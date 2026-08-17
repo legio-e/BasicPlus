@@ -606,6 +606,16 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   ⚠️ **No se toca sin hablarlo**: esas tres líneas son el instrumento con el que
   se cazaron #355 y #357, y quien decide qué se le quita es Eduardo.
 
+### Familias — lo que dejó el censo (`#427`)
+
+- **`hello_mod.c` del STM32: regenerarlo del mismo fuente que las demás** — el
+  punto **8** de los rojos priorizados del censo, y el único suyo que sigue en V5
+  (1, 2 y 3 se cerraron en `ec81afc`). Necesita el pipeline de embebido, por eso
+  no cayó con los otros tres. Sale aquí como entrada propia porque **dentro de una
+  ficha cerrada era invisible a un barrido**, y trabajo de V5 que no aparece al
+  listar es justo lo que hace que las cosas «aparezcan y desaparezcan».
+  Los puntos 4, 5, 6 y 7 son unificación → **V6**.
+
 ### Placas y hardware
 
 - ~~(sin número)~~ — ✅ **PASADA (15-ago). La prueba que dice si el bus es SANO**: MB de patrón conocido,
@@ -704,7 +714,7 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   (`packs: cargado, la entrada devolvio 0`), publica su API (`SQLI, 17
   simbolos`) y con pack grabado el barrido tarda **18 ms** (lo encuentra al
   principio de la zona).
-- ~~`#427`~~ — ✅ **EL CENSO, HECHO el 17-ago: `docs/CENSO_FAMILIAS.md`.** Todo
+- ~~`#427`~~ — ✅ **EL CENSO, HECHO el 16-ago (`e158693`): `docs/CENSO_FAMILIAS.md`.** Todo
   mecánico y con la fuente de cada dato. Lo que encontró, en corto:
   🔴 **el P4 compila a `-Og`** (sdkconfig + 18 hits en el log de build) — la
   lección del STM32-a-`-O0` repetida, y TODAS las medidas de estos días son con
@@ -717,8 +727,14 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   y no hay lista escrita de cuáles son CONTRATO); 🟡 la columna STM32 sale del
   Debug/subdir.mk y trae rarezas (compila fs_host/net_host) — contrastar.
   **Los rojos quedan PRIORIZADOS en el doc, decisión ficha a ficha** (de
-  Eduardo): 1-el `-Og` del P4, 2-el #421 al STM32, 3-json_min, 8-hello_mod
-  caben en V5; el resto es unificación → V6.
+  Eduardo): **1, 2, 3 y 8 caben en V5**; el resto es unificación → V6.
+  ✅ **Y 1, 2 y 3 SE HICIERON EL MISMO DÍA** (`ec81afc`, 16-ago 14:26): el P4 a
+  `-Os` —fijado en `sdkconfig.defaults` con su porqué—, el #421 al STM32 y el
+  `json_min` resincronizado (los tres md5 idénticos), verificado con el build
+  headless. **De este censo sólo queda el 8**, y está abajo con entrada propia:
+  enterrado dentro de una ficha CERRADA no lo veía ningún barrido.
+  ⚠️ Con esto cae también la alarma de *«todas las medidas llevan optimización de
+  depuración»*: sólo afecta a lo medido **hasta el 16-ago a mediodía**.
   *(El enunciado y el método, abajo.)* 🔎 **EL CENSO DE LAS FAMILIAS.** Decisión de Eduardo (16-ago): *«lo mejor
   sería revisar todas las familias e imágenes; eso nos daría un censo real de
   cómo está el código. La unificación y racionalización es la tarea de V6, pero
