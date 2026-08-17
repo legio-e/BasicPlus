@@ -535,6 +535,9 @@ public class FrmMain extends javax.swing.JFrame
         JMenuItem miEnv = new JMenuItem("Variables de entorno…");
         miEnv.addActionListener(e -> openEnvDialog());
         jMenu3.add(miEnv);
+        JMenuItem miDao = new JMenuItem("DAO build");
+        miDao.addActionListener(e -> doDaoBuild());
+        jMenu3.add(miDao);
 
         jMenu3.addSeparator();
         JMenuItem miClear = new JMenuItem("Clear console");
@@ -578,6 +581,10 @@ public class FrmMain extends javax.swing.JFrame
                   toolButton("New",        "Nuevo fichero",   e -> onNewFile()),
                   toolButton("Open Proj.", "Abrir proyecto",  e -> onOpenProject()));
 
+        /* #395 — el estado inicial: al arrancar no hay proyecto, asi que el
+         * botón nace deshabilitado y diciendo por qué en su tooltip. */
+        actualizarEstadoProyecto();
+
         tb.add(javax.swing.Box.createHorizontalGlue());
 
         // -- Centro: ejecución.
@@ -588,6 +595,8 @@ public class FrmMain extends javax.swing.JFrame
                   toolButton("Run on Device", "Ejecutar en placa",   e -> doRunOnPico()),
                   toolButton("Placa",         "Gestión de placa (particiones + packs)", e -> openBoardManager()),
                   toolButton("Entorno",       "Variables de entorno de la placa", e -> openEnvDialog()),
+                  btnDaoBuild = toolButton("DAO build", "Generar los DAO del proyecto a partir de las @BD",
+                                           e -> doDaoBuild()),
                   toolButton("Debug",         "Depurar",             e -> doDebug()),
                   toolButton("Stop",          "Parar (Ctrl+F2)",     e -> onStopRun()));
 
@@ -1214,6 +1223,7 @@ public class FrmMain extends javax.swing.JFrame
     private void onCloseProject() {
         currentProject = null;
         currentProjectFile = null;
+        actualizarEstadoProyecto();         // #395
         javax.swing.tree.DefaultMutableTreeNode root =
                 new javax.swing.tree.DefaultMutableTreeNode("(sin proyecto)");
         projectTreeModel.setRoot(root);
@@ -1237,6 +1247,7 @@ public class FrmMain extends javax.swing.JFrame
             basicplus.frontend.BpBuild proj = basicplus.frontend.BpBuild.load(bpbuild);
             this.currentProject     = proj;
             this.currentProjectFile = bpbuild;
+            actualizarEstadoProyecto();     // #395
             refreshProjectTree();
             setTitle(titulo(String.valueOf(bpbuild.getFileName())));
             // IDE-3 — registrar en "Recent Projects".
@@ -3286,6 +3297,57 @@ public class FrmMain extends javax.swing.JFrame
      *
      *  <p>Abre el MISMO diálogo que el botón de FrmBoard: uno solo, sin copia. */
     private EnvDialog envDialogPrincipal;
+
+    /** #395 — el botón «DAO build». Se guarda la referencia porque va
+     *  HABILITADO SÓLO CON PROYECTO ABIERTO: el generador lee las entidades
+     *  `@BD` del proyecto, así que sin proyecto no hay nada que generar y un
+     *  botón que sólo sabe decir «no hay proyecto» es un botón que estorba. */
+    private javax.swing.JButton btnDaoBuild;
+
+    /** Refleja en la UI si hay proyecto. Se llama al abrir y al cerrar. */
+    private void actualizarEstadoProyecto() {
+        if (btnDaoBuild != null) {
+            boolean hay = currentProject != null;
+            btnDaoBuild.setEnabled(hay);
+            btnDaoBuild.setToolTipText(hay
+                    ? "Generar los DAO del proyecto a partir de las @BD"
+                    : "Necesita un proyecto abierto (.bpbuild)");
+        }
+    }
+
+    /** #395 — genera los DAO del proyecto. Mismo camino que
+     *  `--dao-build` por línea de órdenes: se llama a `DaoGen.generar` y se
+     *  vuelca su resultado a la consola tal cual — avisos, errores y qué
+     *  ficheros se han escrito o estaban ya al día. No se resume ni se
+     *  reinterpreta: el generador ya dice lo que hay que saber. */
+    private void doDaoBuild() {
+        if (currentProject == null) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "No hay proyecto abierto. Abre o crea un proyecto (.bpbuild).",
+                    "DAO build", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        appendConsola("== DAO build: " + currentProjectFile.getFileName() + " ==" + "\n");
+        try {
+            basicplus.frontend.DaoGen.Resultado r =
+                    basicplus.frontend.DaoGen.generar(currentProject, true);
+            for (String a : r.avisos)     appendConsola("aviso: " + a + "\n");
+            for (String e : r.errores)    appendConsola("error: " + e + "\n");
+            for (String f : r.escritos)   appendConsola("  generado : " + f + "\n");
+            for (String f : r.sinCambios) appendConsola("  al dia   : " + f + "\n");
+            if (!r.ok()) {
+                appendConsola("== DAO build: NO se ha generado nada (" + r.errores.size()
+                        + " errores) ==" + "\n");
+                return;
+            }
+            appendConsola("== DAO build OK: " + r.entidades + " entidad(es), "
+                    + r.escritos.size() + " escrito(s), " + r.sinCambios.size()
+                    + " ya al dia ==" + "\n");
+            refreshProjectTree();          // los .bp nuevos salen en el árbol
+        } catch (Exception ex) {
+            appendConsola("== DAO build: " + ex + " ==" + "\n");
+        }
+    }
 
     private void openEnvDialog() {
         BpvmClient client = picoExplorer != null ? picoExplorer.debugClient() : null;
