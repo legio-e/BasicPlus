@@ -1,0 +1,54 @@
+// SciPar.bp — GAP-4: la NOTACION CIENTIFICA de double, byte a byte en las dos VMs.
+//
+// La ficha decia que el formateo cientifico de la VM-C estaba pendiente y que
+// «en magnitudes extremas las dos VMs podrian no ser byte-identicas» — o sea,
+// que rozaba el invariante. Antes de tocar nada hay que REPRODUCIRLO, que es lo
+// que hace este programa: barre los dos bordes del rango y lo que hay fuera.
+//
+// Los bordes NO son arbitrarios: las dos VMs cambian de punto fijo a cientifico
+// exactamente en |x| >= 1e12 y 0 < |x| < 1e-6, asi que se prueban los dos LADOS
+// de cada frontera. Un formateador se rompe justo ahi, no en medio.
+//
+// Se ejecuta en las dos VMs y la salida tiene que ser byte-identica.
+module SciPar
+
+  function Main()
+    // --- la frontera de arriba: 1e12 ---
+    print "a1: " + 999999999999.0d      // 1e12 - 1, punto fijo
+    print "a2: " + 1000000000000.0d     // 1e12 exacto, cientifico
+    print "a3: " + 1000000000001.0d
+    print "a4: " + 1234567890123.0d
+
+    // --- la frontera de abajo: 1e-6 ---
+    print "b1: " + 0.000001d            // 1e-6, punto fijo (el limite NO entra)
+    print "b2: " + 0.0000009d           // por debajo, cientifico
+    print "b3: " + 0.000000123456d
+    print "b4: " + 0.0000000000001d
+
+    // --- magnitudes extremas, que es donde la ficha temia el desvio ---
+    print "c1: " + 1.0e300d
+    print "c2: " + 1.0e-300d
+    print "c3: " + 1.7976931348623157e308d   // el mayor double finito
+    print "c4: " + 5.0e-324d                 // el menor subnormal
+
+    // --- el redondeo del mantisa, que es donde se parten estos formateadores:
+    //     con 6 decimales, 9.9999995 sube a 10 y el exponente TIENE que subir ---
+    print "d1: " + 9999999.9999995d
+    print "d2: " + 9.9999999e11d
+    print "d3: " + 9.9999999e-7d
+
+    // --- signos y casos raros ---
+    print "e1: " + (0.0d - 1.0e300d)
+    print "e2: " + (0.0d - 0.0000009d)
+    print "e3: " + 0.0d
+    print "e4: " + (0.0d - 0.0d)
+
+    // --- y el punto fijo de siempre, de control: si esto se moviera, el fallo
+    //     no seria de la cientifica sino de algo mas gordo ---
+    print "f1: " + 3.14159265d
+    print "f2: " + (0.0d - 2.5d)
+    print "f3: " + 1000000.0d
+    print "fin"
+  end Main
+
+end SciPar
