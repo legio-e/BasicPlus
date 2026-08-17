@@ -43,15 +43,43 @@ ausente lanza limpio en ambas VMs—; el problema real era que `parseJson("")`/b
 `0` mudo. Fix en `Json.parseNumberOn`: sin dígito → `RuntimeError` claro en AMBAS VMs. Paridad byte-idéntica
 verificada.)*
 
-### GAP-4 — formateo de `double` extremo en la VM-C: paridad rota (notación científica TODO)
-`bpvm_format_double` (`bpgenvm-c/src/interp.c:321`) es **byte-idéntico** a `VirtualMachine.formatBpDouble`
-(Java) en punto fijo, PERO para magnitudes `|x| >= 1e12` o `0 < |x| < 1e-6` la notación científica es un
-**TODO** (aritmética IEEE determinista + `%lld/%06lld`). Para esos doubles extremos las dos VMs podrían NO
-ser byte-idénticas → rompe el **invariante de paridad dual-VM** (raro de disparar, pero es el invariante
-sagrado del proyecto). *(Minor relacionado: `%lld` no va en newlib-nano del STM32 — hoy mitigado con helpers
-`u64_dec`; ojo si se añade `%lld` directo.)* Hallado 28-jun (auditoría).
-
 ## 🟡 Limitaciones / decisiones documentadas del lenguaje
+
+- **L14 — en el RP2350 (Pico 2 / Metro), los `double` SUBNORMALES se aplastan a
+  cero.** Es decir: por debajo de `2.2250738585072014e-308`, la Metro da `0`
+  donde el PC, el ESP32-P4 y el STM32 dan el valor. Todo lo que esté por encima
+  de esa frontera es exacto y byte-idéntico en las cuatro plataformas.
+
+  **De dónde sale.** El SDK de la Pico sustituye las rutinas de `double` de
+  libgcc por las suyas optimizadas, y ésas descartan los subnormales *a
+  propósito* — está escrito en su ensamblador: `double_sci_m33.S:121`,
+  `movs r0,#0  @ flush denormal`. No es un fallo nuestro ni del SDK: es su
+  compromiso de velocidad, que heredamos al enlazar.
+
+  **Medido, no supuesto** (18-ago, `samples/SubNorm.bp` y `samples/DblBench.bp`,
+  los dos en el repo):
+  - la frontera es EXACTAMENTE la del formato: `n1..n4` (normales, incluido el
+    menor normal) salen bien; `s1..s5` (subnormales) y las operaciones que caen
+    ahí, todos a `0`; el control en magnitudes normales, exacto;
+  - el P4 y el host dan las 16 líneas correctas — **la Metro es la excepción, no
+    la regla**;
+  - cambiarlo se puede (`pico_set_double_implementation(bpvm_pico compiler)`) y
+    cuesta **+23 KB de flash y un 24 % de tiempo** en el banco, que es **1,8×**
+    en la aritmética de coma flotante una vez descontada la sobrecarga del
+    intérprete (control entero idéntico al milisegundo en las dos corridas).
+
+  **Decisión de Eduardo (18-ago): NO se cambia.** *«Prefiero un 25 % más de
+  velocidad y perder un poco de compatibilidad que afecta al 0,01 % de los casos,
+  en los extremos, no con valores normales. `double` se va a utilizar en la toma
+  de medidas que requieran precisión, pero estamos hablando de instrumentación
+  donde tenemos 6 u 8 dígitos significativos como mucho.»* Aplica su propio
+  criterio: esto lo pagaría TODO programa que use `double` en la Metro, siempre,
+  para proteger un rango que no usa nadie.
+
+  ⚠️ **El caso a vigilar no es escribir `5e-324` a mano** —eso no pasa— sino que
+  un cálculo DESBORDE POR ABAJO: en la Metro daría `0` y en el P4 un número
+  diminuto, en silencio. Si algún día alguien tropieza con eso, la palanca está
+  identificada y medida aquí mismo.
 
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia

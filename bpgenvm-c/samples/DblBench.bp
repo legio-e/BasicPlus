@@ -1,0 +1,73 @@
+// DblBench.bp — cuanto cuesta la aritmetica de `double` en la placa.
+//
+// Para que sirve: la Metro aplasta los subnormales a cero porque el SDK de la
+// Pico sustituye las rutinas de `double` por las suyas optimizadas (lo dice su
+// ensamblador: `@ flush denormal`). Cambiar a las del compilador arregla eso
+// —el P4 y el host ya salen bien— y cuesta 23 KB de flash. Lo que NO se sabia
+// es cuanta VELOCIDAD cuesta, y sin ese numero no se decide.
+//
+// Se ejecuta el MISMO .mod en las dos imagenes de la Metro y se comparan los
+// milisegundos. Nada mas.
+//
+// CON CONTROL, que es lo que hace que la medida valga: el bucle de enteros hace
+// la misma forma de trabajo (mismo numero de vueltas, mismas operaciones) pero
+// sin tocar coma flotante. Si al cambiar la implementacion se moviera TAMBIEN
+// el control, lo que estariamos midiendo no serian los `double` sino otra cosa
+// —el interprete, el reloj, la memoria— y la comparacion no diria nada.
+//
+// Los valores se mantienen lejos de los extremos a proposito: aqui se mide el
+// camino COMUN, no los subnormales.
+module DblBench
+
+  public const VUELTAS: integer := 200000
+
+  // Multiplicar y dividir alternando para que el acumulador no se dispare ni
+  // se hunda: se queda dando vueltas alrededor de 1.
+  function bucleDouble(n: integer): double
+    var acc: double := 1.5d
+    var i: integer := 0
+    while i < n do
+      acc := acc * 1.000001d
+      acc := acc / 1.0000005d
+      acc := acc + 0.5d
+      acc := acc - 0.5d
+      i := i + 1
+    endwh
+    return acc
+  end bucleDouble
+
+  // EL CONTROL: misma forma, sin coma flotante.
+  function bucleEntero(n: integer): integer
+    var acc: integer := 3
+    var i: integer := 0
+    while i < n do
+      acc := acc * 3
+      acc := acc / 2
+      acc := acc + 7
+      acc := acc - 7
+      i := i + 1
+    endwh
+    return acc
+  end bucleEntero
+
+  function Main()
+    print "vueltas: " + VUELTAS + " (x4 operaciones)"
+
+    var t0: integer := now()
+    var d: double := bucleDouble(VUELTAS)
+    var t1: integer := now()
+    print "double : " + (t1 - t0) + " ms"
+
+    var t2: integer := now()
+    var e: integer := bucleEntero(VUELTAS)
+    var t3: integer := now()
+    print "entero : " + (t3 - t2) + " ms   (CONTROL: no debe moverse)"
+
+    // Se imprimen los resultados para que nadie —ni una VM lista— pueda
+    // saltarse los bucles por no usarse.
+    print "res.d  : " + d
+    print "res.e  : " + e
+    print "fin"
+  end Main
+
+end DblBench

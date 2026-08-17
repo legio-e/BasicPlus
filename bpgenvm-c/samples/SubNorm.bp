@@ -1,0 +1,48 @@
+// SubNorm.bp — GAP-4 (2ª parte): ¿DONDE deja de funcionar el double en la placa?
+//
+// SciPar destapo UNA divergencia y solo una: el subnormal mas pequeno
+// (5e-324) sale `4.940656E-324` en el PC y `0` en la Metro. Las otras 21 lineas,
+// identicas. Antes de decidir que hacer hay que saber DONDE esta la frontera,
+// porque no es lo mismo «se pierden los subnormales» —un rincon del formato que
+// casi nadie pisa— que «se pierde precision por debajo de cierto valor», que
+// seria otra cosa.
+//
+// El barrido cruza a proposito la frontera NORMAL/SUBNORMAL, que en IEEE754 de
+// doble precision esta en 2.2250738585072014e-308:
+//   n1..n4  NORMALES, cada vez mas pequenos  -> deben salir bien en las dos
+//   s1..s5  SUBNORMALES                      -> aqui es donde se sospecha
+//
+// Y de control, dos operaciones sobre ellos: si el valor sobrevive pero las
+// cuentas no, el sitio a mirar es otro.
+module SubNorm
+
+  function Main()
+    // --- NORMALES: el mas pequeno normal y sus vecinos por arriba ---
+    print "n1: " + 1.0e-300d
+    print "n2: " + 1.0e-307d
+    print "n3: " + 2.2250738585072014e-308d   // el MENOR normal
+    print "n4: " + 3.0e-308d
+
+    // --- SUBNORMALES: por debajo de esa frontera ---
+    print "s1: " + 2.0e-308d
+    print "s2: " + 1.0e-310d
+    print "s3: " + 1.0e-315d
+    print "s4: " + 1.0e-320d
+    print "s5: " + 5.0e-324d                  // el menor subnormal
+
+    // --- CONTROL: operaciones cerca de la frontera ---
+    // Si n3 sale bien pero esto no, el problema no es leer el literal.
+    var x: double := 1.0e-300d
+    print "o1: " + (x * 1.0e-10d)             // 1e-310, cae en subnormal
+    print "o2: " + (x / 1.0e10d)              // idem por division
+    print "o3: " + (1.0e-320d + 1.0e-320d)    // suma de dos subnormales
+    print "o4: " + (1.0e-320d * 2.0d)
+
+    // --- CONTROL SANO: lo mismo pero en magnitudes normales, para separar
+    //     «la placa no sabe de subnormales» de «la placa no sabe de doubles» ---
+    print "c1: " + (1.0e-100d * 1.0e-100d)    // 1e-200, normal
+    print "c2: " + (1.0e-200d / 1.0e100d)     // 1e-300, normal
+    print "fin"
+  end Main
+
+end SubNorm
