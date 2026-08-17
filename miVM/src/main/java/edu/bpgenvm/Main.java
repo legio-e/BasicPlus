@@ -332,20 +332,37 @@ public class Main {
         vm.setAppMainModulePath(runMod);   // H19 — App.mainModulePath()/mainModule()
 
         int exitCode = 0;
+        boolean falloDeCarga = false;   // #431
         String exitReason = "main returned";
         try {
             // #310 — un .pack se EJECUTA: la VM lo abre, lee el manifest y
             // arranca por el módulo que declare. Un .mod, como siempre.
-            if (isPackFile(runMod)) {
-                loader.executeRootPack(runMod);
-            } else {
-                loader.executeRootModule(runMod, moduleName);
+            /* #431 — LA CARGA se trata aparte de la EJECUCIÓN. Que falte una
+             * dependencia es un caso previsto (un `.mod` sin su `.mod` al lado)
+             * y merece una línea, no un volcado de pila de Java: delante de
+             * quien escribe BP, un stack trace no informa y parece que la VM se
+             * ha roto. Mismo texto que la VM-C, que ya lo hacía así. */
+            boolean cargado = true;
+            try {
+                if (isPackFile(runMod)) {
+                    loader.executeRootPack(runMod);
+                } else {
+                    loader.executeRootModule(runMod, moduleName);
+                }
+            } catch (IOException carga) {
+                System.err.println("load " + runMod + ": " + carga.getMessage());
+                exitCode = 1;
+                exitReason = "load: " + carga.getMessage();
+                cargado = false;
+                falloDeCarga = true;
             }
+            if (cargado) {
             vm.run();
             if (vm.isKillRequested()) {        // P-run-stop (#257)
                 exitCode = 130;                // convención 128+SIGINT
                 exitReason = "killed";
             }
+            }   // #431: fin del `if (cargado)`
         } catch (Throwable t) {
             exitCode = 1;
             exitReason = t.getClass().getSimpleName() + ": " + t.getMessage();
@@ -368,6 +385,13 @@ public class Main {
                 dbgServer.close();
             }
         }
+        /* #431 — un fallo de CARGA sale con código != 0. Antes salía 1 «solo»
+         * porque la excepción llegaba arriba sin atrapar; ahora que se trata
+         * como el caso previsto que es, hay que decirlo explícitamente o un
+         * script que encadene compilar+ejecutar daría por bueno un programa
+         * que no llegó a arrancar. Se hace SÓLO en este caso: los demás
+         * caminos de salida se quedan exactamente como estaban. */
+        if (falloDeCarga) System.exit(exitCode);
     }
 
     /**

@@ -181,6 +181,14 @@ public class ModuleManager {
             java.io.File cand = new java.io.File(dir, base);
             if (cand.isFile()) return cand.getPath();
         }
+        // 3b) #431 — LA CARPETA DE LA RAÍZ. Va aquí y no antes a propósito: es
+        //     ADITIVO, no cambia dónde se encontraba nada que ya se encontrara.
+        //     Es lo que hace la VM-C, y sin esto un `.mod` con dependencias sólo
+        //     arrancaba si el directorio actual resultaba ser el suyo.
+        if (rootModuleDir != null) {
+            java.io.File junto = new java.io.File(rootModuleDir, base);
+            if (junto.isFile()) return junto.getPath();
+        }
         // 4) stdlibDir del BpVM.cfg.
         if (stdlibDir != null && !stdlibDir.isEmpty()) {
             java.io.File inStd = new java.io.File(stdlibDir, base);
@@ -227,6 +235,20 @@ public class ModuleManager {
             return new ModSource(null, bytes, name + " (dentro de " + packPath + ")");
         }
         DataInputStream open() throws IOException {
+            /* #431 — que FALTE un módulo es un caso previsto, no un accidente:
+             * se dice con el mismo texto que la VM-C («falta el modulo 'X'»),
+             * no con un FileNotFoundException y su volcado de pila. Un stack
+             * trace de Java delante de quien escribe BP no informa de nada y
+             * parece que la VM se ha roto. */
+            if (bytes == null) {
+                java.io.File f = new java.io.File(path);
+                if (!f.isFile()) {
+                    String base = f.getName();
+                    if (base.endsWith(".mod")) base = base.substring(0, base.length() - 4);
+                    throw new IOException("falta el modulo '" + base + "' (buscado como "
+                            + path + ")");
+                }
+            }
             return new DataInputStream(bytes != null
                     ? new java.io.ByteArrayInputStream(bytes)
                     : new FileInputStream(path));
@@ -486,7 +508,20 @@ public class ModuleManager {
         this.vm = vm;
     }
 
+    /** #431 — la carpeta del `.mod` que se está ejecutando, para buscar ahí sus
+     *  dependencias. La VM-C lo hace desde siempre (`bpvm_load_mod` saca el
+     *  dirname del path y descubre las deps al lado); miVM sólo miraba el
+     *  directorio ACTUAL, así que `java -jar miVM.jar samples/X.mod` reventaba
+     *  y `cd samples && java ... X.mod` funcionaba. Dos VMs con la misma orden
+     *  y distinto resultado, que es lo que no puede pasar. */
+    private String rootModuleDir;
+
     public void executeRootModule(String filename, String moduleName) throws IOException {
+        {   // #431: dónde vive la raíz, para resolver sus deps al lado
+            java.io.File raiz = new java.io.File(filename);
+            java.io.File dir = raiz.getAbsoluteFile().getParentFile();
+            rootModuleDir = (dir != null && dir.isDirectory()) ? dir.getPath() : null;
+        }
         discoveryQueue.clear();
         discoverDependencies(filename, moduleName);
         for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
