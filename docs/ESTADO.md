@@ -62,7 +62,7 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
   porque el tag del handle y el tipo del bloque distinguen array de objeto.
   Diseño de fondo en `docs/OBJECT_COMODIN.md`.
 - **La clase contenedora (`Box`) sigue SIN escribir — ficha `#438`.** ⚠️ Es de
-  **LENGUAJE, no del IDE** (Eduardo, 18-ago): estuvo agrupada por error con el
+  **LENGUAJE, no del IDE** (Eduardo, 17-ago): estuvo agrupada por error con el
   bloque H10. Es la otra mitad del reparto que él hizo —**envolver = librería**
   (una clase aparte con `set` sobrecargado, posible desde que #387 arregló la
   sobrecarga cross-module); **desenvolver con seguridad = lenguaje**, que ya está
@@ -92,7 +92,7 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
   dentro y `FontLoadDemo` cargándola, comprobado por la AUSENCIA de la línea de
   fallo, porque el `id` que devuelve `loadFont` no prueba nada). ⚠️ Esta entrada
   decía lo contrario y llevaba días contradiciendo a la ficha; lo pilló Eduardo
-  el 18-ago al leer la lista de placa: *«ya probamos cargar una fuente de un pack
+  el 17-ago al leer la lista de placa: *«ya probamos cargar una fuente de un pack
   y funcionó»*. **Corregido.**
   Lo que sí queda sin medir es más estrecho de lo que esto decía: los RECURSOS
   (entradas que no son `.mod`) sólo se han sacado de la zona en el **P4**. En la
@@ -246,12 +246,12 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 > dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
 > primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
-## 🎯 EL PLAN DE CIERRE DE V5 — quedan 9 (18-ago)
+## 🎯 EL PLAN DE CIERRE DE V5 — quedan 9 (17-ago)
 
 **A — LA SESIÓN DE PLACA: ✅ CERRADA** (17-ago). Ocho fichas verificadas o
 resueltas en placa; detalle en «Última sesión».
 
-**C — H10, EL BLOQUE DEL IDE: ✅ CERRADO** (18-ago). Las siete:
+**C — H10, EL BLOQUE DEL IDE: ✅ CERRADO** (17-ago). Las siete:
 
 | ficha | qué |
 |---|---|
@@ -270,7 +270,7 @@ abre un diálogo contra el micro simulado y lo fotografía —contesta en un min
 a «¿está roto o es que no se ve?»—, y **`make test-listtrunc`**, que fuerza el
 truncado del listado contra el simulador con su control en verde.
 
-**B — De escritorio: ✅ hecho lo mecánico** (18-ago). `#431` (miVM buscaba las
+**B — De escritorio: ✅ hecho lo mecánico** (17-ago). `#431` (miVM buscaba las
 deps en el CWD y reventaba con un stack trace — ahora busca junto al `.mod` y un
 módulo que falta se DICE, con exit 1) y `#429` (el compilador embebido avisa de
 que se ha quedado rancio, con segundos en las fechas para que la diferencia se
@@ -286,7 +286,7 @@ Queda de B lo que tiene conversación previa: **`List`/`SyncList`/`OwnerList` de
 `Object`, que es la misma conversación.
 
 **Placa cuando toque**: `#379`, `#408` — y `SciPar`, la pata de placa de
-`GAP-4`. (`#415` ✅ **verificada en la Metro el 18-ago**: `/lib` de 14 a 16
+`GAP-4`. (`#415` ✅ **verificada en la Metro el 17-ago**: `/lib` de 14 a 16
 módulos, `Math` e `IO` con su tamaño correcto.)
 
 **Cierre de versión** (van con el push): borrar las cinco carpetas de `notas/`,
@@ -353,7 +353,7 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 ## Última sesión
 
-### 18-ago — H10 ENTERO, el grupo B mecánico, y una ficha que no existía
+### 17-ago — H10 ENTERO, el grupo B mecánico, y una ficha que no existía
 
 **H10 cerrado, las siete** (`#425`, `#437`, `#435`, `#436`, `#394`, `IDE-7`,
 `#395`) — detalle en el plan de cierre, arriba. Y del **grupo B** lo que se podía

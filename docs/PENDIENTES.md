@@ -32,28 +32,11 @@ Forma del arreglo: sellar en el `.mdn` una huella de su receta (arquitectura + h
 que un sello distinto cuente como rancio, igual que la fecha. La arquitectura ya viaja en la
 cabecera (`arch=40`/`243`) pero **nadie la compara** con la de la placa antes de subirlo.
 
-### #389 — el estrechamiento de `Object` a una clase NO se comprueba en ejecución
-Desde el 14-ago, `Object` es la raíz real del modelo de objetos: subir es implícito y **bajar hay
-que escribirlo** (`Cosa(o)`, `string(o)`, la misma forma que `byte(someInt)`). Eso quita el fallo
-mudo —antes `var c: Cosa := dao.read(7)` compilaba sin una palabra—, pero la conversión **sólo fija
-el tipo estático**: si el DAO dice devolver `Cosa` y devuelve `Otra`, sigue leyendo el slot de otra
-clase y sale un **número plausible** (504 en `diag/orm-slots/ProbeMal.bp`, que es el reproductor).
-Falta que **lance**, sobre `instanceof` (#52, ya existe en el lenguaje). Toca las DOS VMs y el AOT,
-por eso salió de H9. Con él van dos hermanos: `toString()`/`compareTo()` sobre un `Object` que lleva
-una **cadena** no tienen vtable que despachar —una cadena es referencia pero no desciende de
-`Object`—; las dos VMs *pueden* detectarlo, porque el tag del handle y el tipo del bloque distinguen
-array de objeto. Diseño de fondo en `docs/OBJECT_COMODIN.md`.
-
-### N-readfile-msg-skew — el mensaje de `RuntimeError` de `readFile(ausente)` difiere entre VMs
-Al abrir un fichero inexistente, **ambas** VMs lanzan `RuntimeError` (bien), pero el **texto** difiere:
-miVM `readFile('x'): x` vs VM-C `readFile('x'): no se pudo abrir`. Si un programa lo atrapa e imprime
-`e.msg`, la salida NO es byte-idéntica → roza el invariante de paridad. Contenido: alinear el wording en
-`miVM` (builtin readFile) y/o `bpgenvm-c/src/builtins.c`. Menor (sólo si se captura y se imprime el msg).
-Hallado 27-jun al cerrar B-gui-load-missing.
-*(B-gui-load-missing RESUELTO 27-jun, commit `ad06993`: el supuesto "cuelgue" NO se reproducía —`readFile`
-ausente lanza limpio en ambas VMs—; el problema real era que `parseJson("")`/basura divergía: VM-C devolvía
-`0` mudo. Fix en `Json.parseNumberOn`: sin dígito → `RuntimeError` claro en AMBAS VMs. Paridad byte-idéntica
-verificada.)*
+*(Cerradas el 17-ago y sacadas de aquí, que estaban dando una lista de bugs más larga que la real:*
+*`#389` —el estrechamiento de `Object` ya COMPRUEBA en ejecución en las dos VMs, opcode `CHECKCAST`,*
+*`05acc0d`; era el último bug conocido del lenguaje— y `N-readfile-msg-skew` —miVM pegaba la ruta*
+*normalizada por Java, o sea distinta por SO; gana el mensaje de la VM-C, paridad 28/0/0, `RfSkew.bp`*
+*en el repo—. Ficha completa de las dos en `notas/FICHAS.md`.)*
 
 ## 🟡 Limitaciones / decisiones documentadas del lenguaje
 
@@ -68,7 +51,7 @@ verificada.)*
   `movs r0,#0  @ flush denormal`. No es un fallo nuestro ni del SDK: es su
   compromiso de velocidad, que heredamos al enlazar.
 
-  **Medido, no supuesto** (18-ago, `samples/SubNorm.bp` y `samples/DblBench.bp`,
+  **Medido, no supuesto** (17-ago, `samples/SubNorm.bp` y `samples/DblBench.bp`,
   los dos en el repo):
   - la frontera es EXACTAMENTE la del formato: `n1..n4` (normales, incluido el
     menor normal) salen bien; `s1..s5` (subnormales) y las operaciones que caen
@@ -80,7 +63,7 @@ verificada.)*
     en la aritmética de coma flotante una vez descontada la sobrecarga del
     intérprete (control entero idéntico al milisegundo en las dos corridas).
 
-  **Decisión de Eduardo (18-ago): NO se cambia.** *«Prefiero un 25 % más de
+  **Decisión de Eduardo (17-ago): NO se cambia.** *«Prefiero un 25 % más de
   velocidad y perder un poco de compatibilidad que afecta al 0,01 % de los casos,
   en los extremos, no con valores normales. `double` se va a utilizar en la toma
   de medidas que requieran precisión, pero estamos hablando de instrumentación
@@ -112,7 +95,7 @@ verificada.)*
   responde `24` (SALIDAS: cada slice tiene canales A y B, que es la cifra que
   anuncian las placas). Las dos son correctas y el porqué está comentado en
   `pico/repl_v1.c:1089`, pero quien ponga las dos líneas una al lado de otra ve
-  una contradicción y va a buscarla — pasó el 18-ago. Basta con que cada una
+  una contradicción y va a buscarla — pasó el 17-ago. Basta con que cada una
   DIGA su unidad (`pwm=12 slices` / `PWM: 24 salidas`). El campo del wire
   conserva el nombre histórico `pwmSlices` aunque lleve salidas, que es la otra
   mitad de la confusión.
