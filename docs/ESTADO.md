@@ -234,7 +234,7 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 > dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
 > primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
-## 🎯 EL PLAN DE CIERRE DE V5 (Eduardo, 17-ago) — la lista queda en 16
+## 🎯 EL PLAN DE CIERRE DE V5 — la lista queda en 18 (17-ago, noche)
 
 La lista de pendientes se revisa EXCLUYENDO V6 (18 fichas movidas a su sección
 de FICHAS.md). Lo que queda, por grupos y en orden:
@@ -292,10 +292,33 @@ sube a la carpeta seleccionada del árbol; sin selección, `/app` como siempre.
 detectar su compilador rancio) · `#412` (`run` con argumento) · `GAP-4`
 (primero REPRODUCIR la divergencia, luego decidir).
 
-**C — SUSPENDIDO pero se hace ANTES de cerrar V5**: H10 entero (`#425`, `#394`,
-`#395`, `IDE-7`) y la clase contenedora (`Box`).
+**C — LO SIGUIENTE: H10 entero, hasta terminarlo** (Eduardo, 17-ago). Deja de
+estar suspendido. Lo que había —`#425`, `#394`, `#395`, `IDE-7` y la clase
+`Box`— **más los tres cambios que trajo Eduardo esa noche**, ya fichados con su
+detalle en `notas/FICHAS.md`:
 
-**D — V6**: todo lo movido (18 fichas: HAL de capacidades, features de lenguaje
+- `#435` **la ventana de la placa, reordenada**: el env sale a diálogo propio, y
+  en su hueco entra un panel de carpetas (por defecto la de packs, navegable)
+  desde el que añadir un pack con un botón en vez del `JFileChooser`.
+- `#436` **editar el `.bpbuild` desde el IDE**, «como el pom de Maven»: tipo de
+  salida, ficheros incluidos, familias nativas. Lo difícil ya está —
+  `BpBuild.save()` conserva lo que no se edita— y hoy la edición vive repartida
+  en tres diálogos.
+- `#437` **la consola no llega a donde llega el árbol**: censado, le faltan
+  `copy` (PUT), `get` y vaciar el log; y al revés, `new`/`autorun`/`sd` sólo
+  están en consola.
+
+⚠️ **`#435`, `#394` y `#437` tocan el MISMO gesto desde tres superficies** (panel
+de carpetas, Upload con destino, `copy` de consola). Hacerlas juntas y con un
+único código de resolver rutas; si no, es el patrón de «el arreglo que no viaja»
+pero dentro del IDE. Y ojo: `#394` puede haberse quedado sin contenido propio,
+porque el Upload ya respeta la carpeta del árbol desde el 17-ago.
+
+**D — V6**: además de las fichas movidas, hay ahora un **`notas/V6_IDEAS.md`**
+con las charlas de diseño de la noche del 17-ago — la clase `File`/`TextFile`
+(decidida: binaria la base, UTF-8 la hija, y la hija AÑADE sobrecargas en vez de
+redefinir), la fusión del `.mdn` dentro del `.mod` con un bloque nativo por
+familia, y el `double` en funciones `native` por helpers. Todo lo movido (fichas: HAL de capacidades, features de lenguaje
 no encargadas, unificaciones del censo, Linux…) vive en la sección «Aplazadas a
 V6» de FICHAS.md y NO cuenta como pendiente de V5.
 
