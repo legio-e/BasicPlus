@@ -332,7 +332,7 @@
   contador de `omitidas`**, y el comando `dir` de la consola ya lo usa y ya avisa
   (`⚠ LISTADO INCOMPLETO: N entrada(s) más`). Falta que el árbol pida por
   directorio —y de paso sea perezoso— en vez del recorrido plano.
-  ✅ **HECHO el 17-ago (`a632122`) y MEDIDO en la Metro el 18** con una SD de
+  ✅ **HECHO el 17-ago (`a632122`) y MEDIDO en la Metro el 17** con una SD de
   32 GB: el listado sale entero (38 ficheros, `ls 99 ms`) y **no aparece aviso**,
   que es el control — el chivato no da falsos positivos. Los topes siguen ahí
   (16 dirs / 96 entradas por dir), pero ahora **cuando muerdan lo dirán**, y con
@@ -852,18 +852,15 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   pasó el 17-ago. Basta con que cada una DIGA su unidad (`pwm=12 slices` /
   `PWM: 24 salidas`). El campo del wire conserva el nombre histórico `pwmSlices`
   aunque lleve salidas, que es la otra mitad de la confusión.
-- **N-listado-plano-trunca-mudo — el árbol del IDE se corta con muchos ficheros, y
-  sólo lo dice el log.** El recorrido que alimenta el árbol es PLANO y recorre el FS
-  entero, con tope de **16 directorios** y **96 entradas por directorio**. Al pasarse
-  trunca: avisa al log del device, pero **al usuario no le dice nada** — el árbol sólo
-  enseña menos cosas, que es la peor forma de fallar. Observado por Eduardo el 8-ago
-  al montar una SD (V5/H2), donde deja de ser teórico; pero el tope **es de siempre**.
-  Arreglo bueno: **árbol perezoso** — pedir los hijos al expandir con `LIST_DIR`
-  (existe desde V5/H2 y ya reporta cuántas entradas dejó fuera). La consola ya lo usa:
-  `dir [ruta]` sí avisa por pantalla cuando trunca.
-  *(Parcialmente atendido por #425, que hizo que el listado DECLARE lo que deja fuera;
-  lo que falta es el árbol perezoso.)*
-
+*(Aquí había un segundo renglón, «N-listado-plano-trunca-mudo», traído de
+`PENDIENTES` el 17-ago. **Era `#425` otra vez** —su enunciado literal es «el árbol
+del IDE TRUNCA EN SILENCIO»— y estaba CERRADA ese mismo día (`a632122`). Lo cazó
+Eduardo al leer la lista: *«esto lo hemos estado mirando esta tarde, ¿por qué
+sigue abierto?»*. Moverlo sin contrastarlo con lo cerrado es justo la enfermedad
+que el reparto nuevo viene a curar, así que se borra en vez de corregirse. El
+árbol perezoso NO es un pendiente suelto: es la decisión condicional que `#425`
+deja escrita —los topes siguen ahí pero ahora avisan, y con ese número se
+decidirá si basta subirlos.)*
 ### Instrumentos
 
 - `#439` — 🩸 **EL LOG NO SIRVE CUANDO LA PLACA SE CUELGA**, que es justo cuando
@@ -1250,6 +1247,9 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 - `H2-P5` — **variedad de tarjetas.** 🟢 **El enunciado original ya NO aplica**: era
   *«una sola tarjeta y una sola placa»* y son **dos y dos** (Eduardo, 17-ago): la
   SanDisk de **128 GB en las dos placas**, y la de **32 GB en la Pico**.
+  *(`#425` documenta una medida con una SD de 32 GB **en la Metro** el 17-ago —38
+  ficheros, `ls` 99 ms—. Si es la misma corrida, la placa es la Metro; si fueron
+  dos, mejor todavía. No se da por sabido: se anota lo que dijo cada fuente.)*
   📐 **Qué queda cubierto de verdad** — mirando sobre qué se bifurca el driver
   (`bpvm_sd.c:129`), no la etiqueta comercial. Hay **dos caminos**, no tres:
   **CSD v1 = SDSC** (capacidad por tres campos, direcciona **por BYTE**) y
