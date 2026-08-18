@@ -243,3 +243,44 @@ primera, cambia la ABI de todo lo compilado.
 
 Ni el GC, ni las VMs, ni el AOT, ni el formato del `.mod`. Todo esto es
 frontend + stdlib.
+
+### Y la pregunta de Eduardo que lo cambia todo: ¿por qué `List` es sintetizada?
+
+> *«¿Y por qué no pones `List` en el `Core` y deja de ser una clase sintetizada?
+> Ya no hace falta que lo sea.»*
+
+**El motivo por el que se sintetizaba ya no existe.** El comentario del emisor lo
+dice: *«emitidas siempre… a cambio cualquier programa puede usarlas sin import
+explícito»*. Eso hoy lo da el **import implícito perezoso** de `#248`, que ya
+funciona para `RuntimeError` desde `Core`. Y si `List` viviera en `Core`:
+
+- los envoltorios y `List` estarían en el mismo sitio → **el problema de capas
+  desaparece**, no hay que inventar nada;
+- las sobrecargas de `add` serían **BP normal**, sin tocar el emisor;
+- `SyncList`/`OwnerList` heredarían o no según lo que se escriba, a la vista;
+- se podrían **borrar ~600 líneas** de síntesis del `MivmEmitter`.
+
+**Pero hoy no se puede, y por una razón concreta y medida (18-ago):**
+
+```
+var items: integer[] := __newRefArray(4)
+this.items[this.size] := o     ← ACEPTADO sin una palabra (o es un Object)
+return this.items[idx]         ← rechazado: «'integer' incompatible con 'Object'»
+```
+
+BP **no tiene arrays de referencias como TIPO**. Sólo existen los builtins
+`__newRefArray` / `__growRefArray`, tipados como `integer[]`. La `List`
+sintetizada se sale con la suya porque el emisor escribe `ASTORE_I64` (8 bytes)
+a mano sobre ese array — un truco que el lenguaje no ofrece. Peor: la
+**escritura pasa en silencio**, y una casilla de `integer[]` son 4 bytes contra
+los 8 de un handle (ficha aparte; falta medir si trunca de verdad).
+
+**Conclusión: la pieza que falta es un tipo `Object[]`**, con su
+`newObjArray(n)` y carga/guarda de 8 bytes. Con él, `List` es BP normal, vive en
+`Core`, las sobrecargas salen gratis, `Box` no hace falta y sobran ~600 líneas
+del emisor. Sin él, hay que seguir sintetizando y meter la construcción del
+envoltorio dentro del emisor, que es más código y más frágil.
+
+**Es una decisión de alcance, y es de Eduardo**: `Object[]` es una pieza de
+lenguaje en una versión que se está cerrando. La alternativa —sobrecargas
+sintetizadas en el emisor— es fea pero contenida.

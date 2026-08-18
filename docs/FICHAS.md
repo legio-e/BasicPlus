@@ -905,6 +905,25 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
+- (sin número) — 🔴 **BP NO TIENE ARRAYS DE REFERENCIAS, y guardar en uno pasa en
+  SILENCIO.** Medido el 18-ago al preguntar Eduardo por qué `List` sigue siendo una
+  clase sintetizada en vez de vivir en `Core`. Reproductor mínimo:
+  ```
+  var items: integer[] := __newRefArray(4)
+  this.items[this.size] := o     // ← ACEPTADO sin una palabra (o es un Object)
+  return this.items[idx]         // ← rechazado: «'integer' incompatible con 'Object'»
+  ```
+  La **lectura** tipa mal y para el compilador; la **escritura** no. Y una casilla
+  de `integer[]` son **4 bytes** mientras un handle son **8**, así que eso es la clase
+  de fallo de la campaña de V4 (*«referencia ≠ long»*) otra vez: truncar el handle
+  y perder la generación. ⏳ **Falta MEDIR si de verdad trunca** — está confirmado
+  que el compilador lo acepta, no lo que emite.
+  📌 Por qué importa ahora: es lo ÚNICO que impide escribir `List` en BP. Lo que la
+  `List` sintetizada hace es declarar `items: integer[]` y escribirlo a mano con
+  `ASTORE_I64` (8 B), un truco que el lenguaje no ofrece. Con un tipo `Object[]` de
+  verdad —`newObjArray`, carga y guarda de 8 B— `List` pasa a ser BP normal.
+
+
 - ~~`#438`~~ — 🚫 **CANCELADA el 18-ago por decisión de Eduardo**: *«la clase
   Box, de momento no la necesitamos. Nuestro comodín será `Object`»*. Lo que
   hacía falta de ella —envolver escalares— se resuelve **donde de verdad se
