@@ -944,6 +944,27 @@ decidirá si basta subirlos.)*
   pero **no lo he comprobado** y no lo doy por sabido.
   🚨 Aparte del alcance: que sea un **crash con traza de Java** y no un diagnóstico
   hay que arreglarlo igual, se implemente o no el `_EXT`.
+  📐 **MEDIDO el 18-ago: «los envoltorios al Core» NO esquiva este bug.** Eduardo
+  eligió esa salida para evitar el cruce de módulo, así que se probó de verdad
+  (movimiento hecho, compilado, y **revertido** al ver el resultado). Lo que arrastra:
+  1. Los envoltorios extienden `Comparable` → se va con ellos.
+  2. `NaturalComparator` hace `Comparable(a)` — **un downcast**. Al quedarse en
+     `Collections` con `Comparable` en `Core`, ese downcast pasa a ser cross-module y
+     **revienta el compilador igual**: *«Clase 'Comparable' no declarada para
+     CHECKCAST»*. O sea que el bug no se esquiva: **se mete en la stdlib**.
+  3. Para evitarlo hay que mover también `NaturalComparator`, y con él su base
+     `Comparator`.
+  4. Y `StringComparator` usa `Str`, así que ponerlo en `Core` haría que **el módulo
+     base dependa de `Str`** — inversión de capas.
+  💰 **Y el coste, que toca el criterio de Eduardo** (*«la base es FINITA: no
+  ¿es útil? sino ¿lo paga todo el mundo?»*): `Core` se importa implícitamente y viaja
+  **embebido en las imágenes de las cinco familias** (`pico/core_mod.c`,
+  `esp32/main/esp32_mods.c`, …), así que engordarlo lo paga hasta el micro más
+  pequeño, y obliga a regenerar los blobs de todas.
+  ⏭️ **Conclusión de la medida**: la salida barata no era barata. Arreglar #444
+  (el `CHECKCAST_EXT`, con el molde de `TRY_BEGIN_EXT`) hace falta **igual** para el
+  código de usuario: cualquiera que use `Object` con un envoltorio de la stdlib se lo
+  encuentra. Decisión de Eduardo pendiente.
 
 - ~~`#442`~~ — ✅ **CERRADA el 18-ago** (`compat` 30 PASS): **un literal de array
   guardaba siempre 4 bytes por casilla.**
