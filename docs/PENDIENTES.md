@@ -64,6 +64,30 @@
   diminuto, en silencio. Si algún día alguien tropieza con eso, la palanca está
   identificada y medida aquí mismo.
 
+- **L15 — el log post-mortem sobrevive a unos resets y a otros no, y depende de la
+  familia.** Desde el 18-ago el log vive en una región de RAM que el arranque no
+  borra, así que una autopsia enseña las líneas de ANTES del reinicio — incluidas
+  las de un cuelgue, que es para lo que se hizo. Pero esa RAM sólo sobrevive si el
+  reset **no corta la alimentación del núcleo**, y ahí las placas no se comportan
+  igual:
+
+  | | conserva el log | lo pierde |
+  |---|---|---|
+  | **ESP32-S3 / P4** | reset por software (el `reset` del IDE), panic/excepción, watchdog | **el botón RST de la placa** y desenchufar |
+  | **RP2350 (Pico 2 / Metro)** | el pin de RUN — o sea el botón de reset de la Metro | desenchufar |
+  | **STM32** | sin comprobar | desenchufar |
+
+  Lo que sorprende es el ESP32: su botón RST tira del pin EN y corta el dominio
+  digital entero, así que cuenta como arranque en frío. **Si persigues un cuelgue en
+  un P4 o un S3, reinicia desde el IDE, no con el botón.** El arranque dice siempre
+  de cuándo es lo que ha cargado (`RAM SUPERVIVIENTE` frente a `arranque en frío`),
+  así que no hay que adivinarlo; y el `Reset` del diálogo de Info dice qué tipo de
+  reinicio hubo. El volcado a flash sigue existiendo como red para los cortes de
+  corriente, pero sólo llega hasta el último punto de guardado.
+
+  ⚠️ Con un programa en ejecución la placa sólo atiende `HELLO` y `KILL`, así que el
+  `reset` del IDE no llega: hay que hacer `kill` primero (ficha #452).
+
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
   (los módulos no la tienen). Reabrible si surge caso de uso.

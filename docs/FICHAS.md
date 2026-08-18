@@ -916,88 +916,91 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   y se leyó lo que sale. Firmware y fat-jar reconstruidos.
 
 
-- 🟡 `#439` — **RESUELTO EN CÓDIGO el 18-ago; falta la prueba EN PLACA.**
-  *(Enunciado original abajo, que explica por qué dolía.)*
-  🩸 **EL LOG NO SERVÍA CUANDO LA PLACA SE COLGABA**, que es justo cuando
-  más falta hace. Vive en RAM y llega a flash sólo en los `log_flush()` de
-  puntos concretos (fin de arranque, algunos errores); un `for(;;)` o un bucle
-  infinito dentro del GC dejan la autopsia CIEGA — al resetear, la cola del log
-  es la del arranque anterior.
+- ~~`#439`~~ — ✅ **CERRADA el 18-ago: el log SOBREVIVE al reset, PROBADO EN PLACA (P4).**
+  🩸 **EL LOG NO SERVÍA CUANDO LA PLACA SE COLGABA**, que es justo cuando más falta
+  hace. Vivía en RAM y llegaba a flash sólo en los `log_flush()` de puntos concretos
+  (fin de arranque, algunos errores); un `for(;;)` o un bucle infinito dentro del GC
+  dejaban la autopsia CIEGA — al resetear, la cola del log era la del arranque anterior.
+  **Anotado el 17-ago por la mañana** al no poder ver por qué se colgaba la Metro con
+  `#430`… y no se abrió ficha. **Por la tarde volvió a morder** con el cuelgue del P4
+  (Eduardo: *«el log no funciona si el programa se cuelga, eso ya lo sabemos de todas
+  estas pruebas, así que no sirve»*), y esa vez costó una vuelta entera de hipótesis que
+  no se podían comprobar. Un instrumento que falla exactamente en el caso que motiva su
+  existencia no es medio instrumento: es una trampa, porque uno cuenta con él.
 
-  **Anotado el 17-ago por la mañana** al no poder ver por qué se colgaba la
-  Metro con `#430`… y no se abrió ficha. **Por la tarde volvió a morder** con el
-  cuelgue del P4 (Eduardo: *«el log no funciona si el programa se cuelga, eso ya
-  lo sabemos de todas estas pruebas, así que no sirve»*), y esa vez costó una
-  vuelta entera de hipótesis que no se podían comprobar. Un instrumento que
-  falla exactamente en el caso que motiva su existencia no es medio instrumento:
-  es una trampa, porque uno cuenta con él.
-  📐 **Dirección de Eduardo (18-ago), al ir a por ella**: *«probablemente los
-  logs se están quedando en RAM»* —confirmado arriba, es exactamente eso— *«y si
-  queremos el log como mecanismo de depuración de verdad, no deberían ir a RAM:
-  directos a la flash (falta un `flush()` o algo similar)»*.
-  📐 **Y la decisión de coste, también de Eduardo (18-ago), que ANULA la campaña
-  de medir que se había planeado**: *«el coste del log solamente afecta al boot;
-  después el log se puede desactivar. Y si está activo y va un poco más lento es
-  que estamos haciendo una traza: es normal que tarde un poco más»*. O sea que el
-  compromiso «log fiable vs log que frena» se resuelve por POLÍTICA, no por
-  medida: activo ⇒ escribe directo y la lentitud es aceptable; desactivado ⇒
-  coste cero. No hay que optimizar el camino, hay que hacerlo FIABLE.
-  ⏭️ Al retomar, lo que queda es implementación, no decisión:
-  1. el camino de escritura a flash YA existe (el log post-mortem de H9, en
-     anillo); esto es llamarlo POR LÍNEA cuando el log esté activo, en vez de
-     sólo en los `log_flush()` de puntos fijos;
-  2. el único cuidado técnico real es el de siempre en la Pico: escribir flash
-     ejecutando DESDE flash (XIP) — el post-mortem ya lo resuelve, reusar su
-     cintura;
-  3. y verificarlo con el caso que motivó la ficha: un `for(;;)` a mitad de
-     programa, resetear, y que la autopsia enseñe las líneas de ANTES del
-     cuelgue — en las tres familias.
-
-
-
-  **Lo que sí funciona con la placa colgada**: el `print` del programa, que va
-  por el wire en directo. Ahí está la pista de cómo arreglarlo.
-
-  **Idea a valorar**: un modo `log=2` que haga `log_flush()` **por línea**. Es
-  lento y desgasta flash, así que jamás sería el modo normal — pero es
-  exactamente lo que hace falta cuando se persigue un cuelgue, y hoy no existe
-  ninguna alternativa. Alternativa más barata: que las líneas de diagn
-
-  ---
-  ✅ **ARREGLO (18-ago) — la región del log vive en RAM QUE NO SE BORRA.**
-  📐 **La idea es de Eduardo y cambió el diseño entero**: *«había una zona de RAM
-  que se mantenía, igual se puede utilizar de pequeña caché para no tener que
-  grabar todo cada vez en la flash»*. Existe, y el propio SDK de la Pico la usa
-  igual (el token mágico del doble reset).
-  🩸 **Y evitó un destrozo.** El plan era *«flush por línea»*: eso es un
-  `erase+program` de 4 KB **por línea** — no «un poco más lento», sino gastar el
-  sector, porque la flash aguanta ~100k borrados y un programa que loguee en
-  bucle se los come en minutos. Con RAM que no se borra: **cero desgaste, cero
-  coste**.
+  ✅ **EL ARREGLO — la región del log vive en RAM QUE NO SE BORRA.**
+  📐 **La idea es de Eduardo y cambió el diseño entero**: *«había una zona de RAM que se
+  mantenía, igual se puede utilizar de pequeña caché para no tener que grabar todo cada
+  vez en la flash»*. Existe, y el propio SDK de la Pico la usa igual (el token mágico
+  del doble reset).
+  🩸 **Y evitó un destrozo.** El plan era *«flush por línea»*: eso es un `erase+program`
+  de 4 KB **por línea** — no «un poco más lento», sino gastar el sector, porque la flash
+  aguanta ~100k borrados y un programa que loguee en bucle se los come en minutos. Con
+  RAM que no se borra: **cero desgaste, cero coste**. La decisión de coste de Eduardo
+  (*«si está activo y va un poco más lento es que estamos haciendo una traza»*) resolvía
+  el compromiso por POLÍTICA; el arreglo lo dejó sin compromiso que resolver.
   📌 **Cómo sabe la región que es válida**: su cabecera vive DENTRO
-  (`[magic|version|size][datos]`), así que se reconoce sola. Sólo hacía falta
-  mantenerla al día en RAM — antes se escribía únicamente en `log_flush`.
-  🔬 **Verificado en el `.elf` de cada imagen** (no en el fuente):
-  Pico `bplog_region` 4 KB en `.uninitialized_data` · S3 4 KB y P4 8 KB en
-  `.noinit` · STM32 8 KB en `.noinit` — **las cuatro con ALLOC y SIN LOAD**.
-  Y `s_used`/`s_dropped` siguen en `.bss` y sí se borran: por eso el tamaño se
-  recupera de la cabecera y el contador del anillo viaja en su campo
-  `reserved` (si no, la autopsia diría que no falta nada cuando faltan líneas —
-  la mentira que #433 vino a quitar).
-  🗣️ El arranque **dice de dónde viene** lo cargado («RAM SUPERVIVIENTE» vs
-  «arranque en frío»): leer una autopsia sin saber de cuándo es fue justo lo que
-  costó una vuelta entera de hipótesis con el cuelgue del P4.
-  ⚠️ Sobrevive al RESET, **no al corte de alimentación** — el flush a flash se
-  queda como red para eso. Y ojo con la Pico, que **no tiene botón de reset** y
-  se recupera desenchufando: allí la prueba va con el reset del IDE o el
-  watchdog, no tirando del cable.
-  ⚠️ El `.ld` del STM32 lo genera CubeIDE: si se regenera el proyecto, la
-  sección `.noinit` se pierde **en silencio**. Avisado dentro del fichero.
-  ⏭️ **LA PRUEBA QUE CIERRA**, y sin ella no se da por buena: un `for(;;)` a
-  mitad de programa, resetear, y que la autopsia enseñe las líneas de ANTES del
-  cuelgue. En las tres familias.óstico
-  puedan salir TAMBIÉN por el wire como eventos OUTPUT mientras hay un RUN vivo,
-  reusando el camino que ya funciona.
+  (`[magic|version|size][datos]`), así que se reconoce sola. Sólo hacía falta mantenerla
+  al día en RAM — antes se escribía únicamente en `log_flush`.
+  🔬 **Verificado en el `.elf` de cada imagen** (no en el fuente): Pico `bplog_region`
+  4 KB en `.uninitialized_data` · S3 4 KB y P4 8 KB en `.noinit` · STM32 8 KB en
+  `.noinit` — **las cuatro con ALLOC y SIN LOAD**. Y `s_used`/`s_dropped` siguen en
+  `.bss` y sí se borran: por eso el tamaño se recupera de la cabecera y el contador del
+  anillo viaja en su campo `reserved` (si no, la autopsia diría que no falta nada cuando
+  faltan líneas — la mentira que #433 vino a quitar).
+
+  🧪 **LA PRUEBA EN PLACA (P4, 18-ago)** — `samples/CuelgaLog.bp`: RUN → **4 min 30 s
+  girando** en un `while true` → `kill` → `reset` del IDE. Al volver, segunda línea del
+  arranque: `log: RAM SUPERVIVIENTE (lineas de ANTES del reset)`, y detrás la sesión
+  entera, incluidos los **269 segundos de silencio** entre `[94888]` y `[364487]` que
+  son el cuelgue. Vale como prueba porque `bpvm_log_init` mira la cabecera de RAM
+  **antes** que el flash y sale por ahí (`bpvm_log.c:99`): da igual que un `ls` haya
+  volcado por el camino. En la misma vuelta el pack cargó entero (`sqlite 3.53.4`,
+  `vfs 'bp' registrado`, `rc=0`), o sea que el peldaño 5 del P4 quedó sano de paso.
+
+  🗣️ **La línea de origen no era adorno, fue LO QUE HIZO POSIBLE LA PRUEBA.** El
+  arranque dice de dónde viene lo cargado («RAM SUPERVIVIENTE» vs «arranque en frío»),
+  y sin eso los dos primeros intentos habrían pasado por buenos siendo inútiles.
+  🩸 **Costó tres intentos, y la trampa fue la misma dos veces: una medida que no
+  desempata.** (1) La línea de origen sólo existía en `pico/main.c` — el P4 ni podía
+  contestar; añadida a las cuatro imágenes. (2) Después, dos resets salieron `arranque
+  en frío` **sin que eso significara fallo**, porque las lecturas «el mecanismo está
+  roto» y «has usado el reset equivocado» explicaban el log igual de bien. Lo desempató
+  el `resetReason` del INFO, que YA EXISTÍA: decía `power-on`. Instrumento que ya
+  estaba, pregunta que no se le había hecho.
+
+  ⚠️ **SOBREVIVE A UNOS RESETS Y A OTROS NO, Y CAMBIA POR FAMILIA.** En ESP32 aguanta
+  `software` (el `esp_restart()` del verbo `RESET`), `panic/exception` y los dos
+  watchdogs, pero **no** `power-on` — que incluye desenchufar **y el botón RST de la
+  placa**, porque tira del pin EN y corta el dominio digital. En el RP2350 la RAM sí
+  aguanta el pin de RUN (de eso vive el doble-tap del SDK), así que en la Metro el botón
+  físico sirve. Del STM32 no está comprobado. Cara al usuario en `PENDIENTES.md` (L15).
+  ⚠️ El `.ld` del STM32 lo genera CubeIDE: si se regenera el proyecto, la sección
+  `.noinit` se pierde **en silencio**. Avisado dentro del fichero.
+  ⏭️ **Queda la misma vuelta en Metro y STM32.** El código está verificado en el `.elf`
+  de las cuatro imágenes y probado en placa en una; lo que falta es repetirlo.
+  💡 **Idea que sobrevive a la ficha** (no hecha): que las líneas de diagnóstico puedan
+  salir TAMBIÉN por el wire como eventos `OUTPUT` mientras hay un RUN vivo, reusando el
+  camino que ya funciona — el `print` del programa sí llega con la placa colgada. Eso
+  daría diagnóstico EN DIRECTO, no autopsia.
+
+
+- `#452` — **el verbo `RESET` no se puede usar cuando más falta hace: con un RUN vivo.**
+  Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
+  `HELLO` y `KILL`, y a todo lo demás contesta `BUSY`
+  (`esp32/main/repl_esp32.c:915`, y el equivalente en las otras familias); el IDE
+  refleja eso apagando el botón (`PicoExplorer.java:2180`). El comentario del código
+  dice que la intención era *«que la placa nunca quede sorda»* — y casi lo consigue,
+  pero deja fuera justo el verbo que hace falta cuando lo que quieres no es recuperar el
+  control, sino **releer lo que acaba de pasar**.
+  🩸 **Por qué importa más de lo que parece, y es por `#439`**: con la placa colgada, si
+  no puedes mandar `RESET` por el wire, la única salida es el RST físico — que en ESP32
+  es `power-on` y **borra la RAM del log**. O sea que el mecanismo funciona y aun así no
+  lo tienes disponible en el escenario para el que se escribió. Hoy se sortea con
+  `kill` + `reset`, que basta porque el `kill` sí llega.
+  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if` (y quitar el `&& enabled` del
+  botón). Una línea por familia; el cuidado está en que responda el `RESET_REPLY` antes
+  de reiniciar, como ya hace.
 
 ### Lenguaje y VM
 

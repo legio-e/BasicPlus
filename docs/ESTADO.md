@@ -27,6 +27,44 @@
 
 ## Última sesión
 
+### 18-ago (tarde) — #439 probada EN PLACA, y los 32 MB del P4 que no pudieron ser
+
+**Lo gordo: `#439` CERRADA, con la prueba en el P4.** `CuelgaLog.bp` → 4 min 30 s
+girando en un `while true` → `kill` → `reset` del IDE → al volver, `log: RAM
+SUPERVIVIENTE (lineas de ANTES del reset)` y la sesion entera detras, con los 269
+segundos de silencio que son el cuelgue. El arreglo (region del log en RAM que el
+arranque no borra) fue idea de Eduardo y evito el plan anterior, que era flush por
+linea: 4 KB de erase+program POR LINEA se come el sector en minutos.
+
+**Costo tres intentos y las dos trampas fueron de instrumento, no de codigo:**
+1. la linea que dice de donde viene lo cargado solo existia en `pico/main.c`, asi
+   que el P4 no podia contestar la pregunta (`be0a86e` la lleva a las 4 imagenes);
+2. luego dos resets salieron `arranque en frio` **sin que eso significara fallo** —
+   «esta roto» y «has usado el reset equivocado» explicaban el log igual de bien.
+   Lo desempato el `resetReason` del INFO, que YA ESTABA: decia `power-on`. En
+   ESP32 el boton RST tira del pin EN y cuenta como arranque en frio; en el RP2350
+   el pin de RUN si conserva la RAM. Anotado como **L15** en `PENDIENTES.md`.
+
+**Abierta `#452`** de camino: con un RUN vivo la placa solo atiende `HELLO`/`KILL`,
+asi que el `RESET` del wire no llega — justo cuando mas falta hace. Se sortea con
+`kill` + `reset`. Una linea por familia.
+
+**Los 32 MB del P4: implementado, probado en placa, revertido.** El bootloader
+usaba 16 de los 32 MB; ampliarlo funciono para el FS y **rompio los packs**, y no
+por tamaño (la hipotesis que Eduardo tumbo con una zona de 6528 KB): el cache de
+flash del P4 direcciona a **24 bits**, o sea que nada por encima de 0x1000000 se
+puede mapear. El diagnostico quedo cerrado y el rediseño (packs debajo de 16 MB,
+FS encima) va a V6 — `9d0589b`. La revision quedo con el pack sano: sqlite 3.53.4,
+vfs `bp` registrado, `rc=0`.
+
+**Y lo demas que cayo:** `#427` pto 8 (el `hello_mod.c` ya sale de un GENERADOR y
+del mismo fuente; las 3 copias muertas, fuera) · `#441` la mitad de la arquitectura
+(el IDE compara el `arch` del `.mdn`, no solo la fecha) · `#451` SyncList a
+Collections · el «pwm» del arranque y del INFO ya dicen su unidad.
+
+**⏭️ Queda de `#439`:** la misma vuelta en Metro y STM32 (el codigo esta verificado
+en el `.elf` de las cuatro, probado en placa en una).
+
 ### 18-ago — el dia de las listas: 8 fichas cerradas en cadena, corpus 29→37
 
 **El hilo del dia** (todo salio de una decision de Eduardo: cancelar `Box`,
