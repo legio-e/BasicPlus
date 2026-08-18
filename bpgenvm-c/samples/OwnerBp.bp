@@ -1,0 +1,70 @@
+// OwnerBp.bp — #449: `OwnerList` SE PUEDE escribir en BP. No hace falta que
+// la sintetice el compilador.
+//
+// Eduardo, 18-ago: «SyncList y OwnerList deberian estar en collections.
+// Hacerlas sintetizadas me parece raro, no veo la razon». Yo habia dicho que
+// OwnerList era la excepcion —que necesitaba `setFieldOwner` y `FREE_REF`, sin
+// sintaxis en BP—. Era falso, y esto lo prueba:
+//
+//   · `var owner items: Object[]` emite SET_FIELD_OWNER, o sea que el bit de
+//     propietario del descriptor —la clave de la cascada— se pone desde BP.
+//     (Lo que hay que mirar es el descriptor, no que compile.)
+//   · liberar UN elemento suelto sale con un `var owner` LOCAL, que emite
+//     FREE_REF al salir del scope. Es la misma semantica escrita de otra forma.
+//
+// El control que dice que la liberacion OCURRE, y no solo que el programa no
+// peta: el guardian de fin de RUN de la VM-C (#339) informa «0 bloques sin
+// liberar». Sin el, un `removeAndFree` que no liberara nada saldria igual de
+// verde — que es justo la clase de verde falso que este proyecto ya conoce.
+module OwnerBp
+  public class Hijo
+    var n: integer
+    public function Hijo(x: integer)
+      this.n := x
+    end Hijo
+    public function valor(): integer
+      return this.n
+    end valor
+  end Hijo
+
+  public class Lista
+    var owner items: Object[]
+    var size: integer
+    public function Lista()
+      this.items := newObjArray(4)
+      this.size  := 0
+    end Lista
+    public function add(o: Object)
+      this.items[this.size] := o
+      this.size := this.size + 1
+    end add
+    public function get(i: integer): Object
+      return this.items[i]
+    end get
+    // ¿se puede liberar UN elemento con un owner local?
+    public function removeAndFree(idx: integer)
+      var owner tmp: Hijo := Hijo(this.items[idx])   // al salir del scope: FREE_REF
+      this.items[idx] := null
+      var i: integer := idx
+      while i < this.size - 1 do
+        this.items[i] := this.items[i + 1]
+        i := i + 1
+      endwh
+      this.size := this.size - 1
+      this.items[this.size] := null
+    end removeAndFree
+  end Lista
+
+  function Main()
+    var l: Lista := Lista()
+    l.add(Hijo(1))
+    l.add(Hijo(2))
+    l.add(Hijo(3))
+    l.removeAndFree(1)
+    var h: Hijo := Hijo(l.get(0))
+    print "0: " + h.valor()
+    var h2: Hijo := Hijo(l.get(1))
+    print "1: " + h2.valor()
+    print "fin"
+  end Main
+end OwnerBp

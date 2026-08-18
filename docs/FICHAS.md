@@ -905,6 +905,25 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
+- 🟢 **#449 — `OwnerList` SÍ se puede escribir en BP; NO hace falta sintetizarla.**
+  Eduardo, 18-ago: *«SyncList y OwnerList deberían estar en collections. Hacerlas
+  sintetizadas me parece raro, no veo la razón»*. Yo había dicho que `OwnerList` era
+  la excepción —que exigía `setFieldOwner` y `FREE_REF`, sin sintaxis en BP—. **Era
+  falso**, y `samples/OwnerBp.bp` lo prueba:
+  · `var owner items: Object[]` **emite `SET_FIELD_OWNER`** (visto en el
+    desensamblado, no en que compile): el bit de propietario del descriptor —la
+    clave de la cascada— se pone desde BP;
+  · liberar UN elemento suelto sale con un `var owner` **local**, que emite `FREE_REF`
+    al salir del scope. Misma semántica, escrita de otra forma.
+  🧪 Control de que la liberación OCURRE: el guardián de fin de RUN (#339) dice
+  **«0 bloques sin liberar»**. Sin él, un `removeAndFree` que no liberase nada saldría
+  igual de verde. Paridad byte a byte, en el corpus.
+  ⏭️ **Con esto el reparto que pidió Eduardo es alcanzable entero y sin tocar el
+  lenguaje**: `List` en `Core` (una clase, no engorda), `SyncList` y `OwnerList` en
+  `Collections`, y el compilador deja de sintetizar las tres. Lo que queda es
+  quitar la síntesis y que los símbolos vengan de sus módulos (alias sin cualificar
+  como ya se hace con `Exception`, + import implícito).
+
 - 🟡 **#446 — los envoltorios ya viven en `Core`; falta `List`.** Primera mitad del
   encargo de Eduardo (*«la list sintetizada debería desaparecer y utilizar la de
   Core»*), hecha y verde el 18-ago: `Comparable` + `Integer/Long/Double/Float/Boolean`
