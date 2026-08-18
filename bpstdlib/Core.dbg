@@ -2,306 +2,378 @@ dbg 3
 module Core
 source C:\lenguajes\pm\bpstdlib\Core.bp
 lines
-1229 24
-1296 32
-1365 63
-1430 74
-1449 77
-1460 78
-1476 79
-1490 81
-1506 82
-1519 84
-1534 87
-1558 70
-1568 71
-1629 98
-1650 101
-1661 102
-1677 103
-1691 105
-1707 106
-1720 108
-1735 111
-1761 94
-1771 95
-1835 122
-1856 125
-1867 126
-1883 127
-1897 129
-1913 130
-1926 132
-1941 135
-1967 118
-1977 119
-2041 146
-2060 149
-2071 150
-2087 151
-2101 153
-2117 154
-2130 156
-2145 159
-2172 142
-2182 143
-2243 170
-2262 173
-2273 174
-2300 175
-2314 177
-2341 178
-2354 180
-2369 183
-2393 166
-2403 167
-2480 200
-2492 201
-2498 202
-2505 203
-2517 205
-2522 206
-2525 207
-2535 208
-2548 209
-2556 211
-2575 212
-2586 213
-2594 215
-2604 216
-2614 217
-2636 218
-2643 219
-2661 221
-2677 222
-2686 223
-2699 224
-2710 225
-2721 226
-2724 227
-2734 228
-2747 229
-2755 231
-2771 233
-2793 237
-2809 238
-2817 239
-2853 240
-2861 242
-2897 243
-2908 245
-2933 250
-2944 251
-2960 253
-2968 254
-2974 255
-2982 256
-2994 258
-3005 259
-3008 260
-3019 261
-3033 262
-3041 263
-3047 264
-3062 266
-3084 267
-3091 268
-3109 270
-3115 271
-3124 272
-3144 273
-3152 275
+414 24
+481 32
+550 63
+615 74
+634 77
+645 78
+661 79
+675 81
+691 82
+704 84
+719 87
+743 70
+753 71
+814 98
+835 101
+846 102
+862 103
+876 105
+892 106
+905 108
+920 111
+946 94
+956 95
+1020 122
+1041 125
+1052 126
+1068 127
+1082 129
+1098 130
+1111 132
+1126 135
+1152 118
+1162 119
+1226 146
+1245 149
+1256 150
+1272 151
+1286 153
+1302 154
+1315 156
+1330 159
+1357 142
+1367 143
+1428 170
+1447 173
+1458 174
+1485 175
+1499 177
+1526 178
+1539 180
+1554 183
+1578 166
+1588 167
+1649 317
+1665 318
+1677 319
+1700 321
+1714 322
+1732 328
+1767 331
+1803 334
+1839 337
+1874 340
+1909 344
+1933 348
+1950 352
+1969 356
+1973 357
+1988 358
+2006 359
+2014 361
+2026 362
+2045 311
+2051 312
+2057 313
+2120 395
+2130 396
+2143 397
+2159 401
+2169 402
+2182 403
+2192 404
+2211 408
+2221 409
+2236 410
+2252 414
+2262 415
+2272 416
+2282 417
+2298 421
+2308 422
+2320 423
+2336 428
+2346 429
+2351 430
+2361 431
+2370 432
+2385 433
+2404 435
+2414 436
+2433 443
+2442 444
+2453 445
+2459 446
+2470 448
+2489 386
+2499 387
+2589 200
+2601 201
+2607 202
+2614 203
+2626 205
+2631 206
+2634 207
+2644 208
+2657 209
+2665 211
+2684 212
+2695 213
+2703 215
+2713 216
+2723 217
+2745 218
+2752 219
+2770 221
+2786 222
+2795 223
+2808 224
+2819 225
+2830 226
+2833 227
+2843 228
+2856 229
+2864 231
+2880 233
+2902 237
+2918 238
+2926 239
+2962 240
+2970 242
+3006 243
+3017 245
+3042 250
+3053 251
+3069 253
+3077 254
+3083 255
+3091 256
+3103 258
+3114 259
+3117 260
+3128 261
+3142 262
+3150 263
+3156 264
+3171 266
+3193 267
+3200 268
+3218 270
+3224 271
+3233 272
+3253 273
+3261 275
 vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 38
-this -28 8 0 ?
-item -20 8 0 ?
-func List.get 116
-this -24 8 0 ?
-idx -16 4 0 ?
-func List.set 135
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func List.length 152
-this -20 8 0 ?
-func List.remove 166
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func List.__init 249
-this -20 8 0 ?
-func OwnerList.removeAndFree 284
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func OwnerList.__init 393
-this -20 8 0 ?
-func StringBuilder.appendChar 409
+func StringBuilder.appendChar 38
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 486
+func StringBuilder.appendStr 115
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 537
+func StringBuilder.appendInt 166
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 556
+func StringBuilder.toString 185
 this -20 8 0 ?
-func StringBuilder.length 580
+func StringBuilder.length 209
 this -20 8 0 ?
-func StringBuilder.__init 594
+func StringBuilder.__init 223
 this -20 8 0 ?
-func Thread.run 627
+func Thread.run 256
 this -20 8 0 ?
-func Thread.start 633
+func Thread.start 262
 this -20 8 0 ?
-func Thread.join 647
+func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 661
+func Thread.__init 290
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 680
+func Mutex.lock 309
 this -20 8 0 ?
-func Mutex.unlock 694
+func Mutex.unlock 323
 this -20 8 0 ?
-func Mutex.__init 708
+func Mutex.__init 337
 this -20 8 0 ?
-func SyncList.add 722
+func Exception.getMsg 381
+this -20 8 0 ?
+func Exception.setMsg 397
 this -28 8 0 ?
-item -20 8 0 ?
-func SyncList.remove 761
+func Exception.__init 411
+this -28 8 0 ?
+m -20 8 0 string
+func __cls_new_Exception 428
+m -20 8 0 string
+func __cls_init_Exception 461
+this -28 8 0 ?
+m -20 8 0 string
+func RuntimeError.__init 478
+this -28 8 0 ?
+m -20 8 0 string
+func __cls_new_RuntimeError 497
+m -20 8 0 string
+func __cls_init_RuntimeError 530
+this -28 8 0 ?
+m -20 8 0 string
+func Comparable.compareTo 547
+this -28 8 0 ?
+other -20 8 0 ref
+func Comparable.__init 562
+this -20 8 0 ?
+func __cls_init_Comparable 598
+this -20 8 0 ?
+func Integer.value 612
+this -20 8 0 ?
+func Integer.compareTo 631
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Integer.toString 716
+this -20 8 0 ?
+func Integer.__init 740
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.get 799
+x -16 4 0 integer
+func __cls_new_Integer 763
+x -16 4 0 integer
+func __cls_init_Integer 795
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.set 840
+x -16 4 0 integer
+func Long.value 811
+this -20 8 0 ?
+func Long.compareTo 832
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Long.toString 917
+this -20 8 0 ?
+func Long.__init 943
+this -28 8 0 ?
+x -20 8 0 long
+func __cls_new_Long 967
+x -20 8 0 long
+func __cls_init_Long 1000
+this -28 8 0 ?
+x -20 8 0 long
+func Double.value 1017
+this -20 8 0 ?
+func Double.compareTo 1038
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Double.toString 1123
+this -20 8 0 ?
+func Double.__init 1149
+this -28 8 0 ?
+x -20 8 0 double
+func __cls_new_Double 1173
+x -20 8 0 double
+func __cls_init_Double 1206
+this -28 8 0 ?
+x -20 8 0 double
+func Float.value 1223
+this -20 8 0 ?
+func Float.compareTo 1242
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Float.toString 1327
+this -20 8 0 ?
+func Float.__init 1354
+this -24 8 0 ?
+x -16 4 0 float
+func __cls_new_Float 1377
+x -16 4 0 float
+func __cls_init_Float 1409
+this -24 8 0 ?
+x -16 4 0 float
+func Boolean.value 1425
+this -20 8 0 ?
+func Boolean.compareTo 1444
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Boolean.toString 1551
+this -20 8 0 ?
+func Boolean.__init 1575
+this -24 8 0 ?
+x -16 4 0 boolean
+func __cls_new_Boolean 1598
+x -16 4 0 boolean
+func __cls_init_Boolean 1630
+this -24 8 0 ?
+x -16 4 0 boolean
+func List.add 1646
+this -28 8 0 ?
+o -20 8 0 ref
+func List.add$i 1729
+this -24 8 0 ?
+i -16 4 0 integer
+func List.add$j 1764
+this -28 8 0 ?
+l -20 8 0 long
+func List.add$d 1800
+this -28 8 0 ?
+d -20 8 0 double
+func List.add$f 1836
+this -24 8 0 ?
+f -16 4 0 float
+func List.add$z 1871
+this -24 8 0 ?
+b -16 4 0 boolean
+func List.get 1906
+this -24 8 0 ?
+idx -16 4 0 integer
+func List.set 1930
 this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func SyncList.length 881
+idx -24 4 0 integer
+o -20 8 0 ref
+func List.length 1947
 this -20 8 0 ?
-func SyncList.pop 918
-this -20 8 0 ?
-func SyncList.popBlocking 1015
-this -20 8 0 ?
-func SyncList.__init 1126
-this -20 8 0 ?
-func Exception.getMsg 1196
-this -20 8 0 ?
-func Exception.setMsg 1212
-this -28 8 0 ?
-func Exception.__init 1226
-this -28 8 0 ?
-m -20 8 0 string
-func __cls_new_Exception 1243
-m -20 8 0 string
-func __cls_init_Exception 1276
-this -28 8 0 ?
-m -20 8 0 string
-func RuntimeError.__init 1293
-this -28 8 0 ?
-m -20 8 0 string
-func __cls_new_RuntimeError 1312
-m -20 8 0 string
-func __cls_init_RuntimeError 1345
-this -28 8 0 ?
-m -20 8 0 string
-func Comparable.compareTo 1362
-this -28 8 0 ?
-other -20 8 0 ref
-func Comparable.__init 1377
-this -20 8 0 ?
-func __cls_init_Comparable 1413
-this -20 8 0 ?
-func Integer.value 1427
-this -20 8 0 ?
-func Integer.compareTo 1446
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Integer.toString 1531
-this -20 8 0 ?
-func Integer.__init 1555
+func List.remove 1966
 this -24 8 0 ?
-x -16 4 0 integer
-func __cls_new_Integer 1578
-x -16 4 0 integer
-func __cls_init_Integer 1610
+idx -16 4 0 integer
+i 0 4 0 integer
+func List.__init 2042
+this -20 8 0 ?
+func __cls_init_List 2103
+this -20 8 0 ?
+func SyncList.add 2117
+this -28 8 0 ?
+o -20 8 0 ref
+func SyncList.get 2156
 this -24 8 0 ?
-x -16 4 0 integer
-func Long.value 1626
+idx -16 4 0 integer
+r 12 8 0 ?
+func SyncList.set 2208
+this -32 8 0 ?
+idx -24 4 0 integer
+o -20 8 0 ref
+func SyncList.length 2249
 this -20 8 0 ?
-func Long.compareTo 1647
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Long.toString 1732
-this -20 8 0 ?
-func Long.__init 1758
-this -28 8 0 ?
-x -20 8 0 long
-func __cls_new_Long 1782
-x -20 8 0 long
-func __cls_init_Long 1815
-this -28 8 0 ?
-x -20 8 0 long
-func Double.value 1832
-this -20 8 0 ?
-func Double.compareTo 1853
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Double.toString 1938
-this -20 8 0 ?
-func Double.__init 1964
-this -28 8 0 ?
-x -20 8 0 double
-func __cls_new_Double 1988
-x -20 8 0 double
-func __cls_init_Double 2021
-this -28 8 0 ?
-x -20 8 0 double
-func Float.value 2038
-this -20 8 0 ?
-func Float.compareTo 2057
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Float.toString 2142
-this -20 8 0 ?
-func Float.__init 2169
+n 8 4 0 integer
+func SyncList.remove 2295
 this -24 8 0 ?
-x -16 4 0 float
-func __cls_new_Float 2192
-x -16 4 0 float
-func __cls_init_Float 2224
-this -24 8 0 ?
-x -16 4 0 float
-func Boolean.value 2240
+idx -16 4 0 integer
+func SyncList.pop 2333
 this -20 8 0 ?
-func Boolean.compareTo 2259
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Boolean.toString 2366
+r 12 8 0 ?
+n 20 4 0 integer
+func SyncList.popBlocking 2430
 this -20 8 0 ?
-func Boolean.__init 2390
-this -24 8 0 ?
-x -16 4 0 boolean
-func __cls_new_Boolean 2413
-x -16 4 0 boolean
-func __cls_init_Boolean 2445
-this -24 8 0 ?
-x -16 4 0 boolean
-func formatDouble 2477
+r 8 8 0 ?
+func SyncList.__init 2486
+this -20 8 0 ?
+func __cls_init_SyncList 2556
+this -20 8 0 ?
+func formatDouble 2586
 x -24 8 0 double
 dec -16 4 0 integer
 neg 8 4 0 boolean
@@ -315,11 +387,11 @@ sb 56 8 0 ?
 fs 80 8 0 string
 pad 88 4 0 integer
 k 92 4 0 integer
-func doubleToString 2790
+func doubleToString 2899
 x -20 8 0 double
 s 8 8 0 string
 stop 16 4 0 integer
-func longToString 2930
+func longToString 3039
 x -20 8 0 long
 neg 8 4 0 boolean
 v 12 8 0 long
@@ -328,7 +400,7 @@ nd 28 4 0 integer
 d 32 4 0 integer
 sb 36 8 0 ?
 i 60 4 0 integer
-func __strconcat 3171
+func __strconcat 3280
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

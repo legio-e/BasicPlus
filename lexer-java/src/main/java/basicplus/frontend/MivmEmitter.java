@@ -279,12 +279,26 @@ public final class MivmEmitter {
         // emitNewObject exige el descriptor ya registrado; si el usuario define
         // su PROPIA clase RuntimeError, el builtin no se sintetiza y la del
         // usuario sólo queda registrada tras la fase 4b. Ver allí.
-        synthesizeListClass();
-        synthesizeOwnerListClass();
+        /* #450 — List, OwnerList y SyncList YA NO SE SINTETIZAN: viven en BP,
+         * `List` en Core y las otras dos en Collections (decision de Eduardo:
+         * «SyncList y OwnerList deberian estar en collections; hacerlas
+         * sintetizadas me parece raro, no veo la razon»).
+         *
+         * La razon que hubo esta escrita arriba —«a cambio cualquier programa
+         * puede usarlas sin import explicito»— y hoy la da el import implicito.
+         * El precio que se pagaba: CADA modulo llevaba su propia copia.
+         *
+         * Los cuerpos sintetizados se dejan en el fichero (synthesizeListClass
+         * y compania) sin llamarlos: son la referencia de lo que la version BP
+         * tiene que hacer, y borrarlos es facil cuando esto lleve un tiempo.
+         *
+         *   synthesizeListClass();
+         *   synthesizeOwnerListClass();
+         *   synthesizeSyncListClass();
+         */
         synthesizeStringBuilderClass();
         synthesizeThreadClass();
         synthesizeMutexClass();
-        synthesizeSyncListClass();
 
         // 3a-bis) Clases de tupla `__Tuple_<sig>` para cada forma de retorno
         //         múltiple usada en el módulo. Antes de las funciones (phase 5)
@@ -3921,7 +3935,29 @@ public final class MivmEmitter {
                     emitExpr(c.args.get(i));
                     if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
                 }
-                w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
+                /* #451 — si el padre vive en OTRO modulo, la llamada tiene que ser
+                 * cross-module: `emitCall` busca por nombre en la tabla LOCAL y
+                 * reventaba con «Funcion no encontrada: Base.pon». Es el mismo
+                 * hueco que #444 pero en el `super`, y le pasa a cualquiera que
+                 * extienda una clase importada, no solo a la stdlib. */
+                /* Lo externo aqui es la CLASE DUENA, no el simbolo del metodo:
+                 * `fs.isExternal` sale false para un metodo heredado de una clase
+                 * importada (lo comprobado: la excepcion saltaba al ESCRIBIR el
+                 * fichero, o sea que el CALL se habia emitido con nombre local). */
+                ClassSymbol duena = fs.ownerClass;
+                if (duena != null && duena.isExternal) {
+                    StringBuilder qn = new StringBuilder();
+                    if (duena.externalLibrary != null && !duena.externalLibrary.isEmpty())
+                        qn.append(duena.externalLibrary).append('.');
+                    /* `Modulo.slotKey`, NO `Modulo.Clase.metodo`: el slotKey ya
+                     * codifica la clase, y con tres componentes el loader lee
+                     * «BaseMod.Base» como nombre de MODULO y busca un .mod que no
+                     * existe. Es la misma forma que usa `externalQualifiedName`. */
+                    qn.append(duena.externalModule).append('.').append(fs.slotKey());
+                    w.emitCallExt(qn.toString(), fromPathFor(qn.toString()));
+                } else {
+                    w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
+                }
                 return;
             }
             // Despacho. push receiver, push args.

@@ -1,8 +1,16 @@
 {
-  "NaturalComparator": { "compare": 2 },
+  "Comparable": {  },
+  "OwnerList": { "removeAndFree": 12 },
   "RuntimeError": {  },
   "StringComparator": { "compare": 2 },
-  "Map": { "withComparator": 2, "bsearch": 3, "insertAt": 4, "size": 5, "put": 6, "get": 7, "containsKey": 8, "remove": 9, "keyAt": 10, "valueAt": 11 },
+  "Double": {  },
   "Exception": {  },
-  "Comparator": { "compare": 2 }
+  "Comparator": { "compare": 2 },
+  "Integer": {  },
+  "Float": {  },
+  "NaturalComparator": { "compare": 2 },
+  "Long": {  },
+  "List": {  },
+  "Boolean": {  },
+  "Map": { "withComparator": 2, "bsearch": 3, "insertAt": 4, "size": 5, "put": 6, "get": 7, "containsKey": 8, "remove": 9, "keyAt": 10, "valueAt": 11 }
 }

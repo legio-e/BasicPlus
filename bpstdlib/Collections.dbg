@@ -2,197 +2,163 @@ dbg 3
 module Collections
 source C:\lenguajes\pm\bpstdlib\Collections.bp
 lines
-1209 34
-1274 44
-1285 45
-1296 46
-1319 41
-1379 60
-1392 61
-1415 57
-1475 85
-1485 86
-1493 87
-1503 88
-1522 94
-1525 95
-1537 96
-1547 97
-1556 98
-1569 99
-1585 100
-1594 101
-1608 103
-1617 104
-1628 106
-1636 109
-1655 114
-1668 115
-1681 116
-1693 117
-1703 118
-1727 119
-1751 120
-1759 122
-1774 123
-1795 128
-1805 129
-1815 130
-1825 131
-1841 136
-1851 137
-1862 138
-1871 139
-1891 141
-1910 143
-1926 148
-1936 149
-1947 150
-1952 151
-1961 152
-1979 154
-1989 155
-2008 159
-2018 160
-2031 161
-2041 162
-2057 167
-2067 168
-2078 169
-2081 170
-2090 171
-2102 172
-2114 173
-2122 175
-2132 176
-2148 188
-2158 189
-2171 190
-2181 191
-2200 195
-2210 196
-2223 197
-2233 198
-2252 76
-2276 77
-2300 78
-2324 79
-2414 212
-2449 217
+394 34
+459 44
+470 45
+481 46
+504 41
+564 60
+577 61
+600 57
+660 94
+671 95
+691 87
+749 119
+759 120
+767 121
+777 122
+796 128
+799 129
+811 130
+821 131
+830 132
+843 133
+859 134
+868 135
+882 137
+891 138
+902 140
+910 143
+929 148
+942 149
+955 150
+967 151
+977 152
+1001 153
+1025 154
+1033 156
+1048 157
+1069 162
+1079 163
+1089 164
+1099 165
+1115 170
+1125 171
+1136 172
+1145 173
+1165 175
+1184 177
+1200 182
+1210 183
+1221 184
+1226 185
+1235 186
+1253 188
+1263 189
+1282 193
+1292 194
+1305 195
+1315 196
+1331 201
+1341 202
+1352 203
+1355 204
+1364 205
+1376 206
+1388 207
+1396 209
+1406 210
+1422 222
+1432 223
+1445 224
+1455 225
+1474 229
+1484 230
+1497 231
+1507 232
+1526 110
+1534 111
+1542 112
+1566 113
+1656 246
+1691 251
 vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 38
-this -28 8 0 ?
-item -20 8 0 ?
-func List.get 116
-this -24 8 0 ?
-idx -16 4 0 ?
-func List.set 135
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func List.length 152
-this -20 8 0 ?
-func List.remove 166
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func List.__init 249
-this -20 8 0 ?
-func OwnerList.removeAndFree 284
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func OwnerList.__init 393
-this -20 8 0 ?
-func StringBuilder.appendChar 409
+func StringBuilder.appendChar 38
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 486
+func StringBuilder.appendStr 115
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 537
+func StringBuilder.appendInt 166
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 556
+func StringBuilder.toString 185
 this -20 8 0 ?
-func StringBuilder.length 580
+func StringBuilder.length 209
 this -20 8 0 ?
-func StringBuilder.__init 594
+func StringBuilder.__init 223
 this -20 8 0 ?
-func Thread.run 627
+func Thread.run 256
 this -20 8 0 ?
-func Thread.start 633
+func Thread.start 262
 this -20 8 0 ?
-func Thread.join 647
+func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 661
+func Thread.__init 290
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 680
+func Mutex.lock 309
 this -20 8 0 ?
-func Mutex.unlock 694
+func Mutex.unlock 323
 this -20 8 0 ?
-func Mutex.__init 708
+func Mutex.__init 337
 this -20 8 0 ?
-func SyncList.add 722
-this -28 8 0 ?
-item -20 8 0 ?
-func SyncList.remove 761
-this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.get 799
-this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.set 840
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func SyncList.length 881
-this -20 8 0 ?
-func SyncList.pop 918
-this -20 8 0 ?
-func SyncList.popBlocking 1015
-this -20 8 0 ?
-func SyncList.__init 1126
-this -20 8 0 ?
-func Comparator.compare 1206
+func Comparator.compare 391
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
-func Comparator.__init 1221
+func Comparator.__init 406
 this -20 8 0 ?
-func __cls_init_Comparator 1257
+func __cls_init_Comparator 442
 this -20 8 0 ?
-func StringComparator.compare 1271
+func StringComparator.compare 456
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 sa 4 8 0 string
 sb 12 8 0 string
-func StringComparator.__init 1316
+func StringComparator.__init 501
 this -20 8 0 ?
-func __cls_init_StringComparator 1362
+func __cls_init_StringComparator 547
 this -20 8 0 ?
-func NaturalComparator.compare 1376
+func NaturalComparator.compare 561
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 ca 4 8 0 ?
-func NaturalComparator.__init 1412
+func NaturalComparator.__init 597
 this -20 8 0 ?
-func __cls_init_NaturalComparator 1458
+func __cls_init_NaturalComparator 643
 this -20 8 0 ?
-func Map.withComparator 1472
+func OwnerList.removeAndFree 657
+this -24 8 0 ?
+idx -16 4 0 integer
+muerto 0 8 0 ?
+func OwnerList.__init 688
+this -20 8 0 ?
+func __cls_init_OwnerList 732
+this -20 8 0 ?
+func Map.withComparator 746
 this -28 8 0 ?
 c -20 8 0 ref
-func Map.bsearch 1519
+func Map.bsearch 793
 this -28 8 0 ?
 key -20 8 0 ref
 lo 4 4 0 integer
@@ -200,47 +166,47 @@ hi 8 4 0 integer
 mid 12 4 0 integer
 midKey 16 8 0 ?
 c 24 4 0 integer
-func Map.insertAt 1652
+func Map.insertAt 926
 this -40 8 0 ?
 ip -32 4 0 integer
 key -28 8 0 ref
 val -20 8 0 ref
 i 4 4 0 integer
-func Map.size 1792
+func Map.size 1066
 this -20 8 0 ?
 n 8 4 0 integer
-func Map.put 1838
+func Map.put 1112
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
 idx 4 4 0 integer
-func Map.get 1923
+func Map.get 1197
 this -28 8 0 ?
 key -20 8 0 ref
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 2005
+func Map.containsKey 1279
 this -28 8 0 ?
 key -20 8 0 ref
 found 8 4 0 boolean
-func Map.remove 2054
+func Map.remove 1328
 this -28 8 0 ?
 key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 2145
+func Map.keyAt 1419
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 2197
+func Map.valueAt 1471
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 2249
+func Map.__init 1523
 this -20 8 0 ?
-func __cls_init_Map 2381
+func __cls_init_Map 1623
 this -20 8 0 ?
-func __strconcat 2503
+func __strconcat 1745
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

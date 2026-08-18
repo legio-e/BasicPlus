@@ -63,6 +63,40 @@ module Collections
   end NaturalComparator
 
   // -------------------------------------------------------------
+  // #450 — SyncList y OwnerList, en BP y en Collections.
+  //
+  // Decision de Eduardo (18-ago): «SyncList y OwnerList deberian estar en
+  // collections. Hacerlas sintetizadas me parece raro, no veo la razon».
+  // La razon era una sola, y esta escrita en el emisor: «emitidas siempre...
+  // a cambio cualquier programa puede usarlas sin import explicito». Hoy eso
+  // lo da el import implicito, y el precio que se pagaba era que CADA modulo
+  // llevaba su propia copia de las tres.
+  //
+  // `List` vive en Core (es tipo basico y el Map de aqui la usa); estas dos
+  // son de colecciones y se quedan en su sitio.
+  // -------------------------------------------------------------
+
+  // Lista PROPIETARIA: al liberarla se liberan tambien sus elementos. Eso lo
+  // hace el `var owner` del campo, que marca el bit del descriptor y la VM
+  // cascadea (verificado en samples/OwnerBp.bp, con el guardian de fin de RUN
+  // diciendo «0 bloques sin liberar»).
+  public class OwnerList extends Core.List
+    var owner propios: Object[]
+
+    public function OwnerList()
+      super()
+    end OwnerList
+
+    // Quitar UN elemento liberandolo. El `var owner` local emite el FREE_REF
+    // al salir del scope, que es la misma semantica que el removeAndFree
+    // sintetizado escribia a mano.
+    public function removeAndFree(idx: integer)
+      var owner muerto: Object := this.get(idx)
+      this.remove(idx)
+    end removeAndFree
+  end OwnerList
+
+  // -------------------------------------------------------------
   // Map — diccionario ordenado por clave.
   // -------------------------------------------------------------
   public class Map

@@ -274,4 +274,180 @@ module Core
     endwh
     return sb.toString()
   end longToString
+
+  // -------------------------------------------------------------
+  // #448 — LIST, en BP y en Core.
+  //
+  // Decision de Eduardo (18-ago): «la list sintetizada deberia desaparecer
+  // (se puede comentar) y utilizar la de Core». El motivo por el que se
+  // sintetizaba —«para poder usarla sin import»— ya lo da el import
+  // implicito de Core.
+  //
+  // Que hacia falta para poder escribirla aqui, y se hizo hoy:
+  //   #442  un literal de array guardaba SIEMPRE 4 bytes por casilla
+  //   #443  newObjArray/growObjArray: crear un array de refs POR TAMANO
+  //   #444  el downcast a una clase de otro modulo (Integer(o) desde fuera)
+  //   #447  el downcast a la PROPIA clase (Integer(other) en su compareTo)
+  //
+  // El `add` sobrecargado es el diseno de Eduardo: «add(i:integer) lo que
+  // hace es llamar a add(obj:Object) y le pasa Integer(i). Los object,
+  // strings y arrays en teoria no hace falta envolverlos.»
+  //
+  // Y esa delegacion es VIRTUAL, lo que hace que las subclases hereden las
+  // sobrecargas sin copiarlas: a SyncList le basta con su add(Object) con
+  // lock (medido en samples/ListaHer.bp).
+  //
+  // ⚠️ La PRIMERA firma es la de Object a proposito: por la regla de H5.a la
+  // primera lleva el nombre pelado y el resto van mangleadas, asi que el
+  // simbolo `add` sigue significando lo de siempre.
+  // -------------------------------------------------------------
+
+  public class List
+    var items: Object[]
+    var size:  integer
+    var cap:   integer
+
+    public function List()
+      this.cap   := 4
+      this.size  := 0
+      this.items := newObjArray(this.cap)
+    end List
+
+    public function add(o: Object)
+      if this.size >= this.cap then
+        this.cap   := this.cap * 2
+        this.items := growObjArray(this.items, this.cap)
+      endif
+      this.items[this.size] := o
+      this.size := this.size + 1
+    end add
+
+    // Las sobrecargas: envuelven el escalar y DELEGAN. Nada de casos
+    // especiales en el compilador.
+    public function add(i: integer)
+      this.add(Integer(i))
+    end add
+    public function add(l: long)
+      this.add(Long(l))
+    end add
+    public function add(d: double)
+      this.add(Double(d))
+    end add
+    public function add(f: float)
+      this.add(Float(f))
+    end add
+    public function add(b: boolean)
+      this.add(Boolean(b))
+    end add
+
+    public function get(idx: integer): Object
+      return this.items[idx]
+    end get
+
+    public function set(idx: integer, o: Object)
+      this.items[idx] := o
+    end set
+
+    public function length(): integer
+      return this.size
+    end length
+
+    public function remove(idx: integer)
+      var i: integer := idx
+      while i < this.size - 1 do
+        this.items[i] := this.items[i + 1]
+        i := i + 1
+      endwh
+      this.size := this.size - 1
+      this.items[this.size] := null
+    end remove
+  end List
+
+  // -------------------------------------------------------------
+  // #451 — SyncList esta AQUI y no en Collections, que es donde Eduardo
+  // la queria, por un motivo concreto y medido: sus metodos con cerrojo
+  // llaman a `super.add(...)`, y **un `super` cross-module no se puede
+  // hacer hoy** — un modulo NO exporta sus metodos (solo __init y los
+  // __cls_new_/__cls_init_), asi que no hay simbolo al que llamar; se
+  // llega por vtable. `OwnerList` si esta en Collections porque solo usa
+  // llamadas VIRTUALES (this.get / this.remove), que si cruzan.
+  //
+  // Se mueve a Collections en cuanto exista el super cross-module (ficha
+  // #451). Mientras tanto vive junto a su base, que es lo unico que
+  // funciona sin dejar el reparto a medias.
+  // -------------------------------------------------------------
+
+  // Lista con cerrojo: cada operacion es atomica de por si. NO hace atomica
+  // una SECUENCIA de operaciones — para eso, un Mutex del llamante.
+  public class SyncList extends List
+    var mtx: Mutex
+
+    public function SyncList()
+      super()
+      this.mtx := Mutex()
+    end SyncList
+
+    // Las cinco con cerrojo. Ojo: SOLO se redefine add(Object) — las
+    // sobrecargas add(integer/long/...) se heredan de List y delegan en
+    // `this.add(o)`, que despacha por vtable y acaba AQUI, con el cerrojo
+    // puesto (medido en samples/ListaHer.bp).
+    public function add(o: Object)
+      this.mtx.lock()
+      super.add(o)
+      this.mtx.unlock()
+    end add
+
+    public function get(idx: integer): Object
+      this.mtx.lock()
+      var r: Object := super.get(idx)
+      this.mtx.unlock()
+      return r
+    end get
+
+    public function set(idx: integer, o: Object)
+      this.mtx.lock()
+      super.set(idx, o)
+      this.mtx.unlock()
+    end set
+
+    public function length(): integer
+      this.mtx.lock()
+      var n: integer := super.length()
+      this.mtx.unlock()
+      return n
+    end length
+
+    public function remove(idx: integer)
+      this.mtx.lock()
+      super.remove(idx)
+      this.mtx.unlock()
+    end remove
+
+    // Propio de SyncList: sacar el ultimo de forma atomica (cola LIFO).
+    public function pop(): Object
+      this.mtx.lock()
+      var r: Object := null
+      var n: integer := super.length()
+      if n > 0 then
+        r := super.get(n - 1)
+        super.remove(n - 1)
+      endif
+      this.mtx.unlock()
+      return r
+    end pop
+
+    // Espera hasta que haya algo. El sleep(1) cede el turno: un spin a secas
+    // se comeria el nucleo y, en el planificador propio, podria no dejar
+    // avanzar al que tiene que meter el dato.
+    public function popBlocking(): Object
+      var r: Object := this.pop()
+      while r == null do
+        sleep(1)
+        r := this.pop()
+      endwh
+      return r
+    end popBlocking
+  end SyncList
+
+
 end Core

@@ -557,6 +557,7 @@ public final class Main {
                     try {
                         SemanticAnalyzer recAnalyzer = new SemanticAnalyzer();
                         injectImplicitCoreImport(parsed.module);
+                        injectImplicitCollectionsImport(parsed.module);   // #450
                         if (parsed.module.imports != null) {
                             for (Ast.ImportNode imp : parsed.module.imports) {
                                 try { ensureInterfaceForImport(imp, src, ctx, depth + 1); }
@@ -594,7 +595,8 @@ public final class Main {
             // 2) Cargar .bpi disponibles en el analizador.
             SemanticAnalyzer analyzer = new SemanticAnalyzer();
             int impErrsBefore = ctx.totalErrors;
-            injectImplicitCoreImport(module);   // #248 — lazy: solo si usa excepciones
+            injectImplicitCoreImport(module);          // #248/#450 — ahora SIEMPRE
+            injectImplicitCollectionsImport(module);   // #450 — solo si nombra SyncList/OwnerList
             loadImportsForAnalyzer(module, src, ctx, analyzer, depth + 1);
             // N6 — un import incompatible/erróneo (interfaz no satisfecha, impl
             // ausente, binding mal usado) es FATAL: no producimos un .mod roto.
@@ -2387,11 +2389,76 @@ public final class Main {
                         && "Core".equals(imp.path.get(imp.path.size() - 1))) return;
             }
         }
-        if (!usesExceptions(module)) return;
         if (module.imports == null) return;   // defensivo: el parser siempre crea la lista
+        /* #450 — antes esto solo se inyectaba si el modulo usaba EXCEPCIONES, para
+         * que los demas «no ganaran ninguna dependencia». Ya no vale: desde que
+         * `List` y los envoltorios viven en Core, cualquier modulo puede nombrarlos
+         * SIN cualificar, y detectarlo exigiria recorrer las expresiones buscando
+         * identificadores — o sea censar por el NOMBRE, que en este proyecto ya ha
+         * salido mal varias veces.
+         *
+         * Asi que Core entra siempre. Lo que cuesta es una linea de dependencia en
+         * el .mod: el Core.mod esta PREINSTALADO en las tres familias, o sea que el
+         * micro no carga nada que no tuviera ya. */
         java.util.List<String> p = new java.util.ArrayList<>();
         p.add("Core");
         module.imports.add(new Ast.ImportNode(p, null, module.line, module.column));
+    }
+
+    /** #450 — `import Collections` implicito si el modulo NOMBRA `SyncList` u
+     *  `OwnerList` como tipo. Aqui si es una condicion y no un «siempre»: son
+     *  clases de coleccion, no del nucleo, y quien no las usa no debe cargarlas.
+     *  Un falso negativo no corrompe nada — da un «identificador no resuelto» en
+     *  compilacion, que se ve. */
+    static void injectImplicitCollectionsImport(Ast.ModuleNode module) {
+        if (module == null || "Collections".equals(module.name)) return;
+        if (module.imports == null) return;
+        for (Ast.ImportNode imp : module.imports) {
+            if (imp.path != null && !imp.path.isEmpty()
+                    && "Collections".equals(imp.path.get(imp.path.size() - 1))) return;
+        }
+        if (!usaListasDeColeccion(module)) return;
+        java.util.List<String> p = new java.util.ArrayList<>();
+        p.add("Collections");
+        module.imports.add(new Ast.ImportNode(p, null, module.line, module.column));
+    }
+
+    private static boolean usaListasDeColeccion(Ast.ModuleNode module) {
+        for (Ast.ITopLevelDecl d : module.defs) {
+            if (declNombraTipo(d)) return true;
+        }
+        return false;
+    }
+
+    private static boolean declNombraTipo(Ast.ITopLevelDecl d) {
+        if (d instanceof Ast.FuncDef) {
+            Ast.FuncDef f = (Ast.FuncDef) d;
+            if (tipoEsListaDeColeccion(f.returnType)) return true;
+            for (Ast.Param p : f.params) if (tipoEsListaDeColeccion(p.type)) return true;
+            return stmtsNombranTipo(f.body);
+        }
+        if (d instanceof Ast.ClassDef) {
+            for (Ast.ITopLevelDecl m : ((Ast.ClassDef) d).members) {
+                if (declNombraTipo(m)) return true;
+            }
+            return false;
+        }
+        if (d instanceof Ast.VarDecl) return tipoEsListaDeColeccion(((Ast.VarDecl) d).type);
+        return false;
+    }
+
+    private static boolean stmtsNombranTipo(java.util.List<Ast.IStmt> body) {
+        if (body == null) return false;
+        for (Ast.IStmt s : body) {
+            if (s instanceof Ast.VarDecl && tipoEsListaDeColeccion(((Ast.VarDecl) s).type)) return true;
+        }
+        return false;
+    }
+
+    private static boolean tipoEsListaDeColeccion(Ast.TypeRef t) {
+        if (!(t instanceof Ast.SimpleTypeRef)) return false;
+        String n = ((Ast.SimpleTypeRef) t).name;
+        return "SyncList".equals(n) || "OwnerList".equals(n);
     }
 
     /** #248 — ¿el módulo usa excepciones? try/throw en cualquier cuerpo

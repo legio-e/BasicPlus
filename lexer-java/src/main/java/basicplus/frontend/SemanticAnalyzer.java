@@ -149,11 +149,28 @@ public final class SemanticAnalyzer {
         // las clases ÚNICAS de Core (stubs del .bpi). tryDefine cede ante una
         // clase local homónima del usuario (compat #220).
         for (Symbol.ImportedNamespaceSymbol ns : preloadedImports) {
-            if (!"Core".equals(ns.moduleName)) continue;
-            Symbol exc = ns.classes.get("Exception");
-            Symbol rte = ns.classes.get("RuntimeError");
-            if (exc != null) module.members.tryDefine(exc);
-            if (rte != null) module.members.tryDefine(rte);
+            if ("Core".equals(ns.moduleName)) {
+                Symbol exc = ns.classes.get("Exception");
+                Symbol rte = ns.classes.get("RuntimeError");
+                if (exc != null) module.members.tryDefine(exc);
+                if (rte != null) module.members.tryDefine(rte);
+                /* #450 — `List` se escribe SIN cualificar, como siempre. Antes lo
+                 * conseguia siendo una clase sintetizada; ahora vive en Core y se
+                 * aliasa igual que Exception. Los envoltorios van con ella: quien
+                 * usa `Object` de comodin escribe `Integer(o)`, no
+                 * `Core.Integer(o)`. */
+                for (String n : new String[]{"List", "SyncList", "Integer", "Long",
+                                             "Double", "Float", "Boolean", "Comparable"}) {
+                    Symbol c = ns.classes.get(n);
+                    if (c != null) module.members.tryDefine(c);
+                }
+            } else if ("Collections".equals(ns.moduleName)) {
+                /* #450 — idem para las dos que se quedaron en Collections. */
+                for (String n : new String[]{"OwnerList"}) {
+                    Symbol c = ns.classes.get(n);
+                    if (c != null) module.members.tryDefine(c);
+                }
+            }
         }
     }
 
@@ -390,28 +407,11 @@ public final class SemanticAnalyzer {
                    new BpType[]{new ArrayType(new BpType.ClassType(objectCls)),
                                 PrimitiveType.INTEGER});
 
-        // ---- Clase stdlib: List (lista dinámica de refs a objetos) ----
-        // Las firmas que toman/devuelven `any` permiten almacenar instancias
-        // de cualquier clase de usuario sin fricción de tipos.
-        ClassSymbol listCls = new ClassSymbol("List", true, null, null, 0, 0);
-        listCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
-        {
-            FunctionSymbol ctor = makeMethod("List", listCls, null, true);
-            ctor.isConstructor = true;
-            listCls.constructor = ctor;
-            listCls.instanceMembers.tryDefine(ctor);
-            listCls.instanceMembers.tryDefine(makeMethod("add",    listCls, VoidType.INSTANCE,
-                    new String[]{"item"}, new BpType[]{AnyType.INSTANCE}));
-            listCls.instanceMembers.tryDefine(makeMethod("get",    listCls, AnyType.INSTANCE,
-                    new String[]{"idx"}, new BpType[]{PrimitiveType.INTEGER}));
-            listCls.instanceMembers.tryDefine(makeMethod("set",    listCls, VoidType.INSTANCE,
-                    new String[]{"idx","item"}, new BpType[]{PrimitiveType.INTEGER, AnyType.INSTANCE}));
-            listCls.instanceMembers.tryDefine(makeMethod("length", listCls, PrimitiveType.INTEGER,
-                    new String[]{}, new BpType[]{}));
-            listCls.instanceMembers.tryDefine(makeMethod("remove", listCls, VoidType.INSTANCE,
-                    new String[]{"idx"}, new BpType[]{PrimitiveType.INTEGER}));
-        }
-        s.tryDefine(listCls);
+        /* #450 — `List` ya NO se registra aqui: vive en BP y llega por
+         * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
+         * builtin para que no tape al de verdad. */
+
+
 
         // ---- Clase stdlib: Thread (multitarea cooperativa) ----
         // Subclasea para tu worker, sobreescribe run(), llama start()/join().
@@ -455,65 +455,17 @@ public final class SemanticAnalyzer {
         }
         s.tryDefine(mutexCls);
 
-        // ---- Clase stdlib: SyncList (lista thread-safe) ----
-        // Hereda de List; cada método público está envuelto con lock/unlock
-        // contra un Mutex por instancia. Útil cuando varios threads BP
-        // comparten una colección. Para read-modify-write atómicos
-        // compuestos (e.g. "si está vacía, añade"), el usuario debe seguir
-        // tomando un Mutex propio: SyncList sólo garantiza atomicidad por
-        // operación individual.
-        ClassSymbol syncListCls = new ClassSymbol("SyncList", true, "List", null, 0, 0);
-        syncListCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
-        syncListCls.baseClass = listCls;
-        {
-            FunctionSymbol ctor = makeMethod("SyncList", syncListCls, null, true);
-            ctor.isConstructor = true;
-            syncListCls.constructor = ctor;
-            syncListCls.instanceMembers.tryDefine(ctor);
-            // Overrides explícitos (mismas firmas que List) para documentar
-            // que el método del subtipo se llama (con locking).
-            syncListCls.instanceMembers.tryDefine(makeMethod("add",    syncListCls, VoidType.INSTANCE,
-                    new String[]{"item"}, new BpType[]{AnyType.INSTANCE}));
-            syncListCls.instanceMembers.tryDefine(makeMethod("get",    syncListCls, AnyType.INSTANCE,
-                    new String[]{"idx"}, new BpType[]{PrimitiveType.INTEGER}));
-            syncListCls.instanceMembers.tryDefine(makeMethod("set",    syncListCls, VoidType.INSTANCE,
-                    new String[]{"idx","item"}, new BpType[]{PrimitiveType.INTEGER, AnyType.INSTANCE}));
-            syncListCls.instanceMembers.tryDefine(makeMethod("length", syncListCls, PrimitiveType.INTEGER,
-                    new String[]{}, new BpType[]{}));
-            syncListCls.instanceMembers.tryDefine(makeMethod("remove", syncListCls, VoidType.INSTANCE,
-                    new String[]{"idx"}, new BpType[]{PrimitiveType.INTEGER}));
-            // Específico de SyncList: pop atómico (queue-like).
-            syncListCls.instanceMembers.tryDefine(makeMethod("pop",    syncListCls, AnyType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-            // N5: popBlocking espera hasta haber un item (yield-spin internamente).
-            syncListCls.instanceMembers.tryDefine(makeMethod("popBlocking", syncListCls, AnyType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-        }
-        s.tryDefine(syncListCls);
+        /* #450 — `SyncList` ya NO se registra aqui: vive en BP y llega por
+         * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
+         * builtin para que no tape al de verdad. */
 
-        // ---- Clase stdlib: OwnerList (List propietaria de sus elementos) ----
-        // Hereda de List la API completa (add, get, set, length, remove). La
-        // diferencia es semántica: al liberar la OwnerList (FREE_REF directo
-        // o vía variable `owner`), se liberan también todos los objetos
-        // contenidos. Implementado vía cascada en TYPE_ARRAY_REF + bitmap
-        // owner del field `items` en el descriptor de OwnerList.
-        ClassSymbol ownerListCls = new ClassSymbol("OwnerList", true, "List", null, 0, 0);
-        ownerListCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
-        ownerListCls.baseClass = listCls;
-        {
-            FunctionSymbol ctor = makeMethod("OwnerList", ownerListCls, null, true);
-            ctor.isConstructor = true;
-            ownerListCls.constructor = ctor;
-            ownerListCls.instanceMembers.tryDefine(ctor);
-            // Método propio: removeAndFree(idx) libera el item ANTES de
-            // desplazar. Útil cuando se quiere quitar UN elemento concreto
-            // sin destruir la lista entera.
-            ownerListCls.instanceMembers.tryDefine(makeMethod("removeAndFree", ownerListCls, VoidType.INSTANCE,
-                    new String[]{"idx"}, new BpType[]{PrimitiveType.INTEGER}));
-            // El resto de métodos (add, get, set, length, remove) se heredan
-            // del baseClass List.
-        }
-        s.tryDefine(ownerListCls);
+
+
+        /* #450 — `OwnerList` ya NO se registra aqui: vive en BP y llega por
+         * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
+         * builtin para que no tape al de verdad. */
+
+
 
         // ---- Clase stdlib: StringBuilder (construcción eficiente de strings) ----
         ClassSymbol sbCls = new ClassSymbol("StringBuilder", true, null, null, 0, 0);

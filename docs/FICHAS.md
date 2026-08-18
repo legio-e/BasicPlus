@@ -905,6 +905,44 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
+- 🟢 **#450 — el compilador YA NO sintetiza `List`, `SyncList` ni `OwnerList`.**
+  Encargo de Eduardo (18-ago), hecho: las tres están escritas en BP. `List` y
+  `SyncList` en `Core`, `OwnerList` en `Collections`. Un programa las sigue usando
+  **sin un solo import**, y `l.add(42)` envuelve solo por la sobrecarga.
+  La razón que hubo para sintetizarlas está en el propio emisor —*«a cambio
+  cualquier programa puede usarlas sin import explícito»*— y hoy la da el import
+  implícito. El precio que se pagaba: **cada módulo llevaba su propia copia**.
+  📐 Tres cambios acoplados (a medias no compila): el emisor deja de sintetizar
+  (los cuerpos se quedan comentados como referencia), el semántico deja de
+  registrar los `ClassSymbol` builtin, y los nombres se aliasan sin cualificar como
+  ya se hacía con `Exception`. `Core` pasa a importarse **siempre**: desde que `List` y
+  los envoltorios viven ahí, detectarlo exigiría buscar identificadores en las
+  expresiones — censar por el NOMBRE, que aquí ya ha salido mal. El `Core.mod` está
+  preinstalado en las tres familias, así que el micro no carga nada nuevo.
+  📏 **El coste, medido**: `Core.mod` pasa de **2.576 a 8.306 bytes**.
+  ✅ Verificado: **compat 36 PASS**, la stdlib entera reconstruida, los blobs
+  embebidos regenerados en las tres familias y **el firmware de la Pico enlazado**.
+
+- 🔴 **#451 — no se puede llamar a `super.metodo()` si el padre está en OTRO módulo.**
+  ```
+  public class Sub extends BaseMod.Base
+    public function pon(x: integer)
+      super.pon(x * 2)     ← RuntimeException: «Funcion no encontrada: Base.pon»
+  ```
+  📐 **La causa no es el nombre, es la ABI**: un módulo **no exporta sus métodos**
+  (sólo `__init` y los `__cls_new_`/`__cls_init_` — comprobado en los EXPORTS del
+  `.mod`). A un método se llega por **vtable**, así que un `super` cross-module no
+  tiene símbolo al que llamar. Probé a cualificarlo de dos formas y las dos fallan
+  más abajo: no es un fallo de nombre.
+  ⚠️ **Le pasa a cualquiera** que extienda una clase importada y quiera delegar en
+  la base, no sólo a la stdlib. Y revienta con traza de Java en vez de dar un
+  diagnóstico.
+  📌 Consecuencia inmediata: **`SyncList` está en `Core` y no en `Collections`**, que es
+  donde Eduardo la quiere — sus métodos con cerrojo llaman a `super.add(...)`.
+  `OwnerList` sí está en `Collections` porque sólo usa llamadas **virtuales**
+  (`this.get`/`this.remove`), que cruzan sin problema. Se mueve en cuanto esto se
+  arregle.
+
 - 🟢 **#449 — `OwnerList` SÍ se puede escribir en BP; NO hace falta sintetizarla.**
   Eduardo, 18-ago: *«SyncList y OwnerList deberían estar en collections. Hacerlas
   sintetizadas me parece raro, no veo la razón»*. Yo había dicho que `OwnerList` era
