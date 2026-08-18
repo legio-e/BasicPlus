@@ -1,19 +1,20 @@
 // XCmpTest — compareTo cross-module DIRECTO (no via map), Integer vs Long.
 module XCmpTest
   import Collections
+  import Core          // #446 — los envoltorios viven aqui
 
   function Main()
     // Integer (campos de 4 bytes).
-    var i1: Collections.Integer := Collections.Integer(100)
-    var i2: Collections.Integer := Collections.Integer(200)
+    var i1: Core.Integer := Core.Integer(100)
+    var i2: Core.Integer := Core.Integer(200)
     print "int cmp(100,200)="
     print i1.compareTo(i2)
     print "int cmp(200,100)="
     print i2.compareTo(i1)
 
     // Long (campo de 8 bytes).
-    var l1: Collections.Long := Collections.Long(100L)
-    var l2: Collections.Long := Collections.Long(5000000000L)
+    var l1: Core.Long := Core.Long(100L)
+    var l2: Core.Long := Core.Long(5000000000L)
     print "l1.value="
     print l1.value()
     print "l2.value="

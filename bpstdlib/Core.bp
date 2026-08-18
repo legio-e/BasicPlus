@@ -33,4 +33,245 @@ module Core
     end RuntimeError
   end RuntimeError
 
+  // -------------------------------------------------------------
+  // #446 — COMPARABLE Y LOS ENVOLTORIOS, traidos de Collections el 18-ago.
+  //
+  // Vienen porque `List` se muda aqui (decision de Eduardo: «la list
+  // sintetizada deberia desaparecer y utilizar la de Core») y sus
+  // sobrecargas de `add` los necesitan para envolver los escalares. Si se
+  // quedaran en Collections, Core tendria que importar Collections y
+  // Collections a Core — circular.
+  //
+  // Ayer esto no se podia: `NaturalComparator` se queda en Collections y
+  // baja a `Comparable`, o sea un downcast cross-module, que REVENTABA el
+  // compilador. Lo arreglo #444 esta misma tarde.
+  // -------------------------------------------------------------
+  // Comparable + envoltorios (boxing MANUAL de primitivos).
+  // Los contenedores trabajan con Object; para meter un primitivo se
+  // envuelve a mano: Integer(5), Double(3.14)... Para sacarlo: .value().
+  // Campos privados (no se exportan cross-module) → unboxing por método.
+  // Integer/Long/Double/Float/Boolean funcionan same-module y cross-module
+  // (BUG-6 cerrado: campos de instancia de 8 bytes long/double + paso de
+  //  args de 8 bytes en métodos virtuales, ambas VMs en paridad).
+  // -------------------------------------------------------------
+
+  // Base de claves/valores ordenables. compareTo: -1 / 0 / 1.
+  public class Comparable
+    public function Comparable()
+    end Comparable
+    public function compareTo(other: Object): integer
+      return 0
+    end compareTo
+  end Comparable
+
+  public class Integer extends Comparable
+    var v: integer
+    public function Integer(x: integer)
+      super()
+      this.v := x
+    end Integer
+    public function value(): integer
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Integer := Integer(other)
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return intToString(this.v)
+    end toString
+  end Integer
+
+  public class Long extends Comparable
+    var v: long
+    public function Long(x: long)
+      super()
+      this.v := x
+    end Long
+    public function value(): long
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Long := Long(other)
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return longToString(this.v)
+    end toString
+  end Long
+
+  public class Double extends Comparable
+    var v: double
+    public function Double(x: double)
+      super()
+      this.v := x
+    end Double
+    public function value(): double
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Double := Double(other)
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return doubleToString(this.v)
+    end toString
+  end Double
+
+  public class Float extends Comparable
+    var v: float
+    public function Float(x: float)
+      super()
+      this.v := x
+    end Float
+    public function value(): float
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Float := Float(other)
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return doubleToString(this.v)
+    end toString
+  end Float
+
+  public class Boolean extends Comparable
+    var v: boolean
+    public function Boolean(x: boolean)
+      super()
+      this.v := x
+    end Boolean
+    public function value(): boolean
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Boolean := Boolean(other)
+      if (not this.v) and o.v then
+        return -1
+      endif
+      if this.v and (not o.v) then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return boolToString(this.v)
+    end toString
+  end Boolean
+
+  // -------------------------------------------------------------
+  // #446 — formateo de double, traido de Str.
+  //
+  // Viene porque los envoltorios Double/Float lo usan en su toString(), y
+  // Core no puede importar Str: Str usa excepciones, o sea que ya importa
+  // Core implicitamente y seria circular.
+  //
+  // Y NO vale sustituirlo por `"" + x`: MEDIDO el 18-ago, coinciden en los
+  // casos normales pero NO en los extremos — el concat da 1E12 y 1E-9
+  // donde esto da 1000000000000 y 0. Cambiarlo movia la salida.
+  // -------------------------------------------------------------
+
+  public function formatDouble(x: double, dec: integer): string
+    var neg: boolean := x < 0.0
+    var ax: double := x
+    if neg then
+      ax := -ax
+    endif
+    var scale: long := 1
+    var i: integer := 0
+    while i < dec do
+      scale := scale * 10
+      i := i + 1
+    endwh
+    var scaled: long := long(ax * double(scale) + 0.5)
+    if scaled == 0 then
+      neg := false                  // evita "-0.00"
+    endif
+    var intPart: long := scaled / scale
+    var fracPart: long := scaled mod scale
+    var sb: StringBuilder := StringBuilder()
+    if neg then
+      sb.appendChar(45)             // '-'
+    endif
+    sb.appendStr(longToString(intPart))
+    if dec > 0 then
+      sb.appendChar(46)             // '.'
+      var fs: string := longToString(fracPart)
+      var pad: integer := dec - strlen(fs)
+      var k: integer := 0
+      while k < pad do
+        sb.appendChar(48)           // '0' de relleno a la izquierda
+        k := k + 1
+      endwh
+      sb.appendStr(fs)
+    endif
+    return sb.toString()
+  end formatDouble
+
+  public function doubleToString(x: double): string
+    var s: string := formatDouble(x, 6)    // dec=6 → siempre incluye '.'
+    var stop: integer := strlen(s)
+    while stop > 0 and charCodeAt(s, stop - 1) == 48 do   // quita '0'
+      stop := stop - 1
+    endwh
+    if stop > 0 and charCodeAt(s, stop - 1) == 46 then     // quita '.' suelto
+      stop := stop - 1
+    endif
+    return substring(s, 0, stop)
+  end doubleToString
+
+  // #446 — traida de Str: la usa formatDouble.
+  public function longToString(x: long): string
+    if x == 0 then
+      return "0"
+    endif
+    var neg: boolean := x < 0
+    var v: long := x
+    if not neg then
+      v := -v                       // ahora v <= 0 siempre
+    endif
+    var digits: integer[] := newIntArray(24)
+    var nd: integer := 0
+    while v < 0 do
+      var d: integer := integer(-(v mod 10))   // 0..9 (v es negativo)
+      digits[nd] := d
+      nd := nd + 1
+      v := v / 10
+    endwh
+    var sb: StringBuilder := StringBuilder()
+    if neg then
+      sb.appendChar(45)             // '-'
+    endif
+    var i: integer := nd - 1
+    while i >= 0 do
+      sb.appendChar(48 + digits[i]) // '0' + dígito
+      i := i - 1
+    endwh
+    return sb.toString()
+  end longToString
 end Core

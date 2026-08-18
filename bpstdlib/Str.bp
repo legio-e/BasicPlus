@@ -25,6 +25,8 @@
 // ============================================================
 module Str
 
+  import Core   // #446 — formatDouble/doubleToString viven alli
+
   // -------------------------------------------------------------
   // Helpers internos
   // -------------------------------------------------------------
@@ -47,33 +49,10 @@ module Str
   // EXACTAMENTE la misma salida (verificado en ambas VMs) y se mantienen
   // por compatibilidad y para componer; formatDouble(x, dec) sigue siendo
   // la unica forma de elegir el numero de decimales.
+  // #446 — implementacion en Core (la usa formatDouble, que se mudo con los
+  // envoltorios). Fachada: `Str.longToString` sigue existiendo.
   public function longToString(x: long): string
-    if x == 0 then
-      return "0"
-    endif
-    var neg: boolean := x < 0
-    var v: long := x
-    if not neg then
-      v := -v                       // ahora v <= 0 siempre
-    endif
-    var digits: integer[] := newIntArray(24)
-    var nd: integer := 0
-    while v < 0 do
-      var d: integer := integer(-(v mod 10))   // 0..9 (v es negativo)
-      digits[nd] := d
-      nd := nd + 1
-      v := v / 10
-    endwh
-    var sb: StringBuilder := StringBuilder()
-    if neg then
-      sb.appendChar(45)             // '-'
-    endif
-    var i: integer := nd - 1
-    while i >= 0 do
-      sb.appendChar(48 + digits[i]) // '0' + dígito
-      i := i - 1
-    endwh
-    return sb.toString()
+    return Core.longToString(x)
   end longToString
 
   // -------------------------------------------------------------
@@ -82,41 +61,9 @@ module Str
   // Punto fijo, SIN notación científica, redondeo al más cercano.
   // Limitación documentada: magnitudes enormes (x * 10^dec por encima
   // de ~9.2e18) desbordan el long de escalado.
+  // #446 — idem: la implementacion vive en Core.
   public function formatDouble(x: double, dec: integer): string
-    var neg: boolean := x < 0.0
-    var ax: double := x
-    if neg then
-      ax := -ax
-    endif
-    var scale: long := 1
-    var i: integer := 0
-    while i < dec do
-      scale := scale * 10
-      i := i + 1
-    endwh
-    var scaled: long := long(ax * double(scale) + 0.5)
-    if scaled == 0 then
-      neg := false                  // evita "-0.00"
-    endif
-    var intPart: long := scaled / scale
-    var fracPart: long := scaled mod scale
-    var sb: StringBuilder := StringBuilder()
-    if neg then
-      sb.appendChar(45)             // '-'
-    endif
-    sb.appendStr(longToString(intPart))
-    if dec > 0 then
-      sb.appendChar(46)             // '.'
-      var fs: string := longToString(fracPart)
-      var pad: integer := dec - strlen(fs)
-      var k: integer := 0
-      while k < pad do
-        sb.appendChar(48)           // '0' de relleno a la izquierda
-        k := k + 1
-      endwh
-      sb.appendStr(fs)
-    endif
-    return sb.toString()
+    return Core.formatDouble(x, dec)
   end formatDouble
 
   // -------------------------------------------------------------
@@ -124,16 +71,11 @@ module Str
   // -------------------------------------------------------------
   // Punto fijo, sin sci, recortando ceros de cola (y el punto si
   // queda suelto). Para control fino usa formatDouble.
+  // #446 — la implementacion se mudo a Core (la necesitan los envoltorios
+  // Double/Float, que viven alli desde que `List` se muda). Aqui queda la
+  // fachada para no romper a nadie: `Str.doubleToString` sigue existiendo.
   public function doubleToString(x: double): string
-    var s: string := formatDouble(x, 6)    // dec=6 → siempre incluye '.'
-    var stop: integer := strlen(s)
-    while stop > 0 and charCodeAt(s, stop - 1) == 48 do   // quita '0'
-      stop := stop - 1
-    endwh
-    if stop > 0 and charCodeAt(s, stop - 1) == 46 then     // quita '.' suelto
-      stop := stop - 1
-    endif
-    return substring(s, 0, stop)
+    return Core.doubleToString(x)
   end doubleToString
 
   // -------------------------------------------------------------

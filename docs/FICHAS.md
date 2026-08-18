@@ -905,6 +905,37 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
+- 🟡 **#446 — los envoltorios ya viven en `Core`; falta `List`.** Primera mitad del
+  encargo de Eduardo (*«la list sintetizada debería desaparecer y utilizar la de
+  Core»*), hecha y verde el 18-ago: `Comparable` + `Integer/Long/Double/Float/Boolean`
+  están en `Core`, y con ellos `formatDouble`/`longToString` (los usa el `toString` de
+  `Double`/`Float`, y `Core` no puede importar `Str`: sería circular). `Str` queda de
+  **fachada** con los mismos nombres públicos, así que nadie se rompe.
+  📐 **Y NO valía el atajo** de poner `"" + x` en vez de `doubleToString`: medido,
+  coinciden en lo normal pero dan `1E12` y `1E-9` donde el otro da `1000000000000`
+  y `0`. Habría movido la salida.
+  🧱 **El muro para la segunda mitad**, medido al intentarlo: en cuanto `Core` define
+  su `List`, el emisor deja de sintetizarla (bien) pero **sigue sintetizando
+  `OwnerList`/`SyncList`, que la extienden** → *«Clase padre no declarada: List»*. Y
+  `OwnerList` **no puede escribirse en BP**: necesita `setFieldOwner("items")` y
+  `FREE_REF`, que no tienen sintaxis (el `var owner` es diseño de V6).
+  ⏭️ **Los dos caminos que quedan**, los dos de emisor:
+  1. que `OwnerList`/`SyncList` sintetizadas extiendan la `List` **externa** de `Core`
+     (la maquinaria existe: `ExternalParentLayout`, la que usa una clase de usuario
+     que hereda de una importada; hay que dársela a la síntesis);
+  2. o sintetizar las tres **sólo al compilar `Core`**, donde `List` es local, y que el
+     resto de módulos las tomen de su interfaz.
+  El cuerpo de la `List` en BP ya está escrito y probado — es `samples/ListaBp.bp`,
+  que corre en las dos VMs.
+
+- 🟡 **(sin número) — `samples/Wrap8Test.bp`: el bucle del `Map` muere** con *«el receptor
+  no es un objeto»*. **Preexistente**, no lo trajo el movimiento: ese sample llevaba
+  sin compilar (lo tapaba un `Collections.mod` del 30-jul en `samples/out`, que aún
+  declaraba `any` donde el fuente dice `Object`). Ya compila; el fallo de ejecución queda.
+  📌 Y de paso, un detalle que roza el invariante: **un error no atrapado sale por
+  `stderr` en miVM y por `stdout` en la VM-C**. El texto es el mismo, o sea que no es
+  divergencia de comportamiento, pero un `diff` de stdout las ve distintas.
+
 - ~~`#447`~~ — ✅ **CERRADA el 18-ago** (`compat` 35 PASS): **convertir un `Object` a LA
   PROPIA CLASE, desde dentro de un método suyo, reventaba el compilador.**
   ```
