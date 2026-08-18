@@ -1,4 +1,10 @@
 {
+  "Integer": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Float": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Comparable": { "compareTo": 1 },
+  "Long": { "value": 2, "compareTo": 1, "toString": 0 },
   "RuntimeError": {  },
+  "Boolean": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Double": { "value": 2, "compareTo": 1, "toString": 0 },
   "Exception": { "setMsg": 3 }
 }

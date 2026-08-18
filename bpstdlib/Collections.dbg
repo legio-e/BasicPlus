@@ -2,134 +2,83 @@ dbg 3
 module Collections
 source C:\lenguajes\pm\bpstdlib\Collections.bp
 lines
-1204 32
-1269 42
-1275 43
-1281 44
-1304 39
-1364 63
-1429 74
-1448 77
-1454 78
-1470 79
-1484 81
-1500 82
-1513 84
-1528 87
-1552 70
-1562 71
-1623 98
-1644 101
-1650 102
-1666 103
-1680 105
-1696 106
-1709 108
-1724 111
-1748 94
-1758 95
-1822 122
-1843 125
-1849 126
-1865 127
-1879 129
-1895 130
-1908 132
-1923 135
-1947 118
-1957 119
-2021 146
-2040 149
-2046 150
-2062 151
-2076 153
-2092 154
-2105 156
-2120 159
-2145 142
-2155 143
-2216 170
-2235 173
-2241 174
-2268 175
-2282 177
-2309 178
-2322 180
-2337 183
-2361 166
-2371 167
-2432 195
-2438 196
-2461 192
-2521 220
-2531 221
-2539 222
-2549 223
-2568 229
-2571 230
-2583 231
-2593 232
-2602 233
-2615 234
-2631 235
-2640 236
-2654 238
-2663 239
-2674 241
-2682 244
-2701 249
-2714 250
-2727 251
-2739 252
-2749 253
-2773 254
-2797 255
-2805 257
-2820 258
-2841 263
-2851 264
-2861 265
-2871 266
-2887 271
-2897 272
-2908 273
-2917 274
-2937 276
-2956 278
-2972 283
-2982 284
-2993 285
-2998 286
-3007 287
-3025 289
-3035 290
-3054 294
-3064 295
-3077 296
-3087 297
-3103 302
-3113 303
-3124 304
-3127 305
-3136 306
-3148 307
-3160 308
-3168 310
-3178 311
-3194 323
-3204 324
-3217 325
-3227 326
-3246 330
-3256 331
-3269 332
-3279 333
-3298 211
-3322 212
-3346 213
-3370 214
-3460 347
-3495 352
+1209 34
+1274 44
+1285 45
+1296 46
+1319 41
+1379 60
+1392 61
+1415 57
+1475 85
+1485 86
+1493 87
+1503 88
+1522 94
+1525 95
+1537 96
+1547 97
+1556 98
+1569 99
+1585 100
+1594 101
+1608 103
+1617 104
+1628 106
+1636 109
+1655 114
+1668 115
+1681 116
+1693 117
+1703 118
+1727 119
+1751 120
+1759 122
+1774 123
+1795 128
+1805 129
+1815 130
+1825 131
+1841 136
+1851 137
+1862 138
+1871 139
+1891 141
+1910 143
+1926 148
+1936 149
+1947 150
+1952 151
+1961 152
+1979 154
+1989 155
+2008 159
+2018 160
+2031 161
+2041 162
+2057 167
+2067 168
+2078 169
+2081 170
+2090 171
+2102 172
+2114 173
+2122 175
+2132 176
+2148 188
+2158 189
+2171 190
+2181 191
+2200 195
+2210 196
+2223 197
+2233 198
+2252 76
+2276 77
+2300 78
+2324 79
+2414 212
+2449 217
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -213,124 +162,37 @@ func SyncList.popBlocking 1015
 this -20 8 0 ?
 func SyncList.__init 1126
 this -20 8 0 ?
-func Comparator.compare 1201
+func Comparator.compare 1206
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
-func Comparator.__init 1216
+func Comparator.__init 1221
 this -20 8 0 ?
-func __cls_init_Comparator 1252
+func __cls_init_Comparator 1257
 this -20 8 0 ?
-func StringComparator.compare 1266
+func StringComparator.compare 1271
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 sa 4 8 0 string
 sb 12 8 0 string
-func StringComparator.__init 1301
+func StringComparator.__init 1316
 this -20 8 0 ?
-func __cls_init_StringComparator 1347
+func __cls_init_StringComparator 1362
 this -20 8 0 ?
-func Comparable.compareTo 1361
-this -28 8 0 ?
-other -20 8 0 ref
-func Comparable.__init 1376
-this -20 8 0 ?
-func __cls_init_Comparable 1412
-this -20 8 0 ?
-func Integer.value 1426
-this -20 8 0 ?
-func Integer.compareTo 1445
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Integer.toString 1525
-this -20 8 0 ?
-func Integer.__init 1549
-this -24 8 0 ?
-x -16 4 0 integer
-func __cls_new_Integer 1572
-x -16 4 0 integer
-func __cls_init_Integer 1604
-this -24 8 0 ?
-x -16 4 0 integer
-func Long.value 1620
-this -20 8 0 ?
-func Long.compareTo 1641
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Long.toString 1721
-this -20 8 0 ?
-func Long.__init 1745
-this -28 8 0 ?
-x -20 8 0 long
-func __cls_new_Long 1769
-x -20 8 0 long
-func __cls_init_Long 1802
-this -28 8 0 ?
-x -20 8 0 long
-func Double.value 1819
-this -20 8 0 ?
-func Double.compareTo 1840
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Double.toString 1920
-this -20 8 0 ?
-func Double.__init 1944
-this -28 8 0 ?
-x -20 8 0 double
-func __cls_new_Double 1968
-x -20 8 0 double
-func __cls_init_Double 2001
-this -28 8 0 ?
-x -20 8 0 double
-func Float.value 2018
-this -20 8 0 ?
-func Float.compareTo 2037
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Float.toString 2117
-this -20 8 0 ?
-func Float.__init 2142
-this -24 8 0 ?
-x -16 4 0 float
-func __cls_new_Float 2165
-x -16 4 0 float
-func __cls_init_Float 2197
-this -24 8 0 ?
-x -16 4 0 float
-func Boolean.value 2213
-this -20 8 0 ?
-func Boolean.compareTo 2232
-this -28 8 0 ?
-other -20 8 0 ref
-o 4 8 0 ?
-func Boolean.toString 2334
-this -20 8 0 ?
-func Boolean.__init 2358
-this -24 8 0 ?
-x -16 4 0 boolean
-func __cls_new_Boolean 2381
-x -16 4 0 boolean
-func __cls_init_Boolean 2413
-this -24 8 0 ?
-x -16 4 0 boolean
-func NaturalComparator.compare 2429
+func NaturalComparator.compare 1376
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 ca 4 8 0 ?
-func NaturalComparator.__init 2458
+func NaturalComparator.__init 1412
 this -20 8 0 ?
-func __cls_init_NaturalComparator 2504
+func __cls_init_NaturalComparator 1458
 this -20 8 0 ?
-func Map.withComparator 2518
+func Map.withComparator 1472
 this -28 8 0 ?
 c -20 8 0 ref
-func Map.bsearch 2565
+func Map.bsearch 1519
 this -28 8 0 ?
 key -20 8 0 ref
 lo 4 4 0 integer
@@ -338,47 +200,47 @@ hi 8 4 0 integer
 mid 12 4 0 integer
 midKey 16 8 0 ?
 c 24 4 0 integer
-func Map.insertAt 2698
+func Map.insertAt 1652
 this -40 8 0 ?
 ip -32 4 0 integer
 key -28 8 0 ref
 val -20 8 0 ref
 i 4 4 0 integer
-func Map.size 2838
+func Map.size 1792
 this -20 8 0 ?
 n 8 4 0 integer
-func Map.put 2884
+func Map.put 1838
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
 idx 4 4 0 integer
-func Map.get 2969
+func Map.get 1923
 this -28 8 0 ?
 key -20 8 0 ref
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 3051
+func Map.containsKey 2005
 this -28 8 0 ?
 key -20 8 0 ref
 found 8 4 0 boolean
-func Map.remove 3100
+func Map.remove 2054
 this -28 8 0 ?
 key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 3191
+func Map.keyAt 2145
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 3243
+func Map.valueAt 2197
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 3295
+func Map.__init 2249
 this -20 8 0 ?
-func __cls_init_Map 3427
+func __cls_init_Map 2381
 this -20 8 0 ?
-func __strconcat 3549
+func __strconcat 2503
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

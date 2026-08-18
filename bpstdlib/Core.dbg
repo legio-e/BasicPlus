@@ -4,6 +4,113 @@ source C:\lenguajes\pm\bpstdlib\Core.bp
 lines
 1229 24
 1296 32
+1365 63
+1430 74
+1449 77
+1460 78
+1476 79
+1490 81
+1506 82
+1519 84
+1534 87
+1558 70
+1568 71
+1629 98
+1650 101
+1661 102
+1677 103
+1691 105
+1707 106
+1720 108
+1735 111
+1761 94
+1771 95
+1835 122
+1856 125
+1867 126
+1883 127
+1897 129
+1913 130
+1926 132
+1941 135
+1967 118
+1977 119
+2041 146
+2060 149
+2071 150
+2087 151
+2101 153
+2117 154
+2130 156
+2145 159
+2172 142
+2182 143
+2243 170
+2262 173
+2273 174
+2300 175
+2314 177
+2341 178
+2354 180
+2369 183
+2393 166
+2403 167
+2480 200
+2492 201
+2498 202
+2505 203
+2517 205
+2522 206
+2525 207
+2535 208
+2548 209
+2556 211
+2575 212
+2586 213
+2594 215
+2604 216
+2614 217
+2636 218
+2643 219
+2661 221
+2677 222
+2686 223
+2699 224
+2710 225
+2721 226
+2724 227
+2734 228
+2747 229
+2755 231
+2771 233
+2793 237
+2809 238
+2817 239
+2853 240
+2861 242
+2897 243
+2908 245
+2933 250
+2944 251
+2960 253
+2968 254
+2974 255
+2982 256
+2994 258
+3005 259
+3008 260
+3019 261
+3033 262
+3041 263
+3047 264
+3062 266
+3084 267
+3091 268
+3109 270
+3115 271
+3124 272
+3144 273
+3152 275
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -107,7 +214,121 @@ m -20 8 0 string
 func __cls_init_RuntimeError 1345
 this -28 8 0 ?
 m -20 8 0 string
-func __strconcat 1378
+func Comparable.compareTo 1362
+this -28 8 0 ?
+other -20 8 0 ref
+func Comparable.__init 1377
+this -20 8 0 ?
+func __cls_init_Comparable 1413
+this -20 8 0 ?
+func Integer.value 1427
+this -20 8 0 ?
+func Integer.compareTo 1446
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Integer.toString 1531
+this -20 8 0 ?
+func Integer.__init 1555
+this -24 8 0 ?
+x -16 4 0 integer
+func __cls_new_Integer 1578
+x -16 4 0 integer
+func __cls_init_Integer 1610
+this -24 8 0 ?
+x -16 4 0 integer
+func Long.value 1626
+this -20 8 0 ?
+func Long.compareTo 1647
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Long.toString 1732
+this -20 8 0 ?
+func Long.__init 1758
+this -28 8 0 ?
+x -20 8 0 long
+func __cls_new_Long 1782
+x -20 8 0 long
+func __cls_init_Long 1815
+this -28 8 0 ?
+x -20 8 0 long
+func Double.value 1832
+this -20 8 0 ?
+func Double.compareTo 1853
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Double.toString 1938
+this -20 8 0 ?
+func Double.__init 1964
+this -28 8 0 ?
+x -20 8 0 double
+func __cls_new_Double 1988
+x -20 8 0 double
+func __cls_init_Double 2021
+this -28 8 0 ?
+x -20 8 0 double
+func Float.value 2038
+this -20 8 0 ?
+func Float.compareTo 2057
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Float.toString 2142
+this -20 8 0 ?
+func Float.__init 2169
+this -24 8 0 ?
+x -16 4 0 float
+func __cls_new_Float 2192
+x -16 4 0 float
+func __cls_init_Float 2224
+this -24 8 0 ?
+x -16 4 0 float
+func Boolean.value 2240
+this -20 8 0 ?
+func Boolean.compareTo 2259
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Boolean.toString 2366
+this -20 8 0 ?
+func Boolean.__init 2390
+this -24 8 0 ?
+x -16 4 0 boolean
+func __cls_new_Boolean 2413
+x -16 4 0 boolean
+func __cls_init_Boolean 2445
+this -24 8 0 ?
+x -16 4 0 boolean
+func formatDouble 2477
+x -24 8 0 double
+dec -16 4 0 integer
+neg 8 4 0 boolean
+ax 12 8 0 double
+scale 20 8 0 long
+i 28 4 0 integer
+scaled 32 8 0 long
+intPart 40 8 0 long
+fracPart 48 8 0 long
+sb 56 8 0 ?
+fs 80 8 0 string
+pad 88 4 0 integer
+k 92 4 0 integer
+func doubleToString 2790
+x -20 8 0 double
+s 8 8 0 string
+stop 16 4 0 integer
+func longToString 2930
+x -20 8 0 long
+neg 8 4 0 boolean
+v 12 8 0 long
+digits 20 8 0 ?
+nd 28 4 0 integer
+d 32 4 0 integer
+sb 36 8 0 ?
+i 60 4 0 integer
+func __strconcat 3171
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
