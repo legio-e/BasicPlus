@@ -905,7 +905,8 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
-- (sin número) — 🔴 **UN LITERAL DE ARRAY GUARDA SIEMPRE 4 BYTES POR CASILLA.**
+- ~~`#442`~~ — ✅ **CERRADA el 18-ago** (`compat` 30 PASS): **un literal de array
+  guardaba siempre 4 bytes por casilla.**
   Medido el 18-ago al preguntar Eduardo *«no entiendo por qué no podemos declarar
   un array de objects, es una limitación bastante tonta»*. Y tiene razón en que es
   tonta, pero el hueco **no es de los objetos**: es de los literales, y se lleva
@@ -940,8 +941,27 @@ decidirá si basta subirlos.)*
   ⏭️ Falta además un **`newObjArray(n)`**: hoy sólo existe `__newRefArray`, interno y
   tipado como `integer[]`. Sin él no se puede crear un array de objetos vacío, que es
   lo que impide escribir `List` en BP.
-  🔗 De aquí depende lo de mover `List` a `Core` (ver la entrada de las listas y
-  `docs/OBJECT_COMODIN.md`).
+  ✅ **ARREGLO**: `emitArrayLit` usa el tipo del literal para (a) reservar con el
+  ancho correcto y (b) coercer + guardar con `astoreOpForElement`, que es justo lo
+  que ya hacía una asignación normal a un elemento.
+  🩸 **La trampa que casi cuela, y que sólo se vio DESENSAMBLANDO**: el primer
+  intento usó *«no es primitivo»* como predicado de referencia. Pero en BP
+  `string` **ES** un `PrimitiveType` y a la vez una referencia de heap, así que salía
+  `NEWARRAY` (4 B) con `ASTORE_I64` (8 B): el elemento 0 pisaba al 1 y el 1 se
+  escribía fuera. El síntoma —`[0]` bien y `[1]` VACÍO— mandaba a mirar el GC y las
+  cadenas literales, y las dos pistas eran falsas. El predicado bueno es
+  `isRefType`, que ya existía y ya documenta esa excepción.
+  ⚠️ Y el otro cuidado: las referencias **no van por opcode**. `NEWARRAY_I64` da un
+  `TYPE_ARRAY_I64` de 8 bytes OPACOS que el GC **no traza**; un array de refs tiene
+  que ser `TYPE_ARRAY_REF` (builtin `NEW_REF_ARRAY`). Confundirlos no truncaría:
+  sería un use-after-free. Por eso `newarrayOpForElement` **no** lleva la rama de
+  referencias, y no le falta.
+  🧪 `bpgenvm-c/samples/ArrLitAncho.bp`, en el corpus de paridad (30 PASS). Cada
+  ancho con su gemelo de 4 bytes como control, el borde de n=1, y presión de GC
+  al final para que un array de refs mal reservado se note. **Rojo verificado**:
+  sin el arreglo da `long : 0 0 5100273664`.
+  🔗 Con esto, mover `List` a `Core` sólo espera a un `newObjArray(n)` público (ver la
+  entrada de las listas y `docs/OBJECT_COMODIN.md`).
 
 - (sin número) — **las listas: de `any` a `Object` + `add` SOBRECARGADO.**
   15 `AnyType.INSTANCE` a mano en `SemanticAnalyzer`. ⚠️ Deja a

@@ -4022,15 +4022,47 @@ public final class MivmEmitter {
         // el tipo de elemento del literal ni siquiera se conoce aquí — ver el TODO de
         // abajo), así que va por el carril de ref, no por ByType.
         declareLocalRef(tmp);
+
+        // #442 — EL ANCHO DEL ELEMENTO. Antes iba NEWARRAY + ASTORE a pelo, o sea
+        // 4 bytes por casilla SIEMPRE, y eso se llevaba por delante todo elemento
+        // de 8 B: `long[]` daba 0 EN SILENCIO (familia de #385), `double[]`
+        // reventaba, y `string[]`/clases daban «No space in heap» o un receptor
+        // null. Las dos VMs igual → era del compilador.
+        //
+        // El `TODO` que había aquí decía «si supiéramos el tipo de contexto»: ya se
+        // sabe. `analyzeArrayLit` lo calcula (con el tipo esperado como pista) y lo
+        // deja en `info.exprTypes`. Con él se hace lo MISMO que ya hace una
+        // asignación normal a un elemento (ver ASSIGN sobre IndexExpr): coerce al
+        // tipo del elemento + store del ancho correcto.
+        //
+        // ⚠️ Y las REFERENCIAS no van por opcode: `NEWARRAY_I64` crea un
+        // `TYPE_ARRAY_I64` de 8 bytes OPACOS que el GC no traza. Un array de refs
+        // tiene que ser `TYPE_ARRAY_REF`, y eso sólo lo da el builtin
+        // NEW_REF_ARRAY. Confundirlos no truncaría: dejaría los elementos sin
+        // trazar → use-after-free.
+        BpType arrT = info.exprTypes.get(a);
+        BpType el   = (arrT instanceof ArrayType) ? ((ArrayType) arrT).element : null;
+        // El predicado tiene que ser isRefType, NO «no es primitivo»: en BP
+        // `string` ES un PrimitiveType y a la vez una referencia de heap (ver
+        // isRefType, que lo dice y explica por qué no se toca isReference()).
+        // Con la versión ingenua salía NEWARRAY (4 B/casilla) con ASTORE_I64
+        // (8 B): el elemento 0 pisaba al 1 y el 1 se escribía fuera — `[0]` se
+        // leía y `[1]` salía VACÍO. Lo delató el desensamblado, no el síntoma.
+        boolean elemEsRef = isRefType(el);
+
         emitInt(n);
-        w.emit(OpCode.NEWARRAY);
+        if (elemEsRef)      emitBuiltinCall(Builtin.NEW_REF_ARRAY);
+        else if (el != null) w.emit(newarrayOpForElement(el));
+        else                 w.emit(OpCode.NEWARRAY);
         w.emitSetLocal(tmp);
+
+        OpCode store = (el != null) ? astoreOpForElement(el) : OpCode.ASTORE;
         for (int i = 0; i < n; i++) {
             w.emitGetLocal(tmp);
             emitInt(i);
             emitExpr(a.elements.get(i));
-            // TODO: coerce a tipo del elemento si supiéramos el tipo array de contexto.
-            w.emit(OpCode.ASTORE);
+            if (el != null) coerceToTarget(a.elements.get(i), el);
+            w.emit(store);
         }
         w.emitGetLocal(tmp);
     }

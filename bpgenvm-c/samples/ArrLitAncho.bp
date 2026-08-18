@@ -1,0 +1,79 @@
+// ArrLitAncho.bp — #442: un literal de array guarda el ANCHO de su elemento.
+//
+// El bug: `emitArrayLit` emitia NEWARRAY + ASTORE a pelo, sin mirar el tipo de
+// elemento, o sea 4 bytes por casilla SIEMPRE. Eso se llevaba por delante todo
+// elemento de 8 bytes, y de tres formas distintas:
+//
+//   long[]    -> 0 EN SILENCIO      (la familia de #385: un numero plausible)
+//   double[]  -> reventaba
+//   string[]  -> «No space in heap»
+//   Clase[]   -> INVOKE_VIRTUAL sobre null receiver
+//
+// Las dos VMs fallaban IGUAL, asi que era del compilador, no divergencia.
+//
+// Por que cada caso lleva su gemelo de 4 bytes: el `integer[]` de arriba es el
+// CONTROL. Sin el, un verde aqui no distingue «lo arregle» de «cambie el
+// literal por algo que no prueba nada» — y el camino de 4 bytes es el unico
+// que ya funcionaba, asi que tambien vigila no haberlo roto al arreglar.
+//
+// Y el caso de las REFERENCIAS es el que mas cuidado pide: no basta con
+// reservar 8 bytes. `NEWARRAY_I64` da un TYPE_ARRAY_I64 de 8 bytes OPACOS que
+// el GC NO traza; un array de refs tiene que ser TYPE_ARRAY_REF (builtin
+// NEW_REF_ARRAY). Confundirlos no truncaria: dejaria los elementos sin trazar,
+// que es un use-after-free en vez de un numero raro. Por eso el bloque final
+// mete presion de GC y vuelve a leer.
+module ArrLitAncho
+
+  public class Caja
+    var n: integer
+    public function Caja(x: integer)
+      this.n := x
+    end Caja
+    public function valor(): integer
+      return this.n
+    end valor
+  end Caja
+
+  function Main()
+    print "== 4 bytes (el control: es lo que YA funcionaba) =="
+    var i: integer[] := [10, 20, 30]
+    print "int    : " + i[0] + " " + i[1] + " " + i[2] + "  len=" + len(i)
+
+    print "== 8 bytes primitivos =="
+    var l: long[] := [10000000000L, 20000000000L, 30000000000L]
+    print "long   : " + l[0] + " " + l[1] + " " + l[2] + "  len=" + len(l)
+    var d: double[] := [1.5d, 2.5d, 3.5d]
+    print "double : " + d[0] + " " + d[1] + " " + d[2] + "  len=" + len(d)
+
+    print "== referencias =="
+    // Dos lecturas en la MISMA expresion: es lo que destapo que el ancho de la
+    // reserva y el del store no casaban (el [0] pisaba al [1]).
+    var s: string[] := ["uno", "dos", "tres"]
+    print "string : " + s[0] + " " + s[1] + " " + s[2] + "  len=" + len(s)
+    var o: Caja[] := [Caja(7), Caja(8), Caja(9)]
+    print "objeto : " + o[0].valor() + " " + o[1].valor() + " " + o[2].valor()
+
+    print "== escribir despues del literal =="
+    s[1] := "DOS"
+    o[1] := Caja(42)
+    print "tras set: " + s[1] + " " + o[1].valor()
+
+    print "== un solo elemento (el borde) =="
+    var u: string[] := ["solo"]
+    print "n=1    : " + u[0] + " otra vez " + u[0] + "  len=" + len(u)
+
+    print "== con el GC de por medio =="
+    // Si el array de refs se hubiera reservado como 8 bytes OPACOS, el GC no
+    // trazaria sus elementos y esto los leeria ya reciclados.
+    var basura: string := ""
+    var k: integer := 0
+    while k < 400 do
+      basura := "x" + k
+      k := k + 1
+    endwh
+    print "tras GC : " + s[0] + " " + s[2] + " " + o[0].valor() + " " + o[2].valor()
+
+    print "fin"
+  end Main
+
+end ArrLitAncho
