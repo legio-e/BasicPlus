@@ -62,6 +62,13 @@ del mismo fuente; las 3 copias muertas, fuera) · `#441` la mitad de la arquitec
 (el IDE compara el `arch` del `.mdn`, no solo la fecha) · `#451` SyncList a
 Collections · el «pwm» del arranque y del INFO ya dicen su unidad.
 
+**`#441` cerrada por la mitad, por decision de Eduardo:** la arquitectura entra en
+V5 (`9fcff33`); la huella de los FLAGS se va a V6 porque pide cambiar el formato
+del `.mdn` y *«ahora no vamos a modificar formatos»*. La cabecera no tiene campo
+libre, asi que meter el hash obliga a subir `version` y a tocar el lector del IDE y
+el de las cuatro imagenes a la vez — eso se hace al empezar una version, no al
+cerrarla. **Con eso, pendientes de V5: 9** (5 tecnicas + 4 tareas de cierre).
+
 **⏭️ Queda de `#439`:** la misma vuelta en Metro y STM32 (el codigo esta verificado
 en el `.elf` de las cuatro, probado en placa en una).
 

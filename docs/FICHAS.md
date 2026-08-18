@@ -1434,8 +1434,9 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   la comprueba en las **dos** direcciones: una guarda que sólo se ve en verde
   podría estar contando siempre cero.
 
-- 🟡 `#441` — **el `.mdn` no recuerda su RECETA. MITAD HECHA el 18-ago: la
-  ARQUITECTURA ya se compara.**
+- ~~`#441`~~ — ✅ **CERRADA en V5 el 18-ago (`9fcff33`): el IDE ya compara la ARQUITECTURA
+  del `.mdn`.** *(La otra mitad —los flags— se aplazó a V6 el mismo día: pide cambiar el
+  formato del `.mdn`, y esta versión no toca formatos. Su texto está en «Aplazadas a V6».)*
   📐 Idea de Eduardo: *«¿los `.mdn` tienen cabecera? porque si tienen cabecera lo que
   corresponde añadir [es] ARM o RISCV»*. Y en efecto **ya la llevaban**: `arch` =
   `e_machine` del ELF (ARM 40 · RISC-V 243 · Xtensa 94 · 0 = legacy), y la placa dice
@@ -1452,13 +1453,6 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   🧪 Control sobre ficheros de verdad, para que la prueba DISTINGA: ARM (40),
   RISC-V (243, cabecera forjada a propósito) y legacy (0, que se deja pasar igual
   que hace el loader).
-  🔴 **SIGUE ABIERTA LA OTRA MITAD, y es la que motivó la ficha: los FLAGS.**
-  La arch caza el `.mdn` de otra familia, pero no el caso del 17-ago — añadir
-  `-mcmodel=medany` dejó malos **todos** los `.mdn` de RISC-V ya generados: misma
-  arch, misma fecha, código inservible. Eso pide sellar una huella de la receta
-  (hash de los flags), y la cabecera **no tiene campo libre**
-  (`magic·version·abi_version·code_size·sym_count·arch`): es un cambio de FORMATO,
-  decisión aparte y no un añadido.
 
 
 - ~~`#381`~~ — ✅ **CERRADA el 16-ago, VERIFICADA EN LA METRO.** `long` en una
@@ -1721,6 +1715,24 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
+
+- **[AOT] el `.mdn` no recuerda su RECETA — la huella de los FLAGS** *(mitad abierta de
+  `#441`; aplazada a V6 el 18-ago. Eduardo: «ahora no vamos a modificar formatos». La
+  otra mitad, la arquitectura, sí entró en V5: `9fcff33`.)*
+  🩸 **El caso real que la motivó, el 17-ago**: añadir `-mcmodel=medany` dejó malos
+  **todos** los `.mdn` de RISC-V ya generados. Misma arquitectura, misma fecha, código
+  inservible — o sea que ni el gate de `arch` ni la comparación de fechas lo ven. Un
+  `.mdn` generado con otra receta se sube tan tranquilo y lo que falla es la placa.
+  📐 **Qué haría falta**: sellar en el `.mdn` una huella de la receta (un hash de los
+  flags de compilación) y compararla al subirlo, igual que ahora se compara `arch`.
+  🔴 **Por qué no es un añadido sino un cambio de FORMATO**: la cabecera no tiene campo
+  libre — `magic·version·abi_version·code_size·sym_count·arch`, y es **little-endian**
+  (al revés que el `.mod`). Meter la huella obliga a subir `version` y a tocar el lector
+  del IDE y el de las cuatro imágenes a la vez. Es la clase de cambio que se hace al
+  principio de una versión, no al cerrarla.
+  💡 **Mientras tanto, lo que hay**: si se vuelven a cambiar los flags de AOT de una
+  familia, hay que regenerar sus `.mdn` A MANO y saberlo — no hay red. Conviene
+  mencionarlo en el commit que toque `AotBuild`.
 
 - **[P4] los 32 MB de flash y el XIP de los packs** — aplazado a V6 el 18-ago
   (Eduardo: *«es demasiado arriesgado»*). El diagnóstico está CERRADO, lo que
