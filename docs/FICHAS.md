@@ -1417,13 +1417,32 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   la comprueba en las **dos** direcciones: una guarda que sólo se ve en verde
   podría estar contando siempre cero.
 
-- `#441` — **el `.mdn` no recuerda con qué RECETA se compiló.** Lo destapó #440:
-  `mdnIsStale` decide por **fecha**, así que al cambiar los flags **ninguno** de los
-  `.mdn` ya generados se habría rehecho — hubo que borrarlos a mano. Tampoco mira
-  la **familia**: el `arch` viaja en la cabecera (`40`/`243`) pero nadie lo compara con
-  el de la placa antes de subirlo. Forma del arreglo: sellar una huella de la
-  receta (arch + hash de los flags) y que un sello distinto cuente como rancio,
-  igual que la fecha. Detalle en `docs/PENDIENTES.md`.
+- 🟡 `#441` — **el `.mdn` no recuerda su RECETA. MITAD HECHA el 18-ago: la
+  ARQUITECTURA ya se compara.**
+  📐 Idea de Eduardo: *«¿los `.mdn` tienen cabecera? porque si tienen cabecera lo que
+  corresponde añadir [es] ARM o RISCV»*. Y en efecto **ya la llevaban**: `arch` =
+  `e_machine` del ELF (ARM 40 · RISC-V 243 · Xtensa 94 · 0 = legacy), y la placa dice
+  la suya en el INFO. Lo que faltaba era que alguien **las comparara**:
+  `mdnIsStale` sólo miraba fechas, así que el IDE subía tan tranquilo un `.mdn` de
+  otra ISA y era el gate del loader quien lo rechazaba **ya en la placa**. Ahora un
+  fallo remoto se convierte en un «regenéralo» local.
+  🗣️ Y el aviso dice el motivo REAL —*«es de otra ARQUITECTURA (arm, y la placa es
+  riscv)»*— en vez de *«es más viejo que su .mod»*, que sería mentira y mandaría a
+  mirar unas fechas que están bien.
+  🔬 **Sólo se ve en el volcado**: la cabecera del `.mdn` es **little-endian** y la del
+  `.mod` big-endian. El primer lector usaba `readInt()` y habría devuelto
+  `0x28000000` en vez de 40. Se cazó con `xxd` sobre un `.mdn` real.
+  🧪 Control sobre ficheros de verdad, para que la prueba DISTINGA: ARM (40),
+  RISC-V (243, cabecera forjada a propósito) y legacy (0, que se deja pasar igual
+  que hace el loader).
+  🔴 **SIGUE ABIERTA LA OTRA MITAD, y es la que motivó la ficha: los FLAGS.**
+  La arch caza el `.mdn` de otra familia, pero no el caso del 17-ago — añadir
+  `-mcmodel=medany` dejó malos **todos** los `.mdn` de RISC-V ya generados: misma
+  arch, misma fecha, código inservible. Eso pide sellar una huella de la receta
+  (hash de los flags), y la cabecera **no tiene campo libre**
+  (`magic·version·abi_version·code_size·sym_count·arch`): es un cambio de FORMATO,
+  decisión aparte y no un añadido.
+
 
 - ~~`#381`~~ — ✅ **CERRADA el 16-ago, VERIFICADA EN LA METRO.** `long` en una
   función `native`. La salida en ARM real es **byte a byte la del PC**, y el IDE
