@@ -81,11 +81,11 @@ arranque (`pwr 45 (activo bajo)` + `sd: montada en /sd`).
 
 **⏭️ COMO SE CIERRA LO QUE QUEDA — decision de Eduardo (18-ago):** *«lo que queda
 pendiente se puede mirar en la fase final donde haremos mas pruebas»*. O sea que las
-tres tecnicas que quedan ( verificar que era ,  medir los dos
-cuellos,  exFAT y superfloppy) NO son trabajo suelto: entran en la tanda de
-pruebas del cierre. Y ahi cabe tambien la cola de  —repetir la vuelta en Metro
+tres tecnicas que quedan (`#379` verificar que era `#398`, `#408` medir los dos
+cuellos, `H2-P5` exFAT y superfloppy) NO son trabajo suelto: entran en la tanda de
+pruebas del cierre. Y ahi cabe tambien la cola de `#439` —repetir la vuelta en Metro
 y STM32— que quedo escrita dentro de la ficha ya cerrada; el codigo esta verificado
-en el  de las cuatro imagenes y probado en placa en una.
+en el `.elf` de las cuatro imagenes y probado en placa en una.
 
 ### 18-ago — el dia de las listas: 8 fichas cerradas en cadena, corpus 29→37
 
