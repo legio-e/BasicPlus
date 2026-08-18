@@ -71,7 +71,13 @@ V5 (`9fcff33`); la huella de los FLAGS se va a V6 porque pide cambiar el formato
 del `.mdn` y *«ahora no vamos a modificar formatos»*. La cabecera no tiene campo
 libre, asi que meter el hash obliga a subir `version` y a tocar el lector del IDE y
 el de las cuatro imagenes a la vez — eso se hace al empezar una version, no al
-cerrarla. **Con eso, pendientes de V5: 8** (4 tecnicas + 4 tareas de cierre).
+cerrarla. **Con eso, pendientes de V5: 7** (3 tecnicas + 4 tareas de cierre). La septima cayo
+al preguntar Eduardo si «la polaridad de Q1» era la luz de la pantalla: no —es el
+MOSFET del rail de la SD por GPIO45— y resulta que no habia nada abierto. Q1 y
+`pwr` son el mismo transistor, y la propia linea de la ficha ya declaraba cerrada
+la polaridad de `pwr`. Error de redaccion mio al archivarla. Contestada por
+triplicado: el analisis del transistor, el codigo (`blk_sdmmc_p4.c:79`) y cada
+arranque (`pwr 45 (activo bajo)` + `sd: montada en /sd`).
 
 **⏭️ Queda de `#439`:** la misma vuelta en Metro y STM32 (el codigo esta verificado
 en el `.elf` de las cuatro, probado en placa en una).

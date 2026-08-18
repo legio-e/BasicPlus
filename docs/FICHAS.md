@@ -1660,8 +1660,21 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
      del arranque de partición**, o sea otra capa. Se prueban **reformateando
      cualquiera de las dos tarjetas que ya hay**, sin comprar nada: es lo barato
      que queda de esta ficha.
-- (de H6) — la **polaridad de Q1**: con qué nivel de GPIO45 se enciende el raíl.
-  *(La de `pwr` sí está cerrada: activo bajo, medido.)*
+- ~~(de H6) — la **polaridad de Q1**~~ — ✅ **CERRADA el 18-ago: no había nada abierto.**
+  Q1 **es** el MOSFET que conmuta el raíl de la tarjeta por GPIO45, o sea que «la
+  polaridad de Q1» y «la polaridad de `pwr`» son lo mismo — y la línea original ya
+  declaraba cerrada la segunda entre paréntesis. Error de redacción mío al archivarla,
+  no trabajo pendiente. Eduardo, al preguntárselo: *«es de la lectura de la SD y el
+  control de alimentación. Tal como está ahora funciona»*.
+  🔬 **Y está contestada por triplicado**, que es lo que la hace cerrable sin tocar
+  nada: el análisis del transistor lo dijo (canal P, fuente en 3V3 ⇒ conduce con la
+  puerta baja), el código lo fija (`esp32p4/main/blk_sdmmc_p4.c:79` — *«la polaridad
+  sale del ENV (`pwralto`) y es activo BAJO — cerrado en placa»*), y **cada arranque lo
+  repite**: `pwr 45 (activo bajo)` seguido de `sd: montada en /sd`.
+  📌 **Ojo con el 45 si alguien amplía el bus**: en esta placa NO es `d4`, es `pwr`
+  (aviso dentro de `blk_sdmmc_p4.c:153`). Y no confundirlo con la retroiluminación,
+  que es **GPIO26** por LEDC y tiene su propia polaridad por panel (`bl_invert`,
+  invertida en la Waveshare) — resuelta aparte.
 ### Cierre de V5 — lo que se hace AL CERRAR, no antes
 
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
