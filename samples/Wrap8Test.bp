@@ -39,7 +39,10 @@ module Wrap8Test
 
     print "size="
     print m.size()
-    print "get(9e9)=" + m.get(Core.Long(9000000000L))
+    // #389 — m.get devuelve Object; si lleva una CADENA, concatenarlo a pelo
+    // no tiene vtable que despachar y LANZA (antes, con `any`, imprimia el
+    // handle en silencio, que era peor). El patron es bajarlo: string(...).
+    print "get(9e9)=" + string(m.get(Core.Long(9000000000L)))
 
     // Iteración: orden numérico de 64 bits → 30, 100, 5e9, 9e9.
     var i: integer := 0

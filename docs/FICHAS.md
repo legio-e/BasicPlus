@@ -1004,13 +1004,20 @@ decidirá si basta subirlos.)*
   El cuerpo de la `List` en BP ya está escrito y probado — es `samples/ListaBp.bp`,
   que corre en las dos VMs.
 
-- 🟡 **(sin número) — `samples/Wrap8Test.bp`: el bucle del `Map` muere** con *«el receptor
-  no es un objeto»*. **Preexistente**, no lo trajo el movimiento: ese sample llevaba
-  sin compilar (lo tapaba un `Collections.mod` del 30-jul en `samples/out`, que aún
-  declaraba `any` donde el fuente dice `Object`). Ya compila; el fallo de ejecución queda.
-  📌 Y de paso, un detalle que roza el invariante: **un error no atrapado sale por
-  `stderr` en miVM y por `stdout` en la VM-C**. El texto es el mismo, o sea que no es
-  divergencia de comportamiento, pero un `diff` de stdout las ve distintas.
+- ~~(sin número)~~ — ✅ **CERRADA el 18-ago: no era el `Map`, era el SAMPLE.**
+  Eduardo: *«el punto 8 es nuevo, ¿qué pasa con Map?»*. Nada — `MapNumTest` (mismo
+  `Map`, claves `Integer`) pasaba con paridad. Acotado con un reproductor de dos
+  líneas: `"x" + o` con `o: Object` funciona si lleva un OBJETO (despacha `toString`)
+  y **lanza si lleva una CADENA** — el hermano documentado de #389, no hay vtable
+  que despachar. `Wrap8Test` concatenaba `m.get(...)` a pelo, el modismo de ANTES de
+  que `Object` fuera clase real; en V4 esa línea imprimía **el handle en silencio**
+  (el `376` medido en `OBJECT_COMODIN.md`), o sea que el sample llevaba mal desde
+  siempre y #389 lo hizo VISIBLE. Arreglo: `string(m.get(...))`, el patrón que ya
+  usaba `MapNumTest`. Verificado: 26 líneas, paridad byte a byte, el `Map` iterando
+  sus claves `Long` en orden numérico de 64 bits.
+  📌 Si algún día se quiere que `"x" + objeto-con-cadena` funcione a pelo (las VMs
+  PUEDEN distinguir el bloque), es una decisión de LENGUAJE de Eduardo — no un bug.
+
 
 - ~~`#447`~~ — ✅ **CERRADA el 18-ago** (`compat` 35 PASS): **convertir un `Object` a LA
   PROPIA CLASE, desde dentro de un método suyo, reventaba el compilador.**
