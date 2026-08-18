@@ -985,35 +985,6 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   daría diagnóstico EN DIRECTO, no autopsia.
 
 
-- `#452` — **el verbo `RESET` no se puede usar cuando más falta hace: con un RUN vivo.**
-  Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
-  `HELLO` y `KILL`, y a todo lo demás contesta `BUSY`
-  (`esp32/main/repl_esp32.c:915`, y el equivalente en las otras familias); el IDE
-  refleja eso apagando el botón (`PicoExplorer.java:2180`). El comentario del código
-  dice que la intención era *«que la placa nunca quede sorda»* — y casi lo consigue,
-  pero deja fuera justo el verbo que hace falta cuando lo que quieres no es recuperar el
-  control, sino **releer lo que acaba de pasar**.
-  🩸 **Por qué importa más de lo que parece, y es por `#439`**: con la placa colgada, si
-  no puedes mandar `RESET` por el wire, la única salida es el RST físico — que en ESP32
-  es `power-on` y **borra la RAM del log**. O sea que el mecanismo funciona y aun así no
-  lo tienes disponible en el escenario para el que se escribió. Hoy se sortea con
-  `kill` + `reset`, que basta porque el `kill` sí llega.
-  📌 **ES DE LA IMAGEN, NO DEL IDE.** El botón apagado es sólo el reflejo: tocar el IDE
-  a solas encendería un botón que la placa contesta con `BUSY`. El filtro está en el
-  firmware y son **CUATRO** sitios, censados por la primitiva (el mensaje) y no por el
-  nombre — `pico/repl_v1.c:1406` · `esp32/main/repl_esp32.c:915` (S3 **y** P4, comparten
-  REPL) · `stm32/port/stm32_repl.c:467` · y **`tools/bpvm_sim.c:679`**, que es el que se
-  escapa si uno cuenta «familias»: el simulador del IDE. Un doble que se comporte
-  distinto del original es una trampa, así que va en el mismo lote.
-  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if`, en los cuatro, y quitar el
-  `&& enabled` de `btnReset` (`PicoExplorer.java:2180`). El `RESET_REPLY` ya se manda
-  antes de reiniciar, así que eso no cambia.
-  ⚠️ **El cuidado real está en la Pico**: su `handle_reset` hace `log_flush()` antes de
-  reiniciar (`repl_v1.c:1229`), y permitirlo durante un RUN significa **escribir flash
-  con la VM en marcha** — el peligro clásico de ejecutar desde XIP. La cintura del log
-  post-mortem ya lo resuelve, pero hay que comprobarlo, no suponerlo. Las de ESP32 no
-  hacen flush (van directas a `esp_restart()`), así que ahí no aplica.
-
 ### Lenguaje y VM
 
 - ~~(sin número)~~ — ✅ **CERRADA el 18-ago** (`compat` 37 PASS): **`SyncList` ya está
@@ -1727,6 +1698,35 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
+
+- **[wire] el verbo `RESET` no llega con un RUN vivo** *(era `#452`; aplazada a V6 el 18-ago. Eduardo: «ahora sabemos apañarnos y a los usuarios no les afecta» — el rodeo es `kill` + `reset`, y está documentado cara al usuario en `PENDIENTES.md` L15.)*
+  Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
+  `HELLO` y `KILL`, y a todo lo demás contesta `BUSY`
+  (`esp32/main/repl_esp32.c:915`, y el equivalente en las otras familias); el IDE
+  refleja eso apagando el botón (`PicoExplorer.java:2180`). El comentario del código
+  dice que la intención era *«que la placa nunca quede sorda»* — y casi lo consigue,
+  pero deja fuera justo el verbo que hace falta cuando lo que quieres no es recuperar el
+  control, sino **releer lo que acaba de pasar**.
+  🩸 **Por qué importa más de lo que parece, y es por `#439`**: con la placa colgada, si
+  no puedes mandar `RESET` por el wire, la única salida es el RST físico — que en ESP32
+  es `power-on` y **borra la RAM del log**. O sea que el mecanismo funciona y aun así no
+  lo tienes disponible en el escenario para el que se escribió. Hoy se sortea con
+  `kill` + `reset`, que basta porque el `kill` sí llega.
+  📌 **ES DE LA IMAGEN, NO DEL IDE.** El botón apagado es sólo el reflejo: tocar el IDE
+  a solas encendería un botón que la placa contesta con `BUSY`. El filtro está en el
+  firmware y son **CUATRO** sitios, censados por la primitiva (el mensaje) y no por el
+  nombre — `pico/repl_v1.c:1406` · `esp32/main/repl_esp32.c:915` (S3 **y** P4, comparten
+  REPL) · `stm32/port/stm32_repl.c:467` · y **`tools/bpvm_sim.c:679`**, que es el que se
+  escapa si uno cuenta «familias»: el simulador del IDE. Un doble que se comporte
+  distinto del original es una trampa, así que va en el mismo lote.
+  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if`, en los cuatro, y quitar el
+  `&& enabled` de `btnReset` (`PicoExplorer.java:2180`). El `RESET_REPLY` ya se manda
+  antes de reiniciar, así que eso no cambia.
+  ⚠️ **El cuidado real está en la Pico**: su `handle_reset` hace `log_flush()` antes de
+  reiniciar (`repl_v1.c:1229`), y permitirlo durante un RUN significa **escribir flash
+  con la VM en marcha** — el peligro clásico de ejecutar desde XIP. La cintura del log
+  post-mortem ya lo resuelve, pero hay que comprobarlo, no suponerlo. Las de ESP32 no
+  hacen flush (van directas a `esp_restart()`), así que ahí no aplica.
 
 - **[AOT] el `.mdn` no recuerda su RECETA — la huella de los FLAGS** *(mitad abierta de
   `#441`; aplazada a V6 el 18-ago. Eduardo: «ahora no vamos a modificar formatos». La

@@ -45,9 +45,13 @@ linea: 4 KB de erase+program POR LINEA se come el sector en minutos.
    ESP32 el boton RST tira del pin EN y cuenta como arranque en frio; en el RP2350
    el pin de RUN si conserva la RAM. Anotado como **L15** en `PENDIENTES.md`.
 
-**Abierta `#452`** de camino: con un RUN vivo la placa solo atiende `HELLO`/`KILL`,
-asi que el `RESET` del wire no llega — justo cuando mas falta hace. Se sortea con
-`kill` + `reset`. Una linea por familia.
+**Abierta `#452`** de camino —con un RUN vivo la placa solo atiende `HELLO`/`KILL`,
+asi que el `RESET` del wire no llega— **y aplazada a V6 el mismo dia** (Eduardo:
+*«ahora sabemos apañarnos y a los usuarios no les afecta»*): el rodeo es `kill` +
+`reset`, documentado en `PENDIENTES.md` L15. De paso salio que el censo por
+familias estaba mal: son CUATRO sitios, no tres — el S3 y el P4 comparten REPL y
+el simulador (`tools/bpvm_sim.c:679`) lleva el mismo filtro. Censar por la
+primitiva (el mensaje) y no por el nombre, otra vez.
 
 **Los 32 MB del P4: implementado, probado en placa, revertido.** El bootloader
 usaba 16 de los 32 MB; ampliarlo funciono para el FS y **rompio los packs**, y no
@@ -67,7 +71,7 @@ V5 (`9fcff33`); la huella de los FLAGS se va a V6 porque pide cambiar el formato
 del `.mdn` y *«ahora no vamos a modificar formatos»*. La cabecera no tiene campo
 libre, asi que meter el hash obliga a subir `version` y a tocar el lector del IDE y
 el de las cuatro imagenes a la vez — eso se hace al empezar una version, no al
-cerrarla. **Con eso, pendientes de V5: 9** (5 tecnicas + 4 tareas de cierre).
+cerrarla. **Con eso, pendientes de V5: 8** (4 tecnicas + 4 tareas de cierre).
 
 **⏭️ Queda de `#439`:** la misma vuelta en Metro y STM32 (el codigo esta verificado
 en el `.elf` de las cuatro, probado en placa en una).

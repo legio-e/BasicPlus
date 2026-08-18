@@ -85,8 +85,11 @@
   reinicio hubo. El volcado a flash sigue existiendo como red para los cortes de
   corriente, pero sólo llega hasta el último punto de guardado.
 
-  ⚠️ Con un programa en ejecución la placa sólo atiende `HELLO` y `KILL`, así que el
-  `reset` del IDE no llega: hay que hacer `kill` primero (ficha #452).
+  ⚠️ **Y el orden importa**: con un programa en ejecución la placa sólo atiende
+  `HELLO` y `KILL`, así que el `reset` del IDE no llega. **Primero `kill`, luego
+  `reset`.** El `kill` sí llega aunque el programa esté colgado —está probado sobre
+  un bucle cerrado que no cede el turno— y no borra el log, así que la autopsia
+  sale entera igual. Que `RESET` se pueda mandar directo queda para V6.
 
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
