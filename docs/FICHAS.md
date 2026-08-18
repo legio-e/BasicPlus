@@ -998,9 +998,21 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   es `power-on` y **borra la RAM del log**. O sea que el mecanismo funciona y aun así no
   lo tienes disponible en el escenario para el que se escribió. Hoy se sortea con
   `kill` + `reset`, que basta porque el `kill` sí llega.
-  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if` (y quitar el `&& enabled` del
-  botón). Una línea por familia; el cuidado está en que responda el `RESET_REPLY` antes
-  de reiniciar, como ya hace.
+  📌 **ES DE LA IMAGEN, NO DEL IDE.** El botón apagado es sólo el reflejo: tocar el IDE
+  a solas encendería un botón que la placa contesta con `BUSY`. El filtro está en el
+  firmware y son **CUATRO** sitios, censados por la primitiva (el mensaje) y no por el
+  nombre — `pico/repl_v1.c:1406` · `esp32/main/repl_esp32.c:915` (S3 **y** P4, comparten
+  REPL) · `stm32/port/stm32_repl.c:467` · y **`tools/bpvm_sim.c:679`**, que es el que se
+  escapa si uno cuenta «familias»: el simulador del IDE. Un doble que se comporte
+  distinto del original es una trampa, así que va en el mismo lote.
+  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if`, en los cuatro, y quitar el
+  `&& enabled` de `btnReset` (`PicoExplorer.java:2180`). El `RESET_REPLY` ya se manda
+  antes de reiniciar, así que eso no cambia.
+  ⚠️ **El cuidado real está en la Pico**: su `handle_reset` hace `log_flush()` antes de
+  reiniciar (`repl_v1.c:1229`), y permitirlo durante un RUN significa **escribir flash
+  con la VM en marcha** — el peligro clásico de ejecutar desde XIP. La cintura del log
+  post-mortem ya lo resuelve, pero hay que comprobarlo, no suponerlo. Las de ESP32 no
+  hacen flush (van directas a `esp_restart()`), así que ahí no aplica.
 
 ### Lenguaje y VM
 
