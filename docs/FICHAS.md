@@ -896,12 +896,24 @@ decidirá si basta subirlos.)*
   logs se están quedando en RAM»* —confirmado arriba, es exactamente eso— *«y si
   queremos el log como mecanismo de depuración de verdad, no deberían ir a RAM:
   directos a la flash (falta un `flush()` o algo similar)»*.
-  ⏭️ Al retomar (tras el descanso del 18-ago): medir ANTES de decidir el cómo —
-  cuánto cuesta un flush por línea en la flash de cada familia (latencia y
-  desgaste; la Pico borra por sectores de 4K), porque ahí está el compromiso
-  entre «log fiable» y «log que frena el programa». Las ideas que ya estaban
-  (`log=2` flush-por-línea como modo, o diagnósticos por el wire) siguen sobre la
-  mesa; la de Eduardo las concreta: el modo depuración escribe DIRECTO.
+  📐 **Y la decisión de coste, también de Eduardo (18-ago), que ANULA la campaña
+  de medir que se había planeado**: *«el coste del log solamente afecta al boot;
+  después el log se puede desactivar. Y si está activo y va un poco más lento es
+  que estamos haciendo una traza: es normal que tarde un poco más»*. O sea que el
+  compromiso «log fiable vs log que frena» se resuelve por POLÍTICA, no por
+  medida: activo ⇒ escribe directo y la lentitud es aceptable; desactivado ⇒
+  coste cero. No hay que optimizar el camino, hay que hacerlo FIABLE.
+  ⏭️ Al retomar, lo que queda es implementación, no decisión:
+  1. el camino de escritura a flash YA existe (el log post-mortem de H9, en
+     anillo); esto es llamarlo POR LÍNEA cuando el log esté activo, en vez de
+     sólo en los `log_flush()` de puntos fijos;
+  2. el único cuidado técnico real es el de siempre en la Pico: escribir flash
+     ejecutando DESDE flash (XIP) — el post-mortem ya lo resuelve, reusar su
+     cintura;
+  3. y verificarlo con el caso que motivó la ficha: un `for(;;)` a mitad de
+     programa, resetear, y que la autopsia enseñe las líneas de ANTES del
+     cuelgue — en las tres familias.
+
 
 
   **Lo que sí funciona con la placa colgada**: el `print` del programa, que va
