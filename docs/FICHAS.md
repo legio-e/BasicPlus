@@ -1055,6 +1055,20 @@ decidirá si basta subirlos.)*
   · `SyncList` **NO** — redeclara las cinco con las mismas firmas, **a propósito**
     («overrides explícitos para documentar que se llama la del subtipo, con
     locking»). Ahí hay que replicarlas, o dejar de redeclararlas.
+  ✅ **18-ago, MEDIDO: las sobrecargas se escriben UNA sola vez.** Eduardo: *«el
+  list ya está y las otras listas heredan de list»*. Cierto, y también para
+  `SyncList`, que era el caso dudoso: redeclara las cinco porque las suyas llevan
+  el lock, así que parecía necesitar copia de cada sobrecarga. **No la necesita**:
+  si la sobrecarga delega con `this.add(o)`, esa llamada es VIRTUAL, así que basta
+  con que la subclase tenga su `add(Object)` — que ya lo tiene.
+  `samples/ListaHer.bp` lo fuerza: `Sub` reescribe SÓLO `add(Object)` y al llamar a
+  `add(7)` (la sobrecarga HEREDADA) ejecuta la de `Sub` — también por referencia a
+  la base. En el corpus, paridad byte a byte.
+  ⏭️ Con eso, lo que queda de esta ficha es **dónde viven las sobrecargas**:
+  · en la `List` sintetizada → el emisor tendría que construir un
+    `Collections.Integer` desde código que él genera, y eso **no está probado**;
+  · o `List` en `Core` → BP normal, y eso **sí** está probado hoy
+    (`samples/ListaBp.bp`). Decisión de alcance, de Eduardo.
   🩸 **Y el obstáculo de fondo, que cancelar `Box` no quita sino que mueve**: una
   casilla de `List` es un **handle** (`items` es array de refs, `ASTORE_I64`, y el GC
   lo traza por el `field_bitmap`). Un `integer` NO cabe ahí, así que `add(i:integer)`
