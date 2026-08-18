@@ -608,18 +608,20 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Familias — lo que dejó el censo (`#427`)
 
-- 🟡 **(sin número) — el `Hello` embebido es código MUERTO en 3 de las 4 imágenes.**
-  Visto el 18-ago al cerrar el punto 8 del censo, y anotado aparte porque es otra
-  cosa: el punto 8 pedía igualar el blob, esto es si debe existir.
-  · **Pico** — el único VIVO: lo preinstala como `/app/Hello.mod` (`main.c:1305`).
-  · **ESP32 y P4** — el `.c` existe pero **no está en `SRCS`**: no se compila.
-  · **STM32** — sí se compila (está en el `subdir.mk`) y lo usa sólo
-    `bpvm_app_run_hello()`, **que no llama nadie** (resto de H9.1). Gasta flash
-    para nada. Y si algún día se llamara, fallaría: carga con
-    `bpvm_load_mod_buffer`, que no resuelve imports, y el Hello de hoy importa `Core`.
-  ⏭️ Lo razonable es borrar los tres `.c` muertos y, con ellos, `bpvm_app.c/h` del
-  STM32. **Es borrar, así que lo decide Eduardo**; el generador ya deja las cuatro
-  iguales mientras tanto.
+- ~~(sin número)~~ — ✅ **CERRADA el 18-ago: borradas.** Eduardo: *«se puede
+  borrar, ya no lo utilizo nunca»*. Fuera `hello_mod.c` de ESP32, P4 y STM32, y con
+  ellos el `bpvm_app.c/h` del STM32 — el demo de H9.1 que era su único consumidor y
+  al que **no llamaba nadie**.
+  📐 Lo que gastaban: ESP32 y P4 ni compilaban el suyo (no estaba en `SRCS`); el del
+  STM32 **sí** entraba en la imagen, para un demo muerto.
+  ✅ Verificado que no los usaba nadie de verdad: Pico y STM32 reconstruidos, **0
+  errores** (el `subdir.mk` que los citaba lo regenera CubeIDE solo).
+  🔁 Y el generador se redujo al único vivo — si no, la próxima pasada los habría
+  vuelto a crear, que es la gracia de tener generador y el peligro de tenerlo mal.
+  📌 Queda el del **Pico**, que sí se usa: lo preinstala como `/app/Hello.mod`. Si
+  tampoco hace falta ahí, quitarlo es cambiar lo que la placa trae de fábrica —
+  decisión aparte.
+
 
 - ~~`hello_mod.c` del STM32~~ — ✅ **CERRADA el 18-ago**: **las cuatro imágenes
   salen ya del mismo fuente**, y por un generador, no a mano.

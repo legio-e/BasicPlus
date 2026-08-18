@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# regen_hello_blob.sh — regenera el `hello_mod.c` de las CUATRO imágenes desde
-# el MISMO fuente, `samples/hello.bp`.
+# regen_hello_blob.sh — regenera el `hello_mod.c` del Pico desde `samples/hello.bp`.
 #
 # POR QUÉ EXISTE. La cabecera de esos ficheros decía «GENERADO por
 # scripts/regen-hello-blob.sh» y ESE SCRIPT NO EXISTÍA: un puntero muerto que
@@ -21,10 +20,6 @@
 # Uso:  bash bpgenvm-c/scripts/regen_hello_blob.sh
 # Después: reconstruir el firmware que lo lleve (sólo el Pico lo ejecuta).
 #
-# NOTA sobre el STM32: su `bpvm_app_run_hello()` no lo llama nadie (resto de
-# H9.1) y carga el módulo con `bpvm_load_mod_buffer`, que no resuelve imports —
-# y el Hello de hoy importa `Core`. Se regenera igual, para que las cuatro
-# salgan del mismo fuente, pero eso NO lo resucita: ver la ficha.
 # ============================================================
 set -euo pipefail
 
@@ -62,9 +57,11 @@ emitir() {   # $1 = fichero destino, $2 = incluir embedded_mods.h (si/no), $3 = 
     printf '  %-44s %s B\n' "${out#$ROOT/}" "$(stat -c%s "$MOD")"
 }
 
+# SOLO EL PICO. Las otras tres copias se BORRARON el 18-ago (decisión de
+# Eduardo: «se puede borrar, ya no lo utilizo nunca»): ESP32 y P4 ni las
+# compilaban, y la del STM32 se compilaba para un `bpvm_app_run_hello()` que no
+# llamaba nadie — gastaba flash para nada. Aquí sólo queda el que se usa: el
+# Pico lo preinstala como /app/Hello.mod.
 emitir "$ROOT/bpgenvm-c/pico/hello_mod.c"         si  "uint8_t"
-emitir "$ROOT/bpgenvm-c/esp32/main/hello_mod.c"   no  "uint8_t"
-emitir "$ROOT/bpgenvm-c/esp32p4/main/hello_mod.c" no  "uint8_t"
-emitir "$ROOT/bpgenvm-c/stm32/port/hello_mod.c"   no  "unsigned char"
 
-echo "OK: las 4 imágenes con el MISMO Hello. Reconstruye el firmware que toque."
+echo "OK: Hello del Pico regenerado. Reconstruye su firmware (ninja bpvm_pico)."
