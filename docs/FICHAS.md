@@ -1719,6 +1719,33 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
+- **[P4] los 32 MB de flash y el XIP de los packs** — aplazado a V6 el 18-ago
+  (Eduardo: *«es demasiado arriesgado»*). El diagnóstico está CERRADO, lo que
+  queda es la obra:
+  📐 **El hecho**: el caché de flash del P4 direcciona a 24 bits, así que
+  `spi_flash_mmap` rechaza (`ESP_ERR_INVALID_ARG`) toda dirección o tramo por
+  encima de **16 MB**. Y el XIP de los packs vive de ese mapeo. Medido en placa
+  con DOS repartos: falla por tamaño (19 MB desde 13,3) y por dirección
+  (empezando en 25,6). Antes iba porque con `bpdata` de 10 MB todo caía debajo.
+  🚫 Saltárselo exige `BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH`, que Espressif
+  marca EXPERIMENTAL (*«can't use on all flash chips stable»*). Descartado.
+  🔑 **La pieza que lo hace resoluble**: el FS **no mapea** — lee con
+  `esp_partition_read`. O sea que el FS puede vivir arriba y sólo los packs
+  necesitan estar abajo.
+  ⏭️ **Dos caminos, ninguno barato:**
+  **A.** Invertir el orden en el común (`bpvm_part_layout_from_sizes`): packs
+  primero con tamaño ajustable, FS al final llevándose el resto. Es el modelo
+  correcto —*dices cuánto para packs, el FS se queda lo demás*— pero el orden lo
+  comparten las TRES familias: el FS se mueve en todas ⇒ **reformatear las tres**.
+  **B.** Dar al P4 una segunda partición (`bppacks` abajo, `bpdata` arriba sólo
+  FS). No toca a las otras, pero el firmware busca UNA partición y la reparte él:
+  hay que enseñarle a usar dos.
+  ⚠️ **Y MIENTRAS TANTO, lo que hay que decidir para V5**: con `bpdata` a 32 MB
+  los packs **no mapean nunca** (su tramo acaba siempre al final de `bpdata`), o
+  sea que el P4 se queda **sin packs ni SQLite** — lo que cerró H7. Volver a 16 MB
+  es un revert de una línea del `.csv` y los packs vuelven, a cambio de dejar
+  media flash sin usar.
+
 - **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
   (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
   `.bin`…), y **el ROJO queda RESERVADO** para ficheros con algún problema.
