@@ -79,8 +79,13 @@ la polaridad de `pwr`. Error de redaccion mio al archivarla. Contestada por
 triplicado: el analisis del transistor, el codigo (`blk_sdmmc_p4.c:79`) y cada
 arranque (`pwr 45 (activo bajo)` + `sd: montada en /sd`).
 
-**⏭️ Queda de `#439`:** la misma vuelta en Metro y STM32 (el codigo esta verificado
-en el `.elf` de las cuatro, probado en placa en una).
+**⏭️ COMO SE CIERRA LO QUE QUEDA — decision de Eduardo (18-ago):** *«lo que queda
+pendiente se puede mirar en la fase final donde haremos mas pruebas»*. O sea que las
+tres tecnicas que quedan ( verificar que era ,  medir los dos
+cuellos,  exFAT y superfloppy) NO son trabajo suelto: entran en la tanda de
+pruebas del cierre. Y ahi cabe tambien la cola de  —repetir la vuelta en Metro
+y STM32— que quedo escrita dentro de la ficha ya cerrada; el codigo esta verificado
+en el  de las cuatro imagenes y probado en placa en una.
 
 ### 18-ago — el dia de las listas: 8 fichas cerradas en cadena, corpus 29→37
 
