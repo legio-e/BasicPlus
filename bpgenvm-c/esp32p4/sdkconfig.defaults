@@ -28,10 +28,12 @@ CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=2048
 # la imagen con LVGL no cabe en el app de 1 MB de la tabla single-app, y avisa
 # "Detected size(16384k) larger than image header(2048k)". Tabla a medida
 # (partitions.csv): app de 4 MB + bpfs (FS persistente). Espeja el firmware del S3.
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
-CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+# La placa lleva 32 MB fisicos. Estuvo a 16 desde el 12-ago porque cambiarlo
+# exige reflashear el BOOTLOADER (el tamaño va en su cabecera), y se aparco.
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="32MB"
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_32m.csv"
 
 # #138: consola SILENCIADA. El P4-Function-EV tiene un solo puerto serie (CP210x/
 # UART0/COM14) y el wire lo usa; con la consola en UART0 se mezclaría, y en USB-JTAG
