@@ -260,6 +260,40 @@ funciona para `RuntimeError` desde `Core`. Y si `List` viviera en `Core`:
 - `SyncList`/`OwnerList` heredarían o no según lo que se escriba, a la vista;
 - se podrían **borrar ~600 líneas** de síntesis del `MivmEmitter`.
 
+**Pero hoy no se puede, y la razón medida (18-ago) resultó ser OTRA de la que
+parecía.** La primera lectura fue *«BP no tiene arrays de referencias»*. Falso:
+los tiene y funcionan — `split()` devuelve un `string[]` y `samples/SplitTest.bp`
+sale correcto; la carga y el guardado de elementos ya son width-aware; y el tipo
+`Caja[]` se acepta. Lo que está roto es **el literal**:
+
+```
+var i: integer[] := [10, 20, 30]        ->  i[1] = 20     ✅ el control
+var l: long[]    := [10000000000L, …]   ->  l[1] = 0      🔴 EN SILENCIO
+var s: string[]  := ["uno", "dos"]      ->  «No space in heap»
+var a: Caja[]    := [Caja(7), Caja(8)]  ->  INVOKE_VIRTUAL sobre null
+```
+
+`emitArrayLit` emite `NEWARRAY` + `ASTORE` **sin mirar el tipo de elemento**, o
+sea 4 bytes por casilla siempre. No es un problema de los objetos: se lleva por
+delante `long[]`, `double[]`, `string[]` y los arrays de clases por igual, y las
+dos VMs fallan idéntico (compilador, no divergencia). Ficha aparte en
+`FICHAS.md`.
+
+Lo que falta para `List` en `Core` son, entonces, **dos cosas pequeñas y
+concretas**, no una pieza de lenguaje nueva:
+
+1. que el literal respete el ancho del elemento — el tipo YA lo calcula
+   `analyzeArrayLit`, y `astoreOpForElement` ya sabe elegir; sólo hay que usarlo
+   (y completar `newarrayOpForElement`, que dice ser su espejo y no contempla las
+   referencias);
+2. un **`newObjArray(n)`** público, porque hoy sólo existe `__newRefArray`,
+   interno y tipado como `integer[]`.
+
+Con eso, `List` se escribe en BP, vive en `Core`, las sobrecargas de `add` salen
+gratis y sobran ~600 líneas del emisor.
+
+*(Lo de abajo era la primera lectura, que la medida siguiente corrigió:)*
+
 **Pero hoy no se puede, y por una razón concreta y medida (18-ago):**
 
 ```

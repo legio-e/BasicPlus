@@ -905,83 +905,44 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
-- (sin número) — 🔴 **BP NO TIENE ARRAYS DE REFERENCIAS, y guardar en uno pasa en
-  SILENCIO.** Medido el 18-ago al preguntar Eduardo por qué `List` sigue siendo una
-  clase sintetizada en vez de vivir en `Core`. Reproductor mínimo:
+- (sin número) — 🔴 **UN LITERAL DE ARRAY GUARDA SIEMPRE 4 BYTES POR CASILLA.**
+  Medido el 18-ago al preguntar Eduardo *«no entiendo por qué no podemos declarar
+  un array de objects, es una limitación bastante tonta»*. Y tiene razón en que es
+  tonta, pero el hueco **no es de los objetos**: es de los literales, y se lleva
+  por delante todo elemento de 8 bytes.
   ```
-  var items: integer[] := __newRefArray(4)
-  this.items[this.size] := o     // ← ACEPTADO sin una palabra (o es un Object)
-  return this.items[idx]         // ← rechazado: «'integer' incompatible con 'Object'»
+  var i: integer[] := [10, 20, 30]              -> i[1] = 20     ✅ el control
+  var l: long[]    := [10000000000L, ...]       -> l[1] = 0      🔴 EN SILENCIO
+  var d: double[]  := [1.5d, 2.5d, 3.5d]        -> revienta
+  var s: string[]  := ["uno", "dos"]            -> «No space in heap»
+  var a: Caja[]    := [Caja(7), Caja(8)]        -> INVOKE_VIRTUAL sobre null
   ```
-  La **lectura** tipa mal y para el compilador; la **escritura** no. Y una casilla
-  de `integer[]` son **4 bytes** mientras un handle son **8**, así que eso es la clase
-  de fallo de la campaña de V4 (*«referencia ≠ long»*) otra vez: truncar el handle
-  y perder la generación. ⏳ **Falta MEDIR si de verdad trunca** — está confirmado
-  que el compilador lo acepta, no lo que emite.
-  📌 Por qué importa ahora: es lo ÚNICO que impide escribir `List` en BP. Lo que la
-  `List` sintetizada hace es declarar `items: integer[]` y escribirlo a mano con
-  `ASTORE_I64` (8 B), un truco que el lenguaje no ofrece. Con un tipo `Object[]` de
-  verdad —`newObjArray`, carga y guarda de 8 B— `List` pasa a ser BP normal.
+  **Las dos VMs dan lo mismo** → es del compilador, no divergencia. Y el `long[]`
+  devuelve un **0 plausible sin decir nada**, que es la familia de #385.
+  📍 **La causa, y el emisor la confiesa** (`MivmEmitter.emitArrayLit`):
+  ```
+  w.emit(OpCode.NEWARRAY);   // sin ancho de elemento
+  // TODO: coerce a tipo del elemento si supieramos el tipo array de contexto.
+  w.emit(OpCode.ASTORE);     // SIEMPRE 4 bytes
+  ```
+  🟢 **Y ese TODO está DESFASADO: el tipo sí se conoce.** `analyzeArrayLit(al, scope,
+  expected)` lo calcula y queda en `info.exprTypes`. Además ya existen las dos piezas
+  que hacen falta: `astoreOpForElement` (que **sí** mira `occupies8Bytes`) y
+  `newarrayOpForElement` (que dice ser su «espejo» pero **le falta esa rama**: sólo
+  contempla `long`/`double`, no las referencias).
+  ⚠️ **Lo que NO es**, comprobado para no arreglar lo que no está roto:
+  · los arrays de referencias **funcionan** si los crea un builtin — `split()` devuelve
+    un `string[]` y `samples/SplitTest.bp` sale correcto (control);
+  · la carga y el guardado de elementos **ya son width-aware**;
+  · el tipo `Caja[]` **se acepta**;
+  · los arrays fijos (`tipo[N]`) **rechazan** las referencias con un mensaje claro, así
+    que por ahí no entra el fallo.
+  ⏭️ Falta además un **`newObjArray(n)`**: hoy sólo existe `__newRefArray`, interno y
+  tipado como `integer[]`. Sin él no se puede crear un array de objetos vacío, que es
+  lo que impide escribir `List` en BP.
+  🔗 De aquí depende lo de mover `List` a `Core` (ver la entrada de las listas y
+  `docs/OBJECT_COMODIN.md`).
 
-
-- ~~`#438`~~ — 🚫 **CANCELADA el 18-ago por decisión de Eduardo**: *«la clase
-  Box, de momento no la necesitamos. Nuestro comodín será `Object`»*. Lo que
-  hacía falta de ella —envolver escalares— se resuelve **donde de verdad se
-  usa**: sobrecargando `List.add` (ver la entrada de las listas). La ficha se
-  queda escrita porque su análisis sigue valiendo:
-  *(enunciado original)* la clase contenedora `Box` (encargo de Eduardo; estaba sin número
-  y agrupada por error con el bloque del IDE — **no es del IDE**, es lenguaje,
-  hermana de `#389` y del comodín `Object`).
-
-  Es la otra mitad del reparto que hizo Eduardo: **envolver = librería**
-  (una clase aparte con `set` sobrecargado, posible desde que `#387` arregló la
-  sobrecarga cross-module); **desenvolver con seguridad = lenguaje** (eso ya está
-  hecho: es el `CHECKCAST` de `#389`). Sin ella, meter un escalar en un `Object`
-  obliga a escribir `Integer(5)` a mano.
-
-  **Decisiones abiertas** (de `ESTADO.md`, sin tocar): el nombre; si distingue
-  «vacío» de `null`; y cómo se saca un escalar — BP **no sobrecarga por tipo de
-  retorno**, así que o N getters con nombre (`getInt`, `getLong`…) o un
-  `get(porDefecto: integer)` por cada tipo. Es la MISMA asimetría que salió al
-  diseñar `File`/`TextFile` (`notas/V6_IDEAS.md`): leer necesita N nombres,
-  escribir puede ser uno sobrecargado. Conviene resolverla igual en los dos
-  sitios, que si no el lenguaje acaba con dos costumbres.
-
-  ⚠️ Y va enlazada con el otro encargo pendiente: pasar `List`/`SyncList`/
-  `OwnerList` de `any` a `Object`. Son la misma conversación —qué se puede meter
-  en una colección y cómo se saca— y hacerlas por separado es arriesgarse a que
-  no encajen.
-
-
-- ~~`#389`~~ — ✅ **CERRADA EN HOST el 17-ago (`05acc0d`): el estrechamiento de
-  `Object` COMPRUEBA en ejecución, en las dos VMs.** Era el último bug conocido
-  del lenguaje.
-  **Nuevo opcode `CHECKCAST` (0xAF)**: mira sin consumir; null pasa; el error
-  NOMBRA el tipo («conversion invalida: el valor no es un 'Gato'») — el nombre
-  viaja como literal internado, porque el descriptor de clase no lo lleva.
-  `cls_off==0` es el centinela del modo cadena (`string(o)`). `Object(x)` no
-  emite nada: un Object puede llevar legítimamente una cadena.
-  **Y los dos «hermanos», también**: INSTANCEOF de la VM-C leía el class_ptr a
-  ciegas (una cadena dentro de un Object → recorrido de herencia sobre su
-  LONGITUD; miVM ya validaba — divergencia de paridad latente, arreglada), y el
-  despacho virtual sobre un no-objeto ahora lanza atrapable en vez del 504.
-  🩸 **La trampa que cazó el reproductor** (caso 6): las cadenas viven en DOS
-  sitios —heap y REGIÓN DE DATOS (literales, sin cabecera)— y el primer intento
-  rechazaba los literales. Regla correcta: una dirección de datos en un Object
-  sólo puede ser un literal de cadena; lo garantiza el sistema de tipos.
-  **Verificado**: `samples/CastRt.bp`, 9 casos con salida BYTE A BYTE idéntica
-  en las dos VMs; frontend 104/104, miVM 34/34, paridad 28/0/0, batería C
-  verde, la Metro enlaza, fat-jar del IDE reconstruido (#429).
-  ⏳ **Falta placa** (opcode nuevo = reflashear, como #414): `CastRt` en la
-  Metro con la imagen nueva. Y anotado: la stdlib precompilada no lleva
-  CHECKCAST en sus `.mod` hasta la próxima regeneración; el AOT ya rechazaba
-  casts de clase en `native` (mensaje mejorable).
-  *(Enunciado original:)* **el estrechamiento de `Object` NO se comprueba en ejecución**. La
-  mitad estática está hecha (14-ago): `Object` es la raíz real y bajar se escribe
-  (`Cosa(o)`, `string(o)`). Falta que **lance**, sobre `instanceof` (#52). Toca
-  las dos VMs y el AOT. Reproductor: `diag/orm-slots/ProbeMal.bp`.
-  Con él: `toString()`/`compareTo()` sobre un `Object` que lleva una **cadena** no
-  tienen vtable que despachar.
 - (sin número) — **las listas: de `any` a `Object` + `add` SOBRECARGADO.**
   15 `AnyType.INSTANCE` a mano en `SemanticAnalyzer`. ⚠️ Deja a
   `samples/AnyNumGc.bp` sin sujeto.
