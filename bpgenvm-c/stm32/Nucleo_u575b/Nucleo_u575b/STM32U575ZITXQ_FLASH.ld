@@ -163,6 +163,25 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM
 
+  /* #439 — SECCION QUE EL ARRANQUE NO BORRA.
+   *
+   * El log post-mortem vive aqui para que sobreviva al reset: el startup solo
+   * limpia de _sbss a _ebss, asi que lo que caiga FUERA de ese rango llega
+   * intacto. Gemelo de `__uninitialized_ram` (Pico) y `__NOINIT_ATTR` (ESP32).
+   *
+   * ATENCION: este .ld lo genera CubeIDE. Si algun dia se regenera el proyecto
+   * hay que volver a poner esto — y se notara porque el log dejara de
+   * sobrevivir, en silencio. Comprobacion: `arm-none-eabi-objdump -h` tiene que
+   * enseñar `.noinit` con ALLOC y SIN LOAD, y el simbolo del log dentro.
+   */
+  .noinit (NOLOAD) :
+  {
+    . = ALIGN(4);
+    *(.noinit)
+    *(.noinit*)
+    . = ALIGN(4);
+  } >RAM
+
   /* User_heap_stack section, used to check that there is enough "RAM" Ram type memory left */
   ._user_heap_stack :
   {

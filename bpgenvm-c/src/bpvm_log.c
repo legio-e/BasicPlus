@@ -58,10 +58,56 @@ static void append_raw(const char* str, uint32_t n) {
     s_used += n;
 }
 
+/* #439 — la cabecera, AL DÍA EN RAM. Antes sólo se escribía dentro de
+ * `log_flush`; ahora es lo que permite que un buffer que sobrevive al reset se
+ * reconozca a sí mismo. Tres words por línea. */
+static void hdr_sync(void) {
+    uint32_t magic = LOG_MAGIC, ver = LOG_VERSION, size = s_used;
+    uint32_t drop = (uint32_t) s_dropped;
+    memcpy(s_c.region_buf + 0,  &magic, 4);
+    memcpy(s_c.region_buf + 4,  &ver,   4);
+    memcpy(s_c.region_buf + 8,  &size,  4);
+    memcpy(s_c.region_buf + 12, &drop,  4);
+}
+
+/* #439 — de dónde salió lo cargado (1 = el buffer sobrevivió al reset). Lo
+ * consulta el arranque para decirlo: una autopsia que no sabe de cuándo es
+ * manda la depuración al sitio equivocado. */
+static int s_origen_ram = 0;
+int bpvm_log_origen_ram(void) { return s_origen_ram; }
+
 void bpvm_log_init(const bpvm_log_cintura_t* cintura) {
     s_c = *cintura;
+
+    /* #439 — ¿el buffer trae un log VÁLIDO de antes del reset? Si la cintura lo
+     * declara en memoria que no se borra (`__uninitialized_ram` en la Pico,
+     * `RTC_NOINIT_ATTR` en el ESP32, una sección `.noinit` en el STM32), aquí
+     * llega intacto — y es MÁS RECIENTE que el flash, que sólo tiene hasta el
+     * último flush. Ese es todo el arreglo.
+     *
+     * En arranque en frío trae basura y el magic no cuadra, que es el mismo
+     * criterio que usa el SDK de la Pico con su token de doble reset.
+     *
+     * ⚠️ Si la plataforma NO lo declara persistente esto es inocuo: el buffer
+     * llega a cero, el magic falla y se sigue por flash como siempre. */
+    {
+        uint32_t magic, ver, size, drop;
+        memcpy(&magic, s_c.region_buf + 0,  4);
+        memcpy(&ver,   s_c.region_buf + 4,  4);
+        memcpy(&size,  s_c.region_buf + 8,  4);
+        memcpy(&drop,  s_c.region_buf + 12, 4);
+        if (magic == LOG_MAGIC && ver == LOG_VERSION && size <= data_cap()) {
+            s_used    = size;
+            s_dropped = (int) drop;   /* el anillo, que vive en .bss y se borra */
+            s_origen_ram = 1;
+            s_init = 1;
+            return;
+        }
+    }
+
     s_used = 0;
     s_dropped = 0;   /* #433: arranque limpio; el anillo se marca al llenarse */
+    s_origen_ram = 0;
     memset(s_c.region_buf, 0, s_c.region_size);
 
     /* Recupera el snapshot: lee la región y valida el header. */
@@ -78,6 +124,7 @@ void bpvm_log_init(const bpvm_log_cintura_t* cintura) {
     } else {
         memset(s_c.region_buf, 0, s_c.region_size);
     }
+    hdr_sync();      /* #439 — reconocible desde ya */
     s_init = 1;
 }
 
@@ -109,6 +156,7 @@ void log_printf(const char* fmt, ...) {
         if (total < (int) sizeof line - 1) line[total++] = '\n';
     }
     append_raw(line, (uint32_t) total);
+    hdr_sync();   /* #439 — que el buffer se reconozca tras un reset */
 }
 
 void log_flush(void) {

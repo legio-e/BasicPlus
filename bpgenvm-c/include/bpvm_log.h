@@ -110,4 +110,9 @@ uint32_t log_total_bytes(void);
 }
 #endif
 
+/* #439 — 1 si lo cargado viene del buffer que SOBREVIVIO al reset (las lineas
+ * de ANTES del cuelgue); 0 si es un arranque en frio y se cargo de flash.
+ * Solo dara 1 si la cintura declara su region en memoria no inicializada. */
+int bpvm_log_origen_ram(void);
+
 #endif /* BPVM_LOG_H */

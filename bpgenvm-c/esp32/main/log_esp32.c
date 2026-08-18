@@ -24,6 +24,7 @@
  * reflasheo del firmware, no es del sistema de ficheros de la aplicación), y un
  * post-mortem es exactamente eso. Los 16 KB restantes quedan de reserva.
  */
+#include "esp_attr.h"   /* #439 — __NOINIT_ATTR */
 #include "log.h"
 
 #include "esp_partition.h"
@@ -52,7 +53,15 @@
 /* La región del log EN RAM (= imagen de flash: header + data). El núcleo escribe
  * aquí y el flush vuelca este mismo buffer, sin copia intermedia. Va en RAM
  * interna a propósito: el log tiene que estar vivo ANTES que la PSRAM. */
-static uint8_t s_region[BP_LOG_SIZE];
+/* #439 — la región va a `.noinit`: el arranque NO la borra, así que el log
+ * sobrevive al reset y la autopsia ve las líneas de ANTES del cuelgue. Gemelo
+ * del `__uninitialized_ram` de la Pico; el núcleo común (`bpvm_log_init`) hace
+ * el resto — valida la cabecera y, si cuadra, se queda con lo que sobrevivió.
+ *
+ * `__NOINIT_ATTR` y no `RTC_NOINIT_ATTR` a propósito: la RTC es pequeña (y en
+ * algunos chips no existe: la macro es un static_assert), y aquí son 4-8 KB.
+ * DRAM `.noinit` sobrevive al reset igual, que es lo que se pide. */
+static uint8_t __NOINIT_ATTR s_region[BP_LOG_SIZE];
 
 static const esp_partition_t* s_part = NULL;
 

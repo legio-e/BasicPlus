@@ -18,7 +18,14 @@
 #include <string.h>
 
 /* La región del log EN RAM (= imagen de flash: header + data). aligned(8). */
-static uint8_t s_region[BP_LOG_SIZE] __attribute__((aligned(8)));
+/* #439 — la región va a `.noinit`, que el startup NO borra (sólo limpia de
+ * _sbss a _ebss): el log sobrevive al reset y la autopsia ve las líneas de
+ * ANTES del cuelgue. Gemelo del `__uninitialized_ram` de la Pico y del
+ * `__NOINIT_ATTR` del ESP32; el núcleo común hace el resto.
+ * La sección la declara el linker script del proyecto — y OJO, ese .ld lo
+ * genera CubeIDE (ver el comentario que hay allí). */
+static uint8_t s_region[BP_LOG_SIZE]
+    __attribute__((aligned(8), section(".noinit")));
 
 static uint32_t now_ms(void) { return HAL_GetTick(); }
 
