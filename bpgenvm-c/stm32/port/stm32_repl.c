@@ -845,6 +845,12 @@ void stm32_repl_run(void) {
      * conduce (Gestión de placa: proponer defaults → aplicar → reset). Sustituye al
      * fs_load() de región fija. */
     log_init();                     /* recupera el log de la sesión anterior (post-mortem) */
+    /* #439 — y DE DONDE sale lo recuperado: sin esto, un volcado con dos
+     * arranques no distingue «la RAM sobrevivio al reset» de «se cargo de
+     * flash lo que el arranque anterior volco». */
+    log_printf(bpvm_log_origen_ram()
+               ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
+               : "log: arranque en frio (cargado de flash)");
     /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
      * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
      * `_write` retargeteado, el stderr del núcleo se PERDÍA. Esto devuelve al

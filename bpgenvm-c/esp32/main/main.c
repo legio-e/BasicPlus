@@ -106,6 +106,15 @@ void app_main(void)
     log_init();
     bpvm_diag_set_sink(diag_al_log);          /* #353 */
     log_printf("=== boot ESP32-S3 ===");
+    /* #439 — DE DONDE sale lo que trae el log. Sin esto, un volcado con dos
+     * arranques no distingue «la RAM sobrevivio» de «se cargo de flash lo que
+     * el arranque anterior volco» — que es exactamente lo que habia antes.
+     * Estaba solo en la Pico: el mecanismo viajo a las 4 imagenes y el AVISO
+     * no. Un arreglo a medias es el que no se puede comprobar. */
+    log_printf(bpvm_log_origen_ram()
+               ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
+               : "log: arranque en frio (cargado de flash)");
+
 
     /* El heap de la VM, ANTES del climb: layer_app comprueba s_vm_buffer. */
     vm_buffer_init();
