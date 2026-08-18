@@ -3569,6 +3569,33 @@ public class VirtualMachine {
                     break;
                 }
 
+                case 0xB0: { // CHECKCAST_EXT — #444, el cast a una clase de OTRO módulo
+                    // Idéntico al 0xAF salvo el ancho del cls_off (i32, lo parcha
+                    // el linker con la dirección cs-relativa de la clase externa).
+                    // Aquí cls_off == 0 NO es el centinela de cadena: `string(o)`
+                    // no cruza módulos y sigue por el 0xAF.
+                    int clsOff    = readI32(mem, pc); pc += 4;
+                    short nameOff = (short) readI16(mem, pc); pc += 2;
+                    long ref = refLoad(mem, sp - REF_SIZE);   // peek: no consume
+                    boolean ok = true;
+                    if (ref != 0) {
+                        int objClass = classPtrOfRefOr0(ref);
+                        ok = (objClass != 0) && isDescendantOf(objClass, cs + clsOff);
+                    }
+                    if (!ok) {
+                        int naddr = cs + nameOff;
+                        int nlen  = readInt32(naddr);
+                        if (nlen > 40) nlen = 40;
+                        String nombre = new String(mem, naddr + 4, nlen,
+                                java.nio.charset.StandardCharsets.UTF_8);
+                        // ⚠️ MISMO mensaje, byte a byte, que interp.c — paridad.
+                        tc.sp = sp; tc.bp = bp; tc.pc = pc; tc.cs = cs;
+                        throwBpRuntimeError(tc,
+                                "conversion invalida: el valor no es un '" + nombre + "'");
+                    }
+                    break;
+                }
+
                 // --- Variantes compactas para reducir tamaño del bytecode.
                 //     Estos cases tienen el writeI32/readI32 INLINE explícito
                 //     porque el JIT del HotSpot considera readI32/writeI32

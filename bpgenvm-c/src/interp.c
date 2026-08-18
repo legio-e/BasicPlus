@@ -1772,6 +1772,69 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
+        case OP_CHECKCAST_EXT: {
+            /* #444 — como OP_CHECKCAST pero el cls_off es i32 y viene PARCHEADO
+             * por el enlazador (nombre cualificado → dirección cs-relativa de la
+             * clase de otro módulo). Misma via que OP_TRY_BEGIN_EXT, incluido el
+             * camino frío de XIP: en un módulo que corre desde FLASH el operando
+             * no se pudo escribir y el valor vive en la tabla lateral. */
+            uint32_t instr_addr   = pc - 1;
+            uint32_t operand_addr = pc;
+            int32_t cls_off  = bpvm_read_i32_be(mem + pc); pc += 4;
+            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            {
+                const bpvm_module_t* xm = bpvm_module_for_code_addr(vm, instr_addr);
+                if (xm && xm->cb != xm->code_start) {
+                    int32_t rel = (int32_t)(operand_addr - xm->cb);
+                    for (int fi = 0; fi < xm->eh_class_fixup_count; fi++) {
+                        const bpvm_eh_class_fixup_t* fx = &xm->eh_class_fixups[fi];
+                        if (fx->code_off == rel && fx->resolved) {
+                            cls_off = fx->resolved_cls_off;
+                            break;
+                        }
+                    }
+                }
+            }
+            bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
+            int ok = 1;
+            if (!bpref_is_null(obj)) {
+                /* Aqui cls_off == 0 NO es el centinela de cadena (una cadena no
+                 * vive en otro modulo): `string(o)` sigue por OP_CHECKCAST. */
+                uint32_t expected = (uint32_t)((int32_t) cs + cls_off);
+                uint32_t cur = class_ptr_of_ref_or0(vm, obj);
+                ok = 0;
+                while (cur != 0) {
+                    if (cur == expected) { ok = 1; break; }
+                    int32_t parent_off = bpvm_read_i32_be(mem + cur
+                                                            + BPVM_CLS_OFF_PARENT_OFF);
+                    if (parent_off == 0) break;
+                    uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, cur);
+                    cur = (uint32_t)((int32_t) cur_cs + parent_off);
+                }
+            }
+            if (!ok) {
+                char msg[96];
+                uint32_t naddr = (uint32_t)((int32_t) cs + name_off);
+                uint32_t nlen  = (uint32_t) bpvm_read_i32_be(mem + naddr);
+                if (nlen > 40u) nlen = 40u;
+                /* MISMO mensaje, byte a byte, que miVM y que OP_CHECKCAST. */
+                snprintf(msg, sizeof msg,
+                         "conversion invalida: el valor no es un '%.*s'",
+                         (int) nlen, (const char*) (mem + naddr + 4));
+                tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+
+                bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+                if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
+                    pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                    mem = vm->memory; break;
+                }
+                exit_status = BPVM_ERR_RUNTIME;
+                if (yielded) *yielded = 1;
+                goto done;
+            }
+            break;
+        }
+
         case OP_FREE_REF: {
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             /* V4/H-006: cascada recursiva (owners + arrays de refs + cualquier tipo).

@@ -923,7 +923,8 @@ decidirá si basta subirlos.)*
   por tamaño, que **las casillas arrancan a null** (no con basura, que es lo que
   decide si el GC puede trazarlas) y que el downcast saca lo que se metió.
 
-- 🔴 **#444 — el downcast a una clase de OTRO MÓDULO revienta el compilador.**
+- ~~`#444`~~ — ✅ **CERRADA el 18-ago** (`compat` 33 PASS): **el downcast a una clase
+  de OTRO MÓDULO ya comprueba en vez de reventar el compilador.**
   Encontrado el 18-ago al escribir `List` en BP, que es lo que #443 desbloqueaba.
   Reproductor de seis líneas, y el gemelo que lo acota:
   ```
@@ -961,10 +962,28 @@ decidirá si basta subirlos.)*
   **embebido en las imágenes de las cinco familias** (`pico/core_mod.c`,
   `esp32/main/esp32_mods.c`, …), así que engordarlo lo paga hasta el micro más
   pequeño, y obliga a regenerar los blobs de todas.
-  ⏭️ **Conclusión de la medida**: la salida barata no era barata. Arreglar #444
-  (el `CHECKCAST_EXT`, con el molde de `TRY_BEGIN_EXT`) hace falta **igual** para el
-  código de usuario: cualquiera que use `Object` con un envoltorio de la stdlib se lo
-  encuentra. Decisión de Eduardo pendiente.
+  ✅ **ARREGLO: opcode `CHECKCAST_EXT` (0xB0)**, hermano de `CHECKCAST` con el
+  `cls_off` a **i32** y parcheado en link-time por el nombre cualificado.
+  🟢 **Lo que lo hizo pequeño**: reusar la subsección de fixups que ya existía
+  para `TRY_BEGIN_EXT` (§4.4 del `.mod`, la llamada *eh-class*, que **de excepciones
+  no tiene nada**: parchea un i32 en una dirección de código). Resultado: **ni el
+  formato del `.mod` ni los dos loaders cambian** — sólo el opcode en las dos VMs y
+  una rama en el emisor. Incluye el camino frío de XIP, igual que su hermano.
+  📌 Un matiz de diseño: en `CHECKCAST_EXT` el `cls_off == 0` **no** es el centinela
+  de cadena. Una cadena no vive en otro módulo, así que `string(o)` sigue por el
+  0xAF de siempre.
+  🧪 `bpgenvm-c/samples/CastExt.bp` en el corpus. **El control va DENTRO**: el caso 3
+  es un downcast que TIENE que fallar (un `Long` bajado a `Integer`), porque un chequeo
+  que nunca dice que no no comprueba nada; y el caso 4 es el mismo fallo con una
+  clase LOCAL, para que si los dos caen se vea que el roto es el chequeo entero y
+  no la variante nueva. El mensaje sale byte a byte igual en las dos VMs.
+  🏁 **Y la prueba de que servía para algo**: `samples/ListaBp.bp` — la `List`
+  escrita EN BP con el `add` sobrecargado de Eduardo, que era lo que #443 y #444
+  bloqueaban entre los dos. Mete integer/long/double envueltos por la sobrecarga y
+  cadena/objeto tal cual, crece de 4 a 48 sin perder nada, y sale byte a byte
+  idéntica en las dos VMs. **El traslado de `List` a `Core` ya no tiene bloqueo
+  técnico** — lo que queda de esa decisión es de alcance.
+
 
 - ~~`#442`~~ — ✅ **CERRADA el 18-ago** (`compat` 30 PASS): **un literal de array
   guardaba siempre 4 bytes por casilla.**

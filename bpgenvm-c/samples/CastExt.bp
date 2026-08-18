@@ -1,0 +1,63 @@
+// CastExt.bp — #444: el downcast a una clase de OTRO MODULO.
+//
+// Antes de esto, `Collections.Integer(o)` no compilaba: reventaba el compilador
+// con una traza de Java («Clase 'Integer' no declarada para CHECKCAST»). Y no
+// era un caso raro — es EXACTAMENTE lo que exige usar `Object` de comodin con
+// la stdlib: metes un escalar envuelto y para sacarlo tienes que bajar.
+//
+// Lo que se prueba, en este orden:
+//   1  el downcast bueno cross-module DEVUELVE el valor  (que compile no basta)
+//   2  la herencia se recorre: Integer es Comparable      (no es igualdad de clase)
+//   3  el downcast MALO lanza, y con su mensaje           (esto es lo que vale)
+//   4  el control LOCAL, que ya funcionaba: si el 3 falla y el 4 tambien, el
+//      problema es del chequeo entero y no de la variante _EXT
+//
+// El 3 es el que de verdad importa: un chequeo que nunca dice que no es un
+// chequeo que no comprueba nada, y este bug se arreglo para que el downcast
+// SIGA protegiendo cuando cruza de modulo.
+module CastExt
+
+  import Collections
+
+  public class Local
+    var n: integer
+    public function Local(x: integer)
+      this.n := x
+    end Local
+    public function valor(): integer
+      return this.n
+    end valor
+  end Local
+
+  function Main()
+    print "1 downcast cross-module que vale"
+    var o: Object := Collections.Integer(5)
+    var i: Collections.Integer := Collections.Integer(o)
+    print "   valor = " + i.value()
+
+    print "2 subiendo por la herencia (Integer es Comparable)"
+    var c: Collections.Comparable := Collections.Comparable(o)
+    print "   compareTo consigo mismo = " + c.compareTo(o)
+
+    print "3 downcast cross-module que NO vale"
+    var l: Object := Collections.Long(7L)
+    try
+      var mal: Collections.Integer := Collections.Integer(l)
+      print "   MAL: no lanzo, y devolvio " + mal.value()
+    catch e: RuntimeError
+      print "   lanzo: " + e.msg
+    endtry
+
+    print "4 el control local, que ya funcionaba"
+    var lo: Object := Local(3)
+    try
+      var malo: Collections.Integer := Collections.Integer(lo)
+      print "   MAL: no lanzo"
+    catch e2: RuntimeError
+      print "   lanzo: " + e2.msg
+    endtry
+
+    print "fin"
+  end Main
+
+end CastExt

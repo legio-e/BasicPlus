@@ -288,7 +288,10 @@ public enum OpCode {
     // si no, objeto descendiente del descriptor en cs+cls_off. Si no cuadra,
     // RuntimeError atrapable que NOMBRA el tipo: name_off apunta al literal
     // [u32 len][utf8] del nombre en la región de datos.
-    CHECKCAST      (0xAF, OperandKind.CLS_NAME_I16_I16);
+    CHECKCAST      (0xAF, OperandKind.CLS_NAME_I16_I16),
+    /* #444 — variante cross-module: cls_off i32 parcheado en link-time por la
+     * misma via que TRY_BEGIN_EXT (ehClassFixups). Ver bpvm_opcodes.h. */
+    CHECKCAST_EXT  (0xB0, OperandKind.CLS_NAME_I32_I16);
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;
@@ -320,6 +323,8 @@ public enum OpCode {
         TRY_HANDLER_I32_I16 (6),
         // #389 — cls_off:i16 + name_off:i16 (los dos cs-relativos)
         CLS_NAME_I16_I16 (4),
+        // #444 — cls_off:i32 (cross-module, parcheado) + name_off:i16 (local)
+        CLS_NAME_I32_I16 (6),
         // BUG-2 — i32 (handler offset) + i32 (cs_off de clase cross-module)
         TRY_HANDLER_I32_I32 (8);
 

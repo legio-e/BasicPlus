@@ -1556,6 +1556,31 @@ public class ModWriter {
         currentBytecodeSize += 9;
     }
 
+    /** #444 — CHECKCAST a una clase de OTRO MODULO. Hermano de
+     *  {@link #emitTryBeginExt}: el cls_off va como i32 a 0 y lo parcha el
+     *  linker resolviendo `qualifiedClassName`, por la MISMA subseccion de
+     *  fixups (que pese al nombre `eh` no tiene nada de excepciones: parchea
+     *  un i32 en una direccion de codigo).
+     *
+     *  Reusar esa via y no inventar otra es lo que hace este arreglo pequeno:
+     *  ni el formato del .mod ni los dos loaders cambian.
+     *
+     *  `nameSym` es LOCAL a proposito: es el literal del mensaje de error, y
+     *  el texto lo ponemos nosotros. */
+    public void emitCheckCastExt(String qualifiedClassName, String nameSym) throws IOException {
+        Integer nameOff = dataSymbolOffset.get(nameSym);
+        if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST_EXT");
+        int instrAddr = currentBytecodeSize;
+        codeOut.writeByte(OpCode.CHECKCAST_EXT.code);
+        EhClassFixup fx = new EhClassFixup();
+        fx.codeOff = instrAddr + 1;          /* el i32 va justo tras el opcode */
+        fx.parentQualified = qualifiedClassName;
+        ehClassFixups.add(fx);
+        codeOut.writeInt(0);
+        codeOut.writeShort(nameOff.shortValue());
+        currentBytecodeSize += 7;
+    }
+
     public void emitInstanceOf(String className) throws IOException {
         Integer csOff = dataSymbolOffset.get(className);
         if (csOff == null) throw new RuntimeException("Clase '" + className + "' no declarada para INSTANCEOF");

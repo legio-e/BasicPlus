@@ -1,0 +1,106 @@
+// ListaBp.bp — #443: `List` escrita EN BP, con el `add` sobrecargado.
+//
+// Es la prueba de que el traslado a `Core` se sostiene (idea de Eduardo:
+// «por que no pones List en el Core y deja de ser una clase sintetizada,
+// ya no hace falta que lo sea»). Aqui no se toca el compilador: es un
+// modulo normal que cualquiera podria escribir.
+//
+// El patron del add es el suyo tambien: «add(i:integer) lo que hace es
+// llamar a add(obj:Object) y le pasa Integer(i). Los object, strings y
+// arrays en teoria no hace falta envolverlos.»
+//
+// La PRIMERA firma es la de Object a proposito: por la regla de H5.a se
+// queda con el nombre pelado y las demas van mangleadas, asi que el dia
+// que esto sustituya a la sintetizada no rompe ningun .mod.
+module ListaBp
+
+  import Collections
+
+  public class Caja
+    var n: integer
+    public function Caja(x: integer)
+      this.n := x
+    end Caja
+    public function valor(): integer
+      return this.n
+    end valor
+  end Caja
+
+  public class Lista
+    var items: Object[]
+    var size: integer
+    var cap: integer
+
+    public function Lista()
+      this.cap   := 4
+      this.size  := 0
+      this.items := newObjArray(this.cap)
+    end Lista
+
+    public function add(o: Object)
+      if this.size >= this.cap then
+        this.cap   := this.cap * 2
+        this.items := growObjArray(this.items, this.cap)
+      endif
+      this.items[this.size] := o
+      this.size := this.size + 1
+    end add
+
+    // Las sobrecargas: envuelven y delegan. Ni un caso especial en el compilador.
+    public function add(i: integer)
+      this.add(Collections.Integer(i))
+    end add
+    public function add(l: long)
+      this.add(Collections.Long(l))
+    end add
+    public function add(d: double)
+      this.add(Collections.Double(d))
+    end add
+
+    public function get(idx: integer): Object
+      return this.items[idx]
+    end get
+
+    public function length(): integer
+      return this.size
+    end length
+  end Lista
+
+  function Main()
+    var l: Lista := Lista()
+
+    // escalares: se envuelven solos
+    l.add(42)
+    l.add(7000000000L)
+    l.add(2.5d)
+    // referencias: entran tal cual
+    l.add("hola")
+    l.add(Caja(99))
+
+    var i0: Collections.Integer := Collections.Integer(l.get(0))
+    print "0 integer: " + i0.value()
+    var l1: Collections.Long := Collections.Long(l.get(1))
+    print "1 long   : " + l1.value()
+    var d2: Collections.Double := Collections.Double(l.get(2))
+    print "2 double : " + d2.value()
+    print "3 string : " + string(l.get(3))
+    var c4: Caja := Caja(l.get(4))
+    print "4 objeto : " + c4.valor()
+    print "largo    : " + l.length()
+
+    // crecer: pasa de 4 a 8 y mas alla, y lo de antes tiene que seguir ahi
+    var k: integer := 0
+    while k < 40 do
+      l.add(k)
+      k := k + 1
+    endwh
+    print "tras crecer, largo: " + l.length()
+    var ult: Collections.Integer := Collections.Integer(l.get(44))
+    print "ultimo   : " + ult.value()
+    var prim: Collections.Integer := Collections.Integer(l.get(0))
+    print "el 0 sigue: " + prim.value()
+    print "3 sigue   : " + string(l.get(3))
+    print "fin"
+  end Main
+
+end ListaBp

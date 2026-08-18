@@ -243,4 +243,22 @@
  * datos. Operandos: cls_off:i16 + name_off:i16, cs-relativos. */
 #define OP_CHECKCAST       0xAF
 
+/* 0xB0 — #444: CHECKCAST_EXT. Variante cross-module de CHECKCAST, hermana de
+ * TRY_BEGIN_EXT (0xAB) y con su MISMA maquinaria: el cls_off es i32 y se emite
+ * a 0, y el enlazador lo parcha resolviendo el nombre CUALIFICADO de la clase
+ * (subseccion §4.4 del .mod, la de eh-class fixups — que no tiene nada de
+ * excepciones: parchea un i32 en una direccion de codigo).
+ *
+ * Por que hace falta: CHECKCAST busca el descriptor en la tabla de simbolos
+ * LOCAL, y una clase importada no esta ahi (construirla si funciona, porque eso
+ * va por el modulo de origen). Sin esto, `Collections.Integer(o)` —o sea el
+ * downcast que exige usar `Object` de comodin con la stdlib— REVENTABA EL
+ * COMPILADOR con una traza de Java.
+ *
+ * Operandos: cls_off i32 (parcheado) + name_off i16 (literal del mensaje,
+ * cs-relativo, LOCAL: el texto del error es nuestro). 7 bytes.
+ * A diferencia de CHECKCAST, cls_off == 0 NO es el centinela de cadena: una
+ * cadena no vive en otro modulo, asi que `string(o)` sigue usando 0xAF. */
+#define OP_CHECKCAST_EXT   0xB0
+
 #endif /* BPVM_OPCODES_H */

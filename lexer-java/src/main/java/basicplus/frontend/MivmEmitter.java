@@ -3738,7 +3738,23 @@ public final class MivmEmitter {
             } else if (t instanceof ClassType) {
                 Symbol.ClassSymbol cls = ((ClassType) t).cls;
                 if (!"Object".equals(cls.name)) {
-                    w.emitCheckCast(cls.name, internString(cls.name));
+                    /* #444 — si la clase es de OTRO módulo, su descriptor no está
+                     * en nuestra tabla de símbolos y `emitCheckCast` reventaba con
+                     * una traza de Java («Clase 'X' no declarada para CHECKCAST»).
+                     * Construirla sí funcionaba —eso va por el módulo de origen—,
+                     * así que el crash sólo salía al BAJAR, que es justo lo que
+                     * exige usar `Object` de comodín con la stdlib.
+                     * La variante _EXT lleva el nombre cualificado y el linker
+                     * parcha el cls_off, igual que `TRY_BEGIN_EXT` en un catch. */
+                    if (cls.isExternal) {
+                        StringBuilder qn = new StringBuilder();
+                        if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
+                            qn.append(cls.externalLibrary).append('.');
+                        qn.append(cls.externalModule).append('.').append(cls.name);
+                        w.emitCheckCastExt(qn.toString(), internString(cls.name));
+                    } else {
+                        w.emitCheckCast(cls.name, internString(cls.name));
+                    }
                 }
             }
             return;
