@@ -905,7 +905,13 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
-- 🟢 **#450 — el compilador YA NO sintetiza `List`, `SyncList` ni `OwnerList`.**
+- (sin número) — **mover `SyncList` de `Core` a `Collections`** — el rabo de #451, ya
+  DESBLOQUEADO (el `super` cross-module funciona). Es un cortar-pegar de la clase +
+  dos líneas de alias en `SemanticAnalyzer`; dos intentos con cirugía de texto
+  salieron mal y se revirtieron — hacerlo con calma. Sale aquí como entrada propia
+  porque dentro de la ficha cerrada **ningún barrido lo ve** (la lección de #427).
+
+- ~~`#450`~~ — ✅ **CERRADA el 18-ago** (`compat` 37 PASS): **el compilador YA NO sintetiza `List`, `SyncList` ni `OwnerList`.**
   Encargo de Eduardo (18-ago), hecho: las tres están escritas en BP. `List` y
   `SyncList` en `Core`, `OwnerList` en `Collections`. Un programa las sigue usando
   **sin un solo import**, y `l.add(42)` envuelve solo por la sobrecarga.
@@ -956,7 +962,7 @@ decidirá si basta subirlos.)*
   cortar-pegar de una clase y dos líneas de alias.
 
 
-- 🟢 **#449 — `OwnerList` SÍ se puede escribir en BP; NO hace falta sintetizarla.**
+- ~~`#449`~~ — ✅ **CERRADA el 18-ago** (absorbida por #450): **`OwnerList` SÍ se puede escribir en BP; NO hace falta sintetizarla.**
   Eduardo, 18-ago: *«SyncList y OwnerList deberían estar en collections. Hacerlas
   sintetizadas me parece raro, no veo la razón»*. Yo había dicho que `OwnerList` era
   la excepción —que exigía `setFieldOwner` y `FREE_REF`, sin sintaxis en BP—. **Era
@@ -975,7 +981,7 @@ decidirá si basta subirlos.)*
   quitar la síntesis y que los símbolos vengan de sus módulos (alias sin cualificar
   como ya se hace con `Exception`, + import implícito).
 
-- 🟡 **#446 — los envoltorios ya viven en `Core`; falta `List`.** Primera mitad del
+- ~~`#446`~~ — ✅ **CERRADA el 18-ago** (las dos mitades: la segunda la hizo #450): **los envoltorios viven en `Core`.** Primera mitad del
   encargo de Eduardo (*«la list sintetizada debería desaparecer y utilizar la de
   Core»*), hecha y verde el 18-ago: `Comparable` + `Integer/Long/Double/Float/Boolean`
   están en `Core`, y con ellos `formatDouble`/`longToString` (los usa el `toString` de
@@ -1172,7 +1178,8 @@ decidirá si basta subirlos.)*
   🔗 Con esto, mover `List` a `Core` sólo espera a un `newObjArray(n)` público (ver la
   entrada de las listas y `docs/OBJECT_COMODIN.md`).
 
-- (sin número) — **las listas: de `any` a `Object` + `add` SOBRECARGADO.**
+- ~~(sin número)~~ — ✅ **CERRADA el 18-ago vía #450**: **las listas: de `any` a
+  `Object` + `add` SOBRECARGADO.**
   15 `AnyType.INSTANCE` a mano en `SemanticAnalyzer`. ⚠️ Deja a
   `samples/AnyNumGc.bp` sin sujeto.
   📐 **Dirección de Eduardo (18-ago)**: *«sobrecargamos el método add, habrá un
