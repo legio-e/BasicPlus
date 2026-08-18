@@ -1334,6 +1334,18 @@ public final class MivmEmitter {
                 if (cls.constructor != null) {
                     synthesizeCrossModuleInit(cls);
                 }
+                /* #451 — y una factoria por METODO, por el mismo motivo y con la
+                 * misma forma. `super.metodo()` desde otro modulo no tenia a que
+                 * llamar: los metodos no se exportan, se llega a ellos por vtable
+                 * — y un `super` es justo lo contrario, un salto NO virtual a la
+                 * implementacion del padre.
+                 *
+                 * Lo puso sobre la pista Eduardo: «si declaras una clase que hereda
+                 * de otra, aunque no lo escribas, se hace la llamada al constructor
+                 * de super». Y esa SI funciona cross-module — porque el ctor tiene
+                 * su factoria `__cls_init_<Cls>`. Esto es lo mismo para los demas
+                 * metodos. */
+                synthesizeCrossModuleMethods(cls);
             }
         } catch (IOException e) {
             errors.add("error en clase " + cd.name + ": " + e.getMessage());
@@ -1405,6 +1417,51 @@ public final class MivmEmitter {
      * cross-module via CALL_EXT. El nombre sin puntos se interpreta como
      * símbolo plano del módulo dueño en el loader (parts[len-2]=módulo).
      */
+    /** #451 — una factoria PUBLICA por metodo de instancia, para que un
+     *  `super.metodo()` de otro modulo tenga a que llamar. Gemela de
+     *  {@link #synthesizeCrossModuleInit}, incluido el detalle que la hace
+     *  funcionar: **el nombre no lleva puntos**, asi que el loader lo lee como
+     *  simbolo plano de este modulo y no como `modulo.submodulo`.
+     *
+     *  Solo para clases publicas: son las unicas que otro modulo puede heredar.
+     *  Es ADITIVO — anade exports, no mueve ninguno—, asi que un `.mod` ya
+     *  compilado sigue valiendo. */
+    private void synthesizeCrossModuleMethods(ClassSymbol cls) throws IOException {
+        if (cls == null) return;   /* el llamante ya filtra por clase publica */
+        for (Symbol sym : cls.instanceMembers.getSymbols()) {
+            if (!(sym instanceof FunctionSymbol)) continue;
+            FunctionSymbol fs = (FunctionSymbol) sym;
+            if (fs.isConstructor || fs.isStatic || !fs.isPublic) continue;
+            /* SOLO los declarados en ESTA clase. Los heredados (toString,
+             * compareTo...) no tienen implementacion local a la que llamar:
+             * generarles factoria daba «Funcion no encontrada: Base.toString».
+             * Y no hace falta — quien herede de Base y quiera el toString del
+             * abuelo sube por la cadena, que es donde vive. */
+            if (fs.astNode == null) continue;   /* sin cuerpo aqui: es heredado */
+            String fname = crossModuleMethodName(cls, fs);
+            w.addFunction(fname, true);   // publica: cross-module
+            declareParamRef("this");
+            for (ParamSymbol p : fs.params) declareParamByType(p.name, p.type);
+            FunctionSymbol synthFs = new FunctionSymbol(fname, true, false, false, null, null);
+            synthFs.returnType = fs.returnType;
+            beginFunctionScope(synthFs, fs.returnType);
+            try {
+                w.emitGetParam("this");
+                for (ParamSymbol p : fs.params) w.emitGetParam(p.name);
+                w.emitCall(cls.name + "." + emitName(fs));   // CALL local, NO virtual
+                if (fs.returnType != null && !(fs.returnType instanceof BpType.VoidType)) {
+                    w.emitSetLocal("__result");
+                }
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        }
+    }
+
+    /** Nombre plano de la factoria de un metodo (sin puntos, ver arriba). */
+    static String crossModuleMethodName(ClassSymbol cls, FunctionSymbol fs) {
+        return "__cls_m_" + cls.name + "_" + emitName(fs);
+    }
+
     private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
         String initName = "__cls_init_" + cls.name;
         w.addFunction(initName, true);   // pública: cross-module
@@ -3953,7 +4010,8 @@ public final class MivmEmitter {
                      * codifica la clase, y con tres componentes el loader lee
                      * «BaseMod.Base» como nombre de MODULO y busca un .mod que no
                      * existe. Es la misma forma que usa `externalQualifiedName`. */
-                    qn.append(duena.externalModule).append('.').append(fs.slotKey());
+                    qn.append(duena.externalModule).append('.')
+                      .append(crossModuleMethodName(duena, fs));
                     w.emitCallExt(qn.toString(), fromPathFor(qn.toString()));
                 } else {
                     w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3

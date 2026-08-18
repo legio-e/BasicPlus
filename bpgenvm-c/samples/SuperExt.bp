@@ -1,0 +1,46 @@
+// SuperExt.bp — #451: `super.metodo()` cuando el padre esta en OTRO modulo.
+//
+// Antes reventaba el compilador: «Funcion no encontrada: Base.pon». Y la causa
+// no era el nombre —lo intente cualificar de dos formas y las dos fallaban mas
+// abajo— sino la ABI: un modulo NO exporta sus metodos, se llega a ellos por
+// VTABLE. Y un `super` es justo lo contrario: un salto NO virtual a la
+// implementacion del padre, o sea que necesita un simbolo al que llamar.
+//
+// Lo desatasco una observacion de Eduardo: «si declaras una clase que hereda de
+// otra, aunque no lo escribas, se hace la llamada al constructor de super». Esa
+// SI cruzaba — porque el constructor tiene una factoria exportada de nombre
+// plano, `__cls_init_<Cls>`. La respuesta era darles a los metodos la suya:
+// `__cls_m_<Cls>_<metodo>`. Mismo mecanismo, y ADITIVO (anade exports, no mueve
+// ninguno), asi que ningun .mod ya compilado cambia.
+//
+// El CONTROL esta dentro: `dobla` usa super y `directo` no. Si el arreglo
+// hubiera roto el despacho normal, `directo` lo diria.
+module SuperExt
+
+  import SuperExtBase
+
+  public class Sub extends SuperExtBase.Base
+    public function Sub()
+      super()                    // esta cruzaba desde siempre
+    end Sub
+    public function pon(x: integer)
+      super.pon(x * 2)           // ESTA es la que no se podia
+    end pon
+  end Sub
+
+  function Main()
+    var s: Sub := Sub()
+    s.pon(5)
+    print "super  : " + s.ver()     // 10 = 5*2, o sea que paso por la de Sub Y por la de Base
+
+    var b: SuperExtBase.Base := SuperExtBase.Base()
+    b.pon(7)
+    print "directo: " + b.ver()     // 7 — el control: la base sigue funcionando sola
+
+    var p: SuperExtBase.Base := Sub()
+    p.pon(3)
+    print "poli   : " + p.ver()     // 6 — por referencia a la base, despacha a Sub
+    print "fin"
+  end Main
+
+end SuperExt

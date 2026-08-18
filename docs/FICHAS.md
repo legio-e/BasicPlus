@@ -923,7 +923,8 @@ decidirá si basta subirlos.)*
   ✅ Verificado: **compat 36 PASS**, la stdlib entera reconstruida, los blobs
   embebidos regenerados en las tres familias y **el firmware de la Pico enlazado**.
 
-- 🔴 **#451 — no se puede llamar a `super.metodo()` si el padre está en OTRO módulo.**
+- ~~`#451`~~ — ✅ **CERRADA el 18-ago** (`compat` 37 PASS): **`super.metodo()` ya
+  cruza módulos.**
   ```
   public class Sub extends BaseMod.Base
     public function pon(x: integer)
@@ -939,9 +940,21 @@ decidirá si basta subirlos.)*
   diagnóstico.
   📌 Consecuencia inmediata: **`SyncList` está en `Core` y no en `Collections`**, que es
   donde Eduardo la quiere — sus métodos con cerrojo llaman a `super.add(...)`.
-  `OwnerList` sí está en `Collections` porque sólo usa llamadas **virtuales**
-  (`this.get`/`this.remove`), que cruzan sin problema. Se mueve en cuanto esto se
-  arregle.
+  ✅ **ARREGLO — y la pista la dio Eduardo**: *«si declaras una clase que hereda
+  de otra, aunque no lo escribas, se hace la llamada al constructor de super»*.
+  Esa SÍ cruzaba, porque el constructor tiene una **factoría exportada de nombre
+  plano** (`__cls_init_<Cls>`). La respuesta era darles a los métodos la suya:
+  `__cls_m_<Cls>_<metodo>`, pública, que hace el CALL local no-virtual. **Mismo
+  mecanismo, y ADITIVO** — añade exports, no mueve ninguno, así que ningún `.mod`
+  ya compilado cambia. Sólo para métodos **declarados en la clase** (`astNode !=
+  null`): generar factoría de los heredados reventaba con «Función no encontrada:
+  Base.toString», porque no hay implementación local a la que llamar.
+  🧪 `samples/SuperExt.bp` + `SuperExtBase.bp` (el par: sin dos módulos no hay caso),
+  en el corpus. El control va dentro: `super` (10), directo (7) y polimórfico (6).
+  ⏭️ **Queda mover `SyncList` a `Collections`**, que ya es posible — dos intentos de
+  cirugía de texto salieron mal y se revirtieron; se hace con calma, es un
+  cortar-pegar de una clase y dos líneas de alias.
+
 
 - 🟢 **#449 — `OwnerList` SÍ se puede escribir en BP; NO hace falta sintetizarla.**
   Eduardo, 18-ago: *«SyncList y OwnerList deberían estar en collections. Hacerlas

@@ -1,0 +1,16 @@
+// SuperExtBase.bp — la BASE del par de #451: vive en su propio modulo para
+// que `SuperExt` la herede CRUZANDO la frontera. Sin dos modulos no hay caso.
+module SuperExtBase
+  public class Base
+    var n: integer
+    public function Base()
+      this.n := 0
+    end Base
+    public function pon(x: integer)
+      this.n := x
+    end pon
+    public function ver(): integer
+      return this.n
+    end ver
+  end Base
+end SuperExtBase
