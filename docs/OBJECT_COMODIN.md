@@ -173,3 +173,73 @@ desenvolver con seguridad = lenguaje (con lo que ya hay).
 - El que declara el tipo no paga nada: esto sólo afecta a quien escribe `Object`.
 - `any` sigue siendo interno y no se toca.
 - Las VMs, el GC y el AOT no se tocan.
+
+---
+
+## Refinamiento del 18-ago: sin `Box`, y las sobrecargas van en `List.add`
+
+> Eduardo: *«#438 la clase `Box`, de momento no la necesitamos. Nuestro comodín
+> será `Object`. El punto 8, las listas, sobrecargamos el método `add`: habrá un
+> `add(i:integer)`, `add(l:long)`, `add(f:float)`, etc. Los otros `list` igual
+> (no sé si pueden heredar los `add`).»*
+
+Es la misma decisión (A) de arriba —envolver, no etiquetar— con **menos
+superficie**: en vez de un contenedor general con `set` sobrecargado, las
+sobrecargas se ponen **donde de verdad se usan**. Nadie escribe `Integer(5)`.
+
+### Lo que dice el código (leído, no supuesto)
+
+**1. La pregunta de la herencia tiene dos respuestas distintas.**
+
+| clase | ¿hereda los `add`? | por qué |
+|---|---|---|
+| `OwnerList` | **SÍ** | sólo declara `removeAndFree`; `add/get/set/length/remove` vienen de `List` (`SemanticAnalyzer`, *«el resto se heredan del baseClass List»*) |
+| `SyncList` | **NO** | redeclara las cinco con las mismas firmas, **a propósito**: *«overrides explícitos para documentar que el método del subtipo se llama (con locking)»* |
+
+O sea: `OwnerList` gana las sobrecargas gratis; en `SyncList` hay que replicarlas
+—o dejar de redeclarar y perder esa documentación deliberada.
+
+**2. El obstáculo que cancelar `Box` no quita, sólo mueve.** Una casilla de
+`List` es un **handle**: `items` se hace con `__growRefArray`, se escribe con
+`ASTORE_I64`, el parámetro se declara con `declareParamRef`, y el GC la traza
+por el `field_bitmap`. Un `integer` **no cabe ahí**. Así que `add(i:integer)`
+tiene que envolver — que es exactamente lo que `Box` iba a hacer. La decisión de
+Eduardo no elimina el envoltorio: elimina que el USUARIO tenga que escribirlo.
+
+**3. Los envoltorios YA EXISTEN y no hay que inventarlos.**
+`bpstdlib/Collections.bp` tiene `Integer`, `Long`, `Double`, `Float` y
+`Boolean`, todas `extends Comparable`, cada una con constructor desde el
+primitivo, `value()`, `compareTo` y `toString`.
+
+**4. El problema de capas tiene un patrón ya probado.** `List` la **sintetiza el
+compilador** (`MivmEmitter.synthesizeListClass`) y se usa **sin import**;
+`Collections` es un módulo importable. Pero `#248` ya resolvió justo esto para
+`RuntimeError`: `Main.injectImplicitCoreImport` inyecta `import Core` **sólo si
+el módulo usa excepciones**, *«así los módulos sin excepciones no ganan ninguna
+dependencia»*. El mismo mecanismo, con la misma condición perezosa: inyectar el
+import **sólo si se llama a un `add` con un primitivo**.
+
+**5. Compatibilidad de ABI — cuál es la PRIMERA firma importa.** Por la regla de
+`H5.a`, *la 1ª firma lleva el nombre pelado y el resto van mangleadas*. Si
+`add(item: Object)` se queda como primera, el símbolo `add` sigue significando
+lo de hoy y **ningún `.mod` existente se rompe**. Si se pone `add(integer)` la
+primera, cambia la ABI de todo lo compilado.
+
+### Lo que queda por decidir (es de Eduardo)
+
+1. **Dónde viven los envoltorios.** ¿Se quedan en `Collections` (y el import
+   implícito lo trae) o suben a `Core`, que ya viaja implícito? `Core` es más
+   barato de resolver pero engorda lo que llega siempre.
+2. **Cómo se saca el escalar.** BP no sobrecarga por tipo de retorno, así que no
+   puede haber `get(): integer`. Sale `Object`, y de ahí `Integer(o).value()`
+   con el downcast ya comprobado de `#389`. ¿Basta, o se quiere un
+   `getInt(idx)` / `getLong(idx)` explícito —que sí se puede, porque se
+   distinguen por NOMBRE, no por retorno?
+3. **`SyncList`**: replicar las sobrecargas, o dejar de redeclarar los métodos.
+4. **El alcance**: `integer`, `long`, `float`, `double`, `boolean`, `byte`… ¿los
+   cinco/seis, o sólo los que se usan? Cada uno son dos entradas por clase.
+
+### Lo que NO cambia
+
+Ni el GC, ni las VMs, ni el AOT, ni el formato del `.mod`. Todo esto es
+frontend + stdlib.

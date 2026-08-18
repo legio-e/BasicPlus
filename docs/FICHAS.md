@@ -905,7 +905,12 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
-- `#438` — **la clase contenedora `Box`** (encargo de Eduardo; estaba sin número
+- ~~`#438`~~ — 🚫 **CANCELADA el 18-ago por decisión de Eduardo**: *«la clase
+  Box, de momento no la necesitamos. Nuestro comodín será `Object`»*. Lo que
+  hacía falta de ella —envolver escalares— se resuelve **donde de verdad se
+  usa**: sobrecargando `List.add` (ver la entrada de las listas). La ficha se
+  queda escrita porque su análisis sigue valiendo:
+  *(enunciado original)* la clase contenedora `Box` (encargo de Eduardo; estaba sin número
   y agrupada por error con el bloque del IDE — **no es del IDE**, es lenguaje,
   hermana de `#389` y del comodín `Object`).
 
@@ -958,9 +963,22 @@ decidirá si basta subirlos.)*
   las dos VMs y el AOT. Reproductor: `diag/orm-slots/ProbeMal.bp`.
   Con él: `toString()`/`compareTo()` sobre un `Object` que lleva una **cadena** no
   tienen vtable que despachar.
-- (sin número) — `List`/`SyncList`/`OwnerList` siguen con firmas `any`: 15
-  `AnyType.INSTANCE` a mano en `SemanticAnalyzer`. Eduardo pidió pasarlas a
-  `Object`. ⚠️ Eso deja a `samples/AnyNumGc.bp` sin sujeto.
+- (sin número) — **las listas: de `any` a `Object` + `add` SOBRECARGADO.**
+  15 `AnyType.INSTANCE` a mano en `SemanticAnalyzer`. ⚠️ Deja a
+  `samples/AnyNumGc.bp` sin sujeto.
+  📐 **Dirección de Eduardo (18-ago)**: *«sobrecargamos el método add, habrá un
+  `add(i:integer)`, `add(l:long)`, `add(f:float)`, etc. Los otros list igual (no sé
+  si pueden heredar los add)»*.
+  **Su pregunta, contestada leyendo el código** (`SemanticAnalyzer`):
+  · `OwnerList` **SÍ hereda** — sólo declara `removeAndFree` propio, el resto viene
+    de `List`. Gana las sobrecargas gratis.
+  · `SyncList` **NO** — redeclara las cinco con las mismas firmas, **a propósito**
+    («overrides explícitos para documentar que se llama la del subtipo, con
+    locking»). Ahí hay que replicarlas, o dejar de redeclararlas.
+  🩸 **Y el obstáculo de fondo, que cancelar `Box` no quita sino que mueve**: una
+  casilla de `List` es un **handle** (`items` es array de refs, `ASTORE_I64`, y el GC
+  lo traza por el `field_bitmap`). Un `integer` NO cabe ahí, así que `add(i:integer)`
+  tiene que **envolver**. Diseño y decisiones abiertas en `docs/OBJECT_COMODIN.md`.
 - ~~`GAP-4`~~ — ✅ **CERRADA el 17-ago: medida, acotada y DECIDIDA.** Resultó
   ser DOS cosas distintas, y ninguna era la que decía la ficha.
 
