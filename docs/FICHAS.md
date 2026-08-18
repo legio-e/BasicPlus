@@ -902,7 +902,9 @@ deja escrita —los topes siguen ahí pero ahora avisan, y con ese número se
 decidirá si basta subirlos.)*
 ### Instrumentos
 
-- `#439` — 🩸 **EL LOG NO SIRVE CUANDO LA PLACA SE CUELGA**, que es justo cuando
+- 🟡 `#439` — **RESUELTO EN CÓDIGO el 18-ago; falta la prueba EN PLACA.**
+  *(Enunciado original abajo, que explica por qué dolía.)*
+  🩸 **EL LOG NO SERVÍA CUANDO LA PLACA SE COLGABA**, que es justo cuando
   más falta hace. Vive en RAM y llega a flash sólo en los `log_flush()` de
   puntos concretos (fin de arranque, algunos errores); un `for(;;)` o un bucle
   infinito dentro del GC dejan la autopsia CIEGA — al resetear, la cola del log
@@ -945,7 +947,41 @@ decidirá si basta subirlos.)*
   **Idea a valorar**: un modo `log=2` que haga `log_flush()` **por línea**. Es
   lento y desgasta flash, así que jamás sería el modo normal — pero es
   exactamente lo que hace falta cuando se persigue un cuelgue, y hoy no existe
-  ninguna alternativa. Alternativa más barata: que las líneas de diagnóstico
+  ninguna alternativa. Alternativa más barata: que las líneas de diagn
+
+  ---
+  ✅ **ARREGLO (18-ago) — la región del log vive en RAM QUE NO SE BORRA.**
+  📐 **La idea es de Eduardo y cambió el diseño entero**: *«había una zona de RAM
+  que se mantenía, igual se puede utilizar de pequeña caché para no tener que
+  grabar todo cada vez en la flash»*. Existe, y el propio SDK de la Pico la usa
+  igual (el token mágico del doble reset).
+  🩸 **Y evitó un destrozo.** El plan era *«flush por línea»*: eso es un
+  `erase+program` de 4 KB **por línea** — no «un poco más lento», sino gastar el
+  sector, porque la flash aguanta ~100k borrados y un programa que loguee en
+  bucle se los come en minutos. Con RAM que no se borra: **cero desgaste, cero
+  coste**.
+  📌 **Cómo sabe la región que es válida**: su cabecera vive DENTRO
+  (`[magic|version|size][datos]`), así que se reconoce sola. Sólo hacía falta
+  mantenerla al día en RAM — antes se escribía únicamente en `log_flush`.
+  🔬 **Verificado en el `.elf` de cada imagen** (no en el fuente):
+  Pico `bplog_region` 4 KB en `.uninitialized_data` · S3 4 KB y P4 8 KB en
+  `.noinit` · STM32 8 KB en `.noinit` — **las cuatro con ALLOC y SIN LOAD**.
+  Y `s_used`/`s_dropped` siguen en `.bss` y sí se borran: por eso el tamaño se
+  recupera de la cabecera y el contador del anillo viaja en su campo
+  `reserved` (si no, la autopsia diría que no falta nada cuando faltan líneas —
+  la mentira que #433 vino a quitar).
+  🗣️ El arranque **dice de dónde viene** lo cargado («RAM SUPERVIVIENTE» vs
+  «arranque en frío»): leer una autopsia sin saber de cuándo es fue justo lo que
+  costó una vuelta entera de hipótesis con el cuelgue del P4.
+  ⚠️ Sobrevive al RESET, **no al corte de alimentación** — el flush a flash se
+  queda como red para eso. Y ojo con la Pico, que **no tiene botón de reset** y
+  se recupera desenchufando: allí la prueba va con el reset del IDE o el
+  watchdog, no tirando del cable.
+  ⚠️ El `.ld` del STM32 lo genera CubeIDE: si se regenera el proyecto, la
+  sección `.noinit` se pierde **en silencio**. Avisado dentro del fichero.
+  ⏭️ **LA PRUEBA QUE CIERRA**, y sin ella no se da por buena: un `for(;;)` a
+  mitad de programa, resetear, y que la autopsia enseñe las líneas de ANTES del
+  cuelgue. En las tres familias.óstico
   puedan salir TAMBIÉN por el wire como eventos OUTPUT mientras hay un RUN vivo,
   reusando el camino que ya funciona.
 
