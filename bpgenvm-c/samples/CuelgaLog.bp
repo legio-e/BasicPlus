@@ -1,0 +1,57 @@
+// CuelgaLog.bp — LA PRUEBA DE #439: ¿sobrevive el log a un cuelgue?
+//
+// Que se comprueba, y por que asi:
+//
+// El log post-mortem lo escribe el FIRMWARE (log_printf), no los `print` de
+// BP — esos van por el wire. Y a flash solo bajaba en los log_flush() de
+// puntos fijos (fin de arranque, algunos errores). O sea que lo que ocurre
+// DESPUES del arranque y antes de un cuelgue era exactamente lo que se perdia:
+// al resetear, la cola del log era la del arranque anterior.
+//
+// Desde el 18-ago la region vive en RAM que el arranque NO borra, asi que
+// deberia estar entera. Este programa fuerza el caso:
+//
+//   1. hace ruido que el firmware/VM registran (alojar mucho -> colectas),
+//   2. avisa por el wire de que va a colgarse,
+//   3. SE CUELGA a proposito, en un bucle sin salida.
+//
+// QUE MIRAR DESPUES DE RESETEAR (con el reset del IDE o el watchdog):
+//
+//   · el banner tiene que decir «log: RAM SUPERVIVIENTE (lineas de ANTES del
+//     reset)». Si dice «arranque en frio», la RAM se perdio — y OJO: en la
+//     Pico eso pasa si desenchufas, porque no tiene boton de reset.
+//   · y el LOG_DUMP tiene que enseñar las lineas de ESTA ejecucion, no las
+//     del arranque anterior. Esa es la prueba de verdad.
+//
+// Si el log siguiera vacio, la ficha NO se cierra: «un log que no registra es
+// una herramienta inutil, ya lo sufrimos ayer» (Eduardo, 18-ago).
+module CuelgaLog
+
+  function Main()
+    print "=== #439: prueba del log que sobrevive al cuelgue ==="
+
+    // 1) Ruido: alojar de sobra para que entren colectas. Lo que el GC y la VM
+    //    digan por el canal de diagnostico acaba en el log persistente, y esas
+    //    lineas son las que ANTES se perdian (van despues del ultimo flush).
+    var i: integer := 0
+    var s: string := ""
+    while i < 3000 do
+      s := "relleno " + i
+      i := i + 1
+    endwh
+    print "1) ruido hecho, ultimo: " + s
+
+    print "2) me voy a colgar AHORA. Resetea la placa y mira el log."
+    print "   esperado al volver: «RAM SUPERVIVIENTE» + estas lineas."
+
+    // 3) El cuelgue, a proposito. Sin sleep: que no ceda el turno, como un
+    //    for(;;) de verdad.
+    var giro: integer := 0
+    while true do
+      giro := giro + 1
+    endwh
+
+    print "INALCANZABLE"
+  end Main
+
+end CuelgaLog
