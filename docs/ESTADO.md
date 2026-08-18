@@ -87,6 +87,16 @@ pruebas del cierre. Y ahi cabe tambien la cola de `#439` —repetir la vuelta en
 y STM32— que quedo escrita dentro de la ficha ya cerrada; el codigo esta verificado
 en el `.elf` de las cuatro imagenes y probado en placa en una.
 
+**Y una que faltaba en el registro:** al resumir Eduardo el cierre como *«limpieza,
+documentar y pruebas finales»*, resulta que **documentar no tenia linea en FICHAS**.
+Medido: `sqlite` y `@BD` salen CERO veces en toda la documentacion de usuario
+(manual, referencia, cheatsheet, QUICKSTART, los dos README) y solo aparecen en
+ficheros de trabajo internos. O sea que los dos hitos mas visibles de V5 —el ORM y
+SQLite en un pack— no existen para quien lea la documentacion. Ficha abierta en
+«Cierre de V5» con lo que hay que escribir y con lo que ya esta bien (referencia.html
+§13.3/13.4 no se quedo rancia: su «SyncList extiende List» paso a ser cierto).
+
+
 ### 18-ago — el dia de las listas: 8 fichas cerradas en cadena, corpus 29→37
 
 **El hilo del dia** (todo salio de una decision de Eduardo: cancelar `Box`,

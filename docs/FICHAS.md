@@ -1680,6 +1680,34 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
 trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
+- **DOCUMENTAR V5 DE CARA AL USUARIO** — abierta el 18-ago al repasar el cierre con
+  Eduardo (*«queda hacer limpieza, documentar y pruebas finales»*), porque **la parte
+  de documentar no tenía línea aquí** y esta lista es la que se mira.
+  🩸 **Lo medido, no lo supuesto**: `sqlite` y `@BD` aparecen **CERO veces** en toda la
+  documentación de usuario —`manual.html`, `referencia.html`, `cheatsheet.html`,
+  `QUICKSTART.md`, `README.md`/`README.es.md`— y sólo salen en ficheros de trabajo
+  internos (`FICHAS`, `ESTADO`, `V5_IDEAS`, `V4_BACKLOG`, `CENSO_FAMILIAS`). O sea que
+  **los dos hitos con más cara de usuario de toda V5 no existen para quien lea la
+  documentación**: el ORM (H5: `@BD`, generador de DAO, verificador, reglas de tipos
+  BP↔SQLite) y SQLite dentro de un pack (H3/H4).
+  ✅ **Lo que SÍ está bien y no hay que tocar** —comprobado, para no rehacer trabajo—:
+  `referencia.html` §13.3/13.4 describe `OwnerList` y `SyncList` sin llamarlas
+  sintetizadas, y su frase *«SyncList extiende List»* pasó a ser literalmente cierta
+  con `#450`/`#451` en vez de quedarse rancia. `Comparable` tiene entrada (§ tabla de
+  stdlib). `Thread` y `Mutex` siguen descritos como sintetizados, que es correcto.
+  ⏭️ **Lo que hay que escribir**, por orden de lo que más se nota si falta:
+  1. **el ORM** — el ciclo entero: anotar con `@BD`, generar el DAO, qué verifica el
+     verificador y qué NO, y la tabla de tipos BP↔SQLite;
+  2. **SQLite en un pack** — cómo se construye, cómo se graba y qué placas lo
+     soportan hoy (Metro y P4; el P4 con el límite de 16 MB del caché, ver V6);
+  3. **Core** — que `List` ya no la sintetiza el compilador, los envoltorios
+     (`Integer`/`Long`/`Double`/`Float`/`Boolean`) y el `add` sobrecargado;
+  4. **`QUICKSTART` y los dos README** — una línea cada uno, que son la puerta;
+  5. **las notas de la versión**, con L14 y L15 de `PENDIENTES` enlazadas.
+  📌 Y una comprobación barata al terminar, que es la que caza lo rancio: buscar en la
+  documentación de usuario los nombres que V5 movió o creó y ver que ninguno describe
+  el mundo anterior.
+
 - **Borrar las cinco carpetas de experimentos de `notas/`** (~56 MB): `metro-h4`,
   `p4`, `v5-salto-crudo`, `v5-sqlite-prueba`, `v5-sqlite_edu`. Salía de `#411`.
   Lo único NO duplicado son los `.elf` de SQLite (ARM 653 KB, RISC-V 1,5 MB), y
