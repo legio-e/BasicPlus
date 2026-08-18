@@ -2003,8 +2003,13 @@ public final class PicoExplorer extends JPanel {
                         .append(String.format(java.util.Locale.US, "%.1f", mtc / 1000.0))
                         .append(" °C\n");
         sb.append("GPIO        : ").append(ilong(m, "gpioCount")).append('\n');
-        sb.append("PIO/PWM/ADC : ").append(ilong(m, "pioCount")).append(" / ")
-          .append(ilong(m, "pwmSlices")).append(" / ").append(ilong(m, "adcChannels")).append('\n');
+        /* El campo del wire se llama `pwmSlices` por historia, pero lleva
+         * SALIDAS en las tres familias (Pico 24, ESP32 8, STM32 28). Se dice,
+         * porque el banner de arranque de la Pico anuncia 12 SLICES de la misma
+         * placa: sin la unidad, las dos cifras parecen contradecirse. */
+        sb.append("PIO         : ").append(ilong(m, "pioCount")).append('\n');
+        sb.append("PWM         : ").append(ilong(m, "pwmSlices")).append(" salidas\n");
+        sb.append("ADC         : ").append(ilong(m, "adcChannels")).append(" canales\n");
         sb.append("Flash       : ").append(human(ilong(m, "flashBytes"))).append('\n');
         sb.append("SRAM        : ").append(human(ilong(m, "sramBytes"))).append('\n');
         long ps = ilong(m, "psramBytes");

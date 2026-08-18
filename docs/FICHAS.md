@@ -899,24 +899,22 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 > Estaban en `PENDIENTES.md`, que es documentación de cara al usuario. Tienen estado de
 > trabajo («hay que hacer X»), así que su sitio es éste.
 
-- **El «pwm» del arranque y el del INFO no son la misma unidad, y se llaman igual.**
-  El log de boot dice `pwm=12` (SLICES, de `board_desc`) y el INFO responde `24`
-  (SALIDAS: cada slice tiene canales A y B, que es la cifra que anuncian las placas).
-  Las dos son correctas y el porqué está comentado en `pico/repl_v1.c:1089`, pero quien
-  ponga las dos líneas una al lado de otra ve una contradicción y va a buscarla —
-  pasó el 17-ago. Basta con que cada una DIGA su unidad (`pwm=12 slices` /
-  `PWM: 24 salidas`). El campo del wire conserva el nombre histórico `pwmSlices`
-  aunque lleve salidas, que es la otra mitad de la confusión.
-*(Aquí había un segundo renglón, «N-listado-plano-trunca-mudo», traído de
-`PENDIENTES` el 17-ago. **Era `#425` otra vez** —su enunciado literal es «el árbol
-del IDE TRUNCA EN SILENCIO»— y estaba CERRADA ese mismo día (`a632122`). Lo cazó
-Eduardo al leer la lista: *«esto lo hemos estado mirando esta tarde, ¿por qué
-sigue abierto?»*. Moverlo sin contrastarlo con lo cerrado es justo la enfermedad
-que el reparto nuevo viene a curar, así que se borra en vez de corregirse. El
-árbol perezoso NO es un pendiente suelto: es la decisión condicional que `#425`
-deja escrita —los topes siguen ahí pero ahora avisan, y con ese número se
-decidirá si basta subirlos.)*
-### Instrumentos
+- ~~**El «pwm» del arranque y el del INFO no son la misma unidad**~~ — ✅ **CERRADA
+  el 18-ago: ahora cada cifra DICE de qué es.**
+  El log de boot decía `pwm=12` (SLICES, de `board_desc`) y el INFO respondía `24`
+  (SALIDAS: cada slice tiene canales A y B) para la MISMA placa. Las dos correctas,
+  pero puestas una al lado de otra parecían contradecirse — pasó el 17-ago.
+  ✅ Arreglo, en los dos lados: el banner dice `pwm=12 slices` y el diálogo del IDE
+  separa las líneas con su unidad — `PWM: 24 salidas` / `ADC: 8 canales`.
+  📐 **Y salió una comprobación que la ficha no pedía**: el campo del wire se llama
+  `pwmSlices` por historia, así que había que ver qué mete cada familia. **Las tres
+  mandan SALIDAS** (Pico 24 · ESP32 8 · STM32 28): el wire era coherente y el único
+  descuadre estaba en el banner. Si alguna hubiera mandado slices, el arreglo
+  habría sido otro — por eso se miró antes de escribir la unidad.
+  🖼️ Verificado **viendo la salida**, no leyendo el código: el formateador del
+  diálogo es estático, así que se le pasaron los datos reales de las tres familias
+  y se leyó lo que sale. Firmware y fat-jar reconstruidos.
+
 
 - 🟡 `#439` — **RESUELTO EN CÓDIGO el 18-ago; falta la prueba EN PLACA.**
   *(Enunciado original abajo, que explica por qué dolía.)*

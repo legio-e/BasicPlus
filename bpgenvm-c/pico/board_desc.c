@@ -187,7 +187,11 @@ void board_desc_init(void) {
         log_printf("board: sin /sys/board.json, uso defaults por variante");
     }
 
-    log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d adc=%d led=%d npx=%d psram=%uMB",
+    /* «pwm=N slices», con la unidad DICHA. El INFO responde 24 para esta misma
+     * placa —SALIDAS: cada slice tiene canales A y B— y quien pusiera las dos
+     * lineas una al lado de otra veia una contradiccion y se iba a buscarla.
+     * Las dos cifras son correctas; lo que faltaba era decir de que. */
+    log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d slices adc=%d led=%d npx=%d psram=%uMB",
                d->name, d->variant, d->gpio_count, d->pio_count, d->pwm_slices,
                d->adc_channels, d->led_pin, d->neopixel_pin,
                d->psram_bytes / (1024u * 1024u));
