@@ -96,6 +96,24 @@ SQLite en un pack— no existen para quien lea la documentacion. Ficha abierta e
 «Cierre de V5» con lo que hay que escribir y con lo que ya esta bien (referencia.html
 §13.3/13.4 no se quedo rancia: su «SyncList extiende List» paso a ser cierto).
 
+**🧊 CODE FREEZE V5, desde hoy.** Eduardo: *«a partir de ahora, codigo congelado,
+solamente se arreglan bugs»*. Banner en la cabecera de `FICHAS.md`, con el criterio
+de V4: la pregunta no es «¿merece la pena?» sino **«¿esta roto?»**. Lo que no lo
+este, a V6.
+
+**El plan de cierre, en este orden** (decision de Eduardo, 18-ago):
+1. **Limpieza** — manana 19-ago, ANTES de documentar (las 5 carpetas de `notas/`,
+   los restos del arbol, la decision sobre `dist/`).
+2. **`H12` — documentar V5.** Con numero de hito, por decision suya.
+3. **`H13` — las pruebas finales.** Idem. Agrupa `#379`, `#408`, `H2-P5` y la cola
+   de `#439` (Metro y STM32) SIN duplicar su texto: cada ficha sigue en su seccion.
+4. **Publicar.**
+
+De paso salio una contradiccion DENTRO de la fuente de verdad: la tabla de hitos
+decia «H10 y H11 cerrados» y dos lineas despues «Queda H10 (IDE)». Comprobado
+mecanicamente —sus 9 fichas estan todas tachadas— y corregido. La tabla ahora llega
+hasta H13.
+
 
 ### 18-ago — el dia de las listas: 8 fichas cerradas en cadena, corpus 29→37
 

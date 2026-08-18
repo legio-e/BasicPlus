@@ -36,6 +36,31 @@
 
 ---
 
+## 🧊 CODE FREEZE V5 — desde el 18-ago-2026
+
+**Decisión de Eduardo:** *«A partir de ahora, código congelado, solamente se arreglan
+bugs.»*
+
+**El criterio, que ya se probó en V4:** la pregunta ante algo que se podría mejorar NO
+es *«¿merece la pena?»* sino **«¿está roto?»**. Si no está roto, se anota para V6 y se
+sigue. Una mejora que entra en la recta final no viene sola: viene con su tanda de
+verificación y con el riesgo de romper algo que ya estaba probado en placa.
+
+**Qué entra**: bugs. **Qué no entra**: features, refactors, mejoras «de paso», y —lo
+que más se cuela— arreglar de camino algo que se ve feo mientras se toca otra cosa.
+
+**El plan de cierre, en este orden** (Eduardo, 18-ago):
+
+1. **Limpieza** — el 19-ago, antes de empezar a documentar. Está en «Cierre de V5».
+2. **H12 — documentar V5.**
+3. **H13 — las pruebas finales.**
+4. **Publicar.**
+
+**Y hasta publicar, nada sube a GitHub.** Commitear no es publicar; «ahead of origin»
+es lo normal en esta fase. Ver la norma en la cabecera de este fichero.
+
+---
+
 ## ABIERTAS
 
 ### 🏁 Packs — V5/H11 «cerrar lo que quedó suelto» (#416, paraguas) — **CERRADO el 15-ago**
@@ -1680,9 +1705,11 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
 trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
-- **DOCUMENTAR V5 DE CARA AL USUARIO** — abierta el 18-ago al repasar el cierre con
-  Eduardo (*«queda hacer limpieza, documentar y pruebas finales»*), porque **la parte
-  de documentar no tenía línea aquí** y esta lista es la que se mira.
+- **`H12` — DOCUMENTAR V5 DE CARA AL USUARIO.** **Hito** por decisión de Eduardo
+  (18-ago): *«documentar con el número de hito que le corresponda»*. Va DESPUÉS de la
+  limpieza. Abierta ese mismo día al repasar el cierre —*«queda hacer limpieza,
+  documentar y pruebas finales»*— porque **la parte de documentar no tenía línea aquí**
+  y esta lista es la que se mira.
   🩸 **Lo medido, no lo supuesto**: `sqlite` y `@BD` aparecen **CERO veces** en toda la
   documentación de usuario —`manual.html`, `referencia.html`, `cheatsheet.html`,
   `QUICKSTART.md`, `README.md`/`README.es.md`— y sólo salen en ficheros de trabajo
@@ -1707,6 +1734,32 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   📌 Y una comprobación barata al terminar, que es la que caza lo rancio: buscar en la
   documentación de usuario los nombres que V5 movió o creó y ver que ninguno describe
   el mundo anterior.
+
+- **`H13` — LAS PRUEBAS FINALES.** **Hito** por decisión de Eduardo (18-ago): *«las
+  pruebas finales también con su hito correspondiente»*. Va DESPUÉS de `H12`, y es lo
+  último antes de publicar.
+  📌 **No duplica fichas: las agrupa.** El texto de cada una sigue en su sitio; aquí
+  está sólo la lista de lo que entra en la tanda, para que ninguna se quede fuera por
+  vivir en otra sección:
+  - **`#379`** — verificar que era `#398` (el refresco del árbol) y no una
+    desincronización del wire. Hipótesis fuerte de Eduardo del 17-ago, con los cuatro
+    síntomas encajando; el Stop del P4 del 18-ago sobre un bucle cerrado es una piedra
+    más. *(sección «Placas y hardware»)*
+  - **`#408`** — medir los dos cuellos que se ven comparando P4 y Metro (árbol en la
+    P4, formateo en la Metro). Válido desde que el P4 dejó de compilarse a `-Og`.
+    *(«Placas y hardware»)*
+  - **`H2-P5`** — exFAT y el «superfloppy», reformateando una de las dos tarjetas que
+    ya hay. La mitad de SDSC cayó el 18-ago con `test_sdsc`. *(«Cola de H2»)*
+  - **la cola de `#439`** — repetir en Metro y STM32 la prueba que cerró la ficha en el
+    P4 (`CuelgaLog.bp` → `kill` → `reset` → «RAM SUPERVIVIENTE»). El código está
+    verificado en el `.elf` de las cuatro imágenes y probado en placa en una. Está
+    escrita DENTRO de una ficha ya cerrada, que es donde las cosas se pierden: por eso
+    se nombra aquí. **En la Metro, ojo**: allí el botón físico de reset SÍ conserva la
+    RAM (pin de RUN), al revés que en el ESP32 — ver L15 de `PENDIENTES.md`.
+  ⚠️ **Estamos en CODE FREEZE** (ver la cabecera): lo que salga de esta tanda y no sea
+  un bug se anota para V6, no se arregla de camino.
+  📌 **Ojo con el número**: el `H13` de V4 era la batería de pruebas de aquel cierre.
+  Mismo problema que ya avisa la tabla con el `H9`. Los hitos se numeran por versión.
 
 - **Borrar las cinco carpetas de experimentos de `notas/`** (~56 MB): `metro-h4`,
   `p4`, `v5-salto-crudo`, `v5-sqlite-prueba`, `v5-sqlite_edu`. Salía de `#411`.
@@ -2121,6 +2174,10 @@ packs, y `PACK_CALL` (#383) cancelada.
 | H7 | **SQLite en el P4**: nativo RISC-V ejecutándose, motor arrancado, pack grabado y `SqlDemo` corriendo | **CERRADO**, verificado en placa |
 | H8 | *la herramienta antes que el artefacto*: relocalizador que coincide con `ld`, `sources`, un `.mod` y N `.mdn`, botón de grabar que relocaliza | 13-ago, en host |
 | H9 | la tanda de **arreglos del compilador** (#384, #385, #386, #387, #388, #392, #393, #406) + `Object` como raíz real (#389, la mitad estática) | **14-ago** |
+| H10 | **el IDE**: lo pendiente que no eran bugs | 15-ago (las 9 fichas de su sección, cerradas) |
+| H11 | **packs**: cerrar lo que quedó suelto (`#416`, paraguas) | 15-ago |
+| H12 | **documentar V5** de cara al usuario | abierto 18-ago |
+| H13 | **las pruebas finales** | abierto 18-ago |
 
 *(El nombre de H8/H9 no está en ningún doc: sale de los prefijos de commit. Ojo con
 confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
@@ -2128,10 +2185,12 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
 *(Tabla subida desde `ESTADO` el 17-ago: era el único sitio con las fechas
 y el enunciado de cada hito. **H10 (IDE) y H11 (packs) cerrados** también.)*
 
-**Hitos V5**: H1 (SD lector) · H2 (SD como FS) · H3 (SQLite en placa) · H4 (BP
-consulta una BD) · H5 (ORM) · H6 (SD del P4) · H7 (SQLite en el P4, pack grabado,
-`SqlDemo` en las dos familias) · H8 (relocalizar al grabar) · H9 (los 11 bugs del
-compilador) · **H11 (packs, 15-ago)** — **cerrados**. Queda **H10 (IDE)**.
+**Cerrados: H1…H11.** Quedan **H12** (documentar) y **H13** (pruebas finales), abiertos
+el 18-ago al fijar el plan de cierre; después, publicar.
+
+⚠️ *Aquí decía «Queda H10 (IDE)» dos líneas después de decir que H10 estaba cerrado —
+una contradicción dentro de la propia fuente de verdad, corregida el 18-ago. H10 lo
+está: sus 9 fichas están todas tachadas.*
 
 ---
 
