@@ -91,6 +91,22 @@ static int mapear_zona(void)
     esp_err_t ed = esp_partition_mmap(bpdata, packs->offset, packs->size,
                                       ESP_PARTITION_MMAP_DATA, &s_map_data, &s_h_data);
 
+    /* #P4-32M — la DIRECCION ABSOLUTA, que es la que decide. El offset relativo a
+     * bpdata no dice nada por si solo: lo que el cache de flash mira es la
+     * direccion fisica, y direcciona a 24 bits. Con estos dos numeros el log
+     * contesta solo si el problema es ese limite o es otra cosa — en vez de
+     * tener que deducirlo leyendo el fuente del IDF. */
+    {
+        uint32_t ini = (uint32_t) bpdata->address + packs->offset;
+        uint32_t fin = ini + packs->size;
+        log_printf("pack: fisica 0x%x..0x%x (%u..%u KB) | limite del cache 24 bits "
+                   "= 0x1000000 (16384 KB)%s%s",
+                   (unsigned) ini, (unsigned) fin,
+                   (unsigned) (ini / 1024u), (unsigned) (fin / 1024u),
+                   (ini >= 0x1000000u) ? "  <<< EMPIEZA POR ENCIMA" : "",
+                   (fin >  0x1000000u) ? "  <<< ACABA POR ENCIMA"  : "");
+    }
+
     log_printf("pack: zona %u KB en bpdata+0x%x | mapeo INST %s @%p | DATA %s @%p",
                (unsigned) (packs->size / 1024u), (unsigned) packs->offset,
                (ei == ESP_OK) ? "ok" : "FALLO", s_map_inst,
