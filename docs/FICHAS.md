@@ -892,6 +892,17 @@ decidirá si basta subirlos.)*
   vuelta entera de hipótesis que no se podían comprobar. Un instrumento que
   falla exactamente en el caso que motiva su existencia no es medio instrumento:
   es una trampa, porque uno cuenta con él.
+  📐 **Dirección de Eduardo (18-ago), al ir a por ella**: *«probablemente los
+  logs se están quedando en RAM»* —confirmado arriba, es exactamente eso— *«y si
+  queremos el log como mecanismo de depuración de verdad, no deberían ir a RAM:
+  directos a la flash (falta un `flush()` o algo similar)»*.
+  ⏭️ Al retomar (tras el descanso del 18-ago): medir ANTES de decidir el cómo —
+  cuánto cuesta un flush por línea en la flash de cada familia (latencia y
+  desgaste; la Pico borra por sectores de 4K), porque ahí está el compromiso
+  entre «log fiable» y «log que frena el programa». Las ideas que ya estaban
+  (`log=2` flush-por-línea como modo, o diagnósticos por el wire) siguen sobre la
+  mesa; la de Eduardo las concreta: el modo depuración escribe DIRECTO.
+
 
   **Lo que sí funciona con la placa colgada**: el `print` del programa, que va
   por el wire en directo. Ahí está la pista de cómo arreglarlo.

@@ -27,6 +27,46 @@
 
 ## Última sesión
 
+### 18-ago — el dia de las listas: 8 fichas cerradas en cadena, corpus 29→37
+
+**El hilo del dia** (todo salio de una decision de Eduardo: cancelar `Box`,
+sobrecargar `add`, y «la list sintetizada deberia desaparecer»):
+
+- **#442** — un literal de array guardaba SIEMPRE 4 B/casilla (`long[]` daba 0
+  EN SILENCIO). La trampa: `string` es PrimitiveType Y referencia — se vio
+  desensamblando, no por el sintoma.
+- **#443** — `newObjArray`/`growObjArray`: alias publicos de builtins que ya
+  existian (el id es ordinal(): entrada nueva = id que ninguna VM conoce).
+- **#444** — `CHECKCAST_EXT` (0xB0): el downcast cross-module reventaba el
+  compilador. Reuso la subseccion de fixups de `TRY_BEGIN_EXT` → ni el formato
+  ni los loaders cambian.
+- **#447** — el cast a la PROPIA clase reventaba (descriptor se registra en
+  endClass). Tapaba que **Collections.bp no compilaba desde el 16-ago** — otro
+  artefacto rancio. Y el fat-jar del frontend empaqueta miVM: `install` sin
+  `clean` deja el jar viejo (trazas con lineas que no cuadran = esa señal).
+- **#446** — envoltorios+Comparable a Core; `formatDouble`/`longToString` con
+  ellos (Str queda de fachada). El atajo `"" + x` NO valia: 1E12 vs 1000000000000.
+- **#450** — el compilador YA NO sintetiza List/SyncList/OwnerList: estan en BP.
+  Core se importa SIEMPRE (Core.mod 2.576→8.306 B, preinstalado). Firmware Pico
+  enlazado con la stdlib nueva.
+- **#449** — mi «OwnerList no se puede escribir en BP» era FALSO (Eduardo lo
+  olio): `var owner items: Object[]` emite SET_FIELD_OWNER, y el owner local da
+  el FREE_REF. Guardian de fin de RUN: 0 bloques sin liberar.
+- **#451** — `super.metodo()` cross-module: la pista la dio Eduardo («el ctor de
+  super SI se llama solo») → factorias `__cls_m_<Cls>_<metodo>`, aditivo.
+- **Wrap8Test** — no era el Map: el sample concatenaba un Object-con-cadena a
+  pelo (en V4 imprimia el HANDLE en silencio; #389 lo hizo visible).
+
+**⏭️ A LA VUELTA DEL DESCANSO (lo dijo Eduardo):** el punto 1 (`hello_mod.c`
+del STM32, mecanico) y **#439** con su hipotesis ya registrada en la ficha:
+los logs se quedan en RAM (confirmado), y «si queremos el log como mecanismo
+de depuracion de verdad, directos a la flash — falta un flush()». Primero
+medir el coste del flush por linea en cada familia (la Pico borra sectores de
+4K), luego decidir el modo.
+
+**Pendientes de V5: 10.** El mas barato despues: mover SyncList a Collections
+(desbloqueado; dos intentos de cirugia de texto fallaron, hacerlo con calma).
+
 ### 17-ago (tarde) — el cuelgue del P4, y UNA fuente de verdad
 
 **Lo gordo: `#440`, verificada en el P4.** Toda `native` que tocara un literal
