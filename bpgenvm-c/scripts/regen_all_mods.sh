@@ -25,6 +25,11 @@ bash "$ROOT/stm32/scripts/regen_stm32_mods.sh"
 echo "== ESP32 =="
 bash "$ROOT/esp32/scripts/regen_esp32_mods.sh"
 
+# #427/8 — el Hello embebido va aparte: no sale de bpstdlib sino de
+# samples/hello.bp, y lo llevan las CUATRO imagenes.
+echo "== Hello (las 4 imagenes) =="
+bash "$ROOT/scripts/regen_hello_blob.sh"
+
 echo ""
-echo "OK: blobs de stdlib regenerados en las 3 familias desde bpstdlib."
+echo "OK: blobs de stdlib (3 familias) + Hello (4 imagenes) regenerados."
 echo "Recuerda RECOMPILAR cada firmware (ver cabecera de este script)."

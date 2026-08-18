@@ -608,13 +608,36 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Familias — lo que dejó el censo (`#427`)
 
-- **`hello_mod.c` del STM32: regenerarlo del mismo fuente que las demás** — el
-  punto **8** de los rojos priorizados del censo, y el único suyo que sigue en V5
-  (1, 2 y 3 se cerraron en `ec81afc`). Necesita el pipeline de embebido, por eso
-  no cayó con los otros tres. Sale aquí como entrada propia porque **dentro de una
-  ficha cerrada era invisible a un barrido**, y trabajo de V5 que no aparece al
-  listar es justo lo que hace que las cosas «aparezcan y desaparezcan».
-  Los puntos 4, 5, 6 y 7 son unificación → **V6**.
+- 🟡 **(sin número) — el `Hello` embebido es código MUERTO en 3 de las 4 imágenes.**
+  Visto el 18-ago al cerrar el punto 8 del censo, y anotado aparte porque es otra
+  cosa: el punto 8 pedía igualar el blob, esto es si debe existir.
+  · **Pico** — el único VIVO: lo preinstala como `/app/Hello.mod` (`main.c:1305`).
+  · **ESP32 y P4** — el `.c` existe pero **no está en `SRCS`**: no se compila.
+  · **STM32** — sí se compila (está en el `subdir.mk`) y lo usa sólo
+    `bpvm_app_run_hello()`, **que no llama nadie** (resto de H9.1). Gasta flash
+    para nada. Y si algún día se llamara, fallaría: carga con
+    `bpvm_load_mod_buffer`, que no resuelve imports, y el Hello de hoy importa `Core`.
+  ⏭️ Lo razonable es borrar los tres `.c` muertos y, con ellos, `bpvm_app.c/h` del
+  STM32. **Es borrar, así que lo decide Eduardo**; el generador ya deja las cuatro
+  iguales mientras tanto.
+
+- ~~`hello_mod.c` del STM32~~ — ✅ **CERRADA el 18-ago**: **las cuatro imágenes
+  salen ya del mismo fuente**, y por un generador, no a mano.
+  🩸 **La raíz era peor que la divergencia**: la cabecera de esos ficheros decía
+  *«GENERADO por `scripts/regen-hello-blob.sh`»* y **ese script no existía** — un
+  puntero muerto que hacía pasar por generado algo mantenido a mano. Por eso el
+  hello era el único blob fuera de los `regen_*_mods.sh`.
+  📐 **Y el censo se quedaba corto**: decía «el STM32 lleva un Hello de otra época»
+  (186 líneas vs 347, y en `MOD5`), pero al medirlo salió que **el ÚNICO vivo
+  también estaba rancio** — la Pico embebía 4.034 B contra los 3.965 que emite el
+  compilador de hoy. O sea que el `.mod` skew que los otros guiones evitan para la
+  stdlib, aquí no lo evitaba nadie.
+  ✅ `bpgenvm-c/scripts/regen_hello_blob.sh`, enganchado a `regen_all_mods.sh`. Las
+  cuatro a 3.965 B del mismo `samples/hello.bp`; **firmware de la Pico reconstruido
+  y enlazado** con el Hello nuevo dentro.
+  ⏭️ Sale de aquí un hallazgo que NO es de este punto y va aparte (abajo): tres de
+  esas cuatro copias son código muerto.
+
 
 ### Placas y hardware
 
