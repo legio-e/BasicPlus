@@ -1,0 +1,42 @@
+// ObjArray.bp — #443: `newObjArray(n)`, el allocator publico de arrays de
+// REFERENCIAS, y su hermano `growObjArray`.
+//
+// Por que faltaba: hasta hoy solo existia `__newRefArray`, interno y MINTIENDO
+// en su tipo (declaraba `integer[]`), asi que un array de objetos solo se podia
+// crear con un literal — o sea con los elementos ya sabidos. Sin constructor por
+// TAMANO no se puede escribir una lista dinamica, que es lo que impedia sacar
+// `List` del compilador y ponerla en `Core` (idea de Eduardo).
+//
+// No son builtins nuevos de la VM: son un SEGUNDO NOMBRE de NEW_REF_ARRAY y
+// GROW_REF_ARRAY, con tipo `Object[]`. El id de builtin es `ordinal()`, asi que
+// una entrada nueva se habria llevado un id que ninguna VM conoce; con el alias,
+// el bytecode emitido es el de siempre y las VMs no se tocan.
+//
+// Lo que se comprueba aqui: que reserva por tamano, que las casillas arrancan a
+// NULL (y no con basura, que es lo que decidiria si el GC puede trazarlas), que
+// admite mezclar cadena y objeto, y que el downcast saca lo que se metio.
+module ObjArray
+  public class Caja
+    var n: integer
+    public function Caja(x: integer)
+      this.n := x
+    end Caja
+    public function valor(): integer
+      return this.n
+    end valor
+  end Caja
+
+  function Main()
+    var a: Object[] := newObjArray(3)
+    print "len      : " + len(a)
+    a[0] := "hola"
+    a[1] := Caja(42)
+    print "0 cadena : " + string(a[0])
+    var c: Caja := Caja(a[1])
+    print "1 objeto : " + c.valor()
+    if a[2] == null then
+      print "2 vacio  : si, arranca a null"
+    endif
+    print "fin"
+  end Main
+end ObjArray

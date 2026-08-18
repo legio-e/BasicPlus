@@ -500,7 +500,22 @@ public enum Builtin {
     Builtin(String bpName) { this.bpName = bpName; this.id = ordinal(); }
 
     private static final Map<String, Builtin> BY_NAME = new HashMap<>();
-    static { for (Builtin b : values()) BY_NAME.put(b.bpName, b); }
+    static {
+        for (Builtin b : values()) BY_NAME.put(b.bpName, b);
+        /* #443 — `newObjArray` es un SEGUNDO NOMBRE de NEW_REF_ARRAY, no un
+         * builtin nuevo: hace exactamente lo mismo (array TYPE_ARRAY_REF con
+         * los slots a 0) y lo que cambia es a quien va dirigido. `__newRefArray`
+         * lleva `__` de interno, para las clases que sintetiza el compilador;
+         * `newObjArray` es el nombre PUBLICO, hermano de newIntArray/newLongArray,
+         * y su tipo de retorno declarado es `Object[]`.
+         *
+         * Alias y no entrada de enum PORQUE EL ID ES `ordinal()`: una constante
+         * nueva se llevaria un id nuevo que ninguna VM conoce, y habria que
+         * implementarlo dos veces para no ganar nada. Asi el bytecode emitido es
+         * el de siempre y las VMs no se tocan. */
+        BY_NAME.put("newObjArray", NEW_REF_ARRAY);
+        BY_NAME.put("growObjArray", GROW_REF_ARRAY);
+    }
 
     public static Builtin byName(String name) { return BY_NAME.get(name); }
     public static Builtin byId(int id) { return values()[id]; }

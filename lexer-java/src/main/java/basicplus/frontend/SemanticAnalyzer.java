@@ -371,6 +371,25 @@ public final class SemanticAnalyzer {
         }
         s.tryDefine(objectCls);
 
+        /* #443 — el allocator que le faltaba a las REFERENCIAS. Hasta hoy sólo
+         * estaba `__newRefArray`, interno y MINTIENDO en su tipo (declaraba
+         * `integer[]`), así que un array de objetos no se podía crear por tamaño:
+         * o literal, o nada. Hermano público de `newIntArray`/`newLongArray`.
+         *
+         * Va AQUÍ y no con los otros builtins porque su tipo de retorno es
+         * `Object[]`, y `Object` es una CLASE de verdad desde #389 — arriba, donde
+         * se registran los demás, `objectCls` todavía no existe. (Cuando `Object`
+         * era un alias de `any` habría dado igual; ya no: el semántico distingue
+         * `any[]` de `Object[]`, y lo dijo él solo al intentarlo.) */
+        addBuiltin(s, "newObjArray", new ArrayType(new BpType.ClassType(objectCls)),
+                   new String[]{"size"}, new BpType[]{PrimitiveType.INTEGER});
+        /* Y su hermano para CRECER: sin él, una lista que se llena tendría que
+         * copiar elemento a elemento en un bucle de BP en vez de un memcpy. */
+        addBuiltin(s, "growObjArray", new ArrayType(new BpType.ClassType(objectCls)),
+                   new String[]{"old", "newCap"},
+                   new BpType[]{new ArrayType(new BpType.ClassType(objectCls)),
+                                PrimitiveType.INTEGER});
+
         // ---- Clase stdlib: List (lista dinámica de refs a objetos) ----
         // Las firmas que toman/devuelven `any` permiten almacenar instancias
         // de cualquier clase de usuario sin fricción de tipos.

@@ -905,6 +905,46 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
+- ~~`#443`~~ — ✅ **CERRADA el 18-ago** (`compat` 31 PASS): **`newObjArray(n)` y
+  `growObjArray(a, n)`**, los allocators públicos de arrays de REFERENCIAS.
+  Hasta hoy sólo estaba `__newRefArray`, interno y **mintiendo en su tipo** (declaraba
+  `integer[]`), así que un array de objetos sólo se podía crear con un LITERAL — o
+  sea con los elementos ya sabidos. Sin constructor por tamaño no hay lista
+  dinámica, y eso era lo que impedía sacar `List` del compilador.
+  📐 **No son builtins nuevos**: son un **segundo nombre** de `NEW_REF_ARRAY` y
+  `GROW_REF_ARRAY`, con tipo `Object[]`. Alias y no entrada de enum **porque el id es
+  `ordinal()`**: una constante nueva se habría llevado un id que ninguna VM conoce y
+  habría que implementarlo dos veces para no ganar nada. Así el bytecode emitido
+  es el de siempre y **las VMs no se tocan**.
+  🩸 Un detalle que costó un intento: el registro va **donde `objectCls` ya existe**,
+  no con los demás builtins. `Object` es una CLASE de verdad desde #389, y el
+  semántico distingue `any[]` de `Object[]` — lo dijo él solo al intentarlo.
+  🧪 `bpgenvm-c/samples/ObjArray.bp`, en el corpus (31 PASS). Comprueba que reserva
+  por tamaño, que **las casillas arrancan a null** (no con basura, que es lo que
+  decide si el GC puede trazarlas) y que el downcast saca lo que se metió.
+
+- 🔴 **#444 — el downcast a una clase de OTRO MÓDULO revienta el compilador.**
+  Encontrado el 18-ago al escribir `List` en BP, que es lo que #443 desbloqueaba.
+  Reproductor de seis líneas, y el gemelo que lo acota:
+  ```
+  var c: Local := Local(o)                            -> compila (clase LOCAL)
+  var c: Collections.Integer := Collections.Integer(o) -> RuntimeException:
+       «Clase 'Integer' no declarada para CHECKCAST»  (traza de Java, no un error)
+  ```
+  Es la mitad DINÁMICA de #389 (opcode `CHECKCAST`, cerrada el 16-ago): busca el
+  descriptor en la tabla LOCAL, y una clase importada no lo tiene ahí — construirla
+  sí funciona porque eso va por el módulo de origen.
+  ⚠️ **Y bloquea justo el camino elegido**: con `Object` de comodín, sacar un escalar
+  es `Collections.Integer(o).value()` — o sea un downcast cross-module en cada uso.
+  📐 **El molde ya existe**: `TRY_BEGIN_EXT` (BUG-2) resuelve una clase de otro módulo
+  con el **nombre cualificado y el `clsOff` parcheado en link-time**. Un `CHECKCAST_EXT`
+  con esa misma forma es trabajo conocido, pero toca **las dos VMs y el enlace**,
+  así que es decisión de alcance.
+  ⏳ Sin medir: si `INSTANCEOF` (#52) tiene el mismo hueco — usa la misma búsqueda,
+  pero **no lo he comprobado** y no lo doy por sabido.
+  🚨 Aparte del alcance: que sea un **crash con traza de Java** y no un diagnóstico
+  hay que arreglarlo igual, se implemente o no el `_EXT`.
+
 - ~~`#442`~~ — ✅ **CERRADA el 18-ago** (`compat` 30 PASS): **un literal de array
   guardaba siempre 4 bytes por casilla.**
   Medido el 18-ago al preguntar Eduardo *«no entiendo por qué no podemos declarar
