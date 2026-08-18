@@ -987,11 +987,21 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
-- (sin número) — **mover `SyncList` de `Core` a `Collections`** — el rabo de #451, ya
-  DESBLOQUEADO (el `super` cross-module funciona). Es un cortar-pegar de la clase +
-  dos líneas de alias en `SemanticAnalyzer`; dos intentos con cirugía de texto
-  salieron mal y se revirtieron — hacerlo con calma. Sale aquí como entrada propia
-  porque dentro de la ficha cerrada **ningún barrido lo ve** (la lección de #427).
+- ~~(sin número)~~ — ✅ **CERRADA el 18-ago** (`compat` 37 PASS): **`SyncList` ya está
+  en `Collections`**, que es donde Eduardo la quería. Con esto el reparto que pidió
+  queda completo: `List` en `Core` (tipo básico, y el `Map` la usa), `SyncList` y
+  `OwnerList` en `Collections`, y **el compilador no sintetiza ninguna**.
+  🧪 `samples/SyncXMod.bp`, en el corpus. **Lo que prueba no es que compile**: lo que
+  se movió fue el sitio de la clase, y lo que podía romperse en silencio era el
+  CERROJO — su `super.add(...)` ahora cruza de módulo. Una lista sin candado no falla
+  al usarla, falla cuando dos hilos la tocan a la vez y a veces. Por eso el sample
+  lanza **4 hilos × 250 vueltas** y comprueba el total: **1000 de 1000**, en las dos
+  VMs.
+  🩸 Y una lección repetida: los tres samples míos de hoy (`CastExt`, `ListaBp`,
+  `ListaHer`) **pasaban contra un `Collections.mod` rancio** que aún tenía los
+  envoltorios. Al refrescarlo salieron 3 SKIP de golpe. El artefacto viejo no da
+  error: da un verde que no vale.
+
 
 - ~~`#450`~~ — ✅ **CERRADA el 18-ago** (`compat` 37 PASS): **el compilador YA NO sintetiza `List`, `SyncList` ni `OwnerList`.**
   Encargo de Eduardo (18-ago), hecho: las tres están escritas en BP. `List` y

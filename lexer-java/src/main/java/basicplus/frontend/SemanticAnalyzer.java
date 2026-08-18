@@ -159,14 +159,14 @@ public final class SemanticAnalyzer {
                  * aliasa igual que Exception. Los envoltorios van con ella: quien
                  * usa `Object` de comodin escribe `Integer(o)`, no
                  * `Core.Integer(o)`. */
-                for (String n : new String[]{"List", "SyncList", "Integer", "Long",
-                                             "Double", "Float", "Boolean", "Comparable"}) {
+                for (String n : new String[]{"List", "Integer", "Long", "Double",
+                                             "Float", "Boolean", "Comparable"}) {
                     Symbol c = ns.classes.get(n);
                     if (c != null) module.members.tryDefine(c);
                 }
             } else if ("Collections".equals(ns.moduleName)) {
                 /* #450 — idem para las dos que se quedaron en Collections. */
-                for (String n : new String[]{"OwnerList"}) {
+                for (String n : new String[]{"SyncList", "OwnerList"}) {
                     Symbol c = ns.classes.get(n);
                     if (c != null) module.members.tryDefine(c);
                 }

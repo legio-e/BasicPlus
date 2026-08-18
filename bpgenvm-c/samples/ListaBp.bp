@@ -14,8 +14,6 @@
 // que esto sustituya a la sintetizada no rompe ningun .mod.
 module ListaBp
 
-  import Collections
-
   public class Caja
     var n: integer
     public function Caja(x: integer)
@@ -48,13 +46,13 @@ module ListaBp
 
     // Las sobrecargas: envuelven y delegan. Ni un caso especial en el compilador.
     public function add(i: integer)
-      this.add(Collections.Integer(i))
+      this.add(Integer(i))
     end add
     public function add(l: long)
-      this.add(Collections.Long(l))
+      this.add(Long(l))
     end add
     public function add(d: double)
-      this.add(Collections.Double(d))
+      this.add(Double(d))
     end add
 
     public function get(idx: integer): Object
@@ -77,11 +75,11 @@ module ListaBp
     l.add("hola")
     l.add(Caja(99))
 
-    var i0: Collections.Integer := Collections.Integer(l.get(0))
+    var i0: Integer := Integer(l.get(0))
     print "0 integer: " + i0.value()
-    var l1: Collections.Long := Collections.Long(l.get(1))
+    var l1: Long := Long(l.get(1))
     print "1 long   : " + l1.value()
-    var d2: Collections.Double := Collections.Double(l.get(2))
+    var d2: Double := Double(l.get(2))
     print "2 double : " + d2.value()
     print "3 string : " + string(l.get(3))
     var c4: Caja := Caja(l.get(4))
@@ -95,9 +93,9 @@ module ListaBp
       k := k + 1
     endwh
     print "tras crecer, largo: " + l.length()
-    var ult: Collections.Integer := Collections.Integer(l.get(44))
+    var ult: Integer := Integer(l.get(44))
     print "ultimo   : " + ult.value()
-    var prim: Collections.Integer := Collections.Integer(l.get(0))
+    var prim: Integer := Integer(l.get(0))
     print "el 0 sigue: " + prim.value()
     print "3 sigue   : " + string(l.get(3))
     print "fin"

@@ -1,6 +1,6 @@
 // CastExt.bp — #444: el downcast a una clase de OTRO MODULO.
 //
-// Antes de esto, `Collections.Integer(o)` no compilaba: reventaba el compilador
+// Antes de esto, `Integer(o)` no compilaba: reventaba el compilador
 // con una traza de Java («Clase 'Integer' no declarada para CHECKCAST»). Y no
 // era un caso raro — es EXACTAMENTE lo que exige usar `Object` de comodin con
 // la stdlib: metes un escalar envuelto y para sacarlo tienes que bajar.
@@ -17,8 +17,6 @@
 // SIGA protegiendo cuando cruza de modulo.
 module CastExt
 
-  import Collections
-
   public class Local
     var n: integer
     public function Local(x: integer)
@@ -31,18 +29,18 @@ module CastExt
 
   function Main()
     print "1 downcast cross-module que vale"
-    var o: Object := Collections.Integer(5)
-    var i: Collections.Integer := Collections.Integer(o)
+    var o: Object := Integer(5)
+    var i: Integer := Integer(o)
     print "   valor = " + i.value()
 
     print "2 subiendo por la herencia (Integer es Comparable)"
-    var c: Collections.Comparable := Collections.Comparable(o)
+    var c: Comparable := Comparable(o)
     print "   compareTo consigo mismo = " + c.compareTo(o)
 
     print "3 downcast cross-module que NO vale"
-    var l: Object := Collections.Long(7L)
+    var l: Object := Long(7L)
     try
-      var mal: Collections.Integer := Collections.Integer(l)
+      var mal: Integer := Integer(l)
       print "   MAL: no lanzo, y devolvio " + mal.value()
     catch e: RuntimeError
       print "   lanzo: " + e.msg
@@ -51,7 +49,7 @@ module CastExt
     print "4 el control local, que ya funcionaba"
     var lo: Object := Local(3)
     try
-      var malo: Collections.Integer := Collections.Integer(lo)
+      var malo: Integer := Integer(lo)
       print "   MAL: no lanzo"
     catch e2: RuntimeError
       print "   lanzo: " + e2.msg

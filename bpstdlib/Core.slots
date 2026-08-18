@@ -1,12 +1,11 @@
 {
-  "Comparable": { "compareTo": 1 },
-  "SyncList": { "add": 2, "get": 8, "set": 9, "length": 10, "remove": 11, "pop": 12, "popBlocking": 13 },
-  "RuntimeError": {  },
-  "Double": { "value": 2, "compareTo": 1, "toString": 0 },
-  "Exception": { "setMsg": 3 },
   "Integer": { "value": 2, "compareTo": 1, "toString": 0 },
   "Float": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Comparable": { "compareTo": 1 },
   "Long": { "value": 2, "compareTo": 1, "toString": 0 },
   "List": { "add": 2, "add": 2, "add": 2, "add": 2, "add": 2, "add": 2, "get": 8, "set": 9, "length": 10, "remove": 11 },
-  "Boolean": { "value": 2, "compareTo": 1, "toString": 0 }
+  "RuntimeError": {  },
+  "Boolean": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Double": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Exception": { "setMsg": 3 }
 }

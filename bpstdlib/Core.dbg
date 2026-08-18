@@ -5,166 +5,134 @@ lines
 414 24
 481 32
 550 63
-615 74
-634 77
-645 78
-661 79
-675 81
-691 82
-704 84
-719 87
-743 70
-753 71
-814 98
-835 101
-846 102
-862 103
-876 105
-892 106
-905 108
-920 111
-946 94
-956 95
-1020 122
-1041 125
-1052 126
-1068 127
-1082 129
-1098 130
-1111 132
-1126 135
-1152 118
-1162 119
-1226 146
-1245 149
-1256 150
-1272 151
-1286 153
-1302 154
-1315 156
-1330 159
-1357 142
-1367 143
-1428 170
-1447 173
-1458 174
-1485 175
-1499 177
-1526 178
-1539 180
-1554 183
-1578 166
-1588 167
-1649 317
-1665 318
-1677 319
-1700 321
-1714 322
-1732 328
-1767 331
-1803 334
-1839 337
-1874 340
-1909 344
-1933 348
-1950 352
-1969 356
-1973 357
-1988 358
-2006 359
-2014 361
-2026 362
-2045 311
-2051 312
-2057 313
-2120 395
-2130 396
-2143 397
-2159 401
-2169 402
-2182 403
-2192 404
-2211 408
-2221 409
-2236 410
-2252 414
-2262 415
-2272 416
-2282 417
-2298 421
-2308 422
-2320 423
-2336 428
-2346 429
-2351 430
-2361 431
-2370 432
-2385 433
-2404 435
-2414 436
-2433 443
-2442 444
-2453 445
-2459 446
-2470 448
-2489 386
-2499 387
-2589 200
-2601 201
-2607 202
-2614 203
-2626 205
-2631 206
-2634 207
-2644 208
-2657 209
-2665 211
-2684 212
-2695 213
-2703 215
-2713 216
-2723 217
-2745 218
-2752 219
-2770 221
-2786 222
-2795 223
-2808 224
-2819 225
-2830 226
-2833 227
-2843 228
-2856 229
-2864 231
-2880 233
-2902 237
-2918 238
-2926 239
-2962 240
-2970 242
-3006 243
-3017 245
-3042 250
-3053 251
-3069 253
-3077 254
-3083 255
-3091 256
-3103 258
-3114 259
-3117 260
-3128 261
-3142 262
-3150 263
-3156 264
-3171 266
-3193 267
-3200 268
-3218 270
-3224 271
-3233 272
-3253 273
-3261 275
+635 74
+654 77
+665 78
+681 79
+695 81
+711 82
+724 84
+739 87
+763 70
+773 71
+890 98
+911 101
+922 102
+938 103
+952 105
+968 106
+981 108
+996 111
+1022 94
+1032 95
+1154 122
+1175 125
+1186 126
+1202 127
+1216 129
+1232 130
+1245 132
+1260 135
+1286 118
+1296 119
+1418 146
+1437 149
+1448 150
+1464 151
+1478 153
+1494 154
+1507 156
+1522 159
+1549 142
+1559 143
+1676 170
+1695 173
+1706 174
+1733 175
+1747 177
+1774 178
+1787 180
+1802 183
+1826 166
+1836 167
+1953 317
+1969 318
+1981 319
+2004 321
+2018 322
+2036 328
+2071 331
+2107 334
+2143 337
+2178 340
+2213 344
+2237 348
+2254 352
+2273 356
+2277 357
+2292 358
+2310 359
+2318 361
+2330 362
+2349 311
+2355 312
+2361 313
+2530 200
+2542 201
+2548 202
+2555 203
+2567 205
+2572 206
+2575 207
+2585 208
+2598 209
+2606 211
+2625 212
+2636 213
+2644 215
+2654 216
+2664 217
+2686 218
+2693 219
+2711 221
+2727 222
+2736 223
+2749 224
+2760 225
+2771 226
+2774 227
+2784 228
+2797 229
+2805 231
+2821 233
+2843 237
+2859 238
+2867 239
+2903 240
+2911 242
+2947 243
+2958 245
+2983 250
+2994 251
+3010 253
+3018 254
+3024 255
+3032 256
+3044 258
+3055 259
+3058 260
+3069 261
+3083 262
+3091 263
+3097 264
+3112 266
+3134 267
+3141 268
+3159 270
+3165 271
+3174 272
+3194 273
+3202 275
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -230,150 +198,175 @@ func Comparable.__init 562
 this -20 8 0 ?
 func __cls_init_Comparable 598
 this -20 8 0 ?
-func Integer.value 612
+func __cls_m_Comparable_compareTo 612
+this -28 8 0 ?
+other -20 8 0 ref
+func Integer.value 632
 this -20 8 0 ?
-func Integer.compareTo 631
+func Integer.compareTo 651
 this -28 8 0 ?
 other -20 8 0 ref
 o 4 8 0 ?
-func Integer.toString 716
+func Integer.toString 736
 this -20 8 0 ?
-func Integer.__init 740
+func Integer.__init 760
 this -24 8 0 ?
 x -16 4 0 integer
-func __cls_new_Integer 763
+func __cls_new_Integer 783
 x -16 4 0 integer
-func __cls_init_Integer 795
+func __cls_init_Integer 815
 this -24 8 0 ?
 x -16 4 0 integer
-func Long.value 811
+func __cls_m_Integer_toString 831
 this -20 8 0 ?
-func Long.compareTo 832
+func __cls_m_Integer_compareTo 850
+this -28 8 0 ?
+other -20 8 0 ref
+func __cls_m_Integer_value 870
+this -20 8 0 ?
+func Long.value 887
+this -20 8 0 ?
+func Long.compareTo 908
 this -28 8 0 ?
 other -20 8 0 ref
 o 4 8 0 ?
-func Long.toString 917
+func Long.toString 993
 this -20 8 0 ?
-func Long.__init 943
+func Long.__init 1019
 this -28 8 0 ?
 x -20 8 0 long
-func __cls_new_Long 967
+func __cls_new_Long 1043
 x -20 8 0 long
-func __cls_init_Long 1000
+func __cls_init_Long 1076
 this -28 8 0 ?
 x -20 8 0 long
-func Double.value 1017
+func __cls_m_Long_toString 1093
 this -20 8 0 ?
-func Double.compareTo 1038
+func __cls_m_Long_compareTo 1112
+this -28 8 0 ?
+other -20 8 0 ref
+func __cls_m_Long_value 1132
+this -20 8 0 ?
+func Double.value 1151
+this -20 8 0 ?
+func Double.compareTo 1172
 this -28 8 0 ?
 other -20 8 0 ref
 o 4 8 0 ?
-func Double.toString 1123
+func Double.toString 1257
 this -20 8 0 ?
-func Double.__init 1149
+func Double.__init 1283
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_new_Double 1173
+func __cls_new_Double 1307
 x -20 8 0 double
-func __cls_init_Double 1206
+func __cls_init_Double 1340
 this -28 8 0 ?
 x -20 8 0 double
-func Float.value 1223
+func __cls_m_Double_toString 1357
 this -20 8 0 ?
-func Float.compareTo 1242
+func __cls_m_Double_compareTo 1376
+this -28 8 0 ?
+other -20 8 0 ref
+func __cls_m_Double_value 1396
+this -20 8 0 ?
+func Float.value 1415
+this -20 8 0 ?
+func Float.compareTo 1434
 this -28 8 0 ?
 other -20 8 0 ref
 o 4 8 0 ?
-func Float.toString 1327
+func Float.toString 1519
 this -20 8 0 ?
-func Float.__init 1354
+func Float.__init 1546
 this -24 8 0 ?
 x -16 4 0 float
-func __cls_new_Float 1377
+func __cls_new_Float 1569
 x -16 4 0 float
-func __cls_init_Float 1409
+func __cls_init_Float 1601
 this -24 8 0 ?
 x -16 4 0 float
-func Boolean.value 1425
+func __cls_m_Float_toString 1617
 this -20 8 0 ?
-func Boolean.compareTo 1444
+func __cls_m_Float_compareTo 1636
+this -28 8 0 ?
+other -20 8 0 ref
+func __cls_m_Float_value 1656
+this -20 8 0 ?
+func Boolean.value 1673
+this -20 8 0 ?
+func Boolean.compareTo 1692
 this -28 8 0 ?
 other -20 8 0 ref
 o 4 8 0 ?
-func Boolean.toString 1551
+func Boolean.toString 1799
 this -20 8 0 ?
-func Boolean.__init 1575
+func Boolean.__init 1823
 this -24 8 0 ?
 x -16 4 0 boolean
-func __cls_new_Boolean 1598
+func __cls_new_Boolean 1846
 x -16 4 0 boolean
-func __cls_init_Boolean 1630
+func __cls_init_Boolean 1878
 this -24 8 0 ?
 x -16 4 0 boolean
-func List.add 1646
+func __cls_m_Boolean_toString 1894
+this -20 8 0 ?
+func __cls_m_Boolean_compareTo 1913
+this -28 8 0 ?
+other -20 8 0 ref
+func __cls_m_Boolean_value 1933
+this -20 8 0 ?
+func List.add 1950
 this -28 8 0 ?
 o -20 8 0 ref
-func List.add$i 1729
+func List.add$i 2033
 this -24 8 0 ?
 i -16 4 0 integer
-func List.add$j 1764
+func List.add$j 2068
 this -28 8 0 ?
 l -20 8 0 long
-func List.add$d 1800
+func List.add$d 2104
 this -28 8 0 ?
 d -20 8 0 double
-func List.add$f 1836
+func List.add$f 2140
 this -24 8 0 ?
 f -16 4 0 float
-func List.add$z 1871
+func List.add$z 2175
 this -24 8 0 ?
 b -16 4 0 boolean
-func List.get 1906
+func List.get 2210
 this -24 8 0 ?
 idx -16 4 0 integer
-func List.set 1930
+func List.set 2234
 this -32 8 0 ?
 idx -24 4 0 integer
 o -20 8 0 ref
-func List.length 1947
+func List.length 2251
 this -20 8 0 ?
-func List.remove 1966
+func List.remove 2270
 this -24 8 0 ?
 idx -16 4 0 integer
 i 0 4 0 integer
-func List.__init 2042
+func List.__init 2346
 this -20 8 0 ?
-func __cls_init_List 2103
+func __cls_init_List 2407
 this -20 8 0 ?
-func SyncList.add 2117
+func __cls_m_List_add 2421
 this -28 8 0 ?
 o -20 8 0 ref
-func SyncList.get 2156
-this -24 8 0 ?
-idx -16 4 0 integer
-r 12 8 0 ?
-func SyncList.set 2208
+func __cls_m_List_set 2438
 this -32 8 0 ?
 idx -24 4 0 integer
 o -20 8 0 ref
-func SyncList.length 2249
-this -20 8 0 ?
-n 8 4 0 integer
-func SyncList.remove 2295
+func __cls_m_List_get 2457
 this -24 8 0 ?
 idx -16 4 0 integer
-func SyncList.pop 2333
+func __cls_m_List_length 2478
 this -20 8 0 ?
-r 12 8 0 ?
-n 20 4 0 integer
-func SyncList.popBlocking 2430
-this -20 8 0 ?
-r 8 8 0 ?
-func SyncList.__init 2486
-this -20 8 0 ?
-func __cls_init_SyncList 2556
-this -20 8 0 ?
-func formatDouble 2586
+func __cls_m_List_remove 2495
+this -24 8 0 ?
+idx -16 4 0 integer
+func formatDouble 2527
 x -24 8 0 double
 dec -16 4 0 integer
 neg 8 4 0 boolean
@@ -387,11 +380,11 @@ sb 56 8 0 ?
 fs 80 8 0 string
 pad 88 4 0 integer
 k 92 4 0 integer
-func doubleToString 2899
+func doubleToString 2840
 x -20 8 0 double
 s 8 8 0 string
 stop 16 4 0 integer
-func longToString 3039
+func longToString 2980
 x -20 8 0 long
 neg 8 4 0 boolean
 v 12 8 0 long
@@ -400,7 +393,7 @@ nd 28 4 0 integer
 d 32 4 0 integer
 sb 36 8 0 ?
 i 60 4 0 integer
-func __strconcat 3280
+func __strconcat 3221
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -1,0 +1,59 @@
+// SyncXMod.bp — #451: la SyncList vive en Collections y su base List en Core,
+// asi que su `super.add(...)` CRUZA DE MODULO. Esto comprueba que sigue
+// haciendo lo suyo.
+//
+// Por que no basta con «compila y suma»: lo que se movio fue el sitio de la
+// clase, y lo que podria romperse en silencio es el CERROJO. Una lista sin
+// candado no falla al usarla — falla cuando dos hilos la tocan a la vez, y a
+// veces. Por eso aqui hay hilos de verdad y muchas vueltas.
+//
+// Si el super cross-module estuviera roto, esto no compilaria (era el sintoma
+// de ayer). Si el cerrojo se hubiera perdido, el total saldria MENOR que el
+// esperado, y de forma intermitente.
+module SyncXMod
+
+  public const HILOS:   integer := 4
+  public const VUELTAS: integer := 250
+
+  public class Metedor extends Thread
+    var lista: SyncList
+    public function Metedor(l: SyncList)
+      super(0)
+      this.lista := l
+    end Metedor
+    public function run()
+      var i: integer := 0
+      while i < VUELTAS do
+        this.lista.add(i)        // sobrecarga heredada -> add(Object) con lock
+        i := i + 1
+      endwh
+    end run
+  end Metedor
+
+  function Main()
+    var l: SyncList := SyncList()
+    var t0: Metedor := Metedor(l)
+    var t1: Metedor := Metedor(l)
+    var t2: Metedor := Metedor(l)
+    var t3: Metedor := Metedor(l)
+    t0.start()
+    t1.start()
+    t2.start()
+    t3.start()
+    t0.join()
+    t1.join()
+    t2.join()
+    t3.join()
+
+    var esperado: integer := HILOS * VUELTAS
+    print "esperado: " + esperado
+    print "obtenido: " + l.length()
+    if l.length() == esperado then
+      print "cerrojo : OK"
+    else
+      print "cerrojo : PERDIDO (faltan " + (esperado - l.length()) + ")"
+    endif
+    print "fin"
+  end Main
+
+end SyncXMod

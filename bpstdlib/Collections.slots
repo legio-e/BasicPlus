@@ -1,5 +1,6 @@
 {
   "Comparable": {  },
+  "SyncList": { "add": 2, "get": 8, "set": 9, "length": 10, "remove": 11, "pop": 12, "popBlocking": 13 },
   "OwnerList": { "removeAndFree": 12 },
   "RuntimeError": {  },
   "StringComparator": { "compare": 2 },

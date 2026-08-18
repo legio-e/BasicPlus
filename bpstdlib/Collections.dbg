@@ -3,85 +3,117 @@ module Collections
 source C:\lenguajes\pm\bpstdlib\Collections.bp
 lines
 394 34
-459 44
-470 45
-481 46
-504 41
-564 60
-577 61
-600 57
-660 94
-671 95
-691 87
-749 119
-759 120
-767 121
-777 122
-796 128
-799 129
-811 130
-821 131
-830 132
-843 133
-859 134
-868 135
-882 137
-891 138
-902 140
-910 143
-929 148
-942 149
-955 150
-967 151
-977 152
-1001 153
-1025 154
-1033 156
-1048 157
-1069 162
-1079 163
-1089 164
-1099 165
-1115 170
-1125 171
-1136 172
-1145 173
-1165 175
-1184 177
-1200 182
-1210 183
-1221 184
-1226 185
-1235 186
-1253 188
-1263 189
-1282 193
-1292 194
-1305 195
-1315 196
-1331 201
-1341 202
-1352 203
-1355 204
-1364 205
-1376 206
-1388 207
-1396 209
-1406 210
-1422 222
-1432 223
-1445 224
-1455 225
-1474 229
-1484 230
-1497 231
-1507 232
-1526 110
-1534 111
-1542 112
-1566 113
-1656 246
-1691 251
+482 44
+493 45
+504 46
+527 41
+610 60
+623 61
+646 57
+729 106
+739 107
+750 108
+766 112
+776 113
+787 114
+797 115
+816 119
+826 120
+839 121
+855 125
+865 126
+873 127
+883 128
+899 132
+909 133
+919 134
+935 139
+945 140
+950 141
+958 142
+967 143
+980 144
+997 146
+1007 147
+1026 154
+1035 155
+1046 156
+1052 157
+1063 159
+1082 97
+1090 98
+1292 180
+1303 181
+1323 173
+1397 205
+1407 206
+1415 207
+1425 208
+1444 214
+1447 215
+1459 216
+1469 217
+1478 218
+1491 219
+1507 220
+1516 221
+1530 223
+1539 224
+1550 226
+1558 229
+1577 234
+1590 235
+1603 236
+1615 237
+1625 238
+1649 239
+1673 240
+1681 242
+1696 243
+1717 248
+1727 249
+1737 250
+1747 251
+1763 256
+1773 257
+1784 258
+1793 259
+1813 261
+1832 263
+1848 268
+1858 269
+1869 270
+1874 271
+1883 272
+1901 274
+1911 275
+1930 279
+1940 280
+1953 281
+1963 282
+1979 287
+1989 288
+2000 289
+2003 290
+2012 291
+2024 292
+2036 293
+2044 295
+2054 296
+2070 308
+2080 309
+2093 310
+2103 311
+2122 315
+2132 316
+2145 317
+2155 318
+2174 196
+2182 197
+2190 198
+2214 199
+2467 332
+2502 337
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -128,37 +160,99 @@ func Comparator.__init 406
 this -20 8 0 ?
 func __cls_init_Comparator 442
 this -20 8 0 ?
-func StringComparator.compare 456
+func __cls_m_Comparator_compare 456
+this -36 8 0 ?
+a -28 8 0 ref
+b -20 8 0 ref
+func StringComparator.compare 479
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 sa 4 8 0 string
 sb 12 8 0 string
-func StringComparator.__init 501
+func StringComparator.__init 524
 this -20 8 0 ?
-func __cls_init_StringComparator 547
+func __cls_init_StringComparator 570
 this -20 8 0 ?
-func NaturalComparator.compare 561
+func __cls_m_StringComparator_compare 584
+this -36 8 0 ?
+a -28 8 0 ref
+b -20 8 0 ref
+func NaturalComparator.compare 607
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 ca 4 8 0 ?
-func NaturalComparator.__init 597
+func NaturalComparator.__init 643
 this -20 8 0 ?
-func __cls_init_NaturalComparator 643
+func __cls_init_NaturalComparator 689
 this -20 8 0 ?
-func OwnerList.removeAndFree 657
+func __cls_m_NaturalComparator_compare 703
+this -36 8 0 ?
+a -28 8 0 ref
+b -20 8 0 ref
+func SyncList.add 726
+this -28 8 0 ?
+o -20 8 0 ref
+func SyncList.get 763
+this -24 8 0 ?
+idx -16 4 0 integer
+r 12 8 0 ?
+func SyncList.set 813
+this -32 8 0 ?
+idx -24 4 0 integer
+o -20 8 0 ref
+func SyncList.length 852
+this -20 8 0 ?
+n 8 4 0 integer
+func SyncList.remove 896
+this -24 8 0 ?
+idx -16 4 0 integer
+func SyncList.pop 932
+this -20 8 0 ?
+r 12 8 0 ?
+n 20 4 0 integer
+func SyncList.popBlocking 1023
+this -20 8 0 ?
+r 8 8 0 ?
+func SyncList.__init 1079
+this -20 8 0 ?
+func __cls_init_SyncList 1147
+this -20 8 0 ?
+func __cls_m_SyncList_add 1161
+this -28 8 0 ?
+o -20 8 0 ref
+func __cls_m_SyncList_pop 1178
+this -20 8 0 ?
+func __cls_m_SyncList_popBlocking 1197
+this -20 8 0 ?
+func __cls_m_SyncList_set 1216
+this -32 8 0 ?
+idx -24 4 0 integer
+o -20 8 0 ref
+func __cls_m_SyncList_get 1235
+this -24 8 0 ?
+idx -16 4 0 integer
+func __cls_m_SyncList_length 1256
+this -20 8 0 ?
+func __cls_m_SyncList_remove 1273
+this -24 8 0 ?
+idx -16 4 0 integer
+func OwnerList.removeAndFree 1289
 this -24 8 0 ?
 idx -16 4 0 integer
 muerto 0 8 0 ?
-func OwnerList.__init 688
+func OwnerList.__init 1320
 this -20 8 0 ?
-func __cls_init_OwnerList 732
+func __cls_init_OwnerList 1364
 this -20 8 0 ?
-func Map.withComparator 746
+func __cls_m_OwnerList_removeAndFree 1378
+this -24 8 0 ?
+idx -16 4 0 integer
+func Map.withComparator 1394
 this -28 8 0 ?
 c -20 8 0 ref
-func Map.bsearch 793
+func Map.bsearch 1441
 this -28 8 0 ?
 key -20 8 0 ref
 lo 4 4 0 integer
@@ -166,47 +260,71 @@ hi 8 4 0 integer
 mid 12 4 0 integer
 midKey 16 8 0 ?
 c 24 4 0 integer
-func Map.insertAt 926
+func Map.insertAt 1574
 this -40 8 0 ?
 ip -32 4 0 integer
 key -28 8 0 ref
 val -20 8 0 ref
 i 4 4 0 integer
-func Map.size 1066
+func Map.size 1714
 this -20 8 0 ?
 n 8 4 0 integer
-func Map.put 1112
+func Map.put 1760
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
 idx 4 4 0 integer
-func Map.get 1197
+func Map.get 1845
 this -28 8 0 ?
 key -20 8 0 ref
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 1279
+func Map.containsKey 1927
 this -28 8 0 ?
 key -20 8 0 ref
 found 8 4 0 boolean
-func Map.remove 1328
+func Map.remove 1976
 this -28 8 0 ?
 key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 1419
+func Map.keyAt 2067
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 1471
+func Map.valueAt 2119
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 1523
+func Map.__init 2171
 this -20 8 0 ?
-func __cls_init_Map 1623
+func __cls_init_Map 2271
 this -20 8 0 ?
-func __strconcat 1745
+func __cls_m_Map_keyAt 2285
+this -24 8 0 ?
+i -16 4 0 integer
+func __cls_m_Map_containsKey 2306
+this -28 8 0 ?
+key -20 8 0 ref
+func __cls_m_Map_valueAt 2326
+this -24 8 0 ?
+i -16 4 0 integer
+func __cls_m_Map_withComparator 2347
+this -28 8 0 ?
+c -20 8 0 ref
+func __cls_m_Map_put 2369
+this -36 8 0 ?
+key -28 8 0 ref
+val -20 8 0 ref
+func __cls_m_Map_remove 2389
+this -28 8 0 ?
+key -20 8 0 ref
+func __cls_m_Map_size 2409
+this -20 8 0 ?
+func __cls_m_Map_get 2426
+this -28 8 0 ?
+key -20 8 0 ref
+func __strconcat 2556
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

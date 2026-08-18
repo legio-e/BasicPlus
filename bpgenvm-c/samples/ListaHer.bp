@@ -14,8 +14,6 @@
 // «Sub», la delegacion despacha por vtable y la respuesta es que SI.
 module ListaHer
 
-  import Collections
-
   public class Base
     var marca: string
     var ultimo: integer
@@ -27,13 +25,13 @@ module ListaHer
     // La que la subclase reescribira.
     public function add(o: Object)
       this.marca := "Base"
-      var i: Collections.Integer := Collections.Integer(o)
+      var i: Integer := Integer(o)
       this.ultimo := i.value()
     end add
 
     // La sobrecarga: envuelve y DELEGA. Esta no se reescribe.
     public function add(i: integer)
-      this.add(Collections.Integer(i))
+      this.add(Integer(i))
     end add
 
     // Los campos son PROTEGIDOS por defecto (modelo de #390), asi que se leen
@@ -54,7 +52,7 @@ module ListaHer
     // con lock.
     public function add(o: Object)
       this.marca := "Sub"
-      var i: Collections.Integer := Collections.Integer(o)
+      var i: Integer := Integer(o)
       this.ultimo := i.value() * 10
     end add
   end Sub

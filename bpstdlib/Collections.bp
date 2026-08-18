@@ -75,6 +75,92 @@ module Collections
   // `List` vive en Core (es tipo basico y el Map de aqui la usa); estas dos
   // son de colecciones y se quedan en su sitio.
   // -------------------------------------------------------------
+  // #451 — SyncList, ya en su sitio.
+  //
+  // Estuvo un rato en Core porque sus metodos con cerrojo llaman a
+  // `super.add(...)`, y un super cross-module no se podia hacer: un modulo
+  // NO exportaba sus metodos, solo se llegaba a ellos por vtable.
+  //
+  // Lo desatasco una observacion de Eduardo: «si declaras una clase que
+  // hereda de otra, aunque no lo escribas, se hace la llamada al constructor
+  // de super». Esa SI cruzaba — porque el ctor tiene una factoria exportada,
+  // `__cls_init_<Cls>`. Ahora los metodos tienen la suya
+  // (`__cls_m_<Cls>_<metodo>`) y esto vive donde debe.
+  // -------------------------------------------------------------
+
+  // Lista con cerrojo: cada operacion es atomica de por si. NO hace atomica
+  // una SECUENCIA de operaciones — para eso, un Mutex del llamante.
+  public class SyncList extends Core.List
+    var mtx: Mutex
+
+    public function SyncList()
+      super()
+      this.mtx := Mutex()
+    end SyncList
+
+    // Las cinco con cerrojo. Ojo: SOLO se redefine add(Object) — las
+    // sobrecargas add(integer/long/...) se heredan de List y delegan en
+    // `this.add(o)`, que despacha por vtable y acaba AQUI, con el cerrojo
+    // puesto (medido en samples/ListaHer.bp).
+    public function add(o: Object)
+      this.mtx.lock()
+      super.add(o)
+      this.mtx.unlock()
+    end add
+
+    public function get(idx: integer): Object
+      this.mtx.lock()
+      var r: Object := super.get(idx)
+      this.mtx.unlock()
+      return r
+    end get
+
+    public function set(idx: integer, o: Object)
+      this.mtx.lock()
+      super.set(idx, o)
+      this.mtx.unlock()
+    end set
+
+    public function length(): integer
+      this.mtx.lock()
+      var n: integer := super.length()
+      this.mtx.unlock()
+      return n
+    end length
+
+    public function remove(idx: integer)
+      this.mtx.lock()
+      super.remove(idx)
+      this.mtx.unlock()
+    end remove
+
+    // Propio de SyncList: sacar el ultimo de forma atomica (cola LIFO).
+    public function pop(): Object
+      this.mtx.lock()
+      var r: Object := null
+      var n: integer := super.length()
+      if n > 0 then
+        r := super.get(n - 1)
+        super.remove(n - 1)
+      endif
+      this.mtx.unlock()
+      return r
+    end pop
+
+    // Espera hasta que haya algo. El sleep(1) cede el turno: un spin a secas
+    // se comeria el nucleo y, en el planificador propio, podria no dejar
+    // avanzar al que tiene que meter el dato.
+    public function popBlocking(): Object
+      var r: Object := this.pop()
+      while r == null do
+        sleep(1)
+        r := this.pop()
+      endwh
+      return r
+    end popBlocking
+  end SyncList
+
+  // -------------------------------------------------------------
 
   // Lista PROPIETARIA: al liberarla se liberan tambien sus elementos. Eso lo
   // hace el `var owner` del campo, que marca el bit del descriptor y la VM
