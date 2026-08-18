@@ -905,6 +905,34 @@ decidirá si basta subirlos.)*
 
 ### Lenguaje y VM
 
+- ~~`#447`~~ — ✅ **CERRADA el 18-ago** (`compat` 35 PASS): **convertir un `Object` a LA
+  PROPIA CLASE, desde dentro de un método suyo, reventaba el compilador.**
+  ```
+  public function comparar(other: Object): integer
+    var o: Cosa := Cosa(other)      ← RuntimeException: «Clase 'Cosa' no declarada»
+  ```
+  📐 **Causa**: el descriptor de una clase se registra en `endClass()` —su tamaño
+  depende del número de métodos—, así que mientras se emiten SUS métodos el
+  símbolo todavía no existe.
+  🩸 **Lo grave no es el crash, es lo que tapaba**: eso es exactamente lo que hace
+  el `compareTo` de los envoltorios (`var o: Integer := Integer(other)`), o sea que
+  **`Collections.bp` llevaba sin poder recompilarse desde #389** (16-ago) y nadie se
+  había enterado — porque su `.mod` ya estaba hecho. Un artefacto rancio tapando que
+  el fuente ya no compila, que es la quinta mordedura de esa familia en el
+  proyecto. Se descubrió de rebote, al mover los envoltorios a `Core`.
+  ✅ **Arreglo**: aplazar el operando (placeholder 0 + fixup) y parchearlo al
+  cerrar el módulo, junto a los saltos, cuando ya están todos los descriptores.
+  🧪 `bpgenvm-c/samples/CastSelf.bp`, en el corpus. Lleva el gemelo *desde fuera de
+  la clase* como control —ese camino ya funcionaba— y un cast que TIENE que
+  lanzar, para que el aplazamiento no se coma la comprobación.
+  🔁 Y la verificación que de verdad lo cierra: **la stdlib entera se reconstruye
+  sin errores**, cosa que antes de esto era imposible.
+  ⚠️ De paso, una trampa de build anotada: el fat-jar del frontend **empaqueta su
+  copia de miVM**, así que tocar `ModWriter` y hacer `install` sin `clean` deja el jar
+  con la versión vieja — el error seguía saliendo con el arreglo ya escrito, y los
+  números de línea de la traza no cuadraban con el fuente. Es la trampa del
+  fat-jar del IDE, un piso más abajo.
+
 - ~~`#443`~~ — ✅ **CERRADA el 18-ago** (`compat` 31 PASS): **`newObjArray(n)` y
   `growObjArray(a, n)`**, los allocators públicos de arrays de REFERENCIAS.
   Hasta hoy sólo estaba `__newRefArray`, interno y **mintiendo en su tipo** (declaraba

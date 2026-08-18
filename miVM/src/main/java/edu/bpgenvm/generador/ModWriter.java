@@ -188,6 +188,18 @@ public class ModWriter {
 
     private final List<JumpFixup> pendingJumps = new ArrayList<>();
 
+    /** #447 — CHECKCAST a la clase que se esta emitiendo AHORA MISMO.
+     *  El descriptor se registra en endClass() (su tamano depende del numero de
+     *  metodos), asi que mientras se emiten los metodos de `Cosa` todavia no
+     *  existe el simbolo "Cosa" — y `Cosa(o)` dentro de un metodo suyo tiraba
+     *  el compilador. Se aplaza: placeholder 0 y se parcha al final, junto a
+     *  los saltos, cuando ya estan todos los descriptores. */
+    private static class SelfCastFixup {
+        final int codeOff; final String className;
+        SelfCastFixup(int codeOff, String className) { this.codeOff = codeOff; this.className = className; }
+    }
+    private final List<SelfCastFixup> pendingSelfCasts = new ArrayList<>();
+
     public static class CallFixup {
         String targetFunction;
         int bytecodeIndex;
@@ -1593,11 +1605,24 @@ public class ModWriter {
      *  `nameSym` es el literal internado con el nombre (para el mensaje). */
     public void emitCheckCast(String className, String nameSym) throws IOException {
         Integer clsOff = dataSymbolOffset.get(className);
-        if (clsOff == null) throw new RuntimeException("Clase '" + className + "' no declarada para CHECKCAST");
+        /* #447 — si la clase se esta emitiendo AHORA, su descriptor aun no
+         * existe (se registra en endClass, porque su tamano depende del numero
+         * de metodos). Eso pasa en cuanto una clase se convierte a si misma
+         * dentro de un metodo suyo — `Integer.compareTo` de la stdlib, sin ir
+         * mas lejos, que dejo Collections.bp sin poder recompilarse desde #389
+         * sin que nadie lo notara (su .mod ya estaba hecho).
+         * Se aplaza el operando en vez de reventar. */
+        boolean aplazado = false;
+        if (clsOff == null && classes.containsKey(className)) {
+            pendingSelfCasts.add(new SelfCastFixup(currentBytecodeSize + 1, className));
+            aplazado = true;
+        } else if (clsOff == null) {
+            throw new RuntimeException("Clase '" + className + "' no declarada para CHECKCAST");
+        }
         Integer nameOff = dataSymbolOffset.get(nameSym);
         if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST");
         codeOut.writeByte(OpCode.CHECKCAST.code);
-        codeOut.writeShort(clsOff.shortValue());
+        codeOut.writeShort(aplazado ? 0 : clsOff.shortValue());
         codeOut.writeShort(nameOff.shortValue());
         currentBytecodeSize += 5;
     }
@@ -1939,6 +1964,17 @@ public class ModWriter {
             rawCode[idx + 1] = (byte) ((relativeAddr >> 16) & 0xFF);
             rawCode[idx + 2] = (byte) ((relativeAddr >> 8)  & 0xFF);
             rawCode[idx + 3] = (byte) ( relativeAddr        & 0xFF);
+        }
+
+        /* #447 — los CHECKCAST aplazados: ahora SI estan todos los descriptores. */
+        for (SelfCastFixup fx : pendingSelfCasts) {
+            Integer off = dataSymbolOffset.get(fx.className);
+            if (off == null) {
+                throw new RuntimeException("Clase '" + fx.className
+                        + "' sigue sin descriptor al cerrar el modulo (CHECKCAST aplazado)");
+            }
+            rawCode[fx.codeOff]     = (byte) ((off >> 8) & 0xFF);
+            rawCode[fx.codeOff + 1] = (byte) ( off       & 0xFF);
         }
 
         for (JumpFixup fixup : pendingJumps) {

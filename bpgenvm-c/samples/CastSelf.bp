@@ -1,0 +1,62 @@
+// CastSelf.bp — #447: convertir un Object a LA PROPIA CLASE, desde dentro de
+// un metodo suyo.
+//
+// El descriptor de una clase se registra en `endClass()` —su tamano depende
+// del numero de metodos—, asi que mientras se emiten SUS metodos el simbolo
+// todavia no existe. `Cosa(o)` dentro de un metodo de `Cosa` tiraba el
+// compilador con una traza de Java.
+//
+// No es un caso rebuscado: es exactamente lo que hace `compareTo` de los
+// envoltorios de la stdlib (`var o: Integer := Integer(other)`). Consecuencia
+// medida el 18-ago: **Collections.bp llevaba sin poder recompilarse desde
+// #389** (16-ago) y nadie se habia enterado, porque su .mod ya estaba hecho.
+// Un artefacto rancio tapando que el fuente ya no compila.
+//
+// El arreglo aplaza el operando y lo parchea al cerrar el modulo, junto a los
+// saltos, cuando ya estan todos los descriptores.
+module CastSelf
+
+  public class Cosa
+    var v: integer
+    public function Cosa(x: integer)
+      this.v := x
+    end Cosa
+    // El caso: baja un Object a Cosa DENTRO de Cosa.
+    public function comparar(other: Object): integer
+      var o: Cosa := Cosa(other)
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end comparar
+  end Cosa
+
+  // El gemelo: la misma conversion desde FUERA de la clase. Ese camino ya
+  // funcionaba, y esta aqui de control: si los dos fallaran, el roto seria el
+  // chequeo entero y no el aplazamiento.
+  function desdeFuera(o: Object): integer
+    var c: Cosa := Cosa(o)
+    return c.comparar(Cosa(0))
+  end desdeFuera
+
+  function Main()
+    var a: Cosa := Cosa(5)
+    print "menor  : " + a.comparar(Cosa(9))
+    print "mayor  : " + a.comparar(Cosa(1))
+    print "igual  : " + a.comparar(Cosa(5))
+    print "control: " + desdeFuera(Cosa(7))
+
+    // Y que el chequeo SIGA comprobando: bajar algo que no es una Cosa lanza.
+    try
+      var mal: integer := desdeFuera("no soy una Cosa")
+      print "MAL: no lanzo, devolvio " + mal
+    catch e: RuntimeError
+      print "lanza : " + e.msg
+    endtry
+    print "fin"
+  end Main
+
+end CastSelf
