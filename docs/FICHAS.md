@@ -1740,11 +1740,25 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   **B.** Dar al P4 una segunda partición (`bppacks` abajo, `bpdata` arriba sólo
   FS). No toca a las otras, pero el firmware busca UNA partición y la reparte él:
   hay que enseñarle a usar dos.
-  ⚠️ **Y MIENTRAS TANTO, lo que hay que decidir para V5**: con `bpdata` a 32 MB
-  los packs **no mapean nunca** (su tramo acaba siempre al final de `bpdata`), o
-  sea que el P4 se queda **sin packs ni SQLite** — lo que cerró H7. Volver a 16 MB
-  es un revert de una línea del `.csv` y los packs vuelven, a cambio de dejar
-  media flash sin usar.
+  ✅ **PROBADO EN PLACA el 18-ago y DECIDIDO: se vuelve a 16 MB en V5.** Eduardo:
+  *«se prueba y se decide… tampoco cuesta tanto probarlo»* — y con razón, porque yo
+  ya había fallado una vez con esto (dije que era el TAMAÑO y su prueba con 6.528 KB
+  lo desmintió). Así que en vez de discutir con el fuente del IDF, se instrumentó el
+  arranque para que lo dijera la placa, y lo dijo:
+  ```
+  pack: fisica 0x19a0000..0x2000000 (26240..32768 KB) | limite del cache 24 bits
+        = 0x1000000 (16384 KB)  <<< EMPIEZA POR ENCIMA  <<< ACABA POR ENCIMA
+  ```
+  Los dos extremos fuera. Con `bpdata` a 32 MB los packs **no mapean nunca**, así que
+  el P4 se quedaría sin packs ni SQLite (lo que cerró H7) — y por el criterio del
+  propio Eduardo (*«si funciona se queda así»*) se revierte.
+  📌 Lo que SÍ se queda: la línea de diagnóstico. Cualquiera que mueva las
+  particiones verá al arrancar si se ha salido del rango mapeable, en vez de un
+  `err=258` que no explica nada.
+  ⚠️ Al volver a 16 MB, **el ENV tiene que caber**: si quedó en FS=20.000 KB, el
+  arranque se queda DEGRADADO (lo dice, no es un ladrillo). El valor que funcionaba
+  era **FS = 7.344 KB**, que deja 2.800 para packs.
+
 
 - **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
   (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
