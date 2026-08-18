@@ -1062,7 +1062,7 @@ public final class PicoExplorer extends JPanel {
                 boolean depMdnStale = depMdn != null && depMdn.isFile() && mdnIsStale(depMdn, dep);
                 if (depMdnStale && outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(
-                            "[Explorer] AOT " + depMdn.getName() + " es MÁS VIEJO que su .mod"
+                            "[Explorer] AOT " + depMdn.getName() + " " + motivoMdnRancio(depMdn, dep)
                             + " — NO se sube (regenéralo activando AOT en el proyecto)"));
                 }
                 if (depMdn != null && depMdn.isFile() && !depMdnStale) {
@@ -1112,7 +1112,7 @@ public final class PicoExplorer extends JPanel {
             boolean mdnStale = mdnFile != null && mdnFile.isFile() && mdnIsStale(mdnFile, modFile);
             if (mdnStale && outputSink != null) {
                 SwingUtilities.invokeLater(() -> outputSink.accept(
-                        "[Explorer] AOT " + mdnFile.getName() + " es MÁS VIEJO que su .mod"
+                        "[Explorer] AOT " + mdnFile.getName() + " " + motivoMdnRancio(mdnFile, modFile)
                         + " — NO se sube (regenéralo activando AOT en el proyecto)"));
             }
             if (mdnFile != null && mdnFile.isFile() && !mdnStale) {
@@ -1236,8 +1236,51 @@ public final class PicoExplorer extends JPanel {
      * La VM tiene además su propio gate de ABI, que rechaza el `.mdn`
      * incompatible aunque llegue. Dos redes independientes, a propósito.
      */
-    private static boolean mdnIsStale(File mdnFile, File modFile) {
-        return mdnFile.lastModified() < modFile.lastModified();
+    /** #441 — POR QUÉ está rancio, que no es lo mismo dicho de dos formas: si la
+     *  causa es la arquitectura, decir «es más viejo que su .mod» es MENTIRA y
+     *  manda a mirar fechas que están bien. */
+    private String motivoMdnRancio(File mdnFile, File modFile) {
+        if (mdnFile.lastModified() < modFile.lastModified()) {
+            return "es MÁS VIEJO que su .mod";
+        }
+        int suyo = mdnArchOf(mdnFile);
+        return "es de otra ARQUITECTURA (" + archName(suyo) + ", y la placa es "
+             + archName(deviceArch) + ")";
+    }
+
+    private boolean mdnIsStale(File mdnFile, File modFile) {
+        if (mdnFile.lastModified() < modFile.lastModified()) return true;
+        /* #441 — y la ARQUITECTURA, no sólo la fecha. Un `.mdn` de otra ISA es
+         * más viejo en el sentido que importa aunque su fecha sea nueva: la
+         * cabecera ya la lleva (`arch` = e_machine del ELF) y la placa dice la
+         * suya en el INFO, pero NADIE las comparaba — así que el IDE lo subía
+         * tan contento y el gate del loader lo rechazaba ya en la placa.
+         * Comparar aquí convierte un fallo remoto en un "regenéralo" local. */
+        int suyo = mdnArchOf(mdnFile);
+        return suyo != 0 && deviceArch != 0 && suyo != deviceArch;
+    }
+
+    /** #441 — la `arch` del header de un `.mdn` (0 = no se pudo leer o legacy).
+     *  Layout (ver `bpgenvm-c/src/mdn_format.h`): magic[4] · version u16 ·
+     *  abi_version u16 · code_size u32 · sym_count u32 · **arch u32** → offset 16.
+     *
+     *  LITTLE-endian, y esto no es un detalle: el `.mod` va en big-endian y dar
+     *  por hecho que el `.mdn` también lo hace devuelve 0x28000000 en vez de 40.
+     *  Se vio en el volcado de un `.mdn` real (`xxd`), no leyendo el struct. */
+    public static int mdnArchOf(File f) {
+        try (java.io.DataInputStream in = new java.io.DataInputStream(
+                new java.io.BufferedInputStream(new java.io.FileInputStream(f)))) {
+            byte[] magic = new byte[4];
+            in.readFully(magic);
+            if (magic[0] != 'M' || magic[1] != 'D' || magic[2] != 'N') return 0;
+            in.skipBytes(12);          /* version+abi (4) + code_size (4) + sym_count (4) */
+            byte[] le = new byte[4];
+            in.readFully(le);
+            return java.nio.ByteBuffer.wrap(le)
+                     .order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt();
+        } catch (Exception e) {
+            return 0;                  /* ilegible → que decida la fecha, como antes */
+        }
     }
 
     /* ===== H10 — micro simulado: arranque, parada y configuración ===== */
