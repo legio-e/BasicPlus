@@ -1502,6 +1502,13 @@ int main(void) {
     /* Log persistente: carga el snapshot anterior antes de pisarlo con
      * mensajes del boot actual. */
     log_init();
+    /* #439 — y que DIGA de dónde salió lo que trae. Leer una autopsia sin saber
+     * si son las líneas de antes del cuelgue o las del arranque anterior es
+     * exactamente el error que la ficha vino a quitar: la primera vez que el
+     * log del P4 fallo, costo una vuelta entera de hipotesis. */
+    log_printf(bpvm_log_origen_ram()
+               ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
+               : "log: arranque en frio (cargado de flash)");
     /* #353 — y en cuanto hay log, se le desvía lo que dice la VM. En la Pico
      * NO es cosmético: el `_write` del SDK manda stderr al MISMO USB CDC que el
      * wire, y a diferencia de wire_v1_send_line no coge el mutex TX → podía

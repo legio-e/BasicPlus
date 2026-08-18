@@ -73,4 +73,10 @@ uint32_t log_total_bytes(void);
 }
 #endif
 
+/* #439 — 1 si lo cargado viene de la RAM que sobrevivio al reset (o sea, las
+ * lineas de ANTES del cuelgue); 0 si se cargo de flash en un arranque en
+ * frio. Lo dice el banner de arranque: una autopsia que no sabe de cuando es
+ * manda la depuracion al sitio equivocado. */
+int bpvm_log_origen_ram(void);
+
 #endif /* BPVM_PICO_LOG_H */

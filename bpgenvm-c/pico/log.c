@@ -60,7 +60,29 @@ typedef struct {
  * ANILLO por líneas: si se llena, se tiran las ANTIGUAS para dejar sitio a las
  * nuevas (ver append_raw). Lo que se conserva es la COLA, que es lo que sirve
  * en un post-mortem. */
-static uint8_t s_region[LOG_REGION_BYTES] __attribute__((aligned(4)));
+/* #439 — LA REGIÓN VIVE EN RAM QUE SOBREVIVE AL RESET.
+ *
+ * Antes era un `static` normal, o sea `.bss`, y el arranque la pone a CERO en
+ * cada reset. Por eso un cuelgue dejaba la autopsia ciega: en flash sólo estaba
+ * lo del último `log_flush()` —puntos fijos— y la RAM se borraba al resetear.
+ * Eduardo, 18-ago: *«un log que no registra es una herramienta inútil, ya lo
+ * sufrimos ayer»*.
+ *
+ * `__uninitialized_ram` la pone en `.uninitialized_data`, que el crt0 NO toca
+ * (ver el linker script del SDK: la sección es NOLOAD). La idea es suya —«había
+ * una zona de RAM que se mantenía, igual se puede utilizar de pequeña caché
+ * para no tener que grabar todo cada vez en la flash»— y es MUCHO mejor que
+ * escribir a flash por línea: cero desgaste y cero coste.
+ *
+ * Y no es un truco de la casa: el propio SDK lo usa igual para detectar el
+ * doble reset (`pico_bootsel_via_double_reset`), token mágico incluido — que es
+ * lo que distingue «el log de antes del cuelgue» de la basura del arranque en
+ * frío. Aquí el token ya lo tenemos: la CABECERA vive dentro de la región.
+ *
+ * ⚠️ Sobrevive al RESET, no al corte de alimentación. Por eso el flush a flash
+ * se queda donde estaba: es la red para cuando se va la luz. */
+static uint8_t __uninitialized_ram(bplog_region)[LOG_REGION_BYTES] __attribute__((aligned(4)));
+#define s_region bplog_region
 #define s_buf ((char*) (s_region + sizeof(log_header_t)))
 static uint32_t s_used;
 static int      s_initialized = 0;
@@ -78,6 +100,18 @@ static int      s_initialized = 0;
  * Ahora se tiran líneas ENTERAS del principio hasta que quepa lo nuevo, y el
  * volcado lo DICE. */
 static int s_dropped = 0;
+
+/* #439 — la cabecera, al día EN RAM. Antes sólo se escribía dentro de
+ * `log_flush`; ahora es lo que hace que la región sobreviviente se reconozca a
+ * sí misma tras un reset, así que se actualiza en cada línea. Son tres words:
+ * gratis comparado con lo que costaba antes NO tenerlas. */
+static void hdr_sync(void) {
+    /* `reserved` lleva el contador del anillo: `s_dropped` vive en .bss y el
+     * reset lo pone a 0, asi que sin esto la autopsia diria que no falta nada
+     * cuando SI faltan lineas — la mentira que #433 vino a quitar. */
+    log_header_t hdr = { LOG_MAGIC, LOG_VERSION, s_used, s_dropped };
+    memcpy(s_region, &hdr, sizeof(hdr));
+}
 
 static void append_raw(const char* str, size_t n) {
     if (n > LOG_DATA_BYTES) n = LOG_DATA_BYTES;   /* línea absurda: recorta */
@@ -97,12 +131,46 @@ static void append_raw(const char* str, size_t n) {
     s_used += n;
 }
 
+/* #439 — ¿la región de RAM trae un log VÁLIDO de antes del reset? En arranque
+ * en frío contiene basura, así que se exige la misma cabecera que en flash:
+ * magic + version + un size que quepa. Es el mismo criterio que usa el SDK con
+ * su token de doble reset. */
+static int ram_superviviente(uint32_t* size_out) {
+    log_header_t hdr;
+    memcpy(&hdr, s_region, sizeof(hdr));
+    if (hdr.magic != LOG_MAGIC) return 0;
+    if (hdr.version != LOG_VERSION) return 0;
+    if (hdr.size > LOG_DATA_BYTES) return 0;
+    *size_out = hdr.size;
+    return 1;
+}
+
+/* #439 — de dónde salió lo que hay cargado. Lo consulta el volcado: leer una
+ * autopsia sin saber si son las líneas de ANTES del cuelgue o las del arranque
+ * anterior es justo el error que esta ficha viene a quitar. */
+static int s_origen_ram = 0;
+int bpvm_log_origen_ram(void) { return s_origen_ram; }
+
 void log_init(void) {
+    /* La RAM manda: si sobrevivió, es MÁS RECIENTE que el flash (que sólo tiene
+     * hasta el último flush). Ese es todo el arreglo. */
+    uint32_t vivo = 0;
+    if (ram_superviviente(&vivo)) {
+        log_header_t hdr;
+        memcpy(&hdr, s_region, sizeof(hdr));
+        s_used = vivo;
+        s_dropped = hdr.reserved;   /* el anillo, recuperado (ver hdr_sync) */
+        s_origen_ram = 1;
+        s_initialized = 1;
+        return;
+    }
+
     s_used = 0;
     s_dropped = 0;
+    s_origen_ram = 0;
     memset(s_buf, 0, LOG_DATA_BYTES);
 
-    /* Intenta cargar del flash. */
+    /* Arranque en frío (o región pisada): lo de flash es lo mejor que hay. */
     const uint8_t* flash_base = (const uint8_t*)(XIP_BASE + LOG_FLASH_OFFSET);
     log_header_t hdr;
     memcpy(&hdr, flash_base, sizeof(hdr));
@@ -112,6 +180,7 @@ void log_init(void) {
         memcpy(s_buf, flash_base + sizeof(hdr), hdr.size);
         s_used = hdr.size;
     }
+    hdr_sync();          /* #439 — deja la region ya reconocible desde YA */
     s_initialized = 1;
 }
 
@@ -146,7 +215,9 @@ void log_printf(const char* fmt, ...) {
         }
     }
     append_raw(line, (size_t) total);
+    hdr_sync();   /* #439 — que la region se reconozca tras un reset */
 }
+
 
 void log_flush(void) {
     if (!s_initialized) return;
@@ -177,6 +248,7 @@ void log_clear_ram(void) {
      * el aviso mentía, que es justo lo que este anillo vino a arreglar. */
     s_dropped = 0;
     if (s_initialized) memset(s_buf, 0, LOG_DATA_BYTES);
+    if (s_initialized) hdr_sync();   /* #439 — que la region refleje el vaciado */
 }
 
 void log_clear_flash(void) {
