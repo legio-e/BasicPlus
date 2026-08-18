@@ -1640,6 +1640,23 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
+- **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
+  (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
+  `.bin`…), y **el ROJO queda RESERVADO** para ficheros con algún problema.
+  Esa reserva es lo importante del encargo: si el rojo se gasta en un tipo,
+  luego no queda color para lo que de verdad hay que mirar.
+  📍 Dónde: `PicoExplorer.java:200`, el `DefaultTreeCellRenderer` del árbol, que
+  hoy ya pone el label y el icono y **no usa color para nada** — el rojo está
+  libre, así que la reserva se puede respetar desde el primer día.
+  📐 Lo que hace falta decidir al hacerlo (no ahora): qué cuenta como
+  *«problema»* para ganarse el rojo. Candidatos que el IDE **ya sabe** hoy y hoy
+  no enseña en el árbol: un `.mdn` cuya arquitectura no es la de la placa
+  (`#441`), un `.mod` de ABI incompatible (el gate de `#284`), un `/lib` rancio
+  (el chivato de `#422`) y un listado truncado (`#425`, que hoy avisa aparte).
+  Ojo con el daltonismo: el color como ÚNICO canal deja fuera a mucha gente —
+  conviene que el rojo lleve además icono o marca.
+
+
 - `#434` — **desacoplar los eventos del lazo de LVGL** (idea de Eduardo, 17-ago,
   al cerrar `#424`). Hoy un clic tiene que ATRAVESAR el lazo de BP para llegar a
   su handler: el upcall lo encola y sólo se drena entre quanta, y el único punto
