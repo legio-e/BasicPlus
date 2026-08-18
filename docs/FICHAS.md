@@ -878,8 +878,22 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
     y me extraña que no esté porque en su día lo estuvimos probando»*. Es la
     misma familia que [[censar-por-la-primitiva-no-por-el-nombre]]: un censo que
     se come casos sin decirlo es peor que no tenerlo, porque da confianza.
-- (sin número) — la **media flash del P4**: 32 MB físicos, bootloader configurado
-  para 16. Aparcado a propósito (12-ago); exige reflashear el bootloader.
+- ~~(sin número)~~ — 🟡 **HECHO en código el 18-ago; falta flashear.** La **media
+  flash del P4**: 32 MB físicos con el bootloader configurado para 16. Estaba
+  aparcado desde el 12-ago *«porque exige reflashear el bootloader»*, y Eduardo:
+  *«debería ser razonable de arreglar»*. Lo era — y **el trabajo estaba medio hecho
+  de antes**: la tabla `partitions_32m.csv` ya existía. Sólo faltaba apuntar a ella
+  y subir el tamaño (`FLASHSIZE_32MB` + `PARTITION_TABLE_CUSTOM_FILENAME`).
+  📏 **Lo que gana**: `bpdata` (FS + packs) pasa de **10.144 K a 26.528 K** — 16 MB
+  más de datos. La app se queda igual (6 MB, 79 % libre).
+  ✅ Verificado en la tabla **generada**, no en el `.csv`.
+  ⚠️ **AL FLASHEAR: bootloader + tabla + app, los tres.** El tamaño vive en la
+  cabecera del BOOTLOADER, así que reflashear sólo la app deja el límite viejo y la
+  flash de arriba **no responde: se escribe y no se guarda**. Es la trampa de #328,
+  que se manifestó como «littlefs CORRUPT».
+  🛡️ Y si pasa, ahora se ve: el guardián de `board_mgr_esp32.c` compara configurada
+  contra física y avisa — *«EL BOOTLOADER USA MENOS FLASH DE LA QUE HAY»*. Va al
+  log, que además desde hoy sobrevive al reset.
 ### Pulido (no urgente) — subidos desde `PENDIENTES` el 17-ago
 
 > Estaban en `PENDIENTES.md`, que es documentación de cara al usuario. Tienen estado de
