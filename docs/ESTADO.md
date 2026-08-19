@@ -71,6 +71,14 @@ encoge 5.789 -> 5.578 B), y `packs/Stdlib.pack` es del 15-ago, anterior al cambi
 De las 11 copias de `Str.mod` del arbol solo la de `bpstdlib/` esta en git, asi que
 esta acotado — pero es el desfase de siempre.
 
+**Y `C:	mp` vaciado**, encargo del mismo dia: **157 MB -> 0**. 146 MB eran tres
+arboles de build; los 12 MB restantes NO eran temporales (el ELF known-good de la
+Discovery, un `.bak` de `gpio_stm32`, dos experimentos con `.uf2` y 42 sondas `.bp`
+unicas) y se miraron uno a uno: superados o ya registrados, ninguno referenciado.
+📐 **El criterio de Eduardo**: *«no tiene sentido tener algo que queremos mantener en
+un directorio temporal»*. Es lo contrario del caso de `notas/` del mismo dia, y por eso
+alli se rescato y aqui no.
+
 **Pendientes de V5: 7.**
 
 

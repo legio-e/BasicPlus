@@ -1791,6 +1791,26 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
     `bigfile.bin`) y **27 `.slots`**, que además pasan a `.gitignore` para que no vuelvan.
     Los de `bpstdlib/` y `bpdevices/` **siguen versionados**: son la distribución.
 
+- ~~**Vaciar `C:	mp`**~~ — ✅ **HECHO el 19-ago** (encargo de Eduardo el mismo día).
+  **157 MB → 0.** 146 MB eran tres árboles de build sin una sola fuente dentro (el
+  `hello_world` de ESP-IDF y dos workspaces de CubeIDE). Los 12 MB restantes NO eran
+  temporales, y por eso se miraron uno a uno antes de tirarlos:
+  - `Discovery_u5g9j_knowngood_GUI.elf` (7,4 MB) — **superado**: la imagen buena de la
+    DK2 es `bpvm_stm32_dk2.bin`, y está en `dist/firmware/`, dentro del ZIP, con su
+    SHA256 y publicada. Comprobado, no supuesto.
+  - `gpio_stm32_selfconfig.bak.c` — **estrictamente anterior** al del repo: a éste le
+    faltan el `BOARD_NAME`, los callbacks board-aware de ADC/PWM y el TIM16 de la DK2.
+  - `spike_device/` (par `.uf2` ON/OFF + su `LEEME`) y `bpvm_pico_SUBNORM.uf2` —
+    imágenes de experimentos cuyas MEDIDAS ya están escritas (la del SUBNORM es la de
+    `L14` en `PENDIENTES`); los binarios se rehacen.
+  - **42 sondas `.bp`** que no existen en el repo — ninguna citada por ninguna ficha
+    (el único positivo del grep era `JFileChooser`, otra cosa).
+  📐 **El criterio es de Eduardo, y vale más que la limpieza**: *«no tiene sentido tener
+  algo que queremos mantener en un directorio temporal»*. Un directorio temporal es
+  desechable POR DEFINICIÓN; si dentro aparece algo irreemplazable, el fallo es que esté
+  ahí, no que se vaya a borrar. Lo contrario de lo que pasó con `notas/` el mismo día —
+  y por eso allí se rescató y aquí no.
+
 - 🔴 **HALLAZGO del 19-ago, y no es de limpieza: `bpstdlib/Str.{mod,dbg,slots}` llevan
   desde ayer regenerados y SIN COMMITEAR.** Los cambió `#446` (Str pasó a fachada que
   delega en Core) y por eso encoge, 5.789 → 5.578 B, que es lo esperado. Pero:
