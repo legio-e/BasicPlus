@@ -1700,6 +1700,36 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   (aviso dentro de `blk_sdmmc_p4.c:153`). Y no confundirlo con la retroiluminación,
   que es **GPIO26** por LEDC y tiene su propia polaridad por panel (`bl_invert`,
   invertida en la Waveshare) — resuelta aparte.
+### 🩸 El ORM no funcionaba — encontrado y arreglado el 19-ago al documentarlo
+
+- ~~**El ORM entero, roto**~~ — ✅ **ARREGLADO y VERIFICADO EN EJECUCION el 19-ago**
+  (`240b400d` los bugs, `7854b61f` el doble de host).
+  🩸 **Ningun demo de BD compilaba**, y `H12` iba a documentar eso. Tres causas:
+  1. **el GENERADOR emitia codigo roto** — `DaoGen` escribia `return this.uno(...)` en
+     una funcion declarada como que devuelve la entidad, y `Orm.Dao.uno()` devuelve
+     `Object` desde `#389`. Ya emite el downcast;
+  2. **`List` era ambiguo en TODO programa del ORM** — al importar `Core` el semantico
+     aliasa `List` en el modulo, y la interfaz de ese modulo la reexporta **como suya**;
+     quien importa `SQLite` y `Orm` veia dos simbolos para UNA clase. Arreglado dando
+     prioridad a `Core`, que se importa implicitamente y es donde viven los tipos raiz;
+  3. **y lo que mas costo NO era un bug**: `samples/` tenia **seis copias fosiles de la
+     stdlib del 10-11 de JUNIO**, ninguna en git, que ganaban porque se busca en
+     `sourceDir` antes que en las dependencias. El `Core` de junio no tenia `List`.
+  🩸 **Y faltaba el `packglue.c`**, que yo mismo habia borrado con `notas/`: es el doble
+  de host de la tabla BIOS, sin el cual no se puede ejecutar nada de BD en el PC.
+  Reescrito desde `bios_pico.c`, con `malloc`/`free`/`realloc` que **no funcionan**
+  igual que en la Pico — un doble mas amable que el original es una trampa.
+  🔬 **PROBADO EN EJECUCION, no solo compilando** (`make test-sqldemo`, host):
+  · `SqlDemo` — exec, execInt/Str/Double, query, consulta anidada · `status=OK`
+  · `DaoDemo` — dos DAO a mano, una conexion, CRUD entero, `Where` con encadenado y
+    `orNext`, el apostrofo escapado · `status=OK`
+  · `GenDemo` — los mismos verbos con DAO **generados** · `status=OK`
+  Los tres con **0 bloques sin liberar**, y sin una sola linea de los stubs de `malloc`:
+  SQLite tira solo de su arena, como en la placa.
+  📌 **La leccion, y es de metodo**: esto lo destapo IR A DOCUMENTARLO. Escribir «asi se
+  usa el ORM» obliga a ejecutarlo, y ejecutarlo es lo que lo encontro. Documentar antes
+  de publicar no es cortesia con el usuario: es una prueba mas.
+
 ### Cierre de V5 — lo que se hace AL CERRAR, no antes
 
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
