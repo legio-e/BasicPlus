@@ -658,16 +658,19 @@ test-rand: $(BIN)
 # La amalgama NO se copia al repo (9,5 MB): se saca del zip ya descargado, igual
 # que hace el arnés de notas/. Las opciones son las MISMAS del binario de la
 # placa, leídas de él y no supuestas.
-SQLNOTAS = ../notas/v5-sqlite-prueba
+# Las fuentes del pack de SQLite: el pegamento en C y los scripts de build.
+# Estuvieron en ../notas/v5-sqlite-prueba —fuera del arbol y fuera de git— y se
+# perdieron al limpiar el 19-ago. Ahora viven donde les toca y versionadas.
+SQLSRC = ../bpstdlib/sqlite/nativo/src
 SQLZIP   = /c/lenguajes/sqlite-amalgamation-3530400.zip
 SQLDEF   = -DSQLITE_OS_OTHER=1 -DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_MEMSYS5            -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_TEMP_STORE=3
 
 test-sqldemo: $(LIBOBJ)
 	@mkdir -p build/sql
 	@[ -f build/sql/sqlite3.c ] || unzip -o -j $(SQLZIP) "*/sqlite3.c" "*/sqlite3.h" 	    -d build/sql >/dev/null
-	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../lexer-java/target/classes;../pack/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/SQLite.bp build/sql)"; 	  exit 1; 	fi
+	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../lexer-java/target/classes;../pack/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql)"; 	  exit 1; 	fi
 	@[ -f build/sql/sqlite3.o ] || $(CC) -O1 -w -c build/sql/sqlite3.c 	    -o build/sql/sqlite3.o -Ibuild/sql $(SQLDEF)
-	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLNOTAS)/H 	    test/test_sqldemo.c build/sql/aot_SQLite.c 	    $(SQLNOTAS)/I/sqlite_shim.c $(SQLNOTAS)/I/vfs_bp.c $(SQLNOTAS)/H/packglue.c 	    build/sql/sqlite3.o $(LIBOBJ) -o build/sqldemo.exe $(LDFLAGS) $(SQLDEF)
+	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLSRC) 	    test/test_sqldemo.c build/sql/aot_SQLite.c 	    $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c $(SQLSRC)/packglue.c 	    build/sql/sqlite3.o $(LIBOBJ) -o build/sqldemo.exe $(LDFLAGS) $(SQLDEF)
 	@echo "--- V5/H4: un programa BP consultando una base de datos ---"
 	@cd build/sql && rm -f medidas.db && ../sqldemo.exe SqlDemo.mod
 
