@@ -1700,6 +1700,25 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   (aviso dentro de `blk_sdmmc_p4.c:153`). Y no confundirlo con la retroiluminación,
   que es **GPIO26** por LEDC y tiene su propia polaridad por panel (`bl_invert`,
   invertida en la Waveshare) — resuelta aparte.
+- 🔴 **La VM-C normal NO puede correr bases de datos: hace falta placa** — abierta el
+  19-ago al preguntarlo Eduardo (*«¿ahora se puede testear una consulta a una BD en la
+  VM-C? Es la que puede probar el usuario sin placa»*).
+  🩸 **Choca con la promesa del proyecto.** Los demos de BD SI corren en el PC, pero con
+  `bpgenvm-c/build/sqldemo.exe`, un binario de PRUEBAS que produce `make test-sqldemo`
+  con SQLite enlazado dentro. La VM-C que usaria un usuario contesta *«sql_open: falta
+  el codigo nativo del pack 'SQLI' v1»*. O sea que «depura en el PC, despliega en el
+  micro» no se cumple para la mitad de lo que V5 añade.
+  ⏭️ **Dos caminos**, y el segundo es el bueno:
+  1. enlazar SQLite en la VM-C de host cuando se compile con un flag — rapido, pero
+     mete 400 KB de C ajeno en el binario de todo el mundo;
+  2. **que la VM-C de host sepa CARGAR un pack**, como hace la placa. Es mas trabajo
+     —el pack es nativo por arquitectura, harian falta `.npk` de x86-64— pero es lo
+     coherente: el PC dejaria de ser un caso especial.
+  📌 Y hay un tercer camino que quiza gane: el **micro simulado del IDE** (V4/H10,
+  `bpvm-sim`) ya habla wire v1 completo. Si el simulador carga packs, el usuario prueba
+  sin placa Y sin binario especial.
+  📌 Mientras tanto, decirlo en `docs/BASEDATOS.md`: hoy la prueba real es en placa.
+
 ### 🩸 El ORM no funcionaba — encontrado y arreglado el 19-ago al documentarlo
 
 - ~~**El ORM entero, roto**~~ — ✅ **ARREGLADO y VERIFICADO EN EJECUCION el 19-ago**
