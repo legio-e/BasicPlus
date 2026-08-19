@@ -2,186 +2,141 @@ dbg 3
 module Compress
 source C:\lenguajes\pm\bpstdlib\Compress.bp
 lines
-1215 20
-1224 21
-1238 23
-1281 24
-1290 25
-1304 27
-1314 28
-1328 31
-1331 32
-1334 33
-1344 34
-1354 35
-1368 37
-1376 38
-1382 40
-1385 41
-1398 42
-1408 43
-1422 45
-1436 47
-1446 48
-1460 50
-1472 51
-1478 52
-1489 55
-1501 56
-1515 58
-1523 59
-1533 60
-1539 61
-1550 62
-1562 63
-1568 64
-1578 65
-1592 67
-1595 68
-1605 69
-1615 70
-1629 72
-1644 73
-1650 74
-1658 77
-1670 80
-1686 89
-1695 90
-1709 93
-1729 94
-1749 95
-1769 96
-1783 97
-1786 99
-1789 100
-1799 102
-1809 103
-1823 105
-1827 106
-1830 107
-1836 109
-1839 110
-1868 112
-1878 113
-1887 114
-1895 116
-1902 117
-1915 118
-1927 121
-1930 122
-1933 123
-1942 124
-1948 125
-1958 126
-1961 127
-2001 128
-2009 130
-2019 131
-2023 132
-2030 133
-2040 134
-2054 137
-2067 141
-2076 143
-2082 144
-2094 145
-2108 147
-2119 148
-2143 149
-2149 150
-2161 153
-2170 154
-2180 155
-2194 157
-2206 158
-2212 159
-2218 161
-2227 164
-2239 167
+405 20
+414 21
+428 23
+471 24
+480 25
+494 27
+504 28
+518 31
+521 32
+524 33
+534 34
+544 35
+558 37
+566 38
+572 40
+575 41
+588 42
+598 43
+612 45
+626 47
+636 48
+650 50
+662 51
+668 52
+679 55
+691 56
+705 58
+713 59
+723 60
+729 61
+740 62
+752 63
+758 64
+768 65
+782 67
+785 68
+795 69
+805 70
+819 72
+834 73
+840 74
+848 77
+860 80
+876 89
+885 90
+899 93
+919 94
+939 95
+959 96
+973 97
+976 99
+979 100
+989 102
+999 103
+1013 105
+1017 106
+1020 107
+1026 109
+1029 110
+1058 112
+1068 113
+1077 114
+1085 116
+1092 117
+1105 118
+1117 121
+1120 122
+1123 123
+1132 124
+1138 125
+1148 126
+1151 127
+1191 128
+1199 130
+1209 131
+1213 132
+1220 133
+1230 134
+1244 137
+1257 141
+1266 143
+1272 144
+1284 145
+1298 147
+1309 148
+1333 149
+1339 150
+1351 153
+1360 154
+1370 155
+1384 157
+1396 158
+1402 159
+1408 161
+1417 164
+1429 167
 vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 38
-this -28 8 0 ?
-item -20 8 0 ?
-func List.get 116
-this -24 8 0 ?
-idx -16 4 0 ?
-func List.set 135
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func List.length 152
-this -20 8 0 ?
-func List.remove 166
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func List.__init 249
-this -20 8 0 ?
-func OwnerList.removeAndFree 284
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func OwnerList.__init 393
-this -20 8 0 ?
-func StringBuilder.appendChar 409
+func StringBuilder.appendChar 38
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 486
+func StringBuilder.appendStr 115
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 537
+func StringBuilder.appendInt 166
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 556
+func StringBuilder.toString 185
 this -20 8 0 ?
-func StringBuilder.length 580
+func StringBuilder.length 209
 this -20 8 0 ?
-func StringBuilder.__init 594
+func StringBuilder.__init 223
 this -20 8 0 ?
-func Thread.run 627
+func Thread.run 256
 this -20 8 0 ?
-func Thread.start 633
+func Thread.start 262
 this -20 8 0 ?
-func Thread.join 647
+func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 661
+func Thread.__init 290
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 680
+func Mutex.lock 309
 this -20 8 0 ?
-func Mutex.unlock 694
+func Mutex.unlock 323
 this -20 8 0 ?
-func Mutex.__init 708
+func Mutex.__init 337
 this -20 8 0 ?
-func SyncList.add 722
-this -28 8 0 ?
-item -20 8 0 ?
-func SyncList.remove 761
-this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.get 799
-this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.set 840
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func SyncList.length 881
-this -20 8 0 ?
-func SyncList.pop 918
-this -20 8 0 ?
-func SyncList.popBlocking 1015
-this -20 8 0 ?
-func SyncList.__init 1126
-this -20 8 0 ?
-func decompress 1212
+func decompress 402
 src -36 8 0 ref
 srcLen -28 4 0 integer
 dst -24 8 0 ref
@@ -197,7 +152,7 @@ off 32 4 0 integer
 leng 36 4 0 integer
 dist 40 4 0 integer
 k 44 4 0 integer
-func compress 1683
+func compress 873
 src -36 8 0 ref
 srcLen -28 4 0 integer
 dst -24 8 0 ref
@@ -214,7 +169,7 @@ bestDist 36 4 0 integer
 cand 40 4 0 integer
 l 44 4 0 integer
 off 48 4 0 integer
-func __strconcat 2252
+func __strconcat 1442
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

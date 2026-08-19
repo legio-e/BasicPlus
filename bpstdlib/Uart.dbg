@@ -2,157 +2,112 @@ dbg 3
 module Uart
 source C:\lenguajes\pm\bpstdlib\Uart.bp
 lines
-1388 173
-1416 179
-1446 185
-1469 160
-1479 161
-1489 162
-1499 163
-1509 164
-1519 165
-1529 166
-1539 167
-1652 63
-1677 67
-1701 71
-1727 75
-1746 80
-1761 83
-1776 88
-1791 91
-1806 94
-1821 99
-1840 102
-1859 105
-1878 108
-1897 111
-1916 114
-1935 117
-1954 120
+578 173
+606 179
+636 185
+659 160
+669 161
+679 162
+689 163
+699 164
+709 165
+719 166
+729 167
+905 63
+930 67
+954 71
+980 75
+999 80
+1014 83
+1029 88
+1044 91
+1059 94
+1074 99
+1093 102
+1112 105
+1131 108
+1150 111
+1169 114
+1188 117
+1207 120
 vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 38
-this -28 8 0 ?
-item -20 8 0 ?
-func List.get 116
-this -24 8 0 ?
-idx -16 4 0 ?
-func List.set 135
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func List.length 152
-this -20 8 0 ?
-func List.remove 166
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func List.__init 249
-this -20 8 0 ?
-func OwnerList.removeAndFree 284
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func OwnerList.__init 393
-this -20 8 0 ?
-func StringBuilder.appendChar 409
+func StringBuilder.appendChar 38
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 486
+func StringBuilder.appendStr 115
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 537
+func StringBuilder.appendInt 166
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 556
+func StringBuilder.toString 185
 this -20 8 0 ?
-func StringBuilder.length 580
+func StringBuilder.length 209
 this -20 8 0 ?
-func StringBuilder.__init 594
+func StringBuilder.__init 223
 this -20 8 0 ?
-func Thread.run 627
+func Thread.run 256
 this -20 8 0 ?
-func Thread.start 633
+func Thread.start 262
 this -20 8 0 ?
-func Thread.join 647
+func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 661
+func Thread.__init 290
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 680
+func Mutex.lock 309
 this -20 8 0 ?
-func Mutex.unlock 694
+func Mutex.unlock 323
 this -20 8 0 ?
-func Mutex.__init 708
+func Mutex.__init 337
 this -20 8 0 ?
-func SyncList.add 722
-this -28 8 0 ?
-item -20 8 0 ?
-func SyncList.remove 761
+func Port.getId 386
+this -20 8 0 ?
+func Port.setId 400
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.get 799
+func Port.getTx 413
+this -20 8 0 ?
+func Port.setTx 427
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.set 840
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func SyncList.length 881
+func Port.getRx 440
 this -20 8 0 ?
-func SyncList.pop 918
-this -20 8 0 ?
-func SyncList.popBlocking 1015
-this -20 8 0 ?
-func SyncList.__init 1126
-this -20 8 0 ?
-func Port.getId 1196
-this -20 8 0 ?
-func Port.setId 1210
+func Port.setRx 454
 this -24 8 0 ?
-func Port.getTx 1223
+func Port.getBaudrate 467
 this -20 8 0 ?
-func Port.setTx 1237
+func Port.setBaudrate 481
 this -24 8 0 ?
-func Port.getRx 1250
+func Port.getDataBits 494
 this -20 8 0 ?
-func Port.setRx 1264
+func Port.setDataBits 508
 this -24 8 0 ?
-func Port.getBaudrate 1277
+func Port.getStopBits 521
 this -20 8 0 ?
-func Port.setBaudrate 1291
+func Port.setStopBits 535
 this -24 8 0 ?
-func Port.getDataBits 1304
+func Port.getParity 548
 this -20 8 0 ?
-func Port.setDataBits 1318
+func Port.setParity 562
 this -24 8 0 ?
-func Port.getStopBits 1331
-this -20 8 0 ?
-func Port.setStopBits 1345
-this -24 8 0 ?
-func Port.getParity 1358
-this -20 8 0 ?
-func Port.setParity 1372
-this -24 8 0 ?
-func Port.write 1385
+func Port.write 575
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Port.read 1413
+func Port.read 603
 this -36 8 0 ?
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Port.available 1443
+func Port.available 633
 this -20 8 0 ?
-func Port.__init 1466
+func Port.__init 656
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -161,7 +116,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_new_Port 1561
+func __cls_new_Port 751
 id -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -169,7 +124,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_init_Port 1605
+func __cls_init_Port 795
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -178,7 +133,18 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func init 1649
+func __cls_m_Port_read 823
+this -36 8 0 ?
+data -28 8 0 ref
+count -20 4 0 integer
+timeoutMs -16 4 0 integer
+func __cls_m_Port_available 847
+this -20 8 0 ?
+func __cls_m_Port_write 864
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func init 902
 bus -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -186,18 +152,18 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func write 1674
+func write 927
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 1698
+func read 951
 bus -32 4 0 integer
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func available 1724
+func available 977
 bus -16 4 0 integer
-func __strconcat 1970
+func __strconcat 1223
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

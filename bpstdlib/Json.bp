@@ -215,7 +215,7 @@ module Json
     end add
 
     public function at(i: integer): JsonValue
-      return this.items.get(i)
+      return JsonValue(this.items.get(i))
     end at
 
     public function length(): integer
@@ -230,7 +230,7 @@ module Json
         if i > 0 then
           sb.appendChar(44)     // ','
         endif
-        var v: JsonValue := this.items.get(i)
+        var v: JsonValue := JsonValue(this.items.get(i))
         v.writeTo(sb)
         i := i + 1
       endwh
@@ -271,7 +271,7 @@ module Json
       var n: integer := this.keys.length()
       var i: integer := 0
       while i < n do
-        var kw: JsonString := this.keys.get(i)
+        var kw: JsonString := JsonString(this.keys.get(i))
         if kw.value == key then
           return i
         endif
@@ -295,7 +295,7 @@ module Json
       if idx < 0 then
         return null
       endif
-      return this.values.get(idx)
+      return JsonValue(this.values.get(idx))
     end find
 
     public function has(key: string): boolean
@@ -303,12 +303,12 @@ module Json
     end has
 
     public function keyAt(i: integer): string
-      var kw: JsonString := this.keys.get(i)
+      var kw: JsonString := JsonString(this.keys.get(i))
       return kw.value
     end keyAt
 
     public function valueAt(i: integer): JsonValue
-      return this.values.get(i)
+      return JsonValue(this.values.get(i))
     end valueAt
 
     // --- accesores de conveniencia (ergonomía) ---
@@ -391,10 +391,10 @@ module Json
         if i > 0 then
           sb.appendChar(44)     // ','
         endif
-        var kw: JsonString := this.keys.get(i)
+        var kw: JsonString := JsonString(this.keys.get(i))
         appendQuotedString(sb, kw.value)
         sb.appendChar(58)       // ':'
-        var v: JsonValue := this.values.get(i)
+        var v: JsonValue := JsonValue(this.values.get(i))
         v.writeTo(sb)
         i := i + 1
       endwh

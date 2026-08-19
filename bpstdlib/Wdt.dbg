@@ -2,125 +2,86 @@ dbg 3
 module Wdt
 source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
-1253 77
-1264 78
-1280 87
-1289 88
-1300 93
-1309 94
-1326 64
-1330 65
-1343 66
-1355 68
-1365 69
-1374 70
+443 77
+454 78
+470 87
+479 88
+490 93
+499 94
+516 64
+520 65
+533 66
+545 68
+555 69
+564 70
 vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 38
-this -28 8 0 ?
-item -20 8 0 ?
-func List.get 116
-this -24 8 0 ?
-idx -16 4 0 ?
-func List.set 135
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func List.length 152
-this -20 8 0 ?
-func List.remove 166
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func List.__init 249
-this -20 8 0 ?
-func OwnerList.removeAndFree 284
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func OwnerList.__init 393
-this -20 8 0 ?
-func StringBuilder.appendChar 409
+func StringBuilder.appendChar 38
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 486
+func StringBuilder.appendStr 115
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 537
+func StringBuilder.appendInt 166
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 556
+func StringBuilder.toString 185
 this -20 8 0 ?
-func StringBuilder.length 580
+func StringBuilder.length 209
 this -20 8 0 ?
-func StringBuilder.__init 594
+func StringBuilder.__init 223
 this -20 8 0 ?
-func Thread.run 627
+func Thread.run 256
 this -20 8 0 ?
-func Thread.start 633
+func Thread.start 262
 this -20 8 0 ?
-func Thread.join 647
+func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 661
+func Thread.__init 290
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 680
+func Mutex.lock 309
 this -20 8 0 ?
-func Mutex.unlock 694
+func Mutex.unlock 323
 this -20 8 0 ?
-func Mutex.__init 708
+func Mutex.__init 337
 this -20 8 0 ?
-func SyncList.add 722
-this -28 8 0 ?
-item -20 8 0 ?
-func SyncList.remove 761
+func Timer.getTimeoutMs_ 386
+this -20 8 0 ?
+func Timer.setTimeoutMs_ 400
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.get 799
+func Timer.getActive_ 413
+this -20 8 0 ?
+func Timer.setActive_ 427
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.set 840
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func SyncList.length 881
+func Timer.feed 440
 this -20 8 0 ?
-func SyncList.pop 918
+func Timer.disable 467
 this -20 8 0 ?
-func SyncList.popBlocking 1015
+func Timer.reenable 487
 this -20 8 0 ?
-func SyncList.__init 1126
-this -20 8 0 ?
-func Timer.getTimeoutMs_ 1196
-this -20 8 0 ?
-func Timer.setTimeoutMs_ 1210
-this -24 8 0 ?
-func Timer.getActive_ 1223
-this -20 8 0 ?
-func Timer.setActive_ 1237
-this -24 8 0 ?
-func Timer.feed 1250
-this -20 8 0 ?
-func Timer.disable 1277
-this -20 8 0 ?
-func Timer.reenable 1297
-this -20 8 0 ?
-func Timer.__init 1323
+func Timer.__init 513
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer 1384
+func __cls_new_Timer 574
 timeoutMs -16 4 0 integer
-func __cls_init_Timer 1416
+func __cls_init_Timer 606
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __strconcat 1448
+func __cls_m_Timer_feed 622
+this -20 8 0 ?
+func __cls_m_Timer_disable 636
+this -20 8 0 ?
+func __cls_m_Timer_reenable 650
+this -20 8 0 ?
+func __strconcat 680
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

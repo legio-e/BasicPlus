@@ -2,133 +2,95 @@ dbg 3
 module Adc
 source C:\lenguajes\pm\bpstdlib\Adc.bp
 lines
-1258 66
-1281 71
-1292 72
-1321 78
-1330 79
-1351 81
-1354 82
-1357 83
-1367 84
-1381 85
-1389 87
-1408 56
-1418 57
-1431 58
-1444 59
-1468 60
+443 66
+466 71
+477 72
+506 78
+515 79
+536 81
+539 82
+542 83
+552 84
+566 85
+574 87
+593 56
+603 57
+616 58
+629 59
+653 60
 vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 38
-this -28 8 0 ?
-item -20 8 0 ?
-func List.get 116
-this -24 8 0 ?
-idx -16 4 0 ?
-func List.set 135
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func List.length 152
-this -20 8 0 ?
-func List.remove 166
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func List.__init 249
-this -20 8 0 ?
-func OwnerList.removeAndFree 284
-this -24 8 0 ?
-idx -16 4 0 ?
-i 0 4 0 ?
-func OwnerList.__init 393
-this -20 8 0 ?
-func StringBuilder.appendChar 409
+func StringBuilder.appendChar 38
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 486
+func StringBuilder.appendStr 115
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 537
+func StringBuilder.appendInt 166
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 556
+func StringBuilder.toString 185
 this -20 8 0 ?
-func StringBuilder.length 580
+func StringBuilder.length 209
 this -20 8 0 ?
-func StringBuilder.__init 594
+func StringBuilder.__init 223
 this -20 8 0 ?
-func Thread.run 627
+func Thread.run 256
 this -20 8 0 ?
-func Thread.start 633
+func Thread.start 262
 this -20 8 0 ?
-func Thread.join 647
+func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 661
+func Thread.__init 290
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 680
+func Mutex.lock 309
 this -20 8 0 ?
-func Mutex.unlock 694
+func Mutex.unlock 323
 this -20 8 0 ?
-func Mutex.__init 708
+func Mutex.__init 337
 this -20 8 0 ?
-func SyncList.add 722
-this -28 8 0 ?
-item -20 8 0 ?
-func SyncList.remove 761
+func Channel.getCh_ 386
+this -20 8 0 ?
+func Channel.setCh_ 400
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.get 799
+func Channel.getPin_ 413
+this -20 8 0 ?
+func Channel.setPin_ 427
 this -24 8 0 ?
-idx -16 4 0 ?
-func SyncList.set 840
-this -32 8 0 ?
-idx -24 4 0 ?
-item -20 8 0 ?
-func SyncList.length 881
+func Channel.read 440
 this -20 8 0 ?
-func SyncList.pop 918
-this -20 8 0 ?
-func SyncList.popBlocking 1015
-this -20 8 0 ?
-func SyncList.__init 1126
-this -20 8 0 ?
-func Channel.getCh_ 1201
-this -20 8 0 ?
-func Channel.setCh_ 1215
-this -24 8 0 ?
-func Channel.getPin_ 1228
-this -20 8 0 ?
-func Channel.setPin_ 1242
-this -24 8 0 ?
-func Channel.read 1255
-this -20 8 0 ?
-func Channel.readVolts 1278
+func Channel.readVolts 463
 this -20 8 0 ?
 raw 4 4 0 integer
-func Channel.readAvg 1318
+func Channel.readAvg 503
 this -24 8 0 ?
 n -16 4 0 integer
 sum 4 4 0 integer
 i 8 4 0 integer
-func Channel.__init 1405
+func Channel.__init 590
 this -24 8 0 ?
 ch -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Channel 1483
+func __cls_new_Channel 668
 ch -16 4 0 integer
-func __cls_init_Channel 1515
+func __cls_init_Channel 700
 this -24 8 0 ?
 ch -16 4 0 integer
-func __strconcat 1547
+func __cls_m_Channel_read 716
+this -20 8 0 ?
+func __cls_m_Channel_readAvg 733
+this -24 8 0 ?
+n -16 4 0 integer
+func __cls_m_Channel_readVolts 752
+this -20 8 0 ?
+func __strconcat 785
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
