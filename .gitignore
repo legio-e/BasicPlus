@@ -92,6 +92,30 @@ bpgenvm-c/samples/*.slots
 
 # Outputs locales del IDE/runs en samples/
 samples/out/
+
+# ============================================================
+# dist/ — la distribucion CONSTRUIDA
+# ============================================================
+# Decision de Eduardo (19-ago): *«dist lo reconstruimos antes de publicar. En
+# principio no se sube al repositorio, el zip se sube a GitHub aparte.»* O sea
+# que es una SALIDA, no una fuente: se rehace en el cierre de cada version y
+# viaja como asset de la release, no como ficheros del repo.
+#
+# El motivo practico esta medido: dentro hay 342 copias de ficheros del arbol
+# (samples, .mod, la stdlib), y su `packs/Stdlib.pack` quedo rancio respecto al
+# layout nuevo de Collections.Map (#390). Una copia vieja de todo el proyecto
+# ensucia las busquedas y da falsos positivos — el 19-ago un grep de FileTest.bp
+# salio por duplicado justo por esto.
+dist/
+
+# ...pero SI se conservan los MANIFIESTOS de lo publicado: son 4 KB de texto y
+# son el unico registro en el repo de que binarios salieron en cada version.
+# Sin ellos no se puede verificar un artefacto descargado.
+!dist/BasicPlus-4.0-win.zip.sha256
+!dist/firmware/
+dist/firmware/*
+!dist/firmware/README.md
+!dist/firmware/SHA256SUMS.txt
 # El .slots es una SALIDA del compilador; los versionados son los de
 # bpstdlib/ y bpdevices/, que son la distribucion. Estos no.
 samples/*.slots

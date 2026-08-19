@@ -1801,11 +1801,21 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   contra el que avisan los `regen_*_mods.sh`. **No se tocó**: commitear un binario que se
   publica y regenerar el pack piden la tanda de verificación — va a `H13`.
 
-- **La decisión sobre `dist/`**: `dist/BasicPlus-4.0-win/packs/Stdlib.pack` está rancio
-  respecto al layout nuevo de `Collections.Map` (#390: `layout 8 10` → `8 12`). Se
-  dejó a propósito —es una distribución CONSTRUIDA de V4, no una fuente— pero es
-  exactamente el desfase de `.mod`/pack que ya ha costado tiempo otras veces.
-  `packs/Stdlib.pack` (el bueno) sí se regeneró en `9f95e92`.
+- ~~**La decisión sobre `dist/`**~~ — ✅ **DECIDIDA el 19-ago por Eduardo**: *«dist lo
+  reconstruimos antes de publicar. En principio no se sube al repositorio, el zip se
+  sube a GitHub aparte.»* O sea que `dist/` es una **salida**, no una fuente: se rehace
+  en el cierre de cada versión y viaja como asset de la release.
+  📌 Aplicado en `.gitignore`. Con una excepción deliberada: **los tres MANIFIESTOS sí
+  siguen versionados** —`BasicPlus-4.0-win.zip.sha256`, `firmware/README.md` y
+  `firmware/SHA256SUMS.txt`, 4 KB de texto—. Son el único registro en el repo de qué
+  binarios salieron en cada versión, y sin ellos no se puede verificar un artefacto
+  descargado. El ZIP no; su huella sí.
+  🩸 **Y el motivo práctico está medido**: dentro hay **342 copias** de ficheros del
+  árbol, y su `packs/Stdlib.pack` quedó rancio respecto al layout nuevo de
+  `Collections.Map` (`#390`). Eso no es teórico — el 19-ago un `grep` de `FileTest.bp`
+  salió por duplicado justo por esto, igual que pasaba con el worktree.
+  📌 Los 31 MB de la build de V4 **siguen en disco a propósito**: es la distribución de
+  una versión ya publicada y se sustituye sola al reconstruir. Ignorarla basta.
 - **Este fichero** deja de ser material de la versión en curso y puede subir con
   ella (ver la cabecera).
 
