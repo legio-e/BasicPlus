@@ -1916,9 +1916,20 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   una palabra reservada —criterio de Eduardo: *«si ya hay algo especial, el azúcar cuelga
   de ahí»*—. Lo natural es que salga de las conversiones que ya se van a escribir:
   `Integer(b)` e `Integer(color)`, y los captadores encima.
-  ⏭️ **Lo que sigue abierto, y es sólo la matriz numérica:**
-  1. `double`→`integer`: ¿trunca o redondea?
-  2. `long`→`integer` que no cabe: ¿error (es una conversión imposible) o recorte?
+  ✅ **`double`→`integer` TRUNCA** (Eduardo, 19-ago): *«debe truncar, si se quiere
+  redondear que llame a la función para redondear que para eso está»*.
+  🔬 Y esa función existe — comprobado: **no está en `Math`, son builtins globales**:
+  `round` (id 33, *half-up*), `floor` (31) y `ceil` (32), con `abs`, `sqrt` y `pow` al
+  lado. `Math.bp` sólo tiene trigonometría y logaritmos, así que buscarlo ahí despista.
+  ⚠️ **Hay que decir HACIA DÓNDE trunca, y no es un detalle**: truncar es *hacia cero*
+  (`-2,7` → `-2`), mientras que `floor` da `-3`. Coinciden en positivos y discrepan en
+  negativos, que es justo donde nadie mira. Y **ningún builtin trunca hoy**: `floor` vale
+  para positivos y `ceil` para negativos, o sea que el comportamiento de los captadores
+  es NUEVO y tiene que quedar escrito en su documentación, con el caso negativo de
+  ejemplo.
+  ⏭️ **Lo único que sigue abierto:** `long`→`integer` que no cabe — ¿error, por ser una
+  conversión imposible, o recorte silencioso? (La coherencia con lo demás apunta a error:
+  el recorte silencioso es justo lo que `#385` vino a quitar del literal `long`.)
   📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
   mirar si `Map` quiere lo mismo para sus valores.
 
