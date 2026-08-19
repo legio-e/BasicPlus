@@ -1882,15 +1882,26 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   `compareTo(Object)` y `toString()`. Nada más. Así que esto son **dos fichas encadenadas**:
   primero las conversiones en los envoltorios, después los captadores de `List`, que se
   vuelven triviales encima.
-  ⏭️ **Lo que hay que decidir al abrirlo:**
-  1. **La matriz de conversiones**, y sus casos feos: `double`→`integer` ¿trunca o
-     redondea?; `long`→`integer` que no cabe ¿error o recorte?; `boolean`→número ¿1/0 o
-     error?; y `string`→número, que es el único que falla por el CONTENIDO.
-  2. **Choca con un contrato que ya existe.** La familia `Str.parse*` ya resuelve
-     «convertir puede fallar» devolviendo una **tupla `(err, valor)`**, no lanzando. Aquí
-     Eduardo pide lanzar. Las dos cosas pueden convivir —`parse` pregunta, `getInteger`
-     afirma— pero conviene que sea una decisión y no un accidente.
-  3. **falta `getBoolean`** en la lista, y `Boolean` sí es uno de los cinco envoltorios.
+  📐 **Y la DIRECCIÓN importa (Eduardo, 19-ago)**: *«integer a string vale, así `"hola"+1`
+  se convierte en `"hola1"` sin problemas, pero string a integer no, eso hay que pedirlo
+  explícitamente con la función concreta.»* La asimetría no es capricho: hacia `string` la
+  conversión **no puede fallar** (todo tiene `toString`), y desde `string` **falla por el
+  CONTENIDO**, que es otra clase de cosa.
+  🔬 Comprobado el 19-ago, las dos mitades: `"hola" + 1` → `hola1` y `"pi=" + 3.5` →
+  `pi=3.5`; y la familia explícita ya existe — `Str.parseInt`, `parseLong`, `parseDouble`
+  y `parseHex`, **todas devolviendo `(boolean, valor)`**, o sea que ni siquiera lanzan:
+  obligan a mirar el `ok`.
+  ✅ **Con eso se cae la contradicción que se había anotado**: `string`→número NO entra en
+  los captadores, así que no hay dos contratos compitiendo. Queda repartido y limpio:
+  - `getString(i)` — **siempre funciona**, porque todo sabe volverse cadena.
+  - `getInteger/getLong/getFloat/getDouble(i)` — convierten **entre numéricos**; si el
+    elemento es una cadena, **NO se parsea**: eso se pide con `Str.parse*`.
+  - lo imposible lanza, que es lo que Eduardo pidió.
+  ⏭️ **Lo que sigue abierto, y es sólo la matriz numérica:**
+  1. `double`→`integer`: ¿trunca o redondea?
+  2. `long`→`integer` que no cabe: ¿error (es una conversión imposible) o recorte?
+  3. `boolean`→número: ¿1/0, o error por no ser numérico?
+  4. **falta `getBoolean`** en la lista, y `Boolean` sí es uno de los cinco envoltorios.
      Puede ser deliberado o un olvido: preguntarlo al abrirlo.
   📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
   mirar si `Map` quiere lo mismo para sus valores.
