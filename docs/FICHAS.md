@@ -1811,15 +1811,28 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   ahí, no que se vaya a borrar. Lo contrario de lo que pasó con `notas/` el mismo día —
   y por eso allí se rescató y aquí no.
 
-- 🔴 **HALLAZGO del 19-ago, y no es de limpieza: `bpstdlib/Str.{mod,dbg,slots}` llevan
-  desde ayer regenerados y SIN COMMITEAR.** Los cambió `#446` (Str pasó a fachada que
-  delega en Core) y por eso encoge, 5.789 → 5.578 B, que es lo esperado. Pero:
-  - el artefacto versionado está modificado en el working tree y nadie lo commiteó;
-  - **`packs/Stdlib.pack` es del 15-ago**, o sea anterior al cambio.
-  📌 Acotado, eso sí: de las 11 copias de `Str.mod` que hay en el árbol **sólo la de
-  `bpstdlib/` está en git**; las demás son salidas locales. Es exactamente el desfase
-  contra el que avisan los `regen_*_mods.sh`. **No se tocó**: commitear un binario que se
-  publica y regenerar el pack piden la tanda de verificación — va a `H13`.
+- ~~**El desfase de `Str` y la stdlib**~~ — ✅ **RESUELTO el 19-ago** (`58ad9d0`).
+  Eduardo, al plantearselo: *«si hay que guardarlo se guarda, si hay que compilarlo se
+  compila y hay que actualizar el pack se actualiza, no veo el problema»*. Y tenia razon
+  en que no lo era — pero al tirar del hilo era **mucho mas grande que `Str`**:
+  🩸 **24 de los 26 modulos versionados** no coincidian con lo que emite el compilador de
+  hoy. Arrastraban toda la tanda del 18-ago (`#442`..`#451`) y el `Core` nuevo.
+  🩸 **Y tapaban un modulo ROTO: `Json.bp` llevaba dias sin compilar.** Desde que `#389`
+  dejo que `List.get()` devuelva `Object` en vez de `any`, 8 sitios asignaban el
+  resultado a `JsonString`/`JsonValue` sin downcast. Su `.mod` del 15-ago lo escondia —
+  el modo de fallo exacto contra el que avisaba la ficha de la stdlib-como-proyecto, otra
+  vez. Arreglado con 8 casts explicitos, sin tocar la logica.
+  🩸 **Y un build NO limpio MIENTE**: `bpstdlib/out/` tenia modulos del 15-ago, asi que el
+  primer pack que genere salio contaminado y el build no se quejo. Con `rm -rf out`
+  delante, aborta en `Json` — que es lo que debia haber pasado siempre. **Regla: la
+  stdlib se reconstruye SIEMPRE en limpio.**
+  🔬 **Verificado con la bateria de `H13`** (`scripts/h13-lista.sh`), antes y despues:
+  `48 corren · 18 compilan · 4 NO compilan · 0 fallan`, y el **diff de las dos salidas es
+  VACIO**. Los 66 programas se comportan igual, `JsonDemo` (parse + serialize) incluido —
+  que es lo que prueba que los casts estan bien y no solo que compilan.
+  📌 Regenerados tambien `packs/Stdlib.pack` (163.840 -> 172.032 B) y los blobs embebidos
+  de las 3 familias; el firmware de la Pico reconstruido y enlaza. **ESP32 y STM32 se
+  reconstruyen en `H13`**, que es cuando se reflashean.
 
 - ~~**La decisión sobre `dist/`**~~ — ✅ **DECIDIDA el 19-ago por Eduardo**: *«dist lo
   reconstruimos antes de publicar. En principio no se sube al repositorio, el zip se
