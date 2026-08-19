@@ -1811,6 +1811,20 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
      📌 Y lo que merece contarse de `#381`, que es lo mejor de la ficha: **dividir por
      cero desde codigo nativo lanza un error de BP ATRAPABLE en vez de reiniciar la
      placa**. Eso es lo que convierte `native` en algo que se puede usar sin miedo.
+     🔎 **Y al mirar los limites REALES (19-ago) salio que `native` son DOS CAMINOS con
+     limites distintos** — si el documento no lo distingue, cualquier correccion sera
+     verdad en un sitio y mentira en el otro:
+     · **native normal (AOT)** — `long` SI cruza (es `#381`). `double` no, y por hierro:
+       RP2350 y STM32U5 no tienen coma flotante de 64 bits.
+     · **puente a un PACK (`AotCEmitter.cTypePack`)** — mas estrecho, y ahi `#381` NO ha
+       llegado. Cruzan `integer`, `boolean` (int32), `float`, `string` (`const char*`),
+       `long[]`/`double[]` **solo como caja de salida**, y los objetos **como handle**.
+       El porque esta en su propio mensaje y es bueno: *«un pack no conoce el GC de BP,
+       asi que solo cruzan VALORES»*.
+     🔴 **Mensaje de error RANCIO**: el del puente dice *«el rodeo se quitara cuando el
+     AOT marshalle 8 bytes - tarea #381»*, y `#381` YA esta cerrada. Quien lo lea buscara
+     una ficha resuelta. O se corrige el texto, o se abre la ficha de llevar los 8 bytes
+     tambien al puente.
   7. **`QUICKSTART` y los dos README**, que son la puerta.
   8. **Las notas de la version**, con L14 y L15 de `PENDIENTES` enlazadas.
   📌 Y una comprobación barata al terminar, que es la que caza lo rancio: buscar en la
