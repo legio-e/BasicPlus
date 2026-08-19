@@ -1929,6 +1929,24 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
+- **[host] PROBAR BASES DE DATOS SIN PLACA — packs en el PC** *(aplazada a V6 el 19-ago.
+  Eduardo: «me parece que se sale de V5, habra que dejarlo para V6»)*.
+  🩸 **El problema**: la VM-C que usa la gente no puede correr BD — dice *«falta el
+  codigo nativo del pack 'SQLI'»*—, asi que hace falta PLACA para probar la mitad de lo
+  que V5 añade. Choca con «depura en el PC, despliega en el micro». Los demos si corren,
+  pero con `sqldemo.exe`, un binario de pruebas con SQLite enlazado dentro.
+  📐 **Lo que ya esta y lo que falta**, medido: el formato de pack y el relocalizador son
+  PORTABLES (`src/bpvm_pack.c`, `src/bpvm_npack.c`, en el nucleo comun). Falta:
+  1. un `.npk` de **x86-64** — o sea pasar el AOT y el relocalizador por una TERCERA
+     arquitectura, con su ABI y sus banderas (lo que costo H4 y H7 en RISC-V);
+  2. y **ejecutar codigo realojado en el PC**: en la placa el pack corre desde flash
+     mapeada (XIP); aqui habria que reservar memoria ejecutable y saltar a ella. Es una
+     pieza NUEVA y especifica del sistema operativo, no un ajuste.
+  💡 **El camino que quiza salga mas barato**: que cargue packs el **micro simulado del
+  IDE** (V4/H10, `bpvm-sim`), que ya habla wire v1 completo. El usuario probaria sin
+  placa y sin binario especial, y de paso el simulador ganaria en fidelidad.
+  📌 Mientras tanto, `docs/BASEDATOS.md` tiene que DECIR que hoy la prueba es en placa.
+
 - **[lenguaje] `List` con captadores TIPADOS** — encargo de Eduardo (19-ago):
   *«en List añadir métodos `getInteger(indice)`, `getLong(indice)`, `getFloat(indice)`,
   `getDouble(indice)` y `getString(indice)`»*.
