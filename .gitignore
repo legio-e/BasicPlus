@@ -88,9 +88,13 @@ bpgenvm-c/build/
 bpgenvm-c/samples/*.mod
 bpgenvm-c/samples/*.bpi
 bpgenvm-c/samples/*.dbg
+bpgenvm-c/samples/*.slots
 
 # Outputs locales del IDE/runs en samples/
 samples/out/
+# El .slots es una SALIDA del compilador; los versionados son los de
+# bpstdlib/ y bpdevices/, que son la distribucion. Estos no.
+samples/*.slots
 
 # ============================================================
 # Outputs ad-hoc del AOT/MdnPack en lexer-java
