@@ -62,6 +62,37 @@ module Core
     public function compareTo(other: Object): integer
       return 0
     end compareTo
+
+    // ── Conversiones (V5, 19-ago) ─────────────────────────────────────────
+    // Viven AQUI y no en cada envoltorio suelto porque hacen falta para los
+    // captadores tipados de `List`, y BP no tiene con que preguntarle su tipo a
+    // un `Object`: no hay `is`, ni `instanceof`, ni `typeof`. La salida en un
+    // lenguaje OO es esta — que cada clase sepa convertirse a si misma y el
+    // despacho virtual haga el resto. Sin excepciones en el camino normal y sin
+    // tocar el formato del `.mod`, que en V5 esta congelado.
+    //
+    // (La alternativa buena, `className()` sobre el objeto, no cabia: el
+    // descriptor de clase NO guarda el nombre —el que sale en el error de un
+    // cast viene de un operando que pone el compilador— asi que exigia meterlo
+    // en el descriptor. Aplazado a V6.)
+    //
+    // Aqui la implementacion por defecto FALLA a proposito: si una clase no
+    // sabe volverse numero, pedirselo es un error del programa, no un cero.
+    public function toInteger(): integer
+      throw RuntimeError("no se puede convertir a integer")
+    end toInteger
+    public function toLong(): long
+      throw RuntimeError("no se puede convertir a long")
+    end toLong
+    public function toFloat(): float
+      throw RuntimeError("no se puede convertir a float")
+    end toFloat
+    public function toDouble(): double
+      throw RuntimeError("no se puede convertir a double")
+    end toDouble
+    public function toBoolean(): boolean
+      throw RuntimeError("no se puede convertir a boolean")
+    end toBoolean
   end Comparable
 
   public class Integer extends Comparable
@@ -86,6 +117,19 @@ module Core
     public function toString(): string
       return intToString(this.v)
     end toString
+
+    public function toInteger(): integer
+      return this.v
+    end toInteger
+    public function toLong(): long
+      return long(this.v)
+    end toLong
+    public function toFloat(): float
+      return float(this.v)
+    end toFloat
+    public function toDouble(): double
+      return double(this.v)
+    end toDouble
   end Integer
 
   public class Long extends Comparable
@@ -110,6 +154,22 @@ module Core
     public function toString(): string
       return longToString(this.v)
     end toString
+
+    public function toInteger(): integer
+      if this.v > 2147483647L or this.v < -2147483648L then
+        throw RuntimeError("el valor no cabe en un integer")
+      endif
+      return integer(this.v)
+    end toInteger
+    public function toLong(): long
+      return this.v
+    end toLong
+    public function toFloat(): float
+      return float(this.v)
+    end toFloat
+    public function toDouble(): double
+      return double(this.v)
+    end toDouble
   end Long
 
   public class Double extends Comparable
@@ -134,6 +194,22 @@ module Core
     public function toString(): string
       return doubleToString(this.v)
     end toString
+
+    public function toInteger(): integer
+      if this.v > 2147483647.0d or this.v < -2147483648.0d then
+        throw RuntimeError("el valor no cabe en un integer")
+      endif
+      return integer(this.v)
+    end toInteger
+    public function toLong(): long
+      return long(this.v)
+    end toLong
+    public function toFloat(): float
+      return float(this.v)
+    end toFloat
+    public function toDouble(): double
+      return this.v
+    end toDouble
   end Double
 
   public class Float extends Comparable
@@ -158,6 +234,22 @@ module Core
     public function toString(): string
       return doubleToString(this.v)
     end toString
+
+    public function toInteger(): integer
+      if double(this.v) > 2147483647.0d or double(this.v) < -2147483648.0d then
+        throw RuntimeError("el valor no cabe en un integer")
+      endif
+      return integer(this.v)
+    end toInteger
+    public function toLong(): long
+      return long(this.v)
+    end toLong
+    public function toFloat(): float
+      return this.v
+    end toFloat
+    public function toDouble(): double
+      return double(this.v)
+    end toDouble
   end Float
 
   public class Boolean extends Comparable
@@ -182,6 +274,27 @@ module Core
     public function toString(): string
       return boolToString(this.v)
     end toString
+
+    // `False`=0 y `True`=1 (decision de Eduardo, 19-ago). Al reves NO: un
+    // numero no se convierte a booleano, que ahi no hay convenio evidente.
+    public function toInteger(): integer
+      if this.v then
+        return 1
+      endif
+      return 0
+    end toInteger
+    public function toLong(): long
+      return long(this.toInteger())
+    end toLong
+    public function toFloat(): float
+      return float(this.toInteger())
+    end toFloat
+    public function toDouble(): double
+      return double(this.toInteger())
+    end toDouble
+    public function toBoolean(): boolean
+      return this.v
+    end toBoolean
   end Boolean
 
   // -------------------------------------------------------------
@@ -347,6 +460,61 @@ module Core
     public function set(idx: integer, o: Object)
       this.items[idx] := o
     end set
+
+    // ── Captadores TIPADOS (V5, 19-ago — encargo de Eduardo) ─────────────
+    // `get` devuelve `Object`, asi que todo uso tipado pedia un downcast en
+    // CADA sitio. El coste estaba medido: arreglar `Json.bp` fueron 8 casts,
+    // los 8 el mismo patron. Esto lo escribe UNA vez, aqui.
+    //
+    // No son casts: CONVIERTEN. `getInteger` sobre un `Long` que cabe da el
+    // numero; si no cabe, LANZA — perder informacion es un error, no un
+    // redondeo silencioso (misma razon que #385). `double`->entero trunca
+    // HACIA CERO, que es lo que ya hace el cast del lenguaje: -2,7 -> -2, y ojo
+    // que `floor` daria -3. Para redondear esta `round()`, que para eso esta.
+    //
+    // Lo que NO hacen: parsear cadenas. Hacia `string` la conversion es
+    // implicita porque no puede fallar; desde `string` falla por el CONTENIDO,
+    // y eso se pide aparte con `Str.parseInt` y compania, que devuelven
+    // `(ok, valor)` en vez de lanzar.
+    public function getString(idx: integer): string
+      var o: Object := this.get(idx)
+      // Una CADENA no despacha metodos (no es un objeto con vtable), asi que
+      // `o.toString()` peta con "el receptor no es un objeto". Y para separar
+      // los dos casos no hay test de tipo en BP... salvo el cast `string(o)`,
+      // que por dentro ES uno: `CHECKCAST` con clase 0 comprueba justo eso.
+      // De ahi el try, que no es pereza: es el unico test de tipo disponible.
+      // Con `className()` (V6) esto seria un `if` y se acabo.
+      try
+        return string(o)
+      catch e: Exception
+      endtry
+      return o.toString()
+    end getString
+
+    public function getInteger(idx: integer): integer
+      var c: Comparable := Comparable(this.get(idx))
+      return c.toInteger()
+    end getInteger
+
+    public function getLong(idx: integer): long
+      var c: Comparable := Comparable(this.get(idx))
+      return c.toLong()
+    end getLong
+
+    public function getFloat(idx: integer): float
+      var c: Comparable := Comparable(this.get(idx))
+      return c.toFloat()
+    end getFloat
+
+    public function getDouble(idx: integer): double
+      var c: Comparable := Comparable(this.get(idx))
+      return c.toDouble()
+    end getDouble
+
+    public function getBoolean(idx: integer): boolean
+      var c: Comparable := Comparable(this.get(idx))
+      return c.toBoolean()
+    end getBoolean
 
     public function length(): integer
       return this.size

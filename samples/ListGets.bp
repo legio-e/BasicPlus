@@ -1,0 +1,69 @@
+// ListGets.bp — los captadores TIPADOS de List (V5, encargo de Eduardo 19-ago).
+//
+// Lo que se prueba, y en este orden:
+//
+//   1. lo facil: cada tipo se saca como el suyo
+//   2. la CONVERSION entre numericos, que es lo que los distingue de un cast
+//   3. `getString` sobre cualquier cosa, porque hacia cadena nunca falla
+//   4. `double`->entero TRUNCA HACIA CERO, con el caso negativo, que es donde
+//      truncar y `floor` discrepan (-2,7 -> -2, no -3)
+//   5. y lo que de verdad importa: que LANCE cuando la conversion es imposible
+//      o pierde informacion. Un captador que nunca dice que no seria un cast
+//      disfrazado.
+//
+// El 5 es el que vale. Los cuatro primeros dicen que funciona; el quinto dice
+// que PROTEGE, que es lo que se le pide a una conversion.
+module ListGets
+
+  function Main()
+    var l: List := List()
+    l.add(42)              // Integer
+    l.add(9000000000L)     // Long, no cabe en integer
+    l.add(-2.7d)           // Double negativo
+    l.add(true)            // Boolean
+    l.add("hola")          // cadena
+
+    print "1 cada uno por su tipo"
+    print "   getInteger(0) = " + l.getInteger(0)
+    print "   getLong(1)    = " + l.getLong(1)
+    print "   getDouble(2)  = " + l.getDouble(2)
+    print "   getBoolean(3) = " + l.getBoolean(3)
+
+    print "2 conversion entre numericos"
+    print "   getLong(0)    = " + l.getLong(0)
+    print "   getDouble(0)  = " + l.getDouble(0)
+    print "   getInteger(3) = " + l.getInteger(3)     // True -> 1
+
+    print "3 getString sobre cualquier cosa"
+    print "   getString(0)  = " + l.getString(0)
+    print "   getString(2)  = " + l.getString(2)
+    print "   getString(3)  = " + l.getString(3)
+    print "   getString(4)  = " + l.getString(4)
+
+    print "4 double a entero TRUNCA HACIA CERO"
+    print "   getInteger(2) = " + l.getInteger(2)     // -2, no -3
+
+    print "5 y lanza cuando no puede"
+    try
+      var x: integer := l.getInteger(1)               // 9.000.000.000
+      print "   MAL: no lanzo, dio " + x
+    catch e: Exception
+      print "   long que no cabe -> " + e.msg
+    endtry
+    try
+      var y: integer := l.getInteger(4)               // "hola"
+      print "   MAL: no lanzo, dio " + y
+    catch e2: Exception
+      print "   cadena a numero  -> lanza (se pide con Str.parseInt)"
+    endtry
+    try
+      var z: boolean := l.getBoolean(0)               // Integer -> boolean
+      print "   MAL: no lanzo"
+    catch e3: Exception
+      print "   numero a booleano -> " + e3.msg
+    endtry
+
+    print "FIN"
+  end Main
+
+end ListGets
