@@ -1927,9 +1927,26 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   para positivos y `ceil` para negativos, o sea que el comportamiento de los captadores
   es NUEVO y tiene que quedar escrito en su documentación, con el caso negativo de
   ejemplo.
-  ⏭️ **Lo único que sigue abierto:** `long`→`integer` que no cabe — ¿error, por ser una
-  conversión imposible, o recorte silencioso? (La coherencia con lo demás apunta a error:
-  el recorte silencioso es justo lo que `#385` vino a quitar del literal `long`.)
+  ✅ **`long`→`integer` que no cabe: EXCEPCIÓN** (Eduardo, 19-ago: *«pues claro, es una
+  exception, es puro sentido común»*). Coherente con `#385`: el recorte silencioso da un
+  número plausible y equivocado, que es el peor fallo posible.
+
+  ### El contrato, ya cerrado entero (19-ago)
+
+  | de \ a | `string` | numérico (`integer`/`long`/`float`/`double`) | `boolean` |
+  |---|---|---|---|
+  | numérico | implícito (`"x=" + 1`) | convierte; `double`→entero **trunca hacia cero**; si no cabe, **excepción** | — |
+  | `boolean` | implícito | `False`=0 · `True`=1 | directo |
+  | `string`  | directo | **NO** — se pide con `Str.parseInt/parseLong/parseDouble`, que devuelven `(ok, valor)` | **NO** |
+  | otro objeto | `toString()` | **excepción** | **excepción** |
+
+  📌 **Los métodos**: `getString`, `getInteger`, `getLong`, `getFloat`, `getDouble` y
+  `getBoolean`, todos por índice y devolviendo el **primitivo**.
+  📌 **Qué se lanza**: lo mismo que ya lanza un downcast fallido (`#444`), para no
+  inventar una segunda familia de errores que diga lo mismo.
+  📌 **La regla que lo explica todo en una frase**: hacia `string` es implícito porque no
+  puede fallar; desde `string` es explícito porque falla por el CONTENIDO; y entre
+  numéricos convierte, pero **perder información es un error, no un redondeo silencioso**.
   📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
   mirar si `Map` quiere lo mismo para sus valores.
 
