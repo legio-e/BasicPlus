@@ -1,0 +1,5 @@
+# Generados por build_sqlite*.sh. El .link tambien: lo escribe el script para
+# que el enlace y el oraculo lean LA MISMA lista, y regenerarlo es gratis.
+*.o
+*.elf
+*.link
