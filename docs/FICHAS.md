@@ -1871,14 +1871,27 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   📌 **Encaja con lo que ya hay**: los envoltorios (`Integer`, `Long`, `Double`, `Float`,
   `Boolean`) se mudaron a `Core` con `#446`, y `add` ya está sobrecargado por tipo. Esto
   es la simetría que falta — se puede meter por tipo pero no sacar por tipo.
-  ⏭️ **Tres decisiones que tomar al hacerlo, no ahora:**
-  1. **¿devuelven el primitivo o el envoltorio?** Lo que quita el ruido es el primitivo
-     (`getInteger` → `integer`), o sea que el método desenvuelve.
-  2. **¿qué pasa si el elemento no es de ese tipo?** Lo coherente es que lance igual que
-     lanza el cast — *«un chequeo que nunca dice que no es un chequeo que no comprueba
-     nada»*, que es lo que se cuidó en `#444`.
-  3. **falta `getBoolean`** en la lista de Eduardo, y `Boolean` sí es uno de los cinco
-     envoltorios de `Core`. Puede ser deliberado o un olvido: preguntarlo al abrirlo.
+  📐 **La semántica la decidió Eduardo (19-ago) y NO es un cast**: *«si no es del tipo
+  pedido hay que hacer conversiones. Los envoltorios ya deberían tener las conversiones.
+  Y si hay una conversión imposible se dispara un error.»* O sea que `getInteger(i)` no
+  exige que el elemento SEA un `Integer`: lo convierte, y sólo revienta si la conversión
+  es imposible. Devuelve el primitivo (`integer`), no el envoltorio.
+  🔴 **Y ahí está el trabajo de verdad: hoy los envoltorios NO tienen conversiones.**
+  Medido en `Core.bp` el 19-ago — `Integer`, `Long`, `Double`, `Float` y `Boolean` tienen
+  exactamente cuatro cosas cada uno: constructor desde SU primitivo, `value()`,
+  `compareTo(Object)` y `toString()`. Nada más. Así que esto son **dos fichas encadenadas**:
+  primero las conversiones en los envoltorios, después los captadores de `List`, que se
+  vuelven triviales encima.
+  ⏭️ **Lo que hay que decidir al abrirlo:**
+  1. **La matriz de conversiones**, y sus casos feos: `double`→`integer` ¿trunca o
+     redondea?; `long`→`integer` que no cabe ¿error o recorte?; `boolean`→número ¿1/0 o
+     error?; y `string`→número, que es el único que falla por el CONTENIDO.
+  2. **Choca con un contrato que ya existe.** La familia `Str.parse*` ya resuelve
+     «convertir puede fallar» devolviendo una **tupla `(err, valor)`**, no lanzando. Aquí
+     Eduardo pide lanzar. Las dos cosas pueden convivir —`parse` pregunta, `getInteger`
+     afirma— pero conviene que sea una decisión y no un accidente.
+  3. **falta `getBoolean`** en la lista, y `Boolean` sí es uno de los cinco envoltorios.
+     Puede ser deliberado o un olvido: preguntarlo al abrirlo.
   📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
   mirar si `Map` quiere lo mismo para sus valores.
 
