@@ -27,6 +27,53 @@
 
 ## Última sesión
 
+### 19-ago — la limpieza, y el rescate que casi no se hace
+
+**85 MB fuera**, en commits separados: `3636ff0` (rescate), `f2edd80` (borrado),
+`04a3bd0` y `a250bd3` (registro). Con eso la limpieza queda CERRADA entera y el
+cierre de V5 pasa al siguiente paso, `H12` documentar.
+
+**🩸 Lo que importa del dia: la ficha se equivocaba en el punto critico.** Decia que
+en `notas/` *«lo unico NO duplicado son los .elf de SQLite»*. Falso. Habia **26
+fuentes y scripts que no existian en ningun otro sitio del repo**, y entre ellos
+`vfs_bp.c` —el VFS sin el cual `sqlite3_initialize()` falla EN SILENCIO— y los dos
+`build_sqlite*.sh` con las banderas que costo sangre averiguar. Enfrente,
+`bpstdlib/sqlite/nativo/*.npk`, binarios versionados **que se publican en V5**.
+Borrar a ciegas los habria dejado sin receta para siempre.
+
+Rescatado a `bpstdlib/sqlite/nativo/src/` (77 KB), que es donde Eduardo decidio el
+14-ago que viviera todo lo del pack — el `LEEME.md` de esa carpeta YA decia que se
+creo porque *«el pack no se podia reconstruir desde un clon limpio»*: el traslado se
+habia hecho a medias, se movieron los `.bp` y los binarios y el pegamento en C no.
+
+**🔬 Y se probo, no se supuso**: el `.npk` de RISC-V se reconstruye **BYTE A BYTE**
+desde su nueva ubicacion (618.168 B, y sus numeros son los que canta el P4 al
+arrancar). Ese control es lo que dice que la receta vale.
+
+**Y el control saco un hallazgo**: el `.npk` de **ARM no se reproduce** — 8 B mas y el
+punto de entrada corrido (0x114 vs 0x10c). Se genero antes de algun cambio del
+pegamento y nadie lo regenero. No se toca en freeze: va a `H13`.
+
+**Lo demas que cayo:** el parche privado (comprobando antes que no aplica), el
+worktree de 28 MB —quitado con `git worktree remove`, no con `rm`— y **un segundo
+worktree que la ficha no listaba** (husk de la sesion `25fabe6b` en Temp);
+`V4_SAMPLES_ROJOS.md` marcado como HISTORICO y metido en git; los artefactos sueltos
+y 27 `.slots`, que ademas pasan a `.gitignore` (los de `bpstdlib/` y `bpdevices/`
+siguen versionados: son la distribucion).
+
+**`dist/` decidido** (Eduardo): es una salida, se reconstruye antes de publicar y el
+zip va a GitHub aparte. Ignorado, salvo los tres MANIFIESTOS de 4 KB, que son el
+unico registro en el repo de que binarios salieron.
+
+**⏭️ HALLAZGO PENDIENTE, para H13:** `bpstdlib/Str.{mod,dbg,slots}` llevan desde el
+18-ago regenerados y SIN COMMITEAR (los cambio `#446`: Str paso a fachada, por eso
+encoge 5.789 -> 5.578 B), y `packs/Stdlib.pack` es del 15-ago, anterior al cambio.
+De las 11 copias de `Str.mod` del arbol solo la de `bpstdlib/` esta en git, asi que
+esta acotado — pero es el desfase de siempre.
+
+**Pendientes de V5: 7.**
+
+
 ### 18-ago (tarde) — #439 probada EN PLACA, y los 32 MB del P4 que no pudieron ser
 
 **Lo gordo: `#439` CERRADA, con la prueba en el P4.** `CuelgaLog.bp` → 4 min 30 s
