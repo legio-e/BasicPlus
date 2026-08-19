@@ -1761,22 +1761,46 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   📌 **Ojo con el número**: el `H13` de V4 era la batería de pruebas de aquel cierre.
   Mismo problema que ya avisa la tabla con el `H9`. Los hitos se numeran por versión.
 
-- **Borrar las cinco carpetas de experimentos de `notas/`** (~56 MB): `metro-h4`,
-  `p4`, `v5-salto-crudo`, `v5-sqlite-prueba`, `v5-sqlite_edu`. Salía de `#411`.
-  Lo único NO duplicado son los `.elf` de SQLite (ARM 653 KB, RISC-V 1,5 MB), y
-  se regeneran del amalgama con los toolchains. *«En notas debería haber las
-  notas y nada más.»*
-- **Los restos del árbol**, con nombre y apellidos (subidos aquí desde `ESTADO` el
-  17-ago, que era el único sitio donde estaba el detalle):
-  - `docs/390-private-wip.patch` — borrador de #390 superado por `0b258d3`;
-    comprobado que **no aplica ni hacia delante ni al revés**. Borrar.
-  - `miVM/.claude/worktrees/jolly-blackburn-9ec483/` (29-jul) — una copia COMPLETA
-    del repo: todo `grep` global sale por duplicado. Borrar.
-  - `docs/V4_SAMPLES_ROJOS.md` — censo del **15-jul** (343 samples: 225 verdes, 80
-    skip-HW, 36 rojos). O se rehace o se marca como histórico: tal cual no dice el
-    estado de hoy de nada.
-  - artefactos sueltos: los `.slots`, `fc.txt`, `ff.txt`, `fileio_test.txt`,
-    `auto.txt`, `bigfile.bin`.
+- ~~**Borrar las cinco carpetas de experimentos de `notas/`**~~ — ✅ **HECHO el 19-ago**
+  (`3636ff0` el rescate, `f2edd80` el borrado). 57 MB fuera; `notas/` se queda con las
+  notas y nada más, que era el encargo (*«en notas debería haber las notas y nada más»*).
+  🩸 **Y la ficha se equivocaba en lo importante.** Decía que *«lo único NO duplicado son
+  los `.elf` de SQLite»*. Falso: había **26 fuentes y scripts que no existían en ningún
+  otro sitio del repo**, y entre ellos `vfs_bp.c` —el VFS sin el cual
+  `sqlite3_initialize()` falla en silencio— y los dos `build_sqlite*.sh`. Enfrente,
+  `bpstdlib/sqlite/nativo/*.npk` y `*.mdn`, **binarios versionados que se publican en
+  V5**. Borrar sin mirar los habría dejado sin receta para siempre.
+  📌 Rescatado a `bpstdlib/sqlite/nativo/src/` (77 KB), que es donde Eduardo decidió el
+  14-ago que viviera todo lo del pack. El `LEEME.md` de esa carpeta ya decía que se creó
+  porque *«el pack no se podía reconstruir desde un clon limpio»* — el traslado se había
+  hecho a medias.
+  🔬 **Probado, no supuesto**: el `.npk` de RISC-V se reconstruye **byte a byte** (618.168 B
+  idénticos, y sus números son los que canta el P4 al arrancar). Ese control es lo que
+  dice que la receta rescatada es la buena.
+
+- ~~**Los restos del árbol**~~ — ✅ **HECHO el 19-ago** (`f2edd80`). 28 MB más:
+  - `docs/390-private-wip.patch` — borrado, comprobando antes que no aplica.
+  - `miVM/.claude/worktrees/jolly-blackburn-9ec483/` — quitado con `git worktree remove`,
+    no con `rm`, para que git se entere. Y de paso salió **un segundo worktree** que la
+    ficha no listaba: un husk de la sesión `25fabe6b` en el scratchpad de Temp, con el
+    checkout ya borrado pero aún registrado. Fuera también; queda un único worktree.
+  - `docs/V4_SAMPLES_ROJOS.md` — **marcado como HISTÓRICO** y metido en git con esa
+    cabecera. Sin fecha visible invitaba a leerse como actual, y ya daba por vivos bugs
+    cerrados. El censo vigente es el del 3-ago y lo produce `compat/compat.sh`.
+  - artefactos sueltos (`fc.txt`, `ff.txt`, `fileio_test.txt` ×3, `auto.txt` —vacío—,
+    `bigfile.bin`) y **27 `.slots`**, que además pasan a `.gitignore` para que no vuelvan.
+    Los de `bpstdlib/` y `bpdevices/` **siguen versionados**: son la distribución.
+
+- 🔴 **HALLAZGO del 19-ago, y no es de limpieza: `bpstdlib/Str.{mod,dbg,slots}` llevan
+  desde ayer regenerados y SIN COMMITEAR.** Los cambió `#446` (Str pasó a fachada que
+  delega en Core) y por eso encoge, 5.789 → 5.578 B, que es lo esperado. Pero:
+  - el artefacto versionado está modificado en el working tree y nadie lo commiteó;
+  - **`packs/Stdlib.pack` es del 15-ago**, o sea anterior al cambio.
+  📌 Acotado, eso sí: de las 11 copias de `Str.mod` que hay en el árbol **sólo la de
+  `bpstdlib/` está en git**; las demás son salidas locales. Es exactamente el desfase
+  contra el que avisan los `regen_*_mods.sh`. **No se tocó**: commitear un binario que se
+  publica y regenerar el pack piden la tanda de verificación — va a `H13`.
+
 - **La decisión sobre `dist/`**: `dist/BasicPlus-4.0-win/packs/Stdlib.pack` está rancio
   respecto al layout nuevo de `Collections.Map` (#390: `layout 8 10` → `8 12`). Se
   dejó a propósito —es una distribución CONSTRUIDA de V4, no una fuente— pero es
