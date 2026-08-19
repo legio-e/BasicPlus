@@ -1798,6 +1798,19 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
      valor ESTRUCTURADO (`sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1`), lo que explica que
      un grep ingenuo no las vea. Documentarlas exige censarlas primero, en serio.
   6. **Los COMANDOS NUEVOS del IDE** (encargo de Eduardo, 19-ago).
+  6b. 🔴 **`native` con `long` — y `docs/AOT_LIMITES.md` MIENTE.** Lo recordo Eduardo el
+     19-ago (*«hemos ampliado las funciones native a long... es un pasito»*). Es `#381`,
+     cerrada el 16-ago y verificada en la Metro. Pero `AOT_LIMITES.md` sigue diciendo
+     que *«`float`, `long`, `double` y `void` quedan fuera»* (linea 64) y titula un
+     apartado *«Tipos de 8 bytes: long y double»* (33). **Eso ya no es cierto para
+     `long`**, y una documentacion que NIEGA una capacidad que existe cuesta mas que una
+     que falta: el usuario ni lo intenta.
+     📌 Ojo al corregir: de `double` el documento tiene RAZON y hay que dejarlo — en
+     RP2350 y STM32U5 no hay coma flotante de 64 bits en hardware (emparenta con `L14`).
+     Lo que cambia es solo `long`.
+     📌 Y lo que merece contarse de `#381`, que es lo mejor de la ficha: **dividir por
+     cero desde codigo nativo lanza un error de BP ATRAPABLE en vez de reiniciar la
+     placa**. Eso es lo que convierte `native` en algo que se puede usar sin miedo.
   7. **`QUICKSTART` y los dos README**, que son la puerta.
   8. **Las notas de la version**, con L14 y L15 de `PENDIENTES` enlazadas.
   📌 Y una comprobación barata al terminar, que es la que caza lo rancio: buscar en la
