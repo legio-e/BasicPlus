@@ -1860,6 +1860,28 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
+- **[lenguaje] `List` con captadores TIPADOS** — encargo de Eduardo (19-ago):
+  *«en List añadir métodos `getInteger(indice)`, `getLong(indice)`, `getFloat(indice)`,
+  `getDouble(indice)` y `getString(indice)`»*.
+  🩸 **De dónde sale, y por eso no es azúcar cosmético**: desde `#389` `List.get()`
+  devuelve `Object`, así que todo uso tipado necesita un downcast explícito. El coste ya
+  se pagó el 19-ago — `Json.bp` llevaba días sin compilar y el arreglo fueron **8 casts,
+  los 8 el mismo patrón**: `JsonValue(this.items.get(i))`. Con captadores tipados eso se
+  escribe una vez, dentro de `List`, en vez de en cada sitio que la use.
+  📌 **Encaja con lo que ya hay**: los envoltorios (`Integer`, `Long`, `Double`, `Float`,
+  `Boolean`) se mudaron a `Core` con `#446`, y `add` ya está sobrecargado por tipo. Esto
+  es la simetría que falta — se puede meter por tipo pero no sacar por tipo.
+  ⏭️ **Tres decisiones que tomar al hacerlo, no ahora:**
+  1. **¿devuelven el primitivo o el envoltorio?** Lo que quita el ruido es el primitivo
+     (`getInteger` → `integer`), o sea que el método desenvuelve.
+  2. **¿qué pasa si el elemento no es de ese tipo?** Lo coherente es que lance igual que
+     lanza el cast — *«un chequeo que nunca dice que no es un chequeo que no comprueba
+     nada»*, que es lo que se cuidó en `#444`.
+  3. **falta `getBoolean`** en la lista de Eduardo, y `Boolean` sí es uno de los cinco
+     envoltorios de `Core`. Puede ser deliberado o un olvido: preguntarlo al abrirlo.
+  📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
+  mirar si `Map` quiere lo mismo para sus valores.
+
 - **[wire] el verbo `RESET` no llega con un RUN vivo** *(era `#452`; aplazada a V6 el 18-ago. Eduardo: «ahora sabemos apañarnos y a los usuarios no les afecta» — el rodeo es `kill` + `reset`, y está documentado cara al usuario en `PENDIENTES.md` L15.)*
   Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
   `HELLO` y `KILL`, y a todo lo demás contesta `BUSY`
