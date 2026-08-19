@@ -118,7 +118,7 @@ module Medidas
     // Una línea: la base pone el SELECT, el cursor y el mapeo; aquí sólo se
     // estrecha el tipo de Object a Medida.
     public function loadById(id: long): Medida
-      return this.uno("id = " + Str.longToString(id))
+      return Medida(this.uno("id = " + Str.longToString(id)))
     end loadById
 
     // Por OBJETO: lo rellena a partir de su propio id. Devuelve si lo encontró.

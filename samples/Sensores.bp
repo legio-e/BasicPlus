@@ -59,13 +59,13 @@ module Sensores
     // ══ LOS VERBOS QUE CONOCEN LA ENTIDAD ═══════════════════════════════════
 
     public function loadById(id: long): Sensor
-      return this.uno("id = " + Str.longToString(id))
+      return Sensor(this.uno("id = " + Str.longToString(id)))
     end loadById
 
     // Por NOMBRE, que en esta tabla también es clave. Un finder propio de la
     // tabla: el generador lo emitiría por cada columna UNIQUE.
     public function loadByNombre(nombre: string): Sensor
-      return this.uno("nombre = '" + nombre + "'")
+      return Sensor(this.uno("nombre = '" + nombre + "'"))
     end loadByNombre
 
     public function load(s: Sensor): boolean

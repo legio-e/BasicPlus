@@ -515,8 +515,16 @@ public final class DaoGen {
         // ── los verbos que conocen la entidad ──
         b.append("    public function loadById(").append(pk.prop).append(": ").append(pk.tipo)
          .append("): ").append(tipoEnt).append("\n");
-        b.append("      return this.uno(\"").append(pk.columna).append(" = \" + ")
-         .append(aTexto(pk.tipo, pk.prop)).append(")\n");
+        // El DOWNCAST no es opcional: `Orm.Dao.uno()` devuelve `Object` —es la
+        // base, no sabe de que entidad hablamos— y esto declara devolver la
+        // entidad. Desde #389 (`Object` como raiz de verdad, en vez de `any`)
+        // eso hay que pedirlo explicitamente, y sin el cast el DAO generado NO
+        // COMPILA. Se descubrio el 19-ago al ir a documentar el ORM: el
+        // generador llevaba dias emitiendo codigo roto y nadie lo habia vuelto
+        // a construir, porque el .mod viejo seguia ahi.
+        b.append("      return ").append(tipoEnt).append("(this.uno(\"")
+         .append(pk.columna).append(" = \" + ")
+         .append(aTexto(pk.tipo, pk.prop)).append("))\n");
         b.append("    end loadById\n\n");
 
         b.append("    public function load(e: ").append(tipoEnt).append("): boolean\n");

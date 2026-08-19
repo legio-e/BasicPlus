@@ -5,7 +5,7 @@
 //     que herede de la que quieras ampliar. Así puedes regenerar sin
 //     perder tus cambios, que es para lo que está pensado.
 //
-// @generado 50c3648e0696b052
+// @generado 10c6dcf7c77d3079
 
 module ModeloDao
   import SQLite
@@ -39,7 +39,7 @@ module ModeloDao
     end read
 
     public function loadById(id: long): Modelo.Medida
-      return this.uno("id = " + Str.longToString(id))
+      return Modelo.Medida(this.uno("id = " + Str.longToString(id)))
     end loadById
 
     public function load(e: Modelo.Medida): boolean
@@ -124,7 +124,7 @@ module ModeloDao
     end read
 
     public function loadById(id: long): Modelo.Sensor
-      return this.uno("id = " + Str.longToString(id))
+      return Modelo.Sensor(this.uno("id = " + Str.longToString(id)))
     end loadById
 
     public function load(e: Modelo.Sensor): boolean

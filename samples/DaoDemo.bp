@@ -99,7 +99,7 @@ module DaoDemo
     print "  sus medidas:", suyas.length()
     var i: integer := 0
     while i < suyas.length() do
-      var m: Medidas.Medida := suyas.get(i)
+      var m: Medidas.Medida := Medidas.Medida(suyas.get(i))
       print "    id =", m.id, " valor =", m.valor, s.unidad, " t =", m.t
       i := i + 1
     endwh
@@ -154,7 +154,7 @@ module DaoDemo
 
     // ── el resto de los verbos, sobre los dos DAOs ──────────────────────────
     print ""
-    var una: Medidas.Medida := suyas.get(0)
+    var una: Medidas.Medida := Medidas.Medida(suyas.get(0))
     una.valor := 99.9d
     print "update(medida)  ->", mdao.update(una)
 

@@ -32,6 +32,12 @@ import java.util.stream.Collectors;
 
 public final class SemanticAnalyzer {
 
+    /** El modulo raiz del lenguaje: importado implicitamente en todos, y de
+     *  donde salen `Object`, `List` y los envoltorios. Su nombre manda al
+     *  resolver un tipo sin cualificar. */
+    private static final String CORE_MODULE = "Core";
+
+
     private final SemanticInfo info = new SemanticInfo();
     private ModuleSymbol module;
 
@@ -1457,24 +1463,47 @@ public final class SemanticAnalyzer {
         // L2: si el nombre del tipo no resuelve en el scope local, buscamos
         // en los namespaces importados. Si hay UNA coincidencia, la usamos;
         // si hay varias (collision), pedimos qualificación con `Mod.Cls`.
+        // Se recogen TODOS los candidatos antes de decidir: si el error saltara
+        // dentro del bucle, el orden de visita mandaria — y con `Core` visitado
+        // el ultimo nunca llegaria a ganar.
         Symbol fromImports = null;
         String importsAlias = null;
+        Symbol deCore = null;
+        boolean choque = false;
+        String otroAlias = null;
         for (Symbol m : module.members.getSymbols()) {
             if (m instanceof Symbol.ImportedNamespaceSymbol) {
                 Symbol.ImportedNamespaceSymbol ns = (Symbol.ImportedNamespaceSymbol) m;
                 Symbol cand = ns.classes.get(st.name);
                 if (cand == null) cand = ns.enums.get(st.name);
-                if (cand != null) {
-                    if (fromImports != null && fromImports != cand) {
-                        err(st.line, st.column, "tipo '" + st.name
-                                + "' ambiguo: aparece en '" + importsAlias
-                                + "' y '" + ns.name + "'; usa Module.Tipo");
-                        return ErrorType.INSTANCE;
-                    }
-                    fromImports = cand;
+                if (cand == null) continue;
+                if (CORE_MODULE.equals(ns.moduleName)) deCore = cand;
+                if (fromImports != null && fromImports != cand) {
+                    choque = true; otroAlias = ns.name;
+                } else if (fromImports == null) {
                     importsAlias = ns.name;
                 }
+                if (fromImports == null) fromImports = cand;
             }
+        }
+        // `Core` gana siempre: se importa IMPLICITAMENTE en todos los modulos y es
+        // donde viven los tipos raiz del lenguaje (Object, List, los envoltorios),
+        // asi que un `List` pelado significa el de Core POR DEFINICION.
+        //
+        // Sin esto, TODO programa del ORM dejo de compilar: importa `SQLite` y
+        // `Orm`, los dos importan `Core`, y cada interfaz reexporta las clases que
+        // expone SIN decir de quien son — asi que el semantico veia dos simbolos
+        // distintos donde hay UNA sola clase, y pedia elegir entre dos cosas
+        // iguales. Se vio documentando el ORM, no compilando la stdlib.
+        if (deCore != null) {
+            if (deCore instanceof ClassSymbol) return new ClassType((ClassSymbol) deCore);
+            if (deCore instanceof EnumSymbol)  return new EnumType((EnumSymbol) deCore);
+        }
+        if (choque) {
+            err(st.line, st.column, "tipo '" + st.name
+                    + "' ambiguo: aparece en '" + importsAlias
+                    + "' y '" + otroAlias + "'; usa Module.Tipo");
+            return ErrorType.INSTANCE;
         }
         if (fromImports instanceof ClassSymbol)
             return new ClassType((ClassSymbol) fromImports);
