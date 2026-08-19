@@ -1752,15 +1752,27 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   sintetizadas, y su frase *«SyncList extiende List»* pasó a ser literalmente cierta
   con `#450`/`#451` en vez de quedarse rancia. `Comparable` tiene entrada (§ tabla de
   stdlib). `Thread` y `Mutex` siguen descritos como sintetizados, que es correcto.
-  ⏭️ **Lo que hay que escribir**, por orden de lo que más se nota si falta:
-  1. **el ORM** — el ciclo entero: anotar con `@BD`, generar el DAO, qué verifica el
-     verificador y qué NO, y la tabla de tipos BP↔SQLite;
-  2. **SQLite en un pack** — cómo se construye, cómo se graba y qué placas lo
-     soportan hoy (Metro y P4; el P4 con el límite de 16 MB del caché, ver V6);
-  3. **Core** — que `List` ya no la sintetiza el compilador, los envoltorios
-     (`Integer`/`Long`/`Double`/`Float`/`Boolean`) y el `add` sobrecargado;
-  4. **`QUICKSTART` y los dos README** — una línea cada uno, que son la puerta;
-  5. **las notas de la versión**, con L14 y L15 de `PENDIENTES` enlazadas.
+  ✅ **HECHO el 19-ago: `docs/BASEDATOS.md`** (`d614d27f`) — las 13 secciones del indice
+  de Eduardo, y todo lo que afirma esta EJECUTADO. Escribirlo fue lo que destapo que el
+  ORM no compilaba (ver la ficha de arriba): documentar es una prueba mas.
+  ⏭️ **Lo que queda, en el orden acordado con Eduardo (19-ago):**
+  1. **La TARJETA SD** — el hueco grande: cero menciones de «tarjeta SD», «/sd» o
+     «FatFs» en manual, referencia y QUICKSTART, y son TRES hitos (H1, H2, H6).
+     📌 **Encuadre correcto, precision de Eduardo**: la SD es capacidad de la IMAGEN,
+     no de la placa. **RP2350 y ESP32** (en STM32 todavia no). Metro y P4 traen lector
+     soldado; en una **Pico 2 se cablea uno** y funciona igual — la imagen es la misma
+     y los pines salen del ENV. Decir «Metro y P4» donde toca decir la familia
+     convierte una cuestion de cableado en un limite inventado.
+  2. **Los PACKS** — construir, grabar, listar, formatear; packs ejecutables; los
+     **resources dentro del pack**; `import X from "..."` (hay samples: `fromtest.bp`,
+     `frompathtest.bp`, `appwithfromimpl.bp`); y los **proyectos tipo pack**, que
+     probablemente vienen de V4. Hoy: UNA mencion en cada documento.
+  3. **Los cambios del IDE** (H10).
+  4. **`Core`** — que `List` ya no la sintetiza el compilador, los envoltorios y sus
+     CONVERSIONES, el `add` sobrecargado y los **captadores tipados** (`getInteger` y
+     compania: cero menciones hoy).
+  5. **`QUICKSTART` y los dos README**, que son la puerta.
+  6. **Las notas de la version**, con L14 y L15 de `PENDIENTES` enlazadas.
   📌 Y una comprobación barata al terminar, que es la que caza lo rancio: buscar en la
   documentación de usuario los nombres que V5 movió o creó y ver que ninguno describe
   el mundo anterior.

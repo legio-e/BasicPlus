@@ -27,6 +27,50 @@
 
 ## Última sesión
 
+### 19-ago (tarde) — H12 arranca, y documentar destapa que el ORM no funcionaba
+
+**Lo mas importante del dia no es lo que se escribio, es lo que salio al escribirlo.**
+Al ir a documentar las BD hubo que ejecutar los demos, y NINGUNO compilaba. Tres
+causas, ninguna la que yo suponia:
+1. **el GENERADOR de DAO emitia codigo roto** — `return this.uno(...)` sin el downcast,
+   y `uno()` devuelve `Object` desde #389;
+2. **`List` era ambiguo en TODO programa del ORM** — al importar `Core` el semantico
+   aliasa `List`, y la interfaz del modulo la reexporta COMO SUYA; quien importa
+   `SQLite` y `Orm` veia dos simbolos para una clase;
+3. **y lo que mas costo NO era un bug**: `samples/` tenia SEIS copias fosiles de la
+   stdlib del 10-11 de JUNIO, ninguna en git, ganando por orden de busqueda.
+Los tres demos **compilan Y CORREN** (`240b400d`, `7854b61f`, `6bb78c6a`).
+
+**🩸 Y dos cosas que borre yo por la manana y hubo que recuperar:**
+- los `.bpbuild` de los demos de BD — reconstruidos y ahora EN GIT (`13a78f9`);
+- **`packglue.c`**, el doble de host de la tabla BIOS, que no estaba en ningun sitio.
+  Reescrito desde `bios_pico.c` (`7854b61f`). Eduardo: *«un source de VM-C que no esta
+  en su sitio y tampoco se ha subido al Git no es un fallo, son como minimo 2»*. Son
+  TRES: fuera del arbol, fuera de git, y nadie lo detectaba — el censo que pidio
+  encontro OTRA ruta muerta en el mismo target (`../bpstdlib/SQLite.bp`, rota desde
+  el 14-ago).
+🩸 **La leccion, y es de metodo**: al censar lo unico de `notas/` busque `.c`, `.h`,
+`.sh` y `.link` — y NO busque `.bpbuild`. Mire las fuentes y me olvide de los ficheros
+que las orquestan.
+
+**Adelantado de V6 por decision de Eduardo** (*«nos ahorramos un monton de problemas»*):
+**los captadores tipados de `List`** — `getInteger/Long/Float/Double/String/Boolean`
+(`4a003aeb`). Como BP no tiene test de tipo, las conversiones son METODOS VIRTUALES en
+`Comparable`. La opcion buena (`className()`) NO CABIA: el descriptor de clase no
+guarda el nombre, asi que exigia cambiar el formato — a V6. Verificado con
+`samples/ListGets.bp`: **las dos VMs, salida identica byte a byte**, y bateria H13 sin
+regresion. ⚠️ Anadir 5 metodos a `Comparable` CORRE SUS RANURAS: hubo que reconstruir
+la libreria de SQLite, o `DaoDemo`/`GenDemo` fallaban en ejecucion aunque compilaran.
+
+**Escrito: `docs/BASEDATOS.md`** (`d614d27f`), las 13 secciones del indice de Eduardo.
+
+**⏭️ Sigue H12**, con la lista y el orden en `FICHAS`: la **tarjeta SD** primero (el
+hueco grande, tres hitos sin una sola mencion), luego **packs**, **IDE**, **Core**, la
+puerta y las notas. 📌 Y el encuadre de la SD, precision de Eduardo: es capacidad de la
+**IMAGEN** (RP2350 y ESP32, en STM32 no), no de la placa — en una Pico 2 se cablea un
+lector y funciona.
+
+
 ### 19-ago — la limpieza, y el rescate que casi no se hace
 
 **85 MB fuera**, en commits separados: `3636ff0` (rescate), `f2edd80` (borrado),
