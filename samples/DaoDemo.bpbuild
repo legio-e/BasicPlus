@@ -1,0 +1,16 @@
+{
+  "_comentario": [
+    "DaoDemo — DAOs escritos A MANO (Sensores, Medidas) sobre UNA conexion.",
+    "En todo el programa no hay una sola sentencia SQL: esa es la prueba.",
+    "",
+    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "        --project samples/DaoDemo.bpbuild --backend=mivm",
+    "",
+    "RECONSTRUIDO el 19-ago (el original vivia en notas/ y se perdio al limpiar).",
+    "Antes hay que construir la libreria: --project bpstdlib/sqlite/SQLite.bpbuild"
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./Sensores.bp", "./Medidas.bp", "./DaoDemo.bp"],
+  "outDir":       "out",
+  "dependencies": ["../bpstdlib/sqlite/out"]
+}

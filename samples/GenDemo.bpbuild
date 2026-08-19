@@ -1,0 +1,22 @@
+{
+  "_comentario": [
+    "GenDemo — los mismos CRUD pero con DAOs GENERADOS por `DAO build`.",
+    "Las entidades estan en Modelo.bp (del usuario) y los DAOs en ModeloDao.bp,",
+    "que NO se edita: se regenera.",
+    "",
+    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "        --project samples/GenDemo.bpbuild --backend=mivm --dao   <- generar",
+    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "        --project samples/GenDemo.bpbuild --backend=mivm         <- compilar",
+    "",
+    "`database` es OPCIONAL y solo sirve para VERIFICAR: el compilador contrasta",
+    "las entidades @BD contra el esquema real y avisa de lo que no cuadra. Nunca",
+    "es error — se puede disenar la base entera antes que el programa.",
+    "",
+    "RECONSTRUIDO el 19-ago (el original vivia en notas/ y se perdio al limpiar)."
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./Modelo.bp", "./ModeloDao.bp", "./GenDemo.bp"],
+  "outDir":       "out",
+  "dependencies": ["../bpstdlib/sqlite/out"]
+}

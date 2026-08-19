@@ -1,0 +1,20 @@
+{
+  "_comentario": [
+    "SqlDemo — SQLite SIN ORM: exec, execInt/Long/Double/Str y query.",
+    "",
+    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "        --project samples/SqlDemo.bpbuild --backend=mivm",
+    "",
+    "RECONSTRUIDO el 19-ago. El original vivia en notas/ (ignorada por git) y se",
+    "perdio al limpiar: los .bp estaban a salvo aqui, el fichero de proyecto no.",
+    "Por eso este vive en samples/, versionado.",
+    "",
+    "`dependencies` apunta al build de la libreria de SQLite. Hay que construirla",
+    "antes (--project bpstdlib/sqlite/SQLite.bpbuild), porque SQLite.mod y Orm.mod",
+    "son SALIDAS suyas, no fuentes."
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./SqlDemo.bp"],
+  "outDir":       "out",
+  "dependencies": ["../bpstdlib/sqlite/out"]
+}
