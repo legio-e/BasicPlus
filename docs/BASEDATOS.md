@@ -35,8 +35,9 @@ la VM, y su tamaño se declara en el entorno de la placa:
 SQLite=4
 ```
 
-Cuatro megabytes es lo que usa el P4. Si pones `SQLite=0` o no cabe, el pack no
-arranca y el arranque lo dice en su línea `bd:`.
+Cuatro megabytes es lo que usa el P4. **El mínimo son 2** y el máximo 4095; por
+debajo de 2 el pack no arranca, igual que con `SQLite=0` o si no cabe — y el
+arranque lo dice en su línea `bd:`.
 
 **Si falta el pack**, el programa no devuelve ceros ni se cuelga: la primera llamada
 lanza una excepción que lo nombra.

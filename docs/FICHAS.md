@@ -1771,8 +1771,16 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   4. **`Core`** — que `List` ya no la sintetiza el compilador, los envoltorios y sus
      CONVERSIONES, el `add` sobrecargado y los **captadores tipados** (`getInteger` y
      compania: cero menciones hoy).
-  5. **`QUICKSTART` y los dos README**, que son la puerta.
-  6. **Las notas de la version**, con L14 y L15 de `PENDIENTES` enlazadas.
+  5. **Las VARIABLES DE ENTORNO** (Eduardo, 19-ago: *«las variables de entorno que
+     afectan al sistema»*). 🔴 **No hay NINGUN documento que las liste**, y peor: hoy
+     nadie puede enumerarlas — hicieron falta tres greps y los dos primeros se dejaron
+     la mayoria. Censo mecanico: `SQLite`, `board`, `flashSizeBytes`, `gpioCount`,
+     `log`, `psram`, `psramCsPin`, `sd`, `gc`, `latido`, `display`... y algunas llevan
+     valor ESTRUCTURADO (`sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1`), lo que explica que
+     un grep ingenuo no las vea. Documentarlas exige censarlas primero, en serio.
+  6. **Los COMANDOS NUEVOS del IDE** (encargo de Eduardo, 19-ago).
+  7. **`QUICKSTART` y los dos README**, que son la puerta.
+  8. **Las notas de la version**, con L14 y L15 de `PENDIENTES` enlazadas.
   📌 Y una comprobación barata al terminar, que es la que caza lo rancio: buscar en la
   documentación de usuario los nombres que V5 movió o creó y ver que ninguno describe
   el mundo anterior.
