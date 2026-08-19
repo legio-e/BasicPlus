@@ -1897,12 +1897,28 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   - `getInteger/getLong/getFloat/getDouble(i)` — convierten **entre numéricos**; si el
     elemento es una cadena, **NO se parsea**: eso se pide con `Str.parse*`.
   - lo imposible lanza, que es lo que Eduardo pidió.
+  ✅ **`getBoolean` ENTRA** (Eduardo, 19-ago: *«añade getBoolean, no hay problema»*), y
+  con él la conversión booleano→numérico: **`False` = 0, `True` = 1**.
+  📐 **De dónde viene la idea, y el matiz que la recorta.** Eduardo la trajo por su
+  parecido con `ord()`, *«que también sirve para los elementos de un enumerador y para la
+  conversión de char»*. `Ord` es de **Pascal** (en Java es `? 1 : 0`), y eso juega a
+  favor: está definido justo para esos tres casos, así que es buen modelo. **Pero en BP
+  sólo quedan DOS de los tres**: `char` **no existe como tipo** —no está en la gramática
+  y los caracteres ya SON enteros (`sb.appendChar(44)`)—, o sea que esa pata sobra aquí.
+  🔬 **Y el tercero tampoco funciona hoy**, comprobado el 19-ago: `var i: integer := c`
+  con `c` de un enum da *«valor de tipo 'Color' no asignable a variable de tipo
+  'integer'»*, aunque la gramática los respalda con enteros
+  (`enum_value ::= name [':=' INTEGER_LIT]`). O sea que **de un enum no se puede sacar su
+  número**, y eso es un agujero por sí solo — emparenta con `M6` de `PENDIENTES`
+  (`const C := Color.RED` tampoco vale). Hacia `string` sí van los dos, coherente con la
+  regla de dirección.
+  ⏭️ **Recomendación al abrirlo: NO un `ord()` nuevo.** Con dos casos no compensa gastar
+  una palabra reservada —criterio de Eduardo: *«si ya hay algo especial, el azúcar cuelga
+  de ahí»*—. Lo natural es que salga de las conversiones que ya se van a escribir:
+  `Integer(b)` e `Integer(color)`, y los captadores encima.
   ⏭️ **Lo que sigue abierto, y es sólo la matriz numérica:**
   1. `double`→`integer`: ¿trunca o redondea?
   2. `long`→`integer` que no cabe: ¿error (es una conversión imposible) o recorte?
-  3. `boolean`→número: ¿1/0, o error por no ser numérico?
-  4. **falta `getBoolean`** en la lista, y `Boolean` sí es uno de los cinco envoltorios.
-     Puede ser deliberado o un olvido: preguntarlo al abrirlo.
   📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
   mirar si `Map` quiere lo mismo para sus valores.
 
