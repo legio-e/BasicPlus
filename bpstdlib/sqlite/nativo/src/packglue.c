@@ -7,7 +7,7 @@
  * (`bpvm_bios_t`) cuando lo carga. Eso es lo que permite que el MISMO binario
  * corra en la Metro y en el P4 sin recompilar. En el PC no hay firmware, asi
  * que aqui esta la misma tabla implementada sobre la libreria estandar — y con
- * ella `make test-sqldemo` ejecuta en el sobremesa exactamente el SQLite que
+ * ella `make test-sqldemo` ejecuta en el PC exactamente el SQLite que
  * lleva la placa.
  *
  * ── DE LAS 29 RANURAS, SOLO SEIS SON NUESTRAS ──────────────────────────────
