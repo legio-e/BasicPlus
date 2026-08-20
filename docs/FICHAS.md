@@ -1764,6 +1764,22 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   usa el ORM» obliga a ejecutarlo, y ejecutarlo es lo que lo encontro. Documentar antes
   de publicar no es cortesia con el usuario: es una prueba mas.
 
+- 🔴 **La documentación INGLESA arrastra deuda de V4** — visto el 20-ago al repasar el
+  bilingüe (lo pidió Eduardo: *«la documentación, la release y la portada son bilingües»*).
+  ✅ **Lo de V5 ya está espejado**: `en/referencia.html` (los dos grupos, SD y Packs),
+  `en/guia-ide.html` (comandos y las once claves del ENV), `en/index.html` (V5, tarjetas y
+  el escaparate de BD) y `en/basedatos.html`, que no existía.
+  🔴 **Lo que falta es ANTERIOR a V5:**
+  1. **`en/manual.html` se dejó SIETE secciones de V4**: `eventos` con sus cuatro
+     subsecciones (`ev-declarar`, `ev-escuchar`, `ev-cuando`, `ev-async`), `sobrecarga` y
+     `dospasadas`. Los eventos y la sobrecarga de funciones **son features de V4** que
+     nunca se tradujeron: 61 secciones en español contra 54 en inglés.
+  2. **Las notas de versión no existen en inglés.** `docs/RELEASES.md` es sólo español, y
+     `en/index.html` las enlaza marcadas «(Spanish)» — o sea que está asumido, no roto.
+  ⏭️ Decisión de Eduardo: traducir esas siete secciones es trabajo de documentación, no un
+  bug, así que cabe o no cabe en el freeze según lo que él quiera. Lo que sí conviene es
+  que no se publique creyendo que el manual inglés está completo.
+
 ### Cierre de V5 — lo que se hace AL CERRAR, no antes
 
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
