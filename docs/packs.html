@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Packs</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ul>
+    <li class="group"><a href="#quees">1. Qué es un pack</a></li>
+    <li class="group"><a href="#tipos">2. Dos tipos: librería y ejecutable</a></li>
+    <li class="group"><a href="#construir">3. Construir uno</a></li>
+    <li class="group"><a href="#dentro">4. Qué entra dentro</a></li>
+    <li class="group"><a href="#grabar">5. Grabarlo y gestionarlo</a></li>
+    <li class="group"><a href="#usar">6. Usarlo desde un programa</a></li>
+    <li class="group"><a href="#from">7. Decir de dónde viene un módulo</a></li>
+    <li class="group"><a href="#descubrir">8. Descubrirlos en ejecución</a></li>
+    <li class="group"><a href="#nativo">9. Packs con código nativo</a></li>
+    <li class="group"><a href="#trampas">10. Trampas conocidas</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<h1>Packs</h1>
+
+<p>
+  Un <strong>pack</strong> es un artefacto que se graba en la placa y lleva dentro varios
+  ficheros: módulos <code>.mod</code>, sus puentes nativos <code>.mdn</code>, recursos, y
+  —si hace falta— código nativo que se ejecuta en el sitio. Sirve para dos cosas que en un
+  micro importan mucho:
+</p>
+
+<ul>
+  <li><strong>Distribuir una librería en una pieza.</strong> Un pack se graba una vez y se
+  queda; los programas que lo usan no lo llevan encima.</li>
+  <li><strong>Que lo grande no lo pague quien no lo usa.</strong> SQLite ocupa más que
+  toda la VM junta. En un pack, sólo está en las placas donde alguien lo quiso.</li>
+</ul>
+
+<h2 id="quees">1. Qué es un pack, y qué no</h2>
+
+<p>
+  <strong>No es una librería del lenguaje.</strong> Las librerías (<code>Math</code>,
+  <code>Json</code>, <code>Gpio</code>…) viajan con la imagen o viven en <code>/lib</code>.
+  Un pack es un <em>contenedor</em>, y lo que hay dentro puede ser cualquier cosa: módulos
+  tuyos, de otro, o un motor entero escrito en C.
+</p>
+
+<p>
+  <strong>No es un fichero comprimido.</strong> Se graba en su propia zona de la flash y
+  los módulos se leen <strong>en el sitio</strong>, sin copiarlos a RAM. Por eso puede
+  llevar cosas que no cabrían de otra manera.
+</p>
+
+<h2 id="tipos">2. Dos tipos: librería y ejecutable</h2>
+
+<p>La diferencia es una sola cosa: <strong>si el módulo raíz tiene <code>main</code></strong>.</p>
+
+<table>
+  <tr><th>tipo</th><th>cuándo</th><th>para qué</th></tr>
+  <tr><td><strong>Librería</strong></td><td>el módulo raíz no tiene <code>main</code></td>
+      <td>lo importan otros programas; no se «ejecuta»</td></tr>
+  <tr><td><strong>Ejecutable</strong></td><td>el módulo raíz tiene <code>main</code></td>
+      <td>el pack anota su entrada en el manifiesto y se puede lanzar</td></tr>
+</table>
+
+<p>
+  No hay que declararlo: el compilador lo deduce y lo dice al construir
+  (<em>«pack: LIBRERIA (el modulo raiz no tiene <code>main</code>, y no le hace
+  falta)»</em>).
+</p>
+
+<h2 id="construir">3. Construir uno</h2>
+
+<p>
+  Un pack sale de un <strong>proyecto</strong>. En el <code>.bpbuild</code>, la clave es
+  <code>"out": "pack"</code>:
+</p>
+
+<pre><code>{
+  <span class="str">"sourceDir"</span>:    <span class="str">"."</span>,
+  <span class="str">"outDir"</span>:       <span class="str">"out"</span>,
+  <span class="str">"main"</span>:         <span class="str">"Demo"</span>,
+  <span class="str">"dependencies"</span>: [],
+  <span class="str">"out"</span>:          <span class="str">"pack"</span>,
+  <span class="str">"pack"</span>: {
+    <span class="str">"name"</span>:     <span class="str">"DemoLib"</span>,
+    <span class="str">"version"</span>:  <span class="str">"1.0"</span>,
+    <span class="str">"provides"</span>: <span class="str">"DEMO"</span>,
+    <span class="str">"notas"</span>:    <span class="str">"lo que sea, para quien lo lea"</span>
+  }
+}</code></pre>
+
+<p>Y se construye como cualquier otro proyecto:</p>
+
+<pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
+     --project mi/proyecto.bpbuild --backend=mivm</code></pre>
+
+<p>
+  Desde el IDE, <em>Project → Build Project</em>. El resultado es un <code>.pack</code> en
+  el <code>outDir</code>.
+</p>
+
+<p class="warn">
+  <strong><code>provides</code> se declara, no se deduce.</strong> Es la marca de cuatro
+  caracteres con la que el pack publica su API nativa (la de SQLite es <code>SQLI</code>).
+  Sacarla del nombre —cortar a cuatro y poner mayúsculas— funcionaría hasta el primer
+  nombre que no se parezca, así que se escribe. Sólo hace falta si el pack publica código
+  nativo; una librería de puro BP no la necesita.
+</p>
+
+<h2 id="dentro">4. Qué entra dentro</h2>
+
+<p>Cuando el proyecto dice <code>"out": "pack"</code>, se empaqueta:</p>
+
+<ul>
+  <li>los <strong><code>.mod</code></strong> del <code>outDir</code> — los módulos compilados;</li>
+  <li>los <strong><code>.mdn</code></strong> que haya — los puentes AOT, uno por arquitectura;</li>
+  <li>y los <strong>recursos</strong>, lo que tengas en <code>resources/</code>: imágenes,
+  fuentes, formularios <code>.win</code>, ficheros de datos.</li>
+</ul>
+
+<p>
+  Eso último es lo que convierte un pack en algo autocontenido: una librería gráfica puede
+  llevarse su fuente dentro y no pedirle nada a quien la usa.
+</p>
+
+<div class="note">
+  <p>
+    <strong>Los <code>.npk</code> son un ingrediente, no una salida.</strong> Si el pack
+    lleva código nativo, su binario se copia al <code>outDir</code> <em>antes</em> de
+    construir: el compilador genera <code>.mod</code> y <code>.mdn</code>, pero el nativo
+    lo pones tú. Está contado en <code>bpstdlib/sqlite/LEEME.md</code>, que es el ejemplo
+    completo.
+  </p>
+</div>
+
+<h2 id="grabar">5. Grabarlo y gestionarlo</h2>
+
+<p>
+  En el IDE, panel de <strong>Packs</strong>. Ahí está todo lo que se puede hacer con la
+  zona de packs de la placa:
+</p>
+
+<table>
+  <tr><th>botón</th><th>qué hace</th></tr>
+  <tr><td><strong>Refrescar</strong></td><td>lee qué packs hay grabados y qué llevan dentro</td></tr>
+  <tr><td><strong>Copiar pack a la placa…</strong></td><td>graba un <code>.pack</code></td></tr>
+  <tr><td><strong>Borrar</strong></td><td>quita uno</td></tr>
+  <tr><td><strong>Formatear zona…</strong></td><td>deja la zona de packs vacía</td></tr>
+</table>
+
+<p>
+  El arranque de la placa también informa: dice dónde está la zona, cuánto ocupa y si ha
+  podido mapearla.
+</p>
+
+<h2 id="usar">6. Usarlo desde un programa</h2>
+
+<p>
+  Nada especial: <code>import</code> y ya. Un módulo que vive en un pack se importa igual
+  que uno que vive en <code>/lib</code>.
+</p>
+
+<pre><code><span class="kw">import</span> SQLite</code></pre>
+
+<p class="warn">
+  <strong>El sistema de ficheros ECLIPSA al pack.</strong> Si hay un
+  <code>Core.mod</code> en el FS y otro dentro de un pack, gana el del FS — y el arranque
+  lo avisa: <em>«'Core' del FS eclipsa al del pack»</em>.<br><br>
+  Es una regla útil (puedes sustituir un módulo del pack sin regrabarlo) y una trampa a
+  partes iguales: si subes al dispositivo una copia vieja de algo que ya trae el pack, el
+  programa usará la vieja y no dirá nada más que ese aviso. Cuando algo se comporte como
+  una versión anterior, mira esa línea.
+</p>
+
+<h2 id="from">7. Decir de dónde viene un módulo</h2>
+
+<p>
+  Normalmente no hace falta. Cuando sí —porque el módulo no está donde se le busca, o
+  porque quieres fijarlo— el <code>import</code> admite decir la ruta:
+</p>
+
+<pre><code><span class="kw">import</span> OtherMod <span class="kw">from</span> <span class="str">"external/other.mod"</span>
+<span class="kw">import</span> lib.Util <span class="kw">from</span> <span class="str">"../shared/util.mod"</span></code></pre>
+
+<p>
+  El nombre puede ir cualificado (<code>lib.Util</code>), y la ruta es relativa al
+  proyecto. Es lo mismo que hace <code>dependencies</code> en el <code>.bpbuild</code>,
+  pero declarado en el fichero que lo usa en vez de en el proyecto entero.
+</p>
+
+<h2 id="descubrir">8. Descubrirlos en ejecución</h2>
+
+<p>
+  Un programa puede averiguar por sí mismo qué packs hay grabados y qué llevan, sin que
+  nadie se lo diga por adelantado:
+</p>
+
+<pre><code><span class="kw">import</span> Packs
+
+<span class="kw">var</span> p: <span class="type">List</span> := Packs.<span class="fn">list</span>()
+<span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+<span class="kw">while</span> i &lt; p.<span class="fn">length</span>() <span class="kw">do</span>
+  <span class="kw">print</span> p.<span class="fn">getString</span>(i)
+  i := i + <span class="num">1</span>
+<span class="kw">endwh</span></code></pre>
+
+<p>
+  Y <code>Packs.listIn(pack, ext)</code> da los ficheros de un pack con una extensión
+  concreta — útil para que una aplicación cargue todos los <code>.win</code> o todas las
+  fuentes que encuentre.
+</p>
+
+<h2 id="nativo">9. Packs con código nativo</h2>
+
+<p>
+  Un pack puede llevar código máquina y ejecutarlo en la placa. Es lo que hace posible
+  meter un motor como SQLite, y tiene tres consecuencias que conviene conocer:
+</p>
+
+<ul>
+  <li><strong>El nativo es por arquitectura.</strong> Un <code>.npk</code> de ARM no vale
+  en RISC-V. Un pack puede llevar los dos.</li>
+  <li><strong>Se ejecuta desde la flash</strong>, mapeada, sin copiarse a RAM.</li>
+  <li><strong>El código del pack no puede tocar el montón de la plataforma.</strong> Lo que
+  necesita del sistema —ficheros, reloj, memoria— se lo presta el firmware en una tabla, y
+  su memoria sale de una arena aparte. Por eso un pack no llama a <code>malloc</code>.</li>
+</ul>
+
+<p>
+  El caso completo, de principio a fin, está en
+  <a href="basedatos.html">bases de datos</a> y en
+  <code>bpstdlib/sqlite/LEEME.md</code>.
+</p>
+
+<h2 id="trampas">10. Trampas conocidas</h2>
+
+<p>
+  <strong>Un pack realojado para otra dirección no vale.</strong> El nativo se graba
+  preparado para una posición concreta; si cambia el reparto de la flash, hay que
+  regrabarlo. El arranque lo dice con todas las letras — <em>«realojado para OTRA
+  direccion — regrabalo desde el IDE»</em> — y compara el sello que esperaba con el que
+  trae el pack.
+</p>
+
+<p>
+  <strong>El FS eclipsa al pack</strong> (ver §6). La causa más común de «esto se comporta
+  como la versión de antes».
+</p>
+
+<p>
+  <strong>La base de datos del proyecto no viaja.</strong> La clave <code>database</code>
+  del <code>.bpbuild</code> es del PC y sirve para verificar entidades; <strong>no se copia
+  al micro</strong>. Una base no es un artefacto: es un dato, y acumula lo que no está en
+  ningún otro sitio. Copiarla en cada ejecución convertiría «ejecutar» en «perder los datos
+  de campo».
+</p>
+
+<p>
+  <strong>Y por lo mismo, no pongas la base en <code>resources/</code></strong>: esa
+  carpeta sí se copia en cada ejecución, así que machacaría tu base con la del proyecto. El
+  compilador te avisa si lo intentas.
+</p>
+
+</main>
+</div>
+</body>
+</html>
