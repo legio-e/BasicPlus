@@ -50,6 +50,17 @@ sobrecarga, `dospasadas`).
 📌 El rebuild dio **bytes idénticos** en todo salvo ese `.npk`: la construcción es
 reproducible.
 
+**Coda del día — cuatro notas de V6 sobre el ESP32-P4X.** Ninguna toca código: el freeze
+sigue en pie y el ZIP sin rehacer. Eduardo avisa de que las placas que tenemos son P4 y
+que por un defecto eléctrico van a **360 MHz** — los 400 dan problemas de consumo — y que
+el **P4X** lo corrige y sí llega a 400. Al escribirlo fui al IDF y lo que yo había supuesto
+resultó falso: **una sola imagen no puede cubrir los dos silicios**. Lo dice su Kconfig en
+la primera línea (*«rev. <3.0 and >=3.0 is mutually exclusive»*) y el interruptor arrastra
+hasta el reloj del bootloader. Política de Eduardo: **se mantienen las dos**, porque del P4
+se siguen vendiendo placas y del P4X apenas hay. Y una buena noticia medida: el bootloader
+ya rechaza la imagen equivocada en las dos direcciones, así que basta con nombrarlas bien.
+Todo en `FICHAS.md` → «Aplazadas a V6».
+
 **⏭️ MAÑANA: H13 en placa**, con `docs/H13_PRUEBAS_V5.md`. Dos días (viernes y sábado),
 partido por puertas. La Puerta 1 —el ABI de `Comparable` en las tres familias— es la que
 bloquea, y la Metro es obligatoria porque su `.npk` no se ha ejecutado nunca.
