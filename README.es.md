@@ -34,17 +34,19 @@ end Blink
 En un PC sin GPIO los builtins de hardware loggean por stdout; en la placa
 mueven pines de verdad. El programa es el mismo byte a byte.
 
-## Nuevo en V4 — consolidación
+## Nuevo en V5 — los datos
 
-V4 **consolida** más que añade. Se ha reformado la **gestión de memoria**: una
-referencia ya no es una dirección, es un **handle** con contador de generación,
-así que usar un objeto ya liberado **falla ahí mismo** en vez de corromper datos
-en silencio. También el **sistema de archivos**, ahora littlefs en las tres
-familias. Por el camino han entrado los **eventos**, la **sobrecarga de
-funciones** y un **micro simulado** dentro del IDE, para probar sin placa.
+V4 arregló los cimientos. **V5 va de guardar datos**: una **tarjeta SD** con
+gigabytes, **SQLite** corriendo dentro del micro con un **ORM** que escribe el
+SQL por ti, y los **packs**, que hacen posible meter una librería tan grande
+como SQLite sin que la pague quien no la usa — y sin comerse la RAM, porque el
+código de un pack se ejecuta desde la flash en vez de cargarse en memoria.
+
+Por el camino, `List` y los envoltorios han dejado de sintetizarse y ahora están
+escritos en BasicPlus, con **captadores tipados** que convierten en vez de
+castear, y las funciones `native` aceptan **`long`**.
 
 Detalle completo en las **[notas de versión](docs/RELEASES.md)**.
-
 ## Interfaces gráficas (desde V3)
 
 Sobre **LVGL**: una veintena de widgets, la posibilidad de **diseñar las

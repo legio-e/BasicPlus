@@ -1,8 +1,144 @@
 # Notas de versión — BasicPlus
 
 > Borrador del cuerpo de la *release* de GitHub. La etiqueta propuesta es
-> `v4.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`). Ajusta
+> `v5.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`). Ajusta
 > versión/fecha al publicar.
+
+---
+
+## v5.0 — agosto 2026 · «los datos»
+
+V4 arregló los cimientos. V5 va de lo que un microcontrolador no sabía hacer
+todavía: **guardar datos de verdad**. Una tarjeta SD con gigabytes, una base de
+datos SQLite corriendo dentro del micro, un ORM que escribe el SQL por ti, y los
+**packs**, que son lo que hace posible meter algo tan grande como SQLite sin que
+lo pague quien no lo usa.
+
+Lo que no cambia es el invariante de siempre: el mismo bytecode, la misma salida
+byte a byte en las dos VMs, y todo verificado en placa.
+
+### La tarjeta SD
+
+Un micro con tarjeta deja de estar limitado a los pocos megas de su flash. Y se
+usa sin aprender nada nuevo: **es una ruta más**.
+
+```basic
+writeFile("/sd/medidas.csv", "hora;valor\n")
+```
+
+La monta el firmware al arrancar, así que no hay que montar nada a mano. Los
+pines **no van en el código**: se declaran en el entorno de la placa, de modo que
+el mismo programa vale para dos cableados distintos.
+
+Funciona en **RP2350** (por SPI) y en **ESP32** (por SDIO, 1 o 4 bits). En STM32
+todavía no. Y conviene saber que es una capacidad de la *imagen*, no de la placa:
+la Metro y el P4 traen lector soldado, pero en una Pico 2 basta con cablear uno.
+
+Debajo hay **FatFs**, para que puedas sacar la tarjeta y leerla en el PC. La
+flash interna sigue con littlefs.
+
+### Bases de datos
+
+BasicPlus habla **SQLite** — el motor de verdad, la versión 3.53.4, corriendo
+dentro del micro. El mismo fichero `.db` y el mismo código en el PC y en la
+placa.
+
+```basic
+var db: SQLite.Db := SQLite.Db()
+db.connect("/sd/medidas.db")
+print db.execDouble("SELECT avg(valor) FROM medidas WHERE sensor = 'temp'")
+```
+
+Están los tres verbos que hacen falta —mandar, pedir un dato, recorrer filas— y
+una regla que hace difícil equivocarse: **sólo lo que devuelve `query` hay que
+liberarlo**.
+
+Y una que sorprende a quien viene de JDBC: aquí **se pueden anidar consultas**
+sobre una sola conexión. Cada cursor avanza por su cuenta.
+
+### El ORM
+
+Encima de SQLite hay un ORM. Anotas tus clases y el compilador genera el DAO:
+
+```basic
+@BD{ tabla = "medidas" }
+public class Medida
+  @BD{ pk }   public property id:    long
+  @BD{}       public property valor: double
+end Medida
+```
+
+A partir de ahí, `insert`, `update`, `delete`, `loadById`, `list`… sin escribir
+una sentencia SQL. Las condiciones se construyen con `Where`, que **escapa los
+valores** — un nombre con apóstrofo no rompe nada.
+
+Y hay una pieza que no se ve pero se agradece: si el proyecto declara su base de
+datos, **el compilador contrasta tus entidades con el esquema real** y avisa de
+lo que no cuadra. Son avisos, nunca errores: una base se diseña entera antes que
+el programa, y bloquear el build por eso convertiría la herramienta en un
+estorbo.
+
+### Packs
+
+Un pack es un contenedor que se graba en la placa: módulos, recursos y, si hace
+falta, código nativo. Es lo que permite distribuir una librería en una pieza —y
+lo que hace viable meter SQLite, que ocupa más que toda la VM junta.
+
+Lo importante no es que ahorren flash, sino **RAM**: un módulo que vive en el
+sistema de ficheros hay que cargarlo entero en memoria para ejecutarlo; uno que
+vive en un pack **se ejecuta en el sitio**, desde la flash. A RAM sólo va su
+tabla de símbolos y su bloque de datos. En una placa con unos cientos de
+kilobytes, eso es la diferencia entre que una librería quepa o no quepa.
+
+Se construyen desde un proyecto y se graban desde el IDE, que también los lista,
+los borra y formatea su zona. Un programa puede además **descubrir en ejecución**
+qué packs hay y qué llevan dentro.
+
+### El lenguaje
+
+`List` y sus parientes **ya no las sintetiza el compilador**: están escritas en
+BasicPlus, en `Core`, y se leen como cualquier otra clase. Con ellas viven ahora
+los **envoltorios** (`Integer`, `Long`, `Double`, `Float`, `Boolean`) y
+`Comparable`.
+
+`add` está sobrecargado, así que meter un número en una lista no pide ceremonia:
+
+```basic
+l.add(42)                        // se envuelve solo
+var n: integer := l.getInteger(0)   // y sale convertido
+```
+
+Esos **captadores tipados** son nuevos y hacen bastante trabajo: `getInteger`,
+`getLong`, `getFloat`, `getDouble`, `getString` y `getBoolean` no castean,
+**convierten** — y protegen. `double` a entero trunca hacia cero; un `long` que
+no cabe en un `integer` **lanza** en vez de recortar en silencio.
+
+### Código nativo
+
+Las funciones `native` aceptan ahora **`long`**, y con ellas los enteros de 64
+bits cruzan a código C en los dos sentidos. Más importante todavía: **dividir por
+cero desde código nativo lanza un error atrapable** en vez de reiniciar la placa,
+que es lo que convierte `native` en algo que se puede usar sin miedo.
+
+### Diagnóstico
+
+El log post-mortem **sobrevive al reinicio**. Vive en una zona de RAM que el
+arranque no borra, así que si un programa se cuelga y reinicias, la autopsia trae
+las líneas de *antes* del cuelgue — que es justo cuando hacía falta y justo
+cuando antes fallaba. Y el arranque dice de dónde viene lo que ha cargado, para
+que nadie lea una autopsia sin saber de cuándo es.
+
+### Lo que todavía no
+
+Dicho sin adornos, porque conviene saberlo antes de empezar:
+
+- **Las bases de datos necesitan placa.** El motor va en un pack de código nativo
+  y todavía no hay uno para PC, así que un programa con SQLite no se puede probar en el PC.
+- **`listDir` no está en la VM-C**, o sea que un programa puede listar un
+  directorio en el PC pero no en la placa. Es el único verbo de fichero que
+  falta.
+- **exFAT no está soportado**: formatea las tarjetas en FAT32.
+- **La tarjeta SD no llega al STM32** todavía.
 
 ---
 
