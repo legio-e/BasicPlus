@@ -2255,7 +2255,7 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
 - **[P4] el silicio nuevo (ESP32-P4X) pedirá lo suyo** — aviso de Eduardo (20-ago):
   *«las placas que tenemos con P4 son ESP32P4, y hay algún problema eléctrico así que
-  funcionan a 350 MHz en vez de los 400 previstos. Hay una versión ESP32P4X que será la
+  funcionan a 360 MHz en vez de los 400 previstos. Hay una versión ESP32P4X que será la
   buena. Pediré una placa con el micro actualizado y tendremos que hacer una imagen para
   él, porque algunas opciones de IDF cambian de un micro a otro.»*
   📐 **Lo que hay hoy, leído del `sdkconfig` y no supuesto:**
@@ -2272,11 +2272,16 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ⚠️ **La trampa, que ya mordió:** `sdkconfig.defaults` **sólo siembra el `sdkconfig` la
   primera vez**. Cambiar los defaults sin borrar el `sdkconfig` que ya existe deja el
   firmware EXACTAMENTE IGUAL, y no lo avisa nadie — pasó el 18-ago.
-  ❓ **Y una pregunta que sale de mirar el fichero:** la imagen está puesta a **360**, y
-  el aviso dice que estas placas dan **350**. Puede que 350 sea la cifra de memoria y 360
-  la buena (el `INFO` de la placa también dice 360), pero conviene confirmarlo: si el tope
-  real fuesen 350, hoy le estaríamos pidiendo diez de más.
-  📌 Si al final son dos imágenes, que se partan como están partidos el S3 y el P4 —dos
+  🔑 **Por qué 360 y no 400 — confirmado por Eduardo (20-ago):** no es una cifra tímida
+  ni un resto de nada, es un RODEO a un defecto del silicio. A 400 MHz estas placas dan
+  **problemas de consumo y no funcionan bien**; a 360 van finas.
+  ⛔ Con lo cual **subirlas a 400 no es una mejora pendiente: es volver a romperlas.**
+  Queda escrito aquí porque el `sdkconfig` sólo dice *360* y un 400 desactivado y sin
+  explicación al lado invita a que alguien lo «arregle» de buena fe.
+  ✅ **Lo que el P4X cambia**: allí está corregido y SÍ puede trabajar a 400. O sea que,
+  si al final son dos imágenes, no se diferencian sólo en la revisión de silicio —
+  también en la frecuencia.
+  📌 Y si se parten, que se partan como están partidos el S3 y el P4 —dos
   targets del IDF—, no como dos builds del mismo target: aquí lo que cambia es el
   SILICIO, no la placa. Lo que cambia por placa sigue yendo al ENV.
 
