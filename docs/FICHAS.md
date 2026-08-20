@@ -2264,11 +2264,23 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
     `sdkconfig.defaults`** — o sea versionadas y deliberadas: la imagen de hoy está
     clavada a silicio *anterior a la v3*.
   - `CONFIG_ESP32P4_REV_MAX_FULL=199`: acepta de la revisión 0.0 a la 1.99.
-  ⏭️ **Primero comprobar si de verdad hacen falta DOS imágenes.** El IDF ya trae el
-  mecanismo para que una sola cubra un rango de silicios: el par `REV_MIN`/`REV_MAX`. Si
-  el P4X entra ensanchando el rango, no hay una segunda imagen que mantener — y eso pesa,
-  porque *una imagen única por familia* es decisión de fondo y partirlas ya se revirtió
-  una vez. Sólo si `SELECTS_REV_LESS_V3` es incompatible con el silicio nuevo toca partir.
+  ⛔ **Son DOS imágenes por narices, y lo dice el propio IDF en la primera línea del
+  Kconfig del P4:** *«Support of ESP32-P4 rev. <3.0 and >=3.0 is mutually exclusive»*, y la
+  ayuda del interruptor remata: *«huge hardware difference… not compatible»*. Verificado el
+  20-ago en `esp_hw_support/port/esp32p4/Kconfig.hw_support` de la v6.0.1.
+  📐 **Qué es de verdad `ESP32P4_SELECTS_REV_LESS_V3`** — no un rango que se pueda
+  ensanchar, sino un interruptor que parte el IDF en dos mitades excluyentes:
+  - con `=y` el mínimo sólo puede ser **0.0 / 0.1 / 1.0**; con `=n`, sólo **3.0 / 3.1**.
+    No hay ajuste que cubra los dos silicios.
+  - el `REV_MAX_FULL` **no se elige: sale de él** (199 con `=y`, 399 con `=n`). El 199 que
+    tenemos es consecuencia, no decisión — por ahí no se toca.
+  - y arrastra código real, no sólo la comprobación de arranque: **el reloj del propio
+    bootloader** (90 MHz con `=y`, 100 con `=n`), el Key Manager del cifrado de flash, el
+    VBAT y el apagado de CPU en light sleep.
+  🔑 **El detalle que ahorra trabajo: el DEFAULT del IDF es `n`** (mínimo 3.1). O sea que
+  la imagen del P4X no hay que «configurarla»: se consigue **quitando** de
+  `sdkconfig.defaults` las dos líneas que hoy la clavan al silicio viejo y dejando mandar
+  al default. Lo que está personalizado es la imagen de AHORA, no la futura.
   ⚠️ **La trampa, que ya mordió:** `sdkconfig.defaults` **sólo siembra el `sdkconfig` la
   primera vez**. Cambiar los defaults sin borrar el `sdkconfig` que ya existe deja el
   firmware EXACTAMENTE IGUAL, y no lo avisa nadie — pasó el 18-ago.
@@ -2278,12 +2290,14 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ⛔ Con lo cual **subirlas a 400 no es una mejora pendiente: es volver a romperlas.**
   Queda escrito aquí porque el `sdkconfig` sólo dice *360* y un 400 desactivado y sin
   explicación al lado invita a que alguien lo «arregle» de buena fe.
-  ✅ **Lo que el P4X cambia**: allí está corregido y SÍ puede trabajar a 400. O sea que,
-  si al final son dos imágenes, no se diferencian sólo en la revisión de silicio —
-  también en la frecuencia.
-  📌 Y si se parten, que se partan como están partidos el S3 y el P4 —dos
-  targets del IDF—, no como dos builds del mismo target: aquí lo que cambia es el
-  SILICIO, no la placa. Lo que cambia por placa sigue yendo al ENV.
+  ✅ **Lo que el P4X cambia**: allí está corregido y SÍ puede trabajar a 400. Así que las
+  dos imágenes se diferenciarán en TRES cosas, no en una: la revisión de silicio, la
+  frecuencia (360 vs 400) y todo lo que el interruptor arrastra por debajo.
+  📌 **Y en la FORMA**, un matiz que conviene no confundir: `esp32/` y `esp32p4/` son
+  carpetas distintas porque son *targets* distintos del IDF; el P4 y el P4X, en cambio,
+  son **el MISMO target** y lo que los separa es este interruptor. Aun así se resuelve
+  igual —otra carpeta de build con su `sdkconfig.defaults`—, nunca con macros repartidas
+  por el código: aquí cambia el SILICIO. Lo que cambia por placa sigue yendo al ENV.
 
 - **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
   (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
