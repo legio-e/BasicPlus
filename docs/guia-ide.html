@@ -463,8 +463,45 @@
   El prompt <code>/ &gt;</code> bajo la Consola habla directamente con
   el dispositivo conectado. <code>help</code> lista los comandos:
 </p>
-<pre><code>dir [ruta] · cd &lt;ruta&gt; · type &lt;fich&gt; · edit &lt;fich&gt; · run &lt;fich&gt; · del &lt;fich&gt;
-kill · autorun [fich|off] · mem · save · log · reset · cls · help</code></pre>
+<pre><code>dir [ruta] · cd &lt;ruta&gt; · type &lt;fich&gt; · edit &lt;fich&gt; · new &lt;fich&gt; · run &lt;fich&gt; · del &lt;fich&gt;
+copy &lt;local&gt; [destino] · get &lt;remoto&gt; [local]
+kill · autorun [fich|off] · mem · save · log · logclr · reset · cls · help
+sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
+
+<table>
+  <tr><th>comando</th><th>qué hace</th></tr>
+  <tr><td><code>dir</code> · <code>cd</code></td><td>moverse por el sistema de ficheros de la placa</td></tr>
+  <tr><td><code>type</code> (<code>cat</code>)</td><td>vuelca un fichero a la consola</td></tr>
+  <tr><td><code>edit</code> · <code>new</code></td><td>ver/editar en ventana · crear uno nuevo</td></tr>
+  <tr><td><code>copy</code> (<code>cp</code>)</td><td><strong>sube</strong> un fichero del PC — sin destino, a la carpeta actual (comillas si hay espacios)</td></tr>
+  <tr><td><code>get</code></td><td><strong>baja</strong> un fichero de la placa al PC</td></tr>
+  <tr><td><code>run</code> · <code>kill</code> (<code>stop</code>)</td><td>ejecutar y abortar</td></tr>
+  <tr><td><code>autorun [fich|off]</code></td><td>qué app arranca sola al encender (§12)</td></tr>
+  <tr><td><code>mem</code> (<code>df</code>)</td><td>memoria y espacio libres</td></tr>
+  <tr><td><code>log</code> · <code>logclr</code></td><td>ver el log de la placa · vaciarlo</td></tr>
+  <tr><td><code>save</code> · <code>reset</code> · <code>cls</code></td><td>guardar · reiniciar el dispositivo · limpiar la consola</td></tr>
+</table>
+
+<div class="note">
+  <p>
+    <strong><code>sd</code> y <code>sd mount</code> no son la forma de usar una tarjeta:
+    son para cuando NO aparece.</strong> Si la placa tiene el lector configurado, el
+    firmware <strong>la monta solo al arrancar</strong> y lo dice en el log
+    (<em>«sd: montada en /sd»</em>); no hay que montar nada a mano.
+  </p>
+  <p>
+    Se mandan cuando la tarjeta no está y hay que averiguar por dónde falla, y por eso son
+    dos y no uno: <code>sd</code> pregunta <strong>si el bus habla</strong> y quién es la
+    tarjeta —sin tocar el sistema de ficheros—, y <code>sd mount</code> intenta el paso
+    siguiente, el FAT. Si el primero no contesta, depurar el FAT encima sería depurar
+    sobre nada.
+  </p>
+  <p>
+    No se lanzan solos al conectar a propósito: hablan con hardware que puede no estar, y
+    la negociación va a 400 kHz por exigencia del estándar — el arranque de una tarjeta
+    puede llevarse hasta un segundo.
+  </p>
+</div>
 <p>
   Dos de ellos merecen subrayado: <code>kill</code> aborta el programa
   en ejecución (equivale a Run → Stop) y <code>autorun</code> gestiona
@@ -565,6 +602,46 @@ kill · autorun [fich|off] · mem · save · log · reset · cls · help</code><
   también viven ahí, pero <strong>no</strong> se listan aquí: los gestiona la
   sección de particiones, para que no se puedan tocar por dos caminos.
 </p>
+
+<p>Las que hay hoy, y qué significa cada una:</p>
+
+<table>
+  <tr><th>clave</th><th>qué ajusta</th></tr>
+  <tr><td><code>board</code></td><td>la identidad de la placa</td></tr>
+  <tr><td><code>display</code></td><td>qué panel de pantalla lleva (en el P4, p.ej. <code>st7701</code>)</td></tr>
+  <tr><td><code>sd</code></td><td>el lector de tarjeta: <strong>valor estructurado</strong> y distinto por familia — ver abajo</td></tr>
+  <tr><td><code>SQLite</code></td><td>megabytes de arena para la base de datos (mínimo 2, máximo 4095)</td></tr>
+  <tr><td><code>psram</code> · <code>psramCsPin</code></td><td>si tiene PSRAM y por qué pin se selecciona</td></tr>
+  <tr><td><code>flashSizeBytes</code></td><td>tamaño de flash declarado</td></tr>
+  <tr><td><code>gpioCount</code></td><td>cuántos GPIO expone</td></tr>
+  <tr><td><code>log</code></td><td>el log post-mortem, encendido o apagado</td></tr>
+  <tr><td><code>gc</code></td><td>el recolector de basura (RP2350)</td></tr>
+  <tr><td><code>latido</code></td><td>el latido de vida (RP2350)</td></tr>
+</table>
+
+<p>
+  <code>sd</code> es la única con estructura dentro, porque describe un cableado y ése
+  cambia con el bus:
+</p>
+
+<pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, por SPI</span>
+sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32, por SDIO</span></code></pre>
+
+<p>
+  En SDIO admite además <code>d1</code>…<code>d3</code> (para 4 bits), <code>slot</code>,
+  <code>khz</code> y <code>ldo</code>; en SPI, <code>cd</code> es opcional. El detalle está
+  en la <a href="referencia.html#stdlib-sd">tarjeta SD</a>.
+</p>
+
+<div class="note">
+  <p>
+    <strong>Que la configuración viva aquí y no en el código es deliberado.</strong> Un
+    <code>.mod</code> corre igual en dos placas cableadas distinto porque lo que cambia —
+    los pines, el panel, la memoria — lo dice la placa, no el programa. Es lo mismo que
+    permite una sola imagen de firmware por familia.
+  </p>
+</div>
+
 
 <h2 id="packs">10. Packs</h2>
 <p>

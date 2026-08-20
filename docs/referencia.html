@@ -1760,7 +1760,12 @@ tira.show()</code></pre>
 
 <h4 id="montaje">14.17.3 Comprobar que ha montado</h4>
 
-<p>El arranque lo dice, y conviene mirarlo antes de sospechar del programa. En el P4:</p>
+<p>
+  <strong>No hay que montar nada.</strong> Si la placa tiene el lector configurado,
+  el firmware monta la tarjeta <strong>al arrancar</strong> y lo dice en el log; a
+  partir de ahí <code>/sd</code> ya está. Conviene mirar esas líneas antes de
+  sospechar del programa. En el P4:
+</p>
 
 <pre><code>sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz
 sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
@@ -1774,7 +1779,8 @@ sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
 
 <h4 id="usarla">14.17.4 Usarla: es sólo una ruta</h4>
 
-<p>Montada la tarjeta, todo lo que ya sabes hacer con ficheros funciona bajo <code>/sd</code>.</p>
+<p>Con la tarjeta montada —que lo hace la placa sola—, todo lo que ya sabes hacer con
+ficheros funciona bajo <code>/sd</code>.</p>
 
 <pre><code><span class="kw">if not</span> <span class="fn">fileExists</span>(<span class="str">"/sd/config.txt"</span>) <span class="kw">then</span>
   <span class="fn">writeFile</span>(<span class="str">"/sd/config.txt"</span>, <span class="str">"intervalo=60"</span>)
