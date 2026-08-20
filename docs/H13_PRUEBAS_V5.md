@@ -144,10 +144,11 @@ Dicho explícitamente, para que sea una decisión y no un olvido:
 
 ## Decisiones pendientes ANTES de publicar
 
-1. 🔴 **El `.npk` de ARM de SQLite está rancio** respecto a sus fuentes: reconstruirlo da
-   8 bytes más y el punto de entrada corrido. El de RISC-V reproduce byte a byte. O se
-   regenera y se verifica en la Metro, o se publica sabiendo que el binario no se
-   corresponde con el código. **No se puede publicar sin decidirlo.**
+1. ✅ **El `.npk` de ARM, RESUELTO el 20-ago.** Eduardo: *«se trata de verificar,
+   tiene que funcionar»*. Regenerado desde sus fuentes (464.127 → 464.399 B), así que el
+   binario ya se corresponde con el código. **Lo que queda no es decidir, es probar**:
+   ese binario no se ha ejecutado nunca, y es lo que hace obligatoria la Metro en la
+   Puerta 2.
 2. 🟡 **El manual inglés se dejó siete secciones de V4** (eventos, sobrecarga,
    `dospasadas`). No es regresión de V5, pero conviene no publicar creyendo que está
    completo.
