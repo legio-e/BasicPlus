@@ -30,10 +30,26 @@ que el compilador se plante.
 
 ## Lo que NO soporta el AOT v1
 
-### 1. Tipos de 8 bytes: `long` y `double`
+> ⚠️ **Ojo: `native` no es un solo camino, y los límites NO son los mismos.**
+> Lo de aquí abajo es el **AOT normal** (una función `native` de tu módulo).
+> El **puente a un PACK** es más estrecho y `long` todavía NO ha llegado ahí:
+> cruzan `integer`, `boolean`, `float`, `string`, los objetos como *handle*, y
+> `long[]`/`double[]` **sólo como caja de salida**. Y las **llamadas de vuelta
+> de `native` a BP** son otra cosa distinta — ver §3.
 
-Ni en parámetros, ni en retorno, ni en **variables locales**. El AOT v1
-marshalla todo en slots de 4 bytes.
+### 1. `double` (pero `long` YA no: entra desde V5)
+
+⚠️ **Este apartado decía que `long` tampoco cruzaba, y dejó de ser cierto el
+16-ago-2026** (tarea #381, verificada en la Metro). Hoy una función `native`
+acepta y devuelve `long` con normalidad: se marshalla como 8 bytes big-endian.
+Se probaron sumas, anchos mezclados en una misma firma, la división y el módulo
+por helper, y las conversiones en los dos sentidos.
+
+Y de aquella tarea salió algo que importa más que el tipo: **dividir por cero
+desde código nativo lanza un error de BP atrapable** en vez de reiniciar la
+placa.
+
+**Lo que sigue fuera es `double`.**
 
 **Qué hacer**: `float` si la precisión de 32 bits basta; o quitar `native` de
 esa función concreta —seguirá funcionando, interpretada— y dejar el resto del

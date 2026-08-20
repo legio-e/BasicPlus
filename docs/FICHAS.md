@@ -1769,7 +1769,19 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
 trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
-- **`H12` — DOCUMENTAR V5 DE CARA AL USUARIO.** **Hito** por decisión de Eduardo
+- ~~**`H12` — DOCUMENTAR V5**~~ — ✅ **CERRADO el 20-ago.** Los ocho puntos hechos:
+  la tarjeta SD (§14.17 de la referencia), los packs (§15), el IDE (consola al día y el
+  ENV con sus once claves), `Core` (§13.2 reescrita y §13.3 nueva), la puerta (portada,
+  los dos README y su apartado de BD) y las notas de versión (`RELEASES.md`, v5.0 «los
+  datos», con su sección «lo que todavía no»). Más `docs/basedatos.html`, volumen propio.
+  🩸 **Y lo que documentar destapó, que fue lo caro**: el ORM no compilaba (tres bugs),
+  `listDir` no está en la VM-C, la §13.2 daba un ejemplo que ya no compila, la lista de
+  comandos del IDE se dejaba seis, el ENV no tenía ni una clave escrita y `AOT_LIMITES`
+  negaba el `long` en `native`. Ninguno salía leyendo código: salieron al EJECUTAR los
+  ejemplos y al contrastar cada afirmación.
+  📌 Queda para `H13`: revisar que la documentación no afirme nada más que haya dejado
+  de ser cierto, con la misma pregunta por documento.
+- ~~(el enunciado original)~~ **Hito** por decisión de Eduardo
   (18-ago): *«documentar con el número de hito que le corresponda»*. Va DESPUÉS de la
   limpieza. Abierta ese mismo día al repasar el cierre —*«queda hacer limpieza,
   documentar y pruebas finales»*— porque **la parte de documentar no tenía línea aquí**
