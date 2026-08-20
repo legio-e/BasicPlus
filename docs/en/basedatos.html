@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Databases</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+    <li class="group"><a href="#pack">1. The pack: installing it</a></li>
+    <li class="group"><a href="#sinorm">2. Without the ORM: plain SQL</a></li>
+    <li class="sub"><a href="#exec">2.1 Fire and forget</a></li>
+    <li class="sub"><a href="#undato">2.2 Asking for ONE value</a></li>
+    <li class="sub"><a href="#filas">2.3 Walking rows</a></li>
+    <li class="group"><a href="#entidades">3. Defining entities</a></li>
+    <li class="group"><a href="#orm">4. The ORM: Dao and Where</a></li>
+    <li class="group"><a href="#generar">5. Generating the DAOs</a></li>
+    <li class="group"><a href="#crud">6. The operations (CRUD)</a></li>
+    <li class="group"><a href="#extender">7. Extending a DAO</a></li>
+    <li class="group"><a href="#verificar">8. Verifying against the database</a></li>
+    <li class="group"><a href="#indices">9. Indexes</a></li>
+    <li class="group"><a href="#ventanas">10. Working in windows</a></li>
+    <li class="group"><a href="#varias">11. Several queries at once</a></li>
+    <li class="group"><a href="#conexiones">12. More than one connection</a></li>
+    <li class="group"><a href="#trampas">13. Known traps</a></li>
+    <li class="group"><a href="#seguir">Where to go next</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<h1>Databases</h1>
+
+<p>
+  BasicPlus talks to <strong>SQLite</strong>. The same engine, the same <code>.db</code> file
+  and the same code on the PC, on the Metro and on the ESP32-P4. It can be used two ways, and
+  both are legitimate:
+</p>
+
+<ul>
+  <li><strong>with SQL</strong>, writing the statements yourself — direct and no surprises;</li>
+  <li><strong>with the ORM</strong>, which writes them for you from your classes.</li>
+</ul>
+
+<h2 id="pack">1. The pack: install it first</h2>
+
+<p>
+  The engine <strong>is not inside the VM</strong>. It is a <em>pack</em> of native code burned
+  separately, published under the name <code>SQLI</code>. This is not a whim: SQLite is larger
+  than the whole VM, and whoever does not use databases should not pay for it.
+</p>
+
+<p><strong>Build the pack</strong> (once, or whenever the library changes):</p>
+
+<pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
+     --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm</code></pre>
+
+<p>
+  <strong>Burn it onto the board</strong>: in the IDE, <em>Packs</em> panel →
+  <strong>«Copy pack to board…»</strong> and pick <code>packs/SQLite.pack</code>.
+</p>
+
+<p>
+  <strong>Give it memory.</strong> SQLite works on an <strong>arena</strong> of its own,
+  separate from the VM heap, and its size is declared in the board's environment:
+</p>
+
+<pre><code>SQLite=4</code></pre>
+
+<p>
+  Four megabytes is what the P4 uses. <strong>The minimum is 2</strong> and the maximum 4095;
+  below 2 the pack will not start, same as with <code>SQLite=0</code> or if it does not fit —
+  and boot says so on its <code>bd:</code> line.
+</p>
+
+<p class="warn">
+  <strong>Today you need a board.</strong> The PC's C VM does not carry the engine: run a
+  program with a database there and the first call throws <em>«sql_open: falta el codigo nativo
+  del pack 'SQLI' v1»</em>. Being able to test it on the desktop is planned, but not possible
+  yet.
+</p>
+
+<h2 id="sinorm">2. Without the ORM: plain SQL</h2>
+
+<p>Three verbs, and they are the only three.</p>
+
+<pre><code><span class="kw">import</span> SQLite
+
+<span class="kw">var</span> db: SQLite.<span class="type">Db</span> := SQLite.<span class="type">Db</span>()
+<span class="kw">if not</span> db.<span class="fn">connect</span>(<span class="str">"/sd/readings.db"</span>) <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"could not open -> "</span>, db.<span class="fn">errorMessage</span>()
+  <span class="kw">return</span>
+<span class="kw">endif</span></code></pre>
+
+<p>
+  <code>connect</code> <strong>returns <code>false</code></strong>, it does not throw: a missing
+  card or a wrong path is something that <em>happens</em>, and your program decides what to do.
+  There is also <code>connectRead(path)</code> for read-only.
+</p>
+
+<h3 id="exec">2.1 Fire and forget</h3>
+
+<pre><code>db.<span class="fn">exec</span>(<span class="str">"CREATE TABLE readings (id INTEGER PRIMARY KEY, sensor TEXT, value REAL)"</span>)
+db.<span class="fn">exec</span>(<span class="str">"INSERT INTO readings(sensor, value) VALUES('temp', 21.5)"</span>)
+<span class="kw">print</span> <span class="str">"last id: "</span>, db.<span class="fn">lastInsertId</span>()    <span class="comment">// long</span>
+<span class="kw">print</span> <span class="str">"rows touched:"</span>, db.<span class="fn">changes</span>()</code></pre>
+
+<p>
+  Several statements in one call, separated by <code>;</code>. Here <strong>malformed SQL IS an
+  exception</strong>: that is a bug in your program, not something the world did.
+</p>
+
+<h3 id="undato">2.2 Asking for ONE value</h3>
+
+<pre><code><span class="kw">print</span> db.<span class="fn">execInt</span>(<span class="str">"SELECT count(*) FROM readings"</span>)
+<span class="kw">print</span> db.<span class="fn">execDouble</span>(<span class="str">"SELECT avg(value) FROM readings WHERE sensor = 'temp'"</span>)
+<span class="kw">print</span> db.<span class="fn">execStr</span>(<span class="str">"SELECT sensor FROM readings ORDER BY id LIMIT 1"</span>)</code></pre>
+
+<p>
+  There is one per answer type because BP is statically typed: the return type has to be decided
+  at compile time. The second parameter is <strong>what to answer when there is no row at
+  all</strong>, which is not the same as «it is zero»:
+</p>
+
+<pre><code>db.<span class="fn">execInt</span>(<span class="str">"SELECT value FROM readings WHERE sensor = 'wind'"</span>, <span class="num">-1</span>)   <span class="comment">// -1</span></code></pre>
+
+<h3 id="filas">2.3 Walking rows</h3>
+
+<pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT sensor, value, t FROM readings ORDER BY value"</span>)
+<span class="kw">while</span> q.<span class="fn">nextRow</span>() <span class="kw">do</span>
+  <span class="kw">print</span> q.<span class="fn">getStr</span>(<span class="num">0</span>), q.<span class="fn">getDouble</span>(<span class="num">1</span>), q.<span class="fn">getLong</span>(<span class="num">2</span>)
+<span class="kw">endwh</span>
+q.<span class="fn">release</span>()</code></pre>
+
+<p>
+  Columns go <strong>by index, starting at 0</strong>, like BP arrays. There are also
+  <code>columnCount()</code>, <code>columnName(i)</code> and <code>columnType(i)</code> for
+  walking a table you do not know in advance.
+</p>
+
+<div class="note">
+  <p>
+    <strong>The rule that makes it hard to get wrong: only what <code>query</code> returns has to
+    be released.</strong> Everything else ends by itself. And <code>close()</code> belongs to the
+    <strong>database</strong>, goes once at the end, and has nothing to do with the
+    <code>release()</code> of queries.
+  </p>
+</div>
+
+<h2 id="entidades">3. Defining entities: what is stored, and where</h2>
+
+<p>An entity is an ordinary class with <code>@BD</code> annotations. The key point:</p>
+
+<div class="note">
+  <p>
+    <strong>Only what carries <code>@BD</code> is persisted.</strong> An unannotated
+    <code>property</code> is yours and never reaches the database. Nothing has to be excluded:
+    what you want stored has to be included.
+  </p>
+</div>
+
+<pre><code><span class="kw">module</span> Model
+
+  @BD{ tabla = <span class="str">"readings"</span> }
+  <span class="kw">public class</span> <span class="type">Reading</span>
+    @BD{ pk }                     <span class="kw">public property</span> id:       <span class="type">long</span>
+    @BD{ columna = <span class="str">"sensor_id"</span> }  <span class="kw">public property</span> sensorId: <span class="type">long</span>
+    @BD{}                         <span class="kw">public property</span> value:    <span class="type">double</span>
+
+    <span class="kw">public function</span> <span class="fn">Reading</span>()
+      <span class="kw">this</span>.id := <span class="num">0</span>
+      <span class="kw">this</span>.sensorId := <span class="num">0</span>
+      <span class="kw">this</span>.value := <span class="num">0.0d</span>
+    <span class="kw">end</span> Reading
+  <span class="kw">end</span> Reading
+
+<span class="kw">end</span> Model</code></pre>
+
+<ul>
+  <li><code>@BD{ tabla = "..." }</code> on the class — which table it maps to.</li>
+  <li><code>@BD{ pk }</code> — the primary key. The database sets it on insert, and when
+  <code>insert</code> returns your object already carries it.</li>
+  <li><code>@BD{ columna = "..." }</code> — when the column is named differently from the
+  property. Without it, the property name is used.</li>
+  <li><code>@BD{}</code> on its own — stored, same name.</li>
+</ul>
+
+<p>
+  Types map like this: <code>long</code>/<code>integer</code> → <code>INTEGER</code>,
+  <code>double</code>/<code>float</code> → <code>REAL</code>, <code>string</code> →
+  <code>TEXT</code>.
+</p>
+
+<h2 id="orm">4. The ORM: <code>Dao</code> and <code>Where</code></h2>
+
+<p>
+  On top of the entities goes <strong>one DAO per table</strong>. It gives you the usual verbs
+  without writing SQL, and <code>Where</code> builds the conditions:
+</p>
+
+<pre><code><span class="kw">var</span> w: Orm.<span class="type">Where</span> := Orm.<span class="type">Where</span>()
+w.<span class="fn">eq</span>(<span class="str">"sensor_id"</span>, <span class="num">1L</span>).<span class="fn">lt</span>(<span class="str">"value"</span>, <span class="num">22.2d</span>)
+<span class="kw">var</span> cold: <span class="type">List</span> := rdao.<span class="fn">list</span>(w)</code></pre>
+
+<p>
+  <code>Where</code> has <code>eq</code>, <code>ne</code>, <code>lt</code>, <code>le</code>,
+  <code>gt</code>, <code>ge</code>, <code>like</code>, <code>isNull</code>,
+  <code>isNotNull</code> and <code>raw</code> for anything else; they chain with AND, and
+  <code>orNext()</code> switches the link to OR. <code>sql()</code> shows you what it is about
+  to send.
+</p>
+
+<p class="warn">
+  <strong><code>Where</code> is not sugar: it is safety.</strong> It writes values
+  <strong>escaped</strong>. A name like <code>O'Brien</code> concatenated by hand breaks the
+  statement; through <code>Where</code> it goes in whole and nothing happens.
+</p>
+
+<h3>Reading the results</h3>
+
+<p>
+  <code>list()</code> returns a <code>List</code> whose elements are <code>Object</code>. For the
+  entity, a cast; for plain values, the <strong>typed getters</strong>:
+</p>
+
+<pre><code><span class="kw">var</span> r: Model.<span class="type">Reading</span> := Model.<span class="type">Reading</span>(rows.<span class="fn">get</span>(i))   <span class="comment">// entities: cast</span>
+<span class="kw">var</span> n: <span class="type">integer</span> := other.<span class="fn">getInteger</span>(<span class="num">0</span>)                 <span class="comment">// values: converts</span></code></pre>
+
+<h2 id="generar">5. Generating the DAOs</h2>
+
+<p>In the IDE: the <strong>«DAO build»</strong> button (or menu). From the command line:</p>
+
+<pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
+     --project my/project.bpbuild --backend=mivm --dao</code></pre>
+
+<p>
+  It reads the project's <code>@BD</code> annotations and writes a module with one DAO per
+  entity. The file opens by warning that it is <strong>not to be edited</strong>, and carries a
+  <code>@generado</code> fingerprint: if nothing changed, the generator says <code>ya al dia</code>
+  and leaves it alone.
+</p>
+
+<h2 id="crud">6. The operations (CRUD)</h2>
+
+<p>With <code>dao</code> built on a connection (<code>ReadingDao(db)</code>):</p>
+
+<table>
+  <tr><th>verb</th><th>what it does</th></tr>
+  <tr><td><code>insert(e)</code></td><td>inserts; on return <code>e</code> carries its key</td></tr>
+  <tr><td><code>add(e)</code></td><td>the same, when you do not care about the id</td></tr>
+  <tr><td><code>loadById(id)</code></td><td>fetches one by key, or <code>null</code></td></tr>
+  <tr><td><code>load(e)</code></td><td>fills <code>e</code> from the database using its key; <code>false</code> if it was not there</td></tr>
+  <tr><td><code>refresh(e)</code></td><td>reloads <code>e</code> (same as <code>load</code>, named for intent)</td></tr>
+  <tr><td><code>update(e)</code></td><td>saves the changes; <code>false</code> if it did not exist</td></tr>
+  <tr><td><code>delete(e)</code></td><td>deletes; the object is left with key 0</td></tr>
+  <tr><td><code>deleteById(id)</code></td><td>deletes by key</td></tr>
+  <tr><td><code>list(w, max)</code></td><td>the ones matching the condition</td></tr>
+  <tr><td><code>listAll(max)</code></td><td>all of them</td></tr>
+  <tr><td><code>uno(cond)</code></td><td>the first match, or <code>null</code></td></tr>
+  <tr><td><code>close()</code></td><td>closes the DAO (the connection is closed by whoever opened it)</td></tr>
+</table>
+
+<h2 id="extender">7. Extending a DAO</h2>
+
+<p><strong>Never edit the generated file</strong>: it gets rebuilt and you lose the changes. Inherit:</p>
+
+<pre><code><span class="kw">public class</span> <span class="type">SensorDaoPlus</span> <span class="kw">extends</span> ModelDao.<span class="type">SensorDao</span>
+  <span class="kw">public function</span> <span class="fn">SensorDaoPlus</span>(base: SQLite.<span class="type">Db</span>)
+    <span class="kw">super</span>(base)
+  <span class="kw">end</span> SensorDaoPlus
+
+  <span class="comment">// By the OTHER key. Convention: by key, `...By&lt;something&gt;`.</span>
+  <span class="kw">public function</span> <span class="fn">loadByName</span>(name: <span class="type">string</span>): Model.<span class="type">Sensor</span>
+    <span class="kw">return</span> Model.<span class="type">Sensor</span>(<span class="kw">this</span>.<span class="fn">uno</span>(<span class="str">"name = '"</span> + Orm.<span class="fn">esc</span>(name) + <span class="str">"'"</span>))
+  <span class="kw">end</span> loadByName
+<span class="kw">end</span> SensorDaoPlus</code></pre>
+
+<h2 id="verificar">8. Verifying your entities against the real database</h2>
+
+<p>
+  If your project declares a database, <strong>the compiler checks the <code>@BD</code>
+  annotations against the real schema</strong> on every build and warns about anything that does
+  not line up: missing tables, missing or extra columns, mismatched types.
+</p>
+
+<pre><code>{
+  <span class="str">"sourceDir"</span>: <span class="str">"."</span>,
+  <span class="str">"outDir"</span>:    <span class="str">"out"</span>,
+  <span class="str">"database"</span>:  <span class="str">"readings.db"</span>
+}</code></pre>
+
+<ul>
+  <li><strong>They are warnings, never errors.</strong> A database can be designed in full before
+  the program, and with forty tables ahead nobody writes forty entities in one go. Blocking the
+  build over that would turn the tool into a nuisance.</li>
+  <li><strong>The database is opened read-only.</strong> It is yours and may hold data that
+  exists nowhere else; a build tool has no business writing there.</li>
+  <li><strong>Verification is optional by design.</strong> It needs a JDBC driver at run time; if
+  it is missing, the step is skipped, says so, and the build carries on.</li>
+</ul>
+
+<h2 id="indices">9. Speeding up <code>SELECT</code>s with indexes</h2>
+
+<p>Nothing BasicPlus-specific here: it is SQL, sent with <code>exec</code>.</p>
+
+<pre><code>db.<span class="fn">exec</span>(<span class="str">"CREATE INDEX IF NOT EXISTS ix_readings_sensor ON readings(sensor_id)"</span>)</code></pre>
+
+<p>
+  Rule of thumb: <strong>index the columns you filter or sort by</strong>, especially the foreign
+  keys you use in <code>Where.eq(...)</code>. It shows up sooner on a micro than on a PC, because
+  the card is slow: with no index, SQLite walks the whole table reading from the SD.
+</p>
+
+<p>
+  And the flip side, which also matters: every index takes space and makes <code>INSERT</code>s
+  more expensive. On a logger that writes a lot and queries little, a spare index costs.
+</p>
+
+<h2 id="ventanas">10. Working in windows, so you do not eat your memory</h2>
+
+<p>
+  A <code>SELECT</code> of a hundred thousand rows does not fit in a microcontroller. There are
+  two ways, and the first one is the good one.
+</p>
+
+<p>
+  <strong>With a cursor</strong> — <code>query</code> + <code>nextRow</code> <strong>never holds
+  more than one row in memory</strong>. It does not matter if the table has a million records:
+</p>
+
+<pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT id, value FROM readings ORDER BY id"</span>)
+<span class="kw">while</span> q.<span class="fn">nextRow</span>() <span class="kw">do</span>
+  <span class="fn">process</span>(q.<span class="fn">getLong</span>(<span class="num">0</span>), q.<span class="fn">getDouble</span>(<span class="num">1</span>))
+<span class="kw">endwh</span>
+q.<span class="fn">release</span>()</code></pre>
+
+<p><strong>By pages</strong>, when you need the results together:</p>
+
+<pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT n FROM t ORDER BY n LIMIT 2 OFFSET 2"</span>)</code></pre>
+
+<p>
+  And in the ORM the cap goes on the verb itself — <strong><code>list</code> and
+  <code>listAll</code> bring at most 1000 unless you say otherwise</strong>, which is a safety net
+  and not a whim:
+</p>
+
+<pre><code><span class="kw">var</span> page: <span class="type">List</span> := rdao.<span class="fn">list</span>(w, <span class="num">50</span>)</code></pre>
+
+<p class="warn">
+  A large <code>OFFSET</code> is expensive: SQLite has to count the rows it skips. To walk a whole
+  table the cursor is better, or paginate by key
+  (<code>WHERE id &gt; last ORDER BY id LIMIT 50</code>).
+</p>
+
+<h2 id="varias">11. Several queries at once</h2>
+
+<p>
+  Here is one that surprises people coming from JDBC: <strong>you can keep several queries open on
+  the same connection, and nest them</strong>. Each <code>query</code> carries its own cursor and
+  they advance independently.
+</p>
+
+<pre><code><span class="kw">var</span> s: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT DISTINCT sensor FROM readings"</span>)
+<span class="kw">while</span> s.<span class="fn">nextRow</span>() <span class="kw">do</span>
+  <span class="kw">var</span> name: <span class="type">string</span> := s.<span class="fn">getStr</span>(<span class="num">0</span>)
+  <span class="comment">// ...and a query INSIDE the other one's walk</span>
+  <span class="kw">var</span> howMany: <span class="type">integer</span> := db.<span class="fn">execInt</span>(<span class="str">"SELECT count(*) FROM readings WHERE sensor = '"</span>
+                                    + Orm.<span class="fn">esc</span>(name) + <span class="str">"'"</span>)
+  <span class="kw">print</span> name, <span class="str">"->"</span>, howMany
+<span class="kw">endwh</span>
+s.<span class="fn">release</span>()</code></pre>
+
+<p>
+  In JDBC this forces a second connection, because a <code>Statement</code> closes its
+  <code>ResultSet</code> when reused. Here it is not needed: the inner <code>execInt</code> calls
+  open and release their own without touching the outer cursor.
+</p>
+
+<h2 id="conexiones">12. More than one connection</h2>
+
+<p>That works too, and at the same time:</p>
+
+<pre><code><span class="kw">var</span> a: SQLite.<span class="type">Db</span> := SQLite.<span class="type">Db</span>()
+<span class="kw">var</span> b: SQLite.<span class="type">Db</span> := SQLite.<span class="type">Db</span>()
+a.<span class="fn">connect</span>(<span class="str">"/sd/readings.db"</span>)
+b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</code></pre>
+
+<p class="warn">
+  <strong>But watch the memory.</strong> Both connections come out of the <strong>same
+  arena</strong>, the one declared by <code>SQLite=&lt;MB&gt;</code>, and it does not grow: every
+  open database takes its own page cache and structures. On a PC you do not notice; on a micro
+  with a 4 MB arena you do.
+</p>
+
+<p>
+  The rule: <strong>if two DAOs work on the same database, they share a connection.</strong> Pass
+  them the same <code>Db</code> when constructing them; each closes its own, and the connection is
+  closed by whoever opened it, last.
+</p>
+
+<h2 id="trampas">13. Known traps</h2>
+
+<p>
+  <strong>The <code>L</code> suffix on <code>long</code> literals.</strong> A millisecond
+  timestamp does not fit in 32 bits. Without the <code>L</code>, the literal is truncated
+  <strong>silently</strong> into a plausible, wrong number:
+</p>
+
+<pre><code><span class="num">1754300000000L</span>    <span class="comment">// right</span>
+<span class="num">1754300000000</span>     <span class="comment">// WRONG: becomes 1953343232</span></code></pre>
+
+<p>
+  <strong>The apostrophe.</strong> Concatenating user text by hand breaks the statement. Use
+  <code>Where</code>, or <code>Orm.esc(...)</code> if you write the SQL yourself.
+</p>
+
+<p>
+  <strong>Where the database lives.</strong> On the board, on the card:
+  <code>/sd/readings.db</code>. <strong>Do not put it in <code>resources/</code></strong> — that
+  folder is copied to the micro on every run and would overwrite your database with the project's.
+</p>
+
+<p>
+  <strong>The path cannot come as an argument.</strong> Today <code>Main</code>'s <code>arg</code>
+  always arrives empty. That is why the samples put the work in a public function —
+  <code>correr(path)</code> — and whoever wants another database writes a three-line module that
+  calls it.
+</p>
+
+<h2 id="seguir">Where to go next</h2>
+
+<table>
+  <tr><th>I want…</th><th>look at</th></tr>
+  <tr><td>plain SQL, the three verbs</td><td><code>samples/SqlDemo.bp</code></td></tr>
+  <tr><td>the ORM with hand-written DAOs</td><td><code>samples/DaoDemo.bp</code></td></tr>
+  <tr><td>the ORM with generated DAOs</td><td><code>samples/GenDemo.bp</code></td></tr>
+  <tr><td>the same database on the card</td><td><code>samples/SqlDemoSd.bp</code> and <a href="referencia.html#stdlib-sd">the SD card</a></td></tr>
+</table>
+
+<p>
+  The examples on this page are <strong>executed</strong>, not assumed: they come from those three
+  programs, which run end to end and return their memory.
+</p>
+
+</main>
+</div>
+</body>
+</html>
