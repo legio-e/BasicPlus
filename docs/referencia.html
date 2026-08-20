@@ -197,8 +197,16 @@
     <li class="sub"><a href="#stdlib-gui">14.16 Gui — volumen aparte</a></li>
     <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
-    <li class="sub"><a href="#packs-descubrir">15.1 Descubrirlos desde el programa</a></li>
-    <li class="sub"><a href="#packs-sqlite">15.2 El pack de SQLite</a></li>
+    <li class="sub"><a href="#quees">15.1 Qué es un pack, y qué no</a></li>
+    <li class="sub"><a href="#tipos">15.2 Dos tipos: librería y ejecutable</a></li>
+    <li class="sub"><a href="#construir">15.3 Construir uno</a></li>
+    <li class="sub"><a href="#dentro">15.4 Qué entra dentro</a></li>
+    <li class="sub"><a href="#grabar">15.5 Grabarlo y gestionarlo</a></li>
+    <li class="sub"><a href="#usar">15.6 Usarlo desde un programa</a></li>
+    <li class="sub"><a href="#from">15.7 Decir de dónde viene un módulo</a></li>
+    <li class="sub"><a href="#descubrir">15.8 Descubrirlos en ejecución</a></li>
+    <li class="sub"><a href="#nativo">15.9 Packs con código nativo</a></li>
+    <li class="sub"><a href="#trampas">15.10 Trampas conocidas</a></li>
     <li class="group"><a href="#cli">16. Compilación &amp; ejecución</a></li>
     <li class="sub"><a href="#cli-frontend">16.1 Frontend</a></li>
     <li class="sub"><a href="#cli-vm">16.2 VM (bpgenvm)</a></li>
@@ -1605,35 +1613,182 @@ tira.show()</code></pre>
 
 <!-- =========================================================== -->
 <h2 id="packs">15. Packs</h2>
+
+
 <p>
-  Un <strong>pack</strong> no es una librería: es un <strong>artefacto grabado en la
-  placa</strong> — un contenedor con módulos <code>.mod</code>, sus puentes nativos
-  <code>.mdn</code>, recursos y, si lleva, código nativo que se ejecuta en el sitio. Es lo
-  que permite que algo tan grande como SQLite viva en el micro sin que lo pague quien no
-  lo usa, y lo que hace que una librería de terceros se distribuya en una pieza.
+  Un <strong>pack</strong> es un artefacto que se graba en la placa y lleva dentro varios
+  ficheros: módulos <code>.mod</code>, sus puentes nativos <code>.mdn</code>, recursos, y
+  —si hace falta— código nativo que se ejecuta en el sitio. Sirve para dos cosas que en un
+  micro importan mucho:
 </p>
+
+<ul>
+  <li><strong>Distribuir una librería en una pieza.</strong> Un pack se graba una vez y se
+  queda; los programas que lo usan no lo llevan encima.</li>
+  <li><strong>Que lo grande no lo pague quien no lo usa.</strong> SQLite ocupa más que
+  toda la VM junta. En un pack, sólo está en las placas donde alguien lo quiso.</li>
+</ul>
+
+<h3 id="quees">15.1 Qué es un pack, y qué no</h3>
+
 <p>
-  Se construyen desde un proyecto (<code>"out": "pack"</code> en el
-  <code>.bpbuild</code>) y se graban desde el IDE, en el panel de <em>Packs</em>. Un
-  programa los usa sin enterarse: <code>import</code> resuelve primero lo que hay en el
-  sistema de ficheros y luego lo que traen los packs.
+  <strong>No es una librería del lenguaje.</strong> Las librerías (<code>Math</code>,
+  <code>Json</code>, <code>Gpio</code>…) viajan con la imagen o viven en <code>/lib</code>.
+  Un pack es un <em>contenedor</em>, y lo que hay dentro puede ser cualquier cosa: módulos
+  tuyos, de otro, o un motor entero escrito en C.
 </p>
 
 <p>
-  Todo lo suyo —los dos tipos, construirlos, qué entra dentro, grabarlos y las
-  trampas— tiene su propio volumen: <strong><a href="packs.html">Packs &rarr;</a></strong>
+  <strong>No es un fichero comprimido.</strong> Se graba en su propia zona de la flash y
+  los módulos se leen <strong>en el sitio</strong>, sin copiarlos a RAM. Por eso puede
+  llevar cosas que no cabrían de otra manera.
 </p>
 
-<h3 id="packs-descubrir">15.1 Descubrirlos desde el programa</h3>
-<p>
-  El módulo <code>Packs</code> deja que un programa averigüe por sí mismo qué hay grabado,
-  sin que nadie se lo diga por adelantado.
-</p>
+<h3 id="tipos">15.2 Dos tipos: librería y ejecutable</h3>
+
+<p>La diferencia es una sola cosa: <strong>si el módulo raíz tiene <code>main</code></strong>.</p>
+
 <table>
-  <tr><th>función</th><th>qué devuelve</th></tr>
-  <tr><td><code>list()</code></td><td>una <code>List</code> con el nombre de cada pack grabado</td></tr>
-  <tr><td><code>listIn(pack, ext)</code></td><td>los ficheros de ese pack con esa extensión</td></tr>
+  <tr><th>tipo</th><th>cuándo</th><th>para qué</th></tr>
+  <tr><td><strong>Librería</strong></td><td>el módulo raíz no tiene <code>main</code></td>
+      <td>lo importan otros programas; no se «ejecuta»</td></tr>
+  <tr><td><strong>Ejecutable</strong></td><td>el módulo raíz tiene <code>main</code></td>
+      <td>el pack anota su entrada en el manifiesto y se puede lanzar</td></tr>
 </table>
+
+<p>
+  No hay que declararlo: el compilador lo deduce y lo dice al construir
+  (<em>«pack: LIBRERIA (el modulo raiz no tiene <code>main</code>, y no le hace
+  falta)»</em>).
+</p>
+
+<h3 id="construir">15.3 Construir uno</h3>
+
+<p>
+  Un pack sale de un <strong>proyecto</strong>. En el <code>.bpbuild</code>, la clave es
+  <code>"out": "pack"</code>:
+</p>
+
+<pre><code>{
+  <span class="str">"sourceDir"</span>:    <span class="str">"."</span>,
+  <span class="str">"outDir"</span>:       <span class="str">"out"</span>,
+  <span class="str">"main"</span>:         <span class="str">"Demo"</span>,
+  <span class="str">"dependencies"</span>: [],
+  <span class="str">"out"</span>:          <span class="str">"pack"</span>,
+  <span class="str">"pack"</span>: {
+    <span class="str">"name"</span>:     <span class="str">"DemoLib"</span>,
+    <span class="str">"version"</span>:  <span class="str">"1.0"</span>,
+    <span class="str">"provides"</span>: <span class="str">"DEMO"</span>,
+    <span class="str">"notas"</span>:    <span class="str">"lo que sea, para quien lo lea"</span>
+  }
+}</code></pre>
+
+<p>Y se construye como cualquier otro proyecto:</p>
+
+<pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
+     --project mi/proyecto.bpbuild --backend=mivm</code></pre>
+
+<p>
+  Desde el IDE, <em>Project → Build Project</em>. El resultado es un <code>.pack</code> en
+  el <code>outDir</code>.
+</p>
+
+<p class="warn">
+  <strong><code>provides</code> se declara, no se deduce.</strong> Es la marca de cuatro
+  caracteres con la que el pack publica su API nativa (la de SQLite es <code>SQLI</code>).
+  Sacarla del nombre —cortar a cuatro y poner mayúsculas— funcionaría hasta el primer
+  nombre que no se parezca, así que se escribe. Sólo hace falta si el pack publica código
+  nativo; una librería de puro BP no la necesita.
+</p>
+
+<h3 id="dentro">15.4 Qué entra dentro</h3>
+
+<p>Cuando el proyecto dice <code>"out": "pack"</code>, se empaqueta:</p>
+
+<ul>
+  <li>los <strong><code>.mod</code></strong> del <code>outDir</code> — los módulos compilados;</li>
+  <li>los <strong><code>.mdn</code></strong> que haya — los puentes AOT, uno por arquitectura;</li>
+  <li>y los <strong>recursos</strong>, lo que tengas en <code>resources/</code>: imágenes,
+  fuentes, formularios <code>.win</code>, ficheros de datos.</li>
+</ul>
+
+<p>
+  Eso último es lo que convierte un pack en algo autocontenido: una librería gráfica puede
+  llevarse su fuente dentro y no pedirle nada a quien la usa.
+</p>
+
+<div class="note">
+  <p>
+    <strong>Los <code>.npk</code> son un ingrediente, no una salida.</strong> Si el pack
+    lleva código nativo, su binario se copia al <code>outDir</code> <em>antes</em> de
+    construir: el compilador genera <code>.mod</code> y <code>.mdn</code>, pero el nativo
+    lo pones tú. Está contado en <code>bpstdlib/sqlite/LEEME.md</code>, que es el ejemplo
+    completo.
+  </p>
+</div>
+
+<h3 id="grabar">15.5 Grabarlo y gestionarlo</h3>
+
+<p>
+  En el IDE, panel de <strong>Packs</strong>. Ahí está todo lo que se puede hacer con la
+  zona de packs de la placa:
+</p>
+
+<table>
+  <tr><th>botón</th><th>qué hace</th></tr>
+  <tr><td><strong>Refrescar</strong></td><td>lee qué packs hay grabados y qué llevan dentro</td></tr>
+  <tr><td><strong>Copiar pack a la placa…</strong></td><td>graba un <code>.pack</code></td></tr>
+  <tr><td><strong>Borrar</strong></td><td>quita uno</td></tr>
+  <tr><td><strong>Formatear zona…</strong></td><td>deja la zona de packs vacía</td></tr>
+</table>
+
+<p>
+  El arranque de la placa también informa: dice dónde está la zona, cuánto ocupa y si ha
+  podido mapearla.
+</p>
+
+<h3 id="usar">15.6 Usarlo desde un programa</h3>
+
+<p>
+  Nada especial: <code>import</code> y ya. Un módulo que vive en un pack se importa igual
+  que uno que vive en <code>/lib</code>.
+</p>
+
+<pre><code><span class="kw">import</span> SQLite</code></pre>
+
+<p class="warn">
+  <strong>El sistema de ficheros ECLIPSA al pack.</strong> Si hay un
+  <code>Core.mod</code> en el FS y otro dentro de un pack, gana el del FS — y el arranque
+  lo avisa: <em>«'Core' del FS eclipsa al del pack»</em>.<br><br>
+  Es una regla útil (puedes sustituir un módulo del pack sin regrabarlo) y una trampa a
+  partes iguales: si subes al dispositivo una copia vieja de algo que ya trae el pack, el
+  programa usará la vieja y no dirá nada más que ese aviso. Cuando algo se comporte como
+  una versión anterior, mira esa línea.
+</p>
+
+<h3 id="from">15.7 Decir de dónde viene un módulo</h3>
+
+<p>
+  Normalmente no hace falta. Cuando sí —porque el módulo no está donde se le busca, o
+  porque quieres fijarlo— el <code>import</code> admite decir la ruta:
+</p>
+
+<pre><code><span class="kw">import</span> OtherMod <span class="kw">from</span> <span class="str">"external/other.mod"</span>
+<span class="kw">import</span> lib.Util <span class="kw">from</span> <span class="str">"../shared/util.mod"</span></code></pre>
+
+<p>
+  El nombre puede ir cualificado (<code>lib.Util</code>), y la ruta es relativa al
+  proyecto. Es lo mismo que hace <code>dependencies</code> en el <code>.bpbuild</code>,
+  pero declarado en el fichero que lo usa en vez de en el proyecto entero.
+</p>
+
+<h3 id="descubrir">15.8 Descubrirlos en ejecución</h3>
+
+<p>
+  Un programa puede averiguar por sí mismo qué packs hay grabados y qué llevan, sin que
+  nadie se lo diga por adelantado:
+</p>
+
 <pre><code><span class="kw">import</span> Packs
 
 <span class="kw">var</span> p: <span class="type">List</span> := Packs.<span class="fn">list</span>()
@@ -1642,22 +1797,65 @@ tira.show()</code></pre>
   <span class="kw">print</span> p.<span class="fn">getString</span>(i)
   i := i + <span class="num">1</span>
 <span class="kw">endwh</span></code></pre>
+
 <p>
-  El recorrido se arma en BP sobre cuatro intrínsecos que dan una cosa por llamada
-  (<code>__packNext</code>, <code>__packInfo</code>, <code>__packEntryNext</code>,
-  <code>__packEntryInfo</code>) y llevan el cursor como <strong>valor</strong>, no como
-  estado guardado en la VM. La razón es concreta: hoy ningún intrínseco devuelve una
-  clase, así que construir la lista en el nativo habría sido estrenar maquinaria en las
-  dos VMs para nada.
+  Y <code>Packs.listIn(pack, ext)</code> da los ficheros de un pack con una extensión
+  concreta — útil para que una aplicación cargue todos los <code>.win</code> o todas las
+  fuentes que encuentre.
 </p>
 
-<h3 id="packs-sqlite">15.2 El pack de SQLite</h3>
+<h3 id="nativo">15.9 Packs con código nativo</h3>
+
 <p>
-  El caso grande y el que más se usa. Está contado entero —instalarlo, darle memoria y
-  qué pasa si falta— en su propio volumen:
-  <strong><a href="basedatos.html">Bases de datos &rarr;</a></strong>
+  Un pack puede llevar código máquina y ejecutarlo en la placa. Es lo que hace posible
+  meter un motor como SQLite, y tiene tres consecuencias que conviene conocer:
 </p>
 
+<ul>
+  <li><strong>El nativo es por arquitectura.</strong> Un <code>.npk</code> de ARM no vale
+  en RISC-V. Un pack puede llevar los dos.</li>
+  <li><strong>Se ejecuta desde la flash</strong>, mapeada, sin copiarse a RAM.</li>
+  <li><strong>El código del pack no puede tocar el montón de la plataforma.</strong> Lo que
+  necesita del sistema —ficheros, reloj, memoria— se lo presta el firmware en una tabla, y
+  su memoria sale de una arena aparte. Por eso un pack no llama a <code>malloc</code>.</li>
+</ul>
+
+<p>
+  El caso completo, de principio a fin, está en
+  <a href="basedatos.html">bases de datos</a> y en
+  <code>bpstdlib/sqlite/LEEME.md</code>.
+</p>
+
+<h3 id="trampas">15.10 Trampas conocidas</h3>
+
+<p>
+  <strong>Un pack realojado para otra dirección no vale.</strong> El nativo se graba
+  preparado para una posición concreta; si cambia el reparto de la flash, hay que
+  regrabarlo. El arranque lo dice con todas las letras — <em>«realojado para OTRA
+  direccion — regrabalo desde el IDE»</em> — y compara el sello que esperaba con el que
+  trae el pack.
+</p>
+
+<p>
+  <strong>El FS eclipsa al pack</strong> (ver §6). La causa más común de «esto se comporta
+  como la versión de antes».
+</p>
+
+<p>
+  <strong>La base de datos del proyecto no viaja.</strong> La clave <code>database</code>
+  del <code>.bpbuild</code> es del PC y sirve para verificar entidades; <strong>no se copia
+  al micro</strong>. Una base no es un artefacto: es un dato, y acumula lo que no está en
+  ningún otro sitio. Copiarla en cada ejecución convertiría «ejecutar» en «perder los datos
+  de campo».
+</p>
+
+<p>
+  <strong>Y por lo mismo, no pongas la base en <code>resources/</code></strong>: esa
+  carpeta sí se copia en cada ejecución, así que machacaría tu base con la del proyecto. El
+  compilador te avisa si lo intentas.
+</p>
+
+<!-- =========================================================== -->
 <h2 id="cli">16. Compilación &amp; ejecución</h2>
 
 <h3 id="cli-frontend">16.1 Frontend</h3>
