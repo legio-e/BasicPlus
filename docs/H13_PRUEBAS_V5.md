@@ -32,6 +32,30 @@ sólo lo nuevo y lo que quedó pendiente.
 
 ---
 
+## Punto de partida (20-ago, tarde) — ya hecho
+
+Todo construido **del mismo árbol y en una sola tanda**, y sellado. Al empezar en placa
+no hay que reconstruir nada: se flashea desde `dist/firmware/`.
+
+- ✅ toolchain en limpio · stdlib (27 módulos) · `Stdlib.pack` · `SQLite.pack`
+- ✅ el `.npk` de ARM **regenerado desde sus fuentes** (464.127 → 464.399 B). Era el
+  rancio; ahora el binario se corresponde con el código. ⚠️ **Por eso la Metro es
+  obligatoria**: ese binario no se ha ejecutado nunca.
+- ✅ las 5 imágenes en `dist/firmware/` con su `SHA256SUMS.txt`
+- ✅ `BasicPlus-5.0-win.zip` (23 MB), con sus dos autocomprobaciones
+- ✅ Puerta 0 pasada: batería **48/18/4/0 con diff vacío** y los tres demos de BD `OK`
+
+📌 **Y el ZIP no se rehace hasta el final** (norma de Eduardo, 20-ago): si salen fallos
+pequeños se anotan, se corrigen si hace falta, y el ZIP se monta **una vez**, al cerrar.
+
+📌 **Reparto previsto: dos días** (viernes y sábado). Lo razonable es partirlo por
+puertas, no por placas — así cada día termina con algo cerrado:
+- **Día 1:** Puerta 1 en las tres familias (el ABI, que es lo que bloquea) + Puerta 2 en
+  la Metro.
+- **Día 2:** Puerta 2 en el P4, y la Puerta 3 entera (las fichas abiertas).
+
+---
+
 ## Puerta 0 — en el PC, antes de tocar una placa
 
 Gratis, mecánico y encuentra regresiones sin gastar un flasheo.

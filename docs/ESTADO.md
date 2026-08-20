@@ -27,6 +27,33 @@
 
 ## Última sesión
 
+### 20-ago (tarde) — H12 CERRADO, el bilingüe al día, y la tanda de construcción
+
+**`H12` cerrado con sus ocho puntos.** Y lo caro no fue escribir: fue lo que escribir
+destapó — la §13.2 de la referencia daba un ejemplo que YA NO COMPILA, la consola del IDE
+se dejaba seis comandos, el ENV no tenia ni una clave escrita, `AOT_LIMITES` negaba el
+`long` en `native` y el manual seguía diciendo que las colecciones usan `any`.
+
+**Estructura, decidida por Eduardo:** la referencia en dos grupos (§13 lenguaje / §14
+dispositivos), §15 Packs aparte, y **todo dentro de `referencia.html` salvo dos volúmenes
+propios**: la GUI «porque es demasiado grande» y las BD «porque lo merecen».
+
+**Y el bilingüe**, que yo no había mirado: `en/referencia.html`, `en/guia-ide.html`,
+`en/index.html` y `en/basedatos.html` (no existía) puestos al día. Los ids son idénticos
+en los dos idiomas, así que el guion de reestructuración valió tal cual.
+⏭️ Queda deuda ANTERIOR: el manual inglés se dejó siete secciones de V4 (eventos,
+sobrecarga, `dospasadas`).
+
+**Tanda de construcción completa**, del mismo árbol: stdlib, los dos packs, los blobs, las
+5 imágenes selladas en `dist/firmware/` y `BasicPlus-5.0-win.zip`. **Versión del IDE a
+5.0.** El `.npk` de ARM regenerado desde sus fuentes — era el rancio.
+📌 El rebuild dio **bytes idénticos** en todo salvo ese `.npk`: la construcción es
+reproducible.
+
+**⏭️ MAÑANA: H13 en placa**, con `docs/H13_PRUEBAS_V5.md`. Dos días (viernes y sábado),
+partido por puertas. La Puerta 1 —el ABI de `Comparable` en las tres familias— es la que
+bloquea, y la Metro es obligatoria porque su `.npk` no se ha ejecutado nunca.
+
 ### 20-ago — H12 en marcha: tres documentos, y la referencia reordenada
 
 **Escrito y verificado:** `docs/TARJETA_SD` y `docs/BASEDATOS` (este ultimo, del dia
