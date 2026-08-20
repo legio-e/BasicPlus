@@ -1983,20 +1983,35 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   (`bpvm_loader_load_xip`, y la VM lo canta: *«cargado XIP desde pack (codigo en
   sitio)»*). O sea que **el mismo módulo cuesta RAM desde el FS y casi nada desde el
   pack**. Con `Stdlib.pack` grabado, `Gui` deja de costar 43 KB de RAM.
-  📐 **La pregunta que lo resuelve, y es de Eduardo**: *«¿cómo sabe el IDE si tiene que
-  copiar o no una dependencia? Pues que se lo pregunte al dispositivo, que le dé el
-  dispositivo la información.»* Es la respuesta correcta y evita la trampa de que el IDE
-  lleve un modelo de lo que cree que hay en la placa — un modelo que se desincroniza en
-  cuanto alguien graba un pack a mano. **La placa sabe lo que tiene; que lo diga.**
-  ⏭️ **Lo que hay que construir:**
-  1. un verbo de wire que responda *«de estos módulos, ¿cuáles tienes ya y de dónde
-     —FS o pack— y con qué versión?»*. La información existe: la resolución de imports ya
-     mira FS y packs, y el `.mod` es autodescriptivo desde `#284`;
-  2. que el IDE pregunte antes de subir y omita lo que ya esté;
-  3. y el cuidado de siempre: comparar **identidad**, no sólo el nombre. Subir de menos
-     por creer que el pack trae la versión buena sería el desfase de `.mod` otra vez, que
-     ya ha costado tiempo — el gate de ABI de `#284` es la red.
-  📌 Encaja con `#310` (packs ejecutables) y con la stdlib preinstalada: si la placa trae
+  ⏭️ **El diseño, afinado por Eduardo (20-ago), y es la clave**: el dispositivo no debe
+  contestar con un inventario. Debe **buscar la dependencia EXACTAMENTE COMO LO HACE EL
+  CARGADOR DE MÓDULOS** y contestar una sola cosa: hace falta o no hace falta.
+  *«Si la dependencia está en cualquier sitio donde el cargador la encuentre, y es igual o
+  más antigua que la que hay grabada, no se carga. Así que da igual que el módulo esté en
+  `/app`, `/lib`, `/sys` o en un pack.»*
+  📐 **Por qué esto es lo correcto y no un detalle**: cualquier otra respuesta obliga al
+  IDE a reimplementar la resolución de imports, y entonces hay **dos buscadores** que se
+  desincronizan en cuanto uno cambie. Es el patrón que ya ha mordido en este proyecto
+  varias veces (una copia privada que no se enteró de que el común creció). Con esto hay
+  UN algoritmo, el del cargador, y el IDE sólo pregunta.
+  ✅ **Y la mitad ya está construida.** `PicoExplorer.putIfChanged` YA le pide al
+  dispositivo el CRC del fichero y **se salta el PUT si coincide** — con su respaldo para
+  firmware viejo (`#110`/`#111`) y una consulta por fichero desde `#398`. Lo que le falta
+  es justo lo que señala Eduardo: hoy pregunta **por la ruta destino** (`/app/Gui.mod`), no
+  *«¿lo encontraría el cargador en algún sitio?»*. Si `Gui` vive en un pack o en `/lib`, la
+  pregunta por `/app` dice «no está» y se sube igual.
+  📌 **Con qué se compara: CRC, no fecha.** Un `.mod` **no lleva marca de tiempo**, así que
+  «más antigua» no se puede medir tal cual; y comparar por tamaño ya falló una vez —el
+  *skip-if-same-size* de `#110` servía `.mod` rancios—. El mecanismo que funciona y que ya
+  está en pie es el CRC, que detecta un rancio venga de donde venga. En la práctica la
+  regla queda: **mismo CRC ⇒ no se sube**; distinto ⇒ se sube, porque el IDE es la fuente
+  de verdad de lo que quieres ejecutar.
+  ⏭️ **Lo que hay que construir, entonces, es poco:**
+  1. un verbo de wire que reciba el nombre del módulo y su CRC y conteste
+     **sí/no** resolviendo con el cargador (FS por sus rutas + packs montados);
+  2. que `putIfChanged` pregunte eso en vez de preguntar por la ruta destino.
+  📌 Encaja con la stdlib preinstalada: si la placa trae `Stdlib.pack`, lo normal pasa a
+  ser **no copiar nada** y subir sólo el programa.
   `Stdlib.pack`, lo normal pasa a ser **no copiar nada** y subir sólo el programa.
 
 - **[host] PROBAR BASES DE DATOS SIN PLACA — packs en el PC** *(aplazada a V6 el 19-ago.
