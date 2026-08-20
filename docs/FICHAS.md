@@ -1971,6 +1971,34 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
+- **[IDE+device] NO copiar dependencias que el dispositivo YA TIENE — y que lo diga él**
+  *(idea de Eduardo, 20-ago. Aplazada a V6: es mejora, no bug.)*
+  🩸 **El problema, con nombres**: hoy el IDE sube al dispositivo las dependencias del
+  programa en cada Run. Entre ellas van `Json` (21 KB) y `Gui` (43 KB), que son las dos
+  más grandes de la stdlib. Eduardo: *«que Json y Gui se carguen cuando se ejecuta un
+  programa no es del todo correcto porque son grandes y consumirán RAM»*.
+  📐 **Y no es sólo transferencia: es RAM.** Un módulo que acaba en el sistema de ficheros
+  se carga ENTERO en memoria para ejecutarse. Uno que vive en un pack se ejecuta **en el
+  sitio**, desde la flash — a RAM sólo van su ext-table y su bloque de datos
+  (`bpvm_loader_load_xip`, y la VM lo canta: *«cargado XIP desde pack (codigo en
+  sitio)»*). O sea que **el mismo módulo cuesta RAM desde el FS y casi nada desde el
+  pack**. Con `Stdlib.pack` grabado, `Gui` deja de costar 43 KB de RAM.
+  📐 **La pregunta que lo resuelve, y es de Eduardo**: *«¿cómo sabe el IDE si tiene que
+  copiar o no una dependencia? Pues que se lo pregunte al dispositivo, que le dé el
+  dispositivo la información.»* Es la respuesta correcta y evita la trampa de que el IDE
+  lleve un modelo de lo que cree que hay en la placa — un modelo que se desincroniza en
+  cuanto alguien graba un pack a mano. **La placa sabe lo que tiene; que lo diga.**
+  ⏭️ **Lo que hay que construir:**
+  1. un verbo de wire que responda *«de estos módulos, ¿cuáles tienes ya y de dónde
+     —FS o pack— y con qué versión?»*. La información existe: la resolución de imports ya
+     mira FS y packs, y el `.mod` es autodescriptivo desde `#284`;
+  2. que el IDE pregunte antes de subir y omita lo que ya esté;
+  3. y el cuidado de siempre: comparar **identidad**, no sólo el nombre. Subir de menos
+     por creer que el pack trae la versión buena sería el desfase de `.mod` otra vez, que
+     ya ha costado tiempo — el gate de ABI de `#284` es la red.
+  📌 Encaja con `#310` (packs ejecutables) y con la stdlib preinstalada: si la placa trae
+  `Stdlib.pack`, lo normal pasa a ser **no copiar nada** y subir sólo el programa.
+
 - **[host] PROBAR BASES DE DATOS SIN PLACA — packs en el PC** *(aplazada a V6 el 19-ago.
   Eduardo: «me parece que se sale de V5, habra que dejarlo para V6»)*.
   🩸 **El problema**: la VM-C que usa la gente no puede correr BD — dice *«falta el

@@ -469,7 +469,10 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         }
         /* H3.c — resolución FS → packs (spec §4): el FS ECLIPSA al pack (shadow
          * de desarrollo, con aviso); si no está en FS, se carga DESDE el pack
-         * montado (mismos bytes .mod; hoy con copia — el XIP es la tanda 2). */
+         * montado (mismos bytes .mod). La tanda 2 YA ESTA: se carga XIP, el
+         * codigo se queda en la region y a RAM solo van ext-table + data
+         * block — ver mas abajo. (Este comentario decia «hoy con copia» y
+         * llevaba rancio; se vio el 20-ago documentando los packs.) */
         uint32_t pk_region_size = 0;
         const uint8_t* pk_region = bpvm_pack_mounted(&pk_region_size);
         uint32_t pk_len = 0;
