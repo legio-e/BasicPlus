@@ -27,6 +27,50 @@
 
 ## Última sesión
 
+### 20-ago — H12 en marcha: tres documentos, y la referencia reordenada
+
+**Escrito y verificado:** `docs/TARJETA_SD` y `docs/BASEDATOS` (este ultimo, del dia
+anterior), mas el apartado de packs. Los ejemplos de la SD se validan con
+`samples/SdDoc.bp`: las DOS VMs, salida identica.
+
+**🩸 Y otra vez, escribir los ejemplos los rompio** — cuatro hallazgos, el ultimo gordo:
+`chr(10)` NO EXISTE (se me habia inventado; son los escapes del lexer); `listDir`
+devuelve `string[]`; un array NO tiene `.length()` (eso es de los objetos, los arrays van
+con `for..in..next`); y **`listDir` no esta en la VM-C**, o sea que funciona en el PC y NO
+en la placa. Es el UNICO verbo de fichero que falta. Documentado como limitacion.
+
+**📐 Estructura, decidida por Eduardo:** la referencia mezclaba librerias del lenguaje con
+las de hardware. Ahora son **§13 Biblioteca del lenguaje** y **§14 Librerias de
+dispositivos** (con la SD como 14.17 y la «Politica HW = clase OO» encabezando el grupo),
+**§15 Packs** aparte —«no es exactamente una libreria»— y 16/17 corridas. La regla final:
+**todo dentro de `referencia.html` salvo dos volumenes propios**, la GUI «porque es
+demasiado grande» y las BD «porque lo merecen». Verificado por script: 34 numeros
+cambiados, referencias en prosa reescritas y contrastadas contra su destino, cero anclas
+rotas, indice regenerado — y se corrigio un `<ul>` sin cerrar que ya traia el fichero.
+
+**🩸 Fallo mio del dia:** escribi los dos primeros documentos en Markdown cuando los
+manuales del proyecto son HTML. Convertidos reusando la cabecera y la hoja de
+`referencia.html` (mismo md5, comprobado).
+
+**🔎 Y una correccion de Eduardo que valia oro:** el apartado de packs contaba flojo su
+razon de ser. No es que ahorren flash: **ahorran RAM**, porque el modulo se ejecuta EN EL
+SITIO desde la flash. Al verificarlo salio que el comentario de `bpvm.c:472` decia «hoy
+con copia — el XIP es la tanda 2» y estaba RANCIO: la tanda 2 ya esta hecha
+(`bpvm_loader_load_xip`, «codigo en sitio»). Corregido el comentario y reescrito el texto.
+
+**⏭️ Idea de Eduardo para V6, anotada con su diseño:** que el IDE no suba dependencias que
+el dispositivo ya tiene, y que **lo decida el dispositivo resolviendo COMO EL CARGADOR**
+(da igual que este en `/app`, `/lib`, `/sys` o en un pack) — asi no hay dos buscadores que
+se desincronicen. Y al mirarlo: **la mitad ya existe**, `putIfChanged` ya compara por CRC;
+lo que le falta es preguntar por la resolucion en vez de por la ruta destino.
+
+**⏭️ Sigue H12:** los cambios del IDE, `Core` (envoltorios, captadores), **las variables de
+entorno** —que hay que CENSAR antes de escribir, hoy nadie puede enumerarlas—, la puerta
+(QUICKSTART y los dos README) y las notas de version. Y una pasada por documento
+preguntando *¿que afirma esto que ya no sea verdad?*: `AOT_LIMITES.md` niega el `long` en
+`native` y eso dejo de ser cierto el 16-ago.
+
+
 ### 19-ago (tarde) — H12 arranca, y documentar destapa que el ORM no funcionaba
 
 **Lo mas importante del dia no es lo que se escribio, es lo que salio al escribirlo.**
