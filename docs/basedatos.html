@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Bases de datos</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ul>
+    <li class="group"><a href="#pack">1. El pack: instalarlo</a></li>
+    <li class="group"><a href="#sinorm">2. Sin ORM: hablar SQL</a></li>
+    <li class="sub"><a href="#exec">2.1 Mandar y ya</a></li>
+    <li class="sub"><a href="#undato">2.2 Pedir UN dato</a></li>
+    <li class="sub"><a href="#filas">2.3 Recorrer filas</a></li>
+    <li class="group"><a href="#entidades">3. Definir entidades</a></li>
+    <li class="group"><a href="#orm">4. El ORM: Dao y Where</a></li>
+    <li class="group"><a href="#generar">5. Generar los DAO</a></li>
+    <li class="group"><a href="#crud">6. Las operaciones (CRUD)</a></li>
+    <li class="group"><a href="#extender">7. Extender un DAO</a></li>
+    <li class="group"><a href="#verificar">8. Verificar contra la base</a></li>
+    <li class="group"><a href="#indices">9. Índices</a></li>
+    <li class="group"><a href="#ventanas">10. Trabajar por ventanas</a></li>
+    <li class="group"><a href="#varias">11. Varias consultas a la vez</a></li>
+    <li class="group"><a href="#conexiones">12. Más de una conexión</a></li>
+    <li class="group"><a href="#trampas">13. Trampas conocidas</a></li>
+    <li class="group"><a href="#seguir">Por dónde seguir</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<h1>Bases de datos</h1>
+
+<p>
+  BasicPlus habla con <strong>SQLite</strong>. El mismo motor, el mismo fichero
+  <code>.db</code> y el mismo código en el PC, en la Metro y en el ESP32-P4. Se puede
+  usar de dos maneras, y las dos son legítimas:
+</p>
+
+<ul>
+  <li><strong>con SQL</strong>, escribiendo las sentencias a mano — directo y sin sorpresas;</li>
+  <li><strong>con el ORM</strong>, que las escribe por ti a partir de tus clases.</li>
+</ul>
+
+<h2 id="pack">1. El pack: instalarlo antes de nada</h2>
+
+<p>
+  El motor <strong>no está dentro de la VM</strong>. Es un <em>pack</em> de código nativo
+  que se graba aparte, y se publica con el nombre <code>SQLI</code>. Esto no es un
+  capricho: SQLite ocupa más que toda la VM junta, y quien no use bases de datos no tiene
+  por qué pagarlo.
+</p>
+
+<p><strong>Construir el pack</strong> (una vez, o cuando cambie la librería):</p>
+
+<pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
+     --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm</code></pre>
+
+<p>
+  <strong>Grabarlo en la placa</strong>: en el IDE, panel de <em>Packs</em> →
+  <strong>«Copiar pack a la placa…»</strong> y elige <code>packs/SQLite.pack</code>. Ahí
+  mismo están <em>Refrescar</em>, <em>Borrar</em> y <em>Formatear zona</em>.
+</p>
+
+<p>
+  <strong>Darle memoria.</strong> SQLite trabaja sobre una <strong>arena</strong> propia,
+  separada del montón de la VM, y su tamaño se declara en el entorno de la placa:
+</p>
+
+<pre><code>SQLite=4</code></pre>
+
+<p>
+  Cuatro megabytes es lo que usa el P4. <strong>El mínimo son 2</strong> y el máximo 4095;
+  por debajo de 2 el pack no arranca, igual que con <code>SQLite=0</code> o si no cabe — y
+  el arranque lo dice en su línea <code>bd:</code>.
+</p>
+
+<p class="warn">
+  <strong>Hoy hace falta placa.</strong> La VM-C del PC no lleva el motor: si ejecutas ahí
+  un programa con base de datos, la primera llamada lanza
+  <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>. Poder probarlo en el
+  sobremesa está previsto, pero todavía no es posible.
+</p>
+
+<h2 id="sinorm">2. Sin ORM: hablar SQL directamente</h2>
+
+<p>Tres verbos, y son los tres que hay.</p>
+
+<pre><code><span class="kw">import</span> SQLite
+
+<span class="kw">var</span> db: SQLite.<span class="type">Db</span> := SQLite.<span class="type">Db</span>()
+<span class="kw">if not</span> db.<span class="fn">connect</span>(<span class="str">"/sd/medidas.db"</span>) <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"no se pudo abrir -> "</span>, db.<span class="fn">errorMessage</span>()
+  <span class="kw">return</span>
+<span class="kw">endif</span></code></pre>
+
+<p>
+  <code>connect</code> <strong>devuelve <code>false</code></strong>, no lanza: que no haya
+  tarjeta o que la ruta esté mal es algo que <em>pasa</em>, y tu programa decide qué hacer.
+  Hay también <code>connectRead(ruta)</code> para abrir en sólo lectura.
+</p>
+
+<h3 id="exec">2.1 Mandar y ya</h3>
+
+<pre><code>db.<span class="fn">exec</span>(<span class="str">"CREATE TABLE medidas (id INTEGER PRIMARY KEY, sensor TEXT, valor REAL)"</span>)
+db.<span class="fn">exec</span>(<span class="str">"INSERT INTO medidas(sensor, valor) VALUES('temp', 21.5)"</span>)
+<span class="kw">print</span> <span class="str">"el ultimo id: "</span>, db.<span class="fn">lastInsertId</span>()    <span class="comment">// long</span>
+<span class="kw">print</span> <span class="str">"filas tocadas:"</span>, db.<span class="fn">changes</span>()</code></pre>
+
+<p>
+  Admite varias sentencias en una llamada, separadas por <code>;</code>. Aquí
+  <strong>un SQL mal escrito sí es excepción</strong>: eso es un fallo del programa, no
+  del mundo.
+</p>
+
+<h3 id="undato">2.2 Pedir UN dato</h3>
+
+<pre><code><span class="kw">print</span> db.<span class="fn">execInt</span>(<span class="str">"SELECT count(*) FROM medidas"</span>)
+<span class="kw">print</span> db.<span class="fn">execDouble</span>(<span class="str">"SELECT avg(valor) FROM medidas WHERE sensor = 'temp'"</span>)
+<span class="kw">print</span> db.<span class="fn">execStr</span>(<span class="str">"SELECT sensor FROM medidas ORDER BY id LIMIT 1"</span>)</code></pre>
+
+<p>
+  Hay uno por tipo de respuesta porque BP es de tipado estático: el tipo de retorno tiene
+  que estar decidido al compilar. El segundo parámetro es <strong>qué contestar cuando no
+  hay ninguna fila</strong>, que no es lo mismo que «vale cero»:
+</p>
+
+<pre><code>db.<span class="fn">execInt</span>(<span class="str">"SELECT valor FROM medidas WHERE sensor = 'viento'"</span>, <span class="num">-1</span>)   <span class="comment">// -1</span></code></pre>
+
+<h3 id="filas">2.3 Recorrer filas</h3>
+
+<pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT sensor, valor, t FROM medidas ORDER BY valor"</span>)
+<span class="kw">while</span> q.<span class="fn">nextRow</span>() <span class="kw">do</span>
+  <span class="kw">print</span> q.<span class="fn">getStr</span>(<span class="num">0</span>), q.<span class="fn">getDouble</span>(<span class="num">1</span>), q.<span class="fn">getLong</span>(<span class="num">2</span>)
+<span class="kw">endwh</span>
+q.<span class="fn">release</span>()</code></pre>
+
+<p>
+  Las columnas van <strong>por índice, empezando en 0</strong>, como los arrays de BP.
+  Están además <code>columnCount()</code>, <code>columnName(i)</code> y
+  <code>columnType(i)</code> para recorrer una tabla que no conoces de antemano. Y
+  <code>getInt</code>, <code>getLong</code>, <code>getDouble</code> y <code>getStr</code>
+  para leer.
+</p>
+
+<div class="note">
+  <p>
+    <strong>La regla que hace difícil equivocarse: sólo lo que devuelve <code>query</code>
+    hay que liberarlo.</strong> Todo lo demás termina solo. Y <code>close()</code> es de la
+    <strong>base</strong>, va una vez al final, y no tiene nada que ver con el
+    <code>release()</code> de las consultas.
+  </p>
+</div>
+
+<h2 id="entidades">3. Definir entidades: qué se guarda y dónde</h2>
+
+<p>Una entidad es una clase normal con anotaciones <code>@BD</code>. El punto importante:</p>
+
+<div class="note">
+  <p>
+    <strong>Sólo persiste lo que lleva <code>@BD</code>.</strong> Una <code>property</code>
+    sin anotar es tuya y no viaja a la base. No hay que excluir nada: hay que incluir lo
+    que quieras guardar.
+  </p>
+</div>
+
+<pre><code><span class="kw">module</span> Modelo
+
+  @BD{ tabla = <span class="str">"medidas"</span> }
+  <span class="kw">public class</span> <span class="type">Medida</span>
+    @BD{ pk }                      <span class="kw">public property</span> id:       <span class="type">long</span>
+    @BD{ columna = <span class="str">"sensor_id"</span> }   <span class="kw">public property</span> sensorId: <span class="type">long</span>
+    @BD{}                          <span class="kw">public property</span> valor:    <span class="type">double</span>
+    @BD{}                          <span class="kw">public property</span> t:        <span class="type">long</span>
+
+    <span class="kw">public function</span> <span class="fn">Medida</span>()
+      <span class="kw">this</span>.id := <span class="num">0</span>
+      <span class="kw">this</span>.sensorId := <span class="num">0</span>
+      <span class="kw">this</span>.valor := <span class="num">0.0d</span>
+      <span class="kw">this</span>.t := <span class="num">0</span>
+    <span class="kw">end</span> Medida
+  <span class="kw">end</span> Medida
+
+<span class="kw">end</span> Modelo</code></pre>
+
+<ul>
+  <li><code>@BD{ tabla = "..." }</code> sobre la clase — con qué tabla casa.</li>
+  <li><code>@BD{ pk }</code> — la clave primaria. La pone la base al insertar, y al volver
+  de <code>insert</code> tu objeto ya la lleva puesta.</li>
+  <li><code>@BD{ columna = "..." }</code> — cuando la columna se llama distinto que la
+  property. Sin él, se usa el nombre de la property.</li>
+  <li><code>@BD{}</code> a secas — se guarda, y la columna se llama igual.</li>
+</ul>
+
+<p>
+  Los tipos casan así: <code>long</code>/<code>integer</code> → <code>INTEGER</code>,
+  <code>double</code>/<code>float</code> → <code>REAL</code>, <code>string</code> →
+  <code>TEXT</code>.
+</p>
+
+<h2 id="orm">4. El ORM: <code>Dao</code> y <code>Where</code></h2>
+
+<p>
+  Sobre las entidades va un <strong>DAO por tabla</strong>. Te da los verbos de siempre sin
+  que escribas SQL, y <code>Where</code> construye las condiciones:
+</p>
+
+<pre><code><span class="kw">var</span> w: Orm.<span class="type">Where</span> := Orm.<span class="type">Where</span>()
+w.<span class="fn">eq</span>(<span class="str">"sensor_id"</span>, <span class="num">1L</span>).<span class="fn">lt</span>(<span class="str">"valor"</span>, <span class="num">22.2d</span>)
+<span class="kw">var</span> frias: <span class="type">List</span> := mdao.<span class="fn">list</span>(w)</code></pre>
+
+<p>
+  <code>Where</code> tiene <code>eq</code>, <code>ne</code>, <code>lt</code>,
+  <code>le</code>, <code>gt</code>, <code>ge</code>, <code>like</code>,
+  <code>isNull</code>, <code>isNotNull</code> y <code>raw</code> para lo que no cubra; se
+  encadenan con AND, y <code>orNext()</code> cambia el enlace a OR. <code>sql()</code> te
+  enseña lo que va a mandar, que es cómodo para depurar.
+</p>
+
+<p class="warn">
+  <strong><code>Where</code> no es azúcar: es seguridad.</strong> Escribe los valores
+  <strong>escapados</strong>. Un nombre como <code>O'Brien</code> concatenado a mano parte
+  la sentencia; por <code>Where</code> entra entero y no pasa nada.
+</p>
+
+<h3>Leer los resultados</h3>
+
+<p>
+  <code>list()</code> devuelve una <code>List</code>, cuyos elementos son
+  <code>Object</code>. Para sacar la entidad, un cast; para sacar valores sueltos, los
+  <strong>captadores tipados</strong>:
+</p>
+
+<pre><code><span class="kw">var</span> m: Modelo.<span class="type">Medida</span> := Modelo.<span class="type">Medida</span>(suyas.<span class="fn">get</span>(i))   <span class="comment">// entidades: cast</span>
+<span class="kw">var</span> n: <span class="type">integer</span> := otra.<span class="fn">getInteger</span>(<span class="num">0</span>)                  <span class="comment">// valores: convierte</span></code></pre>
+
+<h2 id="generar">5. Generar los DAO automáticamente</h2>
+
+<p>En el IDE: botón (o menú) <strong>«DAO build»</strong>. Por línea de comandos:</p>
+
+<pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
+     --project mi/proyecto.bpbuild --backend=mivm --dao</code></pre>
+
+<p>
+  Lee las <code>@BD</code> del proyecto y escribe un módulo con un DAO por entidad. El
+  fichero empieza avisando de que <strong>no se edita</strong>, y lleva una huella
+  <code>@generado</code>: si no ha cambiado, el generador dice <code>ya al dia</code> y no
+  lo reescribe.
+</p>
+
+<h2 id="crud">6. Las operaciones (CRUD)</h2>
+
+<p>Con <code>dao</code> construido sobre una conexión (<code>MedidaDao(db)</code>):</p>
+
+<table>
+  <tr><th>verbo</th><th>qué hace</th></tr>
+  <tr><td><code>insert(e)</code></td><td>inserta; al volver, <code>e</code> lleva su clave puesta</td></tr>
+  <tr><td><code>add(e)</code></td><td>igual, cuando no te interesa el id</td></tr>
+  <tr><td><code>loadById(id)</code></td><td>trae uno por clave, o <code>null</code></td></tr>
+  <tr><td><code>load(e)</code></td><td>rellena <code>e</code> desde la base usando su clave; <code>false</code> si no estaba</td></tr>
+  <tr><td><code>refresh(e)</code></td><td>recarga <code>e</code> (lo mismo que <code>load</code>, con nombre de intención)</td></tr>
+  <tr><td><code>update(e)</code></td><td>guarda los cambios; <code>false</code> si no existía</td></tr>
+  <tr><td><code>delete(e)</code></td><td>borra; el objeto queda con la clave a 0</td></tr>
+  <tr><td><code>deleteById(id)</code></td><td>borra por clave</td></tr>
+  <tr><td><code>list(w, max)</code></td><td>los que cumplen la condición</td></tr>
+  <tr><td><code>listAll(max)</code></td><td>todos</td></tr>
+  <tr><td><code>uno(cond)</code></td><td>el primero que cumpla, o <code>null</code></td></tr>
+  <tr><td><code>close()</code></td><td>cierra el DAO (la conexión la cierra quien la abrió)</td></tr>
+</table>
+
+<h2 id="extender">7. Extender un DAO</h2>
+
+<p><strong>Nunca edites el generado</strong>: se rehace y pierdes los cambios. Hereda:</p>
+
+<pre><code><span class="kw">public class</span> <span class="type">SensorDaoPlus</span> <span class="kw">extends</span> ModeloDao.<span class="type">SensorDao</span>
+  <span class="kw">public function</span> <span class="fn">SensorDaoPlus</span>(base: SQLite.<span class="type">Db</span>)
+    <span class="kw">super</span>(base)
+  <span class="kw">end</span> SensorDaoPlus
+
+  <span class="comment">// Buscar por la OTRA clave. Convención: por clave, `...By&lt;algo&gt;`.</span>
+  <span class="kw">public function</span> <span class="fn">loadByNombre</span>(nombre: <span class="type">string</span>): Modelo.<span class="type">Sensor</span>
+    <span class="kw">return</span> Modelo.<span class="type">Sensor</span>(<span class="kw">this</span>.<span class="fn">uno</span>(<span class="str">"nombre = '"</span> + Orm.<span class="fn">esc</span>(nombre) + <span class="str">"'"</span>))
+  <span class="kw">end</span> loadByNombre
+<span class="kw">end</span> SensorDaoPlus</code></pre>
+
+<p>Así puedes regenerar cuando quieras, que es justo para lo que está pensado.</p>
+
+<h2 id="verificar">8. Verificar tus entidades contra la base de verdad</h2>
+
+<p>
+  Si tu proyecto declara una base, <strong>el compilador contrasta las <code>@BD</code> con
+  el esquema real</strong> en cada build y te avisa de lo que no cuadra: tablas que no
+  están, columnas que faltan o sobran, tipos que no casan.
+</p>
+
+<pre><code>{
+  <span class="str">"sourceDir"</span>: <span class="str">"."</span>,
+  <span class="str">"outDir"</span>:    <span class="str">"out"</span>,
+  <span class="str">"database"</span>:  <span class="str">"medidas.db"</span>
+}</code></pre>
+
+<ul>
+  <li><strong>Son avisos, nunca errores.</strong> Una base se puede diseñar entera antes
+  que el programa, y con cuarenta tablas por delante nadie escribe las cuarenta entidades
+  de un tirón. Bloquear el build por eso convertiría la herramienta en un estorbo.</li>
+  <li><strong>La base se abre en sólo lectura.</strong> Es tuya y puede tener datos que no
+  están en ningún otro sitio; una herramienta de compilación no tiene por qué escribir ahí.</li>
+  <li><strong>La verificación es opcional por diseño.</strong> Necesita un driver JDBC en
+  tiempo de ejecución; si no está, se salta y lo dice, y el build sigue.</li>
+</ul>
+
+<h2 id="indices">9. Acelerar los <code>SELECT</code> con índices</h2>
+
+<p>Aquí no hay nada de BasicPlus: es SQL, y se manda con <code>exec</code>.</p>
+
+<pre><code>db.<span class="fn">exec</span>(<span class="str">"CREATE INDEX IF NOT EXISTS ix_medidas_sensor ON medidas(sensor_id)"</span>)</code></pre>
+
+<p>
+  La regla práctica: <strong>indexa las columnas por las que filtras u ordenas</strong>,
+  sobre todo las claves ajenas que usas en <code>Where.eq(...)</code>. En un micro se nota
+  antes que en un PC, porque la tarjeta es lenta: sin índice, SQLite recorre la tabla
+  entera leyendo de la SD.
+</p>
+
+<p>
+  Y el reverso, que también importa: cada índice ocupa sitio y encarece los
+  <code>INSERT</code>. En un registrador que escribe mucho y consulta poco, un índice de
+  más cuesta.
+</p>
+
+<h2 id="ventanas">10. Trabajar por ventanas, para no comerse la memoria</h2>
+
+<p>
+  Un <code>SELECT</code> de cien mil filas no cabe en un microcontrolador. Hay dos formas,
+  y la primera es la buena.
+</p>
+
+<p>
+  <strong>Con cursor</strong> — <code>query</code> + <code>nextRow</code> <strong>nunca
+  tiene más de una fila en memoria</strong>. Da igual que la tabla tenga un millón de
+  registros:
+</p>
+
+<pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT id, valor FROM medidas ORDER BY id"</span>)
+<span class="kw">while</span> q.<span class="fn">nextRow</span>() <span class="kw">do</span>
+  <span class="fn">procesar</span>(q.<span class="fn">getLong</span>(<span class="num">0</span>), q.<span class="fn">getDouble</span>(<span class="num">1</span>))
+<span class="kw">endwh</span>
+q.<span class="fn">release</span>()</code></pre>
+
+<p>
+  <strong>Por páginas</strong>, cuando necesitas los resultados juntos (para ordenarlos,
+  mostrarlos o mandarlos):
+</p>
+
+<pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT n FROM t ORDER BY n LIMIT 2 OFFSET 2"</span>)</code></pre>
+
+<p>
+  Y en el ORM, el tope va en el propio verbo — <strong><code>list</code> y
+  <code>listAll</code> traen 1000 como máximo si no dices otra cosa</strong>, que es una
+  red y no un capricho:
+</p>
+
+<pre><code><span class="kw">var</span> pagina: <span class="type">List</span> := mdao.<span class="fn">list</span>(w, <span class="num">50</span>)</code></pre>
+
+<p class="warn">
+  <code>OFFSET</code> grande es caro: SQLite tiene que contar las filas saltadas. Para
+  recorrer una tabla entera es mejor el cursor, o paginar por clave
+  (<code>WHERE id &gt; ultimo ORDER BY id LIMIT 50</code>).
+</p>
+
+<h2 id="varias">11. Varias consultas a la vez</h2>
+
+<p>
+  Aquí va una que sorprende a quien viene de JDBC: <strong>puedes tener varias consultas
+  abiertas sobre la misma conexión, y anidarlas</strong>. Cada <code>query</code> lleva su
+  propio cursor y avanzan independientes.
+</p>
+
+<pre><code><span class="kw">var</span> s: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT DISTINCT sensor FROM medidas"</span>)
+<span class="kw">while</span> s.<span class="fn">nextRow</span>() <span class="kw">do</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span> := s.<span class="fn">getStr</span>(<span class="num">0</span>)
+  <span class="comment">// ...y una consulta DENTRO del recorrido de la otra</span>
+  <span class="kw">var</span> cuantas: <span class="type">integer</span> := db.<span class="fn">execInt</span>(<span class="str">"SELECT count(*) FROM medidas WHERE sensor = '"</span>
+                                   + Orm.<span class="fn">esc</span>(nombre) + <span class="str">"'"</span>)
+  <span class="kw">print</span> nombre, <span class="str">"->"</span>, cuantas
+<span class="kw">endwh</span>
+s.<span class="fn">release</span>()</code></pre>
+
+<p>
+  En JDBC esto obliga a abrir otra conexión, porque un <code>Statement</code> cierra su
+  <code>ResultSet</code> al reutilizarse. Aquí no hace falta: los <code>execInt</code> de
+  dentro abren y sueltan el suyo sin tocar el cursor de fuera.
+</p>
+
+<h2 id="conexiones">12. Más de una conexión</h2>
+
+<p>También se puede, y a la vez:</p>
+
+<pre><code><span class="kw">var</span> a: SQLite.<span class="type">Db</span> := SQLite.<span class="type">Db</span>()
+<span class="kw">var</span> b: SQLite.<span class="type">Db</span> := SQLite.<span class="type">Db</span>()
+a.<span class="fn">connect</span>(<span class="str">"/sd/medidas.db"</span>)
+b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</code></pre>
+
+<p class="warn">
+  <strong>Pero vigila la memoria.</strong> Las dos conexiones salen de la <strong>misma
+  arena</strong>, la que declara <code>SQLite=&lt;MB&gt;</code> en el entorno, y no crece:
+  cada base abierta se lleva su caché de páginas y sus estructuras. En un PC esto no se
+  nota; en un micro con 4 MB de arena, sí.
+</p>
+
+<p>
+  La regla: <strong>si dos DAO trabajan sobre la misma base, comparten conexión.</strong>
+  Se les pasa el mismo <code>Db</code> al construirlos y cada uno cierra lo suyo; la
+  conexión la cierra quien la abrió, y el último.
+</p>
+
+<h2 id="trampas">13. Trampas conocidas</h2>
+
+<p>
+  <strong>El sufijo <code>L</code> de los <code>long</code>.</strong> Una marca de tiempo
+  en milisegundos no cabe en 32 bits. Sin la <code>L</code>, el literal se trunca
+  <strong>en silencio</strong> y sale un número plausible y equivocado:
+</p>
+
+<pre><code><span class="num">1754300000000L</span>    <span class="comment">// bien</span>
+<span class="num">1754300000000</span>     <span class="comment">// MAL: se convierte en 1953343232</span></code></pre>
+
+<p>
+  <strong>El apóstrofo.</strong> Concatenar texto del usuario a mano parte la sentencia.
+  Usa <code>Where</code>, o <code>Orm.esc(...)</code> si escribes el SQL tú.
+</p>
+
+<p>
+  <strong>Dónde vive la base.</strong> En la placa, en la tarjeta:
+  <code>/sd/medidas.db</code>. <strong>No la pongas en <code>resources/</code></strong>,
+  que esa carpeta se copia al micro en cada ejecución y se machacaría tu base con la del
+  proyecto.
+</p>
+
+<p>
+  <strong>El camino no puede venir por argumento.</strong> Hoy el <code>arg</code> de
+  <code>Main</code> llega siempre vacío. Por eso los ejemplos ponen el trabajo en una
+  función pública — <code>correr(camino)</code> — y quien quiera otra base escribe un
+  módulo de tres líneas que la llame.
+</p>
+
+<h2 id="seguir">Por dónde seguir</h2>
+
+<table>
+  <tr><th>quiero…</th><th>mira</th></tr>
+  <tr><td>SQL a pelo, los tres verbos</td><td><code>samples/SqlDemo.bp</code></td></tr>
+  <tr><td>el ORM con DAO escritos a mano</td><td><code>samples/DaoDemo.bp</code></td></tr>
+  <tr><td>el ORM con DAO generados</td><td><code>samples/GenDemo.bp</code></td></tr>
+  <tr><td>la misma base en la tarjeta</td><td><code>samples/SqlDemoSd.bp</code> y <a href="tarjeta-sd.html">la tarjeta SD</a></td></tr>
+</table>
+
+<p>
+  Los ejemplos de esta página están <strong>ejecutados</strong>, no supuestos: salen de
+  esos tres programas, que corren enteros y devuelven la memoria a su sitio.
+</p>
+
+</main>
+</div>
+</body>
+</html>
