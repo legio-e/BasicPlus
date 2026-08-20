@@ -171,7 +171,7 @@
     micro.
   </p>
   <div class="badges">
-    <span class="badge">V4 · consolidation</span>
+    <span class="badge">V5 · data</span>
     <span class="badge">RP2350 · ESP32-S3/P4 · STM32</span>
     <span class="badge">Two VMs · one byte-identical output</span>
     <span class="badge">Handle-based memory</span>
@@ -205,16 +205,37 @@
     <span class="kw">print</span> <span class="str">"Blink done"</span>
   <span class="kw">end</span> Main
 <span class="kw">end</span> Blink</code></pre>
+<p style="margin-top:1.6rem">
+  And a micro does not only move pins: it also <strong>stores data</strong>. BasicPlus ships
+  <strong>SQLite</strong> — the same engine, the same <code>.db</code> file and the same code
+  on the PC and on the board, with the database on an SD card. You can write the SQL by hand
+  or let the <strong>ORM</strong> write it from your classes.
+</p>
+<pre><code><span class="comment">// Entities are annotated, and the compiler generates the DAO.</span>
+@BD{ tabla = <span class="str">"readings"</span> }
+<span class="kw">public class</span> <span class="type">Reading</span>
+  @BD{ pk }   <span class="kw">public property</span> id:    <span class="type">long</span>
+  @BD{}       <span class="kw">public property</span> value: <span class="type">double</span>
+<span class="kw">end</span> Reading
+
+<span class="comment">// ...and then, not one SQL statement in sight:</span>
+<span class="kw">var</span> w: Orm.<span class="type">Where</span> := Orm.<span class="type">Where</span>()
+<span class="kw">var</span> cold: <span class="type">List</span> := dao.<span class="fn">list</span>(w.<span class="fn">lt</span>(<span class="str">"value"</span>, <span class="num">22.0d</span>))</code></pre>
+<p>
+  The engine does not live inside the VM: it is burned separately, in a <strong>pack</strong>,
+  so only those who use it pay for it — and it runs from flash without eating RAM.
+  <a href="basedatos.html">How it works, in full &rarr;</a>
+</p>
+
 
 <p style="margin-top:1.4rem">
-  <strong>New in V4:</strong> this release <strong>consolidates</strong> more than it
-  adds. <strong>Memory management</strong> was reworked — a reference is no longer an
-  address, it is a <strong>handle</strong> with a generation counter, so using a freed
-  object <strong>fails right there</strong> instead of silently corrupting data — and so
-  was the <strong>filesystem</strong>. Along the way came <strong>events</strong>,
-  <strong>function overloading</strong> and a <strong>simulated micro</strong> inside the
-  IDE, to try things out without a board.
-  Full detail in the <a href="../RELEASES.md">release notes</a> (Spanish).
+  <strong>New in V5:</strong> this release is about <strong>storing data</strong>:
+  an <strong>SD card</strong> with gigabytes, <strong>SQLite</strong> running inside the
+  micro with an <strong>ORM</strong> that writes the SQL for you, and <strong>packs</strong>,
+  which make it possible to ship a library as large as SQLite without those who do not use
+  it paying for it — and without eating RAM, since its code runs straight from flash. Along
+  the way <code>List</code> and the wrappers have been written in BasicPlus, with
+  <strong>typed getters</strong>, and <code>native</code> accepts <code>long</code>.
 </p>
 
 <h2>Getting started</h2>
@@ -247,6 +268,18 @@
   <a class="card" href="gui.html">
     <span class="t">Graphical interface →</span>
     <span class="d">The <code>Gui</code> module: screen and widgets, layout, color and fonts, events and forms. Same bytecode on the PC and on the board.</span>
+  </a>
+  <a class="card" href="basedatos.html">
+    <span class="t">Databases &rarr;</span>
+    <span class="d">SQLite on the micro: the pack, plain SQL, <code>@BD</code> entities, the ORM with its generated DAOs, indexes and how not to eat your memory.</span>
+  </a>
+  <a class="card" href="referencia.html#packs">
+    <span class="t">Packs &rarr;</span>
+    <span class="d">Shipping a library in one piece and burning it onto the board: the two kinds, what goes inside, how it is used and the traps.</span>
+  </a>
+  <a class="card" href="referencia.html#stdlib-sd">
+    <span class="t">The SD card &rarr;</span>
+    <span class="d">Gigabytes for your data: which families support it, how it is wired and configured, and how it is used &mdash; which is like any other path.</span>
   </a>
   <a class="card" href="guia-ide.html">
     <span class="t">IDE guide →</span>

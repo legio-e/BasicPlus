@@ -461,8 +461,43 @@
   The <code>/ &gt;</code> prompt under the Console talks directly to the
   connected device. <code>help</code> lists the commands:
 </p>
-<pre><code>dir [path] · cd &lt;path&gt; · type &lt;file&gt; · edit &lt;file&gt; · run &lt;file&gt; · del &lt;file&gt;
-kill · autorun [file|off] · mem · save · log · reset · cls · help</code></pre>
+<pre><code>dir [path] · cd &lt;path&gt; · type &lt;file&gt; · edit &lt;file&gt; · new &lt;file&gt; · run &lt;file&gt; · del &lt;file&gt;
+copy &lt;local&gt; [dest] · get &lt;remote&gt; [local]
+kill · autorun [file|off] · mem · save · log · logclr · reset · cls · help
+sd · sd mount   — SD card diagnostics (see below)</code></pre>
+
+<table>
+  <tr><th>command</th><th>what it does</th></tr>
+  <tr><td><code>dir</code> · <code>cd</code></td><td>move around the board's filesystem</td></tr>
+  <tr><td><code>type</code> (<code>cat</code>)</td><td>dump a file to the console</td></tr>
+  <tr><td><code>edit</code> · <code>new</code></td><td>view/edit in a window · create a new file</td></tr>
+  <tr><td><code>copy</code> (<code>cp</code>)</td><td><strong>uploads</strong> a file from the PC — with no destination, to the current folder (quotes if it has spaces)</td></tr>
+  <tr><td><code>get</code></td><td><strong>downloads</strong> a file from the board to the PC</td></tr>
+  <tr><td><code>run</code> · <code>kill</code> (<code>stop</code>)</td><td>run and abort</td></tr>
+  <tr><td><code>autorun [file|off]</code></td><td>which app starts by itself at power-on (§12)</td></tr>
+  <tr><td><code>mem</code> (<code>df</code>)</td><td>free memory and space</td></tr>
+  <tr><td><code>log</code> · <code>logclr</code></td><td>read the board's log · clear it</td></tr>
+  <tr><td><code>save</code> · <code>reset</code> · <code>cls</code></td><td>save · reboot the device · clear the console</td></tr>
+</table>
+
+<div class="note">
+  <p>
+    <strong><code>sd</code> and <code>sd mount</code> are not how you use a card: they are for
+    when it does NOT show up.</strong> If the board has its reader configured, the firmware
+    <strong>mounts it at boot</strong> and says so in the log (<em>«sd: montada en /sd»</em>);
+    nothing has to be mounted by hand.
+  </p>
+  <p>
+    You send them when the card is missing and you need to find out where it fails, and that is
+    why there are two: <code>sd</code> asks <strong>whether the bus talks</strong> and who the
+    card is —without touching the filesystem— and <code>sd mount</code> tries the next step, the
+    FAT. If the first one does not answer, debugging FAT on top would be debugging on nothing.
+  </p>
+  <p>
+    They are deliberately not run on connect: they talk to hardware that may not be there, and
+    negotiation runs at 400 kHz by standard — a card can take up to a second to come up.
+  </p>
+</div>
 <p>
   Two of them deserve a highlight: <code>kill</code> aborts the running
   program (equivalent to Run → Stop) and <code>autorun</code> manages the
@@ -558,6 +593,43 @@ kill · autorun [file|off] · mem · save · log · reset · cls · help</code><
   there, but are <strong>not</strong> listed here: the partitions section
   manages them, so they cannot be changed through two different doors.
 </p>
+
+<p>The ones that exist today, and what each is for:</p>
+
+<table>
+  <tr><th>key</th><th>what it sets</th></tr>
+  <tr><td><code>board</code></td><td>the board's identity</td></tr>
+  <tr><td><code>display</code></td><td>which display panel it carries (on the P4, e.g. <code>st7701</code>)</td></tr>
+  <tr><td><code>sd</code></td><td>the card reader: <strong>structured value</strong>, different per family — see below</td></tr>
+  <tr><td><code>SQLite</code></td><td>megabytes of arena for the database (minimum 2, maximum 4095)</td></tr>
+  <tr><td><code>psram</code> · <code>psramCsPin</code></td><td>whether it has PSRAM and on which pin it is selected</td></tr>
+  <tr><td><code>flashSizeBytes</code></td><td>declared flash size</td></tr>
+  <tr><td><code>gpioCount</code></td><td>how many GPIOs it exposes</td></tr>
+  <tr><td><code>log</code></td><td>the post-mortem log, on or off</td></tr>
+  <tr><td><code>gc</code></td><td>the garbage collector (RP2350)</td></tr>
+  <tr><td><code>latido</code></td><td>the heartbeat (RP2350)</td></tr>
+</table>
+
+<p><code>sd</code> is the only one with structure inside, because it describes a wiring and that changes with the bus:</p>
+
+<pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, over SPI</span>
+sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32, over SDIO</span></code></pre>
+
+<p>
+  On SDIO it also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,
+  <code>khz</code> and <code>ldo</code>; on SPI, <code>cd</code> is optional. The detail is in
+  <a href="referencia.html#stdlib-sd">the SD card section</a>.
+</p>
+
+<div class="note">
+  <p>
+    <strong>Keeping the configuration here and not in the code is deliberate.</strong> A
+    <code>.mod</code> runs the same on two differently wired boards because what changes —the
+    pins, the panel, the memory— is stated by the board, not by the program. It is the same
+    thing that allows a single firmware image per family.
+  </p>
+</div>
+
 
 <h2 id="packs">10. Packs</h2>
 <p>
