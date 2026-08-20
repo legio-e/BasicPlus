@@ -8,7 +8,7 @@
          y FrmMain.VERSION), asi que no hay un segundo numero que se quede rancio.
          Antes el titulo decia "BpIde [H9]" — una etiqueta interna de un hito viejo
          que no le dice nada a un usuario y que ademas hoy significa otra cosa. -->
-    <version>4.0</version>
+    <version>5.0</version>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
@@ -85,7 +85,7 @@
             <!--
               Fat-jar: empaqueta el IDE + todas las deps (basicplus-frontend,
               bpgenvm, purejavacomm + sus deps transitivas como JNA) en un
-              único jar ejecutable con `java -jar BpIde-4.0.jar`.
+              único jar ejecutable con `java -jar BpIde-5.0.jar`.
               Necesario para correr el IDE fuera de NetBeans sin pelear con
               classpaths.
             -->

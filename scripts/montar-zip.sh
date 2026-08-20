@@ -141,7 +141,10 @@ done
 #    pinta nada en una publicacion (reproducciones minimas, diagnostico de GC).
 #    Hace falta ELEGIR. Lo que no puede ser es que olvidarse sea SILENCIOSO —
 #    por eso, debajo, el guardian.
-PUBLICAR_DIRS="benchmarks errores external formdemo imageproject plugins sampleproject"
+PUBLICAR_DIRS="benchmarks errores external formdemo imageproject packlib plugins sampleproject"
+#    packlib/ entra en V5 (decidido el 20-ago): es el caso MINIMO de un pack
+#    ejecutable (#365), y los packs son una de las cabeceras de esta version.
+#    La referencia los documenta entera (§15) y quien lea eso quiere el ejemplo.
 #    external/ y plugins/ no son demos: son las DEPENDENCIAS de tres samples de
 #    la raiz que importan por ruta (appwithfromimpl -> plugins/filelogger.mod,
 #    frompathtest -> external/helper.mod). Sin ellas esos tres no compilan desde

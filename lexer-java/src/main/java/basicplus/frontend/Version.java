@@ -23,7 +23,7 @@ import java.util.Date;
  * de verdad identifica al compilador es <b>de dónde salió y de cuándo es</b>:
  *
  * <pre>
- *   compilador BP 1.0.0 · BpIde-4.0-shaded.jar · 2026-08-08 16:13
+ *   compilador BP 1.0.0 · BpIde-5.0-shaded.jar · 2026-08-08 16:13
  *   compilador BP dev   · target/classes       · 2026-08-11 10:05
  * </pre>
  *

@@ -119,7 +119,7 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod                  # VM-C
 
 # El IDE
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-4.0.jar
+java -jar BpIde/target/BpIde-5.0.jar
 ```
 
 ### Cómo verificar la paridad dual-VM (el gesto más repetido)
