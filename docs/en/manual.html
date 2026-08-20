@@ -524,10 +524,24 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h3 id="any">4.5 <code>any</code></h3>
 <p>
-  An internal type used by some stdlib signatures (e.g.
-  <code>List.add(item: any)</code>). It is bidirectionally assignable: any ref
-  goes in, and any target type accepts a value of type <code>any</code>. You
-  cannot write <code>any</code> as a type in BP source.
+  An internal type, <strong>bidirectionally assignable</strong>: any ref goes in, and any
+  target type accepts an <code>any</code> value. You cannot write <code>any</code> as a
+  type in BP source.
+</p>
+<p class="warn">
+  <strong>Careful if you come from an earlier version: collections NO LONGER use
+  <code>any</code>.</strong> Since V5, <code>List.add</code> takes <code>Object</code> and
+  <code>List.get</code> returns <code>Object</code> — and <code>Object</code> is
+  <strong>not</strong> bidirectionally assignable: getting an entity out needs an explicit
+  <em>downcast</em>.
+</p>
+<pre><code><span class="kw">var</span> p: <span class="type">Person</span> := l.<span class="fn">get</span>(<span class="num">1</span>)            <span class="comment">// V4: fine. Today it does NOT compile.</span>
+<span class="kw">var</span> p: <span class="type">Person</span> := <span class="type">Person</span>(l.<span class="fn">get</span>(<span class="num">1</span>))   <span class="comment">// V5: the cast, explicit.</span></code></pre>
+<p>
+  The change is deliberate: <code>any</code> let anything through and the failure showed up
+  late. With <code>Object</code> the compiler makes you say what you expect, and if it is not
+  that, it <strong>fails right there</strong>. For plain values there is a shortcut with no
+  cast — <code>List</code>'s typed getters, in the reference.
 </p>
 
 <!-- =========================================================== -->

@@ -544,10 +544,24 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h3 id="any">4.5 <code>any</code></h3>
 <p>
-  Tipo interno usado por algunas signaturas de stdlib (e.g.
-  <code>List.add(item: any)</code>). Es bidireccionalmente asignable: cualquier
-  ref entra, cualquier tipo target acepta un valor de tipo <code>any</code>.
-  No se puede escribir <code>any</code> como tipo en BP source.
+  Tipo interno, <strong>bidireccionalmente asignable</strong>: cualquier ref entra, y
+  cualquier tipo destino acepta un valor <code>any</code>. No se puede escribir
+  <code>any</code> como tipo en BP source.
+</p>
+<p class="warn">
+  <strong>Ojo si vienes de una versión anterior: las colecciones YA NO usan
+  <code>any</code>.</strong> Desde V5, <code>List.add</code> toma <code>Object</code> y
+  <code>List.get</code> devuelve <code>Object</code> — y <code>Object</code>
+  <strong>no</strong> es bidireccionalmente asignable: sacar una entidad pide un
+  <em>downcast</em> explícito.
+</p>
+<pre><code><span class="kw">var</span> p: <span class="type">Persona</span> := l.<span class="fn">get</span>(<span class="num">1</span>)             <span class="comment">// V4: valía. Hoy NO compila.</span>
+<span class="kw">var</span> p: <span class="type">Persona</span> := <span class="type">Persona</span>(l.<span class="fn">get</span>(<span class="num">1</span>))    <span class="comment">// V5: el cast, explícito.</span></code></pre>
+<p>
+  El cambio es deliberado: <code>any</code> dejaba pasar cualquier cosa y el fallo
+  aparecía tarde. Con <code>Object</code> el compilador te obliga a decir qué esperas, y
+  si no lo es, <strong>falla ahí mismo</strong>. Para valores sueltos hay atajo sin cast —
+  los captadores tipados de <code>List</code>, en la referencia.
 </p>
 
 <!-- =========================================================== -->
