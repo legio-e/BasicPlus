@@ -1805,13 +1805,28 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   4. **`Core`** — que `List` ya no la sintetiza el compilador, los envoltorios y sus
      CONVERSIONES, el `add` sobrecargado y los **captadores tipados** (`getInteger` y
      compania: cero menciones hoy).
-  5. **Las VARIABLES DE ENTORNO** (Eduardo, 19-ago: *«las variables de entorno que
-     afectan al sistema»*). 🔴 **No hay NINGUN documento que las liste**, y peor: hoy
-     nadie puede enumerarlas — hicieron falta tres greps y los dos primeros se dejaron
-     la mayoria. Censo mecanico: `SQLite`, `board`, `flashSizeBytes`, `gpioCount`,
-     `log`, `psram`, `psramCsPin`, `sd`, `gc`, `latido`, `display`... y algunas llevan
-     valor ESTRUCTURADO (`sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1`), lo que explica que
-     un grep ingenuo no las vea. Documentarlas exige censarlas primero, en serio.
+  5. **Las VARIABLES DE ENTORNO** — ✅ **CENSADAS el 20-ago**, que era el trabajo previo.
+     Son **once**, y algunas llevan valor estructurado:
+
+     | clave | qué |
+     |---|---|
+     | `board` | identidad de la placa |
+     | `display` | qué panel lleva (P4: `st7701`…) |
+     | `sd` | el lector: **valor estructurado**, distinto por familia — RP2350 (SPI) `sck,mosi,miso,cs,cd`; ESP32 (SDIO) `clk,cmd,d0..d3,pwr,pwralto,slot,khz,ldo` |
+     | `SQLite` | MB de arena para la BD (mín. 2, máx. 4095) |
+     | `psram` · `psramCsPin` | PSRAM y su pin de selección |
+     | `flashSizeBytes` | tamaño de flash declarado |
+     | `gpioCount` | número de GPIO |
+     | `log` | el log post-mortem, encendido/apagado |
+     | `gc` | el recolector (Pico) |
+     | `latido` | el latido de vida (Pico) |
+
+     🩸 **Y por qué no las sabía nadie**: **no hay UNA forma de leer el entorno**. Conviven
+     `bpvm_env_get*(env, "k", …)`, un envoltorio por familia (`board_env_bool("gc", 1)`) y
+     un `#define ENV_KEY_DISPLAY "display"` — y ese último no lo encuentra ningún grep de
+     literales en la llamada. Por eso los dos primeros censos se dejaron la mitad.
+     ⏭️ **Para V6**: una sola puerta de lectura, o un registro declarado de claves. Mientras
+     haya tres idiomas, la lista se vuelve a desincronizar en cuanto alguien añada una.
   6. **Los COMANDOS NUEVOS del IDE** (encargo de Eduardo, 19-ago).
   6b. 🔴 **`native` con `long` — y `docs/AOT_LIMITES.md` MIENTE.** Lo recordo Eduardo el
      19-ago (*«hemos ampliado las funciones native a long... es un pasito»*). Es `#381`,
