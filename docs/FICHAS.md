@@ -2253,6 +2253,33 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   era **FS = 7.344 KB**, que deja 2.800 para packs.
 
 
+- **[P4] el silicio nuevo (ESP32-P4X) pedirá lo suyo** — aviso de Eduardo (20-ago):
+  *«las placas que tenemos con P4 son ESP32P4, y hay algún problema eléctrico así que
+  funcionan a 350 MHz en vez de los 400 previstos. Hay una versión ESP32P4X que será la
+  buena. Pediré una placa con el micro actualizado y tendremos que hacer una imagen para
+  él, porque algunas opciones de IDF cambian de un micro a otro.»*
+  📐 **Lo que hay hoy, leído del `sdkconfig` y no supuesto:**
+  - `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=360`, con el de **400 explícitamente desactivado**.
+  - `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` y `CONFIG_ESP32P4_REV_MIN_0=y`, **las dos en
+    `sdkconfig.defaults`** — o sea versionadas y deliberadas: la imagen de hoy está
+    clavada a silicio *anterior a la v3*.
+  - `CONFIG_ESP32P4_REV_MAX_FULL=199`: acepta de la revisión 0.0 a la 1.99.
+  ⏭️ **Primero comprobar si de verdad hacen falta DOS imágenes.** El IDF ya trae el
+  mecanismo para que una sola cubra un rango de silicios: el par `REV_MIN`/`REV_MAX`. Si
+  el P4X entra ensanchando el rango, no hay una segunda imagen que mantener — y eso pesa,
+  porque *una imagen única por familia* es decisión de fondo y partirlas ya se revirtió
+  una vez. Sólo si `SELECTS_REV_LESS_V3` es incompatible con el silicio nuevo toca partir.
+  ⚠️ **La trampa, que ya mordió:** `sdkconfig.defaults` **sólo siembra el `sdkconfig` la
+  primera vez**. Cambiar los defaults sin borrar el `sdkconfig` que ya existe deja el
+  firmware EXACTAMENTE IGUAL, y no lo avisa nadie — pasó el 18-ago.
+  ❓ **Y una pregunta que sale de mirar el fichero:** la imagen está puesta a **360**, y
+  el aviso dice que estas placas dan **350**. Puede que 350 sea la cifra de memoria y 360
+  la buena (el `INFO` de la placa también dice 360), pero conviene confirmarlo: si el tope
+  real fuesen 350, hoy le estaríamos pidiendo diez de más.
+  📌 Si al final son dos imágenes, que se partan como están partidos el S3 y el P4 —dos
+  targets del IDF—, no como dos builds del mismo target: aquí lo que cambia es el
+  SILICIO, no la placa. Lo que cambia por placa sigue yendo al ENV.
+
 - **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
   (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
   `.bin`…), y **el ROJO queda RESERVADO** para ficheros con algún problema.
