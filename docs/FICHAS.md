@@ -1719,6 +1719,21 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   sin placa Y sin binario especial.
   📌 Mientras tanto, decirlo en `docs/BASEDATOS.md`: hoy la prueba real es en placa.
 
+- 🔴 **`listDir` NO esta en la VM-C: un programa BP no puede listar un directorio en
+  placa** — encontrado el 19-ago escribiendo `docs/TARJETA_SD.md`.
+  🩸 Se puso un ejemplo de recorrer un directorio, se ejecuto, y la VM-C contesto
+  *«builtin 42 no soportado en esta VM (subconjunto C)»*. miVM si lo tiene, o sea que
+  **funciona en el PC y no en el micro** — la peor forma de faltar.
+  📌 **Acotado**: es el UNICO verbo de fichero que falta. `readFile`, `writeFile`,
+  `appendFile`, `fileExists`, `readFileBytes` y `writeFileBytes` estan en las dos
+  (comprobado sobre `bpgenvm-c/src/builtins.c`).
+  📌 **No confundirlo** con el arbol de ficheros del IDE, que si lista la tarjeta: eso
+  lo hace el firmware por el wire (`LIST`/`LIST_DIR`), no el programa del usuario.
+  ⏭️ Implementarlo es un builtin en la VM-C sobre la fachada de FS que ya existe. **No
+  se hizo: es una FEATURE que falta, no un bug, y estamos en freeze** — decision de
+  Eduardo. Documentado como limitacion en `TARJETA_SD.md` §6, con el rodeo mientras
+  tanto (llevarse la cuenta uno mismo, o nombres predecibles por fecha).
+
 ### 🩸 El ORM no funcionaba — encontrado y arreglado el 19-ago al documentarlo
 
 - ~~**El ORM entero, roto**~~ — ✅ **ARREGLADO y VERIFICADO EN EJECUCION el 19-ago**

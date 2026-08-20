@@ -1,0 +1,64 @@
+// SdDoc.bp — comprueba que los ejemplos de `docs/TARJETA_SD.md` son de verdad.
+//
+// Corre en el PC sobre el sistema de ficheros del host: la API es LA MISMA que
+// bajo `/sd`, asi que lo que se prueba aqui es que el codigo del documento
+// compila y hace lo que dice. Lo propio de la tarjeta —montaje, pines, FAT— es
+// de placa y esta medido en los logs de arranque, no aqui.
+module SdDoc
+  import IO
+
+  function Main()
+    var dir: string := "sddoc"
+    IO.mkdir(dir)
+
+    // §4 — leer y escribir, tal cual sale en el documento
+    var cfg: string := IO.pathJoin(dir, "config.txt")
+    if not fileExists(cfg) then
+      writeFile(cfg, "intervalo=60")
+    endif
+    print "config      = " + readFile(cfg)
+
+    // el escape \n, que es lo que corregi del borrador
+    var csv: string := IO.pathJoin(dir, "medidas.csv")
+    writeFile(csv, "hora;valor\n")
+    appendFile(csv, "12:00;21.5\n")
+    print "csv         = " + IO.fileSize(csv) + " bytes"
+
+    // writeFile TRUNCA, que es facil de olvidar
+    writeFile(csv, "XY")
+    print "tras truncar= " + IO.fileSize(csv) + " bytes"
+
+    // §6 — `listDir` NO ESTA AQUI, y su ausencia es el hallazgo.
+    //
+    // Escribiendo el documento se puso un ejemplo de recorrer un directorio y al
+    // ejecutarlo salio que `listDir` (builtin 42) NO esta en la VM-C — o sea que
+    // funciona en el PC con la VM de referencia y NO en las placas. Es el unico
+    // verbo de fichero que falta; los otros seis estan en las dos.
+    //
+    // No se puede meter aqui porque este programa vale precisamente para
+    // comprobar que las DOS VMs dicen lo mismo, y en esto no lo dicen. Queda
+    // documentado en la seccion 6 y anotado en FICHAS.
+
+    // §7 — bytes crudos
+    var bin: string := IO.pathJoin(dir, "datos.bin")
+    var b: byte[] := newByteArray(3)
+    b[0] := 1
+    b[1] := 2
+    b[2] := 3
+    writeFileBytes(bin, b)
+    var leidos: byte[] := readFileBytes(bin)
+    var m: integer := 0
+    for x in leidos do
+      m += 1
+    next x
+    print "bytes       = " + m
+
+    // limpieza
+    IO.removeFile(cfg)
+    IO.removeFile(csv)
+    IO.removeFile(bin)
+    IO.rmdir(dir)
+    print "FIN"
+  end Main
+
+end SdDoc
