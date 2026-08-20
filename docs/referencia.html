@@ -196,6 +196,7 @@
     <li class="sub"><a href="#stdlib-net">14.15 Net</a></li>
     <li class="sub"><a href="#stdlib-gui">14.16 Gui — volumen aparte</a></li>
     <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
+    <li class="group"><a href="#seguir">Por dónde seguir</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#quees">15.1 Qué es un pack, y qué no</a></li>
     <li class="sub"><a href="#tipos">15.2 Dos tipos: librería y ejecutable</a></li>
@@ -1594,21 +1595,241 @@ tira.show()</code></pre>
 </p>
 
 <h3 id="stdlib-sd">14.17 Tarjeta SD</h3>
+
+
 <p>
-  La tarjeta no es un módulo: una vez montada es <strong>una ruta más</strong>
-  (<code>/sd/…</code>), y se usa con los verbos de fichero de
-  <a href="#stdlib-funcs">13.1</a> y con <a href="#stdlib-io">IO</a>. Lo que sí es propio
-  suyo —en qué familias funciona, cómo se cablea, cómo se configuran los pines en el
-  entorno y cómo saber si ha montado— tiene su propio volumen:
+  Una tarjeta SD le da a un microcontrolador lo que no tiene: <strong>sitio</strong>.
+  Gigabytes para registros, medidas, bases de datos o ficheros de configuración, en vez
+  de los pocos megas de la flash interna. Y se usa igual que el resto del sistema de
+  ficheros: <strong>es una ruta más</strong>.
 </p>
+
+<pre><code><span class="fn">writeFile</span>(<span class="str">"/sd/medidas.csv"</span>, <span class="str">"hora;valor\n"</span>)</code></pre>
+
+<h4 id="donde">14.17.1 Dónde funciona</h4>
+
+<table>
+  <tr><th>familia</th><th>tarjeta SD</th><th>cómo</th></tr>
+  <tr><td><strong>RP2350</strong> (Pico 2, Metro)</td><td>sí</td><td>por SPI</td></tr>
+  <tr><td><strong>ESP32</strong> (P4)</td><td>sí</td><td>por SDIO, 1 o 4 bits</td></tr>
+  <tr><td><strong>STM32</strong></td><td>todavía no</td><td>—</td></tr>
+</table>
+
+<div class="note">
+  <p>
+    <strong>La tarjeta es una capacidad de la IMAGEN, no de la placa.</strong> El
+    firmware de RP2350 es único para Pico 2 y Metro. Lo que la Metro tiene de más es el
+    <strong>lector soldado</strong>; en una Pico 2 puedes cablear un lector a los pines
+    que quieras y funciona igual, sin firmware especial. Lo mismo en la familia ESP32.
+  </p>
+</div>
+
 <p>
-  <strong><a href="tarjeta-sd.html">La tarjeta SD &rarr;</a></strong>
+  Las placas que traen lector y funcionan enchufando la tarjeta y ya: <strong>Metro</strong>
+  (RP2350) y <strong>ESP32-P4</strong>.
 </p>
+
+<h4 id="pines">14.17.2 Decirle dónde está el lector</h4>
+
+<p>
+  Los pines <strong>no van en el código</strong>: van en el entorno de la placa, en la
+  clave <code>sd</code>. Así el mismo programa vale para dos cableados distintos, que es
+  la misma idea que hace que un <code>.mod</code> corra en cualquier familia.
+</p>
+
+<p><strong>En RP2350</strong> (SPI) — así están cableados los de la Metro:</p>
+<pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40</code></pre>
+
+<p><strong>En ESP32-P4</strong> (SDIO) — así está el P4:</p>
+<pre><code>sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1</code></pre>
+
+<p>
+  Las claves que acepta la variante SDIO son <code>clk</code>, <code>cmd</code>,
+  <code>d0</code>…<code>d3</code> (para 4 bits), <code>pwr</code> y <code>pwralto</code>
+  (el pin que alimenta el raíl y con qué nivel se enciende), <code>slot</code>,
+  <code>khz</code> (velocidad, por defecto 20000) y <code>ldo</code> (el regulador
+  interno de las E/S).
+</p>
+
+<p>
+  <code>cd</code> en SPI es el <em>card detect</em>, opcional: si no lo cableas, quítalo
+  de la línea.
+</p>
+
+<h4 id="montaje">14.17.3 Comprobar que ha montado</h4>
+
+<p>El arranque lo dice, y conviene mirarlo antes de sospechar del programa. En el P4:</p>
+
+<pre><code>sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz
+sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
+
+<p>
+  <strong>Las dos líneas dicen cosas distintas y las dos hacen falta.</strong> La primera
+  es la CONFIGURACIÓN: con qué pines y a qué velocidad lo va a intentar. La segunda es el
+  RESULTADO. Si sólo sale la primera, el problema es de cableado, de alimentación o de
+  tarjeta; si sale la segunda, la tarjeta ya está y lo que falle es tuyo.
+</p>
+
+<h4 id="usarla">14.17.4 Usarla: es sólo una ruta</h4>
+
+<p>Montada la tarjeta, todo lo que ya sabes hacer con ficheros funciona bajo <code>/sd</code>.</p>
+
+<pre><code><span class="kw">if not</span> <span class="fn">fileExists</span>(<span class="str">"/sd/config.txt"</span>) <span class="kw">then</span>
+  <span class="fn">writeFile</span>(<span class="str">"/sd/config.txt"</span>, <span class="str">"intervalo=60"</span>)
+<span class="kw">endif</span>
+<span class="kw">var</span> cfg: <span class="type">string</span> := <span class="fn">readFile</span>(<span class="str">"/sd/config.txt"</span>)</code></pre>
+
+<p><strong>Los verbos de fichero</strong> son builtins, no hace falta importar nada:</p>
+
+<table>
+  <tr><th>verbo</th><th>qué hace</th></tr>
+  <tr><td><code>readFile(ruta)</code></td><td>el contenido entero, como cadena</td></tr>
+  <tr><td><code>writeFile(ruta, texto)</code></td><td>lo escribe; si existía, <strong>trunca</strong></td></tr>
+  <tr><td><code>appendFile(ruta, texto)</code></td><td>añade al final</td></tr>
+  <tr><td><code>fileExists(ruta)</code></td><td><code>true</code> / <code>false</code></td></tr>
+  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio — <strong>sólo en el PC</strong>, ver §6</td></tr>
+  <tr><td><code>readFileBytes(ruta)</code></td><td>el contenido como bytes</td></tr>
+  <tr><td><code>writeFileBytes(ruta, datos)</code></td><td>escribe bytes</td></tr>
+</table>
+
+<p>
+  <strong>Y el módulo <code>IO</code></strong> para lo demás: <code>mkdir</code>,
+  <code>rmdir</code>, <code>removeFile</code>, <code>rename</code>, <code>copyFile</code>,
+  <code>fileSize</code>, <code>isDirectory</code>, <code>lastModified</code>, y la familia
+  de rutas <code>pathJoin</code>, <code>pathParent</code>, <code>pathBasename</code>,
+  <code>pathExtension</code>, <code>pathAbsolute</code>.
+</p>
+
+<pre><code><span class="kw">import</span> IO
+
+IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
+<span class="kw">var</span> f: <span class="type">string</span> := IO.<span class="fn">pathJoin</span>(<span class="str">"/sd/registros"</span>, <span class="str">"2026-08.csv"</span>)
+<span class="fn">appendFile</span>(f, <span class="str">"12:00;21.5\n"</span>)
+<span class="kw">print</span> IO.<span class="fn">fileSize</span>(f), <span class="str">"bytes"</span></code></pre>
+
+<p>
+  Las rutas llevan <strong>siempre <code>/</code></strong>, también en Windows cuando
+  pruebas en el PC. Y en los literales de cadena valen los escapes de siempre:
+  <code>\n</code>, <code>\t</code>, <code>\r</code>, <code>\\</code>, <code>\"</code> y
+  <code>\0</code>.
+</p>
+
+<h4 id="dosfs">14.17.5 Dos sistemas de ficheros, uno al lado del otro</h4>
+
+<p>Conviene tenerlo claro porque explica varias diferencias:</p>
+
+<ul>
+  <li><strong>La flash interna</strong> de la placa lleva <strong>littlefs</strong>,
+  pensado para memoria que se desgasta y para cortes de corriente. Ahí viven
+  <code>/app</code>, <code>/lib</code> y <code>/sys</code>.</li>
+  <li><strong>La tarjeta</strong> lleva <strong>FAT</strong>, que es lo que entiende un
+  PC. Por eso puedes sacarla, meterla en el portátil y leer lo que ha escrito el micro.</li>
+</ul>
+
+<p>
+  Esa es toda la razón de que la tarjeta sea el sitio de los datos y la flash el de los
+  programas: los datos quieres poder leerlos en otro sitio.
+</p>
+
 <p class="warn">
-  Lo único que conviene saber aquí: <strong>funciona en RP2350 y ESP32, en STM32
-  todavía no</strong>; y <code>listDir</code> es el <strong>único</strong> verbo de
-  fichero que no está en la VM-C, o sea que un programa puede listar un directorio en el
-  PC pero no en la placa.
+  <strong>Formatea las tarjetas en FAT32.</strong> Las de más de 32 GB vienen a menudo en
+  exFAT de fábrica, y <strong>exFAT todavía no está soportado</strong> — reformatéalas.
+  Probadas en placa: una SanDisk de 128 GB en Metro y P4, y una de 32 GB en la Metro.
+</p>
+
+<h4 id="listar">14.17.6 Recorrer un directorio — hoy sólo en el PC</h4>
+
+<pre><code><span class="kw">var</span> nombres: <span class="type">string</span>[] := <span class="fn">listDir</span>(<span class="str">"/sd/registros"</span>)
+<span class="kw">for</span> f <span class="kw">in</span> nombres <span class="kw">do</span>
+  <span class="kw">print</span> <span class="str">"  "</span>, f
+<span class="kw">next</span> f</code></pre>
+
+<p>
+  Devuelve un <code>string[]</code>, y los arrays se recorren con
+  <code>for … in … next</code>. Ojo con esto, que es fácil de confundir:
+  <code>.length()</code> es de los <strong>objetos</strong> —una <code>List</code>, un
+  <code>StringBuilder</code>—, no de los arrays.
+</p>
+
+<p class="warn">
+  <strong><code>listDir</code> no está en la VM-C, que es la que corre en las placas.</strong>
+  Funciona cuando pruebas con la VM de referencia en el PC, y en el micro lanza
+  <em>«builtin 42 no soportado en esta VM (subconjunto C)»</em>. Es el <strong>único</strong>
+  verbo de fichero que falta: <code>readFile</code>, <code>writeFile</code>,
+  <code>appendFile</code>, <code>fileExists</code>, <code>readFileBytes</code> y
+  <code>writeFileBytes</code> sí están en las dos.<br><br>
+  No lo confundas con el árbol de ficheros del IDE, que sí lista la tarjeta: eso lo hace
+  el firmware por el protocolo de depuración, no tu programa.<br><br>
+  <strong>Mientras tanto</strong>, si tu programa necesita saber qué ficheros hay, llévate
+  tú la cuenta: un índice en un fichero de texto, o nombres predecibles por fecha
+  (<code>2026-08.csv</code>) que puedas construir en vez de descubrir.
+</p>
+
+<p>
+  Y una nota de coste para cuando esté: en un micro, listar un directorio con muchos
+  ficheros <strong>cuesta tiempo real</strong>, sobre todo si la tarjeta es lenta. No es
+  una operación gratis que se pueda meter dentro de un bucle.
+</p>
+
+<h4 id="bytes">14.17.7 Texto y bytes</h4>
+
+<p>
+  <code>readFile</code>/<code>writeFile</code> trabajan con <strong>texto</strong>;
+  <code>readFileBytes</code>/<code>writeFileBytes</code>, con <strong>bytes crudos</strong>.
+  Usa los de bytes para imágenes, binarios o cualquier cosa que no sea texto: pasar un
+  binario por la versión de texto lo estropea.
+</p>
+
+<p class="warn">
+  <code>readFile</code> <strong>se trae el fichero entero a memoria</strong>. En un micro
+  con unos pocos megas de heap, leer así un fichero de 50 MB no va a acabar bien. Para
+  ficheros grandes, o lo partes, o usas una base de datos — que para eso está
+  (ver <a href="basedatos.html">bases de datos</a>).
+</p>
+
+<h4 id="trampas">14.17.8 Trampas conocidas</h4>
+
+<p>
+  <strong>Sin pull-up, un bus no calla: MIENTE.</strong> Si cableas tu propio lector, no
+  te saltes las resistencias. Un pad sin pull-up arranca en pull-down y devuelve
+  <code>0x00</code>, que la tarjeta acepta como respuesta válida — o sea que en vez de
+  silencio obtienes un falso positivo, que es mucho peor de depurar.
+</p>
+
+<p>
+  <strong>La alimentación del raíl.</strong> En placas que conmutan la alimentación de la
+  tarjeta con un transistor (el P4 lo hace por GPIO45), la polaridad importa:
+  <code>pwralto:1</code> si el raíl se enciende con el pin alto, y sin él se asume activo
+  bajo. Si te equivocas, la tarjeta simplemente no responde, sin decir por qué.
+</p>
+
+<p>
+  <strong>No confundas la placa con la imagen.</strong> Cuando leas «Pico» en la
+  documentación o en un mensaje, casi siempre se refiere a la <strong>imagen</strong> del
+  firmware, que es única para Pico 2 y Metro. La Pico 2 tal como viene no tiene lector;
+  la Metro sí.
+</p>
+
+<p>
+  <strong>Sacar la tarjeta con el programa escribiendo</strong> corrompe lo que estuviera
+  a medias, igual que en un PC. No hay magia: cierra antes.
+</p>
+
+<h2 id="seguir">Por dónde seguir</h2>
+
+<table>
+  <tr><th>quiero…</th><th>mira</th></tr>
+  <tr><td>escribir y leer ficheros</td><td><code>samples/FileTest.bp</code></td></tr>
+  <tr><td>las operaciones de <code>IO</code></td><td><code>samples/FileOpsTest.bp</code></td></tr>
+  <tr><td>bytes crudos</td><td><code>samples/FileBytesTest.bp</code></td></tr>
+  <tr><td>los ejemplos de esta página, ejecutables</td><td><code>samples/SdDoc.bp</code></td></tr>
+  <tr><td>una base de datos en la tarjeta</td><td><code>samples/SqlDemoSd.bp</code> y <a href="basedatos.html">bases de datos</a></td></tr>
+</table>
+
+<p>
+  Los ejemplos de esta página están <strong>ejecutados</strong>, no supuestos:
+  <code>samples/SdDoc.bp</code> los corre en las dos VMs y da la misma salida. Lo propio
+  de la tarjeta —montaje, pines, FAT— está medido en placa.
 </p>
 
 <!-- =========================================================== -->
@@ -1639,10 +1860,28 @@ tira.show()</code></pre>
 </p>
 
 <p>
-  <strong>No es un fichero comprimido.</strong> Se graba en su propia zona de la flash y
-  los módulos se leen <strong>en el sitio</strong>, sin copiarlos a RAM. Por eso puede
-  llevar cosas que no cabrían de otra manera.
+  <strong>No es un fichero comprimido.</strong> Se graba en su propia zona de la flash, y
+  ahí está lo que de verdad importa en un microcontrolador.
 </p>
+
+<div class="note">
+  <p>
+    <strong>Un pack AHORRA RAM, no sólo flash.</strong> Un módulo que vive en el sistema
+    de ficheros hay que <strong>cargarlo entero en memoria</strong> para ejecutarlo: ocupa
+    RAM mientras el programa corre. Un módulo que vive en un pack se ejecuta
+    <strong>en el sitio</strong>, desde la flash — a RAM sólo van su tabla de símbolos
+    externos y su bloque de datos. El código, que es la mayor parte, no se copia.
+  </p>
+  <p>
+    Y la VM lo dice al cargarlo:
+    <em>«'X' cargado XIP desde pack (codigo en sitio)»</em>.
+  </p>
+  <p>
+    Por eso un pack no es sólo «una forma de distribuir»: es la diferencia entre que una
+    librería grande quepa o no quepa. En una placa con unos pocos cientos de kilobytes de
+    RAM, un módulo de 40 KB que no se copia son 40 KB que le quedan a tu programa.
+  </p>
+</div>
 
 <h3 id="tipos">15.2 Dos tipos: librería y ejecutable</h3>
 
