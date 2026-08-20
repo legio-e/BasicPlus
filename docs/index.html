@@ -213,6 +213,27 @@
     <span class="kw">print</span> <span class="str">"Blink terminado"</span>
   <span class="kw">end</span> Main
 <span class="kw">end</span> Blink</code></pre>
+<p style="margin-top:1.6rem">
+  Y un micro no sólo mueve pines: también <strong>guarda datos</strong>. BasicPlus lleva
+  <strong>SQLite</strong> — el mismo motor, el mismo fichero <code>.db</code> y el mismo
+  código en el sobremesa y en la placa, con la base en una tarjeta SD. Se puede escribir
+  el SQL a mano o dejar que lo escriba el <strong>ORM</strong> a partir de tus clases.
+</p>
+<pre><code><span class="comment">// Las entidades se anotan, y el DAO lo genera el compilador.</span>
+@BD{ tabla = <span class="str">"medidas"</span> }
+<span class="kw">public class</span> <span class="type">Medida</span>
+  @BD{ pk }   <span class="kw">public property</span> id:    <span class="type">long</span>
+  @BD{}       <span class="kw">public property</span> valor: <span class="type">double</span>
+<span class="kw">end</span> Medida
+
+<span class="comment">// ...y luego, ni una sentencia SQL a la vista:</span>
+<span class="kw">var</span> w: Orm.<span class="type">Where</span> := Orm.<span class="type">Where</span>()
+<span class="kw">var</span> frias: <span class="type">List</span> := dao.<span class="fn">list</span>(w.<span class="fn">lt</span>(<span class="str">"valor"</span>, <span class="num">22.0d</span>))</code></pre>
+<p>
+  El motor no va dentro de la VM: se graba aparte, en un <strong>pack</strong>, así que
+  sólo lo paga quien lo usa — y se ejecuta desde la flash, sin comerse la RAM.
+  <a href="basedatos.html">Cómo funciona, entero →</a>
+</p>
 
 <p style="margin-top:1.4rem">
   <strong>Nuevo en V4:</strong> esta versión <strong>consolida</strong> más que añade.
