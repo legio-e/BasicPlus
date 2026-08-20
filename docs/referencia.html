@@ -160,14 +160,7 @@
 <nav class="toc">
   <h2>Contenido</h2>
   <ul>
-  <ul>
-
-
-
-
-
-
-    <li class="group"><a href="#stdlib">13. Biblioteca estándar</a></li>
+    <li class="group"><a href="#stdlib">13. Biblioteca del lenguaje</a></li>
     <li class="sub"><a href="#stdlib-funcs">13.1 Funciones built-in</a></li>
     <li class="sub"><a href="#stdlib-list">13.2 List</a></li>
     <li class="sub"><a href="#stdlib-ownerlist">13.3 OwnerList</a></li>
@@ -178,67 +171,45 @@
     <li class="sub"><a href="#stdlib-mutex">13.8 Mutex</a></li>
     <li class="sub"><a href="#stdlib-math">13.9 Math</a></li>
     <li class="sub"><a href="#stdlib-io">13.10 IO</a></li>
-    <li class="sub"><a href="#stdlib-gpio">13.11 Gpio</a></li>
-    <li class="sub"><a href="#stdlib-i2c">13.12 I2c</a></li>
-    <li class="sub"><a href="#stdlib-spi">13.13 Spi</a></li>
-    <li class="sub"><a href="#stdlib-uart">13.14 Uart</a></li>
-    <li class="sub"><a href="#stdlib-pulse">13.15 Pulse</a></li>
-    <li class="sub"><a href="#stdlib-pwm">13.16 Pwm</a></li>
-    <li class="sub"><a href="#stdlib-adc">13.17 Adc</a></li>
-    <li class="sub"><a href="#stdlib-pico">13.18 Pico (info MCU)</a></li>
-    <li class="sub"><a href="#stdlib-rtc">13.19 Rtc</a></li>
-    <li class="sub"><a href="#stdlib-wdt">13.20 Wdt</a></li>
-    <li class="sub"><a href="#stdlib-timer">13.21 Timer</a></li>
-    <li class="sub"><a href="#stdlib-hw-policy">13.22 Política HW = clase OO</a></li>
-    <li class="sub"><a href="#stdlib-neopixel">13.23 Neopixel</a></li>
-    <li class="sub"><a href="#stdlib-log">13.24 Log</a></li>
-    <li class="sub"><a href="#stdlib-str">13.25 Str</a></li>
-    <li class="sub"><a href="#stdlib-collections">13.26 Collections</a></li>
-    <li class="sub"><a href="#stdlib-stats">13.27 Stats</a></li>
-    <li class="sub"><a href="#stdlib-compress">13.28 Compress</a></li>
-    <li class="sub"><a href="#stdlib-net">13.29 Net</a></li>
-    <li class="sub"><a href="#stdlib-json">13.30 Json</a></li>
-    <li class="sub"><a href="#stdlib-freq">13.31 Freq</a></li>
-    <li class="sub"><a href="#stdlib-app">13.32 App</a></li>
-    <li class="sub"><a href="#stdlib-gui">13.33 Gui → volumen de gráficos</a></li>
-
-    <li class="group"><a href="#cli">15. Compilación &amp; ejecución</a></li>
-    <li class="sub"><a href="#cli-frontend">15.1 Frontend (bp → .mod)</a></li>
-    <li class="sub"><a href="#cli-vm">15.2 VM (bpgenvm)</a></li>
-    <li class="sub" style="padding-left:1.6em"><a href="#cli-vmproject">.bpproject (proyecto VM)</a></li>
-    <li class="sub" style="padding-left:1.6em"><a href="#cli-bpbuild">.bpbuild (proyecto compilador / IDE)</a></li>
-    <li class="sub"><a href="#cli-disasm">15.3 Disasm</a></li>
-    <li class="sub"><a href="#cli-mcu">15.4 Ejecución en microcontroladores</a></li>
-
-    <li class="group"><a href="#artefactos">16. Artefactos en disco</a></li>
-    <li class="sub"><a href="#mod">16.1 .mod</a></li>
-    <li class="sub"><a href="#bpi">16.2 Interfaz del módulo</a></li>
-    <li class="sub"><a href="#dbg">16.3 .dbg</a></li>
-    <li class="sub"><a href="#mdn">16.4 .mdn</a></li>
-    <li class="sub"><a href="#proyecto">16.5 .bpbuild / .bpproject</a></li>
-
-  </ul>
-  <h2>Manual del lenguaje (volumen aparte)</h2>
-  <ul>
-    <li><a href="manual.html#intro">1. Introducción</a></li>
-    <li><a href="manual.html#hello">2. Hola mundo</a></li>
-    <li class="group"><a href="manual.html#lexico">3. Léxico</a></li>
-    <li class="group"><a href="manual.html#tipos">4. Tipos</a></li>
-    <li class="group"><a href="manual.html#declaraciones">5. Declaraciones</a></li>
-    <li class="group"><a href="manual.html#operadores">6. Operadores</a></li>
-    <li class="group"><a href="manual.html#control">7. Control de flujo</a></li>
-    <li class="group"><a href="manual.html#funciones">8. Funciones</a></li>
-    <li class="group"><a href="manual.html#clases">9. Clases</a></li>
-    <li class="group"><a href="manual.html#modulos">10. Módulos</a></li>
-    <li class="group"><a href="manual.html#excepciones">11. Excepciones</a></li>
-    <li class="group"><a href="manual.html#owner">12. Owner semantics</a></li>
-    <li class="group"><a href="manual.html#concurrencia">14. Concurrencia</a></li>
-    <li class="group"><a href="manual.html#pendientes">17. Pendientes / no soportado</a></li>
-  </ul>
-  <h2>Gráficos (volumen aparte)</h2>
-  <ul>
-    <li class="group"><a href="gui.html#intro">18–25. Interfaz gráfica (<code>Gui</code>)</a></li>
-    <li><a href="en/referencia.html">🇬🇧 English</a></li>
+    <li class="sub"><a href="#stdlib-log">13.11 Log</a></li>
+    <li class="sub"><a href="#stdlib-str">13.12 Str</a></li>
+    <li class="sub"><a href="#stdlib-collections">13.13 Collections</a></li>
+    <li class="sub"><a href="#stdlib-stats">13.14 Stats</a></li>
+    <li class="sub"><a href="#stdlib-compress">13.15 Compress</a></li>
+    <li class="sub"><a href="#stdlib-json">13.16 Json</a></li>
+    <li class="sub"><a href="#stdlib-app">13.17 App</a></li>
+    <li class="group"><a href="#dispositivos">14. Librerías de dispositivos</a></li>
+    <li class="sub"><a href="#stdlib-hw-policy">14.1 Política HW = clase OO</a></li>
+    <li class="sub"><a href="#stdlib-gpio">14.2 Gpio</a></li>
+    <li class="sub"><a href="#stdlib-i2c">14.3 I2c</a></li>
+    <li class="sub"><a href="#stdlib-spi">14.4 Spi</a></li>
+    <li class="sub"><a href="#stdlib-uart">14.5 Uart</a></li>
+    <li class="sub"><a href="#stdlib-pulse">14.6 Pulse</a></li>
+    <li class="sub"><a href="#stdlib-pwm">14.7 Pwm</a></li>
+    <li class="sub"><a href="#stdlib-adc">14.8 Adc</a></li>
+    <li class="sub"><a href="#stdlib-pico">14.9 Pico (información del MCU)</a></li>
+    <li class="sub"><a href="#stdlib-rtc">14.10 Rtc</a></li>
+    <li class="sub"><a href="#stdlib-wdt">14.11 Wdt (watchdog)</a></li>
+    <li class="sub"><a href="#stdlib-timer">14.12 Timer (alarmas periódicas)</a></li>
+    <li class="sub"><a href="#stdlib-neopixel">14.13 Neopixel</a></li>
+    <li class="sub"><a href="#stdlib-freq">14.14 Freq</a></li>
+    <li class="sub"><a href="#stdlib-net">14.15 Net</a></li>
+    <li class="sub"><a href="#stdlib-gui">14.16 Gui — volumen aparte</a></li>
+    <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
+    <li class="group"><a href="#packs">15. Packs</a></li>
+    <li class="sub"><a href="#packs-descubrir">15.1 Descubrirlos desde el programa</a></li>
+    <li class="sub"><a href="#packs-sqlite">15.2 El pack de SQLite</a></li>
+    <li class="group"><a href="#cli">16. Compilación &amp; ejecución</a></li>
+    <li class="sub"><a href="#cli-frontend">16.1 Frontend</a></li>
+    <li class="sub"><a href="#cli-vm">16.2 VM (bpgenvm)</a></li>
+    <li class="sub"><a href="#cli-disasm">16.3 Disasm</a></li>
+    <li class="sub"><a href="#cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</a></li>
+    <li class="group"><a href="#artefactos">17. Artefactos en disco</a></li>
+    <li class="sub"><a href="#mod">17.1 .mod (binario, MOD6)</a></li>
+    <li class="sub"><a href="#bpi">17.2 Interfaz del módulo (texto, v7)</a></li>
+    <li class="sub"><a href="#dbg">17.3 .dbg (info de depuración, v3)</a></li>
+    <li class="sub"><a href="#mdn">17.4 .mdn (overlay AOT)</a></li>
+    <li class="sub"><a href="#proyecto">17.5 .bpbuild / .bpproject (JSON)</a></li>
   </ul>
 </nav>
 <main>
@@ -251,7 +222,9 @@
 </p>
 
 <!-- =========================================================== -->
-<h2 id="stdlib">13. Biblioteca estándar</h2>
+<h2 id="stdlib">13. Biblioteca del lenguaje</h2>
+
+<p>Lo que trae el lenguaje consigo: colecciones, texto, matemáticas, ficheros, concurrencia y formatos. Nada de esto depende de la placa.</p>
 
 <h3 id="stdlib-funcs">13.1 Funciones built-in</h3>
 <table>
@@ -524,6 +497,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 </p>
 
 <!-- =========================================================== -->
+
 <h3 id="stdlib-math">13.9 <code>Math</code></h3>
 <p>
   Funciones matemáticas accesibles tras <code>import Math</code>. Todas
@@ -578,6 +552,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 </table>
 
 <!-- =========================================================== -->
+
 <h3 id="stdlib-io">13.10 <code>IO</code></h3>
 <p>
   Manipulación de paths y operaciones de filesystem accesibles tras
@@ -652,7 +627,253 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 </table>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-gpio">13.11 <code>Gpio</code></h3>
+
+<h3 id="stdlib-log">13.11 <code>Log</code></h3>
+<p>
+  Logger de aplicación en BP puro sobre el file I/O de <code>IO</code>:
+  niveles, salida a consola y/o fichero, rotación por tamaño y thread-safe
+  (Mutex interno). <strong>A prueba de fallos</strong>: si el fichero falla
+  (FS lleno, op no soportada), avisa UNA vez y degrada a solo-consola —
+  un logger nunca tumba la aplicación.
+</p>
+<pre><code><span class="kw">import</span> Log
+
+Log.setLevel(Log.DEBUG)            <span class="comment">// por defecto INFO</span>
+Log.setFile(<span class="str">"app.log"</span>)             <span class="comment">// por defecto "app.log"</span>
+Log.info(<span class="str">"arrancando"</span>)             <span class="comment">// → [INFO ] arrancando</span>
+Log.warn(<span class="str">"bateria baja"</span>)
+Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>debug/info/warn/error(msg)</code></td>
+      <td>Emite una línea <code>[NIVEL] msg</code> si <code>nivel >= setLevel</code>.</td></tr>
+  <tr><td><code>setLevel(n)</code></td>
+      <td>Nivel mínimo: consts <code>Log.DEBUG/INFO/WARN/ERROR</code> (0..3). Por defecto INFO.</td></tr>
+  <tr><td><code>setFile(p)</code></td><td>Ruta del fichero de log.</td></tr>
+  <tr><td><code>setConsole(b)</code> / <code>setFileEnabled(b)</code></td>
+      <td>Activa/desactiva cada salida (por defecto ambas on).</td></tr>
+  <tr><td><code>setMaxSize(n)</code></td>
+      <td>Rotación: al superar n bytes, el fichero pasa a <code>&lt;ruta&gt;.old</code> y empieza otro (16 KB por defecto).</td></tr>
+  <tr><td><code>setTimestamp(b)</code></td>
+      <td>Antepone el uptime en ms (off por defecto — salida determinista).</td></tr>
+</table>
+
+<h3 id="stdlib-str">13.12 <code>Str</code></h3>
+<p>
+  Utilidades de string en BP puro. Los parsers devuelven una
+  <strong>tupla</strong> <code>(ok, valor)</code> — sin excepciones por
+  formato:
+</p>
+<pre><code><span class="kw">import</span> Str
+
+<span class="kw">var</span> ok: <span class="type">boolean</span> := <span class="kw">false</span>
+<span class="kw">var</span> v: <span class="type">integer</span> := <span class="num">0</span>
+{ ok, v } := Str.parseInt(<span class="str">"123"</span>)
+<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v
+
+<span class="kw">print</span> Str.formatDouble(<span class="num">3.14159d</span>, <span class="num">2</span>)   <span class="comment">// "3.14"</span>
+<span class="kw">print</span> Str.padLeft(<span class="str">"7"</span>, <span class="num">3</span>)             <span class="comment">// "  7"</span></code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>formatDouble(x, dec): string</code></td>
+      <td>Redondeado a <code>dec</code> decimales.</td></tr>
+  <tr><td><code>longToString(x)</code> / <code>doubleToString(x)</code></td>
+      <td>Idénticas al concat <code>"" + x</code> (se mantienen por compatibilidad y para componer).</td></tr>
+  <tr><td><code>toHex(x: long): string</code></td><td>Hexadecimal sin prefijo.</td></tr>
+  <tr><td><code>fromCharCode(cp): string</code></td><td>String de 1 code point.</td></tr>
+  <tr><td><code>lastIndexOf(s, sub): integer</code></td><td>Última aparición (-1 si no está).</td></tr>
+  <tr><td><code>compare(a, b): integer</code></td><td>&lt;0 / 0 / &gt;0 (orden por code points).</td></tr>
+  <tr><td><code>padLeft(s, ancho)</code> / <code>padRight(s, ancho)</code></td><td>Relleno con espacios.</td></tr>
+  <tr><td><code>parseInt/parseLong/parseDouble/parseHex(s): (boolean, T)</code></td>
+      <td>Tupla <code>(ok, valor)</code>; <code>ok=false</code> si el formato no es válido.</td></tr>
+</table>
+
+<h3 id="stdlib-collections">13.13 <code>Collections</code></h3>
+<p>
+  Mapa ordenado + infraestructura de comparación en BP puro. Como los
+  primitivos no son objetos, vienen wrappers <code>Integer</code>/
+  <code>Long</code>/<code>Double</code>/<code>Float</code>/<code>Boolean</code>
+  (con <code>value()</code> y <code>compareTo</code>) para usarlos como
+  claves/valores.
+</p>
+<pre><code><span class="kw">import</span> Collections
+
+<span class="kw">var</span> edades: Collections.Map := Collections.stringMap()
+edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num">30</span>))
+<span class="kw">var</span> w: Collections.Integer := edades.get(<span class="str">"ana"</span>)
+<span class="kw">print</span> w.value()                          <span class="comment">// 30</span></code></pre>
+<table>
+  <tr><th>API</th><th>Descripción</th></tr>
+  <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
+      <td>Factorías: Map con comparador de strings / numérico.</td></tr>
+  <tr><td><code>Map.put/get/containsKey/remove</code></td>
+      <td>Operaciones básicas; <code>get</code> devuelve <code>null</code> si no está.</td></tr>
+  <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
+      <td>Iteración por índice, en el ORDEN del comparador (mapa ordenado:
+          búsqueda binaria por dentro). Thread-safe (Mutex interno).</td></tr>
+  <tr><td><code>Comparator</code> / <code>Comparable</code></td>
+      <td>Clases base para orden propio (<code>Map.withComparator(c)</code>).</td></tr>
+</table>
+
+<h3 id="stdlib-stats">13.14 <code>Stats</code></h3>
+<p>
+  Estadística incremental en BP puro (double): pensada para flujos de
+  medidas de sensores sin guardar el histórico.
+</p>
+<table>
+  <tr><th>Clase</th><th>API</th></tr>
+  <tr><td><code>Accumulator</code></td>
+      <td><code>add(x)</code>, <code>count()</code>, <code>mean()</code>,
+          <code>variance()</code>, <code>stdDev()</code>, <code>min()</code>,
+          <code>max()</code> — acumulación online.</td></tr>
+  <tr><td><code>LinReg</code></td>
+      <td><code>addPoint(x, y)</code> / <code>subPoint(x, y)</code> (ventana
+          deslizante), <code>addData(xs, ys, n)</code>, <code>slope()</code>,
+          <code>intercept()</code>, <code>r()</code>,
+          <code>predict(x)</code> — regresión lineal incremental.</td></tr>
+</table>
+
+<h3 id="stdlib-compress">13.15 <code>Compress</code></h3>
+<p>
+  Descompresor LZSS en BP puro, para desplegar datos comprimidos en la
+  flash del micro (tablas, recursos). <strong>Solo descompresión por
+  diseño</strong>: el compresor es una herramienta de host.
+</p>
+<pre><code><span class="kw">import</span> Compress
+
+<span class="kw">var</span> dst: <span class="type">byte</span>[] := newByteArray(<span class="num">8192</span>)
+<span class="kw">var</span> n: <span class="type">integer</span> := Compress.decompress(src, len(src), dst, len(dst))
+<span class="comment">// n = bytes descomprimidos en dst; -1 si el destino no cabe
+// o los datos están corruptos (sin excepciones)</span></code></pre>
+
+<h3 id="stdlib-json">13.16 <code>Json</code></h3>
+<p>
+  Lectura y escritura de JSON (<code>import Json</code>). El documento se modela con una
+  jerarquía de clases: <code>JsonValue</code> (base) y sus hijas <code>JsonNull</code>,
+  <code>JsonBool</code>, <code>JsonInt</code>, <code>JsonFloat</code>, <code>JsonString</code>,
+  <code>JsonArray</code> y <code>JsonObject</code>.
+</p>
+<table>
+  <tr><th>API</th><th>Descripción</th></tr>
+  <tr><td><code>Json.parseJson(s): JsonValue</code></td>
+      <td>Parsea un string JSON; lanza <code>RuntimeError</code> si es inválido.</td></tr>
+  <tr><td><code>Json.writeJson(v): string</code><br><code>Json.writeJsonPretty(v): string</code></td>
+      <td>Serializa (compacto / indentado). Un valor también se serializa con
+          <code>v.toJson()</code>.</td></tr>
+  <tr><td><code>v.isObject() … v.isNull()</code></td>
+      <td>Test de tipo polimórfico: <code>isNull isBool isInt isFloat isNumber isString
+          isArray isObject</code>.</td></tr>
+  <tr><td><code>v.asObject() … v.asString()</code></td>
+      <td>Cast con comprobación (lanza <code>RuntimeError</code> si el tipo no encaja).</td></tr>
+  <tr><td><code>JsonObject</code></td>
+      <td><code>put(clave, v)</code> · <code>has(clave)</code> ·
+          <code>getString/getInt/getFloat/getBool/getObject/getArray(clave)</code> ·
+          variantes <code>get…Or(clave, def)</code> con valor por defecto.</td></tr>
+  <tr><td><code>JsonArray</code></td>
+      <td><code>add(v)</code> · <code>at(i): JsonValue</code> · <code>length()</code>.</td></tr>
+</table>
+<pre><code><span class="kw">var</span> root: Json.<span class="type">JsonObject</span> := Json.<span class="fn">JsonObject</span>()
+root.<span class="fn">put</span>(<span class="str">"nombre"</span>, Json.<span class="fn">JsonString</span>(<span class="str">"Ana"</span>))
+root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span class="fn">JsonInt</span>(<span class="num">30</span>))
+<span class="kw">print</span> Json.<span class="fn">writeJson</span>(root)              <span class="comment">// {"nombre":"Ana","edad":30}</span>
+
+<span class="kw">var</span> v: Json.<span class="type">JsonValue</span> := Json.<span class="fn">parseJson</span>(<span class="str">"{\"ok\":true}"</span>)
+<span class="kw">print</span> boolToString(v.<span class="fn">asObject</span>().<span class="fn">getBool</span>(<span class="str">"ok"</span>))</code></pre>
+<p>
+  Ejemplo completo: <code>samples/JsonDemo.bp</code>. El cargador de formularios
+  <code>.win</code> (<a href="gui.html#eventos">guía de gráficos §22</a>) usa este módulo.
+</p>
+
+<h3 id="stdlib-app">13.17 <code>App</code></h3>
+<p>
+  Introspección del proyecto en ejecución (<code>import App</code>), estilo
+  <code>getResource()</code> de Java: el programa puede preguntar dónde está su raíz y construir
+  rutas de recursos explícitas. Los valores dependen del entorno (en placa,
+  <code>/app/&lt;proyecto&gt;/…</code>; en host, el <code>.mod</code> ejecutado y su base-dir) —
+  como <code>now()</code> o el FS, no forman parte de la paridad byte-idéntica.
+</p>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>App.mainModule(): string</code></td><td>Nombre del módulo principal en ejecución.</td></tr>
+  <tr><td><code>App.mainModulePath(): string</code></td><td>Ruta del <code>.mod</code> ejecutado.</td></tr>
+  <tr><td><code>App.projectPath(): string</code></td><td>Raíz del proyecto (la base de las rutas relativas de <code>readFile</code>, imágenes, <code>.win</code>…).</td></tr>
+</table>
+
+
+<!-- =========================================================== -->
+
+<h2 id="dispositivos">14. Librerías de dispositivos</h2>
+
+<p>Lo que habla con el hierro: buses, pines, tiempo y periféricos. Todo funciona igual en el PC —donde los builtins de hardware loggean por consola— y en la placa, donde mueven pines de verdad.</p>
+
+<h3 id="stdlib-hw-policy">14.1 Política HW = clase OO</h3>
+<p>
+  Decisión arquitectónica del proyecto: <strong>todo periférico
+  hardware nuevo se modela como clase OO</strong> dentro de un módulo
+  BP que la encapsula. Detalle completo en
+  <code>docs/HW_CLASS_POLICY.md</code>; resumen aquí.
+</p>
+<p>
+  Razones: encapsulación (el id opaco del backend vive en la
+  instancia), tipado (<code>var bus: Spi.Bus</code> documenta qué
+  representa la variable), y liberación de recursos cuando lleguen
+  finalizers.
+</p>
+<p>
+  Patrón canónico:
+</p>
+<ul>
+  <li>Módulo <code>Foo</code> con intrínsecos de bajo nivel
+      sufijados con el tipo de recurso (e.g. <code>initBus</code>,
+      <code>startSlice</code>) para no colisionar con métodos cortos
+      de la clase (<code>start()</code>).</li>
+  <li>Clase <code>Foo.Bar</code> envolvente. Constructor recibe los
+      parámetros físicos + lanza <code>RuntimeError</code> si la
+      init backend falla.</li>
+  <li>Static consts dentro de la clase para enumeraciones
+      (<code>Bar.MODE_X</code>, <code>Pin.PULL_UP</code>, etc.).</li>
+  <li>Fields privados al módulo dueño. <strong>NO</strong> se
+      exportan cross-module. Para exponer valores cross-module se
+      usa <code>property</code> con getter (encapsulación clásica).</li>
+</ul>
+<p>
+  <strong>Excepción documentada</strong>: el módulo <code>Pico</code>
+  expone funciones + constantes sin clase porque la info del chip es
+  singleton sin recursos liberables. Misma lógica para futuros
+  módulos de información global.
+</p>
+<p>
+  Estado actual de la suite OO HW:
+</p>
+<table>
+  <tr><th>Módulo</th><th>Clase</th><th>Recurso encapsulado</th></tr>
+  <tr><td><code>Gpio</code></td><td><code>Gpio.Pin</code></td>
+      <td>Número de pin + modo</td></tr>
+  <tr><td><code>I2c</code></td><td><code>I2c.Bus</code></td>
+      <td>busId + pines + baudrate</td></tr>
+  <tr><td><code>Spi</code></td><td><code>Spi.Bus</code></td>
+      <td>busId + pines + baudrate + mode</td></tr>
+  <tr><td><code>Uart</code></td><td><code>Uart.Port</code></td>
+      <td>busId + pines + baudrate + format</td></tr>
+  <tr><td><code>Pulse</code></td><td><code>Pulse.Counter</code></td>
+      <td>counterSlice en modo input-gate</td></tr>
+  <tr><td><code>Pwm</code></td><td><code>Pwm.Slice</code></td>
+      <td>sliceId + canal A/B</td></tr>
+  <tr><td><code>Adc</code></td><td><code>Adc.Channel</code></td>
+      <td>Canal ADC + pin físico</td></tr>
+  <tr><td><code>Rtc</code></td><td><code>Rtc.Clock</code></td>
+      <td>Wall clock con offset (singleton lógico)</td></tr>
+  <tr><td><code>Wdt</code></td><td><code>Wdt.Timer</code></td>
+      <td>Watchdog HW (singleton)</td></tr>
+  <tr><td><code>Timer</code></td><td><code>Timer.Alarm</code></td>
+      <td>Periodo + nextFire (BP puro, sin HW)</td></tr>
+  <tr><td><code>Pico</code></td><td><em>(funcs + consts)</em></td>
+      <td><em>Info MCU singleton sin recursos — excepción documentada</em></td></tr>
+</table>
+
+<!-- =========================================================== -->
+
+<h3 id="stdlib-gpio">14.2 <code>Gpio</code></h3>
 <p>
   Control de pines GPIO. La VM Java sobre PC sólo loggea; la VM C sobre
   Pico 2 (RP2350) traduce cada llamada a la SDK del Pico
@@ -753,7 +974,8 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 </p>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-i2c">13.12 <code>I2c</code></h3>
+
+<h3 id="stdlib-i2c">14.3 <code>I2c</code></h3>
 <p>
   Bus I²C master multi-slave de 2 hilos (SDA + SCL). En el Pico 2
   hay 2 buses HW (<code>i2c0</code>, <code>i2c1</code>). Los buffers
@@ -793,14 +1015,15 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 <p>
   También existe la clase <code>I2c.Bus</code> (recomendada) que
   encapsula el bus + pines + baudrate en una instancia. Ver
-  <a href="#stdlib-hw-policy">§13.22</a> para el patrón general.
+  <a href="#stdlib-hw-policy">§14.1</a> para el patrón general.
 </p>
 <pre><code><span class="kw">var</span> bus: I2c.Bus := I2c.Bus(<span class="num">0</span>, <span class="num">4</span>, <span class="num">5</span>, I2c.Bus.STANDARD)
 <span class="kw">var</span> devs: <span class="type">integer</span>[] := bus.scan()
 bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span class="num">1</span>)</code></pre>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-spi">13.13 <code>Spi</code></h3>
+
+<h3 id="stdlib-spi">14.4 <code>Spi</code></h3>
 <p>
   Bus SPI master full-duplex de 4 hilos (SCK + MOSI + MISO + CS).
   El CS de cada slave lo gestiona el usuario con
@@ -851,7 +1074,8 @@ bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span 
 bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-uart">13.14 <code>Uart</code></h3>
+
+<h3 id="stdlib-uart">14.5 <code>Uart</code></h3>
 <p>
   Bus serial asíncrono punto a punto (RS-232 lógico) sobre 2 hilos
   TX/RX + GND. Sin reloj compartido: ambos extremos deben acordar
@@ -912,7 +1136,7 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
 </p>
 <p>
   También existe la clase <code>Uart.Port</code> (recomendada) con la
-  misma API en forma OO — ver <a href="#stdlib-hw-policy">§13.22</a>
+  misma API en forma OO — ver <a href="#stdlib-hw-policy">§14.1</a>
   para el patrón general.
 </p>
 <pre><code><span class="kw">var</span> port: Uart.Port := Uart.Port(<span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">115200</span>,
@@ -921,7 +1145,8 @@ port.write(tx, <span class="num">4</span>)
 <span class="kw">var</span> n: <span class="type">integer</span> := port.read(rx, <span class="num">64</span>, <span class="num">1000</span>)</code></pre>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-pulse">13.15 <code>Pulse</code></h3>
+
+<h3 id="stdlib-pulse">14.6 <code>Pulse</code></h3>
 <p>
   Contador de pulsos hardware. En el RP2350 cada slice PWM puede operar
   en modo &quot;input gate edge counting&quot;: el contador del slice
@@ -961,7 +1186,8 @@ port.write(tx, <span class="num">4</span>)
 </table>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-pwm">13.16 <code>Pwm</code></h3>
+
+<h3 id="stdlib-pwm">14.7 <code>Pwm</code></h3>
 <p>
   Generación de señal PWM hardware. Cada GPIO mapea a un slice + canal
   del PWM fijo por hardware (pares = canal A, impares = canal B). Las
@@ -1009,7 +1235,8 @@ port.write(tx, <span class="num">4</span>)
 </p>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-adc">13.17 <code>Adc</code></h3>
+
+<h3 id="stdlib-adc">14.8 <code>Adc</code></h3>
 <p>
   Convertidor analógico-digital del MCU. El RP2350 tiene 4 canales
   accesibles vía GPIO:
@@ -1024,7 +1251,7 @@ port.write(tx, <span class="num">4</span>)
 <p>
   Resolución 12-bit (0..4095), referencia Vref ≈ 3.3 V típico. Para
   leer la temperatura interna del die, NO uses <code>Adc</code> — usa
-  <code>Pico.tempC()</code> (ver <a href="#stdlib-pico">§13.18</a>)
+  <code>Pico.tempC()</code> (ver <a href="#stdlib-pico">§14.9</a>)
   que ya hace la conversión con la fórmula del sensor.
 </p>
 <pre><code><span class="kw">import</span> Adc
@@ -1057,14 +1284,15 @@ port.write(tx, <span class="num">4</span>)
 </p>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-pico">13.18 <code>Pico</code> (información del MCU)</h3>
+
+<h3 id="stdlib-pico">14.9 <code>Pico</code> (información del MCU)</h3>
 <p>
   Información del microcontrolador físico: identificación, sensores
   internos, reloj y control de la frecuencia del clk_sys.
 </p>
 <p>
   <strong>Excepción documentada</strong> a la política HW = clase OO
-  (ver <a href="#stdlib-hw-policy">§13.22</a>): <code>Pico</code>
+  (ver <a href="#stdlib-hw-policy">§14.1</a>): <code>Pico</code>
   expone funciones + constantes sin clase porque la info del chip no
   tiene &quot;instancia&quot; (es uno y único) y no encapsula recursos
   liberables.
@@ -1114,7 +1342,8 @@ port.write(tx, <span class="num">4</span>)
 </p>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-rtc">13.19 <code>Rtc</code></h3>
+
+<h3 id="stdlib-rtc">14.10 <code>Rtc</code></h3>
 <p>
   Wall clock con sincronización IDE→Pico. El Pico no tiene RTC con
   backup battery por defecto, así que este módulo mantiene un
@@ -1154,7 +1383,8 @@ port.write(tx, <span class="num">4</span>)
 </table>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-wdt">13.20 <code>Wdt</code> (watchdog)</h3>
+
+<h3 id="stdlib-wdt">14.11 <code>Wdt</code> (watchdog)</h3>
 <p>
   Watchdog timer del MCU. Si no se &quot;alimenta&quot; dentro del
   timeout configurado, el chip se RESETEA automáticamente. Útil para
@@ -1198,7 +1428,8 @@ port.write(tx, <span class="num">4</span>)
 </table>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-timer">13.21 <code>Timer</code> (alarmas periódicas)</h3>
+
+<h3 id="stdlib-timer">14.12 <code>Timer</code> (alarmas periódicas)</h3>
 <p>
   <code>Timer.Alarm</code> es una abstracción puramente BP sobre
   <code>now()</code>. NO usa interrupts hardware ni callbacks — el
@@ -1261,73 +1492,8 @@ port.write(tx, <span class="num">4</span>)
 </table>
 
 <!-- =========================================================== -->
-<h3 id="stdlib-hw-policy">13.22 Política HW = clase OO</h3>
-<p>
-  Decisión arquitectónica del proyecto: <strong>todo periférico
-  hardware nuevo se modela como clase OO</strong> dentro de un módulo
-  BP que la encapsula. Detalle completo en
-  <code>docs/HW_CLASS_POLICY.md</code>; resumen aquí.
-</p>
-<p>
-  Razones: encapsulación (el id opaco del backend vive en la
-  instancia), tipado (<code>var bus: Spi.Bus</code> documenta qué
-  representa la variable), y liberación de recursos cuando lleguen
-  finalizers.
-</p>
-<p>
-  Patrón canónico:
-</p>
-<ul>
-  <li>Módulo <code>Foo</code> con intrínsecos de bajo nivel
-      sufijados con el tipo de recurso (e.g. <code>initBus</code>,
-      <code>startSlice</code>) para no colisionar con métodos cortos
-      de la clase (<code>start()</code>).</li>
-  <li>Clase <code>Foo.Bar</code> envolvente. Constructor recibe los
-      parámetros físicos + lanza <code>RuntimeError</code> si la
-      init backend falla.</li>
-  <li>Static consts dentro de la clase para enumeraciones
-      (<code>Bar.MODE_X</code>, <code>Pin.PULL_UP</code>, etc.).</li>
-  <li>Fields privados al módulo dueño. <strong>NO</strong> se
-      exportan cross-module. Para exponer valores cross-module se
-      usa <code>property</code> con getter (encapsulación clásica).</li>
-</ul>
-<p>
-  <strong>Excepción documentada</strong>: el módulo <code>Pico</code>
-  expone funciones + constantes sin clase porque la info del chip es
-  singleton sin recursos liberables. Misma lógica para futuros
-  módulos de información global.
-</p>
-<p>
-  Estado actual de la suite OO HW:
-</p>
-<table>
-  <tr><th>Módulo</th><th>Clase</th><th>Recurso encapsulado</th></tr>
-  <tr><td><code>Gpio</code></td><td><code>Gpio.Pin</code></td>
-      <td>Número de pin + modo</td></tr>
-  <tr><td><code>I2c</code></td><td><code>I2c.Bus</code></td>
-      <td>busId + pines + baudrate</td></tr>
-  <tr><td><code>Spi</code></td><td><code>Spi.Bus</code></td>
-      <td>busId + pines + baudrate + mode</td></tr>
-  <tr><td><code>Uart</code></td><td><code>Uart.Port</code></td>
-      <td>busId + pines + baudrate + format</td></tr>
-  <tr><td><code>Pulse</code></td><td><code>Pulse.Counter</code></td>
-      <td>counterSlice en modo input-gate</td></tr>
-  <tr><td><code>Pwm</code></td><td><code>Pwm.Slice</code></td>
-      <td>sliceId + canal A/B</td></tr>
-  <tr><td><code>Adc</code></td><td><code>Adc.Channel</code></td>
-      <td>Canal ADC + pin físico</td></tr>
-  <tr><td><code>Rtc</code></td><td><code>Rtc.Clock</code></td>
-      <td>Wall clock con offset (singleton lógico)</td></tr>
-  <tr><td><code>Wdt</code></td><td><code>Wdt.Timer</code></td>
-      <td>Watchdog HW (singleton)</td></tr>
-  <tr><td><code>Timer</code></td><td><code>Timer.Alarm</code></td>
-      <td>Periodo + nextFire (BP puro, sin HW)</td></tr>
-  <tr><td><code>Pico</code></td><td><em>(funcs + consts)</em></td>
-      <td><em>Info MCU singleton sin recursos — excepción documentada</em></td></tr>
-</table>
 
-<!-- =========================================================== -->
-<h3 id="stdlib-neopixel">13.23 <code>Neopixel</code></h3>
+<h3 id="stdlib-neopixel">14.13 <code>Neopixel</code></h3>
 <p>
   Tira de LEDs WS2812 ("NeoPixel") conducida por la PIO del RP2350
   (Pico 2 / Metro; en otras familias el constructor lanza
@@ -1350,125 +1516,32 @@ tira.show()</code></pre>
   <tr><td><code>count(): integer</code></td><td>Nº de LEDs.</td></tr>
 </table>
 
-<h3 id="stdlib-log">13.24 <code>Log</code></h3>
+<h3 id="stdlib-freq">14.14 <code>Freq</code></h3>
 <p>
-  Logger de aplicación en BP puro sobre el file I/O de <code>IO</code>:
-  niveles, salida a consola y/o fichero, rotación por tamaño y thread-safe
-  (Mutex interno). <strong>A prueba de fallos</strong>: si el fichero falla
-  (FS lleno, op no soportada), avisa UNA vez y degrada a solo-consola —
-  un logger nunca tumba la aplicación.
-</p>
-<pre><code><span class="kw">import</span> Log
-
-Log.setLevel(Log.DEBUG)            <span class="comment">// por defecto INFO</span>
-Log.setFile(<span class="str">"app.log"</span>)             <span class="comment">// por defecto "app.log"</span>
-Log.info(<span class="str">"arrancando"</span>)             <span class="comment">// → [INFO ] arrancando</span>
-Log.warn(<span class="str">"bateria baja"</span>)
-Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
-<table>
-  <tr><th>Función</th><th>Descripción</th></tr>
-  <tr><td><code>debug/info/warn/error(msg)</code></td>
-      <td>Emite una línea <code>[NIVEL] msg</code> si <code>nivel >= setLevel</code>.</td></tr>
-  <tr><td><code>setLevel(n)</code></td>
-      <td>Nivel mínimo: consts <code>Log.DEBUG/INFO/WARN/ERROR</code> (0..3). Por defecto INFO.</td></tr>
-  <tr><td><code>setFile(p)</code></td><td>Ruta del fichero de log.</td></tr>
-  <tr><td><code>setConsole(b)</code> / <code>setFileEnabled(b)</code></td>
-      <td>Activa/desactiva cada salida (por defecto ambas on).</td></tr>
-  <tr><td><code>setMaxSize(n)</code></td>
-      <td>Rotación: al superar n bytes, el fichero pasa a <code>&lt;ruta&gt;.old</code> y empieza otro (16 KB por defecto).</td></tr>
-  <tr><td><code>setTimestamp(b)</code></td>
-      <td>Antepone el uptime en ms (off por defecto — salida determinista).</td></tr>
-</table>
-
-<h3 id="stdlib-str">13.25 <code>Str</code></h3>
-<p>
-  Utilidades de string en BP puro. Los parsers devuelven una
-  <strong>tupla</strong> <code>(ok, valor)</code> — sin excepciones por
-  formato:
-</p>
-<pre><code><span class="kw">import</span> Str
-
-<span class="kw">var</span> ok: <span class="type">boolean</span> := <span class="kw">false</span>
-<span class="kw">var</span> v: <span class="type">integer</span> := <span class="num">0</span>
-{ ok, v } := Str.parseInt(<span class="str">"123"</span>)
-<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v
-
-<span class="kw">print</span> Str.formatDouble(<span class="num">3.14159d</span>, <span class="num">2</span>)   <span class="comment">// "3.14"</span>
-<span class="kw">print</span> Str.padLeft(<span class="str">"7"</span>, <span class="num">3</span>)             <span class="comment">// "  7"</span></code></pre>
-<table>
-  <tr><th>Función</th><th>Descripción</th></tr>
-  <tr><td><code>formatDouble(x, dec): string</code></td>
-      <td>Redondeado a <code>dec</code> decimales.</td></tr>
-  <tr><td><code>longToString(x)</code> / <code>doubleToString(x)</code></td>
-      <td>Idénticas al concat <code>"" + x</code> (se mantienen por compatibilidad y para componer).</td></tr>
-  <tr><td><code>toHex(x: long): string</code></td><td>Hexadecimal sin prefijo.</td></tr>
-  <tr><td><code>fromCharCode(cp): string</code></td><td>String de 1 code point.</td></tr>
-  <tr><td><code>lastIndexOf(s, sub): integer</code></td><td>Última aparición (-1 si no está).</td></tr>
-  <tr><td><code>compare(a, b): integer</code></td><td>&lt;0 / 0 / &gt;0 (orden por code points).</td></tr>
-  <tr><td><code>padLeft(s, ancho)</code> / <code>padRight(s, ancho)</code></td><td>Relleno con espacios.</td></tr>
-  <tr><td><code>parseInt/parseLong/parseDouble/parseHex(s): (boolean, T)</code></td>
-      <td>Tupla <code>(ok, valor)</code>; <code>ok=false</code> si el formato no es válido.</td></tr>
-</table>
-
-<h3 id="stdlib-collections">13.26 <code>Collections</code></h3>
-<p>
-  Mapa ordenado + infraestructura de comparación en BP puro. Como los
-  primitivos no son objetos, vienen wrappers <code>Integer</code>/
-  <code>Long</code>/<code>Double</code>/<code>Float</code>/<code>Boolean</code>
-  (con <code>value()</code> y <code>compareTo</code>) para usarlos como
-  claves/valores.
-</p>
-<pre><code><span class="kw">import</span> Collections
-
-<span class="kw">var</span> edades: Collections.Map := Collections.stringMap()
-edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num">30</span>))
-<span class="kw">var</span> w: Collections.Integer := edades.get(<span class="str">"ana"</span>)
-<span class="kw">print</span> w.value()                          <span class="comment">// 30</span></code></pre>
-<table>
-  <tr><th>API</th><th>Descripción</th></tr>
-  <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
-      <td>Factorías: Map con comparador de strings / numérico.</td></tr>
-  <tr><td><code>Map.put/get/containsKey/remove</code></td>
-      <td>Operaciones básicas; <code>get</code> devuelve <code>null</code> si no está.</td></tr>
-  <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
-      <td>Iteración por índice, en el ORDEN del comparador (mapa ordenado:
-          búsqueda binaria por dentro). Thread-safe (Mutex interno).</td></tr>
-  <tr><td><code>Comparator</code> / <code>Comparable</code></td>
-      <td>Clases base para orden propio (<code>Map.withComparator(c)</code>).</td></tr>
-</table>
-
-<h3 id="stdlib-stats">13.27 <code>Stats</code></h3>
-<p>
-  Estadística incremental en BP puro (double): pensada para flujos de
-  medidas de sensores sin guardar el histórico.
+  Frecuencímetro por conteo de flancos (<code>import Freq</code>): mide la frecuencia de la señal
+  de un pin contando los flancos que llegan durante una ventana de tiempo conocida
+  (<em>gate time</em>) — <code>Hz = flancos / ventana</code>. Se apoya en
+  <code>Pulse.Counter</code> (conteo por hardware, sin coste de CPU); el pin tiene la misma
+  restricción de canal que <code>Pulse.Counter</code> (<a href="#stdlib-pulse">§14.6</a>).
 </p>
 <table>
-  <tr><th>Clase</th><th>API</th></tr>
-  <tr><td><code>Accumulator</code></td>
-      <td><code>add(x)</code>, <code>count()</code>, <code>mean()</code>,
-          <code>variance()</code>, <code>stdDev()</code>, <code>min()</code>,
-          <code>max()</code> — acumulación online.</td></tr>
-  <tr><td><code>LinReg</code></td>
-      <td><code>addPoint(x, y)</code> / <code>subPoint(x, y)</code> (ventana
-          deslizante), <code>addData(xs, ys, n)</code>, <code>slope()</code>,
-          <code>intercept()</code>, <code>r()</code>,
-          <code>predict(x)</code> — regresión lineal incremental.</td></tr>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Freq.RISING() / FALLING() / BOTH()</code></td>
+      <td>Qué flanco contar.</td></tr>
+  <tr><td><code>Meter(pin, edge)</code></td>
+      <td>Crea el medidor sobre un pin.</td></tr>
+  <tr><td><code>measureHz(windowMs): integer</code></td>
+      <td>Una medida con ventana de <code>windowMs</code> ms.</td></tr>
+  <tr><td><code>measureHzAvg(windowMs, samples): integer</code></td>
+      <td>Media de <code>samples</code> medidas.</td></tr>
+  <tr><td><code>maxHz(windowMs): integer</code></td>
+      <td>Frecuencia máxima medible con esa ventana antes de desbordar el contador de
+          16 bits; por encima, usa una ventana menor.</td></tr>
+  <tr><td><code>close()</code></td>
+      <td>Libera el contador (deja el canal disponible para PWM, etc.).</td></tr>
 </table>
 
-<h3 id="stdlib-compress">13.28 <code>Compress</code></h3>
-<p>
-  Descompresor LZSS en BP puro, para desplegar datos comprimidos en la
-  flash del micro (tablas, recursos). <strong>Solo descompresión por
-  diseño</strong>: el compresor es una herramienta de host.
-</p>
-<pre><code><span class="kw">import</span> Compress
-
-<span class="kw">var</span> dst: <span class="type">byte</span>[] := newByteArray(<span class="num">8192</span>)
-<span class="kw">var</span> n: <span class="type">integer</span> := Compress.decompress(src, len(src), dst, len(dst))
-<span class="comment">// n = bytes descomprimidos en dst; -1 si el destino no cabe
-// o los datos están corruptos (sin excepciones)</span></code></pre>
-
-<h3 id="stdlib-net">13.29 <code>Net</code></h3>
+<h3 id="stdlib-net">14.15 <code>Net</code></h3>
 <p>
   Cliente TCP simple (H11). Disponible en <strong>PC</strong> (ambas VMs:
   sockets del SO); en los micros <em>todavía no hay backend de red</em>
@@ -1503,85 +1576,8 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
-<h3 id="stdlib-json">13.30 <code>Json</code></h3>
-<p>
-  Lectura y escritura de JSON (<code>import Json</code>). El documento se modela con una
-  jerarquía de clases: <code>JsonValue</code> (base) y sus hijas <code>JsonNull</code>,
-  <code>JsonBool</code>, <code>JsonInt</code>, <code>JsonFloat</code>, <code>JsonString</code>,
-  <code>JsonArray</code> y <code>JsonObject</code>.
-</p>
-<table>
-  <tr><th>API</th><th>Descripción</th></tr>
-  <tr><td><code>Json.parseJson(s): JsonValue</code></td>
-      <td>Parsea un string JSON; lanza <code>RuntimeError</code> si es inválido.</td></tr>
-  <tr><td><code>Json.writeJson(v): string</code><br><code>Json.writeJsonPretty(v): string</code></td>
-      <td>Serializa (compacto / indentado). Un valor también se serializa con
-          <code>v.toJson()</code>.</td></tr>
-  <tr><td><code>v.isObject() … v.isNull()</code></td>
-      <td>Test de tipo polimórfico: <code>isNull isBool isInt isFloat isNumber isString
-          isArray isObject</code>.</td></tr>
-  <tr><td><code>v.asObject() … v.asString()</code></td>
-      <td>Cast con comprobación (lanza <code>RuntimeError</code> si el tipo no encaja).</td></tr>
-  <tr><td><code>JsonObject</code></td>
-      <td><code>put(clave, v)</code> · <code>has(clave)</code> ·
-          <code>getString/getInt/getFloat/getBool/getObject/getArray(clave)</code> ·
-          variantes <code>get…Or(clave, def)</code> con valor por defecto.</td></tr>
-  <tr><td><code>JsonArray</code></td>
-      <td><code>add(v)</code> · <code>at(i): JsonValue</code> · <code>length()</code>.</td></tr>
-</table>
-<pre><code><span class="kw">var</span> root: Json.<span class="type">JsonObject</span> := Json.<span class="fn">JsonObject</span>()
-root.<span class="fn">put</span>(<span class="str">"nombre"</span>, Json.<span class="fn">JsonString</span>(<span class="str">"Ana"</span>))
-root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span class="fn">JsonInt</span>(<span class="num">30</span>))
-<span class="kw">print</span> Json.<span class="fn">writeJson</span>(root)              <span class="comment">// {"nombre":"Ana","edad":30}</span>
 
-<span class="kw">var</span> v: Json.<span class="type">JsonValue</span> := Json.<span class="fn">parseJson</span>(<span class="str">"{\"ok\":true}"</span>)
-<span class="kw">print</span> boolToString(v.<span class="fn">asObject</span>().<span class="fn">getBool</span>(<span class="str">"ok"</span>))</code></pre>
-<p>
-  Ejemplo completo: <code>samples/JsonDemo.bp</code>. El cargador de formularios
-  <code>.win</code> (<a href="gui.html#eventos">guía de gráficos §22</a>) usa este módulo.
-</p>
-
-<h3 id="stdlib-freq">13.31 <code>Freq</code></h3>
-<p>
-  Frecuencímetro por conteo de flancos (<code>import Freq</code>): mide la frecuencia de la señal
-  de un pin contando los flancos que llegan durante una ventana de tiempo conocida
-  (<em>gate time</em>) — <code>Hz = flancos / ventana</code>. Se apoya en
-  <code>Pulse.Counter</code> (conteo por hardware, sin coste de CPU); el pin tiene la misma
-  restricción de canal que <code>Pulse.Counter</code> (<a href="#stdlib-pulse">§13.15</a>).
-</p>
-<table>
-  <tr><th>Miembro</th><th>Descripción</th></tr>
-  <tr><td><code>Freq.RISING() / FALLING() / BOTH()</code></td>
-      <td>Qué flanco contar.</td></tr>
-  <tr><td><code>Meter(pin, edge)</code></td>
-      <td>Crea el medidor sobre un pin.</td></tr>
-  <tr><td><code>measureHz(windowMs): integer</code></td>
-      <td>Una medida con ventana de <code>windowMs</code> ms.</td></tr>
-  <tr><td><code>measureHzAvg(windowMs, samples): integer</code></td>
-      <td>Media de <code>samples</code> medidas.</td></tr>
-  <tr><td><code>maxHz(windowMs): integer</code></td>
-      <td>Frecuencia máxima medible con esa ventana antes de desbordar el contador de
-          16 bits; por encima, usa una ventana menor.</td></tr>
-  <tr><td><code>close()</code></td>
-      <td>Libera el contador (deja el canal disponible para PWM, etc.).</td></tr>
-</table>
-
-<h3 id="stdlib-app">13.32 <code>App</code></h3>
-<p>
-  Introspección del proyecto en ejecución (<code>import App</code>), estilo
-  <code>getResource()</code> de Java: el programa puede preguntar dónde está su raíz y construir
-  rutas de recursos explícitas. Los valores dependen del entorno (en placa,
-  <code>/app/&lt;proyecto&gt;/…</code>; en host, el <code>.mod</code> ejecutado y su base-dir) —
-  como <code>now()</code> o el FS, no forman parte de la paridad byte-idéntica.
-</p>
-<table>
-  <tr><th>Función</th><th>Descripción</th></tr>
-  <tr><td><code>App.mainModule(): string</code></td><td>Nombre del módulo principal en ejecución.</td></tr>
-  <tr><td><code>App.mainModulePath(): string</code></td><td>Ruta del <code>.mod</code> ejecutado.</td></tr>
-  <tr><td><code>App.projectPath(): string</code></td><td>Raíz del proyecto (la base de las rutas relativas de <code>readFile</code>, imágenes, <code>.win</code>…).</td></tr>
-</table>
-
-<h3 id="stdlib-gui">13.33 <code>Gui</code> — volumen aparte</h3>
+<h3 id="stdlib-gui">14.16 <code>Gui</code> — volumen aparte</h3>
 <p>
   La interfaz gráfica (pantalla y árbol de widgets, el catálogo completo, color y fuentes,
   formularios <code>.win</code>, ejecución en host y placa) tiene su propio volumen:
@@ -1589,9 +1585,77 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   referencia rápida del API <code>Gui.*</code> en <a href="gui.html#referencia">§24</a>.
 </p>
 
-<h2 id="cli">15. Compilación &amp; ejecución</h2>
+<h3 id="stdlib-sd">14.17 Tarjeta SD</h3>
+<p>
+  La tarjeta no es un módulo: una vez montada es <strong>una ruta más</strong>
+  (<code>/sd/…</code>), y se usa con los verbos de fichero de
+  <a href="#stdlib-funcs">13.1</a> y con <a href="#stdlib-io">IO</a>. Lo que sí es propio
+  suyo —en qué familias funciona, cómo se cablea, cómo se configuran los pines en el
+  entorno y cómo saber si ha montado— tiene su propio volumen:
+</p>
+<p>
+  <strong><a href="tarjeta-sd.html">La tarjeta SD &rarr;</a></strong>
+</p>
+<p class="warn">
+  Lo único que conviene saber aquí: <strong>funciona en RP2350 y ESP32, en STM32
+  todavía no</strong>; y <code>listDir</code> es el <strong>único</strong> verbo de
+  fichero que no está en la VM-C, o sea que un programa puede listar un directorio en el
+  PC pero no en la placa.
+</p>
 
-<h3 id="cli-frontend">15.1 Frontend</h3>
+<!-- =========================================================== -->
+<h2 id="packs">15. Packs</h2>
+<p>
+  Un <strong>pack</strong> no es una librería: es un <strong>artefacto grabado en la
+  placa</strong> — un contenedor con módulos <code>.mod</code>, sus puentes nativos
+  <code>.mdn</code>, recursos y, si lleva, código nativo que se ejecuta en el sitio. Es lo
+  que permite que algo tan grande como SQLite viva en el micro sin que lo pague quien no
+  lo usa, y lo que hace que una librería de terceros se distribuya en una pieza.
+</p>
+<p>
+  Se construyen desde un proyecto (<code>"out": "pack"</code> en el
+  <code>.bpbuild</code>) y se graban desde el IDE, en el panel de <em>Packs</em>. Un
+  programa los usa sin enterarse: <code>import</code> resuelve primero lo que hay en el
+  sistema de ficheros y luego lo que traen los packs.
+</p>
+
+<h3 id="packs-descubrir">15.1 Descubrirlos desde el programa</h3>
+<p>
+  El módulo <code>Packs</code> deja que un programa averigüe por sí mismo qué hay grabado,
+  sin que nadie se lo diga por adelantado.
+</p>
+<table>
+  <tr><th>función</th><th>qué devuelve</th></tr>
+  <tr><td><code>list()</code></td><td>una <code>List</code> con el nombre de cada pack grabado</td></tr>
+  <tr><td><code>listIn(pack, ext)</code></td><td>los ficheros de ese pack con esa extensión</td></tr>
+</table>
+<pre><code><span class="kw">import</span> Packs
+
+<span class="kw">var</span> p: <span class="type">List</span> := Packs.<span class="fn">list</span>()
+<span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+<span class="kw">while</span> i &lt; p.<span class="fn">length</span>() <span class="kw">do</span>
+  <span class="kw">print</span> p.<span class="fn">getString</span>(i)
+  i := i + <span class="num">1</span>
+<span class="kw">endwh</span></code></pre>
+<p>
+  El recorrido se arma en BP sobre cuatro intrínsecos que dan una cosa por llamada
+  (<code>__packNext</code>, <code>__packInfo</code>, <code>__packEntryNext</code>,
+  <code>__packEntryInfo</code>) y llevan el cursor como <strong>valor</strong>, no como
+  estado guardado en la VM. La razón es concreta: hoy ningún intrínseco devuelve una
+  clase, así que construir la lista en el nativo habría sido estrenar maquinaria en las
+  dos VMs para nada.
+</p>
+
+<h3 id="packs-sqlite">15.2 El pack de SQLite</h3>
+<p>
+  El caso grande y el que más se usa. Está contado entero —instalarlo, darle memoria y
+  qué pasa si falta— en su propio volumen:
+  <strong><a href="basedatos.html">Bases de datos &rarr;</a></strong>
+</p>
+
+<h2 id="cli">16. Compilación &amp; ejecución</h2>
+
+<h3 id="cli-frontend">16.1 Frontend</h3>
 <pre><code>java -jar basicplus-frontend.jar &lt;archivo.bp&gt; [opciones]</code></pre>
 <table>
   <tr><th>Opción</th><th>Efecto</th></tr>
@@ -1610,7 +1674,7 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   deps.
 </p>
 
-<h3 id="cli-vm">15.2 VM (bpgenvm)</h3>
+<h3 id="cli-vm">16.2 VM (bpgenvm)</h3>
 <pre><code>java -jar bpgenvm.jar [opciones] &lt;archivo.mod&gt;</code></pre>
 <ul>
   <li>Por defecto carga y ejecuta el <code>.mod</code> raíz. La VM resuelve
@@ -1782,14 +1846,14 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <code>docs/BpBuild.example</code> para una plantilla anotada.
 </p>
 
-<h3 id="cli-disasm">15.3 Disasm</h3>
+<h3 id="cli-disasm">16.3 Disasm</h3>
 <pre><code>java -cp bpgenvm.jar edu.bpgenvm.tools.Disasm &lt;archivo.mod&gt;</code></pre>
 <p>
   Muestra el header, imports, exports, data block y código desensamblado
   con anotaciones (nombre de función, sección, jumps con destino).
 </p>
 
-<h3 id="cli-mcu">15.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</h3>
+<h3 id="cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</h3>
 <p>
   Desde el IDE, <em>Run on Device</em> ejecuta el módulo en un MCU conectado
   por puerto serie (protocolo «wire v1»): el IDE sube el <code>.mod</code>
@@ -1854,9 +1918,9 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
-<h2 id="artefactos">16. Artefactos en disco</h2>
+<h2 id="artefactos">17. Artefactos en disco</h2>
 
-<h3 id="mod">16.1 <code>.mod</code> (binario, MOD6)</h3>
+<h3 id="mod">17.1 <code>.mod</code> (binario, MOD6)</h3>
 <pre>[MAGIC=0x4D4F4436]            4 bytes  "MOD6"
 [dataSize]                    4
 [mainOffset]                  4   offset al __startup, o -1
@@ -1869,7 +1933,7 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
 [library   bytes]             librarySize
 [imports   bytes]             importsSize   pares (name, fromPath) UTF
 [exports   bytes]             exportsSize   pares (name, offset)
-[interface bytes]             interfaceSize texto de interfaz (§16.2)
+[interface bytes]             interfaceSize texto de interfaz (§17.2)
 [data block]                  dataSize      strings, constantes, class descriptors
 [code]                        codeSize      bytecode</pre>
 <p>
@@ -1887,10 +1951,10 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   antiguos.
 </p>
 
-<h3 id="bpi">16.2 Interfaz del módulo (texto, v7)</h3>
+<h3 id="bpi">17.2 Interfaz del módulo (texto, v7)</h3>
 <p>
   El texto que viaja en la sección <code>interface</code> del
-  <code>.mod</code> (§16.1). Hasta V3 se escribía en un fichero
+  <code>.mod</code> (§17.1). Hasta V3 se escribía en un fichero
   <code>.bpi</code> aparte; desde V4 <strong>no se genera ningún
   fichero</strong>: es una sección del propio módulo. El formato del
   texto no ha cambiado, y su línea de versión conserva la palabra
@@ -1926,7 +1990,7 @@ end class</pre>
   juntos o no se emiten.
 </p>
 
-<h3 id="dbg">16.3 <code>.dbg</code> (info de depuración, v3)</h3>
+<h3 id="dbg">17.3 <code>.dbg</code> (info de depuración, v3)</h3>
 <pre>dbg 3
 module Str
 source C:\...\Str.bp
@@ -1940,7 +2004,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   VM local como contra el device (mismo formato).
 </p>
 
-<h3 id="mdn">16.4 <code>.mdn</code> (overlay AOT)</h3>
+<h3 id="mdn">17.4 <code>.mdn</code> (overlay AOT)</h3>
 <p>
   Código máquina Thumb-2 de las <code>native function</code> de un módulo
   (ver <a href="manual.html#funciones-native">§8.3</a>). Es <strong>aditivo</strong>:
@@ -1963,7 +2027,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   script queda para builds manuales o automatizados.
 </p>
 
-<h3 id="proyecto">16.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
+<h3 id="proyecto">17.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
 <pre><span class="comment">// App.bpbuild — entrada del COMPILADOR (y del IDE):</span>
 { "sourceDir": "src", "outDir": "out", "main": "App", "dependencies": [] }
 
