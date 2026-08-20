@@ -163,21 +163,22 @@
     <li class="group"><a href="#stdlib">13. Biblioteca del lenguaje</a></li>
     <li class="sub"><a href="#stdlib-funcs">13.1 Funciones built-in</a></li>
     <li class="sub"><a href="#stdlib-list">13.2 List</a></li>
-    <li class="sub"><a href="#stdlib-ownerlist">13.3 OwnerList</a></li>
-    <li class="sub"><a href="#stdlib-synclist">13.4 SyncList</a></li>
-    <li class="sub"><a href="#stdlib-sb">13.5 StringBuilder</a></li>
-    <li class="sub"><a href="#stdlib-rterr">13.6 RuntimeError</a></li>
-    <li class="sub"><a href="#stdlib-thread">13.7 Thread</a></li>
-    <li class="sub"><a href="#stdlib-mutex">13.8 Mutex</a></li>
-    <li class="sub"><a href="#stdlib-math">13.9 Math</a></li>
-    <li class="sub"><a href="#stdlib-io">13.10 IO</a></li>
-    <li class="sub"><a href="#stdlib-log">13.11 Log</a></li>
-    <li class="sub"><a href="#stdlib-str">13.12 Str</a></li>
-    <li class="sub"><a href="#stdlib-collections">13.13 Collections</a></li>
-    <li class="sub"><a href="#stdlib-stats">13.14 Stats</a></li>
-    <li class="sub"><a href="#stdlib-compress">13.15 Compress</a></li>
-    <li class="sub"><a href="#stdlib-json">13.16 Json</a></li>
-    <li class="sub"><a href="#stdlib-app">13.17 App</a></li>
+    <li class="sub"><a href="#stdlib-wrappers">13.3 Envoltorios y Comparable</a></li>
+    <li class="sub"><a href="#stdlib-ownerlist">13.4 OwnerList</a></li>
+    <li class="sub"><a href="#stdlib-synclist">13.5 SyncList</a></li>
+    <li class="sub"><a href="#stdlib-sb">13.6 StringBuilder</a></li>
+    <li class="sub"><a href="#stdlib-rterr">13.7 RuntimeError</a></li>
+    <li class="sub"><a href="#stdlib-thread">13.8 Thread</a></li>
+    <li class="sub"><a href="#stdlib-mutex">13.9 Mutex</a></li>
+    <li class="sub"><a href="#stdlib-math">13.10 Math</a></li>
+    <li class="sub"><a href="#stdlib-io">13.11 IO</a></li>
+    <li class="sub"><a href="#stdlib-log">13.12 Log</a></li>
+    <li class="sub"><a href="#stdlib-str">13.13 Str</a></li>
+    <li class="sub"><a href="#stdlib-collections">13.14 Collections</a></li>
+    <li class="sub"><a href="#stdlib-stats">13.15 Stats</a></li>
+    <li class="sub"><a href="#stdlib-compress">13.16 Compress</a></li>
+    <li class="sub"><a href="#stdlib-json">13.17 Json</a></li>
+    <li class="sub"><a href="#stdlib-app">13.18 App</a></li>
     <li class="group"><a href="#dispositivos">14. Librerías de dispositivos</a></li>
     <li class="sub"><a href="#stdlib-hw-policy">14.1 Política HW = clase OO</a></li>
     <li class="sub"><a href="#stdlib-gpio">14.2 Gpio</a></li>
@@ -254,7 +255,7 @@
       <td><code>sqrt</code> <code>pow</code> <code>exp</code>
           <code><a href="#rnd">random()</a></code> <code><a href="#rnd">randomInt(lo, hi)</a></code><br>
           <em>Trigonometría, logaritmos, π, e y resto requieren
-          <code>import Math</code> — ver <a href="#stdlib-math">§13.9</a>.</em></td></tr>
+          <code>import Math</code> — ver <a href="#stdlib-math">§13.10</a>.</em></td></tr>
   <tr><td>Conversión num</td>
       <td><code>floor(x)</code> <code>ceil(x)</code> <code>round(x)</code></td></tr>
   <tr><td>Expresiones</td>
@@ -271,29 +272,130 @@
   <tr><td>Fichero</td>
       <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
           <code>appendFile(path, content)</code> <code>fileExists(path)</code>
-          <code>listDir(path)</code></td></tr>
+          <code>listDir(path)</code> <em>&mdash; ojo: <strong>s&oacute;lo en el PC</strong>, no est&aacute; en la VM-C que corre en las placas (ver <a href="#stdlib-sd">&sect;14.17</a>)</em></td></tr>
   <tr><td>Internos (stdlib)</td>
       <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
           <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
 </table>
 
 <h3 id="stdlib-list">13.2 <code>List</code></h3>
-<pre><code><span class="kw">var</span> l: List := List()
-l.add(<span class="num">10</span>)                       <span class="comment">// add(item: any)</span>
-l.add(Persona(<span class="str">"Ana"</span>, <span class="num">30</span>))
-<span class="kw">var</span> p: Persona := l.get(<span class="num">1</span>)      <span class="comment">// get(idx): any</span>
-l.set(<span class="num">0</span>, <span class="num">42</span>)                    <span class="comment">// set(idx, item: any)</span>
-<span class="kw">print</span> l.length()              <span class="comment">// → 2</span>
-l.remove(<span class="num">0</span>)                    <span class="comment">// shift; el item queda huérfano (GC eventual)</span></code></pre>
+
+<pre><code><span class="kw">var</span> l: <span class="type">List</span> := <span class="type">List</span>()
+l.<span class="fn">add</span>(<span class="num">10</span>)                       <span class="comment">// se envuelve solo en un Integer</span>
+l.<span class="fn">add</span>(Persona(<span class="str">"Ana"</span>, <span class="num">30</span>))       <span class="comment">// un objeto, tal cual</span>
+
+<span class="kw">var</span> p: <span class="type">Persona</span> := <span class="type">Persona</span>(l.<span class="fn">get</span>(<span class="num">1</span>))   <span class="comment">// get devuelve Object: hace falta el cast</span>
+<span class="kw">var</span> n: <span class="type">integer</span> := l.<span class="fn">getInteger</span>(<span class="num">0</span>)      <span class="comment">// o el captador tipado, que convierte</span>
+
+<span class="kw">print</span> l.<span class="fn">length</span>()                   <span class="comment">// 2</span>
+l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
+
 <p>
-  Lista dinámica de refs a objetos. Doubling al crecer. Backing
-  <code>items: integer[]</code> es <code>TYPE_ARRAY_REF</code>, escaneado
-  por el GC. <code>add</code> y <code>set</code> aceptan cualquier tipo de
-  objeto (vía <code>any</code>); <code>get</code> devuelve <code>any</code>
-  asignable a cualquier tipo de variable.
+  Lista dinámica que crece doblando. Sus casillas son referencias que el GC recorre, así
+  que puede guardar cualquier objeto.
 </p>
 
-<h3 id="stdlib-ownerlist">13.3 <code>OwnerList</code></h3>
+<table>
+  <tr><th>miembro</th><th>qué hace</th></tr>
+  <tr><td><code>add(o: Object)</code></td><td>añade un objeto</td></tr>
+  <tr><td><code>add(i: integer)</code> · <code>add(l: long)</code> · <code>add(d: double)</code> · <code>add(f: float)</code> · <code>add(b: boolean)</code></td>
+      <td>añade un primitivo: lo <strong>envuelve</strong> por ti en su clase (§13.10)</td></tr>
+  <tr><td><code>get(idx): Object</code></td><td>el elemento, sin tipar</td></tr>
+  <tr><td><code>set(idx, o: Object)</code></td><td>lo reemplaza</td></tr>
+  <tr><td><code>length(): integer</code></td><td>cuántos hay</td></tr>
+  <tr><td><code>remove(idx)</code></td><td>lo quita y corre los de detrás</td></tr>
+</table>
+
+<h4 id="stdlib-list-tipados">Sacar valores: los captadores tipados</h4>
+
+<p>
+  <code>get</code> devuelve <code>Object</code>, así que para un objeto hace falta un cast
+  (<code>Persona(l.get(i))</code>). Para valores sueltos están los captadores, que no
+  castean: <strong>convierten</strong>.
+</p>
+
+<table>
+  <tr><th>captador</th><th>devuelve</th></tr>
+  <tr><td><code>getString(idx)</code></td><td><code>string</code> — <strong>siempre funciona</strong>: todo sabe volverse cadena</td></tr>
+  <tr><td><code>getInteger(idx)</code> · <code>getLong(idx)</code> · <code>getFloat(idx)</code> · <code>getDouble(idx)</code></td>
+      <td>el número, convirtiendo entre tipos numéricos</td></tr>
+  <tr><td><code>getBoolean(idx)</code></td><td><code>boolean</code></td></tr>
+</table>
+
+<p class="warn">
+  <strong>Las reglas de la conversión, que no son arbitrarias:</strong>
+</p>
+<ul>
+  <li><strong>Hacia <code>string</code> siempre se puede</strong>, porque no puede fallar.</li>
+  <li><strong>Desde <code>string</code> NO.</strong> Un elemento que es texto no se parsea:
+  eso se pide aparte con <code>Str.parseInt</code> y compañía, que devuelven
+  <code>(ok, valor)</code> en vez de lanzar. Convertir texto a número falla por el
+  <em>contenido</em>, que es otra clase de problema.</li>
+  <li><strong><code>double</code> → entero TRUNCA hacia cero</strong>: <code>-2,7</code> da
+  <code>-2</code> (ojo, que <code>floor</code> daría <code>-3</code>). Para redondear está
+  <code>round()</code>.</li>
+  <li><strong>Si el número no cabe, lanza.</strong> Un <code>long</code> de 9.000.000.000
+  pedido como <code>integer</code> es un error, no un recorte silencioso.</li>
+  <li><code>False</code> vale <strong>0</strong> y <code>True</code> vale <strong>1</strong>.
+  Al revés no: un número no se convierte a booleano.</li>
+</ul>
+
+<h3 id="stdlib-wrappers">13.3 Envoltorios y <code>Comparable</code></h3>
+
+<p>
+  En BP todo desciende de <code>Object</code>, pero los primitivos —<code>integer</code>,
+  <code>long</code>, <code>double</code>, <code>float</code>, <code>boolean</code>— no son
+  objetos. Los <strong>envoltorios</strong> son la clase que los hace objeto, y es lo que
+  permite meterlos en una <code>List</code> o en un <code>Map</code>.
+</p>
+
+<pre><code><span class="kw">var</span> o: <span class="type">Object</span> := <span class="type">Integer</span>(<span class="num">5</span>)
+<span class="kw">var</span> i: <span class="type">Integer</span> := <span class="type">Integer</span>(o)      <span class="comment">// downcast; si no lo es, lanza</span>
+<span class="kw">print</span> i.<span class="fn">value</span>()                  <span class="comment">// 5</span></code></pre>
+
+<p>
+  Normalmente no hace falta escribirlos: <code>List.add(42)</code> ya envuelve por ti.
+  Se escriben cuando haces el camino de vuelta.
+</p>
+
+<table>
+  <tr><th>clase</th><th>envuelve</th></tr>
+  <tr><td><code>Integer</code></td><td><code>integer</code></td></tr>
+  <tr><td><code>Long</code></td><td><code>long</code></td></tr>
+  <tr><td><code>Double</code></td><td><code>double</code></td></tr>
+  <tr><td><code>Float</code></td><td><code>float</code></td></tr>
+  <tr><td><code>Boolean</code></td><td><code>boolean</code></td></tr>
+</table>
+
+<p>Los cinco heredan de <code>Comparable</code> y comparten los mismos miembros:</p>
+
+<table>
+  <tr><th>miembro</th><th>qué hace</th></tr>
+  <tr><td><code>value()</code></td><td>el primitivo que lleva dentro</td></tr>
+  <tr><td><code>toString(): string</code></td><td>su texto</td></tr>
+  <tr><td><code>compareTo(other: Object): integer</code></td><td>−1, 0 o 1 — lo que usan los ordenados</td></tr>
+  <tr><td><code>toInteger()</code> · <code>toLong()</code> · <code>toFloat()</code> · <code>toDouble()</code> · <code>toBoolean()</code></td>
+      <td>convierten, con las reglas de §13.2. Sobre ellas están construidos los captadores de <code>List</code></td></tr>
+</table>
+
+<div class="note">
+  <p>
+    <strong><code>Comparable</code> es también la puerta para tus clases.</strong> Si una
+    clase tuya la extiende e implementa <code>compareTo</code>, ya se puede ordenar y usar
+    como clave. Y sus conversiones vienen con una implementación por defecto que
+    <strong>lanza</strong>: si tu clase no sabe volverse número, pedírselo es un error del
+    programa, no un cero.
+  </p>
+</div>
+
+<p class="warn">
+  <strong>Se escriben sin cualificar.</strong> <code>Integer</code>, <code>List</code>,
+  <code>Object</code> y los demás viven en <code>Core</code>, que se importa
+  <strong>solo</strong> en todos los módulos. No hace falta <code>import Core</code> ni
+  escribir <code>Core.Integer</code>.
+</p>
+
+<h3 id="stdlib-ownerlist">13.4 <code>OwnerList</code></h3>
 <pre><code><span class="kw">var owner</span> ol: OwnerList := OwnerList()
 ol.add(Recurso(<span class="str">"A"</span>))
 ol.add(Recurso(<span class="str">"B"</span>))
@@ -312,7 +414,7 @@ ol.removeAndFree(<span class="num">0</span>)               <span class="comment"
       <code>remove(idx)</code> no libera (se mantiene la API original).</li>
 </ul>
 
-<h3 id="stdlib-synclist">13.4 <code>SyncList</code></h3>
+<h3 id="stdlib-synclist">13.5 <code>SyncList</code></h3>
 <pre><code><span class="kw">var</span> sl: SyncList := SyncList()
 sl.add(Item(<span class="num">1</span>))               <span class="comment">// atómico</span>
 sl.add(Item(<span class="num">2</span>))
@@ -360,7 +462,7 @@ sl.remove(<span class="num">0</span>)                  <span class="comment">// 
   método nuevo (no existe en <code>List</code>).
 </p>
 
-<h3 id="stdlib-sb">13.5 <code>StringBuilder</code></h3>
+<h3 id="stdlib-sb">13.6 <code>StringBuilder</code></h3>
 <pre><code><span class="kw">var</span> sb: StringBuilder := StringBuilder()
 sb.appendStr(<span class="str">"Hola, "</span>)
 sb.appendStr(<span class="str">"mundo"</span>)
@@ -372,7 +474,7 @@ sb.appendInt(<span class="num">42</span>)
   Constructor sin args (capacidad inicial 64). Doubling automático.
 </p>
 
-<h3 id="stdlib-rterr">13.6 <code>RuntimeError</code></h3>
+<h3 id="stdlib-rterr">13.7 <code>RuntimeError</code></h3>
 <pre><code><span class="kw">throw</span> RuntimeError(<span class="str">"algo fallo"</span>)
 
 <span class="kw">try</span>
@@ -391,7 +493,7 @@ sb.appendInt(<span class="num">42</span>)
   <a href="manual.html#excepciones">§11</a>).
 </p>
 
-<h3 id="stdlib-thread">13.7 <code>Thread</code></h3>
+<h3 id="stdlib-thread">13.8 <code>Thread</code></h3>
 <pre><code><span class="kw">class</span> Worker <span class="kw">extends</span> Thread
   <span class="kw">var</span> nombre: <span class="type">string</span>
   <span class="kw">public function</span> Worker(nombre: <span class="type">string</span>)
@@ -442,7 +544,7 @@ sb.appendInt(<span class="num">42</span>)
   <a href="manual.html#parallel">§7.6</a>.
 </p>
 
-<h3 id="stdlib-mutex">13.8 <code>Mutex</code></h3>
+<h3 id="stdlib-mutex">13.9 <code>Mutex</code></h3>
 <pre><code><span class="kw">var</span> m: Mutex := Mutex()
 
 <span class="comment">// dentro del run() de cada Thread que comparta el mutex:</span>
@@ -507,7 +609,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 
 <!-- =========================================================== -->
 
-<h3 id="stdlib-math">13.9 <code>Math</code></h3>
+<h3 id="stdlib-math">13.10 <code>Math</code></h3>
 <p>
   Funciones matemáticas accesibles tras <code>import Math</code>. Todas
   son <code>intrinsic</code>: el call-site <code>Math.foo(...)</code>
@@ -562,7 +664,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 
 <!-- =========================================================== -->
 
-<h3 id="stdlib-io">13.10 <code>IO</code></h3>
+<h3 id="stdlib-io">13.11 <code>IO</code></h3>
 <p>
   Manipulación de paths y operaciones de filesystem accesibles tras
   <code>import IO</code>. Todas las funciones son <code>intrinsic</code>.
@@ -637,7 +739,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 
 <!-- =========================================================== -->
 
-<h3 id="stdlib-log">13.11 <code>Log</code></h3>
+<h3 id="stdlib-log">13.12 <code>Log</code></h3>
 <p>
   Logger de aplicación en BP puro sobre el file I/O de <code>IO</code>:
   niveles, salida a consola y/o fichero, rotación por tamaño y thread-safe
@@ -667,7 +769,7 @@ Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
       <td>Antepone el uptime en ms (off por defecto — salida determinista).</td></tr>
 </table>
 
-<h3 id="stdlib-str">13.12 <code>Str</code></h3>
+<h3 id="stdlib-str">13.13 <code>Str</code></h3>
 <p>
   Utilidades de string en BP puro. Los parsers devuelven una
   <strong>tupla</strong> <code>(ok, valor)</code> — sin excepciones por
@@ -697,7 +799,7 @@ Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
       <td>Tupla <code>(ok, valor)</code>; <code>ok=false</code> si el formato no es válido.</td></tr>
 </table>
 
-<h3 id="stdlib-collections">13.13 <code>Collections</code></h3>
+<h3 id="stdlib-collections">13.14 <code>Collections</code></h3>
 <p>
   Mapa ordenado + infraestructura de comparación en BP puro. Como los
   primitivos no son objetos, vienen wrappers <code>Integer</code>/
@@ -724,7 +826,7 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
       <td>Clases base para orden propio (<code>Map.withComparator(c)</code>).</td></tr>
 </table>
 
-<h3 id="stdlib-stats">13.14 <code>Stats</code></h3>
+<h3 id="stdlib-stats">13.15 <code>Stats</code></h3>
 <p>
   Estadística incremental en BP puro (double): pensada para flujos de
   medidas de sensores sin guardar el histórico.
@@ -742,7 +844,7 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
           <code>predict(x)</code> — regresión lineal incremental.</td></tr>
 </table>
 
-<h3 id="stdlib-compress">13.15 <code>Compress</code></h3>
+<h3 id="stdlib-compress">13.16 <code>Compress</code></h3>
 <p>
   Descompresor LZSS en BP puro, para desplegar datos comprimidos en la
   flash del micro (tablas, recursos). <strong>Solo descompresión por
@@ -755,7 +857,7 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
 <span class="comment">// n = bytes descomprimidos en dst; -1 si el destino no cabe
 // o los datos están corruptos (sin excepciones)</span></code></pre>
 
-<h3 id="stdlib-json">13.16 <code>Json</code></h3>
+<h3 id="stdlib-json">13.17 <code>Json</code></h3>
 <p>
   Lectura y escritura de JSON (<code>import Json</code>). El documento se modela con una
   jerarquía de clases: <code>JsonValue</code> (base) y sus hijas <code>JsonNull</code>,
@@ -793,7 +895,7 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <code>.win</code> (<a href="gui.html#eventos">guía de gráficos §22</a>) usa este módulo.
 </p>
 
-<h3 id="stdlib-app">13.17 <code>App</code></h3>
+<h3 id="stdlib-app">13.18 <code>App</code></h3>
 <p>
   Introspección del proyecto en ejecución (<code>import App</code>), estilo
   <code>getResource()</code> de Java: el programa puede preguntar dónde está su raíz y construir
