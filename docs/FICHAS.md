@@ -2293,6 +2293,24 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ✅ **Lo que el P4X cambia**: allí está corregido y SÍ puede trabajar a 400. Así que las
   dos imágenes se diferenciarán en TRES cosas, no en una: la revisión de silicio, la
   frecuencia (360 vs 400) y todo lo que el interruptor arrastra por debajo.
+  🧭 **Y la política: se MANTIENEN LAS DOS.** Eduardo, 20-ago: *«aunque el P4 queda
+  obsoleto, todavía quedan muchas placas que se están comercializando actualmente; en
+  cambio del P4X, que será el bueno, hoy apenas hay placas.»* O sea que esto **no es una
+  migración** con fecha de caducidad: durante V6 el silicio viejo es el que la gente
+  tiene y compra, y el nuevo el que casi nadie ha visto. La imagen del P4X se añade, no
+  sustituye.
+  📦 **Consecuencia para la distribución**: el ZIP pasará a llevar **dos imágenes de P4**,
+  y ahí el nombre es lo único que separa al usuario de flashear la que no es. Hay
+  precedente de que un artefacto se cuele en la placa equivocada, así que los nombres
+  tienen que decir el silicio, no la familia.
+  🛡️ **La red ya existe, y es del propio IDF — verificado el 20-ago** en
+  `bootloader_support/src/bootloader_common_loader.c`: el bootloader compara la revisión
+  grabada en efuses contra la de la imagen y **rechaza en las DOS direcciones**, con el
+  mensaje `chip revision check failed. Required >= vX.Y / <= vX.Y, found vX.Y`. La
+  imagen vieja en un P4X falla por el máximo; la del P4X en un P4 viejo, por el mínimo.
+  ✅ Con lo cual **la imagen equivocada no arranca a medias ni corrompe nada: se planta y
+  dice por qué**. No hay que construir ninguna comprobación propia — basta con nombrarlas
+  bien y decirlo en la documentación.
   📌 **Y en la FORMA**, un matiz que conviene no confundir: `esp32/` y `esp32p4/` son
   carpetas distintas porque son *targets* distintos del IDF; el P4 y el P4X, en cambio,
   son **el MISMO target** y lo que los separa es este interruptor. Aun así se resuelve
