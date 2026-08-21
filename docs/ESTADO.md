@@ -107,6 +107,32 @@ se siguen vendiendo placas y del P4X apenas hay. Y una buena noticia medida: el 
 ya rechaza la imagen equivocada en las dos direcciones, así que basta con nombrarlas bien.
 Todo en `FICHAS.md` → «Aplazadas a V6».
 
+**Coda del día — sesión de DISEÑO, ya sin placa.** Eduardo pide el listado de lo aplazado
+y de ahí sale que estaba en **tres sitios**; se consolida en `docs/V6_BACKLOG.md`, que es
+un ÍNDICE y lo dice en su cabecera para no crear una cuarta fuente. Al reunirlo aparece
+una entrada rancia (los captadores tipados de `List`, hechos en V5) que se mueve a
+«CERRADAS» conservando sus 89 líneas de diseño.
+
+**Y tres asuntos nuevos, los tres nacidos de un problema observado y no de imaginar:**
+- **La RAM del código nativo de un pack.** La tercera vía ya estaba elegida y corriendo
+  (la arena del ENV); lo abierto es que hoy es singular y se llama `SQLite`, y que los
+  `malloc` de la BIOS son chivatos que aún no reparten nada.
+- **🩸 `native` en un MÉTODO se ignora en SILENCIO** — bug real, fichado. Y salió porque
+  **Eduardo dudó de un diagnóstico mío**: yo dije *«no hay `this`, no se puede»* y él
+  contestó que `miObjeto.miMetodo(...)` es `miMetodo(miObjeto, ...)`. Tenía razón: el
+  emisor ya emite `MemberAccessExpr`; lo que falla es un barrido que no desciende a las
+  clases (`AotCEmitter.java:259`). **El trabajo era mucho más pequeño de lo que yo dije.**
+- **El lazo de LVGL y los cabos del AOT**, que resultaron ser la misma enfermedad.
+
+📌 **Y el censo que más va a doler**: `AOT_LIMITES.md` nombraba **5** límites y son **~24**
+— la lista corta engañaba porque el emisor tiene rechazos genéricos, así que sólo estaba
+documentado lo que alguien se encontró de frente. De ahí sale el **hito AOT de V6**
+(encargo de Eduardo: arreglar el método, `double`, y los statements sencillos).
+
+⏭️ **Pendiente de decidir**: `notas/` está en el `.gitignore` y ahí viven **473 líneas** de
+diseños de V6 sin versionar — y por esa misma vía ya se perdió el `SqlDemo.bpbuild`. Los
+documentos nuevos se han creado en `docs/` a propósito.
+
 **⏭️ MAÑANA: H13 en placa**, con `docs/H13_PRUEBAS_V5.md`. Dos días (viernes y sábado),
 partido por puertas. La Puerta 1 —el ABI de `Comparable` en las tres familias— es la que
 bloquea, y la Metro es obligatoria porque su `.npk` no se ha ejecutado nunca.
