@@ -92,6 +92,7 @@ detecta el arranque. Todas las comparaciones son contra la salida del host.
 | SD | ✅ monta sola: `sd: montada en /sd (particion en el bloque 2048)` |
 | `SdDoc` (la API de ficheros, FS interno) | ✅ **5/5 idénticas** — los ejemplos de `TARJETA_SD.md` hacen lo que dicen |
 | `SdCard` (la TARJETA, sobre `/sd`) | ✅ **los seis**: escribir/leer, añadir, truncar, bytes crudos, 32.000 B en 500 trozos, y releerlo |
+| `Bench` (AOT al vuelo) | ✅ **105×** — `fib(28)` interp 8.819 ms → AOT **84 ms**, y los dos dan `317811` |
 | streaming `#294` | ✅ `SQLite.pack` (1,13 MB) subido sin incidencias |
 
 📌 **Lo que vale de verdad del `SqlDemo`**: con UNA ejecución quedan probados el
@@ -100,6 +101,10 @@ pack en **XIP**, la arena de 2 MB que reserva el ENV, y la escritura en la SD.
 📌 **Y del `DaoDemo`/`GenDemo`**: el apóstrofo de `O'Brien` escapado por el `Where`
 y por el DAO generado — que es lo que separa un ORM de una inyección de SQL— y el
 `delete` repetido devolviendo `false` en vez de reventar.
+📌 **Y el `Bench` prueba la OTRA cadena de nativo**, que es independiente de la del
+`.npk`: el IDE **genera** un `.mdn` de ARM para esta placa (`1 thunk, 64 B nativo`),
+lo sube y la VM lo ejecuta. La de SQLite es nativo *precompilado y empaquetado*; ésta
+es nativo *generado al vuelo*. Las dos quedan verificadas en la Metro el 21-ago.
 
 
 **Puerta 3 — cola de `#439` en la Metro: ✅ PASA (21-ago).**
