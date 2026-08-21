@@ -117,4 +117,6 @@ montar dar error en vez de desviar? **Sin decidir.**
 - ~~**`List` con captadores TIPADOS**~~ — estaba en la lista de V6 y **se hizo en V5**
   el 20-ago, adelantada por Eduardo (*«las demos han de funcionar»*). `getInteger`,
   `getLong`, `getDouble`, `getBoolean` y `getString`, con las conversiones en los
-  envoltorios. **Hay que quitarla de la sección de `FICHAS`.**
+  envoltorios. ✅ **Ya movida** en `FICHAS.md` a «CERRADAS EN V5», con sus 89 líneas de
+  diseño intactas — porque su cola sigue viva: **¿quiere `Map` lo mismo para sus
+  valores?** `SyncList` y `OwnerList` los heredan gratis; `Map` no.
