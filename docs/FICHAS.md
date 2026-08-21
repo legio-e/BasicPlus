@@ -2110,6 +2110,37 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+### 🎯 V6/HITO-AOT — ampliar la cobertura del AOT, poco a poco (encargo de Eduardo, 21-ago)
+
+> *«Creamos un hito AOT, donde solucionamos esto, implementamos double y mejoramos el
+> soporte de statements que ahora no entran, al menos los más sencillos. Así poco a poco
+> vamos ampliando el soporte AOT.»*
+
+El criterio es suyo y conviene respetarlo: **ampliar por tandas**, no de un salto.
+
+**1. `native` en un MÉTODO — arreglarlo, no sólo avisar.** Hoy se ignora en silencio (ver
+la ficha aparte). Son dos cosas y en este orden: que **AVISE** —barato, y convierte una
+mentira muda en una línea— y luego **abrir el barrido** de `AotCEmitter.java:259` a los
+métodos de las clases, pasando el objeto como primer parámetro. Ojo: `MemberAccessExpr`
+ya está soportado, así que la parte que parecía difícil (`this`) puede que no lo sea.
+
+**2. `double`.** Diseño hecho en `notas/V6_IDEAS.md` §double, con la ganancia estimada
+sobre datos reales. Es la ficha `#426`.
+⚠️ Con el matiz que ya está escrito en `AOT_LIMITES.md` y no hay que perder: la FPU de
+Cortex-M33 es de precisión **simple**, así que un `double` no toca la FPU en dos de las
+tres familias. Soportarlo es correcto; **prometer velocidad con él, no**.
+
+**3. Los statements sencillos.** Del censo de `AOT_LIMITES.md`, por relación
+esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),
+**`do…loop`** (un `while` al revés), **literales de array**. Las cuatro son azúcar y
+ninguna estaba documentada como límite hasta el censo del 21-ago.
+
+⏭️ **Y una cuarta que propongo, porque si no las otras tres se pudren**: un **test que
+recorra los nodos del AST** y compruebe cuáles pasan por el AOT. Mientras el emisor tenga
+rechazos genéricos (`statement no soportado`), cualquier lista escrita a mano se queda
+rancia sola — el propio `AOT_LIMITES.md` nombraba cinco cuando eran veinticuatro. Con el
+test, la lista se mide en cada batería en vez de recordarse.
+
 > Decisión de Eduardo (16-ago) al sacar `#426`: lo que no es de esta versión no
 > debe engordar su lista. Se quedan escritas aquí para no perderlas.
 
