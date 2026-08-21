@@ -1668,6 +1668,20 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   protocolo del wire**, con cuatro implementadores.
 ### Cola de H2 (la SD), anotada al cerrarlo el 8-ago
 
+- **`H2-P5` (exFAT / «superfloppy») — CERRADO el 21-ago con una PRUEBA, no con una
+  suposición.** Tarjeta reformateada a exFAT en el PC y metida en la Metro:
+  ```
+  [ 7809] sd: no hay FAT32 en la particion (exFAT? reformatea a FAT32)
+  ```
+  ✅ **El resultado es el bueno**: exFAT no está soportado —se sabía— pero el firmware
+  **lo detecta y lo dice con la salida incluida**, en vez de callarse o montar basura.
+  Y ya estaba documentado en los dos idiomas (`referencia.html` §SD y su gemelo inglés):
+  *«Formatea las tarjetas en FAT32… exFAT todavía no está soportado»*. Nada que arreglar.
+  📌 **Y de regalo, el pin de detección quedó probado en sus TRES casos**, que no era el
+  objetivo de la prueba: `tarjeta RETIRADA — /sd desmontado` al sacarla,
+  `zocalo VACIO (pin de deteccion) — no se monta` al arrancar sin ella, y detección **en
+  caliente** al meterla (leyó la tarjeta a los 7,8 s del arranque). Los tres correctos.
+
 - ~~`H2-P4`~~ — las seis operaciones que nunca se habían ejecutado.
   ✅ **CERRADA el 15-ago, VERIFICADA EN PLACA (P4) en los DOS volúmenes**:
   littlefs 10 ok + «mtime no soportado» · SD (FatFs) **11 ok con la fecha real**.
