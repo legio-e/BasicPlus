@@ -84,6 +84,28 @@ Gratis, mecánico y encuentra regresiones sin gastar un flasheo.
 
 ---
 
+
+## ⚠️ IMÁGENES PENDIENTES DE REHACER (21-ago) — antes de probar en esas placas
+
+El arreglo de `#414` (los builtins de packs estaban dentro de `#ifdef BPVM_GUI`,
+commit `494d7bba`) cambia `src/builtins.c`, que es **común a las cinco imágenes**.
+
+| imagen | estado |
+|---|---|
+| **Pico / Metro** (`bpvm_pico.uf2`) | ✅ **REHECHA y resellada** el 21-ago (602.112 B) |
+| **ESP32-S3** (`bpvm_esp32_merged.bin`) | ❌ **pendiente** — comprobado con `nm`: 0 referencias a `bpvm_pack_iter` |
+| **STM32 Nucleo** (`bpvm_stm32_nucleo.bin`) | ❌ **pendiente** — sin GUI, se presume igual |
+| **ESP32-P4** (`bpvm_esp32p4_merged.bin`) | ✅ sana (tiene GUI; verificado en su objeto) |
+| **STM32 DK2** (`bpvm_stm32_dk2.bin`) | ✅ se presume sana (tiene GUI) |
+
+📌 **Criterio de Eduardo (21-ago)**: se rehace **sólo la Pico** ahora, y las demás
+**antes de probar en su placa**. *«Así si aparecen más errores, nos ahorramos
+reconstruir las imágenes cada vez.»* Las tres sanas/pendientes se rehacen en una
+sola tanda al final, con lo que haya salido para entonces.
+
+⚠️ Mientras estén pendientes, **el S3 y el Nucleo de `dist/firmware/` NO valen para
+probar packs**: darían el fallo ya diagnosticado, no uno nuevo.
+
 ## Puerta 1 — el ABI nuevo, en placa. NO NEGOCIABLE
 
 Lo único que no se puede comprobar en el PC. Una placa por familia, y basta con un
