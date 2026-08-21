@@ -99,6 +99,20 @@ pack en **XIP**, la arena de 2 MB que reserva el ENV, y la escritura en la SD.
 y por el DAO generado — que es lo que separa un ORM de una inyección de SQL— y el
 `delete` repetido devolviendo `false` en vez de reventar.
 
+
+**Puerta 3 — cola de `#439` en la Metro: ✅ PASA (21-ago).**
+`CuelgaLog` → `kill` → `reset` → al arrancar, `log: RAM SUPERVIVIENTE (lineas de
+ANTES del reset)`. El log post-mortem sobrevive tambien en RP2350, no solo en el P4.
+⚠️ **Alcance exacto**: se probo el **reset por wire**, que se implementa con watchdog
+(`causa del reset = WATCHDOG`). El **boton fisico** (pin de RUN) es otro camino y NO
+se ha probado. Si se quiere cerrar del todo, repetir pulsando el boton.
+📌 De la misma traza salen tres confirmaciones que no se buscaban:
+- `GC por TABLA de handles: 4033/4096 slots` — el segundo eje de presion del `#430`
+  disparando por NUMERO de handles y no por volumen. Es el caso que motivo la ficha.
+- `RUN finished: terminado por KILL` — el `kill` corta limpio.
+- `fin de RUN: la memoria vuelve a su sitio (0 bloques sin liberar)` — el guardian
+  del `#339` dando el visto bueno.
+
 ## Puerta 0 — en el PC, antes de tocar una placa
 
 Gratis, mecánico y encuentra regresiones sin gastar un flasheo.
