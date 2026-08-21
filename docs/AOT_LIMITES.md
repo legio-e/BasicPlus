@@ -109,3 +109,69 @@ así que el mensaje se enriquece donde sí se sabe.
 **Si añades un recorte nuevo**: lánzalo como `UnsupportedAotException` con un
 mensaje que diga *qué* no se puede y *qué alternativa* hay. El contexto de
 función y línea se pone solo.
+
+---
+
+## 🔬 EL CENSO: cuánto le falta al AOT para tragar CUALQUIER código BP
+
+> Medido el 21-ago, a pregunta de Eduardo. **Este apartado existe porque el resto del
+> documento subestima**: nombra cinco límites, y son los cinco que alguien se encontró de
+> frente y escribió. La cobertura real la define lo que el emisor tiene implementado, no
+> una lista de excepciones — y por eso hay rechazos genéricos (`statement no soportado`,
+> `expression no soportada`, `TypeRef no soportado`) esperando a lo que no se contempló.
+
+**Método**: comparar los nodos de AST que `AotCEmitter` sabe emitir contra los que
+`Ast.java` define y un usuario puede escribir. **30 soportados frente a ~54.**
+
+### 🔴 La barrera de verdad, y NO es `double`: no hay `this`
+
+`ThisExpr`, `ClassDef`, `PropertyDef`, `GetterDef` y `SetterDef` tienen **cero menciones**
+en el emisor. La consecuencia es grande y conviene decirla entera:
+
+> **Un MÉTODO no puede ser `native`. Sólo las funciones sueltas de un módulo.**
+
+En un lenguaje donde todo desciende de `Object` y el código de usuario vive en clases, eso
+deja fuera a la mayoría del código BP que se escribe — **independientemente de qué tipos
+crucen la frontera**. Por eso `double` (que entra en V6) no es la barrera que más pesa:
+aunque cruzaran todos los tipos del mundo, seguiría sin poder marcarse `native` un método.
+
+### 🟡 Lo cotidiano que sorprende (y es barato)
+
+Comprobado ejecutando el compilador, no leyendo: `print "hola"` dentro de una `native`
+da `AOT: statement no soportado: PrintStmt`.
+
+| falta | nodo |
+|---|---|
+| **`print`** | `PrintStmt` |
+| **`null`** | `NullLitExpr` |
+| literales de array (`[1,2,3]`) | `ArrayLitExpr` |
+| **`do … loop`** | `DoLoopStmt` |
+| `for … in` sobre colecciones | `ForInRange` / `ForRange` |
+| desestructurar `{a, b} := t` | `DestructAssignStmt` |
+| tuplas | `TupleExpr`, `TupleTypeRef` |
+| `instanceof` | `InstanceOfExpr` |
+
+📌 Varias de estas son **azúcar y se emiten casi solas**: `do…loop` es un `while` al
+revés, `null` es un cero, `print` es una llamada al runtime que ya existe. Son las que
+mejor relación esfuerzo/cobertura tienen, y ninguna está en el documento de arriba.
+
+### 🟠 Lo profundo
+
+`EventDef` y `RaiseStmt` (eventos) · `ParallelStmt` · `MethodRefExpr` · `SuperCallExpr` ·
+`BoundCallExpr` (el `import X:Y`) · `EnumDef`. Aquí no es emitir C: es decidir qué
+significan esas construcciones cuando el que corre es código nativo y no la VM.
+
+### El resumen que contesta la pregunta
+
+| | |
+|---|---|
+| Límites documentados arriba | **5** |
+| Construcciones del lenguaje sin soporte, medidas | **~24** |
+| La que más pesa | **`this` → no hay métodos `native`** |
+| Las más baratas | `print`, `null`, `do…loop`, literales de array |
+| Ya con fecha | `double` → V6 · fundir `.mdn` en `.mod` → V6 |
+
+⏭️ **Y la conclusión de método**: mientras el emisor tenga rechazos genéricos, esta lista
+se queda rancia sola. Lo que la mantendría honesta es un **test que recorra los nodos del
+AST** y compruebe cuáles pasan por el AOT — el mismo censo de arriba, pero automático y
+corriendo en la batería.
