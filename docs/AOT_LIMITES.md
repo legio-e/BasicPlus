@@ -123,17 +123,43 @@ función y línea se pone solo.
 **Método**: comparar los nodos de AST que `AotCEmitter` sabe emitir contra los que
 `Ast.java` define y un usuario puede escribir. **30 soportados frente a ~54.**
 
-### 🔴 La barrera de verdad, y NO es `double`: no hay `this`
+### 🔴 La barrera de verdad: el barrido NO DESCIENDE a las clases
 
-`ThisExpr`, `ClassDef`, `PropertyDef`, `GetterDef` y `SetterDef` tienen **cero menciones**
-en el emisor. La consecuencia es grande y conviene decirla entera:
+⚠️ **Corregido el 21-ago.** Este apartado decía *«no hay `this`, así que un método no
+puede ser native»*, y estaba **mal razonado**. Lo corrigió Eduardo en el momento: *«me
+parece una limitación tonta, teniendo en cuenta que `miObjeto.miMetodo(...)` en realidad
+internamente es `miMetodo(miObjeto, ...)`»*. Tiene razón — `this` es el primer parámetro,
+no un obstáculo semántico. Y el emisor **ya sabe emitir `MemberAccessExpr`**, que es lo
+que `this.n` necesita.
 
-> **Un MÉTODO no puede ser `native`. Sólo las funciones sueltas de un módulo.**
+**Lo que pasa de verdad, medido**: el pre-pass que recolecta las `native` recorre sólo el
+primer nivel del módulo (`AotCEmitter.java:259`):
 
-En un lenguaje donde todo desciende de `Object` y el código de usuario vive en clases, eso
-deja fuera a la mayoría del código BP que se escribe — **independientemente de qué tipos
-crucen la frontera**. Por eso `double` (que entra en V6) no es la barrera que más pesa:
-aunque cruzaran todos los tipos del mundo, seguiría sin poder marcarse `native` un método.
+```java
+for (Ast.ITopLevelDecl d : module.defs) {
+    if (d instanceof Ast.FuncDef) { ... }      // un ClassDef no entra aquí
+}
+```
+
+Un `ClassDef` no es un `FuncDef`, así que **ni se abre**. Los métodos no se rechazan: no
+se miran.
+
+**🐛 Y eso tiene una consecuencia que es un bug por sí sola: falla en SILENCIO.**
+Comprobado con una clase con `public native function doble(): integer` que devuelve
+`this.n * 2`:
+- el compilador **no da ningún error**;
+- `AotMain` responde *«módulo AotMet no tiene funciones `native` — sin emisión»*;
+- y el método **corre interpretado** mientras el programador cree que va a velocidad AOT.
+
+Es exactamente el desfase mudo que el proyecto persigue en otros cinco sitios (el gate del
+`.mod`, `magic`/`version` de la BIOS, el sello del `.npk`, la marca del punto de
+encuentro, el aviso de `/lib` rancio). ⏭️ **Que `native` en un método AVISE no espera a
+V6**: es barato y convierte una mentira silenciosa en una línea de aviso.
+
+⏭️ **Y el trabajo de fondo, que ahora se ve más pequeño de lo que parecía**: abrir ese
+bucle a los métodos de las clases y pasar el objeto como primer parámetro — que es lo que
+ya ocurre por debajo. Hay que medir qué se rompe, pero la pieza que se creía ausente
+(`this`) resulta que ya está cubierta por `MemberAccessExpr`.
 
 ### 🟡 Lo cotidiano que sorprende (y es barato)
 
@@ -167,7 +193,7 @@ significan esas construcciones cuando el que corre es código nativo y no la VM.
 |---|---|
 | Límites documentados arriba | **5** |
 | Construcciones del lenguaje sin soporte, medidas | **~24** |
-| La que más pesa | **`this` → no hay métodos `native`** |
+| La que más pesa | **el barrido no desciende a las clases** — y encima falla en silencio |
 | Las más baratas | `print`, `null`, `do…loop`, literales de array |
 | Ya con fecha | `double` → V6 · fundir `.mdn` en `.mod` → V6 |
 

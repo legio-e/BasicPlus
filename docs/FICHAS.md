@@ -1480,6 +1480,28 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 
 ### AOT / native
 
+- **🐛 [AOT] `native` en un MÉTODO se ignora en SILENCIO** — encontrado el 21-ago, y lo
+  destapó Eduardo dudando de un diagnóstico mío: *«¿ningún método de clase puede ser
+  native? Me parece una limitación tonta, teniendo en cuenta que `miObjeto.miMetodo(...)`
+  en realidad internamente es `miMetodo(miObjeto, ...)`»*. Tenía razón.
+  📐 **La causa, en una línea** (`AotCEmitter.java:259`): el pre-pass que recolecta las
+  `native` recorre `module.defs` y sólo mira los `Ast.FuncDef`. **Un `ClassDef` no entra**,
+  así que los métodos ni se abren. No se rechazan: no se miran.
+  🩸 **Y por eso el fallo es MUDO, que es lo grave.** Probado con una clase con
+  `public native function doble(): integer` devolviendo `this.n * 2`: el compilador no da
+  error, `AotMain` dice *«no tiene funciones `native` — sin emisión»*, y el método corre
+  **interpretado** mientras el programador cree que va a velocidad AOT. Pedir velocidad y
+  que te la nieguen sin avisar.
+  ⏭️ **Dos trabajos, y el primero NO espera a V6**: (a) que `native` en un método **avise**
+  — es el mismo criterio de «que el desfase grite» que el proyecto ya aplica en el gate del
+  `.mod`, el `magic` de la BIOS, el sello del `.npk`, la marca del punto de encuentro y el
+  aviso de `/lib` rancio; (b) abrir el barrido a los métodos, pasando el objeto como primer
+  parámetro — que es lo que ya ocurre por debajo.
+  📌 **Y una corrección de un diagnóstico mío**, para que no se herede el error: escribí que
+  la barrera era *«no hay `this`»*. Falso. El emisor **ya sabe emitir `MemberAccessExpr`**,
+  que es lo que `this.n` necesita. La barrera era el barrido, no la semántica — y eso hace
+  el trabajo bastante más pequeño de lo que yo había dicho.
+
 - ~~`#440`~~ — ✅ **CERRADA el 17-ago, VERIFICADA EN EL P4** (`9d41562`).
   El `.mdn` de RISC-V direccionaba sus datos en **absoluto** → se colgaba toda
   `native` que tocara un literal. Enlazar a `-Ttext=0` deja relativos los SALTOS,
