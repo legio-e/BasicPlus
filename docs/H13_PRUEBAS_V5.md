@@ -78,7 +78,7 @@ que se prueba lleva la MISMA configuración que la placa. Hoy no la lleva.
 menos que el censo compare los builtins compilados de cada imagen.
 
 
-**Metro (RP2350B) — Puerta 1 y el bloque de BD de la Puerta 2, CERRADOS.**
+**Metro (RP2350B) — Puertas 1 y 2 CERRADAS** (salvo GUI, que esta placa no tiene).
 Misma imagen que la Pico; la variante (48 GPIO, 8 ADC, 16 MB flash, 8 MB PSRAM) la
 detecta el arranque. Todas las comparaciones son contra la salida del host.
 
@@ -90,6 +90,8 @@ detecta el arranque. Todas las comparaciones son contra la salida del host.
 | `DaoDemo` (ORM a mano) | ✅ **25/25 sin ni una diferencia** |
 | `GenDemo` (ORM generado por `@BD`) | ✅ **10/10 sin ni una diferencia** |
 | SD | ✅ monta sola: `sd: montada en /sd (particion en el bloque 2048)` |
+| `SdDoc` (la API de ficheros, FS interno) | ✅ **5/5 idénticas** — los ejemplos de `TARJETA_SD.md` hacen lo que dicen |
+| `SdCard` (la TARJETA, sobre `/sd`) | ✅ **los seis**: escribir/leer, añadir, truncar, bytes crudos, 32.000 B en 500 trozos, y releerlo |
 | streaming `#294` | ✅ `SQLite.pack` (1,13 MB) subido sin incidencias |
 
 📌 **Lo que vale de verdad del `SqlDemo`**: con UNA ejecución quedan probados el
