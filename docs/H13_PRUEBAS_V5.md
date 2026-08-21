@@ -56,6 +56,27 @@ puertas, no por placas — así cada día termina con algo cerrado:
 
 ---
 
+
+## ✅ RESULTADOS — día 1 (21-ago)
+
+**Pico (RP2350) — CERRADA.** Imagen `bpvm_pico.uf2` rehecha con el arreglo de `#414`.
+- `ListGets` → **21 líneas idénticas** a miVM y a la VM-C de host. Puerta 1 pasada
+  para la familia RP2350: el ABI nuevo de `Comparable` va bien en placa.
+- `PacksDemo` con `Stdlib.pack` grabado → **32 líneas idénticas** al host.
+- 🩸 **Bug `#414` encontrado en placa y arreglado** (`494d7bba`): los cuatro builtins
+  de packs vivían dentro de `#ifdef BPVM_GUI`. Nunca habían funcionado en una placa
+  sin pantalla. Ver la tabla de imágenes pendientes, arriba.
+- 🩸 **`PacksDemo.bp` no compilaba** — `List.get()` devuelve `Object` desde `#389`.
+  Arreglado con los captadores tipados.
+
+📌 **Y un hallazgo de MÉTODO, que vale más que los dos bugs:** la cascada
+Java→C→placa no podía cazar el `#414` porque **la VM-C de host se construye CON
+GUI y los firmwares sin pantalla no**. El doble era más permisivo que el original.
+*«Lo que no funciona en C tampoco funcionará en la Pico»* sólo se sostiene si el C
+que se prueba lleva la MISMA configuración que la placa. Hoy no la lleva.
+⏭️ Para V6: que la batería de host corra también en la configuración sin GUI, o al
+menos que el censo compare los builtins compilados de cada imagen.
+
 ## Puerta 0 — en el PC, antes de tocar una placa
 
 Gratis, mecánico y encuentra regresiones sin gastar un flasheo.
@@ -166,13 +187,39 @@ Dicho explícitamente, para que sea una decisión y no un olvido:
 
 ## Decisiones pendientes ANTES de publicar
 
-1. ✅ **El `.npk` de ARM, RESUELTO el 20-ago.** Eduardo: *«se trata de verificar,
-   tiene que funcionar»*. Regenerado desde sus fuentes (464.127 → 464.399 B), así que el
-   binario ya se corresponde con el código. **Lo que queda no es decidir, es probar**:
-   ese binario no se ha ejecutado nunca, y es lo que hace obligatoria la Metro en la
-   Puerta 2.
+1. ✅✅ **El `.npk` de ARM: RESUELTO DEL TODO el 21-ago — ya no es «nunca ejecutado».**
+   Regenerado desde sus fuentes el 20-ago (464.127 → 464.399 B) y **ejecutado en la
+   Metro el 21-ago**: `SqlDemo` dio **25 de 25 líneas idénticas** al host (única
+   diferencia, la ruta: `/sd/medidas.db` frente al `medidas.db` del PC, que la imprime
+   el propio programa). Antes de grabarlo se verificó que los bytes del `.npk`
+   regenerado están **completos dentro de `SQLite.pack`** (ARM en el offset 176,
+   RISC-V en el 464.624). Con una sola ejecución quedan probados a la vez: el nativo
+   nuevo, SQLite corriendo desde un pack en XIP, la arena de 2 MB que reserva el ENV,
+   y la escritura en la tarjeta SD.
 2. 🟡 **El manual inglés se dejó siete secciones de V4** (eventos, sobrecarga,
    `dospasadas`). No es regresión de V5, pero conviene no publicar creyendo que está
    completo.
-3. 🟡 **Los cuatro samples que no compilan** en la batería (`MemInfo`, `synclisttest`,
-   `TupleFirstClass` y uno más). Vienen de antes; hay que mirar si son fósiles o bugs.
+3. ✅ **Los samples que no compilaban: RESUELTO el 21-ago, y eran más de cuatro.**
+   El censo de los **277 `.bp` que viajan en el ZIP** (la batería sólo cubre ~70) dio
+   18 fallos. Triados: **6 rotos de verdad**, todos por el mismo motivo —`List.get()`
+   devuelve `Object` desde `#389` y el downcast ahora hay que pedirlo—, arreglados y
+   verificados con paridad dual-VM (`PacksDemo`, `AnyNumGc`, `n5_popblocking`,
+   `ownerlistremove`, `stdtest`, `synclisttest`); **8 eran artefacto del censo** (los
+   del grupo BD, que se construyen con su `.bpbuild`); y quedan **2 por decidir**, que
+   NO son erratas (ver punto 4).
+4. 🔴 **DECISIÓN DE EDUARDO PENDIENTE — `List` ya no admite arrays ni tuplas.**
+   `MemInfo` hace `l.add(x)` con un `byte[]` y `TupleFirstClass` con una tupla
+   `(integer, string)`. Con `any` cabían; con `Object` como raíz (`#389`) **no son
+   `Object`** y el compilador los rechaza. No es un sample roto: es una capacidad del
+   lenguaje que V5 quitó sin decirlo. Opciones: (a) que arrays y tuplas desciendan de
+   `Object`, (b) dejarlo y documentarlo como limitación en `PENDIENTES.md`, (c) algo
+   intermedio. **No se toca sin decidir**, y no se publica sin que esté decidido.
+5. 🟡 **La instrucción de ACTUALIZAR de V4 no existe, y hace falta.** Al arrancar con
+   un `/lib` de otra versión, la placa lo dice bien (`/lib/Core.mod NO es el de esta
+   imagen (2576 B en FS, 12999 embebido)`) y el programa muere con `exit 11`. Pero
+   `RELEASES.md` sólo tiene el «Qué implica al actualizar» de **v3.0.1**, que dice
+   *«nada más que hacer»* — y para V5 eso es falso. Se ha perdido dos veces la ocasión
+   de medir el arreglo MÍNIMO (en la Pico se reparticionó, en la Metro se formateó):
+   ⏭️ **queda pendiente aprovechar el S3 o el Nucleo**, que llegarán con su `/lib`
+   rancio, para comprobar si basta con borrar `/lib` (el firmware lleva la stdlib
+   embebida) o hace falta más.
