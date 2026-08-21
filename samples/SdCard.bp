@@ -1,0 +1,119 @@
+// SdCard.bp — la TARJETA de verdad: escribir, leer, anadir y un fichero grande.
+//
+// Por que no vale `SdDoc.bp` para esto: aquel usa un directorio relativo, asi
+// que en placa escribe en el FS interno y no toca la tarjeta. Este apunta a
+// `/sd` a proposito.
+//
+// Y por eso mismo NO se compara con el PC: alli `/sd` no existe. En su lugar el
+// programa comprueba SUS PROPIOS invariantes y dicta veredicto — cada linea dice
+// lo que esperaba y lo que encontro, y al final sale OK o FALLO. Un test que se
+// mira a si mismo, como `synclisttest`.
+module SdCard
+  import IO
+
+  function Main()
+    var dir: string := "/sd/bptest"
+    var mal: integer := 0
+
+    IO.mkdir(dir)
+
+    // --- 1. escribir y leer ------------------------------------------------
+    var cfg: string := IO.pathJoin(dir, "config.txt")
+    writeFile(cfg, "intervalo=60")
+    var leido: string := readFile(cfg)
+    if leido == "intervalo=60" then
+      print "1 escribir/leer  OK"
+    else
+      print "1 escribir/leer  FALLO: leyo '" + leido + "'"
+      mal += 1
+    endif
+
+    // --- 2. anadir ---------------------------------------------------------
+    var csv: string := IO.pathJoin(dir, "medidas.csv")
+    writeFile(csv, "hora;valor\n")
+    appendFile(csv, "12:00;21.5\n")
+    appendFile(csv, "12:01;21.7\n")
+    var n: integer := IO.fileSize(csv)
+    if n == 33 then
+      print "2 anadir         OK (33 bytes)"
+    else
+      print "2 anadir         FALLO: " + n + " bytes, esperaba 33"
+      mal += 1
+    endif
+
+    // --- 3. writeFile TRUNCA ------------------------------------------------
+    writeFile(csv, "XY")
+    n := IO.fileSize(csv)
+    if n == 2 then
+      print "3 truncar        OK"
+    else
+      print "3 truncar        FALLO: " + n + " bytes, esperaba 2"
+      mal += 1
+    endif
+
+    // --- 4. bytes crudos ----------------------------------------------------
+    var bin: string := IO.pathJoin(dir, "datos.bin")
+    var b: byte[] := newByteArray(4)
+    b[0] := 1
+    b[1] := 2
+    b[2] := 3
+    b[3] := 250
+    writeFileBytes(bin, b)
+    var vuelta: byte[] := readFileBytes(bin)
+    var cuenta: integer := 0
+    var suma: integer := 0
+    for x in vuelta do
+      cuenta += 1
+      suma += x
+    next x
+    if cuenta == 4 and suma == 256 then
+      print "4 bytes crudos   OK (4 bytes, suma 256)"
+    else
+      print "4 bytes crudos   FALLO: " + cuenta + " bytes, suma " + suma
+      mal += 1
+    endif
+
+    // --- 5. un fichero GRANDE ----------------------------------------------
+    // 500 lineas de 64 bytes = 32.000. Lo interesante no es el tamano sino que
+    // se escriba a trozos y el total cuadre: si la tarjeta pierde un bloque por
+    // el camino, aqui se ve y en un fichero de 12 bytes no.
+    var gordo: string := IO.pathJoin(dir, "gordo.txt")
+    var linea: string := "0123456789012345678901234567890123456789012345678901234567890123"
+    writeFile(gordo, "")
+    var i: integer := 0
+    while i < 500 do
+      appendFile(gordo, linea)
+      i += 1
+    endwh
+    n := IO.fileSize(gordo)
+    if n == 32000 then
+      print "5 fichero grande OK (32.000 bytes en 500 trozos)"
+    else
+      print "5 fichero grande FALLO: " + n + " bytes, esperaba 32000"
+      mal += 1
+    endif
+
+    // y releerlo entero, que escribir no es leer
+    var todo: string := readFile(gordo)
+    if len(todo) == 32000 then
+      print "6 releer grande  OK"
+    else
+      print "6 releer grande  FALLO: leyo " + len(todo) + ", esperaba 32000"
+      mal += 1
+    endif
+
+    // --- limpieza -----------------------------------------------------------
+    IO.removeFile(cfg)
+    IO.removeFile(csv)
+    IO.removeFile(bin)
+    IO.removeFile(gordo)
+    IO.rmdir(dir)
+
+    if mal == 0 then
+      print "SD OK — los seis"
+    else
+      print "SD FALLO — " + mal + " de 6"
+    endif
+  end Main
+
+end SdCard
