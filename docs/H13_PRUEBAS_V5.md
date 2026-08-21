@@ -270,3 +270,11 @@ Dicho explícitamente, para que sea una decisión y no un olvido:
    ⏭️ **queda pendiente aprovechar el S3 o el Nucleo**, que llegarán con su `/lib`
    rancio, para comprobar si basta con borrar `/lib` (el firmware lleva la stdlib
    embebida) o hace falta más.
+
+6. 🔴 **`appv1lsp.bp` y `appv2.bp` viajan en el ZIP y NO compilan** (encontrado el
+   21-ago, fichado en `FICHAS.md` → «la sustitución por LSP entre interfaces de módulo
+   NO funciona»). **No es regresión de V5**: es el subsistema de interfaces de módulo,
+   y apunta al mismo sitio que el bug ya aparcado de la pasada `INTERFACE_ONLY`.
+   **Tres salidas, hay que elegir una antes de publicar**: (a) arreglarlo, (b) sacar los
+   dos samples de la distribución, (c) moverlos a `samples/errores/` con una nota de que
+   hoy no funciona. Publicar dos ejemplos rotos no es una de ellas.

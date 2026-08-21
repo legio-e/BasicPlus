@@ -1012,6 +1012,37 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Lenguaje y VM
 
+- **🐛 [compilador] la sustitución por LSP entre interfaces de módulo NO funciona** —
+  encontrado el 21-ago censando los 277 `.bp` del ZIP. **Dos samples publicados que no
+  compilan**, y no por V5: nada que ver con `any`→`Object`.
+  📐 **El caso**, que el propio sample explica en su cabecera: `appv1lsp.bp` importa
+  `com.example.LogApi:BufferedLogger`; `BufferedLogger` declara
+  `implements com.example.LogApiV2`; y `logapiv2.bp` dice
+  `module interface LogApiV2 extends com.example.LogApi`. Transitivamente lo cumple, y
+  el comentario del código lo da por bueno:
+  *«El impl puede implementar la interfaz pedida directamente o cualquier descendiente
+  de ella (subinterfaz)»* (`Main.java:1958`). Pero el compilador lo rechaza:
+  ```
+  error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o
+  transitivamente; declara com.example.LogApiV2)
+  ```
+  Y `appv2.bp` cae por lo mismo visto del otro lado: *«el módulo importado 'LogApiV2'
+  no expone 'log' / 'level' / 'VERSION'»* — que son los miembros que HEREDA de `LogApi`.
+  🔍 **Hasta dónde llegué (21-ago)**: el algoritmo de `implSatisfies`
+  (`Main.java:1357`) es correcto en forma —sube `implements` → `extends` hasta dar con
+  la pedida— así que falla el dato, no la lógica. Y el dato falta porque **una
+  `module interface` pura no genera `.mod`**: compilado el conjunto como proyecto, sale
+  `com.example.BufferedLogger.mod` y **no** `com.example.LogApiV2.mod`. Sin artefacto,
+  la cadena sólo puede recorrerse recompilando la interfaz desde el fuente en modo
+  `INTERFACE_ONLY`… que es **la pasada con el bug ya aparcado** («la pasada
+  interfaz-only tira firmas»). Muy probablemente son el mismo problema visto dos veces.
+  📌 **Por qué no se arregló al encontrarlo**: code freeze, y esto **no es regresión de
+  V5** — es del subsistema de interfaces de módulo, que es delicado. Se ficha y lo
+  decide Eduardo.
+  ⚠️ **Mientras tanto**: `appv1lsp.bp` y `appv2.bp` viajan en el ZIP y no compilan. O se
+  arregla, o se sacan de la distribución, o se mueven a `samples/errores/` con una nota
+  de que hoy no va. **No se publica sin elegir una de las tres.**
+
 - ~~(sin número)~~ — ✅ **CERRADA el 18-ago** (`compat` 37 PASS): **`SyncList` ya está
   en `Collections`**, que es donde Eduardo la quería. Con esto el reparto que pidió
   queda completo: `List` en `Core` (tipo básico, y el `Map` la usa), `SyncList` y
