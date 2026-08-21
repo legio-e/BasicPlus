@@ -105,6 +105,13 @@ y por el DAO generado — que es lo que separa un ORM de una inyección de SQL�
 `.npk`: el IDE **genera** un `.mdn` de ARM para esta placa (`1 thunk, 64 B nativo`),
 lo sube y la VM lo ejecuta. La de SQLite es nativo *precompilado y empaquetado*; ésta
 es nativo *generado al vuelo*. Las dos quedan verificadas en la Metro el 21-ago.
+📌 **El arreglo de los blobs de `IO`/`Math`, VERIFICADO en placa el 21-ago.** Tras
+reflashear con la imagen corregida, el arranque preinstala `Math.mod (2320 bytes)` e
+`IO.mod (2401 bytes)` —los tamaños nuevos— y **no queda ni una línea de `NO es el de
+esta imagen`**. La placa y la distribución dicen por fin lo mismo.
+📌 **Y el ancla se demostró sola**: al cambiar la imagen se movió de `0x10058B6C` a
+`0x10058ABC`, y el log dice *«la busqueda la encuentra, y es LA misma»*. Es justo para
+esto que se diseñó buscándola en vez de clavar la dirección.
 
 
 **Puerta 3 — cola de `#439` en la Metro: ✅ PASA (21-ago).**
