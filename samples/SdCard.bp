@@ -15,6 +15,19 @@ module SdCard
     var dir: string := "/sd/bptest"
     var mal: integer := 0
 
+    // LO PRIMERO: que /sd exista. Sin esta guarda el programa NO falla — hace
+    // algo peor. La fachada de ficheros enruta por el prefijo mas largo y deja
+    // la RAIZ de respaldo, asi que con la tarjeta fuera (o en exFAT) "/sd/..."
+    // cae en silencio al FS interno: escribirias 32.000 bytes en la flash de la
+    // placa creyendo que van a la tarjeta. Comprobado el 21-ago, y de la peor
+    // manera: sin esta guarda el test parecia COLGARSE.
+    if not IO.isDirectory("/sd") then
+      print "SD NO MONTADA — no hay nada que probar."
+      print "  causas tipicas: sin tarjeta, o formateada en exFAT (hace falta FAT32)."
+      print "  el arranque de la placa lo dice: 'sd: montada en /sd' o el motivo."
+      return
+    endif
+
     IO.mkdir(dir)
 
     // --- 1. escribir y leer ------------------------------------------------
@@ -84,6 +97,11 @@ module SdCard
     while i < 500 do
       appendFile(gordo, linea)
       i += 1
+      // Señales de vida: 500 escrituras sobre una tarjeta lenta tardan, y un
+      // programa mudo que tarda es indistinguible de uno colgado.
+      if i mod 100 == 0 then
+        print "   ... " + i + "/500"
+      endif
     endwh
     n := IO.fileSize(gordo)
     if n == 32000 then
