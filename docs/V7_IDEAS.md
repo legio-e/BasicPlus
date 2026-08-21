@@ -179,3 +179,68 @@ pasa a ser **la diferencia entre depurar tu programa y no poder**.
 depura, y hasta hace poco tampoco se sabía dónde falló. Mientras sea un rincón para `fib`,
 da igual. El hito de V6 lo convierte en territorio, y entonces cada uno de estos cabos
 pasa de curiosidad a requisito.
+
+---
+
+## El lazo de LVGL, y por qué es la MISMA enfermedad que el AOT (Eduardo, 21-ago)
+
+> *«El bucle principal de LVGL, una vez que entramos en él como que no hay manera de
+> salir. Creo que debemos crear nuestro propio bucle, que haga todo lo que hace el de
+> LVGL pero que nosotros podamos interrumpir, parar, suspender y reanudar a voluntad. De
+> esa manera el stop de la línea de comandos debería funcionar, pero si hay más de un
+> Thread, que los otros hilos puedan trabajar correctamente.»*
+
+### La mitad que YA está hecha (y conviene saberlo antes de rehacerla)
+
+**No entramos en el lazo de LVGL: ya tenemos el nuestro.** `BUILTIN_GUI_RUN`
+(`builtins.c:921`) drena eventos, polea el wire y llama a `bpvm_gui_lvgl_pump()` **una
+iteración cada vez**. LVGL no manda: se le pide una vuelta.
+
+Y el `stop` **ya funciona**, por `#257`, con el porqué escrito en el propio código:
+
+> *«KILL durante `Gui.run()`: el scheduler no corre quanta mientras este builtin bombea,
+> así que poleamos el wire aquí mismo (el MISMO `poll_cb` que el scheduler usa entre
+> quanta). Al romper caemos al push+return → el quantum termina → el scheduler ve
+> `kill_requested` y devuelve `BPVM_KILLED` (parada limpia entre opcodes).»*
+
+### La mitad que NO está, y está nombrada en esa misma frase
+
+**«El scheduler no corre quanta mientras este builtin bombea.»** Ése es exactamente el
+segundo requisito de Eduardo, y hoy no se cumple: con la GUI viva, **los demás hilos BP
+no avanzan**. El `poll_cb` se metió para poder ABORTAR, no para REPARTIR.
+
+📌 **Y ahí está la lección que vale para los dos casos**: polear el wire dentro de un lazo
+resuelve *parar*; **no resuelve *compartir***. Son dos problemas distintos con la misma
+apariencia, y el arreglo de uno no da el otro gratis.
+
+### Por qué es la misma enfermedad que el AOT
+
+| | `Gui.run()` | thunk AOT |
+|---|---|---|
+| ¿se puede abortar? | ✅ sí, `poll_cb` en cada vuelta (`#257`) | ❌ no hay dónde preguntar |
+| ¿corren otros hilos? | ❌ no | ❌ no |
+| forma del problema | un builtin que no vuelve | una función que no vuelve |
+
+Las dos son **código que se queda con la CPU y deja al planificador sin sitio donde
+entrar**. Y el remedio de fondo es el mismo en los dos: que el lazo **ceda al
+planificador**, no sólo que pregunte si debe morir.
+
+### Qué habría que hacer, tal como se ve hoy
+
+⏭️ Que la vuelta del lazo de la GUI **corra quanta de los demás hilos** entre bombeo y
+bombeo, en vez de sólo preguntar por el KILL. La pieza existe —el scheduler ya sabe correr
+un quantum— y el lazo ya está en nuestras manos; lo que falta es llamarlo desde ahí.
+⚠️ **La trampa a medir antes**: LVGL no es reentrante, y hoy hay un comentario que lo dice
+(*«el pump (hilo del `lv_timer_handler`) para no reentrar LVGL»*). Si un quantum de otro
+hilo ejecuta código BP que toca la GUI, se reentra por la puerta de atrás. O sea que
+repartir el tiempo exige decidir **qué pueden hacer los otros hilos mientras la GUI vive**
+— y eso es diseño, no una llamada más.
+
+📌 **Emparenta directamente con `#434`** (desacoplar los eventos del lazo de LVGL), que ya
+está en V6: quien toque uno va a estar mirando el otro. Conviene abrirlos juntos.
+
+🔴 **Y la prioridad, en palabras de Eduardo**: de todos los cabos, *«quizás el más
+importante sea que al menos podamos detener un bucle, porque si no eso se puede convertir
+en un bucle infinito y el usuario lo va a traducir en un cuelgue»*. Con razón: un cuelgue
+no se distingue de una avería, y en la GUI ya está resuelto — **el que queda descubierto
+es el AOT**.
