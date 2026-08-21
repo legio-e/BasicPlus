@@ -77,6 +77,28 @@ que se prueba lleva la MISMA configuración que la placa. Hoy no la lleva.
 ⏭️ Para V6: que la batería de host corra también en la configuración sin GUI, o al
 menos que el censo compare los builtins compilados de cada imagen.
 
+
+**Metro (RP2350B) — Puerta 1 y el bloque de BD de la Puerta 2, CERRADOS.**
+Misma imagen que la Pico; la variante (48 GPIO, 8 ADC, 16 MB flash, 8 MB PSRAM) la
+detecta el arranque. Todas las comparaciones son contra la salida del host.
+
+| prueba | resultado |
+|---|---|
+| `ListGets` (el ABI de `Comparable`) | ✅ **21/21 idénticas** |
+| `PacksDemo` (packs en placa) | ✅ lista los packs y su contenido |
+| `SqlDemo` (SQLite) | ✅ **25/25**, única diferencia la ruta `/sd/medidas.db` |
+| `DaoDemo` (ORM a mano) | ✅ **25/25 sin ni una diferencia** |
+| `GenDemo` (ORM generado por `@BD`) | ✅ **10/10 sin ni una diferencia** |
+| SD | ✅ monta sola: `sd: montada en /sd (particion en el bloque 2048)` |
+| streaming `#294` | ✅ `SQLite.pack` (1,13 MB) subido sin incidencias |
+
+📌 **Lo que vale de verdad del `SqlDemo`**: con UNA ejecución quedan probados el
+`.npk` de ARM regenerado (que nunca se había ejecutado), SQLite corriendo desde un
+pack en **XIP**, la arena de 2 MB que reserva el ENV, y la escritura en la SD.
+📌 **Y del `DaoDemo`/`GenDemo`**: el apóstrofo de `O'Brien` escapado por el `Where`
+y por el DAO generado — que es lo que separa un ORM de una inyección de SQL— y el
+`delete` repetido devolviendo `false` en vez de reventar.
+
 ## Puerta 0 — en el PC, antes de tocar una placa
 
 Gratis, mecánico y encuentra regresiones sin gastar un flasheo.
