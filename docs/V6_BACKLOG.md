@@ -109,6 +109,8 @@ montar dar error en vez de desviar? **Sin decidir.**
 ## H · Fuera de versión (V6+)
 
 - **Linux**: el IDE en Linux + la Raspberry Pi como PLACA. Marcado `[SIN VERSIÓN, V6+]`.
+- **V7 — LVGL a un pack, y el diseño del código nativo empotrable**: cuántos caben, cómo
+  publican su API y si hablan entre ellos. Encargo de Eduardo (21-ago) → **`docs/V7_IDEAS.md`**.
 
 ---
 
