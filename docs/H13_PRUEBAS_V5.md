@@ -173,10 +173,12 @@ compilando `builtins.c` con `-DBPVM_GUI` antes y después del arreglo sale un ob
 
 📌 Las cinco entradas de `SHA256SUMS.txt` verifican. **Ya se puede flashear cualquiera
 de las cinco placas sin más preparación.**
-⚠️ La única deuda: la Pico/Metro se probó con la imagen ANTERIOR al arreglo de los
-blobs. Los resultados valen (los tests usaron el `/lib` que sube el IDE, idéntico al
-blob nuevo), pero conviene **repetir `SdCard` en la Metro** con la imagen final para
-que el «se prueba lo que se publica» quede sin asterisco.
+✅ **Sin deuda: `SdCard` repetido en la Metro con la imagen FINAL** (602.112 B, la
+de `dist/firmware/`, con el `#414` y los blobs de `IO`/`Math` dentro). Los seis en
+verde. Lo que se ha probado es, bit a bit, lo que se va a publicar.
+📌 Y de paso queda **exonerado por la prueba** —no por argumento— el susto del final
+de la sesión: el cuelgue no era el `#414` ni los blobs. Con esa misma imagen la placa
+corre con normalidad; era el estado persistente que se fichó aparte.
 
 ## Puerta 1 — el ABI nuevo, en placa. NO NEGOCIABLE
 
