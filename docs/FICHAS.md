@@ -879,6 +879,16 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   timeout» y «se pierde» son dos fallos distintos y desde fuera se ven igual.
 - `#408` — medir **los dos cuellos** que se ven comparando P4 y Metro (árbol en la
   P4 / formateo en la Metro).
+- **`#408` — la mitad de la METRO, MEDIDA el 21-ago: el formateo son ~15 s**, y es el
+  de la **zona de packs** (4,2 MB en esta placa) → unos **280 KB/s de borrado de
+  flash**, que para un RP2350 es lo esperable. 📌 Anotado como *explicado*, no como
+  pendiente: nadie tiene que perseguirlo pensando que es un fallo. Borrar 4,2 MB cuesta
+  eso. La otra mitad de la ficha —el árbol en la P4— sigue sin medir.
+  🔎 **Y de camino salió esto**: `save` responde «FS guardado en flash» y nada más, pero
+  el firmware **sí se cronometra** y manda `durationMs` en el `SAVE_REPLY`
+  (`pico/repl_v1.c:929-943`). **El dato viaja por el wire y el IDE lo descarta.**
+  Enseñarlo no cuesta nada y es exactamente la medida que esta ficha pedía. No es un
+  bug, así que con el freeze va a V6 → ver «Aplazadas».
 - ~~`#415`~~ — ✅ **CERRADA el 17-ago y VERIFICADA EN LA METRO**: `/lib` pasó de
   14 a 16 módulos, con `Math.mod` (2410 B) e `IO.mod` (2491 B) preinstalados y
   con el tamaño correcto. **La stdlib BASE ya es la misma en las tres.**
@@ -2044,6 +2054,17 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 *(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
 se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
+
+
+- **[IDE] enseñar el `durationMs` que la placa YA manda** *(salido el 21-ago midiendo
+  `#408`; aplazado a V6 porque es mejora, no bug — code freeze)*.
+  📐 **El hecho**: `SAVE` se cronometra en el firmware y devuelve `durationMs` en el
+  `SAVE_REPLY` (`pico/repl_v1.c:929-943`). El IDE responde «FS guardado en flash» y
+  **tira el número**. O sea que la medida que pedía `#408` ya existe, ya viaja por el
+  wire, y sólo falta imprimirla.
+  ⏭️ Lo barato: que la consola diga «FS guardado en flash (1.234 ms)». Y de paso mirar
+  qué otros verbos ya devuelven tiempos que nadie enseña — si `SAVE` lo hacía sin que
+  lo supiéramos, puede haber más.
 
 - **[IDE+device] NO copiar dependencias que el dispositivo YA TIENE — y que lo diga él**
   *(idea de Eduardo, 20-ago. Aplazada a V6: es mejora, no bug.)*
