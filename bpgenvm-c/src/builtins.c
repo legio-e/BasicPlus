@@ -1046,6 +1046,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
+#endif  /* BPVM_GUI — los packs NO son de la GUI: se cierra aqui a proposito */
+
     /* ── #414 — los packs GRABADOS, recorridos desde BP ───────────────────────
      *
      * Sin zona montada no es un error: es «ya estás al final». Eso hace que un
@@ -1103,6 +1105,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
+
+#ifdef BPVM_GUI   /* se reanuda el bloque de GUI, cortado por los packs */
     case BUILTIN_GUI_INVOKE_BY_NAME: {
         /* H13 — Forms: resuelve `name` como función pública del módulo de `host`
          * (la ventana) y la invoca con `sender` como arg0. Args: host, name, sender.

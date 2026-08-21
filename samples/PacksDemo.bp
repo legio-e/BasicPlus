@@ -21,14 +21,14 @@ module PacksDemo
 
     var i: integer := 0
     while i < l.length() do
-      var nombre: string := l.get(i)
+      var nombre: string := l.getString(i)
       print "- " + nombre
 
       // Todo lo que lleva dentro (extensión vacía = sin filtro).
       var f: List := Packs.listIn(nombre, "")
       var j: integer := 0
       while j < f.length() do
-        print "    " + f.get(j)
+        print "    " + f.getString(j)
         j := j + 1
       endwh
 
