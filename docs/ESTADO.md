@@ -27,6 +27,52 @@
 
 ## Última sesión
 
+### 21-ago — H13 día 1: Pico y Metro CERRADAS, y cinco bugs que sólo salieron ejecutando
+
+**Dos placas completas** (Puertas 1, 2 y 3), todo comparado contra la salida del host:
+`ListGets` 21/21 en las dos variantes de RP2350 · `SqlDemo` 25/25 · `DaoDemo` 25/25 ·
+`GenDemo` 10/10 · `PacksDemo` 32/32 · `SdDoc` 5/5 · `SdCard` los seis · `Bench` 105×.
+
+**Y con eso quedan probadas las DOS cadenas de nativo**, que son independientes: el
+`.npk` de ARM *precompilado y empaquetado* (SQLite, que nunca se había ejecutado) y el
+`.mdn` *generado al vuelo* por el IDE para esta placa (`Bench`).
+
+**Cinco bugs, y ninguno se veía leyendo código:**
+- 🩸 **`#414`**: los cuatro builtins de packs vivían dentro de un `#ifdef BPVM_GUI`.
+  Nacieron así, en el propio commit de la feature: **nunca habían funcionado en una
+  placa sin pantalla**. Lo destapó `Packs.list()` muriendo en la Pico.
+- 🩸 **Los blobs de `IO` y `Math` de la Pico, rancios desde el 17-ago**: `#415` los
+  añadió al FIRMWARE y nadie los dio de alta en el GENERADOR. Lo cantó la placa
+  (`/lib/IO.mod NO es el de esta imagen`) y lo preguntó Eduardo. Sólo afectaba a la
+  Pico: el S3 y el STM32 sí los listaban.
+- 🩸 **Ocho samples del ZIP que no compilaban** desde el cambio `any`→`Object`.
+- 🩸 Un `test1.pack` de pruebas viajando en la distribución, y el README de `packs/`
+  todavía en V4 (decía 26 módulos; son 27).
+
+**El censo que lo destapó**: la batería cubre ~70 samples y en el ZIP viajan **278**.
+Compilados los 278: 8 arreglados, 8 artefacto del arnés, 2 con bug real.
+
+**🧠 Y la lección de método, que vale más que los bugs:** la cascada Java→C→placa **no
+podía** cazar el `#414`, porque la VM-C de host se construye **con GUI** y los firmwares
+sin pantalla no. El doble era más permisivo que el original. *«Lo que no funciona en C
+tampoco en la Pico»* sólo se sostiene si el C que se prueba lleva la MISMA configuración.
+
+**Dos cosas fichadas SIN resolver** (las dos con diagnóstico, ninguna con parche):
+- La **sustitución por LSP entre interfaces de módulo** no funciona → `appv1lsp.bp` y
+  `appv2.bp` viajan rotos en el ZIP. No es regresión de V5.
+- Un **estado persistente deja la placa sin ejecutar NADA** —ni el `Hello` embebido—,
+  sobrevive al flasheo, no lo cura formatear, y **sólo lo cura reparticionar**. Sin
+  causa. Lo que falta medir está escrito en la ficha.
+
+**Imágenes**: las cinco al día. El P4 y la DK2 **exentas por demostración** —compilar
+`builtins.c` con `-DBPVM_GUI` antes y después del arreglo da un objeto byte a byte
+idéntico—, así que sólo hubo que rehacer Pico, S3 y Nucleo.
+
+**⏭️ MAÑANA: P4 y STM32**, flasheables directos desde `dist/firmware/`. El Nucleo
+llegará con `/lib` rancio: es la ocasión —perdida ya dos veces— de medir cuál es el
+arreglo MÍNIMO al actualizar de V4, que es la decisión 5 y hoy no existe en la
+documentación. Las seis decisiones abiertas están numeradas en `H13_PRUEBAS_V5.md`.
+
 ### 20-ago (tarde) — H12 CERRADO, el bilingüe al día, y la tanda de construcción
 
 **`H12` cerrado con sus ocho puntos.** Y lo caro no fue escribir: fue lo que escribir
