@@ -668,6 +668,31 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Placas y hardware
 
+- **🐛🔴 [placa] un estado persistente deja la Metro SIN PODER EJECUTAR NADA, y sólo lo
+  cura REPARTICIONAR** — visto el 21-ago al final de la sesión de H13. **Sin causa
+  identificada**; se ficha con la cronología porque el rodeo no es evidente y a un
+  usuario le puede pasar.
+  📐 **El síntoma**: no corre **ningún** programa. Ni los de la sesión, ni el
+  `/app/Hello.mod` que preinstala el propio firmware —que no usa strings, ni builtins,
+  ni un solo `import`—. Se cuelga mudo, sin línea de error.
+  🔍 **Lo que DESCARTA el firmware, y es el dato que más vale**: se volvió a flashear la
+  imagen del 20-ago —la misma que esa mañana había corrido `ListGets`, `SqlDemo`,
+  `DaoDemo`, `GenDemo`, `SdDoc`, `SdCard` y `Bench` sin una queja— **y tampoco
+  funcionaba**. Con lo cual lo roto sobrevive al flasheo: es FS, ENV o zona de packs.
+  ⚠️ **Y formatear NO bastó.** Se formateó (FS + zona de packs) y siguió igual. Lo único
+  que lo curó fue **cambiar el tamaño de la partición**, que fuerza a rehacer el reparto
+  entero. Es la SEGUNDA vez en el mismo día que reparticionar arregla algo.
+  📋 **Cronología, por si la pista está aquí** (todo entre «funcionaba» y «no
+  funciona»): formatear FS+packs → regrabar `SQLite.pack` (1,13 MB por streaming) →
+  reformatear la SD a exFAT → reiniciar → reformatear la SD a FAT32 → flashear imagen
+  nueva → flashear la de ayer.
+  🔬 **LO QUE FALTA MEDIR, y no se capturó**: el log **durante el intento de ejecución**.
+  Si sale la línea `RUN/v1 /app/X.mod session=N` el programa llega a lanzarse y se
+  atasca dentro; si no sale, no llega ni a arrancar. Eso parte el problema en dos y sin
+  ello sólo se puede especular. **Si vuelve a pasar, lo PRIMERO es ese log.**
+  ⏭️ Sospechoso natural para empezar: qué toca un cambio de tamaño de partición que un
+  formateo NO toca. Ahí está la diferencia entre lo que curó y lo que no.
+
 - ~~(sin número)~~ — ✅ **PASADA (15-ago). La prueba que dice si el bus es SANO**: MB de patrón conocido,
   ida y vuelta, al reloj objetivo. Cola de H6. ⚠️ Lo importante: un bus marginal
   **no falla en el `mount`**, y debajo de SQLite **corrompe la base en silencio**.
