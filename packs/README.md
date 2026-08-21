@@ -6,7 +6,8 @@ placa (o en el micro simulado) desde el panel de Packs.
 
 | Pack | Qué trae | Se construye con |
 |---|---|---|
-| `Stdlib.pack` | La librería estándar completa (26 módulos: Str, Collections, Json, IO, Math, Gui, Net, y los de hardware) | `bpstdlib/Stdlib.bpbuild` |
+| `Stdlib.pack` | La librería estándar completa (27 módulos: Str, Collections, Json, IO, Math, Gui, Net, y los de hardware) | `bpstdlib/Stdlib.bpbuild` |
+| `SQLite.pack` | El motor SQLite y su ORM: los módulos `SQLite` y `Orm`, más el código nativo precompilado (`.npk` + `.mdn`) para **ARM y RISC-V** | `bpstdlib/sqlite/SQLite.bpbuild` |
 
 ## Cómo se reconstruye
 
