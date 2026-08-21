@@ -287,3 +287,59 @@ hecho y probado. Una cola de tareas que lleve referencias entra por el mismo sit
 aquí lo natural sería una referencia a método o un objeto con un método conocido —y ahí
 entra `MethodRefExpr`, que hoy tampoco soporta el AOT (ver el censo de `AOT_LIMITES.md`).
 Otra vez la misma pieza asomando por dos sitios distintos.
+
+### 💡💡 «Comandos» como solución intermedia (Eduardo, 21-ago)
+
+> *«Encolar métodos diferentes con diferentes parámetros es difícil. Como solución
+> intermedia podemos utilizar "comandos": tienen una interfaz definida, se pueden
+> activar/desactivar, y si los hacemos asíncronos se podrían encolar.»*
+
+**Resuelve exactamente la parte difícil.** En vez de encolar `(método, parámetros)`
+heterogéneos —que obliga a marshallar firmas distintas—, se encolan **objetos de un tipo
+conocido que llevan sus parámetros dentro**. El despacho pasa a ser **una sola llamada
+virtual**, que es algo que la VM ya hace en cada método.
+
+📌 **Y Swing hizo literalmente esto.** Encima de los listeners crudos añadió
+`javax.swing.Action`: un comando con `setEnabled(boolean)`. El «activar/desactivar» de
+Eduardo es el mismo que Swing acabó necesitando, por el mismo motivo — un botón y una
+entrada de menú que hacen lo mismo comparten el comando, y se habilitan a la vez.
+
+#### La forma que encaja HOY, sin tocar el lenguaje
+
+⚠️ **BP no tiene interfaces de clase ni clases abstractas**: la gramática las lista como
+*«IDEAS para v3 (no en el lenguaje)»*. Las `module interface` son de módulo, no de clase.
+
+✅ **Pero la vía de la clase base funciona, y hay precedente en la propia stdlib**:
+`Core.Comparable` es una base cuyos métodos lanzan por defecto y se sobrescriben en los
+cinco envoltorios (`toInteger`, `toLong`, `toDouble`, `toBoolean`, `toString`, añadidos el
+20-ago). Un `Command` con `ejecutar()` y `habilitado` es la misma forma exacta.
+
+```basic
+class Command
+  public property habilitado: boolean
+  public function ejecutar()        // la base lanza; cada comando la sobrescribe
+end Command
+```
+
+#### ⚠️ El aviso que sale de la experiencia de ayer, y no es menor
+
+**Meter una clase base nueva en la stdlib es un EVENTO DE ABI.** El 20-ago, añadir cinco
+métodos a `Comparable` **corrió las ranuras de su vtable** y con ellas las de todo lo que
+la extiende: `DaoDemo` y `GenDemo` compilaban y **fallaban en ejecución** hasta reconstruir
+la librería de SQLite contra el `Core` nuevo. Y en placa el desfase sobrevive a lo que
+tengas grabado.
+
+⏭️ **Consecuencia práctica**: si entra un `Command`, que entre **completo de una vez** —con
+los métodos y propiedades que se le prevean— y no creciendo de uno en uno. Cada método
+añadido después es otra corrida de ranuras y otra tanda de reconstrucciones.
+
+#### Lo que queda por decidir
+
+- **¿La base lanza o no hace nada?** `Comparable` lanza, y para conversiones es correcto
+  (fallar es informativo). Para un comando, un `ejecutar()` que no hace nada puede ser un
+  fallo mudo; conviene que lance.
+- **Qué pasa con la cola llena.** Ya apuntado arriba: descartar un clic se defiende;
+  descartar un comando, no.
+- **Y una pregunta de alcance**: ¿el comando es sólo para la GUI, o es el mecanismo general
+  de *«ejecutar esto en aquel hilo»*? Si es lo segundo, deja de ser una pieza de la GUI y
+  pasa a ser del lenguaje — que es más potente, y también más caro de equivocarse.
