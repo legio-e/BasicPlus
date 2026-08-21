@@ -244,3 +244,46 @@ importante sea que al menos podamos detener un bucle, porque si no eso se puede 
 en un bucle infinito y el usuario lo va a traducir en un cuelgue»*. Con razón: un cuelgue
 no se distingue de una avería, y en la GUI ya está resuelto — **el que queda descubierto
 es el AOT**.
+
+### 💡 El modelo de Swing: `invokeLater`, y por qué encaja (Eduardo, 21-ago)
+
+> *«Si no recuerdo mal, en el Swing de Java tienen un "ejecutar más adelante"… utilizan
+> una cola de mensajes donde se pueden acumular tareas que se despachan cuando el Swing
+> tiene tiempo.»*
+
+**Y media pieza ya está construida.** La cola de eventos de la GUI (`gui.c:1096-1112`) es
+un anillo `(objptr, kind)` con `ev_push` de un lado y `bpvm_gui_next_event` del otro, que
+**drena `Gui.run()` en cada vuelta**. Esa es exactamente la forma del EDT: un hilo de UI
+que vacía una cola cuando tiene tiempo.
+
+**Lo que falta es la otra dirección**, que es justo lo que aporta `invokeLater`:
+
+| | hoy | lo que añadiría Swing |
+|---|---|---|
+| sentido | eventos que **entran** (un clic → `onClick`) | trabajo que **cualquier hilo encola** para el hilo de la UI |
+| quién produce | el backend (LVGL/SDL) | cualquier hilo BP |
+| qué se encola | `(objptr, kind)` | una tarea: algo que ejecutar |
+
+🔑 **Y con eso el problema de reentrada se disuelve, en vez de resolverse.** Antes había
+que decidir *«qué pueden hacer los otros hilos mientras la GUI vive»*, que es diseño
+delicado porque LVGL no es reentrante. Con el modelo de Swing la regla cabe en una línea:
+**los otros hilos pueden hacer todo menos tocar la GUI; para eso, encolan.** Un hilo sólo
+toca LVGL: el que bombea.
+
+### Dos detalles concretos, sacados de la cola que ya existe
+
+⚠️ **1. La cola de hoy DESCARTA cuando se llena**: *«cola llena: descarta (como `offer()`
+de miVM)»*. Para eventos de interfaz es defendible —un clic perdido con la cola a tope es
+mejor que bloquear el backend—. **Para tareas de `invokeLater` NO lo es**: perder trabajo
+en silencio es un bug, no una política. Si se generaliza la cola, ese comportamiento hay
+que decidirlo aparte para cada uso.
+
+✅ **2. La parte difícil ya está resuelta, y conviene saberlo**: `bpvm_gui_visit_roots`
+(`gui.c:1114`) ya enumera **los eventos pendientes en la cola como raíces del GC**, bajo
+stop-the-world. O sea que el patrón *«lo encolado mantiene vivo lo que referencia»* está
+hecho y probado. Una cola de tareas que lleve referencias entra por el mismo sitio.
+
+⏭️ **Lo que quedaría por decidir**: qué es «una tarea» en BP. Swing encola un `Runnable`;
+aquí lo natural sería una referencia a método o un objeto con un método conocido —y ahí
+entra `MethodRefExpr`, que hoy tampoco soporta el AOT (ver el censo de `AOT_LIMITES.md`).
+Otra vez la misma pieza asomando por dos sitios distintos.
