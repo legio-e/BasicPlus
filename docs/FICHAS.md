@@ -2166,95 +2166,10 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   placa y sin binario especial, y de paso el simulador ganaria en fidelidad.
   📌 Mientras tanto, `docs/BASEDATOS.md` tiene que DECIR que hoy la prueba es en placa.
 
-- **[lenguaje] `List` con captadores TIPADOS** — encargo de Eduardo (19-ago):
-  *«en List añadir métodos `getInteger(indice)`, `getLong(indice)`, `getFloat(indice)`,
-  `getDouble(indice)` y `getString(indice)`»*.
-  🩸 **De dónde sale, y por eso no es azúcar cosmético**: desde `#389` `List.get()`
-  devuelve `Object`, así que todo uso tipado necesita un downcast explícito. El coste ya
-  se pagó el 19-ago — `Json.bp` llevaba días sin compilar y el arreglo fueron **8 casts,
-  los 8 el mismo patrón**: `JsonValue(this.items.get(i))`. Con captadores tipados eso se
-  escribe una vez, dentro de `List`, en vez de en cada sitio que la use.
-  📌 **Encaja con lo que ya hay**: los envoltorios (`Integer`, `Long`, `Double`, `Float`,
-  `Boolean`) se mudaron a `Core` con `#446`, y `add` ya está sobrecargado por tipo. Esto
-  es la simetría que falta — se puede meter por tipo pero no sacar por tipo.
-  📐 **La semántica la decidió Eduardo (19-ago) y NO es un cast**: *«si no es del tipo
-  pedido hay que hacer conversiones. Los envoltorios ya deberían tener las conversiones.
-  Y si hay una conversión imposible se dispara un error.»* O sea que `getInteger(i)` no
-  exige que el elemento SEA un `Integer`: lo convierte, y sólo revienta si la conversión
-  es imposible. Devuelve el primitivo (`integer`), no el envoltorio.
-  🔴 **Y ahí está el trabajo de verdad: hoy los envoltorios NO tienen conversiones.**
-  Medido en `Core.bp` el 19-ago — `Integer`, `Long`, `Double`, `Float` y `Boolean` tienen
-  exactamente cuatro cosas cada uno: constructor desde SU primitivo, `value()`,
-  `compareTo(Object)` y `toString()`. Nada más. Así que esto son **dos fichas encadenadas**:
-  primero las conversiones en los envoltorios, después los captadores de `List`, que se
-  vuelven triviales encima.
-  📐 **Y la DIRECCIÓN importa (Eduardo, 19-ago)**: *«integer a string vale, así `"hola"+1`
-  se convierte en `"hola1"` sin problemas, pero string a integer no, eso hay que pedirlo
-  explícitamente con la función concreta.»* La asimetría no es capricho: hacia `string` la
-  conversión **no puede fallar** (todo tiene `toString`), y desde `string` **falla por el
-  CONTENIDO**, que es otra clase de cosa.
-  🔬 Comprobado el 19-ago, las dos mitades: `"hola" + 1` → `hola1` y `"pi=" + 3.5` →
-  `pi=3.5`; y la familia explícita ya existe — `Str.parseInt`, `parseLong`, `parseDouble`
-  y `parseHex`, **todas devolviendo `(boolean, valor)`**, o sea que ni siquiera lanzan:
-  obligan a mirar el `ok`.
-  ✅ **Con eso se cae la contradicción que se había anotado**: `string`→número NO entra en
-  los captadores, así que no hay dos contratos compitiendo. Queda repartido y limpio:
-  - `getString(i)` — **siempre funciona**, porque todo sabe volverse cadena.
-  - `getInteger/getLong/getFloat/getDouble(i)` — convierten **entre numéricos**; si el
-    elemento es una cadena, **NO se parsea**: eso se pide con `Str.parse*`.
-  - lo imposible lanza, que es lo que Eduardo pidió.
-  ✅ **`getBoolean` ENTRA** (Eduardo, 19-ago: *«añade getBoolean, no hay problema»*), y
-  con él la conversión booleano→numérico: **`False` = 0, `True` = 1**.
-  📐 **De dónde viene la idea, y el matiz que la recorta.** Eduardo la trajo por su
-  parecido con `ord()`, *«que también sirve para los elementos de un enumerador y para la
-  conversión de char»*. `Ord` es de **Pascal** (en Java es `? 1 : 0`), y eso juega a
-  favor: está definido justo para esos tres casos, así que es buen modelo. **Pero en BP
-  sólo quedan DOS de los tres**: `char` **no existe como tipo** —no está en la gramática
-  y los caracteres ya SON enteros (`sb.appendChar(44)`)—, o sea que esa pata sobra aquí.
-  🔬 **Y el tercero tampoco funciona hoy**, comprobado el 19-ago: `var i: integer := c`
-  con `c` de un enum da *«valor de tipo 'Color' no asignable a variable de tipo
-  'integer'»*, aunque la gramática los respalda con enteros
-  (`enum_value ::= name [':=' INTEGER_LIT]`). O sea que **de un enum no se puede sacar su
-  número**, y eso es un agujero por sí solo — emparenta con `M6` de `PENDIENTES`
-  (`const C := Color.RED` tampoco vale). Hacia `string` sí van los dos, coherente con la
-  regla de dirección.
-  ⏭️ **Recomendación al abrirlo: NO un `ord()` nuevo.** Con dos casos no compensa gastar
-  una palabra reservada —criterio de Eduardo: *«si ya hay algo especial, el azúcar cuelga
-  de ahí»*—. Lo natural es que salga de las conversiones que ya se van a escribir:
-  `Integer(b)` e `Integer(color)`, y los captadores encima.
-  ✅ **`double`→`integer` TRUNCA** (Eduardo, 19-ago): *«debe truncar, si se quiere
-  redondear que llame a la función para redondear que para eso está»*.
-  🔬 Y esa función existe — comprobado: **no está en `Math`, son builtins globales**:
-  `round` (id 33, *half-up*), `floor` (31) y `ceil` (32), con `abs`, `sqrt` y `pow` al
-  lado. `Math.bp` sólo tiene trigonometría y logaritmos, así que buscarlo ahí despista.
-  ⚠️ **Hay que decir HACIA DÓNDE trunca, y no es un detalle**: truncar es *hacia cero*
-  (`-2,7` → `-2`), mientras que `floor` da `-3`. Coinciden en positivos y discrepan en
-  negativos, que es justo donde nadie mira. Y **ningún builtin trunca hoy**: `floor` vale
-  para positivos y `ceil` para negativos, o sea que el comportamiento de los captadores
-  es NUEVO y tiene que quedar escrito en su documentación, con el caso negativo de
-  ejemplo.
-  ✅ **`long`→`integer` que no cabe: EXCEPCIÓN** (Eduardo, 19-ago: *«pues claro, es una
-  exception, es puro sentido común»*). Coherente con `#385`: el recorte silencioso da un
-  número plausible y equivocado, que es el peor fallo posible.
-
-  ### El contrato, ya cerrado entero (19-ago)
-
-  | de \ a | `string` | numérico (`integer`/`long`/`float`/`double`) | `boolean` |
-  |---|---|---|---|
-  | numérico | implícito (`"x=" + 1`) | convierte; `double`→entero **trunca hacia cero**; si no cabe, **excepción** | — |
-  | `boolean` | implícito | `False`=0 · `True`=1 | directo |
-  | `string`  | directo | **NO** — se pide con `Str.parseInt/parseLong/parseDouble`, que devuelven `(ok, valor)` | **NO** |
-  | otro objeto | `toString()` | **excepción** | **excepción** |
-
-  📌 **Los métodos**: `getString`, `getInteger`, `getLong`, `getFloat`, `getDouble` y
-  `getBoolean`, todos por índice y devolviendo el **primitivo**.
-  📌 **Qué se lanza**: lo mismo que ya lanza un downcast fallido (`#444`), para no
-  inventar una segunda familia de errores que diga lo mismo.
-  📌 **La regla que lo explica todo en una frase**: hacia `string` es implícito porque no
-  puede fallar; desde `string` es explícito porque falla por el CONTENIDO; y entre
-  numéricos convierte, pero **perder información es un error, no un redondeo silencioso**.
-  📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
-  mirar si `Map` quiere lo mismo para sus valores.
+- **[lenguaje] ¿quiere `Map` captadores tipados para sus VALORES?** — cola de los
+  captadores de `List`, que se hicieron en V5 (ver «CERRADAS EN V5»). `SyncList` y
+  `OwnerList` los heredan gratis por extender `Core.List`; `Map` no, y su caso es
+  distinto porque la clave también podría quererlos. **Sin decidir.**
 
 - **[wire] el verbo `RESET` no llega con un RUN vivo** *(era `#452`; aplazada a V6 el 18-ago. Eduardo: «ahora sabemos apañarnos y a los usuarios no les afecta» — el rodeo es `kill` + `reset`, y está documentado cara al usuario en `PENDIENTES.md` L15.)*
   Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
@@ -2687,6 +2602,105 @@ arquitecturas**, ARM y RISC-V, no en una.)*
 Con esto **H11 quedó desbloqueado** (era la ficha que lo trababa) y el 15-ago
 **cerró entero**: `#414` y `#365` cerradas con commit, `#411` en su parte de
 packs, y `PACK_CALL` (#383) cancelada.
+
+
+### ~~[lenguaje] `List` con captadores TIPADOS~~ — ✅ CERRADA EN V5 (`20-ago`, adelantada desde V6)
+
+Eduardo la adelantó al ver que las demos de BD no funcionaban: *«las demos han de
+funcionar, no vamos a hacer como en C que por sistema las demos nunca funcionan»*.
+Entraron `getInteger`, `getLong`, `getDouble`, `getBoolean` y `getString`, con las
+conversiones puestas en los cinco envoltorios. **El enunciado y las decisiones de
+diseño se conservan enteros abajo, porque la cola de `Map` sigue abierta.**
+
+- **[lenguaje] `List` con captadores TIPADOS** — encargo de Eduardo (19-ago):
+  *«en List añadir métodos `getInteger(indice)`, `getLong(indice)`, `getFloat(indice)`,
+  `getDouble(indice)` y `getString(indice)`»*.
+  🩸 **De dónde sale, y por eso no es azúcar cosmético**: desde `#389` `List.get()`
+  devuelve `Object`, así que todo uso tipado necesita un downcast explícito. El coste ya
+  se pagó el 19-ago — `Json.bp` llevaba días sin compilar y el arreglo fueron **8 casts,
+  los 8 el mismo patrón**: `JsonValue(this.items.get(i))`. Con captadores tipados eso se
+  escribe una vez, dentro de `List`, en vez de en cada sitio que la use.
+  📌 **Encaja con lo que ya hay**: los envoltorios (`Integer`, `Long`, `Double`, `Float`,
+  `Boolean`) se mudaron a `Core` con `#446`, y `add` ya está sobrecargado por tipo. Esto
+  es la simetría que falta — se puede meter por tipo pero no sacar por tipo.
+  📐 **La semántica la decidió Eduardo (19-ago) y NO es un cast**: *«si no es del tipo
+  pedido hay que hacer conversiones. Los envoltorios ya deberían tener las conversiones.
+  Y si hay una conversión imposible se dispara un error.»* O sea que `getInteger(i)` no
+  exige que el elemento SEA un `Integer`: lo convierte, y sólo revienta si la conversión
+  es imposible. Devuelve el primitivo (`integer`), no el envoltorio.
+  🔴 **Y ahí está el trabajo de verdad: hoy los envoltorios NO tienen conversiones.**
+  Medido en `Core.bp` el 19-ago — `Integer`, `Long`, `Double`, `Float` y `Boolean` tienen
+  exactamente cuatro cosas cada uno: constructor desde SU primitivo, `value()`,
+  `compareTo(Object)` y `toString()`. Nada más. Así que esto son **dos fichas encadenadas**:
+  primero las conversiones en los envoltorios, después los captadores de `List`, que se
+  vuelven triviales encima.
+  📐 **Y la DIRECCIÓN importa (Eduardo, 19-ago)**: *«integer a string vale, así `"hola"+1`
+  se convierte en `"hola1"` sin problemas, pero string a integer no, eso hay que pedirlo
+  explícitamente con la función concreta.»* La asimetría no es capricho: hacia `string` la
+  conversión **no puede fallar** (todo tiene `toString`), y desde `string` **falla por el
+  CONTENIDO**, que es otra clase de cosa.
+  🔬 Comprobado el 19-ago, las dos mitades: `"hola" + 1` → `hola1` y `"pi=" + 3.5` →
+  `pi=3.5`; y la familia explícita ya existe — `Str.parseInt`, `parseLong`, `parseDouble`
+  y `parseHex`, **todas devolviendo `(boolean, valor)`**, o sea que ni siquiera lanzan:
+  obligan a mirar el `ok`.
+  ✅ **Con eso se cae la contradicción que se había anotado**: `string`→número NO entra en
+  los captadores, así que no hay dos contratos compitiendo. Queda repartido y limpio:
+  - `getString(i)` — **siempre funciona**, porque todo sabe volverse cadena.
+  - `getInteger/getLong/getFloat/getDouble(i)` — convierten **entre numéricos**; si el
+    elemento es una cadena, **NO se parsea**: eso se pide con `Str.parse*`.
+  - lo imposible lanza, que es lo que Eduardo pidió.
+  ✅ **`getBoolean` ENTRA** (Eduardo, 19-ago: *«añade getBoolean, no hay problema»*), y
+  con él la conversión booleano→numérico: **`False` = 0, `True` = 1**.
+  📐 **De dónde viene la idea, y el matiz que la recorta.** Eduardo la trajo por su
+  parecido con `ord()`, *«que también sirve para los elementos de un enumerador y para la
+  conversión de char»*. `Ord` es de **Pascal** (en Java es `? 1 : 0`), y eso juega a
+  favor: está definido justo para esos tres casos, así que es buen modelo. **Pero en BP
+  sólo quedan DOS de los tres**: `char` **no existe como tipo** —no está en la gramática
+  y los caracteres ya SON enteros (`sb.appendChar(44)`)—, o sea que esa pata sobra aquí.
+  🔬 **Y el tercero tampoco funciona hoy**, comprobado el 19-ago: `var i: integer := c`
+  con `c` de un enum da *«valor de tipo 'Color' no asignable a variable de tipo
+  'integer'»*, aunque la gramática los respalda con enteros
+  (`enum_value ::= name [':=' INTEGER_LIT]`). O sea que **de un enum no se puede sacar su
+  número**, y eso es un agujero por sí solo — emparenta con `M6` de `PENDIENTES`
+  (`const C := Color.RED` tampoco vale). Hacia `string` sí van los dos, coherente con la
+  regla de dirección.
+  ⏭️ **Recomendación al abrirlo: NO un `ord()` nuevo.** Con dos casos no compensa gastar
+  una palabra reservada —criterio de Eduardo: *«si ya hay algo especial, el azúcar cuelga
+  de ahí»*—. Lo natural es que salga de las conversiones que ya se van a escribir:
+  `Integer(b)` e `Integer(color)`, y los captadores encima.
+  ✅ **`double`→`integer` TRUNCA** (Eduardo, 19-ago): *«debe truncar, si se quiere
+  redondear que llame a la función para redondear que para eso está»*.
+  🔬 Y esa función existe — comprobado: **no está en `Math`, son builtins globales**:
+  `round` (id 33, *half-up*), `floor` (31) y `ceil` (32), con `abs`, `sqrt` y `pow` al
+  lado. `Math.bp` sólo tiene trigonometría y logaritmos, así que buscarlo ahí despista.
+  ⚠️ **Hay que decir HACIA DÓNDE trunca, y no es un detalle**: truncar es *hacia cero*
+  (`-2,7` → `-2`), mientras que `floor` da `-3`. Coinciden en positivos y discrepan en
+  negativos, que es justo donde nadie mira. Y **ningún builtin trunca hoy**: `floor` vale
+  para positivos y `ceil` para negativos, o sea que el comportamiento de los captadores
+  es NUEVO y tiene que quedar escrito en su documentación, con el caso negativo de
+  ejemplo.
+  ✅ **`long`→`integer` que no cabe: EXCEPCIÓN** (Eduardo, 19-ago: *«pues claro, es una
+  exception, es puro sentido común»*). Coherente con `#385`: el recorte silencioso da un
+  número plausible y equivocado, que es el peor fallo posible.
+
+  ### El contrato, ya cerrado entero (19-ago)
+
+  | de \ a | `string` | numérico (`integer`/`long`/`float`/`double`) | `boolean` |
+  |---|---|---|---|
+  | numérico | implícito (`"x=" + 1`) | convierte; `double`→entero **trunca hacia cero**; si no cabe, **excepción** | — |
+  | `boolean` | implícito | `False`=0 · `True`=1 | directo |
+  | `string`  | directo | **NO** — se pide con `Str.parseInt/parseLong/parseDouble`, que devuelven `(ok, valor)` | **NO** |
+  | otro objeto | `toString()` | **excepción** | **excepción** |
+
+  📌 **Los métodos**: `getString`, `getInteger`, `getLong`, `getFloat`, `getDouble` y
+  `getBoolean`, todos por índice y devolviendo el **primitivo**.
+  📌 **Qué se lanza**: lo mismo que ya lanza un downcast fallido (`#444`), para no
+  inventar una segunda familia de errores que diga lo mismo.
+  📌 **La regla que lo explica todo en una frase**: hacia `string` es implícito porque no
+  puede fallar; desde `string` es explícito porque falla por el CONTENIDO; y entre
+  numéricos convierte, pero **perder información es un error, no un redondeo silencioso**.
+  📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
+  mirar si `Map` quiere lo mismo para sus valores.
 
 ### Hitos de V5 — la tabla
 
