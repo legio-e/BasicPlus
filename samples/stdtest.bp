@@ -32,7 +32,7 @@ module StdTest
 
     var i: integer := 0
     while i < personas.length() do
-      var p: Persona := personas.get(i)
+      var p: Persona := Persona(personas.get(i))
       print "  [" + intToString(i) + "] " + p.nombre + " (" + intToString(p.edad) + ")"
       i := i + 1
     endwh
@@ -42,7 +42,7 @@ module StdTest
     print "tras remove(1):"
     i := 0
     while i < personas.length() do
-      var p: Persona := personas.get(i)
+      var p: Persona := Persona(personas.get(i))
       print "  [" + intToString(i) + "] " + p.nombre
       i := i + 1
     endwh

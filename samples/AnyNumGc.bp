@@ -25,7 +25,7 @@ module AnyNumGc
       this.l.add(x)
     end put
     public function getInt(): integer
-      return this.l.get(0)
+      return this.l.getInteger(0)
     end getInt
   end Box
 

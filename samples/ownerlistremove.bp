@@ -18,7 +18,7 @@ module OwnerListRemove
     print "antes del remove:"
     var i: integer := 0
     while i < ol.length() do
-      var r: Recurso := ol.get(i)
+      var r: Recurso := Recurso(ol.get(i))
       print "  [" + intToString(i) + "] " + r.nombre
       i := i + 1
     endwh
@@ -38,7 +38,7 @@ module OwnerListRemove
     print "lista actual:"
     i := 0
     while i < ol.length() do
-      var r: Recurso := ol.get(i)
+      var r: Recurso := Recurso(ol.get(i))
       print "  [" + intToString(i) + "] " + r.nombre
       i := i + 1
     endwh
@@ -53,7 +53,7 @@ module OwnerListRemove
     print "lista actual:"
     i := 0
     while i < ol.length() do
-      var r: Recurso := ol.get(i)
+      var r: Recurso := Recurso(ol.get(i))
       print "  [" + intToString(i) + "] " + r.nombre
       i := i + 1
     endwh

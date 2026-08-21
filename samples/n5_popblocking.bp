@@ -58,7 +58,7 @@ module N5PopBlocking
     public function run()
       var i: integer := 0
       while i < this.iters do
-        var it: Item := this.bag.popBlocking()
+        var it: Item := Item(this.bag.popBlocking())
         this.got := this.got + 1
         this.sum := this.sum + it.n
         i := i + 1

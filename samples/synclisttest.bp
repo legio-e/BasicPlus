@@ -60,7 +60,7 @@ module SyncListTest
     public function run()
       var attempts: integer := 0
       while attempts < this.maxAttempts do
-        var it: Item := this.bag.pop()
+        var it: Item := Item(this.bag.pop())
         if it != null then
           this.consumed := this.consumed + 1
         endif
@@ -105,7 +105,7 @@ module SyncListTest
     var suma: integer := 0
     var i: integer := 0
     while i < total do
-      var it: Item := bag.get(i)
+      var it: Item := Item(bag.get(i))
       suma := suma + it.n
       i := i + 1
     endwh
