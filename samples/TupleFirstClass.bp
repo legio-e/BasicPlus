@@ -42,6 +42,18 @@ module TupleFC
     return t
   end passthrough
 
+  // El sustituto de "una tupla dentro de una List": una clase con dos
+  // propiedades. Cuesta cinco lineas y a cambio los campos tienen nombre.
+  class Par
+    public property numero: integer
+    public property texto: string
+
+    public function Par(n: integer, t: string)
+      this.numero := n
+      this.texto  := t
+    end Par
+  end Par
+
   function main()
     print fStoreVar()                       // hi/42
 
@@ -63,14 +75,23 @@ module TupleFC
     { p.x, p.y } := coords()
     print intToString(p.x + p.y)            // 30
 
-    // colecciones: meter una tupla y recuperarla (any -> tupla)
+    // COLECCIONES: una tupla NO entra en una List, y es a proposito.
+    //
+    // Hasta V4 colaba, porque `any` era asignable en los dos sentidos. Desde
+    // `#389` la raiz del modelo de objetos es `Object` y una tupla no lo es, asi
+    // que `lst.add(pair())` ya no compila. Decision de Eduardo (21-ago): se queda
+    // asi. La tupla es para DEVOLVER varios valores de una funcion, que es donde
+    // gana; para guardarlos, el lenguaje ya tiene dos formas mejores.
+    //
+    // Quien quiera una coleccion de pares, lo hace como aqui abajo: una clase con
+    // sus dos propiedades —que ademas les pone NOMBRE— o un `Map`.
     var lst: List := List()
-    lst.add(pair())
-    var t3: (integer, string) := lst.get(0)
     var n3: integer := 0
     var s3: string := ""
-    { n3, s3 } := t3
-    print s3 + intToString(n3)              // hi42
+    { n3, s3 } := pair()
+    lst.add(Par(n3, s3))
+    var q: Par := Par(lst.get(0))
+    print q.texto + intToString(q.numero)   // hi42
   end main
 
 end TupleFC

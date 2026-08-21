@@ -103,6 +103,48 @@
   declara `class SyncList` con solo `add`, la suya gana e incompleta; diagnosticar
   la incompatibilidad de firma sería útil.
 
+
+### Una tupla no entra en una colección (decidido el 21-ago)
+
+`lst.add(pair())` **no compila**. Hasta V4 colaba porque `any` era asignable en los
+dos sentidos; desde `#389` la raíz del modelo de objetos es `Object`, y una tupla no
+es un `Object`.
+
+**Es una decisión, no un olvido.** La tupla está para **devolver varios valores de
+una función**, que es donde gana:
+
+```basic
+{ n, s } := pair()          // esto sigue igual de bien
+```
+
+Para **guardar** pares hay dos formas mejores, y las dos le ponen nombre a los campos:
+
+```basic
+class Par                    // 1) una clase con sus dos propiedades
+  public property numero: integer
+  public property texto: string
+  public function Par(n: integer, t: string)
+    this.numero := n
+    this.texto  := t
+  end Par
+end Par
+
+lst.add(Par(42, "hi"))
+var p: Par := Par(lst.get(0))
+```
+
+```basic
+var m: Map := Map()          // 2) un Map, si lo que quieres es buscar por clave
+m.put("hi", 42)
+```
+
+El ejemplo `samples/TupleFirstClass.bp` lo enseña de las dos maneras.
+
+📌 **Lo mismo vale para los arrays**: un `byte[]` tampoco es un `Object`, así que
+`lst.add(newByteArray(n))` no compila. Se envuelve igual, en una clase de una sola
+propiedad — es lo que hace `samples/MemInfo.bp`, donde la lista sólo sirve de ancla
+contra el recolector.
+
 ## 🟢 Pulido (no urgente)
 
 *(El aviso del «pwm» y el truncado mudo del árbol se subieron a `docs/FICHAS.md`

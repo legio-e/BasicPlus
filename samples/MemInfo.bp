@@ -26,6 +26,19 @@ module MemInfo
 
   import Core
 
+  // Un envoltorio de UNA propiedad, y no está aquí por gusto: desde `#389` la
+  // raíz del modelo es `Object` y un `byte[]` NO lo es, así que un array ya no
+  // entra en una `List`. La lista aquí sólo hace de ancla contra el GC —da igual
+  // qué guarde mientras mantenga vivo el bloque—, con lo que envolverlo no
+  // cambia ni un byte de lo que este programa mide.
+  class Bloque
+    public property datos: byte[]
+
+    public function Bloque(d: byte[])
+      this.datos := d
+    end Bloque
+  end Bloque
+
   // El mayor bloque reservable, DESCENDIENDO desde un techo conocido.
   //
   // ⚠️ POR QUÉ NO SE BISECA, que sería lo natural. Porque bisecar MIDE MAL, y lo
@@ -62,7 +75,7 @@ module MemInfo
     var vueltas: integer := 0
     try
       while vueltas < 100000 do
-        lst.add(newByteArray(paso))
+        lst.add(Bloque(newByteArray(paso)))
         total := total + paso
         vueltas := vueltas + 1
       endwh

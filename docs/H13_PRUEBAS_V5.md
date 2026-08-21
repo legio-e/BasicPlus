@@ -245,13 +245,17 @@ Dicho explícitamente, para que sea una decisión y no un olvido:
    `ownerlistremove`, `stdtest`, `synclisttest`); **8 eran artefacto del censo** (los
    del grupo BD, que se construyen con su `.bpbuild`); y quedan **2 por decidir**, que
    NO son erratas (ver punto 4).
-4. 🔴 **DECISIÓN DE EDUARDO PENDIENTE — `List` ya no admite arrays ni tuplas.**
-   `MemInfo` hace `l.add(x)` con un `byte[]` y `TupleFirstClass` con una tupla
-   `(integer, string)`. Con `any` cabían; con `Object` como raíz (`#389`) **no son
-   `Object`** y el compilador los rechaza. No es un sample roto: es una capacidad del
-   lenguaje que V5 quitó sin decirlo. Opciones: (a) que arrays y tuplas desciendan de
-   `Object`, (b) dejarlo y documentarlo como limitación en `PENDIENTES.md`, (c) algo
-   intermedio. **No se toca sin decidir**, y no se publica sin que esté decidido.
+4. ✅ **`List` ya no admite arrays ni tuplas: DECIDIDO por Eduardo el 21-ago.**
+   *«No lista tuplas, pues vale. El que quiera pares de valores o se crea una clase
+   con 2 propiedades o utiliza Map.»* Se queda como está y se documenta.
+   - `TupleFirstClass` reescrito: la sección de colecciones ahora enseña **la clase
+     `Par`** en vez de meter la tupla, y sale lo mismo (`hi42`). Paridad dual-VM OK.
+   - `MemInfo` **sí se arregló**, porque su caso era otro: la `List` no guardaba
+     «pares de valores» sino bloques de `newByteArray` para que el GC no se los
+     llevara mientras mide. Con una clase envoltorio de una propiedad mide igual
+     (244 KB en trozos de 4 KB, verificado).
+   - Documentado en `PENDIENTES.md` → «Una tupla no entra en una colección», con
+     las dos alternativas escritas y la nota de que a los arrays les pasa igual.
 5. 🟡 **La instrucción de ACTUALIZAR de V4 no existe, y hace falta.** Al arrancar con
    un `/lib` de otra versión, la placa lo dice bien (`/lib/Core.mod NO es el de esta
    imagen (2576 B en FS, 12999 embebido)`) y el programa muere con `exit 11`. Pero
