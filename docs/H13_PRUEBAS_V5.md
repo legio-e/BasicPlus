@@ -156,26 +156,27 @@ Gratis, mecánico y encuentra regresiones sin gastar un flasheo.
 ---
 
 
-## ⚠️ IMÁGENES PENDIENTES DE REHACER (21-ago) — antes de probar en esas placas
+## ✅ IMÁGENES: TODAS AL DÍA (21-ago)
 
-El arreglo de `#414` (los builtins de packs estaban dentro de `#ifdef BPVM_GUI`,
-commit `494d7bba`) cambia `src/builtins.c`, que es **común a las cinco imágenes**.
+El arreglo de `#414` toca `src/builtins.c`, común a las cinco imágenes. Pero **sólo
+afecta a las que se compilan SIN `BPVM_GUI`**, y eso está *demostrado*, no supuesto:
+compilando `builtins.c` con `-DBPVM_GUI` antes y después del arreglo sale un objeto
+**byte a byte idéntico** — cerrar el `#ifdef` y reabrirlo es un no-op cuando está activo.
 
 | imagen | estado |
 |---|---|
-| **Pico / Metro** (`bpvm_pico.uf2`) | ✅ **REHECHA y resellada** el 21-ago (602.112 B) |
-| **ESP32-S3** (`bpvm_esp32_merged.bin`) | ❌ **pendiente** — comprobado con `nm`: 0 referencias a `bpvm_pack_iter` |
-| **STM32 Nucleo** (`bpvm_stm32_nucleo.bin`) | ❌ **pendiente** — sin GUI, se presume igual |
-| **ESP32-P4** (`bpvm_esp32p4_merged.bin`) | ✅ sana (tiene GUI; verificado en su objeto) |
-| **STM32 DK2** (`bpvm_stm32_dk2.bin`) | ✅ se presume sana (tiene GUI) |
+| **Pico / Metro** (`bpvm_pico.uf2`) | ✅ rehecha, resellada y **probada en placa**. Lleva además el arreglo de los blobs de `IO`/`Math` |
+| **ESP32-S3** (`bpvm_esp32_merged.bin`) | ✅ **rehecha el 21-ago** (502.144 → 504.224 B); 5 símbolos de packs verificados con `nm` |
+| **STM32 Nucleo** (`bpvm_stm32_nucleo.bin`) | ✅ **rehecha el 21-ago** (246.848 → 247.448 B); 5 símbolos verificados |
+| **ESP32-P4** (`bpvm_esp32p4_merged.bin`) | ✅ no necesita rehacerse — tiene GUI, el arreglo es no-op |
+| **STM32 DK2** (`bpvm_stm32_dk2.bin`) | ✅ no necesita rehacerse — tiene GUI (`BPVM_GUI` en su `.cproject`) |
 
-📌 **Criterio de Eduardo (21-ago)**: se rehace **sólo la Pico** ahora, y las demás
-**antes de probar en su placa**. *«Así si aparecen más errores, nos ahorramos
-reconstruir las imágenes cada vez.»* Las tres sanas/pendientes se rehacen en una
-sola tanda al final, con lo que haya salido para entonces.
-
-⚠️ Mientras estén pendientes, **el S3 y el Nucleo de `dist/firmware/` NO valen para
-probar packs**: darían el fallo ya diagnosticado, no uno nuevo.
+📌 Las cinco entradas de `SHA256SUMS.txt` verifican. **Ya se puede flashear cualquiera
+de las cinco placas sin más preparación.**
+⚠️ La única deuda: la Pico/Metro se probó con la imagen ANTERIOR al arreglo de los
+blobs. Los resultados valen (los tests usaron el `/lib` que sube el IDE, idéntico al
+blob nuevo), pero conviene **repetir `SdCard` en la Metro** con la imagen final para
+que el «se prueba lo que se publica» quede sin asterisco.
 
 ## Puerta 1 — el ABI nuevo, en placa. NO NEGOCIABLE
 
