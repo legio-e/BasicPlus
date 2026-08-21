@@ -18,7 +18,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 STDLIB="$(cd "$HERE/../../.." && pwd)/bpstdlib"
 PICODIR="$(cd "$HERE/.." && pwd)"
 
-MODS=(Core Gpio I2c Spi Uart Pulse Pwm Pico Rtc Adc Wdt Timer Neopixel)
+MODS=(Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Rtc Adc Wdt Timer Neopixel)
 
 for Mod in "${MODS[@]}"; do
     if [ ! -f "$STDLIB/$Mod.mod" ]; then
