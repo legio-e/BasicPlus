@@ -65,7 +65,7 @@ G|samples/GuiFontDemo.bp|catalogo de fuentes|gui
 G|samples/GuiRotDemo.bp|rotacion del display|gui
 G|samples/GuiClickDemo.bp|eventos de clic|gui
 G|samples/GuiAsyncDemo.bp|trabajo largo sin congelar la UI|gui
-G|bpgenvm-c/samples/ChartDemo.bp|widget Chart (NUEVO en V4)|gui
+G|samples/ChartDemo.bp|widget Chart (NUEVO en V4)|gui
 E|samples/EvFull.bp|el ciclo completo de un evento
 E|samples/EvOrder.bp|se atienden en el orden en que se disparan
 E|samples/EvNest.bp|un handler dispara otro evento (reentrada)

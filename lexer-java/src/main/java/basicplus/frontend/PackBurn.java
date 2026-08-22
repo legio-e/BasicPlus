@@ -77,6 +77,16 @@ public final class PackBurn {
      * <p>Si {@link #necesitaDireccion} es false ya está listo: no lleva motor
      * nativo y `bytes` es lo que se graba tal cual.
      */
+    /* El bloque de borrado MAYOR de las familias que soportamos, y por eso el
+     * que se usa al rearmar: RP2350 y ESP32 borran en 4 KB, pero el STM32 U5 lo
+     * hace en paginas de 8 KB. `PackWriter` alinea el tamano total al bloque que
+     * se le diga, y su valor por defecto es 4096 —"(Pico/ESP)", lo dice su propio
+     * comentario—, asi que un pack rearmado caia la mitad de las veces en un
+     * multiplo de 4 K que NO lo es de 8 K y el STM32 lo rechazaba con BAD_ALIGN.
+     * Alinear siempre al mayor cuesta como mucho 4 KB de flash por pack y vale
+     * para las tres familias sin preguntarle nada al dispositivo. */
+    private static final int BLOQUE_GRABADO = 8192;
+
     public static final class Preparado {
         /** El pack de esta familia. Tamaño DEFINITIVO (la tabla ya no está). */
         public final byte[] bytes;
@@ -189,11 +199,25 @@ public final class PackBurn {
                     + "' (sufijo " + destino.sufijo + "). Lleva: " + ajenas
                     + ". Hay que construirlo para este destino.");
 
+        /* REARMAR SOLO SI HACE FALTA. Las dos condiciones son de Eduardo (22-ago):
+         *   1. que haya codigo nativo PARA NOSOTROS  -> hay que sellarlo
+         *   2. que haya entradas de otros micros      -> hay que podarlas
+         * Si no se cumple ninguna, el fichero YA es lo que hay que grabar, y
+         * reserializarlo es trabajo inutil que ademas le cambia el tamano. Un
+         * `.pack` construido por el proyecto viene alineado; el rearmado no tenia
+         * por que caer en el mismo sitio. Mandar el original tambien da una
+         * propiedad que se agradece: lo que se graba es, byte a byte, lo que se
+         * construyo y se verifico en el PC. */
         byte[] nuevo;
-        try {
-            nuevo = PackWriter.build(p.nombre, p.versionContenido, p.fechaUnix, salida);
-        } catch (PackException ex) {
-            throw new BurnException("no se puede rearmar el pack: " + ex.getMessage());
+        if (podadas == 0 && img == null) {
+            nuevo = packBytes;
+        } else {
+            try {
+                nuevo = PackWriter.build(p.nombre, p.versionContenido, p.fechaUnix,
+                                         salida, BLOQUE_GRABADO);
+            } catch (PackException ex) {
+                throw new BurnException("no se puede rearmar el pack: " + ex.getMessage());
+            }
         }
 
         /* Dónde ha quedado el motor DENTRO del pack ya montado. Se relee en vez
@@ -265,8 +289,12 @@ public final class PackBurn {
             List<PackEntry> finales = new ArrayList<>(prep.entradas);
             finales.set(prep.idxNpk, new PackEntry("npk",
                     prep.entradas.get(prep.idxNpk).nombre, npk));
+            /* MISMO bloque que en `podar`: este rearmado tiene que medir
+             * exactamente igual que el podado, porque el tamano ya se declaro
+             * al dispositivo. Con el bloque por defecto (4 KB) podria no
+             * cuadrar, y la comprobacion de abajo lo cazaria demasiado tarde. */
             byte[] out = PackWriter.build(prep.nombrePack, prep.versionPack,
-                                          prep.fechaPack, finales);
+                                          prep.fechaPack, finales, BLOQUE_GRABADO);
             if (out.length != prep.bytes.length)
                 throw new BurnException("el pack sellado mide " + out.length
                         + " B y el podado medía " + prep.bytes.length);
