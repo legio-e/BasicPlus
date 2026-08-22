@@ -2173,6 +2173,40 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🏛️ [V6] ¿QUÉ INCLUYE el «sistema operativo» común, y dónde encaja cada pieza?** —
+  pregunta de Eduardo (22-ago): *«por encima del HAL BP está sobre todo el sistema
+  operativo: gestión de memoria, FS, etc. Y este es (debe ser) común. Entonces si es
+  común deberíamos saber qué incluye. El sistema de packs es común pero se tiene que
+  montar casi antes que todo lo demás, así que ¿va antes del SO o pertenece al SO?»*
+  Y su encuadre del hito: *«V6 es un paso necesario, un poner orden. Es como V4, que era
+  poner orden en la gestión de RAM y el FS; aquí es más a nivel de arquitectura.»*
+  ✅ **Para los packs la respuesta YA está en el código, y es «pertenece»**:
+  ```c
+  void bpvm_pack_mount(const uint8_t* base, uint32_t size) {
+      s_mounted_base = base; s_mounted_size = size;
+      bpvm_fs_set_fallback(zone_res_stat, zone_res_read, NULL);   /* ← */
+  }
+  ```
+  Montar un pack **registra un respaldo en la fachada de ficheros**. O sea que los packs ya
+  están modelados como **un backend del FS**, igual que littlefs o la SD. No van antes del
+  SO: son parte de él, en la misma capa que el FS, y por debajo sólo consumen particiones.
+  🔑 **Y de ahí sale el criterio general para colocar cualquier pieza**: *la capa de algo es
+  la de aquello que CONSUME*. Los packs consumen particiones (no FS) ⇒ por encima de
+  particiones; y ofrecen ficheros ⇒ proveedor del FS, no algo previo.
+  🩸 **Lo que falta, y es justo el «poner orden»: la escalera NO lo dice.** `bpvm_boot.h`
+  declara `KERNEL(0) → PARTITIONS(1) → FS(2) → APP(3)` y **no hay peldaño para los packs**,
+  así que cada familia los monta donde le parece: la Pico en `pack_pico.c`, el STM32 dentro
+  de su `board_mgr`, el P4 tras su `mmap`… y el S3 **en ninguna parte**.
+  📌 **Esa ausencia es la causa del agujero del S3**, no un descuido de quien lo portó: sin
+  peldaño declarado, olvidarlo no rompe nada al compilar ni al arrancar — sólo aparece el
+  día que alguien intenta grabar un pack en esa placa. Un peldaño obligatorio convierte el
+  olvido en un fallo ruidoso, que es lo que el proyecto ya hace en otros cinco sitios.
+  ⏭️ **El trabajo de V6, entonces, es doble**: (a) **declarar** qué capas hay y qué contiene
+  cada una —el SO común: memoria, FS+backends, packs, planificador…—, y (b) que la escalera
+  de arranque las refleje, de modo que **una capa no provista se DIGA** en vez de faltar en
+  silencio. El mecanismo ya existe: `bpvm_boot` distingue *«capa no provista»* de *«capa
+  fallida»* — hoy nadie usa esa distinción para los packs.
+
 - **🎯 [V6] EL CRITERIO DE CAPAS, y lo que mide contra el código de hoy** — Eduardo,
   22-ago: *«si dividimos el código por capas, solamente la de hardware, la HAL y la BP HAL
   tiene sentido que sean diferentes; todo lo demás debe ser independiente del hardware y
