@@ -226,23 +226,28 @@ verde. Lo que se ha probado es, bit a bit, lo que se va a publicar.
 de la sesión: el cuelgue no era el `#414` ni los blobs. Con esa misma imagen la placa
 corre con normalidad; era el estado persistente que se fichó aparte.
 
-## Puerta 1 — el ABI nuevo, en placa. NO NEGOCIABLE
+## ✅ Puerta 1 — CERRADA (22-ago): el ABI nuevo, en SEIS placas
 
-Lo único que no se puede comprobar en el PC. Una placa por familia, y basta con un
-programa pequeño que toque lo que cambió.
+Era el gate no negociable de H13: el 20-ago `Comparable` ganó cinco métodos y eso **corre
+las ranuras de su vtable** y las de todo lo que la extiende. En el PC no se nota porque se
+reconstruye junto; en placa sobrevive lo viejo.
 
-- [ ] **Reflashear las tres familias** con la imagen sellada. La stdlib embebida cambió:
-      un firmware viejo con `.mod` nuevos es el fallo que se busca.
-- [ ] **Borrar `/lib` y `/app` y dejar que el IDE los suba de nuevo**, o regrabar
-      `Stdlib.pack`. Un `.mod` de antes del cambio de `Comparable` es exactamente lo que
-      tiene que fallar aquí y no en producción.
-- [ ] Ejecutar en cada familia un programa que use **`List`, un envoltorio y un captador
-      tipado** (vale `ListGets`): tiene que dar **la misma salida que en el PC**.
-- [ ] `INFO` y el arranque sin líneas de error nuevas.
+`ListGets` —que usa `List`, los cinco envoltorios y los captadores tipados— da **21 líneas
+idénticas** a miVM y a la VM-C de host en **todas**:
 
-Si esto pasa en las tres, el resto del guión es sobre features, no sobre cimientos.
+| placa | familia | arquitectura | |
+|---|---|---|---|
+| Pico 2 | RP2350A | ARM | ✅ 21/21 |
+| Metro | RP2350B | ARM | ✅ 21/21 |
+| Nucleo-U575 | STM32U5 | ARM | ✅ 21/21 |
+| Discovery U5G9J | STM32U5 | ARM | ✅ 21/21 |
+| DevKit S3 | ESP32 | **Xtensa** | ✅ 21/21 |
+| ESP32-P4 | ESP32 | **RISC-V** | ✅ 21/21 |
 
----
+📌 **Tres arquitecturas y tres familias.** Y en cinco de las seis hubo que refrescar la
+stdlib de la placa antes — con tres procedimientos distintos, que es lo que destapó el
+problema de `/lib` y `/app` (ver decisión 5). El gate hizo su trabajo: **el desfase salió
+en la prueba y no en casa de un usuario.**
 
 ## Puerta 2 — lo nuevo de V5, en la placa que lo tiene
 
