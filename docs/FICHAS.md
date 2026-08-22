@@ -2173,6 +2173,45 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🎭 [V6] EL SIMULADOR CON DISFRACES: que `bpvm-sim` pueda vestirse de cada familia** —
+  nace de la reflexión de Eduardo (22-ago): *«la VM-C es un hardware completamente
+  diferente… podríamos hacer 2 versiones, una más libre, más cercana al PC, y otra más
+  integrada con toda la arquitectura de las placas, y con ésta detectar más problemas de
+  integración. Antes la VM-C servía para validar la VM y el compilador; esto serviría para
+  validar todo el resto. ¿La ganancia? Detectar cosas en los micros es caro en tiempo;
+  validar en el PC es mucho más ágil.»*
+  ✅ **Las dos versiones YA EXISTEN**: `bpgenvm-c` (la libre, valida VM+compilador) y
+  **`bpvm-sim`** (H10), que es *«servidor TCP wire v1 COMPLETO (META + FILES + TERMINAL +
+  gestión de placa + packs) con FS littlefs sobre imagen y la VM-C de verdad ejecutando; el
+  IDE lo trata como una placa más»*. Enlaza la librería entera y ya tiene dos smokes
+  (`boardsim-smoke`, `sim-smoke`) que corren sin placa.
+  🔎 **Entonces la pregunta útil no es si hacerlo, sino POR QUÉ NO CAZÓ LO DE HOY.** Y la
+  respuesta acota el trabajo: **el sim valida el camino común; los bugs de estos dos días
+  estaban en los caminos POR FAMILIA.**
+
+  | hallazgo | ¿lo habría cazado el sim de hoy? |
+  |---|---|
+  | `#414`: builtins de packs dentro de `#ifdef BPVM_GUI` | ❌ el sim se construye **con** GUI |
+  | packs a 4 KB vs los 8 KB del STM32 | ❌ tiene un solo bloque de borrado |
+  | el S3 sin vista de packs | ❌ el sim sí la tiene |
+  | las tres estrategias de `/lib` | ❌ el sim tiene una |
+
+  📐 **Sus parámetros de hoy** (`--mem --psram --flash --fs`) cubren **memoria y
+  almacenamiento, y nada de la personalidad de cada familia**.
+  ⏭️ **La propuesta concreta**: un `--familia=<pico|s3|p4|stm32>` que fije lo que de verdad
+  distingue a cada una y que ya sabemos enumerar porque lo hemos medido estos dos días —
+  **bloque de borrado** (4 K / 8 K), **GUI sí/no**, **estrategia de `/lib`** (instalar si
+  falta / si difiere / vaciar y reembeber), **hay vista de packs o no**, y **AOT
+  disponible** (arm / riscv / ninguno).
+  🎯 **Con eso, los dos bugs de packs de hoy se cazan en el PC en segundos** en vez de en
+  dos días de placa — que es exactamente la ganancia que Eduardo busca. Y encaja con la
+  lección del `#414`: *«lo que no funciona en C tampoco en la Pico» sólo vale si el C que
+  se prueba lleva la MISMA configuración*. El disfraz ES esa configuración.
+  📌 **Y una consecuencia de método**: esto convierte la batería multi-placa en algo que se
+  puede correr **antes** de tocar hardware. La placa seguiría siendo la última palabra —hay
+  cosas que sólo da el silicio— pero dejaría de ser el primer sitio donde se descubren las
+  asimetrías.
+
 - **🥾🥾 [V6] ¿UN boot o DOS?** — pregunta de Eduardo (22-ago): *«tenemos 1 boot, y
   dependerá del hardware. Si lo dividimos en 2, podemos tener un boot que dependa del
   hardware pero el 2º, que se ejecuta a continuación, podría ya ser independiente.»*
