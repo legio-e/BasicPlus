@@ -239,15 +239,15 @@ Documentation is available in **English** (`docs/en/`) and
 
 ## Status
 
-**V4 — consolidation** (August 2026). V1 proved the idea; V2 hardened and
-broadened it; V3 gave it a face; **V4 fixes its foundations**: handle-based
-memory — using a freed object fails on the spot instead of corrupting data —,
-a littlefs filesystem on all three families, events, function overloading and a
-simulated micro in the IDE so you can work without a board. Verified on real
-hardware on the four reference boards.
+**V5 — the data** (August 2026). V1 proved the idea; V2 hardened and broadened
+it; V3 gave it a face; V4 fixed its foundations; **V5 gives it somewhere to put
+things**: an SD card with gigabytes, SQLite running inside the micro, an ORM that
+writes the SQL from the table declaration itself, and packs, which fit a library
+as large as SQLite into flash without charging those who never use it. Verified
+on real hardware across **six boards and three architectures**.
 
 Downloads and full detail: the
-**[v4.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v4.0)** and the
+**[v5.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v5.0)** and the
 **[release notes](docs/RELEASES.md)** *(Spanish)*.
 
 ## License
