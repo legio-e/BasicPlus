@@ -2173,6 +2173,39 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🧮 [V6] ¿CUÁNTO cuesta una familia nueva (ESP32-C3 / C6) si antes unificamos?** —
+  pregunta de Eduardo (22-ago): *«si tenemos en cuenta que el IDF es el mismo para todas
+  las familias ESP32, en realidad sale muy poco código: casi todo lo hecho para el P4
+  debería servir. Así que meter una familia nueva será el boot y sobre todo trabajo de
+  pruebas.»*
+  ✅ **Ya hay un experimento hecho que lo contesta: el P4**, que fue la última familia
+  añadida. **Reutiliza OCHO ficheros del S3** —incluido el `repl_esp32.c` de 69 KB, el
+  `board_mgr`, `platform`, `fs_lfs`, los blobs, el log, `gpio` y `json_min`— y sólo tiene
+  **2.558 líneas propias**. Pero lo que decide la respuesta es **en qué** se le van:
+
+  | fichero propio del P4 | líneas | ¿lo necesita un C3/C6? |
+  |---|---|---|
+  | `gui_display_dsi.c` | 713 | ❌ no tienen pantalla |
+  | `main.c` (**el boot**) | 623 | ✅ sí |
+  | `pack_p4.c` | 340 | 🔧 lo unifica V6 → un gancho |
+  | `wire_v1_tcp.c` | 321 | ❌ irían por UART, como el S3 |
+  | `blk_sdmmc_p4.c` | 249 | ❌ normalmente no llevan SD |
+  | `bios_p4.c` | 141 | ✅ sí |
+  | `p4_board_id.c` | 91 | ✅ sí |
+  | `aot_Bench.c` / `aot_funcs_p4.c` | 80 | ✅ el registro (31); el resto es un sample |
+
+  📊 **Cuenta**: **1.283 líneas no aplican** (pantalla + Ethernet + SD). Lo realmente
+  necesario son **≈890 líneas**, y **el grueso es `main.c`: el BOOT** — exactamente lo que
+  Eduardo predijo. Con la partición en dos boots, la mayor parte de esas 623 se va al común
+  y quedan las decenas del arranque de silicio.
+  🎁 **Y un regalo que no estaba contado: el C3 y el C6 son RISC-V, como el P4.** Toda la
+  cadena AOT de `H4` —`.mdn`, `.npk`, relocalización, `-mcmodel=medany`— **ya funciona para
+  ellos**. Nacen con aceleración el primer día, sin escribir una línea de AOT.
+  🎯 **Conclusión, que es la de Eduardo con números detrás**: el código de una familia ESP32
+  nueva es **el boot y poco más**. El coste real se desplaza a **las pruebas** — y por eso
+  el simulador con disfraces y la batería multi-placa dejan de ser comodidad para ser *la*
+  inversión que hace sostenible añadir placas.
+
 - **📈 [V6] «Unificar no es una opción, es el único camino» — la tesis económica, medida**
   — cierre de Eduardo (22-ago): *«la parte del compilador es muy pequeña; añadiendo la VM
   crece, pero en el total sigue siendo pequeña. ¿En qué se nos va el tiempo? Cada vez más
