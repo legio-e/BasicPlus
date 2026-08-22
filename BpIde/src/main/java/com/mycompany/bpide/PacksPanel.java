@@ -327,11 +327,21 @@ public final class PacksPanel extends JPanel {
         String arch = PicoExplorer.archName(a);
         basicplus.frontend.NpackReloc.Destino d =
                 basicplus.frontend.NpackReloc.porTargetAot(arch);
-        if (d == null)
-            throw new java.io.IOException("no sé la arquitectura de la placa"
-                + (arch.isEmpty() ? "" : " ('" + arch + "')")
-                + ". Desconecta y vuelve a conectar el explorador: sin eso no se"
-                + " puede elegir qué motor grabar.");
+        /* Arquitectura desconocida o sin motor nativo (p.ej. el Xtensa del S3):
+         * NO es motivo para negarse a grabar. Decision de Eduardo (22-ago):
+         * *«lleve nativo o no, el pack se graba; lo unico, si el nativo no existe
+         * o no se corresponde con el del micro, se graba SIN nativo»*. Se pasa
+         * `null` como destino y `podar` se lleva por delante todo lo nativo,
+         * avisando de lo que ha quitado.
+         *
+         * Hasta hoy esto LANZABA, y encima aconsejaba RECONECTAR — que en el caso
+         * del S3 no podia funcionar nunca: por muchas veces que reconectes, el
+         * micro sigue siendo Xtensa. Lo vio Eduardo con una DevKit. */
+        if (d == null) {
+            log.accept("[Packs] la placa es '"
+                + (arch.isEmpty() ? "(no la dice)" : arch)
+                + "': no hay motor nativo para ella, se grabara SIN nativo\n");
+        }
         try {
             basicplus.frontend.PackBurn.Preparado prep =
                     basicplus.frontend.PackBurn.podar(img, d);

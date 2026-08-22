@@ -139,7 +139,13 @@ public final class PackBurn {
             throw new BurnException("no se puede leer el pack: " + ex.getMessage());
         }
 
-        String sufMio = "." + destino.sufijo;
+        /* `destino == null` = la placa NO tiene motor nativo para su arquitectura
+         * (p.ej. el Xtensa del S3, o una que aún no conocemos). NO es motivo para
+         * negarse a grabar — decisión de Eduardo (22-ago): *«lleve nativo o no, el
+         * pack se graba; lo único, si el nativo no existe o no se corresponde con
+         * el del micro, se graba SIN nativo»*. Con `sufMio` a null ningún sufijo
+         * coincide, así que TODO lo nativo cae en la poda de abajo. */
+        String sufMio = (destino != null) ? ("." + destino.sufijo) : null;
         List<PackEntry> salida = new ArrayList<>();
         List<String> ajenas = new ArrayList<>();
         int podadas = 0;
@@ -192,12 +198,14 @@ public final class PackBurn {
             }
         }
 
-        /* ¿Había familias y ninguna era la nuestra? Eso NO puede pasar callando:
-         * se grabaría un pack sin motor y el fallo saldría mucho después. */
-        if (img == null && !ajenas.isEmpty() && !hayAlgoMio(p, sufMio))
-            throw new BurnException("este pack no trae nada para '" + destino.nombre
-                    + "' (sufijo " + destino.sufijo + "). Lleva: " + ajenas
-                    + ". Hay que construirlo para este destino.");
+        /* ¿Había motores y ninguno era el nuestro? Antes esto ABORTABA el grabado.
+         * Desde el 22-ago **no**: se graba igual, sin motor, y se AVISA. El
+         * razonamiento de Eduardo es que un pack medio útil es mejor que ninguno —
+         * sus módulos BP siguen sirviendo— y que negarse deja al usuario sin
+         * opción. Pero el aviso se queda: sin motor, lo que dependa de él fallará
+         * al usarse, y eso hay que verlo AHORA y no dentro de media hora. */
+        boolean sinMotor = (img == null && !ajenas.isEmpty()
+                            && (sufMio == null || !hayAlgoMio(p, sufMio)));
 
         /* REARMAR SOLO SI HACE FALTA. Las dos condiciones son de Eduardo (22-ago):
          *   1. que haya codigo nativo PARA NOSOTROS  -> hay que sellarlo
@@ -242,7 +250,13 @@ public final class PackBurn {
 
         Preparado prep = new Preparado(nuevo, npkOff, img, meta, destino, podadas,
                 salida, idxNpk, p.nombre, p.versionContenido, p.fechaUnix);
-        prep.detalle.add("destino " + destino.nombre + " (" + destino.sufijo + ")");
+        prep.detalle.add(destino != null
+                ? ("destino " + destino.nombre + " (" + destino.sufijo + ")")
+                : "SIN destino nativo: esta placa no tiene motor para su arquitectura");
+        if (sinMotor)
+            prep.detalle.add("AVISO: se graba SIN motor nativo — el pack trae "
+                    + ajenas + " y ninguno vale aquí. Lo que dependa del motor"
+                    + " fallara al usarlo.");
         prep.detalle.add(podadas + " entrada(s) de otras familias podada(s)"
                 + (ajenas.isEmpty() ? "" : " " + ajenas));
         prep.detalle.add(salida.size() + " entradas, " + nuevo.length + " B");
