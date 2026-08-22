@@ -61,6 +61,44 @@ es lo normal en esta fase. Ver la norma en la cabecera de este fichero.
 
 ---
 
+## 🚀 V5 PUBLICADA — 22-ago-2026
+
+Los cuatro pasos del plan de cierre, hechos. **El congelado queda levantado** y lo que
+entre a partir de ahora es V6 (índice en `V6_BACKLOG.md`).
+
+| qué | dónde |
+|---|---|
+| commit publicado | `ff408a1e` |
+| etiqueta | `v5.0` |
+| release | https://github.com/legio-e/BasicPlus/releases/tag/v5.0 |
+| artefacto **único** | `BasicPlus-5.0-win.zip` — 24.403.893 B, `sha256 093789a6…a5f9` |
+| web | https://legio-e.github.io/BasicPlus/ y `/en/`, build `built` sobre `ff408a1e` |
+
+**Verificado, no supuesto:** el ZIP se **descargó desde la propia release** y su sha256
+coincide con el que se montó y se probó; las dos webs se consultaron con `curl` y sirven
+V5 (no bastaba con que el build dijera `built` — el fallo de V4 fue exactamente ése).
+
+📌 **Tres cosas que se encontraron al publicar y que ya están corregidas en
+`PUBLICAR.md`**, para que no vuelvan a morder:
+
+1. **Las cuatro portadas seguían en `v4.0`** —las dos del repo y las dos de Pages— y las
+   tarjetas de la web ofrecían «lo diferido a v5», que ya era v6.
+2. **El número de versión hay que subirlo ANTES de montar el ZIP**, porque `docs/` viaja
+   dentro: se hizo al revés, hubo que rehacer el ZIP *después* de que Eduardo lo hubiera
+   probado y volver a verificarlo. Salió barato de milagro (la lista de ficheros quedó
+   idéntica porque las sustituciones conservaban la longitud).
+3. **El checklist mentía sobre el cuerpo de la release**: decía «= sección de
+   `RELEASES.md`», que es sólo español; V4 publicó de verdad un cuerpo **bilingüe** con
+   Descarga y Documentación. Se descubrió comparando con lo que V4 hizo, no con lo que
+   el doc decía.
+
+📌 **Y una decisión de contenido:** entran al repo público `bp_propuesta_modelo_memoria/`
+(el estudio de mayo-julio del modelo de memoria) y `diag/orm-slots/`. Al primero se le
+escribió **portada** (`0517af68`) porque no se abría por ninguna parte y citaba 13 veces
+unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
+
+---
+
 ## ABIERTAS
 
 ### 🏁 Packs — V5/H11 «cerrar lo que quedó suelto» (#416, paraguas) — **CERRADO el 15-ago**

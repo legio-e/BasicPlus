@@ -27,6 +27,36 @@
 
 ## Última sesión
 
+### 22-ago (tarde) — V5 PUBLICADA
+
+Se empujaron los **358 commits** acumulados desde el 6-ago, se etiquetó `v5.0` sobre
+`ff408a1e` y se creó la release con el ZIP como artefacto único. Detalle y verificación,
+en `FICHAS.md` §«V5 PUBLICADA».
+
+**Lo que pasó por el camino, que es lo que interesa aquí:**
+
+- **La revisión del push encontró dos carpetas que nadie había mirado**:
+  `bp_propuesta_modelo_memoria/` (205 KB de mayo-julio) y `diag/orm-slots/`. Eduardo dejó
+  la decisión abierta —*«si crees que es interesante se sube… pero es antiguo»*— y suben
+  las dos. La primera con portada nueva, porque no tenía raíz y citaba 13 veces unas
+  carpetas que nunca estuvieron en el repo.
+- **Mi primer recuento de enlaces rotos estuvo mal**: resolví los `../` contra la raíz del
+  conjunto en vez de contra la carpeta de cada fichero, y me salieron rotos que no lo
+  eran. Rehecho bien antes de escribir nada.
+- **Las cuatro portadas seguían anunciando V4.** Al corregirlas hubo que **rehacer el ZIP**
+  (la web viaja dentro, es la ayuda del IDE) *después* de que Eduardo ya lo hubiera
+  probado. La lista de ficheros quedó idéntica, así que su prueba seguía valiendo — pero
+  por suerte, no por método. Corregido el orden en `PUBLICAR.md`.
+- **Eduardo avisó del problema de refresco de la portada de V4** y estaba fichado: dos
+  despliegues seguidos se pisan y el segundo **falla en silencio**. Esta vez se comprobó
+  el `status` del build *y además* qué sirve la web con `curl`. Las dos cosas, verdes.
+- **El checklist mentía sobre el cuerpo de la release.** Decía «= sección de
+  `RELEASES.md`»; V4 había publicado un cuerpo **bilingüe** con Descarga y Documentación.
+  Se siguió el precedente, no el doc, y se corrigió el doc.
+
+**Riesgo que queda:** ninguno bloqueante. El congelado está levantado; lo siguiente es V6
+y su índice está en `V6_BACKLOG.md`.
+
 ### 22-ago — H13 TERMINADO: seis placas, y ocho bugs por el camino
 
 **Las tres familias cerradas.** `ListGets` da **21 líneas idénticas** al PC en Pico, Metro,

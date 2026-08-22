@@ -127,6 +127,12 @@ Y la de Pages viaja **además** dentro del ZIP: es la documentación que abre
 el IDE. Si cambias `docs/`, **hay que rehacer el ZIP**; el `README.md` no
 viaja, así que ése no obliga.
 
+⚠️ **Por eso el número de versión de las portadas se sube ANTES de montar el
+ZIP.** El 22-ago se hizo al revés: las cuatro portadas seguían en `v4.0`, se
+corrigieron después de que Eduardo hubiera probado el ZIP, y hubo que rehacerlo
+y volver a verificarlo. Salió barato porque la lista de ficheros quedó idéntica
+—las sustituciones conservaban la longitud— pero es suerte, no método.
+
 ⚠️ Los volúmenes en **inglés** se quedan atrás sin que nadie lo note:
 `docs/en/index.html` llegó a estar **dos versiones** por detrás. Búscalo con
 `grep -rn -i "\bv3\b" docs/ README*.md` y decide caso por caso qué es
@@ -149,7 +155,12 @@ historia legítima y qué es texto caducado.
 ## 4 · Release v5.0
 
 - [ ] Tag `v5.0` sobre el commit publicado.
-- [ ] Cuerpo de la release = sección **v5.0** de `docs/RELEASES.md`.
+- [ ] Cuerpo de la release: **bilingüe, español y luego inglés**, con el molde de
+      V4 (`gh release view v4.0 --json body`): intro · Lo nuevo · **Al actualizar** ·
+      Descarga (tabla de imágenes + `sha256` del ZIP) · Documentación · Limitaciones.
+      ⚠️ **No es un copia-pega de `RELEASES.md`**: aquel es sólo español y va por
+      temas, no por release. Esto se escribió mal en el checklist y se descubrió el
+      22-ago comparando con lo que V4 publicó de verdad.
 - [ ] Adjuntar **el ZIP y nada más** (ver arriba: las imágenes van dentro).
 - [ ] Comprobar desde la propia release: descargar el ZIP y verificar el
       `sha256` contra el que anotaste al montarlo.
