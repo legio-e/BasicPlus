@@ -160,7 +160,6 @@
 <nav class="toc">
   <h2>Contents</h2>
   <ul>
-  <ul>
     <li><a href="#intro">1. Introduction</a></li>
     <li><a href="#hello">2. Hello world</a></li>
     <li class="group"><a href="#lexico">3. Lexical structure</a></li>
@@ -194,6 +193,7 @@
     <li class="sub"><a href="#defaults">8.1 Default parameter values</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuples (multiple return)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 native functions (AOT)</a></li>
+    <li class="sub"><a href="#sobrecarga">8.4 Function overloading</a></li>
     <li class="group"><a href="#clases">9. Classes</a></li>
     <li class="sub"><a href="#campos">9.1 Fields</a></li>
     <li class="sub"><a href="#metodos">9.2 Methods</a></li>
@@ -211,6 +211,7 @@
     <li class="sub"><a href="#implements">10.5 implements</a></li>
     <li class="sub"><a href="#binding">10.6 Binding I:Impl</a></li>
     <li class="sub"><a href="#encapsulacion">10.7 Class↔module encapsulation</a></li>
+    <li class="sub"><a href="#dospasadas">10.8 Two passes and cycles between modules</a></li>
 
     <li class="group"><a href="#excepciones">11. Exceptions</a></li>
     <li class="group"><a href="#owner">12. Owner semantics</a></li>
@@ -223,6 +224,11 @@
 
 
 
+    <li class="group"><a href="#eventos">15. Events</a></li>
+    <li class="sub"><a href="#ev-declarar">15.1 Declaring and raising</a></li>
+    <li class="sub"><a href="#ev-escuchar">15.2 Listening: function event and ::</a></li>
+    <li class="sub"><a href="#ev-cuando">15.3 raise does not call the handler</a></li>
+    <li class="sub"><a href="#ev-async">15.4 Asynchronous calls</a></li>
     <li class="group"><a href="#pendientes">17. Pending / not supported</a></li>
   </ul>
   <h2>Reference (separate volume)</h2>
@@ -871,6 +877,66 @@ lista.add(pair())                      <span class="comment">// go into collecti
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+<h3 id="sobrecarga">8.4 Function overloading</h3>
+<p>You can declare <strong>several functions with the same name</strong> as long as
+they differ in their <strong>parameters</strong>. The compiler picks the one that
+fits each call.</p>
+<pre><code><span class="kw">public function</span> <span class="fn">texto</span>(n: <span class="type">integer</span>): <span class="type">string</span>
+  <span class="kw">return</span> <span class="str">"int:"</span> + intToString(n)
+<span class="kw">end</span> texto
+
+<span class="kw">public function</span> <span class="fn">texto</span>(s: <span class="type">string</span>): <span class="type">string</span>          <span class="comment">// different TYPE</span>
+  <span class="kw">return</span> <span class="str">"str:"</span> + s
+<span class="kw">end</span> texto
+
+<span class="kw">public function</span> <span class="fn">texto</span>(n: <span class="type">integer</span>, veces: <span class="type">integer</span>): <span class="type">string</span>   <span class="comment">// different COUNT</span>
+  ...
+<span class="kw">end</span> texto</code></pre>
+<p>It works with <strong>free functions</strong>, <strong>static methods</strong>,
+<strong>instance methods</strong> and <strong>constructors</strong>. And also
+<strong>across modules</strong>: importing <code>Fmt</code> makes the three
+<code>Fmt.texto(...)</code> above available, resolved the same way.</p>
+
+<h4>What tells one overload from another</h4>
+<p>Only <strong>the parameter list</strong> (count and types). <strong>The return type
+does NOT count</strong>: two functions differing only in what they return are the same
+one to the compiler.</p>
+<pre><code><span class="kw">function</span> <span class="fn">g</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
+<span class="kw">function</span> <span class="fn">g</span>(a: <span class="type">integer</span>): <span class="type">string</span>  ...   <span class="comment">// ERROR</span></code></pre>
+<pre><code>error semantico: sobrecarga duplicada: 'g' con la misma firma de parametros ya declarada</code></pre>
+<p>The reason is that at the call site there is not always an expected type to decide
+with: <code>print g(1)</code> does not say which of the two you want.</p>
+
+<h4>Overloading and inheritance: overriding one does NOT hide the others</h4>
+<p>If a subclass overrides <em>one</em> of the inherited overloads, the others are
+still there:</p>
+<pre><code><span class="kw">class</span> Base
+  <span class="kw">public function</span> <span class="fn">saluda</span>(): <span class="type">string</span> ... <span class="comment">// "base"</span>
+  <span class="kw">public function</span> <span class="fn">saluda</span>(n: <span class="type">integer</span>): <span class="type">string</span> ... <span class="comment">// "base N"</span>
+<span class="kw">end</span> Base
+
+<span class="kw">class</span> Hija <span class="kw">extends</span> Base
+  <span class="kw">public function</span> <span class="fn">saluda</span>(): <span class="type">string</span> ... <span class="comment">// "hija" &mdash; overrides only THIS one</span>
+<span class="kw">end</span> Hija
+
+<span class="kw">var</span> h: Hija := Hija()
+<span class="kw">print</span> h.saluda(), <span class="str">" / "</span>, h.saluda(<span class="num">7</span>)   <span class="comment">// -> hija / base 7</span></code></pre>
+<p>That is: the override replaces the version <em>with that same signature</em>, and
+the <code>(integer)</code> one is inherited untouched.</p>
+
+<h4>Careful when mixing it with default values</h4>
+<p>An overload and a <a href="#defaults">parameter with a default value</a> can end up
+accepting the <strong>same call</strong>. The compiler does not guess: it rejects it.</p>
+<pre><code><span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
+<span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span> := <span class="num">0</span>): <span class="type">integer</span> ...
+
+h(<span class="num">1</span>)    <span class="comment">// both fit</span></code></pre>
+<pre><code>error semantico: llamada ambigua a 'h' con (integer): varias sobrecargas encajan por igual (usa un cast)</code></pre>
+<p>The clean way out is usually to keep just one of the two forms: <strong>either</strong>
+overloads <strong>or</strong> a default value, but not both covering the same case.</p>
+
+<!-- =========================================================== -->
+
 <h2 id="clases">9. Classes</h2>
 <pre><code><span class="kw">public class</span> Persona
   <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// fields are ALWAYS private</span>
@@ -911,6 +977,54 @@ lista.add(pair())                      <span class="comment">// go into collecti
   Like functions but inside the class. The implicit parameter <code>this</code>
   points to the instance. All non-static methods are virtual (dynamic dispatch
   via vtable).
+</p>
+
+<h4 id="visibilidad">9.2.1 Visibility: the three levels</h4>
+<p>
+  A class member has one of three levels. The middle one is what you get
+  <em>without writing anything</em>, because when building a hierarchy the normal case
+  is that the child can use what the parent has:
+</p>
+<table>
+  <tr><th>You write</th><th>Who sees it</th><th>Virtual?</th></tr>
+  <tr><td><code>public</code></td><td>Everyone</td><td>Yes</td></tr>
+  <tr><td><em>(nothing)</em> &mdash; <strong>protected</strong></td>
+      <td>Its class and its descendants, even in another module</td><td>Yes</td></tr>
+  <tr><td><code>private</code></td><td>Only its own class</td><td><strong>No</strong></td></tr>
+</table>
+<pre><code>public class Base
+  public function Base()
+  end Base
+
+  public function saluda(): string      // anyone sees it
+    return this.adorna(this.crudo())
+  end saluda
+
+  function adorna(s: string): string    // PROTECTED: the child may use it
+    return "&lt;&lt; " + s + " &gt;&gt;"
+  end adorna
+
+  private function crudo(): string      // only this class, not even the child
+    return "hola"
+  end crudo
+end Base</code></pre>
+<p>
+  <strong>There is no <code>virtual</code> keyword, and none is needed:</strong>
+  everything except <code>private</code> is virtual. A protected method goes into the
+  method table just like a public one &mdash; the difference between them is
+  <em>who may name it</em>, not how it is called or what it costs.
+</p>
+<p>
+  <code>private</code> only makes sense inside a class: at module level, whatever is not
+  <code>public</code> is already private to the module, and there are no descendants to
+  protect from. And <code>public private</code> does not exist: they are mutually
+  exclusive.
+</p>
+<p>
+  <strong>When choosing:</strong> use <code>private</code> when you want to be able to
+  change or delete that method without checking who inherits from the class. If you
+  leave it unmarked, a child &mdash;yours or one written by whoever uses your
+  library&mdash; may be relying on it.
 </p>
 
 <h3 id="ctor">9.3 Constructor</h3>
@@ -1269,6 +1383,75 @@ Counter.bump()</code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+<h3 id="dospasadas">10.8 Two passes: why modules can call each other</h3>
+<p>The compiler processes each module <strong>twice</strong>:</p>
+<ol>
+  <li><strong>Interface pass</strong> &mdash; it walks the declarations and notes
+      <em>what</em> the module exposes: signatures of public functions, classes,
+      properties and constants. It does not look at function bodies.</li>
+  <li><strong>Full pass</strong> &mdash; now with every module's interface available,
+      it compiles the real code and resolves each call.</li>
+</ol>
+<p>That separation is what lets <strong>two modules call each other</strong>. When the
+body of <code>Par</code> is compiled, the interface of <code>Impar</code> already
+exists (and the other way round), so neither of the two has to be finished for the
+other one to compile:</p>
+<pre><code><span class="kw">module</span> Par
+  <span class="kw">import</span> Impar
+  <span class="kw">public function</span> <span class="fn">esPar</span>(n: <span class="type">integer</span>): <span class="type">boolean</span>
+    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">true</span>
+    <span class="kw">return</span> Impar.esImpar(n - <span class="num">1</span>)   <span class="comment">// calls Impar</span>
+  <span class="kw">end</span> esPar
+<span class="kw">end</span> Par
+
+<span class="kw">module</span> Impar
+  <span class="kw">import</span> Par
+  <span class="kw">public function</span> <span class="fn">esImpar</span>(n: <span class="type">integer</span>): <span class="type">boolean</span>
+    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">false</span>
+    <span class="kw">return</span> Par.esPar(n - <span class="num">1</span>)       <span class="comment">// ...and Par calls Impar</span>
+  <span class="kw">end</span> esImpar
+<span class="kw">end</span> Impar</code></pre>
+<p>This compiles and works. <strong>Circularity in the CODE is allowed</strong>, and it
+holds equally for functions, class methods and properties.</p>
+
+<h4>The limit: DEFINITIONS cannot be circular</h4>
+<p>What cannot close the circle is <strong>the type itself</strong>. If a public class
+of <code>TA</code> exposes a type from <code>TB</code>, and <code>TB</code>'s class in
+turn exposes a type from <code>TA</code>, the interface cannot be built: to know what
+<code>TA.Nodo</code> is you first need to know what <code>TB.Hoja</code> is, and vice
+versa.</p>
+<pre><code><span class="comment">// TA.bp</span>
+<span class="kw">public class</span> Nodo
+  <span class="kw">public property</span> vecino: TB.Hoja      <span class="comment">// TA depends on TB...</span>
+<span class="kw">end</span> Nodo
+
+<span class="comment">// TB.bp</span>
+<span class="kw">public class</span> Hoja
+  <span class="kw">public property</span> duenyo: TA.Nodo     <span class="comment">// ...and TB on TA -> circle closed</span>
+<span class="kw">end</span> Hoja</code></pre>
+<p>The compiler <strong>does not abort</strong>: it warns and <strong>leaves out of the
+interface</strong> the member it cannot resolve.</p>
+<pre><code>-- omitidas en interfaz (1): class Hoja.property duenyo: tipo no exportable</code></pre>
+<p class="warn"><strong>Mind this warning.</strong> The module compiles, but that
+property <em>does not exist</em> for whoever imports it: the real error will show up
+later, in the module that tries to use it. If you see a &ldquo;does not expose X&rdquo;
+that does not match what you wrote, check for a cycle between definitions.</p>
+<p>How to break it, in order of preference:</p>
+<ul>
+  <li><strong>A third module</strong> with the common types, imported by both. It is the
+      clean solution and it usually reveals that those types were a separate piece all
+      along.</li>
+  <li><strong>Invert one of the two dependencies</strong>: normally one of the two
+      directions is the natural one, and the other can be solved by passing the datum as
+      a parameter instead of storing it as a field.</li>
+  <li><strong>Put both classes in one module</strong>, if they really are a single thing
+      split across two files.</li>
+</ul>
+<p>Remember the limit applies only to <em>types that cross the module boundary</em>.
+Within one module, two classes may refer to each other with no problem.</p>
+
+<!-- =========================================================== -->
+
 <h2 id="excepciones">11. Exceptions</h2>
 <pre><code><span class="kw">try</span>
   riskyOp()
@@ -1492,6 +1675,83 @@ shared object</code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+<h2 id="eventos">15. Events</h2>
+<p>An <strong>event</strong> lets an object <em>announce</em> that something has
+happened without knowing who is listening. The emitter declares <strong>the
+signature</strong> of what it will notify; the listener <strong>subscribes</strong>
+with one of its own methods.</p>
+<p>It is the foundation of the graphical interface &mdash;a button does not know what
+your program does when it is pressed&mdash; but it is <strong>not limited to it</strong>:
+it works in any class.</p>
+
+<h3 id="ev-declarar">15.1 Declaring and raising</h3>
+<p>Inside the emitting class, <code>event</code> declares a name and parameters. It
+accepts <a href="#defaults">default values</a> like any other signature:</p>
+<pre><code><span class="kw">class</span> Boton
+  <span class="kw">var</span> id: <span class="type">integer</span>
+  <span class="kw">event</span> <span class="fn">onClick</span>(sender: Boton, veces: <span class="type">integer</span> := <span class="num">1</span>)
+
+  <span class="kw">public function</span> <span class="fn">pulsa</span>(n: <span class="type">integer</span>)
+    <span class="kw">raise</span> onClick(<span class="kw">this</span>, n)      <span class="comment">// raises it</span>
+  <span class="kw">end</span> pulsa
+<span class="kw">end</span> Boton</code></pre>
+
+<h3 id="ev-escuchar">15.2 Listening: <code>function event</code> and <code>::</code></h3>
+<p>The listener declares a <strong>handler</strong> with <code>function event</code>
+and the same parameter list. It does not need to be public &mdash; normally it is
+private, because nobody else calls it.</p>
+<p>The subscription is written with <code>::</code>, which binds <strong>an object and
+one of its methods</strong>:</p>
+<pre><code><span class="kw">class</span> Panel
+  <span class="kw">function event</span> <span class="fn">pulsado</span>(b: Boton, veces: <span class="type">integer</span>)
+    <span class="kw">print</span>(<span class="str">"  handler: boton "</span> + b.numero + <span class="str">" x"</span> + veces)
+  <span class="kw">end</span> pulsado
+<span class="kw">end</span> Panel
+
+<span class="kw">var</span> b: Boton := Boton(<span class="num">7</span>)
+<span class="kw">var</span> p: Panel := Panel(<span class="str">"principal"</span>)
+b.onClick := p::pulsado          <span class="comment">// subscribes the method of THAT object</span></code></pre>
+
+<h3 id="ev-cuando">15.3 The important part: <code>raise</code> does NOT call the handler</h3>
+<p class="warn">This is what you need to be clear about to avoid surprises:
+<strong><code>raise</code> queues the event and returns immediately</strong>. The
+handler runs <em>afterwards</em>, when the scheduler injects its frame into the
+thread between two execution slices.</p>
+<pre><code><span class="kw">print</span>(<span class="str">"antes del raise"</span>)
+b.pulsa(<span class="num">3</span>)
+<span class="kw">print</span>(<span class="str">"despues del raise (el handler todavia NO ha corrido)"</span>)
+sleep(<span class="num">30</span>)
+<span class="kw">print</span>(<span class="str">"fin"</span>)</code></pre>
+<p>It prints, in this order:</p>
+<pre><code>antes del raise
+despues del raise (el handler todavia NO ha corrido)
+  handler: boton 7 x3 en principal
+fin</code></pre>
+<p>Two practical consequences:</p>
+<ul>
+  <li><strong>The one raising does not block.</strong> That is why a button can give
+      notice without the interface freezing while it waits for your code.</li>
+  <li><strong>Do not count on the handler having already run</strong> on the line
+      after the <code>raise</code>. If you need the result, pass it through the event
+      itself or wait until the handler has written it down.</li>
+</ul>
+
+<h3 id="ev-async">15.4 Asynchronous calls</h3>
+<p>The same <code>::</code> can launch a method <strong>on another thread</strong>,
+without writing a <code>Thread</code> class by hand:</p>
+<pre><code>Thread(obj::metodo(args)).start()</code></pre>
+<p>It is meant precisely for what blocks: a long read, a heavy computation or a disk
+access launched from an interface handler, so that the screen keeps responding
+meanwhile.</p>
+<p class="warn"><strong>And here you do need to be careful.</strong> What is launched
+this way runs on a <strong>thread other than the main one</strong>. If you are going to
+share variables with the rest of the program, use the language's synchronisation
+mechanisms (see <a href="#concurrencia">14. Concurrency</a>) to avoid corrupting the
+data. A normal event handler does <em>not</em> have this problem: it runs on the thread
+that receives it.</p>
+
+<!-- =========================================================== -->
+
 <h2 id="pendientes">17. Pending / not supported</h2>
 <p style="color:var(--fg-muted)">Status at the close of V3 (July 2026). What
 was here and is now done: classes/properties in the interface
