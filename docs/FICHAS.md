@@ -669,6 +669,33 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Familias — lo que dejó el censo (`#427`)
 
+- **🕳️ [S3] los packs: encaminados pero SIN REGIÓN — el mismo agujero que `#327` en la
+  Pico, ahora en el S3** (visto el 22-ago probando H13).
+  📐 **El hecho**: no existe `esp32/main/pack_s3.c`. El único que llama a
+  `board_mgr_esp32_set_packs_view()` es `esp32p4/main/pack_p4.c`, así que en el S3
+  `s_packs_view` es NULL para siempre → `bm.packs_*` se queda a cero → la placa contesta
+  *«la placa no expone packs (configura las particiones primero)»*.
+  🩸 **Y el mensaje ENGAÑA, igual que engañó en la Pico**: invita a tocar las particiones,
+  y en el S3 eso **no puede** arreglarlo. El comentario de `#327` en `board_mgr_pico.c:41`
+  ya lo decía con estas palabras: *«el LS contestaba —correctamente— "esta placa no expone
+  packs", **hiciera Eduardo lo que hiciera con las particiones**»*.
+  📌 **Y la frase de `#327` que define el patrón**: *«Encaminar los comandos y no dar la
+  zona es media función»*. Entonces el hueco era la Pico y lo tenían el STM32 y el
+  simulado; hoy lo tienen las otras cuatro y el hueco es el S3. Es
+  [[arreglo-que-no-viaja-entre-familias]] otra vez: el común creció y una copia privada
+  no.
+  ✅ **No es regresión de V5 ni bloquea**: la tabla de la Puerta 2 nunca listó packs para
+  el S3. Pero conviene DECIRLO, porque hoy sólo se descubre intentándolo y el mensaje
+  manda a otro sitio.
+  ⏭️ **Dos trabajos, separables**:
+  1. **Barato y honesto**: que la placa distinga *«esta familia no tiene zona de packs»* de
+     *«hay zona pero no está configurada»*. Hoy las dos dan la misma frase y una de ellas
+     es un consejo imposible. Es el mismo criterio que ya se aplicó al `BAD_ALIGN` y al
+     `exit 11`: **que el mensaje diga qué encontró, no lo que supone**.
+  2. **El de fondo**: escribir `pack_s3.c`. La flash del S3 son 16 MB y la zona caería por
+     debajo del límite del caché, así que no tiene el problema del P4 con los 32 MB —
+     debería ser un port directo del mapeo del P4.
+
 - ~~(sin número)~~ — ✅ **CERRADA el 18-ago: borradas.** Eduardo: *«se puede
   borrar, ya no lo utilizo nunca»*. Fuera `hello_mod.c` de ESP32, P4 y STM32, y con
   ellos el `bpvm_app.c/h` del STM32 — el demo de H9.1 que era su único consumidor y
