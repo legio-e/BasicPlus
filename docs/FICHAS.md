@@ -2173,6 +2173,32 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **📊 [V6] EL INVENTARIO de lo unificado y lo que falta** — medido el 22-ago, a raíz de la
+  observación de Eduardo: *«poco a poco vamos unificando: ya tenemos particiones comunes,
+  variables de entorno (más o menos), logs, y ahora packs. Y además la gestión de RAM y el
+  FS.»* Es cierto; esto lo pone en números para que la unificación de V6 se planifique
+  sobre datos y no sobre impresión.
+  📐 **El reparto de hoy**: **57 ficheros `.c` en `src/`** (común) frente a 32 en `pico/`,
+  11 en `esp32/main`, 9 en `esp32p4/main` y 11 en `stm32/port`.
+  ✅ **Ya común de verdad**: particiones (`bpvm_part`), ENV (`bpvm_env`), arranque
+  escalonado (`bpvm_boot`), núcleo de packs (`bpvm_pack`), fachada de ficheros
+  (`fs_facade`), heap y GC, tabla BIOS.
+  🔎 **Lo que sigue duplicado, por orden de facilidad:**
+  1. **`json_min.c` — TRES COPIAS BYTE A BYTE IDÉNTICAS** (8.688 B en `pico/`,
+     `esp32/main/` y `stm32/port/`). Es el parser JSON del wire y **no toca hardware**.
+     Duplicación pura: subirlo a `src/` es la unificación más barata que queda y no tiene
+     riesgo, porque los tres ficheros ya son el mismo.
+  2. **El log está «más o menos», como el ENV**: hay núcleo común (`src/bpvm_log.c`,
+     8.937 B) pero cada familia añade el suyo — y **el de la Pico (11.913 B) es MÁS GRANDE
+     que el común**. Merece mirar qué hay ahí que no sea de hardware.
+  3. **Packs**: ver la ficha de la unificación — la diferencia real cabe en una función.
+  4. `fs_lfs` y `board_mgr`: motor común + cintura por familia. **Esto es lo correcto**, no
+     hay nada que unificar; se listan para que no se confundan con los de arriba.
+  📌 **Y el criterio que sale de esto**: la pregunta no es *«¿está duplicado?»* sino
+  *«¿lo duplicado depende del hardware?»*. `board_mgr` duplicado está bien; `json_min`
+  triplicado no. Sin esa distinción, un censo de duplicados manda a rehacer cinturas que
+  están bien.
+
 - **🏗️ [V6] UNIFICAR el sistema de packs: implementación común + cintura por hardware** —
   decisión de Eduardo (22-ago), al dejar el S3 sin packs en V5: *«yo unificaría el
   sistema, el mismo para todas las familias, con las particularidades de hardware de cada
