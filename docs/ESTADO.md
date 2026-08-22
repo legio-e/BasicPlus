@@ -27,6 +27,65 @@
 
 ## Última sesión
 
+### 22-ago — H13 TERMINADO: seis placas, y ocho bugs por el camino
+
+**Las tres familias cerradas.** `ListGets` da **21 líneas idénticas** al PC en Pico, Metro,
+Nucleo, Discovery, S3 y P4 — tres familias, **tres arquitecturas** (ARM, Xtensa, RISC-V).
+La Puerta 1 era el gate no negociable y está pasado en todo el parque.
+
+**La matriz de nativo, completa.** `.mdn` generado al vuelo: ARM **105×** (Metro), RISC-V
+**112×** (P4). `.npk` precompilado en pack: ARM y **RISC-V**, los dos con `SqlDemo` 25/25.
+Las cuatro casillas, que hasta hoy eran dos.
+
+**Y la BD entera en DOS familias**: `SqlDemo` 25/25, `DaoDemo` 25/25, `GenDemo` 10/10 — en
+la Metro (ARM) y en el P4 (RISC-V). 60 líneas por placa, idénticas al PC.
+
+**Ocho bugs arreglados, ninguno visible leyendo código:**
+- 🩸 **Los packs no se podían grabar en STM32**: el IDE rearma el pack antes de mandarlo y
+  lo alineaba a **4 KB**, pero el U5 borra en páginas de **8 KB**. Fallaba la mitad de las
+  veces con un `BAD_ALIGN` que **culpaba al tamaño del fichero, lo único correcto**.
+- 🩸 **El pack se negaba a grabarse si el micro no tenía motor nativo.** Decisión de
+  Eduardo: *«lleve nativo o no, el pack se graba; si el nativo no corresponde, se graba SIN
+  nativo»*. Y el mensaje anterior aconsejaba **reconectar**, cosa imposible de arreglar en
+  un Xtensa.
+- 🩸 **`/app` es el punto ciego**: el STM32 vacía y reembebe `/lib` cada arranque pero no
+  toca `/app`, donde el IDE deja las dependencias. Un `Core.mod` rancio ahí dio `exit 11`
+  con `/lib` recién puesto. Lo encontró Eduardo con `dir /app`.
+- Y: la guía de instalación **sin la Discovery** (que sí viaja en el ZIP), el manual
+  **negando el AOT del P4** (lo tiene desde V4, 113×), `ChartDemo` con ruta rancia en la
+  batería (que queda **51/19/0/0**, limpia), y los samples y blobs del día anterior.
+
+**Y tres cosas que no son bugs pero faltaban:**
+- **`#408` CERRADA**: el árbol del P4 son **145 ms** (`app:1/3 lib:14/64 sd:8/33`) y el
+  formateo de la Metro **15 s** — lo que cuesta borrar 4,2 MB. Ninguno es un cuello.
+- **La decisión 5 CONTESTADA, y son TRES respuestas**: RP2350 instala si falta *o difiere*
+  y **avisa**; STM32 vacía y reembebe `/lib` cada boot; ESP32 instala **sólo si falta y no
+  avisa**. La instrucción honesta para la release vale para las tres: **borrar `/lib` y
+  `/app`**.
+- **El S3 no expone packs** — no existe `pack_s3.c`. Es el agujero de `#327` (que fue el de
+  la Pico) migrado de familia. Fichado; no bloquea porque nunca se prometió.
+
+**🧠 Y una mañana entera de REFLEXIONES de Eduardo sobre V6**, todas medidas contra el
+código y fichadas: el criterio de capas (sólo hardware/HAL deben diferir) · el inventario
+(el REPL **triplicado en 220 KB**, `json_min` en **3 copias idénticas**) · unificar packs
+(la diferencia cabe en **una función**) · uno o dos boots (la frontera existe pero no tiene
+nombre) · el simulador con **disfraces** por familia · por qué unificar da fiabilidad (cero
+bugs de memoria y de FS en dos días; los cinco estructurales, todos de lo repartido) · y el
+coste (sistemas **3×** el lenguaje en trabajo real de V5, y el lenguaje ya no crece).
+📌 Con una corrección suya que conviene recordar: yo medí líneas TOTALES y eso es el
+artefacto, no el esfuerzo. Bien contado —365 commits desde `v4.0`— salen **17.389 líneas
+tocadas en sistemas por familia frente a 7.234 de lenguaje**, y con **12.146 borradas**:
+eso no es escribir, es **reformar**.
+
+**⏭️ A LA VUELTA: arreglar lo que falte y PUBLICAR.** Lo pendiente ya no es probar:
+1. 🔴 `appv1lsp` y `appv2` viajan **rotos** en el ZIP → arreglar, sacar, o a `samples/errores/`.
+2. 🟡 El manual inglés se dejó siete secciones de V4.
+3. 🟡 Escribir en `RELEASES.md` la instrucción de actualizar (ya la sabemos).
+4. 🟡 **Rehacer el ZIP UNA vez** — han cambiado samples, IDE, `PackBurn`, tres imágenes y
+   mucha documentación.
+📌 Y dos fichas abiertas que **no bloquean**: el bug de LSP entre interfaces de módulo, y
+el estado persistente que dejó una placa sin ejecutar nada (sólo lo curó reparticionar).
+
 ### 21-ago — H13 día 1: Pico y Metro CERRADAS, y cinco bugs que sólo salieron ejecutando
 
 **Dos placas completas** (Puertas 1, 2 y 3), todo comparado contra la salida del host:
