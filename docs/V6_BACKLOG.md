@@ -10,7 +10,7 @@
 > aplazado estaba repartido en tres sitios y no había forma de verlo de un vistazo —
 > que es la misma enfermedad que nos costó tiempo en V5.
 
-**Recuento:** 29 asuntos vivos + 4 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos
+**Recuento:** 30 asuntos vivos + 4 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos
 que salieron el 21-ago probando H13. Uno de la lista se hizo ya en V5 y se ha movido a «CERRADAS» (ver el final).
 
 ---
@@ -69,6 +69,7 @@ que salieron el 21-ago probando H13. Uno de la lista se hizo ya en V5 y se ha mo
 | **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC | `FICHAS` §Aplazadas |
 | **El árbol de ficheros por COLOR** según el tipo (rojo RESERVADO) | `FICHAS` §Aplazadas |
 | 🆕 **Enseñar el `durationMs` que la placa YA manda** y nadie imprime | `FICHAS` §Aplazadas (21-ago) |
+| 🆕 **Al fallar una dependencia, decir DE DÓNDE salió el módulo — por CRC** | `FICHAS` §Aplazadas (22-ago, idea de Eduardo) |
 
 ## F · Placas
 

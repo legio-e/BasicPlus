@@ -2146,6 +2146,34 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **[VM] al fallar una dependencia, DECIR DE DÓNDE salió el módulo — por CRC** *(idea de
+  Eduardo, 22-ago, y él mismo la sitúa en V6)*.
+  🩸 **El problema, vivido el 22-ago**: el Nucleo dio
+  `exit 11 (lib 'Core' presente pero no exporta 'Core.__cls_new_List'; ¿version vieja?)`
+  **con `/lib` recién reembebido**. La causa era un `Core.mod` rancio en **`/app`**, y el
+  mensaje no lo decía porque **sólo nombra el módulo, no el fichero**. Eduardo: *«debe
+  indicar el path exacto, ya que la mayoría de las veces es porque hay más de un módulo»*.
+  Costó media hora con el código delante; a un usuario no le sale.
+  📐 **Por qué hoy no puede decirlo**: `bpvm_module_t` guarda `library` y `name` pero
+  **no la ruta**. El cargador SÍ la conoce y la registra
+  (`bpvm.c:512`, `[bpvm-c] dep 'Core' -> /lib/Core.mod`), pero eso va al log —que hay que
+  tener encendido— y no al mensaje que ve el usuario.
+  💡 **La idea de Eduardo, y por qué es mejor que guardar la ruta**: en vez de arrastrar
+  una ruta por módulo, **guardar su CRC**; y cuando ocurra el error, recorrer los sitios
+  donde pudo estar, calcular el CRC de cada candidato y decir cuál coincide.
+  ✅ **Cuesta CERO en régimen normal**, que es lo que la hace buena: la búsqueda sólo
+  ocurre cuando ya ha fallado algo. Y en memoria son **4 bytes por módulo** en vez de una
+  ruta: con `BPVM_MAX_MODULES = 16`, **64 B frente a ~1 KB**. En un micro eso no es un
+  detalle.
+  🔎 **Comprobado que las piezas están**: `bpvm_crc32` ya existe en la VM-C
+  (`include/crc32.h`, y `crc32.c` se enlaza en las cinco imágenes). El `.mod` no lleva CRC
+  en su cabecera, así que se calcularía sobre los bytes al cargar — que el cargador ya lee
+  enteros.
+  ⏭️ **Y el remate que lo hace de verdad útil**: si ADEMÁS encuentra un segundo fichero con
+  el mismo nombre y distinto CRC, decirlo — *«hay otro `Core.mod` en `/app` que NO es
+  éste»*. Ese es el mensaje que habría resuelto la mañana del 22-ago en un vistazo, porque
+  nombra las dos copias y no sólo la que se cargó.
+
 ### 🎯 V6/HITO-AOT — ampliar la cobertura del AOT, poco a poco (encargo de Eduardo, 21-ago)
 
 > *«Creamos un hito AOT, donde solucionamos esto, implementamos double y mejoramos el
