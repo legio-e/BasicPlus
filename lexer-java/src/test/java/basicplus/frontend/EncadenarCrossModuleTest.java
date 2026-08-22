@@ -47,6 +47,20 @@ class EncadenarCrossModuleTest {
 
     private static final String LIB =
         "module CadLib\n"
+      /* #450 (18-ago) saco `List` del compilador —antes la SINTETIZABA y
+       * existia en todas partes— y desde entonces viene de `Core.bp` como
+       * cualquier otra clase. Este fixture es del 13-ago y describia el
+       * lenguaje anterior: sin el import, la PASADA DE INTERFAZ no resuelve
+       * `List` y deja fuera el metodo `Dao.list`, con lo que el consumidor
+       * falla con "'Dao' no tiene miembro de instancia 'list'". El cuerpo SI
+       * compilaba: la asimetria es entre las dos pasadas, no en el lenguaje.
+       *
+       * Se anade el import para que el test vuelva a medir LO SUYO —encadenar
+       * sobre lo devuelto por un metodo importado (#387/#388)— y no la regla
+       * de imports. Que la pasada de interfaz resuelva `Core` implicito igual
+       * que la completa esta fichado para V6: decision de Eduardo, «en V6
+       * esto tiene que estar solucionado definitivamente». */
+      + "  import Core\n"
       + "  public class Where\n"
       + "    public property n: integer\n"
       + "    public function Where()\n"
@@ -96,6 +110,17 @@ class EncadenarCrossModuleTest {
         b.sourceDir  = src.toString();
         b.outDir     = out.toString();
         b.main       = "CadUso";
+        /* La stdlib, que ANTES no hacia falta. Hasta #450 el compilador
+         * SINTETIZABA `List`, asi que este fixture compilaba en el vacio. Desde
+         * que `List` vive en `Core.bp`, hay que decirle donde esta — igual que
+         * cualquier proyecto real, que la recibe del IDE o del `.bpbuild`.
+         * Si no aparece, se dice POR QUE en vez de fallar con un error de
+         * compilacion que no apunta aqui. */
+        java.io.File std = new java.io.File("../bpstdlib");
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            new java.io.File(std, "Core.mod").isFile(),
+            "hace falta ../bpstdlib/Core.mod (compila la stdlib antes de este test)");
+        b.dependencies.add(std.getAbsolutePath());
         return Main.buildProject(b, "mivm", false);
     }
 

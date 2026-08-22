@@ -36,25 +36,48 @@ public final class VmTestSupport {
      * como AssertionError para que el test falle con stack trace útil.
      */
     public static VmResult runMain(ThrowingRunnable mainFn) {
-        PrintStream original = System.out;
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream capture;
+        /* SE CAPTURAN LOS DOS CANALES, y el porqué importa (22-ago):
+         *
+         * El diagnóstico de GC (`VM [GC]: ...`) salía por **stdout**, y de ahí lo
+         * contaba `parse`. En V5 se movió a **stderr**, y con razón: stdout tiene
+         * que ser BYTE-IDÉNTICO entre miVM y la VM-C —es el invariante del
+         * proyecto— y cada una escribe su traza de GC de forma distinta. Dejarla
+         * en stdout rompía la paridad.
+         *
+         * Nadie actualizó estos tests, así que llevaban rojos contando 0 GCs
+         * mientras el GC funcionaba: `GcTest` y `OopTest` fallaban SÓLO en el
+         * recuento —sus aserciones de salida pasaban— que es la firma de un test
+         * rancio y no de un producto roto.
+         *
+         * Se capturan los dos y se concatenan: las líneas de programa siguen
+         * viniendo de stdout y las de diagnóstico de stderr, y `parse` las
+         * distingue por su prefijo como siempre. */
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        ByteArrayOutputStream bErr = new ByteArrayOutputStream();
+        PrintStream capOut, capErr;
         try {
-            capture = new PrintStream(baos, true, "UTF-8");
+            capOut = new PrintStream(bOut, true, "UTF-8");
+            capErr = new PrintStream(bErr, true, "UTF-8");
         } catch (UnsupportedEncodingException e) {
             throw new AssertionError(e);
         }
-        System.setOut(capture);
+        System.setOut(capOut);
+        System.setErr(capErr);
         try {
             mainFn.run();
         } catch (Exception e) {
-            System.setOut(original);
-            e.printStackTrace(original);
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            e.printStackTrace(originalOut);
             throw new AssertionError("main lanzó excepción", e);
         } finally {
-            System.setOut(original);
+            System.setOut(originalOut);
+            System.setErr(originalErr);
         }
-        String full = new String(baos.toByteArray(), StandardCharsets.UTF_8);
+        String full = new String(bOut.toByteArray(), StandardCharsets.UTF_8)
+                    + new String(bErr.toByteArray(), StandardCharsets.UTF_8);
         return parse(full);
     }
 
@@ -66,6 +89,11 @@ public final class VmTestSupport {
             // Markers de la VM
             if (raw.contains("INICIANDO")) { inVm = true; continue; }
             if (raw.contains("FIN DE LA"))  { inVm = false; continue; }
+            /* El diagnóstico de GC va por stderr y se concatena DESPUÉS de stdout,
+             * o sea que llega cuando `inVm` ya es false. Se cuenta aparte, antes
+             * del filtro: no está dentro de la ventana de ejecución y no tiene por
+             * qué estarlo — es diagnóstico, no salida de programa. */
+            if (raw.trim().startsWith("VM [GC]:")) { r.gcCount++; continue; }
             if (!inVm) continue;
 
             String line = raw.trim();
@@ -79,8 +107,6 @@ public final class VmTestSupport {
                 r.prints.add(Integer.parseInt(line.substring("VM [PRINT]: ".length()).trim()));
             } else if (line.startsWith("VM [FPRINT]: ")) {
                 r.fprints.add(Float.parseFloat(line.substring("VM [FPRINT]: ".length()).trim()));
-            } else if (line.startsWith("VM [GC]:")) {
-                r.gcCount++;
             } else {
                 // Línea de PRINT_STRING (o PRINT_CHAR concatenado): la VM la imprime "limpia".
                 r.stringPrints.add(line);
