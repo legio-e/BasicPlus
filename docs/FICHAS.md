@@ -404,7 +404,7 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Módulos y arranque (nuevas del 14-ago, en placa)
 
-- **🐛 [ESP32] un `/lib` rancio sobrevive para siempre y NADIE lo dice** — encontrado el
+- **🐛 [ESP32 y STM32] un módulo rancio sobrevive y NADIE lo dice — y `/app` es el punto ciego de los DOS** — encontrado el
   22-ago comparando las tres familias. **No es regresión de V5**: es así desde que existe
   el mecanismo.
   📐 **El hecho**: `esp32_mods_install` (`esp32/main/esp32_mods.c:4840`) instala un módulo
@@ -422,6 +422,18 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   `H11`: preguntar sólo si EXISTE costaba menos que leerlo). Es el mismo criterio de «que
   el desfase GRITE» que el proyecto aplica en el gate del `.mod`, el `magic` de la BIOS, el
   sello del `.npk` y la marca del punto de encuentro.
+  🩸 **AMPLIADO el 22-ago, con el Nucleo delante**: el problema **no es sólo del ESP32 ni
+  sólo de `/lib`**. El IDE sube las dependencias del programa a **`/app`**, y lo que hay
+  ahí **tapa** a lo de `/lib`. El STM32 vacía `/lib` en cada arranque pero **no toca
+  `/app`**, así que un `Core.mod` rancio ahí sobrevive a todo — y eso es exactamente lo que
+  dio el `exit 11` en el Nucleo con `/lib` recién reembebido. Lo encontró Eduardo con
+  `dir /app`.
+  ✅ **El RP2350 es la única familia con la red completa**: su comprobación recorre una
+  tabla que incluye las dos carpetas, y por eso en la Metro salía
+  `lib: /app/Hello.mod NO es el de esta imagen` (`pico/main.c:1323`).
+  🔗 **Y emparenta con la ficha de V6** *«NO copiar dependencias que el dispositivo YA
+  TIENE»*: si el IDE no dejara copias en `/app`, no habría nada que envejecer. Esa ficha
+  deja de ser sólo una optimización de tiempo de subida.
   ⚖️ **Y hay una TERCERA vía ya escrita en el propio proyecto**: el STM32 vacía `/lib` y lo
   reembebe fresco cada arranque (*«evita stdlib rancia tras actualizar el firmware»*,
   `fs_lfs_stm32.c:196`). Se autocura, a cambio de desgaste de flash. **Tres familias, tres

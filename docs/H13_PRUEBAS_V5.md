@@ -271,32 +271,40 @@ Dicho explícitamente, para que sea una decisión y no un olvido:
      (244 KB en trozos de 4 KB, verificado).
    - Documentado en `PENDIENTES.md` → «Una tupla no entra en una colección», con
      las dos alternativas escritas y la nota de que a los arrays les pasa igual.
-5. ✅ **La instrucción de ACTUALIZAR: CONTESTADA el 22-ago — y son TRES respuestas, no
-   una.** Salió midiendo por qué el FS del Nucleo crecía en cada arranque. Cada familia
-   resuelve la stdlib rancia de una forma distinta, y sólo una avisa:
+5. ✅ **La instrucción de ACTUALIZAR: CONTESTADA el 22-ago — tres familias, tres
+   comportamientos, y NINGUNO cubre las dos carpetas salvo el RP2350.**
+   ⚠️ **Corregido el mismo día**: la primera versión de este punto decía que en STM32 *«no
+   hay que hacer nada porque se autocura»*. **Falso, y lo desmintió la placa media hora
+   después**: el Nucleo dio `exit 11` con `/lib` recién reembebido. La causa era un
+   `Core.mod` rancio en **`/app`**, que el autocurado no toca — Eduardo lo encontró con
+   `dir /app` y lo borró.
 
-   | familia | qué hace al arrancar | ¿avisa del desfase? | qué debe hacer el usuario |
+   🔑 **La pieza que faltaba: hay DOS carpetas y el problema puede estar en cualquiera.**
+   El IDE sube las dependencias del programa a **`/app`**, y lo que hay ahí **tapa** a lo
+   de `/lib`. Limpiar sólo `/lib` no basta.
+
+   | familia | `/lib` | `/app` | ¿avisa? |
    |---|---|---|---|
-   | **RP2350** (Pico, Metro) | instala si falta **o difiere** | ✅ `/lib/X.mod NO es el de esta imagen (N B en FS, M embebido)` | borrar `/lib` (o regrabar `Stdlib.pack`) |
-   | **STM32** (Nucleo, DK2) | **vacía `/lib` y lo reembebe FRESCO cada boot** | no hace falta: se autocura | **nada** |
-   | **ESP32** (S3, P4) | instala **sólo si falta** (`esp32_mods.c:4840`) | ❌ **NO** | borrar `/lib` a mano… sin que nada se lo diga |
+   | **RP2350** (Pico, Metro) | instala si falta **o difiere** | ✅ **también lo revisa** | ✅ sí, de las dos (`pico/main.c:1323`) |
+   | **STM32** (Nucleo, DK2) | ✅ lo **vacía y reembebe** cada boot | ❌ **no lo toca** | ❌ no |
+   | **ESP32** (S3, P4) | instala **sólo si falta** | ❌ no lo toca | ❌ no |
 
-   🩸 **El ESP32 es el agujero**: un módulo rancio de un firmware anterior sobrevive para
-   siempre y **nadie lo menciona**. El síntoma que le llega al usuario es el `exit 11`
-   (*«lib 'Core' presente pero no exporta …; ¿versión vieja?»*) sin ninguna pista de que
-   la causa está en `/lib` ni de que borrarlo lo arregla.
-   📌 El comentario del ESP32 explica POR QUÉ no sobrescribe —*«p.ej. el usuario subió una
-   versión»*—, y es un motivo legítimo. El problema no es la política: es que **no avisa**.
-   ⏭️ Lo barato y en la línea de lo que el proyecto ya hace en cinco sitios: **comparar
-   tamaños y decirlo**, como la Pico. No cambiar la política, sólo dejar de callarla.
-   📌 **Y para las notas de la release**: «qué implica al actualizar» tiene que decir las
-   tres cosas, porque hoy `RELEASES.md` sólo trae el texto de v3.0.1 (*«nada más que
-   hacer»*), que resulta ser cierto **sólo en STM32**.
+   📌 **El RP2350 es la ÚNICA familia con la red completa**, y por eso allí el problema se
+   ve en el arranque en vez de en un `exit 11` sin pistas. En STM32 y ESP32 hay que
+   saberlo de antemano.
+   ⏭️ **Para las notas de la release**, la instrucción honesta es una sola frase que vale
+   para todas: **«al actualizar, borra `/lib` Y `/app` de la placa; el firmware repondrá
+   lo suyo»**. Es más bruta de lo necesario en RP2350 y STM32, pero es correcta en las
+   tres y no obliga al usuario a saber en qué familia está.
+   🔗 **Y este incidente es un caso concreto de una ficha de V6 que ya existía**: *«NO
+   copiar dependencias que el dispositivo YA TIENE — y que lo diga él»*. Si el IDE no
+   hubiera puesto un `Core.mod` en `/app`, no habría habido nada que envejecer. La ficha
+   deja de ser una optimización y pasa a ser también un arreglo de robustez.
    🔬 De paso quedó explicado el crecimiento del FS del Nucleo (294.912 → 344.064 →
-   409.600 → 417.792 B, a saltos de 8 KB = bloque de littlefs): es el precio de reembeber
-   14 módulos cada arranque. **Se estabiliza** —el cuarto arranque ya no creció y el
-   quinto tampoco—, así que es coste de desgaste, no una fuga. El propio código lo asume:
-   *«mismo desgaste que el snapshot viejo»*.
+   409.600 → 417.792 B, a saltos de 8 KB = bloque de littlefs): es el precio de vaciar y
+   reembeber 14 módulos en cada arranque. **Se estabiliza** al cuarto, así que es desgaste
+   asumido —el propio código lo dice: *«mismo desgaste que el snapshot viejo»*— y no fuga.
+
 6. 🔴 **`appv1lsp.bp` y `appv2.bp` viajan en el ZIP y NO compilan** (encontrado el
    21-ago, fichado en `FICHAS.md` → «la sustitución por LSP entre interfaces de módulo
    NO funciona»). **No es regresión de V5**: es el subsistema de interfaces de módulo,
