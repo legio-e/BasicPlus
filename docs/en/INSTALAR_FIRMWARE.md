@@ -121,29 +121,39 @@ and port notes (ESP-IDF v6.0.1, silicon revision) in
 
 ---
 
-## STM32 (Nucleo-U575ZI-Q) — `bpvm_stm32.bin` / `.hex`
+## STM32 — two boards, two images
 
-The Nucleo's integrated ST-LINK acts as the programmer — the same USB
-cable serves for flashing and for the wire (VCP).
+| board | image | display |
+|---|---|---|
+| **Nucleo-U575ZI-Q** (c1) | `bpvm_stm32_nucleo.bin` | no |
+| **Discovery STM32U5G9J-DK2** (c2) | `bpvm_stm32_dk2.bin` | yes (LVGL GUI) |
+
+On both, the **on-board ST-LINK acts as the programmer**: the same USB cable is used for
+flashing and for the wire (VCP).
 
 ### A. Prebuilt image
 
 Two options, simplest first:
 
-1. **Drag and drop**: the Nucleo shows up as a USB drive
-   (`NOD_U575ZI`). Copy the `.bin` to that drive and the ST-LINK burns it
-   by itself (the ST-LINK LED blinks while programming).
-2. **STM32CubeProgrammer** (free, GUI or CLI): connect → open the
-   `.hex`/`.bin` → *Download*. The robust route if drag&drop ever
-   misbehaves.
+1. **Drag and drop**: the board shows up as a USB drive (`NOD_U575ZI` on the Nucleo,
+   `DIS_U5G9J` on the Discovery). Copy the matching `.bin` onto that drive and the
+   ST-LINK flashes it (its LED blinks while writing).
+2. **STM32CubeProgrammer** (free, GUI or CLI). From the command line:
+   ```
+   STM32_Programmer_CLI -c port=SWD -d bpvm_stm32_nucleo.bin 0x08000000 -hardRst
+   ```
+   This is the robust route if drag and drop misbehaves.
+
+⚠️ **Do not mix the two images.** Same family, different boards: the Discovery one carries
+display support and the Nucleo one does not. Flashing the wrong one breaks nothing, but
+the board will not do what you expect.
 
 ### B. Building it
 
-The port is built inside an **STM32CubeIDE** project; the integration
+The port is built inside an **STM32CubeIDE** project (one per board); the integration
 guide (include paths, linked core folder, source list) is in
-`bpgenvm-c/stm32/port/README.md`. The resulting binary is flashed from
-CubeIDE itself (Run/Debug) or by exporting the `.bin`.
-
+`bpgenvm-c/stm32/port/README.md`. The resulting binary is flashed from CubeIDE itself
+(Run/Debug) or by exporting the `.bin`.
 ---
 
 ## Which version is on my board?

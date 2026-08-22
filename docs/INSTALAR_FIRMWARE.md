@@ -125,29 +125,39 @@ notas del port (ESP-IDF v6.0.1, revisión del silicio) en
 
 ---
 
-## STM32 (Nucleo-U575ZI-Q) — `bpvm_stm32.bin` / `.hex`
+## STM32 — dos placas, dos imágenes
 
-El ST-LINK integrado de la Nucleo hace de programador — el mismo cable
-USB sirve para flashear y para el wire (VCP).
+| placa | imagen | pantalla |
+|---|---|---|
+| **Nucleo-U575ZI-Q** (c1) | `bpvm_stm32_nucleo.bin` | no |
+| **Discovery STM32U5G9J-DK2** (c2) | `bpvm_stm32_dk2.bin` | sí (GUI LVGL) |
+
+En las dos, el **ST-LINK integrado hace de programador**: el mismo cable USB sirve para
+flashear y para el wire (VCP).
 
 ### A. Imagen precompilada
 
 Dos opciones, de más simple a más completa:
 
-1. **Arrastrar y soltar**: la Nucleo aparece como una unidad USB
-   (`NOD_U575ZI`). Copia el `.bin` a esa unidad y el ST-LINK lo graba
-   solo (el LED del ST-LINK parpadea durante la grabación).
-2. **STM32CubeProgrammer** (gratuito, GUI o CLI): conectar → abrir el
-   `.hex`/`.bin` → *Download*. Es la vía robusta si el drag&drop diera
-   problemas.
+1. **Arrastrar y soltar**: la placa aparece como una unidad USB (`NOD_U575ZI` en la
+   Nucleo, `DIS_U5G9J` en la Discovery). Copia el `.bin` que le corresponda a esa unidad
+   y el ST-LINK lo graba solo (su LED parpadea durante la grabación).
+2. **STM32CubeProgrammer** (gratuito, GUI o CLI). Por línea de órdenes:
+   ```
+   STM32_Programmer_CLI -c port=SWD -d bpvm_stm32_nucleo.bin 0x08000000 -hardRst
+   ```
+   Es la vía robusta si el arrastrar y soltar diera problemas.
+
+⚠️ **No confundas las dos imágenes.** Comparten familia pero no placa: la de la Discovery
+lleva el soporte de pantalla y la de la Nucleo no. Flashear la que no es no rompe nada,
+pero la placa no hará lo que esperas.
 
 ### B. Compilarla
 
-El port se construye dentro de un proyecto **STM32CubeIDE**; la guía de
-integración (include paths, carpeta enlazada del core, lista de fuentes)
-está en `bpgenvm-c/stm32/port/README.md`. El binario resultante se
-flashea desde el propio CubeIDE (Run/Debug) o exportando el `.bin`.
-
+El port se construye dentro de un proyecto **STM32CubeIDE** (uno por placa); la guía de
+integración (include paths, carpeta enlazada del core, lista de fuentes) está en
+`bpgenvm-c/stm32/port/README.md`. El binario resultante se flashea desde el propio
+CubeIDE (Run/Debug) o exportando el `.bin`.
 ---
 
 ## ¿Qué versión tengo en la placa?
