@@ -149,7 +149,16 @@ PUBLICAR_DIRS="benchmarks errores external formdemo imageproject packlib plugins
 #    la raiz que importan por ruta (appwithfromimpl -> plugins/filelogger.mod,
 #    frompathtest -> external/helper.mod). Sin ellas esos tres no compilan desde
 #    la instalacion. Misma familia que el hallazgo 6.
-INTERNAS_DIRS="aottest formev formmin holes resources"
+INTERNAS_DIRS="aottest formev formmin holes resources pendientes"
+#    pendientes/    = ejemplos que DEBERIAN funcionar y hoy no, por un fallo nuestro.
+#                     Se quedan en el repo porque son la prueba de regresion —el dia
+#                     que compilen, esta arreglado— pero NO se publican: un ejemplo
+#                     roto en el paquete es peor que no tenerlo. Entro el 22-ago con
+#                     appv1lsp/appv2 (la sustitucion de Liskov entre interfaces de
+#                     modulo, que el compilador rechaza aunque su propio codigo diga
+#                     que debe valer). OJO: NO van a errores/, que es para los que
+#                     fallan A PROPOSITO — mezclarlos camuflaria el bug entre los
+#                     fallos por diseno, que es justo lo que esa carpeta evita.
 #    aottest/       = banco de pruebas del AOT POR PROYECTO, no un ejemplo. Nacio
 #                     en H12, cuando la arquitectura del .mdn habia que escribirla
 #                     a mano en el .bpbuild ("target": "arm"). En H11 eso cambio:
