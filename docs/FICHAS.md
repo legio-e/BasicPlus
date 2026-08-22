@@ -2182,6 +2182,35 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🔴 [V6, OBLIGATORIO] la pasada de INTERFAZ no resuelve `Core` implícito** — encargo
+  explícito de Eduardo (22-ago): *«de momento hacemos 1 para salir del paso, pero en V6
+  esto tiene que estar solucionado definitivamente»*.
+  📐 **El hecho**, medido al recorrer el checklist de publicación: un módulo que expone un
+  tipo de la stdlib en una **firma pública** sin importar `Core` compila su cuerpo pero
+  **pierde el miembro en la interfaz**:
+  ```
+  -- omitidas en interfaz (1): class Dao.method list: retorno tipo no exportable: <error>
+  ```
+  Y el error de verdad aparece **en el consumidor**, lejos de la causa:
+  `'Dao' no tiene miembro de instancia 'list'`.
+  🔍 **La asimetría es entre las DOS PASADAS**: la completa resuelve `Core` implícito —por
+  eso `ListGets.bp` usa `List` sin importar nada y corre en las seis placas— y la de
+  interfaz no.
+  📅 **Desde cuándo**: el 18-ago, con `#450` («el compilador deja de sintetizar List,
+  SyncList y OwnerList»). Antes `List` la fabricaba el compilador y existía en todas
+  partes; ahora viene de `Core.bp` como cualquier clase. El cambio es correcto; lo que
+  faltó fue que la pasada de interfaz lo acompañara.
+  ✅ **Alcance real, comprobado — por eso NO bloqueó V5**: la stdlib está limpia
+  (`Str.bp` importa `Core` desde `#446`, y el `Orm` lo recibe de ahí; ningún módulo expone
+  un tipo de `Core` sin importarlo). Sólo afecta a un módulo **de usuario** que exponga
+  tipos de stdlib sin importar nada que arrastre `Core`. Y el compilador **avisa en el
+  sitio correcto**, aunque el error salga en otro.
+  ⏭️ **Lo que hay que hacer en V6**: que la pasada de interfaz resuelva los tipos
+  implícitos igual que la completa. Emparenta con el otro bug de esa misma pasada —el de
+  LSP entre interfaces de módulo, `appv1lsp`/`appv2`— que también sale de que
+  `INTERFACE_ONLY` ve menos que la pasada entera. **Son la misma raíz y conviene
+  arreglarlos juntos.**
+
 - **🧮 [V6] ¿CUÁNTO cuesta una familia nueva (ESP32-C3 / C6) si antes unificamos?** —
   pregunta de Eduardo (22-ago): *«si tenemos en cuenta que el IDF es el mismo para todas
   las familias ESP32, en realidad sale muy poco código: casi todo lo hecho para el P4
