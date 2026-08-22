@@ -1062,7 +1062,27 @@ int main(int argc, char** argv) {
     }
     g_packs = g_vm_mem + g_mem_size;
     memset(g_packs, 0xFF, PACKS_REGION_SIZE);   /* zona de packs virgen */
-    for (int i = 0; i < n_packs; i++) if (packs_preload(packs[i]) != 0) return 1;
+    /* Un pack que no entra NO tumba el simulador (22-ago). Antes era `return 1`
+     * y bastaba con que el IDE le pasara `SQLite.pack` —1,08 MB contra el 1 MB
+     * de aqui abajo— para que el micro simulado no arrancase: exit 1 nada mas
+     * empezar, con los packs que trae la propia distribucion. O sea que fallaba
+     * recien instalado y sin que el usuario hubiera hecho nada.
+     *
+     * Mismo criterio que Eduardo fijo ese dia para grabar packs en placa: lo que
+     * no se pueda usar se deja fuera y se DICE, pero no se aborta. Aqui es aun
+     * mas claro, porque el que no cabe no impide que los demas sirvan: la stdlib
+     * entra de sobra y es la que hace falta para casi todo.
+     *
+     * (Que SQLite no corra en el simulador es OTRA cosa, sabida y documentada:
+     * no hay motor nativo para PC. Eso no se arregla aqui.) */
+    int cargados = 0, fuera = 0;
+    for (int i = 0; i < n_packs; i++) {
+        if (packs_preload(packs[i]) == 0) cargados++;
+        else                              fuera++;
+    }
+    if (fuera > 0)
+        fprintf(stderr, "sim: %d pack(s) fuera y %d cargado(s) — el simulador"
+                        " arranca igual con los que si caben\n", fuera, cargados);
     bpvm_pack_mount(g_packs, PACKS_REGION_SIZE);
 
     /* --- "flash" del env (A/B) + gestor de placa --- */
