@@ -10,7 +10,7 @@
 > aplazado estaba repartido en tres sitios y no había forma de verlo de un vistazo —
 > que es la misma enfermedad que nos costó tiempo en V5.
 
-**Recuento:** 30 asuntos vivos + 4 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos
+**Recuento:** 31 asuntos vivos + 4 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos
 que salieron el 21-ago probando H13. Uno de la lista se hizo ya en V5 y se ha movido a «CERRADAS» (ver el final).
 
 ---
@@ -50,6 +50,7 @@ que salieron el 21-ago probando H13. Uno de la lista se hizo ya en V5 y se ha mo
 | **La S3 no tiene `bios_s3.c`** — no ofrece tabla BIOS | `FICHAS` §Aplazadas |
 | **`SD_INFO`/`SD_MOUNT` siguen sólo en `pico/repl_v1.c`** — no han subido al común | `FICHAS` §Aplazadas (de H6) |
 | **La unificación que dejó el censo `#427`** — lo que no cupo en V5 | `FICHAS` L805 |
+| 🆕 **UNIFICAR los packs**: implementación común + cintura por hardware (la diferencia real cabe en UNA función) | `FICHAS` §Aplazadas (22-ago, decisión de Eduardo) |
 
 ## D · Memoria y GC
 

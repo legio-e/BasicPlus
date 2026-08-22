@@ -2173,6 +2173,34 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🏗️ [V6] UNIFICAR el sistema de packs: implementación común + cintura por hardware** —
+  decisión de Eduardo (22-ago), al dejar el S3 sin packs en V5: *«yo unificaría el
+  sistema, el mismo para todas las familias, con las particularidades de hardware de cada
+  una. O sea: un sistema común, una implementación común, pero soporte a las diferencias
+  particulares de cada hardware.»*
+  📐 **Y el reparto sale MUY favorable, medido el 22-ago.** Lo único que difiere de verdad
+  entre las cuatro es **cómo se consigue un puntero legible a la zona**:
+
+  | familia | cómo obtiene el puntero |
+  |---|---|
+  | STM32 | `FLASH_BASE + pp->offset` — aritmética; la flash interna ya está mapeada |
+  | RP2350 | `(const uint8_t*) base` — aritmética; XIP mapeado por hardware |
+  | ESP32-P4 | `s_map_inst` de un **mmap explícito** — *«antes del mapeo no existe»* |
+  | ESP32-S3 | **nada**: no existe `pack_s3.c` (ver la ficha del agujero) |
+
+  ✅ **Todo lo demás YA es común y está probado en placa**: `bpvm_pack_mount()`, el
+  recorrido de la zona, la búsqueda de módulos y `.mdn`, y el grabado entero por la cintura
+  `bpvm_pack_flash_t` (erase/program/erase_block). O sea que **la diferencia cabe en una
+  función por familia**: `mapear(offset, size) → const uint8_t*`.
+  ⏭️ **La forma que sugiere el propio código**: un paso común que, con el layout del boot
+  en la mano, pida el puntero a esa función y llame a `bpvm_pack_mount`. Las dos familias
+  de aritmética la implementan en una línea; el ESP32 con su `mmap`; y **quien no la
+  implemente lo dice**, en vez de quedarse en silencio como el S3 hoy.
+  🎯 **Por qué esto vale más que arreglar el S3 a mano**: es la tercera vez que el mismo
+  agujero aparece en una familia distinta (`#327` en la Pico, y hoy el S3). Cablearlo a
+  mano una cuarta vez sólo mueve el hueco. Emparenta directamente con `#378` (que cada
+  micro DIGA lo que tiene) y con la unificación que dejó el censo `#427`.
+
 - **[VM] al fallar una dependencia, DECIR DE DÓNDE salió el módulo — por CRC** *(idea de
   Eduardo, 22-ago, y él mismo la sitúa en V6)*.
   🩸 **El problema, vivido el 22-ago**: el Nucleo dio
