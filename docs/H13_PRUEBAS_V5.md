@@ -60,6 +60,29 @@ puertas, no por placas — así cada día termina con algo cerrado:
 ## ✅ RESULTADOS — día 1 (21-ago)
 
 **Pico (RP2350) — CERRADA.** Imagen `bpvm_pico.uf2` rehecha con el arreglo de `#414`.
+
+**Nucleo-U575 (STM32U5) — Puerta 1 y lo que le aplica de la Puerta 2, CERRADAS.**
+Sin SD ni SQLite (no los tiene); packs sí, y GUI en la Discovery.
+
+| prueba | resultado |
+|---|---|
+| `ListGets` (el ABI de `Comparable`) | ✅ **21/21 idénticas** al PC |
+| `PacksDemo` (packs en placa) | ✅ **32/32 idénticas** — graba, lista y lee |
+| cola de `#439` | ✅ `RAM SUPERVIVIENTE` tras un reset (visto de rebote en el log) |
+
+🩸 **Y costó dos bugs, los dos encontrados aquí y arreglados el 22-ago:**
+- **Los packs NO se podían grabar en STM32**: el IDE rearma el pack antes de mandarlo y
+  lo alineaba a **4 KB** (`PackWriter.DEFAULT_BLOCK`, *«(Pico/ESP)»*), pero el U5 borra en
+  páginas de **8 KB**. Fallaba la mitad de las veces con un `BAD_ALIGN` que **apuntaba al
+  tamaño del fichero, que era justo lo único correcto**.
+- **`/app` es el punto ciego del autocurado**: el Nucleo vacía y reembebe `/lib` en cada
+  arranque, pero no toca `/app`, donde el IDE deja las dependencias. Un `Core.mod` rancio
+  ahí dio `exit 11` con `/lib` recién puesto.
+
+📌 **Lo que estos dos tienen en común, y conviene no perderlo**: en las dos ocasiones el
+mensaje de la placa **señalaba al sitio equivocado**. Uno culpaba al tamaño del fichero
+(correcto) y el otro a `/lib` (recién reembebido). Con el código delante nos costó media
+hora cada uno.
 - `ListGets` → **21 líneas idénticas** a miVM y a la VM-C de host. Puerta 1 pasada
   para la familia RP2350: el ABI nuevo de `Comparable` va bien en placa.
 - `PacksDemo` con `Stdlib.pack` grabado → **32 líneas idénticas** al host.
