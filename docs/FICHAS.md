@@ -2178,24 +2178,36 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
   crece, pero en el total sigue siendo pequeña. ¿En qué se nos va el tiempo? Cada vez más
   en los sistemas y en las pruebas. Unificar es el único camino viable para crecer de forma
   lineal y no exponencial: no es una opción.»*
-  ⚠️ **La foto ESTÁTICA no le da la razón, y conviene decirlo** (medido el 22-ago):
+  ⚠️ **Primero conté MAL, y Eduardo lo corrigió**: sumé las líneas TOTALES de compilador
+  y VMs, y eso mide el artefacto acumulado, no el esfuerzo — *«no los hemos escrito en esta
+  versión, los hemos ido escribiendo a lo largo de 5. Si queremos ser justos habría que
+  contar las líneas NUEVAS de esta versión. Y lo mismo con todo: el trabajo no es hacerlo
+  todo de nuevo, es ampliar y reformar lo que ya hay.»* Tiene razón, y bien contado la
+  tesis sale REFORZADA.
+  📊 **V5 de verdad: 365 commits desde el tag `v4.0`**, y esto es lo tocado:
 
-  | área | líneas | % |
+  | área | añadidas | borradas |
   |---|---|---|
-  | compilador 29.689 + VM Java 16.999 + núcleo VM-C 8.918 | **55.606** | **46 %** |
-  | sistemas comunes 9.904 + por familia 31.271 | **41.175** | 34 % |
-  | IDE | 13.416 | 11 % |
-  | pruebas | 10.873 | 9 % |
+  | compilador | 6.836 | 403 |
+  | VM Java | 398 | 11 |
+  | VM-C (núcleo + sistemas) | 3.802 | 110 |
+  | **sistemas por familia** | **17.389** | **12.146** |
+  | IDE | 2.682 | 255 |
+  | stdlib | 6.973 | 4.075 |
+  | documentación | 10.250 | 2.032 |
 
-  Hoy el lenguaje es el 46 %: no es una parte pequeña.
-  ✅ **Pero la DERIVADA sí le da la razón, y es lo que importa para decidir.** Al añadir una
-  familia nueva:
-  - compilador **+0** · VM **+0**
-  - sistemas **≈ +8.000 líneas** (media de las cuatro actuales)
-  - pruebas **× una placa más** en cada campaña — H13 son dos días por CINCO placas
-  📌 **Y el crecimiento no es exponencial por el código: lo es por la MATRIZ.** Cada familia
-  nueva multiplica las combinaciones y cada característica nueva se multiplica por las
-  familias. Hoy 5 imágenes; con el C3 y el C6 previstos serían 7.
+  ✅ **El reparto real del esfuerzo de V5**: lenguaje (compilador + VM Java) **7.234
+  líneas**; sistemas (por familia + el `src/` de la VM-C, que es casi todo sistemas)
+  **≈21.000**. **Los sistemas son TRES VECES el lenguaje.** Y la documentación sola (10.250)
+  pesa más que el compilador.
+  🔬 **Y el número que confirma lo de «ampliar y reformar»**: en sistemas por familia se
+  añaden 17.389 líneas y se borran **12.146**. Esa proporción no es la de escribir cosas
+  nuevas — es la de REFORMAR. Se tira dos tercios de lo que se pone.
+  📌 **La derivada, que era el argumento**: al añadir una familia nueva, compilador **+0**,
+  VM **+0**, sistemas **≈ +8.000**, y una placa más en cada campaña de pruebas (H13 son dos
+  días por CINCO). El crecimiento no es exponencial por el código: lo es por la **MATRIZ**
+  — cada familia multiplica las combinaciones y cada característica se multiplica por las
+  familias. Hoy 5 imágenes; con el C3 y el C6 previstos, 7.
   🎯 **Formulado así, la tesis es más fuerte**: no es que el lenguaje sea pequeño, es que
   **el lenguaje ya no crece y los sistemas sí**. El esfuerzo se ha desplazado sin que nadie
   lo decidiera. Unificar convierte «añadir una placa» en *una cintura* en vez de *una
