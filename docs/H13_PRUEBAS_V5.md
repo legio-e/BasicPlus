@@ -61,6 +61,29 @@ puertas, no por placas — así cada día termina con algo cerrado:
 
 **Pico (RP2350) — CERRADA.** Imagen `bpvm_pico.uf2` rehecha con el arreglo de `#414`.
 
+
+**Discovery U5G9J-DK2 (STM32U5) — CERRADA.** La placa con pantalla de la familia; su
+imagen NO se rehizo porque está demostrado que el arreglo del `#414` es no-op con `GUI`.
+
+| prueba | resultado |
+|---|---|
+| `ListGets` (el ABI de `Comparable`) | ✅ **21/21 idénticas** al PC |
+| `Bench` (AOT al vuelo) | ✅ **105×** — `fib(28)` 8.925 → 85 ms, los dos dan `317811` |
+| `PacksDemo` (packs en placa) | ✅ **32/32**, y con la zona vacía dice `0` y sale OK |
+| **GUI**: `ChartDemo` y `FontLoadDemo` | ✅ **las dos**, con la fuente cargada y renderizando |
+
+📌 **Lo que esta placa venía a demostrar y demuestra**: LVGL **no se movió** con el `Core`
+nuevo. Era el riesgo real de la familia, y está descartado.
+✅ **Y de paso queda verificado en placa el arreglo del `BAD_ALIGN`**: `Stdlib.pack` —el
+que esta mañana no se podía grabar en STM32— entra sin incidencias en **las dos** placas
+de la familia.
+
+📐 **Una medida que conviene no malinterpretar** (y que Eduardo corrigió): el U5 tarda
+8.925 ms interpretado a 160 MHz frente a los 8.819 de la Metro a 150. Es un 1 %, ruido —
+**no es que el STM32 rinda menos**. Su RAM y su flash están DENTRO del chip, que es
+ventaja y no desventaja; explica además por qué declara 645 KB de `bss` estático donde el
+RP2350 sólo 73. ⏭️ Eso acota la ficha `#432` de V6 antes de empezarla: **el reparto de
+memoria no puede ser el mismo en las tres familias, y el motivo es de silicio.**
 **Nucleo-U575 (STM32U5) — Puerta 1 y lo que le aplica de la Puerta 2, CERRADAS.**
 Sin SD ni SQLite (no los tiene); packs sí, y GUI en la Discovery.
 
