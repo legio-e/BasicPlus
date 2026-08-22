@@ -271,16 +271,32 @@ Dicho explícitamente, para que sea una decisión y no un olvido:
      (244 KB en trozos de 4 KB, verificado).
    - Documentado en `PENDIENTES.md` → «Una tupla no entra en una colección», con
      las dos alternativas escritas y la nota de que a los arrays les pasa igual.
-5. 🟡 **La instrucción de ACTUALIZAR de V4 no existe, y hace falta.** Al arrancar con
-   un `/lib` de otra versión, la placa lo dice bien (`/lib/Core.mod NO es el de esta
-   imagen (2576 B en FS, 12999 embebido)`) y el programa muere con `exit 11`. Pero
-   `RELEASES.md` sólo tiene el «Qué implica al actualizar» de **v3.0.1**, que dice
-   *«nada más que hacer»* — y para V5 eso es falso. Se ha perdido dos veces la ocasión
-   de medir el arreglo MÍNIMO (en la Pico se reparticionó, en la Metro se formateó):
-   ⏭️ **queda pendiente aprovechar el S3 o el Nucleo**, que llegarán con su `/lib`
-   rancio, para comprobar si basta con borrar `/lib` (el firmware lleva la stdlib
-   embebida) o hace falta más.
+5. ✅ **La instrucción de ACTUALIZAR: CONTESTADA el 22-ago — y son TRES respuestas, no
+   una.** Salió midiendo por qué el FS del Nucleo crecía en cada arranque. Cada familia
+   resuelve la stdlib rancia de una forma distinta, y sólo una avisa:
 
+   | familia | qué hace al arrancar | ¿avisa del desfase? | qué debe hacer el usuario |
+   |---|---|---|---|
+   | **RP2350** (Pico, Metro) | instala si falta **o difiere** | ✅ `/lib/X.mod NO es el de esta imagen (N B en FS, M embebido)` | borrar `/lib` (o regrabar `Stdlib.pack`) |
+   | **STM32** (Nucleo, DK2) | **vacía `/lib` y lo reembebe FRESCO cada boot** | no hace falta: se autocura | **nada** |
+   | **ESP32** (S3, P4) | instala **sólo si falta** (`esp32_mods.c:4840`) | ❌ **NO** | borrar `/lib` a mano… sin que nada se lo diga |
+
+   🩸 **El ESP32 es el agujero**: un módulo rancio de un firmware anterior sobrevive para
+   siempre y **nadie lo menciona**. El síntoma que le llega al usuario es el `exit 11`
+   (*«lib 'Core' presente pero no exporta …; ¿versión vieja?»*) sin ninguna pista de que
+   la causa está en `/lib` ni de que borrarlo lo arregla.
+   📌 El comentario del ESP32 explica POR QUÉ no sobrescribe —*«p.ej. el usuario subió una
+   versión»*—, y es un motivo legítimo. El problema no es la política: es que **no avisa**.
+   ⏭️ Lo barato y en la línea de lo que el proyecto ya hace en cinco sitios: **comparar
+   tamaños y decirlo**, como la Pico. No cambiar la política, sólo dejar de callarla.
+   📌 **Y para las notas de la release**: «qué implica al actualizar» tiene que decir las
+   tres cosas, porque hoy `RELEASES.md` sólo trae el texto de v3.0.1 (*«nada más que
+   hacer»*), que resulta ser cierto **sólo en STM32**.
+   🔬 De paso quedó explicado el crecimiento del FS del Nucleo (294.912 → 344.064 →
+   409.600 → 417.792 B, a saltos de 8 KB = bloque de littlefs): es el precio de reembeber
+   14 módulos cada arranque. **Se estabiliza** —el cuarto arranque ya no creció y el
+   quinto tampoco—, así que es coste de desgaste, no una fuga. El propio código lo asume:
+   *«mismo desgaste que el snapshot viejo»*.
 6. 🔴 **`appv1lsp.bp` y `appv2.bp` viajan en el ZIP y NO compilan** (encontrado el
    21-ago, fichado en `FICHAS.md` → «la sustitución por LSP entre interfaces de módulo
    NO funciona»). **No es regresión de V5**: es el subsistema de interfaces de módulo,

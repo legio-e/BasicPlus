@@ -404,6 +404,30 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
 
 ### Módulos y arranque (nuevas del 14-ago, en placa)
 
+- **🐛 [ESP32] un `/lib` rancio sobrevive para siempre y NADIE lo dice** — encontrado el
+  22-ago comparando las tres familias. **No es regresión de V5**: es así desde que existe
+  el mecanismo.
+  📐 **El hecho**: `esp32_mods_install` (`esp32/main/esp32_mods.c:4840`) instala un módulo
+  **sólo si NO existe** (`if (bpvm_fs_stat(...) != 0)`). Un `Core.mod` de un firmware
+  anterior se queda ahí indefinidamente. Y a diferencia del RP2350, el ESP32 **no tiene el
+  aviso** `NO es el de esta imagen` — ése vive sólo en `pico/main.c`.
+  🩸 **Lo que le llega al usuario**: `exit 11` con *«lib 'Core' presente pero no exporta
+  'Core.__cls_new_List'; ¿versión vieja?»* — y ni una pista de que la causa esté en `/lib`
+  ni de que borrarlo lo arregle. En la Pico lo dice la placa al arrancar; aquí no.
+  📌 **La POLÍTICA no es el problema y no hay que cambiarla.** Su comentario la justifica:
+  *«No sobreescribas si ya está (p.ej. el usuario subió una versión)»*, que es razonable —
+  respetar lo que el usuario puso a mano. Lo que falta es **decirlo**.
+  ⏭️ **El arreglo barato**: comparar el tamaño del fichero con el del blob embebido y
+  emitir la misma línea que la Pico. No lee el fichero entero (la Pico ya resolvió eso en
+  `H11`: preguntar sólo si EXISTE costaba menos que leerlo). Es el mismo criterio de «que
+  el desfase GRITE» que el proyecto aplica en el gate del `.mod`, el `magic` de la BIOS, el
+  sello del `.npk` y la marca del punto de encuentro.
+  ⚖️ **Y hay una TERCERA vía ya escrita en el propio proyecto**: el STM32 vacía `/lib` y lo
+  reembebe fresco cada arranque (*«evita stdlib rancia tras actualizar el firmware»*,
+  `fs_lfs_stm32.c:196`). Se autocura, a cambio de desgaste de flash. **Tres familias, tres
+  estrategias, ninguna decidida como LA buena** — eso es material del eje común/hardware de
+  V6 (`#427`), no de un parche suelto.
+
 - ~~`#418`~~ — **los módulos de `/sys` no se encuentran.** `bpvm_entry_resolve`
   (`src/bpvm.c:697`) busca **basedir → tal cual → `/app` → `/lib`**, y `/sys` NO
   está en la lista: en toda la VM, `/sys` sólo se usa para leer `auto.txt` (#345).
