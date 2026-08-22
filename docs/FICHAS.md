@@ -971,7 +971,16 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   de la **zona de packs** (4,2 MB en esta placa) → unos **280 KB/s de borrado de
   flash**, que para un RP2350 es lo esperable. 📌 Anotado como *explicado*, no como
   pendiente: nadie tiene que perseguirlo pensando que es un fallo. Borrar 4,2 MB cuesta
-  eso. La otra mitad de la ficha —el árbol en la P4— sigue sin medir.
+  eso.
+  ✅ **Y LA OTRA MITAD, MEDIDA el 22-ago en el P4 — `#408` QUEDA CERRADA.** El árbol
+  **no es un cuello**: `ls: 23 ent en 145 ms | app:1/0ms lib:14/61ms sd:8/36ms`. 145 ms
+  para 23 entradas, y encima **desglosado por carpeta**, que era justo lo que la ficha
+  pedía para poder distinguir quién tarda. El grueso se lo lleva `/lib` (14 entradas en
+  61 ms) y la SD (8 en 36 ms); `/app` es instantáneo.
+  📌 **Las dos mitades, entonces, tienen respuestas opuestas y las dos son buenas
+  noticias**: el formateo tarda lo que cuesta borrar flash (explicado, no patológico) y el
+  árbol ya no tarda —lo arregló `#424` el 17-ago— así que no queda nada que optimizar.
+  Cerrar una ficha midiendo y descubriendo que no hay problema también es cerrarla.
   🔎 **Y de camino salió esto**: `save` responde «FS guardado en flash» y nada más, pero
   el firmware **sí se cronometra** y manda `durationMs` en el `SAVE_REPLY`
   (`pico/repl_v1.c:929-943`). **El dato viaja por el wire y el IDE lo descarta.**
