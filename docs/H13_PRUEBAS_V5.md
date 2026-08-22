@@ -227,6 +227,39 @@ de la sesión: el cuelgue no era el `#414` ni los blobs. Con esa misma imagen la
 corre con normalidad; era el estado persistente que se fichó aparte.
 
 
+
+**ESP32-P4 — CERRADA (22-ago). La más completa, y la que faltaba.**
+Es la única placa donde coinciden GUI, SD, SQLite, ORM, packs y AOT, y la única de
+arquitectura **RISC-V**.
+
+| prueba | resultado |
+|---|---|
+| `ListGets` (el ABI de `Comparable`) | ✅ **21/21** |
+| `PacksDemo` | ✅ idéntico a la Metro; zona mapeada en `0x40144000` |
+| `SdCard` (la tarjeta, SDIO 4 bits) | ✅ **los seis** |
+| `Bench` (AOT RISC-V al vuelo) | ✅ **112×** — 4.363 → 39 ms |
+| `SqlDemo` (SQLite sobre el `.npk` RISC-V) | ✅ **25/25** |
+| `DaoDemo` (ORM a mano) | ✅ **25/25 sin ni una diferencia** |
+| `GenDemo` (ORM generado por `@BD`) | ✅ **10/10** |
+| **GUI**: `ChartDemo` | ✅ |
+
+🩸 **Y con un hallazgo propio de la familia**: sus **catorce** módulos de `/lib` estaban
+rancios —`Core.mod` de 8.002 B contra los 12.999 actuales— y **la placa no dijo nada**,
+porque el ESP32 instala sólo-si-falta y no compara. Lo vio Eduardo mirando el árbol a mano.
+Es la mejor ilustración del agujero de la decisión 5: en la Pico habrían salido catorce
+avisos en el arranque.
+
+📊 **Y de paso, la tabla de rendimiento interpretado que no existía:**
+
+| placa | reloj | `fib(28)` interpretado | con AOT |
+|---|---|---|---|
+| **ESP32-P4** | 360 MHz | **4.363 ms** | **39 ms · 112×** |
+| Metro (RP2350) | 150 MHz | 8.819 ms | 84 ms · 105× |
+| Discovery (U5) | 160 MHz | 8.925 ms | — |
+| ESP32-S3 | 240 MHz | 17.971 ms | ✗ sin AOT en Xtensa |
+
+El P4 dobla a RP2350 y STM32 y cuadruplica al S3 — que además es el único sin acelerar.
+⏭️ Es material directo para la ficha de la **batería de rendimiento** de V6.
 ## ✅ LA MATRIZ DE NATIVO, COMPLETA (22-ago)
 
 Son **dos cadenas independientes** y **dos arquitecturas**, y hasta hoy sólo estaba probada
