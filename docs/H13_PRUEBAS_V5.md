@@ -226,6 +226,26 @@ verde. Lo que se ha probado es, bit a bit, lo que se va a publicar.
 de la sesión: el cuelgue no era el `#414` ni los blobs. Con esa misma imagen la placa
 corre con normalidad; era el estado persistente que se fichó aparte.
 
+
+## ✅ LA MATRIZ DE NATIVO, COMPLETA (22-ago)
+
+Son **dos cadenas independientes** y **dos arquitecturas**, y hasta hoy sólo estaba probada
+media tabla. Ya no:
+
+| | ARM (Cortex-M33) | RISC-V (ESP32-P4) |
+|---|---|---|
+| **`.mdn` generado al vuelo** por el IDE | ✅ Metro · `fib(28)` **105×** (8.819→84 ms) | ✅ P4 · **112×** (4.363→39 ms) |
+| **`.npk` precompilado** dentro de un pack | ✅ Metro · `SqlDemo` 25/25 | ✅ P4 · `SqlDemo` **25/25** |
+
+📌 **Y el `SqlDemo` del P4 verifica cuatro cosas de una sola corrida**: el nativo RISC-V
+precompilado, SQLite ejecutándose **desde un pack en XIP** (mapeado en `0x40144000`, con
+`INST` y `DATA` compartiendo dirección), la **arena de 4 MB** que reservó el ENV
+(`bd: bloque 4096 KB @0x48001000`), y la escritura en la **SD por SDIO a 4 bits**.
+📌 El `112×` coincide con el `113×` que quedó medido al cerrar `H4` en V4 — la aceleración
+no se ha degradado en una versión.
+⚠️ **Y el Xtensa no tiene AOT**, y está bien dicho: el IDE avisa nombrando los destinos que
+sí existen, el programa corre interpretado y da el mismo resultado. Medido en el S3:
+`fib(28)` tarda lo mismo por los dos caminos.
 ## ✅ Puerta 1 — CERRADA (22-ago): el ABI nuevo, en SEIS placas
 
 Era el gate no negociable de H13: el 20-ago `Comparable` ganó cinco métodos y eso **corre
