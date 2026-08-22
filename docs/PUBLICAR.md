@@ -1,4 +1,4 @@
-# Checklist de publicación — BasicPlus v4.0
+# Checklist de publicación — BasicPlus v5.0
 
 Doc de mantenedor (no enlazado desde la portada). El repo público
 `legio-e/BasicPlus` **ya existe**; publicar es un `push` + una release.
@@ -7,7 +7,7 @@ Doc de mantenedor (no enlazado desde la portada). El repo público
 > dice *qué* se hace, *quién* lo hace y **cómo saber que salió bien**. Si un paso
 > no tiene forma de comprobarse, es que está mal escrito.
 
-**Lo que se publica en V4 es UN artefacto**: `BasicPlus-4.0-win.zip` — el paquete
+**Lo que se publica en V5 es UN artefacto**: `BasicPlus-5.0-win.zip` — el paquete
 completo (IDE + compilador + stdlib + samples + docs + micro simulado + **las 5
 imágenes de firmware dentro**, en `firmware/`).
 
@@ -28,6 +28,33 @@ decisión.
 
 ---
 
+
+## ✅ PRE-FLIGHT DE V5 — pasado el 22-ago
+
+Queda registrado porque el checklist pide cada casilla y las tres últimas costaron
+hallazgos que no estaban previstos.
+
+| comprobación | resultado |
+|---|---|
+| Suite `lexer-java` | ✅ **104 tests, 0 fallos** |
+| Suite `miVM` | ✅ **34 tests, 0 fallos** |
+| Batería de samples | ✅ **51 corren · 19 compilan · 0 no compilan · 0 fallan** |
+| Los tres demos de BD en el host | ✅ `SqlDemo`, `DaoDemo`, `GenDemo` con `status=OK` |
+| Las 5 imágenes, del mismo árbol y selladas | ✅ `SHA256SUMS.txt` verifica |
+| Micro simulado **con LVGL** | ✅ y con **reja en `montar-zip.sh`** para que no se repita |
+| ZIP montado y verificado por dentro | ✅ **24.403.893 B** |
+| **Desplegado en carpeta limpia y probado allí** | ✅ **Eduardo, 22-ago**: el IDE del ZIP funciona *«tanto con placa como con el simulador; la ayuda también»* |
+
+🩸 **Las suites estaban ROJAS y nadie lo sabía** — 3 fallos, ninguno del producto: dos
+tests de miVM contaban el GC por `stdout` cuando el diagnóstico se movió a `stderr` (para
+no romper la paridad byte a byte, que es el invariante), y uno de `lexer-java` llevaba
+rojo desde el 18-ago porque su fixture describía el lenguaje anterior a `#450`.
+🩸 **Y el simulador se publicaba SIN gráficos.** El checklist ya decía *«micro simulado con
+LVGL»* y aun así se saltó en el ZIP del 20-ago. Ahora el empaquetado lo comprueba: un
+humano puede saltarse una casilla, el script no.
+📌 **Las dos cosas salieron de recorrer el checklist entero en vez de fiarse.** Y la
+última —desplegar en limpio— es la que encontró los dos fallos del simulador. Ninguno se
+ve desde el repo.
 ## 1 · Pre-flight — que lo que se publica sea lo que se probó
 
 Estos pasos **ya se hicieron el 6-ago-2026** (H13). Se dejan escritos porque la
@@ -119,10 +146,10 @@ historia legítima y qué es texto caducado.
       `docs/` a propósito (para que no viaje en el ZIP). Si lo quieres en la web,
       hay que copiarlo o enlazarlo a mano.
 
-## 4 · Release v4.0
+## 4 · Release v5.0
 
-- [ ] Tag `v4.0` sobre el commit publicado.
-- [ ] Cuerpo de la release = sección **v4.0** de `docs/RELEASES.md`.
+- [ ] Tag `v5.0` sobre el commit publicado.
+- [ ] Cuerpo de la release = sección **v5.0** de `docs/RELEASES.md`.
 - [ ] Adjuntar **el ZIP y nada más** (ver arriba: las imágenes van dentro).
 - [ ] Comprobar desde la propia release: descargar el ZIP y verificar el
       `sha256` contra el que anotaste al montarlo.
