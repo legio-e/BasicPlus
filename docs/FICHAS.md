@@ -1956,6 +1956,23 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 
 ### Cierre de V5 — lo que se hace AL CERRAR, no antes
 
+- **⚖️ DECIDIDO (22-ago): el ZIP pesa 24 MB y SE QUEDA ASÍ.** No es un descuido ni una
+  tarea pendiente — es una decisión, y se escribe aquí para que nadie la «arregle».
+  📊 **De dónde sale el peso** (V4 9,6 MB → V5 24,4 MB, medido comparando los dos ZIP):
+  el 93 % del crecimiento es **el fat-jar del IDE**, que pasa de 4,4 a 18,2 MB. Y dentro,
+  `org/sqlite` son **24,9 MB sin comprimir**: el driver JDBC de SQLite, que el IDE necesita
+  en el PC para leer el esquema de una base y generar los DAO de `@BD`.
+  📐 El artefacto de Maven trae los nativos de **seis plataformas** — Linux 7,2 MB ·
+  Android 4,9 · **Windows 3,8** · musl 3,2 · FreeBSD 3,2 · Mac 2,3 — y en una distribución
+  `-win` sólo se ejecuta uno. Son ~20,7 MB que no arrancarán jamás.
+  🎯 **Y aun así se quedan. Eduardo**: *«no tocamos nada. Es el PC: los recursos son casi
+  ilimitados comparados con los de un micro. 10 MB más en un PC no es nada.»*
+  📌 **Encaja con la filosofía del proyecto y conviene verlo así**: se diseña para el
+  dispositivo pequeño, y el PC **no es la restricción**. Gastar riesgo de empaquetado —una
+  exclusión de rutas en el shade que, si se pasa, deja el IDE sin generador de DAO— para
+  ahorrar unos megas en un disco de terabytes es cambiar algo caro por algo que no vale
+  nada. El sitio donde cada byte cuenta es la flash del micro, y ahí sí se pelea.
+
 Nada de esto bloquea un hito, y por eso está aparte: tenerlo colgando de H11
 trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
