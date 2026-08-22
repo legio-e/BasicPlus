@@ -2173,6 +2173,45 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🏆 [V6] POR QUÉ UNIFICAR: la tesis de Eduardo, contrastada con H13** — cierre de las
+  reflexiones del 22-ago: *«¿cuántos problemas de memoria hemos tenido? ¿Y cuántos de FS?
+  Ya nos hemos olvidado: los dos sistemas están funcionando. ¿Y por qué? Primero porque los
+  unificamos en un único sistema, y después de unificarlos los fuimos puliendo hasta que
+  desaparecieron los bugs. Así que **la unificación es el paso previo a tener sistemas
+  fiables**.»*
+  🔬 **Y H13 lo confirma sin que nadie lo buscara.** Clasificando TODO lo encontrado el 21
+  y 22-ago sobre cinco placas:
+
+  | hallazgo | de dónde nace |
+  |---|---|
+  | `#414`: builtins de packs dentro del `#ifdef BPVM_GUI` | packs — **por familia** |
+  | blobs de `IO`/`Math` rancios (sólo la Pico) | generador — **por familia** |
+  | `BAD_ALIGN` grabando packs en STM32 (4 K vs 8 K) | bloque de borrado — **por familia** |
+  | `Core.mod` rancio en `/app` tapando a `/lib` | 3 estrategias de `/lib` — **por familia** |
+  | el S3 sin vista de packs | packs — **por familia** |
+  | 8 samples que no compilaban | lenguaje (`any`→`Object`) |
+  | LSP entre interfaces · `native` en método ignorado | compilador |
+  | 3 errores de documentación | docs |
+  | **memoria** | **CERO** |
+  | **sistema de ficheros** | **CERO** |
+
+  📌 **Dos días machacando cinco placas** con SD, SQLite, ORM, GUI, packs, hilos y GC
+  —incluido `SdCard` escribiendo 32.000 B en 500 trozos y `AotGcRt` forzando colectas— **y
+  ni un fallo de memoria ni de FS**. Los dos subsistemas que en V4 costaron una campaña
+  entera no han dicho una palabra.
+  🎯 **Y los CINCO fallos estructurales vienen todos del mismo sitio: lo que NO está
+  unificado** — packs, arranque, `/lib`. Ninguno del núcleo común.
+  ⚠️ **Con una salvedad honesta**: queda un fallo sin explicar —la placa que dejó de
+  ejecutar nada y sólo se recuperó reparticionando— y **podría ser de FS o de particiones**.
+  Está fichado aparte con lo que hay que medir si repite. No cambia el balance, pero
+  contarlo como cero sería hacer trampa.
+  💡 **Lo que esto añade a la tesis**: no es sólo que unificar permita pulir. Es que
+  **mientras algo está repartido en N copias, los bugs no se manifiestan donde se
+  desarrolla** — aparecen en la placa que nadie probó, meses después. Memoria y FS se
+  pudieron pulir porque, al ser únicos, **cada bug salía en el PC y en las cinco placas a
+  la vez**. Un bug de packs sólo sale en la familia que lo tiene mal, y por eso los cinco de
+  arriba llevaban meses ahí sin que nada fallara.
+
 - **🎭 [V6] EL SIMULADOR CON DISFRACES: que `bpvm-sim` pueda vestirse de cada familia** —
   nace de la reflexión de Eduardo (22-ago): *«la VM-C es un hardware completamente
   diferente… podríamos hacer 2 versiones, una más libre, más cercana al PC, y otra más
