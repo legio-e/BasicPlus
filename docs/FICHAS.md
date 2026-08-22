@@ -2173,6 +2173,45 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🎯 [V6] EL CRITERIO DE CAPAS, y lo que mide contra el código de hoy** — Eduardo,
+  22-ago: *«si dividimos el código por capas, solamente la de hardware, la HAL y la BP HAL
+  tiene sentido que sean diferentes; todo lo demás debe ser independiente del hardware y
+  por lo tanto común»*. Es un criterio **operativo**: se puede contrastar. Esto es el
+  contraste, medido el mismo día.
+  🔴 **Lo que más lo incumple, y con diferencia: el REPL está TRIPLICADO en ~220 KB.**
+
+  | fichero | bytes |
+  |---|---|
+  | `pico/repl_v1.c` | **102.966** |
+  | `esp32/main/repl_esp32.c` | 69.052 |
+  | `stm32/port/stm32_repl.c` | 47.816 |
+  | *común del wire* (`bmgr_wire`+`dbg_wire`+`comm_common`) | *43.159* |
+
+  El **transporte** sí es hardware (UART, USB-CDC); **interpretar `RUN`, `DIR`, `INFO` o
+  `PACK_BURN` no lo es** — el protocolo es el mismo en las cinco imágenes.
+  🧠 **Y esto explica CUATRO hallazgos del 21 y 22-ago que parecían independientes:**
+  `SD_INFO`/`SD_MOUNT` sólo en `pico/repl_v1.c` · el `INFO` del STM32 sin cuatro campos que
+  la Pico sí da · el aviso `/lib … NO es el de esta imagen` sólo en la Pico · el
+  `preinstall` con comprobación, sólo en la Pico.
+  **No son cuatro fallos: son cuatro síntomas del mismo.** Con tres REPL separados, cada
+  mejora aterriza en uno y los otros se quedan atrás — y no se descubre hasta que alguien
+  prueba esa placa concreta. Es [[arreglo-que-no-viaja-entre-familias]] con una causa
+  estructural detrás.
+  🔎 **El resto del contraste**, por si sirve para ordenar el trabajo:
+  - ✅ **Cumplen el criterio** (son cintura y deben serlo): `bios_*`, `board_mgr_*`,
+    `platform_*`, `comm_*`, `fs_lfs_*`, `flash_lock`, `psram`, `neopixel`, `gpio_*`,
+    `gui_display_*`, los `main.c`.
+  - ❌ **No lo cumplen**: los tres REPL (arriba) · `json_min.c` (**3 copias idénticas**) ·
+    el log (núcleo común 8.937 B **+** 11.913 de la Pico, 5.216 del S3, 2.553 del STM32).
+  - 🟡 **Ni una cosa ni otra: los blobs.** La Pico tiene **16 ficheros `*_mod.c`** con la
+    stdlib embebida; el ESP32 y el STM32 la meten en **UNO** (`esp32_mods.c`,
+    `stm32_mods.c`). Mismo dato, tres formas — y de ahí sale que la Pico "tenga 32
+    ficheros" frente a 11. No es código: es la misma stdlib empaquetada distinto.
+  ⏭️ **Y el orden que sugiere la medida**: `json_min` primero (gratis, los tres ficheros ya
+  son idénticos), luego el REPL (donde está el 80 % del problema y el 100 % de las
+  asimetrías que nos han mordido), y el log al hilo del REPL, porque buena parte de lo que
+  cada familia mete ahí es diagnóstico del propio REPL.
+
 - **📊 [V6] EL INVENTARIO de lo unificado y lo que falta** — medido el 22-ago, a raíz de la
   observación de Eduardo: *«poco a poco vamos unificando: ya tenemos particiones comunes,
   variables de entorno (más o menos), logs, y ahora packs. Y además la gestión de RAM y el
