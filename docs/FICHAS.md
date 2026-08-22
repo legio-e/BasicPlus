@@ -2173,6 +2173,37 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **📈 [V6] «Unificar no es una opción, es el único camino» — la tesis económica, medida**
+  — cierre de Eduardo (22-ago): *«la parte del compilador es muy pequeña; añadiendo la VM
+  crece, pero en el total sigue siendo pequeña. ¿En qué se nos va el tiempo? Cada vez más
+  en los sistemas y en las pruebas. Unificar es el único camino viable para crecer de forma
+  lineal y no exponencial: no es una opción.»*
+  ⚠️ **La foto ESTÁTICA no le da la razón, y conviene decirlo** (medido el 22-ago):
+
+  | área | líneas | % |
+  |---|---|---|
+  | compilador 29.689 + VM Java 16.999 + núcleo VM-C 8.918 | **55.606** | **46 %** |
+  | sistemas comunes 9.904 + por familia 31.271 | **41.175** | 34 % |
+  | IDE | 13.416 | 11 % |
+  | pruebas | 10.873 | 9 % |
+
+  Hoy el lenguaje es el 46 %: no es una parte pequeña.
+  ✅ **Pero la DERIVADA sí le da la razón, y es lo que importa para decidir.** Al añadir una
+  familia nueva:
+  - compilador **+0** · VM **+0**
+  - sistemas **≈ +8.000 líneas** (media de las cuatro actuales)
+  - pruebas **× una placa más** en cada campaña — H13 son dos días por CINCO placas
+  📌 **Y el crecimiento no es exponencial por el código: lo es por la MATRIZ.** Cada familia
+  nueva multiplica las combinaciones y cada característica nueva se multiplica por las
+  familias. Hoy 5 imágenes; con el C3 y el C6 previstos serían 7.
+  🎯 **Formulado así, la tesis es más fuerte**: no es que el lenguaje sea pequeño, es que
+  **el lenguaje ya no crece y los sistemas sí**. El esfuerzo se ha desplazado sin que nadie
+  lo decidiera. Unificar convierte «añadir una placa» en *una cintura* en vez de *una
+  reimplementación*, y «añadir una característica» en *una vez* en vez de *cinco*.
+  🔗 Y enlaza con la tesis de fiabilidad de la ficha anterior: lo repartido no sólo cuesta
+  más de mantener — **esconde sus bugs hasta que alguien prueba esa placa concreta**. Coste
+  y fiabilidad empujan en la misma dirección.
+
 - **🏆 [V6] POR QUÉ UNIFICAR: la tesis de Eduardo, contrastada con H13** — cierre de las
   reflexiones del 22-ago: *«¿cuántos problemas de memoria hemos tenido? ¿Y cuántos de FS?
   Ya nos hemos olvidado: los dos sistemas están funcionando. ¿Y por qué? Primero porque los
