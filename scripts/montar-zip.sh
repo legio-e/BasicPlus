@@ -57,6 +57,21 @@ cat > "$OUT/BpVM.cfg" <<'CFG'
 CFG
 
 # --- micro simulado (el IDE lo busca en bin/) --------------------------------
+# ⚠️ EL SIM TIENE QUE LLEVAR GRAFICOS, y hay que COMPROBARLO (22-ago).
+#    `make sim` a secas lo construye SIN LVGL —el valor por defecto es LVGL=0— y
+#    el binario resultante arranca igual, sirve ficheros, ejecuta programas y
+#    habla wire. Lo unico que NO hace es PINTAR: dice "panel sin pantalla" y las
+#    demos graficas no van. Se publico asi en el ZIP del 20-ago sin que nadie lo
+#    notara, con el SDL2.dll al lado sin usar, y lo encontro Eduardo probando el
+#    IDE recien instalado.
+#    Se construye con:   make LVGL=1 sim
+#    Y se distingue por el import de SDL2.dll: el de sin graficos no lo tiene.
+if ! strings "$RAIZ/bpgenvm-c/build/bpvm-sim.exe" 2>/dev/null | grep -qx "SDL2.dll"; then
+    echo "ERROR: bpvm-sim.exe esta construido SIN LVGL (no importa SDL2.dll)." >&2
+    echo "       Las demos graficas no funcionarian en el micro simulado." >&2
+    echo "       Reconstruyelo con:  cd bpgenvm-c && make LVGL=1 sim" >&2
+    exit 1
+fi
 cp "$RAIZ/bpgenvm-c/build/bpvm-sim.exe" "$OUT/bin/"
 cp "$RAIZ/bpgenvm-c/build/SDL2.dll"     "$OUT/bin/"
 
