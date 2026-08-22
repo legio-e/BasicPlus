@@ -139,6 +139,36 @@ Dicho sin adornos, porque conviene saberlo antes de empezar:
   falta.
 - **exFAT no está soportado**: formatea las tarjetas en FAT32.
 - **La tarjeta SD no llega al STM32** todavía.
+- **El ESP32-S3 no tiene AOT**: sus funciones `native` corren interpretadas — el AOT
+  emite ARM y RISC-V, no Xtensa. El IDE lo avisa al compilar y el programa funciona
+  igual, sólo que sin acelerar. El P4 sí acelera.
+- **El S3 tampoco expone packs.** El resto de placas sí.
+- **La sustitución entre interfaces de módulo** (un impl de `LogApiV2` donde se pide
+  `LogApi`) no funciona todavía.
+
+### Qué implica al actualizar desde V4
+
+⚠️ **Un paso, y no es opcional: borra `/lib` y `/app` de la placa.** El firmware repone
+lo suyo al arrancar.
+
+La stdlib de V5 cambió —`Object` sustituyó a `any` como raíz, y `Comparable` ganó las
+conversiones—, así que un módulo de V4 que sobreviva en la placa **tapa al nuevo**. El
+síntoma es un error al ejecutar del estilo:
+
+```
+exit 11 (lib 'Core' presente pero no exporta 'Core.__cls_new_List'; ¿version vieja?)
+```
+
+📌 **Por qué las dos carpetas y no sólo `/lib`**: el IDE deja en `/app` las dependencias
+del programa, y lo que hay ahí **tiene preferencia** sobre `/lib`. Limpiar sólo una no
+basta — nos costó media hora encontrarlo durante las pruebas.
+
+📌 **Y por qué la instrucción es la misma para todas las placas** aunque no la necesiten
+todas: cada familia se comporta distinto —el RP2350 avisa del desfase al arrancar, el
+STM32 rehace `/lib` solo en cada arranque, y el ESP32 ni lo toca ni avisa— y la regla de
+borrar las dos carpetas es correcta en las tres sin tener que saber en cuál estás.
+
+También hay que **reflashear el firmware**: la stdlib va embebida en la imagen.
 
 ---
 
