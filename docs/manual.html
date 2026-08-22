@@ -1792,8 +1792,13 @@ igual que el device) y, en V3, el AOT automático desde el IDE y la GUI
   <li>Array de tamaño fijo <code>tipo[N]</code> como campo de clase y
       dentro de una <code>native function</code> (error de compilación con
       alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
-  <li>AOT en ESP32 (Xtensa del S3, RISC-V del P4) — el <code>.mdn</code> es
-      Thumb-2 (RP2350 y STM32 sí aceleran); v4.</li>
+  <li><strong>AOT en el ESP32-S3 (Xtensa)</strong> — sus funciones <code>native</code>
+      corren <strong>interpretadas</strong>: el AOT emite ARM (Thumb-2) y RISC-V, no
+      Xtensa. El IDE lo dice al compilar, nombrando los destinos que sí hay, y el
+      programa funciona igual — sólo que sin la aceleración. <em>Medido el 22-ago en una
+      DevKit S3: <code>fib(28)</code> tarda lo mismo por los dos caminos.</em>
+      <br><strong>El ESP32-P4 SÍ acelera</strong> (RISC-V, desde V4), igual que el RP2350
+      y el STM32.</li>
   <li>Mejora de rendimiento (no de funcionalidad): la llamada de una
       <code>native</code> a una función de OTRO módulo ya funciona, pero
       cruza por el puente del intérprete (el compilador avisa). La mejora

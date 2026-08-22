@@ -1507,8 +1507,13 @@ and, in V3, automatic AOT from the IDE and the GUI
   <li>Fixed-size array <code>type[N]</code> as a class field and inside a
       <code>native function</code> (compile error, with the alternative:
       <code>type[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
-  <li>AOT on ESP32 (the S3's Xtensa, the P4's RISC-V) — the <code>.mdn</code> is
-      Thumb-2 (RP2350 and STM32 do accelerate); v4.</li>
+  <li><strong>AOT on the ESP32-S3 (Xtensa)</strong> — its <code>native</code> functions
+      run <strong>interpreted</strong>: the AOT emits ARM (Thumb-2) and RISC-V, not
+      Xtensa. The IDE says so at compile time, naming the targets that do exist, and the
+      program still works — just without the speedup. <em>Measured on 22-ago on an S3
+      DevKit: <code>fib(28)</code> takes the same time either way.</em>
+      <br><strong>The ESP32-P4 DOES accelerate</strong> (RISC-V, since V4), like the
+      RP2350 and the STM32.</li>
   <li>Performance improvement (not functionality): a <code>native</code>'s call
       to a function in ANOTHER module already works, but crosses the interpreter
       bridge (the compiler warns). The improvement — dispatching native→native
