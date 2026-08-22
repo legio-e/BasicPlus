@@ -2173,6 +2173,41 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 
 ### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
 
+- **🥾🥾 [V6] ¿UN boot o DOS?** — pregunta de Eduardo (22-ago): *«tenemos 1 boot, y
+  dependerá del hardware. Si lo dividimos en 2, podemos tener un boot que dependa del
+  hardware pero el 2º, que se ejecuta a continuación, podría ya ser independiente.»*
+  ✅ **La división está EMPEZADA, sólo que sin nombre.** `bpvm_boot_climb()` ya es una
+  escalera **común** (`KERNEL→PARTITIONS→FS→APP`) cuyos peldaños son **callbacks que pone
+  cada familia**. O sea que la SECUENCIA ya es independiente del hardware y lo específico
+  son los ganchos: el «boot 2» existe en embrión.
+  🩸 **Lo que falta es que la FRONTERA tenga nombre — y se nota en que cada familia la
+  dibuja donde le parece:**
+
+  | familia | llama a la escalera desde |
+  |---|---|
+  | Pico | `main.c:1239` |
+  | ESP32 | `board_mgr_esp32.c:313` |
+  | STM32 | `board_mgr_stm32.c:141` |
+
+  📌 **Y el ejemplo que lo demuestra, medido**: el `preinstall` de la Pico —el que puebla
+  `/lib` desde los blobs y AVISA de módulos rancios, el que cazó el `IO.mod` desfasado el
+  21-ago— vive en `pico/main.c:1285`, o sea **DESPUÉS de la escalera pero dentro del código
+  de familia**. No tiene nada de hardware: es poblar un FS y comparar tamaños. Por eso sólo
+  lo tiene la Pico, por eso el STM32 resolvió lo mismo de otra forma (vaciar y reembeber),
+  el ESP32 de una tercera (sólo-si-falta), y **ninguno de los dos avisa**.
+  🎯 **Ahí está el valor de la propuesta**: con un «boot 2» común y declarado, poblar `/lib`
+  sería un peldaño suyo — y las cinco imágenes lo tendrían, o **dirían que no lo traen**.
+  Las tres estrategias distintas de `/lib` y el peldaño de packs que el S3 no tiene son el
+  mismo síntoma: **piezas sin hardware dentro viviendo en el boot de hardware**.
+  ⏭️ **El reparto que sugiere lo medido**:
+  - **Boot 1 (por familia)**: relojes, RAM, RTOS, transporte, acceso a flash. Lo que no
+    existe hasta que el silicio arranca.
+  - **Boot 2 (común)**: particiones → **packs** (hoy sin peldaño) → FS → poblar `/lib` →
+    VM. Con ganchos sólo para *«cómo alcanzo este almacenamiento»*, que es lo único que
+    de verdad cambia (ver la ficha de unificar packs: cabe en una función).
+  🔗 Emparenta con todo lo anterior de hoy: el criterio de capas, el inventario, y el
+  peldaño de packs que falta. **Son la misma reforma vista desde cuatro sitios.**
+
 - **🏛️ [V6] ¿QUÉ INCLUYE el «sistema operativo» común, y dónde encaja cada pieza?** —
   pregunta de Eduardo (22-ago): *«por encima del HAL BP está sobre todo el sistema
   operativo: gestión de memoria, FS, etc. Y este es (debe ser) común. Entonces si es
