@@ -185,6 +185,29 @@ public final class AotCEmitter {
         return "long";
     }
 
+    /** [V6/N1.3] El helper de impresion que toca segun el TIPO de la expresion,
+     *  o excepcion si ese tipo no tiene ninguno. Rechazar es deliberado:
+     *  imprimir un `long` con print_i32 truncaria en silencio. */
+    private String printHelperDe(Ast.IExpr e) {
+        BpType t = (semInfo != null) ? semInfo.exprTypes.get(e) : null;
+        if (t instanceof PrimitiveType) {
+            switch (((PrimitiveType) t).tag) {
+                case INTEGER: case INT8: case UINT8: case INT16: case UINT16:
+                    return "print_i32";
+                case FLOAT:   return "print_f32";
+                case STRING:  return "print_string";
+                default: break;
+            }
+        }
+        String cual = (t == null) ? "desconocido" : t.toString();
+        throw new UnsupportedAotException(
+            "AOT: `print` de un valor de tipo '" + cual + "' dentro de una funcion native "
+            + "todavia no va (linea " + ((Ast.Node) e).line + "). Hoy van integer, float y string. "
+            + "El motivo es que el interprete los imprime con rutinas distintas y la tabla "
+            + "de helpers solo trae esas tres; usar otra truncaria en silencio. Opciones: "
+            + "convertir a string antes, o sacar el `print` de la native.");
+    }
+
     private static String dobleHelper(String op) {
         if (op == null) return null;
         switch (op) {
@@ -973,6 +996,62 @@ public final class AotCEmitter {
             w.println("}");
             return;
         }
+        /* [V6/N1.3] `print` dentro de una `native`.
+         *
+         * ⚠️ NO es "una llamada al runtime que ya existe", como parecia: el
+         * interprete despacha POR TIPO (`PRINT_NONL`, `LPRINT_NONL`,
+         * `DPRINT_NONL`, `FPRINT_NONL`, `PRINT_STR_NONL`, el booleano via builtin
+         * BOOL_TO_STRING y el objeto via toString() polimorfico), y de esos la
+         * tabla de helpers solo tiene i32, f32 y string.
+         *
+         * Asi que se soporta lo que hay y se RECHAZA lo demas nombrando el tipo.
+         * Imprimir un `long` con print_i32 truncaria en silencio, y un `print`
+         * que miente es peor que un `print` que no esta — sobre todo aqui, que su
+         * uso es depurar.
+         *
+         * El espaciado se copia del interprete: un espacio entre items separados
+         * por COMA (no por punto y coma), y un salto de linea al final. */
+        if (s instanceof Ast.PrintStmt) {
+            Ast.PrintStmt ps = (Ast.PrintStmt) s;
+            for (int i = 0; i < ps.items.size(); i++) {
+                Ast.PrintItem it = ps.items.get(i);
+                if (i > 0 && it.leadingSep == Ast.PrintSep.COMMA) {
+                    indent();
+                    w.println("vm->aot_helpers->print_char(vm, ' ');");
+                }
+                if (it.expr == null) continue;
+                String h = printHelperDe(it.expr);
+                indent();
+                w.print("vm->aot_helpers->" + h + "(vm, ");
+                emitExpr(it.expr);
+                w.println(");");
+            }
+            indent();
+            w.println("vm->aot_helpers->print_nl(vm);");
+            return;
+        }
+
+        /* [V6/N1.3] `do ... loop [cond]` — un `while` al reves, y C lo tiene tal
+         * cual: `do { ... } while (cond)`. La condicion se evalua DESPUES, asi que
+         * el cuerpo corre al menos una vez; sin condicion, es un bucle infinito y
+         * se emite `while (1)`, que es lo que hace el interprete. */
+        if (s instanceof Ast.DoLoopStmt) {
+            Ast.DoLoopStmt dl = (Ast.DoLoopStmt) s;
+            indent();
+            w.println("do {");
+            indentLevel++;
+            for (Ast.IStmt st : dl.body) emitStmt(st);
+            indentLevel--;
+            indent();
+            if (dl.condition == null) {
+                w.println("} while (1);");
+            } else {
+                w.print("} while (");
+                emitExpr(dl.condition);
+                w.println(");");
+            }
+            return;
+        }
         if (s instanceof Ast.ForStmt) {
             emitForStmt((Ast.ForStmt) s);
             return;
@@ -1313,6 +1392,10 @@ public final class AotCEmitter {
             w.print(Float.toString((float) v) + "f");
             return;
         }
+        /* [V6/N1.3] `null` — un cero. Una referencia BP es un handle empaquetado y
+         * el handle nulo ES el cero, asi que no hay nada que traducir: el mismo
+         * valor que empuja el interprete con OP_NULL. */
+        if (e instanceof Ast.NullLitExpr) { w.print("0"); return; }
         if (e instanceof Ast.DoubleLitExpr) {
             /* #426 — sin sufijo: en C un literal de coma flotante YA es double.
              * `Double.toString` da la representacion mas corta que redondea de

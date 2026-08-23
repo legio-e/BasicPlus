@@ -78,11 +78,13 @@ class AotCoberturaTest {
      * gesto que registra que la cobertura del AOT se movió.
      */
     private static final Set<String> SOPORTADOS = new TreeSet<>(java.util.Arrays.asList(
-        // Medido el 23-ago-2026. 20 de 27.
+        // Medido el 23-ago-2026. 23 de 27 tras N1.3 (entraron DoLoopStmt,
+        // NullLitExpr y PrintStmt; la foto anterior eran 20).
         "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt", "ContinueStmt",
-        "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr", "IfStmt",
-        "IndexExpr", "IntLitExpr", "LongLitExpr", "ParenExpr", "ReturnStmt",
-        "StringLitExpr", "SwitchStmt", "UnaryExpr", "VarDecl", "WhileStmt"
+        "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
+        "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",
+        "ParenExpr", "PrintStmt", "ReturnStmt", "StringLitExpr", "SwitchStmt",
+        "UnaryExpr", "VarDecl", "WhileStmt"
     ));
 
     /** El motivo del ultimo rechazo, para que el informe no culpe al nodo

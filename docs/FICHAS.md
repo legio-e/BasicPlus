@@ -900,7 +900,36 @@ intérprete en las dos VMs), así que estos helpers **no tienen red automática 
 prueba de verdad es cronometrar y comparar un bucle de `double` en una `native` contra el
 mismo interpretado — que es justo lo que el diseño pedía para el primer día.
 
-**3. Los statements sencillos.** Del censo de `AOT_LIMITES.md`, por relación
+**3. Los statements sencillos.** 🟨 **TRES DE CUATRO HECHOS (23-ago), y la cuarta pata
+—el medidor— PRIMERO**, que es lo que evita que las otras se pudran.
+
+✅ **El medidor** (`AotCoberturaTest`): recorre los nodos del AST con un fragmento BP mínimo
+por cada uno y **mide** cuáles pasan. La foto es el test: cambiarla es el gesto que registra
+que la cobertura se movió; si nadie la tocó y hay diferencia, es regresión.
+📌 **Y se validó a sí mismo**: la primera medida decía 17 de 28, pero al hacer que dijera el
+**motivo** de cada rechazo salieron **seis fragmentos míos mal escritos** — cuatro nodos
+(`ForStmt`, `IndexExpr`, `LongLitExpr`, `SwitchStmt`) **sí estaban soportados** y el censo
+los habría dado por rotos. Un medidor sin la columna del porqué acusa a quien no es.
+
+✅ **`null`** — un cero: el handle nulo ES el cero, nada que traducir.
+✅ **`do…loop`** — el `do { } while (c)` de C tal cual; sin condición, `while (1)`.
+✅ **`print`** — ⚠️ **y NO era «una llamada al runtime que ya existe»**, como decía esta
+ficha: el intérprete despacha **por tipo** (seis rutinas distintas más el booleano por
+builtin y el `toString` polimórfico), y la tabla de helpers sólo trae `i32`, `f32` y
+`string`. Así que va **lo que hay** y se **rechaza el resto nombrando el tipo**: imprimir un
+`long` con `print_i32` truncaría en silencio, y un `print` que miente es peor que uno que no
+está — sobre todo aquí, que su uso es depurar. El espaciado se copia del intérprete.
+
+⏭️ **Queda el literal de array**, que sí necesita alocar (`newarray_i32` y `array_store_i32`
+ya están en los helpers, así que es abordable). Y quedan fuera, con su motivo escrito:
+`try`/`catch` dentro de una native, `throw` de algo que no sea `RuntimeError(string)`, y el
+destructuring de tuplas.
+
+📊 **Cobertura: 20 → 23 de 27.** Baterías 109/0, paridad 35 PASS.
+⚠️ Misma carencia que los `double`: **la paridad no cubre el camino AOT**, así que estos
+tres no tienen red automática — sólo el medidor, que dice si *compilan*, no si *coinciden*.
+
+**3b. Los statements sencillos — el enunciado original.** Del censo de `AOT_LIMITES.md`, por relación
 esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),
 **`do…loop`** (un `while` al revés), **literales de array**. Las cuatro son azúcar y
 ninguna estaba documentada como límite hasta el censo del 21-ago.
