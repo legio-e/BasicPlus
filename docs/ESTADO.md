@@ -27,6 +27,60 @@
 
 ## Última sesión
 
+### 23-ago (tarde-2) — U1 hecho y cerrado, y siete hitos más
+
+**Código, por fin.** Las dos tareas de U1, verificadas **en las cinco imágenes**:
+
+- **`U1.2` — el log de la Pico al núcleo común** (`31ad091e`): de **280 a 101 líneas**. Era
+  la única familia que no compilaba `src/bpvm_log.c` —su `CMakeLists` ni lo nombraba—
+  mientras STM32 y ESP32 ya sólo aportaban cintura, así que **había dos ejemplos** y no hubo
+  que diseñar nada. ⏳ **Falta placa**: que el post-mortem sobreviva al reinicio.
+- **`U1.1` — `json_min` al común** (`b506bbde`): de 3 copias byte-idénticas a una. El
+  trabajo no era mover el fichero sino el alta en **cinco builds** — y de paso arregla el
+  simulador, que metía mano en `pico/`.
+
+**Y U1 se cerró con DOS tareas, no cuatro.** Las otras dos se cayeron al mirarlas:
+
+- **`U1.3`** lo paró Eduardo: *«si vamos a fusionar `.mod` y `.mdn`, deja de tener sentido»*.
+  Cierto — la fusión borra ese código.
+- **`U1.4`** tenía la **premisa falsa, y era mía**: dije «cuelgan de `bpvm_part.h`» y
+  `bpvm_part.h` no hace E/S de flash. Lo real: ~12 cableados de `erase`/`program` y **dos
+  cinturas distintas** ya existentes. Es diseño, no mecánica.
+
+🧠 **La lección, que vale para U2–U5**: mi criterio de «fácil» era *«¿existe ya el
+contrato?»*. Detecta divergencia muy bien y **no presupuesta nada** — ni mira si el trabajo
+sobrevivirá a lo ya planeado.
+
+**Hallazgo gordo, y arreglado** (`27dadba3`, `c7d0bbee`): **los dos proyectos STM32 tenían
+una configuración `Release` abandonada**. A la de la Discovery le faltaban cuatro `-D`
+—entre ellos `BPVM_BOARD_DK2`, sin el cual `board.h` cae a la rama de la **Nucleo**—, dos
+rutas de include y tres exclusiones; la de la Nucleo no tenía **ninguna** ruta ni exclusión,
+y ni siquiera se había construido nunca. Lo que se publica sale de `Debug`, comprobado con
+números (887.604 B contra los 888.268 del `.bin` publicado). **Eduardo mandó borrar las dos.**
+⚠️ Queda dicho lo que es harina de otro costal: esa única configuración se llama `Debug`
+aunque compile a `-Os` y sea la de publicar.
+
+**Siete hitos nuevos** (`8a337ad7`): **N1** AOT · **L1** lenguaje y compilador · **E1** IDE
+y wire · **G1** el bucle de LVGL a un hilo BP propio · **P1** ESP32-C3 y C6 · **P2**
+pantallas SPI (tras P1). Más `A1`, la revisión por niveles, tras la unificación.
+
+**⏭️ AL VOLVER — encargo de Eduardo:** *«antes de empezar U2, que me parece un trabajo
+bastante pesado, me gustaría abordar un poco de AOT (1 o 2 puntos, no todo), y así vamos
+cambiando un poco de tipo de tareas»*. El hito **N1** tiene tres puntos, y el orden que él
+mismo dejó escrito el 21-ago es **por tandas, no de un salto**:
+
+1. **`native` en un MÉTODO** — hoy se ignora **en silencio**. Son dos cosas y en este orden:
+   que **AVISE** (barato, y `AOT_LIMITES.md` dice que *no espera a V6*) y luego abrir el
+   barrido de `AotCEmitter.java:259` a los métodos, pasando el objeto como primer parámetro.
+   📌 `MemberAccessExpr` ya está soportado, así que lo del `this` puede que no sea el muro
+   que parecía — ver [[no-se-puede-vs-no-esta-implementado]].
+2. **`double`** (`#426`) — diseño hecho en `docs/V6_IDEAS.md` §double.
+3. **Los statements sencillos**, del censo de `AOT_LIMITES.md`.
+
+El 1 parece el mejor primer paso: su mitad barata (avisar) cabe en una sesión corta y
+convierte una mentira muda en una línea.
+
+
 ### 23-ago — V6 abierto: el índice, al día, y el primer paso verificado
 
 Sesión corta, de orientación. **No se tocó código.**
