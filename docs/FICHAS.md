@@ -201,6 +201,21 @@ va por MIPI-DSI (P4) y LTDC (STM32), las dos interfaces paralelas de gama alta; 
 que abre la GUI a las placas pequeñas, y conviene desarrollarla contra el hardware que la
 va a usar.
 
+#### ✅ U1 — CERRADO el 23-ago (con dos tareas, no cuatro)
+
+**Quedó en `U1.1` (json_min) y `U1.2` (el log de la Pico), las dos hechas y verificadas en
+las cinco imágenes.** `U1.3` y `U1.4` salieron del hito al mirarlas de cerca, cada una por
+un motivo distinto — y las dos las paró un criterio que a mi clasificación le faltaba:
+
+- **`U1.3`**: la fusión `.mod`/`.mdn` **borra** ese código. Lo vio Eduardo. Mi criterio
+  miraba si el contrato ya existía, no si el trabajo **seguirá existiendo** después.
+- **`U1.4`**: mi premisa era falsa. Agrupé dos ficheros por la señal *«no incluye cabecera
+  común»*, que detecta divergencia bien pero **no dice qué hace falta para arreglarla**.
+
+📌 **La lección, que vale para U2–U5**: «¿existe ya el contrato?» es un buen detector de
+humo y un mal presupuesto. Antes de meter algo en un hito de *«no exige decidir nada»*, hay
+que mirar **qué es cada fichero** y **si el trabajo sobrevive** a lo que ya está planeado.
+
 #### 🟢 U1 — lo que no exige decidir nada
 
 Cuatro tareas independientes entre sí. Ninguna necesita diseño: el contrato ya existe o
@@ -257,10 +272,28 @@ las copias ya son idénticas.
   módulo común ya existe y la migración es *«cambiar su bucle por una llamada, no
   reescribirlo»* — pero deja de serlo si la fusión se aplaza mucho.
 
-- **`U1.4` · Flash y particiones, al contrato que ya existe.** `pico/flash_lock.c` y
-  `stm32/port/stm32_flash.c` **no incluyen ninguna cabecera común**, aunque `bpvm_part.h`
-  existe y es común. Colgarlos de él.
-  ✅ **Se comprueba**: grabar un pack sigue funcionando en las dos familias.
+- **`U1.4`** ~~Flash y particiones al contrato~~ — ❌ **SACADO de U1 el 23-ago: su premisa
+  era falsa.** Yo dije *«cuelgan de `bpvm_part.h`, que ya existe»*. Medido: `bpvm_part.h`
+  es el **mapa** de particiones (nombres, layout, tamaños) y **no hace E/S de flash**. Y
+  **no existe ninguna cabecera común de flash**. Los dos ficheros tampoco son lo mismo:
+  `flash_lock.c` (40) es la **ventana exclusiva de XIP** del RP2350 —concurrencia— y
+  `stm32_flash.c` (56) son las **primitivas de borrado/escritura** del U5.
+
+  📐 **Lo que SÍ hay, medido:** cada familia cablea `erase`/`program` para **cuatro
+  consumidores** —packs, env, FS y log— y ya existen **dos cinturas distintas** para lo
+  mismo: `bpvm_pack_flash_t` (`erase`/`program`, offsets **relativos** a la región) y
+  `bpvm_log_cintura_t` (`flash_read`/`flash_write` de la región **entera**). Entre las tres
+  familias son ~12 cableados de las mismas dos operaciones.
+
+  ⏭️ **El trabajo real es UNA cintura de flash por familia** usada por los cuatro. Y es
+  **diseño**, no mecánica: hay que decidir offsets relativos o absolutos, si la lectura
+  entra en el contrato, y quién toma el candado. Buena noticia: `bpvm_pack_flash_t` ya es
+  genérica —no tiene nada de packs salvo el nombre— así que probablemente sea ascenderla,
+  no inventarla.
+
+  ✅ **Y una sospecha mía que resultó infundada, comprobada antes de fichar**: miré si
+  alguna de esas escrituras se saltaba `flash_lock` en la Pico. **No**: packs, env y FS lo
+  toman los tres. No hay bug latente; falta la abstracción, nada más.
 
 #### 🔎 Lo que salió al hacer U1.1 — la configuración RELEASE del STM32 está abandonada
 
