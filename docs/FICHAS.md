@@ -189,6 +189,44 @@ por diseño, y por eso `#432` (dónde debe vivir y de qué tamaño) no se puede 
 
 ---
 
+### ✅ DECIDIDAS el 23-ago (Eduardo) — entran en V6
+
+- **📁 [FS] `/sd` pasa a ser un PREFIJO RESERVADO.** Decisión de Eduardo: *«en Linux hay
+  una carpeta `/dev` donde están los dispositivos y otra donde se montan (`/mnt`). Aquí
+  quizás deberíamos reservar `/sd` para que no haya problemas.»*
+  🔬 **El mecanismo de hoy, medido en `src/fs_facade.c`**: la tabla de montajes tiene la
+  entrada 0 como backend **raíz con prefijo `""`**, y `route()` elige el prefijo
+  coincidente más largo. Sin tarjeta, `/sd/x` no coincide con ningún montaje y **cae en la
+  raíz**, que actúa de comodín. Por eso escribir en `/sd` con la tarjeta fuera no falla:
+  va a la flash interna en silencio.
+  ⏭️ **Lo que hay que hacer**: que `/sd` exista en la tabla **aunque no haya nada montado**,
+  como punto de montaje reservado, y que `route()` devuelva error en vez de la raíz.
+  📌 **Y el matiz que hace buena la idea**: Linux tiene exactamente esta trampa —escribir
+  en `/mnt/x` sin montar escribe en el disco de abajo—, y es una molestia clásica. Lo que
+  propone Eduardo **no es copiar Linux: es arreglar lo que Linux hace mal**, aprovechando
+  que aquí el conjunto de prefijos es finito y conocido.
+  ⚠️ **Es un cambio de comportamiento.** Un programa que hoy funciona apoyándose en el
+  respaldo dejará de hacerlo — y eso es lo que se busca, pero hay que decirlo en las notas
+  de versión. Nos mordió el 21-ago: sin guarda, `SdCard.bp` *parecía colgarse*.
+
+- **🗺️ [lenguaje] `Map`: objetos internos para claves Y valores, más sobrecargas de
+  `add`.** Decisión de Eduardo, cerrando la cola que dejaron los captadores de `List` en
+  V5: *«objetos internos tanto para las keys como para los values. También sobrecargas
+  para `add(key, value)`; aquí podemos hacerlo para los casos más habituales: key integer
+  y key string.»*
+  📐 **Lo que fija la decisión**: `Map` no hereda los captadores de `Core.List` (`SyncList`
+  y `OwnerList` sí, por extenderla), así que hay que dárselos — y **a las dos mitades**,
+  no sólo a los valores, que era la duda que quedaba abierta.
+  ⏭️ **El alcance está acotado a propósito**: las sobrecargas de `add` se hacen para
+  **clave entera y clave cadena**, que son los casos habituales, no para el producto
+  cartesiano de todos los tipos. Encaja con [[base-finita-lo-demas-en-packs]] — la
+  pregunta no es «¿es útil?» sino «¿lo paga todo el mundo?».
+  📌 Sigue la regla de la casa para el azúcar: cuelga de algo que ya existe
+  ([[no-gastar-palabras-reservadas]]), y las conversiones van en los envoltorios, como se
+  hizo en `List`.
+
+---
+
 ### 🔜 Aplazadas a V6 durante el desarrollo de V5
 
 - **🔴 [V6, OBLIGATORIO] la pasada de INTERFAZ no resuelve `Core` implícito** — encargo
