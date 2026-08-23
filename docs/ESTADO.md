@@ -66,8 +66,10 @@ pantallas SPI (tras P1). Más `A1`, la revisión por niveles, tras la unificaci�
 
 **⏭️ AL VOLVER — encargo de Eduardo:** *«antes de empezar U2, que me parece un trabajo
 bastante pesado, me gustaría abordar un poco de AOT (1 o 2 puntos, no todo), y así vamos
-cambiando un poco de tipo de tareas»*. El hito **N1** tiene tres puntos, y el orden que él
-mismo dejó escrito el 21-ago es **por tandas, no de un salto**:
+cambiando un poco de tipo de tareas»*. El hito **N1** tiene **cuatro** puntos —la fusión `.mod`/`.mdn` entró ahí al final del día,
+por decisión suya: *«aunque no sea exactamente AOT, cuando terminemos se puede probar todo
+junto en placa»*— y el orden que él mismo dejó escrito el 21-ago es **por tandas, no de un
+salto**:
 
 1. **`native` en un MÉTODO** — hoy se ignora **en silencio**. Son dos cosas y en este orden:
    que **AVISE** (barato, y `AOT_LIMITES.md` dice que *no espera a V6*) y luego abrir el
@@ -77,8 +79,13 @@ mismo dejó escrito el 21-ago es **por tandas, no de un salto**:
 2. **`double`** (`#426`) — diseño hecho en `docs/V6_IDEAS.md` §double.
 3. **Los statements sencillos**, del censo de `AOT_LIMITES.md`.
 
+4. **La fusión `.mod`/`.mdn`** — diseño hecho, y **el punto más pesado del hito**: sube la
+   versión del `.mod`, deja rancias las cuatro copias de la stdlib, y toca la lógica de poda
+   y comparación del IDE.
+
 El 1 parece el mejor primer paso: su mitad barata (avisar) cabe en una sesión corta y
-convierte una mentira muda en una línea.
+convierte una mentira muda en una línea. La progresión natural es barato primero y la
+fusión cuando haya rato seguido.
 
 
 ### 23-ago — V6 abierto: el índice, al día, y el primer paso verificado
