@@ -112,6 +112,67 @@ class ModV7SeccionNativaTest {
         }
     }
 
+    /** Los bytes de `data`+`code` de un .mod, para comprobar que no se mueven. */
+    private static byte[] colaDe(byte[] mod) {
+        ByteBuffer b = ByteBuffer.wrap(mod);
+        b.getInt();                                   // magic
+        int dataSize = b.getInt(); b.getInt();        // dataSize, mainOffset
+        int imp = b.getInt(), exp = b.getInt(), code = b.getInt();
+        int lib = b.getInt(), iface = b.getInt(), nat = b.getInt();
+        int ini = 36 + lib + imp + exp + iface + nat;
+        byte[] cola = new byte[dataSize + code];
+        System.arraycopy(mod, ini, cola, 0, cola.length);
+        return cola;
+    }
+
+    @Test
+    @DisplayName("fundir un blob: el módulo sube a v7 y data/code no se mueven")
+    void fundirUnBlob(@TempDir Path dir) throws IOException {
+        byte[] original = Files.readAllBytes(escribeModulo(dir, "Fundir", null));
+        byte[] colaAntes = colaDe(original);
+
+        byte[] blob = new byte[7];
+        for (int i = 0; i < 7; i++) blob[i] = (byte) (0x50 + i);
+        byte[] fundido = edu.bpgenvm.bytecode.ModFormat.conBloqueNativo(original, blob);
+
+        ByteBuffer b = ByteBuffer.wrap(fundido);
+        assertEquals(ModFormat.MAGIC_NUMBER_V7, b.getInt(), "debe salir v7");
+        // data y code son lo que EJECUTA la VM: si se mueven o se cortan, el
+        // módulo queda roto de una forma que no se ve hasta ejecutarlo.
+        org.junit.jupiter.api.Assertions.assertArrayEquals(colaAntes, colaDe(fundido),
+                "data+code cambiaron al fundir el bloque nativo");
+    }
+
+    @Test
+    @DisplayName("DOS familias: los dos blobs caben, y los dos quedan alineados")
+    void dosFamilias(@TempDir Path dir) throws IOException {
+        byte[] mod = Files.readAllBytes(escribeModulo(dir, "DosFam", null));
+
+        byte[] arm   = {(byte) 0xA1, (byte) 0xA2, (byte) 0xA3};        // 3 bytes
+        byte[] riscv = {(byte) 0xB1, (byte) 0xB2, (byte) 0xB3, (byte) 0xB4, (byte) 0xB5};
+
+        byte[] uno = ModFormat.conBloqueNativo(mod, arm);
+        byte[] dos = ModFormat.conBloqueNativo(uno, riscv);   // acumulativa
+
+        int[] h = new int[9];
+        ByteBuffer b = ByteBuffer.wrap(dos);
+        for (int i = 0; i < 9; i++) h[i] = b.getInt();
+        int iniSeccion = 36 + h[6] + h[3] + h[4] + h[7];
+
+        // Los dos blobs tienen que estar, y cada uno en múltiplo de 4. Se buscan
+        // por su primer byte, que es distinto a propósito.
+        int pos1 = -1, pos2 = -1;
+        for (int i = iniSeccion; i < iniSeccion + h[8]; i++) {
+            if (dos[i] == (byte) 0xA1 && pos1 < 0) pos1 = i;
+            if (dos[i] == (byte) 0xB1 && pos2 < 0) pos2 = i;
+        }
+        assertTrue(pos1 >= 0 && pos2 >= 0,
+                "falta alguno de los dos blobs en la sección (multifamilia roto)");
+        assertEquals(0, pos1 % 4, "el blob ARM empieza en " + pos1 + ", sin alinear");
+        assertEquals(0, pos2 % 4, "el blob RISC-V empieza en " + pos2 + ", sin alinear");
+        assertTrue(pos2 > pos1, "el segundo blob debe ir DESPUÉS del primero");
+    }
+
     @Test
     @DisplayName("el blob se recupera intacto tras el relleno")
     void elBlobSobreviveAlRelleno(@TempDir Path dir) throws IOException {

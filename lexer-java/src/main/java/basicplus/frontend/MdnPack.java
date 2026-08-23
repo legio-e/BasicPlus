@@ -91,6 +91,35 @@ public final class MdnPack {
      */
     public static PackResult pack(Path inPath, Path outPath, String moduleName)
             throws IOException, PackException {
+        Empaquetado e = empaquetar(inPath, moduleName);
+        Files.write(outPath, e.bytes);
+        return e.resultado;
+    }
+
+    /** El `.mdn` construido, EN MEMORIA. */
+    public static final class Empaquetado {
+        public final byte[] bytes;
+        public final PackResult resultado;
+        Empaquetado(byte[] b, PackResult r) { this.bytes = b; this.resultado = r; }
+    }
+
+    /**
+     * [V6/N1.4] Igual que {@link #pack}, pero DEVUELVE los bytes en vez de
+     * escribirlos.
+     *
+     * <p>Idea de Eduardo: si el `.mdn` va a acabar DENTRO del `.mod` (sección
+     * `native`, formato v7), escribirlo a un fichero para leerlo justo después y
+     * volver a escribir el `.mod` son dos vueltas de disco que no hacen falta —
+     * el empaquetado ya se construía entero en memoria y sólo al final se
+     * volcaba. Con esto el llamante junta módulo y nativo en memoria y **escribe
+     * el fichero final una sola vez**.
+     *
+     * <p>{@link #pack} se queda como está —el `.mdn` suelto sigue existiendo
+     * mientras la fusión no esté completa— y ahora delega aquí, así que no hay
+     * dos implementaciones que puedan separarse.
+     */
+    public static Empaquetado empaquetar(Path inPath, String moduleName)
+            throws IOException, PackException {
         byte[] elf = Files.readAllBytes(inPath);
 
         Elf32 f = Elf32.parse(elf);
@@ -201,8 +230,8 @@ public final class MdnPack {
         }
         out.write(code);
 
-        Files.write(outPath, out.toByteArray());
-        return new PackResult(code.length, exports.size());
+        return new Empaquetado(out.toByteArray(),
+                               new PackResult(code.length, exports.size()));
     }
 
     /**

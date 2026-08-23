@@ -155,5 +155,78 @@ public final class ModFormat {
                 "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\" o \"MOD7\")", magic);
     }
 
+    // ============================================================
+    // [V6/N1.4] Fundir un `.mdn` DENTRO del `.mod` (sección `native`, v7)
+    // ============================================================
+
+    /**
+     * Devuelve los bytes de un `.mod` con {@code blob} AÑADIDO a su sección
+     * `native`. Si el módulo era v6, sale v7; si ya era v7 con contenido, el
+     * blob se **añade** al final de la sección.
+     *
+     * <p><b>Que sea acumulativa es el diseño, no un extra.</b> La sección son N
+     * blobs `.mdn` concatenados, uno por familia; llamar una vez por familia da
+     * el multifamilia sin escribir nada más. Y como cada `.mdn` dice su `arch`,
+     * el cargador se queda con el suyo.
+     *
+     * <p><b>Alineación.</b> Cada blob empieza en múltiplo de 4 — con XIP el
+     * módulo se ejecuta EN SU SITIO, así que su posición en el fichero ES su
+     * dirección de ejecución, y un blob RISC-V en offset impar no arranca. El
+     * relleno va delante de cada blob y cuenta dentro de `nativeSize`.
+     *
+     * <p>Idea de Eduardo: hacerlo <b>en memoria</b>. `MdnPack` ya construía el
+     * `.mdn` entero en un buffer, así que escribirlo a disco para releerlo y
+     * reescribir el `.mod` eran dos vueltas que no hacían falta. El llamante
+     * junta las dos cosas aquí y escribe el fichero final UNA vez.
+     */
+    public static byte[] conBloqueNativo(byte[] mod, byte[] blob) {
+        if (mod == null || mod.length < HEADER_SIZE_V6) {
+            throw new IllegalArgumentException("no es un .mod: " +
+                    (mod == null ? "null" : mod.length + " bytes"));
+        }
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(mod);   // big-endian
+        int magic = b.getInt();
+        if (!isAbiSupported(magic)) {
+            throw new IllegalArgumentException(abiRejectReason(magic));
+        }
+        boolean v7 = (magic == MAGIC_NUMBER_V7);
+        int dataSize   = b.getInt();
+        int mainOffset = b.getInt();
+        int impSize    = b.getInt();
+        int expSize    = b.getInt();
+        int codeSize   = b.getInt();
+        int libSize    = b.getInt();
+        int ifaceSize  = b.getInt();
+        int natSize    = v7 ? b.getInt() : 0;
+
+        int hdr    = v7 ? HEADER_SIZE_V7 : HEADER_SIZE_V6;
+        int iniLib = hdr;
+        int iniNat = iniLib + libSize + impSize + expSize + ifaceSize;
+        int iniData = iniNat + natSize;
+
+        /* El relleno se calcula sobre dónde caerá el blob en el fichero NUEVO,
+         * que siempre tiene header v7 (36). Si el módulo venía en v6 el header
+         * crece 4 bytes — múltiplo de 4, así que no descoloca lo de delante. */
+        int finNatNuevo = HEADER_SIZE_V7 + libSize + impSize + expSize + ifaceSize + natSize;
+        int pad = (4 - (finNatNuevo & 3)) & 3;
+
+        int natSizeNuevo = natSize + pad + blob.length;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(
+                mod.length + pad + blob.length + 4);
+        java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(HEADER_SIZE_V7);
+        h.putInt(MAGIC_NUMBER_V7);
+        h.putInt(dataSize); h.putInt(mainOffset); h.putInt(impSize);
+        h.putInt(expSize);  h.putInt(codeSize);   h.putInt(libSize);
+        h.putInt(ifaceSize); h.putInt(natSizeNuevo);
+        out.write(h.array(), 0, HEADER_SIZE_V7);
+
+        out.write(mod, iniLib, iniNat - iniLib);        // library+imports+exports+interface
+        if (natSize > 0) out.write(mod, iniNat, natSize);   // los blobs que ya había
+        for (int i = 0; i < pad; i++) out.write(0);         // relleno de ESTE blob
+        out.write(blob, 0, blob.length);
+        out.write(mod, iniData, dataSize + codeSize);   // data + code, intactos
+        return out.toByteArray();
+    }
+
     private ModFormat() { /* no-instanciable */ }
 }
