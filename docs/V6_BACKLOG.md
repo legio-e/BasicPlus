@@ -10,8 +10,12 @@
 > aplazado estaba repartido en tres sitios y no había forma de verlo de un vistazo —
 > que es la misma enfermedad que nos costó tiempo en V5.
 
-**Recuento:** 31 asuntos vivos + 4 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos
-que salieron el 21-ago probando H13. Uno de la lista se hizo ya en V5 y se ha movido a «CERRADAS» (ver el final).
+**Recuento:** 31 asuntos vivos + **8 reflexiones de fundamentación** (§C, del 22-ago) +
+5 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos que salieron el 21-ago probando H13.
+Uno de la lista se hizo ya en V5 y se ha movido a «CERRADAS» (ver el final).
+
+📌 **Puesto al día el 23-ago**, al abrir V6: el índice se escribió el 21 y no recogía el
+bloque de arquitectura del 22 — que es justamente la columna vertebral del hito.
 
 ---
 
@@ -40,6 +44,22 @@ que salieron el 21-ago probando H13. Uno de la lista se hizo ya en V5 y se ha mo
 
 > Es **el eje grande de V6**: partir común y hardware para poder meter pruebas en medio.
 > El modelo declarado es el VFS de SQLite.
+
+### 🧠 La fundamentación — el bloque de reflexiones del 22-ago
+
+No son tareas: son **el porqué y la medida** sobre los que se planifica el eje. Salieron
+todas de una misma mañana, al cerrar V5, y están en `FICHAS.md` con su desarrollo.
+
+| reflexión | lo que ya contesta | `FICHAS` |
+|---|---|---|
+| **POR QUÉ UNIFICAR** — la tesis de Eduardo | memoria y FS dejaron de dar guerra **después** de unificarlos: la unificación es el paso previo a la fiabilidad | L2345 |
+| **La tesis económica** — «no es una opción, es el único camino» | el tiempo no se va en el compilador sino en **sistemas y pruebas**; unificar es lo que hace el crecimiento lineal y no exponencial | L2302 |
+| **EL CRITERIO DE CAPAS** | sólo hardware / HAL / BP HAL deben diferir. Contrastado contra el código: **el REPL está TRIPLICADO, ~220 KB** | L2492 |
+| **EL INVENTARIO** de lo unificado y lo que falta | el reparto de hoy en números (57 `.c` comunes frente a los privados por familia), para planificar sobre datos | L2531 |
+| **¿QUÉ INCLUYE el «sistema operativo» común?** | y dónde encaja cada pieza — en particular los packs, que se montan casi antes que todo lo demás | L2458 |
+| **¿UN boot o DOS?** | la división **ya está empezada sin nombre**: `bpvm_boot_climb()` es una escalera común cuyos peldaños los pone cada familia | L2423 |
+| **¿CUÁNTO cuesta una familia nueva** (C3/C6)? | el P4 es el experimento que ya lo responde: casi todo lo hecho sirve; lo nuevo es el boot y **sobre todo pruebas** | L2269 |
+| **EL SIMULADOR CON DISFRACES** | que `bpvm-sim` pueda vestirse de cada familia y cazar problemas de integración en el PC, que en placa cuestan caro | L2384 |
 
 | asunto | dónde |
 |---|---|
