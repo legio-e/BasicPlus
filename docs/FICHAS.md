@@ -1052,6 +1052,27 @@ multifamilia es lo normal, y un aviso que salta siempre se aprende a ignorar.
 *(De hecho mi primera versión SÍ lo duplicaba, y estaba mal: en host habría aceptado un
 blob ARM.)*
 
+🔬 **PRIMERA PRUEBA EN PLACA (23-ago) — dos fallos míos, los dos cazados por ella.** Eduardo
+la corrió con `Bench` en la Pico y el sample dio `fib(28) AOT = 8518 ms`, **idéntico al
+interpretado**. Ningún error. El mismo síntoma mudo que ya tiene comentario en `FrmMain` de
+una vez anterior.
+
+1. 🔴 **La fusión reescribía el `.mod` DESPUÉS de escribir el `.mdn`**, así que el `.mod`
+   quedaba más nuevo y el guardián del IDE —que existe justamente para que no se
+   desparejen— **rechazaba el `.mdn`**. Sin él y con el firmware cargando todavía por ahí,
+   no se ejecutaba nada nativo. Arreglado invirtiendo el orden: fundir primero.
+2. 🔴 **`MDN_ABI_VERSION` estaba en DOS sitios y sólo subí uno.** El C pasó a 5 y el Java
+   seguía estampando 4, así que la placa rechazaba el `.mdn` — con un mensaje correcto que
+   **va al log de la placa, no a la consola del IDE**, y por eso no se veía nada.
+
+📌 **Lo que enseñan juntos**: los dos son *desfases mudos entre dos artefactos que deben ir
+juntos* — exactamente la clase de fallo que esta fusión existe para eliminar. Que aparezcan
+al implementarla es casi poético, pero también dice que **mientras haya `.mod` y `.mdn`
+sueltos el riesgo sigue vivo**, y que la única cura es que quede uno.
+⏭️ Y una carencia que dejan a la vista: **el IDE no sabe qué ABI habla la placa**. Lo publica
+todo menos eso (`arch` sí va en el `INFO`), así que un desfase sólo se descubre ejecutando y
+mirando el log del dispositivo. Merece ficha aparte.
+
 ⏭️ **Lo que queda para cerrarlo del todo**: desplegar en las cinco imágenes y entonces
 retirar el `.mdn` suelto. Va con la tanda de pruebas ya comprometida — el ABI de helpers
 (4→5) obliga a reflashear igualmente.

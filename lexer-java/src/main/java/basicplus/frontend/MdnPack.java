@@ -49,7 +49,7 @@ public final class MdnPack {
      * mudo en placa. Se destapó el 26-jul al arreglar el gate. */
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
     private static final int MDN_VERSION = 1;
-    static final int MDN_ABI_VERSION = 4;   /* 11-ago — el .mdn tambien depende
+    static final int MDN_ABI_VERSION = 5;   /* 11-ago — el .mdn tambien depende
                                                     * del OFFSET de `memory` y
                                                     * `aot_helpers` dentro de
                                                     * `struct bpvm`, no solo de la

@@ -388,30 +388,45 @@ public final class AotBuild {
             MdnPack.Empaquetado emp = MdnPack.empaquetar(packInput, mod);
             MdnPack.PackResult pr = emp.resultado;
 
-            /* (a) El `.mdn` suelto, como siempre. SIGUE HACIENDO FALTA mientras el
-             *     cargador no lea la sección del `.mod`: quitarlo ahora dejaría el
-             *     AOT sin efecto en placa. Se retirará cuando la otra mitad esté,
-             *     y ése será el día en que dejen de poder desparejarse. */
-            java.nio.file.Files.write(mdnFile, emp.bytes);
-            salidas.add(mdnFile);
+            /* ⚠️ EL ORDEN IMPORTA, y me mordió el 23-ago en la primera prueba en
+             * placa: la fusión va ANTES de escribir el `.mdn`.
+             *
+             * El IDE tiene un guardián que NO sube un `.mdn` más viejo que su
+             * `.mod` —existe porque desparejarlos ya nos costó caro—. Si se funde
+             * DESPUÉS, el `.mod` queda más nuevo, el guardián rechaza el `.mdn`,
+             * y como el firmware todavía carga por ahí el resultado es que NO se
+             * ejecuta nada nativo. En la placa se vio como `fib(28) AOT = 8518 ms`,
+             * exactamente igual que interpretado y sin un solo error. El mismo
+             * sintoma mudo que ya tiene su comentario en FrmMain.
+             *
+             * Se invierte hasta que el `.mdn` suelto desaparezca; entonces esto
+             * deja de importar porque no habrá dos ficheros que comparar. */
 
-            /* (b) Y el MISMO blob, fundido en el `.mod` (sección `native`, v7).
+            /* (a) El blob, fundido en el `.mod` (sección `native`, v7).
              *     Acumulativo: con varias familias, cada vuelta añade el suyo y
              *     el módulo acaba llevándolas todas, cada una con su `arch`.
-             *     Tolerante: si el `.mod` no está —compilación sólo-AOT, o el
-             *     orden de pasos cambió— se avisa y se sigue. El `.mdn` de (a)
-             *     mantiene el AOT funcionando igual. */
+             *     Tolerante: si el `.mod` no está, se avisa y se sigue — el `.mdn`
+             *     de (b) mantiene el AOT funcionando igual. */
             java.nio.file.Path modFile = outDir.resolve(mod + ".mod");
             if (java.nio.file.Files.exists(modFile)) {
                 byte[] antes = java.nio.file.Files.readAllBytes(modFile);
                 byte[] fundido = edu.bpgenvm.bytecode.ModFormat.conBloqueNativo(antes, emp.bytes);
                 java.nio.file.Files.write(modFile, fundido);
                 log.accept("[aot] " + modFile.getFileName() + " lleva dentro el nativo de "
-                    + f.target() + " (" + emp.bytes.length + " B, .mod v7)");
+                    + f.target() + " (" + emp.bytes.length + " B, .mod v7 — "
+                    + antes.length + " -> " + fundido.length + " B)");
             } else {
                 log.accept("[aot] aviso: no encuentro " + modFile.getFileName()
                     + " para fundir el nativo; queda el .mdn suelto");
             }
+
+            /* (b) Y el `.mdn` suelto, como siempre. SIGUE HACIENDO FALTA mientras
+             *     el cargador de todas las imágenes no lea la sección: quitarlo
+             *     ahora dejaría el AOT sin efecto en placa. Se retirará cuando la
+             *     otra mitad esté desplegada, y ése será el día en que dejen de
+             *     poder desparejarse. */
+            java.nio.file.Files.write(mdnFile, emp.bytes);
+            salidas.add(mdnFile);
 
             log.accept("[aot] " + mdnFile.getFileName() + " ✓ (" + pr.symbols
                 + " thunk(s), " + pr.codeBytes + " B nativo)");

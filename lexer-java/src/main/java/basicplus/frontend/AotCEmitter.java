@@ -1024,7 +1024,11 @@ public final class AotCEmitter {
                 indent();
                 w.print("vm->aot_helpers->" + h + "(vm, ");
                 emitExpr(it.expr);
-                w.println(");");
+                /* El 3er parametro es `nl`: los helpers imprimen y opcionalmente
+                 * saltan de linea. Aqui va 0 SIEMPRE —son los `*_NONL` del
+                 * interprete— y el salto lo pone `print_nl` al final, que es
+                 * exactamente el orden de `emitPrint` en MivmEmitter. */
+                w.println(", 0);");
             }
             indent();
             w.println("vm->aot_helpers->print_nl(vm);");
