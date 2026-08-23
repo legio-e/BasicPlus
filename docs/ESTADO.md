@@ -27,6 +27,52 @@
 
 ## Última sesión
 
+### 23-ago (tarde-3) — el hito AOT: `native` en métodos y `double`, los dos cerrados
+
+**N1.1 — los métodos `native` ya se compilan a C** (`e1842bd9`, `631f55fa`). Salió tal como
+lo planteó Eduardo —*«mimodulo.miclase.mimetodonative(objMiclase, ...)»*— y **no hubo que
+forzar nada**: `ModWriter.addMethod` ya hacía `declareParam("this", 8)` antes que los demás.
+Faltaba **exportar el nombre**, porque el registro AOT busca el símbolo para sacar la
+dirección. Y la lectura de miembros va **por el getter** (`call_method_i32`), que es como lo
+emite el bytecode y la única ruta que el runtime soporta.
+
+**N1.2 — `double` ya cruza** (`a853b9a9`, `e8b1c8f1`). 21 helpers al final de la tabla, el
+emisor los usa, `MDN_ABI_VERSION` 4→5. `DPOW` pasa a `bpvm_dpow`: **una** implementación que
+comparten intérprete y helper.
+
+🧠 **Y la lección del día, que es la misma tres veces.** Eduardo me corrigió en las tres, y
+las tres tenían la misma forma — yo escribía *«no se puede»* donde era *«no está hecho»* o
+*«es más caro»*:
+1. *«el cuerpo del método no tiene símbolo»* → lo tenía; faltaba un booleano.
+2. *«hace falta el layout de la clase»* → hacía falta llamar al getter.
+3. *«no se puede llamar al opcode»* → sí se puede (lo hicimos con el getter); lo cierto es
+   que para aritmética el helper es más barato.
+Ver [[no-se-puede-vs-no-esta-implementado]]. La señal es que la frase salga de **no haber
+mirado**, no de haber medido.
+
+**Redes nuevas** (las dos primeras del AOT que hay en el repo): `AotNativeEnMetodoTest`
+(4 casos) y **`powtest` en el corpus de paridad**, que cubría `doubletest` pero ningún caso
+de `^`. Paridad 34 → **35 PASS**. Baterías 108/0 y 34/0.
+
+🔴 **HALLAZGO QUE NO ES MÍO Y CONVIENE MIRAR PRONTO: el arnés de paridad está en ROJO.**
+Tres samples (`CastExt`, `ListaBp`, `ListaHer`) fallan con
+*«lib 'Core' presente pero no exporta `Core.Integer#value#2`»*. Es **desfase de ranuras**: el
+`Core.mod` publicado tiene `Integer.value` en el **slot 7** y el compilador de hoy lo pide en
+el **2**. Lo aislé revirtiendo mis cambios y reconstruyendo: **sale igual**, o sea que es
+previo. H13 no lo vio porque su batería es `scripts/h13-lista.sh`, no este arnés — **V5 se
+publicó sin que nadie mirara esta red**. Regenerar la stdlib es cambio de ABI, así que no lo
+toqué.
+
+**⏭️ AL VOLVER, tres cosas:**
+1. **Lo de la paridad en rojo** — es el invariante sagrado el que está sin vigilar.
+2. **Las pruebas en placa**, que acumulan ya tres cambios sin verificar: el log de la Pico
+   (U1.2), los métodos `native` y los `double`. ⚠️ Ese día hay que **reflashear las cinco
+   imágenes Y regenerar los cuatro nativos de SQLite con su pack A LA VEZ** — el ABI subió,
+   y hacer sólo una mitad deja el arranque rechazando los packs.
+3. Del hito N1 quedan los **statements sencillos** y la **fusión `.mod`/`.mdn`** (punto 4),
+   que Eduardo dejó para más adelante.
+
+
 ### 23-ago (tarde-2) — U1 hecho y cerrado, y siete hitos más
 
 **Código, por fin.** Las dos tareas de U1, verificadas **en las cinco imágenes**:
