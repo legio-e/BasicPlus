@@ -1603,10 +1603,16 @@ public final class MivmEmitter {
         // properties privadas, cuyos accesores llevan años en la vtable.
         // La condición tiene que ser LA MISMA que en computeClassLayout o el
         // cross-check de #299 aborta.
+        /* [V6/N1.1] Un metodo `native` EXPORTA su nombre; los demas no, como
+         * siempre. El registro AOT busca el simbolo en la tabla de exportacion
+         * para sacar su direccion — sin nombre no hay a que engancharse, aunque
+         * el mecanismo (secuestro por direccion en OP_CALL) sirva igual para
+         * funciones y metodos. */
+        boolean exportarParaAot = fn.isNative && !fn.isIntrinsic;
         if (fs.esVirtual()) {
-            w.addMethod(emitName(fs));          // vtable + función; declara "this"
+            w.addMethod(emitName(fs), exportarParaAot);          // vtable + función; declara "this"
         } else {
-            w.addPrivateMethod(emitName(fs));   // solo función llamable; declara "this"
+            w.addPrivateMethod(emitName(fs), exportarParaAot);   // solo función llamable; declara "this"
         }
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);

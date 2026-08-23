@@ -67,6 +67,16 @@ public final class AotCEmitter {
     private final List<String> warnings = new ArrayList<>();
     public List<String> getWarnings() { return warnings; }
 
+    /** [V6/N1.1] Un metodo aplanado se llama `<Clase>.<metodo>`, y el punto NO
+     *  vale en un identificador de C. El nombre de REGISTRO conserva el punto
+     *  (es el simbolo del .mod); solo se sanean los identificadores emitidos. */
+    private static String cId(String nombre) { return nombre.replace('.', '_'); }
+
+    /** Los metodos que este modulo aplano. Si uno no se puede emitir NO tumba el
+     *  modulo entero —eso seria una regresion: hoy esos modulos emiten bien— sino
+     *  que se cae solo, con su aviso. */
+    private final java.util.Set<String> metodosAplanados = new java.util.HashSet<>();
+
     /** #211 — nombre de la función AOT que se está emitiendo (para mensajes
      *  de aviso). Fijado al inicio de cada emitFunction. */
     private String currentFuncName = "?";
@@ -290,11 +300,28 @@ public final class AotCEmitter {
             for (Ast.ITopLevelDecl m : c.members) {
                 if (!(m instanceof Ast.FuncDef)) continue;
                 Ast.FuncDef f = (Ast.FuncDef) m;
-                if (f.isNative && !f.isIntrinsic) {
-                    warnings.add("el metodo native '" + c.name + "." + f.name.name
-                        + "' NO se compila a codigo nativo todavia: corre interpretado."
-                        + " Solo se emiten funciones `native` de nivel modulo.");
-                }
+                if (!f.isNative || f.isIntrinsic) continue;
+
+                /* EL APLANADO. Idea de Eduardo: «mimodulo.miclase.mimetodonative(
+                 * objMiclase, ...)» — y no hay que forzar nada, porque por debajo
+                 * el metodo YA ES eso: `ModWriter.addMethod` hace
+                 * `declareParam("this", 8)` antes que los demas parametros. Aqui
+                 * solo se hace explicito para que la maquinaria de funciones
+                 * —cuerpo, thunk, refs de 8B, registro— sirva sin tocarla. */
+                List<Ast.Param> ps = new ArrayList<>();
+                ps.add(new Ast.Param("this",
+                        new Ast.SimpleTypeRef(c.name, f.line, f.column), f.line, f.column));
+                ps.addAll(f.params);
+                String plano = c.name + "." + f.name.name;   /* el punto SI vale aqui:
+                                                              * es el simbolo del .mod */
+                Ast.FuncDef fd = new Ast.FuncDef(f.isPublic, f.isFinal, f.isIntrinsic,
+                        f.isNative, new Ast.DeclName(null, plano, f.line, f.column),
+                        ps, f.returnType, f.body, f.line, f.column);
+                metodosAplanados.add(plano);
+                nativeFuncs.add(fd);
+                nativeFuncNames.add(plano);
+                nativeFuncDefs.put(plano, fd);
+                allFuncDefs.put(plano, fd);
             }
         }
 
@@ -318,6 +345,7 @@ public final class AotCEmitter {
         emitHeader();
 
         // Una función + thunk por cada native.
+        List<Ast.FuncDef> emitidas = new ArrayList<>();
         for (Ast.FuncDef f : nativeFuncs) {
             /* #349 — LA FUNCIÓN Y LA LÍNEA, o el aviso no sirve de nada. Los
              * throw de aquí abajo nacen en sitios que no saben en qué función
@@ -332,7 +360,20 @@ public final class AotCEmitter {
                  * pack o a codigo traducido se ve exactamente igual. */
                 if (f.isPackExtern) emitPackExtern(f); else emitFunction(f);
                 emitThunk(f);
+                emitidas.add(f);
             } catch (UnsupportedAotException ex) {
+                /* [V6/N1.1] Un METODO aplanado que no se puede traducir se cae
+                 * SOLO. Si tumbara el modulo entero seria una regresion pura:
+                 * hoy esos modulos emiten sus funciones native sin problema
+                 * porque los metodos ni se miraban. Se degrada a aviso — que es
+                 * mas de lo que habia — y el metodo sigue corriendo interpretado,
+                 * exactamente como antes. */
+                if (metodosAplanados.contains(f.name.name)) {
+                    warnings.add("el metodo native '" + f.name.name + "' (linea " + f.line
+                        + ") no se ha podido traducir a C: corre interpretado. Motivo: "
+                        + ex.getMessage());
+                    continue;
+                }
                 throw new UnsupportedAotException(
                     "en la funcion native '" + f.name.name + "' (linea " + f.line + "): "
                     + ex.getMessage());
@@ -344,7 +385,7 @@ public final class AotCEmitter {
         // literal contaminan el code section. El loader del firmware
         // registra automáticamente a partir del symtab.
         if (!omitRegisterFunc) {
-            emitRegisterFunc(nativeFuncs);
+            emitRegisterFunc(emitidas);
         }
         return out.toString();
     }
@@ -374,7 +415,7 @@ public final class AotCEmitter {
              * justo el que salía sin nombre de función. */
             try {
                 w.print("static " + cType(f.returnType) + " aot_"
-                    + moduleName + "_" + f.name.name + "(struct bpvm* vm");
+                    + moduleName + "_" + cId(f.name.name) + "(struct bpvm* vm");
                 for (Ast.Param p : f.params) {
                     w.print(", " + cType(p.type) + " " + p.name);
                 }
@@ -430,7 +471,7 @@ public final class AotCEmitter {
 
     private void emitFunction(Ast.FuncDef f) {
         currentFuncName = f.name.name;   /* #211 — para mensajes de aviso */
-        String fname = "aot_" + moduleName + "_" + f.name.name;
+        String fname = "aot_" + moduleName + "_" + cId(f.name.name);
         String cRet  = cType(f.returnType);
         w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
         for (Ast.Param p : f.params) {
@@ -496,7 +537,7 @@ public final class AotCEmitter {
      */
     private void emitPackExtern(Ast.FuncDef f) {
         currentFuncName = f.name.name;
-        String sim   = f.name.name;
+        String sim   = cId(f.name.name);
         String fname = "aot_" + moduleName + "_" + sim;
         String marca = String.format("0x%08Xu", packMarca);
         String ver   = packVersion + "u";
@@ -668,8 +709,8 @@ public final class AotCEmitter {
     // ==================== Thunk ====================
 
     private void emitThunk(Ast.FuncDef f) {
-        String fname = "aot_" + moduleName + "_" + f.name.name;
-        String tname = "thunk_" + moduleName + "_" + f.name.name;
+        String fname = "aot_" + moduleName + "_" + cId(f.name.name);
+        String tname = "thunk_" + moduleName + "_" + cId(f.name.name);
         // En modo .mdn el thunk debe ser visible al linker — MdnPack lo
         // busca por nombre en el symtab del .o. Además marcamos `used`
         // para que -Os con -ffunction-sections no lo deade-code-stripe
@@ -756,7 +797,7 @@ public final class AotCEmitter {
         w.println("void aot_" + moduleName + "_register(struct bpvm* vm) {");
         for (Ast.FuncDef f : nativeFuncs) {
             String qualified = moduleName + "." + f.name.name;
-            String tname = "thunk_" + moduleName + "_" + f.name.name;
+            String tname = "thunk_" + moduleName + "_" + cId(f.name.name);
             w.println("    bpvm_aot_register_by_name(vm, \"" + qualified + "\", " + tname + ");");
         }
         w.println("}");

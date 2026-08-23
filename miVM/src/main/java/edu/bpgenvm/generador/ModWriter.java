@@ -885,7 +885,32 @@ public class ModWriter {
      * emitRet(). Al llamar a addMethod / addFunction / endClass posteriormente,
      * el cierre de la función previa se hace automáticamente.
      */
+    /** {@link #addMethod(String)} con control de EXPORTACION.
+     *
+     * <p>[V6/N1.1] Un metodo no se exporta: se llama por la vtable, dentro del
+     * modulo. Pero el registro AOT trabaja por NOMBRE — busca el simbolo en la
+     * tabla de exportacion del .mod para sacar su direccion, y despues el
+     * secuestro ya es por direccion. Sin exportar, un metodo `native` no se
+     * puede registrar: no porque el mecanismo no valga (vale: `interp.c` hace
+     * `bpvm_aot_lookup(target_abs)` sin mirar si es funcion o metodo), sino
+     * porque no hay con que nombrarlo.
+     *
+     * <p>Asi que un metodo `native` SI se exporta, y solo ese. El nombre es el
+     * de siempre —`&lt;Clase&gt;.&lt;metodo&gt;`— y el cargador le pone delante
+     * el modulo, de modo que el AOT lo registra como
+     * `&lt;Modulo&gt;.&lt;Clase&gt;.&lt;metodo&gt;`. Que es exactamente como
+     * Eduardo lo planteo: *«mimodulo.miclase.mimetodonative(objMiclase, ...)»* —
+     * y encaja sin violencia porque el receptor YA es el primer parametro
+     * (`declareParam("this", 8)`, aqui debajo). */
+    public void addMethod(String simpleName, boolean exportar) {
+        addMethodImpl(simpleName, exportar);
+    }
+
     public void addMethod(String simpleName) {
+        addMethodImpl(simpleName, false);
+    }
+
+    private void addMethodImpl(String simpleName, boolean exportar) {
         if (currentClass == null) {
             throw new RuntimeException("addMethod fuera de una clase (¿llamada antes de addClass?)");
         }
@@ -907,8 +932,10 @@ public class ModWriter {
             currentClass.methods.add(m);
         }
 
-        // Los métodos no se exportan al exports table (acceso intra-módulo vía vtable).
-        addFunction(qualifiedName, false);
+        // Los métodos no se exportan al exports table (acceso intra-módulo vía
+        // vtable) — SALVO los `native`, que necesitan nombre para que el AOT
+        // pueda registrarlos (ver addMethod(String,boolean)).
+        addFunction(qualifiedName, exportar);
         declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
     }
 
@@ -948,12 +975,22 @@ public class ModWriter {
      * métodos públicos y su orden coincide con el .bpi (evita el desfase de
      * slots cross-module, BUG-4). Registra la función llamable + "this".
      */
+    /** Gemelo de {@link #addMethod(String,boolean)} para los que no van a la
+     *  vtable. Mismo motivo: un `native` privado tambien quiere su thunk. */
+    public void addPrivateMethod(String simpleName, boolean exportar) {
+        addPrivateMethodImpl(simpleName, exportar);
+    }
+
     public void addPrivateMethod(String simpleName) {
+        addPrivateMethodImpl(simpleName, false);
+    }
+
+    private void addPrivateMethodImpl(String simpleName, boolean exportar) {
         if (currentClass == null) {
             throw new RuntimeException("addPrivateMethod fuera de una clase (¿antes de addClass?)");
         }
         String qualifiedName = currentClass.name + "." + simpleName;
-        addFunction(qualifiedName, false);   // llamable por CALL, sin slot de vtable
+        addFunction(qualifiedName, exportar);   // llamable por CALL, sin slot de vtable
         declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
     }
 
