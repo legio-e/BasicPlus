@@ -90,7 +90,7 @@ donde deben** y sólo **3** de los que faltan son hardware de verdad.
 | asunto | dónde |
 |---|---|
 | **`#426` — `double` en funciones `native`** | `FICHAS` + **diseño hecho** en `V6_IDEAS.md` §double (con ganancia estimada sobre datos reales) |
-| **El `.mdn` se funde en el `.mod`**, con un bloque nativo por familia | `V6_IDEAS.md` §.mdn (≈90 líneas: por qué no es una apuesta, qué mata, la trampa) |
+| **El `.mdn` se funde en el `.mod`** — 🎯 **punto 4 del hito N1** *(23-ago: va con el AOT para probarlo todo junto en placa)* | `V6_IDEAS.md` §.mdn · `FICHAS` §HITO-AOT |
 | **El `.mdn` no recuerda su RECETA** — huella de los flags de compilación | `FICHAS` §Aplazadas (mitad abierta del `#441`) |
 | **`[ISA]` `CALL_REL`** — CALL local PC-relativo | `FICHAS` §Aplazadas |
 | 🆕 **`native` en un MÉTODO se ignora en SILENCIO** — y el método corre interpretado mientras el programador cree que va a velocidad AOT. El AVISO *no espera a V6* (`AOT_LIMITES.md` L157): es barato | `FICHAS` L2244 |

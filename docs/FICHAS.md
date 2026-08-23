@@ -819,6 +819,35 @@ rechazos genéricos (`statement no soportado`), cualquier lista escrita a mano s
 rancia sola — el propio `AOT_LIMITES.md` nombraba cinco cuando eran veinticuatro. Con el
 test, la lista se mide en cada batería en vez de recordarse.
 
+**4. 🧬 EL `.mod` SE COME AL `.mdn`** — *(metido en este hito el 23-ago por decisión de
+Eduardo: «aunque no sea exactamente AOT, cuando terminemos se puede probar todo junto en
+placa»)*. El razonamiento es el bueno: **la placa es lo caro**, y los cuatro puntos tocan la
+misma superficie —código nativo—, así que una sola tanda de verificación los cubre.
+
+Diseño completo en `docs/V6_IDEAS.md` §.mdn (≈90 líneas). En corto: un `.mod` lleva su
+bytecode y **cero o varios bloques nativos, uno por familia**; el IDE poda antes de enviar y
+al micro le llega sólo el suyo.
+
+📌 **No es una apuesta: ya funciona en otro sitio.** El `.bpi` se fundió en el `.mod` en
+V4/H6.a (71 ficheros borrados), y **el pack de SQLite ya lleva dos familias dentro y el IDE
+lo poda al grabar** — 1.122.304 B en disco, 569.344 en la placa. Es el mismo flujo, subido
+del NOMBRE del fichero al FORMATO, donde se puede validar.
+
+⚖️ **Lo que justifica hacerlo** no es la comodidad, es que **mata una clase de fallo**: dos
+ficheros que deben ir juntos se desparejan, y nos ha pasado de las dos maneras — en el
+tiempo (*«el `.mdn` es MÁS VIEJO que su `.mod`»*, hay un guardián porque hace falta) y de
+familia ([[artefacto-de-otra-familia-se-cuela]]: un `.mdn` de ARM subido a la P4). Con
+bloques etiquetados dentro, elegir el equivocado **deja de ser posible por construcción**.
+
+🔗 **Y ya es carga estructural**: `U1.3` se canceló porque esta fusión borra el escaneo del
+`.mdn`. O sea que hay trabajo secuenciado contra ella.
+
+⚠️ **Lo caro no es la fusión, es su cola** — está en el diseño y conviene no descubrirlo a
+mitad: el gate de ABI sube la versión del `.mod` y eso deja **rancias las cuatro copias de
+la stdlib** (incluida `packs/Stdlib.pack`); el IDE compara local-contra-device para no
+resubir y **al podar esa comparación empieza a mentir**; y la poda debe ser **UNA** función
+llamada desde los dos sitios, o es [[arreglo-que-no-viaja-entre-familias]] otra vez.
+
 > Decisión de Eduardo (16-ago) al sacar `#426`: lo que no es de esta versión no
 > debe engordar su lista. Se quedan escritas aquí para no perderlas.
 
