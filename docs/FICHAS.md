@@ -1027,8 +1027,34 @@ no sea necesario buscar en el código cómo se ha hecho»*—. `MOD_FORMAT.md` �
 describía v5 cuando el compilador emitía v6, así que la sección `interface` **nunca se había
 escrito**. Ahora están las dos.
 
-⏭️ **Lo que falta**: que el compilador meta el blob en la sección, y que el cargador registre
-sus thunks desde ahí en vez de buscar un `.mdn` en el FS.
+🟩 **SEGUNDO PASO HECHO (23-ago): el blob ya viaja dentro, y el cargador lo lee.**
+
+- **En memoria, idea de Eduardo** (*«¿no podemos utilizar un streamer en memoria (2 en
+  realidad)…?»*) — y tenía razón en que era fácil, **porque `MdnPack` ya construía el `.mdn`
+  entero en un buffer** y sólo al final hacía `Files.write`. `MdnPack.empaquetar()` devuelve
+  los bytes; `pack()` se queda y delega, así que no hay dos implementaciones.
+- **`ModFormat.conBloqueNativo(mod, blob)`** funde los dos en memoria. **Acumulativa**: una
+  llamada por familia y el módulo acaba con todas, cada una con su `arch`. Multifamilia sin
+  escribir nada más.
+- **El IDE** (`AotBuild`) funde al vuelo. ⚠️ **Sigue emitiendo también el `.mdn` suelto** a
+  propósito: quitarlo antes de que TODAS las imágenes lean la sección dejaría el AOT sin
+  efecto en placa. Se retira cuando la otra mitad esté desplegada — y ése es el día en que
+  dejan de poder desparejarse.
+- **El cargador C** registra los thunks desde la sección, y va **al final de la carga** a
+  propósito: `bpvm_load_mdn` resuelve por NOMBRE contra los símbolos exportados, que se
+  registran antes. Ponerlo donde se salta la sección no habría encontrado ninguno.
+
+📌 **Y una decisión que evita una segunda copia:** el gate de arquitectura **no se
+reimplementa** en el bucle — se le pasan todos los blobs a `bpvm_load_mdn` y decide él.
+Duplicarlo era tentador (ahorra intentos) pero equivocarse ahí significa **ejecutar código
+de otra ISA**, y ya teníamos el gate probado. `MDN_ERR_ARCH` no se avisa: en un módulo
+multifamilia es lo normal, y un aviso que salta siempre se aprende a ignorar.
+*(De hecho mi primera versión SÍ lo duplicaba, y estaba mal: en host habría aceptado un
+blob ARM.)*
+
+⏭️ **Lo que queda para cerrarlo del todo**: desplegar en las cinco imágenes y entonces
+retirar el `.mdn` suelto. Va con la tanda de pruebas ya comprometida — el ABI de helpers
+(4→5) obliga a reflashear igualmente.
 
 ⚠️ **Lo caro no es la fusión, es su cola** — está en el diseño y conviene no descubrirlo a
 mitad: el gate de ABI sube la versión del `.mod` y eso deja **rancias las cuatro copias de

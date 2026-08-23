@@ -12,6 +12,8 @@
  */
 
 #include "bpvm_internal.h"
+#include "mdn_loader.h"   /* V6/N1.4: cargar el bloque nativo embebido */
+#include "mdn_format.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -233,7 +235,9 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     if (interface_size > 0) {
         if (bc_skip(&c, interface_size) != 0) return BPVM_ERR_IO;
     }
+    uint32_t native_off = 0;   /* offset de la seccion dentro de `data` (el buffer del .mod) */
     if (native_size > 0) {
+        native_off = (uint32_t) c.pos;
         if (bc_skip(&c, native_size) != 0) return BPVM_ERR_IO;
     }
 
@@ -415,6 +419,60 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     }
 
     vm->module_count++;
+
+    /* [V6/N1.4] EL BLOQUE NATIVO EMBEBIDO (.mod v7, seccion `native`).
+     *
+     * Va AQUI y no donde se salta la seccion, porque `bpvm_load_mdn` resuelve
+     * los thunks POR NOMBRE contra los simbolos exportados del modulo — y esos
+     * se registran mas arriba. Cargarlo antes no encontraria ninguno.
+     *
+     * La seccion son N blobs `.mdn` concatenados, cada uno autodelimitado por su
+     * cabecera y autoidentificado por su `arch`. Se recorren en orden y se carga
+     * el que coincide con esta imagen; los demas se saltan sin ruido, que es lo
+     * normal en un modulo multifamilia.
+     *
+     * TOLERANTE a proposito: si un blob no carga, se dice y se sigue. El AOT es
+     * una ACELERACION — sin el, el modulo corre interpretado y correcto. Lo que
+     * no puede pasar es que un nativo malo impida ejecutar. */
+    if (native_size > 0) {
+        const uint8_t* sec = data + native_off;
+        uint32_t p = 0;
+        /* El primer blob empieza en el multiplo de 4 mas cercano: el relleno va
+         * dentro de la seccion (ver docs/MOD_FORMAT.md §4.6). */
+        uint32_t abs0 = native_off;
+        p = ((abs0 + 3u) & ~3u) - abs0;
+
+        int cargados = 0;
+        while (p + sizeof(mdn_header_t) <= native_size) {
+            const mdn_header_t* h = (const mdn_header_t*) (const void*) (sec + p);
+            if (h->magic[0] != 'M' || h->magic[1] != 'D' || h->magic[2] != 'N') break;
+            uint32_t tam = (uint32_t) sizeof(mdn_header_t)
+                         + h->sym_count * (uint32_t) sizeof(mdn_symbol_t)
+                         + h->code_size;
+            tam = (tam + 3u) & ~3u;
+            if (p + tam > native_size) break;          /* truncado: no se adivina */
+
+            /* El gate de arquitectura NO se reimplementa aqui: lo hace
+             * `bpvm_load_mdn`, que ya distingue los casos raros (un `.mdn`
+             * legacy con arch==0 vale solo en firmware ARM; en host no vale
+             * ninguno). Duplicarlo seria una segunda copia que puede separarse
+             * de la primera — y aqui equivocarse significa ejecutar codigo de
+             * otra ISA. Asi que se le pasan TODOS y el decide.
+             *
+             * Por eso MDN_ERR_ARCH no se avisa: en un modulo multifamilia es lo
+             * NORMAL —los blobs de las otras placas— y un aviso que salta
+             * siempre se aprende a ignorar. */
+            int rc = bpvm_load_mdn(vm, sec + p, tam);
+            if (rc == MDN_OK) cargados++;
+            else if (rc != MDN_ERR_ARCH)
+                bpvm_diag_urgente("[mdn] bloque embebido rechazado (rc=%d) — se sigue "
+                                  "interpretado", rc);
+            p += tam;
+        }
+        if (cargados > 0)
+            bpvm_diag_urgente("[mdn] %d bloque(s) nativo(s) desde el propio .mod", cargados);
+    }
+
     return BPVM_OK;
 }
 

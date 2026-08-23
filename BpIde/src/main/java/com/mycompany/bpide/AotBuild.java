@@ -383,10 +383,38 @@ public final class AotBuild {
             }
 
             // 2c) MdnPack → .mdn.
-            MdnPack.PackResult pr = MdnPack.pack(packInput, mdnFile, mod);
+            /* [V6/N1.4] El empaquetado se hace EN MEMORIA y de ahí salen las DOS
+             * cosas, sin releer nada del disco. Idea de Eduardo. */
+            MdnPack.Empaquetado emp = MdnPack.empaquetar(packInput, mod);
+            MdnPack.PackResult pr = emp.resultado;
+
+            /* (a) El `.mdn` suelto, como siempre. SIGUE HACIENDO FALTA mientras el
+             *     cargador no lea la sección del `.mod`: quitarlo ahora dejaría el
+             *     AOT sin efecto en placa. Se retirará cuando la otra mitad esté,
+             *     y ése será el día en que dejen de poder desparejarse. */
+            java.nio.file.Files.write(mdnFile, emp.bytes);
+            salidas.add(mdnFile);
+
+            /* (b) Y el MISMO blob, fundido en el `.mod` (sección `native`, v7).
+             *     Acumulativo: con varias familias, cada vuelta añade el suyo y
+             *     el módulo acaba llevándolas todas, cada una con su `arch`.
+             *     Tolerante: si el `.mod` no está —compilación sólo-AOT, o el
+             *     orden de pasos cambió— se avisa y se sigue. El `.mdn` de (a)
+             *     mantiene el AOT funcionando igual. */
+            java.nio.file.Path modFile = outDir.resolve(mod + ".mod");
+            if (java.nio.file.Files.exists(modFile)) {
+                byte[] antes = java.nio.file.Files.readAllBytes(modFile);
+                byte[] fundido = edu.bpgenvm.bytecode.ModFormat.conBloqueNativo(antes, emp.bytes);
+                java.nio.file.Files.write(modFile, fundido);
+                log.accept("[aot] " + modFile.getFileName() + " lleva dentro el nativo de "
+                    + f.target() + " (" + emp.bytes.length + " B, .mod v7)");
+            } else {
+                log.accept("[aot] aviso: no encuentro " + modFile.getFileName()
+                    + " para fundir el nativo; queda el .mdn suelto");
+            }
+
             log.accept("[aot] " + mdnFile.getFileName() + " ✓ (" + pr.symbols
                 + " thunk(s), " + pr.codeBytes + " B nativo)");
-            salidas.add(mdnFile);
         }
         return salidas;
     }
