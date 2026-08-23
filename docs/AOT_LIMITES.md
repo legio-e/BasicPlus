@@ -170,12 +170,20 @@ da `AOT: statement no soportado: PrintStmt`.
 |---|---|
 | **`print`** | `PrintStmt` |
 | **`null`** | `NullLitExpr` |
-| literales de array (`[1,2,3]`) | `ArrayLitExpr` |
+| literales de array (`[1,2,3]`) — ⚠️ **no es un muro: los helpers están y son muñones** | `ArrayLitExpr` |
 | **`do … loop`** | `DoLoopStmt` |
 | `for … in` sobre colecciones | `ForInRange` / `ForRange` |
 | desestructurar `{a, b} := t` | `DestructAssignStmt` |
 | tuplas | `TupleExpr`, `TupleTypeRef` |
 | `instanceof` | `InstanceOfExpr` |
+
+⚠️ **CREAR objetos y arrays: SE PUEDE, y está sin hacer** *(anotado el 23-ago)*. Las
+ranuras `newarray_i32/i8/i16` y `new_object` **ya existen** en la tabla de helpers, pero las
+cuatro son **muñones que devuelven 0** —uno lo dice: *«stub — implementar al AOT-ear
+arrays»*— y el emisor no las llama nunca. Y lo que parecía la barrera de fondo —que el GC no
+ve un handle que vive en una local de C— **se quitó en V5** (`heap.c` §2d, `#302` paso 3):
+el GC escanea la pila de C del thunk, con un `setjmp` a lo Boehm para los registros. O sea
+que lo que queda es trabajo, no investigación. Detalle en `FICHAS.md` §3c del hito AOT.
 
 📌 Varias de estas son **azúcar y se emiten casi solas**: `do…loop` es un `while` al
 revés, `null` es un cero, `print` es una llamada al runtime que ya existe. Son las que

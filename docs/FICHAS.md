@@ -929,6 +929,38 @@ destructuring de tuplas.
 ⚠️ Misma carencia que los `double`: **la paridad no cubre el camino AOT**, así que estos
 tres no tienen red automática — sólo el medidor, que dice si *compilan*, no si *coinciden*.
 
+**3c. 🧱 CREAR objetos y arrays desde `native` — SE PUEDE, y está sin hacer.**
+*(Anotado el 23-ago a petición de Eduardo: «déjalo pendiente por ahora pero que conste que
+se puede hacer».)*
+
+📐 **La evidencia, para que nadie lo vuelva a leer como un muro:**
+- Las **ranuras ya están** en la tabla de helpers: `newarray_i32`, `newarray_i8`,
+  `newarray_i16` y `new_object`.
+- Y las cuatro son **muñones que devuelven 0**. Uno lo dice en voz alta:
+  ```c
+  bpvm_diag_urgente("[aot] newarray_i32 stub — implementar al AOT-ear arrays");
+  ```
+- El emisor **no las llama nunca** (`grep newarray|new_object` en `AotCEmitter` = 0).
+
+✅ **Y el obstáculo de fondo YA NO EXISTE — se quitó en V5.** Lo difícil de alocar desde
+código nativo no es alocar: es que **el GC no ve un handle que vive en una local de C** (o
+peor, sólo en un registro). Eso está resuelto en `heap.c` §2d (`#302` paso 3), **con la idea
+de Eduardo**: *«que el GC mire donde el native ya tiene sus handles, en vez de obligar al
+native a apartarlos a un shadow stack»*. Escanea la pila de C del thunk, y usa el truco de
+Boehm —un `setjmp` que vuelca los registros preservados— porque un handle puede vivir sólo
+en un registro. Lo destapó `make test-aotgc`: un intermedio de `"valor " + intToString(n)`
+se reciclaba a media expresión, **mudo y en host**.
+
+⏭️ **Lo que queda es trabajo, no investigación**: implementar los cuatro helpers llamando al
+alocador real —lo mismo que hacen `OP_NEWARRAY`/`OP_NEW` en el intérprete, con la disciplina
+de siempre: **el helper hace lo que hace el opcode**— y enseñar al emisor a emitirlos. Con
+eso caen `ArrayLitExpr` y la creación de objetos de una vez.
+
+⚠️ **Y por qué se escribe así:** hoy dije cuatro veces *«no se puede»* donde era *«no está
+hecho»*, y Eduardo me corrigió las cuatro. Ésta es la peor de las cuatro, porque la barrera
+que iba a alegar **la había quitado él mismo una versión antes**. Ver
+[[no-se-puede-vs-no-esta-implementado]].
+
 **3b. Los statements sencillos — el enunciado original.** Del censo de `AOT_LIMITES.md`, por relación
 esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),
 **`do…loop`** (un `while` al revés), **literales de array**. Las cuatro son azúcar y
