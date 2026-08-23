@@ -26,8 +26,8 @@
  *
  * Coste estimado: ~150-200 líneas .c, ~3KB .text en Cortex-M33.
  */
-#ifndef BPVM_PICO_JSON_MIN_H
-#define BPVM_PICO_JSON_MIN_H
+#ifndef BPVM_JSON_MIN_H
+#define BPVM_JSON_MIN_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -94,4 +94,4 @@ const char* json_get_str_raw(const json_obj_t* obj, const char* key,
 }
 #endif
 
-#endif /* BPVM_PICO_JSON_MIN_H */
+#endif /* BPVM_JSON_MIN_H */
