@@ -278,9 +278,16 @@ si hablara del proyecto.
 quedaba huérfano (2,4 MB, no versionado). Verificado después: el proyecto **importa y
 construye igual**, 0 errores y 0 avisos, con el mismo `text` de 887.604 B.
 
-🔎 **Y la Nucleo tiene lo mismo, peor**: su configuración `Release` no tiene **ninguna**
-ruta de include ni **ninguna** exclusión de ficheros host-only (`Debug` tiene 4 y 4).
-Pendiente de que Eduardo diga si se borra también.
+✅ **Y la Nucleo, igual (Eduardo, mismo día: *«quita también release de la Nucleo»*).** La
+suya estaba aún peor: **ninguna** ruta de include y **ninguna** exclusión de ficheros
+host-only, donde `Debug` tiene cuatro de cada. Ni siquiera existía su directorio `Release/`
+— **nadie la había construido nunca**, que es la prueba más limpia de que sobraba.
+Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 247.448 del
+`bpvm_stm32_nucleo.bin` publicado.
+
+📌 **Así que las dos placas STM32 tienen ya UNA sola configuración, y es la que se usa.**
+Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
+esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
 #### 🟡 U2 — el transporte
 
