@@ -164,13 +164,17 @@ vale si el C que se prueba lleva la MISMA configuración que la placa.
 un censo que compare los builtins **compilados** de cada imagen contra los que emite el
 compilador — habría cazado esto sin ejecutar nada.
 
-### 🆕 Y otra de la misma sesión, sin decidir
+### ✅ Y otra de la misma sesión — DECIDIDA el 23-ago
 
 La fachada de ficheros enruta por prefijo más largo **con la raíz de respaldo**. Con la
-tarjeta fuera, escribir en `/sd/...` **no da error: cae en silencio al FS interno**. Es
-deliberado, pero para un prefijo de dispositivo extraíble significa que un programa
-escribe en la flash de la placa creyendo que escribe en la tarjeta. ¿Debería `/sd` sin
-montar dar error en vez de desviar? **Sin decidir.**
+tarjeta fuera, escribir en `/sd/...` **no da error: cae en silencio al FS interno**, así
+que un programa escribe en la flash de la placa creyendo que escribe en la tarjeta.
+
+**Decisión de Eduardo: `/sd` pasa a ser un PREFIJO RESERVADO** — existe en la tabla de
+montajes aunque no haya nada montado, y sin tarjeta **da error en vez de desviar**. La
+idea viene de `/dev` y `/mnt` de Linux, y de paso arregla lo que Linux hace mal ahí.
+Detalle y qué tocar, en `FICHAS` §«DECIDIDAS el 23-ago». ⚠️ Es cambio de comportamiento:
+va en las notas de versión.
 
 ## H · Fuera de versión (V6+)
 
