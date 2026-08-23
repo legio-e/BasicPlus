@@ -320,6 +320,58 @@ struct aot_helpers_v2 {
      * justamente el invariante que no se puede romper. */
     int64_t (*idiv64)(struct bpvm* vm, int64_t a, int64_t b);
     int64_t (*imod64)(struct bpvm* vm, int64_t a, int64_t b);
+
+    /* --- #426 (V6/N1.2): COMA FLOTANTE DE DOBLE PRECISION --------------
+     *
+     * Mismo problema que resolvio `idiv64`, y por el mismo motivo: NINGUNA de las
+     * familias de hoy tiene FPU de doble precision — el RP2350 y el STM32U5 son
+     * FPv5-SP (simple), y el P4 usa el ABI ilp32f. Asi que un `a * b` de `double`
+     * escrito en el .c generado se convierte en una llamada a libgcc
+     * (`__muldf3`...), y un `.mdn` NO PUEDE resolver simbolos externos: es codigo
+     * relocalizable puro, sin enlazador al cargar.
+     *
+     * La salida es la de Eduardo (17-ago): que el helper lo haga. El helper se
+     * compila DENTRO del firmware, que si esta enlazado contra libgcc — o sea que
+     * no hay que reimplementar coma flotante por software, sino PRESTARLE al
+     * `.mdn` la que el firmware ya tiene.
+     *
+     * ⚠️ REGLA, la misma que la de `idiv64` y aqui pica mas: estos helpers hacen
+     * EXACTAMENTE lo que hace el interprete, no lo que seria "mas correcto". NaN,
+     * infinitos, `-0.0`, el redondeo, que pasa al convertir un double fuera de
+     * rango... cada uno es una oportunidad de que el `.mdn` y el interprete
+     * difieran en un bit, y entonces el mismo programa daria dos resultados segun
+     * llevara `.mdn` o no. Que es justo el invariante que no se puede romper.
+     *
+     * 📌 Y por eso `dpow` NO se reimplementa aqui: llama a `bpvm_dpow`, que es la
+     * MISMA funcion que ejecuta OP_DPOW. Es la unica de las diecinueve con
+     * algoritmo propio (cuadrados para exponente entero, exp/ln si no), copiada a
+     * su vez byte a byte de VirtualMachine.java. Dos copias de eso se separan
+     * solas; una compartida, no. */
+    double  (*dadd)(double a, double b);
+    double  (*dsub)(double a, double b);
+    double  (*dmul)(double a, double b);
+    double  (*ddiv)(double a, double b);
+    double  (*dmod)(double a, double b);        /* fmod, como OP_DMOD */
+    double  (*dneg)(double a);
+    double  (*dpow)(double base, double e);     /* == bpvm_dpow, compartida */
+
+    /* Las seis comparaciones, cada una por separado: con NaN NO son negaciones
+     * unas de otras (`!(a<b)` no es `a>=b`), asi que un unico `dcmp` de -1/0/1
+     * daria respuestas distintas al interprete en cuanto apareciera un NaN. */
+    int32_t (*deq)(double a, double b);
+    int32_t (*dneq)(double a, double b);
+    int32_t (*dlt)(double a, double b);
+    int32_t (*dle)(double a, double b);
+    int32_t (*dgt)(double a, double b);
+    int32_t (*dge)(double a, double b);
+
+    /* Conversiones — los mismos casts que OP_I2D/OP_D2I/OP_L2D/OP_D2L/OP_F2D/OP_D2F. */
+    double  (*i2d)(int32_t v);
+    int32_t (*d2i)(double d);
+    double  (*l2d)(int64_t v);
+    int64_t (*d2l)(double d);
+    double  (*f2d)(float f);
+    float   (*d2f)(double d);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.
@@ -337,6 +389,11 @@ struct aot_helpers_v2 {
 /* Tabla v2 instanciada en el runtime con los punteros a las funciones
  * reales. Compartida entre todas las VMs del proceso. Pasada a cada
  * vm en bpvm_init via vm->aot_helpers. */
+/* #426 — la potencia de doble precision, UNA sola implementacion: la usan
+ * OP_DPOW (interp.c) y el helper `dpow`. Su algoritmo esta copiado byte a byte
+ * de VirtualMachine.java case 0xAE, asi que dos copias se separarian solas. */
+double bpvm_dpow(double base, double e);
+
 extern const aot_helpers_v2_t bpvm_aot_helpers_v2;
 
 #ifdef __cplusplus

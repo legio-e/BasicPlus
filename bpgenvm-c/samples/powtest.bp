@@ -1,0 +1,59 @@
+module PowTest
+
+    // #426 — LA POTENCIA DE DOBLE PRECISION, en la red de paridad.
+    //
+    // Por que existe este sample: `DPOW` es la UNICA de las diecinueve
+    // operaciones de `double` con algoritmo propio — exponente entero por
+    // cuadrados (parity-safe), fraccionario por exp(e*ln base) — y esa logica
+    // esta copiada byte a byte entre VirtualMachine.java y el interprete de la
+    // VM-C. El corpus de paridad cubria `doubletest` (aritmetica, comparaciones,
+    // conversiones) pero NINGUN caso de `^`, asi que si las dos copias se
+    // separaban no habia quien lo dijera.
+    //
+    // Se anadio el 23-ago-2026 al mover esa logica a `bpvm_dpow` (una sola
+    // implementacion, compartida por OP_DPOW y por el helper `dpow` del AOT). Un
+    // cambio asi sin red es exactamente lo que este arnes existe para no dejar
+    // pasar.
+    //
+    // Los valores se eligen EXACTOS en binario (potencias de 2 y enteros
+    // pequenos) para que el formato impreso coincida en las dos VMs y el test
+    // hable de la potencia, no del redondeo al imprimir.
+
+    function Main()
+        var b: double := 2.0d
+
+        // --- exponente entero: la rama de los cuadrados ---
+        print "2^0    =", b ^ 0.0d          // 1.0
+        print "2^1    =", b ^ 1.0d          // 2.0
+        print "2^2    =", b ^ 2.0d          // 4.0
+        print "2^10   =", b ^ 10.0d         // 1024.0
+        print "3^4    =", 3.0d ^ 4.0d       // 81.0
+
+        // Exponente entero NEGATIVO: la misma rama, con el 1/r del final.
+        print "2^-1   =", b ^ -1.0d         // 0.5
+        print "2^-3   =", b ^ -3.0d         // 0.125
+
+        // --- exponente fraccionario: la rama exp(e*ln base) ---
+        // 4^0.5 y 9^0.5 salen exactos, asi que valen para comparar sin depender
+        // de cuantos decimales imprima cada VM.
+        print "4^0.5  =", 4.0d ^ 0.5d       // 2.0
+        print "9^0.5  =", 9.0d ^ 0.5d       // 3.0
+        print "16^0.25=", 16.0d ^ 0.25d     // 2.0
+
+        // --- los bordes que separan las dos ramas ---
+        // base 1 y exponente 0 son los casos que cualquier implementacion
+        // "lista" tiende a atajar de forma distinta.
+        print "1^99   =", 1.0d ^ 99.0d      // 1.0
+        print "0^0    =", 0.0d ^ 0.0d       // 1.0 (rama entera: r=1 sin iterar)
+        print "0^2    =", 0.0d ^ 2.0d       // 0.0
+
+        // Base negativa con exponente entero: la rama de cuadrados conserva el
+        // signo por paridad. La otra rama (log de un negativo) daria NaN, asi
+        // que este caso comprueba que se toma la rama correcta.
+        print "(-2)^2 =", -2.0d ^ 2.0d      // 4.0
+        print "(-2)^3 =", -2.0d ^ 3.0d      // -8.0
+
+        print "FIN"
+    end Main
+
+end PowTest

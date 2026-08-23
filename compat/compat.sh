@@ -48,7 +48,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 # Elegidos por cobertura de features V2 y por NO depender de stdlib mas alla de
 # Core (import implicito de clases/excepciones). Se amplia en tandas posteriores.
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
-        bytetest longtest longarr doubletest casttest utf8test idxtest \
+        bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
         samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt"
 

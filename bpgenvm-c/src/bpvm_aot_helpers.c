@@ -16,6 +16,7 @@
 #include <string.h>
 #include <setjmp.h>
 #include <inttypes.h>
+#include <math.h>          /* #426: fmod/floor/isinf/fabs/exp/log de los helpers de double */
 
 /* ---------- #186: slot de fault por worker ----------
  * Ver bpvm_internal.h para el diseño. En host hay N workers pthread →
@@ -112,6 +113,47 @@ static int64_t h_idiv64(bpvm_t* vm, int64_t a, int64_t b) {
     }
     return a / b;
 }
+/* ---------- #426 (V6/N1.2): coma flotante de doble precision ----------
+ *
+ * Ninguna familia de hoy tiene FPU de doble, asi que un `a*b` de double escrito
+ * en el .c generado se vuelve una llamada a libgcc — y un `.mdn` no resuelve
+ * simbolos externos. Estos helpers viven DENTRO del firmware, que si esta
+ * enlazado contra libgcc: le prestan al `.mdn` la coma flotante que ya hay.
+ *
+ * ⚠️ Son el ESPEJO EXACTO de los OP_D* del interprete (`interp.c`), no una
+ * version "mejorada". Si un dia se toca uno hay que tocar el otro EL MISMO DIA,
+ * o el mismo programa dara resultados distintos segun lleve `.mdn` o no — que es
+ * el invariante que sostiene todo el proyecto. Con double pica mas que con long:
+ * NaN, infinitos, -0.0 y las conversiones fuera de rango son cuatro sitios donde
+ * es facil ser "mas correcto" que el interprete y romperlo.
+ *
+ * Ninguno lanza: la division por cero en coma flotante NO es un error, da
+ * inf/NaN — igual que OP_DDIV, que tampoco comprueba nada. */
+static double h_dadd(double a, double b) { return a + b; }
+static double h_dsub(double a, double b) { return a - b; }
+static double h_dmul(double a, double b) { return a * b; }
+static double h_ddiv(double a, double b) { return a / b; }
+static double h_dmod(double a, double b) { return fmod(a, b); }
+static double h_dneg(double a)           { return -a; }
+
+/* Las seis comparaciones, cada una por su lado. Con NaN NO son negaciones unas
+ * de otras —`!(a<b)` no es `a>=b`— asi que un unico `dcmp` de -1/0/1 divergiria
+ * del interprete en cuanto apareciera un NaN. */
+static int32_t h_deq (double a, double b) { return a == b ? 1 : 0; }
+static int32_t h_dneq(double a, double b) { return a != b ? 1 : 0; }
+static int32_t h_dlt (double a, double b) { return a <  b ? 1 : 0; }
+static int32_t h_dle (double a, double b) { return a <= b ? 1 : 0; }
+static int32_t h_dgt (double a, double b) { return a >  b ? 1 : 0; }
+static int32_t h_dge (double a, double b) { return a >= b ? 1 : 0; }
+
+/* Conversiones: los mismos casts que OP_I2D/OP_D2I/OP_L2D/OP_D2L/OP_F2D/OP_D2F. */
+static double  h_i2d(int32_t v) { return (double)  v; }
+static int32_t h_d2i(double  d) { return (int32_t) d; }
+static double  h_l2d(int64_t v) { return (double)  v; }
+static int64_t h_d2l(double  d) { return (int64_t) d; }
+static double  h_f2d(float   f) { return (double)  f; }
+static float   h_d2f(double  d) { return (float)   d; }
+
 static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
     if (b == 0) {
         bpvm_aot_helpers_v2.throw_runtime(vm, "Módulo por cero");     /* no retorna */
@@ -642,4 +684,42 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     /* #381 — la división de 64 bits, que el micro no tiene en hardware. */
     .idiv64              = h_idiv64,
     .imod64              = h_imod64,
+    /* #426 — la coma flotante de doble, que ningun micro de hoy tiene en
+     * hardware. `dpow` NO se reimplementa: es bpvm_dpow, la MISMA que ejecuta
+     * OP_DPOW (su algoritmo viene copiado byte a byte de VirtualMachine.java, y
+     * dos copias de eso se separan solas). */
+    .dadd                = h_dadd,
+    .dsub                = h_dsub,
+    .dmul                = h_dmul,
+    .ddiv                = h_ddiv,
+    .dmod                = h_dmod,
+    .dneg                = h_dneg,
+    .dpow                = bpvm_dpow,
+    .deq                 = h_deq,
+    .dneq                = h_dneq,
+    .dlt                 = h_dlt,
+    .dle                 = h_dle,
+    .dgt                 = h_dgt,
+    .dge                 = h_dge,
+    .i2d                 = h_i2d,
+    .d2i                 = h_d2i,
+    .l2d                 = h_l2d,
+    .d2l                 = h_d2l,
+    .f2d                 = h_f2d,
+    .d2f                 = h_d2f,
 };
+
+/* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la
+ * nota de arriba — es la unica de las diecinueve con algoritmo propio.
+ * Exponente entero (incl. x^2) -> cuadrados en f64 (parity-safe);
+ * fraccionario -> exp(e*ln base). Misma logica byte-a-byte que
+ * VirtualMachine.java case 0xAE. */
+double bpvm_dpow(double base, double e) {
+    if (e == floor(e) && !isinf(e) && fabs(e) <= 1024.0) {
+        int64_t n = (int64_t) e; int neg = (n < 0); if (neg) n = -n;
+        double r = 1.0, bb = base;
+        while (n > 0) { if (n & 1) r *= bb; bb *= bb; n >>= 1; }
+        return neg ? 1.0 / r : r;
+    }
+    return exp(e * log(base));
+}
