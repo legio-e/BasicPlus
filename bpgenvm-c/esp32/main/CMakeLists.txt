@@ -1,5 +1,5 @@
 # Componente `main` — H4.3. Core VM portable + backend ESP32 + wire v1
-# (UART0) + FS RAM + REPL. El parser JSON (pico/json_min.c) es C portable
+# (UART0) + FS RAM + REPL. El parser JSON (src/json_min.c) es C portable
 # y se reutiliza directamente.
 idf_component_register(
     SRCS
@@ -10,7 +10,7 @@ idf_component_register(
         "repl_esp32.c"
         "gpio_esp32.c"
         "esp32_mods.c"
-        "json_min.c"
+        "../../src/json_min.c"               # V6/U1.1: parser JSON comun (era una copia local)
         "board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"

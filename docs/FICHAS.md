@@ -206,14 +206,21 @@ va a usar.
 Cuatro tareas independientes entre sí. Ninguna necesita diseño: el contrato ya existe o
 las copias ya son idénticas.
 
-- **`U1.1` · `json_min` al común.** Las tres copias (`pico/`, `esp32/main/`, `stm32/port/`)
+- **`U1.1` ✅ HECHO (23-ago) · `json_min` al común.** Las tres copias (`pico/`, `esp32/main/`, `stm32/port/`)
   son **byte-idénticas — 0 % de diferencia medido**, y las tres cabeceras declaran las
   mismas seis funciones. Mover a `src/`, borrar las privadas.
   ⚠️ **El trabajo no es mover, es dar de alta**: un `.c` del común va en **cinco** sitios
   (`Makefile`, `pico/CMakeLists.txt`, `esp32/main/CMakeLists.txt`,
   `esp32p4/main/CMakeLists.txt`, y el `.cproject`+`subdir.mk` del STM32). Ver
   [[core-c-nuevo-alta-en-5-builds]].
-  ✅ **Se comprueba**: las cinco imágenes enlazan, y `find -name json_min.c` devuelve UNO.
+  ✅ **Hecho y verificado en las CINCO**: `src/json_min.c` + `include/json_min.h`, las tres
+  copias privadas borradas, y alta en `Makefile` (el simulador, que metía mano en `pico/`),
+  `pico/CMakeLists.txt`, `esp32/main/CMakeLists.txt`, `esp32p4/main/CMakeLists.txt` y el
+  STM32 (que regenera su `subdir.mk` solo). Las cinco construyen. `find -name json_min.c`
+  devuelve **uno**.
+  📌 De paso quedó anotado un dato que el censo no tenía: **la P4 reutiliza SIETE ficheros
+  del S3** (`wire_v1`, `esp32_mods`, `repl_esp32`, `board_mgr_esp32`, `platform_esp32`,
+  `gpio_esp32` y el propio `json_min`), así que no es un árbol independiente.
 
 - **`U1.2` ✅ HECHO EN CÓDIGO (23-ago) · El log de la Pico al común** *(cierra `#423`)*. Medido: **la Pico es la única
   familia cuyo `CMakeLists` no nombra `src/bpvm_log.c`** — lleva las 15 funciones
@@ -240,6 +247,34 @@ las copias ya son idénticas.
   `stm32/port/stm32_flash.c` **no incluyen ninguna cabecera común**, aunque `bpvm_part.h`
   existe y es común. Colgarlos de él.
   ✅ **Se comprueba**: grabar un pack sigue funcionando en las dos familias.
+
+#### 🔎 Lo que salió al hacer U1.1 — la configuración RELEASE del STM32 está abandonada
+
+Encontrado el 23-ago al intentar compilar las cinco imágenes. **No bloquea nada y no se ha
+tocado**, pero conviene saberlo antes de que muerda.
+
+El proyecto de la Discovery tiene dos configuraciones, y **la que se publica es `Debug`**:
+su `text` son **887.604 B** y el `bpvm_stm32_dk2.bin` publicado son **888.268 B** — cuadran.
+
+🔴 **`Release` no serviría**, y por tres motivos a la vez:
+- le faltan cuatro `-D` que `Debug` sí tiene: **`BPVM_BOARD_DK2`**, `BPVM_GUI`, `BPVM_LVGL`
+  y `LV_CONF_INCLUDE_SIMPLE`. Sin el primero, `board.h` **cae a la rama de la Nucleo** y
+  pide `stm32u5xx_nucleo.h`;
+- le faltan dos rutas de include (`third_party/littlefs` y `third_party/lvgl`);
+- excluye **dos** ficheros host-only donde `Debug` excluye **cinco** (`fs_host.c`,
+  `fs_lfs_host.c` y `fs_fat.c` se le cuelan, y no compilan para ARM).
+
+⚠️ **La trampa es el NOMBRE**: quien vaya a hacer «la de release» construye, sin saberlo,
+una Nucleo sin GUI — o no construye. Me pasó a mí hoy, y perdí un rato creyendo que había
+roto algo.
+📌 **Y corrige al censo**: `CENSO_FAMILIAS.md` daba el STM32 como `-Os` citando el
+`subdir.mk`, y anotaba que lo de los ficheros host-only estaba *«RESUELTO: su `.cproject`
+SÍ los excluye»*. Las dos cosas son ciertas **de `Debug`**, que es de donde salía el dato —
+y falsas de `Release`. El instrumento decía la verdad de una configuración y se leyó como
+si hablara del proyecto.
+⏭️ **Sin decidir, y es de Eduardo**: o se arregla `Release` para que sea de verdad la de
+publicar, o se borra para que nadie la use por error. Lo que no puede quedarse es una
+configuración que se llama como la que manda y hace otra cosa.
 
 #### 🟡 U2 — el transporte
 

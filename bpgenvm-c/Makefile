@@ -725,11 +725,11 @@ test-crc:
 # TERMINAL + gestión de placa + packs) con FS littlefs sobre imagen y la VM-C de
 # verdad ejecutando. El IDE lo trata como una placa más. Nació en H9 como
 # boardsim (sólo STATE/ENV_*/PART_*); H10 le enchufa el FS y la VM → enlaza la
-# lib entera ($(LIBOBJ)). Reusa pico/json_min.c (parser JSON portable).
+# lib entera ($(LIBOBJ)). El parser JSON vive en src/ desde V6/U1.1.
 # Winsock via $(LDFLAGS) (-lws2_32). Con LVGL=1 arrastra la ventana SDL.
 sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c pico/json_min.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
 	@echo "sim listo: build/bpvm-sim.exe [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
 
 # Alias histórico (H9): el boardsim ES el sim, con otro nombre.

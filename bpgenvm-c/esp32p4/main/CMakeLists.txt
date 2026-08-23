@@ -26,7 +26,7 @@ idf_component_register(
         "aot_Bench.c"                         # H4 AOT RISC-V (Hito 1): fib nativo (mismo .c portable que el Pico, toolchain RISC-V)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
-        "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
+        "../../src/json_min.c"                # V6/U1.1: parser JSON, ya en el comun
         "../../esp32/main/board_mgr_esp32.c"  # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART) — compartido S3
         "../../esp32/main/platform_esp32.c"
         "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)

@@ -176,7 +176,7 @@ add_executable(bpvm_pico
                     # protocolo texto legacy de repl.c, que era del Pico y sólo
                     # del Pico (ESP32/STM32 nacieron ya wire-v1).
     board_mgr_pico.c # H9: cintura de flash del env (A/B) + puente a bpvm_bmgr_wire
-    json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
+    ${BPVM_C_ROOT}/src/json_min.c            # V6/U1.1: parser JSON, COMUN a las 4 imagenes
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     flash_lock.c    # H2 #153: ventana XIP-safe (single + dual-core)
