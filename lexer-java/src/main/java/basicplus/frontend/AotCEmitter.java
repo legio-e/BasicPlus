@@ -267,6 +267,37 @@ public final class AotCEmitter {
                 }
             }
         }
+        /* [V6/N1.1] Un metodo `native` de una clase NO se emite, y hasta el
+         * 23-ago-2026 eso pasaba EN SILENCIO: el bucle de arriba solo abre los
+         * `Ast.FuncDef` de nivel modulo, asi que un `ClassDef` ni se miraba. El
+         * compilador no daba error, AotMain decia "no tiene funciones native" y
+         * el metodo corria INTERPRETADO mientras el programador creia tener
+         * velocidad AOT. Pedir velocidad y que te la nieguen sin avisar.
+         *
+         * Mientras no se abra el barrido a los metodos (el otro medio trabajo de
+         * la ficha), al menos que se DIGA. Es el mismo criterio que el proyecto
+         * ya aplica en el gate del `.mod`, el `magic` de la BIOS, el sello del
+         * `.npk` y el aviso de `/lib` rancio: un desfase mudo es peor que uno
+         * ruidoso.
+         *
+         * Va ANTES del `return ""` a proposito: un modulo cuyas unicas `native`
+         * sean metodos sale por ahi, y es justo el caso que hay que avisar. Los
+         * dos consumidores (Main y AotMain) leen getWarnings() tambien en ese
+         * camino. */
+        for (Ast.ITopLevelDecl d : module.defs) {
+            if (!(d instanceof Ast.ClassDef)) continue;
+            Ast.ClassDef c = (Ast.ClassDef) d;
+            for (Ast.ITopLevelDecl m : c.members) {
+                if (!(m instanceof Ast.FuncDef)) continue;
+                Ast.FuncDef f = (Ast.FuncDef) m;
+                if (f.isNative && !f.isIntrinsic) {
+                    warnings.add("el metodo native '" + c.name + "." + f.name.name
+                        + "' NO se compila a codigo nativo todavia: corre interpretado."
+                        + " Solo se emiten funciones `native` de nivel modulo.");
+                }
+            }
+        }
+
         if (nativeFuncs.isEmpty()) return "";
 
         /* V5/H4 - el pack del que salen las `native` sin cuerpo. */

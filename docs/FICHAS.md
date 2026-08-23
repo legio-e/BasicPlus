@@ -796,7 +796,20 @@ por diseño, y por eso `#432` (dónde debe vivir y de qué tamaño) no se puede 
 
 El criterio es suyo y conviene respetarlo: **ampliar por tandas**, no de un salto.
 
-**1. `native` en un MÉTODO — arreglarlo, no sólo avisar.** Hoy se ignora en silencio (ver
+**1. `native` en un MÉTODO — arreglarlo, no sólo avisar.** 🟨 **LA MITAD BARATA, HECHA
+(23-ago)**: ya **AVISA**. `AotCEmitter.emitModule` recorre ahora también los `ClassDef` y
+nombra el método que no se emite —*«el metodo native 'Caja.doble' NO se compila a codigo
+nativo todavia: corre interpretado»*—. Va **antes** del `return ""`, que era el camino por
+el que se colaba el caso peor: un módulo cuyas únicas `native` son métodos salía diciendo
+*«no tiene funciones native»* y punto.
+✅ **Con test de regresión** (`AotNativeEnMetodoTest`, la **primera prueba del AOT** que hay
+en el repo): tres casos —sólo método, mezcla con una `native` de módulo, y una clase limpia
+que **no** debe generar ruido—. Comprobado que **falla sin el arreglo** (2 de 3), que es lo
+que distingue un test de un adorno. Batería: 107/0.
+⏭️ **Falta la otra mitad**: abrir el barrido a los métodos. Cuando se haga, este aviso
+sobra y el test cambia — y eso es correcto.
+
+**1 (continuación).** Hoy se ignora en silencio (ver
 la ficha aparte). Son dos cosas y en este orden: que **AVISE** —barato, y convierte una
 mentira muda en una línea— y luego **abrir el barrido** de `AotCEmitter.java:259` a los
 métodos de las clases, pasando el objeto como primer parámetro. Ojo: `MemberAccessExpr`
