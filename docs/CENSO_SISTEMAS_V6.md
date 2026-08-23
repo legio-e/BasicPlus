@@ -92,10 +92,10 @@ cinco. Es la primera anomalía que saca este censo.
 |---|---|---|---|---|
 | 19 | **Packs** | contenedor grabable + XIP | `bpvm_pack.c` 760 · `bpvm_npack.c` 153 · `bpvm_bios_fs.c` 131 | dentro de `board_mgr_*.c` en las **tres** familias |
 | 20 | **BIOS** | punto de encuentro para el código nativo | `bpvm_bios.c` 157 | `bios_pico.c` 145 · `bios_p4.c` 141 — ✅ **las dos con la misma macro** `BPVM_BIOS_TABLA` |
-| 21 | **AOT / nativo** | `.mdn`, `.npk`, registro de funciones | `bpvm_aot_helpers.c` 645 · `aot_registry.c` 66 · `bpvm_mdn_scan.c` 153 | `aot_funcs.c` (Pico) · `aot_funcs_stub.c` (ESP32) — 🔴 **el STM32 escanea con su propio bucle** |
+| 21 | **AOT / nativo** | `.mdn`, `.npk`, registro de funciones | `bpvm_aot_helpers.c` 645 · `aot_registry.c` 66 · `bpvm_mdn_scan.c` 153 | `aot_funcs.c` (Pico) · `aot_funcs_stub.c` (ESP32) — 🔴 **sólo el Pico usa `bpvm_mdn_scan`; las otras TRES conservan su bucle** *(y lo borrará la fusión `.mod`/`.mdn`, N1.4)* |
 | 22 | **Arranque** | la escalera `KERNEL→PARTITIONS→FS→APP` | `bpvm_boot.c` 70 | `main.c` de cada familia (1582 en la Pico) |
 | 23 | **Entorno / gestor de placa** | variables, descripción de la placa | `bpvm_bmgr.c` 132 · `bpvm_env.c` 275 · `bpvm_bmgr_wire.c` 431 | `board_mgr_*.c` ×3 · `board_desc.c` |
-| 24 | **Log** | diagnóstico, post-mortem en RAM | `bpvm_log.c` 215 | 🔴 `pico/log.c` 280 · `log_esp32.c` 103 · `stm32 log.c` 60 |
+| 24 | **Log** | diagnóstico, post-mortem en RAM | `bpvm_log.c` 215 | ✅ **sólo cintura en las tres (23-ago, U1.2)**: `pico/log.c` **101** · `log_esp32.c` 103 · `stm32 log.c` 60 |
 
 ### Comunicación e interfaz
 
@@ -113,7 +113,7 @@ cinco. Es la primera anomalía que saca este censo.
 | 29 | **Drivers de periférico** | gpio, spi, i2c, uart, pwm, adc, rtc, wdt, pulse, neopixel | 10 ficheros de `src/`, 25–73 líneas cada uno | `gpio_esp32.c` 610 · `gpio_stm32.c` 1049 · `neopixel.c` · `psram.c` |
 | 30 | **stdlib embebida** | los módulos que la imagen trae dentro | — | 🟡 **16 ficheros `*_mod.c`** en la Pico frente a **UNO** en ESP32 (4845) y STM32 (4837) |
 | 31 | **SQLite (pegamento)** | la regla del bloque de la BD | `bpvm_sqlmem.c` 60 | *(el motor va en un pack)* |
-| 32 | **Utilidades** | JSON, CRC, varios | `bpvm_util.c` 161 · `crc32.c` 30 | 🔴 `json_min.c` **×3 copias byte-idénticas** |
+| 32 | **Utilidades** | JSON, CRC, varios | `bpvm_util.c` 161 · `crc32.c` 30 · **`json_min.c` 263** | ✅ **unificado el 23-ago (U1.1)**: eran 3 copias byte-idénticas |
 
 ---
 
@@ -126,15 +126,15 @@ Sin entrar todavía en los ejes que faltan, hay siete anomalías que se ven sól
    asimetrías conocidas (ver `FICHAS` §«EL CRITERIO DE CAPAS»).
 2. 🔴 **La tabla de handles no es un sistema, es un rastro** — repartida por cinco
    ficheros sin dueño. Casa con la ficha `#432` (dónde debe vivir y de qué tamaño).
-3. 🔴 **El log está en las tres familias además del común** — 443 líneas privadas frente
-   a 215 comunes.
+3. ✅ **El log — RESUELTO el 23-ago (U1.2).** La Pico era la única que no usaba el núcleo
+   común y llevaba 280 líneas duplicadas; ahora son 101 y sólo de cintura.
 4. ✅ **La BIOS la tienen la Pico y la P4** — las dos familias que alojan SQLite, y las
    dos construyen su tabla con la misma macro. **No es una anomalía: es coherente.** La
    S3 y el STM32 no la tienen porque no alojan packs nativos.
 5. 🔴 **Tres sistemas no llegan al STM32**: SD/bloque, `LIST_DIR` y el escaneo común de
    `.mdn` (usa un bucle propio).
-6. 🟡 **`json_min.c` está tres veces, byte-idéntico.** Es la unificación más barata que
-   existe hoy: cero decisiones que tomar.
+6. ✅ **`json_min.c` — RESUELTO el 23-ago (U1.1).** Estaba tres veces, byte-idéntico; ahora
+   vive en `src/`. El trabajo no fue mover el fichero sino el alta en los **cinco** builds.
 7. 🟡 **La stdlib embebida usa dos formatos**: 16 ficheros en la Pico, uno en las otras.
    No es código distinto — es el mismo dato empaquetado de dos maneras, y es de ahí de
    donde sale que «la Pico tenga 32 ficheros».
