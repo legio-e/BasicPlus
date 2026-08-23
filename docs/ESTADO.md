@@ -80,6 +80,34 @@ una a una — mi clasificador automático falló en dos (`#422` decía «EL CHIV
 lo detectó). Es una limpieza de una sesión corta, y hasta hacerla **ABIERTAS parece mucho
 más grande de lo que es**.
 
+**Y la sesión siguió, con el censo funcional de V6** (`CENSO_SISTEMAS_V6.md`, nuevo):
+
+- **Paso 1 — los 32 sistemas.** Salen del listado real de fuentes y del `grep` de quién
+  implementa cada interfaz. Contesta la pregunta de Eduardo sobre la memoria: hoy **reserva
+  y GC son UN solo sistema** (`heap.c`, 1.121 líneas), y hay una **tercera** pieza que no es
+  ninguna de las dos — la tabla de handles, sin fichero, repartida por cinco `.c`.
+- **Paso 2 — cuántos están unificados**, con una prueba **mecánica**: un `.c` por familia
+  está bien construido si implementa un contrato de una cabecera común. **22 de 32 están
+  donde deben**; de los 10 que faltan, sólo 3 son hardware. Dos hallazgos: **no existe
+  `bpvm_repl.h`** (el REPL no tiene el contrato roto, no tiene contrato), y los dos
+  `wire_v1.c` **difieren al 100 %** pese al nombre.
+- 🔴 **Y el censo estuvo MAL y lo cazó Eduardo.** Me dejé fuera `esp32p4/` entero: censé los
+  directorios que *recordaba*, no los que hay. Lo destapó una contradicción de mi propio
+  documento —«la BIOS sólo la tiene la Pico» cuando SQLite corre en la P4—. La P4 sí tiene
+  BIOS, con la misma macro. Corregido en `b0d33ff9`. **Son CUATRO árboles de placa, no
+  tres.**
+- **Los hitos U1–U5** (`FICHAS` §«LOS HITOS DE V6»), por decisión de Eduardo: unificar antes
+  de seguir analizando, de lo fácil a lo difícil, y la revisión por niveles (A1) **después**
+  — *«al estar todo unificado, cualquier cambio estructural se hace una vez y no 3 veces»*.
+- **Tres decisiones cerradas**: `/sd` pasa a **prefijo reservado** (cambio de comportamiento
+  → notas de versión) · `Map` llevará objetos internos para **claves y valores** + `add`
+  sobrecargado para clave entera y cadena · y **`notas/` se vacía**: borrado todo lo de V5.
+
+**⏭️ Al volver**: U1 es lo siguiente, y **U1.2 (el log de la Pico) es el mejor primer paso**
+— cierra `#423`, hay **dos ejemplos** de cómo debe quedar (STM32 y ESP32 ya sólo tienen
+cintura), y se comprueba fácil: que el post-mortem siga sobreviviendo al reinicio. `U1.1`
+(`json_min`) es igual de mecánico pero toca **los cinco builds**, así que con calma.
+
 
 ### 22-ago (tarde) — V5 PUBLICADA
 
