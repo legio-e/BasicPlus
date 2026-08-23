@@ -1073,6 +1073,46 @@ sueltos el riesgo sigue vivo**, y que la única cura es que quede uno.
 todo menos eso (`arch` sí va en el `INFO`), así que un desfase sólo se descubre ejecutando y
 mirando el log del dispositivo. Merece ficha aparte.
 
+✅✅ **VALIDADO EN PLACA (Pico, 23-ago): el nativo viaja DENTRO del `.mod` y se ejecuta.**
+Con `/app/Bench.mdn` **borrado**, o sea sin ningún fichero suelto:
+
+```
+fib(28) interp =  317811  in  8601  ms
+fib(28) AOT    =  317811  in    84  ms      ← 102×
+```
+
+Y en el log de la placa, la línea que lo prueba: `[mdn] 1 bloque(s) nativo(s) desde el
+propio .mod` — precedida de `MDN: 1/1 thunks registrados, 64 code bytes (zero-copy)`.
+**Zero-copy** significa que el código se ejecuta donde está, sin copiarse: para eso servía
+toda la disciplina de alineación.
+
+🩸 **LO QUE COSTÓ: CINCO fallos, todos míos, y NINGUNO detectable sin placa.** Vale la pena
+listarlos porque el patrón es el mismo en los cinco —un desfase mudo entre dos cosas que
+deben casar— y porque explica por qué esta feature existe:
+
+| fallo | por qué no lo vio nadie |
+|---|---|
+| la fusión reescribía el `.mod` **tras** el `.mdn` | el guardián de frescura rechazaba el `.mdn`; cero errores |
+| `MDN_ABI_VERSION` subido **sólo en C** | Java estampaba 4, el firmware hablaba 5; el rechazo va al log de la placa |
+| `data + off` con el `.mod` **por trozos** | en la Pico `data` es NULL (H11); en host funcionaba |
+| el relleno **copiado** a RAM | el blob caía en `copia+1..3` → acceso desalineado → hard fault |
+| `malloc` + `free` con un cargador **zero-copy** | los thunks apuntaban a memoria liberada → cuelgue al ejecutar |
+| *(y uno del REPL)* `bpvm_aot_clear()` **tras** la carga | borraba lo que el módulo acababa de registrar |
+
+📌 **Los seis pasaron limpiamente por 109 pruebas de compilador, 39 de VM y la paridad
+dual-VM.** No es que las redes fallaran: es que **ninguna toca el camino AOT en placa**. Es
+la medida más clara que tenemos de dónde está el hueco de cobertura, y confirma lo que ya
+se anotó con los `double`.
+📌 **Y el instrumento decisivo fue el log del dispositivo.** Estuve tres iteraciones
+teorizando sobre el código; en cuanto Eduardo lo encendió (`log=1`), la línea *«1/1 thunks
+registrados»* descartó de golpe formato, subida, ABI, alineación y lectura, y dejó una sola
+posibilidad. Encender el log era el primer paso, no el último.
+
+⚠️ **Y el `clear()` mal colocado está en las TRES familias** (`repl_v1.c`, `repl_esp32.c`,
+`stm32_repl.c`), porque el REPL está triplicado. Arreglado sólo en la Pico. Es el ejemplo
+más limpio que ha dado V6 de por qué existe **U3**: un arreglo que hay que hacer tres veces
+y que, si mañana se hace en dos, falla en silencio en la tercera.
+
 ⏭️ **Lo que queda para cerrarlo del todo**: desplegar en las cinco imágenes y entonces
 retirar el `.mdn` suelto. Va con la tanda de pruebas ya comprometida — el ABI de helpers
 (4→5) obliga a reflashear igualmente.

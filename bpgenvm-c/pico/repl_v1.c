@@ -1561,6 +1561,21 @@ static void run_module_path(const char* path, long id) {
     v1_sink_ctx_t sink_ctx = { session };
     bpvm_set_output(vm, v1_output_sink, &sink_ctx);
 
+    /* [V6/N1.4] EL REGISTRO AOT SE VACIA AQUI, ANTES DE CARGAR — y el sitio
+     * importa. Estaba mas abajo, despues de la carga, porque la suposicion era
+     * «lo que llena el registry es el escaneo del FS». Con el bloque nativo
+     * EMBEBIDO en el .mod eso dejo de ser cierto: el modulo registra sus thunks
+     * mientras se carga, y un clear() posterior los borraba.
+     *
+     * Se vio en placa el 23-ago y de la peor manera: el log decia «1/1 thunks
+     * registrados (zero-copy)» y aun asi `fib(28) AOT` tardaba lo mismo que
+     * interpretado. Todo correcto, y sin efecto.
+     *
+     * Vaciar antes de cargar es ademas lo que siempre se quiso decir: el registro
+     * arranca limpio en cada RUN y luego ACUMULA — lo que traiga cada modulo y lo
+     * que encuentre el barrido de .mdn sueltos. */
+    bpvm_aot_clear();
+
     /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, lee por trozos,
      * resuelve las dependencias con la regla comun (FS y, si no esta, los packs
      * grabados en XIP) y NOMBRA la que falte. Aqui vivia el bucle de 4 pasadas
@@ -1615,11 +1630,8 @@ static void run_module_path(const char* path, long id) {
         log_printf("run: GC DESACTIVADO por el ENV (gc=0) — memoria de un solo uso");
     }
 
-    /* 4b. El registro AOT arranca VACÍO en cada RUN. Antes había aquí dos
-     *     etapas de precarga horneadas en la imagen (Bench linkado + un .mdn
-     *     embebido); se retiraron en H13 (hallazgo 12) — ver aot_funcs.c.
-     *     Lo que llena el registry es el escaneo del FS de justo abajo. */
-    bpvm_aot_clear();
+    /* 4b. (El vaciado del registro AOT se hizo ANTES de cargar — ver arriba.
+     *     Aqui borraria los thunks que el propio .mod trajo embebidos.) */
 
     /* 4c. V5/H4 — el .mdn de cada módulo, del FS o del PACK.
      *

@@ -435,22 +435,79 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      * una ACELERACION — sin el, el modulo corre interpretado y correcto. Lo que
      * no puede pasar es que un nativo malo impida ejecutar. */
     if (native_size > 0) {
-        const uint8_t* sec = data + native_off;
-        uint32_t p = 0;
-        /* El primer blob empieza en el multiplo de 4 mas cercano: el relleno va
-         * dentro de la seccion (ver docs/MOD_FORMAT.md §4.6). */
-        uint32_t abs0 = native_off;
-        p = ((abs0 + 3u) & ~3u) - abs0;
+        /* ⚠️ EL .mod NO SIEMPRE ESTA EN RAM. El cursor tiene DOS fuentes (ver su
+         * comentario arriba): `base` cuando el blob esta en RAM o en flash (host,
+         * XIP, embebido en la imagen) y `rd` cuando se lee POR TROZOS — que es lo
+         * que hace la placa desde H11: el .mod se queda en el FS y no cabe entero.
+         *
+         * La primera version usaba `data + off` a pelo. En host funcionaba y en la
+         * Pico no hacia NADA, porque alli `data` es NULL: el bloque embebido no se
+         * cargaba y el AOT se quedaba en el .mdn suelto. Se vio en placa —83 ms con
+         * .mdn, 8518 sin el— y no dio ni un error.
+         *
+         * Con `base` se usa el puntero DIRECTO: es lo que hace falta para XIP, donde
+         * el codigo se ejecuta en su sitio y copiarlo seria justo lo que la seccion
+         * evita. Sin `base` hay que traerlo a RAM, y se libera al salir: los thunks
+         * ya viven en el pool del AOT, no aqui. */
+        /* El relleno que metio el escritor para que el PRIMER BLOB caiga en
+         * multiplo de 4 DENTRO DEL FICHERO. Se calcula igual en los dos caminos,
+         * pero se USA distinto — y confundirlos fue el cuelgue del 23-ago. */
+        uint32_t pad = ((native_off + 3u) & ~3u) - native_off;
+        if (pad > native_size) goto fin_nativo;          /* seccion absurda */
+        uint32_t largo = native_size - pad;
 
+        uint8_t* copia = NULL;
+        const uint8_t* sec;
+        if (c.base) {
+            /* Puntero DIRECTO. Es lo que hace falta para XIP: el codigo se
+             * ejecuta en su sitio y copiarlo seria justo lo que la seccion evita.
+             * Aqui el relleno SI cuenta, porque `c.base + native_off` conserva la
+             * posicion del fichero y es de ahi de donde sale la alineacion. */
+            sec = c.base + native_off + pad;
+        } else {
+            /* Por TROZOS (la placa desde H11: el .mod se queda en el FS).
+             *
+             * ⚠️ Y aqui el relleno se SALTA, no se copia. La alineacion del blob
+             * venia de su posicion EN EL FICHERO; al traerlo a un buffer nuevo esa
+             * posicion desaparece y lo que manda es el offset dentro del buffer.
+             * Copiar el relleno dejaba el blob en `copia + 1..3` — y un `malloc`
+             * esta alineado, asi que eso es un acceso desalineado en Cortex-M33:
+             * hard fault. En placa se vio como un CUELGUE seco, sin un mensaje.
+             * Leyendo desde `native_off + pad`, el blob empieza en `copia + 0`. */
+            /* ⚠️ ARENA DE LA VM, no `malloc`. El cargador de `.mdn` es ZERO-COPY
+             * por diseno: registra los thunks apuntando DENTRO del buffer que se
+             * le pasa, sin copiar. Asi que ese buffer tiene que seguir vivo, con
+             * direccion estable y ejecutable, TODO EL RUN.
+             *
+             * La primera version pedia un `malloc` y lo liberaba al salir. En
+             * placa eso fue un CUELGUE seco al ejecutar el thunk —saltaba a
+             * memoria ya liberada— y el log llegaba justo hasta «about to
+             * bpvm_run». Es la misma arena que usa el barrido del FS
+             * (`repl_v1.c`), 4-alineada porque es lo que pide Thumb-2. */
+            copia = bpvm_arena_reserve(vm, largo, 4);
+            if (!copia) {
+                bpvm_diag_urgente("[mdn] el bloque embebido (%u B) no cabe en la arena "
+                                  "— se sigue interpretado", (unsigned) largo);
+                goto fin_nativo;
+            }
+            if (!c.rd || c.rd(c.rd_user, native_off + pad, copia, largo) != (long) largo) {
+                bpvm_diag_urgente("[mdn] no se pudo leer el bloque embebido — "
+                                  "se sigue interpretado");
+                goto fin_nativo;   /* la arena se recupera sola al acabar el RUN */
+            }
+            sec = copia;
+        }
+
+        uint32_t p = 0;   /* `sec` YA apunta al primer blob, en los dos caminos */
         int cargados = 0;
-        while (p + sizeof(mdn_header_t) <= native_size) {
+        while (p + sizeof(mdn_header_t) <= largo) {
             const mdn_header_t* h = (const mdn_header_t*) (const void*) (sec + p);
             if (h->magic[0] != 'M' || h->magic[1] != 'D' || h->magic[2] != 'N') break;
             uint32_t tam = (uint32_t) sizeof(mdn_header_t)
                          + h->sym_count * (uint32_t) sizeof(mdn_symbol_t)
                          + h->code_size;
             tam = (tam + 3u) & ~3u;
-            if (p + tam > native_size) break;          /* truncado: no se adivina */
+            if (p + tam > largo) break;          /* truncado: no se adivina */
 
             /* El gate de arquitectura NO se reimplementa aqui: lo hace
              * `bpvm_load_mdn`, que ya distingue los casos raros (un `.mdn`
@@ -471,7 +528,12 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
         }
         if (cargados > 0)
             bpvm_diag_urgente("[mdn] %d bloque(s) nativo(s) desde el propio .mod", cargados);
+        /* NO se libera: los thunks apuntan aqui dentro (zero-copy) y tienen que
+         * seguir validos durante todo el RUN. La arena se recupera entera al
+         * terminar, que es justo su contrato. */
     }
+fin_nativo:
+    (void) 0;
 
     return BPVM_OK;
 }
