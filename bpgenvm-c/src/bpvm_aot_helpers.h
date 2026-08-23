@@ -372,6 +372,13 @@ struct aot_helpers_v2 {
     int64_t (*d2l)(double d);
     double  (*f2d)(float f);
     float   (*d2f)(double d);
+
+    /* #426 — la FRONTERA del thunk para `double`: la pila BP guarda el patron de
+     * bits en 8 bytes big-endian (igual que un `long`), y el cuerpo AOT quiere un
+     * `double`. Gemelos exactos de read_f32_be/write_f32_be, que ya hacian esto
+     * mismo para `float`. */
+    double  (*read_f64_be)(const uint8_t* p);
+    void    (*write_f64_be)(uint8_t* p, double v);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

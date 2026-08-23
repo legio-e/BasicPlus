@@ -856,7 +856,7 @@ sobre datos reales. Es la ficha `#426`.
 Cortex-M33 es de precisión **simple**, así que un `double` no toca la FPU en dos de las
 tres familias. Soportarlo es correcto; **prometer velocidad con él, no**.
 
-**2 (estado, 23-ago).** 🟨 **ETAPA 1 HECHA — los 19 helpers ya están en la tabla** (lado
+**2 (estado, 23-ago).** ✅✅ **HECHO — `double` YA CRUZA a una función `native`.** ETAPA 1 — los 19 helpers ya están en la tabla** (lado
 C): las 4 aritméticas, `mod`, `neg`, `pow`, las 6 comparaciones y las 6 conversiones,
 añadidas **al final** (prefijo congelado, `#158`), así que es aditivo.
 📌 **Dos decisiones tomadas al hacerlo:** las seis comparaciones van **separadas** y no como
@@ -875,9 +875,30 @@ los helpers AOT: hay que REGENERARLO»*—. O sea que ese día hay que regenerar
 - el **`SQLite.pack`** que los lleva dentro,
 - y **reflashear las cinco imágenes**, porque la tabla vive en el firmware.
 
-📌 **Hoy NO hace falta nada de eso**: al ser aditivo, los `.mdn` existentes siguen usando el
-prefijo congelado y funcionan con la tabla crecida. El coste se paga entero en la etapa 2 —
-y conviene pagarlo de una vez, no a plazos.
+✅ **ETAPA 2 HECHA (23-ago)** — el emisor ya usa los helpers:
+- `cType`/`readHelper`/`writeHelper` aceptan `double` (el marshalling ya estaba, compartido
+  con `long`); se añadieron `read_f64_be`/`write_f64_be`, gemelos de los de `float`.
+- literal `DoubleLitExpr`, y **toda la aritmética y las comparaciones por helper**:
+  `dadd`/`dsub`/`dmul`/`ddiv`/`dmod`/`dpow` y las seis de comparar. Basta con que UN
+  operando sea `double`, igual que la regla de `long`.
+- **`MDN_ABI_VERSION` 4 → 5.**
+
+✅ **VERIFICADO donde importa, no en el `.c` sino en el `.o`:** el C generado compila con
+`-Wall -Wextra`, y en modo `.mdn` **no tiene NI UN símbolo indefinido**. Que era el objetivo
+entero: sin helpers, `a + b` de `double` habría dejado un `__adddf3` sin resolver y el
+empaquetador lo habría rechazado. Baterías 108/0 y paridad 35 PASS.
+
+⏭️ **PENDIENTE, y decidido por Eduardo (23-ago): las imágenes NO se regeneran ahora,
+*«cuando hagamos pruebas las regeneramos»*.** Eso es coherente: el `MDN_ABI_VERSION` subido
+no tiene efecto hasta que se reconstruyan las VMs. Pero el día que se reconstruyan hay que
+hacer **las dos cosas a la vez**, o el arranque rechazará los packs:
+- regenerar los cuatro nativos de SQLite y su `SQLite.pack`,
+- reflashear las cinco imágenes.
+
+⚠️ **Y una medida que falta**: la paridad dual-VM **no cubre el camino AOT** (ejecuta el
+intérprete en las dos VMs), así que estos helpers **no tienen red automática todavía**. La
+prueba de verdad es cronometrar y comparar un bucle de `double` en una `native` contra el
+mismo interpretado — que es justo lo que el diseño pedía para el primer día.
 
 **3. Los statements sencillos.** Del censo de `AOT_LIMITES.md`, por relación
 esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),

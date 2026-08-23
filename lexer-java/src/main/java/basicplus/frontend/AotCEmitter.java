@@ -168,6 +168,49 @@ public final class AotCEmitter {
             && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
     }
 
+    /** #426 (V6/N1.2) — ¿el tipo resuelto de `e` es double? Decide que sus
+     *  operaciones van por HELPER y no con los operadores de C: en el micro un
+     *  `a * b` de double es una llamada a libgcc (`__muldf3`), y un `.mdn` no
+     *  resuelve símbolos externos. Mismo motivo que la división de `long`. */
+    /** #426 — el helper que corresponde a cada operador de `double`, o null si
+     *  ese operador no es de coma flotante (y entonces se emite como siempre).
+     *  Las seis comparaciones van por separado a proposito: con NaN NO son
+     *  negaciones unas de otras, asi que un unico comparador divergiria del
+     *  interprete en cuanto apareciera un NaN. */
+    /** Quien ocupa los 8 bytes, para que el comentario del thunk no mienta:
+     *  decia "long" tambien para un `double` (#426). */
+    private static String anchoQuien(Ast.TypeRef t) {
+        if (t instanceof Ast.SimpleTypeRef && "double".equals(((Ast.SimpleTypeRef) t).name))
+            return "double";
+        return "long";
+    }
+
+    private static String dobleHelper(String op) {
+        if (op == null) return null;
+        switch (op) {
+            case "+":   return "dadd";
+            case "-":   return "dsub";
+            case "*":   return "dmul";
+            case "/":   return "ddiv";
+            case "mod": case "%": return "dmod";
+            case "^":   return "dpow";
+            case "==":  return "deq";
+            case "<>": case "!=": return "dneq";
+            case "<":   return "dlt";
+            case "<=":  return "dle";
+            case ">":   return "dgt";
+            case ">=":  return "dge";
+            default:    return null;
+        }
+    }
+
+    private boolean isDoubleExpr(Ast.IExpr e) {
+        if (semInfo == null) return false;
+        BpType t = semInfo.exprTypes.get(e);
+        return (t instanceof PrimitiveType)
+            && ((PrimitiveType) t).tag == PrimitiveType.Kind.DOUBLE;
+    }
+
     /** #173 — ¿el tipo resuelto de `e` es integer? */
     private boolean isIntExpr(Ast.IExpr e) {
         if (semInfo == null) return false;
@@ -749,7 +792,7 @@ public final class AotCEmitter {
                 int w8 = slotBytes(p.type);
                 w.println("    " + cType(p.type) + " a" + i + " = H->"
                     + readHelper(p.type) + "(mem + sp - " + w8 + "); sp -= " + w8 + ";"
-                    + (w8 == 8 ? "  /* long: 8B */" : ""));
+                    + (w8 == 8 ? ("  /* " + anchoQuien(p.type) + ": 8B */") : ""));
             }
         }
         // C call con args en orden original a0, a1, a2...
@@ -772,7 +815,7 @@ public final class AotCEmitter {
             int w8 = slotBytes(f.returnType);
             w.println("    H->" + writeHelper(f.returnType)
                 + "(mem + sp, r); sp += " + w8 + ";"
-                + (w8 == 8 ? "  /* long: 8B */" : ""));
+                + (w8 == 8 ? ("  /* " + anchoQuien(f.returnType) + ": 8B */") : ""));
         } else {
             /* #177 FIX — Las funciones BP normal con OP_RET siempre push
              * un ret_val (incluso si son void). El compilador BP emite
@@ -1270,6 +1313,14 @@ public final class AotCEmitter {
             w.print(Float.toString((float) v) + "f");
             return;
         }
+        if (e instanceof Ast.DoubleLitExpr) {
+            /* #426 — sin sufijo: en C un literal de coma flotante YA es double.
+             * `Double.toString` da la representacion mas corta que redondea de
+             * vuelta al mismo valor, asi que el bit-pattern se conserva; y su
+             * forma ("1.0E10") es valida como literal C. */
+            w.print(Double.toString(((Ast.DoubleLitExpr) e).value));
+            return;
+        }
         if (e instanceof Ast.BoolLitExpr) {
             /* BP boolean → C int 0/1 (matchea cType(boolean) = int32_t). */
             w.print(((Ast.BoolLitExpr) e).value ? "1" : "0");
@@ -1367,6 +1418,32 @@ public final class AotCEmitter {
                 emitExpr(b.right);
                 w.print("))");
                 return;
+            }
+            /* #426 — ARITMETICA Y COMPARACION DE DOUBLE: por helper.
+             *
+             * Mismo caso que la division de `long` de arriba, y por el mismo
+             * motivo: ninguna familia de hoy tiene FPU de doble (el RP2350 y el
+             * STM32U5 son FPv5-SP; el P4 usa ilp32f), asi que `a + b` de double
+             * se convierte en una llamada a libgcc — y eso en un `.mdn` es un
+             * simbolo sin resolver.
+             *
+             * Los helpers viven DENTRO del firmware, que si esta enlazado contra
+             * libgcc. Y hacen EXACTAMENTE lo que hace el interprete: si el camino
+             * compilado fuera "mas correcto" con un NaN o un -0.0, el mismo
+             * programa daria dos resultados segun llevara `.mdn` o no.
+             *
+             * Basta con que UN operando sea double: en C la promocion haria el
+             * resto en double igualmente, que es lo que hace el interprete. */
+            {
+                String dh = dobleHelper(b.op);
+                if (dh != null && (isDoubleExpr(b.left) || isDoubleExpr(b.right))) {
+                    w.print("vm->aot_helpers->" + dh + "((double)(");
+                    emitExpr(b.left);
+                    w.print("), (double)(");
+                    emitExpr(b.right);
+                    w.print("))");
+                    return;
+                }
             }
             /* Numérico/lógico normal. */
             w.print("(");
@@ -1899,32 +1976,18 @@ public final class AotCEmitter {
                      * avanza `sp` de 8 en 8 con read_i64_be/write_i64_be. */
                     return "int64_t";
                 case "double":
-                    /* #349/#426 — 8 bytes, y `double` sigue fuera: no es el
-                     * marshalling lo que le falta (ése ya está, lo comparte con
-                     * `long`), es que su aritmética se emula por software y esas
+                    /* #426 (V6/N1.2) — YA CRUZA. Lo que faltaba no era el
+                     * marshalling (ese lo comparte con `long` desde #381: 8 bytes
+                     * big-endian) sino su ARITMETICA: se emula por software y las
                      * rutinas de libgcc no caben en un `.mdn`, que se carga sin
-                     * enlazador. Ver docs/AOT_ABI8_IDEAS.md.
+                     * enlazador.
                      *
-                     * El mensaje NO puede decir "en la signature": cType se usa
-                     * también para las VARIABLES LOCALES, y decía signature en
-                     * los dos casos. Con un `double` declarado dentro del cuerpo,
-                     * el usuario iba a mirar la firma, no encontrar nada raro y
-                     * quedarse atascado. Un recorte anunciado mal es casi tan
-                     * caro como uno mudo.
-                     *
-                     * Y dice QUÉ HACER, que es lo que convierte un error en una
-                     * decisión: o `float` (32 bits, sí soportado) si la precisión
-                     * da, o quitar `native` y que esa función corra interpretada
-                     * — el resto del módulo sigue compilando a nativo igual. */
-                    throw new UnsupportedAotException(
-                        "el tipo 'double' todavía no cruza a una función native. "
-                        + "('long' sí, desde #381.) La razón no es el tamaño: es que "
-                        + "su aritmética la emula el software y esas rutinas no caben "
-                        + "en el código nativo del módulo. Opciones: usar 'float', que "
-                        + "sí va y ADEMÁS usa la FPU del micro (la de estos chips es de "
-                        + "precisión simple, así que un 'double' tampoco correría por "
-                        + "ella); o quitar 'native' de esta función para que corra "
-                        + "interpretada (el resto del módulo sigue yendo a nativo).");
+                     * La salida es la de Eduardo: que la ponga el firmware. Las 19
+                     * operaciones de `double` viven en la tabla de helpers —dentro
+                     * del firmware, que SI esta enlazado contra libgcc— y el emisor
+                     * llama a ellas en vez de escribir `a + b`. No se reimplementa
+                     * coma flotante: se le presta al `.mdn` la que ya hay. */
+                    return "double";
                 default:
                     /* #174b — clase/enum/any: ref u valor de 4 bytes → handle i32.
                      * (El análisis semántico ya validó el tipo, así que un nombre
@@ -1976,9 +2039,7 @@ public final class AotCEmitter {
                 case "long":
                     return "read_i64_be";      /* #381 — 8 bytes en la pila BP */
                 case "double":
-                    throw new UnsupportedAotException(
-                        "AOT: tipo 'double' no soportado en thunk native (ficha #426; "
-                        + "'long' sí, desde #381)");
+                    return "read_f64_be";     /* #426 — 8 bytes en la pila BP */
                 default:
                     /* #174b — clase/enum/any: handle/valor i32. */
                     return "read_i32_be";
@@ -2005,9 +2066,7 @@ public final class AotCEmitter {
                 case "long":
                     return "write_i64_be";      /* #381 — 8 bytes en la pila BP */
                 case "double":
-                    throw new UnsupportedAotException(
-                        "AOT: tipo 'double' no soportado en thunk native (ficha #426; "
-                        + "'long' sí, desde #381)");
+                    return "write_f64_be";    /* #426 — 8 bytes en la pila BP */
                 default:
                     /* #174b — clase/enum/any: handle/valor i32. */
                     return "write_i32_be";

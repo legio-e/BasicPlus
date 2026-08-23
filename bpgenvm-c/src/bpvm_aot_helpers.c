@@ -300,6 +300,17 @@ static float h_read_f32_be(const uint8_t* p) {
 static void h_write_f32_be(uint8_t* p, float v) {
     bpvm_write_i32_be(p, (int32_t) aoth_float_to_bits(v));
 }
+/* #426 — los mismos, en 64 bits. El patron de bits de la pila BP es EL MISMO que
+ * escribe el interprete (bpvm_write_i64_be sobre double_to_bits), asi que un
+ * `double` que cruza el thunk y vuelve es identico bit a bit. */
+static double h_read_f64_be(const uint8_t* p) {
+    union { double d; uint64_t u; } u; u.u = (uint64_t) bpvm_read_i64_be(p);
+    return u.d;
+}
+static void h_write_f64_be(uint8_t* p, double v) {
+    union { double d; uint64_t u; } u; u.d = v;
+    bpvm_write_i64_be(p, (int64_t) u.u);
+}
 
 /* ---------- Acceso a arrays (H3 #167) ----------
  * Layout heap: [length:u32 BE][el0:T][el1:T]... — T=4 bytes para i32.
@@ -707,6 +718,8 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .d2l                 = h_d2l,
     .f2d                 = h_f2d,
     .d2f                 = h_d2f,
+    .read_f64_be         = h_read_f64_be,
+    .write_f64_be        = h_write_f64_be,
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

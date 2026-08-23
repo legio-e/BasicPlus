@@ -31,7 +31,7 @@
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
 #define MDN_VERSION        1   /* incrementar si cambia el header layout */
-#define MDN_ABI_VERSION    4   /* 11-ago — el .mdn NO solo depende de la TABLA de
+#define MDN_ABI_VERSION    5   /* 11-ago — el .mdn NO solo depende de la TABLA de
                                 * helpers: su codigo lee `vm->memory` y
                                 * `vm->aot_helpers` POR DESPLAZAMIENTO dentro de
                                 * `struct bpvm`. Ayer añadi un campo a
