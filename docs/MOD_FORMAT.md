@@ -22,27 +22,46 @@ Convención general:
 
 ## 1. Layout del fichero
 
+> ⚠️ **Este documento estuvo DOS versiones desatrasado** — describía v5 cuando el
+> compilador llevaba tiempo emitiendo v6 — y se puso al día el 23-ago-2026 al
+> añadir v7. Queda escrito porque volverá a pasar y porque el fallo es caro: **el
+> header CRECE con la versión**, así que un lector que se equivoque de tamaño
+> desplaza *todas* las secciones y corrompe el módulo en silencio. Leer el header
+> según el MAGIC no es una precaución: es el contrato.
+
 ```
-+──────────────────────────── header (28 bytes) ───────────────────────────+
-│  +00  MAGIC          i32  0x4D4F4435 ("MOD5")                            │
++─────────────────────── header (36 bytes en v7) ───────────────────────────+
+│  +00  MAGIC          i32  0x4D4F4437 ("MOD7")                            │
 │  +04  dataSize       i32  bytes de la sección data                       │
 │  +08  mainOffset     i32  offset del entrypoint dentro de code (-1 = no) │
 │  +12  importsSize    i32  bytes de la sección imports                    │
 │  +16  exportsSize    i32  bytes de la sección exports                    │
 │  +20  codeSize       i32  bytes de la sección code                       │
 │  +24  librarySize    i32  bytes de la sección library (0 si no hay)      │
+│  +28  interfaceSize  i32  bytes de la sección interface   ← v6 y v7      │
+│  +32  nativeSize     i32  bytes de la sección native      ← sólo v7      │
 +──────────────────────────────────────────────────────────────────────────+
-+── library  ──+  librarySize bytes, UTF-8 raw (sin length prefix)
-+── imports  ──+  importsSize bytes (ver §3)
-+── exports  ──+  exportsSize bytes (ver §4)
-+── data     ──+  dataSize    bytes (ver §5)
-+── code     ──+  codeSize    bytes (ver §6)
++── library   ──+  librarySize   bytes, UTF-8 raw (sin length prefix)
++── imports   ──+  importsSize   bytes (ver §3)
++── exports   ──+  exportsSize   bytes (ver §4)
++── interface ──+  interfaceSize bytes (ver §4.5)   ← v6+
++── native    ──+  nativeSize    bytes (ver §4.6)   ← v7
++── data      ──+  dataSize      bytes (ver §5)
++── code      ──+  codeSize      bytes (ver §6)
 ```
+
+**Header por versión:** v5 = 28 bytes (7 enteros) · v6 = 32 (8) · v7 = 36 (9).
+
+📌 **Las secciones nuevas se insertan ANTES de `data`, nunca al final.** No es
+estética: los offsets internos de `data` y `code` son relativos a su propia
+sección, así que meter algo delante no obliga a recalcular nada — y meterlo
+detrás convertiría el fichero en algo cuyo final hay que adivinar. Un `.mod` que
+vive en un pack por XIP **no es un fichero**: es una región mapeada, y ahí "lo
+que sobra al final" no es una señal que exista.
 
 El fichero termina exactamente al final de la sección `code`. Sin
 trailer, sin checksum, sin padding.
 
----
 
 ## 2. Library
 
@@ -180,6 +199,95 @@ for each eh_fixup:
 En runtime `TRY_BEGIN_EXT` computa `expectedClass = cs + clsOff = parentAbs`,
 de modo que `isDescendantOf` casa el `catch` con la clase del otro módulo.
 
+---
+
+## 4.5 Sección INTERFACE (v6+)
+
+El texto de la interfaz del módulo — lo que hasta V4 era un fichero `.bpi`
+aparte. UTF-8 crudo, sin length prefix; `interfaceSize` lo delimita. Vacía
+(`interfaceSize == 0`) es legítimo: los módulos emitidos a mano por los tests no
+la llevan.
+
+**Por qué se fundió** (V4/H6.a): dos ficheros que tienen que ir juntos son dos
+ficheros que se pueden desparejar. Al meterla dentro desaparecieron **71 `.bpi`**
+y con ellos una clase entera de fallo. Es el mismo argumento que justifica §4.6.
+
+Las VMs la **saltan**: ejecutan sin ella. La usa el compilador, para resolver
+imports sin recompilar el módulo dueño.
+
+## 4.6 Sección NATIVE (v7)
+
+El código nativo AOT del módulo — lo que hasta V5 era un fichero `.mdn` aparte.
+Vacía (`nativeSize == 0`) mientras el módulo no lleve nativo, que es el caso de
+casi todos.
+
+### Su contenido: N blobs `.mdn` concatenados, uno por familia
+
+```
++── blob 0 ──+  cabecera mdn_header_t + N symbols + code   (alineado a 4)
++── blob 1 ──+  idem, otra arquitectura
++──   …    ──+
+```
+
+### ⚠️ La sección se ALINEA A SÍ MISMA
+
+Las secciones del `.mod` **no están alineadas**: se empaquetan seguidas, y hoy
+`data` y `code` empiezan en offsets impares. Da igual para ellas, porque el
+cargador las **copia** a `memory[]` en direcciones alineadas — la alineación del
+fichero no se hereda.
+
+**Con `native` no da igual.** Un `.mod` dentro de un pack se ejecuta por **XIP,
+en su sitio**, así que la posición del blob en el fichero **es su dirección de
+ejecución**. Un blob RISC-V en offset impar no arranca, y el propio `.mdn` ya
+pide sus datos alineados a 4.
+
+Por eso la sección empieza con **0–3 bytes de relleno** hasta el múltiplo de 4, y
+`nativeSize` **los incluye**. Ninguna otra sección se toca; el lector hace:
+
+```
+inicio_del_primer_blob = align4(inicio_de_la_seccion)
+```
+
+📌 Lo señaló Eduardo el 23-ago al revisar el formato, **antes** de que hubiera un
+solo blob emitido. Sin eso, el fallo sólo se habría visto en placa, con XIP, y en
+una arquitectura sí y en otra no.
+
+**No hay tabla de contenidos, y no hace falta**: un `.mdn` ya se describe a sí
+mismo. Su cabecera (`src/mdn_format.h`) trae `code_size` y `sym_count`, así que
+el tamaño total de un blob se calcula desde él:
+
+```
+total = sizeof(mdn_header_t) + sym_count * sizeof(mdn_symbol_t) + code_size
+```
+
+redondeado a 4. Con eso un lector camina de blob en blob hasta agotar
+`nativeSize`. Y cada blob dice **para qué arquitectura es**, en su campo `arch`
+(`MDN_ARCH_ARM`, `_RISCV`, `_XTENSA`), así que el cargador se queda con el suyo y
+salta los demás.
+
+📌 **Por eso el formato de N familias es el mismo que el de una.** Hoy se emite
+N=1 —la familia de la placa conectada— y el multifamilia no pide ningún cambio de
+formato: sólo que el compilador emita más blobs. La poda del IDE se vuelve
+*«quédate con el blob cuyo `arch` coincide»*, que es tirar bytes, no reformatear.
+
+### Lo que mata
+
+Igual que §4.5, pero peor, porque el `.mdn` se puede desparejar **de dos maneras**
+y las dos nos han pasado:
+
+- **En el tiempo** — *«el `.mdn` es MÁS VIEJO que su `.mod`»*. Existe un guardián
+  en el IDE porque hacía falta; con un solo fichero no hay de qué guardarse.
+- **De familia** — se subió un `.mdn` de ARM a una P4. El `arch` estaba en el
+  fichero y la placa decía el suyo, pero nadie los comparaba. Con bloques
+  etiquetados **dentro**, elegir el equivocado deja de ser posible por
+  construcción.
+
+### Estado (23-ago-2026)
+
+El **formato** está cerrado y los dos cargadores lo leen. La sección se emite
+**vacía**: falta que el compilador meta el blob y que el cargador registre sus
+thunks desde ahí en vez de buscar un `.mdn` en el FS. Ver `FICHAS.md`, hito N1
+punto 4.
 ---
 
 ## 5. Sección DATA
@@ -325,10 +433,17 @@ guarda type+size — ver `HEAP_LAYOUT.md` §2 para detalle.
 ## 10. Detección de versión
 
 El loader debe:
-1. Leer 4 bytes y comprobar `MAGIC == 0x4D4F4435`.
-2. Si no coincide, abortar con error "firma mágica inválida".
-3. Versiones futuras del `.mod` (v6+) cambiarán el MAGIC. Es la única
-   forma fiable de detección — no hay byte de versión separado.
+1. Leer 4 bytes y mirar el MAGIC. **No hay byte de versión separado**: el MAGIC
+   ES la versión, y también la declaración de ABI (ver `#284`).
+2. **El tamaño del header depende del MAGIC** — 28 / 32 / 36 bytes para v5 / v6 /
+   v7. Leerlo mal desplaza todas las secciones. En Java está resuelto en
+   `ModFormat.headerSizeDe(magic)`.
+3. **Qué se ejecuta hoy: v6 y v7.** v5 se **rechaza** — es anterior al ensanchado
+   de refs 4→8B y su ABI no se puede garantizar, así que correrlo corrompería en
+   silencio.
+4. 📌 **v7 NO obliga a regenerar nada.** Sólo añade una sección; el ABI (el ancho
+   de referencia) no cambia, y por eso v6 sigue siendo ejecutable. El gate de
+   `#284` vigila el ABI, no el número.
 
 Para añadir un campo sin romper compat se usa el truco de subsección
 opcional detectable por bytes remanentes (ver §4.2 / §4.3). Para
@@ -340,9 +455,11 @@ cambios incompatibles se sube el número.
 
 | Símbolo | Valor | Significado |
 |---|---|---|
-| `MAGIC` | `0x4D4F4435` | "MOD5" en ASCII big-endian |
-| `HEADER_SIZE` | 28 | bytes del header binario |
-| `FORMAT_VERSION` | 5 | versión lógica (informativa) |
+| `MAGIC` | `0x4D4F4435` | "MOD5" — rechazado (ABI ambiguo) |
+| `MAGIC_V6` | `0x4D4F4436` | "MOD6" — con sección `interface` |
+| `MAGIC_V7` | `0x4D4F4437` | "MOD7" — con sección `native` |
+| `HEADER_SIZE` / `_V6` / `_V7` | 28 / 32 / 36 | bytes del header, según MAGIC |
+| `FORMAT_VERSION` | 7 | versión lógica (informativa) |
 | `CLS_OFF_NUM_FIELDS` | 0 | offset del campo en el class descriptor |
 | `CLS_OFF_NUM_METHODS` | 2 | |
 | `CLS_OFF_BITMAP_WORDS` | 4 | |
@@ -354,7 +471,14 @@ cambios incompatibles se sube el número.
 
 ## 12. Cambios entre versiones
 
-- **v5** (actual): cada import lleva `fromPath` además de `name`.
+- **v7** (actual, 23-ago-2026): sección **`native`** entre `interface` y `data`
+  (§4.6) — el `.mdn` deja de ser un fichero aparte. Header de 36 bytes.
+  **Aditivo**: no cambia el ABI, así que los `.mod` v6 se siguen ejecutando y no
+  hubo que regenerar ninguno.
+- **v6** (V4/H6.a): sección **`interface`** entre `exports` y `data` (§4.5) — el
+  `.bpi` deja de ser un fichero aparte; se borraron 71. Header de 32 bytes. Y
+  marca la era de refs de 8 bytes, que es lo que hace ejecutable un módulo (#284).
+- **v5**: cada import lleva `fromPath` además de `name`.
 - **v4**: se añade `librarySize` al header + sección `library`.
 - **v3**: layout actual del class descriptor (con `bitmap_words` y
   `parent_offset` en sus posiciones actuales).

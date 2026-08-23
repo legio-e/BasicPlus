@@ -25,6 +25,11 @@ typedef struct { uint64_t v; } bpref_t;
 
 #define BPVM_MAGIC          0x4D4F4435u   /* "MOD5" big-endian (v5, sin interfaz) */
 #define BPVM_MAGIC_V6       0x4D4F4436u   /* "MOD6" big-endian (v6, H6.a: sección interface) */
+/* [V6/N1.4] v7 — anade la seccion `native` (el `.mdn` embebido). NO cambia el
+ * ABI —las refs siguen siendo de 8 bytes—, asi que v6 se sigue ejecutando y NO
+ * hay que regenerar los .mod que ya existen. Mismo movimiento que hizo v6 con
+ * el `.bpi` sobre v5. */
+#define BPVM_MAGIC_V7       0x4D4F4437u   /* "MOD7" big-endian */
 #define BPVM_HEADER_SIZE    28            /* header v5; v6 = 32 (añade interfaceSize) */
 #define BPVM_HEADER_SIZE_V6 32
 #define BPVM_FORMAT_VERSION 6

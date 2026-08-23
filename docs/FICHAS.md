@@ -995,6 +995,41 @@ bloques etiquetados dentro, elegir el equivocado **deja de ser posible por const
 🔗 **Y ya es carga estructural**: `U1.3` se canceló porque esta fusión borra el escaneo del
 `.mdn`. O sea que hay trabajo secuenciado contra ella.
 
+🟨 **PRIMER PASO HECHO (23-ago): el FORMATO está cerrado — `.mod` v7.** A petición de
+Eduardo (*«¿podemos hacer algo ahora, el caso más sencillo, una sola plataforma?»*).
+- Header de **36 bytes** (9 enteros: se añade `nativeSize`) y sección **`native`** entre
+  `interface` y `data`. Calcado de lo que hizo v6 con el `.bpi`.
+- **Contenido: N blobs `.mdn` concatenados.** No hace falta tabla de contenidos porque un
+  `.mdn` **ya se describe a sí mismo** (`code_size` + `sym_count` dan su tamaño) y **ya dice
+  su arquitectura** (`arch`). Por eso **el formato de N familias es el mismo que el de una**:
+  hoy N=1, y el multifamilia no pedirá tocar el formato, sólo emitir más blobs. La poda del
+  IDE se vuelve *«quédate con el blob cuyo `arch` coincide»* — tirar bytes, no reformatear.
+- ✅ **v6 SIGUE EJECUTÁNDOSE, así que NO hubo que regenerar los 32 `.mod` existentes.** El
+  gate de `#284` vigila el **ABI** (el ancho de referencia) y v7 no lo toca: sólo añade una
+  sección. Demostrado, no supuesto: la stdlib sigue siendo MOD6 y la paridad pasa.
+
+⚠️ **Y una que salvó Eduardo, revisando el formato antes de que hubiera un solo blob: LA
+ALINEACIÓN.** Las secciones del `.mod` **no están alineadas** —hoy `data` y `code` empiezan
+en offsets impares— y da igual, porque el cargador las **copia** a `memory[]` alineadas. Con
+`native` **no da igual**: un `.mod` en un pack se ejecuta por **XIP, en su sitio**, así que
+la posición del blob en el fichero **es su dirección de ejecución**, y un blob RISC-V en
+offset impar no arranca. La sección se alinea **a sí misma** (0–3 bytes de relleno al
+principio, incluidos en `nativeSize`); el lector hace `align4(inicio)`.
+📌 Sin esa observación, el fallo habría salido **sólo en placa, sólo con XIP y sólo en una
+arquitectura**. De los caros.
+✅ Y con test (`ModV7SeccionNativaTest`, 8 tamaños de blob), **que hacía falta porque el
+relleno es código que hoy no ejecuta nadie** — la sección se emite vacía. El test cazó de
+entrada que mi aserción no decía lo que el diseño promete.
+
+📖 **DOCUMENTADO** —encargo de Eduardo: *«cuando esté hecho hay que documentarlo, para que
+no sea necesario buscar en el código cómo se ha hecho»*—. `MOD_FORMAT.md` §1, §4.5, §4.6,
+§10, §11 y §12. Y de paso se descubrió que **el doc llevaba DOS versiones de retraso**:
+describía v5 cuando el compilador emitía v6, así que la sección `interface` **nunca se había
+escrito**. Ahora están las dos.
+
+⏭️ **Lo que falta**: que el compilador meta el blob en la sección, y que el cargador registre
+sus thunks desde ahí en vez de buscar un `.mdn` en el FS.
+
 ⚠️ **Lo caro no es la fusión, es su cola** — está en el diseño y conviene no descubrirlo a
 mitad: el gate de ABI sube la versión del `.mod` y eso deja **rancias las cuatro copias de
 la stdlib** (incluida `packs/Stdlib.pack`); el IDE compara local-contra-device para no

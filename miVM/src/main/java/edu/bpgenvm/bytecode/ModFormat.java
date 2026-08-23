@@ -82,14 +82,30 @@ public final class ModFormat {
     /** Tamaño del header v6 en bytes (8 enteros: añade interfaceSize). */
     public static final int HEADER_SIZE_V6 = 32;
 
+    /** Identificador de los .mod v7 (V6/N1.4 — con sección `native` embebida:
+     *  el `.mdn` deja de ser un fichero aparte). */
+    public static final int MAGIC_NUMBER_V7 = 0x4D4F4437; // "MOD7"
+
+    /** Tamaño del header v7 en bytes (9 enteros: añade nativeSize). */
+    public static final int HEADER_SIZE_V7 = 36;
+
     /** Versión lógica del formato; informativa. */
-    public static final int FORMAT_VERSION = 6;
+    public static final int FORMAT_VERSION = 7;
 
     /** True si {@code magic} es un MAGIC de .mod RECONOCIBLE (v5 o v6). Sirve
      *  para INSPECCIONAR (disasm / module info): saber qué es un fichero. NO
      *  implica que se pueda ejecutar — para eso está {@link #isAbiSupported}. */
     public static boolean isKnownMagic(int magic) {
-        return magic == MAGIC_NUMBER || magic == MAGIC_NUMBER_V6;
+        return magic == MAGIC_NUMBER || magic == MAGIC_NUMBER_V6
+            || magic == MAGIC_NUMBER_V7;
+    }
+
+    /** Bytes de header que le corresponden a este magic. El header CRECE con la
+     *  versión, así que leerlo mal desplaza TODAS las secciones. */
+    public static int headerSizeDe(int magic) {
+        if (magic == MAGIC_NUMBER_V7) return HEADER_SIZE_V7;
+        if (magic == MAGIC_NUMBER_V6) return HEADER_SIZE_V6;
+        return HEADER_SIZE;
     }
 
     // ============================================================
@@ -115,9 +131,17 @@ public final class ModFormat {
     public static final int ABI_REF_SIZE_V6 = 8;
 
     /** True si un .mod con este magic tiene un ABI que esta VM puede EJECUTAR.
-     *  Hoy sólo v6 (refs 8B garantizado); v5 es ambiguo → no se ejecuta. */
+     *
+     *  <p>v6 Y v7. Y que v6 siga valiendo NO es una concesión: el gate de `#284`
+     *  vigila el <b>ABI</b> —el ancho de referencia—, y v7 no lo toca. v7 sólo
+     *  AÑADE una sección (`native`) al final del header y del layout, igual que
+     *  v6 añadió `interface` sobre v5. Un v6 ejecuta idéntico; lo único que no
+     *  tiene es bloque nativo embebido, que es justo lo que no tenía antes.
+     *
+     *  <p>Por eso el salto a v7 <b>no obliga a regenerar</b> los `.mod` que ya
+     *  hay. v5 sigue rechazado, y por el motivo de siempre: su ABI es ambiguo. */
     public static boolean isAbiSupported(int magic) {
-        return magic == MAGIC_NUMBER_V6;
+        return magic == MAGIC_NUMBER_V6 || magic == MAGIC_NUMBER_V7;
     }
 
     /** Motivo de rechazo, claro y accionable, para un magic no ejecutable. */
@@ -128,7 +152,7 @@ public final class ModFormat {
                  + "corrompería memoria en silencio). Recompílalo con el compilador actual.";
         }
         return String.format(
-                "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\")", magic);
+                "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\" o \"MOD7\")", magic);
     }
 
     private ModFormat() { /* no-instanciable */ }

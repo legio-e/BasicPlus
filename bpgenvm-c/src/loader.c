@@ -111,6 +111,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     /* --- Header (v5=28 bytes / v6=32 bytes) --- */
     uint32_t magic, data_size, imports_size, exports_size, code_size, library_size;
     uint32_t interface_size = 0;   /* H6.a: sección interface (sólo v6) */
+    uint32_t native_size    = 0;   /* V6/N1.4: sección native (sólo v7) */
     int32_t  main_offset;
     if (bc_read_be32(&c, &magic) != 0)                 return BPVM_ERR_IO;
     /* #284 — GATE DE ABI. La versión del formato ES la declaración de ABI:
@@ -119,8 +120,10 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      * no se pueda garantizar se RECHAZA aquí, en la carga, con un error claro
      * -- nunca se ejecuta a ciegas. */
     if (magic == BPVM_MAGIC)                           return BPVM_ERR_ABI_MOD_V5;
-    if (magic != BPVM_MAGIC_V6)                        return BPVM_ERR_BAD_MAGIC;
-    int is_v6 = 1;
+    if (magic != BPVM_MAGIC_V6 && magic != BPVM_MAGIC_V7)
+                                                       return BPVM_ERR_BAD_MAGIC;
+    int is_v6 = 1;                       /* v6 y v7 llevan interfaceSize */
+    int is_v7 = (magic == BPVM_MAGIC_V7);
     if (bc_read_be32(&c, &data_size) != 0)             return BPVM_ERR_IO;
     {
         uint32_t mo;
@@ -132,6 +135,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     if (bc_read_be32(&c, &code_size) != 0)             return BPVM_ERR_IO;
     if (bc_read_be32(&c, &library_size) != 0)          return BPVM_ERR_IO;
     if (is_v6 && bc_read_be32(&c, &interface_size) != 0) return BPVM_ERR_IO;
+    if (is_v7 && bc_read_be32(&c, &native_size) != 0)    return BPVM_ERR_IO;
 
     bpvm_module_t* mod = &vm->modules[vm->module_count];
     memset(mod, 0, sizeof(*mod));
@@ -222,8 +226,15 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
     /* H6.a — la sección interface va entre exports y data; la VM ejecuta sin
      * ella (es metadato de compilación). La saltamos íntegra. */
+    /* [V6/N1.4] La seccion `native` va JUSTO DESPUES de `interface`. De momento
+     * se salta: lo que se cierra hoy es el FORMATO, para que el registro de
+     * thunks desde aqui pueda apoyarse en el. Saltarla mal desplazaria `data` y
+     * `code`, que es como se corrompe un modulo en silencio. */
     if (interface_size > 0) {
         if (bc_skip(&c, interface_size) != 0) return BPVM_ERR_IO;
+    }
+    if (native_size > 0) {
+        if (bc_skip(&c, native_size) != 0) return BPVM_ERR_IO;
     }
 
     /* Data block: lo copiamos en memory[] (mutable: SIEMPRE a RAM). */

@@ -545,7 +545,8 @@ public class ModuleManager {
                 throw new RuntimeException("no se puede cargar " + src.label + ": "
                         + ModFormat.abiRejectReason(magic0));
             }
-            boolean v6a = (magic0 == ModFormat.MAGIC_NUMBER_V6);
+            boolean v6a = (magic0 != ModFormat.MAGIC_NUMBER);   // v6 o v7: llevan interfaceSize
+            boolean v7a = (magic0 == ModFormat.MAGIC_NUMBER_V7);
             in.readInt(); // dataSize
             in.readInt(); // mainOffset
 
@@ -554,6 +555,7 @@ public class ModuleManager {
             in.readInt();   // codeSize
             int librarySize = in.readInt();
             if (v6a) in.readInt();   // interfaceSize (v6): irrelevante para el discovery de imports
+            if (v7a) in.readInt();   // nativeSize (v7): idem — aqui solo se buscan imports
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
@@ -611,7 +613,8 @@ public class ModuleManager {
                 throw new RuntimeException("no se puede cargar " + source.label + ": "
                         + ModFormat.abiRejectReason(magic1));
             }
-            boolean v6 = (magic1 == ModFormat.MAGIC_NUMBER_V6);
+            boolean v6 = (magic1 != ModFormat.MAGIC_NUMBER);   // v6 o v7 llevan interfaceSize
+            boolean v7 = (magic1 == ModFormat.MAGIC_NUMBER_V7);
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
             int importSize  = in.readInt();
@@ -619,6 +622,12 @@ public class ModuleManager {
             int codeSize    = in.readInt();
             int librarySize = in.readInt();
             int interfaceSize = v6 ? in.readInt() : 0;   // H6.a: sección interface (v6)
+            /* [V6/N1.4] v7 — sección `native`: N blobs `.mdn` concatenados, cada
+             * uno autodelimitado (cabecera + sym_count*sizeof(sym) + code_size) y
+             * autoidentificado por su `arch`. La VM-Java NO ejecuta código nativo
+             * —sus `native` corren interpretadas— asi que la SALTA; pero tiene que
+             * saltarla BIEN, o todo lo que viene detras se desplaza. */
+            int nativeSize = v7 ? in.readInt() : 0;
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
@@ -667,6 +676,14 @@ public class ModuleManager {
             if (interfaceSize > 0) {
                 byte[] ifaceSkip = new byte[interfaceSize];
                 in.readFully(ifaceSkip);
+            }
+            // [V6/N1.4] Y la sección `native` va justo después, por el mismo
+            // motivo y con el mismo gesto: la VM-Java no ejecuta código nativo
+            // (sus `native` corren interpretadas), pero saltarla MAL desplazaría
+            // data y code — que es como se corrompe un módulo en silencio.
+            if (nativeSize > 0) {
+                byte[] natSkip = new byte[nativeSize];
+                in.readFully(natSkip);
             }
             java.io.DataInputStream expIn = new java.io.DataInputStream(
                     new java.io.ByteArrayInputStream(expBuf));

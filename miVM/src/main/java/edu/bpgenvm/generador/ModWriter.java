@@ -278,6 +278,13 @@ public class ModWriter {
         this.currentLibrary = (library == null) ? "" : library;
     }
 
+    /** [V6/N1.4] Los bytes de la sección `native` (cero o más blobs `.mdn`).
+     *  Null o vacío = el módulo no lleva código nativo embebido. */
+    private byte[] nativeBytes = null;
+
+    /** Instala la sección `native` del módulo. Ver la nota del writer. */
+    public void setNativeBytes(byte[] b) { this.nativeBytes = b; }
+
     /** H6.a — embebe la interfaz del módulo (texto del antiguo .bpi, UTF-8) en
      *  el .mod. Si se llama con bytes no nulos, {@link #writeToFile} emite el
      *  formato v6 (MAGIC "MOD6") con la sección `interface` entre exports y
@@ -2121,8 +2128,49 @@ public class ModWriter {
         // dispararlo. (Los .mod v5 genuinamente antiguos siguen rechazados.)
         byte[] iface = (interfaceBytes != null) ? interfaceBytes : new byte[0];
 
+        /* [V6/N1.4] v7 — sección `native`: el `.mdn` deja de ser un fichero aparte
+         * y viaja DENTRO del módulo. Mismo movimiento que hizo v6 con el `.bpi`.
+         *
+         * El contenido es «cero o más blobs `.mdn` concatenados», y no hace falta
+         * inventar un formato para separarlos: un `.mdn` YA se describe a sí mismo
+         * —cabecera `MDN ` con `arch`, `abi_version`, `code_size` y `sym_count`—,
+         * así que el lector avanza blob a blob. El caso de UNA plataforma es
+         * simplemente N=1, y el multifamilia sale del mismo diseño sin tocarlo.
+         *
+         * Vacía mientras el compilador no la rellene: lo que se cierra hoy es el
+         * FORMATO, para que el resto pueda apoyarse en él. */
+        byte[] nativoRaw = (nativeBytes != null) ? nativeBytes : new byte[0];
+
+        /* ⚠️ ALINEACION A 4 — la señaló Eduardo, y evita un fallo que sólo se
+         * habría visto EN PLACA.
+         *
+         * Las secciones del `.mod` NO están alineadas: se empaquetan seguidas, y
+         * hoy `data` y `code` empiezan en offsets impares tan tranquilos. Da
+         * igual, porque el cargador los COPIA a `memory[]` en direcciones
+         * alineadas — la alineación del fichero no se hereda.
+         *
+         * Con `native` no da igual: un `.mod` dentro de un pack se ejecuta por
+         * XIP, EN SU SITIO, así que la posición del blob en el fichero ES su
+         * dirección de ejecución. Un blob RISC-V que caiga en un offset impar no
+         * arranca, y el `.mdn` ya pedía sus datos alineados a 4 por su cuenta.
+         *
+         * La sección se alinea A SI MISMA: empieza con 0..3 bytes de relleno
+         * hasta el múltiplo de 4, y `nativeSize` los incluye. Así no hay que
+         * tocar ninguna otra sección ni recalcular nada — el lector hace
+         * `inicio_del_primer_blob = align4(inicio_de_la_seccion)`. */
+        byte[] nativo = nativoRaw;
+        if (nativoRaw.length > 0) {
+            int inicio = 36 + libraryBytes.length + importStream.size()
+                       + exportStream.size() + iface.length;
+            int pad = (4 - (inicio & 3)) & 3;
+            if (pad > 0) {
+                nativo = new byte[pad + nativoRaw.length];
+                System.arraycopy(nativoRaw, 0, nativo, pad, nativoRaw.length);
+            }
+        }
+
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filename))) {
-            out.writeInt(ModFormat.MAGIC_NUMBER_V6);
+            out.writeInt(ModFormat.MAGIC_NUMBER_V7);
             out.writeInt(dataSize);
             out.writeInt(mainOffset);
             out.writeInt(importStream.size());
@@ -2130,11 +2178,13 @@ public class ModWriter {
             out.writeInt(rawCode.length);
             out.writeInt(libraryBytes.length);
             out.writeInt(iface.length);                // 8º entero del header v6
+            out.writeInt(nativo.length);               // 9º entero del header v7
 
             out.write(libraryBytes);
             out.write(importStream.toByteArray());
             out.write(exportStream.toByteArray());
             out.write(iface);                          // sección interface (vacía si no hay)
+            out.write(nativo);                         // sección native   (vacía si no hay)
             out.write(dataBuf);
             out.write(rawCode);
         }
