@@ -16,11 +16,26 @@
 > censar.»*
 >
 > 📐 **De dónde salen los datos:** del listado real de fuentes de cada imagen
-> (`src/` 57 ficheros · `pico/` 32 · `esp32/main/` 11 · `stm32/port/` 11), del `grep` de
+> (`src/` 57 ficheros · `pico/` 32 · `esp32/main/` 11 · **`esp32p4/main/` 9** ·
+> `stm32/port/` 11), del `grep` de
 > quién implementa cada interfaz, y del censo por fichero que ya existe en
 > `CENSO_FAMILIAS.md`. Nada sale de memoria.
 
 ---
+
+> ⚠️ **CORREGIDO el 23-ago, y la corrección importa.** La primera versión de este censo
+> **se dejó fuera un árbol de familia entero**: `esp32p4/main/` (9 ficheros, 2.478 líneas).
+> Miró `src/`, `pico/`, `esp32/main/` y `stm32/port/` dando por hecho que «ESP32» era un
+> directorio, y son **dos**: la S3 y la P4 tienen árboles separados.
+>
+> Lo destapó una pregunta de Eduardo que el propio censo hacía inevitable: *«la BIOS la
+> empezamos para SQLite, y SQLite corre en la Pico y en la P4. ¿La P4 no tiene BIOS?»*.
+> La tenía. `esp32p4/main/bios_p4.c`.
+>
+> 📌 **La lección, que es la de siempre**: el censo se hizo con `ls` sobre los directorios
+> *que yo sabía que existían*, no sobre los que existen. Un `ls -d */` habría bastado.
+> Enlaza con [[censar-por-la-primitiva-no-por-el-nombre]]: censar por lo que uno recuerda
+> es censar dos veces mal.
 
 ## Los 32 sistemas
 
@@ -76,7 +91,7 @@ cinco. Es la primera anomalía que saca este censo.
 | # | sistema | qué hace | común | cintura |
 |---|---|---|---|---|
 | 19 | **Packs** | contenedor grabable + XIP | `bpvm_pack.c` 760 · `bpvm_npack.c` 153 · `bpvm_bios_fs.c` 131 | dentro de `board_mgr_*.c` en las **tres** familias |
-| 20 | **BIOS** | punto de encuentro para el código nativo | `bpvm_bios.c` 157 | `bios_pico.c` — 🔴 **sólo la Pico** |
+| 20 | **BIOS** | punto de encuentro para el código nativo | `bpvm_bios.c` 157 | `bios_pico.c` 145 · `bios_p4.c` 141 — ✅ **las dos con la misma macro** `BPVM_BIOS_TABLA` |
 | 21 | **AOT / nativo** | `.mdn`, `.npk`, registro de funciones | `bpvm_aot_helpers.c` 645 · `aot_registry.c` 66 · `bpvm_mdn_scan.c` 153 | `aot_funcs.c` (Pico) · `aot_funcs_stub.c` (ESP32) — 🔴 **el STM32 escanea con su propio bucle** |
 | 22 | **Arranque** | la escalera `KERNEL→PARTITIONS→FS→APP` | `bpvm_boot.c` 70 | `main.c` de cada familia (1582 en la Pico) |
 | 23 | **Entorno / gestor de placa** | variables, descripción de la placa | `bpvm_bmgr.c` 132 · `bpvm_env.c` 275 · `bpvm_bmgr_wire.c` 431 | `board_mgr_*.c` ×3 · `board_desc.c` |
@@ -113,7 +128,9 @@ Sin entrar todavía en los ejes que faltan, hay siete anomalías que se ven sól
    ficheros sin dueño. Casa con la ficha `#432` (dónde debe vivir y de qué tamaño).
 3. 🔴 **El log está en las tres familias además del común** — 443 líneas privadas frente
    a 215 comunes.
-4. 🔴 **La BIOS sólo la tiene la Pico.** ESP32 y STM32 no publican tabla.
+4. ✅ **La BIOS la tienen la Pico y la P4** — las dos familias que alojan SQLite, y las
+   dos construyen su tabla con la misma macro. **No es una anomalía: es coherente.** La
+   S3 y el STM32 no la tienen porque no alojan packs nativos.
 5. 🔴 **Tres sistemas no llegan al STM32**: SD/bloque, `LIST_DIR` y el escaneo común de
    `.mdn` (usa un bucle propio).
 6. 🟡 **`json_min.c` está tres veces, byte-idéntico.** Es la unificación más barata que
@@ -155,14 +172,17 @@ la placa Pico — es la fachada del **módulo `Pico` de la stdlib**, el mismo pa
 | grupo | qué significa | cuántos |
 |---|---|---|
 | **A · Unificados de verdad** | todo el código en `src/`, cero por familia | **15** |
-| **B · HAL BP correcto** | implementación por familia + **contrato común** | **6** |
-| **C · HAL BP con el contrato roto** | debería ser B, pero la interfaz no es común (o falta en alguna familia) | **4** |
+| **B · HAL BP correcto** | implementación por familia + **contrato común** | **7** |
+| **C · HAL BP con el contrato roto** | debería ser B, pero la interfaz no es común | **3** |
 | **D · Duplicación pura** | **no son hardware**: deberían ser 100 % comunes y no lo son | **5** |
 | **E · Casos aparte** | arranque y red | **2** |
 
-**Respuesta corta:** unificados de verdad, **15 de 32**. Bien resueltos como HAL BP, **6
-más** → **21 de 32 están donde deben**. Los **11 restantes** son el trabajo de V6, y sólo
-**4** de ellos son de verdad hardware.
+**Respuesta corta:** unificados de verdad, **15 de 32**. Bien resueltos como HAL BP, **7
+más** → **22 de 32 están donde deben**. Los **10 restantes** son el trabajo de V6, y sólo
+**3** de ellos son de verdad hardware.
+
+*(Eran 21 y 11 antes de censar la P4; la BIOS pasó de «rota» a «correcta» al aparecer
+`bios_p4.c`.)*
 
 ## A · Unificados de verdad (15)
 
@@ -188,17 +208,19 @@ Aquí la implementación **debe** diferir, y el contrato ya es común. Es el mod
 | **Packs** | `bpvm_pack.h` | los tres `board_mgr_*.c` |
 | **Entorno / gestor de placa** | `bpvm_bmgr.h` | los tres `board_mgr_*.c` |
 | **Drivers de periférico** | `bpvm_gpio.h`, `bpvm_spi.h`, … | `gpio_esp32.c` · `gpio_stm32.c` |
-| **GUI** | `bpvm_gui.h` | `gui_display_ltdc.c` · `gui_display_sdl.c` |
+| **GUI** | `bpvm_gui.h` | `gui_display_ltdc.c` · `gui_display_dsi.c` · `gui_display_sdl.c` |
+| **BIOS** | `bpvm_bios.h` + la macro `BPVM_BIOS_TABLA` | `bios_pico.c` · `bios_p4.c` — las dos familias que alojan SQLite |
 
-📌 **El dato que más tranquiliza del censo:** las tres familias implementan `littlefs`,
-`plataforma`, `packs` y `gestor de placa` **contra la misma cabecera**. Eso es
+📌 **El dato que más tranquiliza del censo:** las familias implementan `littlefs`,
+`plataforma`, `packs` y `gestor de placa` **contra la misma cabecera**. Y la P4, que fue
+la última en llegar, es la que **mejor** los respeta: seis de sus siete ficheros cuelgan
+de una cabecera común — la excepción es su transporte, como en todas. Eso es
 exactamente lo que Eduardo describe como HAL BP, y ya funciona en cuatro sistemas.
 
 ## C · Debería ser HAL BP, pero el contrato no es común — 4 sistemas
 
 | sistema | qué falla | qué falta |
 |---|---|---|
-| **BIOS** | `bpvm_bios.h` existe y **sólo la Pico lo implementa** | escribir `bios_esp32.c` y `bios_stm32.c` — es **añadir**, no refactorizar |
 | **Particiones / flash** | `bpvm_part.h` es común, pero `flash_lock.c` y `stm32_flash.c` **no incluyen ninguna cabecera común** | colgarlos del contrato que ya hay |
 | **SD / capa de bloque** | contrato común (`bpvm_sd.h`, `bpvm_blk.h`), pero **el STM32 no lo tiene** | implementarlo — trabajo nuevo, no unificación |
 | **Wire / transporte** | 🔴 los tres transportes (`wire_v1.c` ×2, `stm32_wire.c`) **no incluyen `bpvm_comm.h`** | y hay algo peor, abajo |
@@ -246,8 +268,9 @@ las copias.
 
 ### 🟡 Medias — hay que decidir algo
 
-5. **BIOS en ESP32 y STM32** — no es unificar, es **escribir lo que falta** contra una
-   cabecera que ya existe. El trabajo se conoce; el volumen, no.
+5. **Packs nativos en la S3 y el STM32** — que hoy no los alojan. La BIOS **no está rota**:
+   la Pico y la P4 la construyen con la misma macro. Lo que falta es extender los packs
+   nativos a las otras dos, y ahí la BIOS viene detrás, no delante.
 6. **stdlib embebida** — es un **generado**, no código a mano: se toca el generador, nunca
    el resultado. Unificar el formato es barato; equivocarse de sitio, caro.
 
