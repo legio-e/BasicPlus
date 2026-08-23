@@ -92,6 +92,103 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabajados, en
 `V6_IDEAS.md`. Aquí vive el estado.
 
+### 🎯 LOS HITOS DE V6 — unificar primero, arquitectura después
+
+**Decisión de Eduardo (23-ago), y su razón:** *«antes de hacer más cosas deberíamos
+empezar unificando, de lo más sencillo a lo más complicado. Una vez tengamos los sistemas
+unificados podemos volver a estudiarlos desde el punto de vista de arquitectura, por
+niveles. Pero al estar todo unificado, cualquier cambio estructural se puede hacer una vez
+y no 3 veces.»*
+
+📐 **De dónde sale el orden:** del censo de sistemas (`CENSO_SISTEMAS_V6.md`), que midió
+qué está unificado y qué cuesta cada cosa. No es una lista de deseos: cada tarea dice qué
+tocar y cómo se comprueba.
+
+| hito | qué | cerrado |
+|---|---|---|
+| **U1** | lo que **no exige decidir nada** — 4 tareas, una por sesión corta | abierto 23-ago |
+| **U2** | el **transporte** (wire): entender los gemelos falsos y darle contrato | abierto 23-ago |
+| **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | abierto 23-ago |
+| **U4** | la **stdlib embebida**: un solo formato de blobs | abierto 23-ago |
+| **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
+| **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
+
+⚠️ **Fuera de esta serie, y a propósito**: los packs nativos en S3/STM32, la SD del STM32,
+`LIST_DIR` en el STM32 y la red en placa **no son unificación, son funcionalidad que no
+existe**. Van al saco de «qué falta» y no bloquean U1–U5.
+
+---
+
+#### 🟢 U1 — lo que no exige decidir nada
+
+Cuatro tareas independientes entre sí. Ninguna necesita diseño: el contrato ya existe o
+las copias ya son idénticas.
+
+- **`U1.1` · `json_min` al común.** Las tres copias (`pico/`, `esp32/main/`, `stm32/port/`)
+  son **byte-idénticas — 0 % de diferencia medido**, y las tres cabeceras declaran las
+  mismas seis funciones. Mover a `src/`, borrar las privadas.
+  ⚠️ **El trabajo no es mover, es dar de alta**: un `.c` del común va en **cinco** sitios
+  (`Makefile`, `pico/CMakeLists.txt`, `esp32/main/CMakeLists.txt`,
+  `esp32p4/main/CMakeLists.txt`, y el `.cproject`+`subdir.mk` del STM32). Ver
+  [[core-c-nuevo-alta-en-5-builds]].
+  ✅ **Se comprueba**: las cinco imágenes enlazan, y `find -name json_min.c` devuelve UNO.
+
+- **`U1.2` · El log de la Pico al común** *(cierra `#423`)*. Medido: **la Pico es la única
+  familia cuyo `CMakeLists` no nombra `src/bpvm_log.c`** — lleva las 15 funciones
+  duplicadas en `pico/log.c` (280 líneas). El STM32 (60) y el ESP32 (103) **ya tienen la
+  forma correcta**: sólo cintura (`flash_read`, `flash_write`, `now_ms`).
+  ⏭️ O sea que no hay que diseñar nada: **hay dos ejemplos de cómo debe quedar**.
+  ✅ **Se comprueba**: el log post-mortem sigue sobreviviendo al reinicio en la Pico —
+  ésa es la función que no puede romperse.
+
+- **`U1.3` · El escaneo de `.mdn` del STM32 al común.** Usa un bucle propio en
+  `stm32_repl.c:526` en vez de `bpvm_mdn_scan.c`, que ya usan las otras tres familias.
+  ✅ **Se comprueba**: un `.mdn` se detecta y ejecuta en el STM32 igual que antes.
+
+- **`U1.4` · Flash y particiones, al contrato que ya existe.** `pico/flash_lock.c` y
+  `stm32/port/stm32_flash.c` **no incluyen ninguna cabecera común**, aunque `bpvm_part.h`
+  existe y es común. Colgarlos de él.
+  ✅ **Se comprueba**: grabar un pack sigue funcionando en las dos familias.
+
+#### 🟡 U2 — el transporte
+
+- **`U2.1` · Explicar los gemelos falsos, ANTES de tocar nada.** `pico/wire_v1.c` (259) y
+  `esp32/main/wire_v1.c` (252) se llaman igual, dicen ser la misma versión del protocolo,
+  y **el 100 % de sus líneas difieren**. No es una copia divergida: son dos programas
+  distintos con el mismo nombre. Hasta saber por qué, unificarlos es adivinar.
+- **`U2.2` · Contrato común de transporte.** Los **cuatro** transportes —los dos
+  `wire_v1.c`, `stm32_wire.c` y `wire_v1_tcp.c` de la P4— **no incluyen `bpvm_comm.h`**,
+  que existe y es común. Es la única cosa que ninguna familia respeta.
+
+#### 🔴 U3 — el REPL
+
+El 80 % del problema y el 100 % de las asimetrías que nos han mordido (`SD_INFO` sólo en
+la Pico, el `INFO` del STM32 incompleto, el aviso de `/lib`, el `preinstall`).
+
+- **`U3.1` · Escribir `bpvm_repl.h`.** Hoy **no existe**: el REPL no tiene el contrato
+  roto, es que no tiene contrato.
+- **`U3.2` · Partir en dos.** El transporte **sí** es hardware; interpretar `RUN`, `DIR`,
+  `INFO` o `PACK_BURN` **no**. Depende de U2.
+- **`U3.3` · Migrar familia a familia**, de la que menos tiene a la que más:
+  `stm32_repl.c` 920 → `repl_esp32.c` 1344 → `repl_v1.c` 2054.
+  ✅ **Se comprueba, y es el hito con más red**: el IDE hace lo mismo contra cada placa,
+  y `LIST_DIR`/`INFO`/`PACK_LS` devuelven lo mismo que antes.
+
+#### 🟡 U4 — la stdlib embebida
+
+16 ficheros `*_mod.c` en la Pico frente a **uno** en ESP32 (4.845 líneas) y STM32 (4.837).
+No es código distinto: es el mismo dato empaquetado de dos maneras.
+⚠️ **Es un GENERADO.** Se toca el generador, nunca el resultado — ver
+[[generado-parcheado-a-mano]].
+
+#### 🟡 U5 — la tabla de handles
+
+Hoy no tiene fichero ni cabecera: vive repartida por `bpvm.c`, `builtins.c`,
+`bpvm_aot_helpers.c`, `bpvm_dbg_wire.c` y `bpvm_util.c`. Está *unificada por omisión*, no
+por diseño, y por eso `#432` (dónde debe vivir y de qué tamaño) no se puede ni plantear.
+
+---
+
 ### 🔜 Aplazadas a V6 durante el desarrollo de V5
 
 - **🔴 [V6, OBLIGATORIO] la pasada de INTERFAZ no resuelve `Core` implícito** — encargo

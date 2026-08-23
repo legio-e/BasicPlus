@@ -35,6 +35,29 @@ en un hito que ya cerró.
 
 ---
 
+## 🎯 EL PLAN DE V6 — primero unificar, luego arquitectura
+
+**Decisión de Eduardo (23-ago):** unificar antes de seguir analizando, de lo más sencillo
+a lo más complicado. *«Al estar todo unificado, cualquier cambio estructural se puede hacer
+una vez y no 3 veces.»* El detalle de cada tarea está en `FICHAS.md` §«LOS HITOS DE V6».
+
+| hito | qué | por qué ahí |
+|---|---|---|
+| 🟢 **U1** | `json_min` · el log de la Pico · el `.mdn` del STM32 · flash al contrato | no exige **decidir** nada: el contrato existe o las copias son idénticas |
+| 🟡 **U2** | el transporte (wire) | primero **explicar** por qué dos ficheros con el mismo nombre difieren al 100 % |
+| 🔴 **U3** | el REPL — 4.318 líneas **sin contrato** | el 80 % del problema; depende de U2 |
+| 🟡 **U4** | la stdlib embebida: un formato en vez de dos | es un **generado**: se toca el generador |
+| 🟡 **U5** | la tabla de handles: darle módulo | hoy repartida por 5 ficheros; desbloquea `#432` |
+| ⬜ **A1** | la revisión **por niveles** | después de U1–U5, y ya sobre código único |
+
+⚠️ **No entran aquí, a propósito:** packs nativos en S3/STM32, la SD del STM32, `LIST_DIR`
+en el STM32 y la red en placa. **No son unificación: es funcionalidad que no existe.**
+
+📐 La base de todo esto es `CENSO_SISTEMAS_V6.md`: 32 sistemas, de los que **22 ya están
+donde deben** y sólo **3** de los que faltan son hardware de verdad.
+
+---
+
 ## A · Lenguaje y modelo de objetos
 
 | asunto | dónde está el detalle |
