@@ -27,6 +27,52 @@
 
 ## Última sesión
 
+### 23-ago (noche) — N1.3 y N1.4: el `.mdn` ya viaja DENTRO del `.mod`, validado en placa
+
+**N1.3 — los statements sencillos**, y la cuarta pata primero: **`AotCoberturaTest`**, que
+**mide** qué construcciones pasan por el AOT en vez de recordarlo. Cobertura **20 → 23 de
+27** (`null`, `do…loop`, `print`).
+📌 El medidor se validó a sí mismo: la primera medida decía 17 de 28, y al hacer que dijera
+el **motivo** de cada rechazo salieron **seis fragmentos míos mal escritos** — cuatro nodos
+sí estaban soportados. Un medidor sin la columna del porqué acusa a quien no es.
+📌 Y `print` **no era** «una llamada al runtime que ya existe», como decía la ficha: el
+intérprete despacha por tipo y la tabla de helpers sólo cubre tres. Va lo que hay y se
+rechaza el resto **nombrando el tipo**.
+
+**N1.4 — la fusión `.mod`/`.mdn`.** Formato **v7** (header de 36 B, sección `native` entre
+`interface` y `data`), fusión **en memoria** (idea de Eduardo: `MdnPack` ya construía el
+`.mdn` en un buffer), **acumulativa** por familia, y el cargador registrando desde ahí.
+✅ **VALIDADO EN LA PICO con el `.mdn` BORRADO: 8601 → 84 ms (102×)**, mismo resultado, y
+`zero-copy` — el código se ejecuta donde está.
+📌 **v6 sigue ejecutándose**, así que no hubo que regenerar los 32 `.mod` existentes: el
+gate del `#284` vigila el ABI y v7 no lo toca.
+📌 **`MOD_FORMAT.md` llevaba DOS versiones de retraso** (describía v5 con el compilador
+emitiendo v6). Ahora documenta v6 y v7.
+
+🩸 **LA LECCIÓN DEL DÍA, y es la más cara que ha dado V6: SEIS fallos, todos míos, y
+NINGUNO detectable sin placa** — orden de la fusión · ABI subido sólo en C · `data+off` con
+lectura por trozos · relleno copiado (blob desalineado → hard fault) · `malloc`+`free` con
+un cargador zero-copy (thunks a memoria liberada) · `bpvm_aot_clear()` tras la carga.
+**Los seis pasaron por 109 pruebas de compilador, 39 de VM y la paridad dual-VM.** No es que
+las redes fallaran: **ninguna toca el camino AOT en placa**. Ése es el hueco de cobertura, y
+ahora está medido.
+🔦 **Y el instrumento decisivo fue el log del dispositivo.** Tres iteraciones teorizando
+sobre código; en cuanto se encendió (`log=1`), una línea —«1/1 thunks registrados»— descartó
+formato, subida, ABI, alineación y lectura de golpe. **Encender el log es el primer paso, no
+el último.**
+📐 Dos de esos seis los anticipó la pregunta de Eduardo sobre la **alineación**, hecha antes
+de que existiera un solo blob.
+
+**⏭️ AL VOLVER:**
+1. **Las otras cuatro imágenes** — y ahí hay uno esperando: el `bpvm_aot_clear()` mal
+   colocado está también en `repl_esp32.c` y `stm32_repl.c`. Es **U3** en estado puro: un
+   arreglo que hay que hacer tres veces y que, si se hace en dos, falla mudo en la tercera.
+2. **Retirar el `.mdn` suelto** cuando todas lean la sección. Ése es el día en que los dos
+   ficheros dejan de poder desparejarse — el objetivo de la ficha.
+3. Y sigue pendiente **la paridad en rojo** (3 fallos por desfase de ranuras en `Core.mod`),
+   que no es de hoy y nadie vigila.
+
+
 ### 23-ago (tarde-3) — el hito AOT: `native` en métodos y `double`, los dos cerrados
 
 **N1.1 — los métodos `native` ya se compilan a C** (`e1842bd9`, `631f55fa`). Salió tal como
