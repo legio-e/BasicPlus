@@ -272,9 +272,15 @@ roto algo.
 SÍ los excluye»*. Las dos cosas son ciertas **de `Debug`**, que es de donde salía el dato —
 y falsas de `Release`. El instrumento decía la verdad de una configuración y se leyó como
 si hablara del proyecto.
-⏭️ **Sin decidir, y es de Eduardo**: o se arregla `Release` para que sea de verdad la de
-publicar, o se borra para que nadie la use por error. Lo que no puede quedarse es una
-configuración que se llama como la que manda y hace otra cosa.
+✅ **DECIDIDO Y HECHO (23-ago). Eduardo: *«de momento borra release»***. Quitada del
+`.cproject` de la Discovery —los tres sitios: el `<cconfiguration>`, su
+`scannerConfigBuildInfo` y su entrada de `refreshScope`— más el directorio `Release/` que
+quedaba huérfano (2,4 MB, no versionado). Verificado después: el proyecto **importa y
+construye igual**, 0 errores y 0 avisos, con el mismo `text` de 887.604 B.
+
+🔎 **Y la Nucleo tiene lo mismo, peor**: su configuración `Release` no tiene **ninguna**
+ruta de include ni **ninguna** exclusión de ficheros host-only (`Debug` tiene 4 y 4).
+Pendiente de que Eduardo diga si se borra también.
 
 #### 🟡 U2 — el transporte
 
