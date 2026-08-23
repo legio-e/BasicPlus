@@ -45,9 +45,30 @@ Sesión corta, de orientación. **No se tocó código.**
   llegó a los docs, pero el patrón es el de [[instrumento-mudo-dudar-de-el]]: **antes de
   declarar algo roto, contrastar contra un caso que se sabe bueno.**
 
+**Y por la tarde, encargo de Eduardo:** *«archivar V5, poner V6 en primer plano; lo de V6
+que esté por ahí en diferentes archivos se unifica; las notas de V6 sin guardar ya se pueden
+guardar»*. Hecho en `6351b990`:
+
+- **Guardado lo que vivía fuera del repositorio** (`notas/`, ignorada por git): `V6_IDEAS.md`
+  (538 líneas, cinco diseños ya trabajados), `V5_BACKLOG.md` (1.116) y `V5_IDEAS.md` (2.977).
+  ⚠️ **Y aquí una trampa que casi muerde**: `V5_IDEAS.md` existía en los DOS sitios y no eran
+  copias — 25 secciones en `notas/` frente a **una distinta** en `docs/`. Sobrescribir habría
+  borrado esa. Se fusionaron: 26 secciones, verificado.
+- **`FICHAS` reordenado sin perder una línea** (comprobado por conteo, no por confianza):
+  ABIERTAS empieza por V6; debajo, las **heredadas de V5**, que NO se archivan porque no
+  están resueltas — les falta decidir si entran en V6. Bajan al archivo cuatro secciones ya
+  terminadas y el CODE FREEZE, que arriba se leía como una instrucción en vigor.
+- **Unificado lo de V6 que estaba suelto: cinco asuntos vivos** que el índice no recogía —
+  los packs del S3 sin región, el módulo rancio de ESP32/STM32, el estado persistente de la
+  Metro, `native` en un método, y **el CENSO FUNCIONAL** que Eduardo especificó el 17-ago y
+  que sólo estaba dentro de `CENSO_FAMILIAS.md`. De 31 asuntos a 36.
+- Las tres copias de `notas/` quedan marcadas **⛔ COPIA MUERTA** para que nadie edite la
+  equivocada. Sin borrar: eso lo decide Eduardo.
+
 **Lo siguiente, sin compromiso de fecha:** decidir el ALCANCE de V6 antes de tocar nada. La
 medida sugiere `json_min` → REPL (el 80 % del problema) → el log. El REPL es el trabajo de
-verdad y no cabe en una sesión corta.
+verdad y no cabe en una sesión corta. Y hay una decisión menor esperando: **triar las fichas
+heredadas** — cuáles entran en V6 y cuáles esperan.
 
 
 ### 22-ago (tarde) — V5 PUBLICADA
