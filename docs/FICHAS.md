@@ -239,9 +239,23 @@ las copias ya son idénticas.
   y dejaba el log en RAM —así que el siguiente volcado lo devolvía—; el del núcleo vacía
   las dos. Si vacías el log, esperas que se vaya.
 
-- **`U1.3` · El escaneo de `.mdn` del STM32 al común.** Usa un bucle propio en
-  `stm32_repl.c:526` en vez de `bpvm_mdn_scan.c`, que ya usan las otras tres familias.
-  ✅ **Se comprueba**: un `.mdn` se detecta y ejecuta en el STM32 igual que antes.
+- **`U1.3`** ~~El escaneo de `.mdn` al común~~ — ❌ **RETIRADO de U1 el 23-ago. Lo paró
+  Eduardo**: *«si vamos a fusionar `.mod` y `.mdn`, deja de tener sentido, ¿no?»*. Y tiene
+  razón: la fusión **elimina justo lo que ese módulo hace**, que es *buscar* el `.mdn` —ni
+  en el FS por nombre ni en la zona de packs, porque el bloque nativo llega **dentro** del
+  módulo que se carga. Unificar tres bucles para borrarlos después es trabajo perdido.
+  📌 **De paso corrige al censo, que dijo menos de lo que pasa.** No es «el STM32 diverge»:
+  la cabecera de `bpvm_mdn_scan.h` lo deja escrito desde el 10-ago — *«sólo el Pico llama a
+  esto; las otras TRES familias conservan su bucle propio, INTACTO»*. Son tres, y estaba
+  documentado.
+  ⏭️ **Lo que SÍ sobrevive a la fusión** y hay que llevarse a su hito: la **cintura** de la
+  RAM ejecutable cuando hay que copiar el código —arena en Pico y STM32,
+  `heap_caps_malloc(MALLOC_CAP_EXEC)` en el ESP32—. Ya está parametrizada como callback, o
+  sea que no es trabajo de unificación: es parte del diseño de la fusión.
+  ⚠️ **El riesgo de aplazarlo, dicho para que no sorprenda**: mientras la fusión no llegue,
+  una mejora del AOT aterriza en una familia y no en las otras tres. Es tolerable porque el
+  módulo común ya existe y la migración es *«cambiar su bucle por una llamada, no
+  reescribirlo»* — pero deja de serlo si la fusión se aplaza mucho.
 
 - **`U1.4` · Flash y particiones, al contrato que ya existe.** `pico/flash_lock.c` y
   `stm32/port/stm32_flash.c` **no incluyen ninguna cabecera común**, aunque `bpvm_part.h`
