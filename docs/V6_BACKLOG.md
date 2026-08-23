@@ -1,16 +1,21 @@
-# V6 — el mapa de lo aplazado
+# V6 — el mapa del hito EN CURSO
+
+> 🚀 **Desde el 23-ago-2026, V6 es la versión en curso** (V5 se publicó el 22). Este
+> fichero nació como índice de lo aplazado; ahora es además la puerta de entrada al hito.
+> El estado sigue en `FICHAS.md` §ABIERTAS, cuyo primer bloque es ya **V6**; los diseños,
+> en `V6_IDEAS.md` (guardado en `docs/` ese mismo día: antes vivía fuera del repositorio).
 
 > **Qué es esto y qué NO es.** Un **índice**, hecho el 21-ago a petición de Eduardo
 > («hay muchas cosas aplazadas a V6, dame un listado»). Una línea por asunto y un
 > puntero a dónde está el detalle.
 >
 > ⚠️ **NO es una fuente de verdad y no debe convertirse en una.** El estado sigue
-> viviendo en **`FICHAS.md`**, y los diseños ya trabajados en **`notas/V6_IDEAS.md`**.
+> viviendo en **`FICHAS.md`**, y los diseños ya trabajados en **`docs/V6_IDEAS.md`**.
 > Si algo aquí contradice a `FICHAS`, manda `FICHAS`. Este fichero existe porque lo
 > aplazado estaba repartido en tres sitios y no había forma de verlo de un vistazo —
 > que es la misma enfermedad que nos costó tiempo en V5.
 
-**Recuento:** 31 asuntos vivos + **8 reflexiones de fundamentación** (§C, del 22-ago) +
+**Recuento:** 36 asuntos vivos + **8 reflexiones de fundamentación** (§C, del 22-ago) +
 5 diseños ya cerrados en `V6_IDEAS.md`, y 2 candidatos que salieron el 21-ago probando H13.
 Uno de la lista se hizo ya en V5 y se ha movido a «CERRADAS» (ver el final).
 
@@ -39,6 +44,7 @@ bloque de arquitectura del 22 — que es justamente la columna vertebral del hit
 | **El `.mdn` se funde en el `.mod`**, con un bloque nativo por familia | `V6_IDEAS.md` §.mdn (≈90 líneas: por qué no es una apuesta, qué mata, la trampa) |
 | **El `.mdn` no recuerda su RECETA** — huella de los flags de compilación | `FICHAS` §Aplazadas (mitad abierta del `#441`) |
 | **`[ISA]` `CALL_REL`** — CALL local PC-relativo | `FICHAS` §Aplazadas |
+| 🆕 **`native` en un MÉTODO se ignora en SILENCIO** — y el método corre interpretado mientras el programador cree que va a velocidad AOT. El AVISO *no espera a V6* (`AOT_LIMITES.md` L157): es barato | `FICHAS` L2244 |
 
 ## C · Arquitectura — el reparto común/hardware
 
@@ -71,6 +77,9 @@ todas de una misma mañana, al cerrar V5, y están en `FICHAS.md` con su desarro
 | **`SD_INFO`/`SD_MOUNT` siguen sólo en `pico/repl_v1.c`** — no han subido al común | `FICHAS` §Aplazadas (de H6) |
 | **La unificación que dejó el censo `#427`** — lo que no cupo en V5 | `FICHAS` L805 |
 | 🆕 **UNIFICAR los packs**: implementación común + cintura por hardware (la diferencia real cabe en UNA función) | `FICHAS` §Aplazadas (22-ago, decisión de Eduardo) |
+| 🆕 **[S3] los packs: encaminados pero SIN REGIÓN** — el mismo agujero que `#327`; la S3 es la única familia que no los expone | `FICHAS` L1384 |
+| 🆕 **Un módulo rancio sobrevive y NADIE lo dice** (ESP32 y STM32) — y `/app` es el punto ciego: tiene preferencia sobre `/lib` | `FICHAS` L1119 |
+| 🆕 **El CENSO FUNCIONAL** — el de V5 es por fichero; Eduardo especificó el 17-ago ampliarlo a cuatro ejes (función · específico-vs-común · capas · memoria y tiempos) | `CENSO_FAMILIAS.md` §«El censo de V6» |
 
 ## D · Memoria y GC
 
@@ -99,6 +108,7 @@ todas de una misma mañana, al cerrar V5, y están en `FICHAS.md` con su desarro
 | **El ESP32-P4X** — silicio nuevo, imagen aparte, 400 MHz | `FICHAS` §Aplazadas (20-ago) |
 | **Los 32 MB de flash del P4 y el XIP de los packs** — dos caminos, ninguno barato | `FICHAS` §Aplazadas |
 | **`#434`** — desacoplar los eventos del lazo de LVGL | `FICHAS` §Aplazadas |
+| 🆕 **Un estado persistente dejó la Metro SIN PODER EJECUTAR NADA** — sólo se curó reparticionando. Sin causa identificada: es el riesgo abierto más feo que deja V5 | `FICHAS` L1446 |
 
 ## G · Pruebas y medida
 

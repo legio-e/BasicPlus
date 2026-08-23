@@ -36,31 +36,6 @@
 
 ---
 
-## 🧊 CODE FREEZE V5 — desde el 18-ago-2026
-
-**Decisión de Eduardo:** *«A partir de ahora, código congelado, solamente se arreglan
-bugs.»*
-
-**El criterio, que ya se probó en V4:** la pregunta ante algo que se podría mejorar NO
-es *«¿merece la pena?»* sino **«¿está roto?»**. Si no está roto, se anota para V6 y se
-sigue. Una mejora que entra en la recta final no viene sola: viene con su tanda de
-verificación y con el riesgo de romper algo que ya estaba probado en placa.
-
-**Qué entra**: bugs. **Qué no entra**: features, refactors, mejoras «de paso», y —lo
-que más se cuela— arreglar de camino algo que se ve feo mientras se toca otra cosa.
-
-**El plan de cierre, en este orden** (Eduardo, 18-ago):
-
-1. **Limpieza** — el 19-ago, antes de empezar a documentar. Está en «Cierre de V5».
-2. **H12 — documentar V5.**
-3. **H13 — las pruebas finales.**
-4. **Publicar.**
-
-**Y hasta publicar, nada sube a GitHub.** Commitear no es publicar; «ahead of origin»
-es lo normal en esta fase. Ver la norma en la cabecera de este fichero.
-
----
-
 ## 🚀 V5 PUBLICADA — 22-ago-2026
 
 Los cuatro pasos del plan de cierre, hechos. **El congelado queda levantado** y lo que
@@ -101,117 +76,816 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 
 ## ABIERTAS
 
-### 🏁 Packs — V5/H11 «cerrar lo que quedó suelto» (#416, paraguas) — **CERRADO el 15-ago**
+> **Desde el 23-ago-2026 esta sección es de V6.** V5 se publicó el 22-ago, así que lo
+> suyo dejó de ser trabajo: las secciones ya terminadas bajaron a «CERRADAS EN V5» y
+> **V6 va primero**, que es la versión en curso. Debajo de los dos bloques de V6 siguen
+> las fichas heredadas —bugs y pendientes que V5 no llegó a resolver—: **están vivas**,
+> no archivadas, y les falta decidir si entran en V6. Reorganizado a petición de Eduardo:
+> *«archivar V5, poner V6 en primer plano»*.
 
-> Las cuatro fichas que colgaban de él, resueltas: `#417` y `#414` **verificadas
-> en placa**, `#365` verificada en las dos VMs, `#411` cerrada en su parte de
-> packs, y `PACK_CALL` (#383) **cancelada** por decisión de alcance. Lo que se
-> quitó de en medio para poder cerrarlo —la limpieza de `notas/`— no era trabajo
-> de packs: está en «Cierre de V5».
->
-> Se queda todo escrito aquí, no se borra: el registro de lo cerrado es lo que
-> evita volver a darlo por pendiente.
+### ═══ V6 — LA VERSIÓN EN CURSO ═══
 
-- ~~`#417`~~ — **CERRADA el 14-ago, verificada en el P4.** Ver abajo.
-- ~~`#414`~~ — módulo `Packs`. ✅ **CERRADA: host (`3901f1c`) y VERIFICADA EN EL
-  P4 el 15-ago.** API: `Packs.list()` y `Packs.listIn(pack, ext)`, las dos
-  devolviendo `List`.
-  **En placa** listó los dos packs grabados con su contenido: `SQLite` (7
-  entradas) y `test1` (3), y el filtro por extensión dejó 4 módulos y 1
-  respectivamente. **Cuadra con lo que el IDE enseña por el wire** (`PACK_ENTRIES`
-  → «SQLite … 7 fich», «test1 … 3 fich»): dos caminos independientes contando lo
-  mismo, que es la mejor comprobación que se podía pedir sin montar nada.
-  **La forma la decidió Eduardo**: cuatro intrínsecos que sólo mueven primitivos
-  —dos avanzan (`0` empieza, `-1` termina), dos dicen el texto— y la lista se arma
-  en BP. Así ningún builtin construye objetos, que era el coste escondido de la
-  ficha: hoy ninguno lo hace. El cursor es un valor que lleva el programa, así que
-  no hay estado, es reentrante entre hilos y avanzar es O(1).
-  **miVM**: sin zona de packs, `next` devuelve -1 a la primera → lista vacía. Eso
-  contesta la duda del diseño del 13-ago y da la paridad **sin un solo `if`**.
-  Verificado en host: con `--pack=PackFixA.pack` lista el pack y sus 3 ficheros
-  (y cuadra con el `LIST` del propio firmware, que es otro camino); sin zona, las
-  dos VMs dicen `0`; stdlib 27, frontend 102/102, miVM 34/34, paridad 28/0/0.
-  ⚠️ **Para probarlo en placa hay que REFLASHEAR**: los cuatro builtins son
-  código de la VM-C. Con un firmware viejo, `PacksDemo` se encuentra un opcode
-  que no conoce. El sample está en `samples/PacksDemo.bp` y en el P4 debería
-  listar `SQLite` y `test1` con su contenido.
-- ~~`#411`~~ — ✅ **CERRADA el 15-ago** (`5f9e924`) en lo que era de packs: el
-  SQLite.pack tiene **carpeta propia**, `bpstdlib/sqlite/`, con fuentes, los
-  cuatro nativos versionados (`.npk` + `.mdn` × ARM/RISC-V) y un `LEEME.md` con
-  la cadena entera. El pack se reconstruye igual (1.122.304 B) y **ya se puede
-  rehacer desde un clon limpio**, que antes no.
-  📤 **La limpieza de `notas/` SE SACA DEL HITO** — decisión de Eduardo (15-ago):
-  no es trabajo de packs, es de cierre de versión, y tenerla aquí trababa H11 sin
-  motivo. Vive ahora en «Cierre de V5» (al final de este fichero).
-  *(Lo de abajo es el enunciado original, por si hace falta el contexto.)* Sus palabras: *«todo el tema del SQLite.pack debería tener una
-  carpeta propia»*, *«en notas debería haber las notas y nada más»*, *«las demos
-  (SqlDemo, SqlDemoSd) SÍ deben estar en samples, que son ejemplos»*. Y en esa
-  carpeta va **todo: fuentes, compilados y el pack**.
-  Censo: `bpstdlib/SQLite.bp` se va (es librería de pack, no stdlib — `Stdlib.bp`
-  no la importa ni entra en `Stdlib.pack`, así que mover es barato) ·
-  `samples/Orm.bp` se va · `notas/p4/SQLite.bpbuild` se va · las demos se quedan.
-  Y `notas/` tiene CINCO subcarpetas de experimentos con binarios dentro
-  (`metro-h4`, `p4`, `v5-salto-crudo`, `v5-sqlite-prueba`, `v5-sqlite_edu`).
-  **Por qué importa**: el 13-ago costó tiempo porque con `Orm.bp` en `samples/`
-  la fuente local GANA al pack, y la prueba del ORM-desde-el-pack no probaba nada.
-  Es el mismo patrón que el `/app` tapando a `/lib` del 15-ago.
-  Falta decidir: el NOMBRE de la carpeta, y qué se hace con las cinco de `notas/`
-  (llevan los binarios que fueron la evidencia de H4/H7/H8).
-  ⚠️ Al ejecutarlo: toca rutas de build y hay que reconstruir el `SQLite.pack`
-  al terminar para comprobar que sale igual. En su propia tanda, no a medias.
-- ~~`#365`~~ — ✅ **CERRADA el 15-ago (`88e75a4`), verificada en las dos VMs.**
-  Un módulo con `library` ya puede **arrancar** un pack.
-  **Qué pasaba** (y el enunciado viejo se quedaba corto — no era «`library` +
-  `out:pack` es imposible», era el *arranque*): el `.mod` de un módulo con
-  `library` se llama `com.example.Demo.mod`, así que su entrada en el pack es
-  `com.example.Demo`; el manifest escribía `main=<proj.main>` y `proj.main`
-  nombra el FICHERO FUENTE (`Demo.bp`). Quien arranca busca la entrada LITERAL
-  (`bpvm.c:643` y `ModuleManager.executeRootPack`, las dos igual) y no la
-  encontraba. Poner el cualificado en `main` tampoco valía: ahí se busca el
-  fuente. Un pack **biblioteca** con `library` sí funcionaba.
-  **El arreglo lo decidió Eduardo** («¿y si ponemos `library` dentro del
-  manifest?»). De las dos formas se eligió la que **no toca las VMs**: en vez de
-  un campo `library=` que las dos tuvieran que concatenar —dos implementaciones
-  haciendo la misma cuenta es donde el invariante se rompe—, el manifest lleva
-  ya el nombre CANÓNICO (`main=com.example.Demo`). Las dos VMs siguen buscando
-  literal, **sin una línea de cambio**. El manifest es un fichero generado: puede
-  llevar el nombre resuelto. El dato viaja en el `Cierre`, que es del compilador.
-  🩸 **Y de camino, una trampa muda**: la regla de doble extensión (la de
-  `sqlite.npk.RISCV`) miraba el penúltimo componente del nombre. Con
-  `com.example.Npk.mod` —un módulo llamado `Npk` dentro de una librería— veía
-  `npk` y renombraba la entrada a `com.example.mod` con tipo `npk`, en silencio y
-  dentro de un pack ya grabado; con `Mod`, un error falso. Ahora sólo se mira la
-  doble extensión si la ÚLTIMA no es ya un tipo.
-  **Verificado, no sólo compilado**: `samples/packlib/` (queda en el repo, con el
-  cómo-se-prueba dentro) construye el pack y **las dos VMs dan la misma salida**;
-  frontend 104/104 con 2 tests nuevos, miVM 34/34, paridad 28/0/0, `test-pack` y
-  `test-packres` verdes, y **el `SQLite.pack` real da sus 9 entradas idénticas**
-  con el compilador nuevo. Fat-jar del IDE reconstruido.
-- ~~`PACK_CALL` (= **#383**)~~ — ❌ **CANCELADA el 15-ago, decisión de Eduardo**:
-  *«estos packs los hacemos nosotros, así que el sistema actual está bien»*.
-  Era un builtin genérico para llamar a un pack **sin AOT** («reusar el mecanismo
-  de los `intrinsic`»), y lo que compraba era que **mantener** un pack nativo no
-  exigiera los dos toolchains cruzados: hoy, tocar una línea de `SQLite.bp`
-  obliga a regenerar `SQLite.mdn.ARMV8` y `.RISCV`. Como el único que publica
-  packs nativos es el propio proyecto —que tiene los toolchains—, esa barrera no
-  existe en la práctica.
-  **Lo que se aceptó al cancelarla, dicho claro**: en un pack nativo el AOT **no
-  es una optimización, es un requisito**. Sin `.mdn` para esa arquitectura, sus
-  funciones lanzan. Y el AOT **es mudo por línea de comandos** (ver el LEEME de
-  `bpstdlib/sqlite/`): si no puede generar los `.mdn`, el pack sale más pequeño
-  sin decir nada. Eso deja de ser «algo que PACK_CALL arreglará algún día» y pasa
-  a ser el comportamiento definitivo — por eso conviene que el aviso mudo del AOT
-  se mire alguna vez.
-  **Y lo que costaría si algún día se reabre** (medido el 15-ago, para no
-  repetir el estudio): el `.npk` tiene **UNA sola entrada** (`bp_pack_init`,
-  `NpackBuild.java:44`) y **ninguna tabla de símbolos**, así que haría falta
-  cambiar su formato, **regenerar los `.npk` con los dos toolchains** (el `.elf`
-  intermedio no se guarda), un opcode nuevo en las dos VMs y la llamada genérica
-  en C — que esa sí es barata: un `switch` por aridad con casts a punteros de
-  función de N `int32_t`, sin ensamblador ni libffi, con el mismo límite de 32
-  bits que ya tiene la ABI del AOT.
-  🔧 El comentario del parser que la daba por futura está actualizado
-  (`Parser.java:699`): ese cuerpo-que-lanza es **definitivo**.
+El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabajados, en
+`V6_IDEAS.md`. Aquí vive el estado.
+
+### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
+
+- **🔴 [V6, OBLIGATORIO] la pasada de INTERFAZ no resuelve `Core` implícito** — encargo
+  explícito de Eduardo (22-ago): *«de momento hacemos 1 para salir del paso, pero en V6
+  esto tiene que estar solucionado definitivamente»*.
+  📐 **El hecho**, medido al recorrer el checklist de publicación: un módulo que expone un
+  tipo de la stdlib en una **firma pública** sin importar `Core` compila su cuerpo pero
+  **pierde el miembro en la interfaz**:
+  ```
+  -- omitidas en interfaz (1): class Dao.method list: retorno tipo no exportable: <error>
+  ```
+  Y el error de verdad aparece **en el consumidor**, lejos de la causa:
+  `'Dao' no tiene miembro de instancia 'list'`.
+  🔍 **La asimetría es entre las DOS PASADAS**: la completa resuelve `Core` implícito —por
+  eso `ListGets.bp` usa `List` sin importar nada y corre en las seis placas— y la de
+  interfaz no.
+  📅 **Desde cuándo**: el 18-ago, con `#450` («el compilador deja de sintetizar List,
+  SyncList y OwnerList»). Antes `List` la fabricaba el compilador y existía en todas
+  partes; ahora viene de `Core.bp` como cualquier clase. El cambio es correcto; lo que
+  faltó fue que la pasada de interfaz lo acompañara.
+  ✅ **Alcance real, comprobado — por eso NO bloqueó V5**: la stdlib está limpia
+  (`Str.bp` importa `Core` desde `#446`, y el `Orm` lo recibe de ahí; ningún módulo expone
+  un tipo de `Core` sin importarlo). Sólo afecta a un módulo **de usuario** que exponga
+  tipos de stdlib sin importar nada que arrastre `Core`. Y el compilador **avisa en el
+  sitio correcto**, aunque el error salga en otro.
+  ⏭️ **Lo que hay que hacer en V6**: que la pasada de interfaz resuelva los tipos
+  implícitos igual que la completa. Emparenta con el otro bug de esa misma pasada —el de
+  LSP entre interfaces de módulo, `appv1lsp`/`appv2`— que también sale de que
+  `INTERFACE_ONLY` ve menos que la pasada entera. **Son la misma raíz y conviene
+  arreglarlos juntos.**
+
+- **🧮 [V6] ¿CUÁNTO cuesta una familia nueva (ESP32-C3 / C6) si antes unificamos?** —
+  pregunta de Eduardo (22-ago): *«si tenemos en cuenta que el IDF es el mismo para todas
+  las familias ESP32, en realidad sale muy poco código: casi todo lo hecho para el P4
+  debería servir. Así que meter una familia nueva será el boot y sobre todo trabajo de
+  pruebas.»*
+  ✅ **Ya hay un experimento hecho que lo contesta: el P4**, que fue la última familia
+  añadida. **Reutiliza OCHO ficheros del S3** —incluido el `repl_esp32.c` de 69 KB, el
+  `board_mgr`, `platform`, `fs_lfs`, los blobs, el log, `gpio` y `json_min`— y sólo tiene
+  **2.558 líneas propias**. Pero lo que decide la respuesta es **en qué** se le van:
+
+  | fichero propio del P4 | líneas | ¿lo necesita un C3/C6? |
+  |---|---|---|
+  | `gui_display_dsi.c` | 713 | ❌ no tienen pantalla |
+  | `main.c` (**el boot**) | 623 | ✅ sí |
+  | `pack_p4.c` | 340 | 🔧 lo unifica V6 → un gancho |
+  | `wire_v1_tcp.c` | 321 | ❌ irían por UART, como el S3 |
+  | `blk_sdmmc_p4.c` | 249 | ❌ normalmente no llevan SD |
+  | `bios_p4.c` | 141 | ✅ sí |
+  | `p4_board_id.c` | 91 | ✅ sí |
+  | `aot_Bench.c` / `aot_funcs_p4.c` | 80 | ✅ el registro (31); el resto es un sample |
+
+  📊 **Cuenta**: **1.283 líneas no aplican** (pantalla + Ethernet + SD). Lo realmente
+  necesario son **≈890 líneas**, y **el grueso es `main.c`: el BOOT** — exactamente lo que
+  Eduardo predijo. Con la partición en dos boots, la mayor parte de esas 623 se va al común
+  y quedan las decenas del arranque de silicio.
+  🎁 **Y un regalo que no estaba contado: el C3 y el C6 son RISC-V, como el P4.** Toda la
+  cadena AOT de `H4` —`.mdn`, `.npk`, relocalización, `-mcmodel=medany`— **ya funciona para
+  ellos**. Nacen con aceleración el primer día, sin escribir una línea de AOT.
+  🎯 **Conclusión, que es la de Eduardo con números detrás**: el código de una familia ESP32
+  nueva es **el boot y poco más**. El coste real se desplaza a **las pruebas** — y por eso
+  el simulador con disfraces y la batería multi-placa dejan de ser comodidad para ser *la*
+  inversión que hace sostenible añadir placas.
+
+- **📈 [V6] «Unificar no es una opción, es el único camino» — la tesis económica, medida**
+  — cierre de Eduardo (22-ago): *«la parte del compilador es muy pequeña; añadiendo la VM
+  crece, pero en el total sigue siendo pequeña. ¿En qué se nos va el tiempo? Cada vez más
+  en los sistemas y en las pruebas. Unificar es el único camino viable para crecer de forma
+  lineal y no exponencial: no es una opción.»*
+  ⚠️ **Primero conté MAL, y Eduardo lo corrigió**: sumé las líneas TOTALES de compilador
+  y VMs, y eso mide el artefacto acumulado, no el esfuerzo — *«no los hemos escrito en esta
+  versión, los hemos ido escribiendo a lo largo de 5. Si queremos ser justos habría que
+  contar las líneas NUEVAS de esta versión. Y lo mismo con todo: el trabajo no es hacerlo
+  todo de nuevo, es ampliar y reformar lo que ya hay.»* Tiene razón, y bien contado la
+  tesis sale REFORZADA.
+  📊 **V5 de verdad: 365 commits desde el tag `v4.0`**, y esto es lo tocado:
+
+  | área | añadidas | borradas |
+  |---|---|---|
+  | compilador | 6.836 | 403 |
+  | VM Java | 398 | 11 |
+  | VM-C (núcleo + sistemas) | 3.802 | 110 |
+  | **sistemas por familia** | **17.389** | **12.146** |
+  | IDE | 2.682 | 255 |
+  | stdlib | 6.973 | 4.075 |
+  | documentación | 10.250 | 2.032 |
+
+  ✅ **El reparto real del esfuerzo de V5**: lenguaje (compilador + VM Java) **7.234
+  líneas**; sistemas (por familia + el `src/` de la VM-C, que es casi todo sistemas)
+  **≈21.000**. **Los sistemas son TRES VECES el lenguaje.** Y la documentación sola (10.250)
+  pesa más que el compilador.
+  🔬 **Y el número que confirma lo de «ampliar y reformar»**: en sistemas por familia se
+  añaden 17.389 líneas y se borran **12.146**. Esa proporción no es la de escribir cosas
+  nuevas — es la de REFORMAR. Se tira dos tercios de lo que se pone.
+  📌 **La derivada, que era el argumento**: al añadir una familia nueva, compilador **+0**,
+  VM **+0**, sistemas **≈ +8.000**, y una placa más en cada campaña de pruebas (H13 son dos
+  días por CINCO). El crecimiento no es exponencial por el código: lo es por la **MATRIZ**
+  — cada familia multiplica las combinaciones y cada característica se multiplica por las
+  familias. Hoy 5 imágenes; con el C3 y el C6 previstos, 7.
+  🎯 **Formulado así, la tesis es más fuerte**: no es que el lenguaje sea pequeño, es que
+  **el lenguaje ya no crece y los sistemas sí**. El esfuerzo se ha desplazado sin que nadie
+  lo decidiera. Unificar convierte «añadir una placa» en *una cintura* en vez de *una
+  reimplementación*, y «añadir una característica» en *una vez* en vez de *cinco*.
+  🔗 Y enlaza con la tesis de fiabilidad de la ficha anterior: lo repartido no sólo cuesta
+  más de mantener — **esconde sus bugs hasta que alguien prueba esa placa concreta**. Coste
+  y fiabilidad empujan en la misma dirección.
+
+- **🏆 [V6] POR QUÉ UNIFICAR: la tesis de Eduardo, contrastada con H13** — cierre de las
+  reflexiones del 22-ago: *«¿cuántos problemas de memoria hemos tenido? ¿Y cuántos de FS?
+  Ya nos hemos olvidado: los dos sistemas están funcionando. ¿Y por qué? Primero porque los
+  unificamos en un único sistema, y después de unificarlos los fuimos puliendo hasta que
+  desaparecieron los bugs. Así que **la unificación es el paso previo a tener sistemas
+  fiables**.»*
+  🔬 **Y H13 lo confirma sin que nadie lo buscara.** Clasificando TODO lo encontrado el 21
+  y 22-ago sobre cinco placas:
+
+  | hallazgo | de dónde nace |
+  |---|---|
+  | `#414`: builtins de packs dentro del `#ifdef BPVM_GUI` | packs — **por familia** |
+  | blobs de `IO`/`Math` rancios (sólo la Pico) | generador — **por familia** |
+  | `BAD_ALIGN` grabando packs en STM32 (4 K vs 8 K) | bloque de borrado — **por familia** |
+  | `Core.mod` rancio en `/app` tapando a `/lib` | 3 estrategias de `/lib` — **por familia** |
+  | el S3 sin vista de packs | packs — **por familia** |
+  | 8 samples que no compilaban | lenguaje (`any`→`Object`) |
+  | LSP entre interfaces · `native` en método ignorado | compilador |
+  | 3 errores de documentación | docs |
+  | **memoria** | **CERO** |
+  | **sistema de ficheros** | **CERO** |
+
+  📌 **Dos días machacando cinco placas** con SD, SQLite, ORM, GUI, packs, hilos y GC
+  —incluido `SdCard` escribiendo 32.000 B en 500 trozos y `AotGcRt` forzando colectas— **y
+  ni un fallo de memoria ni de FS**. Los dos subsistemas que en V4 costaron una campaña
+  entera no han dicho una palabra.
+  🎯 **Y los CINCO fallos estructurales vienen todos del mismo sitio: lo que NO está
+  unificado** — packs, arranque, `/lib`. Ninguno del núcleo común.
+  ⚠️ **Con una salvedad honesta**: queda un fallo sin explicar —la placa que dejó de
+  ejecutar nada y sólo se recuperó reparticionando— y **podría ser de FS o de particiones**.
+  Está fichado aparte con lo que hay que medir si repite. No cambia el balance, pero
+  contarlo como cero sería hacer trampa.
+  💡 **Lo que esto añade a la tesis**: no es sólo que unificar permita pulir. Es que
+  **mientras algo está repartido en N copias, los bugs no se manifiestan donde se
+  desarrolla** — aparecen en la placa que nadie probó, meses después. Memoria y FS se
+  pudieron pulir porque, al ser únicos, **cada bug salía en el PC y en las cinco placas a
+  la vez**. Un bug de packs sólo sale en la familia que lo tiene mal, y por eso los cinco de
+  arriba llevaban meses ahí sin que nada fallara.
+
+- **🎭 [V6] EL SIMULADOR CON DISFRACES: que `bpvm-sim` pueda vestirse de cada familia** —
+  nace de la reflexión de Eduardo (22-ago): *«la VM-C es un hardware completamente
+  diferente… podríamos hacer 2 versiones, una más libre, más cercana al PC, y otra más
+  integrada con toda la arquitectura de las placas, y con ésta detectar más problemas de
+  integración. Antes la VM-C servía para validar la VM y el compilador; esto serviría para
+  validar todo el resto. ¿La ganancia? Detectar cosas en los micros es caro en tiempo;
+  validar en el PC es mucho más ágil.»*
+  ✅ **Las dos versiones YA EXISTEN**: `bpgenvm-c` (la libre, valida VM+compilador) y
+  **`bpvm-sim`** (H10), que es *«servidor TCP wire v1 COMPLETO (META + FILES + TERMINAL +
+  gestión de placa + packs) con FS littlefs sobre imagen y la VM-C de verdad ejecutando; el
+  IDE lo trata como una placa más»*. Enlaza la librería entera y ya tiene dos smokes
+  (`boardsim-smoke`, `sim-smoke`) que corren sin placa.
+  🔎 **Entonces la pregunta útil no es si hacerlo, sino POR QUÉ NO CAZÓ LO DE HOY.** Y la
+  respuesta acota el trabajo: **el sim valida el camino común; los bugs de estos dos días
+  estaban en los caminos POR FAMILIA.**
+
+  | hallazgo | ¿lo habría cazado el sim de hoy? |
+  |---|---|
+  | `#414`: builtins de packs dentro de `#ifdef BPVM_GUI` | ❌ el sim se construye **con** GUI |
+  | packs a 4 KB vs los 8 KB del STM32 | ❌ tiene un solo bloque de borrado |
+  | el S3 sin vista de packs | ❌ el sim sí la tiene |
+  | las tres estrategias de `/lib` | ❌ el sim tiene una |
+
+  📐 **Sus parámetros de hoy** (`--mem --psram --flash --fs`) cubren **memoria y
+  almacenamiento, y nada de la personalidad de cada familia**.
+  ⏭️ **La propuesta concreta**: un `--familia=<pico|s3|p4|stm32>` que fije lo que de verdad
+  distingue a cada una y que ya sabemos enumerar porque lo hemos medido estos dos días —
+  **bloque de borrado** (4 K / 8 K), **GUI sí/no**, **estrategia de `/lib`** (instalar si
+  falta / si difiere / vaciar y reembeber), **hay vista de packs o no**, y **AOT
+  disponible** (arm / riscv / ninguno).
+  🎯 **Con eso, los dos bugs de packs de hoy se cazan en el PC en segundos** en vez de en
+  dos días de placa — que es exactamente la ganancia que Eduardo busca. Y encaja con la
+  lección del `#414`: *«lo que no funciona en C tampoco en la Pico» sólo vale si el C que
+  se prueba lleva la MISMA configuración*. El disfraz ES esa configuración.
+  📌 **Y una consecuencia de método**: esto convierte la batería multi-placa en algo que se
+  puede correr **antes** de tocar hardware. La placa seguiría siendo la última palabra —hay
+  cosas que sólo da el silicio— pero dejaría de ser el primer sitio donde se descubren las
+  asimetrías.
+
+- **🥾🥾 [V6] ¿UN boot o DOS?** — pregunta de Eduardo (22-ago): *«tenemos 1 boot, y
+  dependerá del hardware. Si lo dividimos en 2, podemos tener un boot que dependa del
+  hardware pero el 2º, que se ejecuta a continuación, podría ya ser independiente.»*
+  ✅ **La división está EMPEZADA, sólo que sin nombre.** `bpvm_boot_climb()` ya es una
+  escalera **común** (`KERNEL→PARTITIONS→FS→APP`) cuyos peldaños son **callbacks que pone
+  cada familia**. O sea que la SECUENCIA ya es independiente del hardware y lo específico
+  son los ganchos: el «boot 2» existe en embrión.
+  🩸 **Lo que falta es que la FRONTERA tenga nombre — y se nota en que cada familia la
+  dibuja donde le parece:**
+
+  | familia | llama a la escalera desde |
+  |---|---|
+  | Pico | `main.c:1239` |
+  | ESP32 | `board_mgr_esp32.c:313` |
+  | STM32 | `board_mgr_stm32.c:141` |
+
+  📌 **Y el ejemplo que lo demuestra, medido**: el `preinstall` de la Pico —el que puebla
+  `/lib` desde los blobs y AVISA de módulos rancios, el que cazó el `IO.mod` desfasado el
+  21-ago— vive en `pico/main.c:1285`, o sea **DESPUÉS de la escalera pero dentro del código
+  de familia**. No tiene nada de hardware: es poblar un FS y comparar tamaños. Por eso sólo
+  lo tiene la Pico, por eso el STM32 resolvió lo mismo de otra forma (vaciar y reembeber),
+  el ESP32 de una tercera (sólo-si-falta), y **ninguno de los dos avisa**.
+  🎯 **Ahí está el valor de la propuesta**: con un «boot 2» común y declarado, poblar `/lib`
+  sería un peldaño suyo — y las cinco imágenes lo tendrían, o **dirían que no lo traen**.
+  Las tres estrategias distintas de `/lib` y el peldaño de packs que el S3 no tiene son el
+  mismo síntoma: **piezas sin hardware dentro viviendo en el boot de hardware**.
+  ⏭️ **El reparto que sugiere lo medido**:
+  - **Boot 1 (por familia)**: relojes, RAM, RTOS, transporte, acceso a flash. Lo que no
+    existe hasta que el silicio arranca.
+  - **Boot 2 (común)**: particiones → **packs** (hoy sin peldaño) → FS → poblar `/lib` →
+    VM. Con ganchos sólo para *«cómo alcanzo este almacenamiento»*, que es lo único que
+    de verdad cambia (ver la ficha de unificar packs: cabe en una función).
+  🔗 Emparenta con todo lo anterior de hoy: el criterio de capas, el inventario, y el
+  peldaño de packs que falta. **Son la misma reforma vista desde cuatro sitios.**
+
+- **🏛️ [V6] ¿QUÉ INCLUYE el «sistema operativo» común, y dónde encaja cada pieza?** —
+  pregunta de Eduardo (22-ago): *«por encima del HAL BP está sobre todo el sistema
+  operativo: gestión de memoria, FS, etc. Y este es (debe ser) común. Entonces si es
+  común deberíamos saber qué incluye. El sistema de packs es común pero se tiene que
+  montar casi antes que todo lo demás, así que ¿va antes del SO o pertenece al SO?»*
+  Y su encuadre del hito: *«V6 es un paso necesario, un poner orden. Es como V4, que era
+  poner orden en la gestión de RAM y el FS; aquí es más a nivel de arquitectura.»*
+  ✅ **Para los packs la respuesta YA está en el código, y es «pertenece»**:
+  ```c
+  void bpvm_pack_mount(const uint8_t* base, uint32_t size) {
+      s_mounted_base = base; s_mounted_size = size;
+      bpvm_fs_set_fallback(zone_res_stat, zone_res_read, NULL);   /* ← */
+  }
+  ```
+  Montar un pack **registra un respaldo en la fachada de ficheros**. O sea que los packs ya
+  están modelados como **un backend del FS**, igual que littlefs o la SD. No van antes del
+  SO: son parte de él, en la misma capa que el FS, y por debajo sólo consumen particiones.
+  🔑 **Y de ahí sale el criterio general para colocar cualquier pieza**: *la capa de algo es
+  la de aquello que CONSUME*. Los packs consumen particiones (no FS) ⇒ por encima de
+  particiones; y ofrecen ficheros ⇒ proveedor del FS, no algo previo.
+  🩸 **Lo que falta, y es justo el «poner orden»: la escalera NO lo dice.** `bpvm_boot.h`
+  declara `KERNEL(0) → PARTITIONS(1) → FS(2) → APP(3)` y **no hay peldaño para los packs**,
+  así que cada familia los monta donde le parece: la Pico en `pack_pico.c`, el STM32 dentro
+  de su `board_mgr`, el P4 tras su `mmap`… y el S3 **en ninguna parte**.
+  📌 **Esa ausencia es la causa del agujero del S3**, no un descuido de quien lo portó: sin
+  peldaño declarado, olvidarlo no rompe nada al compilar ni al arrancar — sólo aparece el
+  día que alguien intenta grabar un pack en esa placa. Un peldaño obligatorio convierte el
+  olvido en un fallo ruidoso, que es lo que el proyecto ya hace en otros cinco sitios.
+  ⏭️ **El trabajo de V6, entonces, es doble**: (a) **declarar** qué capas hay y qué contiene
+  cada una —el SO común: memoria, FS+backends, packs, planificador…—, y (b) que la escalera
+  de arranque las refleje, de modo que **una capa no provista se DIGA** en vez de faltar en
+  silencio. El mecanismo ya existe: `bpvm_boot` distingue *«capa no provista»* de *«capa
+  fallida»* — hoy nadie usa esa distinción para los packs.
+
+- **🎯 [V6] EL CRITERIO DE CAPAS, y lo que mide contra el código de hoy** — Eduardo,
+  22-ago: *«si dividimos el código por capas, solamente la de hardware, la HAL y la BP HAL
+  tiene sentido que sean diferentes; todo lo demás debe ser independiente del hardware y
+  por lo tanto común»*. Es un criterio **operativo**: se puede contrastar. Esto es el
+  contraste, medido el mismo día.
+  🔴 **Lo que más lo incumple, y con diferencia: el REPL está TRIPLICADO en ~220 KB.**
+
+  | fichero | bytes |
+  |---|---|
+  | `pico/repl_v1.c` | **102.966** |
+  | `esp32/main/repl_esp32.c` | 69.052 |
+  | `stm32/port/stm32_repl.c` | 47.816 |
+  | *común del wire* (`bmgr_wire`+`dbg_wire`+`comm_common`) | *43.159* |
+
+  El **transporte** sí es hardware (UART, USB-CDC); **interpretar `RUN`, `DIR`, `INFO` o
+  `PACK_BURN` no lo es** — el protocolo es el mismo en las cinco imágenes.
+  🧠 **Y esto explica CUATRO hallazgos del 21 y 22-ago que parecían independientes:**
+  `SD_INFO`/`SD_MOUNT` sólo en `pico/repl_v1.c` · el `INFO` del STM32 sin cuatro campos que
+  la Pico sí da · el aviso `/lib … NO es el de esta imagen` sólo en la Pico · el
+  `preinstall` con comprobación, sólo en la Pico.
+  **No son cuatro fallos: son cuatro síntomas del mismo.** Con tres REPL separados, cada
+  mejora aterriza en uno y los otros se quedan atrás — y no se descubre hasta que alguien
+  prueba esa placa concreta. Es [[arreglo-que-no-viaja-entre-familias]] con una causa
+  estructural detrás.
+  🔎 **El resto del contraste**, por si sirve para ordenar el trabajo:
+  - ✅ **Cumplen el criterio** (son cintura y deben serlo): `bios_*`, `board_mgr_*`,
+    `platform_*`, `comm_*`, `fs_lfs_*`, `flash_lock`, `psram`, `neopixel`, `gpio_*`,
+    `gui_display_*`, los `main.c`.
+  - ❌ **No lo cumplen**: los tres REPL (arriba) · `json_min.c` (**3 copias idénticas**) ·
+    el log (núcleo común 8.937 B **+** 11.913 de la Pico, 5.216 del S3, 2.553 del STM32).
+  - 🟡 **Ni una cosa ni otra: los blobs.** La Pico tiene **16 ficheros `*_mod.c`** con la
+    stdlib embebida; el ESP32 y el STM32 la meten en **UNO** (`esp32_mods.c`,
+    `stm32_mods.c`). Mismo dato, tres formas — y de ahí sale que la Pico "tenga 32
+    ficheros" frente a 11. No es código: es la misma stdlib empaquetada distinto.
+  ⏭️ **Y el orden que sugiere la medida**: `json_min` primero (gratis, los tres ficheros ya
+  son idénticos), luego el REPL (donde está el 80 % del problema y el 100 % de las
+  asimetrías que nos han mordido), y el log al hilo del REPL, porque buena parte de lo que
+  cada familia mete ahí es diagnóstico del propio REPL.
+
+- **📊 [V6] EL INVENTARIO de lo unificado y lo que falta** — medido el 22-ago, a raíz de la
+  observación de Eduardo: *«poco a poco vamos unificando: ya tenemos particiones comunes,
+  variables de entorno (más o menos), logs, y ahora packs. Y además la gestión de RAM y el
+  FS.»* Es cierto; esto lo pone en números para que la unificación de V6 se planifique
+  sobre datos y no sobre impresión.
+  📐 **El reparto de hoy**: **57 ficheros `.c` en `src/`** (común) frente a 32 en `pico/`,
+  11 en `esp32/main`, 9 en `esp32p4/main` y 11 en `stm32/port`.
+  ✅ **Ya común de verdad**: particiones (`bpvm_part`), ENV (`bpvm_env`), arranque
+  escalonado (`bpvm_boot`), núcleo de packs (`bpvm_pack`), fachada de ficheros
+  (`fs_facade`), heap y GC, tabla BIOS.
+  🔎 **Lo que sigue duplicado, por orden de facilidad:**
+  1. **`json_min.c` — TRES COPIAS BYTE A BYTE IDÉNTICAS** (8.688 B en `pico/`,
+     `esp32/main/` y `stm32/port/`). Es el parser JSON del wire y **no toca hardware**.
+     Duplicación pura: subirlo a `src/` es la unificación más barata que queda y no tiene
+     riesgo, porque los tres ficheros ya son el mismo.
+  2. **El log está «más o menos», como el ENV**: hay núcleo común (`src/bpvm_log.c`,
+     8.937 B) pero cada familia añade el suyo — y **el de la Pico (11.913 B) es MÁS GRANDE
+     que el común**. Merece mirar qué hay ahí que no sea de hardware.
+  3. **Packs**: ver la ficha de la unificación — la diferencia real cabe en una función.
+  4. `fs_lfs` y `board_mgr`: motor común + cintura por familia. **Esto es lo correcto**, no
+     hay nada que unificar; se listan para que no se confundan con los de arriba.
+  📌 **Y el criterio que sale de esto**: la pregunta no es *«¿está duplicado?»* sino
+  *«¿lo duplicado depende del hardware?»*. `board_mgr` duplicado está bien; `json_min`
+  triplicado no. Sin esa distinción, un censo de duplicados manda a rehacer cinturas que
+  están bien.
+
+- **🏗️ [V6] UNIFICAR el sistema de packs: implementación común + cintura por hardware** —
+  decisión de Eduardo (22-ago), al dejar el S3 sin packs en V5: *«yo unificaría el
+  sistema, el mismo para todas las familias, con las particularidades de hardware de cada
+  una. O sea: un sistema común, una implementación común, pero soporte a las diferencias
+  particulares de cada hardware.»*
+  📐 **Y el reparto sale MUY favorable, medido el 22-ago.** Lo único que difiere de verdad
+  entre las cuatro es **cómo se consigue un puntero legible a la zona**:
+
+  | familia | cómo obtiene el puntero |
+  |---|---|
+  | STM32 | `FLASH_BASE + pp->offset` — aritmética; la flash interna ya está mapeada |
+  | RP2350 | `(const uint8_t*) base` — aritmética; XIP mapeado por hardware |
+  | ESP32-P4 | `s_map_inst` de un **mmap explícito** — *«antes del mapeo no existe»* |
+  | ESP32-S3 | **nada**: no existe `pack_s3.c` (ver la ficha del agujero) |
+
+  ✅ **Todo lo demás YA es común y está probado en placa**: `bpvm_pack_mount()`, el
+  recorrido de la zona, la búsqueda de módulos y `.mdn`, y el grabado entero por la cintura
+  `bpvm_pack_flash_t` (erase/program/erase_block). O sea que **la diferencia cabe en una
+  función por familia**: `mapear(offset, size) → const uint8_t*`.
+  ⏭️ **La forma que sugiere el propio código**: un paso común que, con el layout del boot
+  en la mano, pida el puntero a esa función y llame a `bpvm_pack_mount`. Las dos familias
+  de aritmética la implementan en una línea; el ESP32 con su `mmap`; y **quien no la
+  implemente lo dice**, en vez de quedarse en silencio como el S3 hoy.
+  🎯 **Por qué esto vale más que arreglar el S3 a mano**: es la tercera vez que el mismo
+  agujero aparece en una familia distinta (`#327` en la Pico, y hoy el S3). Cablearlo a
+  mano una cuarta vez sólo mueve el hueco. Emparenta directamente con `#378` (que cada
+  micro DIGA lo que tiene) y con la unificación que dejó el censo `#427`.
+
+- **[VM] al fallar una dependencia, DECIR DE DÓNDE salió el módulo — por CRC** *(idea de
+  Eduardo, 22-ago, y él mismo la sitúa en V6)*.
+  🩸 **El problema, vivido el 22-ago**: el Nucleo dio
+  `exit 11 (lib 'Core' presente pero no exporta 'Core.__cls_new_List'; ¿version vieja?)`
+  **con `/lib` recién reembebido**. La causa era un `Core.mod` rancio en **`/app`**, y el
+  mensaje no lo decía porque **sólo nombra el módulo, no el fichero**. Eduardo: *«debe
+  indicar el path exacto, ya que la mayoría de las veces es porque hay más de un módulo»*.
+  Costó media hora con el código delante; a un usuario no le sale.
+  📐 **Por qué hoy no puede decirlo**: `bpvm_module_t` guarda `library` y `name` pero
+  **no la ruta**. El cargador SÍ la conoce y la registra
+  (`bpvm.c:512`, `[bpvm-c] dep 'Core' -> /lib/Core.mod`), pero eso va al log —que hay que
+  tener encendido— y no al mensaje que ve el usuario.
+  💡 **La idea de Eduardo, y por qué es mejor que guardar la ruta**: en vez de arrastrar
+  una ruta por módulo, **guardar su CRC**; y cuando ocurra el error, recorrer los sitios
+  donde pudo estar, calcular el CRC de cada candidato y decir cuál coincide.
+  ✅ **Cuesta CERO en régimen normal**, que es lo que la hace buena: la búsqueda sólo
+  ocurre cuando ya ha fallado algo. Y en memoria son **4 bytes por módulo** en vez de una
+  ruta: con `BPVM_MAX_MODULES = 16`, **64 B frente a ~1 KB**. En un micro eso no es un
+  detalle.
+  🔎 **Comprobado que las piezas están**: `bpvm_crc32` ya existe en la VM-C
+  (`include/crc32.h`, y `crc32.c` se enlaza en las cinco imágenes). El `.mod` no lleva CRC
+  en su cabecera, así que se calcularía sobre los bytes al cargar — que el cargador ya lee
+  enteros.
+  ⏭️ **Y el remate que lo hace de verdad útil**: si ADEMÁS encuentra un segundo fichero con
+  el mismo nombre y distinto CRC, decirlo — *«hay otro `Core.mod` en `/app` que NO es
+  éste»*. Ese es el mensaje que habría resuelto la mañana del 22-ago en un vistazo, porque
+  nombra las dos copias y no sólo la que se cargó.
+
+### 🎯 V6/HITO-AOT — ampliar la cobertura del AOT, poco a poco (encargo de Eduardo, 21-ago)
+
+> *«Creamos un hito AOT, donde solucionamos esto, implementamos double y mejoramos el
+> soporte de statements que ahora no entran, al menos los más sencillos. Así poco a poco
+> vamos ampliando el soporte AOT.»*
+
+El criterio es suyo y conviene respetarlo: **ampliar por tandas**, no de un salto.
+
+**1. `native` en un MÉTODO — arreglarlo, no sólo avisar.** Hoy se ignora en silencio (ver
+la ficha aparte). Son dos cosas y en este orden: que **AVISE** —barato, y convierte una
+mentira muda en una línea— y luego **abrir el barrido** de `AotCEmitter.java:259` a los
+métodos de las clases, pasando el objeto como primer parámetro. Ojo: `MemberAccessExpr`
+ya está soportado, así que la parte que parecía difícil (`this`) puede que no lo sea.
+
+**2. `double`.** Diseño hecho en `docs/V6_IDEAS.md` §double, con la ganancia estimada
+sobre datos reales. Es la ficha `#426`.
+⚠️ Con el matiz que ya está escrito en `AOT_LIMITES.md` y no hay que perder: la FPU de
+Cortex-M33 es de precisión **simple**, así que un `double` no toca la FPU en dos de las
+tres familias. Soportarlo es correcto; **prometer velocidad con él, no**.
+
+**3. Los statements sencillos.** Del censo de `AOT_LIMITES.md`, por relación
+esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),
+**`do…loop`** (un `while` al revés), **literales de array**. Las cuatro son azúcar y
+ninguna estaba documentada como límite hasta el censo del 21-ago.
+
+⏭️ **Y una cuarta que propongo, porque si no las otras tres se pudren**: un **test que
+recorra los nodos del AST** y compruebe cuáles pasan por el AOT. Mientras el emisor tenga
+rechazos genéricos (`statement no soportado`), cualquier lista escrita a mano se queda
+rancia sola — el propio `AOT_LIMITES.md` nombraba cinco cuando eran veinticuatro. Con el
+test, la lista se mide en cada batería en vez de recordarse.
+
+> Decisión de Eduardo (16-ago) al sacar `#426`: lo que no es de esta versión no
+> debe engordar su lista. Se quedan escritas aquí para no perderlas.
+
+*(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
+se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
+
+
+- **[IDE] enseñar el `durationMs` que la placa YA manda** *(salido el 21-ago midiendo
+  `#408`; aplazado a V6 porque es mejora, no bug — code freeze)*.
+  📐 **El hecho**: `SAVE` se cronometra en el firmware y devuelve `durationMs` en el
+  `SAVE_REPLY` (`pico/repl_v1.c:929-943`). El IDE responde «FS guardado en flash» y
+  **tira el número**. O sea que la medida que pedía `#408` ya existe, ya viaja por el
+  wire, y sólo falta imprimirla.
+  ⏭️ Lo barato: que la consola diga «FS guardado en flash (1.234 ms)». Y de paso mirar
+  qué otros verbos ya devuelven tiempos que nadie enseña — si `SAVE` lo hacía sin que
+  lo supiéramos, puede haber más.
+
+- **[IDE+device] NO copiar dependencias que el dispositivo YA TIENE — y que lo diga él**
+  *(idea de Eduardo, 20-ago. Aplazada a V6: es mejora, no bug.)*
+  🩸 **El problema, con nombres**: hoy el IDE sube al dispositivo las dependencias del
+  programa en cada Run. Entre ellas van `Json` (21 KB) y `Gui` (43 KB), que son las dos
+  más grandes de la stdlib. Eduardo: *«que Json y Gui se carguen cuando se ejecuta un
+  programa no es del todo correcto porque son grandes y consumirán RAM»*.
+  📐 **Y no es sólo transferencia: es RAM.** Un módulo que acaba en el sistema de ficheros
+  se carga ENTERO en memoria para ejecutarse. Uno que vive en un pack se ejecuta **en el
+  sitio**, desde la flash — a RAM sólo van su ext-table y su bloque de datos
+  (`bpvm_loader_load_xip`, y la VM lo canta: *«cargado XIP desde pack (codigo en
+  sitio)»*). O sea que **el mismo módulo cuesta RAM desde el FS y casi nada desde el
+  pack**. Con `Stdlib.pack` grabado, `Gui` deja de costar 43 KB de RAM.
+  ⏭️ **El diseño, afinado por Eduardo (20-ago), y es la clave**: el dispositivo no debe
+  contestar con un inventario. Debe **buscar la dependencia EXACTAMENTE COMO LO HACE EL
+  CARGADOR DE MÓDULOS** y contestar una sola cosa: hace falta o no hace falta.
+  *«Si la dependencia está en cualquier sitio donde el cargador la encuentre, y es igual o
+  más antigua que la que hay grabada, no se carga. Así que da igual que el módulo esté en
+  `/app`, `/lib`, `/sys` o en un pack.»*
+  📐 **Por qué esto es lo correcto y no un detalle**: cualquier otra respuesta obliga al
+  IDE a reimplementar la resolución de imports, y entonces hay **dos buscadores** que se
+  desincronizan en cuanto uno cambie. Es el patrón que ya ha mordido en este proyecto
+  varias veces (una copia privada que no se enteró de que el común creció). Con esto hay
+  UN algoritmo, el del cargador, y el IDE sólo pregunta.
+  ✅ **Y la mitad ya está construida.** `PicoExplorer.putIfChanged` YA le pide al
+  dispositivo el CRC del fichero y **se salta el PUT si coincide** — con su respaldo para
+  firmware viejo (`#110`/`#111`) y una consulta por fichero desde `#398`. Lo que le falta
+  es justo lo que señala Eduardo: hoy pregunta **por la ruta destino** (`/app/Gui.mod`), no
+  *«¿lo encontraría el cargador en algún sitio?»*. Si `Gui` vive en un pack o en `/lib`, la
+  pregunta por `/app` dice «no está» y se sube igual.
+  📌 **Con qué se compara: CRC, no fecha.** Un `.mod` **no lleva marca de tiempo**, así que
+  «más antigua» no se puede medir tal cual; y comparar por tamaño ya falló una vez —el
+  *skip-if-same-size* de `#110` servía `.mod` rancios—. El mecanismo que funciona y que ya
+  está en pie es el CRC, que detecta un rancio venga de donde venga. En la práctica la
+  regla queda: **mismo CRC ⇒ no se sube**; distinto ⇒ se sube, porque el IDE es la fuente
+  de verdad de lo que quieres ejecutar.
+  ⏭️ **Lo que hay que construir, entonces, es poco:**
+  1. un verbo de wire que reciba el nombre del módulo y su CRC y conteste
+     **sí/no** resolviendo con el cargador (FS por sus rutas + packs montados);
+  2. que `putIfChanged` pregunte eso en vez de preguntar por la ruta destino.
+  📌 Encaja con la stdlib preinstalada: si la placa trae `Stdlib.pack`, lo normal pasa a
+  ser **no copiar nada** y subir sólo el programa.
+  `Stdlib.pack`, lo normal pasa a ser **no copiar nada** y subir sólo el programa.
+
+- **[host] PROBAR BASES DE DATOS SIN PLACA — packs en el PC** *(aplazada a V6 el 19-ago.
+  Eduardo: «me parece que se sale de V5, habra que dejarlo para V6»)*.
+  🩸 **El problema**: la VM-C que usa la gente no puede correr BD — dice *«falta el
+  codigo nativo del pack 'SQLI'»*—, asi que hace falta PLACA para probar la mitad de lo
+  que V5 añade. Choca con «depura en el PC, despliega en el micro». Los demos si corren,
+  pero con `sqldemo.exe`, un binario de pruebas con SQLite enlazado dentro.
+  📐 **Lo que ya esta y lo que falta**, medido: el formato de pack y el relocalizador son
+  PORTABLES (`src/bpvm_pack.c`, `src/bpvm_npack.c`, en el nucleo comun). Falta:
+  1. un `.npk` de **x86-64** — o sea pasar el AOT y el relocalizador por una TERCERA
+     arquitectura, con su ABI y sus banderas (lo que costo H4 y H7 en RISC-V);
+  2. y **ejecutar codigo realojado en el PC**: en la placa el pack corre desde flash
+     mapeada (XIP); aqui habria que reservar memoria ejecutable y saltar a ella. Es una
+     pieza NUEVA y especifica del sistema operativo, no un ajuste.
+  💡 **El camino que quiza salga mas barato**: que cargue packs el **micro simulado del
+  IDE** (V4/H10, `bpvm-sim`), que ya habla wire v1 completo. El usuario probaria sin
+  placa y sin binario especial, y de paso el simulador ganaria en fidelidad.
+  📌 Mientras tanto, `docs/BASEDATOS.md` tiene que DECIR que hoy la prueba es en placa.
+
+- **[lenguaje] ¿quiere `Map` captadores tipados para sus VALORES?** — cola de los
+  captadores de `List`, que se hicieron en V5 (ver «CERRADAS EN V5»). `SyncList` y
+  `OwnerList` los heredan gratis por extender `Core.List`; `Map` no, y su caso es
+  distinto porque la clave también podría quererlos. **Sin decidir.**
+
+- **[wire] el verbo `RESET` no llega con un RUN vivo** *(era `#452`; aplazada a V6 el 18-ago. Eduardo: «ahora sabemos apañarnos y a los usuarios no les afecta» — el rodeo es `kill` + `reset`, y está documentado cara al usuario en `PENDIENTES.md` L15.)*
+  Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
+  `HELLO` y `KILL`, y a todo lo demás contesta `BUSY`
+  (`esp32/main/repl_esp32.c:915`, y el equivalente en las otras familias); el IDE
+  refleja eso apagando el botón (`PicoExplorer.java:2180`). El comentario del código
+  dice que la intención era *«que la placa nunca quede sorda»* — y casi lo consigue,
+  pero deja fuera justo el verbo que hace falta cuando lo que quieres no es recuperar el
+  control, sino **releer lo que acaba de pasar**.
+  🩸 **Por qué importa más de lo que parece, y es por `#439`**: con la placa colgada, si
+  no puedes mandar `RESET` por el wire, la única salida es el RST físico — que en ESP32
+  es `power-on` y **borra la RAM del log**. O sea que el mecanismo funciona y aun así no
+  lo tienes disponible en el escenario para el que se escribió. Hoy se sortea con
+  `kill` + `reset`, que basta porque el `kill` sí llega.
+  📌 **ES DE LA IMAGEN, NO DEL IDE.** El botón apagado es sólo el reflejo: tocar el IDE
+  a solas encendería un botón que la placa contesta con `BUSY`. El filtro está en el
+  firmware y son **CUATRO** sitios, censados por la primitiva (el mensaje) y no por el
+  nombre — `pico/repl_v1.c:1406` · `esp32/main/repl_esp32.c:915` (S3 **y** P4, comparten
+  REPL) · `stm32/port/stm32_repl.c:467` · y **`tools/bpvm_sim.c:679`**, que es el que se
+  escapa si uno cuenta «familias»: el simulador del IDE. Un doble que se comporte
+  distinto del original es una trampa, así que va en el mismo lote.
+  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if`, en los cuatro, y quitar el
+  `&& enabled` de `btnReset` (`PicoExplorer.java:2180`). El `RESET_REPLY` ya se manda
+  antes de reiniciar, así que eso no cambia.
+  ⚠️ **El cuidado real está en la Pico**: su `handle_reset` hace `log_flush()` antes de
+  reiniciar (`repl_v1.c:1229`), y permitirlo durante un RUN significa **escribir flash
+  con la VM en marcha** — el peligro clásico de ejecutar desde XIP. La cintura del log
+  post-mortem ya lo resuelve, pero hay que comprobarlo, no suponerlo. Las de ESP32 no
+  hacen flush (van directas a `esp_restart()`), así que ahí no aplica.
+
+- **[AOT] el `.mdn` no recuerda su RECETA — la huella de los FLAGS** *(mitad abierta de
+  `#441`; aplazada a V6 el 18-ago. Eduardo: «ahora no vamos a modificar formatos». La
+  otra mitad, la arquitectura, sí entró en V5: `9fcff33`.)*
+  🩸 **El caso real que la motivó, el 17-ago**: añadir `-mcmodel=medany` dejó malos
+  **todos** los `.mdn` de RISC-V ya generados. Misma arquitectura, misma fecha, código
+  inservible — o sea que ni el gate de `arch` ni la comparación de fechas lo ven. Un
+  `.mdn` generado con otra receta se sube tan tranquilo y lo que falla es la placa.
+  📐 **Qué haría falta**: sellar en el `.mdn` una huella de la receta (un hash de los
+  flags de compilación) y compararla al subirlo, igual que ahora se compara `arch`.
+  🔴 **Por qué no es un añadido sino un cambio de FORMATO**: la cabecera no tiene campo
+  libre — `magic·version·abi_version·code_size·sym_count·arch`, y es **little-endian**
+  (al revés que el `.mod`). Meter la huella obliga a subir `version` y a tocar el lector
+  del IDE y el de las cuatro imágenes a la vez. Es la clase de cambio que se hace al
+  principio de una versión, no al cerrarla.
+  💡 **Mientras tanto, lo que hay**: si se vuelven a cambiar los flags de AOT de una
+  familia, hay que regenerar sus `.mdn` A MANO y saberlo — no hay red. Conviene
+  mencionarlo en el commit que toque `AotBuild`.
+
+- **[P4] los 32 MB de flash y el XIP de los packs** — aplazado a V6 el 18-ago
+  (Eduardo: *«es demasiado arriesgado»*). El diagnóstico está CERRADO, lo que
+  queda es la obra:
+  📐 **El hecho**: el caché de flash del P4 direcciona a 24 bits, así que
+  `spi_flash_mmap` rechaza (`ESP_ERR_INVALID_ARG`) toda dirección o tramo por
+  encima de **16 MB**. Y el XIP de los packs vive de ese mapeo. Medido en placa
+  con DOS repartos: falla por tamaño (19 MB desde 13,3) y por dirección
+  (empezando en 25,6). Antes iba porque con `bpdata` de 10 MB todo caía debajo.
+  🚫 Saltárselo exige `BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH`, que Espressif
+  marca EXPERIMENTAL (*«can't use on all flash chips stable»*). Descartado.
+  🔑 **La pieza que lo hace resoluble**: el FS **no mapea** — lee con
+  `esp_partition_read`. O sea que el FS puede vivir arriba y sólo los packs
+  necesitan estar abajo.
+  ⏭️ **Dos caminos, ninguno barato:**
+  **A.** Invertir el orden en el común (`bpvm_part_layout_from_sizes`): packs
+  primero con tamaño ajustable, FS al final llevándose el resto. Es el modelo
+  correcto —*dices cuánto para packs, el FS se queda lo demás*— pero el orden lo
+  comparten las TRES familias: el FS se mueve en todas ⇒ **reformatear las tres**.
+  **B.** Dar al P4 una segunda partición (`bppacks` abajo, `bpdata` arriba sólo
+  FS). No toca a las otras, pero el firmware busca UNA partición y la reparte él:
+  hay que enseñarle a usar dos.
+  ✅ **PROBADO EN PLACA el 18-ago y DECIDIDO: se vuelve a 16 MB en V5.** Eduardo:
+  *«se prueba y se decide… tampoco cuesta tanto probarlo»* — y con razón, porque yo
+  ya había fallado una vez con esto (dije que era el TAMAÑO y su prueba con 6.528 KB
+  lo desmintió). Así que en vez de discutir con el fuente del IDF, se instrumentó el
+  arranque para que lo dijera la placa, y lo dijo:
+  ```
+  pack: fisica 0x19a0000..0x2000000 (26240..32768 KB) | limite del cache 24 bits
+        = 0x1000000 (16384 KB)  <<< EMPIEZA POR ENCIMA  <<< ACABA POR ENCIMA
+  ```
+  Los dos extremos fuera. Con `bpdata` a 32 MB los packs **no mapean nunca**, así que
+  el P4 se quedaría sin packs ni SQLite (lo que cerró H7) — y por el criterio del
+  propio Eduardo (*«si funciona se queda así»*) se revierte.
+  📌 Lo que SÍ se queda: la línea de diagnóstico. Cualquiera que mueva las
+  particiones verá al arrancar si se ha salido del rango mapeable, en vez de un
+  `err=258` que no explica nada.
+  ⚠️ Al volver a 16 MB, **el ENV tiene que caber**: si quedó en FS=20.000 KB, el
+  arranque se queda DEGRADADO (lo dice, no es un ladrillo). El valor que funcionaba
+  era **FS = 7.344 KB**, que deja 2.800 para packs.
+
+
+- **[P4] el silicio nuevo (ESP32-P4X) pedirá lo suyo** — aviso de Eduardo (20-ago):
+  *«las placas que tenemos con P4 son ESP32P4, y hay algún problema eléctrico así que
+  funcionan a 360 MHz en vez de los 400 previstos. Hay una versión ESP32P4X que será la
+  buena. Pediré una placa con el micro actualizado y tendremos que hacer una imagen para
+  él, porque algunas opciones de IDF cambian de un micro a otro.»*
+  📐 **Lo que hay hoy, leído del `sdkconfig` y no supuesto:**
+  - `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=360`, con el de **400 explícitamente desactivado**.
+  - `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` y `CONFIG_ESP32P4_REV_MIN_0=y`, **las dos en
+    `sdkconfig.defaults`** — o sea versionadas y deliberadas: la imagen de hoy está
+    clavada a silicio *anterior a la v3*.
+  - `CONFIG_ESP32P4_REV_MAX_FULL=199`: acepta de la revisión 0.0 a la 1.99.
+  ⛔ **Son DOS imágenes por narices, y lo dice el propio IDF en la primera línea del
+  Kconfig del P4:** *«Support of ESP32-P4 rev. <3.0 and >=3.0 is mutually exclusive»*, y la
+  ayuda del interruptor remata: *«huge hardware difference… not compatible»*. Verificado el
+  20-ago en `esp_hw_support/port/esp32p4/Kconfig.hw_support` de la v6.0.1.
+  📐 **Qué es de verdad `ESP32P4_SELECTS_REV_LESS_V3`** — no un rango que se pueda
+  ensanchar, sino un interruptor que parte el IDF en dos mitades excluyentes:
+  - con `=y` el mínimo sólo puede ser **0.0 / 0.1 / 1.0**; con `=n`, sólo **3.0 / 3.1**.
+    No hay ajuste que cubra los dos silicios.
+  - el `REV_MAX_FULL` **no se elige: sale de él** (199 con `=y`, 399 con `=n`). El 199 que
+    tenemos es consecuencia, no decisión — por ahí no se toca.
+  - y arrastra código real, no sólo la comprobación de arranque: **el reloj del propio
+    bootloader** (90 MHz con `=y`, 100 con `=n`), el Key Manager del cifrado de flash, el
+    VBAT y el apagado de CPU en light sleep.
+  🔑 **El detalle que ahorra trabajo: el DEFAULT del IDF es `n`** (mínimo 3.1). O sea que
+  la imagen del P4X no hay que «configurarla»: se consigue **quitando** de
+  `sdkconfig.defaults` las dos líneas que hoy la clavan al silicio viejo y dejando mandar
+  al default. Lo que está personalizado es la imagen de AHORA, no la futura.
+  ⚠️ **La trampa, que ya mordió:** `sdkconfig.defaults` **sólo siembra el `sdkconfig` la
+  primera vez**. Cambiar los defaults sin borrar el `sdkconfig` que ya existe deja el
+  firmware EXACTAMENTE IGUAL, y no lo avisa nadie — pasó el 18-ago.
+  🔑 **Por qué 360 y no 400 — confirmado por Eduardo (20-ago):** no es una cifra tímida
+  ni un resto de nada, es un RODEO a un defecto del silicio. A 400 MHz estas placas dan
+  **problemas de consumo y no funcionan bien**; a 360 van finas.
+  ⛔ Con lo cual **subirlas a 400 no es una mejora pendiente: es volver a romperlas.**
+  Queda escrito aquí porque el `sdkconfig` sólo dice *360* y un 400 desactivado y sin
+  explicación al lado invita a que alguien lo «arregle» de buena fe.
+  ✅ **Lo que el P4X cambia**: allí está corregido y SÍ puede trabajar a 400. Así que las
+  dos imágenes se diferenciarán en TRES cosas, no en una: la revisión de silicio, la
+  frecuencia (360 vs 400) y todo lo que el interruptor arrastra por debajo.
+  🧭 **Y la política: se MANTIENEN LAS DOS.** Eduardo, 20-ago: *«aunque el P4 queda
+  obsoleto, todavía quedan muchas placas que se están comercializando actualmente; en
+  cambio del P4X, que será el bueno, hoy apenas hay placas.»* O sea que esto **no es una
+  migración** con fecha de caducidad: durante V6 el silicio viejo es el que la gente
+  tiene y compra, y el nuevo el que casi nadie ha visto. La imagen del P4X se añade, no
+  sustituye.
+  📦 **Consecuencia para la distribución**: el ZIP pasará a llevar **dos imágenes de P4**,
+  y ahí el nombre es lo único que separa al usuario de flashear la que no es. Hay
+  precedente de que un artefacto se cuele en la placa equivocada, así que los nombres
+  tienen que decir el silicio, no la familia.
+  🛡️ **La red ya existe, y es del propio IDF — verificado el 20-ago** en
+  `bootloader_support/src/bootloader_common_loader.c`: el bootloader compara la revisión
+  grabada en efuses contra la de la imagen y **rechaza en las DOS direcciones**, con el
+  mensaje `chip revision check failed. Required >= vX.Y / <= vX.Y, found vX.Y`. La
+  imagen vieja en un P4X falla por el máximo; la del P4X en un P4 viejo, por el mínimo.
+  ✅ Con lo cual **la imagen equivocada no arranca a medias ni corrompe nada: se planta y
+  dice por qué**. No hay que construir ninguna comprobación propia — basta con nombrarlas
+  bien y decirlo en la documentación.
+  📌 **Y en la FORMA**, un matiz que conviene no confundir: `esp32/` y `esp32p4/` son
+  carpetas distintas porque son *targets* distintos del IDF; el P4 y el P4X, en cambio,
+  son **el MISMO target** y lo que los separa es este interruptor. Aun así se resuelve
+  igual —otra carpeta de build con su `sdkconfig.defaults`—, nunca con macros repartidas
+  por el código: aquí cambia el SILICIO. Lo que cambia por placa sigue yendo al ENV.
+
+- **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
+  (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
+  `.bin`…), y **el ROJO queda RESERVADO** para ficheros con algún problema.
+  Esa reserva es lo importante del encargo: si el rojo se gasta en un tipo,
+  luego no queda color para lo que de verdad hay que mirar.
+  📍 Dónde: `PicoExplorer.java:200`, el `DefaultTreeCellRenderer` del árbol, que
+  hoy ya pone el label y el icono y **no usa color para nada** — el rojo está
+  libre, así que la reserva se puede respetar desde el primer día.
+  📐 Lo que hace falta decidir al hacerlo (no ahora): qué cuenta como
+  *«problema»* para ganarse el rojo. Candidatos que el IDE **ya sabe** hoy y hoy
+  no enseña en el árbol: un `.mdn` cuya arquitectura no es la de la placa
+  (`#441`), un `.mod` de ABI incompatible (el gate de `#284`), un `/lib` rancio
+  (el chivato de `#422`) y un listado truncado (`#425`, que hoy avisa aparte).
+  Ojo con el daltonismo: el color como ÚNICO canal deja fuera a mucha gente —
+  conviene que el rojo lleve además icono o marca.
+
+
+- `#434` — **desacoplar los eventos del lazo de LVGL** (idea de Eduardo, 17-ago,
+  al cerrar `#424`). Hoy un clic tiene que ATRAVESAR el lazo de BP para llegar a
+  su handler: el upcall lo encola y sólo se drena entre quanta, y el único punto
+  de quantum es la vuelta de `Gui.run()`. O sea que **el evento no avanza
+  mientras el bombeo duerme**. El mecanismo es IDÉNTICO en las dos familias; lo
+  que cambia es el grano del sueño — 10 ms en el P4 (`CONFIG_FREERTOS_HZ=100`)
+  contra 1 ms en el STM32 (`__WFI` + SysTick). Un factor diez sobre la misma
+  forma. Desacoplarlos quita la dependencia del ritmo del lazo en TODAS las
+  familias, en vez de ajustar un número por placa.
+  Antes de diseñar nada, dos medidas: **instrumentar el STM32 igual que el P4**
+  (sus cifras están leídas del código, no medidas) y cronometrar el camino
+  clic → handler por separado del camino invalidar → pintar. Palancas conocidas
+  y ya descartadas como parche: el tope del lazo (hecho, 50→10) y el periodo del
+  `indev` de LVGL (40→10 ms; costaría pasar de ~3 % a ~12-15 % de un núcleo).
+  Emparenta con [[#432]] en lo de fondo: el reparto común/hardware de V6.
+
+- `#432` — **¿dónde debe vivir la tabla de handles, y de qué tamaño?** Las dos
+  preguntas que dejó `#430` (Eduardo, 17-ago). **Están acopladas: la segunda
+  depende de la primera**, y conviene decidirlas juntas.
+
+  **(a) ¿Se queda en el malloc de plataforma (SRAM) o se muda a la zona del
+  heap?** Hoy sale de `bpvm_realloc` → SRAM, mientras los objetos que indexa
+  viven en PSRAM: la tabla escala con el número de objetos, pero se paga de un
+  presupuesto que no escala con ellos. Mudarla parece lo coherente, pero hay
+  tres cosas que mirar antes:
+  - ⚠️ **Es la estructura MÁS CALIENTE de la VM**: cada `bpref_deref` toca
+    `handle_addr[idx]`. Moverla a PSRAM la mete en la memoria lenta. Esto se
+    **mide** (derefs/segundo antes y después) — es exactamente el tipo de
+    mejora que sale cara sin avisar. Cabe una tercera vía: `handle_gen` (frío,
+    sólo en validación y GC) fuera y `handle_addr` (caliente) en SRAM.
+  - ⚠️ **La zona ya tiene otro inquilino**: SQLite reserva de ahí
+    (`bd: reservada (SQLite=2) -> 2048 KB @ 0x11000000`). Si la tabla también
+    tira de ella, hay que decidir el reparto — y quién cede cuando no cabe.
+  - `bpvm_arena_reserve` ya talla de esa región, pero es de **un solo uso** y
+    la tabla **crece**. O se preasigna el máximo (y entonces el tamaño hay que
+    acertarlo, ver (b)), o la región tiene que poder crecer, y eso toca los
+    límites que usa `is_heap_ref`.
+
+  **(b) ¿El tamaño debería salir del heap?** Hoy el arranque (4096) y el tope
+  (16384 en la Pico) son constantes, y el tope está puesto **por la SRAM**. Pero
+  la NECESIDAD sale del heap: con 5,6 MB y objetos de ~24 B caben ~230.000
+  objetos vivos, catorce veces el tope. Consecuencia real: un programa legítimo
+  puede recibir OOM **con heap libre**. (Ya no cuelga —eso lo arregló `#430`—
+  pero sigue estando mal.) Lo natural sería derivarlo del heap, como ya hace
+  `gc_bump_threshold` (`(stack_base - heap_start) / 8`)… y ahí está el nudo:
+  **mientras la tabla se pague en SRAM, el tope no PUEDE escalar con el heap**,
+  porque el presupuesto no escala. Resolver (a) es lo que desbloquea (b).
+
+  **Lo que hace falta medir antes de decidir** (encaja con el censo funcional de
+  V6, eje «memoria y tiempos»): el coste real de un deref en PSRAM vs SRAM, y
+  cuántos objetos vivos a la vez llega a tener un programa de verdad — si nadie
+  se acerca a 16384, el problema es teórico y la respuesta es «déjala donde
+  está»; si un ORM con muchas filas lo roza, es urgente. Ver
+  [[tabla-handles-sram-y-presion-430]].
+
+- `#378` — que cada micro **DIGA lo que tiene** (capa HAL BP de capacidades).
+
+- (sin número) — el **tamaño de flash lo dice la placa**: tabla grande + clamp, no
+  una imagen por tamaño.
+
+- (sin número) — **la S3 no tiene `bios_s3.c`**: no ofrece tabla BIOS, así que no
+  puede alojar un pack nativo. Familia por hacer, no prueba pendiente.
+
+- `[V6]` `Object` = comodín por referencia — decidido y diseñado en
+  `docs/OBJECT_COMODIN.md`. **Ojo**: estaba clasificado V6 y su mitad estática se
+  hizo en V5 el 14-ago. Falta la **clase contenedora** (nombre sin decidir, si
+  distingue vacío de `null`, y cómo se saca un escalar).
+
+- (sin número) — **liberación de recursos**: destructor `~Clase()` + `var owner` +
+  bloque. Diseño de Eduardo.
+
+- `#396` — módulo `Time` con clase `Time.Date`, sobre un `long` de segundos de
+  época — **no** un tipo del lenguaje.
+
+- (sin número) — librería `Math`: ampliar (`fact` sobrecargada, f64) **y repasar
+  lo que ya hay**; strings igual si hace falta.
+
+- (sin número) — **diagnóstico del heap DESDE BP**: las herramientas existen, pero
+  están en la VM equivocada.
+
+- (sin número) — **muro de contención** entre el heap y las pilas. Idea de Eduardo.
+
+- `[ISA]` — `CALL_REL`: CALL local PC-relativo, el modelo de Eduardo.
+
+- `#19` — array fijo LOCAL: el UAF ya está cerrado (`b99529e`); queda **sólo el
+  inline por eficiencia**.
+
+- `#356` — REBAJADO: la pérdida de bytes no se manifiesta (era colateral de #357);
+  queda **el descarte mudo**, latente.
+
+- (sin número) — **librería de placa GENÉRICA**: el micro da el dato, la librería
+  hace de puente.
+
+- (sin número) — **batería de rendimiento HW+SW**: medir el REPARTO, no el tiempo.
+
+- (sin número) — **prueba de resistencia larga**: días de carga VARIADA, con marca
+  periódica en el log-anillo para que «la muerte deje rastro».
+
+- `[SIN VERSIÓN, V6+]` — Linux: el IDE en Linux + la Raspberry Pi como PLACA.
+
+- (de H6) — `SD_INFO` y `SD_MOUNT` siguen sólo en `pico/repl_v1.c`; no han subido
+  a código común. Verificado el 14-ago: siguen ahí.
+
+- `#426` `[V6]` — **`double` en una función `native`. APLAZADO A V6 por decisión
+  de Eduardo (16-ago)**, y no por coste sino porque *falta pensar el diseño*:
+  *«los micros como los STM32F7 tienen coprocesador que soporta float y double.
+  Lo correcto sería: si el micro soporta double por hardware, por hardware; si
+  no, por software. Quizás lo mejor sería meter las funciones de coma flotante
+  en la BIOS o en opcodes»*.
+  Eso reencuadra la ficha entera: **no es «cómo meto libgcc en el .mdn», es
+  «quién provee la coma flotante y cómo lo dice cada placa»** — que es la misma
+  pregunta que `#378` (que cada micro DIGA lo que tiene). Hacerlo ahora por
+  helpers sería resolver el caso pequeño y cerrar la puerta al bueno.
+  ⚠️ Ojo al dato que lo motiva: la FPU del Cortex-M33 (RP2350, STM32U5) es de
+  **precisión simple**, pero la del **STM32F7 es de doble** — o sea que la
+  respuesta correcta DEPENDE DE LA PLACA, y por eso no puede ser una constante
+  en el emisor.
+  *(Lo demás, tal como estaba.)* **`double` en una función `native`** (sale de `#381`, que los tenía
+  juntos). No le falta el marshalling —ése ya está hecho y es el mismo—: le
+  falta que la aritmética de coma flotante, que estos micros **emulan por
+  software**, sea alcanzable desde un `.mdn`. Hoy deja seis símbolos de libgcc
+  sin resolver (`__aeabi_dadd`, `__aeabi_dmul`, `__aeabi_ddiv`, `__aeabi_dcmplt`,
+  `__aeabi_i2d`…) y el empaquetador lo rechaza.
+  El camino es el mismo que funcionó para la división de `long` —helpers en la
+  tabla—, pero aquí serían MUCHAS operaciones y se paga una llamada indirecta
+  por cada una: hay que **medir si sale a cuenta** antes de escribirlo.
+  ⚠️ Y el aviso de fondo de Eduardo, que sigue en pie (`AOT_LIMITES.md` §1): la
+  FPU de estos micros es de **precisión simple**, así que un `double` no toca la
+  FPU ni compilado. Marcar `native` una función con `double` es pedir velocidad
+  y elegir el camino lento a la vez. Riesgo añadido: la paridad de coma flotante
+  (contracción `a*b+c`) — ver `GAP-4`.
+  Análisis completo en `docs/AOT_ABI8_IDEAS.md`.
+
+---
+
+
+### ═══ HEREDADAS DE V5 — vivas, pendientes de triar para V6 ═══
+
+> No se archivan porque **no están resueltas**. Lo que falta es decidir, una por una,
+> si entran en V6 o se quedan esperando. Hasta esa decisión siguen aquí.
 
 ### IDE — V5/H10 «lo pendiente que no son bugs»
 
@@ -1565,29 +2239,6 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   (Windows: barras invertidas), o sea distinta por SO y distinta de la VM-C.
   Gana el mensaje de la C: `readFile('...'): no se pudo abrir`. Byte-idéntico
   medido, paridad 28/0/0.
-### ~~🐛 `#431`~~ — ✅ CERRADA (`8055248`): miVM busca las deps junto al `.mod`, y un módulo que falta se DICE
-
-Descubierto de rebote el 17-ago preparando la prueba de `/sys` (#418), y
-confirmado con un control (`BridgeApp`, un sample viejo, falla igual ⇒ no es del
-sample nuevo).
-
-```sh
-java -jar miVM/target/bpgenvm-1.0.jar bpgenvm-c/samples/SysUse.mod   # ❌ revienta
-cd bpgenvm-c/samples && java -jar ../../miVM/...jar SysUse.mod       # ✅ va
-bpgenvm-c/build/bpgenvm-c bpgenvm-c/samples/SysUse.mod               # ✅ va (VM-C)
-```
-
-Dos cosas mal, y la segunda es la fea:
-
-1. **La política difiere**: la VM-C resuelve las deps en la carpeta del `.mod`
-   (`bpvm_load_mod` → `path_dirname`); miVM las busca en el CWD.
-2. **El fallo NO es un error, es un `FileNotFoundException` con stack trace de
-   Java.** Aunque la política se decidiera distinta a propósito, quedarse sin
-   una dependencia tiene que decirlo como lo dice la VM-C, no volcar la pila.
-
-No afecta al arnés (copia a un WORK dir y ejecuta desde allí) ni al IDE (manda
-rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
-
 ### AOT / native
 
 - **🐛 [AOT] `native` en un MÉTODO se ignora en SILENCIO** — encontrado el 21-ago, y lo
@@ -1817,7 +2468,7 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 
 - ~~`#412`~~ — **MOVIDA A V6** el 17-ago por decisión de Eduardo (*«puede ir a
   V6, no es nada urgente ni crítico»*). El diseño quedó CERRADO antes de moverla
-  y está en `notas/V6_IDEAS.md`: el argumento **siempre en el heap** (idea de
+  y está en `docs/V6_IDEAS.md`: el argumento **siempre en el heap** (idea de
   Eduardo), que además borra una asimetría de fondo — hoy el argumento horneado
   es un literal de la zona de datos y uno de ejecución sería del heap, las dos
   formas de cadena que dieron guerra en `#389`. Lo que la saca de V5 no es el
@@ -1945,6 +2596,408 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   se hizo: es una FEATURE que falta, no un bug, y estamos en freeze** — decision de
   Eduardo. Documentado como limitacion en `TARJETA_SD.md` §6, con el rodeo mientras
   tanto (llevarse la cuenta uno mismo, o nombres predecibles por fecha).
+
+## CERRADAS EN V5 (con su commit, para no volver a darlas por abiertas)
+
+| ficha | qué | commit |
+|---|---|---|
+| `#384` | el error de palabra reservada DICE que lo es | `2637a43` |
+| `#385` | el tipo de un literal entero lo decide su MAGNITUD | `537dfe3` |
+| `#386` | el argumento de `Main` sale de su valor por defecto | `7a2eef2` |
+| `#387` | a la 2ª firma le faltaban los TIPOS | `e9c9b5a` |
+| `#388` | encadenar sobre lo devuelto por un método importado | `9ed0010` |
+| `#390` | visibilidad en 3 niveles (private / protected / public) | `0b258d3` |
+| `#391` | ABSORBIDO por #390: `virtual` es todo menos `private` | — |
+| `#392` | el importador contaba mal los slots de una hija con sobrecargas | `c4f5053` |
+| `#393` | el importador comprueba su tabla de métodos | `b5d2ff0` |
+| `#402` | el oráculo pasa también por ARM, con el SQLite entero | `4420746` |
+| `#403` | el emisor a `.class` queda marcado OBSOLETO | `c3a8b13` |
+| `#406` | un `throw` sin atrapar ya DICE qué pasó, en las 3 familias | `c599095` |
+| `#362` | la zona de packs sirve RECURSOS (host) | `d5552ed` |
+| `#417` | **verificado EN PLACA (P4, 14-ago)**: los recursos salen de la zona | — |
+| `#414` | módulo `Packs` (`list`/`listIn`) — **verificado en el P4** | `3901f1c` |
+| `#365` | un módulo con `library` ya puede **arrancar** un pack | `88e75a4` |
+| `#411` | el SQLite.pack con carpeta propia, reconstruible de un clon limpio | `5f9e924` |
+| `#383` | `PACK_CALL` — **CANCELADA** por alcance (los packs los hace el proyecto) | — |
+| `#419` | el arranque con SD — **DESCARTADA POR LA MEDIDA** (965 ms, 266 de la SD) | — |
+| `#398` | el refresco del árbol: **6953 ms → 155 ms**, verificado en la P4 | `f4e5c1f` `10b4467` |
+| `#430` | el cuelgue de la Metro era **LA TABLA DE HANDLES** — **verificado en DOS familias: Metro y P4 (17-ago)** | `d1c1c1f` |
+| `#302`p3 | el GC escanea la pila C del native — **VERIFICADO EN PLACA (17-ago)** | `53a22fa` |
+| `#422` | el chivato del `/lib` rancio — **VERIFICADO EN PLACA, los 2 caminos (17-ago)** | — |
+| `#418` | `/sys` resuelve (el ULTIMO: rescata sin tapar) — **VERIFICADO EN PLACA (17-ago)** | — |
+| `#433` | el log COMUN truncaba por el final y EN SILENCIO — ahora anillo (P4/S3/STM32) | `79a25ce` |
+| `#424` | los eventos del GUI: **medido y mejorado** (50→100 Hz); el resto → `#434` en V6 | `f96c957` |
+| `#425` | el listado DECLARA lo que deja fuera (4 implementaciones + el simulador) | `a632122` |
+| `#437` | la consola llega donde el árbol: `copy` · `get` · `logclr` | `dcb2b7d` |
+| `#435` | la ventana de la placa reordenada + entorno a diálogo, también desde la principal | `08de08e` |
+| `#436` | editar el `.bpbuild` desde el IDE (guarda y RELEE para validar) | `c88f8b5` |
+| `#394` | subir eligiendo destino — ahora se VE y se puede editar | `69adaa9` |
+| `IDE-7` | selección múltiple: borrar y subir en lote, con UN refresco | `69adaa9` |
+| `#395` | botón `DAO build`, habilitado sólo con proyecto abierto | `1eaf117` |
+| `#440` | el `.mdn` de RISC-V direccionaba sus datos en **ABSOLUTO** — **VERIFICADO EN PLACA (P4, 17-ago)** | `9d41562` |
+
+**`#430`, la ficha entera** (abierta y cerrada el 17-ago; se abre aquí para no
+perder cómo se acotó, que es lo reutilizable):
+
+- **Síntoma**: la Metro se colgaba muda ejecutando `AotGcRt` (30.000 concats en
+  una `native`). Ni log, ni `MALLOC FAIL`: la cola de flash acababa en
+  `about to bpvm_run` — el post-mortem **no cubre cuelgues**, sólo crashes y
+  puntos fijos de volcado (ficha aparte, ver ABIERTAS).
+- **Cómo se acotó** (todo de Eduardo, y en este orden):
+  1. *«¿Qué pasa si no es native?»* → sin `native` moría igual, tras el 3000.
+     El nativo y el escaneo #302, exonerados de un plumazo.
+  2. *`gc()` a mano cada 1000* → **terminó limpio**. El GC de la placa funciona;
+     lo que fallaba es que nadie lo llamaba.
+  3. *«Cambiar el tamaño de la tabla y ver si se cuelga antes o después»* → el
+     gemelo `AotGcRt2` gasta el DOBLE de handles por vuelta y murió tras el
+     **1000** en vez del 3000. La muerte sigue a la **cuenta de handles**.
+- **Causa**: el disparo del GC contaba **volumen** (#357) y un programa de
+  objetos chicos se le escapa: 600 KB (bajo el umbral de 704 KB) pero 30.000
+  slots. La tabla sólo doblaba hasta pedir 512 KB **de SRAM** (las dos tablas
+  salen del malloc de PLATAFORMA, no del heap de la VM, que está en PSRAM). El
+  RP2350 tiene 520 KB. El malloc fallaba → `vApplicationMallocFailedHook` →
+  parpadeo eterno: **un cuelgue, no un error**.
+- **El arreglo, en las DOS VMs** (las tres ideas, de Eduardo):
+  1. **La marca**: repartir un slot de los últimos 64 arma `handle_pressure`;
+     la puerta de `heap_alloc` lo consulta y colecta ahí. Si recicla, resuelto;
+     si todo está VIVO, crece — donde crecer es una decisión, no un accidente
+     en medio de un `register`.
+  2. **El tope por puerto** (`BPVM_HANDLE_CAP_MAX`; la Pico: 16384 slots =
+     128 KB) convierte el malloc imposible en OOM honesto ANTES de pedirlo. Y
+     `handle_register` deja de devolver la **dirección cruda** cuando no puede
+     crecer (el «las refs MIENTEN» que #355 dejó a medias): ref nula → los 5
+     sitios de `interp.c` la vuelven `No space in heap` atrapable.
+  3. **La excepción PREFABRICADA**: el OOM se construye en el prólogo del RUN,
+     cuando construir es gratis, y vive como raíz del GC. Lanzarla no aloja
+     nada ⇒ muere el «throw: sin memoria para el MENSAJE → el programa NO se
+     entera».
+- **De regalo**: miVM escribía su diagnóstico de GC por **stdout** — cualquier
+  programa que colectara rompía el invariante en Java. A stderr, como
+  `bpvm_diag`.
+- **Pruebas**: `AotGcRt2` con memoria de Metro mantiene la tabla en 4096 y
+  termina; `OomHandles` con `--handlecap` 2048/1024 atrapa el OOM y sigue vivo,
+  y el nodo escala con el tope (994 / 482); paridad 28 PASS; `test-aotgc` verde.
+  **En placa: `AotGcRt2` llega a `fin` con `malos : 0`** (antes moría al 1000).
+
+**`#302` paso 3, cómo se verificó EN PLACA** (17-ago, con el #430 ya arreglado):
+`AotGcRt.bp` en su forma NATIVE, 10.000 vueltas, `.mdn` cargado (1 thunk, 152 B
+nativo). Salió `malos : 0` y `ultimo : v9999w9999`. Por qué eso PRUEBA el
+escaneo y no sólo "no petó": el intermedio del concat izquierdo vive **sólo en
+la pila C** mientras el derecho aloja tres veces más; con la presión de tabla
+disparando (#430) hubo ~20 colectas en el recorrido, y 7 de cada 12 reservas de
+la vuelta se hacen DENTRO de `eco`. Sin el escaneo conservador de la pila C, ese
+intermedio se recicla y `ultimo` sale corrupto — el mismo fallo que el test rojo
+`test_aotgc.c` pilló en host antes de arreglarlo. 10.000 comparaciones, cero
+desviaciones.
+
+*(Y el 17-ago por la tarde, la MISMA prueba en el **P4** una vez arreglado
+#440: 10.000 vueltas, `malos : 0`, `ultimo : v9999w9999`. O sea que el
+escaneo conservador de la pila C esta verificado en placa en las **dos
+arquitecturas**, ARM y RISC-V, no en una.)*
+
+> Y la lección de método: este sample estuvo DOS intentos sin probar nada —
+> primero mudo (parecía colgado cuando trabajaba: le faltaba el latido), y luego
+> colgándose de verdad por una causa **ajena a lo que venía a medir** (#430). Un
+> instrumento nuevo se valida antes de creerle, también cuando lo que falla es
+> el sujeto y no el instrumento.
+
+**`#417`, cómo se verificó** — importa porque el instrumento obvio no valía:
+
+- Pack `test1` grabado en el P4 con `montserrat_26_bold.bin` dentro (3 entradas:
+  `mod1.mod`, la fuente y el `manifest.mft`), y `FontLoadDemo` cargándola.
+- **El `id` que devuelve `loadFont` NO prueba nada**: el contador es 1-based y se
+  asigna SIEMPRE, con o sin fuente, a propósito, para que la VM-C y miVM devuelvan
+  ids idénticos (paridad dual-VM) — `gui.c:964`.
+- **Lo que lo prueba es una línea que NO aparece.** Si no consigue materializar la
+  fuente, `gui.c:981` escribe
+  `[gui] loadFont('...'): no se pudo cargar (id N queda sin fuente)`.
+  No está en la salida, y en el P4 ese chivato está activo porque lleva LVGL.
+- **El `__guiDumpTree` no sirve** para esto: `gui.c:1185` sólo imprime `font=`
+  cuando hay `fontSize` (catálogo compilado), nunca para `setFont`. Su silencio no
+  significa nada.
+- **Y salió del PACK, no del FS**: Eduardo lo probó con la forma **cualificada**,
+  `Gui.loadFont("pack:test1/montserrat_26_bold.bin")`, que va a ESE pack y se
+  salta el FS entero. Así que no queda el matiz de «cargó, pero no sabemos de
+  dónde»: la zona de packs sirvió el recurso, que es exactamente lo que #362
+  prometía y lo que esta ficha tenía que demostrar.
+
+Con esto **H11 quedó desbloqueado** (era la ficha que lo trababa) y el 15-ago
+**cerró entero**: `#414` y `#365` cerradas con commit, `#411` en su parte de
+packs, y `PACK_CALL` (#383) cancelada.
+
+
+### ~~[lenguaje] `List` con captadores TIPADOS~~ — ✅ CERRADA EN V5 (`20-ago`, adelantada desde V6)
+
+Eduardo la adelantó al ver que las demos de BD no funcionaban: *«las demos han de
+funcionar, no vamos a hacer como en C que por sistema las demos nunca funcionan»*.
+Entraron `getInteger`, `getLong`, `getDouble`, `getBoolean` y `getString`, con las
+conversiones puestas en los cinco envoltorios. **El enunciado y las decisiones de
+diseño se conservan enteros abajo, porque la cola de `Map` sigue abierta.**
+
+- **[lenguaje] `List` con captadores TIPADOS** — encargo de Eduardo (19-ago):
+  *«en List añadir métodos `getInteger(indice)`, `getLong(indice)`, `getFloat(indice)`,
+  `getDouble(indice)` y `getString(indice)`»*.
+  🩸 **De dónde sale, y por eso no es azúcar cosmético**: desde `#389` `List.get()`
+  devuelve `Object`, así que todo uso tipado necesita un downcast explícito. El coste ya
+  se pagó el 19-ago — `Json.bp` llevaba días sin compilar y el arreglo fueron **8 casts,
+  los 8 el mismo patrón**: `JsonValue(this.items.get(i))`. Con captadores tipados eso se
+  escribe una vez, dentro de `List`, en vez de en cada sitio que la use.
+  📌 **Encaja con lo que ya hay**: los envoltorios (`Integer`, `Long`, `Double`, `Float`,
+  `Boolean`) se mudaron a `Core` con `#446`, y `add` ya está sobrecargado por tipo. Esto
+  es la simetría que falta — se puede meter por tipo pero no sacar por tipo.
+  📐 **La semántica la decidió Eduardo (19-ago) y NO es un cast**: *«si no es del tipo
+  pedido hay que hacer conversiones. Los envoltorios ya deberían tener las conversiones.
+  Y si hay una conversión imposible se dispara un error.»* O sea que `getInteger(i)` no
+  exige que el elemento SEA un `Integer`: lo convierte, y sólo revienta si la conversión
+  es imposible. Devuelve el primitivo (`integer`), no el envoltorio.
+  🔴 **Y ahí está el trabajo de verdad: hoy los envoltorios NO tienen conversiones.**
+  Medido en `Core.bp` el 19-ago — `Integer`, `Long`, `Double`, `Float` y `Boolean` tienen
+  exactamente cuatro cosas cada uno: constructor desde SU primitivo, `value()`,
+  `compareTo(Object)` y `toString()`. Nada más. Así que esto son **dos fichas encadenadas**:
+  primero las conversiones en los envoltorios, después los captadores de `List`, que se
+  vuelven triviales encima.
+  📐 **Y la DIRECCIÓN importa (Eduardo, 19-ago)**: *«integer a string vale, así `"hola"+1`
+  se convierte en `"hola1"` sin problemas, pero string a integer no, eso hay que pedirlo
+  explícitamente con la función concreta.»* La asimetría no es capricho: hacia `string` la
+  conversión **no puede fallar** (todo tiene `toString`), y desde `string` **falla por el
+  CONTENIDO**, que es otra clase de cosa.
+  🔬 Comprobado el 19-ago, las dos mitades: `"hola" + 1` → `hola1` y `"pi=" + 3.5` →
+  `pi=3.5`; y la familia explícita ya existe — `Str.parseInt`, `parseLong`, `parseDouble`
+  y `parseHex`, **todas devolviendo `(boolean, valor)`**, o sea que ni siquiera lanzan:
+  obligan a mirar el `ok`.
+  ✅ **Con eso se cae la contradicción que se había anotado**: `string`→número NO entra en
+  los captadores, así que no hay dos contratos compitiendo. Queda repartido y limpio:
+  - `getString(i)` — **siempre funciona**, porque todo sabe volverse cadena.
+  - `getInteger/getLong/getFloat/getDouble(i)` — convierten **entre numéricos**; si el
+    elemento es una cadena, **NO se parsea**: eso se pide con `Str.parse*`.
+  - lo imposible lanza, que es lo que Eduardo pidió.
+  ✅ **`getBoolean` ENTRA** (Eduardo, 19-ago: *«añade getBoolean, no hay problema»*), y
+  con él la conversión booleano→numérico: **`False` = 0, `True` = 1**.
+  📐 **De dónde viene la idea, y el matiz que la recorta.** Eduardo la trajo por su
+  parecido con `ord()`, *«que también sirve para los elementos de un enumerador y para la
+  conversión de char»*. `Ord` es de **Pascal** (en Java es `? 1 : 0`), y eso juega a
+  favor: está definido justo para esos tres casos, así que es buen modelo. **Pero en BP
+  sólo quedan DOS de los tres**: `char` **no existe como tipo** —no está en la gramática
+  y los caracteres ya SON enteros (`sb.appendChar(44)`)—, o sea que esa pata sobra aquí.
+  🔬 **Y el tercero tampoco funciona hoy**, comprobado el 19-ago: `var i: integer := c`
+  con `c` de un enum da *«valor de tipo 'Color' no asignable a variable de tipo
+  'integer'»*, aunque la gramática los respalda con enteros
+  (`enum_value ::= name [':=' INTEGER_LIT]`). O sea que **de un enum no se puede sacar su
+  número**, y eso es un agujero por sí solo — emparenta con `M6` de `PENDIENTES`
+  (`const C := Color.RED` tampoco vale). Hacia `string` sí van los dos, coherente con la
+  regla de dirección.
+  ⏭️ **Recomendación al abrirlo: NO un `ord()` nuevo.** Con dos casos no compensa gastar
+  una palabra reservada —criterio de Eduardo: *«si ya hay algo especial, el azúcar cuelga
+  de ahí»*—. Lo natural es que salga de las conversiones que ya se van a escribir:
+  `Integer(b)` e `Integer(color)`, y los captadores encima.
+  ✅ **`double`→`integer` TRUNCA** (Eduardo, 19-ago): *«debe truncar, si se quiere
+  redondear que llame a la función para redondear que para eso está»*.
+  🔬 Y esa función existe — comprobado: **no está en `Math`, son builtins globales**:
+  `round` (id 33, *half-up*), `floor` (31) y `ceil` (32), con `abs`, `sqrt` y `pow` al
+  lado. `Math.bp` sólo tiene trigonometría y logaritmos, así que buscarlo ahí despista.
+  ⚠️ **Hay que decir HACIA DÓNDE trunca, y no es un detalle**: truncar es *hacia cero*
+  (`-2,7` → `-2`), mientras que `floor` da `-3`. Coinciden en positivos y discrepan en
+  negativos, que es justo donde nadie mira. Y **ningún builtin trunca hoy**: `floor` vale
+  para positivos y `ceil` para negativos, o sea que el comportamiento de los captadores
+  es NUEVO y tiene que quedar escrito en su documentación, con el caso negativo de
+  ejemplo.
+  ✅ **`long`→`integer` que no cabe: EXCEPCIÓN** (Eduardo, 19-ago: *«pues claro, es una
+  exception, es puro sentido común»*). Coherente con `#385`: el recorte silencioso da un
+  número plausible y equivocado, que es el peor fallo posible.
+
+  ### El contrato, ya cerrado entero (19-ago)
+
+  | de \ a | `string` | numérico (`integer`/`long`/`float`/`double`) | `boolean` |
+  |---|---|---|---|
+  | numérico | implícito (`"x=" + 1`) | convierte; `double`→entero **trunca hacia cero**; si no cabe, **excepción** | — |
+  | `boolean` | implícito | `False`=0 · `True`=1 | directo |
+  | `string`  | directo | **NO** — se pide con `Str.parseInt/parseLong/parseDouble`, que devuelven `(ok, valor)` | **NO** |
+  | otro objeto | `toString()` | **excepción** | **excepción** |
+
+  📌 **Los métodos**: `getString`, `getInteger`, `getLong`, `getFloat`, `getDouble` y
+  `getBoolean`, todos por índice y devolviendo el **primitivo**.
+  📌 **Qué se lanza**: lo mismo que ya lanza un downcast fallido (`#444`), para no
+  inventar una segunda familia de errores que diga lo mismo.
+  📌 **La regla que lo explica todo en una frase**: hacia `string` es implícito porque no
+  puede fallar; desde `string` es explícito porque falla por el CONTENIDO; y entre
+  numéricos convierte, pero **perder información es un error, no un redondeo silencioso**.
+  📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
+  mirar si `Map` quiere lo mismo para sus valores.
+
+### Hitos de V5 — la tabla
+
+| hito | qué | cerrado |
+|---|---|---|
+| H1 | la Metro **lee** la tarjeta SD | 7-ago, en placa |
+| H2 | la SD como **sistema de ficheros** (FatFs) | 8-ago, en placa |
+| H3 | **SQLite corre en la Metro** (la tabla BIOS presta memoria) | 8-ago, en placa |
+| H4 | un programa BP **consulta una BD de verdad** | 10-ago, salida idéntica al host |
+| H5 | **el ORM**: DAO a mano → `@BD{...}` → generador → verificador | 11-ago |
+| H6 | la SD del P4 por **SDMMC** + `LIST_DIR` a código común | 11-ago, en placa |
+| H7 | **SQLite en el P4**: nativo RISC-V ejecutándose, motor arrancado, pack grabado y `SqlDemo` corriendo | **CERRADO**, verificado en placa |
+| H8 | *la herramienta antes que el artefacto*: relocalizador que coincide con `ld`, `sources`, un `.mod` y N `.mdn`, botón de grabar que relocaliza | 13-ago, en host |
+| H9 | la tanda de **arreglos del compilador** (#384, #385, #386, #387, #388, #392, #393, #406) + `Object` como raíz real (#389, la mitad estática) | **14-ago** |
+| H10 | **el IDE**: lo pendiente que no eran bugs | 15-ago (las 9 fichas de su sección, cerradas) |
+| H11 | **packs**: cerrar lo que quedó suelto (`#416`, paraguas) | 15-ago |
+| H12 | **documentar V5** de cara al usuario | abierto 18-ago |
+| H13 | **las pruebas finales** | abierto 18-ago |
+
+*(El nombre de H8/H9 no está en ningún doc: sale de los prefijos de commit. Ojo con
+confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
+
+*(Tabla subida desde `ESTADO` el 17-ago: era el único sitio con las fechas
+y el enunciado de cada hito. **H10 (IDE) y H11 (packs) cerrados** también.)*
+
+**Cerrados: H1…H11.** Quedan **H12** (documentar) y **H13** (pruebas finales), abiertos
+el 18-ago al fijar el plan de cierre; después, publicar.
+
+⚠️ *Aquí decía «Queda H10 (IDE)» dos líneas después de decir que H10 estaba cerrado —
+una contradicción dentro de la propia fuente de verdad, corregida el 18-ago. H10 lo
+está: sus 9 fichas están todas tachadas.*
+
+---
+
+
+### 📦 Archivado el 23-ago al abrir V6 — secciones que ya estaban terminadas
+
+> Estaban en «ABIERTAS» pero no lo estaban: o se cerraron durante V5, o eran el propio
+> trabajo de cerrar la versión, que se completó al publicar el 22-ago. Se bajan enteras,
+> sin tocar su texto.
+
+### 🏁 Packs — V5/H11 «cerrar lo que quedó suelto» (#416, paraguas) — **CERRADO el 15-ago**
+
+> Las cuatro fichas que colgaban de él, resueltas: `#417` y `#414` **verificadas
+> en placa**, `#365` verificada en las dos VMs, `#411` cerrada en su parte de
+> packs, y `PACK_CALL` (#383) **cancelada** por decisión de alcance. Lo que se
+> quitó de en medio para poder cerrarlo —la limpieza de `notas/`— no era trabajo
+> de packs: está en «Cierre de V5».
+>
+> Se queda todo escrito aquí, no se borra: el registro de lo cerrado es lo que
+> evita volver a darlo por pendiente.
+
+- ~~`#417`~~ — **CERRADA el 14-ago, verificada en el P4.** Ver abajo.
+- ~~`#414`~~ — módulo `Packs`. ✅ **CERRADA: host (`3901f1c`) y VERIFICADA EN EL
+  P4 el 15-ago.** API: `Packs.list()` y `Packs.listIn(pack, ext)`, las dos
+  devolviendo `List`.
+  **En placa** listó los dos packs grabados con su contenido: `SQLite` (7
+  entradas) y `test1` (3), y el filtro por extensión dejó 4 módulos y 1
+  respectivamente. **Cuadra con lo que el IDE enseña por el wire** (`PACK_ENTRIES`
+  → «SQLite … 7 fich», «test1 … 3 fich»): dos caminos independientes contando lo
+  mismo, que es la mejor comprobación que se podía pedir sin montar nada.
+  **La forma la decidió Eduardo**: cuatro intrínsecos que sólo mueven primitivos
+  —dos avanzan (`0` empieza, `-1` termina), dos dicen el texto— y la lista se arma
+  en BP. Así ningún builtin construye objetos, que era el coste escondido de la
+  ficha: hoy ninguno lo hace. El cursor es un valor que lleva el programa, así que
+  no hay estado, es reentrante entre hilos y avanzar es O(1).
+  **miVM**: sin zona de packs, `next` devuelve -1 a la primera → lista vacía. Eso
+  contesta la duda del diseño del 13-ago y da la paridad **sin un solo `if`**.
+  Verificado en host: con `--pack=PackFixA.pack` lista el pack y sus 3 ficheros
+  (y cuadra con el `LIST` del propio firmware, que es otro camino); sin zona, las
+  dos VMs dicen `0`; stdlib 27, frontend 102/102, miVM 34/34, paridad 28/0/0.
+  ⚠️ **Para probarlo en placa hay que REFLASHEAR**: los cuatro builtins son
+  código de la VM-C. Con un firmware viejo, `PacksDemo` se encuentra un opcode
+  que no conoce. El sample está en `samples/PacksDemo.bp` y en el P4 debería
+  listar `SQLite` y `test1` con su contenido.
+- ~~`#411`~~ — ✅ **CERRADA el 15-ago** (`5f9e924`) en lo que era de packs: el
+  SQLite.pack tiene **carpeta propia**, `bpstdlib/sqlite/`, con fuentes, los
+  cuatro nativos versionados (`.npk` + `.mdn` × ARM/RISC-V) y un `LEEME.md` con
+  la cadena entera. El pack se reconstruye igual (1.122.304 B) y **ya se puede
+  rehacer desde un clon limpio**, que antes no.
+  📤 **La limpieza de `notas/` SE SACA DEL HITO** — decisión de Eduardo (15-ago):
+  no es trabajo de packs, es de cierre de versión, y tenerla aquí trababa H11 sin
+  motivo. Vive ahora en «Cierre de V5» (al final de este fichero).
+  *(Lo de abajo es el enunciado original, por si hace falta el contexto.)* Sus palabras: *«todo el tema del SQLite.pack debería tener una
+  carpeta propia»*, *«en notas debería haber las notas y nada más»*, *«las demos
+  (SqlDemo, SqlDemoSd) SÍ deben estar en samples, que son ejemplos»*. Y en esa
+  carpeta va **todo: fuentes, compilados y el pack**.
+  Censo: `bpstdlib/SQLite.bp` se va (es librería de pack, no stdlib — `Stdlib.bp`
+  no la importa ni entra en `Stdlib.pack`, así que mover es barato) ·
+  `samples/Orm.bp` se va · `notas/p4/SQLite.bpbuild` se va · las demos se quedan.
+  Y `notas/` tiene CINCO subcarpetas de experimentos con binarios dentro
+  (`metro-h4`, `p4`, `v5-salto-crudo`, `v5-sqlite-prueba`, `v5-sqlite_edu`).
+  **Por qué importa**: el 13-ago costó tiempo porque con `Orm.bp` en `samples/`
+  la fuente local GANA al pack, y la prueba del ORM-desde-el-pack no probaba nada.
+  Es el mismo patrón que el `/app` tapando a `/lib` del 15-ago.
+  Falta decidir: el NOMBRE de la carpeta, y qué se hace con las cinco de `notas/`
+  (llevan los binarios que fueron la evidencia de H4/H7/H8).
+  ⚠️ Al ejecutarlo: toca rutas de build y hay que reconstruir el `SQLite.pack`
+  al terminar para comprobar que sale igual. En su propia tanda, no a medias.
+- ~~`#365`~~ — ✅ **CERRADA el 15-ago (`88e75a4`), verificada en las dos VMs.**
+  Un módulo con `library` ya puede **arrancar** un pack.
+  **Qué pasaba** (y el enunciado viejo se quedaba corto — no era «`library` +
+  `out:pack` es imposible», era el *arranque*): el `.mod` de un módulo con
+  `library` se llama `com.example.Demo.mod`, así que su entrada en el pack es
+  `com.example.Demo`; el manifest escribía `main=<proj.main>` y `proj.main`
+  nombra el FICHERO FUENTE (`Demo.bp`). Quien arranca busca la entrada LITERAL
+  (`bpvm.c:643` y `ModuleManager.executeRootPack`, las dos igual) y no la
+  encontraba. Poner el cualificado en `main` tampoco valía: ahí se busca el
+  fuente. Un pack **biblioteca** con `library` sí funcionaba.
+  **El arreglo lo decidió Eduardo** («¿y si ponemos `library` dentro del
+  manifest?»). De las dos formas se eligió la que **no toca las VMs**: en vez de
+  un campo `library=` que las dos tuvieran que concatenar —dos implementaciones
+  haciendo la misma cuenta es donde el invariante se rompe—, el manifest lleva
+  ya el nombre CANÓNICO (`main=com.example.Demo`). Las dos VMs siguen buscando
+  literal, **sin una línea de cambio**. El manifest es un fichero generado: puede
+  llevar el nombre resuelto. El dato viaja en el `Cierre`, que es del compilador.
+  🩸 **Y de camino, una trampa muda**: la regla de doble extensión (la de
+  `sqlite.npk.RISCV`) miraba el penúltimo componente del nombre. Con
+  `com.example.Npk.mod` —un módulo llamado `Npk` dentro de una librería— veía
+  `npk` y renombraba la entrada a `com.example.mod` con tipo `npk`, en silencio y
+  dentro de un pack ya grabado; con `Mod`, un error falso. Ahora sólo se mira la
+  doble extensión si la ÚLTIMA no es ya un tipo.
+  **Verificado, no sólo compilado**: `samples/packlib/` (queda en el repo, con el
+  cómo-se-prueba dentro) construye el pack y **las dos VMs dan la misma salida**;
+  frontend 104/104 con 2 tests nuevos, miVM 34/34, paridad 28/0/0, `test-pack` y
+  `test-packres` verdes, y **el `SQLite.pack` real da sus 9 entradas idénticas**
+  con el compilador nuevo. Fat-jar del IDE reconstruido.
+- ~~`PACK_CALL` (= **#383**)~~ — ❌ **CANCELADA el 15-ago, decisión de Eduardo**:
+  *«estos packs los hacemos nosotros, así que el sistema actual está bien»*.
+  Era un builtin genérico para llamar a un pack **sin AOT** («reusar el mecanismo
+  de los `intrinsic`»), y lo que compraba era que **mantener** un pack nativo no
+  exigiera los dos toolchains cruzados: hoy, tocar una línea de `SQLite.bp`
+  obliga a regenerar `SQLite.mdn.ARMV8` y `.RISCV`. Como el único que publica
+  packs nativos es el propio proyecto —que tiene los toolchains—, esa barrera no
+  existe en la práctica.
+  **Lo que se aceptó al cancelarla, dicho claro**: en un pack nativo el AOT **no
+  es una optimización, es un requisito**. Sin `.mdn` para esa arquitectura, sus
+  funciones lanzan. Y el AOT **es mudo por línea de comandos** (ver el LEEME de
+  `bpstdlib/sqlite/`): si no puede generar los `.mdn`, el pack sale más pequeño
+  sin decir nada. Eso deja de ser «algo que PACK_CALL arreglará algún día» y pasa
+  a ser el comportamiento definitivo — por eso conviene que el aviso mudo del AOT
+  se mire alguna vez.
+  **Y lo que costaría si algún día se reabre** (medido el 15-ago, para no
+  repetir el estudio): el `.npk` tiene **UNA sola entrada** (`bp_pack_init`,
+  `NpackBuild.java:44`) y **ninguna tabla de símbolos**, así que haría falta
+  cambiar su formato, **regenerar los `.npk` con los dos toolchains** (el `.elf`
+  intermedio no se guarda), un opcode nuevo en las dos VMs y la llamada genérica
+  en C — que esa sí es barata: un `switch` por aridad con casts a punteros de
+  función de N `int32_t`, sin ensamblador ni libffi, con el mismo límite de 32
+  bits que ya tiene la ABI del AOT.
+  🔧 El comentario del parser que la daba por futura está actualizado
+  (`Parser.java:699`): ese cuerpo-que-lanza es **definitivo**.
+
+### ~~🐛 `#431`~~ — ✅ CERRADA (`8055248`): miVM busca las deps junto al `.mod`, y un módulo que falta se DICE
+
+Descubierto de rebote el 17-ago preparando la prueba de `/sys` (#418), y
+confirmado con un control (`BridgeApp`, un sample viejo, falla igual ⇒ no es del
+sample nuevo).
+
+```sh
+java -jar miVM/target/bpgenvm-1.0.jar bpgenvm-c/samples/SysUse.mod   # ❌ revienta
+cd bpgenvm-c/samples && java -jar ../../miVM/...jar SysUse.mod       # ✅ va
+bpgenvm-c/build/bpgenvm-c bpgenvm-c/samples/SysUse.mod               # ✅ va (VM-C)
+```
+
+Dos cosas mal, y la segunda es la fea:
+
+1. **La política difiere**: la VM-C resuelve las deps en la carpeta del `.mod`
+   (`bpvm_load_mod` → `path_dirname`); miVM las busca en el CWD.
+2. **El fallo NO es un error, es un `FileNotFoundException` con stack trace de
+   Java.** Aunque la política se decidiera distinta a propósito, quedarse sin
+   una dependencia tiene que decirlo como lo dice la VM-C, no volcar la pila.
+
+No afecta al arnés (copia a un WORK dir y ejecuta desde allí) ni al IDE (manda
+rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
 
 ### 🩸 El ORM no funcionaba — encontrado y arreglado el 19-ago al documentarlo
 
@@ -2235,1058 +3288,39 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
 - **Este fichero** deja de ser material de la versión en curso y puede subir con
   ella (ver la cabecera).
 
-### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
+## 🧊 CODE FREEZE V5 — ✅ LEVANTADO (histórico)
 
-- **🔴 [V6, OBLIGATORIO] la pasada de INTERFAZ no resuelve `Core` implícito** — encargo
-  explícito de Eduardo (22-ago): *«de momento hacemos 1 para salir del paso, pero en V6
-  esto tiene que estar solucionado definitivamente»*.
-  📐 **El hecho**, medido al recorrer el checklist de publicación: un módulo que expone un
-  tipo de la stdlib en una **firma pública** sin importar `Core` compila su cuerpo pero
-  **pierde el miembro en la interfaz**:
-  ```
-  -- omitidas en interfaz (1): class Dao.method list: retorno tipo no exportable: <error>
-  ```
-  Y el error de verdad aparece **en el consumidor**, lejos de la causa:
-  `'Dao' no tiene miembro de instancia 'list'`.
-  🔍 **La asimetría es entre las DOS PASADAS**: la completa resuelve `Core` implícito —por
-  eso `ListGets.bp` usa `List` sin importar nada y corre en las seis placas— y la de
-  interfaz no.
-  📅 **Desde cuándo**: el 18-ago, con `#450` («el compilador deja de sintetizar List,
-  SyncList y OwnerList»). Antes `List` la fabricaba el compilador y existía en todas
-  partes; ahora viene de `Core.bp` como cualquier clase. El cambio es correcto; lo que
-  faltó fue que la pasada de interfaz lo acompañara.
-  ✅ **Alcance real, comprobado — por eso NO bloqueó V5**: la stdlib está limpia
-  (`Str.bp` importa `Core` desde `#446`, y el `Orm` lo recibe de ahí; ningún módulo expone
-  un tipo de `Core` sin importarlo). Sólo afecta a un módulo **de usuario** que exponga
-  tipos de stdlib sin importar nada que arrastre `Core`. Y el compilador **avisa en el
-  sitio correcto**, aunque el error salga en otro.
-  ⏭️ **Lo que hay que hacer en V6**: que la pasada de interfaz resuelva los tipos
-  implícitos igual que la completa. Emparenta con el otro bug de esa misma pasada —el de
-  LSP entre interfaces de módulo, `appv1lsp`/`appv2`— que también sale de que
-  `INTERFACE_ONLY` ve menos que la pasada entera. **Son la misma raíz y conviene
-  arreglarlos juntos.**
+> Se levantó al publicar V5 el 22-ago. Se baja aquí el 23-ago porque, arriba, un
+> congelado se lee como una instrucción en vigor. **El criterio que usó sigue
+> siendo bueno** y volverá a valer al cerrar V6: ante algo mejorable, la pregunta
+> no es «¿merece la pena?» sino «¿está roto?».
+>
+> *Título original: «CODE FREEZE V5 — desde el 18-ago-2026».*
 
-- **🧮 [V6] ¿CUÁNTO cuesta una familia nueva (ESP32-C3 / C6) si antes unificamos?** —
-  pregunta de Eduardo (22-ago): *«si tenemos en cuenta que el IDF es el mismo para todas
-  las familias ESP32, en realidad sale muy poco código: casi todo lo hecho para el P4
-  debería servir. Así que meter una familia nueva será el boot y sobre todo trabajo de
-  pruebas.»*
-  ✅ **Ya hay un experimento hecho que lo contesta: el P4**, que fue la última familia
-  añadida. **Reutiliza OCHO ficheros del S3** —incluido el `repl_esp32.c` de 69 KB, el
-  `board_mgr`, `platform`, `fs_lfs`, los blobs, el log, `gpio` y `json_min`— y sólo tiene
-  **2.558 líneas propias**. Pero lo que decide la respuesta es **en qué** se le van:
 
-  | fichero propio del P4 | líneas | ¿lo necesita un C3/C6? |
-  |---|---|---|
-  | `gui_display_dsi.c` | 713 | ❌ no tienen pantalla |
-  | `main.c` (**el boot**) | 623 | ✅ sí |
-  | `pack_p4.c` | 340 | 🔧 lo unifica V6 → un gancho |
-  | `wire_v1_tcp.c` | 321 | ❌ irían por UART, como el S3 |
-  | `blk_sdmmc_p4.c` | 249 | ❌ normalmente no llevan SD |
-  | `bios_p4.c` | 141 | ✅ sí |
-  | `p4_board_id.c` | 91 | ✅ sí |
-  | `aot_Bench.c` / `aot_funcs_p4.c` | 80 | ✅ el registro (31); el resto es un sample |
+**Decisión de Eduardo:** *«A partir de ahora, código congelado, solamente se arreglan
+bugs.»*
 
-  📊 **Cuenta**: **1.283 líneas no aplican** (pantalla + Ethernet + SD). Lo realmente
-  necesario son **≈890 líneas**, y **el grueso es `main.c`: el BOOT** — exactamente lo que
-  Eduardo predijo. Con la partición en dos boots, la mayor parte de esas 623 se va al común
-  y quedan las decenas del arranque de silicio.
-  🎁 **Y un regalo que no estaba contado: el C3 y el C6 son RISC-V, como el P4.** Toda la
-  cadena AOT de `H4` —`.mdn`, `.npk`, relocalización, `-mcmodel=medany`— **ya funciona para
-  ellos**. Nacen con aceleración el primer día, sin escribir una línea de AOT.
-  🎯 **Conclusión, que es la de Eduardo con números detrás**: el código de una familia ESP32
-  nueva es **el boot y poco más**. El coste real se desplaza a **las pruebas** — y por eso
-  el simulador con disfraces y la batería multi-placa dejan de ser comodidad para ser *la*
-  inversión que hace sostenible añadir placas.
+**El criterio, que ya se probó en V4:** la pregunta ante algo que se podría mejorar NO
+es *«¿merece la pena?»* sino **«¿está roto?»**. Si no está roto, se anota para V6 y se
+sigue. Una mejora que entra en la recta final no viene sola: viene con su tanda de
+verificación y con el riesgo de romper algo que ya estaba probado en placa.
 
-- **📈 [V6] «Unificar no es una opción, es el único camino» — la tesis económica, medida**
-  — cierre de Eduardo (22-ago): *«la parte del compilador es muy pequeña; añadiendo la VM
-  crece, pero en el total sigue siendo pequeña. ¿En qué se nos va el tiempo? Cada vez más
-  en los sistemas y en las pruebas. Unificar es el único camino viable para crecer de forma
-  lineal y no exponencial: no es una opción.»*
-  ⚠️ **Primero conté MAL, y Eduardo lo corrigió**: sumé las líneas TOTALES de compilador
-  y VMs, y eso mide el artefacto acumulado, no el esfuerzo — *«no los hemos escrito en esta
-  versión, los hemos ido escribiendo a lo largo de 5. Si queremos ser justos habría que
-  contar las líneas NUEVAS de esta versión. Y lo mismo con todo: el trabajo no es hacerlo
-  todo de nuevo, es ampliar y reformar lo que ya hay.»* Tiene razón, y bien contado la
-  tesis sale REFORZADA.
-  📊 **V5 de verdad: 365 commits desde el tag `v4.0`**, y esto es lo tocado:
+**Qué entra**: bugs. **Qué no entra**: features, refactors, mejoras «de paso», y —lo
+que más se cuela— arreglar de camino algo que se ve feo mientras se toca otra cosa.
 
-  | área | añadidas | borradas |
-  |---|---|---|
-  | compilador | 6.836 | 403 |
-  | VM Java | 398 | 11 |
-  | VM-C (núcleo + sistemas) | 3.802 | 110 |
-  | **sistemas por familia** | **17.389** | **12.146** |
-  | IDE | 2.682 | 255 |
-  | stdlib | 6.973 | 4.075 |
-  | documentación | 10.250 | 2.032 |
+**El plan de cierre, en este orden** (Eduardo, 18-ago):
 
-  ✅ **El reparto real del esfuerzo de V5**: lenguaje (compilador + VM Java) **7.234
-  líneas**; sistemas (por familia + el `src/` de la VM-C, que es casi todo sistemas)
-  **≈21.000**. **Los sistemas son TRES VECES el lenguaje.** Y la documentación sola (10.250)
-  pesa más que el compilador.
-  🔬 **Y el número que confirma lo de «ampliar y reformar»**: en sistemas por familia se
-  añaden 17.389 líneas y se borran **12.146**. Esa proporción no es la de escribir cosas
-  nuevas — es la de REFORMAR. Se tira dos tercios de lo que se pone.
-  📌 **La derivada, que era el argumento**: al añadir una familia nueva, compilador **+0**,
-  VM **+0**, sistemas **≈ +8.000**, y una placa más en cada campaña de pruebas (H13 son dos
-  días por CINCO). El crecimiento no es exponencial por el código: lo es por la **MATRIZ**
-  — cada familia multiplica las combinaciones y cada característica se multiplica por las
-  familias. Hoy 5 imágenes; con el C3 y el C6 previstos, 7.
-  🎯 **Formulado así, la tesis es más fuerte**: no es que el lenguaje sea pequeño, es que
-  **el lenguaje ya no crece y los sistemas sí**. El esfuerzo se ha desplazado sin que nadie
-  lo decidiera. Unificar convierte «añadir una placa» en *una cintura* en vez de *una
-  reimplementación*, y «añadir una característica» en *una vez* en vez de *cinco*.
-  🔗 Y enlaza con la tesis de fiabilidad de la ficha anterior: lo repartido no sólo cuesta
-  más de mantener — **esconde sus bugs hasta que alguien prueba esa placa concreta**. Coste
-  y fiabilidad empujan en la misma dirección.
+1. **Limpieza** — el 19-ago, antes de empezar a documentar. Está en «Cierre de V5».
+2. **H12 — documentar V5.**
+3. **H13 — las pruebas finales.**
+4. **Publicar.**
 
-- **🏆 [V6] POR QUÉ UNIFICAR: la tesis de Eduardo, contrastada con H13** — cierre de las
-  reflexiones del 22-ago: *«¿cuántos problemas de memoria hemos tenido? ¿Y cuántos de FS?
-  Ya nos hemos olvidado: los dos sistemas están funcionando. ¿Y por qué? Primero porque los
-  unificamos en un único sistema, y después de unificarlos los fuimos puliendo hasta que
-  desaparecieron los bugs. Así que **la unificación es el paso previo a tener sistemas
-  fiables**.»*
-  🔬 **Y H13 lo confirma sin que nadie lo buscara.** Clasificando TODO lo encontrado el 21
-  y 22-ago sobre cinco placas:
-
-  | hallazgo | de dónde nace |
-  |---|---|
-  | `#414`: builtins de packs dentro del `#ifdef BPVM_GUI` | packs — **por familia** |
-  | blobs de `IO`/`Math` rancios (sólo la Pico) | generador — **por familia** |
-  | `BAD_ALIGN` grabando packs en STM32 (4 K vs 8 K) | bloque de borrado — **por familia** |
-  | `Core.mod` rancio en `/app` tapando a `/lib` | 3 estrategias de `/lib` — **por familia** |
-  | el S3 sin vista de packs | packs — **por familia** |
-  | 8 samples que no compilaban | lenguaje (`any`→`Object`) |
-  | LSP entre interfaces · `native` en método ignorado | compilador |
-  | 3 errores de documentación | docs |
-  | **memoria** | **CERO** |
-  | **sistema de ficheros** | **CERO** |
-
-  📌 **Dos días machacando cinco placas** con SD, SQLite, ORM, GUI, packs, hilos y GC
-  —incluido `SdCard` escribiendo 32.000 B en 500 trozos y `AotGcRt` forzando colectas— **y
-  ni un fallo de memoria ni de FS**. Los dos subsistemas que en V4 costaron una campaña
-  entera no han dicho una palabra.
-  🎯 **Y los CINCO fallos estructurales vienen todos del mismo sitio: lo que NO está
-  unificado** — packs, arranque, `/lib`. Ninguno del núcleo común.
-  ⚠️ **Con una salvedad honesta**: queda un fallo sin explicar —la placa que dejó de
-  ejecutar nada y sólo se recuperó reparticionando— y **podría ser de FS o de particiones**.
-  Está fichado aparte con lo que hay que medir si repite. No cambia el balance, pero
-  contarlo como cero sería hacer trampa.
-  💡 **Lo que esto añade a la tesis**: no es sólo que unificar permita pulir. Es que
-  **mientras algo está repartido en N copias, los bugs no se manifiestan donde se
-  desarrolla** — aparecen en la placa que nadie probó, meses después. Memoria y FS se
-  pudieron pulir porque, al ser únicos, **cada bug salía en el PC y en las cinco placas a
-  la vez**. Un bug de packs sólo sale en la familia que lo tiene mal, y por eso los cinco de
-  arriba llevaban meses ahí sin que nada fallara.
-
-- **🎭 [V6] EL SIMULADOR CON DISFRACES: que `bpvm-sim` pueda vestirse de cada familia** —
-  nace de la reflexión de Eduardo (22-ago): *«la VM-C es un hardware completamente
-  diferente… podríamos hacer 2 versiones, una más libre, más cercana al PC, y otra más
-  integrada con toda la arquitectura de las placas, y con ésta detectar más problemas de
-  integración. Antes la VM-C servía para validar la VM y el compilador; esto serviría para
-  validar todo el resto. ¿La ganancia? Detectar cosas en los micros es caro en tiempo;
-  validar en el PC es mucho más ágil.»*
-  ✅ **Las dos versiones YA EXISTEN**: `bpgenvm-c` (la libre, valida VM+compilador) y
-  **`bpvm-sim`** (H10), que es *«servidor TCP wire v1 COMPLETO (META + FILES + TERMINAL +
-  gestión de placa + packs) con FS littlefs sobre imagen y la VM-C de verdad ejecutando; el
-  IDE lo trata como una placa más»*. Enlaza la librería entera y ya tiene dos smokes
-  (`boardsim-smoke`, `sim-smoke`) que corren sin placa.
-  🔎 **Entonces la pregunta útil no es si hacerlo, sino POR QUÉ NO CAZÓ LO DE HOY.** Y la
-  respuesta acota el trabajo: **el sim valida el camino común; los bugs de estos dos días
-  estaban en los caminos POR FAMILIA.**
-
-  | hallazgo | ¿lo habría cazado el sim de hoy? |
-  |---|---|
-  | `#414`: builtins de packs dentro de `#ifdef BPVM_GUI` | ❌ el sim se construye **con** GUI |
-  | packs a 4 KB vs los 8 KB del STM32 | ❌ tiene un solo bloque de borrado |
-  | el S3 sin vista de packs | ❌ el sim sí la tiene |
-  | las tres estrategias de `/lib` | ❌ el sim tiene una |
-
-  📐 **Sus parámetros de hoy** (`--mem --psram --flash --fs`) cubren **memoria y
-  almacenamiento, y nada de la personalidad de cada familia**.
-  ⏭️ **La propuesta concreta**: un `--familia=<pico|s3|p4|stm32>` que fije lo que de verdad
-  distingue a cada una y que ya sabemos enumerar porque lo hemos medido estos dos días —
-  **bloque de borrado** (4 K / 8 K), **GUI sí/no**, **estrategia de `/lib`** (instalar si
-  falta / si difiere / vaciar y reembeber), **hay vista de packs o no**, y **AOT
-  disponible** (arm / riscv / ninguno).
-  🎯 **Con eso, los dos bugs de packs de hoy se cazan en el PC en segundos** en vez de en
-  dos días de placa — que es exactamente la ganancia que Eduardo busca. Y encaja con la
-  lección del `#414`: *«lo que no funciona en C tampoco en la Pico» sólo vale si el C que
-  se prueba lleva la MISMA configuración*. El disfraz ES esa configuración.
-  📌 **Y una consecuencia de método**: esto convierte la batería multi-placa en algo que se
-  puede correr **antes** de tocar hardware. La placa seguiría siendo la última palabra —hay
-  cosas que sólo da el silicio— pero dejaría de ser el primer sitio donde se descubren las
-  asimetrías.
-
-- **🥾🥾 [V6] ¿UN boot o DOS?** — pregunta de Eduardo (22-ago): *«tenemos 1 boot, y
-  dependerá del hardware. Si lo dividimos en 2, podemos tener un boot que dependa del
-  hardware pero el 2º, que se ejecuta a continuación, podría ya ser independiente.»*
-  ✅ **La división está EMPEZADA, sólo que sin nombre.** `bpvm_boot_climb()` ya es una
-  escalera **común** (`KERNEL→PARTITIONS→FS→APP`) cuyos peldaños son **callbacks que pone
-  cada familia**. O sea que la SECUENCIA ya es independiente del hardware y lo específico
-  son los ganchos: el «boot 2» existe en embrión.
-  🩸 **Lo que falta es que la FRONTERA tenga nombre — y se nota en que cada familia la
-  dibuja donde le parece:**
-
-  | familia | llama a la escalera desde |
-  |---|---|
-  | Pico | `main.c:1239` |
-  | ESP32 | `board_mgr_esp32.c:313` |
-  | STM32 | `board_mgr_stm32.c:141` |
-
-  📌 **Y el ejemplo que lo demuestra, medido**: el `preinstall` de la Pico —el que puebla
-  `/lib` desde los blobs y AVISA de módulos rancios, el que cazó el `IO.mod` desfasado el
-  21-ago— vive en `pico/main.c:1285`, o sea **DESPUÉS de la escalera pero dentro del código
-  de familia**. No tiene nada de hardware: es poblar un FS y comparar tamaños. Por eso sólo
-  lo tiene la Pico, por eso el STM32 resolvió lo mismo de otra forma (vaciar y reembeber),
-  el ESP32 de una tercera (sólo-si-falta), y **ninguno de los dos avisa**.
-  🎯 **Ahí está el valor de la propuesta**: con un «boot 2» común y declarado, poblar `/lib`
-  sería un peldaño suyo — y las cinco imágenes lo tendrían, o **dirían que no lo traen**.
-  Las tres estrategias distintas de `/lib` y el peldaño de packs que el S3 no tiene son el
-  mismo síntoma: **piezas sin hardware dentro viviendo en el boot de hardware**.
-  ⏭️ **El reparto que sugiere lo medido**:
-  - **Boot 1 (por familia)**: relojes, RAM, RTOS, transporte, acceso a flash. Lo que no
-    existe hasta que el silicio arranca.
-  - **Boot 2 (común)**: particiones → **packs** (hoy sin peldaño) → FS → poblar `/lib` →
-    VM. Con ganchos sólo para *«cómo alcanzo este almacenamiento»*, que es lo único que
-    de verdad cambia (ver la ficha de unificar packs: cabe en una función).
-  🔗 Emparenta con todo lo anterior de hoy: el criterio de capas, el inventario, y el
-  peldaño de packs que falta. **Son la misma reforma vista desde cuatro sitios.**
-
-- **🏛️ [V6] ¿QUÉ INCLUYE el «sistema operativo» común, y dónde encaja cada pieza?** —
-  pregunta de Eduardo (22-ago): *«por encima del HAL BP está sobre todo el sistema
-  operativo: gestión de memoria, FS, etc. Y este es (debe ser) común. Entonces si es
-  común deberíamos saber qué incluye. El sistema de packs es común pero se tiene que
-  montar casi antes que todo lo demás, así que ¿va antes del SO o pertenece al SO?»*
-  Y su encuadre del hito: *«V6 es un paso necesario, un poner orden. Es como V4, que era
-  poner orden en la gestión de RAM y el FS; aquí es más a nivel de arquitectura.»*
-  ✅ **Para los packs la respuesta YA está en el código, y es «pertenece»**:
-  ```c
-  void bpvm_pack_mount(const uint8_t* base, uint32_t size) {
-      s_mounted_base = base; s_mounted_size = size;
-      bpvm_fs_set_fallback(zone_res_stat, zone_res_read, NULL);   /* ← */
-  }
-  ```
-  Montar un pack **registra un respaldo en la fachada de ficheros**. O sea que los packs ya
-  están modelados como **un backend del FS**, igual que littlefs o la SD. No van antes del
-  SO: son parte de él, en la misma capa que el FS, y por debajo sólo consumen particiones.
-  🔑 **Y de ahí sale el criterio general para colocar cualquier pieza**: *la capa de algo es
-  la de aquello que CONSUME*. Los packs consumen particiones (no FS) ⇒ por encima de
-  particiones; y ofrecen ficheros ⇒ proveedor del FS, no algo previo.
-  🩸 **Lo que falta, y es justo el «poner orden»: la escalera NO lo dice.** `bpvm_boot.h`
-  declara `KERNEL(0) → PARTITIONS(1) → FS(2) → APP(3)` y **no hay peldaño para los packs**,
-  así que cada familia los monta donde le parece: la Pico en `pack_pico.c`, el STM32 dentro
-  de su `board_mgr`, el P4 tras su `mmap`… y el S3 **en ninguna parte**.
-  📌 **Esa ausencia es la causa del agujero del S3**, no un descuido de quien lo portó: sin
-  peldaño declarado, olvidarlo no rompe nada al compilar ni al arrancar — sólo aparece el
-  día que alguien intenta grabar un pack en esa placa. Un peldaño obligatorio convierte el
-  olvido en un fallo ruidoso, que es lo que el proyecto ya hace en otros cinco sitios.
-  ⏭️ **El trabajo de V6, entonces, es doble**: (a) **declarar** qué capas hay y qué contiene
-  cada una —el SO común: memoria, FS+backends, packs, planificador…—, y (b) que la escalera
-  de arranque las refleje, de modo que **una capa no provista se DIGA** en vez de faltar en
-  silencio. El mecanismo ya existe: `bpvm_boot` distingue *«capa no provista»* de *«capa
-  fallida»* — hoy nadie usa esa distinción para los packs.
-
-- **🎯 [V6] EL CRITERIO DE CAPAS, y lo que mide contra el código de hoy** — Eduardo,
-  22-ago: *«si dividimos el código por capas, solamente la de hardware, la HAL y la BP HAL
-  tiene sentido que sean diferentes; todo lo demás debe ser independiente del hardware y
-  por lo tanto común»*. Es un criterio **operativo**: se puede contrastar. Esto es el
-  contraste, medido el mismo día.
-  🔴 **Lo que más lo incumple, y con diferencia: el REPL está TRIPLICADO en ~220 KB.**
-
-  | fichero | bytes |
-  |---|---|
-  | `pico/repl_v1.c` | **102.966** |
-  | `esp32/main/repl_esp32.c` | 69.052 |
-  | `stm32/port/stm32_repl.c` | 47.816 |
-  | *común del wire* (`bmgr_wire`+`dbg_wire`+`comm_common`) | *43.159* |
-
-  El **transporte** sí es hardware (UART, USB-CDC); **interpretar `RUN`, `DIR`, `INFO` o
-  `PACK_BURN` no lo es** — el protocolo es el mismo en las cinco imágenes.
-  🧠 **Y esto explica CUATRO hallazgos del 21 y 22-ago que parecían independientes:**
-  `SD_INFO`/`SD_MOUNT` sólo en `pico/repl_v1.c` · el `INFO` del STM32 sin cuatro campos que
-  la Pico sí da · el aviso `/lib … NO es el de esta imagen` sólo en la Pico · el
-  `preinstall` con comprobación, sólo en la Pico.
-  **No son cuatro fallos: son cuatro síntomas del mismo.** Con tres REPL separados, cada
-  mejora aterriza en uno y los otros se quedan atrás — y no se descubre hasta que alguien
-  prueba esa placa concreta. Es [[arreglo-que-no-viaja-entre-familias]] con una causa
-  estructural detrás.
-  🔎 **El resto del contraste**, por si sirve para ordenar el trabajo:
-  - ✅ **Cumplen el criterio** (son cintura y deben serlo): `bios_*`, `board_mgr_*`,
-    `platform_*`, `comm_*`, `fs_lfs_*`, `flash_lock`, `psram`, `neopixel`, `gpio_*`,
-    `gui_display_*`, los `main.c`.
-  - ❌ **No lo cumplen**: los tres REPL (arriba) · `json_min.c` (**3 copias idénticas**) ·
-    el log (núcleo común 8.937 B **+** 11.913 de la Pico, 5.216 del S3, 2.553 del STM32).
-  - 🟡 **Ni una cosa ni otra: los blobs.** La Pico tiene **16 ficheros `*_mod.c`** con la
-    stdlib embebida; el ESP32 y el STM32 la meten en **UNO** (`esp32_mods.c`,
-    `stm32_mods.c`). Mismo dato, tres formas — y de ahí sale que la Pico "tenga 32
-    ficheros" frente a 11. No es código: es la misma stdlib empaquetada distinto.
-  ⏭️ **Y el orden que sugiere la medida**: `json_min` primero (gratis, los tres ficheros ya
-  son idénticos), luego el REPL (donde está el 80 % del problema y el 100 % de las
-  asimetrías que nos han mordido), y el log al hilo del REPL, porque buena parte de lo que
-  cada familia mete ahí es diagnóstico del propio REPL.
-
-- **📊 [V6] EL INVENTARIO de lo unificado y lo que falta** — medido el 22-ago, a raíz de la
-  observación de Eduardo: *«poco a poco vamos unificando: ya tenemos particiones comunes,
-  variables de entorno (más o menos), logs, y ahora packs. Y además la gestión de RAM y el
-  FS.»* Es cierto; esto lo pone en números para que la unificación de V6 se planifique
-  sobre datos y no sobre impresión.
-  📐 **El reparto de hoy**: **57 ficheros `.c` en `src/`** (común) frente a 32 en `pico/`,
-  11 en `esp32/main`, 9 en `esp32p4/main` y 11 en `stm32/port`.
-  ✅ **Ya común de verdad**: particiones (`bpvm_part`), ENV (`bpvm_env`), arranque
-  escalonado (`bpvm_boot`), núcleo de packs (`bpvm_pack`), fachada de ficheros
-  (`fs_facade`), heap y GC, tabla BIOS.
-  🔎 **Lo que sigue duplicado, por orden de facilidad:**
-  1. **`json_min.c` — TRES COPIAS BYTE A BYTE IDÉNTICAS** (8.688 B en `pico/`,
-     `esp32/main/` y `stm32/port/`). Es el parser JSON del wire y **no toca hardware**.
-     Duplicación pura: subirlo a `src/` es la unificación más barata que queda y no tiene
-     riesgo, porque los tres ficheros ya son el mismo.
-  2. **El log está «más o menos», como el ENV**: hay núcleo común (`src/bpvm_log.c`,
-     8.937 B) pero cada familia añade el suyo — y **el de la Pico (11.913 B) es MÁS GRANDE
-     que el común**. Merece mirar qué hay ahí que no sea de hardware.
-  3. **Packs**: ver la ficha de la unificación — la diferencia real cabe en una función.
-  4. `fs_lfs` y `board_mgr`: motor común + cintura por familia. **Esto es lo correcto**, no
-     hay nada que unificar; se listan para que no se confundan con los de arriba.
-  📌 **Y el criterio que sale de esto**: la pregunta no es *«¿está duplicado?»* sino
-  *«¿lo duplicado depende del hardware?»*. `board_mgr` duplicado está bien; `json_min`
-  triplicado no. Sin esa distinción, un censo de duplicados manda a rehacer cinturas que
-  están bien.
-
-- **🏗️ [V6] UNIFICAR el sistema de packs: implementación común + cintura por hardware** —
-  decisión de Eduardo (22-ago), al dejar el S3 sin packs en V5: *«yo unificaría el
-  sistema, el mismo para todas las familias, con las particularidades de hardware de cada
-  una. O sea: un sistema común, una implementación común, pero soporte a las diferencias
-  particulares de cada hardware.»*
-  📐 **Y el reparto sale MUY favorable, medido el 22-ago.** Lo único que difiere de verdad
-  entre las cuatro es **cómo se consigue un puntero legible a la zona**:
-
-  | familia | cómo obtiene el puntero |
-  |---|---|
-  | STM32 | `FLASH_BASE + pp->offset` — aritmética; la flash interna ya está mapeada |
-  | RP2350 | `(const uint8_t*) base` — aritmética; XIP mapeado por hardware |
-  | ESP32-P4 | `s_map_inst` de un **mmap explícito** — *«antes del mapeo no existe»* |
-  | ESP32-S3 | **nada**: no existe `pack_s3.c` (ver la ficha del agujero) |
-
-  ✅ **Todo lo demás YA es común y está probado en placa**: `bpvm_pack_mount()`, el
-  recorrido de la zona, la búsqueda de módulos y `.mdn`, y el grabado entero por la cintura
-  `bpvm_pack_flash_t` (erase/program/erase_block). O sea que **la diferencia cabe en una
-  función por familia**: `mapear(offset, size) → const uint8_t*`.
-  ⏭️ **La forma que sugiere el propio código**: un paso común que, con el layout del boot
-  en la mano, pida el puntero a esa función y llame a `bpvm_pack_mount`. Las dos familias
-  de aritmética la implementan en una línea; el ESP32 con su `mmap`; y **quien no la
-  implemente lo dice**, en vez de quedarse en silencio como el S3 hoy.
-  🎯 **Por qué esto vale más que arreglar el S3 a mano**: es la tercera vez que el mismo
-  agujero aparece en una familia distinta (`#327` en la Pico, y hoy el S3). Cablearlo a
-  mano una cuarta vez sólo mueve el hueco. Emparenta directamente con `#378` (que cada
-  micro DIGA lo que tiene) y con la unificación que dejó el censo `#427`.
-
-- **[VM] al fallar una dependencia, DECIR DE DÓNDE salió el módulo — por CRC** *(idea de
-  Eduardo, 22-ago, y él mismo la sitúa en V6)*.
-  🩸 **El problema, vivido el 22-ago**: el Nucleo dio
-  `exit 11 (lib 'Core' presente pero no exporta 'Core.__cls_new_List'; ¿version vieja?)`
-  **con `/lib` recién reembebido**. La causa era un `Core.mod` rancio en **`/app`**, y el
-  mensaje no lo decía porque **sólo nombra el módulo, no el fichero**. Eduardo: *«debe
-  indicar el path exacto, ya que la mayoría de las veces es porque hay más de un módulo»*.
-  Costó media hora con el código delante; a un usuario no le sale.
-  📐 **Por qué hoy no puede decirlo**: `bpvm_module_t` guarda `library` y `name` pero
-  **no la ruta**. El cargador SÍ la conoce y la registra
-  (`bpvm.c:512`, `[bpvm-c] dep 'Core' -> /lib/Core.mod`), pero eso va al log —que hay que
-  tener encendido— y no al mensaje que ve el usuario.
-  💡 **La idea de Eduardo, y por qué es mejor que guardar la ruta**: en vez de arrastrar
-  una ruta por módulo, **guardar su CRC**; y cuando ocurra el error, recorrer los sitios
-  donde pudo estar, calcular el CRC de cada candidato y decir cuál coincide.
-  ✅ **Cuesta CERO en régimen normal**, que es lo que la hace buena: la búsqueda sólo
-  ocurre cuando ya ha fallado algo. Y en memoria son **4 bytes por módulo** en vez de una
-  ruta: con `BPVM_MAX_MODULES = 16`, **64 B frente a ~1 KB**. En un micro eso no es un
-  detalle.
-  🔎 **Comprobado que las piezas están**: `bpvm_crc32` ya existe en la VM-C
-  (`include/crc32.h`, y `crc32.c` se enlaza en las cinco imágenes). El `.mod` no lleva CRC
-  en su cabecera, así que se calcularía sobre los bytes al cargar — que el cargador ya lee
-  enteros.
-  ⏭️ **Y el remate que lo hace de verdad útil**: si ADEMÁS encuentra un segundo fichero con
-  el mismo nombre y distinto CRC, decirlo — *«hay otro `Core.mod` en `/app` que NO es
-  éste»*. Ese es el mensaje que habría resuelto la mañana del 22-ago en un vistazo, porque
-  nombra las dos copias y no sólo la que se cargó.
-
-### 🎯 V6/HITO-AOT — ampliar la cobertura del AOT, poco a poco (encargo de Eduardo, 21-ago)
-
-> *«Creamos un hito AOT, donde solucionamos esto, implementamos double y mejoramos el
-> soporte de statements que ahora no entran, al menos los más sencillos. Así poco a poco
-> vamos ampliando el soporte AOT.»*
-
-El criterio es suyo y conviene respetarlo: **ampliar por tandas**, no de un salto.
-
-**1. `native` en un MÉTODO — arreglarlo, no sólo avisar.** Hoy se ignora en silencio (ver
-la ficha aparte). Son dos cosas y en este orden: que **AVISE** —barato, y convierte una
-mentira muda en una línea— y luego **abrir el barrido** de `AotCEmitter.java:259` a los
-métodos de las clases, pasando el objeto como primer parámetro. Ojo: `MemberAccessExpr`
-ya está soportado, así que la parte que parecía difícil (`this`) puede que no lo sea.
-
-**2. `double`.** Diseño hecho en `notas/V6_IDEAS.md` §double, con la ganancia estimada
-sobre datos reales. Es la ficha `#426`.
-⚠️ Con el matiz que ya está escrito en `AOT_LIMITES.md` y no hay que perder: la FPU de
-Cortex-M33 es de precisión **simple**, así que un `double` no toca la FPU en dos de las
-tres familias. Soportarlo es correcto; **prometer velocidad con él, no**.
-
-**3. Los statements sencillos.** Del censo de `AOT_LIMITES.md`, por relación
-esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),
-**`do…loop`** (un `while` al revés), **literales de array**. Las cuatro son azúcar y
-ninguna estaba documentada como límite hasta el censo del 21-ago.
-
-⏭️ **Y una cuarta que propongo, porque si no las otras tres se pudren**: un **test que
-recorra los nodos del AST** y compruebe cuáles pasan por el AOT. Mientras el emisor tenga
-rechazos genéricos (`statement no soportado`), cualquier lista escrita a mano se queda
-rancia sola — el propio `AOT_LIMITES.md` nombraba cinco cuando eran veinticuatro. Con el
-test, la lista se mide en cada batería en vez de recordarse.
-
-> Decisión de Eduardo (16-ago) al sacar `#426`: lo que no es de esta versión no
-> debe engordar su lista. Se quedan escritas aquí para no perderlas.
-
-*(Movidas aquí el 17-ago por decisión de Eduardo: la lista de pendientes de V5
-se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
-
-
-- **[IDE] enseñar el `durationMs` que la placa YA manda** *(salido el 21-ago midiendo
-  `#408`; aplazado a V6 porque es mejora, no bug — code freeze)*.
-  📐 **El hecho**: `SAVE` se cronometra en el firmware y devuelve `durationMs` en el
-  `SAVE_REPLY` (`pico/repl_v1.c:929-943`). El IDE responde «FS guardado en flash» y
-  **tira el número**. O sea que la medida que pedía `#408` ya existe, ya viaja por el
-  wire, y sólo falta imprimirla.
-  ⏭️ Lo barato: que la consola diga «FS guardado en flash (1.234 ms)». Y de paso mirar
-  qué otros verbos ya devuelven tiempos que nadie enseña — si `SAVE` lo hacía sin que
-  lo supiéramos, puede haber más.
-
-- **[IDE+device] NO copiar dependencias que el dispositivo YA TIENE — y que lo diga él**
-  *(idea de Eduardo, 20-ago. Aplazada a V6: es mejora, no bug.)*
-  🩸 **El problema, con nombres**: hoy el IDE sube al dispositivo las dependencias del
-  programa en cada Run. Entre ellas van `Json` (21 KB) y `Gui` (43 KB), que son las dos
-  más grandes de la stdlib. Eduardo: *«que Json y Gui se carguen cuando se ejecuta un
-  programa no es del todo correcto porque son grandes y consumirán RAM»*.
-  📐 **Y no es sólo transferencia: es RAM.** Un módulo que acaba en el sistema de ficheros
-  se carga ENTERO en memoria para ejecutarse. Uno que vive en un pack se ejecuta **en el
-  sitio**, desde la flash — a RAM sólo van su ext-table y su bloque de datos
-  (`bpvm_loader_load_xip`, y la VM lo canta: *«cargado XIP desde pack (codigo en
-  sitio)»*). O sea que **el mismo módulo cuesta RAM desde el FS y casi nada desde el
-  pack**. Con `Stdlib.pack` grabado, `Gui` deja de costar 43 KB de RAM.
-  ⏭️ **El diseño, afinado por Eduardo (20-ago), y es la clave**: el dispositivo no debe
-  contestar con un inventario. Debe **buscar la dependencia EXACTAMENTE COMO LO HACE EL
-  CARGADOR DE MÓDULOS** y contestar una sola cosa: hace falta o no hace falta.
-  *«Si la dependencia está en cualquier sitio donde el cargador la encuentre, y es igual o
-  más antigua que la que hay grabada, no se carga. Así que da igual que el módulo esté en
-  `/app`, `/lib`, `/sys` o en un pack.»*
-  📐 **Por qué esto es lo correcto y no un detalle**: cualquier otra respuesta obliga al
-  IDE a reimplementar la resolución de imports, y entonces hay **dos buscadores** que se
-  desincronizan en cuanto uno cambie. Es el patrón que ya ha mordido en este proyecto
-  varias veces (una copia privada que no se enteró de que el común creció). Con esto hay
-  UN algoritmo, el del cargador, y el IDE sólo pregunta.
-  ✅ **Y la mitad ya está construida.** `PicoExplorer.putIfChanged` YA le pide al
-  dispositivo el CRC del fichero y **se salta el PUT si coincide** — con su respaldo para
-  firmware viejo (`#110`/`#111`) y una consulta por fichero desde `#398`. Lo que le falta
-  es justo lo que señala Eduardo: hoy pregunta **por la ruta destino** (`/app/Gui.mod`), no
-  *«¿lo encontraría el cargador en algún sitio?»*. Si `Gui` vive en un pack o en `/lib`, la
-  pregunta por `/app` dice «no está» y se sube igual.
-  📌 **Con qué se compara: CRC, no fecha.** Un `.mod` **no lleva marca de tiempo**, así que
-  «más antigua» no se puede medir tal cual; y comparar por tamaño ya falló una vez —el
-  *skip-if-same-size* de `#110` servía `.mod` rancios—. El mecanismo que funciona y que ya
-  está en pie es el CRC, que detecta un rancio venga de donde venga. En la práctica la
-  regla queda: **mismo CRC ⇒ no se sube**; distinto ⇒ se sube, porque el IDE es la fuente
-  de verdad de lo que quieres ejecutar.
-  ⏭️ **Lo que hay que construir, entonces, es poco:**
-  1. un verbo de wire que reciba el nombre del módulo y su CRC y conteste
-     **sí/no** resolviendo con el cargador (FS por sus rutas + packs montados);
-  2. que `putIfChanged` pregunte eso en vez de preguntar por la ruta destino.
-  📌 Encaja con la stdlib preinstalada: si la placa trae `Stdlib.pack`, lo normal pasa a
-  ser **no copiar nada** y subir sólo el programa.
-  `Stdlib.pack`, lo normal pasa a ser **no copiar nada** y subir sólo el programa.
-
-- **[host] PROBAR BASES DE DATOS SIN PLACA — packs en el PC** *(aplazada a V6 el 19-ago.
-  Eduardo: «me parece que se sale de V5, habra que dejarlo para V6»)*.
-  🩸 **El problema**: la VM-C que usa la gente no puede correr BD — dice *«falta el
-  codigo nativo del pack 'SQLI'»*—, asi que hace falta PLACA para probar la mitad de lo
-  que V5 añade. Choca con «depura en el PC, despliega en el micro». Los demos si corren,
-  pero con `sqldemo.exe`, un binario de pruebas con SQLite enlazado dentro.
-  📐 **Lo que ya esta y lo que falta**, medido: el formato de pack y el relocalizador son
-  PORTABLES (`src/bpvm_pack.c`, `src/bpvm_npack.c`, en el nucleo comun). Falta:
-  1. un `.npk` de **x86-64** — o sea pasar el AOT y el relocalizador por una TERCERA
-     arquitectura, con su ABI y sus banderas (lo que costo H4 y H7 en RISC-V);
-  2. y **ejecutar codigo realojado en el PC**: en la placa el pack corre desde flash
-     mapeada (XIP); aqui habria que reservar memoria ejecutable y saltar a ella. Es una
-     pieza NUEVA y especifica del sistema operativo, no un ajuste.
-  💡 **El camino que quiza salga mas barato**: que cargue packs el **micro simulado del
-  IDE** (V4/H10, `bpvm-sim`), que ya habla wire v1 completo. El usuario probaria sin
-  placa y sin binario especial, y de paso el simulador ganaria en fidelidad.
-  📌 Mientras tanto, `docs/BASEDATOS.md` tiene que DECIR que hoy la prueba es en placa.
-
-- **[lenguaje] ¿quiere `Map` captadores tipados para sus VALORES?** — cola de los
-  captadores de `List`, que se hicieron en V5 (ver «CERRADAS EN V5»). `SyncList` y
-  `OwnerList` los heredan gratis por extender `Core.List`; `Map` no, y su caso es
-  distinto porque la clave también podría quererlos. **Sin decidir.**
-
-- **[wire] el verbo `RESET` no llega con un RUN vivo** *(era `#452`; aplazada a V6 el 18-ago. Eduardo: «ahora sabemos apañarnos y a los usuarios no les afecta» — el rodeo es `kill` + `reset`, y está documentado cara al usuario en `PENDIENTES.md` L15.)*
-  Salió el 18-ago probando `#439`. Durante una ejecución el firmware sólo atiende
-  `HELLO` y `KILL`, y a todo lo demás contesta `BUSY`
-  (`esp32/main/repl_esp32.c:915`, y el equivalente en las otras familias); el IDE
-  refleja eso apagando el botón (`PicoExplorer.java:2180`). El comentario del código
-  dice que la intención era *«que la placa nunca quede sorda»* — y casi lo consigue,
-  pero deja fuera justo el verbo que hace falta cuando lo que quieres no es recuperar el
-  control, sino **releer lo que acaba de pasar**.
-  🩸 **Por qué importa más de lo que parece, y es por `#439`**: con la placa colgada, si
-  no puedes mandar `RESET` por el wire, la única salida es el RST físico — que en ESP32
-  es `power-on` y **borra la RAM del log**. O sea que el mecanismo funciona y aun así no
-  lo tienes disponible en el escenario para el que se escribió. Hoy se sortea con
-  `kill` + `reset`, que basta porque el `kill` sí llega.
-  📌 **ES DE LA IMAGEN, NO DEL IDE.** El botón apagado es sólo el reflejo: tocar el IDE
-  a solas encendería un botón que la placa contesta con `BUSY`. El filtro está en el
-  firmware y son **CUATRO** sitios, censados por la primitiva (el mensaje) y no por el
-  nombre — `pico/repl_v1.c:1406` · `esp32/main/repl_esp32.c:915` (S3 **y** P4, comparten
-  REPL) · `stm32/port/stm32_repl.c:467` · y **`tools/bpvm_sim.c:679`**, que es el que se
-  escapa si uno cuenta «familias»: el simulador del IDE. Un doble que se comporte
-  distinto del original es una trampa, así que va en el mismo lote.
-  ⏭️ Meter `RESET` en la lista blanca de ese mismo `if`, en los cuatro, y quitar el
-  `&& enabled` de `btnReset` (`PicoExplorer.java:2180`). El `RESET_REPLY` ya se manda
-  antes de reiniciar, así que eso no cambia.
-  ⚠️ **El cuidado real está en la Pico**: su `handle_reset` hace `log_flush()` antes de
-  reiniciar (`repl_v1.c:1229`), y permitirlo durante un RUN significa **escribir flash
-  con la VM en marcha** — el peligro clásico de ejecutar desde XIP. La cintura del log
-  post-mortem ya lo resuelve, pero hay que comprobarlo, no suponerlo. Las de ESP32 no
-  hacen flush (van directas a `esp_restart()`), así que ahí no aplica.
-
-- **[AOT] el `.mdn` no recuerda su RECETA — la huella de los FLAGS** *(mitad abierta de
-  `#441`; aplazada a V6 el 18-ago. Eduardo: «ahora no vamos a modificar formatos». La
-  otra mitad, la arquitectura, sí entró en V5: `9fcff33`.)*
-  🩸 **El caso real que la motivó, el 17-ago**: añadir `-mcmodel=medany` dejó malos
-  **todos** los `.mdn` de RISC-V ya generados. Misma arquitectura, misma fecha, código
-  inservible — o sea que ni el gate de `arch` ni la comparación de fechas lo ven. Un
-  `.mdn` generado con otra receta se sube tan tranquilo y lo que falla es la placa.
-  📐 **Qué haría falta**: sellar en el `.mdn` una huella de la receta (un hash de los
-  flags de compilación) y compararla al subirlo, igual que ahora se compara `arch`.
-  🔴 **Por qué no es un añadido sino un cambio de FORMATO**: la cabecera no tiene campo
-  libre — `magic·version·abi_version·code_size·sym_count·arch`, y es **little-endian**
-  (al revés que el `.mod`). Meter la huella obliga a subir `version` y a tocar el lector
-  del IDE y el de las cuatro imágenes a la vez. Es la clase de cambio que se hace al
-  principio de una versión, no al cerrarla.
-  💡 **Mientras tanto, lo que hay**: si se vuelven a cambiar los flags de AOT de una
-  familia, hay que regenerar sus `.mdn` A MANO y saberlo — no hay red. Conviene
-  mencionarlo en el commit que toque `AotBuild`.
-
-- **[P4] los 32 MB de flash y el XIP de los packs** — aplazado a V6 el 18-ago
-  (Eduardo: *«es demasiado arriesgado»*). El diagnóstico está CERRADO, lo que
-  queda es la obra:
-  📐 **El hecho**: el caché de flash del P4 direcciona a 24 bits, así que
-  `spi_flash_mmap` rechaza (`ESP_ERR_INVALID_ARG`) toda dirección o tramo por
-  encima de **16 MB**. Y el XIP de los packs vive de ese mapeo. Medido en placa
-  con DOS repartos: falla por tamaño (19 MB desde 13,3) y por dirección
-  (empezando en 25,6). Antes iba porque con `bpdata` de 10 MB todo caía debajo.
-  🚫 Saltárselo exige `BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH`, que Espressif
-  marca EXPERIMENTAL (*«can't use on all flash chips stable»*). Descartado.
-  🔑 **La pieza que lo hace resoluble**: el FS **no mapea** — lee con
-  `esp_partition_read`. O sea que el FS puede vivir arriba y sólo los packs
-  necesitan estar abajo.
-  ⏭️ **Dos caminos, ninguno barato:**
-  **A.** Invertir el orden en el común (`bpvm_part_layout_from_sizes`): packs
-  primero con tamaño ajustable, FS al final llevándose el resto. Es el modelo
-  correcto —*dices cuánto para packs, el FS se queda lo demás*— pero el orden lo
-  comparten las TRES familias: el FS se mueve en todas ⇒ **reformatear las tres**.
-  **B.** Dar al P4 una segunda partición (`bppacks` abajo, `bpdata` arriba sólo
-  FS). No toca a las otras, pero el firmware busca UNA partición y la reparte él:
-  hay que enseñarle a usar dos.
-  ✅ **PROBADO EN PLACA el 18-ago y DECIDIDO: se vuelve a 16 MB en V5.** Eduardo:
-  *«se prueba y se decide… tampoco cuesta tanto probarlo»* — y con razón, porque yo
-  ya había fallado una vez con esto (dije que era el TAMAÑO y su prueba con 6.528 KB
-  lo desmintió). Así que en vez de discutir con el fuente del IDF, se instrumentó el
-  arranque para que lo dijera la placa, y lo dijo:
-  ```
-  pack: fisica 0x19a0000..0x2000000 (26240..32768 KB) | limite del cache 24 bits
-        = 0x1000000 (16384 KB)  <<< EMPIEZA POR ENCIMA  <<< ACABA POR ENCIMA
-  ```
-  Los dos extremos fuera. Con `bpdata` a 32 MB los packs **no mapean nunca**, así que
-  el P4 se quedaría sin packs ni SQLite (lo que cerró H7) — y por el criterio del
-  propio Eduardo (*«si funciona se queda así»*) se revierte.
-  📌 Lo que SÍ se queda: la línea de diagnóstico. Cualquiera que mueva las
-  particiones verá al arrancar si se ha salido del rango mapeable, en vez de un
-  `err=258` que no explica nada.
-  ⚠️ Al volver a 16 MB, **el ENV tiene que caber**: si quedó en FS=20.000 KB, el
-  arranque se queda DEGRADADO (lo dice, no es un ladrillo). El valor que funcionaba
-  era **FS = 7.344 KB**, que deja 2.800 para packs.
-
-
-- **[P4] el silicio nuevo (ESP32-P4X) pedirá lo suyo** — aviso de Eduardo (20-ago):
-  *«las placas que tenemos con P4 son ESP32P4, y hay algún problema eléctrico así que
-  funcionan a 360 MHz en vez de los 400 previstos. Hay una versión ESP32P4X que será la
-  buena. Pediré una placa con el micro actualizado y tendremos que hacer una imagen para
-  él, porque algunas opciones de IDF cambian de un micro a otro.»*
-  📐 **Lo que hay hoy, leído del `sdkconfig` y no supuesto:**
-  - `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=360`, con el de **400 explícitamente desactivado**.
-  - `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` y `CONFIG_ESP32P4_REV_MIN_0=y`, **las dos en
-    `sdkconfig.defaults`** — o sea versionadas y deliberadas: la imagen de hoy está
-    clavada a silicio *anterior a la v3*.
-  - `CONFIG_ESP32P4_REV_MAX_FULL=199`: acepta de la revisión 0.0 a la 1.99.
-  ⛔ **Son DOS imágenes por narices, y lo dice el propio IDF en la primera línea del
-  Kconfig del P4:** *«Support of ESP32-P4 rev. <3.0 and >=3.0 is mutually exclusive»*, y la
-  ayuda del interruptor remata: *«huge hardware difference… not compatible»*. Verificado el
-  20-ago en `esp_hw_support/port/esp32p4/Kconfig.hw_support` de la v6.0.1.
-  📐 **Qué es de verdad `ESP32P4_SELECTS_REV_LESS_V3`** — no un rango que se pueda
-  ensanchar, sino un interruptor que parte el IDF en dos mitades excluyentes:
-  - con `=y` el mínimo sólo puede ser **0.0 / 0.1 / 1.0**; con `=n`, sólo **3.0 / 3.1**.
-    No hay ajuste que cubra los dos silicios.
-  - el `REV_MAX_FULL` **no se elige: sale de él** (199 con `=y`, 399 con `=n`). El 199 que
-    tenemos es consecuencia, no decisión — por ahí no se toca.
-  - y arrastra código real, no sólo la comprobación de arranque: **el reloj del propio
-    bootloader** (90 MHz con `=y`, 100 con `=n`), el Key Manager del cifrado de flash, el
-    VBAT y el apagado de CPU en light sleep.
-  🔑 **El detalle que ahorra trabajo: el DEFAULT del IDF es `n`** (mínimo 3.1). O sea que
-  la imagen del P4X no hay que «configurarla»: se consigue **quitando** de
-  `sdkconfig.defaults` las dos líneas que hoy la clavan al silicio viejo y dejando mandar
-  al default. Lo que está personalizado es la imagen de AHORA, no la futura.
-  ⚠️ **La trampa, que ya mordió:** `sdkconfig.defaults` **sólo siembra el `sdkconfig` la
-  primera vez**. Cambiar los defaults sin borrar el `sdkconfig` que ya existe deja el
-  firmware EXACTAMENTE IGUAL, y no lo avisa nadie — pasó el 18-ago.
-  🔑 **Por qué 360 y no 400 — confirmado por Eduardo (20-ago):** no es una cifra tímida
-  ni un resto de nada, es un RODEO a un defecto del silicio. A 400 MHz estas placas dan
-  **problemas de consumo y no funcionan bien**; a 360 van finas.
-  ⛔ Con lo cual **subirlas a 400 no es una mejora pendiente: es volver a romperlas.**
-  Queda escrito aquí porque el `sdkconfig` sólo dice *360* y un 400 desactivado y sin
-  explicación al lado invita a que alguien lo «arregle» de buena fe.
-  ✅ **Lo que el P4X cambia**: allí está corregido y SÍ puede trabajar a 400. Así que las
-  dos imágenes se diferenciarán en TRES cosas, no en una: la revisión de silicio, la
-  frecuencia (360 vs 400) y todo lo que el interruptor arrastra por debajo.
-  🧭 **Y la política: se MANTIENEN LAS DOS.** Eduardo, 20-ago: *«aunque el P4 queda
-  obsoleto, todavía quedan muchas placas que se están comercializando actualmente; en
-  cambio del P4X, que será el bueno, hoy apenas hay placas.»* O sea que esto **no es una
-  migración** con fecha de caducidad: durante V6 el silicio viejo es el que la gente
-  tiene y compra, y el nuevo el que casi nadie ha visto. La imagen del P4X se añade, no
-  sustituye.
-  📦 **Consecuencia para la distribución**: el ZIP pasará a llevar **dos imágenes de P4**,
-  y ahí el nombre es lo único que separa al usuario de flashear la que no es. Hay
-  precedente de que un artefacto se cuele en la placa equivocada, así que los nombres
-  tienen que decir el silicio, no la familia.
-  🛡️ **La red ya existe, y es del propio IDF — verificado el 20-ago** en
-  `bootloader_support/src/bootloader_common_loader.c`: el bootloader compara la revisión
-  grabada en efuses contra la de la imagen y **rechaza en las DOS direcciones**, con el
-  mensaje `chip revision check failed. Required >= vX.Y / <= vX.Y, found vX.Y`. La
-  imagen vieja en un P4X falla por el máximo; la del P4X en un P4 viejo, por el mínimo.
-  ✅ Con lo cual **la imagen equivocada no arranca a medias ni corrompe nada: se planta y
-  dice por qué**. No hay que construir ninguna comprobación propia — basta con nombrarlas
-  bien y decirlo en la documentación.
-  📌 **Y en la FORMA**, un matiz que conviene no confundir: `esp32/` y `esp32p4/` son
-  carpetas distintas porque son *targets* distintos del IDF; el P4 y el P4X, en cambio,
-  son **el MISMO target** y lo que los separa es este interruptor. Aun así se resuelve
-  igual —otra carpeta de build con su `sdkconfig.defaults`—, nunca con macros repartidas
-  por el código: aquí cambia el SILICIO. Lo que cambia por placa sigue yendo al ENV.
-
-- **[IDE] el árbol de ficheros, por COLOR según el tipo** — encargo de Eduardo
-  (18-ago). Cada extensión conocida con su color (`.mod`, `.mdn`, `.fon`,
-  `.bin`…), y **el ROJO queda RESERVADO** para ficheros con algún problema.
-  Esa reserva es lo importante del encargo: si el rojo se gasta en un tipo,
-  luego no queda color para lo que de verdad hay que mirar.
-  📍 Dónde: `PicoExplorer.java:200`, el `DefaultTreeCellRenderer` del árbol, que
-  hoy ya pone el label y el icono y **no usa color para nada** — el rojo está
-  libre, así que la reserva se puede respetar desde el primer día.
-  📐 Lo que hace falta decidir al hacerlo (no ahora): qué cuenta como
-  *«problema»* para ganarse el rojo. Candidatos que el IDE **ya sabe** hoy y hoy
-  no enseña en el árbol: un `.mdn` cuya arquitectura no es la de la placa
-  (`#441`), un `.mod` de ABI incompatible (el gate de `#284`), un `/lib` rancio
-  (el chivato de `#422`) y un listado truncado (`#425`, que hoy avisa aparte).
-  Ojo con el daltonismo: el color como ÚNICO canal deja fuera a mucha gente —
-  conviene que el rojo lleve además icono o marca.
-
-
-- `#434` — **desacoplar los eventos del lazo de LVGL** (idea de Eduardo, 17-ago,
-  al cerrar `#424`). Hoy un clic tiene que ATRAVESAR el lazo de BP para llegar a
-  su handler: el upcall lo encola y sólo se drena entre quanta, y el único punto
-  de quantum es la vuelta de `Gui.run()`. O sea que **el evento no avanza
-  mientras el bombeo duerme**. El mecanismo es IDÉNTICO en las dos familias; lo
-  que cambia es el grano del sueño — 10 ms en el P4 (`CONFIG_FREERTOS_HZ=100`)
-  contra 1 ms en el STM32 (`__WFI` + SysTick). Un factor diez sobre la misma
-  forma. Desacoplarlos quita la dependencia del ritmo del lazo en TODAS las
-  familias, en vez de ajustar un número por placa.
-  Antes de diseñar nada, dos medidas: **instrumentar el STM32 igual que el P4**
-  (sus cifras están leídas del código, no medidas) y cronometrar el camino
-  clic → handler por separado del camino invalidar → pintar. Palancas conocidas
-  y ya descartadas como parche: el tope del lazo (hecho, 50→10) y el periodo del
-  `indev` de LVGL (40→10 ms; costaría pasar de ~3 % a ~12-15 % de un núcleo).
-  Emparenta con [[#432]] en lo de fondo: el reparto común/hardware de V6.
-
-- `#432` — **¿dónde debe vivir la tabla de handles, y de qué tamaño?** Las dos
-  preguntas que dejó `#430` (Eduardo, 17-ago). **Están acopladas: la segunda
-  depende de la primera**, y conviene decidirlas juntas.
-
-  **(a) ¿Se queda en el malloc de plataforma (SRAM) o se muda a la zona del
-  heap?** Hoy sale de `bpvm_realloc` → SRAM, mientras los objetos que indexa
-  viven en PSRAM: la tabla escala con el número de objetos, pero se paga de un
-  presupuesto que no escala con ellos. Mudarla parece lo coherente, pero hay
-  tres cosas que mirar antes:
-  - ⚠️ **Es la estructura MÁS CALIENTE de la VM**: cada `bpref_deref` toca
-    `handle_addr[idx]`. Moverla a PSRAM la mete en la memoria lenta. Esto se
-    **mide** (derefs/segundo antes y después) — es exactamente el tipo de
-    mejora que sale cara sin avisar. Cabe una tercera vía: `handle_gen` (frío,
-    sólo en validación y GC) fuera y `handle_addr` (caliente) en SRAM.
-  - ⚠️ **La zona ya tiene otro inquilino**: SQLite reserva de ahí
-    (`bd: reservada (SQLite=2) -> 2048 KB @ 0x11000000`). Si la tabla también
-    tira de ella, hay que decidir el reparto — y quién cede cuando no cabe.
-  - `bpvm_arena_reserve` ya talla de esa región, pero es de **un solo uso** y
-    la tabla **crece**. O se preasigna el máximo (y entonces el tamaño hay que
-    acertarlo, ver (b)), o la región tiene que poder crecer, y eso toca los
-    límites que usa `is_heap_ref`.
-
-  **(b) ¿El tamaño debería salir del heap?** Hoy el arranque (4096) y el tope
-  (16384 en la Pico) son constantes, y el tope está puesto **por la SRAM**. Pero
-  la NECESIDAD sale del heap: con 5,6 MB y objetos de ~24 B caben ~230.000
-  objetos vivos, catorce veces el tope. Consecuencia real: un programa legítimo
-  puede recibir OOM **con heap libre**. (Ya no cuelga —eso lo arregló `#430`—
-  pero sigue estando mal.) Lo natural sería derivarlo del heap, como ya hace
-  `gc_bump_threshold` (`(stack_base - heap_start) / 8`)… y ahí está el nudo:
-  **mientras la tabla se pague en SRAM, el tope no PUEDE escalar con el heap**,
-  porque el presupuesto no escala. Resolver (a) es lo que desbloquea (b).
-
-  **Lo que hace falta medir antes de decidir** (encaja con el censo funcional de
-  V6, eje «memoria y tiempos»): el coste real de un deref en PSRAM vs SRAM, y
-  cuántos objetos vivos a la vez llega a tener un programa de verdad — si nadie
-  se acerca a 16384, el problema es teórico y la respuesta es «déjala donde
-  está»; si un ORM con muchas filas lo roza, es urgente. Ver
-  [[tabla-handles-sram-y-presion-430]].
-
-- `#378` — que cada micro **DIGA lo que tiene** (capa HAL BP de capacidades).
-
-- (sin número) — el **tamaño de flash lo dice la placa**: tabla grande + clamp, no
-  una imagen por tamaño.
-
-- (sin número) — **la S3 no tiene `bios_s3.c`**: no ofrece tabla BIOS, así que no
-  puede alojar un pack nativo. Familia por hacer, no prueba pendiente.
-
-- `[V6]` `Object` = comodín por referencia — decidido y diseñado en
-  `docs/OBJECT_COMODIN.md`. **Ojo**: estaba clasificado V6 y su mitad estática se
-  hizo en V5 el 14-ago. Falta la **clase contenedora** (nombre sin decidir, si
-  distingue vacío de `null`, y cómo se saca un escalar).
-
-- (sin número) — **liberación de recursos**: destructor `~Clase()` + `var owner` +
-  bloque. Diseño de Eduardo.
-
-- `#396` — módulo `Time` con clase `Time.Date`, sobre un `long` de segundos de
-  época — **no** un tipo del lenguaje.
-
-- (sin número) — librería `Math`: ampliar (`fact` sobrecargada, f64) **y repasar
-  lo que ya hay**; strings igual si hace falta.
-
-- (sin número) — **diagnóstico del heap DESDE BP**: las herramientas existen, pero
-  están en la VM equivocada.
-
-- (sin número) — **muro de contención** entre el heap y las pilas. Idea de Eduardo.
-
-- `[ISA]` — `CALL_REL`: CALL local PC-relativo, el modelo de Eduardo.
-
-- `#19` — array fijo LOCAL: el UAF ya está cerrado (`b99529e`); queda **sólo el
-  inline por eficiencia**.
-
-- `#356` — REBAJADO: la pérdida de bytes no se manifiesta (era colateral de #357);
-  queda **el descarte mudo**, latente.
-
-- (sin número) — **librería de placa GENÉRICA**: el micro da el dato, la librería
-  hace de puente.
-
-- (sin número) — **batería de rendimiento HW+SW**: medir el REPARTO, no el tiempo.
-
-- (sin número) — **prueba de resistencia larga**: días de carga VARIADA, con marca
-  periódica en el log-anillo para que «la muerte deje rastro».
-
-- `[SIN VERSIÓN, V6+]` — Linux: el IDE en Linux + la Raspberry Pi como PLACA.
-
-- (de H6) — `SD_INFO` y `SD_MOUNT` siguen sólo en `pico/repl_v1.c`; no han subido
-  a código común. Verificado el 14-ago: siguen ahí.
-
-- `#426` `[V6]` — **`double` en una función `native`. APLAZADO A V6 por decisión
-  de Eduardo (16-ago)**, y no por coste sino porque *falta pensar el diseño*:
-  *«los micros como los STM32F7 tienen coprocesador que soporta float y double.
-  Lo correcto sería: si el micro soporta double por hardware, por hardware; si
-  no, por software. Quizás lo mejor sería meter las funciones de coma flotante
-  en la BIOS o en opcodes»*.
-  Eso reencuadra la ficha entera: **no es «cómo meto libgcc en el .mdn», es
-  «quién provee la coma flotante y cómo lo dice cada placa»** — que es la misma
-  pregunta que `#378` (que cada micro DIGA lo que tiene). Hacerlo ahora por
-  helpers sería resolver el caso pequeño y cerrar la puerta al bueno.
-  ⚠️ Ojo al dato que lo motiva: la FPU del Cortex-M33 (RP2350, STM32U5) es de
-  **precisión simple**, pero la del **STM32F7 es de doble** — o sea que la
-  respuesta correcta DEPENDE DE LA PLACA, y por eso no puede ser una constante
-  en el emisor.
-  *(Lo demás, tal como estaba.)* **`double` en una función `native`** (sale de `#381`, que los tenía
-  juntos). No le falta el marshalling —ése ya está hecho y es el mismo—: le
-  falta que la aritmética de coma flotante, que estos micros **emulan por
-  software**, sea alcanzable desde un `.mdn`. Hoy deja seis símbolos de libgcc
-  sin resolver (`__aeabi_dadd`, `__aeabi_dmul`, `__aeabi_ddiv`, `__aeabi_dcmplt`,
-  `__aeabi_i2d`…) y el empaquetador lo rechaza.
-  El camino es el mismo que funcionó para la división de `long` —helpers en la
-  tabla—, pero aquí serían MUCHAS operaciones y se paga una llamada indirecta
-  por cada una: hay que **medir si sale a cuenta** antes de escribirlo.
-  ⚠️ Y el aviso de fondo de Eduardo, que sigue en pie (`AOT_LIMITES.md` §1): la
-  FPU de estos micros es de **precisión simple**, así que un `double` no toca la
-  FPU ni compilado. Marcar `native` una función con `double` es pedir velocidad
-  y elegir el camino lento a la vez. Riesgo añadido: la paridad de coma flotante
-  (contracción `a*b+c`) — ver `GAP-4`.
-  Análisis completo en `docs/AOT_ABI8_IDEAS.md`.
+**Y hasta publicar, nada sube a GitHub.** Commitear no es publicar; «ahead of origin»
+es lo normal en esta fase. Ver la norma en la cabecera de este fichero.
 
 ---
 
-## CERRADAS EN V5 (con su commit, para no volver a darlas por abiertas)
-
-| ficha | qué | commit |
-|---|---|---|
-| `#384` | el error de palabra reservada DICE que lo es | `2637a43` |
-| `#385` | el tipo de un literal entero lo decide su MAGNITUD | `537dfe3` |
-| `#386` | el argumento de `Main` sale de su valor por defecto | `7a2eef2` |
-| `#387` | a la 2ª firma le faltaban los TIPOS | `e9c9b5a` |
-| `#388` | encadenar sobre lo devuelto por un método importado | `9ed0010` |
-| `#390` | visibilidad en 3 niveles (private / protected / public) | `0b258d3` |
-| `#391` | ABSORBIDO por #390: `virtual` es todo menos `private` | — |
-| `#392` | el importador contaba mal los slots de una hija con sobrecargas | `c4f5053` |
-| `#393` | el importador comprueba su tabla de métodos | `b5d2ff0` |
-| `#402` | el oráculo pasa también por ARM, con el SQLite entero | `4420746` |
-| `#403` | el emisor a `.class` queda marcado OBSOLETO | `c3a8b13` |
-| `#406` | un `throw` sin atrapar ya DICE qué pasó, en las 3 familias | `c599095` |
-| `#362` | la zona de packs sirve RECURSOS (host) | `d5552ed` |
-| `#417` | **verificado EN PLACA (P4, 14-ago)**: los recursos salen de la zona | — |
-| `#414` | módulo `Packs` (`list`/`listIn`) — **verificado en el P4** | `3901f1c` |
-| `#365` | un módulo con `library` ya puede **arrancar** un pack | `88e75a4` |
-| `#411` | el SQLite.pack con carpeta propia, reconstruible de un clon limpio | `5f9e924` |
-| `#383` | `PACK_CALL` — **CANCELADA** por alcance (los packs los hace el proyecto) | — |
-| `#419` | el arranque con SD — **DESCARTADA POR LA MEDIDA** (965 ms, 266 de la SD) | — |
-| `#398` | el refresco del árbol: **6953 ms → 155 ms**, verificado en la P4 | `f4e5c1f` `10b4467` |
-| `#430` | el cuelgue de la Metro era **LA TABLA DE HANDLES** — **verificado en DOS familias: Metro y P4 (17-ago)** | `d1c1c1f` |
-| `#302`p3 | el GC escanea la pila C del native — **VERIFICADO EN PLACA (17-ago)** | `53a22fa` |
-| `#422` | el chivato del `/lib` rancio — **VERIFICADO EN PLACA, los 2 caminos (17-ago)** | — |
-| `#418` | `/sys` resuelve (el ULTIMO: rescata sin tapar) — **VERIFICADO EN PLACA (17-ago)** | — |
-| `#433` | el log COMUN truncaba por el final y EN SILENCIO — ahora anillo (P4/S3/STM32) | `79a25ce` |
-| `#424` | los eventos del GUI: **medido y mejorado** (50→100 Hz); el resto → `#434` en V6 | `f96c957` |
-| `#425` | el listado DECLARA lo que deja fuera (4 implementaciones + el simulador) | `a632122` |
-| `#437` | la consola llega donde el árbol: `copy` · `get` · `logclr` | `dcb2b7d` |
-| `#435` | la ventana de la placa reordenada + entorno a diálogo, también desde la principal | `08de08e` |
-| `#436` | editar el `.bpbuild` desde el IDE (guarda y RELEE para validar) | `c88f8b5` |
-| `#394` | subir eligiendo destino — ahora se VE y se puede editar | `69adaa9` |
-| `IDE-7` | selección múltiple: borrar y subir en lote, con UN refresco | `69adaa9` |
-| `#395` | botón `DAO build`, habilitado sólo con proyecto abierto | `1eaf117` |
-| `#440` | el `.mdn` de RISC-V direccionaba sus datos en **ABSOLUTO** — **VERIFICADO EN PLACA (P4, 17-ago)** | `9d41562` |
-
-**`#430`, la ficha entera** (abierta y cerrada el 17-ago; se abre aquí para no
-perder cómo se acotó, que es lo reutilizable):
-
-- **Síntoma**: la Metro se colgaba muda ejecutando `AotGcRt` (30.000 concats en
-  una `native`). Ni log, ni `MALLOC FAIL`: la cola de flash acababa en
-  `about to bpvm_run` — el post-mortem **no cubre cuelgues**, sólo crashes y
-  puntos fijos de volcado (ficha aparte, ver ABIERTAS).
-- **Cómo se acotó** (todo de Eduardo, y en este orden):
-  1. *«¿Qué pasa si no es native?»* → sin `native` moría igual, tras el 3000.
-     El nativo y el escaneo #302, exonerados de un plumazo.
-  2. *`gc()` a mano cada 1000* → **terminó limpio**. El GC de la placa funciona;
-     lo que fallaba es que nadie lo llamaba.
-  3. *«Cambiar el tamaño de la tabla y ver si se cuelga antes o después»* → el
-     gemelo `AotGcRt2` gasta el DOBLE de handles por vuelta y murió tras el
-     **1000** en vez del 3000. La muerte sigue a la **cuenta de handles**.
-- **Causa**: el disparo del GC contaba **volumen** (#357) y un programa de
-  objetos chicos se le escapa: 600 KB (bajo el umbral de 704 KB) pero 30.000
-  slots. La tabla sólo doblaba hasta pedir 512 KB **de SRAM** (las dos tablas
-  salen del malloc de PLATAFORMA, no del heap de la VM, que está en PSRAM). El
-  RP2350 tiene 520 KB. El malloc fallaba → `vApplicationMallocFailedHook` →
-  parpadeo eterno: **un cuelgue, no un error**.
-- **El arreglo, en las DOS VMs** (las tres ideas, de Eduardo):
-  1. **La marca**: repartir un slot de los últimos 64 arma `handle_pressure`;
-     la puerta de `heap_alloc` lo consulta y colecta ahí. Si recicla, resuelto;
-     si todo está VIVO, crece — donde crecer es una decisión, no un accidente
-     en medio de un `register`.
-  2. **El tope por puerto** (`BPVM_HANDLE_CAP_MAX`; la Pico: 16384 slots =
-     128 KB) convierte el malloc imposible en OOM honesto ANTES de pedirlo. Y
-     `handle_register` deja de devolver la **dirección cruda** cuando no puede
-     crecer (el «las refs MIENTEN» que #355 dejó a medias): ref nula → los 5
-     sitios de `interp.c` la vuelven `No space in heap` atrapable.
-  3. **La excepción PREFABRICADA**: el OOM se construye en el prólogo del RUN,
-     cuando construir es gratis, y vive como raíz del GC. Lanzarla no aloja
-     nada ⇒ muere el «throw: sin memoria para el MENSAJE → el programa NO se
-     entera».
-- **De regalo**: miVM escribía su diagnóstico de GC por **stdout** — cualquier
-  programa que colectara rompía el invariante en Java. A stderr, como
-  `bpvm_diag`.
-- **Pruebas**: `AotGcRt2` con memoria de Metro mantiene la tabla en 4096 y
-  termina; `OomHandles` con `--handlecap` 2048/1024 atrapa el OOM y sigue vivo,
-  y el nodo escala con el tope (994 / 482); paridad 28 PASS; `test-aotgc` verde.
-  **En placa: `AotGcRt2` llega a `fin` con `malos : 0`** (antes moría al 1000).
-
-**`#302` paso 3, cómo se verificó EN PLACA** (17-ago, con el #430 ya arreglado):
-`AotGcRt.bp` en su forma NATIVE, 10.000 vueltas, `.mdn` cargado (1 thunk, 152 B
-nativo). Salió `malos : 0` y `ultimo : v9999w9999`. Por qué eso PRUEBA el
-escaneo y no sólo "no petó": el intermedio del concat izquierdo vive **sólo en
-la pila C** mientras el derecho aloja tres veces más; con la presión de tabla
-disparando (#430) hubo ~20 colectas en el recorrido, y 7 de cada 12 reservas de
-la vuelta se hacen DENTRO de `eco`. Sin el escaneo conservador de la pila C, ese
-intermedio se recicla y `ultimo` sale corrupto — el mismo fallo que el test rojo
-`test_aotgc.c` pilló en host antes de arreglarlo. 10.000 comparaciones, cero
-desviaciones.
-
-*(Y el 17-ago por la tarde, la MISMA prueba en el **P4** una vez arreglado
-#440: 10.000 vueltas, `malos : 0`, `ultimo : v9999w9999`. O sea que el
-escaneo conservador de la pila C esta verificado en placa en las **dos
-arquitecturas**, ARM y RISC-V, no en una.)*
-
-> Y la lección de método: este sample estuvo DOS intentos sin probar nada —
-> primero mudo (parecía colgado cuando trabajaba: le faltaba el latido), y luego
-> colgándose de verdad por una causa **ajena a lo que venía a medir** (#430). Un
-> instrumento nuevo se valida antes de creerle, también cuando lo que falla es
-> el sujeto y no el instrumento.
-
-**`#417`, cómo se verificó** — importa porque el instrumento obvio no valía:
-
-- Pack `test1` grabado en el P4 con `montserrat_26_bold.bin` dentro (3 entradas:
-  `mod1.mod`, la fuente y el `manifest.mft`), y `FontLoadDemo` cargándola.
-- **El `id` que devuelve `loadFont` NO prueba nada**: el contador es 1-based y se
-  asigna SIEMPRE, con o sin fuente, a propósito, para que la VM-C y miVM devuelvan
-  ids idénticos (paridad dual-VM) — `gui.c:964`.
-- **Lo que lo prueba es una línea que NO aparece.** Si no consigue materializar la
-  fuente, `gui.c:981` escribe
-  `[gui] loadFont('...'): no se pudo cargar (id N queda sin fuente)`.
-  No está en la salida, y en el P4 ese chivato está activo porque lleva LVGL.
-- **El `__guiDumpTree` no sirve** para esto: `gui.c:1185` sólo imprime `font=`
-  cuando hay `fontSize` (catálogo compilado), nunca para `setFont`. Su silencio no
-  significa nada.
-- **Y salió del PACK, no del FS**: Eduardo lo probó con la forma **cualificada**,
-  `Gui.loadFont("pack:test1/montserrat_26_bold.bin")`, que va a ESE pack y se
-  salta el FS entero. Así que no queda el matiz de «cargó, pero no sabemos de
-  dónde»: la zona de packs sirvió el recurso, que es exactamente lo que #362
-  prometía y lo que esta ficha tenía que demostrar.
-
-Con esto **H11 quedó desbloqueado** (era la ficha que lo trababa) y el 15-ago
-**cerró entero**: `#414` y `#365` cerradas con commit, `#411` en su parte de
-packs, y `PACK_CALL` (#383) cancelada.
-
-
-### ~~[lenguaje] `List` con captadores TIPADOS~~ — ✅ CERRADA EN V5 (`20-ago`, adelantada desde V6)
-
-Eduardo la adelantó al ver que las demos de BD no funcionaban: *«las demos han de
-funcionar, no vamos a hacer como en C que por sistema las demos nunca funcionan»*.
-Entraron `getInteger`, `getLong`, `getDouble`, `getBoolean` y `getString`, con las
-conversiones puestas en los cinco envoltorios. **El enunciado y las decisiones de
-diseño se conservan enteros abajo, porque la cola de `Map` sigue abierta.**
-
-- **[lenguaje] `List` con captadores TIPADOS** — encargo de Eduardo (19-ago):
-  *«en List añadir métodos `getInteger(indice)`, `getLong(indice)`, `getFloat(indice)`,
-  `getDouble(indice)` y `getString(indice)`»*.
-  🩸 **De dónde sale, y por eso no es azúcar cosmético**: desde `#389` `List.get()`
-  devuelve `Object`, así que todo uso tipado necesita un downcast explícito. El coste ya
-  se pagó el 19-ago — `Json.bp` llevaba días sin compilar y el arreglo fueron **8 casts,
-  los 8 el mismo patrón**: `JsonValue(this.items.get(i))`. Con captadores tipados eso se
-  escribe una vez, dentro de `List`, en vez de en cada sitio que la use.
-  📌 **Encaja con lo que ya hay**: los envoltorios (`Integer`, `Long`, `Double`, `Float`,
-  `Boolean`) se mudaron a `Core` con `#446`, y `add` ya está sobrecargado por tipo. Esto
-  es la simetría que falta — se puede meter por tipo pero no sacar por tipo.
-  📐 **La semántica la decidió Eduardo (19-ago) y NO es un cast**: *«si no es del tipo
-  pedido hay que hacer conversiones. Los envoltorios ya deberían tener las conversiones.
-  Y si hay una conversión imposible se dispara un error.»* O sea que `getInteger(i)` no
-  exige que el elemento SEA un `Integer`: lo convierte, y sólo revienta si la conversión
-  es imposible. Devuelve el primitivo (`integer`), no el envoltorio.
-  🔴 **Y ahí está el trabajo de verdad: hoy los envoltorios NO tienen conversiones.**
-  Medido en `Core.bp` el 19-ago — `Integer`, `Long`, `Double`, `Float` y `Boolean` tienen
-  exactamente cuatro cosas cada uno: constructor desde SU primitivo, `value()`,
-  `compareTo(Object)` y `toString()`. Nada más. Así que esto son **dos fichas encadenadas**:
-  primero las conversiones en los envoltorios, después los captadores de `List`, que se
-  vuelven triviales encima.
-  📐 **Y la DIRECCIÓN importa (Eduardo, 19-ago)**: *«integer a string vale, así `"hola"+1`
-  se convierte en `"hola1"` sin problemas, pero string a integer no, eso hay que pedirlo
-  explícitamente con la función concreta.»* La asimetría no es capricho: hacia `string` la
-  conversión **no puede fallar** (todo tiene `toString`), y desde `string` **falla por el
-  CONTENIDO**, que es otra clase de cosa.
-  🔬 Comprobado el 19-ago, las dos mitades: `"hola" + 1` → `hola1` y `"pi=" + 3.5` →
-  `pi=3.5`; y la familia explícita ya existe — `Str.parseInt`, `parseLong`, `parseDouble`
-  y `parseHex`, **todas devolviendo `(boolean, valor)`**, o sea que ni siquiera lanzan:
-  obligan a mirar el `ok`.
-  ✅ **Con eso se cae la contradicción que se había anotado**: `string`→número NO entra en
-  los captadores, así que no hay dos contratos compitiendo. Queda repartido y limpio:
-  - `getString(i)` — **siempre funciona**, porque todo sabe volverse cadena.
-  - `getInteger/getLong/getFloat/getDouble(i)` — convierten **entre numéricos**; si el
-    elemento es una cadena, **NO se parsea**: eso se pide con `Str.parse*`.
-  - lo imposible lanza, que es lo que Eduardo pidió.
-  ✅ **`getBoolean` ENTRA** (Eduardo, 19-ago: *«añade getBoolean, no hay problema»*), y
-  con él la conversión booleano→numérico: **`False` = 0, `True` = 1**.
-  📐 **De dónde viene la idea, y el matiz que la recorta.** Eduardo la trajo por su
-  parecido con `ord()`, *«que también sirve para los elementos de un enumerador y para la
-  conversión de char»*. `Ord` es de **Pascal** (en Java es `? 1 : 0`), y eso juega a
-  favor: está definido justo para esos tres casos, así que es buen modelo. **Pero en BP
-  sólo quedan DOS de los tres**: `char` **no existe como tipo** —no está en la gramática
-  y los caracteres ya SON enteros (`sb.appendChar(44)`)—, o sea que esa pata sobra aquí.
-  🔬 **Y el tercero tampoco funciona hoy**, comprobado el 19-ago: `var i: integer := c`
-  con `c` de un enum da *«valor de tipo 'Color' no asignable a variable de tipo
-  'integer'»*, aunque la gramática los respalda con enteros
-  (`enum_value ::= name [':=' INTEGER_LIT]`). O sea que **de un enum no se puede sacar su
-  número**, y eso es un agujero por sí solo — emparenta con `M6` de `PENDIENTES`
-  (`const C := Color.RED` tampoco vale). Hacia `string` sí van los dos, coherente con la
-  regla de dirección.
-  ⏭️ **Recomendación al abrirlo: NO un `ord()` nuevo.** Con dos casos no compensa gastar
-  una palabra reservada —criterio de Eduardo: *«si ya hay algo especial, el azúcar cuelga
-  de ahí»*—. Lo natural es que salga de las conversiones que ya se van a escribir:
-  `Integer(b)` e `Integer(color)`, y los captadores encima.
-  ✅ **`double`→`integer` TRUNCA** (Eduardo, 19-ago): *«debe truncar, si se quiere
-  redondear que llame a la función para redondear que para eso está»*.
-  🔬 Y esa función existe — comprobado: **no está en `Math`, son builtins globales**:
-  `round` (id 33, *half-up*), `floor` (31) y `ceil` (32), con `abs`, `sqrt` y `pow` al
-  lado. `Math.bp` sólo tiene trigonometría y logaritmos, así que buscarlo ahí despista.
-  ⚠️ **Hay que decir HACIA DÓNDE trunca, y no es un detalle**: truncar es *hacia cero*
-  (`-2,7` → `-2`), mientras que `floor` da `-3`. Coinciden en positivos y discrepan en
-  negativos, que es justo donde nadie mira. Y **ningún builtin trunca hoy**: `floor` vale
-  para positivos y `ceil` para negativos, o sea que el comportamiento de los captadores
-  es NUEVO y tiene que quedar escrito en su documentación, con el caso negativo de
-  ejemplo.
-  ✅ **`long`→`integer` que no cabe: EXCEPCIÓN** (Eduardo, 19-ago: *«pues claro, es una
-  exception, es puro sentido común»*). Coherente con `#385`: el recorte silencioso da un
-  número plausible y equivocado, que es el peor fallo posible.
-
-  ### El contrato, ya cerrado entero (19-ago)
-
-  | de \ a | `string` | numérico (`integer`/`long`/`float`/`double`) | `boolean` |
-  |---|---|---|---|
-  | numérico | implícito (`"x=" + 1`) | convierte; `double`→entero **trunca hacia cero**; si no cabe, **excepción** | — |
-  | `boolean` | implícito | `False`=0 · `True`=1 | directo |
-  | `string`  | directo | **NO** — se pide con `Str.parseInt/parseLong/parseDouble`, que devuelven `(ok, valor)` | **NO** |
-  | otro objeto | `toString()` | **excepción** | **excepción** |
-
-  📌 **Los métodos**: `getString`, `getInteger`, `getLong`, `getFloat`, `getDouble` y
-  `getBoolean`, todos por índice y devolviendo el **primitivo**.
-  📌 **Qué se lanza**: lo mismo que ya lanza un downcast fallido (`#444`), para no
-  inventar una segunda familia de errores que diga lo mismo.
-  📌 **La regla que lo explica todo en una frase**: hacia `string` es implícito porque no
-  puede fallar; desde `string` es explícito porque falla por el CONTENIDO; y entre
-  numéricos convierte, pero **perder información es un error, no un redondeo silencioso**.
-  📌 Aplica también a `SyncList` y `OwnerList`, que heredan de `Core.List`, y conviene
-  mirar si `Map` quiere lo mismo para sus valores.
-
-### Hitos de V5 — la tabla
-
-| hito | qué | cerrado |
-|---|---|---|
-| H1 | la Metro **lee** la tarjeta SD | 7-ago, en placa |
-| H2 | la SD como **sistema de ficheros** (FatFs) | 8-ago, en placa |
-| H3 | **SQLite corre en la Metro** (la tabla BIOS presta memoria) | 8-ago, en placa |
-| H4 | un programa BP **consulta una BD de verdad** | 10-ago, salida idéntica al host |
-| H5 | **el ORM**: DAO a mano → `@BD{...}` → generador → verificador | 11-ago |
-| H6 | la SD del P4 por **SDMMC** + `LIST_DIR` a código común | 11-ago, en placa |
-| H7 | **SQLite en el P4**: nativo RISC-V ejecutándose, motor arrancado, pack grabado y `SqlDemo` corriendo | **CERRADO**, verificado en placa |
-| H8 | *la herramienta antes que el artefacto*: relocalizador que coincide con `ld`, `sources`, un `.mod` y N `.mdn`, botón de grabar que relocaliza | 13-ago, en host |
-| H9 | la tanda de **arreglos del compilador** (#384, #385, #386, #387, #388, #392, #393, #406) + `Object` como raíz real (#389, la mitad estática) | **14-ago** |
-| H10 | **el IDE**: lo pendiente que no eran bugs | 15-ago (las 9 fichas de su sección, cerradas) |
-| H11 | **packs**: cerrar lo que quedó suelto (`#416`, paraguas) | 15-ago |
-| H12 | **documentar V5** de cara al usuario | abierto 18-ago |
-| H13 | **las pruebas finales** | abierto 18-ago |
-
-*(El nombre de H8/H9 no está en ningún doc: sale de los prefijos de commit. Ojo con
-confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
-
-*(Tabla subida desde `ESTADO` el 17-ago: era el único sitio con las fechas
-y el enunciado de cada hito. **H10 (IDE) y H11 (packs) cerrados** también.)*
-
-**Cerrados: H1…H11.** Quedan **H12** (documentar) y **H13** (pruebas finales), abiertos
-el 18-ago al fijar el plan de cierre; después, publicar.
-
-⚠️ *Aquí decía «Queda H10 (IDE)» dos líneas después de decir que H10 estaba cerrado —
-una contradicción dentro de la propia fuente de verdad, corregida el 18-ago. H10 lo
-está: sus 9 fichas están todas tachadas.*
-
----
 
 ## SIN CATALOGAR
 

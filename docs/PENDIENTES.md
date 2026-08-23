@@ -19,7 +19,9 @@
 > **Mapa de docs:**
 > - **`docs/FICHAS.md`** — el registro de fichas. **La fuente de verdad.**
 > - **`docs/ESTADO.md`** — el traspaso entre sesiones (diario, por fechas).
-> - **`V4_BACKLOG.md`** / **`HECHO_V*.md`** — snapshots inmutables de versiones cerradas.
+> - **`V5_BACKLOG.md`** / **`V4_BACKLOG.md`** / **`HECHO_V*.md`** — snapshots inmutables
+>   de versiones cerradas.
+> - **`V6_BACKLOG.md`** / **`V6_IDEAS.md`** — la versión EN CURSO: lo aplazado y su diseño.
 >
 > Convención: L=limitación · N=hallazgo · M=mejora. (Los bugs, **B**, se fueron a
 > `FICHAS.md`: tienen estado.)

@@ -67,7 +67,7 @@ sino **si el array fijo es la forma correcta** cuando el catálogo crezca (SQLit
 panel, red…). Con 4 y comparación por `==` el coste es cero; conviene medir antes de
 cambiarlo por algo con más ceremonia.
 
-**4. La RAM, y la corrección de Eduardo.** Ver la nota de `notas/V6_IDEAS.md` sobre la
+**4. La RAM, y la corrección de Eduardo.** Ver la nota de `docs/V6_IDEAS.md` sobre la
 arena: la tercera vía ya está elegida y corriendo, pero **la unidad debe ser el código
 nativo, no el pack**, y hoy la arena es singular y se llama `SQLite`.
 

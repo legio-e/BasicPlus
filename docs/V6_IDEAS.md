@@ -1,0 +1,541 @@
+# V6 — ideas y diseño
+
+Documento hermano de `V3_IDEAS.md`, `V4_IDEAS.md` y `V5_IDEAS.md`: aquí se
+registran las charlas de diseño de V6 **antes** de escribir código, que es el
+método de la casa.
+
+**V5 se publicó el 22-ago-2026** (release `v5.0`), así que V6 es la versión EN CURSO y
+esto ya no es material aparcado: es el cuaderno de diseño vivo del hito. Guardado en
+`docs/` el 23-ago al abrir V6, por decisión de Eduardo — hasta entonces vivía fuera del
+repositorio porque era material de la versión siguiente.
+
+El hilo de fondo de V6 ya está fijado en otros sitios y conviene tenerlo
+delante al leer esto:
+
+- `docs/CENSO_FAMILIAS.md` — el censo por FICHERO (hecho en V5) es la base; V6
+  lo amplía a un censo **funcional** (Boot, SD, memoria, FS, GC, Packs, VM,
+  drivers…) con cuatro ejes: implementado / específico-vs-común / capas
+  respetadas / memoria y tiempos MEDIDOS.
+- El reparto **común vs hardware**, para poder meter pruebas en medio. El
+  modelo es el VFS de SQLite.
+- Las fichas ya abiertas viven en `docs/FICHAS.md`, sección «Aplazadas a V6».
+
+---
+
+## Ficheros: no hay `seek` porque no hay `open` (Eduardo, 17-ago)
+
+**La pregunta.** *«¿Tenemos una función seek o fseek para movernos dentro de un
+fichero?»* No. Y el hueco es más grande que un `seek`: **BP no tiene el concepto
+de fichero abierto**. Toda la API es de fichero entero.
+
+| hoy | qué hace |
+|---|---|
+| `readFile(path)` → `string` | lee el fichero ENTERO |
+| `readFileBytes(path)` → `byte[]` | ídem, en bytes |
+| `writeFile(path, contenido)` | escribe el fichero entero (lo reemplaza) |
+| `writeFileBytes(path, datos)` | ídem |
+| `appendFile(path, texto)` | añade al final — la ÚNICA operación parcial |
+| módulo `IO` | rutas, `mkdir`, `removeFile`, `rename`, `copyFile`, `fileSize`, `isDirectory`, `lastModified` |
+
+No hay descriptor, así que no hay dónde colgar una posición.
+
+**Por qué importa AHORA y no antes.** Mientras el FS era littlefs en flash
+interna, un fichero cabía en RAM por construcción. Con las SD de V5/H1-H2 eso
+se acabó: un log, un CSV o un volcado de datos en la tarjeta puede ser de
+megas, y `readFile` exige metértelo entero en el heap. Hoy, en la práctica, **un
+fichero más grande que el heap es un fichero que BP no puede tocar** — salvo
+por SQLite, que sí sabe hacerlo porque no pasa por esta API.
+
+**La buena noticia: la fontanería YA ESTÁ, y muy rodada.** La fachada del FS
+tiene `read_at` y `write_at` (`include/bpvm_fs.h`), implementadas por las cinco
+familias. No son código nuevo ni experimental: **SQLite las exige** —el propio
+comentario del header lo dice, *«sin ellas no hay base de datos: una BD
+reescribe la página N»*— así que llevan meses de uso duro en placa. Lo que falta
+es sólo la superficie visible desde BP.
+
+### DECIDIDO (Eduardo, 17-ago): un fichero es una CLASE
+
+*«Un fichero para BP debe ser una clase, con los métodos habituales: open,
+close, read, write, seek. Read tendrán que ser varios (readByte, readStr, etc.)
+mientras que write se puede sobrecargar para diferentes tipos.»*
+
+Queda descartada la variante sin handles (`readFileAt(path, off, n)`), que era
+la otra opción sobre la mesa. Bien descartada, además: la trampa de #398
+—`fat_read_at` hace `f_open`+`f_lseek`+`f_read`+`f_close` en CADA llamada, y por
+eso el árbol tardaba 6.953 ms— desaparece sola cuando el fichero se abre UNA vez
+y se queda abierto. Con handles no hay que inventar ninguna caché: la apertura
+persistente **es** el handle.
+
+**Hay molde en casa y no hay que inventarlo: `Net.Tcp`** (`bpstdlib/Net.bp`).
+Sujeta un handle entero `h`, tiene `isOpen()`, un `close()` que lo pone a cero
+—idempotente— y ya usa exactamente la forma que pide Eduardo: un método crudo y
+su azúcar (`send`/`sendStr`, `recv`/`recvStr`). La asimetría read/write sale del
+lenguaje, no del capricho: **BP no sobrecarga por tipo de retorno**, así que
+leer necesita N nombres y escribir puede ser un solo nombre sobrecargado.
+
+Forma de partida, a discutir:
+
+```
+class File
+  public function File(path: string, modo: string)   // o open() aparte
+  public function isOpen(): boolean
+  public function close()
+
+  public function seek(pos: integer)
+  public function tell(): integer
+  public function size(): integer
+  public function eof(): boolean
+
+  public function readByte(): integer          // -1 = fin
+  public function readBytes(n: integer): byte[]
+  public function readStr(n: integer): string
+  public function readLine(): string
+
+  public function write(s: string)             // sobrecargas por tipo
+  public function write(b: byte[])
+  public function write(n: integer)
+  ...
+end File
+```
+
+### DECIDIDO (Eduardo, 17-ago): DOS clases, y la segunda hereda
+
+*«En Java tienen una clase para cada cosa: ficheros binarios, de texto, etc. En
+otros lenguajes utilizan un tipo nada más. Aquí podemos tener un tipo `File` con
+las funciones básicas y que trabaja a nivel de bytes. Después un 2º tipo que
+herede del anterior y que trabaje con strings (UTF-8).»*
+
+Punto medio entre el zoo de Java y el tipo único de C: **dos** clases, y la de
+texto ES un fichero (hereda seek/tell/close, que valen igual). Y de paso
+**disuelve la pregunta 1** —`write(42)`, ¿texto o binario?—: en `File` es
+binario porque `File` es binario, y el texto vive en la subclase.
+
+**La regla que lo deja limpio del todo: `TextFile` AÑADE sobrecargas, nunca
+redefine el significado de una heredada.** Si `File.write(42)` escribiera 4
+bytes y `TextFile.write(42)` escribiera `"42"`, la misma llamada haría cosas
+distintas según el tipo dinámico, y un `TextFile` pasado como `File` no
+cumpliría lo que promete su tipo estático. Con la regla, `write` significa
+SIEMPRE crudo en toda la jerarquía. Lo formateado va por otro verbo — y hay uno
+que ya significa exactamente eso en BP: **`print`**.
+
+```
+class File                       // BYTES, y nada mas
+  public function File(path: string, modo: string)
+  public function isOpen(): boolean
+  public function close()
+  public function seek(pos: integer)
+  public function tell(): integer
+  public function size(): integer
+  public function eof(): boolean
+  public function readByte(): integer            // -1 = fin
+  public function readBytes(n: integer): byte[]
+  public function write(b: byte[])               // siempre CRUDO
+  public function write(n: integer)              // (falta decidir el ANCHO, ver abajo)
+end File
+
+class TextFile extends File      // UTF-8 encima, sin quitar nada
+  public function readLine(): string
+  public function readStr(n: integer): string    // n CARACTERES, no bytes
+  public function write(s: string)               // sobrecarga NUEVA, no override
+  public function writeLine(s: string)
+  public function print(n: integer)              // FORMATEADO, como el print del lenguaje
+  public function print(d: double)
+end TextFile
+```
+
+`write(s: string)` no es un override: la base no tiene esa firma. El conflicto
+sólo existía en los numéricos, y `print` lo desactiva.
+
+### Lo que la herencia trae de nuevo (y hay que decidir)
+
+**a. `readStr(n)`: ¿n bytes o n caracteres?** En UTF-8 no es lo mismo, y ahí está
+justamente la razón de ser de la subclase: la base cuenta BYTES (`readBytes`) y
+la de texto cuenta CARACTERES. Si `readStr` viviera en la base tendría que
+mentir en una de las dos. Por eso arriba está sólo en `TextFile`.
+
+**b. `seek` en un fichero de texto es en BYTES, y puede caer a media letra.** No
+es un fallo del diseño —es lo que hace todo el mundo, y arreglarlo costaría un
+índice— pero hay que ESCRIBIRLO: `seek` posiciona en bytes también en `TextFile`,
+y quien salte a un offset arbitrario puede partir un carácter. Lo razonable es
+que la siguiente lectura resincronice al principio del carácter siguiente y no
+devuelva basura.
+
+**c. Fin de línea, que es el clásico.** Un `.csv` escrito en Windows y leído en
+la Metro trae `
+`. Propuesta: `readLine` tolera los dos y NO devuelve el
+terminador; `writeLine` escribe `
+` y punto (uno solo, elegido, igual en las
+dos VMs). Si alguien quiere `
+` que lo escriba con `write`.
+
+**d. Sigue abierto el ANCHO de `write(n: integer)`**: un `integer` de BP son 4
+bytes, pero escribir un byte suelto es lo más común en binario. O `write(n)` son
+4 bytes y hay `writeByte(n)` aparte, o al revés. Va con la pregunta del
+endianness (abajo).
+
+### Las preguntas que hay que contestar ANTES de escribirla
+
+Por orden de lo que cuesta equivocarse. La que era la primera —`write(42)`,
+¿texto o binario?— la resolvió el reparto en dos clases.
+
+**1. ¿Qué pasa si no se cierra?** BP no tiene destructores, y el precedente
+(`Net.Tcp`) tampoco resuelve esto: si el objeto se pierde sin `close()`, el
+recurso nativo queda colgado hasta el reset. En un micro con pocas ranuras de
+fichero abierto eso es un cuelgue diferido. La red que ya existe y hay que usar:
+la VM **mide la memoria al final de cada RUN** (`#339`, dice quién se quedó qué
+con fichero y línea) — lo natural es que el fin de RUN cierre lo que quede
+abierto y lo DIGA, en vez de callar. Decidir si además hace falta algo en vivo.
+
+**2. Cuántos ficheros a la vez, y qué pasa al pasarse.** Es una restricción de
+micro, no de diseño: cada cintura tiene lo suyo (FatFs está hoy con
+`FF_FS_LOCK 0`, o sea sin control de aperturas duplicadas). Hay que fijar un
+número por familia y que pasarse sea un error atrapable, no un fallo raro —
+misma lección que el tope de la tabla de handles (`#430`): el «no puedo» tiene
+que ser honesto y temprano.
+
+**3. Endianness de los tipos multibyte** (y con ella el ancho de `write(n)`, punto **d** de arriba). El `.mod` es big-endian por dentro,
+pero un fichero de datos lo lee otro programa: hay que ELEGIR y escribirlo, no
+heredarlo por accidente. Y sea cual sea, igual en las dos VMs.
+
+**4. Detalles que parecen menores y luego no lo son:** el modo de apertura
+(lectura/escritura/append/crear/truncar) y su ortografía; si `seek` es absoluto
+o admite origen (inicio/actual/final); qué devuelve `readLine` al llegar al final;
+si escribir más allá del final extiende y con qué se rellena el hueco.
+
+### Lo que hay debajo, y lo que habrá que añadir
+
+`read_at`/`write_at` de la fachada (`include/bpvm_fs.h`) resuelven el movimiento
+de datos y están rodadas por SQLite. Lo que NO existe es el **descriptor**: la
+fachada trabaja por PATH. Así que la implementación tendrá que llevar una tabla
+pequeña de ficheros abiertos (path + handle nativo + posición) indexada por el
+entero que sujeta la clase — igual que hace la capa TCP con sus sockets. Ahí es
+donde se paga la apertura persistente, y donde deja de aplicar la trampa de
+#398.
+
+Y en **miVM** es directo (`RandomAccessFile`), así que la paridad no será el
+problema: el problema es que la semántica de los cinco puntos de arriba esté
+escrita ANTES, para que las dos VMs implementen lo mismo y no dos primos.
+
+
+---
+
+## El `.mdn` se funde en el `.mod`, con un bloque nativo por familia (Eduardo, 17-ago)
+
+**La idea.** Igual que el `.bpi` desapareció dentro del `.mod` en V4/H6.a, que el
+`.mdn` haga lo mismo. Un `.mod` tendría su bloque de código BP de siempre y,
+además, **cero o varios bloques de código nativo, uno por familia**. Al compilar
+desde el IDE con la placa conectada se genera el nativo de ESA familia; si hay
+un proyecto abierto que declara varias, se generan las N y van todas dentro. **Al
+micro no le llega el `.mod` gordo**: el IDE poda y le manda sólo el bloque de su
+familia. Los packs, igual.
+
+### Por qué esto no es una apuesta: ya funciona, en otro sitio
+
+Hay **dos** precedentes, y el segundo es literalmente este mecanismo:
+
+1. **H6.a**: el `.bpi` se fundió en el `.mod` (v6 autodescriptivo) y se borraron
+   71 ficheros. Mismo movimiento, ya hecho una vez y salió bien.
+2. **El pack de SQLite ya lleva DOS familias dentro y el IDE lo poda al
+   grabar.** No es una analogía: es el mismo flujo.
+   - el proyecto declara las familias en **`aot.targets`** — el concepto ya
+     existe, no hay que inventarlo;
+   - `AotBuild.buildPackTargets` emite **un `.mdn` por familia**, y —esto es lo
+     bueno— **el `.c` intermedio se emite UNA sola vez y lo comparten todas las
+     toolchains**. Su propio comentario dice por qué: *«no es un ahorro de
+     tiempo: es que así los `.mdn` del pack no pueden divergir entre sí ni del
+     bytecode que llevan al lado»*;
+   - `PackBurn` se queda con el de la placa, le quita el sufijo y poda el resto:
+     *«el micro encuentra `SQLite.mdn` de siempre y no se entera de que hubo
+     hermanas»*. Medido: 1.122.304 B en disco → 569.344 en la placa.
+
+   Hoy todo eso se apoya en el NOMBRE del fichero (`SQLite.mdn.RISCV`). La idea
+   es subirlo al formato, donde se puede validar.
+
+### Lo que MATA (y esto es lo que lo justifica, más que la comodidad)
+
+Dos ficheros que tienen que ir juntos son dos ficheros que se pueden desparejar,
+y ya nos ha pasado de las dos maneras posibles:
+
+- **Desfase en el tiempo.** Hoy mismo: *«[Explorer] AOT `AotGcRt.mdn` es MÁS
+  VIEJO que su `.mod` — NO se sube»*. Existe un guardián porque hace falta; con
+  un solo fichero no habría de qué guardarse.
+- **Desfase de familia.** Se subió un `.mdn` de ARM a la P4
+  ([[artefacto-de-otra-familia-se-cuela]]): el `arch` está en el fichero y la
+  placa dice el suyo, pero nadie los comparaba. Con bloques etiquetados dentro
+  del `.mod`, elegir el equivocado deja de ser posible **por construcción**.
+
+Es el mismo tipo de argumento que cerró H6.a: no «un fichero menos», sino **una
+clase entera de fallo que deja de existir**.
+
+### Lo que hay que decidir, y una trampa concreta
+
+**⚠️ La trampa: el IDE compara para NO subir, y si poda, compara mal.** Hoy el
+Explorer dice *«`/lib/Gui.mod` ya en FS (43077 bytes, contenido idéntico), salto
+PUT»* — compara el fichero LOCAL con el del device. En cuanto el IDE pode antes
+de enviar, el local y el del device **dejan de ser el mismo fichero a
+propósito**, y esa comparación empieza a mentir: o resubiría siempre, o peor,
+saltaría cuando no debe. Hay que comparar contra los **bytes podados**, no
+contra el fuente. Y lo mismo mira el chivato del `/lib` (`#422`), que compara el
+módulo del FS con el embebido en la imagen.
+
+**Una sola implementación de la poda.** `PackBurn` ya poda; el camino del `.mod`
+necesitará lo mismo. Si acaban siendo dos funciones parecidas, es
+[[arreglo-que-no-viaja-entre-familias]] otra vez — y hoy hemos tenido tres casos
+de esa forma en un día. Debe ser UNA, llamada desde los dos sitios.
+
+**¿La poda es obligatoria o una optimización?** Merece decisión explícita. Si el
+cargador del device sabe **saltarse** los bloques de otras familias, un `.mod`
+gordo copiado a mano en una SD sigue funcionando (sólo ocupa más); si los
+rechaza, es un error duro. Lo robusto parece: el device TOLERA y usa el suyo, y
+la poda existe para no gastar flash — que en un micro no es poca cosa, pero es
+un problema de tamaño, no de corrección.
+
+**El gate de ABI (`#284`) y las copias rancias.** Cambiar el formato del `.mod`
+sube su versión, y eso está bien —el loader rechaza lo incompatible y el desfase
+GRITA en vez de corromper—. Pero arrastra el trabajo conocido: hay **cuatro
+copias de los `.mod` de la stdlib** que se quedan rancias, incluida
+`packs/Stdlib.pack` ([[stdlib-mod-version-skew-oo-device]]). Regenerarlas es
+parte del hito, no un fleco.
+
+**Qué hace el host con un `.mod` multifamilia.** En PC no hay `.mdn` (las
+`native` corren interpretadas), así que las dos VMs de host deben **ignorar**
+los bloques nativos sin quejarse, sea cual sea su `arch`. Es la prueba barata de
+que el formato es tolerante.
+
+**Dónde se declaran las familias.** Ya está: `aot.targets` del proyecto. Sin
+proyecto abierto, la familia es la de la placa conectada — que es exactamente lo
+que hace hoy el IDE (*«target riscv — lo dice la placa»*).
+
+---
+
+## `double` en funciones `native` — helpers, igual que hizo `long` (Eduardo, 17-ago)
+
+Es la ficha **`#426`**, aplazada a V6 el 16-ago. Hoy el emisor lo rechaza a la
+cara: *«AOT: tipo 'double' no soportado en thunk native (ficha #426)»*.
+
+**La propuesta.** *«Al código C generado, si hace falta, le añadimos las
+funciones C que necesite de las operaciones de double. De momento, esas
+funciones internamente lo que harán es llamar a los opCodes que corresponda. No
+es muy óptimo en rendimiento pero nos sirve mientras no encontremos una solución
+mejor.»*
+
+### El patrón ya está probado: es lo que resolvió `#381`
+
+Con `long` pasó exactamente lo mismo y se resolvió así (idea de Eduardo también,
+en su día): el micro no tiene división de 64 bits en hardware, el `/` de C se
+convertiría en una llamada a libgcc, **y un `.mdn` no puede resolver símbolos
+externos** — es código relocalizable puro, sin enlazador al cargar. La salida
+fue `idiv64`/`imod64` en la tabla `aot_helpers`. Su comentario dice el porqué y
+también el cuidado que hay que tener:
+
+> *«⚠️ Y hacen EXACTAMENTE lo que hace el intérprete, no lo que sería "más
+> correcto": mismo chequeo de divisor cero, mismo mensaje… Si el camino
+> compilado fuera más listo que el interpretado, el mismo programa daría dos
+> resultados según llevara `.mdn` o no — que es justamente el invariante que no
+> se puede romper.»*
+
+Eso vale igual aquí, y con `double` **pica más**: NaN, infinitos, el redondeo,
+el `-0.0`, qué pasa al convertir un `double` fuera de rango a `integer`. Cada
+uno de esos es una oportunidad de que el `.mdn` y el intérprete difieran en un
+bit. La regla es la misma: el helper no implementa la operación, **comparte la
+implementación del intérprete**.
+
+### Una precisión que abarata mucho la idea
+
+«Llamar al opcode» no significa meterse en el intérprete: el helper es **C
+normal compilado DENTRO del firmware**, y el firmware sí está enlazado contra
+libgcc. O sea que `h_dadd(a,b)` es literalmente `return a + b;` — el `__adddf3`
+lo resuelve el enlazador del firmware, que es lo que el `.mdn` no puede hacer.
+No hay que reimplementar coma flotante por software: hay que **prestarle al
+`.mdn` la que el firmware ya tiene**.
+
+### Cuántos helpers, y el detalle de que aquí NO basta con la división
+
+Con `long` sólo hicieron falta dos (`/` y `mod`): sumar y multiplicar los hace
+GCC en línea. Con `double` **en las familias de hoy no hay ni una operación
+gratis**, porque ninguna tiene FPU de doble precisión:
+
+| familia | FPU | `double` |
+|---|---|---|
+| RP2350 (Cortex-M33) | simple precisión (FPv5-**SP**-D16) | software |
+| ESP32-P4 (RISC-V) | ABI `ilp32f` = float en registros | software |
+| STM32U5 (Cortex-M33) | simple precisión | software |
+
+Así que la lista es la de libgcc soft-float: `+ - * /`, negar, las seis
+comparaciones y las conversiones (`double`↔`integer`, `double`↔`long`,
+`double`↔`float`). Unas 15-20 entradas. La tabla `aot_helpers` **sólo crece por
+el final** (prefijo congelado, `#158`), así que añadirlas es aditivo y no rompe
+ningún `.mdn` ya grabado.
+
+### Y una simetría que conviene ver antes de llamarlo «poco óptimo»
+
+Eduardo lo da por lento a propósito, pero el número puede sorprender **a favor**:
+
+- **Donde `double` es software** (todas las placas de hoy), una operación cuesta
+  ya decenas de ciclos. El coste extra de la llamada al helper —una decena— es
+  un recargo del orden del 20-30 %, no un desastre.
+- **Donde `double` fuera hardware** (un STM32F7/H7 con FPU de doble, que Eduardo
+  mencionó), la operación costaría 1-3 ciclos y la llamada 10-20: ahí sí, un
+  factor 5-10.
+
+O sea que **la solución barata es barata justo donde `double` ya es lento, y cara
+justo donde sería rápido**. Eso le da a la «solución mejor» un disparador claro y
+medible en vez de una intuición: emitir la instrucción nativa en lugar del helper
+**sólo si el micro tiene FPU de doble precisión**. Y parte del mecanismo para
+saberlo ya existe — el `.mdn` lleva su ABI de coma flotante en la cabecera
+(`ilp32f`), precisamente porque una discrepancia de ABI de FP no da error de
+enlace sino resultados mal.
+
+### La ganancia esperada, ESTIMADA con datos reales (18-ago)
+
+La pregunta de Eduardo —*«si ya hay una emulación de operaciones double, ¿no
+podemos hacer que las native la aprovechen?»*— es exactamente este diseño. Y
+`samples/DblBench.bp`, escrito ese día para otra cosa, permite estimar lo que se
+ganaría **antes** de invertir el trabajo:
+
+| Metro, 200.000 vueltas × 4 operaciones | ms |
+|---|---:|
+| bucle de `double` **interpretado** | 4048 |
+| bucle de enteros (≈ el coste del INTÉRPRETE) | 2835 |
+| **la aritmética de coma flotante en sí** | **~1213** (1,5 µs/op) |
+
+Una `native` quita el despacho del intérprete —esos 2835 ms— pero **la
+aritmética se queda igual**, porque acaba en las MISMAS rutinas a través de los
+helpers. Sumando la llamada, saldrían unos 1300-1400 ms contra 4048: **≈3×**,
+no 10×.
+
+Eso no descarta la feature —3× medido es una ganancia real— pero **cambia cómo
+se cuenta**: el suelo lo pone la emulación, no el intérprete, y quien marque
+`native` esperando que un cálculo de `double` vuele se llevará una decepción.
+Conviene que eso esté escrito en el manual el día que entre.
+
+**Corolario de la decisión de `L14`**: al quedarse con las rutinas optimizadas
+del RP2350 (las que aplastan subnormales), los helpers heredan ESA velocidad. Si
+se hubiera cambiado a las de libgcc, el `double` en `native` habría nacido un
+80 % más lento en su parte cara — la decisión de hoy abarata la feature de
+mañana sin que nadie lo pretendiera.
+
+Aun así, la medida de verdad sigue pendiente para el primer día del trabajo:
+cronometrar un bucle de `double` en una `native` con helpers contra el mismo
+bucle interpretado. La estimación de arriba es aritmética sobre datos reales,
+que es mucho mejor que una intuición — pero sigue sin ser una medida.
+
+---
+
+## `run miModulo <arg>` — el argumento, SIEMPRE en el heap (Eduardo, 18-ago)
+
+Es la ficha **`#412`**, movida a V6 por decisión de Eduardo: *«no es nada
+urgente ni crítico»*. Pero el diseño queda cerrado aquí, que es lo que cuesta.
+
+**De dónde viene.** `#386` arregló que el argumento de `Main` saliera de su
+VALOR POR DEFECTO en vez de ser siempre `""`, y su propio comentario en
+`MivmEmitter` dejó dicho lo que faltaba: *«Pasar el runtime el argumento DE
+VERDAD (wire + IDE + los 3 firmwares) sigue pendiente aparte»*. Eso es esto.
+
+**La idea de Eduardo, que es la que lo simplifica:** *«si el argumento se sube
+al heap y se le pasa la referencia, el caso sin argumentos se convierte en un
+caso con argumento `""` también subido al heap; en realidad los dos casos son
+casi iguales.»*
+
+**Y por qué importa más de lo que parece.** No es sólo tener un camino en vez de
+dos: hoy los dos casos producen **tipos de cadena distintos**. El argumento
+horneado es un literal de la ZONA DE DATOS —sin cabecera de bloque y con
+dirección por debajo de `heap_start`— y uno de ejecución sería una cadena del
+HEAP. Son las dos formas que hubo que reconocer en `#389` para el `CHECKCAST`.
+Si `Main` recibe una u otra según cómo se lance el programa, todo lo que haga
+con ella (guardarla en un campo, concatenar, dejar que la vea el GC) recorre
+caminos distintos — la clase de diferencia que acaba en «funciona desde el IDE y
+falla en la placa». Con la propuesta, **siempre es del heap** y la asimetría no
+llega a existir.
+
+### La forma
+
+- La VM tiene *el argumento de ejecución*: una cadena, vacía si nadie la dio.
+- `__startup` sigue conociendo el valor por defecto (lo dice el fuente) pero ya
+  no lo empuja: se lo **pasa a un builtin**, que devuelve la referencia buena —
+  el argumento de ejecución si lo hay, y si no una copia del defecto **subida al
+  heap igualmente**.
+- `Main` recibe siempre una referencia del heap, venga de donde venga.
+
+Lo que CONSERVA, y por eso es seguro: sin argumento y sin defecto el programa
+recibe `""` en el heap en vez de `""` en datos — mismo valor y mismo
+comportamiento observable. Un programa que hoy funciona no se entera.
+
+### Lo que cuesta, contado
+
+| dónde | qué |
+|---|---|
+| emisor | una línea distinta en `__startup` (`MivmEmitter`) |
+| las 2 VMs | un builtin que resuelve arg-de-ejecución-o-defecto, y lo aloja |
+| wire | campo `arg` en `RUN` — **cuatro** implementadores: Pico, ESP32, STM32 y el simulador |
+| CLI | los dos hosts |
+| IDE | `run X <arg>` en la consola y el «Run on Device» |
+
+**Lo caro no es el mecanismo: es que abre el protocolo.** Por eso encaja en V6 y
+no en el cierre de V5 — y encaja además con `#434` (desacoplar los eventos) y
+con fundir el `.mdn` en el `.mod`, que ya van a mover ese mismo terreno.
+
+---
+
+## La RAM del código nativo de un pack: ¿stack, heap, o arena aparte? (Eduardo, 21-ago)
+
+Pregunta de Eduardo, planteada mirando a V6/V7: *«cualquier código C que metamos en un
+Pack necesitará algo de RAM para trabajar. Al final habrá que hacer como los módulos que
+están en un Pack: el código se queda quieto pero se emplea un poco de RAM para cada uno.
+La cuestión es de dónde sale esa RAM: del stack, del heap, o una tercera vía — un espacio
+reservado con su propio malloc aparte del gestionado por el Heap.»*
+
+### La respuesta corta: la tercera vía YA está elegida, y corriendo
+
+No es una decisión pendiente: es lo que se hizo para SQLite en V5/H3, y el porqué está
+escrito en el código.
+
+- **`bpvm_bios.h:74`** separa las dos cosas sin ambigüedad: *«el del pack, NO el heap BP
+  (son de formas distintas: `bpvm_heap_alloc` devuelve handles con tipo y sujetos al GC;
+  esto quiere punteros crudos). Sale de la arena reservada por el ENV.»*
+- **`bios_pico.c:12`** explica por qué NO se apuntó al heap del sistema: *«el pack
+  comería del heap de FreeRTOS, justo lo que la arena separada existe para evitar»*.
+- **`bpvm_sqlmem.c`** es la REGLA de cuánta se reserva, con los números medidos.
+- Y en placa se ve: `bd: reservada (SQLite=2) -> 2048 KB @ 0x11000000`.
+
+**Por qué NO el heap de BP** (y esto ya no hay que volver a discutirlo): el heap reparte
+*handles* con generación, sujetos al GC y movibles. El C nativo quiere *punteros crudos*
+que no se muevan bajo sus pies. Son formas incompatibles, no una preferencia.
+
+**Por qué NO la pila**: es de tamaño fijo y contado por hilo (`Pila VM: 12 KB sin usar de
+16 KB`), y una biblioteca C que reserve por su cuenta la desborda sin aviso. Lo que la
+pila NO da es lo que estas bibliotecas piden: vida más larga que la llamada.
+
+### Lo que de verdad está abierto (y esto sí es V6/V7)
+
+1. **La arena de hoy es SINGULAR y se llama `SQLite`** — la clave del ENV y la ranura de
+   la BIOS (*«LA ARENA DE LA BD»*). Para N packs hace falta identidad.
+2. **SQLite se queda la arena ENTERA** y la gestiona con su propio asignador (MEMSYS5).
+   Un segundo pack nativo hoy se pelearía con él.
+3. **`malloc`/`free`/`realloc` de la BIOS son CHIVATOS, no implementaciones.** Ese es
+   justo el camino que necesita *«cualquier código C»* que no traiga asignador propio, y
+   el código ya dice que llegará: *«saldrán de la arena del ENV cuando toque»*. **Ese es
+   el trabajo concreto**, y hoy en la Pico devuelve NULL gritando.
+4. **Quién decide los tamaños.** Hoy: una clave de ENV por función. Con N packs son N
+   claves, y eso choca de frente con *«un microcontrolador no es un barco»*.
+
+### Una propuesta, para discutir — NO decidida
+
+**Una sola arena, con el asignador dentro de la VM y contabilidad POR PACK.**
+
+- Se mantiene la frontera que importa —ni el heap de FreeRTOS ni el de BP—, que es lo que
+  la arena existe para proteger.
+- Una sola clave de ENV (`nativo=<MB>` o similar) en vez de una por biblioteca.
+- La contabilidad por pack da lo que hoy dan los chivatos, pero en régimen permanente:
+  **quién se está comiendo la arena**, con nombre. Hoy eso sólo se sabe cuando peta.
+- SQLite seguiría pudiendo pedir un bloque grande y usar MEMSYS5 dentro: *un cliente más*
+  de la arena, no su dueño.
+
+⚠️ **Lo que hay que mirar antes de comprarla**: un asignador de propósito general en la
+VM es código nuevo en el camino crítico, y la fragmentación con clientes de vidas muy
+distintas (LVGL pinta y suelta; SQLite retiene páginas) es exactamente donde estos
+esquemas se rompen. Merece medirse antes que escribirse.
+
+📌 **Y el contexto de Eduardo**: *«SQLite es un buen modelo pero habrá que mejorarlo»*, y
+**LVGL a un pack es V7**. O sea que el segundo cliente de la arena ya tiene nombre y
+fecha aproximada: cuando llegue, el punto 2 de arriba deja de ser teórico.
