@@ -82,6 +82,7 @@ set(BPVM_C_SRC
     # H9 — gestión de placa (entorno + particiones), núcleo portable compartido
     # con el boardsim de host; el firmware solo aporta la cintura de flash + el
     # puente (board_mgr_pico.c, abajo).
+    ${BPVM_C_ROOT}/src/bpvm_log.c            # V6/U1.2: el NUCLEO del log, comun a las 4 imagenes
     ${BPVM_C_ROOT}/src/bpvm_env.c            # bloque de env A/B (formato + CRC + A/B)
     ${BPVM_C_ROOT}/src/bpvm_part.c           # particiones fijas, offsets derivados
     ${BPVM_C_ROOT}/src/bpvm_boot.c           # máquina de estados de arranque + STATE

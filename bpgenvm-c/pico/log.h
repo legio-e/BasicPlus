@@ -1,82 +1,31 @@
 /*
- * log.h — log persistente para diagnóstico post-mortem.
+ * log.h (Pico/RP2350) — el firmware usa el NÚCLEO PORTABLE del log
+ * (`src/bpvm_log.c`). Este header sólo re-expone la API portable —`log_printf`,
+ * `log_flush`, `log_dump`, `log_clear_*`, el interruptor y las estadísticas
+ * vienen de `bpvm_log.h`— y declara `log_init()`, que construye la cintura del
+ * RP2350 (FreeRTOS + XIP + `flash_lock` sobre el sector BP_LOG) y arranca el
+ * núcleo.
  *
- * Motivación: si el firmware se cuelga o el USB CDC deja de responder,
- * perdíamos toda la info de qué estaba pasando. Con esta capa:
- *
- *   - Cada mensaje importante va a un buffer en RAM (4 KB).
- *   - En momentos críticos (boot, assert, antes de RESET) se persiste a
- *     un sector de flash dedicado.
- *   - Al arrancar, log_init() carga el último snapshot — así podemos
- *     hacer LOG y ver qué pasó en la sesión anterior antes de morir.
- *
- * Layout flash:
- *    0x3FC000  ┌─ LOG sector (4 KB)
- *              │   header: magic + version + size
- *              │   data:   bytes UTF-8, line-based
- *    0x3FD000  ├─ FS region (12 KB)
- *
- * No es un sistema de logging completo (no levels, no timestamps a
- * subsegundo, no rotación). Solo "qué ha hecho el firmware hasta ahora,
- * en orden". Suficiente para post-mortem en bring-up.
+ * La lógica del log ya NO vive aquí: es idéntica en las cuatro imágenes. Gemelo
+ * de `stm32/port/log.h` y del `log.h` del ESP32. Ver `pico/log.c` para qué se
+ * conserva de la versión anterior y qué cambió a propósito.
  */
 #ifndef BPVM_PICO_LOG_H
 #define BPVM_PICO_LOG_H
 
-#include <stddef.h>
-#include <stdint.h>
+#include "bpvm_log.h"   /* log_printf / log_flush / log_dump / log_clear_* / stats */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Inicializa el log. Intenta cargar el snapshot de flash si hay magic
- * válido. Llamar UNA vez antes del primer log_printf. */
+/* Construye la cintura del RP2350 y recupera el snapshot anterior (post-mortem
+ * #439: si la RAM sobrevivió al reset, manda sobre el flash). Llamar UNA vez
+ * antes del primer `log_printf`. */
 void log_init(void);
-
-/* Añade una línea al log. Auto-añade timestamp (ms desde boot actual)
- * + newline. No bloquea, no toca flash. */
-void log_printf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
-
-/* #423 — EL INTERRUPTOR DEL LOG (`log=0|1` en el entorno). Arranca ENCENDIDO:
- * lo que pase antes de que el arranque lea su entorno se registra siempre.
- * Apagado no borra nada, sólo deja de añadir.
- *
- * ⚠️ ESTA FAMILIA TIENE SU PROPIO LOG. `bpvm_log.h` dice ser «el núcleo
- * portable que unifica los logs de Pico/STM32/ESP32 en UNA implementación», y
- * el Pico nunca migró: `pico/log.c` lleva su copia completa. Por eso esto se
- * declara e implementa aquí y no se hereda. Migrarlo es otra ficha; duplicar
- * dos líneas hoy es más barato que mover el log de la placa a estas horas —
- * pero que quede escrito, porque es exactamente la clase de copia que se queda
- * atrás cuando el común crece. */
-void bpvm_log_set_enabled(int on);
-int  bpvm_log_enabled(void);
-
-/* Persiste el buffer RAM a flash (erase + program del sector). Bloquea
- * ~50 ms con IRQs OFF. Llamar en momentos críticos. */
-void log_flush(void);
-
-/* Vacía el buffer RAM (no toca flash). Útil al iniciar una nueva sesión
- * de pruebas. log_clear_flash() también borra el sector. */
-void log_clear_ram(void);
-void log_clear_flash(void);
-
-/* Vuelca el log actual (RAM) a un sink. Cada chunk se entrega a `cb`. */
-typedef void (*log_sink_t)(const char* data, size_t len, void* user);
-void log_dump(log_sink_t cb, void* user);
-
-/* Stats. */
-uint32_t log_used_bytes(void);
-uint32_t log_total_bytes(void);
 
 #ifdef __cplusplus
 }
 #endif
-
-/* #439 — 1 si lo cargado viene de la RAM que sobrevivio al reset (o sea, las
- * lineas de ANTES del cuelgue); 0 si se cargo de flash en un arranque en
- * frio. Lo dice el banner de arranque: una autopsia que no sabe de cuando es
- * manda la depuracion al sitio equivocado. */
-int bpvm_log_origen_ram(void);
 
 #endif /* BPVM_PICO_LOG_H */

@@ -133,13 +133,22 @@ las copias ya son idénticas.
   [[core-c-nuevo-alta-en-5-builds]].
   ✅ **Se comprueba**: las cinco imágenes enlazan, y `find -name json_min.c` devuelve UNO.
 
-- **`U1.2` · El log de la Pico al común** *(cierra `#423`)*. Medido: **la Pico es la única
+- **`U1.2` ✅ HECHO EN CÓDIGO (23-ago) · El log de la Pico al común** *(cierra `#423`)*. Medido: **la Pico es la única
   familia cuyo `CMakeLists` no nombra `src/bpvm_log.c`** — lleva las 15 funciones
   duplicadas en `pico/log.c` (280 líneas). El STM32 (60) y el ESP32 (103) **ya tienen la
   forma correcta**: sólo cintura (`flash_read`, `flash_write`, `now_ms`).
   ⏭️ O sea que no hay que diseñar nada: **hay dos ejemplos de cómo debe quedar**.
-  ✅ **Se comprueba**: el log post-mortem sigue sobreviviendo al reinicio en la Pico —
-  ésa es la función que no puede romperse.
+  ✅ **Hecho**: `pico/log.c` pasa de **280 a 101 líneas** (sólo cintura: reloj de FreeRTOS,
+  lectura por XIP, `erase`+`program` bajo `flash_lock`), `pico/log.h` queda como fachada
+  igual que la del STM32, y **`src/bpvm_log.c` entra por fin en `pico/CMakeLists.txt`**.
+  ✅ **Verificado en el PC**: el firmware **compila y enlaza** —y eso ya prueba que no
+  quedó ninguna función duplicada del núcleo, que el enlazador lo habría cantado— y
+  `make test-logsw` sigue en verde (4 de 4).
+  ⏳ **Falta la placa**: que el post-mortem siga sobreviviendo al reinicio en la Pico. Es
+  la función que no puede romperse y **no se puede comprobar en host**.
+  ⚠️ **Un cambio de comportamiento, a propósito**: `log_clear_flash` borraba SÓLO la flash
+  y dejaba el log en RAM —así que el siguiente volcado lo devolvía—; el del núcleo vacía
+  las dos. Si vacías el log, esperas que se vaya.
 
 - **`U1.3` · El escaneo de `.mdn` del STM32 al común.** Usa un bucle propio en
   `stm32_repl.c:526` en vez de `bpvm_mdn_scan.c`, que ya usan las otras tres familias.
