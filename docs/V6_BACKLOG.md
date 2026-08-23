@@ -50,6 +50,21 @@ una vez y no 3 veces.»* El detalle de cada tarea está en `FICHAS.md` §«LOS H
 | 🟡 **U5** | la tabla de handles: darle módulo | hoy repartida por 5 ficheros; desbloquea `#432` |
 | ⬜ **A1** | la revisión **por niveles** | después de U1–U5, y ya sobre código único |
 
+Y **siete hitos más**, que agrupan lo que ya estaba fichado y suelto (23-ago):
+
+| hito | qué | nota |
+|---|---|---|
+| **N1** | **AOT**: ampliar la cobertura por tandas | ya existía, del 21-ago |
+| **L1** | **lenguaje y compilador** | incluye el `Core` implícito, marcado *OBLIGATORIO* |
+| **E1** | **el IDE** y el wire | `#412`, el CRC de dependencias, `RESET`, el árbol por color… |
+| **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | es una **solución** para `#434`, no un problema nuevo |
+| **P1** | **ESP32-C3 y ESP32-C6** | las dos RISC-V; va **después** de la unificación, a propósito |
+| **P2** | **pantallas SPI** | *después de P1*: la placa primero, el driver después |
+
+📌 **U1–U5 no bloquean a los demás** — abaratan lo que venga detrás, pero N1, L1 y E1 tocan
+sitios distintos. Con orden obligado sólo: A1 (tras la unificación), P2 (tras P1) y U3
+(tras U2).
+
 ⚠️ **No entran aquí, a propósito:** packs nativos en S3/STM32, la SD del STM32, `LIST_DIR`
 en el STM32 y la red en placa. **No son unificación: es funcionalidad que no existe.**
 

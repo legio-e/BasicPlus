@@ -112,12 +112,94 @@ tocar y cómo se comprueba.
 | **U4** | la **stdlib embebida**: un solo formato de blobs | abierto 23-ago |
 | **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
+| **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | abierto 21-ago |
+| **L1** | **lenguaje y compilador** | abierto 23-ago |
+| **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
+| **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
+| **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | abierto 23-ago |
+| **P2** | **pantallas SPI** — *después de P1* | abierto 23-ago |
+
+📌 **U1–U5 no bloquean a los demás.** La unificación es lo que se hace *primero* porque
+abarata todo lo que venga detrás, pero N1, L1 y E1 tocan sitios distintos y pueden avanzar
+en paralelo si apetece cambiar de aire. Los que **sí** tienen orden son A1 (después de la
+unificación), P2 (después de P1) y U3 (después de U2).
 
 ⚠️ **Fuera de esta serie, y a propósito**: los packs nativos en S3/STM32, la SD del STM32,
 `LIST_DIR` en el STM32 y la red en placa **no son unificación, son funcionalidad que no
 existe**. Van al saco de «qué falta» y no bloquean U1–U5.
 
 ---
+
+#### 🖼️ G1 — el bucle de LVGL a un hilo BP propio
+
+**Idea de Eduardo (23-ago):** *«de LVGL me gustaría, si podemos, mejorar el bucle,
+poniéndolo en un hilo BP sólo para él»*.
+
+📌 **No es un problema nuevo: es una FORMA DE SOLUCIÓN para `#434`**, que ya está fichada.
+Hoy un clic tiene que **atravesar el lazo de BP** para llegar a su handler —el upcall lo
+encola y sólo se drena entre quanta, y el único punto de quantum es la vuelta de
+`Gui.run()`—, así que **el evento no avanza mientras el bombeo duerme**.
+
+⏭️ **Por qué encaja**: BasicPlus tiene **hilos preemptivos de verdad**, no `async`. Un hilo
+dedicado al bombeo de LVGL desacopla el ritmo de la GUI del quantum de la aplicación **en
+todas las familias a la vez**, en vez de ajustar un número por placa — que es justo lo que
+`#434` pedía evitar.
+
+⚠️ **Lo que hay que resolver antes de escribir código**, y no es menor: LVGL **no es
+reentrante**. Si el bombeo vive en su hilo y los builtins de `Gui` se llaman desde el hilo
+de la app, hay dos hilos tocando LVGL. Hace falta decidir el candado —o que los builtins
+encolen y sea el hilo de la GUI quien ejecute— antes de tocar nada.
+📐 Y lo que `#434` ya pedía sigue valiendo: **medir primero** el camino clic→handler
+aparte del camino invalidar→pintar, e instrumentar el STM32 como está el P4.
+
+#### 🧩 L1 — lenguaje y compilador
+
+Agrupa lo que ya está fichado y suelto por el registro. **No duplica: agrupa** — el texto
+de cada una sigue en su sitio.
+
+- 🔴 **La pasada de INTERFAZ no resuelve `Core` implícito** — marcada *V6 OBLIGATORIO*.
+- **La sustitución por LSP entre interfaces de módulo** no funciona *(probablemente el
+  mismo problema visto dos veces que el anterior)*.
+- **`Object` = comodín por referencia** — decidido y diseñado.
+- **Liberación de recursos**: destructor `~Clase()` + `var owner` + `FREE_REF`.
+- **Ficheros como CLASE** — decidido: dos clases y la segunda hereda.
+- **`Map`**: objetos internos para claves **y** valores + `add` sobrecargado *(decidido el
+  23-ago; ver arriba)*.
+- **`Math`, ampliar** — `fact` sobrecargada y f64, más lo que salió de mirar BASIC256:
+  `atan2`, `remap`, `clamp`, `hypot`, `wrap`. Todas son cálculo puro y de pocas líneas.
+- **`#19`** array fijo LOCAL: que sea inline de verdad · **`#396`** módulo `Time`.
+
+#### 💻 E1 — el IDE y el wire
+
+- **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
+- **NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.
+- **Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC *(idea de Eduardo)*.
+- **El verbo `RESET` no llega con un RUN vivo** *(era `#452`)*.
+- **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC.
+- **El árbol de ficheros por COLOR** según el tipo · **enseñar el `durationMs`** que la
+  placa ya manda y nadie imprime.
+
+#### 🔌 P1 — las placas nuevas: ESP32-C3 y ESP32-C6
+
+**Encargo de Eduardo (23-ago).** Encaja con la prioridad ya escrita —[[prioridad-arm-riscv-s3-secundario]]:
+ARM y RISC-V primero— porque las dos son **RISC-V**.
+
+✅ **Ya hay una estimación hecha, y es buena noticia**: la ficha *«¿cuánto cuesta una familia
+nueva si antes unificamos?»* la contesta con el precedente del P4 — el IDF es el mismo para
+toda la familia ESP32, así que casi todo lo hecho sirve y **lo nuevo es el arranque y, sobre
+todo, trabajo de pruebas**.
+⏭️ **Y por eso este hito va DESPUÉS de U1–U5**, no antes: cada sistema sin unificar es una
+copia más que escribir para cada micro nuevo. Es el argumento entero de V6, aplicado.
+
+#### 📺 P2 — pantallas SPI *(depende de P1)*
+
+**Encargo de Eduardo (23-ago):** *«hay que mirar el soporte de pantallas SPI, pero eso
+cuando hayamos añadido los micros ESP32-C6, que tiene una pantalla muy pequeña»*.
+
+📌 El orden lo pone él y tiene sentido: **la placa primero, el driver después**. Hoy la GUI
+va por MIPI-DSI (P4) y LTDC (STM32), las dos interfaces paralelas de gama alta; SPI es la
+que abre la GUI a las placas pequeñas, y conviene desarrollarla contra el hardware que la
+va a usar.
 
 #### 🟢 U1 — lo que no exige decidir nada
 
