@@ -806,8 +806,43 @@ el que se colaba el caso peor: un módulo cuyas únicas `native` son métodos sa
 en el repo): tres casos —sólo método, mezcla con una `native` de módulo, y una clase limpia
 que **no** debe generar ruido—. Comprobado que **falla sin el arreglo** (2 de 3), que es lo
 que distingue un test de un adorno. Batería: 107/0.
-⏭️ **Falta la otra mitad**: abrir el barrido a los métodos. Cuando se haga, este aviso
-sobra y el test cambia — y eso es correcto.
+✅✅ **Y LA OTRA MITAD TAMBIÉN (23-ago): los métodos `native` YA SE COMPILAN.** Salió tal
+como lo planteó Eduardo —*«mimodulo.miclase.mimetodonative(objMiclase, ...)»*— y **no hubo
+que forzar nada, porque por debajo ya era así**: `ModWriter.addMethod` hace
+`declareParam("this", 8)` antes que los demás parámetros. Lo único que faltaba era
+**exportar el nombre**, porque el registro AOT busca el símbolo para sacar su dirección.
+
+📐 **Lo que se midió por el camino, y desmonta dos cosas que yo había escrito:**
+- Un método `native` y uno normal producen el **`.mod` idéntico**. El `native` no cambia
+  el bytecode — lo dice el propio comentario de `Ast.FuncDef.isNative`.
+- El secuestro AOT va **por DIRECCIÓN** (`bpvm_aot_lookup(target_abs)` en `OP_CALL` y
+  `CALL_EXT`), no por nombre. El nombre sólo sirve para hallar la dirección al registrar.
+- Mi *«el cuerpo del método no tiene símbolo»* era **falso**: tiene dirección, sólo que
+  `addMethod` la daba de alta con `exportar=false` y un comentario explicando por qué.
+
+🔩 **Tres cambios**: `ModWriter` acepta `exportar` en `addMethod`/`addPrivateMethod` ·
+`MivmEmitter` pasa `fn.isNative` · `AotCEmitter` **aplana** cada método a un `FuncDef` con
+`this` delante, así toda la maquinaria (cuerpo, thunk, refs de 8 B, registro) sirve sin
+tocarla. Registro: `<Módulo>.<Clase>.<método>`.
+
+🔑 **Y la LECTURA DE PROPERTY, por su getter** — corrección de Eduardo: *«no se accede a un
+campo, se accede como una propiedad y eso es llamar a un método get»*. No es una
+conveniencia: en BP no hay campos públicos, es como ya lo emite el bytecode
+(`emitInvokeVirtualSmart(cls, "get"+Nombre, 0)`), **y es la única ruta que el runtime
+soporta** — entre los helpers del AOT está `call_method_i32` y no hay ninguno para leer
+campos. El C sale así:
+```c
+return (vm->aot_helpers->call_method_i32(vm, this, 2, (const int32_t*) 0, 0, 0u, 0) * 2);
+```
+⚖️ **LIMITACIÓN ACEPTADA (Eduardo, 23-ago):** un `native` **no** puede leer un campo
+directamente — *«es razonable, teniendo en cuenta que siempre puede acceder a través de un
+getter»*. Se avisa y ese método corre interpretado.
+
+🛡️ **Sin regresión**: un método que no se puede traducir **se cae solo**, con su aviso, en
+vez de tumbar el módulo — que es lo que habría pasado con el `throw` de siempre, y habría
+roto módulos que hoy emiten bien.
+✅ Test reescrito a cuatro casos (emite · property por el getter · campo degrada sin
+tumbar · clase limpia sin ruido). Baterías **108/0** y **34/0**.
 
 **1 (continuación).** Hoy se ignora en silencio (ver
 la ficha aparte). Son dos cosas y en este orden: que **AVISE** —barato, y convierte una

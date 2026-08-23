@@ -1507,6 +1507,58 @@ public final class AotCEmitter {
             w.print(")");
             return;
         }
+        /* [V6/N1.1] `this` — en un metodo aplanado ES el primer parametro, con ese
+         * mismo nombre (ver el barrido de emitModule). Asi que no hay nada que
+         * resolver: se emite tal cual, como el `self` de Python. */
+        if (e instanceof Ast.ThisExpr) { w.print("this"); return; }
+
+        /* [V6/N1.1] Lectura de una PROPERTY — `obj.x`, y tambien `this.x`.
+         *
+         * En BP no hay campos publicos: publico ⇒ property, y leer una property
+         * es LLAMAR A SU GETTER. Criterio de Eduardo (23-ago-2026), y no es una
+         * conveniencia: es como lo emite ya el bytecode (`emitInvokeVirtualSmart(
+         * cls, "get"+Nombre, 0)` en MivmEmitter), asi que el AOT hace lo mismo y
+         * no inventa una segunda semantica.
+         *
+         * Que un `native` NO pueda leer un campo directamente es una limitacion
+         * ACEPTADA — Eduardo: *«es razonable, teniendo en cuenta que siempre
+         * puede acceder a traves de un getter»*. Y encaja con la maquina: entre
+         * los helpers del AOT esta `call_method_i32` y NO hay ninguno para leer
+         * campos, asi que esta es la unica ruta que el runtime ya soporta. */
+        if (e instanceof Ast.MemberAccessExpr) {
+            Ast.MemberAccessExpr ma = (Ast.MemberAccessExpr) e;
+            Symbol mSym = (semInfo != null) ? semInfo.exprSymbols.get(ma) : null;
+            if (mSym instanceof Symbol.PropertySymbol) {
+                Symbol.PropertySymbol ps = (Symbol.PropertySymbol) mSym;
+                if (ps.ownerClass == null || ps.isStatic) {
+                    throw new UnsupportedAotException(
+                        "AOT: property de modulo o estatica '" + ma.member + "' (line "
+                        + ma.line + "): el puente v1 solo cubre properties de instancia.");
+                }
+                String getter = "get" + Character.toUpperCase(ps.name.charAt(0))
+                              + ps.name.substring(1);
+                int slot = ps.ownerClass.slotOf(getter);
+                if (slot < 0) {
+                    throw new UnsupportedAotException(
+                        "AOT: no se pudo resolver el slot del getter '" + getter
+                        + "' de '" + ps.ownerClass.name + "' (line " + ma.line + ").");
+                }
+                boolean retIsRef = isRefBp(ps.type);
+                if (!isBridgeI32Type(ps.type) && !retIsRef) {
+                    throw new UnsupportedAotException(
+                        "AOT: property '" + ma.member + "' (line " + ma.line + "): el puente "
+                        + "v1 solo soporta i32 y referencias; float/long/double → pendiente.");
+                }
+                warnings.add("la funcion native '" + currentFuncName + "' lee la property '"
+                    + ma.member + "' (linea " + ma.line + "). Esa lectura cruza al interprete "
+                    + "por el puente native→BP (getter virtual) y NO se acelera por AOT.");
+                w.print("vm->aot_helpers->call_method_i32(vm, ");
+                emitExpr(ma.target);
+                w.print(", " + slot + ", (const int32_t*) 0, 0, 0u, " + (retIsRef ? 1 : 0) + ")");
+                return;
+            }
+        }
+
         throw new UnsupportedAotException(
             "AOT: expression no soportada: " + e.getClass().getSimpleName());
     }
