@@ -67,8 +67,18 @@ guardar»*. Hecho en `6351b990`:
 
 **Lo siguiente, sin compromiso de fecha:** decidir el ALCANCE de V6 antes de tocar nada. La
 medida sugiere `json_min` → REPL (el 80 % del problema) → el log. El REPL es el trabajo de
-verdad y no cabe en una sesión corta. Y hay una decisión menor esperando: **triar las fichas
-heredadas** — cuáles entran en V6 y cuáles esperan.
+verdad y no cabe en una sesión corta.
+
+**Y esa decisión la tomó Eduardo en el momento**, así que no quedó esperando: *«lo que haya
+de V5 que quedó pendiente pasa a V6 y deja de ser de V5»*. El bloque heredado deja de ser un
+limbo (`09640964`). Los títulos de sección siguen diciendo `V5/H10` o «la cola de H2» a
+propósito: dicen **de dónde viene** la ficha, no a qué hito pertenece.
+
+⚠️ **Lo que SÍ queda, y es distinto:** de las 59 entradas heredadas, **unas 43 llevan marca
+de cierre** y deberían estar en «CERRADAS». No se movieron porque separarlas exige leerlas
+una a una — mi clasificador automático falló en dos (`#422` decía «EL CHIVATO, HECHO» y no
+lo detectó). Es una limpieza de una sesión corta, y hasta hacerla **ABIERTAS parece mucho
+más grande de lo que es**.
 
 
 ### 22-ago (tarde) — V5 PUBLICADA
