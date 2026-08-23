@@ -856,6 +856,29 @@ sobre datos reales. Es la ficha `#426`.
 Cortex-M33 es de precisión **simple**, así que un `double` no toca la FPU en dos de las
 tres familias. Soportarlo es correcto; **prometer velocidad con él, no**.
 
+**2 (estado, 23-ago).** 🟨 **ETAPA 1 HECHA — los 19 helpers ya están en la tabla** (lado
+C): las 4 aritméticas, `mod`, `neg`, `pow`, las 6 comparaciones y las 6 conversiones,
+añadidas **al final** (prefijo congelado, `#158`), así que es aditivo.
+📌 **Dos decisiones tomadas al hacerlo:** las seis comparaciones van **separadas** y no como
+un `dcmp` de −1/0/1 —con NaN no son negaciones unas de otras, y un comparador único
+divergiría del intérprete en cuanto apareciera un NaN—; y **`DPOW` no se duplica**: se movió
+a `bpvm_dpow`, UNA implementación que usan el intérprete y el helper. Su algoritmo venía
+copiado byte a byte de `VirtualMachine.java`, y dos copias de eso se separan solas.
+✅ **Con red nueva**: `powtest` entra en el corpus de paridad, que cubría `doubletest` pero
+**ningún caso de `^`**. Paridad **34 → 35 PASS**.
+
+⏭️ **LA COLA DE LA ETAPA 2, para no descubrirla a mitad.** Cuando el emisor empiece a usar
+los helpers hay que **subir `MDN_ABI_VERSION` de 4 a 5**. Y eso NO es cosmético: el cargador
+compara con **igualdad exacta** y rechaza —bien, con mensaje: *«el `.mdn` es de otra era de
+los helpers AOT: hay que REGENERARLO»*—. O sea que ese día hay que regenerar:
+- los **cuatro** nativos versionados de SQLite (`SQLite.mdn` y `sqlite.npk`, ARM y RISC-V),
+- el **`SQLite.pack`** que los lleva dentro,
+- y **reflashear las cinco imágenes**, porque la tabla vive en el firmware.
+
+📌 **Hoy NO hace falta nada de eso**: al ser aditivo, los `.mdn` existentes siguen usando el
+prefijo congelado y funcionan con la tabla crecida. El coste se paga entero en la etapa 2 —
+y conviene pagarlo de una vez, no a plazos.
+
 **3. Los statements sencillos.** Del censo de `AOT_LIMITES.md`, por relación
 esfuerzo/cobertura: **`print`** (llamada al runtime que ya existe), **`null`** (un cero),
 **`do…loop`** (un `while` al revés), **literales de array**. Las cuatro son azúcar y
