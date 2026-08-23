@@ -22,6 +22,17 @@ Uno de la lista se hizo ya en V5 y se ha movido a «CERRADAS» (ver el final).
 📌 **Puesto al día el 23-ago**, al abrir V6: el índice se escribió el 21 y no recogía el
 bloque de arquitectura del 22 — que es justamente la columna vertebral del hito.
 
+➕ **Y ese mismo día, por decisión de Eduardo, lo que V5 dejó pendiente pasó a V6 y dejó
+de ser de V5.** Eso ensancha el hito por encima de esta lista: en `FICHAS.md` §ABIERTAS
+**todo es ya de V6**, incluido el bloque heredado (fichas del IDE, módulos y arranque,
+placas, lenguaje, AOT y la cola de la SD). Este índice recoge los asuntos *nombrados*;
+la cuenta real de fichas vive en `FICHAS`.
+
+⚠️ **Con una salvedad medida:** de las 59 entradas del bloque heredado, **unas 43 llevan
+marca de cierre**. Están donde están porque separarlas exige leerlas una a una. Así que
+«pasa a V6» no significa «hay 59 tareas nuevas»: significa que ninguna se queda huérfana
+en un hito que ya cerró.
+
 ---
 
 ## A · Lenguaje y modelo de objetos

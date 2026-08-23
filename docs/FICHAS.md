@@ -76,19 +76,23 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 
 ## ABIERTAS
 
-> **Desde el 23-ago-2026 esta sección es de V6.** V5 se publicó el 22-ago, así que lo
-> suyo dejó de ser trabajo: las secciones ya terminadas bajaron a «CERRADAS EN V5» y
-> **V6 va primero**, que es la versión en curso. Debajo de los dos bloques de V6 siguen
-> las fichas heredadas —bugs y pendientes que V5 no llegó a resolver—: **están vivas**,
-> no archivadas, y les falta decidir si entran en V6. Reorganizado a petición de Eduardo:
-> *«archivar V5, poner V6 en primer plano»*.
+> **Desde el 23-ago-2026 TODO lo de esta sección es de V6.** V5 se publicó el 22-ago;
+> las secciones ya terminadas bajaron a «CERRADAS EN V5», y **lo que quedó pendiente pasó
+> a V6 y dejó de ser de V5** — decisión de Eduardo ese mismo día. Así que aquí no hay dos
+> categorías: hay fichas de V6, unas abiertas *durante* V5 y otras heredadas *de* V5.
+>
+> ⚠️ **Queda una limpieza sin hacer, y conviene saberla:** en el bloque heredado hay **59
+> entradas y unas 43 llevan marca de cierre** (✅, «CERRADA», «HECHO» o un commit). O sea
+> que buena parte de lo que se lee aquí ya está resuelto y debería estar abajo. No se ha
+> movido porque distinguirlas exige leerlas una a una —un clasificador automático ya falló
+> en dos— y eso es trabajo aparte.
 
 ### ═══ V6 — LA VERSIÓN EN CURSO ═══
 
 El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabajados, en
 `V6_IDEAS.md`. Aquí vive el estado.
 
-### 🔜 Aplazadas a V6 — NO cuentan como pendientes de V5
+### 🔜 Aplazadas a V6 durante el desarrollo de V5
 
 - **🔴 [V6, OBLIGATORIO] la pasada de INTERFAZ no resuelve `Core` implícito** — encargo
   explícito de Eduardo (22-ago): *«de momento hacemos 1 para salir del paso, pero en V6
@@ -882,10 +886,15 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 ---
 
 
-### ═══ HEREDADAS DE V5 — vivas, pendientes de triar para V6 ═══
+### ═══ V6 — lo que viene de V5 y AHORA ES DE V6 ═══
 
-> No se archivan porque **no están resueltas**. Lo que falta es decidir, una por una,
-> si entran en V6 o se quedan esperando. Hasta esa decisión siguen aquí.
+> **Decisión de Eduardo (23-ago):** *«lo que haya de V5 que quedó pendiente pasa a V6 y
+> deja de ser de V5»*. Así que esto **no es un limbo ni una lista de espera**: son fichas
+> de V6 como las de arriba. Lo único que las distingue es de dónde vienen, y eso se
+> conserva porque el contexto de un bug incluye cuándo salió.
+>
+> Los títulos de sección siguen nombrando hitos de V5 (`V5/H10`, «la cola de H2») **a
+> propósito**: dicen la procedencia, no el hito al que pertenecen.
 
 ### IDE — V5/H10 «lo pendiente que no son bugs»
 
