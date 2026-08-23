@@ -27,6 +27,29 @@
 
 ## Última sesión
 
+### 23-ago — V6 abierto: el índice, al día, y el primer paso verificado
+
+Sesión corta, de orientación. **No se tocó código.**
+
+- **`V6_BACKLOG.md` no recogía el bloque de arquitectura del 22-ago.** El índice se escribió
+  el 21; las nueve reflexiones sobre unificación salieron el 22 y sólo dos llegaron.
+  Faltaban ocho — la columna vertebral del hito. Entran en §C como «La fundamentación»,
+  separadas de las tareas porque no son tareas: son el porqué y la medida. `666732fd`.
+- **Verificado el primer paso que sugiere la medida** (`FICHAS` L2492, «el orden que sugiere
+  la medida»): `json_min` es **realmente gratis**. Los tres `.c` son byte-idénticos (8.688 B,
+  mismo md5) y las tres cabeceras declaran las mismas seis funciones; sólo cambia el formato.
+  Se puede subir a `src/` sin decidir nada.
+- ⚠️ **Y una advertencia sobre mí mismo, porque hoy pasó cuatro veces**: varios `grep` míos
+  dieron falso rojo —alternancia `\|` con `-E`, clases sin dígitos, un patrón que exigía el
+  paréntesis pegado— y llegué a dar por asimétrico un `json_min.h` que estaba bien. Ninguna
+  llegó a los docs, pero el patrón es el de [[instrumento-mudo-dudar-de-el]]: **antes de
+  declarar algo roto, contrastar contra un caso que se sabe bueno.**
+
+**Lo siguiente, sin compromiso de fecha:** decidir el ALCANCE de V6 antes de tocar nada. La
+medida sugiere `json_min` → REPL (el 80 % del problema) → el log. El REPL es el trabajo de
+verdad y no cabe en una sesión corta.
+
+
 ### 22-ago (tarde) — V5 PUBLICADA
 
 Se empujaron los **358 commits** acumulados desde el 6-ago, se etiquetó `v5.0` sobre
