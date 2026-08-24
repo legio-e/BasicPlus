@@ -87,36 +87,39 @@ array o string; sobre una clase es una llamada a su `length()`/`size()` y va por
 otro camino) · `newIntArray`, `newByteArray`, `newLongArray`, `newDoubleArray`
 *(V6/N1.5)*. El resto se rechaza con el nombre del builtin en el mensaje.
 
-### 5. Arrays: qué elemento sí y cuál no *(V6/N1.5)*
+### 5. Arrays: todos los elementos *(V6/N1.5)*
 
-Crear e indexar arrays dentro de una `native` va para **integer, boolean, byte,
-word, short, long y double** — cada ancho con su helper.
+Crear e indexar arrays dentro de una `native` va para **todos** los tipos de
+elemento: `integer`, `boolean`, `byte`, `word`, `short`, `long`, `double`,
+`float`, y los de **referencias** (`string[]`, `Clase[]`, arrays anidados).
+Cada ancho con su helper.
 
-Faltan dos, y ninguno es un muro:
-
-- **Arrays de REFERENCIAS** (`string[]`, `Clase[]`): faltan tres helpers de la
-  misma forma que los demás — `newarray_ref`, `array_load_ref`, `array_store_ref`.
-- **`float[]`**: falta el helper de store (el valor tendría que cruzar como patrón
-  de bits).
-
-> ⚠️ **Aquí ponía un motivo FALSO**, corregido por Eduardo el 24-ago-2026. Decía
-> que un array de referencias no se podía *«porque en esta ABI una ref cruza con
-> la generación descartada y un `TYPE_ARRAY_REF` las guarda con ella»*. Eso no es
-> pérdida de información: `bpref_regen(vm, ref)` **reconstruye** la generación
-> viva consultando la tabla de handles, y el helper `write_ref` ya hace justo eso
-> en la frontera del thunk desde `#302`. Eduardo: *«desde V5 todas las
-> referencias a objetos, arrays y strings deberían poder pasarse tal cual»*.
+> 🐛 **La lección de este apartado, que valió por dos.** Hasta el 24-ago el
+> emisor elegía el helper por el ancho **sólo para `byte`**, y para todo lo demás
+> usaba el de 4 bytes: un `long[]` se leía de cuatro en cuatro y un `word[]`
+> también. No fallaba — devolvía otro número. La limitación estaba escrita en un
+> comentario («v1: solo integer[]») y no la hacía cumplir nadie. **Un límite que
+> no falla no es un límite.**
 >
-> Es un error de lectura con patrón: leer un límite de TRANSPORTE («no se lleva
-> la generación») como un límite de CAPACIDAD («no se puede recuperar»). El
-> mismo que convirtió cinco veces un «no está hecho» en un «no se puede».
+> ⚠️ **Y el mismo día, el otro error, que es el de siempre**: aquí llegó a poner
+> que los arrays de referencias *no se podían* porque «en esta ABI una ref cruza
+> con la generación descartada». **Falso.** `bpref_regen(vm, ref)` la reconstruye
+> desde la tabla de handles, y `write_ref` ya hacía justo eso en la frontera del
+> thunk desde `#302`. Lo corrigió Eduardo: *«desde V5 todas las referencias a
+> objetos, arrays y strings deberían poder pasarse tal cual»* — y se hicieron esa
+> misma tarde, tres helpers de la misma forma que los demás. Leer un límite de
+> **transporte** («no se lleva la generación») como uno de **capacidad** («no se
+> puede recuperar») es el mismo error que convirtió cinco veces un «no está
+> hecho» en un «no se puede».
+>
+> 📌 Donde SÍ se recupera la generación es en `array_store_ref`, y no es un
+> detalle: guardar la palabra baja a secas dejaría el handle con generación 0, y
+> un 0 no casa con nada — el objeto se leería como muerto al primer acceso. Un
+> use-after-free, no un error.
 
-> 🐛 **Ojo con la lección de este apartado.** Hasta el 24-ago el emisor elegía el
-> helper por el ancho **sólo para `byte`**, y para todo lo demás usaba el de 4
-> bytes: un `long[]` se leía de cuatro en cuatro y un `word[]` también. No
-> fallaba — devolvía otro número. La limitación estaba escrita en un comentario
-> («v1: solo integer[]») y no la hacía cumplir nadie. **Un límite que no falla no
-> es un límite**, y por eso ahora cada caso sin helper es un rechazo con motivo.
+⚠️ **Lo que sigue sin poderse meter en un array desde una native es un LITERAL de
+cadena** — pero eso no es de los arrays: es que un literal vive en `.rodata` y un
+`.mdn` sólo se lleva `.text` (ver §3). Se fabrican con `intToString` y demás.
 
 ### 6. Construcciones sueltas
 

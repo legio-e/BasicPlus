@@ -409,6 +409,24 @@ struct aot_helpers_v2 {
     int32_t (*array_load_i16) (struct bpvm* vm, uint32_t ref, int32_t idx);
     int32_t (*array_load_u16) (struct bpvm* vm, uint32_t ref, int32_t idx);
     void    (*array_store_i16)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
+
+    /* [V6/N1.5b] Arrays de REFERENCIAS (`string[]`, `Clase[]`) y de `float`.
+     *
+     * Los de referencias faltaban por un motivo FALSO: que en esta ABI una ref
+     * cruza «con la generación descartada» se leyó como pérdida de información.
+     * `bpref_regen` la reconstruye desde la tabla de handles — es un límite de
+     * transporte, no de capacidad. Lo corrigió Eduardo (24-ago-2026): *«desde V5
+     * todas las referencias a objetos, arrays y strings deberían poder pasarse
+     * tal cual»*. `array_store_ref` es la frontera donde se recupera; guardar la
+     * palabra baja a secas dejaría gen 0, o sea un objeto que se lee muerto.
+     *
+     * Un elemento ref son BPVM_REF_SIZE bytes y el array es TYPE_ARRAY_REF, no
+     * TYPE_ARRAY_I64: los 8 bytes opacos del I64 el GC no los traza. */
+    int32_t (*newarray_ref)   (struct bpvm* vm, int32_t size);
+    int32_t (*array_load_ref) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (*array_store_ref)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
+    float   (*array_load_f32) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (*array_store_f32)(struct bpvm* vm, uint32_t ref, int32_t idx, float v);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

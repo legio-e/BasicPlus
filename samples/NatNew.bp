@@ -53,7 +53,49 @@ module NatNew
     return v[0] + v[1]
   end sumaLargos
 
-  // ── 3. Un OBJETO creado dentro de la native, leído por sus getters ──────
+  // ── 3. Un array de word: DOS bytes por casilla ──────────────────────────
+  // Este es el que descubrió el fallo: el emisor elegía el helper por el
+  // ancho, y para todo lo que no fuera `byte` elegía el de 4 bytes. Un
+  // `word[]` se leía de cuatro en cuatro y un `long[]` de cuatro en ocho.
+  // No fallaba: devolvía otro número. Aquí se escribe y se relee dentro de
+  // la native, que es el camino que estaba mudo.
+  native function tocaPalabras(v: word[]): integer
+    v[0] := 1000
+    v[1] := 2000
+    v[2] := 3000
+    return v[0] + v[1] + v[2]
+  end tocaPalabras
+
+  // ── 4. Un array de double creado dentro de la native ────────────────────
+  native function mediaDobles(): double
+    var d: double[] := newDoubleArray(2)
+    d[0] := 3.0d
+    d[1] := 5.0d
+    return (d[0] + d[1]) / 2.0d
+  end mediaDobles
+
+  // ── 5. Un array de REFERENCIAS creado dentro de la native ───────────────
+  // El más exigente de todos con el GC: el array es una referencia, y CADA
+  // elemento es otra referencia recién alocada. Con colecta en cada alocación,
+  // rellenar la casilla 1 dispara un GC mientras la 0 sólo la sostiene el
+  // propio array. Si `array_store_ref` guardara el handle sin su generación
+  // viva, el elemento 0 se leería como objeto muerto — no daría error: daría
+  // use-after-free.
+  //
+  // ⚠️ Sin literales de cadena a propósito: un `.mdn` sólo se lleva `.text` y un
+  // literal vive en `.rodata`. Los strings se fabrican con intToString.
+  native function largoDeDos(a: integer, b: integer): integer
+    var v: string[] := [intToString(a), intToString(b)]
+    return len(v[0]) + len(v[1])
+  end largoDeDos
+
+  // ── 6. Un array de float ────────────────────────────────────────────────
+  native function sumaFloats(): float
+    var f: float[] := [1.5, 2.5]
+    return f[0] + f[1]
+  end sumaFloats
+
+  // ── 7. Un OBJETO creado dentro de la native, leído por sus getters ───────
   native function areaDe(a: integer, b: integer): integer
     var p: Punto := Punto(a, b)
     return p.x * p.y
@@ -63,6 +105,11 @@ module NatNew
     print "== NatNew =="
     print "  sumaArray(5)  =", sumaArray(5), " (esperado 105)"
     print "  sumaLargos()  =", sumaLargos(), " (esperado 7000000000)"
+    var w: word[3]
+    print "  tocaPalabras()=", tocaPalabras(w), " (esperado 6000)"
+    print "  mediaDobles() =", mediaDobles(), " (esperado 4)"
+    print "  largoDeDos()  =", largoDeDos(1234, 56), " (esperado 6)"
+    print "  sumaFloats()  =", sumaFloats(), " (esperado 4)"
     print "  areaDe(6,7)   =", areaDe(6, 7), " (esperado 42)"
     print "== FIN =="
   end Main

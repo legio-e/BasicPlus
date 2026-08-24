@@ -266,7 +266,12 @@ public final class AotCEmitter {
                 + ((Ast.Node) arr).line + "). Sin saber el ancho del elemento no se "
                 + "puede elegir el helper, y elegir mal no falla: lee de más o de menos.");
         }
-        BpType el = ((ArrayType) t).element;
+        return elemKindDe(((ArrayType) t).element);
+    }
+
+    /** [V6/N1.5] El sufijo de helper que corresponde a un tipo de elemento.
+     *  `null` si ese elemento no tiene helper — quien llame decide qué decir. */
+    private static String elemKindDe(BpType el) {
         if (el instanceof PrimitiveType) {
             switch (((PrimitiveType) el).tag) {
                 case UINT8:  return "u8";
@@ -275,15 +280,16 @@ public final class AotCEmitter {
                 case INT16:  return "i16";
                 case LONG:   return "i64";
                 case DOUBLE: return "f64";
+                case FLOAT:  return "f32";
                 case INTEGER: case BOOLEAN: return "i32";
-                default: break;   /* string, float → abajo */
+                /* `string` ES un PrimitiveType y a la vez una REFERENCIA de heap
+                 * (lo mismo que dice isRefType en MivmEmitter). Va por ref. */
+                case STRING: return "ref";
+                default: return null;
             }
         }
-        throw new UnsupportedAotException(
-            "AOT: indexar un array de '" + el + "' (line " + ((Ast.Node) arr).line + ") "
-            + "desde una native todavía no está implementado. Van integer, boolean, byte, "
-            + "word, short, long y double. Faltan los de REFERENCIAS (string[], Clase[]) "
-            + "y float[] — y hasta hoy ninguno fallaba: leían 4 bytes y seguían.");
+        /* Clase, array anidado, `any`, tupla → referencia. */
+        return "ref";
     }
     /** Nombre del helper de carga de elemento según el ancho del array. */
     private String arrLoadFn(Ast.IExpr arr) {
@@ -295,7 +301,7 @@ public final class AotCEmitter {
         String k = arrElemKind(arr);
         if ("u8".equals(k)  || "i8".equals(k))  return "array_store_i8";
         if ("u16".equals(k) || "i16".equals(k)) return "array_store_i16";
-        return "array_store_" + k;   /* i32, i64, f64 */
+        return "array_store_" + k;   /* i32, i64, f64, f32, ref */
     }
 
     /** [V6/N1.5] Sufijo del helper de reserva segun el tipo de elemento, o null
@@ -304,29 +310,24 @@ public final class AotCEmitter {
      *  EXACTAMENTE lo mismo que el interprete o el mismo `.bp` daria dos
      *  layouts segun llevara `.mdn`. */
     private static String newarraySufijo(BpType el) {
-        if (!(el instanceof PrimitiveType)) return null;      /* clase → ref */
-        switch (((PrimitiveType) el).tag) {
-            case UINT8: case INT8:   return "i8";
-            case UINT16: case INT16: return "i16";
-            case LONG: case DOUBLE:  return "i64";
-            case INTEGER: case BOOLEAN: return "i32";
-            default: return null;                             /* string, float */
-        }
+        String k = elemKindDe(el);
+        if (k == null) return null;
+        if ("u8".equals(k)  || "i8".equals(k))  return "i8";
+        if ("u16".equals(k) || "i16".equals(k)) return "i16";
+        if ("f64".equals(k)) return "i64";   /* `double[]` = 8 bytes opacos */
+        if ("f32".equals(k)) return "i32";   /* `float[]`  = 4, como integer[] */
+        return k;                            /* i32, i64, ref */
     }
 
     /** [V6/N1.5] Helper de store que corresponde al elemento. `double` no
      *  comparte el de `long`: el valor cruza como `double`, no como patron de
      *  bits (mismo criterio que array_load_f64 desde V5/H4). */
     private static String arrayStoreSufijo(BpType el) {
-        if (!(el instanceof PrimitiveType)) return null;
-        switch (((PrimitiveType) el).tag) {
-            case UINT8: case INT8:   return "i8";
-            case UINT16: case INT16: return "i32";   /* no hay store_i16; el i32 trunca igual */
-            case LONG:               return "i64";
-            case DOUBLE:             return "f64";
-            case INTEGER: case BOOLEAN: return "i32";
-            default: return null;
-        }
+        String k = elemKindDe(el);
+        if (k == null) return null;
+        if ("u8".equals(k)  || "i8".equals(k))  return "i8";
+        if ("u16".equals(k) || "i16".equals(k)) return "i16";
+        return k;                            /* i32, i64, f64, f32, ref */
     }
 
     /** [V6/N1.5] ¿Esta llamada es CREAR UN OBJETO? En BP se escribe igual que
@@ -351,19 +352,15 @@ public final class AotCEmitter {
         String nuevo = newarraySufijo(el);
         String store = arrayStoreSufijo(el);
         if (nuevo == null || store == null) {
-            /* ⚠️ Aqui hubo un motivo FALSO, corregido por Eduardo el 24-ago-2026.
-             * Decia que un array de refs no se podia porque «en esta ABI una ref
-             * cruza con la generacion descartada». No es perdida de informacion:
-             * `bpref_regen(vm, ref)` la RECONSTRUYE desde la tabla de handles, y
-             * el helper `write_ref` ya hace exactamente eso en la frontera del
-             * thunk. Lo que falta son tres helpers (newarray_ref, array_load_ref,
-             * array_store_ref), no una decision. */
+            /* ⚠️ Aqui hubo un motivo FALSO, corregido por Eduardo el 24-ago-2026:
+             * que un array de refs no se podia «porque en esta ABI una ref cruza
+             * con la generacion descartada». No era perdida de informacion —
+             * `bpref_regen` la reconstruye— asi que se hizo (N1.5b) y este
+             * rechazo dejo de aplicarles. Queda para lo que de verdad no tiene
+             * helper. */
             throw new UnsupportedAotException(
                 "AOT: literal de array de '" + el + "' (line " + a.line + ") todavia no "
-                + "esta implementado. Desde una native se crean arrays de integer, "
-                + "boolean, byte, word, short, long y double. Faltan los de REFERENCIAS "
-                + "(string[], Clase[]) — tres helpers de la misma forma que los demas — "
-                + "y float[], sin helper de store.");
+                + "esta implementado.");
         }
         int n = a.elements.size();
         w.print("({ int32_t __arr = vm->aot_helpers->newarray_" + nuevo + "(vm, " + n + "); ");

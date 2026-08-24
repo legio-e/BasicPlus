@@ -15,8 +15,10 @@
 /* Forward decls de las funciones AOT de este módulo. */
 static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t a, int32_t b);
 static double aot_NatNew_mediaDobles(struct bpvm* vm);
+static float aot_NatNew_sumaFloats(struct bpvm* vm);
 static int64_t aot_NatNew_sumaLargos(struct bpvm* vm);
 static int32_t aot_NatNew_tocaPalabras(struct bpvm* vm, int32_t v);
+static int32_t aot_NatNew_largoDeDos(struct bpvm* vm, int32_t a, int32_t b);
 static int32_t aot_NatNew_sumaArray(struct bpvm* vm, int32_t n);
 
 static int32_t aot_NatNew_sumaArray(struct bpvm* vm, int32_t n) {
@@ -121,6 +123,54 @@ static void thunk_NatNew_mediaDobles(struct bpvm* vm,
     *sp_p = sp;
 }
 
+static int32_t aot_NatNew_largoDeDos(struct bpvm* vm, int32_t a, int32_t b) {
+    (void) vm;   /* puede no usarse si la función no toca
+                  *  globals/arrays/builtins. */
+    (void) a;
+    (void) b;
+    int32_t v = ({ int32_t __arr = vm->aot_helpers->newarray_ref(vm, 2); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 0, vm->aot_helpers->int_to_string(vm, a)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 1, vm->aot_helpers->int_to_string(vm, b)); __arr; });
+    return (vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 0))) + vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 1))));
+}
+
+static void thunk_NatNew_largoDeDos(struct bpvm* vm,
+                              uint32_t* sp_p,
+                              uint32_t* bp_p) {
+    (void) bp_p;
+    /* H3 #158 — helpers accedidos indirect via vm.
+     * No referencia símbolos del runtime por nombre → el
+     * .o resultante con -fpic es 100% relocatable. */
+    const struct aot_helpers_v2* H = vm->aot_helpers;
+    uint8_t* mem = vm->memory;
+    uint32_t sp = *sp_p;
+    int32_t a1 = H->read_i32_be(mem + sp - 4); sp -= 4;
+    int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;
+    int32_t r = aot_NatNew_largoDeDos(vm, a0, a1);
+    H->write_i32_be(mem + sp, r); sp += 4;
+    *sp_p = sp;
+}
+
+static float aot_NatNew_sumaFloats(struct bpvm* vm) {
+    (void) vm;   /* puede no usarse si la función no toca
+                  *  globals/arrays/builtins. */
+    int32_t f = ({ int32_t __arr = vm->aot_helpers->newarray_i32(vm, 2); vm->aot_helpers->array_store_f32(vm, (uint32_t) __arr, 0, 1.5f); vm->aot_helpers->array_store_f32(vm, (uint32_t) __arr, 1, 2.5f); __arr; });
+    return (vm->aot_helpers->array_load_f32(vm, f, 0) + vm->aot_helpers->array_load_f32(vm, f, 1));
+}
+
+static void thunk_NatNew_sumaFloats(struct bpvm* vm,
+                              uint32_t* sp_p,
+                              uint32_t* bp_p) {
+    (void) bp_p;
+    /* H3 #158 — helpers accedidos indirect via vm.
+     * No referencia símbolos del runtime por nombre → el
+     * .o resultante con -fpic es 100% relocatable. */
+    const struct aot_helpers_v2* H = vm->aot_helpers;
+    uint8_t* mem = vm->memory;
+    uint32_t sp = *sp_p;
+    float r = aot_NatNew_sumaFloats(vm);
+    H->write_f32_be(mem + sp, r); sp += 4;
+    *sp_p = sp;
+}
+
 static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t a, int32_t b) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
@@ -155,6 +205,8 @@ void aot_NatNew_register(struct bpvm* vm) {
     bpvm_aot_register_by_name(vm, "NatNew.sumaLargos", thunk_NatNew_sumaLargos);
     bpvm_aot_register_by_name(vm, "NatNew.tocaPalabras", thunk_NatNew_tocaPalabras);
     bpvm_aot_register_by_name(vm, "NatNew.mediaDobles", thunk_NatNew_mediaDobles);
+    bpvm_aot_register_by_name(vm, "NatNew.largoDeDos", thunk_NatNew_largoDeDos);
+    bpvm_aot_register_by_name(vm, "NatNew.sumaFloats", thunk_NatNew_sumaFloats);
     bpvm_aot_register_by_name(vm, "NatNew.areaDe", thunk_NatNew_areaDe);
 }
 

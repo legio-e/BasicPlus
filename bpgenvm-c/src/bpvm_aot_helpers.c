@@ -517,6 +517,74 @@ static void h_array_store_i16(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) 
     e[1] = (uint8_t)(v & 0xFF);
 }
 
+/* ---------- [V6/N1.5b] ARRAYS DE REFERENCIAS ----------
+ *
+ * Estos faltaban por un motivo que resulto ser FALSO. Lo escrito era que un
+ * `TYPE_ARRAY_REF` guarda handles de 64 bits CON generacion y que en esta ABI
+ * una ref cruza con la generacion DESCARTADA — leido como si fuera perdida de
+ * informacion. No lo es, y lo corrigio Eduardo el 24-ago-2026: *«desde V5 todas
+ * las referencias a objetos, arrays y strings deberian poder pasarse tal cual»*.
+ *
+ * `bpref_regen(vm, ref)` RECONSTRUYE la generacion viva consultando
+ * `vm->handle_gen[idx]`. Es un limite de TRANSPORTE (no se lleva), no de
+ * CAPACIDAD (no se puede recuperar). Y de hecho estas dos lineas ya estaban
+ * escritas dos veces en este mismo fichero: `h_read_ref` y `h_write_ref`, la
+ * frontera del thunk desde #302.
+ *
+ * Un elemento ocupa BPVM_REF_SIZE (8 bytes) y lleva el handle COMPLETO — que es
+ * lo que el GC necesita para trazarlo, y por eso un array de refs no puede ser
+ * un TYPE_ARRAY_I64: seria 8 bytes opacos que el GC no mira. Los opcodes que
+ * hace el interprete son ALOAD_I64/ASTORE_I64 sobre un array creado por
+ * BUILTIN_NEW_REF_ARRAY; esto es exactamente eso. */
+static int32_t h_newarray_ref(bpvm_t* vm, int32_t size) {
+    return h_newarray_tipo(vm, size, BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
+}
+static int32_t h_array_load_ref(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_ref: null array");
+        return 0;
+    }
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(vm->memory + addr);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_ref: index out of bounds");
+        return 0;
+    }
+    /* El elemento guarda el handle de 64b; al codigo native le va la palabra
+     * baja (idx|TAG), que es lo que dice el convenio de esta ABI. */
+    return (int32_t) bpvm_read_i64_be(vm->memory + addr + BPVM_ARR_DATA_OFF
+                                      + (uint32_t) idx * BPVM_REF_SIZE);
+}
+static void h_array_store_ref(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_ref: null array");
+        return;
+    }
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(vm->memory + addr);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_ref: index out of bounds");
+        return;
+    }
+    /* La gen VIVA se reconstruye aqui: es la frontera. Guardar la palabra baja
+     * a secas dejaria un handle con gen 0 — y un gen 0 no casa con nada, asi que
+     * el objeto se leeria como muerto (use-after-free) en el primer acceso. */
+    bpvm_write_i64_be(vm->memory + addr + BPVM_ARR_DATA_OFF
+                      + (uint32_t) idx * BPVM_REF_SIZE,
+                      (int64_t) bpref_regen(vm, (uint32_t) v).v);
+}
+
+/* ---------- [V6/N1.5b] `float[]` ----------
+ * Cuatro bytes por casilla, como `integer[]` (el interprete usa NEWARRAY para
+ * los dos). Lo que faltaba no era el alocador: era mover el PATRON DE BITS sin
+ * que pase por un int32 por el camino. Gemelos de read_f32_be/write_f32_be. */
+static float h_array_load_f32(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    return aoth_bits_to_float((uint32_t) h_array_load_i32(vm, ref, idx));
+}
+static void h_array_store_f32(bpvm_t* vm, uint32_t ref, int32_t idx, float v) {
+    h_array_store_i32(vm, ref, idx, (int32_t) aoth_float_to_bits(v));
+}
+
 static void h_array_store_i8(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
     if (ref == 0) {
         if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i8: null array");
@@ -830,6 +898,12 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .array_load_i16      = h_array_load_i16,
     .array_load_u16      = h_array_load_u16,
     .array_store_i16     = h_array_store_i16,
+    /* [V6/N1.5b] arrays de REFERENCIAS y de `float`. */
+    .newarray_ref        = h_newarray_ref,
+    .array_load_ref      = h_array_load_ref,
+    .array_store_ref     = h_array_store_ref,
+    .array_load_f32      = h_array_load_f32,
+    .array_store_f32     = h_array_store_f32,
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

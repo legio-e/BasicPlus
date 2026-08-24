@@ -1134,27 +1134,36 @@ que `#213` ya había abierto para `throw MiExcepcion(...)`; sólo faltaba dejar 
 recién creado vive en un local de C, y hasta V5 el GC no miraba ahí. Fabricarlo era
 fabricar algo recolectable en vivo. Lo quitó `#302` paso 3 — idea de Eduardo.
 
-**Fuera, con el motivo escrito en el rechazo:** arrays de REFERENCIAS (`string[]`,
-`Clase[]`) y `float[]` (sin helper de store).
+##### ✅ N1.5b (24-ago, la misma tarde) — arrays de REFERENCIAS y de `float`
 
-> ⚠️ **Y el motivo que escribí para los arrays de referencias era FALSO.** Puse que *«en
-> esta ABI una ref cruza con la generación descartada y un `TYPE_ARRAY_REF` las guarda con
-> ella»*, como si fuera pérdida de información. **No lo es**, y lo corrigió Eduardo el
-> mismo día: *«desde V5 todas las referencias a objetos, arrays y strings deberían poder
-> pasarse tal cual»*.
->
-> 📐 **Comprobado**: `bpref_regen(vm, ref)` (`bpvm_internal.h:733`) RECONSTRUYE la
-> generación viva consultando `vm->handle_gen[idx]` a partir del handle empaquetado. La
-> generación no se pierde — sólo no se transporta, y se recupera cuando hace falta. De
-> hecho **ya hay un helper que hace exactamente eso**: `write_ref`, *«toma un handle
-> empaquetado, reconstruye la gen VIVA»*, usado en la frontera del thunk desde `#302`.
->
-> ⏭️ Así que esto **no es investigación, es trabajo**: tres helpers de la misma forma que
-> los de N1.5 (`newarray_ref` = lo que hace `BUILTIN_NEW_REF_ARRAY`; `array_load_ref`;
-> `array_store_ref` = `bpref_store` de `bpref_regen(v)`) más elegirlos en `arrElemKind`.
-> Es la **quinta vez** que digo «no se puede» donde era «no está hecho», y la segunda en
-> que la barrera que iba a alegar ya estaba quitada. Ver
-> [[no-se-puede-vs-no-esta-implementado]].
+Escribí que los arrays de referencias no se podían *«porque en esta ABI una ref cruza con
+la generación descartada y un `TYPE_ARRAY_REF` las guarda con ella»*. **Falso**, y lo
+corrigió Eduardo en el momento: *«desde V5 todas las referencias a objetos, arrays y
+strings deberían poder pasarse tal cual»*.
+
+📐 **Comprobado antes de tocar nada**: `bpref_regen(vm, ref)` (`bpvm_internal.h:733`)
+reconstruye la generación viva consultando `vm->handle_gen[idx]`. No es pérdida de
+información: es un límite de **transporte**, no de **capacidad**. Y las dos líneas ya
+estaban escritas dos veces en el propio fichero de helpers — `read_ref`/`write_ref`, la
+frontera del thunk desde `#302`.
+
+Hechos esa misma tarde, para que entren en el mismo reflasheo: `newarray_ref`,
+`array_load_ref`, `array_store_ref` y, de paso, `array_load_f32`/`array_store_f32`. El ABI
+se queda en **6**: nunca se ha flasheado nada con él, así que sumar slots no rompe a nadie.
+
+📌 **`array_store_ref` es la frontera donde se recupera la generación**, y no es un
+detalle: guardar la palabra baja a secas dejaría gen 0, que no casa con nada → el objeto se
+leería **muerto** al primer acceso. Use-after-free, no error.
+
+✅ **Probado por el peldaño 3**, que es el que puede decir algo aquí: `largoDeDos` crea un
+`string[]` y mete en él dos cadenas **recién alocadas**, con `gc_bump_threshold = 1`.
+Rellenar la casilla 1 dispara un GC mientras a la 0 sólo la sostiene el array. Con la
+generación mal puesta eso no da error: da corrupción. Siete valores exactos.
+`AotCoberturaTest` sigue en 28/30 (esto no añade nodos: los quita de la lista de rechazos).
+
+**Lo único que sigue sin poder ir dentro de un array desde una native es un LITERAL de
+cadena** — y eso no es de los arrays: un literal vive en `.rodata` y un `.mdn` sólo se
+lleva `.text`.
 
 **Aplazado a V7** (decisiones de Eduardo, 24-ago):
 - **Tuplas** dentro de native (`DestructAssignStmt`, `TupleExpr`).
