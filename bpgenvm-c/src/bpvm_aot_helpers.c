@@ -217,21 +217,70 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
 }
 
 /* ---------- Heap / GC ----------
- * Stubs por ahora — el AOT que use estos slots tiene que activar
- * via flag de capabilities en el .mdn. La fase A no los necesita. */
+ * [V6/N1.5] Dejaron de ser stubs. Eran cuatro `return 0` — o sea que un native
+ * que creara un array recibia el ref NULO y seguia como si nada; el fallo salia
+ * lejos del sitio, al usarlo. Ahora hacen lo MISMO que sus opcodes
+ * (OP_NEWARRAY / _I8 / _I16 en interp.c:1410-1446), que es el contrato: si el
+ * camino compilado alocara distinto que el interpretado, el mismo programa
+ * daria dos resultados segun llevara `.mdn`.
+ *
+ * ⚠️ Lo que NO hace falta aqui y si hace falta en el interprete: el SAFEPOINT
+ * (`tc->sp = sp`). El interprete lo pone para que el GC vea su pila; un native
+ * no tiene pila BP que publicar — sus handles viven en locales de C y en
+ * registros, y a esos los mira el GC desde V5 (heap.c §2d, la idea de Eduardo
+ * de escanear la pila de C del native con el volcado de registros de setjmp).
+ * Sin ese mecanismo, ninguno de estos cuatro helpers seria seguro: el array
+ * recien creado podria recolectarse antes de que el native lo guardara.
+ *
+ * OOM: se LANZA, no se devuelve 0. `throw_runtime` hace longjmp al boundary y
+ * el error sale como RuntimeError atrapable — igual que BPVM_RT_THROW("No space
+ * in heap") en el intérprete. Un 0 devuelto en silencio es lo que hacia el
+ * stub, y es justo lo que no queremos. */
+/* El cuerpo comun: aloca `bytes`, escribe la longitud EN ELEMENTOS en la
+ * cabecera y registra el handle. Devuelve el handle empaquetado. */
+static int32_t h_newarray_tipo(bpvm_t* vm, int32_t size, uint32_t bytes_por_elem,
+                               int tipo) {
+    if (size < 0) { h_throw_runtime(vm, "tamaño de array negativo"); return 0; }
+    uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * bytes_por_elem, tipo);
+    if (ref == 0) { h_throw_runtime(vm, "No space in heap"); return 0; }
+    bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
+    bpref_t h = bpvm_handle_register(vm, ref);
+    if (h.v == 0u) { h_throw_runtime(vm, "No space in heap"); return 0; }   /* #430 */
+    return (int32_t) h.v;
+}
 static int32_t h_newarray_i32(bpvm_t* vm, int32_t size) {
-    (void) vm; (void) size;
-    bpvm_diag_urgente("[aot] newarray_i32 stub — implementar al AOT-ear arrays");
-    return 0;
+    return h_newarray_tipo(vm, size, 4, BPVM_TYPE_ARRAY_I32);
 }
 static int32_t h_newarray_i8(bpvm_t* vm, int32_t size) {
-    (void) vm; (void) size; return 0;
+    return h_newarray_tipo(vm, size, 1, BPVM_TYPE_ARRAY_I8);
 }
 static int32_t h_newarray_i16(bpvm_t* vm, int32_t size) {
-    (void) vm; (void) size; return 0;
+    return h_newarray_tipo(vm, size, 2, BPVM_TYPE_ARRAY_I16);
 }
+/* [V6/N1.5] `long[]` y `double[]`: 8 bytes OPACOS por casilla (el GC no los
+ * traza, que es justo lo que se quiere para numeros). Mismo tipo que usa
+ * OP_NEWARRAY_I64 — un `double[]` es un I64 con otro contenido, como en el
+ * intérprete. */
+static int32_t h_newarray_i64(bpvm_t* vm, int32_t size) {
+    return h_newarray_tipo(vm, size, 8, BPVM_TYPE_ARRAY_I64);
+}
+
+/* [V6/N1.5] Este SIGUE sin implementarse, y ahora lo DICE en vez de devolver 0.
+ *
+ * No es que no se pueda alocar el objeto — es que alocarlo no basta: un objeto
+ * BP se construye ejecutando su CONSTRUCTOR, y el constructor es bytecode. Por
+ * eso el emisor no genera `new_object`: genera una llamada por el puente a la
+ * factoria `__cls_new_<Clase>` (call_bp_i32), que corre el ctor de verdad en el
+ * intérprete y devuelve la instancia. Es la misma ruta que #213 abrio para
+ * `throw MiExcepcion(...)`.
+ *
+ * El slot se queda —la tabla solo crece por el final— y falla ruidosamente por
+ * si algun `.mdn` viejo lo invoca. */
 static int32_t h_new_object(bpvm_t* vm, uint32_t class_addr) {
-    (void) vm; (void) class_addr; return 0;
+    (void) class_addr;
+    h_throw_runtime(vm, "new_object: el AOT crea objetos por la factoria "
+                        "__cls_new_ (el ctor es bytecode), no por este helper");
+    return 0;
 }
 
 /* ---------- Output sink ----------
@@ -720,6 +769,9 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .d2f                 = h_d2f,
     .read_f64_be         = h_read_f64_be,
     .write_f64_be        = h_write_f64_be,
+    /* [V6/N1.5] crear arrays desde native: los tres de arriba dejaron de ser
+     * stubs y este es nuevo (`long[]`/`double[]`). */
+    .newarray_i64        = h_newarray_i64,
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

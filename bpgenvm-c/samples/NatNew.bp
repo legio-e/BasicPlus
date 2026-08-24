@@ -1,0 +1,70 @@
+// NatNew — [V6/N1.5] CREAR cosas dentro de una `native`: un array y un objeto.
+//
+// ─── QUÉ DEMUESTRA ───
+//
+// Hasta hoy una `native` sabía OPERAR con lo que le pasaran, pero no podía
+// FABRICAR nada: `[1,2,3]` abortaba la compilación de esa función y el módulo
+// caía a bytecode interpretado. Los cuatro helpers de reserva de la tabla AOT
+// eran `return 0` — o sea que, de haberse invocado, el native habría recibido
+// una referencia nula y el fallo habría salido lejos del sitio.
+//
+// ⚠️ Lo que lo bloqueaba de verdad NO era el emisor. Un objeto recién creado
+// dentro de una native vive en un local de C, y hasta V5 el GC no miraba ahí:
+// fabricarlo era fabricar algo que podía recolectarse en vivo. Lo desatascó
+// #302 paso 3 (idea de Eduardo: que el GC escanee la pila de C del native con
+// el volcado de registros de setjmp).
+//
+// ─── QUÉ MIRAR ───
+//
+//  1. Los tres valores esperados. Son exactos: si el camino compilado y el
+//     interpretado difirieran, saldría aquí.
+//  2. La salida tiene que ser IDÉNTICA en miVM y en la VM-C (el invariante).
+//  3. En placa, `[mdn] 1 bloque(s) nativo(s) desde el propio .mod` en el log.
+//
+// 📌 Un objeto NO se aloca en C: se construye llamando a su factoría
+// `__cls_new_Punto` por el puente, que ejecuta el constructor DE VERDAD en el
+// intérprete. Alocar los campos y devolver el ref daría un objeto a medio hacer.
+module NatNew
+
+  public class Punto
+    public property x: integer
+    public property y: integer
+    public function Punto(a: integer, b: integer)
+      this.x := a
+      this.y := b
+    end Punto
+  end Punto
+
+  // ── 1. Un array de integer creado DENTRO de la native ───────────────────
+  native function sumaArray(n: integer): integer
+    var v: integer[] := [10, 20, 30, 40]
+    var t: integer := 0
+    var i: integer := 0
+    while i < 4 do
+      t += v[i]
+      i += 1
+    endwh
+    return t + n
+  end sumaArray
+
+  // ── 2. Un array de long: 8 bytes por casilla (el slot que faltaba) ──────
+  native function sumaLargos(): long
+    var v: long[] := [3000000000L, 4000000000L]
+    return v[0] + v[1]
+  end sumaLargos
+
+  // ── 3. Un OBJETO creado dentro de la native, leído por sus getters ──────
+  native function areaDe(a: integer, b: integer): integer
+    var p: Punto := Punto(a, b)
+    return p.x * p.y
+  end areaDe
+
+  function Main()
+    print "== NatNew =="
+    print "  sumaArray(5)  =", sumaArray(5), " (esperado 105)"
+    print "  sumaLargos()  =", sumaLargos(), " (esperado 7000000000)"
+    print "  areaDe(6,7)   =", areaDe(6, 7), " (esperado 42)"
+    print "== FIN =="
+  end Main
+
+end NatNew

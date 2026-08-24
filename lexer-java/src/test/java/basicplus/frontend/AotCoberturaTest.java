@@ -71,6 +71,12 @@ class AotCoberturaTest {
         // `v` ya es un PARAMETRO de f: la variable duplicada tapaba la medida.
         CASOS.put("ArrayLitExpr",  "var w: integer[] := [1, 2, 3]\n      return w[0]");
         CASOS.put("IndexExpr",     "return v[0]");
+        // Los tres siguientes FALTABAN en el censo. Que un nodo no este listado
+        // no es "no soportado": es NO MEDIDO, que es peor — cuenta como nada, y
+        // los tres los toca N1 de lleno.
+        CASOS.put("CallExpr",      "return dosMas(a)");
+        CASOS.put("NewObjectExpr", "var c: Caja := Caja(3)\n      return a");
+        CASOS.put("MemberAccessExpr", "var c: Caja := Caja(3)\n      return c.n");
         // El destructuring ASIGNA: las dos variables tienen que existir antes.
         CASOS.put("TupleExpr",     "var x: integer\n      var y: integer\n      { x, y } := dosCosas()\n      return x + y");
         // InstanceOfExpr se quedó FUERA a propósito: el fragmento que tenía era
@@ -83,12 +89,16 @@ class AotCoberturaTest {
      * gesto que registra que la cobertura del AOT se movió.
      */
     private static final Set<String> SOPORTADOS = new TreeSet<>(java.util.Arrays.asList(
-        // Medido el 24-ago-2026: 24 de 27. ThrowStmt entra SIN tocar el emisor
-        // — ya estaba soportado desde #186/#213 y lo tapaba un fragmento mal
-        // escrito (`throw "vaya"`, que #248 no permite). Los otros cuatro casos
-        // estaban igual de mal; al arreglarlos la foto pasó de "23 medidos" a
-        // "27 medidos de verdad".
-        "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt", "ContinueStmt",
+        // Medido el 24-ago-2026: 28 de 30. Tres movimientos en el mismo dia:
+        //   · ThrowStmt entró SIN tocar el emisor — ya estaba soportado desde
+        //     #186/#213 y lo tapaba un fragmento mal escrito (`throw "vaya"`,
+        //     que #248 no permite). Otros cuatro casos estaban igual de mal.
+        //   · CallExpr, NewObjectExpr y MemberAccessExpr no estaban en el censo:
+        //     tres nodos que N1 toca de lleno y que nadie medía.
+        //   · ArrayLitExpr y NewObjectExpr entraron de verdad (N1.5).
+        // Quedan TryStmt y TupleExpr, los dos aplazados a V7 a propósito.
+        "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt",
+        "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt",
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
         "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",
         "ParenExpr", "PrintStmt", "ReturnStmt", "StringLitExpr", "SwitchStmt",
@@ -108,13 +118,19 @@ class AotCoberturaTest {
             // y los casos de excepciones median "no compila" en vez de medir el AOT.
             + "  import Core\n"
             // Una clase, para poder escribir una referencia (el caso de `null`).
-            + "  class Caja\n"
+            + "  public class Caja\n"
             + "    public property n: integer\n"
+            + "    public function Caja(v: integer)\n"
+            + "      this.n := v\n"
+            + "    end Caja\n"
             + "  end Caja\n"
             // Una funcion auxiliar que devuelve dos valores, para el caso de la
             // tupla; y `v: integer[]` como parametro, para el del indice. Asi
             // ninguno de los dos depende de poder CREAR el array dentro de la
             // native, que es otra pregunta distinta.
+            + "  function dosMas(x: integer): integer\n"
+            + "    return x + 2\n"
+            + "  end dosMas\n"
             + "  function dosCosas(): (integer, integer)\n"
             + "    return (1, 2)\n"
             + "  end dosCosas\n"

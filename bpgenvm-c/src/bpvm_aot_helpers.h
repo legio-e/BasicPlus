@@ -379,6 +379,25 @@ struct aot_helpers_v2 {
      * mismo para `float`. */
     double  (*read_f64_be)(const uint8_t* p);
     void    (*write_f64_be)(uint8_t* p, double v);
+
+    /* --- [V6/N1.5]: CREAR ARRAYS DESDE UN NATIVE ----------------------
+     *
+     * Los tres `newarray_*` de arriba existian desde la fase A y eran STUBS que
+     * devolvian 0 — o sea que un native que creara un array recibia el ref nulo
+     * y el fallo aparecia lejos, al usarlo. Ya hacen lo suyo.
+     *
+     * Este cuarto es el que faltaba: `long[]` y `double[]` (8 bytes opacos por
+     * casilla, BPVM_TYPE_ARRAY_I64, igual que OP_NEWARRAY_I64). Sus load/store
+     * ya estaban desde V5/H4 — se podia ESCRIBIR en un `long[]` que te pasaran,
+     * pero no CREAR uno.
+     *
+     * ⚠️ Lo que sigue sin poderse crear desde native es un array de REFERENCIAS
+     * (`string[]`, `Caja[]`). No es que falte el alocador: es que en esta ABI una
+     * ref viaja con la GENERACION DESCARTADA (ver el convenio de arriba) y un
+     * TYPE_ARRAY_REF guarda handles de 64 bits CON generacion. Escribir uno desde
+     * aqui exige decidir donde se recupera la gen viva, y esa decision no se toma
+     * de pasada. El emisor lo rechaza con ese motivo escrito. */
+    int32_t (*newarray_i64)(struct bpvm* vm, int32_t size);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

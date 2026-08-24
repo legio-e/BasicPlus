@@ -49,11 +49,11 @@ public final class MdnPack {
      * mudo en placa. Se destapó el 26-jul al arreglar el gate. */
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
     private static final int MDN_VERSION = 1;
-    static final int MDN_ABI_VERSION = 5;   /* 11-ago — el .mdn tambien depende
-                                                    * del OFFSET de `memory` y
-                                                    * `aot_helpers` dentro de
-                                                    * `struct bpvm`, no solo de la
-                                                    * tabla. Ver mdn_format.h. */
+    /* [V6/N1.5] 24-ago: 6 — slot `newarray_i64` nuevo, y tres newarray_* que
+     * dejaron de ser stubs. Histórico: 5 = 11-ago, el .mdn depende también del
+     * OFFSET de `memory` y `aot_helpers` dentro de `struct bpvm`, no sólo de la
+     * tabla. La autoridad del número es mdn_format.h; esto lo copia. */
+    static final int MDN_ABI_VERSION = 6;
     private static final int MDN_NAME_MAX = 32;
 
     public static void main(String[] args) throws IOException {

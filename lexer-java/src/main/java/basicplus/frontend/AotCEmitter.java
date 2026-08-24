@@ -272,6 +272,82 @@ public final class AotCEmitter {
         return ("u8".equals(k) || "i8".equals(k)) ? "array_store_i8" : "array_store_i32";
     }
 
+    /** [V6/N1.5] Sufijo del helper de reserva segun el tipo de elemento, o null
+     *  si ese tipo de array no se puede crear desde una native todavia.
+     *  Espeja `newarrayOpForElement` de MivmEmitter: el AOT tiene que reservar
+     *  EXACTAMENTE lo mismo que el interprete o el mismo `.bp` daria dos
+     *  layouts segun llevara `.mdn`. */
+    private static String newarraySufijo(BpType el) {
+        if (!(el instanceof PrimitiveType)) return null;      /* clase → ref */
+        switch (((PrimitiveType) el).tag) {
+            case UINT8: case INT8:   return "i8";
+            case UINT16: case INT16: return "i16";
+            case LONG: case DOUBLE:  return "i64";
+            case INTEGER: case BOOLEAN: return "i32";
+            default: return null;                             /* string, float */
+        }
+    }
+
+    /** [V6/N1.5] Helper de store que corresponde al elemento. `double` no
+     *  comparte el de `long`: el valor cruza como `double`, no como patron de
+     *  bits (mismo criterio que array_load_f64 desde V5/H4). */
+    private static String arrayStoreSufijo(BpType el) {
+        if (!(el instanceof PrimitiveType)) return null;
+        switch (((PrimitiveType) el).tag) {
+            case UINT8: case INT8:   return "i8";
+            case UINT16: case INT16: return "i32";   /* no hay store_i16; el i32 trunca igual */
+            case LONG:               return "i64";
+            case DOUBLE:             return "f64";
+            case INTEGER: case BOOLEAN: return "i32";
+            default: return null;
+        }
+    }
+
+    /** [V6/N1.5] ¿Esta llamada es CREAR UN OBJETO? En BP se escribe igual que
+     *  una llamada a funcion (`Caja(21)`), asi que la distincion no esta en la
+     *  sintaxis: esta en que el TIPO de la expresion sea la clase que se nombra.
+     *  Devuelve la clase, o null si no es una construccion. */
+    private Symbol.ClassSymbol claseConstruida(Ast.CallExpr c) {
+        BpType t = (semInfo != null) ? semInfo.exprTypes.get(c) : null;
+        if (!(t instanceof BpType.ClassType)) return null;
+        Symbol.ClassSymbol cls = ((BpType.ClassType) t).cls;
+        return cls.name.equals(calleeSimpleName(c.callee)) ? cls : null;
+    }
+
+    /** [V6/N1.5] `[a, b, c]` → reservar + rellenar, devolviendo el handle. */
+    private void emitArrayLit(Ast.ArrayLitExpr a) {
+        BpType arrT = (semInfo != null) ? semInfo.exprTypes.get(a) : null;
+        BpType el   = (arrT instanceof ArrayType) ? ((ArrayType) arrT).element : null;
+        if (el == null) {
+            throw new UnsupportedAotException(
+                "AOT: literal de array sin tipo de elemento resuelto (line " + a.line + ")");
+        }
+        String nuevo = newarraySufijo(el);
+        String store = arrayStoreSufijo(el);
+        if (nuevo == null || store == null) {
+            /* El motivo importa y es distinto en cada caso: `string[]`/clase es
+             * un array de REFERENCIAS (TYPE_ARRAY_REF, handles de 64 bits CON
+             * generacion) y en esta ABI las refs viajan con la generacion
+             * descartada; `float[]` es de 4 bytes pero no hay store que meta el
+             * patron de bits. Ninguno de los dos es "no se puede": son dos
+             * decisiones que no se toman de pasada. */
+            throw new UnsupportedAotException(
+                "AOT: literal de array de '" + el + "' (line " + a.line + ") no soportado. "
+                + "Desde una native se crean arrays de integer, boolean, byte, word, "
+                + "long y double. Un array de REFERENCIAS (string[], Clase[]) necesita "
+                + "TYPE_ARRAY_REF, y en la ABI del AOT una ref cruza sin su generacion; "
+                + "float[] no tiene helper de store. Los dos, pendientes.");
+        }
+        int n = a.elements.size();
+        w.print("({ int32_t __arr = vm->aot_helpers->newarray_" + nuevo + "(vm, " + n + "); ");
+        for (int i = 0; i < n; i++) {
+            w.print("vm->aot_helpers->array_store_" + store + "(vm, (uint32_t) __arr, " + i + ", ");
+            emitExpr(a.elements.get(i));
+            w.print("); ");
+        }
+        w.print("__arr; })");
+    }
+
     /** #173 — emite un operando de concat como string-handle. Si ya es
      *  string, tal cual; si es integer, lo convierte con int_to_string
      *  (cubre el patrón típico `"x = " + n`). Otros tipos mixtos
@@ -1211,9 +1287,45 @@ public final class AotCEmitter {
      *  entre la factory y el unwind. Validamos contra la firma REAL de la
      *  factory = ctor PROPIO de la clase (igual que synthesizeCrossModuleFactory). */
     private void emitThrowUserClass(Ast.CallExpr c, Symbol.ClassSymbol cls, int line) {
+        indent();
+        w.print("vm->aot_helpers->throw_ref(vm, (uint32_t) ");
+        emitFactoriaClase(c, cls, line, "throw " + cls.name + "(...)",
+            "la instancia del throw se construye en el intérprete");
+        w.println(");");
+    }
+
+    /** [V6/N1.5] CREAR UN OBJETO desde una native — `Caja(21)`.
+     *
+     * <p>La instancia NO se aloca en C. Un objeto BP se construye ejecutando su
+     * CONSTRUCTOR, y el constructor es bytecode: alocar los campos y devolver el
+     * ref daria un objeto a medio hacer. Asi que se cruza el puente a la factoria
+     * `__cls_new_<Clase>` —la misma que usa un modulo importador para un `new`—,
+     * que corre el ctor de verdad y devuelve la instancia ya construida.
+     *
+     * <p>No es una ruta nueva: es exactamente la que #213 abrio para
+     * `throw MiExcepcion(...)`, y por eso los dos gestos comparten codigo aqui.
+     * Lo unico que hacia falta era dejar de mirarla solo dentro de un `throw`.
+     *
+     * <p>🔑 Y lo que la desbloqueaba de verdad tampoco estaba en el emisor: el
+     * ref que devuelve la factoria queda en un local de C, y hasta V5 el GC no
+     * miraba ahi (#302 paso 3). Con el objeto invisible para el GC, crearlo era
+     * crear algo que se podia recolectar en vivo.
+     *
+     * <p>El helper `new_object` de la tabla NO se usa —y ahora lo dice al ser
+     * invocado en vez de devolver 0—: existir no es lo mismo que servir. */
+    private void emitNewObject(Ast.CallExpr c, Symbol.ClassSymbol cls, int line) {
+        emitFactoriaClase(c, cls, line, cls.name + "(...)",
+            "la instancia se construye en el intérprete, que es quien ejecuta el ctor");
+    }
+
+    /** Emite la llamada a `__cls_new_<Clase>` con sus validaciones. `gesto` es
+     *  como se escribe en el `.bp` lo que la pide, para que el motivo del
+     *  rechazo nombre lo que el usuario escribio y no un detalle interno. */
+    private void emitFactoriaClase(Ast.CallExpr c, Symbol.ClassSymbol cls, int line,
+                                   String gesto, String porque) {
         if (!cls.isPublic) {
             throw new UnsupportedAotException(
-                "AOT: `throw " + cls.name + "(...)` en native (line " + line + ") necesita "
+                "AOT: `" + gesto + "` en native (line " + line + ") necesita "
                 + "que la clase sea public: la instancia se construye via la factory "
                 + "cross-module __cls_new_" + cls.name + ", que solo se sintetiza para "
                 + "clases public. Declárala `public class` o quita native.");
@@ -1222,7 +1334,7 @@ public final class AotCEmitter {
         int expected = (ctor != null) ? ctor.params.size() : 0;
         if (c.args.size() != expected) {
             throw new UnsupportedAotException(
-                "AOT: `throw " + cls.name + "(...)` (line " + line + "): " + c.args.size()
+                "AOT: `" + gesto + "` (line " + line + "): " + c.args.size()
                 + " args pero la factory __cls_new_" + cls.name + " espera " + expected
                 + " (firma del ctor propio de la clase).");
         }
@@ -1230,7 +1342,7 @@ public final class AotCEmitter {
             for (Symbol.ParamSymbol p : ctor.params) {
                 if (!isBridgeI32Type(p.type)) {
                     throw new UnsupportedAotException(
-                        "AOT: `throw " + cls.name + "(...)` (line " + line + "): el puente v1 "
+                        "AOT: `" + gesto + "` (line " + line + "): el puente v1 "
                         + "solo soporta params i32 (integer/boolean/string/ref); el param '"
                         + p.name + "' del ctor no lo es. float/long/double → pendiente.");
                 }
@@ -1246,14 +1358,10 @@ public final class AotCEmitter {
         }
         qn.append(".__cls_new_").append(cls.name);
 
-        indent();
-        w.print("vm->aot_helpers->throw_ref(vm, (uint32_t) ");
         /* La factory __cls_new_* SIEMPRE devuelve la instancia (una ref) → ret_is_ref=1. */
         int ctorMask = (ctor != null) ? refMaskOfParams(ctor.params) : 0;
         emitCallBpEmission(qn.toString(), c.args, line,
-            "la factory de '" + cls.name + "' (la instancia del throw se construye "
-            + "en el intérprete)", ctorMask, true);
-        w.println(");");
+            "la factory de '" + cls.name + "' (" + porque + ")", ctorMask, true);
     }
 
     /** Devuelve el literal del mensaje si {@code value} es exactamente
@@ -1560,6 +1668,24 @@ public final class AotCEmitter {
             w.print(")");
             return;
         }
+        /* [V6/N1.5] LITERAL DE ARRAY — `[1, 2, 3]` dentro de una native.
+         *
+         * Se emite como una EXPRESION DE SENTENCIAS de gcc (`({ ...; v; })`), y
+         * no por gusto: crear un array son N+1 operaciones (reservar y luego
+         * rellenar) y el literal aparece donde se espera un valor. Con el temp
+         * dentro del bloque no hay que declarar nada arriba ni llevar un
+         * contador de temporales, y el anidamiento sale gratis. La extension es
+         * de gcc y el `.c` generado ya usa otras (`__attribute__((used))`);
+         * los tres toolchains del proyecto son gcc.
+         *
+         * 🔑 Y ES SEGURO FRENTE AL GC por una razon concreta: el handle recien
+         * creado vive en `__arr`, un LOCAL DE C — y desde V5 (#302 paso 3, idea
+         * de Eduardo) el GC escanea la pila de C del native con el volcado de
+         * registros de setjmp. Antes de eso, rellenar el array habria podido
+         * recolectarlo a medias: cada elemento que alocara seria una tirada de
+         * dados. Esa era la verdadera razon por la que esto estaba pendiente. */
+        if (e instanceof Ast.ArrayLitExpr) { emitArrayLit((Ast.ArrayLitExpr) e); return; }
+
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;
 
@@ -1596,10 +1722,16 @@ public final class AotCEmitter {
                         return;
                     }
                 }
+                /* [V6/N1.5] `OtroMod.Caja(21)` — construccion cross-module. Se
+                 * mira DESPUES de los metodos (un metodo que devuelva una
+                 * instancia de su propia clase no es una construccion: ahi el
+                 * nombre del callee es el del metodo, no el de la clase). */
+                Symbol.ClassSymbol ctorCls = claseConstruida(c);
+                if (ctorCls != null) { emitNewObject(c, ctorCls, c.line); return; }
                 throw new UnsupportedAotException(
                     "AOT: method call '" + ma.member + "' no soportado todavía (line "
                     + c.line + ") — solo método público (virtual); privado/super/"
-                    + "estático/construcción pendientes.");
+                    + "estático pendientes.");
             }
 
             if (!(c.callee instanceof Ast.IdentifierExpr)) {
@@ -1653,6 +1785,11 @@ public final class AotCEmitter {
                     emitBridgeCall(name, target, c);
                     return;
                 }
+                /* [V6/N1.5] `Caja(21)` — crear un objeto. Va aqui, al final: si
+                 * existiera una funcion con el nombre de la clase, la funcion
+                 * manda (es lo que hace el resto del compilador). */
+                Symbol.ClassSymbol nuevaCls = claseConstruida(c);
+                if (nuevaCls != null) { emitNewObject(c, nuevaCls, c.line); return; }
                 throw new UnsupportedAotException(
                     "AOT: call a función desconocida '" + name + "' (line " + c.line + "). "
                     + "Debe ser native o BP del mismo módulo, o un builtin AOT-soportado "
@@ -1844,7 +1981,29 @@ public final class AotCEmitter {
      *  (int32_t[]){args...}, n). El compound literal C99 vive en el bloque
      *  envolvente — válido como argumento. find_function resuelve el nombre
      *  cada vez (scan barato; cachear en static es mejora futura, pero el coste
-     *  del puente domina). */
+     *  del puente domina).
+     *
+     *  <h3>[V6/N1.5] El nombre va BYTE A BYTE, y esto no es un detalle</h3>
+     *
+     *  Escrito como `find_function(vm, "Mod.func")`, el literal se va a
+     *  `.rodata` y en `.text` queda una relocalización. Un `.mdn` se lleva
+     *  `.text` <b>y nada más</b>, sin aplicar relocs: en placa eso sería un
+     *  puntero a ninguna parte, en silencio.
+     *
+     *  <p>No es una precaución teórica: <b>MdnPack rechazaba el `.o`</b>. Medido
+     *  el 24-ago-2026 con el toolchain real — o sea que el puente native→BP,
+     *  desde que existe (#211, V5), <b>nunca ha llegado a una placa</b>: se
+     *  verificó que EMITE, no que empaqueta. Un camino ejecutado no es un camino
+     *  probado, y aquí ni siquiera se ejecutaba: sólo se compilaba.
+     *
+     *  <p>La vuelta es la que ya usaba `emitPackExtern` para el nombre del
+     *  símbolo de un pack: materializar los bytes en la PILA, asignación a
+     *  asignación. Y tiene que ser así — `char nm[] = "..."` no vale, gcc
+     *  reconoce el inicializador y lo devuelve a `.rodata`.
+     *
+     *  <p>El envoltorio es una expresión-de-sentencias de gcc porque la llamada
+     *  aparece donde se espera un VALOR y hay que ejecutar sentencias antes.
+     *  Mismo recurso que el literal de array, y los tres toolchains son gcc. */
     private void emitCallBpEmission(String qualified, List<Ast.IExpr> args, int line,
                                     String targetDesc, int refMask, boolean retIsRef) {
         warnings.add("la función native '" + currentFuncName + "' llama a " + targetDesc
@@ -1853,11 +2012,15 @@ public final class AotCEmitter {
         /* #302 paso 2 — ref_mask + ret_is_ref: los args-ref se ensanchan a 8 bytes
          * con regen en el puente y el retorno-ref popea 8 (ver bridge_run_bp_frame). */
         String tail = ", " + refMask + "u, " + (retIsRef ? 1 : 0) + ")";
-        w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, \""
-            + qualified + "\"), ");
+        byte[] nm = qualified.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        w.print("({ char __fn[" + (nm.length + 1) + "];");
+        for (int i = 0; i < nm.length; i++)
+            w.print(" __fn[" + i + "]=" + (nm[i] & 0xFF) + ";");
+        w.print(" __fn[" + nm.length + "]=0; ");
+        w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, __fn), ");
         int n = args.size();
         if (n == 0) {
-            w.print("(const int32_t*) 0, 0" + tail);
+            w.print("(const int32_t*) 0, 0" + tail + "; })");
             return;
         }
         w.print("(int32_t[]){ ");
@@ -1865,7 +2028,7 @@ public final class AotCEmitter {
             if (i > 0) w.print(", ");
             emitExpr(args.get(i));
         }
-        w.print(" }, " + n + tail);
+        w.print(" }, " + n + tail + "; })");
     }
 
     /** #211 — ¿el tipo se representa como un i32 de 4 bytes que el puente

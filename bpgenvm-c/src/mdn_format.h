@@ -31,7 +31,14 @@
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
 #define MDN_VERSION        1   /* incrementar si cambia el header layout */
-#define MDN_ABI_VERSION    5   /* 11-ago — el .mdn NO solo depende de la TABLA de
+#define MDN_ABI_VERSION    6   /* [V6/N1.5] 24-ago — un slot nuevo al final
+                                * (`newarray_i64`) y tres que dejaron de ser
+                                * stubs. Lo primero mueve el tamaño de la tabla;
+                                * lo segundo cambia lo que hace un .mdn ya
+                                * emitido (de devolver 0 a alocar), y eso no
+                                * debe pasar en silencio.
+                                *
+                                * Histórico: 5 = 11-ago — el .mdn NO solo depende de la TABLA de
                                 * helpers: su codigo lee `vm->memory` y
                                 * `vm->aot_helpers` POR DESPLAZAMIENTO dentro de
                                 * `struct bpvm`. Ayer añadi un campo a
