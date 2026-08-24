@@ -391,15 +391,33 @@ presupuesto*.
 
 ##### 🧭 Lo que SÍ hay que hacer, en pasitos
 
-1. **Mover las 11 al común** (`src/`), dejando en cada familia sólo las 4 del cable. Es
-   **un paso pequeño con red fuerte**: si las once son idénticas palabra por palabra,
-   moverlas **no puede cambiar el comportamiento**, y lo comprueba que las tres imágenes
-   sigan construyendo y que el IDE siga hablando con cada placa.
-   ⚠️ Alta del `.c` nuevo en **cinco** builds — [[core-c-nuevo-alta-en-5-builds]].
-2. **El STM32 es una CUARTA forma**, no una copia: `stm32_wire.c` no tiene builders (usa
+1. ✅ **HECHO Y VERIFICADO EN PLACA (24-ago) · `bb530e3f`** — las 11 + sus 4 helpers a
+   `src/wire_v1_proto.c`, con `include/bpvm_wire_v1.h` nombrando las dos capas.
+   **Sólo la Pico**: el S3 y la P4 conservan su copia hasta tenerlas en el banco.
+   `pico/wire_v1.c` 259 → 108 líneas; su cabecera 133 → 42.
+
+   🎯 **La red fue más fuerte de lo previsto, y conviene repetir el gesto**: antes de
+   flashear se comparó la imagen nueva con la vieja y salió que las **15 funciones generan
+   código máquina IDÉNTICO**, que hay **1984 símbolos en las dos, el mismo conjunto y todos
+   del mismo tamaño**, y que **`.text` es idéntico byte a byte** (303.148). Los 1494 bytes
+   que difieren en el `.uf2` (0,25 %) son pura recolocación. Con eso la prueba en placa
+   **confirma en vez de descubrir**.
+   📌 Por eso el bloque se movió TAL CUAL, sin reescribir una línea: si se hubiera
+   "mejorado" de paso, esa comparación no existiría.
+
+   ✅ **En placa (Eduardo)**: el IDE conecta y funciona todo, **incluida la subida de un
+   Pack** — que es la prueba fuerte, porque el bulk es binario y ahí un fallo de framing no
+   da error, corrompe datos. Ejercita las dos capas: `field_bulk` (común) y
+   `send_bulk`/`recv_bulk` (las que se quedan en la familia).
+
+2. ⏭️ **Paso 2 — S3 y P4 al común.** Borrar sus dos copias y que usen `wire_v1_proto.c`.
+   📌 **Va en el MISMO viaje al banco que la validación AOT de esas dos familias** (hito
+   N1): las dos cosas piden las mismas placas encendidas, y el banco es lo caro.
+   ⚠️ Alta del `.c` en sus builds — [[core-c-nuevo-alta-en-5-builds]].
+3. **El STM32 es una CUARTA forma**, no una copia: `stm32_wire.c` no tiene builders (usa
    otros nombres, `stm32_wire_*`) y `stm32_repl.c` arma el JSON a mano. Traerlo al común es
    un paso aparte y más caro; no mezclar con el 1.
-3. Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
+4. Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
    familias sin implementar un contrato que existe.
 
 ##### 📐 De propina, una lección de método que costó dos medidas
