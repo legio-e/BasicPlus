@@ -27,6 +27,50 @@
 
 ## Última sesión
 
+### 24-ago — N1.5: la `native` ya FABRICA, y el censo dejó de mentir
+
+**Lo pedido**: *«a ver si podemos cerrar AOT»*, y a mitad de sesión Eduardo acotó: *«tuplas
+las aplazamos a V7. Lo que nos queda en V6 es instanciar arrays y objetos»*.
+
+**Hecho**: arrays (i32/i8/i16/i64/f64) y objetos creados dentro de una `native`. Un objeto
+no se aloca en C —el constructor es bytecode—: se cruza a la factoría `__cls_new_<Clase>`,
+la ruta que `#213` ya había abierto para `throw`. Detalle completo en `FICHAS.md` → N1.5.
+
+**📌 Lo que hay que llevarse de esta sesión no es la feature: es que TRES cosas que
+parecían medidas no lo estaban.**
+
+1. **El censo del AOT medía cinco fragmentos mal escritos, no el AOT.** `ThrowStmt`
+   llevaba soportado desde `#186` y lo tapaba un `throw "vaya"` que #248 no permite. El
+   arnés sólo miraba errores del *parser*: lo que no compilaba salía como «no soportado».
+   Arreglado el arnés, la foto pasó de «23 medidos» a **28 de 30 medidos de verdad**.
+2. **El puente native→BP nunca había llegado a una placa.** Metía el nombre de la función
+   como literal, y un literal vive en `.rodata`; un `.mdn` se lleva `.text` y nada más.
+   `MdnPack` rechazaba el `.o`. Desde `#211` (V5). Se verificó que **emite**, no que
+   empaqueta.
+3. **Indexar un `long[]` en native leía 4 bytes donde hay 8.** No fallaba: devolvía otro
+   número. El límite estaba escrito en un comentario y no lo hacía cumplir nadie.
+
+Y de propina, uno **ajeno al AOT**: `OP_ASTORE_I16` de la VM-C ponía a cero el elemento
+siguiente. Divergencia con miVM, o sea el invariante roto — cazada por un `word[4]` de tres
+líneas escrito para comprobar otra cosa.
+
+**⚙️ La herramienta que queda, que vale más que los arreglos**: `make test-aotnew`. Compila
+el `.c` generado con el compilador del host y lo **EJECUTA** con `gc_bump_threshold = 1`
+(GC en cada alocación). Es el tercer peldaño que faltaba —**emite / cabe / acierta**— y es
+el que cazó el `long[]`. Los dos primeros ya habían dado verde.
+
+**⏭️ Riesgo que acecha, y no es pequeño**: nada de N1.5 ha corrido **en placa**. El ABI del
+`.mdn` sube **5 → 6**, así que la tanda de reflasheo pendiente desde N1.4 ahora arrastra
+también esto. Sigue pendiente lo mismo de ayer: desplegar en las **cinco imágenes** (el
+`bpvm_aot_clear()` mal colocado está sin arreglar en `repl_esp32.c` y `stm32_repl.c`),
+regenerar los **cuatro artefactos nativos de SQLite + `SQLite.pack`**, y sólo entonces
+retirar el `.mdn` suelto.
+
+**⚠️ Y sigue en ROJO lo de ayer, sin tocar**: la paridad dual-VM da **35 PASS / 3 FAIL**
+(`CastExt`, `ListaBp`, `ListaHer`) por desfase de slots en `Core.mod` — el compilador pide
+`Integer#value#2` y la stdlib publicada exporta `#7`. Es **anterior** a estos cambios
+(comprobado revirtiendo) y regenerar la stdlib es un cambio de ABI: decisión de Eduardo.
+
 ### 23-ago (noche) — N1.3 y N1.4: el `.mdn` ya viaja DENTRO del `.mod`, validado en placa
 
 **N1.3 — los statements sencillos**, y la cuarta pata primero: **`AotCoberturaTest`**, que

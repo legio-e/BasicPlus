@@ -929,9 +929,11 @@ destructuring de tuplas.
 ⚠️ Misma carencia que los `double`: **la paridad no cubre el camino AOT**, así que estos
 tres no tienen red automática — sólo el medidor, que dice si *compilan*, no si *coinciden*.
 
-**3c. 🧱 CREAR objetos y arrays desde `native` — SE PUEDE, y está sin hacer.**
+**3c. ✅ CERRADO (24-ago) — CREAR objetos y arrays desde `native`.**
 *(Anotado el 23-ago a petición de Eduardo: «déjalo pendiente por ahora pero que conste que
-se puede hacer».)*
+se puede hacer». Hecho el 24-ago: `6ba99f81` + `05a68055`. El detalle de lo que salió al
+hacerlo, en **N1.5** más abajo — incluidos tres fallos mudos que estaban ahí desde antes,
+y uno de la VM-C ajeno al AOT.)*
 
 📐 **La evidencia, para que nadie lo vuelva a leer como un muro:**
 - Las **ranuras ya están** en la tabla de helpers: `newarray_i32`, `newarray_i8`,
@@ -1115,7 +1117,68 @@ y que, si mañana se hace en dos, falla en silencio en la tercera.
 
 ⏭️ **Lo que queda para cerrarlo del todo**: desplegar en las cinco imágenes y entonces
 retirar el `.mdn` suelto. Va con la tanda de pruebas ya comprometida — el ABI de helpers
-(4→5) obliga a reflashear igualmente.
+(4→5, y **5→6** el 24-ago con N1.5) obliga a reflashear igualmente.
+
+---
+
+#### ✅ N1.5 (24-ago) — una `native` ya CREA arrays y objetos · `6ba99f81` `05a68055` `0f955e67`
+
+**Lo que entró.** Los cuatro helpers de reserva llevaban desde la fase A siendo `return 0`;
+ahora hacen lo mismo que sus opcodes, entra `newarray_i64` (`long[]`/`double[]`, que
+faltaba), y el emisor sabe emitir `[a,b,c]` y `newXArray(n)`. Un **objeto** no se aloca en
+C —el constructor es bytecode—: se cruza a la factoría `__cls_new_<Clase>`, que es la ruta
+que `#213` ya había abierto para `throw MiExcepcion(...)`; sólo faltaba dejar de mirarla
+únicamente dentro de un `throw`. `new_object` sigue sin implementarse y **ahora lo dice**.
+
+📌 **Esto es sobre todo COBRAR V5.** Lo que lo bloqueaba no estaba en el emisor: un objeto
+recién creado vive en un local de C, y hasta V5 el GC no miraba ahí. Fabricarlo era
+fabricar algo recolectable en vivo. Lo quitó `#302` paso 3 — idea de Eduardo.
+
+**Fuera, con el motivo escrito en el rechazo:** arrays de REFERENCIAS (`string[]`,
+`Clase[]`) — en esta ABI una ref cruza con la generación descartada y un `TYPE_ARRAY_REF`
+las guarda con ella; y `float[]`, sin helper de store.
+
+**Tuplas → V7** (decisión de Eduardo, 24-ago). `try`/`catch` dentro de native sigue donde
+estaba (`#213`: el `.mdn` no puede usar `setjmp`).
+
+##### 🔴 Y lo que salió al hacerlo: tres fallos mudos, ninguno nuevo
+
+| fallo | desde | por qué no lo vio nadie |
+|---|---|---|
+| el censo del AOT medía **cinco fragmentos mal escritos**, no el AOT | 21-ago | `pasa()` sólo miraba errores del PARSER; lo que parecía «no soportado» era «no compila». `ThrowStmt` llevaba soportado desde `#186` |
+| el puente native→BP metía el nombre en **`.rodata`** | `#211`, V5 | `MdnPack` rechazaba el `.o` → **el puente NUNCA había llegado a una placa**; se verificó que emite, no que empaqueta |
+| indexar un `long[]`/`word[]` en native leía **4 bytes** | siempre | `arrElemKind` devolvía "i32" para todo lo que no fuera `byte`. No fallaba: devolvía otro número |
+
+Y uno **ajeno al AOT**, de propina: `OP_ASTORE_I16` de la VM-C escribía cuatro bytes de
+ceros en una casilla de dos → guardar `v[0]` ponía a cero `v[1]`, y el último elemento se
+salía del array. Sólo en la VM-C, o sea **divergencia entre las dos VMs** (`0f955e67`,
+guarda en `samples/WordStore.bp`). Salió leyendo ese opcode para copiarlo en el helper
+nuevo; la línea llevaba el comentario «unused (preservado de la versión previa)».
+
+##### 📐 La lección de método: **el censo mide EMISIÓN, y eso no basta**
+
+Que el emisor acepte una construcción no dice que su C compile para el micro ni que dé el
+número correcto. Las dos cosas fallaron: `print` pasaba el censo y no compilaba para ARM
+(23-ago); `long[]` pasaba el censo, compilaba, empaquetaba **y devolvía otro número**.
+
+De ahí salen los **tres peldaños**, cada uno con su herramienta:
+
+| peldaño | herramienta |
+|---|---|
+| emite | `AotCoberturaTest` — foto **28 de 30** |
+| cabe | `arm-none-eabi-gcc` + `MdnPack`, y `riscv32-esp-elf-gcc` + enlace |
+| **acierta** | **`make test-aotnew`** *(nuevo)* — compila el mismo `.c` con el compilador del host y lo EJECUTA con `gc_bump_threshold = 1` |
+
+El tercero es el que faltaba y el que cazó el `long[]`. Y hace la pregunta que sólo se
+puede hacer ejecutando: **¿sobrevive al GC lo que la native fabrica?** Colectar en cada
+alocación convierte esa ventana de lotería en certeza. Cinco valores exactos: arrays i32,
+i64, i16, f64 y un objeto. Gemelo de `test-aotgc`, y regenera el `.c` desde el `.bp` —
+nunca un artefacto rancio.
+
+⏭️ **Lo que NO cubre todavía**: que el código compilado corra **en placa**. Eso sigue
+esperando a la tanda de reflasheo, igual que N1.4.
+
+---
 
 ⚠️ **Lo caro no es la fusión, es su cola** — está en el diseño y conviene no descubrirlo a
 mitad: el gate de ABI sube la versión del `.mod` y eso deja **rancias las cuatro copias de
