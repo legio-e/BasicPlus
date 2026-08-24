@@ -50,8 +50,10 @@ class AotCoberturaTest {
         CASOS.put("SwitchStmt",    "switch a\n        case 1\n          return 10\n      endsw\n      return 0");
         CASOS.put("BreakStmt",     "while true do\n        break\n      endwh\n      return a");
         CASOS.put("ContinueStmt",  "var t: integer := 0\n      while t < 3 do\n        t += 1\n        continue\n      endwh\n      return t");
-        CASOS.put("TryStmt",       "try\n        return 1\n      catch e: Core.Exception\n        return 2\n      endtry");
-        CASOS.put("ThrowStmt",     "throw \"vaya\"\n      return a");
+        CASOS.put("TryStmt",       "try\n        return 1\n      catch e: Exception\n        return 2\n      endtry");
+        // `throw "vaya"` NO es BP: #248 solo deja lanzar instancias de Exception.
+        // El fragmento anterior media eso, no el AOT.
+        CASOS.put("ThrowStmt",     "throw RuntimeError(\"vaya\")\n      return a");
 
         // --- expresiones ---
         CASOS.put("IntLitExpr",    "return 42");
@@ -60,14 +62,17 @@ class AotCoberturaTest {
         CASOS.put("DoubleLitExpr", "var d: double := 1.5d\n      return a");
         CASOS.put("BoolLitExpr",   "var b: boolean := true\n      return a");
         CASOS.put("StringLitExpr", "var s: string := \"x\"\n      return a");
-        CASOS.put("NullLitExpr",   "var s: string := null\n      return a");
+        // `string` no admite null; una REFERENCIA sí. La clase la pone el modulo del arnes.
+        CASOS.put("NullLitExpr",   "var z: Caja := null\n      return a");
         CASOS.put("BinaryExpr",    "return a + 1");
         CASOS.put("UnaryExpr",     "return -a");
         CASOS.put("ParenExpr",     "return (a + 1)");
         CASOS.put("IdentifierExpr","return a");
-        CASOS.put("ArrayLitExpr",  "var v: integer[] := [1, 2, 3]\n      return v[0]");
+        // `v` ya es un PARAMETRO de f: la variable duplicada tapaba la medida.
+        CASOS.put("ArrayLitExpr",  "var w: integer[] := [1, 2, 3]\n      return w[0]");
         CASOS.put("IndexExpr",     "return v[0]");
-        CASOS.put("TupleExpr",     "{ x, y } := dosCosas()\n      return x + y");
+        // El destructuring ASIGNA: las dos variables tienen que existir antes.
+        CASOS.put("TupleExpr",     "var x: integer\n      var y: integer\n      { x, y } := dosCosas()\n      return x + y");
         // InstanceOfExpr se quedó FUERA a propósito: el fragmento que tenía era
         // `return a`, que no produce ese nodo — un caso que dice medir una cosa y
         // mide otra es peor que no tenerlo, porque cuenta como cobertura.
@@ -78,13 +83,16 @@ class AotCoberturaTest {
      * gesto que registra que la cobertura del AOT se movió.
      */
     private static final Set<String> SOPORTADOS = new TreeSet<>(java.util.Arrays.asList(
-        // Medido el 23-ago-2026. 23 de 27 tras N1.3 (entraron DoLoopStmt,
-        // NullLitExpr y PrintStmt; la foto anterior eran 20).
+        // Medido el 24-ago-2026: 24 de 27. ThrowStmt entra SIN tocar el emisor
+        // — ya estaba soportado desde #186/#213 y lo tapaba un fragmento mal
+        // escrito (`throw "vaya"`, que #248 no permite). Los otros cuatro casos
+        // estaban igual de mal; al arreglarlos la foto pasó de "23 medidos" a
+        // "27 medidos de verdad".
         "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt", "ContinueStmt",
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
         "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",
         "ParenExpr", "PrintStmt", "ReturnStmt", "StringLitExpr", "SwitchStmt",
-        "UnaryExpr", "VarDecl", "WhileStmt"
+        "ThrowStmt", "UnaryExpr", "VarDecl", "WhileStmt"
     ));
 
     /** El motivo del ultimo rechazo, para que el informe no culpe al nodo
@@ -96,6 +104,13 @@ class AotCoberturaTest {
     private static boolean pasa(String cuerpo) {
         String src =
               "module CobTest\n"
+            // `import Core` explicito: sin el no hay Exception ni RuntimeError,
+            // y los casos de excepciones median "no compila" en vez de medir el AOT.
+            + "  import Core\n"
+            // Una clase, para poder escribir una referencia (el caso de `null`).
+            + "  class Caja\n"
+            + "    public property n: integer\n"
+            + "  end Caja\n"
             // Una funcion auxiliar que devuelve dos valores, para el caso de la
             // tupla; y `v: integer[]` como parametro, para el del indice. Asi
             // ninguno de los dos depende de poder CREAR el array dentro de la
@@ -117,7 +132,35 @@ class AotCoberturaTest {
                 ultimoMotivo = "NO PARSEA (el fragmento del test esta mal): " + p.getErrors();
                 return false;
             }
-            SemanticInfo info = new SemanticAnalyzer().analyze(m);
+            // Los imports se resuelven con el MISMO codigo que el compilador
+            // (Main.loadImportsForAnalyzer contra la stdlib de este checkout).
+            // Reimplementarlo aqui seria un doble, y un doble mas amable que el
+            // original convierte el censo en adorno.
+            SemanticAnalyzer sa = new SemanticAnalyzer();
+            Main.Ctx ctx = new Main.Ctx();
+            ctx.verbose = false;
+            ctx.outDir  = java.nio.file.Paths.get("target");
+            // El cwd del test es lexer-java/, donde no hay BpVM.cfg: hay que
+            // decirle desde donde caminar hacia arriba para encontrarlo (y con
+            // el, el stdlibDir donde vive Core.mod).
+            ctx.autodiscoverFromSource(java.nio.file.Paths.get("pom.xml").toAbsolutePath());
+            Main.loadImportsForAnalyzer(m, java.nio.file.Paths.get("target", "CobTest.bp"),
+                                        ctx, sa, 0);
+            SemanticInfo info = sa.analyze(m);
+            // Un fragmento que no pasa el analisis semantico NO mide el AOT:
+            // mide que esta mal escrito. Sin este filtro se cuenta como "no
+            // soportado" y la foto miente hacia abajo — pasó siete veces
+            // (23 y 24-ago-2026), y `throw \"vaya\"` fue la ultima: #248 solo
+            // deja lanzar Exception, asi que el caso no llegaba a preguntarle
+            // nada al emisor.
+            StringBuilder errs = new StringBuilder();
+            for (SemanticDiagnostic d : info.diagnostics)
+                if (d.kind == SemanticDiagnostic.Kind.ERROR)
+                    errs.append(errs.length() == 0 ? "" : " | ").append(d.message);
+            if (errs.length() > 0) {
+                ultimoMotivo = "NO COMPILA (el fragmento del test esta mal): " + errs;
+                return false;
+            }
             AotCEmitter em = new AotCEmitter(m.name);
             em.setSemanticInfo(info);
             return !em.emitModule(m).isEmpty();
