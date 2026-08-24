@@ -1165,13 +1165,54 @@ generación mal puesta eso no da error: da corrupción. Siete valores exactos.
 (`["1234", "56", "xy"]`), porque eso lo resolvió `#428` en V5 y conviene que se note si
 alguna vez deja de ser verdad.
 
-**Aplazado a V7** (decisiones de Eduardo, 24-ago):
-- **Tuplas** dentro de native (`DestructAssignStmt`, `TupleExpr`).
-- **`try`/`catch` dentro de native** — *«por lo menos ver si es posible»*. Hoy se rechaza
-  citando `#213` (el `.mdn` no puede llamar a `setjmp`: cero relocalizaciones externas).
-  ⚠️ Ese enunciado merece la misma desconfianza que el de arriba: dice qué NO se puede
-  usar, no que no haya otro camino. Lo primero de V7 es **medir si lo hay**, no repetir la
-  frase.
+**Aplazado a V7** (decisiones de Eduardo, 24-ago). Con el planteamiento inicial que dio él
+al cerrar la tarde, que en los dos casos es el mismo: **una función AOT es una función BP
+con código nativo**, así que lo que funciona en BP debería poder reproducirse dentro.
+
+##### 🧩 V7 — TUPLAS dentro de una native
+
+> Eduardo: *«las tuplas deberían funcionar, a fin de cuentas son objetos»*.
+
+Y es literal: el compilador sintetiza una clase oculta por forma
+(`MivmEmitter.synthesizeTupleClasses`) con campos `_0`, `_1`, … El destructuring es *coge
+la ref, lee sus campos*. De las dos mitades, **una ya funciona**: la llamada devuelve una
+ref y el puente sabe traerla (`ret_is_ref=1`, lo mismo que hace la factoría de un objeto).
+
+⏭️ **Lo que falta es LEER UN CAMPO desde native**, y hoy no hay helper para eso — a
+propósito: la regla es *público ⇒ property*, y una property se lee por su getter
+(`call_method_i32`). Pero una tupla **no tiene getters**: sus `_i` son campos pelados. Dos
+salidas, y conviene elegir a la vista:
+
+- **helpers de campo** (`get_field_i32` / `_i64` / `_ref`), del mismo tamaño que los de
+  array de N1.5. El slot es determinista y el compilador lo conoce. Contenido, pero abre
+  una puerta que la regla de las properties cerró a propósito;
+- **darle getters a la clase sintética**, y entonces el camino es el que ya existe. No
+  añade mecanismo, pero mete slots de vtable en todo módulo que use tuplas.
+
+##### 🧩 V7 — `try`/`catch` dentro de una native · ⚠️ LA OBJECIÓN ERA FALSA
+
+Aquí ponía que no se podía *«porque el `.mdn` no puede llamar a `setjmp`: cero
+relocalizaciones externas»* (`#213`). Eso es cierto **del `setjmp` de libc** — y no es el
+único salto no-local que hay.
+
+📐 **MEDIDO el 24-ago con los dos toolchains reales**: `__builtin_setjmp` /
+`__builtin_longjmp` de gcc **se expanden INLINE**. Un `.o` que los usa sale con **cero
+símbolos indefinidos**, y empaqueta: **ARM 52 B, RISC-V 60 B**. O sea que el salto no-local
+dentro del `.mdn` existe.
+
+⏭️ **Lo que queda por resolver NO es el salto: es a dónde salta un `throw`.** Hoy un helper
+que lanza hace `longjmp` al *boundary AOT* del intérprete, saltándose de largo el marco del
+native. Para cazar dentro hace falta que el `eh_stack` sepa que hay un manejador NATIVO en
+medio — y ahí encaja exactamente el planteamiento de Eduardo: darle al native las mismas
+primitivas que tiene el intérprete (empujar y sacar manejador), con la única diferencia de
+que el aterrizaje es un `__builtin_longjmp` a su marco en vez de una asignación de PC.
+
+⚠️ **Y lo que NO está medido, para no repetir el error de hoy**: que `__builtin_setjmp`
+aguante lo que aquí se le va a pedir. Está pensado para uso interno de gcc, no guarda los
+registros callee-saved como el `setjmp` de verdad, y el salto tiene que llegar desde OTRO
+marco (el del helper). El experimento de arriba salta dentro de la misma función. **El
+siguiente paso de V7 es un caso que salte desde una llamada anidada**, no dar por bueno lo
+que este mide.
 
 ##### ⏭️ PENDIENTE de N1: verificar CADA FAMILIA por separado
 
