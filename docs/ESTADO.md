@@ -32,12 +32,15 @@
 **Lo pedido**: *«a ver si podemos cerrar AOT»*, y a mitad de sesión Eduardo acotó: *«tuplas
 las aplazamos a V7. Lo que nos queda en V6 es instanciar arrays y objetos»*.
 
-**Hecho**: arrays (i32/i8/i16/i64/f64) y objetos creados dentro de una `native`. Un objeto
-no se aloca en C —el constructor es bytecode—: se cruza a la factoría `__cls_new_<Clase>`,
-la ruta que `#213` ya había abierto para `throw`. Detalle completo en `FICHAS.md` → N1.5.
+**Hecho**: arrays de **todos** los tipos de elemento dentro de una `native`
+(i32/i8/i16/i64/f64/f32 y **referencias**: `string[]`, `Clase[]`) y creación de objetos. Un
+objeto no se aloca en C —el constructor es bytecode—: se cruza a la factoría
+`__cls_new_<Clase>`, la ruta que `#213` ya había abierto para `throw`. Detalle completo en
+`FICHAS.md` → N1.5 y N1.5b.
 
 **📌 Lo que hay que llevarse de esta sesión no es la feature: es que TRES cosas que
-parecían medidas no lo estaban.**
+parecían medidas no lo estaban — y de las tres, DOS eran errores míos de medida, no
+fallos del código.** Las dos las destapó Eduardo preguntando, no una prueba.
 
 1. **El censo del AOT medía cinco fragmentos mal escritos, no el AOT.** `ThrowStmt`
    llevaba soportado desde `#186` y lo tapaba un `throw "vaya"` que #248 no permite. El
