@@ -1,0 +1,31 @@
+// WordStore — guarda contra una corrupcion MUDA de `word[]`/`short[]`.
+//
+// La VM-C, al guardar un elemento de 16 bits, escribia CUATRO bytes de ceros
+// antes de escribir los dos suyos: `v[0] := 111` ponia a cero `v[1]`, y en el
+// ultimo elemento se salia dos bytes del array. La linea llevaba el comentario
+// «unused (preservado de la version previa)».
+//
+// Solo pasaba en la VM-C. miVM daba lo correcto, asi que el sintoma era una
+// DIVERGENCIA entre las dos VMs — el invariante sagrado — y no un fallo.
+//
+// Esperado (identico en las dos VMs):
+//   1000 2000 3000 4000
+//   111 2000 3000 4000
+//   111 2000 333 4000
+//
+// 📌 Salio buscando otra cosa: comprobando los helpers de 16 bits que le
+// faltaban al AOT (V6/N1.5). Tres lineas de BP.
+module WordStore
+  function Main()
+    var v: word[4]
+    v[0] := 1000
+    v[1] := 2000
+    v[2] := 3000
+    v[3] := 4000
+    print v[0], v[1], v[2], v[3]
+    v[0] := 111
+    print v[0], v[1], v[2], v[3]
+    v[2] := 333
+    print v[0], v[1], v[2], v[3]
+  end Main
+end WordStore

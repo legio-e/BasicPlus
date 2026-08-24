@@ -1532,7 +1532,16 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v16 = (int16_t)(v & 0xFFFF);
             uint8_t* e = bpref_arr_elem(vm, arr, (uint32_t) idx, 2);
-            bpvm_write_u32_be(e, 0); /* unused (preservado de la versión previa) */
+            /* [24-ago-2026] AQUI HABIA UN `bpvm_write_u32_be(e, 0)` con el
+             * comentario «unused (preservado de la versión previa)». No era
+             * unused: escribia CUATRO bytes de ceros en una casilla de DOS, o
+             * sea que guardar v[i] ponia a cero v[i+1] — y en el ultimo
+             * elemento se salia dos bytes del array.
+             *
+             * Silencioso y solo en la VM-C: miVM daba `111 2000 3000 4000` y la
+             * VM-C `111 0 3000 4000`. Justo lo que el invariante existe para
+             * cazar. Salio de un `word[4]` de tres lineas escrito para
+             * comprobar OTRA cosa (los helpers de 16 bits del AOT, V6/N1.5). */
             e[0] = (uint8_t)((v16 >> 8) & 0xFF);
             e[1] = (uint8_t)(v16 & 0xFF);
             break;
