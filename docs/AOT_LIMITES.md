@@ -72,13 +72,15 @@ ocupan 4 bytes. `float`, `long`, `double` y `void` quedan fuera.
 Ojo: llamar a BP desde `native` **pierde la velocidad AOT** (esa función corre
 interpretada). El compilador lo avisa como `-- aviso AOT: ...` sin abortar.
 
-> 🐛 **Y hasta el 24-ago-2026 este puente NO LLEGABA A UNA PLACA.** Emitía
-> `find_function(vm, "Mod.func")`, y ese literal se va a `.rodata`; un `.mdn` se
-> lleva `.text` y nada más, sin aplicar relocalizaciones, así que `MdnPack`
-> rechazaba el `.o`. O sea que el puente estaba verificado por EMISIÓN, no por
-> empaquetado — desde que existe (#211, V5). Afectaba a las llamadas del mismo
-> módulo, a las cross-module y al `throw MiExcepcion(...)` de #213. El nombre va
-> ahora byte a byte en la pila, como ya hacía el puente a un pack.
+> ⚠️ **El 24-ago-2026 escribí aquí que este puente «nunca había llegado a una
+> placa» porque su `find_function(vm, "Mod.func")` mete el nombre en `.rodata`.
+> Era FALSO**, y conviene que se quede escrito por qué: comprobé el `.o` **sin el
+> paso de ENLACE**, que el pipeline real hace siempre. El guión
+> `bpgenvm-c/aot/mdn.ld` fusiona `.rodata` dentro de `.text` — eso es `#428`,
+> cerrado en V5 y verificado en la Metro. Con el enlace, empaqueta.
+>
+> Lo caro del error no fue el código que sobraba: fue **medir una etapa que el
+> producto no tiene** y sacar de ahí una conclusión sobre la placa.
 
 ### 4. Builtins: sólo un subconjunto
 
@@ -117,9 +119,10 @@ Cada ancho con su helper.
 > un 0 no casa con nada — el objeto se leería como muerto al primer acceso. Un
 > use-after-free, no un error.
 
-⚠️ **Lo que sigue sin poderse meter en un array desde una native es un LITERAL de
-cadena** — pero eso no es de los arrays: es que un literal vive en `.rodata` y un
-`.mdn` sólo se lleva `.text` (ver §3). Se fabrican con `intToString` y demás.
+📌 **Y un literal de cadena SÍ puede ir dentro** — `["a", intToString(n)]` compila
+y empaqueta. Lo resuelve `#428` (V5): el paso de enlace fusiona `.rodata` dentro
+de `.text`. El sample `NatNew.bp` lleva uno a propósito, para que se note si
+alguna vez deja de ser verdad. Se fabrican con `intToString` y demás.
 
 ### 6. Construcciones sueltas
 
@@ -150,7 +153,7 @@ función y línea se pone solo.
 
 **Y si añades SOPORTE nuevo**: mueve el nodo en `AotCoberturaTest.SOPORTADOS`
 —ése es el registro— y súbelo por los tres peldaños de abajo. El primero solo no
-demuestra nada: `print` los pasó el 23-ago y no compilaba para ARM.
+demuestra nada.
 
 ---
 
@@ -198,18 +201,23 @@ Y tres nodos que N1 toca de lleno —`CallExpr`, la creación de objetos y
 Que el emisor acepte una construcción no dice que su C compile para el micro, ni
 que dé el número correcto. Las dos cosas han fallado ya:
 
-- **`print`** pasaba el censo y **no compilaba para ARM** (23-ago): metía un
-  literal en `.rodata` y `MdnPack` lo rechazaba.
 - **`long[]`** pasaba el censo, compilaba, empaquetaba… y devolvía **otro
-  número** (24-ago): el emisor elegía el helper de 4 bytes.
+  número** (24-ago): el emisor elegía el helper de 4 bytes. Sólo lo ve quien lo
+  ejecuta.
 
 Por eso la verificación de una construcción nueva son **tres peldaños**, no uno:
 
 | peldaño | qué demuestra | con qué |
 |---|---|---|
 | 1. emite | el emisor la acepta | `AotCoberturaTest` |
-| 2. cabe | compila y empaqueta para el micro | `arm-none-eabi-gcc` + `MdnPack` (y el `riscv32-esp-elf-gcc` + enlace, para el P4) |
+| 2. cabe | compila y empaqueta para el micro | gcc de la familia → **ENLACE con `bpgenvm-c/aot/mdn.ld`** → `MdnPack` |
 | 3. acierta | ejecutada da el valor exacto | `make test-aotnew` — compila el mismo `.c` con el compilador del host y lo corre con `gc_bump_threshold = 1` |
+
+⚠️ **El enlace del peldaño 2 no es opcional y saltárselo miente hacia el lado
+malo.** `MdnPack` sobre el `.o` rechaza cualquier literal (`.LC0`); sobre el
+`.elf` enlazado lo acepta, porque `mdn.ld` fusiona `.rodata` en `.text` (`#428`).
+Medir el `.o` me hizo declarar **tres límites que no existen** en dos días — el
+`print` del 23-ago y, el 24, los literales de cadena y el puente native→BP.
 
 El peldaño 3 es el que faltaba y el que cazó el `long[]`. Y hace la pregunta que
 sólo se puede hacer ejecutando: **¿sobrevive al GC lo que la native fabrica?** El

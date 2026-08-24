@@ -82,11 +82,15 @@ module NatNew
   // viva, el elemento 0 se leería como objeto muerto — no daría error: daría
   // use-after-free.
   //
-  // ⚠️ Sin literales de cadena a propósito: un `.mdn` sólo se lleva `.text` y un
-  // literal vive en `.rodata`. Los strings se fabrican con intToString.
+  // 📌 Y CON UN LITERAL DE CADENA dentro, a propósito: un literal vive en
+  // `.rodata` y un `.mdn` sólo se lleva `.text`, pero el paso de ENLACE del
+  // pipeline (`bpgenvm-c/aot/mdn.ld`) lo fusiona dentro de `.text`. Eso es
+  // #428, cerrado en V5 con la idea de Eduardo — «esos literales tienen que ir
+  // como parte del código nativo»— y verificado en la Metro. Está aquí para que
+  // se note si alguna vez deja de estarlo.
   native function largoDeDos(a: integer, b: integer): integer
-    var v: string[] := [intToString(a), intToString(b)]
-    return len(v[0]) + len(v[1])
+    var v: string[] := [intToString(a), intToString(b), "xy"]
+    return len(v[0]) + len(v[1]) + len(v[2])
   end largoDeDos
 
   // ── 6. Un array de float ────────────────────────────────────────────────
@@ -108,7 +112,7 @@ module NatNew
     var w: word[3]
     print "  tocaPalabras()=", tocaPalabras(w), " (esperado 6000)"
     print "  mediaDobles() =", mediaDobles(), " (esperado 4)"
-    print "  largoDeDos()  =", largoDeDos(1234, 56), " (esperado 6)"
+    print "  largoDeDos()  =", largoDeDos(1234, 56), " (esperado 8)"
     print "  sumaFloats()  =", sumaFloats(), " (esperado 4)"
     print "  areaDe(6,7)   =", areaDe(6, 7), " (esperado 42)"
     print "== FIN =="

@@ -2007,27 +2007,27 @@ public final class AotCEmitter {
      *  cada vez (scan barato; cachear en static es mejora futura, pero el coste
      *  del puente domina).
      *
-     *  <h3>[V6/N1.5] El nombre va BYTE A BYTE, y esto no es un detalle</h3>
+     *  <h3>⚠️ El nombre va como LITERAL DE C, y así debe quedarse</h3>
      *
-     *  Escrito como `find_function(vm, "Mod.func")`, el literal se va a
-     *  `.rodata` y en `.text` queda una relocalización. Un `.mdn` se lleva
-     *  `.text` <b>y nada más</b>, sin aplicar relocs: en placa eso sería un
-     *  puntero a ninguna parte, en silencio.
+     *  El 24-ago-2026 lo cambié a materializarlo byte a byte en la pila, porque
+     *  `MdnPack` rechazaba el `.o`: el literal vive en `.rodata` y un `.mdn` se
+     *  lleva `.text`. Y concluí que el puente «nunca había llegado a una placa».
      *
-     *  <p>No es una precaución teórica: <b>MdnPack rechazaba el `.o`</b>. Medido
-     *  el 24-ago-2026 con el toolchain real — o sea que el puente native→BP,
-     *  desde que existe (#211, V5), <b>nunca ha llegado a una placa</b>: se
-     *  verificó que EMITE, no que empaqueta. Un camino ejecutado no es un camino
-     *  probado, y aquí ni siquiera se ejecutaba: sólo se compilaba.
+     *  <p><b>Las dos cosas eran falsas, y por el mismo motivo</b>: comprobé el
+     *  `.o` <b>sin el paso de ENLACE</b>, que el pipeline real hace siempre
+     *  ({@code AotBuild.enlazar} = true en todas las familias). El guión
+     *  {@code bpgenvm-c/aot/mdn.ld} <b>fusiona `.rodata` dentro de `.text`</b>, y
+     *  con él el literal empaqueta sin problema.
      *
-     *  <p>La vuelta es la que ya usaba `emitPackExtern` para el nombre del
-     *  símbolo de un pack: materializar los bytes en la PILA, asignación a
-     *  asignación. Y tiene que ser así — `char nm[] = "..."` no vale, gcc
-     *  reconoce el inicializador y lo devuelve a `.rodata`.
+     *  <p>Eso es `#428`, cerrado en V5 el 16-ago con la idea de Eduardo —<i>«esos
+     *  literales tienen que ir como parte del código nativo»</i>— y verificado en
+     *  la Metro. No es una trampa: enlazado a dos direcciones distintas el
+     *  `.text` sale byte-idéntico, o sea que sigue siendo relocatable.
      *
-     *  <p>El envoltorio es una expresión-de-sentencias de gcc porque la llamada
-     *  aparece donde se espera un VALOR y hay que ejecutar sentencias antes.
-     *  Mismo recurso que el literal de array, y los tres toolchains son gcc. */
+     *  <p>📌 Lo caro del error no fue el código de más: fue medir <b>una etapa
+     *  que el producto no tiene</b> y sacar de ahí una conclusión sobre la placa.
+     *  Si vuelves a ver a `MdnPack` quejarse de un `.LC0`, la pregunta es si
+     *  estás enlazando, no si hay que quitar el literal. */
     private void emitCallBpEmission(String qualified, List<Ast.IExpr> args, int line,
                                     String targetDesc, int refMask, boolean retIsRef) {
         warnings.add("la función native '" + currentFuncName + "' llama a " + targetDesc
@@ -2036,15 +2036,11 @@ public final class AotCEmitter {
         /* #302 paso 2 — ref_mask + ret_is_ref: los args-ref se ensanchan a 8 bytes
          * con regen en el puente y el retorno-ref popea 8 (ver bridge_run_bp_frame). */
         String tail = ", " + refMask + "u, " + (retIsRef ? 1 : 0) + ")";
-        byte[] nm = qualified.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        w.print("({ char __fn[" + (nm.length + 1) + "];");
-        for (int i = 0; i < nm.length; i++)
-            w.print(" __fn[" + i + "]=" + (nm[i] & 0xFF) + ";");
-        w.print(" __fn[" + nm.length + "]=0; ");
-        w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, __fn), ");
+        w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, \""
+            + qualified + "\"), ");
         int n = args.size();
         if (n == 0) {
-            w.print("(const int32_t*) 0, 0" + tail + "; })");
+            w.print("(const int32_t*) 0, 0" + tail);
             return;
         }
         w.print("(int32_t[]){ ");
@@ -2052,7 +2048,7 @@ public final class AotCEmitter {
             if (i > 0) w.print(", ");
             emitExpr(args.get(i));
         }
-        w.print(" }, " + n + tail + "; })");
+        w.print(" }, " + n + tail);
     }
 
     /** #211 — ¿el tipo se representa como un i32 de 4 bytes que el puente

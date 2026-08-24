@@ -43,10 +43,15 @@ parecían medidas no lo estaban.**
    llevaba soportado desde `#186` y lo tapaba un `throw "vaya"` que #248 no permite. El
    arnés sólo miraba errores del *parser*: lo que no compilaba salía como «no soportado».
    Arreglado el arnés, la foto pasó de «23 medidos» a **28 de 30 medidos de verdad**.
-2. **El puente native→BP nunca había llegado a una placa.** Metía el nombre de la función
-   como literal, y un literal vive en `.rodata`; un `.mdn` se lleva `.text` y nada más.
-   `MdnPack` rechazaba el `.o`. Desde `#211` (V5). Se verificó que **emite**, no que
-   empaqueta.
+2. ~~El puente native→BP nunca había llegado a una placa.~~ **FALSO, y corregido el
+   mismo día a partir de una pregunta de Eduardo** (*«lo de los literales lo vimos en V5»*).
+   Yo comprobaba el `.o`; el pipeline real empaqueta el `.elf` **ENLAZADO**, y el guión
+   `bpgenvm-c/aot/mdn.ld` fusiona `.rodata` dentro de `.text` — eso es `#428`, cerrado en
+   V5 y verificado en la Metro. El cambio que metí por esto sobraba: revertido.
+   ⚠️ El mismo error de medida había producido el «`print` no compila para ARM» del
+   23-ago. **Dos límites declarados que no existían**, los dos por medir una etapa que el
+   producto no tiene. La regla: si `MdnPack` se queja de un `.LC0`, la pregunta es si
+   estás enlazando.
 3. **Indexar un `long[]` en native leía 4 bytes donde hay 8.** No fallaba: devolvía otro
    número. El límite estaba escrito en un comentario y no lo hacía cumplir nadie.
 

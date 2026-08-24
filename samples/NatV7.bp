@@ -54,10 +54,11 @@ module NatV7
   end Caja
 
   // ── 4. print DENTRO de una native ────────────────────────────────────────
-  // ⚠️ SIN literal de cadena: un `.mdn` sólo se lleva `.text`, y un literal vive
-  // en `.rodata`. MdnPack lo caza y lo dice —«sería un puntero a ninguna parte,
-  // en silencio»— pero conviene saberlo: dentro de una `native` que vaya a `.mdn`
-  // se puede imprimir un VALOR, no un rótulo.
+  // ⚠️ Sin literal de cadena, pero NO porque no se pueda: un literal vive en
+  // `.rodata` y el paso de ENLACE del pipeline (`bpgenvm-c/aot/mdn.ld`) lo
+  // fusiona dentro de `.text` desde #428 (V5). Lo que caza MdnPack es el `.o`
+  // sin enlazar — y creerse eso me hizo declarar dos límites que no existían
+  // (24-ago). Aquí se imprime un valor porque es lo que este sample mide.
   native function traza(x: integer): integer
     print x
     return x + 1

@@ -1161,9 +1161,9 @@ Rellenar la casilla 1 dispara un GC mientras a la 0 sólo la sostiene el array. 
 generación mal puesta eso no da error: da corrupción. Siete valores exactos.
 `AotCoberturaTest` sigue en 28/30 (esto no añade nodos: los quita de la lista de rechazos).
 
-**Lo único que sigue sin poder ir dentro de un array desde una native es un LITERAL de
-cadena** — y eso no es de los arrays: un literal vive en `.rodata` y un `.mdn` sólo se
-lleva `.text`.
+📌 **Y un literal de cadena SÍ puede ir dentro.** El sample lleva uno a propósito
+(`["1234", "56", "xy"]`), porque eso lo resolvió `#428` en V5 y conviene que se note si
+alguna vez deja de ser verdad.
 
 **Aplazado a V7** (decisiones de Eduardo, 24-ago):
 - **Tuplas** dentro de native (`DestructAssignStmt`, `TupleExpr`).
@@ -1196,8 +1196,40 @@ placa, las demás juntas y más adelante.
 | fallo | desde | por qué no lo vio nadie |
 |---|---|---|
 | el censo del AOT medía **cinco fragmentos mal escritos**, no el AOT | 21-ago | `pasa()` sólo miraba errores del PARSER; lo que parecía «no soportado» era «no compila». `ThrowStmt` llevaba soportado desde `#186` |
-| el puente native→BP metía el nombre en **`.rodata`** | `#211`, V5 | `MdnPack` rechazaba el `.o` → **el puente NUNCA había llegado a una placa**; se verificó que emite, no que empaqueta |
+| ~~el puente native→BP metía el nombre en `.rodata`~~ | — | **FALSA ALARMA, ver abajo**: comprobé el `.o` sin el paso de ENLACE, que el pipeline hace siempre |
 | indexar un `long[]`/`word[]` en native leía **4 bytes** | siempre | `arrElemKind` devolvía "i32" para todo lo que no fuera `byte`. No fallaba: devolvía otro número |
+
+##### 🔴🔴 CORREGIDO EL MISMO DÍA: **dos de esos «fallos» no existían**
+
+Lo destapó una pregunta de Eduardo: *«lo de soporte de literales strings lo vimos en V5.
+Había un problema con el compilador gcc, sé que lo solucionamos pero no sé si se hizo
+alguna trampa»*. No hubo trampa: es **`#428`**, cerrado el 16-ago con su idea —*«esos
+literales tienen que ir como parte del código nativo»*— y **verificado en la Metro**. Un
+guión de enlace compartido (`bpgenvm-c/aot/mdn.ld`) **fusiona `.rodata` dentro de
+`.text`**, y sigue siendo relocatable: enlazado a dos direcciones distintas el `.text` sale
+byte-idéntico.
+
+**Yo comprobaba el `.o`, y el pipeline real empaqueta el `.elf` ENLAZADO**
+(`AotBuild.enlazar` = true en TODAS las familias). Medido las dos formas con el mismo
+fichero:
+
+| | `MdnPack` sobre el `.o` | sobre el `.elf` enlazado |
+|---|---|---|
+| una native con `return "hola"` | ❌ *«1 referencia fuera de .text: .LC0»* | ✅ 60 B, 1 símbolo |
+| `print "valor:", n` (el «fallo» del 23-ago) | ❌ | ✅ 116 B |
+| el puente `find_function("Mod.func")` | ❌ | ✅ |
+
+Así que **el puente native→BP sí llegaba a una placa**, y el `print` del 23-ago **sí
+compilaba para ARM**. Los dos «hallazgos» eran el mismo error de medida, y el cambio que
+metí por ellos —materializar el nombre byte a byte— sobraba: **revertido**.
+
+📌 **Lo caro no fue el código de más: fue medir UNA ETAPA QUE EL PRODUCTO NO TIENE y sacar
+de ahí una conclusión sobre la placa.** El instrumento estaba bien; lo que estaba mal era
+dónde lo puse. Enlaza con [[instrumento-mudo-dudar-de-el.md]] por el otro lado: aquí el
+instrumento no callaba, gritaba — y gritaba sobre algo que no era el producto.
+
+⏭️ **La regla que queda**: si `MdnPack` se queja de un `.LC0`, la pregunta es **si estás
+enlazando**, no si hay que quitar el literal.
 
 Y uno **ajeno al AOT**, de propina: `OP_ASTORE_I16` de la VM-C escribía cuatro bytes de
 ceros en una casilla de dos → guardar `v[0]` ponía a cero `v[1]`, y el último elemento se

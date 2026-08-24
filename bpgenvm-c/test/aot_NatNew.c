@@ -128,8 +128,8 @@ static int32_t aot_NatNew_largoDeDos(struct bpvm* vm, int32_t a, int32_t b) {
                   *  globals/arrays/builtins. */
     (void) a;
     (void) b;
-    int32_t v = ({ int32_t __arr = vm->aot_helpers->newarray_ref(vm, 2); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 0, vm->aot_helpers->int_to_string(vm, a)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 1, vm->aot_helpers->int_to_string(vm, b)); __arr; });
-    return (vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 0))) + vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 1))));
+    int32_t v = ({ int32_t __arr = vm->aot_helpers->newarray_ref(vm, 3); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 0, vm->aot_helpers->int_to_string(vm, a)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 1, vm->aot_helpers->int_to_string(vm, b)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 2, vm->aot_helpers->string_from_cstr(vm, "xy", 2)); __arr; });
+    return ((vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 0))) + vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 1)))) + vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, v, 2))));
 }
 
 static void thunk_NatNew_largoDeDos(struct bpvm* vm,
@@ -176,7 +176,7 @@ static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t a, int32_t b) {
                   *  globals/arrays/builtins. */
     (void) a;
     (void) b;
-    int32_t p = ({ char __fn[23]; __fn[0]=78; __fn[1]=97; __fn[2]=116; __fn[3]=78; __fn[4]=101; __fn[5]=119; __fn[6]=46; __fn[7]=95; __fn[8]=95; __fn[9]=99; __fn[10]=108; __fn[11]=115; __fn[12]=95; __fn[13]=110; __fn[14]=101; __fn[15]=119; __fn[16]=95; __fn[17]=80; __fn[18]=117; __fn[19]=110; __fn[20]=116; __fn[21]=111; __fn[22]=0; vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, __fn), (int32_t[]){ a, b }, 2, 0u, 1); });
+    int32_t p = vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "NatNew.__cls_new_Punto"), (int32_t[]){ a, b }, 2, 0u, 1);
     return (vm->aot_helpers->call_method_i32(vm, p, 2, (const int32_t*) 0, 0, 0u, 0) * vm->aot_helpers->call_method_i32(vm, p, 4, (const int32_t*) 0, 0, 0u, 0));
 }
 
