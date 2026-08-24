@@ -27,6 +27,68 @@
 
 ## Última sesión
 
+### 24-ago (tarde) — U2.1: los gemelos del wire no lo eran, y el primer paso ya está en placa
+
+Con AOT cerrado en la Pico, Eduardo propuso unificar algo de las imágenes. Salió `U2.1`, y
+**los dos enunciados del hito eran falsos**:
+
+- Decía que `pico/wire_v1.c` y `esp32/main/wire_v1.c` *«son dos programas distintos con el
+  mismo nombre; el 100 % de sus líneas difieren»*. Medido palabra por palabra: las tres
+  familias con wire exponen **las mismas 15 funciones** y **once son idénticas** (88 líneas
+  × 3 copias). Las cuatro que difieren son **exactamente** las cuatro que tocan el cable.
+  La costura ya existía y estaba limpia.
+- Y `U2.2` decía que los transportes no incluyen `bpvm_comm.h`. Ese header **no es su
+  contrato**: es el de VM↔comunicaciones, y lo implementan **dos de las cinco** imágenes.
+
+**Paso 1 hecho y verificado en placa** (`bb530e3f`): las 11 + sus 4 helpers a
+`src/wire_v1_proto.c`, con `include/bpvm_wire_v1.h` nombrando las dos capas. Sólo la Pico.
+Eduardo confirma que el IDE funciona **incluida la subida de un Pack** — la prueba fuerte,
+porque el bulk es binario y ahí un fallo de framing corrompe en vez de fallar.
+
+🎯 **Y el gesto que hay que repetir**: antes de flashear se comparó la imagen nueva con la
+vieja — **código máquina idéntico en las 15**, mismo conjunto de 1984 símbolos con los
+mismos tamaños, `.text` idéntico byte a byte. Por eso el bloque se movió **tal cual**, sin
+mejorar nada de paso: si se hubiera "aprovechado" para limpiar, esa comparación no existiría
+y la prueba en placa habría sido un descubrimiento en vez de una confirmación.
+
+⚠️ **Criterio de Eduardo que manda sobre todo este hito**: *«las comunicaciones son nuestro
+cordón umbilical entre el PC y el micro. Cada cambio lo hemos de verificar en placa; será
+un poco pesado pero aquí nos importa más la seguridad que la velocidad. En vez de 1 gran
+cambio, mejor 3 o 4 pequeños.»*
+
+---
+
+## ⏭️ PARA MAÑANA — verificar AOT y comunicaciones en OTRA familia
+
+Las dos cosas piden las mismas placas encendidas, así que van en el mismo viaje al banco.
+
+**🔴 Hay un prerrequisito que se hace SIN placa, y conviene hacerlo antes de encenderla:**
+el `bpvm_aot_clear()` mal colocado sigue **sin arreglar** en `esp32/main/repl_esp32.c:1001`
+y `stm32/port/stm32_repl.c:548`. Está *después* de la carga, así que **borra los thunks que
+el módulo acaba de registrar**. Si mañana se enciende el S3 o la P4 sin arreglarlo, el AOT
+saldrá 0/N y se perderá la sesión buscando lo que ya sabemos. En la Pico se arregló el
+23-ago (`repl_v1.c`).
+
+**Lo que hay que llevar hecho:**
+1. El `clear()` en las dos familias que faltan.
+2. `U2.1` paso 2: borrar las copias del protocolo en `esp32/main/wire_v1.c` y
+   `esp32p4/main/wire_v1_tcp.c`, dar de alta `src/wire_v1_proto.c` en sus builds, y
+   **comparar el código generado antes/después** como se hizo con la Pico.
+3. Regenerar los **cuatro artefactos nativos de SQLite + `SQLite.pack`** — el ABI del `.mdn`
+   subió 5 → 6 y sin eso el pack de SQLite no casa con la imagen nueva.
+
+**Qué mirar en la placa** (lo mismo que hoy en la Pico, y con `log=1`, que se lee en el
+arranque):
+- AOT: `MDN: N/N thunks registrados` **sin ningún `skip`**, y `[mdn] 1 bloque(s) nativo(s)
+  desde el propio .mod`. Los samples ya están: `samples/NatNew.bp` (7 thunks) y
+  `samples/NatV7.bp` (4). ⚠️ La salida correcta **no demuestra nada** sin esas líneas.
+- Wire: que el IDE conecte, liste, ejecute… **y suba un Pack**, que es el camino bulk.
+
+📌 **Y una decisión pequeña que ahorra tiempo**: elegir UNA familia y hacerla entera
+(AOT + wire), no las dos a medias — [[focus-un-kit-batch-cross-family]].
+
+---
+
 ### 24-ago — N1.5: la `native` ya FABRICA, y el censo dejó de mentir
 
 **Lo pedido**: *«a ver si podemos cerrar AOT»*, y a mitad de sesión Eduardo acotó: *«tuplas
