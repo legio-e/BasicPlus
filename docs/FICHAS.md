@@ -338,13 +338,78 @@ esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que s
 
 #### 🟡 U2 — el transporte
 
-- **`U2.1` · Explicar los gemelos falsos, ANTES de tocar nada.** `pico/wire_v1.c` (259) y
-  `esp32/main/wire_v1.c` (252) se llaman igual, dicen ser la misma versión del protocolo,
-  y **el 100 % de sus líneas difieren**. No es una copia divergida: son dos programas
-  distintos con el mismo nombre. Hasta saber por qué, unificarlos es adivinar.
-- **`U2.2` · Contrato común de transporte.** Los **cuatro** transportes —los dos
-  `wire_v1.c`, `stm32_wire.c` y `wire_v1_tcp.c` de la P4— **no incluyen `bpvm_comm.h`**,
-  que existe y es común. Es la única cosa que ninguna familia respeta.
+> ⚠️ **Criterio de Eduardo (24-ago), y manda sobre el resto del hito**: *«las comunicaciones
+> son nuestro cordón umbilical entre el PC y el micro, conviene ir con prudencia. Los
+> cambios tienen que hacerse en pasitos pequeños; en vez de 1 gran cambio, mejor 3 o 4
+> pequeños.»*
+
+##### ✅ `U2.1` HECHO (24-ago) — y los dos enunciados de este hito eran FALSOS
+
+Decía: *«`pico/wire_v1.c` y `esp32/main/wire_v1.c` se llaman igual, dicen ser la misma
+versión del protocolo, y **el 100 % de sus líneas difieren**. No es una copia divergida:
+son dos programas distintos con el mismo nombre.»*
+
+**Medido, y es justo al revés.** Las tres familias que comparten la API (`pico`, `esp32/S3`,
+`esp32p4`) exponen **las mismas 15 funciones `wire_v1_*`**, y comparadas *palabra por
+palabra*:
+
+| | funciones | líneas |
+|---|---|---|
+| **idénticas en las tres** | **11** | 88 (× 3 copias = **264** donde bastan 88) |
+| distintas de verdad | 4 | 47 |
+
+Y las cuatro que difieren son **exactamente** las cuatro que tocan el cable:
+`recv_line`, `recv_bulk`, `send_line`, `send_bulk`. Las otras once —`msg_begin`,
+`msg_begin_event`, `msg_end`, los cuatro `field_*`, `send_cstr`, `send_error`,
+`send_fatal`, `send_reply_empty`— son **construcción de JSON, sin una línea de hardware**.
+
+📌 **O sea que la costura ya existe y está limpia**: el fichero mezcla dos capas, protocolo
+y transporte, y la frontera cae en un sitio exacto. No hay nada que adivinar.
+
+📌 **Y los propios ficheros lo dicen**, sólo que nadie lo había leído junto: *«Misma API que
+pico/wire_v1.h»* (S3), *«MISMA API (wire_v1.h), de modo que el dispatcher `repl_esp32.c` se
+reutiliza TAL CUAL»* (P4). El P4 reutilizando el REPL del S3 sin tocarlo **es la prueba** de
+que la API es común de verdad.
+
+⚠️ **La mina, que sigue ahí**: los tres ficheros llevan escrito *«los builders JSON son
+COPIA… si cambia el formato del protocolo, mantener las tres copias en sync»*. Hoy están en
+sync —las once son idénticas—, o sea que alguien lo ha hecho a mano y le ha salido bien.
+**Un comentario no es un mecanismo**: es [[arreglo-que-no-viaja-entre-familias]] esperando
+turno.
+
+##### ❌ `U2.2` — su premisa también era falsa, y de otra manera
+
+Decía que los cuatro transportes *«no incluyen `bpvm_comm.h`, que existe y es común»*.
+Medido: `bpvm_comm.h` **no es el contrato de los transportes**. Declara tres funciones
+(`bpvm_comm_start` / `_stop` / `_output_enqueue`) que son el contrato **VM↔comunicaciones**,
+y las implementan **dos de las cinco imágenes**: `src/comm_host.c` y `pico/comm_pico.c`. El
+S3, la P4 y el STM32 **no las implementan en absoluto**.
+
+Así que añadir un `#include` ahí no unifica nada. Es el mismo error que paró `U1.4`, y con
+la lección ya escrita: *«¿existe ya el contrato?» es un buen detector de humo y un mal
+presupuesto*.
+
+##### 🧭 Lo que SÍ hay que hacer, en pasitos
+
+1. **Mover las 11 al común** (`src/`), dejando en cada familia sólo las 4 del cable. Es
+   **un paso pequeño con red fuerte**: si las once son idénticas palabra por palabra,
+   moverlas **no puede cambiar el comportamiento**, y lo comprueba que las tres imágenes
+   sigan construyendo y que el IDE siga hablando con cada placa.
+   ⚠️ Alta del `.c` nuevo en **cinco** builds — [[core-c-nuevo-alta-en-5-builds]].
+2. **El STM32 es una CUARTA forma**, no una copia: `stm32_wire.c` no tiene builders (usa
+   otros nombres, `stm32_wire_*`) y `stm32_repl.c` arma el JSON a mano. Traerlo al común es
+   un paso aparte y más caro; no mezclar con el 1.
+3. Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
+   familias sin implementar un contrato que existe.
+
+##### 📐 De propina, una lección de método que costó dos medidas
+
+El enunciado falso («100 % difieren») salió de un diff **por líneas**. Al remedir yo caí en
+lo mismo: mi primer script dijo *«0 de 15 idénticas»* — porque comparaba líneas sobre código
+**reformateado** (`char* buf` vs `char *buf`, el ajuste de línea de un parámetro), y encima
+mi extractor cortaba mal las funciones al contar la llave de dentro del literal `'}'`.
+Comparando palabra por palabra salieron 11. **Un diff por líneas sobre C reformateado miente
+hacia el lado peor**: dice que hay que investigar donde no hay nada que investigar.
 
 #### 🔴 U3 — el REPL
 
