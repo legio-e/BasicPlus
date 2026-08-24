@@ -1184,7 +1184,7 @@ de familias no ha ejecutado una sola línea de este código. No es una formalida
 
 | familia | estado |
 |---|---|
-| **RP2350** (Pico 2 / Metro) | ✅ **N1.4 + N1.5 + N1.5b en placa** (23 y 24-ago). Ver abajo |
+| **RP2350** (Pico 2 / Metro) | ✅ **CERRADA (24-ago)**: N1.1…N1.5b en placa, `NatNew` 7/7 y `NatV7` 4/4 thunks. Ver abajo |
 | **ESP32-S3 / ESP32-P4** | ⬜ sin verificar. Y el `bpvm_aot_clear()` mal colocado sigue ahí (`repl_esp32.c`) |
 | **STM32** | ⬜ sin verificar. Mismo `clear()` sin arreglar (`stm32_repl.c`) |
 
@@ -1284,6 +1284,46 @@ objetos por la factoría, un literal de cadena fusionado en `.text` por `mdn.ld`
 código nativo se instaló y que coincide con el intérprete —el secuestro es por dirección en
 `OP_CALL`, así que registrado implica ejecutado— pero el cronómetro de este sample no
 existe. El 102× de ayer (`Bench`) es la medida de velocidad.
+
+##### 🔴 Y la segunda pasada destapó que N1.1 NUNCA se había acelerado
+
+`NatV7` —el sample de lo de ayer: métodos `native`, `double`, `print` desde native— dio
+**3 de 4**:
+
+```
+MDN: skip 'NatV7.Caja_doble' rc=-2 (symbol no en .mod?)
+MDN: 3/4 thunks registrados
+```
+
+El `.mod` exporta el método como `Caja.doble` y `MdnPack` pedía `Caja_doble`: reconstruía
+el nombre BP partiendo el identificador de C por el prefijo `thunk_<Mod>_`, y `cId()` ya
+había convertido el punto en guion bajo. De `Caja_doble` no se recupera `Caja.doble`
+—un identificador BP también lleva guiones bajos—, así que **no había forma de acertar**.
+
+📌 **Las funciones de MÓDULO sí acertaban** (no tienen punto que perder), y por eso el
+fallo vivía escondido detrás de los casos que iban. Es
+[[n-casos-del-mismo-sample-no-son-n-casos]]: 3 de 4 verdes no dicen nada del cuarto.
+
+⚠️ **Y no daba error.** El thunk no se registra, el método corre interpretado y el programa
+imprime 42. N1.1 se cerró el 23-ago verificado por EMISIÓN —el C generado era impecable,
+con el nombre equivocado— y ésta fue la primera vez que ese caso se ejecutó en una placa.
+El único sitio donde se veía era el log, y sólo con `log=1`.
+
+**Arreglo** (`e7b50683`): dejar de adivinar. El emisor pone el nombre verdadero en el
+propio símbolo ELF (`__asm__("thunk_<Mod>_<nombre BP>")`) y `MdnPack` lo lee tal cual; su
+filtro de alias de gcc pasa de «cualquier nombre con punto» a los sufijos de clonado
+concretos, porque ahora el punto es parte del nombre. **Sin tocar C: no hubo que
+reflashear**, sólo rehacer el fat-jar del IDE.
+
+✅ **Reverificado**: `MDN: 4/4 thunks registrados`, sin skip.
+
+##### 🕸️ La red que faltaba — `AotSimboloEnModTest`
+
+Compara los nombres que el AOT va a registrar contra los símbolos que el `.mod` exporta de
+verdad. **Caza esta clase entera porque compara DOS ARTEFACTOS**, y el fallo era un
+desacuerdo entre dos caminos distintos (`AotCEmitter` y `MivmEmitter`): una prueba que mire
+uno solo no puede ver nada. Comprobada en rojo reintroduciendo el fallo antes de darla por
+buena, y su mensaje dice literalmente que el síntoma es *«el resultado sale bien»*.
 
 ⏭️ **Lo que queda**: las otras dos familias (S3/P4 y STM32), y entonces retirar el `.mdn`
 suelto — que el IDE sigue subiendo al lado (`PicoExplorer.java:1106`).

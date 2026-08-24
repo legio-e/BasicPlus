@@ -82,6 +82,28 @@ dónde sale el mensaje —`bpvm_load_mdn(vm, sec + p, ...)`, con `sec` dentro de
 el hecho de que el barrido del suelto entra 17 ms después sin registrar nada. No hizo falta
 borrar nada.
 
+**🔴 Y la segunda pasada, con `NatV7`, destapó que N1.1 NUNCA se había acelerado.** Dio
+`MDN: skip 'NatV7.Caja_doble' rc=-2` → **3 de 4**. El `.mod` exporta el método como
+`Caja.doble` y `MdnPack` pedía `Caja_doble`: reconstruía el nombre partiendo el
+identificador de C, y de `Caja_doble` no se recupera `Caja.doble`. Las funciones de MÓDULO
+sí acertaban (no tienen punto que perder), así que el fallo vivía detrás de los casos que
+iban — 3 verdes no dicen nada del cuarto.
+
+Y no daba error: el método corría interpretado y el programa imprimía 42. **N1.1 se cerró
+el 23-ago verificado por EMISIÓN** —el C era impecable con el nombre equivocado— y ésta fue
+la primera vez que ese caso se ejecutó en una placa. Arreglado poniendo el nombre verdadero
+en el símbolo ELF; reverificado: **4/4, sin skip**. Sin tocar C, o sea sin reflashear.
+
+**⚙️ Queda `AotSimboloEnModTest`**, que compara los nombres que el AOT registra contra los
+que el `.mod` exporta. Es la red que faltaba, y caza la clase entera porque compara DOS
+ARTEFACTOS — el fallo era un desacuerdo entre `AotCEmitter` y `MivmEmitter`. Puesta en rojo
+a propósito antes de darla por buena.
+
+📌 **El patrón del día, tres veces**: N1.1, el `long[]` y el censo estaban «verificados» por
+emisión. Lo que los destapó fue **ejecutar** — en host el `long[]`, en placa los otros dos.
+Y en placa hizo falta además `log=1`: sin él, `NatV7` imprime los cuatro valores correctos
+y no hay nada que mirar.
+
 **⏭️ Riesgo que sigue**: las otras dos familias (S3/P4 y STM32) no han ejecutado una línea
 de esto, y el `bpvm_aot_clear()` mal colocado sigue sin arreglar en `repl_esp32.c` y
 `stm32_repl.c`. Al desplegar ahí hay que regenerar además los **cuatro artefactos nativos de
