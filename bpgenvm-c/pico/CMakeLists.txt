@@ -177,6 +177,7 @@ add_executable(bpvm_pico
                     # del Pico (ESP32/STM32 nacieron ya wire-v1).
     board_mgr_pico.c # H9: cintura de flash del env (A/B) + puente a bpvm_bmgr_wire
     ${BPVM_C_ROOT}/src/json_min.c            # V6/U1.1: parser JSON, COMUN a las 4 imagenes
+    ${BPVM_C_ROOT}/src/wire_v1_proto.c       # V6/U2.1: los builders JSON del wire, COMUNES
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     flash_lock.c    # H2 #153: ventana XIP-safe (single + dual-core)
