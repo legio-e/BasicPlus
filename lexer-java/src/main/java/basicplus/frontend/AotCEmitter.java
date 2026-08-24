@@ -883,6 +883,23 @@ public final class AotCEmitter {
         // por no tener llamadores en este TU. En modo "linked-in" se
         // mantiene como antes: static, registrado via aot_<Mod>_register.
         if (omitRegisterFunc) {
+            /* [24-ago-2026] EL NOMBRE DEL SIMBOLO ES EL DEL `.mod`, y por eso se
+             * pone a mano en vez de dejar que se deduzca del identificador de C.
+             *
+             * `MdnPack` reconstruia el nombre BP partiendo el identificador por
+             * el prefijo `thunk_<Mod>_`. Para una funcion de modulo eso acierta;
+             * para un METODO no, porque `cId()` ha convertido el punto en guion
+             * bajo y de `Caja_doble` no se puede recuperar `Caja.doble` — un
+             * identificador BP tambien puede llevar guiones bajos.
+             *
+             * Consecuencia MUDA: la placa no encontraba el simbolo
+             * (`MDN: skip 'NatV7.Caja_doble' rc=-2`), registraba 3 de 4 thunks y
+             * el metodo corria interpretado. El programa daba el resultado
+             * correcto — que es justo lo que hace invisible este fallo.
+             *
+             * Con el nombre puesto explicitamente no hay nada que deducir. */
+            w.println("void " + tname + "(struct bpvm*, uint32_t*, uint32_t*)");
+            w.println("    __asm__(\"thunk_" + moduleName + "_" + f.name.name + "\");");
             w.println("__attribute__((used))");
             w.println("void " + tname + "(struct bpvm* vm,");
         } else {

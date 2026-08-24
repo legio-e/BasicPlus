@@ -56,6 +56,17 @@ public final class MdnPack {
     static final int MDN_ABI_VERSION = 6;
     private static final int MDN_NAME_MAX = 32;
 
+    /** Sufijos que gcc le pega a un simbolo cuando lo clona o especializa. Son
+     *  copias de una funcion nuestra y NO deben entrar en el `.mdn`: registrar
+     *  dos direcciones para el mismo nombre BP es pedir que gane la que no es. */
+    private static final String[] CLON_GCC = {
+        ".localalias", ".constprop", ".isra", ".part", ".cold", ".lto_priv"
+    };
+    private static boolean esClonDeGcc(String nombre) {
+        for (String c : CLON_GCC) if (nombre.contains(c)) return true;
+        return false;
+    }
+
     public static void main(String[] args) throws IOException {
         if (args.length != 3) {
             System.err.println("Uso: MdnPack <input.o> <output.mdn> <ModuleName>");
@@ -190,7 +201,13 @@ public final class MdnPack {
         List<Elf32.Symbol> exports = new ArrayList<>();
         for (Elf32.Symbol s : f.symbols()) {
             if (s.shndx != textIdx) continue;
-            if (s.name.contains(".")) continue;  // skip gcc localalias
+            /* [24-ago-2026] Antes esto era `if (s.name.contains(".")) continue`,
+             * para saltarse los alias que fabrica gcc. Pero el nombre BP de un
+             * METODO LLEVA PUNTO (`Caja.doble`) — desde que el emisor lo pone
+             * explicito con `__asm__`, un punto ya no es senal de alias. Se
+             * saltan los sufijos de clonado de gcc, que es lo que se queria
+             * saltar; el punto del nombre BP pasa. */
+            if (esClonDeGcc(s.name)) continue;
             if (!s.name.startsWith(prefix)) continue;
             String funcName = s.name.substring(prefix.length());
             String qualified = moduleName + "." + funcName;
