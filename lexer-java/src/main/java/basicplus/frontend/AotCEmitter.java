@@ -243,33 +243,60 @@ public final class AotCEmitter {
     }
 
     /** #193 — ancho del elemento del array `arr` para elegir el helper AOT.
-     *  Devuelve "u8"/"i8" para byte[] (uint8/int8), "i32" para el resto
-     *  (incl. tipo desconocido → comportamiento previo). */
+     *
+     *  <h3>[V6/N1.5] Esto devolvía "i32" para todo lo que no fuera byte</h3>
+     *
+     *  Y no daba error: para un {@code long[]} emitía {@code array_load_i32},
+     *  que lee CUATRO bytes donde hay ocho. El resultado no era un fallo — era
+     *  un número plausible y equivocado. Igual con {@code word[]} (dos bytes),
+     *  {@code double[]} y {@code float[]}.
+     *
+     *  <p>La limitación estaba ESCRITA («v1: solo integer[]», en la emisión de
+     *  IndexExpr) y no la hacía cumplir nadie. Un límite que no falla no es un
+     *  límite. Lo destapó el primer {@code long[]} creado dentro de una native:
+     *  {@code 3000000000L + 4000000000L} devolvió -1294967296.
+     *
+     *  <p>Ahora cada ancho tiene su helper, y lo que no lo tiene se RECHAZA con
+     *  el motivo — que es lo que debió pasar desde el principio. */
     private String arrElemKind(Ast.IExpr arr) {
-        if (semInfo != null) {
-            BpType t = semInfo.exprTypes.get(arr);
-            if (t instanceof ArrayType) {
-                BpType el = ((ArrayType) t).element;
-                if (el instanceof PrimitiveType) {
-                    switch (((PrimitiveType) el).tag) {
-                        case UINT8: return "u8";
-                        case INT8:  return "i8";
-                        default: break;
-                    }
-                }
+        BpType t = (semInfo != null) ? semInfo.exprTypes.get(arr) : null;
+        if (!(t instanceof ArrayType)) {
+            throw new UnsupportedAotException(
+                "AOT: indexar algo cuyo tipo de array no está resuelto (line "
+                + ((Ast.Node) arr).line + "). Sin saber el ancho del elemento no se "
+                + "puede elegir el helper, y elegir mal no falla: lee de más o de menos.");
+        }
+        BpType el = ((ArrayType) t).element;
+        if (el instanceof PrimitiveType) {
+            switch (((PrimitiveType) el).tag) {
+                case UINT8:  return "u8";
+                case INT8:   return "i8";
+                case UINT16: return "u16";
+                case INT16:  return "i16";
+                case LONG:   return "i64";
+                case DOUBLE: return "f64";
+                case INTEGER: case BOOLEAN: return "i32";
+                default: break;   /* string, float → abajo */
             }
         }
-        return "i32";
+        throw new UnsupportedAotException(
+            "AOT: array de '" + el + "' (line " + ((Ast.Node) arr).line + ") no se puede "
+            + "indexar desde una native. Van integer, boolean, byte, word, short, long y "
+            + "double. Un array de REFERENCIAS (string[], Clase[]) guarda handles CON "
+            + "generación y en esta ABI una ref cruza sin ella; float[] no tiene helper. "
+            + "Los dos, pendientes — y hasta hoy ninguno fallaba: leían 4 bytes y seguían.");
     }
     /** Nombre del helper de carga de elemento según el ancho del array. */
     private String arrLoadFn(Ast.IExpr arr) {
         return "array_load_" + arrElemKind(arr);
     }
-    /** Nombre del helper de store de elemento. byte[] (u8/i8) → array_store_i8
-     *  (el store trunca; signed/unsigned es el mismo opcode). */
+    /** Nombre del helper de store de elemento. El store TRUNCA, así que signed y
+     *  unsigned comparten helper: `u8`/`i8` → store_i8, `u16`/`i16` → store_i16. */
     private String arrStoreFn(Ast.IExpr arr) {
         String k = arrElemKind(arr);
-        return ("u8".equals(k) || "i8".equals(k)) ? "array_store_i8" : "array_store_i32";
+        if ("u8".equals(k)  || "i8".equals(k))  return "array_store_i8";
+        if ("u16".equals(k) || "i16".equals(k)) return "array_store_i16";
+        return "array_store_" + k;   /* i32, i64, f64 */
     }
 
     /** [V6/N1.5] Sufijo del helper de reserva segun el tipo de elemento, o null
@@ -2122,9 +2149,51 @@ public final class AotCEmitter {
                 emitExpr(args.get(0));
                 w.print(")");
                 return true;
+            /* [V6/N1.5] Crear un array DE UN TAMAÑO. El literal `[a,b,c]` sirve
+             * cuando se conocen los elementos; esto es lo que hace falta cuando
+             * lo que se conoce es el tamaño — que en una native es lo normal
+             * (un buffer). Cada uno a su helper, por el ancho del elemento:
+             * un `long[]` de 8 bytes por casilla y un `byte[]` de 1 son arrays
+             * DISTINTOS, no el mismo con otro nombre. */
+            case "newIntArray":    return newArrayBuiltin(name, args, "i32");
+            case "newByteArray":   return newArrayBuiltin(name, args, "i8");
+            case "newLongArray":   return newArrayBuiltin(name, args, "i64");
+            case "newDoubleArray": return newArrayBuiltin(name, args, "i64");   /* 8 B opacos */
+            /* `len(x)` es POLIMORFICO en BP (array, string, o clase con
+             * length()/size()), asi que aqui se decide por el TIPO del
+             * argumento — no por el nombre. Las clases se rechazan: eso es una
+             * llamada a metodo y va por su camino, no por un helper. */
+            case "len": {
+                requireArgc(name, args, 1);
+                Ast.IExpr x = args.get(0);
+                BpType t = (semInfo != null) ? semInfo.exprTypes.get(x) : null;
+                if (t instanceof ArrayType) {
+                    w.print("vm->aot_helpers->array_length(vm, (uint32_t) (");
+                    emitExpr(x); w.print("))");
+                    return true;
+                }
+                if (isStringExpr(x)) {
+                    w.print("vm->aot_helpers->string_length(vm, (uint32_t) (");
+                    emitExpr(x); w.print("))");
+                    return true;
+                }
+                throw new UnsupportedAotException(
+                    "AOT: len() en native soporta arrays y strings; sobre una clase "
+                    + "es una llamada a su length()/size() y esa va por su camino "
+                    + "(line " + ((Ast.Node) x).line + ").");
+            }
             default:
                 return false;
         }
+    }
+
+    /** [V6/N1.5] `newXArray(n)` → el helper de reserva del ancho que toca. */
+    private boolean newArrayBuiltin(String name, List<Ast.IExpr> args, String sufijo) {
+        requireArgc(name, args, 1);
+        w.print("vm->aot_helpers->newarray_" + sufijo + "(vm, ");
+        emitExpr(args.get(0));
+        w.print(")");
+        return true;
     }
 
     /** #173 — valida nº de args de un builtin; lanza si no cuadra. */

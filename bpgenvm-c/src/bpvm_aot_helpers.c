@@ -462,6 +462,61 @@ static int32_t h_array_load_u8(bpvm_t* vm, uint32_t ref, int32_t idx) {
     }
     return (int32_t)(uint8_t) mem[addr + 4 + (uint32_t) idx];  /* zero-extend */
 }
+/* [V6/N1.5] Los de 16 bits, que FALTABAN — y su ausencia no daba error: el
+ * emisor caia al helper de i32 y leia CUATRO bytes donde hay dos. Ver la nota
+ * de `arrElemKind` en AotCEmitter: el limite estaba escrito («v1: solo
+ * integer[]») y no lo hacia cumplir nadie. Un limite que no falla no es un
+ * limite: es un numero equivocado.
+ *
+ * Dos cargas y un solo store, igual que los de 8 bits: la extension de signo
+ * distingue `short` de `word`, la truncacion del store no. Los `u16`/`i16` van
+ * en BIG-ENDIAN dentro del array, como los escribe el interprete. */
+static int32_t h_array_load_i16(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i16: null array");
+        return 0;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(mem + addr);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i16: index out of bounds");
+        return 0;
+    }
+    return (int32_t) bpvm_read_i16_be(mem + addr + 4 + (uint32_t) idx * 2u);
+}
+static int32_t h_array_load_u16(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u16: null array");
+        return 0;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(mem + addr);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u16: index out of bounds");
+        return 0;
+    }
+    return (int32_t)(uint16_t) bpvm_read_i16_be(mem + addr + 4 + (uint32_t) idx * 2u);
+}
+static void h_array_store_i16(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i16: null array");
+        return;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(mem + addr);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i16: index out of bounds");
+        return;
+    }
+    /* Big-endian byte a byte, igual que OP_ASTORE_I16: no hay write_u16_be. */
+    uint8_t* e = mem + addr + 4 + (uint32_t) idx * 2u;
+    e[0] = (uint8_t)((v >> 8) & 0xFF);
+    e[1] = (uint8_t)(v & 0xFF);
+}
+
 static void h_array_store_i8(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
     if (ref == 0) {
         if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i8: null array");
@@ -772,6 +827,9 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     /* [V6/N1.5] crear arrays desde native: los tres de arriba dejaron de ser
      * stubs y este es nuevo (`long[]`/`double[]`). */
     .newarray_i64        = h_newarray_i64,
+    .array_load_i16      = h_array_load_i16,
+    .array_load_u16      = h_array_load_u16,
+    .array_store_i16     = h_array_store_i16,
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

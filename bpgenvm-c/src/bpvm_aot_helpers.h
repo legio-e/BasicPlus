@@ -398,6 +398,17 @@ struct aot_helpers_v2 {
      * aqui exige decidir donde se recupera la gen viva, y esa decision no se toma
      * de pasada. El emisor lo rechaza con ese motivo escrito. */
     int32_t (*newarray_i64)(struct bpvm* vm, int32_t size);
+
+    /* [V6/N1.5] Elementos de 16 bits — `word[]` y `short[]`. Faltaban, y su
+     * ausencia NO daba error: el emisor caia al helper de i32 y leia cuatro
+     * bytes donde hay dos. El limite estaba escrito en un comentario («v1: solo
+     * integer[]») y no lo hacia cumplir nadie. Lo mismo le pasaba a `long[]` y
+     * `double[]`, cuyos helpers si existian desde V5/H4 pero que el emisor no
+     * elegia — lo destapo el primer `long[]` creado dentro de una native, que
+     * devolvio un numero PLAUSIBLE y equivocado. */
+    int32_t (*array_load_i16) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    int32_t (*array_load_u16) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (*array_store_i16)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

@@ -104,7 +104,7 @@ endif
 # Un test que falla por su andamio enseña a ignorarlo, que es la peor avería.
 # ---------------------------------------------------------------------------
 define fixture
-@want=$$(sed -n 's/.*BPVM_MAGIC_V6[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p' include/bpvm_internal.h | head -1 | tr a-z A-Z); \
+@want=$$(sed -n 's/.*BPVM_MAGIC_V7[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p' include/bpvm_internal.h | head -1 | tr a-z A-Z); \
 for m in $(1); do \
   why=""; \
   if [ ! -f samples/$$m.mod ]; then why="no existe"; \
@@ -458,6 +458,18 @@ test-aotgc:
 	$(CC) $(CFLAGS) -Isrc test/test_aotgc.c test/aot_RoTest.c $(LIBOBJ) 	  -o build/test_aotgc.exe $(LDFLAGS)
 	@echo "--- #302p3 native compilado + GC por alocacion (VERDE = arreglado) ---"
 	@./build/test_aotgc.exe samples/RoTest.mod 2>/dev/null | grep -q "valor 7" 	  && echo "[status=OK] el intermedio sobrevive al GC" 	  || { echo "[status=ROJO] el GC recicla el intermedio del native (esperado hoy)"; exit 1; }
+
+# [V6/N1.5] El gemelo de test-aotgc para lo que una native FABRICA. Regenera el
+# .c desde el .bp (nunca un artefacto rancio checkeado a mano) y lo EJECUTA con
+# el GC colectando en cada alocacion.
+test-aotnew:
+	@mkdir -p build
+	$(call fixture,NatNew)
+	@java -cp "../lexer-java/target/classes;../pack/target/classes" 	  basicplus.frontend.AotMain samples/NatNew.bp build/aotnew >/dev/null
+	@cp build/aotnew/aot_NatNew.c test/aot_NatNew.c
+	$(CC) $(CFLAGS) -Isrc test/test_aotnew.c test/aot_NatNew.c $(LIBOBJ) 	  -o build/test_aotnew.exe $(LDFLAGS)
+	@echo "--- N1.5: la native CREA array y objeto, con GC en cada alocacion ---"
+	@./build/test_aotnew.exe samples/NatNew.mod 2>/dev/null > build/aotnew.out; 	 ok=1; 	 grep -q "sumaArray(5)  = 105" build/aotnew.out || { echo "  ROJO: sumaArray"; ok=0; }; 	 grep -q "sumaLargos()  = 7000000000" build/aotnew.out || { echo "  ROJO: sumaLargos"; ok=0; }; 	 grep -q "tocaPalabras()= 6000" build/aotnew.out || { echo "  ROJO: tocaPalabras (word[], 2 bytes/casilla)"; ok=0; }; grep -q "mediaDobles() = 4" build/aotnew.out || { echo "  ROJO: mediaDobles (double[], f64)"; ok=0; }; grep -q "areaDe(6,7)   = 42" build/aotnew.out || { echo "  ROJO: areaDe"; ok=0; }; 	 if [ $$ok = 1 ]; then echo "[status=OK] arrays i32/i64/i16/f64 y objeto sobreviven al GC"; 	 else cat build/aotnew.out; exit 1; fi
 
 test-aotgc-control: test-aotgc
 	@true
