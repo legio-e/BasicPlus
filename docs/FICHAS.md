@@ -1184,7 +1184,7 @@ de familias no ha ejecutado una sola línea de este código. No es una formalida
 
 | familia | estado |
 |---|---|
-| **RP2350** (Pico 2 / Metro) | N1.4 ✅ en placa (23-ago, 102×). **N1.5 pendiente — esta tarde** |
+| **RP2350** (Pico 2 / Metro) | ✅ **N1.4 + N1.5 + N1.5b en placa** (23 y 24-ago). Ver abajo |
 | **ESP32-S3 / ESP32-P4** | ⬜ sin verificar. Y el `bpvm_aot_clear()` mal colocado sigue ahí (`repl_esp32.c`) |
 | **STM32** | ⬜ sin verificar. Mismo `clear()` sin arreglar (`stm32_repl.c`) |
 
@@ -1257,8 +1257,36 @@ alocación convierte esa ventana de lotería en certeza. Cinco valores exactos: 
 i64, i16, f64 y un objeto. Gemelo de `test-aotgc`, y regenera el `.c` desde el `.bp` —
 nunca un artefacto rancio.
 
-⏭️ **Lo que NO cubre todavía**: que el código compilado corra **en placa**. Eso sigue
-esperando a la tanda de reflasheo, igual que N1.4.
+##### ✅ VERIFICADO EN LA PICO (24-ago, tarde)
+
+`NatNew.mod` con su bloque ARM dentro (3.363 → 4.808 B), y el log de la placa:
+
+```
+[313579] MDN: 7/7 thunks registrados, 1172 code bytes (zero-copy)
+[313579] [mdn] 1 bloque(s) nativo(s) desde el propio .mod
+...
+[313596] AOT: buscando el .mdn de 2 modulos (FS + pack)
+```
+
+📌 **Y esas dos líneas no son ambiguas, que era la duda**: `MDN: 7/7` lo emite
+`bpvm_load_mdn(vm, sec + p, tam)` — `sec` apunta DENTRO de la sección del `.mod` — y
+`[mdn] 1 bloque(s)` sólo sale si esa misma llamada devolvió OK (`loader.c:521-530`). Los
+dos en el mismo tick, y el barrido del `.mdn` suelto no entra hasta 17 ms después sin
+emitir un segundo registro. **No hizo falta borrar el `.mdn` suelto para desempatar**: lo
+desempata de dónde sale el mensaje.
+
+Los siete valores, exactos e idénticos a miVM y a la VM-C de host. Con eso quedan
+ejecutándose en ARM: arrays i32/i8/i16/i64/f64/f32 **y de referencias**, creación de
+objetos por la factoría, un literal de cadena fusionado en `.text` por `mdn.ld`, y
+`long`/`double` dentro de una native.
+
+⚠️ **Lo que esto NO mide**: el tiempo. Registro + resultado correcto demuestran que el
+código nativo se instaló y que coincide con el intérprete —el secuestro es por dirección en
+`OP_CALL`, así que registrado implica ejecutado— pero el cronómetro de este sample no
+existe. El 102× de ayer (`Bench`) es la medida de velocidad.
+
+⏭️ **Lo que queda**: las otras dos familias (S3/P4 y STM32), y entonces retirar el `.mdn`
+suelto — que el IDE sigue subiendo al lado (`PicoExplorer.java:1106`).
 
 ---
 

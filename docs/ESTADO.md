@@ -67,12 +67,26 @@ el `.c` generado con el compilador del host y lo **EJECUTA** con `gc_bump_thresh
 (GC en cada alocación). Es el tercer peldaño que faltaba —**emite / cabe / acierta**— y es
 el que cazó el `long[]`. Los dos primeros ya habían dado verde.
 
-**⏭️ Riesgo que acecha, y no es pequeño**: nada de N1.5 ha corrido **en placa**. El ABI del
-`.mdn` sube **5 → 6**, así que la tanda de reflasheo pendiente desde N1.4 ahora arrastra
-también esto. Sigue pendiente lo mismo de ayer: desplegar en las **cinco imágenes** (el
-`bpvm_aot_clear()` mal colocado está sin arreglar en `repl_esp32.c` y `stm32_repl.c`),
-regenerar los **cuatro artefactos nativos de SQLite + `SQLite.pack`**, y sólo entonces
-retirar el `.mdn` suelto.
+**✅ VERIFICADO EN LA PICO esa misma tarde.** Imagen reconstruida (ABI 6) + fat-jar del IDE
+reconstruido —comprobado a mano que estampa `abi_version=6`, porque un desfase ahí costó un
+flasheo el 23—. El log de la placa:
+
+```
+[313579] MDN: 7/7 thunks registrados, 1172 code bytes (zero-copy)
+[313579] [mdn] 1 bloque(s) nativo(s) desde el propio .mod
+```
+
+Los siete valores exactos. **La duda que había que despejar** era si esos thunks venían de
+la sección del `.mod` o del `.mdn` suelto que el IDE sigue subiendo al lado: la despeja de
+dónde sale el mensaje —`bpvm_load_mdn(vm, sec + p, ...)`, con `sec` dentro de la sección— y
+el hecho de que el barrido del suelto entra 17 ms después sin registrar nada. No hizo falta
+borrar nada.
+
+**⏭️ Riesgo que sigue**: las otras dos familias (S3/P4 y STM32) no han ejecutado una línea
+de esto, y el `bpvm_aot_clear()` mal colocado sigue sin arreglar en `repl_esp32.c` y
+`stm32_repl.c`. Al desplegar ahí hay que regenerar además los **cuatro artefactos nativos de
+SQLite + `SQLite.pack`** (ABI 5 → 6), y sólo entonces retirar el `.mdn` suelto
+(`PicoExplorer.java:1106`).
 
 **⚠️ Y sigue en ROJO lo de ayer, sin tocar**: la paridad dual-VM da **35 PASS / 3 FAIL**
 (`CastExt`, `ListaBp`, `ListaHer`) por desfase de slots en `Core.mod` — el compilador pide
