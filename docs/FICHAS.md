@@ -1135,11 +1135,52 @@ recién creado vive en un local de C, y hasta V5 el GC no miraba ahí. Fabricarl
 fabricar algo recolectable en vivo. Lo quitó `#302` paso 3 — idea de Eduardo.
 
 **Fuera, con el motivo escrito en el rechazo:** arrays de REFERENCIAS (`string[]`,
-`Clase[]`) — en esta ABI una ref cruza con la generación descartada y un `TYPE_ARRAY_REF`
-las guarda con ella; y `float[]`, sin helper de store.
+`Clase[]`) y `float[]` (sin helper de store).
 
-**Tuplas → V7** (decisión de Eduardo, 24-ago). `try`/`catch` dentro de native sigue donde
-estaba (`#213`: el `.mdn` no puede usar `setjmp`).
+> ⚠️ **Y el motivo que escribí para los arrays de referencias era FALSO.** Puse que *«en
+> esta ABI una ref cruza con la generación descartada y un `TYPE_ARRAY_REF` las guarda con
+> ella»*, como si fuera pérdida de información. **No lo es**, y lo corrigió Eduardo el
+> mismo día: *«desde V5 todas las referencias a objetos, arrays y strings deberían poder
+> pasarse tal cual»*.
+>
+> 📐 **Comprobado**: `bpref_regen(vm, ref)` (`bpvm_internal.h:733`) RECONSTRUYE la
+> generación viva consultando `vm->handle_gen[idx]` a partir del handle empaquetado. La
+> generación no se pierde — sólo no se transporta, y se recupera cuando hace falta. De
+> hecho **ya hay un helper que hace exactamente eso**: `write_ref`, *«toma un handle
+> empaquetado, reconstruye la gen VIVA»*, usado en la frontera del thunk desde `#302`.
+>
+> ⏭️ Así que esto **no es investigación, es trabajo**: tres helpers de la misma forma que
+> los de N1.5 (`newarray_ref` = lo que hace `BUILTIN_NEW_REF_ARRAY`; `array_load_ref`;
+> `array_store_ref` = `bpref_store` de `bpref_regen(v)`) más elegirlos en `arrElemKind`.
+> Es la **quinta vez** que digo «no se puede» donde era «no está hecho», y la segunda en
+> que la barrera que iba a alegar ya estaba quitada. Ver
+> [[no-se-puede-vs-no-esta-implementado]].
+
+**Aplazado a V7** (decisiones de Eduardo, 24-ago):
+- **Tuplas** dentro de native (`DestructAssignStmt`, `TupleExpr`).
+- **`try`/`catch` dentro de native** — *«por lo menos ver si es posible»*. Hoy se rechaza
+  citando `#213` (el `.mdn` no puede llamar a `setjmp`: cero relocalizaciones externas).
+  ⚠️ Ese enunciado merece la misma desconfianza que el de arriba: dice qué NO se puede
+  usar, no que no haya otro camino. Lo primero de V7 es **medir si lo hay**, no repetir la
+  frase.
+
+##### ⏭️ PENDIENTE de N1: verificar CADA FAMILIA por separado
+
+*(Encargo de Eduardo, 24-ago: «esta tarde verificamos en la Pico y las otras dos familias
+más adelante».)*
+
+Todo lo de N1 —N1.1 a N1.5— está verificado en host y, de N1.4, **sólo la Pico**. El resto
+de familias no ha ejecutado una sola línea de este código. No es una formalidad: N1.4 dejó
+**seis fallos que sólo se ven en placa** y ninguna de las 148 pruebas los tocó.
+
+| familia | estado |
+|---|---|
+| **RP2350** (Pico 2 / Metro) | N1.4 ✅ en placa (23-ago, 102×). **N1.5 pendiente — esta tarde** |
+| **ESP32-S3 / ESP32-P4** | ⬜ sin verificar. Y el `bpvm_aot_clear()` mal colocado sigue ahí (`repl_esp32.c`) |
+| **STM32** | ⬜ sin verificar. Mismo `clear()` sin arreglar (`stm32_repl.c`) |
+
+📌 Va por familias y no de golpe por [[focus-un-kit-batch-cross-family]]: a fondo en una
+placa, las demás juntas y más adelante.
 
 ##### 🔴 Y lo que salió al hacerlo: tres fallos mudos, ninguno nuevo
 

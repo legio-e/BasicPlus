@@ -280,11 +280,10 @@ public final class AotCEmitter {
             }
         }
         throw new UnsupportedAotException(
-            "AOT: array de '" + el + "' (line " + ((Ast.Node) arr).line + ") no se puede "
-            + "indexar desde una native. Van integer, boolean, byte, word, short, long y "
-            + "double. Un array de REFERENCIAS (string[], Clase[]) guarda handles CON "
-            + "generación y en esta ABI una ref cruza sin ella; float[] no tiene helper. "
-            + "Los dos, pendientes — y hasta hoy ninguno fallaba: leían 4 bytes y seguían.");
+            "AOT: indexar un array de '" + el + "' (line " + ((Ast.Node) arr).line + ") "
+            + "desde una native todavía no está implementado. Van integer, boolean, byte, "
+            + "word, short, long y double. Faltan los de REFERENCIAS (string[], Clase[]) "
+            + "y float[] — y hasta hoy ninguno fallaba: leían 4 bytes y seguían.");
     }
     /** Nombre del helper de carga de elemento según el ancho del array. */
     private String arrLoadFn(Ast.IExpr arr) {
@@ -352,18 +351,19 @@ public final class AotCEmitter {
         String nuevo = newarraySufijo(el);
         String store = arrayStoreSufijo(el);
         if (nuevo == null || store == null) {
-            /* El motivo importa y es distinto en cada caso: `string[]`/clase es
-             * un array de REFERENCIAS (TYPE_ARRAY_REF, handles de 64 bits CON
-             * generacion) y en esta ABI las refs viajan con la generacion
-             * descartada; `float[]` es de 4 bytes pero no hay store que meta el
-             * patron de bits. Ninguno de los dos es "no se puede": son dos
-             * decisiones que no se toman de pasada. */
+            /* ⚠️ Aqui hubo un motivo FALSO, corregido por Eduardo el 24-ago-2026.
+             * Decia que un array de refs no se podia porque «en esta ABI una ref
+             * cruza con la generacion descartada». No es perdida de informacion:
+             * `bpref_regen(vm, ref)` la RECONSTRUYE desde la tabla de handles, y
+             * el helper `write_ref` ya hace exactamente eso en la frontera del
+             * thunk. Lo que falta son tres helpers (newarray_ref, array_load_ref,
+             * array_store_ref), no una decision. */
             throw new UnsupportedAotException(
-                "AOT: literal de array de '" + el + "' (line " + a.line + ") no soportado. "
-                + "Desde una native se crean arrays de integer, boolean, byte, word, "
-                + "long y double. Un array de REFERENCIAS (string[], Clase[]) necesita "
-                + "TYPE_ARRAY_REF, y en la ABI del AOT una ref cruza sin su generacion; "
-                + "float[] no tiene helper de store. Los dos, pendientes.");
+                "AOT: literal de array de '" + el + "' (line " + a.line + ") todavia no "
+                + "esta implementado. Desde una native se crean arrays de integer, "
+                + "boolean, byte, word, short, long y double. Faltan los de REFERENCIAS "
+                + "(string[], Clase[]) — tres helpers de la misma forma que los demas — "
+                + "y float[], sin helper de store.");
         }
         int n = a.elements.size();
         w.print("({ int32_t __arr = vm->aot_helpers->newarray_" + nuevo + "(vm, " + n + "); ");

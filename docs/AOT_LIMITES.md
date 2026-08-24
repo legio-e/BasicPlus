@@ -92,14 +92,24 @@ otro camino) · `newIntArray`, `newByteArray`, `newLongArray`, `newDoubleArray`
 Crear e indexar arrays dentro de una `native` va para **integer, boolean, byte,
 word, short, long y double** — cada ancho con su helper.
 
-Fuera quedan dos, y por motivos distintos:
+Faltan dos, y ninguno es un muro:
 
-- **Arrays de REFERENCIAS** (`string[]`, `Clase[]`): un `TYPE_ARRAY_REF` guarda
-  handles de 64 bits **con generación**, y en la ABI del AOT una referencia cruza
-  con la generación descartada. Hay que decidir dónde se recupera la viva, y esa
-  decisión no se toma de paso.
-- **`float[]`**: no tiene helper de store (el valor tendría que cruzar como
-  patrón de bits).
+- **Arrays de REFERENCIAS** (`string[]`, `Clase[]`): faltan tres helpers de la
+  misma forma que los demás — `newarray_ref`, `array_load_ref`, `array_store_ref`.
+- **`float[]`**: falta el helper de store (el valor tendría que cruzar como patrón
+  de bits).
+
+> ⚠️ **Aquí ponía un motivo FALSO**, corregido por Eduardo el 24-ago-2026. Decía
+> que un array de referencias no se podía *«porque en esta ABI una ref cruza con
+> la generación descartada y un `TYPE_ARRAY_REF` las guarda con ella»*. Eso no es
+> pérdida de información: `bpref_regen(vm, ref)` **reconstruye** la generación
+> viva consultando la tabla de handles, y el helper `write_ref` ya hace justo eso
+> en la frontera del thunk desde `#302`. Eduardo: *«desde V5 todas las
+> referencias a objetos, arrays y strings deberían poder pasarse tal cual»*.
+>
+> Es un error de lectura con patrón: leer un límite de TRANSPORTE («no se lleva
+> la generación») como un límite de CAPACIDAD («no se puede recuperar»). El
+> mismo que convirtió cinco veces un «no está hecho» en un «no se puede».
 
 > 🐛 **Ojo con la lección de este apartado.** Hasta el 24-ago el emisor elegía el
 > helper por el ancho **sólo para `byte`**, y para todo lo demás usaba el de 4
@@ -208,7 +218,7 @@ cada alocación convierte esa ventana de lotería en certeza.
 
 | falta | nodo | motivo |
 |---|---|---|
-| `try`/`catch` dentro de native | `TryStmt` | el `.mdn` no puede usar `setjmp` (§2). Lanzar sí |
+| `try`/`catch` dentro de native | `TryStmt` | el `.mdn` no puede usar `setjmp` (§2). Lanzar sí. **A V7 «por lo menos ver si es posible»** (Eduardo, 24-ago): la frase de arriba dice qué NO se puede usar, no que no haya otro camino — y ese enunciado ya ha fallado cinco veces en este mismo documento |
 | desestructurar `{a, b} := t` | `DestructAssignStmt`, `TupleExpr` | **aplazado a V7** (decisión de Eduardo, 24-ago). Una tupla es un objeto sintético y sus elementos son CAMPOS; leerlos desde native pediría un helper de campo que hoy no existe |
 | `for … in` sobre colecciones | `ForInRange` | el `for` numérico sí |
 | `instanceof` | `InstanceOfExpr` | sin medir siquiera: el fragmento que tenía no producía el nodo |
