@@ -180,6 +180,75 @@ depura, y hasta hace poco tampoco se sabía dónde falló. Mientras sea un rinc�
 da igual. El hito de V6 lo convierte en territorio, y entonces cada uno de estos cabos
 pasa de curiosidad a requisito.
 
+### ⏭️ La propuesta de Eduardo (24-ago): UNA marca que sirve para tres cosas
+
+> *«Si tenemos funciones native 100×100 compatibles, ¿cuál es el siguiente paso?
+> Tendríamos un híbrido de funciones native envueltas en un sistema BP. Ganamos velocidad,
+> pero perdemos el debug y la traza, y el poder detener una función native, y el cambio de
+> contexto en un sistema multi-thread BP. Perdemos demasiadas cosas.*
+>
+> *Un pequeño parche que se me ocurre es, con el modo debug activado, insertar pequeñas
+> entradas para indicar número de línea del source, para poder localizar los errores pero
+> también para dar paso al intérprete para que pueda hacer cambios de thread. A ver,
+> penalizará el rendimiento, habrá que medirlo o estudiar una solución mejor.»*
+
+**Lo que aporta sobre lo de arriba**: los cuatro cabos estaban listados por separado, cada
+uno con su idea. Esto los ata: **una sola marca** —un punto seguro que el emisor inserta—
+resuelve tres a la vez. Sabe la línea (traza y errores), y al pasar por ella el intérprete
+puede tomar el control (cambio de hilo, `kill`, breakpoint).
+
+#### 🟢 Y una pieza que el 21-ago no estaba: la SALIDA existe
+
+Aquel día la lista de ideas no tenía cómo *salir* del nativo una vez detectado que hay que
+parar. **Medido el 24-ago con los dos toolchains reales**: `__builtin_setjmp` /
+`__builtin_longjmp` de gcc se expanden **inline** — cero símbolos indefinidos, y el `.o`
+empaqueta (ARM 52 B, RISC-V 60 B). O sea que el salto no-local dentro de un `.mdn` es
+posible, y es la misma pieza que hace falta para el `try`/`catch` de dentro de una native.
+**Dos cabos, un mecanismo.**
+
+⚠️ Sin dar por bueno más de lo medido: el experimento salta **dentro de la misma función**.
+Lo que aquí hace falta es saltar desde OTRO marco, y `__builtin_setjmp` está pensado para
+uso interno de gcc y no guarda los callee-saved como el `setjmp` de verdad.
+
+#### 📐 Un matiz que cambia el coste: NO todo necesita la misma densidad
+
+La propuesta habla de una marca por línea. Pero los tres usos no piden lo mismo, y
+mezclarlos hace parecer caro algo que puede no serlo:
+
+| para qué | dónde hace falta la marca | coste |
+|---|---|---|
+| **expropiar / `kill`** | sólo en los **saltos hacia atrás** (un bucle es lo único que puede correr sin fin) | una comprobación por vuelta; el código en línea recto no paga nada |
+| **traza y línea del error** | por sentencia | ahí sí se nota |
+| **breakpoint dentro** | por sentencia | idem |
+
+📌 O sea que **lo que hace falta siempre —no colgar el planificador— es lo barato**, y lo
+caro es lo que sólo se quiere al depurar. Es lo que hacen las máquinas virtuales con
+*safepoints*: sondeo en los back-edges y en los retornos, no en cada instrucción.
+
+#### ⚠️ Y el riesgo de fondo: depurar un artefacto que no es el que se ejecuta
+
+Si el modo depuración cambia el código generado, **el `.mdn` que depuras no es el que
+envías** — y el bug que persigues puede no existir en la variante con marcas. Choca con el
+instinto del proyecto (el invariante dual-VM, los gates de ABI: *lo que pruebas es lo que
+publicas*).
+
+🟢 **Pero aquí hay suerte, y viene de V6/N1.4**: la sección `native` del `.mod` **ya es
+multi-bloque y autodescriptiva** — hoy un bloque por familia, y el cargador se queda con el
+suyo mirando su campo `arch`. Llevar **las dos variantes** (con marcas y sin ellas) no pide
+rediseñar nada de la sección: pide un campo más en la cabecera del `.mdn` para
+distinguirlas. El mismo `.mod` podría depurarse y ejecutarse a toda velocidad sin
+recompilar.
+
+#### ⏭️ El primer paso cuando se retome, y es barato
+
+**Medirlo**, que es lo que pide Eduardo. El banco ya existe: `samples/NatV7.bp` cronometra
+`sumaHasta(20000)` y en la Pico dio **1 ms** (24-ago). Añadir la comprobación en el
+back-edge y volver a medir el mismo sample da el número real en una tarde — y **el número
+es el que decide** si esto es un parche o hay que estudiar una solución mejor. Suponer el
+coste antes de medirlo sería repetir el error que este documento lleva anotado tres veces.
+
+*(Sin fecha, decisión de Eduardo: «todo eso para el futuro».)*
+
 ---
 
 ## El lazo de LVGL, y por qué es la MISMA enfermedad que el AOT (Eduardo, 21-ago)
