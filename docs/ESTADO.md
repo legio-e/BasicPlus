@@ -27,6 +27,30 @@
 
 ## Última sesión
 
+## ⏭️ PRÓXIMO PASO, decidido por Eduardo (25-ago): **LA PARIDAD**
+
+Antes que el STM32. El arnés lleva **tres días en rojo** —35 PASS / 3 FAIL: `CastExt`,
+`ListaBp`, `ListaHer`— y nos hemos acostumbrado a decir «los tres preexistentes» y seguir.
+Es un semáforo en rojo normalizado, que es la misma forma de fallo que hemos estado cazando
+toda la sesión: **el arnés es el instrumento que respalda todo lo demás**, y hoy se ha
+dicho «paridad OK» tres veces con una nota al pie.
+
+**Paso 1: RECONFIRMAR el diagnóstico, no darlo por bueno.** Lo que hay escrito es mío y del
+23-ago: *`Core.mod` exporta `Integer#value#7` y el compilador pide `#2`* — desfase de slots
+por stdlib rancia. Después de esta sesión, eso se vuelve a medir antes de tocar nada.
+
+**Por qué ahora y no después**: no necesita placa para diagnosticarlo, y si acaba pidiendo
+regenerar la stdlib y reflashear, **hoy es el día barato** — las imágenes están recién
+reconstruidas (Pico, P4, S3) y las placas a mano. Dentro de dos semanas eso vuelve a costar
+una tarde entera.
+
+**El STM32 va después**, y no por pereza: es la familia más cara. Su wire es una CUARTA
+forma —sin builders, con el JSON armado a mano en `stm32_repl.c`— y el AOT allí no ha
+existido nunca (tiene carga de `.mdn` desde H9.5, pero ningún `aot_funcs`). Hoy se ha visto
+que «la última familia» puede esconder tres bugs; mejor entrar con el arnés en verde.
+
+---
+
 ### 25-ago — la P4: AOT y wire, y TRES fallos que sólo la placa podía enseñar
 
 **Qué familia tocaba, y no era una preferencia**: el AOT sólo tiene dos destinos
