@@ -190,6 +190,16 @@ check_parity() {
       echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
     fi
     rm -rf "$WORK"/*.mod "$WORK/src" "$WORK/p.bpbuild"
+    # La stdlib FRESCA va al outDir ANTES de compilar, y no es un detalle: el
+    # resolutor de imports mira outDir PRIMERO y el directorio del fuente
+    # despues. Sin esto, un sample de bpgenvm-c/samples/ resolvia `Core` contra
+    # el Core.mod HERMANO de ese directorio — una copia del 18-ago con otra
+    # vtable — y luego ejecutaba contra el de la stdlib actual: compilar contra
+    # una era y ejecutar contra otra. Asi estuvo el arnes 3 dias en rojo
+    # (CastExt/ListaBp/ListaHer pidiendo Integer#value#2 donde la stdlib
+    # exporta #7) con un diagnostico equivocado de "stdlib rancia". La stdlib
+    # estaba bien; el arnes mezclaba las dos.
+    cp "$STDLIB"/*.mod "$WORK/" 2>/dev/null
     if ! java -jar "$V3_FE" "$bp" --compile "$WORK" --backend=mivm >/dev/null 2>&1; then
       # 2o intento POR PROYECTO. Un sample que importa stdlib (Math, IO, ...) no
       # compila con --compile a secas: el frontend no sabe donde buscar, y eso
@@ -214,10 +224,18 @@ check_parity() {
       # hace el dispositivo, que las tiene instaladas), asi que van al lado.
       cp "$STDLIB"/*.mod "$WORK/" 2>/dev/null
     fi
-    # El .mod raiz es el que NO es Core (dep implicita desde #248).
-    mod="$(ls "$WORK"/*.mod 2>/dev/null | grep -v '[/\]Core\.mod$' | head -1)"
-    if [ -z "$mod" ]; then
-      echo "  SKIP $s (el frontend no emitio .mod)"; skip=$((skip+1)); continue
+    # El .mod raiz se localiza POR NOMBRE DE MODULO, leido del propio .bp.
+    #
+    # Antes era "el primer .mod que no sea Core", y eso era una MINA: en cuanto
+    # la stdlib fresca se copia al WORK antes de compilar (el arreglo de arriba),
+    # el primero alfabetico pasa a ser Adc.mod — una libreria sin main — y las
+    # dos VMs fallan IGUAL al ejecutarla: 38/38 en verde sin haber ejecutado NI
+    # UN sample. El falso-PAR exacto contra el que este arnes advierte.
+    local rootname
+    rootname="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "$bp" | head -1)"
+    mod="$WORK/$rootname.mod"
+    if [ -z "$rootname" ] || [ ! -f "$mod" ]; then
+      echo "  SKIP $s (no se encontro $rootname.mod tras compilar)"; skip=$((skip+1)); continue
     fi
     [ -f "$WORK/Core.mod" ] || cp "$STDLIB/Core.mod" "$WORK/" 2>/dev/null
     oj="$(run_vm "$V3_JAVA" "$mod")"; oc="$(run_vm "$V3_C" "$mod")"
@@ -229,6 +247,13 @@ check_parity() {
     fi
   done
   echo "  paridad: $pass PASS, $fail FAIL, $skip SKIP"
+  # CERO ejecutados no es verde. Se vio el 25-ago: un fallo del arnes convirtio
+  # los 38 en SKIP y el resumen decia VERDE sin haber ejecutado ni un sample.
+  # (Ya estaba apuntado de antes: «un SKIP no es un PASS».)
+  if [ "$pass" -eq 0 ]; then
+    echo "  ⚠ 0 PASS: no se ha ejecutado NADA — eso no es paridad, es un arnes roto"
+    return 1
+  fi
   [ "$fail" -eq 0 ]
 }
 
