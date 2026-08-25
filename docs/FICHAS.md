@@ -973,10 +973,28 @@ empaquetador lo habría rechazado. Baterías 108/0 y paridad 35 PASS.
 
 ⏭️ **PENDIENTE, y decidido por Eduardo (23-ago): las imágenes NO se regeneran ahora,
 *«cuando hagamos pruebas las regeneramos»*.** Eso es coherente: el `MDN_ABI_VERSION` subido
-no tiene efecto hasta que se reconstruyan las VMs. Pero el día que se reconstruyan hay que
-hacer **las dos cosas a la vez**, o el arranque rechazará los packs:
-- regenerar los cuatro nativos de SQLite y su `SQLite.pack`,
-- reflashear las cinco imágenes.
+no tiene efecto hasta que se reconstruyan las VMs.
+
+❌ **PERO LO DE REGENERAR SQLITE ERA FALSO — medido el 25-ago.** Lo escribí arriba dos veces
+(*«ese día hay que regenerar los cuatro nativos de SQLite y su `SQLite.pack`»*) y **el
+`.npk` no lleva el ABI de la tabla de helpers**: `bpvm_npack.c` valida por **arquitectura y
+float-ABI** (`bpvm_mdn_host_arch` / `_float_abi`), no por `MDN_ABI_VERSION`. Ese gate es del
+`.mdn` y sólo del `.mdn`.
+
+La prueba, en el log del P4 ya con la imagen de ABI 6 y el `SQLite.pack` de siempre grabado:
+
+```
+pack: sqlite: pack vivo · 3.53.4
+pack: sqlite: initialize OK — motor arrancado y vfs 'bp' registrado
+pack: sqlite: API publicada como 'SQLI' — 17 simbolos, v1
+```
+
+📌 Confirmado **al cargar**. Confirmarlo **en uso** pide correr un sample del ORM, que es
+otra cosa y no está hecho. Pero la tarea «regenerar los cuatro nativos» sale de la lista:
+no existía.
+
+⏭️ Lo que SÍ queda de aquí: **reflashear las cinco imágenes** (la tabla vive en el
+firmware). Hecho ya en Pico, P4 y S3.
 
 ⚠️ **Y una medida que falta**: la paridad dual-VM **no cubre el camino AOT** (ejecuta el
 intérprete en las dos VMs), así que estos helpers **no tienen red automática todavía**. La

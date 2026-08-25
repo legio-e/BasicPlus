@@ -74,8 +74,13 @@ saldrá 0/N y se perderá la sesión buscando lo que ya sabemos. En la Pico se a
 2. `U2.1` paso 2: borrar las copias del protocolo en `esp32/main/wire_v1.c` y
    `esp32p4/main/wire_v1_tcp.c`, dar de alta `src/wire_v1_proto.c` en sus builds, y
    **comparar el código generado antes/después** como se hizo con la Pico.
-3. Regenerar los **cuatro artefactos nativos de SQLite + `SQLite.pack`** — el ABI del `.mdn`
-   subió 5 → 6 y sin eso el pack de SQLite no casa con la imagen nueva.
+3. ~~Regenerar los cuatro artefactos nativos de SQLite + `SQLite.pack`.~~ ❌ **FALSO, y
+   comprobado el 25-ago**: el `.npk` NO lleva el ABI de la tabla de helpers — se valida por
+   **arquitectura y float-ABI** (`bpvm_npack.c` usa `bpvm_mdn_host_arch`/`_float_abi`, no
+   `MDN_ABI_VERSION`). La prueba está en el log del P4 con la imagen de ABI 6: *«sqlite:
+   pack vivo · 3.53.4 · initialize OK — motor arrancado y vfs 'bp' registrado · API
+   publicada como 'SQLI', 17 simbolos»*. Confirmado **al cargar**; confirmarlo **en uso**
+   pide correr un sample del ORM, que es otra cosa.
 
 **Qué mirar en la placa** (lo mismo que hoy en la Pico, y con `log=1`, que se lee en el
 arranque):
