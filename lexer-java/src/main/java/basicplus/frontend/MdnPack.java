@@ -193,6 +193,45 @@ public final class MdnPack {
             throw new PackException(sb.toString());
         }
 
+        /* ── [25-ago-2026] NADA CON CONTENIDO PUEDE QUEDARSE FUERA DEL `.text` ──
+         *
+         * Un `.mdn` se lleva `.text` y NADA MAS. El guardian de relocalizaciones
+         * de mas abajo mira el `.o`; pero el pipeline empaqueta el `.elf` YA
+         * ENLAZADO, y ahi las relocalizaciones estan resueltas — o sea que una
+         * seccion que se quede fuera ya no deja rastro que aquel pueda ver. Se
+         * cae por el agujero EN SILENCIO.
+         *
+         * Paso: el guion de enlace fusionaba `.rodata*` dentro de `.text` pero no
+         * `.srodata*`, que es donde RISC-V pone las CONSTANTES DE COMA FLOTANTE.
+         * El `auipc` las apuntaba mas alla del final del blob y la P4 leia lo que
+         * hubiera detras: `(3.0+5.0)/2.0` devolvio Infinity y un `float[]` dio
+         * 1.219193E25. Sin un solo error. En ARM no pasaba porque alli van a
+         * `.rodata.cst8`.
+         *
+         * La comprobacion es la que deberia haber existido desde el principio:
+         * si queda ALGUNA seccion asignable con contenido que no sea la que se
+         * empaqueta, se aborta. Vale para lo que venga — `.sdata`, `.srodata`,
+         * `.data`, o lo que invente el siguiente toolchain. */
+        {
+            StringBuilder fuera = new StringBuilder();
+            for (Elf32.Section sec : f.sections()) {
+                if ((sec.flags & 0x2) == 0) continue;          /* no SHF_ALLOC */
+                if (sec.size == 0) continue;
+                if (".text".equals(sec.name)) continue;
+                fuera.append(fuera.length() == 0 ? "" : ", ")
+                     .append(sec.name).append(" (").append(sec.size).append(" B)");
+            }
+            if (fuera.length() > 0) {
+                throw new PackException(
+                    "hay secciones CON CONTENIDO fuera de `.text`, y un .mdn solo se lleva\n"
+                    + "  `.text`: " + fuera + "\n"
+                    + "  En la placa eso se lee como basura, sin dar error — ahi cayeron las\n"
+                    + "  constantes de coma flotante de RISC-V (.srodata.cst8) el 25-ago.\n"
+                    + "  Si es un `.o` SIN ENLAZAR, ese es el problema: el pipeline enlaza\n"
+                    + "  con bpgenvm-c/aot/mdn.ld, que las fusiona dentro de `.text`.");
+            }
+        }
+
         /* ── [25-ago-2026] EL `.mdn` TIENE QUE HABLAR LA MISMA ABI QUE EL FIRMWARE ──
          *
          * No lo comprobaba nadie, y el dia que dejo de casar la placa NO dio un

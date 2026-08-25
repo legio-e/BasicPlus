@@ -43,6 +43,21 @@ SECTIONS
         /* Los literales, DENTRO del código. Ver arriba. */
         *(.rodata .rodata.*)
         . = ALIGN(4);
+        /* ⚠️ Y LAS `.srodata` — 25-ago-2026, y costó un valor equivocado en placa.
+         *
+         * En RISC-V gcc no pone las constantes pequeñas de sólo lectura en
+         * `.rodata`, sino en `.srodata.cst8` / `.srodata.cst4` (la "small data"
+         * que se direcciona por `gp`). Ahí caen **las constantes de coma
+         * flotante**: un `3.0` o un `1.5f` del código generado.
+         *
+         * Sin esta línea quedaban FUERA del `.text` empaquetado, y el `auipc`
+         * las apuntaba más allá del final del blob. En la P4 eso no da error:
+         * `(3.0 + 5.0) / 2.0` devolvió **Infinity** —el divisor leído era 0— y
+         * un `float[]` devolvió 1.219193E25.
+         *
+         * En ARM no pasaba porque allí van a `.rodata.cst8`, que sí entraba. */
+        *(.srodata .srodata.*)
+        . = ALIGN(4);
     }
 
     /* Ruido del toolchain que no pinta nada en un `.mdn`. Descartarlo aquí
