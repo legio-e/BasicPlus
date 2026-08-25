@@ -410,13 +410,37 @@ presupuesto*.
    da error, corrompe datos. Ejercita las dos capas: `field_bulk` (común) y
    `send_bulk`/`recv_bulk` (las que se quedan en la familia).
 
-2. ⏭️ **Paso 2 — S3 y P4 al común.** Borrar sus dos copias y que usen `wire_v1_proto.c`.
+2. ✅ **HECHO Y VERIFICADO EN LA P4 (25-ago) · `f7510d85`** — borradas las dos copias
+   (`esp32/main/wire_v1.c` 252→124, `esp32p4/main/wire_v1_tcp.c` 321→192) y alta de
+   `src/wire_v1_proto.c` en sus builds. Los 11 builders viven ya en UN sitio para las tres
+   familias con wire; la frase que llevaban dentro —*«mantener las tres copias en sync»*—
+   ya no describe nada.
+
+   🎯 **Mismo gesto que en la Pico, antes de flashear**: binario del P4 **exactamente igual**
+   (`0x13ccc0`), **6713 símbolos con los mismos tamaños salvo uno** — `wire_task_uart`,
+   0xc4→0xc2. Y ese uno explicado, no supuesto: desensamblado son **66 instrucciones, las
+   mismas y en el mismo orden**; contando codificaciones, 32 comprimidas + 33 de 4 bytes
+   pasan a 33 + 32. Una instrucción se comprimió por **relajación del enlazador** al quedar
+   su destino más cerca. Cero diferencia semántica.
+
+   ✅ **En placa**: `INFO`, `ls` y `RUN` (los 11 builders construyendo JSON sobre RISC-V), y
+   la prueba fuerte — **subida de un Pack de 581.632 B por el camino BULK**, que es binario
+   y donde un fallo de framing corrompe en vez de fallar. De paso confirmó la **poda por
+   familia** (2 entradas ARMV8 descartadas, 1.130.496 → 581.632 B) y la relocalización del
+   motor de SQLite en 5.087 sitios.
+
+   ⚠️ **Aviso de método que este paso deja**: comparar `.text` byte a byte **no vale en
+   ESP-IDF** — el código no vive en `.text` y `objcopy --only-section=.text` saca DOS
+   FICHEROS VACÍOS, que comparados dan «idéntico». Las secciones son `.flash.text` e
+   `.iram0.text`, y ahí la comparación byte a byte tampoco dice nada útil (una función
+   encoge y todo lo de detrás se desplaza). **Lo que vale es por símbolo.**
+
+3. ⏭️ **Paso 3 — el STM32**, que es una CUARTA forma.
    📌 **Va en el MISMO viaje al banco que la validación AOT de esas dos familias** (hito
    N1): las dos cosas piden las mismas placas encendidas, y el banco es lo caro.
    ⚠️ Alta del `.c` en sus builds — [[core-c-nuevo-alta-en-5-builds]].
-3. **El STM32 es una CUARTA forma**, no una copia: `stm32_wire.c` no tiene builders (usa
-   otros nombres, `stm32_wire_*`) y `stm32_repl.c` arma el JSON a mano. Traerlo al común es
-   un paso aparte y más caro; no mezclar con el 1.
+   `stm32_wire.c` no tiene builders (usa otros nombres, `stm32_wire_*`) y `stm32_repl.c`
+   arma el JSON a mano. Es un paso aparte y más caro; no mezclar con el 2.
 4. Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
    familias sin implementar un contrato que existe.
 
