@@ -1327,7 +1327,8 @@ de familias no ha ejecutado una sola línea de este código. No es una formalida
 | familia | estado |
 |---|---|
 | **RP2350** (Pico 2 / Metro) | ✅ **CERRADA (24-ago)**: N1.1…N1.5b en placa, `NatNew` 7/7 y `NatV7` 4/4 thunks. Ver abajo |
-| **ESP32-S3 / ESP32-P4** | ⬜ sin verificar. Y el `bpvm_aot_clear()` mal colocado sigue ahí (`repl_esp32.c`) |
+| **ESP32-P4** (RISC-V) | ✅ **CERRADA (25-ago)**: `NatV7` 4/4 y `NatNew` los 7 valores. Ver abajo — costó **tres** fallos que sólo la placa podía enseñar |
+| **ESP32-S3** (Xtensa) | ➖ **NO APLICA**: no hay generador AOT para Xtensa (`NpackReloc.DESTINOS` = ARM + RISC-V), y su `aot_funcs_stub.c` es un no-op explícito. Lo que sí se verificó es el **wire** |
 | **STM32** | ⬜ sin verificar. Mismo `clear()` sin arreglar (`stm32_repl.c`) |
 
 📌 Va por familias y no de golpe por [[focus-un-kit-batch-cross-family]]: a fondo en una
@@ -1467,8 +1468,43 @@ desacuerdo entre dos caminos distintos (`AotCEmitter` y `MivmEmitter`): una prue
 uno solo no puede ver nada. Comprobada en rojo reintroduciendo el fallo antes de darla por
 buena, y su mensaje dice literalmente que el síntoma es *«el resultado sale bien»*.
 
-⏭️ **Lo que queda**: las otras dos familias (S3/P4 y STM32), y entonces retirar el `.mdn`
-suelto — que el IDE sigue subiendo al lado (`PicoExplorer.java:1106`).
+##### ✅ LA P4 (25-ago) — y los TRES fallos que hicieron falta para llegar
+
+Ninguno era del AOT. Los tres eran **el `.mdn` cruzando a la placa sin que nadie comprobara
+que casaba con ella**, y ninguno se manifestó como un error: uno colgó y dos devolvieron un
+número.
+
+| # | qué | síntoma | por qué no lo vio nadie |
+|---|---|---|---|
+| 1 | el `clear()` del registro AOT iba **después** de cargar | habría dado 0/N | arreglado en la Pico el 23-ago y nunca viajó — [[arreglo-que-no-viaja-entre-familias]] |
+| 2 | el `.mdn` se compilaba con **otra ABI y otro repertorio** que el firmware | **CUELGUE** | `AotBuild` no fijaba `-march`/`-mabi` *«porque casan por construcción»*. Falso: el defecto del toolchain trae la extensión `d` (doble en hardware) que el P4 no tiene |
+| 3 | las **constantes de coma flotante** se quedaban fuera del blob | `Infinity` y `1.219193E25` | `mdn.ld` fusiona `.rodata*` pero RISC-V las pone en `.srodata*` |
+
+📌 **Y uno más, que fue el que permitió ver los otros**: el log del cargador era un hook
+débil que **sólo la Pico implementaba**. La P4 cargaba el bloque y no había forma de saber
+si sus thunks habían entrado. Se quitó el hook y ahora el loader escribe en el log común —
+las cuatro familias ven lo mismo.
+
+##### 🕸️ Lo que queda de todo esto: tres guardianes donde no había ninguno
+
+1. **ABI de coma flotante** del `.o` RISC-V (`e_flags`) y **repertorio** declarado
+   (`.riscv.attributes`, la extensión `d`). Aborta el empaquetado nombrando el remedio.
+2. **Nada con contenido fuera de `.text`**. El guardián que ya existía mira las
+   *relocalizaciones del `.o`*; el pipeline empaqueta el `.elf` **ya enlazado**, donde
+   están resueltas — o sea que una sección que se cae fuera **no dejaba rastro**. Éste vale
+   para lo que venga.
+3. Y el del día anterior: **el nombre del símbolo** tiene que existir en el `.mod`
+   (`AotSimboloEnModTest`).
+
+⚠️ **Los tres se probaron EN ROJO** antes de darlos por buenos, con el artefacto que
+fallaba de verdad.
+
+📐 **La lección de método, que es la misma tres veces**: el `.npk` valida arquitectura y
+float-ABI desde V5/H4. El `.mdn` no validaba **nada**. Dos formatos hermanos, uno con
+contrato y otro sin él — y el que no lo tenía es el que se cargó tres veces.
+
+⏭️ **Lo que queda**: el STM32, y entonces retirar el `.mdn` suelto — que el IDE sigue
+subiendo al lado (`PicoExplorer.java:1106`).
 
 ---
 

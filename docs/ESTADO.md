@@ -27,6 +27,57 @@
 
 ## Última sesión
 
+### 25-ago — la P4: AOT y wire, y TRES fallos que sólo la placa podía enseñar
+
+**Qué familia tocaba, y no era una preferencia**: el AOT sólo tiene dos destinos
+(`NpackReloc.DESTINOS` = ARM Cortex-M33 y RISC-V32 del P4). **El S3 es Xtensa y no tiene
+generador** — su `aot_funcs_stub.c` es un no-op explícito. Así que el ESP32 que toca es
+**la P4**.
+
+**Resultado**: `NatV7` 4/4 thunks y `NatNew` los siete valores exactos, ejecutando código
+RISC-V compilado. Y `U2.1` paso 2 (el S3 y la P4 al protocolo común del wire) verificado de
+paso — `INFO` y `ls` se construyen con los 11 builders que se movieron.
+
+**Pero costó tres fallos, y ninguno era del AOT.** Los tres eran lo mismo: **el `.mdn`
+cruzaba a la placa sin que nadie comprobara que casaba con ella.** Y ninguno dio un error —
+uno colgó y dos devolvieron un número:
+
+1. El `bpvm_aot_clear()` iba **después** de cargar (habría dado 0/N). Arreglado en la Pico
+   el 23-ago y nunca viajó al resto.
+2. El `.mdn` se compilaba con **otra ABI y otro repertorio**: `AotBuild` no fijaba
+   `-march`/`-mabi` *«porque casan por construcción»*, y el defecto del toolchain trae la
+   extensión `d` — coma flotante de doble **en hardware, que el P4 no tiene**. Con doubles
+   derramados a la pila, `fld`/`fsd` = instrucción ilegal → **cuelgue**.
+3. Las **constantes de coma flotante** se quedaban fuera del blob: `mdn.ld` fusiona
+   `.rodata*` en `.text`, y RISC-V las pone en `.srodata*`. El `auipc` apuntaba más allá
+   del final. `(3.0+5.0)/2.0` = **Infinity**, un `float[]` = **1.219193E25**.
+
+**📌 Y un cuarto que fue el que permitió ver los otros**: el log del cargador de `.mdn` era
+un hook débil que **sólo la Pico implementaba**. La P4 cargaba el bloque y no había forma de
+saber si sus thunks habían entrado. Se quitó el hook; ahora escribe en el log común y las
+cuatro familias ven lo mismo.
+
+**🕸️ Lo que queda: tres guardianes donde no había ninguno** — ABI y repertorio del `.o`; que
+no sobreviva nada con contenido fuera de `.text`; y el nombre del símbolo contra el `.mod`
+(de ayer). **Los tres probados en rojo** con el artefacto que fallaba de verdad.
+
+📐 **La lección, y es la misma tres veces**: el `.npk` valida arquitectura y float-ABI desde
+V5/H4. El `.mdn` **no validaba nada**. Dos formatos hermanos, uno con contrato y otro sin
+él, y el que no lo tenía es el que se cargó tres veces en un día.
+
+⚠️ **Dos falsos verdes míos**, los dos por mirar el log de la herramienta en vez del
+artefacto: dije «las cuatro imágenes compilan `bpvm_log.c`» a partir de un `grep -l` que dio
+positivo por una mención suelta, y canté «host OK» cuando el enlace había fallado y
+`bpgenvm-c.exe` ni existía (la paridad se fue a 5/33 y pareció que había roto la VM).
+**Comprobar el ARTEFACTO, no el log.**
+
+⏭️ **Queda**: el STM32, y entonces retirar el `.mdn` suelto. Y una cosa que la P4 avisa sola
+y no es de hoy: el proyecto está configurado a **16 MB de flash con un chip de 32** — la
+zona de packs se queda en 2800 KB. Cambiarlo mueve el mapa de particiones, así que merece su
+propio paso verificado.
+
+---
+
 ### 24-ago (tarde) — U2.1: los gemelos del wire no lo eran, y el primer paso ya está en placa
 
 Con AOT cerrado en la Pico, Eduardo propuso unificar algo de las imágenes. Salió `U2.1`, y
