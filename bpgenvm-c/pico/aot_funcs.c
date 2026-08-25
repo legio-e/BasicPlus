@@ -28,14 +28,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-/* H9.5 — implementación FUERTE del hook de trazas del mdn_loader (que es
- * weak no-op en src/mdn_loader.c, compartido entre ports): en el Pico las
- * trazas del .mdn van al log persistente. */
-void bpvm_mdn_log(const char* fmt, ...) {
-    char buf[160];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    log_printf("%s", buf);
-}
+/* [V6, 24-ago-2026] Aquí estaba la implementación FUERTE del hook de trazas del
+ * mdn_loader, y era la ÚNICA de las cuatro familias — por eso el S3, la P4 y el
+ * STM32 eran ciegos a la carga del `.mdn`. El loader escribe ahora directo en el
+ * log común y este reenvío sobra. */

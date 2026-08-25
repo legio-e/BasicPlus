@@ -62,11 +62,11 @@ const char* bpvm_mdn_host_float_abi(void);
 void   bpvm_mdn_reset(void);
 size_t bpvm_mdn_used_bytes(void);
 
-/* H9.5 — hook de trazas del loader, débil (no-op por defecto): un port puede
- * dar una implementación fuerte para ver el detalle de la carga (el Pico la
- * enruta a su log persistente; el STM32, wire-only, usa el default silencioso).
- * El loader funciona igual sin logging — los códigos de retorno mandan. */
-void bpvm_mdn_log(const char* fmt, ...);
+/* [V6, 24-ago-2026] Aquí había un hook de trazas débil (`bpvm_mdn_log`) que
+ * cada port podía sobreescribir. Sólo lo hacía el Pico, así que las otras tres
+ * familias no veían NADA de lo que el loader tiene que decir. El loader escribe
+ * ahora directamente en el log común (`bpvm_log.h`), que compilan las cuatro.
+ * Ver la nota larga en src/mdn_loader.c. */
 
 #ifdef __cplusplus
 }

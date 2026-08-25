@@ -21,6 +21,7 @@
  */
 
 #include "mdn_loader.h"
+#include "bpvm_log.h"   /* las trazas van al log comun (antes: hook débil) */
 #include "mdn_format.h"
 #include "aot_registry.h"
 
@@ -88,11 +89,25 @@ const char* bpvm_mdn_host_float_abi(void) {
 #endif
 }
 
-/* H9.5 — el loader es compartido entre ports (Pico, STM32, ...). Las trazas
- * van por bpvm_mdn_log, débil no-op aquí: el Pico da una implementación
- * fuerte sobre su log persistente (pico/aot_funcs.c); el STM32 (wire-only)
- * se queda con el silencio. Así el fichero no depende de ningún log.h. */
-__attribute__((weak)) void bpvm_mdn_log(const char* fmt, ...) { (void) fmt; }
+/* [V6, 24-ago-2026] LAS TRAZAS VAN AL LOG COMÚN, sin intermediario.
+ *
+ * Aquí había un hook débil (`bpvm_mdn_log`, no-op) que cada port podía
+ * sobreescribir, *«así el fichero no depende de ningún log.h»*. Sólo lo
+ * sobreescribía el Pico — o sea que el S3, la P4 y el STM32 eran **CIEGOS** a
+ * todo lo que este cargador tiene que decir: cuántos thunks se registraron, un
+ * rechazo por ABI, un desajuste de arquitectura, un símbolo que no está en el
+ * `.mod`.
+ *
+ * 📌 Se vio probando AOT en la P4: el bloque nativo cargaba y no había forma de
+ * saber si sus thunks habían entrado. El fallo del método `native` que se cazó
+ * el 24-ago en la Pico (`MDN: skip 'X' rc=-2`) habría pasado **invisible** en
+ * las otras tres familias.
+ *
+ * Y el motivo del hook había CADUCADO: en V6/U1.2 el log pasó al común
+ * (`src/bpvm_log.c` + `include/bpvm_log.h`), que compilan las cuatro imágenes —
+ * el STM32 incluido, por su cintura. Depender de él ya no acopla nada. En host
+ * `log_printf` sale sin hacer nada (nadie llama a `log_init`), así que no
+ * aparece salida nueva y la paridad no se toca. */
 
 /* El FS pinea cada fichero 4-aligned (fs.c v4), así que data viene
  * ya correctamente alineado para Thumb-2. NO necesitamos staging.
@@ -111,7 +126,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * también vienen alineados por el compilador. Si llega misaligned,
      * es bug del caller. */
     if (((uintptr_t) data) & 0x3u) {
-        bpvm_mdn_log("MDN: ABORT — data %p no alineado a 4 (FS v4 debería garantizar)",
+        log_printf("MDN: ABORT — data %p no alineado a 4 (FS v4 debería garantizar)",
                    (const void*) data);
         return MDN_ERR_TRUNCATED;
     }
@@ -129,7 +144,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * #302 esperan HANDLES de 64 bits ⇒ corrupción y reset mudo. Preferimos
      * quedarnos sin overlay (interpretado, correcto) que ejecutar a ciegas. */
     if (h->abi_version != MDN_ABI_VERSION) {
-        bpvm_mdn_log("MDN: RECHAZADO — ABI %u, esta VM habla %u. El .mdn es de "
+        log_printf("MDN: RECHAZADO — ABI %u, esta VM habla %u. El .mdn es de "
                      "otra era de los helpers AOT: hay que REGENERARLO.",
                      (unsigned) h->abi_version, (unsigned) MDN_ABI_VERSION);
         return MDN_ERR_ABI;
@@ -144,7 +159,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
         int ok = (a == MDN_HOST_ARCH)
               || (a == MDN_ARCH_NONE && MDN_HOST_ARCH == MDN_ARCH_ARM);
         if (!ok) {
-            bpvm_mdn_log("MDN: arch mismatch .mdn=%u firmware=%u — RECHAZADO",
+            log_printf("MDN: arch mismatch .mdn=%u firmware=%u — RECHAZADO",
                        (unsigned) a, (unsigned) MDN_HOST_ARCH);
             return MDN_ERR_ARCH;
         }
@@ -170,11 +185,11 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
         if (rc == 0) {
             registered++;
         } else {
-            bpvm_mdn_log("MDN: skip '%s' rc=%d (symbol no en .mod?)",
+            log_printf("MDN: skip '%s' rc=%d (symbol no en .mod?)",
                        syms[i].name, rc);
         }
     }
-    bpvm_mdn_log("MDN: %d/%u thunks registrados, %u code bytes (zero-copy)",
+    log_printf("MDN: %d/%u thunks registrados, %u code bytes (zero-copy)",
                registered, (unsigned) h->sym_count, (unsigned) h->code_size);
     return MDN_OK;
 }
