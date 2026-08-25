@@ -527,6 +527,14 @@ static void run_module_path(const char* path, long id) {
      * desaparecen ~70 líneas sin perder ni una capacidad. El guard sigue siendo
      * imprescindible en bare-metal — un CALL_EXT sin resolver cuelga el micro —
      * sólo que ahora lo hace `first_missing` para las cinco. */
+    /* [V6/N1.4] EL VACIADO VA ANTES DE CARGAR. El registro AOT es global y hay
+     * que tirar el del RUN anterior (los módulos se recargan en direcciones
+     * frescas), pero desde que un `.mod` trae su bloque nativo dentro,
+     * `bpvm_load_entry` YA REGISTRA thunks — y vaciar después los borraba.
+     * No da error: se ejecuta interpretado y el resultado sale bien. Se vio en
+     * la Pico el 23-ago, y sólo con el log encendido. */
+    bpvm_aot_clear();
+
     bpvm_entry_t entry;
     memset(&entry, 0, sizeof entry);
     bpvm_status_t st = bpvm_load_entry(vm, path, &entry);
@@ -544,8 +552,12 @@ static void run_module_path(const char* path, long id) {
      * Tolerante: sin .mdn o rc != OK → se ejecuta interpretado, sin más.
      * Nota U575: el código ejecuta desde SRAM (S-bus); el ICACHE del U5
      * cachea la ruta de flash (C-bus), así que no hace falta invalidación
-     * — confirmar en placa con el primer smoke (fib_native). */
-    bpvm_aot_clear();
+     * — confirmar en placa con el primer smoke (fib_native).
+     *
+     * ⚠️ EL `bpvm_aot_clear()` YA NO ESTÁ AQUÍ — ver arriba, antes de la carga.
+     * Desde [V6/N1.4] un `.mod` puede traer su bloque nativo DENTRO y el
+     * cargador registra sus thunks durante `bpvm_load_entry`: vaciar el
+     * registro después borraba justo eso. */
     if (st == BPVM_OK && !missing[0]) {
         for (int mi = 0; mi < vm->module_count; mi++) {
             const char* mname = vm->modules[mi].name;

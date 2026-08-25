@@ -973,6 +973,18 @@ static void run_module_path(const char* path, long id) {
      * las tres familias, y además era una versión POBRE: cortaba el import por
      * el primer punto y no sabía nada del pack en ejecución — que es lo que
      * impedía ejecutar packs en la placa. */
+    /* [V6/N1.4] EL VACIADO VA ANTES DE CARGAR, y el orden es el fallo entero.
+     *
+     * Cada RUN recarga los módulos en direcciones frescas, así que el registro
+     * AOT del RUN anterior hay que tirarlo. Pero desde que un `.mod` puede
+     * traer su bloque nativo DENTRO, `bpvm_load_entry` YA REGISTRA thunks — y
+     * vaciar después borraba lo que la carga acababa de poner.
+     *
+     * No da error: el módulo corre interpretado y el resultado sale bien. En la
+     * Pico se vio el 23-ago y sólo con el log encendido (`0/N thunks`). Aquí
+     * estaba igual, en el REPL que comparten el S3 y la P4. */
+    bpvm_aot_clear();
+
     bpvm_entry_t entry;
     memset(&entry, 0, sizeof entry);
     bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
@@ -997,8 +1009,12 @@ static void run_module_path(const char* path, long id) {
     /* H4 AOT — registrar funciones AOT baked-in tras link, antes de run (mismo
      * punto que la Pico). En el P4 (RISC-V) esp_aot_register (fuerte, aot_funcs_p4.c)
      * arma los thunks nativos compilados para RISC-V; en el S3 (Xtensa) es weak
-     * no-op. Clear primero: cada RUN recarga módulos en direcciones frescas. */
-    bpvm_aot_clear();
+     * no-op.
+     *
+     * ⚠️ EL `bpvm_aot_clear()` YA NO ESTÁ AQUÍ — ver arriba, antes de la carga.
+     * Desde [V6/N1.4] el `.mod` puede traer su bloque nativo DENTRO, y el
+     * cargador registra sus thunks durante `bpvm_load_entry`. Vaciar el
+     * registro después de cargar borraba justo eso. */
     esp_aot_register(vm);
 
 #if defined(__riscv)
