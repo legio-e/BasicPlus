@@ -179,13 +179,18 @@ public final class MdnInspect {
             if ((thunkOff & 1) != 0) {
                 System.err.println("FAIL: sym[" + i + "] '" + name
                     + "' thunk_offset=" + thunkOff
-                    + " IMPAR — el bit Thumb se añade al cargar, no aquí. MdnPack debería haberlo strippeado.");
+                    + " IMPAR — un offset de thunk siempre es par (en ARM el bit Thumb"
+                    + " se añade al cargar, no aquí; MdnPack debería haberlo strippeado).");
                 return 19;
             }
+            /* El `| 1` es el bit Thumb, y es SÓLO de ARM: en RISC-V la dirección
+             * es el offset tal cual. Decir «Thumb» sobre un blob RISC-V manda a
+             * buscar un bit que no existe. */
+            boolean esArm = (reserved == 0 || reserved == 40);   /* 0 = legacy, se trata como ARM */
             System.out.println("  [" + i + "] '" + name + "' @ offset 0x"
                 + Long.toHexString(thunkOff)
-                + " (Thumb addr en runtime = base+0x"
-                + Long.toHexString(thunkOff) + " | 1)");
+                + (esArm ? " (dir. Thumb en runtime = base+0x" + Long.toHexString(thunkOff) + " | 1)"
+                         : " (dir. en runtime = base+0x" + Long.toHexString(thunkOff) + ")"));
         }
 
         // 7. Hex dump primeros 16 bytes de código + últimos 4 bytes
