@@ -1353,7 +1353,7 @@ de familias no ha ejecutado una sola línea de este código. No es una formalida
 | **RP2350** (Pico 2 / Metro) | ✅ **CERRADA (24-ago)**: N1.1…N1.5b en placa, `NatNew` 7/7 y `NatV7` 4/4 thunks. Ver abajo |
 | **ESP32-P4** (RISC-V) | ✅ **CERRADA (25-ago)**: `NatV7` **4/4 thunks** y `NatNew` **7/7, 1448 code bytes** — el mismo número que produjo MdnPack, cuadra punta a punta. Los siete valores exactos. Ver abajo: costó **tres** fallos que sólo la placa podía enseñar |
 | **ESP32-S3** (Xtensa) | ➖ **NO APLICA**: no hay generador AOT para Xtensa (`NpackReloc.DESTINOS` = ARM + RISC-V), y su `aot_funcs_stub.c` es un no-op explícito. Lo que sí se verificó es el **wire** |
-| **STM32** | ⬜ sin verificar. Mismo `clear()` sin arreglar (`stm32_repl.c`) |
+| **STM32** (Nucleo U575) | ✅ **CERRADA (25-ago)**: `NatV7` 4/4 thunks y `NatNew` los 7 valores — **primer AOT ejecutado en un STM32**. `sumaHasta` en 0 ms a 160 MHz = nativo de verdad. Costó DOS fallos propios de esta placa, ver abajo |
 
 📌 Va por familias y no de golpe por [[focus-un-kit-batch-cross-family]]: a fondo en una
 placa, las demás juntas y más adelante.
@@ -1527,8 +1527,51 @@ fallaba de verdad.
 float-ABI desde V5/H4. El `.mdn` no validaba **nada**. Dos formatos hermanos, uno con
 contrato y otro sin él — y el que no lo tenía es el que se cargó tres veces.
 
-⏭️ **Lo que queda**: el STM32, y entonces retirar el `.mdn` suelto — que el IDE sigue
-subiendo al lado (`PicoExplorer.java:1106`).
+##### ✅ EL STM32 (25-ago, tarde) — y los DOS fallos que costó
+
+**1. La imagen que llegaba a la placa no era la construida.** El build headless regenera el
+`.elf` **pero NO el `.bin`** —trampa ya documentada en `PUBLICAR.md`— y el `.bin` del
+`Debug/` era del **5 de agosto** (más un `bpvm_stm32.bin` de **junio** haciendo de señuelo).
+Dos flasheos en falso: la placa corría una imagen pre-v7 que rechazaba todo `.mod` de hoy
+sin decir palabra. 📌 Lo desatascó **la pregunta de Eduardo** —*«¿por qué el log sólo añade
+una línea cuando en la Pico añade 12?»*— que obligó a mirar el instrumento antes que la
+teoría: el camino de fallo del RUN **no hablaba**. Ahora habla (status + fallo + missing +
+el MAGIC leído), y los `.bin` están regenerados.
+
+**2. La frontera de coma flotante hablaba OTRA ABI.** Primer AOT en un STM32: 4/4 thunks,
+`sumaHasta` a velocidad nativa… y `mediaPor2(3,5) = NaN`. Sólo los `double`. Medido en los
+dos firmwares:
+
+|  | float-abi | los `double` cruzan por |
+|---|---|---|
+| Pico (funcionaba) | `softfp` | r0-r3 |
+| STM32 (NaN) | `hard` | la FPU (d0) |
+
+El `.mdn` ARM es **uno para las dos** y va en softfp: en el STM32, `h_dadd` leía la FPU
+mientras el operando estaba en r0-r1. **En la Pico casaba de chiripa histórica, no por
+contrato.** Arreglo (`da9be3af`): `pcs("aapcs")` —macro `BPVM_AOT_FP_ABI`, sólo `__arm__`—
+en las **28 entradas** de la tabla que cruzan float/double por valor, en el tipo del
+puntero **y** en la definición: si no coinciden, **no compila**, que es la red. Verificado
+en el desensamblado (h_dmod recibe en r0-r3 y hace él mismo los `vmov` a su `fmod`). El
+`.mdn` no cambia ni un byte; la Pico tampoco. Sin subir `MDN_ABI`.
+
+##### 🎯 N1 EN PLACA: CERRADO EN LAS TRES FAMILIAS CON GENERADOR
+
+| familia | evidencia |
+|---|---|
+| RP2350 | 7/7 y 4/4, 102× (`Bench`) |
+| ESP32-P4 | 7/7 (1448 B) y 4/4, RISC-V |
+| STM32 U575 | 4/4 y los 7 valores, 0 ms el bucle |
+
+📐 **El patrón de la semana, cerrado**: seis fallos de integración `.mdn`↔placa en tres
+días —clear(), ABI RISC-V, `.srodata`, nombres de símbolo, float-ABI ARM, y el censo que
+medía mal— y **ninguno dio un error**: colgaban o devolvían un número. Hoy los seis tienen
+guardián o instrumento.
+
+⏭️ **Lo que queda de N1, ya DESBLOQUEADO**: retirar el `.mdn` suelto — las tres familias
+leen la sección del `.mod`, así que el IDE puede dejar de subirlo al lado
+(`PicoExplorer.java:1106`) y los REPL de quitar su barrido. Es un pasito propio, con su
+verificación en placa como todo lo del cordón.
 
 ---
 
