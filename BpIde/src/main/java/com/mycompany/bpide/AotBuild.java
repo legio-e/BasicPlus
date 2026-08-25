@@ -417,19 +417,12 @@ public final class AotBuild {
             MdnPack.Empaquetado emp = MdnPack.empaquetar(packInput, mod);
             MdnPack.PackResult pr = emp.resultado;
 
-            /* ⚠️ EL ORDEN IMPORTA, y me mordió el 23-ago en la primera prueba en
-             * placa: la fusión va ANTES de escribir el `.mdn`.
-             *
-             * El IDE tiene un guardián que NO sube un `.mdn` más viejo que su
-             * `.mod` —existe porque desparejarlos ya nos costó caro—. Si se funde
-             * DESPUÉS, el `.mod` queda más nuevo, el guardián rechaza el `.mdn`,
-             * y como el firmware todavía carga por ahí el resultado es que NO se
-             * ejecuta nada nativo. En la placa se vio como `fib(28) AOT = 8518 ms`,
-             * exactamente igual que interpretado y sin un solo error. El mismo
-             * sintoma mudo que ya tiene su comentario en FrmMain.
-             *
-             * Se invierte hasta que el `.mdn` suelto desaparezca; entonces esto
-             * deja de importar porque no habrá dos ficheros que comparar. */
+            /* [25-ago-2026] AQUEL «se invierte hasta que el .mdn suelto
+             * desaparezca» era por esto, y ese día llegó: las TRES familias
+             * leen ya la sección del propio `.mod`, verificado en placa
+             * (Pico 23-ago, P4 y STM32 25-ago). El `.mdn` suelto de la APP no
+             * se escribe más — no hay dos ficheros que puedan desparejarse,
+             * que era la clase entera de fallo. */
 
             /* (a) El blob, fundido en el `.mod` (sección `native`, v7).
              *     Acumulativo: con varias familias, cada vuelta añade el suyo y
@@ -449,16 +442,33 @@ public final class AotBuild {
                     + " para fundir el nativo; queda el .mdn suelto");
             }
 
-            /* (b) Y el `.mdn` suelto, como siempre. SIGUE HACIENDO FALTA mientras
-             *     el cargador de todas las imágenes no lea la sección: quitarlo
-             *     ahora dejaría el AOT sin efecto en placa. Se retirará cuando la
-             *     otra mitad esté desplegada, y ése será el día en que dejen de
-             *     poder desparejarse. */
-            java.nio.file.Files.write(mdnFile, emp.bytes);
-            salidas.add(mdnFile);
-
-            log.accept("[aot] " + mdnFile.getFileName() + " ✓ (" + pr.symbols
-                + " thunk(s), " + pr.codeBytes + " B nativo)");
+            /* (b) El `.mdn` SUELTO sólo se escribe cuando hace falta de verdad:
+             *
+             *     - `sufijar` (pipeline de PACKS): el `SQLite.mdn.RISCV` y
+             *       hermanos son artefactos con nombre propio, siguen igual.
+             *     - la fusión FALLÓ (no había `.mod`): el aviso de arriba ya
+             *       dijo «queda el .mdn suelto», y es el paracaídas.
+             *
+             *     Para la APP con fusión hecha, NO se escribe — petición de
+             *     Eduardo (25-ago): «si quitas que genere el .mdn me haces un
+             *     favor, lo que tengo que borrar en cada prueba». Y de paso se
+             *     RETIRA el rancio que quedara de antes en outDir: si se queda,
+             *     cada compilación repite el aviso de «más viejo que su .mod»
+             *     para un fichero que ya no pinta nada. */
+            boolean fundido = !sufijar && java.nio.file.Files.exists(modFile);
+            if (fundido) {
+                if (java.nio.file.Files.deleteIfExists(mdnFile)) {
+                    log.accept("[aot] retirado " + mdnFile.getFileName()
+                        + " (el nativo va DENTRO del .mod desde N1.4)");
+                }
+                log.accept("[aot] " + mod + ": " + pr.symbols + " thunk(s), "
+                    + pr.codeBytes + " B nativo — dentro del .mod");
+            } else {
+                java.nio.file.Files.write(mdnFile, emp.bytes);
+                salidas.add(mdnFile);
+                log.accept("[aot] " + mdnFile.getFileName() + " ✓ (" + pr.symbols
+                    + " thunk(s), " + pr.codeBytes + " B nativo)");
+            }
         }
         return salidas;
     }

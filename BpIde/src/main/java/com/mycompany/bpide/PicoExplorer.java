@@ -1124,6 +1124,29 @@ public final class PicoExplorer extends JPanel {
                             "[Explorer] subido AOT " + mdnRemote + " ("
                             + mdnFile.length() + " bytes)"));
                 }
+            } else {
+                /* [25-ago-2026] La app ya NO trae `.mdn` suelto (el nativo va
+                 * DENTRO del `.mod` desde N1.4, y AotBuild dejó de escribirlo).
+                 * Pero el de la TANDA ANTERIOR sigue en el device, y no es
+                 * inofensivo: el barrido del RUN lo registra DESPUÉS del bloque
+                 * embebido, así que un `.mdn` rancio PISARÍA a los thunks
+                 * frescos — la clase de fallo que la fusión vino a matar.
+                 * Se retira aquí, best-effort, como los huérfanos de proyecto. */
+                String mdnRemote = appPath(prefix,
+                        modFile.getName().replaceFirst("[.]mod$", ".mdn"));
+                if (remote.containsKey(mdnRemote)) {
+                    try {
+                        b.del(mdnRemote);
+                        if (outputSink != null) {
+                            final String k = mdnRemote;
+                            SwingUtilities.invokeLater(() -> outputSink.accept(
+                                    "[Explorer] AOT retirado del device: " + k
+                                    + " (el nativo va dentro del .mod)"));
+                        }
+                    } catch (java.io.IOException delErr) {
+                        /* best-effort: si falla el DEL, seguimos */
+                    }
+                }
             }
             // 2b-bis) F2 (H19) — huérfanos: en modo proyecto, borra de prefix/
             //   las claves que el device tiene pero este run ya no despliega
