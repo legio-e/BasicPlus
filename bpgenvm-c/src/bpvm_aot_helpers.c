@@ -129,30 +129,30 @@ static int64_t h_idiv64(bpvm_t* vm, int64_t a, int64_t b) {
  *
  * Ninguno lanza: la division por cero en coma flotante NO es un error, da
  * inf/NaN — igual que OP_DDIV, que tampoco comprueba nada. */
-static double h_dadd(double a, double b) { return a + b; }
-static double h_dsub(double a, double b) { return a - b; }
-static double h_dmul(double a, double b) { return a * b; }
-static double h_ddiv(double a, double b) { return a / b; }
-static double h_dmod(double a, double b) { return fmod(a, b); }
-static double h_dneg(double a)           { return -a; }
+static BPVM_AOT_FP_ABI double h_dadd(double a, double b) { return a + b; }
+static BPVM_AOT_FP_ABI double h_dsub(double a, double b) { return a - b; }
+static BPVM_AOT_FP_ABI double h_dmul(double a, double b) { return a * b; }
+static BPVM_AOT_FP_ABI double h_ddiv(double a, double b) { return a / b; }
+static BPVM_AOT_FP_ABI double h_dmod(double a, double b) { return fmod(a, b); }
+static BPVM_AOT_FP_ABI double h_dneg(double a)           { return -a; }
 
 /* Las seis comparaciones, cada una por su lado. Con NaN NO son negaciones unas
  * de otras —`!(a<b)` no es `a>=b`— asi que un unico `dcmp` de -1/0/1 divergiria
  * del interprete en cuanto apareciera un NaN. */
-static int32_t h_deq (double a, double b) { return a == b ? 1 : 0; }
-static int32_t h_dneq(double a, double b) { return a != b ? 1 : 0; }
-static int32_t h_dlt (double a, double b) { return a <  b ? 1 : 0; }
-static int32_t h_dle (double a, double b) { return a <= b ? 1 : 0; }
-static int32_t h_dgt (double a, double b) { return a >  b ? 1 : 0; }
-static int32_t h_dge (double a, double b) { return a >= b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_deq(double a, double b) { return a == b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_dneq(double a, double b) { return a != b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_dlt(double a, double b) { return a <  b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_dle(double a, double b) { return a <= b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_dgt(double a, double b) { return a >  b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_dge(double a, double b) { return a >= b ? 1 : 0; }
 
 /* Conversiones: los mismos casts que OP_I2D/OP_D2I/OP_L2D/OP_D2L/OP_F2D/OP_D2F. */
-static double  h_i2d(int32_t v) { return (double)  v; }
-static int32_t h_d2i(double  d) { return (int32_t) d; }
-static double  h_l2d(int64_t v) { return (double)  v; }
-static int64_t h_d2l(double  d) { return (int64_t) d; }
-static double  h_f2d(float   f) { return (double)  f; }
-static float   h_d2f(double  d) { return (float)   d; }
+static BPVM_AOT_FP_ABI double  h_i2d(int32_t v) { return (double)  v; }
+static BPVM_AOT_FP_ABI int32_t h_d2i(double  d) { return (int32_t) d; }
+static BPVM_AOT_FP_ABI double  h_l2d(int64_t v) { return (double)  v; }
+static BPVM_AOT_FP_ABI int64_t h_d2l(double  d) { return (int64_t) d; }
+static BPVM_AOT_FP_ABI double  h_f2d(float   f) { return (double)  f; }
+static BPVM_AOT_FP_ABI float   h_d2f(double  d) { return (float)   d; }
 
 static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
     if (b == 0) {
@@ -294,7 +294,7 @@ static void h_print_i32(bpvm_t* vm, int32_t v, int nl) {
         fwrite(buf, 1, (size_t) n, stdout);
     }
 }
-static void h_print_f32(bpvm_t* vm, float v, int nl) {
+static BPVM_AOT_FP_ABI void h_print_f32(bpvm_t* vm, float v, int nl) {
     char buf[40];
     int n = snprintf(buf, sizeof(buf), nl ? "%g\n" : "%g", (double) v);
     if (n > 0 && vm->output_cb) {
@@ -343,20 +343,20 @@ static inline float aoth_bits_to_float(uint32_t bits) {
 static inline uint32_t aoth_float_to_bits(float f) {
     union { float f; uint32_t u; } u; u.f = f;    return u.u;
 }
-static float h_read_f32_be(const uint8_t* p) {
+static BPVM_AOT_FP_ABI float h_read_f32_be(const uint8_t* p) {
     return aoth_bits_to_float((uint32_t) bpvm_read_i32_be(p));
 }
-static void h_write_f32_be(uint8_t* p, float v) {
+static BPVM_AOT_FP_ABI void h_write_f32_be(uint8_t* p, float v) {
     bpvm_write_i32_be(p, (int32_t) aoth_float_to_bits(v));
 }
 /* #426 — los mismos, en 64 bits. El patron de bits de la pila BP es EL MISMO que
  * escribe el interprete (bpvm_write_i64_be sobre double_to_bits), asi que un
  * `double` que cruza el thunk y vuelve es identico bit a bit. */
-static double h_read_f64_be(const uint8_t* p) {
+static BPVM_AOT_FP_ABI double h_read_f64_be(const uint8_t* p) {
     union { double d; uint64_t u; } u; u.u = (uint64_t) bpvm_read_i64_be(p);
     return u.d;
 }
-static void h_write_f64_be(uint8_t* p, double v) {
+static BPVM_AOT_FP_ABI void h_write_f64_be(uint8_t* p, double v) {
     union { double d; uint64_t u; } u; u.d = v;
     bpvm_write_i64_be(p, (int64_t) u.u);
 }
@@ -416,12 +416,12 @@ static void h_array_store_i64(bpvm_t* vm, uint32_t ref, int32_t idx, int64_t v) 
     uint8_t* p = elem8(vm, ref, idx, "long[]: indice fuera de rango o array nulo");
     if (p) bpvm_write_i64_be(p, v);
 }
-static double h_array_load_f64(bpvm_t* vm, uint32_t ref, int32_t idx) {
+static BPVM_AOT_FP_ABI double h_array_load_f64(bpvm_t* vm, uint32_t ref, int32_t idx) {
     uint8_t* p = elem8(vm, ref, idx, "double[]: indice fuera de rango o array nulo");
     if (!p) return 0.0;
     { int64_t bits = bpvm_read_i64_be(p); double d; memcpy(&d, &bits, 8); return d; }
 }
-static void h_array_store_f64(bpvm_t* vm, uint32_t ref, int32_t idx, double v) {
+static BPVM_AOT_FP_ABI void h_array_store_f64(bpvm_t* vm, uint32_t ref, int32_t idx, double v) {
     uint8_t* p = elem8(vm, ref, idx, "double[]: indice fuera de rango o array nulo");
     if (p) { int64_t bits; memcpy(&bits, &v, 8); bpvm_write_i64_be(p, bits); }
 }
@@ -578,10 +578,10 @@ static void h_array_store_ref(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) 
  * Cuatro bytes por casilla, como `integer[]` (el interprete usa NEWARRAY para
  * los dos). Lo que faltaba no era el alocador: era mover el PATRON DE BITS sin
  * que pase por un int32 por el camino. Gemelos de read_f32_be/write_f32_be. */
-static float h_array_load_f32(bpvm_t* vm, uint32_t ref, int32_t idx) {
+static BPVM_AOT_FP_ABI float h_array_load_f32(bpvm_t* vm, uint32_t ref, int32_t idx) {
     return aoth_bits_to_float((uint32_t) h_array_load_i32(vm, ref, idx));
 }
-static void h_array_store_f32(bpvm_t* vm, uint32_t ref, int32_t idx, float v) {
+static BPVM_AOT_FP_ABI void h_array_store_f32(bpvm_t* vm, uint32_t ref, int32_t idx, float v) {
     h_array_store_i32(vm, ref, idx, (int32_t) aoth_float_to_bits(v));
 }
 
@@ -803,6 +803,13 @@ static uint32_t h_int_to_string(bpvm_t* vm, int32_t v) {
     return bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
 }
 
+/* `dpow` NO reimplementa nada: el algoritmo sigue siendo bpvm_dpow, LA MISMA
+ * funcion que ejecuta OP_DPOW. Este envoltorio existe solo por la ABI de la
+ * frontera (BPVM_AOT_FP_ABI): a bpvm_dpow la llama el interprete por dentro
+ * con la ABI del firmware, y cambiarle la convencion por el .mdn seria pagar
+ * el peaje tambien en el camino caliente. El pegamento, en el pegamento. */
+static BPVM_AOT_FP_ABI double h_dpow(double b, double e) { return bpvm_dpow(b, e); }
+
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
 const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
@@ -877,7 +884,7 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .ddiv                = h_ddiv,
     .dmod                = h_dmod,
     .dneg                = h_dneg,
-    .dpow                = bpvm_dpow,
+    .dpow                = h_dpow,
     .deq                 = h_deq,
     .dneq                = h_dneq,
     .dlt                 = h_dlt,

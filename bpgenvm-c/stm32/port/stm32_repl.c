@@ -542,6 +542,17 @@ static void run_module_path(const char* path, long id) {
     if (entry.missing[0]) strncpy(missing, entry.missing, sizeof(missing) - 1);
     if (entry.from_pack)
         log_printf("run: pack '%s' (main=%s)", entry.resolved, entry.main_module);
+    /* [25-ago] EL CAMINO DEL FALLO HABLA. Un RUN que moria en la carga dejaba
+     * UNA linea en el log (el guardian de memoria, al destruir) y nada mas: ni
+     * el status, ni el motivo, ni que fichero se estaba leyendo. Depurar eso
+     * era adivinar — pregunta de Eduardo: "¿por que el log solo añade una linea
+     * cuando en la Pico añade 12?". Esta linea es la respuesta al proximo. */
+    if (st != BPVM_OK) {
+        uint8_t m4[4] = {0};
+        (void) bpvm_fs_read(main_path, m4, 4);   /* el MAGIC que vio el loader */
+        log_printf("run: load '%s' FALLO st=%d fallo='%s' missing='%s' magic=%02X%02X%02X%02X",
+                   path, (int) st, entry.fallo, missing, m4[0], m4[1], m4[2], m4[3]);
+    }
 
     /* H9.5 — overlay AOT: para cada módulo cargado, si el FS tiene su
      * <Modulo>.mdn (PIC Thumb-2 de build_mdn.sh — mismo -mcpu=cortex-m33

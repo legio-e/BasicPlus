@@ -27,6 +27,34 @@
 
 struct bpvm;
 
+/* ─── [25-ago-2026] LA CONVENCION DE LLAMADA DE LA FRONTERA, FIJADA ───────────
+ *
+ * Esta tabla la cruzan DOS binarios compilados por separado: el firmware (que
+ * implementa los helpers) y el `.mdn` (que los llama). En ARM, los `float` y
+ * `double` por VALOR viajan distinto segun `-mfloat-abi`:
+ *
+ *     softfp → registros enteros (r0-r3)     ← la Pico, y el `.mdn` siempre
+ *     hard   → registros de la FPU (s0/d0)   ← el STM32 (CubeIDE)
+ *
+ * El `.mdn` ARM es UNO para las dos familias y va en softfp. En el STM32 (hard)
+ * `h_dadd` esperaba el operando en d0 y el `.mdn` lo dejaba en r0-r1: leia
+ * basura y `(3.0+5.0)/2.0` devolvia NaN — sin un solo error. En la Pico casaba
+ * de chiripa historica, no por contrato.
+ *
+ * `pcs("aapcs")` fija estas entradas a la convencion de REGISTROS ENTEROS en
+ * las dos puntas, sea cual sea el -mfloat-abi del que compila. El atributo va
+ * en el TIPO del puntero (aqui) y en la DEFINICION del helper (el .c) — gcc
+ * exige que coincidan, que es justo lo que queremos: si alguien añade un
+ * helper con coma flotante y olvida el atributo en un lado, NO COMPILA.
+ *
+ * Solo ARM: en RISC-V la ABI se fija por flags (-mabi=ilp32f en las dos
+ * puntas, guardian en MdnPack desde hoy) y en host no hay dos binarios. */
+#if defined(__arm__)
+#  define BPVM_AOT_FP_ABI __attribute__((pcs("aapcs")))
+#else
+#  define BPVM_AOT_FP_ABI
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,7 +91,7 @@ struct aot_helpers_v2 {
 
     /* --- Output sink ----------------------------------------- */
     void     (*print_i32)(struct bpvm* vm, int32_t v, int nl);
-    void     (*print_f32)(struct bpvm* vm, float v, int nl);
+    void     (BPVM_AOT_FP_ABI *print_f32)(struct bpvm* vm, float v, int nl);
     void     (*print_string)(struct bpvm* vm, uint32_t ref, int nl);
     void     (*print_char)(struct bpvm* vm, int32_t ch);
     void     (*print_nl)(struct bpvm* vm);
@@ -74,8 +102,8 @@ struct aot_helpers_v2 {
      * IEEE-754 en slots de 4 bytes big-endian. Los thunks AOT con
      * args/return float usan estas funciones para hacer la conversión
      * sin tener que hacer type-punning manual. */
-    float    (*read_f32_be)(const uint8_t* p);
-    void     (*write_f32_be)(uint8_t* p, float v);
+    float    (BPVM_AOT_FP_ABI *read_f32_be)(const uint8_t* p);
+    void     (BPVM_AOT_FP_ABI *write_f32_be)(uint8_t* p, float v);
 
     /* Acceso a arrays (H3 #167). El handle 'ref' es el offset al heap
      * donde vive el array (primeros 4 bytes = length BE, después los
@@ -271,8 +299,8 @@ struct aot_helpers_v2 {
      * no devuelven basura. */
     int64_t (*array_load_i64) (struct bpvm* vm, uint32_t ref, int32_t idx);
     void    (*array_store_i64)(struct bpvm* vm, uint32_t ref, int32_t idx, int64_t v);
-    double  (*array_load_f64) (struct bpvm* vm, uint32_t ref, int32_t idx);
-    void    (*array_store_f64)(struct bpvm* vm, uint32_t ref, int32_t idx, double v);
+    double  (BPVM_AOT_FP_ABI *array_load_f64) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (BPVM_AOT_FP_ABI *array_store_f64)(struct bpvm* vm, uint32_t ref, int32_t idx, double v);
 
     /* #381 — I/O de 8 BYTES en la pila BP: el marshalling de `long`.
      *
@@ -347,38 +375,38 @@ struct aot_helpers_v2 {
      * algoritmo propio (cuadrados para exponente entero, exp/ln si no), copiada a
      * su vez byte a byte de VirtualMachine.java. Dos copias de eso se separan
      * solas; una compartida, no. */
-    double  (*dadd)(double a, double b);
-    double  (*dsub)(double a, double b);
-    double  (*dmul)(double a, double b);
-    double  (*ddiv)(double a, double b);
-    double  (*dmod)(double a, double b);        /* fmod, como OP_DMOD */
-    double  (*dneg)(double a);
-    double  (*dpow)(double base, double e);     /* == bpvm_dpow, compartida */
+    double  (BPVM_AOT_FP_ABI *dadd)(double a, double b);
+    double  (BPVM_AOT_FP_ABI *dsub)(double a, double b);
+    double  (BPVM_AOT_FP_ABI *dmul)(double a, double b);
+    double  (BPVM_AOT_FP_ABI *ddiv)(double a, double b);
+    double  (BPVM_AOT_FP_ABI *dmod)(double a, double b);        /* fmod, como OP_DMOD */
+    double  (BPVM_AOT_FP_ABI *dneg)(double a);
+    double  (BPVM_AOT_FP_ABI *dpow)(double base, double e);     /* == bpvm_dpow, compartida */
 
     /* Las seis comparaciones, cada una por separado: con NaN NO son negaciones
      * unas de otras (`!(a<b)` no es `a>=b`), asi que un unico `dcmp` de -1/0/1
      * daria respuestas distintas al interprete en cuanto apareciera un NaN. */
-    int32_t (*deq)(double a, double b);
-    int32_t (*dneq)(double a, double b);
-    int32_t (*dlt)(double a, double b);
-    int32_t (*dle)(double a, double b);
-    int32_t (*dgt)(double a, double b);
-    int32_t (*dge)(double a, double b);
+    int32_t (BPVM_AOT_FP_ABI *deq)(double a, double b);
+    int32_t (BPVM_AOT_FP_ABI *dneq)(double a, double b);
+    int32_t (BPVM_AOT_FP_ABI *dlt)(double a, double b);
+    int32_t (BPVM_AOT_FP_ABI *dle)(double a, double b);
+    int32_t (BPVM_AOT_FP_ABI *dgt)(double a, double b);
+    int32_t (BPVM_AOT_FP_ABI *dge)(double a, double b);
 
     /* Conversiones — los mismos casts que OP_I2D/OP_D2I/OP_L2D/OP_D2L/OP_F2D/OP_D2F. */
-    double  (*i2d)(int32_t v);
-    int32_t (*d2i)(double d);
-    double  (*l2d)(int64_t v);
-    int64_t (*d2l)(double d);
-    double  (*f2d)(float f);
-    float   (*d2f)(double d);
+    double  (BPVM_AOT_FP_ABI *i2d)(int32_t v);
+    int32_t (BPVM_AOT_FP_ABI *d2i)(double d);
+    double  (BPVM_AOT_FP_ABI *l2d)(int64_t v);
+    int64_t (BPVM_AOT_FP_ABI *d2l)(double d);
+    double  (BPVM_AOT_FP_ABI *f2d)(float f);
+    float   (BPVM_AOT_FP_ABI *d2f)(double d);
 
     /* #426 — la FRONTERA del thunk para `double`: la pila BP guarda el patron de
      * bits en 8 bytes big-endian (igual que un `long`), y el cuerpo AOT quiere un
      * `double`. Gemelos exactos de read_f32_be/write_f32_be, que ya hacian esto
      * mismo para `float`. */
-    double  (*read_f64_be)(const uint8_t* p);
-    void    (*write_f64_be)(uint8_t* p, double v);
+    double  (BPVM_AOT_FP_ABI *read_f64_be)(const uint8_t* p);
+    void    (BPVM_AOT_FP_ABI *write_f64_be)(uint8_t* p, double v);
 
     /* --- [V6/N1.5]: CREAR ARRAYS DESDE UN NATIVE ----------------------
      *
@@ -425,8 +453,8 @@ struct aot_helpers_v2 {
     int32_t (*newarray_ref)   (struct bpvm* vm, int32_t size);
     int32_t (*array_load_ref) (struct bpvm* vm, uint32_t ref, int32_t idx);
     void    (*array_store_ref)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
-    float   (*array_load_f32) (struct bpvm* vm, uint32_t ref, int32_t idx);
-    void    (*array_store_f32)(struct bpvm* vm, uint32_t ref, int32_t idx, float v);
+    float   (BPVM_AOT_FP_ABI *array_load_f32) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (BPVM_AOT_FP_ABI *array_store_f32)(struct bpvm* vm, uint32_t ref, int32_t idx, float v);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.
