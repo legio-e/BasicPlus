@@ -27,29 +27,37 @@
 
 ## Última sesión
 
-## ⏭️ PRÓXIMO PASO, decidido por Eduardo (25-ago): **LA PARIDAD**
+### 25-ago (tarde) — LA PARIDAD: era el ARNÉS, no la stdlib — 38/38 ✅
 
-Antes que el STM32. El arnés lleva **tres días en rojo** —35 PASS / 3 FAIL: `CastExt`,
-`ListaBp`, `ListaHer`— y nos hemos acostumbrado a decir «los tres preexistentes» y seguir.
-Es un semáforo en rojo normalizado, que es la misma forma de fallo que hemos estado cazando
-toda la sesión: **el arnés es el instrumento que respalda todo lo demás**, y hoy se ha
-dicho «paridad OK» tres veces con una nota al pie.
+**El diagnóstico escrito era falso, y era mío.** Decía «desfase de slots por stdlib rancia;
+regenerarla es decisión de Eduardo». Medido: la stdlib está bien, el compilador está bien y
+el gate de #284 hacía su trabajo. Lo que pasaba: el arnés compilaba los 3 samples desde
+`bpgenvm-c/samples/`, donde un **`Core.mod` HERMANO del 18-ago** —anterior a que
+`Comparable` ganara las conversiones— tapaba a la stdlib (el resolutor mira junto al fuente
+antes que en la stdlib). El módulo pedía `Integer#value#2`; luego el arnés copiaba el Core
+ACTUAL (`#7`) al lado y ejecutaba. **Compilaba contra una era y ejecutaba contra otra.** El
+ERROR DE LINK era la única parte del sistema diciendo la verdad.
 
-**Paso 1: RECONFIRMAR el diagnóstico, no darlo por bueno.** Lo que hay escrito es mío y del
-23-ago: *`Core.mod` exporta `Integer#value#7` y el compilador pide `#2`* — desfase de slots
-por stdlib rancia. Después de esta sesión, eso se vuelve a medir antes de tocar nada.
+**Tres arreglos en el arnés** (`41477504`), y los dos últimos los destapó el primero al
+fallar:
+1. **Hermético**: la stdlib fresca al outDir ANTES de compilar (outDir gana al hermano).
+2. **El raíz por nombre de módulo**: con la stdlib en WORK, «el primer .mod que no sea
+   Core» era `Adc.mod` — una librería sin main que las dos VMs fallaban IGUAL: **38/38
+   verde sin ejecutar ni un sample**. El falso-PAR de manual.
+3. **Cero PASS ya no es verde**: otro fallo intermedio dio 0 PASS / 38 SKIP y el resumen
+   decía VERDE.
 
-**Por qué ahora y no después**: no necesita placa para diagnosticarlo, y si acaba pidiendo
-regenerar la stdlib y reflashear, **hoy es el día barato** — las imágenes están recién
-reconstruidas (Pico, P4, S3) y las placas a mano. Dentro de dos semanas eso vuelve a costar
-una tarde entera.
+Verificado con el ARTEFACTO: `CastExt` pide `#7` y su salida es la del sample entero.
+**38 PASS / 0 FAIL / 0 SKIP** — primera vez en verde real desde el 22-ago.
 
-**El STM32 va después**, y no por pereza: es la familia más cara. Su wire es una CUARTA
-forma —sin builders, con el JSON armado a mano en `stm32_repl.c`— y el AOT allí no ha
-existido nunca (tiene carga de `.mdn` desde H9.5, pero ningún `aot_funcs`). Hoy se ha visto
-que «la última familia» puede esconder tres bugs; mejor entrar con el arnés en verde.
+**Y la mina de fondo, refrescada pero no resuelta**: 11 módulos de stdlib HERMANOS en
+`bpgenvm-c/samples/` (gitignorados, seis eran de MAYO). La VM-C de host los necesita en
+ejecución; nadie los refresca. Copiados de `bpstdlib/` a mano; el día que la stdlib cambie
+una vtable volverán a mentir. El mecanismo de los tests (`stdlibdep` del Makefile) existe —
+los runs manuales no pasan por él.
 
 ---
+
 
 ### 25-ago — la P4: AOT y wire, y TRES fallos que sólo la placa podía enseñar
 
