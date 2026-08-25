@@ -34,8 +34,9 @@
 generador** — su `aot_funcs_stub.c` es un no-op explícito. Así que el ESP32 que toca es
 **la P4**.
 
-**Resultado**: `NatV7` 4/4 thunks y `NatNew` los siete valores exactos, ejecutando código
-RISC-V compilado. Y `U2.1` paso 2 (el S3 y la P4 al protocolo común del wire) verificado de
+**Resultado**: `NatV7` **4/4 thunks** y `NatNew` **7/7, 1448 code bytes** —el mismo número
+que produjo MdnPack, o sea que cuadra punta a punta— con los siete valores exactos,
+ejecutando código RISC-V compilado. Y `U2.1` paso 2 (el S3 y la P4 al protocolo común del wire) verificado de
 paso — `INFO` y `ls` se construyen con los 11 builders que se movieron.
 
 **Pero costó tres fallos, y ninguno era del AOT.** Los tres eran lo mismo: **el `.mdn`

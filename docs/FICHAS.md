@@ -1327,7 +1327,7 @@ de familias no ha ejecutado una sola línea de este código. No es una formalida
 | familia | estado |
 |---|---|
 | **RP2350** (Pico 2 / Metro) | ✅ **CERRADA (24-ago)**: N1.1…N1.5b en placa, `NatNew` 7/7 y `NatV7` 4/4 thunks. Ver abajo |
-| **ESP32-P4** (RISC-V) | ✅ **CERRADA (25-ago)**: `NatV7` 4/4 y `NatNew` los 7 valores. Ver abajo — costó **tres** fallos que sólo la placa podía enseñar |
+| **ESP32-P4** (RISC-V) | ✅ **CERRADA (25-ago)**: `NatV7` **4/4 thunks** y `NatNew` **7/7, 1448 code bytes** — el mismo número que produjo MdnPack, cuadra punta a punta. Los siete valores exactos. Ver abajo: costó **tres** fallos que sólo la placa podía enseñar |
 | **ESP32-S3** (Xtensa) | ➖ **NO APLICA**: no hay generador AOT para Xtensa (`NpackReloc.DESTINOS` = ARM + RISC-V), y su `aot_funcs_stub.c` es un no-op explícito. Lo que sí se verificó es el **wire** |
 | **STM32** | ⬜ sin verificar. Mismo `clear()` sin arreglar (`stm32_repl.c`) |
 
