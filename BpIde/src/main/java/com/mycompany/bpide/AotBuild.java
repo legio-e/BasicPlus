@@ -54,9 +54,11 @@ public final class AotBuild {
         "-fpic", "-fno-jump-tables", "-Os",
     };
 
-    /** Flags de compilación del target "riscv" = ESP32-P4 (RV32IMAFC). NO fijamos
-     *  -march/-mabi: el toolchain esp trae el del P4 por DEFECTO y el firmware
-     *  tampoco los pasa → casan por construcción. A diferencia de ARM, el .text
+    /** Flags de compilación del target "riscv" = ESP32-P4 (RV32IMAFC).
+     *
+     *  ⚠️ Este comentario decía que NO hacía falta fijar `-march`/`-mabi` porque
+     *  «casan por construcción». Era falso y costó un cuelgue — ver la nota larga
+     *  sobre {@link #RISCV_P4_FLAGS}. A diferencia de ARM, el .text
      *  RISC-V NO sale autocontenido (la llamada recursiva, refs PC-relativas dejan
      *  relocalizaciones que MdnPack no resuelve) → hace falta el paso de enlace
      *  (RISCV_LINK_FLAGS). -mno-relax evita las relocs de relajación.
@@ -76,7 +78,34 @@ public final class AotBuild {
      *
      *  Medido desensamblando las dos familias: 3 refs absolutas → 0. Y hace
      *  falta el -mno-relax de arriba, que la relajación deshace los auipc. */
+    /* ⚠️ `-march`/`-mabi` EXPLICITOS, y son obligatorios — 25-ago-2026.
+     *
+     * Aqui ponia que no hacia falta fijarlos: *«el toolchain esp trae el del P4
+     * por DEFECTO y el firmware tampoco los pasa -> casan por construccion»*.
+     * MEDIDO, es falso, y por los dos lados:
+     *
+     *              arch                         ABI
+     *   firmware   rv32i m a f c  (SIN `d`)     single-float (ilp32f)
+     *   .mdn       rv32i m a f D c  (CON `d`)   soft-float   (ilp32)
+     *
+     * El defecto del toolchain incluye la extension `d` — coma flotante de
+     * DOBLE en hardware, que el ESP32-P4 NO TIENE. Con doubles vivos gcc los
+     * derrama a la pila con `fld`/`fsd`, y eso en el P4 es instruccion ilegal:
+     * la placa se CUELGA. Se vio con `NatNew.mediaDobles` (un `double[]`), y el
+     * desensamblado lo dejo exacto: 6 instrucciones de doble, TODAS en el thunk
+     * de esa funcion. Lo demas del sample habia pasado.
+     *
+     * Y el ABI tambien difiere: soft-float pasa los `float` en registros
+     * enteros y single-float en registros de coma flotante. Los `double` van en
+     * pares de enteros con los dos, y por eso `mediaPor2` (V6/NatV7) funciono y
+     * escondio el problema: el primer sintoma necesito un `float`/`double`
+     * DERRAMADO, no solo pasado.
+     *
+     * 📌 No se copia la cadena entera del firmware: lleva extensiones propias de
+     * Espressif (`xesploop`, `xespv`) que el `.mdn` no necesita. Lo que tiene que
+     * casar es lo que decide la ABI y el repertorio: `imafc` + `ilp32f`. */
     private static final String[] RISCV_P4_FLAGS = {
+        "-march=rv32imafc_zicsr_zifencei", "-mabi=ilp32f",
         "-fno-pic", "-mcmodel=medany", "-mno-relax", "-fno-jump-tables", "-Os",
     };
 

@@ -96,6 +96,7 @@ public final class Elf32 {
      * filtrada de siempre tiene `symbols()`. */
     private final List<Symbol> symsAll = new ArrayList<>();
     private int machine;   /* e_machine (offset 18): 40=EM_ARM, 243=EM_RISCV */
+    private int flags;     /* e_flags   (offset 36): en RISC-V, la ABI de coma flotante */
 
     private Elf32(byte[] data) { this.data = data; }
 
@@ -107,6 +108,34 @@ public final class Elf32 {
 
     /** `e_machine`: 40 = EM_ARM, 243 = EM_RISCV. Es el tag de arquitectura del .mdn. */
     public int machine() { return machine; }
+
+    /** `e_flags` (offset 36). En RISC-V dice la ABI de coma flotante, y eso TIENE
+     *  que casar con el firmware: 0x0 soft, 0x2 single, 0x4 double (bits 1-2), más
+     *  0x1 = RVC. Un `.mdn` soft-float contra un firmware single-float pasa los
+     *  `float` por registros distintos. Se lee desde el 25-ago-2026, cuando un
+     *  desajuste asi colgo la P4. */
+    public int flags() { return flags; }
+
+    /** El texto de `Tag_RISCV_arch` de la sección `.riscv.attributes`, o "" si no
+     *  está. Es donde vive el repertorio REAL (`rv32i…m…a…f…d…c`), que `e_flags`
+     *  no cuenta — y la extensión `d` de más fue justo la que colgó la placa. */
+    public String riscvArch() {
+        int idx = findSectionIndex(".riscv.attributes");
+        if (idx < 0) return "";
+        Section sec = section(idx);
+        /* Formato TLV anidado; aqui no hace falta parsearlo: la cadena de arch va
+         * en claro y empieza por "rv32"/"rv64". Buscarla es suficiente para
+         * PREGUNTARLE si lleva `d`, que es lo unico que se quiere saber. */
+        for (int i = sec.offset; i + 4 < sec.offset + sec.size && i + 4 < data.length; i++) {
+            if (data[i] == 'r' && data[i+1] == 'v'
+                    && (data[i+2] == '3' || data[i+2] == '6')) {
+                int fin = i;
+                while (fin < data.length && data[fin] != 0) fin++;
+                return new String(data, i, fin - i, java.nio.charset.StandardCharsets.US_ASCII);
+            }
+        }
+        return "";
+    }
 
     private int u32(int off) {
         return ByteBuffer.wrap(data, off, 4)
@@ -140,6 +169,7 @@ public final class Elf32 {
             throw new RuntimeException("solo ELF32 soportado");
         }
         machine = u16(18);   /* e_machine: 40=EM_ARM, 243=EM_RISCV (H4 arch tag) */
+        flags   = u32(36);   /* e_flags: RISC-V float ABI (25-ago: un desajuste colgo la P4) */
         int shoff = u32(32);
         int shentsize = u16(46);
         int shnum = u16(48);

@@ -193,6 +193,44 @@ public final class MdnPack {
             throw new PackException(sb.toString());
         }
 
+        /* ── [25-ago-2026] EL `.mdn` TIENE QUE HABLAR LA MISMA ABI QUE EL FIRMWARE ──
+         *
+         * No lo comprobaba nadie, y el dia que dejo de casar la placa NO dio un
+         * error: se COLGO. `AotBuild` no fijaba `-march`/`-mabi` para RISC-V
+         * —decia que «casan por construccion»— y el defecto del toolchain trae la
+         * extension `d` (coma flotante de DOBLE en hardware) y ABI soft-float,
+         * mientras el ESP32-P4 va sin `d` y con single-float. Con doubles vivos,
+         * gcc los derrama con `fld`/`fsd`: instruccion ilegal en el P4.
+         *
+         * Se caza aqui porque aqui esta el `.o`, que es quien lo sabe. Dos
+         * preguntas, las dos baratas:
+         *   1. la ABI de coma flotante de `e_flags` (bits 1-2);
+         *   2. si el repertorio declarado lleva `d`.
+         *
+         * ⚠️ Hoy RISC-V solo significa ESP32-P4. El dia que haya otra placa
+         * RISC-V con otra ABI, esto tiene que preguntarselo a la familia en vez
+         * de darlo por sabido — pero un valor fijo y comprobado es infinitamente
+         * mejor que ninguna comprobacion. */
+        if (f.machine() == 243) {   /* EM_RISCV */
+            int fabi = f.flags() & 0x6;
+            if (fabi != 0x2) {      /* 0=soft, 2=single, 4=double */
+                String cual = (fabi == 0) ? "soft-float" : (fabi == 4 ? "double-float" : "?");
+                throw new PackException(
+                    "el .o es " + cual + " y el ESP32-P4 va con SINGLE-FLOAT (ilp32f).\n"
+                    + "  Los `float` viajarian por registros distintos que en el firmware.\n"
+                    + "  Compila con:  -march=rv32imafc_zicsr_zifencei -mabi=ilp32f");
+            }
+            String arch = f.riscvArch();
+            if (arch.matches(".*_d[0-9].*") || arch.matches(".*[0-9]d[0-9].*")) {
+                throw new PackException(
+                    "el .o declara la extension `d` (coma flotante de DOBLE en hardware)\n"
+                    + "  y el ESP32-P4 NO la tiene: gcc derrama los double con fld/fsd y la\n"
+                    + "  placa se CUELGA (instruccion ilegal), sin mensaje.\n"
+                    + "  arch del .o: " + arch + "\n"
+                    + "  Compila con:  -march=rv32imafc_zicsr_zifencei -mabi=ilp32f");
+            }
+        }
+
         // Símbolos exportados: nombre que empieza por "thunk_<Module>_". En Thumb-2
         // el bit 0 del valor indica "modo Thumb" (no es parte del offset): lo
         // limpiamos; el loader del firmware re-añade `| 1u` al construir la dirección.
