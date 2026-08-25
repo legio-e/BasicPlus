@@ -11,6 +11,7 @@ idf_component_register(
         "gpio_esp32.c"
         "esp32_mods.c"
         "../../src/json_min.c"               # V6/U1.1: parser JSON comun (era una copia local)
+        "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
         "board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
