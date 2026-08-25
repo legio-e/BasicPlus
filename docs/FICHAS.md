@@ -1568,10 +1568,21 @@ días —clear(), ABI RISC-V, `.srodata`, nombres de símbolo, float-ABI ARM, y 
 medía mal— y **ninguno dio un error**: colgaban o devolvían un número. Hoy los seis tienen
 guardián o instrumento.
 
-⏭️ **Lo que queda de N1, ya DESBLOQUEADO**: retirar el `.mdn` suelto — las tres familias
-leen la sección del `.mod`, así que el IDE puede dejar de subirlo al lado
-(`PicoExplorer.java:1106`) y los REPL de quitar su barrido. Es un pasito propio, con su
-verificación en placa como todo lo del cordón.
+✅ **Y el `.mdn` suelto, RETIRADO (25-ago, `761fd6cc`) — verificado por Eduardo en placa.**
+Petición suya: *«si quitas que genere el .mdn me haces un favor, lo que tengo que borrar en
+cada prueba»*. Tres piezas: AotBuild no lo escribe (y retira el rancio del outDir), el
+Explorer lo retira del DEVICE al subir — que no era cosmética: el barrido del RUN registra
+el suelto DESPUÉS del embebido, así que un rancio en `/app` habría PISADO a los thunks
+frescos —, y siguen a propósito los de doble extensión del pipeline de packs y el barrido
+de los REPL (camino de los `.mdn` de deps versionados, como `SQLite.mdn`).
+
+##### 🏁 N1, EL ALCANCE DE V6: CERRADO (25-ago)
+
+Formato v7 con sección native · cobertura 28/30 nodos (medida, no recordada) · arrays de
+todos los anchos y refs, objetos, `double` · verificado en las TRES familias con generador ·
+el `.mdn` suelto retirado · seis guardianes/instrumentos donde no había ninguno. **Lo que
+queda es de V7 a propósito**: tuplas y `try`/`catch` en native (arriba), y la nota de que la
+paridad no cubre el camino AOT (mitigada por `make test-aotnew` en host).
 
 ---
 

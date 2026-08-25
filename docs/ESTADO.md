@@ -27,6 +27,30 @@
 
 ## Última sesión
 
+### 25-ago (noche) — el STM32 cierra N1, y el `.mdn` suelto se retira
+
+**El STM32 ejecuta AOT** — primero de su familia: `NatV7` 4/4 (con `sumaHasta` en 0 ms a
+160 MHz) y `NatNew` los siete valores. Costó dos fallos: el **`.bin` del 5-ago** (el
+headless regenera el `.elf` pero NO el `.bin` — dos flasheos en falso, y lo desatascó la
+pregunta de Eduardo sobre el log, que llevó a dar voz al camino de fallo del RUN), y la
+**frontera de coma flotante** hablando dos ABI (Pico softfp / STM32 hard, con el `.mdn`
+softfp para las dos: NaN sin un error; en la Pico casaba de chiripa). Arreglo: la
+convención fijada en las 28 entradas FP de la tabla (`pcs("aapcs")`, en el tipo Y la
+definición — si no coinciden no compila). Verificado en el desensamblado y en placa.
+
+**Y el `.mdn` suelto, RETIRADO** (petición de Eduardo, verificado por él en placa): la app
+ya no lo genera, el Explorer limpia el rancio del device — que además habría PISADO a los
+thunks embebidos —, y quedan a propósito los de packs y el barrido para deps versionadas.
+
+**🏁 Con esto N1 (alcance V6) queda CERRADO**: formato v7, 28/30 nodos, tres familias en
+placa, seis guardianes nuevos. Tuplas y try/catch → V7, como decidió Eduardo.
+
+**⏭️ El siguiente frente natural es U3 (el REPL)** — el trabajo grande de la versión — o
+las bolsas L1/E1 para sesiones cortas. U2 tiene pendientes el paso 3 (STM32, cuarta forma)
+y `bpvm_comm.h`.
+
+---
+
 ### 25-ago (tarde) — LA PARIDAD: era el ARNÉS, no la stdlib — 38/38 ✅
 
 **El diagnóstico escrito era falso, y era mío.** Decía «desfase de slots por stdlib rancia;
