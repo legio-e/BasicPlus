@@ -1,5 +1,12 @@
 /*
- * stm32_wire.c — framing wire v1 sobre el USART del VCP (bare-metal).
+ * stm32_wire.c — EL CABLE del wire v1 en el STM32: USART del VCP, bare-metal.
+ *
+ * [V6/U2, 25-ago-2026] Este fichero implementa las CUATRO funciones de cable
+ * del contrato (`bpvm_wire_v1.h`): recv_line, recv_bulk, send_line, send_bulk.
+ * Los builders JSON y send_cstr/send_error/send_reply_empty/send_fatal viven en
+ * `src/wire_v1_proto.c`, comunes a las cuatro familias. Aquí quedan además los
+ * extras propios del USART (getchar, ring de RX, write) y el wrapper de FATAL
+ * que enciende el LED de error de la placa.
  *
  * E/S por el hcom_uart[COM1] del BSP (ya inicializado por BSP_COM_Init en
  * main.c). RX por polling directo del registro (sin ISR ni NVIC → cero
@@ -7,7 +14,8 @@
  *
  * Nota de robustez: RX por lectura DIRECTA del registro (flag RXNE + RDR),
  * NO con HAL_UART_Receive() — su overhead (lock + máquina de estados + tick
- * por byte) a 4 MHz no seguía 115200 baud → overrun, se perdía el '\n' y el
+ * por byte) a 4 MHz no seguía 115200 baud → overrun, se perdía el '
+' y el
  * REPL se colgaba en recv_line. Limpiamos ORE por si un burst nos adelanta.
  */
 #include "stm32_wire.h"
@@ -90,7 +98,7 @@ void stm32_wire_write(const char* buf, size_t len) {
     HAL_UART_Transmit(wire_uart(), (uint8_t*) buf, (uint16_t) len, HAL_MAX_DELAY);
 }
 
-int stm32_wire_recv_line(int first_char, char* buf, size_t max) {
+int wire_v1_recv_line(int first_char, char* buf, size_t max) {
     size_t n = 0;
     if (first_char >= 0 && first_char != '\n') {
         if (n < max) buf[n++] = (char) first_char;
@@ -113,32 +121,23 @@ int stm32_wire_recv_line(int first_char, char* buf, size_t max) {
     }
 }
 
-void stm32_wire_send_line(const char* data, size_t len) {
+void wire_v1_send_line(const char* data, size_t len) {
     stm32_wire_write(data, len);
     stm32_wire_write("\n", 1);
 }
 
-void stm32_wire_send_cstr(const char* s) {
-    stm32_wire_send_line(s, strlen(s));
-}
-
-void stm32_wire_send_error(long id, const char* code, const char* message) {
-    char buf[256];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"%s\",\"message\":\"%s\"}",
-        id, code, message);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
-}
+/* [V6/U2] send_cstr y send_error se fueron al comun (`wire_v1_proto.c`).
+ * El de aqui metia `message` SIN ESCAPAR: una comilla en un mensaje de error
+ * rompia el framing. El comun escapa siempre (field_string → put_escaped). */
 
 void stm32_wire_send_fatal(const char* code, const char* message) {
-    BOARD_LED_ERR_ON();    /* señal de error: LED de error encendido hasta el reset */
-    char buf[256];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"FATAL\",\"code\":\"%s\",\"message\":\"%s\"}", code, message);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    BOARD_LED_ERR_ON();    /* señal de error: LED encendido hasta el reset — el
+                            * matiz de esta placa; el JSON lo arma el comun */
+    wire_v1_send_fatal(code, message);
 }
 
-int stm32_wire_recv_bulk(uint8_t* buf, size_t n) {
+int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
+    if (n > buf_max) return -1;   /* el contrato: nunca desbordar al llamante */
     size_t got = 0;
     uint32_t last = HAL_GetTick();
     while (got < n) {
@@ -150,10 +149,10 @@ int stm32_wire_recv_bulk(uint8_t* buf, size_t n) {
         last = HAL_GetTick();
         buf[got++] = (uint8_t) c;
     }
-    return 0;
+    return (int) n;
 }
 
-void stm32_wire_send_bulk(const uint8_t* data, size_t n) {
+void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     size_t off = 0;
     while (off < n) {
         size_t chunk = n - off;

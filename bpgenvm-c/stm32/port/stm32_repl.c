@@ -88,7 +88,7 @@ static long    s_run_session = 0;             /* sesión activa (para el sink) *
 static void reply_empty(const char* type, long id) {
     char buf[96];
     int n = snprintf(buf, sizeof(buf), "{\"type\":\"%s\",\"id\":%ld}", type, id);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 /* ---- META ---- */
@@ -100,7 +100,7 @@ static void handle_hello(long id) {
         "\"serverName\":\"%s\",\"serverBuild\":\"%s %s\","
         "\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\",\"PACKS\"]}",
         id, SERVER_NAME, __DATE__, __TIME__);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 static void handle_info(long id) {
@@ -161,7 +161,7 @@ static void handle_info(long id) {
         (unsigned long) (sizeof(s_vm_mem) - bpvm_stack_region_bytes(sizeof(s_vm_mem))),
         (unsigned long) bpvm_stack_region_bytes(sizeof(s_vm_mem)),
         (unsigned) bpvm_mdn_host_arch());
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 /* ---- FILES ---- */
@@ -184,7 +184,7 @@ static void handle_list(long id, json_obj_t* obj) {
     char head[64];
     int hn = snprintf(head, sizeof(head),
                       "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
-    stm32_wire_send_bulk((const uint8_t*) head, (size_t) hn);
+    wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
     char ent[192];
     int first = 1;
     int cnt = fs_count();
@@ -213,7 +213,7 @@ static void handle_list(long id, json_obj_t* obj) {
             log_printf("fs: LIST se salta '%s' (no cabe en %u B)", rel, (unsigned) sizeof(ent));
             continue;
         }
-        stm32_wire_send_bulk((const uint8_t*) ent, (size_t) w);
+        wire_v1_send_bulk((const uint8_t*) ent, (size_t) w);
         first = 0;
     }
     /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
@@ -222,24 +222,24 @@ static void handle_list(long id, json_obj_t* obj) {
      * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
     { char cola[40];
       int cn = snprintf(cola, sizeof(cola), "],\"omitted\":%d}", fs_list_omitidas());
-      stm32_wire_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
+      wire_v1_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
 }
 
 static void handle_stat(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
     /* H11 — el STAT sólo quiere el TAMAÑO. */
     uint32_t size = 0;
     if (bpvm_fs_stat(path, &size) != 0) {
-        stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return;
+        wire_v1_send_error(id, "NOT_FOUND", "no existe"); return;
     }
     char buf[128];
     int n = snprintf(buf, sizeof(buf),
         "{\"type\":\"STAT_REPLY\",\"id\":%ld,\"size\":%lu,\"isDir\":false,\"mtime\":0}",
         id, (unsigned long) size);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 static void handle_df(long id) {
@@ -250,31 +250,31 @@ static void handle_df(long id) {
         "\"freeBytes\":%lu,\"fileCount\":%d}",
         id, (unsigned long) total, (unsigned long) used,
         (unsigned long) (total - used), fs_count());
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 static void handle_get(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
     /* H11 — el GET no carga el fichero: sólo su TAMAÑO para la cabecera, y
      * luego lo escupe POR TROZOS de 256 B (el mismo trozo interno de littlefs). */
     uint32_t size = 0;
     if (bpvm_fs_stat(path, &size) != 0) {
-        stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return;
+        wire_v1_send_error(id, "NOT_FOUND", "no existe"); return;
     }
     char buf[96];
     int n = snprintf(buf, sizeof(buf),
         "{\"type\":\"GET_REPLY\",\"id\":%ld,\"bulk\":%lu}", id, (unsigned long) size);
     if (n > 0) {
-        stm32_wire_send_line(buf, (size_t) n);
+        wire_v1_send_line(buf, (size_t) n);
         uint32_t sent = 0;
         while (sent < size) {
             uint8_t chunk[256];
             long r = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
             if (r <= 0) break;
-            stm32_wire_send_bulk(chunk, (uint32_t) r);
+            wire_v1_send_bulk(chunk, (uint32_t) r);
             sent += (uint32_t) r;
         }
     }
@@ -283,9 +283,9 @@ static void handle_get(long id, json_obj_t* obj) {
 static void handle_del(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
-    if (fs_del(path) != 0) { stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return; }
+    if (fs_del(path) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
     if (strncmp(path, "/lib/", 5) != 0) fs_save();   /* /lib se re-provee al boot */
     reply_empty("DEL_REPLY", id);
 }
@@ -293,29 +293,29 @@ static void handle_del(long id, json_obj_t* obj) {
 static void handle_put(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
     long bulk = json_get_long(obj, "bulk", -1);
-    if (bulk < 0) { stm32_wire_send_error(id, "INVALID_PARAM", "missing bulk"); return; }
+    if (bulk < 0) { wire_v1_send_error(id, "INVALID_PARAM", "missing bulk"); return; }
 
     /* CRÍTICO: consumir SIEMPRE los `bulk` bytes para no desincronizar el wire. */
     if ((size_t) bulk > sizeof(s_put_buf)) {
         size_t rem = (size_t) bulk;
         while (rem > 0) {
             size_t chunk = rem < sizeof(s_put_buf) ? rem : sizeof(s_put_buf);
-            if (stm32_wire_recv_bulk(s_put_buf, chunk) != 0) {
+            if (wire_v1_recv_bulk(s_put_buf, chunk, sizeof s_put_buf) < 0) {
                 stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
             }
             rem -= chunk;
         }
-        stm32_wire_send_error(id, "NO_SPACE", "fichero demasiado grande");
+        wire_v1_send_error(id, "NO_SPACE", "fichero demasiado grande");
         return;
     }
-    if (stm32_wire_recv_bulk(s_put_buf, (size_t) bulk) != 0) {
+    if (wire_v1_recv_bulk(s_put_buf, (size_t) bulk, sizeof s_put_buf) < 0) {
         stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
     }
     if (fs_put(path, s_put_buf, (uint32_t) bulk) != 0) {
-        stm32_wire_send_error(id, "NO_SPACE", "FS lleno"); return;
+        wire_v1_send_error(id, "NO_SPACE", "FS lleno"); return;
     }
     /* Persistir sólo lo que sobrevive al reset de forma útil: /lib lo re-instala
      * el embebido al boot, así que un PUT a /lib (el IDE lo hace cada Run) no
@@ -339,15 +339,15 @@ static void reply_put_field(const char* type, long id, uint32_t val, const char*
     char buf[96];
     int n = snprintf(buf, sizeof(buf), "{\"type\":\"%s\",\"id\":%ld,\"%s\":%lu}",
                      type, id, field, (unsigned long) val);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 static void handle_put_begin(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
-    if (fs_put(path, NULL, 0) != 0) { stm32_wire_send_error(id, "NO_SPACE", "FS lleno"); return; }
+    if (fs_put(path, NULL, 0) != 0) { wire_v1_send_error(id, "NO_SPACE", "FS lleno"); return; }
     s_put_sess.active   = 1;
     s_put_sess.received = 0;
     s_put_sess.expected = (uint32_t) json_get_long(obj, "size", 0);
@@ -358,24 +358,24 @@ static void handle_put_begin(long id, json_obj_t* obj) {
 
 static void handle_put_data(long id, json_obj_t* obj) {
     long bulk = json_get_long(obj, "bulk", -1);
-    if (bulk < 0) { stm32_wire_send_error(id, "INVALID_PARAM", "missing bulk"); return; }
+    if (bulk < 0) { wire_v1_send_error(id, "INVALID_PARAM", "missing bulk"); return; }
     /* CONSUMIR SIEMPRE el bulk (aunque falle luego) para no desincronizar el wire. */
     if ((size_t) bulk > sizeof(s_put_buf)) {
         size_t rem = (size_t) bulk;
         while (rem > 0) {
             size_t chunk = rem < sizeof(s_put_buf) ? rem : sizeof(s_put_buf);
-            if (stm32_wire_recv_bulk(s_put_buf, chunk) != 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return; }
+            if (wire_v1_recv_bulk(s_put_buf, chunk, sizeof s_put_buf) < 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return; }
             rem -= chunk;
         }
         s_put_sess.active = 0;
-        stm32_wire_send_error(id, "NO_SPACE", "chunk mayor que el buffer"); return;
+        wire_v1_send_error(id, "NO_SPACE", "chunk mayor que el buffer"); return;
     }
-    if (stm32_wire_recv_bulk(s_put_buf, (size_t) bulk) != 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return; }
+    if (wire_v1_recv_bulk(s_put_buf, (size_t) bulk, sizeof s_put_buf) < 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return; }
     /* bulk ya consumido → ahora validar sesion + escribir. */
-    if (!s_put_sess.active) { stm32_wire_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
+    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
     if (bulk > 0 && fs_put_append(s_put_sess.path, s_put_buf, (uint32_t) bulk) != 0) {
         s_put_sess.active = 0;
-        stm32_wire_send_error(id, "NO_SPACE", "FS lleno"); return;
+        wire_v1_send_error(id, "NO_SPACE", "FS lleno"); return;
     }
     s_put_sess.received += (uint32_t) bulk;
     reply_put_field("PUT_DATA_REPLY", id, s_put_sess.received, "received");
@@ -383,11 +383,11 @@ static void handle_put_data(long id, json_obj_t* obj) {
 
 static void handle_put_end(long id, json_obj_t* obj) {
     (void) obj;
-    if (!s_put_sess.active) { stm32_wire_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
+    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
     uint32_t recv = s_put_sess.received;
     uint32_t exp  = s_put_sess.expected;
     s_put_sess.active = 0;
-    if (exp != 0 && recv != exp) { stm32_wire_send_error(id, "SIZE_MISMATCH", "bytes != size"); return; }
+    if (exp != 0 && recv != exp) { wire_v1_send_error(id, "SIZE_MISMATCH", "bytes != size"); return; }
     /* Persistir UNA sola vez (no por chunk). /lib lo re-instala el embebido al boot. */
     if (strncmp(s_put_sess.path, "/lib/", 5) != 0) fs_save();
     reply_put_field("PUT_END_REPLY", id, recv, "size");
@@ -397,7 +397,7 @@ static void handle_format(long id, json_obj_t* obj) {
     char confirm[8];
     if (json_get_str(obj, "confirm", confirm, sizeof(confirm)) < 0 ||
         strcmp(confirm, "YES") != 0) {
-        stm32_wire_send_error(id, "MISSING_CONFIRM", "confirm:\"YES\""); return;
+        wire_v1_send_error(id, "MISSING_CONFIRM", "confirm:\"YES\""); return;
     }
     fs_format();
     fs_save();                       /* H9.3: persistir el formateo (FS vacío) */
@@ -431,7 +431,7 @@ static void v1_output_sink(const char* s, size_t len, void* user) {
     int n = snprintf(s_out_msg, sizeof(s_out_msg),
         "{\"type\":\"OUTPUT\",\"session\":%ld,\"stream\":\"stdout\",\"data\":\"%s\"}",
         s_run_session, s_out_esc);
-    if (n > 0) stm32_wire_send_line(s_out_msg, (size_t) n);
+    if (n > 0) wire_v1_send_line(s_out_msg, (size_t) n);
 }
 
 static void emit_exited(long session, const char* status, int code, uint32_t ms) {
@@ -439,7 +439,7 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
     int n = snprintf(buf, sizeof(buf),
         "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"%s\",\"exitCode\":%d,"
         "\"elapsedMs\":%lu}", session, status, code, (unsigned long) ms);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
 /* P-run-stop (#257) + P-autorun (#256) — wire durante el run (la VM
@@ -455,7 +455,7 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
     int c = stm32_wire_getchar();
     if (c < 0) return 0;
-    int n = stm32_wire_recv_line(c, s_line, sizeof(s_line));
+    int n = wire_v1_recv_line(c, s_line, sizeof(s_line));
     if (n < 0) return 0;                      /* rota/estancada: descartar */
     json_obj_t obj;
     if (json_parse(s_line, (size_t) n, &obj) != 0) return 0;
@@ -464,7 +464,7 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
     if (strcmp(type, "HELLO") == 0) { handle_hello(rid); return 0; }
-    stm32_wire_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
+    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
 
@@ -493,7 +493,7 @@ static void run_module_path(const char* path, long id) {
     bpvm_fs_set_basedir_from_module(path);
     char main_path[80]; uint32_t size;
     if (stm32_fs_resolve(path, main_path, sizeof(main_path), &size) != 0) {
-        if (id >= 0) stm32_wire_send_error(id, "NOT_FOUND", "no existe");
+        if (id >= 0) wire_v1_send_error(id, "NOT_FOUND", "no existe");
         else         BOARD_LED_ERR_ON();            /* autorun: ruta mala */
         return;
     }
@@ -504,7 +504,7 @@ static void run_module_path(const char* path, long id) {
         char buf[80];
         int n = snprintf(buf, sizeof(buf),
             "{\"type\":\"RUN_REPLY\",\"id\":%ld,\"session\":%ld}", id, session);
-        if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+        if (n > 0) wire_v1_send_line(buf, (size_t) n);
     }
 
     /* Antes pasaba 0 = 'default de bpvm_init' (mitad y mitad): la única de las
@@ -623,7 +623,7 @@ static void run_module_path(const char* path, long id) {
             "\"exitCode\":-2,\"elapsedMs\":0,"
             "\"errorMessage\":\"falta el modulo %s en el FS (stdlib no embebida?)\"}",
             session, missing);
-        if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+        if (n > 0) wire_v1_send_line(buf, (size_t) n);
     } else if (st != BPVM_OK && entry.fallo[0]) {
         /* #421 (17-ago) — el PORQUÉ del fallo de CARGA, con su ruta. El resto
          * de familias lo mandaba desde el 16-ago y ésta seguía con el «IO
@@ -637,7 +637,7 @@ static void run_module_path(const char* path, long id) {
             "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
             "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"load: %s\"}",
             session, (int) st, (unsigned long) dt, entry.fallo);
-        if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+        if (n > 0) wire_v1_send_line(buf, (size_t) n);
     } else {
         if (st != BPVM_OK && st != BPVM_KILLED) BOARD_LED_ERR_ON();
         const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
@@ -647,7 +647,7 @@ static void run_module_path(const char* path, long id) {
                 "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"LINK_ERROR\","
                 "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
                 session, (int) st, (unsigned long) dt, link_err);
-            if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+            if (n > 0) wire_v1_send_line(buf, (size_t) n);
         } else {
             /* #406 — el DETALLE del error de ejecucion, no solo la categoria.
              *
@@ -667,7 +667,7 @@ static void run_module_path(const char* path, long id) {
                     "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
                     "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
                     session, (int) st, (unsigned long) dt, rt_err);
-                if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+                if (n > 0) wire_v1_send_line(buf, (size_t) n);
             } else {
                 emit_exited(session,
                             (st == BPVM_OK)     ? "OK"
@@ -682,7 +682,7 @@ static void run_module_path(const char* path, long id) {
 static void handle_run(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
     run_module_path(path, id);
 }
@@ -703,7 +703,7 @@ static int stm32_autorun_escucha(void* user) {
     (void) user;
     int c = stm32_wire_getchar();
     if (c < 0) return 0;                       /* nada pendiente */
-    int n = stm32_wire_recv_line(c, s_line, sizeof(s_line));
+    int n = wire_v1_recv_line(c, s_line, sizeof(s_line));
     if (n < 0) return 1;                       /* línea rota, pero HAY alguien */
     json_obj_t obj;
     if (json_parse(s_line, (size_t) n, &obj) != 0) return 1;
@@ -746,7 +746,7 @@ static void autorun_boot(void) {
 /* ---- dispatch ---- */
 
 static void dispatch(int first_char) {
-    int len = stm32_wire_recv_line(first_char, s_line, sizeof(s_line));
+    int len = wire_v1_recv_line(first_char, s_line, sizeof(s_line));
     if (len == -2) return;   /* línea estancada: silencio; el IDE reintenta */
     if (len < 0)  { stm32_wire_send_fatal("PROTOCOL_ERROR", "line too long"); return; }
 
@@ -757,7 +757,7 @@ static void dispatch(int first_char) {
     long id = json_get_long(&obj, "id", 0);
     char type[40];
     if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
-        stm32_wire_send_error(id, "PROTOCOL_ERROR", "missing type"); return;
+        wire_v1_send_error(id, "PROTOCOL_ERROR", "missing type"); return;
     }
 
     /* H9 — gestión de placa (STATE/ENV_x/PART_x + H3 PACK_x): el host configura el
@@ -780,15 +780,15 @@ static void dispatch(int first_char) {
                 size_t rem = (size_t) bulk;
                 while (rem > 0) {
                     size_t chunk = rem < sizeof s_burn_chunk ? rem : sizeof s_burn_chunk;
-                    if (stm32_wire_recv_bulk(s_burn_chunk, chunk) != 0) {
+                    if (wire_v1_recv_bulk(s_burn_chunk, chunk, sizeof s_burn_chunk) < 0) {
                         stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
                     }
                     rem -= chunk;
                 }
-                stm32_wire_send_error(id, "INVALID_PARAM", "chunk demasiado grande");
+                wire_v1_send_error(id, "INVALID_PARAM", "chunk demasiado grande");
                 return;
             }
-            if (stm32_wire_recv_bulk(s_burn_chunk, (size_t) bulk) != 0) {
+            if (wire_v1_recv_bulk(s_burn_chunk, (size_t) bulk, sizeof s_burn_chunk) < 0) {
                 stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
             }
             bulk_ptr = s_burn_chunk;
@@ -806,11 +806,11 @@ static void dispatch(int first_char) {
                   || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
                   || strcmp(type, "MKDIR") == 0 || strcmp(type, "FORMAT") == 0);
         if (is_fs && st < BPVM_BOOT_FS) {
-            stm32_wire_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
+            wire_v1_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
             return;
         }
         if (strcmp(type, "RUN") == 0 && st < BPVM_BOOT_APP) {
-            stm32_wire_send_error(id, "NOT_READY", "VM no lista (configura particiones)");
+            wire_v1_send_error(id, "NOT_READY", "VM no lista (configura particiones)");
             return;
         }
     }
@@ -839,7 +839,7 @@ static void dispatch(int first_char) {
     /* P-run-stop (#257) — KILL en idle: nada que matar (el útil llega
      * DURANTE un RUN y lo atiende stm32_run_poll_cb). */
     else if (strcmp(type, "KILL")      == 0)
-        stm32_wire_send_error(id, "NO_SESSION", "no hay programa en ejecución");
+        wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución");
     else if (strcmp(type, "LOG_DUMP")  == 0) handle_log_dump(id);
     else if (strcmp(type, "LOG_CLEAR") == 0) {
         log_clear_ram();
@@ -855,7 +855,7 @@ static void dispatch(int first_char) {
     } else {
         char msg[96];
         snprintf(msg, sizeof(msg), "type '%s' no implementado (H9.2)", type);
-        stm32_wire_send_error(id, "UNSUPPORTED", msg);
+        wire_v1_send_error(id, "UNSUPPORTED", msg);
     }
 }
 
@@ -911,11 +911,11 @@ void stm32_repl_run(void) {
     stm32_wire_rx_irq_enable();
 #endif
 
-    stm32_wire_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
+    wire_v1_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
     {   /* H10 — causa del último reset (diagnóstico; revela WDT/soft/power-on). */
         char rc[64];
         snprintf(rc, sizeof(rc), "reset cause: %s", stm32_reset_cause());
-        stm32_wire_send_cstr(rc);
+        wire_v1_send_cstr(rc);
     }
 
     /* P-autorun (#256) — el wire ya está vivo: si la app de auto.txt se

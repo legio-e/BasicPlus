@@ -16,7 +16,7 @@
 #include "bpvm_pack.h"           /* H3 — cintura de burn de la zona de packs */
 #include "bpvm_part.h"
 #include "bpvm_env.h"
-#include "stm32_wire.h"          /* stm32_wire_send_error / send_line (no wire_v1) */
+#include "stm32_wire.h"          /* el cable; los builders vienen del contrato comun */
 #include "stm32_fs.h"            /* fs_init_at */
 #include "stm32_flash.h"         /* stm32_flash_write / erase (compartidas con el FS) */
 #include "flash_layout_stm32.h"  /* BP_ENV_A/B_OFFSET, BP_PART_BASE, BP_USABLE_FLASH, símbolos .ld */
@@ -170,7 +170,7 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
      * rechaza a gritos, nunca se escribe. */
     if ((uintptr_t) (FLASH_BASE + BP_ENV_A_OFFSET) < (uintptr_t) __bp_flash_end
         || (uintptr_t) (FLASH_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_part_start) {
-        stm32_wire_send_error(id, "INTERNAL_ERROR",
+        wire_v1_send_error(id, "INTERNAL_ERROR",
                               "layout de flash inconsistente (env fuera de la zona 2)");
         return;
     }
@@ -187,7 +187,7 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
      * llegan con el buffer ya mordido por su bulk: el resto va entero a la respuesta. */
     const unsigned long minimo = con_env ? (unsigned long) BP_ENV_SECTOR + 512u : 512u;
     if (scratch == NULL || scratch_len < minimo) {
-        stm32_wire_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
+        wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
         return;
     }
     uint8_t* sc        = con_env ? scratch : NULL;
@@ -200,7 +200,7 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
         /* Contiguas y en ese orden: `b` cuelga de `a`. Una petición, un dueño. */
         a = (uint8_t*) bpvm_scratch_take(2u * (size_t) BP_ENV_SECTOR, "bmgr-env");
         if (a == NULL) {
-            stm32_wire_send_error(id, "INTERNAL_ERROR",
+            wire_v1_send_error(id, "INTERNAL_ERROR",
                                   "zona de scratch no disponible para el entorno");
             return;
         }
@@ -254,10 +254,10 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
      * el sector que va a flash vive en ella. */
     if (n < 0) {
         if (con_env) bpvm_scratch_give("bmgr-env");
-        stm32_wire_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
+        wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
         return;
     }
     if (wrote >= 0) env_write_slot(wrote, wrote == 0 ? a : b);   /* RAM → flash */
     if (con_env) bpvm_scratch_give("bmgr-env");
-    stm32_wire_send_line(reply, (size_t) n);
+    wire_v1_send_line(reply, (size_t) n);
 }
