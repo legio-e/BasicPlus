@@ -543,9 +543,9 @@ aprende el `crc` bajo demanda (#398): el «contenido idéntico, salto PUT» del 
 ya en algo real en esta placa. Divergencias unificadas: códigos de error a la referencia, y
 el `fs_save()` tras DEL (no-op documentado) fuera.
 
-✅ **En placa (Nucleo, 26-ago)**: Delete (DEL común), doble subida con `salto PUT` (STAT+crc
-común), PUT de familia y RUN de control con su AOT 4/4 intacto. ⏳ GET (Download) compilado
-y pendiente de su clic de verificación.
+✅ **En placa (Nucleo, 26-ago), el grupo COMPLETO**: Delete (DEL común), doble subida con
+`salto PUT` (STAT+crc común), Download (GET común, bulk por trozos), PUT de familia y RUN
+de control con su AOT 4/4 intacto.
 
 **El marcador de U3**: 10 verbos en el común (meta 4 + FS 6) de los 29 del protocolo. En el
 STM32 quedan de familia: HELLO, INFO, LIST, DF, FORMAT, PUT*, RUN, KILL, RESET, STATE — los
