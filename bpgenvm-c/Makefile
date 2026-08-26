@@ -15,6 +15,9 @@ CFLAGS  += $(CFLAGS_EXTRA)
 # incluyen. Sin esto, un cambio de struct dejaba .o desalineados (build stale).
 CFLAGS  += -MMD -MP
 
+# ⚠️ src/bpvm_repl.c NO va aqui A PROPOSITO (V6/U3): es capa-WIRE, no core de
+# VM — llama al cable (wire_v1_send_*) que el CLI de host no tiene. Su sitio
+# son los CUATRO firmwares (+ el simulador cuando migre). Ver bpvm_repl.h.
 SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/link.c src/scheduler.c src/threading.c src/exceptions.c src/events.c \
           src/platform_pthread.c src/gpio.c src/i2c.c src/spi.c src/uart.c \

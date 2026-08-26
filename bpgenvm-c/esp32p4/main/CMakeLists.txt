@@ -28,6 +28,7 @@ idf_component_register(
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../src/json_min.c"                # V6/U1.1: parser JSON, ya en el comun
         "../../src/wire_v1_proto.c"                # V6/U2.1: los builders JSON del wire, ya en el comun
+        "../../src/bpvm_repl.c"                # V6/U3: los verbos comunes del REPL
         "../../esp32/main/board_mgr_esp32.c"  # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART) — compartido S3
         "../../esp32/main/platform_esp32.c"
         "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)

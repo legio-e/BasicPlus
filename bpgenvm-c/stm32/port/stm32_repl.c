@@ -30,7 +30,8 @@
 #include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
 #include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
-#include "aot_registry.h"    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
+#include "aot_registry.h"
+#include "bpvm_repl.h"       /* V6/U3: los verbos COMUNES del REPL (grupo 1: meta) */    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
 
 #include "main.h"
 #include "board.h"              /* placa: BOARD_WIRE_UART, BOARD_NAME, BOARD_SRAM_BYTES, BOARD_LED_* */
@@ -406,21 +407,8 @@ static void handle_format(long id, json_obj_t* obj) {
 
 /* Sink que escapa cada chunk del log y lo escribe RAW → streaming como el Pico
  * (header + chunks + cierre), sin buffer para el log entero. */
-static char s_log_esc[1600];   /* chunk de 256 B escapado (peor caso ~6x + NUL) */
-static void log_chunk_sink(const char* data, size_t len, void* user) {
-    (void) user;
-    if (stm32_wire_json_escape(data, len, s_log_esc, sizeof(s_log_esc)) < 0) return;
-    stm32_wire_write(s_log_esc, strlen(s_log_esc));
-}
 
-static void handle_log_dump(long id) {
-    char hdr[64];
-    int n = snprintf(hdr, sizeof(hdr),
-        "{\"type\":\"LOG_DUMP_REPLY\",\"id\":%ld,\"text\":\"", id);
-    if (n > 0) stm32_wire_write(hdr, (size_t) n);
-    log_dump(log_chunk_sink, NULL);
-    stm32_wire_write("\"}\n", 3);
-}
+/* V6/U3 — LOG_DUMP vive en el común (src/bpvm_repl.c). */
 
 /* ---- TERMINAL: RUN + streaming ---- */
 
@@ -815,14 +803,13 @@ static void dispatch(int first_char) {
         }
     }
 
+    /* V6/U3 — PRIMERO el común: PING/TIME/LOG_DUMP/LOG_CLEAR viven en
+     * src/bpvm_repl.c para las cuatro familias. Si lo atiende, hemos acabado.
+     * Los verbos de esta familia siguen debajo y van migrando por grupos. */
+    if (bpvm_repl_dispatch(type, id, &obj)) return;
+
     if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
     else if (strcmp(type, "INFO")      == 0) handle_info(id);
-    else if (strcmp(type, "PING")      == 0) reply_empty("PONG", id);
-    else if (strcmp(type, "TIME")      == 0) {   /* H10 — aplica la hora al RTC HW */
-        long epochSec = json_get_long(&obj, "epochSec", -1);
-        if (epochSec >= 0) bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);
-        reply_empty("TIME_REPLY", id);
-    }
     else if (strcmp(type, "LIST")      == 0) handle_list(id, &obj);
     else if (strcmp(type, "STAT")      == 0) handle_stat(id, &obj);
     else if (strcmp(type, "DF")        == 0) handle_df(id);
@@ -840,12 +827,6 @@ static void dispatch(int first_char) {
      * DURANTE un RUN y lo atiende stm32_run_poll_cb). */
     else if (strcmp(type, "KILL")      == 0)
         wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución");
-    else if (strcmp(type, "LOG_DUMP")  == 0) handle_log_dump(id);
-    else if (strcmp(type, "LOG_CLEAR") == 0) {
-        log_clear_ram();
-        log_clear_flash();
-        reply_empty("LOG_CLEAR_REPLY", id);
-    }
     else if (strcmp(type, "RESET")     == 0) {
         log_printf("RESET (wire): reinicio");
         log_flush();                 /* persiste la sesión antes de reiniciar */

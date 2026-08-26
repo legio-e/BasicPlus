@@ -12,6 +12,7 @@ idf_component_register(
         "esp32_mods.c"
         "../../src/json_min.c"               # V6/U1.1: parser JSON comun (era una copia local)
         "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
+        "../../src/bpvm_repl.c"               # V6/U3: los verbos comunes del REPL
         "board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
