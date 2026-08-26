@@ -27,6 +27,40 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (26-ago, tarde) — decidir entre estas tres
+
+Nada a medias: todo lo tocado hoy está commiteado, construido y verificado en placa.
+
+1. **Seguir U3 — el grupo `ops`** (INFO, DF, FORMAT, SAVE). Pide diseñar
+   `bpvm_repl_ops_t`, la struct de cintura: **es la pieza de diseño que le falta al
+   contrato** y la que usará el resto de la migración. Eduardo avisó de que la migración
+   se le hace *«un poco aburrida»*, así que conviene alternarla, no encadenarla.
+2. **E1 — la vista de packs en el árbol**. Es la ficha que mordió hoy con el episodio del
+   `/lib` (el fallback del pack contesta `stat`/`read` pero NO `list`), y tiene caso de
+   prueba natural montado. Retorno inmediato y visible.
+3. **Una de las 9 arrastradas** que el triaje dejó limpias — p.ej. `listDir` ausente en la
+   VM-C, o el módulo rancio que sobrevive sin avisar.
+
+### Lo hecho hoy (26-ago)
+
+- **U2 paso 3 y CIERRE del hito**: el STM32 al contrato del wire; cuatro familias, un solo
+  transporte. Un bug latente muerto (su `send_error` no escapaba `message`).
+- **U3.1/U3.2/U3.3**: nace `bpvm_repl` (contrato + común) y el STM32 delega **11 de 29
+  verbos** — meta, FS de fachada y LIST. Ganó RENAME, RMDIR y el `crc` bajo demanda; su
+  refresco de árbol pasó de leer el FS entero a no leer nada (#398 nunca le había llegado).
+  Cada grupo verificado en placa el mismo día.
+- **Triaje de FICHAS**: de 59 arrastres, **9 vivos**. 47 al archivo, íntegros (0 líneas
+  perdidas, comprobado contra git).
+
+### Espinas abiertas, sin cerrar
+
+- El **total del FS del STM32 baila** entre arranques (516096 ↔ 614400) y el **recuento de
+  KB no cuadra** con lo que se ve. Sin explicar.
+- El **P4 configurado a 16 MB** de flash con chip de 32.
+- El **instalador de mods es mudo** (`fs_put` sin comprobar ni log).
+
+---
+
 ## ⏭️ AL RETOMAR — U3, con el mapa ya hecho
 
 El diseño está decidido y el censo profundo hecho (U3.0 + U3.0b en FICHAS; boceto en
