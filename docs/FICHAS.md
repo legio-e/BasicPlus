@@ -567,6 +567,31 @@ DEL/GET consumen, y quedó escrito).
 **Marcador U3: 11 de 29 verbos en el común** (meta 4 + FS 7). Quedan en familia: HELLO,
 INFO, LIST_DIR, DF, FORMAT, SAVE, PUT*, RUN, KILL, RESET, STATE, DEBUG* y los de hardware.
 
+##### ✅ `U3.4` — LA CINTURA: INFO, DF, FORMAT, SAVE (26-ago · `f2425cb9`)
+
+El primer grupo que **no** se resuelve solo con contratos comunes. Se midió antes de
+diseñar: comparando el INFO de las tres, **18 campos son comunes y 11 sólo del RP2350**
+(variante, packs/XIP, los cinco de SQLite, `floatAbi`, dos del RTOS). De ahí la forma de
+`bpvm_repl_ops_t`: los comunes como **valores** en una struct que la familia rellena (no 18
+punteros a función), lo propio por **un** gancho (`info_extra`), y punteros sólo para las
+ACCIONES (`fs_format`, `fs_save`) y los contadores del FS, que aún no tienen fachada.
+
+Tres mejoras que no son de copiar:
+- **INFO tiene la misma forma y el mismo orden en las tres.** Antes cada una lo armaba con
+  su `snprintf` — así fue como el STM32 acabó mandando 7 campos y uno con otro nombre.
+- Sin cintura registrada, o sin `fs_format`: **UNSUPPORTED con nombre y motivo**, no el
+  «type no implementado» genérico. Un port a medias lo dice en vez de parecer roto.
+- `SAVE` sin `fs_save` contesta OK **y es la verdad** (littlefs persiste al cerrar), no un
+  no-op disfrazado.
+
+✅ **En placa (Nucleo)**: el diálogo INFO completo y con los valores propios en su sitio
+(114 GPIO del LQFP144, 28 salidas PWM, 20 canales ADC, flash leída del registro, reparto de
+la VM 384+128 KB). La documentación del STM32 sobre **de dónde sale cada valor** se
+conservó entera: es lo único realmente propio de esa familia.
+
+**Marcador U3: 15 de 29 verbos en el común.** Quedan: HELLO, STATE, LIST_DIR, PUT*, RUN,
+KILL, RESET, DEBUG* y los de hardware (BOOTSEL, SD_*).
+
 ##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
 
 Tras flashear, el árbol del IDE mostraba `/app` con 3 ficheros y **ningún `/lib`** — con
