@@ -58,6 +58,64 @@
 extern "C" {
 #endif
 
+/* ══════════════ LA CINTURA: lo que cada familia pone ══════════════
+ *
+ * Medido antes de diseñarla (26-ago), comparando el INFO de las tres: **18
+ * campos son comunes a todas** y 11 son sólo del RP2350 (variante, packs/XIP,
+ * los cinco de SQLite, `floatAbi`, dos del RTOS). De ahí la forma:
+ *
+ *   · los 18 comunes viajan como VALORES en `bpvm_repl_info_t` — la familia
+ *     rellena una struct, no implementa 18 funciones;
+ *   · lo propio entra por UN gancho (`info_extra`), que añade sus campos al
+ *     mismo mensaje;
+ *   · y sólo son punteros a función las ACCIONES (formatear, guardar) y los
+ *     contadores del FS, que no tienen fachada común todavía.
+ *
+ * ⚠️ Un campo que una familia no sepa: se deja a 0 / cadena vacía, NO se omite.
+ * El IDE lee por nombre y un campo ausente y uno a cero se distinguen; que la
+ * forma del mensaje sea SIEMPRE la misma es justo lo que este hito persigue. */
+
+typedef struct {
+    const char* unique_id;        /* serie del micro, ya formateado */
+    const char* board_name;
+    const char* reset_reason;
+    unsigned    arch;             /* el tag del `.mdn` que ejecuta esta imagen */
+    unsigned long cpu_hz;
+    unsigned long uptime_ms;
+    long        temp_milli_c;
+    int         gpio_count, pio_count, pwm_slices, adc_channels;
+    unsigned long flash_bytes, sram_bytes, psram_bytes;
+    unsigned long vm_heap_bytes, vm_stack_bytes;
+    unsigned long fs_total_bytes, fs_used_bytes;
+} bpvm_repl_info_t;
+
+typedef struct {
+    /** Rellena los 18 campos comunes. Obligatoria. */
+    void (*info)(bpvm_repl_info_t* out);
+
+    /** Añade los campos PROPIOS de la familia al mensaje a medio construir.
+     *  Recibe el buffer y el offset actual; devuelve el offset nuevo, o -1 si
+     *  no cabe. Puede ser NULL: la mayoría de familias no tienen extras. */
+    int (*info_extra)(char* buf, unsigned long buf_max, int off);
+
+    /** Contadores del FS para DF. Obligatorias (no hay fachada común aún). */
+    unsigned long (*fs_total_bytes)(void);
+    unsigned long (*fs_used_bytes)(void);
+    int           (*fs_file_count)(void);
+
+    /** Formatear el FS. NULL = esta familia no lo soporta (y el común
+     *  responderá con un error CON NOMBRE, no con «type no implementado»). */
+    int (*fs_format)(void);
+
+    /** Persistir el FS. NULL = no hace falta (littlefs persiste al cerrar):
+     *  el común contesta OK, que es la verdad, no un no-op disfrazado. */
+    int (*fs_save)(void);
+} bpvm_repl_ops_t;
+
+/** La familia registra su cintura UNA vez, antes de atender el primer mensaje.
+ *  Sin esto, los verbos que la necesitan responden error con nombre. */
+void bpvm_repl_set_ops(const bpvm_repl_ops_t* ops);
+
 /** Atiende `type` si es un verbo del común. Devuelve 1 si lo atendió (la
  *  respuesta ya salió por el wire), 0 si no es suyo y la familia debe seguir
  *  con su cadena. `obj` es el mensaje ya parseado (para los parámetros). */

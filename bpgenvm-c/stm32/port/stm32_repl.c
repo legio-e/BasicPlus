@@ -104,10 +104,14 @@ static void handle_hello(long id) {
     if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
-static void handle_info(long id) {
-    /* N-stm32-info — el diálogo INFO del IDE (PicoExplorer.formatInfo) lee el
-     * MISMO set de campos que manda la Pico; antes solo enviábamos 7 (y
-     * "tempC" en vez de "tempMilliC") → el diálogo salía medio vacío.
+/* ── V6/U3 g4: LA CINTURA de esta familia ────────────────────────────────────
+ * El REPL común pide los datos; aquí se dicen. Ver bpvm_repl.h para la forma
+ * y la medida que la decidió (18 campos comunes, 11 sólo del RP2350). */
+
+static void stm32_repl_info(bpvm_repl_info_t* o) {
+    /* N-stm32-info — DE DONDE SALE CADA VALOR de esta placa. El mensaje ya no
+     * se arma aquí (lo hace src/bpvm_repl.c con los 18 campos comunes); esto
+     * sólo los RELLENA, que es lo que de verdad es propio del STM32.
      * Valores del NUCLEO-U575ZI-Q (datasheet DS13737): flash 2 MB (sufijo
      * ZI), SRAM 768 KB, sin PSRAM. gpioCount=114 (I/Os del LQFP144).
      * pioCount=0 (PIO es RP2350-only). pwmSlices=28 — el campo lleva
@@ -120,66 +124,53 @@ static void handle_info(long id) {
      * tempMilliC=0 (el diálogo oculta la línea; el sensor interno queda
      * para más adelante). FLASH_SIZE real del registro por si montan otra
      * variante. */
+    static char uid[28];
     uint32_t u0 = *(volatile uint32_t*) (UID_BASE + 0U);
     uint32_t u1 = *(volatile uint32_t*) (UID_BASE + 4U);
     uint32_t u2 = *(volatile uint32_t*) (UID_BASE + 8U);
-    unsigned long flash_bytes = (unsigned long) (*(volatile uint16_t*) FLASHSIZE_BASE) * 1024UL;
-    char buf[512];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"INFO_REPLY\",\"id\":%ld,"
-        "\"uniqueId\":\"%08lX%08lX%08lX\","
-        "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,"
-        "\"tempMilliC\":0,\"resetReason\":\"%s\","
-        /* H13 hallazgo 32 — OJO: estos cuatro numeros estan a mano AQUI y otra vez
-         * en gpio_stm32.c (el backend que contesta a Pico.GPIO_COUNT() etc), y en
-         * GPIO NO COINCIDEN: aqui 114 (las I/O del encapsulado LQFP144) y alli 128
-         * (8 puertos x 16 = el rango de numeros de pin que el driver acepta). Los
-         * dos son ciertos de cosas distintas, y en el STM32 NINGUNO sirve para
-         * recorrer pines, porque se numeran puerto*16+bit y son dispersos.
-         *   NO se unifica a pelo: decision de Eduardo (6-ago) = es INFORMATIVO, no
-         * afecta a la funcionalidad, y el arreglo bueno es otro -> ver #378 en
-         * docs/V5_IDEAS.md: que cada micro DIGA lo que tiene (preguntando a la HAL
-         * del fabricante) y que la capa HAL BP tire de eso. STM vende el mismo core
-         * en encapsulados con distinto pinado Y distintos perifericos, asi que una
-         * imagen unica por familia obliga a preguntarselo a la placa, no a hornearlo. */
-        "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":28,\"adcChannels\":20,"
-        "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
-        "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu,"
-        /* H13 hallazgo 30 — el reparto de la memoria de la VM, que las otras dos
-         * familias ya mandaban y esta no. No es cosmetico: el panel de INFO es el
-         * instrumento con el que se lee la tanda de memoria, y sin esta linea
-         * habia que ir a buscar el numero al fuente. MISMO calculo que usa el RUN
-         * (bpvm_stack_region_bytes sobre el bloque real), no una constante. */
-        "\"vmHeapBytes\":%lu,\"vmStackBytes\":%lu,"
-        /* H11 — arquitectura del nativo que ejecuta este firmware: el IDE la
-         * usa para compilar el .mdn a la ISA correcta sin que nadie la teclee. */
-        "\"arch\":%u}",
-        id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,
-        BOARD_NAME, (unsigned long) SystemCoreClock, (unsigned long) HAL_GetTick(),
-        stm32_reset_cause(),
-        flash_bytes, BOARD_SRAM_BYTES,
-        (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes(),
-        (unsigned long) (sizeof(s_vm_mem) - bpvm_stack_region_bytes(sizeof(s_vm_mem))),
-        (unsigned long) bpvm_stack_region_bytes(sizeof(s_vm_mem)),
-        (unsigned) bpvm_mdn_host_arch());
-    if (n > 0) wire_v1_send_line(buf, (size_t) n);
+    snprintf(uid, sizeof uid, "%08lX%08lX%08lX",
+             (unsigned long) u2, (unsigned long) u1, (unsigned long) u0);
+    o->unique_id     = uid;
+    o->board_name    = BOARD_NAME;
+    o->reset_reason  = stm32_reset_cause();
+    o->arch          = (unsigned) bpvm_mdn_host_arch();
+    o->cpu_hz        = (unsigned long) SystemCoreClock;
+    o->uptime_ms     = (unsigned long) HAL_GetTick();
+    o->temp_milli_c  = 0;            /* sensor interno, para más adelante */
+    o->gpio_count    = 114;          /* I/Os del LQFP144 */
+    o->pio_count     = 0;            /* PIO es del RP2350 */
+    o->pwm_slices    = 28;           /* salidas PWM, como cuentan los otros ports */
+    o->adc_channels  = 20;
+    o->flash_bytes   = (unsigned long) (*(volatile uint16_t*) FLASHSIZE_BASE) * 1024UL;
+    o->sram_bytes    = BOARD_SRAM_BYTES;
+    o->psram_bytes   = 0;
+    o->vm_heap_bytes  = (unsigned long) (sizeof(s_vm_mem) - bpvm_stack_region_bytes(sizeof(s_vm_mem)));
+    o->vm_stack_bytes = (unsigned long) bpvm_stack_region_bytes(sizeof(s_vm_mem));
+    o->fs_total_bytes = (unsigned long) fs_total_bytes();
+    o->fs_used_bytes  = (unsigned long) fs_used_bytes();
 }
+
+static unsigned long stm32_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
+static unsigned long stm32_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
+static int           stm32_repl_fs_count(void) { return fs_count(); }
+static int           stm32_repl_fs_format(void){ fs_format(); return 0; }
+static int           stm32_repl_fs_save(void)  { fs_save(); return 0; }
+
+static const bpvm_repl_ops_t s_repl_ops = {
+    stm32_repl_info,
+    NULL,                      /* sin campos propios: los 18 comunes bastan */
+    stm32_repl_fs_total,
+    stm32_repl_fs_used,
+    stm32_repl_fs_count,
+    stm32_repl_fs_format,
+    stm32_repl_fs_save,
+};
 
 /* ---- FILES ---- */
 
 /* V6/U3 g3 — LIST vive en el común (streaming, crc:-1, montajes de la fachada). */
 
 
-static void handle_df(long id) {
-    uint32_t total = fs_total_bytes(), used = fs_used_bytes();
-    char buf[160];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"DF_REPLY\",\"id\":%ld,\"totalBytes\":%lu,\"usedBytes\":%lu,"
-        "\"freeBytes\":%lu,\"fileCount\":%d}",
-        id, (unsigned long) total, (unsigned long) used,
-        (unsigned long) (total - used), fs_count());
-    if (n > 0) wire_v1_send_line(buf, (size_t) n);
-}
 
 
 
@@ -286,16 +277,6 @@ static void handle_put_end(long id, json_obj_t* obj) {
     reply_put_field("PUT_END_REPLY", id, recv, "size");
 }
 
-static void handle_format(long id, json_obj_t* obj) {
-    char confirm[8];
-    if (json_get_str(obj, "confirm", confirm, sizeof(confirm)) < 0 ||
-        strcmp(confirm, "YES") != 0) {
-        wire_v1_send_error(id, "MISSING_CONFIRM", "confirm:\"YES\""); return;
-    }
-    fs_format();
-    fs_save();                       /* H9.3: persistir el formateo (FS vacío) */
-    reply_empty("FORMAT_REPLY", id);
-}
 
 /* Sink que escapa cada chunk del log y lo escribe RAW → streaming como el Pico
  * (header + chunks + cierre), sin buffer para el log entero. */
@@ -705,14 +686,11 @@ static void dispatch(int first_char) {
     if (bpvm_repl_dispatch(type, id, &obj)) return;
 
     if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
-    else if (strcmp(type, "INFO")      == 0) handle_info(id);
-    else if (strcmp(type, "DF")        == 0) handle_df(id);
     else if (strcmp(type, "PUT")       == 0) handle_put(id, &obj);
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     else if (strcmp(type, "PUT_BEGIN") == 0) handle_put_begin(id, &obj);
     else if (strcmp(type, "PUT_DATA")  == 0) handle_put_data(id, &obj);
     else if (strcmp(type, "PUT_END")   == 0) handle_put_end(id, &obj);
-    else if (strcmp(type, "FORMAT")    == 0) handle_format(id, &obj);
     else if (strcmp(type, "RUN")       == 0) handle_run(id, &obj);
     /* P-run-stop (#257) — KILL en idle: nada que matar (el útil llega
      * DURANTE un RUN y lo atiende stm32_run_poll_cb). */
@@ -750,6 +728,7 @@ void stm32_repl_run(void) {
      * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
      * `_write` retargeteado, el stderr del núcleo se PERDÍA. Esto devuelve al
      * log los avisos de pack que este port tenía a mano antes de #344. */
+    bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3 g4: la cintura, antes del primer mensaje */
     bpvm_diag_set_sink(diag_al_log);
     board_mgr_stm32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();

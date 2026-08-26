@@ -281,6 +281,138 @@ static void repl_list(long id) {
     log_printf("ls: %d ent (%d dirs omitidos)", c.emitidas, c.omitidas);
 }
 
+
+/* ══════════════ GRUPO 4 — INFO, DF, FORMAT, SAVE: los de la cintura ══════════
+ *
+ * Primer grupo que NO se resuelve solo con contratos comunes: necesita datos y
+ * acciones de la placa. Por eso existe `bpvm_repl_ops_t` (ver el header, donde
+ * está la medida que le dio la forma).
+ *
+ * Lo que se unifica aquí, más allá de borrar tres copias:
+ *   · el mensaje de INFO tiene LA MISMA forma en las tres familias, con los
+ *     mismos 18 campos y en el mismo orden. Antes cada una emitía los suyos en
+ *     su orden y con su `snprintf` a mano.
+ *   · FORMAT exige `confirm:"YES"` en todas (la Pico y el STM32 ya lo pedían).
+ *   · una familia sin `fs_format` responde UNSUPPORTED **con su nombre y el
+ *     motivo**, no el «type no implementado» genérico de la cola del dispatch.
+ */
+
+static const bpvm_repl_ops_t* s_ops = NULL;
+
+void bpvm_repl_set_ops(const bpvm_repl_ops_t* ops) { s_ops = ops; }
+
+/* Sin cintura registrada no se adivina: se dice. Vale para el port a medias y
+ * para el arranque degradado, que son justo los momentos en que un mensaje
+ * claro ahorra una tarde. */
+static int sin_ops(long id, const char* verbo) {
+    if (s_ops) return 0;
+    char m[96];
+    snprintf(m, sizeof m, "%s: este firmware no ha registrado su cintura de REPL", verbo);
+    wire_v1_send_error(id, "UNSUPPORTED", m);
+    return 1;
+}
+
+static void repl_info(long id) {
+    char buf[900];
+    bpvm_repl_info_t in;
+    memset(&in, 0, sizeof in);
+    s_ops->info(&in);
+    if (!in.unique_id)    in.unique_id = "";
+    if (!in.board_name)   in.board_name = "";
+    if (!in.reset_reason) in.reset_reason = "";
+
+    int off = wire_v1_msg_begin(buf, sizeof buf, 0, "INFO_REPLY", id);
+    if (off < 0) goto err;
+#define CAMPO_S(k, v)  do { off = wire_v1_field_string(buf, sizeof buf, (size_t) off, (k), (v));                             if (off < 0) goto err; } while (0)
+#define CAMPO_L(k, v)  do { off = wire_v1_field_long(buf, sizeof buf, (size_t) off, (k), (long) (v));                             if (off < 0) goto err; } while (0)
+    CAMPO_S("uniqueId",     in.unique_id);
+    CAMPO_S("boardName",    in.board_name);
+    CAMPO_L("arch",         in.arch);
+    CAMPO_L("cpuFreqHz",    in.cpu_hz);
+    CAMPO_L("uptimeMs",     in.uptime_ms);
+    CAMPO_S("resetReason",  in.reset_reason);
+    CAMPO_L("tempMilliC",   in.temp_milli_c);
+    CAMPO_L("gpioCount",    in.gpio_count);
+    CAMPO_L("pioCount",     in.pio_count);
+    CAMPO_L("pwmSlices",    in.pwm_slices);
+    CAMPO_L("adcChannels",  in.adc_channels);
+    CAMPO_L("flashBytes",   in.flash_bytes);
+    CAMPO_L("sramBytes",    in.sram_bytes);
+    CAMPO_L("psramBytes",   in.psram_bytes);
+    CAMPO_L("vmHeapBytes",  in.vm_heap_bytes);
+    CAMPO_L("vmStackBytes", in.vm_stack_bytes);
+    CAMPO_L("fsTotalBytes", in.fs_total_bytes);
+    CAMPO_L("fsUsedBytes",  in.fs_used_bytes);
+#undef CAMPO_S
+#undef CAMPO_L
+    /* Y lo PROPIO de la familia, si tiene. */
+    if (s_ops->info_extra) {
+        off = s_ops->info_extra(buf, (unsigned long) sizeof buf, off);
+        if (off < 0) goto err;
+    }
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off < 0) goto err;
+    wire_v1_send_line(buf, (size_t) off);
+    return;
+err:
+    wire_v1_send_error(id, "INTERNAL_ERROR", "INFO_REPLY no cabe");
+}
+
+static void repl_df(long id) {
+    char buf[192];
+    unsigned long total = s_ops->fs_total_bytes();
+    unsigned long used  = s_ops->fs_used_bytes();
+    int off = wire_v1_msg_begin(buf, sizeof buf, 0, "DF_REPLY", id);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "totalBytes", (long) total);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "usedBytes", (long) used);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "freeBytes",
+                             (long) (total > used ? total - used : 0));
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "fileCount",
+                             (long) s_ops->fs_file_count());
+    if (off < 0) goto err;
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off < 0) goto err;
+    wire_v1_send_line(buf, (size_t) off);
+    return;
+err:
+    wire_v1_send_error(id, "INTERNAL_ERROR", "DF_REPLY no cabe");
+}
+
+static void repl_format(long id, const json_obj_t* obj) {
+    char confirm[8];
+    /* El seguro, y en las tres igual: formatear no puede ser un clic de más. */
+    if (json_get_str(obj, "confirm", confirm, sizeof confirm) < 0
+            || strcmp(confirm, "YES") != 0) {
+        wire_v1_send_error(id, "MISSING_CONFIRM", "confirm:\"YES\"");
+        return;
+    }
+    if (!s_ops->fs_format) {
+        wire_v1_send_error(id, "UNSUPPORTED",
+                           "FORMAT: este firmware no sabe formatear su FS");
+        return;
+    }
+    if (s_ops->fs_format() != 0) {
+        wire_v1_send_error(id, "INTERNAL_ERROR", "FORMAT: el FS no se pudo formatear");
+        return;
+    }
+    if (s_ops->fs_save) (void) s_ops->fs_save();   /* persistir el FS vacio */
+    wire_v1_send_reply_empty("FORMAT_REPLY", id);
+}
+
+static void repl_save(long id) {
+    /* Sin `fs_save` la respuesta es OK, y es la VERDAD: en littlefs cada close
+     * ya persiste. No es un no-op disfrazado — es que no hay nada que hacer. */
+    if (s_ops->fs_save && s_ops->fs_save() != 0) {
+        wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE: el FS no se pudo persistir");
+        return;
+    }
+    wire_v1_send_reply_empty("SAVE_REPLY", id);
+}
+
 int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
@@ -309,6 +441,11 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
         return 1;
     }
     if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
+    /* ── grupo 4: los de la cintura ── */
+    if (strcmp(type, "INFO")   == 0) { if (!sin_ops(id, "INFO"))   repl_info(id);        return 1; }
+    if (strcmp(type, "DF")     == 0) { if (!sin_ops(id, "DF"))     repl_df(id);          return 1; }
+    if (strcmp(type, "FORMAT") == 0) { if (!sin_ops(id, "FORMAT")) repl_format(id, obj); return 1; }
+    if (strcmp(type, "SAVE")   == 0) { if (!sin_ops(id, "SAVE"))   repl_save(id);        return 1; }
     /* ── grupo 2: el FS por la fachada ── */
     if (strcmp(type, "DEL")    == 0) { repl_del(id, obj);    return 1; }
     if (strcmp(type, "STAT")   == 0) { repl_stat(id, obj);   return 1; }
