@@ -1982,6 +1982,16 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   (el chivato de `#422`) y un listado truncado (`#425`, que hoy avisa aparte).
   Ojo con el daltonismo: el color como ÚNICO canal deja fuera a mucha gente —
   conviene que el rojo lleve además icono o marca.
+  ✅ **PRESUPUESTADO el 26-ago** (Eduardo: *«si no es muy complicado lo podemos
+  probar a hacer a la vuelta»*). Mirado el sitio: **un solo renderer, un solo
+  fichero, sin tocar wire ni firmware**. Ya calcula el label y pone el icono;
+  falta un `setForeground(...)` por extensión. `Backend.Entry` trae `name` y
+  `size`, o sea que **el color por TIPO sale con lo que ya hay**.
+  ⏭️ **Va en dos pasos, y el primero es el encargo entero**:
+  1. colores por extensión, con **el rojo RESERVADO y sin usar** — eso ya
+     cumple lo pedido y no espera a nada;
+  2. el rojo, después, según el IDE sepa señalar cada problema (los cuatro
+     candidatos de arriba necesitan datos que el árbol hoy no pide).
 
 
 - `#434` — **desacoplar los eventos del lazo de LVGL** (idea de Eduardo, 17-ago,
