@@ -27,6 +27,21 @@
 
 ## Última sesión
 
+### 26-ago — U2 paso 3: el STM32 deja de ser la cuarta forma del wire
+
+Las 4 funciones de cable a los nombres del contrato, `send_error`/`send_cstr` borrados en
+favor del común (que YA se compilaba en este build sin llamantes), `send_fatal` como
+wrapper con el LED de la placa, 57 llamantes renombrados, y de regalo un bug latente
+fuera: el `send_error` propio no escapaba `message`. Verificado por Eduardo en placa:
+programas subidos y ejecutados, un módulo cargado y un Pack grabado (todo el camino bulk
+con la firma nueva de `recv_bulk`).
+
+**Estado de U2**: pasos 1-3 hechos y en placa (Pico, S3+P4, STM32). Queda el **paso 4**:
+decidir qué hacer con `bpvm_comm.h` — el contrato VM↔comunicaciones que sólo implementan
+host y Pico. Y los ~22 replies a mano del REPL del STM32 quedan PARA U3, que es su sitio.
+
+---
+
 ### 25-ago (noche) — el STM32 cierra N1, y el `.mdn` suelto se retira
 
 **El STM32 ejecuta AOT** — primero de su familia: `NatV7` 4/4 (con `sumaHasta` en 0 ms a
