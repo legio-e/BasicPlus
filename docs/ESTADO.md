@@ -27,6 +27,23 @@
 
 ## Última sesión
 
+### 26-ago (3) — U3 arranca por donde debe: midiendo
+
+**U3.0 hecho**: la matriz verbo × familia de los tres REPL. El enunciado del hito («no
+tiene contrato») exageraba: hay un **núcleo de 20 verbos idénticos en las tres**, la Pico
+es el superconjunto (29), y el protocolo escrito ya documenta la mayoría. Las asimetrías
+que muerden y no estaban fichadas: S3/P4/STM32 **incumplen** `RENAME`/`RMDIR`/`FORMAT`
+(que están en `BPVM_WIRE_PROTOCOL.md`), y el STM32 además no tiene `PROMPT_RESPONSE`
+(⇒ `input()` desde el IDE no puede contestar ahí) ni `SAVE`.
+
+**El diseño del REPL común está BOCETADO en `V6_IDEAS.md`** (dispatcher común + cintura
+`bpvm_repl_ops_t` por familia, espejo del patrón de U2), con LA PREGUNTA para Eduardo:
+¿migración 1:1 y los verbos que faltan entran gratis al compartir dispatcher, o se
+aprovecha para más? Y el riesgo nombrado: RUN es el hueso y se queda en la familia hasta
+que los otros 19 estén verificados.
+
+---
+
 ### 26-ago (2) — U2 CERRADO: el paso 4 era corregir el registro, no el código
 
 `bpvm_comm.h` medido de punta a punta, y las DOS premisas escritas eran falsas (las dos

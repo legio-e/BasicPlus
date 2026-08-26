@@ -539,3 +539,52 @@ esquemas se rompen. Merece medirse antes que escribirse.
 📌 **Y el contexto de Eduardo**: *«SQLite es un buen modelo pero habrá que mejorarlo»*, y
 **LVGL a un pack es V7**. O sea que el segundo cliente de la arena ya tiene nombre y
 fecha aproximada: cuando llegue, el punto 2 de arriba deja de ser teórico.
+
+## El REPL común (U3): partir en dispatcher + operaciones de familia (26-ago)
+
+> **Estado: PARA DECIDIR con Eduardo.** U3.0 (la matriz verbo × familia) está medida y en
+> `FICHAS.md`. Esto es el boceto de diseño ANTES de escribir código, siguiendo el método:
+> las charlas de diseño se escriben aquí y el código llega después de la decisión.
+
+### Lo que la matriz permite afirmar
+
+- **El contrato de facto existe**: 20 verbos idénticos en las tres familias, protocolo
+  escrito en `BPVM_WIRE_PROTOCOL.md`, y desde U2 los tres REPL hablan por el MISMO wire
+  (builders comunes + 4 funciones de cable por familia).
+- Lo que difiere de verdad por familia, verbo a verbo, cae en tres cubos:
+  1. **nada** (PING, TIME, DEL, MKDIR, STAT, GET, PUT*, LOG_*…): tocan el wire y la
+     fachada de FS, que ya son comunes;
+  2. **datos de placa** (INFO, STATE, DF): el flujo es igual y cambian los CAMPOS que
+     aporta la familia;
+  3. **el flujo entero** (RUN, y los verbos de hardware BOOTSEL/SD_*): enredado con el
+     scheduler, el autorun, el poll de KILL, el debug… — el hueso.
+
+### La forma propuesta (espejo del patrón que ya funcionó en U2)
+
+- `src/bpvm_repl.c` — el dispatcher y los verbos de los cubos 1 y 2, UNA vez.
+- `bpvm_repl_ops_t` — la cintura de familia: un struct de punteros con lo que el común no
+  puede saber (rellenar los campos de INFO, ejecutar un RUN, los verbos extra de hardware).
+  Mismo patrón que la cintura del log o el VFS de SQLite.
+- Cada familia queda en: su cable (U2) + su `ops` + sus verbos propios. El objetivo de
+  tamaño: que `stm32_repl.c` pase de 920 líneas a ~200 de cintura.
+
+### La pregunta que decide el orden (para Eduardo)
+
+**¿Migración 1:1 primero y los verbos que faltan después, o aprovechar la migración para
+añadirlos?** La matriz enseña que S3/P4/STM32 incumplen verbos del protocolo escrito
+(`RENAME`, `RMDIR`, `FORMAT`; el STM32 además `PROMPT_RESPONSE` y `SAVE`). Con el REPL
+común, esos verbos se ganan GRATIS al migrar — la familia los recibe del común sin
+escribirlos. Eso sugiere: **migrar 1:1 el núcleo de 20, y los que faltan entran solos al
+compartir dispatcher** (no es «añadir features durante la migración»: es que la migración
+ES la feature). El orden de familias, el ya escrito en U3.3: STM32 → S3 → Pico, de menos a
+más.
+
+### Los riesgos que ya se ven
+
+- **RUN es el hueso** (cubo 3): cada familia lo tiene entretejido con su scheduler/autorun/
+  poll. Propuesta: RUN se queda EN LA FAMILIA en la primera pasada (es un verbo del `ops`),
+  y sólo migra cuando los otros 19 estén en el común y verificados en placa.
+- **El INFO por campos**: la tentación de un INFO común con `#ifdef` por familia. Mejor un
+  callback `ops->info_campos(writer)` — el común pone el sobre, la familia mete lo suyo.
+- **Verificación**: la de siempre del cordón — el IDE contra cada placa tras cada tanda,
+  y `LIST_DIR`/`INFO`/`PACK_LS` byte-comparables antes/después donde no cambie nada.

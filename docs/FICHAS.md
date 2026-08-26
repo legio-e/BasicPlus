@@ -484,8 +484,29 @@ hacia el lado peor**: dice que hay que investigar donde no hay nada que investig
 El 80 % del problema y el 100 % de las asimetrías que nos han mordido (`SD_INFO` sólo en
 la Pico, el `INFO` del STM32 incompleto, el aviso de `/lib`, el `preinstall`).
 
-- **`U3.1` · Escribir `bpvm_repl.h`.** Hoy **no existe**: el REPL no tiene el contrato
-  roto, es que no tiene contrato.
+##### ✅ `U3.0` (26-ago) — LA MATRIZ VERBO × FAMILIA, medida
+
+El enunciado de este hito («no tiene contrato») también exageraba hacia el lado malo:
+hay un **núcleo de 20 verbos idénticos en las tres**, la Pico es el superconjunto (29),
+y el protocolo (`BPVM_WIRE_PROTOCOL.md`) ya documenta la mayoría. Medido con
+`strcmp(type, …)` sobre los tres dispatchers:
+
+| faltan en | verbos |
+|---|---|
+| **esp32 (S3 y P4)** | `FORMAT`, `RENAME`, `RMDIR`, `SD_INFO`, `SD_MOUNT`, `BOOTSEL`* |
+| **stm32** | `LIST_DIR`†, `PROMPT_RESPONSE`, `SAVE`, `RENAME`, `RMDIR`, `SD_*`†, `BOOTSEL`* |
+
+\* `BOOTSEL` es hardware del RP2350: exclusión legítima. † Ya fichadas.
+
+🔴 **Las que muerden y no estaban fichadas**: `RENAME`/`RMDIR`/`FORMAT` **están en el
+protocolo escrito** — S3/P4/STM32 lo incumplen, no divergen en silencio. El STM32 sin
+`PROMPT_RESPONSE` significa que **`input()` desde el IDE no puede contestar** en esa
+familia. Y sin `SAVE`, el IDE que lo mande recibe comando desconocido (aunque en littlefs
+del STM32 persistir-en-close haga el verbo casi no-op: la respuesta educada existe).
+
+- **`U3.1` · Escribir `bpvm_repl.h`.** Hoy **no existe** como fichero, pero U3.0 enseña
+  que el contrato de facto sí: 20 verbos comunes + el protocolo escrito. El `.h` es
+  ponerle nombre a lo que ya converge.
 - **`U3.2` · Partir en dos.** El transporte **sí** es hardware; interpretar `RUN`, `DIR`,
   `INFO` o `PACK_BURN` **no**. Depende de U2.
 - **`U3.3` · Migrar familia a familia**, de la que menos tiene a la que más:
