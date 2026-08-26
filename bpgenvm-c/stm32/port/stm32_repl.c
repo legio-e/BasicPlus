@@ -226,22 +226,6 @@ static void handle_list(long id, json_obj_t* obj) {
       wire_v1_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
 }
 
-static void handle_stat(long id, json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
-    }
-    /* H11 — el STAT sólo quiere el TAMAÑO. */
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) {
-        wire_v1_send_error(id, "NOT_FOUND", "no existe"); return;
-    }
-    char buf[128];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"STAT_REPLY\",\"id\":%ld,\"size\":%lu,\"isDir\":false,\"mtime\":0}",
-        id, (unsigned long) size);
-    if (n > 0) wire_v1_send_line(buf, (size_t) n);
-}
 
 static void handle_df(long id) {
     uint32_t total = fs_total_bytes(), used = fs_used_bytes();
@@ -254,42 +238,7 @@ static void handle_df(long id) {
     if (n > 0) wire_v1_send_line(buf, (size_t) n);
 }
 
-static void handle_get(long id, json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
-    }
-    /* H11 — el GET no carga el fichero: sólo su TAMAÑO para la cabecera, y
-     * luego lo escupe POR TROZOS de 256 B (el mismo trozo interno de littlefs). */
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) {
-        wire_v1_send_error(id, "NOT_FOUND", "no existe"); return;
-    }
-    char buf[96];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"GET_REPLY\",\"id\":%ld,\"bulk\":%lu}", id, (unsigned long) size);
-    if (n > 0) {
-        wire_v1_send_line(buf, (size_t) n);
-        uint32_t sent = 0;
-        while (sent < size) {
-            uint8_t chunk[256];
-            long r = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
-            if (r <= 0) break;
-            wire_v1_send_bulk(chunk, (uint32_t) r);
-            sent += (uint32_t) r;
-        }
-    }
-}
 
-static void handle_del(long id, json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
-    }
-    if (fs_del(path) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
-    if (strncmp(path, "/lib/", 5) != 0) fs_save();   /* /lib se re-provee al boot */
-    reply_empty("DEL_REPLY", id);
-}
 
 static void handle_put(long id, json_obj_t* obj) {
     char path[64];
@@ -409,6 +358,7 @@ static void handle_format(long id, json_obj_t* obj) {
  * (header + chunks + cierre), sin buffer para el log entero. */
 
 /* V6/U3 — LOG_DUMP vive en el común (src/bpvm_repl.c). */
+/* V6/U3 g2 — DEL/STAT/GET/MKDIR también (y RENAME/RMDIR, que esta familia no tenía). */
 
 /* ---- TERMINAL: RUN + streaming ---- */
 
@@ -792,7 +742,10 @@ static void dispatch(int first_char) {
         int is_fs = (strcmp(type, "LIST")  == 0 || strcmp(type, "STAT") == 0 || strcmp(type, "DF")  == 0
                   || strcmp(type, "GET")   == 0 || strcmp(type, "PUT")  == 0 || strcmp(type, "DEL") == 0
                   || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
-                  || strcmp(type, "MKDIR") == 0 || strcmp(type, "FORMAT") == 0);
+                  || strcmp(type, "MKDIR") == 0 || strcmp(type, "FORMAT") == 0
+                  || strcmp(type, "RENAME") == 0 || strcmp(type, "RMDIR") == 0);
+                  /* V6/U3 g2: RENAME/RMDIR entran por el común, pero el gate
+                   * de FS-no-montado es de esta familia y debe cubrirlos. */
         if (is_fs && st < BPVM_BOOT_FS) {
             wire_v1_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
             return;
@@ -811,16 +764,12 @@ static void dispatch(int first_char) {
     if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
     else if (strcmp(type, "INFO")      == 0) handle_info(id);
     else if (strcmp(type, "LIST")      == 0) handle_list(id, &obj);
-    else if (strcmp(type, "STAT")      == 0) handle_stat(id, &obj);
     else if (strcmp(type, "DF")        == 0) handle_df(id);
-    else if (strcmp(type, "GET")       == 0) handle_get(id, &obj);
     else if (strcmp(type, "PUT")       == 0) handle_put(id, &obj);
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     else if (strcmp(type, "PUT_BEGIN") == 0) handle_put_begin(id, &obj);
     else if (strcmp(type, "PUT_DATA")  == 0) handle_put_data(id, &obj);
     else if (strcmp(type, "PUT_END")   == 0) handle_put_end(id, &obj);
-    else if (strcmp(type, "DEL")       == 0) handle_del(id, &obj);
-    else if (strcmp(type, "MKDIR")     == 0) reply_empty("MKDIR_REPLY", id);
     else if (strcmp(type, "FORMAT")    == 0) handle_format(id, &obj);
     else if (strcmp(type, "RUN")       == 0) handle_run(id, &obj);
     /* P-run-stop (#257) — KILL en idle: nada que matar (el útil llega
