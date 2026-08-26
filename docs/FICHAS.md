@@ -521,6 +521,43 @@ VM-C** — ni en placa ni en host (`repl_v1.c:2005`: *«nunca emitimos PROMPT_RE
 miVM sí lo tiene. Es una divergencia real del invariante que la paridad **no puede ver**
 (un programa interactivo no cabe en el corpus). Queda fichada aquí.
 
+##### ✅ `U3.1` — el contrato + GRUPO 1, verificado en placa (26-ago · `0285fb6c`)
+
+`include/bpvm_repl.h` (el contrato: la familia pregunta primero al común) y
+`src/bpvm_repl.c` con el grupo 1 —PING, TIME, LOG_DUMP, LOG_CLEAR—, todo sobre contratos ya
+comunes (wire U2, log U1.2, RTC, json U1.1). El STM32 delega y borró sus cuatro copias.
+Alta en los CUATRO firmwares; en el host CLI **no va a propósito** (es capa-wire, el
+Makefile dice por qué). Tres divergencias unificadas y anotadas en el header (TIME sin
+parámetro ahora avisa; la marca del CLEAR queda siempre; el sink del STM32 perdía chunks).
+
+✅ **En placa (Nucleo, 26-ago)**: conexión (PING), LOG_DUMP entero por el sink nuevo, y la
+prueba visible — la marca `LOG cleared via wire v1` **apareció en el log del STM32 por
+primera vez**: esa línea sólo puede venir del común.
+
+##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
+
+Tras flashear, el árbol del IDE mostraba `/app` con 3 ficheros y **ningún `/lib`** — con
+90 KB usados en el FS. La cadena, medida pieza a pieza y confirmada por Eduardo:
+
+1. El flasheo **borró `/lib`** del littlefs.
+2. La **Stdlib está grabada como PACK** en esta placa, y `bpvm_pack.c:126` registra la zona
+   como *fallback* de la fachada — **con `stat` y `read`, y NULL en `list`**.
+3. El instalador *si-ausente* pregunta por `stat` → el pack contesta «existe» → **no
+   repone**. Correcto: ¿para qué duplicar lo que el pack sirve por XIP?
+4. El RUN resuelve `Core` por el fallback → todo funciona.
+5. **LIST no tiene fallback** → el árbol miente por omisión. Y el IDE, comparando contra
+   LIST, subió un `Pico.mod` que el pack ya servía.
+
+📌 **Nada estaba roto en lo funcional: lo roto es la VISIBILIDAD.** Son exactamente dos
+fichas de E1 ya escritas, mordiendo a la vez: **«vista de packs en el árbol»** y **«no
+copiar deps que el device YA TIENE — y que lo diga él»**. Este episodio es su caso de
+prueba natural cuando se hagan.
+
+⚠️ Dos huecos de instrumento anotados de paso: el instalador es MUDO (`fs_put` sin
+comprobar ni log — debería decir «N instalados, M ya servidos por el pack») y el boot del
+STM32 no dice de dónde salió la tabla de particiones (el TOTAL del FS bailó 516096 ↔
+614400 entre arranques del mismo día y aún no está explicado).
+
 📐 **Lo que esto fija del diseño**: heredar el dispatcher común da funcionalidad REAL en
 `RENAME`/`FORMAT`/`SAVE`, semántica-v1 coherente en `RMDIR`, y NO resucita `PROMPT` (eso
 pide implementar `IO.prompt` en la VM-C, que es otra ficha). Los verbos de hardware
