@@ -435,14 +435,21 @@ presupuesto*.
    `.iram0.text`, y ahí la comparación byte a byte tampoco dice nada útil (una función
    encoge y todo lo de detrás se desplaza). **Lo que vale es por símbolo.**
 
-3. ⏭️ **Paso 3 — el STM32**, que es una CUARTA forma.
-   📌 **Va en el MISMO viaje al banco que la validación AOT de esas dos familias** (hito
-   N1): las dos cosas piden las mismas placas encendidas, y el banco es lo caro.
-   ⚠️ Alta del `.c` en sus builds — [[core-c-nuevo-alta-en-5-builds]].
-   `stm32_wire.c` no tiene builders (usa otros nombres, `stm32_wire_*`) y `stm32_repl.c`
-   arma el JSON a mano. Es un paso aparte y más caro; no mezclar con el 2.
-4. Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
-   familias sin implementar un contrato que existe.
+3. ✅ **HECHO Y VERIFICADO EN PLACA (26-ago) · `ba70c9ab`** — el STM32 deja de ser la
+   cuarta forma. Las 4 de cable a los nombres del contrato (`recv_bulk` gana el chequeo de
+   capacidad que no hacía), `send_error`/`send_cstr` borrados en favor del común —**y con
+   ello un bug latente fuera**: el `send_error` propio metía `message` SIN ESCAPAR, una
+   comilla rompía el framing—, `send_fatal` como wrapper de 1 línea (LED de la placa + el
+   JSON del común), 57 llamantes renombrados.
+   📌 `wire_v1_proto.o` **ya se compilaba** en este build (linked folder): el linker lo
+   descartaba por no tener llamantes. La unificación fue darle llamantes.
+   ✅ **En placa (Eduardo)**: varios programas subidos y ejecutados (PUT = `recv_bulk` con
+   la firma nueva; la salida por `send_line` del contrato), un módulo cargado y un **Pack
+   grabado** — el camino bulk a lo grande, `s_burn_chunk` incluido.
+   ⏭️ **Se queda para U3, a propósito**: los ~22 replies que el REPL arma a mano con
+   `snprintf` + `json_escape` (INFO, LIST…). Son del dispatcher, no del cable.
+4. ⏭️ Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
+   familias sin implementar un contrato que existe. **Es lo único que queda de U2.**
 
 ##### 📐 De propina, una lección de método que costó dos medidas
 
