@@ -577,10 +577,36 @@ hay debajo — y **hasta la Pico tiene verbos-fachada**. Verbo ausente × primit
 | `SD_INFO`/`SD_MOUNT` | S3/P4, STM32 | `bpvm_sd` común, cintura RP2350 (SPI) y ESP32 (SDIO); **STM32 sin cintura** | S3/P4 probablemente gratis; STM32 debe **fallar con mensaje**, no faltar |
 | `BOOTSEL` | S3/P4, STM32 | hardware del RP2350 | ✅ verbo de familia (`ops`): correcto que falte |
 
-🔴 **Hallazgo colateral con entidad propia**: **`input()`/`IO.prompt()` NO existe en la
-VM-C** — ni en placa ni en host (`repl_v1.c:2005`: *«nunca emitimos PROMPT_REQUEST»*).
-miVM sí lo tiene. Es una divergencia real del invariante que la paridad **no puede ver**
-(un programa interactivo no cabe en el corpus). Queda fichada aquí.
+🔴 **Hallazgo colateral con entidad propia — y AMPLIADO el 26-ago**: **`input()` /
+`IO.prompt()` no existe en la VM-C**, ni en placa ni en host (`repl_v1.c:2005`: *«nunca
+emitimos PROMPT_REQUEST»*).
+
+📐 **Lo que se creía el 25-ago**: una tubería a medio construir. **Lo que es de verdad**,
+tras el apunte de Eduardo (*«en su día sí que lo probamos, se abría una ventana; eso es de
+V1 o V2»*) y comprobarlo en el histórico: **funciona en miVM desde antes del wire v1** —
+`setPromptSender` / `deliverPromptResponse` ya estaban, y en `5182e396` (25-may) sólo se
+MIGRABAN de `promptRequest` a `PROMPT_REQUEST`. El IDE recibe y contesta; los tres REPL
+aceptan la respuesta.
+
+| | ¿lo tiene? |
+|---|---|
+| miVM | ✅ completo, desde V1/V2 |
+| IDE (la ventana que Eduardo recuerda) | ✅ |
+| protocolo + los tres REPL | ✅ |
+| **VM-C** | ❌ **nunca** |
+
+⚠️ O sea que **no es una feature a medias: es una divergencia limpia del invariante
+sagrado**, y de las que la paridad **no puede cazar por construcción** — el arnés compara
+el `stdout` de dos ejecuciones no interactivas, y un programa que espera respuesta no cabe
+en ese corpus. Lleva así desde V1.
+
+📌 Encaja con el patrón que V6 lleva toda la semana destapando: algo que se da por bueno
+porque **el instrumento que lo vigilaría no llega hasta ahí**. Antes de implementarlo hay
+una pregunta de diseño que contestar (Eduardo, 26-ago, sin decidir): **¿lo queremos?** Un
+`input()` bloqueante en un micro sin consola es discutible —lo natural allí es la GUI o el
+wire—, y «BasicPlus no tiene entrada por consola, tiene formularios» sería una decisión
+legítima. Lo que no vale es el estado de hoy: **funcionando en una VM y no en la otra, sin
+decidir**.
 
 ##### ✅ `U3.1` — el contrato + GRUPO 1, verificado en placa (26-ago · `0285fb6c`)
 
