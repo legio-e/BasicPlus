@@ -601,12 +601,32 @@ el `stdout` de dos ejecuciones no interactivas, y un programa que espera respues
 en ese corpus. Lleva así desde V1.
 
 📌 Encaja con el patrón que V6 lleva toda la semana destapando: algo que se da por bueno
-porque **el instrumento que lo vigilaría no llega hasta ahí**. Antes de implementarlo hay
-una pregunta de diseño que contestar (Eduardo, 26-ago, sin decidir): **¿lo queremos?** Un
-`input()` bloqueante en un micro sin consola es discutible —lo natural allí es la GUI o el
-wire—, y «BasicPlus no tiene entrada por consola, tiene formularios» sería una decisión
-legítima. Lo que no vale es el estado de hoy: **funcionando en una VM y no en la otra, sin
-decidir**.
+porque **el instrumento que lo vigilaría no llega hasta ahí**.
+
+### ✅ DECIDIDO (Eduardo, 26-ago): SE QUEDA COMO ESTÁ. No se implementa en la VM-C.
+
+Su razonamiento, que reencuadra la ficha entera: *«lo normal es que un programa en un micro
+no pida entradas por input, igual que los prints tampoco sirven de nada si el programa no
+está conectado a una consola. ¿Entonces para qué sirven el print y los inputs? Son
+herramientas de DEPURACIÓN básicamente. Fíjate que están antes que el debugger, así que si
+quieres que un programa se pare le pones un input y te hace la función de un break. Yo lo
+dejaría, no molesta.»*
+
+📐 **Y el coste, medido, apoya la decisión**: `input()` no es «un builtin más». En miVM es
+un **estado de hilo** — el `tc` pasa a `BLOCKED_PROMPT`, sale de la cola de ejecución, y
+otro hilo deposita el resultado en su pila cuando llega la respuesta
+(`VirtualMachine.java:5023`). Portarlo a la VM-C significa un estado nuevo en el
+planificador más un despertar desde el wire, con el `poll` entre quanta de por medio: toca
+el scheduler, no la tabla de builtins.
+
+⚠️ **La asimetría que queda, dicha para que conste**: en placa `print` SÍ llega por el wire
+(sale como evento OUTPUT), así que las dos herramientas de depuración están en la misma
+situación —sólo sirven conectado— pero sólo una funciona. Se acepta a sabiendas: el
+debugger de verdad ya existe y hace mejor lo que el `input()` hacía de apaño.
+
+📌 **Lo que esto cambia en el registro**: deja de ser una divergencia *pendiente* y pasa a
+ser una **limitación conocida y decidida**. Su sitio, por tanto, es `docs/PENDIENTES.md`
+(limitaciones de cara al usuario), no la lista de trabajo.
 
 ##### ✅ `U3.1` — el contrato + GRUPO 1, verificado en placa (26-ago · `0285fb6c`)
 

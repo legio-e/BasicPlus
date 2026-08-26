@@ -106,6 +106,25 @@
   la incompatibilidad de firma sería útil.
 
 
+### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago)
+
+`input()` / `IO.prompt()` abre su ventana en el IDE cuando el programa corre en la **VM
+Java**. En un **micro no hace nada**: la VM-C nunca lo implementó, aunque el protocolo, el
+IDE y los tres REPL sí lo soportan.
+
+**Se queda así a propósito.** El razonamiento de Eduardo: `print` e `input` no son entrada
+y salida de verdad en un micro —son **herramientas de depuración**, anteriores al
+debugger—, y un `input()` era el «breakpoint del pobre» para parar un programa. Con el
+debugger de verdad funcionando, eso ya está mejor resuelto.
+
+⚠️ **Lo que hay que saber al escribir un programa**: si va a correr en placa, no uses
+`input()` para pedir datos. Para interactuar con el usuario en un micro está la GUI
+(formularios), y para pausar y mirar, el debugger.
+
+📌 El coste de igualarlo no era pequeño: `input()` bloquea el hilo BP (estado
+`BLOCKED_PROMPT` y salida de la cola de ejecución hasta que llega la respuesta), así que en
+la VM-C tocaría el planificador, no la tabla de builtins.
+
 ### Una tupla no entra en una colección (decidido el 21-ago)
 
 `lst.add(pair())` **no compila**. Hasta V4 colaba porque `any` era asignable en los
