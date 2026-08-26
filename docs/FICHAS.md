@@ -534,6 +534,23 @@ parámetro ahora avisa; la marca del CLEAR queda siempre; el sink del STM32 perd
 prueba visible — la marca `LOG cleared via wire v1` **apareció en el log del STM32 por
 primera vez**: esa línea sólo puede venir del común.
 
+##### ✅ `U3.2` — GRUPO 2: el FS por la fachada común (26-ago · `778e6361`)
+
+Seis verbos más al común — DEL, MKDIR, RMDIR, STAT, RENAME, GET — todos resueltos enteros
+con `bpvm_fs_*`. El STM32 borra sus copias y **gana dos verbos que nunca tuvo**: RENAME con
+primitiva real (fachada → `lfs_rename`, atómico) y RMDIR (el stub v1, a sabiendas). Su STAT
+aprende el `crc` bajo demanda (#398): el «contenido idéntico, salto PUT» del IDE se apoya
+ya en algo real en esta placa. Divergencias unificadas: códigos de error a la referencia, y
+el `fs_save()` tras DEL (no-op documentado) fuera.
+
+✅ **En placa (Nucleo, 26-ago)**: Delete (DEL común), doble subida con `salto PUT` (STAT+crc
+común), PUT de familia y RUN de control con su AOT 4/4 intacto. ⏳ GET (Download) compilado
+y pendiente de su clic de verificación.
+
+**El marcador de U3**: 10 verbos en el común (meta 4 + FS 6) de los 29 del protocolo. En el
+STM32 quedan de familia: HELLO, INFO, LIST, DF, FORMAT, PUT*, RUN, KILL, RESET, STATE — los
+de `ops` y los de estado.
+
 ##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
 
 Tras flashear, el árbol del IDE mostraba `/app` con 3 ficheros y **ningún `/lib`** — con
