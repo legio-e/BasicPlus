@@ -1242,16 +1242,28 @@ public final class PicoExplorer extends JPanel {
      * ⚠️ Y cuando llegue: el color como ÚNICO canal deja fuera a quien no
      * distingue rojo y verde. El rojo tendrá que venir con icono o marca.
      *
-     * Los tonos son MATES y oscuros a propósito (criterio de Eduardo, 26-ago:
-     * *«no utilices colores brillantes, mejor mates, un poco más oscuros»*).
-     * Poca saturación: el árbol es una lista que se lee de un vistazo, no un
-     * semáforo — el color agrupa, no grita. Y deja sitio arriba para cuando
-     * entre el rojo, que sí tiene que destacar. */
-    private static final Color COLOR_MOD    = new Color(0x2C, 0x40, 0x63);  /* azul pizarra: el bytecode, el artefacto principal */
-    private static final Color COLOR_MDN    = new Color(0x51, 0x3D, 0x63);  /* ciruela: su nativo, hermano del .mod */
-    private static final Color COLOR_PACK   = new Color(0x6B, 0x5A, 0x38);  /* ocre: contenedor grabable */
-    private static final Color COLOR_TEXTO  = new Color(0x33, 0x57, 0x52);  /* verde pizarra: configuración legible */
-    private static final Color COLOR_BINARIO= new Color(0x5A, 0x5A, 0x5A);  /* gris: recursos opacos */
+     * Los tonos son MATES a propósito (criterio de Eduardo, 26-ago: *«no
+     * utilices colores brillantes, mejor mates, un poco más oscuros»*). El
+     * árbol es una lista que se lee de un vistazo, no un semáforo: el color
+     * agrupa, no grita. Y deja sitio arriba para cuando entre el rojo.
+     *
+     * ⚠️ PERO hay un suelo, y la primera versión lo cruzó: los tonos estaban
+     * tan apagados que *«el azul se ve poco, cuesta distinguirlos»* (Eduardo,
+     * en placa). Un color que no se distingue del texto normal no agrupa nada
+     * — es gasto sin función. Lo que importa NO es el contraste contra el
+     * fondo blanco (aquel ya iba de sobra, 10:1) sino contra el NEGRO del
+     * texto corriente, que es de lo que hay que despegarse. Medido: los tonos
+     * de ahora están entre 3,0 y 4,2 veces más claros que el negro, y siguen
+     * por encima de 5:1 sobre blanco (accesibilidad pide 4,5:1). El azul
+     * anterior estaba en 2,2 — de ahí que se leyera como negro.
+     *
+     * Las familias son SEMÁNTICAS, no una por extensión: quien mira el árbol
+     * busca «qué clase de cosa es esto», no la extensión exacta. */
+    private static final Color COLOR_MOD    = new Color(0x2F, 0x5C, 0x9C);  /* azul: el bytecode, el artefacto principal */
+    private static final Color COLOR_MDN    = new Color(0x6B, 0x4A, 0x8F);  /* ciruela: su nativo, hermano del .mod */
+    private static final Color COLOR_PACK   = new Color(0x7A, 0x62, 0x24);  /* ocre: contenedor grabable */
+    private static final Color COLOR_RECURSO= new Color(0x2E, 0x7D, 0x4F);  /* verde: los recursos del proyecto */
+    private static final Color COLOR_TEXTO  = new Color(0x5A, 0x5A, 0x5A);  /* gris: texto y configuración */
 
     /** Color de un fichero del árbol por su extensión, o null si no es un tipo
      *  conocido (se pinta con el color normal). NUNCA devuelve rojo. */
@@ -1263,9 +1275,15 @@ public final class PicoExplorer extends JPanel {
         if (n.endsWith(".pack")) return COLOR_PACK;
         if (n.endsWith(".txt") || n.endsWith(".json") || n.endsWith(".ini")
                 || n.endsWith(".log") || n.endsWith(".md"))  return COLOR_TEXTO;
+        /* Los RECURSOS del proyecto (la carpeta resources/, #260): fuentes,
+         * imágenes, ventanas de formulario, binarios sueltos. Van juntos y en
+         * verde por criterio de Eduardo — son «lo que la app lleva encima»,
+         * frente a los .mod que son «lo que la app ES». */
         if (n.endsWith(".bin") || n.endsWith(".fon") || n.endsWith(".raw")
-                || n.endsWith(".npk"))                       return COLOR_BINARIO;
-        return null;
+                || n.endsWith(".win") || n.endsWith(".npk")
+                || n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".bmp")
+                || n.endsWith(".wav"))                       return COLOR_RECURSO;
+        return null;   /* desconocido y DIRECTORIOS: el negro de siempre */
     }
 
     /** Convierte un nombre local (e.g. "Hello.mod") en un path remoto.

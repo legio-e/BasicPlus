@@ -1987,6 +1987,17 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   fichero, sin tocar wire ni firmware**. Ya calcula el label y pone el icono;
   falta un `setForeground(...)` por extensión. `Backend.Entry` trae `name` y
   `size`, o sea que **el color por TIPO sale con lo que ya hay**.
+  ✅ **PASO 1 HECHO Y VISTO EN PANTALLA (26-ago · `9cc33ee6` + ajuste)**: cinco
+  familias SEMÁNTICAS —`.mod` azul, `.mdn` ciruela, `.pack` ocre, **recursos en
+  verde** (fuentes, imágenes, `.win`, binarios), texto/config gris— y
+  directorios y desconocidos en negro. **El rojo, sin gastar.**
+  📐 **La corrección que enseñó el criterio** (Eduardo, en pantalla): la primera
+  paleta salió tan apagada que *«el azul se ve poco, cuesta distinguirlos»*. El
+  error de medida fue mío y es instructivo: yo comprobaba el contraste contra el
+  FONDO BLANCO (iba sobrado, 10:1) cuando lo que importa es el contraste contra
+  el **NEGRO del texto normal**, que es de lo que hay que despegarse para que el
+  color signifique algo. El azul viejo estaba a 2,2× del negro; los de ahora,
+  entre 3,0 y 4,2× — y siguen por encima de 5:1 sobre blanco. Mate, pero legible.
   ⏭️ **Va en dos pasos, y el primero es el encargo entero**:
   1. colores por extensión, con **el rojo RESERVADO y sin usar** — eso ya
      cumple lo pedido y no espera a nada;
