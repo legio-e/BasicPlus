@@ -498,11 +498,34 @@ y el protocolo (`BPVM_WIRE_PROTOCOL.md`) ya documenta la mayoría. Medido con
 
 \* `BOOTSEL` es hardware del RP2350: exclusión legítima. † Ya fichadas.
 
-🔴 **Las que muerden y no estaban fichadas**: `RENAME`/`RMDIR`/`FORMAT` **están en el
-protocolo escrito** — S3/P4/STM32 lo incumplen, no divergen en silencio. El STM32 sin
-`PROMPT_RESPONSE` significa que **`input()` desde el IDE no puede contestar** en esa
-familia. Y sin `SAVE`, el IDE que lo mande recibe comando desconocido (aunque en littlefs
-del STM32 persistir-en-close haga el verbo casi no-op: la respuesta educada existe).
+##### 🔬 `U3.0b` (26-ago) — Y LA SEGUNDA PASADA, a pregunta de Eduardo
+
+> *«Si añadimos un comando RENAME y detrás no hay un comando que lo implemente de verdad,
+> no va a servir de nada. Hay que ver si esos comandos están implementados o no.»*
+
+Tenía razón, y más de lo esperado: la matriz medía el **dispatcher** (`strcmp`), no lo que
+hay debajo — y **hasta la Pico tiene verbos-fachada**. Verbo ausente × primitiva real:
+
+| verbo | le falta a | la primitiva debajo | veredicto al compartir dispatcher |
+|---|---|---|---|
+| `RENAME` | S3/P4, STM32 | `bpvm_fs_rename` — **fachada común**, `lfs_rename` del motor común | ✅ **gratis DE VERDAD** |
+| `FORMAT` | S3/P4 | `fs_format_ram` **EXISTE** en `fs_lfs_esp32.c` | ✅ gratis (nombre de familia → va al `ops`) |
+| `SAVE` | STM32 | littlefs persiste en cada close (`fs_save` no-op **documentado**) | ✅ gratis como no-op LEGÍTIMO vía `ops` |
+| `RMDIR` | S3/P4, STM32 | **ninguna**: el de la Pico ES un stub que contesta OK sin hacer nada (v1: dirs = prefijos) | ⚠️ se hereda el stub — coherente, pero que conste |
+| `PROMPT_RESPONSE` | STM32 | **ninguna en NINGUNA familia**: `IO.prompt()` no está implementado en la VM-C; la Pico hace ack cortés | 🔴 letra muerta — heredar = heredar el stub |
+| `SD_INFO`/`SD_MOUNT` | S3/P4, STM32 | `bpvm_sd` común, cintura RP2350 (SPI) y ESP32 (SDIO); **STM32 sin cintura** | S3/P4 probablemente gratis; STM32 debe **fallar con mensaje**, no faltar |
+| `BOOTSEL` | S3/P4, STM32 | hardware del RP2350 | ✅ verbo de familia (`ops`): correcto que falte |
+
+🔴 **Hallazgo colateral con entidad propia**: **`input()`/`IO.prompt()` NO existe en la
+VM-C** — ni en placa ni en host (`repl_v1.c:2005`: *«nunca emitimos PROMPT_REQUEST»*).
+miVM sí lo tiene. Es una divergencia real del invariante que la paridad **no puede ver**
+(un programa interactivo no cabe en el corpus). Queda fichada aquí.
+
+📐 **Lo que esto fija del diseño**: heredar el dispatcher común da funcionalidad REAL en
+`RENAME`/`FORMAT`/`SAVE`, semántica-v1 coherente en `RMDIR`, y NO resucita `PROMPT` (eso
+pide implementar `IO.prompt` en la VM-C, que es otra ficha). Los verbos de hardware
+(`BOOTSEL`, `SD_*`) viven en el `ops` de familia, y donde no haya soporte la respuesta es
+un error con nombre, nunca «type no implementado».
 
 - **`U3.1` · Escribir `bpvm_repl.h`.** Hoy **no existe** como fichero, pero U3.0 enseña
   que el contrato de facto sí: 20 verbos comunes + el protocolo escrito. El `.h` es

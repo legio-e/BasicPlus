@@ -571,12 +571,13 @@ fecha aproximada: cuando llegue, el punto 2 de arriba deja de ser teórico.
 ### La pregunta que decide el orden (para Eduardo)
 
 **¿Migración 1:1 primero y los verbos que faltan después, o aprovechar la migración para
-añadirlos?** La matriz enseña que S3/P4/STM32 incumplen verbos del protocolo escrito
-(`RENAME`, `RMDIR`, `FORMAT`; el STM32 además `PROMPT_RESPONSE` y `SAVE`). Con el REPL
-común, esos verbos se ganan GRATIS al migrar — la familia los recibe del común sin
-escribirlos. Eso sugiere: **migrar 1:1 el núcleo de 20, y los que faltan entran solos al
-compartir dispatcher** (no es «añadir features durante la migración»: es que la migración
-ES la feature). El orden de familias, el ya escrito en U3.3: STM32 → S3 → Pico, de menos a
+añadirlos?** — Contestada con la segunda pasada de Eduardo (*«hay que ver si esos comandos
+están implementados o no»*, U3.0b en FICHAS): el «gratis» se midió verbo a verbo. Da
+funcionalidad REAL en `RENAME` (fachada común) / `FORMAT` (primitiva presente en ESP32) /
+`SAVE` (no-op legítimo en STM32); semántica-v1 coherente en `RMDIR` (stub también en la
+Pico); y NO resucita `PROMPT`, que está muerto en toda la VM-C (`IO.prompt` sin
+implementar — fichado aparte). Así que: **migrar 1:1 el núcleo, los verbos con primitiva
+entran solos, y lo muerto no se disfraza**. El orden de familias, el ya escrito en U3.3: STM32 → S3 → Pico, de menos a
 más.
 
 ### Los riesgos que ya se ven
