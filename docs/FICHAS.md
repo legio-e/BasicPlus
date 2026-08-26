@@ -551,6 +551,22 @@ de control con su AOT 4/4 intacto.
 STM32 quedan de familia: HELLO, INFO, LIST, DF, FORMAT, PUT*, RUN, KILL, RESET, STATE — los
 de `ops` y los de estado.
 
+##### ✅ `U3.3` — LIST al común, verificado en placa (26-ago · `ecd08f73`)
+
+El verbo del episodio del `/lib`, en streaming sobre la fachada (que inyecta los montajes
+hijos: `/sd` entra solo). El STM32 borra su `handle_list` y gana lo que #398 nunca le
+llevó: **su LIST viejo calculaba el CRC de CADA fichero en CADA refresco del árbol** — el
+común emite `crc:-1` y el CRC va por `STAT{crc}` bajo demanda (grupo 2). El refresco pasa
+de leer el FS entero a no leer nada. Y sin CRC anidado, fuera el snapshot por directorio:
+streaming puro, con el único tope (directorios pendientes) DECLARADO (`omitted` + log).
+
+✅ **En placa (Nucleo)**: Refresh con el árbol correcto y la línea nueva `ls: N ent` en el
+log; Delete y Download de control sobre lo listado (los nombres que emite LIST son los que
+DEL/GET consumen, y quedó escrito).
+
+**Marcador U3: 11 de 29 verbos en el común** (meta 4 + FS 7). Quedan en familia: HELLO,
+INFO, LIST_DIR, DF, FORMAT, SAVE, PUT*, RUN, KILL, RESET, STATE, DEBUG* y los de hardware.
+
 ##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
 
 Tras flashear, el árbol del IDE mostraba `/app` con 3 ficheros y **ningún `/lib`** — con
