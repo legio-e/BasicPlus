@@ -214,6 +214,21 @@ public final class PicoExplorer extends JPanel {
                         if (slash >= 0) label = label.substring(slash + 1);
                         setText(label + "  (" + f.size + " bytes)");
                         setIcon(UIManager.getIcon("FileView.fileIcon"));
+                        /* El COLOR por tipo. Encargo de Eduardo (18-ago).
+                         *
+                         * Sólo cuando la fila NO está seleccionada: al
+                         * seleccionar manda el color de selección del L&F, y
+                         * pisarlo daría texto ilegible sobre el azul.
+                         *
+                         * Y se pone SIEMPRE (con el color por defecto si el
+                         * tipo no es conocido) porque el renderer es UN
+                         * componente reutilizado para todas las filas: si una
+                         * rama no asigna, hereda el color de la fila anterior.
+                         * Eso no lo ves probando con un solo tipo. */
+                        if (!sel) {
+                            Color c = colorDeTipo(f.name);
+                            setForeground(c != null ? c : getTextNonSelectionColor());
+                        }
                     } else {
                         // Carpeta (o raíz). Usa los iconos nativos.
                         Icon icon = expanded
@@ -1212,6 +1227,45 @@ public final class PicoExplorer extends JPanel {
             status.setText("Done: " + statusStr);
             onRefresh();
         });
+    }
+
+    /* ── EL ÁRBOL POR COLORES (encargo de Eduardo, 18-ago) ──────────────────
+     *
+     * Cada tipo con su color, y **el ROJO RESERVADO**: es lo importante del
+     * encargo. Si el rojo se gasta en un tipo de fichero, cuando de verdad haya
+     * algo que mirar —un `.mdn` de otra arquitectura (#441), un `.mod` de ABI
+     * incompatible (#284), un `/lib` rancio (#422), un listado truncado
+     * (#425)— ya no queda color con el que decirlo. Así que aquí no hay rojo
+     * ni nada que se le parezca: los cuatro casos entran cuando el árbol sepa
+     * pedir esos datos, y entonces el rojo estará libre y esperándolos.
+     *
+     * ⚠️ Y cuando llegue: el color como ÚNICO canal deja fuera a quien no
+     * distingue rojo y verde. El rojo tendrá que venir con icono o marca.
+     *
+     * Los tonos son MATES y oscuros a propósito (criterio de Eduardo, 26-ago:
+     * *«no utilices colores brillantes, mejor mates, un poco más oscuros»*).
+     * Poca saturación: el árbol es una lista que se lee de un vistazo, no un
+     * semáforo — el color agrupa, no grita. Y deja sitio arriba para cuando
+     * entre el rojo, que sí tiene que destacar. */
+    private static final Color COLOR_MOD    = new Color(0x2C, 0x40, 0x63);  /* azul pizarra: el bytecode, el artefacto principal */
+    private static final Color COLOR_MDN    = new Color(0x51, 0x3D, 0x63);  /* ciruela: su nativo, hermano del .mod */
+    private static final Color COLOR_PACK   = new Color(0x6B, 0x5A, 0x38);  /* ocre: contenedor grabable */
+    private static final Color COLOR_TEXTO  = new Color(0x33, 0x57, 0x52);  /* verde pizarra: configuración legible */
+    private static final Color COLOR_BINARIO= new Color(0x5A, 0x5A, 0x5A);  /* gris: recursos opacos */
+
+    /** Color de un fichero del árbol por su extensión, o null si no es un tipo
+     *  conocido (se pinta con el color normal). NUNCA devuelve rojo. */
+    private static Color colorDeTipo(String nombre) {
+        if (nombre == null) return null;
+        String n = nombre.toLowerCase();
+        if (n.endsWith(".mod"))  return COLOR_MOD;
+        if (n.endsWith(".mdn"))  return COLOR_MDN;
+        if (n.endsWith(".pack")) return COLOR_PACK;
+        if (n.endsWith(".txt") || n.endsWith(".json") || n.endsWith(".ini")
+                || n.endsWith(".log") || n.endsWith(".md"))  return COLOR_TEXTO;
+        if (n.endsWith(".bin") || n.endsWith(".fon") || n.endsWith(".raw")
+                || n.endsWith(".npk"))                       return COLOR_BINARIO;
+        return null;
     }
 
     /** Convierte un nombre local (e.g. "Hello.mod") en un path remoto.
