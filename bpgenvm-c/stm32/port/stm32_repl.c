@@ -167,64 +167,7 @@ static void handle_info(long id) {
 
 /* ---- FILES ---- */
 
-static void handle_list(long id, json_obj_t* obj) {
-    char prefix[64];
-    if (json_get_str(obj, "path", prefix, sizeof(prefix)) < 0) prefix[0] = '\0';
-    size_t plen = strlen(prefix);
-
-    /* EFECTO VENTANA (Eduardo, 28-jul) — AQUÍ ESTABA. La respuesta entera se
-     * armaba en `char buf[1024]` y, al llenarse, un `break` MUDO dejaba fuera el
-     * resto: con ~80 B por entrada cabían unas DOCE. Por eso, cuantos más
-     * módulos había en /app, más "desaparecían" los de /lib — /app se comía el
-     * presupuesto y a /lib no le llegaba el turno. Los ficheros estaban ahí; lo
-     * que se cortaba era el listado, sin decirlo.
-     * El Pico y el ESP32 ya EMITEN el listado según lo recorren (cabecera →
-     * entradas → cierre), sin buffer para la respuesta completa. El STM32 era el
-     * único que no, así que se alinea: sin tope, y de paso las 3 familias hacen
-     * lo mismo. Sólo queda un buffer POR ENTRADA, que sí tiene tamaño acotado. */
-    char head[64];
-    int hn = snprintf(head, sizeof(head),
-                      "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
-    wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
-    char ent[192];
-    int first = 1;
-    int cnt = fs_count();
-    for (int i = 0; i < cnt; i++) {
-        const char* name; uint32_t size;
-        if (fs_entry(i, &name, &size) != 0) continue;
-        if (plen > 0 && strncmp(name, prefix, plen) != 0) continue;
-        const char* rel = name + plen;             /* basename tras el prefijo */
-        /* Solo recortar la '/' del resto cuando HAY prefijo. Con LIST("")
-         * (el del árbol del IDE) hay que devolver el nombre COMPLETO tal
-         * cual está guardado ("/app/X.mod") — como hace el Pico — o el
-         * DEL/GET del árbol mandan el path sin barra y find() exacto da
-         * NOT_FOUND. */
-        if (plen > 0 && *rel == '/') rel++;
-        /* paso 4 cierre — CRC del contenido (== java.util.zip.CRC32) para el
-         * skip-PUT por contenido real del device. fs_get por el nombre COMPLETO. */
-        /* H11 — CRC por trozos (256 B en la pila dentro de la fachada), no
-         * leyendo el fichero entero a un espejo. Igual que Pico y ESP32. */
-        uint32_t crc = 0;
-        if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
-        int w = snprintf(ent, sizeof(ent),
-            "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":%lu,\"isDir\":false,\"mtime\":0}",
-            first ? "" : ",", rel, (unsigned long) size, (unsigned long) crc);
-        if (w <= 0) continue;
-        if ((size_t) w >= sizeof(ent)) {   /* nombre absurdo: sáltalo, pero DILO */
-            log_printf("fs: LIST se salta '%s' (no cabe en %u B)", rel, (unsigned) sizeof(ent));
-            continue;
-        }
-        wire_v1_send_bulk((const uint8_t*) ent, (size_t) w);
-        first = 0;
-    }
-    /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
-     * topes y al pasarse recortaba EN SILENCIO: el firmware lo anotaba en su log
-     * pero por aqui salia una lista corta que el IDE pintaba como si fuera todo.
-     * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
-    { char cola[40];
-      int cn = snprintf(cola, sizeof(cola), "],\"omitted\":%d}", fs_list_omitidas());
-      wire_v1_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
-}
+/* V6/U3 g3 — LIST vive en el común (streaming, crc:-1, montajes de la fachada). */
 
 
 static void handle_df(long id) {
@@ -763,7 +706,6 @@ static void dispatch(int first_char) {
 
     if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
     else if (strcmp(type, "INFO")      == 0) handle_info(id);
-    else if (strcmp(type, "LIST")      == 0) handle_list(id, &obj);
     else if (strcmp(type, "DF")        == 0) handle_df(id);
     else if (strcmp(type, "PUT")       == 0) handle_put(id, &obj);
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */

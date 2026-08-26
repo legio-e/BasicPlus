@@ -182,6 +182,105 @@ static void repl_get(long id, const json_obj_t* obj) {
     }
 }
 
+
+/* ══════════════ GRUPO 3 — LIST, el del episodio del /lib ══════════════
+ *
+ * BFS sobre la fachada (`bpvm_fs_list`), que ademas INYECTA los montajes hijos
+ * al listar su padre (`emite_montajes_hijos`): /sd y compania entran solos.
+ *
+ * Tres cosas que este verbo UNIFICA, medidas al migrar (26-ago):
+ *
+ *   · CRC POR ENTRADA, FUERA (#398). El STM32 aun leia CADA fichero entero en
+ *     CADA refresco del arbol para su CRC — la medida de la P4 (15-ago) fue el
+ *     99 % del tiempo del refresco. El comun emite `crc:-1` («este firmware no
+ *     da CRC en el listado», que el IDE ya entiende) y el CRC se pide fichero a
+ *     fichero con STAT{crc:true}, que ya esta en el grupo 2.
+ *
+ *   · SIN SNAPSHOT. Las familias copiaban cada directorio a un snapshot antes
+ *     de emitir, porque calcular el CRC en mitad del recorrido reentraba en el
+ *     FS. Sin CRC no hay reentrada: se emite en STREAMING segun se recorre —
+ *     ni scratch, ni tope de entradas por directorio, ni SNAP_MAX del FS
+ *     entero. El unico tope que queda es el de DIRECTORIOS pendientes, y al
+ *     pasarse se DICE (`omitted` + log, #425): un listado corto que no se
+ *     declara corto es una mentira de las que se creen.
+ *
+ *   · `path` SE IGNORA, como en la referencia: el arbol del IDE manda "" y
+ *     lista todo (el STM32 tenia un filtro por prefijo que nadie usaba; el
+ *     por-directorio de verdad es el verbo LIST_DIR).
+ *
+ * Nombres como los guarda el FS: raiz → pelado («Hello.mod»); subdirectorio →
+ * completo con barra («/lib/Core.mod»). El DEL/GET del arbol dependen de eso. */
+
+#define REPL_LIST_MAX_DIRS  16
+#define REPL_LIST_NAME_MAX  64
+
+typedef struct {
+    long id;
+    int  first;
+    int  omitidas;
+    int  emitidas;
+    char (*pending)[REPL_LIST_NAME_MAX];
+    int  tail;
+    const char* dir;      /* el directorio en curso (para componer el nombre) */
+} repl_list_ctx_t;
+
+static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user) {
+    repl_list_ctx_t* c = (repl_list_ctx_t*) user;
+    int is_root = (c->dir[1] == '\0');
+    if (is_dir) {
+        if (c->tail < REPL_LIST_MAX_DIRS) {
+            snprintf(c->pending[c->tail], REPL_LIST_NAME_MAX, "%s%s%s",
+                     c->dir, is_root ? "" : "/", name);
+            c->tail++;
+        } else {
+            c->omitidas++;   /* #425: un directorio sin recorrer TAMBIEN falta */
+            log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; '%s' sin recorrer",
+                       REPL_LIST_MAX_DIRS, name);
+        }
+        return;              /* los dirs no se emiten (legado plano) */
+    }
+    char ent[192];
+    char full[REPL_LIST_NAME_MAX];
+    if (is_root) snprintf(full, sizeof full, "%s", name);
+    else         snprintf(full, sizeof full, "%s/%s", c->dir, name);
+    /* Escape minimo del nombre: en un path solo asoman `"` y el separador. */
+    char esc[REPL_LIST_NAME_MAX * 2]; size_t o = 0;
+    for (const char* q = full; *q && o + 2 < sizeof esc; q++) {
+        if (*q == '"' || *q == '\\') esc[o++] = '\\';
+        esc[o++] = *q;
+    }
+    esc[o] = '\0';
+    int w = snprintf(ent, sizeof ent,
+        "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":-1,\"isDir\":false,\"mtime\":0}",
+        c->first ? "" : ",", esc, (unsigned long) size);
+    if (w > 0) { wire_v1_send_bulk((const uint8_t*) ent, (size_t) w); c->first = 0; c->emitidas++; }
+}
+
+static void repl_list(long id) {
+    static char pending[REPL_LIST_MAX_DIRS][REPL_LIST_NAME_MAX];
+    char head[64];
+    int hn = snprintf(head, sizeof head,
+                      "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
+    if (hn <= 0) return;
+    wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
+
+    repl_list_ctx_t c;
+    c.id = id; c.first = 1; c.omitidas = 0; c.emitidas = 0;
+    c.pending = pending; c.tail = 0;
+    snprintf(pending[c.tail++], REPL_LIST_NAME_MAX, "/");
+    int head_i = 0;
+    while (head_i < c.tail) {
+        char dir[REPL_LIST_NAME_MAX];
+        snprintf(dir, sizeof dir, "%.63s", pending[head_i++]);   /* copia: sin aliasing */
+        c.dir = dir;
+        (void) bpvm_fs_list(dir, repl_list_cb, &c);   /* un volumen caido no borra el resto */
+    }
+    char cola[40];
+    int cn = snprintf(cola, sizeof cola, "],\"omitted\":%d}", c.omitidas);
+    if (cn > 0) wire_v1_send_line(cola, (size_t) cn);
+    log_printf("ls: %d ent (%d dirs omitidos)", c.emitidas, c.omitidas);
+}
+
 int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
@@ -209,6 +308,7 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
         wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
         return 1;
     }
+    if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
     /* ── grupo 2: el FS por la fachada ── */
     if (strcmp(type, "DEL")    == 0) { repl_del(id, obj);    return 1; }
     if (strcmp(type, "STAT")   == 0) { repl_stat(id, obj);   return 1; }
