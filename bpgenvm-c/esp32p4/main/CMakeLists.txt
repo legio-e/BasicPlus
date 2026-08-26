@@ -81,7 +81,7 @@ idf_component_register(
         "../../src/mdn_loader.c"              # H4 AOT RISC-V (Hito 2): loader .mdn dinámico (SOLO P4)
         "../../src/scheduler_smp.c"
         "../../src/comm_common.c"
-        "../../src/comm_host.c"
+        "../../src/comm_host.c"         # RELLENO del contrato SMP (bpvm_comm.h): idem S3 — sin SMP aqui; un SMP futuro trae su comm propio
         # --- fachadas HW (backend ESP-IDF vía gpio_esp32.c; ADC/PWM aún stub) ---
         "../../src/gpio.c"
         "../../src/i2c.c"

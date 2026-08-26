@@ -448,8 +448,27 @@ presupuesto*.
    grabado** — el camino bulk a lo grande, `s_burn_chunk` incluido.
    ⏭️ **Se queda para U3, a propósito**: los ~22 replies que el REPL arma a mano con
    `snprintf` + `json_escape` (INFO, LIST…). Son del dispatcher, no del cable.
-4. ⏭️ Y sólo entonces mirar qué hacer con `bpvm_comm.h`, que es **otro** problema: tres
-   familias sin implementar un contrato que existe. **Es lo único que queda de U2.**
+4. ✅ **RESUELTO (26-ago) — y la premisa era FALSA por segunda vez.** Medido de punta a
+   punta: `bpvm_comm.h` es el contrato de salida del **modo SMP**, que es *opt-in* (host
+   `--smp=N`; Pico `-DBPVM_PICO_SMP_WORKERS`, que el build por defecto NO define). En
+   single-worker —todas las placas hoy— la salida va por `output_cb` y este contrato ni se
+   toca. Y **las cinco imágenes SÍ lo implementan**: la Pico con `comm_pico.c` y las otras
+   cuatro con `comm_host.c` — tres de ellas **como relleno deliberado** (S3 y P4 lo listan
+   explícito en su CMakeLists; el STM32 lo arrastra por el linked folder).
+   Lo dicho antes aquí («tres familias sin implementar un contrato que existe») medía
+   *implementaciones propias* y concluía *implementaciones*. La cadena entera de este hito
+   nació de leer mal este fichero — dos veces.
+   **La acción**: el MAPA escrito en `bpvm_comm.h` (quién, cuándo corre, y el aviso de que
+   un SMP futuro en S3/P4/STM32 debe traer su `comm_<familia>.c` que hable por el wire, no
+   heredar el relleno de stdout), y el relleno anotado en los dos CMakeLists. Cero cambio
+   de comportamiento; sin reflashear.
+
+##### 🏁 U2, EL TRANSPORTE: CERRADO (26-ago)
+
+Los 11 builders del protocolo en UN fichero para las cuatro familias con wire · el cable
+reducido a 4 funciones por familia · el STM32 dentro del contrato (y su `send_error` sin
+escapar, muerto) · `bpvm_comm.h` con su mapa. **Verificado en placa en Pico, P4 y STM32**;
+el S3 comparte los ficheros del P4. Los ~22 replies a mano del REPL del STM32 → U3.
 
 ##### 📐 De propina, una lección de método que costó dos medidas
 

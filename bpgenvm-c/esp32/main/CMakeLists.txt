@@ -56,7 +56,7 @@ idf_component_register(
         "../../src/bpvm_aot_helpers.c"
         "../../src/scheduler_smp.c"
         "../../src/comm_common.c"
-        "../../src/comm_host.c"
+        "../../src/comm_host.c"        # RELLENO del contrato SMP (bpvm_comm.h): esta familia no ofrece SMP; si algun dia lo ofrece, necesita su comm_esp32.c que hable por el WIRE
         # --- fachadas HW (stubs sin backend) ---
         "../../src/gpio.c"
         "../../src/i2c.c"

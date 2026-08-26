@@ -27,6 +27,29 @@
 
 ## Última sesión
 
+### 26-ago (2) — U2 CERRADO: el paso 4 era corregir el registro, no el código
+
+`bpvm_comm.h` medido de punta a punta, y las DOS premisas escritas eran falsas (las dos
+mías): no es el contrato de los transportes, y no es que «sólo 2 de 5 lo implementen» — es
+el contrato de salida del **modo SMP** (opt-in: host `--smp=N`, Pico por opción de build), y
+**las cinco imágenes lo enlazan**: Pico con su backend, las otras cuatro con `comm_host.c`,
+tres de ellas como relleno deliberado. En single-worker (todas las placas hoy) la salida va
+por `output_cb` y este contrato ni se toca.
+
+Por el camino caí en una TERCERA teoría falsa («enlazan de chiripa por gc-sections») que
+también murió por medida: `emit_text` está vivo en todas y el símbolo lo da el relleno.
+Tres teorías, tres medidas, y la única que quedó en pie es la que salió de mirar los
+CMakeLists y los `.elf`.
+
+**Acción**: el MAPA en `bpvm_comm.h` + el relleno anotado en los CMakeLists de S3/P4. Cero
+código, sin reflashear. **U2 queda CERRADO** — protocolo común, cable por familia, STM32
+dentro, contrato SMP cartografiado.
+
+**⏭️ Siguiente**: U3, el REPL — 4.318 líneas triplicadas sin contrato, y ya sin la excusa
+del transporte: U2 le deja la frontera limpia.
+
+---
+
 ### 26-ago — U2 paso 3: el STM32 deja de ser la cuarta forma del wire
 
 Las 4 funciones de cable a los nombres del contrato, `send_error`/`send_cstr` borrados en
