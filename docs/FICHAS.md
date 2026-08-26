@@ -191,6 +191,67 @@ todo, trabajo de pruebas**.
 ⏭️ **Y por eso este hito va DESPUÉS de U1–U5**, no antes: cada sistema sin unificar es una
 copia más que escribir para cada micro nuevo. Es el argumento entero de V6, aplicado.
 
+##### 📐 EL COSTE, MEDIDO (26-ago) — a pregunta de Eduardo
+
+No estimado a ojo: contado sobre el precedente del P4, que es la última familia añadida.
+
+| de dónde sale su código | ficheros |
+|---|---|
+| el común (`src/`) | **53** |
+| reutilizados del S3 | **10** |
+| **propios de la familia** | **7** |
+
+**Siete ficheros.** Ése es hoy el tamaño de «una familia ESP nueva» — y con U3 terminado
+uno de esos siete (su REPL) también se cae.
+
+✅ **La memoria NO es el problema que parecía**, y el precedente vuelve a ser del S3: ya
+funciona **sin PSRAM**, reservando la VM en SRAM interna (`MALLOC_CAP_INTERNAL`), 160 KB
+con **respaldo automático a 128 KB** si no cabe, y avisando por el log. El C6 (512 KB) está
+en el mismo rango que el S3; el C3 (400 KB) es el más justo, pero el mecanismo de respaldo
+ya existe y ya habla.
+
+🔴 **LA TRAMPA, y conviene saberla antes de empezar: `riscv` NO ES UN TARGET, SON DOS.** El
+catálogo (`NpackReloc.DESTINOS`) tiene una sola entrada RISC-V, `riscv32-esp-p4`, con
+`-march=rv32imafc -mabi=ilp32f` — o sea **con FPU**. El C3 y el C6 son **rv32imac, sin
+coma flotante**: su ABI es `ilp32`. Un `.mdn` del P4 **no vale** en un C6 ni al revés.
+📌 Es exactamente la clase de fallo que costó media tarde el 25-ago con el ARM
+softfp/hard — pero ya **no puede pasar callado**: el guardián de `MdnPack` compara la
+float-ABI del `.o` y el firmware declara la suya (`bpvm_mdn_host_float_abi`). Fallaría con
+mensaje. Lo que hay que hacer es dar de alta un destino nuevo y decidir su sufijo (hoy
+`RISCV` a secas se quedaría ambiguo).
+
+⏭️ **Reparto del trabajo**: arranque y bring-up baratos (casi todo reúso del S3; el IDF
+amortigua) · decidir cuánta RAM lleva la VM en el C3 · un destino AOT nuevo con sus flags ·
+y **lo caro, como siempre, el banco**: dos placas × la batería.
+
+##### 🖼️ La pantalla del C6 — evaluado el 26-ago, y DECIDIDO
+
+**Decisión de Eduardo**: el C6 se hace **como las demás imágenes, con LVGL empotrado**.
+
+📐 **Por qué sale barato**: el patrón está probado tres veces y el driver más pequeño
+(STM32/LTDC) son **160 líneas**. La cintura de una pantalla nueva es `flush_cb`,
+`lv_tick_set_cb`, el buffer parcial y —si hay táctil— un `read_cb`. Todo lo demás (widgets,
+layout, eventos) vive en `src/gui.c`, portable.
+Y la RAM juega a favor: la DK2 necesita ~750 KB de framebuffer para su panel de 800×480,
+pero **por SPI no hace falta framebuffer completo** — se dibuja en un buffer parcial y se
+envía por el bus. Con 20 líneas de 240 son ~10 KB. Los costes reales son otros dos: el
+FLASH que ocupa LVGL, y que `flush_cb` sobre SPI es más lento que sobre LTDC/DSI (no hay
+DMA de escaneo). Ninguno es un muro.
+
+❌ **Lo que se DESCARTA para V6: LVGL como PACK binario** — *«merece un trabajo separado,
+con una evaluación previa a ver cómo se puede diseñar, pero eso está fuera de V6»*
+(Eduardo). La evaluación que lo aparca, para no repetirla:
+- La BIOS tiene **20 ranuras y ninguna de GUI**. El modelo que funciona (SQLite) es de
+  llamadas **hacia dentro**: BP pide, el pack calcula, devuelve.
+- LVGL necesita lo contrario: llamadas **hacia fuera y en caliente** — `flush_cb` lo llama
+  LVGL muchas veces por frame, el `read_cb` del táctil igual, y los eventos vuelven a BP.
+  Es un contrato **bidireccional y con estado**, no una tabla de servicios.
+- Y `src/gui.c` (1.201 líneas) tendría que irse al pack con él, porque es quien habla con
+  LVGL: código hoy COMÚN convertido en un binario por arquitectura — lo contrario del
+  camino de V6.
+- 📌 Si el objetivo fuera *no pagar LVGL en las imágenes que no lo usan*, **ya existe la
+  vía barata**: `BPVM_LVGL`, sin el cual el driver es una unidad de compilación vacía.
+
 #### 📺 P2 — pantallas SPI *(depende de P1)*
 
 **Encargo de Eduardo (23-ago):** *«hay que mirar el soporte de pantallas SPI, pero eso
