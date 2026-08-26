@@ -27,6 +27,27 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR — U3, con el mapa ya hecho
+
+El diseño está decidido y el censo profundo hecho (U3.0 + U3.0b en FICHAS; boceto en
+`V6_IDEAS.md` §REPL). Lo que toca al volver, en este orden:
+
+1. **`bpvm_repl.h`** — el contrato: dispatcher común + `bpvm_repl_ops_t` (cintura de
+   familia: campos de INFO, RUN, verbos de hardware).
+2. **El dispatcher común en `src/`** con los verbos del cubo fácil (PING, TIME, DEL,
+   MKDIR, STAT, GET, PUT*, LOG_*, RENAME, RMDIR…), que ya solo tocan wire común + fachada
+   de FS común.
+3. **Primera familia: el STM32** (920 líneas, la que menos tiene) — con RUN quedándose en
+   la familia hasta que los otros 19 estén verificados en placa.
+4. Verificación del cordón: el IDE contra la placa tras cada tanda.
+
+**Decisiones ya tomadas** (no reabrir): migración 1:1; los verbos con primitiva entran
+gratis al compartir dispatcher; `PROMPT` no se disfraza (muerto en toda la VM-C hasta que
+`IO.prompt` se implemente — hallazgo fichado en U3.0b); donde no haya hardware, error con
+nombre y no «type no implementado».
+
+---
+
 ### 26-ago (3) — U3 arranca por donde debe: midiendo
 
 **U3.0 hecho**: la matriz verbo × familia de los tres REPL. El enunciado del hito («no
