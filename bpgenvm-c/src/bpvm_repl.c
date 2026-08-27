@@ -367,7 +367,10 @@ static int falta_pieza(long id, const char* verbo, int hay,
 }
 
 static void repl_info(long id) {
-    char buf[900];
+    /* 1024 y no menos: la Pico manda 29 campos (los 18 comunes + 11 propios por
+     * info_extra) y es la familia que mas dice. Su handler ya estaba
+     * dimensionado asi; recortarlo aqui seria cortarle el INFO por la mitad. */
+    char buf[1024];
     bpvm_repl_info_t in;
     memset(&in, 0, sizeof in);
     s_ops->info(&in);

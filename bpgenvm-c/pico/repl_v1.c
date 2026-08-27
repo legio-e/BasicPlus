@@ -702,96 +702,72 @@ typedef struct {
 /* ============================================================ */
 /* META — INFO, RESET, BOOTSEL. (TIME y PING viven en el común.) */
 
-static void handle_info(long id, const json_obj_t* obj) {
-    (void) obj;
-    char unique[20]   = "";
-    char board[16]    = "";
-    bpvm_pico_unique_id(unique, sizeof(unique));
-    bpvm_pico_board_name(board, sizeof(board));
-    long freq    = (long) bpvm_pico_cpu_freq_hz();
-    long uptime  = (long) bpvm_pico_uptime_ms();
-    float tempC  = bpvm_pico_temp_c();
-    long fsTotal = (long) fs_total_bytes();
-    long fsUsed  = (long) fs_used_bytes();
+/* ── V6/U3 g10 — INFO: los 18 comunes por aqui, los 11 propios por info_extra ──
+ * El reparto no es arbitrario: en `info` va lo que TODA placa tiene (serie,
+ * reloj, memoria, FS) y en `info_extra` lo que solo significa algo aqui — la
+ * zona de packs con su direccion XIP, el bloque de SQLite y las marcas de agua
+ * de FreeRTOS. Meter esto ultimo en el struct comun obligaria a las otras
+ * familias a declarar campos que no saben rellenar. */
+static void pico_repl_info(bpvm_repl_info_t* out) {
+    /* Estaticos porque el struct guarda punteros y el comun los lee DESPUES. */
+    static char unique[20], board[16];
+    bpvm_pico_unique_id(unique, sizeof unique);
+    bpvm_pico_board_name(board, sizeof board);
+    const board_desc_t* bd = board_desc();
+    size_t vstack = vm_stack_region_bytes();
 
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "INFO_REPLY", id);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                               (size_t) off, "uniqueId", unique);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                               (size_t) off, "boardName", board);
-    /* H11 — la ARQUITECTURA del código nativo que este firmware ejecuta
-     * (MDN_ARCH_ARM/RISCV). Sin esto el IDE no sabe a qué ISA compilar el .mdn
-     * de un `.bp` suelto, que no tiene proyecto donde apuntarla. La placa es
-     * quien lo sabe, así que lo dice ella. */
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "arch",
-                                             (long) bpvm_mdn_host_arch());
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "cpuFreqHz", freq);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "uptimeMs", uptime);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                               (size_t) off, "resetReason", bpvm_pico_reset_cause());
-    /* tempC: el wire v1 NO soporta floats (parser del cliente rechaza
-     * decimales/científica). Enviamos como entero en milidegrees → el
-     * cliente divide por 1000 para mostrar con precisión de display.
-     * "tempMilliC":25430 → 25.43 °C en la UI. */
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "tempMilliC",
-                                             (long)(tempC * 1000.0f));
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "fsTotalBytes", fsTotal);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "fsUsedBytes", fsUsed);
-    /* H7 — descriptor de placa: variante, caps del chip, flash y PSRAM. */
+    out->unique_id    = unique;
+    out->board_name   = board;
+    /* H11 — la ARQUITECTURA del nativo que esta imagen ejecuta. Sin esto el IDE
+     * no sabe a que ISA compilar el .mdn de un `.bp` suelto. Lo dice la placa. */
+    out->arch         = (unsigned) bpvm_mdn_host_arch();
+    out->cpu_hz       = (unsigned long) bpvm_pico_cpu_freq_hz();
+    out->uptime_ms    = (unsigned long) bpvm_pico_uptime_ms();
+    out->reset_reason = bpvm_pico_reset_cause();
+    /* El wire v1 no lleva floats (el parser del cliente rechaza decimales), asi
+     * que la temperatura viaja en milesimas: 20400 -> 20,4 grados en la UI. */
+    out->temp_milli_c = (long) (bpvm_pico_temp_c() * 1000.0f);
+    out->gpio_count   = bd->gpio_count;
+    out->pio_count    = bd->pio_count;
+    /* PWM en SALIDAS, no slices: cada slice tiene 2 canales (A/B) -> 24 en
+     * RP2350, que es la cifra que anuncian las placas. El campo del wire
+     * conserva el nombre historico "pwmSlices". */
+    out->pwm_slices   = bd->pwm_slices * 2;
+    out->adc_channels = bd->adc_channels;
+    out->flash_bytes  = (unsigned long) bd->flash_bytes;
+    out->sram_bytes   = 520UL * 1024UL;
+    out->psram_bytes  = (unsigned long) bd->psram_bytes;
+    /* El MISMO reparto que usa el RUN (vm_stack_region_bytes), visible sin
+     * ejecutar nada. */
+    out->vm_heap_bytes  = (unsigned long) (s_vm_buffer_size - vstack);
+    out->vm_stack_bytes = (unsigned long) vstack;
+    out->fs_total_bytes = (unsigned long) fs_total_bytes();
+    out->fs_used_bytes  = (unsigned long) fs_used_bytes();
+}
+
+static int pico_repl_info_extra(char* buf, unsigned long buf_max, int off) {
+    size_t max = (size_t) buf_max;
+#define X_S(k, v) do { off = wire_v1_field_string(buf, max, (size_t) off, (k), (v)); \
+                       if (off < 0) return off; } while (0)
+#define X_L(k, v) do { off = wire_v1_field_long(buf, max, (size_t) off, (k), (long) (v)); \
+                       if (off < 0) return off; } while (0)
     const board_desc_t* bd = board_desc();
     char variant[2]; variant[0] = bd->variant; variant[1] = '\0';
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                               (size_t) off, "variant", variant);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "gpioCount", bd->gpio_count);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "pioCount", bd->pio_count);
-    /* PWM en SALIDAS, no slices: cada slice tiene 2 canales (A/B) → 24
-     * en RP2350, que es la cifra que anuncian las placas. El campo del
-     * wire conserva el nombre histórico "pwmSlices". */
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "pwmSlices", bd->pwm_slices * 2);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "adcChannels", bd->adc_channels);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "flashBytes", (long) bd->flash_bytes);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "sramBytes", 520L * 1024L);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "psramBytes", (long) bd->psram_bytes);
-    /* Reparto de la memoria de la VM (heap/stacks BP) — el MISMO cálculo que
-     * usa el RUN (vm_stack_region_bytes), visible sin ejecutar nada. */
-    {
-        size_t vstack = vm_stack_region_bytes();
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "vmHeapBytes",
-                                                 (long)(s_vm_buffer_size - vstack));
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "vmStackBytes", (long) vstack);
-    }
+    X_S("variant", variant);
+
     /* V5/H — LO QUE EL IDE NECESITA PARA PRE-ENLAZAR UN PACK NATIVO.
-     *
      * El pack se enlaza en base 0 y el IDE lo realoja en el PC antes de grabar,
-     * así que tiene que saber DÓNDE va a caer. Cuatro datos, y ninguno se puede
-     * deducir desde fuera:
-     *
-     *  · packsXipBase — ⚠️ la dirección que ve la CPU (XIP_BASE + offset de la
-     *    partición), NO el offset crudo en flash. Sólo la placa conoce ese mapeo,
-     *    y equivocarse ahí desplaza TODO el código por una constante, en
-     *    silencio. Es el error más caro posible en este camino.
+     * asi que tiene que saber DONDE va a caer. Y ninguno de estos se deduce
+     * desde fuera:
+     *  · packsXipBase — ⚠️ la direccion que ve la CPU (XIP_BASE + offset de la
+     *    particion), NO el offset crudo en flash. Solo la placa conoce ese
+     *    mapeo, y equivocarse ahi desplaza TODO el codigo por una constante, en
+     *    silencio: es el error mas caro posible en este camino.
      *  · packsBytes  — para negarse ANTES de compilar 400 KB que no caben.
-     *  · sqliteBase/Bytes — el bloque de RAM que el arranque reservó desde el
+     *  · sqliteBase/Bytes — el bloque de RAM que el arranque reservo desde el
      *    ENV (`SQLite=<MB>`). 0 = no hay BD en esta placa.
-     *  · floatAbi    — junto a `arch`, el SELLO. `arch` solo no distingue hard
-     *    de softfp, y esa discrepancia da números mal sin avisar.
-     */
+     *  · floatAbi    — junto a `arch`, el SELLO. `arch` sola no distingue hard
+     *    de softfp, y esa discrepancia da numeros mal sin avisar. */
     {
         long packs_xip = 0, packs_len = 0;
         const bpvm_part_layout_t* lay = board_partitions();
@@ -802,74 +778,42 @@ static void handle_info(long id, const json_obj_t* obj) {
                 packs_len = (long) pp->size;
             }
         }
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "packsXipBase", packs_xip);
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "packsBytes", packs_len);
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "sqliteBase",
-                                                 (long)(uintptr_t) s_sqlite_base);
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "sqliteBytes",
-                                                 (long) s_sqlite_size);
-        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "floatAbi",
-                                                   bpvm_mdn_host_float_abi());
-        /* El AVISO (decision de Eduardo: vive en el INFO). Van los TRES datos
-         * que hacen falta para redactarlo sin mentir y sin que el IDE se invente
-         * nada: el MOTIVO (0 bytes por "no se pidio" y por "se pidio poco" son
-         * cosas distintas), lo que se PIDIO (para citarlo) y el MINIMO (para que
-         * el remedio salga de la placa y no de un numero copiado en Java —
-         * si un dia cambia, cambia en un sitio). */
-        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "sqliteStatus",
-                                                   bpvm_sqlite_res_code(
-                                                       (bpvm_sqlite_res_t) s_sqlite_res));
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "sqliteAskedMb",
-                                                 s_sqlite_asked_mb);
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "sqliteMinMb",
-                                                 (long) BPVM_SQLITE_MIN_MB);
+        X_L("packsXipBase", packs_xip);
+        X_L("packsBytes",   packs_len);
     }
+    X_L("sqliteBase",  (long) (uintptr_t) s_sqlite_base);
+    X_L("sqliteBytes", (long) s_sqlite_size);
+    X_S("floatAbi",    bpvm_mdn_host_float_abi());
+    /* El AVISO (decision de Eduardo: vive en el INFO). Van los TRES datos que
+     * hacen falta para redactarlo sin mentir y sin que el IDE se invente nada:
+     * el MOTIVO (0 bytes por "no se pidio" y por "se pidio poco" son cosas
+     * distintas), lo que se PIDIO (para citarlo) y el MINIMO (para que el
+     * remedio salga de la placa y no de un numero copiado en Java). */
+    X_S("sqliteStatus",  bpvm_sqlite_res_code((bpvm_sqlite_res_t) s_sqlite_res));
+    X_L("sqliteAskedMb", s_sqlite_asked_mb);
+    X_L("sqliteMinMb",   (long) BPVM_SQLITE_MIN_MB);
+
     /* #354 — LO QUE NUNCA LE HEMOS PREGUNTADO A FreeRTOS: cuanto de lo que se le
-     * reservo llego a usar de verdad. Esto es SOLO DIAGNOSTICO — no se recorta
-     * nada hasta ver los numeros con carga real, y en la duda se deja como esta.
-     *
-     * Las dos cifras contestan a dos preguntas distintas, y conviene no
-     * confundirlas:
-     *
-     *  · rtosHeapMinFreeBytes = lo que quedo libre de `ucHeap` (32 KB) en el
-     *    PEOR momento. OJO: ese heap NO tiene estructuras del kernel, tiene
-     *    PILAS DE TAREAS — 16 KB solo la de vm_task, y 4 KB por cada thread BP.
-     *    Es decir que lo que sobra ahi es el TECHO DE THREADS, no memoria
-     *    muerta: recortarlo baja una capacidad.
-     *
-     *  · vmTaskStackFreeBytes = lo que le sobro a la PILA de vm_task de sus
-     *    16 KB. Aqui si, si sobra mucho, sobra de verdad.
-     *
+     * reservo llego a usar. SOLO DIAGNOSTICO. Dos cifras que contestan a dos
+     * preguntas distintas y conviene no confundir:
+     *  · rtosHeapMinFreeBytes = lo que quedo libre de `ucHeap` en el PEOR
+     *    momento. OJO: ese heap no tiene estructuras del kernel, tiene PILAS DE
+     *    TAREAS — 16 KB solo vm_task y 4 KB por thread BP. Lo que sobra ahi es
+     *    el TECHO DE THREADS, no memoria muerta: recortarlo baja una capacidad.
+     *  · vmTaskStackFreeBytes = lo que le sobro a la pila de vm_task. Aqui si,
+     *    si sobra mucho, sobra de verdad.
      * uxTaskGetStackHighWaterMark devuelve PALABRAS en FreeRTOS de serie (en
-     * ESP-IDF son BYTES — la misma trampa que xTaskCreate). Se multiplica por
-     * sizeof(StackType_t) para mandar bytes en los dos casos.
-     *
-     * Una marca de agua tomada sin haber ejecutado nada no dice nada: hay que
-     * mirarla DESPUES de correr algo con carga (GuiColorDemo, JsonDemo, threads). */
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "rtosHeapMinFreeBytes",
-                                             (long) xPortGetMinimumEverFreeHeapSize());
+     * ESP-IDF son BYTES — la misma trampa que xTaskCreate), de ahi el producto.
+     * Y una marca tomada sin haber ejecutado nada no dice nada: se mira DESPUES
+     * de correr algo con carga. */
+    X_L("rtosHeapMinFreeBytes", xPortGetMinimumEverFreeHeapSize());
     if (g_vm_task != NULL) {
         UBaseType_t words = uxTaskGetStackHighWaterMark(g_vm_task);
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "vmTaskStackFreeBytes",
-                                                 (long)((size_t) words * sizeof(StackType_t)));
+        X_L("vmTaskStackFreeBytes", (size_t) words * sizeof(StackType_t));
     }
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
-                                          (size_t) off);
-    if (off < 0) {
-        wire_v1_send_error(id, "INTERNAL_ERROR", "INFO_REPLY no cabe");
-        return;
-    }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
+#undef X_S
+#undef X_L
+    return off;
 }
 
 
@@ -1518,8 +1462,8 @@ static unsigned long pico_repl_fs_used(void)  { return (unsigned long) fs_used_b
 static int  pico_repl_fs_count(void)  { return (int) fs_file_count(); }
 
 static const bpvm_repl_ops_t s_repl_ops = {
-    .info           = NULL,      /* llega con INFO (los 18 comunes + 11 propios) */
-    .info_extra     = NULL,      /*   idem */
+    .info           = pico_repl_info,
+    .info_extra     = pico_repl_info_extra,
     .server_name    = "bpvm-pico",
     .server_build   = BPVM_PICO_BUILD_DATE,
     /* BOOTSEL va como capacidad aparte: es de esta familia y el IDE decide con
@@ -1589,7 +1533,6 @@ void repl_v1_handle_request(int first_char) {
 
     /* 6. Despachar. */
     /* META */
-    if (strcmp(type, "INFO")     == 0) { handle_info(id, &obj);     return; }
     if (strcmp(type, "RESET")    == 0) { handle_reset(id, &obj);    return; }
     if (strcmp(type, "BOOTSEL")  == 0) { handle_bootsel(id, &obj);  return; }
     /* H9 — gating por estado REAL del boot: sin particiones/FS (estado < 2)
