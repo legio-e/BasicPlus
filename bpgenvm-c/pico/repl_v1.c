@@ -264,77 +264,11 @@ err:
 }
 
 /* ============================================================ */
-/* LIST — emite entries por streaming a stdout porque pueden ser muchas. */
+/* V6/U3 g8 — LIST vive en el común. El recorrido de allí no necesita la zona de
+ * scratch (ésta la pedía para TODO el listado) ni tiene tope de entradas por
+ * directorio. A cambio emite dentro del callback de la fachada, o sea con el
+ * lock del FS cogido; ver la nota del commit. */
 
-typedef struct {
-    long id;
-    int  first;       /* 1 = todavía no se ha escrito ninguna entry */
-} list_ctx_t;
-
-static int list_cb(const char* name, uint32_t size, void* user) {
-    list_ctx_t* ctx = (list_ctx_t*) user;
-    /* Emit por bloques pequeños — el USB CDC del Pico tolera writes
-     * cortos en streaming sin problema. */
-    if (!ctx->first) fputc(',', stdout);
-    ctx->first = 0;
-    /* {"name":"<escaped>","size":<n>,"isDir":false} */
-    fputs("{\"name\":\"", stdout);
-    /* Escape inline: solo " y \ son comunes en paths. Resto literal. */
-    for (const char* p = name; *p; p++) {
-        char c = *p;
-        if (c == '"' || c == '\\') fputc('\\', stdout);
-        fputc(c, stdout);
-    }
-    fputc('"', stdout);
-    /* paso 4 cierre — CRC del contenido (== java.util.zip.CRC32) para que el
-     * IDE salte el PUT por contenido REAL del device.
-     * #305: por TROZOS. Antes esto era un fs_get, o sea leer el fichero ENTERO al
-     * scratch de 128 KB... por cada fichero del listado, uno detrás de otro. Con
-     * bpvm_fs_crc32 el coste es un buffer de 256 B en la pila, y el resultado es
-     * bit a bit el mismo (mismo algoritmo, sólo encadenado). */
-    /* V5/H2 — pero SÓLO del FS propio del micro. Desde que la fachada publica
-     * los montajes, este recorrido baja también al volumen montado, y ahí el
-     * CRC es puro gasto: sirve para saltarse los PUT, y al montaje no se le
-     * sube nada. Sin este corte, cada refresco del árbol se leería la tarjeta
-     * ENTERA por SPI para tirar el resultado — con 119 GB delante eso deja de
-     * ser un detalle.
-     *
-     * Se manda -1, que el IDE ya entiende como "este firmware no da CRC" y
-     * resuelve comparando tamaños. Y va CON SIGNO: un (uint32_t)-1 impreso
-     * como %u sale 4294967295, o sea un CRC de aspecto perfectamente normal
-     * que no coincidiría nunca. Mentir con un número creíble es peor que
-     * callarse. */
-    /* #398 (15-ago) — Y AHORA TAMPOCO DEL FS PROPIO. El corte de arriba era la
-     * mitad buena de la idea: ahorraba leerse la tarjeta, pero el flash interno
-     * se seguía leyendo ENTERO en cada refresco del árbol. Medido en la P4 —que
-     * no tenía ni siquiera ese corte, ver abajo—: 1589 ms sólo del FS propio con
-     * 19 ficheros y 128 KB, el 98 % del listado.
-     *
-     * El CRC se pide ahora con `STAT {crc:true}`, fichero a fichero y justo
-     * antes de subirlo, que es el único momento en que sirve para algo.
-     *
-     * 🩸 Y la razón por la que esto se arregla en los DOS sitios a la vez: el
-     * corte de la tarjeta estaba SÓLO AQUÍ. El ESP32/P4 calculaba el CRC de
-     * todo, montajes incluidos, y por eso allí un refresco con SD costaba casi
-     * siete segundos y aquí no. Un arreglo que no viaja entre familias es medio
-     * arreglo. */
-    fprintf(stdout, ",\"size\":%u,\"crc\":-1,\"isDir\":false}", (unsigned) size);
-    return 0;
-}
-
-static void handle_list(long id, const json_obj_t* obj) {
-    (void) obj;   /* el path es informativo; FS plano lista todo */
-    fputs("{\"type\":\"LIST_REPLY\",\"id\":", stdout);
-    fprintf(stdout, "%ld,\"entries\":[", id);
-    list_ctx_t ctx = { id, 1 };
-    fs_list(list_cb, &ctx);
-    /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
-     * topes y al pasarse recortaba EN SILENCIO: el firmware lo anotaba en su log
-     * pero por aqui salia una lista corta que el IDE pintaba como si fuera todo.
-     * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
-    fprintf(stdout, "],\"omitted\":%d}\n", fs_list_omitidas());
-    fflush(stdout);
-}
 
 /* ============================================================ */
 /* STAT */
@@ -1751,7 +1685,6 @@ void repl_v1_handle_request(int first_char) {
         }
     }
     /* FILES */
-    if (strcmp(type, "LIST")     == 0) { handle_list(id, &obj);     return; }
     if (strcmp(type, "PUT")      == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
