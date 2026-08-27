@@ -28,6 +28,7 @@
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
 #include "bpvm_platform.h"
+#include "bpvm_log.h"   /* V6/U3 g5: la línea del fallo, antes duplicada en 2 familias */
 #include "crc32.h"      /* #398 — CRC del fichero entero con UNA apertura */
 #include <string.h>
 
@@ -41,6 +42,26 @@ static const struct lfs_config* s_cfg_ptr = NULL;   /* B2: para reformat */
 static int s_last_err = 0;
 
 int bpvm_fs_lfs_last_err(void) { return s_last_err; }
+
+bpvm_fs_fail_t bpvm_fs_last_fail(void) {
+    switch (s_last_err) {
+        case LFS_ERR_NOSPC:       return BPVM_FS_FAIL_NO_SPACE;
+        case LFS_ERR_FBIG:        return BPVM_FS_FAIL_TOO_BIG;
+        case LFS_ERR_NAMETOOLONG: return BPVM_FS_FAIL_NAME_TOO_LONG;
+        case LFS_ERR_EXIST:       return BPVM_FS_FAIL_EXISTS;
+        case LFS_ERR_NOENT:       return BPVM_FS_FAIL_NOT_FOUND;
+        case LFS_ERR_IO:
+        case LFS_ERR_CORRUPT:     return BPVM_FS_FAIL_IO;
+        default:                  return BPVM_FS_FAIL_OTHER;
+    }
+}
+
+void bpvm_fs_log_fail(const char* op, const char* path, unsigned long size,
+                      unsigned long libre, unsigned long total) {
+    log_printf("fs: %s '%s' (%lu B) FALLO lfs=%d %s  [libre %lu/%lu B]",
+               op, path, size, s_last_err, bpvm_fs_lfs_err_str(s_last_err),
+               libre, total);
+}
 
 const char* bpvm_fs_lfs_err_str(int e) {
     switch (e) {

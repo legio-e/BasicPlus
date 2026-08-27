@@ -94,15 +94,7 @@ static void reply_empty(const char* type, long id) {
 
 /* ---- META ---- */
 
-static void handle_hello(long id) {
-    char buf[256];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"HELLO_REPLY\",\"id\":%ld,\"protoVersion\":1,"
-        "\"serverName\":\"%s\",\"serverBuild\":\"%s %s\","
-        "\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\",\"PACKS\"]}",
-        id, SERVER_NAME, __DATE__, __TIME__);
-    if (n > 0) wire_v1_send_line(buf, (size_t) n);
-}
+/* V6/U3 g5 — HELLO vive en el común; lo propio va en la cintura, abajo. */
 
 /* ── V6/U3 g4: LA CINTURA de esta familia ────────────────────────────────────
  * El REPL común pide los datos; aquí se dicen. Ver bpvm_repl.h para la forma
@@ -156,14 +148,36 @@ static int           stm32_repl_fs_count(void) { return fs_count(); }
 static int           stm32_repl_fs_format(void){ fs_format(); return 0; }
 static int           stm32_repl_fs_save(void)  { fs_save(); return 0; }
 
+/* El sello de compilación de ESTA familia. Ver la nota de `server_build` en
+ * bpvm_repl.h: es la fecha de este fichero, no la del enlace — no identifica la
+ * imagen por sí solo, pero es lo que había y no empeora al centralizar. */
+static const char s_build[] = __DATE__ " " __TIME__;
+
+/* Designados a propósito: la cintura va a crecer verbo a verbo, y con campos
+ * posicionales meter uno en medio corre todos los de abajo en silencio — un
+ * puntero a función acabaría llamándose por el hueco de otro. Ya nos pasó al
+ * quitar un método de una base de la stdlib. */
+/* Persistir sólo lo que sobrevive al reset de forma útil: /lib lo re-instala el
+ * embebido en cada boot, así que un PUT a /lib (el IDE lo hace en cada Run) no
+ * necesita flash → se ahorra un erase+program por ejecución. */
+static void stm32_after_put(const char* path) {
+    if (strncmp(path, "/lib/", 5) != 0) fs_save();
+}
+
 static const bpvm_repl_ops_t s_repl_ops = {
-    stm32_repl_info,
-    NULL,                      /* sin campos propios: los 18 comunes bastan */
-    stm32_repl_fs_total,
-    stm32_repl_fs_used,
-    stm32_repl_fs_count,
-    stm32_repl_fs_format,
-    stm32_repl_fs_save,
+    .info          = stm32_repl_info,
+    .info_extra    = NULL,     /* sin campos propios: los 18 comunes bastan */
+    .server_name   = SERVER_NAME,
+    .server_build  = s_build,
+    .capabilities  = "[\"META\",\"FILES\",\"TERMINAL\",\"PACKS\"]",
+    .fs_total_bytes= stm32_repl_fs_total,
+    .fs_used_bytes = stm32_repl_fs_used,
+    .fs_file_count = stm32_repl_fs_count,
+    .fs_format     = stm32_repl_fs_format,
+    .fs_save       = stm32_repl_fs_save,
+    .put_buf       = s_put_buf,
+    .put_buf_size  = sizeof s_put_buf,
+    .after_put     = stm32_after_put,
 };
 
 /* ---- FILES ---- */
@@ -174,39 +188,8 @@ static const bpvm_repl_ops_t s_repl_ops = {
 
 
 
-static void handle_put(long id, json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
-    }
-    long bulk = json_get_long(obj, "bulk", -1);
-    if (bulk < 0) { wire_v1_send_error(id, "INVALID_PARAM", "missing bulk"); return; }
-
-    /* CRÍTICO: consumir SIEMPRE los `bulk` bytes para no desincronizar el wire. */
-    if ((size_t) bulk > sizeof(s_put_buf)) {
-        size_t rem = (size_t) bulk;
-        while (rem > 0) {
-            size_t chunk = rem < sizeof(s_put_buf) ? rem : sizeof(s_put_buf);
-            if (wire_v1_recv_bulk(s_put_buf, chunk, sizeof s_put_buf) < 0) {
-                stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
-            }
-            rem -= chunk;
-        }
-        wire_v1_send_error(id, "NO_SPACE", "fichero demasiado grande");
-        return;
-    }
-    if (wire_v1_recv_bulk(s_put_buf, (size_t) bulk, sizeof s_put_buf) < 0) {
-        stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
-    }
-    if (fs_put(path, s_put_buf, (uint32_t) bulk) != 0) {
-        wire_v1_send_error(id, "NO_SPACE", "FS lleno"); return;
-    }
-    /* Persistir sólo lo que sobrevive al reset de forma útil: /lib lo re-instala
-     * el embebido al boot, así que un PUT a /lib (el IDE lo hace cada Run) no
-     * necesita flash → evita un erase+program por ejecución. */
-    if (strncmp(path, "/lib/", 5) != 0) fs_save();
-    reply_empty("PUT_REPLY", id);
-}
+/* V6/U3 g5 — PUT vive en el común. Lo propio de esta familia son el scratch y
+ * qué hacer después de una subida; ambos están en la cintura, abajo. */
 
 /* #294 streaming PUT — subida por trozos (PUT_BEGIN/PUT_DATA/PUT_END), espejo del
  * BURN de packs. BEGIN crea/trunca, cada DATA apende (lee su propio bulk), END
@@ -325,7 +308,7 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
-    if (strcmp(type, "HELLO") == 0) { handle_hello(rid); return 0; }
+    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }
     wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
@@ -573,7 +556,7 @@ static int stm32_autorun_escucha(void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { reply_empty("KILL_REPLY", rid); return 2; }
-    if (strcmp(type, "HELLO") == 0) { handle_hello(rid); return 1; }
+    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 1; }
     return 1;                                  /* hay alguien: basta con eso */
 }
 
@@ -685,8 +668,6 @@ static void dispatch(int first_char) {
      * Los verbos de esta familia siguen debajo y van migrando por grupos. */
     if (bpvm_repl_dispatch(type, id, &obj)) return;
 
-    if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
-    else if (strcmp(type, "PUT")       == 0) handle_put(id, &obj);
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     else if (strcmp(type, "PUT_BEGIN") == 0) handle_put_begin(id, &obj);
     else if (strcmp(type, "PUT_DATA")  == 0) handle_put_data(id, &obj);

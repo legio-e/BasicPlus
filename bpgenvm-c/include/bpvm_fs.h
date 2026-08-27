@@ -231,6 +231,33 @@ void bpvm_fs_register_host(void);
  * Monta img_path (block_size/block_count en 0 → defaults 4096/256 = 1 MB);
  * si el mount falla y format_if_needed, formatea. 0 / -1. Solo tipos planos
  * aquí: el API que arrastra lfs.h vive en bpvm_fs_lfs.h. */
+
+/* ── #329 (cerrado en V6/U3 g5) — por qué falló la última op de FS ──────────
+ * La fachada devuelve 0/-1 y el -1 no dice nada. `bpvm_fs_lfs_last_err()` sí,
+ * pero es un `int` de littlefs y para leerlo hay que arrastrar lfs.h — cosa que
+ * quien contesta al IDE no debería tener que hacer. Esto es la MISMA
+ * información sin el acoplamiento.
+ *
+ * Sale a la capa de arriba como una clasificación corta, no como un código de
+ * wire: los nombres del protocolo son del protocolo, no del sistema de
+ * ficheros. */
+typedef enum {
+    BPVM_FS_FAIL_OTHER = 0,
+    BPVM_FS_FAIL_NO_SPACE,
+    BPVM_FS_FAIL_TOO_BIG,
+    BPVM_FS_FAIL_NAME_TOO_LONG,
+    BPVM_FS_FAIL_EXISTS,
+    BPVM_FS_FAIL_NOT_FOUND,
+    BPVM_FS_FAIL_IO
+} bpvm_fs_fail_t;
+
+bpvm_fs_fail_t bpvm_fs_last_fail(void);
+
+/* Deja en el log la línea de un fallo de FS (op, fichero, tamaño, motivo crudo
+ * y espacio libre). Vivía DUPLICADA en la Pico y en el STM32, idéntica carácter
+ * por carácter; ahora la escribe quien sabe el motivo. */
+void bpvm_fs_log_fail(const char* op, const char* path, unsigned long size,
+                      unsigned long libre, unsigned long total);
 int  bpvm_fs_register_lfs_filebd(const char* img_path,
                                  unsigned block_size, unsigned block_count,
                                  int format_if_needed);

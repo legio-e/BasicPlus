@@ -413,6 +413,124 @@ static void repl_save(long id) {
     wire_v1_send_reply_empty("SAVE_REPLY", id);
 }
 
+
+/* HELLO — el saludo. La FORMA es del común (protoVersion y el orden de los
+ * campos); lo propio de cada familia son tres cadenas que trae la cintura.
+ *
+ * Las capacidades viajan como array JSON ya escrito por la familia: son una
+ * lista de constantes, no datos, y montarlas campo a campo aquí sería inventar
+ * un mecanismo para lo que ya es un literal. */
+static void repl_hello(long id) {
+    char buf[320];
+    int off = wire_v1_msg_begin(buf, sizeof buf, 0, "HELLO_REPLY", id);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "protoVersion", 1);
+    if (off < 0) goto err;
+    off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "serverName",
+                               s_ops->server_name ? s_ops->server_name : "bpvm");
+    if (off < 0) goto err;
+    off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "serverBuild",
+                               s_ops->server_build ? s_ops->server_build : "");
+    if (off < 0) goto err;
+    /* El array, tal cual lo da la familia. */
+    {
+        const char* caps = s_ops->capabilities ? s_ops->capabilities
+                                               : "[\"META\",\"FILES\",\"TERMINAL\"]";
+        int n = snprintf(buf + off, sizeof buf - (size_t) off, ",\"capabilities\":%s", caps);
+        if (n <= 0 || (size_t) (off + n) >= sizeof buf) goto err;
+        off += n;
+    }
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off < 0) goto err;
+    wire_v1_send_line(buf, (size_t) off);
+    return;
+err:
+    wire_v1_send_error(id, "INTERNAL_ERROR", "HELLO_REPLY no cabe");
+}
+
+
+/* ── El fallo del FS, contado de verdad ────────────────────────────────────
+ * Antes de V6/U3 esto estaba DOS veces (map_lfs_err en la Pico, log_fallo_fs en
+ * el STM32) con la misma línea de log carácter por carácter, y encima el STM32
+ * tiraba la información: respondiera lo que respondiera littlefs, contestaba
+ * siempre "NO_SPACE / FS lleno". Los códigos son los que el IDE ya recibe de la
+ * Pico, que es la que los mapeaba bien. */
+static void fs_fallo(const char* op, const char* path, unsigned long size,
+                     const char** code, const char** msg) {
+    unsigned long tot = s_ops && s_ops->fs_total_bytes ? s_ops->fs_total_bytes() : 0;
+    unsigned long usa = s_ops && s_ops->fs_used_bytes  ? s_ops->fs_used_bytes()  : 0;
+    bpvm_fs_log_fail(op, path, size, (tot > usa) ? (tot - usa) : 0ul, tot);
+    switch (bpvm_fs_last_fail()) {
+        case BPVM_FS_FAIL_NO_SPACE:      *code = "NO_SPACE";       *msg = "FS lleno"; break;
+        case BPVM_FS_FAIL_TOO_BIG:       *code = "NO_SPACE";       *msg = "fichero demasiado grande"; break;
+        case BPVM_FS_FAIL_NAME_TOO_LONG: *code = "INVALID_PATH";   *msg = "nombre demasiado largo"; break;
+        case BPVM_FS_FAIL_EXISTS:        *code = "EXISTS";         *msg = "ya existe"; break;
+        case BPVM_FS_FAIL_NOT_FOUND:     *code = "NOT_FOUND";      *msg = "fichero no existe"; break;
+        case BPVM_FS_FAIL_IO:            *code = "INTERNAL_ERROR"; *msg = "flash op falló"; break;
+        default:                         *code = "INVALID_PARAM";  *msg = "argumento inválido"; break;
+    }
+}
+
+/* Traga los `n` bytes anunciados y los tira.
+ *
+ * CRÍTICO, y es la razón de que esta función exista: el bulk viaja DETRÁS de la
+ * línea JSON, así que si no se consumen los bytes anunciados el siguiente
+ * mensaje se lee a partir de la mitad de los datos y el wire queda
+ * desincronizado — el síntoma no es "falló el PUT", es que a partir de ahí no
+ * funciona nada. Hay que tragárselos quepan o no, ANTES de contestar el error.
+ * Devuelve 0 si se consumieron todos; <0 si el cable se cortó a medias. */
+static int tragar_bulk(unsigned long n) {
+    unsigned char* buf = s_ops->put_buf;
+    unsigned long  cap = s_ops->put_buf_size;
+    while (n > 0) {
+        unsigned long chunk = n < cap ? n : cap;
+        if (wire_v1_recv_bulk(buf, (size_t) chunk, (size_t) cap) < 0) return -1;
+        n -= chunk;
+    }
+    return 0;
+}
+
+/* PUT — subida de un tirón (para ficheros que caben en el scratch; los grandes
+ * van por PUT_BEGIN/DATA/END). */
+static void repl_put(long id, const json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof path) < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
+    }
+    long bulk = json_get_long(obj, "bulk", -1);
+    if (bulk < 0) { wire_v1_send_error(id, "INVALID_PARAM", "falta bulk"); return; }
+
+    if ((unsigned long) bulk > s_ops->put_buf_size) {
+        if (tragar_bulk((unsigned long) bulk) < 0) {
+            wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+        }
+        wire_v1_send_error(id, "NO_SPACE", "fichero demasiado grande");
+        return;
+    }
+    if (wire_v1_recv_bulk(s_ops->put_buf, (size_t) bulk, (size_t) s_ops->put_buf_size) < 0) {
+        wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+    }
+    if (bpvm_fs_write(path, s_ops->put_buf, (uint32_t) bulk, 0) != 0) {
+        const char *code, *msg;
+        fs_fallo("put", path, (unsigned long) bulk, &code, &msg);
+        wire_v1_send_error(id, code, msg);
+        return;
+    }
+    if (s_ops->after_put) s_ops->after_put(path);
+
+    char buf[96];
+    int off = wire_v1_msg_begin(buf, sizeof buf, 0, "PUT_REPLY", id);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "size", bulk);
+    if (off < 0) goto err;
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off < 0) goto err;
+    wire_v1_send_line(buf, (size_t) off);
+    return;
+err:
+    wire_v1_send_error(id, "INTERNAL_ERROR", "PUT_REPLY no cabe");
+}
+
 int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
@@ -442,6 +560,8 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     }
     if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
     /* ── grupo 4: los de la cintura ── */
+    if (strcmp(type, "HELLO")  == 0) { if (!sin_ops(id, "HELLO"))  repl_hello(id);       return 1; }
+    if (strcmp(type, "PUT")    == 0) { if (!sin_ops(id, "PUT"))    repl_put(id, obj);     return 1; }
     if (strcmp(type, "INFO")   == 0) { if (!sin_ops(id, "INFO"))   repl_info(id);        return 1; }
     if (strcmp(type, "DF")     == 0) { if (!sin_ops(id, "DF"))     repl_df(id);          return 1; }
     if (strcmp(type, "FORMAT") == 0) { if (!sin_ops(id, "FORMAT")) repl_format(id, obj); return 1; }

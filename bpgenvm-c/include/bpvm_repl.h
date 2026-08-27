@@ -93,6 +93,33 @@ typedef struct {
     /** Rellena los 18 campos comunes. Obligatoria. */
     void (*info)(bpvm_repl_info_t* out);
 
+    /* ── Lo que HELLO tiene de propio, y sólo eso ──────────────────────────
+     * El resto del saludo (protoVersion, la forma del mensaje) es del común.
+     *
+     * ⚠️ `server_build` NO se calcula en el común, y es a propósito: un
+     * `__DATE__` puesto en `src/bpvm_repl.c` sería la fecha en que se compiló
+     * ESE fichero — común y rara vez recompilado—, o sea una fecha que no
+     * identifica la imagen. Ya nos costó un diagnóstico falso una vez. Que lo
+     * ponga la familia no lo arregla del todo (sigue siendo la fecha de SU
+     * fichero, no la del enlace), pero al menos no empeora. */
+    const char* server_name;      /* "bpvm-pico", "bpvm-stm32"… */
+    const char* server_build;     /* sello de compilación de la familia */
+    const char* capabilities;     /* el array JSON literal: "[\"META\",…]" */
+
+    /* ── PUT: el scratch y la política de persistencia ─────────────────────
+     * El buffer lo pone la FAMILIA y no el común, por dos razones medidas: su
+     * tamaño tiene restricciones propias (el STM32 lo usa además de scratch del
+     * sector de env, la Pico lo comprueba con un assert de compilación), y una
+     * familia pequeña no tiene por qué pagar 8 KB que no usa. */
+    unsigned char* put_buf;
+    unsigned long  put_buf_size;
+
+    /* Qué hacer cuando una subida ha aterrizado bien. NO es lo mismo en todas:
+     * el STM32 persiste el FS (salvo bajo /lib/, que el embebido reinstala en
+     * cada boot — así se ahorra un erase+program por Run), y la Pico no hace
+     * nada. Es política de familia, así que la decide la familia. NULL = nada. */
+    void (*after_put)(const char* path);
+
     /** Añade los campos PROPIOS de la familia al mensaje a medio construir.
      *  Recibe el buffer y el offset actual; devuelve el offset nuevo, o -1 si
      *  no cabe. Puede ser NULL: la mayoría de familias no tienen extras. */
