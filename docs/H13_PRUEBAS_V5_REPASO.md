@@ -117,3 +117,33 @@
 | # | placa | bloque | qué pasó |
 |---|---|---|---|
 | | | | |
+
+## ⚠️ DEUDA DE VERIFICACIÓN — el STM32, desde `U3.6` (visto por Eduardo, 27-ago)
+
+**El matiz que se me escapó**: se probó el STM32 (`U3.5`/`U3.6`) ✅, luego se probó la Pico
+(`U3.7`…`U3.12`) ✅ — pero **cinco de los seis pasos de la Pico tocaron el fichero COMÚN**,
+que el STM32 también usa. Y `U3.12` tocó `stm32_repl.c` directamente. Así que el STM32
+lleva cinco commits sin verificar.
+
+Medido con `git log e8d2a129..HEAD -- src/bpvm_repl.c include/bpvm_repl.h stm32/port/stm32_repl.c`
+(sólo `U3.9`, el LIST, fue exclusivo de la Pico).
+
+**No hace falta repasarlo entero.** Lo que le cambió, y qué lo ejercita:
+
+| paso | qué le cambió al STM32 | gesto |
+|---|---|---|
+| `U3.7` | el volcado de log emite `\uXXXX` en vez de un espacio | **Log** |
+| `U3.8` | `DEL` distingue «no está» de «está y no se pudo borrar» | **Delete** |
+| `U3.10` | `SAVE_REPLY` lleva ahora `durationMs` (campo nuevo) | **Save** |
+| `U3.11` | el buffer del `INFO` sube de 900 a 1024 (pila) | **Info** |
+| `U3.12` | su puerta de H9 traga el bulk; y el drenaje del PUT cambió de función | **subir un fichero pequeño y uno > 8 KB** |
+
+⚠️ El `.bin` a usar es el de **las 16:49** o uno reconstruido — y recordar que el build
+headless regenera el `.elf` pero **NO** el `.bin`: hay que pasar `arm-none-eabi-objcopy -O binary`.
+
+**La lección, y generaliza:** ya teníamos escrito que *«un arreglo que no viaja entre
+familias es medio arreglo»*. Esto es **el caso inverso y menos visible**: un cambio que SÍ
+viaja, a una familia que en ese momento no se está probando. Al migrar la familia B, todo lo
+que caiga en el común deja **deuda de verificación** en la familia A. La regla operativa:
+**cuando un paso toca el común, la lista de placas a re-verificar son TODAS las que lo
+enlazan, no sólo la que se está migrando.** Y basta con el gesto que ejercita lo que cambió.
