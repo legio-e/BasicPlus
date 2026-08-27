@@ -143,6 +143,19 @@ typedef struct {
  *  Sin esto, los verbos que la necesitan responden error con nombre. */
 void bpvm_repl_set_ops(const bpvm_repl_ops_t* ops);
 
+/* Traga y tira los `n` bytes de bulk anunciados por un mensaje.
+ *
+ * Lo necesita quien RECHAZA un mensaje que traía bulk antes de que llegue al
+ * handler — típicamente la puerta de arranque de cada familia («sin FS montado,
+ * nada de ficheros»). El bulk viaja DETRÁS de la línea JSON: si se contesta el
+ * error y se vuelve sin consumirlo, esos bytes se quedan en el cable y el
+ * mensaje siguiente se lee desde la mitad de los datos. El síntoma no es «falló
+ * el PUT», es que a partir de ahí no funciona nada.
+ *
+ * Best-effort: 0 si se consumieron todos, <0 si el cable se cortó a medias (en
+ * cuyo caso ya no hay sincronía que salvar). */
+int bpvm_repl_drain_bulk(unsigned long n);
+
 /** Atiende `type` si es un verbo del común. Devuelve 1 si lo atendió (la
  *  respuesta ya salió por el wire), 0 si no es suyo y la familia debe seguir
  *  con su cadena. `obj` es el mensaje ya parseado (para los parámetros). */

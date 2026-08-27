@@ -530,9 +530,13 @@ err:
  * desincronizado — el síntoma no es "falló el PUT", es que a partir de ahí no
  * funciona nada. Hay que tragárselos quepan o no, ANTES de contestar el error.
  * Devuelve 0 si se consumieron todos; <0 si el cable se cortó a medias. */
-static int tragar_bulk(unsigned long n) {
-    unsigned char* buf = s_ops->put_buf;
-    unsigned long  cap = s_ops->put_buf_size;
+int bpvm_repl_drain_bulk(unsigned long n) {
+    /* Con scratch de la familia se traga a bocados grandes; sin él (la puerta
+     * puede rechazar antes de que nadie registre cintura) vale uno de pila: lo
+     * que importa es CONSUMIRLO, no la velocidad de tirarlo. */
+    unsigned char pila[64];
+    unsigned char* buf = (s_ops && s_ops->put_buf) ? s_ops->put_buf : pila;
+    unsigned long  cap = (s_ops && s_ops->put_buf) ? s_ops->put_buf_size : sizeof pila;
     while (n > 0) {
         unsigned long chunk = n < cap ? n : cap;
         if (wire_v1_recv_bulk(buf, (size_t) chunk, (size_t) cap) < 0) return -1;
@@ -540,6 +544,8 @@ static int tragar_bulk(unsigned long n) {
     }
     return 0;
 }
+
+static int tragar_bulk(unsigned long n) { return bpvm_repl_drain_bulk(n); }
 
 /* PUT — subida de un tirón (para ficheros que caben en el scratch; los grandes
  * van por PUT_BEGIN/DATA/END). */

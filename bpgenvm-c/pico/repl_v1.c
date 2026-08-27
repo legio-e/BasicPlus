@@ -250,99 +250,12 @@ static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
 /* ============================================================ */
 /* PUT — request lleva bulk. */
 
-/* PUT necesita un manejo especial: el dispatcher común DRAINA el bulk
- * antes de despachar; aquí necesitamos en su lugar LEERLO al buffer.
- * Por eso el dispatcher pasa los bytes ya leídos a través del puntero
- * y la longitud. */
-static void handle_put(long id, const json_obj_t* obj,
-                       const uint8_t* bulk, size_t bulk_size) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path");
-        return;
-    }
-    fs_status_t s = fs_put(path, bulk, (uint32_t) bulk_size);
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
-        return;
-    }
-    /* Reply incluye size para que el cliente confirme cuánto se escribió. */
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "PUT_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "size", (long) bulk_size);
-    if (off < 0) goto err;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "PUT_REPLY no cabe");
-}
 
 /* ============================================================ */
-/* #294 streaming PUT — subida por trozos (PUT_BEGIN/PUT_DATA/PUT_END), espejo del
- * BURN de packs. Evita el techo del PUT clasico (s_put_buf=48K): BEGIN crea/trunca,
- * cada DATA apende un chunk, END verifica el tamaño. Una sesion a la vez. */
 
-static struct {
-    int      active;
-    char     path[FS_NAME_LEN];
-    uint32_t received;
-    uint32_t expected;   /* size anunciado en BEGIN (0 = no verificar) */
-} s_put_sess;
 
-static void put_stream_reply(long id, const char* type, uint32_t val, const char* field) {
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, type, id);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, field, (long) val);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "reply no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
 
-static void handle_put_begin(long id, const json_obj_t* obj) {
-    char path[FS_NAME_LEN];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
-    }
-    fs_status_t s = fs_put(path, NULL, 0);   /* crea/trunca + dirs padre */
-    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
-    s_put_sess.active   = 1;
-    s_put_sess.received = 0;
-    s_put_sess.expected = (uint32_t) json_get_long(obj, "size", 0);
-    strncpy(s_put_sess.path, path, sizeof(s_put_sess.path) - 1);
-    s_put_sess.path[sizeof(s_put_sess.path) - 1] = '\0';
-    put_stream_reply(id, "PUT_BEGIN_REPLY", 0, "received");
-}
 
-static void handle_put_data(long id, const json_obj_t* obj, const uint8_t* bulk, size_t bulk_size) {
-    (void) obj;
-    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
-    if (bulk_size > 0) {
-        fs_status_t s = fs_put_append(s_put_sess.path, bulk, (uint32_t) bulk_size);
-        if (s != FS_OK) {
-            s_put_sess.active = 0;
-            const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return;
-        }
-        s_put_sess.received += (uint32_t) bulk_size;
-    }
-    put_stream_reply(id, "PUT_DATA_REPLY", s_put_sess.received, "received");
-}
-
-static void handle_put_end(long id, const json_obj_t* obj) {
-    (void) obj;
-    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
-    uint32_t recv = s_put_sess.received;
-    uint32_t exp  = s_put_sess.expected;
-    s_put_sess.active = 0;
-    if (exp != 0 && recv != exp) {
-        wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado"); return;
-    }
-    put_stream_reply(id, "PUT_END_REPLY", recv, "size");
-}
 
 /* ============================================================ */
 /* V5/H1 — SD_INFO: ¿contesta la tarjeta, y qué dice de sí misma?
@@ -1469,9 +1382,11 @@ static const bpvm_repl_ops_t s_repl_ops = {
     /* BOOTSEL va como capacidad aparte: es de esta familia y el IDE decide con
      * ella si enseñar el botón. */
     .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"BOOTSEL\"]",
-    .put_buf        = NULL,      /* llega con el grupo PUT */
-    .put_buf_size   = 0,
-    .after_put      = NULL,      /* littlefs ya persiste en cada close */
+    .put_buf        = s_put_buf,
+    .put_buf_size   = sizeof s_put_buf,
+    /* Sin after_put a propósito: littlefs committea en cada close, así que aquí
+     * NO hay nada que persistir tras una subida (a diferencia del STM32). */
+    .after_put      = NULL,
     .fs_total_bytes = pico_repl_fs_total,
     .fs_used_bytes  = pico_repl_fs_used,
     .fs_file_count  = pico_repl_fs_count,
@@ -1494,9 +1409,30 @@ void repl_v1_handle_request(int first_char) {
         return;
     }
 
-    /* 3. Si hay bulk, leerlo al buffer ANTES de despachar. Si fuera
-     *    de rango, drain y error. */
-    long bulk = json_get_long(&obj, "bulk", 0);
+    /* 3. id (puede ser 0 si el peer no lo mandó). */
+    long id = json_get_long(&obj, "id", 0);
+
+    /* 4. type. Se saca ANTES de tocar el bulk, y a propósito (V6/U3 g11): hay
+     *    que saber QUÉ verbo es para decidir quién lee esos bytes. Leer el tipo
+     *    del JSON ya parseado no toca el cable, así que adelantarlo es gratis. */
+    char type[40];
+    if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
+        wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'");
+        return;
+    }
+
+    /* 5. El bulk — pero SÓLO para quien no se lo lee él mismo.
+     *
+     * Los verbos PUT viven en el común desde V6/U3 y ahí el bulk se lee DENTRO
+     * del handler. Si además se pre-leyera aquí, se leería DOS VECES: la segunda
+     * lectura se comería el mensaje siguiente y el wire quedaría desincronizado.
+     * No es hipotético — es exactamente el bug que tuvo el ESP32 en 0456da8, y
+     * el síntoma no es "falla el PUT" sino que a partir de ahí no funciona nada.
+     *
+     * Lo que SÍ sigue pre-leyéndose es PACK_BURN_DATA y compañía: el gestor de
+     * placa recibe el bulk ya en s_put_buf, y su camino no ha migrado. */
+    int lo_lee_el_comun = (strcmp(type, "PUT") == 0 || strncmp(type, "PUT_", 4) == 0);
+    long bulk = lo_lee_el_comun ? 0 : json_get_long(&obj, "bulk", 0);
     size_t bulk_size = 0;
     if (bulk > 0) {
         if (bulk > (long) sizeof(s_put_buf)) {
@@ -1509,8 +1445,7 @@ void repl_v1_handle_request(int first_char) {
                 if (wire_v1_recv_bulk(drain, chunk, sizeof(drain)) < 0) break;
                 remaining -= (long) chunk;
             }
-            long id_err = json_get_long(&obj, "id", 0);
-            wire_v1_send_error(id_err, "NO_SPACE",
+            wire_v1_send_error(id, "NO_SPACE",
                                 "bulk supera el buffer del servidor");
             return;
         }
@@ -1519,16 +1454,6 @@ void repl_v1_handle_request(int first_char) {
             return;
         }
         bulk_size = (size_t) bulk;
-    }
-
-    /* 4. id (puede ser 0 si el peer no lo mandó). */
-    long id = json_get_long(&obj, "id", 0);
-
-    /* 5. type. */
-    char type[40];
-    if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
-        wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'");
-        return;
     }
 
     /* 6. Despachar. */
@@ -1549,6 +1474,13 @@ void repl_v1_handle_request(int first_char) {
                      || strcmp(type, "FORMAT") == 0 || strcmp(type, "SAVE") == 0
                      || strcmp(type, "DF") == 0;
         if (is_fs_cmd && bs->state < BPVM_BOOT_FS) {
+            /* El bulk que esta puerta rechaza hay que TRAGARSELO igual, o se
+             * queda en el cable. Sólo el de los verbos PUT: el resto ya lo
+             * pre-leyó el paso 5. */
+            if (lo_lee_el_comun) {
+                long b_pend = json_get_long(&obj, "bulk", 0);
+                if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
+            }
             char msg[96];
             snprintf(msg, sizeof msg,
                      "FS no disponible en estado %d (%s): configurar particiones",
@@ -1563,11 +1495,6 @@ void repl_v1_handle_request(int first_char) {
         }
     }
     /* FILES */
-    if (strcmp(type, "PUT")      == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
-    /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
-    if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
-    if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
-    if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
     if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
     if (strcmp(type, "SD_MOUNT") == 0) { handle_sd_mount(id, &obj); return; }  /* V5/H2 */
     if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H2 */

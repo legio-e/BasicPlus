@@ -589,6 +589,12 @@ static void dispatch(int first_char) {
                   /* V6/U3 g2: RENAME/RMDIR entran por el común, pero el gate
                    * de FS-no-montado es de esta familia y debe cubrirlos. */
         if (is_fs && st < BPVM_BOOT_FS) {
+            /* El bulk que esta puerta rechaza hay que TRAGARSELO igual, o se
+             * queda en el cable y el mensaje siguiente se lee desde la mitad.
+             * Aquí no lo ha leído nadie todavía: el bloque de PACK_* retorna
+             * antes de llegar a esta puerta. */
+            long b_pend = json_get_long(&obj, "bulk", 0);
+            if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
             wire_v1_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
             return;
         }
