@@ -531,6 +531,99 @@ err:
     wire_v1_send_error(id, "INTERNAL_ERROR", "PUT_REPLY no cabe");
 }
 
+
+/* ── #294 streaming PUT — subida por trozos ────────────────────────────────
+ * BEGIN crea/trunca, cada DATA apende su propio bulk, END verifica el tamaño y
+ * persiste UNA sola vez (un after_put por chunk sería un erase+program por
+ * trozo). Una sesión a la vez: el wire es un solo cable y el IDE sube de uno
+ * en uno. */
+static struct {
+    int           active;
+    char          path[64];
+    unsigned long received;
+    unsigned long expected;
+} s_put_sess;
+
+static void reply_put_field(const char* type, long id, unsigned long val,
+                            const char* field) {
+    char buf[96];
+    int off = wire_v1_msg_begin(buf, sizeof buf, 0, type, id);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, field, (long) val);
+    if (off < 0) goto err;
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off < 0) goto err;
+    wire_v1_send_line(buf, (size_t) off);
+    return;
+err:
+    wire_v1_send_error(id, "INTERNAL_ERROR", "reply no cabe");
+}
+
+static void repl_put_begin(long id, const json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof path) < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
+    }
+    if (bpvm_fs_write(path, NULL, 0, 0) != 0) {      /* crea/trunca */
+        const char *code, *msg;
+        fs_fallo("put", path, 0, &code, &msg);
+        wire_v1_send_error(id, code, msg); return;
+    }
+    s_put_sess.active   = 1;
+    s_put_sess.received = 0;
+    s_put_sess.expected = (unsigned long) json_get_long(obj, "size", 0);
+    strncpy(s_put_sess.path, path, sizeof s_put_sess.path - 1);
+    s_put_sess.path[sizeof s_put_sess.path - 1] = '\0';
+    reply_put_field("PUT_BEGIN_REPLY", id, 0, "received");
+}
+
+static void repl_put_data(long id, const json_obj_t* obj) {
+    long bulk = json_get_long(obj, "bulk", -1);
+    if (bulk < 0) { wire_v1_send_error(id, "INVALID_PARAM", "falta bulk"); return; }
+
+    if ((unsigned long) bulk > s_ops->put_buf_size) {
+        if (tragar_bulk((unsigned long) bulk) < 0) {
+            wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+        }
+        s_put_sess.active = 0;
+        wire_v1_send_error(id, "NO_SPACE", "chunk mayor que el buffer"); return;
+    }
+    if (wire_v1_recv_bulk(s_ops->put_buf, (size_t) bulk, (size_t) s_ops->put_buf_size) < 0) {
+        wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+    }
+    /* El bulk YA está consumido. Sólo a partir de aquí se puede contestar un
+     * error sin dejar el wire a medias — de ahí que la sesión se valide DESPUÉS
+     * de leer y no antes, que es lo que parecería natural. */
+    if (!s_put_sess.active) {
+        wire_v1_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return;
+    }
+    if (bulk > 0 && bpvm_fs_write(s_put_sess.path, s_ops->put_buf,
+                                  (uint32_t) bulk, 1) != 0) {
+        const char *code, *msg;
+        s_put_sess.active = 0;
+        fs_fallo("append", s_put_sess.path, (unsigned long) bulk, &code, &msg);
+        wire_v1_send_error(id, code, msg); return;
+    }
+    s_put_sess.received += (unsigned long) bulk;
+    reply_put_field("PUT_DATA_REPLY", id, s_put_sess.received, "received");
+}
+
+static void repl_put_end(long id, const json_obj_t* obj) {
+    (void) obj;
+    if (!s_put_sess.active) {
+        wire_v1_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return;
+    }
+    unsigned long recv = s_put_sess.received;
+    unsigned long exp  = s_put_sess.expected;
+    s_put_sess.active = 0;
+    if (exp != 0 && recv != exp) {
+        wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado");
+        return;
+    }
+    if (s_ops->after_put) s_ops->after_put(s_put_sess.path);
+    reply_put_field("PUT_END_REPLY", id, recv, "size");
+}
+
 int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
@@ -562,6 +655,10 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     /* ── grupo 4: los de la cintura ── */
     if (strcmp(type, "HELLO")  == 0) { if (!sin_ops(id, "HELLO"))  repl_hello(id);       return 1; }
     if (strcmp(type, "PUT")    == 0) { if (!sin_ops(id, "PUT"))    repl_put(id, obj);     return 1; }
+    /* #294 streaming: los tres van juntos o no van — comparten sesión. */
+    if (strcmp(type, "PUT_BEGIN") == 0) { if (!sin_ops(id, type)) repl_put_begin(id, obj); return 1; }
+    if (strcmp(type, "PUT_DATA")  == 0) { if (!sin_ops(id, type)) repl_put_data(id, obj);  return 1; }
+    if (strcmp(type, "PUT_END")   == 0) { if (!sin_ops(id, type)) repl_put_end(id, obj);   return 1; }
     if (strcmp(type, "INFO")   == 0) { if (!sin_ops(id, "INFO"))   repl_info(id);        return 1; }
     if (strcmp(type, "DF")     == 0) { if (!sin_ops(id, "DF"))     repl_df(id);          return 1; }
     if (strcmp(type, "FORMAT") == 0) { if (!sin_ops(id, "FORMAT")) repl_format(id, obj); return 1; }
