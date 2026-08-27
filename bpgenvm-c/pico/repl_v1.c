@@ -231,37 +231,6 @@ static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
 /* ============================================================ */
 /* HELLO — META. */
 
-static void handle_hello(long id, const json_obj_t* obj) {
-    (void) obj;
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "HELLO_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "protoVersion", 1);
-    if (off < 0) goto err;
-    off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                                "serverName", "bpvm-pico");
-    if (off < 0) goto err;
-    off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                                "serverBuild", BPVM_PICO_BUILD_DATE);
-    if (off < 0) goto err;
-    /* Capabilities — crecerá con cada fase. Hoy META completo (HELLO/
-     * INFO/TIME/PING/RESET/BOOTSEL), FILES completo, TERMINAL parcial
-     * (RUN/OUTPUT/EXITED, sin KILL ni PROMPT — depende de #136/#139).
-     * Añadimos también "BOOTSEL" como capability separada porque es
-     * Pico-specific (la VM Java NO la tiene). */
-    static const char* CAPS = ",\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"BOOTSEL\"]";
-    size_t caps_len = strlen(CAPS);
-    if ((size_t) off + caps_len + 1 > sizeof(s_reply_buf)) goto err;
-    memcpy(s_reply_buf + off, CAPS, caps_len);
-    off += (int) caps_len;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "HELLO_REPLY no cabe");
-}
 
 /* ============================================================ */
 /* V6/U3 g8 — LIST vive en el común. El recorrido de allí no necesita la zona de
@@ -712,76 +681,14 @@ static void handle_sd_mount(long id, const json_obj_t* obj) {
 /* ============================================================ */
 /* FORMAT — borra todo el FS RAM. Requiere confirm:"YES". */
 
-static void handle_format(long id, const json_obj_t* obj) {
-    char confirm[8];
-    if (json_get_str(obj, "confirm", confirm, sizeof(confirm)) < 0 ||
-        strcmp(confirm, "YES") != 0) {
-        wire_v1_send_error(id, "MISSING_CONFIRM",
-                            "FORMAT requiere {\"confirm\":\"YES\"}");
-        return;
-    }
-    fs_format_ram();
-    wire_v1_send_reply_empty("FORMAT_REPLY", id);
-}
 
 /* ============================================================ */
 /* SAVE — persiste el FS RAM a flash. */
 
-static void handle_save(long id, const json_obj_t* obj) {
-    (void) obj;
-    uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-    fs_status_t s = fs_save_to_flash();
-    uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
-        return;
-    }
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "SAVE_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "durationMs", (long) dt);
-    if (off < 0) goto err;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE_REPLY no cabe");
-}
 
 /* ============================================================ */
 /* DF — stats del FS. */
 
-static void handle_df(long id, const json_obj_t* obj) {
-    (void) obj;
-    long total = (long) fs_total_bytes();
-    long used  = (long) fs_used_bytes();
-    long fcnt  = (long) fs_file_count();
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "DF_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "totalBytes", total);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "usedBytes", used);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "freeBytes", total - used);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "fileCount", fcnt);
-    if (off < 0) goto err;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "DF_REPLY no cabe");
-}
 
 /* ============================================================ */
 /* LOG_DUMP — text del log persistente, embebido como string JSON. */
@@ -1147,7 +1054,7 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         return 1;                              /* → BPVM_KILLED */
     }
     if (strcmp(type, "HELLO") == 0) {
-        handle_hello(rid, &obj);               /* attach en caliente */
+        bpvm_repl_dispatch(type, rid, &obj);   /* attach en caliente */
         return 0;
     }
     wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
@@ -1532,7 +1439,7 @@ static int pico_autorun_escucha(void* user) {
         wire_v1_send_reply_empty("KILL_REPLY", rid);
         return 2;
     }
-    if (strcmp(type, "HELLO") == 0) { handle_hello(rid, &obj); return 1; }
+    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 1; }
     /* Cualquier otra cosa: hay alguien al otro lado, que es lo que se
      * preguntaba. No se contesta — el REPL la atenderá si no se arranca. */
     return 1;
@@ -1599,6 +1506,35 @@ void repl_v1_autorun(void) {
 /* ============================================================ */
 /* Dispatcher principal. */
 
+
+/* ── V6/U3 g9 — la cintura del REPL de esta familia ────────────────────────
+ * Se registra A MEDIAS a propósito: `info` y `put_buf` llegan en sus pasos. El
+ * común no se fía del orden de la cadena para eso — cada verbo comprueba la
+ * pieza que necesita y contesta UNSUPPORTED si falta. */
+static int  pico_repl_fs_format(void) { fs_format_ram(); return 0; }
+static int  pico_repl_fs_save(void)   { return fs_save_to_flash() == FS_OK ? 0 : -1; }
+static unsigned long pico_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
+static unsigned long pico_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
+static int  pico_repl_fs_count(void)  { return (int) fs_file_count(); }
+
+static const bpvm_repl_ops_t s_repl_ops = {
+    .info           = NULL,      /* llega con INFO (los 18 comunes + 11 propios) */
+    .info_extra     = NULL,      /*   idem */
+    .server_name    = "bpvm-pico",
+    .server_build   = BPVM_PICO_BUILD_DATE,
+    /* BOOTSEL va como capacidad aparte: es de esta familia y el IDE decide con
+     * ella si enseñar el botón. */
+    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"BOOTSEL\"]",
+    .put_buf        = NULL,      /* llega con el grupo PUT */
+    .put_buf_size   = 0,
+    .after_put      = NULL,      /* littlefs ya persiste en cada close */
+    .fs_total_bytes = pico_repl_fs_total,
+    .fs_used_bytes  = pico_repl_fs_used,
+    .fs_file_count  = pico_repl_fs_count,
+    .fs_format      = pico_repl_fs_format,
+    .fs_save        = pico_repl_fs_save,
+};
+
 void repl_v1_handle_request(int first_char) {
     /* 1. Leer la línea JSON completa. */
     int n = wire_v1_recv_line(first_char, s_line_buf, sizeof(s_line_buf));
@@ -1653,7 +1589,6 @@ void repl_v1_handle_request(int first_char) {
 
     /* 6. Despachar. */
     /* META */
-    if (strcmp(type, "HELLO")    == 0) { handle_hello(id, &obj);    return; }
     if (strcmp(type, "INFO")     == 0) { handle_info(id, &obj);     return; }
     if (strcmp(type, "RESET")    == 0) { handle_reset(id, &obj);    return; }
     if (strcmp(type, "BOOTSEL")  == 0) { handle_bootsel(id, &obj);  return; }
@@ -1693,9 +1628,6 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
     if (strcmp(type, "SD_MOUNT") == 0) { handle_sd_mount(id, &obj); return; }  /* V5/H2 */
     if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H2 */
-    if (strcmp(type, "FORMAT")   == 0) { handle_format(id, &obj);   return; }
-    if (strcmp(type, "SAVE")     == 0) { handle_save(id, &obj);     return; }
-    if (strcmp(type, "DF")       == 0) { handle_df(id, &obj);       return; }
     /* V6/U3 — el común, DESPUÉS de los propios y no antes (al revés que el
      * STM32) porque esta familia se migra por grupos: lo que esta placa siga
      * implementando gana, y lo que ya no, cae aquí. Al terminar la migración
@@ -1781,6 +1713,7 @@ void repl_v1_handle_request(int first_char) {
  * Nada se pierde por funcionalidad: el wire v1 cubre TIME, RESET y BOOTSEL, que
  * era lo único del modo texto sin equivalente obvio. */
 void repl_v1_run(void) {
+    bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3 g9: la cintura, antes del primer mensaje */
     log_printf("REPL entry (wire v1)");
     /* #326 CONTROL: se marca en TODO arranque, haya depurador o no. Es la
      * prueba de que el portador funciona — el equivalente a ejecutar T antes

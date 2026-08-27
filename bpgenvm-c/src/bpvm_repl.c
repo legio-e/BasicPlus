@@ -12,6 +12,7 @@
 #include "bpvm_log.h"
 #include "bpvm_fs.h"
 #include "bpvm_rtc.h"
+#include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
 
 #include <stdio.h>
 #include <string.h>
@@ -352,6 +353,19 @@ static int sin_ops(long id, const char* verbo) {
     return 1;
 }
 
+/* Una familia puede registrar la cintura A MEDIAS mientras migra por grupos: la
+ * Pico lo hace. Que falte una pieza tiene que decirlo el verbo que la necesita
+ * —no depender de que la cadena de la familia lo atrape antes—, porque eso
+ * ultimo es cierto hasta que alguien reordena la cadena. */
+static int falta_pieza(long id, const char* verbo, int hay,
+                       const char* nombre) {
+    if (hay) return 0;
+    char m[112];
+    snprintf(m, sizeof m, "%s: la cintura de este firmware no trae '%s'", verbo, nombre);
+    wire_v1_send_error(id, "UNSUPPORTED", m);
+    return 1;
+}
+
 static void repl_info(long id) {
     char buf[900];
     bpvm_repl_info_t in;
@@ -446,11 +460,26 @@ static void repl_format(long id, const json_obj_t* obj) {
 static void repl_save(long id) {
     /* Sin `fs_save` la respuesta es OK, y es la VERDAD: en littlefs cada close
      * ya persiste. No es un no-op disfrazado — es que no hay nada que hacer. */
+    int64_t t0 = bpvm_platform_now_ms();
     if (s_ops->fs_save && s_ops->fs_save() != 0) {
         wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE: el FS no se pudo persistir");
         return;
     }
-    wire_v1_send_reply_empty("SAVE_REPLY", id);
+    /* `durationMs` lo daba SOLO la Pico, donde además mide un no-op y sale 0.
+     * Donde de verdad significa algo es en el STM32, que sí escribe flash — y
+     * ahí no existía. Se emite siempre: 0 es una respuesta honrada. */
+    char buf[96];
+    long dt = (long) (bpvm_platform_now_ms() - t0);
+    int off = wire_v1_msg_begin(buf, sizeof buf, 0, "SAVE_REPLY", id);
+    if (off < 0) goto err;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "durationMs", dt);
+    if (off < 0) goto err;
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off < 0) goto err;
+    wire_v1_send_line(buf, (size_t) off);
+    return;
+err:
+    wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE_REPLY no cabe");
 }
 
 
@@ -673,12 +702,23 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
     /* ── grupo 4: los de la cintura ── */
     if (strcmp(type, "HELLO")  == 0) { if (!sin_ops(id, "HELLO"))  repl_hello(id);       return 1; }
-    if (strcmp(type, "PUT")    == 0) { if (!sin_ops(id, "PUT"))    repl_put(id, obj);     return 1; }
-    /* #294 streaming: los tres van juntos o no van — comparten sesión. */
-    if (strcmp(type, "PUT_BEGIN") == 0) { if (!sin_ops(id, type)) repl_put_begin(id, obj); return 1; }
-    if (strcmp(type, "PUT_DATA")  == 0) { if (!sin_ops(id, type)) repl_put_data(id, obj);  return 1; }
-    if (strcmp(type, "PUT_END")   == 0) { if (!sin_ops(id, type)) repl_put_end(id, obj);   return 1; }
-    if (strcmp(type, "INFO")   == 0) { if (!sin_ops(id, "INFO"))   repl_info(id);        return 1; }
+    if (strncmp(type, "PUT", 3) == 0
+            && (strcmp(type, "PUT") == 0 || strcmp(type, "PUT_BEGIN") == 0
+             || strcmp(type, "PUT_DATA") == 0 || strcmp(type, "PUT_END") == 0)) {
+        if (sin_ops(id, type)) return 1;
+        if (falta_pieza(id, type, s_ops->put_buf != NULL, "put_buf")) return 1;
+        if      (strcmp(type, "PUT")       == 0) repl_put(id, obj);
+        /* #294 streaming: los tres van juntos o no van — comparten sesión. */
+        else if (strcmp(type, "PUT_BEGIN") == 0) repl_put_begin(id, obj);
+        else if (strcmp(type, "PUT_DATA")  == 0) repl_put_data(id, obj);
+        else                                     repl_put_end(id, obj);
+        return 1;
+    }
+    if (strcmp(type, "INFO")   == 0) {
+        if (sin_ops(id, "INFO")) return 1;
+        if (falta_pieza(id, "INFO", s_ops->info != NULL, "info")) return 1;
+        repl_info(id); return 1;
+    }
     if (strcmp(type, "DF")     == 0) { if (!sin_ops(id, "DF"))     repl_df(id);          return 1; }
     if (strcmp(type, "FORMAT") == 0) { if (!sin_ops(id, "FORMAT")) repl_format(id, obj); return 1; }
     if (strcmp(type, "SAVE")   == 0) { if (!sin_ops(id, "SAVE"))   repl_save(id);        return 1; }
