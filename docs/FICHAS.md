@@ -92,6 +92,68 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabajados, en
 `V6_IDEAS.md`. Aquí vive el estado.
 
+
+#### 🔴 `#440` — `JsonDemo` falla en la RP2350 desde algún punto entre V4 y V5 (abierta 27-ago)
+
+**Síntoma**: `exit 6 (opcode desconocido 0x43 en PC 7784)`; con el programa casi vacío,
+`exit 7 (PC fuera de rango)`. **Va** en la Nucleo, **va** en el host, **va** con la imagen
+publicada de **V4**. **Falla** con la de **V5** y con todas las posteriores.
+
+**Lo MEDIDO** (no interpretado):
+- El CRC del `.mod` en la placa coincide con el del PC → los bytes llegan bien; el camino de
+  subida está limpio (lo confirma el propio IDE con su «contenido idéntico, salto PUT»).
+- Los 27 `.mod` de la stdlib son **byte a byte idénticos** en V4, V5 y hoy. El fuente de
+  `JsonDemo.bp` también. Y los compiladores de V4 y V5 producen el **mismo** `JsonDemo.mod`.
+  **La diferencia no está en el lado del PC.**
+- `PicoA` (sin imports) va; `PicoB` (sólo añade `import Json`, sin usarlo) falla.
+- El fallo NO depende del camino de lanzamiento (Run desde el PC y doble clic dan lo mismo).
+
+**Descartado con medida**: la migración del REPL de hoy (falla igual con la imagen anterior
+a la sesión), `Core.mod` rancio en `/app` (falla igual viniendo de `/lib`), el escaneo de
+`.mdn` (fue un no-op en la ejecución que falló), el parcheo AOT (escribe `0xAA`), y que
+algún `.mod` del disco use ese opcode (ninguno).
+
+**Estado**: hueco acotado a **6-ago → 22-ago** (385 commits; sólo 62 tocan el camino de
+carga/enlace/intérprete o el firmware de la Pico, y **uno solo** toca `loader.c`/`link.c`).
+Hay tres imágenes de bisección construidas (cuartiles: 14, 17 y 20 de agosto).
+
+⚠️ **Al bisecar, IDE FIJO**: usar el de V4 en todas las pruebas. Genera `.mod` v6, que
+aceptan todas las imágenes del rango — si se cambia de IDE se mueven dos variables.
+
+**Por qué salió ahora y no antes**: `JsonDemo` estaba en la batería de V4 (tanda 3, ✅) y
+**no aparece ni una vez** en el registro de V5. Ver `H13_PRUEBAS_V5_REPASO.md`.
+
+#### 🟡 `#441` — seis opcodes que la VM-Java tiene y la VM-C no (abierta 27-ago)
+
+`GET_GLOBAL_I8/U8/I16/U16` y `SET_GLOBAL_I8/I16` (0x40–0x45) están **declarados** en
+`bpvm_opcodes.h` y **no tienen `case`** en `src/interp.c`. `VirtualMachine.java` los
+implementa. Es una violación del invariante sagrado que el arnés no ve porque **ningún
+sample tiene una global `byte` o `short`**, y el compilador de hoy tampoco los emite: la
+familia está viva en el formato y muerta en una de las dos VMs.
+
+Salió al perseguir #440 (el `0x43` del síntoma es `GET_GLOBAL_U16`). **No es su causa** —el
+mismo `.mod` corre en el host—, pero es real y conviene cerrarlo: son seis casos triviales.
+
+#### 🟡 `#442` — «opcode desconocido» es un mensaje que manda a buscar donde no es
+
+Dice el opcode y un **PC absoluto**, y no dice el módulo ni el offset dentro de él. Con
+varios módulos enlazados en un espacio común, ese número no sirve sin hacer la aritmética a
+mano (`cb` de cada módulo + tamaños). El 27-ago costó buena parte de una tarde. Debería
+decir: **módulo, offset dentro del módulo, y de dónde salió ese módulo** (FS o pack).
+Encaja con la norma de Eduardo sobre mensajes que mienten o callan.
+
+#### 📋 `#443` — repaso de V5 con la batería de V4 (encargo de Eduardo, 27-ago)
+
+*«Yo repetiría todas las pruebas de V4 sobre IDE + Firmware + Demos de V5. A ver qué sale,
+es muy raro que solamente falle JsonDemo.»* La hipótesis a comprobar es que **#440 no está
+solo**. La lista, las condiciones de partida y lo ya sabido, en
+`docs/H13_PRUEBAS_V5_REPASO.md`.
+
+Lo que destapó la necesidad: la campaña de V4 dejó **2413 líneas** de registro y la de V5
+**418**. No es que no se anote — es que **cuando una versión hereda de otra, lo que no se
+re-prueba hay que saber que no se re-probó**. Si en V5 hubiera puesto «de la lista de V4,
+estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
+
 ### 🎯 LOS HITOS DE V6 — unificar primero, arquitectura después
 
 **Decisión de Eduardo (23-ago), y su razón:** *«antes de hacer más cosas deberíamos
@@ -698,6 +760,84 @@ conservó entera: es lo único realmente propio de esa familia.
 
 **Marcador U3: 15 de 29 verbos en el común.** Quedan: HELLO, STATE, LIST_DIR, PUT*, RUN,
 KILL, RESET, DEBUG* y los de hardware (BOOTSEL, SD_*).
+
+##### ✅ `U3.5`–`U3.6` — el STM32 COMPLETO: HELLO y el grupo PUT (27-ago · `c926ce1a`, `e8d2a129`)
+
+**HELLO.** La forma del saludo al común; lo propio son tres cadenas de cintura
+(`server_name`, `server_build`, `capabilities`). `server_build` se queda FUERA del común a
+propósito: un `__DATE__` en `src/bpvm_repl.c` sería la fecha de un fichero que casi nunca se
+recompila — o sea una fecha que no identifica la imagen, que ya costó un diagnóstico falso.
+
+Dos cosas aparecieron al medir y no estaban en el plan:
+- El STM32 tenía **TRES llamantes** de HELLO, no uno: los otros dos son los *poll* de
+  «ocupado ejecutando» (durante un RUN sólo se atienden HELLO y KILL).
+- Meter tres campos **corrió un puesto** el initializer de la cintura. Lo cazó el
+  compilador, pero es el bug que ya nos comimos al quitar un método de una base de la
+  stdlib → la cintura pasa a **inicializadores designados**.
+
+**PUT** (de un tirón) y **PUT_BEGIN/DATA/END** (streaming). El scratch y la política de
+persistencia van en la cintura porque NO son iguales: el buffer tiene restricciones propias
+por familia, y el `after_put` del STM32 persiste salvo bajo `/lib/` mientras la Pico no hace
+nada (littlefs ya commitea al cerrar).
+
+El orden de `PUT_DATA` se conserva y ahora está EXPLICADO, porque es lo contrario de lo que
+parece natural: **primero se lee el bulk, después se valida la sesión**. Validar antes es lo
+que uno escribiría, y el síntoma de hacerlo es malísimo — la respuesta sale correcta
+(`NO_SESSION`) y lo único que pasa es que los bytes anunciados se quedan en el cable, así
+que el mensaje siguiente se lee desde la mitad de los datos.
+
+**Y se termina #329.** El motivo real del fallo de FS ya se guardaba, pero el STM32 lo
+tiraba: respondiera lo que respondiera littlefs, contestaba SIEMPRE «NO_SPACE / FS lleno».
+La clasificación y la línea de log bajan a la capa de littlefs (estaban DUPLICADAS en dos
+familias, idénticas carácter por carácter) y salen como enum para que quien contesta al IDE
+no arrastre `lfs.h`.
+
+✅ **En placa (Nucleo)**: conexión + INFO; subida y ejecución de JsonDemo (dos ficheros a
+`/app`); y `Stdlib.pack` de **180 KB por streaming**, que ejercita BEGIN/DATA/END de verdad.
+
+**Marcador U3: 26 de 29.** Al STM32 sólo le quedan RUN/KILL/RESET, que se quedan en la
+familia **por diseño**.
+
+##### ✅ `U3.7`–`U3.12` — la Pico entera, en seis pasos (27-ago · `97050ef9`…`467a3ced`)
+
+La Pico se migra **al revés que el STM32**: el dispatch común va al FINAL de su cadena, no
+al principio. Así lo que la placa siga implementando gana y lo que ya no, cae al común — se
+puede ir grupo a grupo con la placa funcionando entre paso y paso.
+
+| paso | qué | lo que apareció al comparar |
+|---|---|---|
+| `U3.7` | PING/TIME/LOG_DUMP/LOG_CLEAR | el sink del log del común sustituía los caracteres de control por un **espacio** (byte perdido); la Pico emitía `\uXXXX`. Gana el rico |
+| `U3.8` | DEL/STAT/GET/MKDIR/RMDIR/RENAME | el `DEL` común juntaba «no está» y «está y no se puede borrar» en *«no existe»*, que en el segundo caso es falso |
+| `U3.9` | LIST | la Pico **gana** (no pide la zona de scratch para todo el listado, y desaparece el tope de entradas por directorio) y **pierde** una: emite dentro del callback de la fachada, o sea con el lock del FS cogido. Si molesta, el arreglo es del COMÚN y para las tres |
+| `U3.10` | cintura + HELLO/DF/FORMAT/SAVE | el `SAVE` de la Pico daba `durationMs` y el común no. Allí mide un no-op (sale 0), pero en el STM32 —que sí escribe flash— significa algo y no existía. Ahora lo emite el común con `bpvm_platform_now_ms`, que ya era primitiva común |
+| `U3.11` | INFO | 18 comunes + **11 propios** por `info_extra`. El buffer del común sube de 900 a 1024 (medido en banco: 679 B, 345 libres) |
+| `U3.12` | grupo PUT | ver abajo |
+
+**Lo de `U3.12` merece su párrafo.** El despachador de la Pico pre-leía el bulk ANTES de
+saber qué verbo era, y el común lo lee dentro del handler: dejarlo así sería leerlo dos
+veces. La salida no es quitar la pre-lectura (`PACK_BURN_DATA` la necesita) sino **adelantar
+la extracción del `type`**, que no toca el cable, y saltársela sólo para los verbos PUT.
+
+Y al reordenar salió a la luz **un agujero de verdad**: la puerta de arranque de H9 —«sin FS
+montado, nada de ficheros»— contesta `NOT_READY` y **vuelve sin tragarse el bulk**. En la
+Pico lo tapaba la pre-lectura; en el STM32 no lo tapaba nada y llevaba ahí desde `U3.5`.
+Arreglado una vez, en el común: `bpvm_repl_drain_bulk()` público, y las dos puertas lo
+llaman antes de contestar.
+
+**La cintura de la Pico se registró A MEDIAS a propósito** (`info` y `put_buf` llegaban en
+sus pasos). Para que eso fuera seguro **por construcción** y no por el orden de la cadena, el
+común dejó de fiarse: `falta_pieza()` hace que cada verbo compruebe lo que necesita y
+conteste UNSUPPORTED diciendo **cuál** falta.
+
+✅ **Cada paso verificado en placa el mismo día**, uno a uno (norma de Eduardo: *«cada cambio
+lo hemos de verificar en placa; aquí nos importa más la seguridad que la velocidad»*).
+
+**Marcador U3: 26 de 29 en dos familias.** A la Pico le quedan RUN/KILL/RESET (por diseño) y
+lo suyo propio: BOOTSEL, SD_INFO, SD_MOUNT, LIST_DIR, PROMPT_RESPONSE. Su `repl_v1.c` pasa
+de **2066 a ~1300 líneas**.
+
+⏭️ **Queda de U3**: la familia ESP32 (el S3 y el P4 **comparten** `repl_esp32.c`, así que van
+juntas). Y ojo al migrar: su despachador también pre-lee el bulk.
 
 ##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
 

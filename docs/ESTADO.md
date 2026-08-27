@@ -27,6 +27,62 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (27-ago, noche) — el repaso de V5, decidido por Eduardo
+
+**Lo primero de mañana**: la batería de V4 completa sobre **V5 puro** (IDE + firmware +
+demos del mismo paquete). Lista, condiciones de partida y lo ya sabido en
+**`docs/H13_PRUEBAS_V5_REPASO.md`**. Encargo suyo, y la hipótesis es concreta: *«es muy
+raro que solamente falle JsonDemo»*.
+
+⚠️ **La placa quedó en un estado mezclado** (IDE de V4 + imagen de V5 + un FS con ~35
+ficheros de las pruebas de acotación). Formatear antes de empezar; sobre esa mezcla ningún
+resultado sería atribuible.
+
+### Lo que se cerró hoy
+
+**U3 terminado en dos familias.** Ocho pasos, `U3.5` a `U3.12`, cada uno construido en las
+cuatro imágenes y **verificado en placa el mismo día** antes de pasar al siguiente. El
+STM32 y la Pico quedan con 26 de 29 verbos en el común; los tres que faltan (RUN, KILL,
+RESET) se quedan en la familia por diseño. `pico/repl_v1.c` pasa de 2066 a ~1300 líneas.
+El detalle, en `FICHAS.md`.
+
+Lo que más valor tuvo no fue mover código, sino **comparar antes de mover**: en cinco de los
+ocho pasos apareció una divergencia real entre familias, y **la que lo hacía bien no siempre
+era la misma**. Unificar «hacia el común» sin mirar habría degradado una u otra en cada
+verbo. Y de camino se cerró #329 y se tapó un agujero (`bpvm_repl_drain_bulk`) que llevaba
+en el STM32 desde la mañana y en la Pico lo tapaba una pre-lectura.
+
+### La cacería que se llevó la tarde — dónde quedó
+
+`JsonDemo` falla en la RP2350 (**#440** en `FICHAS.md`, con todo lo medido y lo descartado).
+No lo trajo el trabajo de hoy: falla igual con la imagen anterior a la sesión y con la
+publicada de V5. Va con la de V4 → **hueco acotado a 6-ago → 22-ago**.
+
+Hay **tres imágenes de bisección ya construidas** (cuartiles 14, 17 y 20 de agosto) en el
+scratchpad de la sesión. Si el repaso de mañana no las hace innecesarias, se reconstruyen en
+un minuto con `git checkout <sha> -- bpgenvm-c/` + `ninja -C pico/build` + restaurar.
+⚠️ Ese ir y venir **deja ficheros de commits viejos** que no existen en HEAD: comprobar con
+`git status` y borrarlos tras verificar uno a uno que no están en HEAD.
+
+Dos hallazgos laterales quedan anotados como **#441** (seis opcodes que la VM-Java tiene y
+la VM-C no) y **#442** (el mensaje «opcode desconocido» no dice ni módulo ni offset).
+
+### El riesgo que acecha, y no es técnico
+
+La campaña de V4 dejó **2413 líneas** de registro; la de V5, **418**. `JsonDemo` estaba en
+la de V4 con su ✅ y no aparece ni una vez en la de V5. No es que no se anote: es que
+**cuando una versión hereda de otra, lo que no se re-prueba hay que saber que no se
+re-probó**. Ficha **#443**.
+
+Y una lección de método, mía, apuntada también en memoria: tuve los dos anclajes servidos
+—el `.uf2` publicado de V4/V5 y la Nucleo en verde con el mismo fichero— y en vez de usarlos
+me puse a **generar casos sintéticos para validar una hipótesis propia**. Eduardo lo paró
+dos veces. Fabricar casos de prueba **parece** método, pero mide el eje que uno elige; si el
+eje está mal, cada peldaño añade precisión sobre nada. El tell: si el siguiente paso que se
+me ocurre es *construir* algo en vez de *ejecutar algo que ya existe* en un punto conocido
+del pasado, estoy validando, no acotando.
+
+
 ## ⏭️ AL RETOMAR (26-ago, tarde) — decidir entre estas tres
 
 Nada a medias: todo lo tocado hoy está commiteado, construido y verificado en placa.

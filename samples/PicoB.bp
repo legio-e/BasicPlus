@@ -1,0 +1,11 @@
+// PicoB.bp — IDENTICO a PicoA salvo el import. Json se importa y NO se usa:
+// lo unico que cambia entre los dos es que la placa tiene que cargar el
+// modulo de 24 KB.
+module PicoB
+  import Json
+
+  function Main()
+    print "B: inicio"
+    print "B: fin"
+  end Main
+end PicoB

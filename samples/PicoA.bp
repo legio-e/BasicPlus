@@ -1,0 +1,9 @@
+// PicoA.bp — control del par A/B (bug de la Pico, 27-ago).
+// SIN imports. Si esto va y PicoB no, el disparador es CARGAR Json,
+// no el programa.
+module PicoA
+  function Main()
+    print "A: inicio"
+    print "A: fin"
+  end Main
+end PicoA
