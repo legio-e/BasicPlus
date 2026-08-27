@@ -25,7 +25,10 @@
  * no le cabía en un buffer estático. */
 static void log_chunk_sink(const char* data, size_t len, void* user) {
     (void) user;
-    char esc[256 * 2];   /* el núcleo entrega chunks de 256 B; peor caso = ×2 */
+    /* El núcleo entrega chunks de 256 B. El peor caso por byte es \uXXXX (6),
+     * pero NO se dimensiona a ×6 (1,5 KB de pila en un micro pequeño): el buffer
+     * se queda en 512 y se vacía en cuanto no caben los 6 del caso peor. */
+    char esc[256 * 2];
     size_t o = 0;
     for (size_t i = 0; i < len; i++) {
         char ch = data[i];
@@ -43,9 +46,12 @@ static void log_chunk_sink(const char* data, size_t len, void* user) {
             esc[o++] = rep[0];
             esc[o++] = rep[1];
         } else if ((unsigned char) ch < 0x20u) {
-            /* control raro → espacio: el log es texto nuestro, no datos */
-            if (o + 1 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
-            esc[o++] = ' ';
+            /* Control raro → \uXXXX, que es lo que hacía la Pico. El STM32 lo
+             * sustituía por un espacio y con eso el byte se PIERDE; en un
+             * volcado de log, que es justo donde se mira cuando algo va mal,
+             * conviene poder distinguir un 0x01 de un 0x02. */
+            if (o + 6 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
+            o += (size_t) snprintf(esc + o, sizeof esc - o, "\\u%04x", (unsigned) ch);
         } else {
             if (o + 1 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
             esc[o++] = ch;

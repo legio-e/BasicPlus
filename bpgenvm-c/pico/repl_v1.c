@@ -20,6 +20,7 @@
 
 #include "repl_v1.h"
 #include "wire_v1.h"
+#include "bpvm_repl.h"      /* V6/U3: los verbos comunes del REPL */
 #include "json_min.h"
 #include "fs.h"
 #include "bpvm_fs.h"
@@ -987,53 +988,10 @@ typedef struct {
     int first;        /* 1 = todavía no se ha escrito el header */
 } log_ctx_t;
 
-/* Escapa y emite chunks del log directamente a stdout, dentro de las
- * comillas del campo "text". */
-static void log_chunk_sink(const char* data, size_t len, void* user) {
-    (void) user;
-    for (size_t i = 0; i < len; i++) {
-        char c = data[i];
-        switch (c) {
-            case '"':  fputs("\\\"", stdout); break;
-            case '\\': fputs("\\\\", stdout); break;
-            case '\n': fputs("\\n", stdout);  break;
-            case '\r': fputs("\\r", stdout);  break;
-            case '\t': fputs("\\t", stdout);  break;
-            default:
-                if ((unsigned char) c < 0x20) {
-                    fprintf(stdout, "\\u%04x", (unsigned) c);
-                } else {
-                    fputc(c, stdout);
-                }
-                break;
-        }
-    }
-}
 
-static void handle_log_dump(long id, const json_obj_t* obj) {
-    (void) obj;
-    fputs("{\"type\":\"LOG_DUMP_REPLY\",\"id\":", stdout);
-    fprintf(stdout, "%ld,\"text\":\"", id);
-    log_dump(log_chunk_sink, NULL);
-    fputs("\"}\n", stdout);
-    fflush(stdout);
-}
-
-/* Borra el log RAM + flash. Útil para bisects de instrumentación —
- * partir de 0 y ver inequívocamente qué persiste tras el siguiente
- * intento. NO reinicia el firmware. */
-static void handle_log_clear(long id, const json_obj_t* obj) {
-    (void) obj;
-    log_clear_ram();
-    log_clear_flash();
-    log_printf("LOG cleared via wire v1");
-    /* No log_flush() — dejamos el "cleared" en RAM. El siguiente
-     * flush natural lo persistirá si interesa. */
-    wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
-}
 
 /* ============================================================ */
-/* META — INFO, TIME, PING, RESET, BOOTSEL. */
+/* META — INFO, RESET, BOOTSEL. (TIME y PING viven en el común.) */
 
 static void handle_info(long id, const json_obj_t* obj) {
     (void) obj;
@@ -1205,20 +1163,7 @@ static void handle_info(long id, const json_obj_t* obj) {
     wire_v1_send_line(s_reply_buf, (size_t) off);
 }
 
-static void handle_time(long id, const json_obj_t* obj) {
-    long epochSec = json_get_long(obj, "epochSec", -1);
-    if (epochSec < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "TIME: falta 'epochSec' (>=0)");
-        return;
-    }
-    bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);
-    wire_v1_send_reply_empty("TIME_REPLY", id);
-}
 
-static void handle_ping(long id, const json_obj_t* obj) {
-    (void) obj;
-    wire_v1_send_reply_empty("PONG", id);
-}
 
 static void handle_reset(long id, const json_obj_t* obj) {
     (void) obj;
@@ -1908,8 +1853,6 @@ void repl_v1_handle_request(int first_char) {
     /* META */
     if (strcmp(type, "HELLO")    == 0) { handle_hello(id, &obj);    return; }
     if (strcmp(type, "INFO")     == 0) { handle_info(id, &obj);     return; }
-    if (strcmp(type, "TIME")     == 0) { handle_time(id, &obj);     return; }
-    if (strcmp(type, "PING")     == 0) { handle_ping(id, &obj);     return; }
     if (strcmp(type, "RESET")    == 0) { handle_reset(id, &obj);    return; }
     if (strcmp(type, "BOOTSEL")  == 0) { handle_bootsel(id, &obj);  return; }
     /* H9 — gating por estado REAL del boot: sin particiones/FS (estado < 2)
@@ -1958,8 +1901,16 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "FORMAT")   == 0) { handle_format(id, &obj);   return; }
     if (strcmp(type, "SAVE")     == 0) { handle_save(id, &obj);     return; }
     if (strcmp(type, "DF")       == 0) { handle_df(id, &obj);       return; }
-    if (strcmp(type, "LOG_DUMP") == 0) { handle_log_dump(id, &obj); return; }
-    if (strcmp(type, "LOG_CLEAR")== 0) { handle_log_clear(id, &obj); return; }
+    /* V6/U3 — el común, DESPUÉS de los propios y no antes (al revés que el
+     * STM32) porque esta familia se migra por grupos: lo que esta placa siga
+     * implementando gana, y lo que ya no, cae aquí. Al terminar la migración
+     * este if sube al principio y la cadena de arriba desaparece.
+     *
+     * ⚠️ El grupo PUT NO puede migrar mientras el despachador de arriba lea el
+     * bulk por adelantado (el común lo lee él): sería leerlo dos veces. Va en su
+     * propio paso, junto con quitar esa pre-lectura. */
+    if (bpvm_repl_dispatch(type, id, &obj)) return;
+
     /* BOARD (H9) — gestión de placa: entorno + particiones (núcleo compartido con
      * el boardsim vía bpvm_bmgr_wire). */
     if (strcmp(type, "STATE") == 0
