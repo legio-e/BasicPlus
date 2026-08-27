@@ -88,14 +88,49 @@ static void repl_log_dump(long id) {
  *   · el DEL del STM32 llamaba a fs_save() tras borrar — no-op documentado
  *     en littlefs (persiste en cada close): se cae sin cambio de conducta. */
 
+/* La cintura de la familia (bpvm_repl_set_ops). Se declara aqui arriba
+ * porque fs_fallo, que es de los primeros, ya necesita fs_total/used_bytes. */
+static const bpvm_repl_ops_t* s_ops = NULL;
+
+/* ── El fallo del FS, contado de verdad ────────────────────────────────────
+ * Antes de V6/U3 esto estaba DOS veces (map_lfs_err en la Pico, log_fallo_fs en
+ * el STM32) con la misma línea de log carácter por carácter, y encima el STM32
+ * tiraba la información: respondiera lo que respondiera littlefs, contestaba
+ * siempre "NO_SPACE / FS lleno". Los códigos son los que el IDE ya recibe de la
+ * Pico, que es la que los mapeaba bien. */
+static void fs_fallo(const char* op, const char* path, unsigned long size,
+                     const char** code, const char** msg) {
+    unsigned long tot = s_ops && s_ops->fs_total_bytes ? s_ops->fs_total_bytes() : 0;
+    unsigned long usa = s_ops && s_ops->fs_used_bytes  ? s_ops->fs_used_bytes()  : 0;
+    bpvm_fs_log_fail(op, path, size, (tot > usa) ? (tot - usa) : 0ul, tot);
+    switch (bpvm_fs_last_fail()) {
+        case BPVM_FS_FAIL_NO_SPACE:      *code = "NO_SPACE";       *msg = "FS lleno"; break;
+        case BPVM_FS_FAIL_TOO_BIG:       *code = "NO_SPACE";       *msg = "fichero demasiado grande"; break;
+        case BPVM_FS_FAIL_NAME_TOO_LONG: *code = "INVALID_PATH";   *msg = "nombre demasiado largo"; break;
+        case BPVM_FS_FAIL_EXISTS:        *code = "EXISTS";         *msg = "ya existe"; break;
+        case BPVM_FS_FAIL_NOT_FOUND:     *code = "NOT_FOUND";      *msg = "fichero no existe"; break;
+        case BPVM_FS_FAIL_IO:            *code = "INTERNAL_ERROR"; *msg = "flash op falló"; break;
+        default:                         *code = "INVALID_PARAM";  *msg = "argumento inválido"; break;
+    }
+}
+
 static void repl_del(long id, const json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path");
         return;
     }
-    if (bpvm_fs_remove(path) != 0) {
+    /* Dos fallos distintos que NO son el mismo: que no esté, y que esté y no se
+     * pueda borrar. El común los juntaba en "no existe", que en el segundo caso
+     * es simplemente falso. La Pico ya los distinguía. */
+    if (!bpvm_fs_exists(path)) {
         wire_v1_send_error(id, "NOT_FOUND", "no existe");
+        return;
+    }
+    if (bpvm_fs_remove(path) != 0) {
+        const char *code, *msg;
+        fs_fallo("del", path, 0, &code, &msg);
+        wire_v1_send_error(id, code, msg);
         return;
     }
     wire_v1_send_reply_empty("DEL_REPLY", id);
@@ -303,7 +338,6 @@ static void repl_list(long id) {
  *     motivo**, no el «type no implementado» genérico de la cola del dispatch.
  */
 
-static const bpvm_repl_ops_t* s_ops = NULL;
 
 void bpvm_repl_set_ops(const bpvm_repl_ops_t* ops) { s_ops = ops; }
 
@@ -455,27 +489,6 @@ err:
 }
 
 
-/* ── El fallo del FS, contado de verdad ────────────────────────────────────
- * Antes de V6/U3 esto estaba DOS veces (map_lfs_err en la Pico, log_fallo_fs en
- * el STM32) con la misma línea de log carácter por carácter, y encima el STM32
- * tiraba la información: respondiera lo que respondiera littlefs, contestaba
- * siempre "NO_SPACE / FS lleno". Los códigos son los que el IDE ya recibe de la
- * Pico, que es la que los mapeaba bien. */
-static void fs_fallo(const char* op, const char* path, unsigned long size,
-                     const char** code, const char** msg) {
-    unsigned long tot = s_ops && s_ops->fs_total_bytes ? s_ops->fs_total_bytes() : 0;
-    unsigned long usa = s_ops && s_ops->fs_used_bytes  ? s_ops->fs_used_bytes()  : 0;
-    bpvm_fs_log_fail(op, path, size, (tot > usa) ? (tot - usa) : 0ul, tot);
-    switch (bpvm_fs_last_fail()) {
-        case BPVM_FS_FAIL_NO_SPACE:      *code = "NO_SPACE";       *msg = "FS lleno"; break;
-        case BPVM_FS_FAIL_TOO_BIG:       *code = "NO_SPACE";       *msg = "fichero demasiado grande"; break;
-        case BPVM_FS_FAIL_NAME_TOO_LONG: *code = "INVALID_PATH";   *msg = "nombre demasiado largo"; break;
-        case BPVM_FS_FAIL_EXISTS:        *code = "EXISTS";         *msg = "ya existe"; break;
-        case BPVM_FS_FAIL_NOT_FOUND:     *code = "NOT_FOUND";      *msg = "fichero no existe"; break;
-        case BPVM_FS_FAIL_IO:            *code = "INTERNAL_ERROR"; *msg = "flash op falló"; break;
-        default:                         *code = "INVALID_PARAM";  *msg = "argumento inválido"; break;
-    }
-}
 
 /* Traga los `n` bytes anunciados y los tira.
  *

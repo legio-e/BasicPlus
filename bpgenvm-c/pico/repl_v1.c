@@ -339,94 +339,10 @@ static void handle_list(long id, const json_obj_t* obj) {
 /* ============================================================ */
 /* STAT */
 
-static void handle_stat(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path");
-        return;
-    }
-    /* #305 — el STAT sólo publica el TAMAÑO, y para eso leía el fichero ENTERO
-     * al scratch. Ahora es lo que siempre debió ser: un stat. */
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) {
-        wire_v1_send_error(id, "NOT_FOUND", "no existe");
-        return;
-    }
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "STAT_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "size", (long) size);
-    if (off < 0) goto err;
-    /* #398 — el CRC, SÓLO SI SE PIDE. Aquí es donde vive ahora el CRC que antes
-     * calculaba el LIST para todos los ficheros en cada refresco del árbol. Se
-     * pregunta por UN fichero, justo antes de subirlo. Mismo verbo y mismo
-     * campo que en la familia ESP32: el protocolo es UNO. */
-    if (json_get_bool(obj, "crc", 0)) {
-        uint32_t c = 0;
-        long v = (bpvm_fs_crc32(path, &c) == 0) ? (long) c : -1L;
-        off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "crc", v);
-        if (off < 0) goto err;
-    }
-    off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "isDir", 0);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              "mtime", 0);   /* FS no tiene mtime */
-    if (off < 0) goto err;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "STAT_REPLY no cabe");
-}
 
 /* ============================================================ */
 /* GET — reply con bulk. */
 
-static void handle_get(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path");
-        return;
-    }
-    /* #305 — el GET NO carga el fichero: sólo necesita su TAMAÑO para la cabecera
-     * y después lo va escupiendo por trozos. Antes era un fs_get, o sea el
-     * fichero ENTERO al scratch de 128 KB para copiarlo acto seguido al wire. */
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) {
-        wire_v1_send_error(id, "NOT_FOUND", "no existe");
-        return;
-    }
-    /* Header: {"type":"GET_REPLY","id":N,"bulk":<size>} */
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                  "GET_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_bulk(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
-                              (size_t) size);
-    if (off < 0) goto err;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    /* Y los bytes raw, POR TROZOS. El tamaño del trozo es el mismo 256 B que usa
-     * littlefs internamente: ni introduce un número nuevo ni fuerza al motor a
-     * partir lecturas. Si el FS falla a media transferencia ya no se puede
-     * rectificar —la cabecera con `bulk` ya salió— así que se corta y el cliente
-     * lo detecta por el bulk incompleto; es lo mismo que pasaría con un cable
-     * desconectado, y el wire no tiene forma mejor de decirlo. */
-    uint32_t sent = 0;
-    while (sent < size) {
-        uint8_t chunk[256];
-        long n = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
-        if (n <= 0) break;
-        wire_v1_send_bulk(chunk, (size_t) n);
-        sent += (uint32_t) n;
-    }
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "GET_REPLY no cabe");
-}
 
 /* ============================================================ */
 /* PUT — request lleva bulk. */
@@ -849,63 +765,15 @@ static void handle_sd_mount(long id, const json_obj_t* obj) {
 /* ============================================================ */
 /* DEL */
 
-static void handle_del(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path");
-        return;
-    }
-    fs_status_t s = fs_delete(path);
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
-        return;
-    }
-    wire_v1_send_reply_empty("DEL_REPLY", id);
-}
 
 /* ============================================================ */
 /* MKDIR / RMDIR — no-op en FS plano. */
 
-static void handle_mkdir(long id, const json_obj_t* obj) {
-    (void) obj;
-    /* En FS plano con `/` como namespace, no hay nodos de directorio.
-     * MKDIR es idempotente y silenciosa. */
-    wire_v1_send_reply_empty("MKDIR_REPLY", id);
-}
 
-static void handle_rmdir(long id, const json_obj_t* obj) {
-    (void) obj;
-    /* Idem MKDIR. RMDIR de un "directorio" no-vacío debería fallar
-     * según el spec, pero para v1 simplemente devolvemos OK. El
-     * cliente puede iterar y borrar ficheros uno a uno si quiere
-     * vaciar un prefijo. */
-    wire_v1_send_reply_empty("RMDIR_REPLY", id);
-}
 
 /* ============================================================ */
 /* RENAME — copia + delete. */
 
-static void handle_rename(long id, const json_obj_t* obj) {
-    char from[64], to[64];
-    if (json_get_str(obj, "from", from, sizeof(from)) < 0 ||
-        json_get_str(obj, "to",   to,   sizeof(to))   < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "faltan from/to");
-        return;
-    }
-    /* #305 — RENAME nativo. Antes esto era leer-copiar-escribir-borrar: el
-     * fichero al scratch, de ahí al buffer del PUT y de ahí al FS otra vez, con
-     * un tope artificial de 16 KB "por el buffer". littlefs sabe renombrar él
-     * solo —es mover una entrada de directorio— así que no se copia ni un byte,
-     * no hay límite de tamaño, y además es ATÓMICO: antes, si fallaba el borrado
-     * del origen, quedaban las dos copias. */
-    if (bpvm_fs_rename(from, to) != 0) {
-        wire_v1_send_error(id, "NOT_FOUND", "no se pudo renombrar");
-        return;
-    }
-    wire_v1_send_reply_empty("RENAME_REPLY", id);
-}
 
 /* ============================================================ */
 /* FORMAT — borra todo el FS RAM. Requiere confirm:"YES". */
@@ -1884,20 +1752,14 @@ void repl_v1_handle_request(int first_char) {
     }
     /* FILES */
     if (strcmp(type, "LIST")     == 0) { handle_list(id, &obj);     return; }
-    if (strcmp(type, "STAT")     == 0) { handle_stat(id, &obj);     return; }
-    if (strcmp(type, "GET")      == 0) { handle_get(id, &obj);      return; }
     if (strcmp(type, "PUT")      == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
     if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
-    if (strcmp(type, "DEL")      == 0) { handle_del(id, &obj);      return; }
     if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
     if (strcmp(type, "SD_MOUNT") == 0) { handle_sd_mount(id, &obj); return; }  /* V5/H2 */
     if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H2 */
-    if (strcmp(type, "MKDIR")    == 0) { handle_mkdir(id, &obj);    return; }
-    if (strcmp(type, "RMDIR")    == 0) { handle_rmdir(id, &obj);    return; }
-    if (strcmp(type, "RENAME")   == 0) { handle_rename(id, &obj);   return; }
     if (strcmp(type, "FORMAT")   == 0) { handle_format(id, &obj);   return; }
     if (strcmp(type, "SAVE")     == 0) { handle_save(id, &obj);     return; }
     if (strcmp(type, "DF")       == 0) { handle_df(id, &obj);       return; }
