@@ -154,6 +154,25 @@ Lo que destapó la necesidad: la campaña de V4 dejó **2413 líneas** de regist
 re-prueba hay que saber que no se re-probó**. Si en V5 hubiera puesto «de la lista de V4,
 estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
 
+
+#### 🔵 `#444` — el sistema de pruebas no escala a una docena de placas (ABIERTA, 27-ago)
+
+Planteado por Eduardo al cerrar el día: *«hay que mejorar el sistema de test, porque si todo
+hay que verificarlo en todas las plataformas nos vamos a volver locos cuando tengamos una
+docena de placas»*.
+
+**El problema, medido hoy mismo**: U3 obligó a re-verificar en placa ocho veces en un día, y
+aun así quedó deuda (ver el apartado de deuda en `H13_PRUEBAS_V5_REPASO.md`). Con 4 familias
+ya duele; con 12 es inviable.
+
+**Descartado como respuesta suficiente** (propuesto el 27-ago, Eduardo: *«sigue sin ser un
+buen sistema»*): el reparto obvio en tres pisos — host/unit con cintura falsa, batería
+completa contra `bpvm-sim`, y en placa sólo lo que el simulador no puede tener — apoyado en
+que `HELLO` ya declara capacidades para que el runner se adapte. **No basta**, y conviene
+entender por qué antes de volver a diseñar: queda pendiente esa conversación.
+
+⏭️ **Charla de diseño pendiente**, no tarea. Cuando se retome, va a `docs/*_IDEAS.md`.
+
 ### 🎯 LOS HITOS DE V6 — unificar primero, arquitectura después
 
 **Decisión de Eduardo (23-ago), y su razón:** *«antes de hacer más cosas deberíamos
