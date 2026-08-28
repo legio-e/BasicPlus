@@ -1966,11 +1966,47 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
-        default:
-            bpvm_diag_urgente("[bpvm-c] opcode 0x%02X desconocido en PC %" PRIu32 "",
-                    op, pc - 1);
+        default: {
+            /* #442 — SITUAR el PC, que solo no dice nada.
+             *
+             * Con varios modulos enlazados en un espacio comun, un PC absoluto
+             * obliga a hacer a mano la aritmetica de las bases (`cb` de cada
+             * modulo + sus tamanos) para saber siquiera EN CUAL revento. El
+             * 27-ago eso costo buena parte de una tarde. Aqui esa cuenta la
+             * hace quien la tiene delante.
+             *
+             * Y los bytes de alrededor, porque contestan la pregunta que viene
+             * despues: si coinciden con el `.mod` en disco, el PC llego mal
+             * (salto a sitio equivocado); si no coinciden, el codigo esta
+             * PISADO — y son dos investigaciones distintas. */
+            uint32_t bad = pc - 1;
+            const char* mod = NULL; uint32_t off = 0;
+            for (int mi = 0; mi < vm->module_count; mi++) {
+                bpvm_module_t* m = &vm->modules[mi];
+                if (bad >= m->cb && bad < m->cb + m->code_size) {
+                    mod = m->name; off = bad - m->cb; break;
+                }
+            }
+            if (mod) {
+                bpvm_diag_urgente("[bpvm-c] opcode 0x%02X desconocido en PC %" PRIu32
+                                  " = %s+%" PRIu32 "",
+                                  op, bad, mod, off);
+            } else {
+                bpvm_diag_urgente("[bpvm-c] opcode 0x%02X desconocido en PC %" PRIu32
+                                  " — FUERA del codigo de todo modulo cargado",
+                                  op, bad);
+            }
+            /* Los 8 bytes de alrededor, para cotejar con el .mod en disco. */
+            {
+                uint32_t a = (bad >= 4u) ? bad - 4u : 0u;
+                bpvm_diag_urgente("[bpvm-c]   bytes @%" PRIu32 ": %02X %02X %02X %02X "
+                                  "[%02X] %02X %02X %02X", a,
+                                  mem[a], mem[a+1], mem[a+2], mem[a+3],
+                                  mem[bad], mem[bad+1], mem[bad+2], mem[bad+3]);
+            }
             exit_status = BPVM_ERR_BAD_OPCODE;
             goto done;
+        }
         }
     }
 
