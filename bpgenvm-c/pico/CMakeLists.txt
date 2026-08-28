@@ -281,6 +281,29 @@ target_compile_definitions(bpvm_pico PRIVATE
 #   necesite más objetos VIVOS a la vez pide más de lo que esta placa da.
 target_compile_definitions(bpvm_pico PRIVATE
     BPVM_HANDLE_CAP_MAX=16384
+    # #447 — el panic del SDK cuenta el MOTIVO por stdout, que aqui es el mismo
+    # cable del wire: el IDE lo tira y el cuelgue parece mudo. Con esto el motivo
+    # va al log post-mortem, que es donde se puede leer despues del reset.
+    PICO_PANIC_FUNCTION=bpvm_pico_panic
+
+    # #448 — QUE `malloc` DEVUELVA NULL EN VEZ DE MATAR LA PLACA.
+    #
+    # El wrapper del SDK trae PICO_MALLOC_PANIC=1 por defecto y hace
+    # `panic("Out of memory")` ANTES de devolver NULL (pico_malloc/malloc.c,
+    # check_alloc). O sea que en esta placa `malloc` no falla: mata.
+    #
+    # Y eso anula lo que V4 construyo a proposito: `bpvm_alloc_raw` maneja el
+    # NULL y da paso al OOM ATRAPABLE (#355), que es lo que hacen el host y las
+    # otras familias — alli malloc si devuelve NULL. Aqui ese camino no se
+    # ejecutaba NUNCA. Medido el 28-ago con `MemT5_Gc`: `PANIC: Out of memory`
+    # y la placa muerta y muda, mientras el mismo programa da RuntimeError en el
+    # PC.
+    #
+    # Quitarlo NO deja hueco: el guardian de la pila vive en `_sbrk`
+    # (newlib_interface.c), que devuelve -1 al llegar a __StackLimit — y
+    # PICO_USE_OPTIMISTIC_SBRK no esta definido, asi que falla limpio. El
+    # `check_alloc` del wrapper era una segunda red sobre la primera.
+    PICO_MALLOC_PANIC=0
 )
 
 # H2 Pico SMP — opt-in al scheduler multi-worker.
