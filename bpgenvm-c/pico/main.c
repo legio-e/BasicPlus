@@ -19,6 +19,7 @@
 #include "hardware/watchdog.h"   /* paso 4 cierre — watchdog_caused_reboot (resetCause) */
 
 #include "bpvm.h"
+#include "bpvm_internal.h"   /* #440: el MPU necesita bpvm_module_t */
 #include "embedded_mods.h"
 #include "fs.h"
 #include "bpvm_fs.h"
@@ -1583,6 +1584,122 @@ int main(void) {
 }
 
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * #440 — EL MPU COMO TESTIGO: quién escribe en el código de un módulo.
+ *
+ * El síntoma es que el código de `Json` aparece PISADO en ejecución (a
+ * `Json+3754` hay un `"Core"` donde el `.mod` tiene un `ENTER`). Saber QUÉ pasa
+ * ya lo sabemos; falta QUIÉN lo escribe, y eso no se deduce leyendo: se pilla
+ * en el acto.
+ *
+ * El Cortex-M33 tiene MPU y aquí está libre — ni FreeRTOS (sin
+ * `portUSING_MPU_WRAPPERS`) ni el SDK lo tocan. Se marca el código de cada
+ * módulo como SÓLO LECTURA y la primera escritura levanta un DACCVIOL, que el
+ * manejador de #447 ya cuenta con su `PC` y su `MMFAR`. El `PC` es el culpable.
+ *
+ * ⚠️ POR QUÉ SÓLO EL CÓDIGO, y no "los módulos" (lo vio Eduardo). El reparto en
+ * memoria es `[ext-table][data][code]` POR MÓDULO, así que en el bloque queda
+ * intercalado:
+ *
+ *     [JsonDemo: ext|data|CODE][Json: ext|data|CODE][Core: ext|data|CODE][heap…]
+ *
+ * El `data` son las ESTÁTICAS del módulo y se escriben con `SET_GLOBAL` todo el
+ * rato. Una región que cubriera "el módulo" saltaría con cada escritura
+ * legítima a una global. De ahí una región por módulo y sólo sobre
+ * `[code_start, code_start+code_size)`.
+ *
+ * CUÁNDO se arma: DESPUÉS de enlazar, porque el enlace escribe en el código (el
+ * fixup de `eh_class` va a `code_start + code_off`). `bpvm_link_all` escribe
+ * valores resueltos absolutos, o sea que es idempotente y se puede llamar antes
+ * a mano sin romper el que hace `bpvm_run`.
+ *
+ * Andamio de diagnóstico: va detrás del ENV `mpu=1` y por defecto NO se arma.
+ * Una región mal calculada tumbaría una placa buena con un falso positivo, y
+ * eso es peor que el bug que persigue. */
+
+/* Registros del MPU (ARMv8-M). Se tocan a pelo porque el CMSIS que trae el SDK
+ * es el stub del RP2040 y declara `__MPU_PRESENT 0`, que no aplica al M33. */
+#define MPU_TYPE_ADDR   0xE000ED90u
+#define MPU_CTRL_ADDR   0xE000ED94u
+#define MPU_RNR_ADDR    0xE000ED98u
+#define MPU_RBAR_ADDR   0xE000ED9Cu
+#define MPU_RLAR_ADDR   0xE000EDA0u
+#define MPU_MAIR0_ADDR  0xE000EDC0u
+
+static int s_mpu_armado = 0;
+
+/* Cuántas regiones tiene ESTE chip. Se lee, no se supone. */
+static unsigned mpu_regiones(void) {
+    volatile uint32_t* t = (volatile uint32_t*) MPU_TYPE_ADDR;
+    return (unsigned) ((*t >> 8) & 0xFFu);
+}
+
+void bpvm_pico_mpu_desarmar(void) {
+    if (!s_mpu_armado) return;
+    volatile uint32_t* ctrl = (volatile uint32_t*) MPU_CTRL_ADDR;
+    __asm volatile ("dsb");
+    *ctrl = 0u;
+    __asm volatile ("dsb" ::: "memory");
+    __asm volatile ("isb");
+    s_mpu_armado = 0;
+}
+
+/* Protege el CÓDIGO de cada módulo cargado. `base` es vm->memory (las
+ * direcciones de la VM son offsets sobre él). */
+void bpvm_pico_mpu_armar(const uint8_t* base, const bpvm_module_t* mods, int n) {
+    unsigned max = mpu_regiones();
+    if (max == 0u) { log_printf("mpu: este chip no declara regiones — no se arma"); return; }
+
+    volatile uint32_t* ctrl  = (volatile uint32_t*) MPU_CTRL_ADDR;
+    volatile uint32_t* rnr   = (volatile uint32_t*) MPU_RNR_ADDR;
+    volatile uint32_t* rbar  = (volatile uint32_t*) MPU_RBAR_ADDR;
+    volatile uint32_t* rlar  = (volatile uint32_t*) MPU_RLAR_ADDR;
+    volatile uint32_t* mair0 = (volatile uint32_t*) MPU_MAIR0_ADDR;
+
+    bpvm_pico_mpu_desarmar();
+    /* attr0 = Normal, write-back read/write-allocate. Sin esto la región sería
+     * Device-nGnRnE y el código NO SE PODRIA EJECUTAR desde ella. */
+    *mair0 = 0x000000FFu;
+
+    unsigned usadas = 0;
+    for (int i = 0; i < n && usadas < max; i++) {
+        /* Alineación de 32 B, y REDONDEANDO HACIA DENTRO: la base sube y el
+         * tope baja. Perder 31 bytes en cada extremo no importa —lo que se
+         * persigue es una escritura de kilobytes— y a cambio se garantiza que
+         * la región no roza ni el `data` de este módulo ni el `ext` del
+         * siguiente. Un falso positivo aquí costaría más que el bug. */
+        uint32_t ini = ((uint32_t)(uintptr_t) base + mods[i].code_start + 31u) & ~31u;
+        uint32_t fin = ((uint32_t)(uintptr_t) base + mods[i].code_start
+                        + mods[i].code_size) & ~31u;
+        if (fin <= ini + 32u) continue;   /* código minúsculo: no cabe región */
+
+        *rnr  = usadas;
+        /* RBAR: BASE[31:5] | SH=0 | AP=10 (RO, privilegiado) | XN=0 (ejecutable) */
+        *rbar = (ini & ~31u) | (2u << 1);
+        /* RLAR: LIMIT[31:5] (inclusivo) | AttrIndx=0 | EN=1 */
+        *rlar = ((fin - 32u) & ~31u) | 1u;
+        log_printf("mpu: region %u = %s code [%08lX,%08lX) SOLO LECTURA",
+                   usadas, mods[i].name, (unsigned long) ini, (unsigned long) fin);
+        usadas++;
+    }
+    if (usadas == 0u) { log_printf("mpu: nada que proteger"); return; }
+    if ((unsigned) n > max)
+        log_printf("mpu: OJO, %d modulos y solo %u regiones — los ultimos SIN proteger",
+                   n, max);
+
+    __asm volatile ("dsb");
+    /* ENABLE | PRIVDEFENA: fuera de las regiones, los permisos de siempre. Sin
+     * PRIVDEFENA todo lo demas quedaria prohibido y la placa moriria al
+     * instante. */
+    *ctrl = (1u << 0) | (1u << 2);
+    __asm volatile ("dsb" ::: "memory");
+    __asm volatile ("isb");
+    s_mpu_armado = 1;
+    log_printf("mpu: ARMADO (%u de %u regiones) — una escritura al codigo dara DACCVIOL",
+               usadas, max);
+}
+
 /* #447 — el panic, contado en el log en vez de por un cable que nadie lee.
  *
  * El `panic()` del SDK escribe "*** PANIC ***" + el motivo por stdout. En esta
@@ -1650,17 +1767,35 @@ void bpvm_pico_fault_report(struct bpvm_fault_frame* f, const char* cual) {
     log_printf("FALLO  PC=%08lX LR=%08lX PSR=%08lX",
                (unsigned long) f->pc, (unsigned long) f->lr, (unsigned long) f->psr);
     /* El desglose en palabras, para no tener que decodificar el hex a mano. */
-    if (cfsr & (1u << 24)) log_printf("FALLO  causa: UNDEFINSTR (instruccion invalida)");
-    if (cfsr & (1u << 25)) log_printf("FALLO  causa: INVSTATE");
-    if (cfsr & (1u << 26)) log_printf("FALLO  causa: INVPC");
-    if (cfsr & (1u << 27)) log_printf("FALLO  causa: NOCP (coprocesador ausente)");
-    if (cfsr & (1u << 24 | 1u << 25 | 1u << 26)) { /* agrupado arriba */ }
-    if (cfsr & (1u << 8))  log_printf("FALLO  causa: UNALIGNED  <-- acceso desalineado");
-    if (cfsr & (1u << 9))  log_printf("FALLO  causa: DIVBYZERO");
+    /* El CFSR son TRES registros apilados, y confundirlos hace que el telltale
+     * MIENTA — que es peor que no tenerlo. El reparto (ARMv8-M):
+     *   MMFSR = CFSR[7:0]    fallos de MEMORIA (MPU)
+     *   BFSR  = CFSR[15:8]   fallos de BUS
+     *   UFSR  = CFSR[31:16]  fallos de USO   <- UNALIGNED es su bit 8, o sea CFSR bit 24
+     * En la primera version puse UNALIGNED en el bit 8 (que es IBUSERR) y
+     * UNDEFINSTR en el 24 (que es UNALIGNED): justo cambiados. */
+    /* --- MMFSR: memoria (esto es lo que dispara el MPU) --- */
+    if (cfsr & (1u << 0))  log_printf("FALLO  causa: IACCVIOL (ejecutar donde no se puede)");
+    if (cfsr & (1u << 1))  log_printf("FALLO  causa: DACCVIOL  <-- ESCRITURA/LECTURA prohibida (MPU)");
+    if (cfsr & (1u << 3))  log_printf("FALLO  causa: MUNSTKERR");
+    if (cfsr & (1u << 4))  log_printf("FALLO  causa: MSTKERR");
+    if (cfsr & (1u << 7))  log_printf("FALLO  MMFAR=%08lX (la direccion prohibida)",
+                                      (unsigned long) *SCB_MMFAR);
+    else if (cfsr & 0x000000FFu) log_printf("FALLO  MMFAR NO valido");
+    /* --- BFSR: bus --- */
+    if (cfsr & (1u << 8))  log_printf("FALLO  causa: IBUSERR");
+    if (cfsr & (1u << 9))  log_printf("FALLO  causa: PRECISERR");
+    if (cfsr & (1u << 10)) log_printf("FALLO  causa: IMPRECISERR");
     if (cfsr & (1u << 15)) log_printf("FALLO  BFAR=%08lX (direccion que se toco)",
                                       (unsigned long) *SCB_BFAR);
-    else if (cfsr & 0x0000FF00u) log_printf("FALLO  BFAR NO valido (no se apunta la direccion)");
-    if (cfsr & (1u << 7))  log_printf("FALLO  MMFAR=%08lX", (unsigned long) *SCB_MMFAR);
+    else if (cfsr & 0x0000FF00u) log_printf("FALLO  BFAR NO valido");
+    /* --- UFSR: uso --- */
+    if (cfsr & (1u << 16)) log_printf("FALLO  causa: UNDEFINSTR (instruccion invalida)");
+    if (cfsr & (1u << 17)) log_printf("FALLO  causa: INVSTATE");
+    if (cfsr & (1u << 18)) log_printf("FALLO  causa: INVPC");
+    if (cfsr & (1u << 19)) log_printf("FALLO  causa: NOCP (coprocesador ausente)");
+    if (cfsr & (1u << 24)) log_printf("FALLO  causa: UNALIGNED  <-- acceso desalineado");
+    if (cfsr & (1u << 25)) log_printf("FALLO  causa: DIVBYZERO");
     log_flush();
     for (;;) { /* parados, pero habiendo dicho por que */ }
 }

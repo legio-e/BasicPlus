@@ -1166,6 +1166,25 @@ static void run_module_path(const char* path, long id) {
     }
     s_latido_on = board_env_bool("latido", 0);
     if (s_latido_on) log_printf("latido: ENCENDIDO (ENV latido=1)");
+    /* #440 — EL TESTIGO DEL MPU, detrás del ENV `mpu=1` (por defecto NO).
+     *
+     * Marca el código de cada módulo como sólo lectura para que la escritura que
+     * lo pisa levante un DACCVIOL con su PC — el manejador de #447 lo cuenta.
+     * Se arma DESPUÉS de enlazar porque el enlace escribe en el código (el fixup
+     * de eh_class). `bpvm_link_all` escribe valores resueltos absolutos, así que
+     * es idempotente y el que hace `bpvm_run` a continuación no molesta.
+     *
+     * Andamio de diagnóstico, no producción: una región mal calculada tumbaría
+     * una placa buena, y eso es peor que el bug que persigue. */
+    if (board_env_bool("mpu", 0)) {
+        extern void bpvm_pico_mpu_armar(const uint8_t*, const bpvm_module_t*, int);
+        if (bpvm_link_all(vm) == BPVM_OK) {
+            bpvm_pico_mpu_armar(vm->memory, vm->modules, vm->module_count);
+        } else {
+            log_printf("mpu: no se arma — el enlace fallo antes");
+        }
+    }
+
     log_printf("AOT: scan done, about to bpvm_run");
     log_flush();   /* CHECKPOINT — si vemos hasta aquí, fase D loaded
                     * correctamente. Lo siguiente que crashee es la
@@ -1216,6 +1235,11 @@ static void run_module_path(const char* path, long id) {
     rs = bpvm_run(vm);
 #endif
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
+    /* #440 — desarmar SIEMPRE: la siguiente carga tiene que poder escribir el
+     * código de los módulos, y dejar el MPU puesto convertiría el Run siguiente
+     * en un fallo espurio. */
+    { extern void bpvm_pico_mpu_desarmar(void); bpvm_pico_mpu_desarmar(); }
+
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 
     /* P-run-stop — ack diferido del KILL. Orden: KILL_REPLY → EXITED. */
