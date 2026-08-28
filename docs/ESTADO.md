@@ -27,6 +27,78 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (28-ago, noche) — la batería de V4 sobre la Pico 2, y lo que destapó
+
+**Lo primero de mañana**: `#440` es el único rojo que queda de los ocho, y está acotado a
+un offset concreto con una pista de código. Entrar por `src/loader.c:224`. Todo el detalle
+—lo medido y lo **descartado con medida**, para no repetirlo— en `FICHAS.md`.
+
+⚠️ **SON DOS PROBLEMAS Y SE MEZCLAN.** Lo vio Eduardo al cerrar: *«creo que tenemos 2
+problemas diferentes y están un poco mezclados»*. La trampa es que **en la Metro
+desaparecen los dos** (heap en PSRAM ⇒ la SRAM entera para `malloc`), así que su verde no
+distingue entre ellos. Hay un cuadro comparándolos al principio de las fichas.
+
+### Lo que pasó, en orden
+
+Se corrió la batería de V4 completa sobre la Pico 2 (48 samples, decisión de Eduardo:
+*«es muy raro que solamente falle JsonDemo»* — y tenía razón). **40 verdes, 8 rojos.**
+Seis eran cuelgues mudos, uno `exit 6`, uno `exit 11`.
+
+De ahí salieron cinco fichas. La secuencia que funcionó, y conviene recordarla porque es
+el método de la casa: **primero hacer hablar al sistema, después arreglar.**
+
+1. `#445` — al probar `AppTest` salió `builtin 211 no soportado`. Los tres builtins de
+   `App` vivían dentro del `#ifdef BPVM_GUI`: rotos en TODA placa sin pantalla. Arreglado
+   y verificado en placa.
+2. `#446` — y eso destapó por qué el arnés no podía verlo: el host lleva `GUI ?= 1`, o sea
+   que **siempre** compila con GUI. 535 líneas del core que ninguna placa pequeña tiene.
+3. `#447` — los cuelgues eran mudos porque el SDK deja `isr_hardfault` como bucle infinito.
+   Se le puso manejador propio + captura del motivo del `panic`. **No arreglaba nada**, y
+   fue lo que desatascó todo: `MemT5_Gc` pasó de misterio a `PANIC: Out of memory` en una
+   ejecución.
+4. `#448` — y el motivo era gordo: `PICO_MALLOC_PANIC=1` hace que en la RP2350 `malloc`
+   **mate en vez de devolver NULL**, anulando el OOM atrapable que V4 construyó (#355).
+   Arreglado; dos de los seis cuelgues pasaron a verde y otros dos a error con nombre.
+5. `#449` — la causa de fondo: `VM_SRAM_MALLOC_MARGIN` son 64 KB dimensionados en julio
+   para `calloc`/`strdup` por import, y en agosto (#430) la tabla de handles pasó a salir
+   del mismo `malloc` — 32 KB de golpe. El margen no se tocó. **Arreglo por decidir**, con
+   tres opciones y su contrapartida en la ficha.
+
+### El riesgo que esto deja al descubierto
+
+`#430` se diagnosticó y se arregló **en la Metro**, donde el heap se va a la PSRAM y la
+SRAM interna entera queda para `malloc`. El consumidor nuevo se estrenó justo en la placa
+donde no cuesta nada, y viajó a la Pico 2 en la MISMA imagen.
+
+Es la contrapartida de la imagen única, y no invalida el principio: es que **la Pico 2 y la
+Metro tienen realidades de memoria opuestas, y la más estricta es la que menos se prueba**.
+Para todo lo que toque memoria, la Pico 2 debería mandar. Aquí pasó al revés.
+
+### Deuda que sigue pendiente
+
+- **El STM32 lleva sin verificar desde `U3.6`** (ver el apartado de deuda en
+  `H13_PRUEBAS_V5_REPASO.md`): seis gestos, cinco minutos. No se hizo hoy porque Eduardo
+  priorizó, con razón, cazar el bug de la Pico primero.
+- **La batería de V4 en las otras familias.** Hoy se corrió sólo en la Pico 2 (y `JsonDemo`
+  en la Metro). El S3, el P4 y las dos STM32 sin pasar.
+- **El UAF de `MemT5_Gc`**: con el `malloc` arreglado da
+  `referencia a objeto eliminado (use-after-free)`. Un OOM no debería producir una
+  referencia colgada, así que hay algo más ahí. Con `gc=0` da otra cosa
+  (`ALOAD_U8: idx fuera de rango 0 (len=0)`), pero no es control limpio: sin GC el
+  programa no llega igual de lejos.
+- **El env de la placa cambió a mitad de investigación** (FS 1512→1024 KB, packs
+  536 KB→1024 KB) sin que Eduardo lo tocara. Alguna de las imágenes flasheadas hoy
+  reescribió el env. No parece afectar a lo perseguido, pero conviene saberlo.
+
+### Herramientas nuevas, que se quedan
+
+- La Pico **dice por qué muere**: fallos con `CFSR`/`HFSR`/`PC` y el motivo del `panic`, al
+  log post-mortem.
+- El **opcode desconocido** dice módulo, offset y los bytes de alrededor — que parten la
+  investigación en dos (PC malo vs código pisado) sin desensamblar a mano.
+- `samples/PicoA.bp` y `PicoB.bp`: el caso mínimo de `#440`, idénticos salvo un `import`.
+
+
 ## ⏭️ AL RETOMAR (27-ago, noche) — el repaso de V5, decidido por Eduardo
 
 **Lo primero de mañana**: la batería de V4 completa sobre **V5 puro** (IDE + firmware +

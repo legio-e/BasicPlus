@@ -93,35 +93,186 @@ El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabaja
 `V6_IDEAS.md`. Aquí vive el estado.
 
 
-#### 🔴 `#440` — `JsonDemo` falla en la RP2350 desde algún punto entre V4 y V5 (abierta 27-ago)
+#### 🔴 SON DOS PROBLEMAS, Y SE MEZCLAN (28-ago) — leer esto antes que #440 y #449
 
-**Síntoma**: `exit 6 (opcode desconocido 0x43 en PC 7784)`; con el programa casi vacío,
-`exit 7 (PC fuera de rango)`. **Va** en la Nucleo, **va** en el host, **va** con la imagen
-publicada de **V4**. **Falla** con la de **V5** y con todas las posteriores.
+Criterio de Eduardo al cerrar el día: *«creo que tenemos 2 problemas diferentes y están un
+poco mezclados. Lo que está claro es que hay un problema de memoria y en la Metro
+desaparece.»*
+
+Y la trampa está justo ahí: **en la Metro desaparecen LOS DOS**, así que su verde no
+distingue entre ellos. Allí el heap se va a la PSRAM y la SRAM interna entera queda para
+`malloc` — la presión de #449 no existe, y #440 tampoco se reproduce. Un solo verde no
+puede exonerar a dos causas.
+
+| | **#449 — presión de memoria** | **#440 — código pisado** |
+|---|---|---|
+| síntoma | cuelgue mudo → ahora error con nombre | `opcode 0x43` en `Json+3754` |
+| determinista | no (depende de cuánto gaste) | **sí**, mismo PC en todas las imágenes |
+| en el log | `PANIC: Out of memory`, tabla agotada | **nada**: ni panic, ni OOM, ni tabla |
+| cuántos samples | 7 de los 8 rojos | 1 |
+| ventana | #430, 16-ago | por determinar |
+| estado | causa localizada, **arreglo por decidir** | **abierto**, con pista concreta |
+
+**La batería de V4 sobre la Pico 2, 28-ago: 40 verdes de 48.**
+
+#### 🔴 `#440` — `JsonDemo`: el código de un módulo aparece PISADO en la RP2350 (abierta 27-ago)
+
+**Síntoma**: `exit 6 (opcode 0x43 desconocido)`, siempre en el mismo sitio. Con el mensaje
+mejorado (#442) el sitio ya tiene nombre:
+
+```
+opcode 0x43 desconocido en PC 7784 = Json+3754
+  bytes @7780: FF 32 00 00 [43] 6F 72 65        <- 43 6F 72 65 = "Core" en ASCII
+```
+
+Y en el `.mod` de disco ese offset tiene **código**, no datos:
+
+```
++3752  08 04     RET   4
++3754  0F 00 04  ENTER 4
+```
+
+O sea: **el código está pisado**, no es un salto a sitio equivocado. Esa distinción costó
+una tarde el 27-ago y ahora la contesta el propio mensaje.
 
 **Lo MEDIDO** (no interpretado):
-- El CRC del `.mod` en la placa coincide con el del PC → los bytes llegan bien; el camino de
-  subida está limpio (lo confirma el propio IDE con su «contenido idéntico, salto PUT»).
-- Los 27 `.mod` de la stdlib son **byte a byte idénticos** en V4, V5 y hoy. El fuente de
-  `JsonDemo.bp` también. Y los compiladores de V4 y V5 producen el **mismo** `JsonDemo.mod`.
-  **La diferencia no está en el lado del PC.**
+- El CRC del `.mod` en la placa coincide con el del PC → los bytes llegan bien.
+- Los 27 `.mod` de la stdlib son byte a byte idénticos en V4, V5 y hoy; el fuente de
+  `JsonDemo.bp` también; y los compiladores de V4 y V5 producen el **mismo**
+  `JsonDemo.mod`. La diferencia **no** está en el lado del PC.
 - `PicoA` (sin imports) va; `PicoB` (sólo añade `import Json`, sin usarlo) falla.
-- El fallo NO depende del camino de lanzamiento (Run desde el PC y doble clic dan lo mismo).
+- **Verde en la Metro** con la misma imagen y ficheros — pero ver el cuadro de arriba:
+  allí tampoco hay presión de memoria, así que ese verde no separa las causas.
+- **No lo cura #448**: con el `malloc` arreglado sigue dando `exit 6`, y el log no trae ni
+  un evento de memoria. Es lo que lo separa de #449.
+- No depende del camino de lanzamiento (Run desde el PC y doble clic dan lo mismo).
 
-**Descartado con medida**: la migración del REPL de hoy (falla igual con la imagen anterior
-a la sesión), `Core.mod` rancio en `/app` (falla igual viniendo de `/lib`), el escaneo de
-`.mdn` (fue un no-op en la ejecución que falló), el parcheo AOT (escribe `0xAA`), y que
-algún `.mod` del disco use ese opcode (ninguno).
+**Descartado con medida**: la migración del REPL del 27-ago (falla igual con la imagen
+anterior), `Core.mod` rancio en `/app` (falla igual viniendo de `/lib`), desfase de la
+stdlib (el `Core.mod` embebido, el de `bpstdlib/out` y el que sube el IDE son **el mismo
+fichero**), el escaneo de `.mdn` (no-op en la ejecución que falló), el parcheo AOT (escribe
+`0xAA`), el tamaño del `.mod` (rojos 1861-4730 B, verdes 1808-4372: solapan), y el
+desalineamiento (`CFSR=0`).
 
-**Estado**: hueco acotado a **6-ago → 22-ago** (385 commits; sólo 62 tocan el camino de
-carga/enlace/intérprete o el firmware de la Pico, y **uno solo** toca `loader.c`/`link.c`).
-Hay tres imágenes de bisección construidas (cuartiles: 14, 17 y 20 de agosto).
+**⏩ LA PISTA, y es por donde entrar.** `src/loader.c:224`:
 
-⚠️ **Al bisecar, IDE FIJO**: usar el de V4 en todas las pruebas. Genera `.mod` v6, que
-aceptan todas las imágenes del rango — si se cambia de IDE se mueven dos variables.
+```c
+bc_read(&c, vm->memory + end_addr, exports_size);   /* scratch DETRAS del modulo */
+exp_buf = vm->memory + end_addr;
+```
 
-**Por qué salió ahora y no antes**: `JsonDemo` estaba en la batería de V4 (tanda 3, ✅) y
-**no aparece ni una vez** en el registro de V5. Ver `H13_PRUEBAS_V5_REPASO.md`.
+La sección de **exports se lee a la memoria de la VM justo detrás del módulo**, como zona
+de trabajo — y para `Json` son **7773 bytes**. Es el primer sitio donde el cargador escribe
+kilobytes en una zona que no es suya. En la Metro da igual (heap en PSRAM); en la Pico 2
+todo comparte el mismo bloque de 357 KB.
+
+⚠️ **No está cerrado**: por la aritmética de las bases ese scratch NO debería caer en 7784
+(con el orden JsonDemo→Json→Core las direcciones sólo suben). Falta leer el flujo del
+cargador. Pero es la única escritura grande fuera de sitio que hay, y encaja con la
+asimetría Metro/Pico 2.
+
+Bases del caso, para no recalcularlas: `JsonDemo cb=0x474 (1140)` · `Json cb=0xFBE (4030)`,
+code 8877 · `Core cb=0x368B (13963)`, code 4998 · heap desde `end_addr+64`.
+
+#### 🔴 `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago)
+
+**El número, y son dos ficheros que no se conocen:**
+
+```
+26-jul (V4, #309)   VM_SRAM_MALLOC_MARGIN = 64 KB   (pico/main.c)
+                    dimensionado para "calloc/strdup por cada import"
+
+16-ago (V5, #430)   la tabla de handles pasa a salir del MISMO malloc
+                    -> 32 KB de golpe, y crece x2      (src/heap.c)
+                    <- el margen NO se toco
+```
+
+Y el tope lo remata: `BPVM_HANDLE_CAP_MAX=16384` ⇒ las dos tablas a tope son **128 KB** en
+un hueco de **64**. La tabla **no puede alcanzar ni de lejos su propio tope**: muere en el
+primer crecimiento, porque pasar de 4096 a 8192 slots necesita 64 KB nuevos con los 32
+viejos aún vivos (el `realloc` necesita ambos) — 96 KB en 64.
+
+**Por qué nadie lo vio, y es la lección:** #430 se diagnosticó y se arregló **en la Metro**,
+donde el heap se va a la PSRAM y la SRAM interna entera queda para `malloc`. El consumidor
+nuevo se estrenó en la placa donde no cuesta nada y viajó a la Pico 2 en la MISMA imagen.
+Es la contrapartida de la imagen única: dos placas con realidades de memoria opuestas, y
+**la más estricta es la que menos se prueba**.
+
+**Explica 7 de los 8 rojos**, y por qué morían MUDOS (era #448).
+
+⏩ **Arreglo por decidir (de Eduardo, tiene contrapartida real):**
+1. **Subir el margen** → menos heap. Hoy 267 KB heap + 89 pilas; 96 KB más para `malloc`
+   los deja en ~200.
+2. **Bajar `handle_cap_max`** → menos objetos vivos a la vez, sin tocar el heap.
+3. **Que el margen se CALCULE** desde el tope de handles en vez de ser una constante
+   suelta. Más trabajo, pero es lo único que evita que se repita: hoy los dos números viven
+   en ficheros distintos y no saben el uno del otro.
+
+⚠️ Aunque un programa salga verde hoy, está verde **por poco**: lo que lo salva es no llegar
+a necesitar el crecimiento. Eso no es estar arreglado, es tener suerte.
+
+#### ✅ `#448` — en la RP2350 `malloc` no fallaba: MATABA (cerrada 28-ago · `defcaae4`)
+
+El wrapper del SDK trae `PICO_MALLOC_PANIC=1` y hace `panic("Out of memory")` **antes** de
+devolver NULL. O sea que el OOM ATRAPABLE que V4 construyó a propósito (#355) —
+`bpvm_alloc_raw` maneja el NULL y lanza `RuntimeError`— **no se ejecutaba nunca en esa
+placa**. En el host y en las otras familias sí, y por eso el mismo programa daba error
+limpio en el PC y mataba la placa.
+
+Quitarlo no deja hueco: el guardián de la pila vive en `_sbrk` (devuelve -1 al llegar a
+`__StackLimit`) y `PICO_USE_OPTIMISTIC_SBRK` no está definido.
+
+Verificado que es **sólo de esta familia**: ESP32/P4 traen
+`CONFIG_HEAP_ABORT_WHEN_ALLOCATION_FAILS` sin activar y el STM32 usa newlib.
+
+Efecto: `stacktrace` y `MemT4b_ReadOnly` pasan de colgarse a **verde**; `MemT5_Gc` y
+`synclisttest` pasan de cuelgue mudo a error con nombre.
+
+#### ✅ `#447` — la Pico ya no muere muda (cerrada 28-ago · `defcaae4`)
+
+El SDK deja `isr_hardfault` como bucle infinito: un fallo paraba la placa en seco, sin
+print, sin exit code y sin log. Y el silencio no es neutral — **un HardFault y un bucle
+infinito de BP se veían EXACTAMENTE IGUAL desde fuera**.
+
+Ahora un manejador propio escribe `CFSR`/`HFSR`, `PC`, `LR` y el desglose en palabras
+(incluido `UNALIGNED`) al log post-mortem antes de parar. Y con `PICO_PANIC_FUNCTION` el
+`panic()` del SDK cuenta su MOTIVO al log — hacía falta porque lo escribía por `stdout`,
+que en esta placa **es el cable del wire**: el IDE recibía esos bytes en medio del protocolo
+y los tiraba.
+
+**Rindió en una ejecución**: `MemT5_Gc` pasó de misterio a `PANIC: Out of memory`, y el
+`CFSR=00000000` descartó la hipótesis del acceso desalineado — la dijo el hardware.
+
+#### ✅ `#445` — `App.mainModule()` sólo iba en placas CON PANTALLA (cerrada 28-ago · `53396c39`)
+
+Los tres builtins de introspección de H19 (211/212/213) vivían **dentro del bloque
+`#ifdef BPVM_GUI`** de `builtins.c`. No tienen nada que ver con la pantalla: es donde se
+metieron. Funcionaban sólo donde se define `BPVM_GUI` (host, ESP32-P4, STM32 Discovery) y
+**no** en la Pico, el S3 ni la Nucleo.
+
+**Lo que engaña**: el `case` SÍ está escrito. Quien lea el fuente lo ve implementado.
+
+Verificado en el preprocesado con control (ANTES: 0 sin GUI / 3 con GUI; AHORA: 3 y 3) y
+ejecutando `AppTest` en un host con `GUI=0`. ✅ Verificado en placa.
+
+#### 🔴 `#446` — el arnés no puede ver lo que le falta a una placa pequeña (abierta 28-ago)
+
+Salió al cerrar #445 y es estructural. El Makefile del host lleva **`GUI ?= 1`**: el PC
+**siempre** compila con `BPVM_GUI`. Las **535 líneas** del core bajo ese flag están siempre
+presentes en el host, así que el arnés **no puede detectar que a una placa pequeña le falte
+algo de ahí**.
+
+⏩ **Arreglo barato y sin placa**: construir el host **también con `GUI=0`** y pasarle el
+mismo arnés. Habría cazado #445 en el PC. Es la respuesta concreta a #444: no es que falte
+una herramienta, es que **la que hay mide una configuración que ninguna placa pequeña
+tiene**.
+
+#### ✅ `#442` — el opcode desconocido ya dice DÓNDE (cerrada 28-ago · `ce748e16`)
+
+Decía el opcode y un PC absoluto; con varios módulos en un espacio común eso obliga a hacer
+a mano la aritmética de las bases. Ahora trae **módulo+offset** y los **8 bytes de
+alrededor**, que parten la investigación en dos: coinciden con el `.mod` → el PC llegó mal;
+no coinciden → el código está pisado. Cerró el diagnóstico de #440 en una ejecución.
 
 #### 🟡 `#441` — seis opcodes que la VM-Java tiene y la VM-C no (abierta 27-ago)
 
