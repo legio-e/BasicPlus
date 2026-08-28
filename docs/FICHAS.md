@@ -174,6 +174,48 @@ asimetría Metro/Pico 2.
 Bases del caso, para no recalcularlas: `JsonDemo cb=0x474 (1140)` · `Json cb=0xFBE (4030)`,
 code 8877 · `Core cb=0x368B (13963)`, code 4998 · heap desde `end_addr+64`.
 
+#### 🔴 `U6` — la ORGANIZACIÓN DE LA MEMORIA no está unificada, y no estaba prevista (abierta 28-ago)
+
+Pregunta de Eduardo al cerrar el día: *«La organización de memoria no sé cómo se está
+haciendo hoy en día. ¿Es por micro o por familia? ¿Está previsto unificarlo?»*
+
+**Es por MICRO**, y son cuatro mecanismos distintos inventados por separado:
+
+| | cómo decide su memoria de VM |
+|---|---|
+| Pico / Metro | runtime, desde símbolos del linker (`end`, base de la RAM de packs); o la PSRAM entera si `board_desc()` la declara |
+| STM32 | array estático: `static uint8_t s_vm_mem[512*1024]` (`stm32_repl.c:81`) |
+| ESP32-S3 | `heap_caps_malloc(160 KB)` con escalón de respaldo a 128 (`esp32/main/main.c:49`) |
+| ESP32-P4 | de la PSRAM, restando la reserva del display |
+
+**Y no estaba previsto**: la serie U cubre el wire (U2), el REPL (U3), los blobs de la
+stdlib (U4) y darle módulo a la tabla de handles (U5). La organización de la memoria **no
+está en la lista**.
+
+**Lo que costó no tenerlo** (28-ago, #440 + #449): tres decisiones de memoria que no se
+hablan entre sí —
+- el margen de `malloc` (64 KB) es una constante de la Pico que nadie más conoce
+  (`pico/main.c`),
+- el arranque de la tabla de handles (4096 slots = 32 KB) lo decide `src/heap.c` **sin
+  saber en qué placa está**,
+- y la frontera entre el heap de `malloc` y el bloque de la VM **vivía sólo en un
+  comentario**: `_sbrk` se limita en `__StackLimit`, así que `malloc` la cruzaba en
+  silencio y escribía dentro del código de un módulo.
+
+Dos días de investigación, y el síntoma era un opcode imposible.
+
+⏩ **La forma, que es la misma que U2/U3**: un contrato con cintura. La familia dice **dónde
+y cuánto** —lo único genuinamente suyo: PSRAM, SRAM, símbolos del linker, `heap_caps`— y el
+común decide el **reparto**: heap, pilas, tabla de handles y margen, con una regla
+proporcional en un solo sitio. Hoy el reparto está replicado y divergente en cuatro
+puertos.
+
+📌 **Y el criterio que lo hace urgente** (Eduardo, 28-ago): *«estamos poniendo la misma
+tabla para un micro de 520K y otro de 8M+520K. El tamaño de la tabla debe ser proporcional
+al tamaño del heap.»* Mientras el reparto sea constantes sueltas, cada placa nueva es otra
+oportunidad de poner mal el número — y la placa más estricta es la que menos se prueba
+(ver #449).
+
 #### 🔴 `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago)
 
 **El número, y son dos ficheros que no se conocen:**
@@ -343,6 +385,7 @@ tocar y cómo se comprueba.
 | **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | abierto 23-ago |
 | **U4** | la **stdlib embebida**: un solo formato de blobs | abierto 23-ago |
 | **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
+| **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | abierto 28-ago |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | abierto 21-ago |
 | **L1** | **lenguaje y compilador** | abierto 23-ago |
