@@ -853,6 +853,42 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
 
+    /* H19 — App.* introspección del proyecto en ejecución (id 211-213).
+     *
+     * ⚠️ FUERA del bloque `#ifdef BPVM_GUI`, y es donde debieron nacer: no
+     * tienen NADA que ver con la pantalla. Estuvieron dentro hasta el 28-ago,
+     * así que `App.mainModule()` y compañía funcionaban SÓLO en las placas con
+     * GUI (P4, Discovery) y en el host con LVGL — en la Pico, el S3 y la Nucleo
+     * el programa moría con «builtin 211 no soportado en esta VM». Lo que
+     * engaña del caso: el `case` SÍ está escrito y el símbolo existe en el
+     * fuente, así que leyendo el código parece implementado. */
+    case BUILTIN_APP_MAIN_MODULE: {        /* nombre del entry: basename sin ".mod" */
+        const char* p = bpvm_fs_main_module_path();
+        const char* base = strrchr(p, '/');
+        base = base ? base + 1 : p;
+        char nm[64]; size_t i = 0;
+        while (base[i] && base[i] != '.' && i + 1 < sizeof(nm)) { nm[i] = base[i]; i++; }
+        nm[i] = '\0';
+        uint32_t r = bpvm_heap_alloc_string(vm, nm, strlen(nm));
+        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
+        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
+        return BPVM_OK;
+    }
+    case BUILTIN_APP_MAIN_MODULE_PATH: {
+        const char* s = bpvm_fs_main_module_path();
+        uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
+        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
+        return BPVM_OK;
+    }
+    case BUILTIN_APP_PROJECT_PATH: {
+        const char* s = bpvm_fs_basedir();
+        uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
+        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
+        return BPVM_OK;
+    }
+
 #ifdef BPVM_GUI
     /* ---- V3 / H4.1 — GUI (modelo de comportamiento; paridad por dumpTree).
      * Sólo en el build con GUI. Convención (confirmada por disasm): todo builtin
@@ -888,33 +924,6 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                                        push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
     case BUILTIN_GUI_SET_ROTATION:   { int deg = pop_i32(vm, tc); bpvm_gui_set_rotation(deg); push_i32(vm, tc, 0); return BPVM_OK; }
 
-    /* H19 — App.* introspección del proyecto en ejecución (id 211-213). */
-    case BUILTIN_APP_MAIN_MODULE: {        /* nombre del entry: basename sin ".mod" */
-        const char* p = bpvm_fs_main_module_path();
-        const char* base = strrchr(p, '/');
-        base = base ? base + 1 : p;
-        char nm[64]; size_t i = 0;
-        while (base[i] && base[i] != '.' && i + 1 < sizeof(nm)) { nm[i] = base[i]; i++; }
-        nm[i] = '\0';
-        uint32_t r = bpvm_heap_alloc_string(vm, nm, strlen(nm));
-        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
-        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
-        return BPVM_OK;
-    }
-    case BUILTIN_APP_MAIN_MODULE_PATH: {
-        const char* s = bpvm_fs_main_module_path();
-        uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
-        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
-        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
-        return BPVM_OK;
-    }
-    case BUILTIN_APP_PROJECT_PATH: {
-        const char* s = bpvm_fs_basedir();
-        uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
-        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
-        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
-        return BPVM_OK;
-    }
     case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_DELETE:      { int h = pop_i32(vm, tc); bpvm_gui_delete(h); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SCREEN_LOAD: { pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }   /* una sola pantalla por ahora */
