@@ -242,6 +242,22 @@ Es la contrapartida de la imagen única: dos placas con realidades de memoria op
 
 **Explica 7 de los 8 rojos**, y por qué morían MUDOS (era #448).
 
+**⏩ 28-ago, tras arreglar la frontera (`_sbrk`) y la tabla proporcional**: la corrupción
+desaparece y el fallo se vuelve honrado — `lib 'Core' presente pero no exporta
+'Core.__init'`, o sea un `strdup`/`calloc` del cargador devolviendo NULL. **La escasez es
+real y ahora se ve.** Y el consumidor gordo está medido:
+
+```
+bpvm_symbol_t = char name[128] + uint32_t = 132 BYTES POR SIMBOLO
+   Json ~101 simbolos -> 13 KB      Core ~75 -> 9 KB      total ~24 KB
+```
+
+...de un margen de 64, y creciendo con `realloc`, que necesita el viejo y el nuevo A LA
+VEZ (pasar de 16 a 32 KB pide 48 de pico). El `name[128]` fijo es lo caro: los nombres
+cualificados reales rondan los 20-30 caracteres. Un pool de cadenas, o simplemente un
+tamaño realista, dividiría eso por cuatro. **Candidato nº 1 para mañana**, y no toca
+diseño: es una struct.
+
 ⏩ **Arreglo por decidir (de Eduardo, tiene contrapartida real):**
 1. **Subir el margen** → menos heap. Hoy 267 KB heap + 89 pilas; 96 KB más para `malloc`
    los deja en ~200.
