@@ -706,8 +706,52 @@ static void bpvm_gc(bpvm_t* vm) {
  * el par de tablas de 65536) o porque el malloc de plataforma dijo que no.
  * NO grita aqui: el que llama decide si es OOM (la puerta de heap_alloc) o
  * aviso urgente (register como ultimo recurso). Se llama BAJO el vm_lock. */
+/* #449 — EL TAMANO DE LA TABLA, PROPORCIONAL AL HEAP.
+ *
+ * Criterio de Eduardo (28-ago): *"estamos poniendo la misma tabla para un micro
+ * de 520K y otro de 8M+520K. El tamano de la tabla debe ser proporcional al
+ * tamano del heap."*
+ *
+ * Antes eran 4096 slots FIJOS de arranque, en las cuatro familias. Para la
+ * Pico 2 (heap 267 KB) eso son 32 KB de tabla nada mas empezar — el 12 % del
+ * heap, y salidos del malloc de plataforma, que alli son 64 KB: se los comia y
+ * empujaba el heap de malloc DENTRO del bloque de la VM (#440). Para la Metro
+ * (heap 8 MB) el mismo numero se queda corto y la tabla crece a las primeras de
+ * cambio.
+ *
+ * La regla: la tabla no puede pasar del 12,5 % del heap (son 8 B por slot entre
+ * las dos, o sea `heap/64` slots), y arranca en un octavo de ese tope. Con eso
+ * hay UN numero que justificar en vez de dos constantes en dos ficheros.
+ *
+ *   Pico 2  heap  267 KB -> tope 4.272 slots (34 KB), arranque   534 (4 KB)
+ *   Metro   heap    8 MB -> tope 131.072     ( 1 MB), arranque 16.384
+ *
+ * La cota demostrable seria `heap / BPVM_MIN_FREE_BLOCK` (nunca puede haber mas
+ * objetos vivos que eso), pero para la Pico son 22.784 slots = 182 KB sobre 267
+ * de heap: existe, y es inutil de tan generosa. */
+static uint32_t handle_slots_por_heap(const bpvm_t* vm, int arranque) {
+    uint32_t heap = (vm->stack_base > vm->heap_start)
+                    ? (uint32_t) (vm->stack_base - vm->heap_start) : 0u;
+    uint32_t tope = heap / 64u;                 /* 8 B/slot => 12,5 % del heap */
+    if (!arranque) return tope;
+    uint32_t ini = tope / 8u;
+    if (ini < 256u) ini = 256u;                 /* piso: crecer desde 1 es tonto */
+    if (tope && ini > tope) ini = tope;
+    return ini;
+}
+
 static int handle_table_grow(bpvm_t* vm) {
-    uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
+    uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u
+                                      : handle_slots_por_heap(vm, 1);
+    /* #449 — y el tope tambien sale del heap, salvo que el puerto imponga uno
+     * mas bajo (BPVM_HANDLE_CAP_MAX). Se toma el MENOR de los dos: el puerto
+     * puede apretar, nunca aflojar. */
+    {
+        uint32_t por_heap = handle_slots_por_heap(vm, 0);
+        if (por_heap != 0u
+                && (vm->handle_cap_max == 0u || por_heap < vm->handle_cap_max))
+            vm->handle_cap_max = por_heap;
+    }
     /* El tope RECORTA, no prohibe: con tope < 4096 la tabla nace ya recortada,
      * y un tope que no es potencia de 2 recibe un ultimo crecimiento parcial.
      * Solo se falla cuando el recorte no da ni un slot nuevo. */

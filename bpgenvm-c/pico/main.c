@@ -1585,6 +1585,51 @@ int main(void) {
 
 
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * #440 — LA FRONTERA, QUE HASTA HOY VIVIA EN UN COMENTARIO.
+ *
+ * El reparto de esta placa es: `malloc` crece desde `end` hacia arriba y el
+ * bloque de la VM ocupa el techo, con `VM_SRAM_MALLOC_MARGIN` de hueco entre
+ * los dos. El comentario de `vm_sram_region()` decia que "crecen el uno hacia
+ * el otro con todo el hueco de por medio" — pero esa comprobacion se hace UNA
+ * VEZ, en el arranque. Nada impedia que `malloc` siguiera creciendo despues:
+ * el `_sbrk` del SDK se limita en `__StackLimit`, que esta MUY por encima del
+ * bloque de la VM.
+ *
+ * Y eso es lo que paso el 28-ago: la tabla de handles pidio 32 KB, el heap de
+ * `malloc` cruzo el margen y `_malloc_r` acabo escribiendo DENTRO del codigo de
+ * un modulo cargado. Sintoma: `opcode 0x43 desconocido`. Lo pillo el MPU en la
+ * primera ejecucion, con el PC apuntando a `_malloc_r`.
+ *
+ * `_sbrk` es `__weak` en el SDK, asi que se sustituye: el techo pasa a ser la
+ * base del bloque de la VM. Cruzarla deja de ser posible; `malloc` devuelve
+ * NULL —que desde #448 ya no mata— y la VM lanza su OOM ATRAPABLE.
+ *
+ * ⚠️ Si el heap de la VM se fue a la PSRAM (Metro), `s_vm_buffer` apunta fuera
+ * de la SRAM y no sirve de techo: ahi se usa `__StackLimit`, como siempre. Y
+ * antes de que el arranque fije el bloque, tambien. */
+void* _sbrk(int incr);
+void* _sbrk(int incr) {
+    extern char end;
+    extern char __StackLimit;
+    static char* heap_end = 0;
+    if (heap_end == 0) heap_end = &end;
+
+    /* El techo: la base del bloque de la VM si esta en SRAM; si no, el de
+     * siempre. La comparacion con __StackLimit es la que descarta la PSRAM. */
+    char* techo = &__StackLimit;
+    if (s_vm_buffer != NULL && (char*) s_vm_buffer < techo
+                            && (char*) s_vm_buffer > &end)
+        techo = (char*) s_vm_buffer;
+
+    char* prev = heap_end;
+    char* next = heap_end + incr;
+    if (next > techo) return (void*) -1;   /* -> malloc devuelve NULL */
+    heap_end = next;
+    return (void*) prev;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * #440 — EL MPU COMO TESTIGO: quién escribe en el código de un módulo.
  *
