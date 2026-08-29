@@ -146,6 +146,14 @@ size_t vm_stack_region_bytes(void) {
     return bpvm_stack_region_bytes((size_t) s_vm_buffer_size);
 }
 
+/* #440 — el testigo del MPU se arma en el gancho POST-ENLACE (ver bpvm.h y el
+ * comentario del `mpu=1` más abajo): es el primer instante en que el código de
+ * un módulo ya no debe cambiar. */
+static void mpu_armar_tras_enlace(bpvm_t* vm) {
+    extern void bpvm_pico_mpu_armar(const uint8_t*, const bpvm_module_t*, int);
+    bpvm_pico_mpu_armar(vm->memory, vm->modules, vm->module_count);
+}
+
 /* #304 — accesor para que el REPL de texto (repl.c) comparta este buffer en vez
  * de duplicar 32 K (modo-texto y modo-wire son mutuamente excluyentes). */
 
@@ -1170,19 +1178,20 @@ static void run_module_path(const char* path, long id) {
      *
      * Marca el código de cada módulo como sólo lectura para que la escritura que
      * lo pisa levante un DACCVIOL con su PC — el manejador de #447 lo cuenta.
-     * Se arma DESPUÉS de enlazar porque el enlace escribe en el código (el fixup
-     * de eh_class). `bpvm_link_all` escribe valores resueltos absolutos, así que
-     * es idempotente y el que hace `bpvm_run` a continuación no molesta.
+     *
+     * ⚠️ SE ARMA POR EL GANCHO POST-ENLACE, no aquí. Antes se hacía aquí, con un
+     * `bpvm_link_all` propio por delante, razonando que el enlace de `bpvm_run`
+     * sería inofensivo por ser idempotente. **Ese razonamiento era falso**:
+     * idempotente quiere decir que escribe el MISMO valor, pero sigue siendo una
+     * ESCRITURA, y al MPU el valor le da igual. El 29-ago eso tumbó `StackTrace`
+     * —un programa sano— con un DACCVIOL sobre su propio fixup de `eh_class`
+     * (`code_off=461`). El gancho dispara en el único instante correcto: después
+     * del último enlace y antes de la primera instrucción.
      *
      * Andamio de diagnóstico, no producción: una región mal calculada tumbaría
      * una placa buena, y eso es peor que el bug que persigue. */
     if (board_env_bool("mpu", 0)) {
-        extern void bpvm_pico_mpu_armar(const uint8_t*, const bpvm_module_t*, int);
-        if (bpvm_link_all(vm) == BPVM_OK) {
-            bpvm_pico_mpu_armar(vm->memory, vm->modules, vm->module_count);
-        } else {
-            log_printf("mpu: no se arma — el enlace fallo antes");
-        }
+        bpvm_set_after_link_hook(mpu_armar_tras_enlace);
     }
 
     log_printf("AOT: scan done, about to bpvm_run");

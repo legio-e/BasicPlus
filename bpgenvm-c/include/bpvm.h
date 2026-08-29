@@ -110,6 +110,18 @@ size_t bpvm_stack_region_bytes(size_t total_bytes);
  * es quien conoce el bloque. */
 void bpvm_set_stack_kb(unsigned long kb);
 
+/* Gancho de diagnóstico: se llama justo DESPUÉS de que `bpvm_run` resuelva el
+ * enlace y ANTES de ejecutar una sola instrucción. NULL (el defecto) = nada.
+ *
+ * Existe por una razón concreta: **el enlace ESCRIBE en el código de los
+ * módulos** (los fixups de `eh_class` van a `code_start + code_off`). Cualquier
+ * vigilancia que se instale antes de este punto verá esas escrituras legítimas
+ * y dará un falso positivo — que es exactamente lo que le pasó al testigo del
+ * MPU de la Pico el 29-ago con `StackTrace`. Este es el primer instante en que
+ * el código de un módulo ya no debe cambiar. */
+typedef void (*bpvm_after_link_fn)(bpvm_t* vm);
+void bpvm_set_after_link_hook(bpvm_after_link_fn fn);
+
 /*
  * Variante embebida: carga un .mod desde un buffer ya en memoria. No
  * descubre dependencias (no hay filesystem). El caller debe pre-cargar

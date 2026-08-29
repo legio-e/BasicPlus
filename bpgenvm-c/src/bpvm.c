@@ -1063,12 +1063,19 @@ bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
     return BPVM_OK;
 }
 
+/* Gancho post-enlace (ver bpvm.h). Fuera del bpvm_t a propósito: es andamio de
+ * diagnóstico del puerto, no estado del programa. */
+static bpvm_after_link_fn g_after_link = NULL;
+
+void bpvm_set_after_link_hook(bpvm_after_link_fn fn) { g_after_link = fn; }
+
 bpvm_status_t bpvm_run(bpvm_t* vm) {
     if (!vm) return BPVM_ERR_BAD_PC;
     vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
     /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
     bpvm_status_t ls = bpvm_link_all(vm);
     if (ls != BPVM_OK) return ls;
+    if (g_after_link) g_after_link(vm);   /* el código ya no debe cambiar */
 
     /* Inicializar thread main desde el entry-point antes de entrar al
      * scheduler. */
@@ -1121,6 +1128,7 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
     bpvm_status_t ls = bpvm_link_all(vm);
     if (ls != BPVM_OK) return ls;
+    if (g_after_link) g_after_link(vm);   /* el código ya no debe cambiar */
     if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
     bpvm_thread_t* main_tc = &vm->threads[0];
     main_tc->pc = vm->main_absolute_address;
