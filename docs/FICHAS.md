@@ -93,6 +93,55 @@ El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabaja
 `V6_IDEAS.md`. Aquí vive el estado.
 
 
+#### 🟢 LA BATERÍA DE V4 SOBRE LA PICO 2: de 40/48 a **47/48** (29-ago)
+
+Ayer, 8 rojos. Hoy queda **uno**, y las causas reales eran menos de las que
+parecían:
+
+| sample | ayer | hoy | causa real |
+|---|---|---|---|
+| `JsonDemo` | `exit 6`, código pisado | ✅ | tabla de símbolos desbordando el margen (#440/#449) |
+| `stacktrace`, `MemT4b` | cuelgue mudo | ✅ | `PICO_MALLOC_PANIC` (#448) |
+| `MemT5_Gc`, `synctest`, `PropLongTest`, `ThreadFieldTest` | cuelgue / error | ✅ | presión de memoria, resuelta por #448 + #449 |
+| `synclisttest` | cuelgue mudo | 🔴 | **la tabla de handles no cabe en el margen** → #451 |
+
+⚠️ **Y DOS DE LOS FALLOS DE HOY NO ERAN DE NINGÚN PROGRAMA: eran del andamio del
+MPU.** `StackTrace` y `ThreadFieldTest` están sanos; los mató el testigo. Está
+contado en #440, y la lección en el bloque de abajo.
+
+#### 🔴 `#451` — la tabla de handles no puede crecer: el margen de 64 KB otra vez (abierta 29-ago)
+
+`synclisttest` muere con `No space in heap` **teniendo el heap al 20 %**. El log
+de la placa lo dice entero:
+
+```
+[gc] vivo=39796  heap=[16512..65492)                      <- 49 KB usados
+[bpvm] GC: bump 65492 -> 65492 (... heap 16512..273720)   <- de 251 KB
+[bpvm] tabla de handles: 2008 -> 4016 slots (31 KB)
+[bpvm] throw: "No space in heap"                          <- con 200 KB libres
+```
+
+Y la línea de después del throw dice `1946/**2008**`: ese crecimiento **no
+ocurrió**. El `realloc` falló en el margen de plataforma:
+
+```
+tabla de símbolos ......... 12,0 KB
+tabla de handles vieja .... 15,7 KB
+tabla de handles nueva .... 31,4 KB   (el realloc necesita las dos)
+                            -------
+                             59,1 KB   en un margen de 64
+```
+
+📌 **Por qué no es un caso raro:** el objeto medio de este programa mide **25
+bytes**, y el reparto proporcional de #449 (`heap/64`) asume 64. Todo programa de
+objetos pequeños agota los handles teniendo heap de sobra — aquí, 200 KB de sobra.
+No es un tope mal puesto: es que **las dos memorias están separadas y no se
+prestan nada**.
+
+⏩ **Lo cierra `U6`** (la tabla dentro del bloque de la VM): entonces 30 KB de
+tabla salen de 251 KB de heap y el problema desaparece por construcción. Mientras
+sigan siendo dos bolsas, esto reaparecerá.
+
 #### ✅ `#450` — `stack=N` (KB): el reparto pilas/montón lo decide el usuario (cerrada 29-ago)
 
 Petición de Eduardo mientras se arreglaba #449: *«podemos añadir una variable de entorno
@@ -228,6 +277,26 @@ el rastro *era* el propio dato corrupto, y no había quien contase lo que ocupab
 > nada que ver. Se deja escrita a propósito: era la única escritura grande fuera de sitio
 > que se veía leyendo el código, encajaba con la asimetría Metro/Pico 2, y aun así no era.
 > Lo que la descartó no fue leer más código, fue **contar**.
+>
+> 🔻 **Y EL TESTIGO DEL MPU MATÓ DOS PROGRAMAS SANOS** (29-ago). Cazó al culpable
+> —`_malloc_r`— y luego dio **dos falsos positivos**, los dos por la misma clase de
+> defecto: *estado que sobrevive cuando no debería*.
+>
+> 1. **Se armaba antes del último enlace.** Mi comentario decía que era seguro «porque
+>    `bpvm_link_all` es idempotente». Idempotente significa que escribe el **mismo
+>    valor** — pero sigue siendo una **escritura**, y al MPU el valor le da igual. Cayó
+>    `StackTrace` sobre su propio fixup de `eh_class` (`code_off=461`). Arreglado con un
+>    gancho post-enlace en el núcleo (`bpvm_set_after_link_hook`).
+> 2. **El desarmado no apagaba las regiones**, sólo `CTRL`. Un programa de 4 módulos
+>    dejaba 4 regiones vivas; el siguiente, de 2, reconfiguraba dos y heredaba las otras
+>    dos apuntando a lo que ya era **heap**. Cayó `ThreadFieldTest` en la quinta ejecución,
+>    con un `MMFAR` **fuera** de las regiones que el propio log listaba — que es lo que
+>    delató el asunto.
+>
+> 📌 **La lección, y es la del día entero:** *un andamio de diagnóstico es código de
+> producción.* Las tres pérdidas de tiempo del 29-ago no fueron programas rotos, fueron
+> **instrumentos que mentían** (estos dos y el aviso con `static` de #449). Y las tres
+> tenían la misma forma: algo que se guardaba de una ejecución a la siguiente.
 
 **Síntoma**: `exit 6 (opcode 0x43 desconocido)`, siempre en el mismo sitio. Con el mensaje
 mejorado (#442) el sitio ya tiene nombre:

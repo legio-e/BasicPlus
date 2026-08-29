@@ -27,6 +27,56 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (29-ago) — la batería queda en 47/48, y lo único que falta es `U6`
+
+**Lo primero de mañana**: decidir `U6`. Es lo único que bloquea el 48/48, está
+diagnosticado con números y no hay nada más que investigar — sólo hacerlo. Detalle
+en `#451`.
+
+### Lo que se cerró hoy
+
+`#440` y `#449` (los dos síntomas eran **una sola causa**: la tabla de símbolos
+desbordando el margen de `malloc` y escribiéndose sobre el código de un módulo —
+los bytes `43 6F 72 65` eran la cadena `"Core…"`). El arreglo: un **pool de
+nombres**, 59 KB → 20, y el pico del `realloc` de 99 KB → 28. `JsonDemo` corre en
+placa con salida **byte-idéntica a la VM-Java y al host**.
+
+`#450` nuevo y cerrado: **`stack=N` (KB) en el ENV**, petición de Eduardo. El
+usuario reparte el bloque entre pilas y montón; ausente = lo de siempre. Entró
+donde la regla ya estaba unificada, así que fue el núcleo + una línea por familia.
+Verificado en placa: `heap 267+89` → `heap 293+64`.
+
+**La batería, de 40/48 a 47/48.** El único rojo real es `synclisttest` (`#451`).
+
+### Lo que hay que saber para mañana
+
+🔻 **De los tres atascos de hoy, NINGUNO fue un programa roto: los tres fueron
+instrumentos que mentían.** El MPU armado antes del último enlace, el MPU
+heredando regiones de la ejecución anterior, y el aviso de `#430` gastado por un
+`static`. Los tres con la misma forma: **estado que sobrevive entre ejecuciones**.
+Cuando algo «falla» y el andamio está puesto, sospechar del andamio primero.
+
+📌 **Y el método que sí funcionó, dos veces: contar.** La pista de `loader.c:224`
+para `#440` era excelente —explicaba el síntoma *y* la asimetría Metro/Pico 2— y
+era falsa; sobrevivió dos días. Lo que la mató fue instrumentar el registro de
+símbolos y **contar** (460, no los ~176 que yo había estimado). Igual con
+`synclisttest`: la corrección de Eduardo *«se añaden unos cuantos prints y vemos
+dónde está el problema»* dio en 10 minutos lo que yo iba a buscar construyendo
+instrumentación del alocador.
+
+### Deuda que sigue viva
+
+- **`U6`** — la tabla de handles fuera del bloque de la VM. Ver `#451`: el objeto
+  medio mide 25 B y el reparto asume 64, así que todo programa de objetos pequeños
+  agota handles con el heap casi vacío.
+- **El STM32 sin verificar desde `U3.6`** (`H13_PRUEBAS_V5_REPASO.md`): seis
+  gestos, cinco minutos. Sigue sin hacerse.
+- **La batería en las otras familias**: hoy sólo Pico 2.
+- **`--smp=2` cuelga en el host** con `synclisttest` (`--smp=1` y el camino normal
+  pasan). Bug real del paralelismo, sin ficha todavía; **no** afecta a la Pico,
+  cuya imagen no define `BPVM_PICO_SMP_WORKERS`.
+- `#446` (host con `GUI=0`) y `#441` (seis opcodes) siguen abiertas.
+
 ## ⏭️ AL RETOMAR (28-ago, noche) — la batería de V4 sobre la Pico 2, y lo que destapó
 
 **Lo primero de mañana**: `#440` es el único rojo que queda de los ocho, y está acotado a
