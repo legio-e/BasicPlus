@@ -130,7 +130,18 @@ montón y salen de otro sitio —
 
 Documentada para el usuario en `guia-ide.html` §9.3. Las cinco imágenes construidas y
 **verificado en el binario** (no en el log del build) que la llamada existe: 1 sitio en
-cada una. ⏳ Falta el gesto en placa.
+cada una.
+
+✅ **VERIFICADO EN PLACA** (Pico 2, 29-ago), y el testigo es el propio INFO:
+
+```
+sin la clave    VM : heap 267 KB + stack 89 KB
+stack=64        VM : heap 293 KB + stack 64 KB
+```
+
+Los 25 KB que se le quitan a la pila aparecen en el montón y el bloque total no se mueve
+(356/357 KB, la diferencia es el redondeo a KB del INFO). O sea que no es sólo que la clave
+se lea: es que **el reparto cambia de verdad y no se pierde memoria por el camino**.
 
 #### 🟢 ERAN DOS SÍNTOMAS DE UNA SOLA CAUSA (medido 29-ago) — leer esto antes que #440 y #449
 
