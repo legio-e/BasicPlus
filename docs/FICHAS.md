@@ -143,7 +143,7 @@ Los 25 KB que se le quitan a la pila aparecen en el montón y el bloque total no
 (356/357 KB, la diferencia es el redondeo a KB del INFO). O sea que no es sólo que la clave
 se lea: es que **el reparto cambia de verdad y no se pierde memoria por el camino**.
 
-#### 🟢 ERAN DOS SÍNTOMAS DE UNA SOLA CAUSA (medido 29-ago) — leer esto antes que #440 y #449
+#### ✅ ERAN DOS SÍNTOMAS DE UNA SOLA CAUSA (medido y CERRADO 29-ago) — leer esto antes que #440 y #449
 
 > **Actualiza el cuadro de abajo, que se deja como está por lo que enseña.** El 28-ago
 > #440 y #449 parecían dos problemas: uno determinista y mudo, otro variable y ruidoso.
@@ -213,14 +213,21 @@ el rastro *era* el propio dato corrupto, y no había quien contase lo que ocupab
 
 **La batería de V4 sobre la Pico 2, 28-ago: 40 verdes de 48.**
 
-#### 🟡 `#440` — `JsonDemo`: el código de un módulo aparece PISADO en la RP2350 (abierta 27-ago · CAUSA MEDIDA 29-ago)
+#### ✅ `#440` — `JsonDemo`: el código de un módulo aparece PISADO en la RP2350 (abierta 27-ago · **CERRADA 29-ago** · `e4957d7c`)
 
-> ⚠️ **La causa ya no está por determinar** — ver el bloque de arriba. Los bytes `43 6F 72
-> 65` de `Json+3754` **son el nombre de un símbolo** (`Core.…`): la tabla de símbolos
-> desbordaba el margen de `malloc` y se escribía sobre el código. Arreglado por dos vías
-> (la frontera de `_sbrk` en `40a34b24` y el pool de nombres el 29-ago). ⏳ **Falta
-> confirmarlo en placa** — hasta ese verde no se cierra. Lo de abajo es el registro de
-> cómo se acotó, y la pista de `loader.c:224` resultó NO ser la causa.
+> ✅ **VERDE EN LA PICO 2**, `exit 0`. Y no sólo verde: la salida es **byte-idéntica a la de
+> la VM-Java y a la del host** — el invariante de las dos VMs se cumple sobre el programa
+> que llevaba dos días roto.
+>
+> **La causa**: los bytes `43 6F 72 65` de `Json+3754` **eran el nombre de un símbolo**
+> (`Core.…`), no un opcode. La tabla de símbolos desbordaba el margen de `malloc` y se
+> escribía sobre el código. Arreglado por dos vías: la frontera de `_sbrk` (`40a34b24`) y
+> el pool de nombres (`e4957d7c`).
+>
+> ⚠️ **La pista de `loader.c:224` que hay abajo era FALSA** — el scratch de exports no tenía
+> nada que ver. Se deja escrita a propósito: era la única escritura grande fuera de sitio
+> que se veía leyendo el código, encajaba con la asimetría Metro/Pico 2, y aun así no era.
+> Lo que la descartó no fue leer más código, fue **contar**.
 
 **Síntoma**: `exit 6 (opcode 0x43 desconocido)`, siempre en el mismo sitio. Con el mensaje
 mejorado (#442) el sitio ya tiene nombre:
@@ -321,17 +328,22 @@ al tamaño del heap.»* Mientras el reparto sea constantes sueltas, cada placa n
 oportunidad de poner mal el número — y la placa más estricta es la que menos se prueba
 (ver #449).
 
-#### 🟡 `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · ARREGLADA 29-ago, falta placa)
+#### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
-> ⚠️ **Arreglo hecho, y no fue el de las tres opciones de abajo.** La opción 3 («que el
-> margen se calcule») era la buena por instinto, pero la medida cambió la pregunta: el
-> problema no era el tamaño del margen sino **quién lo llenaba**. Los dos consumidores,
-> atacados por separado —
+> ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
+>
+> ⚠️ **El arreglo NO fue ninguna de las tres opciones de abajo.** La 3 («que el margen se
+> calcule») era la buena por instinto, pero la medida cambió la pregunta: el problema no era
+> el tamaño del margen sino **quién lo llenaba**. Los dos consumidores, atacados por
+> separado —
 >
 > - la **tabla de handles** ahora es proporcional al heap (`40a34b24`), y
-> - la **tabla de símbolos** pasó de 59 KB a 20 con el pool de nombres (ver arriba).
+> - la **tabla de símbolos** pasó de 59 KB a 20 con el pool de nombres (`e4957d7c`).
 >
-> El margen de 64 KB **no se ha tocado**: ya no hace falta. ⏳ Falta el verde en placa.
+> El margen de 64 KB **no se ha tocado**: ya no hace falta. Y esto es lo que hay que
+> recordar del episodio — *ninguna de las tres opciones que parecían el trabajo lo era*.
+> Las tres discutían cómo repartir 64 KB; la medida dijo que sobraban en cuanto se dejara
+> de malgastarlos.
 
 **El número, y son dos ficheros que no se conocen:**
 
