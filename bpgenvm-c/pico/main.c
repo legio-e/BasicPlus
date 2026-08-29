@@ -1686,10 +1686,33 @@ static unsigned mpu_regiones(void) {
 }
 
 void bpvm_pico_mpu_desarmar(void) {
-    if (!s_mpu_armado) return;
     volatile uint32_t* ctrl = (volatile uint32_t*) MPU_CTRL_ADDR;
+    volatile uint32_t* rnr  = (volatile uint32_t*) MPU_RNR_ADDR;
+    volatile uint32_t* rlar = (volatile uint32_t*) MPU_RLAR_ADDR;
     __asm volatile ("dsb");
     *ctrl = 0u;
+    /* ⚠️ APAGAR CTRL NO BASTA, Y ESO COSTO UN FALSO POSITIVO (29-ago).
+     *
+     * Antes esto era sólo `*ctrl = 0`. Las regiones se quedaban CONFIGURADAS y
+     * con su bit EN a 1, así que la siguiente ejecución heredaba las del
+     * programa anterior. Con `SyncListDiag` (4 módulos) se armaban 4 regiones;
+     * al correr después `ThreadFieldTest` (2 módulos) se reconfiguraban la 0 y
+     * la 1 — y las regiones 2 y 3 seguían VIVAS, prohibiendo escribir donde
+     * antes estaban `Collections` y `Str` y ahora está el HEAP. DACCVIOL en
+     * 0x20027260, fuera de las dos regiones que el log decía. Un programa sano
+     * muerto por la basura del anterior.
+     *
+     * Se apagan TODAS, no `usadas`: el número de regiones de la vez anterior no
+     * se sabe aquí, y de todas formas apagar una que ya está apagada es gratis.
+     *
+     * Nótese que ya no hay guarda `if (!s_mpu_armado) return;`: precisamente lo
+     * que hay que limpiar es el estado que quedó de OTRA ejecución, cuando esa
+     * bandera vale 0. */
+    unsigned max = mpu_regiones();
+    for (unsigned r = 0; r < max; r++) {
+        *rnr  = r;
+        *rlar = 0u;              /* EN = 0 */
+    }
     __asm volatile ("dsb" ::: "memory");
     __asm volatile ("isb");
     s_mpu_armado = 0;
