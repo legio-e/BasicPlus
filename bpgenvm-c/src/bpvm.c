@@ -1295,8 +1295,10 @@ void bpvm_destroy(bpvm_t* vm) {
      * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */
     uint64_t run_mark = vm->run_mark;
 
-    bpvm_free(vm->handle_addr);   /* V4: tabla de handles */
-    bpvm_free(vm->handle_gen);    /* V4/paso 3: generación */
+    /* #451 — `handle_addr` y `handle_gen` YA NO SE LIBERAN: desde que la tabla
+     * vive dentro del bloque de la VM, esos punteros apuntan a `vm->memory` y
+     * pasarlos por `bpvm_free` seria liberar memoria que no es nuestra. Se van
+     * con el bloque. La free-list si sigue saliendo del malloc de plataforma. */
     bpvm_free(vm->handle_free_list);   /* V4/paso 4c: free-list */
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {

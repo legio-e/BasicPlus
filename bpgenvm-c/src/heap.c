@@ -729,63 +729,128 @@ static void bpvm_gc(bpvm_t* vm) {
  * La cota demostrable seria `heap / BPVM_MIN_FREE_BLOCK` (nunca puede haber mas
  * objetos vivos que eso), pero para la Pico son 22.784 slots = 182 KB sobre 267
  * de heap: existe, y es inutil de tan generosa. */
-static uint32_t handle_slots_por_heap(const bpvm_t* vm, int arranque) {
+/* #451 — YA SOLO DECIDE EL ARRANQUE, no el tope. El tope proporcional se retiró
+ * al meter la tabla en el bloque: era una política que hacía falta mientras la
+ * tabla salía de OTRA bolsa y había que adivinar cuánto podía gastar de ella.
+ * Adivinaba mal, además —asumía 64 B por objeto y los reales eran 25—, así que
+ * un programa de objetos pequeños se quedaba sin handles con el heap medio
+ * vacío. Ahora el límite es físico: la tabla baja hasta chocar con el heap. */
+static uint32_t handle_slots_por_heap(const bpvm_t* vm) {
     uint32_t heap = (vm->heap_top > vm->heap_start)
                     ? (uint32_t) (vm->heap_top - vm->heap_start) : 0u;
-    uint32_t tope = heap / 64u;                 /* 8 B/slot => 12,5 % del heap */
-    if (!arranque) return tope;
-    uint32_t ini = tope / 8u;
+    uint32_t ini = heap / 512u;                 /* ~0,2 % del heap para empezar */
     if (ini < 256u) ini = 256u;                 /* piso: crecer desde 1 es tonto */
-    if (tope && ini > tope) ini = tope;
     return ini;
 }
 
+/* #451 — LA TABLA VIVE DENTRO DEL BLOQUE DE LA VM, entre el heap y las pilas:
+ *
+ *     [ modulos ][ heap →→→ ][ TABLA ][ pila del main ][ pilas del resto ]
+ *                 heap_start  heap_top                  stack_base
+ *
+ * y dentro de la region, `gen` primero y `addr` despues:
+ *
+ *     [ gen[cap] ][ addr[cap] ]      = cap*8 bytes
+ *     heap_top                       stack_base
+ *
+ * POR QUE SE MOVIO (29-ago). Salia del `malloc` de PLATAFORMA, que en la Pico 2
+ * es un margen de 64 KB compartido con la tabla de simbolos. `synclisttest`
+ * moria con `No space in heap` **teniendo el heap al 20 %**: 200 KB parados
+ * mientras la tabla, que vive en otra bolsa, no podia crecer. Dos memorias
+ * separadas que no se prestan nada.
+ *
+ * 🎁 Y ADEMAS EL CRECIMIENTO YA NO CUESTA EL DOBLE. Un `realloc` necesita el
+ * array viejo y el nuevo a la vez —doblar de 256 a 512 entradas pedia 99 KB en
+ * un margen de 64, que es exactamente lo que fallaba—. Aqui la tabla crece
+ * HACIA ABAJO y las regiones se solapan: un `memmove` y ya. El pico de memoria
+ * es el tamaño final, no el doble.
+ *
+ * El orden de los dos movimientos NO es libre: el sitio nuevo de `addr` es el
+ * sitio viejo de `gen`, asi que `gen` se muda primero. */
 static int handle_table_grow(bpvm_t* vm) {
-    uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u
-                                      : handle_slots_por_heap(vm, 1);
-    /* #449 — y el tope tambien sale del heap, salvo que el puerto imponga uno
-     * mas bajo (BPVM_HANDLE_CAP_MAX). Se toma el MENOR de los dos: el puerto
-     * puede apretar, nunca aflojar. */
-    {
-        uint32_t por_heap = handle_slots_por_heap(vm, 0);
-        if (por_heap != 0u
-                && (vm->handle_cap_max == 0u || por_heap < vm->handle_cap_max))
-            vm->handle_cap_max = por_heap;
-    }
-    /* El tope RECORTA, no prohibe: con tope < 4096 la tabla nace ya recortada,
-     * y un tope que no es potencia de 2 recibe un ultimo crecimiento parcial.
-     * Solo se falla cuando el recorte no da ni un slot nuevo. */
+    uint32_t antes    = vm->handle_cap;
+    uint32_t new_cap  = antes ? antes * 2u : handle_slots_por_heap(vm);
+
+    /* Un tope del puerto sigue mandando si lo hay (hoy ninguno lo pone). El
+     * tope proporcional al heap SE RETIRA: era una politica necesaria cuando la
+     * tabla salia de otra bolsa y habia que adivinar cuanto podia gastar. Ahora
+     * el limite es fisico y honesto —chocar con el heap— y no hay que adivinar. */
     if (vm->handle_cap_max != 0u && new_cap > vm->handle_cap_max)
         new_cap = vm->handle_cap_max;
-    if (new_cap <= vm->handle_cap) return 0;
-    /* #355 — QUE SE VEA CRECER. Las dos tablas juntas son new_cap*8 bytes y
-     * salen del malloc de la PLATAFORMA, no del heap de la VM: en la Pico eso
-     * es SRAM (520 KB en total), y el realloc necesita el viejo a la vez.
+    if (new_cap <= antes) return 0;
+
+    /* Dónde caeria el techo del heap con la tabla nueva. Alineado a 8 para que
+     * los dos `uint32_t*` queden alineados: en ARM/RISC-V un acceso de 32 bits
+     * desalineado no es "lento", es un fallo. */
+    uint32_t nuevo_top = (vm->stack_base - new_cap * 8u) & ~7u;
+
+    /* ⚠️ EL HEAP ACABA DONDE EMPIEZA LA TABLA — y un heap VACIO no tiene sitio
+     * fijo, asi que su final se mueve con ella.
      *
-     * ⚠️ ESTA LINEA ANUNCIABA UNA INTENCION COMO SI FUERA UN HECHO (29-ago). Se
-     * emitia ANTES del realloc y no se decia nada si fallaba, asi que en el log
-     * de la Pico se leia "tabla de handles: 2008 -> 4016" seguido de un OOM — y
-     * la tabla seguia en 2008. Un instrumento que informa de lo que iba a pasar
-     * es peor que ninguno: manda a buscar el fallo donde no esta. Ahora dice
-     * SIEMPRE como acabo. */
-    uint32_t antes = vm->handle_cap;
-    uint32_t* na = (uint32_t*) bpvm_realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
-    uint32_t* ng = na ? (uint32_t*) bpvm_realloc(vm->handle_gen, (size_t) new_cap * sizeof(uint32_t))
-                      : NULL;
-    if (!na || !ng) {
-        if (na) vm->handle_addr = na;   /* la de addr ya crecio: inocuo */
-        bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos) FALLO "
-                  "— el malloc de PLATAFORMA no da mas (no es el heap de la VM)",
+     * `bpvm_init` deja `heap_start = heap_next = stack_base` como marcador de
+     * "aun no hay modulos": el heap es un intervalo VACIO pegado al techo, y es
+     * el loader quien lo baja al cargar. Mientras siga asi, cualquier tabla
+     * caeria por debajo de ese marcador y se rechazaria — con eso
+     * `handle_register` devolvia ref nula SIEMPRE y `test-smphandles` paso de 0
+     * corrupciones a 200.000 (todas). No era una carrera: era que la tabla no
+     * llegaba a existir.
+     *
+     * Un heap sin nada dentro se desplaza gratis. La condicion es estricta a
+     * proposito —vacio Y por encima del techo nuevo—, o sea el caso del marcador
+     * y ninguno mas: con modulos cargados `heap_start` esta muy por debajo. */
+    if (vm->heap_next == vm->heap_start && vm->heap_start >= nuevo_top) {
+        vm->heap_start = nuevo_top;
+        vm->heap_next  = nuevo_top;
+    }
+
+    /* El limite real: la tabla no puede comerse el heap VIVO ni la reserva de
+     * emergencia (la que permite CONSTRUIR el error de OOM, #355).
+     *
+     * 📌 `<` y no `<=`: que la tabla empiece EXACTAMENTE donde acaba el heap vivo
+     * es el caso normal, no una colision — es lo que significa "el heap acaba
+     * donde empieza la tabla". Con `<=` se rechazaba a si mismo justo despues de
+     * deslizar el heap vacio, que es como se vio: la frase mal dicha y el
+     * operador mal puesto eran el mismo error. */
+    if (nuevo_top < vm->heap_next + vm->heap_reserve || nuevo_top >= vm->stack_base) {
+        bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB) NO CABE "
+                  "— el heap vivo llega a %u y la tabla querria bajar a %u",
                   (unsigned) antes, (unsigned) new_cap,
-                  (unsigned)((new_cap * 8u) / 1024u));
+                  (unsigned)((new_cap * 8u) / 1024u),
+                  (unsigned) vm->heap_next, (unsigned) nuevo_top);
         return 0;
     }
-    vm->handle_addr = na;
-    vm->handle_gen  = ng;
-    vm->handle_cap  = new_cap;
-    bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos) OK",
+
+    uint8_t* mem = vm->memory;
+    uint32_t viejo_top = vm->heap_top;
+    /* gen PRIMERO (su destino esta por debajo de todo lo vivo), addr despues
+     * (su destino es justo donde estaba gen). Con `memmove` porque origen y
+     * destino pueden solaparse. */
+    if (antes != 0u) {
+        memmove(mem + nuevo_top,                    /* gen nuevo  */
+                mem + viejo_top,                    /* gen viejo  */
+                (size_t) antes * 4u);
+        memmove(mem + nuevo_top + new_cap * 4u,     /* addr nuevo */
+                mem + viejo_top + antes * 4u,       /* addr viejo */
+                (size_t) antes * 4u);
+    }
+    /* Los slots nuevos nacen a cero: gen 0 y addr 0 es "slot libre". */
+    memset(mem + nuevo_top + antes * 4u, 0, (size_t)(new_cap - antes) * 4u);
+    memset(mem + nuevo_top + new_cap * 4u + antes * 4u, 0,
+           (size_t)(new_cap - antes) * 4u);
+
+    vm->heap_top     = nuevo_top;
+    vm->handle_gen   = (uint32_t*)(void*)(mem + nuevo_top);
+    vm->handle_addr  = (uint32_t*)(void*)(mem + nuevo_top + new_cap * 4u);
+    vm->handle_cap   = new_cap;
+
+    /* ⚠️ Esta linea se emitia ANTES de saber si habia funcionado, y en el log de
+     * la Pico se leia como un crecimiento consumado mientras la tabla seguia
+     * igual. Ahora sale cuando ya es un hecho. */
+    bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB dentro del heap) OK "
+              "— techo del heap %u, libre %u KB",
               (unsigned) antes, (unsigned) new_cap,
-              (unsigned)((new_cap * 8u) / 1024u));
+              (unsigned)((new_cap * 8u) / 1024u), (unsigned) nuevo_top,
+              (unsigned)((nuevo_top - vm->heap_next) / 1024u));
     return 1;
 }
 
@@ -1100,12 +1165,16 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
              * mensaje manda a mirar precisamente donde no esta el problema. */
             if (!vm->handle_oom_avisado) {
                 vm->handle_oom_avisado = 1;
-                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles (%u slots, tope %u). "
-                          "OJO: el heap NO esta lleno — quedan %u KB libres de %u. "
-                          "Lo que se agoto es la tabla, que sale del malloc de PLATAFORMA.",
-                          (unsigned) vm->handle_cap, (unsigned) vm->handle_cap_max,
-                          (unsigned)((vm->heap_top - vm->heap_next) / 1024u),
-                          (unsigned)((vm->heap_top - vm->heap_start) / 1024u));
+                /* #451 — desde que la tabla vive DENTRO del bloque, quedarse sin
+                 * handles ya significa quedarse sin memoria de verdad: la tabla
+                 * bajo hasta tocar el heap. Ya no hay que aclarar "no es el
+                 * heap", porque ahora si lo es — es la misma bolsa. */
+                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles: %u slots ocupan "
+                          "%u KB y la tabla ya toca el heap (vivo hasta %u, techo %u). "
+                          "OOM atrapable.",
+                          (unsigned) vm->handle_cap,
+                          (unsigned)((vm->handle_cap * 8u) / 1024u),
+                          (unsigned) vm->heap_next, (unsigned) vm->heap_top);
             }
             bpvm_smp_unlock(vm);
             return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
