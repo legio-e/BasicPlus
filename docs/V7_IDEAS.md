@@ -412,3 +412,92 @@ añadido después es otra corrida de ranuras y otra tanda de reconstrucciones.
 - **Y una pregunta de alcance**: ¿el comando es sólo para la GUI, o es el mecanismo general
   de *«ejecutar esto en aquel hilo»*? Si es lo segundo, deja de ser una pieza de la GUI y
   pasa a ser del lenguaje — que es más potente, y también más caro de equivocarse.
+
+---
+
+## Sistematizar las pruebas EN PLACA — un arnés que recorra la matriz (Eduardo, 29-ago)
+
+### El problema, y cómo se manifestó
+
+Balance de Eduardo tras la campaña de memoria del 27-29 de agosto:
+
+> *«Este problema no apareció en V5 porque estábamos con SQLite y utilizamos la Metro
+> para las pruebas, y nos confiamos en que la Metro y la Pico tienen la misma imagen.
+> OK, un error nuestro. Pero hacer test sobre todas las placas es mucho trabajo. Lo que
+> hace falta es una herramienta de test que nos permita sistematizar las pruebas.»*
+
+Y el matiz que lo hace peligroso: **la imagen SÍ era la misma**. Lo que cambia no es el
+binario, es la *realidad de memoria* — la Metro lleva el heap a la PSRAM y deja la SRAM
+entera para `malloc`; la Pico 2 lo comparte todo en 357 KB. `#430` se diagnosticó y se
+arregló en la Metro, donde el consumidor nuevo no cuesta nada, y viajó a la Pico 2 en la
+MISMA imagen. Es la contrapartida de la imagen única: **la placa más estricta es la que
+menos se prueba**.
+
+Lo que falló no fue el criterio, fue que **nadie llevaba la cuenta de qué celdas de la
+matriz (sample × placa) estaban sin correr**. Una celda vacía y una celda verde se ven
+igual cuando no hay tabla.
+
+### Lo que YA está construido — y es más de la mitad
+
+Antes de diseñar nada, el censo, porque la pieza cara ya existe:
+
+| pieza | dónde | qué hace ya |
+|---|---|---|
+| **protocolo wire v1** | `docs/BPVM_WIRE_PROTOCOL.md` | `PUT`/`RUN`/`OUTPUT`/`EXITED` — cargar, ejecutar y recoger, ya está especificado y en las 5 familias |
+| **cliente wire en Python** | `bpgenvm-c/tools/sim_smoke.py` | clase `Wire` con `call`, `call_bulk`, `get`, y **`drain_run()` que junta los OUTPUT hasta el EXITED**. Es literalmente «cargar un programa, atrapar los resultados» |
+| **el simulador** | `tools/bpvm_sim.c` (H10) | habla wire v1 **completo** en el PC: un destino más de la matriz, gratis y sin cable |
+| **arnés de paridad** | `compat/compat.sh` | ya hace Java-vs-C sobre 38 samples en el host |
+| **la referencia** | miVM | el INVARIANTE SAGRADO da el *golden* sin inventarlo: el `stdout` de la VM-Java |
+
+⏩ **Lo que falta es sorprendentemente poco**: `Wire.__init__` recibe un **socket**. Una
+placa habla por **serie**. Abstraer ese transporte (socket ↔ `pyserial`) es el 80 % del
+camino, porque `drain_run()` ya hace el resto.
+
+### La forma propuesta
+
+**1. El golden sale de la VM-Java, no se escribe a mano.** Es el invariante del proyecto
+aplicado al device: para el mismo `.mod`, el `stdout` de la placa debe ser byte-idéntico
+al de miVM. Eso convierte los **48 samples que ya existen** en una batería de placa **sin
+tocar ni uno**. Es la diferencia entre «escribir tests» (caro, y nunca se hace) y
+«cosechar los que ya hay».
+
+**2. Un manifiesto con lo que cada sample NECESITA**, que es lo que habría cazado este
+bug:
+
+```
+synclisttest:   corre_en: todas        memoria: APRETADA
+GuiColorDemo:   corre_en: p4, disco    necesita: pantalla
+SdPaso:         corre_en: metro, p4    necesita: sd
+JsonDemo:       corre_en: todas
+```
+
+Un sample marcado `memoria: APRETADA` **no puede darse por verde hasta haber corrido en
+la placa más pequeña**. La regla que faltaba, escrita donde la máquina la puede exigir.
+
+**3. El informe es una MATRIZ, y las celdas sin correr se ven.** No un «38 PASS»: una
+tabla sample × placa donde `—` (sin correr) es visualmente distinto de ✅. El fallo de V5
+fue exactamente una celda que nadie miró. Un total agregado la habría escondido otra vez.
+
+**4. El flasheo sigue siendo manual** (es de Eduardo). El arnés asume placa flasheada en
+un puerto. Pero **debe verificar contra qué imagen habla** —por `INFO`, antes de empezar—
+porque «correr la batería contra un binario de hace tres semanas» ya ha pasado
+([[el-sello-de-build-no-identifica-la-imagen]]).
+
+### Lo que queda por decidir
+
+- **¿Tests que se auto-verifican, o comparación con golden?** Hay samples que ya imprimen
+  su propio veredicto (`=== ThreadFieldTest: 3 de 3 ===`) — es un test de estilo Java sin
+  formalizar. El golden cubre los 48 hoy y sin trabajo; lo auto-verificado es mejor para
+  los nuevos. Probablemente los dos, pero **el golden primero**: da cobertura inmediata.
+- **Qué hacer con lo que legítimamente difiere por placa** (GPIO, temperatura, serial).
+  Un sample así o se marca o normaliza esas líneas. Conviene que sean pocos y explícitos.
+- **El tiempo de la vuelta completa.** 48 samples × 5 placas por serie no es gratis. Se
+  puede paralelizar por placa (puertos distintos, procesos distintos) y correr el
+  simulador siempre. Medir antes de optimizar.
+- **Dónde vive.** `compat/` ya es el sitio de los arneses; esto es su hermano de device.
+
+📌 **Y el criterio que ordena todo esto**: la herramienta no tiene que *diagnosticar*.
+Eduardo lo dijo explícito — *«luego, investigar si un test no pasa ya es cosa nuestra»*.
+Su único trabajo es **decir qué celda está roja y cuál está sin correr**. Todo lo que se
+le añada por encima de eso es la trampa de siempre: construir el instrumento en vez de
+usar los que ya hay.
