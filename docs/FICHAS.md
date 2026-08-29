@@ -109,7 +109,44 @@ parecían:
 MPU.** `StackTrace` y `ThreadFieldTest` están sanos; los mató el testigo. Está
 contado en #440, y la lección en el bloque de abajo.
 
-#### 🔴 `#451` — la tabla de handles no puede crecer: el margen de 64 KB otra vez (abierta 29-ago)
+#### ✅ `#451` — la tabla de handles no puede crecer: el margen de 64 KB otra vez (**CERRADA 29-ago** · `1ebd034f`+`87e9ae20`)
+
+> ✅ **VERDE EN LA PICO 2**, `exit 0`, el programa entero. **La batería queda 48/48.**
+>
+> **El arreglo**: la tabla se muda DENTRO del bloque de la VM, al FINAL del heap
+> —`[módulos][heap →][TABLA][pilas]`—. Criterio de Eduardo para el sitio: al principio
+> no, que ahí va la arena de SQLite, y este espacio *«nunca será ejecutable»*.
+>
+> | | heap | antes | ahora |
+> |---|---|---|---|
+> | Pico 2 | 257 KB | ❌ moría a 1800 items | ✅ tabla a 3848 slots |
+> | S3 · C6 · C3 | 96 KB | ❌ tope 1536, imposible | ✅ tabla a 4096 slots |
+> | respaldo S3 | 64 KB | ❌ | ❌ pero por el **heap de verdad**, no por la tabla |
+>
+> 🎁 **Y el crecimiento dejó de costar el doble.** Un `realloc` necesita el array viejo y
+> el nuevo a la vez —doblar de 256 a 512 pedía 99 KB en un margen de 64, que era
+> exactamente lo que fallaba—. Dentro del bloque la tabla crece **hacia abajo** y las
+> regiones se solapan: un `memmove` y ya. El pico es el tamaño final, no 2×.
+>
+> 📌 **Se retiró el tope proporcional (`heap/64`)**: era una política que hacía falta
+> mientras la tabla salía de otra bolsa y había que adivinar cuánto gastar de ella — y
+> adivinaba mal, porque asumía 64 B por objeto y los reales son 25. Ahora el límite es
+> físico: la tabla baja hasta tocar el heap, y quedarse sin handles ya *es* quedarse sin
+> memoria.
+>
+> ⚠️ **Dos cosas se rompieron por el camino, y las dos enseñan:**
+> 1. `test-smphandles` pasó de 0 corrupciones a **200.000 (todas)**. No era una carrera:
+>    `bpvm_init` deja `heap_start = heap_next = stack_base` como marcador de «aún no hay
+>    módulos», así que la tabla caía por debajo y **nunca llegaba a existir**. Un heap
+>    vacío se desplaza gratis; ahora lo hace.
+> 2. **El operador estaba mal justo donde la frase estaba mal.** Yo había escrito «el heap
+>    empieza donde acaba la tabla» —al revés— y la comprobación decía
+>    `nuevo_top <= heap_next + reserva`, que rechaza la igualdad. Lo cazó Eduardo leyendo
+>    el comentario: si la tabla va al FINAL, **«el heap ACABA donde EMPIEZA la tabla»**, y
+>    entonces que coincidan es el caso normal, no una colisión. Una frase mal dicha y un
+>    `<=` de más eran el mismo error.
+
+#### 🔵 `#451`(histórico) — el diagnóstico, tal como se escribió (29-ago)
 
 `synclisttest` muere con `No space in heap` **teniendo el heap al 20 %**. El log
 de la placa lo dice entero:
@@ -710,10 +747,16 @@ regla de #449 (la tabla de handles es el 12,5 % del heap, y sale de OTRA bolsa):
 en el S3, el C6 y el C3 **no cabe** — y no por el tamaño de los objetos, sino porque hay
 96 KB de heap parados mientras la tabla, que vive en otra bolsa, se queda sin sitio.
 
-⏭️ **Consecuencia directa: `U6` no es una mejora, es un PRERREQUISITO de P1.** Estrenar dos
-familias con la memoria todavía repartida en dos bolsas que no se prestan nada es garantizar
-que la batería nazca roja en las placas nuevas — y, peor, gastar el banco (que es lo caro de
-P1) diagnosticando un problema que ya está diagnosticado. Ver #451.
+✅ **RESUELTO ESA MISMA TARDE (#451), y esta correccion se queda por lo que ensena.** Por la
+mañana escribí aquí que `U6` era *prerrequisito* de P1, con estos números como argumento.
+Por la tarde se movió la tabla dentro del bloque de la VM y **el argumento dejó de valer**:
+con 96 KB de heap la tabla llega a 4096 slots y `synclisttest` pasa. La tabla y el heap son
+ya una sola bolsa, así que el tope proporcional —y con él estas dos filas— no existe.
+
+📌 Lo que sigue en pie, y es más flojo de lo que escribí: `U6` sigue mereciendo la pena
+porque el reparto vive replicado en cuatro puertos y cada familia nueva es otra copia. Pero
+**no bloquea P1**: las placas nuevas ya no nacen rojas por esto. Conviene no dejar en las
+fichas una urgencia que se apagó — la cifra que la justificaba está arreglada.
 
 🔴 **LA TRAMPA, y conviene saberla antes de empezar: `riscv` NO ES UN TARGET, SON DOS.** El
 catálogo (`NpackReloc.DESTINOS`) tiene una sola entrada RISC-V, `riscv32-esp-p4`, con

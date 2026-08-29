@@ -641,3 +641,38 @@ natural para gatear los samples de `memoria: APRETADA` sin coste humano.
 📌 Lo cual refuerza el orden ya escrito en P1 —las placas nuevas van **después** de la
 unificación— y le añade a `U6` un motivo que antes no tenía: no es sólo que unificar
 abarate la familia nueva; es que **sin unificar, la familia nueva no pasa la batería**.
+
+#### 🔻 El golden NO cubre todos los samples — y hay prueba (29-ago)
+
+Al cerrar #451 se comprobó `synclisttest` contra la VM-Java, y **no coinciden**:
+
+```
+VM-Java   consumidos c1 = 1707   c2 = 793
+VM-C      consumidos c1 = 1254   c2 = 1246
+```
+
+No es un bug: el reparto entre los dos consumidores **depende del scheduling**, y el
+propio sample lo dice en su comentario — *«el conteo de pops efectivos en cada hilo no es
+predecible; pero sumando los dos deberíamos haber consumido EXACTAMENTE lo producido»*.
+El **total** sí coincide (2500) y todas sus líneas `OK:` también.
+
+Y encaja con algo que ya estaba: el corpus del arnés de paridad son **38 samples elegidos a
+mano**, y `synclisttest` nunca estuvo en él. No por olvido — es que no puede estar.
+
+⏩ **Consecuencia para el manifiesto**: hace falta una categoría más, y no es opcional.
+
+| tipo de sample | cómo se juzga |
+|---|---|
+| determinista | `stdout` byte-idéntico al de la VM-Java (el golden) |
+| **no determinista** | **por sus propias asercciones**: ninguna línea `ERROR`, y `exit 0` |
+
+Los samples concurrentes son el caso claro, pero seguramente no el único (cualquiera que
+imprima tiempos, direcciones o temperatura cae aquí). Marcarlos es barato; **no marcarlos
+sale caro de dos maneras**: o el arnés da rojos falsos y se deja de mirar, o alguien
+«arregla» el golden fijando un entrelazado concreto y a partir de ahí el test sólo prueba
+que el scheduler no ha cambiado.
+
+⚠️ Y un aviso sobre instrumentar para diagnosticar: `samples/SyncListDiag.bp` —la copia con
+prints que localizó este bug— es **todavía menos comparable** que el original, porque sus
+prints van DENTRO de los hilos y exponen el entrelazado entero. Es una herramienta de
+diagnóstico, no un test: no debe entrar en la batería.
