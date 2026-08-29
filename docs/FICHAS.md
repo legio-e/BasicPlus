@@ -768,6 +768,56 @@ float-ABI del `.o` y el firmware declara la suya (`bpvm_mdn_host_float_abi`). Fa
 mensaje. Lo que hay que hacer es dar de alta un destino nuevo y decidir su sufijo (hoy
 `RISCV` a secas se quedaría ambiguo).
 
+##### 📏 LA MEMORIA DE CADA CHIP, contra el suelo del FABRICANTE (29-ago)
+
+Eduardo trajo la tabla de Espressif *«Memory Usage Comparison»* (memoria libre corriendo
+ejemplos basicos). Es el suelo de referencia que faltaba: permite separar **lo que cuesta el
+chip** de **lo que cuesta BasicPlus**, en vez de discutirlo.
+
+```
+proyecto VACIO en S3 (Espressif) ....... 392,0 KB libres
+nuestra imagen (medido en placa) ....... 331,6 KB libres
+                                         ---------------
+lo que cuesta BasicPlus ................  60,4 KB
+   libmain.a (nuestro codigo) ..........  43,1 KB   (medido con idf.py size-components)
+   drivers, spi_flash, littlefs, fatfs ..  17,3 KB
+```
+
+60 KB para un runtime con FS, drivers y wire de depuracion. **No es anormal**, y ahora esta
+medido contra el suelo del propio fabricante.
+
+⏩ **Y la tabla corrige la premisa de este hito.** Aplicando esos 60,4 KB:
+
+| chip | vacio (Espressif) | con BasicPlus |
+|---|---|---|
+| ESP32-**C3** | 332 KB | **~272 KB** |
+| ESP32-S3 | 392 KB | ~332 KB |
+| ESP32-**C6** | **474 KB** | **~414 KB** |
+| ESP32-S31 | 478 KB | ~418 KB |
+| ESP32-P4 | 608 KB | ~548 KB |
+
+🔴 **El C6 tiene MAS memoria que el S3, no menos** — unos 82 KB mas, probablemente por ser
+de un solo nucleo frente a los dos del S3. La frase de arriba *«son RISC-V pero tienen poca
+memoria»* vale para el **C3**; el C6 esta entre las holgadas.
+
+🔴 **Y el S3 es estrecho POR DECISION NUESTRA, no por el chip**: tiene 332 KB libres y le
+damos 160 al bloque de la VM. Al mirar el mapa parecia que el IDF se comia la RAM; el
+`size-components` dice que WiFi, BT, lwip y mbedTLS **ni se enlazan** (5-29 bytes cada uno).
+
+El orden real de estrechez es **C3 → S3 → C6 → S31 → P4**.
+
+⚠️ Dos avisos: la tabla es de ejemplos **vacios y sin optimizar** (un suelo, no una
+promesa), y los 60,4 KB estan medidos en el S3 — en otro chip cambia el juego de drivers.
+
+##### 🧭 PRIORIDAD (Eduardo, 29-ago)
+
+*«A mi la S3 me importa relativamente, es el paso. El futuro son la P4, la C6 y la S31.»*
+
+Encaja con [[prioridad-arm-riscv-s3-secundario]] y con la tabla de arriba: **las tres del
+futuro son las tres mas holgadas** (~414, ~418 y ~548 KB), asi que el trabajo de memoria de
+estos dias se hizo contra el caso peor y no contra el caso que viene. El C3 queda como la
+placa que apretara de verdad.
+
 ⏭️ **Reparto del trabajo**: arranque y bring-up baratos (casi todo reúso del S3; el IDF
 amortigua) · decidir cuánta RAM lleva la VM en el C3 · un destino AOT nuevo con sus flags ·
 y **lo caro, como siempre, el banco**: dos placas × la batería.
