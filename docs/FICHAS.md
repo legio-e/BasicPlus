@@ -576,7 +576,10 @@ familia está viva en el formato y muerta en una de las dos VMs.
 Salió al perseguir #440 (el `0x43` del síntoma es `GET_GLOBAL_U16`). **No es su causa** —el
 mismo `.mod` corre en el host—, pero es real y conviene cerrarlo: son seis casos triviales.
 
-#### 🟡 `#442` — «opcode desconocido» es un mensaje que manda a buscar donde no es
+#### ✅ `#442`(enunciado) — «opcode desconocido» manda a buscar donde no es · CERRADA, ver arriba
+
+> Esta era la ENTRADA ORIGINAL; el cierre está más arriba (28-ago · `ce748e16`). Se deja
+> el enunciado porque explica el porqué, pero **no cuenta como pendiente**.
 
 Dice el opcode y un **PC absoluto**, y no dice el módulo ni el offset dentro de él. Con
 varios módulos enlazados en un espacio común, ese número no sirve sin hacer la aritmética a
@@ -995,7 +998,10 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
-#### 🟡 U2 — el transporte
+#### ✅ U2 — el transporte (CERRADO 26-ago; sus cuatro pasos, verificados en placa)
+
+> Los cuatro pasos están ✅ y verificados en las tres familias con wire. Lo único que
+> quedó vivo se movió a `U3` a propósito (los ~22 replies que el REPL arma a mano).
 
 > ⚠️ **Criterio de Eduardo (24-ago), y manda sobre el resto del hito**: *«las comunicaciones
 > son nuestro cordón umbilical entre el PC y el micro, conviene ir con prudencia. Los
