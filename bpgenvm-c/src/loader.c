@@ -196,7 +196,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     uint32_t code_start  = data_start + data_size;      /* = CS (ancla, SIEMPRE RAM) */
     uint32_t end_addr    = xip ? code_start : code_start + code_size;
 
-    if (end_addr > vm->stack_base) {
+    if (end_addr > vm->heap_top) {
         return BPVM_ERR_OOM;
     }
 
@@ -220,7 +220,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
              * encima del módulo — memoria que nadie ha reclamado todavía
              * (next_free_address no llega ahí hasta el final) y que se olvida
              * sola al volver. Cero buffers estáticos. */
-            if (end_addr + exports_size > vm->stack_base) return BPVM_ERR_OOM;
+            if (end_addr + exports_size > vm->heap_top) return BPVM_ERR_OOM;
             if (bc_read(&c, vm->memory + end_addr, exports_size) != 0) return BPVM_ERR_IO;
             exp_buf = vm->memory + end_addr;
         }
@@ -404,7 +404,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
     vm->alloc_since_gc    = 0u;   /* #357 */
-    vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
+    vm->gc_bump_threshold = (vm->heap_top - vm->heap_start) / 8;
     if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
     /* #355 — arma la reserva de emergencia (ver el comentario largo en bpvm.c,
      * donde se hace lo mismo por el otro camino de carga). Los DOS sitios que
@@ -412,7 +412,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      * mitad de las cargas se quedaría sin red y el fallo volvería a ser mudo
      * según por dónde hubiera entrado el módulo. */
     vm->heap_reserve = 1024u;
-    if ((vm->stack_base - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
+    if ((vm->heap_top - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
 
     if (main_offset >= 0 && vm->main_absolute_address == 0) {
         vm->main_absolute_address = mod_cb + (uint32_t) main_offset;

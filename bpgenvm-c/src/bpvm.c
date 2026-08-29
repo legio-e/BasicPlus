@@ -324,6 +324,13 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->memory = memory;
     vm->memory_size = memory_size;
     vm->stack_base = (uint32_t) stack_base;
+    /* #451 — EL TECHO DEL HEAP SE SEPARA DE `stack_base`. Hasta hoy eran el
+     * mismo número y por eso 27 sitios preguntaban por `stack_base` queriendo
+     * decir «dónde acaba el heap». Son dos conceptos distintos: `stack_base` es
+     * dónde empieza la pila del main; `heap_top` es hasta dónde puede crecer el
+     * heap. Coinciden AHORA (este paso no cambia ningún comportamiento), y dejan
+     * de coincidir en cuanto la tabla de handles se aloje entre los dos. */
+    vm->heap_top = (uint32_t) stack_base;
     vm->next_free_address = BPVM_INITIAL_FREE_ADDR;
     vm->heap_start = (uint32_t) stack_base;   /* sin módulos cargados aún */
     vm->heap_next  = vm->heap_start;
@@ -1008,7 +1015,7 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     if (!vm || n == 0) return NULL;
     uint32_t base = vm->next_free_address;
     if (align > 1) base = (base + (align - 1)) & ~(align - 1);
-    if (base + n > vm->stack_base) return NULL;      /* no cabe: que lo sepa el caller */
+    if (base + n > vm->heap_top) return NULL;      /* no cabe: que lo sepa el caller */
     vm->next_free_address = base + n;
     /* El heap empieza tras lo último reservado — MISMO invariante (y mismos
      * campos) que fija el loader al terminar de cargar un módulo, incluido el
@@ -1018,7 +1025,7 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
     vm->alloc_since_gc    = 0u;   /* #357 */
-    vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
+    vm->gc_bump_threshold = (vm->heap_top - vm->heap_start) / 8;
     if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
     /* #355 — ARMA LA RESERVA DE EMERGENCIA (idea de Eduardo). 1 KB del final del
      * heap que el programa no puede tocar; se suelta cuando una reserva ya ha
@@ -1035,7 +1042,7 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
      * RuntimeError son unas pocas decenas. Y si el heap es tan pequeno que 1 KB
      * es una porcion notable, no se arma: mas vale ese K para el programa. */
     vm->heap_reserve = 1024u;
-    if ((vm->stack_base - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
+    if ((vm->heap_top - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
     return vm->memory + base;
 }
 

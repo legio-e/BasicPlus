@@ -87,7 +87,7 @@ static void bpvm_diag_bloque_mentiroso(const bpvm_t* vm, const char* quien,
     bpvm_diag_urgente("[gc] !! BLOQUE MENTIROSO (%s) en %u: dice medir %u B y el heap entero "
               "son %u. tag=0x%08x len/size=%u tipo=%u libre=%u marcado=%u",
               quien, (unsigned) cur, (unsigned) total,
-              (unsigned)(vm->stack_base - vm->heap_start),
+              (unsigned)(vm->heap_top - vm->heap_start),
               (unsigned) t, (unsigned) l,
               (unsigned)((t & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT),
               (unsigned)((t & BPVM_TAG_FREE_BIT) ? 1u : 0u),
@@ -162,7 +162,7 @@ static void build_gc_valid_map(bpvm_t* vm) {
          * casualidad en heap_next, el guardián se calla con el mapa hecho polvo.
          * Por eso llevamos dos tandas viéndolo mudo. Aquí se caza el tamaño
          * imposible EN EL BLOQUE, antes de que la suma tape el rastro. */
-        if (total > vm->stack_base - vm->heap_start) {
+        if (total > vm->heap_top - vm->heap_start) {
             bpvm_diag_bloque_mentiroso(vm, "mapa", cur, prev, total);
             break;
         }
@@ -196,8 +196,8 @@ static void build_gc_valid_map(bpvm_t* vm) {
          * Se añade el ÚLTIMO bloque recorrido y lo que se leyó en él: sin eso el
          * aviso dice que hay un descarrilamiento pero no dónde, y el heap tiene
          * miles de bloques. */
-        uint32_t tag = (cur + 8 <= vm->stack_base) ? bpvm_read_u32_be(vm->memory + cur) : 0;
-        uint32_t len = (cur + 8 <= vm->stack_base) ? bpvm_read_u32_be(vm->memory + cur + 4) : 0;
+        uint32_t tag = (cur + 8 <= vm->heap_top) ? bpvm_read_u32_be(vm->memory + cur) : 0;
+        uint32_t len = (cur + 8 <= vm->heap_top) ? bpvm_read_u32_be(vm->memory + cur + 4) : 0;
         bpvm_diag_urgente("[gc] !! HEAP DESCARRILADO: el recorrido de cabeceras acabo en %u, "
                   "no en heap_next=%u. En %u hay tag=0x%08x len=%u (tipo=%u, libre=%u). "
                   "Un bloque mide distinto de lo que dice block_total_size() -> el mapa "
@@ -459,12 +459,12 @@ static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
      * recorrido del heap se apoya en ella, así que un valor imposible aquí es un
      * descarrilamiento garantizado unas cuantas reservas más tarde, ya sin rastro
      * de quién lo escribió. Que se cace EN LA ESCRITURA, no en la lectura. */
-    if (size < BPVM_MIN_FREE_BLOCK || addr + size > vm->stack_base) {
+    if (size < BPVM_MIN_FREE_BLOCK || addr + size > vm->heap_top) {
         bpvm_diag_urgente("[gc] !! ALTA IMPOSIBLE en la lista de libres: bloque en %u de %u B "
                   "(minimo %u, y el heap acaba en %u). No se da de alta: dejarlo entrar "
                   "descarrilaria el recorrido del heap en el proximo GC.",
                   (unsigned) addr, (unsigned) size,
-                  (unsigned) BPVM_MIN_FREE_BLOCK, (unsigned) vm->stack_base);
+                  (unsigned) BPVM_MIN_FREE_BLOCK, (unsigned) vm->heap_top);
         return;
     }
     g_altas++;
@@ -575,7 +575,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
          * corrupción nace ENTRE los dos recorridos, y en medio sólo pasa una
          * cosa: el marcado escribiendo MARK_BIT en las cabeceras. Si salta en
          * los dos, ya venía de antes. Esa diferencia es la respuesta. */
-        if (total > vm->stack_base - vm->heap_start) {
+        if (total > vm->heap_top - vm->heap_start) {
             bpvm_diag_bloque_mentiroso(vm, "barrido", cur, prev_blk, total);
             break;   /* no seguir: el recorrido ya no significa nada */
         }
@@ -730,8 +730,8 @@ static void bpvm_gc(bpvm_t* vm) {
  * objetos vivos que eso), pero para la Pico son 22.784 slots = 182 KB sobre 267
  * de heap: existe, y es inutil de tan generosa. */
 static uint32_t handle_slots_por_heap(const bpvm_t* vm, int arranque) {
-    uint32_t heap = (vm->stack_base > vm->heap_start)
-                    ? (uint32_t) (vm->stack_base - vm->heap_start) : 0u;
+    uint32_t heap = (vm->heap_top > vm->heap_start)
+                    ? (uint32_t) (vm->heap_top - vm->heap_start) : 0u;
     uint32_t tope = heap / 64u;                 /* 8 B/slot => 12,5 % del heap */
     if (!arranque) return tope;
     uint32_t ini = tope / 8u;
@@ -917,24 +917,24 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
          * USADO y medir algo representable que quepa. Si no, la lista está rota:
          * se abandona el recorrido (mejor reservar por bump que servir basura) y
          * se dice por el canal urgente, que es el que sobrevive a un cuelgue. */
-        if (cur < vm->heap_start || cur + BPVM_MIN_FREE_BLOCK > vm->stack_base) {
+        if (cur < vm->heap_start || cur + BPVM_MIN_FREE_BLOCK > vm->heap_top) {
             bpvm_diag_urgente("[gc] !! LISTA DE LIBRES ROTA: el nodo %u cae fuera del "
                               "heap [%u..%u). Detras del heap estan las PILAS: servir "
                               "ese bloque habria escrito encima de los locales del "
                               "programa. Se abandona la lista y se reserva por bump.",
                               (unsigned) cur, (unsigned) vm->heap_start,
-                              (unsigned) vm->stack_base);
+                              (unsigned) vm->heap_top);
             vm->free_list_head = 0u;   /* la lista ya no significa nada */
             break;
         }
         uint32_t block_size = bpvm_read_u32_be(mem + cur + 4);
         uint32_t next = bpvm_read_u32_be(mem + cur + 8);
-        if (block_size < BPVM_MIN_FREE_BLOCK || cur + block_size > vm->stack_base) {
+        if (block_size < BPVM_MIN_FREE_BLOCK || cur + block_size > vm->heap_top) {
             bpvm_diag_urgente("[gc] !! BLOQUE LIBRE IMPOSIBLE en %u: dice medir %u B y "
                               "acabaria en %u, pasado el final del heap (%u). Se abandona "
                               "la lista: entregarlo pisaria la pila del programa.",
                               (unsigned) cur, (unsigned) block_size,
-                              (unsigned)(cur + block_size), (unsigned) vm->stack_base);
+                              (unsigned)(cur + block_size), (unsigned) vm->heap_top);
             vm->free_list_head = 0u;
             break;
         }
@@ -997,7 +997,7 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
      * Se hace bajando el TECHO y no reservando un bloque a propósito: así no
      * fragmenta, no hay que llevarle la cuenta a nadie y soltarla es poner un
      * campo a cero. */
-    if (vm->heap_next + total > vm->stack_base - vm->heap_reserve) return 0;
+    if (vm->heap_next + total > vm->heap_top - vm->heap_reserve) return 0;
     uint32_t addr = vm->heap_next;
     vm->heap_next += total;
     g_alloc_de_bump++;   /* #355: servida ampliando el heap, sin reciclar nada */
@@ -1067,7 +1067,7 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                       (unsigned) antes, (unsigned) vm->heap_next,
                       (int)((long) antes - (long) vm->heap_next),
                       (unsigned) vm->gc_bump_threshold,
-                      (unsigned) vm->heap_start, (unsigned) vm->stack_base);
+                      (unsigned) vm->heap_start, (unsigned) vm->heap_top);
         }
     }
 
@@ -1104,8 +1104,8 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                           "OJO: el heap NO esta lleno — quedan %u KB libres de %u. "
                           "Lo que se agoto es la tabla, que sale del malloc de PLATAFORMA.",
                           (unsigned) vm->handle_cap, (unsigned) vm->handle_cap_max,
-                          (unsigned)((vm->stack_base - vm->heap_next) / 1024u),
-                          (unsigned)((vm->stack_base - vm->heap_start) / 1024u));
+                          (unsigned)((vm->heap_top - vm->heap_next) / 1024u),
+                          (unsigned)((vm->heap_top - vm->heap_start) / 1024u));
             }
             bpvm_smp_unlock(vm);
             return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
@@ -1150,8 +1150,8 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                           "caben (bump %u, tope de pila %u, libres %u KB). Este aviso sale "
                           "UNA vez por ejecucion; el que llamo deberia lanzar OOM atrapable.",
                           (unsigned) total, (unsigned) vm->heap_next,
-                          (unsigned) vm->stack_base,
-                          (unsigned)((vm->stack_base - vm->heap_next) / 1024u));
+                          (unsigned) vm->heap_top,
+                          (unsigned)((vm->heap_top - vm->heap_next) / 1024u));
             }
             bpvm_smp_unlock(vm);
             return 0;   /* OOM real: ni con la reserva de emergencia cabe */

@@ -404,6 +404,11 @@ struct bpvm {
     uint32_t next_free_address;
     uint32_t heap_start;       /* fijado tras último módulo cargado */
     uint32_t heap_next;        /* bump del heap (F2) */
+    /* #451 — hasta dónde puede crecer el heap. NO es lo mismo que `stack_base`
+     * (dónde empieza la pila del main), aunque hoy valgan igual: entre los dos
+     * es donde va a vivir la tabla de handles. Todo lo que signifique «el final
+     * del heap» pregunta por esto. */
+    uint32_t heap_top;
     /* H3 (V2): GC con free-list + reuso + coalescing + retreat + disparo por
      * umbral (espejo de la VM-Java). Bloque libre = [tag FREE][size@+4][next@+8]. */
     uint32_t free_list_head;   /* 0 = lista vacía */
