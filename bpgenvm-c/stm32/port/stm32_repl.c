@@ -694,6 +694,12 @@ void stm32_repl_run(void) {
      * siempre (son ~15 lineas y hacen falta cuando una placa no arranca) y lo
      * que se apaga es el rastro de EJECUCION, que es el que llena la region.
      * Por defecto APAGADO: `log=1` cuando se va a depurar. */
+    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap; ausente
+     * o 0 = el reparto de siempre. Mismo sitio y misma clave que en las otras
+     * familias: la regla vive en bpvm_stack_region_bytes(). Va aquí, ANTES del
+     * primer RUN, que es quien llama a bpvm_init. */
+    bpvm_set_stack_kb((unsigned long) board_mgr_stm32_env_long("stack", 0));
+
     bpvm_log_set_enabled(board_mgr_stm32_env_bool("log", 0));
 
     autorun_boot();

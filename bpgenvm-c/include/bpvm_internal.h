@@ -198,9 +198,25 @@ typedef struct {
     int                    eh_class_fixup_count;
 } bpvm_module_t;
 
-/* Tabla global de símbolos exportados (F3). */
+/* Tabla global de símbolos exportados (F3).
+ *
+ * #449 — EL NOMBRE NO VIVE AQUI, SINO EN UN POOL. Antes esto era
+ * `char name[128]`, o sea 132 bytes POR SIMBOLO. Medido el 29-ago sobre el caso
+ * real (JsonDemo + Json + Core): 460 simbolos, longitud MEDIA 24 y MAXIMA 35.
+ * Es decir, 59 KB de tabla para 12 KB de nombres — y como crecia duplicando, el
+ * `realloc` de 256 a 512 entradas pedia los dos arrays a la vez: 33 + 66 = 99 KB
+ * dentro de un margen de `malloc` de 64. En la Pico 2 eso desbordaba hacia el
+ * bloque de la VM y PISABA EL CODIGO de un modulo (#440).
+ *
+ * Con el pool son 8 B por entrada mas el nombre exacto: los mismos 460 simbolos
+ * pasan de 59 KB a ~16.
+ *
+ * ⚠️ `name_off` es un OFFSET dentro de `vm->sym_pool`, no un puntero, y es a
+ * proposito: el pool se REALOJA al crecer. Para leer el nombre esta
+ * `bpvm_symbol_name()`; el `const char*` que devuelve no sobrevive a un
+ * registro nuevo, asi que no se guarda. */
 typedef struct {
-    char     name[128];        /* qualified: e.g. "L2Lib.Counter" o "Foo.__init" */
+    uint32_t name_off;         /* offset en vm->sym_pool (cadena terminada en 0) */
     uint32_t abs_addr;
 } bpvm_symbol_t;
 
@@ -474,6 +490,10 @@ struct bpvm {
     bpvm_symbol_t* symbols;
     int            symbol_count;
     int            symbol_capacity;
+    /* #449 — pool de nombres: las cadenas van seguidas, cada una terminada en 0. */
+    char*          sym_pool;
+    uint32_t       sym_pool_len;
+    uint32_t       sym_pool_cap;
 
     /* F4 — alocador de regiones de stack para nuevos threads BP. Cada
      * Thread.start() reserva una región a partir de `next_thread_stack`. */
@@ -901,6 +921,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
                                          uint32_t abs_addr);
 uint32_t      bpvm_link_lookup(const bpvm_t* vm, const char* qualified);
+const char*   bpvm_symbol_name(const bpvm_t* vm, int i);   /* #449 — ver el pool */
 bpvm_status_t bpvm_link_all(bpvm_t* vm);
 uint32_t      bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr);
 uint32_t      bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr);

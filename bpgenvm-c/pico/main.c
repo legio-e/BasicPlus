@@ -1087,6 +1087,11 @@ static void vm_task(void* arg) {
      * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
     board_desc_psram_from_env(bpvm_env_get_bool(&s_env, "psram", 0));
 
+    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap. Ausente
+     * o 0 = el 25% de siempre. Va aquí, con el resto del reparto de memoria, y
+     * ANTES de que nadie pregunte por bpvm_stack_region_bytes(). */
+    bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&s_env, "stack", 0));
+
     /* V5/H1 — los pines del lector de SD, en UNA entrada con etiquetas (decisión
      * de Eduardo: una sola línea es más simple para el usuario que cinco):
      *

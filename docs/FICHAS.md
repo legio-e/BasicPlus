@@ -93,16 +93,100 @@ El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabaja
 `V6_IDEAS.md`. Aquí vive el estado.
 
 
-#### 🔴 SON DOS PROBLEMAS, Y SE MEZCLAN (28-ago) — leer esto antes que #440 y #449
+#### ✅ `#450` — `stack=N` (KB): el reparto pilas/montón lo decide el usuario (cerrada 29-ago)
 
-Criterio de Eduardo al cerrar el día: *«creo que tenemos 2 problemas diferentes y están un
-poco mezclados. Lo que está claro es que hay un problema de memoria y en la Metro
-desaparece.»*
+Petición de Eduardo mientras se arreglaba #449: *«podemos añadir una variable de entorno
+`stack=100` y que el usuario configure el tamaño del stack. Si no existe, el tamaño como
+hasta ahora»* — y en **kilobytes**, *«más sencillo para el usuario»*.
 
-Y la trampa está justo ahí: **en la Metro desaparecen LOS DOS**, así que su verde no
-distingue entre ellos. Allí el heap se va a la PSRAM y la SRAM interna entera queda para
-`malloc` — la presión de #449 no existe, y #440 tampoco se reproduce. Un solo verde no
-puede exonerar a dos causas.
+El reparto era 25 % pilas / 75 % montón, y esa proporción **es una apuesta sobre el
+programa**: uno con muchos hilos se queda sin pilas teniendo montón de sobra; uno de un
+solo hilo que mueve datos desperdicia el 25 %. En la Pico 2 son 89 KB de los 358 del
+bloque, y no había forma de moverlos sin recompilar.
+
+**Dónde entró, que es lo que hace que sea barato:** la regla ya estaba unificada en
+`bpvm_stack_region_bytes()` (`src/bpvm.c`) desde antes; las familias sólo la consultan. Así
+que el ENV **alimenta** la regla, no la duplica: un `bpvm_set_stack_kb()` en el núcleo y
+**una línea por familia** para leer la clave. Cinco imágenes, cinco líneas idénticas.
+
+- Ausente o `0` ⇒ **exactamente** lo de siempre. Verificado: sin la opción, el `stdout` del
+  host es byte-idéntico al de antes del cambio.
+- Los topes (16 KB … la mitad del bloque) **no son paternalismo**: por debajo del stack del
+  `main` la VM no arranca (`bpvm_init` devuelve NULL) y por encima de la mitad no queda
+  montón. Un valor del env no puede dejar la placa inútil, así que se ajusta **y se dice**:
+
+  ```
+  [bpvm] env stack=9999 KB fuera de rango: se usan 256 KB (permitido 16..256 KB con un bloque de 512 KB)
+  ```
+
+**Probado en el host antes que en placa** (la cascada), con `--stack=N`, que es el espejo
+de la clave igual que `--nogc` lo es de `gc=0`. El testigo de que el reparto se mueve de
+verdad no es el mensaje: son los slots de la tabla de handles, que son proporcionales al
+montón y salen de otro sitio —
+
+| | `<default>` | `--stack=16` | `--stack=100` | `--stack=200` |
+|---|---|---|---|---|
+| slots | 474 | 954 | 786 | 586 |
+
+Documentada para el usuario en `guia-ide.html` §9.3. Las cinco imágenes construidas y
+**verificado en el binario** (no en el log del build) que la llamada existe: 1 sitio en
+cada una. ⏳ Falta el gesto en placa.
+
+#### 🟢 ERAN DOS SÍNTOMAS DE UNA SOLA CAUSA (medido 29-ago) — leer esto antes que #440 y #449
+
+> **Actualiza el cuadro de abajo, que se deja como está por lo que enseña.** El 28-ago
+> #440 y #449 parecían dos problemas: uno determinista y mudo, otro variable y ruidoso.
+> El 29-ago la medida dice que **es el mismo**, y por eso el cuadro no conseguía separarlos.
+
+**LA CAUSA, medida en el caso real** (`JsonDemo` + `Json` + `Core` en el host, contando
+los símbolos según se registran):
+
+```
+460 simbolos  ·  132 B cada uno (char name[128] + addr)  =  59 KB vivos
+la tabla crece DUPLICANDO, y el realloc necesita el viejo Y el nuevo:
+    256 entradas (33 KB)  ->  512 (66 KB)   =   99 KB A LA VEZ
+... dentro de un margen de malloc de 64 KB.
+```
+
+Y ahí se parten los dos síntomas, que es lo que despistaba:
+
+- **Antes del arreglo de la frontera** (`40a34b24`): `malloc` no tenía tope, así que los
+  99 KB **entraban en el bloque de la VM** y la tabla se escribía encima del código de
+  `Json`. De ahí `43 6F 72 65` en `Json+3754`: **no era un opcode, era el nombre de un
+  símbolo** — la cadena `Core.…`. Eso es #440, y por eso era determinista y no dejaba
+  rastro: no fallaba nada, se escribía en el sitio equivocado.
+- **Después del arreglo**: `_sbrk` corta, el `realloc` devuelve NULL y `Core` se queda sin
+  registrar → `exit 11 (lib 'Core' presente pero no exporta 'Core.__init')`. Eso es #449.
+
+O sea que **el arreglo de ayer no cambió el problema, cambió el síntoma**: de corrupción
+silenciosa a error honesto. Que era exactamente lo que se buscaba.
+
+⏩ **El arreglo** (29-ago): el nombre sale de la struct y va a un **pool de cadenas** —
+8 B por entrada más el nombre exacto. Los mismos 460 símbolos:
+
+| | vivos | pico del `realloc` |
+|---|---|---|
+| antes | 59,3 KB | **99,0 KB** |
+| ahora | 20,0 KB | **28,0 KB** |
+
+📌 **Y por qué un pool y no un `name[40]`**, que también habría entrado: la medida dice que
+el nombre más largo son 35 caracteres, pero un array fijo **trunca**, y dos nombres que
+compartan prefijo y se pasen del tamaño pasan a ser **el mismo símbolo** — el enlace
+resolvería a la función equivocada, en silencio. Eso es peor que quedarse sin memoria, que
+al menos se ve. El pool no trunca nunca *y* cuesta menos: no había que elegir.
+
+🔦 **Lo que faltaba era un instrumento, no una idea.** El consumidor más grande del margen
+era invisible: la tabla de handles decía su tamaño desde #430, la de símbolos no decía
+nada. Ahora lo dice, con la misma forma:
+
+```
+[bpvm] tabla de simbolos: 460 simbolos, 11564 B de nombres, 20480 B en total
+```
+
+---
+
+*(El cuadro del 28-ago, tal como se escribió, porque enseña cómo se ve una causa única
+desde dentro:)*
 
 | | **#449 — presión de memoria** | **#440 — código pisado** |
 |---|---|---|
@@ -113,9 +197,19 @@ puede exonerar a dos causas.
 | ventana | #430, 16-ago | por determinar |
 | estado | causa localizada, **arreglo por decidir** | **abierto**, con pista concreta |
 
+La fila que estaba mal era «en el log: **nada**». No era que #440 no dejara rastro: es que
+el rastro *era* el propio dato corrupto, y no había quien contase lo que ocupaba la tabla.
+
 **La batería de V4 sobre la Pico 2, 28-ago: 40 verdes de 48.**
 
-#### 🔴 `#440` — `JsonDemo`: el código de un módulo aparece PISADO en la RP2350 (abierta 27-ago)
+#### 🟡 `#440` — `JsonDemo`: el código de un módulo aparece PISADO en la RP2350 (abierta 27-ago · CAUSA MEDIDA 29-ago)
+
+> ⚠️ **La causa ya no está por determinar** — ver el bloque de arriba. Los bytes `43 6F 72
+> 65` de `Json+3754` **son el nombre de un símbolo** (`Core.…`): la tabla de símbolos
+> desbordaba el margen de `malloc` y se escribía sobre el código. Arreglado por dos vías
+> (la frontera de `_sbrk` en `40a34b24` y el pool de nombres el 29-ago). ⏳ **Falta
+> confirmarlo en placa** — hasta ese verde no se cierra. Lo de abajo es el registro de
+> cómo se acotó, y la pista de `loader.c:224` resultó NO ser la causa.
 
 **Síntoma**: `exit 6 (opcode 0x43 desconocido)`, siempre en el mismo sitio. Con el mensaje
 mejorado (#442) el sitio ya tiene nombre:
@@ -216,7 +310,17 @@ al tamaño del heap.»* Mientras el reparto sea constantes sueltas, cada placa n
 oportunidad de poner mal el número — y la placa más estricta es la que menos se prueba
 (ver #449).
 
-#### 🔴 `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago)
+#### 🟡 `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · ARREGLADA 29-ago, falta placa)
+
+> ⚠️ **Arreglo hecho, y no fue el de las tres opciones de abajo.** La opción 3 («que el
+> margen se calcule») era la buena por instinto, pero la medida cambió la pregunta: el
+> problema no era el tamaño del margen sino **quién lo llenaba**. Los dos consumidores,
+> atacados por separado —
+>
+> - la **tabla de handles** ahora es proporcional al heap (`40a34b24`), y
+> - la **tabla de símbolos** pasó de 59 KB a 20 con el pool de nombres (ver arriba).
+>
+> El margen de 64 KB **no se ha tocado**: ya no hace falta. ⏳ Falta el verde en placa.
 
 **El número, y son dos ficheros que no se conocen:**
 

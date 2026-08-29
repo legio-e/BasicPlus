@@ -253,7 +253,48 @@ uint64_t bpvm_alloc_sweep(uint64_t mark) {
     return bytes;
 }
 
+/* ENV `stack` — el usuario fija el tamaño de la región de pilas, en KB.
+ *
+ * 0 (o la clave ausente) = la regla de siempre, que es lo que estaba antes de
+ * esto: nadie que no ponga la variable nota ningún cambio.
+ *
+ * POR QUE SE PUEDE QUERER TOCAR: el reparto por defecto es 25% pilas / 75% heap,
+ * y esa proporción es una apuesta sobre el programa. Un programa con muchos
+ * hilos se queda sin pilas teniendo heap de sobra; uno de un solo hilo que
+ * mueve datos desperdicia el 25%. En la Pico 2 son 89 KB de los 358 del bloque,
+ * y no había forma de moverlos sin recompilar.
+ *
+ * La regla sigue viviendo AQUI y en un solo sitio: el ENV la alimenta, no la
+ * duplica. Las familias sólo leen la clave y la pasan (ver bpvm_set_stack_kb). */
+static unsigned long g_stack_kb = 0;    /* 0 = regla por defecto */
+static int           g_stack_avisado = 0;
+
+void bpvm_set_stack_kb(unsigned long kb) {
+    g_stack_kb = kb;
+    g_stack_avisado = 0;
+}
+
 size_t bpvm_stack_region_bytes(size_t total_bytes) {
+    if (g_stack_kb) {
+        size_t pedido = (size_t) g_stack_kb * 1024u;
+        /* Los topes NO son paternalismo: por debajo del stack del main la VM ni
+         * arranca (bpvm_init devuelve NULL), y por encima de la mitad el heap se
+         * queda sin nada y no arranca el programa. Un valor del env no puede
+         * dejar la placa inutil — se ajusta y SE DICE. */
+        size_t suelo = (size_t) BPVM_MAIN_STACK_BYTES;
+        size_t techo = total_bytes / 2u;
+        size_t r = pedido;
+        if (r < suelo) r = suelo;
+        if (r > techo) r = techo;
+        if (r != pedido && !g_stack_avisado) {
+            g_stack_avisado = 1;      /* una vez, no en cada INFO */
+            bpvm_diag("[bpvm] env stack=%lu KB fuera de rango: se usan %u KB "
+                      "(permitido %u..%u KB con un bloque de %u KB)",
+                      g_stack_kb, (unsigned)(r >> 10), (unsigned)(suelo >> 10),
+                      (unsigned)(techo >> 10), (unsigned)(total_bytes >> 10));
+        }
+        return r;
+    }
     size_t r = total_bytes / 4u;                    /* 25% para stacks */
     if (r < 64u * 1024u)  r = 64u * 1024u;          /* ...nunca menos (threads) */
     if (r > 512u * 1024u) r = 512u * 1024u;         /* ...nunca más (PSRAM) */
@@ -1261,6 +1302,7 @@ void bpvm_destroy(bpvm_t* vm) {
     }
     bpvm_free(vm->mutexes);
     bpvm_free(vm->symbols);
+    bpvm_free(vm->sym_pool);   /* #449 — el pool de nombres se va con la tabla */
     bpvm_free(vm->scratch);
     bpvm_free(vm->gc_valid_map);
     /* #352 — el modelo del GUI es de la VM: se va con ella. Antes vivía en

@@ -139,6 +139,7 @@ int main(int argc, char** argv) {
     int   smp_workers = 0;        /* 0 = single-worker legacy */
     int   no_gc       = 0;        /* #355: --nogc = el recolector no corre (ver repl_v1) */
     long  handle_cap  = -1;       /* #430: --handlecap=N; -1 = el default del build */
+    unsigned long stack_kb = 0;   /* --stack=N (KB); 0 = el reparto de siempre */
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
     const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
@@ -166,6 +167,12 @@ int main(int argc, char** argv) {
         }
         else if (strcmp(a, "--nogc") == 0) {
             no_gc = 1;   /* #355: espejo en el PC del `gc=0` del ENV de la placa */
+        }
+        else if (strncmp(a, "--stack=", 8) == 0) {
+            /* Espejo en el PC del `stack=N` del ENV de la placa (KB), igual que
+             * --nogc lo es de `gc=0`. Sirve para probar aquí el reparto antes de
+             * flashear: mismo camino y mismos topes que en el micro. */
+            stack_kb = strtoul(a + 8, NULL, 10);
         }
         else if (strncmp(a, "--handlecap=", 12) == 0) {
             /* #430: fuerza en host el tope de tabla de un puerto (0 = sin tope).
@@ -222,7 +229,7 @@ int main(int argc, char** argv) {
         }
     }
     if (!path) {
-        fprintf(stderr, "Uso: bpgenvm-c [--trace] [--mem=N] [--screen=WxH] [--no-screen] <fichero.mod>\n");
+        fprintf(stderr, "Uso: bpgenvm-c [--trace] [--mem=N] [--stack=KB] [--screen=WxH] [--no-screen] <fichero.mod>\n");
         return 1;
     }
 
@@ -247,7 +254,15 @@ int main(int argc, char** argv) {
         fprintf(stderr, "[BPVM_POISON] buffer de %zu bytes envenenado con 0xAA\n", mem_size);
     }
 
-    bpvm_t* vm = bpvm_init(mem, mem_size, 0);
+    /* Sin --stack, se pasa 0 = el default de bpvm_init (mitad y mitad), que es
+     * lo que el host ha hecho siempre: nadie nota nada. Con --stack manda la
+     * regla del núcleo, la misma que usa la placa. */
+    size_t stack_base = 0;
+    if (stack_kb) {
+        bpvm_set_stack_kb(stack_kb);
+        stack_base = mem_size - bpvm_stack_region_bytes(mem_size);
+    }
+    bpvm_t* vm = bpvm_init(mem, mem_size, stack_base);
     if (!vm) {
         fprintf(stderr, "bpvm_init falló (memSize=%zu)\n", mem_size);
         free(mem);

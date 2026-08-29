@@ -50,7 +50,7 @@ int bpvm_aot_register_by_name(struct bpvm* vm,
                                 bpvm_aot_thunk_t thunk) {
     if (!vm || !qualified || !thunk) return -2;
     for (int i = 0; i < vm->symbol_count; i++) {
-        if (strcmp(vm->symbols[i].name, qualified) == 0) {
+        if (strcmp(bpvm_symbol_name(vm, i), qualified) == 0) {
             return bpvm_aot_register(vm->symbols[i].abs_addr, thunk);
         }
     }

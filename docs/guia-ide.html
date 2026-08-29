@@ -614,6 +614,7 @@ sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
   <tr><td><code>psram</code> · <code>psramCsPin</code></td><td>si tiene PSRAM y por qué pin se selecciona</td></tr>
   <tr><td><code>flashSizeBytes</code></td><td>tamaño de flash declarado</td></tr>
   <tr><td><code>gpioCount</code></td><td>cuántos GPIO expone</td></tr>
+  <tr><td><code>stack</code></td><td>kilobytes de pila (el resto de la memoria de la VM va al montón); ausente = el reparto por defecto</td></tr>
   <tr><td><code>log</code></td><td>el log post-mortem, encendido o apagado</td></tr>
   <tr><td><code>gc</code></td><td>el recolector de basura (RP2350)</td></tr>
   <tr><td><code>latido</code></td><td>el latido de vida (RP2350)</td></tr>
@@ -631,6 +632,18 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// E
   En SDIO admite además <code>d1</code>…<code>d3</code> (para 4 bits), <code>slot</code>,
   <code>khz</code> y <code>ldo</code>; en SPI, <code>cd</code> es opcional. El detalle está
   en la <a href="referencia.html#stdlib-sd">tarjeta SD</a>.
+</p>
+
+<p>
+  <code>stack</code> merece una línea aparte porque reparte un recurso escaso. La memoria
+  que el firmware da a la VM se parte en dos: las <em>pilas</em> de los hilos y el
+  <em>montón</em> donde viven los objetos. Por defecto van el 25&nbsp;% a pilas y el resto
+  al montón, y para casi todo está bien. Pero esa proporción es una apuesta sobre el
+  programa: uno con muchos hilos se queda sin pilas teniendo montón de sobra, y uno de un
+  solo hilo que mueve datos desperdicia ese 25&nbsp;%. <code>stack=100</code> pide 100 KB de
+  pilas; quitar la clave vuelve al reparto de siempre. Cada hilo consume 2 KB y el
+  principal 16, así que el número sale de contar hilos. Si te pasas de lo que cabe, el
+  firmware lo ajusta y <strong>lo dice en el log</strong> — no se queda callado.
 </p>
 
 <div class="note">

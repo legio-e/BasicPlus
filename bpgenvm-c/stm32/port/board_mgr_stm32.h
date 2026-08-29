@@ -26,7 +26,8 @@ void board_mgr_stm32_boot(void);
 const bpvm_boot_status_t* board_boot_status(void);
 
 /* #423 — una bandera del entorno (p.ej. `log`), sin sacar los slots. */
-int board_mgr_stm32_env_bool(const char* key, int def);
+int  board_mgr_stm32_env_bool(const char* key, int def);
+long board_mgr_stm32_env_long(const char* key, long def);
 
 /* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x/PACK_x). `scratch`
  * (>= 3 sectores + 512 = 24.5 KB; s_put_buf del repl vale) lo presta el llamador →

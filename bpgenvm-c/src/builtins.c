@@ -622,11 +622,11 @@ static uint32_t bpvm_resolve_handler(bpvm_t* vm, uint32_t host, const char* simp
     else
         snprintf(qual, sizeof(qual), "%s.%s", m->name, simple);
     for (int i = 0; i < vm->symbol_count; i++)
-        if (strcmp(vm->symbols[i].name, qual) == 0) return vm->symbols[i].abs_addr;
+        if (strcmp(bpvm_symbol_name(vm, i), qual) == 0) return vm->symbols[i].abs_addr;
     if (m->library[0] != '\0') {   /* fallback: clave corta name.simple */
         snprintf(qual, sizeof(qual), "%s.%s", m->name, simple);
         for (int i = 0; i < vm->symbol_count; i++)
-            if (strcmp(vm->symbols[i].name, qual) == 0) return vm->symbols[i].abs_addr;
+            if (strcmp(bpvm_symbol_name(vm, i), qual) == 0) return vm->symbols[i].abs_addr;
     }
     return 0;
 }
@@ -936,8 +936,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * (modelo-only/arnés): drena los inyectados y vuelve. */
         uint32_t disp_click = 0, disp_change = 0;
         for (int i = 0; i < vm->symbol_count; i++) {
-            if      (strcmp(vm->symbols[i].name, "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
-            else if (strcmp(vm->symbols[i].name, "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
+            if      (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
+            else if (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
         }
 #ifdef BPVM_LVGL
         for (;;) {
@@ -975,8 +975,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * Devuelve 1 = "vuelve a llamarme" / 0 = "no queda nada". */
         uint32_t disp_click = 0, disp_change = 0;
         for (int i = 0; i < vm->symbol_count; i++) {
-            if      (strcmp(vm->symbols[i].name, "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
-            else if (strcmp(vm->symbols[i].name, "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
+            if      (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
+            else if (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
         }
         int drained = 0;
         uint32_t objptr; int kind;
@@ -1034,7 +1034,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             if (vm->symbols[i].abs_addr != class_ptr) continue;
             /* Formato: <Clase>#<metodo>#<slot>. Se busca "#<metodo>#" y se lee
              * el numero que va detras. */
-            const char* s = vm->symbols[i].name;
+            const char* s = bpvm_symbol_name(vm, i);
             const char* h = strchr(s, '#');
             if (h == NULL) continue;
             if (strncmp(h + 1, nm, nlen) != 0 || h[1 + nlen] != '#') continue;

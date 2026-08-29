@@ -104,6 +104,12 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base);
  * S3/STM32 128 KB -> 64 KB (suelo; IDÉNTICO a hoy, sin regresión). */
 size_t bpvm_stack_region_bytes(size_t total_bytes);
 
+/* ENV `stack` — pisa el reparto de arriba con un tamaño de pilas en KB elegido
+ * por el usuario; 0 (o no llamar) = la regla de siempre. La familia lo lee de su
+ * env al arrancar y lo pasa aquí; el ajuste a lo que cabe lo hace el núcleo, que
+ * es quien conoce el bloque. */
+void bpvm_set_stack_kb(unsigned long kb);
+
 /*
  * Variante embebida: carga un .mod desde un buffer ya en memoria. No
  * descubre dependencias (no hay filesystem). El caller debe pre-cargar

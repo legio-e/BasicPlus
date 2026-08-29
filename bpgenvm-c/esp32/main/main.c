@@ -148,6 +148,10 @@ void app_main(void)
      * Por defecto APAGADO: se enciende con `log=1` en el entorno cuando se va a
      * depurar, que es lo que pidio Eduardo. Para moverlo mas arriba, basta con
      * subir esta llamada: todo lo que quede por encima se registra siempre. */
+    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap;
+     * ausente o 0 = el reparto de siempre. Mismo sitio y misma clave que
+     * en las otras familias: la regla vive en bpvm_stack_region_bytes(). */
+    bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(board_mgr_env(), "stack", 0));
     bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
 
         repl_esp32_autorun();   /* H9: autorun solo con la placa sana en estado 3 */

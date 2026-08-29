@@ -92,6 +92,13 @@ int board_mgr_stm32_env_bool(const char* key, int def) {
     return bpvm_env_get_bool(&env, key, def);
 }
 
+/* Lo mismo para una clave numerica (hoy: `stack`, el reparto pilas/heap en KB). */
+long board_mgr_stm32_env_long(const char* key, long def) {
+    bpvm_env_t env;
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
+    return bpvm_env_get_long(&env, key, def);
+}
+
 static bpvm_boot_step_t layer_partitions(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';

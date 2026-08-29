@@ -638,7 +638,7 @@ static uint32_t h_find_module_cs(bpvm_t* vm, const char* module_name) {
 static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
     if (!vm || !qualified) return 0;
     for (int i = 0; i < vm->symbol_count; i++) {
-        if (strcmp(vm->symbols[i].name, qualified) == 0) {
+        if (strcmp(bpvm_symbol_name(vm, i), qualified) == 0) {
             return vm->symbols[i].abs_addr;
         }
     }

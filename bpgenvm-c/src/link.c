@@ -84,13 +84,40 @@ uint32_t bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs) {
 
 /* ---- Global symbol table ----
  *
- * Almacenada en vm->symbols (array dinámico, alocado con realloc al
- * añadir). Las claves son strings hasta 128 chars; los valores son
- * direcciones absolutas en memory[].
- */
+ * Dos piezas: `vm->symbols` (array de registros de 8 B) y `vm->sym_pool` (las
+ * cadenas, seguidas). Los valores son direcciones absolutas en memory[].
+ *
+ * #449 — POR QUE EL POOL, y no un `char name[N]` mas corto. La medida del
+ * 29-ago dice que los nombres reales son de 24 de media y 35 el mayor, asi que
+ * un `name[40]` habria entrado igual de bien en memoria. Pero un array fijo
+ * TRUNCA, y dos nombres que compartan prefijo y se pasen del tamaño se
+ * convierten en el MISMO simbolo: el enlace resolveria a la funcion equivocada
+ * en silencio. Eso es peor que quedarse sin memoria, que al menos se ve. El
+ * pool no trunca nunca y ademas cuesta menos. */
+
+/* Nombre del simbolo i. ⚠️ NO guardar el puntero a traves de un registro nuevo:
+ * el pool se realoja al crecer y el puntero quedaria colgado. */
+const char* bpvm_symbol_name(const bpvm_t* vm, int i) {
+    if (!vm->sym_pool || i < 0 || i >= vm->symbol_count) return "";
+    return vm->sym_pool + vm->symbols[i].name_off;
+}
 
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
                                          uint32_t abs_addr) {
+    size_t n = strlen(qualified);
+
+    /* 1) sitio en el pool para el nombre + su terminador. */
+    if (vm->sym_pool_len + n + 1u > vm->sym_pool_cap) {
+        uint32_t new_cap = vm->sym_pool_cap ? vm->sym_pool_cap * 2u : 1024u;
+        while (new_cap < vm->sym_pool_len + n + 1u) new_cap *= 2u;
+        char* new_pool = (char*) bpvm_realloc(vm->sym_pool, new_cap);
+        if (!new_pool) return BPVM_ERR_OOM;
+        vm->sym_pool = new_pool;
+        vm->sym_pool_cap = new_cap;
+    }
+
+    /* 2) sitio en la tabla. Se hace DESPUES del pool para que un fallo aqui no
+     * deje una cadena huerfana ocupando sitio. */
     if (vm->symbol_count >= vm->symbol_capacity) {
         int new_cap = vm->symbol_capacity == 0 ? 32 : vm->symbol_capacity * 2;
         bpvm_symbol_t* new_arr = (bpvm_symbol_t*) bpvm_realloc(vm->symbols,
@@ -99,18 +126,18 @@ bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
         vm->symbols = new_arr;
         vm->symbol_capacity = new_cap;
     }
+
     bpvm_symbol_t* s = &vm->symbols[vm->symbol_count++];
-    size_t n = strlen(qualified);
-    if (n >= sizeof(s->name)) n = sizeof(s->name) - 1;
-    memcpy(s->name, qualified, n);
-    s->name[n] = '\0';
+    s->name_off = vm->sym_pool_len;
     s->abs_addr = abs_addr;
+    memcpy(vm->sym_pool + vm->sym_pool_len, qualified, n + 1u);
+    vm->sym_pool_len += (uint32_t)(n + 1u);
     return BPVM_OK;
 }
 
 uint32_t bpvm_link_lookup(const bpvm_t* vm, const char* qualified) {
     for (int i = 0; i < vm->symbol_count; i++) {
-        if (strcmp(vm->symbols[i].name, qualified) == 0) {
+        if (strcmp(bpvm_symbol_name(vm, i), qualified) == 0) {
             return vm->symbols[i].abs_addr;
         }
     }
@@ -218,5 +245,14 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             }
         }
     }
+
+    /* #449 — que la tabla DIGA lo que ocupa, igual que la de handles. Sale del
+     * `malloc` de plataforma, que en la Pico 2 es un margen de 64 KB: cuando
+     * este numero se acerca, el siguiente import no cabe. Sin esta linea el
+     * consumidor mas grande del margen era invisible, y costo dos dias. */
+    bpvm_diag("[bpvm] tabla de simbolos: %d simbolos, %u B de nombres, %u B en total",
+              vm->symbol_count, (unsigned) vm->sym_pool_len,
+              (unsigned)((size_t) vm->symbol_capacity * sizeof(bpvm_symbol_t)
+                         + vm->sym_pool_cap));
     return BPVM_OK;
 }
