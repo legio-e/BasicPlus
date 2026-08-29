@@ -560,3 +560,55 @@ del `malloc`), pero **el arnés no puede depender de que no pase**. Hace falta:
 
 Un cuelgue que deja la matriz entera roja no informa de nada; un cuelgue que dice
 *«aquí se colgó, y de aquí en adelante no se ha probado»* informa de todo.
+
+#### El ORDEN de la matriz, y por qué no es cosmético (Eduardo, 29-ago)
+
+> *«En la ESP32 se puede resetear a través de la conexión. En la STM32 no estoy seguro,
+> pero en la Pico no se puede. Quizás para las pruebas es mejor por las que más se pueden
+> automatizar. Si el primer equipo no pasa, puede ser del equipo, la VM o cualquier cosa.
+> Pero si el primer equipo pasa y otro no, probablemente sea algo del micro.»*
+
+Esto es **la cascada de verificación aplicada a las placas**, y tiene el mismo valor: cada
+columna que pasa ESTRECHA lo que puede estar mal en la siguiente. La primera columna verde
+no es un test más — es el **control** que convierte los rojos de las demás en información.
+
+**Por qué unas se automatizan y otras no**, que es una diferencia de *hardware*, no de
+firmware:
+
+| placa | reset sin manos | por qué |
+|---|---|---|
+| host + `bpvm-sim` | ✅ total | es un proceso: se mata y se relanza |
+| ESP32-S3 / P4 | ✅ | el chip USB-serie lleva el circuito DTR/RTS que resetea el micro |
+| STM32 | ❓ **por comprobar** | el ST-LINK sí puede resetear el target, pero por su propia vía, no por el puerto serie |
+| RP2350 | ❌ | USB **nativo**: no hay chip serie que lleve ese circuito. Sólo se recupera desenchufando ([[pico-sin-reset-instrumentar]]) |
+
+⚠️ **Matiz importante**: el verbo `RESET` del wire existe en todas, pero **sólo sirve si el
+firmware está vivo para recibirlo**. Lo que distingue a las placas de arriba es el reset
+por hardware, que es justo el que hace falta cuando hay un cuelgue — o sea, el único caso
+en el que se necesita.
+
+⏩ **El orden propuesto**, de menos a más coste humano: `sim` → `host` → `ESP32` → `STM32`
+→ `Pico 2`. Las tres primeras corren desatendidas; la última exige a alguien delante *sólo
+si se cuelga*.
+
+🔴 **Y AQUÍ HAY UNA TENSIÓN REAL QUE NO SE PUEDE ESCONDER.** La Pico 2 es la última en
+automatización y **la primera en severidad**: es la placa más estricta de memoria y donde
+aparecen los bugs que las demás no ven. Dejarla al final del orden es *exactamente* el
+fallo de V5 otra vez, ahora institucionalizado en una herramienta.
+
+La salida no es cambiar el orden —el de Eduardo es correcto por coste—, sino que **el orden
+de EJECUCIÓN y el criterio de VERDE sean cosas distintas**: un sample marcado
+`memoria: APRETADA` corre el último por comodidad, pero **la matriz no se declara verde sin
+esa celda**. El orden lo decide la automatización; el veredicto, la placa que más aprieta.
+
+#### Un afinado a la regla, que hoy costó dos días
+
+*«Si el primero pasa y otro no, probablemente sea algo del micro»* es cierto, pero conviene
+leer «del micro» en sentido ancho. Hoy `JsonDemo` iba en la Metro y fallaba en la Pico 2 —
+**misma familia, misma imagen, mismo binario**. No era el port ni el silicio: era la
+*realidad de memoria* (PSRAM contra SRAM compartida).
+
+Así que la regla útil es: **una diferencia entre columnas apunta a lo que DIFIERE entre
+esas dos columnas** — y en la lista de lo que difiere hay que contar la memoria, no sólo el
+código específico de la familia. Cuando la diferencia es la memoria, dos placas de la misma
+familia pueden discrepar; y el verde de la generosa no exonera a la estricta.
