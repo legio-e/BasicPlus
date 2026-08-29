@@ -612,3 +612,32 @@ Así que la regla útil es: **una diferencia entre columnas apunta a lo que DIFI
 esas dos columnas** — y en la lista de lo que difiere hay que contar la memoria, no sólo el
 código específico de la familia. Cuando la diferencia es la memoria, dos placas de la misma
 familia pueden discrepar; y el verde de la generosa no exonera a la estricta.
+
+#### Y en V6 entran dos columnas más: C3 y C6 (Eduardo, 29-ago)
+
+> *«En V6 incorporamos 2 placas nuevas, ESP32-C3 y ESP32-C6, son RISC-V pero tienen poca
+> memoria. Yo creo que se podría empezar con la ESP32-C6, es similar a la Pico.»*
+
+Y empezar por el **C6** resuelve justo la tensión de arriba, porque junta las dos
+propiedades que en las placas de hoy están separadas:
+
+- **es estricta de memoria** (512 KB, sin PSRAM — el rango de la Pico 2), o sea que ve los
+  bugs que la Metro esconde;
+- **es un ESP32**, o sea que se resetea sin manos.
+
+Es decir: **la primera placa que puede ser a la vez el control automatizado y el juez de
+memoria.** Hoy hay que elegir — la que se automatiza (ESP32-S3) es generosa y la que
+aprieta (Pico 2) hay que desenchufarla. Si el C6 cumple las dos, pasa a ser la columna
+natural para gatear los samples de `memoria: APRETADA` sin coste humano.
+
+⚠️ **Dos cosas por comprobar antes de darlo por bueno**, ninguna difícil:
+1. **Que el reset por hardware funcione de verdad** en el devkit concreto. El C6 lleva
+   USB-Serial-JTAG nativo; `esptool` sabe resetear por ahí, pero es distinto del circuito
+   DTR/RTS de un puente USB-UART y **hay que verlo, no suponerlo**.
+2. **Cuánta memoria le queda de verdad a la VM.** Ver la corrección de la ficha P1
+   (29-ago): con el reparto de hoy, una VM de 160 KB da un tope de **1536 handles**, y hay
+   samples de la batería que piden 3848. La columna nacería roja por diseño.
+
+📌 Lo cual refuerza el orden ya escrito en P1 —las placas nuevas van **después** de la
+unificación— y le añade a `U6` un motivo que antes no tenía: no es sólo que unificar
+abarate la familia nueva; es que **sin unificar, la familia nueva no pasa la batería**.

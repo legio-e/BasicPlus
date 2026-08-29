@@ -697,6 +697,24 @@ con **respaldo automático a 128 KB** si no cabe, y avisando por el log. El C6 (
 en el mismo rango que el S3; el C3 (400 KB) es el más justo, pero el mecanismo de respaldo
 ya existe y ya habla.
 
+🔴 **CORRECCIÓN (29-ago): esa conclusión se queda corta, y ahora hay un número.** *Caber*
+no es el problema; el problema es **cuántos objetos vivos** admite ese reparto. Con la
+regla de #449 (la tabla de handles es el 12,5 % del heap, y sale de OTRA bolsa):
+
+| | VM | heap | tope de handles |
+|---|---|---|---|
+| Pico 2 | 357 KB | 267 KB | **4284** |
+| S3 · C6 · C3 | 160 KB | 96 KB | **1536** |
+
+`synclisttest` necesita **3848** handles (medido en el host). En la Pico 2 cabe por poco;
+en el S3, el C6 y el C3 **no cabe** — y no por el tamaño de los objetos, sino porque hay
+96 KB de heap parados mientras la tabla, que vive en otra bolsa, se queda sin sitio.
+
+⏭️ **Consecuencia directa: `U6` no es una mejora, es un PRERREQUISITO de P1.** Estrenar dos
+familias con la memoria todavía repartida en dos bolsas que no se prestan nada es garantizar
+que la batería nazca roja en las placas nuevas — y, peor, gastar el banco (que es lo caro de
+P1) diagnosticando un problema que ya está diagnosticado. Ver #451.
+
 🔴 **LA TRAMPA, y conviene saberla antes de empezar: `riscv` NO ES UN TARGET, SON DOS.** El
 catálogo (`NpackReloc.DESTINOS`) tiene una sola entrada RISC-V, `riscv32-esp-p4`, con
 `-march=rv32imafc -mabi=ilp32f` — o sea **con FPU**. El C3 y el C6 son **rv32imac, sin
