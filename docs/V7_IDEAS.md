@@ -501,3 +501,62 @@ Eduardo lo dijo explícito — *«luego, investigar si un test no pasa ya es cos
 Su único trabajo es **decir qué celda está roja y cuál está sin correr**. Todo lo que se
 le añada por encima de eso es la trampa de siempre: construir el instrumento en vez de
 usar los que ya hay.
+
+### El mecanismo, dicho por Eduardo (29-ago)
+
+> *«Si un test no pasa, aparte de registrarlo, lo ideal sería registrar la salida de la
+> consola y la captura del log. Así que el mecanismo sería: pasar una lista de test, para
+> cada entrada en la lista secuencia: borrar log, borrar consola, compilar, cargar,
+> ejecutar; si OK borrar programa del micro, si no OK, guardar consola y log, y borrar
+> programa.»*
+
+Traducido a verbos, **y todos existen ya** — ninguno hay que inventarlo:
+
+| paso | verbo | notas |
+|---|---|---|
+| borrar log | `LOG_CLEAR` | |
+| borrar consola | *(del lado del PC)* | el buffer del runner, no de la placa |
+| compilar | `basicplus-frontend.jar` | en el PC |
+| cargar | `PUT` / `PUT_BEGIN`+`DATA`+`END` | el streaming, por encima de 40 K |
+| ejecutar | `RUN` → `OUTPUT`* → `EXITED` | `drain_run()` ya junta esto |
+| si OK | `DEL` | |
+| si NO OK | `LOG_DUMP` + volcar la consola a fichero, luego `DEL` | |
+
+🔗 **Y esto sólo es fiable gracias a `U3`.** Al unificar 26 de los 29 verbos en
+`src/bpvm_repl.c` se encontraron **cinco divergencias reales** entre familias —y la que
+estaba «bien» no siempre era la misma placa. Un arnés escrito antes de `U3` habría hablado
+un dialecto distinto con cada micro y sus rojos no serían comparables. La fontanería de
+estos días es lo que hace posible la herramienta.
+
+#### Los dos detalles del mecanismo que no son obvios, y los dos salen de hoy
+
+**Borrar el log ANTES, no leerlo después.** El log post-mortem es un **anillo**: el 29-ago
+llegó con la vuelta dada (`se tiraron lineas ANTIGUAS`) y se perdió el principio de la
+ejecución justo cuando hacía falta. Limpiándolo antes de cada test, lo que se captura es
+**la historia completa de ese test y de nada más**.
+
+**Borrar el programa SIEMPRE, pase o falle.** No es sólo higiene del FS: hoy se vio
+`/app/SyncListTest.mod ya en FS (contenido idéntico), salto PUT`. Ese atajo es correcto
+para el IDE y **veneno para un arnés** — bastaría con que un `.mod` no se regenerara para
+estar ejecutando el de la vuelta anterior y no enterarse. Borrando siempre, lo que corre
+es siempre lo que se acaba de compilar.
+
+#### El caso que el mecanismo todavía no cubre: que se cuelgue
+
+La secuencia asume que `RUN` termina. Si el micro se queda colgado no hay `EXITED`, y
+tampoco se puede `DEL` — es exactamente lo que Eduardo describió el 28-ago:
+*«cuando se cuelga desde el IDE no tengo ningún control, y si reseteo no hay nada
+registrado en el log»*.
+
+Hoy eso es mucho menos probable (`#447` hace hablar a los fallos, `#448` quitó el `panic`
+del `malloc`), pero **el arnés no puede depender de que no pase**. Hace falta:
+
+- **timeout por test**, y que agotarlo sea un resultado con nombre propio —`CUELGUE`—
+  distinto de `FALLA`, porque no significan lo mismo;
+- **recuperación**: intentar `RESET` por el wire y, si tampoco responde, marcar la placa
+  como *necesita intervención* y **parar esa columna** en vez de dar por rojos los 40
+  samples que quedan;
+- y el log **se pide después del reset**, que para eso es post-mortem y vive en flash.
+
+Un cuelgue que deja la matriz entera roja no informa de nada; un cuelgue que dice
+*«aquí se colgó, y de aquí en adelante no se ha probado»* informa de todo.
