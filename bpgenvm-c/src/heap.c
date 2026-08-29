@@ -760,17 +760,32 @@ static int handle_table_grow(bpvm_t* vm) {
     if (new_cap <= vm->handle_cap) return 0;
     /* #355 — QUE SE VEA CRECER. Las dos tablas juntas son new_cap*8 bytes y
      * salen del malloc de la PLATAFORMA, no del heap de la VM: en la Pico eso
-     * es SRAM (520 KB en total), y el realloc necesita el viejo a la vez. */
-    bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos)",
-              (unsigned) vm->handle_cap, (unsigned) new_cap,
-              (unsigned)((new_cap * 8u) / 1024u));
+     * es SRAM (520 KB en total), y el realloc necesita el viejo a la vez.
+     *
+     * ⚠️ ESTA LINEA ANUNCIABA UNA INTENCION COMO SI FUERA UN HECHO (29-ago). Se
+     * emitia ANTES del realloc y no se decia nada si fallaba, asi que en el log
+     * de la Pico se leia "tabla de handles: 2008 -> 4016" seguido de un OOM — y
+     * la tabla seguia en 2008. Un instrumento que informa de lo que iba a pasar
+     * es peor que ninguno: manda a buscar el fallo donde no esta. Ahora dice
+     * SIEMPRE como acabo. */
+    uint32_t antes = vm->handle_cap;
     uint32_t* na = (uint32_t*) bpvm_realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
-    if (!na) return 0;
-    uint32_t* ng = (uint32_t*) bpvm_realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
-    if (!ng) { vm->handle_addr = na; return 0; }   /* la de addr ya crecio: inocuo */
+    uint32_t* ng = na ? (uint32_t*) bpvm_realloc(vm->handle_gen, (size_t) new_cap * sizeof(uint32_t))
+                      : NULL;
+    if (!na || !ng) {
+        if (na) vm->handle_addr = na;   /* la de addr ya crecio: inocuo */
+        bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos) FALLO "
+                  "— el malloc de PLATAFORMA no da mas (no es el heap de la VM)",
+                  (unsigned) antes, (unsigned) new_cap,
+                  (unsigned)((new_cap * 8u) / 1024u));
+        return 0;
+    }
     vm->handle_addr = na;
     vm->handle_gen  = ng;
     vm->handle_cap  = new_cap;
+    bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos) OK",
+              (unsigned) antes, (unsigned) new_cap,
+              (unsigned)((new_cap * 8u) / 1024u));
     return 1;
 }
 
@@ -1071,12 +1086,26 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
         } else if (handle_table_grow(vm)) {
             vm->handle_pressure = 0;          /* todo vivo: tabla mas grande */
         } else {
-            static int ya_avisado_tabla = 0;
-            if (!ya_avisado_tabla) {
-                ya_avisado_tabla = 1;
-                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles (%u slots, tope %u): "
-                          "OOM atrapable. Este aviso sale UNA vez por ejecucion.",
-                          (unsigned) vm->handle_cap, (unsigned) vm->handle_cap_max);
+            /* ⚠️ EL AVISO ESTABA MUDO (29-ago). Era un `static` de fichero, o sea
+             * UNA VEZ POR ARRANQUE — no por ejecucion, que es lo que decia su
+             * propio texto. En la Pico, con la placa encendida y varias pruebas
+             * corridas, ya estaba gastado: `SyncListDiag` murio por la tabla y
+             * el unico mensaje que lo decia no salio. Se buscó el fallo en el
+             * heap durante media hora. Ahora vive en el `vm`, que nace a cero en
+             * cada RUN (calloc).
+             *
+             * Y dice el heap LIBRE a proposito: el OOM que el programa recibe se
+             * llama "No space in heap" —no se puede cambiar sin romper la
+             * paridad con la VM-Java— asi que sin este numero al lado, el
+             * mensaje manda a mirar precisamente donde no esta el problema. */
+            if (!vm->handle_oom_avisado) {
+                vm->handle_oom_avisado = 1;
+                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles (%u slots, tope %u). "
+                          "OJO: el heap NO esta lleno — quedan %u KB libres de %u. "
+                          "Lo que se agoto es la tabla, que sale del malloc de PLATAFORMA.",
+                          (unsigned) vm->handle_cap, (unsigned) vm->handle_cap_max,
+                          (unsigned)((vm->stack_base - vm->heap_next) / 1024u),
+                          (unsigned)((vm->stack_base - vm->heap_start) / 1024u));
             }
             bpvm_smp_unlock(vm);
             return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
@@ -1111,16 +1140,18 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
              * escribia una linea de log. En un bucle, a 150 MHz y con 268 KB,
              * eso no parece lento: parece un CUELGUE. Lo vio Eduardo en la Pico.
              * El 1er aviso es el que informa; los demas solo estorban. */
-            {
-                static int ya_avisado = 0;
-                if (!ya_avisado) {
-                    ya_avisado = 1;
-                    bpvm_diag_urgente("[bpvm] SIN MEMORIA en el heap: pedidos %u B y no caben "
-                              "(bump %u, tope de pila %u). Este aviso sale UNA vez "
-                              "por ejecucion; el que llamo deberia lanzar OOM atrapable.",
-                              (unsigned) total, (unsigned) vm->heap_next,
-                              (unsigned) vm->stack_base);
-                }
+            /* Mismo arreglo que el aviso de la tabla: era un `static`, o sea una
+             * vez por ARRANQUE aunque el texto dijera "por ejecucion". Ahora en
+             * el `vm`, que nace a cero en cada RUN. Este SI es el heap lleno de
+             * verdad — y por eso importa que se distinga del otro. */
+            if (!vm->heap_oom_avisado) {
+                vm->heap_oom_avisado = 1;
+                bpvm_diag_urgente("[bpvm] SIN MEMORIA en el heap DE VERDAD: pedidos %u B y no "
+                          "caben (bump %u, tope de pila %u, libres %u KB). Este aviso sale "
+                          "UNA vez por ejecucion; el que llamo deberia lanzar OOM atrapable.",
+                          (unsigned) total, (unsigned) vm->heap_next,
+                          (unsigned) vm->stack_base,
+                          (unsigned)((vm->stack_base - vm->heap_next) / 1024u));
             }
             bpvm_smp_unlock(vm);
             return 0;   /* OOM real: ni con la reserva de emergencia cabe */

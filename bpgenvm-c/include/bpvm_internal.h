@@ -474,6 +474,11 @@ struct bpvm {
      * frontera se anuncia sola: una colecta por cruce, cero aritmética por
      * alloc. */
     uint32_t  handle_pressure;
+    /* El aviso de "sin sitio para mas handles" sale una vez POR EJECUCION. Vive
+     * aqui y no en un `static` porque un static es una vez por ARRANQUE: en la
+     * Pico eso lo dejo mudo justo cuando hacia falta (29-ago). */
+    int       handle_oom_avisado;
+    int       heap_oom_avisado;    /* idem para el heap lleno DE VERDAD */
     /* #430 — la excepcion PREFABRICADA del OOM (idea de Eduardo): se construye
      * en el prologo del RUN, cuando construir es gratis, y se lanza cuando la
      * construccion normal del error falla por falta de memoria (de heap o de

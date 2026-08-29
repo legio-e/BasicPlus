@@ -1,0 +1,147 @@
+module SyncListDiag
+
+  // Copia de synclisttest.bp CON PRINTS DE PROGRESO. No prueba nada nuevo:
+  // sirve para ver HASTA DONDE llega antes del "No space in heap" en la Pico 2,
+  // que es lo unico que el mensaje de OOM no dice.
+  //
+  // Los prints van cada 100 items y cuentan tambien el largo de la lista, para
+  // separar dos cosas que desde fuera se ven igual: que el productor se pare, y
+  // que la lista deje de crecer.
+
+  public class Item
+    public property n: integer
+    public function Item(n: integer)
+      this.n := n
+    end Item
+  end Item
+
+  public class Producer extends Thread
+    var bag: SyncList
+    var base: integer
+    var iters: integer
+
+    public function Producer(bag: SyncList, base: integer, iters: integer)
+      super(2048)
+      this.bag   := bag
+      this.base  := base
+      this.iters := iters
+    end Producer
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        this.bag.add(Item(this.base + i))
+        i := i + 1
+        if (i mod 100) == 0 then
+          print "  prod" + intToString(this.base) + ": " + intToString(i) +
+                " puestos, lista=" + intToString(this.bag.length())
+        endif
+      endwh
+      print "  prod" + intToString(this.base) + ": TERMINA con " + intToString(i)
+    end run
+  end Producer
+
+  public class Consumer extends Thread
+    var bag: SyncList
+    var consumed: integer
+    var maxAttempts: integer
+
+    public function Consumer(bag: SyncList, maxAttempts: integer)
+      super(2048)
+      this.bag := bag
+      this.consumed := 0
+      this.maxAttempts := maxAttempts
+    end Consumer
+
+    public function run()
+      var attempts: integer := 0
+      while attempts < this.maxAttempts do
+        var it: Item := Item(this.bag.pop())
+        if it != null then
+          this.consumed := this.consumed + 1
+        endif
+        attempts := attempts + 1
+        if (attempts mod 1000) == 0 then
+          print "  cons: " + intToString(attempts) + " intentos, " +
+                intToString(this.consumed) + " sacados, lista=" +
+                intToString(this.bag.length())
+        endif
+      endwh
+      print "  cons: TERMINA con " + intToString(this.consumed)
+    end run
+
+    public function getConsumed(): integer
+      return this.consumed
+    end getConsumed
+  end Consumer
+
+  function main(arg: string)
+    print "[1] antes de crear la lista"
+    var bag: SyncList := SyncList()
+    var iters: integer := 1000
+
+    print "[2] lista creada; arrancando 2 productores x " + intToString(iters)
+    var t1: Thread := Producer(bag, 1000, iters)
+    var t2: Thread := Producer(bag, 9000, iters)
+    print "[3] los dos Producer construidos"
+    t1.start()
+    t2.start()
+    print "[4] los dos arrancados; esperando"
+    t1.join()
+    t2.join()
+    print "[5] los dos han terminado"
+
+    var total: integer := bag.length()
+    print "[6] total en lista = " + intToString(total)
+    if total == 2 * iters then
+      print "OK: no se perdio ningun item (sin race)"
+    else
+      print "ERROR: se esperaban " + intToString(2 * iters) + " items"
+    endif
+
+    var suma: integer := 0
+    var i: integer := 0
+    while i < total do
+      var it: Item := Item(bag.get(i))
+      suma := suma + it.n
+      i := i + 1
+    endwh
+    print "[7] suma de valores = " + intToString(suma)
+    if suma == 10999000 then
+      print "OK: todos los valores intactos"
+    else
+      print "ERROR: suma inesperada"
+    endif
+
+    print "[8] --- fase 2: productor + 2 consumidores ---"
+    var prodMore: Thread := Producer(bag, 100000, 500)
+    var c1: Consumer := Consumer(bag, 5000)
+    var c2: Consumer := Consumer(bag, 5000)
+    print "[9] los tres construidos"
+    prodMore.start()
+    c1.start()
+    c2.start()
+    print "[10] los tres arrancados; esperando"
+    prodMore.join()
+    c1.join()
+    c2.join()
+    print "[11] los tres han terminado"
+
+    var consumed1: integer := c1.getConsumed()
+    var consumed2: integer := c2.getConsumed()
+    var totalConsumed: integer := consumed1 + consumed2
+    var remaining: integer := bag.length()
+    print "consumidos c1 = " + intToString(consumed1)
+    print "consumidos c2 = " + intToString(consumed2)
+    print "total consumidos = " + intToString(totalConsumed)
+    print "quedan en lista  = " + intToString(remaining)
+    var esperado: integer := 2 * iters + 500
+    if totalConsumed + remaining == esperado then
+      print "OK: cuentas cuadran (sin items duplicados o perdidos)"
+    else
+      print "ERROR: cuentas no cuadran"
+    endif
+    print "[12] FIN"
+  end main
+
+end SyncListDiag
