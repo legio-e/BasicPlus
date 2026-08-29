@@ -27,6 +27,53 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (29-ago, cierre) — **se sigue por `U3` con el ESP32**
+
+**Decisión de Eduardo al cerrar**: *«cuando retomemos continuamos justo por U3 y vamos
+cerrando cosas»*. Con eso **termina la etapa de bugs de V5** y se vuelve a V6.
+
+### Por dónde exactamente
+
+`U3` (el REPL) tiene **STM32 y Pico completos** y verificados en placa: 26 de los 29 verbos
+al común (`RUN`/`KILL`/`RESET` se quedan por diseño). **Falta la tercera familia: el
+ESP32** — el S3 y la P4 conservan su `repl_esp32.c` de 1344 líneas.
+
+📌 **Y hay un motivo nuevo para que sea lo siguiente.** Eduardo fijó ese día la prioridad:
+*«a mí la S3 me importa relativamente, es el paso; el futuro son la P4, la C6 y la S31»*.
+Las tres son ESP32 y **las tres comparten `esp32/main/*`**: cada verbo que siga en la copia
+privada es un verbo que habrá que replicar tres veces. Es el argumento de V6, aplicado.
+
+⏭️ Y de paso, en el mismo arranque, **saldar la deuda del STM32 desde `U3.6`** (seis
+gestos, cinco minutos, en `H13_PRUEBAS_V5_REPASO.md`): lleva desde el 27 esperando.
+
+### El estado de la serie, ya limpio
+
+| | | |
+|---|---|---|
+| U1 · U2 | — · el transporte | ✅ cerrados |
+| **U3** | **el REPL** | 🔵 **STM32 y Pico hechos; falta ESP32** ← *aquí* |
+| U4 | la stdlib embebida | 🟡 sin empezar (es un GENERADO: tocar el generador) |
+| U5 | la tabla de handles | 🟡 sin fichero propio todavía |
+| U6 | la organización de memoria | 🔴 abierta, **sin la urgencia** que tuvo el 29 por la mañana |
+
+Abiertas además: `#446` (host con `GUI=0`, barato y sin placa), `#441` (seis opcodes) y
+`#444` (el sistema de pruebas no escala — su diseño ya está escrito en `V7_IDEAS.md`).
+
+### Lo que se cerró en la sesión del 29
+
+**La batería pasó de 40/48 a 48/48.** Cerradas `#440`, `#442`, `#445`, `#447`, `#448`,
+`#449`, `#450` y `#451`. La causa de fondo era **una sola**: las tablas de símbolos y de
+handles vivían en el margen de `malloc` de la plataforma, separadas del heap, y no se
+prestaban nada. Arreglado en dos movimientos —un pool de nombres y la tabla de handles
+dentro del bloque de la VM— y verificado en **dos familias** (Pico 2 y S3).
+
+⚠️ **Lo que conviene llevarse, y no es sobre el bug**: de los cinco atascos del día, **cuatro
+no eran del proyecto** — tres eran instrumentos de diagnóstico míos mintiendo y uno era una
+cifra mía mal calculada. Lo que resolvió las dos veces que hubo atasco de verdad fue
+**medir**: contar símbolos, contar handles, `idf.py size-components`, y la tabla de memoria
+de Espressif. Nunca razonar. Ver [[contar-los-consumidores-no-leer-el-codigo]] y
+[[instrumento-mudo-dudar-de-el]].
+
 ## ⏭️ AL RETOMAR (29-ago) — la batería queda en 47/48, y lo único que falta es `U6`
 
 **Lo primero de mañana**: decidir `U6`. Es lo único que bloquea el 48/48, está
