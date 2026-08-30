@@ -1079,7 +1079,7 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
-#### 🔴 `#459` — un `catch` SIN tipo entrega un valor roto, y **eso se publicó en V5** (abierta 30-ago)
+#### ✅ `#459` — un `catch` SIN tipo entregaba un valor roto, y **eso se publicó en V5** (cerrada 30-ago)
 
 **Síntoma**, visto en la ESP32-P4 corriendo `samples/trytest.bp` (sample publicado):
 
@@ -1135,12 +1135,36 @@ deducido: compilando y ejecutando `trytest.bp` con el compilador, la VM y la std
 `dist/BasicPlus-5.0-win/` — misma basura. **No es una regresión de la tanda del 30-ago**,
 que era la sospecha razonable y resultó falsa.
 
-⏭️ **Cómo arreglarlo — decisión de Eduardo, porque es semántica del lenguaje.** Lo natural
-es que un `catch` sin tipo enlace un `Core.Exception` en vez de `ErrorType`: entonces
-`.msg` funciona, la concatenación pasa por `toString()` (rama `ClassType`, que ya existe y
-funciona) y encaja con la norma de `#458` — usar el tipo pide `import Core`. La otra opción
-es tiparlo como `Object`, más estricto: `.msg` dejaría de compilar y habría que escribir el
-tipo. Las dos cierran el agujero; la primera no rompe código escrito.
+### ✅ El arreglo, en dos mitades — y las dos las decidió Eduardo
+
+**1. El `catch` sin tipo es AZÚCAR.** *«Catch sin tipo debería ser como un `catch _e:
+Exception` — no está en BP, lo añade el compilador al AST.»* Una línea en el `Parser`: si
+hay variable y no hay tipo, el tipo es `Exception`. A partir de ahí todo va por el camino
+tipado, que ya funcionaba.
+
+📐 **Comprobado que no pierde capturas, en vez de suponerlo**: desde `#248` el compilador
+**rechaza** `throw` de cualquier cosa que no sea una instancia de `Exception`
+(*«solo se puede lanzar una instancia de Exception»*). O sea que el comentario del emisor
+—*«en BP los throws son típicamente strings»*— describía un lenguaje que ya no existía, y
+todo lo lanzable cae dentro del tipo que se pone.
+
+**2. Y una excepción se imprime como su MENSAJE.** Pregunta de Eduardo al ver el arreglo a
+medias: *«¿el `toString()` de una exception no debería imprimir el msg?»*. Sin eso el
+agujero de memoria estaba tapado pero `trytest.bp` decía `atrapado: object@1073741827`.
+Con el `toString()` en `Exception` (`Core.bp`) dice lo que su propio comentario anunciaba:
+
+```
+Probar(-3) => atrapado: n era negativo
+inner catch: inner
+outer atrapa relanzado: relanzado desde catch
+```
+
+📌 Es un **override del slot 0** (el `toString` de `Object`), así que no corre ningún slot
+—la trampa de tocar una base de stdlib— y el layout de campos no cambia, que importa
+porque las dos VMs asumen `campo 0 = msg` al fabricar un `RuntimeError`.
+
+✅ **Verificado**: `trytest.bp` byte-idéntico en las dos VMs, paridad **38 PASS / 0 FAIL /
+0 SKIP**, censo de 313 samples sin roturas nuevas, stdlib 27/27 y las cuatro imágenes.
 
 #### ✅ `#458` — `Core` implícito: la norma pasa a ser EXPLÍCITA, y la pasada de interfaz deja de tirar miembros en silencio (cerrada 30-ago)
 

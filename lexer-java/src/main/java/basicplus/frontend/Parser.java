@@ -1312,6 +1312,23 @@ public final class Parser {
                         excType = excType + "." + consumeIdentifier("clase tras '.' en el tipo del 'catch'");
                 }
             }
+            /* V6/#459 — `catch err` ES `catch err: Exception`, y el tipo lo pone
+             * aquí el compilador. Decisión de Eduardo (30-ago): que sea AZÚCAR y
+             * no un caso aparte.
+             *
+             * Antes el tipo se quedaba a null, el analizador tipaba la variable
+             * como `ErrorType` y el emisor la trataba COMO STRING sobre una
+             * suposición que ya no era cierta (`MivmEmitter`: «en BP los throws son
+             * típicamente strings»). Como una excepción es un OBJETO, aquello
+             * imprimía el heap desde donde cayera la referencia. Publicado así en V5.
+             *
+             * No pierde capturas: desde #248 `throw` sólo acepta una instancia de
+             * `Exception` —el compilador lo rechaza si no—, así que todo lo lanzable
+             * cae dentro del tipo que ponemos. Comprobado, no supuesto.
+             *
+             * Sólo cuando hay VARIABLE: un `catch` a secas no enlaza nada, así que
+             * no hay nada que tipar y su semántica de «atrapa todo» no se toca. */
+            if (varName != null && excType == null) excType = "Exception";
             consumeStmtTerminator("se esperaba salto de línea tras la cabecera del 'catch'");
             List<IStmt> cb = parseBody(TokenType.CATCH, TokenType.FINALLY, TokenType.ENDTRY);
             catches.add(new CatchClause(varName, excType, cb, cTok.line, cTok.column));

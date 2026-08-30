@@ -93,6 +93,18 @@
   un bucle cerrado que no cede el turno— y no borra el log, así que la autopsia
   sale entera igual. Que `RESET` se pueda mandar directo queda para V6.
 
+- **L17 — un `catch` sin tipo ES `catch e: Exception`** (V6, 30-ago). No es un caso
+  aparte: el compilador le pone ese tipo al AST, así que `catch e` y
+  `catch e: Core.Exception` compilan a lo mismo. Consecuencias prácticas:
+  - `e.msg` funciona sin escribir el tipo;
+  - **imprimir la excepción muestra su mensaje** (`Exception.toString()` devuelve `msg`),
+    no `object@1234`;
+  - y como `Exception` es un tipo de `Core`, un módulo que use `catch` necesita
+    `import Core` — ver **L16**.
+
+  No se pierde ninguna captura: `throw` sólo acepta instancias de `Exception`, y el
+  compilador lo rechaza si no lo es.
+
 - **L16 — si usas un tipo de `Core`, tienes que escribir `import Core`** (V6, 30-ago).
   Vale para `List`, los envoltorios de los primitivos (`Integer`, `Long`, `Float`,
   `Double`, `Boolean`), `Comparable`, `Exception` y `RuntimeError` — o sea que **atrapar

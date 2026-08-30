@@ -23,6 +23,15 @@ module Core
     public function Exception(m: string)
       this.msg := m
     end Exception
+
+    // V6/#459 — una excepcion se imprime como su MENSAJE, no como `object@1234`.
+    // Es el slot 0 de la vtable (heredado de Object), asi que esto lo SOBRESCRIBE
+    // y no corre ningun slot; el layout de campos tampoco cambia, que importa
+    // porque las dos VMs asumen `campo 0 = msg` al fabricar un RuntimeError.
+    // Lo hereda RuntimeError y cualquier excepcion de usuario.
+    public function toString(): string
+      return this.msg
+    end toString
   end Exception
 
   // Errores nativos de la VM (división por cero, null deref, índice fuera de
