@@ -284,10 +284,7 @@ static void handle_info(long id, const json_obj_t* obj) {
     wire_v1_send_line(s_reply_buf, (size_t) off);
 }
 
-static void handle_ping(long id, const json_obj_t* obj) {
-    (void) obj;
-    wire_v1_send_reply_empty("PONG", id);
-}
+/* V6/U3 g1 - PING vive en el comun (identico: responde PONG vacio). */
 
 static void handle_reset(long id, const json_obj_t* obj) {
     (void) obj;
@@ -504,51 +501,15 @@ static void handle_df(long id, const json_obj_t* obj) {
 
 /* ── LOG (post-mortem) ── Escapa el texto a JSON y lo va soltando por bulk, sin
  * buffer intermedio del tamaño del log. Mismo formato de reply que el Pico. */
-static void log_chunk_sink(const char* data, size_t len, void* user) {
-    (void) user;
-    char esc[256 * 2];   /* el núcleo entrega chunks de 256 B; peor caso = x2 */
-    size_t o = 0;
-    for (size_t i = 0; i < len; i++) {
-        char ch = data[i];
-        const char* rep = NULL;
-        switch (ch) {
-            case '"':  rep = "\\\""; break;
-            case '\\': rep = "\\\\"; break;
-            case '\n': rep = "\\n";  break;
-            case '\r': rep = "\\r";  break;
-            case '\t': rep = "\\t";  break;
-            default: break;
-        }
-        if (rep) {
-            if (o + 2 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
-            esc[o++] = rep[0]; esc[o++] = rep[1];
-        } else if ((unsigned char) ch < 0x20) {
-            if (o + 6 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
-            o += (size_t) snprintf(esc + o, sizeof esc - o, "\\u%04x", (unsigned) ch);
-        } else {
-            if (o + 1 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
-            esc[o++] = ch;
-        }
-    }
-    if (o) wire_v1_send_bulk((const uint8_t*) esc, o);
-}
+/* V6/U3 g1 - el sink de escapado del LOG vive en el comun. El de aqui ya
+ * emitia \uXXXX para los caracteres de control, igual que el comun: no habia
+ * divergencia que arreglar en esta familia. */
 
-static void handle_log_dump(long id, const json_obj_t* obj) {
-    (void) obj;
-    char head[64];
-    int hn = snprintf(head, sizeof head, "{\"type\":\"LOG_DUMP_REPLY\",\"id\":%ld,\"text\":\"", id);
-    wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
-    log_dump(log_chunk_sink, NULL);
-    wire_v1_send_line("\"}", 2);   /* cierra + '\n' */
-}
+/* V6/U3 g1 - LOG_DUMP vive en el comun (misma cabecera, mismo bulk, mismo
+ * cierre; el comun ademas comprueba el snprintf). */
 
-static void handle_log_clear(long id, const json_obj_t* obj) {
-    (void) obj;
-    log_clear_ram();
-    log_clear_flash();
-    log_printf("LOG cleared via wire v1");
-    wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
-}
+/* V6/U3 g1 - LOG_CLEAR vive en el comun (identico, incluida la linea que
+ * fecha el corte en el log nuevo). */
 
 /* ── #326 DEPURACIÓN: cintura del núcleo portable bpvm_dbg_wire ──
  * La máquina de depurar (breakpoints por pc, pausa, step) ya estaba en la placa
@@ -1241,7 +1202,6 @@ static void handle_request(const char* line, int len) {
 
     if (strcmp(type, "HELLO") == 0) { handle_hello(id, &obj); return; }
     if (strcmp(type, "INFO")  == 0) { handle_info(id, &obj);  return; }
-    if (strcmp(type, "PING")  == 0) { handle_ping(id, &obj);  return; }
     if (strcmp(type, "RESET") == 0) { handle_reset(id, &obj); return; }
     /* H9 — gestión de placa (env + particiones): mismo núcleo que boardsim/Pico. */
     if (strcmp(type, "STATE") == 0
@@ -1306,8 +1266,6 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "DF")    == 0) { handle_df(id, &obj);    return; }
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
-    if (strcmp(type, "LOG_DUMP")  == 0) { handle_log_dump(id, &obj);  return; }
-    if (strcmp(type, "LOG_CLEAR") == 0) { handle_log_clear(id, &obj); return; }
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }
     /* #326 DEPURACIÓN pre-RUN: acumular breakpoints / pedir pausa inicial. Los
      * demás (CONTINUE, STEP, LOCALS, STACK, READ_*) los atiende el bucle de
@@ -1321,12 +1279,6 @@ static void handle_request(const char* line, int len) {
      * VM-C): ack silente, como en el Pico — que el IDE no se quede esperando. */
     if (strcmp(type, "PROMPT_RESPONSE") == 0) {
         wire_v1_send_reply_empty("PROMPT_RESPONSE_REPLY", id);
-        return;
-    }
-    if (strcmp(type, "TIME")  == 0) {   /* H14 — sync de hora del IDE → RTC */
-        long epochSec = json_get_long(&obj, "epochSec", -1);
-        if (epochSec >= 0) bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);
-        wire_v1_send_reply_empty("TIME_REPLY", id);
         return;
     }
     /* P-run-stop (#257) — KILL en idle: nada que matar (el KILL útil llega
