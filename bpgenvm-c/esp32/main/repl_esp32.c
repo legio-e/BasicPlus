@@ -222,67 +222,8 @@ err:
     wire_v1_send_error(id, "INTERNAL_ERROR", "HELLO_REPLY no cabe");
 }
 
-static void handle_info(long id, const json_obj_t* obj) {
-    /* Mismo arreglo que en stm32_repl.c: el diálogo INFO del IDE
-     * (PicoExplorer.formatInfo) lee el set completo de campos; antes solo
-     * mandábamos 5 → diálogo medio vacío. Datos del CHIP ESP32-S3
-     * (datasheet): 45 GPIOs (0-21 y 26-48), sin PIO (el RMT no es
-     * comparable), PWM = 8 canales LEDC, ADC = 20 canales (ADC1+ADC2,
-     * GPIO1..20), SRAM interna 512 KB. Flash y PSRAM se miden en runtime
-     * (dependen del módulo montado). Los backends BP de Pwm/Adc en ESP32
-     * aún no están cableados (solo GPIO) — esto describe el hardware.
-     * tempMilliC=0: el diálogo oculta la línea (sensor interno, futuro). */
-    (void) obj;
-    long uptime  = (long)(esp_timer_get_time() / 1000LL);
-    long fsTotal = (long) fs_total_bytes();
-    long fsUsed  = (long) fs_used_bytes();
-    uint8_t mac[6] = {0};
-    esp_efuse_mac_get_default(mac);
-    char uid[16];
-    snprintf(uid, sizeof(uid), "%02X%02X%02X%02X%02X%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    /* Tamaño FÍSICO del chip (SFDP/JEDEC), NO el del sobre del build: esp_flash_get_size
-     * devuelve el FLASHSIZE del sdkconfig (horneado, "a piñon"). Mismo criterio que el
-     * JEDEC del RP2350 (#292): la verdad es el chip. Fallback al sobre si el chip no
-     * reporta SFDP. OJO — lo USABLE lo acota la tabla vendor (bpdata), tambien horneada
-     * en el build: si fisica > sobre, hay flash de sobra sin particionar. */
-    uint32_t flash_bytes = 0;
-    if (esp_flash_get_physical_size(NULL, &flash_bytes) != ESP_OK || flash_bytes == 0) {
-        if (esp_flash_get_size(NULL, &flash_bytes) != ESP_OK) flash_bytes = 0;
-    }
-    long psram_bytes = (long) heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-    const repl_board_id_t *bid = s_board_id;
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "INFO_REPLY", id);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "boardName", bid->board_name);
-    /* H11 — ARQUITECTURA del código nativo que ejecuta este firmware. El IDE la
-     * necesita para compilar el .mdn a la ISA correcta cuando no hay proyecto
-     * donde apuntarla (un `.bp` suelto). La sabe la placa, la dice la placa. */
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "arch", (long) bpvm_mdn_host_arch());
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uniqueId", uid);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "cpuFreqHz", bid->cpu_freq_hz);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uptimeMs", uptime);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "resetReason", bpvm_pico_reset_cause());
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "tempMilliC", 0);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "gpioCount", bid->gpio_count);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pioCount", bid->pio_count);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pwmSlices", bid->pwm_slices);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "adcChannels", bid->adc_channels);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "flashBytes", (long) flash_bytes);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "sramBytes", bid->sram_bytes);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "psramBytes", psram_bytes);
-    /* H9 — reparto de la memoria de la VM (heap + stacks BP, tope 512K); mismo
-     * cálculo que el RUN. El IDE lo muestra como "VM: heap X + stack Y". */
-    {
-        size_t vstack = vm_stack_region_bytes();
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "vmHeapBytes", (long)(s_vm_buffer_size - vstack));
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "vmStackBytes", (long) vstack);
-    }
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsTotalBytes", fsTotal);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsUsedBytes", fsUsed);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "INFO_REPLY no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
+/* V6/U3 g4 - INFO vive en el comun; lo propio de esta placa es RELLENAR los
+ * 18 campos, y eso esta abajo en la cintura (esp32_repl_info). */
 
 /* V6/U3 g1 - PING vive en el comun (identico: responde PONG vacio). */
 
@@ -1085,6 +1026,52 @@ void repl_esp32_autorun(void) {
  * con nombre en vez de reventar. Hoy no se llega a ellos porque el ESP32 sigue
  * atendiendo `INFO` y el grupo `PUT`. */
 
+/* Los 18 campos del INFO. El mensaje ya no se arma aqui (lo hace
+ * src/bpvm_repl.c): esto solo RELLENA, que es lo unico propio del ESP32.
+ * Los valores son los MISMOS que calculaba handle_info -- se movieron tal cual,
+ * sin "mejorar" ninguno de paso, para que la comparacion siga valiendo.
+ *
+ * Datos del chip S3 (datasheet): 45 GPIOs (0-21 y 26-48), sin PIO (el RMT no es
+ * comparable), PWM = 8 canales LEDC, ADC = 20 canales, SRAM interna 512 KB.
+ * Flash y PSRAM se miden en runtime: dependen del modulo montado. */
+static void esp32_repl_info(bpvm_repl_info_t* o) {
+    static char uid[16];
+    uint8_t mac[6] = {0};
+    esp_efuse_mac_get_default(mac);
+    snprintf(uid, sizeof uid, "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    /* Tamano FISICO del chip (SFDP/JEDEC), NO el del sobre del build:
+     * esp_flash_get_size devuelve el FLASHSIZE del sdkconfig (horneado). Mismo
+     * criterio que el JEDEC del RP2350 (#292): la verdad es el chip. */
+    uint32_t flash_bytes = 0;
+    if (esp_flash_get_physical_size(NULL, &flash_bytes) != ESP_OK || flash_bytes == 0) {
+        if (esp_flash_get_size(NULL, &flash_bytes) != ESP_OK) flash_bytes = 0;
+    }
+
+    const repl_board_id_t* bid = s_board_id;
+    size_t vstack = vm_stack_region_bytes();
+
+    o->unique_id     = uid;
+    o->board_name    = bid->board_name;
+    o->reset_reason  = bpvm_pico_reset_cause();
+    o->arch          = (unsigned) bpvm_mdn_host_arch();
+    o->cpu_hz        = (unsigned long) bid->cpu_freq_hz;
+    o->uptime_ms     = (unsigned long) (esp_timer_get_time() / 1000LL);
+    o->temp_milli_c  = 0;            /* sensor interno, para mas adelante */
+    o->gpio_count    = bid->gpio_count;
+    o->pio_count     = bid->pio_count;
+    o->pwm_slices    = bid->pwm_slices;
+    o->adc_channels  = bid->adc_channels;
+    o->flash_bytes   = (unsigned long) flash_bytes;
+    o->sram_bytes    = (unsigned long) bid->sram_bytes;
+    o->psram_bytes   = (unsigned long) heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    o->vm_heap_bytes = (unsigned long) (s_vm_buffer_size - vstack);
+    o->vm_stack_bytes= (unsigned long) vstack;
+    o->fs_total_bytes= (unsigned long) fs_total_bytes();
+    o->fs_used_bytes = (unsigned long) fs_used_bytes();
+}
+
 static int  esp32_repl_fs_format(void) { fs_format_ram(); return 0; }
 static int  esp32_repl_fs_save(void)   { return fs_save_to_flash() == FS_OK ? 0 : -1; }
 static unsigned long esp32_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
@@ -1092,6 +1079,7 @@ static unsigned long esp32_repl_fs_used(void)  { return (unsigned long) fs_used_
 static int  esp32_repl_fs_count(void)  { return (int) fs_file_count(); }
 
 static const bpvm_repl_ops_t s_repl_ops = {
+    .info           = esp32_repl_info,
     .server_name    = "bpvm-esp32",
     .server_build   = ESP32_BUILD_DATE,
     .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\"]",
@@ -1151,7 +1139,6 @@ static void handle_request(const char* line, int len) {
     }
 
     if (strcmp(type, "HELLO") == 0) { handle_hello(id, &obj); return; }
-    if (strcmp(type, "INFO")  == 0) { handle_info(id, &obj);  return; }
     if (strcmp(type, "RESET") == 0) { handle_reset(id, &obj); return; }
     /* H9 — gestión de placa (env + particiones): mismo núcleo que boardsim/Pico. */
     if (strcmp(type, "STATE") == 0
