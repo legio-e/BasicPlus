@@ -499,10 +499,8 @@ static void handle_df(long id, const json_obj_t* obj) {
 
 /* Igual que en el Pico: el `/` es namespace, no hay nodos de directorio → MKDIR
  * es idempotente y silenciosa. Existe para que el IDE no se coma un error. */
-static void handle_mkdir(long id, const json_obj_t* obj) {
-    (void) obj;
-    wire_v1_send_reply_empty("MKDIR_REPLY", id);
-}
+/* V6/U3 g2 - MKDIR vive en el comun: en un FS plano con "/" de namespace no
+ * hay nodos de directorio, asi que es idempotente y silenciosa. */
 
 /* ── LOG (post-mortem) ── Escapa el texto a JSON y lo va soltando por bulk, sin
  * buffer intermedio del tamaño del log. Mismo formato de reply que el Pico. */
@@ -601,32 +599,8 @@ static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
     c->ref  = json_get_long(obj, "ref",   0);
 }
 
-static void handle_stat(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
-    }
-    /* H11 — el STAT sólo quiere el TAMAÑO; leer el fichero entero para eso era
-     * absurdo (y costaba el espejo de 64 KB). */
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "STAT_REPLY", id);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "size", (long) size);
-    /* #398 — el CRC, SÓLO SI SE PIDE. Aquí es donde vive ahora el CRC que antes
-     * calculaba el LIST de todos los ficheros en cada refresco del árbol: se
-     * pregunta por UN fichero y justo antes de subirlo, que es cuando sirve.
-     * Calcularlo siempre sería mudar el problema de sitio, no quitarlo. */
-    if (json_get_bool(obj, "crc", 0)) {
-        uint32_t crc = 0;
-        long v = (bpvm_fs_crc32(path, &crc) == 0) ? (long) crc : -1L;
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "crc", v);
-    }
-    if (off >= 0) off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "isDir", 0);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "mtime", 0);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "STAT_REPLY no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
+/* V6/U3 g2 - STAT vive en el comun (mismo bpvm_fs_stat, mismo CRC bajo
+ * demanda de #398, mismos campos). Se comparo linea a linea antes de borrar. */
 
 static void handle_get(long id, const json_obj_t* obj) {
     char path[64];
@@ -731,15 +705,9 @@ static void handle_put_end(long id, const json_obj_t* obj) {
     put_reply(id, "PUT_END_REPLY", recv, "size");
 }
 
-static void handle_del(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
-    }
-    fs_status_t s = fs_delete(path);
-    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
-    wire_v1_send_reply_empty("DEL_REPLY", id);
-}
+/* V6/U3 g2 - DEL vive en el comun, y ADEMAS mejora: el de aqui juntaba "no
+ * existe" con "existe y no se puede borrar", que en el segundo caso es
+ * simplemente falso. El comun los distingue (la Pico ya lo hacia). */
 
 /* ====================== TERMINAL (RUN) ====================== */
 
@@ -1328,17 +1296,14 @@ static void handle_request(const char* line, int len) {
     }
     if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H6 ANTES que LIST: el prefijo no debe comerselo */
     if (strcmp(type, "LIST")  == 0) { handle_list(id, &obj);  return; }
-    if (strcmp(type, "STAT")  == 0) { handle_stat(id, &obj);  return; }
     if (strcmp(type, "GET")   == 0) { handle_get(id, &obj);   return; }
     if (strcmp(type, "PUT")   == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
     if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
-    if (strcmp(type, "DEL")   == 0) { handle_del(id, &obj);   return; }
     if (strcmp(type, "SAVE")  == 0) { handle_save(id, &obj);  return; }
     if (strcmp(type, "DF")    == 0) { handle_df(id, &obj);    return; }
-    if (strcmp(type, "MKDIR") == 0) { handle_mkdir(id, &obj); return; }
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
     if (strcmp(type, "LOG_DUMP")  == 0) { handle_log_dump(id, &obj);  return; }
