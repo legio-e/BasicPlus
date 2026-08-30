@@ -18,6 +18,7 @@
 #include "fs.h"
 #include "bpvm_fs.h"   /* H19-F1: base-dir por proyecto (bpvm_fs_set_basedir_from_module) */
 #include "bpvm_listdir.h"  /* V5/H6 paso 3: LIST_DIR, nucleo comun */
+#include "bpvm_repl.h"     /* V6/U3: el REPL comun + la cintura de familia */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
@@ -1183,6 +1184,45 @@ void repl_esp32_autorun(void) {
     printf("[autorun] terminado — REPL normal\n");
 }
 
+/* ====================== V6/U3 — LA CINTURA DE ESTA FAMILIA ======================
+ *
+ * Tercera y última familia del hito (el STM32 y la Pico ya están migrados). El
+ * contrato es `bpvm_repl_ops_t` (include/bpvm_repl.h): el común pone la lógica y
+ * las replies, y aquí sólo va lo que de verdad es de esta placa.
+ *
+ * 📌 ESTE PASO ES PURAMENTE ADITIVO: no se borra ni un handler. El despacho común
+ * se encadena AL FINAL, así que todo lo que el ESP32 ya implementa sigue ganando
+ * y sólo cae al común lo que hoy no tiene. Efecto neto: esta familia GANA
+ * `FORMAT`, `RENAME` y `RMDIR`, que le faltaban desde siempre (U3.0). Los verbos
+ * se irán migrando después, grupo a grupo, cada uno con su verificación.
+ *
+ * ⚠️ Y el grupo PUT NO puede migrar mientras `handle_request` lea el bulk POR
+ * ADELANTADO (el común lo lee él): sería leerlo dos veces y desincronizar el
+ * wire. Va en su propio paso, junto con reordenar esa pre-lectura — exactamente
+ * lo que hubo que hacer en la Pico.
+ *
+ * Los campos que esta cintura NO trae todavía (`info`, `put_buf`, `after_put`)
+ * quedan a NULL a propósito: el común los comprueba y contesta un `UNSUPPORTED`
+ * con nombre en vez de reventar. Hoy no se llega a ellos porque el ESP32 sigue
+ * atendiendo `INFO` y el grupo `PUT`. */
+
+static int  esp32_repl_fs_format(void) { fs_format_ram(); return 0; }
+static int  esp32_repl_fs_save(void)   { return fs_save_to_flash() == FS_OK ? 0 : -1; }
+static unsigned long esp32_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
+static unsigned long esp32_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
+static int  esp32_repl_fs_count(void)  { return (int) fs_file_count(); }
+
+static const bpvm_repl_ops_t s_repl_ops = {
+    .server_name    = "bpvm-esp32",
+    .server_build   = ESP32_BUILD_DATE,
+    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\"]",
+    .fs_total_bytes = esp32_repl_fs_total,
+    .fs_used_bytes  = esp32_repl_fs_used,
+    .fs_file_count  = esp32_repl_fs_count,
+    .fs_format      = esp32_repl_fs_format,
+    .fs_save        = esp32_repl_fs_save,
+};
+
 /* ====================== Dispatcher ====================== */
 
 static void handle_request(const char* line, int len) {
@@ -1331,6 +1371,12 @@ static void handle_request(const char* line, int len) {
         return;
     }
 
+    /* V6/U3 — el común, DESPUÉS de los propios y no antes (igual que en la Pico)
+     * porque esta familia se migra por grupos: lo que esta placa siga
+     * implementando gana, y lo que ya no, cae aquí. Al terminar la migración
+     * este `if` sube al principio y la cadena de arriba desaparece. */
+    if (bpvm_repl_dispatch(type, id, &obj)) return;
+
     /* El mensaje DICE CUÁL. El de antes ("type no implementado") obligaba a
      * adivinar qué comando había mandado el IDE — costó una vuelta entera de
      * diagnóstico. Si el wire crece y una familia se queda atrás, que el error
@@ -1348,6 +1394,7 @@ void repl_esp32_run(void) {
      * línea, el problema es de boot; si aparece, la placa estaba escuchando y lo
      * que venga después es del comando. También deja a la vista el tamaño del
      * buffer de bulk, que es distinto por placa (S3 48K / P4 64K). */
+    bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3: la cintura, antes del primer mensaje */
     log_printf("REPL entry (wire v1) — buffer de bulk %u B", (unsigned) sizeof(s_put_buf));
     log_flush();
     for (;;) {
