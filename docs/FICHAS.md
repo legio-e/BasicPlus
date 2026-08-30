@@ -1023,6 +1023,34 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
+#### 🟡 `#452` — CINCO verbos del wire que ningún cliente manda (abierta 30-ago)
+
+Salió de una pregunta de Eduardo al probar `U3.17` —*«df / mem ?»*— y de tirar del hilo.
+En la línea de comandos del IDE `df` y `mem` son **el mismo comando**, y no manda `DF`:
+`SerialBackend.mem()` se lo sintetiza con `INFO` + `LIST`.
+
+Censados los 40 verbos que el IDE emite (`sendRequest`) contra los 20 del REPL común:
+
+| verbo | ¿lo manda algún cliente? |
+|---|---|
+| `PING` · `DF` · `FORMAT` · `RENAME` · `RMDIR` | ❌ **cero ocurrencias en todo el IDE** |
+| los otros 15 | sí |
+
+⚠️ **Por qué importa, y no es "código de más":**
+1. **No se pueden probar.** Ningún gesto del IDE los alcanza — se vio migrándolos: `U3.13`
+   dio al ESP32 `FORMAT`/`RENAME`/`RMDIR` y **no hubo forma de verificarlo por uso**, hubo
+   que cambiar el plan y verificar con el paso siguiente.
+2. **Y por eso se pudren en silencio**: si uno se rompe, nadie se entera. Es superficie
+   viva del protocolo que nadie ejercita.
+3. **El arnés de V7 tampoco los cubrirá**, porque su modelo es «lo que hace el IDE». Van a
+   necesitar un cliente de pruebas que hable el wire a pelo — lo cual, de paso, es la
+   respuesta a *cómo* se prueban.
+
+⏩ **Lo que hay que DECIDIR** (no lo decido yo): o el IDE los usa —`RENAME` en el árbol de
+ficheros es una función que a un usuario le falta, y `FORMAT` ya existe para packs—, o se
+declaran explícitamente «del protocolo, sin cliente todavía» y el arnés los cubre aparte.
+Lo que no vale es dejarlos como están: implementados, documentados y sin tocar.
+
 #### ✅ U2 — el transporte (CERRADO 26-ago; sus cuatro pasos, verificados en placa)
 
 > Los cuatro pasos están ✅ y verificados en las tres familias con wire. Lo único que
