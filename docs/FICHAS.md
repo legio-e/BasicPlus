@@ -612,7 +612,36 @@ mano (`cb` de cada módulo + tamaños). El 27-ago costó buena parte de una tard
 decir: **módulo, offset dentro del módulo, y de dónde salió ese módulo** (FS o pack).
 Encaja con la norma de Eduardo sobre mensajes que mienten o callan.
 
-#### 📋 `#443` — repaso de V5 con la batería de V4 (encargo de Eduardo, 27-ago)
+#### ✅ `#443` — repaso de V5 con la batería de V4 · **CERRADA POR DECISIÓN (30-ago)**
+
+> **Eduardo:** *«la 443 la podemos dejar, creo que ya está claro el problema. De todas
+> formas al final de V6 toca volver a testear así que los bugs no se van a escapar.»*
+>
+> La hipótesis que la abrió —*«es muy raro que solamente falle `JsonDemo`»*— **quedó
+> contestada, y con medida**: la batería de la Pico pasó de 40/48 a **48/48**, y las
+> ocho rojas resultaron ser tres causas (`#440`/`#449`, `#448`, `#451`) más dos falsos
+> positivos del andamio del MPU. No había una cola de bugs distintos escondida: había
+> presión de memoria y un instrumento que mentía.
+>
+> Y el repaso completo **no se pierde, se traslada**: el cierre de V6 lo lleva de todas
+> formas. Repetirlo ahora sería pasar dos veces la misma batería sobre un árbol que va
+> a seguir moviéndose.
+>
+> 📌 **Lo que SÍ hay que conservar es la lección, que es de método y no de esta ficha**:
+> *cuando una versión hereda de otra, lo que no se re-prueba hay que saber que no se
+> re-probó*. V4 dejó 2413 líneas de registro y V5 **418**; si en V5 hubiera puesto «de
+> la lista de V4, estas N no se repiten», el 27-ago habría sido una consulta y no una
+> tarde. `docs/H13_PRUEBAS_V5_REPASO.md` se queda como **la lista de arranque de la
+> tanda de cierre de V6** — sus «condiciones de partida» son lo que hace atribuible el
+> resultado.
+>
+> ⚠️ **Lo que esto NO cierra**: la deuda de verificación del **STM32** (Nucleo desde el
+> 27-ago, Discovery en toda la serie). Eso no es «repasar V5», es que hay código común
+> nuevo que esas dos placas no han ejecutado nunca — y cuanto más tarde salte, más
+> commits hay que bisecar.
+
+<details><summary>El enunciado original</summary>
+
 
 *«Yo repetiría todas las pruebas de V4 sobre IDE + Firmware + Demos de V5. A ver qué sale,
 es muy raro que solamente falle JsonDemo.»* La hipótesis a comprobar es que **#440 no está
@@ -623,6 +652,8 @@ Lo que destapó la necesidad: la campaña de V4 dejó **2413 líneas** de regist
 **418**. No es que no se anote — es que **cuando una versión hereda de otra, lo que no se
 re-prueba hay que saber que no se re-probó**. Si en V5 hubiera puesto «de la lista de V4,
 estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
+
+</details>
 
 
 #### 🔵 `#444` — el sistema de pruebas no escala a una docena de placas (ABIERTA, 27-ago)

@@ -1,5 +1,21 @@
 # Repaso de V5 con la batería de V4 — 28-ago-2026
 
+> ## ⏸️ ESTE REPASO YA NO ES UNA TAREA ABIERTA (30-ago)
+>
+> `#443` se cerró **por decisión de Eduardo**: la hipótesis que lo abrió está
+> contestada (la batería de la Pico llegó a **48/48** y las ocho rojas eran tres
+> causas, no ocho bugs), y **el cierre de V6 trae su propia tanda de pruebas**, así
+> que repetir ésta ahora sería pasar dos veces la misma batería sobre un árbol que
+> todavía se mueve.
+>
+> **Lo que este documento pasa a ser: la lista de arranque de esa tanda de cierre.**
+> Las «condiciones de partida» de abajo son lo que hace el resultado *atribuible* —
+> sin ellas, un rojo no dice de quién es. Se lee al empezar el cierre de V6, no antes.
+>
+> ⚠️ Lo que NO cubre: la **deuda de verificación del STM32** (ver la matriz en
+> `ESTADO.md`). Eso no es repasar V5 — es código común que esas placas no han
+> ejecutado nunca.
+
 > **Por qué existe este documento.** El 27-ago, probando otra cosa, `JsonDemo`
 > falló en la Pico con `exit 6 (opcode desconocido)`. Al buscar cuándo dejó de
 > ir salió esto:
