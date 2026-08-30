@@ -86,6 +86,13 @@ mordió al menos una vez**.
     copias el `.bin` que hay al lado, publicas el build anterior.
   - ESP32: `esptool merge-bin` con los offsets de `build/flash_args`
     (S3 `0x0/0x8000/0x10000` @80m · P4 `0x2000/0x8000/0x10000` @40m).
+    ⚠️ **`idf.py merge-bin` escribe `build/merged-binary.bin`**, no
+    `bpvm_esp32*_merged.bin`, que es el nombre que `INSTALAR_FIRMWARE.md` le da
+    al usuario. O sea que el atajo `idf.py merge-bin` deja **intacta la imagen
+    con el nombre bueno** — y ahí sigue la vieja, con su fecha vieja, sin que
+    nada avise. Medido el 30-ago: al reconstruir el P4, la `*_merged.bin` que
+    había al lado era **del 4-ago**. Renómbrala o pásale `-o` el nombre bueno, y
+    comprueba la FECHA del fichero, no la salida del comando.
   - Regenerar `dist/firmware/SHA256SUMS.txt`.
 - [ ] **BpIde**: ⚠️ **con el IDE CERRADO**. `mvn install` en `miVM` y en
       `lexer-java`, luego `mvn package` en `BpIde`. La versión sale del pom

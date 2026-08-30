@@ -784,8 +784,9 @@ public final class BpvmClient implements AutoCloseable {
     /* #294 — umbral del PUT clásico (whole-buffer). Por debajo del tope del wire
      * del firmware (s_put_buf=48K), con margen. Ficheros <= esto van por el PUT de
      * siempre (1 round-trip, probado en todas las placas); mayores van por
-     * streaming (PUT_BEGIN/DATA/END), que hoy solo tiene el ESP32 (Pico/STM32 =
-     * tanda 3). Así grandes = sin techo en el ESP32 y cero regresión en el resto. */
+     * streaming (PUT_BEGIN/DATA/END). Cuando se escribió esto el streaming sólo
+     * lo tenía el ESP32; desde la tanda 3 de #294 está en las tres familias, y
+     * desde V6/U3 lo sirve el MISMO código común en todas. */
     /* #334 — 40K -> 8K. El umbral por debajo del cual se sube de una pieza fija el
      * buffer que el firmware tiene que reservar SIEMPRE. Con el streaming ya
      * verificado en placa en las 3 familias, bajarlo devuelve 28-36 KB de RAM por

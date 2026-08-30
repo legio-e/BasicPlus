@@ -461,80 +461,18 @@ static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
  * bpvm_fs_stat para la cabecera, mismos trozos de 256 B (el interno de
  * littlefs), mismo bpvm_fs_read_at y los mismos errores. */
 
-static void handle_put(long id, const json_obj_t* obj, const uint8_t* bulk, size_t bulk_size) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
-    }
-    fs_status_t s = fs_put(path, bulk, (uint32_t) bulk_size);
-    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "PUT_REPLY", id);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "size", (long) bulk_size);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "PUT_REPLY no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
-
-/* #294 streaming PUT — subida por trozos (PUT_BEGIN/PUT_DATA/PUT_END), espejo del
- * BURN de packs. Evita buferizar el fichero entero (el PUT clásico tope en
- * s_put_buf=48K): BEGIN crea/trunca, cada DATA apende un chunk, END verifica el
- * tamaño. Una sesión a la vez (un IDE, un puerto). */
-static struct {
-    int      active;
-    char     path[FS_NAME_LEN];
-    uint32_t received;
-    uint32_t expected;   /* size anunciado en BEGIN (0 = no verificar) */
-} s_put_sess;
-
-static void put_reply(long id, const char* type, uint32_t val, const char* field) {
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, type, id);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, field, (long) val);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "reply no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
-
-static void handle_put_begin(long id, const json_obj_t* obj) {
-    char path[FS_NAME_LEN];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
-    }
-    fs_status_t s = fs_put(path, NULL, 0);   /* crea/trunca + dirs padre */
-    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
-    s_put_sess.active   = 1;
-    s_put_sess.received = 0;
-    s_put_sess.expected = (uint32_t) json_get_long(obj, "size", 0);
-    strncpy(s_put_sess.path, path, sizeof(s_put_sess.path) - 1);
-    s_put_sess.path[sizeof(s_put_sess.path) - 1] = '\0';
-    put_reply(id, "PUT_BEGIN_REPLY", 0, "received");
-}
-
-static void handle_put_data(long id, const json_obj_t* obj, const uint8_t* bulk, size_t bulk_size) {
-    (void) obj;
-    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
-    if (bulk_size > 0) {
-        fs_status_t s = fs_put_append(s_put_sess.path, bulk, (uint32_t) bulk_size);
-        if (s != FS_OK) {
-            s_put_sess.active = 0;   /* sesión muerta ante error de escritura */
-            const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return;
-        }
-        s_put_sess.received += (uint32_t) bulk_size;
-    }
-    put_reply(id, "PUT_DATA_REPLY", s_put_sess.received, "received");
-}
-
-static void handle_put_end(long id, const json_obj_t* obj) {
-    (void) obj;
-    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
-    uint32_t recv = s_put_sess.received;
-    uint32_t exp  = s_put_sess.expected;
-    s_put_sess.active = 0;
-    if (exp != 0 && recv != exp) {
-        wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado"); return;
-    }
-    put_reply(id, "PUT_END_REPLY", recv, "size");
-}
-
+/* V6/U3 g12 - EL GRUPO PUT VIVE EN EL COMUN (PUT + PUT_BEGIN/DATA/END).
+ *
+ * Lo que hacia falta para poder migrarlo no era el handler: era QUIEN LEE EL
+ * BULK. El bulk viaja detras de la linea JSON y solo puede leerlo uno; el comun
+ * lo lee DENTRO del handler, asi que la pre-lectura del despachador tenia que
+ * dejar de ocurrir para estos cuatro verbos. Eso lo prepara `U3.20` (subir el
+ * `type`) y lo activa la bandera `lo_lee_el_comun` de abajo.
+ *
+ * Comparado linea a linea antes de borrar, y salio UNA diferencia: el `fs_put`
+ * de esta familia crea los directorios que falten y el comun no lo hacia. En vez
+ * de migrar perdiendola, se subio al comun (#455) -- donde ademas la RECUPERAN
+ * la Pico y el STM32, que la perdieron sin ruido en `U3.12`. */
 /* V6/U3 g2 - DEL vive en el comun, y ADEMAS mejora: el de aqui juntaba "no
  * existe" con "existe y no se puede borrar", que en el segundo caso es
  * simplemente falso. El comun los distingue (la Pico ya lo hacia). */
@@ -994,15 +932,15 @@ void repl_esp32_autorun(void) {
  * `FORMAT`, `RENAME` y `RMDIR`, que le faltaban desde siempre (U3.0). Los verbos
  * se irán migrando después, grupo a grupo, cada uno con su verificación.
  *
- * ⚠️ Y el grupo PUT NO puede migrar mientras `handle_request` lea el bulk POR
- * ADELANTADO (el común lo lee él): sería leerlo dos veces y desincronizar el
- * wire. Va en su propio paso, junto con reordenar esa pre-lectura — exactamente
- * lo que hubo que hacer en la Pico.
+ * El grupo PUT migró en `U3.21`, y lo que había que mover no era el handler
+ * sino QUIÉN LEE EL BULK: el común lo lee dentro del handler, así que la
+ * pre-lectura del despachador tuvo que dejar de ocurrir para esos cuatro verbos
+ * (bandera `lo_lee_el_comun`). Leerlo dos veces desincroniza el wire, y como es
+ * binario eso no da error: CORROMPE.
  *
- * Los campos que esta cintura NO trae todavía (`info`, `put_buf`, `after_put`)
- * quedan a NULL a propósito: el común los comprueba y contesta un `UNSUPPORTED`
- * con nombre en vez de reventar. Hoy no se llega a ellos porque el ESP32 sigue
- * atendiendo `INFO` y el grupo `PUT`. */
+ * `after_put` se queda a NULL a propósito (littlefs committea en cada close, lo
+ * mismo que la Pico); el común comprueba las piezas que faltan y contesta un
+ * `UNSUPPORTED` con nombre en vez de reventar. */
 
 /* Los 18 campos del INFO. El mensaje ya no se arma aqui (lo hace
  * src/bpvm_repl.c): esto solo RELLENA, que es lo unico propio del ESP32.
@@ -1072,6 +1010,13 @@ static bpvm_repl_ops_t s_repl_ops = {
     .fs_file_count  = esp32_repl_fs_count,
     .fs_format      = esp32_repl_fs_format,
     .fs_save        = esp32_repl_fs_save,
+    /* V6/U3 g12: el scratch del bulk lo presta la familia; el común lo llena. */
+    .put_buf        = s_put_buf,
+    .put_buf_size   = sizeof s_put_buf,
+    /* Sin `after_put` a propósito, igual que la Pico: littlefs committea en cada
+     * close, así que no hay nada que persistir después (el STM32 sí lo necesita,
+     * su FS vive en un sector que hay que volcar). */
+    .after_put      = NULL,
 };
 
 /* ====================== Dispatcher ====================== */
@@ -1088,10 +1033,9 @@ static void handle_request(const char* line, int len) {
      * eso no da error -- CORROMPE. Mientras esta pre-lectura ocurriera antes de
      * saber el `type`, el grupo PUT no podia migrar al comun (que lo lee el).
      *
-     * Este paso es SOLO el reordenado: `lo_lee_el_comun` esta en 0 fijo, o sea
-     * que hoy se sigue pre-leyendo exactamente igual que antes. La migracion va
-     * en el paso siguiente, y entonces esta bandera pasa a mirar el `type`. Se
-     * separan a proposito: si algo se rompe, se sabe cual de los dos fue. */
+     * El reordenado entro solo (`U3.20`, con la bandera en 0 fijo) y la
+     * migracion detras (`U3.21`), a proposito: si algo se rompe, se sabe cual de
+     * los dos fue. Desde `U3.21` la bandera YA mira el `type`. */
     long id = json_get_long(&obj, "id", 0);
     char type[40];
     if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
@@ -1106,7 +1050,12 @@ static void handle_request(const char* line, int len) {
         wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'"); return;
     }
 
-    const int lo_lee_el_comun = 0;   /* paso siguiente: PUT y PUT_* */
+    /* V6/U3 g12 — los verbos PUT ya viven en el común y el bulk se lee ALLÍ.
+     * Pre-leerlo aquí además sería leerlo DOS VECES: la segunda se comería el
+     * mensaje siguiente y el wire quedaría desincronizado (el bug de 0456da8).
+     * Lo que SÍ se sigue pre-leyendo es `PACK_BURN_DATA` y compañía: el gestor
+     * de placa recibe el bulk ya en `s_put_buf` y ese camino no ha migrado. */
+    const int lo_lee_el_comun = (strcmp(type, "PUT") == 0 || strncmp(type, "PUT_", 4) == 0);
     long bulk = lo_lee_el_comun ? 0 : json_get_long(&obj, "bulk", 0);
     size_t bulk_size = 0;
     if (bulk > 0) {
@@ -1184,6 +1133,14 @@ static void handle_request(const char* line, int len) {
                  || strcmp(type, "DEL")  == 0
                  || strcmp(type, "SAVE") == 0 || strcmp(type, "DF") == 0;
         if (is_fs && bs->state < BPVM_BOOT_FS) {
+            /* El bulk que esta puerta rechaza HAY QUE TRAGÁRSELO igual, o se
+             * queda en el cable y el mensaje siguiente se lee a partir de la
+             * mitad de los datos. Sólo el de los verbos PUT: el del resto ya lo
+             * pre-leyó el paso de arriba. */
+            if (lo_lee_el_comun) {
+                long b_pend = json_get_long(&obj, "bulk", 0);
+                if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
+            }
             wire_v1_send_error(id, "NOT_READY", "FS no disponible: configurar particiones");
             return;
         }
@@ -1194,11 +1151,6 @@ static void handle_request(const char* line, int len) {
     }
     if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H6 ANTES que LIST: el prefijo no debe comerselo */
     if (strcmp(type, "LIST")  == 0) { handle_list(id, &obj);  return; }
-    if (strcmp(type, "PUT")   == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
-    /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
-    if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
-    if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
-    if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }

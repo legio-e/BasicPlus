@@ -570,6 +570,30 @@ int bpvm_repl_drain_bulk(unsigned long n) {
 
 static int tragar_bulk(unsigned long n) { return bpvm_repl_drain_bulk(n); }
 
+/* #455 — el PUT del wire CREA la carpeta que le falte al destino.
+ *
+ * `bpvm_fs_write` NO la crea, y hace bien: se comporta como `fopen`, y ése es el
+ * contrato que el lenguaje expone (lo fija `test_fs_lfs`: «write sin padres →
+ * -1»). Pero un PUT del wire no es un `fopen`: es «guarda este fichero ahí».
+ *
+ * Las TRES familias lo hacían, cada una en su `fs_put` (`fs_lfs_pico.c`,
+ * `fs_lfs_stm32.c`, `fs_lfs_esp32.c` → `ensure_parent_dirs`), y ese `fs_put` es
+ * justo lo que dejó de llamarse al subir PUT al común en `U3.12`. O sea que esto
+ * no es una mejora de paso: es DEVOLVER lo que la familia de referencia tenía.
+ *
+ * Se perdió en silencio porque `/sys`, `/lib` y `/app` se crean al montar: sólo
+ * muerde subiendo a una carpeta nueva, que es lo que el IDE aún no hace. */
+static void crear_dirs_padre(const char* path) {
+    const char* ult = strrchr(path, '/');
+    if (!ult || ult == path) return;      /* en la raíz o sin carpeta: nada que crear */
+    char dir[64];
+    size_t n = (size_t)(ult - path);
+    if (n >= sizeof dir) return;          /* que lo rechace el write, con su error */
+    memcpy(dir, path, n);
+    dir[n] = '\0';
+    bpvm_fs_mkdir(dir);                   /* recursivo y ok-si-existe en los 3 backends */
+}
+
 /* PUT — subida de un tirón (para ficheros que caben en el scratch; los grandes
  * van por PUT_BEGIN/DATA/END). */
 static void repl_put(long id, const json_obj_t* obj) {
@@ -590,6 +614,7 @@ static void repl_put(long id, const json_obj_t* obj) {
     if (wire_v1_recv_bulk(s_ops->put_buf, (size_t) bulk, (size_t) s_ops->put_buf_size) < 0) {
         wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
     }
+    crear_dirs_padre(path);                             /* #455 */
     if (bpvm_fs_write(path, s_ops->put_buf, (uint32_t) bulk, 0) != 0) {
         const char *code, *msg;
         fs_fallo("put", path, (unsigned long) bulk, &code, &msg);
@@ -644,6 +669,7 @@ static void repl_put_begin(long id, const json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof path) < 0) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
     }
+    crear_dirs_padre(path);                          /* #455 */
     if (bpvm_fs_write(path, NULL, 0, 0) != 0) {      /* crea/trunca */
         const char *code, *msg;
         fs_fallo("put", path, 0, &code, &msg);

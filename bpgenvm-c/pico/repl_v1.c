@@ -1536,9 +1536,8 @@ void repl_v1_handle_request(int first_char) {
      * implementando gana, y lo que ya no, cae aquí. Al terminar la migración
      * este if sube al principio y la cadena de arriba desaparece.
      *
-     * ⚠️ El grupo PUT NO puede migrar mientras el despachador de arriba lea el
-     * bulk por adelantado (el común lo lee él): sería leerlo dos veces. Va en su
-     * propio paso, junto con quitar esa pre-lectura. */
+     * El grupo PUT ya migró (U3.12), y con él la pre-lectura del bulk dejó de
+     * ocurrir para esos verbos — la lleva `lo_lee_el_comun` en el paso 5. */
     if (bpvm_repl_dispatch(type, id, &obj)) return;
 
     /* BOARD (H9) — gestión de placa: entorno + particiones (núcleo compartido con

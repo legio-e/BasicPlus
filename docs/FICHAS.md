@@ -1023,6 +1023,44 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
+#### ✅ `#455` — el `PUT` del común dejó de crear las carpetas que faltaban (cerrada 30-ago)
+
+**Cómo salió**: comparando línea a línea el `handle_put` del ESP32 contra el del común
+**antes de borrarlo** — que es el gesto que ya salvó el `server_name` en `U3.19`. Salió
+UNA diferencia, y no estaba en el ESP32: estaba en el común.
+
+| quién escribe | qué hacía |
+|---|---|
+| `fs_put` de cada familia (`fs_lfs_pico.c`, `fs_lfs_stm32.c`, `fs_lfs_esp32.c`) | `ensure_parent_dirs` → `mkdir -p` del directorio del destino |
+| `repl_put` del común (desde `U3.12`) | `bpvm_fs_write` a pelo |
+
+Y `bpvm_fs_write` **hace bien** en no crearlas: se comporta como `fopen`, y ése es el
+contrato que el lenguaje expone — lo fija `test_fs_lfs` con un assert explícito
+(*«write sin padres → -1»*). El que cambió de significado fue el **PUT del wire**, que
+no es un `fopen` sino «guarda este fichero ahí».
+
+🔴 **O sea que la Pico y el STM32 lo perdieron el 27-ago** (`467a3ced`, `U3.12`), en
+silencio y sin que nadie lo notara. Y no se notó por una razón concreta: `/sys`, `/lib`
+y `/app` **se crean al montar**, así que subir a un directorio que ya existe —que es
+todo lo que el IDE hace hoy— sigue funcionando. Sólo muerde subiendo a una carpeta
+nueva.
+
+✅ **Arreglado en el común** (`crear_dirs_padre` en `bpvm_repl.c`, llamado por `PUT` y
+por `PUT_BEGIN`), donde **lo recuperan las tres familias a la vez**. No es una mejora de
+paso: es devolver lo que la familia de referencia tenía, que es justo lo que manda la
+regla de la casa del fichero.
+
+📌 **Lo que enseña, y van cuatro veces en dos días**: *el arreglo existe en un camino y
+falta en su gemelo*. Aquí con un matiz nuevo y peor — el gemelo sano era el **de la
+familia que aún no había migrado**, o sea que la migración iba a BORRAR la última copia
+buena. La comparación antes de borrar es lo único que lo caza; el verde de la placa no,
+porque el camino roto no se ejecuta nunca.
+
+⚠️ **Sin test de host**: `bpvm_repl.c` no lo tiene (el simulador `bpvm-sim` trae su
+**propio** `handle_put` y no enlaza el común, así que `sim-smoke` da verde sin tocar
+este código). Es exactamente el hueco que el arnés de V7 (`#444`) tiene que tapar, y de
+momento queda anotado en vez de disimulado.
+
 #### ✅ `#454` — el timeout del wire medía lo que no debía (cerrada 30-ago · `01d3eb22`)
 
 **Síntoma**: abrir `ESTADO.md` (120.763 B) desde el árbol del IDE daba
