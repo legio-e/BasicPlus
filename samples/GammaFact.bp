@@ -1,0 +1,32 @@
+// GammaFact.bp — oráculo de la identidad  n! == Γ(n+1).
+//
+// Por qué existe: `Math.gamma` YA calcula el factorial real, así que un
+// `factorial` en coma flotante no necesita builtin nuevo — necesita que el
+// compilador deje SOBRECARGAR una intrínseca. Este sample fija la identidad
+// que esa sobrecarga tendría que cumplir, y sirve de red si algún día se
+// toca la implementación de Lanczos.
+//
+// Se corre en LAS DOS VMs y se comparan los stdout: la identidad no vale
+// nada si cada VM la cumple con números distintos.
+module GammaFact
+  import Math
+
+  function Main()
+    print "n  n! (exacto, i32)   gamma(n+1) (f32)"
+    var n: integer := 0
+    while n <= 12 do
+      print n, Math.factorial(n), Math.gamma(n + 1.0)
+      n := n + 1
+    endwh
+
+    // Lo que el entero NO puede dar: 13! desborda i32 (lanza RuntimeError),
+    // y gamma sigue contestando. Es justo el hueco que la sobrecarga taparía.
+    print "13! por gamma =", Math.gamma(14.0)
+    print "20! por gamma =", Math.gamma(21.0)
+
+    // Y el otro lado de la identidad: gamma NO es sólo para enteros.
+    print "gamma(0.5)  =", Math.gamma(0.5)
+    print "gamma(1.5)  =", Math.gamma(1.5)
+  end Main
+
+end GammaFact
