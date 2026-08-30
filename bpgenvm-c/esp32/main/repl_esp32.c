@@ -1081,7 +1081,33 @@ static void handle_request(const char* line, int len) {
     if (json_parse(line, (size_t) len, &obj) != 0) {
         wire_v1_send_fatal("PROTOCOL_ERROR", "JSON inválido"); return;
     }
-    long bulk = json_get_long(&obj, "bulk", 0);
+    /* V6/U3 - EL `type` SE LEE ANTES QUE EL BULK, y el orden NO es cosmetico.
+     *
+     * El bulk viaja DESPUES de la linea JSON, asi que quien lo lee tiene que ser
+     * uno solo: leerlo dos veces desincroniza el wire, y como el bulk es binario
+     * eso no da error -- CORROMPE. Mientras esta pre-lectura ocurriera antes de
+     * saber el `type`, el grupo PUT no podia migrar al comun (que lo lee el).
+     *
+     * Este paso es SOLO el reordenado: `lo_lee_el_comun` esta en 0 fijo, o sea
+     * que hoy se sigue pre-leyendo exactamente igual que antes. La migracion va
+     * en el paso siguiente, y entonces esta bandera pasa a mirar el `type`. Se
+     * separan a proposito: si algo se rompe, se sabe cual de los dos fue. */
+    long id = json_get_long(&obj, "id", 0);
+    char type[40];
+    if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
+        /* ⚠️ HAY QUE TRAGARSE EL BULK ANTES DE CONTESTAR. Al subir el `type`,
+         * este error paso a ocurrir ANTES de la pre-lectura -- y salir de aqui
+         * sin consumir el bulk deja el wire A MEDIAS: los bytes del cuerpo se
+         * leerian luego como si fueran la linea siguiente. Con un bulk BINARIO
+         * eso no da error, CORROMPE. Antes del reordenado no podia pasar,
+         * porque el bulk ya estaba leido al llegar aqui. */
+        long b = json_get_long(&obj, "bulk", 0);
+        if (b > 0) (void) bpvm_repl_drain_bulk((unsigned long) b);
+        wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'"); return;
+    }
+
+    const int lo_lee_el_comun = 0;   /* paso siguiente: PUT y PUT_* */
+    long bulk = lo_lee_el_comun ? 0 : json_get_long(&obj, "bulk", 0);
     size_t bulk_size = 0;
     if (bulk > 0) {
         if (bulk > (long) sizeof(s_put_buf)) {
@@ -1097,16 +1123,14 @@ static void handle_request(const char* line, int len) {
              * ve el código, era indistinguible de "FS lleno" y mandaba a mirar
              * el sitio equivocado. Dejamos las cifras en el log y el mensaje
              * dice de qué buffer habla. */
-            char t[40] = {0};
-            json_get_str(&obj, "type", t, sizeof t);   /* `type` se lee más abajo */
             log_printf("wire: bulk RECHAZADO %ld B > buffer %u B ('%s') — NO es el FS",
-                       bulk, (unsigned) sizeof(s_put_buf), t);
+                       bulk, (unsigned) sizeof(s_put_buf), type);
             log_flush();
             {
                 char m[96];
                 snprintf(m, sizeof m, "bulk %ld B supera el buffer del servidor (%u B)",
                          bulk, (unsigned) sizeof(s_put_buf));
-                wire_v1_send_error(json_get_long(&obj, "id", 0), "BULK_TOO_BIG", m);
+                wire_v1_send_error(id, "BULK_TOO_BIG", m);
             }
             return;
         }
@@ -1114,12 +1138,6 @@ static void handle_request(const char* line, int len) {
             wire_v1_send_fatal("PROTOCOL_ERROR", "lectura de bulk truncada"); return;
         }
         bulk_size = (size_t) bulk;
-    }
-
-    long id = json_get_long(&obj, "id", 0);
-    char type[40];
-    if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
-        wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'"); return;
     }
 
     if (strcmp(type, "RESET") == 0) { handle_reset(id, &obj); return; }
