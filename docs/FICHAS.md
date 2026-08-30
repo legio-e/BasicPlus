@@ -1079,6 +1079,69 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
+#### 🔴 `#459` — un `catch` SIN tipo entrega un valor roto, y **eso se publicó en V5** (abierta 30-ago)
+
+**Síntoma**, visto en la ESP32-P4 corriendo `samples/trytest.bp` (sample publicado):
+
+```
+Probar(-3) => atrapado:       ▒      	vatrapado:       ▒      	vatrapado: ...
+inner catch:       ▒ger#toFloat#4▒▒▒ Integer#toDouble#5▒▒▒ ... List#remove#17▒▒▒t
+```
+
+Eso que sale por pantalla **es la tabla de símbolos del programa**. `exit 0`, sin un
+solo aviso.
+
+### Aislado a una línea
+
+| forma | resultado |
+|---|---|
+| `catch e: Core.RuntimeError` → `e.msg` | ✅ `[con tipo]` |
+| `catch e2` (sin tipo) → `e2.msg` | ❌ bytes del heap |
+
+Caso mínimo en `samples/pendientes/CatchSinTipo.bp`.
+
+### La causa, y está escrita en el código
+
+`MivmEmitter.java:3353` — el analizador tipa la variable de un `catch` genérico como
+`ErrorType`, y el emisor hace:
+
+```java
+} else if (t == null || t instanceof BpType.ErrorType) {
+    // Sucede con variables de 'catch' genérico ...
+    // En BP los throws son típicamente strings.
+    w.emit(OpCode.PRINT_STR_NONL);
+}
+```
+
+O sea: emite *«imprime el string que hay en esta dirección»* sobre lo que es una
+**referencia a objeto**. La suposición del comentario —*«los throws son típicamente
+strings»*— dejó de ser cierta cuando las excepciones pasaron a ser objetos, y nadie
+volvió a este `else if`.
+
+⚠️ **No es sólo salida fea: es leer memoria ajena y enseñarla.** Un programa BP puede
+volcar el heap de la VM sin querer.
+
+### 🔴 Por qué NO lo cazó nada, que es lo más importante de esta ficha
+
+1. **El arnés de paridad da VERDE.** Compara VM-Java contra VM-C, y **las dos producen
+   la MISMA basura** — byte a byte. Es la *trampa del falso-PAR*: un oráculo que sólo
+   compara dos implementaciones **no puede ver un fallo que ambas comparten**.
+2. **`trytest.bp` no está en el corpus de paridad** (los 38 viven en `bpgenvm-c/samples/`).
+3. **La stdlib usa la forma tipada** (`catch e: Core.Exception`), que funciona. El
+   camino roto sólo lo pisa un sample.
+
+📅 **Desde cuándo**: al menos desde **V5 publicada**. Comprobado con el artefacto, no
+deducido: compilando y ejecutando `trytest.bp` con el compilador, la VM y la stdlib de
+`dist/BasicPlus-5.0-win/` — misma basura. **No es una regresión de la tanda del 30-ago**,
+que era la sospecha razonable y resultó falsa.
+
+⏭️ **Cómo arreglarlo — decisión de Eduardo, porque es semántica del lenguaje.** Lo natural
+es que un `catch` sin tipo enlace un `Core.Exception` en vez de `ErrorType`: entonces
+`.msg` funciona, la concatenación pasa por `toString()` (rama `ClassType`, que ya existe y
+funciona) y encaja con la norma de `#458` — usar el tipo pide `import Core`. La otra opción
+es tiparlo como `Object`, más estricto: `.msg` dejaría de compilar y habría que escribir el
+tipo. Las dos cierran el agujero; la primera no rompe código escrito.
+
 #### ✅ `#458` — `Core` implícito: la norma pasa a ser EXPLÍCITA, y la pasada de interfaz deja de tirar miembros en silencio (cerrada 30-ago)
 
 **Norma de Eduardo (30-ago):** *«la norma tiene que ser sencilla: si se utiliza un tipo
