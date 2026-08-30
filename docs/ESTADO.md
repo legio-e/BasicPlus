@@ -27,6 +27,88 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (30-ago, tarde-noche) — tres bugs del COMPILADOR, y uno venía publicado en V5
+
+### Lo que hay que saber antes de tocar nada
+
+🔴 **Al flashear cualquier placa, FORMATEA EL FS.** Hoy han cambiado **los 27 módulos de
+la stdlib** (todos pasan a `.mod` v7 y `Core` además gana un método). El ESP32 y el STM32
+instalan un módulo embebido **sólo si no existe** (`esp32_mods.c:4862`), así que una placa
+con `/lib` de ayer se queda con el viejo **y no lo dice** — la Pico sí lo canta en el log
+(`main.c:1330`). Es la ficha *«un módulo rancio sobrevive y NADIE lo dice»*, latente hasta
+hoy porque ninguna imagen había traído la stdlib cambiada.
+*(El camino del IDE lo esquiva solo: compara por CRC y sube a `/app`, que tiene precedencia.)*
+
+### Lo cerrado
+
+| ficha | qué |
+|---|---|
+| **`#457`** | el compilador escribía `.mod` **v7** y su propio lector de interfaces sólo aceptaba **v6** → **la stdlib no se podía regenerar**. Un `return null` mudo, con el error saliendo en otro fichero |
+| **`#458`** | **norma nueva**: si usas un tipo de `Core`, importas `Core`. Y la pasada de interfaz **deja de tirar miembros en silencio** |
+| **`#459`** | un `catch` sin tipo entregaba un valor roto que **volcaba la tabla de símbolos** por pantalla. **Publicado en V5** |
+| `U3.21` + **`#455`** | el grupo `PUT` del ESP32 al común; el `mkdir` de los directorios padre, recuperado antes de que la migración borrara la última copia |
+| `Math` | entran `clamp` `wrap` `hypot` `remap` (`atan2` ya estaba, y la ficha la seguía pidiendo) |
+| **`#443`** | cerrada **por decisión**: la hipótesis está contestada y el cierre de V6 trae su propia tanda |
+
+**Abiertas nuevas**: `#456` (un `path` >63 chars se trunca en silencio y la operación dice OK).
+
+### 🔑 Las tres son la MISMA enfermedad
+
+Una suposición que dejó de ser cierta y a la que nadie volvió:
+
+- el `import Core` implícito, inyectado **en una de las dos pasadas**;
+- el lector de interfaces, congelado en `MOD6` cuando el escritor pasó a `MOD7`;
+- el emisor tratando una excepción como string porque *«en BP los throws son típicamente
+  strings»* — cierto **dos versiones atrás**, y el propio comentario lo dejaba escrito.
+
+📌 **Al subir un formato o cambiar una regla, censar los LECTORES.** Con `.mod` eran tres,
+no dos: las dos VMs lo aceptaban y el que se quedó atrás fue el del compilador, que nadie
+recuerda que existe porque casi siempre trabaja en memoria.
+
+### ⚠️ Y el arnés estuvo VERDE con un bug de memoria dentro
+
+`#459` volcaba el heap por pantalla y `compat.sh` daba **38 PASS**: las dos VMs producían
+**la misma basura, byte a byte**. *Un oráculo que sólo compara dos implementaciones no
+puede ver un fallo que ambas comparten.* Es la trampa del falso-PAR en su forma pura, y
+refuerza `#444`: hace falta una red que compare contra lo ESPERADO, no sólo entre VMs.
+
+### Estado de verificación
+
+| familia | qué se ha visto |
+|---|---|
+| **ESP32-P4** | **la mejor**: `JsonDemo` (con `Core.mod` regenerado corriendo en RISC-V) y `trytest.bp` con la salida idéntica al host |
+| **Pico · S3 · STM32** | 🔴 **la stdlib nueva SIN ESTRENAR**. Compilan, pero ninguna la ha ejecutado |
+
+⏭️ **Primer gesto al retomar**: `trytest.bp` y `JsonDemo` en la Pico y en el S3 —los dos
+ya tienen salida conocida, o sea que sirven de oráculo— **después de formatear el FS**.
+
+### Lo que queda del tema «lenguaje»
+
+- 🟡 **LSP entre interfaces de módulo** (`appv1lsp`/`appv2`, en `samples/pendientes/`).
+  ⚠️ Y la explicación escrita en la ficha **está en duda**: dice que *«falla el dato»*
+  porque una `module interface` pura no genera `.mod`, pero la traza del 30-ago imprime
+  `extends=com.example.LogApi` — el dato está. Primer gesto: mirar si `implSatisfies`
+  recibe ese `extends` o una copia sin él, en vez de dar por buena la explicación.
+- 🟡 **`factorial` en f64** y **unificar `sign`/`signF`**: bloqueados por lo mismo, **no se
+  puede sobrecargar una intrínseca** (`Intrinsics.REGISTRY` es un `Map` por nombre pelado
+  y el call-site compone la clave con `fs.name`, no con el mangleado de `H5.a`).
+- 🟡 **Mudar `Exception` fuera de `Core`**, como está `Object` — idea de Eduardo. Ahorraría
+  el `import` a 21 de 56 ficheros. **No se hizo a propósito**: mete identidad de clases
+  entre módulos en medio de un arreglo de bug, y un `catch` que deja de atrapar falla en
+  silencio. Va en su propio paso.
+
+### Lo que enseñó la tarde, y no es del código
+
+**El «no sé» de Eduardo ante una salida rara.** Propuse `trytest.bp` como trámite para
+cerrar la verificación; él miró la salida, dijo *«no sé»*, y eso destapó `#459`. Una salida
+que no se entiende merece pararse a mirarla **aunque el `exit` sea 0 y el arnés esté verde**.
+
+**Y un método que funcionó**: para decidir *«¿lo he roto yo hoy?»* se usó la
+**distribución publicada** (`dist/BasicPlus-5.0-win/`) como oráculo — su compilador, su VM
+y su stdlib, todo desde el mismo fat-jar. Contestó en un minuto lo que rebuildeando el
+árbol viejo habría costado varios, y descartó la sospecha razonable (y falsa) de que la
+tanda del día tuviera la culpa.
+
 ## ⏭️ AL RETOMAR (30-ago, tarde) — `U3.21` cerrado y **el P4 al día**; la deuda es ahora del STM32
 
 ### La matriz, al cierre de la tarde
