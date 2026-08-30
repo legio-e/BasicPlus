@@ -378,6 +378,34 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
  * propósito: es lo que sustituye al scratch del tamaño del fichero mayor. 256 B
  * es el mismo tamaño que ya usa littlefs para sus buffers de lectura, así que no
  * introduce un número nuevo que cuadrar. */
+/* #453 — LA MISMA HISTORIA QUE `crc32`, con el segundo llamador.
+ *
+ * Cuando se arreglo el CRC (#398/#424) se anadio esa op al backend porque era
+ * el caso cronometrado; el OTRO bucle de `read_at` -- el `GET` del wire -- se
+ * quedo igual. Medido el 30-ago en un S3: un fichero de 9 KB (36 trozos) se
+ * abre, y uno de 120 KB (472 trozos) NO -- se pasa de los 10 s de timeout del
+ * IDE. Mismo codigo y misma placa: solo cambia el tamano.
+ *
+ * Si el backend sabe leer en secuencia, que lo haga el (UNA apertura). Si no,
+ * el bucle de siempre: mas lento, pero correcto -- y es lo que ya habia. */
+long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
+    if (!cb) return -1;
+    const bpvm_fs_backend_t* be_rs = route(path);
+    if (be_rs && be_rs->read_stream) return be_rs->read_stream(path, cb, user);
+
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) return -1;
+    uint8_t  buf[256];
+    uint32_t off = 0;
+    while (off < size) {
+        long n = bpvm_fs_read_at(path, off, buf, sizeof buf);
+        if (n <= 0) return -1;               /* incluye "backend sin read_at" */
+        if (cb(buf, (uint32_t) n, user) != 0) break;   /* el llamador aborta */
+        off += (uint32_t) n;
+    }
+    return (long) off;
+}
+
 int bpvm_fs_crc32(const char* path, uint32_t* crc_out) {
     /* #398 — si el backend sabe hacerlo, que lo haga ÉL: abre el fichero una
      * vez y lo lee en secuencia. El bucle de abajo, que va por `read_at`, paga

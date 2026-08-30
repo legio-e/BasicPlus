@@ -189,6 +189,15 @@ static void repl_rename(long id, const json_obj_t* obj) {
     wire_v1_send_reply_empty("RENAME_REPLY", id);
 }
 
+/* #453 — cada trozo, tal cual al wire. Devuelve 0 siempre: aqui no hay forma
+ * de saber si el otro lado sigue ahi, y cortar por nuestra cuenta dejaria el
+ * `bulk` anunciado a medias sin motivo. */
+static int repl_get_chunk(const uint8_t* data, uint32_t len, void* user) {
+    (void) user;
+    wire_v1_send_bulk(data, (size_t) len);
+    return 0;
+}
+
 static void repl_get(long id, const json_obj_t* obj) {
     char path[64];
     char buf[96];
@@ -211,17 +220,23 @@ static void repl_get(long id, const json_obj_t* obj) {
     off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
     if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "GET_REPLY no cabe"); return; }
     wire_v1_send_line(buf, (size_t) off);
-    /* Si el FS falla a media transferencia ya no hay rectificación posible —
-     * la cabecera con `bulk` salió—: se corta y el cliente lo ve por el bulk
+    /* #453 — UNA apertura, no una por trozo.
+     *
+     * Esto era un bucle de `bpvm_fs_read_at` de 256 en 256 B, y `read_at` recibe
+     * el PATH: cada trozo abria el fichero, hacia seek desde el principio, leia
+     * y cerraba. Medido el 30-ago en un S3 con ficheros del propio proyecto:
+     * uno de 9 KB (36 trozos) se abre y uno de 120 KB (472 trozos) NO -- se pasa
+     * de los 10 s de timeout del IDE. Mismo codigo y misma placa: solo el tamano.
+     *
+     * Es la MISMA enfermedad que #398/#424 arreglo para el CRC, en el otro
+     * llamador que se quedo sin arreglar. `bpvm_fs_read_stream` cae al bucle de
+     * siempre si el backend no sabe leer en secuencia, asi que esto no rompe a
+     * nadie: donde no haya `read_stream`, se comporta exactamente como antes.
+     *
+     * Si el FS falla a media transferencia ya no hay rectificacion posible -- la
+     * cabecera con `bulk` ya salio--: se corta y el cliente lo ve por el bulk
      * incompleto, como con un cable desconectado. */
-    uint32_t sent = 0;
-    while (sent < size) {
-        uint8_t chunk[256];
-        long n = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
-        if (n <= 0) break;
-        wire_v1_send_bulk(chunk, (size_t) n);
-        sent += (uint32_t) n;
-    }
+    (void) bpvm_fs_read_stream(path, repl_get_chunk, NULL);
 }
 
 

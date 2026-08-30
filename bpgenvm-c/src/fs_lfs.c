@@ -177,6 +177,27 @@ static int be_crc32_impl(const char* path, uint32_t* crc_out) {
     return 0;
 }
 
+/* #453 — el gemelo de `be_crc32_impl` para el `GET` del wire: UNA apertura y
+ * lectura en secuencia, entregando cada trozo al callback. Mismo buffer de 512 B
+ * y mismo motivo que alli (ver la nota de arriba): esto lo llama tambien el
+ * firmware mas apretado. */
+static long be_read_stream_impl(const char* path, bpvm_fs_chunk_cb cb, void* user) {
+    lfs_file_t f;
+    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    uint8_t buf[512];
+    long    total = 0;
+    int     err = 0;
+    for (;;) {
+        lfs_ssize_t n = lfs_file_read(&s_lfs, &f, buf, sizeof buf);
+        if (n < 0) { err = 1; break; }
+        if (n == 0) break;
+        total += (long) n;
+        if (cb(buf, (uint32_t) n, user) != 0) break;   /* el llamador aborta */
+    }
+    lfs_file_close(&s_lfs, &f);
+    return err ? -1 : total;
+}
+
 static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
     lfs_file_t f;
     int flags = LFS_O_WRONLY | LFS_O_CREAT | (append ? LFS_O_APPEND : LFS_O_TRUNC);
@@ -293,6 +314,13 @@ static int be_crc32(const char* path, uint32_t* crc_out) {
     fs_lock(); int r = be_crc32_impl(path, crc_out); fs_unlock(); return r;
 }
 
+/* #453 — y el lock, igual que en el CRC: UNA vez para todo el fichero, no una
+ * por trozo. Ademas de lo que cuesta entrar y salir 472 veces, dejaba huecos por
+ * los que otro hilo podia escribir el fichero a mitad de su propio envio. */
+static long be_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
+    fs_lock(); long r = be_read_stream_impl(path, cb, user); fs_unlock(); return r;
+}
+
 /* V5/H2 — las gemelas de escritura. `LFS_O_CREAT` sin `LFS_O_TRUNC`: abre lo que
  * haya o lo crea, y a partir de ahí sólo pisa el trozo que le toca.
  *
@@ -376,6 +404,7 @@ static const bpvm_fs_backend_t s_lfs_backend = {
     .write_at = be_write_at, /* V5/H2 — escritura posicional (base de datos) */
     .truncate = be_truncate,
     .crc32    = be_crc32,   /* #398 — sin esto, 512 aperturas por 128 KB */
+    .read_stream = be_read_stream, /* #453 — idem para el GET: 472 aperturas por 120 KB */
 };
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {

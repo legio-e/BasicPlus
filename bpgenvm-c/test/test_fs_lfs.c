@@ -30,6 +30,17 @@ static int g_asserts = 0;
     g_asserts++;                                             \
 } while (0)
 
+/* #453 — junta los trozos de read_stream para poder compararlos. */
+static uint32_t g_rs_off = 0;
+static int      g_rs_veces = 0;
+static int rs_cb(const uint8_t* data, uint32_t len, void* user) {
+    uint8_t* dst = (uint8_t*) user;
+    memcpy(dst + g_rs_off, data, len);
+    g_rs_off += len;
+    g_rs_veces++;
+    return 0;
+}
+
 static int read_str(const char* path, char* out, unsigned cap) {
     long n = bpvm_fs_read(path, (uint8_t*) out, cap - 1);
     if (n < 0) return -1;
@@ -129,6 +140,49 @@ int main(void) {
                "crc: backend == bucle de read_at (littlefs)");
         }
         OK(bpvm_fs_remove("/crc.bin") == 0, "crc: limpiar");
+    }
+
+    /* -- #453: read_stream DEL BACKEND == EL BUCLE DE read_at, byte a byte --
+     *
+     * El gemelo del bloque de arriba, para el otro llamador. Aqui lo que no
+     * puede cambiar no es un numero sino EL CONTENIDO: si `read_stream` entrega
+     * bytes distintos, el fichero que el IDE descarga sale corrupto -- y sin
+     * error, porque el `bulk` anunciado sigue cuadrando.
+     *
+     * Casos alrededor de los limites de trozo (256 del camino viejo, 512 del
+     * nuevo) porque es donde se rompen estos bucles: 255/256/257 y 511/512/513.
+     * El 0 esta a proposito: un fichero vacio no debe llamar al callback ni una
+     * vez, y debe devolver 0, no -1. */
+    {
+        const uint32_t TAMS[] = { 0, 1, 255, 256, 257, 511, 512, 513, 1000, 5001 };
+        for (unsigned t = 0; t < sizeof(TAMS)/sizeof(TAMS[0]); t++) {
+            uint32_t n = TAMS[t];
+            static uint8_t datos[5001];
+            for (uint32_t i = 0; i < n; i++) datos[i] = (uint8_t) (i * 17 + 3);
+            OK(bpvm_fs_write("/rs.bin", datos, n, 0) == 0, "rs: escribir el caso");
+
+            static uint8_t junto[5001];
+            g_rs_off = 0; g_rs_veces = 0;
+            long total = bpvm_fs_read_stream("/rs.bin", rs_cb, junto);
+            OK(total == (long) n, "rs: devuelve el tamano del fichero");
+            OK(g_rs_off == n, "rs: entrega exactamente n bytes");
+            OK(n == 0 ? g_rs_veces == 0 : g_rs_veces > 0,
+               "rs: un fichero vacio no llama al callback");
+            OK(memcmp(junto, datos, n) == 0,
+               "rs: los bytes son los MISMOS que se escribieron");
+
+            /* y contra el camino viejo, que es el oraculo de verdad */
+            uint32_t off = 0; int malo = 0;
+            uint8_t tr[256];
+            while (off < n) {
+                long got = bpvm_fs_read_at("/rs.bin", off, tr, sizeof tr);
+                if (got <= 0) { malo = 1; break; }
+                if (memcmp(tr, junto + off, (size_t) got) != 0) { malo = 1; break; }
+                off += (uint32_t) got;
+            }
+            OK(!malo && off == n, "rs: read_stream == bucle de read_at");
+        }
+        OK(bpvm_fs_remove("/rs.bin") == 0, "rs: limpiar");
     }
 
     /* -- PERSISTENCIA entre attach + mount-primero-no-reformatear -- */

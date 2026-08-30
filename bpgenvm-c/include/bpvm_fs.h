@@ -22,6 +22,10 @@
 extern "C" {
 #endif
 
+/* V6 (#453) — trozo de fichero entregado por `read_stream`. Devolver != 0
+ * aborta la lectura (p.ej. el wire se corto y ya no hay a quien mandarlo). */
+typedef int (*bpvm_fs_chunk_cb)(const uint8_t* data, uint32_t len, void* user);
+
 typedef struct {
     /* 0 + *size si el fichero existe; -1 si no. */
     int  (*stat)(const char* path, uint32_t* size);
@@ -109,6 +113,30 @@ typedef struct {
      * implemente lo deja a NULL y la fachada usa el bucle de `read_at`.
      */
     int  (*crc32)(const char* path, uint32_t* crc);
+    /*
+     * V6 (#453) — LEER EL FICHERO ENTERO POR TROZOS, con UNA sola apertura.
+     *
+     * La MISMA enfermedad que arriba y el MISMO remedio, aplicados al segundo
+     * llamador. Cuando se arregló el CRC (#398/#424) se añadió `crc32` porque
+     * era el caso que se había cronometrado — y el otro bucle de `read_at`, el
+     * del `GET` del wire, se quedó como estaba.
+     *
+     * Medido el 30-ago en un S3, abriendo ficheros del propio proyecto:
+     *
+     *     AOT_ABI8_IDEAS.md    9.178 B ->  36 trozos -> abre
+     *     ESTADO.md          120.763 B -> 472 trozos -> TIMEOUT (10 s del IDE)
+     *
+     * Mismo código y misma placa: sólo cambia el tamaño. Con el seek creciendo
+     * con el offset, 472 aperturas no caben en el timeout.
+     *
+     * `cb` recibe cada trozo en orden; devolver != 0 aborta la lectura (el
+     * llamador ya no puede seguir, p.ej. el wire se cortó). Devuelve los bytes
+     * entregados, o -1.
+     *
+     * Campo AL FINAL y opcional, igual que `crc32`: el backend que no lo traiga
+     * lo deja a NULL y la fachada cae al bucle de `read_at` de siempre.
+     */
+    long (*read_stream)(const char* path, bpvm_fs_chunk_cb cb, void* user);
 } bpvm_fs_backend_t;
 
 /* Registra el backend RAÍZ (una vez al boot). Limpia cualquier montaje
@@ -165,6 +193,9 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
  * pila. Es lo que el LS del wire necesita de cada fichero, y la razón por la
  * que había un scratch enorme. 0 y *crc_out puesto; -1 si no se pudo leer. */
 int  bpvm_fs_crc32(const char* path, uint32_t* crc_out);
+/* #453 — lee el fichero entero por trozos. Usa el `read_stream` del backend si
+ * lo hay (UNA apertura); si no, cae al bucle de `read_at` de siempre. */
+long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user);
 
 /* ── H19-F1 — base-dir por ejecución (modelo de proyecto / paths web-app) ──
  * Cuando un proyecto está activo (p.ej. "/app/<proj>"), los paths RELATIVOS de
