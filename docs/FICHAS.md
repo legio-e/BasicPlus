@@ -3393,9 +3393,27 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   📌 **Por qué no se arregló al encontrarlo**: code freeze, y esto **no es regresión de
   V5** — es del subsistema de interfaces de módulo, que es delicado. Se ficha y lo
   decide Eduardo.
-  ⚠️ **Mientras tanto**: `appv1lsp.bp` y `appv2.bp` viajan en el ZIP y no compilan. O se
-  arregla, o se sacan de la distribución, o se mueven a `samples/errores/` con una nota
-  de que hoy no va. **No se publica sin elegir una de las tres.**
+  ✅ **La decisión de publicación YA SE TOMÓ** (y este párrafo decía lo contrario hasta el
+  30-ago): `appv1lsp.bp` y `appv2.bp` **no viajan** — viven en `samples/pendientes/`, una
+  tercera carpeta creada para esto, con su `LEEME` explicando por qué no van a
+  `samples/errores/` (esa es para los que fallan **a propósito**; meter aquí un bug sería
+  camuflarlo) y por qué no se borran (**son la prueba de regresión**: el día que compilen,
+  está arreglado). En `dist/BasicPlus-5.0-win/samples/` sólo quedan `logapi.bp` y
+  `logapiv2.bp`, que compilan solos.
+
+  🔁 **Sigue vivo — reproducido el 30-ago** con el compilador actual:
+  ```
+  error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o transitivamente;
+  declara com.example.LogApiV2)
+  ```
+  📌 **Y la traza de hoy discute la hipótesis de arriba, así que conviene comprobarlo antes
+  de arreglar.** Se dijo que *«falla el dato»* porque una `module interface` pura no genera
+  `.mod` y la cadena no se puede recorrer. Pero en esta corrida el dato **sí está**: la
+  pasada imprime `interfaz : com.example.LogApiV2 (… interface=true,
+  extends=com.example.LogApi)` — o sea que el `extends` se conoce y aun así el impl se
+  rechaza. Puede que el dato exista y no llegue a donde mira `implSatisfies`. **Primer
+  gesto al retomarlo: mirar si `implSatisfies` recibe ese `extends` o una copia sin él**,
+  en vez de dar por buena la explicación escrita.
 
 ### AOT / native
 
