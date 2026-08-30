@@ -52,6 +52,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -116,6 +117,46 @@ public final class BpvmClient implements AutoCloseable {
     private InputStream inRaw;
     private final Object writeLock = new Object();
 
+    /* #454 — LATIDO DEL CABLE: cuándo llegó el último byte de la placa.
+     *
+     * El timeout de `sendRequest` era un plazo ÚNICO para la respuesta entera, y
+     * eso mide lo que no debe. Un timeout sirve para detectar que el otro lado
+     * NO ESTÁ; acotar cuánto puede tardar una transferencia es otra cosa, y
+     * ponerle un número fijo la rompe en cuanto el fichero crece.
+     *
+     * Se vio con dos ficheros del propio proyecto sobre un S3 (UART 115200):
+     * uno de 9 KB abre y uno de 120 KB no — 120.763 B a 115200 son 10,5 s y el
+     * plazo eran 10,0. Y lo que lo dejó claro fue que un PACK de ~580 KB SÍ se
+     * graba: tarda ~50 s, pero va por PUT_BEGIN/DATA/END, o sea N peticiones
+     * con SU plazo cada una. El camino de SUBIDA ya tenía resuelto esto; el de
+     * bajada, que es un `GET` de una pieza, no lo recibió.
+     *
+     * Criterio de Eduardo: «el timeout se suele configurar por trama, no por
+     * tiempo total del traspaso de un archivo; sirve para detectar conexiones
+     * que se han caído». Con esto un fichero de 10 MB por un cable lento va
+     * bien mientras sigan llegando bytes, y un cable muerto se detecta igual de
+     * rápido aunque el fichero sea diminuto. */
+    private volatile long lastRxMillis = System.currentTimeMillis();
+
+    /** Envuelve el stream del wire para sellar la hora de CADA byte que entra.
+     *  Va aquí y no en el bucle lector porque el cuerpo de un `bulk` se lee
+     *  dentro de `recvBulk`, que no vuelve hasta tenerlo entero: sellar sólo por
+     *  frame dejaría los 120 KB sin dar señales de vida. */
+    private InputStream conLatido(InputStream d) {
+        return new FilterInputStream(d) {
+            @Override public int read() throws IOException {
+                int c = super.read();
+                if (c >= 0) lastRxMillis = System.currentTimeMillis();
+                return c;
+            }
+            @Override public int read(byte[] b, int off, int len) throws IOException {
+                int n = super.read(b, off, len);
+                if (n > 0) lastRxMillis = System.currentTimeMillis();
+                return n;
+            }
+        };
+    }
+
     private Thread readerThread;
     private Thread stderrPumpThread;
     /** Latch que cierra cuando llega HELLO_REPLY (handshake completo). */
@@ -176,7 +217,7 @@ public final class BpvmClient implements AutoCloseable {
         try {
             this.socket = new java.net.Socket(host, port);
             this.outRaw = new BufferedOutputStream(socket.getOutputStream());
-            this.inRaw  = new BufferedInputStream(socket.getInputStream());
+            this.inRaw  = conLatido(new BufferedInputStream(socket.getInputStream()));
         } catch (IOException e) {
             throw new IOException("no se pudo conectar a la VM remota " + host + ":" + port
                     + " — ¿está corriendo `bpgenvm --listen " + port + " --workdir ...` allí?", e);
@@ -255,7 +296,7 @@ public final class BpvmClient implements AutoCloseable {
             throw new IOException("drain inicial falló: " + ioe.getMessage(), ioe);
         }
 
-        this.inRaw  = new SerialBlockingInputStream(rawIn);
+        this.inRaw  = conLatido(new SerialBlockingInputStream(rawIn));
         this.outRaw = rawOut;   // raw — purejavacomm a veces se atraganta con buffered
         startReaderThread();
         doHandshake();
@@ -534,6 +575,23 @@ public final class BpvmClient implements AutoCloseable {
      *  IOException si timeout o si la respuesta es un ERROR. `extraJson`
      *  va como pares CSV ya formateados (sin llaves). `bulkOrNull` se
      *  serializa como `"bulk":N` + N bytes raw tras el `\n`. */
+    /** Espera la respuesta rindiendose solo tras `inactividadMs` SIN recibir un
+     *  byte. Trocear la espera es lo unico que hace falta: el latido lo sella el
+     *  stream (ver conLatido). */
+    private Map<String, Object> esperarPorActividad(CompletableFuture<Map<String, Object>> f,
+                                                    long inactividadMs)
+            throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
+        final long RODAJA_MS = 250L;
+        for (;;) {
+            try {
+                return f.get(RODAJA_MS, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException te) {
+                if (System.currentTimeMillis() - lastRxMillis > inactividadMs) throw te;
+                /* siguen llegando bytes: el cable esta vivo, se sigue esperando */
+            }
+        }
+    }
+
     private Map<String, Object> sendRequest(String type, String extraJson, byte[] bulkOrNull, long timeoutMs)
             throws IOException {
         long id = nextRequestId.getAndIncrement();
@@ -550,7 +608,12 @@ public final class BpvmClient implements AutoCloseable {
         sb.append('}');
         writeFrame(sb.toString(), bulkOrNull);
         try {
-            Map<String, Object> resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
+            /* #454 — se espera POR INACTIVIDAD, no por tiempo total. Mientras
+             * la placa siga mandando bytes, esto no se rinde; si deja de
+             * mandarlos durante `timeoutMs`, sí. El plazo pasa de "cuánto puede
+             * tardar la respuesta" a "cuánto puede callar el cable", que es lo
+             * que un timeout debe medir. */
+            Map<String, Object> resp = esperarPorActividad(future, timeoutMs);
             String respType = Json.getString(resp, "type", "");
             if ("ERROR".equals(respType)) {
                 throw new WireError(Json.getString(resp, "code", "?"),
@@ -1409,7 +1472,7 @@ public final class BpvmClient implements AutoCloseable {
             try {
                 this.socket = new Socket("localhost", port);
                 this.outRaw = new BufferedOutputStream(socket.getOutputStream());
-                this.inRaw  = new BufferedInputStream(socket.getInputStream());
+                this.inRaw  = conLatido(new BufferedInputStream(socket.getInputStream()));
                 return;
             } catch (IOException e) {
                 last = e;
