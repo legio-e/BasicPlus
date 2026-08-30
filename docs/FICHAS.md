@@ -1023,6 +1023,38 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
+#### 🟡 `#456` — un `path` largo se TRUNCA en silencio y la operación dice OK (abierta 30-ago)
+
+Salió mirando los límites de longitud al migrar el `PUT` (`U3.21`). **Medido**, no
+deducido — programita en el host contra `json_min.c`:
+
+```
+pedido : 70 caracteres
+copiado: 63  -> '/app/xxxxxxxx…xxx' (63)
+¿el llamador se entera? json_get_str<0 = NO
+```
+
+`json_get_str` **trunca por contrato** (está escrito en `json_min.h`: *«Si dst_size es
+insuficiente, trunca»*), y devuelve la longitud copiada. Los seis sitios del REPL común
+que leen un path comprueban `< 0`, que sólo detecta *«no viene»* — nunca *«no cabe»*.
+
+🔴 **El modo de fallo es el peor de los tres**: no es un error, ni un cuelgue. Es
+**operar sobre OTRO fichero y contestar que todo fue bien**. Un `PUT` escribe en el
+nombre recortado; un `DEL` borraría el recortado si existiera.
+
+Alcance: `PUT`, `PUT_BEGIN`, `GET`, `DEL`, `STAT`, `MKDIR` (`path`) y `RENAME`
+(`from`/`to`). El `confirm` del `FORMAT` **falla seguro** y no cuenta: truncado deja de
+coincidir con el valor esperado.
+
+Probabilidad hoy: baja — el IDE manda nombres planos y el tope son 63 caracteres. Pero
+es exactamente la categoría que aquí no se acepta: **error silencioso**.
+
+⏩ **Lo que hay que decidir**: lo barato es que `json_get_str` devuelva `-2` al truncar.
+Como los seis sitios ya comprueban `< 0`, **todos empiezan a rechazar sin tocarlos** — a
+cambio de contestar *«falta path»* cuando lo correcto sería *«path demasiado largo»*. Si
+se quiere el mensaje bueno, hay que distinguir `-1` de `-2` en cada uno. Toca las cinco
+implementaciones del wire, así que va en su propio paso y con placa.
+
 #### ✅ `#455` — el `PUT` del común dejó de crear las carpetas que faltaban (cerrada 30-ago)
 
 **Cómo salió**: comparando línea a línea el `handle_put` del ESP32 contra el del común
