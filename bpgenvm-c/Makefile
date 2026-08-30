@@ -1057,3 +1057,35 @@ gui-imgdecode: build/liblvgl.a build/SDL2.dll
 	$(CC) -std=gnu11 -O2 $(LVGL_INC) test/gui_imgdecode.c build/liblvgl.a \
 	  -L$(SDL2_DIR)/lib -lSDL2 -o build/gui_imgdecode.exe
 	./build/gui_imgdecode.exe ../bpstdlib/testimg.png
+
+# ── #446 — LO QUE EL ARNÉS NO PODÍA VER ────────────────────────────────────────
+# El host lleva `GUI ?= 1`, así que SIEMPRE compila con BPVM_GUI. Las 535 líneas
+# del core bajo ese flag están siempre presentes en el PC, y por eso el arnés no
+# puede detectar que a una placa pequeña le falte algo de ahí: fue #445, tres
+# builtins de `App` (211/212/213) que vivían dentro del `#ifdef` sin tener nada
+# que ver con la pantalla. Rotos en TODA placa sin GUI, y el fuente los enseñaba
+# implementados.
+#
+# El control: preprocesar de verdad —con y sin el flag— y comprobar que todo lo
+# que sólo existe con GUI se llama `GUI_*`. Cualquier otra cosa es un colado.
+#
+# 📌 Se preprocesa, NO se lee el fuente con grep/awk: al escribir esto un awk que
+# contaba `#ifdef`/`#endif` a mano dijo que los tres `APP_*` seguían dentro (se
+# le coló un `#ifdef` de la línea 33) — un instrumento mintiendo sobre el propio
+# bug que persigue. El preprocesador no opina.
+check-nogui:
+	@echo "== #446: builtins que solo existen con BPVM_GUI =="
+	@ln() { $(CC) -E -Iinclude -Isrc -Ithird_party/littlefs $$1 src/builtins.c 2>/dev/null | \
+	          awk '/^# [0-9]+ ".*builtins\.c"/ { split($$0,a," "); l=a[2]; next } \
+	               { if (/case BUILTIN_/) print l; l++ }' | sort -u; }; \
+	 con=$$(ln "-DBPVM_GUI" | wc -l); sin=$$(ln "" | wc -l); \
+	 echo "   con GUI: $$con | sin GUI: $$sin | solo-GUI: $$((con-sin))"; \
+	 colados=$$(comm -13 <(ln "") <(ln "-DBPVM_GUI") | while read l; do sed -n "$${l}p" src/builtins.c; done \
+	            | grep -oE "BUILTIN_[A-Z_0-9]+" | sed 's/BUILTIN_//' | sort -u | grep -v "^GUI_" || true); \
+	 if [ -n "$$colados" ]; then \
+	   echo "   FAIL: estos NO son de la GUI y solo existen con ella:"; \
+	   echo "$$colados" | sed 's/^/     /'; \
+	   echo "   (rotos en toda placa sin pantalla, y el fuente los ensena implementados)"; \
+	   exit 1; \
+	 fi; \
+	 echo "   PASS check-nogui: todo lo solo-GUI se llama GUI_*"

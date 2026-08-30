@@ -546,7 +546,32 @@ metieron. Funcionaban sólo donde se define `BPVM_GUI` (host, ESP32-P4, STM32 Di
 Verificado en el preprocesado con control (ANTES: 0 sin GUI / 3 con GUI; AHORA: 3 y 3) y
 ejecutando `AppTest` en un host con `GUI=0`. ✅ Verificado en placa.
 
-#### 🔴 `#446` — el arnés no puede ver lo que le falta a una placa pequeña (abierta 28-ago)
+#### ✅ `#446` — el arnés no puede ver lo que le falta a una placa pequeña (**CERRADA 30-ago**)
+
+> ⏩ **El arreglo es un control, `make check-nogui`**, y lo que mide no es lo que decía el
+> enunciado. Construir el host con `GUI=0` y pasarle el arnés sale **38/38 verde** — pero
+> eso no prueba nada: esos 38 son el núcleo determinista y ninguno toca la GUI. **El hueco
+> no era el flag, era el corpus.**
+>
+> Lo que sí cierra el agujero de #445 es preprocesar con y sin el flag y comparar:
+>
+> ```
+> con GUI: 222 builtins  |  sin GUI: 145  |  sólo-GUI: 77
+> ...y los 77 se llaman TODOS `GUI_*`  ->  no queda ningún colado
+> ```
+>
+> El control falla si alguna vez un builtin que **no** sea `GUI_*` acaba dentro del
+> `#ifdef` — que fue exactamente #445 (los tres de `App`, rotos en toda placa sin pantalla
+> y con el fuente enseñándolos implementados).
+>
+> ✅ **Y se comprobó que SABE VER ROJO**, que es lo que le faltaba al arnés viejo: se
+> reinyectó el bug de #445 a propósito y el control lo detectó, lo nombró (`APP_MAIN_MODULE`)
+> y salió con error. Un control que sólo sabe decir verde no es un control.
+>
+> 📌 **Y una lección del propio arreglo**: el primer censo lo hice con un `awk` que contaba
+> `#ifdef`/`#endif` a mano, y dijo que los tres `APP_*` **seguían dentro** — se le había
+> colado el `#ifdef` de la línea 33. Un instrumento mintiendo sobre el mismo bug que
+> perseguía. Por eso el control **preprocesa de verdad**: el preprocesador no opina.
 
 Salió al cerrar #445 y es estructural. El Makefile del host lleva **`GUI ?= 1`**: el PC
 **siempre** compila con `BPVM_GUI`. Las **535 líneas** del core bajo ese flag están siempre
