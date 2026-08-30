@@ -465,7 +465,15 @@ static void repl_save(long id) {
      * ya persiste. No es un no-op disfrazado — es que no hay nada que hacer. */
     int64_t t0 = bpvm_platform_now_ms();
     if (s_ops->fs_save && s_ops->fs_save() != 0) {
-        wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE: el FS no se pudo persistir");
+        /* V6/U3 — DICE POR QUÉ, no sólo que no pudo. Esto era un
+         * `INTERNAL_ERROR "el FS no se pudo persistir"` fijo, y al comparar con
+         * el ESP32 (que sí mapeaba el estado del FS: `NO_SPACE`, `INVALID_PATH`…)
+         * quedó claro que migrarlo tal cual habría unificado HACIA ABAJO. Como
+         * las tres familias corren littlefs por debajo, `fs_fallo` sirve a las
+         * tres: mismo mapeo, y además deja libre/total en el log. */
+        const char *code, *msg;
+        fs_fallo("save", "", 0, &code, &msg);
+        wire_v1_send_error(id, code, msg);
         return;
     }
     /* `durationMs` lo daba SOLO la Pico, donde además mide un no-op y sale 0.

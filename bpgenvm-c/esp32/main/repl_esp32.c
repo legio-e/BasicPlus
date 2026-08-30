@@ -462,37 +462,12 @@ static void handle_list(long id, const json_obj_t* obj) {
  * que el desfase saltaba en uso normal. Con littlefs la escritura ya es firme
  * (fs_save_to_flash es el punto de sincronización de la fachada), pero el
  * comando debe existir y contestar como en el Pico: el protocolo es UNO. */
-static void handle_save(long id, const json_obj_t* obj) {
-    (void) obj;
-    uint32_t t0 = (uint32_t) (esp_timer_get_time() / 1000);
-    fs_status_t s = fs_save_to_flash();
-    uint32_t dt = (uint32_t) (esp_timer_get_time() / 1000) - t0;
-    if (s != FS_OK) {
-        const char* c; const char* m; map_fs_status(s, &c, &m);
-        wire_v1_send_error(id, c, m);
-        return;
-    }
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "SAVE_REPLY", id);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "durationMs", (long) dt);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE_REPLY no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
+/* V6/U3 g4 - SAVE vive en el comun, con su durationMs. El mapeo especifico
+ * del fallo (NO_SPACE, INVALID_PATH...) que solo tenia esta familia se SUBIO
+ * al comun en el mismo paso: no se pierde, lo ganan las tres. */
 
-static void handle_df(long id, const json_obj_t* obj) {
-    (void) obj;
-    long total = (long) fs_total_bytes();
-    long used  = (long) fs_used_bytes();
-    long fcnt  = (long) fs_file_count();
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "DF_REPLY", id);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "totalBytes", total);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "usedBytes", used);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "freeBytes", total - used);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fileCount", fcnt);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "DF_REPLY no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
+/* V6/U3 g4 - DF vive en el comun: mismos cuatro campos y en el mismo orden,
+ * y ademas protege la resta total-usado. Los tres getters, en la cintura. */
 
 /* Igual que en el Pico: el `/` es namespace, no hay nodos de directorio → MKDIR
  * es idempotente y silenciosa. Existe para que el IDE no se coma un error. */
@@ -1236,8 +1211,6 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
     if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
-    if (strcmp(type, "SAVE")  == 0) { handle_save(id, &obj);  return; }
-    if (strcmp(type, "DF")    == 0) { handle_df(id, &obj);    return; }
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }
