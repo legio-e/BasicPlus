@@ -1166,6 +1166,23 @@ porque las dos VMs asumen `campo 0 = msg` al fabricar un `RuntimeError`.
 ✅ **Verificado**: `trytest.bp` byte-idéntico en las dos VMs, paridad **38 PASS / 0 FAIL /
 0 SKIP**, censo de 313 samples sin roturas nuevas, stdlib 27/27 y las cuatro imágenes.
 
+✅ **Y EN PLACA (P4, 30-ago)**, con la salida **idéntica a la del host** — o sea que la
+paridad llega hasta el silicio:
+
+```
+Probar(-3) => atrapado: n era negativo
+inner catch: inner
+outer atrapa relanzado: relanzado desde catch
+fin
+[Explorer] VM finished: exit 0 (OK)
+```
+
+📌 **Cómo salió, que es lo que hay que recordar.** Yo propuse correr `trytest.bp` como
+trámite —*«ejercita el camino que más ficheros cambió»*— y Eduardo miró la salida y dijo
+**«no sé»**. Ese «no sé» ante algo raro fue lo que destapó un fallo de seguridad de
+memoria publicado en V5. La lección no es del bug: es que **una salida que no se entiende
+merece pararse a mirarla**, aunque el `exit` sea 0 y aunque el arnés esté verde.
+
 #### ✅ `#458` — `Core` implícito: la norma pasa a ser EXPLÍCITA, y la pasada de interfaz deja de tirar miembros en silencio (cerrada 30-ago)
 
 **Norma de Eduardo (30-ago):** *«la norma tiene que ser sencilla: si se utiliza un tipo
