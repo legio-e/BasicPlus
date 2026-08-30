@@ -492,7 +492,16 @@ public enum Builtin {
     PACK_NEXT("__packNext"),                           // (cur) → cur siguiente, -1 fin         [224]
     PACK_INFO("__packInfo"),                           // (cur) → string (nombre del pack)      [225]
     PACK_ENTRY_NEXT("__packEntryNext"),                // (packCur, cur) → cur, -1 fin          [226]
-    PACK_ENTRY_INFO("__packEntryInfo");                // (packCur, cur) → string (fichero.ext) [227]
+    PACK_ENTRY_INFO("__packEntryInfo"),                // (packCur, cur) → string (fichero.ext) [227]
+
+    /** V6/L1 — los cuatro que le faltaban a `Math` (`remap`, `clamp`, `hypot`,
+     *  `wrap`). AL FINAL del enum, como todo lo de arriba: el id es ordinal(),
+     *  así que intercalarlos correría los de detrás y todo `.mod` compilado
+     *  antes ejecutaría otro builtin — en silencio. */
+    CLAMP_F("__clamp_f"),                              // (x, lo, hi)              → float      [228]
+    WRAP_F("__wrap_f"),                                // (x, lo, hi)              → float      [229]
+    HYPOT_F("__hypot_f"),                              // (x, y)                   → float      [230]
+    REMAP_F("__remap_f");                              // (x, inLo, inHi, oLo, oHi) → float     [231]
 
     public final String bpName;
     public final int id;

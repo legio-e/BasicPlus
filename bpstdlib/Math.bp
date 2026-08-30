@@ -48,6 +48,25 @@ module Math
   // n >= 0, n <= 12 (máximo que cabe en i32). Fuera de rango → RuntimeError.
   public intrinsic function factorial(n: integer): integer
 
+  // -------- Rango y geometría (V6) --------
+  // Acota x al intervalo [lo, hi]. Con lo > hi el intervalo está del revés y el
+  // resultado es `lo` o `hi` según de qué lado caiga x — no es un error, es la
+  // consecuencia de aplicar las dos comparaciones en orden. NaN sale como NaN.
+  public intrinsic function clamp(x: float, lo: float, hi: float): float
+
+  // Envuelve x dentro de [lo, hi) de forma cíclica: wrap(370, 0, 360) = 10 y
+  // wrap(-10, 0, 360) = 350. Exige hi > lo; si no, lanza RuntimeError (un
+  // rango vacío no tiene respuesta correcta y devolver algo la inventaría).
+  public intrinsic function wrap(x: float, lo: float, hi: float): float
+
+  // Longitud del vector (x, y) = raíz(x² + y²).
+  public intrinsic function hypot(x: float, y: float): float
+
+  // Lleva x del rango [inLo, inHi] al rango [outLo, outHi], linealmente. No
+  // acota: fuera del rango de entrada extrapola (si quieres acotar, `clamp`
+  // después). Exige inHi != inLo; si no, lanza RuntimeError.
+  public intrinsic function remap(x: float, inLo: float, inHi: float, outLo: float, outHi: float): float
+
   // Función Γ (Lanczos approximation). Γ(n+1) = n! para naturales.
   // Definida para x > 0; para 0 < x < 0.5 usa la reflexión de Euler.
   public intrinsic function gamma(x: float): float

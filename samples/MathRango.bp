@@ -1,0 +1,55 @@
+// MathRango.bp — los cuatro de Math que entraron en V6: clamp, wrap, hypot, remap.
+//
+// Esto NO es una demo: es el oráculo. Cada línea fija un valor que las DOS VMs
+// tienen que imprimir igual, byte a byte, y las esquinas están a propósito —
+// son donde dos implementaciones "equivalentes" dejan de serlo.
+module MathRango
+  import Math
+
+  function Main()
+    print "-- clamp(x, lo, hi) --"
+    print "dentro   ", Math.clamp(5.0, 0.0, 10.0)      // 5
+    print "por abajo", Math.clamp(-3.0, 0.0, 10.0)     // 0
+    print "por arriba", Math.clamp(99.0, 0.0, 10.0)    // 10
+    print "en el borde lo", Math.clamp(0.0, 0.0, 10.0) // 0
+    print "en el borde hi", Math.clamp(10.0, 0.0, 10.0)// 10
+    // Rango del reves: NO es un error, es el resultado de aplicar las dos
+    // comparaciones en orden. Se fija aqui para que nadie lo "arregle" en una
+    // sola VM y rompa la paridad sin enterarse.
+    print "lo > hi  ", Math.clamp(5.0, 10.0, 0.0)      // 10 (x<lo -> lo)
+
+    print "-- wrap(x, lo, hi) --"
+    print "370 en [0,360)", Math.wrap(370.0, 0.0, 360.0)   // 10
+    print "-10 en [0,360)", Math.wrap(-10.0, 0.0, 360.0)   // 350
+    print "  0 en [0,360)", Math.wrap(0.0, 0.0, 360.0)     // 0
+    print "360 en [0,360)", Math.wrap(360.0, 0.0, 360.0)   // 0  (hi NO pertenece)
+    print "720 en [0,360)", Math.wrap(720.0, 0.0, 360.0)   // 0
+    print "  7 en [-5,5) ", Math.wrap(7.0, -5.0, 5.0)      // -3
+    print " -7 en [-5,5) ", Math.wrap(-7.0, -5.0, 5.0)     // 3
+
+    print "-- hypot(x, y) --"
+    print "(3,4)    ", Math.hypot(3.0, 4.0)            // 5
+    print "(0,0)    ", Math.hypot(0.0, 0.0)            // 0
+    print "(-3,-4)  ", Math.hypot(-3.0, -4.0)          // 5
+    print "(1,1)    ", Math.hypot(1.0, 1.0)            // raiz(2)
+    // Grande: aqui es donde un hypot() de libreria y la forma directa podrian
+    // separarse. Se fija el numero.
+    print "(3e18,4e18)", Math.hypot(3.0e18, 4.0e18)    // 5e18
+
+    print "-- remap(x, inLo, inHi, outLo, outHi) --"
+    print "512 de [0,1023] a [0,100]", Math.remap(512.0, 0.0, 1023.0, 0.0, 100.0)
+    print "  0 de [0,1023] a [0,100]", Math.remap(0.0, 0.0, 1023.0, 0.0, 100.0)
+    print "1023 de [0,1023] a [0,100]", Math.remap(1023.0, 0.0, 1023.0, 0.0, 100.0)
+    // Invertido (un potenciometro al reves) y extrapolacion fuera de rango:
+    // remap NO acota, y eso es deliberado.
+    print "invertido", Math.remap(0.0, 0.0, 10.0, 100.0, 0.0)   // 100
+    print "extrapola", Math.remap(20.0, 0.0, 10.0, 0.0, 100.0)  // 200
+
+    // Los dos juntos, que es como se usan de verdad: leer un ADC y acotarlo.
+    var lectura: float := 1200.0
+    print "adc acotado", Math.clamp(Math.remap(lectura, 0.0, 1023.0, 0.0, 100.0), 0.0, 100.0)
+
+    print "FIN"
+  end Main
+
+end MathRango

@@ -1530,7 +1530,19 @@ public final class Main {
         {
             java.io.DataInputStream in = new java.io.DataInputStream(src);
             int magic = in.readInt();
-            if (magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6) return null;
+            // #457 — TAMBIÉN v7. Este `if` decía sólo V6 y era un bug MUDO: desde
+            // que `N1.4` subió el formato a MOD7 (sección `native` embebida), el
+            // compilador ESCRIBE v7 y aquí lo rechazaba devolviendo `null`, o sea
+            // que cualquier módulo recompilado hoy se volvía invisible como
+            // dependencia. El error no salía aquí sino lejísimos, en el consumidor,
+            // como «identificador no resuelto: 'Math'».
+            //
+            // No mordía porque los 27 `.mod` de `bpstdlib/` seguían siendo v6 (se
+            // generaron antes del salto) y porque los módulos que se compilan
+            // JUNTOS resuelven su interfaz en memoria, sin pasar por disco. Muerde
+            // en cuanto se regenera uno.
+            boolean v7 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V7);
+            if (!v7 && magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6) return null;
             in.readInt();                 // dataSize
             in.readInt();                 // mainOffset
             int importsSize = in.readInt();
@@ -1538,6 +1550,10 @@ public final class Main {
             in.readInt();                 // codeSize
             int librarySize = in.readInt();
             int interfaceSize = in.readInt();
+            // El header v7 tiene UN entero más, `nativeSize`, justo detrás de
+            // `interfaceSize` (ver ModFormat: HEADER_SIZE_V6=32 → V7=36). Hay que
+            // consumirlo o las secciones se leen 4 bytes corridas.
+            if (v7) in.readInt();         // nativeSize
             if (interfaceSize <= 0) return null;
             // Orden de secciones: library, imports, exports, [interface], data,
             // code. La interfaz va tras exports → saltamos library+imports+exports.

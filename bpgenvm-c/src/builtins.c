@@ -357,7 +357,15 @@ enum {
     BUILTIN_PACK_NEXT            = 224,
     BUILTIN_PACK_INFO            = 225,
     BUILTIN_PACK_ENTRY_NEXT      = 226,
-    BUILTIN_PACK_ENTRY_INFO      = 227
+    BUILTIN_PACK_ENTRY_INFO      = 227,
+
+    /* V6/L1 — los cuatro que le faltaban a `Math`. AL FINAL, y los ids son los
+     * MISMOS que el ordinal() del enum Builtin de la VM-Java: si aquí y allí no
+     * coinciden, un `.mod` ejecuta otra funcion y no lo dice nadie. */
+    BUILTIN_CLAMP_F              = 228, /* (x, lo, hi)               → float */
+    BUILTIN_WRAP_F               = 229, /* (x, lo, hi)               → float */
+    BUILTIN_HYPOT_F              = 230, /* (x, y)                    → float */
+    BUILTIN_REMAP_F              = 231  /* (x, inLo, inHi, oLo, oHi) → float */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -2038,6 +2046,60 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, r);
         return BPVM_OK;
     }
+    /* V6/L1 — los cuatro nuevos de Math. Gemelos EXACTOS de los de
+     * VirtualMachine.java: mismas operaciones, mismo orden, cuenta en `double`
+     * y estrechado a f32 al final. El orden no es estilo — es el invariante. */
+    case BUILTIN_CLAMP_F: {
+        /* pila (abajo→arriba): x, lo, hi. El pop devuelve primero el de arriba. */
+        double hi = (double) bits_to_f32(pop_i32(vm, tc));
+        double lo = (double) bits_to_f32(pop_i32(vm, tc));
+        double x  = (double) bits_to_f32(pop_i32(vm, tc));
+        /* NaN: las dos comparaciones son falsas y sale NaN, igual que en Java. */
+        double r = (x < lo) ? lo : ((x > hi) ? hi : x);
+        push_i32(vm, tc, f32_to_bits((float) r));
+        return BPVM_OK;
+    }
+    case BUILTIN_WRAP_F: {
+        double hi = (double) bits_to_f32(pop_i32(vm, tc));
+        double lo = (double) bits_to_f32(pop_i32(vm, tc));
+        double x  = (double) bits_to_f32(pop_i32(vm, tc));
+        double r  = hi - lo;
+        if (!(r > 0)) {
+            /* Sin acentos y SIN NÚMEROS en el texto: `%g` de C y
+             * String.valueOf(double) de Java no dan la misma cadena, y este
+             * mensaje sale por stdout. */
+            return builtin_throw(vm, tc,
+                "wrap: el rango (hi - lo) tiene que ser mayor que cero");
+        }
+        double m = fmod(x - lo, r);      /* == el `%` de Java sobre double */
+        if (m < 0) m += r;
+        push_i32(vm, tc, f32_to_bits((float) (lo + m)));
+        return BPVM_OK;
+    }
+    case BUILTIN_HYPOT_F: {
+        double y = (double) bits_to_f32(pop_i32(vm, tc));
+        double x = (double) bits_to_f32(pop_i32(vm, tc));
+        /* A propósito NO se llama a hypot() de libm: es otro algoritmo que el
+         * Math.hypot() de Java y podrían diferir. Con entradas f32 el cuadrado
+         * no desborda un double (f32 máx ≈ 3.4e38 → 1.2e77 contra 1.8e308). */
+        push_i32(vm, tc, f32_to_bits((float) sqrt(x * x + y * y)));
+        return BPVM_OK;
+    }
+    case BUILTIN_REMAP_F: {
+        double outHi = (double) bits_to_f32(pop_i32(vm, tc));
+        double outLo = (double) bits_to_f32(pop_i32(vm, tc));
+        double inHi  = (double) bits_to_f32(pop_i32(vm, tc));
+        double inLo  = (double) bits_to_f32(pop_i32(vm, tc));
+        double x     = (double) bits_to_f32(pop_i32(vm, tc));
+        double d = inHi - inLo;
+        if (d == 0) {
+            return builtin_throw(vm, tc,
+                "remap: el rango de entrada es vacio (inHi == inLo)");
+        }
+        push_i32(vm, tc, f32_to_bits(
+            (float) (outLo + (x - inLo) * (outHi - outLo) / d)));
+        return BPVM_OK;
+    }
     case BUILTIN_FACTORIAL_I: {
         int32_t n = pop_i32(vm, tc);
         char msg[80];
@@ -2046,7 +2108,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, msg);
         }
         if (n > 12) {   /* 13! desborda i32 con signo */
-            snprintf(msg, sizeof msg, "factorial: %d desborda integer (max 12)", (int) n);
+            snprintf(msg, sizeof msg, "factorial: %d desborda integer (máx 12)", (int) n);
             return builtin_throw(vm, tc, msg);
         }
         int32_t r = 1;

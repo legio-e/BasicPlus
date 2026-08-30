@@ -748,14 +748,33 @@ de cada una sigue en su sitio.
 - **Ficheros como CLASE** — decidido: dos clases y la segunda hereda.
 - **`Map`**: objetos internos para claves **y** valores + `add` sobrecargado *(decidido el
   23-ago; ver arriba)*.
-- **`Math`, ampliar** — quedan **cuatro**: `remap`, `clamp`, `hypot`, `wrap` (cálculo
-  puro, pocas líneas). ⚠️ **`atan2` YA ESTÁ** y esta lista lo pedía hasta el 30-ago:
-  existe en `Math.bp`, la registra `Intrinsics.java` como `Builtin.ATAN2` y **las dos VMs
-  la implementan** — verificado corriendo `samples/mathtest.bp` en las dos, 17 líneas
-  byte-idénticas. Y lo de *«`fact` sobrecargada y f64»* hay que replantearlo antes de
-  hacerlo: la función se llama `factorial` (no `fact`), y para el caso continuo
-  **`gamma(x)` ya existe** — `gamma(n+1) = n!`, o sea que la mitad del deseo está servida.
-  Lo que sí falta de verdad ahí es un `factorial` que no reviente pasado n=12.
+- ✅ **`Math`, ampliar — HECHO el 30-ago**: entran `clamp`, `wrap`, `hypot` y `remap`
+  (ids 228-231, al final del enum porque el id es `ordinal()`). Oráculo en
+  `samples/MathRango.bp`: **29 líneas byte-idénticas en las dos VMs**, con las esquinas
+  fijadas a propósito (rango del revés, `hi` excluido en `wrap`, extrapolación de
+  `remap`, `hypot(3e18,4e18)`). `hypot` NO llama al de libm ni al `Math.hypot()` de
+  Java —son algoritmos distintos y podrían separarse—: las dos VMs hacen
+  `sqrt(x*x+y*y)` en `double`, que con entradas f32 no puede desbordar.
+  ⚠️ Y los mensajes de error **no llevan números en coma flotante**: un `%g` de C y un
+  `String.valueOf(double)` de Java no dan la misma cadena, y ese texto sale por stdout.
+  ℹ️ De la lista original eran cinco: **`atan2` ya estaba hecha** y esta ficha la pidió
+  hasta el 30-ago (existe en `Math.bp`, la registra `Intrinsics.java` y la implementan las
+  dos VMs — comprobado corriendo `samples/mathtest.bp`, 17 líneas byte-idénticas).
+
+- 🟡 **Lo que queda de `Math` NO es matemática, es el COMPILADOR.** Los dos deseos que
+  siguen abiertos son el mismo problema:
+  - *«`factorial` sobrecargada y f64»*. Observación de Eduardo: **nuestro factorial es
+    `Γ(x+1)`**, y `gamma` ya existe — comprobado con `samples/GammaFact.bp`, que fija
+    `gamma(n+1) == factorial(n)` para n=0..12 en las dos VMs, y sigue contestando donde el
+    entero lanza (`13! = 6227020800`, `20! = 2.432902E18`). O sea que **no hace falta
+    builtin nuevo: el cálculo ya está**.
+  - `sign(integer)` y `signF(float)`: dos nombres para una idea, herencia de cuando no
+    había sobrecarga.
+  🔒 **Y lo que bloquea a los dos es lo mismo: una intrínseca NO se puede sobrecargar.**
+  `Intrinsics.REGISTRY` es un `Map` con clave el nombre cualificado y `register()` revienta
+  si se repite; y el call-site (`MivmEmitter.java:3924`) compone la clave con **`fs.name`,
+  el nombre PELADO** — no el mangleado de `H5.a`. Así que las dos firmas caerían en la
+  misma entrada. Arreglarlo es la tarea de verdad, y de paso desbloquea las dos.
 - **`#19`** array fijo LOCAL: que sea inline de verdad · **`#396`** módulo `Time`.
 
 #### 💻 E1 — el IDE y el wire
@@ -1059,6 +1078,47 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 📌 **Así que las dos placas STM32 tienen ya UNA sola configuración, y es la que se usa.**
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
+
+#### ✅ `#457` — el compilador ESCRIBE `.mod` v7 y su lector de interfaces sólo aceptaba v6 (cerrada 30-ago)
+
+🔴 **La stdlib no se podía regenerar.** Recompilar `bpstdlib/Math.mod` desde su propio
+fuente, sin tocar una línea, dejaba de resolver: cualquier consumidor daba
+`identificador no resuelto: 'Math'`.
+
+**Cómo se acotó** — cambiando UNA cosa cada vez, que es lo que evitó culpar a un inocente:
+
+| experimento | resultado |
+|---|---|
+| `Math.mod` del repo + compilador de hoy | ✅ compila |
+| `Math.mod` regenerado **con mis 4 funciones nuevas** | ❌ |
+| `Math.mod` regenerado **desde el `Math.bp` SIN tocar** | ❌ ← *aquí se cayó la hipótesis* |
+| ... regenerado **por proyecto** en vez de suelto | ❌ (no era la receta) |
+
+Lo tercero es lo que lo resolvió: si el fuente sin cambios también rompe, **no son los
+cambios**. Un `hexdump` de los dos `.mod` lo dijo en el primer byte: `MOD6` → **`MOD7`**.
+
+📐 **La causa**: `N1.4` subió el formato a v7 (sección `native` embebida, el `.mdn` deja
+de ser fichero aparte) y `extractInterfaceSection` (`lexer-java/.../Main.java:1533`) se
+quedó en `if (magic != MAGIC_NUMBER_V6) return null;`. O sea que **el compilador escribía
+un formato que él mismo no sabía leer**.
+
+⚠️ **Y es un fallo MUDO doble.** El `return null` no dice nada, y el error aparece
+larguísimo después y en otro fichero, como un identificador sin resolver. Encima estaba
+tapado por dos casualidades: los 27 `.mod` de `bpstdlib/` seguían siendo v6 (se generaron
+antes del salto) y los módulos que se compilan **juntos** resuelven su interfaz en
+memoria, sin pasar por disco. Sólo muerde al regenerar uno — que es justo lo que
+`PUBLICAR.md` manda hacer al tocar la stdlib.
+
+✅ **Arreglado**: se acepta v7 y se consume su entero extra (`nativeSize`, el 9º del
+header — `HEADER_SIZE_V6=32` → `V7=36`); sin eso las secciones se leen 4 bytes corridas.
+Verificado: un `Math.mod` v7 resuelve, paridad dual-VM **38 PASS / 0 FAIL / 0 SKIP**.
+
+📌 **Lo que enseña**: *un formato tiene dos lados, y el que escribe no prueba al que lee*.
+Las VM-Java y VM-C ya aceptaban v7 (`ModFormat.isKnownMagic`, `loader.c:125`); el que se
+quedó atrás fue el **tercer lector**, el del propio compilador, que nadie recuerda que
+existe porque casi siempre trabaja en memoria. Enlaza con
+[[contar-los-consumidores-no-leer-el-codigo]]: al subir un formato hay que **censar los
+lectores**, y son tres, no dos.
 
 #### 🟡 `#456` — un `path` largo se TRUNCA en silencio y la operación dice OK (abierta 30-ago)
 

@@ -4851,6 +4851,61 @@ public class VirtualMachine {
                 pushTc(tc, Float.floatToRawIntBits((float) Math.atan2(y, x)));
                 break;
             }
+            // V6/L1 — los cuatro nuevos de Math. Se calculan en `double` y se
+            // estrechan a f32 al final, igual que el resto: es lo que hace que
+            // una diferencia de último ULP entre las dos VMs se pierda al
+            // redondear. Y el ORDEN de las operaciones se escribe idéntico al
+            // de la VM-C a propósito — el invariante es byte a byte.
+            case CLAMP_F: {
+                // pila (bottom→top): x, lo, hi. popTc devuelve top primero.
+                double hi = Float.intBitsToFloat(popTc(tc));
+                double lo = Float.intBitsToFloat(popTc(tc));
+                double x  = Float.intBitsToFloat(popTc(tc));
+                // NaN: las dos comparaciones son falsas y sale NaN, en las dos VMs.
+                double r = (x < lo) ? lo : ((x > hi) ? hi : x);
+                pushTc(tc, Float.floatToRawIntBits((float) r));
+                break;
+            }
+            case WRAP_F: {
+                double hi = Float.intBitsToFloat(popTc(tc));
+                double lo = Float.intBitsToFloat(popTc(tc));
+                double x  = Float.intBitsToFloat(popTc(tc));
+                double r  = hi - lo;
+                if (!(r > 0))
+                    // Sin acentos y sin números en el texto: un `%g` de C y un
+                    // `String.valueOf(double)` de Java NO dan la misma cadena, y
+                    // el mensaje viaja por stdout.
+                    throwBpRuntimeError(tc, "wrap: el rango (hi - lo) tiene que ser mayor que cero");
+                // `%` sobre double en Java == fmod de C (signo del dividendo).
+                double m = (x - lo) % r;
+                if (m < 0) m += r;
+                pushTc(tc, Float.floatToRawIntBits((float) (lo + m)));
+                break;
+            }
+            case HYPOT_F: {
+                double y = Float.intBitsToFloat(popTc(tc));
+                double x = Float.intBitsToFloat(popTc(tc));
+                // A propósito NO se usa Math.hypot() ni el hypot() de libm: son
+                // algoritmos distintos y podrían diferir. Con entradas f32 el
+                // cuadrado no desborda un double ni de lejos (f32 máx ≈ 3.4e38,
+                // al cuadrado 1.2e77 contra 1.8e308), así que la forma directa
+                // es segura y además idéntica en las dos VMs por construcción.
+                pushTc(tc, Float.floatToRawIntBits((float) Math.sqrt(x * x + y * y)));
+                break;
+            }
+            case REMAP_F: {
+                double outHi = Float.intBitsToFloat(popTc(tc));
+                double outLo = Float.intBitsToFloat(popTc(tc));
+                double inHi  = Float.intBitsToFloat(popTc(tc));
+                double inLo  = Float.intBitsToFloat(popTc(tc));
+                double x     = Float.intBitsToFloat(popTc(tc));
+                double d = inHi - inLo;
+                if (d == 0)
+                    throwBpRuntimeError(tc, "remap: el rango de entrada es vacio (inHi == inLo)");
+                pushTc(tc, Float.floatToRawIntBits(
+                        (float) (outLo + (x - inLo) * (outHi - outLo) / d)));
+                break;
+            }
             case FACTORIAL_I: {
                 int n = popTc(tc);
                 if (n < 0)

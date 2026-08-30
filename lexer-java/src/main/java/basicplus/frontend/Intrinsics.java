@@ -94,6 +94,12 @@ public final class Intrinsics {
         register("Math.factorial",w -> emitBuiltin(w, Builtin.FACTORIAL_I));
         // gamma(x: float): float — factorial real (Lanczos approximation).
         register("Math.gamma",    w -> emitBuiltin(w, Builtin.GAMMA_F));
+        // V6/L1 — rango y geometría. clamp/hypot no fallan nunca; wrap y remap
+        // lanzan RuntimeError con el rango degenerado (ver Math.bp).
+        register("Math.clamp",    w -> emitBuiltin(w, Builtin.CLAMP_F));
+        register("Math.wrap",     w -> emitBuiltin(w, Builtin.WRAP_F));
+        register("Math.hypot",    w -> emitBuiltin(w, Builtin.HYPOT_F));
+        register("Math.remap",    w -> emitBuiltin(w, Builtin.REMAP_F));
 
         // ---- IO ----
         register("IO.pathJoin",     w -> emitBuiltin(w, Builtin.PATH_JOIN));
