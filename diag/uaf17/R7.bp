@@ -1,0 +1,57 @@
+// R7 — FORZAR el estado en vez de esperarlo.
+// Hipótesis: el fallo necesita que el slot del handle se haya RECICLADO (gen != 0).
+// En una VM recién arrancada todos los slots están a gen 0, y un handle truncado
+// (que llega con gen 0) COINCIDE por casualidad → parece que va.
+// Así que primero se genera basura a mansalva para que el GC recicle slots, y
+// DESPUÉS se hace lo que falla. Si la hipótesis es buena, esto rompe siempre.
+module R7
+  public class C
+    public property v: integer
+    public function C(v_: integer)
+      v := v_
+    end C
+  end C
+
+  public class W extends Thread
+    var total: integer
+    public function W()
+      super(1000)
+      total := 0
+    end W
+    public function run()
+      var s: integer := 0
+      var i: integer := 1
+      while i <= 200 do
+        var c: C := C(i)
+        s := s + c.v
+        i := i + 1
+      endwh
+      total := s
+    end run
+    public function getTotal(): integer
+      return this.total
+    end getTotal
+  end W
+
+  function Main()
+    // --- fase 1: churn. Objetos que nacen y mueren para que el GC recicle slots.
+    print "churn..."
+    var k: integer := 0
+    while k < 20000 do
+      var basura: C := C(k)
+      k := k + 1
+    endwh
+    print "churn hecho"
+
+    // --- fase 2: ahora lo que falla, con los slots ya reciclados
+    var w1: W := W()
+    var w2: W := W()
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    print "w1 =", w1.getTotal()
+    print "w2 =", w2.getTotal()
+    print "R7 ok (esperado 20100 los dos)"
+  end Main
+end R7

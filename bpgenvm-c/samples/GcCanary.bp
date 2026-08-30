@@ -1,0 +1,26 @@
+// GcCanary.bp — #355: ¿CUANDO mueren los literales del modulo en placa?
+//
+// El sintoma en la Pico: tras un bucle largo de substring/fromBytes, los
+// literales del modulo salen VACIOS ("Hola" no se ve, "sub_malos=" + "0" da
+// "0"). En host NO pasa con ningun tamano de heap (393K..40K).
+//
+// Este canario se cronometra solo: imprime PREFIJO + NUMERO cada 250 vueltas.
+// Mientras se lea "tic 750" los literales viven; en cuanto salga sólo "750",
+// el literal ya ha muerto — y esa linea DICE la vuelta exacta en que paso.
+// Si nunca se rompe, el culpable no es el bucle.
+module GcCanary
+  import Core
+  function main()
+    var i: integer := 0
+    print "Inicio"
+    while i < 3000 do
+      var s: string := substring("abcdefghij" + intToString(i), 2, 8)
+      var b: string := fromBytes(toBytes("ABCDE"))
+      if i mod 250 == 0 then
+        print "tic " + intToString(i)
+      endif
+      i := i + 1
+    endwh
+    print "final " + intToString(i)
+  end main
+end GcCanary

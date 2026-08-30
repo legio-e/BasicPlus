@@ -14,6 +14,8 @@
 // que esto sustituya a la sintetizada no rompe ningun .mod.
 module ListaBp
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Caja
     var n: integer
     public function Caja(x: integer)

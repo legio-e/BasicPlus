@@ -1,0 +1,56 @@
+// OomString.bp — #355: agotar el heap CREANDO CADENAS debe saltar un
+// RuntimeError ATRAPABLE, nunca devolver cadenas vacias en silencio.
+//
+// POR QUE HACE FALTA, ADEMAS DE OomCatch.bp: aquel agota el heap con OBJETOS
+// (newIntArray dentro de una clase) y ese camino SI comprobaba el 0 desde H1.
+// Los builtins que fabrican CADENAS no lo comprobaban — catorce sitios, con
+// intToString EL PRIMERO. Al llenarse el heap devolvian una ref NULA y seguian:
+//
+//   print x                          -> no imprimia nada (linea en blanco)
+//   print "total=" + intToString(x)  -> salia solo "0", el literal desaparecido
+//
+// Eso costo una manana entera en la Pico (#355): el sintoma aparecia a diez
+// pasos de la causa y parecia corrupcion de memoria.
+//
+// ⚠️ DOS DISENOS ANTERIORES NO SERVIAN, y por la MISMA razon:
+//   - con List, quien se quedaba sin memoria era el array interno AL DOBLARSE
+//     (una peticion de 8..64 KB de golpe, que gana siempre a una cadena de 16 B),
+//     y ese camino ya estaba comprobado -> el test pasaba IGUAL sin el arreglo.
+//   - los arrays de tamano fijo no admiten cadenas.
+// RECURSION (idea de Eduardo): cada frame retiene SU cadena, no hay contenedor
+// y no hay saltos grandes. La UNICA reserva por vuelta es intToString, asi que
+// cuando el heap se acabe es ELLA la que tiene que gritar.
+//
+// Y el test MIRA LOS DATOS, no solo la salida: cuenta cadenas vacias. Los
+// canarios de #355 no petaban precisamente porque nunca miraban lo que creaban.
+//
+//   Esperado: "vacias=0" y "cazado" (la excepcion llega antes de guardar nada).
+//   Con el bug: vacias > 0 — cadenas nulas guardadas tan tranquilas.
+module OomString
+  import Core
+
+  var vacias: integer := 0
+
+  function hondo(n: integer): integer
+    var s: string := intToString(n)   // UNICA reserva, y viva en este frame
+    if len(s) == 0 then
+      vacias := vacias + 1            // esto NO deberia ocurrir nunca
+    endif
+    if n <= 0 then
+      return 0
+    endif
+    return hondo(n - 1)
+  end hondo
+
+  function main()
+    var caught: integer := 0
+    try
+      var r: integer := hondo(2000000)
+    catch e: RuntimeError
+      caught := 1
+      print "cazado"
+    endtry
+    print "vacias=" + intToString(vacias)
+    print "vivo tras OOM, caught=" + intToString(caught)
+  end main
+end OomString

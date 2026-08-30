@@ -1,5 +1,7 @@
 module OwnerListTest
 
+  import Core   // V6: los tipos de Core se importan
+
   class Recurso
     public property nombre: string
 

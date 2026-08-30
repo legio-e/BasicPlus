@@ -2,21 +2,21 @@ dbg 3
 module Pico
 source C:\lenguajes\pm\bpstdlib\Pico.bp
 lines
-405 93
-419 94
-435 96
-454 110
-473 116
-492 138
-496 139
-509 140
-521 142
-534 143
-546 145
-565 160
-580 164
-595 168
-610 175
+400 93
+414 94
+430 96
+449 110
+468 116
+487 138
+491 139
+504 140
+516 142
+529 143
+541 145
+560 160
+575 164
+590 168
+605 175
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -55,10 +55,10 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func setCpuFreqMHz 489
+func setCpuFreqMHz 484
 mhz -16 4 0 integer
 clamped 4 4 0 integer
-func __strconcat 624
+func __strconcat 619
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -1,0 +1,38 @@
+module NB3
+  import Core
+  // NB3 — RÉPLICA de __strconcat como función de usuario: 2 params `string`
+  // (refs 8B en pila), alocación del resultado, DOS bucles de copia byte a byte,
+  // y return del ref. Misma convención de llamada y misma estructura que el
+  // helper sintetizado, pero es código NUESTRO que SÍ podemos bisectar.
+  //   - NB1/NB2 OK y NB3 peta -> reproducido con código controlable: bisecamos
+  //     línea a línea (quitar el 2º bucle, luego el 1º, luego la copia...).
+  //   - NB3 OK pero "a"+"b" (CC1) peta -> la diferencia es el emit del OPERADOR
+  //     `+` vs una llamada normal (detalle de la convención del helper).
+  // (charCodeAt en ASCII == el byte; estructura equivalente al ALOAD_U8 del helper.)
+  function cat(a: string, b: string): byte[]
+    var la: integer := strlen(a)
+    var lb: integer := strlen(b)
+    var out: byte[] := newByteArray(la + lb)
+    var i: integer := 0
+    while i < la do
+      out[i] := byte(charCodeAt(a, i))
+      i := i + 1
+    endwh
+    i := 0
+    while i < lb do
+      out[i + la] := byte(charCodeAt(b, i))
+      i := i + 1
+    endwh
+    return out
+  end cat
+  function main()
+    try
+      var r: byte[] := cat("a", "b")
+      print "NB3 OK (concat manual)"
+    catch e: Core.Exception
+      print "NB3 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB3

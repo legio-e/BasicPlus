@@ -29,6 +29,8 @@
 // ============================================================
 module Adc
 
+  import Core   // V6: los tipos de Core se importan
+
   // ---- Intrínsecos de bajo nivel ----
   public intrinsic function initChannel(ch: integer): integer
   public intrinsic function readChannel(ch: integer): integer

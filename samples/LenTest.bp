@@ -8,6 +8,8 @@
 //   len list = 2
 module LenTest
 
+  import Core   // V6: los tipos de Core se importan
+
   function Main()
     var s: string := "hello"
     print "len str  =", len(s)

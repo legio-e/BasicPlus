@@ -1,0 +1,14 @@
+module CC1
+  import Core
+  function main()
+    try
+      var s: string := "a" + "b"
+      print "CC1 concat OK:"
+      print s
+    catch e: Core.Exception
+      print "CC1 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end CC1

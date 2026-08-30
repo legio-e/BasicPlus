@@ -2,6 +2,8 @@
 // tupla almacenada, destructuring a lvalues no-simples (arr[i], obj.x) y colecciones.
 module TupleFC
 
+  import Core   // V6: los tipos de Core se importan
+
   class Point
     public property x: integer
     public property y: integer

@@ -2,29 +2,29 @@ dbg 3
 module Freq
 source C:\lenguajes\pm\bpstdlib\Freq.bp
 lines
-448 76
-458 77
-468 78
-475 79
-485 80
-495 81
-520 87
-524 88
-533 89
-541 91
-544 92
-547 93
-557 94
-570 95
-578 97
-597 103
-625 108
-641 67
-651 68
-661 69
-820 46
-835 49
-850 52
+443 76
+453 77
+463 78
+470 79
+480 80
+490 81
+515 87
+519 88
+528 89
+536 91
+539 92
+542 93
+552 94
+565 95
+573 97
+592 103
+620 108
+636 67
+646 68
+656 69
+815 46
+830 49
+845 52
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -63,54 +63,54 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func Meter.getPin 391
+func Meter.getPin 386
 this -20 8 0 ?
-func Meter.setPin 405
+func Meter.setPin 400
 this -24 8 0 ?
-func Meter.getEdge 418
+func Meter.getEdge 413
 this -20 8 0 ?
-func Meter.setEdge 432
+func Meter.setEdge 427
 this -24 8 0 ?
-func Meter.measureHz 445
+func Meter.measureHz 440
 this -24 8 0 ?
 windowMs -16 4 0 integer
 n 8 4 0 integer
-func Meter.measureHzAvg 517
+func Meter.measureHzAvg 512
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
 s 4 4 0 integer
 sum 8 4 0 integer
 i 12 4 0 integer
-func Meter.maxHz 594
+func Meter.maxHz 589
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func Meter.close 622
+func Meter.close 617
 this -20 8 0 ?
-func Meter.__init 638
+func Meter.__init 633
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_new_Meter 676
+func __cls_new_Meter 671
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_init_Meter 710
+func __cls_init_Meter 705
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_m_Meter_measureHz 728
+func __cls_m_Meter_measureHz 723
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func __cls_m_Meter_measureHzAvg 747
+func __cls_m_Meter_measureHzAvg 742
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
-func __cls_m_Meter_maxHz 768
+func __cls_m_Meter_maxHz 763
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func __cls_m_Meter_close 787
+func __cls_m_Meter_close 782
 this -20 8 0 ?
-func __strconcat 862
+func __strconcat 857
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

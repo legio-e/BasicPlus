@@ -1,0 +1,19 @@
+// FsMin.bp — diagnóstico de placa: aísla el NÚCLEO del bucle de FsPowerCut
+// (writeFile a un temporal + IO.rename atómico), SIN fileExists/readFile/parseo.
+// Objetivo: ver si writeFile+rename en bucle es lo que peta en el device.
+//   exit 0  → el bucle writeFile+rename va bien; el fallo de FsPowerCut está en
+//             el camino fileExists/readFile/parse (o el resume).
+//   exit 10 → writeFile+rename es el culpable (device-específico).
+// Sólo 5 vueltas: si llega a la 5ª ya sabemos que el mecanismo va.
+module FsMin
+  import IO
+  function main()
+    var i: integer := 0
+    while i < 5 do
+      i := i + 1
+      writeFile("m.tmp", intToString(i))
+      IO.rename("m.tmp", "m.txt")
+    endwh
+    print "FsMin OK i=" + intToString(i)
+  end main
+end FsMin

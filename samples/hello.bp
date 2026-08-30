@@ -2,6 +2,9 @@
 // de tokens del lenguaje BASICPLUS.
 
 module Hello
+
+  import Core   // V6: los tipos de Core se importan
+
   import IO.Console
 
   // Enum estilo C

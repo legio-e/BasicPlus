@@ -1,0 +1,7 @@
+module W1
+  function main()
+    print "W1 antes"
+    writeFile("w1.txt", "hello")
+    print "W1 despues"
+  end main
+end W1

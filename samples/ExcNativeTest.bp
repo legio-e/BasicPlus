@@ -9,6 +9,9 @@
 //   base caza nativo: División por cero
 //   fin
 module ExcNativeTest
+
+  import Core   // V6: los tipos de Core se importan
+
   import ExcNativeLib
 
   function main()

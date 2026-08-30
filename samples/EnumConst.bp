@@ -1,0 +1,32 @@
+// EnumConst.bp — M6: una const puede inicializarse con un valor de enum.
+// El compilador pliega `Color.X` a su int subyacente ANTES de aplicar la norma
+// de const, así `const K := Color.X` == `const K := <int>` (cumple la norma).
+module EnumConst
+
+  public enum Color
+    ROJO
+    VERDE := 10
+    AZUL
+  end Color
+
+  public const FAV := Color.VERDE    // = 10
+  const FONDO := Color.AZUL          // = 11 (auto tras VERDE)
+
+  function Main()
+    var d: Color := FAV
+    switch d
+      case Color.VERDE
+        print "FAV=VERDE ok"
+      default
+        print "FAV MAL"
+    endsw
+    var e: Color := FONDO
+    switch e
+      case Color.AZUL
+        print "FONDO=AZUL ok"
+      default
+        print "FONDO MAL"
+    endsw
+  end Main
+
+end EnumConst

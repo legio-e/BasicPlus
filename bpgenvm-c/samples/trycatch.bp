@@ -1,6 +1,9 @@
 // trycatch.bp — F5: try/catch BP atrapando RuntimeError nativo
 // (división por cero) y RuntimeError lanzado por código BP.
 module TryCatch
+
+  import Core   // V6: los tipos de Core se importan
+
   function dividir(a: integer, b: integer): integer
     return a / b
   end dividir

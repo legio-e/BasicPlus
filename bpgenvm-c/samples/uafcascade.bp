@@ -3,6 +3,8 @@
 // (los tres gritan "objeto eliminado"); D SOBREVIVE (referenciado pero no owned).
 module OwnerCascade
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Node
     public property nombre: string
     public property owner hijo: Node    // hijo OWNER: participa en la cascada

@@ -2,6 +2,8 @@
 // (vía owner-free de un campo owner integer[]) grita "objeto eliminado".
 module UafArr
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Buf
     public property owner data: integer[]
     public function Buf(d: integer[])

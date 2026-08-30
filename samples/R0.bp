@@ -1,0 +1,10 @@
+module R0
+  import IO
+  function main()
+    print "R0 a: write r0.txt"
+    writeFile("r0.txt", "AAAA")
+    print "R0 b: rename r0.txt -> r0new.txt (destino NUEVO)"
+    IO.rename("r0.txt", "r0new.txt")
+    print "R0 c: done"
+  end main
+end R0

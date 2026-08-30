@@ -1,0 +1,19 @@
+module CC2
+  import Core
+  function main()
+    var i: integer := 0
+    var s: string := ""
+    try
+      while i < 200 do
+        i := i + 1
+        s := intToString(i)
+      endwh
+      print "CC2 OK 200"
+    catch e: Core.Exception
+      print "CC2 CAUGHT en iter:"
+      print i
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end CC2

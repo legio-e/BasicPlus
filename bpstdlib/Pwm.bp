@@ -35,6 +35,8 @@
 // ============================================================
 module Pwm
 
+  import Core   // V6: los tipos de Core se importan
+
   // ---- Intrínsecos de bajo nivel ----
   // initSlice devuelve un sliceId opaco (>= 0) o -1 si el pin
   // no es válido. Los demás operan sobre ese sliceId.

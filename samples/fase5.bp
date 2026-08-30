@@ -7,6 +7,8 @@
 
 module Fase5
 
+  import Core   // V6: los tipos de Core se importan
+
   function Fase5()
     print "[init] Fase5"
   end Fase5

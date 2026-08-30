@@ -1016,6 +1016,28 @@ public final class Main {
             indent(depth); System.out.printf("  -- omitidas en interfaz (%d): %s%n",
                     skipped.size(), String.join("; ", skipped));
         }
+        /* V6/#458 — UNA OMISIÓN POR TIPO SIN RESOLVER NO ES UNA OMISIÓN: ES UN FALLO.
+         *
+         * Aquí estaba la mitad de verdad del bug, y no la vi hasta reproducirlo por
+         * tercera vez. Quitar el `import Core` implícito hace que el fallo salte en
+         * la pasada COMPLETA... pero un módulo que se consume como dependencia se
+         * compila antes en modo INTERFAZ, que es TOLERANTE a propósito: no reporta
+         * errores. Así que seguía tirando el miembro en silencio y el consumidor
+         * seguía diciendo «no tiene miembro de instancia 'todos'», lejos de la causa.
+         *
+         * La distinción que faltaba: omitir un miembro porque su tipo NO DEBE
+         * exportarse es correcto; omitirlo porque su tipo NO RESOLVIÓ (`<error>`) es
+         * un fallo, y encima uno que sólo se manifiesta en OTRO fichero. Se separan
+         * por ahí, y el que no resuelve pasa a contar como error de verdad. */
+        for (String s : skipped) {
+            if (!s.contains("<error>")) continue;
+            ctx.totalErrors++;
+            indent(depth);
+            System.err.printf("error: la interfaz de '%s' PIERDE '%s' porque su tipo no "
+                    + "resuelve. El módulo compila, pero quien lo importe no verá ese "
+                    + "miembro. Si el tipo es de `Core`, este módulo necesita "
+                    + "`import Core`.%n", module.name, s);
+        }
     }
 
     // ============================================================
@@ -2306,6 +2328,15 @@ public final class Main {
                 }
                 analyzer.registerImport(ns);
                 loadedNs.add(ns);
+                // V6/#458 — si el que se acaba de cargar es Core, apuntamos sus
+                // nombres de clase para que el mensaje de un nombre sin resolver
+                // pueda decir «`List` vive en `Core`». Se cogen de aquí y no de una
+                // lista escrita a mano: una copia se queda rancia. El conjunto es
+                // estático y dura toda la compilación, así que basta con que UN
+                // módulo del proyecto importe Core — y tras la migración lo hacen
+                // casi todos los de la stdlib.
+                if ("Core".equals(ns.moduleName))
+                    SemanticAnalyzer.registrarNombresDeCore(ns.classes.keySet());
                 indent(depth); System.out.printf("-- cargado import '%s' desde %s (funcs=%d, consts=%d, enums=%d, props=%d, classes=%d) --%n",
                         alias, (bpi != null ? bpi.getFileName().toString() : "caché en memoria"),
                         ns.functions.size(), ns.consts.size(), ns.enums.size(),
@@ -2406,19 +2437,26 @@ public final class Main {
             }
         }
         if (module.imports == null) return;   // defensivo: el parser siempre crea la lista
-        /* #450 — antes esto solo se inyectaba si el modulo usaba EXCEPCIONES, para
-         * que los demas «no ganaran ninguna dependencia». Ya no vale: desde que
-         * `List` y los envoltorios viven en Core, cualquier modulo puede nombrarlos
-         * SIN cualificar, y detectarlo exigiria recorrer las expresiones buscando
-         * identificadores — o sea censar por el NOMBRE, que en este proyecto ya ha
-         * salido mal varias veces.
+
+        /* V6/#458 — YA NO SE INYECTA NADA. Norma de Eduardo (30-ago):
          *
-         * Asi que Core entra siempre. Lo que cuesta es una linea de dependencia en
-         * el .mod: el Core.mod esta PREINSTALADO en las tres familias, o sea que el
-         * micro no carga nada que no tuviera ya. */
-        java.util.List<String> p = new java.util.ArrayList<>();
-        p.add("Core");
-        module.imports.add(new Ast.ImportNode(p, null, module.line, module.column));
+         *     «la norma tiene que ser sencilla: si se utiliza un tipo de Core, se
+         *      ha de importar Core».
+         *
+         * Por qué se quita, y no es cosmética: el `import Core` sintético lo metía
+         * la pasada COMPLETA y no la de INTERFAZ, así que las dos veían cosas
+         * distintas del mismo fichero. Un módulo que exponía un tipo de Core en una
+         * firma pública compilaba entero y, al ser importado por otro, PERDÍA ese
+         * miembro de su interfaz (`retorno tipo no exportable: <error>`) — y el
+         * error salía en el consumidor, lejísimos de la causa.
+         *
+         * Se podía haber enseñado a la pasada de interfaz a inyectarlo también. La
+         * norma es mejor: en vez de que las dos pasadas adivinen igual, no hay nada
+         * que adivinar. Y de paso un módulo que no usa Core deja de arrastrarlo.
+         *
+         * ⚠️ El método se queda (no se borra la llamada) porque sigue haciendo lo
+         * único que importa ahora: NO tocar el AST. Dejar aquí el porqué vale más
+         * que el hueco que dejaría quitarlo. */
     }
 
     /** #450 — `import Collections` implicito si el modulo NOMBRA `SyncList` u

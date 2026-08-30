@@ -48,6 +48,43 @@ public final class SemanticAnalyzer {
      */
     private final java.util.Set<String> reportedUnresolved = new java.util.HashSet<>();
 
+    /** V6/#458 — ¿este módulo declara `import Core`?
+     *
+     *  Desde que la norma es «si usas un tipo de Core, importa Core» (Eduardo,
+     *  30-ago), el motivo MÁS probable de un nombre sin resolver es justo ése. Y
+     *  sin decirlo, la norma se limita a cambiar un error confuso por otro: quien
+     *  escribe `List` y lee «tipo no encontrado» se va a mirar si lo ha escrito
+     *  mal, no a añadir un import. */
+    private boolean coreImportado() {
+        for (Symbol.ImportedNamespaceSymbol ns : preloadedImports)
+            if ("Core".equals(ns.moduleName)) return true;
+        return false;
+    }
+
+    /** Los nombres de clase que EXPORTA `Core`, para la pista de abajo.
+     *
+     *  Los rellena `Main` leyendo la interfaz de Core, y NO se escriben aquí a
+     *  mano: una lista copiada viviría en dos sitios y una de las dos se quedaría
+     *  rancia. Si Core no se puede cargar el conjunto queda vacío y la pista
+     *  simplemente no sale — degradar en silencio es correcto para un mensaje de
+     *  ayuda, que no puede permitirse mentir. */
+    private static final java.util.Set<String> NOMBRES_DE_CORE = new java.util.HashSet<>();
+
+    public static void registrarNombresDeCore(java.util.Collection<String> nombres) {
+        if (nombres != null) NOMBRES_DE_CORE.addAll(nombres);
+    }
+
+    /** El sufijo de la pista para el nombre `n`, o cadena vacía.
+     *
+     *  ⚠️ Sólo si `n` ES de verdad una clase de Core. La primera versión la pegaba
+     *  a CUALQUIER identificador sin resolver, y el censo de samples la pilló
+     *  diciéndole a `SQLite` que se importara Core — o sea mandando a mirar donde
+     *  no es, que es justo el pecado que esta pista venía a evitar. */
+    private String pistaCore(String n) {
+        if (coreImportado() || !NOMBRES_DE_CORE.contains(n)) return "";
+        return " — `" + n + "` vive en `Core`: este módulo necesita `import Core`";
+    }
+
     /**
      * Anti-cascada: tipos ya reportados como "no encontrado" (1 vez por nombre).
      * Un tipo mal escrito usado en N declaraciones daba N errores; ahora 1.
@@ -1510,7 +1547,7 @@ public final class SemanticAnalyzer {
         if (fromImports instanceof EnumSymbol)
             return new EnumType((EnumSymbol) fromImports);
         if (reportedUnknownType.add(st.name))
-            err(st.line, st.column, "tipo '" + st.name + "' no encontrado");
+            err(st.line, st.column, "tipo '" + st.name + "' no encontrado" + pistaCore(st.name));
         return ErrorType.INSTANCE;
     }
 
@@ -2810,7 +2847,7 @@ public final class SemanticAnalyzer {
         if (sym == null) {
             // Anti-cascada: reportar cada nombre no resuelto UNA vez.
             if (reportedUnresolved.add(id.name))
-                err(id.line, id.column, "identificador no resuelto: '" + id.name + "'");
+                err(id.line, id.column, "identificador no resuelto: '" + id.name + "'" + pistaCore(id.name));
             return ErrorType.INSTANCE;
         }
         info.exprSymbols.put(id, sym);

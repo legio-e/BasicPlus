@@ -28,6 +28,9 @@
 // devuelve una lista VACÍA. No es un error ni hace falta un `if`: el mismo
 // programa corre en las dos y en la placa encuentra lo que haya.
 module Packs
+
+  import Core   // V6: los tipos de Core se importan
+
   import Str
 
   public intrinsic function __packNext(cur: integer): integer

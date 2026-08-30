@@ -18,6 +18,8 @@
 // Vale para las dos VMs y para placa. La salida es determinista: sólo veredictos.
 module ThreadFieldTest
 
+  import Core   // V6: los tipos de Core se importan
+
   public const BASURA:  integer := 20000   // objetos usar-y-tirar: fuerzan reciclaje de huecos
   public const VUELTAS: integer := 200     // 1+2+...+200 = 20100, la suma que tiene que salir
   public const ESPERADO: integer := 20100

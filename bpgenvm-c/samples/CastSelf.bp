@@ -16,6 +16,8 @@
 // saltos, cuando ya estan todos los descriptores.
 module CastSelf
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Cosa
     var v: integer
     public function Cosa(x: integer)

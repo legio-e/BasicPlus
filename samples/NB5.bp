@@ -1,0 +1,30 @@
+module NB5
+  import Core
+  // NB5 — como NB1 (todo en main, SIN función/CALL) pero con un CALENTAMIENTO
+  // que churnea el heap: reasigna tmp en bucle (cada reasignación libera el
+  // anterior -> gen bumpeada + slot reusado) y llena el heap para forzar un GC
+  // en el alloc final. Aísla TIMING/reuso-de-gen + GC-durante-alloc del límite
+  // de función.
+  //   - Peta -> el veneno es un slot con gen>0 o el GC-durante-alloc, en main,
+  //             SIN función. El límite del CALL es inocente.
+  //   - OK   -> es el límite de la función (param/return): ver NB2R/NB2P.
+  function main()
+    try
+      var tmp: byte[] := newByteArray(8)
+      var i: integer := 0
+      while i < 500 do
+        tmp := newByteArray(8)     // reasigna -> libera el anterior -> reusa slot (gen++)
+        tmp[0] := 1
+        i := i + 1
+      endwh
+      var out: byte[] := newByteArray(2)   // probable slot reusado (gen>0) + heap churneado
+      out[0] := 65
+      out[1] := 66
+      print "NB5 OK (warmup + alloc+store)"
+    catch e: Core.Exception
+      print "NB5 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB5

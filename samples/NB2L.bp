@@ -1,0 +1,27 @@
+module NB2L
+  import Core
+  // NB2L — DISCRIMINADOR A vs B. Igual que mkP (NB2P) pero el param es un `long`
+  // (8 bytes, MISMO footprint de pila que un string ref) que NO es un handle.
+  //   - Peta  -> el veneno es el PARAM de 8 BYTES (layout de frame / pila). No
+  //              importa que sea ref. Apunta a tu hipótesis (A) desbalance.
+  //   - Va OK  -> el veneno es específico del REF/handle (GC/ref_dead). Apunta a
+  //              (B) pisado del handle. El 8-byte a secas es inocente.
+  function mkL(x: long): integer
+    var out: byte[] := newByteArray(2)     // alloc+store, como mkP
+    out[0] := 88
+    if x > 0L then                          // USA el param de 8B (como strlen usa a)
+      return 1
+    endif
+    return 0
+  end mkL
+  function main()
+    try
+      var k: integer := mkL(long(1))
+      print "NB2L OK (param long 8B, no ref)"
+    catch e: Core.Exception
+      print "NB2L CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2L

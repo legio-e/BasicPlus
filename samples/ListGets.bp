@@ -15,6 +15,8 @@
 // que PROTEGE, que es lo que se le pide a una conversion.
 module ListGets
 
+  import Core   // V6: los tipos de Core se importan
+
   function Main()
     var l: List := List()
     l.add(42)              // Integer

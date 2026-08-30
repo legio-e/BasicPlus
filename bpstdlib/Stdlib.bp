@@ -11,9 +11,12 @@
 // Al añadir un módulo nuevo a la librería, añade aquí su import — si no, no
 // entra en el pack (el compilador sólo sigue lo que se importa).
 //
-// Core NO aparece: se importa implícitamente en todos los módulos (#253).
+// Core SÍ aparece desde V6 (#458): ya no hay import implícito. La norma es que si
+// un módulo usa un tipo de Core, lo importa. Antes lo inyectaba el compilador — y
+// sólo en la pasada COMPLETA, no en la de interfaz: de esa asimetría salía el bug.
 module Stdlib
 
+  import Core             // el núcleo: List, los envoltorios y las excepciones
   // --- núcleo del lenguaje y utilidades ---
   import App              // proyecto en ejecución (projectPath, mainModule)
   import Collections      // List, Map, SyncList, ...

@@ -2,6 +2,8 @@
 // CUALQUIER objeto (heredados de Object), y compareTo por defecto -> throw.
 module ObjMethTest
 
+  import Core   // V6: los tipos de Core se importan
+
   class Punto
     var x: integer
     var y: integer

@@ -1,0 +1,23 @@
+module NB2B
+  import Core
+  // NB2B — CALL_BUILTIN antes del alloc pero SIN ref param (param int, y el
+  // builtin actúa sobre una constante). Quita el ref, deja el builtin.
+  //   - Peta -> basta el BUILTIN + alloc (el ref param es irrelevante).
+  //   - OK   -> el builtin solo no basta; hace falta el ref param (ver NB2Bref).
+  function mkB(n: integer): integer
+    var j: integer := strlen("xy")        // CALL_BUILTIN sobre constante, sin ref param
+    var out: byte[] := newByteArray(n)
+    out[0] := 88
+    return j
+  end mkB
+  function main()
+    try
+      var k: integer := mkB(2)
+      print "NB2B OK (builtin-const + alloc, sin ref param)"
+    catch e: Core.Exception
+      print "NB2B CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2B

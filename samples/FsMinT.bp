@@ -1,0 +1,19 @@
+module FsMinT
+  import Core
+  function main()
+    var i: integer := 0
+    var s: string := ""
+    try
+      while i < 200 do
+        i := i + 1
+        s := "n" + intToString(i)
+      endwh
+      print "OK las 200"
+    catch e: Core.Exception
+      print "CAUGHT en iter:"
+      print i
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end FsMinT

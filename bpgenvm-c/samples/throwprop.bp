@@ -12,6 +12,8 @@
 //   fin
 module ThrowProp
 
+  import Core   // V6: los tipos de Core se importan
+
     native function checkPositive(n: integer): integer
         if n < 0 then
             throw RuntimeError("negative not allowed")

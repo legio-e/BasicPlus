@@ -1,0 +1,8 @@
+// Hola.bp — repro MÍNIMO del bug de-solo-placa (acotado por Eduardo):
+// concat de heap PETA en placa; literal VA. Con BPVM_POISON=1 debería
+// reproducir el use-after-free en HOST (SRAM sucia simulada).
+module Hola
+  function Main()
+    print "Hola" + " mundo"
+  end Main
+end Hola

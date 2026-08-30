@@ -1,0 +1,12 @@
+module R1
+  import IO
+  function main()
+    print "R1 a: write r.txt"
+    writeFile("r.txt", "AAAA")
+    print "R1 b: write t.txt"
+    writeFile("t.txt", "BBBB")
+    print "R1 c: rename t.txt -> r.txt (destino EXISTE)"
+    IO.rename("t.txt", "r.txt")
+    print "R1 d: done"
+  end main
+end R1

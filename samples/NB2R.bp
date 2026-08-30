@@ -1,0 +1,22 @@
+module NB2R
+  import Core
+  // NB2R — RETURN de ref (byte[]), SIN param ref (el param es int). Alocación
+  // dentro, igual que NB2. Solo cambia: no hay param ref.
+  //   - Peta -> el veneno es el RETURN de ref (LRet del handle de 8B).
+  //   - OK   -> el return de ref es sano; el culpable es el PARAM ref (ver NB2P).
+  function mkR(n: integer): byte[]
+    var out: byte[] := newByteArray(n)
+    out[0] := 88
+    return out
+  end mkR
+  function main()
+    try
+      var r: byte[] := mkR(1)
+      print "NB2R OK (return ref, param int)"
+    catch e: Core.Exception
+      print "NB2R CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2R

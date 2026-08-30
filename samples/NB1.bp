@@ -1,0 +1,19 @@
+module NB1
+  import Core
+  // NB1 — SOLO la alocación sospechosa: newByteArray + store, SIN concat,
+  // SIN CALL con param ref. ¿Peta el path genérico de alocación por sí solo?
+  //   - Peta  -> el bug está en NEWARRAY_I8/handle_register (path genérico).
+  //   - Va OK -> la alocación pelada es sana; el bug es del path del CALL/concat.
+  function main()
+    try
+      var out: byte[] := newByteArray(2)
+      out[0] := 65
+      out[1] := 66
+      print "NB1 OK (alloc+store sin concat)"
+    catch e: Core.Exception
+      print "NB1 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB1

@@ -1,0 +1,30 @@
+module NB6
+  import Core
+  // NB6 — COMBINA los dos factores que en placa coinciden y en host estaban
+  // separados: (1) churn de la tabla de handles (warmup, gens>0 + free-list
+  // poblada, como en la placa tras el boot) y (2) alocar dentro de una función
+  // llamada con param ref + return ref (como NB2, que peta en placa).
+  //   - Peta en host -> REPRO LOCAL del bug de placa. A depurar con gdb.
+  function mk(a: string): byte[]
+    var la: integer := strlen(a)
+    var out: byte[] := newByteArray(la)
+    out[0] := 88
+    return out
+  end mk
+  function main()
+    try
+      var tmp: byte[] := newByteArray(8)
+      var i: integer := 0
+      while i < 500 do
+        tmp := newByteArray(8)     // churn: libera el anterior (gen++) + reusa slot
+        i := i + 1
+      endwh
+      var r: byte[] := mk("a")     // como NB2, pero AHORA con la tabla churneada
+      print "NB6 OK (warmup + mk con param/return ref)"
+    catch e: Core.Exception
+      print "NB6 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB6

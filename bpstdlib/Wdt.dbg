@@ -2,18 +2,18 @@ dbg 3
 module Wdt
 source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
-443 77
-454 78
-470 87
-479 88
-490 93
-499 94
-516 64
-520 65
-533 66
-545 68
-555 69
-564 70
+438 77
+449 78
+465 87
+474 88
+485 93
+494 94
+511 64
+515 65
+528 66
+540 68
+550 69
+559 70
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -52,36 +52,36 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func Timer.getTimeoutMs_ 386
+func Timer.getTimeoutMs_ 381
 this -20 8 0 ?
-func Timer.setTimeoutMs_ 400
+func Timer.setTimeoutMs_ 395
 this -24 8 0 ?
-func Timer.getActive_ 413
+func Timer.getActive_ 408
 this -20 8 0 ?
-func Timer.setActive_ 427
+func Timer.setActive_ 422
 this -24 8 0 ?
-func Timer.feed 440
+func Timer.feed 435
 this -20 8 0 ?
-func Timer.disable 467
+func Timer.disable 462
 this -20 8 0 ?
-func Timer.reenable 487
+func Timer.reenable 482
 this -20 8 0 ?
-func Timer.__init 513
+func Timer.__init 508
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer 574
+func __cls_new_Timer 569
 timeoutMs -16 4 0 integer
-func __cls_init_Timer 606
+func __cls_init_Timer 601
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __cls_m_Timer_feed 622
+func __cls_m_Timer_feed 617
 this -20 8 0 ?
-func __cls_m_Timer_disable 636
+func __cls_m_Timer_disable 631
 this -20 8 0 ?
-func __cls_m_Timer_reenable 650
+func __cls_m_Timer_reenable 645
 this -20 8 0 ?
-func __strconcat 680
+func __strconcat 675
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

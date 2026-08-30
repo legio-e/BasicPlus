@@ -1,0 +1,12 @@
+module FsMinC
+  import IO
+  function main()
+    var i: integer := 0
+    while i < 5 do
+      i := i + 1
+      writeFile("m.tmp", "xxxx")
+      IO.rename("m.tmp", "m.txt")
+    endwh
+    print "FsMinC OK 5"
+  end main
+end FsMinC

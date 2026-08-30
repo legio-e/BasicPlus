@@ -11,6 +11,8 @@
 // (NaN->0, saturacion). floor/ceil/round tienen que coincidir tambien ahi.
 module MathOps348
 
+  import Core   // V6: los tipos de Core se importan
+
   import Math
 
   function f(t: string, v: float)

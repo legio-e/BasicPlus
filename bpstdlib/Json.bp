@@ -1,5 +1,7 @@
 module Json
 
+  import Core   // V6: los tipos de Core se importan
+
   // ====================================================================
   // Json.bp — librería para leer y escribir archivos JSON en BasicPlus.
   //

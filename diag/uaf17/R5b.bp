@@ -1,0 +1,38 @@
+// R5b — R5a + el campo SÍ se escribe desde run(). Sigue sin leerse fuera.
+// Si R5a pasa y R5b falla, el problema es ESCRIBIR el campo desde el thread.
+module R5b
+  public class C
+    public property v: integer
+    public function C(v_: integer)
+      v := v_
+    end C
+  end C
+
+  public class W extends Thread
+    var total: integer
+    public function W()
+      super(1000)
+      total := 0
+    end W
+    public function run()
+      var s: integer := 0
+      var i: integer := 1
+      while i <= 200 do
+        var c: C := C(i)
+        s := s + c.v
+        i := i + 1
+      endwh
+      total := s
+    end run
+  end W
+
+  function Main()
+    var w1: W := W()
+    var w2: W := W()
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    print "R5b ok"
+  end Main
+end R5b

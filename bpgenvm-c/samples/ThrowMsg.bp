@@ -13,6 +13,8 @@
 
 module ThrowMsg
 
+  import Core   // V6: los tipos de Core se importan
+
     native function checkRange(n: integer): integer
         if n < 0 then
             throw RuntimeError("valor negativo: " + n)

@@ -2,6 +2,9 @@
 // Orm(base) -> Medidas(hija) -> DaoDemo(usuario) son 3 modulos, y ahi es donde
 // se cayo. Aqui se aisla: ProbeBase -> ProbeDao -> ProbeUso.
 module ProbeUso
+
+  import Core   // V6: los tipos de Core se importan
+
   import ProbeBase
   import ProbeDao
 

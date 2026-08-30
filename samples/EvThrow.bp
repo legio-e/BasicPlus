@@ -18,6 +18,8 @@
 //   fin
 module EvThrow
 
+  import Core   // V6: los tipos de Core se importan
+
   class Boton
     event onClick(n: integer)
     public function Boton()

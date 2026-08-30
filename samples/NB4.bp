@@ -1,0 +1,21 @@
+module NB4
+  import Core
+  // NB4 — el OPERADOR `+` real (llama a __strconcat), pero con el operando
+  // IZQUIERDO de HEAP (un handle real, no una constante del data block). Es el
+  // caso de la 2ª concat de a+b+c: __strconcat(resultado_interno, c). CC1 usa
+  // dos constantes; esto mete un string de heap a la izquierda.
+  //   - CC1 y NB4 petan, NB3 no -> el veneno es el emit del OPERADOR (no nuestra réplica).
+  //   - NB4 peta y CC1 no (o viceversa) -> importa el ORIGEN del operando (heap vs const).
+  function main()
+    try
+      var a: string := intToString(7)   // string de HEAP (handle real)
+      var s: string := a + "x"           // __strconcat(heap, const)
+      print "NB4 OK:"
+      print s
+    catch e: Core.Exception
+      print "NB4 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB4

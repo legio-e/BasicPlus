@@ -1,0 +1,18 @@
+// Repo.bp — un modulo de USUARIO que expone un tipo de la stdlib (List) en una
+// firma publica SIN importar Core. El cuerpo lo usa igual: `List` es implicita.
+module Repo
+
+  public class Almacen
+    public function Almacen()
+    end Almacen
+
+    // <-- LA FIRMA PUBLICA que menciona List sin que nadie haya importado Core
+    public function todos(): List
+      var l: List := List()
+      l.add("uno")
+      l.add("dos")
+      return l
+    end todos
+  end Almacen
+
+end Repo

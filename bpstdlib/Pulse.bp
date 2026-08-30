@@ -33,6 +33,8 @@
 // ============================================================
 module Pulse
 
+  import Core   // V6: los tipos de Core se importan
+
   // ---- Intrínsecos de bajo nivel ----
   // initSlice devuelve un counterId opaco (>= 0) o -1 si el pin
   // no es válido. Los demás operan sobre ese counterId.

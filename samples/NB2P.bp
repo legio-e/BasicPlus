@@ -1,0 +1,23 @@
+module NB2P
+  import Core
+  // NB2P — PARAM ref (string), SIN return de ref (devuelve int). Alocación
+  // dentro, igual que NB2. Solo cambia: no se devuelve un ref.
+  //   - Peta -> el veneno es el PARAM ref (deref del handle 8B pasado al CALL).
+  //   - OK   -> el param ref es sano; el culpable es el RETURN de ref (ver NB2R).
+  function mkP(a: string): integer
+    var la: integer := strlen(a)
+    var out: byte[] := newByteArray(la)
+    out[0] := 88
+    return la
+  end mkP
+  function main()
+    try
+      var k: integer := mkP("a")
+      print "NB2P OK (param ref, return int)"
+    catch e: Core.Exception
+      print "NB2P CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2P

@@ -1079,6 +1079,78 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
+#### ✅ `#458` — `Core` implícito: la norma pasa a ser EXPLÍCITA, y la pasada de interfaz deja de tirar miembros en silencio (cerrada 30-ago)
+
+**Norma de Eduardo (30-ago):** *«la norma tiene que ser sencilla: si se utiliza un tipo
+de Core, se ha de importar Core»*. Y sobre el coste: *«estamos haciendo una nueva versión,
+si hay que recompilar las librerías, se vuelven a compilar. Lo importante es resolver el
+bug.»*
+
+🔑 **Por qué la norma en vez de arreglar la pasada.** El bug era que el `import Core`
+sintético lo inyectaba la pasada COMPLETA y no la de INTERFAZ, así que las dos veían
+cosas distintas del mismo fichero. Se podía enseñar a la de interfaz a inyectarlo
+también; la norma es mejor porque **no hay dos sitios que tengan que adivinar igual: no
+hay nada que adivinar**. De propina, un módulo que no usa `Core` deja de arrastrarlo.
+
+`Object` queda fuera, y no por excepción: **no es un tipo de `Core`**. Es un tipo real
+—con `toString()` y `compareTo()` en los slots 0 y 1 de toda instancia— pero vive en el
+compilador (`SemanticAnalyzer.java:385`), junto a los primitivos. *(Corrección de Eduardo:
+yo lo había contado como si no fuera un tipo de verdad.)*
+
+### ⚠️ La mitad que no vi hasta el tercer intento
+
+Quitar la inyección hace saltar el fallo en la pasada COMPLETA… **pero un módulo que se
+consume como dependencia se compila antes en modo INTERFAZ, que es TOLERANTE a propósito
+y no reporta errores.** O sea que seguía tirando el miembro en silencio y el consumidor
+seguía diciendo *«no tiene miembro de instancia 'todos'»*, lejos de la causa. La norma
+sola NO arreglaba ese camino, que es justo el del bug original.
+
+La distinción que faltaba, y es la que cierra la ficha:
+
+| omitir un miembro porque… | qué es |
+|---|---|
+| su tipo **no debe** exportarse | correcto, informativo |
+| su tipo **no resolvió** (`<error>`) | **un fallo** — y encima sólo visible en OTRO fichero |
+
+Ahora el segundo caso es un error de verdad, y lo dice donde ocurre:
+
+```
+>>> compile Repo.bp (mode=INTERFACE)
+error: la interfaz de 'Repo' PIERDE 'class Almacen.method todos: retorno tipo no
+exportable: <error>' porque su tipo no resuelve. El módulo compila, pero quien lo
+importe no verá ese miembro. Si el tipo es de `Core`, este módulo necesita `import Core`.
+```
+
+### La pista, y el falso positivo que se coló
+
+El mensaje de «tipo no encontrado» sugiere `import Core`, pero **sólo si el nombre es de
+verdad una clase de Core**, y los nombres se leen de la interfaz de Core al cargarla —
+nunca de una lista escrita a mano, que se quedaría rancia. La primera versión los pegaba
+a CUALQUIER identificador sin resolver y **el censo de samples la pilló diciéndole a
+`SQLite` que importara Core**: mandando a mirar donde no es, que es el pecado que la
+pista venía a evitar.
+
+### Alcance, medido
+
+**56 ficheros `.bp`** ganan `import Core` (32 de `samples/`+`bpstdlib/`, 23 de
+`bpgenvm-c/samples/` y `diag/`, más `Stdlib.bp`). Dos cosas que el censo por regex NO vio
+y sí vio **compilar todo**:
+- `Collections.bp` usa `Core.List` **cualificado** — mi regex excluía los usos con punto;
+  ya lo importaba, pero el caso es real: cualificar exige importar.
+- **`bpgenvm-c/samples/` se me quedó fuera del censo** (censé los directorios que
+  recordaba) y ahí vive el corpus de paridad: el arnés cayó a **33 PASS + 5 SKIP** y sólo
+  se vio porque *un SKIP no es un PASS*.
+
+✅ **Verificado**: stdlib **27/27 desde cero, 0 errores**, paridad **38 PASS / 0 FAIL /
+0 SKIP**, censo de **313 samples sin ninguna rotura nueva** (los 2 que disparan el error
+nuevo ya fallaban: les falta el pack de SQLite).
+
+📌 **Lo que enseña**: *reproducir hasta que el arreglo se vea funcionar, no hasta que
+parezca correcto*. Di el bug por arreglado dos veces —al quitar la inyección y al añadir
+la pista— y las dos veces el caso original seguía fallando igual. Sólo el tercer intento,
+mirando la SECUENCIA de pasadas en vez de los errores sueltos, dio con la mitad que
+faltaba.
+
 #### ✅ `#457` — el compilador ESCRIBE `.mod` v7 y su lector de interfaces sólo aceptaba v6 (cerrada 30-ago)
 
 🔴 **La stdlib no se podía regenerar.** Recompilar `bpstdlib/Math.mod` desde su propio

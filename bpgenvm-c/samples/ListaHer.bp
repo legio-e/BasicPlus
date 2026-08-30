@@ -14,6 +14,8 @@
 // «Sub», la delegacion despacha por vtable y la respuesta es que SI.
 module ListaHer
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Base
     var marca: string
     var ultimo: integer

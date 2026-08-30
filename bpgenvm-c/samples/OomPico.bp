@@ -1,0 +1,45 @@
+// OomPico.bp — #355: EL MISMO bucle que esta manana se quedaba mudo en la
+// vuelta ~1011, pero ahora envuelto en try/catch.
+//
+// ESTA MANANA (firmware viejo): la salida se cortaba en i~1011, los literales
+// salian VACIOS ("Hola" en blanco, "sub_malos=" + "0" daba solo "0") y el RUN
+// terminaba diciendo OK. Ninguna excepcion. El motivo: intToString se quedaba
+// sin heap, devolvia una ref NULA y nadie la miraba.
+//
+// AHORA deberia saltar un RuntimeError ATRAPABLE en esa misma vuelta.
+//
+// ⚠️ POR QUE SE PRUEBA AQUI Y NO EN EL HOST: en el PC no consigo que la reserva
+// que falla sea una CADENA — cualquier contenedor pide bloques grandes que
+// revientan antes, y esos ya estaban comprobados desde H1. En la placa, con
+// 268 KB de heap y este bucle, la que falla es la cadena. La placa es el unico
+// sitio donde este test discrimina.
+//
+//   Esperado AHORA:  ... tic 750, tic 1000, CAZADO, vuelta ~1011, caught=1
+//   Con el firmware viejo: se corta en ~1011 y no dice nada, caught=0.
+//
+// El "CAZADO" es un literal a secas A PROPOSITO: si el heap sigue lleno, una
+// concatenacion podria fallar tambien, y quiero que al menos esa linea salga.
+module OomPico
+  import Core
+  function main()
+    var caught: integer := 0
+    var i: integer := 0
+    print "Inicio"
+    try
+      while i < 3000 do
+        var s: string := substring("abcdefghij" + intToString(i), 2, 8)
+        var b: string := fromBytes(toBytes("ABCDE"))
+        if i mod 250 == 0 then
+          print "tic " + intToString(i)
+        endif
+        i := i + 1
+      endwh
+    catch e: RuntimeError
+      caught := 1
+      print "CAZADO"
+      print "vuelta " + intToString(i)
+      print e.msg
+    endtry
+    print "fin, caught=" + intToString(caught)
+  end main
+end OomPico

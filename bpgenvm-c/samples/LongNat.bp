@@ -18,6 +18,8 @@
 // Se ejecuta en las DOS VMs y la salida tiene que ser byte-idéntica.
 module LongNat
 
+  import Core   // V6: los tipos de Core se importan
+
   // Suma de dos longs. El caso base del marshalling: dos entradas de 8 bytes
   // y una salida de 8.
   native function sumaL(a: long, b: long): long

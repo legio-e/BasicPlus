@@ -1,0 +1,7 @@
+module W3
+  function main()
+    print "W3 a"
+    writeFile("w3.txt", intToString(42))
+    print "W3 b"
+  end main
+end W3

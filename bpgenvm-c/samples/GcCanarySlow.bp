@@ -1,0 +1,31 @@
+// GcCanarySlow.bp — #355, prueba de UNA sola variable.
+//
+// IDENTICO a GcCanary salvo por el sleep(30) tras cada tic. Mismas vueltas,
+// mismas reservas, misma presion de GC — lo unico que cambia es que el sleep
+// CEDE la CPU, y con FreeRTOS eso deja correr tud_task() para que el USB CDC
+// se drene.
+//
+//   Si salen los 12 tics y el "final 3000" -> NO hay bug de memoria: la salida
+//   se estaba perdiendo en el transporte USB (el firmware ya usa este mismo
+//   truco en el banner de arranque: 3 copias con fflush + vTaskDelay(200)
+//   "para forzar rondas de tud_task()").
+//
+//   Si se vuelve a cortar en el mismo sitio -> el transporte queda descartado
+//   y el problema es de la VM.
+module GcCanarySlow
+  import Core
+  function main()
+    var i: integer := 0
+    print "Inicio"
+    while i < 3000 do
+      var s: string := substring("abcdefghij" + intToString(i), 2, 8)
+      var b: string := fromBytes(toBytes("ABCDE"))
+      if i mod 250 == 0 then
+        print "tic " + intToString(i)
+        sleep(30)
+      endif
+      i := i + 1
+    endwh
+    print "final " + intToString(i)
+  end main
+end GcCanarySlow

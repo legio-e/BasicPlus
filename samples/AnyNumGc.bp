@@ -16,6 +16,9 @@
 // para "arreglarlo": eso deja el sample verde SIN PROBAR NADA, porque entonces
 // lo que hay en el slot es una referencia de verdad.
 module AnyNumGc
+
+  import Core   // V6: los tipos de Core se importan
+
   class Box
     var l: List
     public function Box()

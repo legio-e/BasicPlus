@@ -2,17 +2,17 @@ dbg 3
 module Net
 source C:\lenguajes\pm\bpstdlib\Net.bp
 lines
-416 58
-434 59
-456 63
-478 68
-504 73
-533 78
-562 83
-594 87
-607 88
-618 89
-638 53
+411 58
+429 59
+451 63
+473 68
+499 73
+528 78
+557 83
+589 87
+602 88
+613 89
+633 53
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -51,61 +51,61 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func Tcp.getH 386
+func Tcp.getH 381
 this -20 8 0 ?
-func Tcp.setH 400
+func Tcp.setH 395
 this -24 8 0 ?
-func Tcp.connect 413
+func Tcp.connect 408
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.isOpen 453
+func Tcp.isOpen 448
 this -20 8 0 ?
-func Tcp.send 475
+func Tcp.send 470
 this -28 8 0 ?
 data -20 8 0 ref
-func Tcp.sendStr 501
+func Tcp.sendStr 496
 this -28 8 0 ?
 s -20 8 0 string
-func Tcp.recv 530
+func Tcp.recv 525
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.recvStr 559
+func Tcp.recvStr 554
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.close 591
+func Tcp.close 586
 this -20 8 0 ?
-func Tcp.__init 635
+func Tcp.__init 630
 this -20 8 0 ?
-func __cls_init_Tcp 680
+func __cls_init_Tcp 675
 this -20 8 0 ?
-func __cls_m_Tcp_recvStr 694
+func __cls_m_Tcp_recvStr 689
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Tcp_isOpen 717
+func __cls_m_Tcp_isOpen 712
 this -20 8 0 ?
-func __cls_m_Tcp_recv 734
+func __cls_m_Tcp_recv 729
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Tcp_sendStr 757
+func __cls_m_Tcp_sendStr 752
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_Tcp_send 777
+func __cls_m_Tcp_send 772
 this -28 8 0 ?
 data -20 8 0 ref
-func __cls_m_Tcp_close 797
+func __cls_m_Tcp_close 792
 this -20 8 0 ?
-func __cls_m_Tcp_connect 811
+func __cls_m_Tcp_connect 806
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __strconcat 851
+func __strconcat 846
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

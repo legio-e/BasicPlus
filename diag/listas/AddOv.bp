@@ -1,0 +1,102 @@
+// AddOv.bp — el patron de Eduardo (18-ago) probado en BP PURO, antes de
+// tocar el compilador.
+//
+//   «add(i:integer) lo que hace es llamar a add(obj:Object) y le pasa
+//    Integer(i). Asi envuelve cada escalar. Los object, strings y arrays
+//    en teoria no hace falta envolverlos.»
+//
+// Si el LENGUAJE ya sabe expresar esto, sintetizarlo en `List` es copiar.
+// Si no sabe, es mucho mejor descubrirlo aqui que dentro del emisor.
+//
+// Lo que se mira, en este orden:
+//   1  que la sobrecarga RESUELVA (add(5) va a la de integer, no a la de Object)
+//   2  que el escalar SOBREVIVA al viaje (se saca con Integer(o).value())
+//   3  que una cadena entre TAL CUAL, sin envolver
+//   4  que una clase de usuario entre tal cual y salga con downcast
+//   5  el control: que la de Object siga siendo alcanzable a mano
+module AddOv
+
+  import Core   // V6: los tipos de Core se importan
+
+  import Collections
+
+  public class Caja
+    var n: integer
+    public function Caja(x: integer)
+      super()
+      this.n := x
+    end Caja
+    public function valor(): integer
+      return this.n
+    end valor
+  end Caja
+
+  // La lista de juguete: un `List` de verdad por dentro, y encima las
+  // sobrecargas que envuelven.
+  public class Lista
+    var datos: List
+    public function Lista()
+      super()
+      this.datos := List()
+    end Lista
+
+    // La PRIMERA firma es la de Object: por la regla de H5.a se queda con el
+    // nombre pelado, y las otras van mangleadas. Asi ningun .mod se rompe.
+    public function add(o: Object)
+      this.datos.add(o)
+    end add
+
+    public function add(i: integer)
+      this.datos.add(Collections.Integer(i))
+    end add
+
+    public function add(l: long)
+      this.datos.add(Collections.Long(l))
+    end add
+
+    public function get(idx: integer): Object
+      return this.datos.get(idx)
+    end get
+
+    public function length(): integer
+      return this.datos.length()
+    end length
+  end Lista
+
+  function Main()
+    var li: Lista := Lista()
+
+    // 1 y 2 — el escalar envuelto por la sobrecarga
+    li.add(42)
+    var o0: Object := li.get(0)
+    var i0: Collections.Integer := Collections.Integer(o0)
+    print "1 integer  : " + i0.value()
+
+    li.add(7000000000L)
+    var o1: Object := li.get(1)
+    var l1: Collections.Long := Collections.Long(o1)
+    print "2 long     : " + l1.value()
+
+    // 3 — la cadena entra tal cual, sin envolver
+    li.add("hola")
+    var o2: Object := li.get(2)
+    print "3 string   : " + string(o2)
+
+    // 4 — una clase de usuario, tal cual + downcast
+    li.add(Caja(99))
+    var o3: Object := li.get(3)
+    var c3: Caja := Caja(o3)
+    print "4 objeto   : " + c3.valor()
+
+    // 5 — el CONTROL: la de Object sigue alcanzable a mano. Si esto fallara,
+    // la sobrecarga habria TAPADO la firma original en vez de sumarse.
+    li.add(Collections.Integer(5))
+    var o4: Object := li.get(4)
+    var i4: Collections.Integer := Collections.Integer(o4)
+    print "5 a mano   : " + i4.value()
+
+    print "largo      : " + li.length()
+    print "fin"
+  end Main
+
+end AddOv

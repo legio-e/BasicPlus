@@ -1,0 +1,9 @@
+module W2
+  function main()
+    print "W2 a"
+    writeFile("w2.txt", "aaaa")
+    print "W2 b"
+    writeFile("w2.txt", "bbbb")
+    print "W2 c"
+  end main
+end W2

@@ -2,21 +2,21 @@ dbg 3
 module Timer
 source C:\lenguajes\pm\bpstdlib\Timer.bp
 lines
-443 75
-448 76
-462 77
-475 78
-489 79
-517 82
-530 84
-545 93
-557 94
-566 95
-578 97
-602 104
-626 110
-657 64
-667 65
+438 75
+443 76
+457 77
+470 78
+484 79
+512 82
+525 84
+540 93
+552 94
+561 95
+573 97
+597 104
+621 110
+652 64
+662 65
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -55,41 +55,41 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func Alarm.getPeriodMs_ 386
+func Alarm.getPeriodMs_ 381
 this -20 8 0 ?
-func Alarm.setPeriodMs_ 400
+func Alarm.setPeriodMs_ 395
 this -24 8 0 ?
-func Alarm.getNextFire_ 413
+func Alarm.getNextFire_ 408
 this -20 8 0 ?
-func Alarm.setNextFire_ 427
+func Alarm.setNextFire_ 422
 this -24 8 0 ?
-func Alarm.check 440
+func Alarm.check 435
 this -20 8 0 ?
 cur 4 4 0 integer
-func Alarm.wait 542
+func Alarm.wait 537
 this -20 8 0 ?
 rem 0 4 0 integer
-func Alarm.reset 599
+func Alarm.reset 594
 this -20 8 0 ?
-func Alarm.since 623
+func Alarm.since 618
 this -20 8 0 ?
-func Alarm.__init 654
+func Alarm.__init 649
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_new_Alarm 684
+func __cls_new_Alarm 679
 periodMs -16 4 0 integer
-func __cls_init_Alarm 716
+func __cls_init_Alarm 711
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_m_Alarm_wait 732
+func __cls_m_Alarm_wait 727
 this -20 8 0 ?
-func __cls_m_Alarm_reset 746
+func __cls_m_Alarm_reset 741
 this -20 8 0 ?
-func __cls_m_Alarm_check 760
+func __cls_m_Alarm_check 755
 this -20 8 0 ?
-func __cls_m_Alarm_since 777
+func __cls_m_Alarm_since 772
 this -20 8 0 ?
-func __strconcat 810
+func __strconcat 805
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -2,6 +2,8 @@
 
 module InstanceTest
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Animal
     var nombre: string
     public function Animal(nombre: string)

@@ -93,6 +93,38 @@
   un bucle cerrado que no cede el turno— y no borra el log, así que la autopsia
   sale entera igual. Que `RESET` se pueda mandar directo queda para V6.
 
+- **L16 — si usas un tipo de `Core`, tienes que escribir `import Core`** (V6, 30-ago).
+  Vale para `List`, los envoltorios de los primitivos (`Integer`, `Long`, `Float`,
+  `Double`, `Boolean`), `Comparable`, `Exception` y `RuntimeError` — o sea que **atrapar
+  un error también pide el import**:
+
+  ```basicplus
+  module MiModulo
+    import Core          // <- hace falta para el catch de abajo y para List
+
+    function leer(): List
+      try
+        ...
+      catch (e: RuntimeError)
+        ...
+      end try
+    end leer
+  end MiModulo
+  ```
+
+  **Antes no hacía falta**: el compilador inyectaba el `import` por su cuenta. Se quitó
+  porque lo inyectaba en una de sus dos pasadas y no en la otra, y eso hacía que un módulo
+  que expusiera un tipo de `Core` en una firma pública **perdiera ese miembro** al ser
+  importado por otro — con el error apareciendo en el consumidor, lejos de la causa.
+  Norma de Eduardo: *«la norma tiene que ser sencilla: si se utiliza un tipo de Core, se
+  ha de importar Core»*.
+
+  **`Object` NO lo necesita**: es un tipo real, con `toString()` y `compareTo()`, pero
+  vive en el lenguaje y no en `Core` — como `integer` o `string`.
+
+  Si se te olvida, el compilador lo dice con el nombre: *«`List` vive en `Core`: este
+  módulo necesita `import Core`»*.
+
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
   (los módulos no la tienen). Reabrible si surge caso de uso.

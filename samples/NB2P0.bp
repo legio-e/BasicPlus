@@ -1,0 +1,22 @@
+module NB2P0
+  import Core
+  // NB2P0 — ¿el param ref llega YA corrupto, o solo se rompe DESPUÉS del alloc?
+  // Param ref (string) pero SIN newByteArray: solo lee el param y devuelve int.
+  //   - Peta  -> el param ref se corrompe en el PASO (sin alloc/GC de por medio).
+  //              Bug puro de paso de parámetros.
+  //   - Va OK  -> el param llega bien; el veneno lo mete el alloc/GC posterior
+  //              (el GC escaneando el slot de out con basura). No es el paso.
+  function mkP0(a: string): integer
+    return strlen(a)
+  end mkP0
+  function main()
+    try
+      var k: integer := mkP0("a")
+      print "NB2P0 OK (param ref, sin alloc)"
+    catch e: Core.Exception
+      print "NB2P0 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2P0

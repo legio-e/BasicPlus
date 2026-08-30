@@ -1,0 +1,12 @@
+module FsMinC30
+  import IO
+  function main()
+    var i: integer := 0
+    while i < 30 do
+      i := i + 1
+      writeFile("m.tmp", "xxxx")
+      IO.rename("m.tmp", "m.txt")
+    endwh
+    print "FsMinC30 OK 30"
+  end main
+end FsMinC30

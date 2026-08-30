@@ -9,6 +9,8 @@
 // limpiamente.
 module CatchMutex
 
+  import Core   // V6: los tipos de Core se importan
+
   function tryReentrant()
     var m: Mutex := Mutex()
     m.lock()

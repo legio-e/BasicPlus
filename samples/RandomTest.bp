@@ -17,6 +17,8 @@
 // sorteado— para que se pueda comparar entre las dos VMs byte a byte.
 module RandomTest
 
+  import Core   // V6: los tipos de Core se importan
+
   const TIRADAS: integer := 2000
 
   function Main()

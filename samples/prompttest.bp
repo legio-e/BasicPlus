@@ -3,6 +3,9 @@
 // Sin IDE conectado: prompt() lanza RuntimeError atrapable.
 // Con IDE conectado: muestra JDialog; recibimos los valores como JSON.
 module PromptTest
+
+  import Core   // V6: los tipos de Core se importan
+
   import IO
 
   function Main()

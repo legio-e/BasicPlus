@@ -1,0 +1,75 @@
+// GcNatP4b.bp — la version APRETADA: ¿es la colecta DENTRO de la nativa?
+//
+// GcNatP4 dijo que el gc() llamado desde BP funciona («despues gc 1» salio) y
+// que la muerte esta en las 500 vueltas siguientes. En esas 500 la nativa aloja
+// ~10 cadenas por vuelta, asi que hacia la 400 la tabla de handles cruza su
+// marca y salta una colecta AUTOMATICA — y esa si cae dentro de la nativa.
+//
+// Esta version colecta cada 100 en vez de cada 500. Con eso la tabla NUNCA
+// llega a llenarse, asi que la colecta automatica no deberia dispararse nunca:
+//
+//   · si TERMINA -> confirmado: lo que mata es colectar dentro de la nativa.
+//   · si MUERE en una vuelta concreta -> no es el GC: es la nativa misma, y el
+//     numero dice en cual (lo que descartaria el codigo RISC-V generado, porque
+//     ese fallaria en la PRIMERA llamada, no en la enesima).
+//
+// Ademas imprime cada 100 vueltas, asi que la ultima linea da el punto de
+// muerte con precision de 100 — por el wire, que sobrevive al cuelgue (#439).
+//
+// El caso: AotGcRt con `native` en el ESP32-P4 imprime el `0` y se cuelga antes
+// del `1000`. El .mdn es correcto (arch=243, RISC-V, verificado leyendo su
+// cabecera) y el mismo programa interpretado va bien, asi que lo que falla esta
+// en el camino del nativo. Alrededor de la vuelta 400 cae la primera colecta por
+// presion de tabla (#430) — y esa cae DENTRO de la nativa.
+//
+// LA PRUEBA (idea de Eduardo): llamar al GC A MANO cada 500 vueltas.
+//
+// Por que discrimina, que es lo que la hace valer: al salir de una funcion
+// `native` la VM restaura su contexto y `cc->tc` vuelve a NULL. El escaneo
+// conservador de la pila C (#302) SOLO se hace con `tc != NULL`. O sea que un
+// `gc()` escrito en BP corre SIN la nativa en la pila y NO pasa por ese escaneo.
+//
+//   · si este programa TERMINA  -> el GC del P4 esta sano; lo que mata es
+//                                  colectar DENTRO de la nativa (el escaneo).
+//   · si este programa SE CUELGA -> el GC esta roto en el P4 en general, y el
+//                                  nativo no tiene nada que ver.
+//
+// Los `print` salen por el wire, que sobrevive al cuelgue (el log NO, #439), asi
+// que la ULTIMA linea que se vea dice exactamente donde murio.
+module GcNatP4b
+
+  public const VUELTAS: integer := 10000
+  public const CADA:    integer := 100
+
+  native function eco(n: integer): string
+    return ("v" + n) + ("w" + n)
+  end eco
+
+  function Main()
+    var i: integer := 0
+    var malos: integer := 0
+    var ultimo: string := ""
+    var ngc: integer := 0
+    while i < VUELTAS do
+      // El gc() a mano ANTES de que la presion lo dispare sola: si la tabla no
+      // se llena, la colecta de dentro de la nativa no llega a ocurrir.
+      if (i mod CADA) == 0 then
+        ngc := ngc + 1
+        print "v" + i + " antes gc " + ngc
+        gc()
+        print "v" + i + " ok"
+      endif
+      ultimo := eco(i)
+      var esperado: string := "v" + i + "w" + i
+      if ultimo != esperado then
+        malos := malos + 1
+      endif
+      i := i + 1
+    endwh
+    print "malos  : " + malos
+    print "ultimo : " + ultimo
+    print "gc     : " + ngc + " colectas a mano"
+    print "fin"
+  end Main
+
+end GcNatP4b

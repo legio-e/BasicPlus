@@ -19,6 +19,8 @@
 // ============================================================
 module Gpio
 
+  import Core   // V6: los tipos de Core se importan
+
   // H7.3 — board-aware: el constructor Gpio.Pin valida el número de
   // pin contra Pico.gpioCount() (30 en RP2350A/Pico, 48 en RP2350B/Metro).
   import Pico

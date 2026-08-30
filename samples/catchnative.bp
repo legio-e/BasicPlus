@@ -3,6 +3,8 @@
 // RuntimeException) ahora se pueden capturar con try/catch.
 module CatchNative
 
+  import Core   // V6: los tipos de Core se importan
+
   function trapDivByZero()
     try
       var a: integer := 10

@@ -2,20 +2,20 @@ dbg 3
 module Neopixel
 source C:\lenguajes\pm\bpstdlib\Neopixel.bp
 lines
-473 50
-502 51
-542 57
-564 58
-567 59
-581 60
-592 61
-606 67
-623 72
-652 77
-672 41
-682 42
-692 43
-705 44
+468 50
+497 51
+537 57
+559 58
+562 59
+576 60
+587 61
+601 67
+618 72
+647 77
+667 41
+677 42
+687 43
+700 44
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -54,66 +54,66 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func Strip.getPin_ 386
+func Strip.getPin_ 381
 this -20 8 0 ?
-func Strip.setPin_ 400
+func Strip.setPin_ 395
 this -24 8 0 ?
-func Strip.getN_ 413
+func Strip.getN_ 408
 this -20 8 0 ?
-func Strip.setN_ 427
+func Strip.setN_ 422
 this -24 8 0 ?
-func Strip.getPx_ 440
+func Strip.getPx_ 435
 this -20 8 0 ?
-func Strip.setPx_ 456
+func Strip.setPx_ 451
 this -28 8 0 ?
-func Strip.setPixel 470
+func Strip.setPixel 465
 this -36 8 0 ?
 i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func Strip.setColor 539
+func Strip.setColor 534
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
 c 0 4 0 integer
 i 4 4 0 integer
-func Strip.clear 603
+func Strip.clear 598
 this -20 8 0 ?
-func Strip.show 620
+func Strip.show 615
 this -20 8 0 ?
-func Strip.count 649
+func Strip.count 644
 this -20 8 0 ?
-func Strip.__init 669
+func Strip.__init 664
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_new_Strip 715
+func __cls_new_Strip 710
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_init_Strip 749
+func __cls_init_Strip 744
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_m_Strip_setPixel 767
+func __cls_m_Strip_setPixel 762
 this -36 8 0 ?
 i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func __cls_m_Strip_setColor 789
+func __cls_m_Strip_setColor 784
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func __cls_m_Strip_clear 809
+func __cls_m_Strip_clear 804
 this -20 8 0 ?
-func __cls_m_Strip_show 823
+func __cls_m_Strip_show 818
 this -20 8 0 ?
-func __cls_m_Strip_count 837
+func __cls_m_Strip_count 832
 this -20 8 0 ?
-func __strconcat 870
+func __strconcat 865
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

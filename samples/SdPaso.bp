@@ -1,0 +1,73 @@
+// SdPaso.bp — QUE llamada exacta se atasca en la tarjeta. Un paso, una linea.
+//
+// No es un ejemplo ni un test: es un INSTRUMENTO, y existe porque `SdCard.bp` se
+// cuelga en la Metro sin decir donde. La regla aqui es que **cada llamada se
+// anuncia ANTES de hacerse**, asi que la ultima linea que salga por la consola
+// nombra a la culpable. Un programa que se para despues de imprimir "3 mkdir..."
+// nos dice mas que cualquier teoria.
+//
+// Dato de partida, y por eso el orden: `SqlDemo` YA escribe en /sd/medidas.db en
+// esta misma placa. O sea que abrir y escribir un fichero en la tarjeta funciona.
+// Lo que `SdCard` hace y `SqlDemo` no es `isDirectory` y `mkdir` — por ahi se
+// empieza.
+module SdPaso
+  import IO
+
+  function Main()
+    print "0 arranco"
+
+    print "1 isDirectory(/sd)..."
+    var hay: boolean := IO.isDirectory("/sd")
+    print "1 OK -> " + hay
+
+    print "2 writeFile(/sd/paso.txt)..."
+    writeFile("/sd/paso.txt", "hola")
+    print "2 OK"
+
+    print "3 readFile(/sd/paso.txt)..."
+    var t: string := readFile("/sd/paso.txt")
+    print "3 OK -> " + t
+
+    print "4 fileSize(/sd/paso.txt)..."
+    print "4 OK -> " + IO.fileSize("/sd/paso.txt")
+
+    print "5 appendFile x3..."
+    appendFile("/sd/paso.txt", "AAAA")
+    appendFile("/sd/paso.txt", "BBBB")
+    appendFile("/sd/paso.txt", "CCCC")
+    print "5 OK -> " + IO.fileSize("/sd/paso.txt") + " bytes (esperado 16)"
+
+    print "6 mkdir(/sd/pasodir)..."
+    IO.mkdir("/sd/pasodir")
+    print "6 OK"
+
+    print "7 isDirectory(/sd/pasodir)..."
+    print "7 OK -> " + IO.isDirectory("/sd/pasodir")
+
+    print "8 writeFile dentro del directorio..."
+    writeFile("/sd/pasodir/dentro.txt", "x")
+    print "8 OK"
+
+    print "9 appendFile x50 (a ver si es cuestion de VOLUMEN)..."
+    writeFile("/sd/gordo.txt", "")
+    var i: integer := 0
+    while i < 50 do
+      appendFile("/sd/gordo.txt", "0123456789012345678901234567890123456789012345678901234567890123")
+      i += 1
+      if i mod 10 == 0 then
+        print "   ... " + i + "/50  (" + IO.fileSize("/sd/gordo.txt") + " B)"
+      endif
+    endwh
+    print "9 OK -> " + IO.fileSize("/sd/gordo.txt") + " bytes (esperado 3200)"
+
+    print "10 limpieza..."
+    IO.removeFile("/sd/paso.txt")
+    IO.removeFile("/sd/gordo.txt")
+    IO.removeFile("/sd/pasodir/dentro.txt")
+    IO.rmdir("/sd/pasodir")
+    print "10 OK"
+
+    print "FIN — llego hasta el final"
+  end Main
+
+end SdPaso

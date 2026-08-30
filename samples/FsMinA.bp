@@ -1,0 +1,11 @@
+module FsMinA
+  function main()
+    var i: integer := 0
+    var s: string := ""
+    while i < 200 do
+      i := i + 1
+      s := "n" + intToString(i)
+    endwh
+    print "FsMinA OK " + s
+  end main
+end FsMinA

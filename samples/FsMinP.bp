@@ -1,0 +1,17 @@
+module FsMinP
+  import IO
+  function main()
+    var i: integer := 0
+    var a:string
+    while i < 5 do
+      i := i + 1
+      a:= intToString(i)
+      print "iter " + a + " writeFile"
+      writeFile("m.tmp", a)
+      print "iter " + a + " rename"
+      IO.rename("m.tmp", "m.txt")
+      print "iter " + a + " done"
+    endwh
+    print "FsMinP OK"
+  end main
+end FsMinP

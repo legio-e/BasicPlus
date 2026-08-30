@@ -1,0 +1,44 @@
+module GcDev
+
+    // Prueba de DEVICE del parche de memoria v3.0.1 (GC-2), dimensionada para
+    // heaps grandes (PSRAM). En un heap de 8 MB el churn de GcMisalign2 NO llena
+    // el heap -> el GC no se dispararia y 'sum=320' saldria sin probar nada. Aqui
+    // forzamos el GC con gc() (builtin 43): rapido y garantizado.
+    //
+    // 'buf' (byte[10] = 14 bytes inline) va ANTES de 'g' -> sin el fix, 'g' caeria
+    // en un offset no-4-alineado y el gc() lo recolectaria en vivo -> sum != 320.
+    // Con el fix (cada simbolo alineado a 4), 'g' sobrevive -> sum = 320.
+    var buf: byte[10]
+    var g: integer[]
+
+    function setup()
+        g := newIntArray(64)
+        var i: integer := 0
+        while i < 64 do
+            print "setup", (i)
+            g[i] := 5
+            i := i + 1
+        endwh
+        buf[0] := 7
+    end
+
+    function Main()
+        print "GcDev"
+        setup()          // al volver, 'g' solo es alcanzable por el data block
+        print "gc1"
+        gc()             // fuerza el GC: si 'g' estuviera desalineado, se recolecta
+        print "gc2"
+        gc()
+        print "gc fin"
+        var sum: integer := 0
+        var i: integer := 0
+        while i < 32 do  // 64 do
+            print(i)
+            sum := sum + g[i]
+            i := i + 1
+        endwh
+        print "sum =", sum      // 320 = fix OK
+        print "buf0 =", buf[0]  // 7
+    end
+
+end GcDev

@@ -18,6 +18,8 @@
 //      descriptor de clase — basura; miVM ya contestaba 0)
 module CastRt
 
+  import Core   // V6: los tipos de Core se importan
+
   class Animal
     var nombre: string
     function Animal()

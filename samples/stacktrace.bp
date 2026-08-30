@@ -17,6 +17,8 @@
 
 module StackTrace
 
+  import Core   // V6: los tipos de Core se importan
+
   public function nivelTres()
     throw RuntimeError("boom desde nivelTres")
   end nivelTres

@@ -1,0 +1,93 @@
+// NatV7 — valida DE UNA PASADA lo que entró en V6/N1: el bloque nativo dentro
+// del propio `.mod` (v7), los métodos `native`, `double` en native, y `print`
+// desde native.
+//
+// ─── QUÉ MIRAR AL EJECUTARLO ───
+//
+//  1. En el LOG de arranque tiene que salir:
+//        [mdn] 1 bloque(s) nativo(s) desde el propio .mod
+//     Esa línea es la prueba de que el mecanismo funciona: el `.mod` traía el
+//     código nativo DENTRO y el cargador lo encontró y registró sus thunks. Sin
+//     ella el programa da los mismos resultados —interpretado— y no se notaría.
+//
+//  2. Los cuatro bloques tienen que dar los valores que dice cada uno. Son
+//     valores exactos a propósito: si el AOT y el intérprete difirieran aunque
+//     fuera en un bit, saldría aquí.
+//
+//  3. El tiempo del bucle. Con el nativo registrado tiene que bajar mucho
+//     respecto a interpretado; es la única forma de VER que se está ejecutando
+//     el código compilado y no el bytecode.
+//
+// ⚠️ Si sale "MDN: RECHAZADO — ABI n, esta VM habla m", la imagen y el `.mod`
+// son de eras distintas de los helpers: hay que reflashear con el firmware de
+// esta misma tanda.
+module NatV7
+  import Pico
+
+  // ── 1. native de módulo, con bucle: es la que se cronometra ──────────────
+  native function sumaHasta(n: integer): integer
+    var t: integer := 0
+    var i: integer := 1
+    while i <= n do
+      t += i
+      i += 1
+    endwh
+    return t
+  end sumaHasta
+
+  // ── 2. native con DOUBLE: aritmética por los helpers nuevos ──────────────
+  // (3.0 + 5.0) / 2.0 * 2.0 = 8.0 — exacto en binario, así que el formato
+  // impreso no depende del redondeo.
+  native function mediaPor2(a: double, b: double): double
+    return ((a + b) / 2.0d) * 2.0d
+  end mediaPor2
+
+  // ── 3. método native, y leyendo una PROPERTY por su getter ───────────────
+  public class Caja
+    public property n: integer
+    public function Caja(v: integer)
+      this.n := v
+    end Caja
+    public native function doble(): integer
+      return this.n * 2
+    end doble
+  end Caja
+
+  // ── 4. print DENTRO de una native ────────────────────────────────────────
+  // ⚠️ Sin literal de cadena, pero NO porque no se pueda: un literal vive en
+  // `.rodata` y el paso de ENLACE del pipeline (`bpgenvm-c/aot/mdn.ld`) lo
+  // fusiona dentro de `.text` desde #428 (V5). Lo que caza MdnPack es el `.o`
+  // sin enlazar — y creerse eso me hizo declarar dos límites que no existían
+  // (24-ago). Aquí se imprime un valor porque es lo que este sample mide.
+  native function traza(x: integer): integer
+    print x
+    return x + 1
+  end traza
+
+  function Main()
+    print "== NatV7 — el bloque nativo dentro del .mod =="
+
+    print "1 native de modulo:"
+    var t0: integer := Pico.uptimeMs()
+    var s: integer := sumaHasta(20000)
+    var ms: integer := Pico.uptimeMs() - t0
+    print "  sumaHasta(20000) =", s, " (esperado 200010000)"
+    print "  tiempo:", ms, "ms"
+
+    print "2 double en native:"
+    print "  mediaPor2(3,5) =", mediaPor2(3.0d, 5.0d), " (esperado 8.0)"
+
+    print "3 metodo native (lee property por su getter):"
+    var c: Caja := Caja(21)
+    print "  Caja(21).doble() =", c.doble(), " (esperado 42)"
+
+    // El `print` de dentro de la native sale ANTES, al evaluarse el argumento.
+    // Se llama en una línea aparte para que la salida se lea de arriba abajo.
+    print "4 print desde native:"
+    var r: integer := traza(7)
+    print "  traza(7) =", r, " (esperado 8)"
+
+    print "== FIN =="
+  end Main
+
+end NatV7

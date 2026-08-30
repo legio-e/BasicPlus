@@ -1,4 +1,7 @@
 module ExcField
+
+  import Core   // V6: los tipos de Core se importan
+
   public class MyErr extends Exception
     var code: integer
     public function MyErr(m: string, c: integer)

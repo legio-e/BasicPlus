@@ -2,6 +2,8 @@
 
 module TryTest
 
+  import Core   // V6: los tipos de Core se importan
+
   function TryTest()
     print "[init] TryTest"
   end TryTest

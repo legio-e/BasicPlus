@@ -16,6 +16,8 @@
 // esa es la salida de la paridad dual-VM. El tope es cosa del host C.
 module OomHandles
 
+  import Core   // V6: los tipos de Core se importan
+
   class Nodo
     var siguiente: Nodo
     var etiqueta: string

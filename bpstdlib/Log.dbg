@@ -2,38 +2,38 @@ dbg 3
 module Log
 source C:\lenguajes\pm\bpstdlib\Log.bp
 lines
-422 54
-450 62
-458 63
-464 64
-467 65
-481 70
-491 75
-501 80
-511 86
-521 91
-531 97
-551 101
-571 105
-591 109
-611 115
-621 116
-631 119
-661 120
-668 121
-706 124
-714 125
-721 126
-731 128
-738 129
-747 130
-762 131
-790 135
-793 136
-843 139
-857 146
-868 147
-885 148
+417 57
+445 65
+453 66
+459 67
+462 68
+476 73
+486 78
+496 83
+506 89
+516 94
+526 100
+546 104
+566 108
+586 112
+606 118
+616 119
+626 122
+656 123
+663 124
+701 127
+709 128
+716 129
+726 131
+733 132
+742 133
+757 134
+785 138
+788 139
+838 142
+852 149
+863 150
+880 151
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -72,35 +72,35 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func setFile 447
+func setFile 442
 p -20 8 0 string
-func setLevel 478
+func setLevel 473
 n -16 4 0 integer
-func setConsole 488
+func setConsole 483
 b -16 4 0 boolean
-func setFileEnabled 498
+func setFileEnabled 493
 b -16 4 0 boolean
-func setTimestamp 508
+func setTimestamp 503
 b -16 4 0 boolean
-func setMaxSize 518
+func setMaxSize 513
 n -16 4 0 integer
-func debug 528
+func debug 523
 msg -20 8 0 string
-func info 548
+func info 543
 msg -20 8 0 string
-func warn 568
+func warn 563
 msg -20 8 0 string
-func error 588
+func error 583
 msg -20 8 0 string
-func escribe 608
+func escribe 603
 nivel -32 4 0 integer
 etiqueta -28 8 0 string
 msg -20 8 0 string
 linea 0 8 0 string
 e 12 8 0 ?
-func rotaSiHaceFalta 854
+func rotaSiHaceFalta 849
 entrante -16 4 0 integer
-func __strconcat 917
+func __strconcat 912
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

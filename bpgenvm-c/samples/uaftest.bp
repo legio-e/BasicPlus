@@ -2,6 +2,8 @@
 // grita y salta ("objeto eliminado"), nunca lee el objeto equivocado en silencio.
 module UafTest
 
+  import Core   // V6: los tipos de Core se importan
+
   public class Animal
     public property nombre: string
     public function Animal(nombre: string)

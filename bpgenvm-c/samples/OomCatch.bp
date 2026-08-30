@@ -2,6 +2,9 @@
 // ("No space in heap"), NUNCA colgarse mudo. Cadena de nodos que crece
 // (todos vivos, alcanzables desde head → el GC no libera) hasta OOM.
 module OomCatch
+
+  import Core   // V6: los tipos de Core se importan
+
   class Node
     var nxt: Node
     var buf: integer[]

@@ -1,0 +1,22 @@
+module NB2Bref
+  import Core
+  // NB2Bref — ref param PRESENTE (8B en el frame) pero SIN builtin que lo lea;
+  // el alloc usa tamaño literal. Quita el builtin, deja el ref.
+  //   - Peta -> basta el REF PARAM + alloc (el builtin es irrelevante).
+  //   - OK   -> el ref param solo no basta; hace falta el builtin (ver NB2B).
+  function mkNB(a: string): integer
+    var out: byte[] := newByteArray(2)
+    out[0] := 88
+    return 1
+  end mkNB
+  function main()
+    try
+      var k: integer := mkNB("a")
+      print "NB2Bref OK (ref param sin builtin + alloc)"
+    catch e: Core.Exception
+      print "NB2Bref CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2Bref

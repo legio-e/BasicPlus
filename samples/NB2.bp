@@ -1,0 +1,24 @@
+module NB2
+  import Core
+  // NB2 — alocar DENTRO de una función con un param `string` (= ref de 8 bytes
+  // empujada en la pila de operandos cruzando un CALL) y devolver un ref (LRet).
+  // Es el contexto de frame de __strconcat, pero con UN solo param y sin copia.
+  //   - NB1 OK y NB2 peta -> el veneno es el param-ref-cruzando-CALL.
+  //   - NB2 OK -> el frame con param ref es sano; subimos a NB3.
+  function mk(a: string): byte[]
+    var la: integer := strlen(a)
+    var out: byte[] := newByteArray(la)
+    out[0] := 88
+    return out
+  end mk
+  function main()
+    try
+      var r: byte[] := mk("a")
+      print "NB2 OK (alloc en fn con param string)"
+    catch e: Core.Exception
+      print "NB2 CAUGHT:"
+      print e.msg
+    endtry
+    print "fin"
+  end main
+end NB2

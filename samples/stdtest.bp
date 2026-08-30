@@ -1,5 +1,7 @@
 module StdTest
 
+  import Core   // V6: los tipos de Core se importan
+
   class Persona
     public property nombre: string
     public property edad: integer
