@@ -27,6 +27,76 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (30-ago) — `U3` casi cerrado en ESP32, y **el P4 es la deuda gorda**
+
+### Lo primero: LA MATRIZ DE VERIFICACIÓN
+
+Pregunta de Eduardo al cerrar: *«¿cómo están las otras familias?»*. Medido con
+`git log` sobre el código compartido desde la última prueba de cada una:
+
+| familia | última verificación | qué le falta por ver |
+|---|---|---|
+| **ESP32-S3** | **30-ago**, gesto a gesto | al día |
+| **Pico / Metro** | 29-ago (batería 48/48) | `#453` · el `SAVE` de `U3.17` |
+| **STM32 Nucleo** | 27-ago (`U3.6`) | `#449` `#450` `#451` `#453` · `U3.17` · los 6 gestos de la deuda vieja |
+| **STM32 Discovery** | ninguna esta serie | lo del Nucleo, y además es la de PANTALLA |
+| **ESP32-P4** | **25-ago** (`U2` paso 2) | **`U3` ENTERO (12 verbos)** · `server_name` · `#449` `#450` `#451` `#453` |
+
+🔴 **El P4 es el peor caso y conviene entender por qué.** Comparte
+`repl_esp32.c` con el S3, así que ha recibido **toda** la migración del 30-ago sin
+flashearse. Y —esto es lo importante— **lo único que el verde del S3 NO puede
+exonerar es justo lo suyo**: el `server_name`, que es por placa (`bpvm-esp32p4`
+contra `bpvm-esp32`). Fue el bug que puse en `U3.13` y quité en `U3.19`, y **sólo
+se manifiesta en el P4**.
+
+📌 La regla que sale de ahí, y sirve para toda la serie U: *el código común
+verificado en una familia dice algo de las demás; **lo que sale de la cintura,
+no**.* Por eso la matriz no se puede rellenar por inferencia.
+
+⏭️ **Orden propuesto y el gesto que prueba cada cosa:**
+
+1. **P4** — conectar el IDE y **mirar el nombre del servidor** (cubre lo único no
+   inferible), luego `INFO`, `ls`, subir y bajar un fichero.
+2. **Pico** — abrir un fichero grande (prueba `#453`) y `save` desde la consola.
+3. **STM32** — los seis gestos de `H13_PRUEBAS_V5_REPASO.md` + abrir un fichero
+   grande.
+
+### Lo que se hizo el 30-ago
+
+**`U3` en el ESP32, de 23 verbos propios a 6.** `repl_esp32.c` 1360 → 1242 líneas.
+Migrados y **verificados en placa**: `DEL` `STAT` `MKDIR` `GET` `PING` `TIME`
+`LOG_DUMP` `LOG_CLEAR` `SAVE` `DF` `INFO` `HELLO`.
+
+Quedan dos cosas, y las dos son decisión de Eduardo más que trabajo:
+
+- 🟡 **`LIST` está PARADO a propósito.** Migrarlo tal cual perdería el desglose por
+  raíz que el ESP32 sí imprime (`ls: 25 ent en 160 ms | app:11/50ms lib:14/64ms`) y
+  el común no — sería unificar HACIA ABAJO. Lo correcto es subir ese desglose al
+  común, y entonces la Pico y el STM32 lo GANAN. Además el común recorre
+  directorios (`bpvm_fs_list` con cola desde `/`) y el ESP32 lista plano: ninguno
+  de los dos es «el bueno» entero.
+- ⏭️ **El grupo `PUT`**, con el terreno ya preparado: `U3.20` subió el `type` por
+  encima de la pre-lectura del bulk y dejó la bandera `lo_lee_el_comun` en 0.
+
+**Cuatro fichas nuevas**, tres de ellas encontradas persiguiendo otra cosa:
+`#452` (cinco verbos que ningún cliente manda), `#453` (el `GET` abría el fichero
+472 veces para 120 KB), `#454` (el timeout medía tiempo total en vez de
+inactividad) y `#446` cerrada con `make check-nogui`.
+
+### Lo que conviene llevarse
+
+🔁 **Tres veces el mismo patrón en una sesión: el arreglo existe en un camino y
+falta en su gemelo.** `crc32` arreglado y el `GET` no (`#453`); el corte del CRC en
+la Pico y no en el ESP32 (`#424`); el troceado en `PUT` y no en `GET` (`#454`).
+Ninguno se buscó — los tres salieron de perseguir otra cosa. Merece la pena
+buscarlos a propósito: `grep` de la primitiva que se deja de usar.
+
+⚠️ **Y un diagnóstico mío que era falso.** Calculé que 120 KB a 115200 baud son
+10,5 s contra un plazo de 10,0 y concluí «no cabe por el cable». La aritmética
+estaba bien y la conclusión mal: lo tumbó que Eduardo observara que **un pack de
+~580 KB sí se graba**, tardando ~50 s. No miré lo que ya funcionaba antes de
+declarar algo imposible.
+
 ## ⏭️ AL RETOMAR (29-ago, cierre) — **se sigue por `U3` con el ESP32**
 
 **Decisión de Eduardo al cerrar**: *«cuando retomemos continuamos justo por U3 y vamos
