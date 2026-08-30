@@ -197,30 +197,8 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
 
 /* ====================== META ====================== */
 
-static void handle_hello(long id, const json_obj_t* obj) {
-    (void) obj;
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "HELLO_REPLY", id);
-    if (off < 0) goto err;
-    off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "protoVersion", 1);
-    if (off < 0) goto err;
-    off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "serverName", s_board_id->server_name);
-    if (off < 0) goto err;
-    off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "serverBuild", ESP32_BUILD_DATE);
-    if (off < 0) goto err;
-    /* Capabilities: META + FILES + TERMINAL (RUN/OUTPUT/EXITED). Sin
-     * BOOTSEL (no aplica en ESP32). */
-    static const char* CAPS = ",\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\"]";
-    size_t caps_len = strlen(CAPS);
-    if ((size_t) off + caps_len + 1 > sizeof(s_reply_buf)) goto err;
-    memcpy(s_reply_buf + off, CAPS, caps_len);
-    off += (int) caps_len;
-    off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) goto err;
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    return;
-err:
-    wire_v1_send_error(id, "INTERNAL_ERROR", "HELLO_REPLY no cabe");
-}
+/* V6/U3 g5 - HELLO vive en el comun: mismo protoVersion 1, mismo serverName,
+ * serverBuild y el array de capabilities tal cual lo da la cintura. */
 
 /* V6/U3 g4 - INFO vive en el comun; lo propio de esta placa es RELLENAR los
  * 18 campos, y eso esta abajo en la cintura (esp32_repl_info). */
@@ -732,7 +710,7 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
-    if (strcmp(type, "HELLO") == 0) { handle_hello(rid, &obj); return 0; }
+    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }   /* attach en caliente */
     wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
@@ -971,7 +949,7 @@ static int esp32_autorun_escucha(void* user) {
         wire_v1_send_reply_empty("KILL_REPLY", rid);
         return 2;
     }
-    if (strcmp(type, "HELLO") == 0) { handle_hello(rid, &obj); return 1; }
+    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 1; }   /* attach en caliente */
     return 1;                                  /* hay alguien: basta con eso */
 }
 
@@ -1078,9 +1056,15 @@ static unsigned long esp32_repl_fs_total(void) { return (unsigned long) fs_total
 static unsigned long esp32_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
 static int  esp32_repl_fs_count(void)  { return (int) fs_file_count(); }
 
-static const bpvm_repl_ops_t s_repl_ops = {
+/* ⚠️ NO es `const`: `server_name` se rellena en runtime desde `s_board_id`.
+ * Lo puse literal ("bpvm-esp32") al enganchar la cintura y ERA UN BUG LATENTE:
+ * este fichero lo comparten el S3 y la P4, y la P4 se llama "bpvm-esp32p4"
+ * (`p4_board_id.c`). No habia mordido porque HELLO seguia siendo de la familia
+ * —que si lee `s_board_id`—, y habria mordido justo al migrarlo. Lo caza
+ * comparar antes de borrar, no leer el codigo por encima. */
+static bpvm_repl_ops_t s_repl_ops = {
     .info           = esp32_repl_info,
-    .server_name    = "bpvm-esp32",
+    .server_name    = "bpvm-esp32",   /* se pisa en repl_esp32_run con el real */
     .server_build   = ESP32_BUILD_DATE,
     .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\"]",
     .fs_total_bytes = esp32_repl_fs_total,
@@ -1138,7 +1122,6 @@ static void handle_request(const char* line, int len) {
         wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'"); return;
     }
 
-    if (strcmp(type, "HELLO") == 0) { handle_hello(id, &obj); return; }
     if (strcmp(type, "RESET") == 0) { handle_reset(id, &obj); return; }
     /* H9 — gestión de placa (env + particiones): mismo núcleo que boardsim/Pico. */
     if (strcmp(type, "STATE") == 0
@@ -1245,6 +1228,7 @@ void repl_esp32_run(void) {
      * línea, el problema es de boot; si aparece, la placa estaba escuchando y lo
      * que venga después es del comando. También deja a la vista el tamaño del
      * buffer de bulk, que es distinto por placa (S3 48K / P4 64K). */
+    s_repl_ops.server_name = s_board_id->server_name;   /* S3 o P4: lo dice la placa */
     bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3: la cintura, antes del primer mensaje */
     log_printf("REPL entry (wire v1) — buffer de bulk %u B", (unsigned) sizeof(s_put_buf));
     log_flush();
