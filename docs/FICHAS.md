@@ -1145,6 +1145,22 @@ y sí vio **compilar todo**:
 0 SKIP**, censo de **313 samples sin ninguna rotura nueva** (los 2 que disparan el error
 nuevo ya fallaban: les falta el pack de SQLite).
 
+✅ **VERIFICADO EN PLACA (P4, 30-ago)**: `JsonDemo` corre entero, `exit 0`. Y lo que ese
+gesto prueba de verdad no es el JSON:
+
+| lo que subió el IDE | por qué importa |
+|---|---|
+| `Core.mod` | es EL módulo que hasta hoy no se podía regenerar (`#457`). Reconstruido desde fuente, MOD7, ejecutándose en RISC-V |
+| `Json.mod` | uno de los 8 de la stdlib que ganaron `import Core`: compila bajo la norma nueva y corre |
+
+Y `JsonDemo` es el sample con el que arrancó toda la campaña — el del `exit 6` con el
+código pisado de `#440`.
+
+⚠️ **Lo que NO cubre**, para no apuntárselo: sólo el **P4**, y sólo **2 de los 27** módulos.
+No se ha ejercitado ningún `catch` (el grupo `RuntimeError` es el que más ficheros movió:
+23 de 56) ni las cuatro funciones nuevas de `Math`. Pico, S3 y STM32 llevan la stdlib
+nueva sin estrenar.
+
 📌 **Lo que enseña**: *reproducir hasta que el arreglo se vea funcionar, no hasta que
 parezca correcto*. Di el bug por arreglado dos veces —al quitar la inyección y al añadir
 la pista— y las dos veces el caso original seguía fallando igual. Sólo el tercer intento,
