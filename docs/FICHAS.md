@@ -748,8 +748,14 @@ de cada una sigue en su sitio.
 - **Ficheros como CLASE** — decidido: dos clases y la segunda hereda.
 - **`Map`**: objetos internos para claves **y** valores + `add` sobrecargado *(decidido el
   23-ago; ver arriba)*.
-- **`Math`, ampliar** — `fact` sobrecargada y f64, más lo que salió de mirar BASIC256:
-  `atan2`, `remap`, `clamp`, `hypot`, `wrap`. Todas son cálculo puro y de pocas líneas.
+- **`Math`, ampliar** — quedan **cuatro**: `remap`, `clamp`, `hypot`, `wrap` (cálculo
+  puro, pocas líneas). ⚠️ **`atan2` YA ESTÁ** y esta lista lo pedía hasta el 30-ago:
+  existe en `Math.bp`, la registra `Intrinsics.java` como `Builtin.ATAN2` y **las dos VMs
+  la implementan** — verificado corriendo `samples/mathtest.bp` en las dos, 17 líneas
+  byte-idénticas. Y lo de *«`fact` sobrecargada y f64»* hay que replantearlo antes de
+  hacerlo: la función se llama `factorial` (no `fact`), y para el caso continuo
+  **`gamma(x)` ya existe** — `gamma(n+1) = n!`, o sea que la mitad del deseo está servida.
+  Lo que sí falta de verdad ahí es un `factorial` que no reviente pasado n=12.
 - **`#19`** array fijo LOCAL: que sea inline de verdad · **`#396`** módulo `Time`.
 
 #### 💻 E1 — el IDE y el wire
@@ -3109,8 +3115,13 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 - `#396` — módulo `Time` con clase `Time.Date`, sobre un `long` de segundos de
   época — **no** un tipo del lenguaje.
 
-- (sin número) — librería `Math`: ampliar (`fact` sobrecargada, f64) **y repasar
-  lo que ya hay**; strings igual si hace falta.
+- (sin número) — librería `Math`: ampliar **y repasar lo que ya hay**; strings igual
+  si hace falta. Ver el detalle en `L1` — de la lista original sólo quedan cuatro
+  funciones, y `atan2` ya estaba hecha. 📌 Un ejemplo de lo que significa *repasar lo
+  que ya hay*: `sign(integer)` y `signF(float)` son **dos nombres para una idea**,
+  herencia de cuando no había sobrecarga (existe desde V4/H5.a). Antes de tocarlo hay
+  que comprobar si el registro de intrínsecas sabe despachar por tipo de argumento, y
+  que renombrar rompe código de usuario.
 
 - (sin número) — **diagnóstico del heap DESDE BP**: las herramientas existen, pero
   están en la VM equivocada.
