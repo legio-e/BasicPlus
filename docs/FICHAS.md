@@ -1088,6 +1088,8 @@ familia que aún no había migrado**, o sea que la migración iba a BORRAR la ú
 buena. La comparación antes de borrar es lo único que lo caza; el verde de la placa no,
 porque el camino roto no se ejecuta nunca.
 
+✅ **Verificado en el P4 el 30-ago** (subir y bajar un fichero de ~300 KB) — pero sólo en que **no rompe el caso normal**: el destino fue `/app`, que existe desde el montaje, o sea que el `mkdir` nuevo fue un no-op. **La capacidad que devuelve sigue sin ejercitarse.**
+
 ⚠️ **Sin test de host**: `bpvm_repl.c` no lo tiene (el simulador `bpvm-sim` trae su
 **propio** `handle_put` y no enlaza el común, así que `sim-smoke` da verde sin tocar
 este código). Es exactamente el hueco que el arnés de V7 (`#444`) tiene que tapar, y de

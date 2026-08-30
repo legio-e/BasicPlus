@@ -27,6 +27,49 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (30-ago, tarde) — `U3.21` cerrado y **el P4 al día**; la deuda es ahora del STM32
+
+### La matriz, al cierre de la tarde
+
+| familia | última verificación | qué le falta por ver |
+|---|---|---|
+| **ESP32-P4** | **30-ago (tarde)**, en placa | al día — ver abajo lo que cubrió |
+| **ESP32-S3** | **30-ago**, gesto a gesto | `U3.21` sólo por herencia (comparte `repl_esp32.c` con el P4, que sí se probó) |
+| **Pico / Metro** | 29-ago (batería 48/48) | `#453` · el `SAVE` de `U3.17` · `#455` |
+| **STM32 Nucleo** | 27-ago (`U3.6`) | `#449` `#450` `#451` `#453` `#455` · `U3.17` · los 6 gestos de la deuda vieja |
+| **STM32 Discovery** | ninguna esta serie | lo del Nucleo, y además es la de PANTALLA |
+
+🟢 **El P4 pasó de ser la deuda gorda a estar al día en una tanda.** Y lo primero que
+se resolvió no costó ningún gesto: **el `server_name` lo demuestra el propio `INFO`**.
+`Micro : esp32p4` sale de `bid->board_name`, y `board_name` y `server_name` son campos
+**contiguos de la misma struct**, rellenados en el mismo inicializador de
+`p4_board_id.c`; `p4_install_board_id()` corre en `main.c:322` (y `:370` en el camino
+TCP) **antes** de `repl_esp32_run()`, que copia el nombre en la línea 1201 antes de
+registrar la cintura. No hay ventana. La pregunta se contestó **con lo que ya había**.
+
+Lo que la tanda de Eduardo cubrió, gesto a gesto:
+
+| gesto | qué prueba |
+|---|---|
+| subir y bajar `Fichas.md` (~300 KB) | **`U3.21`**: >8 KB ⇒ `PUT_BEGIN` + ~37×`PUT_DATA` + `PUT_END`, los tres por el común. Y **`#453`/`#454`** en el mismo viaje: en el S3 un fichero de 120 KB daba timeout antes del arreglo |
+| grabar `Stdlib.pack` | 🎯 **el control que hacía falta**: `PACK_BURN_*` es el camino que **sigue pre-leyendo el bulk** en `handle_request`. Si `lo_lee_el_comun` se hubiera colado a `1` de más, esto se corrompe — y en binario no da error, corrompe. Verde ⇒ la bandera separa bien los dos caminos |
+| `fib(28)` interp 4410 ms / **AOT 32 ms** | el `.mdn` RISC-V vivo (137×) y `RUN` + resolución de módulo |
+| `/lib/Pico.mod ya en FS (contenido idéntico), salto PUT` | el `STAT`+CRC bajo demanda (`#398`) migrado, decidiendo bien |
+| el arranque (`heap 27.5 MB + stack 512 KB`) | **`#450`** en su rama por defecto: sin `stack` en el ENV, el reparto de siempre |
+
+⚠️ **Lo que esa tanda NO prueba, y conviene no apuntárselo:** `#455` sólo quedó
+verificado en que **no rompe el caso normal** — el `PUT` fue a `/app`, que existe desde
+el montaje, así que el `mkdir` nuevo fue un no-op. La capacidad que devuelve (subir a
+una carpeta que no existe) **sigue sin ejercitarse**, y no hay test de host que la cubra
+(el simulador trae su propio `handle_put`). Es el hueco de `#444`.
+
+⏭️ **Lo que queda de `U3`**: sólo `LIST`. Sigue parado por lo mismo — el ESP32 imprime
+un desglose por raíz (`ls: 25 ent en 160 ms | app:11/50ms lib:14/64ms`) que el común no
+tiene, y migrarlo tal cual sería **unificar hacia abajo**, que es exactamente el error
+que `#455` acaba de demostrar que se comete solo. El camino bueno es subir el desglose
+al común, y entonces la Pico y el STM32 lo GANAN. Diseño: el común ya recorre con una
+cola desde `/`, así que cronometrar cada entrada de profundidad 1 da el mismo desglose.
+
 ## ⏭️ AL RETOMAR (30-ago) — `U3` casi cerrado en ESP32, y **el P4 es la deuda gorda**
 
 ### Lo primero: LA MATRIZ DE VERIFICACIÓN
