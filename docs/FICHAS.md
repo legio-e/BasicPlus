@@ -93,9 +93,9 @@ El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabaja
 `V6_IDEAS.md`. Aquí vive el estado.
 
 
-#### 🟢 LA BATERÍA DE V4 SOBRE LA PICO 2: de 40/48 a **47/48** (29-ago)
+#### 🟢 LA BATERÍA DE V4 SOBRE LA PICO 2: de 40/48 a **48/48** (29-ago)
 
-Ayer, 8 rojos. Hoy queda **uno**, y las causas reales eran menos de las que
+Ayer, 8 rojos. Hoy **ninguno**, y las causas reales eran menos de las que
 parecían:
 
 | sample | ayer | hoy | causa real |
@@ -103,7 +103,7 @@ parecían:
 | `JsonDemo` | `exit 6`, código pisado | ✅ | tabla de símbolos desbordando el margen (#440/#449) |
 | `stacktrace`, `MemT4b` | cuelgue mudo | ✅ | `PICO_MALLOC_PANIC` (#448) |
 | `MemT5_Gc`, `synctest`, `PropLongTest`, `ThreadFieldTest` | cuelgue / error | ✅ | presión de memoria, resuelta por #448 + #449 |
-| `synclisttest` | cuelgue mudo | 🔴 | **la tabla de handles no cabe en el margen** → #451 |
+| `synclisttest` | cuelgue mudo | ✅ | **la tabla de handles no cabía en el margen** → #451, cerrada esa misma tarde |
 
 ⚠️ **Y DOS DE LOS FALLOS DE HOY NO ERAN DE NINGÚN PROGRAMA: eran del andamio del
 MPU.** `StackTrace` y `ThreadFieldTest` están sanos; los mató el testigo. Está
