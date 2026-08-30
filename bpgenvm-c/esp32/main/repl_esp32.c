@@ -563,34 +563,9 @@ static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
 /* V6/U3 g2 - STAT vive en el comun (mismo bpvm_fs_stat, mismo CRC bajo
  * demanda de #398, mismos campos). Se comparo linea a linea antes de borrar. */
 
-static void handle_get(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
-    }
-    /* H11 — el GET NO carga el fichero: sólo necesita su TAMAÑO para la cabecera
-     * y después lo va escupiendo POR TROZOS. Antes era un fs_get, o sea el
-     * fichero ENTERO al espejo de 64 KB para copiarlo acto seguido al wire. */
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
-    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "GET_REPLY", id);
-    if (off >= 0) off = wire_v1_field_bulk(s_reply_buf, sizeof(s_reply_buf), (size_t) off, (size_t) size);
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "GET_REPLY no cabe"); return; }
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-    /* Trozo de 256 B = el mismo que usa littlefs por dentro: ni introduce un
-     * número nuevo ni fuerza al motor a partir lecturas. Si el FS falla a media
-     * transferencia ya no se puede rectificar (la cabecera con `bulk` ya salió),
-     * así que se corta y el cliente lo detecta por el bulk incompleto. */
-    uint32_t sent = 0;
-    while (sent < size) {
-        uint8_t chunk[256];
-        long n = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
-        if (n <= 0) break;
-        wire_v1_send_bulk(chunk, (size_t) n);
-        sent += (uint32_t) n;
-    }
-}
+/* V6/U3 g2 - GET vive en el comun. Comparado linea a linea: mismo
+ * bpvm_fs_stat para la cabecera, mismos trozos de 256 B (el interno de
+ * littlefs), mismo bpvm_fs_read_at y los mismos errores. */
 
 static void handle_put(long id, const json_obj_t* obj, const uint8_t* bulk, size_t bulk_size) {
     char path[64];
@@ -1256,7 +1231,6 @@ static void handle_request(const char* line, int len) {
     }
     if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H6 ANTES que LIST: el prefijo no debe comerselo */
     if (strcmp(type, "LIST")  == 0) { handle_list(id, &obj);  return; }
-    if (strcmp(type, "GET")   == 0) { handle_get(id, &obj);   return; }
     if (strcmp(type, "PUT")   == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
     /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
     if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
