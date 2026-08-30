@@ -1023,6 +1023,66 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
 
+#### ✅ `#454` — el timeout del wire medía lo que no debía (cerrada 30-ago · `01d3eb22`)
+
+**Síntoma**: abrir `ESTADO.md` (120.763 B) desde el árbol del IDE daba
+`timeout esperando respuesta a 'GET'`. Un fichero de 9 KB sí se abría.
+
+**Y mi primer diagnóstico fue FALSO.** Calculé que 120.763 B a 115200 baud son
+10,5 s contra un plazo de 10,0 y concluí «no cabe por el cable». La aritmética
+estaba bien; la conclusión, mal. **Lo tumbó una observación de Eduardo**: *«cuando
+grabamos un pack, éste se graba aunque tarde bastante»* — un pack de ~580 KB
+tarda ~50 s y **funciona**.
+
+O sea que el cable mueve 580 KB sin problema. Lo que cambia es **la forma**:
+
+```
+SUBIR   PUT_BEGIN / PUT_DATA / PUT_END   ->  N peticiones, cada una con SU plazo
+BAJAR   GET                              ->  UNA peticion, UN plazo para todo
+```
+
+📌 **El criterio, de Eduardo, y es el arreglo**: *«el timeout se suele configurar
+por trama, no por tiempo total del traspaso de un archivo; sirve para detectar no
+conexiones o conexiones que se han caído.»* Un plazo fijo para una transferencia
+sin cota está mal por construcción: no es que 10 s sea poco, es que **no puede
+haber un número**.
+
+⏩ `sendRequest` esperaba con `future.get(timeoutMs)`. Ahora espera a rodajas y
+sólo se rinde tras `timeoutMs` **sin recibir un byte**. Quita la clase entera:
+cualquier verbo, cualquier tamaño, cualquier velocidad — y detecta mejor el cable
+muerto, que es para lo que sirve.
+
+⚠️ **El latido se sella en el STREAM, no en el bucle lector.** El cuerpo de un
+`bulk` se lee dentro de `recvBulk`, que no vuelve hasta tenerlo entero: sellando
+por frame, los 120 KB seguirían sin dar señales de vida y saltaría igual.
+
+#### ✅ `#453` — el `GET` abría el fichero una vez por cada 256 B (cerrada 30-ago · `18c0c42f`)
+
+Salió persiguiendo `#454` y es un problema **distinto y real**, aunque no fuera la
+causa de aquel síntoma. `repl_get` troceaba de 256 en 256 B con `bpvm_fs_read_at`,
+y `read_at` recibe el **path**: cada trozo abría el fichero, hacía `seek` desde el
+principio, leía y cerraba. 472 aperturas para 120 KB.
+
+🔁 **Es LA MISMA ENFERMEDAD que #398/#424, en el otro llamador.** Entonces se
+añadió `crc32` al interfaz de backend porque era el caso cronometrado (refresco
+del árbol 6953 → 155 ms) y **el bucle del `GET` se quedó como estaba**. La
+cabecera incluso llevaba escrito el principio general: *«con el fichero abierto
+UNA vez y leído en secuencia, eso desaparece; el backend es el único que puede
+hacerlo, la fachada no tiene descriptores»*.
+
+⏩ Así que no hubo que diseñar nada: `read_stream(path, cb, user)` como op
+**opcional al final** del backend, igual que `crc32` — el que no la traiga la deja
+a `NULL` y la fachada cae al bucle de siempre. Implementada en littlefs con una
+apertura y el lock tomado **una vez** en lugar de 472.
+
+✅ **Con su oráculo, que es lo que #398 hizo bien**: `test_fs_lfs` comprueba que
+`read_stream` entrega los **mismos bytes** que el bucle viejo, en los tamaños donde
+estos bucles se rompen (255/256/257, 511/512/513, 0 y 5001). Aquí lo que no puede
+cambiar no es un número sino el **contenido**: unos bytes distintos darían un
+fichero corrupto **sin error**, porque el `bulk` anunciado seguiría cuadrando.
+Comprobado además que **sabe ver rojo** (se corrompió un byte a propósito). 58 →
+119 asserts.
+
 #### 🟡 `#452` — CINCO verbos del wire que ningún cliente manda (abierta 30-ago)
 
 Salió de una pregunta de Eduardo al probar `U3.17` —*«df / mem ?»*— y de tirar del hilo.
