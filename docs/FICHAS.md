@@ -1404,6 +1404,38 @@ existe porque casi siempre trabaja en memoria. Enlaza con
 [[contar-los-consumidores-no-leer-el-codigo]]: al subir un formato hay que **censar los
 lectores**, y son tres, no dos.
 
+#### ✅ `#464` — un `if` sin llaves en el arranque del S3: guardaba la línea equivocada (cerrada 31-ago)
+
+Salió **preparando el ensayo del C3**, leyendo el `main.c` del S3 como plantilla. No lo buscaba
+nadie: el código llevaba así desde `#450`.
+
+```c
+if (board_boot_status()->state == BPVM_BOOT_APP && !board_boot_status()->degraded)
+    /* …catorce líneas de comentario… */
+    bpvm_set_stack_kb(...);      // ← ESTO era el cuerpo del if
+    bpvm_set_quantum_ops(...);   // incondicional
+    bpvm_log_set_enabled(...);   // incondicional
+        repl_esp32_autorun();    // incondicional, e indentado como si estuviera dentro
+```
+
+**Los dos efectos, exactamente cambiados:**
+
+| | debería | estaba |
+|---|---|---|
+| `bpvm_set_stack_kb` (`stack=N`) | siempre | **sólo con la placa en estado APP y no degradada** |
+| `repl_esp32_autorun()` | sólo con la placa sana | **siempre** — al revés de lo que dice su propio comentario |
+
+🔎 **Y el P4 lo tiene BIEN**, en una sola línea: `if (bs->state == BPVM_BOOT_APP && !bs->degraded)
+repl_esp32_autorun();`. La misma intención escrita en dos formas: la de una línea aguanta, la
+repartida con catorce de comentario en medio se rompió sin que nadie lo viera. Se copia la del P4.
+
+⚠️ **Por qué no había mordido**: las dos consecuencias sólo aparecen con la placa **degradada o
+por debajo del estado 3**, que es el caso raro. `stack=N` se probó en una placa sana y funcionó.
+
+📌 **Lo que enseña**: *un `if` sin llaves con un comentario largo detrás es una trampa que ni
+compila mal ni avisa*. Y salió de leer el fichero **para copiarlo**, no de depurar — preparar un
+port hace leer código que llevaba meses sin leerse con atención.
+
 #### ✅ `#463` — el IDE no sabía que `Core` va embebido: lo subía a `/app` y creaba un override sin querer (cerrada 31-ago)
 
 **Lo vio Eduardo mirando el árbol de la placa**: *«parece como si el Core no se detectara en la

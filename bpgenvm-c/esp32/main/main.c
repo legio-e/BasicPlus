@@ -136,7 +136,6 @@ void app_main(void)
      * del REPL. El wire ya está vivo y el poll del run atiende
      * HELLO/KILL: el IDE puede conectar y parar la app en cualquier
      * momento. */
-    if (board_boot_status()->state == BPVM_BOOT_APP && !board_boot_status()->degraded)
     /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
      *
      * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
@@ -155,6 +154,14 @@ void app_main(void)
     bpvm_set_quantum_ops(bpvm_env_get_long(board_mgr_env(), "quantum", 0));   /* #462 */
     bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
 
+    /* #464 — EL `if` ESTABA SIN LLAVES y se comía la línea equivocada.
+     *
+     * Estaba escrito como en el P4 pero repartido en varias líneas, con catorce
+     * de comentario en medio: el `if` gobernaba `bpvm_set_stack_kb` —que debe
+     * aplicarse SIEMPRE— y dejaba `repl_esp32_autorun()` incondicional, que es
+     * justo lo contrario de lo que dice su propio comentario. Los dos efectos,
+     * cambiados. El P4 lo tiene bien y en una sola línea; se copia esa forma. */
+    if (board_boot_status()->state == BPVM_BOOT_APP && !board_boot_status()->degraded)
         repl_esp32_autorun();   /* H9: autorun solo con la placa sana en estado 3 */
     repl_esp32_run();   /* no retorna */
 }
