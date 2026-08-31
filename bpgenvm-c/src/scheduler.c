@@ -95,6 +95,26 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
             vm->kill_requested = 1;
         if (vm->kill_requested) return BPVM_KILLED;
 
+        /* #462 — CEDER EL TURNO AL SO ENTRE QUANTA.
+         *
+         * Observación de Eduardo (31-ago): *«en las STM32, cuando se ejecuta un
+         * programa, el resto del sistema sigue vivo, incluidas las comunicaciones;
+         * en las ESP32 se utilizan todos los recursos y se queda todo bloqueado»*.
+         *
+         * Y la causa estaba aquí: este bucle sólo llamaba a `thread_sleep_ms`
+         * cuando NO hay ningún thread ejecutable. Mientras el programa BP tenga
+         * trabajo, la tarea de la VM no se bloquea nunca — en bare-metal (STM32)
+         * da igual, no hay a quién matar de hambre; bajo FreeRTOS se come todo lo
+         * que esté a su prioridad o por debajo, incluido lo que bombea LVGL.
+         *
+         * `bpvm_platform_thread_yield` YA EXISTÍA en el contrato y lo implementaban
+         * las cuatro plataformas (`taskYIELD()` en ESP32 y Pico, no-op en el STM32
+         * porque allí no hace falta). No lo llamaba NADIE. Un gancho que existe y
+         * no se usa no es una abstracción: es una promesa sin cumplir.
+         *
+         * Coste: una llamada por quantum, y un quantum son 1024 opcodes. */
+        bpvm_platform_thread_yield();
+
         /* 1) Despierta sleeps expirados + joins completados. */
         wake_expired_sleeps(vm, bpvm_platform_now_ms());
         wake_completed_joins(vm);

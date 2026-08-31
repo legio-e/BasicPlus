@@ -1404,6 +1404,64 @@ existe porque casi siempre trabaja en memoria. Enlaza con
 [[contar-los-consumidores-no-leer-el-codigo]]: al subir un formato hay que **censar los
 lectores**, y son tres, no dos.
 
+#### 🟡 `#462` — la VM **nunca cede el turno al SO**: en el ESP32 un programa bloquea el resto del sistema (abierta 31-ago)
+
+**Eduardo, como usuario:** *«cuando se ejecuta un programa en las STM32, el resto del
+sistema sigue vivo, incluidas las comunicaciones; en cambio en las ESP32 se utilizan todos
+los recursos y se queda todo bloqueado. Es cierto que pasan los eventos pero mucho más
+lentos. Y como programador, creo que la diferencia no es tanto a nivel de código nuestro
+sino más a nivel de SO.»*
+
+**Tenía razón, y la causa está en nuestro planificador.**
+
+### El hallazgo
+
+`scheduler.c` sólo llama a `bpvm_platform_thread_sleep_ms` **cuando NO hay ningún thread
+ejecutable**. Mientras el programa BP tenga trabajo, el bucle gira sin bloquearse nunca:
+
+```c
+if (idx < 0) { ... bpvm_platform_thread_sleep_ms(dt); continue; }   /* único punto que cede */
+/* con trabajo: quantum, y vuelta a empezar — sin ceder */
+```
+
+En **bare-metal** (STM32) da igual: no hay a quién matar de hambre, y por eso *«funciona muy
+bien»*. Bajo **FreeRTOS** la tarea de la VM se come todo lo que esté a su prioridad o por
+debajo — incluido lo que bombea LVGL, que es el *«los eventos pasan pero mucho más lentos»*.
+
+🔑 **Y lo que lo hace sangrante: `bpvm_platform_thread_yield()` YA EXISTÍA** en el contrato
+(`bpvm_platform.h:57`) y lo implementaban **las cuatro** plataformas — `taskYIELD()` en
+ESP32 y Pico, no-op en el STM32 porque allí no hace falta, `sched_yield()` en el host.
+**Nadie lo llamaba.** Cero llamadas en todo `src/`. Un gancho que existe y no se usa no es
+una abstracción: es una promesa sin cumplir.
+
+### Y hay una segunda diferencia, de configuración, entre las dos ESP32
+
+| | quién ejecuta la VM | prioridad |
+|---|---|---|
+| **STM32** | bare-metal, sin RTOS — el REPL *es* el bucle principal | — |
+| **ESP32-S3** | `app_main` | **1** (`ESP_TASK_PRIO_MIN + 1`, del IDF) |
+| **ESP32-P4** | `xTaskCreate(wire_task_uart, …, 5, NULL)` | **5**, y sin fijar a un núcleo |
+
+El mismo código corre a prioridad 1 en el S3 y a **5** en el P4. A 1, casi cualquier tarea
+de servicio del IDF (5, 18, 22…) desaloja a la VM y el sistema respira; a 5 la VM gana. Eso
+explica que el P4 —*«más rápido y con más de todo»*— se comporte peor.
+
+### Medido
+
+Ceder una vez por quantum (**1024 opcodes**) cuesta en el host **~3,6 %**: 658 ms → 682 ms
+en un bucle entero de 20 M de iteraciones, 5 medidas estables cada uno. Paridad **38 PASS /
+0 FAIL / 0 SKIP** con el yield puesto.
+
+⚠️ *Y una medida mía que era falsa antes de esa*: 30 ms «con yield» contra 658 sin él. El
+número imposible lo delató — ese comando corrió con el shell dentro de `bpgenvm-c/`, la
+ruta relativa no resolvía, y el cronómetro midió **un exec fallido**. Instrumento mudo, otra
+vez, y otra vez lo cazó que el resultado fuera demasiado bueno.
+
+⏭️ **Lo que queda por decidir** (Eduardo): el yield ya está puesto y toca probar en el P4 si
+basta. Si no basta, la otra mitad es la prioridad — bajar el `wire_task` del P4 de 5 a 1
+para igualarlo al S3. 📌 Su criterio para esto: *«ahora que estamos unificando, sería
+recomendable quedarnos con lo bueno y no unificar a lo peor»*.
+
 #### 🟡 `#461` — los paths reservan tamaño FIJO: 7,5 KB de RAM estática para 1,5 KB de nombres (abierta 31-ago)
 
 **Eduardo, al hilo de `#456`:** *«Los path no deberían reservar espacios fijos. Si la
