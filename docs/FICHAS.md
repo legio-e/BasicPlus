@@ -1561,22 +1561,48 @@ lat = 1,19 ms/vuelta × vueltas  +  52 ms de SUELO
 ✅ El **1,19 ms por vuelta** confirma el mecanismo del quantum (estimado ~1,4 antes de medir).
 🔴 Pero hay **un suelo de ~52 ms que el quantum no toca**: una SEGUNDA causa, independiente.
 
-⚠️ **Y ese ajuste todavía no vale**: son dos parámetros sobre dos medidas, así que encaja por
-construcción. **Predicción falsable pendiente**: con `quantum=128` (~36 vueltas) el modelo dice
-**~95 ms**. Si sale eso, el suelo es real; si sale otra cosa, era sobreajuste.
+### ✅ El modelo PREDIJO y acertó (tercer punto, 31-ago)
+
+Con dos medidas el ajuste encajaba por construcción, así que se hizo una **predicción antes de
+medir**: `quantum=128` → **~95 ms**. Medido: **87 ms**.
+
+| quantum | vueltas | medido | modelo (3 puntos) |
+|---|---|---|---|
+| 1024 | 293 | 403 ms | 403 ms |
+| 128 | 37 | **87 ms** | 92 ms |
+| 32 | 9 | 63 ms | 59 ms |
+
+```
+lat = 1,21 ms/vuelta × vueltas  +  48 ms de SUELO
+```
+
+Error máximo **5 ms** en un rango de **32×**. Las dos causas quedan separadas y medidas:
+
+1. 🟢 **El quantum en opcodes** — `1,21 ms × vueltas`. Es el término que crece, y el que hoy
+   pone los 400 ms. **Confirmado.**
+2. 🔴 **Un suelo de 48 ms**, independiente del quantum. Sospechoso: `LV_DEF_REFR_PERIOD = 33 ms`
+   (`include/lv_conf.h:82`). Explica buena parte, no todo. Sin investigar.
 
 🔍 **Sospechoso del suelo**: `LV_DEF_REFR_PERIOD = 33 ms` (`include/lv_conf.h:82`), el periodo
 de refresco de LVGL. Explica buena parte de 52, no los 52. *(Ojo: la latencia se mide desde el
 upcall, o sea que la detección del clic queda FUERA — el suelo está entre el `raise` y el
 handler.)*
 
-### 🐛 Y un error SILENCIOSO que el quantum destapó
+### 🐛 Y un error SILENCIOSO que el quantum destapó — y NO es «mal», es INESTABLE
 
-Con `quantum=32` el `stop` pasa a reportarse **`exit 130 (KILLED)`**; con 1024 decía
-**`exit 0 (OK)`**. Con el quantum grande el KILL llegaba en un punto donde `Gui.run()` devolvía
-por su cuenta y el programa terminaba «normal» — o sea que **un programa MATADO decía que había
-salido con éxito**. Es un fallo de los que no hacen ruido, y no lo buscábamos: salió de cambiar
-un número para medir otra cosa.
+| quantum | qué reporta el `stop` |
+|---|---|
+| 1024 | `exit 0 (OK)` |
+| **32** | **`exit 130 (KILLED)`** |
+| 128 | `exit 0 (OK)` |
+
+Con el quantum grande el KILL llega en un punto donde `Gui.run()` devuelve por su cuenta y el
+programa termina «normal»; con el pequeño lo ve el planificador y sale como matado. O sea que
+**el estado de salida de un `stop` depende de DÓNDE caiga el KILL**: un programa matado puede
+decir que salió con éxito, y no siempre el mismo. Eso no es un valor equivocado, es una
+**carrera** — peor de diagnosticar y peor de fiarse.
+
+📌 Y no lo buscábamos: salió de cambiar un número para medir otra cosa.
 
 🐛 **Y de paso, una ineficiencia real en el bucle más caliente del GUI**: `GUI_RUN_ONCE`
 recorre **toda la tabla de símbolos con `strcmp`** en CADA pasada, para encontrar dos
