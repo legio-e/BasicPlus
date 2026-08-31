@@ -48,7 +48,25 @@
                               * llamara, que es la forma silenciosa de tener
                               * media función. */
 
-#if defined(__riscv)
+/* #465 — «ES RISC-V» NO IMPLICA «TIENE API DE CACHÉ».
+ *
+ * Estas guardas se escribieron para el P4 —RISC-V con caché gestionada— usando la
+ * arquitectura como atajo para «soporta cargar un .mdn en RAM ejecutable». El
+ * ENSAYO DEL C3 lo rompió en la primera compilación: el C3 también es RISC-V y no
+ * trae `esp_cache.h` (viene de `esp_mm`, que ese silicio no tiene).
+ *
+ * La condición real es la CAPACIDAD, no la familia. Se pregunta por la cabecera.
+ * Para el S3 (Xtensa) y el P4 el resultado es EXACTAMENTE el mismo que antes. */
+#if BPVM_ESP_AOT_MDN && defined(__has_include)
+#  if __has_include("esp_cache.h")
+#    define BPVM_ESP_AOT_MDN 1
+#  endif
+#endif
+#ifndef BPVM_ESP_AOT_MDN
+#  define BPVM_ESP_AOT_MDN 0
+#endif
+
+#if BPVM_ESP_AOT_MDN
 #include "esp_cache.h"       /* H4 AOT: sync de cachés tras copiar .mdn a RAM exec */
 #include "esp_log.h"         /* H4 AOT: trazas del cargador .mdn (consola) */
 #endif
@@ -564,7 +582,7 @@ static void send_exited(long session, const char* status, int exit_code,
  *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
 
-#if defined(__riscv)
+#if BPVM_ESP_AOT_MDN
 /* H4 AOT — RAM ejecutable de los .mdn cargados en este RUN. El loader es
  * zero-copy (los thunks apuntan a estos buffers), así que persisten durante el
  * run y se liberan justo después. */
@@ -612,7 +630,7 @@ static const uint8_t* esp32_mdn_del_fs(void* user, const char* nombre,
         heap_caps_free(exec);
         return NULL;
     }
-#if defined(__riscv)
+#if BPVM_ESP_AOT_MDN
     /* Coherencia de cachés: bajar la D-cache a memoria (C2M), invalidar la
      * I-cache y `fence.i`. Sin esto se ejecutaría código rancio o basura.
      * Va antes de que el loader registre nada: los thunks apuntan aquí. */
@@ -754,7 +772,7 @@ static void run_module_path(const char* path, long id) {
      * registro después de cargar borraba justo eso. */
     esp_aot_register(vm);
 
-#if defined(__riscv)
+#if BPVM_ESP_AOT_MDN
     /* ── H4 AOT — los `.mdn` de este RUN, con EL BUCLE COMÚN ──────────────────
      *
      * `bpvm_mdn_escanear` recorre los módulos cargados y busca el puente de
@@ -824,7 +842,7 @@ static void run_module_path(const char* path, long id) {
                                        : (rt_err[0] ? rt_err : bpvm_status_str(rs)));
     send_exited(session, status_str, exit_code, (long) dt, err_msg);
 
-#if defined(__riscv)
+#if BPVM_ESP_AOT_MDN
     /* H4 AOT — el run terminó: los thunks .mdn ya no se ejecutan → liberar la RAM
      * ejecutable. bpvm_aot_clear() del próximo RUN limpia el registry. */
     for (int k = 0; k < s_mdn_exec_n; k++) heap_caps_free(s_mdn_exec[k]);

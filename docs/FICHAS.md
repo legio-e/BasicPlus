@@ -831,6 +831,99 @@ todo, trabajo de pruebas**.
 ⏭️ **Y por eso este hito va DESPUÉS de U1–U5**, no antes: cada sistema sin unificar es una
 copia más que escribir para cada micro nuevo. Es el argumento entero de V6, aplicado.
 
+---
+
+### 🧪 P1.C3 — MIGRACIÓN DEL ESP32-C3 (abierto 31-ago)
+
+**Encargo de Eduardo**: *«dijimos de no empezar la imagen del C3 hasta terminar la
+unificación, pero como es un proceso largo me gustaría adelantar un poco. Sería más bien un
+ensayo, no hace falta que sea una imagen completa. Lo que me interesa más que nada es ver
+cuál es el coste de desarrollo.»*
+
+#### ✅ P1.C3.1 — EL ENSAYO: compila y enlaza para `esp32c3` (31-ago)
+
+**Resultado: `bpvm_esp32c3.bin`, 431 KB, enlaza limpio.** No se ha probado en placa.
+
+📐 **El coste, medido y no estimado.** Todo el port vive en `bpgenvm-c/esp32c3/`, 5 ficheros:
+
+| fichero | líneas | nuevas de verdad |
+|---|---|---|
+| `main/main.c` | 176 | **13** (el banner y el tamaño del bloque de la VM) |
+| `main/CMakeLists.txt` | 108 | **5** de 66 entradas — el resto es la lista del S3 con un prefijo de ruta |
+| `CMakeLists.txt` · `sdkconfig.defaults` · `partitions.csv` | 57 | copia literal, 3 sustituciones |
+
+**≈20 líneas escritas de verdad.** La cintura ESP32 entera se toma del S3 por ruta relativa.
+
+🔑 **Y EL COSTE REAL NO ESTABA AHÍ.** Estaba en **tres suposiciones del S3 metidas en el
+código compartido**, que el C3 destapó una a una — ninguna se habría visto sin intentar el
+port:
+
+| lo que se daba por hecho | el C3 | cuándo saltó |
+|---|---|---|
+| 3 UART y 3 SPI | tiene **2 y 2** | al compilar |
+| *«es RISC-V»* ⇒ tiene API de caché | es RISC-V y **no trae `esp_cache.h`** | al compilar |
+| todos los ESP32 tienen PCNT | **no lo tiene** | al **enlazar** |
+
+Las tres arregladas preguntando al silicio (`SOC_UART_NUM`, `SOC_SPI_PERIPH_NUM`,
+`SOC_PCNT_SUPPORTED`, `__has_include`) en vez de dar por hecho la familia — **y mejoran a
+todas las placas**: el S3 y el P4 compilan exactamente igual que antes (ver `#465`).
+
+📌 La segunda es la que más enseña: *«es RISC-V»* funcionaba como atajo de *«soporta cargar
+un `.mdn` en RAM ejecutable»* **mientras el único RISC-V fuera el P4**. Una familia nueva no
+sólo se añade: **audita el código compartido**.
+
+💾 **Y cabe, con margen medido:**
+
+| | C3 | (S3, de referencia) |
+|---|---|---|
+| DRAM total | 321.296 B | ~319.632 B libres al arrancar |
+| estáticos | 108.538 B (33,8 %) | ~101 KB |
+| **libre para el runtime** | **212.758 B** | — |
+
+Con **96 KB** para la VM quedan ~116 KB, por encima de los **86 KB** que `#336` midió que
+consume el sistema en marcha. **Los 160 KB del S3 NO cabrían** (dejarían 52). ⚠️ Ese 96 está
+**sin medir en placa** y así lo dice el propio `main.c`: el definitivo sale de repetir la
+medida de `#336` aquí.
+
+#### 🟡 P1.C3.2 — REESTRUCTURAR `esp32/`: separar la familia de la placa
+
+**Propuesta de Eduardo (31-ago)**: *«ya tenemos una carpeta para el S3 y otra para el P4,
+habría que crear una tercera para el C3. No sé si iría bien renombrar `ESP32` a `ESP32S3` y
+crear una carpeta `ESP32` que contenga a las otras 3. Entonces lo común de la familia en
+`ESP32` y lo particular de cada micro en su carpeta.»*
+
+✅ **El reparto YA EXISTE en la práctica, sólo que sin decirlo** — contado:
+
+| | ficheros |
+|---|---|
+| **común de la familia** (lo usan P4 y C3 por `../../esp32/main/`) | **8**: `repl_esp32` `board_mgr` `platform` `fs_lfs` `gpio` `wire_v1` `log` `esp32_mods` |
+| común de los que no llevan AOT propio | `aot_funcs_stub.c` (S3 y C3; el P4 tiene el suyo) |
+| **propio de la placa** | **`main.c`. Y sólo eso.** |
+
+**Nueve de diez `.c` son de familia.** Hoy `esp32/` hace dos papeles a la vez, y eso es lo
+que la propuesta separa:
+
+```
+esp32/
+  common/   ← los 9 + las cabeceras
+  s3/       ← main.c + CMakeLists + sdkconfig + partitions
+  p4/  c3/  ← igual
+```
+
+📊 **Coste**: 53 referencias a `esp32/main` en 12 ficheros, pero **sólo 3 son funcionales**
+—los dos `CMakeLists` y `regen_esp32_mods.sh`—; el resto son comentarios y docs (algunas en
+snapshots inmutables, que no se tocan).
+
+⚠️ **Va en su propio paso y con las tres imágenes reconstruidas**: mueve 10 ficheros y toca
+el build de las tres familias a la vez. No mezclarlo con nada.
+
+#### 🔴 P1.C3.3 — lo que falta para que sea una imagen de verdad
+
+- **Medir el bloque de la VM en placa** (repetir `#336` en el C3) y fijar el número.
+- **Un `c3_board_id.c`** — hoy el ensayo usa el `s_default_board` del S3, así que se
+  anunciaría como `bpvm-esp32`. Es exactamente el bug que `U3.19` cazó en el P4.
+- **Verificar en placa**: `trytest.bp` + `JsonDemo`, que ya tienen salida conocida.
+
 ##### 📐 EL COSTE, MEDIDO (26-ago) — a pregunta de Eduardo
 
 No estimado a ojo: contado sobre el precedente del P4, que es la última familia añadida.
@@ -1403,6 +1496,30 @@ quedó atrás fue el **tercer lector**, el del propio compilador, que nadie recu
 existe porque casi siempre trabaja en memoria. Enlaza con
 [[contar-los-consumidores-no-leer-el-codigo]]: al subir un formato hay que **censar los
 lectores**, y son tres, no dos.
+
+#### ✅ `#465` — tres suposiciones del S3 en el código COMPARTIDO de la familia ESP32 (cerrada 31-ago)
+
+Las destapó **el ensayo del C3** (`P1.C3.1`), una a una, y ninguna se habría visto sin
+intentar el port. Las tres viven en ficheros que usan **las tres placas**.
+
+| # | lo que se daba por hecho | el C3 | cuándo saltó | arreglo |
+|---|---|---|---|---|
+| 1 | 3 UART y 3 SPI (`gpio_esp32.c`) | **2 y 2** | al compilar | `#if SOC_UART_NUM > 2` · `SOC_SPI_PERIPH_NUM > 2` |
+| 2 | *«es RISC-V»* ⇒ hay API de caché (`repl_esp32.c`, **5 guardas**) | RISC-V **sin `esp_cache.h`** | al compilar | `__has_include`, capacidad en vez de arquitectura |
+| 3 | todos los ESP32 tienen PCNT (`gpio_esp32.c`) | **no lo tiene** | al **enlazar** | `#if SOC_PCNT_SUPPORTED`, y sin backend se queda el stub portable |
+
+📌 **La segunda es la que más enseña.** *«Es RISC-V»* funcionaba como atajo de *«soporta
+cargar un `.mdn` en RAM ejecutable»* **mientras el único RISC-V fuera el P4**. En cuanto hay
+un segundo, el atajo es falso. Un proxy que acierta con una sola muestra no es una regla: es
+una coincidencia con suerte.
+
+✅ **Las tres mejoran a TODAS las placas**: el S3 (Xtensa) y el P4 evalúan las guardas
+exactamente igual que antes, así que su binario no cambia de comportamiento. Verificado
+reconstruyendo las dos.
+
+📌 **Y lo que enseña del método**: *una familia nueva no sólo se añade — AUDITA el código
+compartido*. Las tres estaban en ficheros que ya pasaban por tres placas y ningún arnés podía
+verlas, porque sólo se manifiestan al compilar para un silicio que no las cumple.
 
 #### ✅ `#464` — un `if` sin llaves en el arranque del S3: guardaba la línea equivocada (cerrada 31-ago)
 

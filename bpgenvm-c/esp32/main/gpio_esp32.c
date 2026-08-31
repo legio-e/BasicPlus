@@ -27,7 +27,11 @@
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"            /* H14: backend PWM */
 #include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
+/* #465 — el PCNT NO existe en todas las familias ESP32: el C3 no lo tiene
+ * (`SOC_PCNT_SUPPORTED` sin definir). Lo dice el silicio, se le pregunta. */
+#if SOC_PCNT_SUPPORTED
 #include "driver/pulse_cnt.h"       /* H14: backend contador (PCNT) */
+#endif
 #include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
 #include "esp_task_wdt.h"           /* cierre V3 — backend Wdt (Task Watchdog Timer) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
@@ -165,9 +169,16 @@ static const bpvm_pico_backend_t s_esp32_pico_backend = {
 
 /* bus N -> UART_NUM_N (numero de bus = instancia HW). bus 0 = wire. */
 static int esp32_uart_port(int bus) {
+    /* #465 — se pregunta al SILICIO cuántos hay (`SOC_UART_NUM` del IDF) en vez de
+     * dar por hecho los del S3. Salió al compilar el ensayo del C3: allí son DOS
+     * UART y `UART_NUM_2` ni existe, así que este fichero —que es la cintura HW
+     * COMPARTIDA de la familia ESP32— no compilaba. Un bus que la placa no tiene
+     * devuelve -1, que es lo que ya hacía para los que no existen. */
     switch (bus) {
         case 1: return UART_NUM_1;
+#if SOC_UART_NUM > 2
         case 2: return UART_NUM_2;
+#endif
         default: return -1;   /* 0 = wire (reservado); el resto no existe */
     }
 }
@@ -230,9 +241,13 @@ static const bpvm_uart_backend_t s_esp32_uart_backend = {
  * de alineacion del DMA. [v3: DMA para transferencias grandes.]
  */
 static int esp32_spi_host(int bus) {
+    /* #465 — igual que el UART: `SOC_SPI_PERIPH_NUM` lo dice el silicio. El C3
+     * tiene DOS periféricos SPI y `SPI3_HOST` no existe. */
     switch (bus) {
         case 2: return SPI2_HOST;
+#if SOC_SPI_PERIPH_NUM > 2
         case 3: return SPI3_HOST;
+#endif
         default: return -1;   /* 0/1 = flash (reservados) */
     }
 }
@@ -481,6 +496,7 @@ static const bpvm_adc_backend_t s_esp32_adc_backend = {
  * RISING(0)/FALLING(1)/BOTH(2). Contador 16-bit con signo (±32767) — como el
  * RP2350. Reusa el counter si se re-inicializa el MISMO pin.
  */
+#if SOC_PCNT_SUPPORTED
 #define ESP32_PULSE_MAX 4
 static int                   s_pulse_n = 0;
 static int                   s_pulse_pin[ESP32_PULSE_MAX];
@@ -525,6 +541,7 @@ static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
     .value = esp32_pulse_value_impl,
     .reset = esp32_pulse_reset_impl,
 };
+#endif  /* SOC_PCNT_SUPPORTED */
 
 /* ===================== RTC (H14) ====================================
  * El ESP32 usa A PROPÓSITO el stub portable de src/rtc.c (NO registra backend):
@@ -604,7 +621,13 @@ void esp32_hw_register(void) {
     bpvm_i2c_set_backend(&s_esp32_i2c_backend);     /* H16 */
     bpvm_pwm_set_backend(&s_esp32_pwm_backend);     /* H14 (LEDC) */
     bpvm_adc_set_backend(&s_esp32_adc_backend);     /* H14 (esp_adc oneshot) */
+#if SOC_PCNT_SUPPORTED
     bpvm_pulse_set_backend(&s_esp32_pulse_backend); /* H14 (PCNT) */
+#else
+    /* #465 — sin PCNT (C3) no se registra backend: `src/pulse.c` deja su stub
+     * portable, que es lo que ya hacen las familias sin el periférico. Mejor
+     * un verbo que dice que no puede que un enlace que no cierra. */
+#endif
     bpvm_wdt_set_backend(&s_esp32_wdt_backend);     /* cierre V3 — Task WDT (reset) */
     /* RTC: sin backend a propósito → stub portable (modelo offset). Ver arriba. */
 }

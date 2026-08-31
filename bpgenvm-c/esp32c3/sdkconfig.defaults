@@ -1,0 +1,32 @@
+# Defaults del proyecto (H4.3). `idf.py set-target esp32s3` fija el target.
+#
+# Consola/logs de ESP-IDF → USB-Serial-JTAG (puerto nativo). El wire v1
+# (binario, lo usa el IDE) va por UART0 vía driver, así que el log de
+# texto NO contamina el wire. Depuras con `idf.py monitor` en el nativo.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# La task de app_main ejecuta el REPL + la VM. Holgura de stack C.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Optimizar a tamaño.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Task Watchdog OFF: esto es un dispositivo-VM que ejecuta código de
+# usuario que puede ser CPU-bound y tardar legítimamente (>5s). La
+# "inanición del idle" que vigila el task wdt NO es un bug aquí, así que
+# lo desactivamos para no spamear backtraces (ni arriesgar reset) en
+# programas pesados. El watchdog HW de arranque sigue activo.
+CONFIG_ESP_TASK_WDT_INIT=n
+
+# Tabla de particiones custom: añade "bpfs" (datos) para el FS persistente
+# (H4.4). Los .mod subidos por el wire sobreviven al reset.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Flash de 16 MB (modulo S3 de referencia). Sin esto el build declara 2 MB y el
+# bootloader NO ve mas alla: la tabla de particiones se queda en 2 MB y sobran
+# ~15 MB sin mapear, aunque el INFO (que lee el chip por JEDEC) diga 16.
+# OJO: sdkconfig es GENERADO — hay que borrarlo o `idf.py reconfigure` para que
+# recoja esto (mismo gotcha que el MEMPROT del P4).
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
