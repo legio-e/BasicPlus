@@ -221,97 +221,15 @@ fs_status_t fs_delete(const char* name) {
  * stdlib completa (~47 módulos en /lib) muerde: el IDE mostraría 32 y el resto
  * simplemente "no estaría". Mismo arreglo que en ESP32 y STM32: sube a 96 y
  * DEJA DE SER MUDO. El snapshot NO se puede quitar (el cb corre bajo el lock). */
-#define LIST_MAX_DIRS     16
-#define LIST_MAX_ENTRIES  96
-#define LIST_NAME_MAX     64
-
-typedef struct {
-    char     names[LIST_MAX_ENTRIES][LIST_NAME_MAX];
-    uint32_t sizes[LIST_MAX_ENTRIES];
-    uint8_t  isdir[LIST_MAX_ENTRIES];
-    int      n;
-    int      overflow;   /* 1 si este directorio tiene MÁS de los que caben */
-} dir_snapshot_t;
 
 /* #425 — las que NO cupieron en el ÚLTIMO recorrido, para que el wire lo diga
  * (ver fs_list_omitidas en fs.h). Se pone a cero al empezar fs_list. */
-static int s_list_omitidas = 0;
-int fs_list_omitidas(void) { return s_list_omitidas; }
-
-static void snap_cb(const char* name, int is_dir, uint32_t size, void* user) {
-    dir_snapshot_t* s = (dir_snapshot_t*) user;
-    if (s->n >= LIST_MAX_ENTRIES) { s->overflow++; s_list_omitidas++; return; }   /* NO en silencio */
-    snprintf(s->names[s->n], LIST_NAME_MAX, "%s", name);
-    s->sizes[s->n] = size;
-    s->isdir[s->n] = (uint8_t) is_dir;
-    s->n++;
-}
 
 /* #338 — los dos buffers del listado, JUNTOS y en un solo préstamo. Iban
  * `static` (6.632 + 1.024 = 7.656 B permanentes en .bss) para no reventar el
  * stack de la comm task; ahora salen de la zona compartida y viven lo que dura
  * el LIST. Cabe de sobra en los 8 KB, y en UNA estructura se deja al compilador
  * el relleno y la alineación en vez de repartir el bloque a mano. */
-typedef struct {
-    dir_snapshot_t snap;
-    char           pending[LIST_MAX_DIRS][LIST_NAME_MAX];
-} list_work_t;
-
-int fs_list(fs_list_cb_t cb, void* user) {
-    s_list_omitidas = 0;   /* #425 */
-    list_work_t* w = (list_work_t*) bpvm_scratch_take(sizeof(list_work_t), "fs_list");
-    if (!w) {
-        /* Sin zona NO se devuelve un listado vacío: eso se leería como "el FS
-         * está vacío", que es mentira y de las caras. Se dice y se sale con
-         * error. */
-        log_printf("fs: LIST sin zona de scratch — listado NO realizado");
-        return 1;
-    }
-    dir_snapshot_t* snap = &w->snap;
-    int head = 0, tail = 0;
-    snprintf(w->pending[tail++], LIST_NAME_MAX, "/");
-
-    while (head < tail) {
-        const char* dir = w->pending[head++];
-        snap->n = 0; snap->overflow = 0;
-        if (bpvm_fs_list(dir, snap_cb, snap) != 0) continue;
-        if (snap->overflow) {
-            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas (%d fuera)",
-                       dir, LIST_MAX_ENTRIES, snap->overflow);
-            log_flush();
-        }
-        for (int i = 0; i < snap->n; i++) {
-            char full[LIST_NAME_MAX];
-            int is_root = (dir[1] == '\0');
-            if (snap->isdir[i]) {
-                if (tail < LIST_MAX_DIRS) {
-                    snprintf(w->pending[tail], LIST_NAME_MAX, "%s%s%s",
-                             dir, is_root ? "" : "/", snap->names[i]);
-                    tail++;
-                } else {
-                    s_list_omitidas++;   /* #425: un directorio sin recorrer TAMBIEN falta */
-                    log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
-                               "'%s' sin recorrer", LIST_MAX_DIRS, snap->names[i]);
-                    log_flush();
-                }
-                continue;                        /* los dirs no se emiten (legado) */
-            }
-            /* raíz → nombre pelado ("Hello.mod"); subdir → "/lib/Core.mod" */
-            if (is_root) snprintf(full, sizeof(full), "%s", snap->names[i]);
-            else         snprintf(full, sizeof(full), "%s/%s", dir, snap->names[i]);
-            if (cb(full, snap->sizes[i], user) != 0) {
-                /* SALIDA TEMPRANA: el callante corta el listado. Aquí es donde
-                 * se olvida uno de soltar la zona — y entonces el siguiente LIST
-                 * (o el siguiente PACK_DEL) se la encuentra ocupada para
-                 * siempre. */
-                bpvm_scratch_give("fs_list");
-                return 1;
-            }
-        }
-    }
-    bpvm_scratch_give("fs_list");
-    return 0;
-}
 
 /* stats para INFO del IDE / logs de boot */
 uint32_t fs_total_bytes(void) {
@@ -332,17 +250,14 @@ uint32_t fs_free_bytes(void) {
     return (t > u) ? (t - u) : 0;
 }
 
-static int count_cb(const char* name, uint32_t size, void* user) {
-    (void) name; (void) size;
-    (*(int*) user)++;
-    return 0;
-}
-
-int fs_file_count(void) {
-    int n = 0;
-    fs_list(count_cb, &n);
-    return n;
-}
+/* #461 — EL RECORRIDO PLANO DE ESTA FAMILIA SE FUE AL COMUN.
+ *
+ * `fs_list` + `dir_snapshot_t` existian para el verbo LIST; desde que LIST vive
+ * en `src/bpvm_repl.c` (`U3.23`) su unico llamador era `fs_file_count`, o sea que
+ * guardaban 96 nombres de 64 caracteres para devolver UN numero. Ahora lo hace
+ * `bpvm_fs_count_files()` en la fachada, sin guardar nombres y con la cola de
+ * directorios en un pool. Tres copias -> una. */
+int fs_file_count(void) { return bpvm_fs_count_files(); }   /* #461 */
 
 const char* fs_status_str(fs_status_t s) {
     switch (s) {

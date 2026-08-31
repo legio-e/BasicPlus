@@ -92,7 +92,6 @@ void fs_autosave_resume(int save_now);
 /* Itera los ficheros. `cb` recibe (name, size, user) por cada uno.
  * Si cb devuelve != 0 la iteración se aborta. */
 typedef int (*fs_list_cb_t)(const char* name, uint32_t size, void* user);
-int fs_list(fs_list_cb_t cb, void* user);
 
 /* #425 — cuantas entradas dejo FUERA el ultimo recorrido de fs_list. 0 = el
  * listado es COMPLETO. Valido inmediatamente despues de la llamada.
@@ -106,7 +105,6 @@ int fs_list(fs_list_cb_t cb, void* user);
  * Es un accesor y no un parametro de salida porque las tres familias recorren
  * de formas distintas (callback aqui y en el ESP32, snapshot en el STM32): lo
  * que puede ser UNIFORME es el contrato de lo que se reporta, no la firma. */
-int fs_list_omitidas(void);
 
 /* Lookup. Si existe, devuelve puntero a los bytes en RAM y rellena
  * *size_out. El puntero es válido hasta el siguiente fs_put/fs_delete. */

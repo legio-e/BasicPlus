@@ -1848,7 +1848,7 @@ dos direcciones la primera vez.
 diferencia real, pero **ya no es la explicación del retraso** — la Discovery, sin RTOS y sin
 prioridades, tiene la misma latencia. Lo que el P4 añade es que además se le acumulan.
 
-#### 🟡 `#461` — los paths reservan tamaño FIJO: 7,5 KB de RAM estática para 1,5 KB de nombres (abierta 31-ago)
+#### ✅ `#461` — los paths reservaban tamaño FIJO: **20 KB recuperados en el STM32 y 7,5 en el ESP32** (cerrada 31-ago)
 
 **Eduardo, al hilo de `#456`:** *«Los path no deberían reservar espacios fijos. Si la
 mayoría de las entradas son de 16 caracteres y puede haber una de 128, ponerlas todas al
@@ -1899,6 +1899,41 @@ Conviene hacer las dos cosas de una vez y no tocar ese camino dos veces.
 📌 **Lo que NO alcanza esta ficha, para no exagerarla**: los seis `char path[64]` de la pila
 del REPL. Sólo vive uno a la vez —un comando cada vez—, así que ahí no hay ×N que ahorrar;
 su problema es el TOPE, y ése es `#456`.
+
+### ✅ CERRADA — y el arreglo fue BORRAR, no encoger (31-ago)
+
+Al migrar `LIST` (`U3.23`) se destapó lo que de verdad pasaba: **esos buffers ya no servían
+para listar**. Censados los llamadores, a los tres recorridos planos de familia les quedaba
+**uno solo: `fs_file_count`**. O sea que guardaban los nombres de todos los ficheros **para
+devolver un número**.
+
+Y contar no necesita los nombres: el callback corre bajo el cerrojo del FS y ahí **incrementar
+es seguro** — lo que no lo era, y por eso existía el snapshot, era *emitir al wire*. Lo único
+que hay que recordar son los **directorios** por visitar, porque descender desde dentro del
+callback reentraría el cerrojo.
+
+🔧 **Una implementación en la fachada, tres borrados**: `bpvm_fs_count_files()`
+(`src/fs_facade.c`), con la cola de directorios **en un pool** —los nombres pegados, no en
+ranuras de 64— y **en la pila**, 352 B que viven lo que dura la cuenta.
+
+| familia | qué tenía | medido |
+|---|---|---|
+| **STM32** | `s_snap_names[192][64]` + tamaños ≈ **13 KB** de `.bss`, un índice persistente | **`.bss` 645.066 → 624.346 = −20.720 B**, y `text` −5.664 |
+| **ESP32-C3** | `names[96][64]` en un `static dir_snapshot_t` | **DRAM 108.538 → 100.882 = −7.656 B** |
+| **ESP32-S3 / P4** | el mismo fichero que el C3 | mismo ahorro (no medido aparte) |
+| **Pico** | igual, pero sobre `bpvm_scratch_take` | ya no costaba `.bss`; se simplifica igual |
+
+*(Las cifras del STM32 incluyen también lo que se llevaron `U3.22` y `U3.23`, que entraron en
+la misma tanda.)*
+
+⚠️ **Un borrado mío que se llevó algo vivo, y cómo se cazó**: el primer script eliminó
+`dirlist_t`/`dirlist_cb` del STM32 porque parecían parte del listado — y los usa `clear_lib()`,
+que sigue vivo. **Se revirtió el fichero con `git checkout` y se rehízo quirúrgico**, borrando
+sólo lo censado. Es la segunda vez hoy que un borrado por patrón se pasa de largo; la regla
+que sale: *revertir y rehacer sale más barato que remendar lo que el patrón se llevó*.
+
+✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP**, y las **cinco imágenes** construidas
+(Pico, S3, P4, C3, STM32 Nucleo).
 
 #### 🟡 `#456` — un `path` largo se TRUNCA en silencio y la operación dice OK (abierta 30-ago)
 

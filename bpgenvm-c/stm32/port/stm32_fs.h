@@ -31,9 +31,8 @@ int  fs_put_append(const char* name, const uint8_t* data, uint32_t size);
 /* Borra (compacta el arena). 0 OK, -1 no existe. */
 int  fs_del(const char* name);
 
-/* Itera entradas: fs_count() y fs_entry(i,...). 0 OK en fs_entry. */
+/* Cuantos ficheros hay. #461: lo cuenta el comun, sin indice persistente. */
 int  fs_count(void);
-int  fs_entry(int i, const char** name, uint32_t* size);
 
 /* #425 — cuantas entradas dejo FUERA el ultimo recorrido. 0 = listado COMPLETO.
  * Valido inmediatamente despues de fs_count(). Mismo contrato y mismo nombre que

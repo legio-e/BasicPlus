@@ -315,6 +315,81 @@ static void emite_montajes_hijos(const char* path,
     }
 }
 
+/* ── #461 — CONTAR LOS FICHEROS, sin guardar sus nombres ─────────────────────
+ *
+ * Sustituye los TRES recorridos planos que tenian Pico, ESP32 y STM32 (`fs_list`
+ * + `dir_snapshot_t`), que desde que `LIST` vive en el comun (`U3.23`) ya solo
+ * servian para esto: devolver un numero.
+ *
+ * Y guardaban 96 nombres de 64 caracteres para ello — en el ESP32, `static`, o
+ * sea 6 KB de `.bss` PERMANENTES para contar. Contar no necesita los nombres:
+ * el callback corre bajo el cerrojo del FS y ahi incrementar es seguro (lo que
+ * no lo era, y por eso existia el snapshot, era EMITIR al wire). Lo unico que
+ * hay que recordar son los DIRECTORIOS por visitar, porque descender desde
+ * dentro del callback reentraria el cerrojo.
+ *
+ * Esa cola va con los nombres PEGADOS en un pool, no en ranuras de tamano fijo:
+ * los paths reales de una placa miden 13,3 de media (medido sobre los `.mod` de `/lib`)
+ * y reservar 64 por ranura desperdiciaba el 78 %. Criterio de Eduardo: «si la
+ * mayoria son de 16 caracteres y puede haber una de 128, ponerlas todas al
+ * tamano mayor es un derroche de RAM que no tenemos».
+ *
+ * Va en la PILA (352 B) y no en `.bss`: se usa durante la cuenta y punto. */
+#define CNT_MAX_DIRS  16
+#define CNT_POOL      320
+
+typedef struct {
+    int      ficheros;
+    char*    pool;
+    uint16_t off[CNT_MAX_DIRS];
+    int      n;          /* directorios encolados            */
+    int      usado;      /* bytes gastados del pool           */
+    int      omitidos;   /* los que no cupieron: por ranuras O por pool */
+    const char* dir;     /* el directorio en curso            */
+} bpvm_cnt_ctx_t;
+
+static void bpvm_cnt_cb(const char* name, int is_dir, uint32_t size, void* user) {
+    bpvm_cnt_ctx_t* c = (bpvm_cnt_ctx_t*) user;
+    (void) size;
+    if (!is_dir) { c->ficheros++; return; }
+
+    /* Un subdirectorio: se apunta para visitarlo despues. */
+    int raiz = (c->dir[1] == '\0');
+    int len  = (int) strlen(c->dir) + (raiz ? 0 : 1) + (int) strlen(name) + 1;
+    if (c->n >= CNT_MAX_DIRS || c->usado + len > CNT_POOL) {
+        /* #425 — un directorio sin recorrer TAMBIEN falta, y las dos razones
+         * (sin ranura / sin pool) cuentan igual. Un total incompleto que no lo
+         * diga es peor que un tope bajo. */
+        c->omitidos++;
+        return;
+    }
+    snprintf(c->pool + c->usado, (size_t)(CNT_POOL - c->usado), "%s%s%s",
+             c->dir, raiz ? "" : "/", name);
+    c->off[c->n++] = (uint16_t) c->usado;
+    c->usado += len;
+}
+
+int bpvm_fs_count_files(void) {
+    char pool[CNT_POOL];
+    bpvm_cnt_ctx_t c;
+    memset(&c, 0, sizeof c);
+    c.pool = pool;
+
+    snprintf(pool, sizeof pool, "/");
+    c.off[c.n++] = 0;
+    c.usado = 2;
+
+    for (int i = 0; i < c.n; i++) {
+        char dir[CNT_POOL];
+        snprintf(dir, sizeof dir, "%s", pool + c.off[i]);  /* copia: sin aliasing */
+        c.dir = dir;
+        (void) bpvm_fs_list(dir, bpvm_cnt_cb, &c);   /* un volumen caido no borra el resto */
+    }
+    if (c.omitidos > 0)
+        bpvm_fs_log_fail("count", "/", 0, 0, 0);   /* deja rastro de que falta algo */
+    return c.ficheros;
+}
+
 int bpvm_fs_list(const char* path,
                  void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                  void* user) {

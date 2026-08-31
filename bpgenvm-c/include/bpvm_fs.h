@@ -182,6 +182,10 @@ int  bpvm_fs_rmdir (const char* path);                    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_copy  (const char* from, const char* to);    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_isdir (const char* path);                    /* #240 2ª: 1 / 0 */
 long long bpvm_fs_mtime_ms(const char* path);             /* #240 2ª: ms / -1 */
+/* #461 — cuenta los ficheros del volumen, recursivo, SIN guardar sus nombres.
+ * Sustituye los tres `fs_list` de familia, que desde `U3.23` solo contaban. */
+int  bpvm_fs_count_files(void);
+
 /* H2·B1.3 — lista el directorio `path` (cb por entrada). 0 / -1. */
 int  bpvm_fs_list(const char* path,
                   void (*cb)(const char* name, int is_dir, uint32_t size, void* user),

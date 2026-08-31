@@ -100,7 +100,6 @@ static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
  * Ahora son dos topes distintos, dimensionados a lo que hay de verdad
  * (la stdlib sola son ~47 módulos), y si alguno se queda corto SE DICE. */
 #define LIST_MAX_ENTRIES  96    /* ficheros de UN directorio (/lib lleva la stdlib) */
-#define SNAP_MAX_FILES    192   /* ficheros del FS ENTERO que puede listar el wire */
 #define LIST_MAX_DIRS     16
 #define LIST_NAME_MAX     64
 
@@ -133,9 +132,6 @@ static void dirlist_cb(const char* name, int is_dir, uint32_t size, void* user) 
 static int      s_list_omitidas = 0;
 int fs_list_omitidas(void) { return s_list_omitidas; }
 
-static char     s_snap_names[SNAP_MAX_FILES][LIST_NAME_MAX];
-static uint32_t s_snap_sizes[SNAP_MAX_FILES];
-static int      s_snap_n = 0;
 
 /* Los paths planos están acotados a LIST_NAME_MAX por contrato del FS (nombres
  * ≤ 64 incl. el path); snprintf trunca a salvo → silenciamos el aviso conservador
@@ -143,54 +139,6 @@ static int      s_snap_n = 0;
  * copiando pending[head] a un local antes de escribir en pending[tail]. */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-static void rebuild_snapshot(void) {
-    static char      pending[LIST_MAX_DIRS][LIST_NAME_MAX];
-    static dirlist_t dl;
-    int head = 0, tail = 0;
-    s_snap_n = 0;
-    s_list_omitidas = 0;   /* #425 */
-    snprintf(pending[tail++], LIST_NAME_MAX, "/");
-
-    while (head < tail) {
-        char dir[LIST_NAME_MAX];
-        snprintf(dir, sizeof(dir), "%s", pending[head++]);   /* copia local: sin aliasing con pending */
-        int is_root = (dir[1] == '\0');
-        dl.n = 0; dl.overflow = 0;
-        if (bpvm_fs_list(dir, dirlist_cb, &dl) != 0) continue;
-        if (dl.overflow) {
-            s_list_omitidas += dl.overflow;   /* #425 */
-            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas (%d fuera)",
-                       dir, LIST_MAX_ENTRIES, dl.overflow);
-        }
-        for (int i = 0; i < dl.n; i++) {
-            if (dl.isdir[i]) {
-                if (tail < LIST_MAX_DIRS)
-                    snprintf(pending[tail++], LIST_NAME_MAX, "%s%s%s",
-                             dir, is_root ? "" : "/", dl.names[i]);
-                else {
-                    s_list_omitidas++;   /* #425: un directorio sin recorrer TAMBIEN falta */
-                    log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
-                               "'%s' sin recorrer", LIST_MAX_DIRS, dl.names[i]);
-                }
-                continue;                        /* los dirs no se emiten (legado plano) */
-            }
-            if (s_snap_n >= SNAP_MAX_FILES) {
-                s_list_omitidas++;   /* #425: al menos este; el `return` corta el resto */
-                /* EL efecto ventana. Antes era un `return` a secas: el resto del
-                 * FS —tipicamente /lib— simplemente no salia, y desde el IDE
-                 * parecia que los ficheros no estaban. */
-                log_printf("fs: LISTADO TRUNCADO a %d ficheros — hay MAS en el FS "
-                           "(se corto en '%s')", SNAP_MAX_FILES, dir);
-                log_flush();
-                return;
-            }
-            if (is_root) snprintf(s_snap_names[s_snap_n], LIST_NAME_MAX, "%s", dl.names[i]);
-            else         snprintf(s_snap_names[s_snap_n], LIST_NAME_MAX, "%s/%s", dir, dl.names[i]);
-            s_snap_sizes[s_snap_n] = dl.sizes[i];
-            s_snap_n++;
-        }
-    }
-}
 #pragma GCC diagnostic pop
 
 /* Vacía /lib tras montar: el FS viejo NO persistía /lib (fs_load lo saltaba) →
@@ -296,17 +244,15 @@ int fs_del(const char* name) {
     return (bpvm_fs_remove(name) == 0) ? 0 : -1;
 }
 
-int fs_count(void) {
-    rebuild_snapshot();
-    return s_snap_n;
-}
-
-int fs_entry(int i, const char** name, uint32_t* size) {
-    if (i < 0 || i >= s_snap_n) return -1;
-    if (name) *name = s_snap_names[i];
-    if (size) *size = s_snap_sizes[i];
-    return 0;
-}
+/* #461 — EL INDICE PERSISTENTE SE FUE AL COMUN.
+ *
+ * `s_snap_names[192][64]` + `s_snap_sizes[192]` eran ~13 KB de `.bss` para que el
+ * wire pudiera listar el FS entero. Desde que `LIST` vive en `src/bpvm_repl.c`
+ * (`U3.23`) su unico consumidor era `fs_count()`: trece kilobytes para devolver
+ * un numero. Ahora cuenta `bpvm_fs_count_files()`, que no guarda nombres.
+ *
+ * `dirlist_t`/`dirlist_cb` SE QUEDAN: los usa `clear_lib()`, que sigue vivo. */
+int fs_count(void) { return bpvm_fs_count_files(); }
 
 uint32_t fs_total_bytes(void) {
     uint32_t t = 0;
