@@ -2497,6 +2497,47 @@ de **2066 a ~1300 líneas**.
 ⏭️ **Queda de U3**: la familia ESP32 (el S3 y el P4 **comparten** `repl_esp32.c`, así que van
 juntas). Y ojo al migrar: su despachador también pre-lee el bulk.
 
+##### ✅ `U3.13`–`U3.21` — el ESP32 entero, en nueve pasos (30-31-ago)
+
+`repl_esp32.c` de 1360 a ~1210 líneas. Migrados y **verificados en placa** (S3 gesto a gesto
+el 30-ago, P4 el 31): `DEL` `STAT` `MKDIR` `GET` `PING` `TIME` `LOG_DUMP` `LOG_CLEAR` `SAVE`
+`DF` `INFO` `HELLO` `FORMAT` `RENAME` `RMDIR`, y el **grupo `PUT`** completo (`U3.21`).
+
+Dos hallazgos que salieron de comparar línea a línea **antes de borrar**, y que se habrían
+perdido migrando a lo bruto: el `server_name` del P4 (`U3.19`) y el `mkdir` de los directorios
+padre (`#455`), que la Pico y el STM32 ya habían perdido sin ruido en `U3.12`.
+
+##### 🎯 `U3` — LO QUE QUEDA, medido el 31-ago
+
+Contados los verbos que cada familia **despacha a un handler propio** (no las listas de la
+puerta del boot, que no son handlers):
+
+| familia | propios | cuáles |
+|---|---|---|
+| **STM32** | **0** | — migrado del todo |
+| **ESP32** (S3+P4) | 4 | `LIST` `LIST_DIR` · *`RUN` `RESET`* |
+| **Pico** | 6 | `LIST_DIR` · *`RUN` `RESET` `BOOTSEL` `SD_INFO` `SD_MOUNT`* |
+
+*En cursiva, los que se quedan **por diseño**: `RUN`/`RESET` tocan la sesión de la VM y la
+placa, y `BOOTSEL`/`SD_*` son hardware que sólo tiene el RP2350.*
+
+**Así que lo pendiente de verdad son DOS verbos:**
+
+1. 🟡 **`LIST`** — sólo le queda al ESP32 (la Pico y el STM32 ya usan el común). **Parado a
+   propósito**: el ESP32 imprime un desglose por raíz (`ls: 25 ent en 160 ms | app:11/50ms
+   lib:14/64ms`) que el común no tiene, y migrarlo tal cual sería **unificar hacia abajo** —
+   el error que `#455` demostró que se comete solo. Lo correcto es subir el desglose, y
+   entonces la Pico y el STM32 lo **ganan**.
+2. 🟢 **`LIST_DIR`** — casi hecho y nadie lo había mirado: **el núcleo ya es común**
+   (`src/bpvm_listdir.c`, lo enlazan Pico, S3 y P4) y lo que queda son envoltorios de **21
+   líneas en la Pico y 17 en el ESP32**. Sólo falta la entrada del verbo.
+   ⚠️ El STM32 **no tiene `LIST_DIR` en absoluto** — eso no es unificación, es funcionalidad
+   que no existe, y está fuera de la serie U a propósito.
+
+🔗 **Y conviene hacerlo junto con `#461`**: los buffers de tamaño fijo del listado (7,5 KB de
+`.bss` en el ESP32 para ~1,5 KB de nombres) están **en ese mismo camino**. Tocarlo dos veces
+sería trabajar de más.
+
 ##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
 
 Tras flashear, el árbol del IDE mostraba `/app` con 3 ficheros y **ningún `/lib`** — con
