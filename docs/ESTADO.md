@@ -29,6 +29,10 @@
 
 ### `P1.C3.3` — el C3 ejecuta BasicPlus, por su único cable
 
+🧹 **Pendiente manual**: el C3 se quedó con `log=1` en su ENV (se puso para medir la marca
+de agua). Devolverlo a `0` cuando ya no haga falta — el log de ejecución llena la región de
+8 KB en ~26 colectas del GC (`#423`).
+
 `fib(28) = 317811`, `exit 0`, subido y ejecutado desde el host por el **USB-Serial-JTAG**, sin
 adaptador. La placa saluda como `bpvm-esp32c3` y el INFO da sus GPIOs, su ADC y su SRAM.
 
