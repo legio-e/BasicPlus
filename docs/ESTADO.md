@@ -27,6 +27,60 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (31-ago) — `#441` cerrada y **LAS CINCO IMÁGENES, del mismo árbol**
+
+### Lo primero: el estado de los artefactos, comprobado por fecha (no de memoria)
+
+| eslabón | estado |
+|---|---|
+| `bpstdlib/*.mod` | **27/27 al día**, ninguno más viejo que su `.bp`, **todos MOD7** |
+| blobs embebidos (`core_mod.c`, `esp32_mods.c`, `stm32_mods.c`) | ✅ posteriores al `.mod` más nuevo |
+| **las CINCO imágenes** | ✅ posteriores al último cambio de núcleo (`interp.c`, `#441`) |
+| fat-jar del IDE | ✅ posterior al frontend |
+
+```
+bpvm_pico.uf2            31-ago 07:37     600.064 B
+bpvm_esp32_merged.bin    31-ago 07:38     505.760 B
+bpvm_esp32p4_merged.bin  31-ago 07:39   1.361.200 B
+Nucleo_u575b.elf         31-ago 07:39   3.701.456 B
+Discovery_u5g9j.bin      31-ago 08:05     889.172 B
+```
+
+🔴 **El Discovery llevaba sin construirse desde el 29-ago** — se le habían pasado los tres
+bugs del compilador, la stdlib nueva y `#441`. Construido y **con la trampa de
+`PUBLICAR.md` confirmada en vivo**: el `cleanBuild` headless regenera el `.elf` **pero no
+el `.bin`**, y el que había al lado era **del 5 de agosto**. Veintiséis días. Regenerado
+con `arm-none-eabi-objcopy`.
+
+⚠️ **`dist/firmware/` sigue siendo del 20-21 de agosto, y ESO ESTÁ BIEN**: es la V5
+publicada. No se toca hasta publicar — y hoy mismo ha servido de **oráculo** para demostrar
+que `#459` no lo habíamos roto nosotros. Sobrescribirla habría destruido esa capacidad.
+
+### Lo cerrado el 31-ago
+
+**`#441`** — los seis opcodes de globales estrechas (`GET/SET_GLOBAL_I8/U8/I16/U16`), ya en
+la VM-C. El arreglo era trivial; lo que costó fue el test, **y resultó que ya existía**:
+`miVM/MainNarrow.java` los ejercita los seis fabricando un `.mod` a mano con `ModWriter`, y
+nadie lo había pasado nunca por la VM-C. Con control en rojo (`opcode 0x40 desconocido`) y
+después **19 valores byte a byte iguales**.
+
+### Decisiones de Eduardo
+
+- **`#452` APLAZADA al script de test.** *«Con los comandos tenemos 3 casos de uso: el
+  usuario, el IDE internamente, y el futuro script.»* El tercero no existe todavía, así que
+  juzgar los verbos ahora sería decidir con un consumidor de menos a la vista. Se repasarán
+  **los 29**, no cinco. 📌 De la tabla que queda hecha, lo más útil: **`FORMAT` hace falta
+  HOY** — tras flashear hay que formatear el FS y no hay forma desde el IDE.
+- **`#461` ABIERTA**: *«los path no deberían reservar espacios fijos… la longitud ha de ser
+  variable»*. Medido: los paths reales miden **13,3 de media**, y el listado del ESP32
+  reserva **7,5 KB de `.bss`** para ~1,5 KB de contenido. El remedio es el pool de `#440`,
+  aplicado hoy mismo en la tabla de símbolos. Empalma con `LIST`, el último verbo de `U3`.
+- **`#456`** replanteada: FatFs y littlefs admiten **255**; el 64 es un tope NUESTRO.
+
+⏭️ **Lo primero al retomar sigue siendo lo mismo**: Pico, S3 y STM32 **con la stdlib nueva
+sin estrenar** — y ahora las cinco imágenes están listas y del mismo árbol. Formatear el FS
+antes, que hoy cambiaron los 27 módulos.
+
 ## ⏭️ AL RETOMAR (30-ago, tarde-noche) — tres bugs del COMPILADOR, y uno venía publicado en V5
 
 ### Lo que hay que saber antes de tocar nada
