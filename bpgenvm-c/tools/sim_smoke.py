@@ -158,6 +158,52 @@ def main():
         r, got = w.get("/app/big.bin")
         check(got == big, "GET del fichero subido por streaming → bytes idénticos")
 
+        # 5b. U3.24 — EL RESTO DEL REPL COMUN.
+        #
+        # Desde que el sim usa `src/bpvm_repl.c`, cada linea de aqui vale para las
+        # CUATRO placas: lo que no se compruebe aqui hay que ir a comprobarlo
+        # flasheando. Estos verbos no los tenia el sim (LIST_DIR, RMDIR) o no los
+        # miraba nadie en el host (MKDIR, RENAME, SAVE, PING, TIME, LOG_*).
+        r = w.call("PING")
+        check(r.get("type") == "PONG", "PING → PONG")
+        r = w.call("TIME")
+        check(r.get("code") == "INVALID_PARAM",
+              "TIME sin epochSec → INVALID_PARAM (se DICE, U3.1)")
+        r = w.call("TIME", epochSec=1735689600)
+        check(r.get("type") == "TIME_REPLY", "TIME con epochSec → OK")
+
+        r = w.call("MKDIR", path="/app/sub")
+        check(r.get("type") == "MKDIR_REPLY", "MKDIR → OK")
+        r = w.call("LIST_DIR", path="/app")
+        names = {e["name"]: e for e in r.get("entries", [])}
+        check(r.get("type") == "LIST_DIR_REPLY" and names.get("sub", {}).get("isDir") is True,
+              "LIST_DIR → nombres SUELTOS (no rutas) y marca los directorios")
+        check("demo" in names and "/" not in "".join(names),
+              "LIST_DIR → un solo nivel, sin descender")
+        r = w.call("RMDIR", path="/app/sub")
+        check(r.get("type") == "RMDIR_REPLY", "RMDIR → OK")
+        r = w.call("RMDIR", path="/app/sub")
+        check(r.get("code") == "NOT_FOUND", "RMDIR repetido → NOT_FOUND")
+        r = w.call("LIST_DIR", path="/no/existe")
+        check(r.get("code") == "NOT_FOUND", "LIST_DIR de lo que no hay → NOT_FOUND")
+
+        r = w.call("RENAME", **{"from": "/app/big.bin", "to": "/app/otro.bin"})
+        check(r.get("type") == "RENAME_REPLY", "RENAME → OK")
+        r = w.call("STAT", path="/app/otro.bin")
+        check(r.get("size") == len(big), "RENAME → el fichero está en el nombre nuevo")
+        r = w.call("RENAME", **{"from": "/app/otro.bin", "to": "/app/big.bin"})
+        check(r.get("type") == "RENAME_REPLY", "RENAME de vuelta")
+
+        r = w.call("SAVE")
+        check(r.get("type") == "SAVE_REPLY", "SAVE → OK (littlefs ya persiste)")
+
+        # El PUT tiene tope de buffer en TODAS las familias, y el error se DICE.
+        r = w.call_bulk("PUT", b"x" * (96 * 1024), path="/app/enorme.bin")
+        check(r.get("code") in ("NO_SPACE", "INVALID_PARAM"),
+              "PUT por encima del scratch → error CON NOMBRE, no silencio")
+        r = w.call("PING")
+        check(r.get("type") == "PONG", "…y el wire sigue en sincronía después (bulk drenado)")
+
         # 6. DEL
         r = w.call("DEL", path="/app/big.bin")
         check(r.get("type") == "DEL_REPLY", "DEL → OK")

@@ -845,6 +845,14 @@ static void repl_listdir_sink(const char* txt, size_t n, void* user) {
     wire_v1_send_bulk((const uint8_t*) txt, n);
 }
 
+/* U3.25 — cuenta entradas de un directorio. Sirve para que RMDIR diga la
+ * verdad: `bpvm_fs_rmdir` devuelve -1 tanto si el dir no esta como si esta
+ * lleno, y son dos fallos distintos (misma leccion que `repl_del`). */
+static void contar_cb(const char* nombre, int is_dir, uint32_t size, void* u) {
+    (void) nombre; (void) is_dir; (void) size;
+    (*(int*) u)++;
+}
+
 static void repl_list_dir(long id, const json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof path) < 0)
@@ -922,14 +930,55 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "RENAME") == 0) { repl_rename(id, obj); return 1; }
     if (strcmp(type, "GET")    == 0) { repl_get(id, obj);    return 1; }
     if (strcmp(type, "MKDIR")  == 0) {
-        /* En un FS plano con '/' como namespace no hay nodos de directorio:
-         * idempotente y silenciosa (la semántica v1 de siempre). */
+        /* U3.25 — CREA EL DIRECTORIO DE VERDAD.
+         *
+         * Antes esto contestaba OK sin tocar nada, con el argumento de que «en un
+         * FS plano con '/' como namespace no hay nodos de directorio». Eso era
+         * cierto del FS en RAM del STM32 y dejó de serlo hace tiempo: los TRES
+         * backends (`fs_lfs.c`, `fs_host.c`) hacen `mkdir` recursivo y ok-si-existe.
+         * De hecho este mismo fichero ya lo llamaba —`crear_dirs_padre()` en cada
+         * PUT (#455)—, así que el común creaba directorios al subir un fichero y
+         * decía «hecho, nada» cuando se le pedía uno. Lo destapó el arnés del
+         * simulador (`U3.24`), que traía un MKDIR de verdad: unificar al stub era
+         * la regresión disfrazada de limpieza de #455. */
+        char path[64];
+        if (json_get_str(obj, "path", path, sizeof path) < 0) {
+            wire_v1_send_error(id, "INVALID_PARAM", "falta path");
+            return 1;
+        }
+        if (bpvm_fs_mkdir(path) != 0) {
+            wire_v1_send_error(id, "INTERNAL_ERROR", "no se pudo crear el directorio");
+            return 1;
+        }
         wire_v1_send_reply_empty("MKDIR_REPLY", id);
         return 1;
     }
     if (strcmp(type, "RMDIR")  == 0) {
-        /* Idem: v1 devuelve OK sin hacer nada — el stub que YA tenía la Pico
-         * (U3.0b lo dejó escrito). El cliente vacía prefijos borrando. */
+        /* U3.25 — BORRA EL DIRECTORIO DE VERDAD (ver MKDIR arriba).
+         *
+         * Y separa los tres desenlaces, que el stub juntaba en un OK: no existe,
+         * existe y tiene cosas dentro, y borrado. `bpvm_fs_rmdir` devuelve -1 en
+         * los dos primeros casos, así que se mira antes con el listado —el mismo
+         * gesto que `repl_del` hace con `bpvm_fs_exists`. */
+        char path[64];
+        if (json_get_str(obj, "path", path, sizeof path) < 0) {
+            wire_v1_send_error(id, "INVALID_PARAM", "falta path");
+            return 1;
+        }
+        if (!bpvm_fs_isdir(path)) {
+            wire_v1_send_error(id, "NOT_FOUND", "no existe o no es un directorio");
+            return 1;
+        }
+        int n = 0;
+        (void) bpvm_fs_list(path, contar_cb, &n);
+        if (n > 0) {
+            wire_v1_send_error(id, "NOT_EMPTY", "el directorio no está vacío");
+            return 1;
+        }
+        if (bpvm_fs_rmdir(path) != 0) {
+            wire_v1_send_error(id, "INTERNAL_ERROR", "no se pudo borrar el directorio");
+            return 1;
+        }
         wire_v1_send_reply_empty("RMDIR_REPLY", id);
         return 1;
     }

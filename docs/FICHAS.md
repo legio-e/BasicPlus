@@ -2697,6 +2697,57 @@ quedado atrás.
 ✅ **Verificado**: `sim-smoke` **25/25**, `boardsim-smoke` verde, paridad **38 PASS / 0 FAIL /
 0 SKIP**, y `LIST_DIR`/`RMDIR` probados a mano contra el sim en marcha.
 
+##### ✅ `U3.25` — **`MKDIR` y `RMDIR` dejaban de mentir** (31-ago). *Lo encontró el arnés recién migrado, a la primera.*
+
+Al ampliar `sim_smoke.py` con los verbos que el común tiene y el arnés no miraba, dos
+comprobaciones salieron en rojo — **y eran de verdad**:
+
+```
+FAIL: LIST_DIR → nombres SUELTOS y marca los directorios   ← MKDIR /app/sub decía OK
+                                                              y el directorio NO estaba
+FAIL: RMDIR repetido → NOT_FOUND                            ← RMDIR decía OK SIEMPRE:
+                                                              sobre lo que no existe,
+                                                              y sobre un dir CON cosas dentro
+```
+
+Los dos verbos eran **stubs que contestaban OK sin tocar nada**, con este argumento escrito:
+*«en un FS plano con `/` como namespace no hay nodos de directorio»*. Eso fue cierto —del FS
+en RAM del STM32— y **dejó de serlo hace tiempo**: los cuatro backends de la fachada
+(`fs_lfs.c`, `fs_host.c`, `fs_fat.c`) tienen `mkdir` recursivo, `rmdir` y `isdir` de verdad.
+
+📌 **Y el común ya lo sabía.** `crear_dirs_padre()` —el arreglo de `#455`— llama a
+`bpvm_fs_mkdir` en **cada PUT**. O sea: el REPL creaba directorios al subir un fichero, y
+contestaba «hecho, nada» cuando se le pedía uno explícitamente. Dos funciones de distancia.
+
+🎯 **Cómo salió: la regresión de `#455`, otra vez.** El simulador **tenía un `MKDIR` de
+verdad** (llamaba a `bpvm_fs_mkdir` y reportaba el fallo); el común, el stub. Migrarlo sin
+mirar fue *unificar hacia abajo* — exactamente lo que Eduardo señaló el 30-ago: **«quedarnos
+con lo bueno y no unificar a lo peor»**. La diferencia con la vez anterior es que esta vez
+**el arnés lo dijo a los diez minutos**, no una placa tres días después.
+
+Ahora:
+
+| | antes | ahora |
+|---|---|---|
+| `MKDIR` | OK sin hacer nada | crea (recursivo, ok-si-existe) o error con nombre |
+| `RMDIR` sobre lo que no está | **OK** | `NOT_FOUND` |
+| `RMDIR` de un dir con contenido | **OK** (y no borraba) | `NOT_EMPTY` |
+| `RMDIR` de un dir vacío | OK (y no borraba) | OK, y **borrado** |
+
+`RMDIR` mira con `bpvm_fs_isdir` + un conteo antes de borrar, porque `bpvm_fs_rmdir` devuelve
+`-1` para los dos fallos y **no son el mismo** — el mismo gesto que `repl_del` ya hacía.
+
+⚠️ **Riesgo mirado antes de tocar**: `BpvmClient.mkdir()` existe en el IDE y **no lo llama
+nadie** (`grep`), así que nada dependía del OK falso.
+
+✅ **Verificado**: `sim-smoke` **40/40** (15 comprobaciones nuevas), `boardsim-smoke` verde,
+paridad **38 PASS / 0 FAIL / 0 SKIP**, y las **seis** imágenes reconstruidas y frescas —
+Pico, S3, P4, C3, STM32 Nucleo y STM32 Discovery.
+
+⏭️ Falta **probarlo en placa**: en el host el backend es `fs_lfs` sobre imagen, y en el micro
+es el mismo fichero sobre flash real, pero eso hay que verlo. Gesto: `MKDIR /app/x`, `LIST_DIR
+/app`, `RMDIR /app/x`.
+
 ---
 
 ### 🏁 `U3` — CERRADO (31-ago)

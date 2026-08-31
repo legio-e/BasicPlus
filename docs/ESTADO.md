@@ -27,6 +27,24 @@
 
 ## Última sesión
 
+### `U3.25` — y el arnés nuevo cazó dos verbos que mentían
+
+Al ampliar `sim_smoke.py` con lo que el común tiene y el arnés no miraba, dos rojos, y de
+verdad: `MKDIR` y `RMDIR` eran **stubs que contestaban OK sin tocar nada**. El común creaba
+directorios en cada PUT (`crear_dirs_padre`, `#455`) y decía «hecho, nada» cuando se le pedía
+uno explícitamente, dos funciones más abajo.
+
+Y el sim **tenía un `MKDIR` de verdad**: migrarlo sin mirar fue unificar hacia abajo — la
+regresión de `#455` otra vez. La diferencia con la vez anterior es el tiempo: **diez minutos
+en el host**, no una placa tres días después.
+
+Arreglado. `MKDIR` crea o da error con nombre; `RMDIR` distingue ahora «no existe»
+(`NOT_FOUND`) de «no está vacío» (`NOT_EMPTY`), que el stub juntaba en un OK.
+
+⏭️ **Falta verlo en placa**: en el host el backend es littlefs sobre una imagen y en el micro
+es flash de verdad. Gesto: `MKDIR /app/x`, `LIST_DIR /app`, `RMDIR /app/x`.
+
+
 ### `U3.24` — el simulador al REPL común: el arnés que faltaba
 
 Cerrado `U3` (las comunicaciones), quedaba una deuda que el propio bug del `LIST` había dejado
