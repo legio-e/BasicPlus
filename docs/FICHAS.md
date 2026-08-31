@@ -740,7 +740,11 @@ aparte del camino invalidar→pintar, e instrumentar el STM32 como está el P4.
 Agrupa lo que ya está fichado y suelto por el registro. **No duplica: agrupa** — el texto
 de cada una sigue en su sitio.
 
-- 🔴 **La pasada de INTERFAZ no resuelve `Core` implícito** — marcada *V6 OBLIGATORIO*.
+- ✅ ~~**La pasada de INTERFAZ no resuelve `Core` implícito**~~ — **CERRADA el 30-ago**
+  (`#458`), y no como estaba previsto: en vez de enseñar a esa pasada a inyectar el
+  `import`, se quitó el implícito y la norma pasó a ser explícita. Con ella cayó también
+  la mitad que nadie había visto: la pasada de interfaz **tiraba miembros en silencio**
+  cuando un tipo no resolvía.
 - ~~**La sustitución por LSP entre interfaces de módulo**~~ — 🧊 **DEJA DE SER UN BUG el
   30-ago**: las interfaces de módulo se retiran del lenguaje (`#460`), así que era la
   prueba de una función que ya no existe. No se arregla: se va con ella.
