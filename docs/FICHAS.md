@@ -1017,6 +1017,90 @@ ensayo **ya se benefició de lo que `U3` lleva hecho**: usa el REPL común. Lo q
 argumentado: *cada sistema sin unificar es una copia más por micro*. La S31 —RISC-V, como el
 C3 y el C6— entra por el mismo camino.
 
+#### 🟡 `P1.C3.3` — EN PLACA: arranca, y la RAM no es la que parecía (31-ago)
+
+**El C3 arranca y la VM está viva.** Placa: chip `v0.4`, mononúcleo a 160 MHz, **flash embebida
+de 4 MB (XMC)**, MAC `e0:72:a1:21:40:78`, un solo puerto USB (`VID_303A/PID_1001` = el
+USB-Serial-JTAG nativo, sin puente UART).
+
+### Tres cosas que había que arreglar ANTES de poder medir
+
+**1. La tabla de particiones declaraba 16 MB** — copia literal de la del S3, cuyo módulo de
+referencia los tiene. `esptool flash-id` dice **4 MB**: la tabla de 16 se sale de la flash y no
+arranca. Bajada al suelo (4 MB) **con los mismos offsets**, así que ensanchar el día que haya
+una placa mayor no mueve el env ni el volumen littlefs. Al revés sí funciona —declarar 4 en un
+chip de 16 usa menos pero va—, así que el suelo vale para cualquier C3.
+
+📌 **Medido, no supuesto.** La pregunta «¿cuánta flash tiene?» tiene respuesta de una línea
+(`esptool flash-id`) y se contestó antes de grabar. Es el mismo modo de fallo que cazó Eduardo
+el 27-jul en el S3, al revés: la constante mentía y el chip no.
+
+**2. Los pines del wire eran los del S3, y en el C3 no existen.** Esto:
+
+```c
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+#define WIRE_UART_TX_PIN 37   /* P4 */
+#else
+#define WIRE_UART_TX_PIN 43   /* ← «el resto» = el S3 DevKitC */
+#endif
+```
+
+El ESP32-C3 tiene **GPIO0..21**: el 43 y el 44 **no existen en ese silicio**. `uart_set_pin`
+devuelve error y **no aborta**, así que el wire se quedaba con RX/TX muertos **en silencio** —
+el peor modo de fallo. Es `#465` con otra cara: **dar por hecha la familia en vez de preguntar
+al silicio**. Arreglado al revés de como estaba: por defecto los pines IO_MUX que el SoC asigna
+a UART0 (los que ya usan la ROM y el bootloader, o sea los de verdad), y se REENRUTA sólo donde
+la **placa** cablea el bridge a otro sitio — que es dato de placa, no de familia, y por eso va
+nombrada una a una.
+
+**3. La foto de RAM del arranque no salía por consola.** `log_printf` escribe **sólo** al log de
+flash, que además está apagado por defecto (`#423`): para ver la RAM había que conectar el IDE y
+pedir un `LOG_DUMP`. El Pico lo dice en su banner *desde siempre* —lo señalaba el propio
+comentario del código como algo que al ESP32 le faltaba—, así que la línea ahora también sale
+por `printf`. Una asimetría hacia abajo menos, y sin ella este hito no se puede medir.
+
+### 📏 El primer número — y no es el que se esperaba
+
+```
+[boot] vm: heap 96 KB reservado | DRAM interna libre 280076->181768 B (bloque mayor 139264->114688 B)
+```
+
+**Hay 280 KB libres y el bloque contiguo mayor es 139264 B (136 KB).** La DRAM del C3 sale
+troceada en regiones —`heap_init` las lista: 157 KiB + 113 KiB de retención + 10 KiB + 7 KiB de
+RTCRAM— y el heap de la VM tiene que ser **un bloque**.
+
+🎯 **Conclusión que ningún cálculo sobre el total habría dado: los 160 KB del S3 NO CABEN en el
+C3, aunque sobre RAM.** Habría caído al escalón de respaldo — y el respaldo del S3 (128 KB)
+tampoco deja margen sano contra un techo de 136. Es literalmente el caso que el comentario de
+`vm_buffer_init` predecía: *«se puede tener RAM de sobra y aun así no caber»*.
+
+Los 96 KB del ensayo caben con holgura. Que sean los definitivos depende del segundo número.
+
+### ⏭️ Lo que falta, y por qué está parado
+
+El segundo número de `#336` es la **marca de agua** (`heap_caps_get_minimum_free_size`), que el
+firmware registra **tras cada RUN** — o sea que hay que ejecutar programas. Y para subir un
+programa hace falta el wire… que va por UART0, y **esta placa no tiene puerto para UART0**: su
+único USB es el nativo, que la consola ya ocupa.
+
+Además el arranque dice `boot: estado 0 (kernel) DEGRADADO: falta algun tamano (placa virgen)`:
+sin env no hay particiones, sin particiones no hay FS y sin FS no hay stdlib. Aprovisionar es lo
+primero que hace el IDE… por el wire.
+
+**Es una decisión, no un bug** — y es justo el tipo de coste que el ensayo existía para
+descubrir:
+
+| opción | quién necesita un adaptador |
+|---|---|
+| **(a)** dejarlo como está | el **wire**: un USB-serie a GPIO20/21 + GND |
+| **(b)** invertir el reparto: wire por USB-Serial-JTAG, consola por UART0 | la **consola** |
+| (c) los dos por el USB-JTAG | nadie, pero se entremezclan → descartada |
+
+La (b) es la que deja al **usuario** con un solo cable —que es quien importa— y deja el
+adaptador para depurar, que es cosa nuestra. Pero cambia el reparto de las tres imágenes ESP32,
+así que se decide antes de tocar.
+
+
 #### 🔴 P1.C3.3 — lo que falta para que sea una imagen de verdad
 
 - **Medir el bloque de la VM en placa** (repetir `#336` en el C3) y fijar el número.
@@ -1042,6 +1126,13 @@ funciona **sin PSRAM**, reservando la VM en SRAM interna (`MALLOC_CAP_INTERNAL`)
 con **respaldo automático a 128 KB** si no cabe, y avisando por el log. El C6 (512 KB) está
 en el mismo rango que el S3; el C3 (400 KB) es el más justo, pero el mecanismo de respaldo
 ya existe y ya habla.
+
+⚠️ **CORREGIDO POR LA MEDIDA EN PLACA (31-ago, `P1.C3.3` arriba).** Este párrafo razonaba sobre
+la RAM **total**, y el límite real es el **bloque contiguo**: en el C3 hay 280 KB libres y el
+mayor bloque son **136 KB**. O sea que en el C3 no cabe ni el número del S3 (160) **ni su
+respaldo con margen sano** (128 contra un techo de 136). «El mecanismo de respaldo ya existe»
+era cierto y **no bastaba**: habría arrancado con un aviso y un heap al borde en vez de con un
+número elegido. Que eso se viera es exactamente para lo que existía el ensayo.
 
 🔴 **CORRECCIÓN (29-ago): esa conclusión se queda corta, y ahora hay un número.** *Caber*
 no es el problema; el problema es **cuántos objetos vivos** admite ese reparto. Con la

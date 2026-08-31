@@ -1,19 +1,24 @@
-# Tabla de particiones — firmware BasicPlus ESP32-S3 (H9: bpenv + bpdata).
+# Tabla de particiones — firmware BasicPlus ESP32-C3 (H9: bpenv + bpdata).
 # factory 1M | bpenv (env A/B, 32K) | bpdata (zona de datos FS+Packs, el resto).
 # El firmware busca "bpdata"; el limite FS|Packs vive en el env (un mando).
 #
-# FLASH 16 MB (modulo de referencia). Antes esta tabla acababa en 2 MB y dejaba
-# ~15 MB SIN MAPEAR: el INFO decia 16 MB (lo lee del chip por JEDEC) pero el
-# gestor de placa solo ofrecia 928 KB, que es lo que media bpdata. Lo cazo
-# Eduardo 27-jul comparando las dos cifras. Mismo modo de fallo que el
-# PICO_FLASH_SIZE_BYTES del Metro (#292): la constante mentia, el chip no.
-# Los OFFSETS de factory/bpenv/bpdata NO se tocan a proposito: asi el env
-# sobrevive y el volumen littlefs no se mueve — solo CRECE el sitio libre.
-# Para un modulo S3 de 2 MB: usar partitions_2m.csv.
+# FLASH 4 MB — EL SUELO, A PROPOSITO (V6/P1.C3.3, 31-ago).
+#
+# Esta tabla nacio como copia literal de la del S3, que declara 16 MB porque el
+# modulo de referencia los tiene. Sobre un devkit C3 de 4 MB eso NO arranca: la
+# tabla se sale de la flash. Al reves si funciona — declarar 4 MB en un chip de
+# 16 usa menos, pero funciona—, asi que el ensayo se hace sobre el suelo, que
+# vale para CUALQUIER C3, y ya se ensancha cuando se sepa la placa exacta.
+# (El mismo modo de fallo, al reves, que cazo Eduardo el 27-jul en el S3: la
+# constante mentia y el chip no.)
+#
+# Los OFFSETS de factory/bpenv/bpdata son los MISMOS que en el S3 y eso es a
+# proposito: asi el env sobrevive y el volumen littlefs no se mueve al ensanchar
+# — solo CRECE el sitio libre.
 #
 # Name,     Type, SubType,  Offset,    Size,     Flags
 nvs,        data, nvs,      0x9000,    0x6000,
 phy_init,   data, phy,      0xf000,    0x1000,
 factory,    app,  factory,  0x10000,   0x100000,
 bpenv,      data, 0x41,     0x110000,  0x8000,
-bpdata,     data, 0x40,     0x118000,  0xEE8000,
+bpdata,     data, 0x40,     0x118000,  0x2E8000,

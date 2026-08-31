@@ -71,11 +71,22 @@ static void vm_buffer_init(void) {
         if (s_vm_buffer) log_printf("vm: AVISO %d KB no caben — se usa el respaldo de %d KB",
                                     VM_BUFFER_SIZE / 1024, VM_BUFFER_FALLBACK / 1024);
     }
+    unsigned after     = (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    unsigned after_blk = (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     log_printf("vm: heap %u KB %s | DRAM interna libre %u->%u B (bloque mayor %u->%u B)",
                (unsigned)(s_vm_buffer_size / 1024u), s_vm_buffer ? "reservado" : "NO CABE",
-               before, (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-               before_blk,
-               (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+               before, after, before_blk, after_blk);
+    /* V6/P1.C3.3 — Y TAMBIEN POR LA CONSOLA.
+     *
+     * Esta linea solo iba al log de flash, que ademas se apaga por defecto
+     * (#423): para ver cuanta RAM queda habia que conectar el IDE y pedir un
+     * LOG_DUMP. El Pico lo dice en su banner de arranque "desde siempre", y por
+     * eso alli se ve enseguida cuando la RAM aprieta — lo dice el comentario de
+     * aqui arriba. Era una asimetria hacia abajo, y se nota al medir un silicio
+     * nuevo: es EL dato del arranque. Son 80 caracteres una vez por reset. */
+    printf("[boot] vm: heap %u KB %s | DRAM interna libre %u->%u B (bloque mayor %u->%u B)\n",
+           (unsigned)(s_vm_buffer_size / 1024u), s_vm_buffer ? "reservado" : "NO CABE",
+           before, after, before_blk, after_blk);
     if (!s_vm_buffer) {
         /* No es fatal: el kernel sigue vivo y el host puede hablar con la placa
          * (H9). Lo que no habrá es VM — y el climb lo reportará. */

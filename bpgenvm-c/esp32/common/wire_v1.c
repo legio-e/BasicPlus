@@ -29,17 +29,36 @@
  *  - P4: el bridge está en los pines IO_MUX por defecto de UART0 → NO_CHANGE (no
  *    reenrutar; con la consola movida a USB-Serial-JTAG, UART0 queda libre).
  *    A VERIFICAR en placa: si no llega el HELLO, fijar aquí los pines reales. */
+/* ── V6/P1.C3.3 — EL DEFECTO ES «LO QUE DIGA EL SILICIO», NO «LO QUE DICE EL S3»
+ *
+ * Esto era un `#if P4 / #else` cuyo `#else` fijaba GPIO43/44 — **los pines del
+ * S3 DevKitC**. En el ESP32-C3 esos pines NO EXISTEN (tiene GPIO0..21), así que
+ * el ensayo del C3 enrutaba el wire a la nada: `uart_set_pin` devuelve error y
+ * no aborta, o sea un RX/TX muerto EN SILENCIO — el peor modo de fallo.
+ *
+ * Es el mismo error que `#465`, con otra cara: **dar por hecha la familia en vez
+ * de preguntar al silicio**. La forma correcta es al revés de como estaba: por
+ * defecto se dejan los pines IO_MUX que el SoC asigna a UART0 (que es lo que ya
+ * usan la ROM y el bootloader, así que son los de verdad), y sólo se REENRUTA
+ * donde la PLACA cablea el bridge a otro sitio — que es información de placa, no
+ * de familia, y por eso va nombrada una a una. */
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
-/* P4: U0TXD/U0RXD por defecto del SoC = GPIO37/GPIO38, cableados al bridge
- * USB-UART de la EV board. Hay que fijarlos EXPLÍCITAMENTE (con la consola en
- * USB-Serial-JTAG, ESP-IDF no enruta UART0 solo → NO_CHANGE deja RX/TX muertos,
- * que fue el fallo del handshake). Si el bridge de tu placa va por otros pines,
- * cámbialos aquí. */
+/* P4 EV board: el bridge USB-UART está en GPIO37/38. Hay que fijarlos
+ * EXPLÍCITAMENTE (con la consola en USB-Serial-JTAG, ESP-IDF no enruta UART0
+ * solo → NO_CHANGE deja RX/TX muertos, que fue el fallo del handshake). */
 #define WIRE_UART_TX_PIN 37
 #define WIRE_UART_RX_PIN 38
-#else
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+/* S3 DevKitC: U0TXD/U0RXD del bridge = GPIO43/44, que NO son los IO_MUX
+ * por defecto — de ahí el reenrutado. */
 #define WIRE_UART_TX_PIN 43
 #define WIRE_UART_RX_PIN 44
+#else
+/* Cualquier otro silicio (C3 hoy; C6 y S31 mañana): los de UART0 del SoC. En el
+ * C3 son GPIO21/GPIO20. Si una placa concreta lleva el bridge a otros pines, se
+ * añade su rama arriba CON EL NOMBRE DE LA PLACA. */
+#define WIRE_UART_TX_PIN UART_PIN_NO_CHANGE
+#define WIRE_UART_RX_PIN UART_PIN_NO_CHANGE
 #endif
 
 void wire_v1_uart_init(void) {
