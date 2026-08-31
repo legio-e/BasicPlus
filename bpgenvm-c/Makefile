@@ -15,6 +15,10 @@ CFLAGS  += $(CFLAGS_EXTRA)
 # incluyen. Sin esto, un cambio de struct dejaba .o desalineados (build stale).
 CFLAGS  += -MMD -MP
 
+# ⚠️ src/bpvm_repl.c NO va en LIBOBJ a proposito (V6/U3): es capa-WIRE, no core
+# de VM. Desde U3.24 SI lo enlaza el `sim` (abajo), que es el quinto consumidor:
+# tener el REPL comun en el host es lo que convierte una prueba de placa en un
+# `make sim-smoke`. Original:
 # ⚠️ src/bpvm_repl.c NO va aqui A PROPOSITO (V6/U3): es capa-WIRE, no core de
 # VM — llama al cable (wire_v1_send_*) que el CLI de host no tiene. Su sitio
 # son los CUATRO firmwares (+ el simulador cuando migre). Ver bpvm_repl.h.
@@ -745,7 +749,7 @@ test-crc:
 # Winsock via $(LDFLAGS) (-lws2_32). Con LVGL=1 arrastra la ventana SDL.
 sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
 	@echo "sim listo: build/bpvm-sim.exe [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
 
 # Alias histórico (H9): el boardsim ES el sim, con otro nombre.

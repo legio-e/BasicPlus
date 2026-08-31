@@ -49,6 +49,8 @@
 #include "mdn_loader.h"
 #include "aot_registry.h"
 #include "json_min.h"
+#include "bpvm_repl.h"      /* U3.24: el REPL comun */
+#include "bpvm_wire_v1.h"
 #ifdef BPVM_GUI
 #include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen */
@@ -235,6 +237,38 @@ static void send_ok(sock_t c, const char* type, long id) {
     sb_raw(&s, "\",\"id\":"); sb_long(&s, id); sb_raw(&s, "}");
     if (s.ok) send_line(c, s.buf);
 }
+static int recv_exact(sock_t c, uint8_t* buf, size_t n);   /* U3.24: se usa abajo */
+
+/* ── V6/U3.24 — EL CONTRATO DEL WIRE, para poder usar el REPL COMUN ──────────
+ *
+ * POR QUE. Este simulador tenia VEINTIUN verbos propios: una implementacion
+ * paralela entera del REPL, en el host, que `sim_smoke.py` ejercita por el wire.
+ * O sea que existia la herramienta capaz de cazar un fallo del REPL comun en
+ * segundos... y miraba otro codigo.
+ *
+ * Lo destapo el bug de `U3.23`: el `LIST` comun no contestaba, y hubo que verlo
+ * en una P4. El Makefile ya lo tenia escrito — «los CUATRO firmwares (+ el
+ * simulador cuando migre)».
+ *
+ * El contrato pide solo DOS funciones de la familia; todo lo demas (los
+ * constructores JSON, los errores) ya vive en `src/wire_v1_proto.c`. Aqui el
+ * "transporte" es el socket del cliente en curso, que ya era global (`g_cli`). */
+void wire_v1_send_line(const char* data, size_t len) {
+    if (g_cli == BAD_SOCK) return;
+    if (len > 0 && send_all(g_cli, data, len) != 0) return;
+    (void) send_all(g_cli, "\n", 1);
+}
+
+void wire_v1_send_bulk(const uint8_t* data, size_t n) {
+    if (g_cli == BAD_SOCK || n == 0) return;
+    (void) send_all(g_cli, (const char*) data, n);
+}
+
+int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
+    if (n > buf_max) return -1;
+    return recv_exact(g_cli, buf, n) == 0 ? (int) n : -1;
+}
+
 /* Lee una línea (hasta '\n', descarta '\r'). Devuelve len o -1 si el peer cierra. */
 static int recv_line(sock_t c, char* buf, size_t cap) {
     size_t n = 0;
@@ -294,17 +328,6 @@ static uint8_t* fs_read_all(const char* path, uint32_t* size_out) {
  * a "/app/proj/x.mod" falla si /app/proj no existe, y el IDE sube rutas
  * completas dando por hecho que el device se apaña (así lo hacen los firmwares,
  * de FS plano). */
-static void ensure_parent_dirs(const char* path) {
-    char tmp[PATH_MAX_SIM];
-    snprintf(tmp, sizeof tmp, "%s", path);
-    for (char* p = tmp + 1; *p; p++) {
-        if (*p != '/') continue;
-        *p = '\0';
-        bpvm_fs_mkdir(tmp);   /* ok si ya existe */
-        *p = '/';
-    }
-}
-
 /* ── Recorrido del árbol del FS ────────────────────────────────────────────
  * littlefs es jerárquico pero el wire lista PLANO con rutas completas
  * ("/lib/Math.mod") — es lo que mandan los firmwares y lo que el árbol del IDE
@@ -402,233 +425,94 @@ static uint32_t fs_partition_size(void) {
     return p ? p->size : 0;
 }
 
-/* ── META ─────────────────────────────────────────────────────────────────── */
+/* ── V6/U3.24 — LA CINTURA DEL SIMULADOR ────────────────────────────────────
+ *
+ * A partir de aquí el sim atiende los verbos de META y FILES con el MISMO
+ * código que las cuatro placas (`src/bpvm_repl.c`). Sus handlers propios se
+ * han borrado, no sombreado: un handler propio que gane al común deja el común
+ * sin ejercitar, que es exactamente el agujero por el que se coló el bug de
+ * `U3.23` (el `LIST` que no contestaba, y hubo que verlo en una P4).
+ *
+ * Lo que el sim sigue poniendo de su parte es lo que de verdad es suyo: el
+ * silicio de mentira que se pide por línea de comandos (`--mem`, `--psram`,
+ * `--flash`, `--screen`) y el formateo, que aquí es cerrar la imagen, borrar
+ * el fichero y volver a montar. */
 
-static void handle_hello(sock_t c, long id) {
-    char buf[320]; sb_t s; sb_init(&s, buf, sizeof buf);
-    sb_raw(&s, "{\"type\":\"HELLO_REPLY\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\"protoVersion\":1,\"serverName\":\"" SERVER_NAME "\","
-               "\"serverBuild\":\"" __DATE__ " " __TIME__ "\","
-               "\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\",\"BOARDMGR\",\"PACKS\"]}");
-    if (s.ok) send_line(c, s.buf);
-}
+static uint32_t fs_partition_size(void);      /* definido más abajo */
+static void     fs_walk(sb_t* sb);
 
-static void handle_info(sock_t c, long id) {
+static void sim_repl_info(bpvm_repl_info_t* out) {
     char idv[64];
     int has = bpvm_bmgr_env_get(&g_bm, "board", idv, sizeof idv) >= 0;
-    uint32_t fs_total = fs_partition_size();
+    static char s_board[64];
+    snprintf(s_board, sizeof s_board, "%s", has ? idv : (g_board ? g_board : "sim"));
     fs_walk(NULL);
 
-    char buf[768]; sb_t s; sb_init(&s, buf, sizeof buf);
-    sb_raw(&s, "{\"type\":\"INFO_REPLY\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\"uniqueId\":\"SIMULATED0000000\",\"boardName\":\"");
-    sb_esc(&s, has ? idv : (g_board ? g_board : "sim"));
-    sb_raw(&s, "\",\"serverName\":\"" SERVER_NAME "\"");
-    sb_raw(&s, ",\"cpuFreqHz\":0,\"uptimeMs\":");
-    sb_ulong(&s, (unsigned long) ((unsigned long) clock() * 1000UL / CLOCKS_PER_SEC));
-    sb_raw(&s, ",\"tempMilliC\":0,\"resetReason\":\"sim\"");
-    sb_raw(&s, ",\"gpioCount\":0,\"pioCount\":0,\"pwmSlices\":0,\"adcChannels\":0");
-    sb_raw(&s, ",\"flashBytes\":");   sb_ulong(&s, (unsigned long) g_flash_size);
-    sb_raw(&s, ",\"sramBytes\":");    sb_ulong(&s, (unsigned long) g_mem_size);
-    sb_raw(&s, ",\"psramBytes\":");   sb_ulong(&s, (unsigned long) g_psram_size);
-    sb_raw(&s, ",\"fsTotalBytes\":"); sb_ulong(&s, (unsigned long) fs_total);
-    sb_raw(&s, ",\"fsUsedBytes\":");  sb_ulong(&s, (unsigned long) g_tally.used);
-    /* H10 — el panel simulado, para que el IDE pueda mostrarlo (0x0 = sin pantalla). */
-    sb_raw(&s, ",\"screenW\":"); sb_long(&s, g_no_screen ? 0 : (g_screen_w > 0 ? g_screen_w : 480));
-    sb_raw(&s, ",\"screenH\":"); sb_long(&s, g_no_screen ? 0 : (g_screen_h > 0 ? g_screen_h : 320));
-    sb_raw(&s, "}");
-    if (s.ok) send_line(c, s.buf); else send_err(c, id, "INTERNAL_ERROR", "INFO_REPLY no cabe");
+    out->unique_id    = "SIMULATED0000000";
+    out->board_name   = s_board;
+    out->reset_reason = "sim";
+    out->arch         = 0;
+    out->cpu_hz       = 0;
+    out->uptime_ms    = (unsigned long) ((unsigned long) clock() * 1000UL / CLOCKS_PER_SEC);
+    out->flash_bytes  = (unsigned long) g_flash_size;
+    out->sram_bytes   = (unsigned long) g_mem_size;
+    out->psram_bytes  = (unsigned long) g_psram_size;
+    out->fs_total_bytes = (unsigned long) fs_partition_size();
+    out->fs_used_bytes  = (unsigned long) g_tally.used;
 }
 
-/* ── FILES ────────────────────────────────────────────────────────────────── */
-
-static void handle_list(sock_t c, long id) {
-    static char big[256 * 1024];   /* host: el árbol entero cabe de sobra */
-    sb_t s; sb_init(&s, big, sizeof big);
-    sb_raw(&s, "{\"type\":\"LIST_REPLY\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\"entries\":[");
-    fs_walk(&s);
-    /* #425 — LA COLA DEL LISTADO DICE SI ESTA ENTERO. El simulador ya sabia que
-     * habia truncado (lo imprimia en SU consola) pero por el wire salia una
-     * lista corta que el IDE pintaba como si fuera todo — el mismo agujero que
-     * tenian las tres familias. */
-    sb_raw(&s, "],\"omitted\":"); sb_long(&s, (long) g_tally.truncated); sb_raw(&s, "}");
-    if (s.ok) send_line(c, s.buf);
-    else      send_err(c, id, "INTERNAL_ERROR", "LIST_REPLY no cabe");
+/* H10 — el panel simulado, para que el IDE pueda mostrarlo (0x0 = sin pantalla).
+ * Es el único campo propio del sim, y por eso entra por el gancho de extras. */
+static int sim_repl_info_extra(char* buf, unsigned long buf_max, int off) {
+    off = wire_v1_field_long(buf, (size_t) buf_max, (size_t) off, "screenW",
+                             g_no_screen ? 0 : (g_screen_w > 0 ? g_screen_w : 480));
+    if (off < 0) return -1;
+    return wire_v1_field_long(buf, (size_t) buf_max, (size_t) off, "screenH",
+                              g_no_screen ? 0 : (g_screen_h > 0 ? g_screen_h : 320));
 }
 
-static void handle_stat(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
-        send_err(c, id, "INVALID_PARAM", "falta path"); return;
-    }
-    uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) { send_err(c, id, "NOT_FOUND", "no existe"); return; }
-    char buf[192]; sb_t s; sb_init(&s, buf, sizeof buf);
-    sb_raw(&s, "{\"type\":\"STAT_REPLY\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\"size\":"); sb_ulong(&s, (unsigned long) size);
-    /* #398 — el CRC, SÓLO SI SE PIDE (`"crc":true` en la petición). Calcularlo
-     * siempre sería mover el problema aquí: el listado dejaría de leer el FS
-     * entero y lo leería el STAT del siguiente que pase. Se pide justo antes de
-     * subir un fichero, que es el único momento en que sirve. */
-    if (json_get_bool(obj, "crc", 0)) {
-        uint32_t crc = 0;
-        if (bpvm_fs_crc32(path, &crc) == 0) { sb_raw(&s, ",\"crc\":"); sb_ulong(&s, (unsigned long) crc); }
-        else                                  sb_raw(&s, ",\"crc\":-1");
-    }
-    sb_raw(&s, ",\"isDir\":false,\"mtime\":0}");
-    if (s.ok) send_line(c, s.buf);
-}
+static unsigned long sim_fs_total(void) { return (unsigned long) fs_partition_size(); }
+static unsigned long sim_fs_used(void)  { fs_walk(NULL); return g_tally.used; }
+static int           sim_fs_count(void) { fs_walk(NULL); return g_tally.count; }
 
-static void handle_df(sock_t c, long id) {
-    uint32_t total = fs_partition_size();
-    fs_walk(NULL);
-    unsigned long used = g_tally.used;
-    char buf[224]; sb_t s; sb_init(&s, buf, sizeof buf);
-    sb_raw(&s, "{\"type\":\"DF_REPLY\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\"totalBytes\":"); sb_ulong(&s, (unsigned long) total);
-    sb_raw(&s, ",\"usedBytes\":");  sb_ulong(&s, used);
-    sb_raw(&s, ",\"freeBytes\":");  sb_ulong(&s, (total > used) ? total - used : 0UL);
-    sb_raw(&s, ",\"fileCount\":");  sb_long(&s, g_tally.count);
-    sb_raw(&s, "}");
-    if (s.ok) send_line(c, s.buf);
-}
-
-static void handle_get(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
-        send_err(c, id, "INVALID_PARAM", "falta path"); return;
-    }
-    uint32_t size = 0;
-    uint8_t* data = fs_read_all(path, &size);
-    if (!data) { send_err(c, id, "NOT_FOUND", "no existe"); return; }
-    char buf[96]; sb_t s; sb_init(&s, buf, sizeof buf);
-    sb_raw(&s, "{\"type\":\"GET_REPLY\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\"bulk\":"); sb_ulong(&s, (unsigned long) size); sb_raw(&s, "}");
-    if (s.ok) {
-        send_line(c, s.buf);
-        if (size > 0) send_all(c, (const char*) data, size);
-    }
-    free(data);
-}
-
-static void handle_put(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    long bulk = json_get_long(obj, "bulk", -1);
-    int has_path = json_get_str(obj, "path", path, sizeof path) >= 0;
-    if (bulk < 0) { send_err(c, id, "INVALID_PARAM", "falta bulk"); return; }
-    /* Consumir SIEMPRE el bulk antes de decidir nada (o el wire se desincroniza). */
-    uint8_t* data = (uint8_t*) malloc(bulk ? (size_t) bulk : 1);
-    if (!data) { drain_bulk(c, bulk); send_err(c, id, "NO_SPACE", "sin memoria"); return; }
-    if (bulk > 0 && recv_exact(c, data, (size_t) bulk) != 0) { free(data); return; }
-    if (!has_path) { free(data); send_err(c, id, "INVALID_PARAM", "falta path"); return; }
-
-    ensure_parent_dirs(path);
-    int rc = bpvm_fs_write(path, data, (uint32_t) bulk, 0);
-    free(data);
-    if (rc != 0) { send_err(c, id, "NO_SPACE", "no se pudo escribir"); return; }
-    send_ok(c, "PUT_REPLY", id);
-}
-
-/* #294 streaming PUT — BEGIN crea/trunca, cada DATA apende, END verifica. */
-static struct { int active; char path[PATH_MAX_SIM]; uint32_t received, expected; } g_put;
-
-static void reply_put_field(sock_t c, const char* type, long id,
-                            unsigned long val, const char* field) {
-    char buf[128]; sb_t s; sb_init(&s, buf, sizeof buf);
-    sb_raw(&s, "{\"type\":\""); sb_raw(&s, type);
-    sb_raw(&s, "\",\"id\":"); sb_long(&s, id);
-    sb_raw(&s, ",\""); sb_raw(&s, field); sb_raw(&s, "\":"); sb_ulong(&s, val);
-    sb_raw(&s, "}");
-    if (s.ok) send_line(c, s.buf);
-}
-
-static void handle_put_begin(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
-        send_err(c, id, "INVALID_PARAM", "falta path"); return;
-    }
-    ensure_parent_dirs(path);
-    if (bpvm_fs_write(path, NULL, 0, 0) != 0) {
-        send_err(c, id, "NO_SPACE", "no se pudo crear"); return;
-    }
-    g_put.active   = 1;
-    g_put.received = 0;
-    g_put.expected = (uint32_t) json_get_long(obj, "size", 0);
-    snprintf(g_put.path, sizeof g_put.path, "%s", path);
-    reply_put_field(c, "PUT_BEGIN_REPLY", id, 0, "received");
-}
-
-static void handle_put_data(sock_t c, long id, const json_obj_t* obj) {
-    long bulk = json_get_long(obj, "bulk", -1);
-    if (bulk < 0) { send_err(c, id, "INVALID_PARAM", "falta bulk"); return; }
-    uint8_t* data = (uint8_t*) malloc(bulk ? (size_t) bulk : 1);
-    if (!data) { drain_bulk(c, bulk); send_err(c, id, "NO_SPACE", "sin memoria"); return; }
-    if (bulk > 0 && recv_exact(c, data, (size_t) bulk) != 0) { free(data); return; }
-    if (!g_put.active) { free(data); send_err(c, id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
-    int rc = (bulk > 0) ? bpvm_fs_write(g_put.path, data, (uint32_t) bulk, 1) : 0;
-    free(data);
-    if (rc != 0) { g_put.active = 0; send_err(c, id, "NO_SPACE", "no se pudo apendar"); return; }
-    g_put.received += (uint32_t) bulk;
-    reply_put_field(c, "PUT_DATA_REPLY", id, g_put.received, "received");
-}
-
-static void handle_put_end(sock_t c, long id) {
-    if (!g_put.active) { send_err(c, id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
-    uint32_t recvd = g_put.received, exp = g_put.expected;
-    g_put.active = 0;
-    if (exp != 0 && recvd != exp) { send_err(c, id, "SIZE_MISMATCH", "bytes != size"); return; }
-    reply_put_field(c, "PUT_END_REPLY", id, recvd, "size");
-}
-
-static void handle_del(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
-        send_err(c, id, "INVALID_PARAM", "falta path"); return;
-    }
-    if (bpvm_fs_remove(path) != 0) { send_err(c, id, "NOT_FOUND", "no existe"); return; }
-    send_ok(c, "DEL_REPLY", id);
-}
-
-static void handle_mkdir(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
-        send_err(c, id, "INVALID_PARAM", "falta path"); return;
-    }
-    ensure_parent_dirs(path);
-    if (bpvm_fs_mkdir(path) != 0) { send_err(c, id, "INTERNAL_ERROR", "no se pudo crear"); return; }
-    send_ok(c, "MKDIR_REPLY", id);
-}
-
-static void handle_rename(sock_t c, long id, const json_obj_t* obj) {
-    char from[PATH_MAX_SIM], to[PATH_MAX_SIM];
-    if (json_get_str(obj, "from", from, sizeof from) < 0 ||
-        json_get_str(obj, "to",   to,   sizeof to)   < 0) {
-        send_err(c, id, "INVALID_PARAM", "faltan from/to"); return;
-    }
-    ensure_parent_dirs(to);
-    if (bpvm_fs_rename(from, to) != 0) { send_err(c, id, "NOT_FOUND", "no se pudo renombrar"); return; }
-    send_ok(c, "RENAME_REPLY", id);
-}
-
-/* Datos de la imagen del FS: hacen falta para re-formatear (cerrar → borrar el
- * fichero → volver a montar formateando), que es como se formatea una flash. */
 static char     g_fs_img[PATH_MAX_SIM] = "";
 static unsigned g_fs_blocks = 0;
 
-static void handle_format(sock_t c, long id, const json_obj_t* obj) {
-    char confirm[8];
-    if (json_get_str(obj, "confirm", confirm, sizeof confirm) < 0 || strcmp(confirm, "YES") != 0) {
-        send_err(c, id, "MISSING_CONFIRM", "confirm:\"YES\""); return;
-    }
+static int sim_fs_format(void) {
     bpvm_fs_lfs_filebd_close();
     remove(g_fs_img);                       /* imagen virgen → el mount la formatea */
-    if (bpvm_fs_register_lfs_filebd(g_fs_img, SECTOR, g_fs_blocks, 1) != 0) {
-        send_err(c, id, "FLASH_ERROR", "no se pudo re-montar el FS"); return;
-    }
-    send_ok(c, "FORMAT_REPLY", id);
+    return bpvm_fs_register_lfs_filebd(g_fs_img, SECTOR, g_fs_blocks, 1);
 }
 
+/* El scratch del PUT. 64 KB porque aquí no cuesta nada y es lo que había: el
+ * sim usaba `malloc(bulk)` sin tope, y el IDE manda de una pieza hasta 40 KB
+ * (por encima trocea con PUT_BEGIN/DATA/END). Un buffer más apretado que el
+ * umbral del IDE convertiría el sim en más estricto que cualquier placa. */
+static unsigned char g_sim_put_buf[64 * 1024];
+
+static const bpvm_repl_ops_t SIM_REPL_OPS = {
+    sim_repl_info,
+    SERVER_NAME,
+    __DATE__ " " __TIME__,
+    "[\"META\",\"FILES\",\"TERMINAL\",\"BOARDMGR\",\"PACKS\"]",
+    g_sim_put_buf,
+    sizeof g_sim_put_buf,
+    NULL,                       /* after_put: littlefs ya persiste */
+    sim_repl_info_extra,
+    sim_fs_total,
+    sim_fs_used,
+    sim_fs_count,
+    sim_fs_format,
+    NULL,                       /* fs_save: idem — el común contesta OK, que es la verdad */
+};
+
+/* ── META ─────────────────────────────────────────────────────────────────── */
+
+/* ── FILES ────────────────────────────────────────────────────────────────── */
+
+
+/* Datos de la imagen del FS: hacen falta para re-formatear (cerrar → borrar el
+ * fichero → volver a montar formateando), que es como se formatea una flash. */
 /* ── TERMINAL: RUN / KILL ─────────────────────────────────────────────────── */
 
 /* Cada print de la VM llega aquí → evento OUTPUT con los bytes escapados. */
@@ -675,7 +559,10 @@ static int sim_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof type);
     long rid = json_get_long(&obj, "id", 0);
     if (!strcmp(type, "KILL"))  { g_kill_ack_id = rid; return 1; }
-    if (!strcmp(type, "HELLO")) { handle_hello(g_cli, rid); return 0; }
+    /* U3.24 — el saludo lo construye el REPL comun (misma forma que en placa):
+     * el IDE puede conectar con algo corriendo y necesita el HELLO para
+     * ofrecer Stop. Lo demas se rechaza con BUSY. */
+    if (!strcmp(type, "HELLO")) { (void) bpvm_repl_dispatch("HELLO", rid, &obj); return 0; }
     send_err(g_cli, rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
@@ -917,15 +804,14 @@ static void handle(sock_t c, const json_obj_t* obj) {
         if (dcmd.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &dcmd)) return;
     }
 
+    /* U3.24 — EL COMUN PRIMERO. META (HELLO/PING/INFO/TIME/LOG_*) y FILES
+     * (LIST, LIST_DIR, STAT, DF, GET, los tres PUT, DEL, MKDIR, RMDIR, RENAME,
+     * FORMAT y SAVE) los
+     * atiende `src/bpvm_repl.c`, el mismo fichero que las cuatro placas. Abajo
+     * solo queda lo que es de verdad del sim. */
+    if (bpvm_repl_dispatch(type, id, obj)) return;
+
     /* META */
-    if (!strcmp(type, "HELLO")) { handle_hello(c, id); return; }
-    if (!strcmp(type, "PING"))  { send_ok(c, "PONG", id); return; }
-    if (!strcmp(type, "INFO"))  { handle_info(c, id); return; }
-    if (!strcmp(type, "TIME"))  {
-        long epoch = json_get_long(obj, "epochSec", 0);
-        if (epoch > 0) bpvm_rtc_set_now_ms((int64_t) epoch * 1000);
-        send_ok(c, "TIME_REPLY", id); return;
-    }
     if (!strcmp(type, "RESET")) {
         /* No hay silicio que rebootear: se contesta y se corta la conexión, que
          * es lo que ve el IDE en una placa. El estado vive en la "flash". */
@@ -934,21 +820,6 @@ static void handle(sock_t c, const json_obj_t* obj) {
         g_cli = BAD_SOCK;
         return;
     }
-
-    /* FILES */
-    if (!strcmp(type, "LIST"))       { handle_list(c, id); return; }
-    if (!strcmp(type, "STAT"))       { handle_stat(c, id, obj); return; }
-    if (!strcmp(type, "DF"))         { handle_df(c, id); return; }
-    if (!strcmp(type, "GET"))        { handle_get(c, id, obj); return; }
-    if (!strcmp(type, "PUT"))        { handle_put(c, id, obj); return; }
-    if (!strcmp(type, "PUT_BEGIN"))  { handle_put_begin(c, id, obj); return; }
-    if (!strcmp(type, "PUT_DATA"))   { handle_put_data(c, id, obj); return; }
-    if (!strcmp(type, "PUT_END"))    { handle_put_end(c, id); return; }
-    if (!strcmp(type, "DEL"))        { handle_del(c, id, obj); return; }
-    if (!strcmp(type, "MKDIR"))      { handle_mkdir(c, id, obj); return; }
-    if (!strcmp(type, "RENAME"))     { handle_rename(c, id, obj); return; }
-    if (!strcmp(type, "FORMAT"))     { handle_format(c, id, obj); return; }
-    if (!strcmp(type, "SAVE"))       { send_ok(c, "SAVE_REPLY", id); return; }  /* littlefs ya persiste */
 
     /* TERMINAL */
     if (!strcmp(type, "RUN"))  { handle_run(c, id, obj); return; }
@@ -1107,6 +978,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "sim: no se pudo montar el FS sobre %s\n", g_fs_img);
         return 1;
     }
+    bpvm_repl_set_ops(&SIM_REPL_OPS);   /* U3.24: la cintura, antes del primer mensaje */
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
 
     /* H10 — el panel simulado. Se fija ANTES de que ningún programa cree el

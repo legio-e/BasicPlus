@@ -2653,6 +2653,50 @@ Y estaba anotado: el `Makefile` dice *«los CUATRO firmwares (+ el simulador cua
 y es la misma forma del hallazgo de `#455` (el sim trae su propio `handle_put`). Es lo que
 `#444` necesita para no ser sólo un deseo.
 
+##### ✅ `U3.24` — **el simulador migra al REPL común** (31-ago): un viaje a la placa se convierte en `make sim-smoke`
+
+Consecuencia directa del bug de arriba, y hecho el mismo día. `bpvm-sim` tenía **21 verbos
+propios**: un REPL entero paralelo, en el host, que `sim_smoke.py` ejercita por el wire. O sea
+que la herramienta capaz de cazar un fallo del REPL común en segundos **existía… y miraba otro
+código**.
+
+| | antes | ahora |
+|---|---|---|
+| verbos propios del sim | **21** | **4** (`RUN` `KILL` `RESET` `STATE`+`ENV_*`/`PART_*`/`PACK_*`) |
+| `tools/bpvm_sim.c` | 964 líneas | **840** (−124) |
+| verbos que el sim **no tenía** | — | **gana `LIST_DIR` y `RMDIR`** |
+
+La cintura del sim son **13 campos** (`bpvm_repl_ops_t`), de los cuales sólo dos son de verdad
+suyos: el silicio de mentira que se pide por línea de comandos (`--mem`, `--psram`, `--flash`,
+`--screen`) y el formateo, que aquí es *cerrar la imagen, borrar el fichero y volver a montar*.
+
+🎯 **El control — y esto es lo que da valor al paso.** Con el arnés ya migrado, **se volvió a
+meter el bug de `U3.23`** (el `memset` por la inicialización campo a campo) y se corrió:
+
+```
+$ make sim-smoke                       # con el bug DENTRO
+  ok  : LIST tras formatear → vacío                     ← pasa igual (FS vacío = 0 entradas)
+  FAIL: LIST → ruta COMPLETA y tamaño correcto
+  FAIL: LIST → trae crc (el IDE lo usa para saltarse PUTs)
+  [status=FAIL]
+```
+
+Lo que ayer costó **flashear una P4 y verlo dar timeout**, hoy son **12 segundos en el host**.
+Y de paso enseña algo del arnés: la comprobación que *parece* cubrir `LIST` (la del FS recién
+formateado) **pasa con el bug vivo**; la que lo caza es la que tiene contenido. Un camino
+ejecutado no es un camino probado — [[test-fuerza-el-caso-que-el-programa-real-no-da]].
+
+📌 **Se borran los handlers propios, no se sombrean.** Un handler de la familia que gane al
+común deja el común **sin ejercitar**, que es exactamente el agujero por el que se coló esto.
+
+⚠️ **Un cambio de comportamiento, a propósito**: `TIME` sin `epochSec` contestaba `OK` en el
+sim y ahora dice `INVALID_PARAM`. Es la unificación ya acordada en `U3.1` («gana la Pico: el
+error se DICE»), que las cuatro placas llevan desde el 26-ago; el sim era el que se había
+quedado atrás.
+
+✅ **Verificado**: `sim-smoke` **25/25**, `boardsim-smoke` verde, paridad **38 PASS / 0 FAIL /
+0 SKIP**, y `LIST_DIR`/`RMDIR` probados a mano contra el sim en marcha.
+
 ---
 
 ### 🏁 `U3` — CERRADO (31-ago)
@@ -2664,6 +2708,7 @@ Verbos que cada familia sigue despachando por su cuenta, y **todos por diseño**
 | **STM32** | **0** | — |
 | **ESP32** | `RUN` `RESET` | tocan la sesión de la VM y la placa |
 | **Pico** | `RUN` `RESET` `BOOTSEL` `SD_INFO` `SD_MOUNT` | + hardware que sólo tiene el RP2350 |
+| **sim** | `RUN` `RESET` `KILL` `STATE` | + la gestión de placa, que ya es núcleo compartido (`U3.24`) |
 
 **Con esto la parte de comunicaciones de la unificación queda cerrada** — que es lo que
 Eduardo señaló como condición para que el C3 y el C6 salgan «casi gratis».

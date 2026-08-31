@@ -27,6 +27,25 @@
 
 ## Última sesión
 
+### `U3.24` — el simulador al REPL común: el arnés que faltaba
+
+Cerrado `U3` (las comunicaciones), quedaba una deuda que el propio bug del `LIST` había dejado
+por escrito: **`bpvm-sim` era el quinto consumidor del REPL y no había migrado**. 21 verbos
+propios, ejercitados por el wire desde `sim_smoke.py`… contra su propio código.
+
+Migrado. El sim baja a **4 verbos propios** (`RUN`, `KILL`, `RESET` y la gestión de placa) y
+`tools/bpvm_sim.c` pierde 124 líneas. De regalo gana `LIST_DIR` y `RMDIR`, que no tenía.
+
+**Y con control, que es lo que lo hace valer:** se volvió a meter el bug de ayer (el `memset`)
+y `make sim-smoke` lo cazó — `FAIL` en las dos comprobaciones de `LIST` con contenido. Doce
+segundos en el host contra el viaje a la P4 de ayer.
+
+Detalle fino que conviene recordar: la comprobación *«LIST tras formatear → vacío»* **pasa con
+el bug vivo**. Cubre el verbo pero no el camino. La que caza es la que tiene ficheros dentro.
+
+Verificado: `sim-smoke` 25/25, `boardsim-smoke` verde, paridad 38 PASS / 0 FAIL / 0 SKIP.
+
+
 ## ⏭️ AL RETOMAR (31-ago, cierre 2) — dos cosas del IDE
 
 ### ✅ `#463` — `Core.mod` se subía a `/app` y creaba un override sin querer
