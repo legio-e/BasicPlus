@@ -1542,9 +1542,41 @@ quantum por opcodes»* — como una diferencia de comportamiento entre VMs, sin 
 se convierte en 400 ms de latencia.
 
 🔧 **Construido el mando para PROBARLO en vez de creérselo** (`quantum=N` en el ENV, mismo
-patrón que el `stack=N` de `#450`, en las cuatro familias). La predicción es falsable:
-**bajar el quantum debe bajar la latencia proporcionalmente**. Con `quantum=32`, ~9 vueltas
-≈ 13 ms. Si no baja, esta explicación es falsa y hay que buscar en otro sitio.
+patrón que el `stack=N` de `#450`, en las cuatro familias).
+
+### ✅ Probado en la Discovery (31-ago): la hipótesis acierta **a medias**, y eso vale más
+
+| `quantum` | vueltas | latencia medida |
+|---|---|---|
+| 1024 (por defecto) | ~293 | **393-420 ms** |
+| **32** | ~9 | **63-64 ms** |
+
+**Baja, pero NO proporcionalmente**: 32× menos quantum da sólo **6,3×** menos latencia. Ajuste
+sobre los dos puntos:
+
+```
+lat = 1,19 ms/vuelta × vueltas  +  52 ms de SUELO
+```
+
+✅ El **1,19 ms por vuelta** confirma el mecanismo del quantum (estimado ~1,4 antes de medir).
+🔴 Pero hay **un suelo de ~52 ms que el quantum no toca**: una SEGUNDA causa, independiente.
+
+⚠️ **Y ese ajuste todavía no vale**: son dos parámetros sobre dos medidas, así que encaja por
+construcción. **Predicción falsable pendiente**: con `quantum=128` (~36 vueltas) el modelo dice
+**~95 ms**. Si sale eso, el suelo es real; si sale otra cosa, era sobreajuste.
+
+🔍 **Sospechoso del suelo**: `LV_DEF_REFR_PERIOD = 33 ms` (`include/lv_conf.h:82`), el periodo
+de refresco de LVGL. Explica buena parte de 52, no los 52. *(Ojo: la latencia se mide desde el
+upcall, o sea que la detección del clic queda FUERA — el suelo está entre el `raise` y el
+handler.)*
+
+### 🐛 Y un error SILENCIOSO que el quantum destapó
+
+Con `quantum=32` el `stop` pasa a reportarse **`exit 130 (KILLED)`**; con 1024 decía
+**`exit 0 (OK)`**. Con el quantum grande el KILL llegaba en un punto donde `Gui.run()` devolvía
+por su cuenta y el programa terminaba «normal» — o sea que **un programa MATADO decía que había
+salido con éxito**. Es un fallo de los que no hacen ruido, y no lo buscábamos: salió de cambiar
+un número para medir otra cosa.
 
 🐛 **Y de paso, una ineficiencia real en el bucle más caliente del GUI**: `GUI_RUN_ONCE`
 recorre **toda la tabla de símbolos con `strcmp`** en CADA pasada, para encontrar dos
