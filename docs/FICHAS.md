@@ -590,7 +590,7 @@ a mano la aritmética de las bases. Ahora trae **módulo+offset** y los **8 byte
 alrededor**, que parten la investigación en dos: coinciden con el `.mod` → el PC llegó mal;
 no coinciden → el código está pisado. Cerró el diagnóstico de #440 en una ejecución.
 
-#### 🟡 `#441` — seis opcodes que la VM-Java tiene y la VM-C no (abierta 27-ago)
+#### ✅ `#441` — seis opcodes que la VM-Java tenía y la VM-C no (cerrada 31-ago)
 
 `GET_GLOBAL_I8/U8/I16/U16` y `SET_GLOBAL_I8/I16` (0x40–0x45) están **declarados** en
 `bpvm_opcodes.h` y **no tienen `case`** en `src/interp.c`. `VirtualMachine.java` los
@@ -600,6 +600,33 @@ familia está viva en el formato y muerta en una de las dos VMs.
 
 Salió al perseguir #440 (el `0x43` del síntoma es `GET_GLOBAL_U16`). **No es su causa** —el
 mismo `.mod` corre en el host—, pero es real y conviene cerrarlo: son seis casos triviales.
+
+### ✅ Cerrada — y el test YA EXISTÍA, sólo que nunca se había corrido contra la VM-C
+
+Implementados en `interp.c` calcados de `VirtualMachine.java` (offset `i16` big-endian,
+extensión de signo en los `I*`, relleno de ceros en los `U*`, truncado a los bytes bajos al
+escribir).
+
+📌 **Lo que costó encontrar no fue el arreglo, fue el test.** El compilador **no emite**
+estos opcodes, así que ningún programa BP los alcanza y el arnés no puede verlos. Pero
+`miVM/.../MainNarrow.java` los ejercita **los seis** con el `ModWriter`, fabricando
+`NarrowDemo.mod` a mano. Existía desde antes y nadie lo había pasado por la VM-C.
+
+🔴 **Con control en rojo, y salió limpio.** Antes de reconstruir, la VM-C con el `.mod`:
+
+```
+[bpvm-c] opcode 0x40 desconocido en PC 295 = NarrowDemo+3
+[bpvm-c]   bytes @291: 00 0F 00 04 [40] FF FC 03
+```
+
+Después: **los 19 valores byte a byte iguales** en las dos VMs (`-1`, `255`, `-1`, `65535`,
+`-56`, `-32000`, `32767`…). Paridad **38 PASS / 0 FAIL / 0 SKIP** y las cuatro imágenes
+reconstruidas (`interp.c` es núcleo: entra en las cuatro).
+
+⚠️ **Un detalle menor que salió de paso**: con el `PRINT` **crudo** la VM-Java antepone
+`VM [PRINT]: ` y la VM-C no. Los VALORES coinciden; el adorno no. No afecta al invariante
+en la práctica porque el compilador nunca emite ese opcode —sólo lo usan los `.mod`
+fabricados a mano—, pero conviene saberlo si algún día se compara uno de ésos byte a byte.
 
 #### ✅ `#442`(enunciado) — «opcode desconocido» manda a buscar donde no es · CERRADA, ver arriba
 

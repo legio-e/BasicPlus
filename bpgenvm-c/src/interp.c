@@ -902,6 +902,53 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i32_be(mem + (uint32_t)((int32_t)cs + soff), v);
             break;
         }
+        /* #441 — GLOBALES ESTRECHAS (byte/short). Estaban DECLARADAS en
+         * `bpvm_opcodes.h` y sin `case` aquí, mientras `VirtualMachine.java` sí las
+         * implementaba: una violación del invariante sagrado, viva en el formato y
+         * muerta en una de las dos VMs. No mordía porque ningún sample tiene una
+         * global `byte` o `short` y el compilador de hoy tampoco las emite — o sea
+         * que el arnés no podía verlo, y por eso el test hay que escribirlo aparte.
+         *
+         * Calcadas de la VM-Java (líneas 2939-2976): el offset es i16 big-endian, la
+         * carga extiende signo (I*) o rellena con ceros (U*), y el almacenamiento
+         * trunca a los bytes bajos. Big-endian también dentro del dato, como todo
+         * aquí. */
+        case OP_GET_GLOBAL_I8: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int8_t v = (int8_t) mem[(uint32_t)((int32_t)cs + soff)];
+            bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4; break;
+        }
+        case OP_GET_GLOBAL_U8: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            uint8_t v = mem[(uint32_t)((int32_t)cs + soff)];
+            bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4; break;
+        }
+        case OP_GET_GLOBAL_I16: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            uint32_t addr = (uint32_t)((int32_t)cs + soff);
+            int32_t raw = ((int32_t) mem[addr] << 8) | (int32_t) mem[addr + 1];
+            bpvm_write_i32_be(mem + sp, (int32_t)(int16_t) raw); sp += 4; break;
+        }
+        case OP_GET_GLOBAL_U16: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            uint32_t addr = (uint32_t)((int32_t)cs + soff);
+            int32_t raw = ((int32_t) mem[addr] << 8) | (int32_t) mem[addr + 1];
+            bpvm_write_i32_be(mem + sp, raw); sp += 4; break;
+        }
+        case OP_SET_GLOBAL_I8: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            mem[(uint32_t)((int32_t)cs + soff)] = (uint8_t)(v & 0xFF);
+            break;
+        }
+        case OP_SET_GLOBAL_I16: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            uint32_t addr = (uint32_t)((int32_t)cs + soff);
+            mem[addr]     = (uint8_t)((v >> 8) & 0xFF);
+            mem[addr + 1] = (uint8_t)( v       & 0xFF);
+            break;
+        }
         case OP_LEA_GLOBAL: {   /* H1.2a: dirección de global (string-const/array fijo) = ref 8 bytes */
             int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
             bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
