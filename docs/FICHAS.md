@@ -2521,18 +2521,50 @@ puerta del boot, que no son handlers):
 *En cursiva, los que se quedan **por diseño**: `RUN`/`RESET` tocan la sesión de la VM y la
 placa, y `BOOTSEL`/`SD_*` son hardware que sólo tiene el RP2350.*
 
-**Así que lo pendiente de verdad son DOS verbos:**
+##### ✅ `U3.22` — `LIST_DIR` al común, y el STM32 lo GANA (31-ago)
+
+El envoltorio que quedaba en la Pico (21 líneas) y en el ESP32 (17), al común. **Comparados
+línea a línea antes de borrar** —el gesto que hoy ya salvó el `server_name` y el `mkdir` de
+`#455`— y salieron **idénticos salvo el transporte**:
+
+| | sink | cierre de línea |
+|---|---|---|
+| Pico | `fwrite(stdout)` | `fputc('
+')` + `fflush` |
+| ESP32 | `wire_v1_send_bulk` | `wire_v1_send_line("", 0)` |
+
+Y en el Pico **esas dos cosas SON** `wire_v1_send_bulk` y `wire_v1_send_line` (el mismo
+`fwrite`+`fflush`), así que usar el contrato deja **los mismos bytes en el cable** — y de
+paso el Pico gana el `tx_lock` que su atajo se saltaba.
+
+🎁 **El STM32 gana `LIST_DIR`, y a coste CERO de build**: `bpvm_listdir.o` ya estaba en su
+binario —su proyecto compila `src/` por carpetas— compilado y sin que nadie lo llamara. Es
+el mismo patrón que `bpvm_pack_mount` en el P4 (ver [[arreglo-que-no-viaja-entre-familias]]):
+código que viaja en el binario y al que nadie encaminó el verbo.
+
+📖 **Y la documentación se mudó con el código**, que es donde sirve: el bloque que explica
+por qué `LIST` y `LIST_DIR` son verbos DISTINTOS (y por qué el listado se hace en dos
+tiempos, para no retener el cerrojo del FS mientras el host lee) vivía en el Pico y ahora
+está en `bpvm_repl.c`.
+
+⚠️ **Un susto propio, y la lección**: la expresión con la que quité la línea del despachador
+era **demasiado glotona** y se llevó también una línea de la condición multilínea de la
+puerta del boot (`is_fs`), que contiene el mismo `strcmp`. Lo cazó el compilador al instante
+(`'is_fs' undeclared`), pero el aviso es real: *borrar por patrón en un fichero grande
+necesita mirar el `git diff` después, no antes*.
+
+✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP** y **las cinco imágenes**
+reconstruidas — Pico, S3, P4, **C3** y STM32 Nucleo, todas posteriores al cambio.
+
+**Así que lo pendiente de verdad es UN verbo:**
 
 1. 🟡 **`LIST`** — sólo le queda al ESP32 (la Pico y el STM32 ya usan el común). **Parado a
    propósito**: el ESP32 imprime un desglose por raíz (`ls: 25 ent en 160 ms | app:11/50ms
    lib:14/64ms`) que el común no tiene, y migrarlo tal cual sería **unificar hacia abajo** —
    el error que `#455` demostró que se comete solo. Lo correcto es subir el desglose, y
    entonces la Pico y el STM32 lo **ganan**.
-2. 🟢 **`LIST_DIR`** — casi hecho y nadie lo había mirado: **el núcleo ya es común**
-   (`src/bpvm_listdir.c`, lo enlazan Pico, S3 y P4) y lo que queda son envoltorios de **21
-   líneas en la Pico y 17 en el ESP32**. Sólo falta la entrada del verbo.
-   ⚠️ El STM32 **no tiene `LIST_DIR` en absoluto** — eso no es unificación, es funcionalidad
-   que no existe, y está fuera de la serie U a propósito.
+2. ✅ ~~**`LIST_DIR`**~~ — **hecho en `U3.22`** (arriba). Y el STM32, que no lo tenía, lo
+   ganó de regalo.
 
 🔗 **Y conviene hacerlo junto con `#461`**: los buffers de tamaño fijo del listado (7,5 KB de
 `.bss` en el ESP32 para ~1,5 KB de nombres) están **en ese mismo camino**. Tocarlo dos veces

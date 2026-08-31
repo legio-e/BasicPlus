@@ -54,7 +54,6 @@
 #include "bpvm_sqlmem.h"   /* V5/H: motivo + minimo, para el aviso del INFO */
 #include "bpvm_sd.h"       /* V5/H1: SD_INFO — la tarjeta se prueba desde aqui */
 #include "bpvm_sd_blk.h"   /* V5/H6: la misma SD como dispositivo de bloque    */
-#include "bpvm_listdir.h" /* V5/H6: LIST_DIR, nucleo comun a las familias    */
 #include "bpvm_fs_fat.h"   /* V5/H2: SD_MOUNT — la tarjeta como sistema de ficheros */
 
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
@@ -463,61 +462,16 @@ static void sd_vigilar_tick(void) {
 }
 
 /* ============================================================ */
-/* LIST_DIR — V5/H2: las entradas de UN directorio
+/* V6/U3.22 — LIST_DIR vive en el COMÚN (`src/bpvm_repl.c`), envoltorio incluido.
  *
- * VERBO NUEVO, no un LIST arreglado. LIST es carga estructural del Run (el
- * IDE salta los PUT comparando el CRC que trae cada entrada), y la norma de
- * V5 es añadir sin mover cimientos. Pero es que además responden a preguntas
- * DISTINTAS, y confundirlas es lo que hacía esto difícil:
+ * El núcleo (`bpvm_listdir_emitir`) ya era común desde V5/H6 — salió justamente de
+ * aquí. Lo que quedaba en esta placa eran 21 líneas, comparadas línea a línea con
+ * las 17 del ESP32 antes de borrar: idénticas salvo el transporte. Y en el Pico
+ * `wire_v1_send_bulk` ES el mismo `fwrite(stdout)+fflush` que hacía el sink local,
+ * con el `tx_lock` que el atajo se saltaba: mismos bytes en el cable.
  *
- *   · LIST     = "todo el FS interno, con CRC" — lo que necesita el Run.
- *   · LIST_DIR = "los hijos de ESTE directorio" — lo que necesita mirar.
- *
- * Y con una SD montada la diferencia deja de ser estética: LIST recorre el FS
- * ENTERO y calcula el CRC de cada fichero, o sea que sobre una tarjeta de
- * 119 GB se leería la tarjeta entera byte a byte por SPI. Aquí no hay CRC ni
- * recursión a propósito, no por ahorrar.
- *
- * El listado se hace en dos tiempos —fotografiar y luego emitir— y eso NO es
- * un rodeo: el callback de la fachada corre DENTRO del cerrojo del sistema de
- * ficheros, así que escribir al USB desde ahí retendría el cerrojo todo el
- * rato que el host tarde en leer, y cualquier thread BP que tocara un fichero
- * se quedaría esperando. Mismo motivo por el que fs_list ya lo hacía así.
- */
-
-/* V5/H6 paso 3 — el cuerpo del verbo se fue a `src/bpvm_listdir.c`, común a
- * las familias. Aquí queda lo único que es DE ESTA PLACA: por dónde sale el
- * texto (stdout, que es su transporte) y con qué palabras se contesta el error.
- *
- * Lo movió el P4: usa el despachador del S3 y se quedó sin LIST_DIR, así que el
- * IDE le caía al LIST con CRC — o sea, leerse la tarjeta entera para pintar un
- * árbol. */
-static void sink_stdout(const char* txt, size_t n, void* user) {
-    (void) user;
-    fwrite(txt, 1, n, stdout);
-}
-
-static void handle_list_dir(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        snprintf(path, sizeof path, "/");        /* sin path = la raíz */
-    }
-
-    switch (bpvm_listdir_emitir(path, id, sink_stdout, NULL, NULL)) {
-    case BPVM_LISTDIR_OCUPADO:
-        wire_v1_send_error(id, "BUSY", "zona de scratch ocupada");
-        return;
-    case BPVM_LISTDIR_NO_LISTA:
-        wire_v1_send_error(id, "NOT_FOUND", "no se puede listar");
-        return;
-    case BPVM_LISTDIR_OK:
-        break;
-    }
-    /* El cierre de línea lo pone el transporte: es lo único que cada familia
-     * hace distinto, y por eso el núcleo no lo escribe. */
-    fputc('\n', stdout);
-    fflush(stdout);
-}
+ * La documentación de por qué LIST y LIST_DIR son verbos DISTINTOS se fue con el
+ * código, que es donde sirve. */
 
 /* ============================================================ */
 /* SD_MOUNT — V5/H2: montar la tarjeta como sistema de ficheros
@@ -1530,7 +1484,6 @@ void repl_v1_handle_request(int first_char) {
     /* FILES */
     if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
     if (strcmp(type, "SD_MOUNT") == 0) { handle_sd_mount(id, &obj); return; }  /* V5/H2 */
-    if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H2 */
     /* V6/U3 — el común, DESPUÉS de los propios y no antes (al revés que el
      * STM32) porque esta familia se migra por grupos: lo que esta placa siga
      * implementando gana, y lo que ya no, cae aquí. Al terminar la migración

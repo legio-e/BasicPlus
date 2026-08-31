@@ -11,6 +11,7 @@
 #include "bpvm_wire_v1.h"
 #include "bpvm_log.h"
 #include "bpvm_fs.h"
+#include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
 #include "bpvm_rtc.h"
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
 
@@ -730,6 +731,67 @@ static void repl_put_end(long id, const json_obj_t* obj) {
     reply_put_field("PUT_END_REPLY", id, recv, "size");
 }
 
+/* ── LIST_DIR ─────────────────────────────────────────────────────────────────
+ *
+ * VERBO DISTINTO DE `LIST`, no un LIST arreglado — y confundirlos es lo que hacía
+ * esto difícil. Responden a preguntas diferentes (doc que viene del Pico, V5/H2):
+ *
+ *   · LIST     = «todo el FS interno, con CRC» — lo que necesita el Run.
+ *   · LIST_DIR = «los hijos de ESTE directorio» — lo que necesita mirar.
+ *
+ * Con una SD montada la diferencia deja de ser estética: `LIST` recorre el FS
+ * ENTERO y calcula el CRC de cada fichero, o sea que sobre una tarjeta de 119 GB
+ * se leería la tarjeta entera byte a byte. Aquí no hay CRC ni recursión **a
+ * propósito**, no por ahorrar.
+ *
+ * El listado se hace en dos tiempos —fotografiar y luego emitir— y eso NO es un
+ * rodeo: el callback de la fachada corre DENTRO del cerrojo del FS, así que
+ * escribir al transporte desde ahí retendría el cerrojo todo lo que el host tarde
+ * en leer, y cualquier thread BP que tocara un fichero se quedaría esperando.
+ *
+ * ── V6/U3.22: el envoltorio, también al común ────────────────────────────────
+ * El listado de UN directorio. El NÚCLEO (`bpvm_listdir_emitir`) ya era común
+ * desde V5/H6 —salió del REPL del Pico— y lo enlazaban las cuatro familias; lo
+ * único que quedaba repartido era este envoltorio: 21 líneas en la Pico y 17 en
+ * el ESP32, y **casi idénticas**. Comparadas antes de borrar, la única
+ * diferencia era el TRANSPORTE:
+ *
+ *   Pico  : sink = fwrite(stdout)          cierre = fputc('
+') + fflush
+ *   ESP32 : sink = wire_v1_send_bulk       cierre = wire_v1_send_line("", 0)
+ *
+ * Y en el Pico esas dos cosas SON `wire_v1_send_bulk` y `wire_v1_send_line`
+ * (mismo `fwrite`+`fflush`), así que usar el contrato deja los mismos bytes en
+ * el cable — y de paso el Pico gana el `tx_lock` que su atajo se saltaba.
+ *
+ * 🎁 El STM32 GANA el verbo, y a coste cero de build: `bpvm_listdir.o` ya estaba
+ * en su binario (su proyecto compila `src/` por carpetas) — compilado y sin que
+ * nadie lo llamara. */
+static void repl_listdir_sink(const char* txt, size_t n, void* user) {
+    (void) user;
+    wire_v1_send_bulk((const uint8_t*) txt, n);
+}
+
+static void repl_list_dir(long id, const json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof path) < 0)
+        snprintf(path, sizeof path, "/");        /* sin path = la raíz */
+
+    switch (bpvm_listdir_emitir(path, id, repl_listdir_sink, NULL, NULL)) {
+        case BPVM_LISTDIR_OCUPADO:
+            wire_v1_send_error(id, "BUSY", "zona de scratch ocupada");
+            return;
+        case BPVM_LISTDIR_NO_LISTA:
+            wire_v1_send_error(id, "NOT_FOUND", "no se puede listar");
+            return;
+        case BPVM_LISTDIR_OK:
+            break;
+    }
+    /* El cierre de línea lo pone el llamante: es lo único que el núcleo no
+     * escribe, justo porque cada transporte lo hace a su manera. */
+    wire_v1_send_line("", 0);
+}
+
 int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
@@ -757,6 +819,7 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
         wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
         return 1;
     }
+    if (strcmp(type, "LIST_DIR") == 0) { repl_list_dir(id, obj); return 1; }  /* U3.22 */
     if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
     /* ── grupo 4: los de la cintura ── */
     if (strcmp(type, "HELLO")  == 0) { if (!sin_ops(id, "HELLO"))  repl_hello(id);       return 1; }
