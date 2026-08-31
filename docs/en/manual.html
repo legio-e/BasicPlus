@@ -207,11 +207,9 @@
     <li class="sub"><a href="#library">10.1 library</a></li>
     <li class="sub"><a href="#main">10.2 main / initializer</a></li>
     <li class="sub"><a href="#imports">10.3 import / from</a></li>
-    <li class="sub"><a href="#interfaces">10.4 module interface</a></li>
-    <li class="sub"><a href="#implements">10.5 implements</a></li>
-    <li class="sub"><a href="#binding">10.6 Binding I:Impl</a></li>
+    <li class="sub"><a href="#interfaces">10.4 module interface (retirado)</a></li>
     <li class="sub"><a href="#encapsulacion">10.7 Class↔module encapsulation</a></li>
-    <li class="sub"><a href="#dospasadas">10.8 Two passes and cycles between modules</a></li>
+    <li class="sub"><a href="#dospasadas">10.6 Two passes and cycles between modules</a></li>
 
     <li class="group"><a href="#excepciones">11. Exceptions</a></li>
     <li class="group"><a href="#owner">12. Owner semantics</a></li>
@@ -1300,70 +1298,23 @@ Counter.bump()</code></pre>
       source <code>.bp</code> by deriving the path.</li>
 </ul>
 
-<h3 id="interfaces">10.4 <code>module interface</code></h3>
-<pre><code><span class="kw">library</span> <span class="str">"com.example"</span>
-<span class="kw">module interface</span> LogApi
-  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
-  <span class="kw">public function</span> level(): <span class="type">integer</span>
-  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
-<span class="kw">end</span> LogApi</code></pre>
-<p>
-  An interface is a contract (a Modula-2 <code>DEFINITION MODULE</code>): public
-  signatures only, no function bodies. It compiles to interface only (flag <code>interface true</code>) and produces no <code>.mod</code>.
-</p>
-<p>
-  Interfaces can extend another interface (contract inheritance):
-</p>
-<pre><code><span class="kw">module interface</span> LogApiV2 <span class="kw">extends</span> com.example.LogApi
-  <span class="kw">public function</span> logWithLevel(lvl: <span class="type">integer</span>, msg: <span class="type">string</span>)
-  <span class="kw">public function</span> flush()
-<span class="kw">end</span> LogApiV2</code></pre>
+<h3 id="interfaces">10.4 <code>module interface</code> — <span class="kw">WITHDRAWN</span></h3>
+<p><strong>BasicPlus has no interfaces.</strong> Not for classes —which would be the
+defensible case— and not for modules. The sections that described
+<code>module interface</code>, <code>implements</code> and the
+<code>import Contract:Impl</code> binding are withdrawn from the language (Eduardo's
+decision, 30-Aug-2026), along with the samples that used them.</p>
+<p>What those three sections were after —<em>evolving a module without breaking its
+users</em>— is still a goal, and the intended shape is <strong>module
+inheritance</strong>: keep the original module and add one that inherits from it. It is
+<strong>deliberately on hold</strong>, because it needs effective version control that
+does not exist yet. It will be revisited then.</p>
+<p>To compose functionality today: plain <code>import</code> (§10.3) and <strong>class
+inheritance</strong> (§9), which does exist and is used — the standard library has 38
+cases, from <code>SyncList extends Core.List</code> to
+<code>RuntimeError extends Exception</code>.</p>
 
-<h3 id="implements">10.5 <code>implements</code></h3>
-<pre><code><span class="kw">module</span> ConsoleLogger <span class="kw">implements</span> com.example.LogApi
-  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
-    <span class="kw">print</span> <span class="str">"[CON] "</span> + msg
-  <span class="kw">end</span> log
-  <span class="kw">public function</span> level(): <span class="type">integer</span>
-    <span class="kw">return</span> <span class="num">0</span>
-  <span class="kw">end</span> level
-  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
-<span class="kw">end</span> ConsoleLogger</code></pre>
-<p>
-  The analyzer verifies that the module exposes ALL the contract's signatures
-  (functions with identical types, consts with the same type, enums with the
-  same members and values). The impl may freely add public <em>extras</em> not
-  required by the contract. Typical errors:
-</p>
-<ul>
-  <li><code>does not implement the function 'foo' required by 'I'</code></li>
-  <li><code>function 'foo': declared return 'float', 'integer' was expected</code></li>
-  <li><code>function 'foo' required by 'I' must be public</code></li>
-</ul>
-
-<h3 id="binding">10.6 Binding <code>import I:Impl</code></h3>
-<pre><code><span class="kw">module</span> App
-  <span class="kw">import</span> com.example.LogApi:ConsoleLogger
-  <span class="comment">// Equivalent with from:
-  // import com.example.LogApi:ConsoleLogger from "plugins/logger.mod"</span>
-
-  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
-    LogApi.log(<span class="str">"hi"</span>)          <span class="comment">// types against LogApi; CALL_EXT to ConsoleLogger.log</span>
-  <span class="kw">end</span> main
-<span class="kw">end</span> App</code></pre>
-<p>
-  Compile-time: the <code>LogApi</code> namespace is typed against the
-  interface. Codegen: each <code>LogApi.x</code> emits <code>CALL_EXT</code> to
-  the bound impl. Switching impl = editing the binding line and recompiling.
-</p>
-<p>
-  <strong>LSP compatibility</strong>: <code>import LogApi:BufferedLogger</code>
-  is valid even if <code>BufferedLogger</code> declares
-  <code>implements LogApiV2</code> and <code>LogApiV2 extends LogApi</code>.
-  The driver walks the <code>implements → extends</code> chain.
-</p>
-
-<h3 id="encapsulacion">10.7 Class ↔ module encapsulation</h3>
+<h3 id="encapsulacion">10.5 Class ↔ module encapsulation</h3>
 <p>
   From inside a class, only <strong>public</strong> module symbols are
   accessible (functions, consts, vars, properties). Types (classes, enums,
@@ -1383,7 +1334,7 @@ Counter.bump()</code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
-<h3 id="dospasadas">10.8 Two passes: why modules can call each other</h3>
+<h3 id="dospasadas">10.6 Two passes: why modules can call each other</h3>
 <p>The compiler processes each module <strong>twice</strong>:</p>
 <ol>
   <li><strong>Interface pass</strong> &mdash; it walks the declarations and notes

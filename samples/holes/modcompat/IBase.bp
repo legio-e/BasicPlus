@@ -1,3 +1,0 @@
-module interface IBase
-  public function foo(): integer
-end IBase

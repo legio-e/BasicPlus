@@ -20,22 +20,17 @@ fallo está arreglado y vuelven a `samples/`.
 
 ## Qué hay hoy
 
-### `appv1lsp.bp` y `appv2.bp` — la sustitución de Liskov entre interfaces de módulo
+### `CatchSinTipo.bp` — un `catch` sin tipo entregaba un valor roto
 
-`BufferedLogger` implementa `com.example.LogApiV2`, que **extiende** `com.example.LogApi`.
-Un cliente que pide `LogApi` debería aceptarlo, y el propio compilador dice que ese es el
-diseño (`Main.java`: *«el impl puede implementar la interfaz pedida directamente o
-cualquier descendiente de ella»*). Lo rechaza igual:
+Cerrado el 30-ago (`#459`), así que **hoy ya pasa**: se queda como prueba de regresión, que
+es para lo que sirve esta carpeta. Su cabecera lleva escrita la salida correcta.
 
-```
-error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o
-transitivamente; declara com.example.LogApiV2)
-```
+---
 
-`appv2.bp` cae por lo mismo visto del otro lado: *«el módulo importado 'LogApiV2' no expone
-'log'»* — que son los miembros que **hereda**.
+> 🗑️ **Se fueron `appv1lsp.bp` y `appv2.bp`** (30-ago). Demostraban la sustitución de
+> Liskov entre *interfaces de módulo*, y **ese mecanismo se retira del lenguaje** por
+> decisión de Eduardo: *«no hay interfaces para módulos; no las tenemos para clases, que
+> sería más defendible, no las tenemos para módulos»*. Un ejemplo de una función que no
+> existe no es una prueba de regresión: es un recordatorio de algo que decidimos no tener.
+> El porqué, y qué se hace con la herencia entre módulos, en `docs/FICHAS.md`.
 
-📌 **No es regresión de V5** (nada que ver con `any`→`Object`) y está fichado en
-`docs/FICHAS.md` con el diagnóstico: `implSatisfies` es correcto en forma, pero una
-`module interface` pura **no genera `.mod`**, así que la cadena sólo se recorre
-recompilando la interfaz en modo `INTERFACE_ONLY` — la pasada con el bug ya aparcado.

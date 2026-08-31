@@ -741,8 +741,9 @@ Agrupa lo que ya está fichado y suelto por el registro. **No duplica: agrupa** 
 de cada una sigue en su sitio.
 
 - 🔴 **La pasada de INTERFAZ no resuelve `Core` implícito** — marcada *V6 OBLIGATORIO*.
-- **La sustitución por LSP entre interfaces de módulo** no funciona *(probablemente el
-  mismo problema visto dos veces que el anterior)*.
+- ~~**La sustitución por LSP entre interfaces de módulo**~~ — 🧊 **DEJA DE SER UN BUG el
+  30-ago**: las interfaces de módulo se retiran del lenguaje (`#460`), así que era la
+  prueba de una función que ya no existe. No se arregla: se va con ella.
 - **`Object` = comodín por referencia** — decidido y diseñado.
 - **Liberación de recursos**: destructor `~Clase()` + `var owner` + `FREE_REF`.
 - **Ficheros como CLASE** — decidido: dos clases y la segunda hereda.
@@ -1078,6 +1079,66 @@ Verificado igual: construye 0 errores, y `text`+`data` = 247.444 B frente a los 
 📌 **Así que las dos placas STM32 tienen ya UNA sola configuración, y es la que se usa.**
 Deja de existir la trampa del nombre. Lo que sí queda pendiente, y es harina de otro costal:
 esa única configuración se llama `Debug` aunque compile a `-Os` y sea la que se publica.
+
+#### 🧊 `#460` — **BasicPlus NO tiene interfaces**: se retiran las de módulo, y la HERENCIA entre módulos queda en suspenso (decidido 30-ago)
+
+**Eduardo, al preguntar qué era el «LSP entre interfaces de módulo»:** *«No entiendo qué es
+`module interface`; nosotros no tenemos interfaces, ni para módulos ni para clases,
+utilizamos herencia entre módulos y entre clases.»* Y al ver el censo: *«No hay interfaces
+para módulos. No las tenemos para clases, que sería más defendible, no las tenemos para
+módulos. […] Las demos de interface van fuera.»*
+
+### Lo que el censo encontró, y por qué le daba la razón
+
+| pregunta | medido en el árbol |
+|---|---|
+| ¿hay `module X extends Y` (herencia entre módulos)? | **CERO casos**, ni en el repo ni en la distribución |
+| ¿herencia entre **clases**? | **38 casos sólo en `bpstdlib`** (`SyncList extends Core.List`, `RuntimeError extends Exception`…) |
+| ¿está `module interface` en la gramática? | **NO** — `basicplus_grammar.ebnf.txt` no menciona `interface` ni una vez |
+| ¿quién lo usaba? | 4 ficheros declaraban `module interface`, 9 `implements`, 6 imports con binding — **todos demos**. Nada de la stdlib, nada de producción |
+| ¿estaba en el manual? | **SÍ**, tres secciones (10.4/10.5/10.6) en ES y EN. Al usuario sí se le prometía |
+
+🔴 **Y además no funcionaba.** `samples/holes/modcompat/` era una guarda de regresión con
+su `README`, y **estaba en rojo sin que nadie la corriera**. Su `UseOK.bp` —que el propio
+README dice que *debe* compilar— falla, y con el mismo mensaje que el caso que *debe*
+fallar:
+
+```
+UseOK  (pido IBase, doy ImplExt):  'ImplExt'  no implementa 'IBase' … declara IExt
+UseBad (pido IExt,  doy ImplBase): 'ImplBase' no implementa 'IExt'  … declara IBase
+```
+
+Rechaza **las dos direcciones igual** ⇒ no recorre el `extends` en absoluto. O sea que lo
+único que el mecanismo añadía sobre un emparejamiento directo —aceptar una implementación
+**más nueva**— era exactamente lo roto. *(Y el `UseBad` «pasaba» sin probar nada: habría
+fallado igual con el recorrido bien hecho.)*
+
+### La decisión, en dos mitades
+
+1. ❌ **Las interfaces de módulo se retiran.** Fuera los 16 `.bp` de demo, el
+   `samples/holes/modcompat/` entero y `samples/plugins/`. Fuera también las tres secciones
+   del manual (ES y EN), sustituidas por una nota que dice qué pasó y a dónde mirar —el
+   ancla `#interfaces` se conserva porque estaba enlazada, y a quien conocía la función hay
+   que decirle algo, no hacerla desaparecer.
+2. 🧊 **La herencia entre módulos se aparca, no se cancela.** *«La idea es que sí, pero hay
+   que aplicarlo bien.»* Su ejemplo es de hoy mismo: **`Math` se amplió editando el código
+   en sitio**, y se podría haber hecho dejando el `Math` original y añadiendo uno nuevo que
+   heredara de él. Lo que falta para eso: *«un control de versiones efectivo, que creo que
+   hoy no tenemos»*. Se retoma cuando lo haya.
+
+📌 **Y ahí está el caso de uso real, que conviene no perder**: el módulo que más ha
+evolucionado es **`Core`**, y ha evolucionado **en sitio** — por eso sus desfases se pagan
+con el `.mod skew` (los cuatro `Core.mod` que se quedan rancios) en vez de con versiones
+que convivan. Cuando se retome, ése es el ejemplo con el que medirlo.
+
+⏭️ **Cabos sueltos, a propósito:**
+- El **compilador sigue aceptando** `module interface`, `implements` y el binding. Quitar
+  ese código es un paso aparte y con su propia verificación; hoy sólo se retira del
+  lenguaje *de cara al usuario* y se le quitan los usuarios.
+- `referencia.html` §17.2 sigue describiendo los campos `interface`/`implements` **del
+  formato `.mod`**, y hace bien: eso es el artefacto, no el lenguaje.
+- Con esto **`appv1lsp`/`appv2` dejan de ser un bug**: eran la prueba de una función que ya
+  no existe. La ficha del LSP se cierra por ahí, no por arreglarla.
 
 #### ✅ `#459` — un `catch` SIN tipo entregaba un valor roto, y **eso se publicó en V5** (cerrada 30-ago)
 
@@ -3628,6 +3689,12 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 > trabajo («hay que hacer X»), así que su sitio es éste.
 
 ### Lenguaje y VM
+
+> 🧊 **CERRADA POR RETIRADA (30-ago, `#460`)**: las interfaces de módulo salen del
+> lenguaje, así que este bug se va con ellas. El texto se conserva porque documenta bien
+> el mecanismo y **el diagnóstico que dejó escrito resultó dudoso** — la traza del 30-ago
+> imprime el `extends` que aquí se daba por ausente. Sirve de recordatorio: una explicación
+> que no se vuelve a comprobar envejece igual que el código.
 
 - **🐛 [compilador] la sustitución por LSP entre interfaces de módulo NO funciona** —
   encontrado el 21-ago censando los 277 `.bp` del ZIP. **Dos samples publicados que no
