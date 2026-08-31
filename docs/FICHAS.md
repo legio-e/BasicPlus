@@ -1404,6 +1404,58 @@ existe porque casi siempre trabaja en memoria. Enlaza con
 [[contar-los-consumidores-no-leer-el-codigo]]: al subir un formato hay que **censar los
 lectores**, y son tres, no dos.
 
+#### 🟡 `#461` — los paths reservan tamaño FIJO: 7,5 KB de RAM estática para 1,5 KB de nombres (abierta 31-ago)
+
+**Eduardo, al hilo de `#456`:** *«Los path no deberían reservar espacios fijos. Si la
+mayoría de las entradas son de 16 caracteres y puede haber una de 128, ponerlas todas al
+tamaño mayor es un derroche de RAM que no tenemos. Claramente, la longitud ha de ser
+variable.»*
+
+### La medida
+
+Longitud **real** de los paths de una placa (`/lib/*.mod`, 27 ficheros): **media 13,3 ·
+máximo 20**. Y lo que se reserva para guardarlos:
+
+| buffer | dónde | tamaño |
+|---|---|---|
+| `names[96][64]` en `static dir_snapshot_t snap` (`fs_lfs_esp32.c:236`) | **.bss del ESP32** | **6144 B** |
+| `pending[16][64]` del mismo fichero | .bss | 1024 B |
+| `sizes[96]` + `isdir[96]` | .bss | 480 B |
+| `pending[16][64]` del común (`bpvm_repl.c:317`) | .bss | 1024 B |
+
+**7,5 KB de RAM estática en el listado del ESP32 para ~1,5 KB de contenido real: 80% de
+desperdicio** — y en la familia donde más escasea, la misma bolsa de la que sale la tabla
+de handles (`#430`).
+
+### Y ya sabemos cómo se arregla, porque se hizo hoy mismo
+
+Es **exactamente** el patrón de `#440`/`#449`: `bpvm_symbol_t` tenía un `char name[128]`
+por símbolo —59 KB vivos, 99 KB de pico al crecer— y pasó a un **pool de cadenas con
+offsets** (`name_off` en `vm->sym_pool`): **20 KB vivos, 28 KB de pico**. Mismo remedio:
+
+```c
+static char     pool[N];                 /* nombres pegados, terminados en 0 */
+static uint16_t off[LIST_MAX_ENTRIES];   /* dónde empieza cada uno */
+```
+
+Con 13,3 de media (+1 del NUL) 96 entradas caben en ~1,4 KB. Un pool de **2 KB** las
+guarda **y además admite un nombre de 200 caracteres**, que hoy no cabría: se gastan ~4 KB
+menos *y* sube el techo. Es la parte bonita — el tamaño fijo pagaba de más y daba de menos
+a la vez.
+
+⚠️ **Lo que hay que hacer bien**: con pool, quedarse corto tiene **dos motivos** (sin
+ranuras / sin pool) y **los dos tienen que contar en el `omitted`** del reply, que ya
+existe desde `#425`. Un listado incompleto que no lo diga es peor que un tope bajo.
+
+🔗 **Empalma con `LIST`, el último verbo de `U3`.** Hoy el ESP32 tiene su propio listado y
+el común otro; unificarlos ya estaba pendiente por el desglose por raíz, y ahora hay una
+segunda razón: **la copia del ESP32 arrastra 7,5 KB de desperdicio que el común no tiene**.
+Conviene hacer las dos cosas de una vez y no tocar ese camino dos veces.
+
+📌 **Lo que NO alcanza esta ficha, para no exagerarla**: los seis `char path[64]` de la pila
+del REPL. Sólo vive uno a la vez —un comando cada vez—, así que ahí no hay ×N que ahorrar;
+su problema es el TOPE, y ése es `#456`.
+
 #### 🟡 `#456` — un `path` largo se TRUNCA en silencio y la operación dice OK (abierta 30-ago)
 
 Salió mirando los límites de longitud al migrar el `PUT` (`U3.21`). **Medido**, no
