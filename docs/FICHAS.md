@@ -1430,6 +1430,39 @@ coincidir con el valor esperado.
 Probabilidad hoy: baja — el IDE manda nombres planos y el tope son 63 caracteres. Pero
 es exactamente la categoría que aquí no se acepta: **error silencioso**.
 
+### 📐 La SD cambia la pregunta (Eduardo, 31-ago)
+
+*«Aquí hay que pensar en las SD: 64 es razonable para la flash interna, pero para las SD se
+puede quedar pequeño.»* Medidos los topes reales de los dos backends:
+
+| | tope de nombre |
+|---|---|
+| **FatFs** (la SD) — `ffconf.h` | `FF_MAX_LFN` = **255** |
+| **littlefs** (la flash interna) — `lfs.h` | `LFS_NAME_MAX` = **255** |
+| **nuestro `char path[64]`** | **63 útiles** |
+
+📌 **O sea que el 64 no lo impone ningún sistema de ficheros: es un tope NUESTRO**, cuatro
+veces por debajo de lo que ambos backends admiten. Y en una SD los nombres **no los
+ponemos nosotros** — fotos, música o logs de otro aparato ya vienen largos. La pregunta
+deja de ser sólo *«¿avisamos al truncar?»* y pasa a ser también *«¿cuánto tiene que caber?»*.
+
+⚖️ **Subirlo NO es gratis, y no todo cuesta lo mismo:**
+
+| buffer | dónde vive | hoy | a 128 | a 256 |
+|---|---|---|---|---|
+| los seis `char path[64]` | **pila**, y sólo uno vivo a la vez (un comando cada vez) | 64 B | 128 B | 256 B |
+| `pending[16][REPL_LIST_NAME_MAX]` del listado | **estático (.bss)**, ×16 | **1 KB** | 2 KB | **4 KB** |
+| `esc[REPL_LIST_NAME_MAX * 2]` | pila | 128 B | 256 B | 512 B |
+
+El de la pila es calderilla; **el del listado es ×16 y es RAM estática**, que en el S3/C6/C3
+es justo lo que escasea (`#430`: la tabla de handles sale de esa misma bolsa). Lo razonable
+parece **desacoplar los dos números** —el path de UN comando no tiene por qué medir lo
+mismo que cada entrada de la cola del listado— en vez de subir uno y pagarlo ×16.
+
+🔑 **Y esto no depende del número que se elija**: cualquiera que se ponga, alguien lo
+pasará. Lo que hay que arreglar es que **al pasarlo se entere**. El tope es una política;
+el silencio es el bug.
+
 ⏩ **Lo que hay que decidir**: lo barato es que `json_get_str` devuelva `-2` al truncar.
 Como los seis sitios ya comprueban `< 0`, **todos empiezan a rechazar sin tocarlos** — a
 cambio de contestar *«falta path»* cuando lo correcto sería *«path demasiado largo»*. Si
@@ -1536,7 +1569,7 @@ fichero corrupto **sin error**, porque el `bulk` anunciado seguiría cuadrando.
 Comprobado además que **sabe ver rojo** (se corrompió un byte a propósito). 58 →
 119 asserts.
 
-#### 🟡 `#452` — CINCO verbos del wire que ningún cliente manda (abierta 30-ago)
+#### ⏸️ `#452` — CINCO verbos del wire que ningún cliente manda (APLAZADA al script de test, 31-ago)
 
 Salió de una pregunta de Eduardo al probar `U3.17` —*«df / mem ?»*— y de tirar del hilo.
 En la línea de comandos del IDE `df` y `mem` son **el mismo comando**, y no manda `DF`:
@@ -1559,10 +1592,31 @@ Censados los 40 verbos que el IDE emite (`sendRequest`) contra los 20 del REPL c
    necesitar un cliente de pruebas que hable el wire a pelo — lo cual, de paso, es la
    respuesta a *cómo* se prueban.
 
-⏩ **Lo que hay que DECIDIR** (no lo decido yo): o el IDE los usa —`RENAME` en el árbol de
-ficheros es una función que a un usuario le falta, y `FORMAT` ya existe para packs—, o se
-declaran explícitamente «del protocolo, sin cliente todavía» y el arnés los cubre aparte.
-Lo que no vale es dejarlos como están: implementados, documentados y sin tocar.
+### 🧭 EL CRITERIO, y por qué la ficha se APLAZA (Eduardo, 31-ago)
+
+*«Con los comandos tenemos 3 casos de uso: 1 — el usuario, 2 — el IDE internamente, 3 — el
+futuro script para automatizar los test en placa. Creo que podemos dejar para cuando
+abordemos el script la revisión de TODOS los verbos.»*
+
+📌 **El cambio de enfoque importa**: la pregunta deja de ser «¿sobra este verbo?» y pasa a
+ser «¿a cuál de los tres consumidores sirve?». Y el tercero **todavía no existe**, así que
+juzgarlos ahora sería decidir con un consumidor de menos a la vista — justo el error de
+censar sin tener delante a todos los que llaman.
+
+⏸️ **Se aparca hasta el script (`#444`)**, y entonces se repasan **los 29 verbos**, no sólo
+estos cinco. Lo medido el 30/31-ago se conserva porque será el punto de partida:
+
+| verbo | ¿usuario? | ¿IDE? | ¿script? |
+|---|---|---|---|
+| **`FORMAT`** | **sí, y hoy falta**: tras flashear hay que formatear el FS y **no hay forma desde el IDE** (ni botón ni comando de consola) | no lo manda | seguro |
+| **`RENAME`** | sí — renombrar en el árbol es algo que al usuario le falta | no lo manda | probable |
+| **`RMDIR`** | sí — el IDE ya manda `MKDIR`, falta el par | no lo manda | probable |
+| **`PING`** | no | no lo manda | **sí**: saber si la placa sigue viva entre test y test |
+| **`DF`** | sí, pero **duplicado**: la consola tiene `df` y `SerialBackend.mem()` lo sintetiza con `INFO` + `LIST` — dos viajes y una cuenta para lo que el firmware da en uno | no lo manda | probable |
+
+⏩ **Lo que decía la ficha antes de aplazarse**: o el IDE los usa, o se declaran
+explícitamente «del protocolo, sin cliente todavía» y el arnés los cubre aparte. Lo que no
+vale es dejarlos como están: implementados, documentados y sin tocar.
 
 #### ✅ U2 — el transporte (CERRADO 26-ago; sus cuatro pasos, verificados en placa)
 
