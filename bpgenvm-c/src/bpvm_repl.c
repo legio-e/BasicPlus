@@ -272,6 +272,22 @@ static void repl_get(long id, const json_obj_t* obj) {
 #define REPL_LIST_MAX_DIRS  16
 #define REPL_LIST_NAME_MAX  64
 
+/* V6/U3.23 — EL DESGLOSE POR RAÍZ, subido del ESP32 (#398/#408).
+ *
+ * El ESP32 imprimía `ls: 25 ent en 160 ms | app:11/50ms lib:14/64ms` y el común
+ * sólo `ls: N ent`. Esa diferencia es la razón por la que `LIST` se quedó sin
+ * migrar tanto tiempo: hacerlo a secas habría sido **unificar hacia abajo**, que
+ * es lo que `#455` demostró que se comete solo. Así que sube el desglose y lo
+ * GANAN la Pico y el STM32.
+ *
+ * Cambia el instrumento, no el dato: el ESP32 cronometraba POR ENTRADA (dos
+ * lecturas de reloj cada una); aquí se mide POR DIRECTORIO, que es la unidad que
+ * el recorrido ya tiene. Sale la misma línea, más barata — y además atribuye bien
+ * los subdirectorios, porque el común desciende y el recorrido plano del ESP32
+ * no. */
+#define REPL_LIST_RAICES_MAX  8
+#define REPL_LIST_RAIZ_NAME   16
+
 typedef struct {
     long id;
     int  first;
@@ -280,7 +296,37 @@ typedef struct {
     char (*pending)[REPL_LIST_NAME_MAX];
     int  tail;
     const char* dir;      /* el directorio en curso (para componer el nombre) */
+    /* Casilleros por carpeta raíz: "app", "lib", "sd"… y "/" para los sueltos,
+     * que también es un dato — dice si el coste está en la raíz o en un volumen. */
+    int      nraices;
+    char     raiz[REPL_LIST_RAICES_MAX][REPL_LIST_RAIZ_NAME];
+    int      raiz_n[REPL_LIST_RAICES_MAX];
+    long     raiz_ms[REPL_LIST_RAICES_MAX];
 } repl_list_ctx_t;
+
+/* Apunta lo que costó un directorio en el casillero de su carpeta raíz. Un
+ * fichero suelto de la raíz cuenta como "/". Si no caben más raíces, el TOTAL
+ * sigue siendo correcto: sólo se pierde el reparto. */
+static void repl_list_apunta(repl_list_ctx_t* c, const char* dir, int n, long ms) {
+    char r[REPL_LIST_RAIZ_NAME];
+    const char* p = (dir[0] == '/') ? dir + 1 : dir;
+    const char* sl = strchr(p, '/');
+    if (*p == '\0')      snprintf(r, sizeof r, "/");
+    else if (sl == NULL) snprintf(r, sizeof r, "%.*s", (int)(sizeof r - 1), p);
+    else {
+        size_t len = (size_t)(sl - p);
+        if (len >= sizeof r) len = sizeof r - 1;
+        memcpy(r, p, len); r[len] = '\0';
+    }
+    for (int i = 0; i < c->nraices; i++) {
+        if (strcmp(c->raiz[i], r) == 0) { c->raiz_n[i] += n; c->raiz_ms[i] += ms; return; }
+    }
+    if (c->nraices >= REPL_LIST_RAICES_MAX) return;
+    snprintf(c->raiz[c->nraices], sizeof c->raiz[0], "%s", r);
+    c->raiz_n[c->nraices]  = n;
+    c->raiz_ms[c->nraices] = ms;
+    c->nraices++;
+}
 
 static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user) {
     repl_list_ctx_t* c = (repl_list_ctx_t*) user;
@@ -316,6 +362,7 @@ static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user
 
 static void repl_list(long id) {
     static char pending[REPL_LIST_MAX_DIRS][REPL_LIST_NAME_MAX];
+    const long  t_ini = (long) bpvm_platform_now_ms();   /* U3.23: total del listado */
     char head[64];
     int hn = snprintf(head, sizeof head,
                       "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
@@ -331,12 +378,29 @@ static void repl_list(long id) {
         char dir[REPL_LIST_NAME_MAX];
         snprintf(dir, sizeof dir, "%.63s", pending[head_i++]);   /* copia: sin aliasing */
         c.dir = dir;
+        int   antes = c.emitidas;
+        long  t0    = (long) bpvm_platform_now_ms();
         (void) bpvm_fs_list(dir, repl_list_cb, &c);   /* un volumen caido no borra el resto */
+        repl_list_apunta(&c, dir, c.emitidas - antes,
+                         (long) bpvm_platform_now_ms() - t0);
     }
     char cola[40];
     int cn = snprintf(cola, sizeof cola, "],\"omitted\":%d}", c.omitidas);
     if (cn > 0) wire_v1_send_line(cola, (size_t) cn);
-    log_printf("ls: %d ent (%d dirs omitidos)", c.emitidas, c.omitidas);
+
+    /* #398/#408 — el desglose, en UNA línea (el log es un bien escaso, #423).
+     * `total` es lo que tarda el device; lo que el usuario ve incluye además el
+     * viaje por el wire y el pintado del árbol, y eso lo mide el IDE. Que los dos
+     * números existan es lo que dirá si el tiempo se va aquí o allí. */
+    char det[160];
+    int o = 0;
+    for (int i = 0; i < c.nraices && o < (int) sizeof(det) - 24; i++) {
+        o += snprintf(det + o, sizeof(det) - (size_t) o, " %s:%d/%ldms",
+                      c.raiz[i], c.raiz_n[i], c.raiz_ms[i]);
+    }
+    det[o] = '\0';
+    log_printf("ls: %d ent en %ld ms |%s (%d dirs omitidos)",
+               c.emitidas, (long) bpvm_platform_now_ms() - t_ini, det, c.omitidas);
 }
 
 

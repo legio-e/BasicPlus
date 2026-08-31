@@ -248,119 +248,13 @@ static void handle_reset(long id, const json_obj_t* obj) {
  *
  * Coste del instrumento: dos lecturas de reloj por entrada y una línea de log
  * por refresco (ojo con #423, que el log se llena). */
-#define LS_RAICES_MAX 8
-
-typedef struct {
-    int      first;
-    uint32_t t0;                        /* ms al empezar el listado           */
-    int      n;                         /* entradas emitidas                  */
-    int      nraices;
-    char     raiz[LS_RAICES_MAX][16];   /* "app", "lib", "sd"…                */
-    int      raiz_n[LS_RAICES_MAX];
-    uint32_t raiz_ms[LS_RAICES_MAX];
-} list_ctx_t;
-
-static uint32_t ls_ms(void) { return (uint32_t) (esp_timer_get_time() / 1000); }
-
 /* Apunta la entrada en el casillero de su carpeta raíz. Un fichero de la raíz
  * (`auto.txt`) cuenta como "/" — que también es un dato: dice si el coste está
  * en los sueltos o en un volumen. */
-static void ls_apunta(list_ctx_t* c, const char* name, uint32_t ms) {
-    char r[16];
-    const char* p = (name[0] == '/') ? name + 1 : name;
-    const char* s = strchr(p, '/');
-    if (s == NULL) { snprintf(r, sizeof r, "/"); }
-    else {
-        size_t len = (size_t) (s - p);
-        if (len >= sizeof r) len = sizeof r - 1;
-        memcpy(r, p, len); r[len] = '\0';
-    }
-    for (int i = 0; i < c->nraices; i++) {
-        if (strcmp(c->raiz[i], r) == 0) { c->raiz_n[i]++; c->raiz_ms[i] += ms; return; }
-    }
-    if (c->nraices >= LS_RAICES_MAX) return;      /* no cabe: el total sigue bien */
-    snprintf(c->raiz[c->nraices], sizeof c->raiz[0], "%s", r);
-    c->raiz_n[c->nraices]  = 1;
-    c->raiz_ms[c->nraices] = ms;
-    c->nraices++;
-}
-
-static int list_cb(const char* name, uint32_t size, void* user) {
-    /* Construimos cada entry en un buffer pequeño y la mandamos como bulk
-     * raw (sin newline) — el wire en UART0 no tiene stdout. */
-    list_ctx_t* ctx = (list_ctx_t*) user;
-    /* #398 — EL CRC YA NO SE CALCULA AQUÍ, y el `-1` es deliberado.
-     *
-     * Estaba para que el IDE se saltara un PUT cuyo contenido ya está en la
-     * placa: una optimización de la SUBIDA que se cobraba en TODOS los
-     * listados, leyendo el FS entero en cada refresco del árbol. Medido en la
-     * P4 el 15-ago: `crc 6903 ms` de un refresco de 6953 — el 99 %.
-     *
-     * Ahora se pide fichero a fichero con `STAT {crc:true}`, que es el único
-     * momento en que sirve: justo antes de subir ESE fichero.
-     *
-     * `-1` no es cero: es el valor que el IDE ya interpretaba como «este
-     * firmware no da CRC» (`if (rf.crc >= 0)`), así que un IDE viejo contra
-     * este firmware degrada a su heurístico de siempre en vez de creerse un
-     * CRC falso y saltarse una subida que hacía falta. */
-    uint32_t t_ent = ls_ms();
-    ctx->n++;
-    char e[128];
-    int o = 0;
-    if (!ctx->first) e[o++] = ',';
-    ctx->first = 0;
-    o += snprintf(e + o, sizeof(e) - o, "{\"name\":\"");
-    for (const char* p = name; *p && o < (int) sizeof(e) - 64; p++) {
-        if (*p == '"' || *p == '\\') e[o++] = '\\';
-        e[o++] = *p;
-    }
-    o += snprintf(e + o, sizeof(e) - o, "\",\"size\":%lu,\"crc\":-1,\"isDir\":false}",
-                  (unsigned long) size);
-    wire_v1_send_bulk((const uint8_t*) e, (size_t) o);
-    /* El reparto por carpeta raíz se queda aunque el CRC se haya ido: es el
-     * chivato que dirá si algún día vuelve a haber un listado caro, y dónde. */
-    ls_apunta(ctx, name, ls_ms() - t_ent);
-    return 0;
-}
-
 /* V6/U3.22 — LIST_DIR vive en el común (`src/bpvm_repl.c`). */
 
-static void handle_list(long id, const json_obj_t* obj) {
-    (void) obj;
-    char head[64];
-    int hn = snprintf(head, sizeof(head), "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
-    wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
-    /* memset y no `= { 1 }`: con la struct ya no de un solo campo, la
-     * inicialización parcial saca -Wmissing-field-initializers, y estos builds
-     * van con -Werror. No lo puedo comprobar aquí (sin ESP-IDF en esta máquina),
-     * así que se escribe de la forma que no da lugar a ello. */
-    list_ctx_t ctx;
-    memset(&ctx, 0, sizeof ctx);
-    ctx.first = 1;
-    ctx.t0 = ls_ms();
-    fs_list(list_cb, &ctx);
-    /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
-     * topes y al pasarse recortaba EN SILENCIO: el firmware lo anotaba en su log
-     * pero por aqui salia una lista corta que el IDE pintaba como si fuera todo.
-     * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
-    { char cola[40];
-      int cn = snprintf(cola, sizeof(cola), "],\"omitted\":%d}", fs_list_omitidas());
-      wire_v1_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
-
-    /* #398/#408 — el desglose, en UNA línea (el log es un bien escaso, #423).
-     * `total` es lo que tarda el device; lo que el usuario ve incluye además el
-     * viaje por el wire y el pintado del árbol, y eso lo mide el IDE. Que los
-     * dos números existan es lo que dirá si el tiempo se va aquí o allí. */
-    uint32_t total = ls_ms() - ctx.t0;
-    char det[160];
-    int o = 0;
-    for (int i = 0; i < ctx.nraices && o < (int) sizeof(det) - 24; i++) {
-        o += snprintf(det + o, sizeof(det) - (size_t) o, " %s:%d/%ums",
-                      ctx.raiz[i], ctx.raiz_n[i], (unsigned) ctx.raiz_ms[i]);
-    }
-    det[o] = '\0';
-    log_printf("ls: %d ent en %u ms |%s", ctx.n, (unsigned) total, det);
-}
+/* V6/U3.23 - LIST vive en el comun, DESGLOSE POR RAIZ INCLUIDO: el de aqui
+ * subio a bpvm_repl.c en vez de perderse, y ahora la Pico y el STM32 lo ganan. */
 
 /* ── SAVE / DF / MKDIR: el IDE los manda y la familia ESP32 no los tenía ──
  * SAVE lo dispara PicoExplorer tras cada subida y desde el botón de guardar, así
@@ -1135,7 +1029,6 @@ static void handle_request(const char* line, int len) {
             return;
         }
     }
-    if (strcmp(type, "LIST")  == 0) { handle_list(id, &obj);  return; }
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }

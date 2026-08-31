@@ -2260,7 +2260,7 @@ mi extractor cortaba mal las funciones al contar la llave de dentro del literal 
 Comparando palabra por palabra salieron 11. **Un diff por líneas sobre C reformateado miente
 hacia el lado peor**: dice que hay que investigar donde no hay nada que investigar.
 
-#### 🔴 U3 — el REPL
+#### 🏁 U3 — el REPL (CERRADO 31-ago)
 
 El 80 % del problema y el 100 % de las asimetrías que nos han mordido (`SD_INFO` sólo en
 la Pico, el `INFO` del STM32 incompleto, el aviso de `/lib`, el `preinstall`).
@@ -2556,6 +2556,55 @@ necesita mirar el `git diff` después, no antes*.
 ✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP** y **las cinco imágenes**
 reconstruidas — Pico, S3, P4, **C3** y STM32 Nucleo, todas posteriores al cambio.
 
+##### ✅ `U3.23` — `LIST` al común, **subiendo el desglose** (31-ago). **`U3` CERRADO.**
+
+El último verbo. Y se migró **al revés de como habría sido cómodo**: en vez de dejar caer el
+desglose por raíz que sólo el ESP32 imprimía, **subió al común** — que era la condición que
+lo tenía parado desde el 30-ago.
+
+```
+antes (común):  ls: 25 ent (0 dirs omitidos)
+antes (ESP32):  ls: 25 ent en 160 ms | app:11/50ms lib:14/64ms
+ahora (TODAS):  ls: 25 ent en 160 ms | app:11/50ms lib:14/64ms (0 dirs omitidos)
+```
+
+📌 **Cambia el instrumento, no el dato.** El ESP32 cronometraba **por entrada** (dos lecturas
+de reloj cada una, y lo decía en su comentario); el común mide **por directorio**, que es la
+unidad que su recorrido ya tiene. Sale la misma línea, más barata — y además **atribuye mejor
+los subdirectorios**, porque el común desciende y el recorrido plano del ESP32 no.
+
+🎁 **La Pico y el STM32 GANAN el desglose.** Ese es el sentido de la regla que salió de
+`#455`: *unificar hacia abajo es una regresión disfrazada de limpieza*.
+
+⚠️ **Y otra vez el heredoc**: al escribir el código, `' '` llegó al fichero como un byte NUL
+de verdad — tres veces, y el `.c` pasó a ser binario para `grep`. Es la trampa que ya está
+fichada en [[escribir-ficheros-sin-destruirlos]] y hoy ha vuelto a morder. Reparado con un
+script en fichero, no con un heredoc.
+
+✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP** y las **cinco imágenes** (Pico, S3,
+P4, C3 y STM32 Nucleo) reconstruidas.
+
+---
+
+### 🏁 `U3` — CERRADO (31-ago)
+
+Verbos que cada familia sigue despachando por su cuenta, y **todos por diseño**:
+
+| familia | propios | por qué |
+|---|---|---|
+| **STM32** | **0** | — |
+| **ESP32** | `RUN` `RESET` | tocan la sesión de la VM y la placa |
+| **Pico** | `RUN` `RESET` `BOOTSEL` `SD_INFO` `SD_MOUNT` | + hardware que sólo tiene el RP2350 |
+
+**Con esto la parte de comunicaciones de la unificación queda cerrada** — que es lo que
+Eduardo señaló como condición para que el C3 y el C6 salgan «casi gratis».
+
+⏭️ Queda `#461` (los buffers de tamaño fijo del listado), que toca este mismo camino y por
+eso se hace **a continuación**: migrar `LIST` deja el `dir_snapshot_t` de 6 KB del ESP32
+sirviendo **sólo para contar ficheros** (`fs_file_count`), que es su único llamador restante.
+
+<details><summary>Lo que quedaba antes de U3.22/U3.23</summary>
+
 **Así que lo pendiente de verdad es UN verbo:**
 
 1. 🟡 **`LIST`** — sólo le queda al ESP32 (la Pico y el STM32 ya usan el común). **Parado a
@@ -2569,6 +2618,8 @@ reconstruidas — Pico, S3, P4, **C3** y STM32 Nucleo, todas posteriores al camb
 🔗 **Y conviene hacerlo junto con `#461`**: los buffers de tamaño fijo del listado (7,5 KB de
 `.bss` en el ESP32 para ~1,5 KB de nombres) están **en ese mismo camino**. Tocarlo dos veces
 sería trabajar de más.
+
+</details>
 
 ##### 📖 El episodio del `/lib` desaparecido (26-ago) — y las DOS fichas de E1 que mordieron
 
