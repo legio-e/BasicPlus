@@ -1091,6 +1091,7 @@ static void vm_task(void* arg) {
      * o 0 = el 25% de siempre. Va aquí, con el resto del reparto de memoria, y
      * ANTES de que nadie pregunte por bpvm_stack_region_bytes(). */
     bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&s_env, "stack", 0));
+    bpvm_set_quantum_ops(bpvm_env_get_long(&s_env, "quantum", 0));   /* #462 */
 
     /* V5/H1 — los pines del lector de SD, en UNA entrada con etiquetas (decisión
      * de Eduardo: una sola línea es más simple para el usuario que cinco):

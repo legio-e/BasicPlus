@@ -274,6 +274,29 @@ void bpvm_set_stack_kb(unsigned long kb) {
     g_stack_avisado = 0;
 }
 
+/* #462 — QUANTUM AJUSTABLE, y de momento es un INSTRUMENTO más que un ajuste.
+ *
+ * El quantum de la VM-C se mide en OPCODES (1024), no en tiempo como el de la
+ * VM-Java — está anotado desde hace tiempo en `bpvm_internal.h`. Eso es barato y
+ * predecible mientras cada opcode cueste lo mismo… y deja de serlo cuando UNO
+ * cuesta milisegundos: `Gui.run()` es `while __guiRunOnce() do endwh`, unos 3-4
+ * opcodes por vuelta de los que uno bombea LVGL entero. Con 1024 opcodes por
+ * quantum salen ~290 vueltas de bombeo antes de que el planificador drene los
+ * eventos encolados — y el handler de un clic espera todo eso.
+ *
+ * Medido en la STM32 Discovery el 31-ago con `samples/GuiEvLat.bp`: **393, 393,
+ * 420, 416, 393 ms** de latencia upcall→handler. Tan constante que no puede ser
+ * carga: es un número FIJO de vueltas.
+ *
+ * Este mando existe para PROBAR esa explicación en placa en vez de creérsela: si
+ * la latencia baja proporcionalmente al bajar el quantum, la causa es ésta. Si no
+ * baja, la explicación es falsa y hay que buscar en otro sitio. */
+static long g_quantum_ops = 0;          /* 0 = por defecto (1024) */
+
+void bpvm_set_quantum_ops(long ops) {
+    g_quantum_ops = ops;
+}
+
 size_t bpvm_stack_region_bytes(size_t total_bytes) {
     if (g_stack_kb) {
         size_t pedido = (size_t) g_stack_kb * 1024u;
@@ -1099,8 +1122,9 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     main_tc->bp = main_tc->stack_base;
     main_tc->status = BPVM_THREAD_RUNNABLE;
 
-    /* Default quantum si no se ajustó. */
-    if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
+    /* Default quantum si no se ajustó; el ENV (`quantum=N`) manda si trae valor. */
+    if (vm->quantum_ops == 0)
+        vm->quantum_ops = (g_quantum_ops > 0) ? (int) g_quantum_ops : 1024;
 
     /* #430 — LA EXCEPCION PREFABRICADA (idea de Eduardo): el OOM se fabrica
      * AQUI, antes de arrancar el programa, cuando fabricarlo es gratis — y
@@ -1151,7 +1175,8 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     main_tc->sp = main_tc->stack_base;
     main_tc->bp = main_tc->stack_base;
     main_tc->status = BPVM_THREAD_RUNNABLE;
-    if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
+    if (vm->quantum_ops == 0)   /* #462 — el ENV (`quantum=N`) manda también aquí */
+        vm->quantum_ops = (g_quantum_ops > 0) ? (int) g_quantum_ops : 1024;
 
     /* #430 — misma prefabricada que en bpvm_run (ver alli). */
     vm->oom_exc.v = 0u;

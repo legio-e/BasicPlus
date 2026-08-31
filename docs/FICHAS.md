@@ -1500,9 +1500,61 @@ La otra mitad es la **prioridad**: bajar el `wire_task` del P4 de **5** a **1** 
 igualarlo al S3. 📌 Criterio de Eduardo para esto: *«ahora que estamos unificando, sería
 recomendable quedarnos con lo bueno y no unificar a lo peor»*.
 
-🔬 **La comparación que falta** para saber cuánto de lento es «lento»: el mismo
-`GuiEvSpike.bp` en la **Discovery**, que es la que *«funciona muy bien»*. Si allí salen pares
-limpios `2→3` y en el P4 ráfagas, el síntoma queda cuantificado entre las dos placas.
+### 🔬 Y al MEDIRLO en ms, la explicación cambió (31-ago)
+
+`GuiEvSpike` sólo dice el ORDEN, y con el orden **no se puede distinguir «el P4 drena
+lento» de «en la Discovery cliqué más despacio»**. Por eso se escribió
+`samples/GuiEvLat.bp`, que cronometra el hueco upcall→handler y la profundidad de la cola.
+
+**Discovery** (la placa que *«funciona muy bien»*):
+
+```
+clic 1  upcall t=267636      handler lat=393 ms  cola=0
+clic 2  upcall t=269852      handler lat=393 ms  cola=0
+clic 3  upcall t=271712      handler lat=420 ms  cola=0
+clic 4  upcall t=272519      handler lat=416 ms  cola=0
+clic 5  upcall t=273320      handler lat=393 ms  cola=0
+```
+
+🔴 **La Discovery TAMPOCO es rápida: cada evento tarda ~400 ms.** Lo que pasa es que los
+clics van a 800-2200 ms de distancia, así que nunca se acumula y el patrón sale en pares
+limpios. **El «funciona bien» era un artefacto del ritmo del dedo.** Sin cronómetro esto no
+se veía — y llevábamos dos diagnósticos apoyados en ello.
+
+📌 **Y la constancia es la pista**: 393, 393, 420, 416, 393. Tan estable no puede ser carga
+ni contención; es un **número fijo de vueltas**.
+
+### La causa que encaja: el quantum se mide en OPCODES
+
+`Gui.run()` es `while __guiRunOnce() do endwh` — unos **3-4 opcodes por vuelta**, de los que
+**uno bombea LVGL entero** (~1,4 ms). El planificador sólo drena los eventos encolados
+**entre quanta**, y un quantum son **1024 opcodes**:
+
+```
+1024 opcodes / ~3,5 por vuelta  ≈  290 vueltas de bombeo
+290 vueltas × ~1,4 ms           ≈  400 ms   ← lo medido
+```
+
+Un quantum en opcodes es barato y predecible **mientras cada opcode cueste lo mismo**. Deja
+de serlo cuando uno cuesta milisegundos. Y esto ya estaba escrito y no se había conectado:
+`bpvm_internal.h:280` anota que *«la VM-Java mide su quantum por TIEMPO, y no la C, con
+quantum por opcodes»* — como una diferencia de comportamiento entre VMs, sin ver que aquí
+se convierte en 400 ms de latencia.
+
+🔧 **Construido el mando para PROBARLO en vez de creérselo** (`quantum=N` en el ENV, mismo
+patrón que el `stack=N` de `#450`, en las cuatro familias). La predicción es falsable:
+**bajar el quantum debe bajar la latencia proporcionalmente**. Con `quantum=32`, ~9 vueltas
+≈ 13 ms. Si no baja, esta explicación es falsa y hay que buscar en otro sitio.
+
+🐛 **Y de paso, una ineficiencia real en el bucle más caliente del GUI**: `GUI_RUN_ONCE`
+recorre **toda la tabla de símbolos con `strcmp`** en CADA pasada, para encontrar dos
+funciones que no cambian nunca (`Gui.__guiDispatch` y `__guiDispatchChange`). Son ~460
+símbolos en un programa como `JsonDemo`, ~290 veces por quantum. Se resuelve cacheando las
+dos direcciones la primera vez.
+
+⚠️ **Lo que esto le hace al diagnóstico anterior**: la prioridad 5 del P4 sigue siendo una
+diferencia real, pero **ya no es la explicación del retraso** — la Discovery, sin RTOS y sin
+prioridades, tiene la misma latencia. Lo que el P4 añade es que además se le acumulan.
 
 #### 🟡 `#461` — los paths reservan tamaño FIJO: 7,5 KB de RAM estática para 1,5 KB de nombres (abierta 31-ago)
 

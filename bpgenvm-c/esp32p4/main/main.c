@@ -386,6 +386,7 @@ static void wire_task_uart(void *arg)
      * ausente o 0 = el reparto de siempre. Mismo sitio y misma clave que
      * en las otras familias: la regla vive en bpvm_stack_region_bytes(). */
     bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(board_mgr_env(), "stack", 0));
+    bpvm_set_quantum_ops(bpvm_env_get_long(board_mgr_env(), "quantum", 0));   /* #462 */
     bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
 
     if (bs->state == BPVM_BOOT_APP && !bs->degraded) repl_esp32_autorun();  /* H9 */

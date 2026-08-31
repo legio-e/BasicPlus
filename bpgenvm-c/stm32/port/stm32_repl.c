@@ -699,6 +699,7 @@ void stm32_repl_run(void) {
      * familias: la regla vive en bpvm_stack_region_bytes(). Va aquí, ANTES del
      * primer RUN, que es quien llama a bpvm_init. */
     bpvm_set_stack_kb((unsigned long) board_mgr_stm32_env_long("stack", 0));
+    bpvm_set_quantum_ops(board_mgr_stm32_env_long("quantum", 0));   /* #462 */
 
     bpvm_log_set_enabled(board_mgr_stm32_env_bool("log", 0));
 

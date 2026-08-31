@@ -110,6 +110,11 @@ size_t bpvm_stack_region_bytes(size_t total_bytes);
  * es quien conoce el bloque. */
 void bpvm_set_stack_kb(unsigned long kb);
 
+/* #462 — opcodes por quantum (0 = por defecto, 1024). Lo alimenta la clave
+ * `quantum` del ENV. Bajarlo acorta la espera de un evento encolado a costa de
+ * más cambios de contexto; ver el porqué en bpvm.c. */
+void bpvm_set_quantum_ops(long ops);
+
 /* Gancho de diagnóstico: se llama justo DESPUÉS de que `bpvm_run` resuelva el
  * enlace y ANTES de ejecutar una sola instrucción. NULL (el defecto) = nada.
  *
