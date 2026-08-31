@@ -27,6 +27,60 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (31-ago, tarde) — **la latencia de los eventos del GUI, medida y partida en dos**
+
+### 🔬 Dónde retomarlo: `#462`, y está listo para atacarse
+
+De una sensación de Eduardo —*«en las ESP32, cuando se ejecuta un programa, se queda todo
+bloqueado; los eventos pasan pero mucho más lentos»*— salieron **cuatro cosas distintas**:
+
+| | qué es | estado |
+|---|---|---|
+| 1 | el planificador **nunca cedía el turno al SO** — el gancho `bpvm_platform_thread_yield()` existía en las 4 plataformas y **no lo llamaba nadie** | ✅ **arreglado**; el `stop` del P4 volvió a funcionar |
+| 2 | el **quantum se mide en OPCODES** (1024) y `Gui.run()` gasta uno bombeando LVGL entero | 🟢 **medido**: `1,21 ms × vueltas`. Sin arreglar |
+| 3 | un **suelo de 48 ms** independiente del quantum | 🔴 **sin investigar**. Sospechoso: `LV_DEF_REFR_PERIOD = 33 ms` (`include/lv_conf.h:82`) |
+| 4 | el `exit` de un `stop` es **una CARRERA**: dice `OK` o `KILLED` según dónde caiga el KILL | 🐛 hallazgo colateral, sin arreglar |
+
+**El modelo, validado con tres puntos en la STM32 Discovery** (`samples/GuiEvLat.bp`, escrito
+para esto):
+
+```
+lat = 1,21 ms/vuelta × vueltas + 48 ms de suelo      (error máx. 5 ms en un rango de 32×)
+
+quantum 1024 → 403 ms     quantum 128 → 87 ms     quantum 32 → 63 ms
+```
+
+📌 **Se predijo antes de medir**: para `quantum=128` el modelo decía ~95 ms y salieron **87**.
+Con dos puntos un ajuste encaja por construcción; con la predicción cumplida, ya no.
+
+⏭️ **Lo que queda, y son decisiones de Eduardo, no trabajo a medias:**
+- **El quantum por TIEMPO**, como ya hace miVM (`bpvm_internal.h:280` lo tenía anotado como
+  diferencia entre VMs, sin ver que aquí valía 400 ms). Toca el planificador → con placa.
+- **El suelo de 48 ms**: averiguar QUÉ es antes de tocar. Bajar el refresco de LVGL cuesta CPU
+  y sería adivinar.
+- **El `exit` inestable**: pequeño, aislado, y de los silenciosos.
+
+🔧 **Herramienta nueva y reutilizable**: `quantum=N` en el ENV, en las cuatro familias (mismo
+patrón que `stack=N`). ⚠️ Se lee **una sola vez al arrancar** → hay que **resetear** tras
+cambiarla. Y **no es configuración para dejar puesta**: con 32 los eventos van finos y el resto
+paga más cambios de contexto.
+
+⚠️ **Si una placa se comporta rara, mira primero si tiene `quantum` puesto en el ENV.**
+
+### 🧭 Lo que enseñó la tarde, y es de método
+
+**La medida tumbó DOS diagnósticos míos seguidos.** Primero *«es la prioridad 5 del P4»* — falso:
+la Discovery, sin RTOS y sin prioridades, tiene la misma latencia. Después *«la latencia bajará
+proporcionalmente al quantum»* — falso: bajó 6,3× de 32, porque había un suelo.
+
+📌 **Y la clave la dio una frase de Eduardo que resultó ser un artefacto**: la Discovery *«funciona
+muy bien»*. No funcionaba bien — **tardaba 400 ms igual**. Lo que pasaba es que los clics iban a
+800-2200 ms y nunca se acumulaban. **Sin cronómetro, dos diagnósticos se apoyaron en una
+impresión que dependía del ritmo del dedo.** De ahí salió `GuiEvLat.bp`: el spike sólo daba el
+ORDEN de las líneas, y con el orden no se distingue «drena lento» de «cliqué despacio».
+
+---
+
 ## ⏭️ AL RETOMAR (31-ago) — `#441` cerrada y **LAS CINCO IMÁGENES, del mismo árbol**
 
 ### Lo primero: el estado de los artefactos, comprobado por fecha (no de memoria)
