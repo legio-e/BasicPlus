@@ -1,19 +1,23 @@
+# Componente `main` del proyecto ESP32-S3.
+#
+# V6/P1.C3.2 — las fuentes de la FAMILIA viven en `../common/`; aqui solo queda
+# este fichero y `chip_cfg.h`, que es lo unico que de verdad cambia por silicio.
 # Componente `main` — H4.3. Core VM portable + backend ESP32 + wire v1
 # (UART0) + FS RAM + REPL. El parser JSON (src/json_min.c) es C portable
 # y se reutiliza directamente.
 idf_component_register(
     SRCS
-        "main.c"
-        "platform_esp32.c"
-        "wire_v1.c"
-        "fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
-        "repl_esp32.c"
-        "gpio_esp32.c"
-        "esp32_mods.c"
+        "../common/main.c"
+        "../common/platform_esp32.c"
+        "../common/wire_v1.c"
+        "../common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
+        "../common/repl_esp32.c"
+        "../common/gpio_esp32.c"
+        "../common/esp32_mods.c"
         "../../src/json_min.c"               # V6/U1.1: parser JSON comun (era una copia local)
         "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"               # V6/U3: los verbos comunes del REPL
-        "board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
+        "../common/board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -38,7 +42,7 @@ idf_component_register(
         "../../src/bpvm_bmgr.c"        # H9: board manager (compone env+part)
         "../../src/bpvm_bmgr_wire.c"   # H9: nucleo del protocolo STATE/ENV/PART
         "../../src/bpvm_pack.c"        # H3 Packs V4: core portable de packs (lo llama bmgr_wire)
-        "aot_funcs_stub.c"            # H4 AOT: def fuerte no-op de esp_aot_register (S3 sin AOT baked-in)
+        "../common/aot_funcs_stub.c"            # H4 AOT: def fuerte no-op de esp_aot_register (S3 sin AOT baked-in)
         "../../src/net.c"              # H11 (#241): facade Net — sin backend hasta H11.c (lwIP) → RuntimeError atrapable
         "../../src/link.c"
         "../../src/scheduler.c"
@@ -46,7 +50,7 @@ idf_component_register(
         "../../src/bpvm_dbg_wire.c"   # #326: ramo de depuracion del wire (portable, ex-Pico)
         "../../src/bpvm_log.c"         # log post-mortem: núcleo portable (idéntico en las 3 familias)
         "../../src/bpvm_listdir.c"     # V5/H6: LIST_DIR comun (salio del repl del Pico)
-        "log_esp32.c"                  # ... y su cintura ESP32 (esp_timer + bpenv sector 2)
+        "../common/log_esp32.c"                  # ... y su cintura ESP32 (esp_timer + bpenv sector 2)
         "../../src/threading.c"
         "../../src/exceptions.c"
         "../../src/aot_registry.c"
@@ -71,7 +75,8 @@ idf_component_register(
         "../../src/wdt.c"
         "../../src/bpvm_neopixel.c"   # fachada no-op sin backend (H7.4)
     INCLUDE_DIRS
-        "."
+        "."                            # V6/P1.C3.2: aqui vive el chip_cfg.h de ESTE silicio
+        "../common"                    # V6/P1.C3.2: las fuentes y cabeceras de la familia
         "../../include"
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h

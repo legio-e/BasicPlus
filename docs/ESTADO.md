@@ -27,6 +27,36 @@
 
 ## Última sesión
 
+### `P1.C3.2` — la familia ESP32 ya tiene un común de verdad
+
+Pregunta de Eduardo antes de empezar: *«¿no hace falta el FS y la gestión de la memoria
+también?»*. Medido, la respuesta es distinta para cada uno:
+
+- **El FS: nada que hacer.** `fs_lfs_esp32.c` busca la partición **por nombre** (`bpdata`) —
+  cero código por chip. Lo único particular es `partitions.csv`, y el C3 ya tiene el suyo.
+- **La memoria: sí, pero no es un problema de reestructurar.** El *código* ya era común; lo
+  particular es **un número**, y tiene que ser constante de compilación porque
+  `vm_buffer_init()` corre **antes** que `board_mgr_esp32_boot()`, o sea antes del ENV.
+
+El censo cambió el tamaño del trabajo: **9 de los 10 `.c` de `esp32/main/` los usan los tres
+chips** — ya era el común sin decirlo. Y mover los proyectos costaba **193 rutas relativas**,
+cuyo fallo típico no es «no compila» sino «resuelve a otra cosa».
+
+Así que el mismo reparto con otra forma: las **fuentes** salen a `esp32/common/` y cada
+proyecto conserva su componente `main/` (que el IDF exige) con un `chip_cfg.h` dentro. Ni una
+profundidad cambia — unas 30 líneas en tres `CMakeLists`.
+
+**Lo que de verdad se arregló**: el `main.c` del C3 era una copia de 176 líneas que se
+diferenciaba en **dos números y un nombre**, y los arreglos no viajaban — `#464` y `#465` se
+hicieron en uno y no en el otro, esta misma semana. Ahora hay uno.
+
+Verificado en el artefacto: el mismo `main.c` produce `ESP32-S3` en una imagen y `ESP32-C3` en
+la otra (`strings` de los `.bin`), y las tres conservan el tamaño exacto de antes.
+
+⏭️ Queda `P1.C3.3`: **medir** el heap del C3 en placa. Los 96 KB de ensayo están puestos para
+enlazar, no medidos, y el fichero lo dice en mayúsculas.
+
+
 ### `U3.25` — y el arnés nuevo cazó dos verbos que mentían
 
 Al ampliar `sim_smoke.py` con lo que el común tiene y el arnés no miraba, dos rojos, y de

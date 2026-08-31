@@ -1,7 +1,7 @@
 # Componente `main` — ENSAYO ESP32-C3 (V6/P1).
 #
 # NO tiene fuentes propias salvo main.c: TODA la cintura ESP32 se toma del S3
-# por ruta relativa (`../../esp32/main/...`). Esa es justamente la medida que
+# por ruta relativa (`../../esp32/common/...`). Esa es justamente la medida que
 # este ensayo persigue — cuanto de una familia nueva es codigo y cuanto es
 # una lista de ficheros.
 #
@@ -10,17 +10,17 @@
 # y se reutiliza directamente.
 idf_component_register(
     SRCS
-        "main.c"
-        "../../esp32/main/platform_esp32.c"
-        "../../esp32/main/wire_v1.c"
-        "../../esp32/main/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
-        "../../esp32/main/repl_esp32.c"
-        "../../esp32/main/gpio_esp32.c"
-        "../../esp32/main/esp32_mods.c"
+        "../../esp32/common/main.c"   # V6/P1.C3.2: el arranque de la FAMILIA; lo propio, en chip_cfg.h
+        "../../esp32/common/platform_esp32.c"
+        "../../esp32/common/wire_v1.c"
+        "../../esp32/common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
+        "../../esp32/common/repl_esp32.c"
+        "../../esp32/common/gpio_esp32.c"
+        "../../esp32/common/esp32_mods.c"
         "../../src/json_min.c"               # V6/U1.1: parser JSON comun (era una copia local)
         "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"               # V6/U3: los verbos comunes del REPL
-        "../../esp32/main/board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
+        "../../esp32/common/board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -45,7 +45,7 @@ idf_component_register(
         "../../src/bpvm_bmgr.c"        # H9: board manager (compone env+part)
         "../../src/bpvm_bmgr_wire.c"   # H9: nucleo del protocolo STATE/ENV/PART
         "../../src/bpvm_pack.c"        # H3 Packs V4: core portable de packs (lo llama bmgr_wire)
-        "../../esp32/main/aot_funcs_stub.c"            # H4 AOT: def fuerte no-op de esp_aot_register (S3 sin AOT baked-in)
+        "../../esp32/common/aot_funcs_stub.c"            # H4 AOT: def fuerte no-op de esp_aot_register (S3 sin AOT baked-in)
         "../../src/net.c"              # H11 (#241): facade Net — sin backend hasta H11.c (lwIP) → RuntimeError atrapable
         "../../src/link.c"
         "../../src/scheduler.c"
@@ -53,7 +53,7 @@ idf_component_register(
         "../../src/bpvm_dbg_wire.c"   # #326: ramo de depuracion del wire (portable, ex-Pico)
         "../../src/bpvm_log.c"         # log post-mortem: núcleo portable (idéntico en las 3 familias)
         "../../src/bpvm_listdir.c"     # V5/H6: LIST_DIR comun (salio del repl del Pico)
-        "../../esp32/main/log_esp32.c"                  # ... y su cintura ESP32 (esp_timer + bpenv sector 2)
+        "../../esp32/common/log_esp32.c"                  # ... y su cintura ESP32 (esp_timer + bpenv sector 2)
         "../../src/threading.c"
         "../../src/exceptions.c"
         "../../src/aot_registry.c"
@@ -79,7 +79,7 @@ idf_component_register(
         "../../src/bpvm_neopixel.c"   # fachada no-op sin backend (H7.4)
     INCLUDE_DIRS
         "."
-        "../../esp32/main"   # ENSAYO: las cabeceras de la cintura ESP32 son las del S3
+        "../../esp32/common"   # V6/P1.C3.2: fuentes y cabeceras de la familia ESP32
         "../../include"
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h
@@ -105,4 +105,4 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 # fs_lfs_esp32.c: el BFS de fs_list hace snprintf de paths (acotados por la
 # estructura del FS, pero GCC no lo ve → -Wformat-truncation). ESP-IDF fuerza
 # -Werror (el Pico no) → relajamos SOLO este fichero (mismo código probado en RP2350).
-set_source_files_properties("../../esp32/main/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)
+set_source_files_properties("../../esp32/common/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)

@@ -1,6 +1,6 @@
 # ESP32-P4 — VM.1: bring-up de red + núcleo de la VM-C ejecutando Hello.mod.
 # El core (../../src) es C99 portable; la plataforma (FreeRTOS/esp_timer) se
-# reutiliza del S3 (../../esp32/main/platform_esp32.c). Las fachadas HW van
+# reutiliza del S3 (../../esp32/common/platform_esp32.c). Las fachadas HW van
 # como stubs (sin backend todavía) — el Hello no usa HW.
 #
 # Transporte del wire (#138): UART0 por DEFECTO (imprescindible; el IDE conecta al
@@ -13,26 +13,26 @@ endif()                       # queda solo para logs. TCP completo con -DBPVM_P4
 if(BPVM_P4_WIRE STREQUAL "tcp")
     set(WIRE_TRANSPORT_SRC "wire_v1_tcp.c")                   # I/O del wire sobre TCP (lwIP)
 else()
-    set(WIRE_TRANSPORT_SRC "../../esp32/main/wire_v1.c")      # I/O del wire sobre UART0 (reúso del S3)
+    set(WIRE_TRANSPORT_SRC "../../esp32/common/wire_v1.c")      # I/O del wire sobre UART0 (reúso del S3)
 endif()
 
 idf_component_register(
     SRCS
         "main.c"
-        "../../esp32/main/esp32_mods.c"       # P6 imagen única: stdlib embebida COMPARTIDA con el S3 (14 mods)
+        "../../esp32/common/esp32_mods.c"       # P6 imagen única: stdlib embebida COMPARTIDA con el S3 (14 mods)
         "${WIRE_TRANSPORT_SRC}"               # VM.3: capa de I/O del wire v1 (TCP o UART0 según BPVM_P4_WIRE)
         "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
         "aot_funcs_p4.c"                      # H4 AOT RISC-V (Hito 1): override fuerte de esp_aot_register (SOLO P4)
         "aot_Bench.c"                         # H4 AOT RISC-V (Hito 1): fib nativo (mismo .c portable que el Pico, toolchain RISC-V)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
-        "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
+        "../../esp32/common/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../src/json_min.c"                # V6/U1.1: parser JSON, ya en el comun
         "../../src/wire_v1_proto.c"                # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"                # V6/U3: los verbos comunes del REPL
-        "../../esp32/main/board_mgr_esp32.c"  # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART) — compartido S3
-        "../../esp32/main/platform_esp32.c"
-        "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
-        "../../esp32/main/fs_lfs_esp32.c"    # H2-B3: littlefs (reutilizado del S3) — reemplaza fs_ram.c
+        "../../esp32/common/board_mgr_esp32.c"  # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART) — compartido S3
+        "../../esp32/common/platform_esp32.c"
+        "../../esp32/common/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
+        "../../esp32/common/fs_lfs_esp32.c"    # H2-B3: littlefs (reutilizado del S3) — reemplaza fs_ram.c
         # --- V5/H6: la SD por SDMMC ---------------------------------------
         "blk_sdmmc_p4.c"                      # H6 paso 2: cintura SDMMC sobre sdmmc_host
         "../../src/bpvm_blk.c"                # H6 paso 1: contrato de bloque + tabla de particiones
@@ -74,7 +74,7 @@ idf_component_register(
         "../../src/events.c"           # H5.c: cola de eventos + inyección del handler entre quanta
         "../../src/bpvm_dbg_wire.c"   # #326: ramo de depuracion del wire (portable, ex-Pico)
         "../../src/bpvm_log.c"         # log post-mortem: núcleo portable (idéntico en las 3 familias)
-        "../../esp32/main/log_esp32.c" # ... y su cintura ESP32 (esp_timer + bpenv sector 2) — compartida S3
+        "../../esp32/common/log_esp32.c" # ... y su cintura ESP32 (esp_timer + bpenv sector 2) — compartida S3
         "../../src/threading.c"
         "../../src/exceptions.c"
         "../../src/aot_registry.c"
@@ -101,7 +101,7 @@ idf_component_register(
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h
         "../../third_party/fatfs"      # V5/H6: ff.h (nuestro ffconf.h sale de ../../include)
-        "../../esp32/main"
+        "../../esp32/common"   # V6/P1.C3.2: fuentes y cabeceras de la familia ESP32
     REQUIRES
         esp_eth
         esp_netif
@@ -129,7 +129,7 @@ idf_component_register(
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
 # fs_lfs_esp32.c: snprintf de paths acotado por el FS (falso positivo de -Wformat-truncation con -Werror).
-set_source_files_properties("../../esp32/main/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)
+set_source_files_properties("../../esp32/common/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)
 
 # Activa el camino TCP/Ethernet en main.c (por defecto = UART0, sin este define).
 if(BPVM_P4_WIRE STREQUAL "tcp")

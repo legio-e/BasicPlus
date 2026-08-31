@@ -885,7 +885,7 @@ consume el sistema en marcha. **Los 160 KB del S3 NO cabrían** (dejarían 52). 
 **sin medir en placa** y así lo dice el propio `main.c`: el definitivo sale de repetir la
 medida de `#336` aquí.
 
-#### 🟡 P1.C3.2 — REESTRUCTURAR `esp32/`: separar la familia de la placa
+#### ✅ P1.C3.2 — REESTRUCTURAR `esp32/`: separar la familia de la placa (HECHO 31-ago)
 
 **Propuesta de Eduardo (31-ago)**: *«ya tenemos una carpeta para el S3 y otra para el P4,
 habría que crear una tercera para el C3. No sé si iría bien renombrar `ESP32` a `ESP32S3` y
@@ -916,6 +916,82 @@ snapshots inmutables, que no se tocan).
 
 ⚠️ **Va en su propio paso y con las tres imágenes reconstruidas**: mueve 10 ficheros y toca
 el build de las tres familias a la vez. No mezclarlo con nada.
+
+##### ✅ `P1.C3.2` — la familia ESP32 tiene un común de verdad (31-ago)
+
+La idea de Eduardo era *«renombrar `esp32/` a `esp32s3/` y crear un `esp32/` que contenga a
+las otras 3: lo común de la familia en `esp32/` y lo particular de cada micro en su carpeta»*.
+**El censo cambió el tamaño del trabajo**, así que se hizo el mismo reparto con otra forma.
+
+### Lo que el censo dijo antes de tocar nada
+
+| pregunta | medida |
+|---|---|
+| `.c` de `esp32/main/` que usan **los tres** chips | **9 de 10** |
+| el único no compartido | `main.c` |
+| `main.c` del C3 **vs** el del S3 | copia con **17 líneas** distintas, en **3 sitios** |
+| `main.c` del P4 vs el del S3 | 628 vs 167 líneas — **otro fichero** |
+| el FS (`fs_lfs_esp32.c`) | busca la partición **por nombre** (`bpdata`): cero código por chip |
+| rutas relativas si se mueven los proyectos | **193** en tres `CMakeLists` |
+
+Dos conclusiones. Una: `esp32/main/` **ya era el común** en todo menos en el nombre — no había
+que construirlo, había que decirlo. Otra: mover los tres proyectos costaba 193 rutas relativas
+cuyo fallo típico no es «no compila» sino «resuelve a otra cosa», que es el peor.
+
+### El reparto que se hizo
+
+El ESP-IDF exige que cada proyecto tenga su componente `main/`. Así que se dejó el componente
+donde estaba y salieron las **fuentes**:
+
+```
+esp32/
+  common/          ← los 9 .c de la familia + main.c + sus .h   (era esp32/main/)
+  main/
+    CMakeLists.txt ← el componente `main` del proyecto S3
+    chip_cfg.h     ← LO DEL S3: nombre + los dos tamaños del heap
+esp32c3/main/
+    chip_cfg.h     ← LO DEL C3
+esp32p4/           ← su main.c propio (es otro arranque de verdad), fuentes del común
+```
+
+**Ni una profundidad cambia**: sólo `esp32/main/X.c` → `esp32/common/X.c`, unas 30 líneas en
+tres `CMakeLists` en vez de 193.
+
+### Lo que de verdad se arregló: el `main.c` duplicado
+
+176 líneas copiadas que se diferenciaban en **dos números y un nombre**. Es la trampa de
+[[arreglo-que-no-viaja-entre-familias]] — y **ya había mordido dos veces esta semana**: el `if`
+sin llaves (`#464`) y las puertas por capacidad del silicio (`#465`) se arreglaron en un
+`main.c` y no en el otro. Ahora hay uno.
+
+Lo particular baja a `chip_cfg.h`, y el criterio de qué entra ahí es estrecho: **sólo lo que no
+se puede preguntar en marcha**. El tamaño del heap de la VM lo es, y por una razón concreta —
+`vm_buffer_init()` corre **antes** que `board_mgr_esp32_boot()` (`layer_app` comprueba
+`s_vm_buffer`), o sea antes de que exista el ENV. Todo lo demás sigue yendo al ENV
+([[config-de-placa-en-el-env]]).
+
+📌 **La resolución del `#include` es lo que hace que esto sea seguro.** Como en `esp32/common/`
+**no** hay ningún `chip_cfg.h`, el `#include "chip_cfg.h"` de `main.c` no puede caer en el del
+vecino por accidente: no encuentra nada al lado del fichero que incluye y cae en el `-I` del
+proyecto que se está compilando. Si se pusiera un `chip_cfg.h` en `common/`, ganaría siempre y
+el fallo sería **silencioso**.
+
+### ✅ Verificado — en el artefacto, no en el log
+
+Las tres imágenes compilan, y **el control es el nombre del chip**: el mismo `main.c` produce
+
+```
+  S3   -> BasicPlus VM en ESP32-S3
+  C3   -> BasicPlus VM en ESP32-C3
+```
+
+leído con `strings` **de los `.bin`**, que es la única forma de saber que cada proyecto cogió su
+`chip_cfg.h`. Y las tres conservan el tamaño exacto que tenían antes del cambio (440000 /
+431472 / 1294000), que es lo que se espera de un movimiento sin cambio de comportamiento.
+
+⏭️ Queda `P1.C3.3`: **medir** el heap del C3 en placa y sustituir el 96 KB de ensayo. El fichero
+lo dice de sí mismo, en mayúsculas.
+
 
 #### 🎯 La conclusión de Eduardo al ver el ensayo (31-ago)
 

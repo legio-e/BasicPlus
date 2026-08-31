@@ -1,5 +1,12 @@
 /*
- * main.c — ENSAYO ESP32-C3 (V6/P1): mismo firmware que el S3, otra silicio.
+ * main.c — H4.3: firmware de la familia ESP32 con REPL wire v1.
+ *
+ * V6/P1.C3.2 — COMPARTIDO por los proyectos de la familia (S3 y C3 hoy). Lo que
+ * cambia de un silicio a otro son TRES cosas —el nombre y los dos tamaños del
+ * heap de la VM— y viven en el `chip_cfg.h` del componente `main/` de cada uno.
+ * Antes esto era un fichero por chip, copiado: el C3 se diferenciaba en 176
+ * lineas de las cuales 17 eran reales, y los arreglos no viajaban (`#464` y
+ * `#465` se hicieron en uno y no en el otro).
  *
  * Arranca el FS (RAM), el wire v1 sobre UART0 y entra al bucle del REPL.
  * El IDE (SerialBackend) conecta al UART0 (puerto del bridge USB-UART),
@@ -33,30 +40,11 @@
  * PSRAM: mismos bytes en marcha, pero el enlazador deja de tener que encajar un
  * bloque contiguo enorme y, si no hay sitio, el boot lo DICE (se queda por
  * debajo del estado 3 con su motivo) en vez de fallar al enlazar. */
-/* Cuánto pide la VM. NO es un número a ojo: sale de medir (#336).
- *   DRAM libre al arrancar, antes de reservar ......... 319632 B
- *   lo que el sistema consume EN MARCHA por encima .....  86256 B  (medido con
- *     heap_caps_get_minimum_free_size tras varios RUN: 188556 justo tras
- *     reservar − 102300 en el peor momento observado)
- *   ⇒ tope seguro = 319632 − 86256 − margen
- * Con 64 KB de margen salen ~164 KB; se redondea a la baja a 160.
- * NO se sube a 192 (que daría heap 128) porque dejaría el peor caso en ~36 KB
- * libres, y con las tareas del IDF creándose EN MARCHA eso ya no es margen.
- * El reparto lo decide bpvm_stack_region_bytes: con 160 KB manda el suelo ⇒
- * stacks 64 KB (igual que antes) y heap 96 KB (+50%).
- * Si algún día no cabe, hay escalón de respaldo abajo: mejor una VM más
- * pequeña que ninguna. */
-/* ⚠️ ENSAYO — ESTE NÚMERO ESTÁ SIN MEDIR.
- *
- * El del S3 (160 KB) sale de medir la DRAM libre y el consumo en marcha (#336).
- * El C3 tiene MENOS SRAM (~400 KB de chip contra 512 del S3) y un solo núcleo, así
- * que copiarlo sería justo lo que este proyecto no hace: poner un número a ojo.
- *
- * Se arranca a 96 KB —por debajo del respaldo known-good del S3— sólo para que el
- * ensayo enlace y se pueda MEDIR con `heap_caps_get_free_size` en placa. El número
- * definitivo sale de repetir la medida de #336 aquí, no de esta línea. */
-#define VM_BUFFER_SIZE   (96 * 1024)
-#define VM_BUFFER_FALLBACK (64 * 1024)    /* ensayo: mejor una VM pequeña que ninguna */
+/* Cuánto pide la VM y cómo se llama el chip: lo pone el proyecto, porque son
+ * las dos cosas que NO se pueden preguntar en marcha (`vm_buffer_init()` corre
+ * antes que el ENV). El porqué de cada número está en el `chip_cfg.h` que lo
+ * fija — y en el del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
+#include "chip_cfg.h"
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
 
@@ -106,7 +94,7 @@ void app_main(void)
 {
     /* Estos printf van a la CONSOLA = USB-Serial-JTAG (puerto nativo),
      * NO al wire (UART0). Sirven para depurar el arranque. */
-    printf("\n=== BasicPlus VM en ESP32-S3 (H4.3 — wire v1) ===\n");
+    printf("\n=== BasicPlus VM en " CHIP_NOMBRE " (H4.3 — wire v1) ===\n");
     printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
 
     /* LO PRIMERO: el log persistente. Recupera el snapshot de la sesión anterior
@@ -114,7 +102,7 @@ void app_main(void)
      * queda grabando desde antes del climb del boot. */
     log_init();
     bpvm_diag_set_sink(diag_al_log);          /* #353 */
-    log_printf("=== boot ESP32-C3 (ensayo) ===");
+    log_printf("=== boot " CHIP_NOMBRE " ===");
     /* #439 — DE DONDE sale lo que trae el log. Sin esto, un volcado con dos
      * arranques no distingue «la RAM sobrevivio» de «se cargo de flash lo que
      * el arranque anterior volco» — que es exactamente lo que habia antes.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# regen_esp32_mods.sh — regenera esp32/main/esp32_mods.c embebiendo la
+# regen_esp32_mods.sh — regenera esp32/common/esp32_mods.c embebiendo la
 # stdlib core de BasicPlus en el firmware del ESP32-S3.
 #
 # Gemelo de stm32/scripts/regen_stm32_mods.sh: cada <Name>.mod de bpstdlib/
@@ -19,7 +19,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 STDLIB="$(cd "$HERE/../../.." && pwd)/bpstdlib"
-OUT="$HERE/../main/esp32_mods.c"
+OUT="$HERE/../common/esp32_mods.c"
 
 # Mismo conjunto que EMBEDDED_CORE_MODS en el IDE. Nombre tal cual (la
 # resolución de imports busca "<Module>.mod" preservando mayúsculas).
