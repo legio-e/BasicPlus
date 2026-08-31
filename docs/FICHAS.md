@@ -1435,6 +1435,21 @@ recuerda; uno accidental te espera — flasheas una imagen con un `Core` nuevo y
 `/app` lo sigue tapando, en silencio. Es la misma familia que el módulo rancio de `/lib`, pero
 por el otro lado.
 
+### ✅ Verificado en placa (Discovery, 31-ago)
+
+```
+[deps] 4 módulo(s) a subir:
+  - Gui.mod  → /lib
+  - Pico.mod → /lib
+  - Json.mod → /app      ← correcto: Json NO va embebido en la imagen
+  - Core.mod → /lib      ← antes iba a /app
+[Explorer] /lib/Core.mod ya en FS (13111 bytes, contenido idéntico), salto PUT
+```
+
+El CRC lo encuentra idéntico en `/lib` y se salta la subida, que es justo lo que tenía que
+pasar. *(El `/app/Core.mod` que dejaron las ejecuciones anteriores hay que borrarlo a mano: el
+arreglo evita crear el próximo, no limpia el que había.)*
+
 ### ⚠️ Lo que queda abierto detrás, y es lo de fondo
 
 **Esa lista es un GEMELO escrito a mano de lo que el firmware embebe**, y se habían separado por
