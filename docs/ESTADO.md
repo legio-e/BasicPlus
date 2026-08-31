@@ -27,6 +27,55 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (31-ago, cierre 2) — dos cosas del IDE
+
+### ✅ `#463` — `Core.mod` se subía a `/app` y creaba un override sin querer
+
+**Lo vio Eduardo mirando el árbol de la placa**, sin que fallara nada: `Core.mod` aparecía en
+`/app` **y** en `/lib` con el mismo tamaño. La lista `EMBEDDED_CORE_MODS` del IDE tenía **13**
+nombres donde el firmware embebe **14**; faltaba `Core`. Arreglado, fat-jar rehecho y
+verificado en la Discovery (`Core.mod → /lib`, CRC idéntico, salta el PUT).
+
+📌 **Dos correcciones de Eduardo que cambiaron el diagnóstico**: que `/app` gane a `/lib` **está
+bien y es a propósito** —*«si tienes un módulo más moderno lo puedes probar; de la otra forma no
+se podría sin borrarlo de /lib»*—, así que el fallo no era la precedencia sino **crear el
+override sin pedirlo**. Un override deliberado se recuerda; uno accidental te espera.
+
+🧹 **Pendiente manual**: borrar el `/app/Core.mod` que dejaron las ejecuciones anteriores. El
+arreglo evita crear el próximo, no limpia el que hay — y mientras esté, sigue ganando.
+
+⚠️ **Lo de fondo, abierto**: esa lista es un **gemelo escrito a mano** de lo que embebe el
+firmware, y se habían separado por uno. Lo robusto es que **lo diga el dispositivo** (el `LIST`
+de `/lib` ya existe y el IDE ya compara por CRC). Mientras siga siendo una constante en Java,
+volverá a desincronizarse.
+
+### ⏸️ EN SUSPENSO — «faltan módulos» al ejecutar desde `run`
+
+**Síntoma de Eduardo**: ejecutar desde el IDE (que copia los módulos) y a continuación desde el
+`run` de la consola (que no copia) → *«me dice que faltan módulos»*. **Decisión: se deja en
+suspenso a ver si vuelve a ocurrir.**
+
+**Lo que se averiguó por el camino y sirve si reaparece** — hay una asimetría real:
+
+| quién lanza | `path` que manda | basedir que se deduce | dónde busca las DEPENDENCIAS |
+|---|---|---|---|
+| IDE, con proyecto | `/app/<proj>/X.mod` | `/app/<proj>` | el proyecto → `/app` → `/lib` → `/sys` |
+| IDE, sin proyecto | `/app/X.mod` | *(plano)* | `/app` → `/lib` → `/sys` |
+| consola `run X` | `consoleCwd + "/X.mod"` | según dónde esté el `cd` | lo que salga de ahí |
+
+📐 La regla está en `bpvm_entry_resolve` (`bpvm.c:779`) y el basedir en
+`bpvm_fs_set_basedir_from_module` (`fs_facade.c:98`), que **sólo lo activa si la ruta empieza
+por `/app/<proj>/`**. O sea: **el mismo programa puede buscar sus dependencias en sitios
+distintos según por dónde lo arranques**.
+
+🔴 **Pero NO está confirmado que sea la causa de lo que vio Eduardo.** Faltan dos datos que sólo
+da la reproducción: **el texto exacto del error** (*«faltan módulos»* y *«no encuentro el
+módulo»* son mensajes distintos y apuntan a sitios distintos) y **dónde estaba el `cd`**. Sin
+eso es una teoría que encaja, no una causa. *(Y cabe que fuera parte de lo de `#463` y ya esté
+resuelto.)*
+
+---
+
 ## ⏭️ AL RETOMAR (31-ago, cierre) — **la matriz de placas, al día**
 
 | familia | estado | qué ha corrido con la imagen de hoy |
