@@ -27,6 +27,33 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (31-ago, cierre) — **la matriz de placas, al día**
+
+| familia | estado | qué ha corrido con la imagen de hoy |
+|---|---|---|
+| **ESP32-P4** | ✅ **probada** | `JsonDemo` · `trytest` · `GuiEvSpike` · `stop` |
+| **STM32 Discovery** | ✅ **probada** | `JsonDemo` · `GuiColorDemo` · `GuiEvSpike` · `GuiEvLat` ×3 · `trytest` · `stop` ×5 |
+| **Pico / Metro** | 🔴 **la stdlib nueva SIN ESTRENAR** | — |
+| **ESP32-S3** | 🔴 **la stdlib nueva SIN ESTRENAR** | — |
+| **STM32 Nucleo** | 🔴 **la stdlib nueva SIN ESTRENAR** | — |
+
+El gesto que cierra cada una son dos programas con **salida conocida e idéntica en las tres
+que ya pasaron**, o sea que valen de oráculo:
+
+- **`trytest.bp`** → `atrapado: n era negativo` + los otros dos mensajes. Es **el camino más
+  tocado de estos dos días**: `#459` cambió cómo se enlaza la variable de un `catch` sin tipo,
+  `Exception` ganó `toString()`, y de los 56 ficheros que ganaron `import Core`, **23 fue por
+  `RuntimeError`**.
+- **`JsonDemo`** → la stdlib nueva corriendo (`Core.mod` regenerado).
+
+⚠️ **Y una precisión sobre el `/lib`, para no dar de más por probado**: el IDE refresca por CRC
+**sólo los módulos que cada programa pide**. La Discovery tiene al día `Core`, `Json`, `Gui` y
+`Pico` — **no los 27**. Los que ningún programa haya pedido pueden seguir siendo los viejos, y
+eso morderá el día que se use uno. Para dejar una placa al día ENTERA: **formatear el FS** y que
+la imagen reinstale.
+
+---
+
 ## ⏭️ AL RETOMAR (31-ago, tarde) — **la latencia de los eventos del GUI, medida y partida en dos**
 
 ### 🔬 Dónde retomarlo: `#462`, y está listo para atacarse
