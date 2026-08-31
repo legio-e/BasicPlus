@@ -207,11 +207,9 @@
     <li class="sub"><a href="#library">10.1 library</a></li>
     <li class="sub"><a href="#main">10.2 main / initializer</a></li>
     <li class="sub"><a href="#imports">10.3 import / from</a></li>
-    <li class="sub"><a href="#interfaces">10.4 module interface</a></li>
-    <li class="sub"><a href="#implements">10.5 implements</a></li>
-    <li class="sub"><a href="#binding">10.6 Binding I:Impl</a></li>
-    <li class="sub"><a href="#encapsulacion">10.7 Encapsulación clase↔módulo</a></li>
-    <li class="sub"><a href="#dospasadas">10.8 Dos pasadas y ciclos entre módulos</a></li>
+    <li class="sub"><a href="#interfaces">10.4 module interface (retirado)</a></li>
+    <li class="sub"><a href="#encapsulacion">10.5 Encapsulación clase↔módulo</a></li>
+    <li class="sub"><a href="#dospasadas">10.6 Dos pasadas y ciclos entre módulos</a></li>
 
     <li class="group"><a href="#excepciones">11. Excepciones</a></li>
     <li class="group"><a href="#owner">12. Owner semantics</a></li>
@@ -1318,70 +1316,23 @@ Counter.bump()</code></pre>
       <code>.bp</code> fuente derivando la ruta.</li>
 </ul>
 
-<h3 id="interfaces">10.4 <code>module interface</code></h3>
-<pre><code><span class="kw">library</span> <span class="str">"com.example"</span>
-<span class="kw">module interface</span> LogApi
-  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
-  <span class="kw">public function</span> level(): <span class="type">integer</span>
-  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
-<span class="kw">end</span> LogApi</code></pre>
-<p>
-  Una interfaz es un contrato (Modula-2 <code>DEFINITION MODULE</code>): sólo
-  firmas públicas, sin cuerpo de función. Compila sólo a interfaz (flag <code>interface true</code>) y no produce <code>.mod</code>.
-</p>
-<p>
-  Las interfaces pueden extender otra interfaz (herencia de contratos):
-</p>
-<pre><code><span class="kw">module interface</span> LogApiV2 <span class="kw">extends</span> com.example.LogApi
-  <span class="kw">public function</span> logWithLevel(lvl: <span class="type">integer</span>, msg: <span class="type">string</span>)
-  <span class="kw">public function</span> flush()
-<span class="kw">end</span> LogApiV2</code></pre>
+<h3 id="interfaces">10.4 <code>module interface</code> — <span class="kw">RETIRADO</span></h3>
+<p><strong>BasicPlus no tiene interfaces.</strong> Ni para clases —que sería lo
+defendible— ni para módulos. Las secciones que aquí describían
+<code>module interface</code>, <code>implements</code> y el binding
+<code>import Contrato:Impl</code> se retiran del lenguaje (decisión de Eduardo,
+30-ago-2026), junto con los ejemplos que las usaban.</p>
+<p>Lo que aquellas tres secciones perseguían —<em>evolucionar un módulo sin romper a
+quien lo usaba</em>— sigue siendo un objetivo, y la forma prevista es la
+<strong>herencia entre módulos</strong>: dejar el módulo original y añadir otro que
+herede de él. Está <strong>en suspenso a propósito</strong>, porque para que funcione
+hace falta un control de versiones efectivo que hoy no existe. Se retomará entonces.</p>
+<p>Para componer funcionalidad hoy: <code>import</code> normal (§10.3) y
+<strong>herencia entre clases</strong> (§9), que sí existe y se usa —la biblioteca
+estándar tiene 38 casos, de <code>SyncList extends Core.List</code> a
+<code>RuntimeError extends Exception</code>.</p>
 
-<h3 id="implements">10.5 <code>implements</code></h3>
-<pre><code><span class="kw">module</span> ConsoleLogger <span class="kw">implements</span> com.example.LogApi
-  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
-    <span class="kw">print</span> <span class="str">"[CON] "</span> + msg
-  <span class="kw">end</span> log
-  <span class="kw">public function</span> level(): <span class="type">integer</span>
-    <span class="kw">return</span> <span class="num">0</span>
-  <span class="kw">end</span> level
-  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
-<span class="kw">end</span> ConsoleLogger</code></pre>
-<p>
-  El analyzer verifica que el módulo expone TODAS las firmas del contrato
-  (funciones con tipos idénticos, consts con mismo tipo, enums con mismos
-  miembros y valores). El impl puede añadir libremente <em>extras</em>
-  públicos no exigidos por el contrato. Errores típicos:
-</p>
-<ul>
-  <li><code>no implementa la función 'foo' requerida por 'I'</code></li>
-  <li><code>la función 'foo': retorno declarado 'float', se esperaba 'integer'</code></li>
-  <li><code>la función 'foo' requerida por 'I' debe ser public</code></li>
-</ul>
-
-<h3 id="binding">10.6 Binding <code>import I:Impl</code></h3>
-<pre><code><span class="kw">module</span> App
-  <span class="kw">import</span> com.example.LogApi:ConsoleLogger
-  <span class="comment">// Equivalente con from:
-  // import com.example.LogApi:ConsoleLogger from "plugins/logger.mod"</span>
-
-  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
-    LogApi.log(<span class="str">"hola"</span>)         <span class="comment">// tipa contra LogApi; CALL_EXT a ConsoleLogger.log</span>
-  <span class="kw">end</span> main
-<span class="kw">end</span> App</code></pre>
-<p>
-  Compile-time: el namespace <code>LogApi</code> se tipa contra la interfaz.
-  Codegen: cada <code>LogApi.x</code> emite <code>CALL_EXT</code> al impl
-  bindeado. Cambiar de impl = editar la línea del binding y recompilar.
-</p>
-<p>
-  <strong>Compatibilidad LSP</strong>: <code>import LogApi:BufferedLogger</code>
-  es válido aunque <code>BufferedLogger</code> declare
-  <code>implements LogApiV2</code> y <code>LogApiV2 extends LogApi</code>.
-  El driver recorre la cadena <code>implements → extends</code>.
-</p>
-
-<h3 id="encapsulacion">10.7 Encapsulación clase ↔ módulo</h3>
+<h3 id="encapsulacion">10.5 Encapsulación clase ↔ módulo</h3>
 <p>
   Desde dentro de una clase, sólo se accede a símbolos <strong>públicos</strong>
   del módulo (functions, consts, vars, properties). Tipos (clases, enums,
@@ -1401,7 +1352,7 @@ Counter.bump()</code></pre>
 
 <!-- =========================================================== -->
 
-<h3 id="dospasadas">10.8 Dos pasadas: por qué los módulos pueden llamarse entre sí</h3>
+<h3 id="dospasadas">10.6 Dos pasadas: por qué los módulos pueden llamarse entre sí</h3>
 <p>El compilador procesa cada módulo <strong>dos veces</strong>:</p>
 <ol>
   <li><strong>Pasada de interfaz</strong> — recorre las declaraciones y anota
