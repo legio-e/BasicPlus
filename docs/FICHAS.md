@@ -2641,6 +2641,23 @@ struct ya no de un solo campo, la inicialización parcial saca
 Comparar línea a línea sirve para no perder FUNCIONALIDAD; esto enseña que también hay que
 mirar **por qué** el código de origen estaba escrito como estaba.
 
+#### ✅ Verificado en la P4 (31-ago)
+
+`JsonDemo` corre entero y sale `exit 0`. **El log demuestra el `LIST` aunque no lo nombre**:
+
+```
+[Explorer] /app/Json.mod ya en FS (24059 bytes, contenido idéntico), salto PUT
+[Explorer] /lib/Core.mod ya en FS (13111 bytes, contenido idéntico), salto PUT
+[Explorer] /app/JsonDemo.mod ya en FS (2505 bytes, contenido idéntico), salto PUT
+```
+
+Esos tres «salto PUT» son **comparaciones contra el listado del Explorer** — el mismo `LIST`
+que ayer daba `[Placa ERROR] timeout`. Si no hubiera contestado, no habría con qué comparar.
+
+🎁 Y de paso confirma `#463` en placa: `Core.mod` va a **`/lib`** y no a `/app`, o sea que ya
+no se crea el override que no había pedido nadie.
+
+
 ### 🔴 Por qué llegó a la placa: **el simulador es el quinto consumidor y no ha migrado**
 
 El arnés de paridad corre PROGRAMAS; `LIST` es un verbo del wire y ahí no llega. Pero existe
