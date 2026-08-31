@@ -917,6 +917,30 @@ snapshots inmutables, que no se tocan).
 ⚠️ **Va en su propio paso y con las tres imágenes reconstruidas**: mueve 10 ficheros y toca
 el build de las tres familias a la vez. No mezclarlo con nada.
 
+#### 🎯 La conclusión de Eduardo al ver el ensayo (31-ago)
+
+*«Me vale como prueba. Realmente las ESP32 escalan bien y eso es bueno. Detrás de la C3 y
+la C6, en un futuro vendrá la S31 —que es como una actualización de la S3 pero con hardware
+más moderno y RISC-V—. Lo que necesitamos es terminar la unificación de las comunicaciones,
+y la migración de C3 y C6 nos sale casi gratis.»*
+
+📊 **Y el ensayo lo respalda con un número.** De dónde salen las 63 fuentes del firmware C3:
+
+| origen | fuentes | |
+|---|---|---|
+| **común de las 5 placas** (`src/`) | **49** | **77 %** |
+| común de la familia ESP32 (`esp32/main/`) | 10 | 15 % |
+| terceros (littlefs) | 3 | 4 % |
+| **propio del C3** | **1** | **1 %** |
+
+**Una fuente de 63 es del C3.** Y las 10 de familia incluyen `repl_esp32.c` — o sea que el
+ensayo **ya se benefició de lo que `U3` lleva hecho**: usa el REPL común. Lo que queda de
+`U3` (`LIST` y el desglose por raíz) es literalmente lo que separa ese 15 % de bajar más.
+
+🔗 **Por eso `P1` va detrás de la unificación y no al revés**, y ahora está medido en vez de
+argumentado: *cada sistema sin unificar es una copia más por micro*. La S31 —RISC-V, como el
+C3 y el C6— entra por el mismo camino.
+
 #### 🔴 P1.C3.3 — lo que falta para que sea una imagen de verdad
 
 - **Medir el bloque de la VM en placa** (repetir `#336` en el C3) y fijar el número.
