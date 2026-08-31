@@ -2827,8 +2827,25 @@ public class FrmMain extends javax.swing.JFrame
      *
      *  Gpio entró aquí (con la clase Pin) tras reflashear el firmware
      *  con el array empotrado actualizado el 23-may-2026. */
+    /* #463 — «Core» FALTABA, y lo vio Eduardo mirando el árbol de la placa:
+     * `Core.mod` aparecía a la vez en /app y en /lib, con el mismo tamaño exacto.
+     *
+     * El firmware embebe CATORCE módulos (ver el generado `esp32_mods.c`) y esta
+     * lista tenía TRECE. Como sólo elige la carpeta destino, `Core` acababa en
+     * /app en vez de /lib.
+     *
+     * 📌 Que /app gane a /lib está BIEN y es a propósito (Eduardo): es como pruebas
+     * un módulo más nuevo sin tener que borrar el de la stdlib. El fallo no es la
+     * precedencia — es que el IDE **crea ese override sin que nadie lo pida**. Un
+     * override deliberado se recuerda; uno accidental te espera: flasheas una imagen
+     * con un `Core` nuevo y la copia de /app lo sigue tapando, en silencio.
+     *
+     * ⚠️ Y esta lista es un GEMELO escrito a mano de lo que el firmware embebe.
+     * Se han separado por uno. La forma robusta es que lo diga el dispositivo (el
+     * `LIST` de /lib ya está), no que el IDE lo recuerde — ver la ficha. */
     private static final java.util.Set<String> EMBEDDED_CORE_MODS =
             new java.util.HashSet<>(java.util.Arrays.asList(
+                    "Core",
                     "Math", "IO", "Gpio", "I2c", "Spi", "Uart",
                     "Pulse", "Pwm", "Pico", "Rtc", "Adc", "Wdt", "Timer"
             ));

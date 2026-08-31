@@ -1404,6 +1404,52 @@ existe porque casi siempre trabaja en memoria. Enlaza con
 [[contar-los-consumidores-no-leer-el-codigo]]: al subir un formato hay que **censar los
 lectores**, y son tres, no dos.
 
+#### ✅ `#463` — el IDE no sabía que `Core` va embebido: lo subía a `/app` y creaba un override sin querer (cerrada 31-ago)
+
+**Lo vio Eduardo mirando el árbol de la placa**: *«parece como si el Core no se detectara en la
+stdlib y lo copia casi siempre»*. Y el árbol lo decía sin ambigüedad — `Core.mod` en `/app` **y**
+en `/lib`, con el mismo tamaño exacto (13111 B).
+
+### La causa: una lista de trece donde había catorce
+
+`FrmMain.EMBEDDED_CORE_MODS` decide **la carpeta destino** de cada dependencia. Comparada con
+lo que el firmware embebe de verdad (leído del generado `esp32_mods.c`, no de memoria):
+
+```
+firmware embebe (14): Adc Core Gpio I2c IO Math Pico Pulse Pwm Rtc Spi Timer Uart Wdt
+IDE creía       (13):     Adc Gpio I2c IO Math Pico Pulse Pwm Rtc Spi Timer Uart Wdt
+                          ^^^^ falta Core
+```
+
+Un solo nombre. Arreglado añadiéndolo.
+
+### 📌 Y la corrección de Eduardo, que cambia cuál es el fallo
+
+Escribí que el problema era que `/app` gane a `/lib`. **Falso**: *«la precedencia está bien, el
+de /app debe ir antes que /lib. Así si tienes un módulo más moderno lo puedes probar; de la otra
+forma no se podría probar sin borrarlo de /lib.»*
+
+O sea que `/app` **es el mecanismo de override**, y está bien puesto. El fallo es otro y más
+fino: **el IDE creaba ese override sin que nadie lo pidiera**. Un override deliberado se
+recuerda; uno accidental te espera — flasheas una imagen con un `Core` nuevo y la copia vieja de
+`/app` lo sigue tapando, en silencio. Es la misma familia que el módulo rancio de `/lib`, pero
+por el otro lado.
+
+### ⚠️ Lo que queda abierto detrás, y es lo de fondo
+
+**Esa lista es un GEMELO escrito a mano de lo que el firmware embebe**, y se habían separado por
+uno. Lo robusto es que **lo diga el dispositivo** en vez de que el IDE lo recuerde: el `LIST` de
+`/lib` ya existe y el IDE ya compara por CRC fichero a fichero. Mientras siga siendo una
+constante en Java, volverá a desincronizarse — el día que el firmware embeba uno más.
+
+🔎 **De paso, una inconsistencia entre los dos caminos del IDE**: el de ejecución usa
+`EMBEDDED_CORE_MODS.contains(mod) || "Gui".equals(mod)` y el de **depuración** (`FrmMain:2778`)
+sólo `EMBEDDED_CORE_MODS.contains(mod)` — sin el `Gui`. Así que `Gui.mod` va a `/lib` al ejecutar
+y a `/app` al depurar. Sin verificar en placa; anotado.
+
+🧹 **Al aplicar esto hay que limpiar a mano** el `/app/Core.mod` que las ejecuciones anteriores
+ya dejaron: el arreglo evita crearlo, no borra el que hay.
+
 #### 🟡 `#462` — la VM **nunca cede el turno al SO**: en el ESP32 un programa bloquea el resto del sistema (abierta 31-ago)
 
 **Eduardo, como usuario:** *«cuando se ejecuta un programa en las STM32, el resto del
