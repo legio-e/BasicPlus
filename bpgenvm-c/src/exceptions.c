@@ -200,9 +200,26 @@ have_class:
         /* Sin RuntimeError disponible — caller debe usar BpThreadFault
          * equivalente (= terminar thread). Aquí imprimimos al menos. */
         /* #355 — al canal de diag: en placa el stderr no llega a ningun sitio
-         * util. De paso cierra uno de los 29 fprintf de #353. */
-        bpvm_diag_urgente("[bpvm] throw: SIN CLASE RuntimeError exportada, no hay con "
-                  "que construir la excepcion: %s", msg ? msg : "");
+         * util. De paso cierra uno de los 29 fprintf de #353.
+         *
+         * V6/P1.C3.3 — Y DICE CUAL DE LAS DOS COSAS ES. Este mismo aviso lo
+         * disparaba tambien la PREFABRICACION del OOM (`#430`), que corre en
+         * todo arranque de programa y que en un modulo que no importa `Core` no
+         * puede hacerse — y no pasa nada, el codigo lo contempla
+         * (`.v == 0 si ni esto se pudo`). Sonaba identico a un OOM real, con la
+         * misma frase y el mismo texto «No space in heap», en el log de una
+         * placa. Me costo un diagnostico entero: di por hecho que el programa
+         * se habia quedado sin heap y llegue a cambiar el tamano del bloque de
+         * la VM por eso. Un aviso que no distingue un no-evento de un fallo es
+         * peor que no tenerlo. */
+        if (vm->prefabricando_oom) {
+            bpvm_diag("[bpvm] OOM sin prefabricar: este modulo no exporta "
+                      "RuntimeError. No es un fallo; si de verdad falta memoria, "
+                      "se reportara sin excepcion.");
+        } else {
+            bpvm_diag_urgente("[bpvm] throw: SIN CLASE RuntimeError exportada, no hay con "
+                      "que construir la excepcion: %s", msg ? msg : "");
+        }
         return bpref_null();
     }
 

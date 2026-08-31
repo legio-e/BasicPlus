@@ -335,7 +335,7 @@ static void wire_task(void *arg)
 /* ===== Transporte UART0 (#138): el IDE conecta al puerto del bridge USB-UART, SIN
  * red → sirve también a placas sin Ethernet (la nueva con pantalla). Gemelo de
  * wire_task: mismo FS+stdlib+HW y el mismo repl_esp32_run reutilizado, pero NO
- * espera Link Up y arranca wire_v1_uart_init en vez del servidor TCP. ===== */
+ * espera Link Up y arranca wire_v1_transport_init en vez del servidor TCP. ===== */
 static void wire_task_uart(void *arg)
 {
     (void) arg;
@@ -368,7 +368,7 @@ static void wire_task_uart(void *arg)
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3) */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* del P4 */
-    wire_v1_uart_init();
+    wire_v1_transport_init();
     net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");
 
     /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).

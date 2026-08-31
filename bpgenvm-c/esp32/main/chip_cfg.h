@@ -43,4 +43,8 @@
 #define VM_BUFFER_SIZE     (160 * 1024)
 #define VM_BUFFER_FALLBACK (128 * 1024)   /* el de siempre, known-good */
 
+/* Identidad de placa: el S3 ES el defecto de `repl_esp32.c`, asi que no hay
+ * nada que pisar. Los silicios que no son el defecto instalan la suya. */
+#define CHIP_INSTALAR_BOARD_ID()  ((void) 0)
+
 #endif /* BPVM_CHIP_CFG_H */

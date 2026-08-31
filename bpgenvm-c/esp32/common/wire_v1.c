@@ -61,7 +61,7 @@
 #define WIRE_UART_RX_PIN UART_PIN_NO_CHANGE
 #endif
 
-void wire_v1_uart_init(void) {
+void wire_v1_transport_init(void) {
     const uart_config_t cfg = {
         .baud_rate = WIRE_UART_BAUD,
         .data_bits = UART_DATA_8_BITS,
@@ -77,6 +77,8 @@ void wire_v1_uart_init(void) {
                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     uart_driver_install(WIRE_UART, WIRE_RX_BUF, 0, 0, NULL, 0);
 }
+
+const char* wire_v1_transport_name(void) { return "UART0 @115200"; }
 
 /* ===================== Lectura ===================== */
 

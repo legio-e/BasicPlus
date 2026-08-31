@@ -12,7 +12,15 @@ idf_component_register(
     SRCS
         "../../esp32/common/main.c"   # V6/P1.C3.2: el arranque de la FAMILIA; lo propio, en chip_cfg.h
         "../../esp32/common/platform_esp32.c"
-        "../../esp32/common/wire_v1.c"
+        # V6/P1.C3.3 — EL CABLE DE ESTA PLACA VA POR EL USB, no por UART0.
+        # Esta placa tiene UN solo conector USB, y el modo descarga se entra a
+        # mano con los pulsadores BOOT+RESET: o sea que en marcha el USB esta
+        # libre. Si esta libre lo ocupa el WIRE, que es lo que necesita el
+        # usuario (un cable y el IDE conecta); la consola se va a UART0, que es
+        # donde tiene sentido lo que solo miramos nosotros cuando algo falla.
+        # El S3 y el P4 tienen dos puertos y NO se tocan.
+        "../../esp32/common/wire_v1_usbjtag.c"
+        "c3_board_id.c"                       # V6/P1.C3.3: identidad de placa (pisa el default del S3)
         "../../esp32/common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
         "../../esp32/common/repl_esp32.c"
         "../../esp32/common/gpio_esp32.c"
@@ -86,6 +94,7 @@ idf_component_register(
     REQUIRES
         esp_timer
         esp_driver_uart
+        esp_driver_usb_serial_jtag   # V6/P1.C3.3: el cable del wire va por el USB nativo
         esp_partition
         esp_driver_gpio
         esp_driver_spi   # H16: backend SPI (spi_master)

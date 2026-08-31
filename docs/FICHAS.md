@@ -1101,7 +1101,95 @@ adaptador para depurar, que es cosa nuestra. Pero cambia el reparto de las tres 
 así que se decide antes de tocar.
 
 
-#### 🔴 P1.C3.3 — lo que falta para que sea una imagen de verdad
+#### ✅ `P1.C3.3` — CERRADO: el C3 ejecuta BasicPlus por su único cable (31-ago)
+
+```
+{"type":"HELLO_REPLY","serverName":"bpvm-esp32c3", ...}
+fib(28) interp = 317811 in 11317 ms          ← por el USB-Serial-JTAG, sin adaptador
+{"type":"EXITED","status":"OK","exitCode":0}
+```
+
+### El muro, y cómo lo tiró Eduardo
+
+La placa tiene **un solo conector USB** y el reparto heredado del S3 —consola por el
+USB-Serial-JTAG, wire por UART0— dejaba el wire en pines pelados. Lo desatascó un dato de la
+**placa**, no del software:
+
+> *«Tenemos un solo conector USB pero a cambio tenemos 2 pulsadores, uno para reset y otro para
+> boot. Si queremos grabar la imagen hay que pulsar los 2 y soltar reset. En un arranque normal
+> el USB es NUESTRO.»*
+
+O sea: el USB no hace falta para grabar. Si está libre, lo ocupa **el wire**, que es lo que
+necesita el usuario. La consola se va a UART0, para cuando haya que depurar.
+
+Antes se descartó la alternativa que él propuso —multiplexar con DTR— **midiendo, no opinando**:
+el C3 declara `SOC_USB_SERIAL_JTAG_SUPPORTED` y **no** `SOC_USB_OTG_SUPPORTED`, y enumerando los
+~70 campos del periférico en los registros del C3 no hay **ninguno** de línea de control: ni
+`dtr`, ni `rts`, ni `line_state`. Ese par lo consume el hardware para reset y boot — por eso un
+pulso de RTS metía el chip en modo descarga. En un chip con USB-OTG (S3, P4) sí se podría, vía
+TinyUSB; pero ésos tienen dos puertos y no lo necesitan.
+
+### Lo que hubo que arreglar para llegar
+
+| | |
+|---|---|
+| **Tabla de particiones de 16 MB** | copia literal de la del S3. `esptool flash-id` dice **4 MB**: no arranca. Bajada al suelo, **mismos offsets** (ensanchar no moverá el env ni el volumen) |
+| **Pines del wire = los del S3** | el `#else` fijaba GPIO43/44 y el C3 tiene GPIO0..21: **no existen**. `uart_set_pin` da error y no aborta ⇒ RX/TX muertos EN SILENCIO. `#465` con otra cara. Ahora el defecto es «lo que el SoC asigne a UART0» y se reenruta sólo con **el nombre de la placa** |
+| **Declaración duplicada** | `wire_v1_uart_init` estaba declarada en `wire_v1.h` **y** en `repl_esp32.h`. Nunca mordió porque decían lo mismo; al renombrar el hueco del transporte, `main.c` compiló contra la copia vieja. Es la mina que el propio `wire_v1.h` describe para su guarda |
+| **El banner mentía** | `[boot] ... wire v1 = UART0` era cadena FIJA: lo decía igual con el cable por USB. Ahora lo dice el transporte, y **avisa si el driver no instaló** |
+| **Consola secundaria** | ESP-IDF, con la primaria en UART, manda ADEMÁS una copia por el USB-Serial-JTAG. Texto por el mismo cable que el wire binario — se vio **inyectado entre las respuestas** |
+| **Identidad de placa** | sin `c3_board_id.c` saludaba como `bpvm-esp32` y anunciaba GPIOs, ADC y SRAM del S3. El mismo bug que `U3.19` cazó en el P4. Se engancha por el `chip_cfg.h` de `P1.C3.2` |
+
+### 📏 El número, medido
+
+```
+[boot] vm: heap 128 KB reservado | DRAM interna libre 280032->148956 B (bloque mayor 139264->114688 B)
+       mem: DRAM interna libre 131396 B | MINIMO HISTORICO 131396 B
+```
+
+| | |
+|---|---|
+| bloque contiguo mayor (**el techo real**) | 139 264 B |
+| consumo del sistema en marcha | **17 560 B** — una quinta parte de los 86 KB del S3 |
+| margen con 128 KB tomados | 131 KB |
+
+Y el reparto: `bpvm_stack_region_bytes` da 25 % a pilas **pero nunca menos de 64 KB**, así que
+con 96 KB el suelo dejaba **32 KB de heap** y con 128 KB deja **64**. Doblar el heap sin tocar
+los hilos, y sin acercarse al margen. La alternativa —bajar el suelo a 32 KB— daba el mismo heap
+pero dejaba la placa en **8 hilos** (main 16 KB + 2 KB por hilo) y tocaba una regla de las cinco
+plataformas.
+
+### 🐛 Y un diagnóstico mío que era falso, con su arreglo
+
+Al medir con 96 KB leí en el log:
+
+```
+[bpvm] throw: SIN CLASE RuntimeError exportada, no hay con que construir la excepcion: No space in heap
+```
+
+y concluí que el heap se había agotado. **Era falso**: es la **prefabricación** del OOM de
+`#430` —la idea de Eduardo de fabricar la excepción cuando fabricarla es gratis—, que corre en
+todo arranque y que en un módulo que no importa `Core` no se puede hacer. El código lo contempla
+(`.v == 0 si ni esto se pudo`). Con 96 KB el `Bench` también terminaba bien.
+
+📌 **El aviso sonaba EXACTAMENTE igual que un fallo real**: misma frase, mismo texto «No space in
+heap», en el log de una placa. Llegué a cambiar el tamaño del bloque de la VM por eso. Arreglado:
+la VM marca cuándo está prefabricando y el aviso lo dice —*«OOM sin prefabricar: este módulo no
+exporta RuntimeError. No es un fallo»*— en el canal normal, no en el urgente. **Un aviso que no
+distingue un no-evento de un fallo es peor que no tenerlo** — el reverso de
+[[errores-si-silenciosos-no]].
+
+*(El 128 KB se queda: su justificación no era ésa, sino que dobla el heap gratis.)*
+
+✅ **Verificado**: `HELLO`/`INFO`/`DF`/`PUT`/`RUN`/`LOG_DUMP` contra la placa por el USB; `Bench`
+dos veces con salida correcta; paridad **38 PASS / 0 FAIL / 0 SKIP**; `sim-smoke` **40/40**; y
+las **seis** imágenes reconstruidas (Pico, S3, P4, C3, Nucleo, Discovery).
+
+⏭️ Queda de `P1.C3`: `trytest.bp` + `JsonDemo` en placa, y el AOT (el C3 es RISC-V, así que el
+`.mdn` del P4 debería servir de plantilla).
+
+
+#### ✅ P1.C3.3 — lo que se pedia (hecho arriba)
 
 - **Medir el bloque de la VM en placa** (repetir `#336` en el C3) y fijar el número.
 - **Un `c3_board_id.c`** — hoy el ensayo usa el `s_default_board` del S3, así que se

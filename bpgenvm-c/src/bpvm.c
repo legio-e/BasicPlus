@@ -1134,7 +1134,9 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
      * anterior dejo una que apunta a un heap ya reseteado. */
     vm->oom_exc.v = 0u;
     {
+        vm->prefabricando_oom = 1;   /* V6/P1.C3.3: para que el aviso no mienta */
         bpref_t pre = bpvm_throw_runtime_error(vm, main_tc, "No space in heap");
+        vm->prefabricando_oom = 0;
         vm->oom_exc = pre;                 /* .v == 0 si ni esto se pudo */
         vm->runtime_error[0] = 0;          /* el prologo no es un error */
         main_tc->alloc_anchor = 0;         /* el ancla era transitoria */
@@ -1182,7 +1184,9 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     vm->oom_exc.v = 0u;
     {
         bpvm_thread_t* tc0 = &vm->threads[0];
+        vm->prefabricando_oom = 1;   /* V6/P1.C3.3: idem */
         bpref_t pre = bpvm_throw_runtime_error(vm, tc0, "No space in heap");
+        vm->prefabricando_oom = 0;
         vm->oom_exc = pre;
         vm->runtime_error[0] = 0;
         tc0->alloc_anchor = 0;

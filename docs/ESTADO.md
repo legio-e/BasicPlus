@@ -27,6 +27,38 @@
 
 ## Última sesión
 
+### `P1.C3.3` — el C3 ejecuta BasicPlus, por su único cable
+
+`fib(28) = 317811`, `exit 0`, subido y ejecutado desde el host por el **USB-Serial-JTAG**, sin
+adaptador. La placa saluda como `bpvm-esp32c3` y el INFO da sus GPIOs, su ADC y su SRAM.
+
+Lo desatascó un dato de la placa, de Eduardo: *«hay 2 pulsadores; para grabar se pulsan los dos
+y se suelta reset. En un arranque normal el USB es NUESTRO.»* Si el USB no hace falta para
+grabar, lo ocupa el wire y la consola se va a UART0.
+
+Antes se descartó su otra idea —multiplexar con DTR— **midiendo**: el C3 no tiene USB-OTG y el
+periférico USB-Serial-JTAG no expone ninguna línea de control al software (los ~70 campos de sus
+registros, ni `dtr` ni `rts` ni `line_state`). Ese par lo consume el hardware para reset y boot.
+
+Cinco cosas rotas por el camino, todas de la misma familia —**heredar del S3 sin preguntar al
+silicio**—: la tabla de particiones de 16 MB (el chip tiene 4), los pines del wire en GPIO43/44
+(que en el C3 no existen), una declaración duplicada del init del transporte, un banner que
+decía «UART0» fuera cual fuera el cable, y la identidad de placa del S3.
+
+⚠️ **Y un diagnóstico mío que era falso.** Leí `throw ... No space in heap` en el log y concluí
+que el heap se agotaba; llegué a cambiar por eso el tamaño del bloque de la VM. Era la
+**prefabricación** del OOM de `#430`, que no puede hacerse en un módulo que no importa `Core` —
+un no-evento que sonaba idéntico a un fallo. Arreglado el aviso para que distinga las dos cosas.
+El 128 KB se queda, pero por su motivo real: dobla el heap (32 → 64 KB) sin tocar los hilos y
+sobrando 131 KB de margen.
+
+💡 Y de ahí salió una idea de Eduardo que quedó anotada en `V6_IDEAS`: **coser las dos regiones
+de RAM en un solo espacio de direcciones**, marcando el hueco como bloque ocupado igual que se
+hace con el de SQLite. Las regiones del C3 resultaron ser **contiguas** (lo parte ESP-IDF por
+capacidades, no por direcciones), así que valdría ~250 KB en vez de 136. Falta medir si los dos
+bloques caen pegados.
+
+
 ### `P1.C3.2` — la familia ESP32 ya tiene un común de verdad
 
 Pregunta de Eduardo antes de empezar: *«¿no hace falta el FS y la gestión de la memoria

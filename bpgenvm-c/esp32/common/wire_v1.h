@@ -34,9 +34,23 @@ extern "C" {
  * resuelven igual (la Pico lo hace dentro de su recv). */
 int wire_v1_try_getchar(void);
 
-/* Configura UART0 (115200 8N1) y su driver. Llamar una vez, antes de usar el
- * wire. Propia de este transporte. */
-void wire_v1_uart_init(void);
+/* Levanta el CABLE de esta imagen. Llamar una vez, antes de usar el wire.
+ *
+ * V6/P1.C3.3 — se llamaba `wire_v1_uart_init` y dejo de ser verdad: en la misma
+ * familia hay ya DOS cables posibles —UART0 (`wire_v1.c`, S3 y P4) y el
+ * USB-Serial-JTAG nativo (`wire_v1_usbjtag.c`, C3)— y el `main.c` es comun. Un
+ * nombre que dice el transporte obliga al comun a saber cual lleva, que es justo
+ * lo que este hito quita. Lo elige el CMakeLists de cada proyecto, en el mismo
+ * hueco que el P4 ya usaba para su variante TCP. */
+void wire_v1_transport_init(void);
+
+/* Como se llama el cable de ESTA imagen, para el banner y el log.
+ *
+ * V6/P1.C3.3 — el arranque decia `wire v1 = UART0` en una cadena FIJA de
+ * `main.c`, o sea que lo decia igual con el cable por USB. Un banner que no
+ * puede equivocarse no informa: cuesta el primer minuto de cualquier
+ * diagnostico, y a mi me lo costo. Lo dice quien lo sabe. */
+const char* wire_v1_transport_name(void);
 
 #ifdef __cplusplus
 }

@@ -106,7 +106,7 @@ void app_main(void)
     /* Estos printf van a la CONSOLA = USB-Serial-JTAG (puerto nativo),
      * NO al wire (UART0). Sirven para depurar el arranque. */
     printf("\n=== BasicPlus VM en " CHIP_NOMBRE " (H4.3 — wire v1) ===\n");
-    printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
+    printf("[boot] wire v1 = %s\n", wire_v1_transport_name());
 
     /* LO PRIMERO: el log persistente. Recupera el snapshot de la sesión anterior
      * (post-mortem: si el arranque previo se fue al garete, aquí está escrito) y
@@ -136,9 +136,18 @@ void app_main(void)
         esp32_mods_install();  /* stdlib core embebida -> /lib (if-absent) */
     }
     esp32_hw_register();   /* backends de HW (GPIO, pico/info) — siempre */
-    wire_v1_uart_init();
+    /* V6/P1.C3.3 — la identidad de placa, si este silicio trae la suya.
+     *
+     * Por defecto el REPL reporta la del S3 (`s_default_board` en
+     * `repl_esp32.c`), y eso es lo que hay que pisar: sin esto el C3 saludaba
+     * como `bpvm-esp32` y anunciaba los GPIOs y la SRAM de otro chip. Mismo bug
+     * que `U3.19` cazó en el P4. Va por el `chip_cfg.h` —el mecanismo que ya
+     * tenemos para lo que cambia por silicio— y no por un símbolo weak, porque
+     * en ESP-IDF el `.o` de un componente no entra si nadie lo referencia. */
+    CHIP_INSTALAR_BOARD_ID();
+    wire_v1_transport_init();
 
-    printf("[boot] REPL wire v1 escuchando en UART0. Conecta el IDE al puerto del bridge.\n");
+    printf("[boot] REPL wire v1 escuchando en %s.\n", wire_v1_transport_name());
 
     /* P-autorun (#256) — si /sys/auto.txt existe, arranca la app antes
      * del REPL. El wire ya está vivo y el poll del run atiende

@@ -19,17 +19,25 @@
 extern "C" {
 #endif
 
-/* Inicializa el driver UART0 para el wire (lo provee wire_v1.c). */
-void wire_v1_uart_init(void);
+/* V6/P1.C3.3 — LA DECLARACION DEL CABLE VIVE EN `wire_v1.h`, Y SOLO ALLI.
+ *
+ * Aqui habia una segunda copia (`void wire_v1_uart_init(void);`) de una funcion
+ * que no es de este modulo. No mordio nunca porque las dos decian lo mismo, pero
+ * al renombrar el hueco del transporte —ahora la familia tiene dos cables: UART0
+ * y el USB-Serial-JTAG— esta copia siguio anunciando el nombre viejo y el
+ * `main.c` compilo contra ELLA. Es la misma mina que el propio `wire_v1.h`
+ * describe sobre su guarda de inclusion: dos declaraciones de lo mismo se tapan
+ * EN SILENCIO hasta el dia que dejan de coincidir. */
+#include "wire_v1.h"
 
 /* Bucle principal del REPL: lee mensajes v1 de UART0 y los despacha.
- * No retorna. Llamar tras fs_init() + wire_v1_uart_init(). */
+ * No retorna. Llamar tras fs_init() + wire_v1_transport_init(). */
 void repl_esp32_run(void);
 
 /* P-autorun (#256) — ejecuta el módulo de /sys/auto.txt (si existe)
  * antes de entrar al REPL. Bloquea hasta que el programa termina o lo
  * matan por el wire (el poll atiende HELLO/KILL durante el run).
- * Llamar UNA vez, tras wire_v1_uart_init() y antes de repl_esp32_run. */
+ * Llamar UNA vez, tras wire_v1_transport_init() y antes de repl_esp32_run. */
 void repl_esp32_autorun(void);
 
 /* Identidad de la placa para INFO/HELLO (solo informativo del wire). Por

@@ -489,6 +489,10 @@ struct bpvm {
      * construccion normal del error falla por falta de memoria (de heap o de
      * tabla). Raiz explicita del GC (gc_mark_phase 2a-bis). 0 = no hay. */
     bpref_t   oom_exc;
+    int       prefabricando_oom;   /* V6/P1.C3.3: 1 solo mientras se PREFABRICA la
+                                    * de #430. Sin esto, el aviso de "no hay
+                                    * RuntimeError" suena igual que un OOM de
+                                    * verdad — y engaña: me costo un diagnostico. */
     int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
 
     /* Módulos cargados. */
