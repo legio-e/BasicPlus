@@ -1,0 +1,69 @@
+// GuiEvLat.bp — #462: CUÁNTO tarda un evento del GUI en drenarse, en milisegundos.
+//
+// POR QUÉ EXISTE. `GuiEvSpike.bp` contesta SI el evento anidado se drena, y lo
+// hace por el ORDEN de las líneas. Eso bastó para #324, pero no sirve para
+// comparar placas: el 31-ago la Discovery sacó pares limpios `2→3` y el P4 sacó
+// ráfagas `2 2 2 → 3 3`, y con sólo el orden **no se puede distinguir «el P4
+// drena lento» de «en la Discovery cliqué más despacio»**. El patrón depende del
+// ritmo del dedo, que no es un instrumento.
+//
+// QUÉ MIDE. El hueco entre el upcall (cuando LVGL entrega el clic) y el handler
+// del evento que ese upcall levanta: en milisegundos, por clic, y con la
+// profundidad de la cola — cuántos clics van por delante de su handler.
+//
+// CÓMO SE LEE:
+//   lat baja y cola=0   -> el evento se drena en el mismo bombeo. Sano.
+//   lat alta y cola=0   -> el bombeo tarda, pero no se acumula.
+//   cola>0              -> llegan clics antes de drenar el anterior: hambre de
+//                          CPU. Es el síntoma de #462.
+//
+// El sello de tiempo y el número de clic VIAJAN EN EL EVENTO, no en variables de
+// módulo: una clase no puede tocar las del módulo (encapsulación clase↔módulo) y
+// hacerlas públicas iría contra la norma de la casa. Además así el camino que se
+// mide no lleva ninguna conversión de tipo añadida.
+//
+// Se cierra con `stop` desde la consola, como el spike.
+module GuiEvLat
+  import Gui
+  import Pico
+
+  // El que ESCUCHA. Lleva su propia cuenta de handlers atendidos, así que la
+  // profundidad de la cola sale de restar: clics levantados − handlers vistos.
+  class Testigo
+    var vistos: integer
+
+    function event alPulsar(quien: Object, n: integer, t: integer)
+      this.vistos := this.vistos + 1
+      print "   handler  lat=", Pico.uptimeMs() - t, "ms  cola=", n - this.vistos
+    end alPulsar
+  end Testigo
+
+  // El de en medio: recibe el clic y, desde DENTRO de ese handler, levanta su
+  // propio evento con el sello puesto. Ahí es donde empieza la medida.
+  class Puente
+    var nClic: integer
+    event pulsado(quien: Object, n: integer, t: integer)
+
+    function event btn_onClick(quien: Gui.Component)
+      this.nClic := this.nClic + 1
+      var t0: integer := Pico.uptimeMs()
+      print "clic ", this.nClic, "  upcall  t=", t0
+      raise pulsado(this, this.nClic, t0)
+    end btn_onClick
+  end Puente
+
+  public function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var btn: Gui.Button := Gui.Button(scr, "latencia")
+
+    var t: Testigo := Testigo()
+    var pu: Puente := Puente()
+    pu.pulsado := t::alPulsar
+    btn.onClick := pu::btn_onClick
+
+    print "listo — pulsa el boton varias veces, luego 'stop'"
+    Gui.run()
+    print "fin"
+  end Main
+
+end GuiEvLat
