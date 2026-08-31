@@ -22,6 +22,90 @@ delante al leer esto:
 
 ---
 
+## Coser dos regiones de RAM en UN espacio de direcciones (Eduardo, 31-ago)
+
+**La idea, con sus palabras**: *«un sólo modelo de memoria. Ahora añadimos un bloque ocupado
+permanentemente que no podemos tocar (similar a la memoria reservada para el SQLite). Y ya
+tenemos lo mismo pero con la infraestructura que ya hay implementada.»*
+
+Sale de mirar el mapa de RAM del ESP32-C3 (`P1.C3.3` en FICHAS): 280 KB libres pero el bloque
+contiguo mayor son 136 KB, así que la VM no puede pedir más de eso aunque sobre memoria.
+
+### Lo que hace que la idea sea buena: las regiones NO están separadas
+
+Lo que imprime la placa al arrancar:
+
+```
+heap_init: At 3FC98B10 len 000274F0 (157 KiB): RAM
+           At 3FCC0000 len 0001C710 (113 KiB): Retention RAM
+           At 3FCDC710 len 00002950 ( 10 KiB): Retention RAM
+```
+
+```
+0x3FC98B10 + 0x274F0 = 0x3FCC0000   ← exactamente donde empieza la segunda
+0x3FCC0000 + 0x1C710 = 0x3FCDC710   ← exactamente donde empieza la tercera
+```
+
+**Son contiguas.** La DRAM del C3 es un tramo seguido de ~281 KiB; ESP-IDF lo parte **por
+capacidades** (las de retención sobreviven al deep sleep), no por direcciones. El techo de
+136 KB es del contador del asignador, no del silicio — y eso es justo lo que esta idea explota.
+
+### Por qué NO es «dos memorias», que ya sabemos que sale mal
+
+Importa la distinción, porque la alternativa obvia —pilas en una región y heap en la otra— es
+un camino que este proyecto ya recorrió y deshizo. La tabla de handles vivía en el `malloc` de
+plataforma, y en `heap.c` está escrito lo que pasó:
+
+> `synclisttest` moría con `No space in heap` **teniendo el heap al 20 %**: 200 KB parados
+> mientras la tabla, que vive en otra bolsa, no podía crecer. **Dos memorias separadas que no
+> se prestan nada.**
+
+El 29-ago se metió **dentro** del bloque de la VM y eso lo arregló. La idea de Eduardo va en la
+dirección contraria y por eso funciona: **sigue habiendo un solo espacio de direcciones** —una
+referencia BP sigue siendo un desplazamiento dentro de `vm->memory`— y lo único que se añade es
+que una parte de ese espacio no es nuestra.
+
+### El hueco tiene sitio reservado desde `#451`
+
+No hace falta mecanismo nuevo. `#451` separó `heap_top` de `stack_base` con esta nota:
+
+> *«Son dos conceptos distintos: `stack_base` es dónde empieza la pila del main; `heap_top` es
+> hasta dónde puede crecer el heap. Coinciden AHORA, y dejan de coincidir en cuanto la tabla de
+> handles se aloje entre los dos.»*
+
+Entre `heap_top` y `stack_base` ya hay una zona que no es ni heap ni pila. El hueco entre las
+dos reservas es otro inquilino de esa misma zona.
+
+### Lo que hay que MEDIR antes de que esto sea un plan
+
+**Que los dos bloques caigan pegados.** El asignador no lo garantiza: se pide el mayor bloque
+de la región A, se pide el de la B, y se comprueba
+
+```c
+    b == a + tam_a + hueco        /* hueco = cabeceras del asignador, unos pocos bytes */
+```
+
+- si caen pegados → `memory = a`, `memory_size = (b + tam_b) - a`, y el hueco se marca ocupado;
+- si no → se usa sólo A, exactamente como hoy. **No se pierde nada por intentarlo.**
+
+Esa comprobación es la que convierte esto de idea en plan, y es de una tarde en la placa que ya
+está en la mesa.
+
+### Lo que valdría
+
+| | hoy | con esto |
+|---|---|---|
+| C3 | 136 KB (bloque contiguo) | ~250 KB |
+| C6, S31 | por medir, misma familia | idem |
+
+Casi el doble en el micro más justo del sobre, sin tocar el modelo de referencias, sin tocar el
+GC y sin tocar el `sp`/`bp` que el debugger lee crudos por el wire.
+
+⚠️ **Y una cautela**: la segunda región es *Retention RAM*. Hay que comprobar qué implica para
+el deep sleep antes de meter ahí el heap de la VM — puede que nada (es DRAM normal que además
+retiene), pero eso se mira, no se supone.
+
+
 ## Ficheros: no hay `seek` porque no hay `open` (Eduardo, 17-ago)
 
 **La pregunta.** *«¿Tenemos una función seek o fseek para movernos dentro de un
