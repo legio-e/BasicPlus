@@ -1457,10 +1457,52 @@ número imposible lo delató — ese comando corrió con el shell dentro de `bpg
 ruta relativa no resolvía, y el cronómetro midió **un exec fallido**. Instrumento mudo, otra
 vez, y otra vez lo cazó que el resultado fuera demasiado bueno.
 
-⏭️ **Lo que queda por decidir** (Eduardo): el yield ya está puesto y toca probar en el P4 si
-basta. Si no basta, la otra mitad es la prioridad — bajar el `wire_task` del P4 de 5 a 1
-para igualarlo al S3. 📌 Su criterio para esto: *«ahora que estamos unificando, sería
+### ✅ Verificado en el P4 (31-ago): **el `stop` vuelve a funcionar**
+
+Eduardo, con la imagen del yield flasheada: *«Sí, es la última imagen de P4. Antes el stop
+ni funcionaba.»*
+
+```
+/> stop
+[Explorer] Stop: KILL enviado a la placa
+4 tras run()
+[Explorer] VM finished: exit 0 (OK)
+```
+
+🎯 **Y de paso, `GuiEvSpike.bp` sale en su caso BUENO.** Su cabecera fija el criterio —
+*«`3 handler` ANTES de `4 tras run` → el drenaje ocurre DENTRO de `run()`»*— y los seis `3`
+salen antes del `4`. O sea que el evento **anidado** (el que un handler levanta desde dentro
+de otro handler) se drena dentro del bombeo. `#324` aguanta en el P4.
+
+⚖️ **La fuerza de la atribución, dicha con precisión.** Entre la imagen anterior del P4 y
+ésta el ÚNICO cambio de código es `scheduler.c` — el yield (`interp.c` de `#441` ya iba en
+la de las 07:39; su commit llegó un minuto después de construirla). Pero **no consta qué
+imagen tenía la placa cuando el `stop` falló**, así que esto es una correlación muy
+apretada, no un test de desplazamiento.
+
+📌 **Y el mecanismo exacto sigue sin estar probado**: el poll corre DENTRO de la tarea de la
+VM y los bytes del UART los mete una ISR, que desaloja a cualquier tarea — o sea que por pura
+lógica el KILL debería haberse visto igual sin el yield. Que funcione no explica por qué.
+
+⏭️ **El control limpio, si se quiere cerrar del todo**: quitar el yield, reflashear y ver si
+el `stop` vuelve a fallar. Un ciclo de flasheo. Merece la pena por una razón concreta: si lo
+arregló otra cosa, estaríamos apuntándole el mérito al cambio equivocado y la causa real
+seguiría escondida — que es exactamente lo que pasó con el andamio del MPU en `#440`,
+acusando a dos programas inocentes.
+
+### ⏭️ Lo que queda: el DESFASE, que es la otra mitad
+
+Los handlers van **hasta tres clics por detrás** de sus upcalls (`2 2 2 → 3 3`). No se
+pierde ninguno, pero llegan tarde: es el *«los eventos pasan pero mucho más lentos»* de
+Eduardo, ya con forma medible. El yield no lo ha quitado.
+
+La otra mitad es la **prioridad**: bajar el `wire_task` del P4 de **5** a **1** para
+igualarlo al S3. 📌 Criterio de Eduardo para esto: *«ahora que estamos unificando, sería
 recomendable quedarnos con lo bueno y no unificar a lo peor»*.
+
+🔬 **La comparación que falta** para saber cuánto de lento es «lento»: el mismo
+`GuiEvSpike.bp` en la **Discovery**, que es la que *«funciona muy bien»*. Si allí salen pares
+limpios `2→3` y en el P4 ráfagas, el síntoma queda cuantificado entre las dos placas.
 
 #### 🟡 `#461` — los paths reservan tamaño FIJO: 7,5 KB de RAM estática para 1,5 KB de nombres (abierta 31-ago)
 
