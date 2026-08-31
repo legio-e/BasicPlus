@@ -2619,6 +2619,40 @@ script en fichero, no con un heredoc.
 ✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP** y las **cinco imágenes** (Pico, S3,
 P4, C3 y STM32 Nucleo) reconstruidas.
 
+### 🐛 Y en placa NO funcionó — `[Placa ERROR] timeout esperando respuesta a 'LIST'`
+
+Bug mío, y de manual. El contexto del listado se inicializaba **campo a campo**:
+
+```c
+repl_list_ctx_t c;
+c.id = id; c.first = 1; c.omitidas = 0; c.emitidas = 0;
+c.pending = pending; c.tail = 0;      /* ← `nraices` NO */
+```
+
+Al añadir los casilleros del desglose (`nraices`, `raiz*`) **la inicialización parcial los
+dejó con basura de pila**, y `repl_list_apunta` usa `nraices` como tope de bucle: recorría
+memoria ajena y el verbo no contestaba. Arreglado con `memset`, que además protege del
+próximo campo que se añada.
+
+📌 **Y lo que más duele: el código que sustituí llevaba la lección escrita.** El
+`handle_list` del ESP32 hacía `memset` con este comentario: *«memset y no `= { 1 }`: con la
+struct ya no de un solo campo, la inicialización parcial saca
+`-Wmissing-field-initializers`»*. Estaba dicho, en el fichero que borré, y no lo traje.
+Comparar línea a línea sirve para no perder FUNCIONALIDAD; esto enseña que también hay que
+mirar **por qué** el código de origen estaba escrito como estaba.
+
+### 🔴 Por qué llegó a la placa: **el simulador es el quinto consumidor y no ha migrado**
+
+El arnés de paridad corre PROGRAMAS; `LIST` es un verbo del wire y ahí no llega. Pero existe
+la herramienta que lo habría cazado en segundos y en el host: **`bpvm-sim` + `sim_smoke.py`,
+que ejercita `LIST` por el wire** … con **su propio `handle_list`** (`tools/bpvm_sim.c:939`),
+no con el común.
+
+Y estaba anotado: el `Makefile` dice *«los CUATRO firmwares (+ el simulador cuando migre)»*.
+**Migrar el simulador al REPL común convierte un viaje a la placa en un `make sim-smoke`** —
+y es la misma forma del hallazgo de `#455` (el sim trae su propio `handle_put`). Es lo que
+`#444` necesita para no ser sólo un deseo.
+
 ---
 
 ### 🏁 `U3` — CERRADO (31-ago)

@@ -369,9 +369,18 @@ static void repl_list(long id) {
     if (hn <= 0) return;
     wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
 
+    /* U3.23 — `memset` y NO campo a campo, que es como estaba y me mordió: al
+     * añadir los casilleros del desglose (`nraices`, `raiz*`) la inicialización
+     * parcial los dejó con BASURA de pila, y `repl_list_apunta` usaba `nraices`
+     * como tope de bucle → recorría memoria ajena y el LIST no contestaba.
+     *
+     * El código del ESP32 que sustituí ya hacía `memset` y llevaba el porqué
+     * escrito («con la struct ya no de un solo campo, la inicialización parcial
+     * saca -Wmissing-field-initializers»). Estaba dicho y no lo traje. */
     repl_list_ctx_t c;
-    c.id = id; c.first = 1; c.omitidas = 0; c.emitidas = 0;
-    c.pending = pending; c.tail = 0;
+    memset(&c, 0, sizeof c);
+    c.id = id; c.first = 1;
+    c.pending = pending;
     snprintf(pending[c.tail++], REPL_LIST_NAME_MAX, "/");
     int head_i = 0;
     while (head_i < c.tail) {
