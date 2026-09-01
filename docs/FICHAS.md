@@ -1017,7 +1017,7 @@ ensayo **ya se benefició de lo que `U3` lleva hecho**: usa el REPL común. Lo q
 argumentado: *cada sistema sin unificar es una copia más por micro*. La S31 —RISC-V, como el
 C3 y el C6— entra por el mismo camino.
 
-#### 🟡 `P1.C3.3` — EN PLACA: arranca, y la RAM no es la que parecía (31-ago)
+#### ✅ `P1.C3.3` (1/2) — EN PLACA: arranca, y la RAM no era la que parecía (31-ago)
 
 **El C3 arranca y la VM está viva.** Placa: chip `v0.4`, mononúcleo a 160 MHz, **flash embebida
 de 4 MB (XMC)**, MAC `e0:72:a1:21:40:78`, un solo puerto USB (`VID_303A/PID_1001` = el
