@@ -51,11 +51,23 @@
  *
  * Estas guardas se escribieron para el P4 —RISC-V con caché gestionada— usando la
  * arquitectura como atajo para «soporta cargar un .mdn en RAM ejecutable». El
- * ENSAYO DEL C3 lo rompió en la primera compilación: el C3 también es RISC-V y no
- * trae `esp_cache.h` (viene de `esp_mm`, que ese silicio no tiene).
+ * ENSAYO DEL C3 lo rompió en la primera compilación: el C3 también es RISC-V y su
+ * build no encontraba `esp_cache.h`.
  *
  * La condición real es la CAPACIDAD, no la familia. Se pregunta por la cabecera.
- * Para el S3 (Xtensa) y el P4 el resultado es EXACTAMENTE el mismo que antes. */
+ * Para el S3 (Xtensa) y el P4 el resultado es EXACTAMENTE el mismo que antes.
+ *
+ * ⚠️ CORREGIDO EL MISMO DÍA, y a pregunta de Eduardo (*«la C3 es RISC-V, debería
+ * soportar AOT»*). Aquí ponía que `esp_cache.h` *«viene de `esp_mm`, que ese
+ * silicio no tiene»*, y **era falso**: el `CMakeLists` de `esp_mm` sólo excluye
+ * `linux` y compila `esp_cache_msync.c` para cualquier target. La cabecera no
+ * faltaba por el silicio — faltaba porque el proyecto del C3 **no pedía `esp_mm`
+ * en `REQUIRES`**, cosa que heredó de copiar la lista del S3, que es Xtensa y no
+ * lo necesita. Añadida esa línea, el C3 compila con el camino del `.mdn` DENTRO.
+ *
+ * O sea que la puerta por capacidad sigue siendo lo correcto —y sigue haciendo
+ * falta para el S3—, pero el diagnóstico que la motivó atribuía al chip lo que
+ * era un descuido del build. Un «no se puede» que era un «no está pedido». */
 #if BPVM_ESP_AOT_MDN && defined(__has_include)
 #  if __has_include("esp_cache.h")
 #    define BPVM_ESP_AOT_MDN 1

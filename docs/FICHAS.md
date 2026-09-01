@@ -747,6 +747,93 @@ de memoria. Aquí puede pasar lo mismo con el FS — si el cuello es la **flash*
 caché en RAM no se nota. La medida tiene que separar las dos cosas.
 
 
+##### ✅ `U6.4` — el margen del S3 estaba MAL: 26,5 KB, no 86 (31-ago)
+
+Antes de convertir el margen en fórmula había que entender por qué el S3 pedía **86 KB** y el C3
+**17,5**. La sospecha era el método, y era el método.
+
+Los dos números salían del mismo instrumento (`heap_caps_get_minimum_free_size`) pero **no de la
+misma prueba**: el del S3 dice sólo *«tras varios RUN»*, sin decir cuáles. Dos medidas del mismo
+instrumento **no se pueden restar si no se sabe qué se ejecutó**.
+
+### La medida, con protocolo escrito
+
+`bpgenvm-c/tools/medir_margen.ps1`: `LOG_CLEAR` → `RESET` → `PUT` → `RUN ×2` → `LIST` →
+`LOG_DUMP`. La misma secuencia en las dos placas.
+
+| | **ESP32-S3** | **ESP32-C3** |
+|---|---|---|
+| bloque de la VM | 160 KB | 128 KB |
+| libre al arrancar | 338 368 B | 280 032 B |
+| **bloque contiguo mayor** | **270 336 B** | **139 264 B** |
+| libre tras reservar | 174 524 B | 148 956 B |
+| mínimo histórico | 147 960 B | 131 368 B |
+| **consumo del sistema en marcha** | **26 564 B** | **17 588 B** |
+| lo que decía la ficha | ~~86 256 B~~ | 17 560 B |
+
+🎯 **El 86 KB era 3,3× el valor real.** Con la misma carga las dos placas se llevan **1,5×** —
+creíble para dos núcleos contra uno— y no el 4,9× que sugerían los números viejos. El C3 es
+reproducible al 0,16 % (17 560 suelto, 17 588 con protocolo).
+
+📌 **Y el bloque contiguo separa a las dos mucho más que el consumo**: 264 KB en el S3 contra 136
+en el C3. Ahí está la diferencia de verdad entre estos dos silicios, no en lo que gasta el
+sistema. Es el dato que `P1.C3.3` destapó y que ningún contrato expresa todavía.
+
+### 🐉 De propina: **el C3 es 1,57× MÁS RÁPIDO que el S3**
+
+Ninguna de las dos placas tiene AOT **en la imagen de hoy** (las dos enlazan `aot_funcs_stub.c`),
+así que en `Bench.bp` las dos mitades corren interpretadas y `elapsed/2` es el tiempo del
+intérprete, exacto:
+
+| | reloj | núcleos | `fib(28)` interpretado | ciclos para el mismo trabajo |
+|---|---|---|---|---|
+| **C3** (RISC-V) | 160 MHz | 1 | **11 315 ms** | 1,81 × 10¹² |
+| **S3** (Xtensa) | 240 MHz | 2 | **17 785 ms** | 4,27 × 10¹² |
+
+**Con un 33 % menos de reloj y un solo núcleo, el C3 gana por 1,57×** — o sea que el S3 necesita
+**2,36× más ciclos** para el mismo trabajo, en el bucle del intérprete, que es donde vive el
+100 % del tiempo de un programa BP.
+
+⚠️ **Es UNA carga** (recursión con aritmética entera y llamadas), no una comparación general de
+CPUs. Pero refuerza lo ya decidido: [[prioridad-arm-riscv-s3-secundario]].
+
+### 🐛 Y una corrección mía, a pregunta de Eduardo
+
+> *«la C3 es RISC-V, debería soportar AOT»*
+
+Tiene razón, y la primera versión de esta ficha daba a entender que el C3 no lo soportaba. **No
+es del silicio: es un hueco del port, y encima con un diagnóstico falso escrito en el código.**
+
+Esta mañana, al crear el proyecto del C3 copiando la lista de fuentes del S3, el gate
+`BPVM_ESP_AOT_MDN` salió a 0 porque no encontraba `esp_cache.h`, y anoté en `repl_esp32.c` que
+*«viene de `esp_mm`, que ese silicio no tiene»*. **Falso**: el `CMakeLists` de `esp_mm` sólo
+excluye `linux` y compila `esp_cache_msync.c` para cualquier target. La cabecera faltaba porque
+el componente del C3 **no pedía `esp_mm` en `REQUIRES`** — herencia de copiar la lista del S3,
+que es Xtensa y no lo necesita.
+
+**Añadida esa línea, el C3 compila con el camino del `.mdn` DENTRO** (las cadenas `[mdn] …` ya
+están en la imagen, y antes no). Un «no se puede» que era un «no está pedido» —
+[[no-se-puede-vs-no-esta-implementado]] otra vez, y esta vez lo escribí en un comentario donde
+va a engañar al siguiente.
+
+La puerta por capacidad sigue siendo lo correcto (y sigue haciendo falta para el S3, que es
+Xtensa de verdad); lo que estaba mal era el motivo.
+
+⏭️ **Lo que falta para que el C3 ejecute nativo**, y ahora es un trabajo acotado:
+
+1. Que el IDE compile el `.mdn` con la ISA del C3. La placa ya publica lo que hace falta —
+   `bpvm_mdn_host_arch()` y `bpvm_mdn_host_float_abi()`—, y ahí está el matiz: el P4 y el C3
+   **comparten el tag `MDN_ARCH_RISCV`** y se distinguen por la **ABI de coma flotante**
+   (`ilp32f` con FPU contra `ilp32` sin ella). Ese mecanismo existe justo por esto, y el
+   comentario de `mdn_loader.h` lo dice: *«`MDN_ARCH_ARM` NO distingue hard de softfp, y esa
+   discrepancia no da error de enlace — da números mal en silencio»*.
+2. ⚠️ Lo que la ABI **no** separa es la extensión `A` (atómicos): el P4 la tiene y el C3 no. Un
+   `.mdn` del P4 que use atómicos pasaría el gate del C3 y ejecutaría instrucción ilegal. Hoy
+   el riesgo es bajo porque el IDE compila para la placa con la que habla, pero un `.mdn` rancio
+   en el FS es exactamente [[artefacto-de-otra-familia-se-cuela]].
+3. Probarlo en placa con `Bench.bp`, que ya trae su gemelo interpretado como línea base.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).

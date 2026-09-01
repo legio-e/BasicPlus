@@ -103,7 +103,8 @@ idf_component_register(
         esp_adc          # H14: backend ADC (esp_adc oneshot)
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
-        esp_hw_support   # INFO: esp_mac.h (uniqueId desde efuse)
+        esp_hw_support
+        esp_mm            # V6: esp_cache.h — el gate del .mdn AOT (el C3 es RISC-V)   # INFO: esp_mac.h (uniqueId desde efuse)
 )
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas
