@@ -932,6 +932,27 @@ Una regla. Lo que cambia es **de quién es la memoria**, no cómo se decide.
   que adaptarlo.
 
 
+##### 🎯 POR QUE U6 IMPORTA MAS ALLA DE HOY (Eduardo, 31-ago)
+
+> *«Lo que estamos haciendo no solamente sirve para ahora, tambien para las placas futuras (C6,
+> P4X, S31, etc). En las proximas placas no hara falta construir un gestor de memoria: es ver su
+> mapa y activar el gestor generico. Menos trabajo y un codigo que sabemos que funciona.»*
+
+Y hoy se puede poner en numeros. Lo que cuesta una familia ESP nueva **despues de esta semana**:
+`chip_cfg.h` (3 constantes), `<chip>_board_id.c` (13 lineas), y `partitions.csv` +
+`sdkconfig.defaults` + `CMakeLists.txt`, que son configuracion y no codigo. **La gestion de
+memoria era la ultima pieza que seguia siendo artesanal**; con `U6` pasa a ser dos constantes mas
+en ese mismo fichero y un enumerador que le pregunta al chip.
+
+📌 **Y hay algo mas que ahorro de trabajo.** De las tres constantes de memoria puestas a mano,
+**dos estaban mal**: el STM32 arrastro 128 KB con ~520 KB parados durante una version entera
+(`H13` hallazgo 31) y el margen del S3 estaba por 3,3x (`U6.4`). Ninguna se puso mal por
+descuido — se pusieron una vez, con criterio, y nunca se volvieron a mirar. Eso es lo que un
+numero escrito a mano hace siempre.
+
+El gestor generico no solo ahorra el trabajo: **quita la clase de error**, porque el enumerador
+no hereda el numero de la placa anterior — lo pregunta.
+
 ##### 🟡 `U6.6` — TRES CAPAS: constantes de la imagen, ENV, y enumeración en marcha (Eduardo, 31-ago)
 
 > *«Lo mejor es que cada imagen defina unas constantes que le indiquen al gestor de memoria las
