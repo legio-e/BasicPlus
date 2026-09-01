@@ -834,6 +834,104 @@ Xtensa de verdad); lo que estaba mal era el motivo.
 3. Probarlo en placa con `Bench.bp`, que ya trae su gemelo interpretado como línea base.
 
 
+##### 🟡 `U6.5` — LA FORMA: una gestión de memoria unificada (propuesta, 31-ago)
+
+> Pregunta de Eduardo: *«¿se puede hacer una gestión de memoria unificada, respetando las
+> particularidades de cada placa? Y hay que tener en cuenta que una misma placa puede ir con
+> PSRAM y sin ella.»*
+
+Sí, y con lo medido hoy se puede describir sin inventar nada. La segunda frase es la que fija la
+forma: **si una misma imagen va con PSRAM y sin ella, la placa no puede DECLARAR su memoria —
+tiene que ENUMERARLA en marcha.** Hoy eso es un `if` en `pico/main.c`; ahí está la pista de que
+la pregunta estaba mal planteada.
+
+### El contrato
+
+La familia contesta **una** pregunta —*«¿qué piezas de memoria tienes ahora mismo?»*— y el común
+decide todo lo demás.
+
+```c
+typedef struct {
+    uint8_t*    base;
+    size_t      bytes;
+    int         exclusiva;   /* 1 = nadie más asigna aquí (PSRAM) */
+    const char* nombre;      /* "PSRAM", "SRAM interna", "trozo 1"… */
+} bpvm_mem_region_t;
+
+typedef struct {
+    /* Enumera lo que HAY, ahora. Devuelve cuántas. Se llama en el arranque, y
+     * por eso la misma imagen sirve con PSRAM y sin ella: el Pico devuelve UNA
+     * región (SRAM) o DOS (PSRAM + SRAM) según lo que el env y el sondeo digan. */
+    int (*regiones)(bpvm_mem_region_t* out, int max);
+
+    /* Lo que NO es de la VM en la memoria COMPARTIDA: malloc, RTOS, FS, wire.
+     * 0 en la exclusiva. Es el único número que la familia tiene que MEDIR. */
+    size_t margen_sistema;
+} bpvm_mem_ops_t;
+```
+
+**Y con eso el común decide**: qué región usar, cuánto tomar, si merece la pena coser dos
+adyacentes, cómo repartir entre heap / tabla / pilas, y qué decir en el log.
+
+### Por qué esta es la división y no otra — lo medido
+
+| lo que el censo `U6.0` encontró disperso | dónde queda |
+|---|---|
+| **dónde** vive el bloque: símbolos del linker / `.bss` / `heap_caps` interna / PSRAM | **la familia**, y es lo único genuinamente suyo |
+| **cuánto**: «todo lo que quede» vs «una constante» (`U6.2`) | **el común**: no son dos filosofías, es una regla y dos clases de memoria |
+| el **margen**: nombrado en Pico y STM32, medido pero anónimo en S3 y C3 (`U6.0` corregido) | **la familia**, como UN número — y ya está medido: 26 564 B el S3, 17 588 el C3 (`U6.4`) |
+| el **techo**: sabido antes / lo comprueba el enlazador / sólo preguntando | **la familia**, dentro del enumerador: devuelve lo que HAY, cada una a su manera |
+| el **reparto** heap/pilas | **el común**, y ya lo era (`bpvm_stack_region_bytes`) — desde `U6.1` también en host y simulador |
+| la **tabla de handles** | **el común**, y ya estaba bien: proporcional al heap y dentro del bloque |
+
+📌 **La clave está en `exclusiva`.** Es lo que hace que «todo lo que quede» y «una constante»
+dejen de ser dos filosofías rivales (`U6.2`):
+
+```
+exclusiva  → tómalo todo, menos las reservas CON NOMBRE (display, SQLite)
+compartida → tómalo todo, menos `margen_sistema`
+```
+
+Una regla. Lo que cambia es **de quién es la memoria**, no cómo se decide.
+
+### Lo que el común hace con las regiones
+
+1. **Elegir.** Prefiere la exclusiva grande si la hay (PSRAM). Si no, la compartida mayor.
+2. **Coser, si sale a cuenta.** Dos regiones ADYACENTES se unen con un bloque reservado
+   permanente (medido en el C3: hueco de 8 024 B, útil 253 952 contra 131 072 — `V6_IDEAS`). El
+   común aplica un umbral: se cose si el hueco es pequeño frente a lo que se gana. **PSRAM y SRAM
+   NO se cosen**: están a 250 MB de distancia en el mapa, y además `U6.3` midió que la PSRAM sólo
+   cuesta un 4–7 %, así que no hay nada que ganar.
+3. **Restar el margen**, y decirlo si no queda sitio.
+4. **Repartir** con la regla de siempre.
+5. **Contarlo en UNA línea**, con el mismo formato en las cinco placas.
+
+### Lo que esto arregla, en concreto
+
+- **La misma imagen con y sin PSRAM deja de ser un `if`**: es cuántas regiones devuelve el
+  enumerador. Y sirve igual para una placa futura con dos bancos, o con PSRAM opcional.
+- **Se acaban las constantes a mano** (`160 KB` el S3, `128` el C3, `512` el STM32). Cada una fue
+  puesta una vez y revisada nunca: el STM32 arrastró 128 KB con *«~520 KB parados»* durante toda
+  una versión (`H13` hallazgo 31), y el C3 estrenó la suya hoy.
+- **El margen pasa de comentario a número**, que es lo que `U6.2` identificó como el bloqueo real
+  del «cuánto».
+- **El bloque reservado queda disponible para lo que venga**, que es lo que Eduardo le veía:
+  *«nos da juego, para este micro pero también para otros futuros»*.
+
+### ⚠️ Lo que NO resuelve, y conviene decirlo antes de empezar
+
+- **El STM32 pierde algo si se unifica mal.** Su bloque es `.bss`, así que el techo lo comprueba
+  **el enlazador**: si no cabe, no compila. Eso es más fuerte que cualquier comprobación en
+  marcha, y un enumerador que devuelva «lo que hay» en runtime lo perdería. Su enumerador debe
+  seguir devolviendo el array estático, y el aserto de enlace quedarse donde está.
+- **Cuatro comprobaciones tienen que aprender qué es un hueco** antes de que coser sea seguro: el
+  barrido del GC, la guarda del PC, el debugger y —si algún día el hueco no está entre heap y
+  pilas— la tabla. Están inventariadas en `V6_IDEAS`.
+- **Sigue faltando el margen del STM32 y el de la Pico como MEDIDA**, no como estimación. El
+  protocolo existe (`tools/medir_margen.ps1`) pero es del wire del ESP32; para las otras dos hay
+  que adaptarlo.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
