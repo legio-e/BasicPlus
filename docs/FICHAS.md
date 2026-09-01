@@ -559,6 +559,60 @@ lo-que-quede) con sus dos formas distintas de bajar cuando no cabe, los **tres r
 techo**, y el **margen sin nombre** en cuatro de los cinco puertos.
 
 
+##### 🟡 `U6.2` — el DÓNDE va antes que el CUÁNTO (Eduardo, 31-ago)
+
+> *«Quizás antes que el cuánto, hay que plantearse el dónde. Así que el orden sería ¿hay PSRAM?
+> y si hay el reparto se hace de una manera, y si no hay se hace de otra.»*
+
+Puesto contra el censo `U6.0`, **explica el hallazgo 1** — que había dos filosofías de «cuánto»
+mezcladas sin decirlo. No eran dos filosofías rivales: era **la misma regla aplicada a dos sitios
+distintos**, y faltaba nombrar la diferencia.
+
+| | **de quién es esa memoria** | cómo decide hoy el bloque |
+|---|---|---|
+| Pico/Metro **con** PSRAM | **exclusiva** de la VM | toda la PSRAM − la región de SQLite |
+| ESP32-P4 | **exclusiva** | toda la PSRAM libre − 4 MB de display, reintentando −1 MiB |
+| Pico **sin** PSRAM | **compartida** (`malloc`, RAM de packs) | el hueco entero − 64 KB de margen **con nombre** − la RAM de packs |
+| ESP32-S3 / C3 | **compartida** (IDF, littlefs, wire, tareas) | ⚠️ **una constante** (160 / 128 KB) |
+| STM32 | **compartida** (`malloc`) | ⚠️ **una constante** (array estático de 512 KB) |
+
+**Los tres puertos con memoria exclusiva CALCULAN. De los tres con memoria compartida, sólo
+calcula el que le puso nombre a su margen.**
+
+### La regla que sale de ahí
+
+```
+¿de quién es la memoria?
+├── EXCLUSIVA (PSRAM)  → todo, menos las reservas CON NOMBRE (display, SQLite)
+└── COMPARTIDA (SRAM)  → todo, menos un margen CON NOMBRE para los demás
+                          inquilinos (malloc, RTOS, FS, wire)
+```
+
+Es **una** regla, no dos, y la rama sólo cambia *qué hay que descontar* y *a quién se le
+pregunta cuánto hay*.
+
+📌 **Y da criterio para el hallazgo 4.** El margen sin nombre no es higiene: es **lo que bloquea
+el «cuánto»**. Mientras un puerto no tenga un número que diga *«esto no es de la VM»*, no le
+queda más remedio que adivinar el bloque entero — y adivinar es exactamente lo que se pone mal
+en cada placa nueva (tres veces ya: STM32, S3 y hoy el C3).
+
+⚠️ **El caso difícil es el ESP32**, y conviene decirlo antes de empezar: allí «cuánto hay» sólo
+se sabe **preguntando** (`heap_caps_get_largest_free_block`) y **después** de que el IDF haya
+arrancado; además lo que devuelve es el **bloque contiguo**, no el total (`P1.C3.3`). O sea que
+la rama compartida necesita dos cosas de la cintura, no una: *cuánto hay* y *cuánto de eso es
+contiguo*.
+
+⏭️ **Lo que falta para poder implementarlo** — y es medir, no escribir:
+
+1. **Nombrar el margen en los tres puertos que no lo tienen** (S3, C3, STM32). No inventarlo:
+   el S3 y el C3 ya tienen la marca de agua medida (`#336`, `P1.C3.3`), que es justo el número
+   —*lo que el sistema consume en marcha*— del que sale el margen. El STM32 no lo tiene medido.
+2. **Comprobar que el orden aguanta en el STM32**, que es el raro: su bloque es `.bss`, así que
+   el techo lo verifica el ENLAZADOR y el fallo es en compilación, no en arranque. Eso es una
+   garantía **más fuerte** que la de los otros dos, y unificar hacia abajo sería perderla
+   ([[arreglo-que-no-viaja-entre-familias]] al revés).
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
