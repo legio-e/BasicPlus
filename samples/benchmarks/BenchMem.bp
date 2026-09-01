@@ -1,0 +1,83 @@
+// BenchMem.bp — ¿cuánto cuesta que el heap de la VM viva en PSRAM?
+//
+// ─── Por qué existe (V6/U6, 31-ago-2026) ─────────────────────────────────────
+//
+// `Bench.bp` mide el intérprete con `fib(28)`, que es RECURSIVO: su conjunto de
+// trabajo caliente es la PILA, pequeño y perfectamente cacheable. Medido en una
+// Metro, la PSRAM le costaba sólo un 4,3 % — pero ése es el caso AMABLE, y una
+// sola medida de un solo programa no dice nada del contrario.
+//
+// Aquí el acceso es al HEAP y a propósito hostil a la caché: un array grande
+// recorrido con un salto primo, de modo que cada lectura cae en otra línea y no
+// hay prefetch que valga. Es el caso que de verdad puede doler.
+//
+// ⚠️ Y trae su CONTROL, que es lo que lo hace una medida y no una impresión: el
+// MISMO bucle, el MISMO número de lecturas, recorriendo el array en orden. La
+// diferencia entre las dos líneas es el coste de la dispersión; comparar esa
+// diferencia con `psram=0` y con `psram=1` es el experimento.
+//
+// Uso (misma imagen, misma placa, una variable):
+//     psram=0 → reset → Run     y     psram=1 → reset → Run
+module BenchMem
+
+  import Pico
+
+  // 32768 enteros = 128 KB. Dos condiciones: que quepa en el heap más pequeño
+  // de los dos casos (con `psram=0` la Metro deja 267 KB) y que sea MUCHO mayor
+  // que la caché XIP del RP2350, o el experimento mediría la caché y no la RAM.
+  const N: integer := 32768
+
+  // Cuántas lecturas hace cada pasada. Ajustar si sale demasiado corto para
+  // medirlo o tan largo que aburra.
+  const LECTURAS: integer := 400000
+
+  // Salto PRIMO y coprimo con N (que es potencia de 2): así el recorrido visita
+  // todo el array sin repetir y cada paso cae lejos del anterior.
+  const SALTO: integer := 4099
+
+  function Main()
+    var a: integer[32768]
+
+    // Contenido: da igual el valor, pero que no sea todo cero — así la suma
+    // final depende de haber leído de verdad y el optimizador (o yo leyendo el
+    // resultado) no puede dar el bucle por vacío.
+    var i: integer := 0
+    while i < N do
+      a[i] := i
+      i := i + 1
+    endwh
+
+    // ── CONTROL: recorrido SECUENCIAL, el mismo número de lecturas ──────────
+    var s1: integer := 0
+    var idx: integer := 0
+    var k: integer := 0
+    var t0: integer := Pico.uptimeMs()
+    while k < LECTURAS do
+      s1 := s1 + a[idx]
+      idx := idx + 1
+      if idx >= N then
+        idx := 0
+      endif
+      k := k + 1
+    endwh
+    var dt1: integer := Pico.uptimeMs() - t0
+    print "secuencial ", LECTURAS, " lecturas = ", dt1, " ms  (suma ", s1, ")"
+
+    // ── LA MEDIDA: recorrido DISPERSO, mismo bucle y mismas lecturas ────────
+    var s2: integer := 0
+    idx := 0
+    k := 0
+    var t1: integer := Pico.uptimeMs()
+    while k < LECTURAS do
+      s2 := s2 + a[idx]
+      idx := idx + SALTO
+      if idx >= N then
+        idx := idx - N
+      endif
+      k := k + 1
+    endwh
+    var dt2: integer := Pico.uptimeMs() - t1
+    print "disperso   ", LECTURAS, " lecturas = ", dt2, " ms  (suma ", s2, ")"
+  end Main
+
+end BenchMem
