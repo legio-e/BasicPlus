@@ -50,6 +50,7 @@
 #include "aot_registry.h"
 #include "json_min.h"
 #include "bpvm_repl.h"      /* U3.24: el REPL comun */
+#include "bpvm_env.h"       /* U6.1: `stack=N` del ENV, como las placas */
 #include "bpvm_wire_v1.h"
 #ifdef BPVM_GUI
 #include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */
@@ -459,6 +460,15 @@ static void sim_repl_info(bpvm_repl_info_t* out) {
     out->psram_bytes  = (unsigned long) g_psram_size;
     out->fs_total_bytes = (unsigned long) fs_partition_size();
     out->fs_used_bytes  = (unsigned long) g_tally.used;
+    /* V6/U6.1 — el reparto de la VM, que iba a CERO mientras las placas daban el
+     * numero real. Es el dato con el que se compara "cuanta memoria tiene el
+     * programa aqui y alli", asi que un cero en el arnes es peor que un numero
+     * feo: parece un dato y no lo es. Misma regla que las tres familias. */
+    {
+        size_t pilas = bpvm_stack_region_bytes(g_mem_size);
+        out->vm_stack_bytes = (unsigned long) pilas;
+        out->vm_heap_bytes  = (unsigned long) (g_mem_size - pilas);
+    }
 }
 
 /* H10 — el panel simulado, para que el IDE pueda mostrarlo (0x0 = sin pantalla).
@@ -686,7 +696,20 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
       sb_raw(&s, ",\"session\":"); sb_long(&s, session); sb_raw(&s, "}");
       if (s.ok) send_line(c, s.buf); }
 
-    bpvm_t* vm = bpvm_init(g_vm_mem, g_mem_size, 0);
+    /* V6/U6.1 — EL MISMO REPARTO QUE LAS PLACAS.
+     *
+     * Aqui iba un `0`, que `bpvm_init` interpreta como «mitad y mitad». Las tres
+     * familias de placa reparten con `bpvm_stack_region_bytes` (25 %, suelo de
+     * 64 KB) desde hace tiempo — el censo `U6.0` encontro que los dos entornos de
+     * PC eran los unicos que no la llamaban.
+     *
+     * Importa mas desde `U3.24`, que hizo de este simulador el ARNES del REPL
+     * comun: un doble que reparte su memoria distinto de la placa es un doble
+     * MAS AMABLE que el original, y esos no cazan nada. Y ya mordio una vez —
+     * `repl_esp32.c` lo lleva escrito: «tenia una COPIA de la regla y se habia
+     * quedado en /2 mientras el Pico ya iba por /4». */
+    bpvm_t* vm = bpvm_init(g_vm_mem, g_mem_size,
+                           g_mem_size - bpvm_stack_region_bytes(g_mem_size));
     if (!vm) {
         free_bufs();
         emit_exited(c, session, "INTERNAL_ERROR", -1, 0, "no se pudo inicializar la VM");
@@ -979,6 +1002,19 @@ int main(int argc, char** argv) {
         return 1;
     }
     bpvm_repl_set_ops(&SIM_REPL_OPS);   /* U3.24: la cintura, antes del primer mensaje */
+    /* V6/U6.1 — `stack=N` del ENV, como las tres placas (`bpvm_set_stack_kb`).
+     *
+     * El simulador tenia gestor de placa y ENV —de hecho responde a `ENV_SET`—
+     * y era el unico que no aplicaba esta clave. Se lee AQUI, en el arranque, y
+     * no en cada `Run`: en la placa el valor se recoge en el boot y hace falta un
+     * reset para que entre. Aplicarlo por `Run` seria mas comodo y por eso mismo
+     * infiel — el simulador tiene que doler donde duele la placa. */
+    {
+        bpvm_env_t env;
+        if (bpvm_bmgr_env(&g_bm, &env))   /* devuelve 1 si HAY env, no 0 */
+            bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&env, "stack", 0));
+    }
+
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
 
     /* H10 — el panel simulado. Se fija ANTES de que ningún programa cree el

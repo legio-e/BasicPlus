@@ -254,14 +254,18 @@ int main(int argc, char** argv) {
         fprintf(stderr, "[BPVM_POISON] buffer de %zu bytes envenenado con 0xAA\n", mem_size);
     }
 
-    /* Sin --stack, se pasa 0 = el default de bpvm_init (mitad y mitad), que es
-     * lo que el host ha hecho siempre: nadie nota nada. Con --stack manda la
-     * regla del núcleo, la misma que usa la placa. */
-    size_t stack_base = 0;
-    if (stack_kb) {
-        bpvm_set_stack_kb(stack_kb);
-        stack_base = mem_size - bpvm_stack_region_bytes(mem_size);
-    }
+    /* V6/U6.1 — EL MISMO REPARTO QUE LAS PLACAS, TAMBIÉN SIN `--stack`.
+     *
+     * Antes, sin `--stack` se pasaba 0 = «mitad y mitad», *«que es lo que el host
+     * ha hecho siempre: nadie nota nada»*. El censo `U6.0` enseña que sí se nota:
+     * era uno de los tres consumidores que no llamaban a la regla común, y el
+     * host es la VM contra la que se comprueba la paridad. Que reparta distinto
+     * de la placa quiere decir que un programa al límite de memoria se comporta
+     * distinto aquí y allí — y aquí es donde miramos.
+     *
+     * `--stack=N` sigue mandando, igual que `stack=N` en el ENV de la placa. */
+    if (stack_kb) bpvm_set_stack_kb(stack_kb);
+    size_t stack_base = mem_size - bpvm_stack_region_bytes(mem_size);
     bpvm_t* vm = bpvm_init(mem, mem_size, stack_base);
     if (!vm) {
         fprintf(stderr, "bpvm_init falló (memSize=%zu)\n", mem_size);

@@ -518,6 +518,47 @@ verifica sin placa, y convierte el arnés en un doble fiel antes de empezar a mo
 placas.
 
 
+##### ✅ `U6.1` — el simulador y el host reparten como las placas (31-ago)
+
+El primero de los cuatro hallazgos del censo, y el que se cierra sin placa. Los tres
+consumidores que no llamaban a la regla común eran el **host** y el **simulador** (la copia del
+ESP32 ya se había arreglado en su día).
+
+| | antes | ahora |
+|---|---|---|
+| host (`test/main.c`) | mitad y mitad **salvo `--stack`** | `bpvm_stack_region_bytes` siempre; `--stack` sigue mandando |
+| simulador | mitad y mitad **siempre** | idem |
+| simulador: `stack=N` del ENV | **no lo leía** | lo lee **en el arranque**, como las tres placas |
+| simulador: `vmHeapBytes`/`vmStackBytes` del `INFO` | **cero** | el reparto de verdad |
+
+Con `--mem=512K`: pilas 131072, heap 393216 — exactamente `max(512K/4, 64K)`. Y con `stack=96`
+en el ENV: 98304 / 425984.
+
+📌 **Se lee en el ARRANQUE y no en cada `Run`, a propósito.** En la placa el valor se recoge en
+el boot y hace falta un reset para que entre. Aplicarlo por `Run` sería más cómodo en el
+simulador y por eso mismo **infiel**: el doble tiene que doler donde duele la placa
+([[doble-mas-amable-que-el-original]]).
+
+⚠️ **Y por qué importaba más de lo que parecía**: desde `U3.24` el simulador es el **arnés** del
+REPL común. Un arnés que reparte su memoria distinto de la placa e ignora el mando que la placa
+sí honra es un doble más amable que el original — y esos no cazan nada. El `INFO` a cero era la
+misma familia de problema: un cero **parece un dato** y no lo es.
+
+🐛 **Un fallo mío por el camino, y lo caza la verificación, no la lectura.** Escribí
+`if (bpvm_bmgr_env(&g_bm, &env) == 0)` y esa función devuelve **1 cuando SÍ hay env**: la
+condición estaba invertida, así que sólo aplicaba `stack=N` cuando no había ninguno. Compilaba y
+se leía bien. Salió al comprobar el número contra el esperado, que es el gesto que no me puedo
+saltar.
+
+✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP** (el host cambia de reparto y la salida
+no se mueve), `sim-smoke` **40/40**, `boardsim-smoke` verde, y el reparto comprobado contra la
+regla con y sin `stack=N`.
+
+⏭️ Quedan los otros tres hallazgos del censo: las **dos filosofías** de «cuánto» (constante vs
+lo-que-quede) con sus dos formas distintas de bajar cuando no cabe, los **tres regímenes de
+techo**, y el **margen sin nombre** en cuatro de los cinco puertos.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
