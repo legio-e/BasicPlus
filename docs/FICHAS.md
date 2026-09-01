@@ -694,6 +694,40 @@ el intérprete con una carga de pila; faltaba una de heap. Ahora las dos existen
 portables.
 
 
+##### 🔵 `U6.F1` — con PSRAM, ¿qué buffers NO-BP se pueden agrandar con la SRAM ociosa? (aparcada 31-ago)
+
+> Eduardo, al cerrar `U6.3`: *«Me sigue chirriando el tener memoria RAM ociosa. Apunta para
+> estudiar en un futuro: en el caso de PSRAM mirar qué buffer o heaps no BP se pueden agrandar
+> para mejorar rendimiento. De momento no lo tocamos.»*
+
+**Es un ángulo DISTINTO del que se descartó**, y conviene no confundirlos. `U6.3` midió mover
+*la memoria de la VM* a la SRAM y salió que no compensa (4–7 %). Esto es al revés: dejar la VM
+donde está y dar la SRAM ociosa a **lo que no es la VM** — que además es lo único que sigue
+viviendo en la interna cuando el heap se va a la PSRAM.
+
+**Cuánto hay**: 421 KB en la Metro (`vm: ... SRAM interna SIN RESERVAR`), 327 KB de DIRAM libre
+en el P4 al enlazar.
+
+**Candidatos, sin orden de mérito** (todos por medir):
+
+| | dónde vive hoy | por qué podría importar |
+|---|---|---|
+| cachés de littlefs (`read`/`prog`/`lookahead`) | dimensionadas para RAM escasa | tocan **cada** operación de FS |
+| el buffer del bulk del wire (`V1_PUT_BUF_SIZE`, 8 KB) | SRAM | trocea las subidas; menos trozos = menos vueltas |
+| el pool de la tabla de símbolos | dentro del bloque de la VM | 20 KB tras `#449`; ¿se beneficia de estar en la rápida? |
+| la RAM ejecutable del AOT | SRAM (ya) | ya está en la buena; confirmar |
+| el margen de `malloc` (64 KB en la Pico) | SRAM | está ocioso en la Metro y nadie lo usa |
+
+⚠️ **El método, antes que la lista**: agrandar un buffer que no es el cuello de botella no
+compra nada. Primero hay que **medir cuál lo es** — cronometrar un `PUT` grande, un `LIST` de un
+FS lleno y una carga de módulo, que son los tres gestos que el usuario espera de la placa. Y con
+control, como en `BenchMem`: la misma operación con el buffer de hoy y con uno mayor.
+
+📌 **Y ojo con el sesgo que ya nos ha salido hoy**: en `U6.3` el intérprete enterraba la latencia
+de memoria. Aquí puede pasar lo mismo con el FS — si el cuello es la **flash**, agrandar una
+caché en RAM no se nota. La medida tiene que separar las dos cosas.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
