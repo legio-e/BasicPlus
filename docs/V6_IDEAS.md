@@ -189,6 +189,67 @@ salen: el asignador no promete nada. Se pide A, se pide B, se miran los punteros
 resultante es razonable se cose; si no, se usa uno solo y no se ha perdido nada.
 
 
+### ✅ MEDIDO (31-ago): los dos trozos SE PUEDEN pedir, y el hueco son 8 KB
+
+Era la única medida que separaba la idea de un plan — el asignador no promete que los dos trozos
+mayores sean adyacentes, ni en qué orden salgan. Se pidieron los dos y se miraron los punteros:
+
+```
+coser: t1 @0x3fc9c414 139264 B | t2 @0x3fcc036c 114688 B
+coser: tramo @0x3fc9c414..0x3fcdc36c = 261976 B | hueco 8024 B | util 253952 B
+```
+
+- **Se pueden pedir a la vez.**
+- Salen **en orden de dirección** (el bajo primero), que es lo que el layout de la VM necesita.
+- **El hueco son 8 024 B**, no los ~26 KB que se habían estimado. Ocho kilobytes de memoria viva
+  del IDF entre los dos trozos.
+
+| | bytes | |
+|---|---|---|
+| bloque de hoy | 131 072 | 64 KB heap + 64 KB pilas |
+| tramo cosido, útil | **253 952** | **1,94×** |
+
+⚠️ **Y la misma medida pone el límite**: tomando los dos trozos ENTEROS al sistema le quedan
+26 080 B, contra un consumo medido en marcha de **17 588** (`U6.4`). Son 8,5 KB de holgura, que es
+poco. Dejando el margen —digamos ~230 KB tomados— el heap quedaría en **~165 KB** contra los 64
+de hoy: **2,6×**. Sigue siendo el cambio de memoria más grande que este micro puede tener.
+
+### La forma final, que es la que Eduardo propuso desde el principio
+
+El hueco **no** es «el espacio entre dos regiones»: es **un bloque más de la cadena del heap**,
+marcado vivo para siempre — *«similar a la memoria reservada para el SQLite»*. La diferencia es
+todo, porque el barrido del GC avanza con `cur += block_total_size(vm, cur)`: **lee la cabecera y
+salta**. Con la cabecera al final del trozo bajo (memoria nuestra) y el tamaño cubriendo el hueco
+(memoria del IDF), el recorrido pasa por encima sin tocarlo.
+
+Y entonces **el heap es UNO** y abarca los dos trozos, con la disposición de siempre:
+
+```
+[ t1: modulos + heap →→→ ][ HUECO = bloque reservado ][ t2: …heap… ][ TABLA ][ pilas ]
+```
+
+📌 **Eso disuelve la pregunta del reparto.** Si el heap abarca las dos, no hay que decidir qué va
+en cada región: la tabla y las pilas se quedan donde están y no hay «región del stack» que pueda
+quedar grande. *(La primera lectura de esta ficha proponía repartir heap y pilas una por región,
+que era peor y además exigía tocar el núcleo. La idea original era mejor que su lectura.)*
+
+### Lo que hay que tocar, y no es poco pero está acotado
+
+1. **El bloque del hueco tiene que sobrevivir al barrido.** Nadie lo va a referenciar, así que
+   `gc_sweep_phase` lo vería «vivo pero sin marcar» y lo liberaría. Necesita un caso especial —
+   una etiqueta propia, o `if (cur == vm->hueco)`.
+2. **La tabla de handles** crece hacia abajo con suelo en `heap_next`: correcto tal cual, porque
+   con el heap abarcando las dos regiones el suelo sigue siendo el heap.
+3. **La guarda del PC** (`interp.c:631`) acepta cualquier `pc < memory_size` — con un hueco
+   dentro, un PC desbocado podría ejecutar memoria del IDF. Hay que excluir el rango.
+4. **El debugger** (`bpvm_dbg_wire.c:106`) lee crudo hasta `memory_size`: mostraría el hueco como
+   memoria de la VM. Cosmético, pero miente.
+
+Los cuatro miran lo mismo, así que lo que hace falta son **dos campos en la VM** (`hueco_lo`,
+`hueco_hi`) y cuatro comprobaciones — no un mecanismo por sitio. Que es lo que le da el juego que
+Eduardo le veía: *«nos da juego, para este micro pero también para otros futuros»*.
+
+
 ## Ficheros: no hay `seek` porque no hay `open` (Eduardo, 17-ago)
 
 **La pregunta.** *«¿Tenemos una función seek o fseek para movernos dentro de un
