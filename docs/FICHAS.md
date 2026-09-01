@@ -434,6 +434,90 @@ al tamaño del heap.»* Mientras el reparto sea constantes sueltas, cada placa n
 oportunidad de poner mal el número — y la placa más estricta es la que menos se prueba
 (ver #449).
 
+##### 📊 `U6.0` — EL CENSO (31-ago). *«Medir dos veces antes de cortar»* (Eduardo)
+
+Leído del código, sin placas. Las cuatro preguntas de la ficha, para los cinco puertos **y los
+dos entornos de PC**, que también son consumidores y estaban fuera del recuento.
+
+| | **DÓNDE** vive el bloque | **CUÁNTO** mide | **REPARTO** | **TECHO**, y quién lo sabe |
+|---|---|---|---|---|
+| **Pico/Metro** (SRAM) | `vm_sram_region()`: de `&end + 64 KB` a `PACK_RAM_SRAM_BASE` | **lo que quede** | `bpvm_stack_region_bytes` | símbolos del **linker** — se sabe **antes** |
+| **Pico/Metro** (PSRAM) | `PSRAM_XIP_BASE` | `board_desc()->psram_bytes` | idem | el descriptor de placa |
+| **STM32** | array estático en `.bss` | **constante 512 KB** | idem | el **enlazador**: si no cabe, no enlaza |
+| **ESP32-S3** | `heap_caps_malloc(INTERNAL)` | **constante 160 KB** (+respaldo 128) | idem | bloque contiguo — **sólo pidiéndolo** |
+| **ESP32-C3** | idem | **constante 128 KB** (+respaldo 96) | idem | idem |
+| **ESP32-P4** | `heap_caps_malloc(SPIRAM)` | **lo que quede** − 4 MB de display, reintentando −1 MiB hasta un piso de 2 MB | idem | PSRAM libre, y se ajusta reintentando |
+| **host** (`test/main.c`) | `malloc` | `--mem` | ⚠️ **mitad y mitad** salvo `--stack` | — |
+| **simulador** | `calloc` | `--mem` (512 KB por defecto) | ⚠️ **mitad y mitad SIEMPRE** | — |
+
+### Lo que el censo destapa
+
+**1️⃣ «Cuánto» son DOS filosofías mezcladas sin decirlo.**
+
+- *«todo lo que quede»* — Pico y P4: **calculan**, y se adaptan solos a la placa.
+- *«una constante»* — STM32 (512 KB), S3 (160), C3 (128): un número escrito a mano.
+
+Las constantes son justo las que se ponen mal en cada placa nueva, y **hoy hemos añadido la
+tercera** (`P1.C3.3`). El P4 además **reintenta bajando 1 MiB**; el S3 y el C3 tienen **un solo
+escalón de respaldo**. Dos maneras distintas de tratar el mismo caso —«no cabe lo que pedí»—
+inventadas por separado.
+
+**2️⃣ El REPARTO está unificado en las placas… y NO en los dos entornos de PC.**
+
+Las tres familias llaman a `bpvm_stack_region_bytes` (25 %, suelo de 64 KB). El host va a
+**mitad y mitad** salvo que le pasen `--stack`, y **el simulador siempre**. Y hay más: las tres
+familias leen `stack=N` del ENV (`bpvm_set_stack_kb`) y **el simulador no lo lee**, teniendo
+gestor de placa y ENV.
+
+📌 Esto ya mordió una vez, y está escrito en `repl_esp32.c`: *«Esta función tenía una COPIA de la
+regla, y se había quedado en /2 mientras el Pico ya iba por /4 — dos placas repartiendo distinto
+sin que nadie lo hubiera decidido.»* La copia del ESP32 se arregló; **las dos del PC siguen
+ahí**.
+
+⚠️ Y es peor de lo que parece por lo que acabamos de hacer en `U3.24`: el simulador es ahora el
+arnés del REPL común. Un doble **más amable que el original** —reparte distinto e ignora el
+mando— es exactamente lo que no queremos de un arnés ([[doble-mas-amable-que-el-original]]).
+
+**3️⃣ El TECHO tiene tres regímenes, y sólo uno se conoce por adelantado.**
+
+- **Se sabe antes** (Pico): sale de símbolos del linker; el cálculo *es* el techo.
+- **Lo comprueba el enlazador** (STM32): el array no cabe ⇒ no enlaza. Falla pronto y fuerte.
+- **Sólo se sabe pidiéndolo** (ESP32): `heap_caps_get_largest_free_block`, y **después** de
+  arrancar el IDF.
+
+El tercero es el que sorprende, y hoy nos sorprendió: en el C3 hay 280 KB libres y el mayor
+bloque son 136 KB. **Ningún contrato de hoy expresa eso** — se descubrió leyendo un log.
+
+**4️⃣ El margen de `malloc` sólo existe como concepto en la Pico.**
+
+`VM_SRAM_MALLOC_MARGIN` (64 KB) es una constante de `pico/main.c` que nadie más conoce. En las
+demás placas el margen existe igual —algo tiene que quedar para `malloc`, littlefs, el wire, las
+tareas del IDF— pero **no lo nombra nadie**, así que no se puede ni comprobar ni ajustar. Es lo
+que costó `#440`/`#449`: dos días y el síntoma era un opcode imposible.
+
+### ✅ Lo que YA está bien y no hay que tocar
+
+- La **tabla de handles** es proporcional al heap desde `#449` (`handle_slots_por_heap`:
+  heap/512, piso 256) y vive **dentro** del bloque desde el 29-ago. Es el único de los cuatro
+  repartos que ya se decide en un solo sitio y con una regla, no con una constante.
+- La **regla del reparto** existe y es única (`bpvm_stack_region_bytes`). El problema no es que
+  falte: es que **hay tres consumidores que no la llaman**.
+
+### ⏭️ La forma que sugiere el censo
+
+La misma que `U2`/`U3`: **un contrato con cintura**.
+
+| | |
+|---|---|
+| **la familia dice** | *dónde* puede vivir, *cuánto* hay como mucho (el techo, en su régimen) y *qué pasa si no cabe* |
+| **el común decide** | *cuánto toma* (la política «todo lo que quede» o «esta constante», elegida UNA vez), *cómo reparte* (heap / pilas / handles / margen) y *cómo baja* si no cabe |
+
+Y el primer paso que cierra algo por sí solo, siguiendo `U3.24`: **que el simulador y el host
+usen la regla común y lean `stack=N`**. Son los dos consumidores que ya tenemos en el PC, se
+verifica sin placa, y convierte el arnés en un doble fiel antes de empezar a mover nada de las
+placas.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
