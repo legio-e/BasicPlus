@@ -613,6 +613,87 @@ contiguo*.
    ([[arreglo-que-no-viaja-entre-familias]] al revés).
 
 
+##### ✅ `U6.3` — ¿la SRAM ociosa sirve para algo? **Medido: no compensa** (31-ago)
+
+> Pregunta de Eduardo: *«En los casos que hay PSRAM el stack y el heap los subimos
+> automáticamente a la PSRAM, OK. Ahora, nos quedamos con memoria SRAM sin utilizar. ¿Se puede
+> aprovechar para algo útil?»*
+
+La pregunta es buena y la memoria ociosa es real. **Lo que no compensa es el motivo**.
+
+### Cuánta SRAM se queda sin usar
+
+Contado desde el ELF y confirmado por la placa:
+
+```
+estático (.data+.bss) ..........  83 KB
+hueco de `end` a la RAM de packs  421 KB
+```
+
+- **Pico sin PSRAM**: la VM toma ese hueco menos los 64 KB de margen → **357 KB**, y la placa lo
+  dice igual: `vm: SRAM interna 357 KB -> heap 267 KB + stacks 89 KB | libre para malloc: 64 KB`.
+- **Metro con PSRAM**: `vm: heap en PSRAM 6 MB @ 0x11200000 (SRAM interna SIN RESERVAR)` — lo
+  dice el propio firmware. Esos 421 KB se quedan para `malloc`, que aquí gasta muy poco.
+- **P4**: 241 KB de DIRAM usados de 576 → **327 KB libres**, y ahí sí los usa el IDF.
+
+### El experimento: una placa, una imagen, UNA variable
+
+La PSRAM de la Pico la conduce el ENV (`psram=1`, decisión de Eduardo del 19-jul), así que la
+misma imagen corre desde SRAM o desde PSRAM con un reset por medio. Silicio, reloj y binario
+idénticos.
+
+| Metro RP2350 | secuencial | disperso | coste de la dispersión |
+|---|---|---|---|
+| **SRAM** (357 KB) | 5694 ms | 5861 ms | +2,9 % |
+| **PSRAM** (6 MB) | 5946 ms | 6269 ms | +5,4 % |
+| **coste de la PSRAM** | **+4,4 %** | **+7,0 %** | |
+
+Y `Bench.bp` (`fib(28)`, recursivo, conjunto de trabajo = la pila):
+
+| | intérprete | AOT |
+|---|---|---|
+| SRAM | 8590 ms | 84 ms |
+| PSRAM | 8961 ms (**+4,3 %**) | 84 ms (**idéntico**) |
+
+**Tres cargas distintas —recursión, heap secuencial, heap hostil a la caché— y la PSRAM cuesta
+entre 4,3 % y 7,0 %.** A cambio la VM pasa de 357 KB a 6 MB: **17× más memoria por 7 % de
+velocidad en el peor caso que he sabido construir.**
+
+### Por qué sale tan poco, que es lo interesante
+
+`BenchMem.bp` trae su control, y comparado con el host el resultado se explica solo:
+
+| la misma dispersión cuesta | |
+|---|---|
+| en el **host** (VM-C, x86) | **+15 %** |
+| en la **Metro con PSRAM** | +5,4 % |
+| en la **Metro con SRAM** | +2,9 % |
+
+📌 **El intérprete entierra la latencia de memoria.** Donde el intérprete es rápido (host, 190×
+más que la placa en `fib`) la memoria asoma; donde es lento, no. Un ciclo de RAM lenta se pierde
+dentro de los ~15 opcodes que la VM gasta por iteración. Esto no es una peculiaridad de la
+Metro: es una propiedad de *ejecutar bytecode interpretado*, y por tanto vale para todo el sobre.
+
+⚠️ **Lo que este resultado NO dice**: que el AOT no se moviera (84 ms en los dos) es de este
+`fib`, que es compute-bound y toca poca memoria. **No** demuestra que el código nativo sea
+inmune a la PSRAM — un nativo que recorra estructuras grandes está sin medir.
+
+### Conclusión, y lo que cambia
+
+🔴 **No se pelea por la SRAM ociosa.** Partir el espacio de direcciones, o mover pilas y tabla
+de handles a la interna, costaría lo que ya sabemos —el modelo de referencias, el GC, el
+`sp`/`bp` que el debugger lee crudos— y compraría **como mucho un 7 %**. No sale.
+
+🟢 **Pero la idea de [[coser dos regiones]] (`V6_IDEAS`) SIGUE VIVA — por otra razón.** En el C3
+**no hay PSRAM**: allí coser las dos regiones no compra velocidad, compra **capacidad** (136 KB →
+~250 KB), que es lo que a ese micro le falta. El argumento de velocidad ha muerto; el de
+capacidad no estaba en duda.
+
+🎁 **Y sale un instrumento**: `samples/benchmarks/BenchMem.bp`, con su control. `Bench.bp` medía
+el intérprete con una carga de pila; faltaba una de heap. Ahora las dos existen y las dos son
+portables.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
