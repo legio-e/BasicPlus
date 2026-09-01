@@ -932,6 +932,79 @@ Una regla. Lo que cambia es **de quién es la memoria**, no cómo se decide.
   que adaptarlo.
 
 
+##### 🟡 `U6.6` — TRES CAPAS: constantes de la imagen, ENV, y enumeración en marcha (Eduardo, 31-ago)
+
+> *«Lo mejor es que cada imagen defina unas constantes que le indiquen al gestor de memoria las
+> particularidades de cada familia. Y por encima de todo el tema de la PSRAM, que cambia el mapa
+> de memoria completamente. O sea que el reparto de memoria tiene que ser dinámico pero que se
+> puede orientar un poco con algunos valores estáticos (el firmware) y del environment.»*
+
+Refina `U6.5`, donde la placa sólo ponía «las regiones + un número». Son **tres capas**, y cada
+una contesta lo que sólo ella puede saber:
+
+| capa | quién | qué sabe que las otras no | cuándo |
+|---|---|---|---|
+| **constantes de la imagen** | `chip_cfg.h` | las propiedades del SILICIO y las medidas hechas sobre él | compilación |
+| **el ENV** | `bpenv` de la placa | lo que varía de UNA placa a otra con la misma imagen | sin recompilar |
+| **enumeración** | el arranque | **lo que de verdad hay ahí ahora mismo** | cada arranque |
+
+📌 **Y el orden de precedencia ya está inventado en este proyecto.** `bpvm_stack_region_bytes`
+lo hace con `stack=N` y lleva escrito el criterio: *«Los topes NO son paternalismo… Un valor del
+env no puede dejar la placa inútil — se ajusta y SE DICE.»* La enumeración marca lo posible, las
+constantes ponen los suelos y la política, el ENV orienta dentro de eso, y **si hay que corregir
+un valor del ENV se corrige y se dice**. Generalizar ese patrón a toda la memoria es exactamente
+lo que se propone.
+
+### Las constantes, y de dónde sale cada una
+
+`chip_cfg.h` ya existe (`P1.C3.2`) y ya es el sitio de «lo que no se puede preguntar en marcha».
+
+| constante | qué es | hoy |
+|---|---|---|
+| `CHIP_MARGEN_SISTEMA` | lo que el sistema consume EN MARCHA fuera de la VM | **medido**: 26 564 B (S3), 17 588 B (C3) — `U6.4` |
+| `CHIP_VM_MIN` | por debajo de esto la VM no da para nada útil: no se arranca a medias, **se dice** | la Pico ya lo tiene (`VM_SRAM_MIN`, 64 KB) |
+| `CHIP_COSER_HUECO_MAX` | hasta qué hueco compensa coser dos regiones adyacentes | medido en el C3: 8 024 B para ganar 122 880 |
+| `CHIP_NOMBRE` | ya está | — |
+
+### Las claves del ENV, y por qué esta lista
+
+| clave | para qué | estado |
+|---|---|---|
+| `psram=0\|1` | **cambia el mapa entero**: la misma imagen con y sin | ✅ existe (Pico) |
+| `stack=N` | repartir pilas/heap sin recompilar | ✅ existe (las 3 familias + el sim desde `U6.1`) |
+| `SQLite=N` | reserva con nombre dentro de la memoria exclusiva | ✅ existe |
+| `vmheap=N` | forzar el tamaño del bloque | ⏳ nuevo — para acotar sin recompilar |
+| `coser=0\|1` | **encender y apagar el cosido** | ⏳ nuevo, y no es un lujo (abajo) |
+
+🎯 **`coser=0|1` se pone DESDE EL PRIMER DÍA, y la razón es de hoy.** Toda la medida de la PSRAM
+(`U6.3`) fue posible porque `psram=` existía como mando del ENV: la misma imagen, un reset por
+medio, **una sola variable**. Sin ese mando habría hecho falta compilar dos firmwares y comparar
+binarios distintos, que es justo lo que no desempata. Un mecanismo nuevo que no se pueda apagar
+no se puede medir — y éste toca el GC, la guarda del PC y el debugger.
+
+### Cómo queda el arranque
+
+```
+1. enumerar        ¿qué regiones hay?          → la familia, en marcha
+2. elegir          exclusiva grande, o la compartida mayor
+3. coser           si son adyacentes y el hueco < CHIP_COSER_HUECO_MAX  (y `coser` no lo apaga)
+4. restar          las reservas con nombre (display, SQLite) o CHIP_MARGEN_SISTEMA
+5. comprobar       ¿≥ CHIP_VM_MIN? si no: no hay VM, y el climb LO DICE
+6. repartir        la regla común, con `stack=N` si lo hay (ajustando y diciéndolo)
+7. contarlo        UNA línea, mismo formato en las cinco placas
+```
+
+El paso 1 es lo único que cambia por familia. Los siete pasos son del común.
+
+### Lo que esta forma resuelve del censo
+
+- **«Con PSRAM o sin ella» deja de ser un `if`**: es cuántas regiones devolvió el enumerador.
+- **Las constantes a mano desaparecen** (160 el S3, 128 el C3, 512 el STM32) y las que quedan son
+  de otra clase: no *«cuánto tomo»* sino *«qué sé de este silicio»*.
+- **El margen pasa de comentario a número**, que `U6.2` identificó como el bloqueo del «cuánto».
+- **Y todo lo nuevo nace medible**, porque cada palanca tiene su interruptor.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
