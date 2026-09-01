@@ -106,6 +106,89 @@ el deep sleep antes de meter ahí el heap de la VM — puede que nada (es DRAM n
 retiene), pero eso se mira, no se supone.
 
 
+### 🔬 MEDIDO (31-ago): no hay «un hueco», hay treinta y siete reservas
+
+La primera versión de esta idea decía que las regiones del C3 son contiguas y que el tope de
+136 KB era «del contador del asignador». **Lo primero es cierto y lo segundo era una suposición
+mía.** Eduardo lo vio: *«Ayer dijiste que el bloque de RAM del C3 es uno. Ahora parece como si
+algo reservase RAM en medio. ¿Quién reserva esa memoria?»*
+
+La cuenta no cuadraba y él tenía razón:
+
+```
+regiones (heap_init)   160 496 + 116 496 + 10 576 = 287 568 B
+libre                                                280 032 B
+⇒ ocupado                                              7 536 B   → el mayor hueco debería ser ~152 960
+la placa dice                                        139 264 B   → faltan ~13,7 KB por explicar
+```
+
+Se le preguntó al chip (`heap_caps_get_info`, ahora una línea del arranque):
+
+```
+heap: libre 280032 | mayor 139264 | bloques: 7 libres, 37 usados, 44 total | usado 13424
+```
+
+📌 **Siete trozos libres, no uno ni tres.** Lo que los parte son **37 reservas** que suman
+13 424 B: lo que **el propio ESP-IDF** ya tiene asignado cuando nuestro `app_main` arranca —
+estructuras de tareas, pilas, drivers, el timer—, repartidas en el orden en que el sistema fue
+arrancando. **Nadie reserva un bloque en medio**; hay 37 pequeños, y el mayor hueco que dejan es
+el techo de la VM.
+
+Que las regiones sean contiguas **en direcciones** era verdad y no bastaba: de ahí no se sigue
+que el espacio LIBRE lo sea. Salté de lo uno a lo otro.
+
+### Lo que eso cambia en la idea
+
+**Peor**: el hueco entre los dos trozos grandes no son unos bytes de cabecera — son ~26 KB de
+memoria **viva del IDF**, que además puede crecer.
+
+**Pero la idea sigue en pie**, y con la misma forma: se piden los dos trozos (139 264 y 114 688),
+se miran sus direcciones reales, y lo que quede entre medias se marca **ocupado permanentemente**.
+No hay que tocarlo — sólo no escribir ahí.
+
+### 🎯 El hueco tiene que ser un CONCEPTO DE LA VM, no un truco del arranque
+
+Pregunta de Eduardo al aterrizarlo: *«¿el GC tiene algún problema con el orden?»*. Se miró, y el
+GC está limpio — `gc_mark_phase` recorre sólo `[stack_base, sp)` de cada hilo y el barrido va
+acotado por `heap_top`. Pero hay **tres** sitios que sí dan por hecho que todo el tramo es
+nuestro:
+
+| | qué hace hoy | qué pasaría con un hueco |
+|---|---|---|
+| **tabla de handles** (`heap.c`) | crece hacia abajo desde `stack_base`, con suelo en `heap_next` | **escribiría** dentro |
+| **guarda del PC** (`interp.c:631`) | acepta cualquier `pc < memory_size` | **ejecutaría** memoria del IDF como bytecode |
+| **debugger** (`bpvm_dbg_wire.c:106`) | lee crudo si `addr + n <= memory_size` | mostraría basura como memoria de la VM |
+
+Los dos primeros son reales; el tercero es cosmético pero miente. De ahí que lo correcto sean dos
+campos en la VM —`hueco_lo` / `hueco_hi`— que esas tres comprobaciones consulten. Así sirve para
+el C3 y para cualquier micro futuro con la RAM repartida, que es lo que Eduardo quería del
+mecanismo: *«nos da juego, para este micro pero también para otros futuros»*.
+
+### El reparto, y por qué el orden lo decide el layout
+
+Lo natural sería *«pilas en una región y heap en la otra»*, y el orden entre ellas da igual —
+salvo por un hecho: **el espacio de direcciones de la VM tiene el heap ABAJO y las pilas
+ARRIBA**. Como la región A está en direcciones más bajas, eso fuerza el reparto sin necesidad de
+tocar el núcleo:
+
+```
+región A: [ modulos ][ heap →→→ ]  |  HUECO (del IDF)  |  región B: [ TABLA ][ pilas ]
+                      heap_top                            suelo_tabla        stack_base
+```
+
+Y la tabla de handles necesita **un tope nuevo**: hoy su suelo es implícitamente `heap_next`
+(`nuevo_top < vm->heap_next + vm->heap_reserve`), y pasaría a ser el principio del trozo de la
+región B. Un campo y una comparación.
+
+| | heap | pilas | útil | contra los 128 KB de hoy |
+|---|---|---|---|---|
+| heap en A, tabla+pilas en B | **136 KB** | 64 KB | **200 KB** | **+56 %** |
+
+⚠️ Sigue faltando **medir que los dos trozos se pueden pedir a la vez** y con qué direcciones
+salen: el asignador no promete nada. Se pide A, se pide B, se miran los punteros. Si el hueco
+resultante es razonable se cose; si no, se usa uno solo y no se ha perdido nada.
+
+
 ## Ficheros: no hay `seek` porque no hay `open` (Eduardo, 17-ago)
 
 **La pregunta.** *«¿Tenemos una función seek o fseek para movernos dentro de un

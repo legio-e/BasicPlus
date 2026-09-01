@@ -58,6 +58,19 @@ static void vm_buffer_init(void) {
      * lo que malloquee después (littlefs, el wire) empieza a fallar con errores
      * que NO se parecen a "sin memoria". El bloque contiguo mayor importa tanto
      * como el total: se puede tener RAM de sobra y aun así no caber. */
+    /* SONDA (V6/U6): el reparto en BLOQUES antes de pedir nada. Un solo hueco
+     * grande = lo ocupado esta en un extremo; varios = hay algo EN MEDIO. */
+    {
+        multi_heap_info_t hi;
+        heap_caps_get_info(&hi, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        log_printf("heap: libre %u | mayor %u | bloques: %u libres, %u usados, %u total | usado %u",
+                   (unsigned) hi.total_free_bytes,
+                   (unsigned) hi.largest_free_block,
+                   (unsigned) hi.free_blocks,
+                   (unsigned) hi.allocated_blocks,
+                   (unsigned) hi.total_blocks,
+                   (unsigned) hi.total_allocated_bytes);
+    }
     unsigned before      = (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     unsigned before_blk  = (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     s_vm_buffer = heap_caps_malloc(VM_BUFFER_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
