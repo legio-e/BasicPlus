@@ -488,12 +488,31 @@ mando— es exactamente lo que no queremos de un arnés ([[doble-mas-amable-que-
 El tercero es el que sorprende, y hoy nos sorprendió: en el C3 hay 280 KB libres y el mayor
 bloque son 136 KB. **Ningún contrato de hoy expresa eso** — se descubrió leyendo un log.
 
-**4️⃣ El margen de `malloc` sólo existe como concepto en la Pico.**
+**4️⃣ El margen tiene nombre en DOS puertos, y en los otros dos vive en un comentario.**
 
-`VM_SRAM_MALLOC_MARGIN` (64 KB) es una constante de `pico/main.c` que nadie más conoce. En las
-demás placas el margen existe igual —algo tiene que quedar para `malloc`, littlefs, el wire, las
-tareas del IDF— pero **no lo nombra nadie**, así que no se puede ni comprobar ni ajustar. Es lo
-que costó `#440`/`#449`: dos días y el síntoma era un opcode imposible.
+⚠️ *Corregido el 31-ago: esta entrada decía «sólo existe en la Pico» y era **falso**. Al ir a
+trabajar los casos sin PSRAM salió que el STM32 también lo tiene, sólo que en el sitio donde no
+lo busqué — el script del enlazador.*
+
+| puerto | el margen | ¿nombrado? | ¿comprobado? |
+|---|---|---|---|
+| **Pico** | `VM_SRAM_MALLOC_MARGIN` = 64 KB | ✅ en C | el cálculo de `vm_sram_region()` lo respeta |
+| **STM32** | `_Min_Heap_Size` 16K + `_Min_Stack_Size` 4K | ✅ en el `.ld` | ✅ **por el ENLAZADOR**: la sección `._user_heap_stack` los reserva dentro de `>RAM`, así que si no cabe **no compila** |
+| **ESP32-S3** | 86 KB (medidos, `#336`) | ❌ sólo en el comentario que justifica la constante | ❌ |
+| **ESP32-C3** | 17,5 KB (medidos, `P1.C3.3`) | ❌ ídem | ❌ |
+
+Y la constante del STM32 tampoco es un número a ojo: lleva su presupuesto escrito —*768 total −
+512 aquí − ~119 del resto del estático = ~137 KB libres, y el linker sólo exige 20; margen de
+6×*— y nació corrigiendo un descuido real (`H13` hallazgo 31: eran 128 KB porque *«se fijó al
+nacer el port y nadie volvió a mirarlo»*, con ~520 KB parados).
+
+📌 **Así que el hueco es MÁS PEQUEÑO de lo que decía este censo: son los dos ESP32.** Y en los
+dos el número **ya está medido** — existe como razonamiento en un comentario, pero no como
+cantidad que el código use. Eso es lo que hay que cambiar: no medir de nuevo, sino **darle
+nombre a lo medido y dejar que el tamaño se calcule**, como hace la Pico.
+
+Lo que costó no tenerlo sigue en pie: `#440`/`#449` fueron dos días y el síntoma era un opcode
+imposible.
 
 ### ✅ Lo que YA está bien y no hay que tocar
 
