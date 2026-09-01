@@ -27,6 +27,100 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR — `U6` tiene diseño y medidas; falta escribir código
+
+La sesión del 31-ago acabó siendo **de análisis y diseño**, y con eso `U6` (la organización de
+la memoria) pasa de ficha roja sin empezar a tener censo, hallazgos, forma y las medidas que la
+sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leído del código.
+
+### Por dónde empezar, en orden de menos riesgo
+
+1. **🟢 `CHIP_MARGEN_SISTEMA` en el S3 y el C3.** El número **ya está medido** (26 564 B y
+   17 588 B, `U6.4`): es sustituir dos constantes a mano por un cálculo. No toca el núcleo, se
+   cierra en una sesión y es lo que `U6.2` identificó como el bloqueo del «cuánto».
+2. **🟡 El enumerador de regiones** (`U6.5`/`U6.6`), familia a familia. Empezar por la **Pico**,
+   que ya calcula, y dejar el **STM32 para el final**: su techo lo comprueba el ENLAZADOR y eso
+   es más fuerte que cualquier comprobación en marcha — su enumerador debe seguir devolviendo el
+   array estático.
+3. **🔴 El cosido de dos regiones.** Es lo que toca el GC, y necesita las cuatro comprobaciones
+   inventariadas en `V6_IDEAS`. Poner `coser=0|1` en el ENV **desde el primer día**: un mecanismo
+   que no se puede apagar no se puede medir.
+
+### Lo que quedó a medias
+
+- **El margen de la Pico y el del STM32 sin MEDIR.** El protocolo existe
+  (`bpgenvm-c/tools/medir_margen.ps1`) pero habla el wire del ESP32; para esas dos hay que
+  adaptarlo.
+- **El AOT del C3.** Hoy se descubrió que su ausencia era un hueco del port, no del silicio: le
+  faltaba `esp_mm` en `REQUIRES` y ya compila con el camino del `.mdn` dentro. Falta que el IDE
+  compile el `.mdn` con la ISA del C3 y probarlo en placa (`U6.4`).
+  ⚠️ Con un aviso: el P4 y el C3 comparten el tag `MDN_ARCH_RISCV` y se separan por la ABI de
+  coma flotante, **pero eso no separa la extensión de atómicos**, que el P4 tiene y el C3 no.
+- **`U6.F1` aparcada** a petición de Eduardo: con PSRAM, qué buffers NO-BP agrandar con la SRAM
+  ociosa. Dentro está el método, que importa más que la lista.
+
+### Riesgos que acechan
+
+- 🔴 **Las cuatro comprobaciones del hueco.** Si se implementa el cosido sin ellas, el fallo no
+  es un error: es la VM escribiendo o ejecutando memoria del IDF. Están listadas en `V6_IDEAS`.
+- 🟡 **El S3 corre una imagen del 30-ago.** Su margen se midió con ella; si se reflashea conviene
+  repetir la medida, que ahora cuesta un minuto.
+- 🟡 **La imagen del C3 en la placa NO es la del repo**: lleva la sonda temporal del cosido, que
+  ya se ha retirado del código. Reflashear antes de medir nada más con ella.
+
+### 🧹 Pendientes manuales
+
+- El **C3** se quedó con `log=1` en su ENV (se puso para medir). Devolverlo a `0`.
+- El `/app/Core.mod` de las placas (sigue, y el S3 lo tiene: se vio en su `LIST`).
+- En el S3 hay además un `/lib/Pico.mod` de V5 tapando el embebido de la imagen — el firmware lo
+  avisa al arrancar. Mismo problema que el `Core.mod`.
+
+### `U6` — la organización de la memoria: censo, medidas y forma (sesión de análisis)
+
+Sesión sin apenas código y con mucho medido. `U6` estaba en rojo desde el 28-ago, abierta con una
+pregunta de Eduardo (*«¿es por micro o por familia? ¿está previsto unificarlo?»*), y sale de hoy
+con censo, cuatro hallazgos, tres medidas en placa y una forma escrita.
+
+**El censo (`U6.0`)** — los cinco puertos **y los dos entornos de PC**, que estaban fuera del
+recuento. Cuatro cosas:
+
+1. «Cuánto» eran **dos filosofías mezcladas sin decirlo**: calcular (Pico, P4) contra una
+   constante a mano (STM32, S3, C3).
+2. El **reparto** estaba unificado en las placas y **no** en el host ni en el simulador.
+3. El **techo** tiene tres regímenes, y el del ESP32 sólo se conoce preguntando — y es el
+   **bloque contiguo**, no el total.
+4. El **margen** ⚠️ *(corregido el mismo día: dije que sólo la Pico lo nombraba y el STM32 también
+   lo hace, en el `.ld`, donde no miré)*.
+
+**Lo cerrado**
+
+- `U6.1` — el **simulador y el host** reparten como las placas y leen `stack=N`. Importa desde
+  `U3.24`: el sim es el arnés del REPL común, y un doble más amable que el original no caza nada.
+- `U6.3` — **la SRAM ociosa no compensa**, medido en la Metro con `psram=0/1`: la PSRAM cuesta
+  entre 4,3 % y 7,0 % en tres cargas distintas, a cambio de 17× más memoria. Y el porqué es lo
+  interesante: **el intérprete entierra la latencia de memoria** (la misma dispersión cuesta 15 %
+  en el host y 5 % en la placa). De ahí salió `BenchMem.bp`, con su control.
+- `U6.4` — **el margen del S3 estaba mal**: 26 564 B, no 86 256. El viejo se midió con una carga
+  que nadie anotó. Ahora hay protocolo escrito (`tools/medir_margen.ps1`) y las dos placas se
+  llevan 1,5×, no 4,9×.
+
+**Lo diseñado** — `U6.5` y `U6.6`: tres capas (constantes de la imagen, ENV, enumeración en
+marcha) y siete pasos de arranque de los que **sólo el primero es de la familia**. La clave es
+`exclusiva`: con ella, «todo lo que quede» y «una constante» dejan de ser rivales y son una
+regla con dos clases de memoria.
+
+**Y dos correcciones mías que conviene recordar**, las dos a preguntas de Eduardo:
+
+- *«la C3 es RISC-V, debería soportar AOT»* — y tenía razón. Su ausencia era un hueco del port
+  (faltaba `esp_mm` en `REQUIRES`) y yo había escrito en el código que era del silicio.
+- *«¿quién reserva esa memoria?»* — nadie: son **37 reservas del IDF** que dejan el espacio libre
+  en 7 trozos. Yo había dicho que las regiones eran contiguas —cierto en direcciones— y salté de
+  ahí a que el espacio libre lo fuera.
+
+**Y una cosa que se midió y salió mejor de lo esperado**: coser dos regiones **se puede**. Los dos
+trozos se piden a la vez, salen en orden de dirección y el hueco entre ellos son **8 024 B**. El
+heap del C3 pasaría de 64 KB a ~165 con el margen puesto: **2,6×**.
+
 ### `P1.C3.3` — el C3 ejecuta BasicPlus, por su único cable
 
 🧹 **Pendiente manual**: el C3 se quedó con `log=1` en su ENV (se puso para medir la marca
