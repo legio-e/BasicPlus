@@ -37,9 +37,10 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
 
 1. ✅ **`CHIP_MARGEN_SISTEMA` en el S3 y el C3 — HECHO en código (`U6.7`, 2-sep).** Tres
    constantes por chip (objetivo / margen medido / suelo) y `vm_buffer_init()` mide, comprueba
-   las dos restricciones y baja diciéndolo. **Falta verlo en placa**: la predicción es que en las
-   dos manda el bloque contiguo y el bloque queda igual que hoy (128 / 160 KB). La línea a buscar:
-   `vm: heap 128 KB reservado (objetivo 128, techo 136 por el bloque contiguo, margen 17588)`.
+   las dos restricciones y baja diciéndolo. **Visto en el C3** (2-sep): la línea sale exactamente
+   como se predijo —`objetivo 128, techo 136 por el bloque contiguo, margen 17588`— y el reparto
+   no se mueve (64/64). **El S3 queda por contrastar** al reflashear; la predicción es 160 KB con
+   techo 264 por el bloque contiguo.
 2. **🟡 El enumerador de regiones** (`U6.5`/`U6.6`), familia a familia. Empezar por la **Pico**,
    que ya calcula, y dejar el **STM32 para el final**: su techo lo comprueba el ENLAZADOR y eso
    es más fuerte que cualquier comprobación en marcha — su enumerador debe seguir devolviendo el
@@ -67,9 +68,8 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
   es un error: es la VM escribiendo o ejecutando memoria del IDF. Están listadas en `V6_IDEAS`.
 - 🟡 **El S3 corre una imagen del 30-ago.** Su margen se midió con ella; si se reflashea conviene
   repetir la medida, que ahora cuesta un minuto.
-- 🟡 **Ni el C3 ni el S3 llevan la imagen del repo.** El C3 tiene la sonda temporal del cosido
-  (ya retirada) y el S3 la del 30-ago; ninguna lleva `U6.7`. Reflashear las dos antes de medir
-  nada — y al hacerlo, contrastar la predicción de arriba.
+- 🟡 **El S3 no lleva la imagen del repo** (tiene la del 30-ago, sin `U6.7`). El C3 ya sí (2-sep).
+  Reflashear el S3 antes de medir nada con él — y al hacerlo, contrastar la predicción de arriba.
 
 ### 🧹 Pendientes manuales
 

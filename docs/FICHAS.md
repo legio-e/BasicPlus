@@ -1089,8 +1089,17 @@ vm: heap 128 KB reservado (objetivo 128, techo 136 por el bloque contiguo, marge
 ```
 
 ✅ **Verificado**: S3, C3 y P4 compilan; las cadenas nuevas están **en los `.bin`** y la del
-«respaldo» viejo ya no. **Sin placa hoy**: la predicción de arriba es lo que hay que contrastar
-al reflashear.
+«respaldo» viejo ya no. **Y en el C3, la predicción palabra por palabra** (2-sep, imagen `U6.7`
+reflasheada, arranque limpio con `LOG_CLEAR` + `RESET` por el wire):
+
+```
+heap: libre 280032 | mayor 139264 | bloques: 7 libres, 37 usados | usado 13424
+vm: heap 128 KB reservado (objetivo 128, techo 136 por el bloque contiguo, margen 17588) | DRAM libre 280032->148956 B
+```
+
+Misma foto del heap que el 31-ago, y el `INFO` da el mismo reparto de antes (`vmHeapBytes` 65536 /
+`vmStackBytes` 65536): **sin cambio de comportamiento, con la comprobación puesta**. El S3 queda
+por contrastar cuando se reflashee.
 
 
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
