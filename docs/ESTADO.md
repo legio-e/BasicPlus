@@ -46,13 +46,12 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
    enumerando; verificado en la Metro en los dos modos, byte a byte con las líneas de ayer.
    ✅ **S3 y C3 HECHOS (`U6.9`, 2-sep)**: `vm_buffer_init` queda en enumerar (`heap_caps_get_info`)
    y tomar (malloc + escalera); verificado en el C3 **y en el S3** con los números esperados.
-   🟡 **P4 en código (`U6.10`)**: el margen pasó a ser **de la región** (el display es un margen
-   de la PSRAM, no una reserva) y `vm_buffer_init_psram` ya enumera/planifica/toma; **falta la
-   placa** para leer su `psram: libre | mayor`, contrastar con el `VM heap en PSRAM` de antes y
-   fijar el fixture. **Después el STM32, el último**: su techo lo comprueba el ENLAZADOR y eso es
-   más fuerte que cualquier comprobación en marcha — su enumerador devuelve el array estático y el
-   aserto se queda. Tres de cinco placas deciden ya con la misma función; la cuarta, en cuanto se
-   enchufe.
+   ✅ **P4 HECHO (`U6.10`)**: el margen es **de la región** y va contra el TOTAL, no contra el
+   contiguo — lo cazó el P4 con 508 KiB de diferencia; corregido, verificado byte a byte con su
+   imagen anterior (28 668 KiB @0x48000a7c) y su caso medido en `test_mem` (19/19). **La familia
+   ESP32 entera y la Pico deciden ya con la misma función.** **Queda el STM32, el último**: su
+   techo lo comprueba el ENLAZADOR y eso es más fuerte que cualquier comprobación en marcha — su
+   enumerador devuelve el array estático y el aserto se queda.
 3. **🔴 El cosido de dos regiones.** Es lo que toca el GC, y necesita las cuatro comprobaciones
    inventariadas en `V6_IDEAS`. Poner `coser=0|1` en el ENV **desde el primer día**: un mecanismo
    que no se puede apagar no se puede medir.
@@ -76,8 +75,9 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
   es un error: es la VM escribiendo o ejecutando memoria del IDF. Están listadas en `V6_IDEAS`.
 - 🟡 **El S3 corre una imagen del 30-ago.** Su margen se midió con ella; si se reflashea conviene
   repetir la medida, que ahora cuesta un minuto.
-- ✅ **Las tres ESP32 y la Metro llevan la imagen del repo** (2-sep): C3 y S3 con `U6.9`, Metro
-  con `U6.8`. El S3 subió a 346 064 B libres / 278 528 contiguos con la imagen nueva (+7,7 KB:
+- ✅ **Las tres ESP32 y la Metro llevan imagen del repo** (2-sep): P4 con `U6.10` (la regla
+  final), S3 con `U6.10` (regla previa, mismos números), C3 con `U6.9`, Metro con `U6.8`. Ninguna
+  de las tres últimas se ha grabado con la regla final: sus fixtures la cubren. El S3 subió a 346 064 B libres / 278 528 contiguos con la imagen nueva (+7,7 KB:
   lo que liberó la unificación); si se remide su margen, añadir el caso a `test_mem`, no
   sustituir el del 30-ago.
 - ℹ️ **Grabar la Pico/Metro sin dedo**: `BOOTSEL` por el wire la abre como disco `RP2350` y se

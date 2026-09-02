@@ -1235,7 +1235,7 @@ válidos, y el planificador no depende del nivel — cuando se remida el margen 
 y las otras dos (P4, STM32) tienen su hueco descrito en `U6.8`.
 
 
-##### 🟡 `U6.10` — el margen es de la REGIÓN, y el P4 al planificador (código hecho; falta su placa) (2-sep)
+##### ✅ `U6.10` — el margen es de la REGIÓN, y el P4 al planificador: la familia ESP32 entera con la misma regla (2-sep)
 
 Al ir a meter el P4 salió que el modelo de `U6.8` tenía el margen en el sitio equivocado. El P4
 tiene **dos** cosas distintas en su PSRAM: una **reserva** (SQLite: asignada aparte, alineada a
@@ -1287,9 +1287,46 @@ falta la placa**: para ver su `psram: libre | mayor` y fijar el fixture con lo m
   tamaño que el de V5, por eso el `LIST` engaña; el aviso *«NO es el de esta imagen»* ya no sale,
   y `bpstdlib/Pico.mod` mide 2 070). 27 → 26 ficheros.
 
-⏭️ Con el P4 en la mesa: grabar, leer `psram: libre | mayor` y la línea del plan, contrastar con
-el `VM heap en PSRAM: … KiB` de la imagen anterior, y añadir el fixture. Entonces la familia ESP32
-entera decide con la misma función.
+### 🐛 Y el P4, en la mesa, cazó un fallo del modelo — con números
+
+Referencia, con su imagen del 31-ago: `PSRAM libre 32765 KB`, `vm: heap 28668 KB en PSRAM
+@0x48000a7c (PSRAM libre 4093 KB)`. Con la primera versión del planificador:
+
+```
+psram: libre 32765 KB | mayor 32256 KB | bloques: 1 libres, 3 usados
+vm: 28160 KB en PSRAM (todo lo que deja el margen de la región)        ← 508 KiB MENOS
+```
+
+La rama exclusiva restaba el margen del display al **bloque contiguo** (32256 − 4096) y la imagen
+vieja lo restaba al **total** (32765 − 4096). Y la vieja tenía razón: los 4 MiB del display los
+pide LVGL en trozos, no necesitan ser contiguos con nada — el margen va contra el *total*, y lo
+contiguo es sólo el tope de lo que un `malloc` puede dar. **Que es exactamente la forma de la
+rama compartida.** Así que las dos ramas se funden en una sola cuenta:
+
+```
+techo = min( contiguo − reserva ,  libre − reserva − margen )
+```
+
+Lo único que cambia entre clases de memoria es **qué inquilinos hay**, no cómo se decide. El
+caso P4 entra en `test_mem` con sus números medidos (**19/19**), y los seis anteriores no se
+mueven.
+
+### ✅ Verificado en el P4, byte a byte con su imagen anterior
+
+```
+psram: libre 32765 KB | mayor 32256 KB | bloques: 1 libres, 3 usados
+vm: 28669 KB en PSRAM (todo lo que deja el margen de la región)
+vm: heap 28668 KB en PSRAM @0x48000a7c (PSRAM libre 4093 KB) | DRAM interna libre 430315 B
+INFO vmHeapBytes 28831744 / vmStackBytes 524288
+```
+
+Mismo bloque (28 668 KiB tras alinear a página), misma dirección, mismos 4093 KB libres. Los
+**seis builds** compilan con la regla final; la Pico, el S3 y el C3 no se han vuelto a grabar con
+ella pero sus fixtures están en el test y no se mueven — y sus enumeradores no han cambiado.
+
+📌 **Con esto la familia ESP32 entera —S3, C3 y P4— y la Pico deciden su memoria con la misma
+función.** Queda el STM32, que es el que devuelve un array estático y conserva el aserto del
+enlazador.
 
 
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)

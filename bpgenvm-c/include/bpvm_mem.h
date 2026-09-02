@@ -9,9 +9,13 @@
  * calcular o poner un número. U6.2 (Eduardo) enseñó que no eran dos filosofías
  * sino UNA regla aplicada a dos clases de memoria:
  *
- *     EXCLUSIVA  (PSRAM)  → todo, menos la reserva CON NOMBRE delante (SQLite) y el
- *                           margen de la región (el display del P4)
- *     COMPARTIDA (SRAM)   → todo lo contiguo, menos el margen de la región (malloc/RTOS)
+ *     techo = min( contiguo − reserva ,  libre − reserva − margen )
+ *
+ *     una sola cuenta: lo CONTIGUO es el tope de un malloc; el MARGEN de la región
+ *     (malloc/RTOS en la SRAM, el display en la PSRAM del P4) va contra el TOTAL,
+ *     porque quien lo usa lo pide en trozos; la RESERVA con nombre (SQLite) se
+ *     aparta DELANTE, en la exclusiva. Lo que cambia entre clases es sólo qué
+ *     inquilinos hay, no cómo se decide.
  *
  * Y U6.6 fijó las tres capas: la FAMILIA enumera lo que HAY (en marcha, porque una
  * misma imagen va con PSRAM y sin ella), las CONSTANTES de la imagen dicen lo que

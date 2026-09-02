@@ -35,31 +35,38 @@ bpvm_mem_res_t bpvm_mem_plan(const bpvm_mem_region_t* r, int n,
     const bpvm_mem_region_t* R = &r[mejor];
     out->idx = mejor;
 
-    /* 2. EL TECHO de esa región: lo que cabe dejando lo debido. */
+    /* 2. EL TECHO de esa región: lo que cabe dejando lo debido. UNA cuenta para
+     *    las dos clases de memoria (U6.10, y lo enseñó el P4 con números):
+     *
+     *        techo = min( contiguo − reserva ,  libre − reserva − margen )
+     *
+     *    · lo CONTIGUO es el tope de lo que un malloc puede dar (P1.C3.3: en el
+     *      C3 hay 280 KB libres en siete trozos y el mayor son 136);
+     *    · el MARGEN va contra el TOTAL, no contra el contiguo: lo que se deja a
+     *      los demás inquilinos —malloc/RTOS, o los 4 MiB del display del P4— lo
+     *      piden ellos en trozos y no necesitan ser contiguos con nada. La primera
+     *      versión lo restaba del contiguo en la exclusiva y el P4 perdió 508 KiB
+     *      respecto a su imagen anterior (32256 − 4096 en vez de 32765 − 4096);
+     *    · la RESERVA con nombre (SQLite) se aparta DELANTE del bloque, así que
+     *      resta a los dos.
+     *    Se dice cuál de las dos manda. */
+    size_t res = 0;
+    if (R->exclusiva) {
+        /* La validez de la reserva (mínimos, dejar VM viable) la decide quien la
+         * pide —bpvm_sqlmem—; aquí sólo se aparta si cabe dejando el suelo. */
+        res = cfg->reserva_bytes;
+        if (res > 0 && (res >= R->bytes || R->bytes - res < cfg->vm_min)) res = 0;
+    }
+    out->reserva_bytes = res;
+    size_t libre    = (R->libre > R->bytes) ? R->libre : R->bytes;
+    size_t contiguo = R->bytes - res;
+    size_t total    = (libre > res + R->margen) ? libre - res - R->margen : 0;
     size_t techo;
     const char* limita;
-    if (R->exclusiva) {
-        /* Exclusiva: todo, menos la reserva con nombre que va DELANTE (SQLite en
-         * la Pico, el display en el P4). La validez de la reserva (mínimos,
-         * dejar VM viable) la decide quien la pide —bpvm_sqlmem—; aquí solo se
-         * aparta si cabe dejando el suelo. */
-        size_t res = cfg->reserva_bytes;
-        if (res > 0 && (res >= R->bytes || R->bytes - res < cfg->vm_min)) res = 0;
-        out->reserva_bytes = res;
-        techo = R->bytes - res;
-        /* Y el margen de la región: lo que se deja libre para otro inquilino de
-         * ESA memoria (el display en la PSRAM del P4). En la Pico/Metro es 0. */
-        if (R->margen > 0) { techo = (techo > R->margen) ? techo - R->margen : 0; limita = K_MARGEN_R; }
-        else               { limita = K_REGION; }
-    } else {
-        /* Compartida: las DOS restricciones que salieron de medir el C3
-         * (P1.C3.3, U6.4): caber en el bloque CONTIGUO, y dejarle al sistema lo
-         * que consume en marcha sobre el TOTAL libre. Manda la más estricta, y
-         * se dice cuál. */
-        size_t libre   = (R->libre > R->bytes) ? R->libre : R->bytes;
-        size_t techo_m = (libre > R->margen) ? libre - R->margen : 0;
-        if (R->bytes < techo_m) { techo = R->bytes; limita = K_CONTIGUO; }
-        else                    { techo = techo_m;  limita = K_MARGEN;   }
+    if (contiguo < total) { techo = contiguo; limita = K_CONTIGUO; }
+    else {
+        techo  = total;
+        limita = R->exclusiva ? (R->margen ? K_MARGEN_R : K_REGION) : K_MARGEN;
     }
 
     /* 3. CUÁNTO: el objetivo si cabe, y nunca más que el objetivo aunque quepa. */

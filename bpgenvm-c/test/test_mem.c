@@ -97,9 +97,25 @@ static void caso_exclusiva_con_margen(void) {
     CHECK(!strcmp(p.limita, "el margen de la región"),         "exclusiva con margen: lo dice: %s", s);
 }
 
+static void caso_p4(void) {
+    /* MEDIDO el 2-sep: psram: libre 32765 KB | mayor 32256 KB | bloques: 1 libres, 3 usados
+     * La imagen anterior daba 28668 KiB (= 32765 - 4096 alineado a pagina). La primera
+     * version del planificador dio 28160 (restaba el display al CONTIGUO): este caso
+     * es el que lo cazo. El margen va contra el TOTAL. */
+    bpvm_mem_region_t r[1] = {{ NULL, 32256u * 1024u, 32765u * 1024u, 1, 4u * 1024u * 1024u, "PSRAM" }};
+    bpvm_mem_cfg_t cfg = { 0, 2u * 1024u * 1024u, 0, NULL };
+    bpvm_mem_plan_t p; char s[160];
+    bpvm_mem_plan(r, 1, &cfg, &p);
+    bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
+    size_t pagina = p.bytes & ~((size_t) 4095u);              /* el P4 alinea a pagina al tomar */
+    CHECK(p.bytes == 28669u * 1024u,                          "P4: techo 32765 - 4096 = 28669 KiB (%u)", (unsigned)(p.bytes / 1024u));
+    CHECK(pagina == 28668u * 1024u,                            "P4: alineado a pagina = 28668 KiB, IGUAL que la imagen anterior");
+    CHECK(!strcmp(p.limita, "el margen de la región"),         "P4: manda el margen de la region (el display), no el contiguo: %s", s);
+}
+
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen();
+    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }
