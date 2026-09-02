@@ -1973,7 +1973,7 @@ de cada una sigue en su sitio.
 #### 💻 E1 — el IDE y el wire
 
 - **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
-- **NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.
+- ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.~~ **HECHO el 2-sep** (`#466`, paso 3): el IDE pregunta por cada dependencia con `STAT` por nombre y sólo sube lo que falta o es más viejo.
 - **Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC *(idea de Eduardo)*.
 - **El verbo `RESET` no llega con un RUN vivo** *(era `#452`)*.
 - **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC.

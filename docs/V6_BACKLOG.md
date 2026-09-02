@@ -143,7 +143,7 @@ todas de una misma mañana, al cerrar V5, y están en `FICHAS.md` con su desarro
 | asunto | dónde |
 |---|---|
 | **`#412` — `run miModulo <arg>`**, el argumento SIEMPRE en el heap | **diseño hecho** en `V6_IDEAS.md` §run |
-| **NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él | `FICHAS` §Aplazadas |
+| ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él~~ — HECHO el 2-sep (`#466` paso 3) | `FICHAS` `#466` |
 | **El verbo `RESET` no llega con un RUN vivo** (era `#452`) | `FICHAS` §Aplazadas |
 | **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC | `FICHAS` §Aplazadas |
 | **El árbol de ficheros por COLOR** según el tipo (rojo RESERVADO) | `FICHAS` §Aplazadas |
