@@ -1894,7 +1894,8 @@ tocar y cómo se comprueba.
 hacer P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»* Estado ese día: U1, U2, U3 y N1
 cerrados; P1.C3 hecho; U6 en código en las cinco familias (faltan las STM32 en placa); `#466`
 hecho salvo la comprobación en placa. El C6 entra **sin pantalla** por el camino del C3, y la
-pantalla es P2.
+pantalla es P2. Y el marcador: *«cuando tengamos la ESP32-C6 yo creo que ya habremos llegado al
+ecuador de V6»* — la segunda mitad es la arquitectura sobre código único (A1) y G1, L1, E1.
 
 📌 **U1–U5 no bloquean a los demás.** La unificación es lo que se hace *primero* porque
 abarata todo lo que venga detrás, pero N1, L1 y E1 tocan sitios distintos y pueden avanzar
