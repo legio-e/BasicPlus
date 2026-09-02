@@ -1451,31 +1451,41 @@ no pudo avisar de su `Pico.mod` de V5 — en las ESP32 y las STM32 el `/lib` ran
 - **C**: dejarlo y sólo avisar (reponer `#422` en las tres, en el helper común) → el invariante
   sigue rompiéndose, ahora con ruido. Es el mínimo si A se aplaza, y A lo incluye.
 
-### ✅ Decidido: **A, corregida por Eduardo** (2-sep) — *«el IDE debía preguntar a la placa si le faltaba una dependencia»*
+### ✅ Decidido: LA REGLA de Eduardo (2-sep) — *«las cosas complicadas o no funcionan o funcionan de formas extrañas»*
 
-Ya estaba hablado en `#463` (*«lo robusto es que lo diga el dispositivo en vez de que el IDE lo
-recuerde: el `LIST` de `/lib` ya existe»*) y yo lo había reformulado peor (duplicar la stdlib bajo
-`/app/<proj>`). La forma acordada:
+Yo iba a montar más de lo necesario (duplicar stdlib bajo `/app/<proj>`, un verbo nuevo). Eduardo
+lo dejó en dos frases, y **la versión de la stdlib la resuelve el SO, no la comunicación**:
 
-1. **El IDE pregunta a la placa.** Para cada dependencia que resolvió de la stdlib (de `stdlibDir`,
-   no del `outDir`), mira en el `LIST` que ya hace al conectar si `/lib/<X>.mod` está. Si está, **no
-   sube nada** — y **nunca la «corrige» por CRC**: la stdlib de la placa es la de su imagen. Si
-   falta (Json, Gui… lo que la imagen no embebe), la **aprovisiona una vez** en `/lib`. La lista
-   `EMBEDDED_CORE_MODS`, el gemelo escrito a mano de lo que el firmware embebe, **desaparece**.
-2. **`/app` sólo lleva módulos de la app** (y los overrides que el usuario ponga a propósito, que
-   es para lo que `/app` gana a `/lib`). El IDE no vuelve a crear uno sin que nadie lo pida.
-3. **El instalador de la imagen repone `/lib`** cuando lo que hay no coincide con lo embebido
-   (tamaño, luego CRC) y lo dice: *«lib: X.mod actualizado (a → b B)»*. En un **helper común de
-   `src/`** que llaman los tres generados — lo que va en un fichero generado se lo lleva la
-   siguiente regeneración, que es como murió `#422` en el ESP32. **`/app` no lo toca nunca**: el
-   `Hello.mod` de muestra de la Pico sigue siendo «sólo si falta», porque `/app` es del usuario.
-4. **El desfase de versiones** (el bug de vtables del 13-jun que motivó el CRC en el IDE) lo grita
-   el gate de ABI de `#284` y se arregla **regrabando la imagen**, no retransmitiendo la stdlib —
-   que es lo que `PHILOSOPHY.md` dice desde el principio (*«sólo se suben cuando sale una nueva
-   versión del lenguaje»*).
+- **SO (la imagen, al arrancar):** por cada módulo embebido, si en `/lib` **falta**, o el que hay es
+  de **versión anterior**, o de la **misma versión con CRC distinto**, se reemplaza. Si el de `/lib`
+  es más nuevo que el embebido, se deja. `/app` no se toca nunca (es del usuario; el `Hello.mod`
+  de muestra de la Pico sigue siendo «sólo si falta»).
+- **Comunicación, el principal:** se sube si no está o su CRC es distinto (como hoy).
+- **Comunicación, las dependencias:** por cada una **se pregunta al micro si ya la tiene, donde
+  sea**; si la tiene, no se sube — salvo que la suya sea de versión anterior, o de la misma versión
+  con CRC distinto. Si el micro la tiene más nueva, no se sube.
 
-Orden de trabajo, cada paso con su verificación: el helper común y los tres generados (host +
-seis builds), el IDE (contra el simulador, y el fat-jar con el IDE cerrado), y las placas.
+**Con lo que hay, sin inventar** (los módulos del FS no tienen fecha: tienen **versión y CRC**):
+
+- La **versión** es el MAGIC del formato (`MOD6` < `MOD7`), que ya discrimina el caso real: la
+  stdlib del dist de V5 es `MOD6` (Math 2320 B, I2c 4153 B) y la del repo `MOD7` (1708, 3276).
+- La **pregunta al micro** ya existe a medias: `STAT` con `crc:true` (`fileCrc` en el IDE) da
+  tamaño y CRC — por ruta. Le faltan dos cosas aditivas: aceptar un **`name` de módulo** y
+  resolverlo con **el resolvedor del propio device** (`bpvm_entry_resolve`: proyecto → literal →
+  `/app` → `/lib` → `/sys`, así el IDE no lleva un gemelo del orden de búsqueda, que es como se
+  desincronizó `#463`), devolviendo la **ruta** donde está y su **`magic`** (4 bytes leídos con
+  `bpvm_fs_read_at`). Verbo nuevo, ninguno.
+- **Destino** de una dependencia que sí se sube: donde el micro la tenía; si no la tenía, `/lib`
+  si es de la stdlib y `/app/<proj>` si es de la app. La lista `EMBEDDED_CORE_MODS` desaparece.
+- **El instalador** de las tres imágenes aplica la regla del SO desde un **helper común de `src/`**
+  (la fachada `bpvm_fs_stat/read_at/crc32/write` es la misma en las tres familias) que llaman los
+  generados; los generadores emiten la llamada. Lo que iba dentro de un generado se lo llevó la
+  siguiente regeneración (`#422` en el ESP32): no se repite.
+
+Orden de trabajo, cada paso con su verificación: (1) el device — `STAT` por nombre + `magic`,
+protocolo documentado, `sim_smoke`; (2) el helper del instalador — test en host, generadores,
+tabla de la Pico, seis builds; (3) el IDE — contra el simulador, fat-jar con el IDE cerrado; (4)
+las placas: Metro y Pico 2, que son las que tienen `/lib` con historia.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
