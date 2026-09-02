@@ -27,7 +27,38 @@
 
 ## Última sesión
 
-## ⏭️ AL RETOMAR — `U6` tiene diseño y medidas; falta escribir código
+## ⏭️ AL RETOMAR (2-sep, pausa) — REPASO GENERAL de imágenes y placas
+
+Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imágenes y placas.»*
+Ésta es la matriz de partida, escrita en caliente el 2-sep a las 14:30, no reconstruida:
+
+| placa | imagen que LLEVA | frente al repo (`U6.10` final, regla unificada) | pendientes en la placa |
+|---|---|---|---|
+| **P4** (COM14) | `U6.10` final, grabada 14:20 | ✅ **es la del repo** — verificada byte a byte (28 668 KiB @0x48000a7c) | `/app/Core.mod` rancio por borrar |
+| **S3** (COM9) | `U6.10` **previa** a la regla unificada, 14:1x | numéricamente igual (su fixture no se mueve); regrabar para tener la exacta | ✅ limpio (Core.mod y Pico.mod de V5 fuera) |
+| **C3** (COM3) | `U6.9`, ~13:5x | dos refactors por detrás (margen en la región, regla unificada); mismos números por fixture | `log=1` en el ENV → devolver a 0 |
+| **Metro** (COM4) | `U6.8`, ~13:4x | idem: mismos números por fixture; regrabar cuando toque (`BOOTSEL` por el wire) | `/app/Core.mod` por borrar; ENV en `psram=0`, `SQLite=2`, `log=1` |
+| **Pico 2** | no tocada esta semana | imagen anterior a `U6` entera | por verificar con `U6.10` (rama SRAM, variante A) |
+| **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | **no migrado**: es la familia que falta en el paso 2 | `quantum` ya devuelto a 0 en la Discovery |
+| host / simulador | — | ✅ repo, `test-mem` 19/19, `sim-smoke` 40/40, paridad 38/0/0 | — |
+
+**Los seis builds compilan** con el repo actual (host, Pico, S3, C3, P4, Nucleo, Discovery).
+
+### Lo que ese repaso debería decidir
+
+1. **Regrabar C3, S3 y Metro con la imagen final** — no por necesidad (sus números están fijados por
+   `test-mem` y no cambian) sino para que «lo que lleva la placa» sea «lo que hay en el repo» en las
+   cuatro que ya deciden con el planificador. La Metro se graba por el wire (`BOOTSEL`); el C3 y el
+   S3 con `idf.py flash` (ojo al DTR/RTS de cada uno, está en `tools/medir_margen.ps1`).
+2. **Limpiar los `/app/Core.mod`** que quedan (P4, Metro) y devolver el `log=1` del C3 a 0.
+3. **El STM32**: la última familia del paso 2. Enumerador = el array estático de 512 KB como región
+   exclusiva sin margen (el margen ya lo puso el enlazador: `_Min_Heap_Size + _Min_Stack_Size`, y el
+   aserto se queda), objetivo 0 → los 512 KB de siempre. Se escribe y compila sin placa; la grabación
+   es de Eduardo desde CubeIDE.
+4. **La Pico 2 sola** (variante A, sin PSRAM): es la rama SRAM del enumerador de la Pico, verificada
+   sólo en la Metro con `psram=0`. Conviene verla en la placa de verdad.
+
+## ⏭️ (anterior) — `U6` tiene diseño y medidas; falta escribir código
 
 La sesión del 31-ago acabó siendo **de análisis y diseño**, y con eso `U6` (la organización de
 la memoria) pasa de ficha roja sin empezar a tener censo, hallazgos, forma y las medidas que la
