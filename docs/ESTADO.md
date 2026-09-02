@@ -37,7 +37,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 | **P4** (COM14) | `U6.10` final, grabada 14:20 | ✅ **es la del repo** — verificada byte a byte (28 668 KiB @0x48000a7c) | `/app/Core.mod` rancio por borrar |
 | **S3** (COM9) | `U6.10` **previa** a la regla unificada, 14:1x | numéricamente igual (su fixture no se mueve); regrabar para tener la exacta | ✅ limpio (Core.mod y Pico.mod de V5 fuera) |
 | **C3** (COM3) | `U6.9`, ~13:5x | dos refactors por detrás (margen en la región, regla unificada); mismos números por fixture | `log=1` en el ENV → devolver a 0 |
-| **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep, 15:xx) | ✅ verificada en los dos modos, byte a byte | ⚠️ **`/lib` rancio: 13 módulos + Hello** (`#466`); NO había `/app/Core.mod` (la matriz se equivocaba); ENV `psram=0`, `SQLite=2`, `log=1` |
+| **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **Pico 2** | no tocada esta semana | imagen anterior a `U6` entera | por verificar con `U6.10` (rama SRAM, variante A) |
 | **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | **no migrado**: es la familia que falta en el paso 2 | `quantum` ya devuelto a 0 en la Discovery |
 | host / simulador | — | ✅ repo, `test-mem` 19/19, `sim-smoke` 40/40, paridad 38/0/0 | — |
@@ -50,8 +50,10 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
    `test-mem` y no cambian) sino para que «lo que lleva la placa» sea «lo que hay en el repo» en las
    cuatro que ya deciden con el planificador. La Metro se graba por el wire (`BOOTSEL`); el C3 y el
    S3 con `idf.py flash` (ojo al DTR/RTS de cada uno, está en `tools/medir_margen.ps1`).
-2. **Limpiar el `/app/Core.mod` del P4** y devolver el `log=1` del C3 a 0. Y decidir `#466`: el
-   `/lib` rancio de la Metro (13 módulos) — a mano hoy, o el instalador refrescando `/lib` de raíz.
+2. **Limpiar el `/app/Core.mod` del P4** y devolver el `log=1` del C3 a 0. Y **`#466` de raíz**
+   (la Metro ya está limpia a mano): que el IDE no suba stdlib a `/lib`, y que el instalador
+   refresque `/lib` cuando no coincida con lo embebido. Mientras tanto, cada Run desde el IDE de
+   V5 contra una placa de V6 vuelve a ensuciar `/lib`.
 3. **El STM32**: la última familia del paso 2. Enumerador = el array estático de 512 KB como región
    exclusiva sin margen (el margen ya lo puso el enlazador: `_Min_Heap_Size + _Min_Stack_Size`, y el
    aserto se queda), objetivo 0 → los 512 KB de siempre. Se escribe y compila sin placa; la grabación
