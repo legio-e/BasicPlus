@@ -45,50 +45,64 @@
  * antes que el ENV). El porqué de cada número está en el `chip_cfg.h` que lo
  * fija — y en el del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
 #include "chip_cfg.h"
+#include "bpvm_mem.h"          /* V6/U6: el planificador comun de memoria */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
 
+/* V6/U6.9 — LO QUE EL ESP32 OFRECE: una region compartida, la DRAM interna.
+ * `bytes` es el bloque CONTIGUO mayor y `libre` el total: las dos restricciones de
+ * la rama compartida del planificador (P1.C3.3 / U6.4) salen de ahi. Con PSRAM (el
+ * P4) la region exclusiva la anade su propio main.c; el S3 y el C3 no la tienen. */
+static int esp32_mem_regiones(bpvm_mem_region_t* out, int max, multi_heap_info_t* hi) {
+    if (max < 1) return 0;
+    heap_caps_get_info(hi, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    out[0].base      = NULL;                      /* se toma pidiendo: heap_caps_malloc */
+    out[0].bytes     = hi->largest_free_block;
+    out[0].libre     = hi->total_free_bytes;
+    out[0].exclusiva = 0;
+    out[0].nombre    = "SRAM interna";
+    return 1;
+}
+
 static void vm_buffer_init(void) {
-    /* SRAM interna a propósito: el S3 de referencia no lleva PSRAM y el heap de
-     * la VM tiene que ser rápido. (El P4, que sí la tiene, va por su main.c.)
+    /* SRAM interna a proposito: el S3 de referencia no lleva PSRAM y el heap de
+     * la VM tiene que ser rapido. (El P4, que si la tiene, va por su main.c.)
      *
-     * V6/U6.7 — EL BLOQUE YA NO SE PIDE A CIEGAS. Antes: malloc(VM_BUFFER_SIZE) y
-     * si fallaba, malloc(VM_BUFFER_FALLBACK); dos números por chip puestos una
-     * vez y revisados nunca (el margen del S3 estaba por 3,3×, U6.4). Ahora se
-     * MIDE lo que hay y se aplican las dos restricciones que salieron del C3:
-     *
-     *   (a) el bloque tiene que caber en el mayor hueco CONTIGUO — en el C3 hay
-     *       280 KB libres en siete trozos y el mayor son 136 (P1.C3.3);
-     *   (b) y tiene que dejarle al sistema lo que consume en marcha:
-     *       CHIP_MARGEN_SISTEMA, medido con tools/medir_margen.ps1 (U6.4).
-     *
-     * El objetivo (CHIP_VM_OBJETIVO) sigue siendo el de siempre a propósito:
-     * Eduardo no quiere reducir el heap del RTOS, que piensa explotar más. Lo
-     * que cambia es que si la realidad es peor que el objetivo, se baja Y SE
-     * DICE, con los números — en vez de fallar el malloc en silencio o, peor,
-     * caber hoy y ahogar al IDF dentro de un rato. */
+     * V6/U6.9 — ENUMERAR, PLANIFICAR, TOMAR. U6.7 dejo aqui la regla de la rama
+     * compartida (techo = min(bloque contiguo, libre - margen), nunca mas que el
+     * objetivo, suelo, escalera); ahora esa regla vive en src/bpvm_mem.c, la misma
+     * para las cinco placas y probada en host contra los numeros medidos de esta
+     * (test/test_mem.c). Aqui queda solo lo que es del silicio: preguntarle al
+     * heap_caps que hay, y TOMAR lo decidido con malloc. */
     multi_heap_info_t hi;
-    heap_caps_get_info(&hi, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    /* La foto en BLOQUES antes de pedir nada: un solo hueco = lo ocupado está en
+    bpvm_mem_region_t reg[1];
+    int nreg = esp32_mem_regiones(reg, 1, &hi);
+    /* La foto en BLOQUES antes de pedir nada: un solo hueco = lo ocupado esta en
      * un extremo; varios = hay reservas en medio (en el C3, 37 del IDF). */
     log_printf("heap: libre %u | mayor %u | bloques: %u libres, %u usados | usado %u",
                (unsigned) hi.total_free_bytes, (unsigned) hi.largest_free_block,
                (unsigned) hi.free_blocks, (unsigned) hi.allocated_blocks,
                (unsigned) hi.total_allocated_bytes);
 
-    unsigned libre    = (unsigned) hi.total_free_bytes;
-    unsigned contiguo = (unsigned) hi.largest_free_block;
-    unsigned techo_b  = (libre > CHIP_MARGEN_SISTEMA) ? libre - CHIP_MARGEN_SISTEMA : 0u;
-    int      limita_a = (contiguo < techo_b);                 /* ¿qué restricción manda? */
-    unsigned techo    = limita_a ? contiguo : techo_b;
-    unsigned bloque   = (CHIP_VM_OBJETIVO < techo) ? CHIP_VM_OBJETIVO : techo;
-    bloque &= ~1023u;                                          /* KB enteros */
+    bpvm_mem_cfg_t cfg;
+    cfg.objetivo       = CHIP_VM_OBJETIVO;       /* politica: cuanto quiere la VM (no se sube aunque quepa) */
+    cfg.margen         = CHIP_MARGEN_SISTEMA;    /* medido: lo que el sistema consume en marcha */
+    cfg.vm_min         = CHIP_VM_MIN;
+    cfg.reserva_bytes  = 0;                      /* la reserva con nombre es de la memoria exclusiva */
+    cfg.reserva_nombre = NULL;
 
-    /* Escalera: si el asignador no sirve lo que sus contadores prometían
-     * (cabeceras, un bloque que se ocupó entre la consulta y la petición), se
-     * baja de 4 en 4 KB hasta el suelo. Misma idea que el P4 en PSRAM (baja de
-     * 1 en 1 MiB): UNA manera de no caber, no una por chip. */
+    bpvm_mem_plan_t plan;
+    bpvm_mem_plan(reg, nreg, &cfg, &plan);
+    char linea[160];
+    bpvm_mem_plan_str(&plan, reg, &cfg, linea, sizeof linea);
+    log_printf("%s", linea);
+
+    /* TOMAR: pidiendo al asignador, en KB enteros, y con escalera si el asignador
+     * no sirve lo que sus contadores prometian (cabeceras, un bloque ocupado entre
+     * la consulta y la peticion): -4 KB hasta el suelo. Misma idea que el P4 en
+     * PSRAM (-1 MiB): UNA manera de no caber. */
     s_vm_buffer = NULL; s_vm_buffer_size = 0;
+    unsigned bloque = (plan.res == BPVM_MEM_OK) ? ((unsigned) plan.bytes & ~1023u) : 0u;
     while (bloque >= CHIP_VM_MIN) {
         s_vm_buffer = (uint8_t*) heap_caps_malloc(bloque, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         if (s_vm_buffer) { s_vm_buffer_size = bloque; break; }
@@ -98,32 +112,25 @@ static void vm_buffer_init(void) {
     unsigned after     = (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     unsigned after_blk = (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (s_vm_buffer) {
-        /* Al log y a la consola (P1.C3.3: el Pico lo dice en su banner desde
-         * siempre; aquí faltaba y se notó al medir un silicio nuevo). */
-        log_printf("vm: heap %u KB reservado (objetivo %u, techo %u por %s, margen %u) | DRAM libre %u->%u B (bloque mayor %u->%u B)",
-                   (unsigned)(s_vm_buffer_size / 1024u), (unsigned) CHIP_VM_OBJETIVO / 1024u, techo / 1024u,
-                   limita_a ? "el bloque contiguo" : "el margen del sistema",
-                   (unsigned) CHIP_MARGEN_SISTEMA, libre, after, contiguo, after_blk);
-        printf("[boot] vm: heap %u KB reservado (objetivo %u, techo %u) | DRAM libre %u->%u B (bloque mayor %u->%u B)\n",
-               (unsigned)(s_vm_buffer_size / 1024u), (unsigned) CHIP_VM_OBJETIVO / 1024u, techo / 1024u,
-               libre, after, contiguo, after_blk);
-        if (s_vm_buffer_size < CHIP_VM_OBJETIVO) {
-            /* No es error: es la placa diciendo que hoy no da para el objetivo,
-             * y POR QUÉ. Antes esto era el «respaldo» mudo o un malloc fallido. */
-            log_printf("vm: AVISO por debajo del objetivo: manda %s",
-                       limita_a ? "el bloque contiguo" : "el margen del sistema");
-            printf("[boot] vm: AVISO por debajo del objetivo (%u KB): manda %s\n",
-                   (unsigned) CHIP_VM_OBJETIVO / 1024u,
-                   limita_a ? "el bloque contiguo" : "el margen del sistema");
+        /* El detalle de la familia, al log y a la consola (P1.C3.3: el Pico lo
+         * dice en su banner desde siempre; aqui faltaba). */
+        log_printf("vm: DRAM interna libre %u->%u B (bloque mayor %u->%u B) | margen %u",
+                   (unsigned) hi.total_free_bytes, after, (unsigned) hi.largest_free_block, after_blk,
+                   (unsigned) CHIP_MARGEN_SISTEMA);
+        printf("[boot] %s\n", linea);
+        printf("[boot] vm: DRAM interna libre %u->%u B (bloque mayor %u->%u B)\n",
+               (unsigned) hi.total_free_bytes, after, (unsigned) hi.largest_free_block, after_blk);
+        if (s_vm_buffer_size < (unsigned) plan.bytes) {
+            /* La escalera bajo: el asignador no dio lo que sus contadores decian. */
+            log_printf("vm: AVISO el asignador solo dio %u KB de los %u planificados",
+                       (unsigned)(s_vm_buffer_size / 1024u), (unsigned)(plan.bytes / 1024u));
         }
     } else {
         /* No es fatal: el kernel sigue vivo y el host puede hablar con la placa
-         * (H9). Lo que no habrá es VM — y el climb lo reportará. */
-        log_printf("vm: heap NO CABE — techo %u B (%s), suelo %u KB | DRAM libre %u B (bloque mayor %u B)",
-                   techo, limita_a ? "bloque contiguo" : "margen del sistema",
-                   (unsigned) CHIP_VM_MIN / 1024u, libre, contiguo);
-        printf("[boot] AVISO: sin RAM para el heap de la VM (techo %u B, suelo %u KB)\n",
-               techo, (unsigned) CHIP_VM_MIN / 1024u);
+         * (H9). Lo que no habra es VM — y el climb lo reportara. La linea del plan
+         * ya dijo por que (NO CABE + techo + suelo). */
+        printf("[boot] AVISO: sin RAM para el heap de la VM — %s\n", linea);
+        log_flush();
     }
 }
 

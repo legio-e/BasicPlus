@@ -1182,6 +1182,39 @@ el «tomar»), luego el **P4** (exclusiva con reserva del display), y el **STM32
 enumerador devuelve el array estático y el aserto del enlazador se queda donde está.
 
 
+##### ✅ `U6.9` — el S3 y el C3 al planificador: `vm_buffer_init` queda en enumerar y tomar (2-sep)
+
+Segunda familia del paso 2, y la más barata: el `vm_buffer_init` de `U6.7` **ya era** la rama
+compartida del planificador (techo = min(contiguo, libre − margen), nunca más que el objetivo,
+suelo, escalera). Ahora esa regla vive en `src/bpvm_mem.c` —la misma que la Pico usa desde
+`U6.8`— y en `esp32/common/main.c` queda sólo lo que es del silicio:
+
+- **enumerar**: `esp32_mem_regiones()` → una región compartida, la DRAM interna, con `bytes` = el
+  bloque contiguo mayor y `libre` = el total (`heap_caps_get_info`);
+- **tomar**: `heap_caps_malloc` de lo planificado, en KB enteros, con la escalera de −4 KB hasta
+  el suelo si el asignador no sirve lo que sus contadores prometían.
+
+Las tres constantes de `chip_cfg.h` (`CHIP_VM_OBJETIVO` / `CHIP_MARGEN_SISTEMA` / `CHIP_VM_MIN`)
+pasan tal cual a `bpvm_mem_cfg_t`. El P4 no cambia: su PSRAM es exclusiva y va por su `main.c`.
+
+### ✅ Verificado en el C3 — los mismos números que `U6.7`, con la línea común
+
+```
+heap: libre 280032 | mayor 139264 | bloques: 7 libres, 37 usados | usado 13424
+vm: 128 KB en SRAM interna (objetivo 128, techo 136 por el bloque contiguo)
+vm: DRAM interna libre 280032->148956 B (bloque mayor 139264->114688 B) | margen 17588
+INFO vmHeapBytes 65536 / vmStackBytes 65536
+```
+
+Es exactamente lo que `test_mem` fija para el caso C3, y lo que `U6.7` había verificado ayer con
+su propia aritmética: **sin cambio de comportamiento, y una regla menos** (la copia de la rama
+compartida que vivía aquí). S3, C3 y P4 compilan. **El S3 queda por reflashear**: su predicción
+sigue siendo `160 KB, techo 264 por el bloque contiguo`.
+
+📌 Con esto, de las cinco placas **tres deciden su memoria con la misma función** (Pico, S3, C3)
+y las otras dos (P4, STM32) tienen su hueco descrito en `U6.8`.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).

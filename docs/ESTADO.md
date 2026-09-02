@@ -44,10 +44,12 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
 2. **🟡 El enumerador de regiones** (`U6.5`/`U6.6`), familia a familia. ✅ **Pico HECHA (`U6.8`,
    2-sep)**: `bpvm_mem` común + `test-mem` (14/14 contra las placas medidas) + la Pico
    enumerando; verificado en la Metro en los dos modos, byte a byte con las líneas de ayer.
-   **Siguen S3 y C3** (su `vm_buffer_init` de `U6.7` *es* la rama compartida del planificador),
-   luego el **P4** (exclusiva con reserva del display) y el **STM32 el último**: su techo lo
-   comprueba el ENLAZADOR y eso es más fuerte que cualquier comprobación en marcha — su
-   enumerador devuelve el array estático y el aserto se queda.
+   ✅ **S3 y C3 HECHOS (`U6.9`, 2-sep)**: `vm_buffer_init` queda en enumerar (`heap_caps_get_info`)
+   y tomar (malloc + escalera); verificado en el C3 con los mismos números que `U6.7`. **Siguen el
+   P4** (exclusiva con reserva del display: su `vm_buffer_init_psram` es la rama exclusiva del
+   planificador) y el **STM32 el último**: su techo lo comprueba el ENLAZADOR y eso es más fuerte
+   que cualquier comprobación en marcha — su enumerador devuelve el array estático y el aserto se
+   queda. Tres de cinco placas ya deciden con la misma función.
 3. **🔴 El cosido de dos regiones.** Es lo que toca el GC, y necesita las cuatro comprobaciones
    inventariadas en `V6_IDEAS`. Poner `coser=0|1` en el ENV **desde el primer día**: un mecanismo
    que no se puede apagar no se puede medir.
