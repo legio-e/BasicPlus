@@ -31,7 +31,8 @@
 #include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
 #include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
 #include "aot_registry.h"
-#include "bpvm_repl.h"       /* V6/U3: los verbos COMUNES del REPL (grupo 1: meta) */    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
+#include "bpvm_repl.h"       /* V6/U3: los verbos COMUNES del REPL (grupo 1: meta) */
+#include "bpvm_mem.h"        /* V6/U6.11: el planificador de memoria COMÚN (una regla, cinco placas) */    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
 
 #include "main.h"
 #include "board.h"              /* placa: BOARD_WIRE_UART, BOARD_NAME, BOARD_SRAM_BYTES, BOARD_LED_* */
@@ -79,6 +80,14 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
  * Discovery tiene 3008 KB de RAM, así que aquí le sobra. Si algún día se quiere
  * afinar por placa, el sitio es board.h — no este #define. */
 static uint8_t s_vm_mem[512u * 1024u];        /* RAM que gestiona la VM */
+/* V6/U6.11 — lo que el planificador COMÚN (bpvm_mem) decidió sobre ese array.
+ * Aquí no hay nada que medir en marcha: la región es el array entero, EXCLUSIVA
+ * de la VM y SIN margen, porque el margen de esta familia lo pone el ENLAZADOR
+ * (si `_Min_Heap_Size + _Min_Stack_Size` no caben detrás del estático, no enlaza,
+ * y eso es más fuerte que cualquier comprobación en marcha). Pero la decisión y
+ * la línea del log son las mismas que en las otras cuatro placas. 0 = sin plan. */
+static size_t  s_vm_bytes = 0;
+#define VM_MEM_MIN  (64u * 1024u)             /* el suelo de las cinco placas */
 static char    s_out_esc[2048];               /* salida escapada (sink) */
 static char    s_out_msg[2300];               /* evento OUTPUT completo */
 static long    s_session = 0;                 /* contador de sesiones RUN */
@@ -136,8 +145,14 @@ static void stm32_repl_info(bpvm_repl_info_t* o) {
     o->flash_bytes   = (unsigned long) (*(volatile uint16_t*) FLASHSIZE_BASE) * 1024UL;
     o->sram_bytes    = BOARD_SRAM_BYTES;
     o->psram_bytes   = 0;
-    o->vm_heap_bytes  = (unsigned long) (sizeof(s_vm_mem) - bpvm_stack_region_bytes(sizeof(s_vm_mem)));
-    o->vm_stack_bytes = (unsigned long) bpvm_stack_region_bytes(sizeof(s_vm_mem));
+    /* V6/U6.11 — sobre lo PLANIFICADO, no sobre el sizeof: hoy coinciden (objetivo
+     * 0 = el array entero) y, si un día dejan de coincidir, el INFO dirá la verdad. */
+    {
+        size_t vmb = s_vm_bytes;
+        size_t pil = vmb ? bpvm_stack_region_bytes(vmb) : 0;
+        o->vm_heap_bytes  = (unsigned long) (vmb - pil);
+        o->vm_stack_bytes = (unsigned long) pil;
+    }
     o->fs_total_bytes = (unsigned long) fs_total_bytes();
     o->fs_used_bytes  = (unsigned long) fs_used_bytes();
 }
@@ -290,8 +305,14 @@ static void run_module_path(const char* path, long id) {
     /* Antes pasaba 0 = 'default de bpvm_init' (mitad y mitad): la única de las
      * tres familias que ni siquiera tenía la regla. Ahora usa LA MISMA que Pico
      * y ESP32. Con 128 KB manda el suelo ⇒ 64/64, idéntico a hoy. */
-    size_t stack_region = bpvm_stack_region_bytes(sizeof(s_vm_mem));
-    bpvm_t* vm = bpvm_init(s_vm_mem, sizeof(s_vm_mem), sizeof(s_vm_mem) - stack_region);
+    /* V6/U6.11 — el bloque es el que decidió el planificador en el arranque (hoy,
+     * el array entero). Sin plan (NO_CABE) no hay VM y se dice: no se arranca a medias. */
+    if (s_vm_bytes == 0) {
+        log_printf("run: sin memoria planificada para la VM — no se ejecuta");
+        BOARD_LED_ERR_ON(); emit_exited(session, "INTERNAL_ERROR", -1, 0); return;
+    }
+    size_t stack_region = bpvm_stack_region_bytes(s_vm_bytes);
+    bpvm_t* vm = bpvm_init(s_vm_mem, s_vm_bytes, s_vm_bytes - stack_region);
     if (!vm) { BOARD_LED_ERR_ON(); emit_exited(session, "INTERNAL_ERROR", -1, 0); return; }
     bpvm_set_output(vm, v1_output_sink, NULL);
 
@@ -630,6 +651,41 @@ static void dispatch(int first_char) {
 /* #353 — sink de diagnóstico de la VM: al log persistente. */
 static void diag_al_log(const char* linea) { log_printf("%s", linea); }
 
+/* V6/U6.11 — ENUMERAR, PLANIFICAR, TOMAR: la misma terna que Pico y ESP32, sobre
+ * la memoria más simple del parque. La familia ofrece UNA región: el array
+ * estático, exclusivo de la VM (nadie más asigna en él) y sin margen — lo que se
+ * deja a malloc y a la pila del MSP no se lo deja la VM: lo exige el enlazador
+ * (`._user_heap_stack`). Objetivo 0 = el array entero; suelo, el de las demás.
+ * El número es el de siempre (512 KB → 384 de heap + 128 de pilas por la regla
+ * común), pero decidido y CONTADO con la misma función y la misma línea que las
+ * otras cuatro placas — y `test_mem` lo fija con este caso. */
+static int stm32_mem_regiones(bpvm_mem_region_t* out, int max) {
+    if (max < 1) return 0;
+    out[0].base      = s_vm_mem;
+    out[0].bytes     = sizeof s_vm_mem;
+    out[0].libre     = sizeof s_vm_mem;      /* un solo bloque: lo contiguo ES el total */
+    out[0].exclusiva = 1;
+    out[0].margen    = 0;                    /* el margen lo puso el enlazador, no la VM */
+    out[0].nombre    = "SRAM estática";
+    return 1;
+}
+
+static void stm32_mem_planificar(void) {
+    bpvm_mem_region_t reg[1];
+    int nreg = stm32_mem_regiones(reg, 1);
+    bpvm_mem_cfg_t cfg;
+    cfg.objetivo       = 0;                  /* todo lo que el plan deje: el array entero */
+    cfg.vm_min         = VM_MEM_MIN;
+    cfg.reserva_bytes  = 0;                  /* sin SQLite en SRAM: no hay reserva con nombre */
+    cfg.reserva_nombre = NULL;
+    bpvm_mem_plan_t plan;
+    bpvm_mem_plan(reg, nreg, &cfg, &plan);
+    char linea[160];
+    bpvm_mem_plan_str(&plan, reg, &cfg, linea, sizeof linea);
+    log_printf("%s", linea);
+    s_vm_bytes = (plan.res == BPVM_MEM_OK) ? plan.bytes : 0;
+}
+
 void stm32_repl_run(void) {
     /* H9 — arranque ESCALONADO: identidad → particiones del env → FS → VM, parando
      * en la 1ª capa que falla. Sin particiones/FS el climb se queda abajo y el host
@@ -642,6 +698,7 @@ void stm32_repl_run(void) {
     log_printf(bpvm_log_origen_ram()
                ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
                : "log: arranque en frio (cargado de flash)");
+    stm32_mem_planificar();         /* V6/U6.11 — la línea `vm:` de las cinco placas, al abrir el boot */
     /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
      * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
      * `_write` retargeteado, el stderr del núcleo se PERDÍA. Esto devuelve al

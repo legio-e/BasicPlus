@@ -40,10 +40,11 @@ la imagen final `U6.10` en su placa (P4, Metro, Pico 2, C3) y tres `/lib` limpia
 2. **S3** (COM9): regrabar con la `U6.10` **final** (lleva la previa a la regla unificada; mismos
    números) y comprobar que el `/lib` sigue limpio — se ensucia en cuanto el IDE de V5 sube
    dependencias.
-3. **STM32 Nucleo y Discovery**: la familia que falta en el paso 2 de `U6` — enumerador = el array
-   estático de 512 KB como región exclusiva sin margen (el margen lo pone el enlazador:
-   `_Min_Heap_Size + _Min_Stack_Size`, y el aserto se queda), objetivo 0 → los 512 KB de siempre.
-   Se escribe y compila sin placa; la grabación es de Eduardo desde CubeIDE. Y revisar su `/lib`.
+3. ✅ **STM32 Nucleo y Discovery, en código (`U6.11`)**: enumerador = el array estático de 512 KB
+   como región exclusiva sin margen, objetivo 0 → los 512 KB de siempre; INFO y RUN sobre lo
+   planificado; `test_mem` 22/22; los dos `.elf` compilados headless con 0 errores. **Falta
+   grabarlas** (Eduardo, desde CubeIDE) y leer su línea `vm:` — y revisar su `/lib`, que su
+   instalador no avisa del rancio.
 4. **`#466` de raíz**, por decidir con Eduardo: que el IDE **no suba stdlib a `/lib`** (sólo módulos
    de la app, a `/app`) y que el instalador **refresque `/lib` cuando no coincida con lo embebido**.
    Mientras no esté, cada Run desde el IDE de V5 vuelve a ensuciar las placas limpiadas hoy. El C3
@@ -63,7 +64,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 | **C3** (COM3) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada: 128 KB, techo 136 por el contiguo, 64/64 — idéntico | ✅ `/lib` **limpio de origen** (lo aprovisionó el instalador; el IDE de V5 nunca le subió nada: 0 avisos), ✅ `log` devuelto a 0 |
 | **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **Pico 2** (COM22) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep; llevaba la del 29-ago) | ✅ **rama SRAM en variante A verificada**: `357 KB @ 0x20024ab8`, y su `stack=90` del ENV respetado (heap 267 + pilas 90; INFO 273736/92160, igual que antes) | ✅ `/lib` **limpio** (16 de V5 y de una imagen vieja borrados y repuestos por la imagen, `#466`); ENV `stack=90`, `gc=1`, `mpu=1`, `log=1`; FS de 1 MB al 24 % — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
-| **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | **no migrado**: es la familia que falta en el paso 2 | `quantum` ya devuelto a 0 en la Discovery |
+| **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | ✅ **migrado en código (`U6.11`)**: los dos `.elf` compilados headless, 0 errores; **falta grabar** y leer la línea `vm:` (esperado: `512 KB en SRAM estática`, INFO 393216/131072) | `/lib` por revisar (su instalador NO avisa del rancio); `quantum` ya devuelto a 0 en la Discovery |
 | host / simulador | — | ✅ repo, `test-mem` 19/19, `sim-smoke` 40/40, paridad 38/0/0 | — |
 
 **Los seis builds compilan** con el repo actual (host, Pico, S3, C3, P4, Nucleo, Discovery).
@@ -78,13 +79,8 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
    (la Metro ya está limpia a mano): que el IDE no suba stdlib a `/lib`, y que el instalador
    refresque `/lib` cuando no coincida con lo embebido. Mientras tanto, cada Run desde el IDE de
    V5 contra una placa de V6 vuelve a ensuciar `/lib`.
-3. **El STM32**: la última familia del paso 2. Enumerador = el array estático de 512 KB como región
-   exclusiva sin margen (el margen ya lo puso el enlazador: `_Min_Heap_Size + _Min_Stack_Size`, y el
-   aserto se queda), objetivo 0 → los 512 KB de siempre. Se escribe y compila sin placa; la grabación
-   es de Eduardo desde CubeIDE.
-4. ✅ **La Pico 2 sola** (variante A, sin PSRAM): verificada el 2-sep con la imagen final — misma
-   dirección y mismo bloque que la Metro con `psram=0`, y el `stack=90` de su ENV manda sobre la
-   regla (90 KB de pilas en vez de 89). Y su `/lib` limpiado a mano el mismo día (16/16).
+3. ✅ **El STM32**: migrado en código (`U6.11`, 2-sep al retomar); falta grabar las dos placas y
+   leer su línea `vm:`.
 
 ## ⏭️ (anterior) — `U6` tiene diseño y medidas; falta escribir código
 

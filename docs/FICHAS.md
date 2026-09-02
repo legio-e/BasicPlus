@@ -1420,6 +1420,50 @@ reinicio pedido — la misma clase que [[aviso-que-no-distingue-no-evento-de-fal
 anotado.
 
 
+##### ✅ `U6.11` — el STM32 al planificador: LAS CINCO FAMILIAS deciden su memoria con la misma función (2-sep)
+
+La última del paso 2 de `U6`, y la más simple: la memoria de la VM en el STM32 es un **array
+estático de 512 KB** (`s_vm_mem`, `stm32_repl.c`), así que no hay nada que medir en marcha. El
+enumerador ofrece **una región**: el array entero, **exclusiva** (nadie más asigna en él) y **sin
+margen** — lo que se deja a `malloc` y a la pila del MSP no se lo deja la VM: lo exige el
+**enlazador** (`._user_heap_stack`: `_Min_Heap_Size + _Min_Stack_Size` detrás del estático, o no
+enlaza), que es más fuerte que cualquier comprobación en marcha. Objetivo 0, suelo 64 KB.
+
+```
+vm: 512 KB en SRAM estática (todo lo que deja la región)
+```
+
+Es la misma línea que en las otras cuatro placas, al abrir el boot (tras `log:`), y el número es
+el de siempre: 512 KB → 384 de heap + 128 de pilas por la regla común. Lo que cambia:
+
+- **INFO y RUN van sobre lo PLANIFICADO** (`s_vm_bytes`), no sobre el `sizeof`: hoy coinciden, y
+  si un día dejan de coincidir el INFO dirá la verdad y el RUN sin plan no arranca a medias
+  (`run: sin memoria planificada para la VM — no se ejecuta`).
+- `test_mem` fija el caso (**22/22**): 512 KB enteros, manda «la región», y la línea.
+
+### ✅ Verificado sin placa (lo que se puede sin ella)
+
+Los dos proyectos CubeIDE compilan **headless** con `cleanBuild` (receta de [[build-stm32-headless]]):
+Nucleo `0 errors` (3 avisos preexistentes de `builtins.c`, funciones sin usar), Discovery
+`0 errors, 0 warnings`; los `.elf` son de ahora y llevan las cadenas nuevas dentro (`strings`).
+Tamaños: Nucleo text 250 200 / bss 624 354; Discovery text 890 908 / bss 1 573 548 — el bss no
+se mueve, el array es el mismo.
+
+⚠️ **Gotcha del headless** que me costó dos builds vacíos: `-data`/`-importAll` con `C:/…`
+(barras) hace que Eclipse lea `C` como ESQUEMA de URI («No file system is defined for scheme:
+C») y no importa nada — y el launcher sale con 0. Con `cygpath -w` (barras invertidas) va. Y el
+`.elf` de las 14:24 seguía ahí para engañar: verificar el ARTEFACTO, no el exit code.
+
+⏭️ **Falta la placa**: Eduardo graba desde CubeIDE; la comprobación es la línea `vm:` en el
+`LOG_DUMP` y el `INFO` (vmHeapBytes 393216 / vmStackBytes 131072, como antes). Y mirar su `/lib`
+(`#466`): su instalador es el único de los tres que **no avisa** del rancio (copia si falta, y
+calla).
+
+📌 **Con esto, las cinco familias —Pico/Metro, S3, C3, P4, STM32— deciden su memoria con
+`bpvm_mem_plan()`** y la cuentan con la misma línea. El paso 2 de `U6` queda cerrado en código;
+una placa futura (C6, P4X, S31…) entra escribiendo un enumerador de diez líneas y sus tres
+constantes.
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).

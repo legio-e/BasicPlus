@@ -113,9 +113,25 @@ static void caso_p4(void) {
     CHECK(!strcmp(p.limita, "el margen de la región"),         "P4: manda el margen de la region (el display), no el contiguo: %s", s);
 }
 
+static void caso_stm32(void) {
+    /* U6.11 — la memoria mas simple del parque: el array estatico de 512 KB del port
+     * (stm32_repl.c), exclusivo de la VM y SIN margen (el margen de esta familia lo
+     * exige el enlazador: _Min_Heap_Size + _Min_Stack_Size detras del estatico, o no
+     * enlaza). Objetivo 0 = el array entero. Nucleo y Discovery comparten el numero. */
+    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20000000, 512u * 1024u, 512u * 1024u, 1, 0, "SRAM estática" }};
+    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 0, NULL };
+    bpvm_mem_plan_t p; char s[160];
+    bpvm_mem_plan(r, 1, &cfg, &p);
+    bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 512u * 1024u,     "STM32: los 512 KB del array, enteros (%u KB)", (unsigned)(p.bytes / 1024u));
+    CHECK(!strcmp(p.limita, "la región"),                      "STM32: manda la region (ni contiguo ni margen)");
+    CHECK(strstr(s, "512 KB en SRAM est") != NULL && strstr(s, "todo lo que deja la regi") != NULL,
+          "STM32: la linea: %s", s);
+}
+
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4();
+    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }
