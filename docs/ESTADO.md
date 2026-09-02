@@ -38,7 +38,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 | **S3** (COM9) | `U6.10` **previa** a la regla unificada, 14:1x | numéricamente igual (su fixture no se mueve); regrabar para tener la exacta | ✅ limpio (Core.mod y Pico.mod de V5 fuera) |
 | **C3** (COM3) | `U6.9`, ~13:5x | dos refactors por detrás (margen en la región, regla unificada); mismos números por fixture | `log=1` en el ENV → devolver a 0 |
 | **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
-| **Pico 2** (COM22) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep; llevaba la del 29-ago) | ✅ **rama SRAM en variante A verificada**: `357 KB @ 0x20024ab8`, y su `stack=90` del ENV respetado (heap 267 + pilas 90; INFO 273736/92160, igual que antes) | ⚠️ `/lib` rancio: **16** (los 13 de V5 + `Core.mod` de V5 + `Pico.mod` 2947 de una imagen vieja + Hello) — `#466`; ENV `stack=90`, `gc=1`, `mpu=1`, `log=1`; FS de 1 MB al 25 % |
+| **Pico 2** (COM22) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep; llevaba la del 29-ago) | ✅ **rama SRAM en variante A verificada**: `357 KB @ 0x20024ab8`, y su `stack=90` del ENV respetado (heap 267 + pilas 90; INFO 273736/92160, igual que antes) | ✅ `/lib` **limpio** (16 de V5 y de una imagen vieja borrados y repuestos por la imagen, `#466`); ENV `stack=90`, `gc=1`, `mpu=1`, `log=1`; FS de 1 MB al 24 % — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | **no migrado**: es la familia que falta en el paso 2 | `quantum` ya devuelto a 0 en la Discovery |
 | host / simulador | — | ✅ repo, `test-mem` 19/19, `sim-smoke` 40/40, paridad 38/0/0 | — |
 
@@ -60,8 +60,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
    es de Eduardo desde CubeIDE.
 4. ✅ **La Pico 2 sola** (variante A, sin PSRAM): verificada el 2-sep con la imagen final — misma
    dirección y mismo bloque que la Metro con `psram=0`, y el `stack=90` de su ENV manda sobre la
-   regla (90 KB de pilas en vez de 89). Queda limpiarle el `/lib` (16 ficheros de V5 y de una imagen
-   vieja) cuando Eduardo lo diga.
+   regla (90 KB de pilas en vez de 89). Y su `/lib` limpiado a mano el mismo día (16/16).
 
 ## ⏭️ (anterior) — `U6` tiene diseño y medidas; falta escribir código
 

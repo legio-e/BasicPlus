@@ -1385,9 +1385,10 @@ stdlib en cada ejecución.»* La retransmite, y encima la de otra versión.
 - ✅ **A mano, hoy (2-sep, Metro)**: los 14 borrados por el wire y rearrancada; el instalador repuso
   los 14 con los tamaños de la imagen (`preinstall: /lib/Math.mod (1708 bytes)`…), **0 avisos** y el
   `LIST` coincide 14/14 con lo embebido. El FS bajó de 172 032 a 163 840 B: las copias de V5 eran
-  más grandes. Igual que en el S3. **No escala**: hay que acordarse, placa a placa — y en cuanto el
-  IDE de V5 vuelva a subir dependencias, vuelve el problema. Por eso el arreglo de raíz sigue
-  abierto.
+  más grandes. Igual que en el S3. Y la **Pico 2** después: 16 borrados, 16 repuestos, 0 avisos,
+  16/16 tamaños. **No escala**: hay que acordarse, placa a placa — y en cuanto el IDE de V5 vuelva a
+  subir dependencias, vuelve el problema. Por eso el arreglo de raíz sigue abierto. Placas limpias
+  hoy: S3, Metro, Pico 2. Pendiente de mirar: P4 (tiene al menos el `/app/Core.mod`), C3.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
