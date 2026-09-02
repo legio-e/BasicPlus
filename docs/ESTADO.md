@@ -27,7 +27,29 @@
 
 ## Última sesión
 
-## ⏭️ AL RETOMAR (2-sep, pausa) — REPASO GENERAL de imágenes y placas
+## ⏭️ AL RETOMAR (2-sep, 2ª pausa — por límite de tokens) — el RESTO de placas
+
+El repaso general quedó **a medias por la mitad buena**: cuatro de cinco familias verificadas con
+la imagen final `U6.10` en su placa (P4, Metro, Pico 2, C3) y tres `/lib` limpiados a mano
+(Metro 14, Pico 2 16, S3 2). Falta, en este orden:
+
+1. **P4** (COM14 cuando se enchufe): borrar `/app/Core.mod` y mirar su `/lib` (`#466`), con el OK
+   de Eduardo. Su memoria ya está verificada byte a byte.
+2. **S3** (COM9): regrabar con la `U6.10` **final** (lleva la previa a la regla unificada; mismos
+   números) y comprobar que el `/lib` sigue limpio — se ensucia en cuanto el IDE de V5 sube
+   dependencias.
+3. **STM32 Nucleo y Discovery**: la familia que falta en el paso 2 de `U6` — enumerador = el array
+   estático de 512 KB como región exclusiva sin margen (el margen lo pone el enlazador:
+   `_Min_Heap_Size + _Min_Stack_Size`, y el aserto se queda), objetivo 0 → los 512 KB de siempre.
+   Se escribe y compila sin placa; la grabación es de Eduardo desde CubeIDE. Y revisar su `/lib`.
+4. **`#466` de raíz**, por decidir con Eduardo: que el IDE **no suba stdlib a `/lib`** (sólo módulos
+   de la app, a `/app`) y que el instalador **refresque `/lib` cuando no coincida con lo embebido**.
+   Mientras no esté, cada Run desde el IDE de V5 vuelve a ensuciar las placas limpiadas hoy. El C3
+   es el control que lo demuestra: el único que el IDE nunca tocó, el único limpio de origen.
+
+La matriz completa, con lo hecho, está justo debajo.
+
+## ⏭️ (2-sep, 1ª pausa) — REPASO GENERAL de imágenes y placas
 
 Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imágenes y placas.»*
 Ésta es la matriz de partida, escrita en caliente el 2-sep a las 14:30, no reconstruida:
