@@ -29,7 +29,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/bpvm_log.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c src/bpvm_mdn_scan.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
@@ -544,6 +544,14 @@ test-sqlmem:
 	$(CC) $(CFLAGS) test/test_sqlmem.c src/bpvm_sqlmem.c -o build/test_sqlmem.exe
 	@echo "--- V5/H bloque de memoria de la BD (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_sqlmem.exe
+
+# V6/U6 — el planificador de memoria contra los numeros MEDIDOS de cada placa
+# (C3, S3, Metro con PSRAM, Pico sin ella). Host-only: solo <stddef.h>/<stdio.h>.
+test-mem:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_mem.c src/bpvm_mem.c -o build/test_mem.exe
+	@echo "--- V6/U6 planificador de memoria vs placas MEDIDAS (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_mem.exe
 
 # V5/I — la tabla BIOS que se le presta al pack nativo. Host-only, dependencia
 # CERO. Lo que se prueba es el CHIVATO: que un hueco se detecte ANTES de ejecutar

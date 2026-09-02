@@ -36,7 +36,8 @@
 #include "bpvm_env.h"         /* H9: env de la zona 2 (bloque A/B) */
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
-#include "bpvm_sqlmem.h"      /* V5/H: regla del bloque de memoria de la BD */
+#include "bpvm_sqlmem.h"
+#include "bpvm_mem.h"        /* V6/U6: el planificador comun de memoria */      /* V5/H: regla del bloque de memoria de la BD */
 #include "bpvm_sd.h"          /* V5/H1: lector de SD por SPI (pines del env)  */
 #include "bpvm_sd_blk.h"      /* V5/H6: esa SD, vista como dispositivo de bloque */
 #include "bpvm_fs_fat.h"      /* V5/H2: montarla al arranque si hay tarjeta   */
@@ -104,17 +105,43 @@ extern char __HeapLimit;         /* tope de la RAM principal */
  * Ahora la VM se queda con TODO lo que hay entre el final de .bss y el techo,
  * menos la reserva de malloc. Sin número mágico: si mañana crece el .bss, la VM
  * recibe menos AUTOMÁTICAMENTE en vez de pisarle la memoria a nadie. */
-static uint8_t* vm_sram_region(uint32_t* size_out) {
-    /* V5/I — el techo NO es __HeapLimit: encima vive la RAM del pack, y la VM
-     * tiene que pararse debajo. Sin esto la VM se quedaria con TODO hasta el
-     * techo y el `.data` del pack iria a parar dentro de su heap — un fallo que
-     * en la Metro no se veria nunca (alli el heap se va a la PSRAM) y solo
-     * reventaria en la Pico 2, con la MISMA imagen. Lo cazo Eduardo. */
-    uintptr_t top          = (uintptr_t) PACK_RAM_SRAM_BASE;
-    uintptr_t malloc_floor = ((uintptr_t) &end + VM_SRAM_MALLOC_MARGIN + 7u) & ~(uintptr_t) 7u;
-    if (malloc_floor >= top) { *size_out = 0; return NULL; }
-    *size_out = (uint32_t) (top - malloc_floor);
-    return (uint8_t*) malloc_floor;
+/* V6/U6.8 — LO QUE LA PICO OFRECE, enumerado en marcha.
+ *
+ * Aquí estaba `vm_sram_region()`, que decidía ella sola cuánto y desde dónde. Ahora
+ * la familia solo dice QUÉ HAY y el planificador común (src/bpvm_mem.c) decide —
+ * la misma regla que en las otras cuatro placas. Y por eso el `if (psram)` que
+ * había en el arranque desaparece: con PSRAM el enumerador devuelve DOS regiones y
+ * sin ella UNA; la misma imagen sirve para las dos placas sin ramas.
+ *
+ * SRAM: de `end` (fin de .bss, desde donde crece malloc) hasta la RAM del pack
+ * (V5/I: encima vive el .data del pack y la VM tiene que pararse debajo). El
+ * MARGEN de malloc NO se resta aquí: es la constante que se le pasa al plan, y el
+ * plan deja el hueco al principio de la región, que es donde sbrk crece. El
+ * `align8` va sobre `end` para que base_vm = align8(end)+margen sea EXACTAMENTE
+ * lo que `vm_sram_region` daba antes (test_mem: 365896 B = los 357 KB del log).
+ *
+ * PSRAM: la ventana entera, EXCLUSIVA de la VM. La reserva de SQLite va delante y
+ * la aparta el plan (bpvm_sqlmem sigue decidiendo si se puede). */
+static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
+    int n = 0;
+    if (n < max) {
+        uintptr_t top  = (uintptr_t) PACK_RAM_SRAM_BASE;
+        uintptr_t base = ((uintptr_t) &end + 7u) & ~(uintptr_t) 7u;
+        out[n].base = (unsigned char*) base;
+        out[n].bytes = (top > base) ? (size_t)(top - base) : 0u;
+        out[n].libre = out[n].bytes;          /* un solo bloque: lo contiguo ES el total */
+        out[n].exclusiva = 0;
+        out[n].nombre = "SRAM interna";
+        n++;
+    }
+    if (n < max && board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20)) {
+        out[n].base = (unsigned char*) (uintptr_t) PSRAM_XIP_BASE;
+        out[n].bytes = out[n].libre = (size_t) board_desc()->psram_bytes;
+        out[n].exclusiva = 1;
+        out[n].nombre = "PSRAM";
+        n++;
+    }
+    return n;
 }
 
 uint8_t* s_vm_buffer      = NULL;   /* se fija en boot (vm_sram_region o PSRAM) */
@@ -1136,59 +1163,81 @@ static void vm_task(void* arg) {
      * H11 — y si NO la hay, se toma del final de la RAM (vm_sram_region). La
      * diferencia con antes: en la placa CON PSRAM no se reserva nada de SRAM
      * interna, porque ya no hay array estático que reservar. */
-    if (board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20)) {
-        /* V5/H — la BD muerde PRIMERO, del principio de la ventana. Así su
-         * dirección es la misma en toda placa con este layout (no depende de
-         * cuánta PSRAM haya), que es lo que el IDE necesita para pre-enlazar el
-         * pack. La regla vive en bpvm_sqlmem (un solo sitio, como #335). */
+    /* V6/U6.8 — ENUMERAR, PLANIFICAR, TOMAR. Antes esto era un if/else de 50
+     * líneas (PSRAM sí / PSRAM no) que decidía cuánto y desde dónde con su propia
+     * aritmética. Ahora la Pico dice qué hay, el planificador común decide con la
+     * regla de las cinco placas, y aquí solo se TOMA lo decidido y se apuntan las
+     * direcciones que el resto del arranque necesita. Los números son los de
+     * siempre (test_mem los fija); lo que cambia es que ya no hay dos ramas. */
+    {
+        bpvm_mem_region_t reg[2];
+        int nreg = pico_mem_regiones(reg, 2);
+
+        /* La BD muerde PRIMERO de la exclusiva, del principio de la ventana: así
+         * su dirección no depende de cuánta PSRAM haya, que es lo que el IDE
+         * necesita para pre-enlazar el pack. Si se puede lo decide bpvm_sqlmem
+         * (un solo sitio, como #335); el plan solo la aparta. Sin PSRAM, sqlmem
+         * dice OFF y aquí no hay reserva. */
         size_t sqlbytes = 0;
         s_sqlite_asked_mb = bpvm_env_get_long(&s_env, "SQLite", 0);
-        bpvm_sqlite_res_t sqlres = bpvm_sqlite_region(
-                s_sqlite_asked_mb,
-                (size_t) board_desc()->psram_bytes, &sqlbytes);
+        bpvm_sqlite_res_t sqlres = BPVM_SQLITE_OFF;
+        for (int k = 0; k < nreg; k++) {
+            if (!reg[k].exclusiva) continue;
+            sqlres = bpvm_sqlite_region(s_sqlite_asked_mb, reg[k].bytes, &sqlbytes);
+            break;
+        }
         s_sqlite_res = (int) sqlres;
+        if (sqlres != BPVM_SQLITE_OK) sqlbytes = 0;
 
-        s_vm_buffer      = (uint8_t*) (uintptr_t) PSRAM_XIP_BASE;
-        s_vm_buffer_size = board_desc()->psram_bytes;
+        bpvm_mem_cfg_t cfg;
+        cfg.objetivo       = 0;                       /* la Pico toma todo lo que el plan deje */
+        cfg.margen         = VM_SRAM_MALLOC_MARGIN;   /* lo que se le deja a malloc en la SRAM */
+        cfg.vm_min         = VM_SRAM_MIN;
+        cfg.reserva_bytes  = sqlbytes;
+        cfg.reserva_nombre = "SQLite";
 
-        if (sqlres == BPVM_SQLITE_OK) {
-            s_sqlite_base     = s_vm_buffer;
-            s_sqlite_size     = (uint32_t) sqlbytes;
-            s_vm_buffer      += sqlbytes;
-            s_vm_buffer_size -= (uint32_t) sqlbytes;
+        bpvm_mem_plan_t plan;
+        bpvm_mem_plan(reg, nreg, &cfg, &plan);
 
+        char linea[160];
+        bpvm_mem_plan_str(&plan, reg, &cfg, linea, sizeof linea);
+        log_printf("%s", linea);
+
+        if (plan.res != BPVM_MEM_OK) {
+            s_vm_buffer = NULL; s_vm_buffer_size = 0;
+            s_pack_ram_base = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            log_flush();
+        } else if (reg[plan.idx].exclusiva) {
+            /* TOMAR de la PSRAM: la reserva delante, la VM detrás. */
+            s_sqlite_base = plan.reserva_bytes ? reg[plan.idx].base : NULL;
+            s_sqlite_size = (uint32_t) plan.reserva_bytes;
+            s_vm_buffer      = reg[plan.idx].base + plan.reserva_bytes;
+            s_vm_buffer_size = (uint32_t) plan.bytes;
             /* V5/I — la RAM del pack sale del PRINCIPIO de este bloque:
              * `[estáticos | arena]`, como se decidió al cerrar la RAM de la BD.
-             * Criterio de Eduardo (7-ago): *"la reserva solamente hace falta si
-             * SQLite=0"* — donde hay arena no se le quita nada a la SRAM. */
-            s_pack_ram_base = s_sqlite_base;
-        }
-
-        log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
-                   (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
-                   (unsigned)(uintptr_t) s_vm_buffer);
-        /* El reparto, EXPLÍCITO — igual que en la rama de SRAM: que se vea, en
-         * vez de deducirlo. Y el motivo de un NO se dice siempre: "se pidió mal"
-         * no puede parecerse a "no se pidió" (patrón del clamp de #292). */
-        if (sqlres != BPVM_SQLITE_OFF) {
-            log_printf("bd: %s (SQLite=%ld) -> %u KB @ 0x%08x",
-                       bpvm_sqlite_res_str(sqlres),
-                       s_sqlite_asked_mb,
-                       (unsigned)(s_sqlite_size / 1024u),
-                       (unsigned)(uintptr_t) s_sqlite_base);
-        }
-    } else {
-        /* Sin PSRAM no hay arena de donde sacarla, así que la RAM del pack se
-         * reserva de la SRAM — y `vm_sram_region` ya se para justo debajo. Es el
-         * caso degenerado: cuando hay arena, esto no cuesta nada. */
-        s_pack_ram_base = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
-        s_vm_buffer = vm_sram_region(&s_vm_buffer_size);
-        if (s_vm_buffer == NULL) {
-            log_printf("vm: NO HAY SITIO en SRAM para el buffer de la VM");
-            log_flush();
+             * Criterio de Eduardo (7-ago): "la reserva solamente hace falta si
+             * SQLite=0" — donde hay arena no se le quita nada a la SRAM. */
+            s_pack_ram_base = plan.reserva_bytes ? s_sqlite_base
+                                                 : (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
+                       (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
+                       (unsigned)(uintptr_t) s_vm_buffer);
+            /* El motivo de un NO se dice siempre: "se pidió mal" no puede
+             * parecerse a "no se pidió" (patrón del clamp de #292). */
+            if (sqlres != BPVM_SQLITE_OFF) {
+                log_printf("bd: %s (SQLite=%ld) -> %u KB @ 0x%08x",
+                           bpvm_sqlite_res_str(sqlres), s_sqlite_asked_mb,
+                           (unsigned)(s_sqlite_size / 1024u),
+                           (unsigned)(uintptr_t) s_sqlite_base);
+            }
         } else {
-            /* El reparto, explícito: si algún día la reserva de malloc se queda
-             * corta o el .bss se come la RAM, se ve aquí en vez de deducirlo. */
+            /* TOMAR de la SRAM: por ARRIBA de la región, para que el margen quede
+             * abajo, pegado a `end`, que es desde donde crece sbrk/malloc. Sin
+             * PSRAM no hay arena de donde sacar la RAM del pack: va a la SRAM, y
+             * la región ya se para justo debajo. */
+            s_pack_ram_base  = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            s_vm_buffer      = reg[plan.idx].base + (reg[plan.idx].bytes - plan.bytes);
+            s_vm_buffer_size = (uint32_t) plan.bytes;
             size_t stk = vm_stack_region_bytes();   /* la regla, no una copia */
             log_printf("vm: SRAM interna %u KB @ 0x%08x -> heap %u KB + stacks %u KB | libre para malloc: %u KB",
                        (unsigned)(s_vm_buffer_size / 1024u), (unsigned)(uintptr_t) s_vm_buffer,

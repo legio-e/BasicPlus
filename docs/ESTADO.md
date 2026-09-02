@@ -41,10 +41,13 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
    como se predijo —`objetivo 128, techo 136 por el bloque contiguo, margen 17588`— y el reparto
    no se mueve (64/64). **El S3 queda por contrastar** al reflashear; la predicción es 160 KB con
    techo 264 por el bloque contiguo.
-2. **🟡 El enumerador de regiones** (`U6.5`/`U6.6`), familia a familia. Empezar por la **Pico**,
-   que ya calcula, y dejar el **STM32 para el final**: su techo lo comprueba el ENLAZADOR y eso
-   es más fuerte que cualquier comprobación en marcha — su enumerador debe seguir devolviendo el
-   array estático.
+2. **🟡 El enumerador de regiones** (`U6.5`/`U6.6`), familia a familia. ✅ **Pico HECHA (`U6.8`,
+   2-sep)**: `bpvm_mem` común + `test-mem` (14/14 contra las placas medidas) + la Pico
+   enumerando; verificado en la Metro en los dos modos, byte a byte con las líneas de ayer.
+   **Siguen S3 y C3** (su `vm_buffer_init` de `U6.7` *es* la rama compartida del planificador),
+   luego el **P4** (exclusiva con reserva del display) y el **STM32 el último**: su techo lo
+   comprueba el ENLAZADOR y eso es más fuerte que cualquier comprobación en marcha — su
+   enumerador devuelve el array estático y el aserto se queda.
 3. **🔴 El cosido de dos regiones.** Es lo que toca el GC, y necesita las cuatro comprobaciones
    inventariadas en `V6_IDEAS`. Poner `coser=0|1` en el ENV **desde el primer día**: un mecanismo
    que no se puede apagar no se puede medir.
@@ -68,8 +71,12 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
   es un error: es la VM escribiendo o ejecutando memoria del IDF. Están listadas en `V6_IDEAS`.
 - 🟡 **El S3 corre una imagen del 30-ago.** Su margen se midió con ella; si se reflashea conviene
   repetir la medida, que ahora cuesta un minuto.
-- 🟡 **El S3 no lleva la imagen del repo** (tiene la del 30-ago, sin `U6.7`). El C3 ya sí (2-sep).
-  Reflashear el S3 antes de medir nada con él — y al hacerlo, contrastar la predicción de arriba.
+- 🟡 **El S3 no lleva la imagen del repo** (tiene la del 30-ago, sin `U6.7`). El C3 (`U6.7`) y la
+  Metro (`U6.8`) ya sí, ambos el 2-sep. Reflashear el S3 antes de medir nada con él — y al
+  hacerlo, contrastar la predicción de `U6.7` (160 KB, techo 264 por el bloque contiguo).
+- ℹ️ **Grabar la Pico/Metro sin dedo**: `BOOTSEL` por el wire la abre como disco `RP2350` y se
+  copia el UF2 (`bpgenvm-c/pico/build/bpvm_pico.uf2`). El `RESET` por el wire corta el puerto
+  antes de contestar — la excepción al leer la respuesta es normal.
 
 ### 🧹 Pendientes manuales
 

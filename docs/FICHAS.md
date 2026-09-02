@@ -1102,6 +1102,86 @@ Misma foto del heap que el 31-ago, y el `INFO` da el mismo reparto de antes (`vm
 por contrastar cuando se reflashee.
 
 
+##### ✅ `U6.8` — el planificador común (`bpvm_mem`) y la Pico enumerando: el `if (psram)` desaparece (2-sep)
+
+El paso 2 del traspaso, primera familia. Y con el patrón de `U3.24`: **el arnés antes que el
+artefacto** — el planificador nació con un test de host que lo contrasta con los números
+MEDIDOS de las cuatro placas, y sólo después se tocó la Pico.
+
+### El común: `include/bpvm_mem.h` + `src/bpvm_mem.c`
+
+Sin dependencias (sólo `<stddef.h>`/`<stdio.h>`), como `bpvm_sqlmem`. La familia describe piezas
+y el común decide:
+
+```c
+bpvm_mem_region_t  { base, bytes /*contiguo*/, libre /*total de la bolsa*/, exclusiva, nombre }
+bpvm_mem_cfg_t     { objetivo, margen, vm_min, reserva_bytes, reserva_nombre }
+bpvm_mem_plan()    → { idx, bytes, techo, limita, reserva_bytes }
+bpvm_mem_plan_str()→ la MISMA línea de log en las cinco placas
+```
+
+La regla es la de `U6.2`: **la exclusiva mayor si la hay, si no la compartida mayor**; en la
+exclusiva se aparta la reserva con nombre delante; en la compartida mandan las dos restricciones
+(`bloque contiguo` / `libre − margen`) y se dice cuál; nunca más que `objetivo` aunque quepa
+(Eduardo: no se reduce el heap del RTOS para volver a agrandarlo); por debajo de `vm_min` no hay
+VM y se dice con los números.
+
+### El test: `test/test_mem.c` (`make test-mem`, 14/14)
+
+Cada caso es una placa real con sus números del log:
+
+| caso | entrada | debe salir |
+|---|---|---|
+| **C3** | contiguo 139 264, libre 280 032, margen 17 588, objetivo 128 KB | 131 072, techo 136 KB por **el bloque contiguo** |
+| **S3** | 270 336 / 338 368 / 26 564 / 160 KB | 163 840 — *cabría más y no se coge* |
+| **Metro** | SRAM 431 432 **y** PSRAM 8 MB, SQLite 2 MB | elige la PSRAM aunque vaya segunda, aparta 2 MB, **6 MB** |
+| **Pico sin PSRAM** | región 431 432, margen 65 536, sin objetivo | **365 896 = los 357 KB del log** |
+| suelo | 90 KB con 40 de margen | `NO CABE … suelo 64 KB: sin VM` |
+
+Si alguien toca el planificador y una placa saldría distinta, esto lo dice en el host en un
+segundo. Es lo que a los cuatro mecanismos anteriores les faltó durante meses.
+
+### La Pico: enumera, y el `if` se va
+
+`vm_sram_region()` —que decidía cuánto y desde dónde— pasa a ser `pico_mem_regiones()`, que
+sólo dice **qué hay**: la SRAM de `align8(end)` a la RAM del pack siempre, y la PSRAM además si
+`board_desc()` la tiene. El `if (psram) { … } else { … }` de 50 líneas del arranque se sustituye
+por *enumerar → planificar → tomar*. La reserva de SQLite sigue decidiéndola `bpvm_sqlmem`; el
+plan sólo la aparta delante. El margen de malloc (64 KB) es ahora `cfg.margen`, y el plan lo
+deja **abajo**, pegado a `end`, que es desde donde crece `sbrk` — por eso la SRAM se toma **por
+arriba** de la región.
+
+📌 **Detalle que garantiza «los mismos números»**: el `align8` va sobre `end`, no sobre
+`end+margen`, para que `base_vm = align8(end) + margen` sea exactamente lo que daba
+`vm_sram_region`. El test lo fija en 365 896.
+
+### ✅ Verificado en la Metro, las dos ramas, byte a byte
+
+Grabada por el wire (`BOOTSEL` es verbo propio de la Pico: la placa se abre como disco `RP2350`
+y se copia el UF2, sin dedo), arranque limpio (`LOG_CLEAR` + `RESET`) en cada modo:
+
+```
+psram=0  vm: 357 KB en SRAM interna (todo lo que deja el margen del sistema)
+         vm: SRAM interna 357 KB @ 0x20024ab8 -> heap 267 KB + stacks 89 KB | libre para malloc: 64 KB
+         INFO vmHeapBytes 274422 / vmStackBytes 91474
+psram=1  vm: 6144 KB en PSRAM (todo lo que deja la región) | SQLite 2048 KB delante
+         vm: heap en PSRAM 6 MB @ 0x11200000 (SRAM interna sin reservar)
+         bd: reservada (SQLite=2) -> 2048 KB @ 0x11000000
+         INFO vmHeapBytes 5767168 / vmStackBytes 524288
+```
+
+Las líneas de la familia son **idénticas** a las del 31-ago (misma dirección `0x20024ab8`, mismo
+reparto, misma BD delante); la línea nueva es la común. ENV devuelto a `psram=0`.
+
+Y el `.c` nuevo está **de alta en los cinco builds** (host, Pico, S3, C3, P4; los dos STM32 lo
+recogen por la carpeta enlazada): compilan los seis. Paridad **38 PASS / 0 FAIL / 0 SKIP**.
+
+⏭️ Siguientes familias, en este orden: **S3 y C3** (su `vm_buffer_init` de `U6.7` *es* la rama
+compartida del planificador: enumerador = `heap_caps_get_info`, y la escalera de −4 KB queda en
+el «tomar»), luego el **P4** (exclusiva con reserva del display), y el **STM32 el último** — su
+enumerador devuelve el array estático y el aserto del enlazador se queda donde está.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
