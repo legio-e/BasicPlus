@@ -1353,6 +1353,13 @@ semanas. `MathRango.bp` fallaría en ella y funcionaría en el host: **rompe el 
 mano; en la Metro son 13 porque su `/lib` es de antes de que la stdlib se recompilara con el
 compilador nuevo. Y mi filtro del log de esta mañana (`psram|vm|bd`) me lo escondió dos veces.
 
+**Y la Pico 2 sola, revisada después, tiene 16**: los 13 de V5, **más `/lib/Core.mod` de V5**
+(12 999 B contra 13 111 embebidos — el IDE también sube `Core` a `/lib` desde `#463`, y sube el de
+V5), más un `/lib/Pico.mod` de **2 947 B** que no es ni de V5 ni del repo: es el embebido de una
+imagen de finales de agosto. Tres generaciones en el mismo `/lib`. La Pico 2 va además con
+`stack=90` en el ENV, que el planificador respeta (pilas 90 KB en vez de 89): el mando del ENV
+sigue mandando sobre la regla, que es lo que `U6.6` pedía.
+
 **Los tamaños dan la CAUSA, no una pista.** Comparados los 13 con el dist de V5 y con el repo:
 
 | módulo | en el FS de la Metro | `BasicPlus-5.0-win/bpstdlib` | repo |
