@@ -1450,6 +1450,32 @@ no pudo avisar de su `Pico.mod` de V5 — en las ESP32 y las STM32 el `/lib` ran
   Run vuelve a subir (~50 KB por el wire). No.
 - **C**: dejarlo y sólo avisar (reponer `#422` en las tres, en el helper común) → el invariante
   sigue rompiéndose, ahora con ruido. Es el mínimo si A se aplaza, y A lo incluye.
+
+### ✅ Decidido: **A, corregida por Eduardo** (2-sep) — *«el IDE debía preguntar a la placa si le faltaba una dependencia»*
+
+Ya estaba hablado en `#463` (*«lo robusto es que lo diga el dispositivo en vez de que el IDE lo
+recuerde: el `LIST` de `/lib` ya existe»*) y yo lo había reformulado peor (duplicar la stdlib bajo
+`/app/<proj>`). La forma acordada:
+
+1. **El IDE pregunta a la placa.** Para cada dependencia que resolvió de la stdlib (de `stdlibDir`,
+   no del `outDir`), mira en el `LIST` que ya hace al conectar si `/lib/<X>.mod` está. Si está, **no
+   sube nada** — y **nunca la «corrige» por CRC**: la stdlib de la placa es la de su imagen. Si
+   falta (Json, Gui… lo que la imagen no embebe), la **aprovisiona una vez** en `/lib`. La lista
+   `EMBEDDED_CORE_MODS`, el gemelo escrito a mano de lo que el firmware embebe, **desaparece**.
+2. **`/app` sólo lleva módulos de la app** (y los overrides que el usuario ponga a propósito, que
+   es para lo que `/app` gana a `/lib`). El IDE no vuelve a crear uno sin que nadie lo pida.
+3. **El instalador de la imagen repone `/lib`** cuando lo que hay no coincide con lo embebido
+   (tamaño, luego CRC) y lo dice: *«lib: X.mod actualizado (a → b B)»*. En un **helper común de
+   `src/`** que llaman los tres generados — lo que va en un fichero generado se lo lleva la
+   siguiente regeneración, que es como murió `#422` en el ESP32. **`/app` no lo toca nunca**: el
+   `Hello.mod` de muestra de la Pico sigue siendo «sólo si falta», porque `/app` es del usuario.
+4. **El desfase de versiones** (el bug de vtables del 13-jun que motivó el CRC en el IDE) lo grita
+   el gate de ABI de `#284` y se arregla **regrabando la imagen**, no retransmitiendo la stdlib —
+   que es lo que `PHILOSOPHY.md` dice desde el principio (*«sólo se suben cuando sale una nueva
+   versión del lenguaje»*).
+
+Orden de trabajo, cada paso con su verificación: el helper común y los tres generados (host +
+seis builds), el IDE (contra el simulador, y el fat-jar con el IDE cerrado), y las placas.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
