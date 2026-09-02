@@ -36,7 +36,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 |---|---|---|---|
 | **P4** (COM14) | `U6.10` final, grabada 14:20 | ✅ **es la del repo** — verificada byte a byte (28 668 KiB @0x48000a7c) | `/app/Core.mod` rancio por borrar |
 | **S3** (COM9) | `U6.10` **previa** a la regla unificada, 14:1x | numéricamente igual (su fixture no se mueve); regrabar para tener la exacta | ✅ limpio (Core.mod y Pico.mod de V5 fuera) |
-| **C3** (COM3) | `U6.9`, ~13:5x | dos refactors por detrás (margen en la región, regla unificada); mismos números por fixture | `log=1` en el ENV → devolver a 0 |
+| **C3** (COM3) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada: 128 KB, techo 136 por el contiguo, 64/64 — idéntico | ✅ `/lib` **limpio de origen** (lo aprovisionó el instalador; el IDE de V5 nunca le subió nada: 0 avisos), ✅ `log` devuelto a 0 |
 | **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **Pico 2** (COM22) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep; llevaba la del 29-ago) | ✅ **rama SRAM en variante A verificada**: `357 KB @ 0x20024ab8`, y su `stack=90` del ENV respetado (heap 267 + pilas 90; INFO 273736/92160, igual que antes) | ✅ `/lib` **limpio** (16 de V5 y de una imagen vieja borrados y repuestos por la imagen, `#466`); ENV `stack=90`, `gc=1`, `mpu=1`, `log=1`; FS de 1 MB al 24 % — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | **no migrado**: es la familia que falta en el paso 2 | `quantum` ya devuelto a 0 en la Discovery |
@@ -50,7 +50,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
    `test-mem` y no cambian) sino para que «lo que lleva la placa» sea «lo que hay en el repo» en las
    cuatro que ya deciden con el planificador. La Metro se graba por el wire (`BOOTSEL`); el C3 y el
    S3 con `idf.py flash` (ojo al DTR/RTS de cada uno, está en `tools/medir_margen.ps1`).
-2. **Limpiar el `/app/Core.mod` del P4** y devolver el `log=1` del C3 a 0. Y **`#466` de raíz**
+2. **Limpiar el `/app/Core.mod` del P4** (el `log` del C3 ya está a 0). Y **`#466` de raíz**
    (la Metro ya está limpia a mano): que el IDE no suba stdlib a `/lib`, y que el instalador
    refresque `/lib` cuando no coincida con lo embebido. Mientras tanto, cada Run desde el IDE de
    V5 contra una placa de V6 vuelve a ensuciar `/lib`.
@@ -110,9 +110,9 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
   es un error: es la VM escribiendo o ejecutando memoria del IDF. Están listadas en `V6_IDEAS`.
 - 🟡 **El S3 corre una imagen del 30-ago.** Su margen se midió con ella; si se reflashea conviene
   repetir la medida, que ahora cuesta un minuto.
-- ✅ **Las tres ESP32 y la Metro llevan imagen del repo** (2-sep): P4 con `U6.10` (la regla
-  final), S3 con `U6.10` (regla previa, mismos números), C3 con `U6.9`, Metro con `U6.8`. Ninguna
-  de las tres últimas se ha grabado con la regla final: sus fixtures la cubren. El S3 subió a 346 064 B libres / 278 528 contiguos con la imagen nueva (+7,7 KB:
+- ✅ **Imagen final (`U6.10`, regla unificada) en P4, Metro, Pico 2 y C3** (2-sep, todas
+  verificadas en placa). El **S3** lleva la `U6.10` previa a la regla unificada (mismos números,
+  fixture); regrabar cuando se conecte. El S3 subió a 346 064 B libres / 278 528 contiguos con la imagen nueva (+7,7 KB:
   lo que liberó la unificación); si se remide su margen, añadir el caso a `test_mem`, no
   sustituir el del 30-ago.
 - ℹ️ **Grabar la Pico/Metro sin dedo**: `BOOTSEL` por el wire la abre como disco `RP2350` y se
