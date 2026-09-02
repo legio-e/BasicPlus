@@ -1026,6 +1026,73 @@ El paso 1 es lo único que cambia por familia. Los siete pasos son del común.
 - **Y todo lo nuevo nace medible**, porque cada palanca tiene su interruptor.
 
 
+##### ✅ `U6.7` — el margen pasa de comentario a NÚMERO: el bloque de la VM ya no se pide a ciegas (2-sep)
+
+El paso 1 del traspaso, el de menos riesgo. Sólo los dos ESP32 sin PSRAM (S3 y C3); el P4 va
+por su rama exclusiva y la Pico y el STM32 ya tenían el margen con nombre.
+
+### Lo que cambia
+
+Antes, `vm_buffer_init()` hacía `malloc(VM_BUFFER_SIZE)` y si fallaba `malloc(VM_BUFFER_FALLBACK)`:
+dos números por chip, puestos una vez y revisados nunca. Ahora **mide** y aplica las dos
+restricciones que salieron del C3:
+
+```
+libre, contiguo  ← heap_caps_get_info            (lo que HAY, ahora)
+techo            = min(contiguo, libre − CHIP_MARGEN_SISTEMA)
+bloque           = min(CHIP_VM_OBJETIVO, techo)
+si bloque < CHIP_VM_MIN → no hay VM, y se dice con los números
+malloc(bloque); si falla, −4 KB y otra vez, hasta el suelo
+```
+
+Y en `chip_cfg.h` de cada silicio quedan **tres constantes de tres clases distintas**:
+
+| | S3 | C3 | qué es |
+|---|---|---|---|
+| `CHIP_VM_OBJETIVO` | 160 KB | 128 KB | **política**: cuánto quiere la VM |
+| `CHIP_MARGEN_SISTEMA` | 26 564 B | 17 588 B | **medida** (`U6.4`, protocolo escrito) |
+| `CHIP_VM_MIN` | 64 KB | 64 KB | **suelo**, el mismo que `VM_SRAM_MIN` de la Pico |
+
+📌 **El objetivo se queda en los 160/128 de siempre A PROPÓSITO.** Cabría más —en el S3 el techo
+son 264 KB—, pero Eduardo fue explícito: *«no tocaría el heap del RTOS, la idea es explotarlo más
+si es necesario en el futuro; no tiene sentido reducirlo para volver a agrandarlo»*. El objetivo
+protege ese heap. Lo que cambia no es cuánto se coge sino que **ya no se coge sin mirar**: si la
+realidad es peor que el objetivo, se baja **y se dice por qué** («manda el bloque contiguo» o
+«manda el margen del sistema»), en vez de fallar el malloc en silencio o —peor— caber hoy y
+ahogar al IDF dentro de un rato.
+
+### Lo que desaparece
+
+- Las **dos constantes a mano** (`VM_BUFFER_SIZE` / `VM_BUFFER_FALLBACK`) en los dos chips.
+- La **escalera de respaldo de dos peldaños**, sustituida por un bucle de −4 KB hasta el suelo:
+  la misma idea que el P4 en PSRAM (−1 MiB). Hallazgo 1 del censo: dos maneras de «no caber»
+  inventadas por separado, ahora una.
+- El comentario del S3 que seguía citando los **86 KB** de `#336` como medida: era 3,3× el valor
+  real y ya está corregido en el fichero.
+
+### 📐 Predicho antes de medir
+
+Con los números de `U6.4`:
+
+```
+C3  libre 280032  contiguo 139264  margen 17588 → techo 139264 (bloque contiguo) → 128 KB = objetivo
+S3  libre 338368  contiguo 270336  margen 26564 → techo 270336 (bloque contiguo) → 160 KB = objetivo
+```
+
+En las dos manda el **bloque contiguo**, no el margen — coherente con `U6.4`: lo que separa a
+estos silicios es la fragmentación, no lo que gasta el sistema. Y en las dos el bloque queda
+**igual que hoy**, que es lo que se pretendía: sin cambio de comportamiento, con la comprobación
+puesta. La línea de arranque que hay que ver en placa:
+
+```
+vm: heap 128 KB reservado (objetivo 128, techo 136 por el bloque contiguo, margen 17588) | ...
+```
+
+✅ **Verificado**: S3, C3 y P4 compilan; las cadenas nuevas están **en los `.bin`** y la del
+«respaldo» viejo ya no. **Sin placa hoy**: la predicción de arriba es lo que hay que contrastar
+al reflashear.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).

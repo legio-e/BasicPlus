@@ -11,62 +11,48 @@
 
 #define CHIP_NOMBRE  "ESP32-C3 (ensayo)"
 
-/* EL BLOQUE DE LA VM — MEDIDO EN PLACA (V6/P1.C3.3, 31-ago-2026).
+/* ─── EL BLOQUE DE LA VM: objetivo, margen y suelo (V6/U6.7, 2-sep-2026) ───────
  *
- * Nació a 96 KB «para que el ensayo enlace» y con la advertencia de que estaba
- * sin medir. Ya está medido, y las dos cosas que salieron cambian el número.
+ * Todo lo de aquí está MEDIDO EN ESTA PLACA (P1.C3.3 y U6.4), no heredado del
+ * S3. El arranque (esp32/common/main.c, vm_buffer_init) mide DRAM libre y bloque
+ * contiguo, comprueba las dos restricciones y baja si no cabe, diciéndolo.
  *
  * ─── 1. El techo NO es la RAM total, es el BLOQUE CONTIGUO ──────────────────
  *
- *   [boot] vm: ... DRAM interna libre 280032->181724 B (bloque mayor 139264->114688 B)
+ *   heap: libre 280032 | mayor 139264 | bloques: 7 libres, 37 usados | usado 13424
  *
- * Hay 280 KB libres y el mayor bloque son **139264 B (136 KB)**: la DRAM del C3
- * sale troceada en regiones (157 KiB + 113 de retención + 10 + 7) y este bloque
- * tiene que ser UNO. O sea que los 160 KB del S3 aquí no caben aunque sobre RAM
- * — es el caso que el comentario de `vm_buffer_init` predecía: «se puede tener
- * RAM de sobra y aun así no caber».
+ * Hay 280 KB libres y el mayor bloque son 139264 B (136 KB): el espacio libre
+ * está en SIETE trozos, partidos por 37 reservas del propio IDF (tareas, drivers,
+ * el timer) hechas antes de que arranque app_main. Los 160 KB del S3 aquí no
+ * caben aunque sobre RAM. Es la restricción que el comentario original de
+ * vm_buffer_init predecía: «se puede tener RAM de sobra y aun así no caber».
  *
- * ─── 2. Lo que el sistema consume EN MARCHA: ~17 KB ─────────────────────────
+ * ─── 2. Por qué 128 y no otro ───────────────────────────────────────────────
  *
- * Marca de agua tras dos `Run` de `Bench.mod` (`heap_caps_get_minimum_free_size`,
- * el mismo instrumento de `#336`):
+ * El reparto (bpvm_stack_region_bytes) da 25 % a pilas pero nunca menos de
+ * 64 KB; con un bloque pequeño ese suelo manda:
  *
- *   libre tras reservar ......... 181724 B
- *   MINIMO HISTORICO ............ 164648 B
- *   ⇒ consumo en marcha .........  17076 B
+ *   bloque  96 KB -> pilas 64 KB + heap 32 KB   (24 hilos)  ← el ensayo
+ *   bloque 128 KB -> pilas 64 KB + heap 64 KB   (24 hilos)  ← éste
  *
- * Una quinta parte de los 86 KB del S3, y tiene sentido: un solo núcleo, menos
- * tareas del IDF y sin WiFi levantado.
+ * El heap se dobla sin tocar los hilos, y quedan 148956 B libres con el peor
+ * momento medido en 131368: margen de sobra. 128 deja 8 KB de holgura sobre el
+ * bloque contiguo; si un día no cabe, el arranque baja de 4 en 4 KB y lo dice.
  *
- * ─── 3. Por qué 128 y no otro ───────────────────────────────────────────────
- *
- * El reparto lo decide `bpvm_stack_region_bytes`: 25 % para pilas **pero nunca
- * menos de 64 KB**. Con un bloque pequeño ese suelo manda, y eso es lo que hace
- * cara la diferencia:
- *
- *   bloque  96 KB -> pilas 64 KB + heap **32 KB**   (24 hilos)
- *   bloque 128 KB -> pilas 64 KB + heap **64 KB**   (24 hilos)
- *
- * El heap se DOBLA y las pilas no cambian. Y sale gratis: con 128 KB reservados
- * quedan 148956 B libres, y el peor momento medido deja 131396 — o sea 131 KB de
- * margen sobre un consumo en marcha de 17,5 KB. La otra forma de llegar a 64 KB
- * de heap era bajar el suelo de pilas a 32 KB, pero eso deja la placa en OCHO
- * hilos (main 16 KB + 2 KB por hilo) y ademas toca una regla que comparten las
- * cinco plataformas. Esto solo toca este fichero.
- *
- * ⚠️ Lo que NO justifica este numero: al medir vi en el log del arranque un
- * `throw ... No space in heap` con el bloque de 96 y lo lei como que el heap se
- * habia agotado. **Era falso.** Es la PREFABRICACION del OOM (`#430`), que corre
- * en todo arranque y que en un modulo que no importa `Core` no puede hacerse —
- * un no-evento que sonaba igual que un fallo. El aviso se arreglo para que
- * distinga las dos cosas. Con 96 KB el `Bench` tambien terminaba bien.
- *
- * 128 KB deja 8 KB de holgura sobre el bloque contiguo (139264 B). Es poco, pero
- * es holgura de MOMENTO DE ARRANQUE, no de ejecucion: si un dia no cabe, entra
- * el respaldo y LO DICE en el log. Por eso el respaldo no baja a 64 sino que se
- * queda en los 96 que ya estan probados en placa. */
-#define VM_BUFFER_SIZE     (128 * 1024)
-#define VM_BUFFER_FALLBACK (96 * 1024)    /* el del ensayo: probado en placa */
+ * ⚠️ Lo que NO justifica este número: al medir vi «throw ... No space in heap»
+ * con el bloque de 96 y lo leí como que el heap se agotaba. Era FALSO — es la
+ * prefabricación del OOM (#430) en un módulo que no importa Core, un no-evento
+ * que sonaba igual que un fallo. El aviso ya distingue las dos cosas. */
+#define CHIP_VM_OBJETIVO      (128u * 1024u)
+
+/* Lo que el SISTEMA consume en marcha fuera de la VM. MEDIDO con
+ * tools/medir_margen.ps1 (U6.4), y reproducible al 0,16 %:
+ *   libre tras reservar 148956 − mínimo histórico 131368 = 17588 B
+ * Una parte de lo del S3 (26564): un solo núcleo, menos tareas, sin WiFi. */
+#define CHIP_MARGEN_SISTEMA   17588u
+
+/* Suelo: mismo concepto y mismo valor que la Pico (VM_SRAM_MIN) y el S3. */
+#define CHIP_VM_MIN           (64u * 1024u)
 
 /* Identidad de placa: sin esto el C3 saluda como `bpvm-esp32` y anuncia los
  * GPIOs, el ADC y la SRAM del S3. Ver `c3_board_id.c`. */
