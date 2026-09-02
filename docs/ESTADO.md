@@ -45,11 +45,14 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
    2-sep)**: `bpvm_mem` común + `test-mem` (14/14 contra las placas medidas) + la Pico
    enumerando; verificado en la Metro en los dos modos, byte a byte con las líneas de ayer.
    ✅ **S3 y C3 HECHOS (`U6.9`, 2-sep)**: `vm_buffer_init` queda en enumerar (`heap_caps_get_info`)
-   y tomar (malloc + escalera); verificado en el C3 **y en el S3** con los números esperados. **Siguen el
-   P4** (exclusiva con reserva del display: su `vm_buffer_init_psram` es la rama exclusiva del
-   planificador) y el **STM32 el último**: su techo lo comprueba el ENLAZADOR y eso es más fuerte
-   que cualquier comprobación en marcha — su enumerador devuelve el array estático y el aserto se
-   queda. Tres de cinco placas ya deciden con la misma función.
+   y tomar (malloc + escalera); verificado en el C3 **y en el S3** con los números esperados.
+   🟡 **P4 en código (`U6.10`)**: el margen pasó a ser **de la región** (el display es un margen
+   de la PSRAM, no una reserva) y `vm_buffer_init_psram` ya enumera/planifica/toma; **falta la
+   placa** para leer su `psram: libre | mayor`, contrastar con el `VM heap en PSRAM` de antes y
+   fijar el fixture. **Después el STM32, el último**: su techo lo comprueba el ENLAZADOR y eso es
+   más fuerte que cualquier comprobación en marcha — su enumerador devuelve el array estático y el
+   aserto se queda. Tres de cinco placas deciden ya con la misma función; la cuarta, en cuanto se
+   enchufe.
 3. **🔴 El cosido de dos regiones.** Es lo que toca el GC, y necesita las cuatro comprobaciones
    inventariadas en `V6_IDEAS`. Poner `coser=0|1` en el ENV **desde el primer día**: un mecanismo
    que no se puede apagar no se puede medir.
@@ -84,9 +87,10 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
 ### 🧹 Pendientes manuales
 
 - El **C3** se quedó con `log=1` en su ENV (se puso para medir). Devolverlo a `0`.
-- El `/app/Core.mod` de las placas (sigue, y el S3 lo tiene: se vio en su `LIST`).
-- En el S3 hay además un `/lib/Pico.mod` de V5 tapando el embebido de la imagen — el firmware lo
-  avisa al arrancar. Mismo problema que el `Core.mod`.
+- ✅ **El S3 ya está limpio** (2-sep, por el wire): fuera `/app/Core.mod` y el `/lib/Pico.mod` de
+  V5; el arranque reinstala el `Pico.mod` de la imagen y el aviso ya no sale.
+- El `/app/Core.mod` del **resto** de placas (Pico/Metro, P4) sigue pendiente: mismo gesto, dos
+  `DEL` por el wire y un reset.
 
 ### `U6` — la organización de la memoria: censo, medidas y forma (sesión de análisis)
 

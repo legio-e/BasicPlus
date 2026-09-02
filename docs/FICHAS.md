@@ -1235,6 +1235,63 @@ válidos, y el planificador no depende del nivel — cuando se remida el margen 
 y las otras dos (P4, STM32) tienen su hueco descrito en `U6.8`.
 
 
+##### 🟡 `U6.10` — el margen es de la REGIÓN, y el P4 al planificador (código hecho; falta su placa) (2-sep)
+
+Al ir a meter el P4 salió que el modelo de `U6.8` tenía el margen en el sitio equivocado. El P4
+tiene **dos** cosas distintas en su PSRAM: una **reserva** (SQLite: asignada aparte, alineada a
+página por el sello del pack) y un **margen** (los 4 MiB que se dejan *libres* para que LVGL los
+pida después). Mi planificador sólo entendía el margen en la memoria compartida.
+
+📌 **Lo correcto es que el margen sea de la región** — *lo que en ESA memoria se deja a los
+demás inquilinos*: `malloc`/RTOS en la SRAM (medido), el display en la PSRAM del P4, **nada** en
+la PSRAM de la Metro. La Metro lo demuestra sola: deja 64 KB en su SRAM y 0 en su PSRAM, y con
+un margen global eso no se puede expresar. Un commit de antigüedad: mejor ahora que arrastrarlo.
+
+```c
+bpvm_mem_region_t { base, bytes, libre, exclusiva, margen, nombre }   /* margen: aquí */
+bpvm_mem_cfg_t    { objetivo, vm_min, reserva_bytes, reserva_nombre } /* ya sin margen */
+```
+
+La regla queda: **exclusiva** → todo, menos la reserva con nombre delante y el margen de la
+región; **compartida** → todo lo contiguo, menos el margen de la región (y se dice cuál de las
+dos restricciones manda).
+
+### `test-mem`: 16/16, con la forma del P4
+
+Los cinco casos medidos siguen dando lo mismo (el margen viajó a las regiones sin cambiar ningún
+número), y entra un sexto: **exclusiva con margen** — 30 MiB con 4 MiB para el display → 26 MiB,
+y la línea lo dice (*«todo lo que deja el margen de la región»*). Números redondos a propósito:
+**el fixture medido se añade cuando el P4 dé los suyos**; los medidos se suman, no se sustituyen.
+
+### El P4, en código
+
+`vm_buffer_init_psram()` pasa a enumerar (`p4_mem_regiones`: la PSRAM, exclusiva, `bytes` = el
+bloque contiguo mayor, `margen` = `VM_PSRAM_DISPLAY_RESERVE`) → planificar (objetivo 0, suelo
+`VM_MEM_MIN`) → tomar (alineado a página, con la escalera de −1 MiB si el asignador discrepa).
+SQLite **no** cambia: se asigna antes y aparte (`vm_sqlite_init_psram`), y el enumerador ya la ve
+gastada.
+
+⚠️ **Un cambio de comportamiento posible, y a favor**: antes el bloque salía de la PSRAM *total*
+libre menos el display, y la escalera de −1 MiB corregía si el mayor bloque no llegaba. Ahora
+sale del **contiguo** menos el display, así que la escalera casi nunca tendrá que bajar — pero si
+la PSRAM del P4 arranca fragmentada, el bloque puede ser algo menor que antes. **Por eso hace
+falta la placa**: para ver su `psram: libre | mayor` y fijar el fixture con lo medido.
+
+### ✅ Verificado hoy, sin el P4
+
+- **S3 reflasheado con el refactor**: las mismas líneas que `U6.9` — `160 KB … techo 272 por el
+  bloque contiguo`, DRAM 346 064→182 220, reparto 96/64. El margen cambió de sitio y no de valor.
+- Los **cinco builds** compilan (host, Pico, S3, C3, P4; los dos STM32 lo recogen solos).
+- **Limpieza del S3** (pedida por Eduardo): `DEL /app/Core.mod` y `DEL /lib/Pico.mod` por el wire;
+  al rearrancar, la stdlib embebida reinstala **el `Pico.mod` de la imagen** (2 070 B —el mismo
+  tamaño que el de V5, por eso el `LIST` engaña; el aviso *«NO es el de esta imagen»* ya no sale,
+  y `bpstdlib/Pico.mod` mide 2 070). 27 → 26 ficheros.
+
+⏭️ Con el P4 en la mesa: grabar, leer `psram: libre | mayor` y la línea del plan, contrastar con
+el `VM heap en PSRAM: … KiB` de la imagen anterior, y añadir el fixture. Entonces la familia ESP32
+entera decide con la misma función.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).

@@ -10,6 +10,7 @@
 static const char* K_REGION   = "la región";
 static const char* K_CONTIGUO = "el bloque contiguo";
 static const char* K_MARGEN   = "el margen del sistema";
+static const char* K_MARGEN_R = "el margen de la región";
 
 bpvm_mem_res_t bpvm_mem_plan(const bpvm_mem_region_t* r, int n,
                              const bpvm_mem_cfg_t* cfg, bpvm_mem_plan_t* out)
@@ -45,15 +46,18 @@ bpvm_mem_res_t bpvm_mem_plan(const bpvm_mem_region_t* r, int n,
         size_t res = cfg->reserva_bytes;
         if (res > 0 && (res >= R->bytes || R->bytes - res < cfg->vm_min)) res = 0;
         out->reserva_bytes = res;
-        techo  = R->bytes - res;
-        limita = K_REGION;
+        techo = R->bytes - res;
+        /* Y el margen de la región: lo que se deja libre para otro inquilino de
+         * ESA memoria (el display en la PSRAM del P4). En la Pico/Metro es 0. */
+        if (R->margen > 0) { techo = (techo > R->margen) ? techo - R->margen : 0; limita = K_MARGEN_R; }
+        else               { limita = K_REGION; }
     } else {
         /* Compartida: las DOS restricciones que salieron de medir el C3
          * (P1.C3.3, U6.4): caber en el bloque CONTIGUO, y dejarle al sistema lo
          * que consume en marcha sobre el TOTAL libre. Manda la más estricta, y
          * se dice cuál. */
         size_t libre   = (R->libre > R->bytes) ? R->libre : R->bytes;
-        size_t techo_m = (libre > cfg->margen) ? libre - cfg->margen : 0;
+        size_t techo_m = (libre > R->margen) ? libre - R->margen : 0;
         if (R->bytes < techo_m) { techo = R->bytes; limita = K_CONTIGUO; }
         else                    { techo = techo_m;  limita = K_MARGEN;   }
     }

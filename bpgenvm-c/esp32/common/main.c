@@ -60,6 +60,7 @@ static int esp32_mem_regiones(bpvm_mem_region_t* out, int max, multi_heap_info_t
     out[0].bytes     = hi->largest_free_block;
     out[0].libre     = hi->total_free_bytes;
     out[0].exclusiva = 0;
+    out[0].margen    = CHIP_MARGEN_SISTEMA;      /* medido: lo que el sistema consume en marcha */
     out[0].nombre    = "SRAM interna";
     return 1;
 }
@@ -86,7 +87,6 @@ static void vm_buffer_init(void) {
 
     bpvm_mem_cfg_t cfg;
     cfg.objetivo       = CHIP_VM_OBJETIVO;       /* politica: cuanto quiere la VM (no se sube aunque quepa) */
-    cfg.margen         = CHIP_MARGEN_SISTEMA;    /* medido: lo que el sistema consume en marcha */
     cfg.vm_min         = CHIP_VM_MIN;
     cfg.reserva_bytes  = 0;                      /* la reserva con nombre es de la memoria exclusiva */
     cfg.reserva_nombre = NULL;

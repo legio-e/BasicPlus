@@ -35,7 +35,8 @@
 #include "pack_p4.h"           /* V5/H7: PACK_RAM_BYTES + s_pack_ram_base + bios_p4_get */
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "esp_heap_caps.h"   /* heap_caps_malloc: heap de la VM en PSRAM */
+#include "esp_heap_caps.h"
+#include "bpvm_mem.h"           /* V6/U6: el planificador comun de memoria */   /* heap_caps_malloc: heap de la VM en PSRAM */
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 
@@ -477,32 +478,68 @@ static void vm_sqlite_init_psram(void)
                (unsigned) ((sqlbytes - PACK_RAM_BYTES) / 1024u));
 }
 
+/* V6/U6.10 — LO QUE EL P4 OFRECE: la PSRAM, EXCLUSIVA de la VM, con un MARGEN de
+ * region: los 4 MiB que se dejan LIBRES para que LVGL los pida despues, on-demand.
+ * La reserva de SQLite no entra aqui: se asigna APARTE y antes (vm_sqlite_init_psram,
+ * alineada a pagina por el sello del pack), asi que el enumerador ya la ve gastada.
+ * `bytes` es el bloque contiguo mayor —lo unico que un malloc puede dar—, y por eso
+ * la escalera de -1 MiB de antes casi nunca tendra que bajar: el plan ya parte del
+ * contiguo, no del total. */
+static int p4_mem_regiones(bpvm_mem_region_t* out, int max, multi_heap_info_t* hi) {
+    if (max < 1) return 0;
+    heap_caps_get_info(hi, MALLOC_CAP_SPIRAM);
+    out[0].base      = NULL;
+    out[0].bytes     = hi->largest_free_block;
+    out[0].libre     = hi->total_free_bytes;
+    out[0].exclusiva = 1;
+    out[0].margen    = VM_PSRAM_DISPLAY_RESERVE;
+    out[0].nombre    = "PSRAM";
+    return 1;
+}
+
 static void vm_buffer_init_psram(void)
 {
-    /* Toda la PSRAM libre MENOS la reserva del display (que LVGL alocará luego,
-     * on-demand, dentro del VM). Reintenta bajando 1 MiB si la mayor no cabe por
-     * fragmentación, hasta un piso. */
-    size_t freeps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    size_t want = (freeps > VM_PSRAM_DISPLAY_RESERVE)
-                  ? (freeps - VM_PSRAM_DISPLAY_RESERVE) : 0u;
-    want &= ~((size_t) 4095u);   /* alineado al sector */
+    /* V6/U6.10 — ENUMERAR, PLANIFICAR, TOMAR: la misma regla que la Pico (U6.8) y
+     * el S3/C3 (U6.9), en su rama exclusiva. Antes: toda la PSRAM libre menos la
+     * reserva del display, reintentando -1 MiB si la mayor no cabia. Ahora el
+     * comun decide (test_mem lo cubre como «exclusiva con margen») y aqui queda
+     * TOMAR: alineado a pagina y con la escalera por si el asignador discrepa. */
+    multi_heap_info_t hi;
+    bpvm_mem_region_t reg[1];
+    int nreg = p4_mem_regiones(reg, 1, &hi);
+    log_printf("psram: libre %u KB | mayor %u KB | bloques: %u libres, %u usados",
+               (unsigned)(hi.total_free_bytes / 1024u), (unsigned)(hi.largest_free_block / 1024u),
+               (unsigned) hi.free_blocks, (unsigned) hi.allocated_blocks);
+
+    bpvm_mem_cfg_t cfg;
+    cfg.objetivo = 0;                 /* la VM toma todo lo que el plan deje */
+    cfg.vm_min   = VM_MEM_MIN;        /* piso si algo va mal */
+    cfg.reserva_bytes = 0; cfg.reserva_nombre = NULL;   /* SQLite va aparte, y ya esta tomada */
+
+    bpvm_mem_plan_t plan;
+    bpvm_mem_plan(reg, nreg, &cfg, &plan);
+    char linea[160];
+    bpvm_mem_plan_str(&plan, reg, &cfg, linea, sizeof linea);
+    log_printf("%s", linea);
+
+    size_t want = (plan.res == BPVM_MEM_OK) ? (plan.bytes & ~((size_t) 4095u)) : 0u;
+    s_vm_buffer = NULL;
     while (want >= VM_MEM_MIN) {
         s_vm_buffer = (uint8_t*) heap_caps_malloc(want, MALLOC_CAP_SPIRAM);
         if (s_vm_buffer != NULL) break;
         want -= 1024u * 1024u;
     }
     if (s_vm_buffer == NULL) {
-        ESP_LOGE(TAG, "PSRAM: no se pudo reservar el heap de la VM (free=%u KiB) - abort",
-                 (unsigned)(freeps / 1024u));
+        ESP_LOGE(TAG, "PSRAM: no se pudo reservar el heap de la VM (%s) - abort", linea);
         abort();
     }
     s_vm_buffer_size = (uint32_t) want;
     ESP_LOGI(TAG, "VM heap en PSRAM: %u KiB (reserva display %u KiB, PSRAM libre %u KiB) @ %p",
              (unsigned)(want / 1024u), (unsigned)(VM_PSRAM_DISPLAY_RESERVE / 1024u),
-             (unsigned)(freeps / 1024u), (void*) s_vm_buffer);
-    /* #329 — al log PERSISTENTE también, con el mismo formato que el S3: la
+             (unsigned)(hi.total_free_bytes / 1024u), (void*) s_vm_buffer);
+    /* #329 — al log PERSISTENTE tambien, con el mismo formato que el S3: la
      * consola se pierde al desconectar y las dos placas tienen que contar lo
-     * mismo para poder compararlas (que es justo lo que pide #328). Aquí además
+     * mismo para poder compararlas (que es justo lo que pide #328). Aqui ademas
      * interesa la DRAM INTERNA, no la PSRAM: el heap de la VM vive fuera, pero
      * littlefs y el wire siguen tirando de la interna. */
     log_printf("vm: heap %u KB en PSRAM @%p (PSRAM libre %u KB) | DRAM interna libre %u B (bloque mayor %u B)",

@@ -131,6 +131,7 @@ static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
         out[n].bytes = (top > base) ? (size_t)(top - base) : 0u;
         out[n].libre = out[n].bytes;          /* un solo bloque: lo contiguo ES el total */
         out[n].exclusiva = 0;
+        out[n].margen = VM_SRAM_MALLOC_MARGIN;   /* lo que se le deja a malloc, pegado a `end` */
         out[n].nombre = "SRAM interna";
         n++;
     }
@@ -138,6 +139,7 @@ static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
         out[n].base = (unsigned char*) (uintptr_t) PSRAM_XIP_BASE;
         out[n].bytes = out[n].libre = (size_t) board_desc()->psram_bytes;
         out[n].exclusiva = 1;
+        out[n].margen = 0;                       /* en la PSRAM la VM no comparte con nadie */
         out[n].nombre = "PSRAM";
         n++;
     }
@@ -1191,7 +1193,6 @@ static void vm_task(void* arg) {
 
         bpvm_mem_cfg_t cfg;
         cfg.objetivo       = 0;                       /* la Pico toma todo lo que el plan deje */
-        cfg.margen         = VM_SRAM_MALLOC_MARGIN;   /* lo que se le deja a malloc en la SRAM */
         cfg.vm_min         = VM_SRAM_MIN;
         cfg.reserva_bytes  = sqlbytes;
         cfg.reserva_nombre = "SQLite";

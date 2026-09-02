@@ -9,8 +9,9 @@
  * calcular o poner un número. U6.2 (Eduardo) enseñó que no eran dos filosofías
  * sino UNA regla aplicada a dos clases de memoria:
  *
- *     EXCLUSIVA  (PSRAM)  → todo, menos las reservas CON NOMBRE (SQLite, display)
- *     COMPARTIDA (SRAM)   → todo, menos un MARGEN para los demás inquilinos
+ *     EXCLUSIVA  (PSRAM)  → todo, menos la reserva CON NOMBRE delante (SQLite) y el
+ *                           margen de la región (el display del P4)
+ *     COMPARTIDA (SRAM)   → todo lo contiguo, menos el margen de la región (malloc/RTOS)
  *
  * Y U6.6 fijó las tres capas: la FAMILIA enumera lo que HAY (en marcha, porque una
  * misma imagen va con PSRAM y sin ella), las CONSTANTES de la imagen dicen lo que
@@ -23,7 +24,7 @@
  * ─── Cómo se usa ─────────────────────────────────────────────────────────────
  *
  *   bpvm_mem_region_t r[2]; int n = mi_familia_enumera(r, 2);   // qué hay
- *   bpvm_mem_cfg_t    cfg = { .objetivo=..., .margen=..., .vm_min=... };
+ *   bpvm_mem_cfg_t    cfg = { .objetivo=..., .vm_min=... };   // el margen va en la region
  *   bpvm_mem_plan_t   p;
  *   bpvm_mem_plan(r, n, &cfg, &p);                                // cuánto y de dónde
  *   // la familia TOMA p.bytes de r[p.idx] como sepa (puntero o malloc), y loguea
@@ -44,13 +45,17 @@ typedef struct {
     size_t         bytes;    /* lo CONTIGUO utilizable (en heap_caps: el bloque mayor) */
     size_t         libre;    /* lo libre en total en esa bolsa (>= bytes); de aquí sale el margen */
     int            exclusiva;/* 1 = nadie más asigna aquí (PSRAM); 0 = compartida con malloc/RTOS */
+    size_t         margen;   /* lo que en ESTA memoria se deja a los demás inquilinos: malloc/RTOS
+                              * en la compartida (MEDIDO: 26564 el S3, 17588 el C3, 64 KB la Pico),
+                              * el display en la PSRAM del P4 (4 MiB para LVGL). 0 = nada. El margen
+                              * es de la región y no de la configuración porque cada memoria tiene
+                              * inquilinos distintos: la Metro deja 64 KB en su SRAM y nada en su PSRAM. */
     const char*    nombre;   /* "PSRAM", "SRAM interna"… para el log */
 } bpvm_mem_region_t;
 
 /* Lo que la IMAGEN sabe (chip_cfg.h) y lo que el ENV pide. */
 typedef struct {
     size_t objetivo;         /* cuánto QUIERE la VM; 0 = todo lo que se pueda */
-    size_t margen;           /* lo que se le deja al sistema en memoria COMPARTIDA (medido) */
     size_t vm_min;           /* por debajo de esto no hay VM útil: no se arranca a medias */
     size_t reserva_bytes;    /* reserva CON NOMBRE delante de la memoria EXCLUSIVA (SQLite); 0 = ninguna */
     const char* reserva_nombre;

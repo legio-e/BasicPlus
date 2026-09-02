@@ -21,8 +21,8 @@ static int fallos = 0;
 
 static void caso_c3(void) {
     /* heap: libre 280032 | mayor 139264   (P1.C3.3, y otra vez el 2-sep) */
-    bpvm_mem_region_t r[1] = {{ NULL, 139264, 280032, 0, "SRAM interna" }};
-    bpvm_mem_cfg_t cfg = { 128u * 1024u, 17588, 64u * 1024u, 0, NULL };
+    bpvm_mem_region_t r[1] = {{ NULL, 139264, 280032, 0, 17588, "SRAM interna" }};
+    bpvm_mem_cfg_t cfg = { 128u * 1024u, 64u * 1024u, 0, NULL };
     bpvm_mem_plan_t p; char s[160];
     bpvm_mem_plan(r, 1, &cfg, &p);
     bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
@@ -34,8 +34,8 @@ static void caso_c3(void) {
 
 static void caso_s3(void) {
     /* vm: ... DRAM interna libre 338368 (bloque mayor 270336)   (U6.4) */
-    bpvm_mem_region_t r[1] = {{ NULL, 270336, 338368, 0, "SRAM interna" }};
-    bpvm_mem_cfg_t cfg = { 160u * 1024u, 26564, 64u * 1024u, 0, NULL };
+    bpvm_mem_region_t r[1] = {{ NULL, 270336, 338368, 0, 26564, "SRAM interna" }};
+    bpvm_mem_cfg_t cfg = { 160u * 1024u, 64u * 1024u, 0, NULL };
     bpvm_mem_plan_t p;
     bpvm_mem_plan(r, 1, &cfg, &p);
     CHECK(p.res == BPVM_MEM_OK && p.bytes == 163840,          "S3: 160 KB, el objetivo (%u)", (unsigned) p.bytes);
@@ -47,10 +47,10 @@ static void caso_metro_psram(void) {
     /* psram: 8 MB usable | bd: reservada (SQLite=2) -> 2048 KB | vm: heap en PSRAM 6 MB
      * Y la SRAM se ofrece TAMBIEN: el planificador debe preferir la exclusiva. */
     bpvm_mem_region_t r[2] = {
-        { (unsigned char*) 0x20014BF8, 431432, 431432, 0, "SRAM interna" },
-        { (unsigned char*) 0x11000000, 8u * 1024u * 1024u, 8u * 1024u * 1024u, 1, "PSRAM" },
+        { (unsigned char*) 0x20014BF8, 431432, 431432, 0, 65536, "SRAM interna" },
+        { (unsigned char*) 0x11000000, 8u * 1024u * 1024u, 8u * 1024u * 1024u, 1, 0, "PSRAM" },
     };
-    bpvm_mem_cfg_t cfg = { 0, 65536, 64u * 1024u, 2u * 1024u * 1024u, "SQLite" };
+    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 2u * 1024u * 1024u, "SQLite" };
     bpvm_mem_plan_t p; char s[160];
     bpvm_mem_plan(r, 2, &cfg, &p);
     bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
@@ -64,8 +64,8 @@ static void caso_pico_sram(void) {
     /* vm: SRAM interna 357 KB ... libre para malloc: 64 KB   (Metro con psram=0, 31-ago)
      * La region es [end, PACK_RAM_SRAM_BASE) = 431432 B; el margen de 64 KB lo resta el plan.
      * 431432 - 65536 = 365896 = 357 KB, que es lo que la placa dice. Sin objetivo: todo. */
-    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20014BF8, 431432, 431432, 0, "SRAM interna" }};
-    bpvm_mem_cfg_t cfg = { 0, 65536, 64u * 1024u, 0, NULL };
+    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20014BF8, 431432, 431432, 0, 65536, "SRAM interna" }};
+    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 0, NULL };
     bpvm_mem_plan_t p;
     bpvm_mem_plan(r, 1, &cfg, &p);
     CHECK(p.res == BPVM_MEM_OK && p.bytes == 365896,           "Pico sin PSRAM: 365896 B = los 357 KB del log (%u)", (unsigned) p.bytes);
@@ -74,8 +74,8 @@ static void caso_pico_sram(void) {
 
 static void caso_suelo(void) {
     /* Una placa imaginaria con 90 KB contiguos y 40 KB de margen: quedan 50 < 64. */
-    bpvm_mem_region_t r[1] = {{ NULL, 90u * 1024u, 90u * 1024u, 0, "SRAM" }};
-    bpvm_mem_cfg_t cfg = { 128u * 1024u, 40u * 1024u, 64u * 1024u, 0, NULL };
+    bpvm_mem_region_t r[1] = {{ NULL, 90u * 1024u, 90u * 1024u, 0, 40u * 1024u, "SRAM" }};
+    bpvm_mem_cfg_t cfg = { 128u * 1024u, 64u * 1024u, 0, NULL };
     bpvm_mem_plan_t p; char s[160];
     bpvm_mem_res_t res = bpvm_mem_plan(r, 1, &cfg, &p);
     bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
@@ -84,9 +84,22 @@ static void caso_suelo(void) {
     CHECK(bpvm_mem_plan(NULL, 0, &cfg, &p) == BPVM_MEM_SIN_REGIONES, "sin regiones: se dice, no se cae");
 }
 
+static void caso_exclusiva_con_margen(void) {
+    /* La forma del P4: PSRAM exclusiva, SQLite aparte (no entra aqui) y 4 MiB que se
+     * dejan LIBRES para el display. Numeros redondos: el fixture medido se anade
+     * cuando el P4 de la mesa de el suyo (los medidos no se sustituyen, se suman). */
+    bpvm_mem_region_t r[1] = {{ NULL, 30u * 1024u * 1024u, 30u * 1024u * 1024u, 1, 4u * 1024u * 1024u, "PSRAM" }};
+    bpvm_mem_cfg_t cfg = { 0, 2u * 1024u * 1024u, 0, NULL };
+    bpvm_mem_plan_t p; char s[160];
+    bpvm_mem_plan(r, 1, &cfg, &p);
+    bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
+    CHECK(p.bytes == 26u * 1024u * 1024u,                      "exclusiva con margen: 30 - 4 = 26 MiB (%u KB)", (unsigned)(p.bytes / 1024u));
+    CHECK(!strcmp(p.limita, "el margen de la región"),         "exclusiva con margen: lo dice: %s", s);
+}
+
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo();
+    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }
