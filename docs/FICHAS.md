@@ -1329,6 +1329,51 @@ función.** Queda el STM32, que es el que devuelve un array estático y conserva
 enlazador.
 
 
+##### 🔴 `#466` — `/lib` se queda RANCIO: el instalador de la stdlib sólo copia «si falta» (abierta 2-sep)
+
+Salió en el repaso de la Metro con la imagen final. La memoria, byte a byte; pero el arranque:
+
+```
+lib: /lib/I2c.mod NO es el de esta imagen (4153 B en FS, 3276 embebido) - ¿rancio de otro firmware, o subido por ti?
+lib: /lib/Math.mod NO es el de esta imagen (2320 B en FS, 1708 embebido) …
+      … y Gpio, Spi, Uart, Pulse, Pwm, Rtc, Adc, Wdt, Timer, IO, Neopixel — 13 módulos — y /app/Hello.mod
+```
+
+**Qué pasa.** El instalador (`esp32_mods_install` y su gemelo de la Pico) copia la stdlib embebida
+a `/lib` **sólo si el fichero no existe**. Una placa que pobló `/lib` con una imagen vieja —o con
+el IDE subiendo el dist de V5— se queda con esa stdlib **para siempre**, imagen tras imagen, y el
+aviso es la única señal. Es [[stdlib-mod-version-skew-oo-device]] en su forma más silenciosa: el
+skew no es entre repo y dist, es entre **la imagen y su propio `/lib`**.
+
+**Consecuencia práctica, hoy**: un programa que importe `Math` en esta Metro recibe el `Math`
+**sin** `clamp`/`wrap`/`hypot`/`remap`; el `Rtc`, el `Wdt`, el `IO` que reciben son los de hace
+semanas. `MathRango.bp` fallaría en ella y funcionaría en el host: **rompe el invariante**.
+
+**Por qué no se vio antes**: en el S3 apareció con UN módulo (`Pico.mod`, `U6.9`) y se arregló a
+mano; en la Metro son 13 porque su `/lib` es de antes de que la stdlib se recompilara con el
+compilador nuevo. Y mi filtro del log de esta mañana (`psram|vm|bd`) me lo escondió dos veces.
+
+**Los tamaños dan una pista**: 9 módulos son exactamente **877 B** más grandes en el FS que
+embebidos (I2c, Spi, Uart, Rtc, Wdt, Timer, IO, Neopixel…) y 5 son **4 B** más pequeños (Gpio,
+Pulse, Pwm, Adc, Hello). Dos generaciones distintas de `.mod` conviviendo en el mismo `/lib`.
+
+### La forma del arreglo (por decidir con Eduardo)
+
+- **A mano, hoy**: borrar los 14 por el wire y rearrancar; el instalador repone los de la imagen.
+  Es lo que se hizo en el S3. No escala: hay que acordarse, placa a placa.
+- **De raíz**: que el instalador **refresque `/lib` cuando no coincide con lo embebido**, en vez
+  de avisar. La duda del aviso —*«¿rancio de otro firmware, o subido por ti?»*— la resolvió Eduardo
+  el 31-ago al fijar la precedencia: **los overrides del usuario van a `/app`, que gana a `/lib`**.
+  Luego un `/lib` distinto del embebido es siempre rancio, y se puede reponer sin miedo. El coste
+  es un `PUT` de cada módulo desactualizado en el primer arranque de una imagen nueva (~50 KB una
+  vez), y se dice en el log: *«lib: X.mod actualizado (4153 → 3276 B)»*.
+
+⚠️ Y una segunda cosa del mismo log: **`boot: causa del reset = WATCHDOG` sale también tras un
+`RESET` por el wire** (la Pico reinicia vía watchdog). El log no distingue un cuelgue de un
+reinicio pedido — la misma clase que [[aviso-que-no-distingue-no-evento-de-fallo]]. Menor, pero
+anotado.
+
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
