@@ -45,10 +45,14 @@ la imagen final `U6.10` en su placa (P4, Metro, Pico 2, C3) y tres `/lib` limpia
    planificado; `test_mem` 22/22; los dos `.elf` compilados headless con 0 errores. **Falta
    grabarlas** (Eduardo, desde CubeIDE) y leer su línea `vm:` — y revisar su `/lib`, que su
    instalador no avisa del rancio.
-4. **`#466` de raíz**, por decidir con Eduardo: que el IDE **no suba stdlib a `/lib`** (sólo módulos
-   de la app, a `/app`) y que el instalador **refresque `/lib` cuando no coincida con lo embebido**.
-   Mientras no esté, cada Run desde el IDE de V5 vuelve a ensuciar las placas limpiadas hoy. El C3
-   es el control que lo demuestra: el único que el IDE nunca tocó, el único limpio de origen.
+4. **`#466` de raíz — ANALIZADO en el código; decisión de Eduardo pendiente** (mecanismo, tres
+   opciones y recomendación, en la ficha): el IDE sube a `/lib` las deps que están en
+   `EMBEDDED_CORE_MODS` (+Gui) con content-check por CRC — a propósito, por un bug de vtables del
+   13-jun; los tres instaladores copian «si falta»; y el aviso de `#422` sólo vive en la Pico: en
+   el ESP32 se perdió al regenerar los blobs (`#446`: iba en un fichero GENERADO) y el STM32 nunca
+   lo tuvo. Recomendación **A**: el IDE deja `/lib` en paz (sus deps de stdlib a `/app/<proj>`, que
+   gana) y un helper común refresca `/lib` cuando no coincide con lo embebido. Mientras no esté,
+   cada Run desde el IDE vuelve a ensuciar las placas limpiadas hoy.
 
 La matriz completa, con lo hecho, está justo debajo.
 
@@ -143,7 +147,8 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
 
 - El **C3** se quedó con `log=1` en su ENV (se puso para medir). Devolverlo a `0`.
 - ✅ **El S3 ya está limpio** (2-sep, por el wire): fuera `/app/Core.mod` y el `/lib/Pico.mod` de
-  V5; el arranque reinstala el `Pico.mod` de la imagen y el aviso ya no sale.
+  V5; el arranque reinstala el `Pico.mod` de la imagen (⚠️ corregido 2-sep: el ESP32 NO tiene el
+  aviso de `#422` — se perdió en `#446`; ver `#466`).
 - ✅ El `/app/Core.mod` del resto de placas: la Metro y la Pico 2 no lo tenían; el del P4, fuera
   el 2-sep al retomar.
 

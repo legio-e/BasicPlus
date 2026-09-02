@@ -1284,7 +1284,8 @@ falta la placa**: para ver su `psram: libre | mayor` y fijar el fixture con lo m
 - Los **cinco builds** compilan (host, Pico, S3, C3, P4; los dos STM32 lo recogen solos).
 - **Limpieza del S3** (pedida por Eduardo): `DEL /app/Core.mod` y `DEL /lib/Pico.mod` por el wire;
   al rearrancar, la stdlib embebida reinstala **el `Pico.mod` de la imagen** (2 070 B —el mismo
-  tamaño que el de V5, por eso el `LIST` engaña; el aviso *«NO es el de esta imagen»* ya no sale,
+  tamaño que el de V5, por eso el `LIST` engaña; ⚠️ *corregido el 2-sep*: aquí NO pudo haber
+  aviso —el ESP32 perdió el de `#422` al regenerar los blobs, ver `#466`—,
   y `bpstdlib/Pico.mod` mide 2 070). 27 → 26 ficheros.
 
 ### 🐛 Y el P4, en la mesa, cazó un fallo del modelo — con números
@@ -1404,7 +1405,51 @@ limpio, 15/15. Luego «el IDE de V5 ensucia `/lib`» no es *siempre*: o las depe
 instalador pobló `/lib` con los blobs de V5 (y el «sólo si falta» los conservó), o depende de
 algo que no he mirado (el `crc:-1` del `LIST`, qué acción del IDE). Se contesta en el código del
 IDE y del instalador —a dónde escribe cada uno—, no adivinando; es el primer paso del arreglo de
-raíz. Lo que no cambia: el `/lib` rancio existe, la placa lo avisa y no lo repone.
+raíz. Lo que no cambia: el `/lib` rancio existe y ninguna placa lo repone.
+
+### 🔍 El mecanismo, leído en el código (2-sep, al retomar) — ya no hay que adivinar
+
+**Quién escribe en `/lib`: el IDE, en cada Run, y a propósito.** `FrmMain` resuelve las
+dependencias del programa y clasifica como «stdlib core» las que están en `EMBEDDED_CORE_MODS`
+(Math, IO, Gpio, I2c, Spi, Uart, Pulse, Pwm, Pico, Rtc, Adc, Wdt, Timer; `Core` entró en `#463`)
+más Gui: ésas van a `/lib/<X>.mod`; el resto (Json, Collections, Str…) a `/app/<proj>`. Y
+`PicoExplorer.putIfChanged` las sube **si el CRC del device no coincide con el local** (DEL +
+PUT). El mecanismo es el mismo en el tag `v5.0` y en el repo de hoy. La razón está escrita al
+lado (13-jun): un blob embebido de un frontend ANTERIOR no casaba en las vtables con la app
+recién compilada → `INVOKE_VIRTUAL slot N no resoluble`; desde entonces `/lib` pasa por el mismo
+content-check que la app, «auto-curando blobs embebidos rancios sin reflashear».
+
+Eso explica **la matriz entera**: la Metro y la Pico 2 corrieron samples de hardware desde el IDE
+de V5 → sus deps (I2c, Spi, Uart, Rtc…) aterrizaron en `/lib` con los blobs de V5, y el instalador
+(«sólo si falta») los conservó imagen tras imagen. El P4 corrió `JsonDemo` con el IDE de V5, cuyas
+deps (Json, y entonces Core) no eran «core» → a `/app`; su `/lib` no lo tocó nadie desde que su FS
+se repobló. El C3 nunca pasó por el IDE. **Dos escritores de `/lib` con criterios opuestos**: la
+imagen dice «`/lib` es lo embebido» y el IDE dice «`/lib` es contra lo que compiló la app». Quien
+escribe el último, gana — y ninguno de los dos se entera del otro.
+
+**Quién avisa: sólo la Pico.** Los tres instaladores copian si falta (`pico/main.c`,
+`esp32_mods.c`, `stm32_mods.c`), pero el chivato de `#422` («NO es el de esta imagen», tamaño y
+luego CRC) hoy sólo existe en `pico/main.c`. 🐛 **En el ESP32 lo hubo y se PERDIÓ**: `#422`
+(16-ago) lo añadió editando a mano `esp32_mods.c`, que es GENERADO, y dos días después `#446`
+(18-ago) regeneró los blobs desde `regen_esp32_mods.sh` —que nunca lo tuvo— y se lo llevó por
+delante sin que nadie lo viera (`git log -S` lo cuenta en un segundo; [[generado-parcheado-a-mano]]
+en carne propia). El STM32 nunca lo tuvo. **Corrección** a lo dicho más arriba y en `U6.10`: el S3
+no pudo avisar de su `Pico.mod` de V5 — en las ESP32 y las STM32 el `/lib` rancio es hoy MUDO.
+
+### La decisión (Eduardo) — con recomendación
+
+- **A (recomendada)**: el IDE **deja de escribir en `/lib`**: las deps de stdlib contra las que
+  compiló van a `/app/<proj>` como cualquier otra dep. Conserva la protección del 13-jun (la app
+  corre contra lo que compiló, porque `/app` gana a `/lib` — la precedencia que fijó Eduardo el
+  31-ago) y cumple `CLAUDE.md` («el IDE NO retransmite la stdlib»). Y el instalador **refresca
+  `/lib` cuando no coincide con lo embebido** (tamaño, luego CRC), en un helper COMÚN de `src/`
+  que llaman los tres generados — no dentro de los generados, que es donde `#422` murió. Coste:
+  módulos de stdlib duplicados bajo `/app` por proyecto (Gui, 44 KB, es el grande; el FS lo
+  aguanta: P4 7 MB, Pico 1 MB al 24 %).
+- **B**: el IDE sigue en `/lib` y el instalador refresca → se pelean: cada arranque repone, cada
+  Run vuelve a subir (~50 KB por el wire). No.
+- **C**: dejarlo y sólo avisar (reponer `#422` en las tres, en el helper común) → el invariante
+  sigue rompiéndose, ahora con ruido. Es el mínimo si A se aplaza, y A lo incluye.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
