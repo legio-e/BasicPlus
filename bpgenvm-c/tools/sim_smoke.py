@@ -210,6 +210,28 @@ def main():
         r = w.call("STAT", path="/app/big.bin")
         check(r.get("code") == "NOT_FOUND", "STAT del borrado → NOT_FOUND")
 
+        # #466 — STAT por NOMBRE de módulo (+ magic): la pregunta del IDE por cada
+        # dependencia, contestada por el resolvedor del RUN (proyecto → /app → /lib).
+        w.call("MKDIR", path="/lib")
+        w.call("MKDIR", path="/app/proj")
+        w.call_bulk("PUT", b"MOD7" + bytes(32), path="/lib/Fake.mod")
+        w.call_bulk("PUT", b"MOD6" + bytes([1]) * 32, path="/app/proj/Fake.mod")
+        w.call_bulk("PUT", b"xyz", path="/app/proj/raw.bin")
+        r = w.call("STAT", name="Fake.mod", crc=True)
+        check(r.get("path") == "/lib/Fake.mod" and r.get("magic") == "MOD7" and r.get("size") == 36,
+              "STAT por nombre → lo encuentra en /lib, con path, magic y tamaño")
+        check(r.get("crc", 0) not in (0, -1), "STAT por nombre → trae el crc si se pide")
+        r = w.call("STAT", name="Fake.mod", base="/app/proj")
+        check(r.get("path") == "/app/proj/Fake.mod" and r.get("magic") == "MOD6",
+              "STAT por nombre con base → el del proyecto PRIMERO (el orden del RUN)")
+        r = w.call("STAT", name="Nadie.mod")
+        check(r.get("code") == "NOT_FOUND", "STAT por nombre de lo que no hay → NOT_FOUND")
+        r = w.call("STAT", path="/app/proj/raw.bin")
+        check(r.get("size") == 3 and "magic" not in r, "STAT de lo que no es módulo → sin magic")
+        for p in ("/lib/Fake.mod", "/app/proj/Fake.mod", "/app/proj/raw.bin"):
+            w.call("DEL", path=p)
+        w.call("RMDIR", path="/app/proj")
+
         # 7. RUN: la VM de verdad ejecutando desde el FS del sim
         mod = build_hello(tmp)
         if mod is None:

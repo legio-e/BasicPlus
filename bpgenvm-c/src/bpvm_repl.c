@@ -11,6 +11,7 @@
 #include "bpvm_wire_v1.h"
 #include "bpvm_log.h"
 #include "bpvm_fs.h"
+#include "bpvm_entry.h"     /* #466: bpvm_entry_resolve — STAT por NOMBRE de módulo */
 #include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
 #include "bpvm_rtc.h"
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
@@ -139,21 +140,61 @@ static void repl_del(long id, const json_obj_t* obj) {
 }
 
 static void repl_stat(long id, const json_obj_t* obj) {
-    char path[64];
-    char buf[192];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta path");
-        return;
-    }
+    char path[96];
+    char buf[256];
+    int por_nombre = 0;
     uint32_t size = 0;
-    if (bpvm_fs_stat(path, &size) != 0) {
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        /* #466 — STAT por NOMBRE de módulo: «¿tienes Math.mod, donde sea?». Es
+         * la pregunta que el IDE hace por cada dependencia antes de subirla, y
+         * la contesta EL MISMO resolvedor que usa el RUN (proyecto → literal →
+         * /app → /lib → /sys): así el IDE no lleva un gemelo del orden de
+         * búsqueda, que es como se desincronizó #463. `base` (opcional) es la
+         * carpeta del proyecto que se va a ejecutar; vale sólo para esta
+         * pregunta y se restaura. */
+        char name[64];
+        if (json_get_str(obj, "name", name, sizeof(name)) < 0) {
+            wire_v1_send_error(id, "INVALID_PARAM", "falta path o name");
+            return;
+        }
+        char base[96], antes[96];
+        int con_base = (json_get_str(obj, "base", base, sizeof(base)) >= 0);
+        if (con_base) {
+            snprintf(antes, sizeof antes, "%s", bpvm_fs_basedir());
+            bpvm_fs_set_basedir(base);
+        }
+        int r = bpvm_entry_resolve(name, path, sizeof(path), &size);
+        if (con_base) bpvm_fs_set_basedir(antes);
+        if (r != 0) {
+            wire_v1_send_error(id, "NOT_FOUND", "no existe");
+            return;
+        }
+        por_nombre = 1;
+    } else if (bpvm_fs_stat(path, &size) != 0) {
         wire_v1_send_error(id, "NOT_FOUND", "no existe");
         return;
     }
     int off = wire_v1_msg_begin(buf, sizeof buf, 0, "STAT_REPLY", id);
     if (off < 0) goto err;
+    if (por_nombre) {           /* DÓNDE lo tiene: si hay que subirlo, se sube ahí */
+        off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "path", path);
+        if (off < 0) goto err;
+    }
     off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "size", (long) size);
     if (off < 0) goto err;
+    /* #466 — la VERSIÓN de un módulo es su MAGIC ("MOD6", "MOD7"): 4 bytes,
+     * sin cargar nada. Sólo si lo parece; lo que no empieza por "MOD" no lo
+     * lleva. Es lo que el IDE compara para decidir si sube una dependencia:
+     * la del micro se queda si es igual o más nueva. */
+    {
+        uint8_t m[4];
+        if (bpvm_fs_read_at(path, 0, m, 4) == 4 && m[0] == 'M' && m[1] == 'O' && m[2] == 'D') {
+            char magic[5];
+            memcpy(magic, m, 4); magic[4] = 0;
+            off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "magic", magic);
+            if (off < 0) goto err;
+        }
+    }
     /* #398 — el CRC solo si se pide: es lo que antes calculaba el LIST para
      * TODOS los ficheros en cada refresco del árbol. */
     if (json_get_bool(obj, "crc", 0)) {

@@ -267,13 +267,32 @@ Reply:
 
 #### `STAT` (request)
 
-Metadata de un fichero individual.
+Metadata de un fichero individual — por **ruta**, o (`#466`) por **nombre de módulo**.
 
 Request: `{"type":"STAT","id":N,"path":"/app/Hello.mod"}`
 
-Reply: `{"type":"STAT_REPLY","id":N,"size":3519,"isDir":false,"mtime":0}`
+Reply: `{"type":"STAT_REPLY","id":N,"size":3519,"magic":"MOD7","isDir":false,"mtime":0}`
 
 Error si no existe: `{"type":"ERROR","id":N,"code":"NOT_FOUND",...}`
+
+- `crc` sólo si se pide (`"crc":true`, #398): calcularlo para todo el FS en cada listado era el
+  99 % del refresco del árbol.
+- `magic` (`#466`): los 4 primeros bytes cuando parecen un módulo (`"MOD6"`, `"MOD7"`). Es la
+  **versión** del módulo — la única que hay: los ficheros no tienen fecha, tienen versión y CRC.
+  Un fichero que no empieza por `MOD` no lo lleva.
+
+**Por nombre** (`#466`) — *«¿tienes `Math.mod`, donde sea?»*, la pregunta que el IDE hace por cada
+dependencia antes de subirla:
+
+Request: `{"type":"STAT","id":N,"name":"Math.mod","base":"/app/proj","crc":true}`
+
+Reply: `{"type":"STAT_REPLY","id":N,"path":"/lib/Math.mod","size":1708,"magic":"MOD7","crc":123456,"isDir":false,"mtime":0}`
+
+El device lo resuelve con **su propio resolvedor**, el del RUN (`base` → literal → `/app` → `/lib`
+→ `/sys`), para que el IDE no lleve una copia del orden de búsqueda. `base` es opcional: la carpeta
+del proyecto que se va a ejecutar. `path` dice dónde lo tiene — si hay que reemplazarlo, se
+reemplaza ahí. La regla del IDE con esta respuesta: se sube si no está (`NOT_FOUND`), si su `magic`
+es anterior, o si es el mismo y el `crc` es distinto; si el del device es más nuevo, no se sube.
 
 #### `GET` (request, reply con bulk)
 
