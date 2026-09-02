@@ -1208,8 +1208,28 @@ INFO vmHeapBytes 65536 / vmStackBytes 65536
 
 Es exactamente lo que `test_mem` fija para el caso C3, y lo que `U6.7` había verificado ayer con
 su propia aritmética: **sin cambio de comportamiento, y una regla menos** (la copia de la rama
-compartida que vivía aquí). S3, C3 y P4 compilan. **El S3 queda por reflashear**: su predicción
-sigue siendo `160 KB, techo 264 por el bloque contiguo`.
+compartida que vivía aquí). S3, C3 y P4 compilan.
+
+### ✅ Y en el S3 (reflasheado el 2-sep), con una sorpresa buena
+
+```
+heap: libre 346064 | mayor 278528 | bloques: 7 libres, 42 usados | usado 17756
+vm: 160 KB en SRAM interna (objetivo 160, techo 272 por el bloque contiguo)
+vm: DRAM interna libre 346064->182220 B (bloque mayor 278528->120832 B) | margen 26564
+INFO vmHeapBytes 98304 / vmStackBytes 65536
+```
+
+La **estructura** de la predicción de `U6.7` se cumple exacta —manda el bloque contiguo, 160 KB =
+objetivo, reparto 96/64 sin moverse— pero el **nivel** subió respecto a la imagen del 30-ago con la
+que se midió `U6.4`: **+7 696 B libres (338 368 → 346 064) y +8 192 B contiguos (270 336 →
+278 528)**, techo 272 KB en vez de 264. Es la RAM que la unificación liberó en el S3 —`U3.23` quitó
+el `dir_snapshot_t` de 6 KB, `#461` el resto— **medida por primera vez en su placa**. Y el S3
+también tiene el espacio libre en **7 trozos**, partidos por 42 reservas del IDF (17 756 B): la
+misma forma que el C3, con más reservas por los dos núcleos.
+
+📌 El fixture del S3 en `test_mem` conserva los números del 30-ago a propósito: son medidos y
+válidos, y el planificador no depende del nivel — cuando se remida el margen con la imagen nueva
+(`tools/medir_margen.ps1`) se añade el caso, no se sustituye.
 
 📌 Con esto, de las cinco placas **tres deciden su memoria con la misma función** (Pico, S3, C3)
 y las otras dos (P4, STM32) tienen su hueco descrito en `U6.8`.

@@ -45,7 +45,7 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
    2-sep)**: `bpvm_mem` común + `test-mem` (14/14 contra las placas medidas) + la Pico
    enumerando; verificado en la Metro en los dos modos, byte a byte con las líneas de ayer.
    ✅ **S3 y C3 HECHOS (`U6.9`, 2-sep)**: `vm_buffer_init` queda en enumerar (`heap_caps_get_info`)
-   y tomar (malloc + escalera); verificado en el C3 con los mismos números que `U6.7`. **Siguen el
+   y tomar (malloc + escalera); verificado en el C3 **y en el S3** con los números esperados. **Siguen el
    P4** (exclusiva con reserva del display: su `vm_buffer_init_psram` es la rama exclusiva del
    planificador) y el **STM32 el último**: su techo lo comprueba el ENLAZADOR y eso es más fuerte
    que cualquier comprobación en marcha — su enumerador devuelve el array estático y el aserto se
@@ -73,9 +73,10 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
   es un error: es la VM escribiendo o ejecutando memoria del IDF. Están listadas en `V6_IDEAS`.
 - 🟡 **El S3 corre una imagen del 30-ago.** Su margen se midió con ella; si se reflashea conviene
   repetir la medida, que ahora cuesta un minuto.
-- 🟡 **El S3 no lleva la imagen del repo** (tiene la del 30-ago, sin `U6.7`). El C3 (`U6.7`) y la
-  Metro (`U6.8`) ya sí, ambos el 2-sep. Reflashear el S3 antes de medir nada con él — y al
-  hacerlo, contrastar la predicción de `U6.7` (160 KB, techo 264 por el bloque contiguo).
+- ✅ **Las tres ESP32 y la Metro llevan la imagen del repo** (2-sep): C3 y S3 con `U6.9`, Metro
+  con `U6.8`. El S3 subió a 346 064 B libres / 278 528 contiguos con la imagen nueva (+7,7 KB:
+  lo que liberó la unificación); si se remide su margen, añadir el caso a `test_mem`, no
+  sustituir el del 30-ago.
 - ℹ️ **Grabar la Pico/Metro sin dedo**: `BOOTSEL` por el wire la abre como disco `RP2350` y se
   copia el UF2 (`bpgenvm-c/pico/build/bpvm_pico.uf2`). El `RESET` por el wire corta el puerto
   antes de contestar — la excepción al leer la respuesta es normal.
