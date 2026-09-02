@@ -27,6 +27,50 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (3-sep) — cerrar `U6`; luego `U4` y `U5`; después `P1` (el C6 sin pantalla) y `P2`
+
+**El orden lo fijó Eduardo al cerrar el 2-sep:** *«Terminaremos U6, U4 y U5. Después podemos hacer
+P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
+
+### Lo que quedó hecho el 2-sep (segunda mitad, tras la pausa por tokens)
+- ✅ **P4 repasado**: `/lib` limpio de por sí (15/15), `/app/Core.mod` fuera con su OK.
+- ✅ **`U6.11`**: el STM32 al planificador — Nucleo y Discovery compilan headless, `test_mem`
+  22/22. **Las cinco familias deciden su memoria con `bpvm_mem_plan()`.**
+- ✅ **`#466` en tres pasos**, con la regla de Eduardo (*el SO repone `/lib` por versión y CRC; el
+  IDE pregunta a la placa por cada dependencia y sólo sube lo que falta o es más viejo*): `STAT`
+  por nombre + `magic`; `src/bpvm_mods.c` llamado por los tres instaladores (`test-mods` 16/16);
+  el IDE con `statModule`, sin `EMBEDDED_CORE_MODS` (`StatModuleSmoke` 5/5). Y de regalo: **el
+  CRC del wire salía negativo** (bit 31, `long` de 32 bits) y el IDE re-subía la mitad de los
+  ficheros idénticos — arreglado en los dos lados. Seis builds verdes, paridad 38/0/0,
+  `sim-smoke` 45/45, fat-jar del IDE reconstruido. Commits `1a7c1924`, `f1a9c23b`, `0e1a425b`.
+
+### En este orden
+1. **`#466` paso (4), en placa**: Metro o Pico 2 → `BOOTSEL` por el wire con
+   `pico/build/bpvm_pico.uf2` (19:38); en el `LOG_DUMP` debe salir `lib: … repuesto` para lo que
+   quede rancio (o nada: hoy están limpias); luego un Run desde el IDE nuevo, que debe decir
+   `[Explorer] X.mod: ya en la placa, idéntico — no se sube`. **Cierra `#466`.**
+2. **S3 (COM9)**: regrabar (`idf.py flash`; el DTR/RTS del puente, en `tools/medir_margen.ps1`) y
+   mirar su `/lib` con el instalador nuevo.
+3. **Nucleo y Discovery**: las graba Eduardo desde CubeIDE (`Debug/*.elf` de las 19:38–19:39); leer
+   `vm: 512 KB en SRAM estática (todo lo que deja la región)` e INFO 393216/131072, y su `/lib`.
+   **Cierra `U6`** (la ficha padre pasa a ✅ con eso).
+4. **`U4`** — la stdlib embebida en UN formato de blobs (hoy 16 ficheros en la Pico, uno en ESP32 y
+   STM32). El instalador ya es común; queda el empaquetado y un generador único.
+5. **`U5`** — la tabla de handles a un módulo propio (hoy repartida en cinco ficheros).
+6. **`P1.C6`** — el ESP32-C6 **sin pantalla**, por el camino del C3: `esp32c6/` con su `chip_cfg.h`
+   (constantes MEDIDAS con `medir_margen.ps1`), transporte, `board_id`, partición. Compilar antes
+   de entregar (IDF en `C:\esp\v6.0.1`).
+7. **`P2`** — la pantalla SPI del C6 con LVGL empotrado (decisión del 26-ago): `flush_cb`, tick,
+   buffer parcial, y táctil si lo hay.
+
+### Riesgos que acechan
+- **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el
+  instalador nuevo la REPONE al siguiente arranque (misma versión, CRC distinto). Sólo se pelean si
+  se mezclan versiones; el dist no se toca.
+- **IDE nuevo contra firmware viejo** (sin `STAT` por nombre): `statModule` devuelve null y el IDE
+  sube como siempre; el CRC con signo lo normaliza `crcSinSigno`.
+- **El S3 y las dos STM32 llevan imágenes anteriores a todo esto** hasta que se graben.
+
 ## ⏭️ AL RETOMAR (2-sep, 2ª pausa — por límite de tokens) — el RESTO de placas
 
 El repaso general quedó **a medias por la mitad buena**: cuatro de cinco familias verificadas con

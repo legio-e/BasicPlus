@@ -1876,19 +1876,25 @@ tocar y cómo se comprueba.
 
 | hito | qué | cerrado |
 |---|---|---|
-| **U1** | lo que **no exige decidir nada** — 4 tareas, una por sesión corta | abierto 23-ago |
-| **U2** | el **transporte** (wire): entender los gemelos falsos y darle contrato | abierto 23-ago |
-| **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | abierto 23-ago |
+| **U1** | lo que **no exige decidir nada** — 4 tareas, una por sesión corta | ✅ 23-ago |
+| **U2** | el **transporte** (wire): entender los gemelos falsos y darle contrato | ✅ 26-ago |
+| **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | ✅ 31-ago (y el simulador, `U3.24`) |
 | **U4** | la **stdlib embebida**: un solo formato de blobs | abierto 23-ago |
 | **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
-| **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | abierto 28-ago |
+| **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | 🟡 código en las 5 familias (2-sep); faltan las STM32 en placa |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
-| **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | abierto 21-ago |
+| **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
 | **L1** | **lenguaje y compilador** | abierto 23-ago |
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
-| **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | abierto 23-ago |
+| **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | 🟡 C3 ✅ (31-ago–2-sep); C6 pendiente, **sin pantalla** |
 | **P2** | **pantallas SPI** — *después de P1* | abierto 23-ago |
+
+📌 **Orden acordado el 2-sep, al cerrar** (Eduardo): *«Terminaremos U6, U4 y U5. Después podemos
+hacer P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»* Estado ese día: U1, U2, U3 y N1
+cerrados; P1.C3 hecho; U6 en código en las cinco familias (faltan las STM32 en placa); `#466`
+hecho salvo la comprobación en placa. El C6 entra **sin pantalla** por el camino del C3, y la
+pantalla es P2.
 
 📌 **U1–U5 no bloquean a los demás.** La unificación es lo que se hace *primero* porque
 abarata todo lo que venga detrás, pero N1, L1 y E1 tocan sitios distintos y pueden avanzar
