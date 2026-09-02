@@ -1353,16 +1353,34 @@ semanas. `MathRango.bp` fallaría en ella y funcionaría en el host: **rompe el 
 mano; en la Metro son 13 porque su `/lib` es de antes de que la stdlib se recompilara con el
 compilador nuevo. Y mi filtro del log de esta mañana (`psram|vm|bd`) me lo escondió dos veces.
 
-**Los tamaños dan una pista**: 9 módulos son exactamente **877 B** más grandes en el FS que
-embebidos (I2c, Spi, Uart, Rtc, Wdt, Timer, IO, Neopixel…) y 5 son **4 B** más pequeños (Gpio,
-Pulse, Pwm, Adc, Hello). Dos generaciones distintas de `.mod` conviviendo en el mismo `/lib`.
+**Los tamaños dan la CAUSA, no una pista.** Comparados los 13 con el dist de V5 y con el repo:
+
+| módulo | en el FS de la Metro | `BasicPlus-5.0-win/bpstdlib` | repo |
+|---|---|---|---|
+| I2c | 4153 | **4153** | 3276 |
+| Math | 2320 | **2320** | 1708 |
+| Gpio | 4031 | **4031** | 4035 |
+| … los 13 | = | **= byte a byte** | ≠ |
+
+**Todos coinciden con el dist de V5 y ninguno con el repo.** Quien pone la stdlib rancia en `/lib`
+no es una imagen vieja: es **el IDE de V5** (`C:\temp\BasicPlus-5.0-win`, el que Eduardo usa
+contra el firmware de V6) subiendo *su* stdlib como dependencias — y como compara CRC y sube
+«si difiere», **corrige la placa hacia V5**. `#463` sólo movió `Core.mod` de `/app` a `/lib`; el
+resto de la stdlib siguió subiéndose igual. Y el instalador de la imagen, que sólo copia «si
+falta», no lo deshace nunca.
+
+📌 Es justo lo que `CLAUDE.md` dice que NO debe pasar: *«Módulos stdlib pre-instalados en el
+device (vía `stdlibDir`); módulos de la app al workdir en cada Run. El IDE NO retransmite la
+stdlib en cada ejecución.»* La retransmite, y encima la de otra versión.
 
 ### La forma del arreglo (por decidir con Eduardo)
 
 - **A mano, hoy**: borrar los 14 por el wire y rearrancar; el instalador repone los de la imagen.
   Es lo que se hizo en el S3. No escala: hay que acordarse, placa a placa.
-- **De raíz**: que el instalador **refresque `/lib` cuando no coincide con lo embebido**, en vez
-  de avisar. La duda del aviso —*«¿rancio de otro firmware, o subido por ti?»*— la resolvió Eduardo
+- **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
+  tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
+  **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
+  que una placa que ya esté rancia se cure sola en el primer arranque de la imagen nueva. La duda del aviso —*«¿rancio de otro firmware, o subido por ti?»*— la resolvió Eduardo
   el 31-ago al fijar la precedencia: **los overrides del usuario van a `/app`, que gana a `/lib`**.
   Luego un `/lib` distinto del embebido es siempre rancio, y se puede reponer sin miedo. El coste
   es un `PUT` de cada módulo desactualizado en el primer arranque de una imagen nueva (~50 KB una
@@ -3806,7 +3824,7 @@ los subdirectorios**, porque el común desciende y el recorrido plano del ESP32 
 🎁 **La Pico y el STM32 GANAN el desglose.** Ese es el sentido de la regla que salió de
 `#455`: *unificar hacia abajo es una regresión disfrazada de limpieza*.
 
-⚠️ **Y otra vez el heredoc**: al escribir el código, `' '` llegó al fichero como un byte NUL
+⚠️ **Y otra vez el heredoc**: al escribir el código, `'\0'` llegó al fichero como un byte NUL
 de verdad — tres veces, y el `.c` pasó a ser binario para `grep`. Es la trampa que ya está
 fichada en [[escribir-ficheros-sin-destruirlos]] y hoy ha vuelto a morder. Reparado con un
 script en fichero, no con un heredoc.
