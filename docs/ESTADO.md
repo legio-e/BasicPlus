@@ -33,8 +33,10 @@ El repaso general quedó **a medias por la mitad buena**: cuatro de cinco famili
 la imagen final `U6.10` en su placa (P4, Metro, Pico 2, C3) y tres `/lib` limpiados a mano
 (Metro 14, Pico 2 16, S3 2). Falta, en este orden:
 
-1. **P4** (COM14 cuando se enchufe): borrar `/app/Core.mod` y mirar su `/lib` (`#466`), con el OK
-   de Eduardo. Su memoria ya está verificada byte a byte.
+1. ✅ **P4** (2-sep, al retomar): `/lib` limpio de por sí (15/15, 0 avisos); `/app/Core.mod`
+   borrado con el OK de Eduardo, reset por el wire, 21 ficheros y los mismos números de memoria.
+   Trae un matiz a `#466`: pasó por el IDE (tiene `/app/Json.mod`, `/app/JsonDemo.mod`) y su
+   `/lib` no se ensució — a dónde escribe el IDE se mira en su código antes del arreglo de raíz.
 2. **S3** (COM9): regrabar con la `U6.10` **final** (lleva la previa a la regla unificada; mismos
    números) y comprobar que el `/lib` sigue limpio — se ensucia en cuanto el IDE de V5 sube
    dependencias.
@@ -56,7 +58,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 
 | placa | imagen que LLEVA | frente al repo (`U6.10` final, regla unificada) | pendientes en la placa |
 |---|---|---|---|
-| **P4** (COM14) | `U6.10` final, grabada 14:20 | ✅ **es la del repo** — verificada byte a byte (28 668 KiB @0x48000a7c) | `/app/Core.mod` rancio por borrar |
+| **P4** (COM14) | `U6.10` final, grabada 14:20 | ✅ **es la del repo** — verificada byte a byte (28 668 KiB @0x48000a7c), y otra vez tras el reset del repaso | ✅ `/lib` **limpio de por sí** (15/15, 0 avisos, aunque pasó por el IDE); ✅ `/app/Core.mod` borrado (2-sep, al retomar) |
 | **S3** (COM9) | `U6.10` **previa** a la regla unificada, 14:1x | numéricamente igual (su fixture no se mueve); regrabar para tener la exacta | ✅ limpio (Core.mod y Pico.mod de V5 fuera) |
 | **C3** (COM3) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada: 128 KB, techo 136 por el contiguo, 64/64 — idéntico | ✅ `/lib` **limpio de origen** (lo aprovisionó el instalador; el IDE de V5 nunca le subió nada: 0 avisos), ✅ `log` devuelto a 0 |
 | **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
@@ -72,7 +74,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
    `test-mem` y no cambian) sino para que «lo que lleva la placa» sea «lo que hay en el repo» en las
    cuatro que ya deciden con el planificador. La Metro se graba por el wire (`BOOTSEL`); el C3 y el
    S3 con `idf.py flash` (ojo al DTR/RTS de cada uno, está en `tools/medir_margen.ps1`).
-2. **Limpiar el `/app/Core.mod` del P4** (el `log` del C3 ya está a 0). Y **`#466` de raíz**
+2. ✅ El `/app/Core.mod` del P4 ya está fuera (el `log` del C3 ya está a 0). Y **`#466` de raíz**
    (la Metro ya está limpia a mano): que el IDE no suba stdlib a `/lib`, y que el instalador
    refresque `/lib` cuando no coincida con lo embebido. Mientras tanto, cada Run desde el IDE de
    V5 contra una placa de V6 vuelve a ensuciar `/lib`.
@@ -146,8 +148,8 @@ sostienen. Nada de lo de abajo es estimación: todo está medido en placa o leí
 - El **C3** se quedó con `log=1` en su ENV (se puso para medir). Devolverlo a `0`.
 - ✅ **El S3 ya está limpio** (2-sep, por el wire): fuera `/app/Core.mod` y el `/lib/Pico.mod` de
   V5; el arranque reinstala el `Pico.mod` de la imagen y el aviso ya no sale.
-- El `/app/Core.mod` del **resto** de placas (Pico/Metro, P4) sigue pendiente: mismo gesto, dos
-  `DEL` por el wire y un reset.
+- ✅ El `/app/Core.mod` del resto de placas: la Metro y la Pico 2 no lo tenían; el del P4, fuera
+  el 2-sep al retomar.
 
 ### `U6` — la organización de la memoria: censo, medidas y forma (sesión de análisis)
 

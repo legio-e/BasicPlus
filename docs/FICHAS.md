@@ -1388,12 +1388,23 @@ stdlib en cada ejecución.»* La retransmite, y encima la de otra versión.
   más grandes. Igual que en el S3. Y la **Pico 2** después: 16 borrados, 16 repuestos, 0 avisos,
   16/16 tamaños. **No escala**: hay que acordarse, placa a placa — y en cuanto el IDE de V5 vuelva a
   subir dependencias, vuelve el problema. Por eso el arreglo de raíz sigue abierto. Placas limpias
-  hoy: S3, Metro, Pico 2. Pendiente de mirar: P4 (tiene al menos el `/app/Core.mod`).
+  hoy: S3, Metro, Pico 2 **y P4** (repasado al retomar la 2ª pausa: su `/lib` ya estaba limpio —
+  15/15 tamaños iguales a los embebidos, 0 avisos—; sólo sobraba el `/app/Core.mod`, borrado con
+  su OK: 22 → 21 ficheros, y tras el reset los mismos números de memoria, 28 668 KiB @0x48000a7c).
 
 📌 **Y el C3 confirma la causa por el lado contrario**: su `/lib` está **limpio de origen** — los
 14 módulos coinciden con los embebidos y no hay ni un aviso — porque lo aprovisionó el instalador
 de la imagen el 31-ago y **el IDE de V5 nunca le ha subido nada**. Las placas que pasaron por el
-IDE (Metro, Pico 2, S3) estaban sucias; la que no, no. No hace falta más prueba de quién ensucia.
+IDE (Metro, Pico 2, S3) estaban sucias; la que no, no.
+
+⚠️ **Matiz que trae el P4** (al retomar): también pasó por el IDE —en su `/app` está lo que el
+IDE sube en cada Run: `JsonDemo.mod`, `Json.mod`, `Core.mod`— y sin embargo su `/lib` estaba
+limpio, 15/15. Luego «el IDE de V5 ensucia `/lib`» no es *siempre*: o las dependencias van a
+`/app` (el workdir) y lo rancio de la Metro y la Pico 2 lo dejó **una imagen anterior** cuyo
+instalador pobló `/lib` con los blobs de V5 (y el «sólo si falta» los conservó), o depende de
+algo que no he mirado (el `crc:-1` del `LIST`, qué acción del IDE). Se contesta en el código del
+IDE y del instalador —a dónde escribe cada uno—, no adivinando; es el primer paso del arreglo de
+raíz. Lo que no cambia: el `/lib` rancio existe, la placa lo avisa y no lo repone.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
