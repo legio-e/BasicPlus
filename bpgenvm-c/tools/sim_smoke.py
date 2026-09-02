@@ -7,7 +7,7 @@
 # No necesita hardware ni el IDE. Sale 0 si todo pasa.
 #
 #   python tools/sim_smoke.py
-import json, socket, subprocess, sys, os, time, tempfile, shutil
+import json, socket, subprocess, sys, os, time, tempfile, shutil, zlib
 
 try: sys.stdout.reconfigure(encoding="utf-8")   # consola Windows cp1252 → UTF-8
 except Exception: pass
@@ -220,7 +220,8 @@ def main():
         r = w.call("STAT", name="Fake.mod", crc=True)
         check(r.get("path") == "/lib/Fake.mod" and r.get("magic") == "MOD7" and r.get("size") == 36,
               "STAT por nombre → lo encuentra en /lib, con path, magic y tamaño")
-        check(r.get("crc", 0) not in (0, -1), "STAT por nombre → trae el crc si se pide")
+        check(r.get("crc") == zlib.crc32(b"MOD7" + bytes(32)),
+              "STAT por nombre → el crc, SIN SIGNO (bit 31 puesto: %s)" % r.get("crc"))
         r = w.call("STAT", name="Fake.mod", base="/app/proj")
         check(r.get("path") == "/app/proj/Fake.mod" and r.get("magic") == "MOD6",
               "STAT por nombre con base → el del proyecto PRIMERO (el orden del RUN)")

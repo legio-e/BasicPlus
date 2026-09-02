@@ -276,7 +276,9 @@ Reply: `{"type":"STAT_REPLY","id":N,"size":3519,"magic":"MOD7","isDir":false,"mt
 Error si no existe: `{"type":"ERROR","id":N,"code":"NOT_FOUND",...}`
 
 - `crc` sólo si se pide (`"crc":true`, #398): calcularlo para todo el FS en cada listado era el
-  99 % del refresco del árbol.
+  99 % del refresco del árbol. Es un entero **sin signo** (0…4294967295; `#466`: antes salía
+  negativo con el bit 31 puesto, porque `long` es de 32 bits en las placas, y el IDE lo daba por
+  distinto). -1 = no se pudo calcular.
 - `magic` (`#466`): los 4 primeros bytes cuando parecen un módulo (`"MOD6"`, `"MOD7"`). Es la
   **versión** del módulo — la única que hay: los ficheros no tienen fecha, tienen versión y CRC.
   Un fichero que no empieza por `MOD` no lo lleva.

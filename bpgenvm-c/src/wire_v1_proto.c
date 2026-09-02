@@ -111,6 +111,17 @@ int wire_v1_field_long(char* buf, size_t buf_max, size_t off,
     return (int) off;
 }
 
+int wire_v1_field_ulong(char* buf, size_t buf_max, size_t off,
+                         const char* key, unsigned long value) {
+    char tmp[24];
+    snprintf(tmp, sizeof tmp, "%lu", value);
+    int r = put_cstr(buf, buf_max, off, ",\""); if (r < 0) return -1; off = (size_t) r;
+    r = put_cstr(buf, buf_max, off, key);        if (r < 0) return -1; off = (size_t) r;
+    r = put_cstr(buf, buf_max, off, "\":");      if (r < 0) return -1; off = (size_t) r;
+    r = put_cstr(buf, buf_max, off, tmp);        if (r < 0) return -1; off = (size_t) r;
+    return (int) off;
+}
+
 int wire_v1_field_bool(char* buf, size_t buf_max, size_t off,
                         const char* key, int value) {
     int r = put_cstr(buf, buf_max, off, ",\""); if (r < 0) return -1; off = (size_t) r;

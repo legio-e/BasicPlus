@@ -82,6 +82,10 @@ int  wire_v1_msg_begin_event(char* buf, size_t buf_max, size_t off,
                              const char* type);
 int  wire_v1_field_long(char* buf, size_t buf_max, size_t off,
                         const char* key, long value);
+/* #466 — para lo que es un uint32 (CRC): `long` es de 32 bits en las placas y en
+ * MinGW, y (long) 0x9C63… salía NEGATIVO por el wire. Sin signo, siempre. */
+int  wire_v1_field_ulong(char* buf, size_t buf_max, size_t off,
+                         const char* key, unsigned long value);
 int  wire_v1_field_bool(char* buf, size_t buf_max, size_t off,
                         const char* key, int value);
 int  wire_v1_field_string(char* buf, size_t buf_max, size_t off,

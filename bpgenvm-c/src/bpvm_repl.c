@@ -199,8 +199,14 @@ static void repl_stat(long id, const json_obj_t* obj) {
      * TODOS los ficheros en cada refresco del árbol. */
     if (json_get_bool(obj, "crc", 0)) {
         uint32_t c = 0;
-        long v = (bpvm_fs_crc32(path, &c) == 0) ? (long) c : -1L;
-        off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "crc", v);
+        /* #466 — SIN SIGNO: `long` es de 32 bits en las placas (y en MinGW), así
+         * que un CRC con el bit 31 puesto salía NEGATIVO, y el IDE —que compara
+         * sin signo— lo daba por distinto y volvía a subir la mitad de los
+         * ficheros «idénticos». Lo cazó el smoke Java del STAT por nombre. */
+        if (bpvm_fs_crc32(path, &c) == 0)
+            off = wire_v1_field_ulong(buf, sizeof buf, (size_t) off, "crc", (unsigned long) c);
+        else
+            off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "crc", -1L);
         if (off < 0) goto err;
     }
     off = wire_v1_field_bool(buf, sizeof buf, (size_t) off, "isDir", 0);

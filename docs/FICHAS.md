@@ -1507,9 +1507,35 @@ las placas: Metro y Pico 2, que son las que tienen `/lib` con historia.
   `test-mem`, `sim-smoke`), Pico (`uf2` de las 19:27), S3/C3/P4 (`Project build complete`, 19:28),
   Nucleo (text 250 200 → 251 248: el helper) y Discovery (0 avisos).
 
-⏭️ (3) el IDE: `BpvmClient.statModule`, el bucle de `uploadAndRun` decide con la respuesta del
-device, fuera `EMBEDDED_CORE_MODS` (también del filtro de `resolveDeviceDeps`, que la usa). (4) las
-placas: Metro y Pico 2.
+### ✅ (3) el IDE pregunta a la placa (2-sep) — y de paso, un CRC que llevaba meses NEGATIVO
+
+- `BpvmClient.statModule(name, base)`: el STAT por nombre; devuelve `ModStat{path, size, crc,
+  magic}` con `version()`. `null` = no lo tiene, o firmware anterior a `#466` (INVALID_PARAM): se
+  sube, como siempre.
+- `PicoExplorer.uploadAndRun`: por cada dependencia pregunta, y aplica la regla: no lo tiene →
+  sube a donde le toca (`/lib` si es de la stdlib, `/app/<proj>` si es de la app); lo tiene MÁS
+  NUEVO → no sube y lo dice; anterior, o misma versión con CRC distinto → sube DONDE la placa lo
+  tenía. Ya no «corrige» `/lib` por CRC ni consulta listas.
+- `FrmMain`: fuera `EMBEDDED_CORE_MODS` (los dos caminos, Run y Debug, y el filtro de
+  `resolveDeviceDeps`, que ya miraba `stdlibDir`); «de la stdlib» = `stdlibDepNames`: vive en
+  `stdlibDir`. Gui y Json entran solos, sin excepciones a mano.
+- Verificado con el cliente REAL contra el simulador: `StatModuleSmoke` (Java, 5/5: `/lib`, el
+  proyecto primero con `base`, el crc, `null`, `versionOf`) y `sim_smoke` 45/45. Fat-jar
+  reconstruido con el IDE cerrado.
+
+🐛 **Lo que cazó el smoke Java: el CRC del wire salía NEGATIVO.** `long` es de 32 bits en las
+placas y en MinGW, y `(long) crc` con el bit 31 puesto —la mitad de los ficheros— viajaba como
+`-1671101502`; el IDE compara contra `java.util.zip.CRC32`, que es sin signo, así que la mitad de
+los «idénticos» le parecían distintos y **los volvía a subir**. Llevaba ahí desde que el CRC entró
+en el wire (`#398` y antes). Arreglo en los dos lados: el device emite el CRC sin signo
+(`wire_v1_field_ulong`; el protocolo lo dice) y el IDE normaliza lo que venga con signo de un
+firmware anterior (`crcSinSigno`). El smoke Python lo comprueba ahora con el VALOR, no con
+«distinto de 0» — que es por donde se coló: una medida que no desempata no es una medida
+([[medida-ambigua-no-desempata]]).
+
+⏭️ (4) las placas: Metro y Pico 2 con el `uf2` nuevo (`BOOTSEL` por el wire), y ver en su log que
+el `/lib` se repone solo (`lib: … repuesto`); después un Run desde el IDE nuevo, que debe decir
+«ya en la placa, idéntico» y no subir nada de stdlib.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para

@@ -911,6 +911,12 @@ public final class PicoExplorer extends JPanel {
         uploadAndRun(modFile, depMods, libDepNames, debugHook, null);
     }
 
+    /** #466 — el MAGIC de un .mod local ("MOD7"): su versión. null si no lo parece. */
+    private static String magicOf(byte[] d) {
+        return (d != null && d.length >= 4)
+                ? new String(d, 0, 4, java.nio.charset.StandardCharsets.US_ASCII) : null;
+    }
+
     /** CRC32 de un buffer, como long (para confirmar contenido idéntico
      *  antes de saltarse un PUT). */
     private static long crc32(byte[] data) {
@@ -1049,28 +1055,56 @@ public final class PicoExplorer extends JPanel {
             //    DEL-before-overwrite por economía (evita reescritura de
             //    flash innecesaria en Pico).
             for (File dep : deps) {
-                // stdlib core → /lib (como en la Pico); driver/app → /app.
-                boolean isLib = libNames.contains(dep.getName());
-                String depRemote = isLib ? ("/lib/" + dep.getName())
-                                         : appPath(prefix, dep.getName());
-                if (!isLib) deployed.add(depRemote);   // F2: bajo el prefijo del proyecto
-                Long sz = remote.get(depRemote);
-                // ANTES: para stdlib en /lib confiábamos en la copia
-                // "pre-instalada" (embebida del firmware) y saltábamos el PUT.
-                // PELIGRO (bug cazado 2026-06-13): si el blob embebido viene de
-                // un frontend ANTERIOR, su layout de vtable de clase no casa con
-                // la app recién compilada → `INVOKE_VIRTUAL slot N no resoluble`
-                // → RuntimeError en CUALQUIER método OO de stdlib (I2c.Bus,
-                // Spi.Bus, Uart.Port, Rtc.Clock, ...). Top-level se salvaba
-                // (resuelve por índice de función), por eso el bug era sutil.
-                // AHORA: /lib pasa por el MISMO content-check (CRC32) que la app,
-                // de modo que la copia en FS siempre case con lo que compiló la
-                // app, auto-curando blobs embebidos rancios sin reflashear.
-                boolean up = putIfChanged(b, dep, depRemote, sz);
-                if (!up && outputSink != null) {
-                    SwingUtilities.invokeLater(() -> outputSink.accept(
-                            "[Explorer] " + depRemote + " ya en FS (" + dep.length()
-                            + " bytes, contenido idéntico), salto PUT"));
+                // #466 — la regla de Eduardo: por cada dependencia SE PREGUNTA A LA
+                // PLACA si ya la tiene, donde sea (STAT por nombre: lo resuelve el
+                // device con el orden del RUN). Se sube sólo si no la tiene, si la
+                // suya es de versión (MAGIC) anterior, o si es la misma versión con
+                // CRC distinto; si la placa la tiene MÁS NUEVA, no se sube.
+                // La versión de la stdlib la resuelve el SO —la imagen repone su
+                // /lib al arrancar—, no esta comunicación: por eso ya no hay aquí
+                // una lista de «módulos embebidos» ni se «corrige» /lib por CRC.
+                // (Lo que motivó aquel CRC el 13-jun —las vtables de un blob viejo—
+                // lo cubre la regla: misma versión y CRC distinto → se sube.)
+                final boolean isLib = libNames.contains(dep.getName());   // viene de la stdlib
+                final BpvmClient dc = debugClient();
+                final BpvmClient.ModStat st = (dc != null)
+                        ? dc.statModule(dep.getName(), prefix, 8000) : null;
+                final byte[] depBytes = Files.readAllBytes(dep.toPath());
+                final int vLocal = BpvmClient.ModStat.versionOf(magicOf(depBytes));
+                final String depRemote; final String motivo; final boolean subir;
+                if (st == null) {
+                    // No lo tiene (o firmware sin STAT por nombre): a donde le toca.
+                    depRemote = isLib ? ("/lib/" + dep.getName()) : appPath(prefix, dep.getName());
+                    motivo = "la placa no lo tiene"; subir = true;
+                } else {
+                    depRemote = st.path;                         // se reemplaza DONDE está
+                    final int vDev = st.version();
+                    if (vDev > vLocal) {
+                        motivo = "la placa lo tiene MÁS NUEVO (MOD" + vDev + " > MOD" + vLocal + ")";
+                        subir = false;
+                    } else if (vDev < vLocal) {
+                        motivo = "la placa lo tiene de versión anterior (MOD" + vDev + " < MOD" + vLocal + ")";
+                        subir = true;
+                    } else if (st.crc >= 0 && st.crc == crc32(depBytes)) {
+                        motivo = "ya en la placa, idéntico"; subir = false;
+                    } else {
+                        motivo = "misma versión, CRC distinto"; subir = true;
+                    }
+                }
+                if (depRemote.startsWith(prefix + "/")) deployed.add(depRemote);   // F2: bajo el prefijo
+                if (subir) {
+                    if (st != null) {           // DEL-before-PUT: economía de flash (#111)
+                        try { b.del(depRemote); } catch (java.io.IOException delErr) { /* tolerable */ }
+                    }
+                    b.put(depRemote, depBytes);
+                    sentCrc.put(depRemote, crc32(depBytes));
+                }
+                if (outputSink != null) {
+                    final String msg = subir
+                            ? "[Explorer] " + dep.getName() + " → " + depRemote + " ("
+                              + depBytes.length + " bytes): " + motivo
+                            : "[Explorer] " + dep.getName() + ": " + motivo + " — no se sube";
+                    SwingUtilities.invokeLater(() -> outputSink.accept(msg));
                 }
                 // Si el dep tiene .mdn alongside, subirlo también.
                 final File depMdn = mdnSiblingOf(dep);

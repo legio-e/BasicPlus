@@ -895,7 +895,7 @@ public final class BpvmClient implements AutoCloseable {
             out.add(new RemoteFile(
                     Json.getString(m, "name", ""),
                     Json.getLong(m, "size", 0),
-                    Json.getLong(m, "crc", -1),   // paso 4 cierre: -1 = firmware sin crc → fallback
+                    crcSinSigno(Json.getLong(m, "crc", -1)),   // paso 4 cierre: -1 = firmware sin crc → fallback
                     Json.getBool(m, "isDir", false)));
         }
         /* Firmware anterior a #425: sin campo → 0 = "no me consta que falte
@@ -954,9 +954,60 @@ public final class BpvmClient implements AutoCloseable {
         try {
             Map<String, Object> r = sendRequest(
                     "STAT", "\"path\":" + jsonStr(remotePath) + ",\"crc\":true", null, timeoutMs);
-            return Json.getLong(r, "crc", -1);
+            return crcSinSigno(Json.getLong(r, "crc", -1));
         } catch (IOException e) {
             return -1;      // no existe, verbo desconocido, timeout… todo es "no lo sé"
+        }
+    }
+
+    /** #466 — un CRC-32 del wire, SIN signo. Los firmwares anteriores lo mandaban
+     *  como `long` de 32 bits (negativo con el bit 31 puesto) y este lado compara
+     *  contra java.util.zip.CRC32, que es sin signo: la mitad de los «idénticos»
+     *  parecían distintos y se volvían a subir. -1 sigue siendo «no lo sé». */
+    static long crcSinSigno(long v) {
+        if (v == -1) return -1;
+        return (v < 0) ? v + 4294967296L : v;
+    }
+
+    /** #466 — lo que la placa dice de un MÓDULO por su nombre, esté donde esté. */
+    public static final class ModStat {
+        public final String path;   /* dónde lo tiene (/app/proj/X.mod, /lib/X.mod…) */
+        public final long   size;
+        public final long   crc;    /* -1 = no lo dio */
+        public final String magic;  /* "MOD7"; null si no parece un módulo */
+        ModStat(String path, long size, long crc, String magic) {
+            this.path = path; this.size = size; this.crc = crc; this.magic = magic;
+        }
+        /** La VERSIÓN del módulo: "MOD7" → 7; 0 si no parece un módulo. Es la única
+         *  que hay —los ficheros del device no tienen fecha: tienen versión y CRC. */
+        public int version() { return versionOf(magic); }
+        public static int versionOf(String m) {
+            if (m == null || m.length() != 4 || !m.startsWith("MOD")) return 0;
+            char c = m.charAt(3);
+            return (c >= '0' && c <= '9') ? c - '0' : 0;
+        }
+    }
+
+    /**
+     * #466 — «¿tienes este módulo, donde sea?»: STAT por NOMBRE. Lo resuelve el
+     * device con SU resolvedor (el del RUN: base → /app → /lib → /sys), así el IDE
+     * no lleva una copia del orden de búsqueda — que es como se desincronizó la
+     * lista de #463. Devuelve null si no lo tiene (NOT_FOUND), si el firmware no
+     * conoce el STAT por nombre (INVALID_PARAM: firmware anterior a #466) o si no
+     * se pudo preguntar: en los tres casos quien llama SUBE, que es lo que se hacía
+     * siempre. Con respuesta, la regla (versión y CRC) la aplica el llamador.
+     */
+    public ModStat statModule(String name, String base, long timeoutMs) {
+        try {
+            String extra = "\"name\":" + jsonStr(name) + ",\"crc\":true";
+            if (base != null && !base.isEmpty()) extra += ",\"base\":" + jsonStr(base);
+            Map<String, Object> r = sendRequest("STAT", extra, null, timeoutMs);
+            String path = Json.getString(r, "path", null);
+            if (path == null) return null;
+            return new ModStat(path, Json.getLong(r, "size", -1), crcSinSigno(Json.getLong(r, "crc", -1)),
+                               Json.getString(r, "magic", null));
+        } catch (IOException e) {
+            return null;
         }
     }
 

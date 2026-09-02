@@ -54,8 +54,12 @@ la imagen final `U6.10` en su placa (P4, Metro, Pico 2, C3) y tres `/lib` limpia
    gana) y un helper común refresca `/lib` cuando no coincide con lo embebido. Mientras no esté,
    cada Run desde el IDE vuelve a ensuciar las placas limpiadas hoy. 🛠️ **Al retomar: la regla
    definitiva de Eduardo está en la ficha, y los pasos (1) `STAT` por nombre + `magic` y (2) el
-   helper común del instalador ya están hechos y verificados (host + seis builds). Faltan (3) el
-   IDE y (4) las placas.**
+   helper común del instalador ya están hechos y verificados (host + seis builds). (3) el IDE también:
+   pregunta a la placa por cada dependencia, fuera `EMBEDDED_CORE_MODS`, verificado con el cliente
+   real contra el simulador y fat-jar reconstruido. **Falta (4) las placas**: Metro y Pico 2 con el
+   `uf2` nuevo (`BOOTSEL` por el wire) y ver `lib: … repuesto` en su log; luego un Run desde el IDE
+   nuevo sin subir stdlib. De paso: el CRC del wire salía NEGATIVO (bit 31, `long` de 32 bits) y
+   el IDE re-subía la mitad de los ficheros idénticos — arreglado en los dos lados.**
 
 La matriz completa, con lo hecho, está justo debajo.
 

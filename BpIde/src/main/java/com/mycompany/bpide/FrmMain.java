@@ -2561,25 +2561,18 @@ public class FrmMain extends javax.swing.JFrame
                         java.util.List<java.io.File> deps = packRun
                                 ? java.util.Collections.<java.io.File>emptyList()
                                 : resolveDeviceDeps(bpFile, outDir);
-                        java.util.Set<String> libDeps = new java.util.HashSet<>();
-                        for (java.io.File d : deps) {
-                            String n = d.getName();
-                            String mod = n.endsWith(".mod")
-                                    ? n.substring(0, n.length() - 4) : n;
-                            // Gui es stdlib (vive en /lib con las demás) aunque el
-                            // firmware aún NO la embeba; el resto de la stdlib core
-                            // ya está en EMBEDDED_CORE_MODS. (Se sube igual con
-                            // content-check; /lib solo elige la carpeta destino.)
-                            if (EMBEDDED_CORE_MODS.contains(mod) || "Gui".equals(mod))
-                                libDeps.add(n);
-                        }
+                        // #466 — «de la stdlib» = vive en stdlibDir. Ya no hay lista a
+                        // mano de lo que el firmware embebe: eso lo contesta la PLACA
+                        // (uploadAndRun le pregunta por cada dependencia). Esto sólo
+                        // decide a dónde iría si la placa NO la tiene: /lib.
+                        java.util.Set<String> libDeps = stdlibDepNames(deps, outDir);
                         if (!deps.isEmpty()) {
                             final String pfx = deviceAppPrefix();   // F2: /app/<proj> o /app
                             appendConsola("[deps] " + deps.size()
                                     + " módulo(s) a subir:\n");
                             for (java.io.File d : deps) {
                                 appendConsola("  - " + d.getName()
-                                        + (libDeps.contains(d.getName()) ? " → /lib" : " → " + pfx)
+                                        + (libDeps.contains(d.getName()) ? " (stdlib: se le pregunta a la placa)" : " → " + pfx)
                                         + "\n");
                             }
                         }
@@ -2771,12 +2764,7 @@ public class FrmMain extends javax.swing.JFrame
                     }
                     // Deps (igual que Run on Pico): stdlib core → /lib, resto → /app.
                     java.util.List<java.io.File> deps = resolveDeviceDeps(bpFile, outDir);
-                    java.util.Set<String> libDeps = new java.util.HashSet<>();
-                    for (java.io.File d : deps) {
-                        String n = d.getName();
-                        String mod = n.endsWith(".mod") ? n.substring(0, n.length() - 4) : n;
-                        if (EMBEDDED_CORE_MODS.contains(mod)) libDeps.add(n);
-                    }
+                    java.util.Set<String> libDeps = stdlibDepNames(deps, outDir);   // #466: como en Run
                     final String remoteMain = deviceAppPrefix() + "/" + base + ".mod";   // F2 (H19)
                     appendConsola("[debug] subiendo + enganchando sesión de debug en la placa...\n");
                     // uploadAndRun con debugHook: sube los ficheros y, en vez de
@@ -2843,12 +2831,28 @@ public class FrmMain extends javax.swing.JFrame
      * ⚠️ Y esta lista es un GEMELO escrito a mano de lo que el firmware embebe.
      * Se han separado por uno. La forma robusta es que lo diga el dispositivo (el
      * `LIST` de /lib ya está), no que el IDE lo recuerde — ver la ficha. */
-    private static final java.util.Set<String> EMBEDDED_CORE_MODS =
-            new java.util.HashSet<>(java.util.Arrays.asList(
-                    "Core",
-                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart",
-                    "Pulse", "Pwm", "Pico", "Rtc", "Adc", "Wdt", "Timer"
-            ));
+    /* #466 — aquí vivía EMBEDDED_CORE_MODS, la lista a mano de lo que el firmware
+     * embebe. Era un GEMELO de la tabla del firmware y se desincronizó (#463: faltaba
+     * Core). Ya no hace falta: lo que la placa tiene lo dice la placa (STAT por
+     * nombre), y «de la stdlib» es «vive en stdlibDir» (stdlibDepNames). */
+
+    /** #466 — qué dependencias son de la STDLIB: las que viven en stdlibDir. Sólo
+     *  decide a dónde iría una que la placa NO tenga (/lib); si la tiene, manda la
+     *  respuesta de la placa. */
+    private java.util.Set<String> stdlibDepNames(java.util.List<java.io.File> deps, Path outDir) {
+        java.util.Set<String> r = new java.util.HashSet<>();
+        String sdir = resolveStdlibDir(outDir);
+        if (sdir == null || deps == null) return r;
+        Path sp = java.nio.file.Paths.get(sdir);
+        for (java.io.File d : deps) {
+            String n = d.getName();
+            String base = n.endsWith(".mod") ? n.substring(0, n.length() - 4) : n;
+            if (Files.isRegularFile(sp.resolve(base + ".mod"))
+                    || Files.isRegularFile(sp.resolve(base + ".bp")))
+                r.add(n);
+        }
+        return r;
+    }
 
     /**
      * Resuelve los drivers de dispositivo necesarios para ejecutar
@@ -2910,8 +2914,7 @@ public class FrmMain extends javax.swing.JFrame
             // de stdlibDir PRIMERO, no solo los EMBEDDED_CORE.
             java.util.List<Path> order = searchDirs;
             boolean isStdlibMod = stdlibFirst != null
-                    && (EMBEDDED_CORE_MODS.contains(imp)
-                        || Files.isRegularFile(stdlibFirst.resolve(imp + ".bp"))
+                    && (Files.isRegularFile(stdlibFirst.resolve(imp + ".bp"))
                         || Files.isRegularFile(stdlibFirst.resolve(imp + ".mod")));
             if (isStdlibMod) {
                 order = new java.util.ArrayList<>();
