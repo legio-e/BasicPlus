@@ -6,8 +6,9 @@
  * de la Pico → los programas que importan stdlib resuelven sin uploads.
  */
 #include "stm32_mods.h"
-#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
 #include "stm32_fs.h"
+#include "log.h"        /* log_printf: lo que decidió el instalador, al log del boot */
+#include "bpvm_mods.h"  /* #466: LA REGLA del /lib vive en src/, no aquí (esto es generado) */
 #include <stdint.h>
 
 static const unsigned char core_mod[] = {
@@ -4197,15 +4198,16 @@ static const mod_entry_t s_mods[] = {
     { "/lib/Timer.mod", timer_mod, timer_mod_len },
 };
 
+static int mods_put(const char* p, const uint8_t* d, uint32_t n) {
+    return fs_put(p, d, n) == 0 ? 0 : -1;
+}
+
 void stm32_mods_install(void) {
     unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));
     for (unsigned i = 0; i < n; i++) {
-        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */
-        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el
-         * espejo (y por 14 módulos seguidos). */
-        uint32_t sz_dummy;
-        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {
-            fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len);
-        }
+        char linea[160];
+        (void) bpvm_mods_sincronizar(s_mods[i].path, s_mods[i].data, s_mods[i].len,
+                                     mods_put, linea, sizeof linea);
+        if (linea[0]) log_printf("%s", linea);
     }
 }

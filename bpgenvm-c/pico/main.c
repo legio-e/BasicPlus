@@ -37,7 +37,8 @@
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
 #include "bpvm_sqlmem.h"
-#include "bpvm_mem.h"        /* V6/U6: el planificador comun de memoria */      /* V5/H: regla del bloque de memoria de la BD */
+#include "bpvm_mem.h"
+#include "bpvm_mods.h"      /* #466: la regla del /lib de la imagen, común */        /* V6/U6: el planificador comun de memoria */      /* V5/H: regla del bloque de memoria de la BD */
 #include "bpvm_sd.h"          /* V5/H1: lector de SD por SPI (pines del env)  */
 #include "bpvm_sd_blk.h"      /* V5/H6: esa SD, vista como dispositivo de bloque */
 #include "bpvm_fs_fat.h"      /* V5/H2: montarla al arranque si hay tarjeta   */
@@ -122,6 +123,11 @@ extern char __HeapLimit;         /* tope de la RAM principal */
  *
  * PSRAM: la ventana entera, EXCLUSIVA de la VM. La reserva de SQLite va delante y
  * la aparta el plan (bpvm_sqlmem sigue decidiendo si se puede). */
+/* #466 — el `put` de esta familia para el instalador común de la stdlib. */
+static int pico_mods_put(const char* p, const uint8_t* d, uint32_t n) {
+    return fs_put(p, d, n) == FS_OK ? 0 : -1;
+}
+
 static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
     int n = 0;
     if (n < max) {
@@ -1362,31 +1368,17 @@ static void vm_task(void* arg) {
          * pre-instalan: los sube el IDE como deps al hacer Run. */
         { "/app/Hello.mod",    hello_mod,    &hello_mod_len    },
     };
+    /* #466 — LA REGLA está en src/bpvm_mods.c, la misma para las tres familias:
+     * falta → se instala; versión (MAGIC) anterior, o misma versión con CRC
+     * distinto → se REPONE; más nuevo → se deja y se dice; /app (el Hello de
+     * muestra) es del usuario → sólo si falta. Sustituye al chivato de #422, que
+     * avisaba y no reponía: reflashear ya refresca el /lib. */
     for (size_t i = 0; i < sizeof(PREINSTALL) / sizeof(PREINSTALL[0]); i++) {
-        if (fs_exists(PREINSTALL[i].path)) {
-            /* #422 — el /lib rancio, VISIBLE (espejo del chivato del ESP32:
-             * mismo criterio, mismo mensaje). Reflashear no refresca estos
-             * módulos; que al menos el arranque diga cuándo lo desplegado no
-             * es lo embebido. Tamaño primero (gratis), CRC solo si empatan. */
-            uint32_t sz = 0;
-            int difiere = (bpvm_fs_stat(PREINSTALL[i].path, &sz) == 0
-                           && sz != *PREINSTALL[i].len);
-            if (!difiere && sz == *PREINSTALL[i].len) {
-                uint32_t c_fs = 0;
-                if (bpvm_fs_crc32(PREINSTALL[i].path, &c_fs) == 0)
-                    difiere = (c_fs != bpvm_crc32(PREINSTALL[i].data,
-                                                  *PREINSTALL[i].len));
-            }
-            if (difiere)
-                log_printf("lib: %s NO es el de esta imagen (%u B en FS, %u embebido)"
-                           " - ¿rancio de otro firmware, o subido por ti?",
-                           PREINSTALL[i].path, (unsigned) sz,
-                           (unsigned) *PREINSTALL[i].len);
-            continue;
-        }
-        fs_put(PREINSTALL[i].path, PREINSTALL[i].data, *PREINSTALL[i].len);
-        log_printf("preinstall: %s (%u bytes)", PREINSTALL[i].path,
-                   (unsigned) *PREINSTALL[i].len);
+        char linea[160];
+        (void) bpvm_mods_sincronizar(PREINSTALL[i].path, PREINSTALL[i].data,
+                                     *PREINSTALL[i].len, pico_mods_put,
+                                     linea, sizeof linea);
+        if (linea[0]) log_printf("%s", linea);
     }
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",

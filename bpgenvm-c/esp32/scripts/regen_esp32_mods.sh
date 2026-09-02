@@ -45,7 +45,8 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo " */"
     echo '#include "esp32_mods.h"'
     echo '#include "fs.h"'
-    echo '#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */'
+    echo '#include "log.h"        /* log_printf: lo que decidió el instalador, al log del boot */'
+    echo '#include "bpvm_mods.h"  /* #466: LA REGLA del /lib vive en src/, no aquí (esto es generado) */'
     echo '#include <stdint.h>'
     echo ""
     for m in "${MODS[@]}"; do
@@ -66,25 +67,31 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo ""
     # OJO: install en LOTE (021fdbf) — sin el suspend/resume, cada fs_put
     # auto-persiste la partición entera y el primer boot del P4 tardaba ~46 s.
-    # Si tocas esto, mantenlo idéntico al esp32_mods.c vigente.
+    # #466 — la DECISIÓN (falta / versión anterior / CRC distinto → se repone; más
+    # nuevo → se deja) NO está aquí: está en src/bpvm_mods.c. Aquí sólo el bucle y
+    # el lote. Lo que se puso a mano en este generado (#422) lo borró la siguiente
+    # regeneración (#446); por eso no se vuelve a poner nada aquí.
+    echo "static int mods_put(const char* p, const uint8_t* d, uint32_t n) {"
+    echo "    return fs_put(p, d, n) == FS_OK ? 0 : -1;"
+    echo "}"
+    echo ""
     echo "void esp32_mods_install(void) {"
     echo "    unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));"
-    echo "    unsigned installed = 0;"
+    echo "    unsigned escritos = 0;"
     echo "    /* LOTE: sin suspender, cada fs_put auto-persiste reescribiendo la partición"
     echo "     * entera (~3 s en la bpfs de 10 MB del P4) → el primer boot tardaba ~46 s."
-    echo "     * Suspender + UN save al final lo deja en ~3 s; si no se instala nada"
+    echo "     * Suspender + UN save al final lo deja en ~3 s; si no se escribe nada"
     echo "     * (boots siguientes), ni siquiera se guarda. */"
     echo "    fs_autosave_suspend();"
     echo "    for (unsigned i = 0; i < n; i++) {"
-    echo "        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */"
-    echo "        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el"
-    echo "         * espejo de 64 KB (y por 14 módulos, uno detrás de otro). */"
-    echo "        uint32_t sz_dummy;"
-    echo "        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {"
-    echo "            if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;"
-    echo "        }"
+    echo "        char linea[160];"
+    echo "        bpvm_mods_res_t r = bpvm_mods_sincronizar(s_mods[i].path, s_mods[i].data,"
+    echo "                                                  s_mods[i].len, mods_put,"
+    echo "                                                  linea, sizeof linea);"
+    echo "        if (r == BPVM_MODS_INSTALADO || r == BPVM_MODS_REPUESTO) escritos++;"
+    echo "        if (linea[0]) log_printf(\"%s\", linea);"
     echo "    }"
-    echo "    fs_autosave_resume(installed > 0);"
+    echo "    fs_autosave_resume(escritos > 0);"
     echo "}"
 } > "$OUT"
 

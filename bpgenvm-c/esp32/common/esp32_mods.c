@@ -8,7 +8,8 @@
  */
 #include "esp32_mods.h"
 #include "fs.h"
-#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
+#include "log.h"        /* log_printf: lo que decidió el instalador, al log del boot */
+#include "bpvm_mods.h"  /* #466: LA REGLA del /lib vive en src/, no aquí (esto es generado) */
 #include <stdint.h>
 
 static const unsigned char core_mod[] = {
@@ -4198,22 +4199,25 @@ static const mod_entry_t s_mods[] = {
     { "/lib/Timer.mod", timer_mod, timer_mod_len },
 };
 
+static int mods_put(const char* p, const uint8_t* d, uint32_t n) {
+    return fs_put(p, d, n) == FS_OK ? 0 : -1;
+}
+
 void esp32_mods_install(void) {
     unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));
-    unsigned installed = 0;
+    unsigned escritos = 0;
     /* LOTE: sin suspender, cada fs_put auto-persiste reescribiendo la partición
      * entera (~3 s en la bpfs de 10 MB del P4) → el primer boot tardaba ~46 s.
-     * Suspender + UN save al final lo deja en ~3 s; si no se instala nada
+     * Suspender + UN save al final lo deja en ~3 s; si no se escribe nada
      * (boots siguientes), ni siquiera se guarda. */
     fs_autosave_suspend();
     for (unsigned i = 0; i < n; i++) {
-        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */
-        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el
-         * espejo de 64 KB (y por 14 módulos, uno detrás de otro). */
-        uint32_t sz_dummy;
-        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {
-            if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;
-        }
+        char linea[160];
+        bpvm_mods_res_t r = bpvm_mods_sincronizar(s_mods[i].path, s_mods[i].data,
+                                                  s_mods[i].len, mods_put,
+                                                  linea, sizeof linea);
+        if (r == BPVM_MODS_INSTALADO || r == BPVM_MODS_REPUESTO) escritos++;
+        if (linea[0]) log_printf("%s", linea);
     }
-    fs_autosave_resume(installed > 0);
+    fs_autosave_resume(escritos > 0);
 }

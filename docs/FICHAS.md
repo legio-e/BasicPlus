@@ -1486,6 +1486,30 @@ Orden de trabajo, cada paso con su verificación: (1) el device — `STAT` por n
 protocolo documentado, `sim_smoke`; (2) el helper del instalador — test en host, generadores,
 tabla de la Pico, seis builds; (3) el IDE — contra el simulador, fat-jar con el IDE cerrado; (4)
 las placas: Metro y Pico 2, que son las que tienen `/lib` con historia.
+
+### 🛠️ Hecho al retomar (2-sep): los pasos (1) y (2), verificados en host y en los seis builds
+
+- **(1) el device pregunta-y-contesta**: `STAT` acepta `name` (+`base` opcional) y lo resuelve
+  `bpvm_entry_resolve` —el del RUN—; la respuesta trae `path` y `magic` (también en el STAT por
+  ruta). Documentado en `BPVM_WIRE_PROTOCOL.md`; `sim_smoke` **45/45** (5 checks nuevos: lo
+  encuentra en `/lib`, el proyecto primero con `base`, NOT_FOUND, sin `magic` para lo que no es
+  módulo). Commit `1a7c1924`.
+- **(2) la regla del SO, una vez**: `src/bpvm_mods.c` (`bpvm_mods_sincronizar`): falta → instala;
+  versión anterior, o misma versión con tamaño/CRC distinto → repone y lo dice; más nuevo → se
+  deja y lo dice; fuera de `/lib` → sólo si falta. Lee por la fachada (`stat/read_at/crc32`) y
+  escribe por el `put` de la familia (el ESP32 agrupa las escrituras). `make test-mods` **16/16**
+  sobre un littlefs real en fichero, con los casos que las placas han tenido de verdad (el MOD6
+  de V5 bajo imagen MOD7, el recompilado con el mismo MOD7, basura, el Hello del usuario). Los
+  dos generadores emiten la llamada —los generados sólo cambian en la cola: **los blobs salieron
+  idénticos**, la stdlib embebida no se ha movido— y la tabla de la Pico llama al mismo helper;
+  el chivato de `#422` desaparece porque ya no hace falta: reflashear REPONE.
+- **Seis builds verdes** con el `.c` nuevo dado de alta en los cinco sitios: host (`make`,
+  `test-mem`, `sim-smoke`), Pico (`uf2` de las 19:27), S3/C3/P4 (`Project build complete`, 19:28),
+  Nucleo (text 250 200 → 251 248: el helper) y Discovery (0 avisos).
+
+⏭️ (3) el IDE: `BpvmClient.statModule`, el bucle de `uploadAndRun` decide con la respuesta del
+device, fuera `EMBEDDED_CORE_MODS` (también del filtro de `resolveDeviceDeps`, que la usa). (4) las
+placas: Metro y Pico 2.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para

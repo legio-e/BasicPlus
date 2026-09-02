@@ -88,6 +88,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_boot.c           # máquina de estados de arranque + STATE
     ${BPVM_C_ROOT}/src/bpvm_sqlmem.c         # V5/H: regla del bloque de memoria de la BD
     ${BPVM_C_ROOT}/src/bpvm_mem.c            # V6/U6: el planificador de memoria de la VM (una regla, cinco placas)
+    ${BPVM_C_ROOT}/src/bpvm_mods.c           # V6/#466: la regla del /lib de la imagen (común a las tres familias)
     ${BPVM_C_ROOT}/src/bpvm_bios.c           # V5/I: tabla BIOS prestada al pack nativo
     ${BPVM_C_ROOT}/src/bpvm_bios_fs.c        # V5/H2: sus ranuras de ficheros (portable)
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo

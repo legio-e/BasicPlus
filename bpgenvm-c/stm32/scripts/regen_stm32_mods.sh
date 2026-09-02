@@ -43,8 +43,9 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo " * de la Pico → los programas que importan stdlib resuelven sin uploads."
     echo " */"
     echo '#include "stm32_mods.h"'
-    echo '#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */'
     echo '#include "stm32_fs.h"'
+    echo '#include "log.h"        /* log_printf: lo que decidió el instalador, al log del boot */'
+    echo '#include "bpvm_mods.h"  /* #466: LA REGLA del /lib vive en src/, no aquí (esto es generado) */'
     echo '#include <stdint.h>'
     echo ""
     for m in "${MODS[@]}"; do
@@ -63,16 +64,19 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     done
     echo "};"
     echo ""
+    # #466 — la DECISIÓN (falta / versión anterior / CRC distinto → se repone; más
+    # nuevo → se deja) NO está aquí: está en src/bpvm_mods.c. Aquí sólo el bucle.
+    echo "static int mods_put(const char* p, const uint8_t* d, uint32_t n) {"
+    echo "    return fs_put(p, d, n) == 0 ? 0 : -1;"
+    echo "}"
+    echo ""
     echo "void stm32_mods_install(void) {"
     echo "    unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));"
     echo "    for (unsigned i = 0; i < n; i++) {"
-    echo "        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */"
-    echo "        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el"
-    echo "         * espejo (y por 14 módulos seguidos). */"
-    echo "        uint32_t sz_dummy;"
-    echo "        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {"
-    echo "            fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len);"
-    echo "        }"
+    echo "        char linea[160];"
+    echo "        (void) bpvm_mods_sincronizar(s_mods[i].path, s_mods[i].data, s_mods[i].len,"
+    echo "                                     mods_put, linea, sizeof linea);"
+    echo "        if (linea[0]) log_printf(\"%s\", linea);"
     echo "    }"
     echo "}"
 } > "$OUT"

@@ -52,7 +52,10 @@ la imagen final `U6.10` en su placa (P4, Metro, Pico 2, C3) y tres `/lib` limpia
    el ESP32 se perdió al regenerar los blobs (`#446`: iba en un fichero GENERADO) y el STM32 nunca
    lo tuvo. Recomendación **A**: el IDE deja `/lib` en paz (sus deps de stdlib a `/app/<proj>`, que
    gana) y un helper común refresca `/lib` cuando no coincide con lo embebido. Mientras no esté,
-   cada Run desde el IDE vuelve a ensuciar las placas limpiadas hoy.
+   cada Run desde el IDE vuelve a ensuciar las placas limpiadas hoy. 🛠️ **Al retomar: la regla
+   definitiva de Eduardo está en la ficha, y los pasos (1) `STAT` por nombre + `magic` y (2) el
+   helper común del instalador ya están hechos y verificados (host + seis builds). Faltan (3) el
+   IDE y (4) las placas.**
 
 La matriz completa, con lo hecho, está justo debajo.
 
