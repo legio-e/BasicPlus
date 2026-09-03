@@ -4291,6 +4291,39 @@ No es código distinto: es el mismo dato empaquetado de dos maneras.
 ⚠️ **Es un GENERADO.** Se toca el generador, nunca el resultado — ver
 [[generado-parcheado-a-mano]].
 
+##### 📐 `U4.0` — el censo y la forma (3-sep): UN generador, ficheros de sólo DATOS, y el bucle en el común
+
+**Medido.** Tres generadores casi iguales (`regen_pico_mods.sh` 47 líneas, `regen_stm32_mods.sh`
+81, `regen_esp32_mods.sh` 92) que emiten el mismo dato en dos formatos:
+
+| familia | fichero(s) generado(s) | líneas | bytes | módulos |
+|---|---|---|---|---|
+| ESP32 (S3, C3, P4) | `esp32/common/esp32_mods.c` | 4 223 | 307 622 | 14 |
+| STM32 | `stm32/port/stm32_mods.c` | 4 213 | 307 033 | 14 |
+| Pico/Metro | 16 × `pico/*_mod.c` + `hello_mod.c` + `embedded_mods.h` | 4 775 | 346 235 | 15 + `Hello` |
+
+Lo que difiere de verdad entre familias es **la lista** (la Pico embebe además `Neopixel`, y el
+`Hello.mod` de muestra en `/app`) y **el `put`** (el ESP32 agrupa las escrituras). Todo lo demás
+—el tipo de la tabla, el bucle, la regla— ya es común desde `#466`: la regla vive en
+`src/bpvm_mods.c`, pero el bucle sigue copiado en cada generado y en el `main.c` de la Pico.
+
+**La forma:**
+1. **Un generador**, `scripts/regen_mods.sh <familia> <salida> MOD… [--extra ruta=fichero]`, que
+   emite UN fichero de **sólo datos**: los blobs (`static const`), la tabla
+   `const bpvm_mod_embebido_t <fam>_mods[]` y `<fam>_mods_n`. **Ni una línea de código dentro
+   del generado**: lo que se puso a mano en uno murió en la siguiente regeneración (`#422`).
+2. **El bucle, una vez, en `src/bpvm_mods.c`**: `bpvm_mods_instalar_tabla(tabla, n, put, log)`
+   → escritos. Cada familia lo llama con su `put` y su `log`; el ESP32 lo envuelve en su lote.
+3. **La Pico pasa al mismo formato**: `pico/pico_mods.c` (15 módulos + `/app/Hello.mod` como
+   entrada `--extra`); fuera los 17 ficheros y `embedded_mods.h`, y con ellos la tabla
+   `PREINSTALL` a mano, que guardaba la longitud por dirección porque los `_len` eran `extern`.
+4. `regen_all_mods.sh` llama al generador tres veces con cada lista; `regen_hello_blob.sh` se
+   queda en compilar `hello.bp` y pasárselo a la Pico como `--extra`.
+
+**Cómo se comprueba:** los blobs regenerados son byte-idénticos a los de hoy (mismo `bpstdlib`:
+se diffea la parte `xxd`), `test-mods` más un caso del bucle en host, los seis builds, y en placa
+el arranque dice lo mismo que hoy (la Pico 2 acaba de verificar la regla con esta misma tabla).
+
 #### 🟡 U5 — la tabla de handles
 
 Hoy no tiene fichero ni cabecera: vive repartida por `bpvm.c`, `builtins.c`,
