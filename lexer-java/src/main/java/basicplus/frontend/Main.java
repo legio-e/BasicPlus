@@ -136,6 +136,10 @@ public final class Main {
          * .bpbuild. Si no hay BpVM.cfg, la lista queda vacía.
          */
         final List<Path> dependencyPaths = new ArrayList<>();
+        /** #467 — el stdlibDir del BpVM.cfg que mande (el del fuente pisa al del
+         *  cwd). Se consulta ANTES que outDir y que el dir del importer: un módulo
+         *  que vive aquí ES la stdlib, y una copia rancia por el camino no vale. */
+        Path stdlibDir = null;
 
         int totalErrors = 0;
 
@@ -156,6 +160,10 @@ public final class Main {
                 edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(source);
                 addDepDirIfPresent(cfg.stdlibDir);
                 addDepDirIfPresent(cfg.devicesDir);
+                if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()
+                        && Files.isDirectory(Paths.get(cfg.stdlibDir))) {
+                    stdlibDir = Paths.get(cfg.stdlibDir);   // #467: el último en llamar, el más específico
+                }
             } catch (Throwable ignored) {
                 // Sin config; sigue funcionando para módulos que no importan stdlib.
             }
@@ -1445,6 +1453,8 @@ public final class Main {
         } else library = "";
         String bpiName = library.isEmpty() ? moduleName + ".bpi" : library + "." + moduleName + ".bpi";
         Path candidate = ctx.outDir.resolve(bpiName);
+        if (ctx.stdlibDir != null && Files.exists(ctx.stdlibDir.resolve(bpiName)))
+            candidate = ctx.stdlibDir.resolve(bpiName);   // #467: la stdlib PRIMERO
         if (!Files.exists(candidate)) {
             Path sib = importerSrc.toAbsolutePath().getParent().resolve(bpiName);
             if (Files.exists(sib)) candidate = sib;
@@ -1506,6 +1516,17 @@ public final class Main {
             if (fp.endsWith(".bpi")) fp = fp.substring(0, fp.length() - 4) + ".mod";
             Path direct = importerDir.resolve(fp).toAbsolutePath().normalize();
             if (carriesInterface(direct)) return direct;
+        }
+        /* #467 — la stdlib PRIMERO: un módulo que vive en stdlibDir ES la stdlib, y
+         * una copia rancia en outDir o junto al fuente no debe cortar la búsqueda.
+         * samples/out tenía los 26 módulos de V5 (MOD6, del 21-ago) tapando a los
+         * MOD7 de bpstdlib: «el módulo importado 'Math' no expone 'clamp'» × 25, con
+         * el compilador y la stdlib al día. carriesInterface() sólo descarta los v5
+         * SIN interfaz; un v6 rancio la lleva y pasaba. Es la misma regla que el IDE
+         * aplica a las deps del device desde el 26-jun; aquí faltaba. */
+        if (ctx.stdlibDir != null) {
+            Path enStdlib = ctx.stdlibDir.resolve(modName);
+            if (carriesInterface(enStdlib)) return enStdlib;
         }
         Path candidate = ctx.outDir.resolve(modName);
         if (carriesInterface(candidate)) return candidate;
@@ -2663,6 +2684,10 @@ public final class Main {
             if (fp.endsWith(".mod")) fp = fp.substring(0, fp.length() - 4) + ".bpi";
             Path direct = importerDir.resolve(fp).toAbsolutePath().normalize();
             if (Files.exists(direct)) return direct;
+        }
+        if (ctx.stdlibDir != null) {                       // #467: la stdlib PRIMERO
+            Path enStdlib = ctx.stdlibDir.resolve(bpiName);
+            if (Files.exists(enStdlib)) return enStdlib;
         }
         Path candidate = ctx.outDir.resolve(bpiName);
         if (Files.exists(candidate)) return candidate;

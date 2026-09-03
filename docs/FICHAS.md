@@ -1632,6 +1632,36 @@ BpIde pasa a **`6.0`** (era la etiqueta de V5 sin subir): el jar del repo es `Bp
 dist sigue siendo `BpIde-5.0.jar`, que ya no se confunden; `bpide.bat` arranca desde la raíz del
 repo; `CLAUDE.md`, `README` y `PUBLICAR` al día. El `BpIde/target/BpIde-5.0.jar` viejo, borrado.
 
+### Segunda vuelta: con el jar 6.0 y el fichero del repo, el MISMO error — la causa de verdad estaba en el COMPILADOR
+
+La captura siguiente lo dejó claro: `BpIde 6.0 — C:/lenguajes/pm/samples/MathRango.bp`, 25 errores.
+El cfg ya no podía ser. **Reproducido en línea de comandos** con el outDir que usa el IDE para un
+fichero suelto (`<dir del .bp>/out`):
+
+```
+basicplus-frontend.jar samples/MathRango.bp --compile samples/out   → 25 «no expone»
+basicplus-frontend.jar samples/MathRango.bp --compile <tmp>         → compila
+```
+
+**`samples/out` guardaba la stdlib ENTERA de V5**: 26 `.mod` MOD6 del 21-ago (`Math.mod` 2320 B,
+`I2c.mod` 4153 B… los mismos tamaños que aparecieron en el `/lib` de la Metro). Y el compilador
+resuelve un `import` buscando el `.mod` en **outDir → dir del fuente → dependencyPaths** (donde va
+`stdlibDir`): la copia rancia de `samples/out` ganaba a la buena de `bpstdlib`. `carriesInterface()`
+sólo descarta los v5 SIN sección de interfaz; un MOD6 la lleva, y pasaba. Es la misma clase de
+fallo que el IDE ya arregló para las dependencias del device (26-jun, «stdlib primero»): el
+compilador no lo tenía.
+
+**Arreglo de raíz (frontend)**: `Ctx.stdlibDir` (el del cfg más específico) y **la stdlib PRIMERO**
+en los tres buscadores —`locateImportMod`, `locateImportBpi` y `loadContractInterface`—: un
+módulo que vive en `stdlibDir` ES la stdlib, y ninguna copia por el camino corta la búsqueda.
+Verificado: con `--compile samples/out` **0 errores**; `samples/out/Math.mod` sigue ahí (2320 B) y
+ya no manda; el `MathRango.mod` compilado ahí corre **byte-idéntico en las dos VMs** (29 líneas);
+el jar del IDE reconstruido con el frontend nuevo (`frontend/Main.class` del 3-sep 18:59).
+
+📌 Lo del cfg (cwd primero) era una trampa real, pero **no la de hoy**; queda arreglada igual. Y
+`samples/out` sigue lleno de MOD6 de V5: ya no hacen daño, pero son un fósil (gitignorado) que
+conviene vaciar cuando toque.
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
