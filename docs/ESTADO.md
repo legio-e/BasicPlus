@@ -81,6 +81,15 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    `test_mem` 30/30. El C6 (COM3) tiene `/lib/Gui.mod`, `/lib/Json.mod` y `/app/GuiColorDemo.mod`.
    Siguiente: **`P2.2`** (PWM del backlight, rotación con gaps, LED RGB como `Neopixel`, el IDE
    subiendo `Gui`+`Json` solos; detalle en la ficha).
+8. 🟡 **`P2.2` EN CURSO (4-sep, madrugada)** — la rotación va por MADCTL del panel con el gap de
+   cada orientación (tabla Adafruit 240×240: 180 → y+80, 270 → x+80) y repintado entero; el aviso a
+   consola, no a stdout. Sample nuevo `GuiRotCycle.bp` (gira solo cada 3 s, marcas en las esquinas;
+   paridad host 25/25). **Imagen regrabada en el C6 y el demo subido y lanzado; falta que Eduardo
+   mire las cuatro orientaciones.** La lista de P2.2 se acortó con hechos: el IDE YA resuelve deps
+   transitivas (Gui→Json), el PWM del backlight no tiene API de brillo a la que servir (se queda el
+   GPIO), y `Neopixel` sólo tiene backend en la Pico (en ESP32 es no-op: adaptador nuevo, ficha
+   aparte). Punto de diseño anotado: el screen lógico dice 480×320 en todas las placas (paridad del
+   dump) mientras LVGL alinea contra el panel real.
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

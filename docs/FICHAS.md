@@ -2865,6 +2865,49 @@ WS2812B (GPIO8) como `Neopixel`, quizá el botón BOOT (GPIO9) como entrada, y c
 IDE 6.0 que `Run on Device` sube `Gui`+`Json` solos (por el wire a mano hicieron falta los dos).
 Cosmético: por el USB nativo asoma un trozo del log del bootloader antes del HELLO.
 
+##### 🟡 `P2.2` — EN CURSO (4-sep, madrugada): la rotación con sus gaps, y lo que P2.2 NO va a ser
+
+Antes de escribir nada, los hechos que cambian la lista (cada uno costó un viaje al código):
+
+- **El IDE ya sube `Gui`+`Json` solo.** `resolveDeviceDeps` hace BFS sobre el grafo de imports
+  desde junio (Gui → Json para el loader de Forms); por el wire a mano hicieron falta los dos porque
+  el wire no resuelve nada. Queda sólo confirmarlo con un `Run on Device` desde el IDE 6.0 en COM3.
+- **El PWM del backlight no tiene a quién servir.** En BasicPlus no hay API de brillo (el P4 también
+  va al 100 % por LEDC). Un PWM sin API es el mismo «a tope» con más código: se queda el GPIO. Si
+  algún día hay `Gui.setBrightness`, es una decisión de lenguaje (las dos VMs + stdlib), no de driver.
+- **`Neopixel` es de la Pico.** El backend `bpvm_neopixel_backend_t` sólo lo registra `pico/main.c`
+  (PIO); en TODA la familia ESP32 `Neopixel.init` devuelve 0 y `show` es no-op. Darle el WS2812B del
+  C6 (GPIO8) es un adaptador nuevo para la familia (RMT/led_strip, valdría también para el LED del
+  S3 y del C3), no «activar lo genérico». Se propone como ficha aparte, decisión de Eduardo.
+- **El screen lógico del modelo dice 480×320 en todas las placas.** `bpvm_gui_set_screen_size` sólo
+  la llaman el host (`--screen`) y el simulador; en firmware el modelo se queda con el `#define` y
+  LVGL alinea contra el panel real (240×240 en el C6, 1024×600 en el P4). Por eso el `align` sale
+  bien en la placa y el `__guiDumpTree` dice 480×320. Si el device dijera su tamaño, el dump (que es
+  stdout) dejaría de ser idéntico al del host: es una decisión de paridad, no un bug del driver.
+
+**Hecho esta noche — la rotación por el panel, con su gap por orientación.** El ST7789 de 240×240
+vive en una RAM de 240×320: sobran 80 filas, al final sin `MY` (por eso 0° va con gap 0/0, visto) y
+al principio con `MY`; con `MV` (90/270) el offset pasa al eje x. Es la tabla de Adafruit_ST7789
+para 240×240 pasada a bits MADCTL: 0° → (0,0); 90° `MV|MX` → (0,0); 180° `MX|MY` → (0,80); 270°
+`MV|MY` → (80,0). Tras el `set_gap` se invalida la pantalla entera (la RAM del panel guarda lo viejo
+en la orientación vieja), y el aviso va a `ESP_LOGI`, no a stdout (paridad del OUTPUT: la versión
+anterior hacía `printf`). El driver del IDF suma el gap a la ventana en `draw_bitmap` y no lo toca
+al hacer `swap_xy`, así que el gap se da ya en términos del panel girado — lo que hace la tabla.
+
+**El instrumento: `samples/GuiRotCycle.bp`.** `GuiRotDemo` gira con un toque y el C6 no tiene
+táctil, así que este gira solo: un hilo (`extends Thread`, como `GuiAsyncDemo`) duerme 3 s y rota
++90, dos vueltas; el label del centro dice los grados y cuatro marcas `TL/TR/BL/BR` dicen dónde ha
+ido cada esquina. Con el giro bien hecho, a 90 la `TL` está arriba a la derecha, a 180 abajo a la
+derecha, a 270 abajo a la izquierda; una franja negra o un desplazamiento = el gap de esa
+orientación está mal. Paridad host: **25 líneas byte-idénticas** miVM/VM-C. En la placa (imagen
+regrabada 4-sep 00:15, `/app/GuiRotCycle.mod` subido): `RUN` → dump → `rotacion: 90` a los 3 s.
+
+⏭️ **Falta lo que sólo ven los ojos**: Eduardo mira el ciclo (`Run on Device` de `GuiRotCycle`
+desde el IDE, o `RUN /app/GuiRotCycle.mod` por el wire) y dice, por orientación, si las esquinas
+caen donde deben y si hay franja. Si 90 y 270 salen cambiadas, el giro es antihorario y se cruzan
+los dos casos; si alguna sale desplazada 80 px, se cambia su gap. Después: cerrar `P2.2` y decidir
+las dos fichas propuestas (`Neopixel` en la familia ESP32; el tamaño del screen lógico en device).
+
 
 
 **Encargo de Eduardo (23-ago):** *«hay que mirar el soporte de pantallas SPI, pero eso

@@ -16,9 +16,13 @@
  * flush_ready cuando el DMA termina (on_color_trans_done). El bombeo es el del
  * P4: lv_timer_handler + ceder al menos un tick, tope 10 ms (#424).
  *
- * Lo que aún no está: PWM del backlight (hoy encendido a tope por GPIO), la
- * rotación con sus offsets (el ST7789 de 240×240 vive en una RAM de 240×320 y
- * girar 180° exige un gap de 80), y el LED RGB (que en BasicPlus es Neopixel).
+ * La rotación la hace el panel por MADCTL con su gap por orientación (tabla en
+ * bpvm_gui_disp_set_rotation; 0° visto en placa, las otras tres por confirmar con
+ * samples/GuiRotCycle.bp). El backlight va a tope por GPIO: un PWM por LEDC sólo
+ * tendría sentido con una API de brillo en BasicPlus, que hoy no existe (el P4
+ * también va al 100 %). El LED RGB (WS2812B en GPIO8) es `Neopixel` en BasicPlus,
+ * pero ese backend sólo lo tiene la Pico (PIO): darlo a la familia ESP32 es un
+ * adaptador nuevo (RMT), no cosa de este fichero.
  */
 #ifdef BPVM_LVGL
 
@@ -136,17 +140,32 @@ void bpvm_gui_disp_pump(void) {
 int bpvm_gui_disp_is_open(void) { return s_open; }
 
 void bpvm_gui_disp_set_rotation(int deg) {
-    /* El giro lo hace el PANEL (MADCTL), que sale gratis. Para 90/180/270 el ST7789
-     * de 240×240 necesita además un gap (su RAM es de 240×320); se ajusta cuando se
-     * vea en la placa — hoy sólo 0° está comprobado. */
+    /* El giro lo hace el PANEL (MADCTL: MV = swap, MX/MY = mirror), que sale gratis:
+     * LVGL sigue pintando 240×240 sin girar y es el controlador quien lo coloca. Lo
+     * que cambia con el giro es el GAP. El ST7789 de 240×240 vive en una RAM de
+     * 240×320: sobran 80 filas, que quedan al FINAL sin MY (por eso 0° va con gap
+     * 0/0, visto en placa) y al PRINCIPIO con MY; y con MV (90/270) ese offset se
+     * pasa al eje x. Es la tabla de Adafruit_ST7789 para 240×240 (rowstart 80,
+     * rowstart2 0, colstart 0) traducida a bits:
+     *
+     *     0°:  sin bits  → gap (0, 0)     90°: MV|MX → gap (0, 0)
+     *   180°:  MX|MY     → gap (0, 80)   270°: MV|MY → gap (80, 0)
+     *
+     * (90° = MV|MX manda la fila superior a la columna derecha: giro horario, la
+     * convención de LVGL/P4.) Tras cambiar MADCTL se invalida la pantalla entera:
+     * la RAM del panel guarda lo viejo en la orientación vieja y nadie más lo
+     * repintaría. El aviso va al log de consola, no a stdout (paridad del OUTPUT). */
     if (s_panel == NULL) return;
+    int gx = 0, gy = 0;
     switch (deg) {
         case 90:  esp_lcd_panel_swap_xy(s_panel, true);  esp_lcd_panel_mirror(s_panel, true,  false); break;
-        case 180: esp_lcd_panel_swap_xy(s_panel, false); esp_lcd_panel_mirror(s_panel, true,  true);  break;
-        case 270: esp_lcd_panel_swap_xy(s_panel, true);  esp_lcd_panel_mirror(s_panel, false, true);  break;
+        case 180: esp_lcd_panel_swap_xy(s_panel, false); esp_lcd_panel_mirror(s_panel, true,  true);  gy = 80; break;
+        case 270: esp_lcd_panel_swap_xy(s_panel, true);  esp_lcd_panel_mirror(s_panel, false, true);  gx = 80; break;
         default:  esp_lcd_panel_swap_xy(s_panel, false); esp_lcd_panel_mirror(s_panel, false, false); break;
     }
-    printf("[gui] setRotation(%d): por MADCTL del panel; los offsets de 90/180/270 están por comprobar\n", deg);
+    esp_lcd_panel_set_gap(s_panel, gx, gy);
+    if (s_disp != NULL) lv_obj_invalidate(lv_screen_active());
+    ESP_LOGI(TAG, "setRotation(%d): MADCTL del panel, gap (%d,%d)", deg, gx, gy);
 }
 
 #endif /* BPVM_LVGL */

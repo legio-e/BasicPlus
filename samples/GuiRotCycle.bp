@@ -1,0 +1,65 @@
+// GuiRotCycle.bp — Gui.setRotation SIN táctil: la pantalla gira sola cada 3 s.
+//
+// Hermano de GuiRotDemo (que gira con un toque): en una placa sin táctil, como el
+// ESP32-C6-LCD-1.3 (ST7789 240x240 por SPI), hace falta que el giro lo dispare el
+// tiempo. Un hilo (extends Thread, como GuiAsyncDemo) duerme 3 s y rota +90
+// grados, dos vueltas enteras; el label del centro dice los grados y las marcas
+// TL/TR/BL/BR (esquinas del screen LÓGICO) dicen dónde ha ido a parar cada
+// esquina: con el giro bien hecho, a 90 la marca TL aparece arriba a la derecha,
+// a 180 abajo a la derecha, a 270 abajo a la izquierda. Si alguna orientación
+// sale desplazada o con una franja negra, el gap del panel para esa orientación
+// está mal (el ST7789 de 240x240 vive en una RAM de 240x320).
+//
+// Paridad headless: el dump muestra el screen antes (0 grados) y el hilo imprime
+// cada giro; en host la ventana sigue viva tras las dos vueltas.
+module GuiRotCycle
+  import Gui
+
+  class Girador extends Thread
+    var lbl: Gui.Label
+    public function Girador(l: Gui.Label)
+      super(2048)
+      this.lbl := l
+    end Girador
+    public function run()
+      var deg: integer := 0
+      var i: integer := 0
+      while i < 8 do
+        sleep(3000)
+        deg := (deg + 90) mod 360
+        Gui.setRotation(deg)
+        this.lbl.setText("rot " + intToString(deg))
+        print "rotacion:"
+        print deg
+        i := i + 1
+      endwh
+      this.lbl.setText("fin: rot 0")
+    end run
+  end Girador
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var tl: Gui.Label := Gui.Label(scr, "TL")
+    tl.align(Gui.Align.TOP_LEFT, 4, 4)
+    var tr: Gui.Label := Gui.Label(scr, "TR")
+    tr.align(Gui.Align.TOP_RIGHT, -4, 4)
+    var bl: Gui.Label := Gui.Label(scr, "BL")
+    bl.align(Gui.Align.BOTTOM_LEFT, 4, -4)
+    var br: Gui.Label := Gui.Label(scr, "BR")
+    br.align(Gui.Align.BOTTOM_RIGHT, -4, -4)
+
+    var lbl: Gui.Label := Gui.Label(scr, "rot 0")
+    lbl.fontSize := 24
+    lbl.align(Gui.Align.CENTER, 0, 0)
+
+    var btn: Gui.Button := Gui.Button(scr, "arriba")
+    btn.align(Gui.Align.TOP_MID, 0, 30)
+
+    print "== antes (0 grados) =="
+    print Gui.__guiDumpTree()
+
+    Girador(lbl).start()
+    Gui.run()
+  end Main
+end GuiRotCycle
