@@ -30,7 +30,7 @@
 /* Board-aware (V3): los micros con panel RGB565 (STM32 DK2 via LTDC; ESP32-P4 via
  * MIPI-DSI) usan 16 bpp; el host (SDL) usa XRGB8888. USE_HAL_DRIVER lo define CubeMX
  * en todo proyecto STM32; BPVM_BOARD_P4 lo define el build del P4; el host ninguno. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4)
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6)
 #define LV_COLOR_DEPTH 16
 #else
 #define LV_COLOR_DEPTH 32
@@ -971,8 +971,9 @@
  *==================*/
 
 /*Use SDL to open window on PC and handle mouse and keyboard*/
-/* Board-aware: los micros (STM32 via LTDC, ESP32-P4 via MIPI-DSI) pintan sin SDL. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4)
+/* Board-aware: los micros (STM32 via LTDC, ESP32-P4 via MIPI-DSI, ESP32-C6 via SPI)
+ * pintan sin SDL. V6/P2: el C6 entra aquí igual que en LV_COLOR_DEPTH, arriba. */
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6)
 #define LV_USE_SDL              0
 #else
 #define LV_USE_SDL              1

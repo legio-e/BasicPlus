@@ -27,7 +27,7 @@
 
 ## Última sesión
 
-## ⏭️ AL RETOMAR (3-sep) — cerrar `U6`; luego `U4` y `U5`; después `P1` (el C6 sin pantalla) y `P2`
+## ⏭️ AL RETOMAR (4-sep) — `P2.1`: ver la pantalla del C6 (U6, U4, U5 y P1.C6 quedaron cerrados el 3-sep)
 
 **El orden lo fijó Eduardo al cerrar el 2-sep:** *«Terminaremos U6, U4 y U5. Después podemos hacer
 P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
@@ -72,8 +72,9 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    cintura común (`SOC_UART_HP_NUM`, el C6 cuenta su UART LP), aprovisionado por el wire, las tres
    constantes MEDIDAS (bloque contiguo 376 KB, margen 16932 → objetivo 192 KB), `fib(28)` 11823 ms
    (C3 11315), `MathRango` 29 líneas byte-idénticas al host. **El ecuador de V6.**
-7. **`P2`** — la pantalla SPI del C6 con LVGL empotrado (decisión del 26-ago): `flush_cb`, tick,
-   buffer parcial, y táctil si lo hay.
+7. 🟡 **`P2` EN CURSO** — el driver ST7789 del C6 está escrito y enlaza (`P2.1`); la `factory`
+   acaba de crecer a 1,5 MB. Al retomar: build → flash COM3 → reaprovisionar por el wire →
+   `GuiColorDemo` desde el IDE (Eduardo mira la pantalla). Los pasos exactos, en la ficha `P2.1`.
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

@@ -2770,6 +2770,29 @@ es nueva: reaprovisionar no cuesta nada).
 embebido: lo sube el IDE, y con `#466` sólo la primera vez), y los ojos de Eduardo son el
 oráculo de la pantalla; después `GuiEvLat`/`GuiEvSpike` para el ritmo, y la medida del margen.
 
+##### 🟡 `P2.1` — EN CURSO (3-sep, cerrado por límite de sesión): el driver escrito y enlazado; falta verlo
+
+- `esp32c6/main/gui_display_st7789.c`: el contrato `bpvm_gui_disp_*` sobre `esp_lcd` (bus SPI2,
+  panel ST7789 con los pines del esquemático, invert on, gap 0/0, backlight GPIO22), dos buffers
+  parciales de 24 líneas en RAM interna con DMA, swap RGB565 en el flush, `flush_ready` por
+  `on_color_trans_done`, bombeo como el P4, rotación por MADCTL (gaps por comprobar).
+- Build: `EXTRA_COMPONENT_DIRS` → LVGL vendorizada; flags `BPVM_BOARD_C6`/`BPVM_GUI`/`BPVM_LVGL`/
+  `LV_CONF_PATH`; `gui.c` y `esp_lcd`/`lvgl` en el `main`; `lv_conf.h` conoce al C6 (RGB565 y sin
+  SDL — el primer build cayó por compilar el driver SDL del host, que la condición no apagaba).
+- **Compila y enlaza**: la imagen mide **0x1142C0 = 1 131 200 B**, y la `factory` era de 1 MB →
+  `partitions.csv` del C6 con `factory` de 1,5 MB (`bpenv` 0x190000, `bpdata` 0x198000 de 2464 KB).
+  Con eso la placa vuelve a virgen (el ENV se mueve).
+
+⏭️ **Al retomar, en este orden**: (1) `idf.py build` en `esp32c6/` y mirar que cabe; (2) `idf.py -p
+COM3 flash`; (3) reaprovisionar por el wire (`PART_DEFAULTS` → `PART_APPLY` con lo propuesto →
+`RESET`, como en `P1.C6.2`) y `ENV_SET log=0`; (4) leer el arranque: la línea `heap:` cambia (el
+pool de LVGL son 64 KB de bss) y hay que ver si el objetivo de 192 KB sigue cabiendo o el
+planificador baja; (5) Eduardo: `Run on Device` de `samples/GuiColorDemo.bp` sobre COM3 desde el
+IDE 6.0 (sube `Gui.mod` la primera vez) y mira la pantalla: si sale invertida/desplazada, tocar
+`invert_color`/`set_gap`; si no sale nada, un patrón de prueba al arranque para separar panel de
+LVGL; (6) volver a medir el margen con la GUI activa y fijar las constantes; (7) `P2.2`: PWM del
+backlight, rotación con gaps, y el LED RGB como `Neopixel`.
+
 
 
 **Encargo de Eduardo (23-ago):** *«hay que mirar el soporte de pantallas SPI, pero eso

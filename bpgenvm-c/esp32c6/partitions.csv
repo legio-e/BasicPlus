@@ -12,13 +12,19 @@
 # (El mismo modo de fallo, al reves, que cazo Eduardo el 27-jul en el S3: la
 # constante mentia y el chip no.)
 #
-# Los OFFSETS de factory/bpenv/bpdata son los MISMOS que en el S3 y eso es a
+# V6/P2 (3-sep) — LA FACTORY CRECE A 1,5 MB: con LVGL (fuentes 12-48 de lv_conf.h)
+# la imagen mide 0x1142C0 = 1 131 200 B y no cabe en 1 MB. bpenv y bpdata se
+# desplazan 0x80000 (el ENV y el FS se mueven: la placa vuelve a virgen y se
+# reaprovisiona por el wire; bpdata queda en 2464 KB). Lo de abajo sobre los
+# offsets del S3 vale para el C3, que no lleva pantalla; aqui ya no coinciden.
+#
+# Los OFFSETS de factory/bpenv/bpdata eran los MISMOS que en el S3 y eso es a
 # proposito: asi el env sobrevive y el volumen littlefs no se mueve al ensanchar
 # — solo CRECE el sitio libre.
 #
 # Name,     Type, SubType,  Offset,    Size,     Flags
 nvs,        data, nvs,      0x9000,    0x6000,
 phy_init,   data, phy,      0xf000,    0x1000,
-factory,    app,  factory,  0x10000,   0x100000,
-bpenv,      data, 0x41,     0x110000,  0x8000,
-bpdata,     data, 0x40,     0x118000,  0x2E8000,
+factory,    app,  factory,  0x10000,   0x180000,
+bpenv,      data, 0x41,     0x190000,  0x8000,
+bpdata,     data, 0x40,     0x198000,  0x268000,

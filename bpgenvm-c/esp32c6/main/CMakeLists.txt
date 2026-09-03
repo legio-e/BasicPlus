@@ -22,6 +22,8 @@ idf_component_register(
         # El S3 y el P4 tienen dos puertos y NO se tocan.
         "../../esp32/common/wire_v1_usbjtag.c"
         "c6_board_id.c"                       # V6/P1.C6: identidad de placa (pisa el default del S3)
+        "gui_display_st7789.c"                # V6/P2: la pantalla ST7789 240x240 por SPI (esp_lcd + LVGL)
+        "../../src/gui.c"                     # V6/P2: modelo GUI + widgets LVGL (Gui.* de BasicPlus), como el P4
         "../../esp32/common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
         "../../esp32/common/repl_esp32.c"
         "../../esp32/common/gpio_esp32.c"
@@ -108,7 +110,9 @@ idf_component_register(
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support
-        esp_mm            # V6: esp_cache.h — el gate del .mdn AOT (el C6 es RISC-V, como el C3)   # INFO: esp_mac.h (uniqueId desde efuse)
+        esp_mm            # V6: esp_cache.h — el gate del .mdn AOT (el C6 es RISC-V, como el C3)
+        esp_lcd           # V6/P2: panel ST7789 por SPI (esp_lcd_new_panel_st7789 + panel_io_spi)
+        lvgl              # V6/P2: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)   # INFO: esp_mac.h (uniqueId desde efuse)
 )
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas
