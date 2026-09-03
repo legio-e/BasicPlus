@@ -1330,7 +1330,7 @@ función.** Queda el STM32, que es el que devuelve un array estático y conserva
 enlazador.
 
 
-##### 🔴 `#466` — `/lib` se queda RANCIO: el instalador de la stdlib sólo copia «si falta» (abierta 2-sep)
+##### ✅ `#466` — `/lib` se queda RANCIO: el instalador de la stdlib sólo copia «si falta» (abierta 2-sep · **CERRADA 3-sep** · `1a7c1924` `f1a9c23b` `0e1a425b` + la Pico 2)
 
 Salió en el repaso de la Metro con la imagen final. La memoria, byte a byte; pero el arranque:
 
@@ -1551,9 +1551,24 @@ el bit 31 puesto**, igual al `zlib.crc32` del `bpstdlib/Math.mod` del repo. Cont
 anterior contestaba `INVALID_PARAM falta path` a la misma pregunta (el camino «firmware viejo»
 del IDE).
 
-⏭️ (4b) **Falta la mitad del IDE en placa**: un Run desde el IDE nuevo (`BpIde/target/BpIde-6.0.jar`,
-no el dist de V5) de un programa con dependencia de stdlib (`samples/MathRango.bp`), que debe
-decir `[Explorer] Math.mod: ya en la placa, idéntico — no se sube`. Y la Metro, cuando se enchufe.
+### ✅ (4b) El IDE en placa (3-sep, Eduardo, desde `BpIde-6.0.jar` sobre la Pico 2)
+
+```
+[deps] 1 módulo(s) a subir:
+  - Math.mod (stdlib: se le pregunta a la placa)
+[Explorer] Math.mod: ya en la placa, idéntico — no se sube
+-- clamp(x, lo, hi) --
+dentro    5
+…
+FIN
+[Explorer] VM finished: exit 0 (OK)
+```
+
+Las 29 líneas de `MathRango` iguales al oráculo del host, y **ni un byte de stdlib por el wire**.
+Antes de esto, con el jar 6.0, salieron 25 errores de compilación — que no eran de `#466`: eran
+`#467`, el compilador tapado por la stdlib de V5 de `samples/out`. Con eso, **cerrada**: el SO
+repone `/lib` (4a) y el IDE pregunta y no retransmite (4b). La Metro y el resto de placas reciben
+lo mismo al regrabarse; no hace falta repetir la prueba en cada una.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
@@ -1656,7 +1671,9 @@ en los tres buscadores —`locateImportMod`, `locateImportBpi` y `loadContractIn
 módulo que vive en `stdlibDir` ES la stdlib, y ninguna copia por el camino corta la búsqueda.
 Verificado: con `--compile samples/out` **0 errores**; `samples/out/Math.mod` sigue ahí (2320 B) y
 ya no manda; el `MathRango.mod` compilado ahí corre **byte-idéntico en las dos VMs** (29 líneas);
-el jar del IDE reconstruido con el frontend nuevo (`frontend/Main.class` del 3-sep 18:59).
+el jar del IDE reconstruido con el frontend nuevo (`frontend/Main.class` del 3-sep 18:59). **Y
+verificado por Eduardo en el IDE**: `== compilación OK: MathRango.mod ==` con `samples/out` delante,
+y el Run en la Pico 2 byte-idéntico al host.
 
 📌 Lo del cfg (cwd primero) era una trampa real, pero **no la de hoy**; queda arreglada igual. Y
 `samples/out` sigue lleno de MOD6 de V5: ya no hacen daño, pero son un fósil (gitignorado) que

@@ -45,11 +45,13 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
   `sim-smoke` 45/45, fat-jar del IDE reconstruido. Commits `1a7c1924`, `f1a9c23b`, `0e1a425b`.
 
 ### En este orden
-1. **`#466` paso (4), en placa**: ✅ **Pico 2 (3-sep)** grabada con el `uf2` de las 19:38; con un
-   `Math.mod` MOD6 plantado a propósito, el arranque lo repuso él solo y sólo ése, y el `STAT` por
-   nombre da ruta, `MOD7` y CRC sin signo (verificado contra el repo). **Falta** un Run desde el IDE
-   nuevo (`BpIde/target/BpIde-6.0.jar`, no el dist) con `samples/MathRango.bp`, que debe decir
-   `[Explorer] Math.mod: ya en la placa, idéntico — no se sube`; y la Metro. Con eso **cierra `#466`.**
+1. ✅ **`#466` CERRADA (3-sep)**: en la Pico 2, el SO repuso solo un `Math.mod` MOD6 plantado a
+   propósito (4a), y el Run de `MathRango` desde `BpIde-6.0.jar` dijo `Math.mod: ya en la placa,
+   idéntico — no se sube` con las 29 líneas iguales al host (4b). De camino salió y se cerró
+   **`#467`**: el compilador resolvía `import Math` contra `samples/out` (la stdlib entera de V5,
+   MOD6) antes que contra `bpstdlib`; ahora la stdlib va PRIMERO en los tres buscadores del
+   frontend, el `BpVM.cfg` del fichero manda sobre el del cwd, y el IDE es `BpIde-6.0.jar`
+   (`bpide.bat` arranca desde la raíz del repo).
 2. **S3 (COM9)**: regrabar (`idf.py flash`; el DTR/RTS del puente, en `tools/medir_margen.ps1`) y
    mirar su `/lib` con el instalador nuevo.
 3. **Nucleo y Discovery**: las graba Eduardo desde CubeIDE (`Debug/*.elf` de las 19:38–19:39); leer
