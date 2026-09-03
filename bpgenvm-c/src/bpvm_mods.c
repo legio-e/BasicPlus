@@ -59,3 +59,17 @@ bpvm_mods_res_t bpvm_mods_sincronizar(const char* path, const uint8_t* data, uin
        path, motivo, v_fs, (unsigned) sz, v_emb, (unsigned) len);
     return BPVM_MODS_REPUESTO;
 }
+
+unsigned bpvm_mods_instalar_tabla(const bpvm_mod_embebido_t* t, unsigned n,
+                                  bpvm_mods_put_fn put, bpvm_mods_log_fn log)
+{
+    unsigned escritos = 0;
+    for (unsigned i = 0; i < n; i++) {
+        char linea[160];
+        bpvm_mods_res_t r = bpvm_mods_sincronizar(t[i].path, t[i].data, t[i].len,
+                                                  put, linea, sizeof linea);
+        if (r == BPVM_MODS_INSTALADO || r == BPVM_MODS_REPUESTO) escritos++;
+        if (log && linea[0]) log(linea);
+    }
+    return escritos;
+}

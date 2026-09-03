@@ -57,8 +57,9 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
 3. **Nucleo y Discovery**: las graba Eduardo desde CubeIDE (`Debug/*.elf` de las 19:38–19:39); leer
    `vm: 512 KB en SRAM estática (todo lo que deja la región)` e INFO 393216/131072, y su `/lib`.
    **Cierra `U6`** (la ficha padre pasa a ✅ con eso).
-4. **`U4`** — la stdlib embebida en UN formato de blobs (hoy 16 ficheros en la Pico, uno en ESP32 y
-   STM32). El instalador ya es común; queda el empaquetado y un generador único.
+4. ✅ **`U4` HECHO (3-sep, `U4.1`)**: un generador (`scripts/regen_mods.sh`), tres ficheros de
+   sólo datos, el bucle en `src/bpvm_mods.c`; blobs byte-idénticos, seis builds, Pico 2 verificada.
+   Las demás placas lo reciben al regrabarse.
 5. **`U5`** — la tabla de handles a un módulo propio (hoy repartida en cinco ficheros).
 6. **`P1.C6`** — el ESP32-C6 **sin pantalla**, por el camino del C3: `esp32c6/` con su `chip_cfg.h`
    (constantes MEDIDAS con `medir_margen.ps1`), transporte, `board_id`, partición. Compilar antes

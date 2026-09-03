@@ -29,6 +29,11 @@ extern "C" {
  * Tras esto, board_boot_status() refleja el estado alcanzado. */
 void board_mgr_esp32_boot(void);
 
+/* V6/U4 — la stdlib embebida a /lib: la tabla la genera scripts/regen_mods.sh
+ * (esp32_mods.c, SÓLO datos) y el bucle y la regla (#466) viven en
+ * src/bpvm_mods.c. Sólo con el FS montado. */
+void esp32_mods_install(void);
+
 /* V5/H7 — carga SÓLO el env, para quien lo necesite ANTES del arranque
  * escalonado. Hoy lo usa el P4 para dimensionar el bloque de la BD, que tiene
  * que reservarse antes que el heap de la VM (su dirección va SELLADA dentro del

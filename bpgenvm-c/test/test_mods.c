@@ -17,6 +17,8 @@ static int fallos = 0;
 
 static int put_fs(const char* p, const uint8_t* d, uint32_t n) { return bpvm_fs_write(p, d, n, 0); }
 static int put_roto(const char* p, const uint8_t* d, uint32_t n) { (void) p; (void) d; (void) n; return -1; }
+static int  g_lineas = 0;
+static void cuenta_linea(const char* l) { (void) l; g_lineas++; }
 
 static int mismo_contenido(const char* path, const uint8_t* data, uint32_t len) {
     uint8_t buf[64]; long n = bpvm_fs_read(path, buf, sizeof buf);
@@ -82,6 +84,20 @@ int main(void) {
 
     CHECK(bpvm_mods_version((const uint8_t*) "MOD7") == 7 && bpvm_mods_version((const uint8_t*) "xMOD") == 0,
           "version(): MOD7 → 7, otra cosa → 0");
+
+    /* U4 — el bucle común sobre una tabla como la que genera regen_mods.sh. */
+    {
+        static const bpvm_mod_embebido_t T[] = {
+            { "/lib/Tabla1.mod", EMB, (uint32_t) sizeof EMB },   /* falta → instala */
+            { "/lib/Math.mod",   EMB, (uint32_t) sizeof EMB },   /* quedó MOD6 arriba → repone */
+        };
+        g_lineas = 0;
+        unsigned esc = bpvm_mods_instalar_tabla(T, 2, put_fs, cuenta_linea);
+        CHECK(esc == 2 && g_lineas == 2, "tabla: 2 escritos (instalado + repuesto) y 2 lineas (%u/%d)", esc, g_lineas);
+        g_lineas = 0;
+        esc = bpvm_mods_instalar_tabla(T, 2, put_fs, cuenta_linea);
+        CHECK(esc == 0 && g_lineas == 0, "tabla otra vez: nada que escribir, nada que decir");
+    }
 
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;

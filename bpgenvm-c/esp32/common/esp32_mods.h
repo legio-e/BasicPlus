@@ -1,28 +1,11 @@
 /*
- * esp32_mods.h — stdlib core embebida (pre-instalada en /lib al boot).
- *
- * La implementación (arrays de bytes + tabla) está en esp32_mods.c, GENERADO
- * por scripts/regen_esp32_mods.sh desde los .mod de bpstdlib. No editar el .c
- * a mano: re-ejecuta el script tras recompilar la stdlib.
- *
- * Gemelo de stm32_mods.h. El ESP32 no embebía la stdlib (solo hello_mod) y
- * dependía de que el IDE subiera cada .mod; pero el IDE no resuelve las deps
- * TRANSITIVAS (p.ej. Gpio -> Pico/Core), así que importar Gpio fallaba al
- * enlazar. Embeberla como en las otras dos familias lo arregla.
+ * esp32_mods.h — GENERADO por scripts/regen_mods.sh. NO EDITAR A MANO.
+ * La tabla de la stdlib embebida de la imagen esp32; la recorre
+ * bpvm_mods_instalar_tabla (src/bpvm_mods.c) con el put de la familia.
  */
 #ifndef ESP32_MODS_H
 #define ESP32_MODS_H
-
-#ifdef __cplusplus
-extern "C" {
+#include "bpvm_mods.h"
+extern const bpvm_mod_embebido_t esp32_mods[];
+extern const unsigned esp32_mods_n;
 #endif
-
-/* Pre-instala la stdlib core en /lib del FS (si no está ya). Llamar una
- * vez al boot, tras fs_init(), antes del REPL. Idempotente. */
-void esp32_mods_install(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* ESP32_MODS_H */

@@ -20,7 +20,7 @@
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* #440: el MPU necesita bpvm_module_t */
-#include "embedded_mods.h"
+#include "pico_mods.h"      /* V6/U4: la tabla GENERADA de la stdlib embebida (sólo datos) */
 #include "fs.h"
 #include "bpvm_fs.h"
 #include "crc32.h"    /* #422: comparar lo desplegado con lo embebido */     /* H11: stat + lectura por trozos (el .mod no pasa entero por RAM) */
@@ -123,10 +123,11 @@ extern char __HeapLimit;         /* tope de la RAM principal */
  *
  * PSRAM: la ventana entera, EXCLUSIVA de la VM. La reserva de SQLite va delante y
  * la aparta el plan (bpvm_sqlmem sigue decidiendo si se puede). */
-/* #466 — el `put` de esta familia para el instalador común de la stdlib. */
-static int pico_mods_put(const char* p, const uint8_t* d, uint32_t n) {
+/* #466 / U4 — lo propio de esta familia para el instalador común: el put y el log. */
+static int  pico_mods_put(const char* p, const uint8_t* d, uint32_t n) {
     return fs_put(p, d, n) == FS_OK ? 0 : -1;
 }
+static void pico_mods_log(const char* l) { log_printf("%s", l); }
 
 static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
     int n = 0;
@@ -1326,60 +1327,13 @@ static void vm_task(void* arg) {
         }
     }
 
-    /* Stdlib pre-instalada en /lib/, Hello en /app/. La resolución de
-     * imports en cmd_run busca también en estos directorios además del
-     * root (ver fs_get_resolve en repl.c), así que el usuario sigue
-     * pudiendo subir ficheros sin prefijo y todo funciona.
-     *
-     * NO persistimos automáticamente a flash — el FORMAT borra apps
-     * pero la stdlib resurge en el siguiente reboot desde la imagen. */
-    /* #305 — pre-instalación de la stdlib embebida. Antes eran 14 bloques
-     * copiados a mano, cada uno preguntando "¿existe?" con fs_get, que LEE EL
-     * FICHERO ENTERO al scratch de 128 KB para no mirar ni un byte (Gui.mod son
-     * 42 KB). Ahora: una tabla —como las que ya tenían el ESP32 y el STM32— y
-     * fs_exists, que es un stat y no toca el scratch.
-     *
-     * NO se persiste a flash a propósito: un FORMAT borra las apps del usuario
-     * pero la stdlib resurge en el siguiente arranque desde la imagen. */
-    /* La longitud se guarda POR DIRECCIÓN: los *_mod_len son variables
-     * (`extern const unsigned int`), no constantes de compilación, así que su
-     * VALOR no vale en un inicializador estático — su dirección sí. Con esto la
-     * tabla vive en flash y no gasta ni un byte de pila. */
-    static const struct { const char* path; const uint8_t* data; const unsigned int* len; }
-    PREINSTALL[] = {
-        { "/lib/Core.mod",     core_mod,     &core_mod_len     },
-        { "/lib/Gpio.mod",     gpio_mod,     &gpio_mod_len     },
-        { "/lib/I2c.mod",      i2c_mod,      &i2c_mod_len      },
-        { "/lib/Spi.mod",      spi_mod,      &spi_mod_len      },
-        { "/lib/Uart.mod",     uart_mod,     &uart_mod_len     },
-        { "/lib/Pulse.mod",    pulse_mod,    &pulse_mod_len    },
-        { "/lib/Pwm.mod",      pwm_mod,      &pwm_mod_len      },
-        { "/lib/Pico.mod",     pico_mod,     &pico_mod_len     },
-        { "/lib/Rtc.mod",      rtc_mod,      &rtc_mod_len      },
-        { "/lib/Adc.mod",      adc_mod,      &adc_mod_len      },
-        { "/lib/Wdt.mod",      wdt_mod,      &wdt_mod_len      },
-        { "/lib/Timer.mod",    timer_mod,    &timer_mod_len    },
-        /* #415 — la stdlib BASE, igual en las tres familias. Iban ya en el
-         * ESP32 y el STM32 y aqui faltaban. */
-        { "/lib/Math.mod",     math_mod,     &math_mod_len     },
-        { "/lib/IO.mod",       io_mod,       &io_mod_len       },
-        { "/lib/Neopixel.mod", neopixel_mod, &neopixel_mod_len },
-        /* Los drivers de dispositivo (PCA9554, BME280, SSD1306...) NO se
-         * pre-instalan: los sube el IDE como deps al hacer Run. */
-        { "/app/Hello.mod",    hello_mod,    &hello_mod_len    },
-    };
-    /* #466 — LA REGLA está en src/bpvm_mods.c, la misma para las tres familias:
-     * falta → se instala; versión (MAGIC) anterior, o misma versión con CRC
-     * distinto → se REPONE; más nuevo → se deja y se dice; /app (el Hello de
-     * muestra) es del usuario → sólo si falta. Sustituye al chivato de #422, que
-     * avisaba y no reponía: reflashear ya refresca el /lib. */
-    for (size_t i = 0; i < sizeof(PREINSTALL) / sizeof(PREINSTALL[0]); i++) {
-        char linea[160];
-        (void) bpvm_mods_sincronizar(PREINSTALL[i].path, PREINSTALL[i].data,
-                                     *PREINSTALL[i].len, pico_mods_put,
-                                     linea, sizeof linea);
-        if (linea[0]) log_printf("%s", linea);
-    }
+    /* V6/U4 — la tabla la genera scripts/regen_mods.sh (pico_mods.c: SÓLO datos,
+     * 15 módulos a /lib + el Hello.mod de muestra a /app); el bucle y la regla
+     * (#466: falta → instala; versión anterior o mismo MAGIC con CRC distinto →
+     * repone; más nuevo → deja; /app → sólo si falta) viven en src/bpvm_mods.c.
+     * Aquí ya no hay tabla a mano: la de antes guardaba la longitud por dirección
+     * porque los `_len` eran `extern` de 16 ficheros; ahora es `sizeof` en uno. */
+    (void) bpvm_mods_instalar_tabla(pico_mods, pico_mods_n, pico_mods_put, pico_mods_log);
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),

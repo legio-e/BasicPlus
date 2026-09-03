@@ -19,6 +19,8 @@
 #include "wire_v1.h"
 #include "fs.h"
 #include "log.h"
+#include "esp32_mods.h"   /* V6/U4: la tabla GENERADA de la stdlib embebida (sólo datos) */
+#include "bpvm_mods.h"    /* V6/U4: el bucle y la regla, comunes a las tres familias */
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "pack_p4.h"   /* V5/H8: s_pack_ram_base — la RAM del motor nativo */
 #endif          /* el resultado del climb, al log persistente */
@@ -449,4 +451,20 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
     if (wrote >= 0) env_write_slot(wrote, wrote == 0 ? a : b);   /* RAM → flash */
     if (con_env) bpvm_scratch_give("bmgr-env");
     wire_v1_send_line(reply, (size_t) n);
+}
+
+/* V6/U4 — la stdlib embebida a /lib. Aquí sólo lo propio de esta familia: el
+ * `put` (fs_put) y el LOTE — sin suspender, cada escritura auto-persiste la
+ * partición entera (~3 s en la bpfs de 10 MB del P4) y el primer boot tardaba
+ * ~46 s (021fdbf). Antes esto vivía dentro del fichero GENERADO, y lo que se
+ * puso ahí a mano (#422) murió en la siguiente regeneración (#446). */
+static int  mods_put(const char* p, const uint8_t* d, uint32_t n) {
+    return fs_put(p, d, n) == FS_OK ? 0 : -1;
+}
+static void mods_log(const char* l) { log_printf("%s", l); }
+
+void esp32_mods_install(void) {
+    fs_autosave_suspend();
+    unsigned escritos = bpvm_mods_instalar_tabla(esp32_mods, esp32_mods_n, mods_put, mods_log);
+    fs_autosave_resume(escritos > 0);
 }

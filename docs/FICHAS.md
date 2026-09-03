@@ -1963,7 +1963,7 @@ tocar y cómo se comprueba.
 | **U1** | lo que **no exige decidir nada** — 4 tareas, una por sesión corta | ✅ 23-ago |
 | **U2** | el **transporte** (wire): entender los gemelos falsos y darle contrato | ✅ 26-ago |
 | **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | ✅ 31-ago (y el simulador, `U3.24`) |
-| **U4** | la **stdlib embebida**: un solo formato de blobs | abierto 23-ago |
+| **U4** | la **stdlib embebida**: un solo formato de blobs | ✅ 3-sep (`U4.1`) |
 | **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
 | **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | 🟡 código en las 5 familias (2-sep); faltan las STM32 en placa |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
@@ -4350,7 +4350,7 @@ un error con nombre, nunca «type no implementado».
   ✅ **Se comprueba, y es el hito con más red**: el IDE hace lo mismo contra cada placa,
   y `LIST_DIR`/`INFO`/`PACK_LS` devuelven lo mismo que antes.
 
-#### 🟡 U4 — la stdlib embebida
+#### ✅ U4 — la stdlib embebida (CERRADO el 3-sep con `U4.1`)
 
 16 ficheros `*_mod.c` en la Pico frente a **uno** en ESP32 (4.845 líneas) y STM32 (4.837).
 No es código distinto: es el mismo dato empaquetado de dos maneras.
@@ -4389,6 +4389,30 @@ Lo que difiere de verdad entre familias es **la lista** (la Pico embebe además 
 **Cómo se comprueba:** los blobs regenerados son byte-idénticos a los de hoy (mismo `bpstdlib`:
 se diffea la parte `xxd`), `test-mods` más un caso del bucle en host, los seis builds, y en placa
 el arranque dice lo mismo que hoy (la Pico 2 acaba de verificar la regla con esta misma tabla).
+
+##### ✅ `U4.1` — HECHO (3-sep): un generador, tres ficheros de sólo datos, el bucle en el común
+
+- `scripts/regen_mods.sh <familia> <dir> MOD… [--extra ruta=fichero]` emite `<fam>_mods.c` (blobs
+  `static const` + la tabla `bpvm_mod_embebido_t` con `sizeof`, no la variable `_len` de xxd) y
+  `<fam>_mods.h` (los `extern`). Los tres `regen_*_mods.sh` quedan en su lista; el maestro los
+  llama; `regen_hello_blob.sh` desaparece (el `Hello.mod` de la Pico lo compila su wrapper y entra
+  como `--extra /app/Hello.mod=…`).
+- `bpvm_mods_instalar_tabla(tabla, n, put, log)` en `src/bpvm_mods.c`: el bucle, una vez. Cada
+  familia sólo pone su `put` y su `log`: el ESP32 en `board_mgr_esp32.c` (con su lote de autosave;
+  los tres `main.c` siguen llamando a `esp32_mods_install()`), el STM32 en su punto de llamada, la
+  Pico en el suyo — fuera la tabla `PREINSTALL` a mano y sus 16 ficheros + `hello_mod.c` +
+  `embedded_mods.h` (`pico_mods.c` los sustituye).
+- **Los blobs salieron byte-idénticos** (huella de las líneas hex: ESP32 y STM32 `0ebdfd5cf77d`
+  antes y después; la Pico `c1418a9a2f1f` en sus 15; el `Hello` recompilado da las mismas 323
+  líneas). `test-mods` 18/18 con el caso del bucle; `make`, `sim-smoke` 45/45.
+- **Seis builds** con el `pico_mods.c` nuevo en CMake (los CMake del ESP32 y el linked folder del
+  STM32 no cambian): Pico 18:54, S3/C3/P4 19:02, Nucleo 19:01 (text 251 432), Discovery 19:02.
+- **En la Pico 2**: grabada la imagen de `U4.1`, el arranque no toca nada (`/lib` idéntico: ni una
+  línea `lib:`), `fs: 33 ficheros` (el 33.º es el `MathRango.mod` del Run de Eduardo), y el `STAT`
+  por nombre contesta lo mismo (`/lib/Math.mod`, MOD7, crc 3686083642).
+
+📌 Ya no queda código en ningún generado: lo que se ponga a mano ahí muere en la siguiente
+regeneración, y ahora no hay nada que poner. **`U4` cerrado.**
 
 #### 🟡 U5 — la tabla de handles
 

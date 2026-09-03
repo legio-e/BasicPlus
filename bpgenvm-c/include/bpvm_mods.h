@@ -52,6 +52,23 @@ bpvm_mods_res_t bpvm_mods_sincronizar(const char* path, const uint8_t* data, uin
 /* La versión de un módulo por su MAGIC ("MOD7" → 7); 0 si no empieza por "MOD". */
 int bpvm_mods_version(const uint8_t* cabecera4);
 
+/* V6/U4 — la tabla de la stdlib embebida de una imagen: la genera
+ * scripts/regen_mods.sh (UN fichero de SÓLO DATOS por familia) y la recorre
+ * bpvm_mods_instalar_tabla, una vez para las tres familias. */
+typedef struct {
+    const char*          path;   /* "/lib/Math.mod"; o "/app/Hello.mod", la muestra de la Pico */
+    const unsigned char* data;
+    uint32_t             len;
+} bpvm_mod_embebido_t;
+
+typedef void (*bpvm_mods_log_fn)(const char* linea);
+
+/* Recorre la tabla aplicando la regla a cada entrada; cada línea que la regla
+ * devuelve va a `log` (si no es NULL). Devuelve cuántos ESCRIBIÓ (instalados +
+ * repuestos): el ESP32 lo usa para guardar la partición una sola vez. */
+unsigned bpvm_mods_instalar_tabla(const bpvm_mod_embebido_t* t, unsigned n,
+                                  bpvm_mods_put_fn put, bpvm_mods_log_fn log);
+
 #ifdef __cplusplus
 }
 #endif

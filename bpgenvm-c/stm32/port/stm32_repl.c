@@ -32,7 +32,8 @@
 #include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
 #include "aot_registry.h"
 #include "bpvm_repl.h"       /* V6/U3: los verbos COMUNES del REPL (grupo 1: meta) */
-#include "bpvm_mem.h"        /* V6/U6.11: el planificador de memoria COMÚN (una regla, cinco placas) */    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
+#include "bpvm_mem.h"        /* V6/U6.11: el planificador de memoria COMÚN (una regla, cinco placas) */
+#include "bpvm_mods.h"       /* V6/U4: el bucle y la regla de la stdlib embebida, comunes */    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
 
 #include "main.h"
 #include "board.h"              /* placa: BOARD_WIRE_UART, BOARD_NAME, BOARD_SRAM_BYTES, BOARD_LED_* */
@@ -659,6 +660,10 @@ static void diag_al_log(const char* linea) { log_printf("%s", linea); }
  * El número es el de siempre (512 KB → 384 de heap + 128 de pilas por la regla
  * común), pero decidido y CONTADO con la misma función y la misma línea que las
  * otras cuatro placas — y `test_mem` lo fija con este caso. */
+/* V6/U4 — lo propio de esta familia para el instalador común: el put y el log. */
+static int  stm32_mods_put(const char* p, const uint8_t* d, uint32_t n) { return fs_put(p, d, n) == 0 ? 0 : -1; }
+static void stm32_mods_log(const char* l) { log_printf("%s", l); }
+
 static int stm32_mem_regiones(bpvm_mem_region_t* out, int max) {
     if (max < 1) return 0;
     out[0].base      = s_vm_mem;
@@ -712,7 +717,9 @@ void stm32_repl_run(void) {
     /* stdlib core embebida en /lib SOLO con el FS montado (si el climb no llegó al
      * FS, no hay dónde instalarla; el host configura particiones primero). */
     if (bs->state >= BPVM_BOOT_FS) {
-        stm32_mods_install();       /* stdlib core -> /lib (si-ausente) */
+        /* V6/U4 — la stdlib embebida a /lib: tabla GENERADA (stm32_mods.c, sólo
+         * datos); bucle y regla (#466) en src/bpvm_mods.c; aquí sólo el put. */
+        (void) bpvm_mods_instalar_tabla(stm32_mods, stm32_mods_n, stm32_mods_put, stm32_mods_log);
         stm32_fs_register_bpvm();   /* #247 — readFile/writeFile/... sobre el FS */
         log_printf("fs: %u/%u bytes usados", (unsigned) fs_used_bytes(),
                    (unsigned) fs_total_bytes());

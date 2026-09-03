@@ -150,22 +150,7 @@ set(BPVM_C_SRC
 # === Firmware executable ================================================
 add_executable(bpvm_pico
     main.c
-    hello_mod.c
-    core_mod.c      # #248: Core (Exception/RuntimeError) embebido
-    gpio_mod.c      # stdlib core pre-instalada
-    i2c_mod.c       # stdlib core pre-instalada
-    spi_mod.c       # stdlib core pre-instalada
-    uart_mod.c      # stdlib core pre-instalada
-    pulse_mod.c     # stdlib core pre-instalada
-    pwm_mod.c       # stdlib core pre-instalada
-    pico_mod.c      # stdlib core pre-instalada (info MCU)
-    rtc_mod.c       # stdlib core pre-instalada (wall clock)
-    adc_mod.c       # stdlib core pre-instalada (ADC del MCU)
-    wdt_mod.c       # stdlib core pre-instalada (watchdog)
-    timer_mod.c     # stdlib core pre-instalada (Timer.Alarm BP-puro)
-    math_mod.c      # #415: stdlib base, igual en las 3 familias
-    io_mod.c        # #415: idem
-    neopixel_mod.c  # H7.4: stdlib Neopixel.Strip (WS2812 vía PIO)
+    pico_mods.c     # V6/U4: la stdlib embebida, GENERADA por scripts/regen_mods.sh (15 mods + Hello). Sólo datos.
     # NOTA: drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO
     # se embeben aquí — viajan con la app del usuario al hacer upload
     # desde el IDE. Solo el core de stdlib (Math, IO, Gpio, I2c, ...)
@@ -202,7 +187,7 @@ target_include_directories(bpvm_pico PRIVATE
     # manda es el NUESTRO. El del paquete se borro al vendorizar justo para que
     # esto no dependa del orden — ver third_party/README.md.
     ${BPVM_C_ROOT}/third_party/fatfs
-    ${CMAKE_CURRENT_LIST_DIR}                   # FreeRTOSConfig.h + embedded_mods.h
+    ${CMAKE_CURRENT_LIST_DIR}                   # FreeRTOSConfig.h + pico_mods.h
 )
 
 target_link_libraries(bpvm_pico PRIVATE
