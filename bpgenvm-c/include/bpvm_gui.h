@@ -135,6 +135,13 @@ void bpvm_gui_disp_init(int w, int h);   /* tick + display + (host) input/cierre
 void bpvm_gui_disp_pump(void);           /* lv_timer_handler + ceder CPU */
 int  bpvm_gui_disp_is_open(void);        /* host: ventana abierta; micro: 1 si corre */
 void bpvm_gui_disp_set_rotation(int deg);/* orientación en runtime (deg validado por gui.c); sin soporte: no-op con aviso */
+/* V6/P2.3 — el tamaño FÍSICO del panel, si el display lo sabe. Decisión de Eduardo
+ * (4-sep-2026): «la resolución ha de ser la que tenga la pantalla, no hay otra». En
+ * un micro el backend devuelve 1 y su panel (C6 240×240, DK2 800×480, P4 lo que
+ * diga el ENV) y el modelo crea el screen a ese tamaño; en host devuelve 0 (una
+ * ventana no tiene tamaño propio) y manda --screen= o el default. gui.c la llama
+ * ANTES de crear el screen, así que el backend no puede depender de disp_init. */
+int  bpvm_gui_disp_native_size(int* w, int* h);
 
 /* H10 — micro simulado SIN pantalla: LVGL se monta contra un display fuera de
  * pantalla (los widgets se crean y el modelo funciona; no se abre ventana y

@@ -147,6 +147,11 @@ void bpvm_gui_disp_pump(void) {
  * wire DURANTE Gui.run() (sondear entre pumps) es pulido de H5.2. */
 int bpvm_gui_disp_is_open(void) { return 1; }
 
+/* V6/P2.3 — el screen del modelo mide lo que mide el panel (decisión de Eduardo,
+ * 4-sep-2026). La DK2 es LTDC a 800×480 fijos: se contesta sin tocar el hardware
+ * (gui.c pregunta ANTES de disp_init). */
+int bpvm_gui_disp_native_size(int* w, int* h) { *w = LTDC_PANEL_W; *h = LTDC_PANEL_H; return 1; }
+
 /* Rotación en runtime (Gui.setRotation): el LTDC escanea un framebuffer fijo y este
  * flush NO gira aún (se haría como en el P4-ws: lv_draw_sw_rotate en el flush).
  * Aviso una vez y no-op. */

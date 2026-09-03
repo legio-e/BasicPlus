@@ -1747,6 +1747,70 @@ y el Run en la Pico 2 byte-idéntico al host.
 `samples/out` sigue lleno de MOD6 de V5: ya no hacen daño, pero son un fósil (gitignorado) que
 conviene vaciar cuando toque.
 
+#### 🟡 `#468` — la stdlib en un pack XIP (memoria de la C6): ANALIZADA con números, a decidir (abierta 4-sep)
+
+**La dirección la dio Eduardo (4-sep):** *«En cuanto al consumo de memoria es cierto que vamos
+justos. Aquí lo suyo es subir el pack de la librería estándar+Json+Gui, y con eso podemos ahorrar
+40 o 50 Ks.»* Antes de escribir código, lo que cuesta hoy y lo que daría, medido en la C6 con
+`GuiColorDemo` (imagen 128 KB, `log=1`):
+
+```
+[bpvm-c] dep 'Gui' -> /lib/Gui.mod · dep 'Json' -> /lib/Json.mod · dep 'Core' -> /lib/Core.mod
+[bpvm] tabla de simbolos: 1294 simbolos, 30554 B de nombres, 49152 B en total
+[bpvm] tabla de handles: 0 -> 256 slots (2 KB dentro del heap) OK — techo del heap 63488, libre 31 KB
+```
+
+**Dónde viven los módulos.** El cargador los pone DENTRO del bloque de la VM, delante del heap
+(`memory[]`: ext-table + data + code, desde `next_free_address`; `heap_start` empieza donde acaban).
+Con XIP (H3.c, ya implementado para la zona de packs montada) el `code` se queda en flash y a RAM
+sólo van ext-table + data. Cabeceras de los `.mod` de hoy:
+
+| módulo | fichero | data | code | en el bloque de la VM | con XIP |
+|---|---|---|---|---|---|
+| Core | 13 111 | 992 | 5 039 | 6 031 | 992 |
+| Json | 24 059 | 1 788 | 8 877 | 10 665 | 1 788 |
+| Gui | 44 003 | 4 176 | 8 352 | 12 528 | 4 176 |
+| **suma** | 81 173 | | | **29 224** | **6 956** |
+
+→ un pack XIP con los tres devuelve **22 268 B (21,7 KB) al heap de la VM**: de 31 KB libres a ~53
+tras cargar el demo. Eso es la mitad de la cifra de Eduardo. **La otra mitad es la tabla de
+símbolos**: 49 152 B (1 294 entradas × 8 B, redondeadas a 16 KB, + un pool de nombres de 32 KB con
+30 554 B usados) que sale del `malloc` de PLATAFORMA — está dentro de los 103 824 B de margen del
+sistema, no en el bloque de la VM. Un pack por sí solo no la toca: para ahorrarla haría falta que
+los nombres se leyeran POR REFERENCIA desde la flash mapeada (el pool desaparece: ~32 KB de DRAM)
+— un cambio de diseño del enlazador (`bpvm_symbol_name` devuelve hoy punteros a un pool que se
+realoja; los nombres del `.mod` van con longitud, no terminados en 0). Las dos cosas juntas son
+los «40 o 50 K».
+
+**Lo que ya hay y lo que falta:**
+- El cargador ya carga XIP desde la zona montada y el orden de búsqueda es pack-en-ejecución → FS
+  → zona (`#310`, spec §4). **El FS ECLIPSA a la zona** («shadow de desarrollo, con aviso»).
+- En la familia ESP32 la zona sólo la mapea el P4 (`pack_p4.c`: `esp_partition_mmap` INST+DATA y
+  `board_mgr_esp32_set_packs_view`, ~40 líneas). Llevarlo a `esp32/common` la activa en S3, C3 y
+  C6 sin construir nada nuevo. La C6 ya tiene partición `packs` (la propuso `PART_DEFAULTS`).
+- El frontend construye packs (`PackStep`, con el cierre de deps externas): un «pack de la
+  stdlib» es un pack sin app; falta la forma de pedirlo y el botón del IDE para grabarlo.
+
+**El nudo, que es el que decide el diseño:** con el orden actual, `/lib/*.mod` tapa al pack. Y en
+`/lib` los pone (a) el instalador de `#466` en cada arranque, desde la tabla embebida, y (b) el
+IDE cuando `STAT` dice que falta (Json y Gui hoy). Para que el pack cuente hacen falta tres cosas
+pequeñas y coherentes: el instalador no repone en `/lib` lo que la zona ya sirve con el mismo
+MAGIC+CRC; `STAT`/`bpvm_entry_resolve` miran también la zona (el IDE dirá «ya en la placa»); y la
+regla de versión de `#466` se aplica igual (un módulo más nuevo en `/app` o `/lib` sigue ganando,
+que para eso el FS eclipsa).
+
+**Alternativa sin subir nada:** la tabla embebida de la imagen (`esp32_mods`: 14 módulos, 48 KB)
+YA está en flash mapeada (`.rodata` es XIP en ESP32, RP2350 y STM32). Cargar XIP desde ahí —una
+fuente más en el orden— ahorra lo mismo que el pack para los módulos embebidos, sin partición ni
+grabación; a cambio Gui y Json tendrían que entrar en la imagen del C6 (+68 KB de flash de los 440
+libres) y el instalador dejaría de copiarlos a `/lib` (con `STAT` contestando desde la tabla). El
+mismo nudo del párrafo anterior, resuelto en el mismo sitio.
+
+⏭️ Decisión de Eduardo: (1) pack en la zona (lo que él propone; sirve también para módulos que no
+van en la imagen) o tabla embebida XIP; (2) si la tabla de símbolos por referencia entra en el
+mismo lote. Con eso se abre la implementación, en este orden: mapear la zona en `esp32/common`
+(activar), el nudo del eclipse (instalador + `STAT`), el pack de la stdlib desde el IDE, medir.
+
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
@@ -2917,6 +2981,32 @@ Quedan fuera de `P2`, como decisiones y no como trabajo a medias:
   desde junio, pero la C6 ya tiene los dos en `/lib` (los subí por el wire), así que hoy el IDE los
   vería idénticos y no subiría nada: probarlo de cero exige borrarlos de `/lib`, y eso se decide.
 - Cosmético: el trozo de log del bootloader que asoma por el USB nativo antes del HELLO.
+
+##### ✅ `P2.3` — HECHA (4-sep): el screen mide lo que mide el panel
+
+**Decisión de Eduardo (4-sep):** *«Lo de la resolución, ha de ser la que tenga la pantalla, no hay
+otra. No tiene sentido que tenga más ni menos. Para más adelante, cuando hagamos LVGL en un pack, el
+sistema tendrá que adaptarse a lo que el usuario le ponga, diferentes pantallas.»*
+
+Hasta hoy el modelo se quedaba con el `#define` (480×320) en TODAS las placas y LVGL alineaba contra
+el panel real: el `align` salía bien, pero `__guiDumpTree` y `scr.width` mentían (480 en un panel de
+240). Lo que cambia, y es poco:
+
+- **Contrato** (`bpvm_gui.h`): `int bpvm_gui_disp_native_size(int* w, int* h)` — el display dice su
+  tamaño físico si lo sabe. Micro → 1 y el panel (C6 240×240 fijo; DK2 800×480 fijo; **P4 lo que
+  diga el ENV**, `p4_panel_select()` es idempotente y se resuelve ahí mismo); host SDL → 0 (una
+  ventana no tiene tamaño propio).
+- **Modelo** (`gui.c`): la primera vez que hace falta el tamaño (crear el screen, o rotar antes de
+  crearlo) se le pregunta al display. Un tamaño fijado con `bpvm_gui_set_screen_size` (host
+  `--screen=`, simulador del IDE) **gana siempre**: así el host puede decir «soy una C6».
+- Ese es también el camino para lo de más adelante: cuando LVGL vaya en un pack y la pantalla la
+  ponga el usuario, el driver del pack contesta a esta misma pregunta y el modelo se adapta solo.
+
+**Verificado:** la C6 regrabada dice `screen [240x240 align=0 +0,0]` en el dump de `GuiRotCycle`;
+el host con `--screen=240x240` da el **mismo dump byte a byte** (8 líneas); sin `--screen` el host
+sigue en 480×320 y su salida es idéntica a la de miVM (25 líneas: la paridad de siempre no se
+toca); `sim-smoke` OK (el simulador fija el tamaño explícito y gana). Compilan las cuatro imágenes
+con GUI: host, C6 (0x114360 B), P4 (0x13cb10 B) y Discovery (headless, 0 errores).
 
 
 

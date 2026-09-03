@@ -383,6 +383,10 @@ int  bpvm_gui_disp_is_open(void) { return !g_window_closed; }
 /* Rotación en runtime (Gui.setRotation): el driver SDL de LVGL gira en su PROPIO flush
  * (lv_sdl_window.c) — la ventana (el "panel físico") se queda w×h y el contenido rota
  * dentro, igual que en placa. deg llega validado de gui.c. */
+/* V6/P2.3 — en host la ventana no tiene tamaño propio: manda --screen= o el default
+ * del modelo (480×320). Devolver 0 es decir «no sé»; gui.c no toca nada. */
+int bpvm_gui_disp_native_size(int* w, int* h) { (void) w; (void) h; return 0; }
+
 void bpvm_gui_disp_set_rotation(int deg)
 {
     lv_display_t *d = lv_display_get_default();

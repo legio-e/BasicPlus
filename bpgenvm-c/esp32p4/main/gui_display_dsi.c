@@ -640,6 +640,18 @@ int bpvm_gui_disp_is_open(void) { return 1; }   /* micro: corre hasta KILL/reset
  * esp32p4-ws) y el táctil se transforma solo (lv_indev) — basta cambiar la rotación
  * del display. deg llega VALIDADO de gui.c (0/90/180/270). Antes del display:
  * queda como orientación de arranque. */
+/* V6/P2.3 — el screen del modelo mide lo que mide el panel (decisión de Eduardo,
+ * 4-sep-2026). El panel del P4 lo elige el ENV (`display=`), así que se resuelve
+ * aquí mismo si aún no se hizo: p4_panel_select es idempotente y sólo lee el env,
+ * que en el primer RUN ya está leído (gui.c pregunta ANTES de disp_init). */
+int bpvm_gui_disp_native_size(int* w, int* h)
+{
+    p4_panel_select();
+    *w = s_cfg->hres;
+    *h = s_cfg->vres;
+    return 1;
+}
+
 void bpvm_gui_disp_set_rotation(int deg)
 {
     switch (deg) {

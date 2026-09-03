@@ -139,6 +139,11 @@ void bpvm_gui_disp_pump(void) {
 
 int bpvm_gui_disp_is_open(void) { return s_open; }
 
+/* V6/P2.3 — el screen del modelo mide lo que mide el panel (decisión de Eduardo,
+ * 4-sep-2026: «la resolución ha de ser la que tenga la pantalla, no hay otra»).
+ * Aquí es fijo: 240×240. gui.c pregunta ANTES de disp_init, por eso no se mira nada. */
+int bpvm_gui_disp_native_size(int* w, int* h) { *w = LCD_W; *h = LCD_H; return 1; }
+
 void bpvm_gui_disp_set_rotation(int deg) {
     /* El giro lo hace el PANEL (MADCTL: MV = swap, MX/MY = mirror), que sale gratis:
      * LVGL sigue pintando 240×240 sin girar y es el controlador quien lo coloca. Lo

@@ -35,9 +35,10 @@ SPI del C6: driver, memoria medida, rotación confirmada) están cerrados. El ma
 según el cuadro de hitos de `FICHAS.md`: **A1** (arquitectura por niveles sobre código único, que
 iba después de la unificación), **G1**, **L1** y **E1**. Y las fichas abiertas de siempre: `#462`
 (cuanto por opcodes / suelo de 48 ms / carrera del exit-code en KILL), `#456`, `#452`, `#444`,
-`U6.F1`. Tres decisiones pequeñas esperan a Eduardo (están al pie de `P2.2`): `Neopixel` en la
-familia ESP32, el tamaño del screen lógico en device, y si se prueba de cero la subida de
-`Gui`+`Json` desde el IDE (exige borrar los dos de `/lib` de la C6).
+`U6.F1`. Decisiones que esperan a Eduardo: **`#468`** (la stdlib en pack XIP: zona vs tabla embebida, con
+o sin la tabla de símbolos por referencia — analizada con números), `Neopixel` en la familia ESP32,
+y si se prueba de cero la subida de `Gui`+`Json` desde el IDE (exige borrar los dos de `/lib` de la
+C6). La del tamaño del screen ya está tomada y hecha (`P2.3`: el screen mide lo que mide el panel).
 
 **Placas.** La C6 (COM3) lleva la imagen con GUI de 128 KB (4-sep 00:15) con `/lib/Gui.mod`,
 `/lib/Json.mod`, `/app/GuiColorDemo.mod` y `/app/GuiRotCycle.mod`, `log=0`. Pico 2, S3, Nucleo y
@@ -107,6 +108,18 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    GPIO), y `Neopixel` sólo tiene backend en la Pico (en ESP32 es no-op: adaptador nuevo, ficha
    aparte). Punto de diseño anotado: el screen lógico dice 480×320 en todas las placas (paridad del
    dump) mientras LVGL alinea contra el panel real. **Con esto `P2` queda cerrada.**
+9. ✅ **`P2.3` HECHA (4-sep)** — decisión de Eduardo: *«la resolución ha de ser la que tenga la
+   pantalla, no hay otra»*. Contrato nuevo `bpvm_gui_disp_native_size` (C6 240×240, DK2 800×480,
+   P4 según el ENV, host 0) y el modelo lo pregunta al crear el screen; `--screen=` y el simulador
+   siguen ganando. La C6 dice `screen [240x240]`; el host con `--screen=240x240` da el mismo dump
+   byte a byte; sin él, paridad con miVM intacta; sim-smoke OK; compilan host, C6, P4 y Discovery.
+10. 🟡 **`#468` ABIERTA (4-sep): la stdlib en un pack XIP** — dirección de Eduardo (*«subir el pack
+   de la librería estándar+Json+Gui, ahorrar 40 o 50 K»*), **analizada con números en la C6**: los
+   tres módulos ocupan 29 224 B del bloque de la VM y un pack XIP devuelve 22 268 B al heap (de 31
+   a ~53 KB libres); la otra mitad es la tabla de símbolos (49 152 B en el malloc de plataforma),
+   que sólo baja con nombres por referencia desde flash. El nudo: el FS eclipsa a la zona y `#466`
+   repone `/lib` en cada arranque → instalador + `STAT` tienen que ver la zona. Falta su decisión
+   (pack en la zona vs tabla embebida XIP; con o sin la tabla de símbolos). Detalle en la ficha.
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

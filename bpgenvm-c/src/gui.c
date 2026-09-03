@@ -43,10 +43,37 @@ static int g_screen_h0 = GUI_SCREEN_H;
 /* Fija el tamaño del panel simulado. Sólo tiene efecto ANTES de crear el screen
  * (después, el display ya está montado a ese tamaño) → el host la llama al
  * arrancar, con lo que venga de la línea de comandos. */
+static int g_screen_size_explicit = 0;   /* V6/P2.3: lo fijó el host/simulador → gana */
+static int g_screen_size_resolved = 0;   /* ya se le preguntó al display (una vez) */
+
 void bpvm_gui_set_screen_size(int w, int h) {
     if (w <= 0 || h <= 0) return;
     g_screen_w0 = w;
     g_screen_h0 = h;
+    g_screen_size_explicit = 1;
+}
+
+/* V6/P2.3 — decisión de Eduardo (4-sep-2026): *«la resolución ha de ser la que tenga
+ * la pantalla, no hay otra. No tiene sentido que tenga más ni menos»*. Hasta aquí el
+ * modelo se quedaba con el #define (480×320) en TODAS las placas y LVGL alineaba
+ * contra el panel real: el `align` salía bien y el dump y `scr.width` mentían. Ahora,
+ * la primera vez que hace falta el tamaño (crear el screen o rotar antes de crearlo),
+ * el modelo se lo pregunta al display: en firmware el backend lo sabe (C6 240×240,
+ * DK2 800×480, P4 lo que diga el ENV) y en host no (ventana → --screen= o default).
+ * Un tamaño fijado explícitamente (host, simulador del IDE) gana siempre: así el
+ * host puede decir «soy una C6» y el dump sale byte-idéntico al de la placa. */
+static void resolve_screen_size(void) {
+    if (g_screen_size_resolved) return;
+    g_screen_size_resolved = 1;
+#ifdef BPVM_LVGL
+    if (!g_screen_size_explicit) {
+        int w = 0, h = 0;
+        if (bpvm_gui_disp_native_size(&w, &h) && w > 0 && h > 0) {
+            g_screen_w0 = w;
+            g_screen_h0 = h;
+        }
+    }
+#endif
 }
 
 /* H7 — tope de series por chart (el modelo es estático por nodo; los puntos sí
@@ -268,6 +295,7 @@ int  bpvm_gui_lvgl_window_open(void) { return g_lvgl_inited && bpvm_gui_disp_is_
 
 int bpvm_gui_screen_active(void) {
     if (g_screen != 0) return g_screen;
+    resolve_screen_size();               /* V6/P2.3: el screen mide lo que mide el panel */
     int h = create_node("screen", 0);
     gui_node* n = node_for(h);
     if (n) { n->w = g_screen_w0; n->h = g_screen_h0; }
@@ -287,6 +315,7 @@ static int g_rotation = 0;
 
 void bpvm_gui_set_rotation(int deg) {
     if (deg != 0 && deg != 90 && deg != 180 && deg != 270) return;
+    resolve_screen_size();               /* V6/P2.3: rotar ANTES del screen también parte del panel */
     int was90 = (g_rotation == 90 || g_rotation == 270);
     int is90  = (deg == 90  || deg == 270);
     g_rotation = deg;
