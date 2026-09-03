@@ -2783,7 +2783,33 @@ oráculo de la pantalla; después `GuiEvLat`/`GuiEvSpike` para el ritmo, y la me
   `partitions.csv` del C6 con `factory` de 1,5 MB (`bpenv` 0x190000, `bpdata` 0x198000 de 2464 KB).
   Con eso la placa vuelve a virgen (el ENV se mueve).
 
-⏭️ **Al retomar, en este orden**: (1) `idf.py build` en `esp32c6/` y mirar que cabe; (2) `idf.py -p
+✅ **Al retomar (3-sep, noche), hasta el humo por el wire**: el build cabe (`0x1142C0`, un 28 %
+libre en la `factory` de 1,5 MB); grabado; reaprovisionado (`PART_DEFAULTS` propone 1 261 568 +
+1 261 568 sobre la `bpdata` de 2464 KB; FS de 1232 KB; 14 módulos preinstalados; `log=0`). El
+arranque con LVGL dentro:
+
+```
+heap: libre 303164 | mayor 278528 | bloques: 6 libres, 42 usados     (sin LVGL: 410988 | 385024)
+vm: 192 KB en SRAM interna (objetivo 192, techo 272 por el bloque contiguo)
+vm: DRAM interna libre 303164->106552 B (bloque mayor 278528->81920 B) | margen 16932
+```
+
+LVGL se lleva ~108 KB de DRAM estática (pool de 64 KB + fuentes/tablas) y el bloque de 192 KB
+sigue cabiendo; quedan 106 KB al sistema, de los que saldrán los 23 KB de buffers y el DMA:
+**el margen hay que remedirlo con la GUI activa** (paso 6). `Gui.mod` (44 KB) y su dependencia
+`Json.mod` (24 KB) —ninguna embebida— subidos por el wire con el PUT por trozos (`putstream.ps1`;
+el primer RUN dijo `falta el modulo 'Json'`, que es lo que el IDE resuelve solo). Y el humo:
+
+```
+RUN /app/GuiColorDemo.mod → "== widgets ==" + el árbol (screen 480x320, 8 botones) → Gui.run()
+KILL a los 12 s → EXITED OK; la placa sigue viva (uptime continuo)
+```
+
+O sea: `bpvm_gui_disp_init` (bus SPI, ST7789, LVGL, buffers) y el bombeo corren sin fallo.
+**Lo que falta es la imagen**, que sólo ven los ojos de Eduardo: el demo se queda corriendo en
+pantalla para eso. Con la pantalla vista, quedan (6) remedir el margen y (7) `P2.2`.
+
+⏭️ **Pasos que quedaban**: (1) `idf.py build` en `esp32c6/` y mirar que cabe; (2) `idf.py -p
 COM3 flash`; (3) reaprovisionar por el wire (`PART_DEFAULTS` → `PART_APPLY` con lo propuesto →
 `RESET`, como en `P1.C6.2`) y `ENV_SET log=0`; (4) leer el arranque: la línea `heap:` cambia (el
 pool de LVGL son 64 KB de bss) y hay que ver si el objetivo de 192 KB sigue cabiendo o el
