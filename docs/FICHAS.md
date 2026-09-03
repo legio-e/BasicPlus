@@ -1686,7 +1686,10 @@ admitiría ~1,75 MB; se pone **1536 KB** (tres veces la Nucleo) y quedan **457 4
 2 622 124 de 3 080 192). El enlazador sigue vigilando (`._user_heap_stack`). `test_mem` fija el
 caso (**24/24**): `vm: 1536 KB en SRAM estática (todo lo que deja la región)`, reparto 1152 + 384.
 Los dos `.elf` compilan headless: la Nucleo idéntica (bss 624 354), la Discovery con bss 2 622 124.
-⏭️ Falta grabar la Discovery y leer `vm: 1536 KB` e INFO 1179648/393216.
+✅ **En placa (3-sep, Eduardo la regrabó desde CubeIDE, sello 19:26)**: INFO `vmHeapBytes 1179648 /
+vmStackBytes 393216` (1152 + 384 = 1536 KB), y el panel del IDE lo dice en sus unidades:
+`VM: heap 1.1 MB + stack 384 KB`. Tres veces la VM de antes en la misma placa, sin tocar nada
+más que una constante.
 
 📌 **Con esto, las cinco familias —Pico/Metro, S3, C3, P4, STM32— deciden su memoria con
 `bpvm_mem_plan()`** y la cuentan con la misma línea. El paso 2 de `U6` queda cerrado en código;

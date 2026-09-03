@@ -59,8 +59,8 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    estática (todo lo que deja la región)` e INFO 393216/131072; sus `/lib` estaban vacíos y la
    imagen instaló los 14; `STAT` por nombre OK. **`U6` CERRADO en las cinco familias.**
    ⏭️ `U6.12` (observación de Eduardo): la Discovery pasa de 512 a **1536 KB** de VM
-   (`BOARD_VM_BYTES` por placa; medido: quedan 457 KB libres); compilada, **falta regrabarla** y
-   leer `vm: 1536 KB en SRAM estática`, INFO 1179648/393216.
+   (`BOARD_VM_BYTES` por placa; medido: quedan 457 KB libres). ✅ Regrabada por Eduardo (sello
+   19:26): INFO 1179648/393216, el panel del IDE `heap 1.1 MB + stack 384 KB`.
 4. ✅ **`U4` HECHO (3-sep, `U4.1`)**: un generador (`scripts/regen_mods.sh`), tres ficheros de
    sólo datos, el bucle en `src/bpvm_mods.c`; blobs byte-idénticos, seis builds, Pico 2 verificada.
    Las demás placas lo reciben al regrabarse.
