@@ -392,7 +392,7 @@ asimetría Metro/Pico 2.
 Bases del caso, para no recalcularlas: `JsonDemo cb=0x474 (1140)` · `Json cb=0xFBE (4030)`,
 code 8877 · `Core cb=0x368B (13963)`, code 4998 · heap desde `end_addr+64`.
 
-#### 🔴 `U6` — la ORGANIZACIÓN DE LA MEMORIA no está unificada, y no estaba prevista (abierta 28-ago)
+#### ✅ `U6` — la ORGANIZACIÓN DE LA MEMORIA no está unificada, y no estaba prevista (abierta 28-ago · **CERRADA 3-sep**: `U6.8`–`U6.11`, las cinco familias con `bpvm_mem_plan()` y verificadas en placa)
 
 Pregunta de Eduardo al cerrar el día: *«La organización de memoria no sé cómo se está
 haciendo hoy en día. ¿Es por micro o por familia? ¿Está previsto unificarlo?»*
@@ -1652,7 +1652,19 @@ La línea de las cinco placas, y el reparto de siempre (384 + 128). Y de `#466`:
 **vacío** (el log viejo resolvía `Core` y `Json` desde `/app`, «eclipsa al del pack») y el primer
 arranque instaló los 14 (`preinstall: …`); en `/app` queda un `Json.mod` MOD6 (24055 B) que la
 imagen no embebe, así que es el IDE quien lo repondrá en el próximo Run que lo necesite (versión
-anterior → sube donde está). ⏭️ Falta la Discovery para dar `U6` por cerrado.
+anterior → sube donde está).
+
+### ✅ Y la Discovery (3-sep, sello 19:12): la quinta familia, en placa
+
+```
+[   11] vm: 512 KB en SRAM estática (todo lo que deja la región)
+INFO: vmHeapBytes 393216 / vmStackBytes 131072 · sramBytes 3080192 · boardName u5g9j-dk2
+```
+
+Su `/lib` estaba vacío también: 14 `preinstall:`; `STAT` por nombre igual que en las otras cuatro
+(`/lib/Math.mod`, MOD7, crc 3686083642). **Con esto las cinco familias —Pico/Metro, S3, C3, P4,
+Nucleo y Discovery— deciden su memoria con la misma función Y lo han demostrado en su placa.
+`U6` cerrado.**
 
 📌 **Con esto, las cinco familias —Pico/Metro, S3, C3, P4, STM32— deciden su memoria con
 `bpvm_mem_plan()`** y la cuentan con la misma línea. El paso 2 de `U6` queda cerrado en código;
@@ -1996,7 +2008,7 @@ tocar y cómo se comprueba.
 | **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | ✅ 31-ago (y el simulador, `U3.24`) |
 | **U4** | la **stdlib embebida**: un solo formato de blobs | ✅ 3-sep (`U4.1`) |
 | **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
-| **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | 🟡 código en las 5 familias (2-sep); faltan las STM32 en placa |
+| **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | ✅ 3-sep (`U6.11`: las 5 familias, verificadas en placa) |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
 | **L1** | **lenguaje y compilador** | abierto 23-ago |
