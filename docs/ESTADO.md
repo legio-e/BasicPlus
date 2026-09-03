@@ -27,7 +27,24 @@
 
 ## Última sesión
 
-## ⏭️ AL RETOMAR (4-sep) — `P2.1`: ver la pantalla del C6 (U6, U4, U5 y P1.C6 quedaron cerrados el 3-sep)
+## ⏭️ AL RETOMAR — `P2` CERRADA (4-sep): la pantalla del C6 entera. Empieza la segunda mitad de V6
+
+**Dónde estamos.** U1–U6 (unificación), `#466`, `P1` (C3 y C6 sin pantalla) y `P2` (la pantalla
+SPI del C6: driver, memoria medida, rotación confirmada) están cerrados. El marcador de Eduardo
+—*«cuando tengamos la ESP32-C6 habremos llegado al ecuador de V6»*— quedó atrás. La segunda mitad,
+según el cuadro de hitos de `FICHAS.md`: **A1** (arquitectura por niveles sobre código único, que
+iba después de la unificación), **G1**, **L1** y **E1**. Y las fichas abiertas de siempre: `#462`
+(cuanto por opcodes / suelo de 48 ms / carrera del exit-code en KILL), `#456`, `#452`, `#444`,
+`U6.F1`. Tres decisiones pequeñas esperan a Eduardo (están al pie de `P2.2`): `Neopixel` en la
+familia ESP32, el tamaño del screen lógico en device, y si se prueba de cero la subida de
+`Gui`+`Json` desde el IDE (exige borrar los dos de `/lib` de la C6).
+
+**Placas.** La C6 (COM3) lleva la imagen con GUI de 128 KB (4-sep 00:15) con `/lib/Gui.mod`,
+`/lib/Json.mod`, `/app/GuiColorDemo.mod` y `/app/GuiRotCycle.mod`, `log=0`. Pico 2, S3, Nucleo y
+Discovery llevan las imágenes del 3-sep. Metro, C3 y P4 siguen con imágenes anteriores a `#466`/U4/U5
+(sus números ya están fijados; se actualizan cuando se graben).
+
+### El orden que venía (para contexto)
 
 **El orden lo fijó Eduardo al cerrar el 2-sep:** *«Terminaremos U6, U4 y U5. Después podemos hacer
 P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
@@ -81,15 +98,15 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    `test_mem` 30/30. El C6 (COM3) tiene `/lib/Gui.mod`, `/lib/Json.mod` y `/app/GuiColorDemo.mod`.
    Siguiente: **`P2.2`** (PWM del backlight, rotación con gaps, LED RGB como `Neopixel`, el IDE
    subiendo `Gui`+`Json` solos; detalle en la ficha).
-8. 🟡 **`P2.2` EN CURSO (4-sep, madrugada)** — la rotación va por MADCTL del panel con el gap de
-   cada orientación (tabla Adafruit 240×240: 180 → y+80, 270 → x+80) y repintado entero; el aviso a
-   consola, no a stdout. Sample nuevo `GuiRotCycle.bp` (gira solo cada 3 s, marcas en las esquinas;
-   paridad host 25/25). **Imagen regrabada en el C6 y el demo subido y lanzado; falta que Eduardo
-   mire las cuatro orientaciones.** La lista de P2.2 se acortó con hechos: el IDE YA resuelve deps
+8. ✅ **`P2.2` HECHA (4-sep)** — la rotación va por MADCTL del panel con el gap de cada orientación
+   (tabla ST7789 240×240: 180 → y+80, 270 → x+80) y repintado entero; el aviso a consola, no a
+   stdout. Sample nuevo `GuiRotCycle.bp` (gira solo cada 3 s, marcas en las esquinas; paridad host
+   25/25). **Eduardo lo vio: «la demo funciona perfectamente, y sí las esquinas coinciden»** — las
+   cuatro orientaciones, sin franja. La lista de P2.2 se acortó con hechos: el IDE YA resuelve deps
    transitivas (Gui→Json), el PWM del backlight no tiene API de brillo a la que servir (se queda el
    GPIO), y `Neopixel` sólo tiene backend en la Pico (en ESP32 es no-op: adaptador nuevo, ficha
    aparte). Punto de diseño anotado: el screen lógico dice 480×320 en todas las placas (paridad del
-   dump) mientras LVGL alinea contra el panel real.
+   dump) mientras LVGL alinea contra el panel real. **Con esto `P2` queda cerrada.**
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

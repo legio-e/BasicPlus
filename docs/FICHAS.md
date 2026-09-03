@@ -2040,7 +2040,7 @@ tocar y cómo se comprueba.
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
-| **P2** | **pantallas SPI** — *después de P1* | abierto 23-ago |
+| **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 
 📌 **Orden acordado el 2-sep, al cerrar** (Eduardo): *«Terminaremos U6, U4 y U5. Después podemos
 hacer P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»* Estado ese día: U1, U2, U3 y N1
@@ -2729,7 +2729,7 @@ con una evaluación previa a ver cómo se puede diseñar, pero eso está fuera d
 - 📌 Si el objetivo fuera *no pagar LVGL en las imágenes que no lo usan*, **ya existe la
   vía barata**: `BPVM_LVGL`, sin el cual el driver es una unidad de compilación vacía.
 
-#### 📺 P2 — pantallas SPI *(depende de P1)*
+#### 📺 P2 — pantallas SPI *(depende de P1)* — ✅ HECHA (4-sep-2026)
 
 ##### 📐 `P2.0` — la placa y la forma (3-sep, tarde): ESP32-C6-LCD-1.3, ST7789 por SPI, sin táctil
 
@@ -2865,7 +2865,7 @@ WS2812B (GPIO8) como `Neopixel`, quizá el botón BOOT (GPIO9) como entrada, y c
 IDE 6.0 que `Run on Device` sube `Gui`+`Json` solos (por el wire a mano hicieron falta los dos).
 Cosmético: por el USB nativo asoma un trozo del log del bootloader antes del HELLO.
 
-##### 🟡 `P2.2` — EN CURSO (4-sep, madrugada): la rotación con sus gaps, y lo que P2.2 NO va a ser
+##### ✅ `P2.2` — HECHA (4-sep): la rotación con sus gaps, confirmada en placa; y lo que P2.2 NO fue
 
 Antes de escribir nada, los hechos que cambian la lista (cada uno costó un viaje al código):
 
@@ -2902,11 +2902,21 @@ derecha, a 270 abajo a la izquierda; una franja negra o un desplazamiento = el g
 orientación está mal. Paridad host: **25 líneas byte-idénticas** miVM/VM-C. En la placa (imagen
 regrabada 4-sep 00:15, `/app/GuiRotCycle.mod` subido): `RUN` → dump → `rotacion: 90` a los 3 s.
 
-⏭️ **Falta lo que sólo ven los ojos**: Eduardo mira el ciclo (`Run on Device` de `GuiRotCycle`
-desde el IDE, o `RUN /app/GuiRotCycle.mod` por el wire) y dice, por orientación, si las esquinas
-caen donde deben y si hay franja. Si 90 y 270 salen cambiadas, el giro es antihorario y se cruzan
-los dos casos; si alguna sale desplazada 80 px, se cambia su gap. Después: cerrar `P2.2` y decidir
-las dos fichas propuestas (`Neopixel` en la familia ESP32; el tamaño del screen lógico en device).
+### ✅ Visto (Eduardo, 4-sep): *«La demo funciona perfectamente, y sí las esquinas coinciden»*
+
+Las cuatro orientaciones, a la primera: la tabla de gaps era la buena, el sentido del giro es el
+horario (90 y 270 no están cruzadas) y no hay franja en ninguna. **`P2.2` cerrada, y con ella
+`P2`**: la pantalla del C6 está entera — bus, panel, LVGL, memoria medida, rotación.
+
+Quedan fuera de `P2`, como decisiones y no como trabajo a medias:
+- **`Neopixel` en la familia ESP32** (adaptador RMT; valdría para el LED del C6, del S3 y del C3).
+  Hoy en ESP32 es no-op; la Pico lo tiene por PIO. Ficha aparte si Eduardo la quiere.
+- **El tamaño del screen lógico en device** (hoy 480×320 en todas las placas; LVGL alinea contra
+  el panel real; si el device dijera el suyo, el dump dejaría de ser idéntico al del host).
+- **Confirmar desde el IDE que `Run on Device` sube `Gui`+`Json` solo.** El código es transitivo
+  desde junio, pero la C6 ya tiene los dos en `/lib` (los subí por el wire), así que hoy el IDE los
+  vería idénticos y no subiría nada: probarlo de cero exige borrarlos de `/lib`, y eso se decide.
+- Cosmético: el trozo de log del bootloader que asoma por el USB nativo antes del HELLO.
 
 
 

@@ -17,8 +17,8 @@
  * P4: lv_timer_handler + ceder al menos un tick, tope 10 ms (#424).
  *
  * La rotación la hace el panel por MADCTL con su gap por orientación (tabla en
- * bpvm_gui_disp_set_rotation; 0° visto en placa, las otras tres por confirmar con
- * samples/GuiRotCycle.bp). El backlight va a tope por GPIO: un PWM por LEDC sólo
+ * bpvm_gui_disp_set_rotation; las cuatro confirmadas en placa el 4-sep-2026 con
+ * samples/GuiRotCycle.bp: «las esquinas coinciden»). El backlight va a tope por GPIO: un PWM por LEDC sólo
  * tendría sentido con una API de brillo en BasicPlus, que hoy no existe (el P4
  * también va al 100 %). El LED RGB (WS2812B en GPIO8) es `Neopixel` en BasicPlus,
  * pero ese backend sólo lo tiene la Pico (PIO): darlo a la familia ESP32 es un
@@ -152,7 +152,9 @@ void bpvm_gui_disp_set_rotation(int deg) {
      *   180°:  MX|MY     → gap (0, 80)   270°: MV|MY → gap (80, 0)
      *
      * (90° = MV|MX manda la fila superior a la columna derecha: giro horario, la
-     * convención de LVGL/P4.) Tras cambiar MADCTL se invalida la pantalla entera:
+     * convención de LVGL/P4.) Las cuatro orientaciones están CONFIRMADAS en placa
+     * (4-sep-2026, samples/GuiRotCycle.bp: las marcas de las esquinas caen donde
+     * deben y no hay franja). Tras cambiar MADCTL se invalida la pantalla entera:
      * la RAM del panel guarda lo viejo en la orientación vieja y nadie más lo
      * repintaría. El aviso va al log de consola, no a stdout (paridad del OUTPUT). */
     if (s_panel == NULL) return;
