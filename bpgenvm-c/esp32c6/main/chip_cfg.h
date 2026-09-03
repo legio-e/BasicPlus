@@ -31,8 +31,26 @@
  *
  * El MARGEN es la resta de la medida: 279912 − 262980 = 16932 B. Del orden del
  * C3 (17588): un núcleo, sin radio activa. */
-#define CHIP_VM_OBJETIVO      (192u * 1024u)
-#define CHIP_MARGEN_SISTEMA   16932u
+/* ─── Y CON LA PANTALLA (V6/P2.1, 3-sep noche) LOS NÚMEROS CAMBIAN ──────────────
+ *
+ * Esta imagen lleva LVGL, y LVGL pesa dos veces: ~108 KB de DRAM ESTÁTICA al arrancar
+ * (heap: libre 410988 → 303164; fuentes, tablas, gui.c) y ~93 KB EN MARCHA, porque
+ * LVGL va sobre el heap de C (LV_USE_STDLIB_MALLOC = CLIB: el pool LV_MEM_SIZE no
+ * se usa) y ahí viven los objetos, los estilos, los dos draw buffers (23 KB, DMA) y
+ * el SPI. Medido con GuiColorDemo 20 s (log=1, KILL), DOS pasadas:
+ *
+ *   con 192 KB de VM: libre tras reservar 106552, mínimo histórico 13624 → uso  92 928 B
+ *   con 160 KB de VM: libre tras reservar 139320, mínimo histórico 35496 → uso 103 824 B
+ *   con 128 KB de VM: libre tras reservar 172088, mínimo histórico 68264 → uso 103 824 B  (4-sep, confirma)
+ *
+ * El uso en marcha varía de pasada a pasada (LVGL sobre el heap de C, fragmentación),
+ * así que el MARGEN es el máximo medido, 103 824. Y el objetivo baja a 128 (heap 64 +
+ * pilas 64, el reparto del C3): el planificador deja 303164 − 131072 = 172 092 B al
+ * sistema, ~68 KB de holgura sobre el peor pico medido — sin radios todavía. Con 160
+ * quedaban 35 KB, y el criterio es el de Eduardo: no vaciar el heap del RTOS para
+ * devolvérselo después. Aquí es la pantalla quien lo cobra. */
+#define CHIP_VM_OBJETIVO      (128u * 1024u)
+#define CHIP_MARGEN_SISTEMA   103824u
 #define CHIP_VM_MIN           (64u * 1024u)    /* el suelo de las cinco placas */
 
 /* Identidad de placa: sin esto el C6 saludaría como `bpvm-esp32` (el S3). */

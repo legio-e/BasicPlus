@@ -2770,7 +2770,7 @@ es nueva: reaprovisionar no cuesta nada).
 embebido: lo sube el IDE, y con `#466` sólo la primera vez), y los ojos de Eduardo son el
 oráculo de la pantalla; después `GuiEvLat`/`GuiEvSpike` para el ritmo, y la medida del margen.
 
-##### 🟡 `P2.1` — EN CURSO (3-sep, cerrado por límite de sesión): el driver escrito y enlazado; falta verlo
+##### ✅ `P2.1` — HECHA (3-sep noche → 4-sep): el primer backend SPI, visto en la pantalla y con sus constantes medidas
 
 - `esp32c6/main/gui_display_st7789.c`: el contrato `bpvm_gui_disp_*` sobre `esp_lcd` (bus SPI2,
   panel ST7789 con los pines del esquemático, invert on, gap 0/0, backlight GPIO22), dos buffers
@@ -2806,18 +2806,64 @@ KILL a los 12 s → EXITED OK; la placa sigue viva (uptime continuo)
 ```
 
 O sea: `bpvm_gui_disp_init` (bus SPI, ST7789, LVGL, buffers) y el bombeo corren sin fallo.
-**Lo que falta es la imagen**, que sólo ven los ojos de Eduardo: el demo se queda corriendo en
-pantalla para eso. Con la pantalla vista, quedan (6) remedir el margen y (7) `P2.2`.
 
-⏭️ **Pasos que quedaban**: (1) `idf.py build` en `esp32c6/` y mirar que cabe; (2) `idf.py -p
-COM3 flash`; (3) reaprovisionar por el wire (`PART_DEFAULTS` → `PART_APPLY` con lo propuesto →
-`RESET`, como en `P1.C6.2`) y `ENV_SET log=0`; (4) leer el arranque: la línea `heap:` cambia (el
-pool de LVGL son 64 KB de bss) y hay que ver si el objetivo de 192 KB sigue cabiendo o el
-planificador baja; (5) Eduardo: `Run on Device` de `samples/GuiColorDemo.bp` sobre COM3 desde el
-IDE 6.0 (sube `Gui.mod` la primera vez) y mira la pantalla: si sale invertida/desplazada, tocar
-`invert_color`/`set_gap`; si no sale nada, un patrón de prueba al arranque para separar panel de
-LVGL; (6) volver a medir el margen con la GUI activa y fijar las constantes; (7) `P2.2`: PWM del
-backlight, rotación con gaps, y el LED RGB como `Neopixel`.
+### ✅ La pantalla, vista (Eduardo, 3-sep noche): *«Veo 3 botones: Rojo, Azul y Amarillo (más bien naranja)»*
+
+Justo lo que tocaba: el demo dibuja una pantalla lógica de 480×320 sobre un panel de 240×240, así
+que se ve la columna izquierda (Rojo, Azul, Amarillo) y el título, centrado a 480, cae fuera. Los
+colores son los del demo (`0xFFD000` es un amarillo cálido: si el orden RGB estuviera al revés el
+rojo saldría azul, y no), la orientación es la buena y no hay bandas ni basura. **El primer backend
+por SPI funciona a la primera con los pines del esquemático, `invert_color` y gap 0/0.**
+
+### 🔬 Y la medida que el humo escondía: con la GUI, 93 KB en marcha
+
+`log=1` → reset → `GuiColorDemo` 20 s → `KILL` → la línea `mem:`:
+
+```
+vm: DRAM interna libre 303164->106552 B (bloque mayor 278528->81920 B) | margen 16932   ← 192 KB
+mem: DRAM interna libre 15308 B | MINIMO HISTORICO 13624 B (bloque mayor 14336 B)
+```
+
+LVGL pesa DOS veces: ~108 KB de DRAM **estática** al arrancar (410988 → 303164: fuentes, tablas,
+`gui.c`) y **~93 KB en marcha**, porque va sobre el heap de C (`LV_USE_STDLIB_MALLOC = CLIB`, el
+pool `LV_MEM_SIZE` no se usa): objetos, estilos, los dos draw buffers (23 KB con DMA) y el SPI. Con
+192 KB de VM el sistema se quedó en **13 624 B** en el peor momento — al límite, y sin radios.
+Segunda pasada, ya con 160 KB de VM (regrabada y verificada: `vm: 160 KB … techo 205 por el margen
+del sistema`, INFO 98304/65536): mínimo **35 496 B** de 139 320 → **103 824 B** de uso en marcha,
+más que en la primera (92 928): LVGL sobre el heap de C varía de pasada a pasada. Así que el
+**margen es el máximo medido, 103 824**, y la imagen con pantalla pone **objetivo 128 KB** (heap 64 +
+pilas 64, el reparto del C3): el planificador deja 172 KB al sistema, ~68 de holgura sobre el peor
+pico. `test_mem` fija los dos casos del C6, sin y con GUI (**30/30**): con GUI manda «el margen del
+sistema» (techo 194 KB), no el contiguo. Es la primera imagen en la que el margen lo pone la
+pantalla y no el RTOS — y `U6` lo absorbe con un número.
+
+### ✅ La imagen final, grabada y confirmada (4-sep, madrugada): 128 KB y el margen clava
+
+Tercera pasada, ya con la imagen de 128 KB en la placa (mismo protocolo: `log=1` → `LOG_CLEAR` →
+`RESET` → `INFO` → `GuiColorDemo` 20 s → `KILL` → `LOG_DUMP`):
+
+```
+heap: libre 303164 | mayor 278528 | bloques: 6 libres, 42 usados | usado 17760
+vm: 128 KB en SRAM interna (objetivo 128, techo 194 por el margen del sistema)
+vm: DRAM interna libre 303164->172088 B (bloque mayor 278528->147456 B) | margen 103824
+INFO: vmHeapBytes 65536 / vmStackBytes 65536
+mem: DRAM interna libre 69324 B | MINIMO HISTORICO 68264 B (bloque mayor 50176 B)
+```
+
+172 088 − 68 264 = **103 824 B**, el margen exacto: la tercera pasada repite la peor de las dos
+anteriores al byte, así que el número no era un pico raro sino lo que la GUI cuesta en marcha. Al
+sistema le quedan **68 KB** en el peor momento con el demo corriendo, y `log=0` otra vez.
+
+**Lo que `P2.1` deja hecho:** `gui_display_st7789.c` (el cuarto backend del contrato
+`bpvm_gui_disp_*` y el primero por SPI), LVGL vendorizada en el build del C6, `lv_conf.h`
+consciente de la placa (RGB565, sin SDL), la `factory` a 1,5 MB, el planificador limitado por el
+margen (y no por el contiguo) por primera vez, y los dos casos del C6 en `test_mem` (30/30).
+
+⏭️ **`P2.2`** (lo que el driver aún no hace): PWM del backlight por LEDC (hoy GPIO a tope),
+rotación 90/180/270 con sus gaps (el ST7789 de 240×240 vive en una RAM de 240×320), el LED RGB
+WS2812B (GPIO8) como `Neopixel`, quizá el botón BOOT (GPIO9) como entrada, y comprobar desde el
+IDE 6.0 que `Run on Device` sube `Gui`+`Json` solos (por el wire a mano hicieron falta los dos).
+Cosmético: por el USB nativo asoma un trozo del log del bootloader antes del HELLO.
 
 
 

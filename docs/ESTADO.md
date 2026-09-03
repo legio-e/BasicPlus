@@ -72,9 +72,15 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    cintura común (`SOC_UART_HP_NUM`, el C6 cuenta su UART LP), aprovisionado por el wire, las tres
    constantes MEDIDAS (bloque contiguo 376 KB, margen 16932 → objetivo 192 KB), `fib(28)` 11823 ms
    (C3 11315), `MathRango` 29 líneas byte-idénticas al host. **El ecuador de V6.**
-7. 🟡 **`P2` EN CURSO** — el driver ST7789 del C6 está escrito y enlaza (`P2.1`); la `factory`
-   acaba de crecer a 1,5 MB. Al retomar: build → flash COM3 → reaprovisionar por el wire →
-   `GuiColorDemo` desde el IDE (Eduardo mira la pantalla). Los pasos exactos, en la ficha `P2.1`.
+7. ✅ **`P2.1` HECHA (3-sep noche → 4-sep madrugada)** — la pantalla del C6 **funciona a la
+   primera** (Eduardo vio los tres botones con sus colores); la imagen con LVGL cabe en la
+   `factory` de 1,5 MB. Medido con la GUI en marcha (tres pasadas), LVGL cuesta ~108 KB estáticos
+   y hasta 103 824 B en marcha (va sobre el heap de C), así que la imagen con pantalla lleva
+   **objetivo 128 KB, margen 103 824**; la de 128 grabada y confirmada (`vm: 128 KB … techo 194
+   por el margen del sistema`, INFO 65536/65536, mínimo histórico 68 264 B con el demo; `log=0`).
+   `test_mem` 30/30. El C6 (COM3) tiene `/lib/Gui.mod`, `/lib/Json.mod` y `/app/GuiColorDemo.mod`.
+   Siguiente: **`P2.2`** (PWM del backlight, rotación con gaps, LED RGB como `Neopixel`, el IDE
+   subiendo `Gui`+`Json` solos; detalle en la ficha).
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el
