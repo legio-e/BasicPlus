@@ -1622,7 +1622,7 @@ constantes.
 
 **La causa**: `FrmMain.resolveStdlibDir` miraba **primero el cwd del proceso** («compatibilidad
 histórica»), después el `outDir` del fichero y luego el proyecto. Lanzado el jar del repo desde
-`C:	emp\BasicPlus-5.0-win`, el cfg que encontraba era el del dist (`"stdlibDir": "./bpstdlib"`
+`C:\temp\BasicPlus-5.0-win`, el cfg que encontraba era el del dist (`"stdlibDir": "./bpstdlib"`
 = la stdlib de V5, `Math` MOD6 sin las cuatro funciones), y con ése compilaba un fichero del repo.
 Jar nuevo, stdlib vieja; y el nombre `BpIde-5.0.jar` en los dos sitios terminó de confundir.
 
