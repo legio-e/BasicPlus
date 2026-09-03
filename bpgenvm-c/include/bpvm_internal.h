@@ -18,6 +18,7 @@
  * como campo y necesitan el tipo completo. Todo lo demás —el ancho del slot,
  * los accesores, el deref— sigue viviendo en aquel bloque y sólo allí. */
 typedef struct { uint64_t v; } bpref_t;
+#include "bpvm_handles.h"   /* V6/U5 — la tabla de handles: su tipo, sus constantes y su API */
 
 /* ============================================================ */
 /*  Constantes extraídas de docs/MOD_FORMAT.md / HEAP_LAYOUT.md  */
@@ -61,12 +62,6 @@ typedef struct { uint64_t v; } bpref_t;
 /* Header de objeto en heap. */
 #define BPVM_OBJ_HEADER_SIZE 8
 #define BPVM_MIN_FREE_BLOCK  12
-
-/* #430 — tope de arranque de la tabla de handles (slots). 0 = sin tope (host).
- * Los puertos con malloc de plataforma chico (SRAM) lo fijan en su build. */
-#ifndef BPVM_HANDLE_CAP_MAX
-#define BPVM_HANDLE_CAP_MAX 0u
-#endif
 
 /* Offsets del class descriptor (MOD_FORMAT.md §8). */
 #define BPVM_CLS_OFF_NUM_FIELDS   0
@@ -447,42 +442,11 @@ struct bpvm {
     uint8_t* gc_valid_map;
     size_t   gc_valid_map_size;
 
-    /* V4 — TABLA DE HANDLES (paso 2b, espejo de miVM). Un objeto de HEAP se
-     * registra aquí y su ref es un HANDLE = índice | tag; bpref_deref lo resuelve.
-     * Modo neutro: monotónica, sin generación (pasos 3-4). handle_addr[i] = addr
-     * físico. El GC se SUSPENDE durante la migración (gc_suspended).
-     * #430 — BPVM_HANDLE_CAP_MAX: valor de arranque de handle_cap_max (abajo);
-     * cada puerto lo fija en su build (la Pico: 32768). 0 = sin tope. */
-    uint32_t* handle_addr;
-    /* Paso 3 — GENERACIÓN por índice (contrato B). Monotónica-no-reuso: 0 = vivo;
-     * >0 = LIBERADO. El deref de PROGRAMA (bpvm_ref_dead) lo consulta → use-after-free
-     * grita. Gen de 1 bit; el handle 64b (gen en los 32 altos) llega en el paso 4. */
-    uint32_t* handle_gen;
-    uint32_t  handle_cap;      /* capacidad de handle_addr Y handle_gen */
-    uint32_t  handle_next;     /* 0 reservado para null */
-    /* Paso 4c — FREE-LIST de slots reciclables (pila LIFO). owner-free empuja el slot;
-     * handle_register lo reusa con su gen ya bumpeada. Reclamación inmediata (1 worker);
-     * la diferida-a-safepoint (SMP/ARM) se pliega al paso 6. */
-    uint32_t* handle_free_list;
-    uint32_t  handle_free_top;
-    uint32_t  handle_free_cap;
-    /* #430 — TOPE de la tabla (slots; 0 = sin tope). Las tablas salen del
-     * malloc de PLATAFORMA: en la Pico eso es SRAM (520 KB en total) y el
-     * salto a 65536 pide ~512 KB con las viejas aun vivas — el puerto fija
-     * aqui lo que su silicio puede pagar y el exceso es OOM atrapable, no
-     * un malloc imposible (cuyo hook CUELGA la placa). Runtime y no #define
-     * a secas para que el host pueda forzarlo en tests (--handlecap). */
-    uint32_t  handle_cap_max;
-    /* #430 — LA MARCA cruzada (idea de Eduardo): register lo arma al repartir
-     * un slot fresco de la zona final de la tabla (últimos 64); la puerta de
-     * heap_alloc lo consulta y lo resuelve (colecta / crece / OOM). Así la
-     * frontera se anuncia sola: una colecta por cruce, cero aritmética por
-     * alloc. */
-    uint32_t  handle_pressure;
-    /* El aviso de "sin sitio para mas handles" sale una vez POR EJECUCION. Vive
-     * aqui y no en un `static` porque un static es una vez por ARRANQUE: en la
-     * Pico eso lo dejo mudo justo cuando hacia falta (29-ago). */
-    int       handle_oom_avisado;
+    /* V6/U5 — LA TABLA DE HANDLES, en su módulo: el tipo, sus constantes y su API
+     * están en bpvm_handles.h y el código en bpvm_handles.c. Antes eran diez
+     * campos sueltos aquí (paso 2b→4c de V4, #430, #451); la historia de cada
+     * uno vive ahora junto al código que lo usa. */
+    bpvm_handles_t handles;
     int       heap_oom_avisado;    /* idem para el heap lleno DE VERDAD */
     /* #430 — la excepcion PREFABRICADA del OOM (idea de Eduardo): se construye
      * en el prologo del RUN, cuando construir es gratis, y se lanza cuando la
@@ -703,19 +667,7 @@ static inline void bpref_push(bpvm_t* vm, bpvm_thread_t* tc, bpref_t r) {
  *    (p.ej. handles) = tocar bpref_deref; los call sites no. -- */
 #define BPVM_ARR_DATA_OFF 4u   /* bytes de user_ref al 1er elemento (prefijo length u32) */
 
-/* V4 — bit 30 marca "es HANDLE de heap". null (0) y las CONSTANTES del data block
- * (dirección directa, inmutable/no-heap) tienen el bit a 0 → no necesitan tabla ni
- * generación. La memoria es <256KB (0x40000) → una dirección real jamás lo tiene. */
-#define BPVM_HANDLE_TAG 0x40000000u
-
-/* V4/paso4c: registra un objeto de HEAP y devuelve su HANDLE 64b (bpref_t =
- * gen(slot)<<32 | idx|TAG). Reusa slots de la free-list si los hay. Devuelve bpref_t
- * (NO uint32) a propósito: asignarlo a un uint32_t es error de compilación → el
- * compilador caza cada sitio que perdería la generación. Implementado en heap.c. */
-bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr);
-/* Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
- * constantes. Idempotente. Implementado en heap.c. */
-void bpvm_handle_kill(bpvm_t* vm, bpref_t r);
+/* V4 — bpvm_handle_register / bpvm_handle_kill: en bpvm_handles.h (V6/U5). */
 
 /* -- H5.c: cola de eventos (events.c). El bpref_t del receptor viaja como
  *    uint64_t porque bpvm_event_t se declara antes del typedef. -- */
@@ -733,15 +685,6 @@ int  bpvm_events_revive_terminated(bpvm_t* vm);
 /* Paso 3 / contrato B — ¿es `r` un handle a un objeto LIBERADO? Solo los handles
  * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA
  * (opcodes de campo/array/invoke) para gritar "objeto eliminado". */
-/* H13/#17 — cuando el deref grita, DECIR QUÉ handle. El mensaje "referencia a
- * objeto eliminado" a secas nos costó una tarde entera de cacería: no distingue
- * un truncamiento de una referencia caducada de verdad, y son bugs distintos con
- * arreglos distintos. Los tres números que hacen falta ya los tiene la VM en la
- * mano. Implementado en bpvm_util.c para no engordar este inline (sólo la rama
- * que ya va a abortar paga la llamada). */
-void bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot,
-                     uint32_t handle_next);
-
 static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return 0;
     uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
@@ -749,9 +692,9 @@ static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
     /* Paso 4b: compara la gen del handle con la del slot. Monotónico → todo handle
      * lleva gen=0, equivale al dead-flag; en 4c (reuso) un slot reciclado tiene gen
      * bumpeada y un handle rancio no matchea → grita. */
-    if (vm->handle_gen == NULL || idx == 0u || idx >= vm->handle_next) return 0;
-    if (vm->handle_gen[idx] == gen) return 0;
-    bpvm_uaf_report(idx, gen, vm->handle_gen[idx], vm->handle_next);
+    if (vm->handles.gen == NULL || idx == 0u || idx >= vm->handles.next) return 0;
+    if (vm->handles.gen[idx] == gen) return 0;
+    bpvm_uaf_report(idx, gen, vm->handles.gen[idx], vm->handles.next);
     return 1;
 }
 
@@ -767,8 +710,8 @@ static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
 static inline bpref_t bpref_regen(const bpvm_t* vm, uint32_t ref) {
     if ((ref & BPVM_HANDLE_TAG) == 0u) return bpref_from_addr(ref);
     uint32_t idx = ref & ~BPVM_HANDLE_TAG;
-    uint32_t gen = (vm->handle_gen != NULL && idx < vm->handle_next)
-                   ? vm->handle_gen[idx] : 0u;
+    uint32_t gen = (vm->handles.gen != NULL && idx < vm->handles.next)
+                   ? vm->handles.gen[idx] : 0u;
     bpref_t r; r.v = ((uint64_t) gen << 32) | (uint64_t) ref;
     return r;
 }
@@ -779,13 +722,13 @@ static inline bpref_t bpref_regen(const bpvm_t* vm, uint32_t ref) {
 static inline uint32_t bpref_deref(const bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return r.v;
     uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
-    if (idx == 0u || idx >= vm->handle_next) return 0u;
+    if (idx == 0u || idx >= vm->handles.next) return 0u;
     /* Paso 7c — A1 publicación segura: ACQUIRE al leer el slot → garantiza VER el objeto
      * COMPLETAMENTE inicializado que el escritor publicó con RELEASE (bpvm_handle_register).
      * Es la mitad LECTOR del apretón de manos (el único punto de publicación = el slot).
      * INERTE en x86 (los loads ya son acquire); en ARM/RISC-V emite la barrera (dmb/ldar).
      * Validación real = fase de placa. */
-    return __atomic_load_n(&vm->handle_addr[idx], __ATOMIC_ACQUIRE);
+    return __atomic_load_n(&vm->handles.addr[idx], __ATOMIC_ACQUIRE);
 }
 /* Longitud (nº de elementos) de un array, leída de su cabecera. 0 si null. */
 static inline uint32_t bpref_arr_len(const bpvm_t* vm, bpref_t arr) {

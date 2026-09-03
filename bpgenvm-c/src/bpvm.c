@@ -365,17 +365,10 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->heap_reserve = 0;        /* #355: se arma al fijar el heap real, no aquí */
     vm->building_error = 0;      /* #355: 1 solo mientras se construye una excepcion */
     vm->main_absolute_address = 0;
-    /* V4 — tabla de handles (lazy) + GC suspendido durante la migración. */
-    vm->handle_cap_max = BPVM_HANDLE_CAP_MAX;   /* #430: tope del puerto (0 = sin tope) */
-    vm->handle_pressure = 0u;                   /* #430: la marca, sin cruzar */
+    /* V4 — tabla de handles (lazy; V6/U5: en su módulo, bpvm_handles.c) + GC
+     * suspendido durante la migración. */
+    bpvm_handles_init(vm);                      /* #430: tope del puerto, la marca sin cruzar, tabla vacía */
     vm->oom_exc.v = 0u;                         /* #430: la prefabricada, aun no */
-    vm->handle_addr  = NULL;
-    vm->handle_gen   = NULL;     /* paso 3: generación por índice (contrato B) */
-    vm->handle_free_list = NULL; /* paso 4c: free-list de slots reciclables */
-    vm->handle_free_top  = 0;
-    vm->handle_free_cap  = 0;
-    vm->handle_cap   = 0;
-    vm->handle_next  = 1;        /* 0 = null */
     vm->gc_suspended = 0;        /* paso 6: GC reactivado (handle-aware: mark + barrido de tabla) */
 
     /* Pone los bytes sentinela en la región reservada:
@@ -1328,7 +1321,7 @@ void bpvm_destroy(bpvm_t* vm) {
      * vive dentro del bloque de la VM, esos punteros apuntan a `vm->memory` y
      * pasarlos por `bpvm_free` seria liberar memoria que no es nuestra. Se van
      * con el bloque. La free-list si sigue saliendo del malloc de plataforma. */
-    bpvm_free(vm->handle_free_list);   /* V4/paso 4c: free-list */
+    bpvm_handles_destroy(vm);          /* V4/paso 4c: la free-list (la tabla se va con el bloque) */
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];

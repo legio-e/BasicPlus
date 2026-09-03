@@ -2032,7 +2032,7 @@ tocar y cómo se comprueba.
 | **U2** | el **transporte** (wire): entender los gemelos falsos y darle contrato | ✅ 26-ago |
 | **U3** | el **REPL** — el trabajo de verdad: 4.318 líneas sin contrato | ✅ 31-ago (y el simulador, `U3.24`) |
 | **U4** | la **stdlib embebida**: un solo formato de blobs | ✅ 3-sep (`U4.1`) |
-| **U5** | la **tabla de handles**: darle módulo | abierto 23-ago |
+| **U5** | la **tabla de handles**: darle módulo | ✅ 3-sep (`U5.1`) |
 | **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | ✅ 3-sep (`U6.11`: las 5 familias, verificadas en placa) |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
@@ -4482,7 +4482,7 @@ el arranque dice lo mismo que hoy (la Pico 2 acaba de verificar la regla con est
 📌 Ya no queda código en ningún generado: lo que se ponga a mano ahí muere en la siguiente
 regeneración, y ahora no hay nada que poner. **`U4` cerrado.**
 
-#### 🟡 U5 — la tabla de handles
+#### ✅ U5 — la tabla de handles (CERRADO el 3-sep con `U5.1`)
 
 Hoy no tiene fichero ni cabecera: vive repartida por `bpvm.c`, `builtins.c`,
 `bpvm_aot_helpers.c`, `bpvm_dbg_wire.c` y `bpvm_util.c`. Está *unificada por omisión*, no
@@ -4515,6 +4515,30 @@ campos por offset, lo hace todo por `helpers->…` (`AotCEmitter`: `newarray_`, 
 el guardián del prefijo (`memory` en 0, `aot_helpers` detrás) sigue siendo el único contrato.
 Verificación: paridad 38/0/0 y `test_smp_handles` en host, los seis builds, y una placa (la Pico
 2, la del margen más justo).
+
+##### ✅ `U5.1` — HECHO (3-sep): la tabla de handles tiene módulo
+
+- **`include/bpvm_handles.h`**: el tipo `bpvm_handles_t` (los diez campos, con la historia de cada
+  uno junto al campo), las constantes (`BPVM_HANDLE_TAG`, `BPVM_HANDLE_CAP_MAX`) y la API:
+  `bpvm_handles_init/destroy`, `bpvm_handle_register/kill`, `bpvm_handles_grow` (era el
+  `handle_table_grow` estático), `bpvm_handles_gc_sweep` (era `gc_table_sweep_phase`),
+  `bpvm_set_handle_cap_max`, `bpvm_uaf_report`.
+- **`src/bpvm_handles.c`** (310 líneas): el tramo de `heap.c` tal cual, con sus comentarios de
+  `#430`, `#449` y `#451` —que son la historia de por qué la tabla está dentro del bloque—, más
+  el init y el destroy que hacía `bpvm.c` a mano. `heap.c` pasa de 1 301 a 1 001 líneas y se queda
+  con sus dos llamadas (la fase 6 del GC y la puerta de `heap_alloc`).
+- **`bpvm_t`**: los diez `handle_*` → un `bpvm_handles_t handles;` detrás del prefijo congelado;
+  todos los accesos (`vm->handle_x` → `vm->handles.x`) renombrados en `heap.c`, `bpvm.c` y los
+  inline del header (`bpref_deref`, `bpvm_ref_dead` y `bpref_regen` se quedan en
+  `bpvm_internal.h`: son el modelo de refs, no la tabla). Ni `builtins.c` ni `bpvm_dbg_wire.c`
+  cambian: no la tocaban.
+- **Verificado**: host `make`; `test_smp_handles` a 4 y 8 hilos, 0 corrupciones; `test-mem`,
+  `test-mods`, `sim-smoke` 45/45; **paridad 38/0/0**; los **seis builds** con el `.c` nuevo dado de
+  alta en los cinco sitios (Nucleo text +160 B, bss idéntico; Discovery bss idéntico); y en la
+  **Pico 2** (grabada, `MathRango` por el wire): **29 líneas byte-idénticas al host**, INFO
+  273736/92160 como antes, sin reinicio.
+
+📌 **`U5` cerrado, y con él la serie de unificación (U1–U6).** `#432` se cierra por referencia.
 
 ---
 
@@ -5917,7 +5941,7 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   `indev` de LVGL (40→10 ms; costaría pasar de ~3 % a ~12-15 % de un núcleo).
   Emparenta con [[#432]] en lo de fondo: el reparto común/hardware de V6.
 
-- `#432` — **¿dónde debe vivir la tabla de handles, y de qué tamaño?** Las dos
+- ✅ *(cerrada el 3-sep por referencia: la contestó `#451` — dentro del bloque, hacia abajo, límite físico; ver `U5.0`)* `#432` — **¿dónde debe vivir la tabla de handles, y de qué tamaño?** Las dos
   preguntas que dejó `#430` (Eduardo, 17-ago). **Están acopladas: la segunda
   depende de la primera**, y conviene decidirlas juntas.
 

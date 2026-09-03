@@ -64,7 +64,10 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
 4. ✅ **`U4` HECHO (3-sep, `U4.1`)**: un generador (`scripts/regen_mods.sh`), tres ficheros de
    sólo datos, el bucle en `src/bpvm_mods.c`; blobs byte-idénticos, seis builds, Pico 2 verificada.
    Las demás placas lo reciben al regrabarse.
-5. **`U5`** — la tabla de handles a un módulo propio (hoy repartida en cinco ficheros).
+5. ✅ **`U5` HECHO (3-sep, `U5.1`)**: `bpvm_handles.[ch]` con la tabla (tipo, constantes, API)
+   sacada de `heap.c` y de diez campos sueltos de `bpvm_t`; el ABI del `.mdn` intacto (los helpers
+   no leen esos campos por offset); paridad 38/0/0, `test_smp_handles` limpio, seis builds, Pico 2
+   byte-idéntica. **Con esto la serie de unificación U1–U6 está cerrada.**
 6. **`P1.C6`** — el ESP32-C6 **sin pantalla**, por el camino del C3: `esp32c6/` con su `chip_cfg.h`
    (constantes MEDIDAS con `medir_margen.ps1`), transporte, `board_id`, partición. Compilar antes
    de entregar (IDF en `C:\esp\v6.0.1`).
