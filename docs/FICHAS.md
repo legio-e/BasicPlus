@@ -1641,10 +1641,18 @@ se mueve, el array es el mismo.
 C») y no importa nada — y el launcher sale con 0. Con `cygpath -w` (barras invertidas) va. Y el
 `.elf` de las 14:24 seguía ahí para engañar: verificar el ARTEFACTO, no el exit code.
 
-⏭️ **Falta la placa**: Eduardo graba desde CubeIDE; la comprobación es la línea `vm:` en el
-`LOG_DUMP` y el `INFO` (vmHeapBytes 393216 / vmStackBytes 131072, como antes). Y mirar su `/lib`
-(`#466`): su instalador es el único de los tres que **no avisa** del rancio (copia si falta, y
-calla).
+### ✅ En la Nucleo (3-sep, grabada por Eduardo desde CubeIDE, sello 19:08)
+
+```
+[    4] vm: 512 KB en SRAM estática (todo lo que deja la región)
+INFO: vmHeapBytes 393216 / vmStackBytes 131072 · sramBytes 786432 · boardName nucleo-u575zi
+```
+
+La línea de las cinco placas, y el reparto de siempre (384 + 128). Y de `#466`: su `/lib` estaba
+**vacío** (el log viejo resolvía `Core` y `Json` desde `/app`, «eclipsa al del pack») y el primer
+arranque instaló los 14 (`preinstall: …`); en `/app` queda un `Json.mod` MOD6 (24055 B) que la
+imagen no embebe, así que es el IDE quien lo repondrá en el próximo Run que lo necesite (versión
+anterior → sube donde está). ⏭️ Falta la Discovery para dar `U6` por cerrado.
 
 📌 **Con esto, las cinco familias —Pico/Metro, S3, C3, P4, STM32— deciden su memoria con
 `bpvm_mem_plan()`** y la cuentan con la misma línea. El paso 2 de `U6` queda cerrado en código;
