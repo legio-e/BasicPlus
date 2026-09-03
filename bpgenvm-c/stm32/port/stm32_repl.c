@@ -80,7 +80,10 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
  * Lo comparten LAS DOS placas de la familia y la que manda es la Nucleo: la
  * Discovery tiene 3008 KB de RAM, así que aquí le sobra. Si algún día se quiere
  * afinar por placa, el sitio es board.h — no este #define. */
-static uint8_t s_vm_mem[512u * 1024u];        /* RAM que gestiona la VM */
+/* V6/U6.12 — el tamaño lo pone CADA PLACA en board.h (BOARD_VM_BYTES): la Nucleo
+ * sigue en 512 KB y la Discovery, con 3008 KB de RAM, pasa a 1536. «Quedarnos con
+ * lo bueno y no unificar a lo peor» (Eduardo). */
+static uint8_t s_vm_mem[BOARD_VM_BYTES];      /* RAM que gestiona la VM */
 /* V6/U6.11 — lo que el planificador COMÚN (bpvm_mem) decidió sobre ese array.
  * Aquí no hay nada que medir en marcha: la región es el array entero, EXCLUSIVA
  * de la VM y SIN margen, porque el margen de esta familia lo pone el ENLAZADOR

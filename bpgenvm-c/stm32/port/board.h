@@ -25,6 +25,13 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 #define BOARD_WIRE_IRQn         USART1_IRQn  /* IRQ de RX → ring (V3/H5.2) */
 #define BOARD_NAME              "u5g9j-dk2"
 #define BOARD_SRAM_BYTES        (3008UL * 1024UL)   /* SRAM interna contigua (linker) */
+/* V6/U6.12 — el bloque de la VM, POR PLACA (antes 512 KB para las dos, «manda la
+ * Nucleo»). Medido sobre el .elf del 3-sep: estático sin la VM ~1 025 KB (el
+ * framebuffer 800×480×2 son 768 000 B, g_nodes 96 KB, s_drawbuf 75 KB…), así que
+ * con 1536 KB de VM quedan ~460 KB para malloc y pila — la Nucleo vive con 158.
+ * El techo real sería ~1,75 MB; 1,5 MB es redondo y holgado. Si no cabe, el
+ * enlazador lo dice (._user_heap_stack). */
+#define BOARD_VM_BYTES          (1536UL * 1024UL)
 /* H11 — AQUÍ ESTABAN BOARD_FS_FLASH_ADDR/_REGION_SIZE (0x08380000, 512 KB). Eran
  * de V2/V3, cuando la región del FS era FIJA por placa. Desde H9 la fija el env
  * (bpvm_part, sobre BP_PART_BASE/BP_USABLE_FLASH de flash_layout_stm32.h) y sólo
@@ -64,6 +71,9 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 #define BOARD_WIRE_IRQ_PRIO     5            /* 0=máx … 15=mín; > SysTick, sin FreeRTOS */
 #define BOARD_NAME              "nucleo-u575zi"
 #define BOARD_SRAM_BYTES        (768UL * 1024UL)
+/* V6/U6.12 — 512 KB de 768: estático sin la VM ~98 KB, quedan ~158 KB para
+ * malloc y pila (H13 hallazgo 31 midió el presupuesto). */
+#define BOARD_VM_BYTES          (512UL * 1024UL)
 /* H11 — ídem que en la DK2: BOARD_FS_FLASH_ADDR/_REGION_SIZE retirados (la región
  * del FS la fija el env desde H9, no un #define). */
 /* H10 — ADC1 habilitado en CubeMX (hadc1) con el canal interno del sensor de

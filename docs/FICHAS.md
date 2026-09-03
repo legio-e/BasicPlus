@@ -1666,6 +1666,28 @@ Su `/lib` estaba vacío también: 14 `preinstall:`; `STAT` por nombre igual que 
 Nucleo y Discovery— deciden su memoria con la misma función Y lo han demostrado en su placa.
 `U6` cerrado.**
 
+##### ✅ `U6.12` — la Discovery deja de heredar el techo de la Nucleo: 1536 KB (3-sep, observación de Eduardo)
+
+*«La Discovery tiene más de 512 K de RAM»* — tiene **3008 KB**, y el port del STM32 usaba un único
+array de 512 KB para las dos placas porque «manda la Nucleo». Con `U6` cada imagen pone sus
+constantes, así que ya no hay razón: **`BOARD_VM_BYTES` en `board.h`**, por placa, y el array la
+toma (`s_vm_mem[BOARD_VM_BYTES]`). Medido antes de elegir el número (`arm-none-eabi-nm --size-sort`
+sobre el `.elf` del 3-sep):
+
+| Discovery (3008 KB) | bytes |
+|---|---|
+| `s_vm_mem` | 524 288 |
+| `s_framebuffer` 800×480×2 | 768 000 |
+| `g_nodes` 96 KB · `s_drawbuf` 75 KB · `g_scratch` 16 · `s_put_buf` 12 · resto | ~257 000 |
+| libre para malloc y pila (con 512 KB de VM) | ~1 470 000 |
+
+La Nucleo vive con ~158 KB libres (768 KB − 624 354 de estático). Con el mismo margen la Discovery
+admitiría ~1,75 MB; se pone **1536 KB** (tres veces la Nucleo) y quedan **457 404 B** libres (bss
+2 622 124 de 3 080 192). El enlazador sigue vigilando (`._user_heap_stack`). `test_mem` fija el
+caso (**24/24**): `vm: 1536 KB en SRAM estática (todo lo que deja la región)`, reparto 1152 + 384.
+Los dos `.elf` compilan headless: la Nucleo idéntica (bss 624 354), la Discovery con bss 2 622 124.
+⏭️ Falta grabar la Discovery y leer `vm: 1536 KB` e INFO 1179648/393216.
+
 📌 **Con esto, las cinco familias —Pico/Metro, S3, C3, P4, STM32— deciden su memoria con
 `bpvm_mem_plan()`** y la cuentan con la misma línea. El paso 2 de `U6` queda cerrado en código;
 una placa futura (C6, P4X, S31…) entra escribiendo un enumerador de diez líneas y sus tres
@@ -4462,6 +4484,34 @@ regeneración, y ahora no hay nada que poner. **`U4` cerrado.**
 Hoy no tiene fichero ni cabecera: vive repartida por `bpvm.c`, `builtins.c`,
 `bpvm_aot_helpers.c`, `bpvm_dbg_wire.c` y `bpvm_util.c`. Está *unificada por omisión*, no
 por diseño, y por eso `#432` (dónde debe vivir y de qué tamaño) no se puede ni plantear.
+
+##### 📐 `U5.0` — el censo (3-sep): la tabla ya está en un sitio; le falta el módulo, no la unificación
+
+**Contando consumidores, no leyendo código** — quién toca los campos `handle_*` de `bpvm_t`:
+
+| fichero | toques | qué |
+|---|---|---|
+| `src/heap.c` | 45 | registro, baja, crecimiento (dentro del bloque, hacia abajo, `#451`), barrido del GC, la presión (`#430`) |
+| `include/bpvm_internal.h` | 20 | los diez campos (detrás del prefijo congelado) + los inline `bpvm_ref_dead` / deref |
+| `src/bpvm.c` | 11 | init a cero, y la free-list en `bpvm_free` |
+| `test/main.c` | 6 | `--handlecap` (`#430`) |
+| `bpvm_util.c` · `bpvm_aot_helpers.c` · `test_smp_handles.c` | 1–2 | un diagnóstico, un comentario, la carrera SMP |
+
+Los que la ficha de agosto citaba (`builtins.c`, `bpvm_dbg_wire.c`) **no la tocan**: usan refs a
+través de los inline. Y lo que `#432` preguntaba —dónde vive, de qué tamaño— **lo contestó `#451`**:
+dentro del bloque de la VM, entre heap y pilas, creciendo hacia abajo hasta chocar con el heap
+(límite físico, sin tope adivinado). `#432` se cierra por referencia.
+
+**Lo que sí falta, y es `U5`**: un módulo con nombre. `src/bpvm_handles.c` + `include/bpvm_handles.h`
+con lo que hoy es un tramo de `heap.c` (`handle_slots_por_heap`, `handle_table_grow`,
+`bpvm_handle_register`, `handle_kill_idx`, `bpvm_handle_kill`, `gc_table_sweep_phase`) y los inline
+de deref; los diez campos, en un `bpvm_handles_t` dentro de `bpvm_t` **detrás del prefijo** — y
+esto es lo que había que comprobar antes de moverlos: el código AOT de los `.mdn` no lee esos
+campos por offset, lo hace todo por `helpers->…` (`AotCEmitter`: `newarray_`, `array_store_`,
+`string_length`, `call_bp_i`… ninguno `handle_*`), así que moverlos **no cambia el ABI del `.mdn`**;
+el guardián del prefijo (`memory` en 0, `aot_helpers` detrás) sigue siendo el único contrato.
+Verificación: paridad 38/0/0 y `test_smp_handles` en host, los seis builds, y una placa (la Pico
+2, la del margen más justo).
 
 ---
 

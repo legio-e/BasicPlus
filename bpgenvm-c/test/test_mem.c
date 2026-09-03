@@ -129,9 +129,23 @@ static void caso_stm32(void) {
           "STM32: la linea: %s", s);
 }
 
+static void caso_discovery(void) {
+    /* U6.12 — la Discovery (3008 KB de RAM) deja de heredar el techo de la Nucleo:
+     * BOARD_VM_BYTES = 1536 KB, medido sobre el .elf (estatico sin la VM ~1025 KB,
+     * quedan ~460 KB para malloc y pila). Misma forma que la Nucleo: exclusiva, sin
+     * margen (el enlazador lo pone), objetivo 0 = el array entero. */
+    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20000000, 1536u * 1024u, 1536u * 1024u, 1, 0, "SRAM estática" }};
+    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 0, NULL };
+    bpvm_mem_plan_t p; char s[160];
+    bpvm_mem_plan(r, 1, &cfg, &p);
+    bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 1536u * 1024u, "Discovery: los 1536 KB del array, enteros (%u KB)", (unsigned)(p.bytes / 1024u));
+    CHECK(strstr(s, "1536 KB en SRAM est") != NULL,         "Discovery: la linea: %s", s);
+}
+
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32();
+    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }
