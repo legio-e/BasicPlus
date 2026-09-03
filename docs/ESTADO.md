@@ -55,9 +55,9 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
 2. ✅ **S3 (3-sep)**: regrabado con la imagen de las 19:01 (`#466` + `U4.1`); su `/lib` era todo de
    V5 (13 MOD6 — ayer lo di por limpio porque el ESP32 no avisaba) y el primer arranque los repuso
    los 13 él solo; memoria idéntica (160 KB, techo 272, margen 26564); `STAT` por nombre OK.
-3. **Nucleo y Discovery**: las graba Eduardo desde CubeIDE (`Debug/*.elf` de las 19:38–19:39); leer
-   `vm: 512 KB en SRAM estática (todo lo que deja la región)` e INFO 393216/131072, y su `/lib`.
-   **Cierra `U6`** (la ficha padre pasa a ✅ con eso).
+3. ✅ **Nucleo (3-sep)**: `vm: 512 KB en SRAM estática (todo lo que deja la región)`, INFO
+   393216/131072; su `/lib` estaba vacío y la imagen instaló los 14; el `/app/Json.mod` MOD6 lo
+   repondrá el IDE. **Falta la Discovery** (la graba Eduardo): con ella **cierra `U6`**.
 4. ✅ **`U4` HECHO (3-sep, `U4.1`)**: un generador (`scripts/regen_mods.sh`), tres ficheros de
    sólo datos, el bucle en `src/bpvm_mods.c`; blobs byte-idénticos, seis builds, Pico 2 verificada.
    Las demás placas lo reciben al regrabarse.
@@ -124,7 +124,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 | **C3** (COM3) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada: 128 KB, techo 136 por el contiguo, 64/64 — idéntico | ✅ `/lib` **limpio de origen** (lo aprovisionó el instalador; el IDE de V5 nunca le subió nada: 0 avisos), ✅ `log` devuelto a 0 |
 | **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **Pico 2** (COM22) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep; llevaba la del 29-ago) | ✅ **rama SRAM en variante A verificada**: `357 KB @ 0x20024ab8`, y su `stack=90` del ENV respetado (heap 267 + pilas 90; INFO 273736/92160, igual que antes) | ✅ `/lib` **limpio** (16 de V5 y de una imagen vieja borrados y repuestos por la imagen, `#466`); ENV `stack=90`, `gc=1`, `mpu=1`, `log=1`; FS de 1 MB al 24 % — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
-| **STM32 Nucleo / Discovery** | lo último que grabó Eduardo (anterior a `U6`) | ✅ **migrado en código (`U6.11`)**: los dos `.elf` compilados headless, 0 errores; **falta grabar** y leer la línea `vm:` (esperado: `512 KB en SRAM estática`, INFO 393216/131072) | `/lib` por revisar (su instalador NO avisa del rancio); `quantum` ya devuelto a 0 en la Discovery |
+| **STM32 Nucleo / Discovery** | Nucleo ✅ **`U4.1` + `#466`** (Eduardo, 3-sep, sello 19:08); Discovery pendiente de grabar | Nucleo ✅ verificada: `vm: 512 KB en SRAM estática`, INFO 393216/131072 | Nucleo: `/lib` instalado entero por la imagen (estaba vacío); `/app/Json.mod` MOD6 lo repondrá el IDE. Discovery: `quantum` ya a 0 |
 | host / simulador | — | ✅ repo, `test-mem` 19/19, `sim-smoke` 40/40, paridad 38/0/0 | — |
 
 **Los seis builds compilan** con el repo actual (host, Pico, S3, C3, P4, Nucleo, Discovery).
