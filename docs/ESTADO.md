@@ -48,7 +48,7 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
 1. **`#466` paso (4), en placa**: ✅ **Pico 2 (3-sep)** grabada con el `uf2` de las 19:38; con un
    `Math.mod` MOD6 plantado a propósito, el arranque lo repuso él solo y sólo ése, y el `STAT` por
    nombre da ruta, `MOD7` y CRC sin signo (verificado contra el repo). **Falta** un Run desde el IDE
-   nuevo (`BpIde/target/BpIde-5.0.jar`, no el dist) con `samples/MathRango.bp`, que debe decir
+   nuevo (`BpIde/target/BpIde-6.0.jar`, no el dist) con `samples/MathRango.bp`, que debe decir
    `[Explorer] Math.mod: ya en la placa, idéntico — no se sube`; y la Metro. Con eso **cierra `#466`.**
 2. **S3 (COM9)**: regrabar (`idf.py flash`; el DTR/RTS del puente, en `tools/medir_margen.ps1`) y
    mirar su `/lib` con el instalador nuevo.

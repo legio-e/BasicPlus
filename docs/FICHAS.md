@@ -1551,7 +1551,7 @@ el bit 31 puesto**, igual al `zlib.crc32` del `bpstdlib/Math.mod` del repo. Cont
 anterior contestaba `INVALID_PARAM falta path` a la misma pregunta (el camino «firmware viejo»
 del IDE).
 
-⏭️ (4b) **Falta la mitad del IDE en placa**: un Run desde el IDE nuevo (`BpIde/target/BpIde-5.0.jar`,
+⏭️ (4b) **Falta la mitad del IDE en placa**: un Run desde el IDE nuevo (`BpIde/target/BpIde-6.0.jar`,
 no el dist de V5) de un programa con dependencia de stdlib (`samples/MathRango.bp`), que debe
 decir `[Explorer] Math.mod: ya en la placa, idéntico — no se sube`. Y la Metro, cuando se enchufe.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
@@ -1612,6 +1612,25 @@ calla).
 `bpvm_mem_plan()`** y la cuentan con la misma línea. El paso 2 de `U6` queda cerrado en código;
 una placa futura (C6, P4X, S31…) entra escribiendo un enumerador de diez líneas y sus tres
 constantes.
+
+#### ✅ `#467` — el IDE del repo compilaba contra la stdlib de V5: el `BpVM.cfg` del CWD mandaba sobre el del fichero (3-sep, cerrada el mismo día)
+
+**Eduardo, con la captura**: 25 errores *«el módulo importado 'Math' no expone 'clamp'»* al abrir
+`samples/MathRango.bp` — y el jar era el de ayer. Lo primero, con hechos: el frontend del repo
+(30-ago 17:16) y la copia embebida en el jar (el mismo `MivmEmitter.class`) compilan
+`MathRango.bp` con `--stdlibDir bpstdlib` sin un error. Compilador y stdlib estaban al día.
+
+**La causa**: `FrmMain.resolveStdlibDir` miraba **primero el cwd del proceso** («compatibilidad
+histórica»), después el `outDir` del fichero y luego el proyecto. Lanzado el jar del repo desde
+`C:	emp\BasicPlus-5.0-win`, el cfg que encontraba era el del dist (`"stdlibDir": "./bpstdlib"`
+= la stdlib de V5, `Math` MOD6 sin las cuatro funciones), y con ése compilaba un fichero del repo.
+Jar nuevo, stdlib vieja; y el nombre `BpIde-5.0.jar` en los dos sitios terminó de confundir.
+
+**Arreglo**: (1) el orden — el cfg junto al fichero (walk-up desde `outDir`) manda, luego el del
+proyecto, y el cwd queda **el último**, como respaldo para quien no tenga cfg; (2) el `pom` de
+BpIde pasa a **`6.0`** (era la etiqueta de V5 sin subir): el jar del repo es `BpIde-6.0.jar` y el del
+dist sigue siendo `BpIde-5.0.jar`, que ya no se confunden; `bpide.bat` arranca desde la raíz del
+repo; `CLAUDE.md`, `README` y `PUBLICAR` al día. El `BpIde/target/BpIde-5.0.jar` viejo, borrado.
 
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 

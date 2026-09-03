@@ -96,7 +96,7 @@ mordió al menos una vez**.
   - Regenerar `dist/firmware/SHA256SUMS.txt`.
 - [ ] **BpIde**: ⚠️ **con el IDE CERRADO**. `mvn install` en `miVM` y en
       `lexer-java`, luego `mvn package` en `BpIde`. La versión sale del pom
-      (`BpIde-5.0.jar`).
+      (`BpIde-6.0.jar`; el `<version>` del pom es la versión del producto en curso).
 - [ ] **Micro simulado con LVGL**: `cd bpgenvm-c && make sim LVGL=1`.
       ⚠️ *Trampa (hallazgo 37)*: **sin `LVGL=1` el simulador ejecuta pero no
       pinta**, y el fallo es mudo. Comprobación: `strings build/bpvm-sim.exe |

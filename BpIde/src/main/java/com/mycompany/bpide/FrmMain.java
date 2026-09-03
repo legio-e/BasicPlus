@@ -3100,32 +3100,40 @@ public class FrmMain extends javax.swing.JFrame
     }
 
     /** Resuelve stdlibDir desde BpVM.cfg. Mira en este orden:
-     *   1) Si hay currentProject: project.outDir → walk up.
-     *   2) cwd del proceso IDE.
-     *   3) outDir del compile → walk up.
+     *   1) outDir del compile → walk up (el cfg del propio fichero).
+     *   2) Si hay currentProject: project.outDir → walk up.
+     *   3) cwd del proceso IDE — el ÚLTIMO, no el primero.
      *  Devuelve null si no encuentra cfg o si no define stdlibDir.
-     *  Usado para propagar el dir al subproceso VM via --stdlibDir. */
+     *  Usado para propagar el dir al subproceso VM via --stdlibDir.
+     *
+     *  #467 (3-sep) — el cwd iba PRIMERO («compatibilidad histórica») y eso hacía
+     *  que el jar del repo, lanzado desde la carpeta del dist de V5, compilase
+     *  samples/MathRango.bp del repo contra la stdlib de V5 del cfg del dist:
+     *  «el módulo importado 'Math' no expone 'clamp'» × 25. La stdlib de un
+     *  fichero la dice el cfg que hay junto al fichero, no el sitio desde el
+     *  que se abrió el IDE; el cwd queda como respaldo para quien no tenga cfg. */
     private String resolveStdlibDir(Path outDirHint) {
         try {
-            // 1) cwd primero (compatibilidad histórica)
-            edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
-            if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
-                return cfg.stdlibDir;
-            }
-            // 2) caminamos desde outDirHint si la tenemos
+            edu.bpgenvm.config.VmConfig cfg;
+            // 1) el cfg del propio fichero: caminamos desde outDirHint
             if (outDirHint != null) {
                 cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(outDirHint.toAbsolutePath());
                 if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
                     return cfg.stdlibDir;
                 }
             }
-            // 3) si hay proyecto activo, intentamos desde su outDir
+            // 2) si hay proyecto activo, desde su outDir
             if (currentProject != null && currentProject.outDir != null) {
                 cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(
                         java.nio.file.Paths.get(currentProject.outDir).toAbsolutePath());
                 if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
                     return cfg.stdlibDir;
                 }
+            }
+            // 3) el cwd, el último: respaldo para quien no tenga cfg junto al fichero
+            cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
+            if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
+                return cfg.stdlibDir;
             }
         } catch (Throwable ignored) { /* sin cfg, devuelve null */ }
         return null;
