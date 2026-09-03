@@ -2731,6 +2731,47 @@ con una evaluación previa a ver cómo se puede diseñar, pero eso está fuera d
 
 #### 📺 P2 — pantallas SPI *(depende de P1)*
 
+##### 📐 `P2.0` — la placa y la forma (3-sep, tarde): ESP32-C6-LCD-1.3, ST7789 por SPI, sin táctil
+
+**La placa** (Waveshare ESP32-C6-LCD-1.3, la que tiene Eduardo): ESP32-C6FH4 (4 MB, sin PSRAM),
+panel IPS 1,3" **240×240, ST7789V2, SPI de 4 hilos, sin táctil**, ranura microSD, LED RGB
+(WS2812B), pulsadores RST y BOOT, cabecera de 12 pines (GP1/2/3 y GP12/13/16/17/20/23 fuera).
+La wiki vieja está vacía y la nueva pone los pines en una imagen; **el esquemático** (su tabla
+«PIN-OUT», leída con `pypdf` por coordenadas) los da sin ambigüedad:
+
+| señal | GPIO | | señal | GPIO |
+|---|---|---|---|---|
+| LCD MOSI | 6 | | SD MISO | 5 |
+| LCD SCLK | 7 | | SD CS | 4 |
+| LCD CS | 14 | | SD MOSI/CLK | 6 / 7 (el mismo bus) |
+| LCD DC | 15 | | LED WS2812B | 8 |
+| LCD RES | 21 | | BOOT | 9 |
+| LCD BL (MOSFET) | 22 | | consola UART0 | 16 / 17 |
+
+**La forma**: el cuarto backend del contrato `bpvm_gui_disp_*` (host SDL, STM32 LTDC, P4 DSI),
+y el primero por SPI — lo que abre la GUI a las placas chicas. `esp32c6/main/gui_display_st7789.c`
+con el `esp_lcd` del IDF (ST7789 de serie: `esp_lcd_new_panel_io_spi` + `esp_lcd_new_panel_st7789`),
+LVGL 9.2.2 vendorizada como componente (`EXTRA_COMPONENT_DIRS`, igual que el P4) y `src/gui.c`
+tal cual. Sin framebuffer completo: dos buffers parciales de 24 líneas (2 × 11 520 B, RAM interna
+con DMA), flush con `esp_lcd_panel_draw_bitmap` y `flush_ready` cuando termina el DMA; el RGB565
+va big-endian por SPI (`lv_draw_sw_rgb565_swap` en el flush); bombeo como el P4 (`lv_timer_handler`
++ ≥1 tick, tope 10 ms, `#424`). Backlight por GPIO (PWM después); rotación por el MADCTL del
+panel (los gaps de 90/180/270 por comprobar). Flags globales `BPVM_GUI`/`BPVM_LVGL`/`LV_CONF_PATH`
+y `BPVM_BOARD_C6` → RGB565 en `lv_conf.h`.
+
+**El presupuesto**: RAM — el pool de LVGL son 64 KB estáticos (`LV_MEM_SIZE`) + 23 KB de buffers
++ el DMA de `esp_lcd`, unos 100 KB de los ~219 que deja el bloque de 192 KB de la VM: cabe, y el
+margen se vuelve a medir con la GUI activa (`medir_margen.ps1`; el planificador se protege solo).
+Flash — la imagen sin GUI son 466 KB de una `factory` de 1 MB; LVGL con las fuentes de
+`lv_conf.h` (12–48) pesa: si no cabe, la `factory` crece a 1,5 MB y `bpdata` se encoge (la placa
+es nueva: reaprovisionar no cuesta nada).
+
+**Cómo se comprueba**: compila; `GuiColorDemo` desde el IDE sobre el C6 (`Gui.mod` no va
+embebido: lo sube el IDE, y con `#466` sólo la primera vez), y los ojos de Eduardo son el
+oráculo de la pantalla; después `GuiEvLat`/`GuiEvSpike` para el ritmo, y la medida del margen.
+
+
+
 **Encargo de Eduardo (23-ago):** *«hay que mirar el soporte de pantallas SPI, pero eso
 cuando hayamos añadido los micros ESP32-C6, que tiene una pantalla muy pequeña»*.
 
