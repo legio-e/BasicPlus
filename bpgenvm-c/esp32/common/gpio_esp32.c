@@ -173,10 +173,16 @@ static int esp32_uart_port(int bus) {
      * dar por hecho los del S3. Salió al compilar el ensayo del C3: allí son DOS
      * UART y `UART_NUM_2` ni existe, así que este fichero —que es la cintura HW
      * COMPARTIDA de la familia ESP32— no compilaba. Un bus que la placa no tiene
-     * devuelve -1, que es lo que ya hacía para los que no existen. */
+     * devuelve -1, que es lo que ya hacía para los que no existen.
+     *
+     * V6/P1.C6 (3-sep) — y la cuenta correcta es `SOC_UART_HP_NUM`, no
+     * `SOC_UART_NUM`: el C6 cuenta TRES UART (dos HP + la LP del núcleo de baja
+     * potencia) pero `UART_NUM_2` no existe — la tercera es `LP_UART_NUM_0`. El
+     * silicio nuevo hizo verdadera una condición que el S3 y el C3 no
+     * distinguían (3 y 2 en las dos cuentas). Los buses BP son los HP. */
     switch (bus) {
         case 1: return UART_NUM_1;
-#if SOC_UART_NUM > 2
+#if SOC_UART_HP_NUM > 2
         case 2: return UART_NUM_2;
 #endif
         default: return -1;   /* 0 = wire (reservado); el resto no existe */

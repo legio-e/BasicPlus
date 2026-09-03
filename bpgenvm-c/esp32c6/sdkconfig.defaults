@@ -1,0 +1,54 @@
+# Defaults del proyecto ESP32-C6 (V6/P1.C6). `idf.py set-target esp32c6` fija el target.
+#
+# Clon del C3 (V6/P1.C3.3): la misma placa en lo que importa aquí — UN conector USB
+# nativo (USB-Serial-JTAG) y 4 MB de flash embebida (medido con esptool el 3-sep).
+#
+# V6/P1.C3.3 — EL REPARTO DE PUERTOS, AL REVES QUE EN EL S3.
+#
+# El S3 DevKitC tiene DOS conectores USB, y por eso alli la consola va por el
+# USB-Serial-JTAG y el wire por UART0 (que sale a su puente USB-UART): el log de
+# texto no ensucia el binario del wire y el IDE conecta al puente.
+#
+# Esta placa tiene UNO. Y el modo descarga se entra A MANO con los pulsadores
+# BOOT+RESET, o sea que el USB no hace falta para grabar: en marcha esta libre.
+# Si esta libre lo ocupa el WIRE, que es lo que necesita el usuario — un cable y
+# el IDE conecta. La consola se va a UART0 (GPIO16/17 en el C6), que es donde tiene
+# sentido lo que solo miramos nosotros cuando algo falla, con un adaptador.
+#
+# La foto de RAM del arranque sigue estando en el log de flash, asi que se lee
+# por el wire con LOG_DUMP sin necesidad de consola.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# Y SIN consola secundaria. El IDF, cuando la primaria es UART, manda ADEMAS una
+# copia por el USB-Serial-JTAG (`ESP_CONSOLE_SECONDARY` vale eso por defecto) —
+# o sea texto viajando POR EL MISMO CABLE que el wire binario. Se vio literalmente
+# inyectado entre las respuestas al probar el HELLO.
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# La task de app_main ejecuta el REPL + la VM. Holgura de stack C.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Optimizar a tamaño.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Task Watchdog OFF: esto es un dispositivo-VM que ejecuta código de
+# usuario que puede ser CPU-bound y tardar legítimamente (>5s). La
+# "inanición del idle" que vigila el task wdt NO es un bug aquí, así que
+# lo desactivamos para no spamear backtraces (ni arriesgar reset) en
+# programas pesados. El watchdog HW de arranque sigue activo.
+CONFIG_ESP_TASK_WDT_INIT=n
+
+# Tabla de particiones custom: añade "bpfs" (datos) para el FS persistente
+# (H4.4). Los .mod subidos por el wire sobreviven al reset.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Flash de 4 MB — EL SUELO, A PROPOSITO (V6/P1.C3.3).
+# Esto era una copia de lo del S3 (16 MB, que es lo que trae su modulo de
+# referencia). Sobre un devkit C6 de 4 MB (este lo es: esptool dijo 4MB) declarar 16 NO arranca; al reves si
+# funciona. Asi que el ensayo va sobre el suelo, que vale para cualquier C6, y
+# se ensancha cuando se sepa la placa exacta — los offsets de partitions.csv
+# estan puestos para que ensanchar no mueva nada.
+# OJO: sdkconfig es GENERADO — hay que borrarlo o `idf.py reconfigure` para que
+# recoja esto (mismo gotcha que el MEMPROT del P4).
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"

@@ -1,0 +1,24 @@
+# Tabla de particiones — firmware BasicPlus ESP32-C6 (H9: bpenv + bpdata).
+# factory 1M | bpenv (env A/B, 32K) | bpdata (zona de datos FS+Packs, el resto).
+# El firmware busca "bpdata"; el limite FS|Packs vive en el env (un mando).
+#
+# FLASH 4 MB — EL SUELO, A PROPOSITO (V6/P1.C3.3, 31-ago).
+#
+# Esta tabla nacio como copia literal de la del S3, que declara 16 MB porque el
+# modulo de referencia los tiene. Sobre un devkit C6 de 4 MB eso NO arranca: la
+# tabla se sale de la flash. Al reves si funciona — declarar 4 MB en un chip de
+# 16 usa menos, pero funciona—, asi que el ensayo se hace sobre el suelo, que
+# vale para CUALQUIER C6, y ya se ensancha cuando se sepa la placa exacta.
+# (El mismo modo de fallo, al reves, que cazo Eduardo el 27-jul en el S3: la
+# constante mentia y el chip no.)
+#
+# Los OFFSETS de factory/bpenv/bpdata son los MISMOS que en el S3 y eso es a
+# proposito: asi el env sobrevive y el volumen littlefs no se mueve al ensanchar
+# — solo CRECE el sitio libre.
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+phy_init,   data, phy,      0xf000,    0x1000,
+factory,    app,  factory,  0x10000,   0x100000,
+bpenv,      data, 0x41,     0x110000,  0x8000,
+bpdata,     data, 0x40,     0x118000,  0x2E8000,

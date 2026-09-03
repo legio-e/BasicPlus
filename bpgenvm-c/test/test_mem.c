@@ -32,6 +32,20 @@ static void caso_c3(void) {
     CHECK(strstr(s, "objetivo 128, techo 136 por el bloque contiguo") != NULL, "C3: la linea: %s", s);
 }
 
+static void caso_c6(void) {
+    /* MEDIDO el 3-sep (P1.C6.3): heap: libre 410988 | mayor 385024; margen 16932.
+     * El objetivo (192 KB) cabe de sobra: manda el objetivo, no el techo. */
+    bpvm_mem_region_t r[1] = {{ NULL, 385024, 410988, 0, 16932, "SRAM interna" }};
+    bpvm_mem_cfg_t cfg = { 192u * 1024u, 64u * 1024u, 0, NULL };
+    bpvm_mem_plan_t p; char s[160];
+    bpvm_mem_plan(r, 1, &cfg, &p);
+    bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 196608,          "C6: 192 KB, el objetivo (%u)", (unsigned) p.bytes);
+    CHECK(p.techo == 385024 && !strcmp(p.limita, "el bloque contiguo"),
+          "C6: techo 376 KB por el bloque contiguo (376 > libre-margen? no: 394056 > 385024)");
+    CHECK(strstr(s, "objetivo 192, techo 376 por el bloque contiguo") != NULL, "C6: la linea: %s", s);
+}
+
 static void caso_s3(void) {
     /* vm: ... DRAM interna libre 338368 (bloque mayor 270336)   (U6.4) */
     bpvm_mem_region_t r[1] = {{ NULL, 270336, 338368, 0, 26564, "SRAM interna" }};
@@ -145,7 +159,7 @@ static void caso_discovery(void) {
 
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery();
+    caso_c3(); caso_c6(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }

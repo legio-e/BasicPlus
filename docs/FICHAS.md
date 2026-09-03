@@ -2039,7 +2039,7 @@ tocar y cómo se comprueba.
 | **L1** | **lenguaje y compilador** | abierto 23-ago |
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
-| **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | 🟡 C3 ✅ (31-ago–2-sep); C6 pendiente, **sin pantalla** |
+| **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **P2** | **pantallas SPI** — *después de P1* | abierto 23-ago |
 
 📌 **Orden acordado el 2-sep, al cerrar** (Eduardo): *«Terminaremos U6, U4 y U5. Después podemos
@@ -2629,6 +2629,77 @@ placa que apretara de verdad.
 ⏭️ **Reparto del trabajo**: arranque y bring-up baratos (casi todo reúso del S3; el IDF
 amortigua) · decidir cuánta RAM lleva la VM en el C3 · un destino AOT nuevo con sus flags ·
 y **lo caro, como siempre, el banco**: dos placas × la batería.
+
+### 🏁 `P1.C6` — EL ESP32-C6 SIN PANTALLA, HECHO (3-sep): el ecuador de V6
+
+*«Cuando tengamos la ESP32-C6 yo creo que ya habremos llegado al ecuador de V6»* (Eduardo, 2-sep).
+Placa en la mesa el 3-sep por la tarde; en una tarde, por el camino del C3.
+
+##### ✅ `P1.C6.1` — compila: el proyecto son siete ficheros y UNA línea de cintura
+
+`esptool` dijo quién es: ESP32-C6, 160 MHz un núcleo + LP, **4 MB de flash embebida**, USB-Serial-JTAG
+nativo (COM3), Wi-Fi 6 / BLE / 802.15.4. El gemelo del C3 en lo que importa al firmware (un USB,
+4 MB, RISC-V sin FPU: el gate del `.mdn` cae solo en RISC-V/softfp por `__riscv`), con más SRAM.
+`esp32c6/` es el clon de `esp32c3/`: `CMakeLists.txt`, `main/CMakeLists.txt` (los mismos fuentes
+comunes; `c6_board_id.c` en vez de `c3_`), `partitions.csv` (la de 4 MB, mismos offsets),
+`sdkconfig.defaults` (wire por USB, consola a UART0 —GPIO16/17 aquí—, sin secundaria), `chip_cfg.h`
+y `c6_board_id.[ch]` (31 GPIO, 6 LEDC, 7 ADC, 512 KB SRAM). Y su `.gitignore` como el del S3: el
+`sdkconfig` generado no entra (el del C3 sí está trackeado: inconsistencia anotada).
+
+🐛 **Lo único que no compiló, y es de la familia**: `gpio_esp32.c` guardaba `UART_NUM_2` con
+`#if SOC_UART_NUM > 2` (`#465`, que ya había salido del C3). El C6 cuenta **tres** UART —dos HP y
+la LP del núcleo de baja potencia— pero la tercera es `LP_UART_NUM_0`: la cuenta correcta es
+`SOC_UART_HP_NUM` (S3 3, C3 2, C6 2). El silicio nuevo hizo verdadera una condición que los dos
+anteriores no distinguían. Arreglado en la cintura común y **recompilados S3, C3 y P4**: verdes.
+
+##### ✅ `P1.C6.2` — en placa: arranca, se aprovisiona por el wire y ejecuta
+
+```
+{"serverName":"bpvm-esp32c6", "boardName":"ESP32-C6", "gpioCount":31, "adcChannels":7,
+ "flashBytes":4194304, "sramBytes":524288}
+[   44] heap: libre 410988 | mayor 385024 | bloques: 6 libres, 42 usados | usado 17760
+[   66] boot: estado 0 (kernel) DEGRADADO: falta algun tamano (placa virgen: proponer defaults)
+```
+
+Virgen, como el C3: `PART_DEFAULTS` propone 1523712 + 1523712 (la `bpdata` de 2976 KB a medias),
+`PART_APPLY` con eso, `RESET` → `boot: estado 3 (app)`, FS de 1488 KB, **los 14 módulos
+preinstalados** y `/lib` completo (el instalador nuevo de `U4.1`, en su primera placa nueva).
+`Bench`: **`fib(28) interp = 317811 in 11823 ms`** — el C3 dio 11315: misma clase, 4 % más lento
+(la línea «AOT» sin `.mdn` cae al intérprete, por eso el RUN tarda 23,6 s: dos veces fib(28)).
+
+📌 Observación: al abrir el puerto justo tras un reset llega un trozo del log del bootloader del
+IDF antes del `HELLO_REPLY` (el ROM y el 2nd stage escriben por el USB-JTAG antes de que
+`app_main` lo entregue al wire). El C3 hace lo mismo y el IDE conecta igual (el handshake se
+salta lo que no es JSON); anotado por si algún día un cliente estricto se queja.
+
+##### ✅ `P1.C6.3` — las tres constantes, MEDIDAS (protocolo `U6.4`)
+
+```
+vm: DRAM interna libre 410988->279912 B (bloque mayor 385024->253952 B)    ← con 128 KB heredados
+mem: ... MINIMO HISTORICO 262980 B   (LOG_CLEAR → RESET → PUT → RUN×2 → LIST, con log=1)
+margen = 279912 − 262980 = 16932 B   (C3 17588, S3 26564: un núcleo, sin radio activa)
+```
+
+El bloque contiguo son **376 KB** (el C3 tenía 136: aquí el IDF deja la SRAM casi de una pieza),
+así que el techo no aprieta y el objetivo lo pone el criterio de Eduardo: no vaciar el heap del
+RTOS para devolvérselo después — y este silicio trae tres radios que pedirán su parte. **192 KB**
+(heap 128 + pilas 64, el doble de heap que el C3) deja 184 KB contiguos y ~219 KB libres al
+sistema; 256 aún dejaría 120 contiguos: es un número, no una obra. `chip_cfg.h`: objetivo 192,
+margen 16932, suelo 64, con la medida al lado. `test_mem` fija el caso (**27/27**). Regrabado:
+
+```
+[   43] vm: 192 KB en SRAM interna (objetivo 192, techo 376 por el bloque contiguo)
+[   43] vm: DRAM interna libre 410988->214376 B (bloque mayor 385024->188416 B) | margen 16932
+INFO: vmHeapBytes 131072 / vmStackBytes 65536
+```
+
+Y la paridad: `MathRango` subido por el wire y ejecutado en el C6 → **29 líneas byte-idénticas al
+host**, `EXITED OK` en 10 ms. El `log` del ENV, devuelto a 0.
+
+📌 **Coste real de una familia nueva, medido**: siete ficheros pequeños, una línea en la cintura
+común, tres números medidos con el protocolo de siempre, ~2 horas con la placa en la mesa. Es lo
+que la unificación prometía (`P1` iba después de U1–U5 por esto), y **el ecuador de V6**. La
+pantalla del C6 es `P2`.
 
 ##### 🖼️ La pantalla del C6 — evaluado el 26-ago, y DECIDIDO
 

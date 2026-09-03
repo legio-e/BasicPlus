@@ -68,9 +68,10 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    sacada de `heap.c` y de diez campos sueltos de `bpvm_t`; el ABI del `.mdn` intacto (los helpers
    no leen esos campos por offset); paridad 38/0/0, `test_smp_handles` limpio, seis builds, Pico 2
    byte-idéntica. **Con esto la serie de unificación U1–U6 está cerrada.**
-6. **`P1.C6`** — el ESP32-C6 **sin pantalla**, por el camino del C3: `esp32c6/` con su `chip_cfg.h`
-   (constantes MEDIDAS con `medir_margen.ps1`), transporte, `board_id`, partición. Compilar antes
-   de entregar (IDF en `C:\esp\v6.0.1`).
+6. ✅ **`P1.C6` HECHO (3-sep, tarde)**: `esp32c6/` clonado del C3 (siete ficheros), un arreglo en la
+   cintura común (`SOC_UART_HP_NUM`, el C6 cuenta su UART LP), aprovisionado por el wire, las tres
+   constantes MEDIDAS (bloque contiguo 376 KB, margen 16932 → objetivo 192 KB), `fib(28)` 11823 ms
+   (C3 11315), `MathRango` 29 líneas byte-idénticas al host. **El ecuador de V6.**
 7. **`P2`** — la pantalla SPI del C6 con LVGL empotrado (decisión del 26-ago): `flush_cb`, tick,
    buffer parcial, y táctil si lo hay.
 
