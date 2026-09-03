@@ -1569,6 +1569,29 @@ Antes de esto, con el jar 6.0, salieron 25 errores de compilación — que no er
 `#467`, el compilador tapado por la stdlib de V5 de `samples/out`. Con eso, **cerrada**: el SO
 repone `/lib` (4a) y el IDE pregunta y no retransmite (4b). La Metro y el resto de placas reciben
 lo mismo al regrabarse; no hace falta repetir la prueba en cada una.
+
+### ✅ Y el S3 (3-sep), sin plantar nada: el caso real, 13 de golpe
+
+Al leerlo antes de regrabar, su `/lib` era **todo de V5** menos el `Pico.mod` repuesto a mano el
+2-sep: 13 módulos MOD6 con los tamaños exactos del dist (`Core` 12999, `Math` 2320, `I2c` 4153…).
+⚠️ Corrección a lo dicho el 2-sep: **el S3 no estaba limpio, estaba mudo** — su firmware no tenía
+el chivato de `#422` (se perdió en `#446`), así que quité los dos que se veían por el `LIST` y di
+por buenos los otros doce. El instrumento sin control, otra vez.
+
+Primer arranque de la imagen nueva (`idf.py flash`, 19:01):
+
+```
+[  483] lib: /lib/Core.mod repuesto: versión anterior (MOD6 12999 B -> MOD7 13111 B)
+[  508] lib: /lib/Math.mod repuesto: versión anterior (MOD6 2320 B -> MOD7 1708 B)
+   … (13 líneas, una por módulo rancio; Pico.mod, ya el bueno, calla)
+[  827] REPL entry (wire v1)
+```
+
+y el siguiente arranque, silencio: `fs: 26 ficheros, 299008 bytes` (antes 307200: las copias de
+V5 eran más grandes). Un solo guardado de la partición para las 13 escrituras (el lote del ESP32).
+Los números de memoria, idénticos a los de `U6.9`/`U6.10` (`160 KB`, techo 272, margen 26564); el
+`STAT` por nombre, igual que en la Pico. **Regrabar ya refresca el `/lib`: era lo que `#422`
+prometía y no cumplía.**
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para

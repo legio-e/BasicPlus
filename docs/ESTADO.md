@@ -52,8 +52,9 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    MOD6) antes que contra `bpstdlib`; ahora la stdlib va PRIMERO en los tres buscadores del
    frontend, el `BpVM.cfg` del fichero manda sobre el del cwd, y el IDE es `BpIde-6.0.jar`
    (`bpide.bat` arranca desde la raíz del repo).
-2. **S3 (COM9)**: regrabar (`idf.py flash`; el DTR/RTS del puente, en `tools/medir_margen.ps1`) y
-   mirar su `/lib` con el instalador nuevo.
+2. ✅ **S3 (3-sep)**: regrabado con la imagen de las 19:01 (`#466` + `U4.1`); su `/lib` era todo de
+   V5 (13 MOD6 — ayer lo di por limpio porque el ESP32 no avisaba) y el primer arranque los repuso
+   los 13 él solo; memoria idéntica (160 KB, techo 272, margen 26564); `STAT` por nombre OK.
 3. **Nucleo y Discovery**: las graba Eduardo desde CubeIDE (`Debug/*.elf` de las 19:38–19:39); leer
    `vm: 512 KB en SRAM estática (todo lo que deja la región)` e INFO 393216/131072, y su `/lib`.
    **Cierra `U6`** (la ficha padre pasa a ✅ con eso).
@@ -119,7 +120,7 @@ Eduardo, al parar: *«A la vuelta repasamos el estado general de todas las imág
 | placa | imagen que LLEVA | frente al repo (`U6.10` final, regla unificada) | pendientes en la placa |
 |---|---|---|---|
 | **P4** (COM14) | `U6.10` final, grabada 14:20 | ✅ **es la del repo** — verificada byte a byte (28 668 KiB @0x48000a7c), y otra vez tras el reset del repaso | ✅ `/lib` **limpio de por sí** (15/15, 0 avisos, aunque pasó por el IDE); ✅ `/app/Core.mod` borrado (2-sep, al retomar) |
-| **S3** (COM9) | `U6.10` **previa** a la regla unificada, 14:1x | numéricamente igual (su fixture no se mueve); regrabar para tener la exacta | ✅ limpio (Core.mod y Pico.mod de V5 fuera) |
+| **S3** (COM9) | ✅ **`U4.1` + `#466`**, regrabada el 3-sep (19:01) | ✅ verificada: mismos números (160 KB, techo 272, margen 26564) | ✅ `/lib` **repuesto por la imagen** (13 MOD6 de V5 → MOD7 al primer arranque; ayer parecía limpio porque el ESP32 no avisaba) |
 | **C3** (COM3) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada: 128 KB, techo 136 por el contiguo, 64/64 — idéntico | ✅ `/lib` **limpio de origen** (lo aprovisionó el instalador; el IDE de V5 nunca le subió nada: 0 avisos), ✅ `log` devuelto a 0 |
 | **Metro** (COM4) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep) | ✅ verificada en los dos modos, byte a byte | ✅ `/lib` **limpio** (los 14 de V5 borrados y repuestos por la imagen, `#466`); NO había `/app/Core.mod`; ENV `psram=0`, `SQLite=2`, `log=1` — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
 | **Pico 2** (COM22) | ✅ **`U6.10` final**, regrabada en el repaso (2-sep; llevaba la del 29-ago) | ✅ **rama SRAM en variante A verificada**: `357 KB @ 0x20024ab8`, y su `stack=90` del ENV respetado (heap 267 + pilas 90; INFO 273736/92160, igual que antes) | ✅ `/lib` **limpio** (16 de V5 y de una imagen vieja borrados y repuestos por la imagen, `#466`); ENV `stack=90`, `gc=1`, `mpu=1`, `log=1`; FS de 1 MB al 24 % — **volverá a ensuciarse mientras el IDE de V5 suba stdlib** |
