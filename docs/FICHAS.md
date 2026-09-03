@@ -1533,9 +1533,27 @@ firmware anterior (`crcSinSigno`). El smoke Python lo comprueba ahora con el VAL
 «distinto de 0» — que es por donde se coló: una medida que no desempata no es una medida
 ([[medida-ambigua-no-desempata]]).
 
-⏭️ (4) las placas: Metro y Pico 2 con el `uf2` nuevo (`BOOTSEL` por el wire), y ver en su log que
-el `/lib` se repone solo (`lib: … repuesto`); después un Run desde el IDE nuevo, que debe decir
-«ya en la placa, idéntico» y no subir nada de stdlib.
+### ✅ (4a) En la Pico 2 (3-sep): el SO repone solo, y sólo lo que toca
+
+Como su `/lib` estaba limpio, se **forzó el caso** (un camino ejecutado no es un camino probado):
+por el wire se plantó el `Math.mod` del dist de V5 (MOD6, 2320 B) en `/lib/Math.mod`, y se grabó
+el `uf2` nuevo por `BOOTSEL`. El arranque:
+
+```
+[  150] lib: /lib/Math.mod repuesto: versión anterior (MOD6 2320 B -> MOD7 1708 B)
+[  185] fs: 32 ficheros, 253952/1048576 bytes usados
+```
+
+**Una línea**: los otros 14 embebidos, idénticos, callan; el `/app/Hello.mod` del usuario no se
+toca; el número de ficheros y los bytes no cambian. Y el `STAT` por nombre desde el wire:
+`{"path":"/lib/Math.mod","size":1708,"magic":"MOD7","crc":3686083642}` — el CRC **sin signo, con
+el bit 31 puesto**, igual al `zlib.crc32` del `bpstdlib/Math.mod` del repo. Control: la imagen
+anterior contestaba `INVALID_PARAM falta path` a la misma pregunta (el camino «firmware viejo»
+del IDE).
+
+⏭️ (4b) **Falta la mitad del IDE en placa**: un Run desde el IDE nuevo (`BpIde/target/BpIde-5.0.jar`,
+no el dist de V5) de un programa con dependencia de stdlib (`samples/MathRango.bp`), que debe
+decir `[Explorer] Math.mod: ya en la placa, idéntico — no se sube`. Y la Metro, cuando se enchufe.
 - **De raíz, y son DOS lados**: (1) el **IDE no debe subir stdlib a `/lib`** — la placa ya la
   tiene, y la suya es la buena para su imagen; sólo módulos de la app, a `/app`. (2) El
   **instalador debe refrescar `/lib` cuando no coincide con lo embebido**, en vez de avisar, para
