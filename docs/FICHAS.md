@@ -578,7 +578,7 @@ lo-que-quede) con sus dos formas distintas de bajar cuando no cabe, los **tres r
 techo**, y el **margen sin nombre** en cuatro de los cinco puertos.
 
 
-##### 🟡 `U6.2` — el DÓNDE va antes que el CUÁNTO (Eduardo, 31-ago)
+##### ✅ `U6.2` — el DÓNDE va antes que el CUÁNTO (Eduardo, 31-ago) — *absorbida por `U6.8`–`U6.11`; U6 cerrada el 3-sep*
 
 > *«Quizás antes que el cuánto, hay que plantearse el dónde. Así que el orden sería ¿hay PSRAM?
 > y si hay el reparto se hace de una manera, y si no hay se hace de otra.»*
@@ -834,7 +834,7 @@ Xtensa de verdad); lo que estaba mal era el motivo.
 3. Probarlo en placa con `Bench.bp`, que ya trae su gemelo interpretado como línea base.
 
 
-##### 🟡 `U6.5` — LA FORMA: una gestión de memoria unificada (propuesta, 31-ago)
+##### ✅ `U6.5` — LA FORMA: una gestión de memoria unificada (propuesta, 31-ago) — *hecha en `U6.8`–`U6.11` (`bpvm_mem_plan`, las cinco familias); U6 cerrada el 3-sep*
 
 > Pregunta de Eduardo: *«¿se puede hacer una gestión de memoria unificada, respetando las
 > particularidades de cada placa? Y hay que tener en cuenta que una misma placa puede ir con
@@ -953,7 +953,7 @@ numero escrito a mano hace siempre.
 El gestor generico no solo ahorra el trabajo: **quita la clase de error**, porque el enumerador
 no hereda el numero de la placa anterior — lo pregunta.
 
-##### 🟡 `U6.6` — TRES CAPAS: constantes de la imagen, ENV, y enumeración en marcha (Eduardo, 31-ago)
+##### ✅ `U6.6` — TRES CAPAS: constantes de la imagen, ENV, y enumeración en marcha (Eduardo, 31-ago) — *hecha: `chip_cfg.h`/`board.h` + ENV + enumeración en `bpvm_mem_plan`; U6 cerrada el 3-sep*
 
 > *«Lo mejor es que cada imagen defina unas constantes que le indiquen al gestor de memoria las
 > particularidades de cada familia. Y por encima de todo el tema de la PSRAM, que cambia el mapa
@@ -6442,7 +6442,7 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
 ### Módulos y arranque (nuevas del 14-ago, en placa)
 
-- **🐛 [ESP32 y STM32] un módulo rancio sobrevive y NADIE lo dice — y `/app` es el punto ciego de los DOS** — encontrado el
+- ✅ ~~**🐛 [ESP32 y STM32] un módulo rancio sobrevive y NADIE lo dice — y `/app` es el punto ciego de los DOS**~~ — **CERRADA el 3-sep por `#466`** (nota al final). Encontrado el
   22-ago comparando las tres familias. **No es regresión de V5**: es así desde que existe
   el mecanismo.
   📐 **El hecho**: `esp32_mods_install` (`esp32/main/esp32_mods.c:4840`) instala un módulo
@@ -6477,6 +6477,17 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   `fs_lfs_stm32.c:196`). Se autocura, a cambio de desgaste de flash. **Tres familias, tres
   estrategias, ninguna decidida como LA buena** — eso es material del eje común/hardware de
   V6 (`#427`), no de un parche suelto.
+  ✅ **CÓMO SE CERRÓ (3-sep, `#466`), y con la regla de Eduardo, no con el parche barato de
+  arriba.** Las tres estrategias se fueron: ahora las tres familias corren el MISMO
+  instalador (`bpvm_mods_sincronizar`, sobre la tabla embebida de `U4`): por cada módulo de
+  la imagen, si falta en `/lib` se instala; si el de `/lib` es de MAGIC anterior, o del mismo
+  MAGIC con otro tamaño/CRC, **se repone y lo dice en el log** («repuesto»); si es más nuevo,
+  se respeta. Y el punto ciego de `/app` lo cubre el IDE por el otro lado: antes de subir una
+  dependencia pregunta a la placa con `STAT` por nombre (resuelve proyecto → `/app` → `/lib`)
+  y, si la copia que encuentra es de versión anterior o de CRC distinto, **la reemplaza donde
+  está** — un `Core.mod` rancio en `/app` cae en el siguiente `Run`. Verificado en Pico 2, S3
+  (13 repuestos), Nucleo, Discovery y C6. Lo único que no toca nadie: un módulo rancio en
+  `/app` que ningún programa importe, que tampoco carga nadie.
 
 ### Familias — lo que dejó el censo (`#427`)
 
