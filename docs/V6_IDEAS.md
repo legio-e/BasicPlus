@@ -817,3 +817,99 @@ más.
   callback `ops->info_campos(writer)` — el común pone el sobre, la familia mete lo suyo.
 - **Verificación**: la de siempre del cordón — el IDE contra cada placa tras cada tanda,
   y `LIST_DIR`/`INFO`/`PACK_LS` byte-comparables antes/después donde no cambie nada.
+
+
+---
+
+## Hilos de ejecución: ¿cuántos queremos de verdad? (Eduardo, 4-sep)
+
+**El planteamiento de Eduardo:** *«Después de unificar código parece que cada micro va a su
+aire. Ahora lo que necesitamos es analizar realmente cuántos hilos de ejecución queremos. A mí
+una cosa que se me plantea es que la VM no debería ocuparse nada más que de interpretar los
+opcodes. Ponerle muchas tareas ahí supone ralentizar la ejecución de los programas. Pero es
+una teoría, deberíamos medirlo.»*
+
+### El censo (leído del código, 4-sep)
+
+| Familia | Tareas nuestras | Qué corre en la tarea de la VM | Del sistema |
+|---|---|---|---|
+| ESP32-C6 / C3 / S3 (`esp32/common`) | **1**: la `main` de ESP-IDF entra en `repl_esp32_run()` y no vuelve | lector del wire + REPL + VM + bombeo de LVGL (C6) | C6/C3: `IDLE`, `esp_timer`, `Tmr Svc` (≈4 en total); S3: + `IDLE1`, `ipc0`, `ipc1` |
+| ESP32-P4 | 1 ó 2: `wire_uart` (o `wire_v1` TCP, nunca las dos) + `tcp_log` opcional | lo mismo, dentro de la tarea del wire | + event loop, `tiT` (lwIP), Ethernet |
+| Pico 2 | **1**: `vm_task` | wire + REPL + VM | `IDLE`, `Tmr Svc` (≈3). El camino SMP (workers + comm task) sólo con `-DBPVM_PICO_SMP_WORKERS`, que el build normal no define |
+| STM32 Nucleo / Discovery | **0**: bare-metal, superbucle + UART por interrupción | todo | — |
+
+Los hilos de BasicPlus son **verdes**: los turna el scheduler de la VM dentro de esa única
+tarea (`scheduler.c`; «sin pthreads adicionales»). `platform_esp32.c` sabe crear tareas de
+FreeRTOS (`bpvm-thread`, 4 KB) pero sólo las pide el scheduler SMP y la comm task, y en ESP32
+no se usan.
+
+### Qué hace la tarea de la VM además de interpretar, y cada cuánto
+
+Entre cuanto y cuanto (**1024 opcodes** por defecto; `quantum=N` por ENV desde `#462`), el lazo
+de `scheduler.c` hace: `events_revive_terminated` → **`poll_cb`** (en ESP32
+`usb_serial_jtag_read_bytes(…, 0)`: ¿ha llegado un KILL/HELLO?) → **`taskYIELD()`** (`#462`) →
+`wake_expired_sleeps` → `wake_completed_joins` → `pick_next_runnable` → `event_drain_one`. Y
+**dentro** del cuanto, cada `print` codifica un mensaje `OUTPUT` en JSON y lo escribe al
+transporte **síncronamente** (`usb_serial_jtag_write_bytes` con tope `WIRE_TX_MS`).
+
+### Experimento 1 — lo de ENTRE cuantos (sin tocar código: `quantum` por ENV)
+
+`Bench.mod` (fib(28) interpretado dos veces, puro cálculo, el wire callado) en la C6 con GUI,
+imagen 128 KB; el cronómetro es el `elapsedMs` del `EXITED`:
+
+| cuanto (opcodes) | elapsedMs | vs 65 536 |
+|---|---|---|
+| 65 536 | 23 390 / 23 400 | — |
+| 8 192 | 23 430 | +0,2 % |
+| **1 024 (defecto)** | **23 640 / 23 640** | **+1,0 %** |
+| 128 | 25 420 | +8,6 % |
+
+Lineal con el número de fronteras (128 = 8× fronteras → 8× el coste: 2 030 ms frente a 250).
+Con ~30 M de opcodes en la pasada salen ~30 000 fronteras → **unos 8 µs por frontera**
+(≈1 300 ciclos a 160 MHz: la llamada al driver USB, el `taskYIELD` y la contabilidad del
+scheduler). **Conclusión: lo que la tarea hace entre cuantos cuesta ~1 %.** Sacarlo a otra tarea
+no aceleraría los programas de forma medible; y subir el cuanto a 8 192 lo deja en 0,2 % a
+cambio de atender un KILL 8× más tarde (que sigue siendo < 1 ms).
+
+### Experimento 2 — la SALIDA dentro de la tarea (`samples/benchmarks/PrintBench.bp`)
+
+Dos bucles iguales de 2 000 vueltas, el segundo con un `print` de ~50 caracteres por vuelta;
+el propio programa cronometra con `Pico.uptimeMs`:
+
+```
+RESULTADO sin print: 21 ms; con print: 1700 ms; lineas: 2000
+mensajes OUTPUT: 11 944 | bytes de data: 122 072 | bytes crudos recibidos: 815 984 | EXITED elapsedMs 1720
+```
+
+**0,84 ms por línea impresa** — 80 veces el bucle que la produce. Y el porqué está en los
+otros dos números: cada `print "a", i, "b"` salió en **seis** mensajes `OUTPUT` (uno por
+argumento y otro por el salto de línea), cada uno con ~60 B de marco JSON, así que **122 KB de
+texto viajaron como 816 KB** (6,7×) en 11 944 escrituras al driver USB; a ~480 KB/s, que es lo
+que da el USB-Serial-JTAG con fragmentos de ese tamaño, son 1,7 s. El intérprete no gasta ese
+tiempo codificando: lo gasta **esperando al transporte**, porque la escritura es síncrona.
+
+### Lo que dicen las dos medidas juntas
+
+1. **La teoría se sostiene en la salida, no en el resto.** Lo que la tarea de la VM hace
+   «además de interpretar» cuesta ~1 % cuando el wire calla, y **0,84 ms por línea** cuando el
+   programa habla. El freno es la salida, y es un freno de *espera*, no de CPU.
+2. **El número de hilos no es la palanca principal; el formato sí.** Un mensaje `OUTPUT` por
+   línea (o por cuanto, o por N bytes acumulados) en vez de uno por argumento divide por seis
+   las escrituras y por ~5 el tráfico, sin tocar la arquitectura de tareas. Es lo primero que
+   habría que hacer, y se mide con el mismo `PrintBench`.
+3. **Una comm task con cola** (la que ya existe para el camino SMP de la Pico: `bpvm_oq_*` +
+   `comm_task_entry`) desacopla al intérprete del transporte: el `print` deja el texto en la
+   cola y sigue; sólo se bloquea cuando la cola se llena, es decir, cuando el programa produce
+   más deprisa de lo que el USB traga — y ahí no hay hilo que lo arregle. Vale para la
+   latencia del intérprete en programas que imprimen a ráfagas; no cambia el caudal.
+4. **El wire de entrada** (poll entre cuantos) es barato como está; lo que `#462` señala —que
+   el SO no respira mientras la VM trabaja— ya tiene su `taskYIELD`, y una tarea propia del
+   wire a mayor prioridad sólo aportaría atender un KILL en mitad de un cuanto largo.
+5. **Unificar el reparto entre familias** es otra cuestión, de forma: hoy Pico (`vm_task`),
+   ESP32 (`main`) y P4 (`wire_uart`) hacen lo mismo con nombres y pilas distintas (16 KB, 8 KB,
+   32 KB). Con estas medidas, el reparto «una tarea de la VM + una comm task con cola» es el
+   único que tiene un porqué medido, y sería el mismo en las tres familias con FreeRTOS.
+
+⏭️ Siguiente paso, si se decide seguir: (a) `OUTPUT` por línea → medir con `PrintBench`;
+(b) la comm task con cola en `esp32/common` reutilizando `bpvm_oq_*` → medir otra vez;
+(c) sólo entonces decidir el reparto común de tareas. Cada paso con su número antes y después.
