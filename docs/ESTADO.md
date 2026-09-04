@@ -126,8 +126,11 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    cuesta 1 %, la salida 0,84 ms por `print` (seis mensajes OUTPUT por línea, 122 KB → 816 KB),
    `AllocBench` 0,66 ms por vuelta con asignación. **Decisión: `vm` sólo opcodes + `io` todo lo
    demás, tres colas, igual en todos los micros; de momento 1 VM, 1 core, 2 hilos de SO; el
-   futuro son dos VM sobre una cola de threads BP (el camino SMP, aparcado sin cerrarlo).** Falta
-   la decisión del RTOS en STM32. El orden: host → C6 → Pico → STM32 → LVGL en `io`. Samples
+   futuro son dos VM sobre una cola de threads BP (el camino SMP, aparcado sin cerrarlo).**
+   Decidido después: **FreeRTOS en todas las familias**, el PC y la **C6** como modelo, y **todo
+   en código común** (las familias sólo ponen transporte, primitivas y la creación de las dos
+   tareas). Tareas concretas `A1.1`–`A1.7` en la ficha; **la siguiente sesión empieza por `A1.1`**
+   (el hilo `io` en común, en el PC: `src/bpvm_io.c`, `OUTPUT` por línea, paridad 38/38). Samples
    nuevos: `PrintBench.bp`, `AllocBench.bp` (en `samples/benchmarks/`).
 
 ### Riesgos que acechan

@@ -2182,13 +2182,62 @@ ya pasa hoy, en la misma tarea); las **interrupciones caen en el núcleo que las
 intérprete en RAM; se mide con `Bench`). En un núcleo, las mismas dos tareas repartiéndose el
 tiempo, `io` con más prioridad.
 
-##### El orden
+##### Las decisiones que cierran el diseño (Eduardo, 4-sep, tarde)
 
-1. Host: `vm` + `io` + tres colas en `src/` común, `OUTPUT` por línea; paridad 38/38 intacta.
-2. C6 (en la mesa): las dos tareas en `esp32/common`; medir `PrintBench` y `Bench` antes/después.
-3. Pico: el camino de la comm task, único.
-4. STM32: la decisión del RTOS, ficha aparte.
-5. LVGL bajo `io` con su cerrojo (`lv_lock`, LVGL 9); medir la latencia del GUI (`#434`).
+- *«FreeRTOS en todas las familias.»* El STM32 deja de ser bare-metal.
+- *«Intentar organizar todo en 2 hilos del SO: un hilo la VM y el otro IO. Empezamos con el PC y
+  un micro, y lo utilizamos de modelo para el resto.»* El micro modelo es la **C6**: está en la
+  mesa, es de un núcleo (obliga a acertar las prioridades) y tiene pantalla (obliga a resolver
+  LVGL). El PC es el simulador (`tools/bpvm_sim.c`), que es el `io` del PC, y el CLI.
+- *«Esto debería ser código común, así que una vez hecho para 1 micro debería funcionar en el
+  resto.»* Y el inventario lo confirma: la cola de salida (`comm_common.c`, `bpvm_oq_*`), el
+  contrato de plataforma (mutex, cond, hilos: implementado en las cuatro), el REPL común de U3
+  (`bpvm_repl.c` + `ops` de familia) y la cola de eventos (H5.c) ya están en `src/`. Lo que
+  sobra son las **copias**: `comm_host.c` y `comm_pico.c` son el mismo lazo dos veces.
+
+**Regla de reparto.** En `src/` (común): el hilo `io` entero — lazo del REPL, lectura del wire,
+drenaje de la cola de salida con `OUTPUT` **por línea**, log, control del depurador —, las tres
+colas, y `bpvm_run` sin ningún transporte dentro. En cada familia, SÓLO: (a) el transporte (leer
+un byte con timeout, escribir bytes: los `wire_v1_*` de hoy), (b) las primitivas del RTOS que ya
+implementa, (c) la llamada que crea las dos tareas con el nombre, la pila y la prioridad que fija
+el común, y (d) el orden de arranque del hardware (la máquina de estados de H9).
+
+##### Las tareas de V6
+
+- **`A1.1` — el hilo `io` en común, en el PC.** `src/bpvm_io.c`: arranque de `io` con las tres
+  colas (la de salida ya existe; control y eventos con su cerrojo); `emit_text` SIEMPRE a la cola
+  (se va el `if (vm->smp)`); `io` drena y enmarca `OUTPUT` por línea (o por tope de bytes / al
+  cerrar el cuanto) — hoy un `print` sale en seis mensajes; el poll del wire sale del lazo de
+  cuantos: `vm` mira una bandera de control que pone `io`; KILL y HELLO los atiende `io` al
+  instante. `comm_host.c` desaparece en el común. **Verificación:** `compat.sh check` 38/38
+  byte-idéntico (el contenido de stdout no cambia, sólo el troceado), `sim-smoke` OK, el
+  simulador corriendo con dos pthreads, y un KILL en mitad de un cuanto largo.
+- **`A1.2` — la C6 con las dos tareas.** `esp32/common/main.c` crea `vm` e `io` con la
+  especificación del común; `repl_esp32.c` se queda con su transporte y la costura, el lazo y el
+  drenaje son los comunes. **Medir:** `PrintBench` (esperado: de 0,84 ms por línea a decenas de
+  µs en `vm`, y ~5× menos bytes por el wire), `Bench` (≈ igual: lo de entre cuantos era el 1 %),
+  `AllocBench` (≈ igual: el GC es de `vm`), y el KILL en cualquier momento.
+- **`A1.3` — el resto de la familia ESP32 (S3, C3, P4) SIN código nuevo:** recompilar y verificar
+  en placa. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
+  como tareas propias: pasan a ser el transporte de `io`. Si hace falta tocar algo de la familia
+  para que arranquen, es que `A1.2` dejó algo en la C6 que era común.
+- **`A1.4` — Pico 2.** `vm_task` → las dos tareas comunes; `comm_pico.c` se va (era la copia); el
+  camino SMP se queda detrás de su opción, sobre el mismo `io`. Verificar en Pico 2 y Metro.
+- **`A1.5` — STM32 con FreeRTOS.** El kernel en los dos proyectos CubeIDE (linked folder y
+  `.cproject`: el `.project` es local de Eduardo, ver la receta headless), `platform_stm32.c`
+  sobre FreeRTOS (hoy devuelve «sin threads»), las dos tareas; el wire por IRQ alimenta a `io`.
+  Verificar Nucleo y Discovery, y que `vm: … KB en SRAM estática` sigue diciendo lo mismo.
+- **`A1.6` — LVGL bajo `io`.** El modelo GUI en `vm` con copia de valores, LVGL en `io`, encargos
+  y eventos por las colas, `lv_lock` de LVGL 9. Medir la latencia de un clic (`#434`) en C6 y DK2.
+  (Absorbe `G1`.)
+- **`A1.7` — el depurador por la cola de control.** Pausa, paso y breakpoints como mensajes de
+  `io` a `vm` (hoy `pause_cb` lee el wire desde la tarea de la VM en la Pico). Verificar con el
+  IDE en la Pico y en la C6.
+
+**Orden:** `A1.1` → `A1.2` → `A1.3` y `A1.4` en bloque → `A1.5` → `A1.6` → `A1.7`. Cada una con
+los tres samples medidos antes y después en la placa que toque, y commit por paso. Si `OUTPUT`
+por línea cambia algo observable del wire, `docs/BPVM_WIRE_PROTOCOL.md` lo dice (no debería: el
+texto concatenado es el mismo).
 
 Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `PrintBench.bp`
 (salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
