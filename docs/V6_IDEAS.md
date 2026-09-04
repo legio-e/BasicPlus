@@ -913,3 +913,18 @@ tiempo codificando: lo gasta **esperando al transporte**, porque la escritura es
 ⏭️ Siguiente paso, si se decide seguir: (a) `OUTPUT` por línea → medir con `PrintBench`;
 (b) la comm task con cola en `esp32/common` reutilizando `bpvm_oq_*` → medir otra vez;
 (c) sólo entonces decidir el reparto común de tareas. Cada paso con su número antes y después.
+
+### La decisión (Eduardo, 4-sep, tarde)
+
+*«Lo veo bastante anárquico, sin un orden claro. Y todos los micros deberían funcionar más o
+menos igual. Creo que el hilo de la VM debería dedicarse solamente a ejecutar los opcodes. Hace
+falta al menos un segundo hilo de ejecución. Y la misma arquitectura en todos los micros.»* Y el
+rumbo: *«En un futuro tendremos dos VM y una cola de threads BP, y así irían recorriendo la cola
+entre las dos. Pero de momento 1 VM, 1 core y 2 hilos a nivel de OS.»*
+
+Queda como ficha `A1` en `FICHAS.md`: `vm` (sólo opcodes) + `io` (todo lo demás), tres colas y
+nada más entre ellos, igual en todas las familias; el modelo GUI en `vm` y LVGL en `io`; en dos
+núcleos cada hilo en el suyo sin más regla que «sólo cruzan las colas» (visibilidad por
+primitivas del RTOS, flash que congela al otro núcleo, interrupciones donde las registra `io`,
+bucle del intérprete en RAM). El camino SMP de `scheduler_smp.c` es el futuro de dos VM sobre
+una cola: se aparca sin cerrarlo.

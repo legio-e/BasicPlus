@@ -1,0 +1,40 @@
+// AllocBench.bp — ¿cuándo y cuánto colecta el GC? Un programa que ASIGNA.
+//
+// PrintBench no asigna nada (print con comas no concatena) y por eso no dispara
+// ni una colecta. Éste crea strings pequeños en un bucle (concatenación por
+// vuelta) y mantiene un conjunto VIVO de tamaño fijo (un array de `vivos`
+// referencias, que se van reemplazando en rueda) para que cada colecta tenga
+// algo que marcar y algo que barrer. Cronometra con Pico.uptimeMs.
+//
+// Con `log=1` en la placa, cada colecta deja una línea `[bpvm] GC: bump A -> B
+// (recupera N B, ...)` con su marca de tiempo: de ahí sale la frecuencia real y
+// el tamaño de cada ciclo. Con `log=0`, el tiempo limpio del programa.
+module AllocBench
+  import Pico
+
+  function Main()
+    var n: integer := 20000
+    var vivos: integer := 200
+    // un array de `vivos` huecos: split de una tira de comas (no hay literal de tamaño)
+    var seed: string := ""
+    var k: integer := 0
+    while k < vivos do
+      seed := seed + ","
+      k := k + 1
+    endwh
+    var pool: string[] := split(seed, ",")
+    var i: integer := 0
+    var total: integer := 0
+
+    var t0: integer := Pico.uptimeMs()
+    while i < n do
+      var s: string := "objeto-" + intToString(i) + "-de-prueba"
+      pool[i mod vivos] := s
+      total := total + 1
+      i := i + 1
+    endwh
+    var t1: integer := Pico.uptimeMs()
+
+    print "RESULTADO asignaciones: ", n, "; vivos: ", vivos, "; tiempo: ", t1 - t0, " ms; vueltas: ", total
+  end Main
+end AllocBench

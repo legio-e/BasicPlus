@@ -2098,7 +2098,7 @@ tocar y cómo se comprueba.
 | **U4** | la **stdlib embebida**: un solo formato de blobs | ✅ 3-sep (`U4.1`) |
 | **U5** | la **tabla de handles**: darle módulo | ✅ 3-sep (`U5.1`) |
 | **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | ✅ 3-sep (`U6.11`: las 5 familias, verificadas en placa) |
-| **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | — |
+| **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | 🟡 abierta 4-sep: **dos hilos de SO, `vm` + `io`, iguales en todos los micros** (decisión de Eduardo, con medidas) |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
 | **L1** | **lenguaje y compilador** | abierto 23-ago |
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
@@ -2124,7 +2124,77 @@ existe**. Van al saco de «qué falta» y no bloquean U1–U5.
 
 ---
 
-#### 🖼️ G1 — el bucle de LVGL a un hilo BP propio
+#### 🏗️ `A1` — la arquitectura de ejecución común: `vm` + `io` (abierta 4-sep)
+
+**La decisión de Eduardo (4-sep), tras el censo y las medidas** (`docs/V6_IDEAS.md`, «Hilos de
+ejecución»): *«Lo veo bastante anárquico, sin un orden claro. Y todos los micros deberían
+funcionar más o menos igual. Creo que el hilo de la VM debería dedicarse solamente a ejecutar
+los opcodes. ¿Y entonces qué pasa con todo lo demás? Hace falta al menos un segundo hilo de
+ejecución. Y la misma arquitectura en todos los micros (o al menos lo más parecido posible).»*
+
+**Y el rumbo, para que quede claro hacia dónde vamos:** *«En un futuro tendremos dos VM y una
+cola de threads BP: las VM irían tomando un thread y ejecutando, la otra VM igual, y así irían
+recorriendo la cola entre las dos. Pero de momento 1 VM, 1 core y 2 hilos a nivel de OS.»*
+Ese futuro es, en forma, el camino SMP que ya existe en `scheduler_smp.c` (N workers sobre una
+cola de runnables, GC stop-the-world entre workers, workers en el núcleo 1+): se queda aparcado y
+**el hilo `vm` de hoy es el worker único de mañana** — nada de lo que se haga en A1 puede cerrar
+esa puerta.
+
+##### El reparto
+
+- **`vm`**: ejecuta opcodes. Dentro: intérprete, scheduler de hilos verdes, GC (es parte de
+  asignar; con un solo mutador no hay baile). No toca ningún transporte: `print` deja bytes en
+  una cola y sigue; entre cuantos mira una bandera («parar», «pausar»), sin llamar a drivers.
+- **`io`**: todo lo demás. Lee el wire en todo momento (KILL/HELLO al instante, no entre
+  cuantos), vacía la cola de salida en `OUTPUT` **por línea** (hoy un `print` sale en seis
+  mensajes: 122 KB de texto → 816 KB por el wire), escribe el log, sirve el REPL, bombea LVGL.
+- **Entre los dos, tres colas y nada más**: salida (vm → io, bytes copiados), control (io →
+  vm: kill, pausa, paso del depurador), eventos (io → vm: clics del GUI, y en el futuro timers
+  e interrupciones — la cola de H5.c ya tiene esa forma). **Nada cruza fuera de las colas.**
+- **GUI**: `vm` es dueña del modelo y de la copia de los valores; `io` es dueña de LVGL. Los
+  cambios de `vm` viajan como encargos; los del usuario vuelven como eventos con el valor
+  dentro; las lecturas (`slider.value`) leen la copia y nunca cruzan. Esto **absorbe `G1`** y es
+  la respuesta a `#434`.
+
+##### Por familia
+
+| Familia | Hoy | Con A1 |
+|---|---|---|
+| ESP32 S3/C3/C6/P4 | 1 tarea (`main` o `wire_uart`) con todo dentro | 2 tareas creadas en `esp32/common`, iguales en las cuatro; en S3/P4 `io` en el núcleo 0 y `vm` en el 1 |
+| Pico 2 | `vm_task` con todo dentro; comm task + cola de salida existen tras la opción SMP | activar ese camino con un worker y hacerlo el único |
+| Host | 1 hilo (o el camino SMP con pthreads) | 2 pthreads: el host prueba la arquitectura ANTES que ninguna placa (la cascada) |
+| STM32 | bare-metal, sin RTOS | **decisión pendiente**: FreeRTOS (recomendado: Cortex-M33 con RAM de sobra, `platform_stm32.c` devuelve «sin threads»), o interrupciones + bucle cooperativo, que es lo más parecido posible sin RTOS |
+
+##### Lo que dicen las medidas (C6, 4-sep) sobre el beneficio
+
+Lo que se saca del hilo de la VM costaba un **1 %** en cálculo puro (cuanto 1024 vs 65 536: 23 640
+vs 23 400 ms): A1 no acelera el intérprete. Lo que cambia es la **salida** (0,84 ms por `print`
+esperando al USB → un empujón a la cola) y la **GUI** (el volcado por SPI deja de costarle tiempo
+al intérprete). Y `#462` desaparece por construcción: `vm` ya no puede matar de hambre a `io`.
+
+##### Con dos núcleos (pregunta de Eduardo): qué puede morder
+
+Nada, si sólo cruzan las colas. Lo que hay que vigilar: la **visibilidad entre núcleos** (todo lo
+que cruza va por primitivas del RTOS o atómicos con orden; nada de `volatile` suelto); la
+**propiedad del modelo GUI** (arriba); las **escrituras en flash** congelan al otro núcleo (XIP;
+ya pasa hoy, en la misma tarea); las **interrupciones caen en el núcleo que las registra** (que
+`io` inicialice USB, SPI y DMA → viven en el 0); la **caché de flash compartida** (el bucle del
+intérprete en RAM; se mide con `Bench`). En un núcleo, las mismas dos tareas repartiéndose el
+tiempo, `io` con más prioridad.
+
+##### El orden
+
+1. Host: `vm` + `io` + tres colas en `src/` común, `OUTPUT` por línea; paridad 38/38 intacta.
+2. C6 (en la mesa): las dos tareas en `esp32/common`; medir `PrintBench` y `Bench` antes/después.
+3. Pico: el camino de la comm task, único.
+4. STM32: la decisión del RTOS, ficha aparte.
+5. LVGL bajo `io` con su cerrojo (`lv_lock`, LVGL 9); medir la latencia del GUI (`#434`).
+
+Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `PrintBench.bp`
+(salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
+en la C6, 0,66 ms por vuelta; el reparto GC/concatenación está por separar con `log=1`).
+
+#### 🖼️ G1 — el bucle de LVGL a un hilo BP propio *(absorbido por `A1`, 4-sep: LVGL vive en `io`)*
 
 **Idea de Eduardo (23-ago):** *«de LVGL me gustaría, si podemos, mejorar el bucle,
 poniéndolo en un hilo BP sólo para él»*.

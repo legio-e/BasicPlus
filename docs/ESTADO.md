@@ -120,6 +120,15 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    que sólo baja con nombres por referencia desde flash. El nudo: el FS eclipsa a la zona y `#466`
    repone `/lib` en cada arranque → instalador + `STAT` tienen que ver la zona. Falta su decisión
    (pack en la zona vs tabla embebida XIP; con o sin la tabla de símbolos). Detalle en la ficha.
+11. 🟡 **`A1` ABIERTA (4-sep, tarde): la arquitectura de ejecución común** — Eduardo preguntó
+   cuántas tareas de FreeRTOS corren (censo: UNA nuestra en ESP32 y Pico con todo dentro, cero en
+   STM32, `vm`/`main`/`wire_uart` según la familia) y se midió en la C6: lo de entre cuantos
+   cuesta 1 %, la salida 0,84 ms por `print` (seis mensajes OUTPUT por línea, 122 KB → 816 KB),
+   `AllocBench` 0,66 ms por vuelta con asignación. **Decisión: `vm` sólo opcodes + `io` todo lo
+   demás, tres colas, igual en todos los micros; de momento 1 VM, 1 core, 2 hilos de SO; el
+   futuro son dos VM sobre una cola de threads BP (el camino SMP, aparcado sin cerrarlo).** Falta
+   la decisión del RTOS en STM32. El orden: host → C6 → Pico → STM32 → LVGL en `io`. Samples
+   nuevos: `PrintBench.bp`, `AllocBench.bp` (en `samples/benchmarks/`).
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el
