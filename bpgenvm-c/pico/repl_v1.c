@@ -202,6 +202,20 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
  * (para saber si `io` corre y para su cerrojo) y el contrato del ramo sólo pasa
  * un puntero de usuario, que ya lleva el contexto del depurador. Un RUN a la vez
  * lo garantiza s_active_session, igual que en `s_io_vm`. */
+/* V6/A1.7 - EL DEPURADOR TIENE SU PROPIO BUFFER, y no es un lujo.
+ *
+ * `s_line_buf` es del hilo `io`: ahi mete la linea que acaba de leer del cable.
+ * Cuando A1.7 hizo que el `next_cmd` del depurador sacara su comando de la cola
+ * de control, lo dejo escribiendo en ESE MISMO buffer — y ese lo lee la tarea
+ * `vm`. O sea: dos tareas escribiendo el mismo array.
+ *
+ * En un nucleo la ventana es un cambio de tarea; en DOS es solapamiento de
+ * verdad, y el sintoma seria un JSON del depurador pisado a media linea. Salio
+ * al mirar, a peticion de Eduardo, que consecuencias tiene usar los dos nucleos
+ * ANTES de activarlos: la respuesta es que esta era una, y estaba puesta hoy
+ * mismo. Un buffer por ROL, que es lo que deberia haber hecho desde el principio. */
+static char s_dbg_buf[WIRE_V1_LINE_MAX];
+
 static bpvm_t* s_dbg_vm = NULL;
 
 static void dbgw_send(const char* line, size_t len, void* user) {
@@ -223,13 +237,13 @@ static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
      * o una familia sin hilos) se lee como siempre. Espera acotada para que un
      * KILL o una desconexión no dejen la VM parada para siempre. */
     if (bpvm_io_running(s_dbg_vm)) {
-        n = (int) bpvm_io_ctrl_pop(s_dbg_vm, s_line_buf, sizeof s_line_buf, 200);
+        n = (int) bpvm_io_ctrl_pop(s_dbg_vm, s_dbg_buf, sizeof s_dbg_buf, 200);
     } else {
-        n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
+        n = wire_v1_recv_line(-1, s_dbg_buf, sizeof s_dbg_buf);
     }
     if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
     json_obj_t o;
-    if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
+    if (json_parse(s_dbg_buf, (size_t) n, &o) != 0) return -1;
     char type[40];
     if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
     out->kind = bpvm_dbg_wire_kind(type);
