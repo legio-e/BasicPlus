@@ -30,3 +30,25 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # recoja esto (mismo gotcha que el MEMPROT del P4).
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+
+# ─── V6 (5-sep-2026): UN SOLO NÚCLEO, POR ORDEN DE EDUARDO ────────────────────
+#
+# Este chip tiene dos núcleos y ESP-IDF los usa POR DEFECTO. Hasta hoy esta imagen
+# corría con FreeRTOS en los dos **sin que nadie lo hubiera decidido** — y con `A1`
+# eso dejó de ser inocuo: la tarea `vm` y el hilo `io` pueden solaparse de verdad
+# sobre estado compartido que nunca se había auditado.
+#
+# Al mirarlo (5-sep) apareció la primera consecuencia a la primera: el depurador y
+# el hilo `io` escribían el MISMO buffer de línea. En un núcleo la ventana es un
+# cambio de tarea; en dos, solapamiento real.
+#
+# Criterio de Eduardo: *«La utilización de 2 núcleos debe hacerse de forma
+# controlada. Antes de hacerla hay que mirar si tiene consecuencias, no queremos
+# corrupciones de memoria de forma aleatoria. Lo ideal es utilizar los 2 núcleos
+# pero paso a paso.»* Y la orden: **un solo núcleo hasta nueva orden.**
+#
+# Va en los DEFAULTS y no en el sdkconfig generado a propósito: el sdkconfig está
+# fuera de git, así que ahí la decisión no viajaría y volvería a ser herencia.
+# El día que se activen los dos, se quita esta línea y se fijan las tareas a mano
+# (`io` en un núcleo, `vm` en el otro), que es como lo tiene previsto la Pico.
+CONFIG_FREERTOS_UNICORE=y
