@@ -144,15 +144,6 @@ void UsageFault_Handler(void)
 /**
   * @brief This function handles System service call via SWI instruction.
   */
-void SVC_Handler(void)
-{
-  /* USER CODE BEGIN SVCall_IRQn 0 */
-
-  /* USER CODE END SVCall_IRQn 0 */
-  /* USER CODE BEGIN SVCall_IRQn 1 */
-
-  /* USER CODE END SVCall_IRQn 1 */
-}
 
 /**
   * @brief This function handles Debug monitor.
@@ -170,28 +161,22 @@ void DebugMon_Handler(void)
 /**
   * @brief This function handles Pendable request for system service.
   */
-void PendSV_Handler(void)
-{
-  /* USER CODE BEGIN PendSV_IRQn 0 */
-
-  /* USER CODE END PendSV_IRQn 0 */
-  /* USER CODE BEGIN PendSV_IRQn 1 */
-
-  /* USER CODE END PendSV_IRQn 1 */
-}
 
 /**
   * @brief This function handles System tick timer.
   */
-void SysTick_Handler(void)
+/* V6/A1.5 - el HAL deja de latir en el SysTick: ahora late en el TIM17, como
+ * en la Nucleo (Core/Src/stm32u5xx_hal_timebase_tim.c). El SysTick pasa a ser
+ * de FreeRTOS, que lo necesita para su tick y cuyo puerto Cortex-M33 define
+ * SysTick_Handler con ese mismo nombre. Este handler se va entero: dejarlo
+ * seria un simbolo duplicado en el enlace. */
+/**
+  * @brief This function handles TIM17 global interrupt.
+  */
+void TIM17_IRQHandler(void)
 {
-  /* USER CODE BEGIN SysTick_IRQn 0 */
-
-  /* USER CODE END SysTick_IRQn 0 */
-  HAL_IncTick();
-  /* USER CODE BEGIN SysTick_IRQn 1 */
-
-  /* USER CODE END SysTick_IRQn 1 */
+  extern TIM_HandleTypeDef htim17;
+  HAL_TIM_IRQHandler(&htim17);
 }
 
 /******************************************************************************/

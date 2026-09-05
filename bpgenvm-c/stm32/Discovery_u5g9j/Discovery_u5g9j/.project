@@ -52,5 +52,20 @@
 			<type>2</type>
 			<location>C:/lenguajes/pm/bpgenvm-c/third_party/littlefs</location>
 		</link>
+		<link>
+			<name>freertos</name>
+			<type>2</type>
+			<location>C:/lenguajes/pm/FreeRTOS-LTS/FreeRTOS/FreeRTOS-Kernel</location>
+		</link>
+		<link>
+			<name>freertos_port</name>
+			<type>2</type>
+			<location>C:/lenguajes/pm/FreeRTOS-LTS/FreeRTOS/FreeRTOS-Kernel/portable/GCC/ARM_CM33_NTZ/non_secure</location>
+		</link>
+		<link>
+			<name>freertos_heap</name>
+			<type>2</type>
+			<location>C:/lenguajes/pm/FreeRTOS-LTS/FreeRTOS/FreeRTOS-Kernel/portable/MemMang</location>
+		</link>
 	</linkedResources>
 </projectDescription>

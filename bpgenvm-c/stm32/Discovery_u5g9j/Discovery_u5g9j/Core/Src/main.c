@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "FreeRTOS.h"   /* V6/A1.5: el kernel */
+#include "task.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -106,6 +108,13 @@ static void MX_ADC1_Init(void);
   * @brief  The application entry point.
   * @retval int
   */
+/* V6/A1.5 - la tarea `vm`: lo de siempre, sobre su pila y bajo el planificador. */
+static void vm_task(void* arg)
+{
+  (void) arg;
+  for (;;) { stm32_repl_run(); }
+}
+
 int main(void)
 {
 
@@ -158,13 +167,15 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-    stm32_repl_run();
+  /* V6/A1.5 - LAS DOS TAREAS (ver el gemelo en Nucleo_u575b/Core/Src/main.c).
+   * La pila de `vm`, 4096 PALABRAS = 16 KB: el mismo _Min_Stack_Size que el
+   * enlazador reservaba como MSP para que el interprete corriera encima. */
+  if (xTaskCreate(vm_task, "vm", 4096, NULL, tskIDLE_PRIORITY + 2, NULL) != pdPASS) {
+    Error_Handler();
   }
+  vTaskStartScheduler();
+  Error_Handler();   /* solo se llega aqui si el planificador no arranco */
+  while (1) { }
   /* USER CODE END 3 */
 }
 
@@ -1213,6 +1224,16 @@ static void MX_GPIO_Init(void)
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
+/* V6/A1.5 - el latido del HAL, ahora desde el TIM17 (ver
+ * Core/Src/stm32u5xx_hal_timebase_tim.c). El SysTick es de FreeRTOS. */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM17)
+  {
+    HAL_IncTick();
+  }
+}
+
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
