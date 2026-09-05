@@ -16,46 +16,25 @@
  * ni la paridad byte-idéntica — solo provee las primitivas de plataforma para
  * que el core enlace.
  */
+/*
+ * platform_stm32.c - LO QUE DE LA PLATAFORMA ES DE ESTE SILICIO, y nada mas.
+ *
+ * V6/A1.5 (5-sep-2026): el STM32 deja de ser bare-metal. Los mutex, las
+ * condvar y los hilos -que eran no-ops porque no habia con quien competir- se
+ * han ido a `src/platform_freertos.c`, que es LA implementacion del contrato
+ * sobre FreeRTOS y la comparten las familias que lo usan. Aqui queda lo que de
+ * verdad depende de esta placa: el reloj, la espera activa y el azar.
+ *
+ * Por que asi y no copiando el fichero de la Pico: de sus 363 lineas solo
+ * cuatro eran suyas. Copiarlo habria repetido el fallo que este proyecto ya
+ * tiene documentado tres veces -el comun crece y la copia privada no-.
+ *
+ * Lo que este fichero NO toca: la salida (eso es el sink de stm32_repl.c) ni la
+ * paridad byte-identica. Solo provee primitivas.
+ */
 #include "bpvm_platform.h"
 #include "main.h"   /* HAL_GetTick, HAL_Delay, SystemCoreClock, CoreDebug, DWT */
 
-/* ---- Mutex (no-op single-thread; handle = sentinela no-NULL) ---- */
-int  bpvm_platform_mutex_init(bpvm_platform_mutex_handle_t* m)    { *m = (void*)1; return 0; }
-void bpvm_platform_mutex_destroy(bpvm_platform_mutex_handle_t* m) { if (m) *m = NULL; }
-void bpvm_platform_mutex_lock(bpvm_platform_mutex_handle_t* m)    { (void)m; }
-void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m)  { (void)m; }
-
-/* ---- Condvar (no-op; nunca se usa single-thread) ---- */
-int  bpvm_platform_cond_init(bpvm_platform_cond_handle_t* c)      { *c = (void*)1; return 0; }
-void bpvm_platform_cond_destroy(bpvm_platform_cond_handle_t* c)   { if (c) *c = NULL; }
-void bpvm_platform_cond_wait(bpvm_platform_cond_handle_t* c, bpvm_platform_mutex_handle_t* m) { (void)c; (void)m; }
-/* V6/A1 - sin hilos en bare-metal: `bpvm_io_start` recibe el -1 y sigue por el
- * camino de un hilo, exactamente como antes. Con FreeRTOS (A1.5) esto pasa a ser
- * un xTaskCreate por encima de la tarea de la VM, como en las demas familias. */
-int  bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
-                                     bpvm_thread_entry_t entry, void* arg) {
-    (void) t; (void) entry; (void) arg;
-    return -1;
-}
-
-int  bpvm_platform_cond_timed_wait(bpvm_platform_cond_handle_t* c, bpvm_platform_mutex_handle_t* m, int ms) { (void)c; (void)m; (void)ms; return 1; /* timeout */ }
-void bpvm_platform_cond_signal(bpvm_platform_cond_handle_t* c)    { (void)c; }
-void bpvm_platform_cond_broadcast(bpvm_platform_cond_handle_t* c) { (void)c; }
-
-/* ---- Thread (sin RTOS en el MVP → no soportado) ---- */
-int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t, bpvm_thread_entry_t entry, void* arg) {
-    (void)t; (void)entry; (void)arg;
-    return -1;   /* sin threads bare-metal: la VM lo trata como fallo limpio */
-}
-int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t, bpvm_thread_entry_t entry, void* arg, int core_id) {
-    (void)core_id;
-    return bpvm_platform_thread_create(t, entry, arg);
-}
-void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) { (void)t; }
-void bpvm_platform_thread_yield(void)                           { }
-void bpvm_platform_thread_sleep_ms(int ms)                      { if (ms > 0) HAL_Delay((uint32_t)ms); }
-
-/* ---- Tiempo ---- */
 int64_t bpvm_platform_now_ms(void) { return (int64_t) HAL_GetTick(); }
 
 void bpvm_platform_busy_wait_us(int us) {
@@ -108,4 +87,37 @@ uint32_t bpvm_platform_random_u32(void) {
     s ^= s >> 17;
     s ^= s << 5;
     return s;
+}
+
+/* ===================== Los ganchos que el kernel exige =====================
+ *
+ * Los tres estan encendidos en stm32/port/FreeRTOSConfig.h a proposito: en un
+ * micro, un desbordamiento de pila o un malloc fallido se manifiestan -si nadie
+ * mira- como un cuelgue mudo tres pasos mas alla. Aqui se convierten en una
+ * linea en el log persistente, que sobrevive al reset y se lee con LOG_DUMP.
+ * Es la norma del proyecto: errores si, silenciosos no. */
+#include "log.h"
+#include "FreeRTOS.h"
+#include "task.h"
+
+static void stm32_rtos_parar(const char* que, const char* det, unsigned num) {
+    log_printf("RTOS: %s (%s:%u) - parado", que, det ? det : "?", num);
+    log_flush();
+    __disable_irq();
+    for (;;) { }
+}
+
+void bpvm_stm32_assert_rtos(const char* fichero, unsigned linea) {
+    stm32_rtos_parar("configASSERT", fichero, linea);
+}
+
+void vApplicationStackOverflowHook(TaskHandle_t task, char* nombre);
+void vApplicationStackOverflowHook(TaskHandle_t task, char* nombre) {
+    (void) task;
+    stm32_rtos_parar("pila desbordada", nombre, 0);
+}
+
+void vApplicationMallocFailedHook(void);
+void vApplicationMallocFailedHook(void) {
+    stm32_rtos_parar("sin heap de FreeRTOS", "configTOTAL_HEAP_SIZE", 0);
 }

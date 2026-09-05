@@ -47,6 +47,8 @@
 									<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\bpgenvm-c\include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\bpgenvm-c\src&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\bpgenvm-c\stm32\port&quot;"/>
+							<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\FreeRTOS-LTS\FreeRTOS\FreeRTOS-Kernel\include&quot;"/>
+							<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\FreeRTOS-LTS\FreeRTOS\FreeRTOS-Kernel\portable\GCC\ARM_CM33_NTZ\non_secure&quot;"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32U5xx_HAL_Driver/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32U5xx_HAL_Driver/Inc/Legacy"/>
 									<listOptionValue builtIn="false" value="../Drivers/BSP/STM32U5xx_Nucleo"/>
@@ -80,6 +82,9 @@
 					</folderInfo>
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
+						<entry excluding="examples|portable" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos"/>
+						<entry excluding="mpu_wrappers_v2_asm.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos_port"/>
+						<entry excluding="heap_1.c|heap_2.c|heap_3.c|heap_5.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos_heap"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry excluding="stm32_fs.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="port"/>
 						<entry excluding="bd" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="littlefs"/>

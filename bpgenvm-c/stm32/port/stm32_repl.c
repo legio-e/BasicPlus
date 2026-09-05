@@ -26,6 +26,7 @@
 #include "gpio_stm32.h"     /* stm32_hw_register (backends GPIO + Pico) */
 #include "json_min.h"
 #include "bpvm.h"
+#include "bpvm_io.h"   /* V6/A1.5: el segundo hilo, comun a todas las familias */
 #include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
 #include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
@@ -250,6 +251,16 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
  *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
 
+/* V6/A1.5 - la costura de esta familia para el hilo `io`: su `poll` (el de
+ * siempre) y su `line` (el sink de siempre, que ahora recibe lineas enteras en
+ * vez de trozos). Nada mas; el lazo y el troceado son comunes. */
+#define STM32_IO_OQ_BYTES 2048
+static int stm32_run_poll_cb(bpvm_t* vm, void* user);
+static int stm32_io_poll(void* user) {
+    (void) user;
+    return stm32_run_poll_cb(NULL, NULL);
+}
+
 static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
     int c = stm32_wire_getchar();
@@ -412,8 +423,27 @@ static void run_module_path(const char* path, long id) {
     s_kill_ack_id = -1;
     if (st == BPVM_OK && !missing[0]) bpvm_set_poll(vm, stm32_run_poll_cb, NULL);
 
+    /* V6/A1.5 - EL HILO `io`, igual que en el PC, el ESP32 y la Pico.
+     *
+     * Mientras esta tarea (`vm`) ejecuta opcodes, `io` lee el wire y arma la
+     * salida POR LINEAS. Aqui esto pesa mas que en ninguna otra placa: la UART
+     * va a 115 200 baud y las 2 000 lineas de PrintBench costaban 71 357 ms
+     * porque viajaban 820 018 bytes; con una linea por mensaje son ~239 KB.
+     *
+     * La cola, 2 KB: como el ESP32, que tambien sale por serie. Cuando se llena,
+     * `vm` espera a que `io` drene, que es lo correcto - el programa no puede
+     * producir mas deprisa de lo que traga el cable. */
+    bpvm_io_ops_t io_ops = { stm32_io_poll, v1_output_sink, NULL };
+    int con_io = (st == BPVM_OK && !missing[0])
+                 && bpvm_io_start(vm, &io_ops, STM32_IO_OQ_BYTES) == 0;
+
     if (st == BPVM_OK && !missing[0]) st = bpvm_run(vm);
     BOARD_LED_RUN_OFF();
+
+    /* Parar `io` ANTES de nada mas: drena la cola entera, asi que al volver de
+     * aqui la ultima linea del programa YA salio por la UART, y el wire vuelve a
+     * ser de esta tarea (que es quien manda KILL_REPLY y EXITED). */
+    if (con_io) bpvm_io_stop(vm);
     uint32_t dt = HAL_GetTick() - t0;
 
     /* P-run-stop — ack diferido del KILL, antes del EXITED. */

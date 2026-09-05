@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "FreeRTOS.h"   /* V6/A1.5: el kernel */
+#include "task.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -97,6 +99,14 @@ static void MX_RTC_Init(void);
   * @brief  The application entry point.
   * @retval int
   */
+/* V6/A1.5 - la tarea `vm`: solo ejecuta lo de siempre, ahora sobre su propia
+ * pila y bajo el planificador. El REPL no sabe que es una tarea. */
+static void vm_task(void* arg)
+{
+  (void) arg;
+  for (;;) { stm32_repl_run(); }
+}
+
 int main(void)
 {
 
@@ -162,14 +172,28 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-	  stm32_repl_run();
+  /* V6/A1.5 - LAS DOS TAREAS, TAMBIEN AQUI.
+   *
+   * Hasta hoy esto era un superbucle: `stm32_repl_run()` dentro de un while(1),
+   * corriendo sobre la pila principal (el MSP). Ahora esa misma funcion es la
+   * tarea `vm`, y el segundo hilo -`io`, que atiende el wire y arma la salida por
+   * lineas- lo crea el propio REPL alrededor de cada RUN, igual que en el PC, en
+   * el ESP32 y en la Pico.
+   *
+   * La pila: 4096 PALABRAS = 16 KB, que es exactamente lo que el enlazador
+   * reservaba como MSP para que el interprete corriera encima (_Min_Stack_Size en
+   * el .ld). No es una eleccion: es el mismo numero de antes, para que este paso
+   * no cambie dos cosas a la vez. El de verdad sale de medirlo con
+   * uxTaskGetStackHighWaterMark, que INFO publica.
+   *
+   * vTaskStartScheduler() no vuelve. Si vuelve es que no hubo heap para la tarea
+   * idle, y eso tiene que hacer ruido y no quedarse en un while(1) mudo. */
+  if (xTaskCreate(vm_task, "vm", 4096, NULL, tskIDLE_PRIORITY + 2, NULL) != pdPASS) {
+    Error_Handler();
   }
+  vTaskStartScheduler();
+  Error_Handler();   /* solo se llega aqui si el planificador no arranco */
+  while (1) { }
   /* USER CODE END 3 */
 }
 
