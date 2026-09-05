@@ -2297,7 +2297,7 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   baterías **en el PC** con este fallo dentro, porque el `pthread` del PC sí espera 5 ms. Lo
   destapó el primer número de la placa. Es la cascada funcionando: el PC caza la lógica, el micro
   caza lo que depende del reloj del silicio.
-- **✅ `A1.3` — HECHA para C3 y P4 (5-sep); el S3 queda pendiente de conectarlo.**
+- **✅ `A1.3` — HECHA: C3, P4 y S3 verificados en placa (5-sep). La familia ESP32 entera.**
 
   Sin una línea de código nuevo: `A1.2` vive entero en `esp32/common`, así que bastó recompilar y
   grabar. Las dos placas llevaban firmware del **1-sep**, o sea anterior a toda la serie, y ahí
@@ -2326,7 +2326,29 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   fija el tamaño del heap y por tanto el ritmo del GC. Queda anotado como pregunta de `U6`, no de
   `A1`, y se contesta comparando el `vmHeapBytes` de antes y después.
 
-  ⏭️ **Falta el S3**, que no estaba conectado. Es sólo grabar y medir: no hay código que tocar. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
+  ### El S3, y la medida que zanja la duda del C3
+
+  El S3 llegó con firmware del **3-sep**, o sea posterior a `U4`, `U5`, `U6` y `#466`: su «antes»
+  es casi sólo `A1`, y por eso su número vale como control.
+
+  | Medida | S3 antes | S3 después |
+  |---|---|---|
+  | `PrintBench` 2 000 líneas | 71 075 ms | **20 343 ms** (3,5×) |
+  | · mensajes `OUTPUT` | 12 016 | **2 001** |
+  | · bytes por el wire | 820 KB | **239 KB** |
+  | `AllocBench` + GC | 20 244 ms | **20 384 ms** (+0,7 %) |
+  | `Bench` fib(28) ×2 | — | 34 980 ms |
+  | KILL calculando / imprimiendo | — | **31 / 535 ms** |
+
+  **Y con esto la duda del C3 queda contestada del todo**: el `AllocBench` del S3, con una
+  referencia posterior a `U6`, sale **plano**; el del C3, con referencia del 1-sep, subía un 10 %.
+  Dos controles independientes (la C6 y ahora el S3) dicen lo mismo: **`A1` no cuesta nada en
+  asignación**, y lo del C3 pasó entre el 1 y el 3 de septiembre.
+
+  El S3 sale por un puente USB-UART a 115 200, como el P4 y el STM32 — de ahí los mismos 71 s de
+  partida y la misma ganancia de 3,5×. 📌 Detalle de método: su puente exige **DTR y RTS afirmados
+  a la vez**, así que los scripts de medida llevan ahora un `-Rts`; con sólo DTR la placa se queda
+  muda y parece rota. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
   como tareas propias: pasan a ser el transporte de `io`. Si hace falta tocar algo de la familia
   para que arranquen, es que `A1.2` dejó algo en la C6 que era común.
 - **✅ `A1.4` — HECHA (5-sep): la Pico 2 con las dos tareas.**

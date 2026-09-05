@@ -203,9 +203,13 @@ es el planificador de memoria de `U6`. Anotado como pregunta de `U6`.
 repetible a ±10 ms, aislado por bisección). Curiosamente el KILL MEJORA (33 → 2 ms), o sea que la
 diferencia está en el reparto de turno, no en trabajo de más. No se sube lo que no se entiende.
 
+✅ **`A1.3` COMPLETA (5-sep): C3, P4 y S3 verificados en placa.** El S3 da `PrintBench`
+**71 075 → 20 343 ms** (3,5×) y `AllocBench` **plano** (20 244 → 20 384) — y ese número zanja lo
+del C3: con dos controles (C6 y S3) queda claro que `A1` no cuesta nada en asignación y que el
+10 % del C3 pasó entre el 1 y el 3 de septiembre, o sea en `U6`.
+
 | Paso | Qué falta | Qué hace falta tener delante |
 |---|---|---|
-| `A1.3` | **Sólo el S3**: grabar y medir, no hay código que tocar | el **S3** conectado |
 | `A1.7` | El depurador por la cola de control: hoy su `pause_cb` lee el wire desde la tarea `vm`, así que **con el depurador armado `io` NO arranca** (interbloqueo puesto a propósito en las tres familias) | una placa y el IDE |
 | — | Migrar la Pico a `src/platform_freertos.c` (es un BORRADO, no una fusión: de sus 363 líneas sólo 4 eran suyas) | la **Pico 2** conectada, para verificar en placa lo que hoy funciona |
 | `A1.6` | 🔄 **Aplazada y reorientada** por Eduardo: no se mueve LVGL, se le da a `Gui.run()` su propio hilo BP. El obstáculo ya está localizado (el bombeo duerme el hilo del SO) | — |
