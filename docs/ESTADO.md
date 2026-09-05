@@ -170,9 +170,18 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    `vTaskDelete(NULL)` deja la pila en manos de la tarea ociosa, que nunca corría. Lo dijo el
    gancho de malloc fallido en el log; ahora borra el `join`. ⏭️ **Falta que Eduardo mire la
    pantalla de la Discovery** (el modelo de 800×480 se arma bien).
-   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA), `A1.6`
-   (LVGL bajo `io`) y `A1.7` (el depurador por la cola de control). Fichas nuevas propuestas:
-   migrar la Pico a `src/platform_freertos.c`; y el `Neopixel` de la familia ESP32.
+   ✅ **La pantalla de la Discovery, vista por Eduardo con las dos tareas: «se ve bien, todo OK».**
+16. 🔄 **`A1.6` APLAZADA Y REORIENTADA (Eduardo, 5-sep)**: LVGL **no** se mueve a `io`. Se trazó
+   dónde corre hoy su lazo —lo conduce el programa BP dentro de `vm`, vía `Gui.run()` →
+   `__guiRunOnce` → `lv_timer_handler`, y nadie más lo bombea— y el coste ya estaba medido en
+   `#424`: 0,4 ms por vuelta cada 33 ms, ~1 % de CPU. No hay caso por rendimiento, y LVGL no es
+   reentrante. Lo que Eduardo quiere es que **`Gui.run()` tenga su propio hilo BP** (verde, luego
+   sin problema de reentrancia) para no bloquear la aplicación. ⚠️ El obstáculo, ya localizado:
+   el bombeo **duerme el hilo del SO** (`vTaskDelay`/`__WFI`/`SDL_Delay`), o sea todos los hilos
+   BP; tiene que volver en vez de dormir y dejar turno al scheduler de la VM. Detalle en la ficha.
+   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA) y `A1.7` (el
+   depurador por la cola de control). Fichas nuevas propuestas: migrar la Pico a
+   `src/platform_freertos.c`; y el `Neopixel` de la familia ESP32.
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

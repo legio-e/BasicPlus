@@ -2440,9 +2440,72 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   (`.gitignore`), así que otra máquina necesita `FreeRTOS-LTS` en la misma ruta. Los dos
   `.project` (que son donde viven los enlaces) entran ahora en git con `add -f`; el del Nucleo
   no estaba trackeado hasta hoy.
-- **`A1.6` — LVGL bajo `io`.** El modelo GUI en `vm` con copia de valores, LVGL en `io`, encargos
-  y eventos por las colas, `lv_lock` de LVGL 9. Medir la latencia de un clic (`#434`) en C6 y DK2.
-  (Absorbe `G1`.)
+- **🔄 `A1.6` — APLAZADA Y REORIENTADA (Eduardo, 5-sep): LVGL NO se mueve a `io`. Lo que quiere
+  su propio hilo es `Gui.run()`, y un hilo BP.**
+
+  *«Creo que podemos posponer esta decisión, de momento no lo movería a IO. El `Gui.run()`
+  debería tener su propio hilo, pero hilo BP, para que pueda interactuar con el resto de la
+  aplicación y que no la bloquee.»*
+
+  ### Dónde corre hoy el lazo de LVGL, y qué es ese lazo
+
+  La pregunta de Eduardo era esa, y la respuesta sale del código, no de la memoria:
+
+  ```
+  Gui.run()  →  while __guiRunOnce() do endwh          (bpstdlib/Gui.bp:789)
+     →  builtin GUI_RUN_ONCE                            (src/builtins.c)
+        →  bpvm_gui_lvgl_pump() → bpvm_gui_disp_pump()  (src/gui.c:289)
+           →  lv_timer_handler()                        (el port de cada placa)
+  ```
+
+  **Lo conduce el programa BasicPlus, dentro de la tarea `vm`.** No lo bombea nadie más:
+  comprobado que no hay ni una llamada en el REPL, ni en el arranque, ni en el `main` de ninguna
+  familia. **Si el programa no está dentro de `Gui.run()`, LVGL no se ejecuta.**
+
+  Y «el lazo de LVGL» son tres temporizadores: el **refresco** cada 33 ms
+  (`LV_DEF_REFR_PERIOD`), que redibuja lo invalidado y llama al `flush_cb`; la **lectura del
+  táctil** cada 30 ms, de donde salen los clics; y las **animaciones**. Se autorregula:
+  `lv_timer_handler()` devuelve cuántos ms faltan para el siguiente, y el bombeo duerme ese rato.
+
+  ### Por qué NO se mueve a `io`: el número ya estaba medido
+
+  El comentario de `#424` en el P4 lo dejó escrito: el trabajo son **0,4 ms por vuelta** y el tope
+  de 50 ms no saltó **ni una vez en 60 s** — *«el lazo no estaba ocupado, estaba DURMIENDO»*. Con
+  una vuelta cada 33 ms eso es ~1 % de CPU. **LVGL no le está quitando tiempo al intérprete**, así
+  que moverlo no se justifica por rendimiento; y sí costaría caro, porque LVGL **no es reentrante**
+  (`LV_USE_OS = LV_OS_NONE`) y los `Gui.*` de BasicPlus crean widgets desde `vm`: tenerlo en `io`
+  obligaría a un cerrojo en cada builtin o al reparto completo por colas.
+
+  ### Por qué un hilo BP es mejor que un hilo de SO, y esto es lo que lo decide
+
+  Los hilos de BasicPlus son **verdes**: `bpvm_thread_spawn` crea un `tc` en `vm->threads[]` y los
+  turna el scheduler de la VM **dentro de la tarea `vm`** (`src/threading.c`). Dos hilos BP no
+  corren nunca a la vez. O sea: **`Gui.run()` en un hilo BP no tiene problema de reentrancia con
+  LVGL**, que es justo lo que hace caro moverlo a `io`. Y resuelve lo que de verdad molesta hoy:
+  que `Gui.run()` no vuelve nunca, así que el programa no puede hacer nada más mientras la
+  pantalla vive.
+
+  ### ⚠️ El obstáculo concreto, para que la ficha futura no empiece de cero
+
+  **El bombeo duerme el HILO DEL SO, no el hilo BP.** Los cuatro puertos acaban igual:
+
+  | Placa | cómo espera |
+  |---|---|
+  | C6 | `vTaskDelay(ticks)` |
+  | P4 | `vTaskDelay(...)` |
+  | Discovery | `__WFI()` |
+  | host | `SDL_Delay(16)` |
+
+  Eso bloquea la tarea `vm` entera, es decir **todos** los hilos BP, no sólo el del GUI. Con
+  `Gui.run()` en su propio hilo BP, el resto de la aplicación se congelaría hasta 10 ms por vuelta
+  igualmente. Así que el trabajo de esta ficha es preciso: **el bombeo tiene que volver, no
+  dormir**, y dejar que el scheduler de la VM le dé el turno a otro hilo BP; dormir de verdad sólo
+  cuando no haya ningún hilo BP ejecutable, que es algo que el scheduler YA hace
+  (`bpvm_platform_thread_sleep_ms` cuando nadie está RUNNABLE). Toca `src/gui.c` y los cuatro
+  bombeos, y se mide con la latencia de un clic (`#434`) y con un programa que calcule mientras
+  la pantalla vive.
+
+  📌 `G1` sigue absorbida aquí, pero con este enunciado y no con el de mover LVGL de hilo.
 - **`A1.7` — el depurador por la cola de control.** Pausa, paso y breakpoints como mensajes de
   `io` a `vm` (hoy `pause_cb` lee el wire desde la tarea de la VM en la Pico). Verificar con el
   IDE en la Pico y en la C6.
