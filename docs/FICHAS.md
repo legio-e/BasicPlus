@@ -2207,6 +2207,26 @@ entender por qué antes de volver a diseñar: queda pendiente esa conversación.
 
 ⏭️ **Charla de diseño pendiente**, no tarea. Cuando se retome, va a `docs/*_IDEAS.md`.
 
+### 💡 Retomada el 5-sep: lo que cambia es QUIÉN paga la re-verificación
+
+Eduardo, al ver la sesión de hoy: *«Te he visto ejecutar programas y resetear en placas reales.
+Si construimos una lista de programas a testear, ¿se los podríamos pasar a un agente para que lo
+haga?»*
+
+**Sí, y hoy ya ha pasado**: las cinco familias grabadas y medidas sin que nadie tocara una placa
+(`idf.py flash`, el `.uf2` con BOOTSEL pedido por el wire, y `STM32_Programmer_CLI` por número de
+sonda). Lo que lo hace posible ya estaba: el wire es protocolo de máquina y `HELLO` declara
+capacidades.
+
+Y por eso el reparto de tres pisos no era la respuesta: **repartir no quita trabajo, sólo lo
+ordena**. El problema medido era *«U3 obligó a re-verificar en placa ocho veces en un día»* — y
+ocho veces las hace un agente mientras se hace otra cosa.
+
+📐 La propuesta completa —el oráculo (el `stdout` del host, que evita mantener ficheros de salida
+esperada), los cinco campos que necesita cada entrada de la lista, lo que un agente NO puede
+hacer y tiene que gritar en vez de saltarse, y el orden de trabajo— está en
+**`docs/V6_IDEAS.md`**, sección *«Las pruebas finales, con un agente conduciendo las placas»*.
+
 ### 🎯 LOS HITOS DE V6 — unificar primero, arquitectura después
 
 **Decisión de Eduardo (23-ago), y su razón:** *«antes de hacer más cosas deberíamos

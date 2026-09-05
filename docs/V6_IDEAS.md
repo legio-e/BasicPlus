@@ -928,3 +928,100 @@ núcleos cada hilo en el suyo sin más regla que «sólo cruzan las colas» (vis
 primitivas del RTOS, flash que congela al otro núcleo, interrupciones donde las registra `io`,
 bucle del intérprete en RAM). El camino SMP de `scheduler_smp.c` es el futuro de dos VM sobre
 una cola: se aparca sin cerrarlo.
+
+
+---
+
+## Las pruebas finales, con un agente conduciendo las placas (Eduardo, 5-sep)
+
+**La pregunta**, al cerrar el día:
+
+> *«Te he visto ejecutar programas y resetear en placas reales. Si construimos una lista de
+> programas a testear, ¿se los podríamos pasar a un agente para que lo haga?»*
+
+**Sí, y hoy ya ha pasado.** En una sesión se han grabado y medido las **cinco familias** sin que
+nadie tocara una placa: `idf.py flash` en las cuatro ESP32, la copia del `.uf2` con `BOOTSEL`
+pedido por el wire en la Pico, y `STM32_Programmer_CLI` por número de sonda en la Nucleo y la
+Discovery. Y sobre eso: subir módulos, ejecutar, matar, leer el log persistente y cronometrar.
+
+Lo que lo hace posible no es nada nuevo: **todo lo que hace falta ya es protocolo de máquina**.
+El wire v1 tiene `PUT`/`RUN`/`KILL`/`LIST`/`LOG_DUMP`/`INFO`, `HELLO` declara las capacidades de
+cada placa, y los programas se cronometran solos. No hay que inventar un sistema de pruebas: hay
+que **decidir tres cosas** que hoy no están decididas.
+
+### 1. El oráculo ya está elegido, y es el invariante del proyecto
+
+La pregunta difícil de un banco de pruebas es «¿cómo sé que el resultado es correcto?». Aquí no
+hay que responderla, porque ya está respondida: **el `stdout` de la placa debe ser byte-idéntico
+al del host para el mismo `.mod`**. Es exactamente lo que `compat/compat.sh` hace hoy entre las
+dos VMs, con un corpus de **38 programas**.
+
+Eso evita el peor error de diseño posible: mantener ficheros de «salida esperada». Se pudren, y
+cuando se pudren nadie sabe si falló el programa o el fichero. Con el host de oráculo, el
+esperado **se calcula en cada pasada**.
+
+📌 Y trae un beneficio que no es obvio: convierte el banco de placas en una extensión del arnés
+de paridad, no en un sistema aparte. Un fallo dice *«la C6 se aparta del host en la línea 12»*,
+que es un diagnóstico, no un aviso.
+
+### 2. Lo que la lista tiene que decir de cada programa (y esto es el trabajo)
+
+«Todos los programas en todas las placas» es justo lo que no escala — y es el problema que
+`#444` planteó. La lista no es una lista de nombres: es una lista de **programas con sus
+condiciones**:
+
+| Campo | Para qué | De dónde sale hoy |
+|---|---|---|
+| dónde aplica | un sample de SD no se corre en una Pico (no tiene lector) | `HELLO` ya declara capacidades; falta usarlas |
+| qué necesita en el FS | `Gui` y `Json` para los del GUI, un `.pack`, un fichero de datos | hoy se sube a mano |
+| cuánto tarda como mucho | para no colgar la tanda | los tiempos ya medidos sirven de base |
+| cómo se decide | byte-idéntico al host · o «no debe petar» · o **ojos de Eduardo** | hoy, en la cabeza |
+| qué hace falta a mano | pulsar un botón, mirar la pantalla, enchufar algo | hoy, en la cabeza |
+
+Las dos últimas filas son las importantes, y llevan a la tercera decisión.
+
+### 3. Lo que un agente NO puede hacer — y que tiene que GRITAR, no saltarse
+
+Hay tres clases de prueba que no se automatizan, y hoy se distinguen sólo porque alguien se
+acuerda:
+
+- **La pantalla.** Que el modelo diga `screen [240x240]` no dice que el panel pinte. Los tres
+  «✅ visto» de esta semana —los tres botones del C6, las esquinas girando, la paleta de la
+  Discovery— los dio Eduardo con los ojos, y no hay forma de que un agente los dé.
+- **Lo físico**: un botón, un sensor, quitar y poner la SD.
+- **Lo que exige una mano**: la Pico sin botón de reset, una placa que sólo se recupera
+  desenchufando.
+
+⚠️ **La regla de diseño que sale de hoy**, y sale escaldado: una prueba que se salta **en
+silencio** es una prueba que no existe. Hoy me ha pasado dos veces en un rato — el caso del GUI
+del arnés `io` se saltaba sin decir por qué (faltaba LVGL, y luego faltaban las dependencias en
+el FS), y un `.elf` que no se reconstruyó dio un «Build Finished» tranquilizador. Así que el
+informe tiene que **probar que corrió**: sello del firmware de cada placa, CRC de cada módulo
+subido, y el número de programas **ejecutados**, no el de programas de la lista. Con una línea
+por cada uno que se saltó y **por qué**.
+
+### 4. Por qué esto sí responde a `#444`, y el reparto de tres pisos no
+
+`#444` descartó el reparto obvio (host / simulador / placa) con un *«sigue sin ser un buen
+sistema»*, y con razón: repartir no quita trabajo, sólo lo ordena. Lo que ha cambiado hoy no es
+el reparto — es **quién paga la re-verificación**. El problema medido era *«U3 obligó a
+re-verificar en placa ocho veces en un día»*. Ocho veces las hace un agente mientras se hace
+otra cosa.
+
+El simulador sigue valiendo, pero por otro motivo: es la única forma de probar lo que **no hay**
+(una placa que no está conectada, una que aún no existe). No sustituye a la placa, la precede.
+
+### ⏭️ Lo que haría falta, en orden
+
+1. **El manifiesto**: un fichero con la lista y sus condiciones (los cinco campos de arriba).
+   Empezar por los **38 del corpus de paridad**, que ya tienen oráculo, y crecer desde ahí hacia
+   los 303 samples.
+2. **El runner**: lee el manifiesto, pregunta `HELLO` a cada placa conectada, ejecuta lo que
+   aplica y compara con el host. Lo que hoy son cuatro guiones sueltos en un scratchpad.
+3. **El informe**: por placa y por programa, con los saltados y su motivo, y el sello que prueba
+   qué firmware corrió.
+4. **La lista de lo que necesita ojos**, aparte y corta, para que Eduardo la despache de una
+   sentada en vez de descubrirla a mitad.
+
+📌 Nada de esto es infraestructura nueva: es escribir el manifiesto y juntar los guiones que hoy
+ya existen. Lo caro era conducir las placas, y eso ya está resuelto.
