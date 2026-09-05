@@ -57,7 +57,12 @@ class Wire:
 
 def compila(src_bp, dest):
     if not os.path.exists(JAR) or shutil.which("java") is None: return None
+    # OJO: se compila DESDE la raiz del repo. El caso del GUI importa Gui, y el
+    # frontend resuelve la stdlib por el BpVM.cfg mas cercano — desde un temporal
+    # no lo encuentra y el import falla. Los otros casos no importan nada y por eso
+    # el fallo no se veia.
     rc = subprocess.run(["java", "-jar", JAR, src_bp, "--compile", dest, "--backend=mivm"],
+                        cwd=REPO,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     mod = os.path.join(dest, os.path.basename(src_bp).replace(".bp", ".mod"))
     return mod if rc.returncode == 0 and os.path.exists(mod) else None
@@ -98,6 +103,25 @@ FUENTE_CORTO = """module IoCorto
 end IoCorto
 """
 
+# #462 - el KILL sobre un programa con GUI: el caso que daba «exit 0 (OK)».
+# `Gui.run()` es `while __guiRunOnce() do endwh`, y el builtin devuelve FALSO al
+# ver el KILL: el bucle BP termina limpiamente, Main retorna y el programa acaba
+# «bien». Medido en placa el 5-sep (P4 y Discovery): un KILL daba status OK. Con
+# la bandera mandando sobre el estado de salida, tiene que decir KILLED.
+FUENTE_GUI = """module IoGui
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var b: Gui.Button := Gui.Button(scr, "parame")
+    b.align(Gui.Align.CENTER, 0, 0)
+    print "gui lista"
+    Gui.run()
+    print "no deberia llegar aqui"
+  end Main
+end IoGui
+"""
+
 def kill_durante(w, mod_remoto, etiqueta, espera_previa):
     """RUN, espera, KILL, y mide cuanto tarda en llegar el EXITED."""
     w.send("RUN", path=mod_remoto)
@@ -128,7 +152,8 @@ def main():
     tmp = tempfile.mkdtemp(prefix="iosmoke")
     mods = {}
     for nombre, fuente in (("IoCalc", FUENTE_CALC), ("IoChorro", FUENTE_CHORRO),
-                           ("IoCorto", FUENTE_CORTO)):
+                           ("IoCorto", FUENTE_CORTO),
+                           ("IoGui", FUENTE_GUI)):
         bp = os.path.join(tmp, nombre + ".bp")
         open(bp, "w", encoding="utf-8").write(fuente)
         m = compila(bp, tmp)
@@ -155,6 +180,13 @@ def main():
             r = w.call_bulk("PUT", datos, path="/app/" + nombre + ".mod")
             if r.get("type") != "PUT_REPLY":
                 check(False, "PUT de " + nombre + ": " + json.dumps(r)[:90]); return 1
+        # El caso del GUI importa Gui, que a su vez importa Json y Core: el simulador
+        # arranca con el FS vacio, asi que hay que subirlas. Sin esto el RUN falla con
+        # «falta el modulo Gui» y la prueba se saltaba creyendo que faltaba LVGL.
+        for dep in ("Core", "Json", "Gui"):
+            origen = os.path.join(REPO, "bpstdlib", dep + ".mod")
+            if os.path.exists(origen):
+                w.call_bulk("PUT", open(origen, "rb").read(), path="/lib/" + dep + ".mod")
 
         print("-- 1. KILL con el programa CALCULANDO (sin imprimir) --")
         kill_durante(w, "/app/IoCalc.mod", "calculo", 0.5)
@@ -162,7 +194,34 @@ def main():
         print("-- 2. KILL con el programa IMPRIMIENDO A CHORRO --")
         kill_durante(w, "/app/IoChorro.mod", "chorro", 0.5)
 
-        print("-- 3. UN mensaje OUTPUT por LINEA, y la salida entera --")
+        # #462 - el KILL sobre `Gui.run()`. Sin LVGL en el simulador este caso no
+        # ejerce el camino (el builtin sale por el #else y `Gui.run()` vuelve sola),
+        # asi que se salta DICIENDOLO: una prueba que se salta en silencio es una
+        # prueba que no existe.
+        print("-- 3. KILL sobre un programa con GUI (#462: daba exit 0 OK) --")
+        w.send("RUN", path="/app/IoGui.mod")
+        r = w._line(timeout=10)
+        arranco = r.get("type") == "RUN_REPLY"
+        vio_gui = False
+        t0 = time.time()
+        while arranco and time.time() - t0 < 5:
+            m = w._line(timeout=5)
+            if m.get("type") == "OUTPUT" and "gui lista" in m.get("data", ""): vio_gui = True; break
+            if m.get("type") == "EXITED": break
+        if not vio_gui:
+            print("        (saltada: el simulador no trae LVGL — make sim LVGL=1)")
+        else:
+            time.sleep(0.4)
+            w.send("KILL")
+            exited, t0 = None, time.time()
+            while time.time() - t0 < 15:
+                m = w._line(timeout=15)
+                if m.get("type") == "EXITED": exited = m; break
+            check(exited is not None and exited.get("status") == "KILLED",
+                  "GUI: un KILL sobre Gui.run() dice KILLED (" +
+                  str(exited and exited.get("status")) + ")")
+
+        print("-- 4. UN mensaje OUTPUT por LINEA, y la salida entera --")
         w.send("RUN", path="/app/IoCorto.mod")
         r = w._line(timeout=10)
         check(r.get("type") == "RUN_REPLY", "el RUN corto arranco")

@@ -170,5 +170,24 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
                         "(destinatario muerto o encolados por un handler tardío)",
                 vm->ev_count);
     }
+
+    /* #462 — UN PROGRAMA AL QUE SE LE PIDIÓ PARAR DICE QUE FUE MATADO, SIEMPRE.
+     *
+     * Se salía por aquí con BPVM_OK aunque hubiera un KILL pendiente, y eso hacía
+     * que el estado de un `stop` dependiera de DÓNDE cayera el KILL: si el
+     * programa terminaba por su cuenta antes de que el planificador volviera a
+     * mirar la bandera, el IDE recibía `exit 0 (OK)` por un programa que el
+     * usuario había mandado parar.
+     *
+     * El camino que lo destapa es el del GUI, y no es raro: `Gui.run()` es
+     * `while __guiRunOnce() do endwh`, y el builtin devuelve FALSO al ver el
+     * KILL — o sea que el bucle de BasicPlus termina limpiamente, `Main` retorna
+     * y el programa acaba «bien». Medido el 5-sep en el P4 y en la Discovery: un
+     * KILL sobre `GuiColorDemo` daba `status OK, exitCode 0`. Con `quantum=32`,
+     * el mismo programa daba `KILLED` — o sea que no era un valor equivocado,
+     * era una CARRERA, que es peor de diagnosticar y peor de fiarse.
+     *
+     * La bandera es la verdad: si se pidió parar, se paró. */
+    if (vm->kill_requested) return BPVM_KILLED;
     return BPVM_OK;
 }
