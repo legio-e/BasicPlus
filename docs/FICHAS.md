@@ -89,6 +89,36 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 
 ### ═══ V6 — LA VERSIÓN EN CURSO ═══
 
+### 🏁 LA UNIFICACIÓN, CONCLUIDA (Eduardo, 5-sep-2026)
+
+> *«Con eso creo que el proceso de unificación lo podemos dar por concluido. Ahora cualquier cosa
+> que implementemos nueva o reformemos prácticamente hay que hacer 1 vez. Eso nos permite crecer
+> de forma lineal, sin que el número de placas/micros afecte apenas.»*
+
+**Qué se cierra**: la serie `U1`–`U6` (transporte, REPL, stdlib embebida, tabla de handles,
+organización de la memoria), `P1`–`P2` (dos placas nuevas y la primera pantalla SPI) y `A1` (la
+arquitectura de ejecución: dos hilos de SO, `vm` e `io`, iguales en las cinco familias, con
+FreeRTOS en todas).
+
+**Con qué número se cierra**: el censo `A2` — **91,8 % del código de cada firmware es común**,
+7,6 % de familia y **0,7 % de placa**, medido por el `.map` del enlazador y no por las carpetas.
+Y lo único que queda como código de placa es **la pantalla** del P4 y del C6, que es donde debe
+estar.
+
+**Lo que eso significa en la práctica, y es lo que Eduardo señala**: el coste de una feature deja
+de multiplicarse por el número de placas. Cuando el C6 entró (ficha `P1.C6`) fueron **siete
+ficheros y una línea de cintura**; cuando `A1.2` llevó las dos tareas a la familia ESP32 fueron
+**veinte líneas en `esp32/common`** y las otras tres placas lo heredaron sin tocar nada; y `A1.3`
+se cerró **sin escribir código**, sólo grabando y midiendo. Ése es el crecimiento lineal.
+
+⚠️ **Y lo que NO cubre esta declaración**, porque conviene no confundir «concluido» con «no queda
+nada»: una **familia** nueva (un silicio con otro SDK) sigue costando su cintura entera —lo barato
+es la placa dentro de una familia, no la familia—; y quedan abiertos, con su ficha y su medida,
+`A1.6` (el hilo BP para `Gui.run()`), la migración de la plataforma de la Pico (parada por un 32 %
+sin explicar) y `#468` (la stdlib en pack XIP). Nada de eso es unificación pendiente: son features
+y una duda medida.
+
+
 El índice de todo lo aplazado está en `V6_BACKLOG.md`; los diseños ya trabajados, en
 `V6_IDEAS.md`. Aquí vive el estado.
 
@@ -2098,7 +2128,8 @@ tocar y cómo se comprueba.
 | **U4** | la **stdlib embebida**: un solo formato de blobs | ✅ 3-sep (`U4.1`) |
 | **U5** | la **tabla de handles**: darle módulo | ✅ 3-sep (`U5.1`) |
 | **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | ✅ 3-sep (`U6.11`: las 5 familias, verificadas en placa) |
-| **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | 🟡 abierta 4-sep: **dos hilos de SO, `vm` + `io`, iguales en todos los micros** (decisión de Eduardo, con medidas) |
+| **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | ✅ 5-sep: **dos hilos de SO, `vm` + `io`**, en las cinco familias y verificados en placa (`A1.6` aplazada y reorientada por Eduardo) |
+| **A2** | el **censo de proporciones** común / familia / placa | ✅ 5-sep: **91,8 % común**, 7,6 % familia, 0,7 % placa |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
 | **L1** | **lenguaje y compilador** | abierto 23-ago |
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |

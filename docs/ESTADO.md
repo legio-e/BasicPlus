@@ -183,7 +183,25 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    depurador por la cola de control). Fichas nuevas propuestas: migrar la Pico a
    `src/platform_freertos.c`; y el `Neopixel` de la familia ESP32.
 
-## ⏭️ AL RETOMAR — el orden lo dio Eduardo al parar (5-sep)
+## 🏁 LA UNIFICACIÓN, CONCLUIDA (Eduardo, 5-sep)
+
+*«Con eso creo que el proceso de unificación lo podemos dar por concluido. Ahora cualquier cosa
+que implementemos nueva o reformemos prácticamente hay que hacer 1 vez. Eso nos permite crecer de
+forma lineal, sin que el número de placas/micros afecte apenas.»*
+
+Cierran `U1`–`U6`, `P1`–`P2` y `A1`, con el número de `A2` detrás: **91,8 % del código de cada
+firmware es común**, 0,7 % de placa, y lo único específico que queda es la pantalla del P4 y del
+C6. La evidencia práctica del crecimiento lineal está en las tres últimas fichas: el C6 entró con
+siete ficheros, `A1.2` llevó las dos tareas a toda la familia ESP32 con veinte líneas, y `A1.3` se
+cerró **sin escribir código**.
+
+⚠️ Lo barato es la **placa dentro de una familia**, no la familia: un silicio con otro SDK sigue
+costando su cintura. Y quedan, con ficha y medida, `A1.6`, la migración de la plataforma de la
+Pico y `#468` — features y una duda medida, no unificación pendiente.
+
+### Lo que queda en la mesa (por si se retoma)
+
+## ⏭️ (anterior) — el orden que dio Eduardo al parar (5-sep)
 
 *«Rematamos todo lo que hay pendiente de A1. Luego, me gustaría conocer las proporciones de
 código específico del micro, el específico de la familia y el común a todos los micros. Después
