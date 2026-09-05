@@ -1876,6 +1876,37 @@ Entre lo que hay ahí sin verificar, y que pinta serio:
 ⏭️ Verificar uno a uno antes de tocar nada. La regla del proyecto vale aquí más que nunca: un
 hallazgo falso cuesta más que uno que falta, porque manda a mirar donde no está el problema.
 
+#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep)
+
+**La idea es de Eduardo, y es vieja**: *«una vez hablamos de hacer una captura de pantalla en el
+micro… para que cuando se probasen los programas gráficos, desde el PC se pudiese ver esa pantalla.
+Al final no lo concretamos pero la idea sigue ahí.»* Ahora tiene destinatario: es la pieza que le
+falta a la propuesta de pruebas con agente (`#444`), donde la pantalla es lo único que hoy exige
+**los ojos de Eduardo**.
+
+**El diseño, con los números, está en `docs/V6_IDEAS.md`.** Lo que hay que retener aquí:
+
+- 🔍 **Leer el framebuffer NO vale**: de las tres placas con pantalla, sólo la **Discovery** (LTDC)
+  tiene la imagen viva en memoria. El **P4** renderiza parcial —el `fb` de 1024×600 de
+  `gui_display_dsi.c:326` es el del rojo de arranque, no la pantalla— y el **C6** ni la tiene ni
+  **cabe** (115 200 B contra ~68 KB libres). `lv_snapshot_take()`, que es lo que usa el host,
+  reserva la pantalla entera: imposible en el C6.
+- ✅ **La forma que sí sirve en las tres**: engancharse al `flush` — invalidar, `lv_refr_now()`, y
+  cada banda que va al panel sale también por el cable. Cero memoria extra, común, ~2 líneas de
+  cintura por familia.
+- ✅ **El transporte ya existe**: `"bulk":N` (el de `GET`). Una banda = un mensaje.
+- ✅ **La costura de ejecución ya existe**: LVGL vive en el hilo `vm`, así que la petición entra por
+  la cola de control y la sirve `Gui.run()` en la guarda que puso `A1` (`src/builtins.c:970`,`:1015`).
+- ⚠️ **La cifra que falta y de la que cuelga todo**: cuánto comprime en RLE una pantalla real. En
+  crudo, la Discovery tarda **67 s** y el P4 **107 s** por UART a 115 200. Se mide **en el host,
+  gratis**, antes de tocar una placa. Plan B si no llega: submuestrear.
+- ⚠️ **Y lo que NO resuelve**: la captura es lo que LVGL **dibujó**, no lo que el panel **muestra**.
+  Un `gap` mal, una rotación al revés o el backlight apagado dan **PNG perfecto y pantalla negra** —
+  los tres fallos de `P2`, literalmente. Retira la repetición, no los ojos.
+
+⏭️ Orden: (1) medir la compresión en el host · (2) captura común + gancho del `flush` en el **C6**
+(el ciclo más barato) · (3) el lado del PC: montar bandas y escribir el PNG · (4) las otras dos.
+
 #### 🟡 `#468` — la stdlib en un pack XIP (memoria de la C6): ANALIZADA con números, a decidir (abierta 4-sep)
 
 **La dirección la dio Eduardo (4-sep):** *«En cuanto al consumo de memoria es cierto que vamos

@@ -1025,3 +1025,117 @@ El simulador sigue valiendo, pero por otro motivo: es la única forma de probar 
 
 📌 Nada de esto es infraestructura nueva: es escribir el manifiesto y juntar los guiones que hoy
 ya existen. Lo caro era conducir las placas, y eso ya está resuelto.
+
+
+---
+
+## La captura de pantalla EN EL MICRO — el testigo que le falta a las pruebas gráficas (Eduardo, 5-sep)
+
+> *«Creo que una vez hablamos de hacer una captura de pantalla en el micro. Mi idea era
+> precisamente para esto: para que cuando se probasen los programas gráficos, desde el PC se
+> pudiese ver esa pantalla. Al final no lo concretamos pero la idea sigue ahí.»*
+
+Encaja justo en el agujero que la propuesta de arriba deja al descubierto: **«la pantalla necesita
+los ojos de Eduardo»**. Los tres «✅ visto» de esta semana —los botones del C6, las esquinas
+girando, la paleta de la Discovery— los dio él mirando. Una captura no quita los ojos, pero quita
+la **repetición**.
+
+En el host ya existe desde hace tiempo (`BPVM_GUI_SHOT_MS` y el comando `shot` de
+`src/gui_display_sdl.c`, con su escritor de PNG sin dependencias). Lo que sigue es qué hace falta
+para tenerlo en la placa.
+
+### 1. La pregunta de verdad: ¿de dónde salen los píxeles?
+
+La respuesta intuitiva —«lee el framebuffer»— **no vale**, y eso se mide, no se supone:
+
+| placa | cómo pinta | ¿hay imagen viva en memoria? |
+|---|---|---|
+| **Discovery U5G9J** (LTDC) | `s_framebuffer[800*480]` estático, el LTDC lo barre por DMA | ✅ **sí**, 768 KB |
+| **ESP32-P4** (MIPI-DSI) | LVGL en `RENDER_MODE_PARTIAL`, buffer de `hres*120` en PSRAM | ❌ **no** — el `fb` de 1024×600 que hay en `gui_display_dsi.c:326` es el del **rojo de arranque** (G3), se queda vivo a propósito pero **no contiene la pantalla actual** |
+| **ESP32-C6** (ST7789 SPI) | `DRAW_LINES 24`, por bandas | ❌ **no**, y **no cabe**: 240×240×2 = **115 200 B** contra ~**68 KB** libres (el mínimo histórico medido en `chip_cfg.h`) |
+
+Y el camino del host tampoco se puede copiar tal cual: `lv_snapshot_take()` **reserva la pantalla
+entera** (115 KB en el C6 — imposible; 768 KB en la Discovery; 1,2 MB en el P4).
+
+📌 O sea: de las tres placas con pantalla, **sólo una** tiene píxeles que leer, y la más pequeña
+no tiene sitio para fabricarlos.
+
+### 2. La forma que sí sirve en las tres: engancharse al `flush`
+
+Las tres renderizan **por bandas** — es su naturaleza, no una limitación. Así que:
+
+> armar una bandera → invalidar la pantalla → `lv_refr_now()` → y **cada banda que LVGL manda al
+> panel sale también por el cable**.
+
+- **Cero memoria extra**: se reaprovecha el buffer de dibujo que ya existe.
+- **Funciona con render parcial**, que es lo que hacen las tres.
+- Es **código común** con ~2 líneas de cintura por familia (el `flush_cb` es de familia).
+- Y **el host hace lo mismo**, así que el artefacto sale igual desde el PC y desde la placa.
+
+### 3. El transporte ya existe — no hace falta protocolo nuevo, casi
+
+El wire v1 ya lleva bytes crudos: `GET` responde con `"bulk":N` y a continuación N bytes
+(`wire_v1_read_exact`). Así que **una banda = un mensaje con su propio `bulk`**, lo que además
+evita tener que saber el total por adelantado y evita el buffer grande:
+
+```
+PC  →  SHOT {id}
+        ← SHOT_BEGIN {w,h,fmt}
+        ← SHOT_BAND  {x1,y1,x2,y2,bulk:N} + N bytes      (una por flush)
+        ← SHOT_END   {bands,bytes}
+```
+
+El PC monta la imagen y escribe el PNG (Python trae `zlib`; y si algún día hiciera falta en el
+micro, el escritor de PNG **sin zlib** ya está escrito en `gui_display_sdl.c`).
+
+### 4. Los números del cable, que son los que mandan
+
+| placa | pantalla | crudo RGB565 | cable | tiempo en crudo |
+|---|---|---|---|---|
+| **C6** | 240×240 | 115 200 B | USB-Serial-JTAG | **< 1 s** |
+| **Discovery** | 800×480 | 768 000 B | UART 115 200 (11,5 KB/s) | **67 s** |
+| **P4** | 1024×600 | 1 228 800 B | UART 115 200 | **107 s** |
+
+⚠️ **En crudo, las dos pantallas grandes están fuera.** Y no es casualidad que sean justo las dos
+que van por UART lenta. Lo natural es **RLE sobre RGB565** (~30 líneas): una pantalla de GUI es
+casi toda tiradas planas del mismo color.
+
+📌 Y aquí va la única cifra que **no tengo**, y de la que cuelga el diseño entero: **cuánto
+comprime de verdad una pantalla real**. Se mide gratis en el host, antes de tocar la placa. Si no
+llega a ~10×, el plan B es **submuestrear** (a 1/4 la pregunta *«¿se ve bien?»* se sigue
+contestando, y cuesta cero).
+
+### 5. Quién lo ejecuta — y `A1` ya dejó la costura hecha
+
+LVGL no es reentrante y vive en el hilo `vm`; el hilo `io` **no puede tocarlo**. Así que la
+petición entra por la **cola de control** y la sirve la tarea `vm`, en la misma costura donde `A1`
+puso la guarda del KILL: `src/builtins.c:970` y `:1015`, dentro de `Gui.run()`. No hay maquinaria
+que inventar — es exactamente para esto para lo que sirve la arquitectura de dos hilos.
+
+Dos disparadores, como en el host:
+1. **El verbo `SHOT`** desde el PC, para el banco de pruebas.
+2. **`Gui.shot()` desde BasicPlus**, para que el programa se retrate **en el instante que importa**
+   — que muchas veces es a mitad, no al final.
+
+### 6. Qué resuelve y qué NO (importa más lo segundo)
+
+**Resuelve**: un PNG por programa gráfico. El agente **adjunta prueba** en vez de decir «parece que
+va»; Eduardo despacha veinte pantallas de una sentada en vez de presenciar veinte ejecuciones; y
+aparece un **oráculo de regresión** que hoy no existe — la misma placa, el mismo programa, antes y
+después.
+
+**No resuelve**, y conviene no venderlo: no es el oráculo dual-VM. El host y la placa no comparten
+resolución, así que comparar píxel a píxel host↔placa no va a ser. Placa↔placa en el tiempo, sí.
+
+⚠️ **Y la trampa, que ya nos ha mordido tres veces**: la captura es lo que LVGL **dibujó**, no lo
+que el panel **muestra**. Un `gap` mal puesto, una rotación al revés, el backlight apagado o una
+línea de SPI floja dan un **PNG perfecto y una pantalla negra** — que es literalmente lo que pasó
+en `P2`. La captura retira la repetición, no los ojos.
+
+### ⏭️ Orden propuesto
+
+1. **Medir la compresión** de pantallas reales en el host. Gratis, y decide el resto.
+2. La captura común + el gancho del `flush` en **una** placa: el **C6** (cable rápido y pantalla
+   pequeña — el ciclo más barato).
+3. El lado del PC: montar las bandas y escribir el PNG.
+4. Las otras dos. Si `A2` dice la verdad, deberían ser dos líneas cada una.
