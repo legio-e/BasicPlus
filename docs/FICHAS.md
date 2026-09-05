@@ -2554,9 +2554,34 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   la pantalla vive.
 
   📌 `G1` sigue absorbida aquí, pero con este enunciado y no con el de mover LVGL de hilo.
-- **`A1.7` — el depurador por la cola de control.** Pausa, paso y breakpoints como mensajes de
-  `io` a `vm` (hoy `pause_cb` lee el wire desde la tarea de la VM en la Pico). Verificar con el
-  IDE en la Pico y en la C6.
+- **✅ `A1.7` — HECHA (5-sep): el depurador por la cola de control. Se acaba la excepción.**
+
+  Hasta hoy, un RUN con breakpoints arrancaba **sin `io`**: el `next_cmd` del depurador LEE el
+  wire, y desde la tarea `vm`, así que con `io` en marcha habría dos lectores del mismo cable.
+  Era un interbloqueo deliberado, pero dejaba el caso «depurando» fuera de la arquitectura de A1.
+
+  **Lo que hay ahora**: `io` sigue siendo el único lector, y cuando la línea es del ramo de
+  depuración la **deposita** en una cola de control (io → vm) de donde el `next_cmd` la saca. Y
+  como durante una pausa quien contesta es la tarea `vm` mientras `io` puede estar drenando lo
+  último que imprimió el programa, el cable gana un **cerrojo de escritura**: sin él, dos líneas
+  se entrelazan y el IDE ve un JSON roto.
+
+  En el común, cuatro funciones (`bpvm_io_ctrl_push/pop`, `bpvm_io_tx_lock/unlock`). La cola es
+  de **líneas** y no de comandos ya parseados, a propósito: el JSON es de la familia, y subir su
+  tipo al común sería meter aquí algo que no es de aquí. Cuatro líneas de capacidad, y si se
+  llena **se descarta en vez de bloquear a `io`**, que también tiene que atender el KILL. En cada
+  familia, tres costuras pequeñas. El STM32 no anuncia `DEBUG` y no tiene esa costura.
+
+  **Verificado con una sesión de depuración completa por el wire, sin IDE** (`PAUSE` → `RUN` →
+  `BP_HIT` → `LOCALS` → `STEP` → `CONTINUE` → `EXITED`) en **Pico 2, C3 y S3**. Y la prueba de
+  que `io` corre de verdad mientras se depura no es que la sesión termine: es que **la salida del
+  programa llega en 1 mensaje `OUTPUT` en vez de 16** — el troceado por líneas es cosa de `io`.
+  Esa comprobación pilló que el S3 estaba corriendo todavía el firmware viejo.
+
+  🔬 Y un fallo que sólo la placa podía enseñar: en el ESP32 el adaptador del `poll` pasa
+  `vm = NULL` —el contrato de `io` da un puntero de usuario, no la VM— así que no encolaba nada, y
+  el C3 paraba en el breakpoint y después no contestaba a nada. La VM del RUN en curso va en un
+  estático, como ya hacía la Pico.
 
 **Orden:** `A1.1` → `A1.2` → `A1.3` y `A1.4` en bloque → `A1.5` → `A1.6` → `A1.7`. Cada una con
 los tres samples medidos antes y después en la placa que toque, y commit por paso. Si `OUTPUT`
