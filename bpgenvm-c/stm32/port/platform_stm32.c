@@ -29,6 +29,15 @@ void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m)  { (void)m; }
 int  bpvm_platform_cond_init(bpvm_platform_cond_handle_t* c)      { *c = (void*)1; return 0; }
 void bpvm_platform_cond_destroy(bpvm_platform_cond_handle_t* c)   { if (c) *c = NULL; }
 void bpvm_platform_cond_wait(bpvm_platform_cond_handle_t* c, bpvm_platform_mutex_handle_t* m) { (void)c; (void)m; }
+/* V6/A1 - sin hilos en bare-metal: `bpvm_io_start` recibe el -1 y sigue por el
+ * camino de un hilo, exactamente como antes. Con FreeRTOS (A1.5) esto pasa a ser
+ * un xTaskCreate por encima de la tarea de la VM, como en las demas familias. */
+int  bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
+                                     bpvm_thread_entry_t entry, void* arg) {
+    (void) t; (void) entry; (void) arg;
+    return -1;
+}
+
 int  bpvm_platform_cond_timed_wait(bpvm_platform_cond_handle_t* c, bpvm_platform_mutex_handle_t* m, int ms) { (void)c; (void)m; (void)ms; return 1; /* timeout */ }
 void bpvm_platform_cond_signal(bpvm_platform_cond_handle_t* c)    { (void)c; }
 void bpvm_platform_cond_broadcast(bpvm_platform_cond_handle_t* c) { (void)c; }

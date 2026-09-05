@@ -242,6 +242,35 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
  * vTaskCoreAffinitySet tras xTaskCreate) con la máscara correspondiente.
  * El call site (scheduler_smp.c, comm_pico.c) no cambia.
  */
+/* V6/A1.4 - el hilo `io`, a la MISMA prioridad que `vm_task` (que corre a
+ * tskIDLE_PRIORITY+2, ver pico/main.c). Con la creacion corriente nacia en +1, o
+ * sea por debajo, y NO SE EJECUTABA mientras la VM calculaba: un KILL enviado a
+ * mitad de un calculo no llegaba hasta que el programa acababa solo (medido el
+ * 5-sep: 9,9 s y EXITED OK en vez de KILLED). Con +2 el reparto por tiempo le da
+ * turno (KILL en 33 ms) sin expulsar a la VM en cada `print`: con +3 funcionaba
+ * igual de bien pero PrintBench subia de 3 958 a 4 832 ms. Atiende el wire y
+ * vuelve a bloquearse en su cola, asi que no le roba tiempo al interprete.
+ * 4 KB de pila: el sink arma el evento OUTPUT en pila. */
+int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
+                                    bpvm_thread_entry_t entry, void* arg) {
+    if (!t || !entry) return -1;
+    fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
+    if (!ft) return -1;
+    ft->exited = xSemaphoreCreateBinary();
+    if (!ft->exited) { vPortFree(ft); return -1; }
+    ft->entry = entry;
+    ft->arg = arg;
+    BaseType_t r = xTaskCreate(fr_thread_trampoline, "bpvm-io", 1024,
+                               ft, tskIDLE_PRIORITY + 2, &ft->task);
+    if (r != pdPASS) {
+        vSemaphoreDelete(ft->exited);
+        vPortFree(ft);
+        return -1;
+    }
+    *t = (void*) ft;
+    return 0;
+}
+
 int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
                                         bpvm_thread_entry_t entry, void* arg,
                                         int core_id) {

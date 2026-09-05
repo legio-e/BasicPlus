@@ -184,9 +184,19 @@ static void es_thread_trampoline(void* pv) {
     vTaskDelete(NULL);
 }
 
+static int es_thread_spawn_prio(bpvm_platform_thread_handle_t* t,
+                                bpvm_thread_entry_t entry, void* arg,
+                                BaseType_t core, UBaseType_t prio);
+
 static int es_thread_spawn(bpvm_platform_thread_handle_t* t,
                            bpvm_thread_entry_t entry, void* arg,
                            BaseType_t core) {
+    return es_thread_spawn_prio(t, entry, arg, core, tskIDLE_PRIORITY + 1);
+}
+
+static int es_thread_spawn_prio(bpvm_platform_thread_handle_t* t,
+                                bpvm_thread_entry_t entry, void* arg,
+                                BaseType_t core, UBaseType_t prio) {
     if (!t || !entry) return -1;
     es_thread_t* et = (es_thread_t*) pvPortMalloc(sizeof(es_thread_t));
     if (!et) return -1;
@@ -196,7 +206,7 @@ static int es_thread_spawn(bpvm_platform_thread_handle_t* t,
     et->arg = arg;
     BaseType_t r = xTaskCreatePinnedToCore(es_thread_trampoline, "bpvm-thread",
                                            BPVM_ESP32_THREAD_STACK_BYTES,
-                                           et, tskIDLE_PRIORITY + 1,
+                                           et, prio,
                                            &et->task, core);
     if (r != pdPASS) {
         vSemaphoreDelete(et->exited);
@@ -205,6 +215,18 @@ static int es_thread_spawn(bpvm_platform_thread_handle_t* t,
     }
     *t = (void*) et;
     return 0;
+}
+
+/* V6/A1 - el hilo `io`, a la MISMA prioridad que la tarea que ejecuta la VM (nunca
+ * por debajo, y tampoco por encima: ver el porque en bpvm_platform.h). En ESP-IDF esa
+ * es la tarea `main` (CONFIG_ESP_MAIN_TASK_PRIO, 1 por defecto), asi que aqui va
+ * a 1: `io` atiende el wire aunque la VM este calculando, y como se bloquea en su
+ * cola en cuanto no hay nada, no le quita tiempo (medido: fib(28) igual).
+ * Sin afinidad a proposito: en el S3 y el P4 el planificador la pondra donde no
+ * moleste, y fijarla al nucleo de I/O es cosa de A1.3 con las placas delante. */
+int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
+                                    bpvm_thread_entry_t entry, void* arg) {
+    return es_thread_spawn_prio(t, entry, arg, tskNO_AFFINITY, tskIDLE_PRIORITY + 1);
 }
 
 int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,

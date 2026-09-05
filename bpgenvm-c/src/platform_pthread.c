@@ -116,6 +116,13 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* th,
  * scheduler del OS sabe mejor que nosotros dónde colocar los threads.
  * core_id se ignora silenciosamente. El handle es 100% compatible con
  * `bpvm_platform_thread_join`. */
+/* V6/A1 - en el PC no hay prioridades que repartir: el SO decide, y `io` pasa la
+ * mayor parte del tiempo bloqueado en su cola. La de siempre. */
+int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
+                                    bpvm_thread_entry_t entry, void* arg) {
+    return bpvm_platform_thread_create(t, entry, arg);
+}
+
 int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* th,
                                         bpvm_thread_entry_t entry, void* arg,
                                         int core_id) {

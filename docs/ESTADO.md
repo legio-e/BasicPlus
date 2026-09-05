@@ -150,8 +150,16 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    de un tick daba 0 y no esperaba, así que `io` giraba en vacío y fib(28) tardaba 140 600 ms.
    Arreglado en ESP32 y Pico (redondeo hacia arriba). Pasó los 38 samples del PC con el fallo
    dentro — la cascada haciendo su trabajo.
-   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA) y `A1.4`
-   (Pico: `vm_task` a las dos tareas comunes, y se va `comm_pico.c`).
+14. ✅ **`A1.4` HECHA (5-sep): la Pico 2 con las dos tareas.** Mismo gesto que en el ESP32.
+   Medido: cálculo igual (fib(28) 17 091 vs 17 157 ms), `AllocBench` +3,6 %, **2 000 líneas de
+   7 694 → 3 958 ms (1,9×)**, 6× menos mensajes, 3,4× menos bytes, KILL en 33 ms.
+   🔬 **Y el segundo bug que sólo se ve en placa: LA PRIORIDAD ES CONTRATO.** El hilo `io` nacía
+   por DEBAJO de `vm_task` en la Pico y no se ejecutaba mientras el programa calculaba: un KILL
+   no llegaba nunca (9,9 s y `EXITED OK`). El contrato gana `bpvm_platform_thread_create_io` y la
+   regla, medida en las dos placas: **`io` a la MISMA prioridad que la VM** — por debajo no
+   funciona, por encima cuesta caudal (C6 486 → 848 ms; Pico 3 958 → 4 832).
+   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA; hacen falta
+   las placas conectadas) y `A1.5` (STM32 con FreeRTOS).
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

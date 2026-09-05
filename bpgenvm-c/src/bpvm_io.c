@@ -113,7 +113,11 @@ int bpvm_io_start(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap) {
     /* El puntero se publica ANTES de arrancar el hilo: en cuanto exista, el
      * lazo puede tocar la cola, y `emit_text` puede empezar a encolar. */
     vm->io = io;
-    if (bpvm_platform_thread_create(&io->th, io_loop, io) != 0) {
+    /* V6/A1 — `..._create_io`, no la corriente: `io` va POR ENCIMA de la VM en
+     * su familia. Con la prioridad de un hilo cualquiera, en la Pico nacía por
+     * debajo de `vm_task` y no se ejecutaba mientras el programa calculaba —
+     * un KILL tardaba 9,9 s en llegar (5-sep). La prioridad es contrato. */
+    if (bpvm_platform_thread_create_io(&io->th, io_loop, io) != 0) {
         vm->io = NULL;
         bpvm_oq_destroy(&io->oq);
         bpvm_free(io);

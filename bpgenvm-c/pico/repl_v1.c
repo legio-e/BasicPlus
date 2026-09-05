@@ -28,6 +28,7 @@
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
+#include "bpvm_io.h"         /* V6/A1.4: el segundo hilo, comun a todas las familias */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
 #include "bpvm_mdn_scan.h"   /* V5/H4: el escaneo del .mdn, compartido */
 
@@ -856,6 +857,30 @@ static void latido(bpvm_t* vm) {
     }
 }
 
+static int pico_run_poll_cb(bpvm_t* vm, void* user);
+
+/* -- V6/A1.4 - LAS DOS TAREAS, TAMBIEN EN LA PICO --------------------------
+ *
+ * Igual que en el PC y en la familia ESP32: durante un RUN esta tarea (`vm_task`)
+ * ejecuta opcodes y el hilo `io` (comun, src/bpvm_io.c) atiende el wire y enmarca
+ * la salida por LINEAS. Lo unico de esta placa son las dos costuras de abajo.
+ *
+ * La cola, 1 KB: en la Pico la salida es USB CDC y ahi el cuello es el
+ * transporte, no el amortiguador (medido: 2 000 lineas costaban 7,7 s con un
+ * hilo, casi todo esperando al USB).
+ *
+ * `s_io_vm` existe porque el `poll` de esta placa SI necesita la VM (el latido
+ * del LED), y el contrato de `io` solo pasa un puntero de usuario, que aqui es
+ * el contexto del sink. Un solo RUN a la vez (lo guarda s_active_session), asi
+ * que un estatico es la forma honesta de decirlo. */
+#define PICO_IO_OQ_BYTES 1024
+static bpvm_t* s_io_vm = NULL;
+
+static int pico_io_poll(void* user) {
+    (void) user;
+    return pico_run_poll_cb(s_io_vm, NULL);   /* el de siempre: latido, KILL, HELLO */
+}
+
 static int pico_run_poll_cb(bpvm_t* vm, void* user) {
     (void) user;
     if (s_latido_on) latido(vm);
@@ -1182,6 +1207,14 @@ static void run_module_path(const char* path, long id) {
     s_kill_ack_id = -1;
     if (!debugging) bpvm_set_poll(vm, pico_run_poll_cb, NULL);
 
+    /* V6/A1.4 - arranca `io`. CON EL DEPURADOR ARMADO, NO: su `pause_cb` lee el
+     * USB desde ESTA tarea y dos lectores del mismo transporte es una carrera
+     * (el mismo interbloqueo que esta unas lineas mas abajo para el camino SMP,
+     * y por el mismo motivo). Se resuelve en A1.7. */
+    s_io_vm = vm;
+    bpvm_io_ops_t io_ops = { pico_io_poll, v1_output_sink, &sink_ctx };
+    int con_io = !debugging && bpvm_io_start(vm, &io_ops, PICO_IO_OQ_BYTES) == 0;
+
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     log_printf("RUN/v1 %s session=%ld", path, session);
     bpvm_status_t rs;
@@ -1197,6 +1230,11 @@ static void run_module_path(const char* path, long id) {
 #else
     rs = bpvm_run(vm);
 #endif
+    /* Parar `io` ANTES de nada mas: drena la cola entera, asi que al volver de
+     * aqui la ultima linea del programa YA salio por el USB, y el wire vuelve a
+     * ser de esta tarea (que es quien manda KILL_REPLY y EXITED). */
+    if (con_io) bpvm_io_stop(vm);
+    s_io_vm = NULL;
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     /* #440 — desarmar SIEMPRE: la siguiente carga tiene que poder escribir el
      * código de los módulos, y dejar el MPU puesto convertiría el Run siguiente

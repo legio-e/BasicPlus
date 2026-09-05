@@ -2303,8 +2303,58 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   es lo que cierra la ficha. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
   como tareas propias: pasan a ser el transporte de `io`. Si hace falta tocar algo de la familia
   para que arranquen, es que `A1.2` dejó algo en la C6 que era común.
-- **`A1.4` — Pico 2.** `vm_task` → las dos tareas comunes; `comm_pico.c` se va (era la copia); el
-  camino SMP se queda detrás de su opción, sobre el mismo `io`. Verificar en Pico 2 y Metro.
+- **✅ `A1.4` — HECHA (5-sep): la Pico 2 con las dos tareas.**
+
+  Mismo gesto que en el ESP32 (un adaptador de `poll` y el arranque de `io` alrededor de
+  `bpvm_run`, con el `v1_output_sink` de siempre), y el mismo interbloqueo con el depurador. Sólo
+  hizo falta un detalle propio: el `poll` de esta placa necesita la VM (el latido del LED) y el
+  contrato de `io` pasa un puntero de usuario, que aquí es el contexto del sink — así que la VM
+  del RUN en curso se guarda en un estático, que es honesto porque `s_active_session` ya
+  garantiza un RUN a la vez.
+
+  **Medido en la Pico 2** (mismo `.mod`, firmware de un hilo del 3-sep → el de hoy):
+
+  | Medida | 1 hilo | 2 hilos | |
+  |---|---|---|---|
+  | `Bench`: fib(28) ×2 | 17 157 ms | **17 091 ms** | igual |
+  | `AllocBench`: 20 000 asignaciones + GC | 10 394 ms | **10 766 ms** | +3,6 % |
+  | `PrintBench`: 2 000 líneas | 7 694 ms | **3 958 ms** | **1,9×** |
+  | · mensajes `OUTPUT` | 12 016 | **2 001** | **6×** menos |
+  | · bytes por el wire | 820 KB | **239 KB** | **3,4×** menos |
+  | KILL calculando / imprimiendo | — | **33 / 85 ms** | |
+
+  `comm_pico.c` (y `comm_host.c`) quedan inertes: sólo los referencia el camino SMP, que ya no
+  arranca su comm task si hay `io`. Se borran cuando ese camino se rehaga sobre `io`, que es el
+  trabajo de las dos VM sobre una cola — no antes, porque hoy son los únicos que dan esos
+  símbolos.
+
+  ### 🔬 Y la segunda cosa que sólo se ve en placa: LA PRIORIDAD ES CONTRATO
+
+  Con el hilo `io` creado como un hilo cualquiera, en la Pico nacía a `tskIDLE_PRIORITY+1` y
+  `vm_task` corre a `+2`: **por debajo**. Resultado: `io` no se ejecutaba mientras el programa
+  calculaba, y un KILL enviado a mitad de un cálculo **no llegaba nunca** — el programa terminaba
+  solo, 9,9 s después, con `EXITED OK` en vez de `KILLED`. En el ESP32 no se veía porque allí la
+  tarea `main` y el hilo corriente van las dos a prioridad 1.
+
+  Así que el contrato de plataforma gana una función, `bpvm_platform_thread_create_io`, y una
+  regla con su número: **`io` a la MISMA prioridad que la tarea que ejecuta la VM, nunca por
+  debajo — y tampoco por encima.** Las tres opciones, medidas:
+
+  | `io` respecto a la VM | KILL calculando | `PrintBench` C6 | `PrintBench` Pico |
+  |---|---|---|---|
+  | por debajo (Pico, accidental) | **no llega** (9,9 s, `OK`) | — | — |
+  | por encima (+1) | 36 ms | 848 ms | 4 832 ms |
+  | **igual** | **15–33 ms** | **486 ms** | **3 958 ms** |
+
+  Por encima funciona pero cuesta caudal: cada `print` despierta a `io` y expulsa a la VM, así
+  que se drena en tragos pequeños. A la misma prioridad, el reparto por tiempo del RTOS le da
+  turno de sobra y drena en tragos grandes. Donde no hay prioridades (el PC) es la creación de
+  siempre; donde no hay hilos (STM32 hasta `A1.5`) devuelve -1 y `bpvm_io_start` se lo traga: la
+  VM sigue por el camino de un hilo, como antes.
+
+  📌 Dos bugs en dos días con la misma forma —**el PC verde y la placa no**— y los dos en la capa
+  de plataforma, no en el diseño: la espera que no esperaba y la prioridad que no era. Es lo que
+  la cascada promete y lo que un arnés de host solo no puede dar.
 - **`A1.5` — STM32 con FreeRTOS.** El kernel en los dos proyectos CubeIDE (linked folder y
   `.cproject`: el `.project` es local de Eduardo, ver la receta headless), `platform_stm32.c`
   sobre FreeRTOS (hoy devuelve «sin threads»), las dos tareas; el wire por IRQ alimenta a `io`.

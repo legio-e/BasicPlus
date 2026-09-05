@@ -72,6 +72,30 @@ int  bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
                                          void* arg,
                                          int core_id);
 
+/* V6/A1 - EL HILO `io`, y por que necesita su propia primitiva.
+ *
+ * `io` atiende el transporte, y tiene que atenderlo AUNQUE LA VM ESTE
+ * CALCULANDO. Con la creacion corriente hereda una prioridad cualquiera, y ahi
+ * el reparto deja de funcionar: en la Pico, `vm_task` corre a tskIDLE_PRIORITY+2
+ * y el hilo corriente nace en +1, o sea POR DEBAJO - un KILL enviado durante un
+ * calculo no llegaba hasta que el programa terminaba solo (medido el 5-sep: 9,9 s
+ * de retraso y EXITED OK en vez de KILLED, mientras que en el ESP32, donde las
+ * dos van a la misma prioridad, llegaba en 18 ms).
+ *
+ * Asi que la prioridad no es un detalle de afinacion: es parte del contrato:
+ * `io` va a la MISMA prioridad que la tarea que ejecuta la VM, NUNCA por debajo.
+ * Igual, no por encima, y esto tambien esta medido (5-sep, C6 y Pico 2): con `io`
+ * por ENCIMA, cada `print` lo despierta y expulsa a la VM, y las 2 000 lineas de
+ * PrintBench pasaron de 470 a 848 ms en la C6 y de 3 958 a 4 832 en la Pico. A la
+ * misma prioridad, el reparto por tiempo del RTOS le da turno de sobra (un KILL
+ * en 33 ms) y drena en tragos grandes. Donde no hay
+ * prioridades (pthread) es la creacion de siempre; donde no hay hilos (STM32
+ * bare-metal, hasta A1.5) devuelve -1 y `bpvm_io_start` se lo traga: la VM sigue
+ * por el camino de un hilo, como antes. */
+int  bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
+                                     bpvm_thread_entry_t entry, void* arg);
+
+
 /* Timestamp en ms (monotonic). Para Java equiv de System.currentTimeMillis().
  * El offset 0 es arbitrario; sólo importan diferencias. */
 int64_t bpvm_platform_now_ms(void);
