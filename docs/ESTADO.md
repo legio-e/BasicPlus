@@ -90,14 +90,60 @@ sin girar); y color y fuente son render-only por contrato.
 ⚠️ Y una tesis mía **falsada al medirla**: no es cierto que sólo cambie la línea `screen` al cambiar
 de resolución — `Gui.bp:824` lee el tamaño de pantalla y **todo el camino Forms** se mueve con ella.
 
-### ⏭️ Para mañana
+### ⏭️ Para mañana — `E1`, con el reconocimiento YA HECHO
 
-**`E1` — el IDE y el wire.** Son seis puntos y están listados en `FICHAS.md`; el único que huele a
-bug de verdad es *«el verbo `RESET` no llega con un RUN vivo»* (`#452`) — y conviene mirarlo con `A1`
-cerrada, porque **KILL sí llega** durante un RUN (15-18 ms medidos), así que la diferencia entre los
-dos caminos debería dar la respuesta sola.
-⚠️ **Antes de tocar nada del IDE**: la trampa del fat-jar — `BpIde` empaqueta **su propia copia** del
-compilador, y **no se reconstruye con el IDE abierto**.
+Dejé corriendo un reconocimiento de los seis puntos de `E1` (un agente por punto + verificación
+adversarial). Lo que trajo, y **`FICHAS.md` ya está corregida** con ello:
+
+🟢 **`E1` tiene CUATRO puntos vivos, no seis.** El árbol por color está **hecho desde el 26-ago**
+(`9cc33ee6` + `fb66e579`, `PicoExplorer.java:1296`) y seguía listado como pendiente. *La lista mentía
+al alza justo en el hito que se iba a abordar* — [[no-acumular-pendientes]] en su forma más barata.
+
+**1. `#452` primero, porque es LO ROTO — y su enunciado era FALSO.** RESET **sí llega**: la placa lo
+lee, lo parsea y lo **rechaza a propósito** con `ERROR BUSY`, porque el poll que atiende el cable
+durante un RUN tiene **lista blanca** (KILL, HELLO). Reproducido en el simulador. La diferencia con
+KILL cabe en una línea: KILL tiene rama en el poll y **delega**; RESET sólo existe en el despachador
+de reposo, al que no se vuelve hasta que `bpvm_run()` retorna.
+- 🔴 **Es además una divergencia de las dos VMs que no estaba escrita**: miVM **sí** contesta RESET
+  con un RUN corriendo — y no porque nadie lo pensara, sino porque su lector es un hilo aparte
+  (`DebugServer.java:175`).
+- 🔴 **Y el IDE se traga el BUSY**: `BpvmClient.reset()` captura la `IOException` (y `WireError` la
+  extiende) y la manda a un `diag()` que puede no ir a ninguna parte; la consola imprime «reset
+  enviado». El usuario cree que reinició, **la placa sigue corriendo y encima se ha quedado sin
+  conexión**. *Errores sí, silenciosos no*, en estado puro.
+- Se parte en dos: **1a sin placa** (que el IDE deje de mentir + el poll del simulador) y **1b con
+  placas** (copiar la forma de KILL en los **tres** ficheros de REPL — las cinco familias son tres).
+
+**2. El tiempo del RUN (sesión corta), pero el número de la ficha CADUCÓ.** El `durationMs` del SAVE
+vale 0 siempre (los `fs_save` son no-ops desde littlefs; comprobado en el `.map`, no en el comentario:
+`.text.fs_save … 0x2`). El bueno es el **`elapsedMs` del `EXITED`**, que mandan los **cinco** emisores
+y que el IDE no ha parseado **nunca**.
+⚠️ Decisión antes de enseñarlo: **no miden lo mismo** — miVM arranca el cronómetro antes de cargar y
+enlazar, la placa justo antes de `bpvm_run`. Sin decidirlo, el PC parecerá siempre más lento.
+
+**3. El `capabilities` del `HELLO` (sesión corta, sin tocar imágenes):** cero ocurrencias en las 39
+clases del IDE, y las tres cadenas **ya divergieron** — el ESP32 no declara `DEBUG` **aunque lo tiene
+cableado entero**, y el STM32 tampoco, que ahí sí es correcto (`stm32_repl.c` no llama a
+`bpvm_dbg_wire_*` ni una vez, confirmado en el `.map` del Nucleo). Síntoma que ve el usuario: «Debug
+on Device» contra una Nucleo → `UNSUPPORTED`.
+
+**Lo que NO tocar mañana**, y por qué:
+- **`#412`** no está roto, **falta** — y arrastra un **builtin nuevo (id 232)** que obliga a
+  reflashear las cinco familias **a la vez** que se publica el compilador. Va con una ronda de flasheo.
+- **Probar BD sin placa**: `make test-sqldemo` ya corre el ciclo **entero** en el PC. Lo que queda es
+  una decisión de diseño, no una sesión. *(Y hoy `SQLite.pack`, 1 130 496 B, ni monta contra la región
+  simulada de 1 MB.)*
+- **CRC de origen**: sesión larga, y el mensaje **no cabe** — `link_error` es `char[160]` y el texto
+  actual ya gasta 78.
+
+**Dos hallazgos de propina, anotados aquí para que no se pierdan:**
+- 🟡 `scheduler_smp.c:114` y `:158` llaman al `poll_cb` **sin la guarda `vm->io == NULL`** que sí
+  tienen `scheduler.c:100` y `builtins.c:970`/`:1015`. **Latente, no vivo** (SMP es opt-in y no está
+  en el build por defecto), pero es exactamente la clase de fallo que cerró `A1.7`.
+- 🟡 El guardián del fat-jar (`#429`) compara la fecha del **compilador** embebido — pero el IDE
+  empaqueta **también la VM-Java**, y para eso no avisa nadie.
+
+⚠️ Y la trampa de siempre antes de tocar el IDE: **el fat-jar no se reconstruye con el IDE abierto**.
 
 ## ⏭️ AL RETOMAR — `P2` CERRADA (4-sep): la pantalla del C6 entera. Empieza la segunda mitad de V6
 

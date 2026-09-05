@@ -3327,10 +3327,30 @@ de cada una sigue en su sitio.
 - **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
 - ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.~~ **HECHO el 2-sep** (`#466`, paso 3): el IDE pregunta por cada dependencia con `STAT` por nombre y sólo sube lo que falta o es más viejo.
 - **Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC *(idea de Eduardo)*.
-- **El verbo `RESET` no llega con un RUN vivo** *(era `#452`)*.
-- **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC.
-- **El árbol de ficheros por COLOR** según el tipo · **enseñar el `durationMs`** que la
-  placa ya manda y nadie imprime.
+- **El verbo `RESET` no llega con un RUN vivo** *(era `#452`)*. ⚠️ **El enunciado es FALSO**,
+  comprobado el 5-sep: RESET **sí llega** — la placa lo lee, lo parsea y lo **rechaza a propósito**
+  con `ERROR BUSY`, porque el poll que atiende el cable durante un RUN tiene **lista blanca**
+  (KILL, HELLO). Reproducido en el simulador. La diferencia con KILL, en una línea: KILL tiene rama
+  en el poll y **delega** el trabajo (`repl_v1.c:931`); RESET sólo existe en el despachador de
+  reposo (`:1533`), al que no se vuelve hasta que `bpvm_run()` retorna.
+- **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC. ⚠️ **La estimación caducó** (5-sep): el
+  ciclo entero YA corre en el PC (`make test-sqldemo` → `sqldemo.exe SqlDemo.mod`, con `[status=OK]`).
+  Lo que falta no es la pieza que decía la ficha, es que ese camino vive en un binario de pruebas y
+  no en los que usa la gente.
+- ✅ ~~**El árbol de ficheros por COLOR** según el tipo~~ — **HECHO el 26-ago** (`9cc33ee6` el color
+  y `fb66e579` la corrección de paleta que pidió Eduardo en pantalla): `PicoExplorer.java:1296`,
+  cinco familias semánticas con el **rojo reservado** a propósito. Se quedó sin tachar en esta lista
+  hasta el 5-sep. *(Queda el «paso 2», el rojo para ficheros con problema, que la propia ficha aparca.)*
+- **Enseñar el tiempo que la placa ya manda y nadie imprime.** ⚠️ **El número que decía esta ficha
+  caducó**: el `durationMs` del SAVE vale **0 siempre** — los tres `fs_save` son no-ops desde
+  littlefs, comprobado en el ARTEFACTO (el `.map` de la Discovery: `.text.fs_save … 0x2`, dos bytes).
+  El bueno es el **`elapsedMs` del `EXITED`**, que mandan **los cinco emisores** (las cuatro C, el
+  sim y miVM) y que el IDE **no ha parseado nunca** (`git log -S elapsedMs -- BpIde/` sale vacío).
+  ~15 líneas en tres ficheros. ⚠️ Decisión previa: **no miden lo mismo** — miVM arranca el
+  cronómetro al asignar la sesión, **antes de cargar y enlazar** (`DebugServer.java:110`); la placa
+  justo antes de `bpvm_run` (`repl_v1.c:1264`). Sin decidirlo, el PC parecerá siempre más lento.
+
+📌 **E1 tiene CUATRO puntos vivos, no seis** (5-sep): dos ya estaban hechos y sin tachar.
 
 #### 🔌 P1 — las placas nuevas: ESP32-C3 y ESP32-C6
 
