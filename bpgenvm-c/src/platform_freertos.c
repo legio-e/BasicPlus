@@ -15,10 +15,18 @@
  * queda con el viejo sin que nadie lo diga. Así que lo que hay aquí es LA
  * implementación, y cada familia pone sólo lo suyo.
  *
- * ⚠️ Hoy lo compila SÓLO el STM32. La Pico sigue con su fichero hasta que se
- * pueda verificar EN PLACA el cambio — mover código que funciona a un sitio
- * nuevo sin poder ejecutarlo sería exactamente el «verde falso» que aquí se
- * persigue. Esa migración es una ficha propia, y es una BORRADO, no una fusión.
+ * ⚠️ Hoy lo compila SÓLO el STM32, y la Pico NO — pero ya no por precaución:
+ * SE INTENTÓ Y SE MIDIÓ (5-sep). Con este fichero, la Pico hacía las 2 000 líneas
+ * de `PrintBench` en **5 330 ms** en vez de **4 040** con el suyo: un 32 % peor,
+ * repetible a ±10 ms en cuatro pasadas y aislado por bisección (se volvió a su
+ * fichero y el tiempo volvió). Curiosamente el KILL MEJORÓ, de 33 ms a 2, o sea
+ * que `io` se despierta antes — la diferencia está en cómo se reparte el turno,
+ * no en trabajo de más, y ésa es la pista para quien lo retome.
+ *
+ * No se subió porque no se supo explicar, que es la regla de esta casa: no se
+ * publica lo que no se entiende, aunque compile y funcione. La migración sigue
+ * siendo lo correcto —evitar la copia privada que no crece con el común— pero
+ * pide antes encontrar ese 32 %.
  *
  * ─── LO QUE CADA FAMILIA TIENE QUE PONER APARTE ──────────────────────────────
  *
@@ -194,6 +202,7 @@ typedef struct {
     SemaphoreHandle_t   exited;
     bpvm_thread_entry_t entry;
     void*               arg;
+    int                 core_id;   /* -1 = sin afinidad; lo lee el gancho de abajo */
 } fr_thread_t;
 
 /* ⚠️ EL HILO NO SE BORRA A SÍ MISMO, Y ESO NO ES UN DETALLE.
@@ -211,8 +220,16 @@ typedef struct {
  * Así que el hilo avisa y se DUERME, y es `join` quien lo borra: borrar una
  * tarea que no es la actual sí libera su memoria en el acto, sin depender de
  * que nadie más tenga turno. */
+/* #153 — la familia puede querer hacer algo EN EL CORE del hilo antes de que
+ * empiece: la Pico registra ahí el core como víctima de lockout de flash, para
+ * que el core que escribe pueda parquearlo. Por defecto no hace nada, y esa es
+ * la forma de que el común no sepa de flash ni de cores. */
+void bpvm_platform_thread_arranca(int core_id);
+__attribute__((weak)) void bpvm_platform_thread_arranca(int core_id) { (void) core_id; }
+
 static void fr_thread_trampoline(void* pv) {
     fr_thread_t* ft = (fr_thread_t*) pv;
+    bpvm_platform_thread_arranca(ft->core_id);
     ft->entry(ft->arg);
     if (ft->exited) xSemaphoreGive(ft->exited);
     vTaskSuspend(NULL);
@@ -220,14 +237,32 @@ static void fr_thread_trampoline(void* pv) {
 }
 
 static int fr_spawn(bpvm_platform_thread_handle_t* t, bpvm_thread_entry_t entry,
-                    void* arg, const char* nombre, uint16_t pila, UBaseType_t prio) {
+                    void* arg, const char* nombre, uint16_t pila, UBaseType_t prio,
+                    int core_id) {
     if (!t || !entry) return -1;
     fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
     if (!ft) return -1;
     ft->exited = xSemaphoreCreateBinary();
     if (!ft->exited) { vPortFree(ft); return -1; }
-    ft->entry = entry;
-    ft->arg   = arg;
+    ft->entry   = entry;
+    ft->arg     = arg;
+    ft->core_id = core_id;
+#if (configNUMBER_OF_CORES > 1) && (configUSE_CORE_AFFINITY == 1)
+    /* Con SMP y un core pedido, se fija la afinidad al crear. Hoy ninguna familia
+     * lo activa (la Pico va con configNUMBER_OF_CORES=1 hasta que cierre #153),
+     * pero el camino vive aquí y no en una copia de familia. */
+    if (core_id >= 0 && core_id < configNUMBER_OF_CORES) {
+        UBaseType_t mascara = (UBaseType_t) 1U << core_id;
+        if (xTaskCreateAffinitySet(fr_thread_trampoline, nombre, pila, ft, prio,
+                                    mascara, &ft->task) != pdPASS) {
+            vSemaphoreDelete(ft->exited);
+            vPortFree(ft);
+            return -1;
+        }
+        *t = (void*) ft;
+        return 0;
+    }
+#endif
     if (xTaskCreate(fr_thread_trampoline, nombre, pila, ft, prio, &ft->task) != pdPASS) {
         vSemaphoreDelete(ft->exited);
         vPortFree(ft);
@@ -239,13 +274,13 @@ static int fr_spawn(bpvm_platform_thread_handle_t* t, bpvm_thread_entry_t entry,
 
 int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
                                  bpvm_thread_entry_t entry, void* arg) {
-    return fr_spawn(t, entry, arg, "bpvm-thr", BPVM_FR_STACK_THR, BPVM_FR_PRIO_VM);
+    return fr_spawn(t, entry, arg, "bpvm-thr", BPVM_FR_STACK_THR, BPVM_FR_PRIO_VM, -1);
 }
 
 /* El hilo `io`: MISMA prioridad que la VM (ver la cabecera). */
 int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
                                     bpvm_thread_entry_t entry, void* arg) {
-    return fr_spawn(t, entry, arg, "bpvm-io", BPVM_FR_STACK_IO, BPVM_FR_PRIO_VM);
+    return fr_spawn(t, entry, arg, "bpvm-io", BPVM_FR_STACK_IO, BPVM_FR_PRIO_VM, -1);
 }
 
 /* Sin SMP la afinidad no significa nada: se acepta y se ignora, que es lo que
@@ -253,8 +288,10 @@ int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
 int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
                                         bpvm_thread_entry_t entry, void* arg,
                                         int core_id) {
-    (void) core_id;
-    return bpvm_platform_thread_create(t, entry, arg);
+    /* Sin SMP la afinidad no significa nada: `fr_spawn` la ignora y crea el hilo
+     * corriente, que es lo que dice el contrato. */
+    return fr_spawn(t, entry, arg, "bpvm-thr-pin", BPVM_FR_STACK_THR,
+                    BPVM_FR_PRIO_VM, core_id);
 }
 
 void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {

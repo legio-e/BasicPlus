@@ -2297,10 +2297,36 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   baterías **en el PC** con este fallo dentro, porque el `pthread` del PC sí espera 5 ms. Lo
   destapó el primer número de la placa. Es la cascada funcionando: el PC caza la lógica, el micro
   caza lo que depende del reloj del silicio.
-- **`A1.3` — el resto de la familia ESP32 (S3, C3, P4) SIN código nuevo:** recompilar y verificar
-  en placa. **El código ya está** (5-sep): `A1.2` vive entero en `esp32/common`, así que las tres
-  lo heredan sin tocar nada — compilan las cuatro imágenes. Falta la verificación EN PLACA, que
-  es lo que cierra la ficha. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
+- **✅ `A1.3` — HECHA para C3 y P4 (5-sep); el S3 queda pendiente de conectarlo.**
+
+  Sin una línea de código nuevo: `A1.2` vive entero en `esp32/common`, así que bastó recompilar y
+  grabar. Las dos placas llevaban firmware del **1-sep**, o sea anterior a toda la serie, y ahí
+  está el matiz honesto: **su «antes» no es sólo `A1`**, incluye `U4`, `U5`, `U6` y `#466`.
+
+  | Medida | C3 antes | C3 después | P4 antes | P4 después |
+  |---|---|---|---|---|
+  | `PrintBench` 2 000 líneas | 1 610 ms | **305 ms** (5,3×) | 71 075 ms | **20 365 ms** (3,5×) |
+  | · mensajes `OUTPUT` | 11 900 | **1 997** | 12 016 | **2 001** |
+  | · bytes por el wire | 813 KB | **239 KB** | 820 KB | **239 KB** |
+  | `AllocBench` + GC | 12 831 ms | 14 174 ms | 4 936 ms | **4 900 ms** |
+  | `Bench` fib(28) ×2 | — | 22 740 ms | — | — |
+  | KILL calculando / imprimiendo | — | **50 / 49 ms** | — | **17 / 837 ms** |
+
+  El P4 sale por un puente USB-UART a 115 200, así que sufre los mismos 71 s que el STM32 y gana
+  lo mismo; el C3 va por USB nativo y por eso su cifra de partida ya era baja — y aun así es la
+  mejora **más grande de todas las placas**, 5,3×.
+
+  🖥️ **La pantalla del P4 sigue**: `GuiColorDemo` arma su screen de **1 024×600** (el tamaño real
+  del panel, o sea que `P2.3` también funciona aquí) y mata limpio.
+
+  ⚠️ **El `AllocBench` del C3 sube un 10 % y NO es `A1`.** Es repetible (14 168 / 14 174), así que
+  no es ruido; pero el control lo desmiente: la **C6** —mismo silicio, misma VM de 128 KB, misma
+  arquitectura de dos hilos— midió 13 129 → 13 188 antes y después de `A1`, o sea plano. Como el
+  «antes» del C3 es del 1-sep, el sospechoso natural es el planificador de memoria de `U6`, que
+  fija el tamaño del heap y por tanto el ritmo del GC. Queda anotado como pregunta de `U6`, no de
+  `A1`, y se contesta comparando el `vmHeapBytes` de antes y después.
+
+  ⏭️ **Falta el S3**, que no estaba conectado. Es sólo grabar y medir: no hay código que tocar. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
   como tareas propias: pasan a ser el transporte de `io`. Si hace falta tocar algo de la familia
   para que arranquen, es que `A1.2` dejó algo en la C6 que era común.
 - **✅ `A1.4` — HECHA (5-sep): la Pico 2 con las dos tareas.**

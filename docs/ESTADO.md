@@ -191,9 +191,21 @@ de A1 debería quedar muy poco código específico.»*
 
 ### 1. Rematar `A1`
 
+✅ **`A1.3` hecha para C3 y P4 (5-sep)**: sin código nuevo, sólo recompilar y grabar. `PrintBench`
+**1 610 → 305 ms** en el C3 (5,3×, la mejor de todas las placas) y **71 075 → 20 365** en el P4
+(3,5×; sale por puente UART, como el STM32). La pantalla del P4 sigue, a 1 024×600. ⚠️ El
+`AllocBench` del C3 sube un 10 %, repetible, pero **no es `A1`**: la C6 —mismo silicio, misma VM—
+salió plana; el «antes» del C3 era del 1-sep e incluye `U4`, `U5`, `U6` y `#466`, y el sospechoso
+es el planificador de memoria de `U6`. Anotado como pregunta de `U6`.
+
+🔴 **La migración de la Pico al fichero común NO se subió, y por un motivo medido**: con
+`src/platform_freertos.c`, `PrintBench` en la Pico pasa de **4 040 a 5 330 ms** (32 % peor,
+repetible a ±10 ms, aislado por bisección). Curiosamente el KILL MEJORA (33 → 2 ms), o sea que la
+diferencia está en el reparto de turno, no en trabajo de más. No se sube lo que no se entiende.
+
 | Paso | Qué falta | Qué hace falta tener delante |
 |---|---|---|
-| `A1.3` | **Sólo verificar en placa**: el código ya está (vive entero en `esp32/common`, que las cuatro comparten) y las cuatro imágenes compilan | el **S3**, el **C3** y el **P4** conectados |
+| `A1.3` | **Sólo el S3**: grabar y medir, no hay código que tocar | el **S3** conectado |
 | `A1.7` | El depurador por la cola de control: hoy su `pause_cb` lee el wire desde la tarea `vm`, así que **con el depurador armado `io` NO arranca** (interbloqueo puesto a propósito en las tres familias) | una placa y el IDE |
 | — | Migrar la Pico a `src/platform_freertos.c` (es un BORRADO, no una fusión: de sus 363 líneas sólo 4 eran suyas) | la **Pico 2** conectada, para verificar en placa lo que hoy funciona |
 | `A1.6` | 🔄 **Aplazada y reorientada** por Eduardo: no se mueve LVGL, se le da a `Gui.run()` su propio hilo BP. El obstáculo ya está localizado (el bombeo duerme el hilo del SO) | — |
