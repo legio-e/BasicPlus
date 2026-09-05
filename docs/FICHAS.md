@@ -2623,6 +2623,135 @@ Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `Pr
 (salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
 en la C6, 0,66 ms por vuelta; el reparto GC/concatenación está por separar con `log=1`).
 
+#### 🧱 `A3` — EL MODELO DE CAPAS, AUDITADO CONTRA EL CÓDIGO (5-sep)
+
+**El enunciado de Eduardo**, que es lo que se audita:
+
+> *«El hardware de cada fabricante, el HAL de cada fabricante, la HAL BP es nuestra pero depende
+> sobre todo de cada familia. La interfaz de HAL BP debería ser común y todo lo que hay por encima
+> también. Eso nos indica cómo deben ser las cosas, prácticamente todo es independiente del micro,
+> con algunas particularidades que se pueden generalizar.»*
+
+```
+   hardware del fabricante          RP2350 · ESP32 S3/C3/C6/P4 · STM32U5
+   HAL del fabricante               Pico SDK · ESP-IDF · STM32 HAL          (ajeno)
+   ─────────────────────────────────────────────────────────────────────
+   HAL BP (implementación)          pico/ · esp32/common/ + esp32*/main/ · stm32/port/
+   ══ la INTERFAZ de la HAL BP ══   include/bpvm_*.h        ← debe ser COMÚN
+   todo lo de encima                src/ (intérprete, GC, REPL, io, GUI, packs)
+   y encima del todo                bpstdlib/*.bp — lo que ve el usuario
+```
+
+### 1. Dónde SE CUMPLE — y se cumple mucho mejor de lo que yo esperaba
+
+Lo comprobé con greps sobre las 31 672 líneas del común (`src/` + `include/`):
+
+- **Cero includes de un SDK.** Ni un `esp_*.h`, `pico/*.h`, `stm32*.h` ni `hardware/*` en todo el
+  común. La única excepción es `src/platform_freertos.c`, que incluye `FreeRTOS.h` — y no es una
+  fuga: ese fichero **es** una implementación de la HAL BP, vive por debajo de la línea aunque
+  esté guardado en `src/`.
+- **Cero llamadas a funciones de familia.** Ni un `pico_*()`, `esp32_*()`, `stm32_*()` ni `HAL_*()`
+  desde `src/` o `include/`.
+- **Y lo más revelador: los `#ifdef` del común son por CAPACIDAD, no por silicio.** De 321
+  directivas de preprocesador, las que mandan son `BPVM_LVGL` (72) y `BPVM_GUI` (10). Sólo **4**
+  miran a una familia o placa, un 1,25 %. El común varía según *qué sabe hacer* la placa, no según
+  *cuál* es. Eso es exactamente el modelo funcionando.
+- Y hay **17 fachadas** con la forma correcta (un `..._backend_t` que la familia registra), con las
+  16 de periférico sumando 642 líneas de común: fino, que es como debe ser una interfaz.
+
+**Conclusión: el modelo se cumple, y donde falla es casi siempre por debajo de la línea o por un
+descuido concreto, no por diseño.** Pero hay tres fugas que sí importan.
+
+### 2. 🔴 La fuga grave: una fachada sin backend miente, y no lo dice
+
+**En una STM32, `Adc.read()` devuelve un número inventado por el stub del PC.** Comprobado:
+
+```
+grep bpvm_adc_set_backend  →  sólo pico/main.c:1543 y esp32/common/gpio_esp32.c:629
+```
+
+El STM32 **no registra backend de ADC**. Y `src/adc.c`, cuando no hay backend, no falla: imprime
+`[adc] initChannel(0) → GP26 (stub)` —**el pinout del RP2350, escrito en código común y ejecutado
+en una placa ST**— y `readChannel` devuelve una **rampa**: un contador que avanza de 73 en 73 y da
+la vuelta a 4095. Un número que se mueve, que parece una lectura y que es falso.
+
+Y la red de seguridad **no puede verlo por construcción**: la VM-Java hace lo mismo
+(`VirtualMachine.java:5495`), así que la paridad dual-VM sale verde. Es el caso exacto de la norma
+del proyecto *«errores sí, silenciosos no»* y del *«aviso que no distingue no-evento de fallo»*.
+
+📌 **Lo que enseña sobre el modelo**: un stub que finge convierte «esta familia no lo implementa»
+en «esto funciona mal». La fachada debería distinguir **no hay hardware** (el host, legítimo) de
+**nadie registró backend** (un olvido), y en el segundo caso fallar con ruido. Eso protege a todas
+las familias futuras, no sólo al STM32.
+
+### 3. 🟠 La identidad de la placa se contesta por dos caminos, y ya divergieron
+
+Los mismos seis datos (nombre, MHz, GPIO, ADC, PWM, causa de reset) se responden **dos veces por
+familia**: una para BasicPlus (la fachada `bpvm_pico_*`) y otra para el wire (`bpvm_repl_info_t`,
+rellenada a mano). Verificado que ya no coinciden:
+
+| | por el wire | por la fachada (lo que ve el programa BP) |
+|---|---|---|
+| **STM32** | 114 GPIO (`stm32_repl.c:146`) | 128 (`gpio_stm32.c:139`) |
+| **ESP32-C3** | «ESP32-C3», 160 MHz, 22 GPIO | **«esp32s3-devkitc», 240 MHz, 45 GPIO** |
+| **Pico** | 24 PWM (`repl_v1.c:632`) | 12 (`main.c:679`) |
+
+El caso del **C3 y el C6 es el peor**: su identidad se arregló *sólo* en la vía del wire
+(`c3_board_id.c` llama a `repl_set_board_id`, pero nadie llama a `bpvm_pico_set_backend`), así que
+**un programa BasicPlus corriendo en un C3 se cree un S3**, con cinco de seis campos falsos
+incluido el nombre. Es exactamente el bug que la cabecera de `c3_board_id.c` dice haber arreglado
+— corregido en un camino y vivo en el otro.
+
+### 4. 🟡 El nombre `Pico` atraviesa todas las capas hasta el usuario
+
+`include/bpvm_pico.h` **no es la fachada de una familia**: es la de «información del MCU», y las
+cinco la implementan. Pero se llama `pico`, y el nombre sube hasta arriba: la stdlib expone un
+módulo **`Pico`**, así que un programa en una STM32 escribe `Pico.uptimeMs()` y
+`Pico.cpuFreqHz()`. Lo confirman mis propios bancos de hoy, que llamaban a `Pico.uptimeMs()` en la
+Nucleo, la Discovery, el S3, el C3, el C6 y el P4.
+
+La interfaz es común y correcta; lo que está mal es **el nombre**, y no es inocuo: nadie busca la
+identidad de un STM32 en un fichero que se llama «pico», y por eso el duplicado del punto 3 pasó
+desapercibido. Mismo vicio, más pequeño: `pio_count` y `pwm_slices` son vocabulario del RP2350 en
+un struct común (`bpvm_repl.h:86`), y `pwm_slices` además significa **cosas distintas** en cada
+familia — slices en la Pico (12), salidas en el STM32 (28), canales LEDC en el ESP32 (8).
+
+### 5. 🟡 Y una fuga pequeña que ya mordió: nombrar familias en vez de capacidades
+
+`src/bpvm_aot_helpers.c:25` decide si usar TLS con `#if defined(BPVM_PICO_NUM_CORES) ||
+defined(ESP_PLATFORM)`. Su propio comentario dice «en MCU un global plano basta» — pero nombra dos
+familias en vez de la capacidad. **El STM32, que llegó después, cae en la rama del PC**, y se
+comprueba en el artefacto: en el `.elf` del Nucleo está `__emutls_v.g_aot_fault`, o sea **TLS
+emulada, con un `malloc` detrás, en un microcontrolador**, donde se quería un global.
+
+### 6. La regla práctica que sale de todo esto
+
+1. **En el común no se nombra un silicio: se nombra una capacidad.** `#ifdef BPVM_GUI` sí;
+   `#ifdef ESP_PLATFORM` no. El aviso de que algo está mal es tener que añadir una familia a una
+   lista: la siguiente que llegue caerá en la rama equivocada, en silencio.
+2. **Una fachada sin backend registrado falla con ruido, no devuelve un valor plausible.** Un
+   stub que finge no es una red de seguridad: es un fallo silencioso con retraso.
+3. **Un dato se contesta desde UN sitio.** Si el wire y BasicPlus responden lo mismo por caminos
+   distintos, divergen — y aquí ya lo han hecho tres veces.
+4. **Las particularidades del silicio bajan, no suben.** Un driver de pantalla depende del panel y
+   eso está bien; lo que no puede es que su vocabulario aparezca en la interfaz de arriba.
+
+### ⏭️ Lo que queda propuesto
+
+- **`#469`** — la fachada de ADC miente en el STM32: registrar backend o hacer que el stub grite.
+- **`#470`** — la identidad de placa, de una sola fuente; y arreglar la vía BP del C3 y el C6, que
+  hoy se presentan como un S3.
+- **`#471`** — renombrar `bpvm_pico_*` y el módulo `Pico` de la stdlib a algo agnóstico (`Board`,
+  `Mcu`…). Toca la stdlib, así que es cambio de lenguaje y decide Eduardo.
+- **`#472`** — `bpvm_aot_helpers.c`: cambiar los dos macros de familia por uno de capacidad.
+
+⚠️ **Honestidad sobre el alcance de esta auditoría**: los seis auditores terminaron, pero la fase
+de verificación adversarial se cortó por límite de sesión — **12 de 90 fugas quedaron
+verificadas**. Todo lo que se afirma arriba está comprobado por mí en el código o en el artefacto;
+el resto de hallazgos (duplicación del verbo RUN escrito cuatro veces, el sink de OUTPUT cinco
+veces, el `EXITED` del STM32 que interpola cadenas del usuario **sin escapar** en el JSON…) están
+en el registro de la auditoría **sin verificar**, y no se dan por buenos hasta comprobarlos.
+
 #### 📊 `A2` — EL CENSO DE PROPORCIONES: cuánto código es común, de familia y de placa (5-sep)
 
 **La pregunta de Eduardo**, al parar tras `A1`: *«me gustaría conocer las proporciones de código
