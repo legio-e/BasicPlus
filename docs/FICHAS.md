@@ -2722,6 +2722,68 @@ Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `Pr
 (salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
 en la C6, 0,66 ms por vuelta; el reparto GC/concatenación está por separar con `log=1`).
 
+#### 🔴 `#474` — `B1` sigue vivo, y su reproducción YA NO COMPILA (abierta 5-sep)
+
+**El rumbo de Eduardo (5-sep)**, y por qué esto importa ahora:
+
+> *«Los 2 núcleos no hacen un aporte significativo si uno ejecuta IO y el otro la VM. La
+> diferencia será importante cuando tengamos 2 VM y varios hilos BP en marcha, ahí sí que podremos
+> casi duplicar la velocidad. Ya lo intentamos y tuvimos que desactivarlo pero pudimos medir un
+> rendimiento de 193 %.»*
+
+**Tiene razón en las dos mitades, y las dos están documentadas.**
+
+**La velocidad, medida** (`docs/SMP_ARCH.md`): `--smp=1` 203 ms vs `--smp=2` 103 ms → **×1,97**, y
+en `SmpFibBench` **×1,9**, «≈ ideal lineal». Ése es el 193 % que recuerda.
+
+**Y por qué se desactivó: `B1`** (`docs/HECHO_V2.md`, caracterizada el 6-jun-2026). Una **carrera
+de datos en el `mem[]` compartido** que sólo muerde con paralelismo REAL:
+
+| workers | fallo |
+|---|---|
+| 1 | **0 %** (el modelo del device) |
+| 2 | ~25 % |
+| 4 | **100 %** |
+
+- **No es el GC**: con heap de 64 MB y **0 GC medidos**, w2 seguía fallando ~25 %.
+- **Firma**: corrupción del `pc`/`bp` de un thread — «HALT en PC basura», «INVOKE_VIRTUAL null
+  receiver». Un volcado sin GC mostró `mutex owner=2` con tid=2 RUNNABLE y tid=1 RUNNING petando:
+  carrera worker↔worker.
+- **Los sospechosos obvios se descartaron leyendo el código** (el claim del scheduler es atómico,
+  el hand-off del mutex es correcto, el guardado de `pc/sp/bp/cs` está en el `finally` de toda
+  salida). O sea que es sutil, y por eso sigue ahí.
+
+**Decisión de entonces**: miVM pasa a 1 worker por defecto, el SMP queda opt-in y experimental, y
+**el arreglo de `B1` se acopla a encender el dual-core**. Eso nunca llegó.
+
+### 🔴 Y lo que se ha visto hoy al ir a comprobarlo
+
+**La reproducción de `B1` ya no compila.** `samples/synclisttest.bp` usaba `SyncList` como
+builtin, y `#450`/`#451` la movieron a `Collections` (donde extiende `Core.List`). Le falta el
+`import` — se lo he puesto — pero aun así choca con el bug del compilador ya aparcado
+(*«la pasada interfaz-only tira firmas»*): `clase base 'Core.List' no existe`.
+
+📌 O sea: **el único instrumento que caracterizó una carrera bloqueante lleva meses sin funcionar
+y nadie lo notó, porque nadie lo ejecutaba.** Es la forma exacta del *«instrumento mudo»* que este
+proyecto ya tiene fichada, aplicada al peor sitio posible: el día que se quiera el futuro de dos
+VM, se empezaría sin la herramienta que lo diagnosticó.
+
+### ⏭️ Lo que hay que hacer, en orden
+
+1. **Revivir la reproducción**: que `synclisttest.bp` compile y corra con `--workers=2/4`. Choca
+   con un bug del compilador aparcado, así que puede que haya que desatascar ése primero — o
+   escribir una reproducción nueva que no dependa de herencia entre módulos.
+2. **Comprobar si `B1` sigue estando**: han pasado V4 (handles, GC preciso), V5 y V6 por encima.
+   Puede seguir igual, puede haber cambiado de firma, o puede haberse ido por accidente. **Sin la
+   medida no se sabe**, y esta ficha existe para que no se dé por supuesto ninguno de los tres.
+3. Sólo entonces, arreglarlo — y entonces sí, las dos VM sobre una cola de hilos BP.
+
+⚠️ **Y el aviso que engancha con `A4`**: el reparto de hoy (`vm` + `io`) **no toca `B1`**, porque
+`io` no ejecuta opcodes ni toca `mem[]`. Los dos núcleos en la configuración actual no lo
+despiertan — pero tampoco aportan nada, como Eduardo dice y como midió el S3 (un núcleo: mismo
+tiempo, y el KILL incluso mejor). El paralelismo que vale es el otro, y ése está bloqueado por
+`B1`.
+
 #### 🧵 `A4` — LOS DOS NÚCLEOS: inventario del estado compartido antes de activarlos (5-sep)
 
 **El encargo de Eduardo**, y el orden que fijó:

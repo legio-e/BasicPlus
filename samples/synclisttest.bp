@@ -1,4 +1,10 @@
 module SyncListTest
+  // #450/#451 - SyncList dejo de ser builtin y vive en Collections (donde
+  // extiende Core.List). Sin este import el sample NO COMPILA, y no compilaba
+  // desde entonces: es la unica reproduccion de B1 -la carrera que obliga a
+  // correr con un solo worker- y se habia quedado rancia sin que nadie lo
+  // notara, porque nadie la ejecutaba. Ver docs/HECHO_V2.md (B1).
+  import Collections
 
   // Demo de SyncList: lista builtin thread-safe.
   //
