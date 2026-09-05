@@ -158,8 +158,21 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    no llegaba nunca (9,9 s y `EXITED OK`). El contrato gana `bpvm_platform_thread_create_io` y la
    regla, medida en las dos placas: **`io` a la MISMA prioridad que la VM** — por debajo no
    funciona, por encima cuesta caudal (C6 486 → 848 ms; Pico 3 958 → 4 832).
-   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA; hacen falta
-   las placas conectadas) y `A1.5` (STM32 con FreeRTOS).
+15. ✅ **`A1.5` HECHA (5-sep): FreeRTOS en el STM32, las dos placas con las dos tareas.**
+   Kernel: el MISMO que la Pico (`FreeRTOS-LTS` V11.3.0, puerto `ARM_CM33_NTZ`) — **de ST no
+   sale**: el paquete U5 trae ThreadX y una capa que emula la API de FreeRTOS encima, y CubeMX no
+   ofrece FREERTOS para U5 aunque sí para el L552, que es el mismo núcleo. La plataforma pasa a
+   `src/platform_freertos.c`, **común** (de las 363 líneas de la Pico sólo 4 eran suyas); migrar
+   la Pico es ficha aparte, exige placa. Medido: `PrintBench` **71 357 → 20 464 ms (3,5×)** en las
+   dos placas (aquí la UART a 115 200 ES el cuello), cálculo igual en la Nucleo y **11 % más
+   rápido** en la Discovery (la VM ya no sondea el wire entre cuantos), KILL en 15 ms.
+   🔬 Tercer fallo de plataforma que sólo se ve en placa: se paraba a la quinta ejecución porque
+   `vTaskDelete(NULL)` deja la pila en manos de la tarea ociosa, que nunca corría. Lo dijo el
+   gancho de malloc fallido en el log; ahora borra el `join`. ⏭️ **Falta que Eduardo mire la
+   pantalla de la Discovery** (el modelo de 800×480 se arma bien).
+   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA), `A1.6`
+   (LVGL bajo `io`) y `A1.7` (el depurador por la cola de control). Fichas nuevas propuestas:
+   migrar la Pico a `src/platform_freertos.c`; y el `Neopixel` de la familia ESP32.
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

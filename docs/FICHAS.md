@@ -2355,10 +2355,82 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   📌 Dos bugs en dos días con la misma forma —**el PC verde y la placa no**— y los dos en la capa
   de plataforma, no en el diseño: la espera que no esperaba y la prioridad que no era. Es lo que
   la cascada promete y lo que un arnés de host solo no puede dar.
-- **`A1.5` — STM32 con FreeRTOS.** El kernel en los dos proyectos CubeIDE (linked folder y
-  `.cproject`: el `.project` es local de Eduardo, ver la receta headless), `platform_stm32.c`
-  sobre FreeRTOS (hoy devuelve «sin threads»), las dos tareas; el wire por IRQ alimenta a `io`.
-  Verificar Nucleo y Discovery, y que `vm: … KB en SRAM estática` sigue diciendo lo mismo.
+- **✅ `A1.5` — HECHA (5-sep): FreeRTOS en el STM32, y las dos placas con las dos tareas.**
+
+  ### De dónde sale el kernel — y por qué no de ST
+
+  Eduardo lo planteó: *«en teoría STM soporta FreeRTOS en su código»*. **En general sí; para el
+  U5 no.** Comprobado, no supuesto: el paquete `STM32Cube_FW_U5_V1.8.0` no tiene ni un `port.c`,
+  ni un `portmacro.h`, ni un `heap_*.c` — lo único que ahí se llama FreeRTOS es una **capa de
+  emulación de su API sobre Azure RTOS ThreadX** (copyright Microsoft, `FreeRTOS.h` incluye
+  `tx_api.h`). Y la base de datos de CubeMX **no ofrece FREERTOS para U5**, aunque sí para el
+  **L552, que es también Cortex-M33** — o sea que es decisión de producto de ST, no límite del
+  silicio (el grep negativo del U5 vale porque el mismo grep da positivo en F4 y L5: instrumento
+  con control). El plugin `mcu.freertos` de CubeIDE es Java: vistas de tareas y colas en el
+  depurador, cero fuentes — aunque eso, gratis, es justo la instrumentación que A1 necesitaba.
+
+  Así que el kernel es **el mismo que ya compila la Pico**: `FreeRTOS-LTS`, kernel **V11.3.0**,
+  puerto `ARM_CM33_NTZ`. Comprobado en su caché de build, no en un comentario:
+  `pico/build/CMakeCache.txt` dice `FREERTOS_KERNEL_PATH:PATH=…/FreeRTOS-LTS/…`. ⚠️ En el disco
+  hay **otra** copia (`C:/lenguajes/pm/FreeRTOS-Kernel`, V11.0.1+) y **no son la misma**: usar
+  cada familia la suya sería tener dos kernels sin que nada lo dijera.
+
+  ### La plataforma pasa a ser COMÚN, y ése es el cambio de fondo
+
+  De las 363 líneas de `pico/platform_freertos.c`, **sólo cuatro** eran de la Pico. Copiarlo
+  habría repetido el fallo que este proyecto ya tiene documentado tres veces —*el común crece y
+  la copia privada no*—, así que la implementación vive en **`src/platform_freertos.c`** y cada
+  familia pone sólo su reloj, su espera activa y su azar. Hoy lo compila el STM32; **migrar la
+  Pico es ficha aparte** porque exige verificarla en placa, y mover código que funciona sin poder
+  ejecutarlo es el «verde falso» que aquí se persigue.
+
+  ### Lo que hizo falta en cada placa
+
+  | | Nucleo U575 | Discovery U5G9J |
+  |---|---|---|
+  | `SysTick` para FreeRTOS | ya libre (el HAL latía en TIM17) | **hubo que mover el HAL al TIM17** (copiado tal cual de la Nucleo; TIM17 estaba libre) |
+  | `SVC`/`PendSV`/`SysTick` en `stm32u5xx_it.c` | fuera (el puerto CM33 los define con esos nombres, y no son weak ni renombrables) | fuera |
+  | Kernel en el build | tres carpetas enlazadas (patrón LVGL: sólo lo que se compila) + dos include paths | igual |
+  | `main.c` | `while(1){repl}` → tarea `vm` (16 KB de pila, el mismo `_Min_Stack_Size` que era el MSP) + `vTaskStartScheduler` | igual |
+
+  ### Medido en placa (bare-metal → dos tareas, mismo `.mod`)
+
+  | Medida | Nucleo antes | Nucleo después | Discovery antes | Discovery después |
+  |---|---|---|---|---|
+  | `Bench` fib(28) ×2 | 15 570 ms | **15 602** | 19 440 ms | **17 317** (−11 %) |
+  | `AllocBench` + GC | 8 946 ms | **9 050** (+1 %) | 10 192 ms | **9 555** (−6 %) |
+  | `PrintBench` 2 000 líneas | 71 357 ms | **20 464** | 71 377 ms | **20 462** |
+  | · mensajes `OUTPUT` | 12 016 | **2 001** | 12 016 | **2 001** |
+  | · bytes por el wire | 820 KB | **239 KB** | 820 KB | **239 KB** |
+  | KILL calculando | — | **15 ms** | — | **15 ms** |
+
+  **Aquí la UART ES el cuello, más que en ninguna otra placa**: 820 018 B a 115 200 baud son
+  exactamente esos 71 s, y por eso el ahorro de bytes vale 3,5× — el doble que en la Pico. Y el
+  cálculo **mejora** en la Discovery porque la VM ya no sondea el wire entre cuantos: lo que en
+  la C6 era el 1 % aquí costaba el 11 %.
+
+  La GUI sigue: `GuiColorDemo` arma su pantalla de 800×480 con los ocho botones y se queda viva
+  bombeando LVGL desde `vm`. ⏭️ Falta que **Eduardo confirme con sus ojos** que el panel pinta.
+
+  ### 🔬 El tercer fallo que sólo se ve en placa — y que el instrumento cazó
+
+  La primera versión se paraba **a la quinta ejecución**. No fue un cuelgue mudo: el gancho de
+  `configUSE_MALLOC_FAILED_HOOK` lo escribió en el log persistente —
+  `RTOS: sin heap de FreeRTOS (configTOTAL_HEAP_SIZE:0) - parado` — y con esa línea el
+  diagnóstico fue directo. **`vTaskDelete(NULL)` no libera la pila ni el TCB**: los deja en manos
+  de la tarea OCIOSA, que con `vm` sondeando el wire a prioridad 2 no llega a correr nunca. Cada
+  RUN creaba su `io` (4 KB) y ninguno se reciclaba. Ahora el hilo avisa y se **duerme**, y es
+  `join` quien lo borra — borrar una tarea que no es la actual sí libera en el acto, sin depender
+  de nadie. Tres pasadas seguidas con el mismo tiempo, en las dos placas.
+
+  📌 Tres fallos en dos días con la misma forma —**el PC verde y la placa no**— y los tres en la
+  capa de plataforma, no en el diseño: la espera que no esperaba, la prioridad que no era, y la
+  memoria que nadie reciclaba. Es lo que la cascada promete.
+
+  ⚠️ **Lo que hay que saber para reproducir el build**: el kernel vive FUERA de git
+  (`.gitignore`), así que otra máquina necesita `FreeRTOS-LTS` en la misma ruta. Los dos
+  `.project` (que son donde viven los enlaces) entran ahora en git con `add -f`; el del Nucleo
+  no estaba trackeado hasta hoy.
 - **`A1.6` — LVGL bajo `io`.** El modelo GUI en `vm` con copia de valores, LVGL en `io`, encargos
   y eventos por las colas, `lv_lock` de LVGL 9. Medir la latencia de un clic (`#434`) en C6 y DK2.
   (Absorbe `G1`.)
