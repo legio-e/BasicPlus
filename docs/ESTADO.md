@@ -138,8 +138,20 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    más `test-mem`, `test-mods`, `test-smphandles`, `sim-smoke` 45/45 y la prueba nueva
    `make io-smoke`: KILL en 3 ms calculando y 17 ms imprimiendo a chorro, **un `OUTPUT` por
    línea** (antes cuatro), salida exacta. Enlaza en las seis imágenes (ninguna lo usa aún).
-   **Siguiente: `A1.2`** — las dos tareas en `esp32/common`, con la C6 como modelo; medir
-   `PrintBench` (espero pasar de 0,84 ms por línea a decenas de µs) y `Bench` (debe quedar igual).
+13. ✅ **`A1.2` HECHA (5-sep): la C6 con las dos tareas** — 20 líneas en `esp32/common`
+   (un adaptador de `poll` y el arranque de `io` alrededor de `bpvm_run`), así que **toda la
+   familia ESP32 lo hereda**. Medido en placa: cálculo IGUAL (fib(28) 23 580 vs 23 640 ms;
+   `AllocBench` 13 188 vs 13 129), salida **3,6× más rápida** (2 000 líneas: 1 700 → 470 ms),
+   **6× menos mensajes** `OUTPUT` (11 944 → 1 988) y **3,4× menos bytes** por el wire (816 → 238
+   KB); KILL en 46 ms imprimiendo y 18 ms calculando. La pantalla sigue (`GuiRotCycle`).
+   ⚠️ Con el depurador armado `io` no arranca (su `pause_cb` lee el wire desde la VM): se
+   resuelve en `A1.7`.
+   🔬 **Por el camino, un bug de plataforma que sólo se ve en placa**: `cond_timed_wait` con menos
+   de un tick daba 0 y no esperaba, así que `io` giraba en vacío y fib(28) tardaba 140 600 ms.
+   Arreglado en ESP32 y Pico (redondeo hacia arriba). Pasó los 38 samples del PC con el fallo
+   dentro — la cascada haciendo su trabajo.
+   **Siguiente: `A1.3`** (S3, C3 y P4: el código ya está, falta verificar EN PLACA) y `A1.4`
+   (Pico: `vm_task` a las dos tareas comunes, y se va `comm_pico.c`).
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

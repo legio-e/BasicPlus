@@ -28,6 +28,7 @@
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 #include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
 #include "bpvm_dbg_wire.h"   /* #326: ramo de depuración, núcleo portable compartido */
+#include "bpvm_io.h"         /* V6/A1.2: el segundo hilo, comun a todas las familias */
 #include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
 #include "freertos/FreeRTOS.h"
@@ -545,6 +546,28 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     return 0;
 }
 
+/* -- V6/A1.2 - LAS DOS TAREAS, TAMBIEN AQUI --------------------------------
+ *
+ * Durante un RUN esta tarea se dedica a lo suyo -ejecutar opcodes- y el hilo
+ * `io` (comun, src/bpvm_io.c) se lleva el resto: lee el wire en todo momento y
+ * enmarca la salida del programa, una vez POR LINEA. Es EL MISMO arranque que
+ * en el PC (test/main.c y el simulador), palabra por palabra: lo unico de esta
+ * familia son estas dos costuras, su `poll` y su `line`.
+ *
+ * El `line` ya existia y no se toca (`v1_output_sink`): lo que cambia es que
+ * ahora lo llama `io` con una linea entera en vez de la VM con cada trozo.
+ *
+ * La cola: 2 KB. No es un buffer de salida, es un amortiguador - cuando se
+ * llena, `vm` espera a que `io` drene (contrapresion), que es lo correcto: un
+ * programa no puede producir mas deprisa de lo que el transporte traga, y
+ * fingir lo contrario seria comerse la RAM del micro. */
+#define ESP32_IO_OQ_BYTES 2048
+
+static int esp32_io_poll(void* user) {
+    (void) user;
+    return esp32_run_poll_cb(NULL, NULL);   /* el de siempre: KILL / HELLO / BUSY */
+}
+
 /* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
  * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: sin
  * RUN_REPLY y errores de resolución a la consola (USB-Serial-JTAG).
@@ -681,9 +704,25 @@ static void run_module_path(const char* path, long id) {
     s_dbgw.session = session;
     bpvm_dbg_wire_arm(&s_dbgw, vm);
 
+    /* V6/A1.2 - arranca `io` (ver arriba). CON EL DEPURADOR ARMADO, NO: su
+     * `pause_cb` lee el wire desde ESTA tarea, y dos lectores del mismo
+     * transporte es una carrera. Mientras el depurador no hable por la cola de
+     * control (A1.7), un RUN con breakpoints sigue por el camino de un hilo:
+     * el mismo interbloqueo que la Pico ya hace en su camino SMP. */
+    v1_sink_ctx_t io_ctx = { session };
+    bpvm_io_ops_t io_ops = { esp32_io_poll, v1_output_sink, &io_ctx };
+    int con_io = !bpvm_dbg_wire_armed()
+                 && bpvm_io_start(vm, &io_ops, ESP32_IO_OQ_BYTES) == 0;
+
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     bpvm_status_t rs = bpvm_run(vm);
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
+
+    /* Parar `io` ANTES de nada mas: drena la cola entera, asi que al volver de
+     * aqui la ultima linea del programa YA salio por el wire. Y a partir de
+     * este punto el wire vuelve a ser de esta tarea, que es quien manda el
+     * KILL_REPLY y el EXITED. */
+    if (con_io) bpvm_io_stop(vm);
 
     /* P-run-stop — ack diferido del KILL, ANTES del EXITED. */
     bpvm_set_poll(vm, NULL, NULL);

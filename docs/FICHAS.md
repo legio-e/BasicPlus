@@ -2246,13 +2246,61 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   CMakeLists + el Makefile; el STM32 lo recoge solo por su carpeta enlazada. Compilan C6, C3, S3,
   P4, Pico 2 (`.uf2` con el símbolo dentro) y Nucleo (`bpvm_io.o` y `bpvm_io_write` en el `.elf`).
   Ninguna lo *usa* todavía: sin `bpvm_io_start`, el camino es exactamente el de antes.
-- **`A1.2` — la C6 con las dos tareas.** `esp32/common/main.c` crea `vm` e `io` con la
-  especificación del común; `repl_esp32.c` se queda con su transporte y la costura, el lazo y el
-  drenaje son los comunes. **Medir:** `PrintBench` (esperado: de 0,84 ms por línea a decenas de
-  µs en `vm`, y ~5× menos bytes por el wire), `Bench` (≈ igual: lo de entre cuantos era el 1 %),
-  `AllocBench` (≈ igual: el GC es de `vm`), y el KILL en cualquier momento.
+- **✅ `A1.2` — HECHA (5-sep): la C6 con las dos tareas, y con ella toda la familia ESP32.**
+
+  **El cambio son 20 líneas en `esp32/common/repl_esp32.c`** y ninguna es de lazo ni de drenaje:
+  un adaptador `esp32_io_poll` (que llama al `esp32_run_poll_cb` de siempre) y el arranque de
+  `io` alrededor de `bpvm_run`, con `v1_output_sink` como `line`. El sink no se toca: lo que
+  cambia es que ahora lo llama `io` con una línea entera en vez de la VM con cada trozo. Es
+  literalmente el mismo gesto que en `test/main.c` y en el simulador — que era el encargo.
+
+  ⚠️ **Con el depurador armado, `io` NO arranca.** Su `pause_cb` lee el wire desde la tarea de la
+  VM, y dos lectores del mismo transporte es una carrera. Hasta `A1.7` (el depurador por la cola
+  de control), un RUN con breakpoints sigue por el camino de un hilo — el mismo interbloqueo que
+  la Pico ya hace en su camino SMP.
+
+  **Medido en la C6** (imagen con GUI, 128 KB de VM; cada fila, el mismo `.mod`):
+
+  | Medida | 1 hilo | 2 hilos | |
+  |---|---|---|---|
+  | `Bench`: fib(28) interpretado ×2 | 23 640 ms | **23 580 ms** | igual (era el 1 %) |
+  | `AllocBench`: 20 000 asignaciones + GC | 13 129 ms | **13 188 ms** | igual |
+  | `PrintBench`: bucle SIN imprimir | 21 ms | **20 ms** | igual |
+  | `PrintBench`: 2 000 líneas | 1 700 ms | **467–482 ms** | **3,6×** |
+  | · mensajes `OUTPUT` | 11 944 | **1 988** | **6×** menos |
+  | · bytes por el wire | 816 KB | **238 KB** | **3,4×** menos |
+  | KILL mientras imprime a chorro | — | **46 ms** | 183 líneas ya encoladas salen antes |
+  | KILL mientras calcula | — | **18 ms** | |
+
+  O sea, exactamente lo que las medidas del 4-sep predecían: el cálculo no se toca y la salida
+  baja de 0,84 a 0,24 ms por línea. Lo que queda es el transporte, que es físico.
+
+  **La pantalla sigue**: `GuiRotCycle` pinta y gira con `io` en marcha (LVGL aún se bombea desde
+  `vm`, dentro de `Gui.run()`; eso se mueve en `A1.6`).
+
+  ### 🔬 Y por el camino, un bug de la capa de plataforma que sólo se ve en placa
+
+  La primera medida con dos hilos dio **fib(28) en 140 600 ms — SEIS VECES más lento**. No era el
+  diseño: era una división entera.
+
+  ```c
+  TickType_t ticks = (ms > 0) ? pdMS_TO_TICKS(ms) : 0;   /* 5 ms a 100 Hz -> 0 ticks */
+  ```
+
+  `bpvm_platform_cond_timed_wait` con menos de un tick (10 ms con `FREERTOS_HZ=100`) daba **cero**,
+  y `xSemaphoreTake(sem, 0)` no espera: sondea. El lazo de `io` pide 5 ms entre trago y trago, se
+  los daban a cero, y el hilo se comía el núcleo que compartía con la VM. Arreglado en las dos
+  plataformas con FreeRTOS (ESP32 y Pico) redondeando **hacia arriba, nunca a cero**: un tick es
+  lo mínimo que ese reloj sabe esperar, así que *«hasta N ms»* no puede significar *«nada»*.
+
+  📌 La lección, que es de método: el hilo `io` pasó los 38 samples de paridad y las cuatro
+  baterías **en el PC** con este fallo dentro, porque el `pthread` del PC sí espera 5 ms. Lo
+  destapó el primer número de la placa. Es la cascada funcionando: el PC caza la lógica, el micro
+  caza lo que depende del reloj del silicio.
 - **`A1.3` — el resto de la familia ESP32 (S3, C3, P4) SIN código nuevo:** recompilar y verificar
-  en placa. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
+  en placa. **El código ya está** (5-sep): `A1.2` vive entero en `esp32/common`, así que las tres
+  lo heredan sin tocar nada — compilan las cuatro imágenes. Falta la verificación EN PLACA, que
+  es lo que cierra la ficha. En S3 y P4, `io` fijada al núcleo 0 y `vm` al 1. El P4 pierde `wire_uart`/`wire_v1`
   como tareas propias: pasan a ser el transporte de `io`. Si hace falta tocar algo de la familia
   para que arranquen, es que `A1.2` dejó algo en la C6 que era común.
 - **`A1.4` — Pico 2.** `vm_task` → las dos tareas comunes; `comm_pico.c` se va (era la copia); el

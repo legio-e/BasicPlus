@@ -124,7 +124,25 @@ int bpvm_platform_cond_timed_wait(bpvm_platform_cond_handle_t* c,
 
     xSemaphoreGive((SemaphoreHandle_t) *m);
 
-    TickType_t ticks = (ms > 0) ? pdMS_TO_TICKS(ms) : 0;
+    /* V6/A1.2 - REDONDEAR HACIA ARRIBA, NUNCA A CERO.
+     *
+     * `pdMS_TO_TICKS(ms)` es una division entera: con el tick a 100 Hz, CUALQUIER
+     * espera menor de 10 ms da 0 ticks, y `xSemaphoreTake(sem, 0)` no espera - es
+     * un sondeo. Quien pidio "espera hasta N ms" se encuentra con que no espera
+     * nada y gira en vacio.
+     *
+     * Lo destapo el hilo `io` en la C6 (5-sep): su lazo pide 5 ms entre trago y
+     * trago, se los daban a cero, y el hilo consumia el 100 % de un nucleo que
+     * compartia con la VM. Medido: fib(28) paso de 23 400 ms a 140 600. El
+     * diseno no tenia la culpa; la tenia esta division.
+     *
+     * Un tick es el minimo que este reloj sabe esperar, asi que es lo correcto:
+     * "hasta N ms" nunca puede significar "nada". */
+    TickType_t ticks = 0;
+    if (ms > 0) {
+        ticks = pdMS_TO_TICKS(ms);
+        if (ticks == 0) ticks = 1;
+    }
     BaseType_t r = xSemaphoreTake(cv->sem, ticks);
 
     xSemaphoreTake((SemaphoreHandle_t) *m, portMAX_DELAY);
