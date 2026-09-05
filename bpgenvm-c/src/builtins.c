@@ -7,6 +7,7 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_io.h"   /* V6/A1: con io, el wire no se mira desde el builtin del GUI */
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include "bpvm.h"       /* #338: la zona de rascar compartida */
 #include "bpvm_platform.h"
@@ -959,7 +960,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
              * mismo (el MISMO poll_cb que el scheduler usa entre quanta). Al romper
              * caemos al push+return de abajo → el quantum termina → el scheduler ve
              * kill_requested y devuelve BPVM_KILLED (parada limpia entre opcodes). */
-            if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+            /* V6/A1 - con el hilo `io` en marcha, el wire NO se mira desde aqui: lo
+         * atiende `io` y el KILL llega como `kill_requested`, que se comprueba
+         * justo debajo. Sin esta guarda habria DOS lectores del mismo transporte
+         * -este builtin desde la tarea `vm` y el lazo de `io`- compartiendo ademas
+         * el buffer de linea estatico de la familia. Es la MISMA guarda que
+         * src/scheduler.c pone entre cuantos; faltaba aqui, y el camino del GUI es
+         * precisamente el que la placa con pantalla recorre. */
+        if (vm->io == NULL && vm->poll_cb != NULL
+                && vm->poll_cb(vm, vm->poll_user) != 0)
                 vm->kill_requested = 1;
             if (vm->kill_requested) break;
             if (!bpvm_gui_lvgl_window_open()) break;
@@ -996,7 +1005,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* P-run-stop (#257): el KILL se sigue poleando aquí. Ahora además el
          * scheduler ve el kill entre pasadas, así que la parada es más fina que
          * con el lazo dentro del builtin. */
-        if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+        /* V6/A1 - con el hilo `io` en marcha, el wire NO se mira desde aqui: lo
+         * atiende `io` y el KILL llega como `kill_requested`, que se comprueba
+         * justo debajo. Sin esta guarda habria DOS lectores del mismo transporte
+         * -este builtin desde la tarea `vm` y el lazo de `io`- compartiendo ademas
+         * el buffer de linea estatico de la familia. Es la MISMA guarda que
+         * src/scheduler.c pone entre cuantos; faltaba aqui, y el camino del GUI es
+         * precisamente el que la placa con pantalla recorre. */
+        if (vm->io == NULL && vm->poll_cb != NULL
+                && vm->poll_cb(vm, vm->poll_user) != 0)
             vm->kill_requested = 1;
         if (vm->kill_requested) { push_i32(vm, tc, 0); return BPVM_OK; }
 #ifdef BPVM_LVGL
