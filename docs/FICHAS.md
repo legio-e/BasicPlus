@@ -2409,8 +2409,17 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
   cálculo **mejora** en la Discovery porque la VM ya no sondea el wire entre cuantos: lo que en
   la C6 era el 1 % aquí costaba el 11 %.
 
-  La GUI sigue: `GuiColorDemo` arma su pantalla de 800×480 con los ocho botones y se queda viva
-  bombeando LVGL desde `vm`. ⏭️ Falta que **Eduardo confirme con sus ojos** que el panel pinta.
+  ### ✅ La GUI, vista (Eduardo, 5-sep): *«La pantalla de la Discovery con el GuiColorDemo se ve
+  bien, todo OK»*
+
+  `GuiColorDemo` arma su pantalla de 800×480 con los ocho botones y se queda viva bombeando LVGL
+  desde `vm`, **con `io` corriendo en paralelo**. Es la comprobación que faltaba y la que más
+  importaba de esta placa: meter un planificador debajo de un firmware que ya pintaba por LTDC
+  era el paso con más cosas juntas (kernel nuevo, el reloj del HAL movido de periférico, y dos
+  tareas compartiendo una UART). No se rompió nada.
+
+  Queda para `A1.6` lo que aún no se ha hecho aquí: mover el bombeo de LVGL de `vm` a `io`. Hoy
+  la pantalla se refresca desde el hilo que interpreta, que es lo que `A1` quiere cambiar.
 
   ### 🔬 El tercer fallo que sólo se ve en placa — y que el instrumento cazó
 
