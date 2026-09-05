@@ -4558,6 +4558,45 @@ decir que salió con éxito, y no siempre el mismo. Eso no es un valor equivocad
 
 📌 Y no lo buscábamos: salió de cambiar un número para medir otra cosa.
 
+### ✅ La carrera del estado de salida, ARREGLADA (5-sep, `83080c02`)
+
+`bpvm_scheduler_run` salía con `BPVM_OK` aunque hubiera un KILL pendiente. La bandera es la
+verdad: **si se pidió parar, se paró**, aunque el programa terminara por su cuenta antes de que
+el planificador volviera a mirarla.
+
+Lo volví a medir sin buscarlo, el 5-sep, en **dos placas**: un KILL sobre `GuiColorDemo` daba
+`status OK, exitCode 0` en el P4 y en la Discovery.
+
+📌 **Y lo que lo cierra del todo: la VM-Java YA lo hacía bien.** `miVM/Main.java:361` comprueba
+`isKillRequested()` tras `run()` y pone 130. Era la VM-C la que se salía del contrato, no las dos
+— así que esto no era una decisión de diseño pendiente, era una diferencia entre VMs.
+
+El camino SMP no hacía falta tocarlo (`bpvm.c:1193` ya comprobaba la bandera): lo miré, lo cambié
+y lo revertí, porque habría traducido a `ERR_RUNTIME` una salida que ya salía bien.
+
+**Regresión con su CONTROL**, que es lo que hace que la prueba valga: `io_smoke.py` gana el caso
+del GUI — arrancar `Gui.run()`, matarlo, exigir `KILLED`. Con el arreglo dice `KILLED`;
+quitándolo dice `OK`. Y por el camino, dos cosas del arnés que lo habrían dejado pasar en
+silencio: compilaba desde un directorio temporal —donde el frontend no encuentra la stdlib, así
+que un caso con `import Gui` **ni compilaba**— y no subía `Core`/`Json`/`Gui` al FS del
+simulador. Ahora la prueba **dice en voz alta cuándo se salta**.
+
+### ⏭️ Lo que queda de esta ficha
+
+| | Qué | Estado |
+|---|---|---|
+| 1 | El **yield** entre cuantos | ✅ 31-ago, y `A1` lo mantiene |
+| 2 | El wire atendido **mientras la VM calcula** | ✅ `A1`: es el hilo `io`, en las cinco familias |
+| 3 | La **carrera del estado de salida** | ✅ 5-sep (arriba) |
+| 4 | El **quantum en opcodes** → 1,21 ms × vueltas de latencia | 🔴 abierto: modelo medido y confirmado con predicción, sin decidir qué se hace |
+| 5 | Un **suelo de ~48 ms** independiente del quantum | 🔴 abierto, sin investigar (sospechoso: `LV_DEF_REFR_PERIOD = 33 ms`) |
+| 6 | La **prioridad del `wire_task` del P4** (5) frente al S3 (1) | 🔴 abierto — y `A3` lo agravó: con `A1`, el hilo `io` del P4 nace a prioridad 1, o sea **POR DEBAJO** de su VM, que es justo lo que el contrato prohíbe |
+
+📌 El 6 es ahora más concreto que en agosto: ya no es «el P4 va a otra prioridad», es que
+**incumple el contrato de `A1`** (`io` a la MISMA prioridad que la VM). En el P4 no se nota
+porque es de dos núcleos —`io` corre en el otro— pero es la misma forma del fallo que en la Pico
+dejó un KILL sin llegar durante 9,9 s.
+
 🐛 **Y de paso, una ineficiencia real en el bucle más caliente del GUI**: `GUI_RUN_ONCE`
 recorre **toda la tabla de símbolos con `strcmp`** en CADA pasada, para encontrar dos
 funciones que no cambian nunca (`Gui.__guiDispatch` y `__guiDispatchChange`). Son ~460
