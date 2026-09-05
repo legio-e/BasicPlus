@@ -2592,6 +2592,74 @@ Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `Pr
 (salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
 en la C6, 0,66 ms por vuelta; el reparto GC/concatenación está por separar con `log=1`).
 
+#### 📊 `A2` — EL CENSO DE PROPORCIONES: cuánto código es común, de familia y de placa (5-sep)
+
+**La pregunta de Eduardo**, al parar tras `A1`: *«me gustaría conocer las proporciones de código
+específico del micro, el específico de la familia y el común a todos los micros. Después de A1
+debería quedar muy poco código específico.»*
+
+### Cómo se mide, y por qué así
+
+Contar líneas por carpeta mide **lo que está escrito**. La pregunta es otra: cuánto de cada
+**firmware** viene de cada sitio. Así que el censo se hace por el **artefacto** — el `.map` del
+enlazador, que dice qué metió en la imagen y cuánto ocupa.
+
+No es una sutileza. En la Nucleo, `gui_display_sdl.o` **está en el build y aporta 0 bytes**: el
+fichero entero es un `#ifdef` que no se cumple. Contando por carpeta sumaría 270 líneas de
+«común»; contando por artefacto, cero. Y el `.map` tiene otra ventaja: ya está hecho, así que no
+hace falta el toolchain de cada arquitectura.
+
+**Las tres trampas** que el traspaso dejó anotadas, y cómo se respetan:
+1. Los **generados** (los blobs de la stdlib, `*_mods.c`: 13 016 líneas) no son código escrito.
+   Fuera — y además el censo sólo mira secciones de **código**, no de datos, así que un blob de
+   48 KB en `.rodata` no puede falsear el reparto.
+2. Los **`Core/` de CubeMX** los genera ST: se cuentan **aparte**, no como código nuestro.
+3. **«Común» no es «común en uso»**: por eso se mide por imagen y no en el árbol.
+
+El guion queda en el repo (`bpgenvm-c/scripts/censo_reparto.py`), así que esto se puede repetir
+después de cada hito y ver la tendencia, que es lo que de verdad dice si la unificación avanza.
+
+### El reparto, por imagen (bytes de código de NUESTRO código)
+
+| Imagen | común | familia | placa | total | reparto |
+|---|---|---|---|---|---|
+| **Discovery U5G9J** | 223 134 | 11 050 | 0 | 234 184 | **95,3 %** / 4,7 % / 0 % |
+| **Nucleo U575** | 190 462 | 10 604 | 0 | 201 066 | **94,7 %** / 5,3 % / 0 % |
+| **ESP32-S3** | 109 882 | 9 282 | 0 | 119 164 | **92,2 %** / 7,8 % / 0 % |
+| **ESP32-C6** | 143 168 | 12 472 | 1 100 | 156 740 | **91,3 %** / 8,0 % / 0,7 % |
+| **ESP32-C3** | 127 514 | 12 068 | 12 | 139 594 | **91,3 %** / 8,6 % / 0,0 % |
+| **ESP32-P4** | 151 550 | 13 320 | 6 450 | 171 320 | **88,5 %** / 7,8 % / 3,8 % |
+| **Pico 2 (RP2350)** | 90 018 | 16 430 | 0 | 106 448 | **84,6 %** / 15,4 % / 0 % |
+| **Las siete juntas** | 1 035 728 | 85 226 | 7 562 | 1 128 516 | **91,8 % / 7,6 % / 0,7 %** |
+
+Aparte, de ST y no nuestro: **29 844 B** de `Core/` en la Discovery y **102 B** en la Nucleo (la
+diferencia es la BSP de la pantalla, que la Discovery sí usa).
+
+### Lo que dicen los números
+
+**La hipótesis de Eduardo se sostiene, y con margen: el 92 % del código de cada firmware es
+común.** Lo específico de un micro concreto es **0,7 %**.
+
+Y hay tres cosas que el número solo no cuenta:
+
+- **La placa casi no existe como categoría.** Sólo el P4 (3,8 %) y el C6 (0,7 %) tienen código
+  propio, y en los dos casos es **la pantalla**: `gui_display_dsi.c` y `gui_display_st7789.c`. Es
+  exactamente donde debe estar lo específico — el silicio de un panel no se puede abstraer— y
+  todo lo demás de esas placas ya vive en su familia o en el común.
+- **La Pico es la familia menos unificada** (15,4 %), y no por casualidad: es la más antigua, y
+  cosas que las otras familias tienen en `esp32/common` o en `src/` ella las tiene en `pico/`
+  (su REPL son 840 líneas, su `main.c` 1 036). Es el sitio con más recorrido si se quiere subir
+  el 92 %. La migración de su plataforma a `src/platform_freertos.c` iba en esa dirección y se
+  paró por una medida (ver `A1.3`).
+- **Las dos STM32 son las más comunes de todas** (95 %), lo cual es llamativo porque son las que
+  más tarde llegaron y las únicas que necesitaron meter un RTOS entero. Dice algo bueno del
+  reparto: la familia sólo pone la cintura (`stm32/port`), y el kernel es de fuera.
+
+📌 **Y un aviso sobre qué NO mide esto**: bytes de código, no esfuerzo. Los 6 450 B del P4 son un
+driver MIPI-DSI que costó varias sesiones; los 223 134 B comunes de la Discovery incluyen el
+intérprete entero, que ya estaba escrito. El censo dice dónde vive el código, no dónde está el
+trabajo.
+
 #### 🖼️ G1 — el bucle de LVGL a un hilo BP propio *(absorbido por `A1`, 4-sep: LVGL vive en `io`)*
 
 **Idea de Eduardo (23-ago):** *«de LVGL me gustaría, si podemos, mejorar el bucle,

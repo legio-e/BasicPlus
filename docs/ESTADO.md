@@ -214,7 +214,18 @@ del C3: con dos controles (C6 y S3) queda claro que `A1` no cuesta nada en asign
 | — | Migrar la Pico a `src/platform_freertos.c` (es un BORRADO, no una fusión: de sus 363 líneas sólo 4 eran suyas) | la **Pico 2** conectada, para verificar en placa lo que hoy funciona |
 | `A1.6` | 🔄 **Aplazada y reorientada** por Eduardo: no se mueve LVGL, se le da a `Gui.run()` su propio hilo BP. El obstáculo ya está localizado (el bombeo duerme el hilo del SO) | — |
 
-### 2. El censo de proporciones: común / familia / micro
+### 2. El censo de proporciones: común / familia / micro — ✅ HECHO (5-sep)
+
+**El 91,8 % del código de cada firmware es COMÚN**; 7,6 % de familia y **0,7 % de placa**. La
+hipótesis de Eduardo se sostiene con margen. Medido por el **artefacto** (el `.map` del enlazador,
+no las líneas por carpeta: en la Nucleo `gui_display_sdl.o` está en el build y aporta 0 bytes) y
+repetible con `bpgenvm-c/scripts/censo_reparto.py`. Detalle e interpretación en la ficha `A2`.
+
+Lo más útil no es el total: la **Pico es la familia menos unificada** (15,4 %, por ser la más
+antigua) y las **dos STM32 las más comunes** (95 %), y lo único que queda como código de placa es
+**la pantalla** del P4 y del C6 — que es donde debe estar.
+
+<sub>El enunciado original, por si hay que rehacerlo:</sub>
 
 **La pregunta de Eduardo, tal cual**: cuánto código es específico de un micro, cuánto de una
 familia y cuánto común — y su hipótesis, que después de `A1` debería quedar muy poco específico.
