@@ -1777,6 +1777,105 @@ y el Run en la Pico 2 byte-idéntico al host.
 `samples/out` sigue lleno de MOD6 de V5: ya no hacen daño, pero son un fósil (gitignorado) que
 conviene vaciar cuando toque.
 
+#### 🔴 `#469` — una fachada SIN BACKEND devuelve un número inventado, y nadie lo dice (abierta 5-sep, de `A3`)
+
+**El síntoma, en una placa real**: en una Nucleo o una Discovery, `Adc.read()` devuelve un número
+que se mueve, parece una lectura y **es falso**; y `Adc.Channel(0)` imprime `→ GP26`, que es el
+pinout del RP2350, desde código común.
+
+**La causa, comprobada**: sólo dos familias registran backend de ADC —
+```
+grep bpvm_adc_set_backend  →  pico/main.c:1543  ·  esp32/common/gpio_esp32.c:629
+```
+El STM32 no. Y `src/adc.c` no falla cuando no hay backend: `initChannel` devuelve `26 + ch` con un
+`printf` del pinout de la Pico, y `readChannel` devuelve una **rampa** (un contador que avanza de
+73 en 73 con vuelta a 4095).
+
+⚠️ **Y la red de seguridad no puede verlo por construcción**: miVM hace lo mismo
+(`VirtualMachine.java:5495` imprime `→ GP26`), así que la **paridad dual-VM sale VERDE**. Es el
+caso exacto de dos normas del proyecto: *«errores sí, silenciosos no»* y *«un aviso que no
+distingue no-evento de fallo»*.
+
+⏭️ **El arreglo tiene dos mitades y la segunda importa más**:
+1. Que el STM32 registre su backend de ADC (o declare que no tiene).
+2. Que **la fachada distinga** «no hay hardware» (el host, legítimo) de «nadie registró backend»
+   (un olvido) y en el segundo caso **grite**. Eso protege a todas las familias futuras, no sólo a
+   ésta — y hay que mirar las OTRAS 16 fachadas por si tienen el mismo stub complaciente.
+
+#### 🟠 `#470` — la identidad de la placa se contesta por DOS caminos, y ya han divergido (abierta 5-sep, de `A3`)
+
+Los mismos seis datos (nombre, MHz, GPIO, ADC, PWM, causa de reset) se responden **dos veces por
+familia**: una para BasicPlus (la fachada `bpvm_pico_*`) y otra para el wire (`bpvm_repl_info_t`,
+rellenada a mano). Ya no coinciden:
+
+| | por el wire | por la fachada (lo que ve el programa BP) |
+|---|---|---|
+| **ESP32-C3** | «ESP32-C3», 160 MHz, 22 GPIO | **«esp32s3-devkitc», 240 MHz, 45 GPIO** |
+| **STM32** | 114 GPIO (`stm32_repl.c:146`) | 128 (`gpio_stm32.c:139`) |
+| **Pico** | 24 PWM (`repl_v1.c:632`) | 12 (`main.c:679`) |
+
+**El caso grave es el C3 y el C6**: su identidad se arregló *sólo* en la vía del wire
+(`c3_board_id.c` llama a `repl_set_board_id`, pero **nadie llama a `bpvm_pico_set_backend`**), así
+que un programa BasicPlus corriendo en un C3 **se cree un S3** — cinco de seis campos falsos,
+incluido el nombre de la placa. Es el mismo bug que la cabecera de `c3_board_id.c` dice haber
+arreglado: corregido en un camino y vivo en el otro.
+
+📌 Antes de arreglarlo hay que **decidir qué significa cada campo**, porque hoy no está claro: el
+114 del STM32 son las I/O del encapsulado y el 128 el rango direccionable del driver; y
+`pwm_slices` significa *slices* en la Pico (12), *salidas* en el STM32 (28) y *canales LEDC* en el
+ESP32 (8). Unificar sin decidir eso sólo cambiaría de sitio la mentira.
+
+#### 🟡 `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3`)
+
+`include/bpvm_pico.h` **no es la fachada de una familia**: es la de «información del MCU», y las
+cinco la implementan. Pero se llama `pico`, y el nombre sube hasta arriba del todo: la stdlib
+expone un módulo **`Pico`**, así que un programa en una STM32 escribe `Pico.uptimeMs()` y
+`Pico.cpuFreqHz()` (los bancos del 5-sep lo hacen en las siete placas).
+
+La interfaz es común y correcta; lo que está mal es **el nombre**, y no es inocuo: nadie busca la
+identidad de un STM32 en un fichero llamado «pico», y por eso `#470` pasó desapercibido. Mismo
+vicio, más pequeño: `pio_count` y `pwm_slices` son vocabulario del RP2350 en un struct común
+(`bpvm_repl.h:86`), y el PIO sólo existe en el RP2350.
+
+⏭️ Renombrar a algo agnóstico (`Board`, `Mcu`…). **Toca la stdlib, así que es un cambio de
+lenguaje y lo decide Eduardo**: rompe programas que ya usan `Pico.*`, y este proyecto no gasta
+palabras reservadas ni cambia el lenguaje a la ligera. Alternativa barata mientras tanto: un alias
+y dejar `Pico` como nombre viejo documentado.
+
+#### 🟡 `#472` — el común nombra DOS familias donde quería decir «micro» (abierta 5-sep, de `A3`)
+
+`src/bpvm_aot_helpers.c:25`: `#if defined(BPVM_PICO_NUM_CORES) || defined(ESP_PLATFORM)`. Su
+propio comentario dice *«en MCU un global plano basta»* — pero nombra dos familias en vez de la
+capacidad, así que **el STM32, que llegó después, cae en la rama del PC**.
+
+Comprobado en el artefacto, no en el código: el `.elf` del Nucleo tiene `__emutls_v.g_aot_fault`,
+o sea **TLS emulada —con un `malloc` detrás— en un microcontrolador**, donde se quería un global
+plano.
+
+⏭️ Un macro de capacidad (`BPVM_SIN_TLS`, o al revés `BPVM_TIENE_TLS`) que ponga cada familia. Es
+media hora, y **quita la clase de error entera**: hoy cualquier familia nueva cae por defecto en
+la rama equivocada y en silencio, que es exactamente lo que pasó.
+
+#### 📋 `#473` — el resto de la auditoría de capas, SIN VERIFICAR (abierta 5-sep, de `A3`)
+
+La auditoría de `A3` la hicieron seis auditores y terminaron los seis, pero **la fase de
+verificación adversarial se cortó por límite de sesión: 12 de 90 hallazgos quedaron
+comprobados**. Lo que entró en `A3` y en `#469`–`#472` está verificado a mano; el resto vive en
+`docs/A3_AUDITORIA_CAPAS_BRUTO.md` y **no se da por bueno**.
+
+Entre lo que hay ahí sin verificar, y que pinta serio:
+- El **`EXITED` del STM32 interpola cadenas del usuario SIN ESCAPAR** en el JSON (`missing`,
+  `entry.fallo`): un mensaje de error con una comilla rompería el protocolo.
+- El verbo **`RUN` está implementado entero cuatro veces**, con la misma secuencia de pasos.
+- El **sink de `OUTPUT` y su escapador JSON, escritos cuatro veces** además del que ya existe en
+  el común.
+- `fs_total_bytes` y compañía, **copiados carácter por carácter** en las tres familias.
+- El STM32 **no desactiva de verdad** con `Wdt.disable()` (reprograma el IWDG a 131 s) y el
+  programa no puede enterarse.
+
+⏭️ Verificar uno a uno antes de tocar nada. La regla del proyecto vale aquí más que nunca: un
+hallazgo falso cuesta más que uno que falta, porque manda a mirar donde no está el problema.
+
 #### 🟡 `#468` — la stdlib en un pack XIP (memoria de la C6): ANALIZADA con números, a decidir (abierta 4-sep)
 
 **La dirección la dio Eduardo (4-sep):** *«En cuanto al consumo de memoria es cierto que vamos

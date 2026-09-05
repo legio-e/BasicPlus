@@ -199,7 +199,20 @@ cerró **sin escribir código**.
 costando su cintura. Y quedan, con ficha y medida, `A1.6`, la migración de la plataforma de la
 Pico y `#468` — features y una duda medida, no unificación pendiente.
 
-### Lo que queda en la mesa (por si se retoma)
+### Lo que queda en la mesa
+
+**Del modelo de capas (`A3`, 5-sep), abiertas para ir arreglando poco a poco** — decisión de
+Eduardo: *«Registralo como pendiente. Lo iremos arreglando poco a poco.»*
+
+| Ficha | Qué | Tamaño |
+|---|---|---|
+| 🔴 `#469` | La fachada de ADC **miente en el STM32**: sin backend registrado devuelve una rampa inventada y el pinout de la Pico. La paridad dual-VM no puede verlo. Hay que mirar las otras 16 fachadas por si tienen el mismo stub complaciente | mediana |
+| 🟠 `#470` | La identidad de placa se contesta por **dos caminos** y ya divergieron; un programa BP en un C3 **se cree un S3** | mediana, y hay que decidir antes qué significa cada campo |
+| 🟡 `#471` | El nombre **`Pico`** llega hasta el usuario (`Pico.uptimeMs()` en una STM32). Toca la stdlib: **cambio de lenguaje, decide Eduardo** | pequeña + decisión |
+| 🟡 `#472` | El común nombra **dos familias** donde quería decir «micro»; el STM32 acaba con TLS emulada | media hora |
+| 📋 `#473` | El **resto de la auditoría, sin verificar** (12 de 90). Dentro, cosas que pintan serias: el `EXITED` del STM32 interpola cadenas del usuario sin escapar; `RUN` escrito cuatro veces | verificar antes de tocar |
+
+### Lo demás que queda (por si se retoma)
 
 ## ⏭️ (anterior) — el orden que dio Eduardo al parar (5-sep)
 
