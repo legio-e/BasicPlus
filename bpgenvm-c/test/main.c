@@ -24,6 +24,7 @@
  */
 
 #include "bpvm.h"
+#include "bpvm_io.h"   /* V6/A1.1: el hilo io, tambien en el PC */
 #include "bpvm_fs.h"
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
 #include "bpvm_pack.h"  /* H3 — zona de packs simulada (--pack=) */
@@ -352,6 +353,24 @@ int main(int argc, char** argv) {
         fprintf(stderr, "config: handle_cap_max=%ld (--handlecap)\n", handle_cap);
     }
 
+    /* -- V6/A1.1 - LOS DOS HILOS, TAMBIEN EN EL PC -------------------------
+     *
+     * El CLI es el `io` mas sencillo que hay: no atiende transporte (aqui no
+     * hay wire) y entrega cada linea a `stdout`, que es donde iba antes. Pero
+     * recorre EL MISMO camino que la placa - `print` encola, `io` trocea por
+     * lineas y entrega - y por eso los 38 samples del arnes de paridad
+     * ejercitan la arquitectura de dos hilos en CADA pasada. Es la cascada: lo
+     * que no va en el PC no llega al micro.
+     *
+     * El `fflush` de antes y el `bpvm_io_stop` de despues no son adorno: el
+     * banner sale desde ESTE hilo y la salida del programa desde `io`, asi que
+     * el orden entre los dos se fija cerrando uno antes de abrir el otro. */
+    fflush(stdout);
+    if (bpvm_io_start(vm, NULL, 0) != 0) {
+        fprintf(stderr, "no se pudo arrancar el hilo io\n");
+        bpvm_destroy(vm); free(mem);
+        return 1;
+    }
     if (smp_workers > 0) {
         printf("=== INICIANDO EJECUCION DE LA VM-C (SMP, workers=%d) ===\n",
                smp_workers);
@@ -360,6 +379,8 @@ int main(int argc, char** argv) {
         printf("=== INICIANDO EJECUCION DE LA VM-C ===\n");
         s = bpvm_run(vm);
     }
+    bpvm_io_stop(vm);   /* drena la cola ENTERA antes de seguir imprimiendo */
+    fflush(stdout);
     {
         const char* le = bpvm_link_error(vm);   /* paso 4 — detalle de lib/símbolo no resuelto */
         if (le[0]) printf("=== ERROR DE LINK: %s ===\n", le);

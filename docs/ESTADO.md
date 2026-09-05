@@ -129,9 +129,17 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    futuro son dos VM sobre una cola de threads BP (el camino SMP, aparcado sin cerrarlo).**
    Decidido después: **FreeRTOS en todas las familias**, el PC y la **C6** como modelo, y **todo
    en código común** (las familias sólo ponen transporte, primitivas y la creación de las dos
-   tareas). Tareas concretas `A1.1`–`A1.7` en la ficha; **la siguiente sesión empieza por `A1.1`**
-   (el hilo `io` en común, en el PC: `src/bpvm_io.c`, `OUTPUT` por línea, paridad 38/38). Samples
-   nuevos: `PrintBench.bp`, `AllocBench.bp` (en `samples/benchmarks/`).
+   tareas). Tareas concretas `A1.1`–`A1.7` en la ficha. Samples nuevos: `PrintBench.bp`,
+   `AllocBench.bp` (en `samples/benchmarks/`).
+12. ✅ **`A1.1` HECHA (5-sep): el PC ya corre con DOS hilos.** `include/bpvm_io.h` +
+   `src/bpvm_io.c` (común): hilo `io`, cola con espera acotada, líneas armadas y entregadas de
+   una pieza, apagado que drena antes de unir. `emit_text` encola; el scheduler deja de llamar al
+   `poll_cb` cuando hay `io`. **Paridad 38/38 byte-idéntica con los dos hilos en cada sample**,
+   más `test-mem`, `test-mods`, `test-smphandles`, `sim-smoke` 45/45 y la prueba nueva
+   `make io-smoke`: KILL en 3 ms calculando y 17 ms imprimiendo a chorro, **un `OUTPUT` por
+   línea** (antes cuatro), salida exacta. Enlaza en las seis imágenes (ninguna lo usa aún).
+   **Siguiente: `A1.2`** — las dos tareas en `esp32/common`, con la C6 como modelo; medir
+   `PrintBench` (espero pasar de 0,84 ms por línea a decenas de µs) y `Bench` (debe quedar igual).
 
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el

@@ -2204,14 +2204,48 @@ el común, y (d) el orden de arranque del hardware (la máquina de estados de H9
 
 ##### Las tareas de V6
 
-- **`A1.1` — el hilo `io` en común, en el PC.** `src/bpvm_io.c`: arranque de `io` con las tres
-  colas (la de salida ya existe; control y eventos con su cerrojo); `emit_text` SIEMPRE a la cola
-  (se va el `if (vm->smp)`); `io` drena y enmarca `OUTPUT` por línea (o por tope de bytes / al
-  cerrar el cuanto) — hoy un `print` sale en seis mensajes; el poll del wire sale del lazo de
-  cuantos: `vm` mira una bandera de control que pone `io`; KILL y HELLO los atiende `io` al
-  instante. `comm_host.c` desaparece en el común. **Verificación:** `compat.sh check` 38/38
-  byte-idéntico (el contenido de stdout no cambia, sólo el troceado), `sim-smoke` OK, el
-  simulador corriendo con dos pthreads, y un KILL en mitad de un cuanto largo.
+- **✅ `A1.1` — HECHA (5-sep): el hilo `io` en común, y el PC ya corre con dos hilos.**
+
+  **Lo que hay ahora** (`include/bpvm_io.h` + `src/bpvm_io.c`, 100 % común): `bpvm_io_start` crea
+  el hilo, `bpvm_io_stop` cierra la cola, espera a que se drene ENTERA y une. El lazo de `io`
+  alterna dos gestos — sacar bytes de la cola con **tope de espera** (5 ms: un programa mudo no
+  puede dejarlo dormido) y llamar al `poll` de la familia — y **arma las líneas**: pega los
+  trozos y entrega una línea completa con su `\n`. Cada familia sólo pone su `bpvm_io_ops_t`
+  (`poll` = atiende mi transporte, `line` = enmarca una línea); con `line` a NULL va a `stdout`,
+  que es el `io` del CLI.
+
+  **Lo que cambió fuera del módulo, y es poco**: `emit_text` encola si hay `io`
+  (`interp.c`); el scheduler **ya no llama al `poll_cb`** cuando hay `io` (`scheduler.c`) — ésa
+  es la línea que corta el trato de la VM con el transporte; un campo `io` en `bpvm_t`, detrás
+  del prefijo congelado; `bpvm_oq_pop_timed` en la cola (`comm_common.c`); y el camino SMP no
+  arranca su comm task si `io` está en marcha (serían dos consumidores de una cola de uno).
+
+  **Verificado en el PC:** `compat.sh check` **38/38 byte-idéntico** con los dos hilos activos en
+  cada sample (el CLI arranca `io` alrededor del run, así que el arnés de paridad ejercita la
+  arquitectura nueva en cada pasada); `test-mem` 30/30, `test-mods`, `test-smphandles` (0
+  corrupciones), `sim-smoke` 45/45. Y el simulador es ya el `io` del PC **con transporte**: `vm`
+  ejecuta en el hilo principal mientras `io` lee el socket.
+
+  **Y lo que `io` viene a arreglar, con su prueba propia** (`tools/io_smoke.py`, `make io-smoke`,
+  contra el simulador):
+
+  | Lo que se prueba | Resultado |
+  |---|---|
+  | KILL con el programa CALCULANDO sin imprimir | EXITED KILLED en **3 ms** |
+  | KILL con el programa IMPRIMIENDO A CHORRO | EXITED KILLED en **17 ms** (el caso que antes esperaba a que drenase) |
+  | Un `print` de tres argumentos → mensajes OUTPUT | **1 por línea** (6 líneas = 6 mensajes; antes 4 por línea) |
+  | La salida entregada | **exacta**, byte a byte, sin perder la última línea al parar |
+
+  ⚠️ **Lo que NO hace y hay que decirlo:** el KILL lo *detecta* `io` al instante, pero la VM para
+  en la siguiente frontera de cuanto (1024 opcodes: microsegundos). Meter la comprobación dentro
+  del intérprete costaría una lectura volátil por opcode y no compensa. Y `comm_host.c` /
+  `comm_pico.c` siguen ahí, ahora inertes: se van en `A1.4`, cuando la Pico entre — borrarlos hoy
+  dejaría al camino SMP puro sin drenaje.
+
+  **Enlaza en las seis imágenes** (la trampa del `.c` nuevo del núcleo): alta en los cinco
+  CMakeLists + el Makefile; el STM32 lo recoge solo por su carpeta enlazada. Compilan C6, C3, S3,
+  P4, Pico 2 (`.uf2` con el símbolo dentro) y Nucleo (`bpvm_io.o` y `bpvm_io_write` en el `.elf`).
+  Ninguna lo *usa* todavía: sin `bpvm_io_start`, el camino es exactamente el de antes.
 - **`A1.2` — la C6 con las dos tareas.** `esp32/common/main.c` crea `vm` e `io` con la
   especificación del común; `repl_esp32.c` se queda con su transporte y la costura, el lazo y el
   drenaje son los comunes. **Medir:** `PrintBench` (esperado: de 0,84 ms por línea a decenas de

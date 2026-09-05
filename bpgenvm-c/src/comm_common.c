@@ -97,6 +97,32 @@ size_t bpvm_oq_pop(bpvm_output_queue_t* q, char* dst, size_t max) {
     return to_read;
 }
 
+/* V6/A1 — la variante con tope de espera que usa el hilo `io` (ver comm_queue.h).
+ * Misma mecanica que el pop de arriba; lo unico distinto es que la espera es
+ * acotada y que decimos si la cola quedo cerrada y seca. */
+size_t bpvm_oq_pop_timed(bpvm_output_queue_t* q, char* dst, size_t max,
+                         int ms, int* eof) {
+    if (eof) *eof = 0;
+    bpvm_platform_mutex_lock(&q->mtx);
+    if (q->used == 0 && !q->closed) {
+        (void) bpvm_platform_cond_timed_wait(&q->not_empty, &q->mtx, ms);
+    }
+    size_t to_read = q->used < max ? q->used : max;
+    if (to_read > 0) {
+        size_t first = q->cap - q->tail;
+        if (first > to_read) first = to_read;
+        memcpy(dst, q->buf + q->tail, first);
+        size_t rest = to_read - first;
+        if (rest) memcpy(dst + first, q->buf, rest);
+        q->tail = (q->tail + to_read) % q->cap;
+        q->used -= to_read;
+        bpvm_platform_cond_broadcast(&q->not_full);
+    }
+    if (eof && q->closed && q->used == 0) *eof = 1;
+    bpvm_platform_mutex_unlock(&q->mtx);
+    return to_read;
+}
+
 void bpvm_oq_close(bpvm_output_queue_t* q) {
     bpvm_platform_mutex_lock(&q->mtx);
     q->closed = true;

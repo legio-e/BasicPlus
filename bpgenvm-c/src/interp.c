@@ -20,6 +20,7 @@
 #include "bpvm_aot_helpers.h"    /* P-aot-call-bp: struct aot_helpers_v1 completa */
 
 #include "bpvm_comm.h"
+#include "bpvm_io.h"   /* V6/A1 — la salida va al hilo io */
 
 #include <stdio.h>
 #include <inttypes.h>
@@ -43,7 +44,12 @@
  *      fwrite directo. Sin overhead extra para el camino existente.
  */
 static void emit_text(bpvm_t* vm, const char* s, size_t len) {
-    if (vm->smp) {
+    /* V6/A1 — con el hilo `io` en marcha, un `print` es UN EMPUJÓN A LA COLA y
+     * vuelve. Ni marco JSON ni escritura al transporte: eso lo hace `io`, una
+     * vez por línea. Medido en la C6 (4-sep): 0,84 ms por línea antes. */
+    if (vm->io) {
+        bpvm_io_write(vm, s, len);
+    } else if (vm->smp) {
         bpvm_comm_output_enqueue(vm, s, len);
     } else if (vm->output_cb) {
         vm->output_cb(s, len, vm->output_user);

@@ -539,6 +539,13 @@ struct bpvm {
      * VM corre con scheduler_smp.c. Allocated by bpvm_smp_init(). */
     struct bpvm_smp* smp;
 
+    /* V6/A1 — el hilo `io` (bpvm_io.c). NULL = nadie lo ha arrancado y todo
+     * sigue como antes: `print` escribe en el sitio y el scheduler llama al
+     * `poll_cb`. No-NULL = hay dos hilos de SO: `vm` sólo ejecuta opcodes y
+     * `io` se encarga del wire y de la salida. Va AQUÍ, detrás del prefijo
+     * congelado, por la misma razón que todo lo demás (ver arriba). */
+    struct bpvm_io* io;
+
     /* Paso 4 (V3) — detalle legible del último fallo de link (lib/símbolo no
      * resuelto). Lo rellena bpvm_link_all; el handler de RUN lo manda al wire
      * en vez del exit-code mudo (antes el detalle solo iba a stderr). "" = sin

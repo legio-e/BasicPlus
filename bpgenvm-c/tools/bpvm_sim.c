@@ -36,6 +36,7 @@
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
  */
 #include "bpvm.h"
+#include "bpvm_io.h"   /* V6/A1.1: el hilo io */
 #include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
@@ -558,6 +559,11 @@ static void emit_exited(sock_t c, long session, const char* status, int code,
 /* Poll del wire entre quanta (#257): KILL para el programa (ack diferido, tras
  * parar), HELLO se contesta al vuelo (el IDE puede conectar con algo corriendo
  * y ofrecer Stop) y cualquier otra cosa devuelve BUSY. */
+/* V6/A1.1 — adaptador para el contrato de `io` (que no conoce la VM: sólo pasa
+ * el `user` que le dieron, y aqui ese `user` es la propia vm). */
+static int sim_run_poll_cb(bpvm_t* vm, void* user);
+static int sim_io_poll(void* user) { return sim_run_poll_cb((bpvm_t*) user, NULL); }
+
 static int sim_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
     if (g_cli == BAD_SOCK || !sock_has_data(g_cli)) return 0;
@@ -761,9 +767,20 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
          * registra su pause_cb. Sin nada armado no hace nada (coste cero). */
         s_dbgw.session = session;
         if (bpvm_dbg_wire_armed()) bpvm_dbg_wire_arm(&s_dbgw, vm);
-        bpvm_set_poll(vm, sim_run_poll_cb, NULL);
-        st = bpvm_run(vm);
-        bpvm_set_poll(vm, NULL, NULL);
+        /* V6/A1.1 — el simulador es el `io` DEL PC CON TRANSPORTE: mientras
+         * `vm` ejecuta opcodes en este hilo, `io` lee el socket (KILL/HELLO al
+         * instante, ya no entre cuantos) y enmarca la salida del programa en
+         * OUTPUT, una vez POR LINEA en vez de uno por trozo. El sink y el poll
+         * son los mismos de antes; lo que cambia es QUIEN los llama, y que
+         * ahora sólo los llama un hilo — durante el RUN, `io`; fuera del RUN,
+         * el lazo del servidor. Nunca los dos a la vez. */
+        bpvm_io_ops_t io_ops = { sim_io_poll, sim_output_sink, vm };
+        if (bpvm_io_start(vm, &io_ops, 0) != 0) {
+            st = bpvm_run(vm);                 /* sin hilo io: el camino de antes */
+        } else {
+            st = bpvm_run(vm);
+            bpvm_io_stop(vm);                  /* drena la salida ANTES del EXITED */
+        }
     }
     bpvm_dbg_wire_reset();   /* la siguiente sesión parte limpia */
     unsigned long dt = (unsigned long) ((clock() - t0) * 1000L / CLOCKS_PER_SEC);

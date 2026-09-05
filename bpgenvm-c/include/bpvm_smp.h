@@ -45,6 +45,11 @@ typedef struct bpvm_output_queue {
 typedef struct bpvm_smp {
     /* Configuración */
     int n_workers;
+    /* V6/A1 — ¿arrancamos la comm task? No, si ya hay un hilo `io` drenando
+     * la salida: serían dos consumidores para una cola de uno. Se decide al
+     * arrancar y se recuerda AQUÍ, porque quien la para es otra función
+     * (bpvm_smp_destroy) y para entonces la respuesta debe ser la misma. */
+    int comm_task_on;
 
     /* vm_lock global. Cubre: threads[].status, runQueue (implícita en
      * threads[]), thread_count, heap_next/free_list, mutexes[]/mutex_count,

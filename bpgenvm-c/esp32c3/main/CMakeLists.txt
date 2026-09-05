@@ -48,6 +48,7 @@ idf_component_register(
         "../../src/bpvm_mem.c"      # V6/U6: el planificador de memoria de la VM
         "../../src/bpvm_mods.c"     # V6/#466: la regla del /lib de la imagen (común)
         "../../src/bpvm_handles.c"  # V6/U5: la tabla de handles, en su módulo
+        "../../src/bpvm_io.c"  # V6/A1: el hilo `io` (segundo hilo de SO: wire + salida por lineas)
         "../../src/bpvm_bios.c"        # V5/I: tabla BIOS prestada al pack nativo
         "../../src/bpvm_bios_fs.c"     # V5/H2: sus ranuras de ficheros (PORTABLE) — faltaba de alta
         "../../src/bpvm_npack.c"       # V5/I: escalera de validacion del pack nativo

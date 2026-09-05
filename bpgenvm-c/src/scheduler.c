@@ -12,6 +12,7 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_io.h"   /* V6/A1 — con io, el wire no se mira desde aquí */
 #include "bpvm_platform.h"
 #include <stdio.h>
 
@@ -91,7 +92,13 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
         /* P-run-stop (#257) — KILL cooperativo: el poll_cb (si hay) mira
          * el transporte ENTRE quanta; kill_requested termina la ejecución
          * limpiamente (paramos entre opcodes → heap/FS consistentes). */
-        if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+        /* V6/A1 — con el hilo `io` en marcha, el wire NO se mira desde aquí: lo
+         * atiende `io` en todo momento y un KILL llega como `kill_requested`,
+         * que se comprueba abajo. Sin `io` (firmware aún sin migrar), el camino
+         * de siempre. Ésta es la línea que hace que la VM deje de tener trato
+         * con el transporte. */
+        if (vm->io == NULL && vm->poll_cb != NULL
+                && vm->poll_cb(vm, vm->poll_user) != 0)
             vm->kill_requested = 1;
         if (vm->kill_requested) return BPVM_KILLED;
 

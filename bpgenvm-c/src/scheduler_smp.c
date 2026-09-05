@@ -17,6 +17,7 @@
 
 #include "bpvm_smp.h"
 #include "bpvm_comm.h"
+#include "bpvm_io.h"   /* V6/A1: si hay `io`, la comm task sobra */
 #include "bpvm_internal.h"
 #include "bpvm_platform.h"
 
@@ -248,7 +249,12 @@ int bpvm_smp_init(bpvm_t* vm, int n_workers) {
     vm->smp = smp;
 
     /* Arranca comm task (host: drena queue a stdout). */
-    if (bpvm_comm_start(vm) != 0) {
+    /* V6/A1 — con el hilo `io` en marcha, la salida ya la drena el: la comm task
+     * de este camino sobra y arrancarla seria tener DOS consumidores para una
+     * cola que solo usa uno. Se conserva para el camino SMP puro (sin io), que
+     * es el que se rehara cuando lleguen las dos VM sobre una cola de threads. */
+    smp->comm_task_on = !bpvm_io_running(vm);
+    if (smp->comm_task_on && bpvm_comm_start(vm) != 0) {
         vm->smp = NULL;
         bpvm_free(smp->worker_threads);
         goto fail_cond;
@@ -273,7 +279,7 @@ void bpvm_smp_destroy(bpvm_t* vm) {
     bpvm_platform_cond_broadcast(&smp->sched_cond);
     bpvm_platform_mutex_unlock(&smp->vm_lock);
     /* Workers ya joineados en scheduler_run_smp; aquí solo cleanup. */
-    bpvm_comm_stop(vm);
+    if (vm->smp->comm_task_on) bpvm_comm_stop(vm);
     bpvm_free(smp->worker_threads);
     bpvm_platform_cond_destroy(&smp->sched_cond);
     bpvm_platform_mutex_destroy(&smp->vm_lock);

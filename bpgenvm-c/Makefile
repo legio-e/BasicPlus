@@ -28,7 +28,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/bpvm_log.c \
-          src/scheduler_smp.c src/comm_common.c src/comm_host.c \
+          src/scheduler_smp.c src/comm_common.c src/comm_host.c src/bpvm_io.c \
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c src/bpvm_mdn_scan.c \
           src/net.c src/net_host.c \
@@ -781,6 +781,13 @@ boardsim-smoke: sim
 sim-smoke: sim
 	@echo "--- H10 sim smoke (FILES + TERMINAL) ---"
 	python tools/sim_smoke.py
+
+# V6/A1.1 - lo que el hilo `io` viene a arreglar, contra el simulador: el KILL
+# llega mientras el programa calcula Y mientras imprime a chorro, y un `print`
+# de varios argumentos sale en UN mensaje OUTPUT (antes, uno por argumento).
+io-smoke: sim
+	@echo "--- V6/A1.1 io smoke (dos hilos: KILL en marcha + OUTPUT por linea) ---"
+	python tools/io_smoke.py
 
 # #425 — el listado DECLARA lo que deja fuera. Contra el micro simulado, que
 # tiene el mismo agujero y los mismos topes en pequeño. Trae su CONTROL (por

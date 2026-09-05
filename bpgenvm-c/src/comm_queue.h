@@ -34,6 +34,19 @@ void   bpvm_oq_push(bpvm_output_queue_t* q, const char* src, size_t len);
  * Devuelve nº bytes leídos. 0 ⇒ closed + drenado (señal de salida). */
 size_t bpvm_oq_pop(bpvm_output_queue_t* q, char* dst, size_t max);
 
+/* V6/A1 — pop CON TOPE DE ESPERA, para el lazo de `io`.
+ *
+ * El pop de arriba bloquea hasta que haya bytes, y eso servia cuando el
+ * consumidor no tenia nada mas que hacer (la comm task del camino SMP). El hilo
+ * `io` SI tiene mas que hacer: entre trago y trago atiende el wire. Con el pop
+ * bloqueante, un programa que no imprime dejaria a `io` dormido para siempre y
+ * un KILL no llegaria nunca.
+ *
+ * Devuelve los bytes leidos (0 si venció el tope sin datos). `*eof` se pone a 1
+ * cuando la cola esta cerrada Y drenada: la senal de salida del lazo. */
+size_t bpvm_oq_pop_timed(bpvm_output_queue_t* q, char* dst, size_t max,
+                         int ms, int* eof);
+
 /* Marca cerrado + despierta productores y consumer para que terminen.
  * Tras esto, push descarta y pop drena lo que queda y devuelve 0. */
 void   bpvm_oq_close(bpvm_output_queue_t* q);
