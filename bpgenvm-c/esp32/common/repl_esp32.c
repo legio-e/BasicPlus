@@ -309,14 +309,31 @@ static void handle_reset(long id, const json_obj_t* obj) {
  * corre DENTRO de bpvm_run, en la misma task del REPL, y el `obj` de la request
  * que lanzó el RUN ya no se usa cuando la VM está corriendo. Mismo esquema que
  * el Pico lleva funcionando desde #140. */
+/* V6/A1.7 - la VM del RUN en curso: las dos costuras del depurador la necesitan
+ * (para saber si `io` corre y para su cerrojo). Un RUN a la vez lo garantiza
+ * s_active_session. */
+static bpvm_t* s_dbg_vm = NULL;
+
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
+    /* V6/A1.7 - un escritor a la vez en el cable: aqui contesta la tarea `vm`
+     * desde un breakpoint y `io` puede estar drenando la salida del programa.
+     * Sin `io`, las dos llamadas son no-ops. */
+    bpvm_io_tx_lock(s_dbg_vm);
     wire_v1_send_line(line, len);
+    bpvm_io_tx_unlock(s_dbg_vm);
 }
 
 static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     (void) user;
-    int n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
+    int n;
+    /* V6/A1.7 - con `io` en marcha, el cable NO se lee desde aqui: `io` es el
+     * unico lector y deja los comandos del ramo en la cola de control. */
+    if (bpvm_io_running(s_dbg_vm)) {
+        n = (int) bpvm_io_ctrl_pop(s_dbg_vm, s_line_buf, sizeof(s_line_buf), 200);
+    } else {
+        n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
+    }
     if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
     json_obj_t o;
     if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
@@ -542,6 +559,15 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
     if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }   /* attach en caliente */
+    /* V6/A1.7 - si es del ramo de depuracion y `io` corre, se DEPOSITA para que
+     * la saque el `next_cmd` (tarea `vm`). Un solo lector del cable: este. */
+    /* OJO: el `vm` que llega aqui es NULL - el adaptador `esp32_io_poll` no lo
+     * tiene (el contrato de `io` pasa un puntero de usuario, no la VM). La VM del
+     * RUN en curso es `s_dbg_vm`, que se fija justo antes de arrancar `io`. Costo
+     * de no verlo: el C3 paraba en el breakpoint y luego no contestaba a nada. */
+    if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && bpvm_io_running(s_dbg_vm)) {
+        if (bpvm_io_ctrl_push(s_dbg_vm, s_line_buf, (size_t) n) == 0) return 0;
+    }
     wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
@@ -711,8 +737,10 @@ static void run_module_path(const char* path, long id) {
      * el mismo interbloqueo que la Pico ya hace en su camino SMP. */
     v1_sink_ctx_t io_ctx = { session };
     bpvm_io_ops_t io_ops = { esp32_io_poll, v1_output_sink, &io_ctx };
-    int con_io = !bpvm_dbg_wire_armed()
-                 && bpvm_io_start(vm, &io_ops, ESP32_IO_OQ_BYTES) == 0;
+    /* V6/A1.7 - ya NO hay excepcion con el depurador: `io` arranca igual y sus
+     * comandos llegan a la VM por la cola de control. */
+    s_dbg_vm = vm;
+    int con_io = bpvm_io_start(vm, &io_ops, ESP32_IO_OQ_BYTES) == 0;
 
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     bpvm_status_t rs = bpvm_run(vm);
@@ -723,6 +751,7 @@ static void run_module_path(const char* path, long id) {
      * este punto el wire vuelve a ser de esta tarea, que es quien manda el
      * KILL_REPLY y el EXITED. */
     if (con_io) bpvm_io_stop(vm);
+    s_dbg_vm = NULL;
 
     /* P-run-stop — ack diferido del KILL, ANTES del EXITED. */
     bpvm_set_poll(vm, NULL, NULL);

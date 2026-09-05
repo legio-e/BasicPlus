@@ -198,14 +198,35 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
  * extrajo LITERALMENTE a src/bpvm_dbg_wire.c (cc658bd) y se estrenó en la P4;
  * verificado en placa, el Pico se pasa al núcleo y borra su copia. Aquí queda
  * sólo lo no portable: traducir JSON ↔ comando tipado y prestar los buffers. */
+/* V6/A1.7 — la VM del RUN en curso: las dos costuras del depurador la necesitan
+ * (para saber si `io` corre y para su cerrojo) y el contrato del ramo sólo pasa
+ * un puntero de usuario, que ya lleva el contexto del depurador. Un RUN a la vez
+ * lo garantiza s_active_session, igual que en `s_io_vm`. */
+static bpvm_t* s_dbg_vm = NULL;
+
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
+    /* V6/A1.7 — el cable tiene un escritor a la vez: aquí contesta la tarea `vm`
+     * desde un breakpoint, y `io` puede estar drenando lo último que el programa
+     * imprimió. Sin este cerrojo, dos líneas se entrelazan y el IDE ve un JSON
+     * roto. Sin `io`, las dos llamadas son no-ops. */
+    bpvm_io_tx_lock(s_dbg_vm);
     wire_v1_send_line(line, len);
+    bpvm_io_tx_unlock(s_dbg_vm);
 }
 
 static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     (void) user;
-    int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
+    int n;
+    /* V6/A1.7 — con `io` en marcha, el cable NO se lee desde aquí: `io` es el
+     * único lector y deja los comandos en la cola de control. Sin `io` (autorun,
+     * o una familia sin hilos) se lee como siempre. Espera acotada para que un
+     * KILL o una desconexión no dejen la VM parada para siempre. */
+    if (bpvm_io_running(s_dbg_vm)) {
+        n = (int) bpvm_io_ctrl_pop(s_dbg_vm, s_line_buf, sizeof s_line_buf, 200);
+    } else {
+        n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
+    }
     if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
     json_obj_t o;
     if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
@@ -901,6 +922,14 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         bpvm_repl_dispatch(type, rid, &obj);   /* attach en caliente */
         return 0;
     }
+    /* V6/A1.7 — si la línea es del ramo de depuración y `io` está en marcha,
+     * se DEPOSITA para que la saque el `next_cmd` del depurador (que corre en la
+     * tarea `vm`). Así sigue habiendo UN solo lector del cable: éste. Antes, un
+     * RUN con breakpoints arrancaba sin `io` para evitar el segundo lector. */
+    if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && bpvm_io_running(vm)) {
+        if (bpvm_io_ctrl_push(vm, s_line_buf, (size_t) n) == 0) return 0;
+        /* No cupo: se contesta como siempre, que es mejor que el silencio. */
+    }
     wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
@@ -1213,7 +1242,10 @@ static void run_module_path(const char* path, long id) {
      * y por el mismo motivo). Se resuelve en A1.7. */
     s_io_vm = vm;
     bpvm_io_ops_t io_ops = { pico_io_poll, v1_output_sink, &sink_ctx };
-    int con_io = !debugging && bpvm_io_start(vm, &io_ops, PICO_IO_OQ_BYTES) == 0;
+    /* V6/A1.7 — ya NO hay excepción con el depurador: `io` arranca igual, y los
+     * comandos del ramo le llegan a la VM por la cola de control. */
+    s_dbg_vm = vm;
+    int con_io = bpvm_io_start(vm, &io_ops, PICO_IO_OQ_BYTES) == 0;
 
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     log_printf("RUN/v1 %s session=%ld", path, session);
@@ -1235,6 +1267,7 @@ static void run_module_path(const char* path, long id) {
      * ser de esta tarea (que es quien manda KILL_REPLY y EXITED). */
     if (con_io) bpvm_io_stop(vm);
     s_io_vm = NULL;
+    s_dbg_vm = NULL;
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     /* #440 — desarmar SIEMPRE: la siguiente carga tiene que poder escribir el
      * código de los módulos, y dejar el MPU puesto convertiría el Run siguiente

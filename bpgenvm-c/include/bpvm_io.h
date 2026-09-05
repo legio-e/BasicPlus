@@ -88,6 +88,41 @@ typedef struct {
  * A partir de aquí, `print` NO escribe: encola. */
 int  bpvm_io_start(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap);
 
+/* ─── V6/A1.7 — LA COLA DE CONTROL (io → vm), y por qué hace falta ───────────
+ *
+ * El depurador tenía un problema de forma: su `next_cmd` LEE EL WIRE, y lo hace
+ * desde la tarea `vm`. Con `io` en marcha eso son dos lectores del mismo
+ * transporte, así que hasta ahora un RUN con breakpoints arrancaba SIN `io` —un
+ * interbloqueo puesto a propósito en las tres familias— y ese caso se quedaba
+ * fuera de la arquitectura de A1.
+ *
+ * Con esta cola deja de haber excepción: `io` sigue siendo el único que lee, y
+ * cuando la línea que llega es del ramo de depuración la DEPOSITA aquí; el
+ * `next_cmd` del depurador la saca. Un solo lector, y el reparto de A1 vale
+ * también depurando.
+ *
+ * Es una cola de LÍNEAS, no de comandos ya parseados, a propósito: el análisis
+ * del JSON es de la familia (cada una tiene su parser y sus buffers), y meterlo
+ * en el común obligaría a subir aquí un tipo que no es de aquí. */
+
+/* Deposita una línea para la VM. La llama el `poll` de la familia, desde `io`.
+ * Devuelve 0 si entró, -1 si no cabía (la cola es pequeña y una línea perdida es
+ * mejor que bloquear a `io`, que también tiene que atender el KILL). */
+int  bpvm_io_ctrl_push(struct bpvm* vm, const char* linea, size_t len);
+
+/* Saca la siguiente línea de control, esperando hasta `ms` (0 = sin esperar).
+ * Devuelve su longitud, o 0 si venció el plazo. La llama la tarea `vm`. */
+size_t bpvm_io_ctrl_pop(struct bpvm* vm, char* dst, size_t cap, int ms);
+
+/* ─── El cerrojo del transporte ──────────────────────────────────────────────
+ * Mientras el programa está PARADO en un breakpoint, quien contesta al IDE es
+ * la tarea `vm` (desde el `pause_cb`), y `io` puede estar drenando lo último que
+ * el programa imprimió. Dos escritores en el mismo cable entrelazarían dos
+ * líneas y el IDE vería un JSON roto. Estas dos funciones lo evitan, y son las
+ * ÚNICAS que el común expone del transporte: no sabe qué transporte es. */
+void bpvm_io_tx_lock(struct bpvm* vm);
+void bpvm_io_tx_unlock(struct bpvm* vm);
+
 /* Cierra la cola, espera a que `io` la drene ENTERA y lo une. Después de
  * volver, toda la salida del programa está entregada — llamarlo antes del
  * EXITED es lo que garantiza que no se pierda la última línea. */

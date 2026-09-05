@@ -48,6 +48,12 @@
 #define IO_LINE_CAP       512
 #define IO_OQ_CAP_DEFAULT 4096
 
+/* V6/A1.7 — la cola de control (io → vm) y el cerrojo del transporte. El porqué
+ * de las dos cosas está en include/bpvm_io.h. La cola es de LÍNEAS y pequeña:
+ * cuatro caben de sobra, porque el IDE manda un comando y espera su respuesta. */
+#define IO_CTRL_LINEAS    4
+#define IO_CTRL_LINEA_CAP 256
+
 struct bpvm_io {
     bpvm_output_queue_t          oq;
     bpvm_io_ops_t                ops;
@@ -56,6 +62,17 @@ struct bpvm_io {
     int                          arrancado;
     char                         linea[IO_LINE_CAP];
     size_t                       linea_n;
+
+    /* Cola de control: anillo de líneas, con su cerrojo y su señal. */
+    char                         ctrl[IO_CTRL_LINEAS][IO_CTRL_LINEA_CAP];
+    size_t                       ctrl_len[IO_CTRL_LINEAS];
+    int                          ctrl_head, ctrl_tail, ctrl_n;
+    bpvm_platform_mutex_handle_t ctrl_mtx;
+    bpvm_platform_cond_handle_t  ctrl_hay;
+
+    /* Un solo escritor en el cable a la vez (io drenando vs la VM contestando
+     * al depurador desde un breakpoint). */
+    bpvm_platform_mutex_handle_t tx_mtx;
 };
 
 /* ─── la entrega: una línea (o un trozo de línea larga) ─────────────────────
@@ -63,8 +80,11 @@ struct bpvm_io {
  * programa ES la salida del proceso. */
 static void entregar(struct bpvm_io* io, const char* s, size_t n) {
     if (n == 0) return;
+    /* A1.7: el cable tiene un solo escritor a la vez. */
+    bpvm_platform_mutex_lock(&io->tx_mtx);
     if (io->ops.line) io->ops.line(s, n, io->ops.user);
     else              fwrite(s, 1, n, stdout);
+    bpvm_platform_mutex_unlock(&io->tx_mtx);
 }
 
 static void purgar_linea(struct bpvm_io* io) {
@@ -110,6 +130,13 @@ int bpvm_io_start(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap) {
         bpvm_free(io);
         return -1;
     }
+    if (bpvm_platform_mutex_init(&io->ctrl_mtx) != 0
+            || bpvm_platform_cond_init(&io->ctrl_hay) != 0
+            || bpvm_platform_mutex_init(&io->tx_mtx) != 0) {
+        bpvm_oq_destroy(&io->oq);
+        bpvm_free(io);
+        return -1;
+    }
     /* El puntero se publica ANTES de arrancar el hilo: en cuanto exista, el
      * lazo puede tocar la cola, y `emit_text` puede empezar a encolar. */
     vm->io = io;
@@ -137,6 +164,9 @@ void bpvm_io_stop(struct bpvm* vm) {
     if (io->arrancado) bpvm_platform_thread_join(&io->th);
     vm->io = NULL;
     bpvm_oq_destroy(&io->oq);
+    bpvm_platform_mutex_destroy(&io->ctrl_mtx);
+    bpvm_platform_cond_destroy(&io->ctrl_hay);
+    bpvm_platform_mutex_destroy(&io->tx_mtx);
     bpvm_free(io);
 }
 
@@ -147,4 +177,54 @@ void bpvm_io_write(struct bpvm* vm, const char* s, size_t len) {
 
 int bpvm_io_running(const struct bpvm* vm) {
     return (vm && vm->io) ? 1 : 0;
+}
+
+/* ─── V6/A1.7: la cola de control y el cerrojo del cable ─────────────────── */
+
+int bpvm_io_ctrl_push(struct bpvm* vm, const char* linea, size_t len) {
+    if (!vm || !vm->io || !linea || len == 0) return -1;
+    struct bpvm_io* io = vm->io;
+    if (len >= IO_CTRL_LINEA_CAP) len = IO_CTRL_LINEA_CAP - 1;
+    bpvm_platform_mutex_lock(&io->ctrl_mtx);
+    if (io->ctrl_n >= IO_CTRL_LINEAS) {
+        /* Llena: se descarta. `io` NO se bloquea aquí a propósito — tiene que
+         * seguir atendiendo el KILL aunque nadie saque los comandos. */
+        bpvm_platform_mutex_unlock(&io->ctrl_mtx);
+        return -1;
+    }
+    memcpy(io->ctrl[io->ctrl_head], linea, len);
+    io->ctrl_len[io->ctrl_head] = len;
+    io->ctrl_head = (io->ctrl_head + 1) % IO_CTRL_LINEAS;
+    io->ctrl_n++;
+    bpvm_platform_cond_signal(&io->ctrl_hay);
+    bpvm_platform_mutex_unlock(&io->ctrl_mtx);
+    return 0;
+}
+
+size_t bpvm_io_ctrl_pop(struct bpvm* vm, char* dst, size_t cap, int ms) {
+    if (!vm || !vm->io || !dst || cap == 0) return 0;
+    struct bpvm_io* io = vm->io;
+    bpvm_platform_mutex_lock(&io->ctrl_mtx);
+    if (io->ctrl_n == 0 && ms > 0) {
+        (void) bpvm_platform_cond_timed_wait(&io->ctrl_hay, &io->ctrl_mtx, ms);
+    }
+    size_t n = 0;
+    if (io->ctrl_n > 0) {
+        n = io->ctrl_len[io->ctrl_tail];
+        if (n > cap - 1) n = cap - 1;
+        memcpy(dst, io->ctrl[io->ctrl_tail], n);
+        dst[n] = '\0';
+        io->ctrl_tail = (io->ctrl_tail + 1) % IO_CTRL_LINEAS;
+        io->ctrl_n--;
+    }
+    bpvm_platform_mutex_unlock(&io->ctrl_mtx);
+    return n;
+}
+
+void bpvm_io_tx_lock(struct bpvm* vm) {
+    if (vm && vm->io) bpvm_platform_mutex_lock(&vm->io->tx_mtx);
+}
+
+void bpvm_io_tx_unlock(struct bpvm* vm) {
+    if (vm && vm->io) bpvm_platform_mutex_unlock(&vm->io->tx_mtx);
 }
