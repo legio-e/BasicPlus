@@ -27,6 +27,78 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (5-sep, noche) — mañana **el IDE**, y `L1` ya no está en V6
+
+**Lo que dijo Eduardo al parar**: *« lo podemos dejar por hoy. Mañana podemos ver el IDE y a partir
+de ahí ir solucionando pendientes.»* O sea: **`E1` primero**, y luego las fichas sueltas.
+
+### 1. La decisión del día: `L1` entera se va a V7
+
+Salió de tirar de un hilo pequeño —*¿por qué no se puede sobrecargar una intrínseca?*— y acabó en
+un cambio de fondo. La cadena, por si hay que reconstruirla:
+
+1. El bloqueo es real y hay **tres** sitios, no uno: el camino de las intrínsecas compone su clave con
+   `fs.name` **pelado** (`MivmEmitter.java:1069`, `:3926`, `:3972`) mientras el propio emisor tiene
+   escrito que *«DEFINICIÓN y LLAMADA deben usar SIEMPRE este mismo helper»* (`:1678`, `emitName`).
+2. Al mirar qué se gana, apareció que **ya conviven dos mecanismos** para lo mismo: `Integer` y
+   `Comparable` son fuente en `bpstdlib/Core.bp` (545 líneas), pero `Object`, `Thread`, `Mutex` y
+   `StringBuilder` se construyen **a mano en Java** (19 `makeMethod`, `SemanticAnalyzer.java:423-529`),
+   y `integer` el tipo es un `case` de un `switch` (`resolveType`, `:1431`). La frontera no responde
+   a ningún criterio: es lo que se pudo expresar en cada momento.
+3. Eduardo lo nombró mejor que yo, y de memoria de Turbo Pascal: **el módulo raíz**, la unidad
+   `System` escrita en el propio lenguaje. *«Me da más tranquilidad tener algo que se pueda LEER que
+   algo que sólo existe en memoria. Y esto también es importante: un solo archivo, sin posibilidad
+   de diferencias entre compilador y VM.»*
+4. Su objeción —«nos queda un `Core.mod` enorme»— **se midió y no se sostiene**: declarar no cuesta
+   RAM. El cargador **salta** la sección `interface` (`loader.c:235`), y `Math.mod` —que es casi sólo
+   declaraciones— es **54,6 % interface y 16 B de exports**. Lo que crece es la flash de las cinco
+   imágenes, porque `Core.mod` va embebido.
+
+✅ **Decidido: `L1` a V7**, con su criterio de siempre —*«lo importante es que lo que hay ahora
+funcione correctamente»*— y **se va casi entera**, porque lo que queda dentro son añadidos que se
+diseñan **encima** del módulo raíz. **V6 queda en `E1` + `G1` + pendientes + la captura.**
+✅ **Lo que NO se aplaza**: `#476`, el andamio. Las **226** entradas de las dos tablas de builtins se
+mantienen a mano y divergir **no hace ruido** — lo denuncia el propio `builtins.c:355`.
+
+### 2. La captura de pantalla, medida — y tres cosas que yo había escrito mal
+
+`#475` reescrita con números (11 agentes; el diseño largo en `docs/V6_IDEAS.md`). Las correcciones,
+que son lo que hay que retener:
+
+- 🔴 **La cola de control de `A1` NO sirve para un verbo `SHOT`**: tiene dos lectores, los dos en el
+  `next_cmd` del depurador — sólo se drena con la VM parada en un breakpoint. → **una sola orden**:
+  `Gui.shot(path)` + el `GET` de siempre. Cero verbos nuevos.
+- 🔴 **El P4 sí tiene framebuffer vivo** (el del driver DPI del IDF). Sólo el **C6** necesita bandas.
+- 🔴 **El FS del P4 no está en PSRAM** — `fs_ram.c` ya no existe; las cinco montan littlefs sobre
+  flash. Desgasta y sobrevive al reset. *(Había una memoria del proyecto diciendo lo contrario, de
+  junio; corregida. Es el riesgo típico: un dato cierto en V3 que sigue en pie en V6.)*
+- ✅ **Comprimir ya está escrito**: el LZ4 de LVGL, `.c` ya dado de alta en los tres builds gráficos,
+  apagado por **una línea** (`lv_conf.h:853`). 21,8× a 152,6× medido.
+- ⚠️ **Y el orden se invierte**: comprimir es el **primer** paso, el fichero es lo opcional — el crudo
+  no cabe en RAM ni en el C6 (115 200 B contra 68 264) ni en la Discovery (771 027 B contra 433 416).
+- ⚠️ **Se empieza en el HOST, no en el C6.** Mi versión anterior rompía la cascada del proyecto.
+
+### 3. `#477` — lo que más me escuece del día
+
+El oráculo exacto de la GUI **existe desde V4 y nadie lo ejecuta**: `dumpTree` es byte-idéntico en las
+dos VMs (medido hoy en 6 samples), **22 samples lo llaman**, y el `check` de `compat.sh` lleva
+desactivado desde V4 con un corpus sin un solo sample de GUI. Antes de construir la segunda vía
+(capturar, comprimir, bajar) hay que enchufar la primera, que es gratis.
+⚠️ Con sus tres agujeros medidos: el chart es invisible en el dump; es **ciego a la rotación** (y en
+la Discovery `disp_set_rotation` es un **no-op declarado**, así que el oráculo sale VERDE con el panel
+sin girar); y color y fuente son render-only por contrato.
+⚠️ Y una tesis mía **falsada al medirla**: no es cierto que sólo cambie la línea `screen` al cambiar
+de resolución — `Gui.bp:824` lee el tamaño de pantalla y **todo el camino Forms** se mueve con ella.
+
+### ⏭️ Para mañana
+
+**`E1` — el IDE y el wire.** Son seis puntos y están listados en `FICHAS.md`; el único que huele a
+bug de verdad es *«el verbo `RESET` no llega con un RUN vivo»* (`#452`) — y conviene mirarlo con `A1`
+cerrada, porque **KILL sí llega** durante un RUN (15-18 ms medidos), así que la diferencia entre los
+dos caminos debería dar la respuesta sola.
+⚠️ **Antes de tocar nada del IDE**: la trampa del fat-jar — `BpIde` empaqueta **su propia copia** del
+compilador, y **no se reconstruye con el IDE abierto**.
+
 ## ⏭️ AL RETOMAR — `P2` CERRADA (4-sep): la pantalla del C6 entera. Empieza la segunda mitad de V6
 
 **Dónde estamos.** U1–U6 (unificación), `#466`, `P1` (C3 y C6 sin pantalla) y `P2` (la pantalla
