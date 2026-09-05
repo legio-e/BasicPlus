@@ -1876,36 +1876,159 @@ Entre lo que hay ahí sin verificar, y que pinta serio:
 ⏭️ Verificar uno a uno antes de tocar nada. La regla del proyecto vale aquí más que nunca: un
 hallazgo falso cuesta más que uno que falta, porque manda a mirar donde no está el problema.
 
-#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep)
+#### 🚨 `#476` — las DOS tablas de builtins se mantienen A MANO, y divergir no hace ruido (abierta 5-sep)
 
-**La idea es de Eduardo, y es vieja**: *«una vez hablamos de hacer una captura de pantalla en el
-micro… para que cuando se probasen los programas gráficos, desde el PC se pudiese ver esa pantalla.
-Al final no lo concretamos pero la idea sigue ahí.»* Ahora tiene destinatario: es la pieza que le
-falta a la propuesta de pruebas con agente (`#444`), donde la pantalla es lo único que hoy exige
-**los ojos de Eduardo**.
+**El código lo denuncia por escrito**, `bpgenvm-c/src/builtins.c:355`:
 
-**El diseño, con los números, está en `docs/V6_IDEAS.md`.** Lo que hay que retener aquí:
+> *«⚠️ Estos números se escriben **A MANO** aquí y tienen que ser el `ordinal()` del enum
+> `Builtin` de miVM. Si divergen, la VM-C ejecuta **OTRO builtin** y el síntoma no apunta a esto.»*
 
-- 🔍 **Leer el framebuffer NO vale**: de las tres placas con pantalla, sólo la **Discovery** (LTDC)
-  tiene la imagen viva en memoria. El **P4** renderiza parcial —el `fb` de 1024×600 de
-  `gui_display_dsi.c:326` es el del rojo de arranque, no la pantalla— y el **C6** ni la tiene ni
-  **cabe** (115 200 B contra ~68 KB libres). `lv_snapshot_take()`, que es lo que usa el host,
-  reserva la pantalla entera: imposible en el C6.
-- ✅ **La forma que sí sirve en las tres**: engancharse al `flush` — invalidar, `lv_refr_now()`, y
-  cada banda que va al panel sale también por el cable. Cero memoria extra, común, ~2 líneas de
-  cintura por familia.
-- ✅ **El transporte ya existe**: `"bulk":N` (el de `GET`). Una banda = un mensaje.
-- ✅ **La costura de ejecución ya existe**: LVGL vive en el hilo `vm`, así que la petición entra por
-  la cola de control y la sirve `Gui.run()` en la guarda que puso `A1` (`src/builtins.c:970`,`:1015`).
-- ⚠️ **La cifra que falta y de la que cuelga todo**: cuánto comprime en RLE una pantalla real. En
-  crudo, la Discovery tarda **67 s** y el P4 **107 s** por UART a 115 200. Se mide **en el host,
-  gratis**, antes de tocar una placa. Plan B si no llega: submuestrear.
-- ⚠️ **Y lo que NO resuelve**: la captura es lo que LVGL **dibujó**, no lo que el panel **muestra**.
-  Un `gap` mal, una rotación al revés o el backlight apagado dan **PNG perfecto y pantalla negra** —
-  los tres fallos de `P2`, literalmente. Retira la repetición, no los ojos.
+Y otra vez ocho líneas más abajo, para los cuatro de `Math`: *«si aquí y allí no coinciden, un
+`.mod` ejecuta otra función y **no lo dice nadie**»*.
 
-⏭️ Orden: (1) medir la compresión en el host · (2) captura común + gancho del `flush` en el **C6**
-(el ciclo más barato) · (3) el lado del PC: montar bandas y escribir el PNG · (4) las otras dos.
+📐 **El tamaño**: **226 builtins** en dos tablas paralelas, acopladas por el `ordinal()` de un
+enum de Java. La defensa es una **convención** — «añadir al final», escrito en un comentario — no
+un mecanismo. No hay generador: `bpgenvm-c/scripts/` sólo tiene los censos y los `regen_mods`.
+
+⏭️ **El arreglo de V6 es el andamio, no la reforma**: un guion que lea el orden del enum
+`Builtin.java` y los números escritos a mano de `builtins.c`, y **falle si no coinciden**. Texto
+contra texto, sin build ni placa, al lado de los censos. Convierte un fallo silencioso con el
+síntoma desplazado en un error de construcción — *errores sí, silenciosos no*.
+
+📌 **La reforma de verdad es de V7** (el módulo raíz: que las dos tablas se **generen** del
+fichero único). Cuando llegue, este guion se tira: habrá sido el andamio.
+
+#### 🟢 `#477` — el oráculo EXACTO del GUI existe desde V4 y NADIE lo ejecuta (abierta 5-sep)
+
+`Gui.__guiDumpTree()` vuelca el árbol de widgets y **está implementado en las dos VMs con paridad
+declarada byte a byte** (`bpgenvm-c/src/gui.c:1156`: *«byte-idéntico a `GuiBackend.dumpTree` de
+miVM»*). Comprobado midiendo hoy: **idéntico en 6 samples** (GuiGeomDemo, GuiDemo, ChartDemo,
+GuiTableDemo, GuiValueDemo, GuiCheckDemo).
+
+🔴 **Y sin embargo: 22 samples lo llaman, el `check` de `compat.sh` lleva DESACTIVADO desde V4,
+y su corpus no incluye ni un sample de GUI.** O sea: la verificación automática de la GUI está
+construida, es exacta, es gratis — y no se ejecuta. Antes de construir la segunda vía (capturar,
+comprimir, bajar, comparar imágenes: `#475`) hay que enchufar la primera.
+
+⚠️ **Tres agujeros del oráculo, medidos, que hay que conocer antes de fiarse de él:**
+- **El chart es invisible**: `ChartDemo` crea 2 series y N puntos, y el árbol saca `chart [200x120
+  align=0 +0,0]` y nada más. `bpvm_gui_create_chart` no pone `has_value` y `dump_node` no tiene
+  rama para chart — aunque el modelo SÍ guarda los datos en `n->cdata`.
+- **Es ciego a la rotación**, y hay una prueba incómoda: en la Discovery
+  `bpvm_gui_disp_set_rotation` es un **no-op declarado**. Tras `setRotation(90)` el dump dice
+  `screen [480x800]` en host y en placa — **oráculo VERDE** — y el panel sigue en 800x480.
+- **Color y fuente son render-only por contrato**: la regresión del `GuiColorDemo` cian no la caza.
+
+⚠️ **Y una tesis mía que quedó FALSADA al medirla**: dije que el árbol sobrevive al cambio de
+resolución salvo el `WxH` de la línea `screen`. **Falso**: `bpstdlib/Gui.bp:824-825` — `Window()`
+lee el tamaño de la pantalla, así que **todo el camino Forms cambia tres líneas o más**. Medido con
+`samples/formev/out/FormEv.mod` a `--screen=240x240` y a `800x480`. Es *censar por la primitiva, no
+por el nombre*, literal: el grep sobre los samples daba cero porque el mecanismo vive un piso arriba.
+
+⚠️ Y miVM tiene la pantalla **clavada a 480x320** sin forma de cambiarla (no hay `--screen` en su
+parser). La VM-C host sí puede disfrazarse de la placa. Cualquier normalización tiene que contar con eso.
+
+⏭️ Enchufar el `check` con un corpus que incluya GUI, disfrazando el host con `--screen` del
+tamaño de la placa (que ya viaja gratis en la línea `screen` del propio dump) y comparando **el
+bloque entero**, no línea a línea — el texto de un widget puede llevar saltos de línea crudos.
+
+#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep · **MEDIDA el 5-sep**)
+
+**La idea es de Eduardo**: *«una vez hablamos de hacer una captura de pantalla en el micro… para
+que cuando se probasen los programas gráficos, desde el PC se pudiese ver esa pantalla»*. Y el
+refinamiento que lo cambia todo, suyo también: **capturar a un FICHERO** en vez de mandar píxeles
+por el cable mientras el programa corre — *«2 o 3 órdenes: captura, comprimir, load»*.
+
+📐 **Está medido** (11 agentes, seis barridos y cuatro lentes; el diseño largo, en
+`docs/V6_IDEAS.md`). Lo que sigue son las conclusiones **con los números que las sostienen**, y
+tres de ellas corrigen lo que esta ficha decía antes.
+
+### 1. Lo que la medida CORRIGIÓ de la primera versión de esta ficha
+
+- 🔴 **La costura de `A1` NO sirve para un verbo `SHOT` del wire.** Esta ficha decía que la
+  petición entraría por la cola de control y la serviría `Gui.run()`. **Falso**: esa cola tiene
+  **exactamente dos lectores en todo el repo, los dos dentro del `next_cmd` del depurador** — sólo
+  se drena con la VM **parada en un breakpoint**, nunca durante un RUN. Y el STM32 no tiene
+  depurador integrado. ✅ **La consecuencia es buena**: **una sola orden nueva, no tres** —
+  `Gui.shot(path)` ejecutado por el hilo `vm`, y el `GET` de siempre. **Cero verbos nuevos.**
+- 🔴 **El P4 SÍ tiene framebuffer completo y vivo**: el del driver DPI del IDF (`.num_fbs=1`,
+  `esp_lcd_dpi_panel_get_frame_buffer`). El `fb` rojo de `gui_display_dsi.c:326` era el smoke test,
+  pero no era el único. Así que **dos de las tres placas tienen framebuffer** y sólo el **C6**
+  necesita captura por bandas. *(Deducido de dos lecturas; falta comprobarlo en placa — es la
+  bisagra de que el P4 salga gratis.)*
+- 🔴 **El FS del P4 NO está en PSRAM**: está en la partición de flash `bpdata` (`fs_ram.c` ya
+  no existe). Desgasta y sobrevive al reset. *(La memoria del proyecto decía lo contrario.)*
+
+### 2. Comprimir ya está escrito — y hay que ponerlo el PRIMERO
+
+✅ **LVGL trae dentro del repo un LZ4 completo —comprime Y descomprime— y su `.c` YA está dado de
+alta en los builds del C6, el P4 y la Discovery.** Está apagado por **una línea**,
+`bpgenvm-c/include/lv_conf.h:853`. <4 KB de código, 1 056 B de RAM. Medido sobre 10 pantallas
+reales: **21,8× a 152,6×**. *(Nadie ha hecho aún el build real con el interruptor a 1.)*
+
+📌 **Y el orden de las tres órdenes se invierte: comprimir es el PRIMER paso, el fichero es lo
+opcional.** Porque el crudo no cabe donde importa:
+
+| | crudo | ¿cabe en RAM? |
+|---|---|---|
+| **C6** | 115 200 B | ❌ **68 264 B libres** (1,69× por encima). Con `lv_snapshot_take`, 230 400 B |
+| **Discovery** | 768 000 B | ❌ comprimir «el fichero» de una llamada pide **771 027 B** contra **433 416 B de heap** (del `.map`) |
+| **P4** | 1 228 800 B | ✅ la única donde la propuesta cabe tal cual |
+
+Comprimido, el cable pasa de **107 s a 1,6 s** (RLE16) o a 7 315 B (deflate) en el P4.
+
+### 3. El fichero: cabe, pero con una trampa medida
+
+El FS se midió **ejecutando el `bpvm_part_defaults` del propio proyecto** con la geometría de cada
+placa: C6 1 261 568 B · DK2 1 302 528 B · P4 5 193 728 (aprovisionado a 7 520 256). Los tres
+ficheros caben. Pero:
+
+- ⚠️ **En la Discovery una captura es el 74 % del FS y REESCRIBIR el mismo fichero falla con `-28`**
+  — littlefs es copy-on-write y pide el doble transitoriamente. Borrar antes sí funciona. En un
+  bucle de pruebas eso muerde a la segunda vuelta. *(Y si la DK2 llevara el FS de la Nucleo, la
+  captura muere tras 323 584 bytes.)*
+- ⚠️ **No existe escritura en streaming**: sólo hay `read_stream` (de `#453`). Escribir por bandas
+  con la fachada de hoy son **N commits**, no uno — el patrón que costó 45× en `#398`.
+- ⚠️ El cerrojo del FS es **grueso**: mientras `vm` escribe la captura, `io` no puede atender el
+  cable. En la DK2 son 48 080 `HAL_FLASH_Program` con la ICACHE apagada.
+- ✅ **El desgaste NO es problema**: ~0,75 borrados por bloque y captura, del orden de 10⁵ capturas
+  (8-53 años a 50/día).
+
+### 4. Qué NO puede ser la imagen
+
+🔴 **La imagen no puede ser el oráculo automático.** El host rasteriza a **32 bpp** y las tres
+placas a **16** (un gate de `lv_conf.h`), así que el antialiasing del texto y las mezclas salen
+distintos aunque el modelo sea idéntico. El oráculo exacto ya existe y es el `dumpTree` → `#477`.
+**La imagen es LA PRUEBA PARA EL OJO, nunca un diff automático.**
+
+⚠️ Y lo que **ninguna** de las dos vías prueba: que el panel **muestre** algo. Backlight, gap,
+rotación, inversión, timing, el cable de la pantalla — todo eso da captura perfecta y pantalla
+negra. La captura sube un peldaño que hoy no existe; el último sigue siendo el ojo.
+
+⚠️ **Y un límite de alcance que nadie había mirado**: en placa **no hay forma de conducir la UI**.
+El host tiene guion determinista (`wait/click/shot/quit`); las placas sólo tienen un dedo sobre el
+táctil. Así que **la comparación por imagen sólo cubre la pantalla inicial** hasta que exista
+inyección de eventos en el device.
+
+### ⏭️ Lo primero — y NO es lo que decía esta ficha
+
+**Construir el camino de captura ENTERO en el host**: leer el `fb1` del display, escribir por la
+fachada `bpvm_fs`, bajarlo con el `GET` del simulador. **Medio día, cero placas.**
+
+📌 La versión anterior decía «empezar por el C6», y eso **viola la cascada del propio proyecto**
+(Java → C → placa). Peor: el host captura hoy por un camino (`lv_snapshot_take` + `fopen`) que **no
+es el que van a usar las placas**; si se queda así, los dos ficheros no son comparables por
+construcción y la comparación se rompe antes de escribirse. Ese mismo prototipo paga de una pasada
+los tres huecos que quedan: el 32-vs-16 bpp, el `--screen` sacado del propio dump, y —bajando el
+draw buffer a 24 líneas— qué áreas entrega de verdad el flush del C6.
+
+⚠️ **Precondición que nadie había nombrado**: LVGL en PARTIAL sólo llama al flush por las áreas
+**invalidadas**. Sin forzar el invalidado total, la captura del C6 sale **a trozos** — plausible y
+equivocada, que es el peor fallo posible. Y sólo con el invalidado total las áreas son bandas de
+ancho completo en orden.
+⚠️ Y en el C6 hay que copiar **ANTES** de `lv_draw_sw_rgb565_swap`, que machaca el buffer in situ.
+⚠️ Trampa de artefacto en el propio host: `bp_shot_%04d` reempieza en 0001 en cada ejecución y
+escribe en el cwd — una captura rancia es **indistinguible** de la nueva. Verde falso de manual.
 
 #### 🟡 `#468` — la stdlib en un pack XIP (memoria de la C6): ANALIZADA con números, a decidir (abierta 4-sep)
 
@@ -2281,11 +2404,35 @@ tocar y cómo se comprueba.
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | ✅ 5-sep: **dos hilos de SO, `vm` + `io`**, en las cinco familias y verificados en placa (`A1.6` aplazada y reorientada por Eduardo) |
 | **A2** | el **censo de proporciones** común / familia / placa | ✅ 5-sep: **91,8 % común**, 7,6 % familia, 0,7 % placa |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
-| **L1** | **lenguaje y compilador** | abierto 23-ago |
+| **L1** | **lenguaje y compilador** | ⏩ **MOVIDA A V7 el 5-sep** — ver la nota bajo la tabla |
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
+
+⏩ **`L1` SE VA A V7, decidido el 5-sep.** Salió de tirar del hilo de las intrínsecas y
+acabó en un cambio de fondo: **el módulo raíz**, al estilo de la unidad `System` de Turbo Pascal
+— *«me da más tranquilidad tener algo que se pueda leer que tener algo que sólo existe en
+memoria. Y esto también es importante: un solo archivo, sin posibilidad de diferencias entre
+compilador y VM»* (Eduardo). El criterio del aplazamiento es suyo y es el de siempre: *«lo
+importante es que lo que hay ahora funcione correctamente»*.
+
+**Por qué V7 y no V6**, en tres:
+1. **No hay nada roto.** El cableado del compilador es frágil, pero funciona.
+2. **Toca `Core.mod`, que va EMBEBIDO en las cinco imágenes** (`esp32_mods.c:4165` y gemelos):
+   engordarlo obliga a regenerar los blobs de las cinco familias, con su riesgo de ABI y de copias
+   rancias. Es justo la clase de cambio que no se mete cerrando una versión.
+3. **Se hace mejor con tiempo**: el módulo raíz decide dónde viven los tipos, dónde se declaran
+   las 226 intrínsecas y quién genera las dos tablas de ids.
+
+📌 **Y se va casi entero.** Aplicando el mismo criterio, lo que queda dentro de `L1` son
+**añadidos, no arreglos** — destructores + `var owner`, ficheros como clase, `Object` comodín,
+`Map` con objetos, el módulo `Time` — y todos se diseñan **encima** del módulo raíz, no debajo.
+Con eso **V6 queda en `E1` + `G1` + los pendientes sueltos + la captura de pantalla**.
+
+⚠️ **Lo que NO se aplaza es la red de seguridad**: ver `#476`. El motivo de querer el módulo
+raíz es que una divergencia entre las dos tablas de builtins **no hace ruido**; si la espera dura
+una versión entera, durante esa espera tiene que gritar.
 
 📌 **Orden acordado el 2-sep, al cerrar** (Eduardo): *«Terminaremos U6, U4 y U5. Después podemos
 hacer P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»* Estado ese día: U1, U2, U3 y N1
