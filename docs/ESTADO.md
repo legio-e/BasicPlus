@@ -183,6 +183,43 @@ P1 (sin pantalla) y P2 (añadir la pantalla a ESP32-C6).»*
    depurador por la cola de control). Fichas nuevas propuestas: migrar la Pico a
    `src/platform_freertos.c`; y el `Neopixel` de la familia ESP32.
 
+## ⏭️ AL RETOMAR — el orden lo dio Eduardo al parar (5-sep)
+
+*«Rematamos todo lo que hay pendiente de A1. Luego, me gustaría conocer las proporciones de
+código específico del micro, el específico de la familia y el común a todos los micros. Después
+de A1 debería quedar muy poco código específico.»*
+
+### 1. Rematar `A1`
+
+| Paso | Qué falta | Qué hace falta tener delante |
+|---|---|---|
+| `A1.3` | **Sólo verificar en placa**: el código ya está (vive entero en `esp32/common`, que las cuatro comparten) y las cuatro imágenes compilan | el **S3**, el **C3** y el **P4** conectados |
+| `A1.7` | El depurador por la cola de control: hoy su `pause_cb` lee el wire desde la tarea `vm`, así que **con el depurador armado `io` NO arranca** (interbloqueo puesto a propósito en las tres familias) | una placa y el IDE |
+| — | Migrar la Pico a `src/platform_freertos.c` (es un BORRADO, no una fusión: de sus 363 líneas sólo 4 eran suyas) | la **Pico 2** conectada, para verificar en placa lo que hoy funciona |
+| `A1.6` | 🔄 **Aplazada y reorientada** por Eduardo: no se mueve LVGL, se le da a `Gui.run()` su propio hilo BP. El obstáculo ya está localizado (el bombeo duerme el hilo del SO) | — |
+
+### 2. El censo de proporciones: común / familia / micro
+
+**La pregunta de Eduardo, tal cual**: cuánto código es específico de un micro, cuánto de una
+familia y cuánto común — y su hipótesis, que después de `A1` debería quedar muy poco específico.
+
+📌 Es un censo, así que vale la norma del proyecto: **censar por lo que el código HACE, no por la
+carpeta en que está**. Un fichero en `src/` que sólo compila una familia no es común; y
+`esp32/common/` es específico de familia aunque se llame «common». Propuesta de método, a
+validar con él antes de contar:
+
+- **Común** = lo que compilan TODAS las imágenes (`src/` menos lo que cada build excluye).
+- **De familia** = `esp32/common/`, `pico/` sin el `board_desc`, `stm32/port/`… lo que sirve a
+  varias placas del mismo silicio.
+- **De micro/placa** = `esp32c6/main/`, `esp32p4/main/`, los `Core/` de CubeIDE, `pico/boards/`.
+- Y las tres trampas conocidas: los **generados** (blobs de stdlib, `.mdn`) no cuentan como
+  código escrito; los `Core/` de CubeMX son **generados por ST**, no nuestros, y hay que contarlos
+  aparte o el número miente; y `src/platform_freertos.c` es común de nacimiento pero **hoy sólo lo
+  compila el STM32** — o sea, el censo tiene que decir «común» y «común EN USO».
+- Lo interesante no es sólo el total: es **la tendencia** (qué había antes de `A1` y qué hay
+  después) y **el desglose por eje** (transporte, memoria, FS, GUI, plataforma), que es lo que
+  dice dónde queda trabajo de unificación.
+
 ### Riesgos que acechan
 - **IDE viejo (dist V5) contra firmware nuevo**: sigue subiendo stdlib a `/lib` por CRC, y el
   instalador nuevo la REPONE al siguiente arranque (misma versión, CRC distinto). Sólo se pelean si
