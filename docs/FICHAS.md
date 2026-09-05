@@ -2722,6 +2722,80 @@ Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `Pr
 (salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
 en la C6, 0,66 ms por vuelta; el reparto GC/concatenación está por separar con `log=1`).
 
+#### 🧵 `A4` — LOS DOS NÚCLEOS: inventario del estado compartido antes de activarlos (5-sep)
+
+**El encargo de Eduardo**, y el orden que fijó:
+
+> *«La utilización de 2 núcleos debe hacerse de forma controlada. Antes de hacerla hay que mirar
+> si tiene consecuencias, no queremos corrupciones de memoria de forma aleatoria. Lo ideal es
+> utilizar los 2 núcleos pero paso a paso.»* — y la orden: **un solo núcleo hasta nueva orden.**
+
+### 0. Lo primero que apareció: el riesgo YA estaba abierto
+
+El S3 y el P4 tienen dos núcleos y **ESP-IDF los usaba por defecto**. Nadie lo había decidido, y
+`sdkconfig` está fuera de git, así que ni siquiera constaba. Con `A1` eso dejó de ser inocuo: la
+tarea `vm` y el hilo `io` pueden solaparse **de verdad** sobre estado que nunca se había mirado.
+
+✅ **Hecho (`c080e1f0`)**: `CONFIG_FREERTOS_UNICORE=y` en los `sdkconfig.defaults` —versionados—
+del S3 y el P4. Las cinco familias corren ahora en un núcleo, y las cinco lo dicen en un fichero
+que viaja. **Y no cuesta nada**, medido en el S3:
+
+| | 2 núcleos | 1 núcleo |
+|---|---|---|
+| 2 000 líneas | 20 343 ms | 20 363 ms |
+| `AllocBench` + GC | 20 384 ms | **20 130 ms** |
+| KILL calculando | 31 ms | **18 ms** |
+
+De regalo, las imágenes adelgazan (~11 KB el S3). El segundo núcleo no estaba comprando nada
+porque el cuello es la UART.
+
+### 1. 🔴 Y el repaso encontró una carrera a la primera — puesta ese mismo día
+
+`s_line_buf` es el buffer del hilo `io`: ahí mete la línea que lee del cable. `A1.7` hizo que el
+`next_cmd` del depurador sacara su comando de la cola de control **escribiendo en ese mismo
+buffer**, y ése lo lee la tarea `vm`. Dos tareas escribiendo el mismo array, en la familia ESP32 y
+en la Pico.
+
+En un núcleo la ventana es un cambio de tarea; en dos, solapamiento real, y el síntoma sería un
+JSON del depurador cortado a media línea — la clase de fallo que sale una vez de cada cien y se le
+echa la culpa al cable. ✅ Arreglado (`64b6f2fb`): **un buffer por rol**.
+
+📌 Es la respuesta empírica al encargo: *mirar antes* no era formalismo, la primera consecuencia
+estaba ahí.
+
+### 2. El inventario, completo
+
+| Estado compartido | Escribe | Lee | Protección | Veredicto |
+|---|---|---|---|---|
+| `vm->kill_requested` | `io` | `vm` | `volatile int`, una palabra alineada | 🟡 vale hoy; con dos núcleos debería ser atómico con orden explícito |
+| `vm->io` (el puntero) | `vm` (start/stop) | `vm` | se publica **antes** de crear el hilo y se anula **tras** el join | ✅ |
+| Cola de salida | `vm` empuja · `io` saca | | mutex + condvar | ✅ |
+| Cola de control | `io` empuja · `vm` saca | | mutex + condvar | ✅ |
+| El cable (dos escritores) | `io` y `vm` (depurador) | | `bpvm_io_tx_lock` | ✅ |
+| `s_line_buf` (familia) | `io` | `io` | un solo rol **desde hoy** | ✅ (era el fallo del punto 1) |
+| `s_dbg_buf` (familia) | `vm` | `vm` | un solo rol | ✅ |
+| `s_out_esc` / `s_out_msg` (STM32) | `io` (el sink) | `io` | sólo los usa el sink | ✅ |
+| El sink del ESP32 y de la Pico | pila (`char buf[1024]`) | | por construcción | ✅ |
+| `wire_v1_send_error` / `..._reply_empty` | pila (`buf[512]`, `buf[64]`) | | por construcción | ✅ |
+| `s_kill_ack_id` | `io` (poll) | `vm` (tras el run) | ordenado por el join de `bpvm_io_stop` | ✅ |
+| El heap de la VM | sólo `vm` | | `io` no reserva nada en su lazo | ✅ |
+
+### 3. Lo que falta ANTES de activar el segundo núcleo
+
+1. 🟡 **`kill_requested` con barrera.** `volatile` impide que el compilador lo cachee, pero no
+   ordena nada entre núcleos. En estos chips la caché es coherente y funciona, pero «funciona»
+   no es «está garantizado»: con dos núcleos debe ser un atómico con orden explícito.
+2. 🟡 **Sólo la Pico tiene cerrojo en su transporte** (`wire_v1_tx_lock`). El ESP32 y el STM32 se
+   apoyan en el cerrojo común, que cubre los dos escritores que conocemos — pero en la Pico el
+   **`printf` de consola y el wire comparten el mismo USB**, y el `printf` no toma ese cerrojo.
+3. 🟢 **Y entonces sí**: fijar `io` a un núcleo y `vm` al otro (el reparto que la Pico ya tiene
+   escrito para cuando cierre `#153`), y medir. No antes.
+
+📌 **Por qué el orden importa**, y es la lección de esta ficha: activar los dos núcleos no habría
+dado un fallo el primer día. Habría dado un JSON roto cada varios cientos de sesiones de
+depuración, meses después, sin forma de atarlo al cambio. Mirar primero costó una tarde y encontró
+la carrera con el código delante.
+
 #### 🧱 `A3` — EL MODELO DE CAPAS, AUDITADO CONTRA EL CÓDIGO (5-sep)
 
 **El enunciado de Eduardo**, que es lo que se audita:
