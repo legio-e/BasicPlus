@@ -250,6 +250,17 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
  *           (auto)run en marcha y ofrecer Stop.
  *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
+static long s_reset_ack_id = -1;   /* RESET recibido en-run (#452) */
+
+/* El reinicio, en UN sitio: lo piden el despachador de reposo y —desde #452— el
+ * final de un RUN que recibió RESET mientras corría. No retorna. */
+static void stm32_hacer_reset(long id) {
+    log_printf("RESET (wire): reinicio");
+    log_flush();                 /* persiste la sesión antes de reiniciar */
+    reply_empty("RESET_REPLY", id);
+    HAL_Delay(50);
+    NVIC_SystemReset();
+}
 
 /* V6/A1.5 - la costura de esta familia para el hilo `io`: su `poll` (el de
  * siempre) y su `line` (el sink de siempre, que ahora recibe lineas enteras en
@@ -273,8 +284,13 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
+    /* V6/E1 (#452) — RESET, con la MISMA forma que KILL. El enunciado de la ficha
+     * era falso: RESET SÍ llegaba, y se rechazaba aquí a propósito con BUSY por no
+     * tener rama. En dos tiempos: marcar el id y devolver 1 para que el RUN muera
+     * por el camino de siempre, y reiniciar DESPUÉS, ya fuera de `bpvm_run`. */
+    if (strcmp(type, "RESET") == 0) { s_reset_ack_id = rid; return 1; }
     if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }
-    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
+    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
     return 0;
 }
 
@@ -421,6 +437,7 @@ static void run_module_path(const char* path, long id) {
 
     /* P-run-stop (#257) — poll del wire entre quanta (KILL/HELLO/BUSY). */
     s_kill_ack_id = -1;
+    s_reset_ack_id = -1;
     if (st == BPVM_OK && !missing[0]) bpvm_set_poll(vm, stm32_run_poll_cb, NULL);
 
     /* V6/A1.5 - EL HILO `io`, igual que en el PC, el ESP32 y la Pico.
@@ -512,6 +529,14 @@ static void run_module_path(const char* path, long id) {
         }
     }
     bpvm_destroy(vm);
+
+    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el EXITED ya
+     * salió, así que el IDE ve la secuencia entera en vez de un BUSY. No retorna. */
+    if (s_reset_ack_id >= 0) {
+        long rid = s_reset_ack_id;
+        s_reset_ack_id = -1;
+        stm32_hacer_reset(rid);
+    }
 }
 
 static void handle_run(long id, json_obj_t* obj) {
@@ -669,13 +694,8 @@ static void dispatch(int first_char) {
      * DURANTE un RUN y lo atiende stm32_run_poll_cb). */
     else if (strcmp(type, "KILL")      == 0)
         wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución");
-    else if (strcmp(type, "RESET")     == 0) {
-        log_printf("RESET (wire): reinicio");
-        log_flush();                 /* persiste la sesión antes de reiniciar */
-        reply_empty("RESET_REPLY", id);
-        HAL_Delay(50);
-        NVIC_SystemReset();
-    } else {
+    else if (strcmp(type, "RESET")     == 0) { stm32_hacer_reset(id); }
+    else {
         char msg[96];
         snprintf(msg, sizeof(msg), "type '%s' no implementado (H9.2)", type);
         wire_v1_send_error(id, "UNSUPPORTED", msg);

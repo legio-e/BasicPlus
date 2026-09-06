@@ -487,6 +487,7 @@ static void send_exited(long session, const char* status, int exit_code,
  *           (auto)run en marcha y ofrecer Stop.
  *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
+static long s_reset_ack_id = -1;   /* RESET recibido en-run (#452) */
 
 #if BPVM_ESP_AOT_MDN
 /* H4 AOT — RAM ejecutable de los .mdn cargados en este RUN. El loader es
@@ -572,6 +573,13 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
+    /* V6/E1 (#452) — RESET, con la MISMA forma que KILL. El enunciado de la ficha
+     * era falso: RESET SÍ llegaba, y se rechazaba aquí a propósito con BUSY por no
+     * tener rama. En dos tiempos, que es lo que Eduardo hacía a mano: marcar el id
+     * y devolver 1 para que el RUN muera por el camino de siempre, y reiniciar
+     * DESPUÉS, ya fuera de `bpvm_run` y desde la tarea del REPL. Ni se reinicia
+     * desde dentro del intérprete, ni aparece un segundo lector del cable. */
+    if (strcmp(type, "RESET") == 0) { s_reset_ack_id = rid; return 1; }
     if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }   /* attach en caliente */
     /* V6/A1.7 - si es del ramo de depuracion y `io` corre, se DEPOSITA para que
      * la saque el `next_cmd` (tarea `vm`). Un solo lector del cable: este. */
@@ -582,7 +590,7 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && bpvm_io_running(s_dbg_vm)) {
         if (bpvm_io_ctrl_push(s_dbg_vm, s_line_buf, (size_t) n) == 0) return 0;
     }
-    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
+    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
     return 0;
 }
 
@@ -736,6 +744,7 @@ static void run_module_path(const char* path, long id) {
 
     /* Ejecutar. bpvm_run single-thread (el SMP en ESP32 es H4.2+). */
     s_kill_ack_id = -1;
+    s_reset_ack_id = -1;
     bpvm_set_poll(vm, esp32_run_poll_cb, NULL);   /* P-run-stop (#257) */
 
     /* #326 — si el IDE dejó breakpoints o pidió PAUSE antes del RUN, engancha el
@@ -822,6 +831,14 @@ static void run_module_path(const char* path, long id) {
     log_flush();
     bpvm_destroy(vm);
     s_active_session = 0;
+
+    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el EXITED ya
+     * salió, así que el IDE ve la secuencia entera en vez de un BUSY. No retorna. */
+    if (s_reset_ack_id >= 0) {
+        long rid = s_reset_ack_id;
+        s_reset_ack_id = -1;
+        handle_reset(rid, NULL);
+    }
 }
 
 static void handle_run(long id, const json_obj_t* obj) {

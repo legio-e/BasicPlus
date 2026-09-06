@@ -242,7 +242,15 @@ public abstract class AbstractBpvmBackend implements Backend {
         require();
         BpvmClient c = this.client;
         this.client = null;
-        c.reset();
+        try {
+            c.reset();
+        } catch (BpvmClient.WireError we) {
+            // V6/E1 (#452) — el device ha dicho que NO y sigue vivo: devolvemos
+            // el cliente a su sitio. Soltarlo dejaba al usuario sin reset y sin
+            // conexión, que es peor que el fallo que venía a contar.
+            this.client = c;
+            throw we;
+        }
     }
 
     // ---- Helpers ----

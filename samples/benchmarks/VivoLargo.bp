@@ -1,0 +1,31 @@
+// VivoLargo.bp — un programa que SIGUE VIVO el tiempo suficiente para probar
+// los verbos que se mandan CON UN RUN EN MARCHA (KILL, RESET: ficha #452).
+//
+// Por qué hace falta: los otros bancos terminan en decenas de milisegundos
+// contra el simulador, así que una prueba que mande el verbo «un segundo
+// después» lo manda en realidad con la VM EN REPOSO — y sale verde con el bug
+// dentro. Me pasó el 6-sep antes de escribir esto. Un instrumento necesita su
+// control, y aquí el control es que el programa siga imprimiendo.
+//
+// Imprime un latido cada pocas vueltas (así el arnés puede COMPROBAR que está
+// vivo justo antes de mandar el verbo) y se rinde solo a los 30 s, para no
+// dejar nada colgado si nadie lo mata.
+module VivoLargo
+  import Pico
+
+  function Main()
+    var t0: integer := Pico.uptimeMs()
+    var i: integer := 0
+    var s: integer := 0
+    var lat: integer := 0
+    while Pico.uptimeMs() - t0 < 30000 do
+      s := s + i
+      i := i + 1
+      if i mod 100000 == 0 then
+        lat := lat + 1
+        print "vivo ", lat, ": ", Pico.uptimeMs() - t0, " ms"
+      endif
+    endwh
+    print "FIN por tiempo (nadie me paro): vueltas ", i, " suma ", s
+  end Main
+end VivoLargo

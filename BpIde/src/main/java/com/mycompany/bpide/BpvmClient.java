@@ -542,14 +542,24 @@ public final class BpvmClient implements AutoCloseable {
     public void reset() throws IOException {
         try {
             sendRequest("RESET", null, null, 2000);
+        } catch (WireError we) {
+            // V6/E1 (#452) — UNA REPLY NO ES UNA REPLY PERDIDA. Si el device
+            // CONTESTA rechazando (p.ej. BUSY con un programa en marcha), eso
+            // no es "ya estaba muriendo": es un no, y el usuario tiene que
+            // verlo. Antes caía en el catch de abajo y se iba a un diag() que,
+            // sin sink, no va a ninguna parte — y la consola imprimía "reset
+            // enviado" sobre una placa que seguía corriendo.
+            //
+            // Y no se cierra: el device está VIVO y al otro lado del cable.
+            // Cerrar aquí dejaba al usuario sin reset Y sin conexión.
+            throw we;
         } catch (IOException ioe) {
-            // Reply perdido es esperable cuando el proceso ya está muriendo.
+            // Reply perdido SÍ es esperable cuando el proceso ya está muriendo.
             // Lo logueamos pero no propagamos — el cliente quiere "reset
             // best-effort", no una garantía de RESET_REPLY síncrona.
             diag("[BpvmClient] RESET sin reply síncrona: " + ioe.getMessage());
-        } finally {
-            close();
         }
+        close();
     }
 
     public void sendCommand(StepCommand cmd) {

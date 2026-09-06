@@ -118,6 +118,7 @@ static sock_t g_cli         = BAD_SOCK;
 static long   g_session     = 0;    /* contador de sesiones RUN */
 static long   g_run_session = 0;    /* sesión activa (para el sink) */
 static long   g_kill_ack_id = -1;   /* KILL recibido durante el run (ack diferido) */
+static long   g_reset_ack_id = -1;  /* RESET recibido durante el run (mata y luego reinicia) */
 
 /* Cintura de "flash" del sim para el BURN (erase/program sobre la región RAM).
  * Bloque de borrado 4K (como Pico/ESP; el STM32 real usa 8K). */
@@ -558,7 +559,14 @@ static void emit_exited(sock_t c, long session, const char* status, int code,
 
 /* Poll del wire entre quanta (#257): KILL para el programa (ack diferido, tras
  * parar), HELLO se contesta al vuelo (el IDE puede conectar con algo corriendo
- * y ofrecer Stop) y cualquier otra cosa devuelve BUSY. */
+ * y ofrecer Stop) y cualquier otra cosa devuelve BUSY.
+ *
+ * V6/E1 (#452) — RESET entra en la lista blanca, con la MISMA forma que KILL.
+ * El enunciado de la ficha era falso: RESET sí llegaba, y se rechazaba aquí a
+ * propósito con BUSY porque no tenía rama. Ahora la tiene, y hace en dos tiempos
+ * lo que Eduardo hacía a mano: marcar el id y devolver 1 para que el RUN muera
+ * por el camino de siempre, y reiniciar DESPUÉS, ya fuera de `bpvm_run`. Ni un
+ * reinicio desde dentro del intérprete, ni un segundo lector del cable. */
 /* V6/A1.1 — adaptador para el contrato de `io` (que no conoce la VM: sólo pasa
  * el `user` que le dieron, y aqui ese `user` es la propia vm). */
 static int sim_run_poll_cb(bpvm_t* vm, void* user);
@@ -575,11 +583,12 @@ static int sim_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof type);
     long rid = json_get_long(&obj, "id", 0);
     if (!strcmp(type, "KILL"))  { g_kill_ack_id = rid; return 1; }
+    if (!strcmp(type, "RESET")) { g_reset_ack_id = rid; return 1; }
     /* U3.24 — el saludo lo construye el REPL comun (misma forma que en placa):
      * el IDE puede conectar con algo corriendo y necesita el HELLO para
      * ofrecer Stop. Lo demas se rechaza con BUSY. */
     if (!strcmp(type, "HELLO")) { (void) bpvm_repl_dispatch("HELLO", rid, &obj); return 0; }
-    send_err(g_cli, rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
+    send_err(g_cli, rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
     return 0;
 }
 
@@ -762,6 +771,7 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     }
 
     g_kill_ack_id = -1;
+    g_reset_ack_id = -1;
     if (st == BPVM_OK && !missing[0]) {
         /* #326 — si hay breakpoints o PAUSE pendientes, el núcleo los aplica y
          * registra su pause_cb. Sin nada armado no hace nada (coste cero). */
@@ -825,6 +835,17 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     bpvm_destroy(vm);
     free_bufs();
     g_run_session = 0;
+
+    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el programa
+     * ya murió y su EXITED ya salió, así que el IDE ve la secuencia completa
+     * (EXITED KILLED → RESET_REPLY → se cae la conexión) en vez de un BUSY que
+     * además se tragaba. Mismo efecto que el RESET en reposo, unas líneas abajo. */
+    if (g_reset_ack_id >= 0) {
+        send_ok(c, "RESET_REPLY", g_reset_ack_id);
+        g_reset_ack_id = -1;
+        close_sock(c);
+        g_cli = BAD_SOCK;
+    }
 }
 
 

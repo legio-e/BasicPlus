@@ -868,6 +868,7 @@ static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code)
 /* mientras el poll corre.                                       */
 /* ============================================================ */
 static long s_kill_ack_id = -1;   /* id del KILL recibido en-run, o -1 */
+static long s_reset_ack_id = -1;  /* id del RESET recibido en-run (#452), o -1 */
 
 static int s_latido_on = 0;   /* V5/H4: lo enciende el ENV `latido=1` */
 
@@ -932,6 +933,16 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         s_kill_ack_id = rid;
         return 1;                              /* → BPVM_KILLED */
     }
+    /* V6/E1 (#452) — RESET, con la MISMA forma que KILL. El enunciado de la ficha
+     * era falso: RESET SÍ llegaba, y se rechazaba aquí a propósito con BUSY por no
+     * tener rama. En dos tiempos, que es lo que Eduardo hacía a mano: marcar el id
+     * y devolver 1 para que el RUN muera por el camino de siempre, y reiniciar
+     * DESPUÉS, ya fuera de `bpvm_run` y desde la tarea del REPL. Ni se reinicia
+     * desde dentro del intérprete, ni aparece un segundo lector del cable. */
+    if (strcmp(type, "RESET") == 0) {
+        s_reset_ack_id = rid;
+        return 1;                              /* → BPVM_KILLED, y luego reboot */
+    }
     if (strcmp(type, "HELLO") == 0) {
         bpvm_repl_dispatch(type, rid, &obj);   /* attach en caliente */
         return 0;
@@ -944,7 +955,7 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         if (bpvm_io_ctrl_push(vm, s_line_buf, (size_t) n) == 0) return 0;
         /* No cupo: se contesta como siempre, que es mejor que el silencio. */
     }
-    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
+    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
     return 0;
 }
 
@@ -1248,6 +1259,7 @@ static void run_module_path(const char* path, long id) {
      * en modo debug el pause_cb ya es el dueño del USB (dos lectores se
      * robarían bytes). */
     s_kill_ack_id = -1;
+    s_reset_ack_id = -1;
     if (!debugging) bpvm_set_poll(vm, pico_run_poll_cb, NULL);
 
     /* V6/A1.4 - arranca `io`. CON EL DEPURADOR ARMADO, NO: su `pause_cb` lee el
@@ -1330,6 +1342,15 @@ static void run_module_path(const char* path, long id) {
     s_active_session = 0;
     /* H6.b.3 — limpiar estado de debug de esta sesión. */
     bpvm_dbg_wire_reset();
+
+    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el programa
+     * ya murió y su EXITED ya salió, así que el IDE ve la secuencia entera
+     * (EXITED KILLED → RESET_REPLY → se cae el cable) en vez de un BUSY. No retorna. */
+    if (s_reset_ack_id >= 0) {
+        long rid = s_reset_ack_id;
+        s_reset_ack_id = -1;
+        handle_reset(rid, NULL);
+    }
 }
 
 static void handle_run(long id, const json_obj_t* obj) {
