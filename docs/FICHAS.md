@@ -3389,7 +3389,25 @@ de cada una sigue en su sitio.
   y `fb66e579` la corrección de paleta que pidió Eduardo en pantalla): `PicoExplorer.java:1296`,
   cinco familias semánticas con el **rojo reservado** a propósito. Se quedó sin tachar en esta lista
   hasta el 5-sep. *(Queda el «paso 2», el rojo para ficheros con problema, que la propia ficha aparca.)*
-- **Enseñar el tiempo que la placa ya manda y nadie imprime.** ⚠️ **El número que decía esta ficha
+- ✅ ~~**Enseñar el tiempo que la placa ya manda y nadie imprime.**~~ — **HECHO el 6-sep**
+  (`ab46384f` + `0fbe6cb2`). El IDE muestra ahora `exit 0 (OK) en 94 ms`; a partir de 10 s, en
+  segundos; y si el peer **no manda** el campo, **no escribe nada** — no se inventa un «0 ms», que
+  sería una medida falsa. Un solo punto (`AbstractBpvmBackend`) cubre todos los sitios que lo pintan.
+  Verificado en el **artefacto** (el fat-jar): los cuatro casos contra un servidor de pega, y de
+  punta a punta contra el simulador con un módulo real.
+  📐 **Y de paso se arregló el significado**: miVM arrancaba su reloj al RECIBIR el RUN y las cinco
+  placas con el módulo ya cargado. Ahora las seis miden **la ejecución**. ⚠️ Pero la cifra que yo
+  anuncié era 30 veces mayor de lo que resultó: instrumentando el método, el sesgo son **7 ms**.
+  Los ~230 ms que medí primero eran **la latencia de mi propio arnés** contestando al breakpoint de
+  entrada (sondeaba cada 200 ms); y el 42× entre las dos VMs con `Bench.mod` (3,8 s en Java contra
+  90 ms en C) **no es sesgo, es velocidad de interpretación**. Lo que separó una cosa de otra fue el
+  cronómetro DEL PROGRAMA, que no depende ni del arnés ni del campo medido.
+  ⚠️ Trampa cara del camino, anotada en `rebuild-bpide-fatjar-tras-frontend`: `mvn install` en
+  `lexer-java` **no re-empaqueta** si sus fuentes no cambiaron, su copia sombreada de `edu.bpgenvm`
+  se queda rancia, gana en el classpath, y el `NoSuchMethodError` **se lo traga el hilo lector**: el
+  IDE no falla, se **cuelga**. Hace falta `clean install` del frontend.
+
+- ⛔️ *(el enunciado viejo de este punto, para el que busque el porqué)* ⚠️ **El número que decía esta ficha
   caducó**: el `durationMs` del SAVE vale **0 siempre** — los tres `fs_save` son no-ops desde
   littlefs, comprobado en el ARTEFACTO (el `.map` de la Discovery: `.text.fs_save … 0x2`, dos bytes).
   El bueno es el **`elapsedMs` del `EXITED`**, que mandan **los cinco emisores** (las cuatro C, el
