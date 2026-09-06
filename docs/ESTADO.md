@@ -74,7 +74,12 @@ una habría sido una ficha falsa.
 
 ### ⏭️ Para la próxima
 
-**`G1`** (`Gui.run()` en su hilo BP) es lo único que queda de los hitos de V6 además de `C1`/`T1`,
+**`G1`**, y con el **diseño ya cerrado** al final del día (ver su ficha): `Gui.run()` sigue
+**síncrono** y se añade `Gui.start()` asíncrono más `Gui.stop()` — decisión de Eduardo, y no se
+puede hacer de otra forma porque varios samples imprimen DESPUÉS de `run()`. Dentro caen dos
+arreglos vistos al mirarlo: el lazo **no duerme** (gira quemando quanta con la ventana abierta) y
+`__guiRunOnce` **rescanea la tabla de símbolos entera en cada pasada**. Es lo único que queda de
+los hitos de V6 además de `C1`/`T1`,
 cuya versión **sigue sin decidir**. De los pendientes, mi orden por daño: **`#477`** (enchufar el
 arnés: es lo que impide que lo de hoy vuelva, y hay cinco samples listos), luego **`#480`** —con el
 `Wdt.disable()` del STM32 que **no desactiva** a la cabeza— y **`#470`**.

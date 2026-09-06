@@ -3492,7 +3492,44 @@ driver MIPI-DSI que costó varias sesiones; los 223 134 B comunes de la Discover
 intérprete entero, que ya estaba escrito. El censo dice dónde vive el código, no dónde está el
 trabajo.
 
-#### 🖼️ G1 — el bucle de LVGL a un hilo BP propio *(absorbido por `A1`, 4-sep: LVGL vive en `io`)*
+#### 🖼️ G1 — el bucle de LVGL a un hilo BP propio *(DISEÑO CERRADO el 6-sep; se implementa en otra sesión)*
+
+### ✅ La forma, decidida por Eduardo el 6-sep
+
+> *«Dejar `Gui.run()` síncrono y `Gui.start()` asíncrono. Pero no lo hacemos hoy, en otra sesión.»*
+
+- **`Gui.run()` SIGUE BLOQUEANDO**, pero por dentro pasa a ser *«lanza el hilo del GUI y espéralo»*.
+- **`Gui.start()`** — lanza el hilo y vuelve.
+- **`Gui.stop()`** — termina el lazo desde otro hilo. Esto es lo que hace posible **interrumpirlo**,
+  que es una de las tres cosas que Eduardo pedía: *«ajustar el bucle, interrumpirlo o salir del
+  programa»*.
+
+**Por qué `run()` no puede dejar de bloquear** — la restricción que fija la forma, comprobada: varios
+samples tienen código **después** de `Gui.run()` y dependen de ello. `GuiCheckDemo` imprime
+«== despues ==», `GuiClickDemo` «== despues del clic ==», `GuiEvLat` «fin». Cambiar el significado
+les cambia la salida, y son justo los que quieren entrar en el corpus (`#477`). Aditivo o nada.
+
+**Lo que YA está hecho y no hay que rehacer** (`#324`): el lazo **ya vive en BP** —
+`Gui.run()` es literalmente `while __guiRunOnce() do endwh`—, no dentro del builtin. `G1` no es sacar
+el lazo: es **de qué hilo cuelga**.
+
+**Por qué hilo BP y no `io`** (decisión de `A1.6`, y se sostiene sola): todos los hilos BP corren
+sobre la MISMA tarea de SO (`vm`), interleavados por el scheduler entre quanta — así que **LVGL se
+sigue llamando desde un solo hilo de SO**. Con `io` habría un segundo hilo de SO tocando algo que no
+es reentrante.
+
+**Y salir del programa sale gratis**: el scheduler para cuando **no queda ningún hilo vivo**
+(`scheduler.c:91`, `if (!any_alive(vm)) break;`), no cuando `Main` vuelve. El hilo del GUI mantiene
+vivo el programa por sí solo.
+
+⏭️ **Dos arreglos que caen dentro, vistos al mirarlo:**
+- 🔴 **El lazo NO duerme.** Con la ventana abierta `__guiRunOnce()` devuelve 1 siempre, así que el
+  `while` gira sin parar quemando quanta. En un hilo BP con su `sleep` se controla el ritmo — es
+  *«ajustar el bucle»*, y es el vecindario de `#462`.
+- 🟡 **`__guiRunOnce` recorre la tabla de símbolos ENTERA en cada pasada** (`builtins.c:1030`) para
+  localizar dos nombres, `Gui.__guiDispatch` y `Gui.__guiDispatchChange`. Con un lazo apretado, eso
+  es un barrido por fotograma. Se cachean y ya.
+
 
 **Idea de Eduardo (23-ago):** *«de LVGL me gustaría, si podemos, mejorar el bucle,
 poniéndolo en un hilo BP sólo para él»*.
