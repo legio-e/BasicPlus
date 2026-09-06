@@ -2636,7 +2636,18 @@ tocar y cómo se comprueba.
 | **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
+| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ítem propio desde el 6-sep**: es implementación nueva, no un pendiente |
+| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ítem propio desde el 6-sep**: es implementación nueva, no un pendiente |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
+
+📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:
+*«`#475` y `#444` hay que darle un ítem propio ya que es implementación nueva. Del resto, hay que ir
+cerrando pendientes.»* O sea: la lista de fichas es para **cerrar lo que está roto o a medias**, y lo
+que es **construir algo que no existe** no cabe ahí — se le pone nombre y se planifica aparte. Los
+dos están **diseñados y con números** (`#475` midió transporte y compresión; `#444` tiene la
+propuesta del agente conduciendo las placas), así que lo que falta es hacerlos.
+⚠️ **En qué versión, NO está decidido** — no lo pregunté y no me lo dijo. Por el criterio que ya se
+aplicó a `L1` («esto es añadir, y V6 está cerrando») sonarían a V7, pero es decisión suya.
 
 ⏩ **`L1` SE VA A V7, decidido el 5-sep.** Salió de tirar del hilo de las intrínsecas y
 acabó en un cambio de fondo: **el módulo raíz**, al estilo de la unidad `System` de Turbo Pascal
