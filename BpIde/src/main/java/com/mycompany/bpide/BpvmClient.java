@@ -522,8 +522,17 @@ public final class BpvmClient implements AutoCloseable {
 
     /** A2.3 — Ordena al daemon arrancar el módulo `module`. Fire-and-forget:
      *  el EXITED event es la confirmación del fin de ejecución. */
-    public void runModule(String module) {
-        sendOneShot("RUN", "\"path\":\"" + Json.escape(module) + "\"", null);
+    public void runModule(String module) { runModule(module, null); }
+
+    /** V6/#412 — con ARGUMENTO DE EJECUCION. Viaja como campo ESCALAR `arg` del
+     *  RUN (no `args:[]`: el mini-parser de las placas no sabe leer arrays
+     *  anidados, y por eso esa forma que el doc prometia nunca existio). null o
+     *  vacio = no se manda el campo, y en la placa manda el valor por defecto
+     *  que declare `Main(arg: string := ...)`. */
+    public void runModule(String module, String arg) {
+        String campos = "\"path\":\"" + Json.escape(module) + "\"";
+        if (arg != null && !arg.isEmpty()) campos += ",\"arg\":\"" + Json.escape(arg) + "\"";
+        sendOneShot("RUN", campos, null);
     }
 
     /** PR-7c — Pide al server que se reinicie. El protocolo v1 manda que el

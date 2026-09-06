@@ -620,7 +620,16 @@ static int esp32_io_poll(void* user) {
  * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: sin
  * RUN_REPLY y errores de resolución a la consola (USB-Serial-JTAG).
  * Lo demás (sesión, OUTPUT, poll, EXITED) es idéntico. */
-static void run_module_path(const char* path, long id) {
+/* V6/#412 — `arg` es el ARGUMENTO DE EJECUCION del programa, y viaja como
+ * campo ESCALAR del RUN (no `args:[]`: el mini-parser de las placas no sabe
+ * leer arrays anidados, ver json_min.h). NULL = no se dio, y manda el valor
+ * por defecto que declare `Main(arg: string := ...)`.
+ *
+ * El AUTORUN no pasa ninguno, a proposito (Eduardo, 6-sep): el parametro es
+ * para PROBAR el programa con distintas opciones; una vez probado se fija el
+ * valor por defecto en el fuente, y la mision del autorun es solo que arranque
+ * al encender el micro. O sea que el defecto ES la configuracion de despliegue. */
+static void run_module_path(const char* path, long id, const char* arg) {
     if (s_active_session != 0) {
         if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
         else         printf("[autorun] BUSY — ignorado\n");
@@ -661,6 +670,9 @@ static void run_module_path(const char* path, long id) {
 
     bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size,
                            s_vm_buffer_size - (uint32_t) vm_stack_region_bytes());
+    /* V6/#412 — el argumento de ejecucion, antes de arrancar: lo recoge el
+     * builtin __runArg que `__startup` llama justo antes de entrar en Main. */
+    if (vm) bpvm_set_run_arg(vm, arg);
     if (!vm) { send_exited(session, "INTERNAL_ERROR", -1, 0, "bpvm_init failed"); s_active_session = 0; return; }
 
     v1_sink_ctx_t sink_ctx = { session };
@@ -846,7 +858,12 @@ static void handle_run(long id, const json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'"); return;
     }
-    run_module_path(path, id);
+    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
+     * NULL, y manda el valor por defecto que declare el fuente. */
+    char argbuf[128];
+    const char* arg = (json_get_str(obj, "arg", argbuf, sizeof(argbuf)) >= 0)
+                    ? argbuf : NULL;
+    run_module_path(path, id, arg);
 }
 
 /* P-autorun (#256) — si existe /sys/auto.txt, ejecuta el módulo de su
@@ -907,7 +924,7 @@ void repl_esp32_autorun(void) {
         printf("[autorun] CANCELADO por el usuario — REPL normal\n");
         return;
     }
-    run_module_path(path, -1);
+    run_module_path(path, -1, NULL);   /* autorun: sin argumento, manda el defecto */
     printf("[autorun] terminado — REPL normal\n");
 }
 

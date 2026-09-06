@@ -643,10 +643,22 @@ public final class PicoExplorer extends JPanel {
                         SwingUtilities.invokeLater(this::onRefresh);   // el árbol refleja el borrado
                         break;
                     case "run": {
-                        if (farg.isEmpty()) { emitLine("  uso: run <fichero>"); break; }
+                        if (farg.isEmpty()) {
+                            emitLine("  uso: run <fichero> [argumento]");
+                            emitLine("       el argumento va con comillas o sin ellas; sin el,");
+                            emitLine("       manda el valor por defecto que declare Main");
+                            break;
+                        }
+                        // V6/#412 — el argumento de ejecucion se pasa AQUI, en la linea de
+                        // comandos. partirDos ya es consciente de las comillas (#437): el
+                        // primer token es el fichero y el RESTO es el argumento, entre
+                        // comillas o sin ellas.
+                        final String[] rp = partirDos(farg);
+                        final String fichero = rp[0];
+                        final String runArg = rp[1];
                         // conveniencia: 'run Blink' = 'run Blink.mod' (los ejecutables son .mod)
-                        String mod = farg.endsWith(".mod") ? farg : farg + ".mod";
-                        emitLine("  (" + backend.run(resolvePath(mod), this::emitLine) + ")");
+                        String mod = fichero.endsWith(".mod") ? fichero : fichero + ".mod";
+                        emitLine("  (" + backend.run(resolvePath(mod), runArg, this::emitLine) + ")");
                         SwingUtilities.invokeLater(this::onRefresh);   // run puede crear ficheros
                         break;
                     }

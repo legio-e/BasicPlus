@@ -1046,7 +1046,16 @@ static void pico_mdn_decir(void* user, const char* msg) {
     log_printf("%s", msg);
 }
 
-static void run_module_path(const char* path, long id) {
+/* V6/#412 — `arg` es el ARGUMENTO DE EJECUCION del programa, y viaja como
+ * campo ESCALAR del RUN (no `args:[]`: el mini-parser de las placas no sabe
+ * leer arrays anidados, ver json_min.h). NULL = no se dio, y manda el valor
+ * por defecto que declare `Main(arg: string := ...)`.
+ *
+ * El AUTORUN no pasa ninguno, a proposito (Eduardo, 6-sep): el parametro es
+ * para PROBAR el programa con distintas opciones; una vez probado se fija el
+ * valor por defecto en el fuente, y la mision del autorun es solo que arranque
+ * al encender el micro. O sea que el defecto ES la configuracion de despliegue. */
+static void run_module_path(const char* path, long id, const char* arg) {
     if (s_active_session != 0) {
         if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
         else         log_printf("autorun: BUSY (sesión activa) — ignorado");
@@ -1099,6 +1108,9 @@ static void run_module_path(const char* path, long id) {
                (unsigned)(stack_region >> 10));
     bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size,
                            s_vm_buffer_size - stack_region);
+    /* V6/#412 — el argumento de ejecucion, antes de arrancar: lo recoge el
+     * builtin __runArg que `__startup` llama justo antes de entrar en Main. */
+    if (vm) bpvm_set_run_arg(vm, arg);
     if (!vm) {
         /* No podemos mandar RUN_REPLY de error porque ya enviamos el
          * RUN_REPLY positivo. Emitimos EXITED con código de error. */
@@ -1359,7 +1371,12 @@ static void handle_run(long id, const json_obj_t* obj) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
         return;
     }
-    run_module_path(path, id);
+    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
+     * NULL, y manda el valor por defecto que declare el fuente. */
+    char argbuf[128];
+    const char* arg = (json_get_str(obj, "arg", argbuf, sizeof(argbuf)) >= 0)
+                    ? argbuf : NULL;
+    run_module_path(path, id, arg);
 }
 
 /* ============================================================ */
@@ -1449,7 +1466,7 @@ void repl_v1_autorun(void) {
         log_printf("autorun: CANCELADO por el usuario (Stop) — REPL normal");
         return;
     }
-    run_module_path(path, -1);
+    run_module_path(path, -1, NULL);   /* autorun: sin argumento, manda el defecto */
     log_printf("autorun: terminado — REPL normal");
 }
 

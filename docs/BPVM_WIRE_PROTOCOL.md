@@ -390,7 +390,26 @@ Reply: `{"type":"LOG_DUMP_REPLY","id":N,"text":"...multilínea..."}`
 
 Arranca un programa. Devuelve `sessionId`.
 
-Request: `{"type":"RUN","id":N,"path":"/app/Hello.mod","args":[]}`
+Request: `{"type":"RUN","id":N,"path":"/app/Hello.mod","arg":"opcional"}`
+
+⚠️ **`args:[]` NUNCA EXISTIÓ, y no podía existir.** Este documento lo prometió desde el principio,
+pero **ninguna línea de código lo parseó jamás** (grep de `"args"` en `bpgenvm-c/src`, `miVM/src` y
+`BpIde/src`: cero), y no era un olvido — el mini-parser JSON de las placas **no sabe leer arrays
+anidados** (`include/json_min.h:14`), así que implementarlo obligaría a tocar el parser de las cinco
+familias. Corregido el 6-sep con `#412`.
+
+**`arg`** (V6/`#412`, opcional): el **argumento de ejecución** del programa, cadena **escalar**. Lo
+recoge el builtin `__runArg` que el compilador emite en `__startup`, y llega a `Main` **siempre como
+una cadena del heap**. Si no viene, manda el valor por defecto que declare el fuente:
+
+```basic
+public function Main(arg: string := "mi valor por defecto")
+```
+
+📌 **Y el autorun (`/sys/auto.txt`) NO pasa ninguno, a propósito** (Eduardo, 6-sep): el argumento es
+para **probar** el programa con distintas opciones; una vez probado se fija el valor por defecto en
+el fuente y la misión del autorun es sólo que arranque al encender el micro. O sea que **el valor por
+defecto ES la configuración de despliegue**.
 
 Reply: `{"type":"RUN_REPLY","id":N,"session":3}`
 
@@ -613,7 +632,7 @@ S → C: INFO_REPLY id=3 boardName="pico2" cpuFreqHz=150000000 ...
 C → S: LIST id=10 path="/app/"
 S → C: LIST_REPLY id=10 entries=[{"name":"Hello.mod","size":3519,...}]
        ← detecta que size coincide; salta el PUT
-C → S: RUN id=11 path="/app/Hello.mod" args=[]
+C → S: RUN id=11 path="/app/Hello.mod" arg="opcional"
 S → C: RUN_REPLY id=11 session=3
 S → C: OUTPUT session=3 data="hola\n"
 S → C: OUTPUT session=3 data="mundo\n"

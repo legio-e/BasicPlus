@@ -3563,7 +3563,37 @@ de cada una sigue en su sitio.
 
 #### 💻 E1 — el IDE y el wire
 
-- **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
+- ✅ ~~**`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap~~ — **HECHO el 6-sep**.
+  La declaración es la que manda, como pidió Eduardo:
+  `public function Main(arg: string := "mi valor por defecto")`.
+  Builtin **`__runArg` (id 232)** en las dos VMs: recibe el defecto que declara el fuente y devuelve
+  el argumento de ejecución si lo hay, y si no **una copia del defecto, alojada en el heap igual**.
+  La idea de Eduardo es la que lo simplifica —el caso sin argumento pasa a ser el caso con `""`
+  también en el heap—, y **no era sólo elegancia**: hoy los dos casos producían **tipos de cadena
+  distintos** (literal de la zona de datos vs cadena del heap), las dos formas que `#389` tuvo que
+  reconocer en el `CHECKCAST`. Con esto la asimetría no llega a existir.
+
+  **Camino completo**: emisor (`__startup`) · las dos VMs · los **dos CLI** (antes rechazaban el
+  segundo posicional, así que la receta de paridad no podía ni ejercitar la feature) · el campo
+  **escalar `arg`** del `RUN` en los **cuatro** implementadores · y el IDE, **por la línea de
+  comandos**: `run <fichero> <argumento>`, con comillas o sin ellas (`partirDos`, ya probado en
+  `#437`).
+
+  📌 **El autorun NO pasa ninguno, a propósito** (Eduardo): *«el parámetro es para poder testear el
+  programa con diferentes opciones; una vez probado, configuramos el valor del argumento por defecto
+  y la misión del auto es simplemente que arranque al arrancar el micro»*. O sea: **el valor por
+  defecto ES la configuración de despliegue**, y por eso vive en el fuente y no en `auto.txt`.
+
+  ⚠️ **Y de paso, una promesa del doc que NUNCA se pudo cumplir**: `BPVM_WIRE_PROTOCOL.md`
+  documentaba `args:[]` desde siempre, **ninguna línea de código lo parseó jamás**, y no era un
+  olvido — el mini-parser de las placas **no sabe leer arrays anidados** (`json_min.h:14`), así que
+  implementarlo obligaría a tocar el parser de las cinco familias. El diseño eligió un `arg`
+  **escalar**, que es la única barata. Doc corregido.
+
+  **Verificado**: paridad byte-idéntica en los dos casos (host), por el wire contra el simulador, y
+  **en placa en la Pico 2** — `arg = [ desde el wire! ]`. Y por el camino del IDE, `exit 0 (OK) en
+  17 ms`. Regresión: `io_smoke` `[status=OK]`, paridad 5/5, y el `RESET` de `#452` sigue bien (toca
+  los mismos REPL).
 - ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.~~ **HECHO el 2-sep** (`#466`, paso 3): el IDE pregunta por cada dependencia con `STAT` por nombre y sólo sube lo que falta o es más viejo.
 - ✅ ~~**Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC~~ *(idea de Eduardo)*
   — **HECHO el 6-sep**, y salió **mucho más pequeño** de lo que yo había estimado (dije «sesión

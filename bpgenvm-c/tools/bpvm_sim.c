@@ -696,6 +696,13 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof path) < 0) {
         send_err(c, id, "INVALID_PARAM", "falta path"); return;
     }
+    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional (no `args:[]`:
+     * el mini-parser de las placas no sabe leer arrays anidados). Si no viene,
+     * NULL, y manda el valor por defecto que declare el fuente. */
+    char argbuf[128];
+    const char* run_arg = (json_get_str(obj, "arg", argbuf, sizeof argbuf) >= 0)
+                        ? argbuf : NULL;
+
     /* H19-F1 — base-dir/main-module del proyecto si vive en /app/<proj>/. */
     bpvm_fs_set_basedir_from_module(path);
     bpvm_fs_set_main_module_path(path);
@@ -730,6 +737,8 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     bpvm_adc_set_backend(bpvm_adc_backend_host());
     bpvm_t* vm = bpvm_init(g_vm_mem, g_mem_size,
                            g_mem_size - bpvm_stack_region_bytes(g_mem_size));
+    /* V6/#412 — antes de arrancar: lo recoge el builtin __runArg. */
+    if (vm) bpvm_set_run_arg(vm, run_arg);
     if (!vm) {
         free_bufs();
         emit_exited(c, session, "INTERNAL_ERROR", -1, 0, "no se pudo inicializar la VM");

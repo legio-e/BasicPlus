@@ -168,7 +168,7 @@ public abstract class AbstractBpvmBackend implements Backend {
      * porque no tiene capability DEBUG), respondemos auto-CONTINUE
      * para que el RUN no se quede colgado.
      */
-    @Override public String run(String path, Consumer<String> lineSink) throws IOException {
+    @Override public String run(String path, String arg, Consumer<String> lineSink) throws IOException {
         require();
         runActive = true;                                    // #256 — ver isRunActive()
         final StringBuilder lineBuf = new StringBuilder();
@@ -220,7 +220,7 @@ public abstract class AbstractBpvmBackend implements Backend {
             // aquí lo ignoramos: el EXITED que sigue cerrará el future.
         });
 
-        client.runModule(path);
+        client.runModule(path, arg);   /* V6/#412 */
         try {
             return done.get(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS);   // ← kill() desbloquea vía EXITED
         } catch (TimeoutException te) {

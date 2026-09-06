@@ -313,7 +313,16 @@ static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_
  * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: sin
  * RUN_REPLY, y una ruta inexistente enciende el LED rojo (el idioma de
  * diagnóstico de este port) en vez de mandar un error al vacío. */
-static void run_module_path(const char* path, long id) {
+/* V6/#412 — `arg` es el ARGUMENTO DE EJECUCION del programa, y viaja como
+ * campo ESCALAR del RUN (no `args:[]`: el mini-parser de las placas no sabe
+ * leer arrays anidados, ver json_min.h). NULL = no se dio, y manda el valor
+ * por defecto que declare `Main(arg: string := ...)`.
+ *
+ * El AUTORUN no pasa ninguno, a proposito (Eduardo, 6-sep): el parametro es
+ * para PROBAR el programa con distintas opciones; una vez probado se fija el
+ * valor por defecto en el fuente, y la mision del autorun es solo que arranque
+ * al encender el micro. O sea que el defecto ES la configuracion de despliegue. */
+static void run_module_path(const char* path, long id, const char* arg) {
     /* H19-F1 — fija el base-dir/main-module del proyecto si el módulo vive en
      * /app/<proj>/ (el IDE manda la ruta cualificada). Plano → sin base-dir. */
     bpvm_fs_set_basedir_from_module(path);
@@ -344,6 +353,9 @@ static void run_module_path(const char* path, long id) {
     }
     size_t stack_region = bpvm_stack_region_bytes(s_vm_bytes);
     bpvm_t* vm = bpvm_init(s_vm_mem, s_vm_bytes, s_vm_bytes - stack_region);
+    /* V6/#412 — el argumento de ejecucion, antes de arrancar: lo recoge el
+     * builtin __runArg que `__startup` llama justo antes de entrar en Main. */
+    if (vm) bpvm_set_run_arg(vm, arg);
     if (!vm) { BOARD_LED_ERR_ON(); emit_exited(session, "INTERNAL_ERROR", -1, 0); return; }
     bpvm_set_output(vm, v1_output_sink, NULL);
 
@@ -544,7 +556,12 @@ static void handle_run(long id, json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
     }
-    run_module_path(path, id);
+    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
+     * NULL, y manda el valor por defecto que declare el fuente. */
+    char argbuf[128];
+    const char* arg = (json_get_str(obj, "arg", argbuf, sizeof(argbuf)) >= 0)
+                    ? argbuf : NULL;
+    run_module_path(path, id, arg);
 }
 
 /* P-autorun (#256) — si existe /sys/auto.txt, ejecuta el módulo de su
@@ -600,7 +617,7 @@ static void autorun_boot(void) {
         return;
     }
     log_printf("autorun: %s", path);
-    run_module_path(path, -1);
+    run_module_path(path, -1, NULL);   /* autorun: sin argumento, manda el defecto */
 }
 
 /* ---- dispatch ---- */

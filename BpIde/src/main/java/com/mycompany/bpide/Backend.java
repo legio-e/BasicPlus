@@ -86,7 +86,15 @@ public interface Backend extends AutoCloseable {
      *  se entrega al `lineSink` a medida que llega. Bloquea hasta que
      *  el programa termina; devuelve un string de status ("OK",
      *  "ERROR …", etc.) para mostrar al usuario. */
-    String run(String path, Consumer<String> lineSink) throws IOException;
+    default String run(String path, Consumer<String> lineSink) throws IOException {
+        return run(path, null, lineSink);
+    }
+
+    /** V6/#412 — igual, con el ARGUMENTO DE EJECUCION del programa. null o vacio
+     *  = no se manda, y manda el valor por defecto que declare `Main`. En el IDE
+     *  se pasa por la LINEA DE COMANDOS: `run <fichero> <argumento>`, con
+     *  comillas o sin ellas. */
+    String run(String path, String arg, Consumer<String> lineSink) throws IOException;
 
     /** P-run-stop (#257) — aborta el programa en ejecución (KILL por el
      *  wire). El run() en curso desbloquea al llegar el EXITED (status
