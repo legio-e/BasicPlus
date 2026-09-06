@@ -3340,8 +3340,24 @@ de cada una sigue en su sitio.
   ```
 
   Y los dos controles en la misma placa: `KILL` sigue dando `KILL_REPLY`+`EXITED` en 51 ms, y
-  `STATE` **sigue dando BUSY** — la lista blanca no se abrió de más. Quedan las otras cuatro
-  familias por verificar en placa (el código es el mismo y compila limpio en las tres imágenes). Rama `RESET` gemela de la de `KILL` en los
+  `STATE` **sigue dando BUSY** — la lista blanca no se abrió de más.
+
+  ✅ **VERIFICADO EN LAS TRES ARQUITECTURAS**, y con eso queda cubierto **todo el código tocado**:
+  los cinco firmwares son **tres ficheros de REPL**, y hay una placa de cada uno.
+
+  | placa | `EXITED KILLED` | `RESET_REPLY` | la prueba del reinicio |
+  |---|---|---|---|
+  | **Discovery U5G9J** (STM32) | +51 ms | +102 ms | banner + **`reset cause: software`** a +2,19 s |
+  | **Pico 2** (RP2350) | +51 ms | +102 ms | el **puerto USB desaparece** a +204 ms y **vuelve a 1,8 s** |
+  | **ESP32-C6** | +51 ms | +102 ms | log de arranque del IDF y **vuelve a 16,6 s** |
+
+  Las tres con su control de vida delante (OUTPUT llegando, ningún EXITED) y con `KILL` y `STATE`
+  comprobados en la misma sesión. Cubren por herencia al Nucleo (comparte `stm32_repl.c`) y al
+  S3/C3/P4 (comparten `esp32/common/repl_esp32.c`).
+
+  🟡 **Cabo suelto menor, visto en las tres**: el `EXITED` de un RESET dice
+  `errorMessage: "terminado por KILL"`. Es verdad a medias —muere por el camino del KILL— pero lo
+  que el usuario pidió fue un RESET. Una línea, cuando se toque otra cosa por ahí. Rama `RESET` gemela de la de `KILL` en los
   cuatro polls (pico, `esp32/common`, stm32, sim): marcar el id, devolver 1 para que el RUN muera
   por el camino de siempre, y reiniciar DESPUÉS desde la tarea del REPL. El STM32 tenía el RESET
   en línea en el despachador → extraído a `stm32_hacer_reset()`. Verificado en el sim con control:

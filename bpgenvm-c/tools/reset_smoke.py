@@ -37,6 +37,9 @@ for _a in sys.argv[2:]:
     if _a.startswith("--serie="): SERIE = _a.split("=", 1)[1]
     elif _a.isdigit():           PORT = int(_a)
 
+class _CableCaido(Exception):
+    pass
+
 if SERIE:
     # Contra una PLACA: el wire v1 es el mismo JSON por lineas, sobre 115200.
     import serial                                   # pyserial
@@ -50,7 +53,13 @@ if SERIE:
     s = _Cable()
     def esperar():
         time.sleep(0.05)
-        return [s] if _ser.in_waiting else []
+        try:
+            return [s] if _ser.in_waiting else []
+        except Exception:
+            # El USB CDC de la Pico VIVE EN EL FIRMWARE: al reiniciar, el puerto
+            # desaparece. Eso no es un fallo del arnes, es la placa reiniciandose
+            # — pero por si solo no prueba nada: la prueba es que VUELVA (abajo).
+            raise _CableCaido()
 else:
     sim = subprocess.Popen([SIM, "--port=%d" % PORT], cwd=REPO,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -73,7 +82,12 @@ def leer(t):
     global buf
     fin, out = time.time() + t, []
     while time.time() < fin:
-        if not esperar(): continue
+        try:
+            hay = esperar()
+        except _CableCaido:
+            out.append(("CABLE", "<<el puerto DESAPARECIO: la placa se reinicia>>", time.time()))
+            break
+        if not hay: continue
         try: d = s.recv(65536)
         except Exception: break
         if not d:
@@ -121,4 +135,31 @@ for tipo, l, ts in leer(15.0):
     print("   [+%6.1f ms] %s" % ((ts - t0) * 1000.0, l[:150]))
 try: s.close()
 except Exception: pass
+
+# La prueba de que hubo reinicio no es que el puerto se caiga —eso lo hace un
+# cable flojo— sino que VUELVA y salude con un arranque nuevo.
+if SERIE and VERBO == "RESET":
+    print("")
+    print("--- vuelve la placa? ---")
+    _hola = ("{" + chr(34) + "type" + chr(34) + ":" + chr(34) + "HELLO" + chr(34)
+             + "," + chr(34) + "id" + chr(34) + ":99}").encode() + bytes([10])
+    volvio, fin2 = False, time.time() + 25
+    while time.time() < fin2 and not volvio:
+        time.sleep(1.0)
+        try: v = serial.Serial(SERIE, 115200, timeout=0)
+        except Exception: continue
+        time.sleep(0.5); v.reset_input_buffer()
+        v.write(_hola); v.flush()
+        b2, f2 = b"", time.time() + 3
+        while time.time() < f2 and bytes([10]) not in b2:
+            d = v.read(4096)
+            if d: b2 += d
+            else: time.sleep(0.05)
+        v.close()
+        for l in b2.decode("utf-8", "replace").split(chr(10)):
+            if "HELLO_REPLY" in l:
+                print("   VOLVIO tras %.1f s: %s" % (time.time() - t0, l[:120]))
+                volvio = True
+                break
+    if not volvio: print("   NO volvio en 25 s")
 parar_sim()
