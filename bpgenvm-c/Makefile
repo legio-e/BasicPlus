@@ -84,7 +84,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -195,6 +195,14 @@ build/%.o: %.c $(FLAVOR_STAMP)
 
 clean:
 	rm -rf build
+
+# V6/#476 — LAS DOS TABLAS DE BUILTINS, QUE SE MANTIENEN A MANO.
+# El id es el ordinal() del enum Builtin de miVM y aqui van los mismos numeros
+# escritos a mano: si divergen, la VM-C ejecuta OTRO builtin y el sintoma no
+# apunta a esto. Texto contra texto, sin build ni placa. Andamio hasta que el
+# modulo raiz (V7) las GENERE de un fichero unico.
+check-builtins:
+	python scripts/check_builtins.py
 
 # H3: incluye los .d generados por -MMD (deps de cabecera). En el primer build
 # aún no existen → el prefijo '-' los ignora silenciosamente.

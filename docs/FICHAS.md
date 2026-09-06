@@ -1890,10 +1890,19 @@ Y otra vez ocho líneas más abajo, para los cuatro de `Math`: *«si aquí y all
 enum de Java. La defensa es una **convención** — «añadir al final», escrito en un comentario — no
 un mecanismo. No hay generador: `bpgenvm-c/scripts/` sólo tiene los censos y los `regen_mods`.
 
-⏭️ **El arreglo de V6 es el andamio, no la reforma**: un guion que lea el orden del enum
-`Builtin.java` y los números escritos a mano de `builtins.c`, y **falle si no coinciden**. Texto
-contra texto, sin build ni placa, al lado de los censos. Convierte un fallo silencioso con el
-síntoma desplazado en un error de construcción — *errores sí, silenciosos no*.
+✅ **HECHO el 6-sep** — `bpgenvm-c/scripts/check_builtins.py`, y `make check-builtins`. Lee el
+orden del enum `Builtin.java` (el id **es** el `ordinal()`) y los números escritos a mano de
+`builtins.c`, y **falla nombrando la entrada** si no coinciden. Texto contra texto, sin build ni
+placa. Convierte un fallo silencioso con el síntoma desplazado en un error de construcción.
+
+**Y con su control negativo, que es lo que lo hace un instrumento y no un adorno**: metiendo a
+propósito `HYPOT_F = 229` donde miVM dice 230, el guion falla y lo dice con nombre y apellidos —
+*«BUILTIN_HYPOT_F = 229 pero en miVM su ordinal es 230»*, salida 1. Restaurado, vuelve a verde.
+
+📊 Estado hoy: **226 entradas de la VM-C, las 226 casan**. Y salen a la luz **6 builtins que sólo
+existen en miVM** y que la VM-C no implementa (`HEAP_FRAG`, `HEAP_MAP`, `INPUT`, `LIST_DIR`,
+`PATH_ABSOLUTE`, `PROMPT`) — comprobado que no están con otro nombre: cero menciones en
+`builtins.c`. No es un error (hay builtins de sólo-host), pero **hasta hoy nadie tenía la lista**.
 
 📌 **La reforma de verdad es de V7** (el módulo raíz: que las dos tablas se **generen** del
 fichero único). Cuando llegue, este guion se tira: habrá sido el andamio.
