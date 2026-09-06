@@ -35,6 +35,12 @@ typedef struct {
 
 void bpvm_adc_set_backend(const bpvm_adc_backend_t* backend);
 
+/* V6/#469 — el backend SIMULADO del PC: la rampa determinista de siempre, con
+ * los mismos textos que miVM. Lo registra a proposito quien no tiene hardware
+ * (el host y el micro simulado). Que una PLACA no registre ninguno ya NO
+ * devuelve un valor plausible: falla con ruido. */
+const bpvm_adc_backend_t* bpvm_adc_backend_host(void);
+
 int bpvm_adc_init_channel(int ch);
 int bpvm_adc_read_channel(int ch);
 

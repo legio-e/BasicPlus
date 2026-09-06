@@ -24,6 +24,7 @@
  */
 
 #include "bpvm.h"
+#include "bpvm_adc.h"
 #include "bpvm_io.h"   /* V6/A1.1: el hilo io, tambien en el PC */
 #include "bpvm_fs.h"
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
@@ -267,6 +268,9 @@ int main(int argc, char** argv) {
      * `--stack=N` sigue mandando, igual que `stack=N` en el ENV de la placa. */
     if (stack_kb) bpvm_set_stack_kb(stack_kb);
     size_t stack_base = mem_size - bpvm_stack_region_bytes(mem_size);
+    /* V6/#469 — el PC no tiene ADC, y lo dice a proposito: registra el backend
+     * simulado. Asi «no hay backend» queda reservado para el olvido de una placa. */
+    bpvm_adc_set_backend(bpvm_adc_backend_host());
     bpvm_t* vm = bpvm_init(mem, mem_size, stack_base);
     if (!vm) {
         fprintf(stderr, "bpvm_init falló (memSize=%zu)\n", mem_size);

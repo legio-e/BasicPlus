@@ -36,6 +36,7 @@
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
  */
 #include "bpvm.h"
+#include "bpvm_adc.h"
 #include "bpvm_io.h"   /* V6/A1.1: el hilo io */
 #include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
 #include "bpvm_bmgr.h"
@@ -723,6 +724,10 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
      * MAS AMABLE que el original, y esos no cazan nada. Y ya mordio una vez —
      * `repl_esp32.c` lo lleva escrito: «tenia una COPIA de la regla y se habia
      * quedado en /2 mientras el Pico ya iba por /4». */
+    /* V6/#469 — el micro SIMULADO tampoco tiene ADC, y lo dice a proposito:
+     * registra el backend del host (la rampa determinista de siempre). Asi «no
+     * hay backend» queda reservado a una placa DE VERDAD que se lo dejo. */
+    bpvm_adc_set_backend(bpvm_adc_backend_host());
     bpvm_t* vm = bpvm_init(g_vm_mem, g_mem_size,
                            g_mem_size - bpvm_stack_region_bytes(g_mem_size));
     if (!vm) {
