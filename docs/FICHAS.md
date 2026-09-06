@@ -1777,7 +1777,7 @@ y el Run en la Pico 2 byte-idéntico al host.
 `samples/out` sigue lleno de MOD6 de V5: ya no hacen daño, pero son un fósil (gitignorado) que
 conviene vaciar cuando toque.
 
-#### 🔴 `#469` — una fachada SIN BACKEND devuelve un número inventado, y nadie lo dice (abierta 5-sep, de `A3`)
+#### 🟠 `#469` — una fachada SIN BACKEND devuelve un número inventado (abierta 5-sep, de `A3` · **ADC HECHO el 6-sep** `bbe0d8fd`; queda decidir qué se hace con las OTRAS que la auditoría destapó)
 
 **El síntoma, en una placa real**: en una Nucleo o una Discovery, `Adc.read()` devuelve un número
 que se mueve, parece una lectura y **es falso**; y `Adc.Channel(0)` imprime `→ GP26`, que es el
@@ -1963,7 +1963,7 @@ regenerados. Encaja con `L1` y el módulo raíz, que ya están en V7 por el mism
 media funcionalidad—: **quita una mentira**. Hasta V7, en una placa sin backend de ADC la fachada
 falla en vez de devolver una rampa que parece una lectura.
 
-#### 🔴 `#478` — miVM NO PUEDE TOCAR UN BUS: los builtins de I2c/Spi/Uart se quedaron fuera del 4→8B (abierta 6-sep)
+#### ✅ `#478` — ~~miVM NO PUEDE TOCAR UN BUS~~: los builtins de I2c/Spi/Uart se quedaron fuera del 4→8B (abierta y **CERRADA el 6-sep**, `c27a85fe` + `163be329`)
 
 **El invariante sagrado, roto en duro, y con la REFERENCIA en el lado equivocado.** Reproducido con
 `samples/BusBug.bp`, el mismo `.mod` en las dos VMs:
@@ -2047,7 +2047,7 @@ Discovery — el aviso de `#469` llega al PC, cuando antes se quedaba en la cons
 ✅ Compilan las cinco familias con el camino nuevo: Pico (ninja), C6 (`idf.py`, y con él toda la
 familia ESP32) y Discovery (CubeIDE) — más el host y el simulador. `io_smoke` sigue en `[status=OK]`.
 
-#### 🚨 `#476` — las DOS tablas de builtins se mantienen A MANO, y divergir no hace ruido (abierta 5-sep)
+#### ✅ `#476` — ~~las DOS tablas de builtins se mantienen A MANO, y divergir no hace ruido~~ (abierta 5-sep · **CERRADA 6-sep**, `15e9b170`: `make check-builtins`)
 
 **El código lo denuncia por escrito**, `bpgenvm-c/src/builtins.c:355`:
 
