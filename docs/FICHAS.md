@@ -1876,6 +1876,45 @@ Entre lo que hay ahí sin verificar, y que pinta serio:
 ⏭️ Verificar uno a uno antes de tocar nada. La regla del proyecto vale aquí más que nunca: un
 hallazgo falso cuesta más que uno que falta, porque manda a mirar donde no está el problema.
 
+#### 🔴 `#478` — miVM NO PUEDE TOCAR UN BUS: los builtins de I2c/Spi/Uart se quedaron fuera del 4→8B (abierta 6-sep)
+
+**El invariante sagrado, roto en duro, y con la REFERENCIA en el lado equivocado.** Reproducido con
+`samples/BusBug.bp`, el mismo `.mod` en las dos VMs:
+
+```
+miVM :  1: inicio · [i2c] init… · 2: ctor ok · 3: array ok  buf[0]= 7
+        [bpgenvm worker 0, tid=0] 1073741830      ← muere aqui
+VM-C :  … 4: read ok  rc= 1  buf[0]= 0 · 5: fin      (status=OK)
+```
+
+`1073741830` = `0x40000006`: **es un handle, no una dirección**.
+
+**La causa, verificada en tres líneas del mismo fichero:**
+- `VirtualMachine.java:1867` → `REF_SIZE = 8`.
+- `VirtualMachine.java:5747` → `popTc()` hace `tc.sp -= 4`.
+- `VirtualMachine.java:5140` (I2C_WRITE) → `int dataRef = popTc(tc);` y acto seguido lo usa como
+  **dirección física**: `readI32(memory, dataRef + 4 + i*4)`. Dos fallos a la vez: lee **medio
+  handle** y **desincroniza la pila** 4 bytes por cada ref.
+
+📌 **Y el arreglo está escrito 400 líneas más arriba, en el mismo fichero.** `case MOVE`
+(`:4774-4783`) usa `popTcRef` + `refDeref`, con un comentario que nombra el bug exacto:
+*«#6 (censo V4): array ref = 8B (era popTc 4B + el handle se usaba como dirección física SIN
+refDeref)»*. **A `MOVE` se lo arreglaron; a los buses no.** Es la campaña de refs 4→8B de V4 con
+siete sitios detrás.
+
+**Los siete**: `:5140`,`:5148` (I2C_WRITE) · `:5159`,`:5164` (I2C_READ) · `:5204`,`:5209`
+(SPI_WRITE) · `:5220`,`:5223` (SPI_READ) · `:5232`,`:5238`,`:5241` (SPI_TRANSFER) · `:5268`,`:5274`
+(UART_WRITE) · `:5287`,`:5290` (UART_READ). Y de propina `NEOPIXEL_SHOW` (`:5452-5458`) y
+`NEOPIXEL_INIT` (`:5446-5451`), que **finge éxito** donde la VM-C lanza.
+
+⚠️ **Por qué no lo vio nadie**, y es la misma historia que `#477`: el corpus de `compat.sh:51-53`
+tiene 16 casos y **ninguno toca i2c, spi, uart, gpio, adc, pwm, pulse ni neopixel**. Y el sample que
+lo reproduce —`samples/BusBug.bp`— existía ya: se escribió para bisecar un cuelgue **en la Pico**.
+El arnés tenía el reactivo delante y no lo metió en la red.
+
+⏭️ Cambiar los siete a `popTcRef` + `refDeref` (el patrón de `MOVE`), y **meter `BusBug` en el
+corpus** — sin eso volverá.
+
 #### 🚨 `#476` — las DOS tablas de builtins se mantienen A MANO, y divergir no hace ruido (abierta 5-sep)
 
 **El código lo denuncia por escrito**, `bpgenvm-c/src/builtins.c:355`:
