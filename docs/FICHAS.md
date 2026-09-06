@@ -3327,8 +3327,21 @@ de cada una sigue en su sitio.
 - **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
 - ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.~~ **HECHO el 2-sep** (`#466`, paso 3): el IDE pregunta por cada dependencia con `STAT` por nombre y sólo sube lo que falta o es más viejo.
 - **Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC *(idea de Eduardo)*.
-- 🔧 **El verbo `RESET` con un RUN vivo** *(era `#452`)* — **ARREGLADO el 6-sep (`ee250df6`), falta
-  la comprobación EN PLACA de las cinco familias.** Rama `RESET` gemela de la de `KILL` en los
+- ✅ ~~**El verbo `RESET` no llega con un RUN vivo**~~ *(era `#452`)* — **ARREGLADO el 6-sep
+  (`ee250df6`) y VERIFICADO EN PLACA en la Discovery U5G9J**, con la placa contando su propio
+  reinicio:
+
+  ```
+  control: el programa esta VIVO (2 OUTPUT, ningun EXITED)
+  [+  51 ms] {"type":"EXITED","session":2,"status":"KILLED","exitCode":130,"elapsedMs":3038}
+  [+ 102 ms] {"type":"RESET_REPLY","id":4}
+  [+2189 ms] === bpvm-stm32 REPL (wire v1) listo ===
+  [+2189 ms] reset cause: software
+  ```
+
+  Y los dos controles en la misma placa: `KILL` sigue dando `KILL_REPLY`+`EXITED` en 51 ms, y
+  `STATE` **sigue dando BUSY** — la lista blanca no se abrió de más. Quedan las otras cuatro
+  familias por verificar en placa (el código es el mismo y compila limpio en las tres imágenes). Rama `RESET` gemela de la de `KILL` en los
   cuatro polls (pico, `esp32/common`, stm32, sim): marcar el id, devolver 1 para que el RUN muera
   por el camino de siempre, y reiniciar DESPUÉS desde la tarea del REPL. El STM32 tenía el RESET
   en línea en el despachador → extraído a `stm32_hacer_reset()`. Verificado en el sim con control:

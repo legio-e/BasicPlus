@@ -5,8 +5,11 @@
     python tools/reset_smoke.py KILL     el camino que ya funcionaba (control)
     python tools/reset_smoke.py STATE    un verbo que SIGUE fuera de la lista (BUSY)
 
-Se ejecuta desde la raiz del repo. Levanta el simulador, sube el programa y sus
-dependencias como hace el IDE, arranca el RUN y manda el verbo a mitad.
+    python tools/reset_smoke.py RESET --serie=COM12   contra una PLACA de verdad
+
+Se ejecuta desde la raiz del repo. Sin --serie levanta el simulador; con --serie
+habla por el cable con la placa (115200, el wire v1 es el mismo JSON por lineas).
+Sube el programa como hace el IDE, arranca el RUN y manda el verbo a mitad.
 
 >>> POR QUE ESTE ARNES TIENE UN CONTROL, Y POR QUE NO ES OPCIONAL <<<
 
@@ -28,12 +31,38 @@ REPO  = r"C:\lenguajes\pm"
 SIM   = os.path.join(REPO, "bpgenvm-c", "build", "bpvm-sim.exe")
 MOD   = os.path.join(REPO, "samples", "benchmarks", "VivoLargo.mod")
 VERBO = (sys.argv[1] if len(sys.argv) > 1 else "RESET").upper()
-PORT  = int(sys.argv[2]) if len(sys.argv) > 2 else 5117
+PORT  = 5117
+SERIE = None
+for _a in sys.argv[2:]:
+    if _a.startswith("--serie="): SERIE = _a.split("=", 1)[1]
+    elif _a.isdigit():           PORT = int(_a)
 
-sim = subprocess.Popen([SIM, "--port=%d" % PORT], cwd=REPO,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(1.2)
-s = socket.create_connection(("127.0.0.1", PORT), timeout=20)
+if SERIE:
+    # Contra una PLACA: el wire v1 es el mismo JSON por lineas, sobre 115200.
+    import serial                                   # pyserial
+    sim = None
+    _ser = serial.Serial(SERIE, 115200, timeout=0)
+    time.sleep(0.4); _ser.reset_input_buffer()
+    class _Cable(object):                           # misma cara que el socket
+        def sendall(self, b): _ser.write(b); _ser.flush()
+        def recv(self, n):    return _ser.read(4096)
+        def close(self):      _ser.close()
+    s = _Cable()
+    def esperar():
+        time.sleep(0.05)
+        return [s] if _ser.in_waiting else []
+else:
+    sim = subprocess.Popen([SIM, "--port=%d" % PORT], cwd=REPO,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.2)
+    s = socket.create_connection(("127.0.0.1", PORT), timeout=20)
+    def esperar():
+        r, _, _ = select.select([s], [], [], 0.15)
+        return r
+
+def parar_sim():
+    if sim is not None: sim.terminate()
+
 buf = b""; n = [0]
 def sig(): n[0] += 1; return n[0]
 def send(o): s.sendall((json.dumps(o) + "\n").encode())
@@ -44,11 +73,12 @@ def leer(t):
     global buf
     fin, out = time.time() + t, []
     while time.time() < fin:
-        r, _, _ = select.select([s], [], [], 0.15)
-        if not r: continue
+        if not esperar(): continue
         try: d = s.recv(65536)
         except Exception: break
-        if not d: out.append(("CERRADA", "<<el sim CERRO la conexion>>", time.time())); break
+        if not d:
+            if SERIE: continue      # en serie, un read vacio es "aun no hay bytes"
+            out.append(("CERRADA", "<<CERRO la conexion>>", time.time())); break
         buf += d
         while b"\n" in buf:
             l, buf = buf.split(b"\n", 1)
@@ -61,23 +91,26 @@ def leer(t):
 
 send({"type": "HELLO", "id": sig()}); leer(2.0)
 send_bulk({"type": "PUT", "id": sig(), "path": "/app/P.mod"}, open(MOD, "rb").read()); leer(3.0)
-for d in ["Core", "Str", "Math", "Collections", "IO", "Pico"]:
-    o = os.path.join(REPO, "bpstdlib", d + ".mod")
-    if os.path.exists(o):
-        send_bulk({"type": "PUT", "id": sig(), "path": "/lib/" + d + ".mod"}, open(o, "rb").read()); leer(3.0)
+# Las dependencias solo hacen falta contra el SIMULADOR: una placa trae la
+# stdlib EMBEBIDA en su imagen, y subirsela seria escribir en su FS sin motivo.
+if not SERIE:
+    for d in ["Core", "Str", "Math", "Collections", "IO", "Pico"]:
+        o = os.path.join(REPO, "bpstdlib", d + ".mod")
+        if os.path.exists(o):
+            send_bulk({"type": "PUT", "id": sig(), "path": "/lib/" + d + ".mod"}, open(o, "rb").read()); leer(3.0)
 
 send({"type": "RUN", "id": sig(), "path": "/app/P.mod"})
 ini = leer(1.5)
 if not any(r[0] == "RUN_REPLY" for r in ini):
-    sim.terminate(); sys.exit("el RUN no arranco: " + str(ini[:2]))
+    parar_sim(); sys.exit("el RUN no arranco: " + str(ini[:2]))
 
 # --- CONTROL: ¿sigue vivo? ---
 mitad = leer(1.5)
 salida = sum(1 for r in ini + mitad if r[0] == "OUTPUT")
 if any(r[0] == "EXITED" for r in ini + mitad):
-    sim.terminate(); sys.exit("INVALIDA: el programa ya habia terminado antes del %s" % VERBO)
+    parar_sim(); sys.exit("INVALIDA: el programa ya habia terminado antes del %s" % VERBO)
 if salida == 0:
-    sim.terminate(); sys.exit("INVALIDA: no hay senal de vida (0 OUTPUT) antes del %s" % VERBO)
+    parar_sim(); sys.exit("INVALIDA: no hay senal de vida (0 OUTPUT) antes del %s" % VERBO)
 print("control: el programa esta VIVO (%d OUTPUT, ningun EXITED)" % salida)
 
 print("\n--- %s con el RUN vivo ---" % VERBO)
@@ -88,4 +121,4 @@ for tipo, l, ts in leer(15.0):
     print("   [+%6.1f ms] %s" % ((ts - t0) * 1000.0, l[:150]))
 try: s.close()
 except Exception: pass
-sim.terminate()
+parar_sim()
