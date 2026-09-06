@@ -27,6 +27,64 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (6-sep, noche) — **`E1` CERRADO, 7 de 7**. Queda `G1` y los pendientes
+
+Jornada larga y con mucho cierre. Eduardo al parar: *«ha sido una buena jornada»*.
+
+### Lo que se cerró hoy
+
+| | |
+|---|---|
+| `#452` | el `RESET` con un RUN vivo — **verificado en las tres arquitecturas** |
+| `#469` | la fachada de ADC ya no inventa lecturas |
+| `#476` | `make check-builtins`, con su **control negativo** |
+| `#478` | **miVM no podía tocar un bus** — 8 sitios del 4→8B de V4 |
+| `#412` | el **argumento de ejecución**, de punta a punta y en placa |
+| `E1` | los **siete** puntos: el tiempo del RUN, el CRC de origen, las BD sin placa |
+
+Y dos piezas de fondo que salieron por el camino: **`bpvm_out`** (la traza de las
+fachadas por el camino del `print`, y en placa **ya viaja por el wire**) y el **gate de
+arquitectura del host** (`MDN_ARCH_X64`), que hasta hoy aceptaba en silencio un blob de ARM.
+
+### 📌 Lo que hay que retener de la jornada
+
+**Tres de los bugs de verdad los encontró el trabajo, no la red de seguridad**, y siempre por lo
+mismo: el `check` de `compat.sh` lleva **desactivado desde V4** y su corpus de 16 casos no toca ni
+buses, ni GPIO, ni ADC, ni GUI (`#477`). ✅ Y hoy quedan **cinco samples byte-idénticos** esperando a
+entrar: `BusBug`, `AdcDemo`, `ArgDemo`, `MathRango`, `MathTest`.
+
+⚠️ **Y una advertencia sobre mí mismo, que se repitió cuatro veces**: mi propio instrumento me dio
+el hallazgo equivocado —la latencia del arnés como si fuera sesgo del `elapsedMs` (30× de más), un
+`cut -c1-100` que «partía» una línea de C sana, un `2>&1` que mezclaba stderr con la paridad, y un
+`make sim` sin `LVGL=1` que acusó a `#462`—. Las cuatro las cazó un **control**. Sin control, cada
+una habría sido una ficha falsa.
+
+### Decisiones de Eduardo, con su criterio
+
+- **«¿Es útil para el programador? Si la respuesta es sí, se hace.»** Con eso entró la BD en el
+  simulador.
+- **«El IDE no tiene que determinar el orden de búsqueda, le pregunta al micro.»** Enderezó el CRC de
+  origen: yo iba a duplicar el orden en el IDE, que es la enfermedad de `#470` y lo que costó `#463`.
+- **«x86 es en realidad x64, los binarios son diferentes.»** De ahí salieron dos valores de
+  arquitectura y no uno.
+- **El autorun no pasa argumento**: el parámetro es para PROBAR; una vez probado, **el valor por
+  defecto ES la configuración de despliegue**.
+- **`#479` (mapa de pines y `AnPin`) a V7**, con el modelo cerrado. Y **`#475`/`#444` pasan a ser
+  hitos propios `C1` y `T1`** — son implementación nueva, no pendientes.
+
+### ⏭️ Para la próxima
+
+**`G1`** (`Gui.run()` en su hilo BP) es lo único que queda de los hitos de V6 además de `C1`/`T1`,
+cuya versión **sigue sin decidir**. De los pendientes, mi orden por daño: **`#477`** (enchufar el
+arnés: es lo que impide que lo de hoy vuelva, y hay cinco samples listos), luego **`#480`** —con el
+`Wdt.disable()` del STM32 que **no desactiva** a la cabeza— y **`#470`**.
+
+⚠️ **Placas**: la Pico 2 quedó con todo lo de hoy. **La Discovery y el C6 se desconectaron a mitad**
+(`No ST-Link detected`), así que llevan firmware de esta mañana: **sin `bpvm_out`, sin `#412` y sin
+el gate**. Y siguen teniendo ficheros de prueba (`/app/P.mod`, `/app/adc.mod`).
+⚠️ Para `make sim SQLITE=1` hace falta generar una vez `build/sql/aot_SQLite.c` con `AotMain` y
+tener la amalgama de SQLite, igual que `test-sqldemo`.
+
 ## ⏭️ AL RETOMAR (6-sep, mediodía) — `E1`, y si da tiempo `G1`
 
 **Lo que dijo Eduardo al parar**: *«a la vuelta retomamos `E1` y si nos da tiempo `G1`. `#475` y
