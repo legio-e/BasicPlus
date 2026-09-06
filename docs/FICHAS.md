@@ -1876,6 +1876,59 @@ Entre lo que hay ahí sin verificar, y que pinta serio:
 ⏭️ Verificar uno a uno antes de tocar nada. La regla del proyecto vale aquí más que nunca: un
 hallazgo falso cuesta más que uno que falta, porque manda a mirar donde no está el problema.
 
+#### 🧬 `#479` — EL MAPA DE PINES Y LOS PINES ANALÓGICOS → **V7** (abierta 6-sep, decidida a V7 el mismo día)
+
+**Decisión de Eduardo, y con su motivo**: *«Lo desarrollamos en V7. Ahora en V6 no lo desarrollamos,
+prefiero no hacer parches.»* Incluye rechazar el trozo intermedio que le ofrecí (hacer que
+`initChannel(ch)` significara «el canal ch de esta placa» sin tocar el lenguaje): media reforma es
+un parche.
+
+**De dónde sale.** Tirando de `#469` apareció que el `0..3` de la fachada de ADC **son los cuatro
+pines analógicos del RP2350 congelados en la API común** — la forma de la primera placa convertida
+en contrato de todas. Con los números delante:
+
+| familia | canales ADC que declara | los que la fachada deja usar |
+|---|---|---|
+| RP2350 | 4 (GP26–29) | 0..3 |
+| ESP32-S3 | 20 | 0..3 |
+| ESP32-C3 | 6 | 0..3 |
+| ESP32-C6 | 7 | 0..3 |
+| STM32U5 | 20 | 0..3 |
+
+**El planteamiento es de Eduardo**: *«seguro que hay más de 4 pines. Hay pines que solamente pueden
+ser digitales, pero hay pines que pueden ser o analógicos o digitales. Eso se tiene que soportar en
+todas las familias.»* Y luego: *«esto es hardware, así que afecta a la capa HAL BP. El mapa de pines
+es algo propio de cada micro y se tiene que construir con la imagen del micro. Lo que afecta al
+lenguaje BP: o hacemos una clase nueva `AdcPin` o extendemos la clase `Pin` (o las dos cosas). Lo
+que está claro es que si un pin es analógico no puede ser digital al mismo tiempo.»*
+
+**Las tres piezas, y en qué capa cae cada una** (comprobado qué hay hoy de cada una):
+
+1. **El mapa de pines — NO EXISTE.** Sólo hay **contadores**: `gpioCount()`, `adcChannels()`,
+   `pwmSlices()` (`include/bpvm_pico.h:48,62,63`). El runtime sabe *cuántos*, nunca *cuáles*. Va en
+   la cintura de cada familia y viaja compilado en su imagen. ⚠️ **El ENV NO es el sitio** —yo lo
+   propuse y me corrigió—: el ENV es config de placa (panel, tamaño de FS); esto es verdad de silicio.
+2. **El estado del pin — TAMPOCO, y sin él el invariante no es comprobable.** `src/gpio.c` sólo
+   reenvía al backend y no guarda nada; el único que lleva cuenta es el STM32, y en privado
+   (`s_mode[128]`, `s_pull[128]`, `gpio_stm32.c:50-51`). Puesto en el común, la regla «analógico ⇒
+   no digital» se escribe **una vez** y vale para las cinco familias.
+3. **El lenguaje.** `Gpio.Pin` ya existe (`Gpio.bp:92`: `Pin(num, mode)` con `on/off/toggle/value/
+   isHigh`). Propuesta: **`Adc.Pin(26)` primero**, clase nueva y **aditiva** (no rompe programas, y
+   el tipo mismo dice que ese pin es analógico); **`Gpio.Pin` después**, ganando la consulta de
+   capacidad sin cambiar lo que hace. Al revés —meter la lectura analógica dentro de `Gpio.Pin`—
+   mezcla dos mundos en la clase más usada.
+
+📌 **Y el dato que explica por qué esto es de lenguaje**: `Adc` es **la única fachada que no
+habla de pines**. Sus vecinas ya hacen lo que Eduardo pide — `Gpio.init(pin, mode)`,
+`Pwm.initSlice(pin, freqHz)`, `Pulse.initSlice(pin, edgeKind)`. La rara es ésta.
+
+⚠️ **Coste**: toca `Adc.bp`/`Gpio.bp`, que van **embebidos en las cinco imágenes** → ABI y blobs
+regenerados. Encaja con `L1` y el módulo raíz, que ya están en V7 por el mismo motivo.
+
+✅ **Lo que SÍ se queda de V6**: el arreglo de `#469`. No es un parche hacia este diseño —no añade
+media funcionalidad—: **quita una mentira**. Hasta V7, en una placa sin backend de ADC la fachada
+falla en vez de devolver una rampa que parece una lectura.
+
 #### 🔴 `#478` — miVM NO PUEDE TOCAR UN BUS: los builtins de I2c/Spi/Uart se quedaron fuera del 4→8B (abierta 6-sep)
 
 **El invariante sagrado, roto en duro, y con la REFERENCIA en el lado equivocado.** Reproducido con
