@@ -1736,9 +1736,12 @@ public final class BpvmClient implements AutoCloseable {
                 if (reason == null || reason.isEmpty()) {
                     reason = Json.getString(m, "status", "");
                 }
+                // V6/E1 — `elapsedMs`: lo mandan los seis emisores y el IDE no
+                // lo habia leido nunca. -1 = el peer no lo manda (firmware viejo).
                 fire(new ExitedEvent(
                         (int) Json.getLong(m, "exitCode", 0),
-                        reason));
+                        reason,
+                        Json.getLong(m, "elapsedMs", -1L)));
                 // Tras EXITED no hay sesión activa.
                 this.currentSession = 0;
                 break;

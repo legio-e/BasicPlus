@@ -204,7 +204,8 @@ public abstract class AbstractBpvmBackend implements Backend {
                 // {errorMessage → reason → status}. "(OK)" en éxito,
                 // "(detalle)" en fallo, "" si peer no envió ninguno.
                 done.complete("exit " + e.exitCode
-                        + (e.reason == null || e.reason.isEmpty() ? "" : " (" + e.reason + ")"));
+                        + (e.reason == null || e.reason.isEmpty() ? "" : " (" + e.reason + ")")
+                        + formatoDuracion(e.elapsedMs));
             } else if (ev instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                 // Daemon Java arranca en STEP_INTO si --wait-client → primer
                 // hook pausa. En el flow "Run" del Explorer queremos
@@ -234,6 +235,20 @@ public abstract class AbstractBpvmBackend implements Backend {
             client.setOutputSink(null);
             client.setEventListener(null);
         }
+    }
+
+    /** V6/E1 — el tiempo de ejecución, para pegarlo al «exit N (motivo)».
+     *
+     *  Devuelve "" si el peer no mandó el campo: un firmware que no lo dice no
+     *  tardó 0 ms, y escribir «0 ms» seria inventarse una medida.
+     *
+     *  📌 Y significa lo mismo en los seis emisores: LA EJECUCIÓN, con el módulo
+     *  ya cargado. miVM lo media desde que le llegaba el RUN —7 ms de mas,
+     *  medidos— y se corrigió el mismo dia que se enchufó esto. */
+    private static String formatoDuracion(long ms) {
+        if (ms < 0) return "";
+        if (ms < 10000) return " en " + ms + " ms";
+        return " en " + String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0) + " s";
     }
 
     // ---- RESET — idéntico ----
