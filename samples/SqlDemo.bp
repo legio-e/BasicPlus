@@ -14,22 +14,36 @@
 // publica como "SQLI". Sin él, la primera llamada lanza una excepción que lo
 // DICE con ese nombre — no devuelve ceros ni se cuelga.
 //
-// ── POR QUÉ EL CAMINO NO ES UN ARGUMENTO ────────────────────────────────────
-// Porque HOY NO SE PUEDE (tarea #386): el `arg` de `main` lo hornea el
-// compilador como cadena vacía y no hay forma de darle otro valor, ni por el
-// wire ni por el IDE. Así que el trabajo está en `correr(camino)`, pública, y
-// quien quiera otra base escribe un módulo de tres líneas que la llame — mira
-// SqlDemoSd.bp, que apunta a la tarjeta.
+// -- EL CAMINO SI ES UN ARGUMENTO (desde el 6-sep, #412) ---------------------
+// Esta cabecera decia «POR QUE EL CAMINO NO ES UN ARGUMENTO: porque HOY NO SE
+// PUEDE (tarea #386)». Ya se puede: el argumento de ejecucion llega por el wire,
+// por el IDE (`run SqlDemo <ruta>`) y por los dos CLI, y el valor por defecto se
+// declara en el propio parametro.
 //
-//   · en el PC                 "medidas.db"      <- este módulo
-//   · en la Metro con tarjeta  "/sd/medidas.db"  <- SqlDemoSd
+// Y de paso se arregla algo que no cuadraba: la cabecera decia que este modulo
+// es el de "medidas.db" y el codigo llamaba a "/sd/medidas.db" -- la ruta de la
+// TARJETA en el demo que NO es el de la tarjeta.
+//
+//   . en flash (PC, simulador o placa)  "medidas.db"      <- este modulo
+//   . en la tarjeta de la Metro         "/sd/medidas.db"  <- SqlDemoSd
 
 module SqlDemo
   import SQLite
   import Str
 
-  function Main(arg: string)
-    correr("/sd/medidas.db")
+  // V6/#412 — el argumento de ejecucion, POR FIN USADO. Este sample es el que
+  // motivo la ficha: recibia `arg` y lo TIRABA, llamando siempre a la ruta de la
+  // tarjeta. Ahora el defecto va donde le toca —en la declaracion— y se puede
+  // probar con otra ruta sin tocar el fuente:
+  //
+  //    run SqlDemo /app/medidas.db      (en el simulador, que no tiene /sd)
+  //    run SqlDemo                      (la Metro con tarjeta: manda el defecto)
+  // El defecto va en la declaracion, que es donde se configura el despliegue;
+  // el argumento sirve para PROBAR con otra base sin tocar el fuente:
+  //     run SqlDemo             -> medidas.db, en la flash
+  //     run SqlDemo otra.db     -> la que digas
+  function Main(arg: string := "medidas.db")
+    correr(arg)
   end Main
 
   public function correr(camino: string)

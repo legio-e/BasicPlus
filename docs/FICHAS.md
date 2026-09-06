@@ -3669,7 +3669,38 @@ de cada una sigue en su sitio.
   (KILL, HELLO). Reproducido en el simulador. La diferencia con KILL, en una línea: KILL tiene rama
   en el poll y **delega** el trabajo (`repl_v1.c:931`); RESET sólo existe en el despachador de
   reposo (`:1533`), al que no se vuelve hasta que `bpvm_run()` retorna.
-- **PROBAR BASES DE DATOS SIN PLACA** — packs en el PC. ⚠️ **La estimación caducó** (5-sep): el
+- ✅ ~~**PROBAR BASES DE DATOS SIN PLACA**~~ — **HECHO el 6-sep**: `make sim SQLITE=1`, y un
+  programa BasicPlus consulta una BD **en el simulador**, por el wire, `status: OK` en 181 ms.
+
+  **El criterio fue de Eduardo**, y conviene que quede: *«¿es útil para el programador? Si la
+  respuesta es sí, se hace. ¿Es útil poder probar la ejecución de un programa que consulta una BD en
+  el simulador? La respuesta es sí, así que lo hacemos.»*
+
+  📐 **Por qué ENLAZADO y no por pack nativo, que era mi plan A.** El pack de una placa se reubica
+  con `NpackReloc`, que es **ELF32 de arriba abajo** — `Elf32.java:169` lo dice sin ambigüedad:
+  *«solo ELF32 soportado»*—, y x86-64 es **ELF64**. Traer eso al PC es **un lector nuevo más el
+  juego de reubicaciones de x86-64**: un proyecto, no una tarde. Y además el `.mdn` se carga
+  **zero-copy** (`mdn_loader.c:173`: *«el código nativo ya está en RAM (ejecutable)»*), suposición
+  que es cierta en un micro y **falsa en un PC** (DEP/NX).
+
+  🔑 **Y no cambia nada de lo que el programador ve**, que es lo que lo hace legítimo: `SQLite.mod`
+  y `Orm.mod` **viajan igual que a una placa** —son bytecode, con **2 bytes** de sección nativa— y
+  sus 16 `native` se casan **POR NOMBRE** (`bpvm_aot_register_by_name`), venga el thunk de un `.npk`
+  reubicado o de aquí. El `.c` del puente es el **mismo** que genera `AotMain` para las placas.
+
+  ⚠️ **Lo que hay que saber**: así el simulador tiene SQLite **siempre** y una placa sólo si le
+  grabas el pack. Un programa que va aquí y no allí falla **ruidosamente** («falta el código nativo
+  del pack 'SQLI'»), que es el propio cuerpo de aviso que el compilador pone a cada `native`
+  (`Parser.java:711`) — no en silencio.
+
+  📌 **Y arregló de paso el sample que motivó `#412`.** `SqlDemo.bp` decía en su cabecera *«POR QUÉ
+  EL CAMINO NO ES UN ARGUMENTO: porque HOY NO SE PUEDE (tarea `#386`)»* —cierto hasta esta misma
+  mañana— y además **llamaba a `/sd/medidas.db` siendo el demo de FLASH**, contradiciendo su propia
+  tabla. Ahora el camino es el argumento, con el defecto en la declaración: `run SqlDemo` usa
+  `medidas.db` (flash) y `run SqlDemo <ruta>` la que digas. *(La BD puede estar en flash o en la
+  tarjeta, y hay un demo para cada cosa — `SqlDemoSd` es el de la SD.)*
+
+  ⏭️ Queda **el trozo viejo de esta ficha**, que sigue siendo verdad: el
   ciclo entero YA corre en el PC (`make test-sqldemo` → `sqldemo.exe SqlDemo.mod`, con `[status=OK]`).
   Lo que falta no es la pieza que decía la ficha, es que ese camino vive en un binario de pruebas y
   no en los que usa la gente.

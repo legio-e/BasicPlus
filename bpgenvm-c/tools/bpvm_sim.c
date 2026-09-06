@@ -37,6 +37,7 @@
  */
 #include "bpvm.h"
 #include "bpvm_adc.h"
+
 #include "bpvm_io.h"   /* V6/A1.1: el hilo io */
 #include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
 #include "bpvm_bmgr.h"
@@ -63,6 +64,45 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#ifdef BPVM_SQLITE
+/* V6 — EL SIMULADOR CON BASE DE DATOS (`make sim SQLITE=1`).
+ *
+ * Criterio de Eduardo: «¿es util para el programador? Si la respuesta es si, se
+ * hace». Poder probar en el PC un programa que consulta una BD, sin grabar una
+ * placa, lo es.
+ *
+ * El puente es EL MISMO que en una placa: `SQLite.mod` y `Orm.mod` viajan igual
+ * —son bytecode, 2 bytes de seccion nativa— y sus 16 `native` se casan POR
+ * NOMBRE con bpvm_aot_register_by_name. Lo unico que cambia es de donde sale el
+ * thunk: en la placa del `.npk` reubicado, y aqui de codigo x86-64 enlazado en
+ * este mismo binario, compilado del MISMO aot_SQLite.c que genera el compilador.
+ *
+ * ⚠️ Y EL ORDEN IMPORTA: `sqlite3_initialize` EXIGE que haya un vfs registrado y
+ * FALLA EN SILENCIO si no lo hay (leccion del 8-ago). El vfs 'bp' se registra
+ * desde dentro de `bpsql_publicar`, que por eso va ANTES que nada. */
+#include "sqlite3.h"
+#include "packglue.h"
+extern void aot_SQLite_register(struct bpvm* vm);   /* generado por AotMain */
+extern int  bpsql_publicar(const bpvm_bios_t* bios);/* sqlite_shim.c        */
+
+#define SIM_SQL_ARENA (2u * 1024u * 1024u)
+static unsigned char s_sql_arena_cruda[SIM_SQL_ARENA + 16];
+
+static void sim_sqlite_arranca(void) {
+    unsigned char* arena = (unsigned char*)
+        (((uintptr_t) s_sql_arena_cruda + 7u) & ~(uintptr_t) 7u);
+    if (sqlite3_config(SQLITE_CONFIG_HEAP, arena, (int) SIM_SQL_ARENA, 64) != SQLITE_OK) {
+        fprintf(stderr, "sim: no se pudo dar la arena a SQLite\n"); return;
+    }
+    if (sqlite3_config(SQLITE_CONFIG_PMASZ, (unsigned) 64) != SQLITE_OK) {
+        fprintf(stderr, "sim: no se pudo fijar PMASZ\n"); return;
+    }
+    int rc = bpsql_publicar(packglue_bios());   /* registra el vfs 'bp' */
+    if (rc != 0) { fprintf(stderr, "sim: el pack de SQLite no publico: %d\n", rc); return; }
+    packglue_callar(1);          /* el log del BIOS taparia la salida del programa */
+}
+#endif
 
 #if defined(_WIN32)
   #include <winsock2.h>
@@ -798,6 +838,14 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
          * son los mismos de antes; lo que cambia es QUIEN los llama, y que
          * ahora sólo los llama un hilo — durante el RUN, `io`; fuera del RUN,
          * el lazo del servidor. Nunca los dos a la vez. */
+#ifdef BPVM_SQLITE
+        /* El puente: las 16 `native` de SQLite.bp, por NOMBRE. Va AQUI —con el
+         * modulo ya cargado y ANTES de las dos ramas del run—: `register_by_name`
+         * se salta EN SILENCIO los simbolos que no encuentra, asi que ponerlo en
+         * la rama equivocada no da error: da el cuerpo de aviso del compilador
+         * («falta el codigo nativo del pack»), que es lo que me paso. */
+        aot_SQLite_register(vm);
+#endif
         bpvm_io_ops_t io_ops = { sim_io_poll, sim_output_sink, vm };
         if (bpvm_io_start(vm, &io_ops, 0) != 0) {
             st = bpvm_run(vm);                 /* sin hilo io: el camino de antes */
@@ -961,6 +1009,11 @@ static size_t parse_size(const char* s) {
 }
 
 int main(int argc, char** argv) {
+#ifdef BPVM_SQLITE
+    /* UNA VEZ, y lo PRIMERO: sqlite3_config solo vale antes de initialize, y
+     * el vfs tiene que estar registrado antes que nada (leccion del 8-ago). */
+    sim_sqlite_arranca();
+#endif
     const char* pos[3]; int npos = 0;
     const char* fs_img_arg = NULL;
     size_t fs_size_arg = 0;

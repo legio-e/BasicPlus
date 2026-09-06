@@ -771,10 +771,43 @@ test-crc:
 # boardsim (sólo STATE/ENV_*/PART_*); H10 le enchufa el FS y la VM → enlaza la
 # lib entera ($(LIBOBJ)). El parser JSON vive en src/ desde V6/U1.1.
 # Winsock via $(LDFLAGS) (-lws2_32). Con LVGL=1 arrastra la ventana SDL.
-sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,)
+# V6 — `make sim SQLITE=1`: el simulador CON base de datos.
+#
+# Criterio de Eduardo (6-sep): «¿es útil para el programador? Si la respuesta es
+# sí, se hace». Y lo es: poder probar en el PC un programa que consulta una BD,
+# sin grabar una placa.
+#
+# POR QUE ENLAZADO Y NO POR PACK: el pack nativo de una placa se reubica con
+# NpackReloc, que es ELF32 de arriba abajo (`Elf32.java:169`: «solo ELF32
+# soportado»), y x86-64 es ELF64. Traer eso al PC es un lector nuevo y el juego
+# de reubicaciones de x86-64 — un proyecto, no una tarde. Enlazarlo da HOY lo que
+# el programador pide, y no cambia nada de lo que él ve: `SQLite.mod` y `Orm.mod`
+# viajan IGUAL que a una placa (son bytecode: 2 bytes de sección nativa), y sus
+# 16 `native` se casan POR NOMBRE con `bpvm_aot_register_by_name`, venga el thunk
+# de un `.npk` o de aquí.
+#
+# ⚠️ Lo que hay que saber: así el simulador tiene SQLite SIEMPRE y una placa sólo
+# si le grabas el pack. Un programa que va aquí y no allí falla RUIDOSAMENTE
+# («falta el codigo nativo del pack 'SQLI'»), no en silencio.
+SIM_SQL_SRC = build/sql/aot_SQLite.c $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c \
+              $(SQLSRC)/packglue.c build/sql/sqlite3.o
+SIM_SQL_FLAGS = -DBPVM_SQLITE -Ibuild/sql -I$(SQLSRC) $(SQLDEF)
+
+sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,) $(if $(filter 1,$(SQLITE)),build/sql/sqlite3.o build/sql/aot_SQLite.c,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
 	@echo "sim listo: build/bpvm-sim.exe [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
+
+# Los ingredientes de SQLITE=1, si no estan ya (los comparte con test-sqldemo).
+build/sql/sqlite3.o:
+	@mkdir -p build/sql
+	@[ -f build/sql/sqlite3.c ] || unzip -o -j $(SQLZIP) "*/sqlite3.c" "*/sqlite3.h" -d build/sql >/dev/null
+	$(CC) -O1 -w -c build/sql/sqlite3.c -o build/sql/sqlite3.o -Ibuild/sql $(SQLDEF)
+
+build/sql/aot_SQLite.c:
+	@echo "falta build/sql/aot_SQLite.c — generalo con:"
+	@echo "   java -cp '../lexer-java/target/classes;../pack/target/classes' basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql"
+	@exit 1
 
 # Alias histórico (H9): el boardsim ES el sim, con otro nombre.
 boardsim: sim
