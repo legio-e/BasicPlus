@@ -656,6 +656,16 @@ public final class MivmEmitter {
                                  ? ((StringLitExpr) p0.defaultExpr).value
                                  : "";
                     w.emitLeaGlobal(internString(valor));
+                    /* V6/#412 — y AQUI deja de ser el defecto horneado: el
+                     * literal pasa a ser el ARGUMENTO DEL BUILTIN, que devuelve
+                     * el argumento de ejecucion si lo hay y si no una copia del
+                     * defecto — SIEMPRE alojada en el heap. Es la linea que el
+                     * comentario de #386 dejaba pendiente («pasar el runtime el
+                     * argumento DE VERDAD»), y con ella `Main` recibe siempre
+                     * una cadena del heap en vez de un literal de la zona de
+                     * datos: se acaba la asimetria de #389. */
+                    w.emit(OpCode.CALL_BUILTIN);
+                    w.emitShort((short) Builtin.RUN_ARG.id);
                 }
                 w.emitCall(fm.name);
                 w.emitSetLocal("__discard");

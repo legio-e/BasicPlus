@@ -501,7 +501,15 @@ public enum Builtin {
     CLAMP_F("__clamp_f"),                              // (x, lo, hi)              → float      [228]
     WRAP_F("__wrap_f"),                                // (x, lo, hi)              → float      [229]
     HYPOT_F("__hypot_f"),                              // (x, y)                   → float      [230]
-    REMAP_F("__remap_f");                              // (x, inLo, inHi, oLo, oHi) → float     [231]
+    REMAP_F("__remap_f"),                              // (x, inLo, inHi, oLo, oHi) → float     [231]
+
+    /* V6/#412 — EL ARGUMENTO DE EJECUCION, SIEMPRE EN EL HEAP.
+     * Lo emite `__startup` pasandole el valor POR DEFECTO que declare el fuente
+     * (`Main(arg: string := "...")`); devuelve el argumento de ejecucion si lo
+     * hay, y si no una COPIA del defecto, alojada igual. Asi Main recibe siempre
+     * una referencia del HEAP y desaparece la asimetria con el literal de la
+     * zona de datos. AL FINAL, que el id es el ordinal(). */
+    RUN_ARG("__runArg");                               // (defecto) -> string
 
     public final String bpName;
     public final int id;

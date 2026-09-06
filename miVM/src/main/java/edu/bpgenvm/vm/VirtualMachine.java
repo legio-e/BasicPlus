@@ -1865,6 +1865,15 @@ public class VirtualMachine {
     //  call sites. Ver docs/V4_REF_ABSTRACTION.md.
     // ============================================================
     private static final int REF_SIZE     = 8;   // bytes de una ref en memory[]/pila
+
+    /** V6/#412 — el argumento de ejecucion. Lo fija quien lanza el programa (el
+     *  CLI o el verbo RUN del wire) ANTES de arrancar; lo lee el builtin
+     *  RUN_ARG. null o "" = no se dio ninguno y manda el valor por defecto que
+     *  declare `Main`. */
+    private String runArg = null;
+
+    /** V6/#412 — fija el argumento de ejecucion. Antes de `run()`. */
+    public void setRunArg(String arg) { this.runArg = arg; }
     private static final int ARR_DATA_OFF = 4;   // offset user_ref → 1er elemento
 
     /** Lee una referencia de memory[at]. V4/paso4: HANDLE de 64b = [gen:32 | idx|TAG:32].
@@ -3912,6 +3921,26 @@ public class VirtualMachine {
                 pushTc(tc, Float.floatToRawIntBits((float) EvalCalc.run(s)));
                 break;
             }
+            /* V6/#412 — EL ARGUMENTO DE EJECUCION, SIEMPRE EN EL HEAP.
+             *
+             * Lo emite `__startup` pasandole el valor POR DEFECTO que declare el
+             * fuente (`Main(arg: string := "...")`). Devuelve el argumento de
+             * ejecucion si lo hay, y si no una COPIA del defecto — alojada
+             * igual. Asi `Main` recibe SIEMPRE una referencia del heap.
+             *
+             * Sin argumento y sin defecto el programa recibe "" en el heap en
+             * vez de "" en la zona de datos: mismo valor, mismo comportamiento
+             * observable. Lo que desaparece es la asimetria entre las dos formas
+             * de cadena que #389 tuvo que reconocer en el CHECKCAST. */
+            case RUN_ARG: {
+                long defRef = popTcRef(tc);
+                String v = (runArg != null && !runArg.isEmpty())
+                         ? runArg
+                         : readVmString(defRef);
+                pushTcRef(tc, allocVmString(v));
+                break;
+            }
+
             case INT_TO_STRING: {
                 int n = popTc(tc);
                 pushTcRef(tc, allocVmString(Integer.toString(n)));

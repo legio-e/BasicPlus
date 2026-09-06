@@ -1,0 +1,8 @@
+// ArgDemo.bp — #412: el argumento de ejecucion, con su valor por defecto
+// declarado en el propio parametro.
+module ArgDemo
+  public function Main(arg: string := "mi valor por defecto")
+    print "arg = [", arg, "]"
+    print "longitud = ", len(arg)
+  end Main
+end ArgDemo

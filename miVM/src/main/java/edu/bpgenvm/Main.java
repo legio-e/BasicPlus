@@ -62,6 +62,7 @@ public class Main {
         String workdir = null;       // sandbox del filesystem; null = sin sandbox
         String cliStdlibDir = null;  // override de cfg.stdlibDir si != null
         String file = null;
+        String runArgCli = null;   // V6/#412
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
@@ -168,6 +169,11 @@ public class Main {
                         System.exit(2);
                         return;
                     }
+                    // V6/#412 — el SEGUNDO posicional es el ARGUMENTO DE
+                    // EJECUCION del programa. Antes se rechazaba, asi que la
+                    // receta de paridad (compilar + correr en las dos + diff) no
+                    // podia ni ejercitar la feature.
+                    if (file != null && runArgCli == null) { runArgCli = a; continue; }
                     if (file != null) {
                         System.err.println("Sólo se admite un fichero por invocación: ya tengo '"
                                 + file + "', ahora '" + a + "'");
@@ -356,6 +362,9 @@ public class Main {
                 cargado = false;
                 falloDeCarga = true;
             }
+            // V6/#412 — el argumento de ejecucion, ANTES de arrancar: lo lee el
+            // builtin __runArg que `__startup` llama justo antes de entrar en Main.
+            if (runArgCli != null) vm.setRunArg(runArgCli);
             if (cargado) {
             // V6/E1 — el `elapsedMs` del EXITED mide LA EJECUCIÓN, no la sesión:
             // el reloj arranca aquí, con el módulo cargado y enlazado. Así el

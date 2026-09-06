@@ -135,6 +135,7 @@ int main(int argc, char** argv) {
     setvbuf(stderr, NULL, _IONBF, 0);
 
     const char* path  = NULL;
+    const char* run_arg = NULL;   /* V6/#412 — el argumento de ejecucion */
     int   trace       = 0;
     int   debug_trace = 0;
     long  debug_print = 0;
@@ -225,6 +226,11 @@ int main(int argc, char** argv) {
             return 2;
         }
         else if (!path)                        { path = a; }
+        /* V6/#412 — el SEGUNDO posicional es el ARGUMENTO DE EJECUCION del
+         * programa: `bpgenvm-c X.mod "loquesea"`. Antes se rechazaba, asi que la
+         * receta de paridad del proyecto (compilar + correr en las dos + diff) no
+         * podia ni ejercitar la feature. */
+        else if (!run_arg)                     { run_arg = a; }
         else {
             fprintf(stderr, "Sólo se admite un .mod por invocación.\n");
             return 2;
@@ -272,6 +278,10 @@ int main(int argc, char** argv) {
      * simulado. Asi «no hay backend» queda reservado para el olvido de una placa. */
     bpvm_adc_set_backend(bpvm_adc_backend_host());
     bpvm_t* vm = bpvm_init(mem, mem_size, stack_base);
+
+    /* V6/#412 — el argumento de ejecucion, ANTES de arrancar: lo lee el
+     * builtin __runArg que `__startup` llama justo antes de entrar en Main. */
+    if (vm && run_arg) bpvm_set_run_arg(vm, run_arg);
     if (!vm) {
         fprintf(stderr, "bpvm_init falló (memSize=%zu)\n", mem_size);
         free(mem);

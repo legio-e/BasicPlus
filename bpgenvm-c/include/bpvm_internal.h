@@ -572,6 +572,22 @@ struct bpvm {
      * Ése fue el agujero del primer intento (16-ago): se arregló el camino menos
      * frecuente. "" = sin error. Fijo, sin malloc. */
     char load_error[160];
+
+    /* V6/#412 — EL ARGUMENTO DE EJECUCION. Lo fija quien lanza el programa (el
+     * verbo RUN del wire, o el CLI), y lo lee el builtin __runArg antes de que
+     * arranque Main. "" = no se dio ninguno.
+     *
+     * La idea de Eduardo es la que simplifica esto: si el argumento se sube al
+     * heap y se pasa la referencia, el caso SIN argumento pasa a ser el caso CON
+     * argumento "" tambien en el heap — y deja de haber dos caminos. Hoy si los
+     * hay, y no son inocuos: el argumento horneado es un literal de la ZONA DE
+     * DATOS (sin cabecera de bloque, por debajo de heap_start) y uno de
+     * ejecucion seria una cadena del HEAP. Son las dos formas que #389 tuvo que
+     * reconocer en el CHECKCAST. Con esto, SIEMPRE es del heap.
+     *
+     * Fijo y sin malloc, como load_error. Va AL FINAL: el prefijo congelado del
+     * .mdn (memory, aot_helpers) esta arriba y no se toca. */
+    char run_arg[128];
 };
 
 

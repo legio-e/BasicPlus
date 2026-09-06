@@ -366,7 +366,13 @@ enum {
     BUILTIN_CLAMP_F              = 228, /* (x, lo, hi)               → float */
     BUILTIN_WRAP_F               = 229, /* (x, lo, hi)               → float */
     BUILTIN_HYPOT_F              = 230, /* (x, y)                    → float */
-    BUILTIN_REMAP_F              = 231  /* (x, inLo, inHi, oLo, oHi) → float */
+    BUILTIN_REMAP_F              = 231, /* (x, inLo, inHi, oLo, oHi) → float */
+
+    /* V6/#412 — el argumento de ejecucion, SIEMPRE en el heap. Lo emite
+     * `__startup` pasandole el valor POR DEFECTO que diga el fuente; devuelve
+     * el argumento de ejecucion si lo hay, y si no una COPIA del defecto —
+     * alojada igual. Asi Main recibe siempre una referencia del heap. */
+    BUILTIN_RUN_ARG              = 232  /* (defecto: string)         → string */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -703,6 +709,36 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t nbytes = bpref_arr_len(vm, s);
         uint32_t ncp = bpref_is_null(s) ? 0 : utf8_cp_count(bpref_arr_elem(vm, s, 0, 1), nbytes);
         push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
+        return BPVM_OK;
+    }
+
+    /* V6/#412 — EL ARGUMENTO DE EJECUCION, SIEMPRE EN EL HEAP.
+     *
+     * Lo llama `__startup` pasandole el valor POR DEFECTO que declare el fuente.
+     * Devuelve el argumento de ejecucion si lo hay, y si no una COPIA del
+     * defecto — alojada en el heap igual. Asi `Main` recibe SIEMPRE una
+     * referencia del heap, venga de donde venga.
+     *
+     * Lo que conserva, y por eso es seguro: sin argumento y sin defecto el
+     * programa recibe "" en el heap en vez de "" en la zona de datos. Mismo
+     * valor y mismo comportamiento observable — un programa que hoy funciona no
+     * se entera. Lo que DESAPARECE es la asimetria: hoy el argumento horneado es
+     * un literal de datos y uno de ejecucion seria del heap, las dos formas que
+     * #389 tuvo que reconocer en el CHECKCAST. */
+    case BUILTIN_RUN_ARG: {
+        uint32_t ref = pop_ref(vm, tc);          /* el defecto que dice el fuente */
+        char buf[128];
+        size_t n;
+        if (vm->run_arg[0] != '\0') {
+            n = strlen(vm->run_arg);
+            if (n > sizeof(buf) - 1) n = sizeof(buf) - 1;
+            memcpy(buf, vm->run_arg, n);
+        } else {
+            n = read_bp_string(vm, ref, buf, sizeof(buf));
+        }
+        uint32_t out = bpvm_heap_alloc_string(vm, buf, n);
+        if (out == 0) return builtin_throw(vm, tc, "No space in heap");
+        push_ref(vm, tc, out);
         return BPVM_OK;
     }
 

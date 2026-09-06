@@ -243,6 +243,13 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers);
  */
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user);
 
+/* V6/#412 — el ARGUMENTO DE EJECUCION del programa. Lo fija quien lo lanza
+ * (el CLI, o el verbo RUN del wire) antes de `bpvm_run`, y lo recoge el
+ * builtin `__runArg` que el compilador emite en `__startup`. NULL o "" = no se
+ * dio ninguno, y manda el valor por defecto que declare `Main(arg: string := ...)`.
+ * La cadena se COPIA: el llamante no tiene que conservarla. */
+void bpvm_set_run_arg(bpvm_t* vm, const char* arg);
+
 /* #355 — enciende/apaga el RECOLECTOR de basura de esta VM. Apagado, no corre
  * por ninguna de las tres puertas: ni el umbral proactivo, ni el intento tras
  * una reserva fallida, ni el gc() manual del programa.
