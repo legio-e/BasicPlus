@@ -1802,6 +1802,54 @@ distingue no-evento de fallo»*.
    (un olvido) y en el segundo caso **grite**. Eso protege a todas las familias futuras, no sólo a
    ésta — y hay que mirar las OTRAS 16 fachadas por si tienen el mismo stub complaciente.
 
+#### 🧪 `#480` — LO QUE DESTAPÓ LA AUDITORÍA DE LAS 13 FACHADAS, verificado (abierta 6-sep)
+
+Tirando de `#469` se auditaron **las trece fachadas de periférico** (quién registra backend en cada
+familia, y qué hace la fachada común cuando nadie lo hizo), con una pasada de verificación
+adversarial encima. Lo que **sobrevivió**, en orden de daño, y que **no está cubierto por otra
+ficha**:
+
+1. 🔴 **`Wdt.disable()` no desactiva en el STM32.** `stm32_wdt_disable_impl` (`gpio_stm32.c:736-739`)
+   no puede parar el IWDG y hace «mejor esfuerzo»: lo **reprograma a ~131 s** y lo refresca, con
+   `s_wdt_on` todavía a 1. Consecuencia: **la placa se resetea sola** si un `sleep` pasa de ahí —
+   haciendo justo lo que recomienda `bpstdlib/Wdt.bp:41`. Y **desde BP no hay forma de saberlo**: el
+   builtin devuelve 0 en las cinco familias. Contraste que prueba que no es «así son los
+   watchdogs»: la Pico llama a `watchdog_disable()` **de verdad** (`pico/main.c:865-874`).
+   ⚠️ Y la doc de usuario culpa al chip equivocado: `Wdt.bp:82-84` dice *«en RP2350 esto se simula
+   con un timeout muy grande»* — falso desde que se arregló el RP2350, y **no nombra al único chip
+   donde hoy es cierto**.
+
+2. 🟠 **`Pulse` en el ESP32-C3 cuenta 0 para siempre.** El C3 no tiene PCNT y **la decisión de no
+   registrar backend es correcta y está documentada** (`#465`, `gpio_esp32.c:630-635`). Lo que está
+   mal es lo que hace la fachada común entonces: `src/pulse.c:36-39` devuelve un `counterId` **0
+   válido** (el wrapper BP sólo lanza si es `< 0`), y `value()` devuelve `s_stub_value`, que **nadie
+   incrementa jamás**. Un frecuencímetro que lee 0 es indistinguible de «no llegan pulsos»: se va a
+   buscar al cableado.
+
+3. 🟠 **El backend de ADC del ESP32 falla con 0, no con −1.** `gpio_esp32.c:477,482,486,488`
+   devuelven **0** cuando no se pudo abrir la unidad o falló la lectura. El contrato del header pide
+   −1 (`bpvm_adc.h:12-14`) y `Adc.bp:60-63` sólo lanza si `< 0`. O sea: ADC roto → **0 V constante y
+   mudo** en las cuatro familias ESP32. Mismo vicio que `#469`, esta vez **con backend registrado**.
+
+4. 🟡 **El breadcrumb está mudo en 4 de 5 familias.** El cuarteto `setMark`/`markCount`/`markAt`/
+   `bootCount` sólo lo rellena el STM32 (`gpio_stm32.c:310-325`); Pico, ESP32 y P4 lo dejan **NULL**,
+   y `src/pico.c:121-140` responde no-op **mudo**, `0`, `0` y `1`. En placa,
+   `samples/BreadcrumbDemo.bp` imprime «Arranque #1» y «Migas: 0» para siempre, y su línea final
+   **promete en voz alta algo falso**. Es el «instrumento mudo» en la herramienta que existe justo
+   para cuando ya estás en problemas.
+   📌 **Es una clase de fallo distinta a `#469`**: no es «nadie registró backend», es **backend
+   registrado con la mitad de los slots a NULL**. El arreglo de la ADC no la cubre.
+
+✅ **Lo que el censo EXAGERABA y se tachó al verificar** (para no mandar a nadie a mirar donde no
+está el problema): **PWM no tiene hallazgo** —las cinco familias registran, el stub sólo corre en el
+PC—, y **RTC no es este vicio**: su modelo de offset es deliberado y está documentado en cuatro
+sitios, incluida la doc de usuario. *(El residuo real del RTC sí es de otra caja: con autorun no hay
+IDE que calibre, y una placa desplegada presenta ms-desde-boot como epoch Unix.)*
+
+⏭️ El arreglo genérico ya está escrito y probado en la ADC (`#469`): **el que no tiene hardware
+registra un backend explícito, y la ausencia pasa a ser un error**. Falta extenderlo — y la pieza 4
+necesita además que la fachada distinga «slot NULL» de «backend ausente».
+
 #### 🟠 `#470` — la identidad de la placa se contesta por DOS caminos, y ya han divergido (abierta 5-sep, de `A3`)
 
 Los mismos seis datos (nombre, MHz, GPIO, ADC, PWM, causa de reset) se responden **dos veces por
