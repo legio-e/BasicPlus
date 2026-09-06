@@ -35,6 +35,7 @@ int bpvm_i2c_read(int bus, int addr, uint8_t* data, size_t n) {
     }
     /* Stub: rellena con ceros. */
     for (size_t i = 0; i < n; i++) data[i] = 0;
-    printf("[i2c] read bus=%d addr=0x%02X n=%zu (stub → ceros)\n", bus, addr, n);
+    /* #478 — TEXTO = CONTRATO DE PARIDAD: identico al de miVM. */
+    printf("[i2c] read bus=%d addr=0x%02X count=%zu (sim → ceros)\n", bus, addr, n);
     return (int) n;
 }

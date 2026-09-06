@@ -1999,8 +1999,25 @@ tiene 16 casos y **ninguno toca i2c, spi, uart, gpio, adc, pwm, pulse ni neopixe
 lo reproduce —`samples/BusBug.bp`— existía ya: se escribió para bisecar un cuelgue **en la Pico**.
 El arnés tenía el reactivo delante y no lo metió en la red.
 
-⏭️ Cambiar los siete a `popTcRef` + `refDeref` (el patrón de `MOVE`), y **meter `BusBug` en el
-corpus** — sin eso volverá.
+✅ **ARREGLADO el 6-sep.** Los **ocho** sitios pasan a `popTcRef` + `refDeref` (el patrón de
+`MOVE`), con su comprobación de null: I2C write/read, SPI write/read/transfer (éste con **dos**
+arrays), UART write/read, y `NEOPIXEL_SHOW` — que no desreferencia, pero **tenía que sacar 8 B o
+descuadraba la pila igual**. Medido antes y después con el mismo `.mod`:
+
+```
+antes:  … 3: array ok  buf[0]= 7 · [bpgenvm worker 0, tid=0] 1073741830   ← muere
+ahora:  … 3: array ok  buf[0]= 7 · [i2c] read … · 4: read ok  rc= 1 · 5: fin
+```
+
+Y de paso se alinearon los textos de los tres stubs de bus de la VM-C con los de miVM
+(`count=`/`(sim → ceros)` en vez de `n=`/`(stub → ceros)`) — misma clase que `#469`. Comprobado que
+no se rompió nada: `MathRango`, `MathTest` y `AdcDemo` siguen dando el mismo contenido en las dos VMs.
+
+⏭️ **Lo que queda para meter `BusBug` en el corpus** (`#477`): las líneas de traza de la VM-C
+(`[bpvm] …`, `[i2c] …`) **se intercalan en distinto orden** —a veces a media línea— con el `print`
+del programa, porque las fachadas escriben con `printf` directo mientras la salida del programa va
+por el camino de la VM. El **contenido** ya es idéntico (comprobado ordenando); es el orden lo que
+falta, y es el mismo problema que se anotó con `#469`.
 
 #### 🚨 `#476` — las DOS tablas de builtins se mantienen A MANO, y divergir no hace ruido (abierta 5-sep)
 

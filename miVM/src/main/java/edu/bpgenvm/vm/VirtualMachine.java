@@ -5137,7 +5137,13 @@ public class VirtualMachine {
             }
             case I2C_WRITE: {
                 int count = popTc(tc);
-                int dataRef = popTc(tc);
+                /* V6/#478 — la ref de un array son 8B y es un HANDLE, no una
+                 * direccion: popTc (4B) leia MEDIO handle y ademas desincronizaba
+                 * la pila. Mismo arreglo que `case MOVE` (#6 del censo V4), que
+                 * llevaba anos hecho aqui al lado. */
+                long dataRefH = popTcRef(tc);
+                if (dataRefH == 0) throwBpRuntimeError(tc, "i2c.write: el array es null");
+                int dataRef = refDeref(dataRefH);
                 int addr = popTc(tc);
                 int bus  = popTc(tc);
                 StringBuilder sb = new StringBuilder();
@@ -5156,7 +5162,9 @@ public class VirtualMachine {
             }
             case I2C_READ: {
                 int count = popTc(tc);
-                int dataRef = popTc(tc);
+                long dataRefH = popTcRef(tc);          /* #478 */
+                if (dataRefH == 0) throwBpRuntimeError(tc, "i2c.read: el array es null");
+                int dataRef = refDeref(dataRefH);
                 int addr = popTc(tc);
                 int bus  = popTc(tc);
                 // En PC simulamos: llenamos con 0x00.
@@ -5201,7 +5209,9 @@ public class VirtualMachine {
             }
             case SPI_WRITE: {
                 int count = popTc(tc);
-                int dataRef = popTc(tc);
+                long dataRefH = popTcRef(tc);          /* #478 */
+                if (dataRefH == 0) throwBpRuntimeError(tc, "spi.write: el array es null");
+                int dataRef = refDeref(dataRefH);
                 int bus  = popTc(tc);
                 StringBuilder sb = new StringBuilder();
                 sb.append("[spi] write bus=").append(bus).append(" bytes=[");
@@ -5217,7 +5227,9 @@ public class VirtualMachine {
             }
             case SPI_READ: {
                 int count = popTc(tc);
-                int dataRef = popTc(tc);
+                long dataRefH = popTcRef(tc);          /* #478 */
+                if (dataRefH == 0) throwBpRuntimeError(tc, "spi.read: el array es null");
+                int dataRef = refDeref(dataRefH);
                 int bus  = popTc(tc);
                 for (int i = 0; i < count; i++) {
                     writeI32(memory, dataRef + 4 + i * 4, 0);
@@ -5229,8 +5241,12 @@ public class VirtualMachine {
             }
             case SPI_TRANSFER: {
                 int count = popTc(tc);
-                int rxRef = popTc(tc);
-                int txRef = popTc(tc);
+                long rxRefH = popTcRef(tc);            /* #478 — DOS arrays */
+                long txRefH = popTcRef(tc);
+                if (rxRefH == 0) throwBpRuntimeError(tc, "spi.transfer: el array rx es null");
+                if (txRefH == 0) throwBpRuntimeError(tc, "spi.transfer: el array tx es null");
+                int rxRef = refDeref(rxRefH);
+                int txRef = refDeref(txRefH);
                 int bus  = popTc(tc);
                 StringBuilder sb = new StringBuilder();
                 sb.append("[spi] transfer bus=").append(bus).append(" tx=[");
@@ -5265,7 +5281,9 @@ public class VirtualMachine {
             }
             case UART_WRITE: {
                 int count = popTc(tc);
-                int dataRef = popTc(tc);
+                long dataRefH = popTcRef(tc);          /* #478 */
+                if (dataRefH == 0) throwBpRuntimeError(tc, "uart.write: el array es null");
+                int dataRef = refDeref(dataRefH);
                 int bus = popTc(tc);
                 StringBuilder sb = new StringBuilder();
                 StringBuilder ascii = new StringBuilder();
@@ -5284,7 +5302,9 @@ public class VirtualMachine {
             case UART_READ: {
                 int timeout = popTc(tc);
                 int count   = popTc(tc);
-                int dataRef = popTc(tc);
+                long dataRefH = popTcRef(tc);          /* #478 */
+                if (dataRefH == 0) throwBpRuntimeError(tc, "uart.read: el array es null");
+                int dataRef = refDeref(dataRefH);
                 int bus     = popTc(tc);
                 for (int i = 0; i < count; i++) {
                     writeI32(memory, dataRef + 4 + i * 4, 0);
@@ -5451,7 +5471,7 @@ public class VirtualMachine {
             }
             case NEOPIXEL_SHOW: {
                 popTc(tc);            /* count */
-                popTc(tc);            /* grbRef */
+                popTcRef(tc);         /* grbRef — #478: 8B, aunque no se use */
                 popTc(tc);            /* pin */
                 pushTc(tc, 0);
                 break;

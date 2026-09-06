@@ -35,7 +35,8 @@ int bpvm_spi_read(int bus, uint8_t* data, size_t n) {
         return g_backend->read(bus, data, n);
     }
     for (size_t i = 0; i < n; i++) data[i] = 0;
-    printf("[spi] read bus=%d n=%zu (stub → ceros)\n", bus, n);
+    /* #478 — TEXTO = CONTRATO DE PARIDAD: identico al de miVM. */
+    printf("[spi] read bus=%d count=%zu (sim → ceros)\n", bus, n);
     return (int) n;
 }
 

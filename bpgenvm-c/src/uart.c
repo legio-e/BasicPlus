@@ -49,7 +49,8 @@ int bpvm_uart_read(int bus, uint8_t* data, size_t n, int timeout_ms) {
         return g_backend->read(bus, data, n, timeout_ms);
     }
     for (size_t i = 0; i < n; i++) data[i] = 0;
-    printf("[uart] read bus=%d n=%zu timeout=%d (stub → ceros)\n",
+    /* #478 — TEXTO = CONTRATO DE PARIDAD: identico al de miVM. */
+    printf("[uart] read bus=%d count=%zu timeout=%d (sim → ceros)\n",
            bus, n, timeout_ms);
     return (int) n;
 }
