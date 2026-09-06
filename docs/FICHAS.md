@@ -3327,7 +3327,26 @@ de cada una sigue en su sitio.
 - **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
 - ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.~~ **HECHO el 2-sep** (`#466`, paso 3): el IDE pregunta por cada dependencia con `STAT` por nombre y sólo sube lo que falta o es más viejo.
 - **Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC *(idea de Eduardo)*.
-- **El verbo `RESET` no llega con un RUN vivo** *(era `#452`)*. ⚠️ **El enunciado es FALSO**,
+- 🔧 **El verbo `RESET` con un RUN vivo** *(era `#452`)* — **ARREGLADO el 6-sep (`ee250df6`), falta
+  la comprobación EN PLACA de las cinco familias.** Rama `RESET` gemela de la de `KILL` en los
+  cuatro polls (pico, `esp32/common`, stm32, sim): marcar el id, devolver 1 para que el RUN muera
+  por el camino de siempre, y reiniciar DESPUÉS desde la tarea del REPL. El STM32 tenía el RESET
+  en línea en el despachador → extraído a `stm32_hacer_reset()`. Verificado en el sim con control:
+  con el programa VIVO (352 OUTPUT, ningún EXITED) sale `EXITED KILLED` → `RESET_REPLY` → cierre,
+  en 0,4 ms; y `STATE` sigue dando BUSY, lo que prueba que la lista blanca no se abrió de más.
+  🔴 **Y el segundo defecto, que no estaba escrito y es peor porque no hacía ruido: el IDE se
+  tragaba el BUSY.** `BpvmClient.reset()` capturaba TODA `IOException` —y `WireError` la extiende—
+  y la mandaba a un `diag()` que sin sink no va a ninguna parte; la consola imprimía «reset
+  enviado» sobre una placa que seguía corriendo, y encima el backend ya había soltado el cliente:
+  **sin reset Y sin conexión**. Ahora una reply de error se propaga (*una reply no es una reply
+  perdida*) y el cliente se conserva. La maquinaria buena ya existía: `runAsync` tiene desde `#256`
+  el mensaje accionable «placa ocupada — 'kill' para abortarlo». Comprobado en el **artefacto**: el
+  fat-jar del 3-sep vuelve sin excepción, el recién construido lanza `WireError code=BUSY`.
+  📌 El arnés está en `bpgenvm-c/tools/reset_smoke.py`, **y con control**: la primera versión salió
+  VERDE con el bug dentro porque mandaba el RESET «un segundo después» y contra el sim los bancos
+  terminan en 80 ms — o sea con la VM en reposo. Ahora comprueba que el programa sigue vivo antes
+  de mandar el verbo y declara la prueba INVÁLIDA si no. Con `samples/benchmarks/VivoLargo.bp`.
+  ⚠️ **El enunciado original era FALSO**,
   comprobado el 5-sep: RESET **sí llega** — la placa lo lee, lo parsea y lo **rechaza a propósito**
   con `ERROR BUSY`, porque el poll que atiende el cable durante un RUN tiene **lista blanca**
   (KILL, HELLO). Reproducido en el simulador. La diferencia con KILL, en una línea: KILL tiene rama
