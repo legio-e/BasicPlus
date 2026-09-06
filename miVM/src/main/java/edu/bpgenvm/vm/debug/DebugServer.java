@@ -602,6 +602,33 @@ public final class DebugServer implements AutoCloseable {
 
     /** Bloquea hasta que llegue un RUN, o el timeout. Devuelve el path
      *  del módulo (relativo al workdir) o null si timeout. */
+    /** V6/E1 — ARRANCA EL RELOJ DEL `elapsedMs`, con el módulo ya cargado y
+     *  enlazado y justo antes de ejecutar. Lo llama {@code Main} en el punto
+     *  exacto en que empieza el programa.
+     *
+     *  Por qué existe: el reloj se ponía en marcha al RECIBIR el RUN, así que el
+     *  número incluía cargar y enlazar y no medía lo mismo que en las placas,
+     *  que cronometran sólo la ejecución. Un campo, un significado.
+     *
+     *  📐 CUÁNTO ERA, MEDIDO — y es mucho menos de lo que yo dije: instrumentando
+     *  este mismo método, el reloj se adelanta **7 ms** con `Bench.mod`. O sea
+     *  que el sesgo existía pero era despreciable; este cambio es corrección de
+     *  significado, no de cifra.
+     *
+     *  ⚠️ Y las dos trampas del experimento que lo midió, que casi cuelo como
+     *  hallazgos:
+     *   1. El primer intento daba ~230 ms de sesgo. Eran **la latencia de mi
+     *      propio arnés** contestando al breakpoint de entrada (sondeaba cada
+     *      200 ms). Bajando el sondeo a 5 ms, se evaporaron.
+     *   2. La diferencia gorda entre las dos VMs con este módulo —3,8 s en Java
+     *      contra 90 ms en C— **no** es este sesgo: es que la VM-Java interpreta
+     *      más despacio. Lo que separa una cosa de otra es el cronómetro DEL
+     *      PROGRAMA (`Pico.uptimeMs()` dentro del propio `Bench.bp`), que no
+     *      depende ni del arnés ni del campo. */
+    public void marcaInicioEjecucion() {
+        this.activeSessionStartMs = System.currentTimeMillis();
+    }
+
     public String awaitRunModule(long timeoutMs) throws InterruptedException {
         try {
             return runModuleRequest.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);

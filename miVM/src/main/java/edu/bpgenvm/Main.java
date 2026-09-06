@@ -357,6 +357,10 @@ public class Main {
                 falloDeCarga = true;
             }
             if (cargado) {
+            // V6/E1 — el `elapsedMs` del EXITED mide LA EJECUCIÓN, no la sesión:
+            // el reloj arranca aquí, con el módulo cargado y enlazado. Así el
+            // número significa lo mismo en el PC y en las cinco placas.
+            if (dbgServer != null) dbgServer.marcaInicioEjecucion();
             vm.run();
             if (vm.isKillRequested()) {        // P-run-stop (#257)
                 exitCode = 130;                // convención 128+SIGINT
