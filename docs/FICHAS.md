@@ -2013,11 +2013,39 @@ Y de paso se alinearon los textos de los tres stubs de bus de la VM-C con los de
 (`count=`/`(sim → ceros)` en vez de `n=`/`(stub → ceros)`) — misma clase que `#469`. Comprobado que
 no se rompió nada: `MathRango`, `MathTest` y `AdcDemo` siguen dando el mismo contenido en las dos VMs.
 
-⏭️ **Lo que queda para meter `BusBug` en el corpus** (`#477`): las líneas de traza de la VM-C
-(`[bpvm] …`, `[i2c] …`) **se intercalan en distinto orden** —a veces a media línea— con el `print`
-del programa, porque las fachadas escriben con `printf` directo mientras la salida del programa va
-por el camino de la VM. El **contenido** ya es idéntico (comprobado ordenando); es el orden lo que
-falta, y es el mismo problema que se anotó con `#469`.
+✅ **Y el orden, también arreglado el 6-sep** — era el último obstáculo para meter estos samples
+en el corpus. Las nueve fachadas (`adc`, `gpio`, `i2c`, `spi`, `uart`, `pwm`, `pulse`, `wdt`,
+`pico`) escribían con **`printf` directo a stdout**: otro buffer, otro orden. Sus **42 llamadas**
+pasan a `bpvm_out()`, que entrega al mismo `emit_text` que usa el `print` de BasicPlus.
+
+**Resultado, comparando sólo stdout, que es lo que dice el contrato:**
+
+| sample | antes | ahora |
+|---|---|---|
+| `BusBug` | miVM moría | ✅ **7 líneas byte-idénticas** |
+| `AdcDemo` | texto Y orden distintos | ✅ **16 líneas byte-idénticas** |
+| `MathRango` · `MathTest` | ok | ✅ 29 y 17, sin cambio |
+
+📌 **Y en placa hace lo que faltaba**: esos mensajes ahora **viajan por el wire**. Verificado en la
+Discovery — el aviso de `#469` llega al PC, cuando antes se quedaba en la consola de la placa:
+
+```
+--- Adc.Channel demo ---
+[adc] initChannel: esta placa NO REGISTRA BACKEND DE ADC.
+      No es que la lectura sea 0: es que no hay de donde leerla.
+```
+
+⚠️ **Dos cosas que costaron un intento cada una y quedan escritas:**
+- **`bpvm_diag` YA EXISTÍA** (`bpvm_util.c`, `#355`) y es **otro canal**: diagnóstico a stderr o al
+  log persistente, con sink enchufable. El choque de nombres lo cazó el enlazador, y fue la pista de
+  que son dos cosas distintas — por eso el nuevo se llama **`bpvm_out`**. El reparto queda escrito
+  en `include/bpvm_out.h`: **`bpvm_diag` = diagnóstico; `bpvm_out` = salida del programa**, sujeta a
+  la paridad byte-idéntica.
+- El mensaje del ADC llegaba **truncado a media palabra** (el buffer de `bpvm_out` son 256 B).
+  Acortado. Un aviso cortado es peor que uno corto.
+
+✅ Compilan las cinco familias con el camino nuevo: Pico (ninja), C6 (`idf.py`, y con él toda la
+familia ESP32) y Discovery (CubeIDE) — más el host y el simulador. `io_smoke` sigue en `[status=OK]`.
 
 #### 🚨 `#476` — las DOS tablas de builtins se mantienen A MANO, y divergir no hace ruido (abierta 5-sep)
 

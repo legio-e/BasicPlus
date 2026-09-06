@@ -2,6 +2,7 @@
  * spi.c — fachada de hooks SPI para la VM C.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_spi.h"
 #include <stdio.h>
 
@@ -16,7 +17,7 @@ void bpvm_spi_init(int bus, int sck, int mosi, int miso, int baudrate, int mode)
         g_backend->init(bus, sck, mosi, miso, baudrate, mode);
         return;
     }
-    printf("[spi] init bus=%d sck=%d mosi=%d miso=%d baud=%d mode=%d\n",
+    bpvm_out("[spi] init bus=%d sck=%d mosi=%d miso=%d baud=%d mode=%d\n",
            bus, sck, mosi, miso, baudrate, mode);
 }
 
@@ -24,9 +25,9 @@ int bpvm_spi_write(int bus, const uint8_t* data, size_t n) {
     if (g_backend && g_backend->write) {
         return g_backend->write(bus, data, n);
     }
-    printf("[spi] write bus=%d bytes=[", bus);
-    for (size_t i = 0; i < n; i++) printf("%s%02X", i ? " " : "", data[i]);
-    printf("]\n");
+    bpvm_out("[spi] write bus=%d bytes=[", bus);
+    for (size_t i = 0; i < n; i++) bpvm_out("%s%02X", i ? " " : "", data[i]);
+    bpvm_out("]\n");
     return (int) n;
 }
 
@@ -36,7 +37,7 @@ int bpvm_spi_read(int bus, uint8_t* data, size_t n) {
     }
     for (size_t i = 0; i < n; i++) data[i] = 0;
     /* #478 — TEXTO = CONTRATO DE PARIDAD: identico al de miVM. */
-    printf("[spi] read bus=%d count=%zu (sim → ceros)\n", bus, n);
+    bpvm_out("[spi] read bus=%d count=%zu (sim → ceros)\n", bus, n);
     return (int) n;
 }
 
@@ -44,11 +45,11 @@ int bpvm_spi_transfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
     if (g_backend && g_backend->transfer) {
         return g_backend->transfer(bus, tx, rx, n);
     }
-    printf("[spi] transfer bus=%d tx=[", bus);
+    bpvm_out("[spi] transfer bus=%d tx=[", bus);
     for (size_t i = 0; i < n; i++) {
-        printf("%s%02X", i ? " " : "", tx[i]);
+        bpvm_out("%s%02X", i ? " " : "", tx[i]);
         rx[i] = 0;
     }
-    printf("] (rx → ceros)\n");
+    bpvm_out("] (rx → ceros)\n");
     return (int) n;
 }

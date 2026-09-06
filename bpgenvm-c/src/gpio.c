@@ -7,6 +7,7 @@
  * redirigir al SDK.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_gpio.h"
 #include <stdio.h>
 
@@ -21,7 +22,7 @@ void bpvm_gpio_init(int pin, int mode) {
         g_backend->init(pin, mode);
         return;
     }
-    printf("[gpio] init pin=%d mode=%s\n", pin,
+    bpvm_out("[gpio] init pin=%d mode=%s\n", pin,
            mode == 0 ? "INPUT" : "OUTPUT");
 }
 
@@ -33,7 +34,7 @@ void bpvm_gpio_pull(int pin, int pull_mode) {
     const char* m = (pull_mode == 0) ? "NONE"
                   : (pull_mode == 1) ? "UP"
                   : "DOWN";
-    printf("[gpio] pull pin=%d mode=%s\n", pin, m);
+    bpvm_out("[gpio] pull pin=%d mode=%s\n", pin, m);
 }
 
 void bpvm_gpio_write(int pin, int value) {
@@ -41,7 +42,7 @@ void bpvm_gpio_write(int pin, int value) {
         g_backend->write(pin, value);
         return;
     }
-    printf("[gpio] write pin=%d value=%s\n", pin,
+    bpvm_out("[gpio] write pin=%d value=%s\n", pin,
            value == 0 ? "LOW" : "HIGH");
 }
 
@@ -49,6 +50,6 @@ int bpvm_gpio_read(int pin) {
     if (g_backend && g_backend->read) {
         return g_backend->read(pin);
     }
-    printf("[gpio] read pin=%d (stub → 0)\n", pin);
+    bpvm_out("[gpio] read pin=%d (stub → 0)\n", pin);
     return 0;
 }

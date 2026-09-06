@@ -8,6 +8,7 @@
  * uart_read_timeout_us del Pico SDK.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_uart.h"
 #include <stdio.h>
 
@@ -23,7 +24,7 @@ void bpvm_uart_init(int bus, int tx, int rx, int baudrate,
         g_backend->init(bus, tx, rx, baudrate, data_bits, stop_bits, parity);
         return;
     }
-    printf("[uart] init bus=%d tx=%d rx=%d baud=%d %d%c%d\n",
+    bpvm_out("[uart] init bus=%d tx=%d rx=%d baud=%d %d%c%d\n",
            bus, tx, rx, baudrate, data_bits,
            parity == 1 ? 'O' : parity == 2 ? 'E' : 'N',
            stop_bits);
@@ -33,14 +34,14 @@ int bpvm_uart_write(int bus, const uint8_t* data, size_t n) {
     if (g_backend && g_backend->write) {
         return g_backend->write(bus, data, n);
     }
-    printf("[uart] write bus=%d bytes=[", bus);
-    for (size_t i = 0; i < n; i++) printf("%s%02X", i ? " " : "", data[i]);
-    printf("] (\"");
+    bpvm_out("[uart] write bus=%d bytes=[", bus);
+    for (size_t i = 0; i < n; i++) bpvm_out("%s%02X", i ? " " : "", data[i]);
+    bpvm_out("] (\"");
     for (size_t i = 0; i < n; i++) {
         char c = (char) data[i];
         putchar((c >= 32 && c < 127) ? c : '.');
     }
-    printf("\")\n");
+    bpvm_out("\")\n");
     return (int) n;
 }
 
@@ -50,7 +51,7 @@ int bpvm_uart_read(int bus, uint8_t* data, size_t n, int timeout_ms) {
     }
     for (size_t i = 0; i < n; i++) data[i] = 0;
     /* #478 — TEXTO = CONTRATO DE PARIDAD: identico al de miVM. */
-    printf("[uart] read bus=%d count=%zu timeout=%d (sim → ceros)\n",
+    bpvm_out("[uart] read bus=%d count=%zu timeout=%d (sim → ceros)\n",
            bus, n, timeout_ms);
     return (int) n;
 }
@@ -59,6 +60,6 @@ int bpvm_uart_available(int bus) {
     if (g_backend && g_backend->available) {
         return g_backend->available(bus);
     }
-    printf("[uart] available bus=%d (stub → 0)\n", bus);
+    bpvm_out("[uart] available bus=%d (stub → 0)\n", bus);
     return 0;
 }

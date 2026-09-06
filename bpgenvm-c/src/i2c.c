@@ -2,6 +2,7 @@
  * i2c.c — fachada de hooks I2C para la VM C.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_i2c.h"
 #include <stdio.h>
 
@@ -16,16 +17,16 @@ void bpvm_i2c_init(int bus, int sda, int scl, int baudrate) {
         g_backend->init(bus, sda, scl, baudrate);
         return;
     }
-    printf("[i2c] init bus=%d sda=%d scl=%d baud=%d\n", bus, sda, scl, baudrate);
+    bpvm_out("[i2c] init bus=%d sda=%d scl=%d baud=%d\n", bus, sda, scl, baudrate);
 }
 
 int bpvm_i2c_write(int bus, int addr, const uint8_t* data, size_t n) {
     if (g_backend && g_backend->write) {
         return g_backend->write(bus, addr, data, n);
     }
-    printf("[i2c] write bus=%d addr=0x%02X bytes=[", bus, addr);
-    for (size_t i = 0; i < n; i++) printf("%s%02X", i ? " " : "", data[i]);
-    printf("]\n");
+    bpvm_out("[i2c] write bus=%d addr=0x%02X bytes=[", bus, addr);
+    for (size_t i = 0; i < n; i++) bpvm_out("%s%02X", i ? " " : "", data[i]);
+    bpvm_out("]\n");
     return (int) n;
 }
 
@@ -36,6 +37,6 @@ int bpvm_i2c_read(int bus, int addr, uint8_t* data, size_t n) {
     /* Stub: rellena con ceros. */
     for (size_t i = 0; i < n; i++) data[i] = 0;
     /* #478 — TEXTO = CONTRATO DE PARIDAD: identico al de miVM. */
-    printf("[i2c] read bus=%d addr=0x%02X count=%zu (sim → ceros)\n", bus, addr, n);
+    bpvm_out("[i2c] read bus=%d addr=0x%02X count=%zu (sim → ceros)\n", bus, addr, n);
     return (int) n;
 }

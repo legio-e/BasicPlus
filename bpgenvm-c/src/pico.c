@@ -7,6 +7,7 @@
  * registra el backend que llama al SDK del Pico.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_pico.h"
 #include "bpvm_platform.h"   /* H13 h41: reloj monotono para el uptime sin backend */
 #include <stdio.h>
@@ -50,7 +51,7 @@ float bpvm_pico_temp_c(void) {
     if (g_backend && g_backend->tempC) {
         return g_backend->tempC();
     }
-    printf("[pico] tempC (stub → 25.0)\n");
+    bpvm_out("[pico] tempC (stub → 25.0)\n");
     return 25.0f;
 }
 
@@ -58,7 +59,7 @@ int bpvm_pico_cpu_freq_hz(void) {
     if (g_backend && g_backend->cpuFreqHz) {
         return g_backend->cpuFreqHz();
     }
-    printf("[pico] cpuFreqHz (stub → 150_000_000)\n");
+    bpvm_out("[pico] cpuFreqHz (stub → 150_000_000)\n");
     return 150000000;
 }
 
@@ -145,6 +146,6 @@ int bpvm_pico_set_cpu_freq_mhz(int mhz) {
     /* Stub: en host no podemos cambiar la frecuencia de nada,
      * pero reportamos "éxito" para que el código BP no rompa en
      * desarrollo. */
-    printf("[pico] setCpuFreqMHz(%d) (stub, no-op)\n", mhz);
+    bpvm_out("[pico] setCpuFreqMHz(%d) (stub, no-op)\n", mhz);
     return 1;
 }

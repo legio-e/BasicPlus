@@ -6,6 +6,7 @@
  * "todo-en-buffer-del-caller" para targets sin libc.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_internal.h"
 #include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
@@ -404,6 +405,8 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
      * código AOT C-emitido la usa vía vm->aot_helpers->func(...). */
     vm->aot_helpers = &bpvm_aot_helpers_v2;
 
+    /* V6/#478 — la traza de las fachadas sale por el camino del `print`. */
+    bpvm_out_set_vm(vm);
     return vm;
 }
 
@@ -1312,6 +1315,8 @@ uint32_t bpvm_thread_bp(const bpvm_thread_t* tc) { return tc ? tc->bp : 0; }
 uint32_t bpvm_thread_cs(const bpvm_thread_t* tc) { return tc ? tc->cs : 0; }
 
 void bpvm_destroy(bpvm_t* vm) {
+    bpvm_out_set_vm(NULL);   /* #478 */
+
     if (!vm) return;
     /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido
      * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */

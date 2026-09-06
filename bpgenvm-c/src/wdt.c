@@ -5,6 +5,7 @@
  * hace nada (no hay chip que resetear). En Pico, delega.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_wdt.h"
 #include <stdio.h>
 #include <stddef.h>
@@ -20,7 +21,7 @@ void bpvm_wdt_enable(int timeoutMs) {
         g_backend->enable(timeoutMs);
         return;
     }
-    printf("[wdt] enable(%d ms) (stub, no-op)\n", timeoutMs);
+    bpvm_out("[wdt] enable(%d ms) (stub, no-op)\n", timeoutMs);
 }
 
 void bpvm_wdt_feed(void) {
@@ -36,5 +37,5 @@ void bpvm_wdt_disable(void) {
         g_backend->disable();
         return;
     }
-    printf("[wdt] disable (stub, no-op)\n");
+    bpvm_out("[wdt] disable (stub, no-op)\n");
 }

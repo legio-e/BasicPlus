@@ -14,6 +14,8 @@
  * la VM Java.
  */
 
+#include "bpvm_out.h"
+#include <stdarg.h>
 #include "bpvm_internal.h"
 #include "bpvm_opcodes.h"
 #include "aot_registry.h"        /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
@@ -56,6 +58,28 @@ static void emit_text(bpvm_t* vm, const char* s, size_t len) {
     } else {
         fwrite(s, 1, len, stdout);
     }
+}
+
+/* V6/#478 — LA TRAZA DE LAS FACHADAS, POR EL MISMO CAMINO QUE EL `print`.
+ *
+ * Antes escribian con printf directo a stdout: otro buffer, otro orden, y en
+ * placa ni siquiera llegaban al wire. El porque largo, en include/bpvm_diag.h.
+ * La VM activa es un global a proposito (una app por VM), como el s_dbg_vm del
+ * depurador. */
+static bpvm_t* s_out_vm = NULL;
+
+void bpvm_out_set_vm(bpvm_t* vm) { s_out_vm = vm; }
+
+void bpvm_out(const char* fmt, ...) {
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n <= 0) return;
+    size_t len = ((size_t) n < sizeof(buf)) ? (size_t) n : sizeof(buf) - 1;
+    if (s_out_vm) emit_text(s_out_vm, buf, len);
+    else          fwrite(buf, 1, len, stdout);   /* fachada suelta en una herramienta */
 }
 
 static void emit_int(bpvm_t* vm, int32_t v, int newline) {

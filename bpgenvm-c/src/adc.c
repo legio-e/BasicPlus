@@ -16,6 +16,7 @@
  * puede caer en el agujero por defecto, que era lo peor del diseno anterior.
  */
 
+#include "bpvm_out.h"
 #include "bpvm_adc.h"
 #include <stdio.h>
 #include <stddef.h>
@@ -41,10 +42,10 @@ void bpvm_adc_set_backend(const bpvm_adc_backend_t* backend) {
  * vio nadie porque ese sample no esta en el corpus del arnes. */
 static int host_init_channel(int ch) {
     if (ch < 0 || ch > 3) {
-        printf("[adc] initChannel(%d) fuera de rango\n", ch);
+        bpvm_out("[adc] initChannel(%d) fuera de rango\n", ch);
         return -1;
     }
-    printf("[adc] initChannel(%d) → GP%d (host)\n", ch, 26 + ch);
+    bpvm_out("[adc] initChannel(%d) → GP%d (host)\n", ch, 26 + ch);
     return 26 + ch;   /* CH0=GP26, CH1=GP27, ... */
 }
 
@@ -64,14 +65,15 @@ static const bpvm_adc_backend_t s_backend_host = {
 const bpvm_adc_backend_t* bpvm_adc_backend_host(void) { return &s_backend_host; }
 
 /* --- y la ausencia de backend, que ya NO devuelve un numero plausible ----- */
+/* ⚠️ El mensaje CABE en el buffer de `bpvm_out` (256 B): el primer intento
+ * llevaba cuatro lineas y llegaba TRUNCADO a media palabra por el wire. Un aviso
+ * cortado es peor que uno corto. */
 static int sin_backend(const char* que) {
     static int avisado = 0;
     if (!avisado) {
         avisado = 1;
-        printf("[adc] %s: ESTA PLACA NO REGISTRA BACKEND DE ADC.\n"
-               "      No es que la lectura sea 0: es que no hay de donde leerla.\n"
-               "      Si la placa tiene ADC, le falta su bpvm_adc_set_backend() en el\n"
-               "      arranque; si no lo tiene, dilo tambien — pero no se inventa un valor.\n",
+        bpvm_out("[adc] %s: esta placa NO REGISTRA BACKEND DE ADC.\n"
+               "      No es que la lectura sea 0: es que no hay de donde leerla.\n",
                que);
     }
     return -1;
