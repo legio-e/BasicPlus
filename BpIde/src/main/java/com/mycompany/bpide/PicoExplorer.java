@@ -1071,6 +1071,13 @@ public final class PicoExplorer extends JPanel {
                         ? dc.statModule(dep.getName(), prefix, 8000) : null;
                 final byte[] depBytes = Files.readAllBytes(dep.toPath());
                 final int vLocal = BpvmClient.ModStat.versionOf(magicOf(depBytes));
+                // V6/E1 — DE DONDE SALIO EL MODULO. La ruta la resuelve el DEVICE con su
+                // propio resolvedor (STAT por nombre); el IDE no lleva un gemelo del orden de
+                // busqueda — asi se desincronizo #463. Aqui solo comparamos lo que el device
+                // contesta con el sitio donde el IDE lo habria puesto: si no coinciden, la
+                // placa esta cargando OTRA copia, y eso hay que decirlo en voz alta.
+                final String donde_le_tocaria = isLib ? ("/lib/" + dep.getName())
+                                                      : appPath(prefix, dep.getName());
                 final String depRemote; final String motivo; final boolean subir;
                 if (st == null) {
                     // No lo tiene (o firmware sin STAT por nombre): a donde le toca.
@@ -1100,10 +1107,19 @@ public final class PicoExplorer extends JPanel {
                     sentCrc.put(depRemote, crc32(depBytes));
                 }
                 if (outputSink != null) {
+                    // V6/E1 — el CRC y la RUTA en el mensaje: cuando algo falla por una
+                    // dependencia, esta linea es la que dice de donde salio el modulo.
+                    final String donde = (st == null) ? "" : "  [la placa lo tiene en " + st.path
+                            + (st.crc >= 0 ? String.format(", crc %08X", st.crc) : "") + "]";
+                    final String ojo = (st != null && !st.path.equals(donde_le_tocaria))
+                            ? "  ⚠ OJO: no es donde este proyecto lo pondria (" + donde_le_tocaria
+                              + ") — la placa carga esa OTRA copia"
+                            : "";
                     final String msg = subir
                             ? "[Explorer] " + dep.getName() + " → " + depRemote + " ("
-                              + depBytes.length + " bytes): " + motivo
-                            : "[Explorer] " + dep.getName() + ": " + motivo + " — no se sube";
+                              + depBytes.length + " bytes): " + motivo + donde + ojo
+                            : "[Explorer] " + dep.getName() + ": " + motivo + donde + ojo
+                              + " — no se sube";
                     SwingUtilities.invokeLater(() -> outputSink.accept(msg));
                 }
                 // Si el dep tiene .mdn alongside, subirlo también.

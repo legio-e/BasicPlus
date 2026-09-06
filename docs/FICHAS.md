@@ -3565,7 +3565,26 @@ de cada una sigue en su sitio.
 
 - **`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap *(diseño hecho)*.
 - ✅ ~~**NO copiar dependencias que el dispositivo YA TIENE** — y que lo diga él.~~ **HECHO el 2-sep** (`#466`, paso 3): el IDE pregunta por cada dependencia con `STAT` por nombre y sólo sube lo que falta o es más viejo.
-- **Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC *(idea de Eduardo)*.
+- ✅ ~~**Al fallar una dependencia, decir DE DÓNDE salió el módulo**, por CRC~~ *(idea de Eduardo)*
+  — **HECHO el 6-sep**, y salió **mucho más pequeño** de lo que yo había estimado (dije «sesión
+  larga, y el mensaje no cabe en `char[160]`»): **las dos mitades ya estaban construidas**.
+  - El **device** ya contesta dónde tiene un módulo: `STAT{name, base, crc:true}` lo resuelve con
+    **el mismo resolvedor que usa el RUN** y devuelve la ruta elegida. Su comentario
+    (`bpvm_repl.c:150`) dice por qué se hizo así: *«el IDE no lleva un gemelo del orden de búsqueda,
+    que es como se desincronizó `#463`»*.
+  - El **IDE** ya lo pregunta por nombre en cada despliegue (`statModule`, `PicoExplorer.java:1070`)
+    y ya recibe `path`, `crc` y `magic`… **y no los enseñaba**.
+  Ahora el mensaje de cada dependencia lleva **dónde la tiene la placa y con qué CRC**, y —lo que de
+  verdad contesta la pregunta— **avisa cuando esa ruta NO es donde este proyecto la pondría**:
+  «⚠ OJO: no es donde este proyecto lo pondría (/app/proj/X.mod) — la placa carga esa OTRA copia».
+  Comprobado contra el simulador: con `Core.mod` en `/lib`, el device contesta `/lib/Core.mod`
+  aunque el IDE lo pondría en `/app/miproyecto/`, y el aviso salta.
+  📌 **Y llega ANTES del fallo**, no como post-mortem: se ve en cada Run, que es cuando la copia
+  rancia todavía no ha mordido.
+  ⚠️ **Corrección de Eduardo que enderezó esto**: yo iba a que el IDE enumerase los candidatos
+  (proyecto → /app → /lib → /sys). *«El IDE no tiene que determinar el orden de búsqueda, le
+  pregunta al micro y éste se encarga.»* Con mi versión, el orden habría quedado en **dos sitios** —
+  la enfermedad de `#470`, y justo lo que `#463` ya costó una vez.
 - ✅ ~~**El verbo `RESET` no llega con un RUN vivo**~~ *(era `#452`)* — **ARREGLADO el 6-sep
   (`ee250df6`) y VERIFICADO EN PLACA en la Discovery U5G9J**, con la placa contando su propio
   reinicio:
