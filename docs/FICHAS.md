@@ -1912,11 +1912,45 @@ que está claro es que si un pin es analógico no puede ser digital al mismo tie
    reenvía al backend y no guarda nada; el único que lleva cuenta es el STM32, y en privado
    (`s_mode[128]`, `s_pull[128]`, `gpio_stm32.c:50-51`). Puesto en el común, la regla «analógico ⇒
    no digital» se escribe **una vez** y vale para las cinco familias.
-3. **El lenguaje.** `Gpio.Pin` ya existe (`Gpio.bp:92`: `Pin(num, mode)` con `on/off/toggle/value/
-   isHigh`). Propuesta: **`Adc.Pin(26)` primero**, clase nueva y **aditiva** (no rompe programas, y
-   el tipo mismo dice que ese pin es analógico); **`Gpio.Pin` después**, ganando la consulta de
-   capacidad sin cambiar lo que hace. Al revés —meter la lectura analógica dentro de `Gpio.Pin`—
-   mezcla dos mundos en la clase más usada.
+3. **El lenguaje — DECIDIDO por Eduardo el 6-sep.** `Gpio.Pin` ya existe (`Gpio.bp:92`:
+   `Pin(num, mode)` con `on/off/toggle/value/isHigh`).
+
+   ❌ **`Adc.Pin` NO**: *«estamos llamando a 2 clases diferentes `Pin` y eso en la práctica va a
+   crear confusión»*. El nombre es **`AnPin`**.
+   ✅ **`AnPin` DESCIENDE de `Pin`**, y el modelo no es artificial: *«como un pin físico puede ser
+   digital y/o analógico, tener una clase que lo permita es un buen modelo»*. Yo objeté que un
+   `AnPin` heredaría `on()`/`off()` —lo que su propio invariante prohíbe— y propuse partir `Pin`;
+   la respuesta cierra la objeción sin partir nada: *«en BP los métodos pueden ser virtuales y los
+   valores se exportan como propiedades, así que no hay ningún problema en extender la clase `Pin`,
+   sobrescribiendo lo que haga falta.»*
+
+   **El modelo, entero:**
+   - **`Pin`** — el pin FÍSICO: `num` y `mode`. Modos digitales **`INPUT` / `OUTPUT` /
+     `OPEN_COLLECTOR`**; modo analógico **`ANALOG`**. El `pull` (none/up/down) aplica **sólo en
+     digital**.
+   - **`AnPin extends Pin`** — sobrescribe lo que haga falta y añade `read()` / `readVolts()` /
+     `readAvg()`.
+   - 🔑 **La exclusividad no hay que vigilarla: es el mismo campo `mode`.** Pedir analógico sobre un
+     pin en modo digital falla **por construcción**, no porque alguien se acuerde de comprobarlo.
+
+   **`OPEN_COLLECTOR` es de Eduardo y es nuevo entero** — *«importante para cuando se conectan
+   varias salidas entre sí»*. Comprobado: **no existe en ninguna parte** (ni en BP, ni en la fachada
+   —`init(pin,mode)` sólo conoce `0=INPUT, 1=OUTPUT`, `bpvm_gpio.h:31`—, ni en las cinco cinturas).
+   Y no cuesta lo mismo en todas, que es el argumento de que esto vive en la HAL BP:
+
+   | familia | colector abierto |
+   |---|---|
+   | **ESP32** | nativo — `GPIO_MODE_OUTPUT_OD` (`hal/gpio_types.h:112` del IDF) |
+   | **STM32** | nativo — `GPIO_MODE_OUTPUT_OD` (`stm32u5xx_hal_gpio.h`) |
+   | **RP2350** | ❌ **el pad NO lo tiene**: hay que emularlo — conducir a bajo / soltar a alta impedancia |
+
+   ⚠️ **Y la semántica que hay que fijar en el contrato, no dejarla a quien implemente**: en modo
+   colector abierto **`write(1)` no significa «pon a alto», significa «suelta»** — el alto lo pone
+   el pull-up (externo, o el interno si se activa). Es el modo en que `write` cambia de significado;
+   sin escribirlo acabaría significando cinco cosas distintas.
+
+   ✅ **De las tres cosas del modo digital, `pull` YA EXISTE** en la fachada común
+   (`pull(pin, 0=none/1=up/2=down)`, `bpvm_gpio.h:32`). Lo que falta es `OPEN_COLLECTOR`.
 
 📌 **Y el dato que explica por qué esto es de lenguaje**: `Adc` es **la única fachada que no
 habla de pines**. Sus vecinas ya hacen lo que Eduardo pide — `Gpio.init(pin, mode)`,
