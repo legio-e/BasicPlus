@@ -27,6 +27,57 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (6-sep, mediodía) — `E1`, y si da tiempo `G1`
+
+**Lo que dijo Eduardo al parar**: *«a la vuelta retomamos `E1` y si nos da tiempo `G1`. `#475` y
+`#444` hay que darle un ítem propio ya que es implementación nueva. Del resto, hay que ir cerrando
+pendientes.»* → `#475` y `#444` ya son los hitos **`C1`** y **`T1`** en la tabla (versión sin decidir).
+
+### Lo que cayó hoy — cinco arreglos, y tres los encontró el propio trabajo
+
+1. ✅ **`#452`** — el `RESET` con un RUN vivo. **El enunciado de la ficha era falso**: RESET *sí*
+   llegaba y se rechazaba a propósito con `BUSY` (lista blanca KILL/HELLO en el poll). Verificado en
+   **las tres arquitecturas** —Discovery, Pico 2, C6—, que es todo el código tocado. Y el segundo
+   defecto, que no hacía ruido: **el IDE se tragaba el BUSY** e imprimía «reset enviado».
+2. ✅ **El tiempo del RUN** (`E1`): el IDE ya enseña `exit 0 (OK) en 94 ms`. El campo llevaba años
+   viajando y `git log -S elapsedMs -- BpIde/` salía **vacío**.
+3. ✅ **`#476`** — `make check-builtins`, con su **control negativo**.
+4. ✅ **`#469`** — la fachada de ADC ya no inventa una lectura. El arreglo es el patrón genérico:
+   *quien no tiene hardware registra un backend explícito, y la ausencia pasa a ser error*.
+5. ✅ **`#478`** — **miVM no podía tocar un bus**: los ocho builtins de I2c/Spi/Uart/Neopixel se
+   quedaron fuera del 4→8B de V4, y el arreglo estaba escrito 400 líneas más arriba en `case MOVE`.
+
+### 📌 El hilo que une los cinco, y es lo que hay que retener
+
+**Los tres bugs de verdad de hoy los encontró el trabajo, no la red de seguridad** — y siempre por
+lo mismo: el `check` de `compat.sh` lleva **desactivado desde V4** y su corpus de 16 casos **no toca
+ni buses, ni GPIO, ni ADC, ni GUI** (`#477`). El sample que reproduce `#478` **ya existía**, escrito
+hace tiempo para bisecar otro cuelgue.
+
+✅ **Y hoy quedan cuatro samples listos para entrar en el corpus**, byte-idénticos en stdout:
+`BusBug` (7 líneas), `AdcDemo` (16), `MathRango` (29), `MathTest` (17). Los dos primeros lo son
+**desde hoy**: hacía falta alinear los textos de los stubs y arreglar el orden.
+
+### 🔧 Y una pieza de fondo que salió de ahí: `bpvm_out`
+
+Las nueve fachadas escribían con **`printf` directo a stdout**; sus **42 llamadas** pasan a
+`bpvm_out()`, que entrega al mismo `emit_text` que el `print` de BasicPlus. Arregla el orden en el
+host **y** hace que en placa esos mensajes **viajen por el wire** — verificado en la Discovery.
+⚠️ Ojo al reparto, que costó un intento: **`bpvm_diag` ya existía** (`#355`) y es OTRO canal —
+diagnóstico a stderr/log. `bpvm_out` = salida del programa, sujeta a la paridad. Escrito en
+`include/bpvm_out.h`.
+
+### ⏭️ Para la vuelta
+
+**`E1`** (quedan `#412`, el CRC de origen y las BD sin placa — los tres esperan decisión, no código)
+y **`G1`**. Y de los pendientes, mi orden por daño: **`#477`** primero (enchufar el arnés: es lo que
+impide que lo de hoy vuelva, y hay cuatro samples esperando), luego **`#480`** —lo que destapó la
+auditoría de las 13 fachadas, con el `Wdt.disable()` del STM32 que **no desactiva** a la cabeza— y
+**`#470`** (el C3 y el C6 se creen un S3 por la vía BP).
+
+⚠️ **Placas**: la Discovery quedó grabada con lo de hoy; la Pico 2 y el C6 con lo del `RESET`, pero
+**no con `bpvm_out`**. Y sigue habiendo un `/app/P.mod` y un `/app/adc.mod` de prueba en ellas.
+
 ## ⏭️ AL RETOMAR (5-sep, noche) — mañana **el IDE**, y `L1` ya no está en V6
 
 **Lo que dijo Eduardo al parar**: *« lo podemos dejar por hoy. Mañana podemos ver el IDE y a partir
