@@ -42,8 +42,25 @@
 #elif defined(__XTENSA__)
 #  define MDN_HOST_ARCH   MDN_ARCH_XTENSA
 #  define MDN_FUNCPTR_BIT 0u    /* Xtensa: dirección plana */
+/* V6 — EL PC TAMBIEN DECLARA SU ARQUITECTURA, y con eso el gate SE ENCIENDE.
+ *
+ * Hasta hoy el host era MDN_ARCH_NONE, que no significa «PC»: significa «sin
+ * gate». Consecuencia medida en la auditoria del 5-sep: coger `SQLite.mdn.ARMV8`,
+ * subirle el byte de ABI y cargarlo en el PC devolvia **0 = OK** — registraba
+ * thunks a codigo ARM en memoria que ademas no es ejecutable. El fallo llevaba
+ * armado desde siempre y no habia disparado solo porque el host nunca llama al
+ * escaner. Con packs nativos en el PC eso deja de ser teorico.
+ *
+ * Es el mismo doble dano que ya se corrigio para el Xtensa (ver mdn_format.h): el
+ * que cae en NONE ni dice a que compilar ni tiene gate. */
+#elif defined(__x86_64__) || defined(_M_X64)
+#  define MDN_HOST_ARCH   MDN_ARCH_X64
+#  define MDN_FUNCPTR_BIT 0u    /* x86-64: dirección plana */
+#elif defined(__i386__) || defined(_M_IX86)
+#  define MDN_HOST_ARCH   MDN_ARCH_X86
+#  define MDN_FUNCPTR_BIT 0u    /* x86: dirección plana */
 #else
-#  define MDN_HOST_ARCH   MDN_ARCH_NONE   /* host/x86: sin gate, dirección plana */
+#  define MDN_HOST_ARCH   MDN_ARCH_NONE   /* arquitectura desconocida: sin gate */
 #  define MDN_FUNCPTR_BIT 0u
 #endif
 

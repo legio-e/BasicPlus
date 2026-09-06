@@ -75,6 +75,20 @@
  * que puede decir "arm") y el gate de arquitectura quedaba desarmado. */
 #define MDN_ARCH_XTENSA    94   /* EM_XTENSA (ESP32-S3) */
 
+/* V6 — EL PC. Dos valores y NO uno, porque son binarios distintos: la
+ * observacion es de Eduardo (6-sep), *«x86 es en realidad x64, lo digo porque
+ * los binarios son diferentes»*, y es la misma leccion que ya costo una vez con
+ * `MDN_ARCH_ARM`, que no distingue hard de softfp — ver mdn_loader.h:54: «esa
+ * discrepancia no da error de enlace, da numeros mal en silencio». Aqui es peor:
+ * codigo de 32 en un proceso de 64 no da numeros mal, no es codigo.
+ *
+ * ⚠️ Y ojo al conjunto: `MDN_ARCH_ARM` (40) aqui significa Cortex-M **Thumb-2, 32
+ * bits**, y el sufijo de fichero que usa el IDE para eso es `ARMV8` — que fuera
+ * de este proyecto se entiende como AArch64, 64 bits. El nombre ya esta cogido y
+ * significa otra cosa; el dia que aparezca un ARM de 64 hay que recordarlo. */
+#define MDN_ARCH_X86       3    /* EM_386    (PC de 32 bits) */
+#define MDN_ARCH_X64       62   /* EM_X86_64 (PC de 64 bits — el host normal) */
+
 typedef struct {
     uint8_t  magic[4];     /* "MDN\0" */
     uint16_t version;      /* formato del header — actualmente 1 */
