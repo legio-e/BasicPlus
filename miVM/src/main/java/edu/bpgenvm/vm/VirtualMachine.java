@@ -2151,6 +2151,11 @@ public class VirtualMachine {
                     + " evento(s) sin atender (destinatario muerto o encolados"
                     + " por un handler tardío)");
         }
+        // La ventana se cierra AQUI, con el programa ya terminado. Sin esto,
+        // un programa que use Gui.stop() imprime todo y NO TERMINA: el EDT de
+        // AWT no es demonio y mantiene viva la JVM mientras haya una ventana.
+        // Es la paridad con la VM-C, donde la ventana SDL muere con el proceso.
+        gui.shutdown();
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 

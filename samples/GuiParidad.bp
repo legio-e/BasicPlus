@@ -1,0 +1,76 @@
+// samples/GuiParidad.bp — el oraculo de PARIDAD de la GUI, y TERMINA SOLO.
+//
+// Por que existe. El oraculo exacto de la GUI (`Gui.__guiDumpTree()`) esta
+// implementado con paridad byte a byte en las dos VMs desde V4, pero NINGUN
+// sample de GUI podia entrar en la red de paridad: los 22 que lo llaman
+// vuelcan el arbol y despues llaman a `Gui.run()`, que bloquea bombeando LVGL
+// y no vuelve sin una ventana que cerrar. Un arnes desatendido se colgaba ahi.
+//
+// La salida es `Gui.start()` (V6/G1): el lazo se va a su propio hilo BP, el
+// programa sigue, y `stop()` + `join()` lo cierran. Este sample construye el
+// arbol, deja que el lazo asiente, lo para y ENTONCES vuelca. Termina con
+// codigo 0 sin que nadie toque una ventana — que es lo que hace falta para
+// estar en el corpus de `compat/compat.sh check`.
+//
+// Que NO prueba, y conviene saberlo antes de fiarse: el volcado es del MODELO.
+// Es ciego al color, a la fuente y a la rotacion (render-only por contrato), y
+// del chart no saca los datos. Para eso esta la segunda via, la captura de
+// pantalla (#475).
+module GuiParidad
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var panel: Gui.Panel := Gui.Panel(scr)
+    panel.setBounds(10, 20, 200, 120)
+
+    var titulo: Gui.Label := Gui.Label(panel, "paridad")
+    titulo.setPos(4, 4)
+
+    var boton: Gui.Button := Gui.Button(panel, "OK")
+    boton.setBounds(4, 30, 80, 28)
+
+    var chk: Gui.Checkbox := Gui.Checkbox(scr, "activo")
+    chk.setPos(10, 160)
+    chk.checked := true
+
+    var sw: Gui.Toggle := Gui.Toggle(scr)
+    sw.setPos(120, 160)
+    sw.checked := true
+
+    var sl: Gui.Slider := Gui.Slider(scr)
+    sl.setBounds(10, 200, 180, 12)
+    sl.setRange(0, 100)
+    sl.value := 42
+
+    var barra: Gui.Bar := Gui.Bar(scr)
+    barra.setBounds(10, 230, 180, 12)
+    barra.setRange(0, 10)
+    barra.value := 7
+
+    var led: Gui.Led := Gui.Led(scr)
+    led.setPos(220, 160)
+
+    var tabla: Gui.Table := Gui.Table(scr)
+    tabla.setPos(240, 20)
+    tabla.setGrid(2, 2)
+    tabla.setCell(0, 0, "a")
+    tabla.setCell(0, 1, "b")
+    tabla.setCell(1, 0, "c")
+    tabla.setCell(1, 1, "d")
+
+    // El bombeo, en su propio hilo BP. La espera no es decorativa: da al lazo
+    // tiempo de asentar el arbol (y de disparar los eventos de construccion)
+    // ANTES de volcar, para que el volcado no dependa de quien llegue primero.
+    Gui.start()
+    sleep(5000)
+    Gui.stop()
+    Gui.join()
+
+    print "== arbol =="
+    print Gui.__guiDumpTree()
+    print "== fin =="
+  end Main
+
+end GuiParidad

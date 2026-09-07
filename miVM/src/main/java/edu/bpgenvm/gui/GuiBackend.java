@@ -746,6 +746,23 @@ public final class GuiBackend {
         }
     }
 
+    /** Cierra la ventana. Existe por Gui.stop() (V6/G1): al sacar el lazo a su
+     *  propio hilo BP, un programa puede PARAR el bombeo y seguir vivo — y
+     *  entonces el JFrame se queda abierto. El EDT de AWT no es demonio, asi que
+     *  con una ventana realizada la JVM NO TERMINA aunque no quede un solo hilo
+     *  BP: el proceso se queda colgado despues de haber impreso toda su salida.
+     *  Se vio midiendo GuiParidad.bp — la VM-C salia con 0 y miVM con 124 (corte
+     *  por timeout) con la MISMA salida byte a byte. Por el camino viejo
+     *  (Gui.run(), que solo vuelve al cerrar la ventana) no se notaba: el
+     *  DISPOSE_ON_CLOSE ya la habia destruido. Llamarlo dos veces es inocuo. */
+    public void shutdown() {
+        final JFrame f = frame;
+        if (f == null) return;
+        frame = null;
+        try { SwingUtilities.invokeAndWait(f::dispose); }
+        catch (Exception ignore) { /* si el EDT ya no esta, no hay nada que cerrar */ }
+    }
+
     /** Saca el siguiente evento del lazo: {objptr, kind} del widget, o
      *  {EVENT_CLOSE, 0}. Bloquea hasta que haya uno (lo alimenta el EDT, o
      *  injectClick). */

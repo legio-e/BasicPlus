@@ -50,7 +50,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/GuiParidad.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -68,6 +68,14 @@ bp_path() {
 
 filt() { grep -vE 'INICIANDO|FIN DE|heapStart|^config:' | sed '/^[[:space:]]*$/d'; }
 
+# Tope de tiempo por ejecucion. NO es para cortar programas que bloquean a
+# proposito: el corpus solo admite casos que TERMINAN SOLOS (los de GUI usan
+# Gui.start()/stop(), no Gui.run()). Es la red de seguridad del propio arnes —
+# un sample que se cuelgue por un bug deja de wedgear la tanda entera y pasa a
+# ser un caso que tarda VM_TIMEOUT, falla y deja seguir a los demas.
+# Si un caso se come el timeout, la salida sale cortada y el diff lo canta.
+VM_TIMEOUT="${VM_TIMEOUT:-25}"
+
 run_vm() {  # $1=bin(.jar|.exe) $2=mod
   # Se ejecuta DESDE el dir del .mod para que ambas VMs resuelvan las deps
   # (p.ej. Core.mod, dep implicita de try/catch en V3 desde #248) junto al
@@ -77,8 +85,8 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod
   # rutas absolutas, siguen resolviendo desde cualquier dir.
   local dir base; dir="$(dirname "$2")"; base="$(basename "$2")"
   case "$1" in
-    *.jar) ( cd "$dir" && java -jar "$1" "$base" 2>/dev/null | filt ) ;;
-    *)     ( cd "$dir" && "$1" "$base" 2>/dev/null | filt ) ;;
+    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -jar "$1" "$base" 2>/dev/null | filt ) ;;
+    *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$1" "$base" 2>/dev/null | filt ) ;;
   esac
 }
 
@@ -239,6 +247,15 @@ check_parity() {
     fi
     [ -f "$WORK/Core.mod" ] || cp "$STDLIB/Core.mod" "$WORK/" 2>/dev/null
     oj="$(run_vm "$V3_JAVA" "$mod")"; oc="$(run_vm "$V3_C" "$mod")"
+    # Una salida VACIA en las dos VMs no es paridad: es un caso que no ejecuto
+    # nada y coincide por casualidad. Importa desde que hay GUI en el corpus,
+    # porque esos samples se cortan por VM_TIMEOUT: si el corte llegase antes
+    # del dump, las dos saldrian vacias y el arnes lo cantaria VERDE. Es el
+    # mismo falso-PAR de "0 PASS no es verde", un piso mas abajo: por caso.
+    if [ -z "$oj" ] && [ -z "$oc" ]; then
+      echo "  FAIL $s — las dos VMs no imprimieron NADA (no es paridad, es un caso mudo)"
+      fail=$((fail+1)); continue
+    fi
     if [ "$oj" = "$oc" ]; then
       pass=$((pass+1))
     else
