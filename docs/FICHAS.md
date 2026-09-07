@@ -2791,6 +2791,39 @@ demás. Es lo primero que hay que resolver de esa placa antes de `F1`.
 📌 Nota para `T1`: **7 imágenes y 9 placas** es el tamaño que el sistema de pruebas tiene que
 conducir. `#444` decía *«no escala a una docena de placas»* — con nueve ya estamos ahí.
 
+##### 💭 Por qué `T1` va ANTES de `F1` — la reflexión de Eduardo (7-sep)
+
+> *«Las pruebas finales normalmente nos llevaban, en el mejor de los casos, 2 días completos.
+> Ahora, con las pruebas en gran parte automatizadas, podría llevarnos la mitad. Pero no sólo es
+> la reducción de tiempo: al ser sistemáticas podemos probar todas las placas completamente.»*
+
+**Lo importante de esa frase es la segunda mitad, y conviene no dejarla en intuición.** Tres cosas
+que la sostienen con números y con lo que pasó hoy mismo:
+
+**1. El parque creció y el presupuesto no.** V5 se publicó con **5 imágenes y 7 placas**; V6 va por
+**7 y 9** (entran C3 y C6). Son **+40 % de imágenes y +29 % de placas** desde la última entrega. Si
+2 días eran «el mejor de los casos» con 7, con 9 ese presupuesto ya estaba roto. **Automatizar no
+es una comodidad: es lo que hace que nueve placas quepan.**
+
+**2. Un proceso manual cubre lo que alguien se acuerda de cubrir** — y de eso hoy hubo tres
+demostraciones seguidas, todas con la misma forma:
+- **`BusBug.bp`** existía desde hacía meses, escrito para bisecar otro cuelgue, y era el reactivo
+  exacto de `#440`. El arnés lo tenía delante y no lo metió en la red.
+- **El oráculo del GUI** (`__guiDumpTree`) está implementado con paridad byte a byte **desde V4**,
+  lo llaman 22 samples, es gratis — y nunca se había ejecutado automáticamente.
+- **El censo de fichas**: seis de las que parecían pendientes no lo eran.
+
+Los tres son lo mismo: lo que se revisa a mano se revisa **por memoria**, y la memoria muestrea.
+Sistemático no significa «más rápido»: significa que **la cobertura deja de depender de quién
+esté cansado a las siete de la tarde**.
+
+⚠️ **3. Y el aviso que hay que meter en el diseño de `T1`, porque ya nos mordió**: sistemático no
+es lo mismo que correcto. `#459` volcaba el heap por pantalla y `compat.sh` daba **38 PASS**: las
+dos VMs producían **la misma basura, byte a byte**. Un oráculo que sólo compara dos
+implementaciones **no puede ver un fallo que ambas comparten** — y a nivel de placa el riesgo se
+multiplica por nueve: te dirá muy convencido que las nueve coinciden. `T1` necesita comparar
+contra **lo esperado**, no sólo entre sí. Es literalmente lo que pedía `#444`.
+
 ⏩ **`L1` SE VA A V7, decidido el 5-sep.** Salió de tirar del hilo de las intrínsecas y
 acabó en un cambio de fondo: **el módulo raíz**, al estilo de la unidad `System` de Turbo Pascal
 — *«me da más tranquilidad tener algo que se pueda leer que tener algo que sólo existe en
