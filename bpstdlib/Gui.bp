@@ -786,9 +786,91 @@ import Json
   // upcall del GUI no se drenaba JAMÁS. ----
   public intrinsic function __guiRunOnce(): boolean
 
+  // ---- V6/G1 — EL LAZO, EN SU PROPIO HILO BP ----------------------------------
+  //
+  // Idea de Eduardo (23-ago), decidida el 6-sep: *«crear nuestro propio bucle
+  // corriendo en su propio Thread BP; de esta forma no habra ningun problema de
+  // ajustar el bucle, interrumpirlo o salir del programa»*.
+  //
+  // POR QUE HILO BP Y NO EL HILO `io` (decision de A1.6): todos los hilos BP
+  // corren sobre la MISMA tarea de SO (`vm`), interleavados por el scheduler
+  // entre quanta. Asi LVGL se sigue llamando desde UN SOLO hilo de SO, que es lo
+  // que exige (no es reentrante). Con `io` habria un segundo hilo tocandolo.
+  //
+  // Y SALIR DEL PROGRAMA SALE GRATIS: el scheduler para cuando no queda NINGUN
+  // hilo vivo, no cuando Main vuelve. Asi que el hilo del GUI mantiene vivo el
+  // programa por si solo, y `Gui.start()` es de verdad util.
+  //
+  // OJO A LA PILA: el lazo despacha los handlers del usuario (onClick/onChange
+  // se llaman desde dentro de __guiRunOnce), asi que corren en la pila de ESTE
+  // hilo. Por eso 8 KB y no la de un hilo de calculo.
+  class HiloGui extends Thread
+    // El estado del lazo vive AQUI y no en el modulo: una clase no puede leer
+    // un `var` de modulo que no sea publico, y publicarlo iria contra la norma
+    // de la casa (#143: «sin variables publicas; lo publico es property»). Y
+    // ademas es su sitio: lo que se para es ESTE hilo.
+    var parar: boolean
+
+    public function HiloGui()
+      super(8192)
+      this.parar := false
+    end HiloGui
+
+    // Lo llama otro hilo (o un handler del propio GUI). No espera.
+    public function pedirParada()
+      this.parar := true
+    end pedirParada
+
+    public function run()
+      // SIN `sleep` AQUI, y es a proposito. Yo habia apuntado como hallazgo que
+      // «el lazo no duerme»: es FALSO. La espera la pone el BOMBEO, y la pone
+      // cada plataforma como le toca — SDL_Delay(16) en el host, vTaskDelay con
+      // el idle que sugiere LVGL en el C6 y el P4, __WFI() en el STM32. Y el
+      // comentario de miVM dice por que ese es el sitio: «puesto donde el bombeo
+      // puede pagarlo sin que el lazo BP tenga que saber de tiempos».
+      // Poner otro `sleep` aqui no ajusta el ritmo: lo EMPEORA, porque suma una
+      // segunda espera a la que ya hay.
+      while not this.parar and __guiRunOnce() do
+      endwh
+    end run
+  end HiloGui
+
+  var hilo: HiloGui           // sin inicializador: un var de modulo solo admite literal
+
+  // ---- start — arranca el lazo y VUELVE. El programa sigue vivo mientras el
+  //      hilo lo este, asi que Main puede terminar. ----
+  public function start()
+    if hilo != null then
+      return
+    endif
+    hilo := HiloGui()
+    hilo.start()
+  end start
+
+  // ---- stop — pide al lazo que termine. Lo puede llamar otro hilo (o un
+  //      handler del propio GUI). No espera: usa join() si lo necesitas. ----
+  public function stop()
+    if hilo != null then
+      hilo.pedirParada()
+    endif
+  end stop
+
+  // ---- join — espera a que el lazo termine. ----
+  public function join()
+    if hilo != null then
+      hilo.join()
+      hilo := null
+    endif
+  end join
+
+
+  // ---- run — SIGUE SIENDO SINCRONO: arranca el hilo y lo espera. Decision de
+  //      Eduardo, y no puede ser de otra forma: varios samples imprimen DESPUES
+  //      de `run()` y dependen de que bloquee (GuiCheckDemo, GuiClickDemo,
+  //      GuiEvLat). Un programa que hoy funciona no se entera de este cambio. ----
   public function run()
-    while __guiRunOnce() do
-    endwh
+    start()
+    join()
   end run
 
   // ---- loadFont — carga una fuente .bin (LVGL binfont) desde el FS del proyecto

@@ -1,0 +1,27 @@
+// GuiStartDemo.bp — V6/G1: el lazo del GUI en su propio hilo BP.
+//   Gui.start()  arranca y VUELVE      Gui.stop()  lo para      Gui.join() espera
+module GuiStartDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var lbl: Gui.Label := Gui.Label(scr, "hola")
+
+    print "1: antes de start"
+    Gui.start()
+    print "2: start() VOLVIO — el lazo corre en su hilo"
+
+    // el hilo principal sigue trabajando mientras el GUI bombea
+    var i: integer := 0
+    while i < 3 do
+      print "3: el hilo principal sigue vivo, vuelta ", i
+      sleep(10)
+      i := i + 1
+    endwh
+
+    print "4: pido la parada"
+    Gui.stop()
+    Gui.join()
+    print "5: el lazo ha terminado"
+  end Main
+end GuiStartDemo

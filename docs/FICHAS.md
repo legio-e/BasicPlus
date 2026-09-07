@@ -3492,7 +3492,7 @@ driver MIPI-DSI que costó varias sesiones; los 223 134 B comunes de la Discover
 intérprete entero, que ya estaba escrito. El censo dice dónde vive el código, no dónde está el
 trabajo.
 
-#### 🖼️ G1 — el bucle de LVGL a un hilo BP propio *(DISEÑO CERRADO el 6-sep; se implementa en otra sesión)*
+#### ✅ G1 — ~~el bucle de LVGL a un hilo BP propio~~ (**CERRADO el 7-sep**)
 
 ### ✅ La forma, decidida por Eduardo el 6-sep
 
@@ -3522,34 +3522,51 @@ es reentrante.
 (`scheduler.c:91`, `if (!any_alive(vm)) break;`), no cuando `Main` vuelve. El hilo del GUI mantiene
 vivo el programa por sí solo.
 
-⏭️ **Dos arreglos que caen dentro, vistos al mirarlo:**
-- 🔴 **El lazo NO duerme.** Con la ventana abierta `__guiRunOnce()` devuelve 1 siempre, así que el
-  `while` gira sin parar quemando quanta. En un hilo BP con su `sleep` se controla el ritmo — es
-  *«ajustar el bucle»*, y es el vecindario de `#462`.
-- 🟡 **`__guiRunOnce` recorre la tabla de símbolos ENTERA en cada pasada** (`builtins.c:1030`) para
-  localizar dos nombres, `Gui.__guiDispatch` y `Gui.__guiDispatchChange`. Con un lazo apretado, eso
-  es un barrido por fotograma. Se cachean y ya.
+### ✅ HECHO el 7-sep
 
+`Gui.start()` / `Gui.stop()` / `Gui.join()`, con el lazo en un `HiloGui extends Thread`. Y
+`Gui.run()` **sigue bloqueando** —decisión de Eduardo: *«bloquea el hilo de ejecución, eso siempre ha
+sido así; personalmente no me gusta pero se puede mantener por compatibilidad»*—, implementado como
+`start()` + `join()`.
 
-**Idea de Eduardo (23-ago):** *«de LVGL me gustaría, si podemos, mejorar el bucle,
-poniéndolo en un hilo BP sólo para él»*.
+**Comprobado**, VM-C headless, tres pasadas por sample:
 
-📌 **No es un problema nuevo: es una FORMA DE SOLUCIÓN para `#434`**, que ya está fichada.
-Hoy un clic tiene que **atravesar el lazo de BP** para llegar a su handler —el upcall lo
-encola y sólo se drena entre quanta, y el único punto de quantum es la vuelta de
-`Gui.run()`—, así que **el evento no avanza mientras el bombeo duerme**.
+```
+1: antes de start
+2: start() VOLVIO — el lazo corre en su hilo
+3: el hilo principal sigue vivo, vuelta 0 / 1 / 2
+4: pido la parada
+5: el lazo ha terminado
+```
 
-⏭️ **Por qué encaja**: BasicPlus tiene **hilos preemptivos de verdad**, no `async`. Un hilo
-dedicado al bombeo de LVGL desacopla el ritmo de la GUI del quantum de la aplicación **en
-todas las familias a la vez**, en vez de ajustar un número por placa — que es justo lo que
-`#434` pedía evitar.
+⚠️ **CAMBIA EL ORDEN DE LOS HANDLERS, y Eduardo lo dio por bueno.** Con el lazo en su hilo, el
+scheduler puede inyectar el frame del handler en un hilo que no es el que espera, así que
+`GuiCheckDemo` y `GuiClickDemo` despachan el `onChange`/`onClick` **dentro** de `run()` en vez de
+después. **Es lo que `#324` perseguía** —el propio sample dice llamar a `run()` «para drenar el
+evento»— y en `GuiClickDemo` el árbol de después ya refleja lo que hizo el handler. `GuiColorDemo` y
+`GuiDemo` salen idénticos.
 
-⚠️ **Lo que hay que resolver antes de escribir código**, y no es menor: LVGL **no es
-reentrante**. Si el bombeo vive en su hilo y los builtins de `Gui` se llaman desde el hilo
-de la app, hay dos hilos tocando LVGL. Hace falta decidir el candado —o que los builtins
-encolen y sea el hilo de la GUI quien ejecute— antes de tocar nada.
-📐 Y lo que `#434` ya pedía sigue valiendo: **medir primero** el camino clic→handler
-aparte del camino invalidar→pintar, e instrumentar el STM32 como está el P4.
+🔴 **RETRACTADA una de las dos «mejoras» que yo había apuntado aquí: «el lazo NO duerme» era FALSO.**
+Duermen **todos** los bombeos, y cada uno como le toca a su plataforma: `SDL_Delay(16)` en el host
+(`gui_display_sdl.c:378`), `vTaskDelay` con el idle que sugiere LVGL en el C6 y el P4, `__WFI()` en
+el STM32 (`gui_display_ltdc.c:143`). Y miVM argumenta dónde va esa espera: *«puesto donde el bombeo
+puede pagarlo sin que el lazo BP tenga que saber de tiempos»* (`VirtualMachine.java`, `guiEventLoopOnce`).
+Mi `sleep` en el lazo BP no ajustaba el ritmo: **sumaba una segunda espera**. Quitado.
+
+🟡 **Sigue en pie el otro**: `__guiRunOnce` recorre la tabla de símbolos **entera en cada pasada**
+(`builtins.c:1030`) para localizar `Gui.__guiDispatch` y `Gui.__guiDispatchChange`. No se ha tocado.
+
+🔴 **Y aparece un bloqueo que explica `#477` mejor de lo que estaba escrito: miVM NO TERMINA los
+samples de GUI.** Cuatro de cuatro pasadas se cuelgan esperando un cierre de ventana que el programa
+nunca hace — **con este cambio y sin él**, comprobado con el `.mod` de antes. O sea que los samples
+de GUI no están en el corpus **no porque nadie los metiera, sino porque no pueden correr
+desatendidos en la VM de referencia**. Sin resolver eso, la paridad de GUI no se puede verificar.
+
+⚠️ **Y una trampa de método que me costó tres intentos**: el compilador resuelve los imports desde el
+**`stdlibDir` de `BpVM.cfg`**, no desde el directorio de salida. Compilar `Gui.bp` a un temporal y
+creer que el sample lo usa es un error — decía «el módulo Gui no expone 'start'» mientras el `.mod`
+nuevo estaba al lado sin instalar. **Para probar un cambio en la stdlib hay que instalar el `.mod`.**
+
 
 #### 🧩 L1 — lenguaje y compilador
 
