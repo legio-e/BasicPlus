@@ -2759,6 +2759,34 @@ son suyos. **El orden de cierre de V6 queda así:**
 Y la consecuencia práctica, dicha por él: *«lo que toca durante unos días es ir resolviendo
 pendientes»*.
 
+##### 🔢 El PARQUE que tiene que probar `F1` — 7 imágenes, 8 o 9 placas
+
+**La cuenta de Eduardo (7-sep)**: *«A mí me salen 8 placas a probar: Pico y Metro; S3, C3, C6 y
+P4; Nucleo y Discovery.»* Contrastado con el repo, sale así:
+
+| imagen | placas que sirve |
+|---|---|
+| `bpvm_pico.uf2` | **Pico 2** · **Metro RP2350B** |
+| `bpvm_esp32_merged.bin` | **ESP32-S3** |
+| `esp32c3` | **ESP32-C3** *(nueva en V6)* |
+| `esp32c6` | **ESP32-C6** *(nueva en V6)* |
+| `bpvm_esp32p4_merged.bin` | **P4 kit** · **P4 Waveshare** |
+| `bpvm_stm32_nucleo.bin` | **Nucleo U575** |
+| `bpvm_stm32_dk2.bin` | **Discovery U5G9J** |
+
+❓ **La única diferencia con la cuenta de Eduardo es la segunda P4, y está por confirmar.** El
+`CMakeLists.txt:12` del P4 dice que la imagen *«sirve a las dos P4 (kit y Waveshare; el panel
+sale del ENV, `#311`)»*. Si la Waveshare entra, son **9**.
+
+⚠️ **Y no sería una placa redundante, que es lo que importa para `F1`:** es la única que ejercita
+el camino **panel elegido por el ENV** (`display=st7701` frente al EK79007 del kit) — o sea, la
+única prueba real de que la imagen única de esa familia lo es de verdad. Probar sólo el kit deja
+ese camino sin cubrir. Además está anotado que **le falta el reflasheo**, así que hoy va por
+detrás de las demás.
+
+📌 Nota para `T1`: **7 imágenes y 8–9 placas** es el tamaño que el sistema de pruebas tiene que
+conducir. `#444` decía *«no escala a una docena de placas»* — no está lejos.
+
 ⏩ **`L1` SE VA A V7, decidido el 5-sep.** Salió de tirar del hilo de las intrínsecas y
 acabó en un cambio de fondo: **el módulo raíz**, al estilo de la unidad `System` de Turbo Pascal
 — *«me da más tranquilidad tener algo que se pueda leer que tener algo que sólo existe en
