@@ -2817,6 +2817,52 @@ Los tres son lo mismo: lo que se revisa a mano se revisa **por memoria**, y la m
 Sistemático no significa «más rápido»: significa que **la cobertura deja de depender de quién
 esté cansado a las siete de la tarde**.
 
+##### 🗂️ Los TRES TIPOS de prueba, y a qué placa le toca cada uno (Eduardo, 7-sep)
+
+> *«Las pruebas, de 3 tipos: las comunes a todas las placas, las pruebas gráficas para las que
+> tengan pantalla, y las pruebas de BD para las que tengan PSRAM.»*
+> Y la corrección que añadió acto seguido: *«La S3 no puede ser para SQLite ya que no tenemos
+> código binario para ella.»*
+
+| placa | comunes | gráficas | BD |
+|---|:---:|:---:|:---:|
+| **Pico 2** | ✅ | — | — *(sin PSRAM)* |
+| **Metro RP2350B** | ✅ | — | ✅ *(**si lleva** PSRAM: la decide el ENV, `psramCsPin`)* |
+| **ESP32-S3** | ✅ | — | ❌ **no hay binario Xtensa** |
+| **ESP32-C3** | ✅ | — | — *(sin PSRAM)* |
+| **ESP32-C6** | ✅ | ✅ *(ST7789 por SPI, `P2`)* | — *(sin PSRAM)* |
+| **P4 kit** | ✅ | ✅ *(EK79007 MIPI-DSI)* | ✅ *(32 MB HEX@200)* |
+| **P4 Waveshare** | ✅ | ✅ *(ST7701, elegido por el ENV)* | ✅ *(32 MB)* |
+| **Nucleo U575** | ✅ | — | — *(sin RAM externa)* |
+| **Discovery U5G9J** | ✅ | ✅ | — *(sin RAM externa)* |
+| | **9** | **4** | **3** |
+
+**La BD tiene DOS puertas, no una, y por eso la S3 se cae.** Comprobado en
+`bpstdlib/sqlite/nativo/`: los packs nativos existen para **`ARMV8`** y **`RISCV`** —
+`SQLite.mdn.ARMV8`, `sqlite.npk.ARMV8`, y sus gemelos RISC-V— y **no hay XTENSA**. O sea:
+
+1. **que haya binario para esa arquitectura** — la contestamos NOSOTROS, mirando qué hemos
+   compilado; y
+2. **que la placa tenga RAM suficiente (PSRAM)** — la contesta LA PLACA.
+
+La S3 falla por la primera, no por la segunda, y eso cambia lo que costaría arreglarlo: no es
+hardware, es **compilar el pack para Xtensa**. (El formato ya tiene el hueco reservado —
+`MDN_ARCH_XTENSA 94` en `mdn_format.h:76`—, así que hoy el gate del `.mdn` lo rechaza limpio en
+vez de colgarse.) El criterio de Eduardo para la BD viene de V5 y sigue valiendo: *«La Pico no
+tiene PSRAM y la Metro puede tenerla o no. El micro y la imagen son la misma, pero en la que no
+lleva PSRAM no voy a meter una BD.»*
+
+🔑 **Y aquí está lo que `T1` tiene que hacer distinto, porque dos de los tres criterios NO se
+pueden leer de una tabla.** «Tiene pantalla» y «tiene PSRAM» **no son propiedades de la imagen**:
+la P4 elige su panel por el ENV (`display=st7701`) y la Metro lleva PSRAM o no según
+`psramCsPin`. Dos placas con **la misma imagen** caen en cubos distintos. Así que `T1` **le
+pregunta a la placa qué tiene** y reparte con la respuesta — que es la norma que Eduardo ya fijó
+para el orden de búsqueda de módulos: *«El IDE no tiene que determinar el orden de búsqueda, le
+pregunta al micro y éste se encarga.»* La tercera puerta —si hay binario para esa arquitectura—
+es la única que se contesta desde nuestro lado.
+
+⚠️ Y los cubos **no son disjuntos**: las dos P4 entran en los tres.
+
 ⚠️ **3. Y el aviso que hay que meter en el diseño de `T1`, porque ya nos mordió**: sistemático no
 es lo mismo que correcto. `#459` volcaba el heap por pantalla y `compat.sh` daba **38 PASS**: las
 dos VMs producían **la misma basura, byte a byte**. Un oráculo que sólo compara dos
