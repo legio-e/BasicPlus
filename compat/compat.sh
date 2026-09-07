@@ -50,7 +50,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/GuiParidad.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/GuiParidad.bp samples/GuiParidad2.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -66,7 +66,19 @@ bp_path() {
   esac
 }
 
-filt() { grep -vE 'INICIANDO|FIN DE|heapStart|^config:' | sed '/^[[:space:]]*$/d'; }
+# Quita el ruido de arranque/cierre y las lineas en blanco DE LOS BORDES. Las
+# de en medio se respetan, y no es un detalle esteta: el volcado de la GUI mete
+# el texto del widget tal cual, con sus saltos de linea crudos (un dropdown de
+# tres opciones ocupa tres lineas). Borrando todos los blancos, una VM que
+# emitiera una linea vacia de mas donde la otra no emite nada saldria VERDE.
+filt() {
+  grep -vE 'INICIANDO|FIN DE|heapStart|^config:' |
+  awk '{
+     if (!vista) { if ($0 ~ /^[[:space:]]*$/) next; vista=1 }
+     if ($0 ~ /^[[:space:]]*$/) { pend[n++]=$0; next }
+     for (i=0;i<n;i++) print pend[i]; n=0; print
+   }'
+}
 
 # Tope de tiempo por ejecucion. NO es para cortar programas que bloquean a
 # proposito: el corpus solo admite casos que TERMINAN SOLOS (los de GUI usan

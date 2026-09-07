@@ -1,0 +1,68 @@
+// samples/GuiParidad2.bp — segundo oraculo de PARIDAD de la GUI. TERMINA SOLO.
+//
+// Hermano de GuiParidad.bp: misma forma (start / sleep / stop / join / volcado)
+// y widgets distintos. Existe porque la cobertura de la red se mide por
+// PRIMITIVA, no por numero de casos: dos samples que crean un panel y un boton
+// son UN caso repetido. Aqui van los contenedores y los widgets con estado
+// interno — dropdown, textarea, lista, tabview con dos pestanas, spinbox — que
+// el otro no toca.
+//
+// Un aviso sobre el chart, y esta MEDIDO: el volcado NO saca sus datos. Crea
+// dos series y N puntos y el arbol dice `chart [WxH ...]` y nada mas, porque
+// `dump_node` no tiene rama para chart aunque el modelo si guarda los valores.
+// O sea que este caso vigila que el chart se CREE igual en las dos VMs, no que
+// tenga los mismos datos. Cerrar ese agujero es trabajo aparte.
+module GuiParidad2
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var dd: Gui.Dropdown := Gui.Dropdown(scr)
+    dd.setBounds(10, 10, 120, 28)
+    dd.setOptions("uno\ndos\ntres")
+    dd.selected := 1
+
+    var ta: Gui.Textarea := Gui.Textarea(scr)
+    ta.setBounds(10, 50, 200, 60)
+    ta.text := "hola"
+
+    var lb: Gui.ListBox := Gui.ListBox(scr)
+    lb.setBounds(10, 120, 120, 80)
+    lb.setItems("rojo\nverde\nazul")
+    lb.selected := 2
+
+    var sp: Gui.Spinbox := Gui.Spinbox(scr)
+    sp.setBounds(150, 120, 90, 30)
+    sp.setRange(0, 50)
+    sp.value := 13
+
+    var tv: Gui.Tabview := Gui.Tabview(scr)
+    tv.setBounds(240, 10, 220, 200)
+    var pag1: Gui.Component := tv.addTab("A")
+    var pag2: Gui.Component := tv.addTab("B")
+    var etq: Gui.Label := Gui.Label(pag1, "en la A")
+    etq.setPos(4, 4)
+    var bot: Gui.Button := Gui.Button(pag2, "en la B")
+    bot.setBounds(4, 4, 90, 26)
+    tv.active := 1
+
+    var ch: Gui.Chart := Gui.Chart(scr)
+    ch.setBounds(10, 220, 220, 90)
+    ch.setRange(0, 100)
+    ch.setPointCount(4)
+    var s1: integer := ch.addSeries(0xFF0000)
+    ch.push(s1, 10)
+    ch.push(s1, 40)
+
+    Gui.start()
+    sleep(5000)
+    Gui.stop()
+    Gui.join()
+
+    print "== arbol =="
+    print Gui.__guiDumpTree()
+    print "== fin =="
+  end Main
+
+end GuiParidad2
