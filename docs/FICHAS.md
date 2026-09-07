@@ -2047,6 +2047,12 @@ tiene 16 casos y **ninguno toca i2c, spi, uart, gpio, adc, pwm, pulse ni neopixe
 lo reproduce —`samples/BusBug.bp`— existía ya: se escribió para bisecar un cuelgue **en la Pico**.
 El arnés tenía el reactivo delante y no lo metió en la red.
 
+✅ **Y eso se cerró el 7-sep (`1e46f346`): `BusBug` YA ESTÁ en el corpus**, junto con `AdcDemo`,
+`ArgDemo`, `MathRango` y `mathtest`. El corpus pasa de 38 a 45 casos y por primera vez lleva GUI.
+Ojo al matiz que corrige este párrafo: **el arnés nunca estuvo desactivado** —el `check` ejecuta
+`check_parity` y estaba en verde—; lo corto era el corpus, que es exactamente lo que esta ficha
+diagnosticó bien y `#477` decía mal. Ver `#477`.
+
 ✅ **ARREGLADO el 6-sep.** Los **ocho** sitios pasan a `popTcRef` + `refDeref` (el patrón de
 `MOVE`), con su comprobación de null: I2C write/read, SPI write/read/transfer (éste con **dos**
 arrays), UART write/read, y `NEOPIXEL_SHOW` — que no desreferencia, pero **tenía que sacar 8 B o
@@ -2126,17 +2132,29 @@ existen en miVM** y que la VM-C no implementa (`HEAP_FRAG`, `HEAP_MAP`, `INPUT`,
 📌 **La reforma de verdad es de V7** (el módulo raíz: que las dos tablas se **generen** del
 fichero único). Cuando llegue, este guion se tira: habrá sido el andamio.
 
-#### 🟢 `#477` — el oráculo EXACTO del GUI existe desde V4 y NADIE lo ejecuta (abierta 5-sep)
+#### ✅ `#477` — el oráculo EXACTO del GUI existe desde V4 y NADIE lo ejecutaba (abierta 5-sep · **CERRADA el 7-sep**, 1e46f346 + cd03ded7)
 
 `Gui.__guiDumpTree()` vuelca el árbol de widgets y **está implementado en las dos VMs con paridad
 declarada byte a byte** (`bpgenvm-c/src/gui.c:1156`: *«byte-idéntico a `GuiBackend.dumpTree` de
 miVM»*). Comprobado midiendo hoy: **idéntico en 6 samples** (GuiGeomDemo, GuiDemo, ChartDemo,
 GuiTableDemo, GuiValueDemo, GuiCheckDemo).
 
-🔴 **Y sin embargo: 22 samples lo llaman, el `check` de `compat.sh` lleva DESACTIVADO desde V4,
-y su corpus no incluye ni un sample de GUI.** O sea: la verificación automática de la GUI está
-construida, es exacta, es gratis — y no se ejecuta. Antes de construir la segunda vía (capturar,
-comprimir, bajar, comparar imágenes: `#475`) hay que enchufar la primera.
+🔴 **Y sin embargo: 22 samples lo llaman y el corpus del arnés no incluía ni un sample de GUI.**
+
+⛔ **Corrección mía, y es la parte importante de esta ficha: yo escribí aquí que «el `check` de
+`compat.sh` lleva DESACTIVADO desde V4». Es FALSO, y en dos capas.** Lo que Eduardo desactivó el
+17-jul fue la compatibilidad **BINARIA** con V2/V3 —imposible de sostener cuando el formato del
+`.mod` cambia a propósito— y lo dejó escrito en la cabecera del propio fichero: *«La red pasa a
+ser: PARIDAD VM-Java <-> VM-C + la batería de tests»*. El `check` **se ejecuta**, y lo que ejecuta
+es exactamente `check_parity`. Medido antes de tocar nada: **38 PASS, 0 FAIL, 0 SKIP**. El arnés
+no estaba muerto: estaba **verde y con el corpus corto**. El diagnóstico bueno ya estaba escrito
+en `#440` —*«el corpus tiene 16 casos y ninguno toca i2c, spi, uart, gpio, adc, pwm, pulse ni
+neopixel»*—: el problema es el **corpus**, no el arnés. Dos veces di por muerta una herramienta
+viva sin abrirla; es *dudar del instrumento* aplicado al revés.
+
+O sea: la verificación automática de la GUI estaba construida, era exacta, era gratis — y no
+entraba en la red. Antes de construir la segunda vía (capturar, comprimir, bajar, comparar
+imágenes: `#475`) había que enchufar la primera.
 
 ⚠️ **Tres agujeros del oráculo, medidos, que hay que conocer antes de fiarse de él:**
 - **El chart es invisible**: `ChartDemo` crea 2 series y N puntos, y el árbol saca `chart [200x120
@@ -2156,9 +2174,60 @@ por el nombre*, literal: el grep sobre los samples daba cero porque el mecanismo
 ⚠️ Y miVM tiene la pantalla **clavada a 480x320** sin forma de cambiarla (no hay `--screen` en su
 parser). La VM-C host sí puede disfrazarse de la placa. Cualquier normalización tiene que contar con eso.
 
-⏭️ Enchufar el `check` con un corpus que incluya GUI, disfrazando el host con `--screen` del
-tamaño de la placa (que ya viaja gratis en la línea `screen` del propio dump) y comparando **el
-bloque entero**, no línea a línea — el texto de un widget puede llevar saltos de línea crudos.
+✅ **HECHO el 7-sep** (`1e46f346`, `cd03ded7`). El corpus pasa de **38 a 45 casos** y por primera
+vez hay GUI dentro. La `--screen` no hizo falta: las dos VMs de host arrancan en **480x320**, así
+que el volcado se compara directo.
+
+🔑 **Y el bloqueo que impedía meter GUI no era del lenguaje: era una ventana sin cerrar.** Esta
+ficha decía —lo escribí yo— que los samples de GUI no podían entrar *«porque miVM NO TERMINA los
+samples de GUI»*, y lo daba por un límite de la VM de referencia. La causa real: el `JFrame` de
+`GuiBackend` se crea y **no se destruye nunca**, y el EDT de AWT no es demonio, así que con una
+ventana realizada la JVM no sale aunque no quede un solo hilo BP. Por el camino viejo no se veía
+—`Gui.run()` sólo vuelve al cerrar la ventana, y el `DISPOSE_ON_CLOSE` ya la había destruido—; en
+cuanto `G1` sacó el lazo a su propio hilo BP y apareció `Gui.stop()`, quedó a la vista.
+
+📐 **Cómo se vio, que es la forma limpia:** `GuiParidad.bp` daba la **misma salida byte a byte** en
+las dos VMs y sin embargo la VM-C salía con código **0** y miVM con **124** (cortada por timeout).
+Misma salida, distinto final — el diff decía verde y el proceso decía otra cosa. Arreglo:
+`gui.shutdown()` en el fin de ejecución de la VM, que es la paridad con la VM-C (allí la ventana
+SDL muere con el proceso). Las dos salen con 0.
+
+🧪 **Los samples nuevos, con la forma que pidió Eduardo** —*«hay que hacer nuevos test y utilizar
+`Gui.start()`… `Gui.Start(); pause(5000); Gui.Stop()`»*—: construir, arrancar el bombeo en su
+hilo BP, dejarlo asentar, pararlo y **entonces** volcar. Terminan solos, sin que nadie cierre una
+ventana. `GuiParidad.bp` (panel/label/button/checkbox/toggle/slider/bar/led/table) y
+`GuiParidad2.bp` (dropdown/textarea/listbox/spinbox/tabview con dos páginas/chart).
+
+↩️ **La vía que se descartó, y por qué importa:** primero probé a meter los **seis** samples de GUI
+que ya existen cortándolos por `timeout`. Funcionaba —49 PASS— pero tardaba **3m37s** y era *flaky
+por diseño*: con el corte a 1 s se vio que `GuiValueDemo` imprime `[slider] cambió` en una VM y en
+la otra no, según quién llegue antes. Un rojo aleatorio es peor que no tener red. La vía de Eduardo
+da **45 PASS en 1m00s** y es determinista.
+
+🕳️ **Un agujero del arnés que destapó el sample nuevo**, y es el que la ⏭️ vieja anticipaba a
+medias: `filt()` borraba **todas** las líneas en blanco, no sólo las del banner. Como el volcado
+mete el texto del widget crudo (un dropdown de tres opciones ocupa tres líneas), una VM que
+emitiera una línea vacía de más donde la otra no emite nada salía **VERDE**. Ahora sólo se quitan
+las de los **bordes**. Comprobado con un control: con un doble de la VM-C que cuela un blanco en la
+posición 5, el check saca FAIL con el diff enseñándolo; colándolo en la 2 sale verde, y está bien
+—esa cae en el borde—.
+
+➕ **Y de paso, tres endurecimientos del arnés:**
+- **Un caso mudo en las DOS VMs ya no es PASS, es FAIL.** Dos salidas vacías coinciden, pero eso no
+  es paridad: es un caso que no ejecutó nada. Es el falso-PAR contra el que ya avisaba el arnés
+  (*«0 PASS no es verde»*) un piso más abajo: por caso en vez de por tanda.
+- `VM_TIMEOUT` (25 s) en `run_vm`, para que un sample colgado por un bug no wedgee la tanda entera.
+- Entran cinco casos no-GUI que ya existían y estaban fuera de la red: **`BusBug`** (el reactivo de
+  los 8 builtins de bus de `#440` — el arnés tenía el reactivo delante y no lo usaba), `AdcDemo`,
+  `ArgDemo` (ejercita `RUN_ARG` de `#412`), `MathRango` y `mathtest`.
+
+✅ **Y el arnés sabe ponerse en ROJO**, que es lo único que hace útil a un verde: con un doble de la
+VM-C que ensucia una línea (`s/^0/X/`), el check saca FAIL por sample con su diff y **sale con
+código 1**; sin sabotaje, código 0.
+
+⏭️ **Lo que queda**, y no es de esta ficha: los tres agujeros del oráculo siguen abiertos (el chart
+no vuelca sus datos, es ciego a la rotación, y color/fuente son render-only). Para eso está la
+segunda vía, `#475`.
 
 #### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep · **MEDIDA el 5-sep**)
 
@@ -3561,6 +3630,15 @@ samples de GUI.** Cuatro de cuatro pasadas se cuelgan esperando un cierre de ven
 nunca hace — **con este cambio y sin él**, comprobado con el `.mod` de antes. O sea que los samples
 de GUI no están en el corpus **no porque nadie los metiera, sino porque no pueden correr
 desatendidos en la VM de referencia**. Sin resolver eso, la paridad de GUI no se puede verificar.
+
+✅ **RESUELTO el 7-sep (`1e46f346`), y la causa era mucho más pequeña de lo que este párrafo
+sugiere.** No es que miVM no sepa terminar un programa de GUI: es que el `JFrame` de `GuiBackend`
+se crea y **nunca se destruye**, y el EDT de AWT no es demonio — con una ventana realizada la JVM
+no sale aunque no quede un solo hilo BP. Por el camino viejo no se notaba porque `Gui.run()` sólo
+vuelve al cerrar la ventana y el `DISPOSE_ON_CLOSE` ya la había destruido; fue `Gui.stop()` —o sea,
+esta misma ficha— lo que dejó el agujero a la vista. Arreglo: `gui.shutdown()` al terminar la
+ejecución. Un programa con `start()/stop()` ahora sale con **código 0** en las dos VMs, y con eso
+la GUI entra en la red de paridad. Detalle y medida, en `#477`.
 
 ⚠️ **Y una trampa de método que me costó tres intentos**: el compilador resuelve los imports desde el
 **`stdlibDir` de `BpVM.cfg`**, no desde el directorio de salida. Compilar `Gui.bp` a un temporal y
