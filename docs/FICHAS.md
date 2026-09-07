@@ -83,17 +83,20 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **69 fichas `####` en esta sección. 13 abiertas**, y ninguna de ellas es un hito:
+> **Lo que queda de V6 son 15 pendientes y 4 hitos** (la cuenta es de Eduardo, 7-sep).
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **V6, pendientes sueltos** | **8** | `#456` · `#462` · `#468` · `#469` · `#470` · `#472` · `#480` · `A4` |
-> | **sin versión decidida** | **5** | `#471` · `#473` · `#474` · `#475` (=`C1`) · `#444` (=`T1`) |
+> | **fichas de V6** | **11** | `#456` · `#462` · `#468` · `#469` · `#470` · `#471` · `#472` · `#473` · `#474` · `#480` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
+> | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
-> ✅ **De los 18 hitos de V6 no queda ninguno abierto** salvo `A4`, que está parado por orden
-> de Eduardo (*«un solo núcleo hasta nueva orden»*). `L1` se fue a V7; `C1` y `T1` esperan que
-> Eduardo decida su versión.
+> ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
+> E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. `A4` cuenta como pendiente, no como hito, y
+> además está parado por orden de Eduardo (*«un solo núcleo hasta nueva orden»*).
+>
+> 📌 **El orden de cierre**: los 15 pendientes primero; después `C1` y `T1`, que son **la
+> herramienta con la que se hacen las pruebas finales**; y al final documentar y probar.
 >
 > 📌 **Cómo se hizo, porque el aviso que había aquí decía otra cosa.** Este bloque avisaba de
 > que en el bloque heredado *«hay 59 entradas y unas 43 llevan marca de cierre»* y que separarlas
@@ -2723,15 +2726,16 @@ tocar y cómo se comprueba.
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | ✅ 5-sep: **dos hilos de SO, `vm` + `io`**, en las cinco familias y verificados en placa (`A1.6` aplazada y reorientada por Eduardo) |
 | **A2** | el **censo de proporciones** común / familia / placa | ✅ 5-sep: **91,8 % común**, 7,6 % familia, 0,7 % placa |
 | **A3** | el **modelo de capas**, auditado contra el código | ✅ 5-sep: la auditoría está hecha; sus fugas salieron como fichas (`#469`–`#473`) |
-| **A4** | los **dos núcleos**: inventario del estado compartido antes de activarlos | 🟡 abierto 5-sep — el inventario está hecho y `UNICORE` puesto; quedan **3 puntos** antes de activar el segundo núcleo. Orden de Eduardo: **un solo núcleo hasta nueva orden** |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
 | **L1** | **lenguaje y compilador** | ⏩ **MOVIDA A V7 el 5-sep** — ver la nota bajo la tabla |
 | **E1** | **el IDE** y el protocolo wire | ✅ **6-sep**: sus **7 puntos** cerrados — `#412` (argumento de ejecución), `#452` (`RESET` con un RUN vivo), las deps que el device ya tiene, el CRC de procedencia, las BD en el simulador, el árbol por color y el tiempo de la placa |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | ✅ **7-sep** (`a4c28062`): `Gui.start()` / `stop()` / `join()`; `Gui.run()` sigue síncrono por compatibilidad |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
-| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ítem propio desde el 6-sep**: es implementación nueva, no un pendiente |
-| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ítem propio desde el 6-sep**: es implementación nueva, no un pendiente |
+| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
+| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
+| **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
+| **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6 |
 
 📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:
 *«`#475` y `#444` hay que darle un ítem propio ya que es implementación nueva. Del resto, hay que ir
@@ -2739,8 +2743,21 @@ cerrando pendientes.»* O sea: la lista de fichas es para **cerrar lo que está 
 que es **construir algo que no existe** no cabe ahí — se le pone nombre y se planifica aparte. Los
 dos están **diseñados y con números** (`#475` midió transporte y compresión; `#444` tiene la
 propuesta del agente conduciendo las placas), así que lo que falta es hacerlos.
-⚠️ **En qué versión, NO está decidido** — no lo pregunté y no me lo dijo. Por el criterio que ya se
-aplicó a `L1` («esto es añadir, y V6 está cerrando») sonarían a V7, pero es decisión suya.
+✅ **Y el 7-sep Eduardo decidió la versión: `C1` y `T1` SE QUEDAN EN V6.** Su razón, que es la que
+manda sobre el criterio de «esto es añadir y V6 está cerrando» con el que yo los mandaba a V7:
+*«C1 y T1 se quedan en V6. La razón es que lo utilizaremos para las pruebas finales.»* O sea que
+no son un añadido que se cuela al cerrar: son **la herramienta con la que se cierra**. Es
+*la herramienta antes que el artefacto* aplicado al cierre de una versión.
+
+📌 **Y con eso aparecen los dos últimos hitos, uno cada uno** (Eduardo, 7-sep): *«La documentación
+y las pruebas finales, un hito cada uno. C1 y T1 justo antes de documentar y pruebas finales.»*
+Los códigos `D1` y `F1` los puse yo siguiendo la nomenclatura de la tabla; el reparto y el orden
+son suyos. **El orden de cierre de V6 queda así:**
+
+> **los 15 pendientes → `C1` → `T1` → `D1` (documentación) → `F1` (pruebas finales)**
+
+Y la consecuencia práctica, dicha por él: *«lo que toca durante unos días es ir resolviendo
+pendientes»*.
 
 ⏩ **`L1` SE VA A V7, decidido el 5-sep.** Salió de tirar del hilo de las intrínsecas y
 acabó en un cambio de fondo: **el módulo raíz**, al estilo de la unidad `System` de Turbo Pascal

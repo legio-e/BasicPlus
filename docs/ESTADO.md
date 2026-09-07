@@ -27,6 +27,84 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (7-sep, noche) — **`G1` cerrado, la GUI ENTRA en la red, y el registro ya no se contradice**
+
+Sesión de dos mitades: por la mañana trabajo de código, por la tarde poner el registro en orden.
+Eduardo al parar: *«Empezaremos mañana, por hoy es suficiente.»*
+
+**Lo primero, y es una corrección mía que conviene leer antes que nada.** Yo venía diciendo —en el
+traspaso de ayer, en dos commits y en la ficha `#477`— que *«el `check` de `compat.sh` lleva
+desactivado desde V4»*. **Es falso.** Lo que Eduardo desactivó el 17-jul fue la compatibilidad
+**BINARIA** con V2/V3; el `check` se ejecuta, y lo que ejecuta es la paridad dual-VM. Lo comprobé
+en un comando: **38 PASS, 0 FAIL, 0 SKIP**. El arnés estaba **verde con el corpus corto**, que es
+justo lo que la ficha `#440` ya decía bien. Y lo peor: **la prueba estaba en este mismo fichero**,
+escrita por mí 900 líneas más abajo — *«`#459` volcaba el heap y `compat.sh` daba 38 PASS»*. Si
+daba 38 PASS, se estaba ejecutando. Dos veces di por muerta una herramienta viva sin abrirla.
+
+**Lo que se hizo con eso.** El corpus pasa de **38 a 45 casos** y por primera vez lleva GUI:
+entran `BusBug` (el reactivo de `#440`, que llevaba meses delante del arnés), `AdcDemo`, `ArgDemo`,
+`MathRango`, `mathtest` y dos samples nuevos de GUI.
+
+🔑 **Y el bloqueo que impedía meter GUI no era del lenguaje: era una ventana sin cerrar.** La ficha
+decía que *«miVM NO TERMINA los samples de GUI»* como si fuera un límite de la VM de referencia.
+El `JFrame` de `GuiBackend` **no se destruye nunca** y el EDT de AWT no es demonio, así que con una
+ventana realizada la JVM no sale aunque no quede un hilo BP vivo. Se vio de la forma limpia:
+**misma salida byte a byte en las dos VMs, y la VM-C salía con 0 y miVM con 124**. Un
+`gui.shutdown()` al terminar y las dos salen con 0.
+
+📌 **Y una corrección de rumbo de Eduardo a mitad de faena, que mejoró el resultado**: yo estaba
+metiendo los seis samples de GUI que ya existen **cortándolos por timeout**. Funcionaba (49 PASS)
+pero tardaba 3m37s y era *flaky por diseño*. Él: *«lo que hay que hacer son nuevos test y utilizar
+`Gui.Start(); pause(5000); Gui.Stop()`»*. Con esa forma: **45 PASS en 1m00s y determinista**.
+Los samples nuevos son `GuiParidad.bp` y `GuiParidad2.bp`.
+
+⚠️ **Tres endurecimientos del arnés, cada uno con su control** (porque un verde sin control no
+vale): el arnés **sabe ponerse en rojo** (doble de la VM-C que ensucia una línea → FAIL por sample
+y código 1); **un caso mudo en las dos VMs ya no es PASS**; y **`filt()` ya no se traga las líneas
+en blanco de en medio** — lo destapó el dropdown del sample nuevo, que vuelca su texto con saltos
+crudos, y antes una VM que emitiera un blanco de más donde la otra no emite nada salía **verde**.
+
+---
+
+### La segunda mitad: el registro contradiciéndose
+
+Eduardo pidió la lista de pendientes *«una entrada por línea para que sea más sencillo contar»*, y
+al censarla —las 69 fichas leídas **enteras**, no por la marca— salieron **seis contradicciones**,
+todas con la misma forma: **el titular decía una cosa y el cuerpo otra**. `E1` y `G1` cerrados con
+la tabla diciendo «abierto»; `A1` cerrada con la cabecera diciendo «abierta»; `A3` y `A4` sin fila
+en la tabla; `#408` con el enunciado pendiente y la respuesta dos líneas más abajo; el bug del LSP
+cerrado por retirada sin decirlo; y las bases de datos en 🔴 mientras `E1` las daba por hechas.
+Eduardo: *«Sí, soluciónalo. No debemos tener información contradictoria.»* Corregidas (`49364cb0`).
+
+📌 **Lo aprovechable del método**: el aviso que había en la cabecera de `ABIERTAS` decía que
+separar lo cerrado era trabajo aparte porque *«un clasificador automático ya falló en dos»*.
+Fallaba porque clasificaba **por la marca**. Leyéndolas enteras salió a la primera — y de paso, la
+«cola heredada» que ese aviso cifraba en **59 entradas** son **12**. Un aviso sobre basura sin
+limpiar también envejece.
+
+---
+
+### 🎯 Y el plan de cierre de V6, decidido por Eduardo (7-sep)
+
+*«`C1` y `T1` se quedan en V6. La razón es que lo utilizaremos para las pruebas finales. La
+documentación y las pruebas finales, un hito cada uno. `C1` y `T1` justo antes de documentar y
+pruebas finales.»*
+
+Con eso V6 queda en **15 pendientes y 4 hitos**, y el orden es:
+
+> **los 15 pendientes → `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales)**
+
+Lo que hace fuerte esta decisión es la razón: `C1` y `T1` no son un añadido que se cuela al cerrar,
+son **la herramienta con la que se cierra**. (`D1` y `F1` son códigos que puse yo siguiendo la
+nomenclatura de la tabla; el reparto y el orden son suyos.)
+
+⏭️ **Mañana**: *«lo que toca durante unos días es ir resolviendo pendientes»*. La lista, en
+`FICHAS.md`, en el censo de la cabecera de `ABIERTAS`.
+
+⚠️ **Y lo que queda a medias, para que no sorprenda**: las placas siguen con el firmware de ayer
+(sin `bpvm_out`, sin `#412`, sin el gate del `.mdn`), y en ellas quedan `/app/P.mod` y
+`/app/adc.mod` de las pruebas — borrarlos necesita tu visto bueno, placa por placa.
+
 ## ⏭️ AL RETOMAR (6-sep, noche) — **`E1` CERRADO, 7 de 7**. Queda `G1` y los pendientes
 
 Jornada larga y con mucho cierre. Eduardo al parar: *«ha sido una buena jornada»*.
