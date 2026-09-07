@@ -81,11 +81,33 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > a V6 y dejó de ser de V5** — decisión de Eduardo ese mismo día. Así que aquí no hay dos
 > categorías: hay fichas de V6, unas abiertas *durante* V5 y otras heredadas *de* V5.
 >
-> ⚠️ **Queda una limpieza sin hacer, y conviene saberla:** en el bloque heredado hay **59
-> entradas y unas 43 llevan marca de cierre** (✅, «CERRADA», «HECHO» o un commit). O sea
-> que buena parte de lo que se lee aquí ya está resuelto y debería estar abajo. No se ha
-> movido porque distinguirlas exige leerlas una a una —un clasificador automático ya falló
-> en dos— y eso es trabajo aparte.
+> ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
+>
+> **69 fichas `####` en esta sección. 13 abiertas**, y ninguna de ellas es un hito:
+>
+> | dónde | cuántas | cuáles |
+> |---|---|---|
+> | **V6, pendientes sueltos** | **8** | `#456` · `#462` · `#468` · `#469` · `#470` · `#472` · `#480` · `A4` |
+> | **sin versión decidida** | **5** | `#471` · `#473` · `#474` · `#475` (=`C1`) · `#444` (=`T1`) |
+> | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
+>
+> ✅ **De los 18 hitos de V6 no queda ninguno abierto** salvo `A4`, que está parado por orden
+> de Eduardo (*«un solo núcleo hasta nueva orden»*). `L1` se fue a V7; `C1` y `T1` esperan que
+> Eduardo decida su versión.
+>
+> 📌 **Cómo se hizo, porque el aviso que había aquí decía otra cosa.** Este bloque avisaba de
+> que en el bloque heredado *«hay 59 entradas y unas 43 llevan marca de cierre»* y que separarlas
+> era trabajo aparte porque *«un clasificador automático ya falló en dos»*. Se hizo el 7-sep, y la
+> forma que funcionó fue **no clasificar por la marca**: 24 agentes leyeron las 69 fichas enteras,
+> y cada candidata a abierta se releyó por segunda vez comprobando además que sus commits existen.
+> La cola heredada son **12 viñetas, no 59**, y **8 están cerradas**.
+>
+> ⚠️ **Y salieron seis contradicciones**, todas de la misma forma —el titular decía una cosa y el
+> cuerpo otra—, corregidas el mismo día: `E1` y `G1` cerrados con la tabla diciendo «abierto»;
+> `A1` cerrada con la cabecera diciendo «abierta»; `A3` y `A4` sin fila en la tabla de hitos;
+> `#408` con el enunciado pendiente y la respuesta dos líneas más abajo; el bug del LSP cerrado
+> por retirada y la viñeta sin decirlo; y la de las bases de datos en 🔴 mientras `E1` la daba por
+> hecha. **Una lista larga esconde**: seis de las que parecían pendientes no lo eran.
 
 ### ═══ V6 — LA VERSIÓN EN CURSO ═══
 
@@ -2700,10 +2722,12 @@ tocar y cómo se comprueba.
 | **U6** | la **organización de la memoria**: hoy son 4 mecanismos por micro | ✅ 3-sep (`U6.11`: las 5 familias, verificadas en placa) |
 | **A1** | *(después de U1–U5)* la revisión **por niveles**, ya sobre código único | ✅ 5-sep: **dos hilos de SO, `vm` + `io`**, en las cinco familias y verificados en placa (`A1.6` aplazada y reorientada por Eduardo) |
 | **A2** | el **censo de proporciones** común / familia / placa | ✅ 5-sep: **91,8 % común**, 7,6 % familia, 0,7 % placa |
+| **A3** | el **modelo de capas**, auditado contra el código | ✅ 5-sep: la auditoría está hecha; sus fugas salieron como fichas (`#469`–`#473`) |
+| **A4** | los **dos núcleos**: inventario del estado compartido antes de activarlos | 🟡 abierto 5-sep — el inventario está hecho y `UNICORE` puesto; quedan **3 puntos** antes de activar el segundo núcleo. Orden de Eduardo: **un solo núcleo hasta nueva orden** |
 | **N1** | **AOT**: ampliar la cobertura por tandas *(encargo del 21-ago)* | ✅ 25-ago (el alcance de V6) |
 | **L1** | **lenguaje y compilador** | ⏩ **MOVIDA A V7 el 5-sep** — ver la nota bajo la tabla |
-| **E1** | **el IDE** y el protocolo wire | abierto 23-ago |
-| **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | abierto 23-ago |
+| **E1** | **el IDE** y el protocolo wire | ✅ **6-sep**: sus **7 puntos** cerrados — `#412` (argumento de ejecución), `#452` (`RESET` con un RUN vivo), las deps que el device ya tiene, el CRC de procedencia, las BD en el simulador, el árbol por color y el tiempo de la placa |
+| **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | ✅ **7-sep** (`a4c28062`): `Gui.start()` / `stop()` / `join()`; `Gui.run()` sigue síncrono por compatibilidad |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ítem propio desde el 6-sep**: es implementación nueva, no un pendiente |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ítem propio desde el 6-sep**: es implementación nueva, no un pendiente |
@@ -2736,7 +2760,10 @@ importante es que lo que hay ahora funcione correctamente»*.
 📌 **Y se va casi entero.** Aplicando el mismo criterio, lo que queda dentro de `L1` son
 **añadidos, no arreglos** — destructores + `var owner`, ficheros como clase, `Object` comodín,
 `Map` con objetos, el módulo `Time` — y todos se diseñan **encima** del módulo raíz, no debajo.
-Con eso **V6 queda en `E1` + `G1` + los pendientes sueltos + la captura de pantalla**.
+Con eso **V6 quedaba en `E1` + `G1` + los pendientes sueltos + la captura de pantalla**.
+📌 **Al día 7-sep: `E1` y `G1` están CERRADOS, así que no queda ni un hito de V6 abierto.**
+Lo que queda de V6 son **pendientes sueltos** (`#456`, `#462`, `#468`, `#469`, `#470`, `#472`,
+`#480`, `A4`) más los cuatro de la cola heredada. `C1` y `T1` siguen **sin versión decidida**.
 
 ⚠️ **Lo que NO se aplaza es la red de seguridad**: ver `#476`. El motivo de querer el módulo
 raíz es que una divergencia entre las dos tablas de builtins **no hace ruido**; si la espera dura
@@ -2760,7 +2787,7 @@ existe**. Van al saco de «qué falta» y no bloquean U1–U5.
 
 ---
 
-#### 🏗️ `A1` — la arquitectura de ejecución común: `vm` + `io` (abierta 4-sep)
+#### ✅ `A1` — la arquitectura de ejecución común: `vm` + `io` (abierta 4-sep · **CERRADA el 5-sep**: los dos hilos de SO en las cinco familias, verificados en placa; `A1.6` aplazada y reorientada por Eduardo)
 
 **La decisión de Eduardo (4-sep), tras el censo y las medidas** (`docs/V6_IDEAS.md`, «Hilos de
 ejecución»): *«Lo veo bastante anárquico, sin un orden claro. Y todos los micros deberían
@@ -3290,7 +3317,7 @@ despiertan — pero tampoco aportan nada, como Eduardo dice y como midió el S3 
 tiempo, y el KILL incluso mejor). El paralelismo que vale es el otro, y ése está bloqueado por
 `B1`.
 
-#### 🧵 `A4` — LOS DOS NÚCLEOS: inventario del estado compartido antes de activarlos (5-sep)
+#### 🟡 `A4` — LOS DOS NÚCLEOS: inventario del estado compartido antes de activarlos (abierta 5-sep · **el inventario está HECHO; quedan 3 puntos antes de activar el segundo núcleo**)
 
 **El encargo de Eduardo**, y el orden que fijó:
 
@@ -3364,7 +3391,7 @@ dado un fallo el primer día. Habría dado un JSON roto cada varios cientos de s
 depuración, meses después, sin forma de atarlo al cambio. Mirar primero costó una tarde y encontró
 la carrera con el código delante.
 
-#### 🧱 `A3` — EL MODELO DE CAPAS, AUDITADO CONTRA EL CÓDIGO (5-sep)
+#### ✅ `A3` — EL MODELO DE CAPAS, AUDITADO CONTRA EL CÓDIGO (**AUDITORÍA HECHA el 5-sep**; sus fugas viven como fichas propias: `#469`–`#473`, y `#473` guarda las 78 sin verificar)
 
 **El enunciado de Eduardo**, que es lo que se audita:
 
@@ -3493,7 +3520,7 @@ el resto de hallazgos (duplicación del verbo RUN escrito cuatro veces, el sink 
 veces, el `EXITED` del STM32 que interpola cadenas del usuario **sin escapar** en el JSON…) están
 en el registro de la auditoría **sin verificar**, y no se dan por buenos hasta comprobarlos.
 
-#### 📊 `A2` — EL CENSO DE PROPORCIONES: cuánto código es común, de familia y de placa (5-sep)
+#### ✅ `A2` — EL CENSO DE PROPORCIONES: cuánto código es común, de familia y de placa (**HECHO el 5-sep**: 91,8 % común, 7,6 % familia, 0,7 % placa)
 
 **La pregunta de Eduardo**, al parar tras `A1`: *«me gustaría conocer las proporciones de código
 específico del micro, el específico de la familia y el común a todos los micros. Después de A1
@@ -3693,7 +3720,7 @@ de cada una sigue en su sitio.
   misma entrada. Arreglarlo es la tarea de verdad, y de paso desbloquea las dos.
 - **`#19`** array fijo LOCAL: que sea inline de verdad · **`#396`** módulo `Time`.
 
-#### 💻 E1 — el IDE y el wire
+#### ✅ E1 — ~~el IDE y el wire~~ (**CERRADO el 6-sep**, 7/7)
 
 - ✅ ~~**`#412`** — `run miModulo <arg>`, con el argumento siempre en el heap~~ — **HECHO el 6-sep**.
   La declaración es la que manda, como pidió Eduardo:
@@ -8299,9 +8326,11 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ⚠️ La medida que separa las hipótesis sigue siendo la misma y no se ha hecho:
   **cronometrar la respuesta en el FIRMWARE, no en el IDE**. «Tarda más que su
   timeout» y «se pierde» son dos fallos distintos y desde fuera se ven igual.
-- `#408` — medir **los dos cuellos** que se ven comparando P4 y Metro (árbol en la
-  P4 / formateo en la Metro).
-- **`#408` — la mitad de la METRO, MEDIDA el 21-ago: el formateo son ~15 s**, y es el
+- ~~`#408` — medir **los dos cuellos** que se ven comparando P4 y Metro (árbol en la
+  P4 / formateo en la Metro).~~ ✅ **CERRADA**: las dos mitades medidas (21 y 22-ago) —
+  el detalle, en la viñeta siguiente. *(Este enunciado se leía como pendiente mientras
+  la respuesta estaba dos líneas más abajo; corregido el 7-sep.)*
+- ✅ **`#408` — CERRADA. La mitad de la METRO, MEDIDA el 21-ago: el formateo son ~15 s**, y es el
   de la **zona de packs** (4,2 MB en esta placa) → unos **280 KB/s de borrado de
   flash**, que para un RP2350 es lo esperable. 📌 Anotado como *explicado*, no como
   pendiente: nadie tiene que perseguirlo pensando que es un fallo. Borrar 4,2 MB cuesta
@@ -8333,7 +8362,10 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 > imprime el `extends` que aquí se daba por ausente. Sirve de recordatorio: una explicación
 > que no se vuelve a comprobar envejece igual que el código.
 
-- **🐛 [compilador] la sustitución por LSP entre interfaces de módulo NO funciona** —
+- ~~**🐛 [compilador] la sustitución por LSP entre interfaces de módulo NO funciona**~~ —
+  ✅ **CERRADA POR RETIRADA (30-ago, `#460`)**, como dice la nota de arriba: las interfaces
+  de módulo salen del lenguaje. *(La viñeta se leía como pendiente; corregido el 7-sep.)*
+  El enunciado original, que se conserva porque documenta el mecanismo:
   encontrado el 21-ago censando los 277 `.bp` del ZIP. **Dos samples publicados que no
   compilan**, y no por V5: nada que ver con `any`→`Object`.
   📐 **El caso**, que el propio sample explica en su cabecera: `appv1lsp.bp` importa
@@ -8464,7 +8496,15 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
      del arranque de partición**, o sea otra capa. Se prueban **reformateando
      cualquiera de las dos tarjetas que ya hay**, sin comprar nada: es lo barato
      que queda de esta ficha.
-- 🔴 **La VM-C normal NO puede correr bases de datos: hace falta placa** — abierta el
+- ~~🔴 **La VM-C normal NO puede correr bases de datos: hace falta placa**~~ — ✅ **CERRADA el
+  6-sep**: `make sim SQLITE=1`, y un programa BasicPlus consulta una BD **en el simulador**, por
+  el wire, `status: OK` en 181 ms. Ganó **el tercer camino** de los que esta misma viñeta
+  proponía —el micro simulado del IDE—, y por la razón que aquí se anticipaba: el usuario prueba
+  sin placa y sin binario especial. El detalle y el porqué de enlazar en vez de cargar un pack
+  nativo (x86-64 es ELF64 y `NpackReloc` sólo lee ELF32), en el punto de `E1`.
+  *(Se leía como 🔴 abierta mientras `E1` la daba por hecha; corregido el 7-sep.)*
+  El enunciado original, que se conserva porque su análisis es el que llevó a la solución —
+  abierta el
   19-ago al preguntarlo Eduardo (*«¿ahora se puede testear una consulta a una BD en la
   VM-C? Es la que puede probar el usuario sin placa»*).
   🩸 **Choca con la promesa del proyecto.** Los demos de BD SI corren en el PC, pero con

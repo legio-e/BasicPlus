@@ -36,7 +36,7 @@ Jornada larga y con mucho cierre. Eduardo al parar: *«ha sido una buena jornada
 | | |
 |---|---|
 | `#452` | el `RESET` con un RUN vivo — **verificado en las tres arquitecturas** |
-| `#469` | la fachada de ADC ya no inventa lecturas |
+| `#469` | la fachada de ADC ya no inventa lecturas — **la MITAD de ADC; la ficha sigue abierta** por las otras fachadas |
 | `#476` | `make check-builtins`, con su **control negativo** |
 | `#478` | **miVM no podía tocar un bus** — 8 sitios del 4→8B de V4 |
 | `#412` | el **argumento de ejecución**, de punta a punta y en placa |
@@ -109,6 +109,9 @@ pendientes.»* → `#475` y `#444` ya son los hitos **`C1`** y **`T1`** en la ta
 3. ✅ **`#476`** — `make check-builtins`, con su **control negativo**.
 4. ✅ **`#469`** — la fachada de ADC ya no inventa una lectura. El arreglo es el patrón genérico:
    *quien no tiene hardware registra un backend explícito, y la ausencia pasa a ser error*.
+   ⚠️ **Pero la ficha NO queda cerrada**: lo hecho es la mitad de ADC, y `FICHAS.md` la mantiene
+   abierta porque *«queda decidir qué se hace con las OTRAS que la auditoría destapó»* (`#480`).
+   *(Corregido el 7-sep: esta lista la daba por cerrada entera y `FICHAS.md` decía lo contrario.)*
 5. ✅ **`#478`** — **miVM no podía tocar un bus**: los ocho builtins de I2c/Spi/Uart/Neopixel se
    quedaron fuera del 4→8B de V4, y el arreglo estaba escrito 400 líneas más arriba en `case MOVE`.
 
