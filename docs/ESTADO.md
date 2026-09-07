@@ -98,6 +98,13 @@ Lo que hace fuerte esta decisión es la razón: `C1` y `T1` no son un añadido q
 son **la herramienta con la que se cierra**. (`D1` y `F1` son códigos que puse yo siguiendo la
 nomenclatura de la tabla; el reparto y el orden son suyos.)
 
+📌 **Y el parque quedó contado, que es la entrada de `F1` y de `T1`: 7 imágenes y 9 placas.**
+Eduardo contó 8 (*«Pico y Metro; S3, C3, C6 y P4; Nucleo y Discovery»*); la novena salió de que
+**la imagen del P4 sirve a DOS placas** (kit y Waveshare, con el panel elegido por el ENV) —
+confirmado por él. Contar placas por imagen se deja una fuera. Y la Waveshare no es redundante:
+es la única que prueba el camino `display=st7701`, o sea que la imagen única lo sea de verdad.
+Tiene deuda: **le falta el reflasheo**.
+
 ⏭️ **Mañana**: *«lo que toca durante unos días es ir resolviendo pendientes»*. La lista, en
 `FICHAS.md`, en el censo de la cabecera de `ABIERTAS`.
 

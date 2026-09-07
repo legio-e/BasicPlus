@@ -2759,10 +2759,11 @@ son suyos. **El orden de cierre de V6 queda así:**
 Y la consecuencia práctica, dicha por él: *«lo que toca durante unos días es ir resolviendo
 pendientes»*.
 
-##### 🔢 El PARQUE que tiene que probar `F1` — 7 imágenes, 8 o 9 placas
+##### 🔢 El PARQUE que tiene que probar `F1` — **7 imágenes, 9 placas**
 
-**La cuenta de Eduardo (7-sep)**: *«A mí me salen 8 placas a probar: Pico y Metro; S3, C3, C6 y
-P4; Nucleo y Discovery.»* Contrastado con el repo, sale así:
+**La cuenta la hizo Eduardo el 7-sep** —*«a mí me salen 8 placas a probar: Pico y Metro; S3, C3,
+C6 y P4; Nucleo y Discovery»*— y al contrastarla con el repo apareció una novena: la **segunda
+P4**. ✅ **Confirmado por él el mismo día: son 9.**
 
 | imagen | placas que sirve |
 |---|---|
@@ -2774,18 +2775,21 @@ P4; Nucleo y Discovery.»* Contrastado con el repo, sale así:
 | `bpvm_stm32_nucleo.bin` | **Nucleo U575** |
 | `bpvm_stm32_dk2.bin` | **Discovery U5G9J** |
 
-❓ **La única diferencia con la cuenta de Eduardo es la segunda P4, y está por confirmar.** El
+📐 **De dónde salió la novena**, porque el criterio sirve para la próxima familia: el
 `CMakeLists.txt:12` del P4 dice que la imagen *«sirve a las dos P4 (kit y Waveshare; el panel
-sale del ENV, `#311`)»*. Si la Waveshare entra, son **9**.
+sale del ENV, `#311`)»*. **Contar placas por imagen se deja una fuera**; hay que contarlas por
+lo que la imagen declara servir.
 
-⚠️ **Y no sería una placa redundante, que es lo que importa para `F1`:** es la única que ejercita
-el camino **panel elegido por el ENV** (`display=st7701` frente al EK79007 del kit) — o sea, la
-única prueba real de que la imagen única de esa familia lo es de verdad. Probar sólo el kit deja
-ese camino sin cubrir. Además está anotado que **le falta el reflasheo**, así que hoy va por
-detrás de las demás.
+⚠️ **Y no es una placa redundante, que es lo que la hace obligatoria en `F1`:** es la única que
+ejercita el camino **panel elegido por el ENV** (`display=st7701` frente al EK79007 del kit) —
+o sea, la única prueba real de que la imagen única de esa familia lo es de verdad. Probando sólo
+el kit, ese camino se queda sin cubrir y no nos enteraríamos.
 
-📌 Nota para `T1`: **7 imágenes y 8–9 placas** es el tamaño que el sistema de pruebas tiene que
-conducir. `#444` decía *«no escala a una docena de placas»* — no está lejos.
+🔴 **Deuda conocida sobre ella**: **le falta el reflasheo**, así que hoy va por detrás de las
+demás. Es lo primero que hay que resolver de esa placa antes de `F1`.
+
+📌 Nota para `T1`: **7 imágenes y 9 placas** es el tamaño que el sistema de pruebas tiene que
+conducir. `#444` decía *«no escala a una docena de placas»* — con nueve ya estamos ahí.
 
 ⏩ **`L1` SE VA A V7, decidido el 5-sep.** Salió de tirar del hilo de las intrínsecas y
 acabó en un cambio de fondo: **el módulo raíz**, al estilo de la unidad `System` de Turbo Pascal
