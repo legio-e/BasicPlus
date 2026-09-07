@@ -49,8 +49,10 @@ arquitectura del host** (`MDN_ARCH_X64`), que hasta hoy aceptaba en silencio un 
 ### 📌 Lo que hay que retener de la jornada
 
 **Tres de los bugs de verdad los encontró el trabajo, no la red de seguridad**, y siempre por lo
-mismo: el `check` de `compat.sh` lleva **desactivado desde V4** y su corpus de 16 casos no toca ni
-buses, ni GPIO, ni ADC, ni GUI (`#477`). ✅ Y hoy quedan **cinco samples byte-idénticos** esperando a
+mismo: **el corpus** del `check` de `compat.sh` no toca ni buses, ni GPIO, ni ADC, ni GUI (`#477`).
+⛔ **Corrección del 7-sep: donde esto decía «el `check` lleva desactivado desde V4», es FALSO.** Lo
+desactivado fue la compatibilidad **binaria** con V2/V3; el `check` se ejecuta y da paridad dual-VM.
+Lo corto era el corpus — que es justo lo que decía la otra mitad de la frase. ✅ Y hoy quedan **cinco samples byte-idénticos** esperando a
 entrar: `BusBug`, `AdcDemo`, `ArgDemo`, `MathRango`, `MathTest`.
 
 ⚠️ **Y una advertencia sobre mí mismo, que se repitió cuatro veces**: mi propio instrumento me dio
@@ -113,8 +115,8 @@ pendientes.»* → `#475` y `#444` ya son los hitos **`C1`** y **`T1`** en la ta
 ### 📌 El hilo que une los cinco, y es lo que hay que retener
 
 **Los tres bugs de verdad de hoy los encontró el trabajo, no la red de seguridad** — y siempre por
-lo mismo: el `check` de `compat.sh` lleva **desactivado desde V4** y su corpus de 16 casos **no toca
-ni buses, ni GPIO, ni ADC, ni GUI** (`#477`). El sample que reproduce `#478` **ya existía**, escrito
+lo mismo: **el corpus** del `check` de `compat.sh` **no toca ni buses, ni GPIO, ni ADC, ni GUI**
+(`#477`). ⛔ *(«el `check` lleva desactivado desde V4» era falso; corregido el 7-sep — ver arriba.)* El sample que reproduce `#478` **ya existía**, escrito
 hace tiempo para bisecar otro cuelgue.
 
 ✅ **Y hoy quedan cuatro samples listos para entrar en el corpus**, byte-idénticos en stdout:
@@ -195,8 +197,9 @@ que son lo que hay que retener:
 ### 3. `#477` — lo que más me escuece del día
 
 El oráculo exacto de la GUI **existe desde V4 y nadie lo ejecuta**: `dumpTree` es byte-idéntico en las
-dos VMs (medido hoy en 6 samples), **22 samples lo llaman**, y el `check` de `compat.sh` lleva
-desactivado desde V4 con un corpus sin un solo sample de GUI. Antes de construir la segunda vía
+dos VMs (medido hoy en 6 samples), **22 samples lo llaman**, y el corpus del `check` de `compat.sh`
+no tiene un solo sample de GUI. ⛔ *(decía «el `check` lleva desactivado desde V4»: falso, corregido
+el 7-sep.)* Antes de construir la segunda vía
 (capturar, comprimir, bajar) hay que enchufar la primera, que es gratis.
 ⚠️ Con sus tres agujeros medidos: el chart es invisible en el dump; es **ciego a la rotación** (y en
 la Discovery `disp_set_rotation` es un **no-op declarado**, así que el oráculo sale VERDE con el panel
