@@ -69,7 +69,15 @@ const bpvm_part_t*     board_mgr_esp32_packs(void);
  * la dirección se la da la MMU en ejecución. Quien no la registre se queda como
  * estaba —sin packs, y el LS lo dice—, que para el S3 hoy es la verdad.
  */
-void board_mgr_esp32_set_packs_view(const void* base, uint32_t size);
+/* Registra la vista de la zona de packs. DOS bases: por donde se LEE y por donde
+ * se SALTA. Son la misma en el P4 y el C6 (D/I vaddr compartidos) y distintas en
+ * el S3 y el C3. Lo normal es no llamarla a mano: la llama el mapeo de abajo. */
+void board_mgr_esp32_set_packs_view(const void* base_lectura,
+                                    const void* base_ejecucion, uint32_t size);
+
+/* Mapea la zona de packs y registra su vista. COMUN a las cuatro ESP32: lo unico
+ * que cambia entre micros es si la MMU da una direccion o dos. 1 = mapeada. */
+int board_mgr_esp32_mapear_packs(void);
 
 /* #311 — el env del boot, para configurar HARDWARE (el panel del P4 sale de aquí).
  * Igual que el Pico con `psram`: la config de placa vive en el env, no en un

@@ -57,122 +57,23 @@ uint8_t* s_pack_ram_base = 0;
 /* Los mapeos se hacen UNA vez y se quedan: soltarlos invalidaría el código que
  * el pack deja publicado (SQLite publica su tabla de funciones y la VM la usa
  * durante toda la sesión). */
-static const void*             s_map_inst  = 0;
-static const void*             s_map_data  = 0;
-static esp_partition_mmap_handle_t s_h_inst = 0;
-static esp_partition_mmap_handle_t s_h_data = 0;
-static uint32_t                s_zona_bytes = 0;
 
 /*
  * Mapea la zona de packs de las dos formas y deja dicho qué salió.
  * Devuelve 1 si se puede seguir (un mapeo utilizable), 0 si no.
  */
+/* El mapeo se fue a `esp32/common/board_mgr_esp32.c` el 8-sep. No porque sobrara
+ * aqui, sino porque nunca fue del P4: lo unico que cambia entre micros es si la
+ * MMU da una direccion o dos, y eso no es una familia, es una capacidad. Mientras
+ * vivio en este fichero, el C6 —que comparte D/I vaddr igual que el P4— se quedo
+ * sin packs por vivir en el directorio de al lado. Correccion de Eduardo.
+ *
+ * Se conserva el nombre local para no tocar a sus tres llamantes de aqui. */
 static int mapear_zona(void)
 {
-    if (s_map_inst) return 1;                    /* ya estaba */
-
-    const esp_partition_t* bpdata =
-        (const esp_partition_t*) board_mgr_esp32_bpdata();
-    const bpvm_part_t* packs = board_mgr_esp32_packs();
-
-    if (!bpdata || !packs) {
-        log_printf("pack: sin zona de packs (el arranque no llego a particiones)");
-        return 0;
-    }
-    if (packs->size == 0u) {
-        log_printf("pack: la zona de packs mide 0 — mira el reparto FS|Packs del ENV");
-        return 0;
-    }
-    s_zona_bytes = packs->size;
-
-    /* El offset es RELATIVO a bpdata, igual que el del FS. */
-    esp_err_t ei = esp_partition_mmap(bpdata, packs->offset, packs->size,
-                                      ESP_PARTITION_MMAP_INST, &s_map_inst, &s_h_inst);
-    esp_err_t ed = esp_partition_mmap(bpdata, packs->offset, packs->size,
-                                      ESP_PARTITION_MMAP_DATA, &s_map_data, &s_h_data);
-
-    /* #P4-32M — la DIRECCION ABSOLUTA, que es la que decide. El offset relativo a
-     * bpdata no dice nada por si solo: lo que el cache de flash mira es la
-     * direccion fisica, y direcciona a 24 bits. Con estos dos numeros el log
-     * contesta solo si el problema es ese limite o es otra cosa — en vez de
-     * tener que deducirlo leyendo el fuente del IDF. */
-    {
-        uint32_t ini = (uint32_t) bpdata->address + packs->offset;
-        uint32_t fin = ini + packs->size;
-        log_printf("pack: fisica 0x%x..0x%x (%u..%u KB) | limite del cache 24 bits "
-                   "= 0x1000000 (16384 KB)%s%s",
-                   (unsigned) ini, (unsigned) fin,
-                   (unsigned) (ini / 1024u), (unsigned) (fin / 1024u),
-                   (ini >= 0x1000000u) ? "  <<< EMPIEZA POR ENCIMA" : "",
-                   (fin >  0x1000000u) ? "  <<< ACABA POR ENCIMA"  : "");
-    }
-
-    log_printf("pack: zona %u KB en bpdata+0x%x | mapeo INST %s @%p | DATA %s @%p",
-               (unsigned) (packs->size / 1024u), (unsigned) packs->offset,
-               (ei == ESP_OK) ? "ok" : "FALLO", s_map_inst,
-               (ed == ESP_OK) ? "ok" : "FALLO", s_map_data);
-
-    if (ei != ESP_OK) {
-        log_printf("pack: sin mapeo EJECUTABLE no hay nada que hacer (err=%d)", (int) ei);
-        s_map_inst = 0;
-        return 0;
-    }
-
-    /* LA MEDIDA. Con las dos direcciones delante ya no hay que suponer nada. */
-    if (ed == ESP_OK && s_map_data == s_map_inst) {
-        log_printf("pack: INST y DATA dan LA MISMA direccion "
-                   "(D/I vaddr compartidos) — un solo mapeo vale para todo");
-    } else if (ed == ESP_OK) {
-        log_printf("pack: OJO — INST y DATA dan direcciones DISTINTAS. "
-                   "El sello va con la de INST (@%p), que es desde donde se ejecuta. "
-                   "Validar por la de DATA y saltar a la de INST exige tratarlas "
-                   "aparte: NO se salta hasta que eso este escrito.", s_map_inst);
-        return 0;
-    } else {
-        log_printf("pack: no hubo mapeo de DATOS (err=%d); se valida por el de "
-                   "INST, que solo admite accesos de 4 bytes -> si la cabecera "
-                   "sale rara, es esto", (int) ed);
-    }
-
-    /* V5/H7 — y AHORA el IDE puede ver la zona. Hasta este registro, `PACK_LS`
-     * contestaba "sin zona de packs" y no había forma de grabar nada desde el
-     * IDE en esta familia: los verbos PACK_* estaban encaminados pero sin nada
-     * detrás. El puntero que hacía falta es justo el que acabamos de conseguir.
-     *
-     * Va aquí, y no en el arranque, porque antes del mapeo no existe. */
-    board_mgr_esp32_set_packs_view(s_map_inst, s_zona_bytes);
-    return 1;
+    return board_mgr_esp32_mapear_packs();
 }
 
-/* V5/H7 - MAPEAR la zona, y sólo eso. Lo llama el ARRANQUE.
- *
- * Está separado de `pack_p4_cargar` desde el 16-ago porque las dos cosas que
- * hacía esa función tienen tiempos y riesgos muy distintos, y se midieron:
- *
- *   mapear  ->  0 ms en el log, y el IDE lo NECESITA desde el arranque: sin la
- *               vista publicada, `PACK_LS` contesta «sin zona de packs» y no
- *               hay forma de grabar nada desde el IDE.
- *   barrer  ->  338 ms, y es el único paso que puede COLGAR (el salto al pack).
- *
- * Así que el mapeo se queda aquí y el barrido se va al primer `Run`, que es
- * donde la Pico lo tenía desde el principio. `mapear_zona` es idempotente, así
- * que da igual quién llegue primero. */
-/* V5/H7 (16-ago) - ¿HAY ALGO QUE BUSCAR? El barrido del ancla recorre la zona
- * ENTERA de 4 en 4 bytes: 2800 KB son ~700.000 comparaciones y 338 ms medidos en
- * la P4. Se pagaban en cada arranque; desde que la carga es perezosa se pagan en
- * CADA `Run` mientras no haya pack, porque sin pack la carga no se marca como
- * hecha (a propósito: así, tras grabar uno, funciona sin reiniciar).
- *
- * Se pueden no pagar, y sin tocar el buscador ni contradecir el ancla: un
- * `.npk` vive SIEMPRE dentro de un pack, así que si en la zona no hay ningún
- * pack grabado no hay ancla que encontrar. Y saberlo es barato — `bpvm_pack_scan`
- * lee la primera cabecera y para.
- *
- * ⚠️ Esto NO es «si la zona empieza virgen, no busques» metido en el buscador.
- * Esa era la idea equivocada: `test_npack.c` tiene un caso que pone el pack en
- * el offset 256 entre basura, porque el ancla existe justo para no depender de
- * dónde esté. Aquí el buscador sigue barriendo TODO lo que se le dé; lo único
- * que cambia es que no se le llama cuando se sabe que no hay nada. */
 static int hay_algun_pack(const uint8_t* base, uint32_t bytes) {
     if (base == 0 || bytes == 0) return 0;
     uint32_t fin = 0;
@@ -187,6 +88,13 @@ int32_t pack_p4_mapear(void)
 
 int32_t pack_p4_cargar(void)
 {
+    /* La zona sale de la vista MONTADA, que la pone el mapeo comun. Aqui es un
+     * puntero de LECTURA y nada mas: el npack se copia a RAM y se ejecuta desde
+     * RAM (la escalera), asi que no hace falta la vista ejecutable. */
+    uint32_t       zbytes = 0;
+    const uint8_t* zbase  = bpvm_pack_mounted(&zbytes);
+    if (!zbase || zbytes == 0) { if (!mapear_zona()) return -1;
+                                 zbase = bpvm_pack_mounted(&zbytes); }
     if (!mapear_zona()) return -1;
 
     if (s_pack_ram_base == 0) {
@@ -201,14 +109,14 @@ int32_t pack_p4_cargar(void)
     if (bios_p4_get() == 0) falta = "la BIOS de esta placa tiene huecos";
 
     /* Si no hay ni un pack grabado, no hay ancla que buscar (ver arriba). */
-    if (!hay_algun_pack((const uint8_t*) s_map_inst, s_zona_bytes)) {
+    if (!hay_algun_pack(zbase, zbytes)) {
         log_printf("pack: la zona no tiene ningun pack grabado - no se barre");
         return -(int32_t) BPVM_NPACK_E_MAGIC;
     }
 
     /* Barrer + subir la escalera. La MISMA de las tres familias. */
     bpvm_npack_hallazgo_t h = bpvm_npack_buscar(
-            s_map_inst, s_zona_bytes,
+            zbase, zbytes,
             (uint32_t) (uintptr_t) s_pack_ram_base, PACK_RAM_BYTES, falta);
 
     if (h.addr == 0) {
@@ -241,16 +149,16 @@ int32_t pack_p4_cargar(void)
          * magic en vez de suponer el offset — que es lo que hace la escalera, y
          * si aquí supusiera otro estaría comparando bytes que no son. */
         uint32_t cand = 0;
-        for (uint32_t i = 0; i + sizeof(bpvm_npack_hdr_t) <= s_zona_bytes; i += 4) {
+        for (uint32_t i = 0; i + sizeof(bpvm_npack_hdr_t) <= zbytes; i += 4) {
             const uint32_t* w = (const uint32_t*) (const void*)
-                                ((const uint8_t*) s_map_inst + i);
+                                (zbase + i);
             if (*w == BPVM_NPACK_MAGIC) { cand = i; break; }
         }
         log_printf("pack: el candidato esta en la zona +%u (0x%x)",
                    (unsigned) cand, (unsigned) cand);
 
         const bpvm_npack_hdr_t* m = (const bpvm_npack_hdr_t*)
-                                    ((const uint8_t*) s_map_inst + cand);
+                                    (zbase + cand);
         bpvm_npack_hdr_t d;
         const esp_partition_t* bpdata =
             (const esp_partition_t*) board_mgr_esp32_bpdata();
@@ -281,7 +189,7 @@ int32_t pack_p4_cargar(void)
         log_printf("pack: esta placa ES arch %u, abi '%s' | sello esperado "
                    "flash 0x%08x ram 0x%08x",
                    (unsigned) bpvm_mdn_host_arch(), bpvm_mdn_host_float_abi(),
-                   (unsigned) ((uint32_t) (uintptr_t) s_map_inst + cand
+                   (unsigned) ((uint32_t) (uintptr_t) zbase + cand
                                + BPVM_NPACK_HDR_BYTES),
                    (unsigned) (uintptr_t) s_pack_ram_base);
         log_printf("pack: el sello DEL PACK dice flash 0x%08x ram 0x%08x",

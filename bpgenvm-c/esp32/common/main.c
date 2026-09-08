@@ -223,6 +223,19 @@ void app_main(void)
         fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
         esp32_mods_install();  /* stdlib core embebida -> /lib (if-absent) */
     }
+
+    /* V6 (8-sep) — MAPEAR LA ZONA DE PACKS. Va aqui, despues de que el arranque
+     * sepa sus particiones, y sirve a S3, C3 y C6 (el P4 lo hace desde su propio
+     * main, que tiene mas cosas que ordenar).
+     *
+     * Hasta hoy esto no existia fuera del P4, y el C6 se quedaba sin packs sin
+     * ninguna razon de silicio: comparte `SOC_MMU_DI_VADDR_SHARED` con el P4 y el
+     * codigo del mapeo vivia en el directorio de al lado. El S3 y el C3 no lo
+     * comparten, y por eso el mapeo devuelve dos direcciones y la zona se monta
+     * con vista de lectura y vista de ejecucion separadas.
+     *
+     * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual. */
+    (void) board_mgr_esp32_mapear_packs();
     esp32_hw_register();   /* backends de HW (GPIO, pico/info) — siempre */
     /* V6/P1.C3.3 — la identidad de placa, si este silicio trae la suya.
      *

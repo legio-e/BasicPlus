@@ -91,11 +91,14 @@ const bpvm_env_t* board_mgr_env(void) { return &s_env; }
  * packs", que para el S3 hoy es LA VERDAD. Un `#ifdef` habría dado el mismo
  * resultado escondiendo que una familia está a medias; esto lo deja a la vista.
  */
-static const uint8_t* s_packs_view      = 0;
+static const uint8_t* s_packs_view      = 0;   /* por donde se LEE la zona */
+static const uint8_t* s_packs_view_exec = 0;   /* por donde se SALTA (== view salvo S3/C3) */
 static uint32_t       s_packs_view_size = 0;
 
-void board_mgr_esp32_set_packs_view(const void* base, uint32_t size) {
-    s_packs_view      = (const uint8_t*) base;
+void board_mgr_esp32_set_packs_view(const void* base_lectura,
+                                    const void* base_ejecucion, uint32_t size) {
+    s_packs_view      = (const uint8_t*) base_lectura;
+    s_packs_view_exec = (const uint8_t*) (base_ejecucion ? base_ejecucion : base_lectura);
     s_packs_view_size = size;
 
     /* ─── Y MONTARLA, que son DOS consumidores, no uno ────────────────────
@@ -119,9 +122,88 @@ void board_mgr_esp32_set_packs_view(const void* base, uint32_t size) {
      *
      * Y va pase lo que pase con el código nativo: un pack de sólo módulos,
      * sin `npk`, tiene que valer igual. */
-    bpvm_pack_mount(s_packs_view, s_packs_view, s_packs_view_size);
-    log_printf("pack: zona montada en %p (%u KB) — modulos y .mdn visibles",
-               (const void*) s_packs_view, (unsigned) (s_packs_view_size / 1024u));
+    bpvm_pack_mount(s_packs_view, s_packs_view_exec, s_packs_view_size);
+    if (s_packs_view_exec == s_packs_view) {
+        log_printf("pack: zona montada en %p (%u KB) — modulos y .mdn visibles",
+                   (const void*) s_packs_view, (unsigned) (s_packs_view_size / 1024u));
+    } else {
+        log_printf("pack: zona montada — lectura @%p, ejecucion @%p (%u KB); "
+                   "este micro NO comparte direccion virtual para datos e instrucciones",
+                   (const void*) s_packs_view, (const void*) s_packs_view_exec,
+                   (unsigned) (s_packs_view_size / 1024u));
+    }
+}
+
+/* ── EL MAPEO DE LA ZONA, COMUN A LAS CUATRO ESP32 ─────────────────────────────
+ *
+ * Vivia en `esp32p4/main/pack_p4.c` y por eso el C6 no tenia packs: no por el
+ * silicio —declara `SOC_MMU_DI_VADDR_SHARED` igual que el P4— sino porque el
+ * codigo estaba en el directorio del vecino. Correccion de Eduardo (8-sep): «el
+ * sistema deberia ser identico, igual que el environment».
+ *
+ * Lo unico que cambia entre micros es cuantas direcciones devuelve la MMU:
+ *   P4 y C6   `SOC_MMU_DI_VADDR_SHARED` -> INST y DATA dan LA MISMA -> una vista
+ *   S3 y C3   no lo declaran            -> dan DISTINTAS -> se lee por DATA y se
+ *                                          ejecuta por INST
+ * Antes el segundo caso se reconocia y se ABANDONABA («NO se salta hasta que eso
+ * este escrito»). Ya esta escrito, y no hizo falta codigo de familia: solo dejar
+ * de suponer que un puntero sirve para las dos cosas (ver `bpvm_pack_mount`).
+ *
+ * Va en el board manager, que es quien ya era dueno de la vista, y no en un
+ * fichero nuevo: los cuatro CMakeLists listan las fuentes A MANO, asi que un
+ * fichero nuevo serian cuatro altas y una oportunidad de olvidar una. */
+int board_mgr_esp32_mapear_packs(void) {
+    static const void* s_map_inst = 0;
+    static const void* s_map_data = 0;
+    static esp_partition_mmap_handle_t s_h_inst = 0;
+    static esp_partition_mmap_handle_t s_h_data = 0;
+
+    if (s_map_inst) return 1;                      /* ya estaba */
+
+    const esp_partition_t* bpdata = s_bpdata;
+    const bpvm_part_t*     packs  = board_mgr_esp32_packs();
+
+    if (!bpdata || !packs) {
+        log_printf("pack: sin zona de packs (el arranque no llego a particiones)");
+        return 0;
+    }
+    if (packs->size == 0u) {
+        log_printf("pack: la zona de packs mide 0 — mira el reparto FS|Packs del ENV");
+        return 0;
+    }
+
+    /* El offset es RELATIVO a bpdata, igual que el del FS. */
+    esp_err_t ei = esp_partition_mmap(bpdata, packs->offset, packs->size,
+                                      ESP_PARTITION_MMAP_INST, &s_map_inst, &s_h_inst);
+    esp_err_t ed = esp_partition_mmap(bpdata, packs->offset, packs->size,
+                                      ESP_PARTITION_MMAP_DATA, &s_map_data, &s_h_data);
+
+    log_printf("pack: zona %u KB en bpdata+0x%x | INST %s @%p | DATA %s @%p",
+               (unsigned) (packs->size / 1024u), (unsigned) packs->offset,
+               (ei == ESP_OK) ? "ok" : "FALLO", s_map_inst,
+               (ed == ESP_OK) ? "ok" : "FALLO", s_map_data);
+
+    if (ei != ESP_OK) {
+        log_printf("pack: sin mapeo EJECUTABLE no hay nada que hacer (err=%d)", (int) ei);
+        s_map_inst = 0;
+        return 0;
+    }
+
+    if (ed == ESP_OK && s_map_data != s_map_inst) {
+        /* S3 y C3. Se lee por DATA (acepta accesos de cualquier ancho) y se salta
+         * por INST. La traduccion la hace `bpvm_pack_exec_ptr` en el unico sitio
+         * donde el puntero pasa de dato a codigo. */
+        board_mgr_esp32_set_packs_view(s_map_data, s_map_inst, packs->size);
+    } else if (ed == ESP_OK) {
+        /* P4 y C6: la misma direccion para las dos cosas. */
+        board_mgr_esp32_set_packs_view(s_map_inst, s_map_inst, packs->size);
+    } else {
+        /* Sin mapeo de DATOS se valida por el de INST, que en algunos micros solo
+         * admite accesos de 4 bytes -> si la cabecera sale rara, es esto. */
+        log_printf("pack: no hubo mapeo de DATOS (err=%d); se lee por el de INST", (int) ed);
+        board_mgr_esp32_set_packs_view(s_map_inst, s_map_inst, packs->size);
+    }
+    return 1;
 }
 
 /* ── Cintura de ESCRITURA. Ésta SÍ es común a los dos ESP32: los dos graban por
