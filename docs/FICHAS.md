@@ -83,12 +83,12 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 13 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo; el
-> 8-sep se cerraron `#472` y `#469`, se abrió `#481`.)*
+> **Lo que queda de V6 son 12 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo; el
+> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7, y se abrió `#481`.)*
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **9** | `#456` · `#462` · `#468` · `#470` · `#471` · `#473` · `#474` · `#480` · `#481` · `A4` |
+> | **fichas de V6** | **8** | `#456` · `#462` · `#470` · `#471` · `#473` · `#474` · `#480` · `#481` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
@@ -2499,7 +2499,26 @@ ancho completo en orden.
 ⚠️ Trampa de artefacto en el propio host: `bp_shot_%04d` reempieza en 0001 en cada ejecución y
 escribe en el cwd — una captura rancia es **indistinguible** de la nueva. Verde falso de manual.
 
-#### 🟡 `#468` — la stdlib en flash en vez de en RAM (memoria de la C6): MEDIDA, y el 8-sep Eduardo tumbó la vía del pack (abierta 4-sep)
+#### ⏩ `#468` — la stdlib en flash en vez de en RAM (memoria de la C6) → **V7** (abierta 4-sep · **APLAZADA el 8-sep por Eduardo**)
+
+⏩ **APLAZADA A V7 el 8-sep. Decisión de Eduardo, con su criterio de siempre:** *«para V6 no
+inventamos cosas nuevas. Se puede plantear para V7, pero en V6 seguimos como hasta ahora.»*
+
+📌 **Y la salida para quien la necesite HOY, que es suya y ya funciona:** *«si alguien quiere
+ahorrar memoria puede montar su propio pack y subirlo»*. Eso dejó de ser teórico esta misma tarde:
+hasta el 8-sep la zona de packs sólo la mapeaba el P4, y desde `630a221e` la tienen también el S3,
+el C3 y el C6. O sea que el usuario que quiera sacar `Gui`/`Json` de la RAM puede hacerlo por el
+camino normal, sin que nosotros toquemos la imagen.
+
+🔮 **Y el apunte que le da forma a la ficha en V7**, también suyo: *«si en V7 LVGL lo subimos a un
+pack, éste puede incluir `Gui.mod`»*. Es la pieza que faltaba — el ahorro deja de ser un mecanismo
+inventado para la stdlib y pasa a ser **una consecuencia** de empaquetar LVGL, que es algo que se
+quiere hacer por su cuenta. El `Gui.mod` viaja con el motor al que envuelve, que es donde debe ir.
+
+⚠️ Lo que sigue valiendo de la medida, para cuando se retome: los **22 268 B** son reales y salen de
+que el `code` se quede en flash; la **otra mitad** de los «40-50 K» es la tabla de símbolos por
+referencia, que es un cambio del enlazador y va aparte. Lo de abajo se conserva porque es el
+análisis que sostiene las dos cosas.
 
 ⛔ **8-sep — EL PACK NO PUEDE SER EL MECANISMO, y la objeción es de Eduardo:** *«los micros, cuando
 arrancan por primera vez, no tienen la partición definida, así que no se puede usar para subir
