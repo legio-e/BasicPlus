@@ -83,11 +83,12 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 15 pendientes y 4 hitos** (la cuenta es de Eduardo, 7-sep).
+> **Lo que queda de V6 son 14 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo;
+> `#472` se cerró el 8-sep.)*
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **11** | `#456` · `#462` · `#468` · `#469` · `#470` · `#471` · `#472` · `#473` · `#474` · `#480` · `A4` |
+> | **fichas de V6** | **10** | `#456` · `#462` · `#468` · `#469` · `#470` · `#471` · `#473` · `#474` · `#480` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
