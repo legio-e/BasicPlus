@@ -20,7 +20,7 @@
 //     psram=0 → reset → Run     y     psram=1 → reset → Run
 module BenchMem
 
-  import Pico
+  import Machine
 
   // 32768 enteros = 128 KB. Dos condiciones: que quepa en el heap más pequeño
   // de los dos casos (con `psram=0` la Metro deja 267 KB) y que sea MUCHO mayor
@@ -51,7 +51,7 @@ module BenchMem
     var s1: integer := 0
     var idx: integer := 0
     var k: integer := 0
-    var t0: integer := Pico.uptimeMs()
+    var t0: integer := Machine.uptimeMs()
     while k < LECTURAS do
       s1 := s1 + a[idx]
       idx := idx + 1
@@ -60,14 +60,14 @@ module BenchMem
       endif
       k := k + 1
     endwh
-    var dt1: integer := Pico.uptimeMs() - t0
+    var dt1: integer := Machine.uptimeMs() - t0
     print "secuencial ", LECTURAS, " lecturas = ", dt1, " ms  (suma ", s1, ")"
 
     // ── LA MEDIDA: recorrido DISPERSO, mismo bucle y mismas lecturas ────────
     var s2: integer := 0
     idx := 0
     k := 0
-    var t1: integer := Pico.uptimeMs()
+    var t1: integer := Machine.uptimeMs()
     while k < LECTURAS do
       s2 := s2 + a[idx]
       idx := idx + SALTO
@@ -76,7 +76,7 @@ module BenchMem
       endif
       k := k + 1
     endwh
-    var dt2: integer := Pico.uptimeMs() - t1
+    var dt2: integer := Machine.uptimeMs() - t1
     print "disperso   ", LECTURAS, " lecturas = ", dt2, " ms  (suma ", s2, ")"
   end Main
 

@@ -22,7 +22,7 @@
 // son de eras distintas de los helpers: hay que reflashear con el firmware de
 // esta misma tanda.
 module NatV7
-  import Pico
+  import Machine
 
   // ── 1. native de módulo, con bucle: es la que se cronometra ──────────────
   native function sumaHasta(n: integer): integer
@@ -68,9 +68,9 @@ module NatV7
     print "== NatV7 — el bloque nativo dentro del .mod =="
 
     print "1 native de modulo:"
-    var t0: integer := Pico.uptimeMs()
+    var t0: integer := Machine.uptimeMs()
     var s: integer := sumaHasta(20000)
-    var ms: integer := Pico.uptimeMs() - t0
+    var ms: integer := Machine.uptimeMs() - t0
     print "  sumaHasta(20000) =", s, " (esperado 200010000)"
     print "  tiempo:", ms, "ms"
 

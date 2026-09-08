@@ -1,4 +1,4 @@
-// OverclockTest.bp — verifica Pico.setCpuFreqMHz() y MAX_CPU_MHZ.
+// OverclockTest.bp — verifica Machine.setCpuFreqMHz() y MAX_CPU_MHZ.
 //
 // Probamos:
 //  1. Lee la frecuencia actual.
@@ -14,7 +14,7 @@
 
 module OverclockTest
 
-  import Pico
+  import Machine
 
   function checkSleep(label: string, expectedMs: integer)
     var t1: integer := now()
@@ -25,35 +25,35 @@ module OverclockTest
   end checkSleep
 
   function Main()
-    print "--- Pico.setCpuFreqMHz / MAX_CPU_MHZ ---"
+    print "--- Machine.setCpuFreqMHz / MAX_CPU_MHZ ---"
     print ""
 
-    print "MAX_CPU_MHZ:", Pico.MAX_CPU_MHZ(), "MHz"
-    print "MIN_CPU_MHZ:", Pico.MIN_CPU_MHZ(), "MHz"
-    print "freq inicial:", Pico.cpuFreqHz() / 1000000, "MHz"
+    print "MAX_CPU_MHZ:", Machine.MAX_CPU_MHZ(), "MHz"
+    print "MIN_CPU_MHZ:", Machine.MIN_CPU_MHZ(), "MHz"
+    print "freq inicial:", Machine.cpuFreqHz() / 1000000, "MHz"
     print ""
 
     print "Subiendo a 250 MHz..."
-    var ok1: boolean := Pico.setCpuFreqMHz(250)
-    print "  ok=", ok1, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    var ok1: boolean := Machine.setCpuFreqMHz(250)
+    print "  ok=", ok1, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     checkSleep("sleep(500)", 500)
     print ""
 
     print "Pidiendo 500 MHz (excede MAX → clamp a 300)..."
-    var ok2: boolean := Pico.setCpuFreqMHz(500)
-    print "  ok=", ok2, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    var ok2: boolean := Machine.setCpuFreqMHz(500)
+    print "  ok=", ok2, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     checkSleep("sleep(1000)", 1000)
     print ""
 
     print "Bajando a 100 MHz..."
-    var ok3: boolean := Pico.setCpuFreqMHz(100)
-    print "  ok=", ok3, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    var ok3: boolean := Machine.setCpuFreqMHz(100)
+    print "  ok=", ok3, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     checkSleep("sleep(500)", 500)
     print ""
 
     print "Restaurando 150 MHz (default RP2350)..."
-    var ok4: boolean := Pico.setCpuFreqMHz(150)
-    print "  ok=", ok4, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    var ok4: boolean := Machine.setCpuFreqMHz(150)
+    print "  ok=", ok4, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     print ""
 
     print "--- fin ---"

@@ -1,185 +1,107 @@
-// ============================================================
-// Pico.bp — información del microcontrolador.
+// Pico.bp — ALIAS OBSOLETO de `Machine`. No añadir nada aquí.
 //
-// Específico de Raspberry Pi Pico 2 (RP2350). Cuando demos soporte
-// a otros MCUs (ESP32, STM32, etc.), cada uno tendrá su propio
-// módulo (Esp32.bp, Stm32.bp) con la misma API básica de
-// identificación / sensores / constantes — el código BP cambia
-// solo el `import` si quiere portabilidad.
+// Este modulo se llamaba asi por la primera placa que hubo, y era un mal nombre:
+// no es de la Pico, es de todos los micros. En V6 pasa a ser `Machine` (decision
+// de Eduardo, 8-sep) y esto se queda como PUENTE, no por comodidad sino por norma
+// de la casa: V4 y V5 estan publicadas y hay programas escritos contra `Pico.*`.
+// Lo nuevo se ANADE y se cuenta la convivencia; no se rompe lo que ya corre.
 //
-// Decisión de diseño: este módulo expone FUNCIONES + CONSTANTES,
-// no una clase. Razón: la información del chip no tiene "instancia"
-// (es uno y único), no hay recursos que liberar (uniqueId es
-// estático, tempC se lee on-demand). La política HW=clases se
-// reserva para los periféricos que sí encapsulan recursos
-// (Gpio.Pin, Spi.Bus, Pulse.Counter, Pwm.Slice, etc.).
+// ⚠️ Para codigo nuevo, usa `Machine`. Aqui no hay nada propio: cada funcion
+// reenvia a la suya, y este fichero se GENERA de las firmas de Machine.bp — si
+// añades algo alli, regeneralo en vez de escribirlo a mano.
 //
-// Uso típico:
-//
-//   import Pico
-//
-//   print "Board:", Pico.boardName()
-//   print "Serial:", Pico.uniqueId()
-//   print "CPU:", Pico.cpuFreqHz() / 1000000, "MHz"
-//   print "Chip temperature:", Pico.tempC(), "°C"
-//   print "I2C buses:", Pico.I2C_BUSES()
-//   print "Uptime:", Pico.uptimeMs(), "ms"
-// ============================================================
+// Coste: ~2 KB de flash por imagen. Las declaraciones no gastan RAM (el cargador
+// salta la seccion `interface`).
+
 module Pico
+  import Machine
 
-  // ---- Identificación ----
-  // ID único del chip flash (16 chars hex). Permanece estable
-  // entre reboots y entre flasheos del firmware.
-  public intrinsic function uniqueId(): string
+  public function uniqueId(): string
+    return Machine.uniqueId()
+  end uniqueId
 
-  // Nombre legible de la board. "pico2" en RP2350, "host" en VM
-  // Java sin HW.
-  public intrinsic function boardName(): string
+  public function boardName(): string
+    return Machine.boardName()
+  end boardName
 
-  // ---- Sensores internos ----
-  // Temperatura del die en °C. Lee el sensor interno del ADC
-  // (canal 4 en RP2350). Precisión típica ±2 °C sin calibración.
-  public intrinsic function tempC(): float
+  public function tempC(): float
+    return Machine.tempC()
+  end tempC
 
-  // ---- Reloj ----
-  // Frecuencia actual del clk_sys en Hz. En RP2350 con config por
-  // defecto es 150_000_000 (150 MHz).
-  public intrinsic function cpuFreqHz(): integer
+  public function cpuFreqHz(): integer
+    return Machine.cpuFreqHz()
+  end cpuFreqHz
 
-  // Milisegundos desde el boot del firmware. 32-bit unsigned con
-  // wrap ≈ 49 días. Para uptimes más largos, usar un acumulador en
-  // BP que detecte el wrap.
-  public intrinsic function uptimeMs(): integer
+  public function uptimeMs(): integer
+    return Machine.uptimeMs()
+  end uptimeMs
 
-  // ---- Board-aware (H7.3) ----
-  // Número de GPIO disponibles en la PLACA. Lo resuelve el firmware
-  // desde el board_desc (variante RP2350A=30 / RP2350B=48, u override
-  // de /sys/board.json). En la VM Java (host) devuelve 30 (perfil A).
-  // GPIO_COUNT() delega aquí para que sea board-aware automáticamente.
-  public intrinsic function gpioCount(): integer
+  public function gpioCount(): integer
+    return Machine.gpioCount()
+  end gpioCount
 
-  // ---- Causa del último reset (H10) ----
-  // Devuelve por qué se reinició el MCU como string: "watchdog (IWDG)",
-  // "power-on/brown-out", "software", "pin (NRST)", "low-power", ... En la
-  // VM Java (host) devuelve "unknown" (un PC no tiene causa de reset de MCU).
-  // Útil para diagnosticar reinicios inesperados (p.ej. un watchdog que saltó).
-  public intrinsic function resetCause(): string
+  public function resetCause(): string
+    return Machine.resetCause()
+  end resetCause
 
-  // ---- Breadcrumb en RAM retenida (H10) ----
-  // "Migas" que sobreviven al reset (registros de backup del MCU). La app deja
-  // marcas (setMark) por fases; tras un reset inesperado se lee el rastro que
-  // llevó al fallo. Útil contra cascadas de errores: markAt(0) es SIEMPRE la
-  // causa ORIGINAL (1ª marca, pegajosa); el resto son las últimas N. En la VM
-  // Java (host) no hay RAM retenida → setMark no-op, markCount=0, bootCount=1.
-  //
-  //   Pico.setMark(10)                  // antes de cada fase arriesgada
-  //   ...
-  //   // tras un reset, al arrancar:
-  //   var n: integer := Pico.markCount()
-  //   var i: integer := 0
-  //   while i < n do
-  //     print "  miga " + intToString(i) + ": " + intToString(Pico.markAt(i))
-  //     i := i + 1
-  //   endwh
-  public intrinsic function setMark(code: integer)
-  public intrinsic function markCount(): integer
-  public intrinsic function markAt(i: integer): integer
-  public intrinsic function bootCount(): integer
+  public function setMark(code: integer)
+    Machine.setMark(code)
+  end setMark
 
-  // Variante del chip como string ("A" / "B"), derivada de gpioCount()
-  // — no necesita su propio intrínseco. RP2350A bondea 30 GPIO, RP2350B
-  // 48; el umbral 40 los separa con holgura.
+  public function markCount(): integer
+    return Machine.markCount()
+  end markCount
+
+  public function markAt(i: integer): integer
+    return Machine.markAt(i)
+  end markAt
+
+  public function bootCount(): integer
+    return Machine.bootCount()
+  end bootCount
+
   public function variant(): string
-    if gpioCount() >= 40 then
-      return "B"
-    else
-      return "A"
-    endif
+    return Machine.variant()
   end variant
 
-  // Frecuencia máxima soportada en MHz para setCpuFreqMHz().
-  //
-  // Conservador: el RP2350 nominal es 150 MHz; con voltaje core
-  // estándar (~1.10 V) la mayoría de chips llegan a 250-300 MHz sin
-  // refrigeración. 300 MHz es el techo "seguro" para configs sin
-  // ajuste de voltaje. Por encima requiere vreg_set_voltage(),
-  // posible inestabilidad de XIP (flash) y refrigeración activa.
-  // Si alguien quiere apurar a 400+ MHz, que use el backend C
-  // directamente; nuestro BP juega seguro.
   public function MAX_CPU_MHZ(): integer
-    return 300
+    return Machine.MAX_CPU_MHZ()
   end MAX_CPU_MHZ
 
-  // Frecuencia mínima razonable. Por debajo la PLL del RP2350 no
-  // sintetiza limpio.
   public function MIN_CPU_MHZ(): integer
-    return 18
+    return Machine.MIN_CPU_MHZ()
   end MIN_CPU_MHZ
 
-  // Cambia el clk_sys del MCU a `mhz` MHz. Devuelve true si la PLL
-  // pudo configurarse, false si la combinación pedida (incluso tras
-  // clamp) no es alcanzable por el HW.
-  //
-  // Política: si mhz > MAX_CPU_MHZ se aplica MAX_CPU_MHZ
-  // (no falla); si mhz < MIN_CPU_MHZ se aplica MIN_CPU_MHZ.
-  // Ambos clamps ocurren AQUÍ — el backend recibe el valor ya
-  // saneado y limita su propio rango mínimo de PLL al margen.
-  //
-  // CRÍTICO: llamar a setCpuFreqMHz ANTES de configurar UART/SPI/
-  // I2C/PWM. Esos buses calculan sus divisores en base a clk_peri
-  // (derivado de clk_sys); cambiar clk_sys después deja los
-  // baudrates/freq mal. Si se hace, hay que re-llamar a Uart.init /
-  // Spi.init / etc. para recalcular.
-  //
-  // Las funciones sleep* (sleep, sleepSec, sleepUs, now) NO se ven
-  // afectadas — usan el timer hardware del RP2350 que corre a 1 MHz
-  // independiente del clk_sys.
   public function setCpuFreqMHz(mhz: integer): boolean
-    var clamped: integer := mhz
-    if clamped > MAX_CPU_MHZ() then
-      clamped := MAX_CPU_MHZ()
-    endif
-    if clamped < MIN_CPU_MHZ() then
-      clamped := MIN_CPU_MHZ()
-    endif
-    return setCpuFreqMHzRaw(clamped)
+    return Machine.setCpuFreqMHz(mhz)
   end setCpuFreqMHz
 
-  // Intrínseco interno (mapea al builtin nativo). Aplica la
-  // frecuencia tal cual sin clampear — el wrapper público
-  // setCpuFreqMHz() es el que hace el clamp con MAX/MIN_CPU_MHZ.
-  // Se expone como `public` porque la infraestructura intrinsic
-  // exige visibilidad pública, pero no debería usarse directo
-  // desde BP de usuario.
-  public intrinsic function setCpuFreqMHzRaw(mhz: integer): boolean
+  public function setCpuFreqMHzRaw(mhz: integer): boolean
+    return Machine.setCpuFreqMHzRaw(mhz)
+  end setCpuFreqMHzRaw
 
-  // ---- Constantes de capacidades del MCU ----
-  // Permiten que código BP defensivo valide rangos antes de usar
-  // p.ej. Spi.init(bus=3, ...) cuando solo hay 2 buses.
   public function I2C_BUSES(): integer
-    return 2
+    return Machine.I2C_BUSES()
   end I2C_BUSES
 
   public function SPI_BUSES(): integer
-    return 2
+    return Machine.SPI_BUSES()
   end SPI_BUSES
 
   public function UART_BUSES(): integer
-    return 2
+    return Machine.UART_BUSES()
   end UART_BUSES
 
-  // Board-aware desde H7.3: delega en el intrínseco gpioCount() (lo
-  // resuelve el firmware por variante / board.json). 30 en host/RP2350A,
-  // 48 en RP2350B (Metro).
   public function GPIO_COUNT(): integer
-    return gpioCount()
+    return Machine.GPIO_COUNT()
   end GPIO_COUNT
 
-  // Board-aware (H14): los resuelve el firmware desde su DESCRIPTOR de placa
-  // (board_desc / board.json en RP2350; p4_board_id en ESP32). En host/RP2350
-  // = perfil RP2350 (4 ADC externos GP26..29 / 12 slices PWM); en el P4 → 14/14.
-  public intrinsic function ADC_CHANNELS(): integer
+  public function ADC_CHANNELS(): integer
+    return Machine.ADC_CHANNELS()
+  end ADC_CHANNELS
 
-  public intrinsic function PWM_SLICES(): integer
+  public function PWM_SLICES(): integer
+    return Machine.PWM_SLICES()
+  end PWM_SLICES
 
 end Pico

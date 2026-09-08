@@ -178,24 +178,46 @@ public final class Intrinsics {
         register("Pwm.stopSlice",  w -> emitBuiltin(w, Builtin.PWM_STOP));
 
         // ---- Pico (info del MCU) ----
-        register("Pico.uniqueId",  w -> emitBuiltin(w, Builtin.PICO_UNIQUE_ID));
-        register("Pico.boardName", w -> emitBuiltin(w, Builtin.PICO_BOARD_NAME));
-        register("Pico.tempC",     w -> emitBuiltin(w, Builtin.PICO_TEMP_C));
-        register("Pico.cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));
-        register("Pico.uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
-        register("Pico.gpioCount", w -> emitBuiltin(w, Builtin.PICO_GPIO_COUNT));
-        register("Pico.ADC_CHANNELS", w -> emitBuiltin(w, Builtin.PICO_ADC_CHANNELS));  // H14 board-aware
-        register("Pico.PWM_SLICES",   w -> emitBuiltin(w, Builtin.PICO_PWM_SLICES));     // H14 board-aware
-        register("Pico.resetCause", w -> emitBuiltin(w, Builtin.PICO_RESET_CAUSE));  // H10
-        register("Pico.setMark",   w -> emitBuiltin(w, Builtin.PICO_SET_MARK));      // H10 breadcrumb
-        register("Pico.markCount", w -> emitBuiltin(w, Builtin.PICO_MARK_COUNT));
-        register("Pico.markAt",    w -> emitBuiltin(w, Builtin.PICO_MARK_AT));
-        register("Pico.bootCount", w -> emitBuiltin(w, Builtin.PICO_BOOT_COUNT));
-        // H7.4 — NeoPixel WS2812 (internos de la clase Neopixel.Strip)
+        // V6 (8-sep) — EL MISMO builtin bajo DOS nombres de modulo.
+        //
+        // `Pico` paso a llamarse `Machine` (no era de la Pico: es de todos los
+        // micros). `Pico` se queda como alias porque V4 y V5 estan publicadas.
+        //
+        // ⚠️ OJO A LA FORMA DEL REGISTRO, que me costo un rato: las intrinsecas se
+        // enganchan por "Modulo.funcion". Al renombrar el modulo busque "Pico" en
+        // el compilador, no salio nada, y di por hecho que el nombre no estaba
+        // cableado — pero esta cableado como "Pico.boardName". Resultado: la
+        // llamada compilaba con CERO errores y devolvia una referencia BASURA.
+        // Se registran los dos nombres DE UNA SOLA LISTA para que no puedan
+        // divergir: anadir una intrinseca aqui la da de alta en los dos modulos.
+        // ⚠️ SOLO `Machine`, y `Pico` NO. Lo intente y rompia: el alias `Pico.bp`
+        // declara funciones BP DE VERDAD que reenvian aqui, asi que registrar
+        // tambien "Pico.boardName" como intrinseca pone DOS mecanismos sobre la
+        // misma llamada — el emisor mete el builtin donde el resolutor esperaba
+        // una llamada, y la pila se desincroniza (miVM paraba y la VM-C hacia
+        // segfault). El alias es de nivel BP; aqui solo va el modulo real.
+        for (String mod : new String[]{"Machine"}) {
+            register(mod + ".uniqueId",  w -> emitBuiltin(w, Builtin.PICO_UNIQUE_ID));
+            register(mod + ".boardName", w -> emitBuiltin(w, Builtin.PICO_BOARD_NAME));
+            register(mod + ".tempC",     w -> emitBuiltin(w, Builtin.PICO_TEMP_C));
+            register(mod + ".cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));
+            register(mod + ".uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
+            register(mod + ".gpioCount", w -> emitBuiltin(w, Builtin.PICO_GPIO_COUNT));
+            register(mod + ".ADC_CHANNELS", w -> emitBuiltin(w, Builtin.PICO_ADC_CHANNELS));  // H14 board-aware
+            register(mod + ".PWM_SLICES",   w -> emitBuiltin(w, Builtin.PICO_PWM_SLICES));     // H14 board-aware
+            register(mod + ".resetCause", w -> emitBuiltin(w, Builtin.PICO_RESET_CAUSE));  // H10
+            register(mod + ".setMark",   w -> emitBuiltin(w, Builtin.PICO_SET_MARK));      // H10 breadcrumb
+            register(mod + ".markCount", w -> emitBuiltin(w, Builtin.PICO_MARK_COUNT));
+            register(mod + ".markAt",    w -> emitBuiltin(w, Builtin.PICO_MARK_AT));
+            register(mod + ".bootCount", w -> emitBuiltin(w, Builtin.PICO_BOOT_COUNT));
+            register(mod + ".setCpuFreqMHzRaw",
+                                       w -> emitBuiltin(w, Builtin.PICO_SET_CPU_FREQ_MHZ));
+        }
+
+        // H7.4 — NeoPixel WS2812 (internos de la clase Neopixel.Strip). FUERA del
+        // bucle de arriba: son de Neopixel, no del modulo del micro.
         register("Neopixel.__npInit", w -> emitBuiltin(w, Builtin.NEOPIXEL_INIT));
         register("Neopixel.__npShow", w -> emitBuiltin(w, Builtin.NEOPIXEL_SHOW));
-        register("Pico.setCpuFreqMHzRaw",
-                                   w -> emitBuiltin(w, Builtin.PICO_SET_CPU_FREQ_MHZ));
 
         // ---- Rtc (wall clock) ----
         register("Rtc.nowSec",     w -> emitBuiltin(w, Builtin.RTC_NOW_SEC));

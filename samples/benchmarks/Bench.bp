@@ -1,6 +1,6 @@
 module Bench
 
-  import Pico
+  import Machine
 
   // H3 #162 — keyword `native` opcional. El bytecode .mod se emite
   // igual; el flag se propaga al AST y (cuando exista) al .bpi para
@@ -26,17 +26,17 @@ module Bench
 
   function Main()
     // Linea base: interpretado.
-    var t0: integer := Pico.uptimeMs()
+    var t0: integer := Machine.uptimeMs()
     var ri: integer := fibInterp(28)
-    var dti: integer := Pico.uptimeMs() - t0
+    var dti: integer := Machine.uptimeMs() - t0
     print "fib(28) interp = ", ri, " in ", dti, " ms"
 
     // AOT: si el firmware trae el thunk nativo de esta arquitectura,
     // fib(28) corre como codigo maquina; si no, cae a interpretado
     // (mismo resultado, sin speedup) — el sample es portable.
-    var t1: integer := Pico.uptimeMs()
+    var t1: integer := Machine.uptimeMs()
     var rn: integer := fib(28)
-    var dtn: integer := Pico.uptimeMs() - t1
+    var dtn: integer := Machine.uptimeMs() - t1
     print "fib(28) AOT    = ", rn, " in ", dtn, " ms"
   end Main
 

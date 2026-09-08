@@ -1,0 +1,18 @@
+// MachineAlias.bp — el modulo `Machine` y su alias obsoleto `Pico` tienen que
+// contestar EXACTAMENTE lo mismo. V6, renombrado del 8-sep.
+module MachineAlias
+  import Machine
+  import Pico
+
+  function Main()
+    print "micro por Machine:", Machine.boardName()
+    print "micro por Pico   :", Pico.boardName()
+    print "gpio  por Machine:", Machine.gpioCount()
+    print "gpio  por Pico   :", Pico.gpioCount()
+    if Machine.boardName() == Pico.boardName() then
+      print "alias OK"
+    else
+      print "ALIAS ROTO"
+    endif
+  end Main
+end MachineAlias

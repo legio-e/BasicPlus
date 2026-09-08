@@ -25,7 +25,7 @@
 // Se cierra con `stop` desde la consola, como el spike.
 module GuiEvLat
   import Gui
-  import Pico
+  import Machine
 
   // El que ESCUCHA. Lleva su propia cuenta de handlers atendidos, así que la
   // profundidad de la cola sale de restar: clics levantados − handlers vistos.
@@ -34,7 +34,7 @@ module GuiEvLat
 
     function event alPulsar(quien: Object, n: integer, t: integer)
       this.vistos := this.vistos + 1
-      print "   handler  lat=", Pico.uptimeMs() - t, "ms  cola=", n - this.vistos
+      print "   handler  lat=", Machine.uptimeMs() - t, "ms  cola=", n - this.vistos
     end alPulsar
   end Testigo
 
@@ -46,7 +46,7 @@ module GuiEvLat
 
     function event btn_onClick(quien: Gui.Component)
       this.nClic := this.nClic + 1
-      var t0: integer := Pico.uptimeMs()
+      var t0: integer := Machine.uptimeMs()
       print "clic ", this.nClic, "  upcall  t=", t0
       raise pulsado(this, this.nClic, t0)
     end btn_onClick

@@ -3,13 +3,13 @@
 // Compara el tiempo CPU-bound a 150 MHz (default RP2350) frente a
 // 250 MHz y al MAX_CPU_MHZ. Speedup ideal = freq_new / freq_old.
 //
-// En host (VM Java / VM C-host) Pico.setCpuFreqMHz es no-op, así que
+// En host (VM Java / VM C-host) Machine.setCpuFreqMHz es no-op, así que
 // los tres bucles miden lo mismo — el sample sigue siendo válido pero
 // no muestra speedup. La gracia se ve flasheado en el Pico real.
 
 module FiboOverclock
 
-  import Pico
+  import Machine
 
   function fibo(n: integer): integer
     if n <= 1 then
@@ -42,32 +42,32 @@ module FiboOverclock
     print "--- Fibo bench con/sin overclock ---"
     print ""
 
-    print "MAX_CPU_MHZ:", Pico.MAX_CPU_MHZ(), "MHz"
+    print "MAX_CPU_MHZ:", Machine.MAX_CPU_MHZ(), "MHz"
     print ""
 
     // 1) Default — RP2350 arranca a 150 MHz.
-    print "[1] freq default:", Pico.cpuFreqHz() / 1000000, "MHz"
+    print "[1] freq default:", Machine.cpuFreqHz() / 1000000, "MHz"
     var t150: integer := benchFibo()
     print ""
 
     // 2) 250 MHz (1.67× nominal).
     print "[2] Subiendo a 200 MHz..."
-    var ok2: boolean := Pico.setCpuFreqMHz(200)
-    print "    ok=", ok2, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    var ok2: boolean := Machine.setCpuFreqMHz(200)
+    print "    ok=", ok2, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     var t250: integer := benchFibo()
     print ""
 
     // 3) MAX (300 MHz por defecto, 2× nominal).
-    print "[3] Subiendo a MAX_CPU_MHZ =", Pico.MAX_CPU_MHZ(), "MHz..."
-    var ok3: boolean := Pico.setCpuFreqMHz(Pico.MAX_CPU_MHZ())
-    print "    ok=", ok3, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    print "[3] Subiendo a MAX_CPU_MHZ =", Machine.MAX_CPU_MHZ(), "MHz..."
+    var ok3: boolean := Machine.setCpuFreqMHz(Machine.MAX_CPU_MHZ())
+    print "    ok=", ok3, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     var tMax: integer := benchFibo()
     print ""
 
-    // 4) Restaura default — limpieza para el siguiente Run on Pico.
+    // 4) Restaura default — limpieza para el siguiente Run on Machine.
     print "[4] Restaurando 150 MHz..."
-    var ok4: boolean := Pico.setCpuFreqMHz(150)
-    print "    ok=", ok4, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
+    var ok4: boolean := Machine.setCpuFreqMHz(150)
+    print "    ok=", ok4, "  freq actual:", Machine.cpuFreqHz() / 1000000, "MHz"
     print ""
 
     print "--- speedup vs 150 MHz ---"

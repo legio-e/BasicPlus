@@ -11,19 +11,19 @@
 // vivo justo antes de mandar el verbo) y se rinde solo a los 30 s, para no
 // dejar nada colgado si nadie lo mata.
 module VivoLargo
-  import Pico
+  import Machine
 
   function Main()
-    var t0: integer := Pico.uptimeMs()
+    var t0: integer := Machine.uptimeMs()
     var i: integer := 0
     var s: integer := 0
     var lat: integer := 0
-    while Pico.uptimeMs() - t0 < 30000 do
+    while Machine.uptimeMs() - t0 < 30000 do
       s := s + i
       i := i + 1
       if i mod 100000 == 0 then
         lat := lat + 1
-        print "vivo ", lat, ": ", Pico.uptimeMs() - t0, " ms"
+        print "vivo ", lat, ": ", Machine.uptimeMs() - t0, " ms"
       endif
     endwh
     print "FIN por tiempo (nadie me paro): vueltas ", i, " suma ", s

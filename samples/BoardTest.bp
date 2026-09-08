@@ -4,12 +4,12 @@
 // En host ambas VMs deben dar 30 / A / 30 byte-idénticos.
 module BoardTest
 
-  import Pico
+  import Machine
 
   function Main()
-    print "gpioCount=" + intToString(Pico.gpioCount())
-    print "variant=" + Pico.variant()
-    print "GPIO_COUNT=" + intToString(Pico.GPIO_COUNT())
+    print "gpioCount=" + intToString(Machine.gpioCount())
+    print "variant=" + Machine.variant()
+    print "GPIO_COUNT=" + intToString(Machine.GPIO_COUNT())
   end Main
 
 end BoardTest

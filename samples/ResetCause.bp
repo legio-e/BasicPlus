@@ -3,8 +3,8 @@
 // Tras un reset por watchdog mostrará "watchdog (IWDG)"; en un arranque
 // normal "power-on/brown-out" o "pin (NRST)"; en la VM Java (host) "unknown".
 module ResetCause
-  import Pico
+  import Machine
   function Main()
-    print "Causa del ultimo reset: " + Pico.resetCause()
+    print "Causa del ultimo reset: " + Machine.resetCause()
   end Main
 end ResetCause

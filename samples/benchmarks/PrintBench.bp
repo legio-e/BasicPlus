@@ -5,33 +5,33 @@
 // como mensaje OUTPUT, codificada en JSON y escrita al transporte desde la misma
 // tarea que interpreta). La diferencia entre los dos tiempos es lo que la salida
 // le roba al intérprete, por línea. Cronometrado por el propio programa
-// (Pico.uptimeMs), igual que Bench.bp, para no depender del reloj del PC.
+// (Machine.uptimeMs), igual que Bench.bp, para no depender del reloj del PC.
 //
 // Pregunta de Eduardo (4-sep): «la VM no debería ocuparse nada más que de
 // interpretar los opcodes; ponerle muchas tareas ahí supone ralentizar la
 // ejecución. Pero es una teoría, deberíamos medirlo.» Éste es uno de los dos
 // instrumentos (el otro es el cuanto por ENV con Bench.bp).
 module PrintBench
-  import Pico
+  import Machine
 
   function Main()
     var n: integer := 2000
     var i: integer := 0
     var s: integer := 0
 
-    var t0: integer := Pico.uptimeMs()
+    var t0: integer := Machine.uptimeMs()
     while i < n do
       s := s + i
       i := i + 1
     endwh
-    var t1: integer := Pico.uptimeMs()
+    var t1: integer := Machine.uptimeMs()
 
     i := 0
     while i < n do
       print "linea ", i, " de salida por el wire, para medir lo que cuesta"
       i := i + 1
     endwh
-    var t2: integer := Pico.uptimeMs()
+    var t2: integer := Machine.uptimeMs()
 
     print "RESULTADO sin print: ", t1 - t0, " ms; con print: ", t2 - t1, " ms; lineas: ", n, "; suma: ", s
   end Main

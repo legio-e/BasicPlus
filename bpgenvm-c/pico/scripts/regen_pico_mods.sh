@@ -12,5 +12,5 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 java -jar "$FE" "$ROOT/samples/hello.bp" --compile "$TMP" --backend=mivm >/dev/null 2>&1
 [ -f "$TMP/Hello.mod" ] || { echo "ERROR: el frontend no produjo Hello.mod" >&2; exit 1; }
 bash "$ROOT/bpgenvm-c/scripts/regen_mods.sh" pico "$HERE/.." \
-    Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Rtc Adc Wdt Timer Neopixel \
+    Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Neopixel \
     --extra "/app/Hello.mod=$TMP/Hello.mod"

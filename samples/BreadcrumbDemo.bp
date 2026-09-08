@@ -8,17 +8,17 @@
 // reset (corre WdtDemo, o pulsa NRST), y vuelve a correr esto → veras el rastro
 // 10..50 con resetCause = "watchdog (IWDG)" o "pin (NRST)".
 module BreadcrumbDemo
-  import Pico
+  import Machine
 
   function Main()
     print "=== Diagnostico del arranque anterior ==="
-    print "Arranque #" + intToString(Pico.bootCount())
-    print "Causa del reset: " + Pico.resetCause()
-    var n: integer := Pico.markCount()
+    print "Arranque #" + intToString(Machine.bootCount())
+    print "Causa del reset: " + Machine.resetCause()
+    var n: integer := Machine.markCount()
     print "Migas del trail previo: " + intToString(n) + "  (markAt(0) = origen)"
     var i: integer := 0
     while i < n do
-      print "  [" + intToString(i) + "] " + intToString(Pico.markAt(i))
+      print "  [" + intToString(i) + "] " + intToString(Machine.markAt(i))
       i := i + 1
     endwh
 
@@ -26,7 +26,7 @@ module BreadcrumbDemo
     print "=== Dejando migas nuevas por fases ==="
     var fase: integer := 10
     while fase <= 50 do
-      Pico.setMark(fase)
+      Machine.setMark(fase)
       print "fase " + intToString(fase) + " (miga puesta)"
       sleep(300)
       fase := fase + 10

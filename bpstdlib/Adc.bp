@@ -7,7 +7,7 @@
 //
 // Resolución 12-bit (0..4095), referencia Vref ≈ 3.3 V típico.
 // Para leer la temperatura interna del die, NO uses Adc — usa
-// Pico.tempC() que ya hace la conversión con la fórmula del
+// Machine.tempC() que ya hace la conversión con la fórmula del
 // sensor interno.
 //
 // El sample rate es alto (~500 ksps) pero el ADC del RP2350 NO
