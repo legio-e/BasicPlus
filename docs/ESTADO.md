@@ -27,6 +27,70 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (8-sep, noche) — **de 15 pendientes a 12**, y el S3 estrena 8 MB de PSRAM
+
+Jornada larga y muy conducida por Eduardo: **tres correcciones suyas** cambiaron el trabajo, y en
+los tres casos lo hicieron MÁS PEQUEÑO. Al parar: *«en 2 o 3 días los tenemos todos hechos»*.
+
+### Lo que se cerró
+
+| | |
+|---|---|
+| `#472` | la **TLS emulada** del STM32 — `__emutls_v` con 2 `malloc` y un `abort()` en un micro |
+| `#469` | fachadas sin backend — **cerrada por Eduardo**: *«para V6 está completo»* |
+| `#468` | la stdlib en flash → **V7** |
+| `S3` | **la PSRAM, activada**: heap de la VM de 160 KB a **7 MB**, probado en placa |
+| `S3`/`C6` | **zona de packs**: el mapeo sale del directorio del P4 y pasa al común |
+| `#471` | `Pico` → **`Machine`**, con alias. Faltan `getMicro()`/`getBoard()` |
+| — | el **neopixel** lanza excepción BP en las dos VMs |
+| `#481` | **abierta**: las dos VMs discrepan en `stdout` al morir lanzando |
+
+El arnés pasa de **38 a 47 casos**.
+
+### 🔑 Las tres correcciones de Eduardo, que son lo aprovechable
+
+1. **El eje era la FAMILIA, no la fachada.** Yo pregunté «¿extendemos el patrón de `#469` a 3 de 13
+   fachadas o a las 13?» y él: *«eso pertenece a la capa HAL BP… no se trata de hacerlo 8 veces,
+   sino 3 y una ya está hecha»*. Medido con ese eje: los huecos eran **cinco**, no ocho ni trece, y
+   la RP2350 ya estaba completa. La ficha se cerró el mismo día.
+2. **«El sistema debería ser idéntico, igual que el environment.»** Yo iba a escribir `pack_s3.c`
+   porque el S3 y el C3 no comparten dirección virtual para datos e instrucciones. Al **contar los
+   consumidores**: 12 de `packs_base` son lectura, sólo **uno** ejecuta, y nace en **una línea**.
+   No hacía falta código de familia — hacía falta dejar de suponer que un puntero sirve para las
+   dos cosas. Y de paso apareció que **el C6 no tenía packs por vivir el código en el directorio
+   del vecino**, no por silicio.
+3. **«No tiene sentido posponerlo todo a V7.»** El renombrado a `Machine` entra en V6.
+
+### ⚠️ Dos trampas nuevas, las dos me costaron una hora
+
+- **Las intrínsecas se enganchan por `"Módulo.función"`.** Busqué `"Pico"` en el compilador, no
+  salió nada, y di por hecho que el nombre no estaba cableado. Estaba, como `"Pico.boardName"`.
+  `Machine.boardName()` compilaba con **cero errores** y devolvía basura (miVM `OutOfMemoryError`,
+  VM-C **segfault**). 📌 Y detrás hay un hueco del compilador: declarar `intrinsic` algo **sin
+  registro** no da error — el **duplicado** sí lo detecta. Sin ficha aún.
+- **El build de la stdlib cachea por FUENTE, no por versión del compilador.** Tras arreglar el
+  registro el alias seguía roto y culpé al compilador; era un artefacto rancio. `rm -rf
+  bpstdlib/out` y correcto. **Al tocar el frontend hay que forzar la reconstrucción.**
+
+⚠️ **Y dos cifras que di mal y quedan corregidas**: los «+877 B por módulo» y el «+18,9 KB de
+imagen» eran de un build incremental con blobs a medias. Con build limpio, los `.mod` no tocados
+salen **byte-idénticos** a los de git y el coste real es **+2,5 KB en ESP, +5,1 KB en la Pico**.
+
+### ⏭️ Mañana
+
+**12 pendientes.** Sin bloqueo y listos: **`#473`** (verificar los 78 hallazgos de la auditoría —
+sólo leer) y **`#474`** (revivir la reproducción de `B1`: le falta un `import Core`). Y la
+continuación natural de hoy: **`getMicro()`/`getBoard()`**, que son builtins nuevos —tocan las dos
+VMs y `make check-builtins`— y son los que quitan el `esp32s3-devkitc` y cierran `#470`.
+
+**Decisiones de Eduardo que siguen abiertas**: `#481` (¿el informe del error no atrapado es salida
+o diagnóstico?), `#480` (qué ve el programador cuando el chip no puede apagar el perro), `listDir`
+(¿entra en V6?), `#456` (qué devuelve un path truncado y cuánto tiene que caber).
+
+⚠️ **Placas**: el **S3 está al día** (PSRAM + packs + `Machine`). La Discovery, el C6 y las demás
+siguen con el firmware de ayer. Y en las placas quedan `/app/P.mod`, `/app/adc.mod`,
+`/app/PsramS3.mod` y `/app/MachineAlias.mod` de las pruebas — borrarlos necesita tu visto bueno.
+
 ## ⏭️ AL RETOMAR (7-sep, noche) — **`G1` cerrado, la GUI ENTRA en la red, y el registro ya no se contradice**
 
 Sesión de dos mitades: por la mañana trabajo de código, por la tarde poner el registro en orden.
