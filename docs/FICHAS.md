@@ -83,12 +83,12 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 14 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo;
-> `#472` se cerró el 8-sep.)*
+> **Lo que queda de V6 son 15 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo;
+> el 8-sep se cerró `#472` y se abrió `#481`.)*
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **10** | `#456` · `#462` · `#468` · `#469` · `#470` · `#471` · `#473` · `#474` · `#480` · `A4` |
+> | **fichas de V6** | **11** | `#456` · `#462` · `#468` · `#469` · `#470` · `#471` · `#473` · `#474` · `#480` · `#481` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
@@ -1828,6 +1828,54 @@ distingue no-evento de fallo»*.
    (un olvido) y en el segundo caso **grite**. Eso protege a todas las familias futuras, no sólo a
    ésta — y hay que mirar las OTRAS 16 fachadas por si tienen el mismo stub complaciente.
 
+##### ✅ EL ALCANCE, DECIDIDO POR EDUARDO (8-sep) — y el eje bueno era otro
+
+Yo planteé la pregunta **por fachada** («¿lo extendemos a 3 de 13, a las 13, o a ninguna?») y
+Eduardo la corrigió: *«eso pertenece a la capa HAL BP, depende del hardware pero sobre todo depende
+de la FAMILIA. Así que no se trata de hacerlo 8 veces, sino 3 y una ya está hecha.»*
+
+📐 **Medido con ese eje** — 11 fachadas con backend (`fs` y `net` no usan `set_backend`, quedan
+fuera) × 3 familias. Los huecos son **cinco**, no ocho ni trece:
+
+| | RP2350 | ESP32 | STM32 |
+|---|:---:|:---:|:---:|
+| `adc` | sí | sí | **no** |
+| `neopixel` | sí | **no** | **no** |
+| `rtc` | **no** | **no** | sí |
+| gpio · i2c · pico · pulse · pwm · spi · uart · wdt | sí | sí | sí |
+
+✅ **Y Eduardo tenía razón: la RP2350 ya está hecha.** Su único «hueco» es `rtc`, y **no es de esta
+clase**: `src/rtc.c` sin backend **no se inventa nada** —mantiene un offset de epoch sobre el reloj
+monotónico, que es una implementación de verdad— y la ausencia está **declarada en el sitio del
+registro** (`pico/main.c:1547`: *«Rtc en Pico usa el stub portable»*). El ESP32 lo declara aún mejor
+(`esp32/common/gpio_esp32.c:552-556`). Así que `rtc` no es un hueco en ninguna de las tres.
+
+🔑 **La norma sale de ahí, y es la de la familia de referencia:** *cada fachada **o** registra
+backend, **o** el camino común es una implementación de verdad **y** la ausencia está declarada
+donde se registra.*
+
+Con esa norma quedaban dos celdas, y Eduardo decidió las dos:
+
+- **`neopixel` en ESP32 y STM32** — *«se implementó en la Pico gracias al PIO que las otras no
+  tienen. Yo lo dejaría pendiente en las otras 2 familias hasta que lo implementemos de verdad. Si
+  alguien lo pide y no está que salte una excepción»* — y el matiz que fija el contrato: *«tienen
+  que lanzar una excepción BP»*. ✅ **HECHO el 8-sep (`3d14e32c`)**, y el culpable no era el que yo
+  señalaba: la VM-C ya lanzaba desde H13; **la que fingía éxito era miVM**. Detalle en la nota de
+  abajo. ⏭️ Implementarlo **de verdad** en esas dos familias queda pendiente y no tiene ficha aún.
+- **`adc` en el STM32** — *«se ha hecho una parte, creo que falta indicar qué pines soportan ADC y
+  cuáles no. Eso hay que definir unos vectores con los números de pines. Creo que lo aplazamos a
+  V7.»* ⏩ **A V7, con `#479`**, que ya se llevó allí el mapa de pines. Ojo al síntoma que queda
+  mientras tanto, porque es una contradicción visible: `gpio_stm32.c:318` anuncia **20 canales**
+  (`adcChannels`) y `bpvm_adc_set_backend` aparece **0 veces** en todo el port — la placa dice tener
+  20 y al usarlos contesta *«canal no válido (0..3)»*.
+
+⚠️ **Y una cosa que esta ficha mezclaba y conviene separar**, porque cambia quién arregla qué:
+- **Clase 1 — no hay backend**: la fachada se inventa un valor porque no hay a quién preguntar. Es
+  HAL BP, es por familia, y es lo que resuelve la norma de arriba.
+- **Clase 2 — hay backend y miente**: el registro existe pero el driver está mal. Son los cuatro de
+  `#480` (el `Wdt` del STM32, el `Pulse` del C3, el ADC del ESP32 que falla con 0, el breadcrumb con
+  los slots a NULL). **El patrón de esta ficha no los arregla**: son bugs de driver, uno a uno.
+
 #### 🧪 `#480` — LO QUE DESTAPÓ LA AUDITORÍA DE LAS 13 FACHADAS, verificado (abierta 6-sep)
 
 Tirando de `#469` se auditaron **las trece fachadas de periférico** (quién registra backend en cada
@@ -1875,6 +1923,53 @@ IDE que calibre, y una placa desplegada presenta ms-desde-boot como epoch Unix.)
 ⏭️ El arreglo genérico ya está escrito y probado en la ADC (`#469`): **el que no tiene hardware
 registra un backend explícito, y la ausencia pasa a ser un error**. Falta extenderlo — y la pieza 4
 necesita además que la fachada distinga «slot NULL» de «backend ausente».
+
+#### 🔴 `#481` — las dos VMs discrepan en `stdout` cuando el programa MUERE con una excepción sin atrapar (abierta 8-sep)
+
+**Rotura del invariante sagrado, y de radio ancho**: para **cualquier** programa que termine con una
+excepción BP no atrapada, las dos VMs escriben cosas distintas en `stdout`.
+
+```
+module ThrowTest        // un índice fuera de rango, nada exótico
+  function Main()
+    print "antes"
+    var a: integer[] := [1, 2, 3]
+    print a[99]
+    print "despues"
+  end Main
+end ThrowTest
+```
+
+```
+miVM   →  antes
+VM-C   →  antes
+          === RuntimeError: ALOAD: índice fuera de rango 99 (length=3) ===
+```
+
+miVM manda el informe **sólo por `stderr`** (`[bpgenvm worker 0, tid=0] <mensaje>`); la VM-C pone
+una línea `=== RuntimeError: … ===` en **`stdout`** (y sus diagnósticos, además, por `stderr`).
+
+📌 **No es de una fachada ni de un builtin.** Salió midiendo el NeoPixel, pero se reprodujo con un
+índice fuera de rango y con una división por cero: es el **camino de salida del error**, común a
+todo. El arreglo del NeoPixel (`3d14e32c`) no lo toca ni lo necesita — allí la excepción **se
+atrapa**, y en ese caso las dos VMs ya salen byte a byte idénticas.
+
+🕳️ **Y explica un agujero del corpus que llevaba ahí desde siempre: no hay ni un sample que muera
+lanzando.** No es casualidad — entrarían **todos** en rojo. O sea que la red de paridad no vigila
+hoy el camino de error, que es justo por donde se sale cuando algo va mal.
+
+⏭️ **Lo que hay que decidir antes de tocar nada** (es de Eduardo): ¿el informe del error no atrapado
+es **salida del programa** o **diagnóstico**?
+- Si es salida → **miVM** tiene que imprimirlo en `stdout` con el mismo formato que la VM-C.
+- Si es diagnóstico → **la VM-C** tiene que moverlo a `bpvm_diag`/`stderr`.
+
+⚖️ **Lo que pesa a favor de `stdout`**: en el micro el usuario ve el `stdout` **por el cable**, y si
+el motivo de la muerte se va por `stderr` se lo traga el firmware. Ojo también a que hoy la VM-C, si
+el módulo **no exporta `RuntimeError`**, no puede construir el objeto y avisa de que *«el programa NO
+se entera»* — ese camino hay que mirarlo a la vez.
+
+⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
+lo haya, esto se puede volver a torcer sin que suene nada.
 
 #### 🟠 `#470` — la identidad de la placa se contesta por DOS caminos, y ya han divergido (abierta 5-sep, de `A3`)
 
