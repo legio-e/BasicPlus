@@ -1082,7 +1082,7 @@ int main(int argc, char** argv) {
     if (fuera > 0)
         fprintf(stderr, "sim: %d pack(s) fuera y %d cargado(s) — el simulador"
                         " arranca igual con los que si caben\n", fuera, cargados);
-    bpvm_pack_mount(g_packs, PACKS_REGION_SIZE);
+    bpvm_pack_mount(g_packs, g_packs, PACKS_REGION_SIZE);
 
     /* --- "flash" del env (A/B) + gestor de placa --- */
     flash_load();

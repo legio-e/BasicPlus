@@ -154,7 +154,10 @@ void board_mgr_stm32_boot(void) {
     if (s_layout_ok) {
         const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
         if (pp && pp->size > 0) {
+            /* La flash del STM32 esta mapeada: la misma direccion sirve para leer
+             * y para ejecutar, asi que va dos veces. */
             bpvm_pack_mount((const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
+                            (const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
                             pp->size);
         }
     }

@@ -119,7 +119,7 @@ void board_mgr_esp32_set_packs_view(const void* base, uint32_t size) {
      *
      * Y va pase lo que pase con el código nativo: un pack de sólo módulos,
      * sin `npk`, tiene que valer igual. */
-    bpvm_pack_mount(s_packs_view, s_packs_view_size);
+    bpvm_pack_mount(s_packs_view, s_packs_view, s_packs_view_size);
     log_printf("pack: zona montada en %p (%u KB) — modulos y .mdn visibles",
                (const void*) s_packs_view, (unsigned) (s_packs_view_size / 1024u));
 }

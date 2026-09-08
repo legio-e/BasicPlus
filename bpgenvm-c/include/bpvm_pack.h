@@ -116,7 +116,32 @@ const uint8_t* bpvm_pack_src_ptr(const bpvm_pack_src_t* s, uint32_t off, uint32_
  * El arranque registra la zona de packs activa (host: --pack= sobre RAM;
  * firmware: la partición PACKS por XIP) y la resolución de imports la consulta
  * como fallback tras el FS (el FS ECLIPSA al pack, spec §4). NULL = sin packs. */
-void bpvm_pack_mount(const uint8_t* base, uint32_t size);
+/* Monta la zona de packs. DOS bases y no una, y el porque es de silicio:
+ *
+ *   base_lectura   por donde se PARSEA la zona (indice, CRCs, contenidos)
+ *   base_ejecucion por donde se SALTA al codigo nativo que hay dentro
+ *
+ * En casi todas son la MISMA direccion y se pasa dos veces: la Pico (XIP) y el
+ * STM32 (flash mapeada) tienen la flash directamente direccionable, y el P4 y el
+ * C6 declaran `SOC_MMU_DI_VADDR_SHARED`, o sea que su MMU da la misma direccion
+ * virtual para instrucciones y datos.
+ *
+ * El S3 y el C3 NO lo declaran: su MMU da direcciones DISTINTAS para I y para D.
+ * Antes eso los dejaba sin packs — se reconocia el caso y se abandonaba. No hacia
+ * falta codigo propio de familia: solo dejar de suponer que un puntero vale para
+ * las dos cosas. Con dos bases, el sistema es el mismo en las cinco familias y lo
+ * unico que cambia es una direccion, que es lo que la cintura existe para dar.
+ *
+ * La firma cambio A PROPOSITO en vez de anadir una segunda llamada: asi la
+ * cintura que no se entere NO COMPILA, en vez de montar media zona en silencio. */
+void bpvm_pack_mount(const uint8_t* base_lectura, const uint8_t* base_ejecucion,
+                     uint32_t size);
+
+/* Traduce un puntero DENTRO de la zona montada a su direccion EJECUTABLE. Fuera
+ * de la zona (o sin zona) devuelve el mismo puntero: un `.mdn` que viene del FS o
+ * embebido en un `.mod` no se traduce. Lo llama el cargador de `.mdn` justo donde
+ * el puntero deja de ser dato y pasa a ser codigo. */
+const uint8_t* bpvm_pack_exec_ptr(const uint8_t* p);
 const uint8_t* bpvm_pack_mounted(uint32_t* size_out);
 
 /* LIST — recorre la cadena y rellena hasta `max` descriptores (activos Y

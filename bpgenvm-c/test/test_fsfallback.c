@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     size_t leidos = fread(zona, 1, (size_t) n, f);
     fclose(f);
     ok(leidos == (size_t) n, "el pack de prueba se lee entero");
-    bpvm_pack_mount(zona, sizeof zona);
+    bpvm_pack_mount(zona, zona, sizeof zona);
 
     /* Una RUTA DEL FS QUE NO EXISTE, con el nombre de un módulo que sí está en
      * el pack: es exactamente lo que prueba el resolutor al buscar en /app. */

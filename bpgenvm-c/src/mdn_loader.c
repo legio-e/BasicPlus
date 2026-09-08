@@ -23,6 +23,7 @@
 #include "mdn_loader.h"
 #include "bpvm_log.h"   /* las trazas van al log comun (antes: hook débil) */
 #include "mdn_format.h"
+#include "bpvm_pack.h"   /* bpvm_pack_exec_ptr: la vista ejecutable de la zona */
 #include "aot_registry.h"
 
 #include "bpvm.h"
@@ -190,7 +191,14 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     /* Registro zero-copy: el código nativo ya está en RAM (ejecutable) en data[],
      * solo apuntamos el thunk ahí. MDN_FUNCPTR_BIT añade el bit de modo que pida
      * la ISA (ARM Thumb = 1; RISC-V/x86 = 0). */
-    const uint8_t*      code_base = data + hdr_total;
+    /* AQUI el puntero deja de ser DATO y pasa a ser CODIGO, y es el unico sitio
+     * del cargador donde eso ocurre. Si el `.mdn` vive dentro de la zona de packs
+     * y el micro da direcciones distintas para instrucciones y datos (S3 y C3, que
+     * no declaran SOC_MMU_DI_VADDR_SHARED), hay que saltar por la vista EJECUTABLE
+     * aunque se haya parseado por la de datos. En todas las demas —Pico, STM32, P4,
+     * C6— las dos vistas son la misma direccion y esto no cambia nada. Un `.mdn`
+     * del FS o embebido en un `.mod` no esta en la zona y pasa de largo. */
+    const uint8_t*      code_base = bpvm_pack_exec_ptr(data + hdr_total);
     const mdn_symbol_t* syms      = (const mdn_symbol_t*)
                                       (data + sizeof(mdn_header_t));
     int registered = 0;

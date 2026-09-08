@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
         }
         /* H3.c — montar la región: la resolución de imports (discover_deps) la
          * consulta como fallback tras el FS. Como en la placa. */
-        bpvm_pack_mount(packs_region, PACKS_REGION_SIZE);
+        bpvm_pack_mount(packs_region, packs_region, PACKS_REGION_SIZE);
     }
 
     debug_trace_state_t dbg_state = { 0, debug_print, 0 };

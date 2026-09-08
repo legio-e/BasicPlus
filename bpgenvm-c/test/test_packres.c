@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     /* ── 1) sin zona montada: nadie sirve nada ─────────────────────────────
      * El CONTROL. Sin él, un respaldo que reclamara SIEMPRE pasaría los demás
      * casos y este test no valdría para nada. */
-    bpvm_pack_mount(NULL, 0);
+    bpvm_pack_mount(NULL, NULL, 0);
     remove("logo.png");
     ok(!leer_recurso("logo.png", buf, sizeof buf), "sin zona y sin fichero: no está");
 
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
     uint8_t* p1 = leer(argv[1], &l1);            /* Iconos */
     uint8_t* p2 = leer(argv[2], &l2);            /* Otros, grabado DESPUÉS */
     ok(bpvm_pack_add(zona, ZONA_BYTES, p1, l1) >= 0, "se graba el pack 'Iconos'");
-    bpvm_pack_mount(zona, ZONA_BYTES);
+    bpvm_pack_mount(zona, zona, ZONA_BYTES);
     ok(leer_recurso("logo.png", buf, sizeof buf) && strcmp(buf, "ICONOS") == 0,
        "la ZONA sirve el recurso (era el agujero de #362)");
 

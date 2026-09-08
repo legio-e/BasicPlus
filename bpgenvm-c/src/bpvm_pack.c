@@ -116,14 +116,27 @@ static uint32_t       s_mounted_size = 0;
  * significaría que las cinco cinturas que montan zona (Pico, ESP32, ESP32-P4,
  * STM32, micro simulado) tienen que acordarse de la segunda — y la que se
  * olvidara no fallaría al compilar: simplemente no encontraría las fuentes. */
+static const uint8_t* s_mounted_exec = 0;   /* vista EJECUTABLE; == base salvo S3/C3 */
+
 static int  zone_res_stat(void* user, const char* path, uint32_t* size);
 static long zone_res_read(void* user, const char* path, uint32_t off,
                           uint8_t* dst, uint32_t cap);
 
-void bpvm_pack_mount(const uint8_t* base, uint32_t size) {
-    s_mounted_base = base;
+void bpvm_pack_mount(const uint8_t* base_lectura, const uint8_t* base_ejecucion,
+                     uint32_t size) {
+    s_mounted_base = base_lectura;
+    s_mounted_exec = base_ejecucion ? base_ejecucion : base_lectura;
     s_mounted_size = size;
     bpvm_fs_set_fallback(zone_res_stat, zone_res_read, NULL);
+}
+
+const uint8_t* bpvm_pack_exec_ptr(const uint8_t* p) {
+    /* Fuera de la zona montada no se toca: el mismo puntero. Asi un `.mdn` del FS
+     * o embebido en un `.mod` pasa de largo sin que el llamante tenga que saber
+     * de donde venia. */
+    if (!p || !s_mounted_base || s_mounted_size == 0) return p;
+    if (p < s_mounted_base || (uint32_t) (p - s_mounted_base) >= s_mounted_size) return p;
+    return s_mounted_exec + (p - s_mounted_base);
 }
 
 /* La CLAVE de un recurso dentro de un pack: (tipo, nombre) = (extensión,

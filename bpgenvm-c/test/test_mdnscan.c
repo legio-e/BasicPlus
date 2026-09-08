@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
     bpvm_t vm;
 
     /* ── 1. Sin pack montado y sin FS: no encuentra nada, y eso NO es error ── */
-    bpvm_pack_mount(NULL, 0);
+    bpvm_pack_mount(NULL, NULL, 0);
     s_fs_datos = NULL; s_dichos_n = 0;
     bpvm_aot_clear();
     vm_con_modulo(&vm, "SQLite", 0);
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     comprueba(s_dichos_n == 0, "sin pack ni FS: no dice nada (no hay noticia)");
 
     /* ── 2. SÓLO en el pack: lo encuentra ahí ─────────────────────────────── */
-    bpvm_pack_mount(pack, pack_len);
+    bpvm_pack_mount(pack, pack, pack_len);
     s_fs_datos = NULL; s_dichos_n = 0;
     bpvm_aot_clear();
     vm_con_modulo(&vm, "SQLite", 0);
@@ -178,12 +178,12 @@ int main(int argc, char** argv) {
     /* 3c. modulo del PACK cuyo .mdn NO esta en el pack: cae al FS y lo DICE.
      *     Sin ese matiz, "primero el pack" se leeria como "solo el pack". */
     s_dichos_n = 0; bpvm_aot_clear();
-    bpvm_pack_mount(NULL, 0);
+    bpvm_pack_mount(NULL, NULL, 0);
     vm_con_modulo(&vm, "SQLite", 1);
     bpvm_mdn_escanear(&vm, fs_falso, anota, NULL);
     comprueba(dijo_que_contenga("pero su .mdn NO esta ahi"),
               "modulo del PACK sin .mdn dentro: cae al FS y lo explica");
-    bpvm_pack_mount(pack, pack_len);
+    bpvm_pack_mount(pack, pack, pack_len);
 
     /* ── 4. Un módulo que no tiene .mdn: ni ruido ni error ────────────────── */
     s_fs_datos = NULL; s_dichos_n = 0;
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
     comprueba(1, "sin callback de mensajes: no revienta");
 
     free(pack); free(mdn);
-    bpvm_pack_mount(NULL, 0);
+    bpvm_pack_mount(NULL, NULL, 0);
 
     printf(fallos == 0 ? "\n[status=OK]\n" : "\n[status=FALLA] %d\n", fallos);
     return fallos == 0 ? 0 : 1;

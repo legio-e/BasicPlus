@@ -108,7 +108,7 @@ int32_t pack_pico_cargar(void)
      *
      * Va ANTES del barrido y pase lo que pase con él: un pack de sólo módulos,
      * sin código nativo, tiene que valer igual. */
-    bpvm_pack_mount((const uint8_t*) base, bytes);
+    bpvm_pack_mount((const uint8_t*) base, (const uint8_t*) base, bytes);
     log_printf("pack: zona montada en 0x%08lX (%u KB) — modulos y .mdn visibles",
                (unsigned long) (uintptr_t) base, (unsigned) (bytes / 1024));
 
