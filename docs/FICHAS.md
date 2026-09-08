@@ -1915,7 +1915,7 @@ lenguaje y lo decide Eduardo**: rompe programas que ya usan `Pico.*`, y este pro
 palabras reservadas ni cambia el lenguaje a la ligera. Alternativa barata mientras tanto: un alias
 y dejar `Pico` como nombre viejo documentado.
 
-#### 🟡 `#472` — el común nombra DOS familias donde quería decir «micro» (abierta 5-sep, de `A3`)
+#### ✅ `#472` — ~~el común nombra DOS familias donde quería decir «micro»~~ (abierta 5-sep, de `A3` · **CERRADA el 8-sep**)
 
 `src/bpvm_aot_helpers.c:25`: `#if defined(BPVM_PICO_NUM_CORES) || defined(ESP_PLATFORM)`. Su
 propio comentario dice *«en MCU un global plano basta»* — pero nombra dos familias en vez de la
@@ -1928,6 +1928,48 @@ plano.
 ⏭️ Un macro de capacidad (`BPVM_SIN_TLS`, o al revés `BPVM_TIENE_TLS`) que ponga cada familia. Es
 media hora, y **quita la clase de error entera**: hoy cualquier familia nueva cae por defecto en
 la rama equivocada y en silencio, que es exactamente lo que pasó.
+
+✅ **CERRADA el 8-sep.** La polaridad se invierte: el macro pasa a nombrar la **capacidad** y el
+**defecto es la rama del micro**. `bpvm_aot_helpers.c` dice ahora `#if defined(BPVM_TIENE_TLS)` →
+`__thread`, `#else` → global plano; y `BPVM_TIENE_TLS` lo declara **un solo sitio**, el
+`bpgenvm-c/Makefile`, que es el único build de host que compila esto (el mismo Makefile hace la VM
+de host, la batería de tests y el simulador). Una familia nueva que no defina nada cae donde debe.
+
+🔴 **Y era PEOR de lo que decía la ficha, medido en el artefacto y no leído.** El síntoma no era
+sólo «el STM32 podría caer en la rama del PC»: estaba **en las dos imágenes STM32 publicadas**, no
+sólo en el Nucleo. `arm-none-eabi-nm` sobre los `.elf` del 6-sep daba `__emutls_v.g_aot_fault`,
+`__emutls_v.g_aot_callctx` y `__emutls_get_address`; y el desensamblado de `emutls_alloc` son **dos
+`malloc` en el primer acceso y un `abort()` si fallan**. En un micro.
+
+⚠️ **Y el comentario que lo justificaba ya era falso**, que es lo que convierte el coste en real:
+decía que *«en MCU el AOT no corre, así que el fault-slot NUNCA se arma»*. Hoy el STM32 **sí** carga
+`.mdn` Thumb-2 (`stm32/port/stm32_repl.c`), `aot_call_guarded` (`interp.c`) arma el slot en **cada
+nativa**, y `heap.c` pide el callctx en **cada GC**. O sea que la TLS emulada se pagaba de verdad.
+
+✅ **Verificado en los cinco artefactos, que es la única prueba que sirve aquí** — y conviene decir
+por qué: **`compat.sh check` NO puede ver este cambio**. Es una decisión de compilación que no altera
+el `stdout`; un verde ahí sería un falso verde. La prueba es de **símbolos**:
+
+| build | antes | después |
+|---|---|---|
+| host (MinGW x64) | símbolos en `.tls` | **siguen en `.tls`** — el host conserva sus N workers |
+| **Nucleo U575** | `__emutls_v` + 2×`malloc` + `abort()` | **`b g_aot_fault` plano en `.bss`** |
+| **Discovery U5G9J** | `__emutls_v` | **plano en `.bss`** |
+| Pico 2 (ARM) | plano | plano — sin cambio |
+| ESP32-C6 (RISC-V) | plano | plano — sin cambio |
+
+📌 Los cuatro `.elf` de ESP comparten la misma rama; se comprobó el **C6** como representante del
+toolchain RISC-V y la **Pico** como representante del ARM de micro. Y de propina, una trampa que se
+coló por el camino: el primer `nm` que usé para el C6 **no existía**, así que su grep salía vacío y
+parecía «0 ocurrencias». Se repitió con el `nm` bueno y con un **control** (6.363 símbolos) para que
+el cero significara algo. Instrumento mudo, otra vez.
+
+⚠️ **Dónde está el riesgo de este cambio, por si algún día se toca**: no en el micro, **en el host**.
+Si el host se quedara sin `__thread`, sus N workers pthread compartirían un `g_aot_fault` con su
+`jmp_buf` dentro (`interp.c`, `setjmp`), y un `longjmp` iría a un frame muerto — sin error de
+compilación, sin diff de paridad, sólo bajo carga. Por eso el `-D` va en el Makefile y no se quita.
+
+✅ Y el arnés, después de reconstruir el host de cero: **45 PASS, 0 FAIL, 0 SKIP**.
 
 #### 📋 `#473` — el resto de la auditoría de capas, SIN VERIFICAR (abierta 5-sep, de `A3`)
 

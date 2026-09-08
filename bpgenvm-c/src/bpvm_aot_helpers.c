@@ -19,17 +19,32 @@
 #include <math.h>          /* #426: fmod/floor/isinf/fabs/exp/log de los helpers de double */
 
 /* ---------- #186: slot de fault por worker ----------
- * Ver bpvm_internal.h para el diseño. En host hay N workers pthread →
- * TLS (__thread). En Pico la config validada es single-worker → un
- * global plano basta (multi-worker Pico = v2, necesitará task-local). */
-#if defined(BPVM_PICO_NUM_CORES) || defined(ESP_PLATFORM)
-   /* MCU (Pico / ESP32): el AOT no corre (no hay codegen para la ISA del
-    * micro — el .mdn es ARM Thumb-2), así que el fault-slot NUNCA se arma
-    * → un global plano basta y evita depender de __thread (ELF TLS) en el
-    * toolchain del micro. */
-#  define BPVM_AOT_TLS
-#else
+ * Ver bpvm_internal.h para el diseño. El slot tiene que ser por worker SÓLO
+ * donde hay más de un worker, y eso hoy pasa en UN sitio: el host, con sus N
+ * workers pthread. Todos los micros corren un solo worker.
+ *
+ * #472 — LA POLARIDAD IMPORTA, Y ANTES ESTABA AL REVÉS. Esto se escribía como
+ * «si es Pico o ESP32, global plano; si no, __thread», o sea nombrando las
+ * FAMILIAS que ya existían. El STM32 no es ninguna de las dos, así que caía en
+ * la rama del PC y se llevaba `__thread` A UN MICRO. No es teórico: en las dos
+ * imágenes STM32 publicadas, `arm-none-eabi-nm` enseña `__emutls_v.g_aot_fault`
+ * y `__emutls_get_address`, y el desensamblado de `emutls_alloc` son DOS
+ * `malloc` en el primer acceso y un `abort()` si fallan. En un micro.
+ *
+ * Ahora se nombra la CAPACIDAD y el defecto es la rama del micro: una familia
+ * nueva que no defina nada cae donde debe, sin que nadie tenga que acordarse.
+ * `BPVM_TIENE_TLS` lo define el build de host (`bpgenvm-c/Makefile`), que es el
+ * único que compila esto fuera de un micro.
+ *
+ * ⚠️ Y ojo al comentario que había aquí: decía que en el micro «el AOT no corre,
+ * así que el fault-slot NUNCA se arma». Eso ya es FALSO — el STM32 carga `.mdn`
+ * Thumb-2 (`stm32/port/stm32_repl.c`), `aot_call_guarded` (`interp.c`) arma el
+ * slot en CADA nativa, y `heap.c` pide el callctx en CADA GC. O sea que la TLS
+ * emulada se estaba pagando de verdad, no «nunca». */
+#if defined(BPVM_TIENE_TLS)
 #  define BPVM_AOT_TLS __thread   /* host: N workers pthread */
+#else
+#  define BPVM_AOT_TLS            /* micro: un solo worker → global plano */
 #endif
 
 static BPVM_AOT_TLS bpvm_aot_fault_t g_aot_fault;

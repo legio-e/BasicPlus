@@ -9,6 +9,13 @@
 CC      ?= gcc
 CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -O2 -g
 CFLAGS  += -Iinclude
+# #472 — el host es el UNICO build con varios workers, asi que es el unico que
+# necesita TLS para el fault-slot del AOT. Se declara por CAPACIDAD y aqui,
+# no por familia dentro del .c: asi una familia nueva que no defina nada cae
+# en la rama del micro (global plano), que es la correcta. Quitar esto deja
+# a los N workers del host compartiendo un jmp_buf: corrupcion SILENCIOSA
+# bajo carga, que ni el compilador ni el diff de paridad ven.
+CFLAGS  += -DBPVM_TIENE_TLS
 CFLAGS  += $(CFLAGS_EXTRA)
 # H3: genera ficheros .d con las dependencias de cabecera de cada .o, para que
 # editar un header (p.ej. bpvm_internal.h, la struct) recompile los .c que lo
