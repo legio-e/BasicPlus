@@ -2005,6 +2005,54 @@ ESP32 (8). Unificar sin decidir eso sólo cambiaría de sitio la mentira.
 
 #### 🟡 `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3`)
 
+##### 🎨 EL DISEÑO, DADO POR EDUARDO (8-sep) — y absorbe también a `#470`
+
+> *«`Pico` no ha de ser "Pico": es un módulo para todos los micros. Se le puede cambiar el nombre a
+> "machine" o "system" o algo parecido. El mismo para todos. Dentro, un método `getBoard()` y otro
+> `getMicro()` o algo similar. **Nosotros devolvemos los 2 nombres, que sea el usuario el que decida
+> qué es lo que le interesa.** Puede haber más métodos: fabricante, número de serie, frecuencia de
+> reloj, psram, RAM, etc.»*
+
+🔑 **Y eso disuelve `#470` en vez de arreglarlo.** La ficha vecina decía que había que *«decidir qué
+significa cada campo»* porque los dos caminos daban valores distintos para lo mismo. Con este
+diseño la pregunta desaparece: **son DOS campos, no uno mal definido.** Hoy `boardName` es una
+cosa por el wire y otra por la fachada, y ni los consumidores se ponen de acuerdo —
+
+```
+BpIde/.../PicoExplorer.java:2152   sb.append("Micro       : ").append(istr(m, "boardName"))
+samples/PicoInfo.bp:12             print "Board:        ", Pico.boardName()
+```
+
+— el mismo campo, rotulado **Micro** por el IDE y **Board** desde BP, y devolviendo por ese segundo
+camino `"esp32s3-devkitc"`, un devkit concreto, para toda la familia ESP32. Con `getMicro()` y
+`getBoard()` cada uno dice lo suyo y no hay nada que sincronizar.
+
+📌 **Y la regla del valor, también suya:** *«nosotros construimos imágenes para el micro, e
+intentamos que sea genérica. Así que si podemos tener una entrada por placa que diga "generic" y
+será igual para todas las placas que lleven esa imagen. Si alguien se hace su propia imagen, que le
+ponga el nombre que quiera.»* O sea: `getMicro()` es real y específico (`esp32s3`, `esp32c3`,
+`rp2350`…) y `getBoard()` es **`generic`** salvo que alguien construya su propia imagen.
+
+⚠️ **`system` NO, `machine`.** El nombre `System` ya está pedido: el **módulo raíz de V7** se planteó
+*«al estilo de la unidad `System` de Turbo Pascal»*. Gastarlo aquí lo deja ocupado para lo otro —
+es *no gastar palabras reservadas*, y la colisión no se ve hasta que duele.
+
+📐 **El alcance, medido antes de decidir la versión**: el módulo expone **22 funciones** y lo usan
+**14 samples, 4 módulos de la stdlib, 25 sitios de la documentación y 3 ficheros del IDE**. Rompe
+todo programa que escriba `Pico.*`, y `Pico.mod` va **embebido en las cinco imágenes** → cambio de
+ABI y blobs regenerados.
+
+⏭️ **Lo que falta decidir: en qué versión.** Por el criterio del propio Eduardo —*«para V6 no
+inventamos cosas nuevas»* (8-sep, `#468`)— esto suena a **V7**, y encaja con `L1` y el módulo raíz,
+que ya están allí. Pero es su decisión.
+
+✅ **Y lo que NO depende de eso y puede hacerse en V6**: que el C3 y el C6 dejen de creerse un S3.
+Hoy su hook por micro (`CHIP_INSTALAR_BOARD_ID()` → `c3_install_board_id()`) instala **sólo** la
+identidad del wire (`repl_set_board_id`), y la fachada BP se queda con la de la familia
+(`esp32/common/gpio_esp32.c:624`, la del S3). Los valores buenos ya están escritos en `C3_ID`: sólo
+van a un sitio en vez de a dos. Eso quita la mentira sin renombrar nada.
+
+
 `include/bpvm_pico.h` **no es la fachada de una familia**: es la de «información del MCU», y las
 cinco la implementan. Pero se llama `pico`, y el nombre sube hasta arriba del todo: la stdlib
 expone un módulo **`Pico`**, así que un programa en una STM32 escribe `Pico.uptimeMs()` y
