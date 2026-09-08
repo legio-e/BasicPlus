@@ -2003,7 +2003,45 @@ arreglado: corregido en un camino y vivo en el otro.
 `pwm_slices` significa *slices* en la Pico (12), *salidas* en el STM32 (28) y *canales LEDC* en el
 ESP32 (8). Unificar sin decidir eso sólo cambiaría de sitio la mentira.
 
-#### 🟡 `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3`)
+#### 🟡 `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3` · **el RENOMBRADO hecho el 8-sep**, `a9b6cb8b`)
+
+##### ✅ PASO 1 HECHO el 8-sep (`a9b6cb8b`): el módulo ya se llama `Machine`
+
+Decisión de Eduardo sobre la versión: *«creo que podemos arreglarlo en V6. No tiene sentido
+posponerlo todo a V7. Es un poco de trabajo pero más que nada es ordenar.»* Y sobre la convivencia,
+al plantearle alias-o-ruptura: **alias**, *«no hay problema»*.
+
+- `bpstdlib/Machine.bp` es el módulo de verdad, con las mismas 22 funciones.
+- `bpstdlib/Pico.bp` es un **alias que reenvía**, y está **generado** de las firmas de `Machine`
+  para que no puedan divergir. Se queda porque V4 y V5 están publicadas.
+- Coste real de imagen, medido con build limpio: **+2,5 KB en ESP, +5,1 KB en la Pico**.
+- `samples/MachineAlias.bp` entra en el corpus → **47 PASS**. Verificado además en los **siete
+  builds** y **en la placa** (S3, por el wire): `Machine` y `Pico` contestan lo mismo.
+
+⚠️ **DOS TROPIEZOS QUE HAY QUE RETENER, porque los dos son de repetición:**
+
+1. **El grep que no bastaba.** Comprobé que `"Pico"` no estuviera cableado en el compilador, no
+   salió nada, y lo di por bueno. Estaba cableado como **`"Pico.boardName"`**: las intrínsecas se
+   registran por `"Módulo.función"` (`Intrinsics.java`). Consecuencia:
+   `Machine.boardName()` compilaba con **CERO errores** y devolvía una referencia **basura** —
+   miVM con `OutOfMemoryError` en `readVmString`, la VM-C con **segfault**. Es *censar por la
+   primitiva, no por el nombre*, con la nota ya escrita.
+   📌 Y de ahí sale un hueco del compilador que merece mirarse: declarar `intrinsic` algo **sin
+   registro** no da error. El caso contrario sí lo detecta (`intrinsic duplicado`).
+2. **Culpé al compilador y era un ARTEFACTO RANCIO.** Tras arreglar el registro, el alias seguía
+   roto. No era un bug: el **fuente** de `Pico.bp` no había cambiado, así que el build de la stdlib
+   lo dio por bueno — mientras el **compilador** sí había cambiado debajo. Con `rm -rf bpstdlib/out`
+   y reconstruir, correcto. **El build de la stdlib cachea por fuente, no por versión del
+   compilador**, y eso muerde en cuanto se toca el frontend.
+
+🔧 Y el registro de intrínsecas queda **de una sola lista** (bucle sobre el nombre de módulo). Sólo
+`Machine`: registrar también `Pico` pone **dos mecanismos** sobre la misma llamada —el alias declara
+funciones BP de verdad— y desincroniza la pila.
+
+⏭️ **Lo que falta de este diseño**: `getMicro()` y `getBoard()` (y los demás que quiera Eduardo:
+fabricante, número de serie, PSRAM, RAM…). Son **builtins nuevos**, o sea que tocan las dos VMs y su
+gate `make check-builtins`. Eso es lo que de verdad quita el `esp32s3-devkitc` y arregla que el C3 y
+el C6 se crean un S3 (`#470`).
 
 ##### 🎨 EL DISEÑO, DADO POR EDUARDO (8-sep) — y absorbe también a `#470`
 
