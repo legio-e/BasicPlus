@@ -1,0 +1,19 @@
+// NeoCatch.bp — el NeoPixel donde no hay driver tiene que lanzar una EXCEPCION BP
+// ATRAPABLE, no morir a secas ni fingir que funciona. Decision de Eduardo (8-sep):
+// «si alguien lo pide y no esta que salte una excepcion... tienen que lanzar una
+// excepcion BP». Este sample es el oraculo de paridad de eso.
+module NeoCatch
+  import Core
+  import Neopixel
+
+  function Main()
+    print "antes"
+    try
+      var np: Neopixel.Strip := Neopixel.Strip(25, 1)
+      print "no deberia llegar aqui"
+    catch e: RuntimeError
+      print "atrapada:", e.msg
+    endtry
+    print "despues"
+  end Main
+end NeoCatch

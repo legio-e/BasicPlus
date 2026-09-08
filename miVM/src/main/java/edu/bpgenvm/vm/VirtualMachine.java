@@ -5498,9 +5498,24 @@ public class VirtualMachine {
             case PICO_ADC_CHANNELS: { pushTc(tc, 4);  break; }   /* host: perfil RP2350 */
             case PICO_PWM_SLICES:   { pushTc(tc, 12); break; }   /* host: perfil RP2350 */
             case NEOPIXEL_INIT: {
-                /* device-only (PIO). Host: no-op — descarta args. */
-                popTc(tc);            /* pin */
-                pushTc(tc, 0);
+                /* #469/HAL-BP — LANZA, no finge. Antes esto era un no-op que
+                 * empujaba 0, o sea que el MISMO .mod terminaba tranquilamente
+                 * en miVM y moría con RuntimeError en la VM-C: el invariante
+                 * sagrado roto, y nadie lo vio porque ningún sample del corpus
+                 * tocaba Neopixel. Reproducido con samples/NeoDemo.bp.
+                 *
+                 * El mensaje es BYTE A BYTE el de builtins.c (BUILTIN_NEOPIXEL_INIT),
+                 * que es quien fija el contrato: se habla de la PLATAFORMA y no
+                 * del chip, porque mañana puede haber driver en otra familia.
+                 *
+                 * Decisión de Eduardo (8-sep): el NeoPixel se implementó en la
+                 * Pico gracias al PIO, que las otras familias no tienen; en ellas
+                 * queda pendiente hasta implementarlo de verdad, y mientras tanto
+                 * «si alguien lo pide y no está, que salte una excepción». miVM
+                 * es host: aquí nunca hay NeoPixel, así que siempre lanza. */
+                int npPin = popTc(tc);
+                throwBpRuntimeError(tc,
+                        "Neopixel(" + npPin + "): no implementado en esta plataforma");
                 break;
             }
             case NEOPIXEL_SHOW: {
