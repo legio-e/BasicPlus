@@ -53,15 +53,54 @@ uint32_t       s_vm_buffer_size = 0;
  * `bytes` es el bloque CONTIGUO mayor y `libre` el total: las dos restricciones de
  * la rama compartida del planificador (P1.C3.3 / U6.4) salen de ahi. Con PSRAM (el
  * P4) la region exclusiva la anade su propio main.c; el S3 y el C3 no la tienen. */
+/* V6 (8-sep) — CON PSRAM, LA VM VA A LA PSRAM; sin ella, a la SRAM interna.
+ *
+ * La guarda es `CONFIG_SPIRAM`, o sea la CAPACIDAD, no la familia. Este fichero
+ * lo comparten S3, C3 y C6: el S3 declara PSRAM en su sdkconfig y entra por la
+ * rama exclusiva; el C3 y el C6 no la declaran y siguen exactamente igual que
+ * antes. Una placa nueva de esta familia cae donde le toca sin que nadie tenga
+ * que acordarse — es la misma leccion de #472, el mismo dia.
+ *
+ * ⚠️ Y esto CONTRADICE a proposito el comentario que habia aqui («la SRAM interna
+ * a proposito... el heap de la VM tiene que ser rapido»). Ese argumento se cayo
+ * con una medida: el interprete ENTIERRA la latencia de memoria, y la PSRAM
+ * cuesta un 4-7 %. Cambiar 8 MB por un 4-7 % no es una duda. Mover memoria de la
+ * VM por VELOCIDAD no compensa; por CAPACIDAD, si.
+ *
+ * La forma es la del P4 (esp32p4/main/main.c, `p4_mem_regiones`): region
+ * EXCLUSIVA, porque la PSRAM no se la disputa nadie mas — los allocs pequenos se
+ * quedan en DRAM interna por `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`.
+ *
+ * Si la placa declara PSRAM y no la tiene (IGNORE_NOTFOUND deja arrancar), esta
+ * rama ve 0 bytes libres, el plan no da para el suelo y se cae a la interna:
+ * no hay que preguntar por el modulo en ningun sitio. */
+#if defined(CONFIG_SPIRAM)
+#  define ESP32_MEM_CAPS   (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+#  define ESP32_MEM_NOMBRE "PSRAM"
+#  define ESP32_MEM_EXCL   1
+   /* El margen de la SRAM (CHIP_MARGEN_SISTEMA) esta MEDIDO para la SRAM y aqui
+    * no aplica: en PSRAM lo que hay que dejar es lo que otros subsistemas pidan
+    * de ella (con ALWAYSINTERNAL=2048, los allocs grandes de terceros). 512 KB
+    * es un margen PRUDENTE Y NO MEDIDO — se ajusta con el log de arranque de la
+    * placa, que dice libre/mayor antes y despues de tomar. El P4 reserva 4 MB
+    * porque tiene que alimentar a LVGL; el S3 no tiene pantalla. */
+#  define ESP32_MEM_MARGEN (512u * 1024u)
+#else
+#  define ESP32_MEM_CAPS   (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+#  define ESP32_MEM_NOMBRE "SRAM interna"
+#  define ESP32_MEM_EXCL   0
+#  define ESP32_MEM_MARGEN CHIP_MARGEN_SISTEMA
+#endif
+
 static int esp32_mem_regiones(bpvm_mem_region_t* out, int max, multi_heap_info_t* hi) {
     if (max < 1) return 0;
-    heap_caps_get_info(hi, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    heap_caps_get_info(hi, ESP32_MEM_CAPS);
     out[0].base      = NULL;                      /* se toma pidiendo: heap_caps_malloc */
     out[0].bytes     = hi->largest_free_block;
     out[0].libre     = hi->total_free_bytes;
-    out[0].exclusiva = 0;
-    out[0].margen    = CHIP_MARGEN_SISTEMA;      /* medido: lo que el sistema consume en marcha */
-    out[0].nombre    = "SRAM interna";
+    out[0].exclusiva = ESP32_MEM_EXCL;
+    out[0].margen    = ESP32_MEM_MARGEN;         /* SRAM: medido. PSRAM: prudente, ver arriba */
+    out[0].nombre    = ESP32_MEM_NOMBRE;
     return 1;
 }
 
@@ -86,7 +125,17 @@ static void vm_buffer_init(void) {
                (unsigned) hi.total_allocated_bytes);
 
     bpvm_mem_cfg_t cfg;
+    /* ⚠️ EL TECHO DE POLITICA TAMBIEN VA POR CAPACIDAD, y es el detalle que hacia
+     * inutil activar la PSRAM: CHIP_VM_OBJETIVO son 160 KB y significa «no se
+     * sube aunque quepa». Con 8 MB delante, la VM habria seguido cogiendo 160 KB
+     * y los otros 7,8 MB se habrian quedado parados — con el arranque diciendo
+     * «PSRAM» y todo. Con region exclusiva se hace como el P4: objetivo 0 = la VM
+     * toma lo que el plan deje. Sin PSRAM, el techo medido del chip sigue mandando. */
+#if defined(CONFIG_SPIRAM)
+    cfg.objetivo       = 0;                      /* exclusiva: todo lo que el plan deje */
+#else
     cfg.objetivo       = CHIP_VM_OBJETIVO;       /* politica: cuanto quiere la VM (no se sube aunque quepa) */
+#endif
     cfg.vm_min         = CHIP_VM_MIN;
     cfg.reserva_bytes  = 0;                      /* la reserva con nombre es de la memoria exclusiva */
     cfg.reserva_nombre = NULL;
@@ -104,7 +153,7 @@ static void vm_buffer_init(void) {
     s_vm_buffer = NULL; s_vm_buffer_size = 0;
     unsigned bloque = (plan.res == BPVM_MEM_OK) ? ((unsigned) plan.bytes & ~1023u) : 0u;
     while (bloque >= CHIP_VM_MIN) {
-        s_vm_buffer = (uint8_t*) heap_caps_malloc(bloque, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        s_vm_buffer = (uint8_t*) heap_caps_malloc(bloque, ESP32_MEM_CAPS);
         if (s_vm_buffer) { s_vm_buffer_size = bloque; break; }
         bloque -= 4096u;
     }

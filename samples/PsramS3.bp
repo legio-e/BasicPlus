@@ -1,0 +1,25 @@
+// PsramS3.bp — comprueba que el heap grande del S3 (PSRAM, V6 8-sep) se USA de
+// verdad: 200.000 enteros son 800 KB, muy por encima de los 160 KB que era el
+// techo de politica antes de activarla. Si el heap no fuese grande, esto muere
+// con OOM — y esa es justamente la prueba.
+//
+// No toca hardware, asi que corre igual en host y en placa. Pero PIDE MEMORIA:
+//   en placa (S3 con PSRAM):  sale OK en ~4 s
+//   en host por defecto:      muere con «No space in heap» (512 KB en BpVM.cfg)
+//   en host con heap grande:  bpgenvm-c --mem=8388608 PsramS3.mod  -> misma salida
+// Por eso NO esta en el corpus de paridad: alli se ejecuta con el heap por
+// defecto y entraria en rojo por diseno.
+module PsramS3
+  function Main()
+    print "--- PSRAM del S3 ---"
+    var n: integer := 200000
+    var a: integer[] := newIntArray(n)
+    var i: integer := 0
+    while i < n do
+      a[i] := i * 3
+      i := i + 1
+    endwh
+    print "array de", len(a), "enteros: a[0]=", a[0], "a[n-1]=", a[n - 1]
+    print "--- fin ---"
+  end Main
+end PsramS3

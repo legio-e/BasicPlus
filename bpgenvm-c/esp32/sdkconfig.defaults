@@ -51,4 +51,28 @@ CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
 # fuera de git, así que ahí la decisión no viajaría y volvería a ser herencia.
 # El día que se activen los dos, se quita esta línea y se fijan las tareas a mano
 # (`io` en un núcleo, `vm` en el otro), que es como lo tiene previsto la Pico.
+# V6 (8-sep) — LA PSRAM DEL S3, QUE LLEVABA DESDE SIEMPRE SIN ACTIVAR.
+# El modulo es un ESP32-S3-WROOM-1 con 8 MB de PSRAM EMBEBIDA, y no lo deduzco:
+# lo dice el propio chip — `esptool flash_id` sobre esta placa contesta
+#   Features: Wi-Fi, BT 5 (LE), 240MHz, Embedded PSRAM 8MB (AP_3v3)
+# 8 MB parados. Con esto el S3 pasa a tener region exclusiva como el P4, y de
+# paso se le cae UNA de las dos puertas que lo dejaban fuera de las pruebas de
+# BD (la otra, no tener binario nativo Xtensa, sigue en pie).
+#
+# OCT y 80M porque el 8 MB del S3 es octal (S3R8); el de 2 MB seria quad.
+# El P4 usa HEX@200, que es su bus, no el de aqui: no se copia el numero.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+#
+# ⚠️ IGNORE_NOTFOUND NO es opcional, es la norma de la casa: la imagen es UNICA
+# por familia y tiene que arrancar igual en un S3 sin PSRAM (un N16 pelado).
+# Sin esto, el bootloader de esa placa entraria en panico. Que haya o no PSRAM
+# lo decide la PLACA en arranque, no una macro de compilacion.
+CONFIG_SPIRAM_IGNORE_NOTFOUND=y
+#
+# Los allocs pequenos siguen en DRAM interna (igual que el P4): la PSRAM es
+# para el bloque grande de la VM, no para la metralla del sistema.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=2048
+
 CONFIG_FREERTOS_UNICORE=y
