@@ -83,12 +83,12 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 15 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo;
-> el 8-sep se cerró `#472` y se abrió `#481`.)*
+> **Lo que queda de V6 son 13 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo; el
+> 8-sep se cerraron `#472` y `#469`, se abrió `#481`.)*
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **11** | `#456` · `#462` · `#468` · `#469` · `#470` · `#471` · `#473` · `#474` · `#480` · `#481` · `A4` |
+> | **fichas de V6** | **9** | `#456` · `#462` · `#468` · `#470` · `#471` · `#473` · `#474` · `#480` · `#481` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
@@ -1803,7 +1803,7 @@ y el Run en la Pico 2 byte-idéntico al host.
 `samples/out` sigue lleno de MOD6 de V5: ya no hacen daño, pero son un fósil (gitignorado) que
 conviene vaciar cuando toque.
 
-#### 🟠 `#469` — una fachada SIN BACKEND devuelve un número inventado (abierta 5-sep, de `A3` · **ADC HECHO el 6-sep** `bbe0d8fd`; queda decidir qué se hace con las OTRAS que la auditoría destapó)
+#### ✅ `#469` — ~~una fachada SIN BACKEND devuelve un número inventado~~ (abierta 5-sep, de `A3` · **CERRADA el 8-sep por Eduardo**)
 
 **El síntoma, en una placa real**: en una Nucleo o una Discovery, `Adc.read()` devuelve un número
 que se mueve, parece una lectura y **es falso**; y `Adc.Channel(0)` imprime `→ GP26`, que es el
@@ -1827,6 +1827,15 @@ distingue no-evento de fallo»*.
 2. Que **la fachada distinga** «no hay hardware» (el host, legítimo) de «nadie registró backend»
    (un olvido) y en el segundo caso **grite**. Eso protege a todas las familias futuras, no sólo a
    ésta — y hay que mirar las OTRAS 16 fachadas por si tienen el mismo stub complaciente.
+
+✅ **CERRADA el 8-sep. Palabras de Eduardo:** *«`#469` está cerrado. En V7 podemos hacer alguna
+cosa y habrá que hacer algún ajuste, pero para V6 está completo.»*
+
+Lo que la cierra es el reparto de abajo: con el eje de **familia** —el suyo— la RP2350 ya estaba
+completa, el `neopixel` de ESP32/STM32 quedó decidido (pendiente de implementar de verdad, y
+mientras tanto **lanza excepción BP**, `3d14e32c`) y el `adc` del STM32 se fue a **V7** con
+`#479`. No queda ningún hueco de esta clase. Lo que sigue vivo es de OTRA clase y tiene ficha
+propia: los cuatro drivers que **tienen backend y mienten**, en `#480`.
 
 ##### ✅ EL ALCANCE, DECIDIDO POR EDUARDO (8-sep) — y el eje bueno era otro
 
@@ -2490,7 +2499,47 @@ ancho completo en orden.
 ⚠️ Trampa de artefacto en el propio host: `bp_shot_%04d` reempieza en 0001 en cada ejecución y
 escribe en el cwd — una captura rancia es **indistinguible** de la nueva. Verde falso de manual.
 
-#### 🟡 `#468` — la stdlib en un pack XIP (memoria de la C6): ANALIZADA con números, a decidir (abierta 4-sep)
+#### 🟡 `#468` — la stdlib en flash en vez de en RAM (memoria de la C6): MEDIDA, y el 8-sep Eduardo tumbó la vía del pack (abierta 4-sep)
+
+⛔ **8-sep — EL PACK NO PUEDE SER EL MECANISMO, y la objeción es de Eduardo:** *«los micros, cuando
+arrancan por primera vez, no tienen la partición definida, así que no se puede usar para subir
+ningún pack. La librería estándar de fábrica viene con la imagen del sistema y se copia a `/lib`.»*
+
+📐 **Comprobado en el código, las tres patas:**
+- El layout de particiones sale del **ENV** (`esp32/common/board_mgr_esp32.c:327`,
+  `bpvm_part_layout(&s_env, …)`). Una placa virgen no tiene ENV escrito.
+- Sin él no hay zona: *«sin zona de packs (el arranque no llegó a particiones)»*.
+- Y la stdlib de fábrica son blobs **dentro de la imagen** (`esp32_mods.c`:
+  `static const unsigned char core_mod[]`), que `esp32_mods_install()` copia a `/lib`.
+
+O sea: un pack sirve para lo que el USUARIO grabe, no para lo que la placa necesita **antes** de
+tener particiones. La stdlib de fábrica es justo eso.
+
+🔑 **Pero el ahorro medido NO necesita un pack**, y esto es lo que queda por decidir. Los 22 268 B
+salen de que el `code` se quede en **flash** en vez de copiarse al bloque de la VM — y los blobs de
+fábrica **ya están en flash**: son `static const`, o sea `.rodata`, mapeada y direccionable. Y el
+cargador ya lo contempla, no hay que construirlo:
+
+```
+loader.c:26    «base != NULL → blob ya en RAM/flash (embebido en la imagen, XIP, host)»
+loader.c:105   ... const char* name_hint, int xip)      ← XIP es un PARAMETRO, no una politica
+loader.c:109   if (xip && !data) return BPVM_ERR_IO;    /* exige blob mapeado */
+```
+
+⚠️ **Lo que hoy lo impide es el rodeo**: blob → se copia a `/lib` → se carga **desde el FS**, y
+desde el FS no hay puntero, así que no se puede XIP. La forma sería: cargar el módulo **desde el
+blob embebido** salvo que el usuario lo haya sustituido en `/lib`, que es el «shadow de desarrollo»
+de `#310` pero al revés.
+
+⏭️ **Lo que queda por decidir (Eduardo):** ¿se prueba esa vía —cargar la stdlib de fábrica en sitio
+desde la imagen— o se deja la memoria de la C6 como está? **No está probada**: lo medido es el
+ahorro (22 KB) y que el cargador acepta XIP con un blob; que funcione con estos blobs concretos hay
+que verlo. La otra mitad de los «40-50 K» sigue siendo la tabla de símbolos por referencia, que es
+un cambio del enlazador y va aparte.
+
+📌 Y lo que la objeción **no** tumba: llevar el mapeo de la zona a `esp32/common` seguía valiendo por
+sí solo, y se hizo el 8-sep (`630a221e`) — el S3 y el C6 ya tienen zona de packs para lo que el
+usuario quiera grabar.
 
 **La dirección la dio Eduardo (4-sep):** *«En cuanto al consumo de memoria es cierto que vamos
 justos. Aquí lo suyo es subir el pack de la librería estándar+Json+Gui, y con eso podemos ahorrar
