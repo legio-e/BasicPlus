@@ -83,12 +83,13 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 12 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo; el
-> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7, y se abrió `#481`.)*
+> **Lo que queda de V6 son 12 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerró
+> `#474`.)*
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **8** | `#456` · `#462` · `#470` · `#471` · `#473` · `#474` · `#480` · `#481` · `A4` |
+> | **fichas de V6** | **8** | `#456` · `#462` · `#470` · `#471` · `#473` · `#480` · `#481` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
@@ -3717,7 +3718,76 @@ Instrumentos: `samples/benchmarks/Bench.bp` (cálculo puro, cuanto por ENV), `Pr
 (salida), `AllocBench.bp` (asignación y GC: 20 000 vueltas con dos concatenaciones = 13 129 ms
 en la C6, 0,66 ms por vuelta; el reparto GC/concatenación está por separar con `log=1`).
 
-#### 🔴 `#474` — `B1` sigue vivo, y su reproducción YA NO COMPILA (abierta 5-sep)
+#### ✅ `#474` — ~~`B1` sigue vivo, y su reproducción YA NO COMPILA~~ (abierta 5-sep · **CERRADA el 9-sep**)
+
+✅ **CERRADA. Los tres pasos que pedía, hechos — y salieron DOS bugs más, en la otra VM.**
+
+**1. La reproducción, revivida.** Esta ficha decía que `synclisttest.bp` choca con el bug aparcado
+del compilador. **Es falso**: le faltaba un `import Core` y compila. Con eso se pudo medir por
+primera vez desde junio.
+
+**2. `B1` seguía vivo**, con su firma exacta —«HALT en thread no-main (tid=2 en PC 9166)» desde el
+worker 2 y «(tid=2 en PC 9164)» desde el 3, dos workers sobre el mismo contexto— pero mucho menos
+frecuente que en V2: `w2` de ~25 % a 0 %, `w4` de 100 % a ~5 %.
+
+**3. Arreglado, y el método es lo aprovechable.** Iba a auditar los 11 sitios que cambian el estado
+leyéndolos. **Criterio de Eduardo (9-sep):** *«aunque esté escrito en C el modelo bueno es el de
+OOP. Si tratas al Thread como una clase, debe haber un SOLO método para cambiar el estado, el
+setter, y es ahí donde proteges. Si luego se llama de 11 sitios diferentes eso ya es otro tema.»*
+Con el estado privado y un setter que **denuncia** la transición ilegal, el culpable se nombró solo:
+
+```
+[B1] tid=1 lo está EJECUTANDO worker-3 y worker-1 le cambia el estado a RUNNABLE desde el case YIELD
+```
+
+⚠️ **Y un detalle de Java que casi lo tapa**: `private` NO bastaba. `ThreadContext` es una clase
+**anidada** dentro de `VirtualMachine`, y en Java la externa ve los privados de la anidada — que es
+justo quien escribía los 11 sitios. Hubo que **renombrar el campo** para que el compilador obligase
+a pasar por el setter.
+
+**La causa**: mientras el worker salía de `runOnContext`, el thread se volvía RUNNABLE por su cuenta
+(un `MUTEX_UNLOCK` le entregaba el mutex) y **otro worker lo reclamaba**. Entonces `getStatus()`
+volvía a decir RUNNING —pero de otro— y re-encolarlo metía el mismo contexto dos veces.
+**El arreglo**: sólo decide sobre el thread quien sigue siendo su dueño. Dos líneas.
+
+### 🔴 Y al preguntar Eduardo «¿y en la VM-C qué ocurre?», salieron dos más
+
+La cascada del proyecto es Java → C → placa, y faltaba la segunda. La VM-C **no** tenía `B1` —su
+planificador hace el claim bien, con `sched_owner`, que es justo el arreglo que se le puso a miVM—
+pero se colgaba igual, **7 de cada 8 veces con `--smp=2`**. La bisección lo acotó sin tocar nada:
+sin mutex (`smp_fib_bench`) `--smp=2` iba limpio y escalaba **×1,90**; con mutex, cuelgue.
+
+- **El mutex no era atómico.** El check-and-set de la propiedad se hacía a pelo en el builtin y el
+  intérprete corre **sin `vm_lock`**. Y peor: un **lost wakeup** — el thread se apuntaba como waiter,
+  aún sin ponerse `BLOCKED_MUTEX`; otro hacía `unlock`, le daba la propiedad y lo ponía `RUNNABLE`;
+  y entonces el primero ejecutaba `status = BLOCKED_MUTEX` y **pisaba su propio despertar**.
+- **El GC podía tener DOS colectores esperándose.** `gc_stw` aguardaba a que `running_workers`
+  bajara de 1, y nada impedía que dos entraran: los dos son workers en ejecución. Lo **predijo el
+  modelo** que dio Eduardo ese día —*«en principio las 2 VM no interactúan entre ellas»*—: la única
+  interacción que no es la cola de threads BP era el GC, y era la única parte que seguía rota.
+
+📊 **Medido, de punta a punta:**
+
+| | antes | tras el mutex | tras el GC |
+|---|---|---|---|
+| `--smp=1` | 0/12 | 0/12 | **0/20** |
+| `--smp=2` | 7 de cada 8 | 1/30 | **0/20 y 0/40** |
+| `--smp=4` | 7 de cada 8 | 5/12 | **0/20** |
+
+Y en miVM: `w2`, `w4` y `w8` a **0 fallos en 40 pasadas cada uno**, con el detector mudo.
+
+💰 **El pago**, que es para lo que se arregla — `smp_fib_bench` con su propio reloj en miVM:
+`workers=1` 4406 ms · `workers=2` **2589 ms (×1,69)** · `workers=4` **2393 ms (×1,83)**. El SMP
+vuelve a servir, y correcto. Estaba bloqueado desde junio.
+
+⚠️ **Lo que esto NO demuestra**: que `B1` no tuviera otras caras. Lo medido es que la carrera
+observada desaparece y que el detector queda mudo. Se caracterizó en V2 y pudo tener más
+manifestaciones.
+
+📌 **Y no se cambia ningún defecto**: miVM sigue arrancando con 1 worker y el SMP sigue opt-in.
+Encenderlo es decisión de Eduardo, y en firmware manda `A4` (*«un solo núcleo hasta nueva orden»*).
+El modelo final de los micros quedó escrito en `docs/V6_IDEAS.md`.
+
 
 **El rumbo de Eduardo (5-sep)**, y por qué esto importa ahora:
 
