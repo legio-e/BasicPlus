@@ -22,7 +22,7 @@ int bpvm_pwm_init(int pin, int freqHz) {
     if (g_backend && g_backend->init) {
         return g_backend->init(pin, freqHz);
     }
-    bpvm_out("[pwm] init pin=%d freqHz=%d (stub → sliceId=0)\n", pin, freqHz);
+    bpvm_out("[pwm] init pin=%d freqHz=%d (sim → sliceId=0)\n", pin, freqHz);
     return 0;
 }
 
@@ -31,7 +31,7 @@ void bpvm_pwm_set_freq(int sliceId, int freqHz) {
         g_backend->setFreq(sliceId, freqHz);
         return;
     }
-    bpvm_out("[pwm] setFreq slice=%d freqHz=%d (stub)\n", sliceId, freqHz);
+    bpvm_out("[pwm] setFreq slice=%d freqHz=%d (sim)\n", sliceId, freqHz);
 }
 
 void bpvm_pwm_set_duty(int sliceId, int pin, int dutyPct) {
@@ -39,7 +39,7 @@ void bpvm_pwm_set_duty(int sliceId, int pin, int dutyPct) {
         g_backend->setDuty(sliceId, pin, dutyPct);
         return;
     }
-    bpvm_out("[pwm] setDuty slice=%d pin=%d duty=%d%% (stub)\n",
+    bpvm_out("[pwm] setDuty slice=%d pin=%d duty=%d%% (sim)\n",
            sliceId, pin, dutyPct);
 }
 
@@ -48,7 +48,7 @@ void bpvm_pwm_start(int sliceId) {
         g_backend->start(sliceId);
         return;
     }
-    bpvm_out("[pwm] start slice=%d (stub)\n", sliceId);
+    bpvm_out("[pwm] start slice=%d (sim)\n", sliceId);
 }
 
 void bpvm_pwm_stop(int sliceId) {
@@ -56,5 +56,5 @@ void bpvm_pwm_stop(int sliceId) {
         g_backend->stop(sliceId);
         return;
     }
-    bpvm_out("[pwm] stop slice=%d (stub)\n", sliceId);
+    bpvm_out("[pwm] stop slice=%d (sim)\n", sliceId);
 }

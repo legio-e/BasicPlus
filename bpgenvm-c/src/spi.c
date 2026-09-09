@@ -50,6 +50,6 @@ int bpvm_spi_transfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
         bpvm_out("%s%02X", i ? " " : "", tx[i]);
         rx[i] = 0;
     }
-    bpvm_out("] (rx → ceros)\n");
+    bpvm_out("] (rx sim → ceros)\n");
     return (int) n;
 }

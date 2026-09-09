@@ -1,0 +1,66 @@
+// StubParidad.bp - el ORACULO de paridad de los STUBS del PC.
+//
+// POR QUE EXISTE. Seis fachadas (gpio, pwm, pulse, uart, spi, pico) no tienen
+// hardware en el PC y escriben una linea de simulacion en stdout. Estaban
+// escritas DOS veces -una en miVM y otra en la VM-C- y no decian lo mismo:
+// miVM ponia "(sim ...)" donde la VM-C ponia "(stub ...)". Trece textos, ocho
+// de ellos en el camino que recorre cualquier programa que toque PWM o Pulse.
+//
+// Eso es una rotura del invariante sagrado -mismo .mod, stdout distinto- y
+// llevaba ahi desde siempre, viva, porque NINGUNA de esas fachadas tenia un
+// sample en el corpus de paridad. Es el mismo agujero que #481 senala para el
+// camino de error: lo que no se compara, se pudre.
+//
+// Este sample toca CADA verbo con stub. Si alguien vuelve a escribir una linea
+// de simulacion en una sola de las dos VMs, aqui se pone rojo.
+module StubParidad
+  import Gpio
+  import Pwm
+  import Pulse
+  import Uart
+  import Spi
+  import Machine
+
+  function Main()
+    // ---- gpio: init / write / read / pull ----
+    var p: Gpio.Pin := Gpio.Pin(25, 1)
+    p.on()
+    p.off()
+    print "gpio value:", p.value()
+    p.setPull(1)
+
+    // ---- pwm: init / setFreq / setDuty / start / stop ----
+    var w: Pwm.Slice := Pwm.Slice(16, 1000)
+    w.setFreq(2000)
+    w.setDuty(50)
+    w.start()
+    w.stop()
+
+    // ---- pulse: init / start / value / stop / reset ----
+    var c: Pulse.Counter := Pulse.Counter(14, 0)
+    c.start()
+    print "pulse value:", c.value()
+    c.stop()
+    c.reset()
+
+    // ---- uart: init / available / read / write ----
+    var u: Uart.Port := Uart.Port(0, 0, 1, 115200, 8, 1, 0)
+    print "uart available:", u.available()
+    var datos: integer[] := [65, 66, 67]
+    var n: integer := u.write(datos, 3)
+    print "uart escritos:", n
+
+    // ---- spi: init / write / read / transfer ----
+    var s: Spi.Bus := Spi.Bus(0, 18, 19, 16, 1000000, 0)
+    var tx: integer[] := [1, 2]
+    var rx: integer[] := [0, 0]
+    print "spi escritos:", s.write(tx, 2)
+    print "spi leidos:", s.read(rx, 2)
+    print "spi transfer:", s.transfer(tx, rx, 2)
+
+    // ---- pico/machine: los que tienen stub ----
+    Machine.setCpuFreqMHz(150)
+
+    print "fin"
+  end Main
+end StubParidad

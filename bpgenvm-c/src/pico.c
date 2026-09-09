@@ -165,6 +165,6 @@ int bpvm_pico_set_cpu_freq_mhz(int mhz) {
     /* Stub: en host no podemos cambiar la frecuencia de nada,
      * pero reportamos "éxito" para que el código BP no rompa en
      * desarrollo. */
-    bpvm_out("[pico] setCpuFreqMHz(%d) (stub, no-op)\n", mhz);
+    bpvm_out("[pico] setCpuFreqMHz(%d) (host, no-op)\n", mhz);
     return 1;
 }

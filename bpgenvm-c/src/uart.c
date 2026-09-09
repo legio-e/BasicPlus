@@ -39,7 +39,11 @@ int bpvm_uart_write(int bus, const uint8_t* data, size_t n) {
     bpvm_out("] (\"");
     for (size_t i = 0; i < n; i++) {
         char c = (char) data[i];
-        putchar((c >= 32 && c < 127) ? c : '.');
+        bpvm_out("%c", (c >= 32 && c < 127) ? c : '.');   /* #480 - NO putchar: ese escribe
+                                                    * al FILE de C y se sale del sumidero de
+                                                    * la VM, asi que el payload salia DESORDENADO
+                                                    * (aparecia al principio de stdout) y el
+                                                    * preview quedaba vacio. */
     }
     bpvm_out("\")\n");
     return (int) n;
@@ -60,6 +64,6 @@ int bpvm_uart_available(int bus) {
     if (g_backend && g_backend->available) {
         return g_backend->available(bus);
     }
-    bpvm_out("[uart] available bus=%d (stub → 0)\n", bus);
+    bpvm_out("[uart] available bus=%d (sim → 0)\n", bus);
     return 0;
 }

@@ -34,7 +34,7 @@ int bpvm_pulse_init(int pin, int edgeKind) {
     const char* edgeName = edgeKind == 0 ? "RISING"
                          : edgeKind == 1 ? "FALLING"
                          : edgeKind == 2 ? "BOTH" : "?";
-    bpvm_out("[pulse] init pin=%d edge=%s (stub → counterId=0)\n",
+    bpvm_out("[pulse] init pin=%d edge=%s (sim → counterId=0)\n",
            pin, edgeName);
     s_stub_value = 0;
     return 0;   /* counterId 0 — solo soportamos uno en stub */
@@ -45,7 +45,7 @@ void bpvm_pulse_start(int counterId) {
         g_backend->start(counterId);
         return;
     }
-    bpvm_out("[pulse] start id=%d (stub)\n", counterId);
+    bpvm_out("[pulse] start id=%d (sim)\n", counterId);
 }
 
 void bpvm_pulse_stop(int counterId) {
@@ -53,14 +53,14 @@ void bpvm_pulse_stop(int counterId) {
         g_backend->stop(counterId);
         return;
     }
-    bpvm_out("[pulse] stop id=%d (stub, value=%d)\n", counterId, s_stub_value);
+    bpvm_out("[pulse] stop id=%d (sim, value=%d)\n", counterId, s_stub_value);
 }
 
 int bpvm_pulse_value(int counterId) {
     if (g_backend && g_backend->value) {
         return g_backend->value(counterId);
     }
-    bpvm_out("[pulse] value id=%d (stub → %d)\n", counterId, s_stub_value);
+    bpvm_out("[pulse] value id=%d (sim → %d)\n", counterId, s_stub_value);
     return s_stub_value;
 }
 
@@ -69,6 +69,6 @@ void bpvm_pulse_reset(int counterId) {
         g_backend->reset(counterId);
         return;
     }
-    bpvm_out("[pulse] reset id=%d (stub)\n", counterId);
+    bpvm_out("[pulse] reset id=%d (sim)\n", counterId);
     s_stub_value = 0;
 }

@@ -50,6 +50,6 @@ int bpvm_gpio_read(int pin) {
     if (g_backend && g_backend->read) {
         return g_backend->read(pin);
     }
-    bpvm_out("[gpio] read pin=%d (stub → 0)\n", pin);
+    bpvm_out("[gpio] read pin=%d (sim → siempre 0 en PC)\n", pin);
     return 0;
 }
