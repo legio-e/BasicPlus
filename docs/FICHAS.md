@@ -2263,6 +2263,19 @@ wire     el INFO de las tres familias      (ya no tienen tabla propia)
 vez de contestarse. El micro sale de `CHIP_MICRO`, una entrada **por micro** en el `chip_cfg.h` de
 cada uno; la placa dice `generic` salvo que la imagen conozca el modelo.
 
+✅ **VERIFICADO EN LAS DOS PLACAS RP2350 Y POR LOS DOS CAMINOS (9-sep, en placa, Eduardo):**
+
+| | por el WIRE (INFO) | por el PROGRAMA BP (`Machine.getMicro`) |
+|---|---|---|
+| **Pico 2** | `rp2350a` | `rp2350a` |
+| **Metro** | `rp2350b (RP2350B)` | `rp2350b` / placa `generic` |
+
+📌 **Y esto es lo que se gana haciéndolo por el camino correcto**: los dos consumidores leen la
+MISMA función de la HAL BP (`bpvm_pico_micro_name()`), así que no hay dos verdades que puedan
+divergir — que es exactamente como se desincronizaron el C3 y el C6. La función «inteligente» que
+pidió Eduardo queda probada: la distinción sale de `SYSINFO.PACKAGE_SEL` (QFN-60 = RP2350A de 61
+pines, QFN-80 = RP2350B de 81), que es de sólo lectura y **no depende del FS**.
+
 ✅ **Verificado en dos placas**, no en el log:
 
 | | por el wire | por el programa BP |
