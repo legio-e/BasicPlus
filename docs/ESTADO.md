@@ -98,7 +98,7 @@ micro es RP2350A (61 pins), en la Metro es el RP2350B (81 pins)»*. **El silicio
 `SYSINFO.PACKAGE_SEL` (1 = QFN-60, 0 = QFN-80), de sólo lectura e independiente del FS. La función
 «inteligente» que pedías son dos líneas.
 
-⚠️ Lo que **no** está verificado: el `rp2350b` de la Metro, porque la Metro sigue sin ejecutar nada.
+✅ **Verificado también el `rp2350b` de la Metro** el mismo día, cuando la Metro volvió a ejecutar: el wire dice `rp2350b (RP2350B)` y `Machine.getMicro()` dice `rp2350b` — los dos leyendo la misma función de la HAL BP.
 
 ### 📐 El modelo de los micros, escrito donde no se pierde
 
