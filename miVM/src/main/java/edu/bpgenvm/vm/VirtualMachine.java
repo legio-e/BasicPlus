@@ -1078,6 +1078,11 @@ public class VirtualMachine {
      * carrera del `stop` de #462, solo que sistematico.
      *
      * Espejo de `bpvm_runtime_error(vm)` en la VM-C. "" = no hubo. */
+    /* #471 — la frecuencia SIMULADA del host. Arranca en el perfil RP2350A y la
+     * mueve setCpuFreqMHz, para que `set` y `get` no se contradigan. Espejo de
+     * `s_host_cpu_hz` en src/pico.c. */
+    private int hostCpuHz = 150_000_000;
+
     private volatile String runtimeError = "";
     public String getRuntimeError() { return runtimeError; }
 
@@ -5643,7 +5648,12 @@ public class VirtualMachine {
                 break;
             }
             case PICO_CPU_FREQ_HZ: {
-                pushTc(tc, 0);   /* host: no aplica */
+                /* #471 — antes 0 («host: no aplica»), y la VM-C devolvia
+                 * 150_000_000: stdout distinto para el mismo programa. Ahora las
+                 * dos parten del perfil RP2350A —el mismo que ya usaban las dos
+                 * en gpioCount— y reflejan lo que se haya pedido con
+                 * setCpuFreqMHz. */
+                pushTc(tc, hostCpuHz);
                 break;
             }
             case PICO_GPIO_COUNT: {
@@ -5688,14 +5698,26 @@ public class VirtualMachine {
                 break;
             }
             case PICO_SET_CPU_FREQ_MHZ: {
-                /* En host no hay PLL que reconfigurar. Aceptamos el
-                 * parámetro, lo logueamos por trazabilidad de samples
-                 * BP, y devolvemos true. El clamp real ocurre en BP
-                 * (función setCpuFreqMHz en Pico.bp) usando la
-                 * constante MAX_CPU_MHZ — así el contrato es idéntico
-                 * en host y en firmware. */
+                /* #471 — EL HOST SIMULA EL CAMBIO Y LO RECUERDA.
+                 *
+                 * Antes esto devolvía true y no guardaba nada, y `cpuFreqHz()`
+                 * seguía contestando lo de siempre: el programa recibía «hecho»
+                 * y la lectura lo desmentía. Aviso de Eduardo (9-sep): «cuidado
+                 * con la frecuencia, no es una constante — la velocidad y la
+                 * tensión se podían ajustar para hacer overclocking».
+                 *
+                 * El clamp real ocurre en BP (Machine.setCpuFreqMHz, con
+                 * MAX/MIN_CPU_MHZ), así que aquí llega ya saneado. El espejo, en
+                 * src/pico.c de la VM-C: mismo valor y mismo texto.
+                 *
+                 * (La TENSIÓN no aparece aquí ni hace falta: en placa la escala
+                 * sola el firmware de la Pico, subiéndola ANTES de subir la
+                 * frecuencia y bajándola DESPUÉS de bajarla. En el PC no hay
+                 * nada que alimentar.) */
                 int mhz = popTc(tc);
-                System.out.println("[pico] setCpuFreqMHz(" + mhz + ") (host, no-op)");
+                if (mhz <= 0) { pushTc(tc, 0); break; }
+                hostCpuHz = mhz * 1_000_000;
+                System.out.println("[pico] setCpuFreqMHz(" + mhz + ") (host, simulado)");
                 pushTc(tc, 1);
                 break;
             }

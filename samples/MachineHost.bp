@@ -1,0 +1,37 @@
+// MachineHost.bp - #471: la superficie de `Machine` en el PC, en paridad.
+//
+// Tres roturas del invariante vivian aqui, y ninguna se veia porque `Machine`
+// no tenia mas sample en el corpus que MachineId (micro/placa):
+//
+//   uniqueId()     miVM "host-pc"   vs   VM-C "0000000000000000"
+//   tempC()        miVM callaba     vs   VM-C escribia una traza en stdout
+//   cpuFreqHz()    miVM 0           vs   VM-C 150000000, y traza
+//
+// Y debajo habia algo peor que una discrepancia, que destapo un aviso de
+// Eduardo («cuidado con la frecuencia, no es una constante»): en las DOS VMs
+//
+//   set(200) -> true    y acto seguido   cpuFreqHz() -> el valor de antes
+//
+// o sea que el programa recibia «hecho» y la lectura lo desmentia. Ahora el host
+// SIMULA el cambio y lo recuerda: es el micro simulado, y simularlo es su
+// trabajo. Este sample vigila las dos cosas — los valores y la coherencia.
+module MachineHost
+  import Machine
+
+  function Main()
+    print "micro:", Machine.getMicro()
+    print "placa:", Machine.getBoard()
+    print "serie:", Machine.uniqueId()
+    print "tempC:", Machine.tempC()
+    print "gpio:", Machine.gpioCount()
+
+    // el par set/get, que es lo que se contradecia
+    print "cpu inicial:", Machine.cpuFreqHz()
+    print "set(200):", Machine.setCpuFreqMHz(200)
+    print "cpu tras set:", Machine.cpuFreqHz()
+
+    // y el clamp del envoltorio BP: pedir 999 aplica MAX_CPU_MHZ
+    print "set(999):", Machine.setCpuFreqMHz(999)
+    print "cpu con clamp:", Machine.cpuFreqHz(), " (max ", Machine.MAX_CPU_MHZ(), ")"
+  end Main
+end MachineHost

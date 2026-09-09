@@ -19,14 +19,33 @@ void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend) {
     g_backend = backend;
 }
 
+/* #471 - LA FRECUENCIA DEL HOST SE SIMULA, no se finge.
+ *
+ * Aviso de Eduardo (9-sep): «cuidado con la frecuencia, no es una constante. En
+ * su dia hicimos pruebas en la Pico: la velocidad y la tension se podian ajustar
+ * para hacer overclocking». Y al medirlo salio algo peor que una constante:
+ *
+ *     set(200) -> true        y acto seguido cpuFreqHz() -> 150000000
+ *
+ * O sea que el stub contestaba «hecho» a un cambio que no hacia, y la lectura lo
+ * desmentia. Es el mismo vicio que el ADC de #480: fallar con un valor plausible.
+ *
+ * Ahora el host RECUERDA lo que se le pide. No es fingir: el host es el micro
+ * SIMULADO (H10), y simular el cambio de frecuencia es exactamente su trabajo —
+ * asi `set` y `get` son coherentes y un programa que ajusta la frecuencia se
+ * puede probar en el PC, que es de lo que va la cascada. El valor inicial es el
+ * perfil RP2350A, el mismo que ya usa gpioCount aqui y en miVM. */
+static int s_host_cpu_hz = 150000000;
+
 void bpvm_pico_unique_id(char* buf, size_t len) {
     if (g_backend && g_backend->uniqueId) {
         g_backend->uniqueId(buf, len);
         return;
     }
-    /* Stub: ID estable conocido para que tests reproducibles
-     * funcionen en host sin sorpresas. */
-    const char* stub = "0000000000000000";
+    /* Stub: ID estable para que los tests sean reproducibles. #471 - el texto
+     * es el de miVM ("host-pc"): antes esta VM decia "0000000000000000" y la
+     * otra "host-pc", o sea stdout distinto para el mismo programa. */
+    const char* stub = "host-pc";
     size_t n = strlen(stub);
     if (len == 0) return;
     if (n > len - 1) n = len - 1;
@@ -70,7 +89,9 @@ float bpvm_pico_temp_c(void) {
     if (g_backend && g_backend->tempC) {
         return g_backend->tempC();
     }
-    bpvm_out("[pico] tempC (stub → 25.0)\n");
+    /* #471 - SIN traza: un getter que escribe una linea cada vez que lo llamas
+     * es ruido -imagina tempC() en un bucle- y ademas miVM no la escribia, o sea
+     * que era una rotura de paridad. El valor es el perfil del host. */
     return 25.0f;
 }
 
@@ -78,8 +99,8 @@ int bpvm_pico_cpu_freq_hz(void) {
     if (g_backend && g_backend->cpuFreqHz) {
         return g_backend->cpuFreqHz();
     }
-    bpvm_out("[pico] cpuFreqHz (stub → 150_000_000)\n");
-    return 150000000;
+
+    return s_host_cpu_hz;   /* #471 - lo que se haya pedido; ver arriba */
 }
 
 int bpvm_pico_uptime_ms(void) {
@@ -162,9 +183,10 @@ int bpvm_pico_set_cpu_freq_mhz(int mhz) {
     if (g_backend && g_backend->setCpuFreqMHz) {
         return g_backend->setCpuFreqMHz(mhz);
     }
-    /* Stub: en host no podemos cambiar la frecuencia de nada,
-     * pero reportamos "éxito" para que el código BP no rompa en
-     * desarrollo. */
-    bpvm_out("[pico] setCpuFreqMHz(%d) (host, no-op)\n", mhz);
+    /* #471 - el host SIMULA el cambio y lo RECUERDA, para que `set` y `get` no
+     * se contradigan. El texto es contrato de paridad con miVM. */
+    if (mhz <= 0) return 0;
+    s_host_cpu_hz = mhz * 1000000;
+    bpvm_out("[pico] setCpuFreqMHz(%d) (host, simulado)\n", mhz);
     return 1;
 }
