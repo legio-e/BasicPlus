@@ -27,7 +27,107 @@
 
 ## Última sesión
 
-## ⏭️ AL RETOMAR (8-sep, noche) — **de 15 pendientes a 12**, y el S3 estrena 8 MB de PSRAM
+## ⏭️ AL RETOMAR (9-sep, noche) — **tres carreras muertas** y la identidad del micro sale por la HAL BP
+
+Sesión corta en fichas (una) y larga en lo que hay debajo: **el SMP de la VM-C pasa de inservible
+a limpio**, y `getMicro()`/`getBoard()` quedan por el camino correcto, no por el rápido.
+
+### Lo que se cerró
+
+| | |
+|---|---|
+| `#474` | `B1` **arreglado en miVM** — y de propina **dos carreras más en la VM-C** (mutex y GC) |
+| `#470` | su mitad buena: **`getMicro()` y `getBoard()`**, por la HAL BP, verificados en dos placas |
+
+Los cuatro números que quedan de `#470` (MHz, GPIO, ADC, PWM) siguen esperando tu criterio, así que
+la ficha sigue abierta. El arnés pasa de **45 a 48 casos** (`NeoCatch`, `MachineAlias`, `MachineId`).
+
+### 🔑 Las tres carreras, y por qué salieron juntas
+
+La ficha `#474` pedía revivir una reproducción que no compilaba (le faltaba un `import Core`). Al
+revivirla, `B1` seguía vivo con su firma exacta. **Pero el arreglo no lo encontré leyendo: lo
+encontró un criterio tuyo.**
+
+> *«Aunque esté escrito en C el modelo bueno es el de OOP. Si tratas al Thread como una clase, debe
+> haber un sólo método para cambiar el estado, el setter correspondiente. Y es ahí donde tienes que
+> proteger el acceso y el cambio de estado.»*
+
+En miVM `ThreadContext.status` era un campo público que se escribía desde **21 sitios**. Encapsularlo
+(`setStatus(nuevo, quien, motivo)`, campo `private`, más un `ownerThread` volátil) no fue cosmética:
+**el bug apareció solo** en cuanto hubo un sitio donde mirar. `YIELD` devolvía a la cola un hilo que
+ya no era suyo. El arreglo son tres líneas, y todas dentro del setter.
+
+⚠️ **Detalle de Java que me costó un intento**: `private` **no** obliga al setter si la clase es
+anidada — la envolvente ve sus privados igual. Hubo que **renombrar el campo** (`status` → `estado`)
+para que el compilador señalara los 21 sitios.
+
+Con eso verde en miVM preguntaste lo que había que preguntar: *«¿y en VM-C qué ocurre?»*. En VM-C
+`--smp=2` **se colgaba 7 de cada 8 veces**. Dos causas independientes, las dos de manual:
+
+| | `--smp=1` | `--smp=2` | `--smp=4` |
+|---|---|---|---|
+| al empezar | 0/12 | **7 de 8 cuelgues** | 7 de 8 |
+| tras el mutex | 0/12 | 1/30 | 5/12 |
+| tras el GC | **0/20** | **0/20 y 0/40** | **0/20** |
+
+- **El mutex no era atómico**: apuntarse como esperando y marcarse `BLOCKED_MUTEX` ocurrían en
+  secciones críticas distintas → **despertar perdido** clásico. Ahora las dos cosas pasan dentro de
+  la misma, en `bpvm_mutex_try_acquire` / `bpvm_mutex_release`, que son los **dos únicos** sitios que
+  tocan la propiedad del mutex (mismo criterio de arriba, aplicado a C).
+- **El GC podía tener DOS colectores**: si un worker entraba en `gc_stw()` con un
+  stop-the-world ya en marcha, se esperaban mutuamente. Ahora el segundo se apunta como parado,
+  espera a que acabe el primero y vuelve.
+
+📌 Y el reparto de SMP, que era lo que estaba tapado: **×1,69 con 2 workers y ×1,83 con 4** en miVM,
+**×1,90** en la VM-C. Tú ya habías dicho lo importante: *«`smp=4` no sé si tiene interés práctico, el
+que realmente interesa es `smp=2`»* — y es justo el que estaba roto.
+
+### 🧭 La corrección de rumbo: la identidad sale de la HAL BP
+
+Iba a hacer que la fachada BP leyera el nombre **del repl** —o sea, invertir las capas— y lo cortaste:
+
+> *«Hay que hacerlo por el camino correcto. Todos han de llamar a una misma función en Hal BP, una
+> para el micro y otra para la placa. Lo que es diferente de cada imagen es la implementación.»*
+
+Hecho así: `bpvm_pico_micro_name()` en la fachada, una implementación por familia, y **el wire y el
+programa BP leen los dos de la misma función**. Verificado en placa: Pico 2 → `rp2350a` / `generic`;
+S3 → `esp32s3` / `generic`.
+
+🔑 Y ahí salió lo que yo había tirado a la basura: yo cableé `"rp2350"` a secas. Tú: *«en la Pico el
+micro es RP2350A (61 pins), en la Metro es el RP2350B (81 pins)»*. **El silicio ya lo dice**:
+`SYSINFO.PACKAGE_SEL` (1 = QFN-60, 0 = QFN-80), de sólo lectura e independiente del FS. La función
+«inteligente» que pedías son dos líneas.
+
+⚠️ Lo que **no** está verificado: el `rp2350b` de la Metro, porque la Metro sigue sin ejecutar nada.
+
+### 📐 El modelo de los micros, escrito donde no se pierde
+
+Lo que dictaste sobre el destino —1 núcleo → `IO`+`VM1` turnándose pero con **cola de hilos de SO**
+para el futuro; 2 núcleos → `IO`+`VM1`+`VM2` a piñón, cada VM consultando la cola de hilos BP, *«en
+principio no interactúan entre ellas, los intercambios se hacen a través de la memoria
+compartida»*— está en **`docs/V6_IDEAS.md`**. En términos de código: **VM = worker**.
+
+### 🧮 Y la cuenta que te hizo gracia
+
+Empezamos el día en «12 pendientes» y lo terminamos en «12». **No era una broma del día: era un
+error mío de ayer.** El rótulo del censo decía *8 fichas* mientras la lista enumeraba **nueve**, o
+sea que ayer eran **13**. Cerrar `#474` corrigió la aritmética además de la lista. Ahora el rótulo y
+la lista dicen lo mismo, que era medio problema.
+
+### ⏭️ Mañana
+
+**12 pendientes, 4 hitos.** Sin bloqueo: **`#473`** (verificar los 78 hallazgos de la auditoría —
+sólo leer) y **`#481`**, que es el que toca el invariante sagrado.
+
+**Decisiones tuyas que siguen abiertas** (las mismas de ayer, ninguna se ha resuelto): `#481` (¿el
+informe del error no atrapado es salida o diagnóstico?), `#480` (qué ve el programador cuando el chip
+no puede apagar el perro), `listDir` (¿entra en V6?), `#456` (qué devuelve un path truncado y cuánto
+tiene que caber), los cuatro campos de `#470`, y si el SMP se activa por defecto.
+
+⚠️ **Placas**: **Pico 2 y S3 llevan el firmware de hoy**; las otras siete, no. Y siguen en ellas los
+`.mod` de prueba que ya te listé ayer — borrarlos sigue necesitando tu visto bueno, placa a placa.
+
+## ⏭️ AL RETOMAR (8-sep, noche) — **de 15 pendientes a 13**, y el S3 estrena 8 MB de PSRAM
 
 Jornada larga y muy conducida por Eduardo: **tres correcciones suyas** cambiaron el trabajo, y en
 los tres casos lo hicieron MÁS PEQUEÑO. Al parar: *«en 2 o 3 días los tenemos todos hechos»*.
@@ -78,7 +178,7 @@ salen **byte-idénticos** a los de git y el coste real es **+2,5 KB en ESP, +5,1
 
 ### ⏭️ Mañana
 
-**12 pendientes.** Sin bloqueo y listos: **`#473`** (verificar los 78 hallazgos de la auditoría —
+**13 pendientes.** Sin bloqueo y listos: **`#473`** (verificar los 78 hallazgos de la auditoría —
 sólo leer) y **`#474`** (revivir la reproducción de `B1`: le falta un `import Core`). Y la
 continuación natural de hoy: **`getMicro()`/`getBoard()`**, que son builtins nuevos —tocan las dos
 VMs y `make check-builtins`— y son los que quitan el `esp32s3-devkitc` y cierran `#470`.
