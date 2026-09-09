@@ -83,17 +83,26 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 9 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> **Lo que queda de V6 son 12 pendientes y 4 hitos** — y son 12 porque cada uno es UNA cosa; con
+> las entradas agrupadas de antes la lista decía 9. *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
 > `#474` y `#456`, `#470` se fue a V7 y `A4` salió del plan de versiones.)*
+>
+> ✅ **9-sep — TODO PENDIENTE TIENE NÚMERO, Y UNA ENTRADA ES UNA COSA.** Eduardo: *«muchas de estas
+> entradas en realidad son múltiples cosas; las que no tienen número asignado hay que asignarle un
+> número»*. Los tres de la cola heredada pasan a `#482` (packs del S3), `#483` (la Metro) y `#484`
+> (`listDir`); y se parten las que escondían varias: de `#462` salen `#485` (el `io` del P4 por
+> debajo de su VM) y `#486` (el `strcmp` del bucle GUI), y de `#480` sale `#487` (el breadcrumb).
+> **La cuenta sube de 9 a 12 y eso es lo correcto**: el trabajo era exactamente el mismo, lo que
+> pasaba es que la lista mentía a la baja. Ya no queda ninguna viñeta sin número, y **el rótulo se
+> saca contando la lista, no a mano** — que es como se coló el desfase del 8-sep.
 >
 > ✅ **`#456` cerrada del todo el 9-sep**: Eduardo confirmó el único número que queda,
 > `BPVM_FS_PATH_MAX` = 256 (*«256 está bien»*).
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **5** | `#462` · `#471` · `#473` · `#480` · `#481` |
-> | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
+> | **fichas de V6** | **12** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#483` · `#484` · `#485` · `#486` · `#487` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -1997,7 +2006,7 @@ entra en el corpus** tocando **cada** verbo con stub de las seis fachadas. Corpu
 | 1 | el watchdog del STM32 | ✅ 9-sep |
 | 2 | el `Pulse` del C3 | 🧬 **V7**, con `#470` |
 | 3 | el **ADC del ESP32 falla con 0, no con −1** → ADC roto = 0 V constante y mudo, **con backend registrado** | 🔴 abierto |
-| 4 | el **breadcrumb mudo en 4 de 5 familias** (backend registrado con la mitad de los slots a NULL) | 🔴 abierto |
+| 4 | el **breadcrumb mudo en 4 de 5 familias** | ➡️ **SEPARADO el 9-sep como `#487`** |
 
 #### 🔴 `#481` — las dos VMs discrepan en `stdout` cuando el programa MUERE con una excepción sin atrapar (abierta 8-sep)
 
@@ -2045,6 +2054,98 @@ se entera»* — ese camino hay que mirarlo a la vez.
 
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
+
+#### 🔴 `#482` — los packs del S3: el camino de EJECUCIÓN está escrito y SIN EJERCITAR (abierta 9-sep, de la cola heredada)
+
+**Por qué existe la ficha**: el 8-sep se arregló el mapeo de packs del ESP32 con la vista doble
+(`bpvm_pack_mount(base_lectura, base_ejecucion, size)`, y `bpvm_pack_exec_ptr()` en el único sitio
+donde un puntero deja de ser dato y pasa a ser código, `mdn_loader.c:201`). La parte de **lectura**
+está verificada en placa —`PACK_LS_REPLY regionSize=5382144, chainOk=true` donde antes decía «sin
+zona de packs»—, pero la de **ejecución no se ha ejercitado nunca**.
+
+📌 **Y no es por falta de ganas: falta el reactivo.** Ejecutar desde un pack necesita un `.mdn`
+**Xtensa**, y ese `.mdn` no existe — el AOT hoy genera ARM Thumb-2 y RISC-V. O sea que el camino
+está escrito y *no se puede* probar hasta que haya con qué.
+
+⏭️ Decidir qué se hace: (a) generar el `.mdn` de Xtensa, (b) probar la vista doble en una familia
+que sí tenga `.mdn` y `SOC_MMU_DI_VADDR_SHARED` indefinido —el **C3** cumple—, o (c) dejarlo
+declarado como no verificado en la documentación de V6. La (b) es la barata y prueba lo mismo.
+
+#### 🔴 `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago**, de la cola heredada)
+
+**Sin causa identificada.** Se ficha con la cronología porque el rodeo no es evidente y a un usuario
+le puede pasar. El detalle completo está en el archivo de la cola heredada de V5, en esta misma
+libreta; lo esencial:
+
+📐 **El síntoma**: no corre **ningún** programa. Ni los de la sesión, ni el `/app/Hello.mod` que
+preinstala el propio firmware —que no usa strings, ni builtins, ni un solo `import`—. Se cuelga
+**mudo**, sin línea de error.
+
+🔍 **Lo que DESCARTA el firmware, y es el dato que más vale**: se reflasheó la imagen del día
+anterior —la misma que esa mañana había corrido `ListGets`, `SqlDemo`, `DaoDemo`, `SdCard` y `Bench`
+sin una queja— **y tampoco funcionaba**. Lo roto **sobrevive al flasheo**: es FS, ENV o zona de
+packs, no la imagen.
+
+⚠️ **Y formatear NO bastó** (FS + zona de packs). Lo único que lo curó fue **cambiar el tamaño de la
+partición**, que fuerza a rehacer el reparto entero.
+
+🔬 **LO QUE FALTA MEDIR, y no se capturó**: el log **durante el intento de ejecución**. Si sale la
+línea `RUN/v1 /app/X.mod session=N`, el programa llega a lanzarse y se atasca dentro; si no sale, no
+llega ni a arrancar. Eso parte el problema en dos y sin ello sólo se puede especular. **Si vuelve a
+pasar, lo PRIMERO es ese log.**
+
+#### 🟡 `#484` — `listDir` no existe en la VM-C (abierta 9-sep, de la cola heredada)
+
+El verbo del wire `LIST_DIR` sí está en el común (`bpvm_repl.c`, `repl_list_dir`), pero la función
+**del lenguaje** para que un programa BP liste un directorio no está en la VM-C. Asimetría entre las
+dos VMs en la superficie del lenguaje, no en el transporte.
+
+⏭️ **Decisión pendiente de Eduardo**: ¿entra en V6? Si entra, el trabajo es el de siempre —builtin
+nuevo en las dos VMs, `make check-builtins` como puerta— y hay que decidir qué devuelve (lista de
+nombres, y si distingue fichero de directorio).
+
+#### 🔴 `#485` — el hilo `io` del P4 nace POR DEBAJO de su VM: el contrato de `A1`, incumplido (abierta 9-sep, sale de `#462`)
+
+El contrato lo declara la cabecera con medidas (`include/bpvm_platform.h:75-94`): `io` va a la
+**misma** prioridad que la tarea que ejecuta la VM, y **nunca por debajo**. El backend ESP fija `io`
+a `tskIDLE_PRIORITY + 1` = **1**, asumiendo que la VM corre en `app_main`. Cierto en S3/C3/C6;
+**falso en el P4**, donde la VM corre en `wire_task` a prioridad **5**.
+
+⚠️ **9-sep, Eduardo**: *«que el P4 tenga 2 núcleos o no ahora mismo da igual, solamente trabajamos
+con 1»* — así que el atenuante que había («el `io` del P4 va sin afinidad y puede correr en el otro
+núcleo») **no cuenta**, y lo que queda es un contrato incumplido a secas.
+
+⏭️ **El arreglo, y es de fondo**: que la prioridad de `io` **se lea de quien lo arranca**
+(`uxTaskPriorityGet(NULL)` en `bpvm_io_start`) en vez de ser un literal. Es la única forma de que
+«la misma que la VM» signifique lo que dice. Debajo hay una fachada que falta —**arrancar la tarea
+que ejecuta la VM no la tiene**—, y es de lo que este contrato depende: hoy son cinco decisiones en
+cinco sitios (`pico/main.c`, los dos `main.c` de CubeMX del STM32, `esp32p4/main/main.c`, y ninguna
+en S3/C3/C6, donde la VM corre en `app_main`).
+
+📌 Es la misma forma del fallo que en la Pico dejó un KILL sin llegar durante 9,9 s.
+
+#### 🟡 `#486` — `GUI_RUN_ONCE` recorre TODA la tabla de símbolos con `strcmp` en cada pasada (abierta 9-sep, sale de `#462`)
+
+En el bucle más caliente de la GUI, cada vuelta busca por nombre las **dos** funciones de dispatch
+(`Gui.__guiDispatch` y `Gui.__guiDispatchChange`) recorriendo la tabla entera: son ~460 símbolos en
+un programa como `JsonDemo`, y la vuelta se repite cientos de veces por quantum
+(`src/builtins.c`, `case BUILTIN_GUI_RUN_ONCE`; miVM ya lo cachea en `guiDispatchPc`).
+
+⏭️ Se resuelve cacheando las dos direcciones la primera vez, exactamente como hace miVM. Es barato y
+no cambia nada observable — pero **cámbialo con el cronómetro puesto**, que si no es una impresión.
+
+#### 🟡 `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, sale de `#480`)
+
+El cuarteto `setMark`/`markCount`/`markAt`/`bootCount` sólo lo rellena el STM32
+(`gpio_stm32.c:310-325`); Pico, ESP32 y P4 dejan esos slots a **NULL**, y `src/pico.c:121-140`
+responde no-op **mudo**, `0`, `0` y `1`. En placa, `samples/BreadcrumbDemo.bp` imprime «Arranque #1»
+y «Migas: 0» para siempre, y su línea final **promete en voz alta algo falso**.
+
+🔑 Es el «instrumento mudo» **en la herramienta que existe justo para cuando ya estás en problemas**.
+
+📌 **Y es una clase de fallo distinta a `#469`**: no es «nadie registró backend», es **backend
+registrado con la mitad de los slots a NULL**. Por eso el arreglo genérico de `#469` no la cubre: la
+fachada tiene que distinguir «slot NULL» de «backend ausente».
 
 #### 🧬 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143` · **los cuatro números → V7** el 9-sep)
 
@@ -6191,18 +6292,15 @@ el otro lado: no un doble más amable, un doble IMPOSIBLE.
 | 3 | La **carrera del estado de salida** | ✅ 5-sep (arriba) |
 | 4 | El **quantum en opcodes** | 🟡 **el caso del GUI, resuelto el 9-sep sin tocarlo** (arriba): el hilo del GUI se aparta solo. El quantum en opcodes sigue siendo desigual para CUALQUIER hilo con opcodes caros, pero ya no hay nada que lo esté sufriendo |
 | 5 | Un **suelo de ~48 ms** independiente del quantum | 🔴 abierto, sin investigar (sospechoso: `LV_DEF_REFR_PERIOD = 33 ms`) |
-| 6 | La **prioridad del `wire_task` del P4** (5) frente al S3 (1) | 🔴 abierto. ⚠️ **9-sep, Eduardo**: *«que el P4 tenga 2 núcleos o no ahora mismo da igual, solamente trabajamos con 1»* — así que el atenuante de los dos núcleos NO cuenta y lo que queda es lo serio: con `A1`, el `io` del P4 nace **por debajo** de su VM, que es lo que el contrato prohíbe |
+| 6 | La **prioridad del `wire_task` del P4** | ➡️ **SEPARADA el 9-sep como `#485`** (Eduardo: *«muchas de estas entradas en realidad son múltiples cosas»*) |
 
 📌 El 6 es ahora más concreto que en agosto: ya no es «el P4 va a otra prioridad», es que
 **incumple el contrato de `A1`** (`io` a la MISMA prioridad que la VM). En el P4 no se nota
 porque es de dos núcleos —`io` corre en el otro— pero es la misma forma del fallo que en la Pico
 dejó un KILL sin llegar durante 9,9 s.
 
-🐛 **Y de paso, una ineficiencia real en el bucle más caliente del GUI**: `GUI_RUN_ONCE`
-recorre **toda la tabla de símbolos con `strcmp`** en CADA pasada, para encontrar dos
-funciones que no cambian nunca (`Gui.__guiDispatch` y `__guiDispatchChange`). Son ~460
-símbolos en un programa como `JsonDemo`, ~290 veces por quantum. Se resuelve cacheando las
-dos direcciones la primera vez.
+🐛 **La ineficiencia del bucle más caliente del GUI** —`GUI_RUN_ONCE` recorriendo toda la tabla de
+símbolos con `strcmp` en cada pasada— ➡️ **SEPARADA el 9-sep como `#486`**.
 
 ⚠️ **Lo que esto le hace al diagnóstico anterior**: la prioridad 5 del P4 sigue siendo una
 diferencia real, pero **ya no es la explicación del retraso** — la Discovery, sin RTOS y sin
