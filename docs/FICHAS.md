@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 6 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 5 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **6** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` |
+> | **fichas de V6** | **5** | `#379` · `#462` · `#471` · `#473` · `#481` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2098,7 +2098,7 @@ se entera»* — ese camino hay que mirarlo a la vez.
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
 
-#### 🔴 `#482` — la VISTA DOBLE de los packs: ¿la necesita ALGUIEN? (abierta 9-sep, de la cola heredada · **la C3 dice que no, medido el 9-sep**)
+#### ✅ `#482` — la VISTA DOBLE de los packs: NO la necesita nadie (abierta 9-sep, de la cola heredada · **CERRADA el 9-sep**, medido en C3 y S3)
 
 **Qué es.** El 8-sep se arregló el mapeo de packs del ESP32 con dos bases —
 `bpvm_pack_mount(base_lectura, base_ejecucion, size)` y `bpvm_pack_exec_ptr()` en el **único** sitio
@@ -2168,6 +2168,51 @@ ese camino existe»**.
 📌 De paso, la C3 quedó al día: llevaba firmware **anterior al 8-sep** —su log tenía once arranques
 y ni una línea `pack:`, que es el bug del directorio del vecino— y ahora monta la zona y trae
 `Machine.mod` y el `Adc.mod` nuevo.
+
+
+### ✅ CERRADA el 9-sep — el caso de vistas separadas NO EXISTE en nuestros micros
+
+**Medido en las dos placas, no leído:**
+
+```
+C3   pack: zona 1488 KB en bpdata+0x174000 | INST ok @0x4207c000 | DATA ok @0x4207c000
+S3   pack: zona 5256 KB en bpdata+0x9c6000 | INST ok @0x4287e000 | DATA ok @0x4287e000
+```
+
+Las dos vistas son **la misma dirección** en los dos chips que se suponían el caso raro. La Pico
+(XIP), el STM32 (flash mapeada), el P4 y el C6 tampoco las separan. **El mecanismo de vista doble no
+tiene ni un usuario.**
+
+📐 **Y la explicación de fondo es de Eduardo, y vale más que la medida porque además PREDICE**:
+*«esto de las vistas separadas me recuerda a micros sin arquitectura Von Neumann, y eso con ARM y
+RISC-V lo veo muy raro»*. Exacto: vistas separadas para instrucciones y datos es un rasgo
+**Harvard**, y ARM Cortex-M y RISC-V tienen el espacio de direcciones **unificado**. Que un
+`soc_caps.h` no declare `SOC_MMU_DI_VADDR_SHARED` no implica que la MMU las separe.
+
+### 🔴 Y lo que esto corrige del 8-sep
+
+Aquel commit llevaba **dos arreglos** y sólo uno estaba trabajando. Lo que dejaba al S3 «sin zona de
+packs» **no eran las vistas**: era que `board_mgr_esp32_mapear_packs()` vivía en el directorio del
+P4 y el proyecto del S3 no lo llamaba nunca. Lo confirma la C3 de hoy: su firmware anterior al 8-sep
+**no tenía ni una línea `pack:`** — el mapeo sencillamente no corría.
+
+### Qué se hace con el mecanismo (decisión de Eduardo)
+
+> *«Posible es, pero no sé si algún día nos vamos a meter en eso. Si prefieres B, pues B.»*
+
+**Se queda** (opción B): cuesta un parámetro y una función identidad, y el día que aparezca un micro
+que sí las separe está resuelto. **Lo que NO se queda es la afirmación falsa**, corregida en los
+tres sitios donde estaba repetida (`bpvm_pack.h`, `src/mdn_loader.c`,
+`esp32/common/board_mgr_esp32.c`) — porque era ella la que hacía daño: se lee y se clasifican chips
+con ella, que es exactamente lo que me pasó a mí.
+
+📌 **La lección, y es la que hay que llevarse**: clasifiqué cuatro micros **leyendo un macro que el
+programa ni consulta** — el código decide en *runtime* comparando lo que devuelve
+`esp_partition_mmap`. No era una medida, era una lectura, y del sitio equivocado. La corrección la
+disparó el escepticismo de Eduardo (*«¿seguro? Antes de nada hay que verificar»*), no una prueba.
+
+📌 De paso, **la C3 quedó al día**: llevaba firmware anterior al 8-sep, y ahora monta la zona de
+packs y trae `Machine.mod` y el `Adc.mod` nuevo.
 
 #### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482` · 🧊 **FUERA DEL PLAN DE VERSIONES el mismo día**: *«de momento no»*)
 

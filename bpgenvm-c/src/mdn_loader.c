@@ -193,11 +193,16 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * la ISA (ARM Thumb = 1; RISC-V/x86 = 0). */
     /* AQUI el puntero deja de ser DATO y pasa a ser CODIGO, y es el unico sitio
      * del cargador donde eso ocurre. Si el `.mdn` vive dentro de la zona de packs
-     * y el micro da direcciones distintas para instrucciones y datos (S3 y C3, que
-     * no declaran SOC_MMU_DI_VADDR_SHARED), hay que saltar por la vista EJECUTABLE
-     * aunque se haya parseado por la de datos. En todas las demas —Pico, STM32, P4,
-     * C6— las dos vistas son la misma direccion y esto no cambia nada. Un `.mdn`
-     * del FS o embebido en un `.mod` no esta en la zona y pasa de largo. */
+     * y el micro diera direcciones distintas para instrucciones y datos, habria
+     * que saltar por la vista EJECUTABLE aunque se haya parseado por la de datos.
+     *
+     * ⚠️ HOY NINGUNO LO HACE: medido en placa el 9-sep en C3 y S3, INST y DATA
+     * salen la MISMA direccion, y la Pico, el STM32, el P4 y el C6 tampoco las
+     * separan. Antes este comentario decia «(S3 y C3, que no declaran
+     * SOC_MMU_DI_VADDR_SHARED)» y era FALSO — ver bpvm_pack.h. Asi que esta
+     * llamada es hoy la identidad en las cinco familias; se queda por si algun
+     * dia aparece un micro Harvard de verdad. Un `.mdn` del FS o embebido en un
+     * `.mod` no esta en la zona y pasa de largo igualmente. */
     const uint8_t*      code_base = bpvm_pack_exec_ptr(data + hdr_total);
     const mdn_symbol_t* syms      = (const mdn_symbol_t*)
                                       (data + sizeof(mdn_header_t));

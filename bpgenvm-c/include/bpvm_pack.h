@@ -116,24 +116,39 @@ const uint8_t* bpvm_pack_src_ptr(const bpvm_pack_src_t* s, uint32_t off, uint32_
  * El arranque registra la zona de packs activa (host: --pack= sobre RAM;
  * firmware: la partición PACKS por XIP) y la resolución de imports la consulta
  * como fallback tras el FS (el FS ECLIPSA al pack, spec §4). NULL = sin packs. */
-/* Monta la zona de packs. DOS bases y no una, y el porque es de silicio:
+/* Monta la zona de packs. DOS bases y no una:
  *
  *   base_lectura   por donde se PARSEA la zona (indice, CRCs, contenidos)
  *   base_ejecucion por donde se SALTA al codigo nativo que hay dentro
  *
- * En casi todas son la MISMA direccion y se pasa dos veces: la Pico (XIP) y el
- * STM32 (flash mapeada) tienen la flash directamente direccionable, y el P4 y el
- * C6 declaran `SOC_MMU_DI_VADDR_SHARED`, o sea que su MMU da la misma direccion
- * virtual para instrucciones y datos.
+ * ⚠️ HOY NINGUNO DE LOS CINCO LAS NECESITA DISTINTAS — medido en placa el
+ * 9-sep-2026, no leido:
  *
- * El S3 y el C3 NO lo declaran: su MMU da direcciones DISTINTAS para I y para D.
- * Antes eso los dejaba sin packs — se reconocia el caso y se abandonaba. No hacia
- * falta codigo propio de familia: solo dejar de suponer que un puntero vale para
- * las dos cosas. Con dos bases, el sistema es el mismo en las cinco familias y lo
- * unico que cambia es una direccion, que es lo que la cintura existe para dar.
+ *   C3   pack: zona 1488 KB | INST ok @0x4207c000 | DATA ok @0x4207c000
+ *   S3   pack: zona 5256 KB | INST ok @0x4287e000 | DATA ok @0x4287e000
  *
- * La firma cambio A PROPOSITO en vez de anadir una segunda llamada: asi la
- * cintura que no se entere NO COMPILA, en vez de montar media zona en silencio. */
+ * y la Pico (XIP), el STM32 (flash mapeada), el P4 y el C6 tampoco. Se pasa la
+ * misma direccion dos veces en las cinco.
+ *
+ * ⚠️ Y LO QUE ESTE COMENTARIO DECIA ANTES ERA FALSO: afirmaba que «el S3 y el C3
+ * dan direcciones DISTINTAS», clasificando los chips por si `soc_caps.h` declara
+ * `SOC_MMU_DI_VADDR_SHARED`. El codigo NO MIRA ESE MACRO —decide en runtime
+ * comparando lo que devuelve `esp_partition_mmap` (board_mgr_esp32.c)— y la
+ * placa dice lo contrario. No clasifiques chips con ese macro.
+ *
+ * 📐 La razon de fondo la puso Eduardo (9-sep): vistas separadas para
+ * instrucciones y datos es un rasgo HARVARD, y ARM Cortex-M y RISC-V son Von
+ * Neumann, con el espacio de direcciones unificado. Que un `soc_caps.h` no
+ * declare el macro no implica que la MMU las separe.
+ *
+ * ENTONCES POR QUE SE QUEDA (decision de Eduardo, 9-sep): cuesta un parametro y
+ * una funcion identidad, y el dia que aparezca un micro que si las separe esta
+ * resuelto. Lo que NO se queda es la afirmacion falsa de arriba, que es lo que
+ * hacia dano: alguien la lee y clasifica chips con ella.
+ *
+ * La firma pide las dos bases A PROPOSITO en vez de anadir una segunda llamada:
+ * asi la cintura que no se entere NO COMPILA, en vez de montar media zona en
+ * silencio. */
 void bpvm_pack_mount(const uint8_t* base_lectura, const uint8_t* base_ejecucion,
                      uint32_t size);
 

@@ -142,8 +142,14 @@ void board_mgr_esp32_set_packs_view(const void* base_lectura,
  * sistema deberia ser identico, igual que el environment».
  *
  * Lo unico que cambia entre micros es cuantas direcciones devuelve la MMU:
- *   P4 y C6   `SOC_MMU_DI_VADDR_SHARED` -> INST y DATA dan LA MISMA -> una vista
- *   S3 y C3   no lo declaran            -> dan DISTINTAS -> se lee por DATA y se
+ *   ⚠️ 9-sep: MEDIDO EN PLACA, LAS CUATRO DAN LA MISMA. C3 y S3 incluidos
+ *   (INST @0x4207c000 = DATA, e INST @0x4287e000 = DATA). Lo que se creia —que
+ *   el S3 y el C3 las separan por no declarar `SOC_MMU_DI_VADDR_SHARED`— es
+ *   FALSO: ese macro no lo mira nadie, la decision es la comparacion de abajo.
+ *   El caso de dos vistas sigue soportado por si aparece, pero hoy no lo usa
+ *   nadie. Lo de abajo describe el mecanismo, no el reparto de chips:
+ *   una vista  -> INST y DATA dan LA MISMA
+ *   dos vistas -> se lee por DATA y se
  *                                          ejecuta por INST
  * Antes el segundo caso se reconocia y se ABANDONABA («NO se salta hasta que eso
  * este escrito»). Ya esta escrito, y no hizo falta codigo de familia: solo dejar
@@ -190,9 +196,10 @@ int board_mgr_esp32_mapear_packs(void) {
     }
 
     if (ed == ESP_OK && s_map_data != s_map_inst) {
-        /* S3 y C3. Se lee por DATA (acepta accesos de cualquier ancho) y se salta
-         * por INST. La traduccion la hace `bpvm_pack_exec_ptr` en el unico sitio
-         * donde el puntero pasa de dato a codigo. */
+        /* Dos vistas: se lee por DATA (acepta accesos de cualquier ancho) y se
+         * salta por INST. La traduccion la hace `bpvm_pack_exec_ptr` en el unico
+         * sitio donde el puntero pasa de dato a codigo.
+         * ⚠️ 9-sep: NINGUN micro nuestro entra por aqui — medido en C3 y S3. */
         board_mgr_esp32_set_packs_view(s_map_data, s_map_inst, packs->size);
     } else if (ed == ESP_OK) {
         /* P4 y C6: la misma direccion para las dos cosas. */
