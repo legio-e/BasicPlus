@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 9 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 8 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **9** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` · `#484` · `#485` · `#487` |
+> | **fichas de V6** | **8** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` · `#484` · `#485` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2339,7 +2339,7 @@ backend); un `throw` de un programa BP construye el objeto con opcodes normales 
 ordenarla no compra nada hoy. **No se abre ficha** — pero queda escrito por si algún día un camino
 nuevo empieza a buscar por nombre en un bucle.
 
-#### 🟡 `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, sale de `#480`)
+#### 🧬 `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, de `#480` · **→ V7** el mismo día)
 
 El cuarteto `setMark`/`markCount`/`markAt`/`bootCount` sólo lo rellena el STM32
 (`gpio_stm32.c:310-325`); Pico, ESP32 y P4 dejan esos slots a **NULL**, y `src/pico.c:121-140`
@@ -2351,6 +2351,47 @@ y «Migas: 0» para siempre, y su línea final **promete en voz alta algo falso*
 📌 **Y es una clase de fallo distinta a `#469`**: no es «nadie registró backend», es **backend
 registrado con la mitad de los slots a NULL**. Por eso el arreglo genérico de `#469` no la cubre: la
 fachada tiene que distinguir «slot NULL» de «backend ausente».
+
+
+### 🧬 9-sep — A **V7** (Eduardo)
+
+> *«Lo pasamos a V7. Ahora mismo, con las nuevas placas ya hechas, casi nos da igual.»*
+
+**El motivo es de oportunidad, no de dificultad**: el breadcrumb es la herramienta de las traídas de
+placa —dejar marcas por fases y leer el rastro tras un reset inesperado—, y las placas nuevas ya
+están arrancadas. Su momento de máximo valor ya pasó; volverá cuando haya silicio nuevo o una
+campaña de fallos en campo.
+
+### Lo que queda medido para cuando se retome, que es la mitad del trabajo
+
+📌 **NO es un caso «el hardware no puede», como el watchdog del STM32.** Comprobado el 9-sep:
+
+| | memoria que sobrevive al reset | |
+|---|---|---|
+| **STM32 U5** | registros de backup | ✅ **es el único que lo implementa** |
+| **RP2350** | *scratch* del watchdog | el propio SDK usa el registro 4 para marcar el motivo del reboot |
+| **ESP32** | `RTC_NOINIT_ATTR` (memoria RTC sin inicializar) | ⚠️ hay chips donde el IDF lo rechaza (`static_assert`) — mirar uno a uno |
+
+Así que en V7 la decisión no es «se puede o no»: es **implementarlo en RP2350 y ESP32, o declarar
+que no está**.
+
+### Y la mitad barata, que va con ello
+
+Sea cual sea la decisión, **la fachada tiene que aprender a distinguir «slot NULL» de «nada que
+informar»**. Hoy no puede:
+
+```c
+void bpvm_pico_set_mark(int code) {
+    if (g_backend && g_backend->setMark) g_backend->setMark(code);
+    /* Host: no-op (sin RAM retenida). */
+}
+```
+
+`markCount()` devuelve **0**, que en BP se lee como *«no hay marcas»* cuando la verdad es *«yo no
+guardo marcas»*. Las dos frases se parecen y llevan a sitios opuestos: la primera dice que el reset
+fue limpio, la segunda que no tienes instrumento. 🔑 **Y es el instrumento mudo dentro del aparato
+que existe para cuando ya estás en problemas** — por eso, aunque se decida no implementarlo,
+`BreadcrumbDemo.bp` no puede seguir prometiendo *«si reseteas ahora, el rastro será 10..50»*.
 
 #### 🧬 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143` · **los cuatro números → V7** el 9-sep)
 
