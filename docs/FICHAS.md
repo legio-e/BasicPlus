@@ -1889,7 +1889,7 @@ Con esa norma quedaban dos celdas, y Eduardo decidió las dos:
   `#480` (el `Wdt` del STM32, el `Pulse` del C3, el ADC del ESP32 que falla con 0, el breadcrumb con
   los slots a NULL). **El patrón de esta ficha no los arregla**: son bugs de driver, uno a uno.
 
-#### 🧪 `#480` — LO QUE DESTAPÓ LA AUDITORÍA DE LAS 13 FACHADAS, verificado (abierta 6-sep)
+#### 🧪 `#480` — LO QUE DESTAPÓ LA AUDITORÍA DE LAS 13 FACHADAS, verificado (abierta 6-sep · **1 de 4 cerrada y 1 a V7** el 9-sep)
 
 Tirando de `#469` se auditaron **las trece fachadas de periférico** (quién registra backend en cada
 familia, y qué hace la fachada común cuando nadie lo hizo), con una pasada de verificación
@@ -1936,6 +1936,68 @@ IDE que calibre, y una placa desplegada presenta ms-desde-boot como epoch Unix.)
 ⏭️ El arreglo genérico ya está escrito y probado en la ADC (`#469`): **el que no tiene hardware
 registra un backend explícito, y la ausencia pasa a ser un error**. Falta extenderlo — y la pieza 4
 necesita además que la fachada distinga «slot NULL» de «backend ausente».
+
+### ✅ 9-sep — LA PIEZA 1 (el watchdog) CERRADA, y la 2 va a V7 (`78320969`, `c6dfa022`)
+
+**Criterio de Eduardo, que zanja la pieza 1 sin discutir el caso concreto:** *«El watchdog se ha de
+implementar completo o no se implementa. Lo del STM32 o se arregla o se desactiva completamente, no
+podemos tener medio watchdog.»*
+
+**Arreglarlo NO SE PUEDE**: el IWDG del U5 no se para por software —arrancado con `KR=0xCCCC`, sólo
+lo apaga un reset—, y eso es silicio. Medido además que **nada lo arranca en el boot**: sólo lo
+enciende `Wdt.enable()` desde BP.
+
+| | enable | feed | disable | |
+|---|---|---|---|---|
+| **Pico** | real | real | `watchdog_disable()` **de verdad** | ✅ se queda |
+| **ESP32** | Task WDT → reset | real | des-suscribe la task | ✅ se queda |
+| **STM32 U5** | IWDG real | real | ❌ imposible | 🚫 **sin backend** |
+| **PC** | — | — | — | 🚫 **sin backend** |
+
+Sin backend, los tres verbos lanzan un `RuntimeError` BP atrapable, igual que el NeoPixel desde el
+8-sep. **El código del IWDG se borra, no se comenta**: git lo guarda y el código muerto son avisos
+del compilador para siempre (el build del Nucleo pasa de 5 avisos a 3). Y se corrigió la doc de
+usuario, que **culpaba al chip equivocado**.
+
+### 🧬 La pieza 2 (el `Pulse` del C3) → **V7**, con `#470`
+
+**Eduardo:** *«El contador lo tiene P4. Si los otros micros no tienen contador, lo que hay que hacer
+es lo mismo que con las UARTs, I2C, etc. Va con los ficheros del micro.»* Medido: el PCNT lo tienen
+**S3, C6 y P4**; el **C3 es el único sin él**. Así que no es un parche de `Pulse`: es la misma
+declaración por micro que `#470` y `#479`.
+
+### 🔴 Y tirando de ahí salió una ROTURA DEL INVARIANTE, viva desde siempre (`c6dfa022`)
+
+**Seis fachadas sin hardware en el PC** —`gpio`, `pwm`, `pulse`, `uart`, `spi`, `pico`— escriben su
+línea de simulación **dos veces**, una en cada VM, y **no decían lo mismo**: `(sim …)` contra
+`(stub …)`. **Trece textos.** Mismo `.mod`, `stdout` distinto.
+
+🕳️ **Por qué nunca saltó: ninguna de las seis tenía un sample en el corpus.** Es el mismo agujero
+que `#481` señala para el camino de error, y con la misma forma — *lo que no se compara, se pudre*.
+
+🐛 **Y uno de los trece NO era cosmético.** `src/uart.c:42` usaba **`putchar`** en medio de una
+secuencia de `bpvm_out`: `putchar` escribe al `FILE` de C y **se sale del sumidero de la VM**, así
+que el payload salía **desordenado** y el preview quedaba vacío.
+
+```
+miVM   [uart] write bus=0 bytes=[41 42 43] ("ABC")
+VM-C   ABC…                   bytes=[41 42 43] ("")
+```
+
+📌 Y dos líneas más abajo, en el mismo fichero, hay un comentario de `#478` que dice *«TEXTO =
+CONTRATO DE PARIDAD: idéntico al de miVM»*. **Se hizo para `read` y se saltó `write`.**
+
+La VM-C se alinea con miVM (esa misma convención: miVM es la referencia), y **`samples/StubParidad.bp`
+entra en el corpus** tocando **cada** verbo con stub de las seis fachadas. Corpus **48 → 50**, 50 PASS.
+
+### ⏭️ Lo que queda de `#480`
+
+| | | |
+|---|---|---|
+| 1 | el watchdog del STM32 | ✅ 9-sep |
+| 2 | el `Pulse` del C3 | 🧬 **V7**, con `#470` |
+| 3 | el **ADC del ESP32 falla con 0, no con −1** → ADC roto = 0 V constante y mudo, **con backend registrado** | 🔴 abierto |
+| 4 | el **breadcrumb mudo en 4 de 5 familias** (backend registrado con la mitad de los slots a NULL) | 🔴 abierto |
 
 #### 🔴 `#481` — las dos VMs discrepan en `stdout` cuando el programa MUERE con una excepción sin atrapar (abierta 8-sep)
 
