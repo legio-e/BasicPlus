@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 3 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 2 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **3** | `#462` · `#471` · `#473` |
+> | **fichas de V6** | **2** | `#462` · `#473` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2757,7 +2757,7 @@ dos veces.
 GPIO) y que `gpioCount()` y compañía pasen a ser su longitud. **En V6 no se toca**, y por tanto esta
 ficha sale de la lista de pendientes de V6.
 
-#### 🟡 `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3` · **el RENOMBRADO hecho el 8-sep**, `a9b6cb8b`)
+#### ✅ `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3` · **RENOMBRADO el 8-sep** `a9b6cb8b` · **CERRADA el 9-sep** `b79a6c1b`; los métodos NUEVOS, a V7)
 
 ##### ✅ PASO 1 HECHO el 8-sep (`a9b6cb8b`): el módulo ya se llama `Machine`
 
@@ -2859,6 +2859,64 @@ vicio, más pequeño: `pio_count` y `pwm_slices` son vocabulario del RP2350 en u
 lenguaje y lo decide Eduardo**: rompe programas que ya usan `Pico.*`, y este proyecto no gasta
 palabras reservadas ni cambia el lenguaje a la ligera. Alternativa barata mientras tanto: un alias
 y dejar `Pico` como nombre viejo documentado.
+
+
+### ✅ 9-sep — LO QUE ESTABA ROTO, ARREGLADO; LO QUE ES NUEVO, A V7 (`b79a6c1b`)
+
+**Reparto de Eduardo:** *«No sé, yo arreglaría algo ahora y el resto para V7.»* Aplicado con su
+propio criterio — **se arregla lo que está roto, se aplaza lo que es nuevo**.
+
+📌 **Y lo primero que salió al ir a añadir métodos es que DOS de los cuatro que pedía la ficha YA
+ESTABAN**: `uniqueId()` (el nº de serie, como recordaba Eduardo) y `tempC()`. Lo que no estaba era
+que funcionaran igual en las dos VMs.
+
+### Lo arreglado — tres roturas del invariante, vivas
+
+Ninguna se veía porque **`Machine` sólo tenía `MachineId` en el corpus** (micro/placa):
+
+| | miVM | VM-C |
+|---|---|---|
+| `uniqueId()` | `host-pc` | `0000000000000000` |
+| `tempC()` | callaba | escribía una traza en `stdout` |
+| `cpuFreqHz()` | **0** | **150000000**, y otra traza |
+
+### Y debajo, algo peor — lo destapó un aviso de Eduardo
+
+> *«Cuidado con la frecuencia, no es una constante. En su día hicimos pruebas en la Pico: la
+> velocidad y la tensión se podían ajustar para hacer overclocking.»*
+
+```
+set(200) -> true        y acto seguido    cpuFreqHz() -> el valor de antes
+```
+
+**En las DOS VMs.** El stub contestaba «hecho» a un cambio que no hacía y la lectura lo desmentía —
+el mismo vicio que el ADC de `#480`: fallar con un valor plausible.
+
+**Ahora el host SIMULA el cambio y lo recuerda.** No es fingir más: el host es el **micro simulado**
+(`H10`), y simular el cambio de frecuencia es exactamente su trabajo — así `set` y `get` no se
+contradicen y un programa que ajusta la frecuencia **se puede probar en el PC**, que es de lo que va
+la cascada.
+
+🔌 **La TENSIÓN no hace falta tocarla, y conviene saber por qué**: en placa la escala **sola**
+`pico_pico_set_cpu_freq_mhz_impl` — 1,10 V hasta 200 MHz, 1,15 hasta 250, 1,20 hasta 280, 1,30 por
+encima — y con el orden correcto en cada sentido: **subiendo, primero el voltaje; bajando, primero
+la frecuencia**, porque al revés *«cuelgue garantizado a 300 MHz con 1,10 V»*. En el PC no hay nada
+que alimentar. *(Eduardo la recordaba en `Timer`; está en `pico/main.c`, dentro del propio
+`setCpuFreqMHz`.)*
+
+**`samples/MachineHost.bp` al corpus**, con el par `set`/`get` y el clamp. Corpus **53 → 54**.
+
+### ⏭️ Lo que va a V7
+
+- **`manufacturer()`** — la pedía Eduardo: *«una constante similar a micro»*, o sea un `CHIP_...` por
+  micro en su `chip_cfg.h`, como `CHIP_MICRO`. Es función nueva.
+- **PSRAM y RAM** — ídem.
+- 🔴 **`MAX_CPU_MHZ = 300` y `MIN_CPU_MHZ = 18` están en BP e IGUALES PARA TODOS LOS MICROS**, y son
+  números del RP2350: en un C3 (160 MHz) o un STM32U5 (160 MHz) el 300 es **falso**. Es exactamente
+  el vicio del `0..3` del ADC —la forma de la primera placa convertida en contrato de todas— y va
+  con la decisión de `#470`: **cada micro declara lo suyo**.
+- **Qué hacen las otras familias con la frecuencia y la tensión**: el escalado de voltaje sólo lo
+  tiene la Pico. Falta mirar si las demás escalan, limitan, o aceptan cualquier número.
 
 #### ✅ `#472` — ~~el común nombra DOS familias donde quería decir «micro»~~ (abierta 5-sep, de `A3` · **CERRADA el 8-sep**)
 
