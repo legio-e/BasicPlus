@@ -1,0 +1,89 @@
+// samples/GuiHambre.bp - #462: ¿el lazo del GUI, ya en su propio hilo BP,
+// deja correr al resto de los hilos?
+//
+// POR QUE EXISTE. Los 400 ms de latencia que mide la ficha #462 se tomaron el
+// 31-ago, cuando `Gui.run()` corría en el hilo principal. `G1` metió el lazo en
+// su propio hilo BP el 6-sep, y Eduardo lo dijo así: *«ahora el bucle se ejecuta
+// en su propio Thread BP, no debería afectar al resto del funcionamiento de los
+// programas»*. Este sample lo pregunta con un número en vez de suponerlo.
+//
+// COMO. Un hilo testigo que no hace nada -sólo mira el reloj y cuenta el hueco
+// desde la vuelta anterior- mientras el lazo del GUI bombea LVGL al lado. Si el
+// planificador reparte por TIEMPO, los huecos son de milisegundos; si reparte
+// por OPCODES, el hilo del GUI se lleva ~1024 opcodes que cuestan ~1,2 ms cada
+// vuelta de bombeo, y el testigo verá huecos de cientos de ms.
+//
+// SU CONTROL, que es lo que hace que la medida valga: la MISMA medida sin GUI
+// (segunda fase). Si el testigo también sale a cientos de ms sin nadie que
+// bombee, el número no dice nada del GUI: dice que el testigo mide mal.
+module GuiHambre
+  import Core
+  import Gui
+  import Machine
+
+  class Testigo extends Thread
+    var parar: boolean
+    var peor: integer
+    var vueltas: integer
+
+    public function Testigo()
+      super(4096)
+      this.parar   := false
+      this.peor    := 0
+      this.vueltas := 0
+    end Testigo
+
+    public function pedirParada()
+      this.parar := true
+    end pedirParada
+
+    public function peorHueco(): integer
+      return this.peor
+    end peorHueco
+
+    public function cuantasVueltas(): integer
+      return this.vueltas
+    end cuantasVueltas
+
+    public function run()
+      var anterior: integer := Machine.uptimeMs()
+      while not this.parar do
+        var ahora: integer := Machine.uptimeMs()
+        var hueco: integer := ahora - anterior
+        if hueco > this.peor then
+          this.peor := hueco
+        endif
+        anterior := ahora
+        this.vueltas := this.vueltas + 1
+      endwh
+    end run
+  end Testigo
+
+  function Main()
+    // ---- FASE 1: el testigo compitiendo con el lazo del GUI ----
+    var scr: Gui.Screen := Gui.Screen()
+    var lbl: Gui.Label := Gui.Label(scr, "hambre")
+    lbl.setPos(10, 10)
+
+    var t1: Testigo := Testigo()
+    Gui.start()
+    t1.start()
+    sleep(3000)
+    t1.pedirParada()
+    t1.join()
+    Gui.stop()
+    Gui.join()
+
+    print "con GUI:  peor hueco = ", t1.peorHueco(), " ms  (vueltas ", t1.cuantasVueltas(), ")"
+
+    // ---- FASE 2 (CONTROL): el mismo testigo, sin nadie bombeando ----
+    var t2: Testigo := Testigo()
+    t2.start()
+    sleep(3000)
+    t2.pedirParada()
+    t2.join()
+
+    print "sin GUI:  peor hueco = ", t2.peorHueco(), " ms  (vueltas ", t2.cuantasVueltas(), ")"
+  end Main
+
+end GuiHambre

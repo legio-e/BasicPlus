@@ -171,6 +171,13 @@ int main(int argc, char** argv) {
         else if (strcmp(a, "--nogc") == 0) {
             no_gc = 1;   /* #355: espejo en el PC del `gc=0` del ENV de la placa */
         }
+        else if (strncmp(a, "--quantum=", 10) == 0) {
+            /* #462 - espejo en el PC del `quantum=N` del ENV de la placa. Lo
+             * tenia SOLO la Pico (pico/main.c:1154), asi que el mando que
+             * separo las dos causas de la latencia del GUI no se podia usar
+             * aqui: habia que flashear para mover un numero. */
+            bpvm_set_quantum_ops(strtol(a + 10, NULL, 10));
+        }
         else if (strncmp(a, "--stack=", 8) == 0) {
             /* Espejo en el PC del `stack=N` del ENV de la placa (KB), igual que
              * --nogc lo es de `gc=0`. Sirve para probar aquí el reparto antes de
