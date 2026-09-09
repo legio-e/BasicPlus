@@ -1053,6 +1053,23 @@ public class VirtualMachine {
      * dispara un RuntimeError BP (vía throwBpRuntimeError) que el código
      * BP puede atrapar con `try/catch e: RuntimeError`.
      */
+    /** #484 — `IO.pathAbsolute`: el nombre que el FS va a usar. Funcion PURA de
+     *  (path, projectPath) — sin tocar el disco — para que la VM-C de lo mismo.
+     *  El espejo, en src/builtins.c (BUILTIN_PATH_ABSOLUTE). */
+    private String pathAbsoluteBp(String p) {
+        if (p == null || p.isEmpty()) return "";
+        if (p.charAt(0) == '/') return p;                  // ya es absoluto
+        for (int i = 0; i < p.length(); i++) {             // #362: esquema "algo:..."
+            char c = p.charAt(i);
+            if (c == '/' || c == '\\') break;              // ya es ruta: no hay esquema
+            if (c == ':') return p;
+        }
+        ModuleManager mm = getModuleManager();
+        java.nio.file.Path wd = (mm != null) ? mm.getWorkdir() : null;
+        String base = (wd != null) ? wd.toString() : "";
+        return base.isEmpty() ? p : (base + "/" + p);
+    }
+
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
@@ -5085,12 +5102,32 @@ public class VirtualMachine {
                 break;
             }
             case PATH_ABSOLUTE: {
+                /* #484 — QUE SIGNIFICA "absoluto" AQUI, y por que cambio.
+                 *
+                 * Antes esto devolvia la ruta del SISTEMA OPERATIVO cuando no
+                 * habia workdir: pathAbsolute("x.txt") sacaba la ruta completa
+                 * del PC por el stdout de un programa BP. Eso (a) filtra el
+                 * host, que es justo lo que el sandbox dice querer evitar, y
+                 * (b) NO EXISTE en un micro, donde "absoluto" es "/app/x.txt".
+                 * La VM-C no podia igualarlo sin inventarse un segundo
+                 * significado, asi que el mismo .mod daba stdout distinto en
+                 * las dos VMs.
+                 *
+                 * Decision de Eduardo (9-sep): «trabajamos con paths relativos
+                 * siempre que podamos, eso lo hace mas transportable». Asi que
+                 * ahora responde EL NOMBRE QUE EL FS VA A USAR, y nada mas:
+                 *
+                 *   empieza por '/'        -> tal cual (ya es absoluto)
+                 *   tiene esquema "x:..."  -> tal cual (direccion exacta, #362)
+                 *   hay proyecto           -> <projectPath>/<path>
+                 *   si no                  -> tal cual (relativo se queda relativo)
+                 *
+                 * NO mira el disco y NO normaliza "..": es una funcion pura de
+                 * (path, projectPath), y eso es lo que permite que las dos VMs
+                 * den lo mismo sin depender del FS de debajo. El espejo esta en
+                 * src/builtins.c, BUILTIN_PATH_ABSOLUTE. */
                 String p = readVmString(popTcRef(tc));
-                // Con sandbox: devuelve el path absoluto DENTRO del workdir
-                // (no filtra info del host). Sin sandbox: usa Paths.get raw.
-                java.nio.file.Path resolved = sandboxPath(tc, p);
-                String r = resolved.toAbsolutePath().normalize().toString();
-                pushTcRef(tc, allocVmString(r));
+                pushTcRef(tc, allocVmString(pathAbsoluteBp(p)));
                 break;
             }
             case MKDIR: {

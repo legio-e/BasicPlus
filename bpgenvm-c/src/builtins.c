@@ -99,6 +99,7 @@ enum {
      * ademas es lo que promete la doc de IO.bp. Dos mensajes distintos para el
      * mismo programa = paridad rota, y no lo veia nadie porque no habia ningun
      * sample suyo en el corpus. */
+    BUILTIN_PATH_ABSOLUTE   = 68,   /* #484 - ver el case, cambia de significado */
     BUILTIN_PROMPT          = 77,
     /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
     BUILTIN_ABS             = 16,
@@ -3160,6 +3161,44 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (bpvm_wdt_disable() != 0)
             return builtin_throw(vm, tc, "Wdt.disable(): no implementado en esta plataforma");
         push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_PATH_ABSOLUTE: {
+        /* #484 - EL NOMBRE QUE EL FS VA A USAR, y nada mas. Espejo exacto de
+         * miVM (VirtualMachine.java, case PATH_ABSOLUTE / pathAbsoluteBp):
+         *
+         *   empieza por '/'        -> tal cual (ya es absoluto)
+         *   tiene esquema "x:..."  -> tal cual (direccion exacta, #362)
+         *   hay proyecto           -> <projectPath>/<path>
+         *   si no                  -> tal cual (relativo se queda relativo)
+         *
+         * NO mira el disco y NO normaliza "..": es una funcion PURA de (path,
+         * projectPath), y por eso las dos VMs pueden dar lo mismo sin depender
+         * del sistema de ficheros de debajo. Decision de Eduardo (9-sep):
+         * «trabajamos con paths relativos siempre que podamos, eso lo hace mas
+         * transportable». */
+        uint32_t pref = pop_ref(vm, tc);
+        char p[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, p, sizeof(p)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
+        const char* base = bpvm_fs_basedir();
+        char out[BPVM_FS_PATH_MAX];
+        const char* r = p;                       /* por defecto, tal cual */
+        if (p[0] != '\0' && p[0] != '/') {
+            int esquema = 0;
+            for (const char* q = p; *q; q++) {
+                if (*q == '/' || *q == '\\') break;      /* ya es ruta */
+                if (*q == ':') { esquema = 1; break; }
+            }
+            if (!esquema && base[0] != '\0') {
+                snprintf(out, sizeof(out), "%s/%s", base, p);
+                r = out;
+            }
+        }
+        uint32_t ref = bpvm_heap_alloc_string(vm, r, strlen(r));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 

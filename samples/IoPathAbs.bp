@@ -1,0 +1,24 @@
+// IoPathAbs.bp - #484: `IO.pathAbsolute` responde EL NOMBRE QUE EL FS VA A USAR.
+//
+// Antes devolvia la ruta del sistema operativo del PC cuando no habia proyecto,
+// asi que (a) sacaba rutas del host por el stdout de un programa BP y (b) la
+// VM-C no podia igualarla: en un micro esa ruta no existe. Mismo .mod, stdout
+// distinto en las dos VMs — y sin ningun sample en el corpus que lo viera.
+//
+// Ahora es una funcion PURA de (path, projectPath): no mira el disco, no
+// normaliza ".." y lo relativo SE QUEDA relativo. Criterio de Eduardo (9-sep):
+// «trabajamos con paths relativos siempre que podamos, eso lo hace mas
+// transportable».
+//
+// Los cinco casos son las cinco ramas de la regla.
+module IoPathAbs
+  import IO
+
+  function Main()
+    print "relativo:", IO.pathAbsolute("x.txt")
+    print "absoluto:", IO.pathAbsolute("/app/x.txt")
+    print "con carpeta:", IO.pathAbsolute("sub/x.txt")
+    print "con esquema:", IO.pathAbsolute("pack:Iconos/logo.png")
+    print "vacio:", IO.pathAbsolute("")
+  end Main
+end IoPathAbs

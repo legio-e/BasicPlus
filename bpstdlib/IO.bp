@@ -37,7 +37,19 @@ module IO
   //   pathExtension("README")      → ""
   public intrinsic function pathExtension(p: string): string
 
-  // Resuelve a path absoluto y normalizado (resuelve ".." y ".").
+  // #484 - EL NOMBRE QUE EL FS VA A USAR. Funcion pura de (path, projectPath):
+  //
+  //   empieza por "/"        -> tal cual (ya es absoluto)
+  //   tiene esquema "x:..."  -> tal cual (es una direccion exacta)
+  //   hay proyecto           -> <App.projectPath()>/<path>
+  //   si no                  -> tal cual (lo relativo SE QUEDA relativo)
+  //
+  // NO mira el disco y NO normaliza ".." ni ".", y las dos cosas son a
+  // proposito: asi la respuesta no depende del sistema de ficheros de debajo y
+  // es la misma en el PC y en la placa. Antes devolvia la ruta del SISTEMA
+  // OPERATIVO del PC, que filtra el host y no existe en un micro.
+  // Criterio de Eduardo (9-sep): «trabajamos con paths relativos siempre que
+  // podamos, eso lo hace mas transportable».
   public intrinsic function pathAbsolute(p: string): string
 
   // ---- Operaciones sobre filesystem ----
