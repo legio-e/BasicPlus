@@ -1,0 +1,33 @@
+// GuiDispatchBench.bp - #486: cuanto cuesta buscar los dos dispatchers por NOMBRE
+// en cada pasada del bombeo.
+//
+// GUI_RUN_ONCE recorre TODA la tabla de simbolos con strcmp en cada vuelta para
+// encontrar dos funciones que no cambian nunca. Este sample llama al bombeo en
+// bucle y lo cronometra. En una build SIN LVGL el bombeo no hace nada mas, asi
+// que lo que se mide es el barrido y poco mas.
+//
+// Los imports NO son decorativos: hacen la tabla de simbolos grande, que es la
+// condicion del problema (un programa de GUI real anda por los ~460).
+module GuiDispatchBench
+  import Gui
+  import Json
+  import Core
+  import Collections
+  import Math
+  import IO
+  import Machine
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var b: Gui.Button := Gui.Button(scr, "x")
+
+    var vueltas: integer := 20000
+    var t0: integer := Machine.uptimeMs()
+    var i: integer := 0
+    while i < vueltas do
+      Gui.__guiRunOnce()
+      i := i + 1
+    endwh
+    print "pasadas:", vueltas, " ms:", Machine.uptimeMs() - t0
+  end Main
+end GuiDispatchBench

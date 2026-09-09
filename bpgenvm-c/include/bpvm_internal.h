@@ -588,6 +588,31 @@ struct bpvm {
      * Fijo y sin malloc, como load_error. Va AL FINAL: el prefijo congelado del
      * .mdn (memory, aot_helpers) esta arriba y no se toca. */
     char run_arg[128];
+
+    /* #486 - LOS DOS DISPATCHERS DEL GUI, RESUELTOS UNA VEZ.
+     *
+     * `GUI_RUN_ONCE` (y su gemelo `GUI_RUN`) buscaban `Gui.__guiDispatch` y
+     * `Gui.__guiDispatchChange` recorriendo la tabla de simbolos ENTERA con
+     * strcmp, en CADA pasada del bombeo — para dos funciones que no cambian
+     * nunca dentro de un RUN. Medido en host: 12 us por vuelta con 1420
+     * simbolos (~8,5 ns por simbolo).
+     *
+     * miVM ya lo cacheaba (`guiDispatchPc`, con centinela -2), asi que esto
+     * ademas quita una asimetria entre las dos VMs.
+     *
+     * POR QUE EN LA VM Y NO EN UN `static`: la direccion depende del programa
+     * CARGADO, y un mismo proceso ejecuta muchos RUN seguidos (el wire). Un
+     * static sobreviviria al RUN y devolveria la direccion del programa
+     * anterior. Aqui muere con la VM, que es lo correcto.
+     *
+     * Centinela: 0 = "sin resolver todavia". 1 = "buscado y NO existe" (el
+     * programa no importa Gui, o no hay handlers): tambien hay que recordarlo,
+     * o el caso "no esta" seguiria barriendo la tabla en cada vuelta. Ninguna
+     * direccion real vale 0 ni 1.
+     *
+     * Va AL FINAL, como run_arg: el prefijo congelado del .mdn no se toca. */
+    uint32_t gui_disp_click;
+    uint32_t gui_disp_change;
 };
 
 

@@ -553,6 +553,28 @@ static int read_bp_path(const bpvm_t* vm, uint32_t ref, char* dst, size_t dst_si
     return 0;
 }
 
+/* #486 - Resuelve los dos dispatchers del GUI UNA vez por RUN y los cachea en la
+ * VM. Antes esto era un barrido de la tabla de simbolos entera con strcmp en
+ * CADA pasada del bombeo, duplicado ademas en GUI_RUN y GUI_RUN_ONCE.
+ *
+ * El centinela 1 significa "buscado y no esta": sin el, un programa sin
+ * handlers seguiria barriendo la tabla en cada vuelta, que es justo el caso que
+ * mas vueltas da. Devuelve 0 en `*click`/`*change` cuando no hay. */
+static void gui_dispatchers(bpvm_t* vm, uint32_t* click, uint32_t* change) {
+    if (vm->gui_disp_click == 0 && vm->gui_disp_change == 0) {
+        uint32_t c = 1, h = 1;                     /* 1 = buscado y no esta */
+        for (int i = 0; i < vm->symbol_count; i++) {
+            const char* n = bpvm_symbol_name(vm, i);
+            if      (strcmp(n, "Gui.__guiDispatch")       == 0) c = vm->symbols[i].abs_addr;
+            else if (strcmp(n, "Gui.__guiDispatchChange") == 0) h = vm->symbols[i].abs_addr;
+        }
+        vm->gui_disp_click  = c;
+        vm->gui_disp_change = h;
+    }
+    *click  = (vm->gui_disp_click  == 1) ? 0 : vm->gui_disp_click;
+    *change = (vm->gui_disp_change == 1) ? 0 : vm->gui_disp_change;
+}
+
 /* Helpers UTF-8 (utf8_cp_count / utf8_byte_offset / utf8_decode / utf8_encode)
  * viven en bpvm_internal.h (fuente única compartida con el AOT). */
 
@@ -1003,11 +1025,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * (simétrico a invokeGuiDispatch de miVM). Con LVGL: bombea la ventana SDL
          * hasta cerrarla, drenando eventos reales + sintéticos. Sin LVGL
          * (modelo-only/arnés): drena los inyectados y vuelve. */
-        uint32_t disp_click = 0, disp_change = 0;
-        for (int i = 0; i < vm->symbol_count; i++) {
-            if      (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
-            else if (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
-        }
+        uint32_t disp_click, disp_change;
+        gui_dispatchers(vm, &disp_click, &disp_change);   /* #486 - una vez por RUN */
 #ifdef BPVM_LVGL
         for (;;) {
             uint32_t objptr; int kind;
@@ -1054,11 +1073,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * pero SIN el lazo: el lazo vive ahora en Gui.run() (BP), que es lo que
          * da la frontera de instrucción donde el scheduler drena los eventos.
          * Devuelve 1 = "vuelve a llamarme" / 0 = "no queda nada". */
-        uint32_t disp_click = 0, disp_change = 0;
-        for (int i = 0; i < vm->symbol_count; i++) {
-            if      (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
-            else if (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
-        }
+        uint32_t disp_click, disp_change;
+        gui_dispatchers(vm, &disp_click, &disp_change);   /* #486 - una vez por RUN */
         int drained = 0;
         uint32_t objptr; int kind;
         while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
