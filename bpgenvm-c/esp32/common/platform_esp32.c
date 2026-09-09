@@ -226,7 +226,20 @@ static int es_thread_spawn_prio(bpvm_platform_thread_handle_t* t,
  * moleste, y fijarla al nucleo de I/O es cosa de A1.3 con las placas delante. */
 int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
                                     bpvm_thread_entry_t entry, void* arg) {
-    return es_thread_spawn_prio(t, entry, arg, tskNO_AFFINITY, tskIDLE_PRIORITY + 1);
+    /* #485 - `io` NO LLEVA NUMERO: hereda el de quien lo arranca.
+     *
+     * El contrato dice «io a la MISMA prioridad que la tarea que ejecuta la VM,
+     * nunca por debajo» (bpvm_platform.h), y hasta hoy eso se VIGILABA: habia
+     * un literal aqui y otro donde cada familia crea su tarea de VM, y tenian
+     * que coincidir a mano. En el P4 dejaron de coincidir -su VM corre en
+     * wire_task a prioridad 5 y esto ponia io a 1- sin que nada lo dijera.
+     *
+     * bpvm_io_start() lo llama SIEMPRE la tarea que ejecuta la VM (los cuatro
+     * repl lo hacen desde el camino del RUN), asi que uxTaskPriorityGet(NULL)
+     * ES la prioridad de la VM. Con esto el contrato pasa de vigilado a
+     * CONSTRUIDO: no hay dos numeros que puedan divergir. */
+    return es_thread_spawn_prio(t, entry, arg, tskNO_AFFINITY,
+                                (int) uxTaskPriorityGet(NULL));
 }
 
 int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,

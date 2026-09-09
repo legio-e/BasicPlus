@@ -280,7 +280,20 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
 /* El hilo `io`: MISMA prioridad que la VM (ver la cabecera). */
 int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
                                     bpvm_thread_entry_t entry, void* arg) {
-    return fr_spawn(t, entry, arg, "bpvm-io", BPVM_FR_STACK_IO, BPVM_FR_PRIO_VM, -1);
+    /* #485 - `io` NO LLEVA NUMERO: hereda el de quien lo arranca.
+     *
+     * El contrato dice «io a la MISMA prioridad que la tarea que ejecuta la VM,
+     * nunca por debajo» (bpvm_platform.h), y hasta hoy eso se VIGILABA: habia
+     * un literal aqui y otro donde cada familia crea su tarea de VM, y tenian
+     * que coincidir a mano. En el P4 dejaron de coincidir -su VM corre en
+     * wire_task a prioridad 5 y esto ponia io a 1- sin que nada lo dijera.
+     *
+     * bpvm_io_start() lo llama SIEMPRE la tarea que ejecuta la VM (los cuatro
+     * repl lo hacen desde el camino del RUN), asi que uxTaskPriorityGet(NULL)
+     * ES la prioridad de la VM. Con esto el contrato pasa de vigilado a
+     * CONSTRUIDO: no hay dos numeros que puedan divergir. */
+    return fr_spawn(t, entry, arg, "bpvm-io", BPVM_FR_STACK_IO,
+                    (int) uxTaskPriorityGet(NULL), -1);
 }
 
 /* Sin SMP la afinidad no significa nada: se acepta y se ignora, que es lo que

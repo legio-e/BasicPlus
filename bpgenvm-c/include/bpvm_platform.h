@@ -84,6 +84,13 @@ int  bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
  *
  * Asi que la prioridad no es un detalle de afinacion: es parte del contrato:
  * `io` va a la MISMA prioridad que la tarea que ejecuta la VM, NUNCA por debajo.
+ *
+ * #485 (9-sep) - Y ese contrato ya esta CONSTRUIDO, no vigilado: las tres
+ * implementaciones sacan la prioridad de `uxTaskPriorityGet(NULL)`, o sea de la
+ * tarea que llama a bpvm_io_start(), que es siempre la que ejecuta la VM. Antes
+ * habia un literal aqui y otro donde cada familia crea su tarea de VM, y tenian
+ * que coincidir A MANO: en el P4 dejaron de coincidir -VM en wire_task a 5, io
+ * a 1- y nada lo dijo. Con esto no hay dos numeros que puedan divergir.
  * Igual, no por encima, y esto tambien esta medido (5-sep, C6 y Pico 2): con `io`
  * por ENCIMA, cada `print` lo despierta y expulsa a la VM, y las 2 000 lineas de
  * PrintBench pasaron de 470 a 848 ms en la C6 y de 3 958 a 4 832 en la Pico. A la
