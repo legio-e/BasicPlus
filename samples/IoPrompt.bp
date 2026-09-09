@@ -1,0 +1,27 @@
+// IoPrompt.bp - #484: `IO.prompt` sin IDE lanza, y lanza LO MISMO en las dos VMs.
+//
+// El dialogo lo pinta el IDE (verbo PROMPT_REQUEST del wire). En la VM-C ese
+// verbo no esta implementado, asi que ahi NUNCA hay quien conteste; y miVM
+// lanzado desde la linea de comandos tampoco tiene IDE. Los dos casos son el
+// mismo y tienen que decir lo mismo.
+//
+// Antes no lo decian: miVM lanzaba «prompt: no hay IDE conectado» -que es lo que
+// promete la doc de IO.bp- y la VM-C caia en su `default` con «builtin 77 no
+// soportado en esta VM (subconjunto C)». Mismo .mod, stdout distinto. No lo veia
+// nadie porque ninguna de las seis intrinsecas que solo estaban en miVM tenia un
+// sample en el corpus.
+module IoPrompt
+  import Core
+  import IO
+
+  function Main()
+    print "antes"
+    try
+      print IO.prompt("{}")
+      print "no deberia llegar aqui"
+    catch e: RuntimeError
+      print "atrapada:", e.msg
+    endtry
+    print "despues"
+  end Main
+end IoPrompt

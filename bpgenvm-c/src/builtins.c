@@ -91,6 +91,15 @@ enum {
     BUILTIN_PATH_PARENT     = 65,
     BUILTIN_PATH_BASENAME   = 66,
     BUILTIN_PATH_EXTENSION  = 67,
+    /* #484 - `IO.prompt` SI existe en la VM-C, y lo que hace es DECIR QUE NO
+     * PUEDE. El dialogo lo pinta el IDE (verbo PROMPT_REQUEST del wire, que aqui
+     * no esta implementado), asi que en esta VM nunca hay quien lo conteste.
+     * Antes caia en el `default` y lanzaba «builtin 77 no soportado en esta VM
+     * (subconjunto C)»; miVM sin IDE lanza «prompt: no hay IDE conectado», que
+     * ademas es lo que promete la doc de IO.bp. Dos mensajes distintos para el
+     * mismo programa = paridad rota, y no lo veia nadie porque no habia ningun
+     * sample suyo en el corpus. */
+    BUILTIN_PROMPT          = 77,
     /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
     BUILTIN_ABS             = 16,
     BUILTIN_MIN             = 17,
@@ -3152,6 +3161,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, "Wdt.disable(): no implementado en esta plataforma");
         push_i32(vm, tc, 0);
         return BPVM_OK;
+    }
+
+    case BUILTIN_PROMPT: {
+        /* #484 - el mensaje es CONTRATO DE PARIDAD: byte a byte el de miVM
+         * (VirtualMachine.java, case PROMPT, rama sin promptSender). */
+        (void) pop_ref(vm, tc);            /* spec: se descarta, no hay a quien mandarla */
+        return builtin_throw(vm, tc, "prompt: no hay IDE conectado");
     }
 
     default: {
