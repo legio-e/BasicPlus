@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 7 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 6 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **7** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` · `#484` |
+> | **fichas de V6** | **6** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2241,7 +2241,7 @@ es el log durante el intento de ejecución**. Si sale `RUN/v1 /app/X.mod session
 llega a lanzarse y se atasca dentro; si no sale, no llega ni a arrancar. Eso parte el problema en
 dos, y sin ello sólo se puede especular — que es exactamente lo que pasó el 21-ago.
 
-#### 🟡 `#484` — `listDir` no existe en la VM-C (abierta 9-sep, de la cola heredada)
+#### ✅ `#484` — `listDir` no existe en la VM-C (abierta 9-sep, de la cola heredada · **CERRADA el 9-sep**: eran SEIS, dos rotas en vivo y dos a V7)
 
 El verbo del wire `LIST_DIR` sí está en el común (`bpvm_repl.c`, `repl_list_dir`), pero la función
 **del lenguaje** para que un programa BP liste un directorio no está en la VM-C. Asimetría entre las
@@ -2250,6 +2250,68 @@ dos VMs en la superficie del lenguaje, no en el transporte.
 ⏭️ **Decisión pendiente de Eduardo**: ¿entra en V6? Si entra, el trabajo es el de siempre —builtin
 nuevo en las dos VMs, `make check-builtins` como puerta— y hay que decidir qué devuelve (lista de
 nombres, y si distingue fichero de directorio).
+
+
+### ✅ CERRADA el 9-sep — y no era «falta `listDir`»: eran SEIS, y dos estaban ROTAS EN VIVO
+
+**El enunciado de la ficha se quedaba corto.** `make check-builtins` lo dice desde siempre y nadie
+lo había leído como una lista de trabajo:
+
+```
+6 builtins solo en miVM, sin numero en la VM-C:
+  HEAP_FRAG, HEAP_MAP, INPUT, LIST_DIR, PATH_ABSOLUTE, PROMPT
+```
+
+Las seis no son lo mismo. La pregunta que las separa es **¿puede un programa BP llamarlas hoy?**, y
+se contesta mirando quién las registra en `Intrinsics.java`:
+
+| grupo | cuáles | qué pasaba |
+|---|---|---|
+| 🔴 **alcanzables y ROTAS** | `IO.pathAbsolute`, `IO.prompt` | funcionaban en miVM y la VM-C lanzaba `builtin N no soportado en esta VM (subconjunto C)`. **Rotura del invariante, viva.** |
+| 🧬 **a medio nacer** | `listDir`, `input` | id en el enum + implementación en miVM, **sin declaración BP y sin C**. Nadie las puede llamar |
+| ⚪ **diagnóstico** | `HEAP_FRAG`, `HEAP_MAP` | inalcanzables también |
+
+🕳️ **Y por qué llevaba ahí sin verse: ninguna de las seis tenía un sample en el corpus.** Otra vez.
+
+### `IO.prompt` — existe, y lo que hace es DECIR QUE NO PUEDE (`38ca8ca3`)
+
+El diálogo lo pinta el IDE (verbo `PROMPT_REQUEST` del wire, que **sólo existe en un comentario** de
+`json_min.h`), así que en la VM-C nunca hay quien conteste. Eso ya estaba bien decidido y hasta
+**documentado en `IO.bp`** —*«si NO hay IDE conectado lanza RuntimeError atrapable»*—; lo que fallaba
+es que lanzaba **otro mensaje**. Ahora lanza el de miVM, byte a byte: `prompt: no hay IDE conectado`.
+
+### `IO.pathAbsolute` — cambia de SIGNIFICADO, y por decisión de Eduardo (`18a150cd`)
+
+Devolvía la ruta del **sistema operativo** cuando no había proyecto: un programa BP sacaba
+`C:\…\x.txt` por su `stdout`. Dos cosas malas — filtra el host (justo lo que el sandbox de miVM dice
+querer evitar) y **no existe en un micro**, donde «absoluto» es `/app/x.txt`. La VM-C no podía
+igualarlo sin inventarse un segundo significado.
+
+> **Eduardo:** *«Trabajamos con paths relativos siempre que podamos, eso lo hace más transportable.»*
+
+```
+empieza por '/'        -> tal cual (ya es absoluto)
+tiene esquema "x:..."  -> tal cual (direccion exacta, #362)
+hay proyecto           -> <projectPath>/<path>
+si no                  -> tal cual (lo relativo SE QUEDA relativo)
+```
+
+🔑 **Y la clave de que las dos VMs no puedan discrepar: es una función PURA de (path,
+projectPath)** — no mira el disco y no normaliza `..`. Se **descartó** copiar `bpvm_fs_resolve`, que
+sí sondea el FS: con eso, `pathAbsolute` contestaría distinto según existiera o no el fichero, y la
+paridad dependería del contenido del disco.
+
+### Lo que va a V7
+
+`listDir` e `input`: tienen id y código en miVM pero **no están declaradas en ningún módulo BP**, así
+que hoy no se pueden llamar. **No son un agujero, son una obra parada** — y terminarlas es una
+feature nueva, que es lo que en V6 no se hace. Allí se decide qué devuelven (lista de nombres, y si
+distingue fichero de directorio).
+
+`HEAP_FRAG` y `HEAP_MAP` se quedan como están: diagnóstico interno, inalcanzable desde BP.
+
+**Corpus 50 → 52**: `IoPrompt.bp` e `IoPathAbs.bp` (las cinco ramas de la regla). `check-builtins`:
+230 entradas en la VM-C, todas casando con su ordinal.
 
 #### ✅ `#485` — el hilo `io` del P4 nace POR DEBAJO de su VM: el contrato de `A1`, incumplido (abierta 9-sep, de `#462` · **CERRADA el 9-sep**, `8d0ebee1`)
 
