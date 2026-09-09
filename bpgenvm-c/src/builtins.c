@@ -3110,19 +3110,30 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, bpvm_adc_read_channel((int) ch));
         return BPVM_OK;
     }
+    /* #480 - Sin backend NO se finge. Antes la fachada escribia
+     * "[wdt] enable(N ms) (stub, no-op)" y seguia: el programa se creia
+     * protegido y no lo estaba. Criterio de Eduardo: «el watchdog se ha de
+     * implementar completo o no se implementa». Los mensajes son byte a byte
+     * los de miVM (VirtualMachine.java, case WDT_*) - es paridad, no estilo. */
     case BUILTIN_WDT_ENABLE: {
         int32_t ms = pop_i32(vm, tc);
-        bpvm_wdt_enable((int) ms);
+        if (bpvm_wdt_enable((int) ms) != 0) {
+            char em[96];
+            snprintf(em, sizeof(em), "Wdt.enable(%d): no implementado en esta plataforma", (int) ms);
+            return builtin_throw(vm, tc, em);
+        }
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_WDT_FEED: {
-        bpvm_wdt_feed();
+        if (bpvm_wdt_feed() != 0)
+            return builtin_throw(vm, tc, "Wdt.feed(): no implementado en esta plataforma");
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_WDT_DISABLE: {
-        bpvm_wdt_disable();
+        if (bpvm_wdt_disable() != 0)
+            return builtin_throw(vm, tc, "Wdt.disable(): no implementado en esta plataforma");
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

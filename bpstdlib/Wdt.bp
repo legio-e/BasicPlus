@@ -79,10 +79,28 @@ module Wdt
       endif
     end feed
 
-    // Desactiva el watchdog. En RP2350 esto se simula con un
-    // timeout muy grande, no hay una API real de "off". Útil
-    // antes de operaciones largas conocidas (sleep prolongado,
-    // flash erase masivo, etc.).
+    // Desactiva el watchdog. Util antes de operaciones largas
+    // conocidas (sleep prolongado, flash erase masivo, etc.).
+    //
+    // #480 - LO QUE ESTA LINEA DECIA ANTES ERA FALSO: «en RP2350 esto
+    // se simula con un timeout muy grande». En RP2350 SI hay API real
+    // (watchdog_disable), y ademas la frase no nombraba al unico chip
+    // donde el apaño existia de verdad — el STM32.
+    //
+    // Ahora la regla es de Eduardo (9-sep-2026): «el watchdog se ha de
+    // implementar completo o no se implementa; no podemos tener medio
+    // watchdog». Donde el hardware no deje pararlo, NO hay watchdog:
+    //
+    //   RP2350  completo (watchdog_disable de verdad)
+    //   ESP32   completo (des-suscribe la task del Task WDT)
+    //   STM32   NO HAY: el IWDG del U5 no se para hasta el reset, asi
+    //           que la imagen no registra backend y los tres verbos
+    //           lanzan. Antes "desactivar" lo reprogramaba a ~131 s y
+    //           la placa se reseteaba sola.
+    //   PC      NO HAY (no hay chip que resetear)
+    //
+    // Donde no hay, los tres verbos lanzan un RuntimeError atrapable
+    // "no implementado en esta plataforma" — igual en las dos VMs.
     public function disable()
       this.active_ := false
       disableRaw()

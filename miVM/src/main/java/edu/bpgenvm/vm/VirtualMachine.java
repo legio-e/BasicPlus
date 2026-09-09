@@ -5683,21 +5683,31 @@ public class VirtualMachine {
                 break;
             }
 
-            /* ---- Wdt — no-op en host con logging ---- */
+            /* ---- Wdt — el PC no tiene watchdog, y no se finge ----
+             *
+             * #480 — criterio de Eduardo (9-sep-2026): «el watchdog se ha de
+             * implementar completo o no se implementa». Antes esto escribía
+             * "[wdt] enable(Nms) (host, no-op)" y seguía: el programa se creía
+             * protegido y no lo estaba.
+             *
+             * Y había una rotura del invariante escondida detrás: esta VM decía
+             * "(host, no-op)" y la VM-C "(stub, no-op)" — textos DISTINTOS en
+             * stdout para el mismo programa. No saltó nunca porque ningún sample
+             * de Wdt estaba en el corpus de paridad. Ahora hay uno
+             * (samples/WdtCatch.bp) y los mensajes son byte a byte los de
+             * src/builtins.c (BUILTIN_WDT_*). */
             case WDT_ENABLE: {
                 int ms = popTc(tc);
-                System.out.println("[wdt] enable(" + ms + "ms) (host, no-op)");
-                pushTc(tc, 0);
+                throwBpRuntimeError(tc,
+                        "Wdt.enable(" + ms + "): no implementado en esta plataforma");
                 break;
             }
             case WDT_FEED: {
-                /* Silencio — feed se llama mucho. */
-                pushTc(tc, 0);
+                throwBpRuntimeError(tc, "Wdt.feed(): no implementado en esta plataforma");
                 break;
             }
             case WDT_DISABLE: {
-                System.out.println("[wdt] disable (host, no-op)");
-                pushTc(tc, 0);
+                throwBpRuntimeError(tc, "Wdt.disable(): no implementado en esta plataforma");
                 break;
             }
 

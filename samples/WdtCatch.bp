@@ -1,0 +1,44 @@
+// WdtCatch.bp - el watchdog donde no hay hardware tiene que LANZAR, no fingir.
+//
+// Criterio de Eduardo (9-sep, #480): «el watchdog se ha de implementar completo
+// o no se implementa. Lo del STM32 o se arregla o se desactiva completamente,
+// no podemos tener medio watchdog.»
+//
+// Antes de esto, sin backend las dos VMs escribian un no-op y seguian: el
+// programa se creia protegido y no lo estaba. Y ademas escribian textos
+// DISTINTOS -miVM "(host, no-op)", la VM-C "(stub, no-op)"-, o sea una rotura
+// del invariante sagrado que nunca salto porque ningun sample de Wdt estaba en
+// el corpus. Este sample es justo eso: el oraculo de paridad del camino de
+// error del watchdog. Hermano de NeoCatch.bp.
+module WdtCatch
+  import Core
+  import Wdt
+
+  function Main()
+    print "antes"
+    try
+      var wdog: Wdt.Timer := Wdt.Timer(2000)
+      print "no deberia llegar aqui"
+    catch e: RuntimeError
+      print "atrapada:", e.msg
+    endtry
+
+    // Y el resto de los verbos, por separado: los tres tienen que decir lo
+    // mismo, no solo el que arranca.
+    try
+      Wdt.feedRaw()
+      print "no deberia llegar aqui"
+    catch e2: RuntimeError
+      print "atrapada:", e2.msg
+    endtry
+
+    try
+      Wdt.disableRaw()
+      print "no deberia llegar aqui"
+    catch e3: RuntimeError
+      print "atrapada:", e3.msg
+    endtry
+
+    print "despues"
+  end Main
+end WdtCatch

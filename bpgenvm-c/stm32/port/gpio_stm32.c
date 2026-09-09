@@ -682,74 +682,29 @@ static const bpvm_i2c_backend_t s_i2c_backend = {
     .read  = stm32_i2c_read_impl,
 };
 
-/* ===================== WDT (IWDG) — H10 ====================================
- * Watchdog independiente por REGISTROS (CMSIS, sin HAL ni CubeMX): así es
- * autocontenido — no necesita IWDG en el .ioc (que metería un MX_IWDG_Init
- * arrancándolo en el BOOT, a ~512 ms → bucle de reset) ni HAL_IWDG_MODULE_ENABLED;
- * funciona igual en Nucleo y DK2 y sobrevive a regeneraciones. Contador de 12 bits
- * sobre el LSI (~32 kHz), prescaler /4../1024; al expirar resetea el chip.
+/* ===================== WDT — NO LO HAY EN ESTA FAMILIA (#480) ==============
  *
- * timeout(ms) → (PR, RLR):  cuentas = ms·LSI/1000/div ; RLR = cuentas−1 ≤ 4095.
- * Elegimos el divisor más pequeño que entre (mejor resolución).
- * Rango ≈ 0.1 ms … 131 s.  PR: 0=/4,1=/8,…,6=/256,7=/512,8=/1024.
+ * Aqui vivia el backend de watchdog sobre el IWDG (enable/feed/disable, el
+ * calculo de PR/RLR y su registro). Se ha QUITADO, no comentado — git lo
+ * guarda, y codigo muerto son avisos del compilador para siempre.
  *
- * LIMITACIÓN HW vs RP2350: el IWDG NO se puede PARAR una vez arrancado → disable()
- * es el mejor esfuerzo (reprograma al timeout máximo ~131 s y refresca); sigue
- * vivo. Para un sleep muy largo, no lo actives hasta necesitarlo. */
-#define STM32_LSI_HZ        32000u    /* LSI nominal; el IWDG es impreciso de por sí */
-#define STM32_IWDG_RLR_MAX  4095u
-#define IWDG_KR_WRITE       0x5555u   /* desbloquea PR/RLR */
-#define IWDG_KR_REFRESH     0xAAAAu   /* recarga el contador */
-#define IWDG_KR_START       0xCCCCu   /* arranca el IWDG (y el LSI) */
-
-static int s_wdt_on = 0;
-
-/* timeout(ms) → código de prescaler PR (0..8) y reload RLR (0..4095). */
-static void stm32_iwdg_calc(uint32_t ms, uint32_t* pr, uint32_t* reload) {
-    uint32_t div = 4u;
-    for (uint32_t code = 0u; code <= 8u; code++, div <<= 1) {
-        uint32_t counts = (ms * (STM32_LSI_HZ / 1000u)) / div;   /* ms·32/div */
-        if (counts == 0u) counts = 1u;
-        if (counts <= (STM32_IWDG_RLR_MAX + 1u)) {
-            *pr = code; *reload = counts - 1u; return;
-        }
-    }
-    *pr = 8u; *reload = STM32_IWDG_RLR_MAX;     /* timeout enorme → tope (/1024) */
-}
-
-/* Reprograma PR/RLR (con el IWDG ya arrancado) y recarga el contador. */
-static void stm32_iwdg_program(uint32_t ms) {
-    uint32_t pr, reload;
-    stm32_iwdg_calc(ms, &pr, &reload);
-    IWDG->KR  = IWDG_KR_WRITE;                  /* desbloquear PR/RLR */
-    IWDG->PR  = pr;
-    IWDG->RLR = reload;
-    uint32_t guard = 200000u;                   /* anti-cuelgue si el LSI fallara */
-    while ((IWDG->SR & (IWDG_SR_PVU | IWDG_SR_RVU)) && --guard) { }
-    IWDG->KR  = IWDG_KR_REFRESH;                /* cargar el contador */
-}
-
-static void stm32_wdt_enable_impl(int timeoutMs) {
-    if (timeoutMs < 1) timeoutMs = 1;
-    IWDG->KR = IWDG_KR_START;                   /* arrancar (enciende el LSI) ANTES de programar */
-    stm32_iwdg_program((uint32_t) timeoutMs);
-    s_wdt_on = 1;
-}
-
-static void stm32_wdt_feed_impl(void) {
-    if (s_wdt_on) IWDG->KR = IWDG_KR_REFRESH;
-}
-
-static void stm32_wdt_disable_impl(void) {
-    /* No se puede parar el IWDG: mejor esfuerzo = timeout máximo + refresco. */
-    if (s_wdt_on) stm32_iwdg_program(131000u);
-}
-
-static const bpvm_wdt_backend_t s_wdt_backend = {
-    .enable  = stm32_wdt_enable_impl,
-    .feed    = stm32_wdt_feed_impl,
-    .disable = stm32_wdt_disable_impl,
-};
+ * POR QUE. El IWDG del U5 no se puede parar por software: una vez arrancado
+ * (KR = 0xCCCC) solo lo apaga un reset. Eso es silicio, no un descuido. Asi que
+ * `disable()` era un "mejor esfuerzo" que lo reprogramaba a ~131 s y lo
+ * refrescaba, con la bandera de activo todavia puesta. Consecuencia REAL: la
+ * placa se resetea sola si un sleep pasa de ahi — haciendo justo lo que
+ * recomienda bpstdlib/Wdt.bp —, y desde BP no habia forma de enterarse, porque
+ * el builtin devolvia 0 en las cinco familias.
+ *
+ * Criterio de Eduardo (9-sep-2026): «el watchdog se ha de implementar COMPLETO
+ * o no se implementa. Lo del STM32 o se arregla o se desactiva completamente,
+ * no podemos tener medio watchdog.» Arreglarlo no se puede, asi que esta imagen
+ * NO registra backend de watchdog y los tres verbos lanzan una excepcion BP
+ * atrapable ("no implementado en esta plataforma"), igual en las dos VMs.
+ *
+ * Si algun dia hay forma de pararlo de verdad (otro silicio, o una ventana
+ * WWDG que si se pueda cerrar), se vuelve a registrar el backend COMPLETO: los
+ * tres verbos o ninguno. */
 
 /* ===================== Causa de reset — H10 ================================
  * Decodifica RCC->CSR (flags de la última causa de reset). Se lee/latchea UNA
@@ -1046,7 +1001,9 @@ void stm32_hw_register(void) {
     bpvm_spi_set_backend(&s_spi_backend);     /* H15.1 */
     bpvm_uart_set_backend(&s_uart_backend);   /* H15.1 */
     bpvm_i2c_set_backend(&s_i2c_backend);     /* H15.2 */
-    bpvm_wdt_set_backend(&s_wdt_backend);     /* H10 — watchdog IWDG */
+    /* #480 - SIN backend de watchdog A PROPOSITO: el IWDG no se puede parar y
+     * medio watchdog es peor que ninguno. El porque, entero, donde estaba el
+     * codigo (busca "WDT - NO LO HAY EN ESTA FAMILIA" en este mismo fichero). */
     stm32_breadcrumb_init();                  /* H10 — breadcrumb RAM retenida (TAMP) */
 #if defined(BOARD_HAS_RTC)
     bpvm_rtc_set_backend(&s_rtc_backend);     /* H10 — RTC HW (hora sobrevive al reset) */

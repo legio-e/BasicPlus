@@ -32,10 +32,16 @@
  *                      load a WATCHDOG_LOAD_BITS, así que ese apaño
  *                      deja el perro ARMADO (~16,8 s) y la placa se
  *                      resetea sola. Fue un bug real aquí.
- *                      Donde el HW no deje pararlo (STM32: el IWDG
- *                      no se para hasta el reset), el backend hace
- *                      lo mejor posible y lo DICE en su comentario;
- *                      no se finge que quede desactivado.
+ *                      #480 - Y DONDE EL HW NO DEJE PARARLO NO SE
+ *                      REGISTRA BACKEND. Criterio de Eduardo
+ *                      (9-sep-2026): «el watchdog se ha de
+ *                      implementar completo o no se implementa; no
+ *                      podemos tener medio watchdog». El "mejor
+ *                      esfuerzo" que este comentario permitia era
+ *                      justo el bug: el STM32 reprogramaba el IWDG a
+ *                      131 s y la placa se reseteaba sola. Sin
+ *                      backend, los tres verbos lanzan una excepcion
+ *                      BP atrapable y el programa SE ENTERA.
  *
  * El watchdog es un SINGLETON del MCU: solo hay uno. Construir
  * varias instancias de Wdt.Timer en BP es legal pero todas
@@ -61,9 +67,9 @@ typedef struct {
 
 void bpvm_wdt_set_backend(const bpvm_wdt_backend_t* backend);
 
-void bpvm_wdt_enable(int timeoutMs);
-void bpvm_wdt_feed(void);
-void bpvm_wdt_disable(void);
+int  bpvm_wdt_enable(int timeoutMs);   /* 0 = hecho, -1 = esta plataforma no tiene watchdog */
+int  bpvm_wdt_feed(void);              /* idem */
+int  bpvm_wdt_disable(void);           /* idem */
 
 #ifdef __cplusplus
 }
