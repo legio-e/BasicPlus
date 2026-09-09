@@ -533,6 +533,26 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
     return out;
 }
 
+/* #456 - LEER UN PATH DE BP. Igual que read_bp_string, pero AVISA si no cupo en
+ * vez de dejar un path recortado -que apunta a otro fichero, o a ninguno- y
+ * seguir como si nada. Devuelve 0 si cupo, -1 si no.
+ *
+ * Aqui el tope NO se puede quitar como se quito en el wire: alli el path ya
+ * venia en la linea del mensaje y bastaba con no copiarlo (json_str_inplace).
+ * Aqui la cadena vive en el heap de la VM SIN terminador, y las dos APIs de FS
+ * de debajo -littlefs y FatFs- piden un `const char*` terminado en NUL. O sea
+ * que hay que copiar, y copiar es tener un tamanyo. Lo que si se puede es que
+ * el programa SE ENTERE, que es de lo que iba la ficha. */
+static int read_bp_path(const bpvm_t* vm, uint32_t ref, char* dst, size_t dst_size) {
+    if (dst_size == 0) return -1;
+    dst[0] = '\0';
+    if (ref == 0) return 0;
+    bpref_t s = bpref_from_addr(ref);
+    if ((size_t) bpref_arr_len(vm, s) + 1 > dst_size) return -1;
+    (void) read_bp_string(vm, ref, dst, dst_size);
+    return 0;
+}
+
 /* Helpers UTF-8 (utf8_cp_count / utf8_byte_offset / utf8_decode / utf8_encode)
  * viven en bpvm_internal.h (fuente única compartida con el AOT). */
 
@@ -1420,8 +1440,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_READ_FILE:
     case BUILTIN_READ_FILE_BYTES: {   /* #247: idéntico — los bytes ya son crudos en heap */
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         /* H19-F1 — resuelve relativo al base-dir del proyecto (si lo hay), luego
          * cwd/literal, luego /app (modo plano). Los absolutos no se tocan. */
         char eff[600];
@@ -1452,8 +1473,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int append = (id == BUILTIN_APPEND_FILE);
         uint32_t cref = pop_ref(vm, tc);   /* content (empujado el último) */
         uint32_t pref = pop_ref(vm, tc);   /* path */
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         uint32_t cad = (cref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(cref));   /* V4: handle→addr */
         uint32_t clen = (cad == 0) ? 0 : bpvm_read_u32_be(vm->memory + cad);
         const uint8_t* cdata = (cad == 0) ? NULL : (vm->memory + cad + 4);
@@ -1468,8 +1490,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_FILE_EXISTS: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         push_i32(vm, tc, bpvm_fs_exists(path) ? 1 : 0);
         return BPVM_OK;
     }
@@ -1479,8 +1502,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * atrapable (los firmwares la añaden en su próximo build). */
     case BUILTIN_REMOVE_FILE: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         if (bpvm_fs_remove(path) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "removeFile('%s'): error al borrar", path);
@@ -1492,9 +1516,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_RENAME: {
         uint32_t tref = pop_ref(vm, tc);   /* to (empujado el último) */
         uint32_t fref = pop_ref(vm, tc);   /* from */
-        char from[512], to[512];
-        read_bp_string(vm, fref, from, sizeof(from));
-        read_bp_string(vm, tref, to, sizeof(to));
+        char from[BPVM_FS_PATH_MAX], to[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, fref, from, sizeof(from)) != 0 ||
+            read_bp_path(vm, tref, to,   sizeof(to))   != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         if (bpvm_fs_rename(from, to) != 0) {
             char em[1100];
             snprintf(em, sizeof(em), "rename('%s' -> '%s'): error al renombrar", from, to);
@@ -1505,8 +1530,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_FILE_SIZE: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         uint32_t sz = 0;
         if (bpvm_fs_stat(path, &sz) != 0) {
             char em[576];
@@ -1526,8 +1552,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * implementarlos (FS plano sin directorios) → RuntimeError atrapable. */
     case BUILTIN_MKDIR: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         if (bpvm_fs_mkdir(path) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "mkdir('%s'): no se pudo crear", path);
@@ -1538,8 +1565,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_RMDIR: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         if (bpvm_fs_rmdir(path) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "rmdir('%s'): no se pudo borrar (¿no vacío?)", path);
@@ -1551,9 +1579,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_COPY_FILE: {
         uint32_t tref = pop_ref(vm, tc);   /* to (empujado el último) */
         uint32_t fref = pop_ref(vm, tc);   /* from */
-        char from[512], to[512];
-        read_bp_string(vm, fref, from, sizeof(from));
-        read_bp_string(vm, tref, to, sizeof(to));
+        char from[BPVM_FS_PATH_MAX], to[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, fref, from, sizeof(from)) != 0 ||
+            read_bp_path(vm, tref, to,   sizeof(to))   != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         if (bpvm_fs_copy(from, to) != 0) {
             char em[1100];
             snprintf(em, sizeof(em), "copyFile('%s' -> '%s'): error al copiar", from, to);
@@ -1564,15 +1593,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_IS_DIRECTORY: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         push_i32(vm, tc, bpvm_fs_isdir(path) ? 1 : 0);   /* sin throw, como Java */
         return BPVM_OK;
     }
     case BUILTIN_LAST_MODIFIED: {
         uint32_t pref = pop_ref(vm, tc);
-        char path[512];
-        read_bp_string(vm, pref, path, sizeof(path));
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
         long long ms = bpvm_fs_mtime_ms(path);
         if (ms == -2) {
             /* H13 hallazgo 13(a) — la capacidad NO ESTA en esta plataforma, que no
