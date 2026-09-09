@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 4 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 3 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **4** | `#379` · `#462` · `#471` · `#473` |
+> | **fichas de V6** | **3** | `#462` · `#471` · `#473` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -3781,7 +3781,7 @@ tocar y cómo se comprueba.
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 | **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
-| **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6 |
+| **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
 
 📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:
 *«`#475` y `#444` hay que darle un ítem propio ya que es implementación nueva. Del resto, hay que ir
@@ -9674,7 +9674,11 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ⏭️ Sospechoso natural para empezar: qué toca un cambio de tamaño de partición que un
   formateo NO toca. Ahí está la diferencia entre lo que curó y lo que no.
 
-- `#379` — el wire se **desincroniza tras el Stop**, y sólo en unas placas.
+- 🧪 `#379` — el wire se **desincroniza tras el Stop**, y sólo en unas placas.
+  **→ ASIGNADA A `F1` (pruebas finales) el 9-sep, decisión de Eduardo**: *«la podemos dejar
+  pendiente para las pruebas finales»*. Deja de contar como pendiente suelto — no porque se
+  aplace, sino porque **lo único que le queda ES una prueba de placa**, y `F1` es la tanda
+  donde las placas se conducen. La medida exacta y su herramienta están abajo.
   🔎 **HIPÓTESIS FUERTE (17-ago): esto era `#398`, no una desincronización.**
   Eduardo, al proponerle repetir la prueba en el P4: *«lo de la P4 con SD con
   comportamiento extraño era ANTES de que se solucionara el problema del refresco
