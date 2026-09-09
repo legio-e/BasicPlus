@@ -853,16 +853,14 @@ static void run_module_path(const char* path, long id, const char* arg) {
     }
 }
 
-static void handle_run(long id, const json_obj_t* obj) {
-    char path[FS_NAME_LEN];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+static void handle_run(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    if (path == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'"); return;
     }
     /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
      * NULL, y manda el valor por defecto que declare el fuente. */
-    char argbuf[128];
-    const char* arg = (json_get_str(obj, "arg", argbuf, sizeof(argbuf)) >= 0)
-                    ? argbuf : NULL;
+    const char* arg = json_str_inplace(obj, "arg");
     run_module_path(path, id, arg);
 }
 

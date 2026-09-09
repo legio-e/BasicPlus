@@ -79,9 +79,37 @@ int         json_get_bool  (const json_obj_t* obj, const char* key, int def);
 /* Copia el valor string del par `key` a `dst` (null-terminated,
  * desescapado: \\n → 0x0a, \\\\ → \\, etc.). Devuelve la longitud
  * copiada (sin contar el null). Si el par no existe o no es string,
- * devuelve -1 y dst[0]=0. Si dst_size es insuficiente, trunca. */
+ * devuelve -1 y dst[0]=0.
+ *
+ * #456 — TRUNCAR YA NO ES SILENCIOSO: si el valor no cabe en dst_size
+ * devuelve -2 (y dst lleva lo que cupo). Antes truncaba y devolvia la
+ * longitud copiada, o sea que el llamador no tenia forma de distinguir
+ * "cabia justo" de "no cabia": un PUT de un path largo escribia en OTRO
+ * fichero y contestaba OK. Los llamadores comprueban < 0, asi que con -2
+ * pasan a rechazar sin tocarlos.
+ *
+ * Para un path NO uses esta funcion: usa json_str_inplace, que no copia y
+ * por tanto no tiene tope. */
 int json_get_str(const json_obj_t* obj, const char* key,
                  char* dst, size_t dst_size);
+
+/* #456 — Desescapa EN SITIO el valor string de `key`, dentro del mismo buffer
+ * que se paso a json_parse, y devuelve un puntero a el terminado en NUL.
+ *
+ * NO COPIA, y por eso NO TIENE TOPE: lo que quepa en la linea que lo trajo,
+ * cabe aqui. Es la forma correcta de leer un path — el tope de 64 que habia
+ * antes no lo imponia ni el FS (255 por nombre en littlefs y en FatFs) ni el
+ * protocolo (WIRE_V1_LINE_MAX), solo el buffer de la copia.
+ *
+ * REQUISITO: el buffer que se paso a json_parse tiene que ser ESCRIBIBLE.
+ * Lo cumplen los cinco wires (todos parsean sobre su propio buffer de linea).
+ *
+ * CONSUME el par: desescapar encoge, asi que el NUL final cae dentro del hueco
+ * que deja o sobre la comilla de cierre. Los demas pares no se tocan, pero la
+ * linea deja de ser re-parseable y este par no se debe volver a leer.
+ *
+ * Devuelve NULL si el par no existe o no es string. */
+char* json_str_inplace(json_obj_t* obj, const char* key);
 
 /* Variante que NO desescapa: devuelve los punteros raw al string
  * dentro del buffer (sin comillas, con escapes literales). Útil para

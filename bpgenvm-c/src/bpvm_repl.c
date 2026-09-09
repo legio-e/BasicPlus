@@ -117,9 +117,9 @@ static void fs_fallo(const char* op, const char* path, unsigned long size,
     }
 }
 
-static void repl_del(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+static void repl_del(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    if (path == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path");
         return;
     }
@@ -139,12 +139,17 @@ static void repl_del(long id, const json_obj_t* obj) {
     wire_v1_send_reply_empty("DEL_REPLY", id);
 }
 
-static void repl_stat(long id, const json_obj_t* obj) {
-    char path[96];
+static void repl_stat(long id, json_obj_t* obj) {
     char buf[256];
     int por_nombre = 0;
     uint32_t size = 0;
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+    /* #456 - dos papeles distintos que antes compartian el MISMO buffer de 96,
+     * y por eso el tope de entrada lo ponia el de salida: el path que MANDA el
+     * peer no se copia (sin tope), y `resuelto` es el que CONSTRUYE el
+     * resolvedor, que si necesita sitio donde caber. */
+    char resuelto[BPVM_FS_PATH_MAX];
+    const char* path = json_str_inplace(obj, "path");
+    if (path == NULL) {
         /* #466 — STAT por NOMBRE de módulo: «¿tienes Math.mod, donde sea?». Es
          * la pregunta que el IDE hace por cada dependencia antes de subirla, y
          * la contesta EL MISMO resolvedor que usa el RUN (proyecto → literal →
@@ -152,23 +157,24 @@ static void repl_stat(long id, const json_obj_t* obj) {
          * búsqueda, que es como se desincronizó #463. `base` (opcional) es la
          * carpeta del proyecto que se va a ejecutar; vale sólo para esta
          * pregunta y se restaura. */
-        char name[64];
-        if (json_get_str(obj, "name", name, sizeof(name)) < 0) {
+        const char* name = json_str_inplace(obj, "name");
+        if (name == NULL) {
             wire_v1_send_error(id, "INVALID_PARAM", "falta path o name");
             return;
         }
-        char base[96], antes[96];
-        int con_base = (json_get_str(obj, "base", base, sizeof(base)) >= 0);
-        if (con_base) {
+        const char* base = json_str_inplace(obj, "base");
+        char antes[BPVM_FS_PATH_MAX];   /* el basedir que se salva y se restaura */
+        if (base) {
             snprintf(antes, sizeof antes, "%s", bpvm_fs_basedir());
             bpvm_fs_set_basedir(base);
         }
-        int r = bpvm_entry_resolve(name, path, sizeof(path), &size);
-        if (con_base) bpvm_fs_set_basedir(antes);
+        int r = bpvm_entry_resolve(name, resuelto, sizeof(resuelto), &size);
+        if (base) bpvm_fs_set_basedir(antes);
         if (r != 0) {
             wire_v1_send_error(id, "NOT_FOUND", "no existe");
             return;
         }
+        path = resuelto;
         por_nombre = 1;
     } else if (bpvm_fs_stat(path, &size) != 0) {
         wire_v1_send_error(id, "NOT_FOUND", "no existe");
@@ -221,10 +227,10 @@ err:
     wire_v1_send_error(id, "INTERNAL_ERROR", "STAT_REPLY no cabe");
 }
 
-static void repl_rename(long id, const json_obj_t* obj) {
-    char from[64], to[64];
-    if (json_get_str(obj, "from", from, sizeof from) < 0 ||
-        json_get_str(obj, "to",   to,   sizeof to)   < 0) {
+static void repl_rename(long id, json_obj_t* obj) {
+    const char* from = json_str_inplace(obj, "from");   /* #456 - sin copia, sin tope */
+    const char* to   = json_str_inplace(obj, "to");
+    if (from == NULL || to == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "faltan from/to");
         return;
     }
@@ -246,10 +252,10 @@ static int repl_get_chunk(const uint8_t* data, uint32_t len, void* user) {
     return 0;
 }
 
-static void repl_get(long id, const json_obj_t* obj) {
-    char path[64];
+static void repl_get(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
     char buf[96];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+    if (path == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path");
         return;
     }
@@ -575,7 +581,7 @@ err:
     wire_v1_send_error(id, "INTERNAL_ERROR", "DF_REPLY no cabe");
 }
 
-static void repl_format(long id, const json_obj_t* obj) {
+static void repl_format(long id, json_obj_t* obj) {
     char confirm[8];
     /* El seguro, y en las tres igual: formatear no puede ser un clic de más. */
     if (json_get_str(obj, "confirm", confirm, sizeof confirm) < 0
@@ -707,7 +713,7 @@ static int tragar_bulk(unsigned long n) { return bpvm_repl_drain_bulk(n); }
 static void crear_dirs_padre(const char* path) {
     const char* ult = strrchr(path, '/');
     if (!ult || ult == path) return;      /* en la raíz o sin carpeta: nada que crear */
-    char dir[64];
+    char dir[BPVM_FS_PATH_MAX];
     size_t n = (size_t)(ult - path);
     if (n >= sizeof dir) return;          /* que lo rechace el write, con su error */
     memcpy(dir, path, n);
@@ -717,9 +723,9 @@ static void crear_dirs_padre(const char* path) {
 
 /* PUT — subida de un tirón (para ficheros que caben en el scratch; los grandes
  * van por PUT_BEGIN/DATA/END). */
-static void repl_put(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
+static void repl_put(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    if (path == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
     }
     long bulk = json_get_long(obj, "bulk", -1);
@@ -765,7 +771,9 @@ err:
  * en uno. */
 static struct {
     int           active;
-    char          path[64];
+    /* #456 - este SI se guarda: sobrevive de BEGIN a END, o sea que no puede
+     * apuntar a la linea (que se sobreescribe con el siguiente mensaje). */
+    char          path[BPVM_FS_PATH_MAX];
     unsigned long received;
     unsigned long expected;
 } s_put_sess;
@@ -785,10 +793,15 @@ err:
     wire_v1_send_error(id, "INTERNAL_ERROR", "reply no cabe");
 }
 
-static void repl_put_begin(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
+static void repl_put_begin(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    if (path == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
+    }
+    /* Lo unico que se copia es lo que hay que GUARDAR para el END. Y si no
+     * cabe se dice AQUI, que es el sitio donde el peer puede enterarse. */
+    if (strlen(path) >= sizeof s_put_sess.path) {
+        wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo"); return;
     }
     crear_dirs_padre(path);                          /* #455 */
     if (bpvm_fs_write(path, NULL, 0, 0) != 0) {      /* crea/trunca */
@@ -804,7 +817,7 @@ static void repl_put_begin(long id, const json_obj_t* obj) {
     reply_put_field("PUT_BEGIN_REPLY", id, 0, "received");
 }
 
-static void repl_put_data(long id, const json_obj_t* obj) {
+static void repl_put_data(long id, json_obj_t* obj) {
     long bulk = json_get_long(obj, "bulk", -1);
     if (bulk < 0) { wire_v1_send_error(id, "INVALID_PARAM", "falta bulk"); return; }
 
@@ -835,7 +848,7 @@ static void repl_put_data(long id, const json_obj_t* obj) {
     reply_put_field("PUT_DATA_REPLY", id, s_put_sess.received, "received");
 }
 
-static void repl_put_end(long id, const json_obj_t* obj) {
+static void repl_put_end(long id, json_obj_t* obj) {
     (void) obj;
     if (!s_put_sess.active) {
         wire_v1_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return;
@@ -900,10 +913,9 @@ static void contar_cb(const char* nombre, int is_dir, uint32_t size, void* u) {
     (*(int*) u)++;
 }
 
-static void repl_list_dir(long id, const json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof path) < 0)
-        snprintf(path, sizeof path, "/");        /* sin path = la raíz */
+static void repl_list_dir(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    if (path == NULL) path = "/";                       /* sin path = la raíz */
 
     switch (bpvm_listdir_emitir(path, id, repl_listdir_sink, NULL, NULL)) {
         case BPVM_LISTDIR_OCUPADO:
@@ -920,7 +932,7 @@ static void repl_list_dir(long id, const json_obj_t* obj) {
     wire_v1_send_line("", 0);
 }
 
-int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
+int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
         return 1;
@@ -988,8 +1000,8 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
          * decía «hecho, nada» cuando se le pedía uno. Lo destapó el arnés del
          * simulador (`U3.24`), que traía un MKDIR de verdad: unificar al stub era
          * la regresión disfrazada de limpieza de #455. */
-        char path[64];
-        if (json_get_str(obj, "path", path, sizeof path) < 0) {
+        const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+        if (path == NULL) {
             wire_v1_send_error(id, "INVALID_PARAM", "falta path");
             return 1;
         }
@@ -1007,8 +1019,8 @@ int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj) {
          * existe y tiene cosas dentro, y borrado. `bpvm_fs_rmdir` devuelve -1 en
          * los dos primeros casos, así que se mira antes con el listado —el mismo
          * gesto que `repl_del` hace con `bpvm_fs_exists`. */
-        char path[64];
-        if (json_get_str(obj, "path", path, sizeof path) < 0) {
+        const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+        if (path == NULL) {
             wire_v1_send_error(id, "INVALID_PARAM", "falta path");
             return 1;
         }

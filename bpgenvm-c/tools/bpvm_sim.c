@@ -123,7 +123,9 @@ static void sim_sqlite_arranca(void) {
 
 #define WIRE_LINE_MAX  2048   /* línea JSON máxima (= WIRE_V1_LINE_MAX del firmware) */
 #define SERVER_NAME    "bpvm-sim"
-#define PATH_MAX_SIM   192    /* paths del wire (el micro usa 64; aquí sobra) */
+/* #456 - los paths que el sim CONSTRUYE (el recorrido del LIST, la imagen de
+ * FS de la linea de comandos). Los que llegan por el wire ya no se copian. */
+#define PATH_MAX_SIM   BPVM_FS_PATH_MAX
 
 /* --- "flash" simulada: dos sectores A/B en RAM, respaldados por un fichero --- */
 #define SECTOR      4096u
@@ -731,23 +733,21 @@ static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* cmd, long id,
     cmd->ref  = json_get_long(obj, "ref",   0);
 }
 
-static void handle_run(sock_t c, long id, const json_obj_t* obj) {
-    char path[PATH_MAX_SIM];
-    if (json_get_str(obj, "path", path, sizeof path) < 0) {
+static void handle_run(sock_t c, long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    if (path == NULL) {
         send_err(c, id, "INVALID_PARAM", "falta path"); return;
     }
     /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional (no `args:[]`:
      * el mini-parser de las placas no sabe leer arrays anidados). Si no viene,
      * NULL, y manda el valor por defecto que declare el fuente. */
-    char argbuf[128];
-    const char* run_arg = (json_get_str(obj, "arg", argbuf, sizeof argbuf) >= 0)
-                        ? argbuf : NULL;
+    const char* run_arg = json_str_inplace(obj, "arg");
 
     /* H19-F1 — base-dir/main-module del proyecto si vive en /app/<proj>/. */
     bpvm_fs_set_basedir_from_module(path);
     bpvm_fs_set_main_module_path(path);
 
-    { char probe[192]; uint32_t psz = 0;
+    { char probe[BPVM_FS_PATH_MAX]; uint32_t psz = 0;
       if (bpvm_entry_resolve(path, probe, sizeof probe, &psz) != 0) {
           send_err(c, id, "NOT_FOUND", "no existe"); return;
       } }
@@ -914,7 +914,7 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
 /* ── dispatch de un request ───────────────────────────────────────────────── */
 
 
-static void handle(sock_t c, const json_obj_t* obj) {
+static void handle(sock_t c, json_obj_t* obj) {
     char type[32];
     if (json_get_str(obj, "type", type, sizeof type) < 0) return;
     long id = json_get_long(obj, "id", -1);

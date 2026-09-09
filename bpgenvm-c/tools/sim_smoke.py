@@ -233,6 +233,30 @@ def main():
             w.call("DEL", path=p)
         w.call("RMDIR", path="/app/proj")
 
+
+        # ── #456 — un path LARGO ya no se trunca en silencio ──────────────────
+        # Antes esto NO fallaba, que es lo grave: con `char path[64]` en el wire,
+        # el PUT escribia en el nombre RECORTADO y contestaba OK. Por eso el caso
+        # de abajo (el recortado NO existe) es el que de verdad prueba el arreglo.
+        largo = "/app/" + "n" * 200          # 205 > 63 (el tope viejo), < 255 (LFS_NAME_MAX)
+        r = w.call_bulk("PUT", b"largo", path=largo)
+        check(r.get("type") == "PUT_REPLY", "PUT de un path de 205 caracteres -> OK")
+        r = w.call("STAT", path=largo)
+        check(r.get("size") == 5, "STAT del path ENTERO -> lo encuentra")
+        r, data = w.get(largo)
+        check(data == b"largo", "GET del path entero -> el contenido")
+        r = w.call("STAT", path=largo[:63])
+        check(r.get("code") == "NOT_FOUND", "...y el nombre RECORTADO no existe (no se trunco)")
+        r = w.call("RENAME", **{"from": largo, "to": "/app/" + "m" * 200})
+        check(r.get("type") == "RENAME_REPLY", "RENAME entre dos paths largos -> OK")
+        r = w.call("DEL", path="/app/" + "m" * 200)
+        check(r.get("type") == "DEL_REPLY", "DEL de un path largo -> OK")
+        # CONTROL del tope que SI queda (la sesion de PUT por trozos guarda el
+        # path entre mensajes): por encima tiene que dar error CON NOMBRE.
+        r = w.call("PUT_BEGIN", path="/app/" + "z" * 300, size=1)
+        check(r.get("code") == "INVALID_PATH",
+              "PUT_BEGIN por encima del tope que queda -> error con nombre, no truncado")
+
         # 7. RUN: la VM de verdad ejecutando desde el FS del sim
         mod = build_hello(tmp)
         if mod is None:

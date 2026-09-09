@@ -159,7 +159,7 @@ int bpvm_repl_drain_bulk(unsigned long n);
 /** Atiende `type` si es un verbo del común. Devuelve 1 si lo atendió (la
  *  respuesta ya salió por el wire), 0 si no es suyo y la familia debe seguir
  *  con su cadena. `obj` es el mensaje ya parseado (para los parámetros). */
-int bpvm_repl_dispatch(const char* type, long id, const json_obj_t* obj);
+int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj);
 
 #ifdef __cplusplus
 }

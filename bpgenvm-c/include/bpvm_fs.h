@@ -22,6 +22,22 @@
 extern "C" {
 #endif
 
+/* ── #456 — EL ÚNICO TOPE DE PATH QUE QUEDA ──────────────────────────────────
+ *
+ * Y sólo vale para los paths que hay que GUARDAR o CONSTRUIR: la sesión de
+ * PUT por trozos (que sobrevive entre mensajes, así que no puede apuntar a la
+ * línea), el path que devuelve el resolvedor, y el basedir que se salva y se
+ * restaura. Un path que sólo se LEE del mensaje no se copia y por tanto no
+ * tiene tope: ver `json_str_inplace` en json_min.h.
+ *
+ * De dónde sale el número, porque antes no salía de ninguna parte (había un 40,
+ * un 64, un 96, un 192, un 256 y un 512 para la misma cosa):
+ *   · littlefs  LFS_NAME_MAX = 255  → por NOMBRE, sin tope de path completo
+ *   · FatFs     FF_MAX_LFN   = 255  → idem
+ * o sea que 256 es «un nombre largo del FS más sus carpetas», y es el mismo
+ * número que ya usaba el basedir del proyecto (`fs_facade.c`). */
+#define BPVM_FS_PATH_MAX  256
+
 /* V6 (#453) — trozo de fichero entregado por `read_stream`. Devolver != 0
  * aborta la lectura (p.ej. el wire se corto y ya no hay a quien mandarlo). */
 typedef int (*bpvm_fs_chunk_cb)(const uint8_t* data, uint32_t len, void* user);

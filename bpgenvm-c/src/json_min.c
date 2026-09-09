@@ -221,17 +221,17 @@ int json_get_bool(const json_obj_t* obj, const char* key, int def) {
     return (p->value_len == 4) ? 1 : 0;   /* "true" tiene 4, "false" 5 */
 }
 
-int json_get_str(const json_obj_t* obj, const char* key,
-                 char* dst, size_t dst_size) {
-    if (dst_size == 0) return -1;
-    dst[0] = '\0';
-    const json_pair_t* p = json_find(obj, key);
-    if (p == NULL || p->type != JSON_TYPE_STRING) return -1;
-    /* Desescape: copia char a char interpretando \\X. */
+/* #456 - El desescape, en UN solo sitio. Antes vivia dentro de json_get_str y
+ * ahora lo comparten las dos formas de leer un string (copiando y en sitio):
+ * dos tablas de escapes que se pueden desincronizar es exactamente la clase de
+ * error que este fichero se esta quitando de encima. Devuelve cuantos bytes
+ * puso en `dst`. `dst` puede solapar con `src` si dst <= src (desescapar solo
+ * encoge), que es lo que permite trabajar EN SITIO. */
+static size_t json_desescapa(const char* src, size_t len, char* dst) {
     size_t out = 0;
-    const char* q  = p->value;
-    const char* qe = p->value + p->value_len;
-    while (q < qe && out + 1 < dst_size) {
+    const char* q  = src;
+    const char* qe = src + len;
+    while (q < qe) {
         char c = *q++;
         if (c == '\\' && q < qe) {
             char esc = *q++;
@@ -247,8 +247,40 @@ int json_get_str(const json_obj_t* obj, const char* key,
         }
         dst[out++] = c;
     }
+    return out;
+}
+
+int json_get_str(const json_obj_t* obj, const char* key,
+                 char* dst, size_t dst_size) {
+    if (dst_size == 0) return -1;
+    dst[0] = '\0';
+    const json_pair_t* p = json_find(obj, key);
+    if (p == NULL || p->type != JSON_TYPE_STRING) return -1;
+    /* Desescapar solo encoge, asi que si el crudo cabe, el desescapado tambien.
+     * Se mide ANTES para poder decir "no cabe" en vez de truncar callando. */
+    if (p->value_len + 1 > dst_size) {
+        /* #456 - deja lo que cupo (sirve para el mensaje de error) y AVISA. */
+        size_t n = json_desescapa(p->value, dst_size - 1, dst);
+        dst[n] = '\0';
+        return -2;
+    }
+    size_t out = json_desescapa(p->value, p->value_len, dst);
     dst[out] = '\0';
     return (int) out;
+}
+
+char* json_str_inplace(json_obj_t* obj, const char* key) {
+    const json_pair_t* cp = json_find(obj, key);
+    if (cp == NULL || cp->type != JSON_TYPE_STRING) return NULL;
+    /* El const del par dice "no lo toques por accidente", no describe la
+     * memoria: el buffer es del llamador, y el contrato de esta funcion
+     * (json_min.h) pide que sea escribible. */
+    json_pair_t* p = (json_pair_t*) cp;
+    char* dst = (char*) p->value;
+    size_t out = json_desescapa(p->value, p->value_len, dst);
+    dst[out] = '\0';   /* cae en el hueco del desescape, o sobre la comilla de cierre */
+    p->value_len = out;
+    return dst;
 }
 
 const char* json_get_str_raw(const json_obj_t* obj, const char* key,
