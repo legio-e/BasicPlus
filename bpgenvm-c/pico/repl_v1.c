@@ -623,7 +623,12 @@ static void pico_repl_info(bpvm_repl_info_t* out) {
     /* Estaticos porque el struct guarda punteros y el comun los lee DESPUES. */
     static char unique[20], board[16];
     bpvm_pico_unique_id(unique, sizeof unique);
-    bpvm_pico_board_name(board, sizeof board);
+    /* V6 (9-sep) — el `board_name` del wire es el MICRO (el IDE lo rotula
+     * «Micro»), asi que aqui va `micro_name` y no `board_name`. La PLACA —que en
+     * el RP2350 SI se conoce, porque la Pico 2 y la Metro llevan la misma imagen
+     * y la variante la da el ENV— sale por `Machine.getBoard()`. Antes esta linea
+     * ponia la placa donde las otras dos familias ponen el micro. */
+    bpvm_pico_micro_name(board, sizeof board);
     const board_desc_t* bd = board_desc();
     size_t vstack = vm_stack_region_bytes();
 

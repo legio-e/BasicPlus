@@ -198,6 +198,10 @@ public final class Intrinsics {
         // segfault). El alias es de nivel BP; aqui solo va el modulo real.
         for (String mod : new String[]{"Machine"}) {
             register(mod + ".uniqueId",  w -> emitBuiltin(w, Builtin.PICO_UNIQUE_ID));
+            /* LOS DOS NOMBRES (V6, 9-sep). `boardName` se conserva por los
+             * programas ya escritos y es lo mismo que `getBoard()`. */
+            register(mod + ".getMicro",  w -> emitBuiltin(w, Builtin.MACHINE_MICRO));
+            register(mod + ".getBoard",  w -> emitBuiltin(w, Builtin.PICO_BOARD_NAME));
             register(mod + ".boardName", w -> emitBuiltin(w, Builtin.PICO_BOARD_NAME));
             register(mod + ".tempC",     w -> emitBuiltin(w, Builtin.PICO_TEMP_C));
             register(mod + ".cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));

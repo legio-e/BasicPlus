@@ -94,7 +94,11 @@ void board_desc_early_init(void) {
      * chip lo fija por su package. INDEPENDIENTE del FS → sobrevive a un borrado
      * de flash. board.json puede seguir forzando la variante (placas atípicas).
      */
-    strncpy(d->name, "rp2350-generic", sizeof d->name - 1);
+    /* V6 (9-sep) — "generic" a secas, no "rp2350-generic". Este campo es la
+     * PLACA y el MICRO tiene el suyo desde el reparto getMicro()/getBoard(), asi
+     * que repetirlo aqui era la redundancia que hacia ambiguo el campo. Lo pisa
+     * el ENV cuando la placa se identifica (Pico 2, Metro...). */
+    strncpy(d->name, "generic", sizeof d->name - 1);
     d->package_sel = (int) (sysinfo_hw->package_sel & 1u);
     apply_variant_caps(d, d->package_sel ? 'A' : 'B');
     d->led_pin       = -1;   /* lo declara la placa (board.json, estado >= 2) */

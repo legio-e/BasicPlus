@@ -24,6 +24,23 @@ module Machine
 
   // Nombre legible de la board. "pico2" en RP2350, "host" en VM
   // Java sin HW.
+  // ---- Los DOS nombres de la identidad (V6) ----
+  //
+  // Se devuelven los dos y decide el programa cual le interesa, que es justo lo
+  // que antes no se podia: habia UN campo y cada familia le daba un significado
+  // distinto, asi que un programa en un C3 se creia un S3.
+  //
+  //   getMicro()  el CHIP: "rp2350", "esp32s3", "esp32c3", "esp32p4", "stm32u5"
+  //               (en el PC, "host"). Real y especifico SIEMPRE.
+  //   getBoard()  la PLACA: "generic" cuando la imagen no conoce el modelo, que
+  //               es lo normal — las imagenes se hacen para el MICRO. El RP2350
+  //               y el STM32 si la conocen ("pico2", "nucleo-u575zi"...).
+  public intrinsic function getMicro(): string
+  public intrinsic function getBoard(): string
+
+  // Obsoleta: es lo mismo que getBoard(). Se conserva por los programas ya
+  // escritos; para codigo nuevo, usa getMicro() o getBoard() segun lo que
+  // quieras saber, que es la distincion que esta funcion no sabia hacer.
   public intrinsic function boardName(): string
 
   // ---- Sensores internos ----

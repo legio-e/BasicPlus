@@ -372,7 +372,11 @@ enum {
      * `__startup` pasandole el valor POR DEFECTO que diga el fuente; devuelve
      * el argumento de ejecucion si lo hay, y si no una COPIA del defecto —
      * alojada igual. Asi Main recibe siempre una referencia del heap. */
-    BUILTIN_RUN_ARG              = 232  /* (defecto: string)         → string */
+    BUILTIN_RUN_ARG              = 232,  /* (defecto: string)         → string */
+    /* V6 (9-sep) — el MICRO. La PLACA la da BUILTIN_PICO_BOARD_NAME: son DOS
+     * campos distintos desde el rediseno de `Machine` (getMicro/getBoard).
+     * 233 = ordinal() de MACHINE_MICRO en el enum Builtin de miVM. */
+    BUILTIN_MACHINE_MICRO        = 233  /* ()                        → string  */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -2914,6 +2918,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
         if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_MACHINE_MICRO: {
+        /* El MICRO, por la fachada HAL BP — la MISMA funcion que lee el wire. */
+        char mbuf[32];
+        bpvm_pico_micro_name(mbuf, sizeof(mbuf));
+        uint32_t mref = bpvm_heap_alloc_string(vm, mbuf, strlen(mbuf));
+        if (mref == 0) return builtin_throw(vm, tc, "No space in heap");
+        push_ref(vm, tc, mref);
         return BPVM_OK;
     }
     case BUILTIN_PICO_BOARD_NAME: {

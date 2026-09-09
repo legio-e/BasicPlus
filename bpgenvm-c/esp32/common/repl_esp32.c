@@ -977,7 +977,15 @@ static void esp32_repl_info(bpvm_repl_info_t* o) {
     size_t vstack = vm_stack_region_bytes();
 
     o->unique_id     = uid;
-    o->board_name    = bid->board_name;
+    /* V6 (9-sep) — POR LA FACHADA, no por la tabla de aqui. `board_name` del wire
+     * es el MICRO (el IDE lo rotula «Micro»), y quien lo sabe es la cintura, que
+     * ya lo publica en HAL BP. Antes salia de `s_board_id`, una SEGUNDA fuente
+     * rellenada a mano por familia — y por eso divergio: el programa BP leia la
+     * fachada («esp32s3-devkitc» para S3, C3 y C6) y el wire leia esto. Una sola
+     * funcion y dos lectores, que es lo que la Pico ya hacia (`repl_v1.c`). */
+    static char micro[24];
+    bpvm_pico_micro_name(micro, sizeof micro);
+    o->board_name    = micro;
     o->reset_reason  = bpvm_pico_reset_cause();
     o->arch          = (unsigned) bpvm_mdn_host_arch();
     o->cpu_hz        = (unsigned long) bid->cpu_freq_hz;

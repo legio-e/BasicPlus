@@ -509,7 +509,12 @@ public enum Builtin {
      * hay, y si no una COPIA del defecto, alojada igual. Asi Main recibe siempre
      * una referencia del HEAP y desaparece la asimetria con el literal de la
      * zona de datos. AL FINAL, que el id es el ordinal(). */
-    RUN_ARG("__runArg");                               // (defecto) -> string
+    RUN_ARG("__runArg"),                               // (defecto) -> string
+    /* V6 (9-sep) — el MICRO. El nombre de la PLACA ya lo daba PICO_BOARD_NAME, y
+     * ahora son dos campos distintos: `Machine.getMicro()` y `Machine.getBoard()`.
+     * VA AL FINAL a proposito: el id es el ordinal() de este enum y la VM-C los
+     * lleva escritos a mano — insertarlo en medio correria todos los de detras. */
+    MACHINE_MICRO("__machineMicro");                   // () -> string
 
     public final String bpName;
     public final int id;

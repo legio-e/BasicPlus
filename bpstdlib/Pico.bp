@@ -20,6 +20,14 @@ module Pico
     return Machine.uniqueId()
   end uniqueId
 
+  public function getMicro(): string
+    return Machine.getMicro()
+  end getMicro
+
+  public function getBoard(): string
+    return Machine.getBoard()
+  end getBoard
+
   public function boardName(): string
     return Machine.boardName()
   end boardName

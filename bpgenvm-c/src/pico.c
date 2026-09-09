@@ -34,6 +34,25 @@ void bpvm_pico_unique_id(char* buf, size_t len) {
     buf[n] = '\0';
 }
 
+/* ── LOS DOS NOMBRES DE LA IDENTIDAD (V6, 9-sep) ───────────────────────────────
+ * Ver el porque de que sean DOS en bpvm_pico.h. Aqui solo la mecanica: cada
+ * imagen aporta su implementacion y estos accesores son el UNICO sitio del que
+ * leen el builtin de BP y el wire. */
+
+void bpvm_pico_micro_name(char* buf, size_t len) {
+    if (g_backend && g_backend->microName) {
+        g_backend->microName(buf, len);
+        return;
+    }
+    /* Sin cintura estamos en el host: el micro es este PC. */
+    const char* stub = "host";
+    size_t n = strlen(stub);
+    if (len == 0) return;
+    if (n > len - 1) n = len - 1;
+    memcpy(buf, stub, n);
+    buf[n] = (char) 0;
+}
+
 void bpvm_pico_board_name(char* buf, size_t len) {
     if (g_backend && g_backend->boardName) {
         g_backend->boardName(buf, len);

@@ -27,6 +27,12 @@
 /* El nombre con el que este silicio se presenta en la consola y en el log. */
 #define CHIP_NOMBRE  "ESP32-S3"
 
+/* V6 (9-sep) — EL ID CANONICO DEL CHIP. `CHIP_NOMBRE` es para leerlo un humano
+ * (sale en el banner); esto es lo que contesta `Machine.getMicro()` y el `INFO`
+ * del wire, y por eso va en minusculas y sin adornos. Una entrada por micro: es
+ * el sitio donde ya vivian el nombre y los numeros de memoria de este chip. */
+#define CHIP_MICRO   "esp32s3"
+
 /* ─── EL BLOQUE DE LA VM: objetivo, margen y suelo (V6/U6.7, 2-sep-2026) ───────
  *
  * Aquí había VM_BUFFER_SIZE (160 KB) y VM_BUFFER_FALLBACK (128): dos números a

@@ -626,6 +626,14 @@ static void pico_pico_unique_id_impl(char* buf, size_t len) {
     }
 }
 
+/* El micro del RP2350 es uno y no depende de la placa: la Pico 2 y la Metro
+ * llevan el mismo silicio y la MISMA imagen. La PLACA si cambia, y esa la da el
+ * `board_desc` de abajo (variante por defecto o ENV) — que es justo el reparto
+ * micro/placa que pidio Eduardo. */
+static void pico_pico_micro_name_impl(char* buf, size_t len) {
+    if (buf && len > 0) { strncpy(buf, "rp2350", len - 1); buf[len - 1] = '\0'; }
+}
+
 static void pico_pico_board_name_impl(char* buf, size_t len) {
     /* H7.3: el nombre lo da el descriptor de placa (board_desc_init lo fija
      * desde la variante por defecto o desde /sys/board.json). */
@@ -769,6 +777,7 @@ static const char* pico_pico_reset_cause_impl(void) {
 
 static const bpvm_pico_backend_t s_pico_pico_backend = {
     .uniqueId      = pico_pico_unique_id_impl,
+    .microName     = pico_pico_micro_name_impl,
     .boardName     = pico_pico_board_name_impl,
     .tempC         = pico_pico_temp_c_impl,
     .cpuFreqHz     = pico_pico_cpu_freq_hz_impl,

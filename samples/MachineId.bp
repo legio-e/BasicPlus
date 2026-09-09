@@ -1,0 +1,10 @@
+// MachineId.bp — los DOS nombres de la identidad (V6). El micro es real y
+// especifico; la placa es `generic` salvo que la imagen conozca el modelo.
+module MachineId
+  import Machine
+  function Main()
+    print "micro:", Machine.getMicro()
+    print "placa:", Machine.getBoard()
+    print "obsoleta boardName() == getBoard():", Machine.boardName() == Machine.getBoard()
+  end Main
+end MachineId

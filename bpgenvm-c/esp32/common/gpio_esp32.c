@@ -10,6 +10,7 @@
  *   - value: 0 = LOW, !=0 = HIGH
  *   - pull: 0 = none, 1 = up, 2 = down
  */
+#include "chip_cfg.h"   /* CHIP_MICRO: el id canonico de ESTE chip */
 #include "hw_esp32.h"
 #include "bpvm_gpio.h"
 #include "bpvm_pico.h"
@@ -87,9 +88,29 @@ static void esp32_unique_id_impl(char* buf, size_t len) {
     }
 }
 
+/* ── LOS DOS NOMBRES (V6, 9-sep) ───────────────────────────────────────────────
+ *
+ * Este fichero lo comparten el S3, el C3 y el C6, y antes tenia UN solo nombre
+ * escrito a mano: "esp32s3-devkitc". O sea que un programa en un C3 se creia un
+ * S3 — cinco de seis campos falsos, incluido el nombre. El arreglo del wire de
+ * `#465` corrigio solo el otro camino y este se quedo mintiendo.
+ *
+ * Ahora el micro sale de `CHIP_MICRO`, una entrada POR MICRO en el `chip_cfg.h`
+ * de cada uno — el mismo sitio del que ya salian su nombre y sus numeros de
+ * memoria. Y la placa dice `generic` a proposito: construimos imagenes para el
+ * MICRO y se quieren genericas, asi que la imagen NO sabe en que placa esta y no
+ * debe inventarselo. Quien se haga la suya, que ponga lo que quiera.
+ * (Decision de Eduardo, 8-sep.) */
+static void esp32_micro_name_impl(char* buf, size_t len) {
+    if (buf && len > 0) {
+        strncpy(buf, CHIP_MICRO, len - 1);
+        buf[len - 1] = '\0';
+    }
+}
+
 static void esp32_board_name_impl(char* buf, size_t len) {
     if (buf && len > 0) {
-        strncpy(buf, "esp32s3-devkitc", len - 1);
+        strncpy(buf, "generic", len - 1);
         buf[len - 1] = '\0';
     }
 }
@@ -148,6 +169,7 @@ const char* esp32_reset_cause(void) {
 
 static const bpvm_pico_backend_t s_esp32_pico_backend = {
     .uniqueId      = esp32_unique_id_impl,
+    .microName     = esp32_micro_name_impl,
     .boardName     = esp32_board_name_impl,
     .tempC         = esp32_temp_c_impl,
     .cpuFreqHz     = esp32_cpu_freq_hz_impl,

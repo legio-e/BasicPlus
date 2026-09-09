@@ -307,8 +307,15 @@ static int stm32_mark_at_impl(int i) {
 
 static int stm32_boot_count_impl(void) { return (int) s_bc_boot_count; }
 
+/* Los DOS nombres (V6, 9-sep): el micro es la familia de silicio; la PLACA sale
+ * de BOARD_NAME, que ya distingue la Nucleo de la DK2 (son dos proyectos). */
+static void stm32_micro_name_impl(char* buf, size_t len) {
+    if (buf && len > 0) { strncpy(buf, "stm32u5", len - 1); buf[len - 1] = '\0'; }
+}
+
 static const bpvm_pico_backend_t s_pico_backend = {
     .uniqueId      = stm32_unique_id_impl,
+    .microName     = stm32_micro_name_impl,
     .boardName     = stm32_board_name_impl,
     .tempC         = stm32_temp_c_impl,
     .cpuFreqHz     = stm32_cpu_freq_hz_impl,

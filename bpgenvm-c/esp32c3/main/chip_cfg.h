@@ -11,6 +11,12 @@
 
 #define CHIP_NOMBRE  "ESP32-C3 (ensayo)"
 
+/* V6 (9-sep) — EL ID CANONICO DEL CHIP. `CHIP_NOMBRE` es para leerlo un humano
+ * (sale en el banner); esto es lo que contesta `Machine.getMicro()` y el `INFO`
+ * del wire, y por eso va en minusculas y sin adornos. Una entrada por micro: es
+ * el sitio donde ya vivian el nombre y los numeros de memoria de este chip. */
+#define CHIP_MICRO   "esp32c3"
+
 /* ─── EL BLOQUE DE LA VM: objetivo, margen y suelo (V6/U6.7, 2-sep-2026) ───────
  *
  * Todo lo de aquí está MEDIDO EN ESTA PLACA (P1.C3.3 y U6.4), no heredado del

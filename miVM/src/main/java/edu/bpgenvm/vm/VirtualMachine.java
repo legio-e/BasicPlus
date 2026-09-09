@@ -5455,7 +5455,15 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString("host-pc"));
                 break;
             }
-            case PICO_BOARD_NAME: {
+            case PICO_BOARD_NAME: {   // la PLACA. En host no hay ninguna.
+                pushTcRef(tc, allocVmString("host"));
+                break;
+            }
+            case MACHINE_MICRO: {     // el MICRO. En host, este PC.
+                /* Los DOS nombres, y aqui los dos valen "host" a proposito: en el
+                 * PC no hay ni micro ni placa que nombrar, y la VM-C dice lo mismo
+                 * (su fachada sin cintura devuelve "host"). La paridad se rompe si
+                 * uno de los dos se pone creativo. */
                 pushTcRef(tc, allocVmString("host"));
                 break;
             }

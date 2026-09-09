@@ -39,8 +39,14 @@ static void p4_pico_unique_id(char* buf, size_t len) {
         snprintf(buf, len, "%02X%02X%02X%02X%02X%02X",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
-static void p4_pico_board_name(char* buf, size_t len) {
+/* Los DOS nombres (V6, 9-sep): el micro es real, la placa dice `generic` porque
+ * esta imagen sirve a las DOS P4 —el kit y la Waveshare— y no sabe en cual esta
+ * (el panel si, y eso sale del ENV; el modelo de placa no). */
+static void p4_pico_micro_name(char* buf, size_t len) {
     if (buf && len > 0) { strncpy(buf, "esp32p4", len - 1); buf[len - 1] = '\0'; }
+}
+static void p4_pico_board_name(char* buf, size_t len) {
+    if (buf && len > 0) { strncpy(buf, "generic", len - 1); buf[len - 1] = '\0'; }
 }
 /* Sensor de temperatura interno del P4 (periférico PROPIO, no ADC). Install +
  * enable PEREZOSO en la 1ª lectura; rango -10..80 °C. */
@@ -64,6 +70,7 @@ static int   p4_pico_pwm_slices(void)      { return 14; }          /* H14: 8 LED
 
 static const bpvm_pico_backend_t s_p4_pico_backend = {
     .uniqueId      = p4_pico_unique_id,
+    .microName     = p4_pico_micro_name,
     .boardName     = p4_pico_board_name,
     .tempC         = p4_pico_temp_c,
     .cpuFreqHz     = p4_pico_cpu_freq_hz,
