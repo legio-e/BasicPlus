@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 11 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 10 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **11** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#484` · `#485` · `#486` · `#487` |
+> | **fichas de V6** | **10** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#484` · `#485` · `#487` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2229,7 +2229,7 @@ en S3/C3/C6, donde la VM corre en `app_main`).
 
 📌 Es la misma forma del fallo que en la Pico dejó un KILL sin llegar durante 9,9 s.
 
-#### 🟡 `#486` — `GUI_RUN_ONCE` recorre TODA la tabla de símbolos con `strcmp` en cada pasada (abierta 9-sep, sale de `#462`)
+#### ✅ `#486` — `GUI_RUN_ONCE` recorre TODA la tabla de símbolos con `strcmp` en cada pasada (abierta 9-sep, de `#462` · **CERRADA el 9-sep**, `c8d5eda4`)
 
 En el bucle más caliente de la GUI, cada vuelta busca por nombre las **dos** funciones de dispatch
 (`Gui.__guiDispatch` y `Gui.__guiDispatchChange`) recorriendo la tabla entera: son ~460 símbolos en
@@ -2238,6 +2238,64 @@ un programa como `JsonDemo`, y la vuelta se repite cientos de veces por quantum
 
 ⏭️ Se resuelve cacheando las dos direcciones la primera vez, exactamente como hace miVM. Es barato y
 no cambia nada observable — pero **cámbialo con el cronómetro puesto**, que si no es una impresión.
+
+
+### ✅ CERRADA el 9-sep (`c8d5eda4`) — y las DOS preguntas de Eduardo mandaron el trabajo
+
+**Medido antes de tocar**, con `samples/GuiDispatchBench.bp` (build **sin LVGL**, para que el
+barrido sea lo único que se cronometre), 1420 símbolos:
+
+| | 20 000 pasadas |
+|---|---|
+| antes | **241 ms** (12 µs por vuelta ≈ 8,5 ns por símbolo) |
+| ahora | **0-1 ms** |
+
+**1ª pregunta de Eduardo: *«¿esto lo hace cada vez que ejecuta una función, o sólo una vez?»***
+Ni una cosa ni la otra: era **una vez por VUELTA DEL BOMBEO**. Con la pausa de 10 ms de `#462`, eso
+son **~100 barridos por segundo** mientras la GUI esté viva. Ahora es **una vez por RUN**.
+
+**El arreglo**: `gui_dispatchers()` resuelve los dos y los cachea **en la VM**, no en un `static` —
+y eso no es un detalle: la dirección depende del programa **cargado**, y un mismo proceso ejecuta
+muchos RUN seguidos (el wire), así que un `static` devolvería la dirección del programa anterior.
+Centinela `1` = «buscado y no está», que hace falta o el caso **sin handlers** —el que más vueltas
+da— seguiría barriendo. Los campos van **al final** de `bpvm_t`: el prefijo congelado del `.mdn` no
+se toca y sus dos asertos siguen en verde (comprobado además con los cuatro tests de nativas).
+
+⚠️ **El corpus NO cubre el dispatch**: ningún caso dispara un handler, así que la paridad en verde no
+probaba lo que se acababa de cambiar. Se forzó a mano con `samples/GuiEvSpike.bp` — «3 handler (el
+evento se ha drenado)» sale en las dos VMs.
+
+### 🔬 **2ª pregunta de Eduardo: *«¿y la lista está ordenada?»*** — no, y se midió qué implica
+
+**No lo está**: los símbolos se añaden en orden de enlazado (`link.c:130`) y **no hay un `qsort` ni
+un `bsearch` en todo el código**. Hay **siete** barridos lineales de la tabla. La pregunta natural
+era si alguno más está en un camino caliente, y la respuesta salió midiendo, no leyendo:
+
+| dónde | cuándo se paga |
+|---|---|
+| `builtins.c:566` | **era cada vuelta del bombeo** → arreglado aquí |
+| `builtins.c:685/689` (`bpvm_resolve_handler`) | por handler de Forms invocado = **por clic** |
+| `builtins.c:1142` (`GUI_SLOT_OF`) | una vez por nombre, **al cargar el form** |
+| `aot_registry.c:52` | registro de thunks = **carga** |
+| `bpvm_aot_helpers.c:655` | el thunk lo llama **una vez y cachea** (lo dice su comentario) |
+| `link.c:139` (`bpvm_link_lookup`) | carga, y el camino de **ERROR** de la VM |
+
+📌 **Y el único sospechoso serio se descartó con una medida, no con una lectura.** `bpvm_link_lookup`
+lo llama `bpvm_throw_runtime_error`, así que parecía «un barrido por excepción». Se probó con dos
+programas idénticos salvo en el número de símbolos:
+
+```
+169 simbolos   ->  12 ms  / 20.000 lanzamientos
+1420 simbolos  ->  13-15 ms
+```
+
+Con 8,4× más símbolos el tiempo no se mueve ⇒ **el barrido no se paga por lanzamiento**. La razón:
+ese camino es el de los errores que levanta **la VM** (un índice fuera de rango, el `Wdt` sin
+backend); un `throw` de un programa BP construye el objeto con opcodes normales y no pasa por ahí.
+
+**Conclusión: tras `#486` no queda ningún barrido de la tabla en un camino caliente**, así que
+ordenarla no compra nada hoy. **No se abre ficha** — pero queda escrito por si algún día un camino
+nuevo empieza a buscar por nombre en un bucle.
 
 #### 🟡 `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, sale de `#480`)
 
