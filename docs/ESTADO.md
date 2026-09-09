@@ -27,6 +27,93 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (9-sep, tarde) — **de 19 cosas a 11**, y la lista dejó de mentir
+
+Sesión de cerrar pendientes, muy conducida por Eduardo: **seis correcciones suyas**, y cinco
+hicieron el trabajo más pequeño o lo pusieron en su sitio.
+
+### Lo que se cerró
+
+| | |
+|---|---|
+| `#456` | el `path` truncado en silencio — **y no se eligió número: se quitó la copia** |
+| `#483` | la Metro que no ejecutaba nada — **por NO REPRODUCIBLE**, con la receta guardada |
+| `#480.1` | el **watchdog** del STM32: completo o no está |
+| `#470` | los nombres, **verificados en placa**: Pico 2 `rp2350a`, Metro `rp2350b` |
+| `A4`, `#488` | **fuera del plan de versiones** |
+| `#470` (números), `#480.2` | **a V7**, con el diseño escrito |
+
+### 🔑 Las correcciones de Eduardo, que es lo aprovechable
+
+1. **«¿Por qué el path tiene un tope?»** — cuatro palabras que cambiaron la ficha entera. No lo
+   imponía nada: ni littlefs ni FatFs (255 **por nombre**), ni el protocolo (línea de 2048), ni el
+   parser (in-place). Lo imponía **la copia**. Y no era un tope: eran **seis** números para la misma
+   cosa (39, 63, 95, 191, 256, 511). Ahora el path del wire **no se copia** (`json_str_inplace`) y
+   queda **un** número, para lo que hay que guardar o construir.
+2. **«Quita topes. Si tiene que haber un tope lo hablamos y vemos cuál es la razón.»** Y al mirar
+   salieron dos cosas que la ficha no tenía: **el lado BP tenía el mismo bug** (13 sitios que
+   ignoraban lo que devuelve `read_bp_string`) y **el resolvedor iba por detrás** — el wire aceptaba
+   205 caracteres y el `RUN` los recortaba a **39**.
+3. **«El bucle de LVGL, si no hay nada pendiente, hace una pausa y el sistema de Threads pasa el
+   testigo al siguiente.»** Yo iba a por «quantum por tiempo». Él tenía razón y era más simple: el
+   bombeo **sí** pausaba, pero **a nivel de SO** (`SDL_Delay`, `vTaskDelay`, `__WFI`,
+   `Thread.sleep`), y sobre esa única tarea corren **todos** los hilos BP. No dormía el hilo del
+   GUI: congelaba la VM. Ahora devuelve el ocio y duerme el lazo BP.
+4. **«El watchdog, completo o no se implementa.»** El IWDG del U5 no se para por software —silicio—,
+   así que el STM32 **se queda sin watchdog** y los tres verbos lanzan. Y **el código se borra, no
+   se comenta**: código muerto son avisos para siempre.
+5. **«El S3 es Xtensa y el C3 es RISC-V, son casos diferentes.»** Yo había propuesto probar los
+   packs del S3 en el C3 como si fuera equivalente. Lo es **para el MMU** y no **para la ISA**. La
+   ficha se partió en dos.
+6. **«Muchas de estas entradas son múltiples cosas; las que no tienen número, asígnaselo.»** De ahí
+   `#482`–`#488`.
+
+### 🔴 Tres roturas del INVARIANTE SAGRADO, vivas y sin que nadie las viera
+
+Y las tres por el mismo motivo: **lo que no está en el corpus, se pudre**.
+
+- **Los stubs del PC.** Seis fachadas (`gpio`, `pwm`, `pulse`, `uart`, `spi`, `pico`) escriben su
+  línea de simulación **dos veces**, y no decían lo mismo: `(sim …)` contra `(stub …)`. **13
+  textos.** Mismo `.mod`, `stdout` distinto.
+- **Y uno no era cosmético**: `src/uart.c:42` usaba **`putchar`** en medio de una secuencia de
+  `bpvm_out`. `putchar` escribe al `FILE` de C y **se sale del sumidero de la VM**: el payload salía
+  **desordenado** (al principio de stdout) y el preview quedaba vacío. Dos líneas más abajo hay un
+  comentario que dice *«TEXTO = CONTRATO DE PARIDAD: idéntico al de miVM»* — se hizo para `read` y
+  se saltó `write`.
+- **El watchdog**: `(host, no-op)` contra `(stub, no-op)`.
+
+**Corpus 48 → 50**: entran `WdtCatch.bp` (los tres verbos del camino de error) y `StubParidad.bp`
+(cada verbo con stub de las seis fachadas).
+
+### 📐 La cuenta, que es lo que descolocó a Eduardo al final
+
+*«Empezamos con 9 pendientes y terminamos con 11, parece que vayamos para atrás.»* Contando **como
+contamos ahora** —una entrada, una cosa— esta mañana había **19**, no 12: `#462` escondía cuatro,
+`#480` otras cuatro, `packs del S3` dos. **De 19 a 11.** Lo que subió no fue el trabajo: fue la
+resolución del microscopio.
+
+### ⚠️ Y una trampa mía, la misma de siempre
+
+Eduardo no pudo compilar `MachineId.bp` desde el IDE: *«intrínseco no implementado en el emisor
+mivm: Machine.getMicro»*. **El IDE empaqueta su propia copia del compilador** y la suya era del
+8-sep 18:19; las intrínsecas se registraron el 9-sep 06:11. El síntoma es de los malos: el
+**semántico las acepta** (las lee de `Machine.mod`) y sólo revienta el emisor, así que parece un bug
+del compilador y es un **artefacto rancio**. Reconstruido y verificado compilando **con el jar del
+IDE**, no mirando el log de Maven.
+
+📌 **Regla que hay que aplicar sola: tocar `Intrinsics.java` obliga a reconstruir el fat-jar del
+IDE** (con el IDE cerrado).
+
+### ⏭️ Al volver
+
+**11 pendientes.** Los dos que no necesitan nada de Eduardo: **`#486`** (cachear las dos direcciones
+del dispatch del GUI, como ya hace miVM) y **`#480`** (el ADC del ESP32 que falla con 0 en vez de
+−1 — es el mismo arreglo aplicado hoy dos veces). **`#481`** sigue esperando su criterio: ¿el
+informe del error no atrapado es **salida** o **diagnóstico**?
+
+⚠️ **Placas**: Pico 2, S3 y **Metro** llevan firmware al día; el resto no. Y el `bpgenvm-c` del host
+está construido **con `LVGL=1`** (hizo falta para medir el GUI) — si algo se compara con builds
+anteriores, tenerlo en cuenta.
 ## ⏭️ AL RETOMAR (9-sep, noche) — **tres carreras muertas** y la identidad del micro sale por la HAL BP
 
 Sesión corta en fichas (una) y larga en lo que hay debajo: **el SMP de la VM-C pasa de inservible
