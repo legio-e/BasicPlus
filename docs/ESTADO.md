@@ -27,6 +27,95 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (9-sep, noche) — **de 19 cosas a 2**, y el corpus de 48 a 54
+
+Segunda mitad del día, entera cerrando pendientes. **Nueve fichas cerradas, cuatro fuera de V6 con
+su decisión escrita.** Y el hilo que recorre casi todas: *lo que no está en el corpus, se pudre*.
+
+### Lo que se cerró
+
+| | |
+|---|---|
+| `#486` | los dos dispatchers del GUI, resueltos **una vez por RUN**: 241 ms → **0-1 ms** |
+| `#480` | entera: el ADC del ESP32 que fallaba con 0, + el watchdog (mañana) |
+| `#485` | el contrato de prioridad de `io`, de **vigilado a construido** |
+| `#484` | no era «falta `listDir`»: eran **seis** builtins sólo en miVM, **dos rotas en vivo** |
+| `#481` | el código de salida y el informe de una excepción no atrapada |
+| `#482` | la vista doble de los packs: **no la necesita nadie** — medido en placa |
+| `#471` | tres roturas de paridad en `Machine`, y un `set()` que mentía |
+| `#379` | → **`F1`**: lo único que le queda es una prueba de placa |
+| `#487`, `#488`, `A4`, `#470`(números), `#480.2` | **fuera de V6**, con el diseño escrito |
+
+### 🔑 Las correcciones de Eduardo, que son lo que hay que retener
+
+1. **«El S3 es Xtensa y el C3 es RISC-V, son casos diferentes.»** Yo había clasificado cuatro micros
+   **leyendo un macro que el programa ni consulta** (`SOC_MMU_DI_VADDR_SHARED`); la decisión se toma
+   en *runtime*. Medido en las dos placas: **INST y DATA son la misma dirección** en C3 y S3. El
+   mecanismo de vista doble **no tiene ni un usuario**. Y de paso corrige el 8-sep: aquel commit
+   llevaba dos arreglos y **sólo uno trabajaba** — lo que dejaba al S3 sin packs era que el mapeo
+   vivía en el directorio del P4.
+   📐 Su explicación **predice** mejor que la medida: vistas separadas es un rasgo **Harvard**, y ARM
+   y RISC-V son Von Neumann.
+2. **«Hay que distinguir de un exit distinto de 0, de una excepción no atrapada: 2 casos.»** Eran dos
+   roturas: miVM salía con **0** para un programa muerto, y la VM-C devolvía **el ordinal del enum**.
+3. **«Cuidado con la frecuencia, no es una constante.»** Destapó que `set(200)` devolvía `true` en
+   las dos VMs y `cpuFreqHz()` seguía diciendo lo de antes.
+4. **«El watchdog, completo o no se implementa.»** El IWDG del U5 no se para por software → el STM32
+   **se queda sin watchdog** y los tres verbos lanzan.
+5. **«Con probarlo una vez en una placa es suficiente.»** El 91,8 % es común; compilar las cinco
+   familias prueba lo mismo cinco veces.
+6. **«Un `exit(11)` no me dice nada.»** → el `help error` del IDE.
+
+### 🔴 CINCO roturas del invariante, todas vivas, todas por lo mismo
+
+Ninguna se veía **porque no había sample suyo en el corpus**:
+
+| | qué |
+|---|---|
+| los stubs del PC | **13 textos** distintos en seis fachadas (`(sim …)` vs `(stub …)`) |
+| `src/uart.c:42` | un **`putchar`** en medio de `bpvm_out` → el payload salía **desordenado** |
+| el watchdog | `(host, no-op)` vs `(stub, no-op)` |
+| `IO.pathAbsolute` / `IO.prompt` | funcionaban en miVM y la VM-C lanzaba «builtin no soportado» |
+| `Machine` | `uniqueId`, `tempC` y `cpuFreqHz` |
+
+**Corpus 48 → 54**: `WdtCatch`, `StubParidad`, `IoPrompt`, `IoPathAbs`, `ThrowSinAtrapar`,
+`MachineHost`.
+
+### 🔧 Herramienta nueva: `bpgenvm-c/tools/wire_serie.py`
+
+Cliente del wire **por serie que NO es el IDE**. Es lo que faltaba desde agosto para el paso 1 de
+`#379` (*¿está colgado el device o el IDE?*). Con él: **16 ciclos `run→stop→INFO` en C3 y S3, 0
+fallos**. Y sirve para cualquier placa: `info`, `log`, `list`, `ciclo`.
+
+```
+python tools/wire_serie.py COM3 ciclo /app/Bench.mod 8
+```
+⚠️ Desde Git Bash hay que poner `MSYS_NO_PATHCONV=1`, o convierte `/app/...` en ruta de Windows y la
+placa contesta `NOT_FOUND` — me costó media hora.
+
+### ⚠️ Dos trampas y un aviso
+
+- **El `io-smoke` tenía un caso PERMANENTEMENTE ROJO**, y era **su guarda**: buscaba `"gui lista"`
+  para detectar que el sim no trae LVGL, y el sim headless también la imprime. Un caso siempre rojo
+  enseña a ignorar el arnés.
+- **Mi propio script tiraba la respuesta que no encajaba** y decía «sin respuesta» mientras la placa
+  contestaba `NOT_FOUND`. El mismo vicio que llevaba el día arreglando en el producto.
+- ⚠️ **El arnés NO mira el código de salida**, sólo `stdout`. Los `exit 1` de `#481` están medidos a
+  mano.
+
+### ⏭️ Al volver: quedan DOS
+
+- **`#462`** — el **suelo de ~48 ms** de latencia upcall→handler, independiente del quantum. Es la
+  única con incógnita de verdad: el sospechoso (`LV_DEF_REFR_PERIOD = 33 ms`) explica buena parte,
+  no los 48. Necesita placa con pantalla.
+- **`#473`** — los **78 hallazgos** de la auditoría de capas, sin verificar. No necesita placa ni
+  decisión: es leer y comprobar. Es la más grande. *(Van ya tres confirmados sin buscarlos: la
+  fachada del FS que no enlaza con el backend de host, el `gpioCount` que no significa «cuántos
+  GPIO», y el `io` del P4.)*
+
+⚠️ **Placas**: la **C3 se reflasheó** hoy (llevaba firmware anterior al 8-sep y ahora monta packs);
+Pico 2, S3 y Metro al día. El P4, el C6 y los STM32 **no**. Y el `bpgenvm-c` del host está construido
+**sin LVGL** (`make sim LVGL=1` para el caso del GUI del `io-smoke`).
 ## ⏭️ AL RETOMAR (9-sep, tarde) — **de 19 cosas a 11**, y la lista dejó de mentir
 
 Sesión de cerrar pendientes, muy conducida por Eduardo: **seis correcciones suyas**, y cinco
