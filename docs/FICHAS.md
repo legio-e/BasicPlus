@@ -6014,6 +6014,66 @@ silencio: compilaba desde un directorio temporal —donde el frontend no encuent
 que un caso con `import Gui` **ni compilaba**— y no subía `Core`/`Json`/`Gui` al FS del
 simulador. Ahora la prueba **dice en voz alta cuándo se salta**.
 
+
+### ✅ 9-sep — LA CAUSA DE FONDO, ARREGLADA: la pausa estaba en el sitio equivocado (`805bdd87`)
+
+**Y el diagnóstico que había aquí arriba —«el quantum en opcodes»— era el SÍNTOMA.** Lo cortó
+Eduardo con el modelo: *«el bucle de LVGL tiene que mirar si hay algo pendiente, si no hay nada
+pendiente lo que tiene que hacer es una pausa y el sistema de Threads le ha de pasar el testigo al
+siguiente.»*
+
+📌 **Y antes de eso, otra corrección suya que ahorró el viaje**: *«ahora el bucle se ejecuta en su
+propio Thread BP, no debería afectar al resto»*. Cierto: los 400 ms de arriba son del **31-ago**, y
+`G1` metió el lazo en su hilo BP el **6-sep**. Había que volver a medir, no seguir citando.
+
+### Lo que se midió (`samples/GuiHambre.bp`, con su control)
+
+Un hilo testigo que sólo mira el reloj mientras el lazo bombea al lado; y la misma medida **sin
+GUI**, que es lo que hace que el número signifique algo.
+
+| | antes | **después** | control (sin GUI) |
+|---|---|---|---|
+| **VM-C** peor hueco | **2136 ms** | **1 ms** | 2 ms |
+| **VM-C** vueltas del testigo en 3 s | **85** | 25 941 803 | 12 985 899 |
+| **miVM** peor hueco | 64 ms | **16 ms** | 17 ms |
+
+Las dos VMs **empatan ya con su propio control**: el lazo del GUI ha dejado de costarle nada a los
+demás hilos BP.
+
+### La causa, y es la misma en las cinco implementaciones
+
+El bombeo **sí** hacía la pausa. La hacía **a nivel de SO**:
+
+```
+host (SDL)   lv_timer_handler();  SDL_Delay(16);      ← 16 ms fijos, y tirando lo que LVGL contestó
+P4  (ESP)    idle = lv_timer_handler();  vTaskDelay(…)  ← SÍ preguntaba… y se comía la respuesta
+C6  (ESP)    ídem
+STM32        lv_timer_handler();  __WFI();
+miVM         Thread.sleep(15) DENTRO del builtin
+```
+
+🔑 Y todos los hilos BP corren sobre **una sola tarea de SO** — decisión de `A1`, y correcta, porque
+LVGL no es reentrante. Así que esa espera no dormía el hilo del GUI: **congelaba la VM entera**. El
+planificador de threads BP ni se enteraba de que podía pasar el testigo. Por eso el testigo corría
+85 veces en tres segundos: no perdía la competición, **nadie repartía**.
+
+### El cambio
+
+`__guiRunOnce()` hace el trabajo y **devuelve el ocio** que dice el propio LVGL — `-1` = «no queda
+nada, sal»; `>= 0` = «vuelve dentro de N ms». Quien duerme es el lazo BP de `Gui.bp`, con un `sleep`
+**de BP**, que bloquea sólo ese hilo BP. El tope (10 ms, el que midió `#424`) queda en **un sitio**
+para las cuatro cinturas y para miVM, en vez de repetido en cinco.
+
+📌 Esto **da la vuelta a una decisión escrita**: `Gui.bp` decía *«SIN `sleep` AQUÍ, y es a propósito.
+La espera la pone el BOMBEO»*. Era justo eso lo que había que cambiar.
+
+⚠️ **Y una madriguera mía, que conviene no repetir.** Perseguí durante media hora un fallo
+intermitente del arnés (1 de cada 5) creyéndolo mío. Lo provocaba **yo**, lanzando dos programas de
+GUI a la vez para medir. Eduardo: *«no puede haber 2 LVGL a la vez, punto.»* Ejecutado como toca:
+**8 pasadas seguidas del arnés a 48 PASS** y 15 de `GuiParidad2` con rc=0 y las 23 líneas. El
+instrumento estaba midiendo una configuración que no existe — [[instrumento-mudo-dudar-de-el]] por
+el otro lado: no un doble más amable, un doble IMPOSIBLE.
+
 ### ⏭️ Lo que queda de esta ficha
 
 | | Qué | Estado |
@@ -6021,9 +6081,9 @@ simulador. Ahora la prueba **dice en voz alta cuándo se salta**.
 | 1 | El **yield** entre cuantos | ✅ 31-ago, y `A1` lo mantiene |
 | 2 | El wire atendido **mientras la VM calcula** | ✅ `A1`: es el hilo `io`, en las cinco familias |
 | 3 | La **carrera del estado de salida** | ✅ 5-sep (arriba) |
-| 4 | El **quantum en opcodes** → 1,21 ms × vueltas de latencia | 🔴 abierto: modelo medido y confirmado con predicción, sin decidir qué se hace |
+| 4 | El **quantum en opcodes** | 🟡 **el caso del GUI, resuelto el 9-sep sin tocarlo** (arriba): el hilo del GUI se aparta solo. El quantum en opcodes sigue siendo desigual para CUALQUIER hilo con opcodes caros, pero ya no hay nada que lo esté sufriendo |
 | 5 | Un **suelo de ~48 ms** independiente del quantum | 🔴 abierto, sin investigar (sospechoso: `LV_DEF_REFR_PERIOD = 33 ms`) |
-| 6 | La **prioridad del `wire_task` del P4** (5) frente al S3 (1) | 🔴 abierto — y `A3` lo agravó: con `A1`, el hilo `io` del P4 nace a prioridad 1, o sea **POR DEBAJO** de su VM, que es justo lo que el contrato prohíbe |
+| 6 | La **prioridad del `wire_task` del P4** (5) frente al S3 (1) | 🔴 abierto. ⚠️ **9-sep, Eduardo**: *«que el P4 tenga 2 núcleos o no ahora mismo da igual, solamente trabajamos con 1»* — así que el atenuante de los dos núcleos NO cuenta y lo que queda es lo serio: con `A1`, el `io` del P4 nace **por debajo** de su VM, que es lo que el contrato prohíbe |
 
 📌 El 6 es ahora más concreto que en agosto: ya no es «el P4 va a otra prioridad», es que
 **incumple el contrato de `A1`** (`io` a la MISMA prioridad que la VM). En el P4 no se nota
