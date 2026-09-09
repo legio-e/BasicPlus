@@ -1980,7 +1980,49 @@ se entera»* — ese camino hay que mirarlo a la vez.
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
 
-#### 🟠 `#470` — la identidad de la placa se contesta por DOS caminos, y ya han divergido (abierta 5-sep, de `A3`)
+#### 🟡 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143`; quedan los cuatro números)
+
+✅ **LOS NOMBRES, RESUELTOS el 9-sep — y no «arreglados»: DISUELTOS.**
+
+**La corrección es de Eduardo, y llegó antes de que yo escribiera nada:** *«hay que hacerlo por el
+camino correcto. Todos han de llamar a una misma función en HAL BP, una para el micro y otra para
+la placa. Lo que es diferente de cada imagen es la IMPLEMENTACIÓN de estas funciones.»* Yo iba a
+hacer que la fachada leyera del **repl**, que invierte las capas.
+
+📐 **Y al medirlo salió que el patrón correcto YA EXISTÍA en la familia de referencia:** el wire de
+la Pico llama a `bpvm_pico_board_name()` (`pico/repl_v1.c:625`), o sea a HAL BP. La ESP32 estaba
+**medio migrada** —lee `reset_cause` de la fachada pero el nombre de su propia tabla— y el STM32
+tenía `BOARD_NAME` y hasta un `gpio_count = 114` **literal en el wire**. Es el mismo patrón que en
+`#469` y en los packs: **la RP2350 lo hacía bien y las otras derivaron.**
+
+```
+HAL BP   bpvm_pico_micro_name()  +  bpvm_pico_board_name()
+           ↑ implementadas por las CUATRO cinturas (Pico, ESP32, P4, STM32)
+           ↓ leídas por LOS DOS consumidores
+BP       Machine.getMicro() / getBoard()   (builtin 233; el gate, en verde)
+wire     el INFO de las tres familias      (ya no tienen tabla propia)
+```
+
+🔑 **Y DOS nombres en vez de uno mal definido**, que es lo que hace que la pregunta desaparezca en
+vez de contestarse. El micro sale de `CHIP_MICRO`, una entrada **por micro** en el `chip_cfg.h` de
+cada uno; la placa dice `generic` salvo que la imagen conozca el modelo.
+
+✅ **Verificado en dos placas**, no en el log:
+
+| | por el wire | por el programa BP |
+|---|---|---|
+| **Pico 2** | `rp2350` | `micro: rp2350` · `placa: generic` |
+| **ESP32-S3** | `esp32s3` | `micro: esp32s3` · `placa: generic` |
+
+📌 Dos cosas del camino: **el P4 no tenía `chip_cfg.h`** y el include entró en el fichero compartido
+→ no compilaba (ahora la tiene, que es lo que significa «una entrada por micro»); y **la Pico ya
+decía `rp2350-generic`**, o sea que el reparto estaba medio inventado en la placa de referencia, con
+micro y placa mezclados en un solo campo.
+
+⏭️ **LO QUE QUEDA, y necesita criterio de Eduardo**: los otros **cuatro** campos siguen con dos
+fuentes, y unificarlos exige decidir qué significan. La tabla de abajo sigue vigente para ellos —
+`pwm_slices` son *slices* en la Pico, *salidas* en el STM32 y *canales LEDC* en el ESP32.
+
 
 Los mismos seis datos (nombre, MHz, GPIO, ADC, PWM, causa de reset) se responden **dos veces por
 familia**: una para BasicPlus (la fachada `bpvm_pico_*`) y otra para el wire (`bpvm_repl_info_t`,
