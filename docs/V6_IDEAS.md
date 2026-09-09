@@ -932,6 +932,67 @@ una cola: se aparca sin cerrarlo.
 
 ---
 
+## EL MODELO FINAL EN LOS MICROS: 1 núcleo y 2 núcleos (Eduardo, 9-sep)
+
+Dicho por él, antes de seguir tocando el SMP, y es el destino contra el que hay que medir
+cualquier cambio:
+
+> **1 núcleo** — dos hilos de SO: `IO` y `VM1`, turnándose. *«Pero hay que tener presente que en un
+> futuro podría haber más hilos del SO, así que hay que trabajar con una cola de threads SO.»*
+>
+> **2 núcleos** — tres hilos de SO: `IO`, `VM1` y `VM2`. *«Yo dejaría las 2 VM a piñón, aunque si no
+> se ejecuta ningún programa BP estarán ociosas.»*
+>
+> *«Suponiendo que tenemos una cola de Threads BP, a nivel de SO la IO, la VM1 y la VM2 se van
+> turnando. Ahora cada VM simplemente tiene que consultar la cola de Threads BP y ejecutar el que le
+> toque. **En principio no interactúan entre ellas**, los intercambios se hacen a través de la
+> memoria compartida.»*
+
+📌 **Vocabulario, que evita un malentendido que ya tuvimos**: lo que él llama **VM** es lo que el
+código llama **worker**. Una VM = un hilo de SO que ejecuta bytecode BP; toma un thread BP, lo
+ejecuta, lo deja y coge otro. Dos VM hacen lo mismo, cada una a su ritmo.
+
+### Lo que ya está así, medido en el código
+
+**La VM-C ya implementa este modelo casi entero** (`src/scheduler_smp.c:6-10`):
+
+```
+- bajo vm_lock: parquear si no hay tc RUNNABLE, despertarse con cond_signal
+- SOLTAR vm_lock y correr el quantum          ← LOCK-FREE
+- re-tomar vm_lock para gestionar la salida del quantum
+```
+
+O sea: las VM se tocan **sólo en la cola**, y mientras ejecutan van sin cerrojo. Y la cola tiene el
+candado semántico que el modelo exige — `sched_owner`, el worker que tiene asignado ese tc: *«sólo
+seleccionable si está RUNNABLE Y nadie lo tiene asignado»*. Eso es literalmente *«un thread en
+ejecución no lo puede tomar otro núcleo»*.
+
+Medido el 9-sep, con una carga sin mutex: **`--smp=2` escala ×1,90** (215 → 113 ms) y no falla.
+
+### 🔑 El modelo PREDICE dónde está el bug que queda
+
+*«En principio no interactúan entre ellas»* — y hoy hay **una** interacción que no es la cola: el
+**GC stop-the-world**. Las dos VM tienen que pararse a la vez.
+
+Y ahí es justo donde queda el cuelgue tras arreglar el mutex: el residuo de `--smp=2` (1 de 30) y
+los fallos de `--smp=4` mueren con las dos últimas líneas **idénticas** —los dos workers anunciando
+el mismo «GC por TABLA de handles»—. El modelo no lo adivinó por casualidad: **la única parte que se
+sale de él es la única que sigue rota.**
+
+### ⏭️ Dos diferencias con lo que hay, para decidir
+
+1. **«A piñón» vs parquear.** Hoy una VM sin trabajo se **parquea** en un `cond_wait` en vez de girar
+   en vacío. Es mejor para consumo y calor —importa en un micro alimentado por batería— y despertar
+   cuesta poco porque el que encola hace `cond_broadcast`. Si de verdad se quiere «a piñón», hay que
+   decir por qué: la latencia de despertar es lo único que se gana, y no está medida.
+2. **La cola de hilos de SO.** Hoy los workers se crean fijos al arrancar (`bpvm_run_smp(vm, n)`).
+   Que sean una *cola* —hilos que entran y salen— es del futuro que él anticipa; hoy no hay nada que
+   lo impida, pero tampoco está.
+
+⚠️ Y lo que **no** cambia con los núcleos: `A4` sigue mandando en el firmware — *«un solo núcleo
+hasta nueva orden»*. Todo lo de arriba se mide hoy en el host.
+
+
 ## Las pruebas finales, con un agente conduciendo las placas (Eduardo, 5-sep)
 
 **La pregunta**, al cerrar el día:
