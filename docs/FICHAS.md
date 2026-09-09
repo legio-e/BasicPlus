@@ -83,22 +83,22 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 10 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> **Lo que queda de V6 son 9 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
-> `#474` y `#456`, y `#470` se fue a V7.)*
+> `#474` y `#456`, `#470` se fue a V7 y `A4` salió del plan de versiones.)*
 >
 > ✅ **`#456` cerrada del todo el 9-sep**: Eduardo confirmó el único número que queda,
 > `BPVM_FS_PATH_MAX` = 256 (*«256 está bien»*).
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **6** | `#462` · `#471` · `#473` · `#480` · `#481` · `A4` |
+> | **fichas de V6** | **5** | `#462` · `#471` · `#473` · `#480` · `#481` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
-> E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. `A4` cuenta como pendiente, no como hito, y
-> además está parado por orden de Eduardo (*«un solo núcleo hasta nueva orden»*).
+> E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
+> plan de versiones — *«no es V6 y probablemente tampoco V7; hay muchas cosas antes»*.
 >
 > 📌 **El orden de cierre**: los 15 pendientes primero; después `C1` y `T1`, que son **la
 > herramienta con la que se hacen las pruebas finales**; y al final documentar y probar.
@@ -3943,7 +3943,24 @@ despiertan — pero tampoco aportan nada, como Eduardo dice y como midió el S3 
 tiempo, y el KILL incluso mejor). El paralelismo que vale es el otro, y ése está bloqueado por
 `B1`.
 
-#### 🟡 `A4` — LOS DOS NÚCLEOS: inventario del estado compartido antes de activarlos (abierta 5-sep · **el inventario está HECHO; quedan 3 puntos antes de activar el segundo núcleo**)
+#### 🧊 `A4` — LOS DOS NÚCLEOS: inventario del estado compartido antes de activarlos (abierta 5-sep · **el inventario está HECHO** · 🧊 **FUERA DEL PLAN DE VERSIONES el 9-sep**: ni V6 ni previsiblemente V7)
+
+### 🧊 9-sep — FUERA DEL PLAN DE VERSIONES (Eduardo)
+
+> *«Los 2 núcleos no sé a dónde van, pero no es V6 (y probablemente tampoco V7). Hay muchas cosas
+> antes de meternos con los 2 núcleos.»*
+
+Así que `A4` **deja de ser un pendiente de V6** y **no se apunta a V7**: queda sin versión asignada.
+No es un aplazamiento con fecha, es una prioridad — hay cola por delante.
+
+📌 **Lo que sí queda ganado, y conviene no perderlo de vista**: el terreno está más limpio que
+cuando se aparcó. El 9-sep se mataron **tres carreras** que hacían el SMP inservible (`#474`) —
+`--smp=2` pasó de colgarse 7 de cada 8 veces a **0 de 40**—, y el modelo final de los micros quedó
+escrito en `docs/V6_IDEAS.md`. Cuando esto se retome, se retoma sobre algo que funciona, no sobre un
+SMP roto.
+
+⚠️ **Y por tanto el defecto no cambia**: un worker, en las dos VMs y en firmware. El SMP sigue
+**opt-in** (`--smp=N` / `workers=N`), que es justo lo que ya decía esta ficha.
 
 **El encargo de Eduardo**, y el orden que fijó:
 
