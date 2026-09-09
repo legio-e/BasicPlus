@@ -9722,6 +9722,46 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ⚠️ La medida que separa las hipótesis sigue siendo la misma y no se ha hecho:
   **cronometrar la respuesta en el FIRMWARE, no en el IDE**. «Tarda más que su
   timeout» y «se pierde» son dos fallos distintos y desde fuera se ven igual.
+
+  ### 🔬 9-sep — EL PASO 1, HECHO POR FIN (y con herramienta, que era lo que faltaba)
+
+  **Idea de Eduardo:** *«A ver si se desincronizan, se puede enviar un código de sincronización tipo
+  UUUUUUUU.»* Buena en general — y al mirarlo resulta que **el wire ya la tiene, y es el `\n`**:
+
+  - **camino de líneas** (todo salvo el bulk): es `{...}\n`, y cada familia **descarta lo que no
+    empiece por `{`** y reintenta al desbordar (`repl_esp32.c:1223`, `repl_v1.c:1727`). Cualquier
+    basura se pierde hasta el siguiente salto de línea, o sea que **ya resincroniza en el siguiente
+    mensaje**. Un patrón `UUUU` no añadiría nada aquí.
+  - **camino bulk** (`PUT` + N bytes crudos): éste **sí** es donde se puede perder el framing de
+    verdad — si los dos lados no coinciden en N, el receptor se come bytes crudos creyendo que son
+    líneas. Es el único sitio donde un código de sincronización tendría trabajo, y hoy se cubre con
+    `drain_bulk` y un caso del arnés («…y el wire sigue en sincronía después»).
+
+  ### Lo que faltaba de verdad: ¿el device o el IDE?
+
+  Era el **paso 1** de esta ficha y llevaba desde agosto sin hacerse, porque no había forma de
+  preguntarle a la placa **sin el IDE por medio**. Ahora la hay: `bpgenvm-c/tools/wire_serie.py`, un
+  cliente del wire por serie que no es el IDE. Con él, `run → stop → INFO`:
+
+  | | ciclos | fallos | KILL | INFO |
+  |---|---|---|---|---|
+  | **ESP32-C3** | 8 | **0** | ~215 ms | contesta siempre |
+  | **ESP32-S3** | 8 | **0** | ~233 ms | contesta siempre |
+
+  Los `uptime` avanzan en cada ciclo, así que son **dieciséis ciclos de verdad**, no la misma
+  respuesta repetida — el control que faltaba en la medida de la Metro del 17-ago.
+
+  ⚠️ **Lo que esto NO prueba, y hay que decirlo**: ninguna de las dos placas tiene **SD**, y el caso
+  de la ficha era el **P4 con la tarjeta**, donde además el Stop *colgaba*. Así que esto **no cierra
+  `#379`: lo estrecha**. Descarta que haya una desincronización de base en el wire —que era la
+  hipótesis del título— y deja la sospecha donde ya la puso Eduardo el 17-ago: el árbol/CRC con
+  tarjeta, o sea `#398`.
+
+  ⏭️ **La medida que queda es la misma de siempre y ahora es de dos minutos**: el P4 con la tarjeta,
+  `python tools/wire_serie.py COM<n> ciclo /app/Bench.mod 8`. Si sale 8/8, la ficha se cierra como
+  absorbida por `#398`; si falla, hay desincronización de verdad y entonces sí toca hablar del
+  código de sincronización — en el camino bulk, que es donde vive el problema.
+
 - ~~`#408` — medir **los dos cuellos** que se ven comparando P4 y Metro (árbol en la
   P4 / formateo en la Metro).~~ ✅ **CERRADA**: las dos mitades medidas (21 y 22-ago) —
   el detalle, en la viñeta siguiente. *(Este enunciado se leía como pendiente mientras
