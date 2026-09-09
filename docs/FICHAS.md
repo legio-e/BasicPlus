@@ -81,15 +81,19 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > a V6 y dejó de ser de V5** — decisión de Eduardo ese mismo día. Así que aquí no hay dos
 > categorías: hay fichas de V6, unas abiertas *durante* V5 y otras heredadas *de* V5.
 >
-> ### 📊 EL CENSO, al 7-sep-2026 — leído ficha a ficha, no por la marca
+> ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 12 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
-> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerró
-> `#474`.)*
+> **Lo que queda de V6 son 11 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep, `#474` y
+> `#456`.)*
+>
+> ⏭️ **`#456` está resuelta en código y le falta UNA confirmación de Eduardo**: el único tope que
+> queda (`BPVM_FS_PATH_MAX` = 256) y si el tope debe ser **del lenguaje** —y comprobarlo también
+> miVM— para que las dos VMs no discrepen por encima de él.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **8** | `#456` · `#462` · `#470` · `#471` · `#473` · `#480` · `#481` · `A4` |
+> | **fichas de V6** | **7** | `#462` · `#470` · `#471` · `#473` · `#480` · `#481` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
@@ -6124,7 +6128,7 @@ que sale: *revertir y rehacer sale más barato que remendar lo que el patrón se
 ✅ **Verificado**: paridad **38 PASS / 0 FAIL / 0 SKIP**, y las **cinco imágenes** construidas
 (Pico, S3, P4, C3, STM32 Nucleo).
 
-#### 🟡 `#456` — un `path` largo se TRUNCA en silencio y la operación dice OK (abierta 30-ago)
+#### ✅ `#456` — un `path` largo se TRUNCA en silencio y la operación dice OK (abierta 30-ago · **RESUELTA 9-sep**)
 
 Salió mirando los límites de longitud al migrar el `PUT` (`U3.21`). **Medido**, no
 deducido — programita en el host contra `json_min.c`:
@@ -6188,6 +6192,83 @@ Como los seis sitios ya comprueban `< 0`, **todos empiezan a rechazar sin tocarl
 cambio de contestar *«falta path»* cuando lo correcto sería *«path demasiado largo»*. Si
 se quiere el mensaje bueno, hay que distinguir `-1` de `-2` en cada uno. Toca las cinco
 implementaciones del wire, así que va en su propio paso y con placa.
+
+### ✅ RESUELTO EL 9-sep — no se eligió un número: se quitó la copia (`fc8641f4`, `1057ba14`, `8daa01eb`)
+
+**La pregunta la reformuló Eduardo en cuatro palabras**: *«¿Por qué el path tiene un tope?»* Y
+medido, la respuesta es que **no lo imponía nada**:
+
+| quién podría imponerlo | qué dice |
+|---|---|
+| littlefs (flash interna) | `LFS_NAME_MAX` = 255 **por nombre**, sin tope de path completo |
+| FatFs (la SD) | `FF_MAX_LFN` = 255, ídem |
+| la línea del wire | **2048** (`bpvm_wire_v1.h:45`) |
+| el parser JSON | **no copia** — es in-place, el path ya está en RAM |
+| `char path[64]` | **63 útiles** ← el único que cortaba |
+
+🔑 **Y no era «un tope»: eran SEIS números distintos para la misma cosa**, ninguno con motivo.
+
+```
+desde un programa BP    511    builtins.c, 13 sitios
+por el wire comun        63    bpvm_repl.c, 11 buffers de 64 (y dos de 96)
+el RUN de Pico y ESP32   39    FS_NAME_LEN
+el RUN del STM32         63
+el simulador            191    PATH_MAX_SIM
+cada entrada del listado 63    REPL_LIST_NAME_MAX
+```
+
+Un fichero que el programa abría sin problema no se podía subir ni borrar desde el IDE.
+
+**Eduardo: *«Quita topes. Si tiene que haber un tope lo hablamos y vemos cuál es la razón.»***
+
+### Lo que se hizo
+
+- **`json_str_inplace()`** — desescapa **en sitio**, dentro de la línea que ya trae el path, y
+  devuelve un puntero. Sin copia ⇒ **sin tope**. Es lo que usan ahora `DEL`, `STAT` (+`name`/`base`),
+  `RENAME`, `GET`, `PUT`, `PUT_BEGIN`, `LIST_DIR`, `MKDIR` y `RMDIR` del común, y el `RUN` de las
+  cuatro familias — con su `arg`, que tenía otro tope callado de 127.
+- **`json_get_str()` devuelve `-2` al truncar.** Los llamadores ya comprobaban `< 0`, así que los
+  que siguen copiando **pasan a rechazar sin tocarlos**. El desescape, además, queda en **un solo
+  sitio** (`json_desescapa`) en vez de dos tablas que se podían desincronizar.
+- **El lado BP tenía el mismo bug y no estaba en la ficha**: `read_bp_string` trunca igual y **los
+  13 sitios ignoraban lo que devuelve**. `read_bp_path()` mide antes de copiar y el builtin lanza un
+  `RuntimeError` atrapable.
+- **El resolvedor iba por detrás**: `main_path[FS_NAME_LEN]` = 40. El wire aceptaba 205 y el `RUN`
+  los recortaba a 39. Al día.
+- **El listado DECLARA lo que no le cabe.** Su tope sí tiene motivo —es RAM estática ×16 (`#461`)—
+  así que no se sube: se cuenta en `omitted` (`#425`) y se anota en el log. Emitir un nombre
+  recortado es el peor de los tres desenlaces: el IDE se lo cree y luego pide algo que no existe.
+
+### El único tope que queda, y su razón
+
+**`BPVM_FS_PATH_MAX` = 256**, en `include/bpvm_fs.h`, y **sólo** para los paths que hay que
+**guardar** (la sesión de `PUT` por trozos, que sobrevive entre mensajes) o **construir** (la salida
+del resolvedor, el basedir que se salva y se restaura, el path que se copia del heap de la VM).
+
+⏭️ **Lo que falta hablar con Eduardo son dos cosas, las dos de una línea:**
+1. **El número.** No se puede quitar del todo: la cadena BP vive en el heap **sin terminador** y las
+   dos APIs de FS piden un `const char*` terminado en NUL, o sea que ahí hay que copiar. 256 sale de
+   los 255 del FS; el techo lo pone la **pila de 8 KB de la tarea `main`** del S3/C3/C6, donde
+   `repl_stat` tiene dos de estos vivos. Con 512 serían 1 KB de esa pila.
+2. **La paridad.** miVM **no tiene tope** (en Java es un `String`), así que por encima de 256 las dos
+   VMs discrepan: miVM abre el fichero y la VM-C lanza. Antes discrepaban igual, a partir de 512 y
+   **en silencio**. Si esto se quiere cerrar de verdad, el tope tiene que ser **del lenguaje** y
+   miVM comprobarlo también — que es la misma discusión de `#481`.
+
+### La prueba, con su control
+
+En `tools/sim_smoke.py`: `PUT` de un path de 205 caracteres, `STAT`/`GET` del path entero, `RENAME`
+entre dos largos, `DEL`, el `LIST` que lo declara, y el `PUT_BEGIN` por encima del tope que queda.
+**Contra el código de ayer da 3 FAIL**, y el que importa es *«el nombre RECORTADO no existe»*: o sea
+que el `PUT` escribía en otro fichero y contestaba OK, que es exactamente el modo de fallo de la
+ficha. Compilan las cinco familias.
+
+⚠️ **Dos rojos ANTERIORES encontrados de paso** (comprobado que salen igual sin este cambio):
+- **`make test-listtrunc` tiene el CONTROL en rojo**: *«16 carpetas → 15 entradas»* y
+  *«omitted=0 (dice 1)»*. El instrumento de `#425` está midiendo mal por debajo del tope. Sin ficha.
+- **`make test-fspos`, `test-listdir` y `test-sd` NO ENLAZAN** (`bpvm_fs_log_fail`, `bpvm_out`). Esto
+  **confirma por ejecución** el hallazgo de `#473` que decía *«un build con fachada + backend host no
+  enlaza; hoy hay 5 objetivos de make rojos por esto»*.
 
 #### ✅ `#455` — el `PUT` del común dejó de crear las carpetas que faltaban (cerrada 30-ago)
 
