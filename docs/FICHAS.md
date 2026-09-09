@@ -83,10 +83,9 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 13 pendientes y 4 hitos** — y son 13 porque cada uno es UNA cosa; con
-> las entradas agrupadas de antes la lista decía 9. *(El 13º salió de una corrección de Eduardo:
-> `#482` mezclaba la vista doble de los packs con que el S3 pueda ejecutar código nativo, y son
-> casos distintos porque el S3 es Xtensa y el C3 RISC-V → `#488`.)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> **Lo que queda de V6 son 12 pendientes y 4 hitos** — y son 12 porque cada uno es UNA cosa; con
+> las entradas agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
+> C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
 > `#474` y `#456`, `#470` se fue a V7 y `A4` salió del plan de versiones.)*
 >
@@ -104,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **13** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#483` · `#484` · `#485` · `#486` · `#487` · `#488` |
+> | **fichas de V6** | **12** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#483` · `#484` · `#485` · `#486` · `#487` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2087,7 +2086,7 @@ doble funciona», no «el S3 ejecuta packs».
 📌 Es la lección del `-mcmodel=medany` otra vez: la ISA impuso un requisito real que sólo se vio en
 el destino. Dar por buena una arquitectura probando otra es justo el error que aquella costó.
 
-#### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482`)
+#### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482` · 🧊 **FUERA DEL PLAN DE VERSIONES el mismo día**: *«de momento no»*)
 
 **El hueco, con los números delante**: el `.mdn` **ya tiene etiqueta** para Xtensa
 (`MDN_ARCH_XTENSA = 94`, `mdn_format.h:76`) y el cargador la comprobaría; lo que no hay es
@@ -2101,6 +2100,32 @@ pieza que no está.
 RISC-V), no de un pendiente de cierre. Además el S3 está *«por popularidad, no por prioridad»*, y
 Espressif también va a RISC-V — así que puede que la respuesta correcta sea no hacerlo nunca y
 **declararlo** en la documentación, que es trabajo de `D1`.
+
+### 🧊 9-sep — DECIDIDO: de momento NO, y no por falta de herramienta (Eduardo)
+
+> *«Lo de generar código Xtensa depende de varias cosas. Lo primero es que gcc lo soporte (parece
+> que sí) pero lo segundo es nuestra prioridad, y no es prioritario. Pendiente de decidir si se hace
+> o no en un futuro, de momento no.»*
+
+✅ **La primera mitad queda comprobada, para que no haya que volver a mirarla**: el compilador
+**está instalado en esta máquina**, no hay que buscarlo ni construirlo —
+
+```
+C:\Users\Eduardo\.espressif\tools\xtensa-esp-elf\esp-13.2.0_20240530\xtensa-esp-elf\bin\
+    xtensa-esp-elf-gcc.exe   (crosstool-NG esp-13.2.0_20240530) 13.2.0
+```
+
+Viene con el ESP-IDF, que ya se usa para compilar el firmware del S3. O sea que **la herramienta no
+es el obstáculo**: el obstáculo es la prioridad.
+
+🧊 **Y por tanto esto sale del plan de versiones**, como `A4`: no es un aplazamiento con fecha, es
+que hay cola por delante. **De momento no**, y si algún día se decide que sí, el punto de partida
+está escrito arriba: hay etiqueta (`MDN_ARCH_XTENSA = 94`), hay cargador que la comprobaría, hay
+toolchain, y falta el generador.
+
+⏭️ **Lo que SÍ hay que hacer mientras tanto, y es de `D1`**: que la documentación diga en voz alta
+que en el ESP32-S3 **todo se ejecuta interpretado**. Hoy sólo lo dice `esp32/README.md`, que es un
+fichero interno — el usuario no lo lee.
 
 #### 🔴 `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago**, de la cola heredada)
 
