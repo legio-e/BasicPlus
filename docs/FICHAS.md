@@ -83,16 +83,16 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 11 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
-> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep, `#474` y
-> `#456`.)*
+> **Lo que queda de V6 son 10 pendientes y 4 hitos.** *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
+> `#474` y `#456`, y `#470` se fue a V7.)*
 >
 > ✅ **`#456` cerrada del todo el 9-sep**: Eduardo confirmó el único número que queda,
 > `BPVM_FS_PATH_MAX` = 256 (*«256 está bien»*).
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **7** | `#462` · `#470` · `#471` · `#473` · `#480` · `#481` · `A4` |
+> | **fichas de V6** | **6** | `#462` · `#471` · `#473` · `#480` · `#481` · `A4` |
 > | **cola heredada de V5** | **4** | packs del S3 · la Metro que no ejecuta nada · `#379` · `listDir` en la VM-C |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
@@ -1984,7 +1984,7 @@ se entera»* — ese camino hay que mirarlo a la vez.
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
 
-#### 🟡 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143`; quedan los cuatro números)
+#### 🧬 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143` · **los cuatro números → V7** el 9-sep)
 
 ✅ **LOS NOMBRES, RESUELTOS el 9-sep — y no «arreglados»: DISUELTOS.**
 
@@ -2048,6 +2048,35 @@ arreglado: corregido en un camino y vivo en el otro.
 114 del STM32 son las I/O del encapsulado y el 128 el rango direccionable del driver; y
 `pwm_slices` significa *slices* en la Pico (12), *salidas* en el STM32 (28) y *canales LEDC* en el
 ESP32 (8). Unificar sin decidir eso sólo cambiaría de sitio la mentira.
+
+### 🧬 LOS CUATRO NÚMEROS → **V7**, y con el diseño ya decidido (Eduardo, 9-sep)
+
+*«Para cada micro creamos unos arrays, por ejemplo `[0, 1, 3]`, que indican los números válidos, ya
+sean UARTs, I2C, SPI, etc. **El número es la longitud del array.** Pero esto va a V7, que es donde
+concretaremos los arrays de cada micro.»*
+
+🔑 **Y eso no aplaza la pregunta: la disuelve.** El problema de arriba era «¿qué significa cada
+campo?», y la respuesta es que **no hay campo**: lo que hay es el CONJUNTO válido, y el número es su
+`length`. Con eso el contador deja de ser un dato aparte que puede contradecir al conjunto — que es
+exactamente cómo miente hoy:
+
+| lo que dice hoy | lo que pasa de verdad |
+|---|---|
+| el S3 declara **45 GPIO** | `Gpio.Pin` **rechaza el GPIO48** (el LED RGB de casi toda placa S3) y **acepta el GPIO23**, que no existe |
+| la fachada de ADC deja usar **`0..3`** | son los cuatro pines analógicos del **RP2350** congelados en la API común; el S3 tiene 20 canales y el STM32 otros 20 |
+| `pwm_slices` | *slices* en la Pico (12), *salidas* en el STM32 (28), *canales LEDC* en el ESP32 (8) |
+
+Con arrays, «cuántos» y «cuáles» **no pueden discrepar**, porque son la misma cosa preguntada de dos
+maneras. Es el mismo movimiento que `#456`: quitar el número en vez de elegirlo.
+
+🔗 **Va con `#479`** (el mapa de pines y los pines analógicos), que ya se fue a V7 el 6-sep por
+decisión de Eduardo —*«prefiero no hacer parches»*— y es la misma forma: **tablas por micro que
+viajan compiladas en su imagen**, en la HAL BP. Conviene hacerlas de una vez y no tocar ese camino
+dos veces.
+
+⏭️ **Lo que queda para V7**, entonces: concretar los arrays de cada micro (UART, I2C, SPI, ADC, PWM,
+GPIO) y que `gpioCount()` y compañía pasen a ser su longitud. **En V6 no se toca**, y por tanto esta
+ficha sale de la lista de pendientes de V6.
 
 #### 🟡 `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3` · **el RENOMBRADO hecho el 8-sep**, `a9b6cb8b`)
 
