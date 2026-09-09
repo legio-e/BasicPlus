@@ -386,8 +386,16 @@ static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user
     int is_root = (c->dir[1] == '\0');
     if (is_dir) {
         if (c->tail < REPL_LIST_MAX_DIRS) {
-            snprintf(c->pending[c->tail], REPL_LIST_NAME_MAX, "%s%s%s",
-                     c->dir, is_root ? "" : "/", name);
+            int need = snprintf(c->pending[c->tail], REPL_LIST_NAME_MAX, "%s%s%s",
+                                c->dir, is_root ? "" : "/", name);
+            /* #456 - un directorio cuyo nombre no cabe NO se encola recortado:
+             * recorrerlo seria recorrer OTRA carpeta. Se declara y se sigue. */
+            if (need < 0 || need >= REPL_LIST_NAME_MAX) {
+                c->omitidas++;
+                log_printf("fs: LISTADO INCOMPLETO - '%s' no cabe en %d y se omite",
+                           name, REPL_LIST_NAME_MAX);
+                return;
+            }
             c->tail++;
         } else {
             c->omitidas++;   /* #425: un directorio sin recorrer TAMBIEN falta */
@@ -398,8 +406,19 @@ static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user
     }
     char ent[192];
     char full[REPL_LIST_NAME_MAX];
-    if (is_root) snprintf(full, sizeof full, "%s", name);
-    else         snprintf(full, sizeof full, "%s/%s", c->dir, name);
+    int need = is_root ? snprintf(full, sizeof full, "%s", name)
+                       : snprintf(full, sizeof full, "%s/%s", c->dir, name);
+    /* #456 - desde que el wire acepta paths largos se puede CREAR un fichero
+     * cuyo nombre no cabe aqui. Emitirlo recortado es lo peor de los tres
+     * desenlaces: el IDE se lo cree y luego pide un fichero que no existe. El
+     * tope de este buffer es RAM estatica x16 (#461), asi que no se sube: se
+     * DECLARA, que es para lo que #425 puso el campo `omitted`. */
+    if (need < 0 || (size_t) need >= sizeof full) {
+        c->omitidas++;
+        log_printf("fs: LISTADO INCOMPLETO - '%s' no cabe en %d y se omite",
+                   name, REPL_LIST_NAME_MAX);
+        return;
+    }
     /* Escape minimo del nombre: en un path solo asoman `"` y el separador. */
     char esc[REPL_LIST_NAME_MAX * 2]; size_t o = 0;
     for (const char* q = full; *q && o + 2 < sizeof esc; q++) {

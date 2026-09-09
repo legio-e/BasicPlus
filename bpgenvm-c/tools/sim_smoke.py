@@ -247,6 +247,16 @@ def main():
         check(data == b"largo", "GET del path entero -> el contenido")
         r = w.call("STAT", path=largo[:63])
         check(r.get("code") == "NOT_FOUND", "...y el nombre RECORTADO no existe (no se trunco)")
+        # ...y el LISTADO, que si tiene tope (RAM estatica x16), lo DECLARA en vez
+        # de emitir el nombre recortado: emitirlo a medias es lo peor de los tres
+        # desenlaces, porque el IDE se lo cree y luego pide algo que no existe.
+        r = w.call("LIST")
+        nombres = [e.get("name", "") for e in (r.get("entries") or [])]
+        check(not any(n.startswith("n" * 60) for n in nombres),
+              "LIST -> el nombre que no le cabe NO sale recortado")
+        check((r.get("omitted") or 0) >= 1,
+              "LIST -> ...y lo DECLARA en 'omitted' (dice %r)" % r.get("omitted"))
+
         r = w.call("RENAME", **{"from": largo, "to": "/app/" + "m" * 200})
         check(r.get("type") == "RENAME_REPLY", "RENAME entre dos paths largos -> OK")
         r = w.call("DEL", path="/app/" + "m" * 200)

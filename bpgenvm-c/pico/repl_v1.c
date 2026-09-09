@@ -1023,7 +1023,7 @@ static void packs_cargar_una_vez(void) {
 static const uint8_t* pico_mdn_del_fs(void* user, const char* nombre,
                                       uint32_t* len) {
     bpvm_t* vm = (bpvm_t*) user;
-    char     real[FS_NAME_LEN];
+    char     real[BPVM_FS_PATH_MAX];   /* #456 - lo CONSTRUYE el resolvedor */
     uint32_t size = 0;
     if (v1_resolve_path(nombre, real, sizeof(real), &size) != FS_OK) return NULL;
 
@@ -1079,7 +1079,7 @@ static void run_module_path(const char* path, long id, const char* arg) {
 
     /* 1. Resolver el módulo principal en el FS (ruta + tamaño; los bytes se
      *    leen por trozos al cargarlo). */
-    char main_path[FS_NAME_LEN]; uint32_t size;
+    char main_path[BPVM_FS_PATH_MAX]; uint32_t size;   /* #456 - salida del resolvedor */
     fs_status_t fs_s = v1_resolve_path(path, main_path, sizeof(main_path), &size);
     if (fs_s != FS_OK) {
         const char* code; const char* msg;

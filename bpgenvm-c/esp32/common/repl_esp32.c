@@ -516,7 +516,7 @@ static const uint8_t* esp32_mdn_del_fs(void* user, const char* nombre,
     (void) user;
     if (s_mdn_exec_n >= MDN_MAX_EXEC) return NULL;   /* ya no caben más overlays */
 
-    char     real[FS_NAME_LEN];
+    char     real[BPVM_FS_PATH_MAX];   /* #456 - lo CONSTRUYE el resolvedor */
     uint32_t size = 0;
     if (v1_resolve_path(nombre, real, sizeof(real), &size) != FS_OK) return NULL;
 
@@ -650,7 +650,7 @@ static void run_module_path(const char* path, long id, const char* arg) {
      * Si esta línea NO aparece, el firmware es PRE-H19 (reflashear). */
     printf("[run] entry='%s' basedir='%s'\n", path, bpvm_fs_basedir());
 
-    char main_path[FS_NAME_LEN]; uint32_t size;
+    char main_path[BPVM_FS_PATH_MAX]; uint32_t size;   /* #456 - salida del resolvedor */
     fs_status_t fs_s = v1_resolve_path(path, main_path, sizeof(main_path), &size);
     if (fs_s != FS_OK) {
         const char* c; const char* m; map_fs_status(fs_s, &c, &m);
@@ -913,7 +913,7 @@ static const bpvm_autorun_wire_t s_autorun_wire = {
 void repl_esp32_autorun(void) {
     /* #345 — leer y limpiar la primera línea lo hace el núcleo. (H11 sigue
      * valiendo: sólo la CABEZA del fichero, nunca el espejo de 64 KB.) */
-    char path[FS_NAME_LEN];
+    char path[BPVM_FS_PATH_MAX];   /* #456 - este se CONSTRUYE (sale del fichero) */
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
 
     /* #345 paso 2 — la ventana de rescate. Decide el usuario. */
