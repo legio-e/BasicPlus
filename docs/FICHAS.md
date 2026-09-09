@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 10 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 9 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **10** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#484` · `#485` · `#487` |
+> | **fichas de V6** | **9** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` · `#484` · `#485` · `#487` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -1899,7 +1899,7 @@ Con esa norma quedaban dos celdas, y Eduardo decidió las dos:
   `#480` (el `Wdt` del STM32, el `Pulse` del C3, el ADC del ESP32 que falla con 0, el breadcrumb con
   los slots a NULL). **El patrón de esta ficha no los arregla**: son bugs de driver, uno a uno.
 
-#### 🧪 `#480` — LO QUE DESTAPÓ LA AUDITORÍA DE LAS 13 FACHADAS, verificado (abierta 6-sep · **1 de 4 cerrada y 1 a V7** el 9-sep)
+#### ✅ `#480` — LO QUE DESTAPÓ LA AUDITORÍA DE LAS 13 FACHADAS, verificado (abierta 6-sep · **CERRADA el 9-sep**: dos piezas arregladas, una a V7 y una separada como `#487`)
 
 Tirando de `#469` se auditaron **las trece fachadas de periférico** (quién registra backend en cada
 familia, y qué hace la fachada común cuando nadie lo hizo), con una pasada de verificación
@@ -2008,6 +2008,48 @@ entra en el corpus** tocando **cada** verbo con stub de las seis fachadas. Corpu
 | 2 | el `Pulse` del C3 | 🧬 **V7**, con `#470` |
 | 3 | el **ADC del ESP32 falla con 0, no con −1** → ADC roto = 0 V constante y mudo, **con backend registrado** | 🔴 abierto |
 | 4 | el **breadcrumb mudo en 4 de 5 familias** | ➡️ **SEPARADO el 9-sep como `#487`** |
+
+
+### ✅ CERRADA el 9-sep — la pieza 3, y con ella la ficha entera (`e875f7e2`)
+
+**El backend del ESP32 devolvía `0` en sus CUATRO caminos de fallo**, y `0` es una lectura
+perfectamente válida (0 V) y un pin plausible. Con `Adc.bp` lanzando sólo si el retorno es `< 0`,
+salía el peor de los tres desenlaces: **ADC roto = 0 V constante y mudo**, en las cuatro familias
+ESP32. Y **con backend registrado**, o sea que el arreglo de `#469` —la ausencia de backend hace
+ruido— no lo cubría: es una clase de fallo distinta.
+
+Ahora los cuatro devuelven **−1**, que es lo que pide `bpvm_adc.h` y lo que ya hacía la familia de
+referencia (`pico/main.c`).
+
+**Y al mirarlo salieron dos cosas más:**
+
+1. **`initChannel` devolvía `1` al ir BIEN**, cuando el contrato dice *«el número de pin físico»*.
+   `Adc.Channel` lo publica en la propiedad `pin_`, así que en un ESP32 un programa que la leyera
+   veía `1`. Ahora sale el **GPIO de verdad** (`adc_oneshot_channel_to_io`), como en la Pico — y el
+   canal se valida contra `SOC_ADC_CHANNEL_NUM` en vez de aceptar cualquiera.
+2. **Con el backend arreglado, el error se mudaba un piso arriba**: un fallo de LECTURA devolvería
+   −1 a BP y nadie lo mira — `read()` daría −1 y `readVolts()` **voltios negativos**. `Adc.bp` gana
+   `leer()`, que lanza un `RuntimeError` atrapable: el mismo idioma que ya usaba el constructor.
+
+⚠️ `Adc` va **embebida** en las imágenes, así que se regeneraron los blobs de las tres familias.
+Sólo cambia `Adc.mod`; los otros 27 salen byte-idénticos.
+
+⚠️ **Lo que NO queda probado, y conviene que esté escrito**: el lanzamiento de `leer()`. En el host
+el stub **no falla nunca**, así que esa rama sólo se ejerce en placa con un ADC que dé error — no
+hay forma de forzarla desde el arnés sin un inyector de fallos que hoy no existe.
+
+### 📋 La ficha, cerrada por piezas
+
+| | | |
+|---|---|---|
+| 1 | el watchdog del STM32 | ✅ 9-sep (`78320969`) |
+| 2 | el `Pulse` del C3 | 🧬 **V7**, con `#470` — cada micro declara lo que tiene |
+| 3 | el ADC del ESP32 | ✅ 9-sep (`e875f7e2`) |
+| 4 | el breadcrumb mudo | ➡️ separado como **`#487`** |
+
+📌 **Y el hilo que las une**, que es lo que hay que llevarse: las cuatro eran **la misma forma** —
+fallar con un valor que el llamante no distingue del éxito. El arreglo genérico ya estaba escrito en
+`#469` y aquí se aplicó tres veces seguidas.
 
 #### 🔴 `#481` — las dos VMs discrepan en `stdout` cuando el programa MUERE con una excepción sin atrapar (abierta 8-sep)
 
