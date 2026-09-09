@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 5 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 4 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **5** | `#379` · `#462` · `#471` · `#473` · `#481` |
+> | **fichas de V6** | **4** | `#379` · `#462` · `#471` · `#473` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2051,7 +2051,7 @@ hay forma de forzarla desde el arnés sin un inyector de fallos que hoy no exist
 fallar con un valor que el llamante no distingue del éxito. El arreglo genérico ya estaba escrito en
 `#469` y aquí se aplicó tres veces seguidas.
 
-#### 🔴 `#481` — las dos VMs discrepan en `stdout` cuando el programa MUERE con una excepción sin atrapar (abierta 8-sep)
+#### ✅ `#481` — las dos VMs discrepan en `stdout` cuando el programa MUERE con una excepción sin atrapar (abierta 8-sep · **CERRADA el 9-sep**, `9e7f4a59`)
 
 **Rotura del invariante sagrado, y de radio ancho**: para **cualquier** programa que termine con una
 excepción BP no atrapada, las dos VMs escriben cosas distintas en `stdout`.
@@ -2097,6 +2097,71 @@ se entera»* — ese camino hay que mirarlo a la vez.
 
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
+
+
+### ✅ CERRADA el 9-sep (`9e7f4a59`) — y eran DOS roturas, no una
+
+**El marco lo puso Eduardo, y es lo que ordenó el trabajo:** *«Aquí hay que distinguir de un exit
+diferente de 0, de una excepción no atrapada. 2 casos.»* Al medirlo, cada caso estaba roto de su
+propia manera:
+
+| | `stdout` | `exit` |
+|---|---|---|
+| **miVM** | `antes` | **0** ← decía que había ido BIEN |
+| **VM-C** | `antes` + `=== RuntimeError: … ===` | **11** ← el ordinal del enum |
+
+### Caso 1 — el informe: es DIAGNÓSTICO, y lo dice quién lo escribe
+
+No lo imprime el programa: lo imprime **el runner**, explicando por qué murió. Mientras estuvo en
+`stdout`, **cualquier** programa que muriese rompía la paridad por construcción. Ahora va por
+`stderr` en las dos.
+
+🔑 **Y el argumento que esta ficha daba a favor de `stdout` —*«en el micro el usuario ve el stdout
+por el cable»*— NO APLICA**, y eso sólo se vio mirando quién escribe qué: en placa el informe **no
+pasa por ahí**. Las cuatro cinturas leen `bpvm_runtime_error()` y lo meten en el `errorMessage` del
+`EXITED`, que es otro canal. El `=== RuntimeError: … ===` lo escribía **sólo el CLI del host**
+(`test/main.c:410`). O sea que la «rotura entre las dos VMs» era, en realidad, entre **dos CLI**.
+
+### Caso 2 — el código de salida: UNA tabla donde había cinco copias crudas
+
+miVM salía con **0** (sistemático, no una carrera como la del `stop` de `#462`) y la VM-C devolvía
+`(int) status` — el ordinal del enum. Y ese mapeo estaba escrito **cinco veces**: el CLI del host y
+los `map_vm_status` de Pico, ESP32, STM32 y el sim, todas igual de crudas.
+
+```
+  0  termino bien               3  fallo interno de la VM
+  1  excepcion BP no atrapada   4  sin memoria
+  2  no se pudo cargar        130  parado con Stop/KILL     131  parado por el depurador
+```
+
+`bpvm_exit_code()` / `bpvm_exit_code_str()` en el común (`src/bpvm.c`), y miVM aplicando la misma.
+**El número dice QUÉ pasó; el detalle viaja aparte.**
+
+📌 **El `3` tiene número propio a propósito**: un opcode o un PC inválidos **no son culpa del
+programa** — son un bug nuestro o un `.mod` corrupto. Confundirlo con el `1` manda a mirar donde no
+está el problema.
+
+### 💡 Y de aquí salió una mejora que no estaba pedida
+
+> **Eduardo:** *«Ahora que estamos, no estaría mal que en la línea de comandos del IDE se pudiera
+> preguntar `help error` y que devuelva lo que significa cada código, porque a mí un `exit(11)` no
+> me dice nada.»*
+
+Hecho, y es lo que hace la tabla **útil**: el número deja de ser un número. La ayuda vive **junto a
+la función que la aplica**, para que no puedan desfasarse. ⚠️ Al tocar el IDE hay que reconstruir su
+fat-jar **con el IDE cerrado** — hecho.
+
+### El agujero del corpus, tapado
+
+La ficha lo decía: *«no hay ni un sample que muera lanzando. No es casualidad — entrarían TODOS en
+rojo»*. Ahora hay uno: **`samples/ThrowSinAtrapar.bp`**. Corpus **52 → 53**, 53 PASS.
+
+⚠️ **Lo que el arnés NO vigila**: el código de salida. `run_vm` compara `stdout` y no mira el
+`exit`. Los dos 1 están medidos a mano. Si algún día alguien devuelve el ordinal otra vez, la
+paridad seguiría verde.
+
+📌 Nadie dependía de los códigos viejos — comprobado antes de tocarlos: en todo el repo sólo se
+mira `== 0`.
 
 #### ✅ `#482` — la VISTA DOBLE de los packs: NO la necesita nadie (abierta 9-sep, de la cola heredada · **CERRADA el 9-sep**, medido en C3 y S3)
 
