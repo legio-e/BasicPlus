@@ -83,8 +83,8 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 12 pendientes y 4 hitos** — y son 12 porque cada uno es UNA cosa; con
-> las entradas agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
+> **Lo que queda de V6 son 11 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
 > `#474` y `#456`, `#470` se fue a V7 y `A4` salió del plan de versiones.)*
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **12** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#483` · `#484` · `#485` · `#486` · `#487` |
+> | **fichas de V6** | **11** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#484` · `#485` · `#486` · `#487` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2127,7 +2127,7 @@ toolchain, y falta el generador.
 que en el ESP32-S3 **todo se ejecuta interpretado**. Hoy sólo lo dice `esp32/README.md`, que es un
 fichero interno — el usuario no lo lee.
 
-#### 🟢 `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago** · **NO SE REPRODUCE** el 9-sep, en placa)
+#### ✅ `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago** · **CERRADA el 9-sep por NO REPRODUCIBLE**)
 
 **Sin causa identificada.** Se ficha con la cronología porque el rodeo no es evidente y a un usuario
 le puede pasar. El detalle completo está en el archivo de la cola heredada de V5, en esta misma
@@ -2182,6 +2182,22 @@ cierra por **no reproducible**, no por arreglada, y se conserva la receta de dia
 a pasar, **lo PRIMERO es el log durante el intento de ejecución** — si sale `RUN/v1 /app/X.mod
 session=N` el programa llega a lanzarse y se atasca dentro; si no sale, no llega ni a arrancar. Eso
 parte el problema en dos y sin ello sólo se puede especular.
+
+
+### ✅ CERRADA el 9-sep por NO REPRODUCIBLE — decisión de Eduardo, con su criterio
+
+> *«Si vuelve a producirse ya la estudiaremos. A veces ocurren cosas raras, pero si es algo que
+> ocurre muy de tanto en tanto cuando se están haciendo pruebas, pues bueno, lo anotamos pero
+> seguimos.»*
+
+**Se cierra por no reproducible, NO por arreglada** — la diferencia importa y por eso queda escrita:
+nunca se identificó la causa, y el modo de fallo sobrevivía al flasheo y no lo curaba formatear. Lo
+que hoy sabemos es que **la Metro ejecuta**, incluido un `Bench` con AOT nativo.
+
+🔬 **Y la receta se conserva, que es lo único que hay que retener**: si vuelve a pasar, **lo PRIMERO
+es el log durante el intento de ejecución**. Si sale `RUN/v1 /app/X.mod session=N`, el programa
+llega a lanzarse y se atasca dentro; si no sale, no llega ni a arrancar. Eso parte el problema en
+dos, y sin ello sólo se puede especular — que es exactamente lo que pasó el 21-ago.
 
 #### 🟡 `#484` — `listDir` no existe en la VM-C (abierta 9-sep, de la cola heredada)
 
