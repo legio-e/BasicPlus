@@ -44,28 +44,104 @@ int bpvm_mutex_alloc(bpvm_t* vm) {
     return mid;
 }
 
-void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid) {
+/* ── LA PROPIEDAD DE UN MUTEX: UN SOLO SITIO QUE LA TOCA ───────────────────────
+ *
+ * Criterio de Eduardo (9-sep), el mismo que arreglo B1 en miVM: si el mutex es
+ * una clase (aqui una struct), el estado se cambia por UN metodo y es AHI donde
+ * se protege. Antes el builtin hacia el check-and-set a pelo:
+ *
+ *     if (m->owner_tid < 0) { m->owner_tid = tc->id; ... }   // LEE y ESCRIBE
+ *
+ * ...y el interprete corre SIN vm_lock (lo dice el propio bpvm_internal.h sobre
+ * `sched_owner`). Con 2 workers, los dos ven el mutex libre y los dos lo toman.
+ *
+ * 🔴 Y el cuelgue venia de una ventana peor, un LOST WAKEUP de manual:
+ *   1. el thread A se apunta como waiter... y todavia NO se ha puesto BLOCKED,
+ *   2. el thread B hace unlock, saca a A de la cola, le da la propiedad y lo pone
+ *      RUNNABLE,
+ *   3. A ejecuta por fin `status = BLOCKED_MUTEX` y PISA el despertar.
+ * A tiene el mutex y esta bloqueado para siempre: nadie lo va a despertar.
+ * Medido: 7 de cada 8 pasadas con --smp=2 se colgaban ahi, mudas.
+ *
+ * Por eso apuntarse Y bloquearse van en la MISMA seccion critica. El cerrojo es
+ * no-op cuando no hay SMP, asi que el camino normal no paga nada. */
+
+int bpvm_mutex_try_acquire(bpvm_t* vm, int mid, int tid) {
+    int r;
     bpvm_smp_lock(vm);
-    if (mid < 0 || mid >= vm->mutex_count) { bpvm_smp_unlock(vm); return; }
+    {
+        bpvm_bp_mutex_t* m = &vm->mutexes[mid];
+        if (m->owner_tid == tid) {
+            r = -1;                       /* re-entrada: la denuncia el llamante */
+        } else if (m->owner_tid < 0) {
+            m->owner_tid = tid;
+            r = 1;                        /* tomado */
+        } else {
+            /* Ocupado: apuntarse Y bloquearse, juntos y bajo el cerrojo. */
+            bpvm_mutex_add_waiter_locked(vm, mid, tid);
+            vm->threads[tid].blocked_on_mutex = mid;
+            vm->threads[tid].status = BPVM_THREAD_BLOCKED_MUTEX;
+            r = 0;                        /* bloqueado */
+        }
+    }
+    bpvm_smp_unlock(vm);
+    return r;
+}
+
+int bpvm_mutex_release(bpvm_t* vm, int mid, int tid, int* owner_out) {
+    int r;
+    bpvm_smp_lock(vm);
+    {
+        bpvm_bp_mutex_t* m = &vm->mutexes[mid];
+        if (m->owner_tid != tid) {
+            if (owner_out) *owner_out = m->owner_tid;
+            r = -1;                       /* no es suyo: lo denuncia el llamante */
+        } else {
+            int next = bpvm_mutex_pop_waiter_locked(vm, mid);
+            if (next >= 0) {
+                m->owner_tid = next;
+                vm->threads[next].blocked_on_mutex = -1;
+                if (vm->threads[next].status == BPVM_THREAD_BLOCKED_MUTEX) {
+                    vm->threads[next].status = BPVM_THREAD_RUNNABLE;
+                }
+            } else {
+                m->owner_tid = -1;
+            }
+            r = 0;
+        }
+    }
+    bpvm_smp_unlock(vm);
+    return r;
+}
+
+void bpvm_mutex_add_waiter_locked(bpvm_t* vm, int mid, int tid) {
+    if (mid < 0 || mid >= vm->mutex_count) { return; }
     bpvm_bp_mutex_t* m = &vm->mutexes[mid];
     if (m->waiter_count >= m->waiter_capacity) {
         int new_cap = m->waiter_capacity == 0 ? 4 : m->waiter_capacity * 2;
         int32_t* arr = (int32_t*) bpvm_realloc(m->waiters,
                         (size_t) new_cap * sizeof(int32_t));
-        if (!arr) { bpvm_smp_unlock(vm); return; }
+        if (!arr) { return; }
         m->waiters = arr;
         m->waiter_capacity = new_cap;
     }
     m->waiters[m->waiter_count++] = tid;
+}
+
+/* Publica: toma el cerrojo y delega. La version `_locked` es la que usan
+   `try_acquire`/`release`, que YA lo sostienen — y el vm_lock NO es
+   recursivo, asi que llamar a esta desde alli se colgaria. */
+void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid) {
+    bpvm_smp_lock(vm);
+    bpvm_mutex_add_waiter_locked(vm, mid, tid);
     bpvm_smp_unlock(vm);
 }
 
 /* Saca y devuelve el primer waiter en FIFO. -1 si no hay. */
-int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
-    bpvm_smp_lock(vm);
-    if (mid < 0 || mid >= vm->mutex_count) { bpvm_smp_unlock(vm); return -1; }
+int bpvm_mutex_pop_waiter_locked(bpvm_t* vm, int mid) {
+    if (mid < 0 || mid >= vm->mutex_count) { return -1; }
     bpvm_bp_mutex_t* m = &vm->mutexes[mid];
-    if (m->waiter_count == 0) { bpvm_smp_unlock(vm); return -1; }
+    if (m->waiter_count == 0) { return -1; }
     int tid = m->waiters[0];
     /* shift down (FIFO). Pocos waiters habitualmente. */
     for (int i = 1; i < m->waiter_count; i++) {
@@ -76,8 +152,17 @@ int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
     if (vm->smp) {
         bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
     }
-    bpvm_smp_unlock(vm);
     return tid;
+}
+
+/* Publica: toma el cerrojo y delega. La version `_locked` es la que usan
+   `try_acquire`/`release`, que YA lo sostienen — y el vm_lock NO es
+   recursivo, asi que llamar a esta desde alli se colgaria. */
+int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
+    bpvm_smp_lock(vm);
+    int r = bpvm_mutex_pop_waiter_locked(vm, mid);
+    bpvm_smp_unlock(vm);
+    return r;
 }
 
 /* ---- Thread spawn ---- *

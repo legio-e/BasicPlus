@@ -919,6 +919,18 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
 
 /* Mutex BP helpers (F4). */
 int  bpvm_mutex_alloc(bpvm_t* vm);                    /* devuelve nuevo mid */
+/* La propiedad de un mutex se toma y se suelta SOLO por estas dos, que llevan el
+   cerrojo dentro. El check-and-set a pelo desde el builtin era la carrera que
+   colgaba --smp=2 (ver el comentario largo en threading.c).
+     try_acquire:  1 = tomado, 0 = bloqueado (ya apuntado como waiter), -1 = re-entrada
+     release:      0 = ok, -1 = no era suyo (deja el owner real en *owner_out) */
+int  bpvm_mutex_try_acquire(bpvm_t* vm, int mid, int tid);
+int  bpvm_mutex_release(bpvm_t* vm, int mid, int tid, int* owner_out);
+
+/* Variantes que asumen el cerrojo YA tomado (las usan las dos de arriba). */
+void bpvm_mutex_add_waiter_locked(bpvm_t* vm, int mid, int tid);
+int  bpvm_mutex_pop_waiter_locked(bpvm_t* vm, int mid);
+
 void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
 

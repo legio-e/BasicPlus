@@ -2544,23 +2544,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
-        bpvm_bp_mutex_t* m = &vm->mutexes[mid];
-        if (m->owner_tid == tc->id) {
+        /* La propiedad la mueve `bpvm_mutex_try_acquire`, que lleva el cerrojo
+         * dentro: aqui solo queda lo que es de BP (lanzar y empujar el retorno).
+         * Antes esto hacia el check-and-set a pelo y el interp corre SIN vm_lock. */
+        int r = bpvm_mutex_try_acquire(vm, mid, tc->id);
+        if (r < 0) {
             /* BUG-7b — reentrada → RuntimeError atrapable (paridad VM-Java). */
             char em[96];
             snprintf(em, sizeof em, "mutex.lock: re-entrada por mismo thread tid=%d (los Mutex no son reentrantes)",
                      (int) tc->id);
             return builtin_throw(vm, tc, em);
         }
-        if (m->owner_tid < 0) {
-            m->owner_tid = tc->id;
-            push_i32(vm, tc, 0);
-            return BPVM_OK;
-        }
-        /* Contended: bloquea. */
-        bpvm_mutex_add_waiter(vm, mid, tc->id);
-        tc->blocked_on_mutex = mid;
-        tc->status = BPVM_THREAD_BLOCKED_MUTEX;
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2576,25 +2570,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
-        bpvm_bp_mutex_t* m = &vm->mutexes[mid];
-        if (m->owner_tid != tc->id) {
+        /* Igual que el lock: la propiedad y el traspaso al waiter van dentro de
+         * `bpvm_mutex_release`, bajo el cerrojo. Antes el traspaso se hacia aqui
+         * en tres pasos sueltos y el waiter podia perder su despertar. */
+        int owner = -1;
+        if (bpvm_mutex_release(vm, mid, tc->id, &owner) < 0) {
             /* BUG-7b — unlock por no-propietario → RuntimeError atrapable (paridad VM-Java). */
             char em[96];
             snprintf(em, sizeof em, "mutex.unlock: thread %d no es propietario (owner=%d)",
-                     (int) tc->id, (int) m->owner_tid);
+                     (int) tc->id, owner);
             return builtin_throw(vm, tc, em);
-        }
-        /* Si hay waiters, traspasamos la propiedad al primero. */
-        int next = bpvm_mutex_pop_waiter(vm, mid);
-        if (next >= 0) {
-            m->owner_tid = next;
-            /* Lo despertamos. */
-            if (vm->threads[next].status == BPVM_THREAD_BLOCKED_MUTEX) {
-                vm->threads[next].status = BPVM_THREAD_RUNNABLE;
-                vm->threads[next].blocked_on_mutex = -1;
-            }
-        } else {
-            m->owner_tid = -1;
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
