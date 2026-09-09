@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 8 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 7 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **8** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` · `#484` · `#485` |
+> | **fichas de V6** | **7** | `#379` · `#462` · `#471` · `#473` · `#481` · `#482` · `#484` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2251,7 +2251,7 @@ dos VMs en la superficie del lenguaje, no en el transporte.
 nuevo en las dos VMs, `make check-builtins` como puerta— y hay que decidir qué devuelve (lista de
 nombres, y si distingue fichero de directorio).
 
-#### 🔴 `#485` — el hilo `io` del P4 nace POR DEBAJO de su VM: el contrato de `A1`, incumplido (abierta 9-sep, sale de `#462`)
+#### ✅ `#485` — el hilo `io` del P4 nace POR DEBAJO de su VM: el contrato de `A1`, incumplido (abierta 9-sep, de `#462` · **CERRADA el 9-sep**, `8d0ebee1`)
 
 El contrato lo declara la cabecera con medidas (`include/bpvm_platform.h:75-94`): `io` va a la
 **misma** prioridad que la tarea que ejecuta la VM, y **nunca por debajo**. El backend ESP fija `io`
@@ -2270,6 +2270,50 @@ cinco sitios (`pico/main.c`, los dos `main.c` de CubeMX del STM32, `esp32p4/main
 en S3/C3/C6, donde la VM corre en `app_main`).
 
 📌 Es la misma forma del fallo que en la Pico dejó un KILL sin llegar durante 9,9 s.
+
+
+### ✅ CERRADA el 9-sep (`8d0ebee1`) — el contrato pasa de VIGILADO a CONSTRUIDO
+
+**El arreglo no es cambiar el número del P4: es que `io` deje de llevar número.** Hasta hoy había un
+literal en cada backend y otro donde cada familia crea su tarea de VM, y tenían que **coincidir a
+mano**:
+
+| | prioridad de `io` | prioridad de la VM | |
+|---|---|---|---|
+| `src/platform_freertos.c:283` (STM32) | `BPVM_FR_PRIO_VM` = IDLE+2 | IDLE+2 | coincidía |
+| `pico/platform_freertos.c:264` | IDLE+2 | IDLE+2 | coincidía |
+| `esp32/common/platform_esp32.c:229` (S3/C3/C6) | IDLE+1 = **1** | `app_main` = 1 | coincidía |
+| **el mismo literal, en el P4** | **1** | **`wire_task` = 5** | 🔴 **NO**, y nada lo decía |
+
+Ahora los tres sacan la prioridad de **`uxTaskPriorityGet(NULL)`**. Y es exacto, no aproximado:
+`bpvm_io_start()` lo llama **siempre** la tarea que ejecuta la VM — comprobados los cuatro
+llamadores (`pico/repl_v1.c:1291`, `esp32/common/repl_esp32.c:778`, `stm32/port/stm32_repl.c:474` y
+el sim), todos desde el camino del RUN. Con esto **no hay dos números que puedan divergir**.
+
+`INCLUDE_uxTaskPriorityGet` ya estaba a 1 en las tres `FreeRTOSConfig`. Compiladas Pico, P4, S3 y
+Nucleo; paridad 50 PASS.
+
+⚠️ **Lo que NO se puede verificar aquí**: el efecto es del RTOS y sólo se ve en placa. La prueba, si
+se quiere cerrar del todo, es **en el P4**: un KILL mientras un programa CALCULA. Con `io` por
+debajo debería tardar; a la misma prioridad, decenas de ms — que es lo medido en la Pico y la C6 el
+5-sep (9,9 s → 33 ms).
+
+### 🐛 Y de paso: el `io-smoke` tenía un caso PERMANENTEMENTE ROJO, y era la guarda (`dac7fae5`)
+
+Al correrlo para verificar esto salieron dos `FAIL`. **No eran del producto.**
+
+`make io-smoke` construye el sim **sin LVGL**, y sin LVGL `Gui.run()` **no bloquea**: el programa
+termina solo antes de que llegue el KILL, el `EXITED` dice `OK` y el caso de `#462` fallaba
+**siempre**. Con `make sim LVGL=1` sale `KILLED` y todo verde.
+
+🔑 **Y el script YA tenía guarda para eso** —*«saltada: el simulador no trae LVGL»*— **pero miraba
+lo que no era**: buscaba `"gui lista"` en la salida, y el sim headless **también la imprime**. La
+guarda no saltaba nunca. La señal de headless es otra y es inequívoca: **si el `EXITED` llega ANTES
+de que mandemos el KILL, no hay nada que medir**.
+
+📌 **Un caso permanentemente rojo enseña a ignorar el arnés**, que es peor que no tenerlo — y este
+llevaba días así sin que nadie lo mirara. Es [[aviso-que-no-distingue-no-evento-de-fallo]] otra vez,
+y esta vez dentro del propio instrumento.
 
 #### ✅ `#486` — `GUI_RUN_ONCE` recorre TODA la tabla de símbolos con `strcmp` en cada pasada (abierta 9-sep, de `#462` · **CERRADA el 9-sep**, `c8d5eda4`)
 
