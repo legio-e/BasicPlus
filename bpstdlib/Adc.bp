@@ -63,27 +63,39 @@ module Adc
       endif
     end Channel
 
+    // #480 - UNA lectura, y si falla LANZA. El backend devuelve < 0 cuando la
+    // conversion no se pudo hacer (o cuando esta placa no tiene ADC, ver #469).
+    // Devolver ese -1 tal cual seria el mismo error silencioso que la ficha:
+    // read() daria -1 y readVolts() voltios NEGATIVOS, y nadie mira. Aqui se
+    // convierte en un RuntimeError atrapable, como ya hacia el constructor.
+    function leer(): integer
+      var raw: integer := readChannel(this.ch_)
+      if raw < 0 then
+        throw RuntimeError("Adc.read: el canal " + intToString(this.ch_) + " no se pudo leer")
+      endif
+      return raw
+    end leer
+
     // Lectura raw: integer 0..4095. Bloquea ~2 µs.
     public function read(): integer
-      return readChannel(this.ch_)
+      return this.leer()
     end read
 
     // Lectura convertida a voltios usando Vref nominal.
     public function readVolts(): float
-      var raw: integer := readChannel(this.ch_)
-      return raw * 3.3 / 4095.0
+      return this.leer() * 3.3 / 4095.0
     end readVolts
 
     // Media de N lecturas — útil para reducir ruido en sensores
     // analógicos. N típico: 8 o 16. Coste: N * 2 µs.
     public function readAvg(n: integer): integer
       if n <= 1 then
-        return readChannel(this.ch_)
+        return this.leer()
       endif
       var sum: integer := 0
       var i: integer := 0
       while i < n do
-        sum := sum + readChannel(this.ch_)
+        sum := sum + this.leer()
         i := i + 1
       endwh
       return sum / n

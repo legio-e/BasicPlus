@@ -2,22 +2,25 @@ dbg 3
 module Adc
 source C:\lenguajes\pm\bpstdlib\Adc.bp
 lines
-443 68
-466 73
-477 74
-506 80
-515 81
-536 83
-539 84
-542 85
-552 86
-566 87
-574 89
-593 58
-603 59
-616 60
-629 61
-653 62
+443 72
+454 73
+463 74
+497 76
+513 81
+533 86
+566 92
+575 93
+593 95
+596 96
+599 97
+609 98
+620 99
+628 101
+647 58
+657 59
+670 60
+683 61
+707 62
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -64,33 +67,35 @@ func Channel.getPin_ 413
 this -20 8 0 ?
 func Channel.setPin_ 427
 this -24 8 0 ?
-func Channel.read 440
-this -20 8 0 ?
-func Channel.readVolts 463
+func Channel.leer 440
 this -20 8 0 ?
 raw 4 4 0 integer
-func Channel.readAvg 503
+func Channel.read 510
+this -20 8 0 ?
+func Channel.readVolts 530
+this -20 8 0 ?
+func Channel.readAvg 563
 this -24 8 0 ?
 n -16 4 0 integer
 sum 4 4 0 integer
 i 8 4 0 integer
-func Channel.__init 590
+func Channel.__init 644
 this -24 8 0 ?
 ch -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Channel 668
+func __cls_new_Channel 722
 ch -16 4 0 integer
-func __cls_init_Channel 700
+func __cls_init_Channel 754
 this -24 8 0 ?
 ch -16 4 0 integer
-func __cls_m_Channel_read 716
+func __cls_m_Channel_read 770
 this -20 8 0 ?
-func __cls_m_Channel_readAvg 733
+func __cls_m_Channel_readAvg 787
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Channel_readVolts 752
+func __cls_m_Channel_readVolts 806
 this -20 8 0 ?
-func __strconcat 785
+func __strconcat 839
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

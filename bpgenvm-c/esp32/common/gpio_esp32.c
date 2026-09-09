@@ -494,22 +494,42 @@ static const bpvm_pwm_backend_t s_esp32_pwm_backend = {
  */
 static adc_oneshot_unit_handle_t s_adc1 = NULL;
 
+/* #480 - EL CONTRATO SE CUMPLE O SE FALLA, PERO NO SE MIENTE.
+ *
+ * Estas dos devolvian 0 en TODOS sus caminos de fallo, y 0 es una lectura
+ * perfectamente valida (0 V) y un pin plausible. Con `Adc.bp` lanzando solo si
+ * el retorno es < 0, el resultado era el peor de los tres desenlaces: ADC roto
+ * = 0 V constante y MUDO, en las cuatro familias ESP32 — y encima con backend
+ * registrado, o sea que el arreglo de #469 (la ausencia de backend hace ruido)
+ * no lo cubria.
+ *
+ * Ahora fallan con -1, que es lo que pide el contrato (bpvm_adc.h) y lo que ya
+ * hacia la familia de referencia (pico/main.c: -1 si el canal no existe).
+ *
+ * Y de paso initChannel devuelve el GPIO DE VERDAD en vez de un 1 fijo: el
+ * contrato dice "el numero de pin fisico", `Adc.Channel` lo publica en `pin_`,
+ * y en un ESP32 ese 1 era otra mentira pequena. El IDF lo sabe:
+ * adc_oneshot_channel_to_io. */
 static int esp32_adc_init_channel_impl(int ch) {
+    if (ch < 0 || ch >= SOC_ADC_CHANNEL_NUM(ADC_UNIT_1)) return -1;
     if (!s_adc1) {
         adc_oneshot_unit_init_cfg_t ucfg = { .unit_id = ADC_UNIT_1 };
-        if (adc_oneshot_new_unit(&ucfg, &s_adc1) != ESP_OK) return 0;
+        if (adc_oneshot_new_unit(&ucfg, &s_adc1) != ESP_OK) { s_adc1 = NULL; return -1; }
     }
     adc_oneshot_chan_cfg_t ccfg = {
         .atten    = ADC_ATTEN_DB_12,
         .bitwidth = ADC_BITWIDTH_DEFAULT,
     };
-    return (adc_oneshot_config_channel(s_adc1, (adc_channel_t) ch, &ccfg) == ESP_OK) ? 1 : 0;
+    if (adc_oneshot_config_channel(s_adc1, (adc_channel_t) ch, &ccfg) != ESP_OK) return -1;
+    int io = -1;
+    if (adc_oneshot_channel_to_io(ADC_UNIT_1, (adc_channel_t) ch, &io) != ESP_OK) return -1;
+    return io;                      /* el GPIO fisico, como en la Pico */
 }
 
 static int esp32_adc_read_channel_impl(int ch) {
-    if (!s_adc1) return 0;
+    if (!s_adc1) return -1;         /* nadie llamo a initChannel, o fallo */
     int raw = 0;
-    if (adc_oneshot_read(s_adc1, (adc_channel_t) ch, &raw) != ESP_OK) return 0;
+    if (adc_oneshot_read(s_adc1, (adc_channel_t) ch, &raw) != ESP_OK) return -1;
     return raw;
 }
 
