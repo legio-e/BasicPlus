@@ -204,14 +204,35 @@ def main():
         arranco = r.get("type") == "RUN_REPLY"
         vio_gui = False
         t0 = time.time()
+        salio_solo = None
         while arranco and time.time() - t0 < 5:
             m = w._line(timeout=5)
             if m.get("type") == "OUTPUT" and "gui lista" in m.get("data", ""): vio_gui = True; break
             if m.get("type") == "EXITED": break
+        # #485 - LA GUARDA MIRABA LO QUE NO ERA. Buscaba "gui lista" para decidir
+        # si el sim trae LVGL, y el sim HEADLESS tambien la imprime: la guarda no
+        # saltaba nunca, el caso corria igual y fallaba SIEMPRE con `make
+        # io-smoke` (que construye el sim sin LVGL). Un caso permanentemente rojo
+        # ensena a ignorar el arnes, que es peor que no tenerlo.
+        #
+        # La senal de headless es otra y es inequivoca: sin LVGL, `Gui.run()` no
+        # bloquea, asi que el programa TERMINA SOLO antes de que nadie lo mate.
+        # Si el EXITED llega antes del KILL, aqui no hay nada que medir.
+        if vio_gui:
+            salio_solo = None
+            t1 = time.time()
+            while time.time() - t1 < 0.4:
+                try:
+                    m = w._line(timeout=0.4)
+                except Exception:
+                    break          # con LVGL no llega nada, que es lo esperado
+                if m.get("type") == "EXITED": salio_solo = m; break
         if not vio_gui:
-            print("        (saltada: el simulador no trae LVGL — make sim LVGL=1)")
+            print("        (saltada: el RUN no llego a levantar la GUI)")
+        elif salio_solo is not None:
+            print("        (SALTADA: el sim no trae LVGL, `Gui.run()` no bloquea y el")
+            print("         programa termina solo. Para medir esto: make sim LVGL=1)")
         else:
-            time.sleep(0.4)
             w.send("KILL")
             exited, t0 = None, time.time()
             while time.time() - t0 < 15:
