@@ -345,7 +345,9 @@ int main(int argc, char** argv) {
         else
             fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
         bpvm_destroy(vm); free(mem);
-        return (int) s;
+        /* #481 - la TABLA, no el ordinal del enum. Aqui da 2, «no se pudo
+         * cargar el modulo», que es justo lo que paso. */
+        return bpvm_exit_code(s);
     }
 
     /* Ya con los módulos DENTRO, el FS pasa a ser el que verá el programa BP.
@@ -407,7 +409,13 @@ int main(int argc, char** argv) {
         if (le[0]) printf("=== ERROR DE LINK: %s ===\n", le);
         /* Detalle del RuntimeError no atrapado (en vez del status genérico). */
         const char* re = bpvm_runtime_error(vm);
-        if (s == BPVM_ERR_RUNTIME && re[0]) printf("=== RuntimeError: %s ===\n", re);
+        /* #481 - A STDERR, no a stdout. Esto no lo imprime el PROGRAMA: lo imprime
+         * el runner, explicando por que murio. Mientras estuvo en stdout,
+         * CUALQUIER programa que muriera rompia la paridad por construccion
+         * -miVM lo manda por stderr-, y no lo veia nadie porque no habia ni un
+         * sample que muriese en el corpus. En placa esto no pasa por aqui: el
+         * detalle viaja en el `errorMessage` del EXITED. */
+        if (s == BPVM_ERR_RUNTIME && re[0]) fprintf(stderr, "=== RuntimeError: %s ===\n", re);
     }
     printf("=== FIN DE LA EJECUCION (status=%s) ===\n", bpvm_status_str(s));
 
@@ -418,5 +426,6 @@ int main(int argc, char** argv) {
     bpvm_destroy(vm);
     free(mem);
     (void) packs_region;   /* tallada dentro de mem: se libera con él */
-    return (int) s;
+    /* #481 - la TABLA, no el ordinal del enum: un `exit 11` no dice nada. */
+    return bpvm_exit_code(s);
 }

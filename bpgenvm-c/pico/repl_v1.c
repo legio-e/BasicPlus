@@ -846,7 +846,11 @@ static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code)
         *exit_code = 130;
     } else {
         *status    = "RUNTIME_ERROR";
-        *exit_code = (int) rs;
+        /* #481 - la TABLA comun, no el ordinal del enum. Antes esto mandaba al
+         * IDE un `exit 11` que no significaba nada y que cambiaria solo con
+         * reordenar bpvm_status_t. El detalle sigue viajando aparte, en el
+         * `errorMessage` de este mismo EXITED. */
+        *exit_code = bpvm_exit_code(rs);
     }
 }
 

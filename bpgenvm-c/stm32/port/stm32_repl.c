@@ -507,7 +507,7 @@ static void run_module_path(const char* path, long id, const char* arg) {
         int n = snprintf(buf, sizeof(buf),
             "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
             "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"load: %s\"}",
-            session, (int) st, (unsigned long) dt, entry.fallo);
+            session, bpvm_exit_code(st), (unsigned long) dt, entry.fallo);
         if (n > 0) wire_v1_send_line(buf, (size_t) n);
     } else {
         if (st != BPVM_OK && st != BPVM_KILLED) BOARD_LED_ERR_ON();
@@ -537,13 +537,13 @@ static void run_module_path(const char* path, long id, const char* arg) {
                 int n = snprintf(buf, sizeof(buf),
                     "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
                     "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
-                    session, (int) st, (unsigned long) dt, rt_err);
+                    session, bpvm_exit_code(st), (unsigned long) dt, rt_err);
                 if (n > 0) wire_v1_send_line(buf, (size_t) n);
             } else {
                 emit_exited(session,
                             (st == BPVM_OK)     ? "OK"
                           : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
-                            (st == BPVM_KILLED) ? 130 : (int) st, dt);
+                            bpvm_exit_code(st), dt);   /* #481 - la tabla comun */
             }
         }
     }

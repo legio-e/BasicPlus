@@ -1370,6 +1370,80 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_alloc_sweep(run_mark);
 }
 
+
+/* #481 - EL CODIGO DE SALIDA, en UN solo sitio.
+ *
+ * Antes cada consumidor devolvia `(int) status`, o sea el ORDINAL DEL ENUM de
+ * aqui arriba: un `exit 11` que no significa nada, y que cambiaria solo con
+ * reordenar la lista. Y estaba escrito cinco veces (el CLI del host y los
+ * `map_vm_status` de Pico, ESP32, STM32 y el sim), todas igual de crudas.
+ *
+ * Criterio de Eduardo (9-sep): «hay que distinguir de un exit diferente de 0, de
+ * una excepcion no atrapada: 2 casos» y «un exit(11) no me dice nada». Asi que
+ * el numero contesta QUE PASO, en una tabla corta que se pueda explicar, y el
+ * DETALLE viaja aparte -por stderr en el PC, en el `errorMessage` del EXITED en
+ * placa-. El IDE la recita con `help error`, y por eso vive AQUI: para que la
+ * ayuda no pueda desfasarse del codigo.
+ *
+ *    0   termino bien
+ *    1   excepcion BP no atrapada
+ *    2   no se pudo cargar el modulo
+ *    3   fallo interno de la VM
+ *    4   sin memoria
+ *  130   parado con Stop/KILL   (convencion 128+SIGINT, ya existia)
+ *  131   parado por el depurador
+ */
+int bpvm_exit_code(bpvm_status_t s) {
+    switch (s) {
+        case BPVM_OK:                 return 0;
+
+        /* El programa hizo algo mal. Los tres acaban en lo mismo para quien
+         * mira desde fuera: el programa se murio por su culpa. */
+        case BPVM_ERR_RUNTIME:
+        case BPVM_ERR_DIV_BY_ZERO:
+        case BPVM_ERR_NULL_RECEIVER:  return 1;
+
+        /* Ni siquiera llego a arrancar: el .mod no se pudo leer, no es un .mod,
+         * o es de una ABI que esta VM ya no entiende (#284). */
+        case BPVM_ERR_IO:
+        case BPVM_ERR_BAD_MAGIC:
+        case BPVM_ERR_ABI_MOD_V5:
+        case BPVM_ERR_BAD_HEADER:     return 2;
+
+        /* Esto NO es culpa del programa: es un bug nuestro o un .mod corrupto
+         * que paso los chequeos. Merece numero propio para no confundirlo con
+         * el 1, que es del programa. */
+        case BPVM_ERR_BAD_OPCODE:
+        case BPVM_ERR_BAD_PC:         return 3;
+
+        case BPVM_ERR_OOM:
+        case BPVM_ERR_STACK_OVERFLOW: return 4;
+
+        case BPVM_KILLED:             return 130;
+        case BPVM_DBG_STOPPED:        return 131;
+
+        /* Sentinela interno del puente native->BP: nunca escapa a bpvm_run, asi
+         * que llegar aqui ya seria un bug. Se trata como fallo interno. */
+        case BPVM_NATIVE_RETURN:      return 3;
+    }
+    return 3;   /* estado nuevo sin clasificar: fallo interno, no silencio */
+}
+
+/* #481 - El texto de cada codigo, para que el IDE (`help error`) y cualquier
+ * script recite LA MISMA tabla que se acaba de aplicar. */
+const char* bpvm_exit_code_str(int code) {
+    switch (code) {
+        case 0:   return "termino bien";
+        case 1:   return "excepcion BP no atrapada";
+        case 2:   return "no se pudo cargar el modulo";
+        case 3:   return "fallo interno de la VM";
+        case 4:   return "sin memoria";
+        case 130: return "parado con Stop/KILL";
+        case 131: return "parado por el depurador";
+        default:  return "codigo desconocido";
+    }
+}
+
 const char* bpvm_status_str(bpvm_status_t s) {
     switch (s) {
     case BPVM_OK:                 return "OK";

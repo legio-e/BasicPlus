@@ -535,6 +535,13 @@ void bpvm_destroy(bpvm_t* vm);
  */
 const char* bpvm_status_str(bpvm_status_t s);
 
+/* #481 - EL CODIGO DE SALIDA, y su texto. Una tabla corta y explicable, en un
+ * solo sitio: la usan el CLI del host, las cuatro cinturas (map_vm_status) y el
+ * `help error` del IDE. El numero dice QUE PASO; el detalle va aparte (stderr en
+ * el PC, `errorMessage` del EXITED en placa). Ver el comentario en src/bpvm.c. */
+int         bpvm_exit_code(bpvm_status_t s);
+const char* bpvm_exit_code_str(int code);
+
 /*
  * Paso 4 (V3) — detalle legible del último fallo de LINK (lib/símbolo
  * cross-module no resuelto): p.ej. "falta la lib 'Json' (la usa 'Gui'; ...)".

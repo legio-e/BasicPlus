@@ -1070,6 +1070,17 @@ public class VirtualMachine {
         return base.isEmpty() ? p : (base + "/" + p);
     }
 
+    /* #481 — EL PROGRAMA MURIO LANZANDO, y hay que poder DECIRLO.
+     *
+     * Hasta hoy una excepcion BP no atrapada se imprimia por stderr y la VM se
+     * apagaba, pero no quedaba rastro que el CLI pudiera leer: `Main` salia con
+     * 0 y un programa muerto decia que habia ido bien. Es el mismo vicio que la
+     * carrera del `stop` de #462, solo que sistematico.
+     *
+     * Espejo de `bpvm_runtime_error(vm)` en la VM-C. "" = no hubo. */
+    private volatile String runtimeError = "";
+    public String getRuntimeError() { return runtimeError; }
+
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
@@ -2327,12 +2338,18 @@ public class VirtualMachine {
                         System.err.println("[bpgenvm worker " + workerId + ", tid="
                                 + tc.id + "] " + tf.getMessage());
                         dumpFault(workerId, tc, "BpThreadFault", tf);
+                        /* #481 — solo cuenta si tumba el programa: un fallo de un
+                         * thread SECUNDARIO no lo mata (abajo se termina ese thread
+                         * y los demas siguen), asi que no debe cambiar el codigo de
+                         * salida. Se apunta abajo, en la rama del main. */
                         // A1.7: notificar al IDE remoto si hay listener cableado.
                         emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
                                 tc.id, tf.getMessage(), ""));
                         synchronized (vmLock) {
                             if (tc.id == 0) {
                                 // main: shutdown coordinado
+                                if (runtimeError.isEmpty())
+                                    runtimeError = String.valueOf(tf.getMessage());   // #481
                                 vmShutdown = true;
                                 vmLock.notifyAll();
                                 return;
@@ -2353,6 +2370,8 @@ public class VirtualMachine {
                         emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
                                 tc.id, String.valueOf(ex.getMessage()), ""));
                         synchronized (vmLock) {
+                            if (runtimeError.isEmpty())
+                                runtimeError = String.valueOf(ex.getMessage());   // #481
                             vmShutdown = true;
                             vmLock.notifyAll();
                         }

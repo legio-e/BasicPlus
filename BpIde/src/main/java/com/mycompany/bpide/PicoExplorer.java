@@ -450,6 +450,25 @@ public final class PicoExplorer extends JPanel {
 
         switch (cmd) {
             case "help": case "?":
+                /* #481 — `help error`: qué significa cada código de salida.
+                 * Idea de Eduardo (9-sep): «a mí un exit(11) no me dice nada».
+                 * La tabla es la MISMA que aplican las dos VMs (bpvm_exit_code
+                 * en bpgenvm-c/src/bpvm.c y Main.java en miVM); si cambia allí,
+                 * cambia aquí. */
+                if (arg.equalsIgnoreCase("error") || arg.equalsIgnoreCase("errores")
+                        || arg.equalsIgnoreCase("exit")) {
+                    emitLine("  códigos de salida de un programa (el `exit N` del EXITED):");
+                    emitLine("      0   terminó bien");
+                    emitLine("      1   excepción BP no atrapada — el programa se murió por su cuenta");
+                    emitLine("      2   no se pudo cargar el módulo (no está, no es un .mod, o su ABI es vieja)");
+                    emitLine("      3   fallo interno de la VM — esto NO es culpa del programa, repórtalo");
+                    emitLine("      4   sin memoria: heap agotado o desbordamiento de pila");
+                    emitLine("    130   parado con Stop/KILL (convención 128+SIGINT)");
+                    emitLine("    131   parado por el depurador");
+                    emitLine("  el número dice QUÉ pasó; el POR QUÉ va en el mensaje que lo acompaña");
+                    emitLine("  (en el PC sale por stderr; desde la placa, en el errorMessage del EXITED)");
+                    return;
+                }
                 emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · new <fich> · run <fich> · del <fich>");
                 emitLine("            copy <local> [destino] · get <remoto> [local]");
                 emitLine("            kill · autorun [fich|off] · mem · save · log · logclr · reset · cls · help");
@@ -461,6 +480,7 @@ public final class PicoExplorer extends JPanel {
                 emitLine("  kill=aborta el programa en ejecución (también menú Run → Stop, Ctrl+F2)");
                 emitLine("  autorun=app que arranca al boot (/sys/auto.txt); con la app corriendo");
                 emitLine("          el IDE puede conectar y pararla con kill");
+                emitLine("  help error    — qué significa cada código de salida de un programa");
                 emitLine("  (doble-clic en el árbol: .mod ejecuta, el resto abre el editor)");
                 return;
             case "cls":

@@ -707,11 +707,11 @@ static void run_module_path(const char* path, long id, const char* arg) {
          * —y lo escribia en su log— pero por el wire no iba nada. */
         if (entry.missing[0]) {
             char em[80]; snprintf(em, sizeof(em), "falta el modulo '%s'", entry.missing);
-            send_exited(session, "RUNTIME_ERROR", (int) ls, 0, em);
+            send_exited(session, "RUNTIME_ERROR", bpvm_exit_code(ls), 0, em);
         } else if (entry.fallo[0]) {
-            send_exited(session, "RUNTIME_ERROR", (int) ls, 0, entry.fallo);
+            send_exited(session, "RUNTIME_ERROR", bpvm_exit_code(ls), 0, entry.fallo);
         } else {
-            send_exited(session, "RUNTIME_ERROR", (int) ls, 0, bpvm_status_str(ls));
+            send_exited(session, "RUNTIME_ERROR", bpvm_exit_code(ls), 0, bpvm_status_str(ls));
         }
         bpvm_destroy(vm); s_active_session = 0; return;
     }
@@ -796,7 +796,9 @@ static void run_module_path(const char* path, long id, const char* arg) {
     const char* status_str = (rs == BPVM_OK)     ? "OK"
                            : (rs == BPVM_KILLED) ? "KILLED"
                            : (link_err[0])       ? "LINK_ERROR" : "RUNTIME_ERROR";
-    int exit_code = (rs == BPVM_OK) ? 0 : (rs == BPVM_KILLED) ? 130 : (int) rs;
+    /* #481 - la TABLA comun, no el ordinal del enum: al IDE le llegaba un
+     * `exit 11` que no significaba nada. El detalle sigue en errorMessage. */
+    int exit_code = bpvm_exit_code(rs);
     /* ── QUÉ error, no SÓLO que hubo uno ────────────────────────────────────
      *
      * Tres fuentes, de la más concreta a la más genérica: el fallo de enlace,

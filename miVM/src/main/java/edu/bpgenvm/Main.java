@@ -374,6 +374,23 @@ public class Main {
             if (vm.isKillRequested()) {        // P-run-stop (#257)
                 exitCode = 130;                // convención 128+SIGINT
                 exitReason = "killed";
+            } else if (!vm.getRuntimeError().isEmpty()) {
+                /* #481 — EL PROGRAMA MURIO LANZANDO. Hasta hoy esto salía con 0:
+                 * un programa muerto decía que había ido bien, y un script que
+                 * encadenara pasos lo daba por bueno.
+                 *
+                 * El 1 es la tabla común, la misma que aplica la VM-C
+                 * (bpvm_exit_code en src/bpvm.c) y la que recita el `help error`
+                 * del IDE:
+                 *
+                 *     0  termino bien              3  fallo interno de la VM
+                 *     1  excepcion BP no atrapada  4  sin memoria
+                 *     2  no se pudo cargar        130 parado con Stop/KILL
+                 *
+                 * El DETALLE no va aquí: ya salió por stderr cuando ocurrió. El
+                 * número dice qué pasó; el mensaje, por qué. */
+                exitCode = 1;
+                exitReason = "runtime: " + vm.getRuntimeError();
             }
             }   // #431: fin del `if (cargado)`
         } catch (Throwable t) {
@@ -404,7 +421,10 @@ public class Main {
          * script que encadene compilar+ejecutar daría por bueno un programa
          * que no llegó a arrancar. Se hace SÓLO en este caso: los demás
          * caminos de salida se quedan exactamente como estaban. */
-        if (falloDeCarga) System.exit(exitCode);
+        /* #481 — se sale con el código SIEMPRE que no sea 0, no sólo en el fallo
+         * de carga: si no, la excepción no atrapada seguiría saliendo con 0 por
+         * el simple hecho de que `main` retorna. */
+        if (exitCode != 0) System.exit(exitCode);
     }
 
     /**

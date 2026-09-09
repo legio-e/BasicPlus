@@ -881,16 +881,16 @@ static void handle_run(sock_t c, long id, json_obj_t* obj) {
          * pasa. Antes esto caía en la rama de abajo y salía `IO error` a secas,
          * que es lo que el IDE enseñaba. Va antes del error de enlace porque un
          * fichero que no se puede leer no llega a enlazarse. */
-        emit_exited(c, session, "RUNTIME_ERROR", (int) st, dt, entry.fallo);
+        emit_exited(c, session, "RUNTIME_ERROR", bpvm_exit_code(st), dt, entry.fallo);
     } else {
         const char* link_err = bpvm_link_error(vm);
         if (link_err[0]) {
-            emit_exited(c, session, "LINK_ERROR", (int) st, dt, link_err);
+            emit_exited(c, session, "LINK_ERROR", bpvm_exit_code(st), dt, link_err);
         } else {
             emit_exited(c, session,
                         (st == BPVM_OK)     ? "OK"
                       : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
-                        (st == BPVM_KILLED) ? 130 : (int) st, dt,
+                        bpvm_exit_code(st), dt,   /* #481 - la tabla comun */
                         (st == BPVM_OK || st == BPVM_KILLED) ? "" : bpvm_runtime_error(vm));
         }
     }

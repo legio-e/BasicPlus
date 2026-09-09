@@ -1,0 +1,27 @@
+// ThrowSinAtrapar.bp - #481: un programa que MUERE lanzando, en el corpus.
+//
+// POR QUE HACIA FALTA. La ficha lo decia asi: «no hay ni un sample que muera
+// lanzando. No es casualidad — entrarian TODOS en rojo». O sea que la red de
+// paridad no vigilaba el camino de ERROR, que es justo por donde se sale cuando
+// algo va mal. Dos cosas estaban torcidas y ninguna se veia:
+//
+//   · la VM-C escribia «=== RuntimeError: ... ===» en STDOUT y miVM no. Mismo
+//     .mod, stdout distinto: el invariante roto para CUALQUIER programa que
+//     muriese. Ahora el informe va por stderr en las dos — no lo imprime el
+//     programa, lo imprime el runner explicando por que murio.
+//   · miVM salia con codigo 0. Un programa muerto decia que habia ido bien.
+//     Ahora las dos salen con 1, de la tabla comun (bpvm_exit_code).
+//
+// Lo que este sample vigila es lo PRIMERO: que el stdout de un programa que
+// muere sea solo lo que el programa llego a imprimir. El codigo de salida no lo
+// mira el arnes; esta medido a mano y anotado en la ficha.
+module ThrowSinAtrapar
+  import Core
+
+  function Main()
+    print "antes"
+    var a: integer[] := [1, 2, 3]
+    print a[99]                      // fuera de rango: muere aqui
+    print "no deberia llegar aqui"
+  end Main
+end ThrowSinAtrapar
