@@ -679,6 +679,30 @@ static void bpvm_gc(bpvm_t* vm) {
 static void gc_stw(bpvm_t* vm) {
     if (vm->gc_suspended) return;   /* V4: GC suspendido durante la migración a handles */
     if (vm->smp) {
+        /* ── UN SOLO COLECTOR ──────────────────────────────────────────────────
+         *
+         * Sin esto, DOS workers podian entrar aqui a la vez y quedarse esperando
+         * el uno al otro: cada uno ponia stop_the_world y se dormia hasta que
+         * `running_workers` bajara de 1 — pero los dos SON workers en ejecucion
+         * (el contador se sube antes de soltar el vm_lock para correr el quantum),
+         * y ninguno puede bajarlo sin salir del quantum, que es justo lo que no van
+         * a hacer. Cuelgue mudo, y con su huella: los DOS imprimen «GC por TABLA de
+         * handles» y ahi se acaba la salida. Medido con --smp=2 y --smp=4.
+         *
+         * Asi que el que llega y encuentra una colecta en marcha NO colecta: cede.
+         * Y mientras espera se DESCUENTA de `running_workers`, porque no esta
+         * ejecutando bytecode — si no, el colector lo estaria esperando a el.
+         * Al volver, el heap ya esta colectado por el otro: el llamante reintenta
+         * su asignacion, que es lo que hace igualmente tras un GC propio. */
+        if (vm->smp->stop_the_world) {
+            vm->smp->running_workers--;
+            bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+            while (vm->smp->stop_the_world) {
+                bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+            }
+            vm->smp->running_workers++;
+            return;
+        }
         vm->smp->stop_the_world = true;
         bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
         while (vm->smp->running_workers > 1) {
