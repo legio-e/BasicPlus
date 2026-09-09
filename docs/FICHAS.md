@@ -2127,7 +2127,7 @@ toolchain, y falta el generador.
 que en el ESP32-S3 **todo se ejecuta interpretado**. Hoy sólo lo dice `esp32/README.md`, que es un
 fichero interno — el usuario no lo lee.
 
-#### 🔴 `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago**, de la cola heredada)
+#### 🟢 `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago** · **NO SE REPRODUCE** el 9-sep, en placa)
 
 **Sin causa identificada.** Se ficha con la cronología porque el rodeo no es evidente y a un usuario
 le puede pasar. El detalle completo está en el archivo de la cola heredada de V5, en esta misma
@@ -2149,6 +2149,39 @@ partición**, que fuerza a rehacer el reparto entero.
 línea `RUN/v1 /app/X.mod session=N`, el programa llega a lanzarse y se atasca dentro; si no sale, no
 llega ni a arrancar. Eso parte el problema en dos y sin ello sólo se puede especular. **Si vuelve a
 pasar, lo PRIMERO es ese log.**
+
+
+### 🟢 9-sep — NO SE REPRODUCE con la imagen actual (Eduardo, en placa)
+
+> *«Estoy probando la Metro con la última imagen y a mí me funciona.»*
+
+```
+[Explorer] la placa ejecuta nativo arm (arch=40)
+--- RUN /app/T.mod on Placa (serial v1) ---
+Hola mundo
+--- VM finished: exit 0 (OK) en 2 ms ---
+--- RUN /app/Bench.mod on Placa (serial v1) ---
+fib(28) interp =  317811  in  8635  ms
+fib(28) AOT    =  317811  in  86  ms
+--- VM finished: exit 0 (OK) en 8724 ms ---
+```
+
+**Y no es sólo «arranca»**: corre un `Bench` con AOT nativo. De propina, esto verifica en la Metro
+algo que no lo estaba — **el AOT ARM en esa placa**: `arch=40` y **×100** (8635 ms → 86 ms).
+
+⚠️ **Lo que esto NO dice, y conviene dejarlo escrito antes de cerrar la ficha.** El modo de fallo del
+21-ago **sobrevivía al flasheo** y **no lo curaba formatear**: lo único que lo curó fue **cambiar el
+tamaño de la partición**. O sea que «funciona hoy» es compatible con dos historias distintas:
+
+1. el estado que lo rompía se deshizo al reparticionar aquel día y **nunca se ha vuelto a
+   provocar** — la causa sigue viva, esperando;
+2. algo de lo hecho entre medias lo arregló de verdad.
+
+**No hay forma de distinguirlas con este dato**, porque nunca se supo la causa. Así que la ficha se
+cierra por **no reproducible**, no por arreglada, y se conserva la receta de diagnóstico: si vuelve
+a pasar, **lo PRIMERO es el log durante el intento de ejecución** — si sale `RUN/v1 /app/X.mod
+session=N` el programa llega a lanzarse y se atasca dentro; si no sale, no llega ni a arrancar. Eso
+parte el problema en dos y sin ello sólo se puede especular.
 
 #### 🟡 `#484` — `listDir` no existe en la VM-C (abierta 9-sep, de la cola heredada)
 
