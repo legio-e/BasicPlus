@@ -83,8 +83,10 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 12 pendientes y 4 hitos** — y son 12 porque cada uno es UNA cosa; con
-> las entradas agrupadas de antes la lista decía 9. *(Eran 15 el 7-sep, cuenta de Eduardo. El
+> **Lo que queda de V6 son 13 pendientes y 4 hitos** — y son 13 porque cada uno es UNA cosa; con
+> las entradas agrupadas de antes la lista decía 9. *(El 13º salió de una corrección de Eduardo:
+> `#482` mezclaba la vista doble de los packs con que el S3 pueda ejecutar código nativo, y son
+> casos distintos porque el S3 es Xtensa y el C3 RISC-V → `#488`.)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
 > `#474` y `#456`, `#470` se fue a V7 y `A4` salió del plan de versiones.)*
 >
@@ -102,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **12** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#483` · `#484` · `#485` · `#486` · `#487` |
+> | **fichas de V6** | **13** | `#379` · `#462` · `#471` · `#473` · `#480` · `#481` · `#482` · `#483` · `#484` · `#485` · `#486` · `#487` · `#488` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2055,21 +2057,50 @@ se entera»* — ese camino hay que mirarlo a la vez.
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
 
-#### 🔴 `#482` — los packs del S3: el camino de EJECUCIÓN está escrito y SIN EJERCITAR (abierta 9-sep, de la cola heredada)
+#### 🔴 `#482` — la VISTA DOBLE de los packs, escrita y SIN EJERCITAR (abierta 9-sep, de la cola heredada)
 
-**Por qué existe la ficha**: el 8-sep se arregló el mapeo de packs del ESP32 con la vista doble
-(`bpvm_pack_mount(base_lectura, base_ejecucion, size)`, y `bpvm_pack_exec_ptr()` en el único sitio
-donde un puntero deja de ser dato y pasa a ser código, `mdn_loader.c:201`). La parte de **lectura**
-está verificada en placa —`PACK_LS_REPLY regionSize=5382144, chainOk=true` donde antes decía «sin
-zona de packs»—, pero la de **ejecución no se ha ejercitado nunca**.
+**Qué es.** El 8-sep se arregló el mapeo de packs del ESP32 con dos bases —
+`bpvm_pack_mount(base_lectura, base_ejecucion, size)` y `bpvm_pack_exec_ptr()` en el **único** sitio
+donde un puntero deja de ser dato y pasa a ser código (`mdn_loader.c:201`). La parte de **lectura**
+está verificada en placa (`PACK_LS_REPLY regionSize=5382144, chainOk=true`, donde antes decía «sin
+zona de packs»); la de **ejecución** no se ha ejercitado nunca.
 
-📌 **Y no es por falta de ganas: falta el reactivo.** Ejecutar desde un pack necesita un `.mdn`
-**Xtensa**, y ese `.mdn` no existe — el AOT hoy genera ARM Thumb-2 y RISC-V. O sea que el camino
-está escrito y *no se puede* probar hasta que haya con qué.
+📐 **Su condición es del MMU, no de la ISA**: hace falta un chip donde las direcciones virtuales de
+instrucción y dato **NO se compartan**, que es cuando el puntero de lectura no vale para ejecutar.
 
-⏭️ Decidir qué se hace: (a) generar el `.mdn` de Xtensa, (b) probar la vista doble en una familia
-que sí tenga `.mdn` y `SOC_MMU_DI_VADDR_SHARED` indefinido —el **C3** cumple—, o (c) dejarlo
-declarado como no verificado en la documentación de V6. La (b) es la barata y prueba lo mismo.
+| | ISA | `SOC_MMU_DI_VADDR_SHARED` | ¿tiene `.mdn`? |
+|---|---|---|---|
+| **ESP32-S3** | **Xtensa** | no lo declara → **separadas** | ❌ no existe generador |
+| **ESP32-C3** | RISC-V | no lo declara → **separadas** | ✅ RISC-V |
+| ESP32-C6 | RISC-V | 1 → compartidas | ✅ |
+| ESP32-P4 | RISC-V | 1 → compartidas | ✅ |
+
+⏭️ **Se prueba en el C3**, que cumple la condición del MMU **y** tiene `.mdn`. Eso ejercita el
+código común: la vista doble, `bpvm_pack_exec_ptr` y el montaje.
+
+⚠️ **Y lo que ese test NO prueba, que es de lo que va la ficha de al lado.** Corrección de Eduardo
+(9-sep): *«el S3 es Xtensa y el C3 es RISC-V, son casos diferentes.»* Tiene razón y yo había
+propuesto el C3 como si fuera equivalente: lo es **para el MMU** y no lo es **para la ISA**. Que el
+S3 ejecute desde un pack necesita código Xtensa, y eso es `#488`. Lo verde en el C3 dirá «la vista
+doble funciona», no «el S3 ejecuta packs».
+
+📌 Es la lección del `-mcmodel=medany` otra vez: la ISA impuso un requisito real que sólo se vio en
+el destino. Dar por buena una arquitectura probando otra es justo el error que aquella costó.
+
+#### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482`)
+
+**El hueco, con los números delante**: el `.mdn` **ya tiene etiqueta** para Xtensa
+(`MDN_ARCH_XTENSA = 94`, `mdn_format.h:76`) y el cargador la comprobaría; lo que no hay es
+**generador**. El AOT emite ARM Thumb-2 (`MDN_ARCH_ARM`) y RISC-V (`MDN_ARCH_RISCV`), y nada más.
+
+**Consecuencia**: en el ESP32-S3 —la única familia Xtensa del sobre— **todo se ejecuta
+interpretado**, y su `esp32/README.md` ya lo dice: *«AOT no aplica aquí»*. No es un bug: es una
+pieza que no está.
+
+⏭️ **Versión sin decidir, y no parece de V6**: un backend AOT nuevo es del tamaño de `H4` (el de
+RISC-V), no de un pendiente de cierre. Además el S3 está *«por popularidad, no por prioridad»*, y
+Espressif también va a RISC-V — así que puede que la respuesta correcta sea no hacerlo nunca y
+**declararlo** en la documentación, que es trabajo de `D1`.
 
 #### 🔴 `#483` — un estado persistente deja la METRO sin poder ejecutar NADA, y sólo lo cura reparticionar (abierta 9-sep · **visto el 21-ago**, de la cola heredada)
 
