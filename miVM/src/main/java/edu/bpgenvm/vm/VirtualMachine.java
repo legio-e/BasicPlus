@@ -93,7 +93,77 @@ public class VirtualMachine {
         final int stackTop;      // dirección máxima (exclusiva)
         int pc, sp, bp, cs;
         boolean running = true;
-        ThreadStatus status = ThreadStatus.RUNNABLE;
+        /* ── EL ESTADO: PRIVADO, Y UN SOLO SITIO QUE LO CAMBIA ────────────────
+         *
+         * Criterio de Eduardo (9-sep): «aunque este escrito en C el modelo bueno
+         * es el de OOP. Si tratas al Thread como una clase, debe haber un solo
+         * metodo para cambiar el estado, el setter correspondiente. Y es ahi donde
+         * tienes que proteger el acceso y el cambio de estado. Si luego se llama de
+         * 11 sitios diferentes eso ya es otro tema.» Es la misma regla que el
+         * lenguaje impone a sus usuarios: en BP no hay campos publicos, se accede
+         * por getter/setter.
+         *
+         * Antes esto era un campo package-private que 11 sitios escribian a mano.
+         * El invariante que ninguno comprobaba, y que es el de B1: **un thread que
+         * esta RUNNING no lo puede tomar otro nucleo**. Con el estado privado, el
+         * unico camino es `setStatus`, y ahi el invariante se puede EXIGIR en vez
+         * de confiar en que los 11 se acuerden. */
+        /* ⚠️ Se llama `estado` y no `status` A PROPOSITO: `private` no basta aqui,
+         * porque en Java una clase ANIDADA deja ver sus privados a la clase que la
+         * contiene — y ThreadContext vive dentro de VirtualMachine, que es justo
+         * quien escribia los 11 sitios. Cambiarle el nombre es lo que hace que el
+         * COMPILADOR obligue a pasar por el setter, en vez de confiar en la
+         * disciplina. Si algun dia ThreadContext sale a su propio fichero, esto
+         * puede volver a llamarse `status`. */
+        private ThreadStatus estado = ThreadStatus.RUNNABLE;
+
+        /** Quien lo esta ejecutando, como HILO JAVA. null = nadie.
+         *
+         *  Se guarda el `Thread` y no un id de worker a proposito: asi el setter
+         *  puede comparar contra `Thread.currentThread()` sin que haya que pasar el
+         *  id del worker por los veinte sitios que cambian estado, la mayoria
+         *  builtins donde ese id ni esta a mano. */
+        volatile Thread ownerThread = null;
+        /** true mientras su worker esta DENTRO de runOnContext. */
+        volatile boolean enEjecucion = false;
+
+        ThreadStatus getStatus() { return estado; }
+
+        /**
+         * EL UNICO sitio que cambia el estado de un thread BP.
+         *
+         * `quien` es el worker que hace el cambio (-1 = fuera de un worker: el
+         * arranque, el DebugServer, el timer). Sirve para el aviso de abajo, no
+         * para decidir: aqui todavia no se veta nada, se DENUNCIA.
+         */
+        void setStatus(ThreadStatus nuevo, int quien, String motivo) {
+            /* 🔴 B1 — LA TRANSICION QUE NO DEBERIA EXISTIR. Si el thread esta
+             * RUNNING en el worker A y el worker B lo pasa a RUNNABLE, B lo acaba
+             * de poner en la cola mientras A sigue ejecutandolo: dos nucleos sobre
+             * el mismo contexto. Es exactamente la firma de B1 («HALT en PC basura»
+             * con dos workers y el mismo tid).
+             *
+             * De momento AVISA y no corta, para poder medir cuantas veces pasa y
+             * desde donde sin cambiar el comportamiento que se esta midiendo. */
+            Thread duenyo = ownerThread;
+            /* Y el DISPARADOR: un thread que se pone a si mismo RUNNABLE mientras
+             * su worker sigue dentro de runOnContext. Ahi es donde se abre la
+             * ventana por la que otro nucleo lo toma. Se cuenta aparte porque no
+             * es un error en si — es la condicion previa. */
+            if (estado == ThreadStatus.RUNNING && nuevo == ThreadStatus.RUNNABLE
+                    && duenyo == Thread.currentThread() && enEjecucion) {
+                System.err.println("[B1-trigger] tid=" + id + " se auto-encola RUNNABLE"
+                        + " desde " + motivo + " mientras su worker lo ejecuta");
+            }
+            if (estado == ThreadStatus.RUNNING && duenyo != null
+                    && duenyo != Thread.currentThread()) {
+                System.err.println("[B1] tid=" + id + " lo esta EJECUTANDO "
+                        + duenyo.getName() + " y " + Thread.currentThread().getName()
+                        + " le cambia el estado a " + nuevo + " desde " + motivo
+                        + " (pc=" + pc + ")");
+            }
+            estado = nuevo;
+        }
         /**
          * Señal per-thread: un builtin (yield/sleep/join) O el timer preemptivo
          * ha pedido que el worker que ejecuta ESTE tc abandone el bucle inner
@@ -425,7 +495,7 @@ public class VirtualMachine {
             int ref = (int) allocVmString(valuesJson == null ? "" : valuesJson);
             writeInt32(tc.sp, ref);
             tc.sp += 4;
-            tc.status = ThreadStatus.RUNNABLE;
+            tc.setStatus(ThreadStatus.RUNNABLE, -1, "L475");
             tc.blockedOnMutexId = -1;
             runQueue.addLast(tc.id);
             vmLock.notifyAll();
@@ -442,7 +512,7 @@ public class VirtualMachine {
         int[] region = allocStackRegion(stackSize);
         int newId = threads.size();
         ThreadContext nt = new ThreadContext(newId, region[0], region[1]);
-        nt.status = ThreadStatus.RUNNABLE;
+        nt.setStatus(ThreadStatus.RUNNABLE, -1, "L492");
         threads.add(nt);
         runQueue.addLast(newId);
         return newId;
@@ -456,15 +526,15 @@ public class VirtualMachine {
     private ThreadContext pickNextRunnableTc() {
         long now = System.currentTimeMillis();
         for (ThreadContext t : threads) {
-            if (t.status == ThreadStatus.BLOCKED_SLEEP && now >= t.wakeAtMs) {
-                t.status = ThreadStatus.RUNNABLE;
+            if (t.getStatus() == ThreadStatus.BLOCKED_SLEEP && now >= t.wakeAtMs) {
+                t.setStatus(ThreadStatus.RUNNABLE, -1, "L507");
                 runQueue.addLast(t.id);
             }
         }
         while (!runQueue.isEmpty()) {
             int tid = runQueue.pollFirst();
             ThreadContext t = threads.get(tid);
-            if (t.status == ThreadStatus.RUNNABLE) return t;
+            if (t.getStatus() == ThreadStatus.RUNNABLE) return t;
         }
         return null;
     }
@@ -473,7 +543,7 @@ public class VirtualMachine {
     private long earliestSleepWakeMs() {
         long e = Long.MAX_VALUE;
         for (ThreadContext t : threads) {
-            if (t.status == ThreadStatus.BLOCKED_SLEEP && t.wakeAtMs < e) {
+            if (t.getStatus() == ThreadStatus.BLOCKED_SLEEP && t.wakeAtMs < e) {
                 e = t.wakeAtMs;
             }
         }
@@ -483,7 +553,7 @@ public class VirtualMachine {
     /** ¿Queda algún thread BP no terminado? Bajo vmLock. */
     private boolean anyThreadAlive() {
         for (ThreadContext t : threads) {
-            if (t.status != ThreadStatus.TERMINATED) return true;
+            if (t.getStatus() != ThreadStatus.TERMINATED) return true;
         }
         return false;
     }
@@ -510,21 +580,21 @@ public class VirtualMachine {
         for (PendingEvent e : eventQueue) if (e.tid == t.id) n++;
         if (n == 0) { t.evPostMortem = 0; return false; }
         if (t.evPostMortem < 0) t.evPostMortem = n;     // deuda al morir
-        t.status = ThreadStatus.RUNNABLE;
+        t.setStatus(ThreadStatus.RUNNABLE, -1, "L560");
         runQueue.addLast(t.id);
         return true;
     }
 
     private void terminateThread(ThreadContext t) {
         if (reviveForPendingEvents(t)) return;   // #342 — aún debe eventos
-        t.status = ThreadStatus.TERMINATED;
+        t.setStatus(ThreadStatus.TERMINATED, -1, "L567");
         if (t.id != 0) {
             freeStackRegion(t.stackBase, t.stackTop);
         }
         for (Integer wid : t.waiters) {
             ThreadContext w = threads.get(wid);
-            if (w.status == ThreadStatus.BLOCKED_JOIN) {
-                w.status = ThreadStatus.RUNNABLE;
+            if (w.getStatus() == ThreadStatus.BLOCKED_JOIN) {
+                w.setStatus(ThreadStatus.RUNNABLE, -1, "L574");
                 runQueue.addLast(wid);
             }
         }
@@ -548,7 +618,7 @@ public class VirtualMachine {
                 jm.ownerTid = nextTid;
                 ThreadContext nt = threads.get(nextTid);
                 if (nt != null) {
-                    nt.status = ThreadStatus.RUNNABLE;
+                    nt.setStatus(ThreadStatus.RUNNABLE, -1, "L598");
                     nt.blockedOnMutexId = -1;
                     runQueue.addLast(nextTid);
                 }
@@ -574,10 +644,10 @@ public class VirtualMachine {
     private void blockTcSleep(ThreadContext tc, int ms) {
         synchronized (vmLock) {
             if (ms <= 0) {
-                tc.status = ThreadStatus.RUNNABLE;
+                tc.setStatus(ThreadStatus.RUNNABLE, -1, "L624");
                 runQueue.addLast(tc.id);
             } else {
-                tc.status = ThreadStatus.BLOCKED_SLEEP;
+                tc.setStatus(ThreadStatus.BLOCKED_SLEEP, -1, "L627");
                 tc.wakeAtMs = System.currentTimeMillis() + ms;
             }
             vmLock.notifyAll();
@@ -606,8 +676,8 @@ public class VirtualMachine {
                 throw new RuntimeException("join: id de thread inválido " + targetTid);
             }
             ThreadContext target = threads.get(targetTid);
-            if (target.status == ThreadStatus.TERMINATED) return false;
-            tc.status = ThreadStatus.BLOCKED_JOIN;
+            if (target.getStatus() == ThreadStatus.TERMINATED) return false;
+            tc.setStatus(ThreadStatus.BLOCKED_JOIN, -1, "L657");
             tc.joiningTid = targetTid;
             target.waiters.add(tc.id);
             vmLock.notifyAll();
@@ -820,7 +890,7 @@ public class VirtualMachine {
               .append(" sp=").append(failedTc.sp)
               .append(" bp=").append(failedTc.bp)
               .append(" cs=").append(failedTc.cs)
-              .append(" status=").append(failedTc.status)
+              .append(" status=").append(failedTc.getStatus())
               .append(" blockedOnMutex=").append(failedTc.blockedOnMutexId)
               .append(" stackBase=").append(failedTc.stackBase)
               .append(" stackTop=").append(failedTc.stackTop)
@@ -846,7 +916,7 @@ public class VirtualMachine {
             for (ThreadContext t : threads) {
                 if (t == null) continue;
                 sb.append("  tid=").append(t.id)
-                  .append(" status=").append(t.status)
+                  .append(" status=").append(t.getStatus())
                   .append(" pc=").append(t.pc)
                   .append(" sp=").append(t.sp)
                   .append(" bp=").append(t.bp)
@@ -1136,7 +1206,7 @@ public class VirtualMachine {
         ThreadContext main = new ThreadContext(0, STACK_BASE, STACK_BASE + MAIN_STACK_BYTES);
         threads.add(main);
         currentThread = main;
-        currentThread.status = ThreadStatus.RUNNING;
+        currentThread.setStatus(ThreadStatus.RUNNING, -1, "L1186");
         this.SP = main.sp;
         this.BP = main.bp;
         this.handlerStack = main.handlerStack;
@@ -1424,7 +1494,7 @@ public class VirtualMachine {
      */
     private boolean anyOtherThreadRunning(int myTid) {
         for (ThreadContext t : threads) {
-            if (t.status != ThreadStatus.RUNNING) continue;
+            if (t.getStatus() != ThreadStatus.RUNNING) continue;
             if (t.id == myTid) continue;
             if (parkedInHeapAlloc.contains(t.id)) continue;
             return true;
@@ -1591,7 +1661,7 @@ public class VirtualMachine {
         // sincroniza tc.sp antes de cualquier llamada que pueda disparar GC,
         // así que aquí basta con leer t.sp para cada uno.
         for (ThreadContext t : threads) {
-            if (t.status == ThreadStatus.TERMINATED) continue;
+            if (t.getStatus() == ThreadStatus.TERMINATED) continue;
             scanRegion(t.stackBase, t.sp, valid);
             // Ancla de heapAlloc: el objeto recién alocado pero todavía no
             // publicado al stack queda referenciado por t.allocAnchor.
@@ -2108,7 +2178,7 @@ public class VirtualMachine {
 
         // main arranca RUNNABLE en la cola; el primer worker que lo pille lo ejecuta.
         synchronized (vmLock) {
-            main.status = ThreadStatus.RUNNABLE;
+            main.setStatus(ThreadStatus.RUNNABLE, -1, "L2158");
             if (!runQueue.contains(0)) runQueue.addFirst(0);
             vmShutdown = false;
         }
@@ -2213,7 +2283,11 @@ public class VirtualMachine {
                                 return;
                             }
                         }
-                        tc.status = ThreadStatus.RUNNING;
+                        tc.setStatus(ThreadStatus.RUNNING, -1, "claim");
+                        /* B1 — quien lo ejecuta, para que `setStatus` pueda
+                         * denunciar a quien se lo lleve por delante. Va DENTRO del
+                         * vmLock, igual que el cambio de estado: son el mismo acto. */
+                        tc.ownerThread = Thread.currentThread();
                         // H5.c — ENTRE QUANTA: si hay un evento para este thread,
                         // le inyectamos el frame del handler antes de darle CPU.
                         // Dentro del vmLock y con el tc ya asignado a este worker:
@@ -2223,7 +2297,9 @@ public class VirtualMachine {
                     ExitSignal sig;
                     currentTcLocal.set(tc);
                     try {
-                        sig = runOnContext(tc);
+                        tc.enEjecucion = true;
+                        try { sig = runOnContext(tc); }
+                        finally { tc.enEjecucion = false; }
                     } catch (BpThreadFault tf) {
                         // Fallo BP localizado a este thread (e.g. violación de
                         // Mutex). Imprimimos el mensaje, terminamos SOLO este
@@ -2288,12 +2364,12 @@ public class VirtualMachine {
                                 break;
                             case YIELD:
                                 // Dos orígenes posibles:
-                                //   1) Builtin yield/sleep/join: ya cambió tc.status
+                                //   1) Builtin yield/sleep/join: ya cambió tc.getStatus()
                                 //      (RUNNABLE+addLast, BLOCKED_SLEEP, o BLOCKED_JOIN).
                                 //   2) Preempt timer: sólo activó yieldRequested,
-                                //      tc.status sigue RUNNING → re-encolamos aquí.
-                                if (tc.status == ThreadStatus.RUNNING) {
-                                    tc.status = ThreadStatus.RUNNABLE;
+                                //      tc.getStatus() sigue RUNNING → re-encolamos aquí.
+                                if (tc.getStatus() == ThreadStatus.RUNNING) {
+                                    tc.setStatus(ThreadStatus.RUNNABLE, -1, "L2343");
                                     runQueue.addLast(tc.id);
                                 }
                                 vmLock.notifyAll();
@@ -2334,7 +2410,7 @@ public class VirtualMachine {
             if (vmShutdown) return;
             synchronized (vmLock) {
                 for (ThreadContext t : threads) {
-                    if (t.status == ThreadStatus.RUNNING) {
+                    if (t.getStatus() == ThreadStatus.RUNNING) {
                         t.yieldRequested = true;
                     }
                 }
@@ -2466,7 +2542,7 @@ public class VirtualMachine {
                     // que el outer scheduler haga terminate + switch.
                     running = false;
                     exitSignal = ExitSignal.THREAD_EXIT;
-                    tc.status = ThreadStatus.TERMINATED;
+                    tc.setStatus(ThreadStatus.TERMINATED, -1, "L2516");
                     break;
 
                 case 0x01: { // PUSH
@@ -4756,7 +4832,7 @@ public class VirtualMachine {
                         // Tomado por otro → nos bloqueamos. El que tenga ownership
                         // nos despertará en MUTEX_UNLOCK y nos dará ownership.
                         jm.waiters.add(tc.id);
-                        tc.status = ThreadStatus.BLOCKED_MUTEX;
+                        tc.setStatus(ThreadStatus.BLOCKED_MUTEX, -1, "L4806");
                         tc.blockedOnMutexId = mid;
                         tc.yieldRequested = true;
                     }
@@ -4785,7 +4861,7 @@ public class VirtualMachine {
                         int nextTid = jm.waiters.remove(0);
                         jm.ownerTid = nextTid;
                         ThreadContext nt = threads.get(nextTid);
-                        nt.status = ThreadStatus.RUNNABLE;
+                        nt.setStatus(ThreadStatus.RUNNABLE, -1, "L4835");
                         nt.blockedOnMutexId = -1;
                         runQueue.addLast(nextTid);
                     }
@@ -5113,7 +5189,7 @@ public class VirtualMachine {
                 // thread Java) pondrá el ref del JSON resultado en tc.sp y
                 // restaurará a RUNNABLE + runQueue.
                 synchronized (vmLock) {
-                    tc.status = ThreadStatus.BLOCKED_PROMPT;
+                    tc.setStatus(ThreadStatus.BLOCKED_PROMPT, -1, "L5163");
                     tc.yieldRequested = true;
                 }
                 // NO pushTc dummy — la respuesta del IDE produce el ref que
@@ -6032,7 +6108,7 @@ public class VirtualMachine {
 
         int base = tc.sp;
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
-        ThreadStatus savedStatus = tc.status;
+        ThreadStatus savedStatus = tc.getStatus();
         boolean savedYield = tc.yieldRequested;
         // Frame del dispatcher(self): [self(8B ref), savedPC=0(centinela), savedBP,
         // savedCS], con bp tras ellos (convención de CALL/INVOKE_VIRTUAL). Según
@@ -6060,7 +6136,7 @@ public class VirtualMachine {
             tc.bp = savedBp;
             tc.cs = savedCs;
             tc.pc = savedPc;
-            tc.status = savedStatus; // el centinela THREAD_EXIT lo puso TERMINATED
+            tc.setStatus(savedStatus, -1, "L6110"); // el centinela THREAD_EXIT lo puso TERMINATED
             tc.yieldRequested = savedYield;
         }
     }
@@ -6088,7 +6164,7 @@ public class VirtualMachine {
         int cs = moduleManager.getModuleBaseFromPC(pc);
         int base = tc.sp;
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
-        ThreadStatus savedStatus = tc.status;
+        ThreadStatus savedStatus = tc.getStatus();
         boolean savedYield = tc.yieldRequested;
         // #302: sender es una REF → 8 bytes con gen viva (ver regenRef).
         refStore(memory, base, regenRef(sender));   // arg0 = sender (ref 8B)
@@ -6107,7 +6183,7 @@ public class VirtualMachine {
             tc.bp = savedBp;
             tc.cs = savedCs;
             tc.pc = savedPc;
-            tc.status = savedStatus;
+            tc.setStatus(savedStatus, -1, "L6157");
             tc.yieldRequested = savedYield;
         }
     }
@@ -6130,7 +6206,7 @@ public class VirtualMachine {
         int methodPc   = targetCS + methodOff;
         int base = tc.sp;
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
-        ThreadStatus savedStatus = tc.status;
+        ThreadStatus savedStatus = tc.getStatus();
         boolean savedYield = tc.yieldRequested;
         // Frame de método: [this=win(8B), sender(8B), savedPC=0, savedBP, savedCS],
         // bp tras ellos. #302: ambos son REFS → 8 bytes con gen viva (ver regenRef).
@@ -6151,7 +6227,7 @@ public class VirtualMachine {
             tc.bp = savedBp;
             tc.cs = savedCs;
             tc.pc = savedPc;
-            tc.status = savedStatus;
+            tc.setStatus(savedStatus, -1, "L6201");
             tc.yieldRequested = savedYield;
         }
     }

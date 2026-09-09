@@ -4,6 +4,7 @@ module SyncListTest
   // desde entonces: es la unica reproduccion de B1 -la carrera que obliga a
   // correr con un solo worker- y se habia quedado rancia sin que nadie lo
   // notara, porque nadie la ejecutaba. Ver docs/HECHO_V2.md (B1).
+  import Core
   import Collections
 
   // Demo de SyncList: lista builtin thread-safe.
