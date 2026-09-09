@@ -87,9 +87,8 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep, `#474` y
 > `#456`.)*
 >
-> ⏭️ **`#456` está resuelta en código y le falta UNA confirmación de Eduardo**: el único tope que
-> queda (`BPVM_FS_PATH_MAX` = 256) y si el tope debe ser **del lenguaje** —y comprobarlo también
-> miVM— para que las dos VMs no discrepen por encima de él.
+> ✅ **`#456` cerrada del todo el 9-sep**: Eduardo confirmó el único número que queda,
+> `BPVM_FS_PATH_MAX` = 256 (*«256 está bien»*).
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
@@ -6245,15 +6244,17 @@ Un fichero que el programa abría sin problema no se podía subir ni borrar desd
 **guardar** (la sesión de `PUT` por trozos, que sobrevive entre mensajes) o **construir** (la salida
 del resolvedor, el basedir que se salva y se restaura, el path que se copia del heap de la VM).
 
-⏭️ **Lo que falta hablar con Eduardo son dos cosas, las dos de una línea:**
-1. **El número.** No se puede quitar del todo: la cadena BP vive en el heap **sin terminador** y las
+✅ **El número, confirmado por Eduardo el 9-sep**: *«256 está bien.»*
+
+1. **Por qué hay número.** No se puede quitar del todo: la cadena BP vive en el heap **sin terminador** y las
    dos APIs de FS piden un `const char*` terminado en NUL, o sea que ahí hay que copiar. 256 sale de
    los 255 del FS; el techo lo pone la **pila de 8 KB de la tarea `main`** del S3/C3/C6, donde
    `repl_stat` tiene dos de estos vivos. Con 512 serían 1 KB de esa pila.
-2. **La paridad.** miVM **no tiene tope** (en Java es un `String`), así que por encima de 256 las dos
-   VMs discrepan: miVM abre el fichero y la VM-C lanza. Antes discrepaban igual, a partir de 512 y
-   **en silencio**. Si esto se quiere cerrar de verdad, el tope tiene que ser **del lenguaje** y
-   miVM comprobarlo también — que es la misma discusión de `#481`.
+2. ⏭️ **Lo único que queda vivo de aquí: la paridad.** miVM **no tiene tope** (en Java es un
+   `String`), así que por encima de 256 las dos VMs discrepan: miVM abre el fichero y la VM-C
+   lanza. Antes discrepaban igual, a partir de 512 y **en silencio**, así que esto ya es mejor;
+   pero para cerrarlo de verdad el tope tiene que ser **del lenguaje** y comprobarlo miVM también.
+   **Es la misma discusión de `#481`** y se decide allí, no aquí.
 
 ### La prueba, con su control
 
