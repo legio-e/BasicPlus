@@ -3192,7 +3192,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 if (*q == ':') { esquema = 1; break; }
             }
             if (!esquema && base[0] != '\0') {
-                snprintf(out, sizeof(out), "%s/%s", base, p);
+                /* #456 - se mide ANTES de componer: dos paths que caben por
+                 * separado pueden no caber juntos, y truncar aqui daria un
+                 * nombre que apunta a OTRO fichero. (El C3 compila con
+                 * -Werror=format-truncation y lo caza; las otras familias no:
+                 * los flags son de cada familia.) */
+                size_t lb = strlen(base), lp = strlen(p);
+                if (lb + 1u + lp + 1u > sizeof(out))
+                    return builtin_throw(vm, tc, "path demasiado largo");
+                memcpy(out, base, lb);
+                out[lb] = '/';
+                memcpy(out + lb + 1u, p, lp + 1u);
                 r = out;
             }
         }

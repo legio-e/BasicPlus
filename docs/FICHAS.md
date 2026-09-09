@@ -2098,7 +2098,7 @@ se entera»* — ese camino hay que mirarlo a la vez.
 ⏭️ Y cuando se cierre: **meter un sample que muera** en el corpus de `compat/compat.sh`. Mientras no
 lo haya, esto se puede volver a torcer sin que suene nada.
 
-#### 🔴 `#482` — la VISTA DOBLE de los packs, escrita y SIN EJERCITAR (abierta 9-sep, de la cola heredada)
+#### 🔴 `#482` — la VISTA DOBLE de los packs: ¿la necesita ALGUIEN? (abierta 9-sep, de la cola heredada · **la C3 dice que no, medido el 9-sep**)
 
 **Qué es.** El 8-sep se arregló el mapeo de packs del ESP32 con dos bases —
 `bpvm_pack_mount(base_lectura, base_ejecucion, size)` y `bpvm_pack_exec_ptr()` en el **único** sitio
@@ -2127,6 +2127,47 @@ doble funciona», no «el S3 ejecuta packs».
 
 📌 Es la lección del `-mcmodel=medany` otra vez: la ISA impuso un requisito real que sólo se vio en
 el destino. Dar por buena una arquitectura probando otra es justo el error que aquella costó.
+
+
+### 🔴 9-sep — MEDIDO EN LA C3, Y LA CLASIFICACIÓN DE ARRIBA ERA FALSA
+
+**Escepticismo de Eduardo, y tenía razón**: *«¿Seguro que el C3 hace eso? Me cuesta entender que se
+comporte diferente que el C6 o el P4. Antes de nada hay que verificar.»*
+
+Flasheada la C3 con el firmware de hoy y leído su log de arranque por el wire:
+
+```
+pack: zona 1488 KB en bpdata+0x174000 | INST ok @0x4207c000 | DATA ok @0x4207c000
+pack: zona montada en 0x4207c000 (1488 KB) — modulos y .mdn visibles
+```
+
+**Las dos vistas son LA MISMA DIRECCIÓN.** La C3 se comporta como el C6 y el P4.
+
+🔑 **De dónde salió el error, porque es la lección**: yo clasifiqué los chips leyendo si
+`soc_caps.h` declara `SOC_MMU_DI_VADDR_SHARED`. **Pero el código no mira ese macro**: decide en
+*runtime* comparando lo que devuelve `esp_partition_mmap` (`board_mgr_esp32.c:192`,
+`s_map_data != s_map_inst`). O sea que la tabla que había aquí no era una medida, era una lectura —
+y de un sitio que el programa ni consulta.
+
+### ⏭️ Y eso deja una pregunta MAYOR que la que la ficha tenía
+
+Si la C3 no tiene vistas separadas, **¿las tiene alguien?** El único candidato que queda es el
+**S3**, y esa afirmación se apoya exactamente en la misma lectura del macro que acaba de fallar.
+
+⚠️ **Si el S3 también diera una sola dirección, el mecanismo de vista doble no tendría NI UN
+USUARIO** — y lo que arregló los packs del S3 el 8-sep no habría sido la vista doble, sino la otra
+mitad de aquel cambio: **mover el mapeo al fichero común** (que es lo que dejaba al C6 sin packs por
+vivir el código en el directorio del P4). Serían dos arreglos en un commit y sólo uno haciendo el
+trabajo.
+
+📐 **La comprobación es de dos minutos y no necesita código**: el S3 ya lleva el firmware de hoy;
+basta conectarlo y leerle el log por el wire, buscando esa misma línea `pack: … INST @… | DATA @…`.
+Hasta entonces, `#482` no es «falta ejercitar el camino de ejecución»: es **«hay que averiguar si
+ese camino existe»**.
+
+📌 De paso, la C3 quedó al día: llevaba firmware **anterior al 8-sep** —su log tenía once arranques
+y ni una línea `pack:`, que es el bug del directorio del vecino— y ahora monta la zona y trae
+`Machine.mod` y el `Adc.mod` nuevo.
 
 #### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482` · 🧊 **FUERA DEL PLAN DE VERSIONES el mismo día**: *«de momento no»*)
 
