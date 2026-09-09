@@ -626,12 +626,27 @@ static void pico_pico_unique_id_impl(char* buf, size_t len) {
     }
 }
 
-/* El micro del RP2350 es uno y no depende de la placa: la Pico 2 y la Metro
- * llevan el mismo silicio y la MISMA imagen. La PLACA si cambia, y esa la da el
- * `board_desc` de abajo (variante por defecto o ENV) — que es justo el reparto
- * micro/placa que pidio Eduardo. */
+/* ── EL MICRO DEL RP2350: A o B, y lo dice EL SILICIO ──────────────────────────
+ *
+ * Correccion de Eduardo (9-sep): «en la Pico el micro es RP2350A (61 pins), en la
+ * Metro es el RP2350B (81 pins). Tenemos la misma imagen para 2 micros diferentes.
+ * En este caso, que es un poco especial, la HAL BP deberia tener una funcion
+ * INTELIGENTE que distinguiera entre los dos.»
+ *
+ * Y no hay que inventar nada: el dato ya se lee del chip. `board_desc_init` saca
+ * `SYSINFO.PACKAGE_SEL` (1 bit, de solo lectura) y su mapeo esta CONFIRMADO en
+ * placa desde el 19-jul — 1 = QFN-60 (RP2350A, Pico 2), 0 = QFN-80 (RP2350B,
+ * Metro). Es INDEPENDIENTE del FS, asi que sobrevive a un borrado de flash: una
+ * placa recien formateada sigue sabiendo que micro es.
+ *
+ * Mi primera version clavaba "rp2350" y tiraba esa informacion. Este es el unico
+ * sitio del proyecto donde UNA imagen sirve a DOS micros distintos, y por eso es
+ * el unico `getMicro()` que mira el hardware en vez de devolver una constante. */
 static void pico_pico_micro_name_impl(char* buf, size_t len) {
-    if (buf && len > 0) { strncpy(buf, "rp2350", len - 1); buf[len - 1] = '\0'; }
+    if (!buf || len == 0) return;
+    const char* micro = (board_desc()->package_sel) ? "rp2350a" : "rp2350b";
+    strncpy(buf, micro, len - 1);
+    buf[len - 1] = '\0';
 }
 
 static void pico_pico_board_name_impl(char* buf, size_t len) {
