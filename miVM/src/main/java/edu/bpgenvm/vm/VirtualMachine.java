@@ -2368,8 +2368,25 @@ public class VirtualMachine {
                                 //      (RUNNABLE+addLast, BLOCKED_SLEEP, o BLOCKED_JOIN).
                                 //   2) Preempt timer: sólo activó yieldRequested,
                                 //      tc.getStatus() sigue RUNNING → re-encolamos aquí.
-                                if (tc.getStatus() == ThreadStatus.RUNNING) {
-                                    tc.setStatus(ThreadStatus.RUNNABLE, -1, "L2343");
+                                //
+                                // 🔴 B1 — Y LA TERCERA, que era la carrera: mientras este
+                                // worker salia de runOnContext, el thread se volvio
+                                // RUNNABLE por su cuenta (p.ej. un MUTEX_UNLOCK le
+                                // entrego el mutex) y OTRO worker lo reclamo. Entonces
+                                // `getStatus()` vuelve a decir RUNNING — pero ese RUNNING
+                                // es del otro. Re-encolarlo aqui metia el mismo contexto
+                                // dos veces en la cola: dos nucleos ejecutandolo a la vez,
+                                // que es exactamente lo que B1 producia («HALT en PC
+                                // basura» con dos workers y el mismo tid).
+                                //
+                                // El estado lo mueve el PLANIFICADOR, no el que
+                                // casualmente lo estaba ejecutando (criterio de Eduardo,
+                                // 9-sep). Y aqui eso se concreta en una condicion: solo
+                                // decide sobre el thread QUIEN SIGUE SIENDO SU DUENYO.
+                                if (tc.getStatus() == ThreadStatus.RUNNING
+                                        && tc.ownerThread == Thread.currentThread()) {
+                                    tc.ownerThread = null;   // deja de ser suyo AQUI
+                                    tc.setStatus(ThreadStatus.RUNNABLE, -1, "yield");
                                     runQueue.addLast(tc.id);
                                 }
                                 vmLock.notifyAll();
