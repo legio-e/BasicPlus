@@ -128,13 +128,13 @@ void bpvm_gui_disp_init(int w, int h) {
              LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
 }
 
-void bpvm_gui_disp_pump(void) {
-    /* Una vuelta del lazo LVGL, y ceder SIEMPRE al menos un tick (tope 10 ms, #424). */
+uint32_t bpvm_gui_disp_pump(void) {
+    /* Una vuelta del lazo LVGL. El tope sigue siendo el de #424; lo que cambia
+     * (#462) es QUIEN espera: antes un vTaskDelay que paraba la tarea `vm` -y
+     * con ella todos los hilos BP-, ahora se devuelve y lo duerme el lazo BP. */
     uint32_t idle_ms = lv_timer_handler();
-    if (idle_ms > 10) idle_ms = 10;
-    TickType_t ticks = pdMS_TO_TICKS(idle_ms);
-    if (ticks == 0) ticks = 1;
-    vTaskDelay(ticks);
+    if (idle_ms > BPVM_GUI_OCIO_MAX_MS) idle_ms = BPVM_GUI_OCIO_MAX_MS;
+    return idle_ms;
 }
 
 int bpvm_gui_disp_is_open(void) { return s_open; }

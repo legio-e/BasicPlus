@@ -4203,7 +4203,7 @@ public class VirtualMachine {
             case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }
             case GUI_RUN:       { guiEventLoop(tc); pushTc(tc, 0); break; }
-            case GUI_RUN_ONCE:  { pushTc(tc, guiEventLoopOnce(tc) ? 1 : 0); break; }
+            case GUI_RUN_ONCE:  { pushTc(tc, guiEventLoopOnce(tc)); break; }
             // #324 tanda 2b — (obj, nombre) → slot de vtable. -1 si no existe:
             // "esta ventana no tiene un handler con ese nombre" es lo normal,
             // no un error, así que decide el llamante. Ver slotOfMarker.
@@ -6060,9 +6060,26 @@ public class VirtualMachine {
     private boolean guiStarted = false;
     private boolean guiClosed  = false;
 
+    /* #462 — CUANTO PUEDE DORMIR EL LAZO DEL GUI entre pasadas. El bombeo ya no
+     * se come la espera: la DEVUELVE, y el lazo BP la duerme con un `sleep` de
+     * BP, que bloquea ese hilo BP y deja que el planificador dé el turno al
+     * siguiente. Antes eran 15 ms de `Thread.sleep` DENTRO del builtin, o sea
+     * que se paraba el worker entero y con él todos los hilos BP.
+     *
+     * El tope es el mismo que midió #424 en el P4: LVGL pide su periodo de
+     * refresco (33 ms) y dormir tanto deja una pulsación esperando hasta 30 ms
+     * a que la pinten. Con 10 ms el lazo va a ~95 Hz y la respuesta es viva. */
+    private static final int GUI_OCIO_MS = 10;
+
     /**
-     * #324 — UNA pasada del bombeo, en vez del lazo entero. Devuelve true =
-     * "vuelve a llamarme", false = "no queda nada".
+     * #324 — UNA pasada del bombeo, en vez del lazo entero.
+     *
+     * #462 — DEVUELVE MILISEGUNDOS, no un booleano: -1 = "no queda nada, sal
+     * del lazo"; >= 0 = "vuelve a llamarme dentro de N ms". El lazo BP es quien
+     * duerme, porque es el único sitio donde dormir NO congela a los demás
+     * hilos BP. Eduardo: «el bucle de LVGL tiene que mirar si hay algo
+     * pendiente, si no hay nada lo que tiene que hacer es una pausa y el
+     * sistema de Threads le ha de pasar el testigo al siguiente».
      *
      * POR QUÉ. guiEventLoop bloqueaba dentro del builtin hasta cerrar la ventana,
      * y mientras tanto la VM entera estaba parada: ni avanzaban los threads ni se
@@ -6074,7 +6091,7 @@ public class VirtualMachine {
      * puede haber handlers de evento encolados que aún no han corrido. Devolver
      * false ya los perdería.
      */
-    private boolean guiEventLoopOnce(ThreadContext tc) {
+    private int guiEventLoopOnce(ThreadContext tc) {
         if (!guiStarted) { gui.start(); guiStarted = true; }
         int drained = 0;
         int[] ev;
@@ -6083,19 +6100,16 @@ public class VirtualMachine {
             if (objptr == edu.bpgenvm.gui.GuiBackend.EVENT_CLOSE) { guiClosed = true; break; }
             if (objptr != 0) { invokeGuiDispatch(tc, objptr, kind); drained++; }
         }
-        if (killRequested) return false;
+        if (killRequested) return -1;
         // Ventana cerrada: sólo se sale cuando NO queda trabajo. "Trabajo" incluye
         // los eventos BP encolados y aún sin entregar — el `raise` de un handler
         // encola, y el frame lo inyecta el scheduler ENTRE quanta, así que salir
         // aquí los perdería. Misma condición que la VM-C (builtins.c, GUI_RUN_ONCE).
-        if (guiClosed) return drained > 0 || !eventQueue.isEmpty();
-        /* Ventana viva y cola vacía: espera corta para no girar en vacío. Es el
-         * `delay` del lazo de LVGL, puesto donde el bombeo puede pagarlo sin que
-         * el lazo BP tenga que saber de tiempos. */
-        if (drained == 0) {
-            try { Thread.sleep(15); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return false; }
-        }
-        return true;
+        if (guiClosed) return (drained > 0 || !eventQueue.isEmpty()) ? 0 : -1;
+        /* Si esta pasada drenó algo puede haber más detrás: vuelve YA (0 ms) y
+         * que el quantum decida. Con la cola vacía, el ocio — y lo duerme el
+         * lazo BP, no este hilo. */
+        return (drained > 0) ? 0 : GUI_OCIO_MS;
     }
 
     /**

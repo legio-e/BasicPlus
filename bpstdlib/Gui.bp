@@ -779,12 +779,14 @@ import Json
   //
   // Con el lazo aquí, cada vuelta es una frontera de instrucción → el scheduler
   // drena. Es la misma forma que recomienda LVGL (while(1){ lv_timer_handler();
-  // delay(); }), sólo que la espera la pone el bombeo y el lazo la ignora.
+  // delay(); }) — y desde #462, TAMBIEN en la espera: LVGL dice cuanto falta y
+  // el lazo lo duerme, que es lo que hace ese patron correcto.
   //
-  // __guiRunOnce: true = "queda trabajo", false = "no queda nada".
-  // Medido en samples/GuiEvSpike.bp — sin esto, un evento levantado desde el
-  // upcall del GUI no se drenaba JAMÁS. ----
-  public intrinsic function __guiRunOnce(): boolean
+  // __guiRunOnce (#462): -1 = "no queda nada, sal"; >= 0 = "vuelve dentro de N
+  // ms". Antes devolvia un booleano y se comia la espera por dentro.
+  // Medido en samples/GuiEvSpike.bp — sin este lazo, un evento levantado desde
+  // el upcall del GUI no se drenaba JAMÁS. ----
+  public intrinsic function __guiRunOnce(): integer
 
   // ---- V6/G1 — EL LAZO, EN SU PROPIO HILO BP ----------------------------------
   //
@@ -830,7 +832,31 @@ import Json
       // puede pagarlo sin que el lazo BP tenga que saber de tiempos».
       // Poner otro `sleep` aqui no ajusta el ritmo: lo EMPEORA, porque suma una
       // segunda espera a la que ya hay.
-      while not this.parar and __guiRunOnce() do
+      // #462 - LA PAUSA LA DUERME ESTE HILO BP, no el bombeo.
+      //
+      // Antes el bombeo se comia la espera por dentro (SDL_Delay(16) en el
+      // host, vTaskDelay en el P4, __WFI en el STM32, Thread.sleep(15) en
+      // miVM). Y esa espera NO es del hilo BP: todos los hilos BP corren sobre
+      // la MISMA tarea de SO, asi que dormir ahi congelaba la VM entera. Se
+      // midio (samples/GuiHambre.bp): un hilo testigo corria 85 veces en 3
+      // segundos mientras el GUI bombeaba al lado.
+      //
+      // Ahora __guiRunOnce() hace el trabajo y DEVUELVE el ocio que le dice
+      // LVGL: -1 = "no queda nada", >= 0 = "vuelve dentro de N ms". Y quien
+      // duerme es este lazo, con un `sleep` de BP -que bloquea SOLO este hilo
+      // BP y le pasa el testigo al siguiente-. Eduardo: «si no hay nada
+      // pendiente lo que tiene que hacer es una pausa y el sistema de Threads
+      // le ha de pasar el testigo al siguiente».
+      var ocio: integer := 0
+      while not this.parar do
+        ocio := __guiRunOnce()
+        if ocio < 0 then
+          this.parar := true
+        else
+          if ocio > 0 then
+            sleep(ocio)
+          endif
+        endif
       endwh
     end run
   end HiloGui

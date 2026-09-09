@@ -1032,7 +1032,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 vm->kill_requested = 1;
             if (vm->kill_requested) break;
             if (!bpvm_gui_lvgl_window_open()) break;
-            bpvm_gui_lvgl_pump();
+            /* #462 - este lazo (el __guiRun de legado) SI bloquea por diseno: no
+             * hay hilo BP al que cederle el turno porque el builtin no vuelve.
+             * Asi que aqui la espera si va a nivel de SO. El lazo bueno es el de
+             * Gui.bp, que duerme con un `sleep` de BP. */
+            bpvm_platform_thread_sleep_ms(bpvm_gui_lvgl_pump());
         }
 #else
         /* Modelo-only (headless): drena los eventos inyectados y vuelve (paridad). */
@@ -1075,11 +1079,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (vm->io == NULL && vm->poll_cb != NULL
                 && vm->poll_cb(vm, vm->poll_user) != 0)
             vm->kill_requested = 1;
-        if (vm->kill_requested) { push_i32(vm, tc, 0); return BPVM_OK; }
+        /* #462 - el contrato cambia: -1 = "no queda nada, sal del lazo";
+         * >= 0 = "vuelve dentro de N ms". Quien duerme esos ms es el lazo BP de
+         * Gui.bp, con un `sleep` de BP -que bloquea ESE hilo BP y le pasa el
+         * turno al siguiente-. Antes se devolvia un booleano y la espera se la
+         * comia el bombeo, a nivel de SO, congelando a todos los hilos BP. */
+        if (vm->kill_requested) { push_i32(vm, tc, -1); return BPVM_OK; }
 #ifdef BPVM_LVGL
-        if (!bpvm_gui_lvgl_window_open()) { push_i32(vm, tc, 0); return BPVM_OK; }
-        bpvm_gui_lvgl_pump();
-        push_i32(vm, tc, 1);                 /* ventana viva → sigue habiendo trabajo */
+        if (!bpvm_gui_lvgl_window_open()) { push_i32(vm, tc, -1); return BPVM_OK; }
+        push_i32(vm, tc, (int32_t) bpvm_gui_lvgl_pump());   /* ventana viva: el ocio que pide LVGL */
 #else
         /* Headless: "queda trabajo" = clics drenados en ESTA pasada O eventos BP
          * ENCOLADOS sin entregar. Lo segundo es lo que hace que el lazo sirva de
@@ -1088,7 +1096,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * cuanto no hay clics deja el evento en la cola para siempre — que es
          * exactamente lo que midió samples/GuiEvSpike.bp. Girando mientras
          * ev_count>0, el lazo alcanza la frontera de quantum donde se drena. */
-        push_i32(vm, tc, (drained > 0 || vm->ev_count > 0) ? 1 : 0);
+        push_i32(vm, tc, (drained > 0 || vm->ev_count > 0) ? 0 : -1);
 #endif
         return BPVM_OK;
     }

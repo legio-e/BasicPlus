@@ -286,7 +286,7 @@ static const lv_font_t* font_for_px(int px) {
     }
 }
 
-void bpvm_gui_lvgl_pump(void)        { bpvm_gui_disp_pump(); }
+uint32_t bpvm_gui_lvgl_pump(void)    { return bpvm_gui_disp_pump(); }
 int  bpvm_gui_lvgl_window_open(void) { return g_lvgl_inited && bpvm_gui_disp_is_open(); }
 
 #endif /* BPVM_LVGL */

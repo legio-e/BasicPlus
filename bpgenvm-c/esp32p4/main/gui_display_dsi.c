@@ -560,7 +560,7 @@ void bpvm_gui_disp_init(int w, int h)
              LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
 }
 
-void bpvm_gui_disp_pump(void)
+uint32_t bpvm_gui_disp_pump(void)
 {
     /* Una iteración del lazo LVGL. La llama Gui.run() (builtins.c) entre frames; ese
      * mismo lazo polea vm->poll_cb para el KILL. Cedemos SIEMPRE >=1 tick (a 100 Hz
@@ -580,9 +580,7 @@ void bpvm_gui_disp_pump(void)
      * que decia su comentario original — ceder siempre >=1 tick para no girar
      * al 100 % ni disparar el TWDT—; lo que cambia es el numero, y ya no es
      * una corazonada. */
-    if (idle_ms > 10) idle_ms = 10;
-    TickType_t ticks = pdMS_TO_TICKS(idle_ms);
-    if (ticks == 0) ticks = 1;
+    if (idle_ms > BPVM_GUI_OCIO_MAX_MS) idle_ms = BPVM_GUI_OCIO_MAX_MS;
 
     /* #424 — EL RITMO DEL LAZO, MEDIDO (con log=1; con log=0 no cuesta ni una
      * linea). "Los eventos van lentos" es una sensacion; la magnitud que hay
@@ -605,7 +603,7 @@ void bpvm_gui_disp_pump(void)
         s_vueltas++;
         s_suma_ms += idle_ms;
         s_trab_us += (uint32_t)(esp_timer_get_time() - t0_trab);
-        if (idle_ms >= 10) s_en_tope++;
+        if (idle_ms >= BPVM_GUI_OCIO_MAX_MS) s_en_tope++;
         if (ahora - s_t0 >= 1000u) {
             uint32_t ms = ahora - s_t0;
             log_printf("gui pump: %u vueltas en %u ms (%u en el tope de 10, "
@@ -631,7 +629,13 @@ void bpvm_gui_disp_pump(void)
         }
     }
 
-    vTaskDelay(ticks);
+    /* #462 - aqui habia un vTaskDelay(ticks). Dormia la tarea `vm`, o sea TODOS
+     * los hilos BP, no solo el del GUI. Ahora el ocio se devuelve y lo duerme el
+     * lazo BP con un `sleep` de BP, que es el unico que cede el turno al
+     * siguiente hilo BP. El comentario de #424 de arriba sigue valiendo para el
+     * TOPE; lo que ya no vale es el "ceder siempre >=1 tick", porque ceder ya no
+     * se hace aqui. */
+    return idle_ms;
 }
 
 int bpvm_gui_disp_is_open(void) { return 1; }   /* micro: corre hasta KILL/reset */

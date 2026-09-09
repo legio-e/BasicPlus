@@ -125,14 +125,26 @@ size_t bpvm_gui_dump_tree(char** out);
 #ifdef BPVM_LVGL
 /* H4.2 — render real (LVGL v9). pump = una iteración del lazo (lv_timer_handler
  * + delay); window_open = false cuando el usuario cierra. */
-void bpvm_gui_lvgl_pump(void);
+uint32_t bpvm_gui_lvgl_pump(void);
 int  bpvm_gui_lvgl_window_open(void);
 
 /* H5.1 — backend de display (lo provee la PLATAFORMA; gui.c lo llama tras
  * lv_init()): host = SDL (src/gui_display_sdl.c), micro = LTDC (port/). El resto
  * del render —creación de widgets— es portable y vive en gui.c. */
 void bpvm_gui_disp_init(int w, int h);   /* tick + display + (host) input/cierre */
-void bpvm_gui_disp_pump(void);           /* lv_timer_handler + ceder CPU */
+/* #462 - EL TOPE DE OCIO del lazo del GUI, y no es una corazonada: lo midio
+ * #424 en el P4. LVGL pide su periodo de refresco (33 ms) y dormir tanto deja
+ * una pulsacion esperando hasta 30 ms a que la pinten; con 10 ms el lazo va a
+ * ~95 Hz. Mismo numero que GUI_OCIO_MS en miVM, y por eso esta aqui y no
+ * repetido en las cuatro cinturas. */
+#define BPVM_GUI_OCIO_MAX_MS  10
+
+/* #462 - UNA vuelta del bombeo. Hace el trabajo y DEVUELVE los milisegundos que
+ * LVGL dice que puede estar ocioso (ya topados a BPVM_GUI_OCIO_MAX_MS). NO
+ * duerme: dormir aqui bloquea la tarea de SO, y sobre esa tarea corren TODOS
+ * los hilos BP -asi que congelaba la VM entera en vez de ceder el turno-. Quien
+ * duerme es el lazo BP de Gui.bp, con un `sleep` de BP. */
+uint32_t bpvm_gui_disp_pump(void);
 int  bpvm_gui_disp_is_open(void);        /* host: ventana abierta; micro: 1 si corre */
 void bpvm_gui_disp_set_rotation(int deg);/* orientación en runtime (deg validado por gui.c); sin soporte: no-op con aviso */
 /* V6/P2.3 — el tamaño FÍSICO del panel, si el display lo sabe. Decisión de Eduardo

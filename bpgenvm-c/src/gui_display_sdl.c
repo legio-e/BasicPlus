@@ -336,8 +336,8 @@ void bpvm_gui_disp_init(int w, int h) {
     else { printf("[gui] aviso: sin windowID → los clics del guión no llegarán\n"); fflush(stdout); }
 }
 
-void bpvm_gui_disp_pump(void) {
-    lv_timer_handler();
+uint32_t bpvm_gui_disp_pump(void) {
+    uint32_t idle_ms = lv_timer_handler();
     /* BPVM_GUI_SHOT_MS: se lee en el primer pump (aquí SDL ya está arrancado, así
      * que SDL_GetTicks() vale) y la cuenta arranca desde el primer frame, que es
      * el instante que le importa a quien pide la captura. */
@@ -375,7 +375,12 @@ void bpvm_gui_disp_pump(void) {
          * delante que quiere seguir mirando. */
         if (g_shot_env_read && getenv("BPVM_GUI_SHOT_MS")) g_window_closed = 1;
     }
-    SDL_Delay(16);
+    /* #462 - antes aqui habia un SDL_Delay(16) INCONDICIONAL, que ademas tiraba
+     * lo que lv_timer_handler acababa de contestar. Y no dormia el hilo BP del
+     * GUI: dormia la tarea de SO sobre la que corren TODOS los hilos BP. Ahora
+     * el ocio se devuelve y lo duerme el lazo BP. */
+    if (idle_ms > BPVM_GUI_OCIO_MAX_MS) idle_ms = BPVM_GUI_OCIO_MAX_MS;
+    return idle_ms;
 }
 
 int  bpvm_gui_disp_is_open(void) { return !g_window_closed; }

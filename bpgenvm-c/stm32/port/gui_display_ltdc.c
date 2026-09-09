@@ -132,15 +132,20 @@ void bpvm_gui_disp_init(int w, int h) {
     lv_indev_set_read_cb(touch, gt911_read_cb);
 }
 
-void bpvm_gui_disp_pump(void) {
-    /* Procesa timers/render de LVGL y DUERME hasta la próxima IRQ (__WFI): el
-     * SysTick (1 ms) marca el ritmo del lazo y la IRQ de RX despierta al instante
-     * si llega un byte. El RX entra por IRQ→ring (stm32_wire.c, DK2), NO por
-     * sondeo, así que el KILL durante Gui.run() no se pierde aunque durmamos entre
-     * frames — y no giramos al 100% de CPU. lv_timer_handler se auto-regula por
-     * lv_tick (no re-renderiza de más). */
-    lv_timer_handler();
-    __WFI();
+uint32_t bpvm_gui_disp_pump(void) {
+    /* Procesa timers/render de LVGL y DEVUELVE el ocio que pide.
+     *
+     * #462 — aqui habia un __WFI(), que duerme el NUCLEO hasta la siguiente IRQ.
+     * No giraba al 100 % de CPU, que era su motivo, pero paraba la tarea `vm` y
+     * con ella TODOS los hilos BP: el lazo del GUI se llevaba el turno y nadie
+     * mas corria. Ahora el ocio lo duerme el lazo BP (`sleep` de BP), que cede
+     * el turno al siguiente hilo BP; y cuando no queda ninguno ejecutable es el
+     * planificador quien duerme, por el mismo camino de siempre.
+     *
+     * lv_timer_handler se auto-regula por lv_tick (no re-renderiza de mas). */
+    uint32_t idle_ms = lv_timer_handler();
+    if (idle_ms > BPVM_GUI_OCIO_MAX_MS) idle_ms = BPVM_GUI_OCIO_MAX_MS;
+    return idle_ms;
 }
 
 /* H5.1: sin "ventana que cerrar"; Gui.run() corre hasta reset. El KILL por el
