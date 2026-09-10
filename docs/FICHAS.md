@@ -2383,6 +2383,40 @@ Con eso a la vista, las dos formas de decidir cuánto dormir se ven claras, y **
 peldaño actual de la escalera. La escalera no sustituye a nada de lo que ya hay — **rellena el hueco
 que queda**.
 
+🧭 **LOS DOS CASOS — Eduardo, 10-sep:** *«Tal como yo lo veo hay 2 casos: 1 — el usuario indica
+expresamente que no va a hacer nada; 2 — el usuario no está prestando atención y la tarea se ha
+terminado.»*
+
+**Y no son dos formas de detectar lo mismo: son dos regímenes distintos, porque cambia QUIÉN ACEPTA
+LAS CONSECUENCIAS.** Ahí está la utilidad de partirlo así:
+
+| | **caso 1 — declarado** | **caso 2 — inferido** |
+|---|---|---|
+| quién decide | el programa, con un verbo | el sistema, solo |
+| quién acepta el coste | **el programador** | **nadie** |
+| qué se puede apagar | mucho: periféricos, relojes, incluso perder el wire — porque alguien lo pidió | sólo lo que se pueda recuperar **como si no hubiera pasado nada** |
+| profundidad | hasta donde diga el verbo | topada por la transparencia |
+| latencia al volver | asumida | no se puede notar |
+
+🔑 **La consecuencia práctica, y es la que más ordena el diseño: el caso 2 tiene que ser
+TRANSPARENTE.** Si nadie ha pedido dormir, nadie ha aceptado perder nada — así que el caso 2 **no
+puede tirar la conexión del wire** (el IDE podría estar enganchado), ni perder un evento, ni
+retrasar un `sleep` de un hilo BP. Es una optimización invisible o no es. El caso 1 sí puede tirar el
+wire, **porque el programa lo ha pedido**.
+
+📌 **No son alternativas, se componen**: el caso 2 es el **suelo** —siempre puesto, automático,
+invisible, y es exactamente donde encaja la escalera— y el caso 1 es la **salida explícita** para
+cuando el programa sabe más de lo que el sistema puede inferir («voy a estar 10 minutos sin hacer
+nada, despiértame con el botón»).
+
+⚠️ **La trampa del caso 2, dicha entera: «el usuario no está prestando atención» NO es observable
+por el micro.** Lo que el micro puede observar es *no hay nada pendiente ni nada que venza pronto*.
+No es lo mismo: un registrador de datos sin ningún usuario delante está *siempre* desatendido y no
+debe dormirse a través de su siguiente muestreo. Así que el disparador del caso 2 no es «nadie mira»
+sino **«nada pendiente Y nada que venza antes de que yo despierte»** — que es, otra vez, la misma
+lista de antes (wire, hilos BP listos, `sleep` que vence, eventos en cola), ahora usada para decidir
+*cuánto* dormir y no sólo *si* dormir.
+
 ⏭️ **V7, y es un ESTUDIO, no una implementación.** El censo de las cinco familias está lanzado
 (10-sep) y su resultado se pega aquí. Lo que falta después: **sin amperímetro no hay números** —
 decir qué hace el código es gratis, decir cuántos mA necesita instrumento.
