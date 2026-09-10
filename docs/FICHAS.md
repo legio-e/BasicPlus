@@ -2328,12 +2328,41 @@ Contesta de una vez a las dos que `V6_IDEAS.md:404-431` dejó sin cerrar, y **el
 - ✅ **El límite deja de ser un número inventado y pasa a ser el honesto**: la memoria — y visible,
   porque el guardián de fin de RUN (`#339`) ya dice quién se quedó qué.
 
+🔓 **Y LO QUE CIERRA EL CÍRCULO: el destructor ya está diseñado, y esta propuesta DESARMA la única
+objeción que tenía.** Eduardo, el mismo día: *«si el GC va a liberar el objeto y ejecuta el
+destructor, éste puede encargarse de cerrar el fichero.»*
+
+El diseño de destructores es suyo y es de **cuatro capas** (`docs/V5_IDEAS.md:2496`, 9-ago), con
+`~Clase()` disparado por **fin de ámbito** —desazucarado a `try/finally`, **cero cambios en las VMs**—
+y con las capas 3 y 4 (el agotamiento GRITA, y el fin de RUN suelta y CUENTA) como red. Sintaxis ya
+decidida: `function ~Db()`, y verificado que `~` no se usa en ninguna fuente del frontend.
+
+Dejó **una sola cosa abierta**: *«¿corre `~Clase()` si el objeto muere SIN `owner` ni bloque, recogido
+por el GC?»*. Y la recomendación escrita era **que no**, con este argumento:
+
+> *«el GC corre por presión de MEMORIA, y un descriptor o un statement son otro recurso escaso. Con 8
+> descriptores agotados y el heap al 3 %, el GC no tiene motivo para pasar y el destructor no correría
+> nunca.»*
+
+🔑 **Ese argumento deja de aplicar si el buffer vive DENTRO del objeto**, y ahí está lo elegante de la
+propuesta: si el recurso escaso **es** el heap, quedarse sin ficheros abiertos **es** presión de
+memoria — así que el GC sí tiene motivo para pasar y el destructor sí corre. La objeción no se rebate:
+**se disuelve**, porque desaparece la premisa.
+
+📐 **De ahí sale una regla de diseño, y conviene fijarla**: **todo el estado por fichero va en el
+objeto**, no sólo el buffer. Si una parte se queda en un `FIL` estático del driver, para esa parte la
+objeción original sigue viva y se vuelve al mismo sitio. Con todo dentro, la contabilidad es honesta:
+un fichero abierto cuesta heap, se ve, y se recupera por el mismo camino que todo lo demás.
+
 ⚠️ **Lo que la propuesta NO resuelve sola:**
 1. **El GC hoy no avisa a nadie al recoger**: no hay finalizador ni gancho (`grep finaliz|destructor|
    on_collect` en `heap.c` e `bpvm_internal.h` → cero). Liberar la memoria **no cierra el fichero**:
-   littlefs y FatFs guardan su propio estado. Para que la red funcione, el GC tiene que aprender a
-   llamar a `close` al recoger — maquinaria nueva, pequeña y acotada, y es la respuesta de diseño a la
-   pregunta 1 de `V6_IDEAS` (*«¿qué pasa si no se cierra?»*).
+   littlefs y FatFs guardan su propio estado. Hace falta que el GC llame al destructor al recoger —
+   maquinaria nueva, pequeña y acotada, y **es la quinta capa** que el diseño de 9-ago dejó fuera a
+   propósito. ⚠️ Con el cuidado clásico: el destructor es código BP, así que **no puede correr DENTRO
+   de la pasada del GC** — la forma sana es una lista de pendientes que la VM vacía después. Y la
+   **paridad** obliga a que miVM haga lo mismo: no puede apoyarse en `finalize()` de Java, que está
+   deprecado desde la 9 y quitado en la 18.
 2. **La red no sustituye a `close()`**: el GC recoge cuando recoge, así que un fichero puede quedar
    abierto mucho después de ser inalcanzable — y en un micro eso importa (estado del driver, y en la SD
    la caché de escritura). Que es como Eduardo lo planteó: *«en caso de cuelgue o error»*.
