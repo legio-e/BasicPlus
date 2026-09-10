@@ -3055,11 +3055,38 @@ LTDC sigue escaneando 800×480 —su `disp_set_rotation` es literalmente `(void)
 se dimensionan con el ancho del **modelo** (`Gui.bp:932`). El programa de prueba es
 `samples/RotaDk2.bp`.
 
-⏭️ **Lo que queda de esta ficha**: los ~57 hallazgos de tipo `incomodo`/`cosmetico`, y **una
-medida pendiente de placa**: si el hilo que se borra a sí mismo (`vTaskDelete(NULL)` en la Pico y el
-ESP32) filtra memoria de verdad, como le pasó a la Nucleo el 5-sep. Hace falta una Pico o una ESP32
-conectada; con la Discovery no se puede, porque es la única familia que ya usa el backend común
-arreglado.
+🔬 **LA MEDIDA PENDIENTE, HECHA (10-sep) — y el hallazgo se cae por la mitad.** La pregunta era si
+el hilo que se borra a sí mismo (`vTaskDelete(NULL)`, vivo en la Pico y el ESP32) filtra memoria como
+le pasó a la Nucleo. **En la Pico NO filtra**, y no es una impresión:
+
+| | |
+|---|---|
+| control | 5 `INFO` seguidos sin ejecutar nada: `rtosHeapMinFree` clavado en 16104 |
+| 40 × `RUN /app/Hello.mod` | 16104 → **10920 en el primer RUN, y ahí se queda los 40** |
+| 15 × `RUN /app/Bench.mod` (la VM ocupada calculando, que es la condición que mató a la Nucleo) | **10920, plano** |
+
+La marca de agua es *mínimo histórico libre*: sólo baja. Una fuga de un solo byte por RUN la habría
+hecho bajar 55 veces. Y el camino **se ejecuta**: cada RUN crea y une el hilo `io`
+(`bpvm_io_start` en `pico/repl_v1.c:1295`) por ese mismo trampolín de 4 KB.
+
+**El porqué, comprobado en los dos extremos** — el mecanismo es quién cede el turno a la tarea
+ociosa, que es quien recicla la pila de una tarea borrada:
+
+| familia | su lazo del wire | ¿la ociosa recibe turno? |
+|---|---|---|
+| Pico | `vTaskDelay(10 ms)` cuando no hay nada que leer (`pico/repl_v1.c:1723`) | **sí** |
+| ESP32 | `wire_read_byte(100)` — bloquea ≤100 ms cediendo CPU (`esp32/common/wire_v1.c:112`) | **sí** |
+| STM32 | `stm32_wire_getchar()` devuelve −1 y el lazo gira con `continue`; el de arriba (`stm32_repl.c:865`) tampoco cede, y la tarea `vm` va a `tskIDLE_PRIORITY + 2` (`Discovery_u5g9j/Core/Src/main.c:173`) | **no** |
+
+Así que la Nucleo no murió por `vTaskDelete(NULL)`: murió porque **su lazo del wire no cede nunca**.
+`vTaskDelete(NULL)` sólo era la parte que se apoyaba en la ociosa. El arreglo del común (suspender y
+que borre `join`) es correcto igual —no depende de que nadie tenga turno—, pero **la Pico y el ESP32
+no estaban expuestas**: el hallazgo acertaba en la duplicación y erraba en la consecuencia.
+
+⏭️ **Lo que queda de esta ficha**: los ~57 hallazgos de tipo `incomodo`/`cosmetico`. Y una nota que
+no es ficha porque no tiene consecuencia conocida hoy: en el STM32 **la tarea ociosa no corre nunca**,
+así que cualquier cosa que FreeRTOS difiera a la ociosa allí no ocurre. El único que se apoyaba en
+ella era el borrado de tareas, y ya no.
 
 #### 🧬 `#479` — EL MAPA DE PINES Y LOS PINES ANALÓGICOS → **V7** (abierta 6-sep, decidida a V7 el mismo día)
 
