@@ -2279,6 +2279,45 @@ disparó el escepticismo de Eduardo (*«¿seguro? Antes de nada hay que verifica
 📌 De paso, **la C3 quedó al día**: llevaba firmware anterior al 8-sep, y ahora monta la zona de
 packs y trae `Machine.mod` y el `Adc.mod` nuevo.
 
+#### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V7** (abierta 10-sep, decidida a V7 el mismo día)
+
+**La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
+nada que hacer, en un micro con alimentación da igual lo que haga, pero si fuese un micro que
+funciona con baterías lo ideal es que se durmiese. ¿Cómo está ahora?»*
+
+Y acto seguido, la frase que decide el diseño entero: 🔑 ***«casi todos los micros tienen un modo de
+bajo consumo; lo difícil no es entrar en él, lo difícil es programar qué es lo que lo hace salir»***.
+
+**Por qué eso lo cambia todo.** Entrar es una instrucción (`WFI`, `esp_light_sleep_start`, el Stop
+del U5). Salir es un **contrato**: hay que declarar *de antemano* qué evento despierta, y ese
+contrato es lo que no existe hoy en BP. Un `Machine.sleep()` a secas sería un cuelgue con otro
+nombre. Las preguntas reales son de lenguaje, no de silicio:
+- ¿Quién declara las fuentes de despertar — el programa, o la placa?
+- ¿Qué pasa con los hilos BP dormidos: el `sleep(200)` de un hilo, ¿es una fuente de despertar?
+- ¿Y el wire? Si el IDE está conectado, la placa **no puede** dormirse sin perder la conexión; si no
+  lo está, sí. Eso hace que el modo dependa de si hay alguien mirando.
+- ¿Y la GUI? Un panel encendido consume más que el core; dormir el micro con la pantalla viva no
+  ahorra gran cosa.
+
+📌 **Es la misma forma que `#479` (el mapa de pines) y que los arrays de buses de `#470`**: qué pines
+y qué periféricos pueden despertar, y qué se conserva en cada modo, es **verdad de silicio** — va en
+la cintura de cada micro y viaja compilada en su imagen, no en el ENV. Conviene resolverlas juntas.
+
+**Lo que se sabe ya, y es poco**: no hay ni una línea escrita sobre consumo en todo `docs/`. Y hay un
+dato duro, medido el 10-sep por otro motivo (`#473`/R16): **en el STM32 la tarea ociosa no corre
+nunca** —su lazo del wire gira con `continue` sin ceder y la tarea `vm` va a `tskIDLE_PRIORITY+2`—,
+así que esa familia ni siquiera llega al escalón previo de poder dormir. Y es la familia de bajo
+consumo de ST, o sea el peor sitio donde tener eso.
+
+⚠️ **Los tres escalones que se confunden**, y hay que mantenerlos separados en todo el estudio:
+(a) el hilo cede la CPU · (b) la tarea ociosa corre · (c) el **micro** entra en bajo consumo.
+Sólo (c) se nota en el amperímetro. Hoy la Pico y el ESP32 llegan a (a) con seguridad; (b) y (c)
+están por censar.
+
+⏭️ **V7, y es un ESTUDIO, no una implementación.** El censo de las cinco familias está lanzado
+(10-sep) y su resultado se pega aquí. Lo que falta después: **sin amperímetro no hay números** —
+decir qué hace el código es gratis, decir cuántos mA necesita instrumento.
+
 #### 🔴 `#489` — la cola del GUI de la VM-C DESCARTA EN SILENCIO cuando se llena (abierta 10-sep)
 
 **Salió contestando a Eduardo** sobre cuánto tarda una tecla del teclado virtual en procesarse:
