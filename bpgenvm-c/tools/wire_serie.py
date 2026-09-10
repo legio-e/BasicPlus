@@ -169,6 +169,46 @@ def cmd_run(w, args):
         print("   basura:", b)
 
 
+def cmd_get(w, args):
+    """Baja un fichero y CRONOMETRA (V6/#473 punto 4: ¿abre una vez o una por trozo?).
+
+    OJO, y me costo una medida invalida: NO se puede usar esperar() aqui. Ese trocea
+    por lineas, asi que se COMIA el bulk crudo y lo tiraba a la basura — el control
+    (littlefs, que si tiene read_stream) salia peor que el caso sospechoso, que es
+    la senal de que el instrumento miente. Aqui se lee el byte crudo a mano."""
+    import json as _json
+    remoto = args[0]
+    w.s.reset_input_buffer(); w.buf = b""
+    t0 = time.time()
+    w.send("GET", path=remoto)
+    # 1. la linea de cabecera, byte a byte hasta el salto
+    linea = b""
+    tope = time.time() + 15
+    while time.time() < tope:
+        c = w.s.read(1)
+        if not c: continue
+        if c == b"\n":
+            if linea.strip().startswith(b"{"): break
+            linea = b""; continue
+        linea += c
+    try:
+        r = _json.loads(linea.strip().decode("utf-8", "replace"))
+    except Exception:
+        print("GET %s: sin cabecera valida (%r)" % (remoto, linea[:120])); return
+    if r.get("type") != "GET_REPLY":
+        print("GET %s: %s %s" % (remoto, r.get("type"), r.get("message", ""))); return
+    n = int(r.get("bulk", 0))
+    # 2. exactamente n bytes crudos, sin interpretar nada
+    datos = b""
+    tope = time.time() + 120
+    while len(datos) < n and time.time() < tope:
+        c = w.s.read(min(4096, n - len(datos)))
+        if c: datos += c
+    ms = (time.time() - t0) * 1000.0
+    kbs = (len(datos) / 1024.0) / (ms / 1000.0) if ms > 0 else 0
+    estado = "completo" if len(datos) >= n else ("INCOMPLETO %d/%d" % (len(datos), n))
+    print("GET %-22s %7d B  %8.0f ms  %6.1f KB/s  %s" % (remoto, n, ms, kbs, estado))
+
 def cmd_ciclo(w, args):
     """#379 — run -> stop -> INFO, N veces. Si el wire se desincronizara tras el
     Stop, el INFO de despues no llegaria."""
@@ -197,7 +237,7 @@ def cmd_ciclo(w, args):
 
 
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
-            "put": cmd_put, "puts": cmd_puts, "run": cmd_run}
+            "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:

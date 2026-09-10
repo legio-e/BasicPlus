@@ -2300,16 +2300,67 @@ el handle**»*. Y sus dos preguntas abiertas son exactamente las que hacían fal
 cierra?** (BP no tiene destructores; la red que ya existe es el guardián de fin de RUN de `#339`) y
 **¿cuántos ficheros a la vez?** — la misma que se planteó de cero al abrir esta ficha.
 
-⚠️ **Dónde se quedó, que es lo que Eduardo preguntaba: en ningún sitio.** Estaba pensado para V6
-—`docs/ESTADO.md:3008` habla de *«al diseñar `File`/`TextFile` para V6»*— pero **nunca se convirtió
-en ficha**, así que no entró en el plan de ninguna versión y no hay ni una línea de código
-(`grep TextFile` en stdlib, miVM, frontend y VM-C: cero).
+⚠️ **CORRECCIÓN — dónde se quedó: dentro de `L1`, que se fue a V7 el 5-sep.** `docs/FICHAS.md:4572`
+lo lista explícitamente entre lo que `L1` se lleva —*«destructores + `var owner`, **ficheros como
+clase**, `Object` comodín, `Map` con objetos, el módulo `Time`»*—, con el criterio de que son
+*«añadidos, no arreglos»*. Estaba pensado para V6 (`docs/ESTADO.md:3008`), pero **nunca tuvo ficha
+propia**. Y no hay ni una línea de código: `grep TextFile` en stdlib, miVM, frontend y VM-C da cero,
+ni un id de builtin reservado.
 
-🔑 **Y ésa es la lección, más cara que el trabajo perdido**: una decisión que vive sólo en un
-`*_IDEAS.md` **no existe para el plan**. `FICHAS.md` es la fuente única precisamente para esto, y
-aquí se ve el coste de saltárselo: un diseño cerrado, con molde en casa (`Net.Tcp`) y con la
-fontanería ya hecha y rodada (`read_at`/`write_at`, que SQLite usa a diario), se quedó fuera nueve
-meses sin que nada lo dijera.
+📌 **La lección es más pequeña de lo que yo dije, pero sigue siendo lección**: no se perdió —está en
+`L1`— pero **una decisión sin ficha propia es invisible en la práctica**, porque *«¿qué hay abierto?»*
+se contesta con la lista de fichas, no releyendo los hitos uno por uno. Por eso esta ficha existe.
+
+🧱 **CÓMO SE CIERRAN LAS DOS PREGUNTAS ABIERTAS — propuesta de Eduardo (10-sep):** *«Si hacemos que un
+fichero BP sea un objeto, éste se alojaría en el heap. Dentro del objeto puede haber un array de bytes
+que sirva de buffer. Así no haría falta limitar el número de handlers de ficheros, y en caso de cuelgue
+o error el GC acabaría recolectando el objeto.»*
+
+Contesta de una vez a las dos que `V6_IDEAS.md:404-431` dejó sin cerrar, y **el terreno lo aguanta**:
+
+- ✅ **El GC NO COMPACTA** (`src/heap.c:119`: *«F2 v1: no compacta (no mueve objetos)»*; `:364`:
+  *«este GC no compacta, así que retener nunca corrompe»*). Es justo la condición que hacía falta: el
+  driver del FS puede quedarse con el puntero al buffer entre llamadas sin que se le mueva debajo.
+- ✅ **Y no rompe la regla de la casa.** `src/fs_lfs.c:86` exige *«CERO malloc en las ops de fichero
+  (obligatorio en micro)»*, y por eso hoy hay **dos** buffers estáticos de 256 B — o sea que el límite
+  real de littlefs son **DOS ficheros abiertos**, no el `FIL` de FatFs. Un array en el heap de la VM
+  **no es malloc**: la regla sobrevive y el límite arbitrario desaparece.
+- ✅ **El límite deja de ser un número inventado y pasa a ser el honesto**: la memoria — y visible,
+  porque el guardián de fin de RUN (`#339`) ya dice quién se quedó qué.
+
+⚠️ **Lo que la propuesta NO resuelve sola:**
+1. **El GC hoy no avisa a nadie al recoger**: no hay finalizador ni gancho (`grep finaliz|destructor|
+   on_collect` en `heap.c` e `bpvm_internal.h` → cero). Liberar la memoria **no cierra el fichero**:
+   littlefs y FatFs guardan su propio estado. Para que la red funcione, el GC tiene que aprender a
+   llamar a `close` al recoger — maquinaria nueva, pequeña y acotada, y es la respuesta de diseño a la
+   pregunta 1 de `V6_IDEAS` (*«¿qué pasa si no se cierra?»*).
+2. **La red no sustituye a `close()`**: el GC recoge cuando recoge, así que un fichero puede quedar
+   abierto mucho después de ser inalcanzable — y en un micro eso importa (estado del driver, y en la SD
+   la caché de escritura). Que es como Eduardo lo planteó: *«en caso de cuelgue o error»*.
+3. **Aperturas duplicadas**: FatFs está con `FF_FS_LOCK 0`, sin control de abrir dos veces el mismo
+   fichero. Sin límite de handles, N escritores sobre el mismo fichero no se quejan. Decisión aparte, y
+   de corrección, no de memoria.
+
+📏 **PUNTO 4 DE `#473`: MEDIDO Y RESUELTO** (10-sep, en la Metro con su SD de 32 GB), con su control:
+
+| | 120 KB | 480 KB | caudal |
+|---|---|---|---|
+| **littlefs** (`/app`, **con** `read_stream`) — el CONTROL | **212 ms** | — | 566 KB/s |
+| **FAT** (`/sd`, **sin** `read_stream`) | **1368 ms** | **6040 ms** | ~80-88 KB/s |
+
+**Es 6,4× más lento, pero NO está roto**: 1,4 s para 120 KB, lejos de los 10 s del timeout del IDE. Y
+**no es cuadrático** — 4× el tamaño da **4,4×** el tiempo, no 16×. La medida prestada de `#453` (que sí
+reventaba los 10 s) era de **littlefs en un S3**: otro backend y otro chip. ⏭️ **El punto 4 no entra en
+V6: se queda aquí**, y desaparece solo el día que exista el cursor.
+
+⚠️ **Y la primera medida fue INVÁLIDA — lo dijo el control**: el `GET` de littlefs, que es el caso
+bueno, salía peor que el sospechoso. El fallo era mío: `cmd_get` usaba `esperar()`, que trocea por
+líneas y **se comía el bulk crudo**. Sin control, habría publicado que las dos zonas son igual de
+lentas. Arreglado leyendo el payload a pelo, y el porqué queda en la docstring de la herramienta.
+
+🩹 **Hay una CUARTA recaída, y es de ESCRITURA**: la ficha `#475` dice *«no existe escritura en
+streaming: sólo hay `read_stream`. Escribir por bandas con la fachada de hoy son N commits, no uno —
+el patrón que costó 45× en `#398`»*. La enfermedad ya ha salido por los dos lados.
 
 ⏭️ **Así que esta ficha ABSORBE aquel diseño** y son la misma cosa por los dos lados: `File`/`TextFile`
 es la mitad de arriba (superficie BP) y el cursor de la fachada es la de abajo. La de abajo hace falta
