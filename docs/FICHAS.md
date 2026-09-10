@@ -3441,11 +3441,45 @@ triaje):
    `tx_lock` dentro de `send_line`). Las otras cuatro escriben sin cerrojo. Depurando en placa, el
    IDE puede recibir dos JSON entrelazados: corrupción de framing, no estética, y **no existe en el
    PC**.
-3. **`Uart.available()` contesta un BOOLEANO en la Pico** donde su propio contrato dice *«cuántos
-   bytes»* (`include/bpvm_uart.h:16-17`): `uart_is_readable(inst) ? 1 : 0` (`pico/main.c:376-378`).
-   El ESP32 cumple (`gpio_esp32.c:249-254`) y el STM32 devuelve `-1` diciendo honestamente que no lo
-   soporta. **`if Uart.available() >= 4` no se cumple NUNCA en la Pico** con 40 bytes esperando, y sí
-   en el ESP32 con el mismo programa. Silencioso, y en la familia de referencia.
+3. **`Uart` pierde bytes en la Pico y en el STM32 — y `available()` sólo era el síntoma.**
+   El hallazgo del auditor era que la Pico contesta un booleano donde su contrato dice *«cuántos
+   bytes»* (`include/bpvm_uart.h:16-17` vs `uart_is_readable(inst) ? 1 : 0`, `pico/main.c:376-378`),
+   con el ESP32 cumpliendo (`gpio_esp32.c:249-254`) y el STM32 devolviendo `-1` honestamente. Cierto:
+   `if Uart.available() >= 4` **no se cumple NUNCA en la Pico** con 40 bytes esperando, y sí en el
+   ESP32 con el mismo programa.
+
+   🔑 **Pero Eduardo va al fondo (10-sep)**: *«las UARTs a veces tienen un pequeño buffer que siempre
+   se queda corto, así que hay que añadir un buffer externo que lo amplíe. Eso es necesario yo diría
+   que siempre, así que no se trata de adaptarse al hardware sino que el hardware y el software se
+   adapten a nuestras necesidades.»*
+
+   Y con eso a la vista, el censo dice que el problema es **mayor** que el `available()`:
+
+   | familia | buffer RX de `Uart` | `available()` |
+   |---|---|---|
+   | **ESP32** | **512 B por software**, alimentado por la ISR del driver de IDF (`ESP32_UART_RX_BUF`, `gpio_esp32.c:190,232`) | la cuenta real |
+   | **Pico** | **ninguno** — sólo el FIFO de 32 B del PL011; **cero IRQ, cero anillo** | `1` ó `0` |
+   | **STM32** | **ninguno** — `HAL_UART_Receive` bloqueante sobre el registro (`gpio_stm32.c:539`) | `−1` |
+
+   O sea: **en la Pico y en el STM32 un programa BP PIERDE BYTES** en cuanto llegan más de los que
+   caben en el FIFO antes de que él lea. El ESP32 ya hace lo que Eduardo describe. Así que no es
+   «arreglar el contador»: es **dar el buffer que el contrato ya prometía**.
+
+   ➕ **Y su segundo apunte, que decide el CÓMO**: *«muchas familias soportan DMA para los
+   buffers.»* Comprobado: **hoy no usamos DMA en ninguna parte** — ni siquiera está enlazada
+   `hardware_dma` en la Pico; en el STM32 lo único que aparece es config de trigger que generó
+   CubeMX. Sería infraestructura nueva entera. Eso parte el trabajo limpiamente:
+
+   - **V6 — el buffer, por IRQ.** Es lo que quita la pérdida de bytes y hace verdad el contrato. El
+     patrón ya está escrito en casa: `stm32/port/stm32_wire.c:71-78` es exactamente un anillo
+     alimentado por IRQ, para el wire.
+   - **V7 — DMA donde la familia lo tenga.** A velocidades altas una IRQ por byte cuesta CPU, y
+     además **despierta al micro por cada byte**, que enlaza directo con `#490`. Con DMA circular
+     los bytes entran sin CPU y `available()` sale del contador del DMA.
+
+   🔑 **Y lo que hace que las dos cosas quepan sin tocar el lenguaje**: la fachada no dice *«usa
+   IRQ»* ni *«usa DMA»* — dice **«hay un buffer de N bytes y `available()` te dice cuántos hay
+   dentro»**. Cómo se llena es asunto de la cintura de cada micro. Es la forma de HAL BP de siempre.
 4. **`read_stream` no existe en el backend FAT** — está en littlefs (`src/fs_lfs.c:407`, *«#453 —
    472 aperturas por 120 KB»*) y no en `src/fs_fat.c`. El respaldo de `fs_facade.c:466-482` es un
    bucle de 256 B con `f_open+f_lseek+f_read+f_close` **por trozo**, y el propio fichero documenta
