@@ -1,0 +1,90 @@
+// ScanCn1.bp — ¿donde esta el puente? Recorre los 16 pines del conector CN1 de
+// la DK2, pone uno a 1 y lee los demas con pull-down. El par que se sigue es el
+// cable. Sirve para no volver a adivinar en que pines esta.
+//
+// Numeracion BP del STM32: pin = (puerto << 4) | bit, con A=0, B=1, C=2...
+module ScanCn1
+  import Gpio
+  import Core
+
+  function nombre(p: integer): string
+    var puerto: string := "?"
+    var i: integer := p / 16
+    if i == 0 then
+      puerto := "A"
+    endif
+    if i == 1 then
+      puerto := "B"
+    endif
+    if i == 2 then
+      puerto := "C"
+    endif
+    if i == 3 then
+      puerto := "D"
+    endif
+    if i == 4 then
+      puerto := "E"
+    endif
+    if i == 5 then
+      puerto := "F"
+    endif
+    if i == 6 then
+      puerto := "G"
+    endif
+    return "P" + puerto + (p mod 16)
+  end nombre
+
+  function Main()
+    // CN1: PB1 PB7 PB8 PC0 PC10 PC11 PC12 PD5 PD7 PE2 PE3 PF2 PG9 PG10 PG12 PG15
+    var pins: integer[] := newIntArray(16)
+    pins[0] := 17
+    pins[1] := 23
+    pins[2] := 24
+    pins[3] := 32
+    pins[4] := 42
+    pins[5] := 43
+    pins[6] := 44
+    pins[7] := 53
+    pins[8] := 55
+    pins[9] := 66
+    pins[10] := 67
+    pins[11] := 82
+    pins[12] := 105
+    pins[13] := 106
+    pins[14] := 108
+    pins[15] := 111
+
+    var hallados: integer := 0
+    var a: integer := 0
+    while a < 16 do
+      // todos a entrada con pull-down, y el de turno a salida
+      var k: integer := 0
+      while k < 16 do
+        Gpio.init(pins[k], Gpio.INPUT())
+        Gpio.pull(pins[k], 2)
+        k := k + 1
+      endwh
+      Gpio.init(pins[a], Gpio.OUTPUT())
+      Gpio.write(pins[a], 1)
+      sleep(5)
+
+      var b: integer := 0
+      while b < 16 do
+        if b != a then
+          if Gpio.read(pins[b]) == 1 then
+            print "UNIDOS: " + nombre(pins[a]) + " (" + pins[a] + ")  <->  " + nombre(pins[b]) + " (" + pins[b] + ")"
+            hallados := hallados + 1
+          endif
+        endif
+        b := b + 1
+      endwh
+      Gpio.write(pins[a], 0)
+      a := a + 1
+    endwh
+
+    if hallados == 0 then
+      print "NINGUN PAR UNIDO en el CN1"
+    endif
+    print "fin del barrido"
+  end Main
+end ScanCn1
