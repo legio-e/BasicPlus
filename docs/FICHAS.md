@@ -2349,6 +2349,40 @@ implementado por el RTOS. La primera pregunta del estudio no es *cómo lo hacemo
 está encendido y por qué hoy no sirve**. La sospecha, con lo medido el 10-sep: no llega a ejecutarse,
 porque la capa de encima (el lazo del wire, y el scheduler de la VM) no cede el turno a la ociosa.
 
+🪜 **LA ESCALERA — Eduardo, 10-sep:** *«Lo de dormir se puede hacer progresivo: primero pausas
+cortas y, según se va avanzando sin actividad, pausas más largas.»*
+
+**Esto deshace la tensión con la latencia, y la deshace en el sitio correcto.** El problema del
+periodo fijo era elegir N: corto gasta, largo tarda. Con la escalera **no hay N que elegir** — el
+sistema se calibra solo, y el coste cae donde menos se paga: justo después de actividad (que es
+cuando es más probable que venga más) la pausa es corta y la latencia sigue siendo la de hoy; tras
+un rato largo de silencio (cuando es menos probable que venga nada) la pausa crece. Se paga latencia
+sólo en el caso en que casi nunca hay nadie esperándola.
+
+⚠️ **El caso malo, dicho sin adornos: el PRIMER evento tras un silencio largo** — que es exactamente
+la persona que deja el aparato quieto y vuelve a tocar un botón. La escalera empeora justo ése. De
+ahí que **el tope de la escalera sea una decisión de producto, no técnica**: un cacharro con pantalla
+no debería pasar de unas decenas de ms porque un toque se notaría lento; un registrador de datos
+puede irse a segundos. Y el escape es limpio: **una fuente que sea interrupción de verdad se salta el
+tope entero** (un táctil con línea de IRQ despierta al instante, esté la escalera donde esté). O sea
+que subir el tope y convertir fuentes en interrupciones son la misma mejora vista desde dos lados.
+
+🔑 **Y lo importante: media escalera YA ESTÁ CONSTRUIDA, y no la habíamos visto así.** Al cerrar
+`#462` el bombeo de la GUI dejó de dormir por su cuenta y pasó a **devolver cuánto tiempo dice LVGL
+que puede estar ocioso** (`lv_timer_handler()`), topado a `BPVM_GUI_OCIO_MAX_MS` = 10 ms
+(`src/gui_display_sdl.c:340,382`), y es el lazo BP quien duerme eso (`bpstdlib/Gui.bp:850-853`). Eso
+no es una pausa fija: es **preguntarle al que sabe**.
+
+Con eso a la vista, las dos formas de decidir cuánto dormir se ven claras, y **se componen**:
+- **Preguntar** — el que sabe, contesta. LVGL ya lo hace. `configUSE_TICKLESS_IDLE` de FreeRTOS hace
+  lo mismo con las tareas: sabe cuándo vence el próximo `vTaskDelay`.
+- **La escalera** — el respaldo para lo que **nadie puede contestar**: cuándo llegará el próximo byte
+  del wire, o el próximo toque. Ahí no hay a quién preguntar, y la progresión es la respuesta.
+
+⏭️ Así que la pausa de cada vuelta sale de un `min()`: lo que digan todos los que saben, contra el
+peldaño actual de la escalera. La escalera no sustituye a nada de lo que ya hay — **rellena el hueco
+que queda**.
+
 ⏭️ **V7, y es un ESTUDIO, no una implementación.** El censo de las cinco familias está lanzado
 (10-sep) y su resultado se pega aquí. Lo que falta después: **sin amperímetro no hay números** —
 decir qué hace el código es gratis, decir cuántos mA necesita instrumento.
