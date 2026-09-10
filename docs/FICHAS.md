@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 3 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 2 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **3** | `#462` · `#473` · `#489` |
+> | **fichas de V6** | **2** | `#473` · `#489` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -6603,7 +6603,7 @@ y a `/app` al depurar. Sin verificar en placa; anotado.
 🧹 **Al aplicar esto hay que limpiar a mano** el `/app/Core.mod` que las ejecuciones anteriores
 ya dejaron: el arreglo evita crearlo, no borra el que hay.
 
-#### 🟡 `#462` — la VM **nunca cede el turno al SO**: en el ESP32 un programa bloquea el resto del sistema (abierta 31-ago)
+#### ✅ `#462` — la VM **nunca cede el turno al SO**: en el ESP32 un programa bloquea el resto del sistema (abierta 31-ago · **CERRADA el 10-sep**: el suelo, 48 → 7 ms en placa)
 
 **Eduardo, como usuario:** *«cuando se ejecuta un programa en las STM32, el resto del
 sistema sigue vivo, incluidas las comunicaciones; en cambio en las ESP32 se utilizan todos
@@ -6970,6 +6970,80 @@ hilo principal** y con el bombeo durmiendo a nivel de SO — las dos cosas cambi
 humana porque el guión de clics es del host (SDL). Si sale del orden de milisegundos, esta pieza se
 cierra sola; si sigue en decenas, entonces sí hay algo que buscar y el terreno ya está despejado de
 los dos sospechosos falsos.
+
+
+### ✅ 10-sep — EL SUELO, MEDIDO EN PLACA: **48 ms → 7 ms**. FICHA CERRADA.
+
+```
+Discovery, 31-ago   suelo = 48 ms     (lazo en el hilo principal; el bombeo dormia a nivel de SO)
+Discovery, 10-sep   suelo =  7 ms     (misma placa, firmware de hoy)   lat= 7 · 7 · 7 · 7 · 7, cola=0
+```
+
+**Y no hizo falta arreglar nada más: se lo llevó por delante el cambio del 9-sep.** El bombeo dejó
+de dormir y devuelve el ocio; el lazo BP lo duerme con `sleep(ocio)`, y **ese `sleep` ES la frontera
+de quantum** donde el planificador entrega el evento. Con `BPVM_GUI_OCIO_MAX_MS = 10`, la espera
+media son ~5-7 ms. Medido, no deducido.
+
+### 🔑 El modelo, que es lo que hay que llevarse (y no estaba escrito)
+
+**La latencia de un evento BP no es un coste del sistema de eventos: es el tiempo hasta la siguiente
+frontera del hilo que lo atiende.** Medido en la C6, con un programa sin GUI:
+
+| lo que hace el hilo tras el `raise` | latencia |
+|---|---|
+| `sleep(200)` | **200 ms** |
+| 20 × `sleep(10)` | **10 ms** |
+
+Así que el «suelo de 48 ms» nunca fue una constante misteriosa: era **el pulso del propio lazo del
+GUI**, que antes iba al ritmo de LVGL (~33 ms) y ahora va a 10.
+
+📌 **Y de ahí sale la cifra que faltaba: el techo de eventos por segundo de un hilo es su número de
+fronteras por segundo.** El lazo del GUI drena **uno por vuelta**, o sea ~100/s. Si algo dispara más
+rápido —un slider arrastrado, un sensor—, la cola crece; `cola=` en el sample es el número que lo
+delata. *(Y si se desborda, hoy se pierde en silencio: `#489`.)*
+
+### ❌ Dos sospechosos descartados por el camino
+
+- **`LV_DEF_REFR_PERIOD`**: prueba de desplazamiento en host con 33 / 66 / 10 → **la latencia no se
+  entera**. Llevaba desde el 31-ago señalado en esta ficha.
+- **Nuestro `BPVM_GUI_OCIO_MAX_MS`** en host: con 2 y con 40, lo mismo.
+
+⚠️ **Los dos salían planos por la misma razón, y es la lección**: en el PC, `sleep(1)` **dura 16-17
+ms** (el tick del planificador de Windows, 15,6). **En el host NO se puede medir latencia por debajo
+de ~20 ms.** Los dos experimentos eran válidos de método y **ciegos de resolución**. La medida
+buena sale en placa, donde el tick es de 1 ms.
+
+### 📋 La ficha, entera
+
+| | | |
+|---|---|---|
+| 1 | el **yield** entre cuantos | ✅ 31-ago |
+| 2 | el wire atendido mientras la VM calcula | ✅ `A1` (el hilo `io`) |
+| 3 | la carrera del estado de salida | ✅ 5-sep |
+| 4 | el **quantum en opcodes** | ✅ resuelto de hecho el 9-sep: el hilo del GUI se aparta solo |
+| 5 | el **suelo** | ✅ **10-sep: 48 → 7 ms**, medido en placa |
+| 6 | la prioridad del `io` del P4 | ➡️ separada como `#485`, **cerrada** el 9-sep |
+| — | el `strcmp` del bucle del GUI | ➡️ separado como `#486`, **cerrado** el 9-sep |
+
+**Cierra la queja original de Eduardo** (*«en las ESP32 se utilizan todos los recursos y se queda
+todo bloqueado; los eventos pasan pero mucho más lentos»*), con los números de las dos mitades: el
+hambre de los demás hilos **2136 ms → 1 ms** (9-sep) y la latencia de un evento **48 → 7 ms**.
+
+### 🧪 Y la herramienta, que es lo que faltaba para poder cerrarla
+
+- **`samples/GuiLatSuelo.bp`** — mide el suelo. En placa con un dedo; en host, sin manos, con el
+  guión de clics (`BPVM_GUI_SCRIPT`) y `BPVM_GUI_SHOT_MS`.
+- **`bpgenvm-c/tools/wire_serie.py`** — gana `put`, `puts` (por trozos, `#294`) y `run`. Sin esto no
+  se puede llevar un `.mod` a una placa sin abrir el IDE.
+
+### ⚠️ Dos cosas que salieron de las placas y NO son de esta ficha
+
+- **La P4 no tiene pantalla operativa**: `GuiColorDemo` construye el árbol y termina en 480 ms, y en
+  el log **no hay ni una línea** de panel, DSI ni LVGL. Que no haya pantalla **no lo dice nadie** —
+  el usuario ve un programa que corre y no pinta. El panel sale del ENV y esta placa no lo tiene.
+- **La zona de packs de la P4 lleva un `Gui` RANCIO que tapa a `/lib/Gui.mod`**: el programa correcto
+  no enlaza (*«lib 'Gui' presente pero no exporta 'Gui.start'»*). Es el desfase de stdlib de siempre,
+  ahora en un pack. Ese error, al menos, **sí habla**.
 
 #### ✅ `#461` — los paths reservaban tamaño FIJO: **20 KB recuperados en el STM32 y 7,5 en el ESP32** (cerrada 31-ago)
 

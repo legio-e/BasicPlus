@@ -93,6 +93,66 @@ def cmd_list(w, _):
         print("  %8s  %s" % (e.get("size"), e.get("name")))
 
 
+def cmd_put(w, args):
+    """Sube un fichero local a la placa. `put <local> [/ruta/remota]`."""
+    import os
+    local = args[0]
+    remoto = args[1] if len(args) > 1 else ("/app/" + os.path.basename(local))
+    data = open(local, "rb").read()
+    w.id += 1
+    cab = json.dumps({"type": "PUT", "id": w.id, "path": remoto, "bulk": len(data)})
+    w.s.write((cab + "\n").encode() + data)        # cabecera + bytes CRUDOS detras
+
+    r = w.esperar("PUT_REPLY", 20)
+    print("put %s -> %s : %s" % (local, remoto,
+          "ok (%d B)" % len(data) if r else "FALLO %s" % [m.get("message") for m in w.otros][:2]))
+    return r is not None
+
+
+def cmd_puts(w, args):
+    """#294 - PUT por TROZOS, para ficheros que no caben en el scratch de la placa
+    (Gui.mod son 44 KB y el PUT de un tiron los rechaza con «demasiado grande»).
+    `puts <local> [/ruta/remota] [trozo]`."""
+    import os
+    local = args[0]
+    remoto = args[1] if len(args) > 1 else ("/app/" + os.path.basename(local))
+    trozo = int(args[2]) if len(args) > 2 else 4096
+    data = open(local, "rb").read()
+    w.send("PUT_BEGIN", path=remoto, size=len(data))
+    if w.esperar("PUT_BEGIN_REPLY", 15) is None:
+        print("PUT_BEGIN fallo:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+    enviados = 0
+    while enviados < len(data):
+        cacho = data[enviados:enviados + trozo]
+        w.id += 1
+        cab = json.dumps({"type": "PUT_DATA", "id": w.id, "bulk": len(cacho)})
+        w.s.write((cab + chr(10)).encode() + cacho)
+        if w.esperar("PUT_DATA_REPLY", 15) is None:
+            print("PUT_DATA fallo en %d B" % enviados); return
+        enviados += len(cacho)
+    w.send("PUT_END")
+    r = w.esperar("PUT_END_REPLY", 20)
+    print("puts %s -> %s : %s" % (local, remoto,
+          ("ok (%s B)" % r.get("size")) if r else "FALLO al cerrar"))
+
+def cmd_run(w, args):
+    """Ejecuta un modulo y vuelca su salida hasta el EXITED."""
+    mod = args[0]
+    w.send("RUN", path=mod)
+    if w.esperar("RUN_REPLY", 10) is None:
+        print("el RUN no arranco:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+    t0 = time.time()
+    while time.time() - t0 < (float(args[1]) if len(args) > 1 else 30):
+        for m in w.lines(0.3):
+            if m.get("type") == "OUTPUT": print(m.get("data", ""), end="")
+            elif m.get("type") == "EXITED":
+                # el POR QUE: tirarlo es como se pierden los diagnosticos.
+                print("\n[EXITED %s exit=%s %s ms] %s" % (m.get("status"),
+                      m.get("exitCode"), m.get("elapsedMs"),
+                      m.get("errorMessage") or ""))
+                return
+
+
 def cmd_ciclo(w, args):
     """#379 — run -> stop -> INFO, N veces. Si el wire se desincronizara tras el
     Stop, el INFO de despues no llegaria."""
@@ -120,7 +180,8 @@ def cmd_ciclo(w, args):
     print("--- %d ciclos, %d con fallo ---" % (n, malos))
 
 
-COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo}
+COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
+            "put": cmd_put, "puts": cmd_puts, "run": cmd_run}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:
