@@ -2477,6 +2477,37 @@ VM-C, no del diseño. ⚠️ Y eso significa que tocarlo **roza el invariante du
   `a5a00daa` tiene el lazo de GUI viejo, que no tiene pausa ninguna y gira a tope**. El síntoma no es
   un fallo: es consumo.
 
+🔧 **EL DATO DE HARDWARE QUE CORRIGE EL VOCABULARIO (Eduardo, 10-sep).** *«El RP2350 no tiene un
+RTC dedicado en su hardware, a diferencia del RP2040. Lo que incluye es un temporizador AON
+(Always-On): un contador de 64 bits en el dominio de energía siempre encendido que mide
+milisegundos, y sirve para programar eventos de encendido. Si una placa RP2350 comercial trae RTC,
+es por un chip externo añadido en la placa (tipo PCF85063), no por una función nativa del micro.»*
+
+**Esto explica el hallazgo del censo en vez de contradecirlo**: que la Pico no registre backend de
+RTC no es un olvido — **es que no hay nada nativo que registrar**.
+
+🔑 **Y cambia cómo hay que llamar a la pieza.** Lo que hace falta no es un *reloj de calendario*: es
+**un contador en el dominio siempre encendido capaz de generar un evento de despertar**. Eso lo
+tienen todas las familias, con nombres distintos:
+
+| familia | la pieza | ¿la alcanzamos hoy? |
+|---|---|---|
+| **RP2350** | **AON Timer**, 64 bits en ms, dentro de POWMAN | **no**: no enlazamos `hardware_powman` ni `pico_sleep` (`pico/CMakeLists.txt:195-213`, 12 librerías y ninguna es ésa) |
+| **STM32U5** | RTC de hardware con dominio de respaldo (y además LPTIM) | **sí**, es el único con backend (`gpio_stm32.c:790`, `:1009`) |
+| **ESP32** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
+
+⚠️ **Un RTC externo NO es un despertador.** Un PCF85063 por I2C es un **driver de placa**, no silicio:
+da la hora, pero **sólo despierta al micro si su línea INT está cableada a un pin capaz de
+despertar**. Tenerlo no da la fuente de despertar; es una pregunta de la placa concreta, no del
+micro. Es exactamente la distinción de `#479`: hay verdades de silicio y verdades de placa, y viven
+en sitios distintos.
+
+📌 **Y una consecuencia que no es de consumo pero está aquí al lado**: en la Pico y el ESP, `Rtc` es
+hoy **un offset por software sobre el reloj monotónico** (`src/rtc.c:28`). Muere en cada reset, y el
+programa **no tiene forma de saber si la hora es real o inventada** — la misma forma que `#469`.
+Anotado en la cabecera de `src/rtc.c`, que además decía que el backend lo registraba la Pico: era
+falso, lo registra el STM32.
+
 ⏭️ **V7, y es un ESTUDIO, no una implementación.** Lo que falta: **sin amperímetro no hay números** —
 decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y hay una medida que
 **no** necesita amperímetro y tampoco se tiene: **cuánto cuesta hoy una vuelta en reposo**. El único
