@@ -2417,9 +2417,72 @@ sino **«nada pendiente Y nada que venza antes de que yo despierte»** — que e
 lista de antes (wire, hilos BP listos, `sleep` que vence, eventos en cola), ahora usada para decidir
 *cuánto* dormir y no sólo *si* dormir.
 
-⏭️ **V7, y es un ESTUDIO, no una implementación.** El censo de las cinco familias está lanzado
-(10-sep) y su resultado se pega aquí. Lo que falta después: **sin amperímetro no hay números** —
-decir qué hace el código es gratis, decir cuántos mA necesita instrumento.
+📊 **EL CENSO, HECHO (10-sep) → `docs/BAJO_CONSUMO_CENSO.md`.** Seis lecturas + refutación
+adversarial (**57 de 73 hallazgos vivos**, 16 tumbados) + crítico de completitud. **Sin amperímetro:
+ni un mA en él, a propósito.** El titular:
+
+> 🔴 **Ninguna de las siete placas llega a dormir. Ni una. No hay una sola línea en el árbol que meta
+> a un micro en un modo de bajo consumo.**
+
+Con los cuatro escalones separados, que es como hay que leerlo:
+
+| familia | el hilo cede | la ociosa corre | el **núcleo** se para (`WFI`) | el **micro** baja consumo |
+|---|---|---|---|---|
+| **RP2350** (Pico 2 / Metro) | sí | sí | **no** | **no** |
+| **ESP32** (S3, C3, C6, P4) | sí | sí | **sí** (`waiti`/`wfi`) | **no** |
+| **STM32U5** (DK2 y Nucleo) | **no** | **no** | **no** | **no** |
+
+Verificado **contra el artefacto**, no leyendo: `wfi` = 0 en el desensamblado de la Pico
+(82 898 líneas) y en los `.list` de la DK2 y la Nucleo. En los ESP el núcleo sí se para porque el
+kernel de IDF llama **siempre** a su idle hook.
+
+🔑 **Y el hallazgo que va contra el punto de partida elegido: el RTC de hardware SÓLO tiene backend
+en el STM32** (`stm32/port/gpio_stm32.c:790`, `:1009`). El ESP usa a propósito el stub portable
+(`esp32/common/gpio_esp32.c:595`) y la Pico no registra ninguno. **El reloj que se propone como
+despertador existe justo en la familia que hoy no llega ni a ejecutar su tarea ociosa, y no existe en
+las otras cuatro.** Empezar por el RTC significa construirlo en tres familias antes de poder probar
+nada; empezar por el timer, no.
+
+🔑 **Y el que cambia el encuadre entero: miVM YA HACE LO CORRECTO.** Calcula
+`earliestSleepWakeMs()` y espera **el delta completo** en `vmLock.wait(delta)`, sin tope, porque
+quien llega lo despierta con un `notify` (`VirtualMachine.java:543`, `:2305-2317`). O sea que el
+patrón *«duerme hasta el próximo vencimiento y que un evento te despierte»* **ya está escrito en la
+implementación de referencia**, y el tope de 50 ms de `src/scheduler.c:144` es una limitación de la
+VM-C, no del diseño. ⚠️ Y eso significa que tocarlo **roza el invariante dual-VM**.
+
+**Lo demás que salió y que conviene tener a mano** (el detalle, en el documento):
+- ⏰ **El techo del sueño lo pone el reloj de sondeo más rápido**, y hoy con un programa cargado son
+  el hilo `io` a 5 ms y el tope de 50 ms del planificador — que además **ya no lo usa nadie** durante
+  un RUN con `io`. Aunque todo lo demás estuviera encendido, **ningún micro podría dormir más de un
+  tick seguido**.
+- ⏰ **Los ESP tienen un límite duro que nadie había censado como tal**: el Interrupt WDT por
+  hardware a **300 ms** en las cuatro imágenes. La Pico sí para su watchdog de verdad; el STM32 hoy
+  no registra backend a propósito.
+- 🔋 **El caso real de una placa a pilas —autorun sin IDE— no estaba censado.** Existe en las tres
+  familias, y es el modo en que vive un aparato con batería: arranca solo y **no hay nadie al otro
+  lado del cable**. Los 200 sondeos/s del hilo `io` se pagan íntegros para atender un `KILL` que no
+  puede llegar.
+- 🔌 **Cargas estáticas que no dependen de la CPU y que no apaga nadie**: en la DK2 se inicializan
+  **19 periféricos incondicionalmente** en el arranque (cinco UART, tres SPI, el PHY del USB HS…) y
+  16 en la Nucleo; el **LTDC escanea el panel desde el arranque** corra o no una GUI; el NeoPixel de
+  la Metro se enciende verde tenue en el arranque *(un `test H7.4.a` que se quedó)* y no lo apaga
+  nadie. Contraste que prueba que no es inevitable: en la Pico el ADC es perezoso.
+- 🐛 **`sleepUs()` es espera activa pura** y su nombre no lo delata: `sleepUs(500000)` son 0,5 s de
+  micro a plena carga sin ceder ni el hilo BP ni la CPU.
+- 🐛 **`Machine.MIN_CPU_MHZ()` declara 18 MHz para las cinco familias y sólo la Pico lo implementa**
+  (y bien: escala Vdd_core por tabla). El STM32 y el ESP devuelven 0. Es la palanca que Eduardo
+  recordaba de las pruebas de overclocking, y está declarada donde no existe.
+- ⚠️ **Un consumo invisible en el parque**: `Gui.mod` no viaja en el blob embebido y el IDE no
+  reinstala la stdlib en cada Run, así que **cualquier placa cuya stdlib no se haya reinstalado tras
+  `a5a00daa` tiene el lazo de GUI viejo, que no tiene pausa ninguna y gira a tope**. El síntoma no es
+  un fallo: es consumo.
+
+⏭️ **V7, y es un ESTUDIO, no una implementación.** Lo que falta: **sin amperímetro no hay números** —
+decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y hay una medida que
+**no** necesita amperímetro y tampoco se tiene: **cuánto cuesta hoy una vuelta en reposo**. El único
+número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `lv_timer_handler`, y su
+propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
+contra qué compararse.
 
 #### 🔴 `#489` — la cola del GUI de la VM-C DESCARTA EN SILENCIO cuando se llena (abierta 10-sep)
 
