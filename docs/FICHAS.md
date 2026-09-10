@@ -2279,6 +2279,49 @@ disparó el escepticismo de Eduardo (*«¿seguro? Antes de nada hay que verifica
 📌 De paso, **la C3 quedó al día**: llevaba firmware anterior al 8-sep, y ahora monta la zona de
 packs y trae `Machine.mod` y el `Adc.mod` nuevo.
 
+#### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
+
+**Sale del punto 4 de `#473`** —que `read_stream` no existe en el backend FAT, así que bajar un
+fichero grande de `/sd` cuesta cuadrático— y lo reencuadra **Eduardo**: *«Esto ya se habló cuando te
+pedí un comando `fseek`. La idea es tener un cursor y poder hacer desplazamientos relativos.»*
+
+**Y con el historial delante, tiene la forma de una enfermedad que ya ha recaído dos veces:**
+
+| | quién sufría | qué se hizo |
+|---|---|---|
+| `#398`/`#424` | `crc32` reabría el fichero cada 256 B — **5432 aperturas para 1,3 MB** | se añadió `crc32` al interfaz de backend: abre una vez. 16,5× medido |
+| `#453` | el `GET` reabría cada 256 B — **472 aperturas para 120 KB** | se añadió `read_stream`: abre una vez. Sólo en littlefs |
+| **hoy** | el `GET` desde `/sd` | se propone añadir `read_stream` **también** a FAT |
+
+Tres veces el mismo síntoma y tres arreglos **por llamador**, no por causa. Y la causa estaba escrita
+desde `#453`, en la cabecera del propio arreglo: *«el backend es el único que puede hacerlo, **la
+fachada no tiene descriptores**»*.
+
+📐 **Medido, no supuesto**: de las 17 operaciones del interfaz de backend
+(`include/bpvm_fs.h`), **16 reciben un `path`**. No hay handle, ni posición, ni nada abierto — ni en
+la fachada, ni en el backend, ni en BP. Y **tres de esas 17 existen sólo para esquivar la ausencia de
+cursor**: `read_at`, `crc32` y `read_stream`. Cada una se añadió el día que un llamador concreto se
+puso demasiado lento.
+
+🔑 **Y lo que de verdad falta no es velocidad, es una CAPACIDAD.** `readFile` hace `stat` y se trae el
+fichero **entero** al heap (`builtins.c`, `BUILTIN_READ_FILE`). O sea que hoy, desde BP, **un fichero
+más grande que la RAM no se puede leer**: un CSV de 1 MB en la SD es ilegible en una placa con 271 KB
+de heap. Eso no lo arregla ningún `read_stream` más — lo arregla el cursor.
+
+⏭️ **Lo que hay que decidir en V7** (aquí no se diseña nada todavía):
+- El cursor en la **fachada**: abrir / desplazar (absoluto y **relativo**, que es lo que pide
+  Eduardo) / leer / escribir / cerrar. Con eso, `read_at`, `crc32` y `read_stream` dejan de ser
+  operaciones especiales y pasan a ser bucles sobre el cursor.
+- El cursor en **BP**: el `fseek` que pidió Eduardo, o sea un fichero abierto como objeto. Eso **es
+  superficie de lenguaje**, así que es V7 por definición.
+- ⚠️ Y una pregunta que hay que contestar antes de escribir código: **cuántos descriptores caben**.
+  Un handle abierto es RAM en el micro, y FatFs quiere su `FIL` (~550 B) por fichero. Que el modelo
+  sea «uno por programa», «N con límite declarado» o «uno por hilo BP» cambia el diseño entero.
+
+📌 **Relación con el punto 4 de `#473`**: son la solución estrecha y la ancha del mismo problema.
+La estrecha —`read_stream` en FAT, gemelo exacto de `fat_crc32`— sigue siendo válida para V6 **si la
+medida la justifica**, y no estorba al cursor: el día que exista, desaparece con las otras dos.
+
 #### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V7** (abierta 10-sep, decidida a V7 el mismo día)
 
 **La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
