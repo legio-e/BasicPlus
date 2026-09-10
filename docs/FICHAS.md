@@ -3408,7 +3408,57 @@ saber sin abrir el documento:
 - 📌 **Nadie compila el común salvo CubeIDE**: un cambio ahí no lo ve ningún `make` ni `idf.py`
   hasta que se construye el STM32.
 
-⏭️ **Lo que queda de esta ficha**: los ~57 hallazgos de tipo `incomodo`/`cosmetico`. Y una nota que
+✅ **LA COLA, TRIADA ENTERA (10-sep) → `docs/473_TRIAJE_COLA.md`.** No eran ~57: son **70**
+(48 `incomodo` + 22 `cosmetico`; la auditoría tiene 91 en total). Siete lotes de diez, verificados
+contra el código de HOY, más una ronda de escépticos **sobre los declarados muertos** — porque al
+cerrar una versión el error caro es dar por resuelto lo que sigue roto: eso apaga la búsqueda.
+
+🔑 **Y esa ronda se ganó el sueldo: de 12 dados por muertos, 8 RESUCITARON.** El patrón, siempre el
+mismo: *se arregló la mitad que llega al usuario y se declaró muerto el hallazgo entero*. Si me
+llego a fiar del primer triaje, ocho cosas vivas se habrían dado por cerradas.
+
+| desenlace | n |
+|---|---|
+| **vivos** | **59** |
+| ya **cubiertos** por otra ficha | 7 (`#470` ×4 · `#473` ×2 · `#487` ×1) |
+| **arreglados** de verdad desde el 5-sep | 4 |
+| **de los vivos, ROTOS HOY** | **4** |
+| de los vivos, a **V7** | 55 |
+
+🔴 **LA LISTA CORTA — los cuatro, releídos a mano uno a uno** (no me fío del texto del auditor ni del
+triaje):
+
+1. **`recv_line` no abandona una línea a medias en 4 de las 5 imágenes.** La Pico
+   (`pico/wire_v1.c:38-45`) y las tres ESP (`esp32/common/wire_v1.c:112-113`) giran sin plazo; el
+   STM32 sí topa a 300 ms con su motivo escrito (`stm32/port/stm32_wire.c:110-115`: *«Anti-cuelgue…
+   en vez de girar para siempre»*). ⚠️ **La consecuencia real, comprobada, NO es la que decía el
+   triaje** (*«la VM se para y hay que desenchufar»*): es que **un mensaje truncado se COME el
+   siguiente**. El mensaje que llega después se concatena a la línea estancada, su `
+` la termina,
+   y el resultado no empieza por `{` → se descarta entero. Si el que se traga es un `KILL`, el
+   síntoma es *«le he dado a parar y no ha parado»*, que no se diagnostica nunca.
+2. **La atomicidad de una línea en el cable sólo la garantiza la Pico** (`pico/wire_v1.c:93-97`,
+   `tx_lock` dentro de `send_line`). Las otras cuatro escriben sin cerrojo. Depurando en placa, el
+   IDE puede recibir dos JSON entrelazados: corrupción de framing, no estética, y **no existe en el
+   PC**.
+3. **`Uart.available()` contesta un BOOLEANO en la Pico** donde su propio contrato dice *«cuántos
+   bytes»* (`include/bpvm_uart.h:16-17`): `uart_is_readable(inst) ? 1 : 0` (`pico/main.c:376-378`).
+   El ESP32 cumple (`gpio_esp32.c:249-254`) y el STM32 devuelve `-1` diciendo honestamente que no lo
+   soporta. **`if Uart.available() >= 4` no se cumple NUNCA en la Pico** con 40 bytes esperando, y sí
+   en el ESP32 con el mismo programa. Silencioso, y en la familia de referencia.
+4. **`read_stream` no existe en el backend FAT** — está en littlefs (`src/fs_lfs.c:407`, *«#453 —
+   472 aperturas por 120 KB»*) y no en `src/fs_fat.c`. El respaldo de `fs_facade.c:466-482` es un
+   bucle de 256 B con `f_open+f_lseek+f_read+f_close` **por trozo**, y el propio fichero documenta
+   que el coste es **cuadrático**. O sea: bajar un fichero grande de `/sd` desde el explorador del
+   IDE. ⚠️ **Condicionado**: la medida del timeout es prestada de `#453` (littlefs en un S3). **Hay
+   que cronometrar un GET de ~120 KB desde la SD de la Metro ANTES de tocar nada**; si no revienta,
+   se va a V7.
+
+⏭️ **Los 55 restantes van a V7**, agrupados por tema y pegados a la ficha que ya los posee: la
+identidad y los números del micro a `#470`; el mapa de pines a `#479`; el breadcrumb a `#487`. Y
+sale un **huérfano que necesita ficha nueva**: el nombre `pico` en la **capa C** (`bpvm_pico.h`,
+`bpvm_pico_set_backend` y 29 `BUILTIN_PICO_*`, que registran las **cinco** familias) — `#471` se
+cerró habiendo arreglado sólo la capa de usuario. Y una nota que
 no es ficha porque no tiene consecuencia conocida hoy: en el STM32 **la tarea ociosa no corre nunca**,
 así que cualquier cosa que FreeRTOS difiera a la ociosa allí no ocurre. El único que se apoyaba en
 ella era el borrado de tareas, y ya no.
