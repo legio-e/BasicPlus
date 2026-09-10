@@ -29,6 +29,8 @@ class Wire:
         self.buf = b""
         self.id = 0
         self.otros = []
+        self.basura = []
+        self.pend = []
         time.sleep(0.3)
         self.s.reset_input_buffer()
 
@@ -39,7 +41,8 @@ class Wire:
         return self.id
 
     def lines(self, secs):
-        out, t0 = [], time.time()
+        out, t0 = self.pend, time.time()
+        self.pend = []
         while time.time() - t0 < secs:
             c = self.s.read(4096)
             if c:
@@ -51,7 +54,9 @@ class Wire:
                     try:
                         out.append(json.loads(ln.decode("utf-8", "replace")))
                     except Exception:
-                        pass
+                        self.basura.append(ln[:200])
+                else:
+                    self.basura.append(ln[:200])
         return out
 
     def esperar(self, typ, secs):
@@ -61,8 +66,11 @@ class Wire:
         self.otros = []
         t0 = time.time()
         while time.time() - t0 < secs:
-            for m in self.lines(0.2):
+            lote = self.lines(0.2)
+            for n, m in enumerate(lote):
                 if m.get("type") == typ:
+                    # la COLA del lote es respuesta tambien: tirarla fue el bug
+                    self.pend = lote[n+1:]
                     return m
                 self.otros.append(m)
         return None
@@ -141,7 +149,7 @@ def cmd_run(w, args):
     w.send("RUN", path=mod)
     if w.esperar("RUN_REPLY", 10) is None:
         print("el RUN no arranco:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
-    t0 = time.time()
+    t0 = time.time(); otros = []
     while time.time() - t0 < (float(args[1]) if len(args) > 1 else 30):
         for m in w.lines(0.3):
             if m.get("type") == "OUTPUT": print(m.get("data", ""), end="")
@@ -151,6 +159,14 @@ def cmd_run(w, args):
                       m.get("exitCode"), m.get("elapsedMs"),
                       m.get("errorMessage") or ""))
                 return
+            else:
+                otros.append(m.get("type"))
+    # el POR QUE: callar aqui es no distinguir "no ha pasado nada" de "se colgo".
+    print("")
+    print("[sin EXITED tras %s s] tipos que llegaron: %s" % (
+          args[1] if len(args) > 1 else 30, sorted(set(otros)) or "ninguno"))
+    for b in w.basura[-5:]:
+        print("   basura:", b)
 
 
 def cmd_ciclo(w, args):

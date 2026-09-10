@@ -241,12 +241,46 @@ static void v1_output_sink(const char* s, size_t len, void* user) {
     if (n > 0) wire_v1_send_line(s_out_msg, (size_t) n);
 }
 
+static void emit_exited_msg(long session, const char* status, int code,
+                            uint32_t ms, const char* errmsg);
+
+/* #473 (R20) — EL EXITED, POR LOS CONSTRUCTORES COMUNES.
+ *
+ * Esta familia armaba el JSON a mano con `snprintf` e interpolaba SIN ESCAPAR
+ * cuatro cadenas que vienen del programa del usuario: `missing`, `entry.fallo`,
+ * el error de enlace y el de ejecucion. Un mensaje con una comilla o una barra
+ * ROMPE EL FRAMING del wire — y el mensaje de un error es justo donde el
+ * usuario mete texto raro.
+ *
+ * Medido: `wire_v1_field_string` (que escapa, via put_escaped) lo usaban la Pico
+ * 18 veces y el ESP32 2; esta familia, CERO. El patron de siempre.
+ *
+ * `msg_begin_event` y no `msg_begin` porque el EXITED lleva `session`, no `id`.
+ * El orden de los campos se conserva: el cliente no lo necesita -es JSON- pero
+ * cambiarlo sin motivo solo complica comparar capturas del wire. */
 static void emit_exited(long session, const char* status, int code, uint32_t ms) {
-    char buf[200];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"%s\",\"exitCode\":%d,"
-        "\"elapsedMs\":%lu}", session, status, code, (unsigned long) ms);
-    if (n > 0) wire_v1_send_line(buf, (size_t) n);
+    emit_exited_msg(session, status, code, ms, NULL);
+}
+
+static void emit_exited_msg(long session, const char* status, int code,
+                            uint32_t ms, const char* errmsg) {
+    char buf[320];
+    int off = wire_v1_msg_begin_event(buf, sizeof buf, 0, "EXITED");
+    if (off < 0) return;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "session", session);
+    if (off < 0) return;
+    off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "status", status);
+    if (off < 0) return;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "exitCode", code);
+    if (off < 0) return;
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "elapsedMs", (long) ms);
+    if (off < 0) return;
+    if (errmsg && errmsg[0]) {
+        off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "errorMessage", errmsg);
+        if (off < 0) return;
+    }
+    off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off > 0) wire_v1_send_line(buf, (size_t) off);
 }
 
 /* P-run-stop (#257) + P-autorun (#256) — wire durante el run (la VM
@@ -488,13 +522,9 @@ static void run_module_path(const char* path, long id, const char* arg) {
 
     if (missing[0]) {
         BOARD_LED_ERR_ON();
-        char buf[160];
-        int n = snprintf(buf, sizeof(buf),
-            "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
-            "\"exitCode\":-2,\"elapsedMs\":0,"
-            "\"errorMessage\":\"falta el modulo %s en el FS (stdlib no embebida?)\"}",
-            session, missing);
-        if (n > 0) wire_v1_send_line(buf, (size_t) n);
+        char em[160];
+        snprintf(em, sizeof em, "falta el modulo %s en el FS (stdlib no embebida?)", missing);
+        emit_exited_msg(session, "RUNTIME_ERROR", -2, 0, em);
     } else if (st != BPVM_OK && entry.fallo[0]) {
         /* #421 (17-ago) — el PORQUÉ del fallo de CARGA, con su ruta. El resto
          * de familias lo mandaba desde el 16-ago y ésta seguía con el «IO
@@ -503,22 +533,14 @@ static void run_module_path(const char* path, long id, const char* arg) {
          * error de enlace porque un fichero que no se puede leer no llega a
          * enlazarse. */
         BOARD_LED_ERR_ON();
-        char buf[288];
-        int n = snprintf(buf, sizeof(buf),
-            "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
-            "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"load: %s\"}",
-            session, bpvm_exit_code(st), (unsigned long) dt, entry.fallo);
-        if (n > 0) wire_v1_send_line(buf, (size_t) n);
+        char em[288];
+        snprintf(em, sizeof em, "load: %s", entry.fallo);
+        emit_exited_msg(session, "RUNTIME_ERROR", bpvm_exit_code(st), dt, em);
     } else {
         if (st != BPVM_OK && st != BPVM_KILLED) BOARD_LED_ERR_ON();
         const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
         if (link_err[0]) {
-            char buf[320];
-            int n = snprintf(buf, sizeof(buf),
-                "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"LINK_ERROR\","
-                "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
-                session, (int) st, (unsigned long) dt, link_err);
-            if (n > 0) wire_v1_send_line(buf, (size_t) n);
+            emit_exited_msg(session, "LINK_ERROR", bpvm_exit_code(st), dt, link_err);
         } else {
             /* #406 — el DETALLE del error de ejecucion, no solo la categoria.
              *
@@ -533,12 +555,7 @@ static void run_module_path(const char* path, long id, const char* arg) {
              * que anadio #406 en src/exceptions.c). */
             const char* rt_err = bpvm_runtime_error(vm);
             if (st != BPVM_OK && st != BPVM_KILLED && rt_err[0]) {
-                char buf[320];
-                int n = snprintf(buf, sizeof(buf),
-                    "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
-                    "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
-                    session, bpvm_exit_code(st), (unsigned long) dt, rt_err);
-                if (n > 0) wire_v1_send_line(buf, (size_t) n);
+                emit_exited_msg(session, "RUNTIME_ERROR", bpvm_exit_code(st), dt, rt_err);
             } else {
                 emit_exited(session,
                             (st == BPVM_OK)     ? "OK"
