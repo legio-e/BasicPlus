@@ -2359,10 +2359,43 @@ un fichero abierto cuesta heap, se ve, y se recupera por el mismo camino que tod
    on_collect` en `heap.c` e `bpvm_internal.h` → cero). Liberar la memoria **no cierra el fichero**:
    littlefs y FatFs guardan su propio estado. Hace falta que el GC llame al destructor al recoger —
    maquinaria nueva, pequeña y acotada, y **es la quinta capa** que el diseño de 9-ago dejó fuera a
-   propósito. ⚠️ Con el cuidado clásico: el destructor es código BP, así que **no puede correr DENTRO
-   de la pasada del GC** — la forma sana es una lista de pendientes que la VM vacía después. Y la
-   **paridad** obliga a que miVM haga lo mismo: no puede apoyarse en `finalize()` de Java, que está
-   deprecado desde la 9 y quitado en la 18.
+   propósito.
+
+   🔬 **«¿Y si el destructor lo hacemos como función NATIVA?» (Eduardo, 10-sep) — analizado, y sí:
+   cambia el problema.** Las cuatro razones por las que un destructor en BP no puede correr dentro
+   del GC se caen casi todas:
+
+   | razón | ¿sobrevive siendo nativo? |
+   |---|---|
+   | hace falta el intérprete y un marco de pila | **no**: una función C/Java no lo necesita |
+   | puede ASIGNAR memoria → reentra en el GC | **no**, si se prohíbe; y un `close()` no asigna |
+   | puede RESUCITAR el objeto guardando `this` | **no**: un nativo no lo hace salvo que se escriba aposta |
+   | puede reentrar el cerrojo de la VM | manejable: es una llamada hoja |
+
+   ✅ **Y el sitio ya existe, con la información ya puesta.** `gc_sweep_phase` (`src/heap.c:564`) lee
+   la cabecera de cada bloque muerto, y para un objeto **la segunda palabra ES el `class_ptr`**
+   (`heap.c:7`, `:55`). Así que saber «este muerto es un `File`» es UNA lectura, no una búsqueda:
+   basta un bit en el descriptor de clase. El tag además ya distingue objeto de array
+   (`BPVM_TYPE_OBJECT`), así que los arrays ni se miran.
+
+   📐 **Pero NO dentro del barrido: justo DESPUÉS.** El barrido recorre el heap linealmente
+   fusionando huecos (`heap.c:564-600`), y cualquier cosa que asigne o mueva en mitad de ese paseo lo
+   corrompe. Recoger las direcciones en una lista y vaciarla al terminar cuesta casi nada y elimina
+   la clase entera de errores **sin tener que razonar sobre qué hace cada nativo** — que es
+   precisamente lo que no se quiere estar comprobando en cada destructor nuevo.
+
+   📌 **Tres condiciones para un destructor nativo**, y conviene que sean del contrato: **no asigna**,
+   **no llama a código BP**, y **es IDEMPOTENTE** — porque las capas 1 y 2 pueden haberlo cerrado ya,
+   y lo normal es que así sea.
+
+   ⚠️ **Lo que ser nativo NO arregla, y es lo que hay que decidir: la PARIDAD.** Los dos GC corren en
+   momentos distintos, así que *cuándo* se dispara el destructor **difiere entre miVM y la VM-C**. Para
+   un `close()` eso es invisible en `stdout`… **salvo que el cierre vuelque escrituras pendientes**:
+   entonces un programa que relea su propio fichero puede ver cosas distintas en el PC y en la placa.
+   De ahí la regla que cierra el asunto, y que ya estaba en el diseño de las cuatro capas: **todo lo
+   observable va por `try`/`owner`; el camino del GC es sólo la red para lo anormal.** Y miVM no puede
+   apoyarse en `finalize()` de Java —deprecado en la 9, quitado en la 18—, así que el mecanismo se
+   escribe explícito en las dos.
 2. **La red no sustituye a `close()`**: el GC recoge cuando recoge, así que un fichero puede quedar
    abierto mucho después de ser inalcanzable — y en un micro eso importa (estado del driver, y en la SD
    la caché de escritura). Que es como Eduardo lo planteó: *«en caso de cuelgue o error»*.
