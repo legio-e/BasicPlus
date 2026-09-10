@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **2** | `#473` · `#489` |
+> | **fichas de V6** | **1** | `#473` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2549,7 +2549,7 @@ número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `
 propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
 contra qué compararse.
 
-#### 🔴 `#489` — la cola del GUI de la VM-C DESCARTA EN SILENCIO cuando se llena (abierta 10-sep)
+#### ✅ `#489` — ~~la cola del GUI de la VM-C descarta EN SILENCIO cuando se llena~~ (abierta 10-sep · **CERRADA el 10-sep**)
 
 **Salió contestando a Eduardo** sobre cuánto tarda una tecla del teclado virtual en procesarse:
 
@@ -2577,6 +2577,37 @@ de lo que salen. 512 da mucho margen, pero el margen no es el punto: **el silenc
 falta que se entere alguien.
 
 📌 De la misma familia que las cinco roturas del 9-sep: **el fallo existe, lo que falta es el ruido.**
+
+✅ **HECHO (10-sep).** No se agrandó la cola: **se le puso voz**, que es lo que faltaba.
+
+- El **primero se dice en el acto** (para enterarse ya) y el **total al terminar el programa**, en
+  `bpvm_gui_reset` — así un slider arrastrado no inunda el diagnóstico con 500 líneas.
+- Va por **`bpvm_diag`**, que sale por **stderr**: el `stdout` no se toca y **la paridad dual-VM
+  queda intacta**. Comprobado: `compat.sh check` → **54 PASS, 0 FAIL**.
+- Copia el patrón que ya estaba escrito al lado, en la cola de eventos BP (`src/events.c:34-40`),
+  incluido su porqué: *«un evento perdido en silencio es de los que cuesta una tarde encontrar»*.
+
+🧪 **Y se FUERZA el caso, porque un camino ejecutado no es un camino probado.** El nuevo
+`test/test_guidrop.c` (`make test-guidrop`) inyecta **600 eventos en 512 huecos sin drenar** — que
+con un programa real pide un slider arrastrado o un sensor rápido, y por eso el fallo llevaba ahí sin
+que nadie lo viera. Salida:
+
+```
+[gui] cola de eventos llena (512): evento descartado (kind=0) — se cuentan los demas
+[gui] 89 eventos de entrada descartados en esta ejecucion (cola de 512)
+inyectados=600  recuperados=511  perdidos=89
+PASS
+```
+El test comprueba además que **el segundo `reset` calla**: el contador se pone a cero, no se arrastra
+de una ejecución a la siguiente.
+
+📌 **Verificado en el artefacto, no en el log**: build headless de la Discovery, **0 errores 0
+avisos**, y las dos cadenas nuevas aparecen en el `.elf`. `gui.c` es común, así que con una familia
+basta (criterio de Eduardo, 8-sep).
+
+📌 **La asimetría con miVM se queda, y a propósito**: su cola no tiene límite, así que en el PC no se
+pierde nada. Igualar hacia abajo —ponerle tope a miVM— sería perder eventos donde hoy no se pierden.
+Lo que se ha arreglado es que la placa **lo diga**.
 
 #### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482` · 🧊 **FUERA DEL PLAN DE VERSIONES el mismo día**: *«de momento no»*)
 

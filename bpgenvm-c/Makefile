@@ -415,6 +415,16 @@ test-kill: $(LIBOBJ)
 # aquí es que el guardián no está mudo: se le pone delante un bloque sin liberar
 # y tiene que verlo, medirlo y señalar el fichero. Ver test/test_runguard.c.
 RUNGUARD_BIN = build/test_runguard.exe
+# V6/#489 — la cola de eventos del GUI descartaba en silencio. Este test FUERZA el
+# desbordamiento (600 eventos en 512 huecos, sin drenar) y comprueba que el primer
+# descarte se dice y el total al terminar. Ver test/test_guidrop.c.
+GUIDROP_BIN = build/test_guidrop.exe
+test-guidrop: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_guidrop.c $(LIBOBJ) -o $(GUIDROP_BIN) $(LDFLAGS)
+	@echo "--- #489: descartes de la cola del GUI (esperado: PASS + 2 avisos) ---"
+	./$(GUIDROP_BIN)
+
 test-runguard: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,MethodCall)

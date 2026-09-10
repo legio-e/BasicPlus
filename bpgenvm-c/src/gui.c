@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
+#include "bpvm.h"       /* V6/#489: bpvm_diag — los descartes hacen ruido */
 
 #ifdef BPVM_LVGL
 #include "lvgl.h"
@@ -125,6 +126,9 @@ static int      g_next_handle = 1;
 static uint32_t g_ev_obj[GUI_MAX_NODES];
 static int      g_ev_kind[GUI_MAX_NODES];
 static int      g_ev_head = 0, g_ev_tail = 0;
+/* V6/#489 — los que NO cupieron. Un evento de entrada perdido en silencio es
+ * de los que cuesta una tarde encontrar, asi que se cuentan y se dicen. */
+static uint32_t g_ev_perdidos = 0;
 
 /* Registro de assets Image (bitmap cargado de archivo). NO son nodos: viven
  * aparte y se comparten entre ImageView. En host el modelo solo guarda ruta +
@@ -1106,6 +1110,11 @@ void bpvm_gui_reset(void) {
     g_screen = 0;
     g_next_handle = 1;
     g_ev_head = g_ev_tail = 0;      /* la cola de eventos también es del programa */
+    if (g_ev_perdidos > 0) {        /* V6/#489 — la cuenta entera, una sola vez */
+        bpvm_diag("[gui] %lu eventos de entrada descartados en esta ejecucion "
+                  "(cola de %d)", (unsigned long) g_ev_perdidos, GUI_MAX_NODES);
+        g_ev_perdidos = 0;
+    }
 
     for (int i = 0; i < g_image_count; i++) {
         bpvm_free(g_images[i].path); g_images[i].path = NULL;
@@ -1127,7 +1136,25 @@ void bpvm_gui_reset(void) {
 /* ---- Cola de eventos {objptr, kind} ---- */
 static void ev_push(uint32_t objptr, int kind) {
     int nt = (g_ev_tail + 1) % GUI_MAX_NODES;
-    if (nt == g_ev_head) return;          /* cola llena: descarta (como offer() de miVM) */
+    if (nt == g_ev_head) {
+        /* V6/#489 — QUE GRITE, igual que la cola de eventos BP (events.c:34-40).
+         *
+         * Aqui se pierde un clic o una tecla: el camino de ENTRADA, el peor sitio
+         * posible para un fallo mudo. Y hay asimetria con miVM, que usa una cola
+         * SIN limite (GuiBackend.java:101): el mismo programa no pierde nada en el
+         * PC y si en la placa. El comentario que habia decia «como offer() de
+         * miVM» — imitaba la llamada, no la conducta.
+         *
+         * El primero se dice en el acto (para enterarse ya) y el total al terminar
+         * el programa (bpvm_gui_reset), que es lo que evita inundar el diagnostico
+         * cuando lo que desborda es un slider arrastrado. Va por bpvm_diag, o sea
+         * a stderr: el stdout no se toca y la paridad dual-VM queda intacta. */
+        if (++g_ev_perdidos == 1) {
+            bpvm_diag("[gui] cola de eventos llena (%d): evento descartado "
+                      "(kind=%d) — se cuentan los demas", GUI_MAX_NODES, kind);
+        }
+        return;
+    }
     g_ev_obj[g_ev_tail] = objptr; g_ev_kind[g_ev_tail] = kind; g_ev_tail = nt;
 }
 void bpvm_gui_inject_click(uint32_t objptr)  { ev_push(objptr, 0); }
