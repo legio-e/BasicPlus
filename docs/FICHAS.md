@@ -83,7 +83,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > ### 📊 EL CENSO, al 9-sep-2026 — leído ficha a ficha, no por la marca
 >
-> **Lo que queda de V6 son 2 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
+> **Lo que queda de V6 son 3 pendientes y 4 hitos** — y cada uno es UNA cosa; con las entradas
 > agrupadas de antes la lista decía 9. *(De `#482` salió `#488` —el S3 es Xtensa y el
 > C3 RISC-V, casos distintos— y `#488` salió acto seguido del plan de versiones: «de momento no».)* *(Eran 15 el 7-sep, cuenta de Eduardo. El
 > 8-sep se cerraron `#472` y `#469`, `#468` se fue a V7 y se abrió `#481`; el 9-sep se cerraron
@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **2** | `#462` · `#473` |
+> | **fichas de V6** | **3** | `#462` · `#473` · `#489` |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2278,6 +2278,35 @@ disparó el escepticismo de Eduardo (*«¿seguro? Antes de nada hay que verifica
 
 📌 De paso, **la C3 quedó al día**: llevaba firmware anterior al 8-sep, y ahora monta la zona de
 packs y trae `Machine.mod` y el `Adc.mod` nuevo.
+
+#### 🔴 `#489` — la cola del GUI de la VM-C DESCARTA EN SILENCIO cuando se llena (abierta 10-sep)
+
+**Salió contestando a Eduardo** sobre cuánto tarda una tecla del teclado virtual en procesarse:
+
+```c
+int nt = (g_ev_tail + 1) % GUI_MAX_NODES;
+if (nt == g_ev_head) return;      /* cola llena: descarta (como offer() de miVM) */
+```
+`src/gui.c:1129-1130` — **512 huecos** (`GUI_MAX_NODES`), y al llenarse el evento **se tira sin log,
+sin contador y sin nada**. Un clic o una tecla perdidos, en el **camino de entrada**, que es el peor
+sitio posible para un fallo mudo.
+
+⚠️ **Y hay asimetría entre las dos VMs**: miVM usa una `LinkedBlockingQueue` **sin límite**
+(`GuiBackend.java:101`), así que ahí no se pierde nada. El mismo programa **no pierde eventos en el
+PC y sí en la placa** — y en silencio. Ojo: el comentario del código dice *«como offer() de miVM»*,
+o sea que la intención era imitarla; lo que imita es la llamada, no el comportamiento.
+
+📐 **Es difícil de provocar pero no imposible**, y se sabe por qué: el techo de drenaje del lazo del
+GUI es **una vuelta cada ~10 ms** (`BPVM_GUI_OCIO_MAX_MS`), así que algo que dispare rápido —un
+slider arrastrado, un `onChange` por cada tecla, un sensor a 200 Hz— puede meter eventos más rápido
+de lo que salen. 512 da mucho margen, pero el margen no es el punto: **el silencio lo es**.
+
+⏭️ **El arreglo es el que ya está escrito en la casa**: contar los descartes y DECIRLO, igual que el
+`omitted` del listado (`#425`) o el aviso de la cola de eventos BP, que miVM ya emite
+(*«evento descartado (tid=…)»*, `VirtualMachine.java:4318`). No hace falta agrandar la cola: hace
+falta que se entere alguien.
+
+📌 De la misma familia que las cinco roturas del 9-sep: **el fallo existe, lo que falta es el ruido.**
 
 #### 🧊 `#488` — el AOT no genera código XTENSA, así que el S3 no puede ejecutar nada nativo (abierta 9-sep, sale de `#482` · 🧊 **FUERA DEL PLAN DE VERSIONES el mismo día**: *«de momento no»*)
 
