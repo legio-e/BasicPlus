@@ -2314,6 +2314,41 @@ consumo de ST, o sea el peor sitio donde tener eso.
 Sólo (c) se nota en el amperímetro. Hoy la Pico y el ESP32 llegan a (a) con seguridad; (b) y (c)
 están por censar.
 
+🎯 **POR DÓNDE EMPEZAR — decidido por Eduardo el 10-sep:** *«No creo que haya una solución común
+para todos los casos, pero podemos empezar por algo sencillo e ir creciendo. Empezar por el timer o
+el RTC y programar un sleep que despierte cada cierto tiempo, y si no hay nada se vuelva a dormir.»*
+
+**Por qué es el punto de partida correcto, y no un atajo.** Convierte el problema difícil —*declarar
+qué despierta*— en uno fácil: *mirar cada cierto tiempo*. Con una sola fuente de despertar (el
+temporizador) no hay contrato que diseñar, no hay mapa de pines que resolver antes, y no hay que
+tocar el lenguaje. La parte difícil no se resuelve: **se aplaza a propósito**, y eso permite que
+haya algo funcionando antes de decidir lo demás.
+
+⚠️ **El precio, y choca de frente con `#462`.** Despertar cada N ms significa que un evento puede
+llegar hasta N ms tarde. Esta misma sesión bajamos el suelo de descubrimiento de un evento de 48 ms
+a **7 ms**, medido en la C6; un periodo de dormir de 100 ms lo devolvería a ~100 ms. Así que **el
+periodo no es una constante: es una política**, y quién la elige (el programa, la placa, o el modo
+en que esté) es ya una pregunta de lenguaje. La forma sana de decirlo: *dormir es cambiar latencia
+por consumo*, y el que sabe cuánta latencia se puede permitir es el programa.
+
+📌 **«Si no hay nada» hay que definirlo, y la lista es reveladora.** Al despertar hay que mirar:
+¿hay bytes en el wire? ¿hay algún hilo BP listo para correr? ¿ha vencido algún `sleep` de hilo?
+¿hay un evento en la cola? **Es exactamente la misma lista que las fuentes de despertar**, sólo que
+sondeada en vez de por interrupción — que es justo por lo que este camino es más barato de empezar,
+y también por lo que crece de forma natural: cada elemento de esa lista que se convierta en
+interrupción real es un paso más, sin rehacer lo anterior.
+
+📌 **Timer y RTC NO son intercambiables**, y ésta es de las primeras cosas que el estudio tiene que
+poner en tabla: qué reloj sobrevive a qué modo de bajo consumo es **verdad de silicio y distinta por
+micro**. Un temporizador general suele morir en los modos profundos; el RTC suele sobrevivir, con
+menos resolución. Elegir uno u otro fija de rebote **hasta dónde se puede dormir**.
+
+📌 **Y hay que mirar lo que FreeRTOS ya trae hecho**: `configUSE_TICKLESS_IDLE` es literalmente este
+patrón —«ninguna tarea estará lista en N ticks → paro el tick, bajo consumo, programo el despertar»—
+implementado por el RTOS. La primera pregunta del estudio no es *cómo lo hacemos*, sino **si eso
+está encendido y por qué hoy no sirve**. La sospecha, con lo medido el 10-sep: no llega a ejecutarse,
+porque la capa de encima (el lazo del wire, y el scheduler de la VM) no cede el turno a la ociosa.
+
 ⏭️ **V7, y es un ESTUDIO, no una implementación.** El censo de las cinco familias está lanzado
 (10-sep) y su resultado se pega aquí. Lo que falta después: **sin amperímetro no hay números** —
 decir qué hace el código es gratis, decir cuántos mA necesita instrumento.
