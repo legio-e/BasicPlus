@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **1** | `#473` |
+> | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
 > | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -3494,7 +3494,12 @@ compilación, sin diff de paridad, sólo bajo carga. Por eso el `-D` va en el Ma
 
 ✅ Y el arnés, después de reconstruir el host de cero: **45 PASS, 0 FAIL, 0 SKIP**.
 
-#### 📋 `#473` — el resto de la auditoría de capas, SIN VERIFICAR (abierta 5-sep, de `A3`)
+#### ✅ `#473` — ~~el resto de la auditoría de capas, sin verificar~~ (abierta 5-sep, de `A3` · **CERRADA el 10-sep**)
+
+> **Cerrada con los 91 hallazgos triados enteros y los CUATRO que estaban rotos resueltos**: tres
+> arreglados y medidos en placa (`97f7fb36`, `66c13317`, `6388dc31`, `c659d94d`) y el cuarto **medido**
+> —resultó no estar roto— y pegado a `#491`. Lo demás (55 vivos de baja gravedad) va a V7, repartido
+> entre `#470`, `#479`, `#487` y `#491`.
 
 La auditoría de `A3` la hicieron seis auditores y terminaron los seis, pero **la fase de
 verificación adversarial se cortó por límite de sesión: 12 de 90 hallazgos quedaron
@@ -4020,6 +4025,37 @@ no vuelca sus datos, es ciego a la rotación, y color/fuente son render-only). P
 segunda vía, `#475`.
 
 #### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep · **MEDIDA el 5-sep**)
+
+🧩 **AMPLIACIÓN DE EDUARDO (11-sep, 0:40 — sólo análisis): SERIALIZAR LA VENTANA A JSON.**
+*«Si tenemos una ventana LVGL montada con todos sus componentes dentro, lo que necesitamos es
+serializar la ventana a Json. En realidad solamente necesitamos que `Component` tenga su
+serializador, y como todos los objetos LVGL heredan de él ya lo tendríamos resuelto. Para serializar,
+un componente se serializa y después en un bucle pide que se serialicen sus componentes, y así
+recursivamente.»*
+
+📐 **Está más construido de lo que parece.** La cabecera de `src/gui.c` lo dice: *«`dump_tree` produce
+el MISMO texto byte-a-byte que miVM → **paridad (sobre el árbol, no píxeles)**… el modelo sigue siendo
+la fuente de verdad del `dump_tree`, así que **la paridad NO depende de LVGL**»*. O sea que ya existe
+el modelo completo (tipo, geometría, valor, rango, celdas de tabla, series de chart, asset de imagen),
+ya se serializa, y **su salida ya es un artefacto con paridad demostrada**. Lo que falta es el
+**formato** (JSON) y la **forma** (recursiva por componente en vez de plana).
+
+Tres cosas del análisis:
+
+1. **El nodo guarda `parent`, no lista de hijos** (`gui.c`, `gui_node.parent`). «Pide a sus hijos que
+   se serialicen» se resuelve recorriendo la tabla filtrando por padre: O(n) por nodo, O(n²) total —
+   con el tope de 512 nodos son 262 000 comparaciones, nada. **No hace falta añadir listas de hijos.**
+2. 🔑 **La decisión de verdad es dónde vive el serializador: en BP o como builtin.** El planteamiento
+   («que `Component` tenga su serializador») apunta a BP, y creo que es lo correcto por un motivo que
+   va más allá de lo elegante: **escrito en BP se escribe UNA vez**. `dumpTree` hoy está escrito DOS
+   (C y Java) y hay que mantenerlo byte-idéntico a mano — la duplicación que `#473` lleva todo el día
+   persiguiendo. Y ya existe el módulo `Json`. ⏭️ **El precio, y es lo primero que hay que censar**:
+   `Component` tendría que exponer como propiedades todo lo que hoy sólo ve el volcado en C.
+3. ⚠️ **Y esto NO sustituye a la captura de píxeles: la complementa.** El árbol dice qué *modelo* hay,
+   no qué se *ve*. El fallo que tiene hoy la P4 —`GuiColorDemo` termina en 480 ms sin una sola línea
+   de LVGL— **sería invisible en un JSON perfecto**. Así que el JSON es el instrumento **automático y
+   comparable** (diffeable, y con paridad ya demostrada) y la captura es la única que caza *«el modelo
+   está bien y no se dibuja nada»*.
 
 **La idea es de Eduardo**: *«una vez hablamos de hacer una captura de pantalla en el micro… para
 que cuando se probasen los programas gráficos, desde el PC se pudiese ver esa pantalla»*. Y el

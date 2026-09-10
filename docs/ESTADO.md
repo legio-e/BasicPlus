@@ -27,6 +27,53 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (10-sep, madrugada) — **V6 se queda SIN fichas abiertas**: sólo los cuatro hitos
+
+**`#473` y `#489` cerradas. No queda ni una ficha de V6 abierta** — lo siguiente son los hitos
+`C1` → `T1` → `D1` → `F1`, y Eduardo pidió **analizarlos antes de empezarlos**.
+
+**Lo que pasó, en orden:**
+
+1. **`#489`** — la cola del GUI descartaba en silencio. No se agrandó: se le puso voz (el primero en
+   el acto, el total al terminar, por `stderr` para no tocar la paridad). Con `make test-guidrop`, que
+   **fuerza** el desbordamiento — 600 eventos en 512 huecos.
+2. **`#473`** — se triaron los **91** hallazgos de la auditoría `A3`: 21 que rompen el modelo (2
+   arreglados, 10 vivos, 9 ya cubiertos) y **70** de baja gravedad. De esos 70, **cuatro estaban rotos
+   de verdad**; tres se arreglaron y el cuarto se midió y resultó no estarlo.
+   - 🔑 **Dato de método**: de 12 hallazgos que la primera pasada dio por muertos, **8 resucitaron** al
+     revisarlos. El patrón siempre igual: *se arregló la mitad que llega al usuario y se declaró
+     muerto el hallazgo entero*.
+3. **Los tres arreglos, todos medidos en placa**: el `-2` de línea estancada sube al contrato (un
+   mensaje truncado se comía el siguiente); la línea del wire es **atómica en las cinco** (el cerrojo
+   es del CABLE, no de la VM); y `Uart` tiene por fin **anillo de 512 B** — verificado en loopback en
+   la Pico (GP0↔GP1) y en la Discovery (PC10↔PC11, en dos buses).
+4. **Se abrieron dos fichas de V7**: `#490` (bajo consumo) y `#491` (el cursor / `File` como objeto),
+   las dos con su estudio dentro.
+
+⚠️ **TRES TROPIEZOS MÍOS, que son la parte útil del traspaso:**
+- **Diagnostiqué contra el firmware VIEJO.** Compilé la Discovery tres veces y **no la grabé ni una**;
+  leí un `available()=-1` como «el anillo no se activa» cuando era código de tres horas antes.
+  **Compilar no es grabar, y el `serverBuild` del `HELLO` lo dice en un segundo.**
+- **Publiqué una medida inválida y me salvó el control.** El primer `GET` cronometrado daba a los dos
+  sistemas de ficheros por igual de lentos; el caso *bueno* salía peor que el sospechoso, que es la
+  señal. El fallo era de mi herramienta (troceaba por líneas y se comía el bulk crudo).
+- **Y estuve a punto de tomar la AUSENCIA de un aviso como prueba de que algo funcionaba.** No lo es:
+  ese aviso sólo salta al fallar, así que falta igual si la función no llegó a ejecutarse.
+
+🔧 **Dos herramientas nuevas en `samples/`, las dos nacidas de equivocarme**: `GpioPuente.bp`
+(comprueba que el cable está ANTES de culpar al código) y `ScanCn1.bp` (lo **busca** en los 16 pines
+del CN1 — contestó en 200 ms cuando yo lo buscaba en los pines de al lado). Y `tools/wire_serie.py`
+tiene ahora verbo `get` con cronómetro.
+
+📌 **Estado del repo**: todo commiteado, **sin push**. Imágenes al día y **grabadas** en Pico
+(23:14) y Discovery (23:15); S3, C3, C6 y P4 compilados y sin grabar. Paridad **54 PASS, 0 FAIL**.
+
+⏭️ **Lo primero al retomar**: `C1`. Eduardo dejó ampliado su diseño la madrugada del 11 —**serializar
+la ventana a JSON, con el serializador en `Component` y recursivo por los hijos**— y el análisis está
+en su ficha (`#475`). Lo que hay que censar primero: **qué propiedades expone hoy `Component`**, porque
+de eso depende que el serializador se pueda escribir en BP (una vez) en vez de como builtin (dos veces).
+
+
 ## ⏭️ AL RETOMAR (9-sep, noche) — **de 19 cosas a 2**, y el corpus de 48 a 54
 
 Segunda mitad del día, entera cerrando pendientes. **Nueve fichas cerradas, cuatro fuera de V6 con
