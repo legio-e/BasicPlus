@@ -1514,6 +1514,10 @@ static const bpvm_repl_ops_t s_repl_ops = {
 void repl_v1_handle_request(int first_char) {
     /* 1. Leer la línea JSON completa. */
     int n = wire_v1_recv_line(first_char, s_line_buf, sizeof(s_line_buf));
+    /* V6/#473 — -2 no es -1: la linea se estanco (truncado/ruido). Descartar en
+     * SILENCIO y seguir; el IDE reintenta. Contestar «demasiado larga» aqui
+     * mandaria a mirar donde no esta el problema. */
+    if (n == -2) return;
     if (n < 0) {
         wire_v1_send_fatal("PROTOCOL_ERROR", "línea excede WIRE_V1_LINE_MAX");
         return;

@@ -11,11 +11,10 @@
  * comilla en un mensaje de error rompía el framing. Los builders comunes
  * escapan siempre; ese bug se fue con la unificación.
  *
- * Matiz de esta familia que el contrato no exige: `wire_v1_recv_line` puede
- * devolver -2 si la línea se estanca (~300 ms sin bytes = byte perdido en el
- * VCP). Los llamantes tratan cualquier negativo como fallo, así que es un
- * detalle de implementación, no una extensión del contrato.
- */
+ * V6/#473 — el `-2` de «linea estancada» YA NO es un matiz de esta familia: se
+ * subio al contrato (include/bpvm_wire_v1.h, WIRE_V1_ESTANCADA_MS) y lo
+ * implementan las cinco. Este port fue el primero en tenerlo, y el motivo que
+ * dio entonces resulto ser del protocolo, no del cable. */
 #ifndef STM32_WIRE_H
 #define STM32_WIRE_H
 

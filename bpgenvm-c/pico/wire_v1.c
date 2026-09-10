@@ -16,6 +16,7 @@
 #include "task.h"
 #include "semphr.h"
 #include "pico/stdlib.h"
+#include "bpvm_platform.h"   /* V6/#473: bpvm_platform_now_ms — plazo de linea estancada */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,12 +36,18 @@ int wire_v1_recv_line(int first_char_already_read,
         if (n + 1 >= buf_max) return -1;
         buf[n++] = (char) first_char_already_read;
     }
+    int64_t ultimo = bpvm_platform_now_ms();   /* V6/#473: plazo de linea estancada */
     for (;;) {
         int c = try_get_char_v1();
         if (c < 0) {
+            /* Sin plazo, un truncado se come el mensaje siguiente. Ver el porque
+             * entero en include/bpvm_wire_v1.h (WIRE_V1_ESTANCADA_MS). */
+            if (n > 0 && bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_ESTANCADA_MS)
+                return -2;
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
+        ultimo = bpvm_platform_now_ms();
         if (c == '\n') return (int) n;
         if (c == '\r') continue;             /* tolerante: CR ignorado */
         if (n + 1 >= buf_max) return -1;     /* overflow */

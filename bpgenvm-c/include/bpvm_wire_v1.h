@@ -49,10 +49,29 @@ extern "C" {
  * Estas cuatro son el cable, y son las únicas que deben diferir. Quien porte a
  * una placa nueva implementa exactamente esto y no toca nada más. */
 
+/* V6/#473 — CUANTO SE ESPERA A UNA LINEA QUE SE HA QUEDADO A MEDIAS.
+ *
+ * El POR QUE, y no es teorico: sin plazo, un mensaje truncado (un byte perdido en
+ * el VCP, un cliente que se cae a mitad de envio, ruido que empieza por '{') deja
+ * el lector esperando un '\n' que no va a llegar — y entonces el SIGUIENTE mensaje
+ * se concatena al trozo estancado, su '\n' cierra la linea, y el resultado ya no
+ * empieza por '{': se descarta ENTERO. O sea que un truncado se COME el mensaje que
+ * viene detras. Si el que se traga es un KILL, el sintoma es «le he dado a parar y
+ * no ha parado», que no se diagnostica nunca.
+ *
+ * Lo tenia SOLO el STM32, y su header lo llamaba «matiz de esta familia que el
+ * contrato no exige». Lo exige: es del protocolo, no del cable. */
+#define WIRE_V1_ESTANCADA_MS 300u
+
 /** Lee una línea JSON hasta el '\n'. NO hace eco (el IDE no lo espera y
  *  rompería el framing). `first_char_already_read` permite pasar un carácter ya
  *  consumido por el dispatcher; -1 = leer la línea entera.
- *  @return longitud sin el '\n' y sin terminador, o -1 si excede `buf_max`. */
+ *  @return longitud sin el '\n' y sin terminador;
+ *          **-1** si excede `buf_max` (linea demasiado larga → hay que avisar);
+ *          **-2** si la linea se estanca `WIRE_V1_ESTANCADA_MS` sin recibir un byte
+ *          (→ descartar EN SILENCIO lo acumulado y seguir; el IDE reintenta).
+ *  ⚠️ Los dos negativos NO son lo mismo: contestar «linea demasiado larga» a una
+ *  linea estancada manda a mirar donde no esta el problema. */
 int  wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max);
 
 /** Lee exactamente `n` bytes crudos (tras un mensaje con campo `"bulk":N`).

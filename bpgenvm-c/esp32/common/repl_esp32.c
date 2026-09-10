@@ -1218,6 +1218,9 @@ void repl_esp32_run(void) {
     log_flush();
     for (;;) {
         int n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
+        /* V6/#473 — -2 no es -1: la linea se estanco (truncado/ruido). Descartar en
+         * SILENCIO y seguir; el IDE reintenta. */
+        if (n == -2) continue;
         if (n < 0) { wire_v1_send_fatal("PROTOCOL_ERROR", "línea excede WIRE_V1_LINE_MAX"); continue; }
         if (n == 0) continue;
         if (s_line_buf[0] != '{') continue;   /* ignora ruido no-v1 */

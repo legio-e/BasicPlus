@@ -33,6 +33,7 @@
  * no se entera de por dónde viaja.
  */
 #include "wire_v1.h"
+#include "bpvm_platform.h"   /* V6/#473: bpvm_platform_now_ms */
 
 #include "driver/usb_serial_jtag.h"
 #include "esp_err.h"
@@ -93,9 +94,17 @@ int wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max) {
         if (n + 1 >= buf_max) return -1;
         buf[n++] = (char) first_char_already_read;
     }
+    int64_t ultimo = bpvm_platform_now_ms();   /* V6/#473: plazo de linea estancada */
     for (;;) {
-        int c = wire_read_byte(100);    /* bloquea ≤100 ms cediendo CPU */
-        if (c < 0) continue;             /* timeout sin datos: reintenta */
+        int c = wire_read_byte(100);    /* bloquea <=100 ms cediendo CPU */
+        if (c < 0) {                     /* timeout sin datos */
+            /* Sin plazo, un truncado se come el mensaje siguiente. El porque
+             * entero, en include/bpvm_wire_v1.h (WIRE_V1_ESTANCADA_MS). */
+            if (n > 0 && bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_ESTANCADA_MS)
+                return -2;
+            continue;
+        }
+        ultimo = bpvm_platform_now_ms();
         if (c == '\n') {
             return (int) n;
         }
