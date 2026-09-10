@@ -336,7 +336,18 @@ void bpvm_platform_thread_yield(void) {
 
 void bpvm_platform_thread_sleep_ms(int ms) {
     if (ms <= 0) { taskYIELD(); return; }
-    vTaskDelay(pdMS_TO_TICKS(ms));
+    /* #473 (R2) - EL MISMO REDONDEO QUE cond_timed_wait, que aqui faltaba.
+     * pdMS_TO_TICKS es una division entera: con el tick a 100 Hz -las CUATRO
+     * variantes ESP lo tienen asi- CUALQUIER espera de 1..9 ms da 0 ticks, y
+     * vTaskDelay(0) no duerme: hace un yield. O sea que `sleep(5)` desde BP no
+     * esperaba. El consumidor es el planificador de hilos BP (scheduler.c:145).
+     *
+     * El arreglo estaba desde el 5-sep en cond_timed_wait de las TRES copias y
+     * en el sleep del comun; a este no viajo. Cuarta vez que este fallo aparece
+     * con la misma forma. */
+    TickType_t ticks = pdMS_TO_TICKS(ms);
+    if (ticks == 0) ticks = 1;
+    vTaskDelay(ticks);
 }
 
 /* ============================== Time =========================== */
