@@ -3663,6 +3663,33 @@ triaje):
    - **V6 — el buffer, por IRQ.** Es lo que quita la pérdida de bytes y hace verdad el contrato. El
      patrón ya está escrito en casa: `stm32/port/stm32_wire.c:71-78` es exactamente un anillo
      alimentado por IRQ, para el wire.
+
+   ✅ **HECHO Y MEDIDO EN LAS DOS FAMILIAS (10-sep).** El anillo (512 B) vive en la fachada común
+   (`src/uart.c`) y cada familia sólo enciende su IRQ y empuja bytes:
+
+   | placa | prueba | resultado |
+   |---|---|---|
+   | **Pico 2** | loopback GP0↔GP1, 200 B, 300 ms sin leer | `available`=200, leídos=200, **0 distintos** — 3 pasadas |
+   | **Discovery** | loopback PC10↔PC11, 200 B, 300 ms sin leer | **PASS en UART4 (AF8) y en USART3 (AF7)** |
+
+   El FIFO de hardware del STM32 son **8 bytes**: escribir 200 y esperar 300 ms sin leer habría
+   perdido 192. No se pierde ninguno.
+
+   🐛 **Y de camino se cerró un cuelgue que nadie había visto.** El `read` viejo del STM32 hacía
+   `timeout <= 0 → HAL_MAX_DELAY` (`gpio_stm32.c:539`), o sea **esperar para siempre**: un programa
+   que sondee con `read(..., 0)` colgaba la VM y hubo que resetear la placa por la sonda. Con el
+   anillo, `timeout 0` devuelve al instante lo que haya. Es el gemelo de lo que `available()` hacía en
+   la Pico: **la fachada prometía sondeo y ninguna de las dos familias lo daba.**
+
+   📌 **Dos herramientas salen de aquí, y las dos por haberme equivocado**: `samples/GpioPuente.bp`
+   comprueba que el cable está ANTES de culpar al código, y `samples/ScanCn1.bp` **busca** el par
+   unido en el conector cuando no se sabe dónde está — contestó «PD7↔PE2» en 200 ms mientras yo
+   probaba en PC10/PC11.
+
+   ⚠️ **Y una torpeza que conviene no repetir**: el primer diagnóstico en la Discovery lo hice contra
+   el firmware **viejo**. Había compilado la placa tres veces y **no la había grabado ni una**;
+   `available()` contestaba `-1` y lo leí como «el anillo no se activa» cuando era código de tres
+   horas antes. Compilar no es grabar, y **el `serverBuild` del `HELLO` lo dice en un segundo**.
    - **V7 — DMA donde la familia lo tenga.** A velocidades altas una IRQ por byte cuesta CPU, y
      además **despierta al micro por cada byte**, que enlaza directo con `#490`. Con DMA circular
      los bytes entran sin CPU y `available()` sale del contador del DMA.
