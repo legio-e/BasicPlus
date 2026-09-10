@@ -22,6 +22,8 @@
 
 #include "main.h"
 #include "board.h"   /* placa: BOARD_WIRE_UART, BOARD_LED_ERR_ON */
+#include "FreeRTOS.h"      /* V6/#473: mutex de TX — la linea es atomica */
+#include "semphr.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -121,9 +123,27 @@ int wire_v1_recv_line(int first_char, char* buf, size_t max) {
     }
 }
 
+/* V6/#473 — LA LINEA ES ATOMICA, y lo exige el contrato desde siempre
+ * (include/bpvm_wire_v1.h). Lo cumplia SOLO la Pico. Dos escritores reales: el
+ * hilo `io` con los OUTPUT del programa y la tarea del wire con sus replies (el
+ * poll atiende HELLO/BUSY en caliente). Sin cerrojo, dos JSON entrelazados en el
+ * IDE: corrupcion de framing, y no pasa en el PC. El cerrojo es del CABLE: el
+ * `tx_mtx` del comun no cubre el poll y ademas vive dentro de la VM. */
+static SemaphoreHandle_t s_tx_mutex = NULL;
+
+static void tx_lock(void) {
+    if (s_tx_mutex == NULL) s_tx_mutex = xSemaphoreCreateMutex();
+    if (s_tx_mutex != NULL) xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
+}
+static void tx_unlock(void) {
+    if (s_tx_mutex != NULL) xSemaphoreGive(s_tx_mutex);
+}
+
 void wire_v1_send_line(const char* data, size_t len) {
+    tx_lock();
     stm32_wire_write(data, len);
     stm32_wire_write("\n", 1);
+    tx_unlock();
 }
 
 /* [V6/U2] send_cstr y send_error se fueron al comun (`wire_v1_proto.c`).

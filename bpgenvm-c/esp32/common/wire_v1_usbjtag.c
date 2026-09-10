@@ -39,6 +39,7 @@
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 #include <string.h>
 
@@ -138,9 +139,37 @@ static void wire_write(const char* data, size_t n) {
     }
 }
 
+/* V6/#473 — LA LINEA ES ATOMICA, y lo exige el contrato desde siempre
+ * (include/bpvm_wire_v1.h: «La linea debe ser ATOMICA frente a otros
+ * escritores»). Lo cumplia SOLO la Pico; aqui estaba vigilado, no construido.
+ *
+ * Los dos escritores concurrentes son reales: el hilo `io` saca los OUTPUT del
+ * programa mientras la tarea del wire contesta sus replies — el poll atiende
+ * HELLO/BUSY EN CALIENTE, durante un run. Sin cerrojo, el IDE recibe dos JSON
+ * entrelazados: corrupcion de framing, no estetica. Y no pasa en el PC.
+ *
+ * El cerrojo es del CABLE, no de la VM: el `tx_mtx` del comun (src/bpvm_io.c:84)
+ * solo cubre la salida del programa —el poll contesta fuera de el— y ademas vive
+ * dentro de la VM, asi que no existe entre ejecuciones.
+ *
+ * Init perezoso, y es seguro: la primera escritura es el banner de arranque, con
+ * una sola tarea viva. Y tomar un mutex libre NO bloquea, asi que vale incluso
+ * antes de que arranque el planificador. */
+static SemaphoreHandle_t s_tx_mutex = NULL;
+
+static void tx_lock(void) {
+    if (s_tx_mutex == NULL) s_tx_mutex = xSemaphoreCreateMutex();
+    if (s_tx_mutex != NULL) xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
+}
+static void tx_unlock(void) {
+    if (s_tx_mutex != NULL) xSemaphoreGive(s_tx_mutex);
+}
+
 void wire_v1_send_line(const char* data, size_t len) {
+    tx_lock();
     if (len) wire_write(data, len);
     wire_write("\n", 1);
+    tx_unlock();
 }
 
 void wire_v1_send_bulk(const uint8_t* data, size_t n) {

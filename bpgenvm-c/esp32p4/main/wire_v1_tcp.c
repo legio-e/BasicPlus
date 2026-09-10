@@ -24,6 +24,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 
@@ -186,10 +187,28 @@ static void wire_send_all(const void *data, size_t len)
     }
 }
 
+/* V6/#473 — LA LINEA ES ATOMICA, y lo exige el contrato desde siempre
+ * (include/bpvm_wire_v1.h). Lo cumplia SOLO la Pico. Dos escritores reales: el
+ * hilo `io` con los OUTPUT del programa y la tarea del wire con sus replies (el
+ * poll atiende HELLO/BUSY en caliente). Sin cerrojo, dos JSON entrelazados en el
+ * IDE: corrupcion de framing, y no pasa en el PC. El cerrojo es del CABLE: el
+ * `tx_mtx` del comun no cubre el poll y ademas vive dentro de la VM. */
+static SemaphoreHandle_t s_tx_mutex = NULL;
+
+static void tx_lock(void) {
+    if (s_tx_mutex == NULL) s_tx_mutex = xSemaphoreCreateMutex();
+    if (s_tx_mutex != NULL) xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
+}
+static void tx_unlock(void) {
+    if (s_tx_mutex != NULL) xSemaphoreGive(s_tx_mutex);
+}
+
 void wire_v1_send_line(const char *data, size_t len)
 {
+    tx_lock();
     wire_send_all(data, len);
     wire_send_all("\n", 1);
+    tx_unlock();
 }
 
 
