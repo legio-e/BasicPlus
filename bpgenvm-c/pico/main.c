@@ -63,6 +63,7 @@ const bpvm_ancla_t* bios_pico_ancla(void);
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
 #include "hardware/uart.h"
+#include "hardware/irq.h"   /* V6/#473: IRQ de RX para el anillo de la fachada */
 #include "hardware/pwm.h"
 #include "hardware/adc.h"
 #include "pico/unique_id.h"
@@ -317,6 +318,8 @@ static const bpvm_spi_backend_t s_pico_spi_backend = {
 static uart_inst_t* uart_inst_for(int bus) {
     return (bus == 1) ? uart1 : uart0;
 }
+static void pico_uart_rx_irq_on(int bus);   /* V6/#473: definida abajo, con el anillo */
+
 static void pico_uart_init_impl(int bus, int tx, int rx, int baud,
                                  int data_bits, int stop_bits, int parity) {
     uart_inst_t* inst = uart_inst_for(bus);
@@ -335,6 +338,7 @@ static void pico_uart_init_impl(int bus, int tx, int rx, int baud,
     uart_set_hw_flow(inst, false, false);
     /* FIFO ON para suavizar bursts. */
     uart_set_fifo_enabled(inst, true);
+    pico_uart_rx_irq_on(bus);   /* V6/#473: y a partir de aqui, anillo de 512 B */
 }
 static int pico_uart_write_impl(int bus, const uint8_t* data, size_t n) {
     uart_inst_t* inst = uart_inst_for(bus);
@@ -373,6 +377,43 @@ static int pico_uart_read_impl(int bus, uint8_t* data, size_t n, int timeout_ms)
     }
     return (int) got;
 }
+/* ─── V6/#473 — el goteo del anillo: IRQ de RX por bus ───────────────────────
+ *
+ * El RP2350 no trae driver con buffer (el SDK da uart_is_readable/uart_read y ya:
+ * no hay API con anillo, a diferencia de ESP-IDF). Asi que el FIFO del PL011 —32
+ * bytes— era TODO lo que habia, y un programa BP perdia lo que llegara por encima
+ * de eso antes de leer. El anillo vive en la fachada comun (src/uart.c); aqui solo
+ * se enciende la IRQ y se empuja byte a byte. */
+static void pico_uart_isr_bus(int bus) {
+    uart_inst_t* inst = uart_inst_for(bus);
+    while (uart_is_readable(inst)) bpvm_uart_rx_push(bus, (uint8_t) uart_getc(inst));
+}
+static void pico_uart0_isr(void) { pico_uart_isr_bus(0); }
+static void pico_uart1_isr(void) { pico_uart_isr_bus(1); }
+
+static void pico_uart_rx_irq_on(int bus) {
+    static int handler_puesto[2] = { 0, 0 };
+    if (bus < 0 || bus > 1) return;
+    uart_inst_t* inst = uart_inst_for(bus);
+    int irq = (bus == 0) ? UART0_IRQ : UART1_IRQ;
+    if (!handler_puesto[bus]) {
+        /* Esto SI es una sola vez: irq_set_exclusive_handler paniquea si repite. */
+        irq_set_exclusive_handler(irq, (bus == 0) ? pico_uart0_isr : pico_uart1_isr);
+        irq_set_enabled(irq, true);
+        handler_puesto[bus] = 1;
+    }
+    /* ⚠️ Y esto va SIEMPRE, no una sola vez. `uart_init()` —unas lineas mas
+     * arriba— RESETEA el periferico, y con el se lleva la mascara de interrupcion
+     * (IMSC). Guardar tambien esto detras del flag dejaba la RX muda a partir del
+     * SEGUNDO Uart.init: la primera ejecucion funcionaba y las demas no. Costo un
+     * diagnostico: la prueba de loopback daba 0 bytes con el cable puesto. */
+    uart_set_irq_enables(inst, true, false);          /* RX si, TX no */
+    bpvm_uart_rx_ring_enable(bus);
+}
+
+/* V6/#473 — ya no se pregunta al FIFO: la fachada contesta desde el anillo, que es
+ * lo que promete el contrato («cuantos bytes hay»). Esto queda de ultimo recurso
+ * para un bus que no consiguiera ranura, y sigue diciendo la verdad que puede. */
 static int pico_uart_available_impl(int bus) {
     uart_inst_t* inst = uart_inst_for(bus);
     return uart_is_readable(inst) ? 1 : 0;

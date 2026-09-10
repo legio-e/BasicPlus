@@ -1,0 +1,31 @@
+// Puente.bp — CONTROL del instrumento: ¿esta el cable GP0-GP1?
+//
+// No prueba nada de la UART: prueba el CABLE. Si GP1 no sigue a GP0 como GPIO
+// puro, cualquier conclusion sobre el loopback de la UART seria sobre el cable,
+// no sobre el codigo.
+module Puente
+  import Gpio
+  import Core
+
+  function Main()
+    Gpio.init(0, Gpio.OUTPUT())
+    Gpio.init(1, Gpio.INPUT())
+    Gpio.pull(1, 2)                 // pull-down: si NO hay cable, leera 0 siempre
+
+    Gpio.write(0, 0)
+    sleep(20)
+    var bajo: integer := Gpio.read(1)
+
+    Gpio.write(0, 1)
+    sleep(20)
+    var alto: integer := Gpio.read(1)
+
+    print "GP0=0 -> GP1=" + bajo
+    print "GP0=1 -> GP1=" + alto
+    if bajo == 0 and alto == 1 then
+      print "CABLE PUESTO"
+    else
+      print "SIN CABLE (o en otros pines)"
+    endif
+  end Main
+end Puente

@@ -474,6 +474,67 @@ static UART_HandleTypeDef* uart_handle(int bus) {
     }
 }
 
+/* ─── V6/#473 — el goteo del anillo de RX: una IRQ por bus ───────────────────
+ *
+ * Aqui ya se sabia que el problema existia, y se habia parcheado a medias: el
+ * comentario del init de abajo cuenta que se encendio el FIFO de 8 bytes porque
+ * «el RX en polling pierde por overrun los bytes que llegan en rafaga (un loopback
+ * de 4 bytes solo capturaba el primero)». Ocho bytes es exactamente lo que Eduardo
+ * describe: un buffer que siempre se queda corto. El anillo de 512 de la fachada
+ * comun (src/uart.c) es el buffer de verdad; esto solo lo alimenta.
+ *
+ * Los handlers son DEBILES en el startup, asi que definirlos aqui los sustituye
+ * sin tocar ni una linea de codigo generado por CubeMX — que es la norma de la
+ * casa: al generador no se le parchea el resultado.
+ *
+ * La ISR no llama a nada de FreeRTOS (solo escribe en el anillo), asi que su
+ * prioridad no esta atada al planificador; usa la misma que el wire por coherencia. */
+static void stm32_uart_isr_bus(int bus) {
+    UART_HandleTypeDef* h = uart_handle(bus);
+    if (!h || !h->Instance) return;
+    /* Overrun: limpiarlo o la RX se queda muda para siempre. */
+    if (__HAL_UART_GET_FLAG(h, UART_FLAG_ORE)) __HAL_UART_CLEAR_OREFLAG(h);
+    while (__HAL_UART_GET_FLAG(h, UART_FLAG_RXNE)) {   /* RXFNE con FIFO on */
+        bpvm_uart_rx_push(bus, (uint8_t) (h->Instance->RDR & 0xFFu));
+    }
+}
+
+void USART2_IRQHandler(void) { stm32_uart_isr_bus(2); }
+void USART3_IRQHandler(void) { stm32_uart_isr_bus(3); }
+void UART4_IRQHandler(void)  { stm32_uart_isr_bus(4); }
+#ifdef UART5
+void UART5_IRQHandler(void)  { stm32_uart_isr_bus(5); }
+#endif
+#ifdef USART6
+void USART6_IRQHandler(void) { stm32_uart_isr_bus(6); }
+#endif
+
+#ifndef BOARD_UART_IRQ_PRIO
+#define BOARD_UART_IRQ_PRIO 5     /* la misma que el wire (board.h: BOARD_WIRE_IRQ_PRIO) */
+#endif
+
+static void stm32_uart_rx_irq_on(int bus) {
+    UART_HandleTypeDef* h = uart_handle(bus);
+    IRQn_Type irq;
+    if (!h) return;
+    switch (bus) {
+        case 2: irq = USART2_IRQn; break;
+        case 3: irq = USART3_IRQn; break;
+        case 4: irq = UART4_IRQn;  break;
+#ifdef UART5
+        case 5: irq = UART5_IRQn;  break;
+#endif
+#ifdef USART6
+        case 6: irq = USART6_IRQn; break;
+#endif
+        default: return;
+    }
+    HAL_NVIC_SetPriority(irq, BOARD_UART_IRQ_PRIO, 0);
+    HAL_NVIC_EnableIRQ(irq);
+    __HAL_UART_ENABLE_IT(h, UART_IT_RXNE);
+    bpvm_uart_rx_ring_enable(bus);
+}
+
 static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
                                  int data_bits, int stop_bits, int parity) {
     UART_HandleTypeDef* h = uart_handle(bus);
@@ -523,6 +584,7 @@ static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
                                                     : GPIO_AF8_UART4;  /* UART4/5 = AF8 */
     cfg_af_pin(tx, af);
     cfg_af_pin(rx, af);
+    stm32_uart_rx_irq_on(bus);   /* V6/#473: y a partir de aqui, anillo de 512 B */
 }
 
 static int stm32_uart_write_impl(int bus, const uint8_t* data, size_t n) {

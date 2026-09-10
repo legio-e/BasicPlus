@@ -37,6 +37,28 @@ typedef struct {
 
 void bpvm_uart_set_backend(const bpvm_uart_backend_t* backend);
 
+/* ─── V6/#473 — el buffer de RX que la fachada garantiza ─────────────────────
+ *
+ * «Las UARTs a veces tienen un pequeno buffer que siempre se queda corto, asi que
+ * hay que anadir un buffer externo que lo amplie. Eso es necesario yo diria que
+ * SIEMPRE» (Eduardo, 10-sep). Asi que el contrato promete un buffer de
+ * BPVM_UART_RX_CAP bytes, y `available` cuenta LO QUE HAY EN EL.
+ *
+ * Como se llena es de la cintura: quien tenga driver con buffer propio (el ESP32)
+ * no hace nada; quien lea el registro a pelo (Pico, STM32) enciende su IRQ de RX y
+ * empuja cada byte. En V7, DMA donde la familia lo tenga — con DMA los bytes
+ * entran sin CPU y sin despertar al micro por cada uno (ver #490).
+ *
+ * DOS llamadas y ni un verbo nuevo en BP. */
+
+/** La familia se apunta: a partir de aqui `available`/`read` salen del anillo. */
+void bpvm_uart_rx_ring_enable(int bus);
+
+/** Desde la ISR de RX de la familia, un byte por llamada. Sin cerrojos: un
+ *  productor y un consumidor. Si el anillo esta lleno CUENTA el descarte y lo dice
+ *  en el siguiente `read` — un byte perdido en silencio cuesta una tarde. */
+void bpvm_uart_rx_push(int bus, uint8_t b);
+
 /* Funciones efectivas. Si backend NULL → stub con logging. */
 void bpvm_uart_init(int bus, int tx, int rx, int baudrate,
                     int data_bits, int stop_bits, int parity);

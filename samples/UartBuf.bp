@@ -1,0 +1,64 @@
+// UartBuf.bp — V6/#473: ¿tiene la UART un buffer de verdad?
+//
+// LO QUE PRUEBA. Antes, la Pico leia el FIFO de 32 B del PL011 a pelo y el STM32
+// el registro con HAL_UART_Receive: un programa perdia todo lo que llegara por
+// encima de eso antes de leer, y available() contestaba 1 o 0 en vez de cuantos.
+// Con el anillo de 512 de la fachada, 200 bytes seguidos tienen que caber Y
+// contarse. En LOOPBACK: hay que puentear TX con RX.
+//
+// Verde = available() devuelve ~200 (no 1) y los 200 vuelven en orden.
+module UartBuf
+  import Uart
+  import Core
+
+  function Main()
+    var N: integer := 200
+    Uart.init(0, 0, 1, 115200, 8, 1, Uart.PARITY_NONE())
+
+    // Un cambio de funcion de pin (GPIO -> UART) mete un pulso que el receptor
+    // lee como bit de arranque: un byte basura ANTES de empezar. Lo drenamos, que
+    // es lo que hace cualquier programa serie real al abrir el puerto.
+    sleep(50)
+    var basura: integer[] := newIntArray(64)
+    var b: integer := Uart.read(0, basura, 64, 0)
+    if b > 0 then
+      print "drenados al abrir: " + b
+    endif
+
+    var tx: integer[] := newIntArray(N)
+    var i: integer := 0
+    while i < N do
+      tx[i] := (i * 7 + 3) mod 251        // patron reproducible, sin repetir pronto
+      i := i + 1
+    endwh
+
+    var w: integer := Uart.write(0, tx, N)
+    print "escritos: " + w
+
+    // Dar tiempo a que lleguen SIN leer: es justo el caso que antes perdia bytes.
+    sleep(300)
+
+    var hay: integer := Uart.available(0)
+    print "available tras la rafaga: " + hay
+
+    var rx: integer[] := newIntArray(N)
+    var r: integer := Uart.read(0, rx, N, 1000)
+    print "leidos: " + r
+
+    var malos: integer := 0
+    i := 0
+    while i < r do
+      if rx[i] != tx[i] then
+        malos := malos + 1
+      endif
+      i := i + 1
+    endwh
+    print "distintos: " + malos
+
+    if hay >= N and r == N and malos == 0 then
+      print "PASS"
+    else
+      print "FAIL"
+    endif
+  end Main
+end UartBuf
