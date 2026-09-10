@@ -3023,6 +3023,44 @@ Entre lo que hay ahí sin verificar, y que pinta serio:
 ⏭️ Verificar uno a uno antes de tocar nada. La regla del proyecto vale aquí más que nunca: un
 hallazgo falso cuesta más que uno que falta, porque manda a mirar donde no está el problema.
 
+---
+
+✅ **LOS 21 `rompe-el-modelo`, TRIADOS ENTEROS (10-sep).** Se verificó uno a uno, contando
+consumidores y —cuando se podía— ejecutándolo en placa. Reparto:
+
+| estado | cuántos | cuáles |
+|---|---|---|
+| **arreglados** | 2 | la redondeo de tick que faltaba en dos backends (`a257be8b`) · el `EXITED` del STM32 sin escapar (`80d6ad0d`) |
+| **vivos y verificados**, sin arreglar | 10 | los tres backends de FreeRTOS · `lv_conf.h` · `setRotation` · la fachada de FS que depende de littlefs · la clasificación de fallo en 1 de 3 backends · los tres `board_mgr_*` · el hilo que se borra a sí mismo · `RUN` cuatro veces · el sink de `OUTPUT` cinco veces · la puerta de arranque con tres listas distintas |
+| **ya cubiertos por otra ficha** | 9 | `#469` (ADC sin backend, el pinout del RP2350 en el común) · `#480` (`Pulse` del C3, `initChannel` que falla con 0) · `#470` (identidad, descriptor de placa, `gpioCount`, y los arrays de buses → V7) |
+
+**Dos hallazgos venían EXAGERADOS**, y esto es justo lo que la fase de verificación existe para
+pillar:
+- *«tres copias casi línea a línea»* de `board_mgr_*`: medido, el solapamiento es 56 % / 44 % / 61 %
+  y el del ESP32 es el doble de grande (294 líneas frente a 137). Hay duplicación, pero no es un
+  copia-pega.
+- *«`lv_conf.h` falla por defecto y en silencio»*: la duplicación es real (dos listas idénticas de
+  nombres de placa, `:33` y `:976`), pero el fallo **no sería silencioso**: sin su `-D` la placa
+  nueva se queda con `LV_USE_SDL 1`, y los builds ESP sí compilan `lv_sdl_*.c` —sus `.obj` están en
+  `esp32c6/build/`—, que acaba en `#include <SDL2/SDL.h>`. Eso es un error de compilación.
+
+**Y uno era PEOR de lo descrito.** La puerta de arranque no sólo está copiada tres veces con listas
+distintas: lo que no está en la lista **pasa de largo al despachador común**. Los agujeros, hoy:
+la Pico no gatea `LIST_DIR`; el ESP32 no gatea `MKDIR`/`RMDIR`/`RENAME`/`FORMAT`; el STM32 no gatea
+`LIST_DIR` ni `SAVE`. Y el común no calla: sin FS, `LIST_DIR` contesta `NOT_FOUND «no se puede
+listar»` —como si el directorio no existiera, en vez de «no hay FS»— y `SAVE` contesta **OK**.
+
+**Medido en placa** (Discovery, 10-sep): `setRotation(90)` deja el modelo en 480×800 mientras el
+LTDC sigue escaneando 800×480 —su `disp_set_rotation` es literalmente `(void) deg;`— y los `Form`
+se dimensionan con el ancho del **modelo** (`Gui.bp:932`). El programa de prueba es
+`samples/RotaDk2.bp`.
+
+⏭️ **Lo que queda de esta ficha**: los ~57 hallazgos de tipo `incomodo`/`cosmetico`, y **una
+medida pendiente de placa**: si el hilo que se borra a sí mismo (`vTaskDelete(NULL)` en la Pico y el
+ESP32) filtra memoria de verdad, como le pasó a la Nucleo el 5-sep. Hace falta una Pico o una ESP32
+conectada; con la Discovery no se puede, porque es la única familia que ya usa el backend común
+arreglado.
+
 #### 🧬 `#479` — EL MAPA DE PINES Y LOS PINES ANALÓGICOS → **V7** (abierta 6-sep, decidida a V7 el mismo día)
 
 **Decisión de Eduardo, y con su motivo**: *«Lo desarrollamos en V7. Ahora en V6 no lo desarrollamos,

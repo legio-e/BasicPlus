@@ -1,0 +1,17 @@
+// RotaDk2.bp — #473/R11: ¿el MODELO gira aunque el panel no gire?
+//
+// El hallazgo dice que bpvm_gui_set_rotation intercambia w/h del screen SIN
+// preguntar al backend, y que en la DK2 el backend es un no-op con aviso. Si es
+// cierto, aqui saldra 800x480 -> 480x800 mientras el panel sigue pintando 800x480.
+module RotaDk2
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    print "antes  : " + scr.width + "x" + scr.height
+    Gui.setRotation(90)
+    print "despues: " + scr.width + "x" + scr.height
+    Gui.setRotation(0)
+    print "vuelta : " + scr.width + "x" + scr.height
+  end Main
+end RotaDk2
