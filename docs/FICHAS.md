@@ -3191,6 +3191,30 @@ Así que la Nucleo no murió por `vTaskDelete(NULL)`: murió porque **su lazo de
 que borre `join`) es correcto igual —no depende de que nadie tenga turno—, pero **la Pico y el ESP32
 no estaban expuestas**: el hallazgo acertaba en la duplicación y erraba en la consecuencia.
 
+📄 **El arreglo de fondo de R1+R16 tiene estudio: `docs/FUSION_BACKENDS_FREERTOS.md`** (10-sep).
+Qué se puede fundir de los tres backends de FreeRTOS y qué no, en pasos verificables. Lo que hay que
+saber sin abrir el documento:
+
+- 🔴 **Lo que bloquea es un 32 % sin explicar.** Ya se intentó y se midió el 5-sep: con el común, la
+  Pico hacía `PrintBench` en **5 330 ms** en vez de 4 040, repetible a ±10 ms y aislado por
+  bisección — y el `KILL` **mejoró** de 33 ms a 2. No se subió porque no se supo explicar. Esa medida
+  es de antes de `#485` y de `a257be8b`, así que **el paso 0 es remedirla**, no discutirla.
+- ⚠️ **Una trampa de unidades que el build no ve.** El común expresa las pilas en **palabras**
+  (`BPVM_FR_STACK_IO 1024u`), el ESP32 en **bytes** (`4096`). Fundir sin pasar el `-D` deja `io` con
+  1 KB cuando su sink declara `char buf[1024]` en pila: desbordamiento en la **primera línea
+  impresa**, con el build en verde.
+- ⚠️ **La fusión cambia una fuga por otra, y hay que decirlo entero.** Con `suspend+join`, un hilo
+  que nadie una **no devuelve su pila nunca, con certeza** (hoy es probabilístico y depende de la
+  ociosa). Hoy sería seguro —los cuatro sitios unen— **salvo el camino de error de
+  `src/scheduler_smp.c:303-315`**, que libera y se va sin unir los workers ya creados. Ése sí es un
+  defecto de hoy.
+- 🐛 **Un defecto latente en las TRES copias, que la fusión NO arregla**: el condvar usa
+  `xSemaphoreCreateBinary()` (`src:106`, `pico:77`, `esp32:70`), que retiene UN token, y `broadcast`
+  emite N. Los sobrantes se pierden, y hay esperadores sin plazo. **Sin síntoma observado** — se
+  anota, no se persigue.
+- 📌 **Nadie compila el común salvo CubeIDE**: un cambio ahí no lo ve ningún `make` ni `idf.py`
+  hasta que se construye el STM32.
+
 ⏭️ **Lo que queda de esta ficha**: los ~57 hallazgos de tipo `incomodo`/`cosmetico`. Y una nota que
 no es ficha porque no tiene consecuencia conocida hoy: en el STM32 **la tarea ociosa no corre nunca**,
 así que cualquier cosa que FreeRTOS difiera a la ociosa allí no ocurre. El único que se apoyaba en
