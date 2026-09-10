@@ -2494,7 +2494,41 @@ tienen todas las familias, con nombres distintos:
 |---|---|---|
 | **RP2350** | **AON Timer**, 64 bits en ms, dentro de POWMAN | **no**: no enlazamos `hardware_powman` ni `pico_sleep` (`pico/CMakeLists.txt:195-213`, 12 librerías y ninguna es ésa) |
 | **STM32U5** | RTC de hardware con dominio de respaldo (y además LPTIM) | **sí**, es el único con backend (`gpio_stm32.c:790`, `:1009`) |
-| **ESP32** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
+| **ESP32-S3 / C3 / C6** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
+| **ESP32-P4** | **igual, pero con más silicio**: controlador RTC con lógica de wake-up para deep-sleep **y dominio VBAT** con respaldo por batería y cristal externo de 32,768 kHz | **no**, y con matiz — ver abajo |
+
+🔬 **EL P4 NO ES «UN ESP32» MÁS EN ESTO (dato de Eduardo, 10-sep, comprobado en nuestras imágenes).**
+El P4 integra controlador RTC con lógica de activación para deep-sleep **y un dominio VBAT** con
+entrada para cristal de 32,768 kHz y conmutación de energía, de modo que la hora sobrevive a un corte
+de la alimentación principal. *(Su aviso, y hay que mantenerlo escrito: el soporte de ESP-IDF para el
+mantenimiento avanzado con VBAT sigue en pruebas.)*
+
+Lo que dicen **nuestros** `sdkconfig`, que es la pregunta útil:
+
+| | S3 | C3 | C6 | **P4** |
+|---|---|---|---|---|
+| `CONFIG_SOC_VBAT_SUPPORTED` | — | — | — | **`y`** |
+| `CONFIG_ESP_VBAT_INIT_AUTO` | — | — | — | **not set** |
+| fuente del reloj RTC | `INT_RC` | `INT_RC` | `INT_RC` | **`INT_RC`** |
+
+O sea: **el silicio del P4 lo soporta, IDF lo sabe (`SOC_VBAT_SUPPORTED=y`) y nuestra imagen no lo
+usa** — y las cuatro, el P4 incluido, corren el RTC sobre el **oscilador RC interno**, no sobre un
+cristal.
+
+🔑 **Y eso separa limpiamente los dos usos, que hasta ahora iban juntos:**
+- **Como DESPERTADOR** («despiértame dentro de N ms»): el RC interno **basta**. Que derive un 5 % con
+  la temperatura da igual cuando lo que se pide es volver a mirar dentro de un rato. Para el caso 2
+  —la escalera— no hace falta cristal ni VBAT.
+- **Como CALENDARIO** («qué hora es tras un corte»): ahí **sí** hacen falta cristal y VBAT, y eso es
+  del P4 y del STM32, no de los otros tres.
+
+Así que el punto de partida no se mueve: **empezar por el despertador, que se puede en todas**, y
+dejar el calendario como una capacidad que unas placas tienen y otras no —y que, como todo lo de
+`#479`, hay que poder **preguntar** en vez de suponer.
+
+❓ **No determinado, y es de placa, no de micro**: si la Waveshare P4 que usamos tiene realmente
+cableados el cristal de 32,768 kHz y la entrada VBAT. Eso no sale del código: sale del esquemático o
+del multímetro.
 
 ⚠️ **Un RTC externo NO es un despertador.** Un PCF85063 por I2C es un **driver de placa**, no silicio:
 da la hora, pero **sólo despierta al micro si su línea INT está cableada a un pin capaz de
