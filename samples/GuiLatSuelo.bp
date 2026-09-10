@@ -1,0 +1,51 @@
+// GuiLatSuelo.bp - #462: el SUELO de latencia upcall->handler, medible sin manos.
+//
+// Hermano de GuiEvLat.bp, con dos diferencias que lo hacen automatico:
+//   · el boton tiene POSICION FIJA, para que el guion de clics
+//     (BPVM_GUI_SCRIPT) sepa donde pinchar;
+//   · usa Gui.start()/stop() en vez de Gui.run(), asi termina solo.
+//
+// QUE MIDE. El handler imprime `uptimeMs() - t`, siendo `t` el sello puesto
+// DENTRO del upcall del clic, justo antes del `raise`. O sea que la deteccion
+// del clic queda FUERA: lo que se mide es lo que tarda un evento BP levantado
+// desde un handler en llegar a su handler. Eso es el suelo de la ficha.
+module GuiLatSuelo
+  import Gui
+  import Machine
+
+  class Testigo
+    var vistos: integer
+    function event alPulsar(quien: Object, n: integer, t: integer)
+      this.vistos := this.vistos + 1
+      print "  lat=", Machine.uptimeMs() - t, " ms  cola=", n - this.vistos
+    end alPulsar
+  end Testigo
+
+  class Puente
+    var nClic: integer
+    event pulsado(quien: Object, n: integer, t: integer)
+    function event btn_onClick(quien: Gui.Component)
+      this.nClic := this.nClic + 1
+      var t0: integer := Machine.uptimeMs()
+      raise pulsado(this, this.nClic, t0)
+    end btn_onClick
+  end Puente
+
+  public function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var btn: Gui.Button := Gui.Button(scr, "latencia")
+    btn.setBounds(20, 20, 160, 60)
+
+    var t: Testigo := Testigo()
+    var pu: Puente := Puente()
+    pu.pulsado := t::alPulsar
+    btn.onClick := pu::btn_onClick
+
+    print "== midiendo =="
+    Gui.start()
+    sleep(9000)
+    Gui.stop()
+    Gui.join()
+    print "== fin =="
+  end Main
+end GuiLatSuelo

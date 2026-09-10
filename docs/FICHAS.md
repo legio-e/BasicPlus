@@ -6865,7 +6865,7 @@ el otro lado: no un doble más amable, un doble IMPOSIBLE.
 | 2 | El wire atendido **mientras la VM calcula** | ✅ `A1`: es el hilo `io`, en las cinco familias |
 | 3 | La **carrera del estado de salida** | ✅ 5-sep (arriba) |
 | 4 | El **quantum en opcodes** | 🟡 **el caso del GUI, resuelto el 9-sep sin tocarlo** (arriba): el hilo del GUI se aparta solo. El quantum en opcodes sigue siendo desigual para CUALQUIER hilo con opcodes caros, pero ya no hay nada que lo esté sufriendo |
-| 5 | Un **suelo de ~48 ms** independiente del quantum | 🔴 abierto, sin investigar (sospechoso: `LV_DEF_REFR_PERIOD = 33 ms`) |
+| 5 | Un **suelo de latencia** independiente del quantum | 🟡 **10-sep**: el sospechoso (`LV_DEF_REFR_PERIOD`) **DESCARTADO** con prueba de desplazamiento, y los 48 ms estaban caducados. Sólo medible EN PLACA — ver abajo |
 | 6 | La **prioridad del `wire_task` del P4** | ➡️ **SEPARADA el 9-sep como `#485`** (Eduardo: *«muchas de estas entradas en realidad son múltiples cosas»*) |
 
 📌 El 6 es ahora más concreto que en agosto: ya no es «el P4 va a otra prioridad», es que
@@ -6879,6 +6879,68 @@ símbolos con `strcmp` en cada pasada— ➡️ **SEPARADA el 9-sep como `#486`*
 ⚠️ **Lo que esto le hace al diagnóstico anterior**: la prioridad 5 del P4 sigue siendo una
 diferencia real, pero **ya no es la explicación del retraso** — la Discovery, sin RTOS y sin
 prioridades, tiene la misma latencia. Lo que el P4 añade es que además se le acumulan.
+
+
+### 🔬 10-sep — EL SOSPECHOSO DEL SUELO, DESCARTADO. Y el suelo del PC es el PC.
+
+**Lo primero, y es la lección de ayer otra vez: los 48 ms estaban CADUCADOS.** Se midieron el
+31-ago, o sea **antes de `G1`** (el lazo al hilo BP, 6-sep) y **antes del arreglo del 9-sep** (el
+bombeo dejó de dormir a nivel de SO). La ficha describía un sistema que ya no existe.
+
+### La herramienta, primero — porque por eso llevaba diez días sin tocarse
+
+Medir esto exigía **que alguien pulsara un botón y mirase**. Ahora no: `samples/GuiLatSuelo.bp` +
+el guión de clics del host (`BPVM_GUI_SCRIPT`, con `wait`/`click x y`) + `BPVM_GUI_SHOT_MS` para que
+termine solo. Sin manos, repetible.
+
+```
+BPVM_GUI_SCRIPT=clics.txt BPVM_GUI_SHOT_MS=8000 build/bpgenvm-c.exe GuiLatSuelo.mod
+```
+
+### ❌ `LV_DEF_REFR_PERIOD` NO es la causa — prueba de desplazamiento
+
+La ficha lo señalaba desde el 31-ago (*«explica buena parte, no todo»*). Se movió el número y la
+latencia **no se enteró**:
+
+| `LV_DEF_REFR_PERIOD` | latencias medidas |
+|---|---|
+| 33 (por defecto) | 17 · 21 · 16 · 16 |
+| **66** | 13 · 17 · 15 · 16 · 15 |
+| **10** | 18 · 19 · 17 · 16 · 15 |
+
+Y el segundo candidato, **nuestro** tope de ocio (`BPVM_GUI_OCIO_MAX_MS`), tampoco: con **2** y con
+**40** salen los mismos 15-18 ms.
+
+### 🔑 Y cuando NINGUNA palanca mueve la medida, el sospechoso es el INSTRUMENTO
+
+```
+sleep(1) real = 16-17 ms          <- en este PC
+sleep(5) real = 16-17 ms
+```
+
+Son los **15,6 ms del tick del planificador de Windows**. O sea que **el «suelo de 17 ms» del host
+es el PC, no el producto** — y por eso los dos experimentos salían planos: estaban midiendo el tick
+de Windows, no LVGL ni nuestro lazo. Los dos eran válidos de método y **ciegos de resolución**.
+
+⚠️ **Consecuencia práctica, y es la que hay que retener: en el PC NO se puede medir latencia por
+debajo de ~20 ms.** Cualquier medida de este tipo en el host, por encima de ese suelo o no vale.
+`samples/GuiLatSuelo.bp` sigue sirviendo —para latencias grandes, como los 400 ms de antes de
+`G1`—, pero lleva ese límite escrito.
+
+### ⏭️ Lo que queda, y dónde
+
+El suelo **sólo se puede medir en placa**, donde el tick es de 1 ms (SysTick del STM32) en vez de
+15,6. Y hay una hipótesis concreta que probar allí, con lo que sabemos hoy:
+
+📐 **Puede que los 48 ms ya no existan.** El camino de hoy es: `raise` → el hilo del GUI termina su
+vuelta → `sleep(ocio)` → **eso ES la frontera de quantum** y el planificador inyecta el handler. Con
+un tick de 1 ms eso deberían ser milisegundos, no 48. Los 48 se midieron con el lazo **dentro del
+hilo principal** y con el bombeo durmiendo a nivel de SO — las dos cosas cambiadas desde entonces.
+
+⏭️ **La medida**: `GuiLatSuelo.bp` en la **Discovery** (o el P4), pulsando de verdad. Necesita mano
+humana porque el guión de clics es del host (SDL). Si sale del orden de milisegundos, esta pieza se
+cierra sola; si sigue en decenas, entonces sí hay algo que buscar y el terreno ya está despejado de
+los dos sospechosos falsos.
 
 #### ✅ `#461` — los paths reservaban tamaño FIJO: **20 KB recuperados en el STM32 y 7,5 en el ESP32** (cerrada 31-ago)
 
