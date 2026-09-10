@@ -2281,6 +2281,40 @@ packs y trae `Machine.mod` y el `Adc.mod` nuevo.
 
 #### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
 
+🔎 **Y NO ES NUEVO: EL DISEÑO YA ESTABA DECIDIDO, Y SE PERDIÓ POR NO SER FICHA.** Eduardo lo recordaba
+(*«se habló que los ficheros de BP fuesen objetos y que open/read/write/close trabajasen con
+handles»*) y estaba: **`docs/V6_IDEAS.md:253`, del 17-ago**, bajo el título *«Ficheros: no hay `seek`
+porque no hay `open`»* — y arrancó de una pregunta suya, la del `fseek`.
+
+Allí hay **dos decisiones suyas, marcadas como DECIDIDO**:
+1. *«Un fichero para BP debe ser una clase, con los métodos habituales: open, close, read, write,
+   seek. Read tendrán que ser varios (readByte, readStr…) mientras que write se puede sobrecargar.»*
+   Y **la variante SIN handles quedó explícitamente descartada** (`readFileAt(path, off, n)`).
+2. *«Podemos tener un tipo `File` con las funciones básicas que trabaja a nivel de bytes. Después un
+   2º tipo que herede del anterior y que trabaje con strings (UTF-8).»* — con la regla que lo deja
+   limpio: **`TextFile` AÑADE sobrecargas, nunca redefine**, y lo formateado va por `print`.
+
+📌 **El documento ya había visto lo que se volvió a descubrir el 10-sep**, y con estas palabras:
+*«la trampa de `#398` desaparece sola cuando el fichero se abre UNA vez… **la apertura persistente ES
+el handle**»*. Y sus dos preguntas abiertas son exactamente las que hacían falta: **¿qué pasa si no se
+cierra?** (BP no tiene destructores; la red que ya existe es el guardián de fin de RUN de `#339`) y
+**¿cuántos ficheros a la vez?** — la misma que se planteó de cero al abrir esta ficha.
+
+⚠️ **Dónde se quedó, que es lo que Eduardo preguntaba: en ningún sitio.** Estaba pensado para V6
+—`docs/ESTADO.md:3008` habla de *«al diseñar `File`/`TextFile` para V6»*— pero **nunca se convirtió
+en ficha**, así que no entró en el plan de ninguna versión y no hay ni una línea de código
+(`grep TextFile` en stdlib, miVM, frontend y VM-C: cero).
+
+🔑 **Y ésa es la lección, más cara que el trabajo perdido**: una decisión que vive sólo en un
+`*_IDEAS.md` **no existe para el plan**. `FICHAS.md` es la fuente única precisamente para esto, y
+aquí se ve el coste de saltárselo: un diseño cerrado, con molde en casa (`Net.Tcp`) y con la
+fontanería ya hecha y rodada (`read_at`/`write_at`, que SQLite usa a diario), se quedó fuera nueve
+meses sin que nada lo dijera.
+
+⏭️ **Así que esta ficha ABSORBE aquel diseño** y son la misma cosa por los dos lados: `File`/`TextFile`
+es la mitad de arriba (superficie BP) y el cursor de la fachada es la de abajo. La de abajo hace falta
+igual: hoy las 17 ops del backend reciben ruta, así que un `File.seek()` no tendría dónde apoyarse.
+
 **Sale del punto 4 de `#473`** —que `read_stream` no existe en el backend FAT, así que bajar un
 fichero grande de `/sd` cuesta cuadrático— y lo reencuadra **Eduardo**: *«Esto ya se habló cuando te
 pedí un comando `fseek`. La idea es tener un cursor y poder hacer desplazamientos relativos.»*
