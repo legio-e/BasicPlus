@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **4** | `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **5** | `G2` (modelo gráfico) → `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -4024,6 +4024,99 @@ código 1**; sin sabotaje, código 0.
 no vuelca sus datos, es ciego a la rotación, y color/fuente son render-only). Para eso está la
 segunda vía, `#475`.
 
+#### 🧱 `G2` — REVISIÓN DEL MODELO GRÁFICO (abierto 11-sep · **DISEÑADO**, no empezado)
+
+**De dónde sale.** Analizando `C1` (serializar la ventana a JSON) apareció que **el modelo BP de la
+GUI no era un modelo**: el árbol vivía sólo en C, los wrappers de los hijos se tiraban al cargar un
+`.win`, y `destroy()` prometía una cascada que el backend no hacía. Eduardo, 11-sep: *«esto no es
+`C1`, es un hito en sí mismo, algo como "Revisión del modelo gráfico"»*.
+
+**Los dos planos** (Eduardo): *«el plano LVGL y el plano GUI de BP. Lo que estamos definiendo es que
+cuando se destruya un componente BP se destruya él mismo, sus hijos si los hay, y en el plano LVGL los
+widgets.»* Cada plano tiene su árbol; **el nuestro manda** y el de LVGL lo sigue.
+
+### El diseño, DECIDIDO (Eduardo, 11-sep)
+
+**El principio que ordena todo lo demás** (Eduardo): *«El modelo LVGL es su modelo, pero el modelo de
+ventanas y componentes BP es NUESTRO modelo, y tiene que ser lógico y coherente. **Si un objeto
+contiene a otro, debería poder verse.**»* Lo que había —el árbol sólo en C, los wrappers de los
+hijos tirados al cargar, `destroy()` prometiendo una cascada que el backend no hace— no lo cumplía.
+
+**1. Cada contenedor tiene a sus hijos** (no una lista plana en `Window`): modela la contención,
+permite el `toJson()` recursivo tal como lo describió, la destrucción en cascada **en BP**, y converge
+con miVM, cuyo `Node` ya tiene `children`.
+
+**2. Una clase `Container` entre `Component` y los que contienen.** *«Tenemos componentes simples,
+que no contienen otros y descienden de `Component`. Luego los que pueden contener a otros —en Swing
+sería un `Panel`—. Serían éste y los que lo hereden los que deberían tener una `OwnerList` de sus
+hijos.»* Las **16 hojas** no pagan nada; los contenedores llevan la lista.
+
+**3. `Button` es un `Container`, con dos constructores.** Salió de un problema real: *«el botón es un
+caso especial: acostumbra a tener un texto nada más, pero también hay botones con iconos, con icono y
+texto…»*. La primera idea —`Button` hoja y un `ButtonEx` que herede y contenga— **no cabe en BP**:
+sin interfaces de clase (la gramática las lista como *«IDEAS… no en el lenguaje»*) un `ButtonEx extends
+Button` nunca sería un `Container`, y el `parent` de los constructores no tendría tipo. Decisión:
+*«todos los botones pueden tener varios componentes; un constructor normal y otro para el caso más
+frecuente, el botón con un texto»*. Y el `Button` de hoy **ya era eso**: su constructor hace
+`Label(this, text)` y tira el wrapper.
+
+```
+Component                          hoja: geometría, eventos, delete(), parent: Container
+ └─ Container extends Component    var owner children: OwnerList · destroy() en cascada · toJson() recursivo
+      ├─ Screen · Panel · Window · TabPage · Tabview
+      └─ Button                    Button(parent)  ·  Button(parent, text)
+```
+
+**4. Los constructores pasan a `parent: Container`.** Es una **garantía en compilación**: meter un
+`Label` en un `Checkbox` deja de compilar. ⚠️ Toca **API publicada** (`Gui.bp` está en V4 y V5); sólo
+rompe programas que ya estaban mal según nuestro modelo, o que declararon el padre con tipo estático
+`Component`. Va implícito en la decisión, pero queda dicho.
+
+**5. Alta y baja simétricas, o el modelo miente:** cada widget se registra en `parent.children` al
+crearse (un solo punto en la base) y **`delete()` lo quita de la lista del padre**. `children` es
+**`OwnerList`**, no `List`: es el que existe para que liberar el contenedor libere los elementos.
+
+**6. El serializador vuelve a BP (A), y esta vez por la razón correcta**: el árbol existe en BP.
+`toJson()` en `Component` emite lo suyo; `Container` lo sobrescribe añadiendo `"children": [...]`;
+cada hoja añade sus campos. Formato: **el de los `.win`**. Prueba: **ida y vuelta con `main.win`**,
+al corpus de paridad. Detalle fijado para que la ida y vuelta no sorprenda: `Button(parent, text)`
+guarda su `Label` en un campo `owner` propio y `toJson()` lo emite como **`"text"`**, no como hijo —
+así el formato de fichero sigue siendo el que ya existe.
+
+**7. Lo que se arregla en C igualmente**, porque es defecto de V6 hoy: `create_node` **reutiliza
+ranuras** y `bpvm_gui_delete` **cascadea en el modelo** (por padre, como `dump_node`). Aunque BP lleve
+la cascada, un `delete()` directo no debe dejar huérfanos en la tabla de 512.
+
+**8. Lo que espera al destructor (`#491`, V7)**: `owner` en las properties declaradas de la ventana.
+Sin destructor, liberar el wrapper no libera el nodo, así que hoy no aporta.
+
+**Y la otra mitad de `C1` sigue en pie**: la captura de píxeles. El árbol dice qué modelo hay; el
+
+### ⚠️ Destruir algo YA destruido — los cuatro sitios (Eduardo: *«hay que preverlo»*)
+
+| | dónde | hoy | regla |
+|---|---|---|---|
+| **1** | BP→BP: segundo `delete()` sobre el mismo handle | `node_for` no lo encuentra → no-op **silencioso**. Seguro | ⏭️ decidir: **idempotente por contrato** (como `close()`), o con aviso |
+| **2** | C→LVGL: `lv_obj_delete` sobre un `lv_obj` que LVGL **ya liberó** por su cascada | 🔴 **ROTO HOY**: `clean()` marca `used=0` sólo a los hijos directos (`gui.c:1051`); los **nietos** quedan `used=1` con `lv` colgando → un `delete()` posterior es **use-after-free en LVGL** | la cascada en C recorre TODO el subárbol; **nunca queda un `lv` colgando** |
+| **3** | reutilizar ranuras: un handle viejo que alias a un widget nuevo (ABA) | ✅ **seguro por construcción**: `node_for` **busca por handle** (`gui.c:157-162`), no indexa, y `g_next_handle++` no se repite | 🔒 **INVARIANTE**: se reutilizan **ranuras**, **jamás números de handle**. Identidad ≠ posición — el principio de los handles con generación de V4. Que nadie «optimice» `node_for` a un índice |
+| **4** | wrapper BP muerto con nodo C vivo: el `objptr` de los eventos (`bind_click`) | un evento LVGL despacharía a memoria BP liberada | **orden**: el nodo C muere **antes** que su wrapper. `destroy()` lo garantiza; soltar la ventana sin `destroy()` no — es el hueco del destructor (`#491`), hoy cubierto sólo por el reset de fin de RUN |
+
+🔑 **Una sola regla de orden resuelve 2 y 4**: la cascada baja **hijos antes que padre**, y en cada
+nodo **C antes que BP**. Cada hijo borra su propio `lv_obj` (LVGL no cascadea por nosotros → no hay
+`lv` colgando) y el wrapper sólo se libera cuando su nodo ya no existe.
+
+### Los defectos de HOY que este hito arregla de paso (son de V6 aunque el hito no existiera)
+- `create_node` **no reutiliza ranuras** (`gui.c:174`): la tabla de 512 sólo crece dentro de un RUN.
+- `bpvm_gui_delete` **no cascadea en el modelo** (`gui.c:1073`): descendientes huérfanos.
+- `bpvm_gui_clean` deja **nietos con `lv` colgando** (el punto 2 de arriba): crash posible.
+
+### Orden de construcción
+1. Los tres arreglos de C (son defectos de hoy y todo lo demás los pisa).
+2. `Container` + `OwnerList` + alta/baja simétricas + `parent: Container` (el cimiento).
+3. `destroy()` en cascada con la regla de orden.
+4. `toJson()` recursivo, formato `.win`, **ida y vuelta con `main.win`** al corpus.
+Y después, `C1` (la captura), que se apoya en esto.
+
 #### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep · **MEDIDA el 5-sep**)
 
 🧩 **AMPLIACIÓN DE EDUARDO (11-sep, 0:40 — sólo análisis): SERIALIZAR LA VENTANA A JSON.**
@@ -4169,62 +4262,11 @@ setter (`__guiSetName`) y una cadena por nodo, y el cargador lo rellena al const
 
 ---
 
-### ✅ `C1` — EL DISEÑO, DECIDIDO (Eduardo, 11-sep)
+### ➡️ El diseño del modelo de componentes SE FUE A SU PROPIO HITO: **`G2` — Revisión del modelo gráfico**
 
-**El principio que ordena todo lo demás** (Eduardo): *«El modelo LVGL es su modelo, pero el modelo de
-ventanas y componentes BP es NUESTRO modelo, y tiene que ser lógico y coherente. **Si un objeto
-contiene a otro, debería poder verse.**»* Lo que había —el árbol sólo en C, los wrappers de los
-hijos tirados al cargar, `destroy()` prometiendo una cascada que el backend no hace— no lo cumplía.
-
-**1. Cada contenedor tiene a sus hijos** (no una lista plana en `Window`): modela la contención,
-permite el `toJson()` recursivo tal como lo describió, la destrucción en cascada **en BP**, y converge
-con miVM, cuyo `Node` ya tiene `children`.
-
-**2. Una clase `Container` entre `Component` y los que contienen.** *«Tenemos componentes simples,
-que no contienen otros y descienden de `Component`. Luego los que pueden contener a otros —en Swing
-sería un `Panel`—. Serían éste y los que lo hereden los que deberían tener una `OwnerList` de sus
-hijos.»* Las **16 hojas** no pagan nada; los contenedores llevan la lista.
-
-**3. `Button` es un `Container`, con dos constructores.** Salió de un problema real: *«el botón es un
-caso especial: acostumbra a tener un texto nada más, pero también hay botones con iconos, con icono y
-texto…»*. La primera idea —`Button` hoja y un `ButtonEx` que herede y contenga— **no cabe en BP**:
-sin interfaces de clase (la gramática las lista como *«IDEAS… no en el lenguaje»*) un `ButtonEx extends
-Button` nunca sería un `Container`, y el `parent` de los constructores no tendría tipo. Decisión:
-*«todos los botones pueden tener varios componentes; un constructor normal y otro para el caso más
-frecuente, el botón con un texto»*. Y el `Button` de hoy **ya era eso**: su constructor hace
-`Label(this, text)` y tira el wrapper.
-
-```
-Component                          hoja: geometría, eventos, delete(), parent: Container
- └─ Container extends Component    var owner children: OwnerList · destroy() en cascada · toJson() recursivo
-      ├─ Screen · Panel · Window · TabPage · Tabview
-      └─ Button                    Button(parent)  ·  Button(parent, text)
-```
-
-**4. Los constructores pasan a `parent: Container`.** Es una **garantía en compilación**: meter un
-`Label` en un `Checkbox` deja de compilar. ⚠️ Toca **API publicada** (`Gui.bp` está en V4 y V5); sólo
-rompe programas que ya estaban mal según nuestro modelo, o que declararon el padre con tipo estático
-`Component`. Va implícito en la decisión, pero queda dicho.
-
-**5. Alta y baja simétricas, o el modelo miente:** cada widget se registra en `parent.children` al
-crearse (un solo punto en la base) y **`delete()` lo quita de la lista del padre**. `children` es
-**`OwnerList`**, no `List`: es el que existe para que liberar el contenedor libere los elementos.
-
-**6. El serializador vuelve a BP (A), y esta vez por la razón correcta**: el árbol existe en BP.
-`toJson()` en `Component` emite lo suyo; `Container` lo sobrescribe añadiendo `"children": [...]`;
-cada hoja añade sus campos. Formato: **el de los `.win`**. Prueba: **ida y vuelta con `main.win`**,
-al corpus de paridad. Detalle fijado para que la ida y vuelta no sorprenda: `Button(parent, text)`
-guarda su `Label` en un campo `owner` propio y `toJson()` lo emite como **`"text"`**, no como hijo —
-así el formato de fichero sigue siendo el que ya existe.
-
-**7. Lo que se arregla en C igualmente**, porque es defecto de V6 hoy: `create_node` **reutiliza
-ranuras** y `bpvm_gui_delete` **cascadea en el modelo** (por padre, como `dump_node`). Aunque BP lleve
-la cascada, un `delete()` directo no debe dejar huérfanos en la tabla de 512.
-
-**8. Lo que espera al destructor (`#491`, V7)**: `owner` en las properties declaradas de la ventana.
-Sin destructor, liberar el wrapper no libera el nodo, así que hoy no aporta.
-
-**Y la otra mitad de `C1` sigue en pie**: la captura de píxeles. El árbol dice qué modelo hay; el
+Eduardo, 11-sep: *«A nivel organizativo esto no es `C1`, es un hito en sí mismo.»* `C1` se queda con lo
+que era: **la captura de píxeles**. El árbol, los contenedores, la cascada y el serializador viven en
+`G2` (abajo, en la tabla de hitos y su sección).
 fallo de la P4 sería invisible en un JSON perfecto. Si se aprueba, el orden es la cascada de siempre: las 7
 intrínsecas en miVM y en la VM-C (host), `Component.toJson()` en BP, y la prueba de ida y vuelta con
 `main.win` — que entra al corpus de paridad como caso nuevo.
@@ -4764,6 +4806,7 @@ tocar y cómo se comprueba.
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | ✅ **7-sep** (`a4c28062`): `Gui.start()` / `stop()` / `join()`; `Gui.run()` sigue síncrono por compatibilidad |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
+| **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ⬜ **ABIERTO · V6** (Eduardo, 11-sep). **Diseñado**; va **antes** de `C1`, que se apoya en él |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 | **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
