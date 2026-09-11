@@ -4769,6 +4769,65 @@ estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
 </details>
 
 
+#### 🧪 `T1` — EL PLAN, INCREMENTAL (Eduardo, 11-sep)
+
+*«Yo plantearía `T1` de una forma incremental. Poder ejecutar las pruebas más sencillas (no gráficas)
+y ver qué infraestructura tenemos y qué nos falta. Una vez comprobado que eso va, podemos pasar a la
+fase 2, que serían las pruebas gráficas. Y me pararía ahí: en V7 se pueden mejorar las pruebas según lo
+que veamos, pero no intentemos hacerlo todo en V6 porque igual se alarga demasiado.»*
+
+El diseño de fondo (oráculo = `stdout` del host · la lista con cinco condiciones por programa · lo
+que un agente no puede hacer y tiene que GRITAR) está en `docs/V6_IDEAS.md` §«Las pruebas finales,
+con un agente conduciendo las placas» (5-sep). Esto es el reparto en fases, **medido contra lo que ya
+existe el 11-sep**.
+
+**Las cinco piezas del sistema, y su estado:**
+
+| pieza | estado |
+|---|---|
+| **el oráculo** — el `stdout` del host por cada `.mod` | ✅ es lo que `compat.sh check` calcula ya (54 PASS) |
+| **conducir la placa** — subir, ejecutar, capturar `stdout`, cronometrar, leer el log | ✅ `tools/wire_serie.py`: `put`/`puts`/`run`/`get`/`log`/`info`/`ciclo` |
+| **grabar sin manos** | ✅ `idf.py` · `BOOTSEL` por el wire + `.uf2` · `STM32_Programmer_CLI` por sonda (las cinco, el 10-sep) |
+| **el bucle y el informe** — placas × programas, comparar, y **probar que corrió** | ❌ **no existe: es el runner** |
+| **las dependencias** — qué `.mod` necesita cada programa | ❌ lo sabe el IDE, no el runner — pero ver abajo: para la fase 1 casi no hace falta |
+
+**El corpus, clasificado** (57 entradas):
+
+| | cuántos | fase |
+|---|---|---|
+| **puros** — sin hardware, sin GUI | **50** | **1** |
+| tocan una fachada de hardware (`AdcDemo`, `WdtCatch`, `NeoCatch`, `StubParidad`, `BusBug`) | 5 | son pruebas de **paridad de stubs**: en placa dan otra cosa a propósito → fuera |
+| GUI (`GuiParidad`, `GuiParidad2`) | 2 | **2** |
+
+**Y dentro de los 50, dos hallazgos que simplifican la fase 1:**
+- Sólo **3** imprimen algo dependiente de la placa (`MachineHost`, `MachineAlias`, `MachineId`). Para
+  ésos el criterio es **«no debe petar»** (exit 0, sin excepción) en vez de byte-idéntico — una de las
+  tres opciones del campo *cómo se decide*. **Los otros 47 van con oráculo byte a byte.**
+- Los módulos que importan los 50 son los **preinstalados en `/lib`** de cualquier placa (`Core`, `IO`,
+  `Machine`, `Math`, `Str`, `Pico`…). La única dependencia de verdad es el par `SuperExt` +
+  `SuperExtBase`, que se suben juntos. **La resolución de dependencias puede esperar a la fase 2.**
+
+### Fase 1 — los 50 puros en las placas conectadas
+**Construir el runner** sobre lo que existe (un script sobre `wire_serie.py`, unas decenas de líneas):
+para cada puerto con `HELLO` → sello del firmware y capacidades; para cada programa → oráculo del host,
+`put`, `run`, `stdout` hasta el `EXITED`, comparar según el criterio, apuntar. **El informe prueba que
+corrió**: sello de cada placa, CRC de cada módulo subido, **ejecutados vs listados**, y una línea por
+cada salto **con su porqué** (regla del 5-sep: *una prueba que se salta en silencio no existe*).
+La lista con cinco campos nace aquí con **defectos por omisión y 3 excepciones** — no hay que
+escribir 50 filas a mano.
+✅ **Criterio de salida de la fase 1**: los 50 corridos en al menos tres familias, con informe, y la
+lista de lo que faltó.
+
+### Fase 2 — las gráficas, sobre `G2` + `C1`
+Los 2 del corpus más los `Gui*Demo` que sean deterministas. El oráculo es **el `shot.json`** (`C1`):
+`GET` y diff contra el del PC. Añade al runner: subir dependencias (`Gui.mod`, `Json.mod` no van en
+`/lib`), decidir por capacidades de `HELLO` qué placas tienen pantalla, y el `GET` del fichero.
+✅ **Criterio de salida**: las gráficas del corpus con árbol idéntico PC↔placa en las placas con pantalla.
+
+### Y AQUÍ SE PARA (decisión de Eduardo)
+Lo que se vea en las dos fases —qué programas faltan, qué falla, qué se salta— es material de V7. **No
+se intenta hacer todo en V6.**
+
 #### 🔵 `#444` — el sistema de pruebas no escala a una docena de placas (ABIERTA, 27-ago)
 
 Planteado por Eduardo al cerrar el día: *«hay que mejorar el sistema de test, porque si todo
@@ -4837,7 +4896,7 @@ tocar y cómo se comprueba.
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ⬜ **ABIERTO · V6** (Eduardo, 11-sep). **Diseñado**; va **antes** de `C1`, que se apoya en él |
-| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
+| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **Plan en dos fases (11-sep)**: los 50 puros primero, las gráficas sobre `G2`+`C1` después, y ahí se para. Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 | **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
 | **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
