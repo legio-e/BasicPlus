@@ -575,14 +575,28 @@ public final class GuiBackend {
             n.suppressEvents = false;
         }
     }
+    /* V6/G2 — LA CASCADA ES NUESTRA. Antes `delete` quitaba el nodo del mapa y
+     * dejaba a TODOS sus descendientes dentro, huérfanos: Swing los borraba de
+     * pantalla (cascadea solo) y por eso nadie lo vio, pero el modelo mentía. Y
+     * `clean` vaciaba la lista de hijos sin quitarlos del mapa: misma fuga.
+     *
+     * Regla de orden (decidida el 11-sep, y es la misma en la VM-C): HIJOS ANTES
+     * QUE PADRE. Así el toolkit nunca cascadea por nosotros y no queda nada
+     * colgando. Un `delete` de algo que ya no existe es idempotente y silencioso
+     * por contrato («un pequeño error que toleramos», Eduardo). */
     public void clean(int handle) {
         Node n = nodes.get(handle); if (n == null) return;
-        if (n.comp instanceof Container) ((Container) n.comp).removeAll();
+        for (int c : new ArrayList<>(n.children)) delete(c);   // copia: delete muta la lista
         n.children.clear();
+        if (n.comp instanceof Container) ((Container) n.comp).removeAll();
     }
     public void delete(int handle) {
-        Node n = nodes.get(handle); if (n == null) return;
+        Node n = nodes.get(handle); if (n == null) return;      // idempotente
+        for (int c : new ArrayList<>(n.children)) delete(c);   // primero los hijos
+        n.children.clear();
         if (n.comp.getParent() != null) n.comp.getParent().remove(n.comp);
+        Node p = nodes.get(n.parent);                          // y baja en la lista del padre
+        if (p != null) p.children.remove(Integer.valueOf(handle));
         nodes.remove(handle);
     }
     public void screenLoad(int handle) { /* una sola pantalla por ahora */ }

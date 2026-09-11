@@ -169,9 +169,30 @@ int bpvm_gui_parent_alive(int parent) {
     return node_for(parent) != NULL;
 }
 
+/* V6/G2 — LA TABLA REUTILIZA RANURAS, Y JAMAS NUMEROS DE HANDLE.
+ *
+ * Antes era `g_nodes[g_node_count++]` a secas: `delete` marcaba used=0 y el hueco
+ * no se recuperaba nunca, asi que la tabla de 512 SOLO CRECIA dentro de un RUN. Un
+ * programa que abra y cierre pantallas moria a las ~500 creaciones con «no se puede
+ * crear un widget sin un contenedor valido» — la muerte que #352 arreglo ENTRE
+ * ejecuciones, pero dentro de una.
+ *
+ * 🔒 INVARIANTE: se reutiliza la RANURA, nunca el HANDLE. `g_next_handle++` es
+ * monotono y `node_for` BUSCA por handle (no indexa), asi que un handle viejo en
+ * manos de un wrapper BP rancio nunca casa con un nodo vivo: identidad ≠ posicion,
+ * el mismo principio que los handles con generacion de V4. Eso es lo que hace
+ * seguro reutilizar ranuras. Que nadie «optimice» node_for a un indice. */
 static int create_node(const char* type, int parent) {
-    if (g_node_count >= GUI_MAX_NODES) return 0;
-    gui_node* n = &g_nodes[g_node_count++];
+    gui_node* n = NULL;
+    for (int i = 0; i < g_node_count; i++)
+        if (!g_nodes[i].used) { n = &g_nodes[i]; break; }
+    if (!n) {
+        if (g_node_count >= GUI_MAX_NODES) return 0;
+        n = &g_nodes[g_node_count++];
+    }
+    /* A cero ENTERO: una ranura reutilizada trae rancios los campos que las lineas
+     * de abajo no tocan (ctype, cser_rgb, cser_lv...). */
+    memset(n, 0, sizeof *n);
     n->used = 1; n->handle = g_next_handle++; n->type = type; n->parent = parent;
     n->w = -1; n->h = -1; n->x = 0; n->y = 0; n->pos_set = 0;
     n->align = 0; n->dx = 0; n->dy = 0; n->scroll = 0;
@@ -1048,11 +1069,37 @@ void bpvm_gui_bind_click(int handle, uint32_t objptr) {
     }
 #endif
 }
-void bpvm_gui_clean(int handle) {
+/* V6/G2 — LA CASCADA ES NUESTRA, Y EL ORDEN ES HIJOS ANTES QUE PADRE.
+ *
+ * Lo que habia: `delete` marcaba used=0 SOLO el nodo, y dejaba a todos sus
+ * descendientes dentro, huerfanos con un padre muerto; `clean` marcaba used=0 a
+ * los hijos DIRECTOS, sin recurrir a los nietos y sin node_release (fugaban
+ * text/cells/cdata). LVGL cascadea por su cuenta, asi que en pantalla se veia
+ * bien y nadie lo noto. Pero los nietos se quedaban used=1 con su `lv` apuntando
+ * a un objeto que LVGL YA HABIA LIBERADO: un delete() posterior sobre uno de
+ * ellos era un use-after-free.
+ *
+ * La regla, decidida el 11-sep (misma en miVM): la cascada baja HIJOS ANTES QUE
+ * PADRE, y cada nodo borra su propio lv_obj. Asi LVGL nunca cascadea por
+ * nosotros, nunca queda un `lv` colgando, y el modelo dice la verdad. Un delete
+ * de algo que ya no existe es idempotente y silencioso por contrato («un pequeno
+ * error que no deberia suceder pero que toleramos», Eduardo). */
+static void delete_hijos(int handle) {
+    /* Por indice, no por puntero: bpvm_gui_delete no crea nodos, asi que el
+     * recorrido es estable aunque marque used=0 por el camino. */
     for (int i = 0; i < g_node_count; i++)
-        if (g_nodes[i].used && g_nodes[i].parent == handle) g_nodes[i].used = 0;
+        if (g_nodes[i].used && g_nodes[i].parent == handle)
+            bpvm_gui_delete(g_nodes[i].handle);
+}
+
+void bpvm_gui_clean(int handle) {
+    gui_node* n = node_for(handle); if (!n) return;
+    delete_hijos(handle);
 #ifdef BPVM_LVGL
-    gui_node* n = node_for(handle); if (n && n->lv) lv_obj_clean(n->lv);
+    /* Los hijos BP ya se fueron cada uno con su lv_obj; esto barre lo que LVGL
+     * haya creado por dentro del widget (un dropdown, una lista) y que no es
+     * nodo nuestro. */
+    if (n->lv) lv_obj_clean(n->lv);
 #endif
 }
 /* Libera lo que un nodo tenga reservado. Lo comparten delete y reset: antes
@@ -1071,7 +1118,8 @@ static void node_release(gui_node* n) {
 }
 
 void bpvm_gui_delete(int handle) {
-    gui_node* n = node_for(handle); if (!n) return;
+    gui_node* n = node_for(handle); if (!n) return;   /* idempotente: ya no existe */
+    delete_hijos(handle);                              /* primero los hijos */
     n->used = 0;
     node_release(n);
 #ifdef BPVM_LVGL

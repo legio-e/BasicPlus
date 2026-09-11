@@ -1,0 +1,36 @@
+// GuiChurn.bp — V6/G2: la tabla de widgets se RECICLA dentro de un RUN.
+//
+// Abre y cierra una "pantalla" (un Panel con cinco Labels) 600 veces: 3600
+// creaciones sobre una tabla de 512 huecos. Antes moria a las ~85 vueltas con
+// «no se puede crear un widget sin un contenedor valido», porque delete()
+// marcaba el hueco como libre pero create_node nunca lo volvia a usar — y
+// ademas dejaba los cinco Labels huerfanos. Es la muerte de #352 (entre RUNs)
+// pero DENTRO de uno.
+//
+// Verde = las 600 vueltas, y despues un widget mas, y el arbol final solo con
+// el (los huerfanos no cuelgan de la raiz, asi que el dump no los veria: por
+// eso la prueba es SOBREVIVIR, no el dump).
+module GuiChurn
+  import Gui
+  import Core
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var vuelta: integer := 0
+    while vuelta < 600 do
+      var p: Gui.Panel := Gui.Panel(scr)
+      var k: integer := 0
+      while k < 5 do
+        var l: Gui.Label := Gui.Label(p, "L" + k)
+        k := k + 1
+      endwh
+      p.delete()
+      vuelta := vuelta + 1
+    endwh
+    print "vueltas completadas: " + vuelta
+
+    var fin: Gui.Label := Gui.Label(scr, "superviviente")
+    print Gui.__guiDumpTree()
+    print "PASS"
+  end Main
+end GuiChurn
