@@ -26,11 +26,28 @@ QUE HACE, EN ORDEN
        build/tanda/<nombre>/ (con la stdlib FRESCA copiada antes, como hace
        compat/compat.sh), ejecuta la VM-C host y guarda stdout + codigo de
        salida, normalizados como compat.sh filt().
-    3. POR PLACA: HELLO + INFO -> sello; decide si tiene pantalla; por prueba:
-       salta con motivo o sube el modulo (y lo que falte de la stdlib), RUN,
-       acumula OUTPUT hasta EXITED o timeout (KILL), baja artefactos, veredicto.
+    3. POR PLACA: KILL y esperar a que este en reposo; HELLO + INFO -> sello
+       (imagen: arch/variant/cpuFreqHz/resetReason/uptimeMs/fs/heap); decide si
+       tiene pantalla; por prueba: salta con motivo o sube el modulo (y lo que
+       falte de la stdlib, comprobado COMO LO RESUELVE EL RUN), borra los
+       artefactos que pudieran quedar de otra tanda, RUN, acumula OUTPUT de ESA
+       sesion hasta EXITED o timeout (KILL), INFO (¿se reinicio?), baja
+       artefactos, veredicto.
     4. Informe: sello + tabla por placa, subidos con CRC32, matriz pruebas x
        placas, SALTADA:/NECESITA OJOS: al final. Nunca un salto silencioso.
+       Lo que no es verde lleva su evidencia: la salida que SI llego, las
+       lineas NO-JSON del wire (panics, avisos) y la cola del stderr del host.
+
+VEREDICTOS
+    IDENTICO / NO-PETA (verdes) - DIFIERE / PETA - COLGADA (sin EXITED en el
+    timeout) - ERROR (no se pudo medir: subida, transporte, dependencia
+    sombreada, fallo de CARGA/ENLACE en la placa) - SIN ORACULO - SALTADA -
+    SIN ARTEFACTO (verde pero sin la evidencia) - DUDOSO (verde pero el
+    artefacto podia ser de otra tanda) - REINICIO (la placa se reinicio
+    durante la prueba: uptimeMs decrecio).
+    Dos fallos solo son IDENTICO si fallan IGUAL: mismo exitCode que el rc
+    del host (misma tabla, bpvm_exit_code). Un LINK_ERROR o un «load:» /
+    «falta el modulo» de la placa es fallo del ARNES, nunca paridad.
 
 POR QUE EL BUCLE ES POR PLACA (decision de Eduardo, 11-sep)
     Todas las pruebas sobre una placa, luego la siguiente. Eduardo va
@@ -48,14 +65,41 @@ QUE PRUEBA EL INFORME (para que no sea un «OK» de fe)
       sus horas — verificar el ARTEFACTO, no el log.
 
 TRAMPAS CONOCIDAS
-    - BUSY en RUN: si la placa estaba ejecutando algo (un Run del IDE que nadie
-      paro), el RUN contesta ERROR/BUSY. Al conectar se manda un KILL y se
-      drena 1,5 s (lo mismo que hace wire_serie.py ciclo); si aun asi sale
-      BUSY, se reintenta UNA vez tras otro KILL y luego es veredicto ERROR.
+    - BUSY: si la placa esta ejecutando algo (un Run del IDE que nadie paro,
+      o una prueba COLGADA cuyo KILL no dio EXITED), contesta ERROR/BUSY a
+      todo menos HELLO/KILL. Al conectar se manda un KILL y se ESPERA a que
+      este en reposo (EXITED, o INFO sin BUSY, hasta 10 s; el sello dice si
+      habia algo corriendo). Un BUSY al subir o al RUN: KILL, esperar el
+      EXITED hasta 10 s y UN reintento; si persiste, la PLACA se aborta («la
+      placa sigue ejecutando X tras KILL») y las pruebas restantes quedan
+      «no se llego a ejecutar». Un ERROR con el id de la peticion corta la
+      espera en seco (antes eran 20 s por PUT).
+    - SESIONES: RUN_REPLY, OUTPUT y EXITED llevan `session`. Un EXITED
+      rezagado (el KILL del run anterior, que en la Pico sale tras drenar la
+      cola) NO es de esta prueba: se descarta y se anota («rezagado de la
+      sesion N»).
+    - DEPENDENCIAS: el RUN resuelve basedir -> tal cual -> /app -> /lib ->
+      /sys (bpvm.c bpvm_entry_resolve) y el overlay de packs contesta al stat
+      de /app/X.mod sin salir en LIST (#493). Mirar el CRC de /lib/X.mod no
+      dice nada de lo que va a cargar el RUN: se pregunta con STAT name=
+      (mismo resolvedor) y se exige que resuelva a /lib/X o /app/X con el
+      crc local; si no, se sube a /app y se vuelve a preguntar; si sigue
+      resolviendo a otro sitio, «dependencia X sombreada por <path>» = ERROR.
     - /lib de la DK2 (STM32U5G9J-DK2): se VACIA en cada arranque y los modulos
       de la GUI no van embebidos. Por eso las dependencias se comprueban en
-      /lib y /app en cada tanda y lo que falte se sube a /app (donde el RUN
-      lo busca antes que en /lib).
+      cada tanda y lo que falte se sube a /app (donde el RUN lo busca antes
+      que en /lib).
+    - ARTEFACTOS RANCIOS: un GuiShot.shot de otra tanda se bajaria como
+      captura de esta. Antes del RUN se borra cada candidato (/app/X, /X, X)
+      con DEL y se confirma con STAT que NO existe; si no se puede garantizar,
+      lo bajado es DUDOSO y no va a NECESITA OJOS.
+    - TRANSPORTE CAIDO a mitad del RUN: la salida ya recibida se conserva
+      (sale en el informe como «salida recibida, sin EXITED»); «ejecutadas»
+      cuenta solo las que dieron EXITED, «no terminaron» las demas que
+      arrancaron; la placa se aborta.
+    - REINICIOS: INFO tras cada prueba; si uptimeMs decrece, «la placa SE
+      REINICIO durante X» y la prueba es REINICIO. (En fallo de CARGA la Pico
+      manda el ordinal del enum como exitCode, no la tabla comun: se anota.)
     - puts > 4 KB: el PUT de un tiron tiene tope en el scratch de la placa
       (Gui.mod son 60 KB y lo rechaza). Por encima de 4 KB va por trozos con
       PUT_BEGIN / PUT_DATA / PUT_END (#294).
@@ -177,6 +221,9 @@ class Wire:
         self.otros = []
         self.basura = []
         self.pend = []
+        self.roto = None             # la excepcion del transporte, si se cayo (hallazgo 5)
+        self.session = None          # la del ultimo RUN_REPLY (hallazgo 3)
+        self.ultima_prueba = None    # la que corrio la ultima (para decir QUE sigue corriendo)
 
     def send(self, typ, **f):
         self.id += 1
@@ -185,10 +232,20 @@ class Wire:
         return self.id
 
     def lines(self, secs):
+        """Los mensajes JSON que llegan en `secs`. Si el transporte se cae, lo
+        YA recibido se entrega en esta llamada y la siguiente lanza la excepcion
+        (hallazgo 5: antes el raise se llevaba por delante los OUTPUT que
+        venian en el mismo chunk que el corte)."""
+        if self.roto is not None and not self.pend:
+            raise self.roto
         out, t0 = self.pend, time.time()
         self.pend = []
         while time.time() - t0 < secs:
-            c = self.t.read(4096)
+            try:
+                c = self.t.read(4096)
+            except (EOFError, OSError) as e:
+                self.roto = e
+                return out
             if c:
                 self.buf += c
             while b"\n" in self.buf:
@@ -205,7 +262,10 @@ class Wire:
 
     def esperar(self, typ, secs):
         """Espera un tipo. GUARDA lo demas en self.otros (wire_serie.py: tirar la
-        respuesta que no encaja es como se pierden los diagnosticos)."""
+        respuesta que no encaja es como se pierden los diagnosticos).
+        Si llega un ERROR con el id de la ULTIMA peticion, la respuesta buena ya
+        no va a venir (BUSY, NOT_FOUND...): se corta en seco en vez de agotar
+        el plazo — con BUSY eran 20 s por PUT (hallazgo 4)."""
         self.otros = []
         t0 = time.time()
         while time.time() - t0 < secs:
@@ -215,7 +275,28 @@ class Wire:
                     self.pend = lote[n + 1:]
                     return m
                 self.otros.append(m)
+                if m.get("type") == "ERROR" and m.get("id") == self.id:
+                    self.pend = lote[n + 1:]
+                    return None
         return None
+
+    def codigo_error(self):
+        """El code del ERROR que contesto a la ultima peticion, o None."""
+        for m in self.otros:
+            if m.get("type") == "ERROR" and m.get("id") == self.id:
+                return m.get("code")
+        return None
+
+    def vaciar_basura(self):
+        self.basura = []
+
+    def basura_texto(self, n=20):
+        """Las ultimas n lineas NO-JSON que soltó el wire (panics del SDK, hard
+        faults, avisos [bpvm-c]), como texto (hallazgo 6)."""
+        out = []
+        for b in self.basura[-n:]:
+            out.append(b.decode("utf-8", "replace") if isinstance(b, bytes) else str(b))
+        return out
 
     def errores(self):
         """Los ERROR que llegaron mientras se esperaba otra cosa, legibles."""
@@ -316,54 +397,133 @@ class Wire:
         datos, self.buf = self.buf[:n], self.buf[n:]
         return datos, "ok (%d B)" % n
 
-    def correr(self, path, timeout_s):
-        """RUN -> RUN_REPLY -> OUTPUT... -> EXITED. Devuelve un dict con
-        salida, exited, colgada, error, tipos (lo demas que llego)."""
-        res = {"salida": "", "exited": None, "colgada": False, "error": None,
-               "tipos": [], "ms_wire": None}
-        self.send("RUN", path=path)
-        r = self.esperar("RUN_REPLY", 10)
-        if r is None:
-            err = self.errores()
-            if "BUSY" in err:
-                # la trampa: algo seguia corriendo. KILL, drenar y UNA vez mas.
-                self.send("KILL"); self.lines(1.5)
-                self.send("RUN", path=path)
-                r = self.esperar("RUN_REPLY", 10)
-                if r is None:
-                    res["error"] = "el RUN no arranco (tras KILL por BUSY): " + self.errores()
-                    return res
-            else:
-                res["error"] = "el RUN no arranco: " + err
-                return res
+    # -- sesiones (hallazgo 3): RUN_REPLY, OUTPUT y EXITED llevan `session` en
+    # las cuatro familias y en el sim. Un EXITED rezagado (el KILL de un run
+    # anterior, que en la Pico sale tras drenar la cola) NO es de esta prueba.
+    def _de_otra_sesion(self, m, session, rezagados):
+        s = m.get("session")
+        if session is None or s is None or s == session:
+            return False
+        rezagados.append("%s rezagado de la sesion %s%s" % (
+            m.get("type"), s, (" (%s)" % m.get("status")) if m.get("status") else ""))
+        return True
+
+    def esperar_exited(self, secs, session=None, out=None):
+        """Espera el EXITED de `session` (None = cualquiera) hasta secs,
+        acumulando los OUTPUT de esa sesion en `out`. Devuelve (exited, rezagados)."""
+        rezagados = []
         t0 = time.time()
-        out = []
-        otros = set()
-        while time.time() - t0 < timeout_s:
+        while time.time() - t0 < secs:
             for m in self.lines(0.3):
                 typ = m.get("type")
-                if typ == "OUTPUT":
+                if typ in ("OUTPUT", "EXITED") and self._de_otra_sesion(m, session, rezagados):
+                    continue
+                if typ == "OUTPUT" and out is not None:
                     out.append(m.get("data", ""))
                 elif typ == "EXITED":
-                    res["salida"] = "".join(out)
-                    res["exited"] = m
-                    res["ms_wire"] = int((time.time() - t0) * 1000)
-                    res["tipos"] = sorted(otros)
-                    return res
+                    return m, rezagados
+        return None, rezagados
+
+    def info(self, secs=6):
+        return self.llamar("INFO", "INFO_REPLY", secs)
+
+    def limpiar_arranque(self, secs=10):
+        """KILL al conectar y ESPERAR a que la placa este en reposo (hallazgo 3):
+        hasta el EXITED, o hasta que INFO conteste sin BUSY, o `secs`.
+        Devuelve (corria, detalle): corria = True/False/None (no se supo)."""
+        kid = self.send("KILL")
+        t0 = time.time()
+        vio_kill_reply = False
+        while time.time() - t0 < secs:
+            for m in self.lines(0.3):
+                typ = m.get("type")
+                if typ == "EXITED":
+                    return True, "habia algo corriendo: EXITED %s (sesion %s) tras %d ms" % (
+                        m.get("status"), m.get("session"), int((time.time() - t0) * 1000))
+                if typ == "KILL_REPLY":
+                    vio_kill_reply = True
+                if typ == "ERROR" and m.get("id") == kid:
+                    if m.get("code") == "NO_SESSION":
+                        return False, "nada corria (KILL: NO_SESSION)"
+                    return None, "KILL rechazado: %s %s" % (m.get("code"), m.get("message"))
+            if vio_kill_reply:
+                # KILL_REPLY sin EXITED: o reposo (el sim contesta asi en vacio) o
+                # el ack diferido con el EXITED aun por drenar. INFO lo desempata:
+                # si contesta, no hay nada corriendo; si BUSY, se sigue esperando.
+                r = self.info(3)
+                ex = [m for m in self.otros if m.get("type") == "EXITED"]
+                if ex:
+                    return True, "habia algo corriendo: EXITED %s (sesion %s) tras %d ms" % (
+                        ex[0].get("status"), ex[0].get("session"), int((time.time() - t0) * 1000))
+                if r is not None:
+                    return False, "nada corria (KILL_REPLY e INFO contesta)"
+                if self.codigo_error() != "BUSY":
+                    return None, "tras KILL, INFO no contesta: " + self.errores()
+        return None, "tras KILL, ni EXITED ni INFO sin BUSY en %d s" % secs
+
+    def correr(self, path, timeout_s):
+        """RUN -> RUN_REPLY -> OUTPUT... -> EXITED. Devuelve un dict con
+        salida, exited, colgada, error, tipos (lo demas que llego), session,
+        rezagados (mensajes de OTRA sesion, descartados), arranco.
+        Si el transporte se cae a mitad (hallazgo 5) NO se pierde lo recibido:
+        vuelve con error + salida parcial + transporte_roto=True."""
+        res = {"salida": "", "exited": None, "colgada": False, "error": None,
+               "tipos": [], "ms_wire": None, "session": None, "rezagados": [],
+               "arranco": False, "transporte_roto": False}
+        out = []
+        try:
+            self.send("RUN", path=path)
+            r = self.esperar("RUN_REPLY", 10)
+            if r is None:
+                err = self.errores()
+                if "BUSY" in err:
+                    # la trampa: algo seguia corriendo. KILL, esperar el reposo y UNA vez mas.
+                    corria, det_k = self.limpiar_arranque(10)
+                    res["rezagados"].append("RUN contesto BUSY; tras KILL: %s" % det_k)
+                    self.send("RUN", path=path)
+                    r = self.esperar("RUN_REPLY", 10)
+                    if r is None:
+                        res["error"] = "el RUN no arranco (tras KILL por BUSY): " + self.errores()
+                        return res
                 else:
-                    otros.add(typ or "?")
-        # timeout: KILL y esperar el EXITED 5 s
-        self.send("KILL")
-        ex = self.esperar("EXITED", 5)
-        for m in self.otros:
-            if m.get("type") == "OUTPUT":
-                out.append(m.get("data", ""))
-        res["salida"] = "".join(out)
-        res["exited"] = ex
-        res["colgada"] = True
-        res["ms_wire"] = int((time.time() - t0) * 1000)
-        res["tipos"] = sorted(otros)
-        return res
+                    res["error"] = "el RUN no arranco: " + err
+                    return res
+            res["arranco"] = True
+            session = r.get("session")
+            res["session"] = session
+            self.session = session
+            t0 = time.time()
+            otros = set()
+            while time.time() - t0 < timeout_s:
+                for m in self.lines(0.3):
+                    typ = m.get("type")
+                    if typ in ("OUTPUT", "EXITED") and self._de_otra_sesion(m, session, res["rezagados"]):
+                        continue
+                    if typ == "OUTPUT":
+                        out.append(m.get("data", ""))
+                    elif typ == "EXITED":
+                        res["salida"] = "".join(out)
+                        res["exited"] = m
+                        res["ms_wire"] = int((time.time() - t0) * 1000)
+                        res["tipos"] = sorted(otros)
+                        return res
+                    else:
+                        otros.add(typ or "?")
+            # timeout: KILL y esperar el EXITED (de ESTA sesion) 5 s
+            self.send("KILL")
+            ex, rz = self.esperar_exited(5, session, out)
+            res["rezagados"].extend(rz)
+            res["salida"] = "".join(out)
+            res["exited"] = ex
+            res["colgada"] = True
+            res["ms_wire"] = int((time.time() - t0) * 1000)
+            res["tipos"] = sorted(otros)
+            return res
+        except (EOFError, OSError) as e:
+            res["salida"] = "".join(out)
+            res["error"] = "transporte durante el RUN: %s" % e
+            res["transporte_roto"] = True
+            return res
 
     def close(self):
         self.t.close()
@@ -590,8 +750,8 @@ def abrir_sim(spec):
     return w
 
 
-def sello_de(w):
-    info = w.llamar("INFO", "INFO_REPLY", 6) or {}
+def sello_de(w, arranque=None):
+    info = w.info(6) or {}
     h = w.hello
     return {
         "boardName": info.get("boardName", "?"),
@@ -599,7 +759,17 @@ def sello_de(w):
         "serverName": h.get("serverName", "?"),
         "serverBuild": h.get("serverBuild", "?"),
         "capabilities": h.get("capabilities", []),
+        # hallazgo 8: lo que identifica la IMAGEN y el estado de la placa
         "arch": info.get("arch"),
+        "variant": info.get("variant"),
+        "cpuFreqHz": info.get("cpuFreqHz"),
+        "resetReason": info.get("resetReason"),
+        "uptimeMs": info.get("uptimeMs"),
+        "fsUsedBytes": info.get("fsUsedBytes"),
+        "fsTotalBytes": info.get("fsTotalBytes"),
+        "vmHeapBytes": info.get("vmHeapBytes"),
+        "uptime_ultimo": info.get("uptimeMs") if isinstance(info.get("uptimeMs"), int) else None,
+        "arranque": arranque,          # (corria, detalle) del KILL de conexion
         "transporte": w.t.nombre,
         "puerto": w.t.puerto,
         "info": info,
@@ -646,56 +816,139 @@ def inventario(w):
     return inv, "%d ficheros en /lib+/app, omitidos=%s" % (len(inv), r.get("omitted", 0))
 
 
-def asegurar_deps(w, deps, inv, subidos, notas):
-    """Lo que no este en /lib ni /app se sube a /app desde bpstdlib. Lo que este
-    en /app con otro CRC que el local se vuelve a subir (rancio). Lo que este
-    en /lib con otro CRC se ANOTA (no se puede sustituir): desfase."""
+class PlacaColgada(RuntimeError):
+    """La placa contesta BUSY a todo y el KILL no la saca de ahi: se aborta la
+    PLACA entera, no solo la prueba (hallazgo 4)."""
+
+
+class DepSombreada(RuntimeError):
+    """Una dependencia que el RUN va a resolver a OTRO fichero que el que
+    creemos haber comprobado (hallazgo 2)."""
+
+
+def put_con_busy(w, data, remoto):
+    """w.put con la trampa del BUSY (hallazgo 4): si la placa contesta BUSY es
+    que sigue ejecutando algo (una prueba COLGADA cuyo KILL no dio EXITED).
+    KILL, esperar el EXITED hasta 10 s, reintentar UNA vez; si persiste, la
+    placa se da por colgada."""
+    ok, det = w.put(data, remoto)
+    if ok or "BUSY" not in det:
+        return ok, det
+    corria, det_k = w.limpiar_arranque(10)      # KILL y esperar el reposo (EXITED o INFO sin BUSY)
+    ok, det2 = w.put(data, remoto)
+    if ok:
+        return ok, det2 + " (tras BUSY: KILL, %s, reintento)" % det_k
+    if "BUSY" in det2:
+        raise PlacaColgada("la placa sigue ejecutando %s tras KILL (BUSY al subir %s; %s)" % (
+            w.ultima_prueba or "algo que no arranco esta tanda", remoto, det_k))
+    return ok, det2 + " (tras BUSY: KILL, %s, reintento)" % det_k
+
+
+def stat_por_nombre(w, fich):
+    """STAT name= : la placa resuelve con bpvm_entry_resolve, EL MISMO que usa el
+    RUN (basedir -> tal cual -> /app -> /lib -> /sys), y dice path y crc.
+    Devuelve (path, crc) o (None, None) si no resuelve."""
+    st = w.llamar("STAT", "STAT_REPLY", 10, name=fich, crc=True)
+    if st is None:
+        return None, None
+    crc = st.get("crc")
+    if isinstance(crc, int) and crc != -1:
+        crc &= 0xFFFFFFFF
+    return st.get("path"), crc
+
+
+def anotar(notas, n):
+    """Una nota por placa, no una por prueba (las deps se preguntan en cada prueba)."""
+    if n not in notas:
+        notas.append(n)
+
+
+def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
+    """Cada dependencia se comprueba COMO LA RESUELVE EL RUN (STAT por nombre,
+    hallazgo 2): si resuelve a /lib/X o /app/X con el crc local, vale; si no
+    (no resuelve, resuelve a otro sitio, o el crc difiere), se sube a /app y se
+    vuelve a preguntar; si aun asi no resuelve a /app/X con el crc local, la
+    dependencia esta SOMBREADA y la prueba es ERROR. Mirar el CRC del fichero
+    de /lib no vale: el RUN busca /app antes que /lib, y el overlay de packs
+    contesta al stat de /app/X.mod sin salir en LIST (#493)."""
     for d in deps:
+        if d in verificadas:
+            continue
         fich = d + ".mod"
         local = os.path.join(STDLIB, fich)
         if not os.path.exists(local):
-            notas.append("dependencia %s: no hay %s en bpstdlib (¿modulo de la app?)" % (d, fich))
+            anotar(notas, "dependencia %s: no hay %s en bpstdlib (¿modulo de la app?)" % (d, fich))
             continue
         crc_local = crc_de(local)
-        en_lib = "/lib/" + fich in inv
-        en_app = "/app/" + fich in inv
-        if en_lib or en_app:
-            ruta = "/lib/" + fich if en_lib else "/app/" + fich
-            st = w.llamar("STAT", "STAT_REPLY", 10, path=ruta, crc=True)
-            crc_placa = st.get("crc") if st else None
-            if crc_placa is not None and crc_placa != -1:
-                crc_placa &= 0xFFFFFFFF
-            if crc_placa == crc_local:
-                n = "dependencia %s: ya en %s (crc igual)" % (d, ruta)
-                if n not in notas:          # una vez por placa, no una por prueba
-                    notas.append(n)
-                continue
-            if en_lib and not en_app:
-                notas.append("dependencia %s: en /lib con crc %s != local %08x (DESFASE, se sube a /app por delante)"
-                             % (d, ("%08x" % crc_placa) if isinstance(crc_placa, int) and crc_placa >= 0 else crc_placa, crc_local))
-            else:
-                notas.append("dependencia %s: en /app con crc %s != local %08x (rancio, se vuelve a subir)"
-                             % (d, ("%08x" % crc_placa) if isinstance(crc_placa, int) and crc_placa >= 0 else crc_placa, crc_local))
+        path, crc_placa = stat_por_nombre(w, fich)
+        if path in ("/lib/" + fich, "/app/" + fich) and crc_placa == crc_local:
+            anotar(notas, "dependencia %s: ya en %s (crc igual; resuelto por nombre, como el RUN)" % (d, path))
+            verificadas.add(d)
+            continue
+        crc_txt = ("%08x" % crc_placa) if isinstance(crc_placa, int) and crc_placa >= 0 else str(crc_placa)
+        if path is None:
+            anotar(notas, "dependencia %s: el RUN no la resuelve (%s): se sube a /app" % (d, w.errores()))
+        elif path not in ("/lib/" + fich, "/app/" + fich):
+            anotar(notas, "dependencia %s: el RUN la resuelve a %s (fuera de /lib y /app), crc %s: se sube a /app"
+                         % (d, path, crc_txt))
+        elif path.startswith("/lib/"):
+            anotar(notas, "dependencia %s: en /lib con crc %s != local %08x (DESFASE, se sube a /app por delante)"
+                         % (d, crc_txt, crc_local))
+        else:
+            anotar(notas, "dependencia %s: en /app con crc %s != local %08x (rancio, se vuelve a subir)"
+                         % (d, crc_txt, crc_local))
         with open(local, "rb") as f:
             data = f.read()
-        ok, det = w.put(data, "/app/" + fich)
+        ok, det = put_con_busy(w, data, "/app/" + fich)
         subidos.append({"remoto": "/app/" + fich, "local": os.path.relpath(local, RAIZ),
                         "size": len(data), "crc": "%08x" % crc_local, "ok": ok, "detalle": det})
-        if ok:
-            inv["/app/" + fich] = len(data)
-        else:
+        if not ok:
             raise RuntimeError("no se pudo subir %s: %s" % (fich, det))
+        inv["/app/" + fich] = len(data)
+        path2, crc2 = stat_por_nombre(w, fich)
+        if path2 != "/app/" + fich or crc2 != crc_local:
+            n = "dependencia %s: SOMBREADA por %s (crc %s) aunque se acaba de subir /app/%s con crc %08x" % (
+                d, path2, ("%08x" % crc2) if isinstance(crc2, int) and crc2 >= 0 else crc2, fich, crc_local)
+            anotar(notas, n)
+            raise DepSombreada("dependencia %s sombreada por %s" % (d, path2))
+        verificadas.add(d)
 
 
 def subir_fichero(w, local, remoto, subidos):
     with open(local, "rb") as f:
         data = f.read()
-    ok, det = w.put(data, remoto)
+    ok, det = put_con_busy(w, data, remoto)
     subidos.append({"remoto": remoto, "local": os.path.relpath(local, RAIZ) if local.startswith(RAIZ) else local,
                     "size": len(data), "crc": "%08x" % (zlib.crc32(data) & 0xFFFFFFFF),
                     "ok": ok, "detalle": det})
     if not ok:
         raise RuntimeError("no se pudo subir %s: %s" % (remoto, det))
+
+
+def borrar_artefactos(w, artefactos):
+    """Antes del RUN (hallazgo 1): que no quede un artefacto de OTRA tanda que
+    luego se baje como si fuera de esta. Borra cada candidato (DEL) y confirma
+    con STAT que NO existe. Devuelve {nombre: {"existia": [rutas], "dudoso": txt|None}}."""
+    previos = {}
+    for art in artefactos:
+        existia, problemas = [], []
+        for remoto in ("/app/" + art, "/" + art, art):
+            r = w.llamar("DEL", "DEL_REPLY", 10, path=remoto)
+            del_fallo = None
+            if r is not None:
+                existia.append(remoto + " (borrado)")
+            elif w.codigo_error() != "NOT_FOUND":
+                del_fallo = "DEL %s: %s" % (remoto, w.errores())
+            # lo que manda es el STAT: que NO exista, diga lo que diga el DEL
+            st = w.llamar("STAT", "STAT_REPLY", 10, path=remoto)
+            if st is not None:
+                existia.append(remoto + " (SIGUE AHI, %s B)" % st.get("size"))
+                problemas.append("%s sigue existiendo tras el DEL%s" % (remoto, (" [%s]" % del_fallo) if del_fallo else ""))
+            elif w.codigo_error() != "NOT_FOUND":
+                problemas.append("STAT %s no confirma que no exista: %s%s" % (
+                    remoto, w.errores(), (" [%s]" % del_fallo) if del_fallo else ""))
+        previos[art] = {"existia": existia, "dudoso": "; ".join(problemas) or None}
+    return previos
 
 
 def diff_corto(a, b, n=10):
@@ -704,8 +957,9 @@ def diff_corto(a, b, n=10):
 
 
 def veredicto_de(p, o, res, sin_oraculo):
-    """Devuelve (veredicto, detalle). Los veredictos: IDENTICO, NO-PETA, DIFIERE,
-    PETA, COLGADA, ERROR, SIN ORACULO, SALTADA."""
+    """Devuelve (veredicto, detalle). Los veredictos de aqui: IDENTICO, NO-PETA,
+    DIFIERE, PETA, COLGADA, ERROR, SIN ORACULO (SALTADA, SIN ARTEFACTO, DUDOSO y
+    REINICIO los pone ejecutar_en_placa)."""
     ex = res["exited"]
     if res["error"]:
         return "ERROR", res["error"]
@@ -715,7 +969,16 @@ def veredicto_de(p, o, res, sin_oraculo):
     if ex is None:
         return "ERROR", "sin EXITED"
     st, code = ex.get("status"), ex.get("exitCode")
-    estado = "EXITED %s exit=%s%s" % (st, code, (" (%s)" % ex.get("errorMessage")) if ex.get("errorMessage") else "")
+    emsg = ex.get("errorMessage") or ""
+    estado = "EXITED %s exit=%s%s" % (st, code, (" (%s)" % emsg) if emsg else "")
+    # Hallazgo 7: un fallo de CARGA/ENLACE en la placa es fallo del ARNES (una
+    # dependencia que falta o sombreada, un .mod que no se pudo leer), no una
+    # paridad que medir: nunca IDENTICO, ni NO-PETA/PETA como si fuera el programa.
+    fallo_arnes = (st == "LINK_ERROR" or emsg.startswith("load:") or emsg.startswith("falta el modulo"))
+    if fallo_arnes:
+        return "ERROR", "fallo del arnes en la placa, no del programa: %s%s" % (
+            estado, " [ojo: en fallo de carga la Pico manda el ORDINAL del enum como exitCode, no la tabla comun]"
+            if emsg.startswith("load:") or emsg.startswith("falta el modulo") else "")
     if p["criterio"] == "no-peta":
         if st == "OK" and code == 0:
             return "NO-PETA", estado
@@ -727,6 +990,11 @@ def veredicto_de(p, o, res, sin_oraculo):
     ok_host = (o["rc"] == 0)
     ok_placa = (st == "OK" and code == 0)
     igual_estado = (ok_host == ok_placa)
+    # Hallazgo 7: si los dos fallan, que fallen IGUAL: el exitCode del EXITED y
+    # el rc del host salen de la misma tabla (bpvm_exit_code); dos fallos
+    # distintos con stdout vacio salian IDENTICO.
+    if igual_estado and not ok_host and code != o["rc"]:
+        igual_estado = False
     if igual_texto and igual_estado:
         return "IDENTICO", "%s; host rc=%s" % (estado, o["rc"])
     partes = []
@@ -737,11 +1005,22 @@ def veredicto_de(p, o, res, sin_oraculo):
     return "DIFIERE", "; ".join(partes)
 
 
-def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas):
-    """Una prueba en una placa. Devuelve el dict del resultado."""
-    r = {"prueba": p["nombre"], "veredicto": None, "detalle": "", "ms_placa": None,
-         "ms_host": o.get("ms"), "exited": None, "salida_placa": None, "diff": None,
-         "artefactos": [], "necesita_ojos": []}
+VERDES = ("IDENTICO", "NO-PETA")
+
+
+def resultado_vacio(nombre, ms_host=None):
+    return {"prueba": nombre, "veredicto": None, "detalle": "", "ms_placa": None,
+            "ms_host": ms_host, "exited": None, "salida_placa": None, "diff": None,
+            "artefactos": [], "necesita_ojos": [], "arranco": False, "termino": False,
+            "rezagados": [], "basura": [], "artefactos_previos": {}, "info_tras": None,
+            "reinicio": False, "abortar_placa": None}
+
+
+def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas, verificadas):
+    """Una prueba en una placa. Devuelve el dict del resultado. Si la placa ya
+    no sirve para las siguientes (transporte roto, colgada tras KILL), lo dice
+    en r["abortar_placa"] y main corta la placa."""
+    r = resultado_vacio(p["nombre"], o.get("ms"))
     for req in p["necesita"]:
         if req == "pantalla":
             if not pantalla[0]:
@@ -756,37 +1035,96 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         r["veredicto"] = "ERROR"
         r["detalle"] = "no hay .mod: " + (o.get("error") or "?")
         return r
+    w.vaciar_basura()          # hallazgo 6: la basura del wire, POR prueba
     try:
-        asegurar_deps(w, dependencias(p["bp"]), inv, subidos, notas)
+        asegurar_deps(w, dependencias(p["bp"]), inv, subidos, notas, verificadas)
         for rec in p["recursos"]:
             subir_fichero(w, os.path.join(RAIZ, rec), "/app/" + os.path.basename(rec), subidos)
         subir_fichero(w, o["mod"], "/app/" + p["modulo"] + ".mod", subidos)
-    except (RuntimeError, EOFError, OSError) as e:
+        r["artefactos_previos"] = borrar_artefactos(w, p["artefactos"])
+    except PlacaColgada as e:
         r["veredicto"] = "ERROR"
-        r["detalle"] = "transporte/subida: %s" % e
+        r["detalle"] = "placa colgada: %s" % e
+        r["abortar_placa"] = str(e)
+        r["basura"] = w.basura_texto()
         return r
-    log("    RUN /app/%s.mod (timeout %d s)" % (p["modulo"], p["timeout_s"]))
-    try:
-        res = w.correr("/app/" + p["modulo"] + ".mod", p["timeout_s"])
+    except DepSombreada as e:
+        r["veredicto"] = "ERROR"
+        r["detalle"] = str(e)
+        r["basura"] = w.basura_texto()
+        return r
     except (EOFError, OSError) as e:
         r["veredicto"] = "ERROR"
-        r["detalle"] = "transporte durante el RUN: %s" % e
+        r["detalle"] = "transporte al subir: %s" % e
+        r["abortar_placa"] = "transporte roto al subir %s: %s" % (p["nombre"], e)
+        r["basura"] = w.basura_texto()
         return r
+    except RuntimeError as e:
+        r["veredicto"] = "ERROR"
+        r["detalle"] = "subida: %s" % e
+        r["basura"] = w.basura_texto()
+        return r
+    for art, pv in r["artefactos_previos"].items():
+        if pv["dudoso"]:
+            notas.append("%s: artefacto %s DUDOSO antes del RUN: %s" % (p["nombre"], art, pv["dudoso"]))
+    log("    RUN /app/%s.mod (timeout %d s)" % (p["modulo"], p["timeout_s"]))
+    w.ultima_prueba = p["nombre"]
+    res = w.correr("/app/" + p["modulo"] + ".mod", p["timeout_s"])
     r["exited"] = res["exited"]
-    r["salida_placa"] = res["salida"]
+    r["salida_placa"] = res["salida"]          # hallazgo 5: tambien si hubo error
     r["tipos_extra"] = res["tipos"]
     r["ms_wire"] = res["ms_wire"]
+    r["session"] = res["session"]
+    r["arranco"] = res["arranco"]
+    r["termino"] = res["exited"] is not None
+    r["rezagados"] = res["rezagados"]
+    if res["rezagados"]:
+        notas.append("%s: descartado %s" % (p["nombre"], "; ".join(res["rezagados"])))
     if res["exited"]:
         r["ms_placa"] = res["exited"].get("elapsedMs")
     r["veredicto"], r["detalle"] = veredicto_de(p, o, res, sin_oraculo)
+    if res["transporte_roto"]:
+        r["abortar_placa"] = "transporte roto durante %s: %s" % (p["nombre"], res["error"])
+        r["basura"] = w.basura_texto()
+        return r
     if r["veredicto"] == "DIFIERE" and p["criterio"] == "identico" and o.get("salida") is not None:
         r["diff"] = diff_corto(o["salida"], normalizar(res["salida"]))
+    if r["veredicto"] in ("DIFIERE", "ERROR", "PETA") and o.get("stderr_cola"):
+        r["stderr_host"] = o["stderr_cola"]
+    # Hallazgo 8: INFO tras cada prueba. Si uptimeMs decrece, la placa SE REINICIO
+    # (un panic, un watchdog) y esa prueba no vale lo que dice su EXITED.
+    try:
+        info2 = w.info(6)
+    except (EOFError, OSError) as e:
+        info2 = None
+        r["abortar_placa"] = "transporte roto tras %s (INFO): %s" % (p["nombre"], e)
+    if info2 is not None:
+        r["info_tras"] = {k: info2.get(k) for k in ("uptimeMs", "fsUsedBytes", "fsTotalBytes", "vmHeapBytes")}
+        up, up0 = info2.get("uptimeMs"), sello.get("uptime_ultimo")
+        if isinstance(up, int) and isinstance(up0, int) and up < up0:
+            r["reinicio"] = True
+            r["detalle"] += "; la placa SE REINICIO durante la prueba (uptimeMs %d -> %d)" % (up0, up)
+            notas.append("%s: la placa SE REINICIO durante la prueba (uptimeMs %d -> %d, resetReason=%s)" % (
+                p["nombre"], up0, up, info2.get("resetReason")))
+            if r["veredicto"] in VERDES:
+                r["veredicto"] = "REINICIO"
+        if isinstance(up, int):
+            sello["uptime_ultimo"] = up
+    elif r["abortar_placa"] is None:
+        r["detalle"] += "; INFO tras la prueba no contesta (%s)" % w.errores()
+    if r["abortar_placa"]:
+        r["basura"] = w.basura_texto()
+        return r
     # artefactos: se bajan aunque el veredicto sea malo (son la evidencia)
     if res["exited"] is not None:
         destino = os.path.join(o["work"], etiqueta_placa(sello))
         os.makedirs(destino, exist_ok=True)
         for art in p["artefactos"]:
-            a = {"nombre": art, "ok": False, "detalle": "", "local": None, "png": None}
+            pv = r["artefactos_previos"].get(art) or {"existia": [], "dudoso": None}
+            a = {"nombre": art, "ok": False, "detalle": "", "local": None, "png": None,
+                 "previo": ("existia: %s" % ", ".join(pv["existia"]))
+                           if pv["existia"] else "no existia",
+                 "dudoso": pv["dudoso"]}
             datos, intentos = None, []
             for remoto in ("/app/" + art, "/" + art, art):
                 try:
@@ -794,6 +1132,7 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
                 except (EOFError, OSError) as e:
                     datos, det = None, "transporte: %s" % e
                     intentos.append(det)
+                    r["abortar_placa"] = "transporte roto bajando %s de %s: %s" % (art, p["nombre"], e)
                     break
                 intentos.append(det)
                 if datos is not None:
@@ -813,7 +1152,8 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
                     c = subprocess.run([sys.executable, SHOT2PNG, local, png], capture_output=True)
                     if c.returncode == 0 and os.path.exists(png):
                         a["png"] = png
-                        r["necesita_ojos"].append(png)
+                        if not a["dudoso"]:
+                            r["necesita_ojos"].append(png)
                     else:
                         a["detalle"] += "; shot2png fallo: " + c.stderr.decode("utf-8", "replace")[-300:]
             r["artefactos"].append(a)
@@ -822,9 +1162,17 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         # con criterio no-peta eso saldria verde sin captura. La evidencia es
         # parte de la prueba.
         faltan = [a["nombre"] for a in r["artefactos"] if not a["ok"]]
-        if faltan and r["veredicto"] in ("IDENTICO", "NO-PETA"):
+        if faltan and r["veredicto"] in VERDES:
             r["veredicto"] = "SIN ARTEFACTO"
             r["detalle"] += "; falta %s" % ", ".join(faltan)
+        # Hallazgo 1: si no se pudo garantizar que el artefacto no estaba antes
+        # del RUN, lo bajado puede ser de OTRA tanda: DUDOSO, y sin NECESITA OJOS.
+        dudosos = [a["nombre"] for a in r["artefactos"] if a["ok"] and a["dudoso"]]
+        if dudosos:
+            if r["veredicto"] in VERDES:
+                r["veredicto"] = "DUDOSO"
+            r["detalle"] += "; artefacto %s DUDOSO (no se pudo garantizar que no existiera antes del RUN)" % ", ".join(dudosos)
+    r["basura"] = w.basura_texto()
     return r
 
 
@@ -870,6 +1218,13 @@ def escribir_informe(ruta, tanda):
         L.append("")
         L.append("- sello: boardName=`%s` uniqueId=`%s` serverName=`%s` serverBuild=`%s` capacidades=%s" % (
             s["boardName"], s["uniqueId"], s["serverName"], s["serverBuild"], json.dumps(s["capabilities"])))
+        L.append("- imagen: arch=%s variant=%s cpuFreqHz=%s resetReason=%s uptimeMs=%s fs=%s/%s B vmHeapBytes=%s" % (
+            s.get("arch"), s.get("variant"), s.get("cpuFreqHz"), s.get("resetReason"), s.get("uptimeMs"),
+            s.get("fsUsedBytes"), s.get("fsTotalBytes"), s.get("vmHeapBytes")))
+        arr = s.get("arranque")
+        if arr:
+            L.append("- al conectar: %s%s" % (
+                arr[1], " **(habia algo corriendo)**" if arr[0] else (" (no se supo)" if arr[0] is None else "")))
         L.append("- transporte: %s %s" % (s["transporte"], s["puerto"]))
         L.append("- pantalla: %s (%s)" % ("si" if pl["pantalla"][0] else "no", pl["pantalla"][1]))
         L.append("- inventario /lib+/app: %s" % pl["inventario_detalle"])
@@ -886,6 +1241,41 @@ def escribir_informe(ruta, tanda):
                 r["detalle"].replace("|", "\\|").replace("\n", " ")))
         L.append("")
         for r in pl["resultados"]:
+            if r.get("reinicio"):
+                L.append("- **la placa SE REINICIO durante %s** (uptimeMs decrecio; ver notas)" % r["prueba"])
+            if r.get("info_tras"):
+                it = r["info_tras"]
+                L.append("- tras %s: uptimeMs=%s fsUsed=%s vmHeapBytes=%s" % (
+                    r["prueba"], it.get("uptimeMs"), it.get("fsUsedBytes"), it.get("vmHeapBytes")))
+            if r["veredicto"] not in VERDES + ("SALTADA",):
+                # hallazgo 5: la salida que SI llego, aunque no hubiera EXITED
+                if r.get("salida_placa") and not r.get("diff"):
+                    L.append("<details><summary>%s: salida recibida de la placa (%s)</summary>" % (
+                        r["prueba"], "sin EXITED" if not r.get("termino") else "con EXITED"))
+                    L.append("")
+                    L.append("```")
+                    L.append(normalizar(r["salida_placa"]))
+                    L.append("```")
+                    L.append("</details>")
+                    L.append("")
+                # hallazgo 6: lo NO-JSON que solto el wire durante la prueba
+                if r.get("basura"):
+                    L.append("<details><summary>%s: %d lineas NO-JSON del wire (panics, hard faults, avisos)</summary>" % (
+                        r["prueba"], len(r["basura"])))
+                    L.append("")
+                    L.append("```")
+                    L.extend(r["basura"])
+                    L.append("```")
+                    L.append("</details>")
+                    L.append("")
+                if r.get("stderr_host"):
+                    L.append("<details><summary>%s: cola del stderr del host</summary>" % r["prueba"])
+                    L.append("")
+                    L.append("```")
+                    L.append(r["stderr_host"])
+                    L.append("```")
+                    L.append("</details>")
+                    L.append("")
             if r.get("diff"):
                 L.append("<details><summary>%s: diff oraculo vs placa</summary>" % r["prueba"])
                 L.append("")
@@ -907,14 +1297,19 @@ def escribir_informe(ruta, tanda):
                 L.append("</details>")
                 L.append("")
             for a in r.get("artefactos", []):
-                L.append("- artefacto %s de %s: %s%s" % (
+                L.append("- artefacto %s de %s: %s%s; antes del RUN: %s%s" % (
                     a["nombre"], r["prueba"],
                     ("bajado a `%s` (%s B, crc %s)" % (a["local"], a.get("size"), a.get("crc"))) if a["ok"] else "NO bajado: " + a["detalle"],
-                    (" -> PNG `%s`" % a["png"]) if a.get("png") else ""))
-        ejecutadas = sum(1 for r in pl["resultados"] if r["veredicto"] not in ("SALTADA",))
-        L.append("- ejecutadas %d de %d listadas (saltadas %d)" % (
-            ejecutadas, len(pl["resultados"]),
-            sum(1 for r in pl["resultados"] if r["veredicto"] == "SALTADA")))
+                    (" -> PNG `%s`" % a["png"]) if a.get("png") else "",
+                    a.get("previo", "?"),
+                    (" — **DUDOSO**: %s" % a["dudoso"]) if a.get("dudoso") else ""))
+        # hallazgo 5: «ejecutada» = con EXITED. Lo que arranco y no termino se cuenta aparte.
+        terminaron = sum(1 for r in pl["resultados"] if r.get("termino"))
+        no_terminaron = sum(1 for r in pl["resultados"] if r.get("arranco") and not r.get("termino"))
+        saltadas = sum(1 for r in pl["resultados"] if r["veredicto"] == "SALTADA")
+        sin_llegar = len(pl["resultados"]) - terminaron - no_terminaron - saltadas
+        L.append("- ejecutadas (con EXITED) %d de %d listadas; no terminaron %d; saltadas %d; no llegaron a arrancar %d" % (
+            terminaron, len(pl["resultados"]), no_terminaron, saltadas, sin_llegar))
         L.append("")
         L.append("subido a /app:")
         L.append("")
@@ -1051,8 +1446,11 @@ def main():
         pl = {"sello": None, "pantalla": None, "resultados": [], "subidos": [], "notas": [],
               "inventario_detalle": "", "error": None}
         try:
-            w.send("KILL"); w.lines(1.5)          # por si quedo algo corriendo (BUSY)
-            sello = sello_de(w)
+            # por si quedo algo corriendo (BUSY): KILL y esperar a que la placa
+            # este en reposo, no 1,5 s a ciegas (hallazgo 3)
+            arranque = w.limpiar_arranque(10)
+            log("  al conectar: %s" % arranque[1])
+            sello = sello_de(w, arranque)
             pl["sello"] = sello
             pl["pantalla"] = tiene_pantalla(sello)
             log("placa %s id=%s build=%s (%s %s) pantalla=%s [%s]" % (
@@ -1064,6 +1462,7 @@ def main():
             if inv is None:
                 raise RuntimeError(det)
             pl["inventario"] = sorted(inv)
+            verificadas = set()          # deps ya comprobadas en ESTA placa
             for p in pruebas:
                 log("  %s" % p["nombre"])
                 o = tanda["oraculos"][p["nombre"]]
@@ -1080,9 +1479,12 @@ def main():
                         pl["notas"].append("%s: la placa tiene pantalla pero INFO no dice su tamano; "
                                            "oraculo de 480x320" % p["nombre"])
                 r = ejecutar_en_placa(w, sello, pl["pantalla"], p, o,
-                                      a.sin_oraculo, inv, pl["subidos"], pl["notas"])
+                                      a.sin_oraculo, inv, pl["subidos"], pl["notas"], verificadas)
                 pl["resultados"].append(r)
                 log("    -> %s: %s" % (r["veredicto"], r["detalle"].split("\n")[0]))
+                if r.get("abortar_placa"):
+                    # la placa ya no sirve para las siguientes: se dice y se corta
+                    raise RuntimeError(r["abortar_placa"])
         except (RuntimeError, EOFError, OSError) as e:
             pl["error"] = str(e)
             log("  ERROR de placa: %s" % e)
@@ -1090,10 +1492,10 @@ def main():
             hechas = {r["prueba"] for r in pl["resultados"]}
             for p in pruebas:
                 if p["nombre"] not in hechas:
-                    pl["resultados"].append({"prueba": p["nombre"], "veredicto": "ERROR",
-                                             "detalle": "no se llego a ejecutar: %s" % e,
-                                             "ms_placa": None, "ms_host": None, "artefactos": [],
-                                             "necesita_ojos": []})
+                    rr = resultado_vacio(p["nombre"])
+                    rr["veredicto"] = "ERROR"
+                    rr["detalle"] = "no se llego a ejecutar: %s" % e
+                    pl["resultados"].append(rr)
         finally:
             w.close()
         if pl["sello"] is None:
@@ -1111,7 +1513,7 @@ def main():
             log("  %-10s %-16s %s" % (pl["sello"]["boardName"], r["prueba"], r["veredicto"]))
     log("informe: %s (+ %s)" % (a.informe, rj))
     malos = sum(1 for pl in tanda["placas"] for r in pl["resultados"]
-                if r["veredicto"] in ("DIFIERE", "PETA", "COLGADA", "ERROR", "SIN ARTEFACTO"))
+                if r["veredicto"] in ("DIFIERE", "PETA", "COLGADA", "ERROR", "SIN ARTEFACTO", "DUDOSO", "REINICIO"))
     return 1 if malos else 0
 
 
