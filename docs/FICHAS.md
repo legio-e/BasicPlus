@@ -2279,6 +2279,48 @@ disparó el escepticismo de Eduardo (*«¿seguro? Antes de nada hay que verifica
 📌 De paso, **la C3 quedó al día**: llevaba firmware anterior al 8-sep, y ahora monta la zona de
 packs y trae `Machine.mod` y el `Adc.mod` nuevo.
 
+#### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
+
+**La regla, de Eduardo (11-sep):** *«Una variable es `protected` si no se indica nada, `private` si se
+declara como tal, y no puede ser pública salvo que sea una propiedad.»* Protegido = lo ven la clase y
+sus descendientes.
+
+**Lo que hace el compilador**: un descendiente que vive en **otro módulo** no ve los campos protegidos
+de la base — `OwnerList extends Core.List` recibía *«'OwnerList' no tiene miembro de instancia
+'items'»*. La causa está en el contrato de módulos: `ClassSig` (`ModuleInterface.java`) exporta
+**métodos, propiedades, constructor, constantes estáticas y el layout binario** (cuántos campos, para
+que el descendiente coloque los suyos), **pero no los nombres ni los tipos de los campos**. Su propio
+comentario lo dice: *«Sin fields públicos (se exponen vía property)»* — correcto, pero se dejó fuera
+también a los protegidos. `lookupInstance` sí sube por `baseClass`; lo que no encuentra es lo que
+nunca se dio de alta.
+
+**El arreglo, y su forma**: la interfaz es texto (`method …`, `prop …`, `staticconst …`, `event …`);
+falta una línea **`field <nombre>:<tipo> slot <n>`** por cada campo **no privado**, y que el
+importador los dé de alta como protegidos. `checkVisibility` ya aplica la regla. Las VMs no cambian:
+el acceso es por slot. **Coste**: rehacer la cadena entera (jar, stdlib como proyecto, samples, fat-jar
+del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
+
+⏭️ **Aplazado por Eduardo**: *«utiliza un get para acceder al campo y de momento salimos del paso»*.
+Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
+que toque un campo protegido de `Window` se estrella igual.
+
+#### 🔵 `#493` — un módulo de stdlib en `/app` TAPA al de `/lib`, y el usuario no se entera (abierta 11-sep, de `G2`)
+
+**Medido en la Pico (11-sep)**: había `Collections.mod`, `Json.mod` y `Str.mod` **viejos** en `/app`
+—restos de subidas a mano de otras sesiones— y `/app` (el directorio de trabajo) **se resuelve antes
+que `/lib`**. `OwnerCascada` moría con `INVOKE_VIRTUAL sobre null` y **el arreglo no tenía nada que
+ver**: cargaba la `Collections` vieja. Sólo se vio en el log: `dep 'Str' -> /app/Str.mod`.
+
+📌 **Es la misma familia que la `Gui` rancia en la zona de packs de la P4**: una copia que sombrea a la
+buena, y un síntoma que apunta a otro sitio. Y el linker **sí** grita en el desfase de métodos
+(*«no exporta `Core.List#length#16`; ¿versión vieja?»*); **lo que no vigila es la sombra**.
+
+⏭️ **Lo que falta es ruido, no lógica**: una línea por el `OUTPUT` cuando un módulo con **nombre de
+stdlib** se resuelve desde `/app` en vez de `/lib` (o del embebido). El log ya lo sabe; que lo diga
+donde el usuario mira. ⚠️ Y para el runner de `T1`: **comprobar que `/app` no tapa a `/lib` antes de
+correr nada**, o los resultados en placa no significan lo que parecen. ¿V6 o V7? Es pequeño y es un
+fallo silencioso — a decidir.
+
 #### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
 
 🔎 **Y NO ES NUEVO: EL DISEÑO YA ESTABA DECIDIDO, Y SE PERDIÓ POR NO SER FICHA.** Eduardo lo recordaba
