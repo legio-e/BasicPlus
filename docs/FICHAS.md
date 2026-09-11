@@ -4096,6 +4096,48 @@ que emitir el nombre es puro BP. Y usar ese formato regala **la prueba**: cargar
 | paridad | gratis: mismo código BP en las dos | la que se vigile a mano |
 | lo que aporta de rebote | las 7 intrínsecas **sirven solas** (hoy un programa no puede preguntar la alineación de un widget) | nada |
 
+🧩 **LA PREGUNTA DE EDUARDO QUE LO REENCUADRA (11-sep)**: *«Si un componente no guarda una lista de sus
+hijos, cuando se destruye una ventana ¿cómo sabe que también se han de liberar todos sus componentes?
+Esto lo hablamos en su día: los componentes deberían declararse con `owner` y al destruir la ventana
+deberían destruirse todos.»*
+
+**Respuesta, comprobada: NO LO SABE.** Tres niveles y tres conductas:
+
+| nivel | `delete()` de la ventana | `clean()` |
+|---|---|---|
+| **LVGL** | cascadea (lista de hijos propia) ✅ | cascadea ✅ |
+| **modelo C** (`gui.c:1073`) | `used=0` **sólo el nodo**; los descendientes quedan **huérfanos ocupando ranura** ❌ | `used=0` sólo los hijos **directos**, sin nietos y **sin `node_release`** (fugan `text`/`cells`) ❌ |
+| **objetos BP** | siguen vivos con un `lvglId` muerto; toda operación **no hace nada, en silencio** ❌ | ídem |
+
+En pantalla se ve bien porque LVGL limpia — por eso nadie lo notó. Y se junta con que **`create_node`
+NUNCA reutiliza ranuras** (`gui.c:174`: `g_nodes[g_node_count++]`, sin buscar hueco): la tabla de 512
+**sólo crece dentro de un RUN**. Un programa que abra y cierre pantallas muere a las ~500 creaciones
+con *«no se puede crear un widget sin un contenedor válido»* — la muerte de `#352`, pero **dentro de
+una ejecución**. ⚠️ miVM tiene la misma fuga (su `delete` quita el nodo del mapa pero no a sus hijos,
+`GuiBackend.java:583`), sólo que sin muro de 512 — y **su `Node` SÍ tiene lista de hijos**, el de C no:
+divergencia estructural entre las dos VMs.
+
+**Sobre `owner`, lo que Eduardo recordaba es MITAD Y MITAD:**
+- ✅ **`var owner` SÍ está implementado** (18-ago, `#449`/`#450`): como campo emite `SET_FIELD_OWNER` y
+  `FREE_REF` cascadea por los bits de propietario del descriptor, **recursivamente**. Probado con
+  `samples/OwnerBp.bp` y el guardián de `#339` («0 bloques sin liberar»).
+- ❌ **La GUI no lo usa, y aunque lo usara no bastaría**, por dos razones: (1) `Component` **no guarda a
+  sus hijos en BP** —el enlace vive sólo en `gui_node.parent`—, así que no hay campo `owner` que
+  cascadear; (2) `owner` libera **memoria del heap**, no el recurso nativo: liberar el wrapper de un
+  `Label` no llama a `__guiDelete`, el nodo C y el `lv_obj` seguirían vivos. Es la otra mitad del
+  problema de `#491`: **el destructor `~Clase()`**, diseñado y en `L1`/V7.
+
+🔑 **Para que «destruir la ventana destruye sus componentes» sea verdad hacen falta las DOS piezas**:
+`Component` con sus hijos como `owner` (la cascada del heap los alcanza) **y** un destructor que llame
+a `__guiDelete` (liberar el wrapper libera el nodo). Hoy: la primera herramienta existe sin aplicar, la
+segunda no existe.
+
+🎯 **Y la convergencia con el serializador**: la pieza que le falta a `toJson()` —que `Component`
+conozca a sus hijos— **es la misma que le falta a la destrucción**. Un solo cimiento sirve a los dos.
+Eso mueve la decisión: no es sólo «7 intrínsecas para serializar», es **dar a `Component` la lista de
+hijos** (en BP, como `owner`), y de ahí salen la serialización, la destrucción en cascada, y la
+paridad estructural con miVM, que ya la tiene.
+
 ⏭️ **Recomendación: A.** Es literalmente el planteamiento de Eduardo, se escribe una vez, y sus siete
 intrínsecas son útiles por sí mismas. Si se aprueba, el orden es la cascada de siempre: las 7
 intrínsecas en miVM y en la VM-C (host), `Component.toJson()` en BP, y la prueba de ida y vuelta con
