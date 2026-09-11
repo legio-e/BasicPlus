@@ -27,6 +27,57 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (11-sep, tarde) — **`G2` CERRADO** en tres commits; el siguiente es `C1`, y antes se PAUSA
+
+**`G2` — Revisión del modelo gráfico — hecho entero el 11-sep** (`50fcbc46` · `65a50f0e` · `65e9f558`),
+y de paso una ficha que nadie esperaba, `#494`. Detalle de cada punto en `FICHAS` (sección `G2`).
+Eduardo pidió *«el punto 4 y después una pausa»*: **esto es la pausa**.
+
+**Lo que pasó, en orden:**
+
+1. **El modelo BP de la GUI no era un modelo** (salió analizando `C1`): el árbol vivía sólo en C, los
+   wrappers de los hijos se tiraban al cargar un `.win`, `destroy()` prometía una cascada que nadie
+   hacía, y `OwnerList` **estaba hueca**. Eduardo lo convirtió en hito: *«si un objeto contiene a
+   otro, debería poder verse»*. Ahora `Container` tiene `children: OwnerList`, `attach()`/`delete()`
+   son el alta y la baja simétricas, la cascada es nuestra (hijos antes que padre, C antes que BP), y
+   `Button` es un contenedor con un solo constructor y `text := ""` por defecto.
+2. **`toJson()` recursivo en formato `.win`**, en BP y UNA vez (paridad gratis), con cinco
+   intrínsecas de una línea para la geometría **autorada** (`align` por nombre + desplazamientos;
+   lo auto se omite: el JSON hereda la paridad del `dumpTree`). **`GuiWinJson.bp`** al corpus:
+   `main.win → J1 → J2`, `J1 == J2`, árbol idéntico; **igual en la Discovery** (LVGL, 800×480).
+3. **La ida y vuelta destapó tres fallos** — para eso es la prueba:
+   - el cargador **perdía la `y`** del `.win` (`align(…,0,0)` la pisaba: el `"y": 12` de `main.win`
+     nunca había llegado al modelo);
+   - una **regresión mía de G2-2**: `Keyboard.attach(ta)` resolvía al `Component.attach` nuevo y el
+     teclado se quedaba sin textarea, en silencio → `setTextarea(ta)`;
+   - 🐛🐛 **`#494`: el GC de la miVM descarrilaba desde el 15-jul** ante cualquier `""` o array
+     vacío (12 B reservados, 8 contados). **El guardián lo gritaba por stderr y el arnés lo tiraba con
+     `2>/dev/null`**: 57 PASS con el GC de la VM de referencia roto. Arreglado (el mismo clamp que la
+     VM-C tenía desde F2) y el arnés ya vuelca esa línea.
+
+⚠️ **LO QUE APRENDÍ HOY, en dos frases:** *(a)* una prueba de ida y vuelta vale más que las tres
+piezas que une: encontró un fallo en el cargador, otro en mi propio commit anterior y otro de hace
+dos meses en el GC; *(b)* **un guardián que grita a una tubería que nadie mira no es un guardián** —
+el `2>/dev/null` del arnés era un `INCONSISTENTE` silenciado durante 57 casos verdes.
+
+🔧 **Herramientas**: `compat.sh` acepta `// recurso: ruta` en la cabecera de un sample (copia el
+fichero al `WORK`), y vuelca `HEAP INCONSISTENTE` del stderr como salida. `wire_serie.py`: desde Git
+Bash hay que exportar `MSYS_NO_PATHCONV=1` o `/app/X.mod` se convierte en `C:/Program Files/Git/app/…`
+(en la DK2 hay dos ficheros con esa ruta de sesiones anteriores).
+
+📌 **Estado del repo**: todo commiteado, **sin push**. Paridad **58 PASS, 0 FAIL** (con el stderr
+vigilado). **Discovery grabada** (13:16) y con `/lib` completo (`Gui/Json/Collections/Str` subidos hoy);
+Pico compilada (13:21), **no grabada** (el cambio de C es sólo GUI); **la Metro sigue sin regrabar**
+desde que cayó del USB (tiene el `Core` viejo: regrabar + reinstalar `/lib` cuando vuelva). Blobs
+embebidos sin tocar (no llevan `Gui`).
+
+⏭️ **Lo primero al retomar**: `C1` — la captura de píxeles (`#475`), porque el árbol ya está
+(`toJson()` es la mitad «árbol» de `C1`). Antes de tocar nada, decidir lo pequeño que quedó abierto:
+si el guardián del heap debe ser **fatal** (`#494`), si `#493` (la sombra de `/app`) entra en V6, y
+la nota de `C1` en `FICHAS` sobre el tamaño del panel horneado en el JSON de `Window.load()`.
+
+---
+
 ## ⏭️ AL RETOMAR (10-sep, madrugada) — **V6 se queda SIN fichas abiertas**: sólo los cuatro hitos
 
 **`#473` y `#489` cerradas. No queda ni una ficha de V6 abierta** — lo siguiente son los hitos

@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **5** | `G2` (modelo gráfico) → `C1` (captura) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **4** | ~~`G2`~~ (✅ 11-sep) → `C1` (captura) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -2304,6 +2304,26 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### ✅ `#494` — EL GC DE LA miVM DESCARRILABA ANTE UN OBJETO DE PAYLOAD 0 — desde el 15-jul (abierta y CERRADA el 11-sep, `65e9f558`, de `G2`)
+
+**Qué era.** `heapAlloc` reserva `max(MIN_FREE_BLOCK=12, align4(8 + payload))` desde `5ea01557`
+(15-jul, *«el alocador regalaba la astilla»*) — pero **`objectTotalSize()` no clampaba**: para un
+`""` o un array vacío contaba 8 B donde había 12. El recorrido de `buildValidObjectsSet` avanzaba 8,
+aterrizaba en el relleno, leía **relleno como cabecera** y de ahí basura: el set de válidos salía
+incompleto → objetos vivos sin marcar → barridos → `use-after-free` **mucho después y sin rastro**.
+La VM-C lo tenía bien desde F2 (`block_total_size` clampa). **Casi dos meses con el GC de la VM de
+referencia roto para cualquier programa que crease una cadena vacía.**
+
+**Por qué no se vio.** El guardián del invariante (`[gc] !! HEAP INCONSISTENTE`) **lo cantaba por
+stderr desde el primer día** — y el arnés de paridad hacía `2>/dev/null`: 57 PASS con el GC roto.
+El caso exacto de *«errores sí, silenciosos no»* y de *«el instrumento necesita control»*: el
+guardián estaba, la tubería lo tiraba. Se vio porque `GuiWinJson` murió con un UAF en miVM y no en
+la VM-C, y la bisección llegó a un `var basura: string := ""` + 3000 concatenaciones.
+
+**Arreglo.** El mismo clamp en `objectTotalSize` (objetos y arrays). Y el arnés vuelca esa línea de
+stderr como salida (rompe la paridad y se ve en el diff). ⏭️ Queda por decidir si el guardián debe
+ser **fatal** en vez de un aviso: si el recorrido se desincroniza, seguir es corromper.
+
 #### 🔵 `#493` — un módulo de stdlib en `/app` TAPA al de `/lib`, y el usuario no se entera (abierta 11-sep, de `G2`)
 
 **Medido en la Pico (11-sep)**: había `Collections.mod`, `Json.mod` y `Str.mod` **viejos** en `/app`
@@ -4066,7 +4086,7 @@ código 1**; sin sabotaje, código 0.
 no vuelca sus datos, es ciego a la rotación, y color/fuente son render-only). Para eso está la
 segunda vía, `#475`.
 
-#### 🧱 `G2` — REVISIÓN DEL MODELO GRÁFICO (abierto 11-sep · **DISEÑADO**, no empezado)
+#### 🧱 `G2` — REVISIÓN DEL MODELO GRÁFICO — ✅ **CERRADO el 11-sep** (`50fcbc46` · `65a50f0e` · `65e9f558`)
 
 **De dónde sale.** Analizando `C1` (serializar la ventana a JSON) apareció que **el modelo BP de la
 GUI no era un modelo**: el árbol vivía sólo en C, los wrappers de los hijos se tiraban al cargar un
@@ -4158,6 +4178,62 @@ nodo **C antes que BP**. Cada hijo borra su propio `lv_obj` (LVGL no cascadea po
 3. `destroy()` en cascada con la regla de orden.
 4. `toJson()` recursivo, formato `.win`, **ida y vuelta con `main.win`** al corpus.
 Y después, `C1` (la captura), que se apoya en esto.
+
+### ✅ CONSTRUIDO (11-sep) — los cuatro puntos, y lo que cada uno destapó
+
+**1. Los tres arreglos de C** (`50fcbc46`): `create_node` reutiliza ranuras (`memset` al reusar;
+**se reusan ranuras, nunca handles**: `g_next_handle` sigue monótono), `bpvm_gui_delete` cascadea
+por padre (`delete_hijos`, recursivo) y `bpvm_gui_clean` borra los hijos por el modelo antes del
+`lv_obj_clean`. miVM (`GuiBackend.clean/delete`) igual: hijos antes que padre, baja del padre.
+`GuiChurn.bp` al corpus (600× panel + 5 labels + delete: la tabla ya no crece).
+
+**2. `Container`** (`65a50f0e`): `Component.attach(padre)` es el único punto de alta;
+`Component.delete()` la baja simétrica; `Container` con `var owner children: OwnerList`,
+`register/unregister/childCount/childAt`, `delete()`/`clean()` de atrás hacia delante (cada
+`delete()` del hijo lo quita de la lista). `Screen/Panel/Window/TabPage/Tabview/Button` extienden
+`Container`; `Button(parent, text := "")` con un solo constructor (decisión de Eduardo: el parámetro
+por defecto, porque la interfaz de módulo no exporta sobrecargas de constructor). **`OwnerList`
+estaba HUECA** (no era owner de nada) y se arregló con `backing()` en `List` + `grow()` virtual
+(`#492`). `GuiArbol.bp` y `OwnerCascada.bp` al corpus; verificado en la Pico (tras vaciar `/app`,
+`#493`) y en la Discovery.
+
+**3. La cascada** vive en `Container.delete()`: no hizo falta más.
+
+**4. `toJson()`** (`65e9f558`): `Component.toJson(): Json.JsonObject` emite `type`, `name`, lo
+propio de la hoja (`jsonProps()`), `align` **por nombre** + `x`/`y` como desplazamientos, o `x`/`y`
+explícitos si mandan ellos, `width`/`height` **sólo si no son auto**, `fontSize`, y los `clic`/`change`
+**explícitos** del `.win` (los derivados de `name` no se guardan: se derivan). `Container.toJson()`
+añade `children`; `Button` emite `text` desde su etiqueta y **no la lista como hijo** (`jsonChild()`).
+`toJsonText()` da el texto sin que el programa importe `Json`. Cinco intrínsecas de una línea ×2 VMs
+(`234..238`): `__guiGetAlign/AlignDx/AlignDy` (`align = -1` si mandan `x,y`) y
+`__guiGetAuthWidth/Height` (`-1` = auto) — la geometría **autorada**, la del `dump_node`; los `get`
+de siempre devuelven el píxel computado y eso no se serializa. **`samples/GuiWinJson.bp`** al corpus:
+`main.win → árbol → J1 → árbol → J2`, `J1 == J2` y `dumpTree` idéntico; en la Discovery (LVGL,
+800×480) el mismo JSON salvo el tamaño del panel. **58 PASS.**
+
+**Lo que la ida y vuelta destapó** (por esto existe la prueba):
+- 🐛 **El cargador perdía la `y` del `.win`**: `applyCommon` aplicaba `x`/`y` como posición y luego
+  `align(…, 0, 0)` los pisaba. El `"y": 12` de `main.win` **nunca había llegado al modelo** (medido:
+  `align=1 +0,0`). Ahora con `align`, `x`/`y` son desplazamientos del ancla (lo que LVGL llama offset).
+- 🐛 **Regresión de G2-2, silenciosa**: `Keyboard.attach(ta)` pasó a resolver al nuevo
+  `Component.attach(padre: Container)` — el teclado se quedaba **sin textarea** y con un `Textarea`
+  por `parent`. El arnés no lo veía (el stdout es igual). Ahora `Keyboard.setTextarea(ta)`, y el
+  teclado se engancha al árbol como todos (`GuiListKbd.bp` actualizado).
+- 🐛🐛 **`#494`: el GC de la miVM descarrilaba desde el 15-jul** — ver la ficha. Salió porque el
+  sample creaba un `""` temprano y el guardián del heap gritó por stderr.
+
+**Lo que `toJson()` NO serializa todavía** (no hay getter en el backend; se añaden cuando `C1`/`T1`
+los pidan, son una línea cada uno): `min`/`max` de Slider/Bar/Spinbox, `options`/`items` de
+Dropdown/ListBox, `buttons` de Msgbox, `bgColor`/`textColor` (el nodo C ni los guarda), el título de
+las pestañas, y nada de Chart/Table/ImageView. 📌 Y una nota para `C1`: `Window.load()` fija
+`width`/`height` del raíz al tamaño de la pantalla cuando el `.win` no los trae, así que el JSON de
+una ventana cargada **lleva el tamaño del panel** (480×320 en el host, 800×480 en la DK2): un `.win`
+guardado desde `toJson()` no es portable entre pantallas hasta que eso se decida.
+
+**Y dos cosas del arnés** (`compat.sh`): un sample declara los ficheros que necesita con
+`// recurso: ruta/desde/la/raíz` en su cabecera (así `GuiWinJson` carga **el** `main.win` de
+formdemo, no una copia); y el stderr **ya no se tira entero**: una línea `HEAP INCONSISTENTE` sale
+como salida y rompe la paridad.
 
 #### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep · **MEDIDA el 5-sep**)
 
@@ -4956,7 +5032,7 @@ tocar y cómo se comprueba.
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | ✅ **7-sep** (`a4c28062`): `Gui.start()` / `stop()` / `join()`; `Gui.run()` sigue síncrono por compatibilidad |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
-| **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ⬜ **ABIERTO · V6** (Eduardo, 11-sep). **Diseñado**; va **antes** de `C1`, que se apoya en él |
+| **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **Plan en dos fases (11-sep)**: los 50 puros primero, las gráficas sobre `G2`+`C1` después, y ahí se para. Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 | **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
