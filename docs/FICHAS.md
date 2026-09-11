@@ -4262,6 +4262,36 @@ setter (`__guiSetName`) y una cadena por nodo, y el cargador lo rellena al const
 
 ---
 
+### 📐 `C1` CON `G2` DEBAJO — el análisis (Eduardo, 11-sep: *«si analizamos `C1` tenemos que tener en cuenta `G2`. Ahora queda claro que desde un componente podemos ir hacia todos sus hijos, así que una serialización recursiva es viable»*)
+
+**Dos mitades, preguntas distintas, mismo camino de salida:**
+
+| | **el árbol** (JSON) | **los píxeles** (lo medido el 5-sep, abajo) |
+|---|---|---|
+| contesta | qué **modelo** hay | qué **se ve** |
+| se apoya en | `G2` (los hijos) | el framebuffer de cada placa |
+| quién lo dispara | **el programa**: `win.toJson()` | **el programa**: `Gui.shot(path)` |
+| cómo sale del micro | escribe un fichero → `GET` de siempre | ídem |
+| verbos nuevos del wire | **cero** | **cero** |
+| comparable en automático | **sí**: texto, y con paridad PC↔placa | no: para ojos |
+
+**Lo que el árbol necesita ADEMÁS de `G2`**: cinco getters de una línea (`align`, `dx`, `dy`, `posSet`,
+`readonly`, ×2 VMs) y un `typeName()` por clase (puro BP). El resto es BP sobre `children`.
+
+**Dos reglas para que el JSON tenga paridad de verdad, no sólo de aspecto:**
+- **No resolver el layout.** Un widget por `align` emite `align` + desplazamientos, **no** un `x,y`
+  calculado — como `dump_node` y como el `.win`. Resolver posiciones metería la fuente y el panel en
+  el número, y PC y placa divergirían. Sin resolver, el JSON **hereda la paridad que `dumpTree` ya
+  tiene**.
+- **Omitir lo «auto»**: `width`/`height` a −1 no se emiten, como no van en el `.win`. Ida y vuelta limpia.
+
+**Lo que esto le da a `T1`, que es para lo que existen las dos mitades**: la prueba de un programa
+gráfico en placa es *ejecutarlo, que escriba su `shot.json`, `GET`, y **diff contra el que salió en
+el PC***. Iguales ⇒ el mismo modelo en las dos VMs, sin que nadie mire una pantalla. El PNG se mira
+sólo cuando el JSON dice que todo está bien y aun así no se ve nada — el caso de la P4 hoy.
+
+⏭️ **Orden**: `G2` entero → `C1`-árbol (barato una vez existe `G2`) → `C1`-píxeles (el plan de abajo).
+
 ### ➡️ El diseño del modelo de componentes SE FUE A SU PROPIO HITO: **`G2` — Revisión del modelo gráfico**
 
 Eduardo, 11-sep: *«A nivel organizativo esto no es `C1`, es un hito en sí mismo.»* `C1` se queda con lo
