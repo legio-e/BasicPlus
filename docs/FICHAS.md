@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **5** | `G2` (modelo gráfico) → `C1` (captura) → `T1` (pruebas) → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **5** | `G2` (modelo gráfico) → `C1` (captura) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -4768,6 +4768,25 @@ estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
 
 </details>
 
+
+#### 🧊 CODE FREEZE V6 — antes de `D1` (decidido por Eduardo, 11-sep)
+
+*«Antes de empezar `D1` marcamos congelación de código, para prevenir que se intente implementar
+código nuevo y centrarse en arreglar posibles bugs.»*
+
+Es la tercera vez que se cierra una versión así (V4 el 17-jul, V5 en agosto), y el criterio es el
+mismo que las dos anteriores: a partir de la congelación **no se pregunta «¿merece la pena?» sino
+«¿está roto?»**. Lo que no está roto, a V7 — y cancelar o aplazar es un resultado válido.
+
+**Qué implica, concretado:**
+- Se marca **al terminar `T1`** (las dos fases) y **antes de tocar `D1`**. `G2`, `C1` y `T1` son
+  código nuevo y van **antes** de la raya, a propósito: son la herramienta con la que se hacen las
+  pruebas finales (`F1`).
+- Después de la raya sólo entran **arreglos de bugs**, cada uno con su ficha y su reproducción.
+- `D1` documenta **lo que hay**, no lo que se quiere; y `F1` prueba **lo congelado**.
+
+⏭️ Cuando llegue, se abre como entrada propia aquí y en `ESTADO.md`, con la fecha y el commit de la
+raya, igual que las anteriores.
 
 #### 🧪 `T1` — EL PLAN, INCREMENTAL (Eduardo, 11-sep)
 
