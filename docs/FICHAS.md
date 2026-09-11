@@ -4165,9 +4165,67 @@ y suma piezas. **El serializador tiene que vivir donde vive el árbol: en el bac
 vuelta con `main.win` lo vigila. Lo único que el modelo C no tiene y el `.win` sí es **`name`**: un
 setter (`__guiSetName`) y una cadena por nodo, y el cargador lo rellena al construir.
 
-⏭️ **Recomendación revisada: B**, más el arreglo de la cascada en `gui.c` como defecto aparte. Y `owner`
-en las properties declaradas queda como mejora natural el día que llegue el destructor (`#491`), no
-antes: sin destructor, liberar el wrapper no libera el nodo. Si se aprueba, el orden es la cascada de siempre: las 7
+~~⏭️ Recomendación revisada: B~~ — **superada por la decisión de abajo, que devuelve el árbol a BP.**
+
+---
+
+### ✅ `C1` — EL DISEÑO, DECIDIDO (Eduardo, 11-sep)
+
+**El principio que ordena todo lo demás** (Eduardo): *«El modelo LVGL es su modelo, pero el modelo de
+ventanas y componentes BP es NUESTRO modelo, y tiene que ser lógico y coherente. **Si un objeto
+contiene a otro, debería poder verse.**»* Lo que había —el árbol sólo en C, los wrappers de los
+hijos tirados al cargar, `destroy()` prometiendo una cascada que el backend no hace— no lo cumplía.
+
+**1. Cada contenedor tiene a sus hijos** (no una lista plana en `Window`): modela la contención,
+permite el `toJson()` recursivo tal como lo describió, la destrucción en cascada **en BP**, y converge
+con miVM, cuyo `Node` ya tiene `children`.
+
+**2. Una clase `Container` entre `Component` y los que contienen.** *«Tenemos componentes simples,
+que no contienen otros y descienden de `Component`. Luego los que pueden contener a otros —en Swing
+sería un `Panel`—. Serían éste y los que lo hereden los que deberían tener una `OwnerList` de sus
+hijos.»* Las **16 hojas** no pagan nada; los contenedores llevan la lista.
+
+**3. `Button` es un `Container`, con dos constructores.** Salió de un problema real: *«el botón es un
+caso especial: acostumbra a tener un texto nada más, pero también hay botones con iconos, con icono y
+texto…»*. La primera idea —`Button` hoja y un `ButtonEx` que herede y contenga— **no cabe en BP**:
+sin interfaces de clase (la gramática las lista como *«IDEAS… no en el lenguaje»*) un `ButtonEx extends
+Button` nunca sería un `Container`, y el `parent` de los constructores no tendría tipo. Decisión:
+*«todos los botones pueden tener varios componentes; un constructor normal y otro para el caso más
+frecuente, el botón con un texto»*. Y el `Button` de hoy **ya era eso**: su constructor hace
+`Label(this, text)` y tira el wrapper.
+
+```
+Component                          hoja: geometría, eventos, delete(), parent: Container
+ └─ Container extends Component    var owner children: OwnerList · destroy() en cascada · toJson() recursivo
+      ├─ Screen · Panel · Window · TabPage · Tabview
+      └─ Button                    Button(parent)  ·  Button(parent, text)
+```
+
+**4. Los constructores pasan a `parent: Container`.** Es una **garantía en compilación**: meter un
+`Label` en un `Checkbox` deja de compilar. ⚠️ Toca **API publicada** (`Gui.bp` está en V4 y V5); sólo
+rompe programas que ya estaban mal según nuestro modelo, o que declararon el padre con tipo estático
+`Component`. Va implícito en la decisión, pero queda dicho.
+
+**5. Alta y baja simétricas, o el modelo miente:** cada widget se registra en `parent.children` al
+crearse (un solo punto en la base) y **`delete()` lo quita de la lista del padre**. `children` es
+**`OwnerList`**, no `List`: es el que existe para que liberar el contenedor libere los elementos.
+
+**6. El serializador vuelve a BP (A), y esta vez por la razón correcta**: el árbol existe en BP.
+`toJson()` en `Component` emite lo suyo; `Container` lo sobrescribe añadiendo `"children": [...]`;
+cada hoja añade sus campos. Formato: **el de los `.win`**. Prueba: **ida y vuelta con `main.win`**,
+al corpus de paridad. Detalle fijado para que la ida y vuelta no sorprenda: `Button(parent, text)`
+guarda su `Label` en un campo `owner` propio y `toJson()` lo emite como **`"text"`**, no como hijo —
+así el formato de fichero sigue siendo el que ya existe.
+
+**7. Lo que se arregla en C igualmente**, porque es defecto de V6 hoy: `create_node` **reutiliza
+ranuras** y `bpvm_gui_delete` **cascadea en el modelo** (por padre, como `dump_node`). Aunque BP lleve
+la cascada, un `delete()` directo no debe dejar huérfanos en la tabla de 512.
+
+**8. Lo que espera al destructor (`#491`, V7)**: `owner` en las properties declaradas de la ventana.
+Sin destructor, liberar el wrapper no libera el nodo, así que hoy no aporta.
+
+**Y la otra mitad de `C1` sigue en pie**: la captura de píxeles. El árbol dice qué modelo hay; el
+fallo de la P4 sería invisible en un JSON perfecto. Si se aprueba, el orden es la cascada de siempre: las 7
 intrínsecas en miVM y en la VM-C (host), `Component.toJson()` en BP, y la prueba de ida y vuelta con
 `main.win` — que entra al corpus de paridad como caso nuevo.
 
