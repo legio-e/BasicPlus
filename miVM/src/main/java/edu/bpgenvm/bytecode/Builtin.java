@@ -514,7 +514,16 @@ public enum Builtin {
      * ahora son dos campos distintos: `Machine.getMicro()` y `Machine.getBoard()`.
      * VA AL FINAL a proposito: el id es el ordinal() de este enum y la VM-C los
      * lleva escritos a mano — insertarlo en medio correria todos los de detras. */
-    MACHINE_MICRO("__machineMicro");                   // () -> string
+    MACHINE_MICRO("__machineMicro"),                   // () -> string           [233]
+    /* V6/G2-4 (11-sep) — la geometria AUTORADA del widget, para el toJson() de
+     * Gui.bp: align/dx/dy (align = -1 si mandan x,y explicitos) y w/h con -1 =
+     * auto. getX/getWidth devuelven el pixel computado y eso no se serializa.
+     * AL FINAL: el id es el ordinal y la VM-C los lleva a mano (234..238). */
+    GUI_GET_ALIGN("__guiGetAlign"),                    // (id) -> align | -1  [234]
+    GUI_GET_ALIGN_DX("__guiGetAlignDx"),               // (id) -> dx          [235]
+    GUI_GET_ALIGN_DY("__guiGetAlignDy"),               // (id) -> dy          [236]
+    GUI_GET_AUTH_WIDTH("__guiGetAuthWidth"),           // (id) -> w | -1      [237]
+    GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight");         // (id) -> h | -1      [238]
 
     public final String bpName;
     public final int id;

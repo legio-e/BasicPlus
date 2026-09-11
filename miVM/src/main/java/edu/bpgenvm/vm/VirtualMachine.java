@@ -1354,12 +1354,18 @@ public class VirtualMachine {
             // header+4 contiene class_ptr (no length). El tamaño lo dicta el descriptor.
             int classPtr = readInt32(headerAddr + 4);
             int numFields = readInt16(classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
-            return alignTo4(OBJ_HEADER_SIZE + numFields * 4);
+            return Math.max(MIN_FREE_BLOCK, alignTo4(OBJ_HEADER_SIZE + numFields * 4));
         }
         int length = readInt32(headerAddr + 4);
         int payload = length * elemSize(type);
         int total = OBJ_HEADER_SIZE + payload;
-        return alignTo4(total);
+        // V6/G2-4 (11-sep) — el MISMO clamp que heapAlloc (Math.max(MIN_FREE_BLOCK,…))
+        // y que block_total_size en heap.c. Faltaba desde 5ea01557 (15-jul): heapAlloc
+        // reservaba 12 B para un payload 0 (un "" o un array vacio) y el recorrido del
+        // GC avanzaba 8 → aterrizaba en el relleno, leia basura como cabecera y el set
+        // de validos salia incompleto (el guardian de buildValidObjectsSet lo cantaba
+        // por stderr, que el arnes tiraba). La VM-C lo tenia bien desde F2.
+        return Math.max(MIN_FREE_BLOCK, alignTo4(total));
     }
 
     private static int alignTo4(int x) {
@@ -4359,6 +4365,12 @@ public class VirtualMachine {
             case GUI_GET_HEIGHT: { int hnd = popTc(tc); pushTc(tc, gui.getHeight(hnd)); break; }
             case GUI_SET_SCROLL_DIR: { int d = popTc(tc); int hnd = popTc(tc); gui.setScrollDir(hnd, d); pushTc(tc, 0); break; }
             case GUI_GET_SCROLL_DIR: { int hnd = popTc(tc); pushTc(tc, gui.getScrollDir(hnd)); break; }
+            // V6/G2-4 — geometria autorada (align/dx/dy, w/h con -1 = auto).
+            case GUI_GET_ALIGN:       { int hnd = popTc(tc); pushTc(tc, gui.getAlign(hnd)); break; }
+            case GUI_GET_ALIGN_DX:    { int hnd = popTc(tc); pushTc(tc, gui.getAlignDx(hnd)); break; }
+            case GUI_GET_ALIGN_DY:    { int hnd = popTc(tc); pushTc(tc, gui.getAlignDy(hnd)); break; }
+            case GUI_GET_AUTH_WIDTH:  { int hnd = popTc(tc); pushTc(tc, gui.getAuthWidth(hnd)); break; }
+            case GUI_GET_AUTH_HEIGHT: { int hnd = popTc(tc); pushTc(tc, gui.getAuthHeight(hnd)); break; }
             case GUI_REFRESH: { int hnd = popTc(tc); gui.refresh(hnd); pushTc(tc, 0); break; }
             // H6 widgets — checkbox.
             case GUI_CREATE_CHECKBOX: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createCheckbox(p)); break; }

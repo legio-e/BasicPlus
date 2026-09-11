@@ -50,7 +50,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -96,10 +96,18 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod
   # Subshell () para no alterar el CWD del propio arnes. Los binarios ($1) son
   # rutas absolutas, siguen resolviendo desde cualquier dir.
   local dir base; dir="$(dirname "$2")"; base="$(basename "$2")"
+  # V6/G2-4 (11-sep) — el stderr NO se tira entero: el guardian del GC de la
+  # miVM ("[gc] !! HEAP INCONSISTENTE") llevaba desde el 15-jul cantando por ahi
+  # que el recorrido del heap descarrilaba, y este arnes lo tapaba con 2>/dev/null
+  # (57 PASS con el GC de la VM de referencia roto). Un aviso de heap se vuelca
+  # como linea de salida: rompe la paridad y se VE en el diff.
+  local err="$WORK/.stderr.$$"
   case "$1" in
-    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -jar "$1" "$base" 2>/dev/null | filt ) ;;
-    *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$1" "$base" 2>/dev/null | filt ) ;;
+    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -jar "$1" "$base" 2>"$err" | filt ) ;;
+    *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$1" "$base" 2>"$err" | filt ) ;;
   esac
+  grep -E "HEAP INCONSISTENTE" "$err" 2>/dev/null | head -2 | sed 's/^/!! stderr: /'
+  rm -f "$err"
 }
 
 # Extrae "NOMBRE 0xID" de cada enum (ids a mayusculas para comparar).
@@ -210,6 +218,13 @@ check_parity() {
       echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
     fi
     rm -rf "$WORK"/*.mod "$WORK/src" "$WORK/p.bpbuild"
+    # V6/G2-4 — un sample puede necesitar un fichero al lado (GuiWinJson carga
+    # el main.win REAL de formdemo). Lo declara el en su cabecera, con
+    # `// recurso: ruta/desde/la/raiz`, igual que el modulo raiz se lee del
+    # propio .bp: el arnes no sabe de samples concretos.
+    sed -nE 's|^//[[:space:]]*recurso:[[:space:]]*([^[:space:]]+).*|\1|p' "$bp" | while read -r rec; do
+      cp "$ROOT/$rec" "$WORK/" 2>/dev/null || echo "  (aviso) $s: recurso '$rec' no encontrado"
+    done
     # La stdlib FRESCA va al outDir ANTES de compilar, y no es un detalle: el
     # resolutor de imports mira outDir PRIMERO y el directorio del fuente
     # despues. Sin esto, un sample de bpgenvm-c/samples/ resolvia `Core` contra

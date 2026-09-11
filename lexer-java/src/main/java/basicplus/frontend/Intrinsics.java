@@ -284,6 +284,12 @@ public final class Intrinsics {
         register("Gui.__guiGetHeight",    w -> emitBuiltin(w, Builtin.GUI_GET_HEIGHT));
         register("Gui.__guiSetScrollDir", w -> emitBuiltin(w, Builtin.GUI_SET_SCROLL_DIR));
         register("Gui.__guiGetScrollDir", w -> emitBuiltin(w, Builtin.GUI_GET_SCROLL_DIR));
+        // V6/G2-4 — geometria autorada (para Component.toJson()).
+        register("Gui.__guiGetAlign",      w -> emitBuiltin(w, Builtin.GUI_GET_ALIGN));
+        register("Gui.__guiGetAlignDx",    w -> emitBuiltin(w, Builtin.GUI_GET_ALIGN_DX));
+        register("Gui.__guiGetAlignDy",    w -> emitBuiltin(w, Builtin.GUI_GET_ALIGN_DY));
+        register("Gui.__guiGetAuthWidth",  w -> emitBuiltin(w, Builtin.GUI_GET_AUTH_WIDTH));
+        register("Gui.__guiGetAuthHeight", w -> emitBuiltin(w, Builtin.GUI_GET_AUTH_HEIGHT));
         register("Gui.__guiRefresh",      w -> emitBuiltin(w, Builtin.GUI_REFRESH));
         // H6 widgets — checkbox.
         register("Gui.__guiCreateCheckbox", w -> emitBuiltin(w, Builtin.GUI_CREATE_CHECKBOX));

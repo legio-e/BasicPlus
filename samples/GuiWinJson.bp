@@ -1,0 +1,67 @@
+// V6/G2-4 — IDA Y VUELTA del .win. El arbol de componentes es NUESTRO (G2), asi
+// que se serializa en BP: Component.toJson() emite lo suyo y Container anade
+// "children", en el formato de los .win. La prueba que regala ese formato:
+//
+//   main.win --load--> arbol --toJson--> J1 --buildForm--> arbol --toJson--> J2
+//
+// J1 == J2 (punto fijo: todo lo que el serializador escribe, el cargador lo lee
+// y lo vuelve a escribir igual) y el dumpTree de los dos arboles identico (el
+// modelo reconstruido es el mismo). Y como todo es BP sobre el modulo Json, la
+// salida es la misma en las dos VMs: paridad por el texto, sin mirar pantallas.
+//
+// Lo que el .win dice y el modelo NO guarda, y por tanto no vuelve: "class" y
+// "comment" (nadie los lee). Lo que SI vuelve aunque no sea un widget: "clic"
+// y "change" explicitos (el modelo los anota al cargar).
+//
+// recurso: samples/formdemo/resources/main.win
+module GuiWinJson
+import Gui
+import Json
+
+  public class MainWin extends Gui.Window
+    public function MainWin()
+    end MainWin
+    public function onSaludar(sender: Gui.Component)
+    end onSaludar
+    public function onActivar(sender: Gui.Component)
+    end onActivar
+  end MainWin
+
+  function main(arg: string)
+    // IDA: el .win → arbol → JSON
+    var w1: MainWin := MainWin()
+    var raiz1: Gui.Component := w1.load("main.win")
+    var j1: string := raiz1.toJsonText()
+    print "J1: " + j1
+    var d1: string := Gui.__guiDumpTree()
+    print "-- arbol tras cargar main.win --"
+    print d1
+    // La ventana entera, desde arriba: Window → Panel → hojas (la recursion).
+    print "WIN: " + w1.toJsonText()
+    w1.destroy()
+
+    // VUELTA: el JSON emitido → arbol otra vez → JSON otra vez
+    var w2: MainWin := MainWin()
+    var nodo: Json.JsonObject := Json.parseJson(j1).asObject()
+    var raiz2: Gui.Component := Gui.buildForm(nodo, w2, w2)
+    var j2: string := raiz2.toJsonText()
+    var d2: string := Gui.__guiDumpTree()
+    print "J2 == J1: " + (j2 == j1)
+    print "arbol igual: " + (d2 == d1)
+    if d2 != d1 then
+      print "J2: " + j2
+      print d2
+    endif
+
+    // Lo que el arbol sabe de si mismo tras la vuelta (G2: hijos visibles).
+    var o: Object := raiz2
+    var cont: Gui.Container := Gui.Container(o)
+    print "hijos del panel: " + cont.childCount()
+    var b: Object := cont.childAt(1)
+    var boton: Gui.Container := Gui.Container(b)
+    print "hijos del boton (la etiqueta): " + boton.childCount()
+    print "boton en JSON: " + boton.toJsonText()
+    w2.destroy()
+    print "FIN"
+  end main
+end GuiWinJson

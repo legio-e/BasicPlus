@@ -820,6 +820,26 @@ void bpvm_gui_set_scroll_dir(int handle, int dir) {
     }
 #endif
 }
+/* V6/G2-4 — la geometria AUTORADA, legible desde BP (la que el dump ya usa).
+ * get_x/get_width devuelven el pixel COMPUTADO cuando no hay nada autorado, y
+ * eso vale para leer, no para SERIALIZAR: el toJson() de Gui.bp tiene que emitir
+ * `align`+desplazamientos y omitir los tamanos auto, o PC y placa divergirian.
+ * get_align devuelve -1 cuando manda pos_set (x,y explicitos). w/h: -1 = auto. */
+int bpvm_gui_get_align(int handle) {
+    gui_node* n = node_for(handle); return (n && !n->pos_set) ? n->align : -1;
+}
+int bpvm_gui_get_align_dx(int handle) {
+    gui_node* n = node_for(handle); return n ? n->dx : 0;
+}
+int bpvm_gui_get_align_dy(int handle) {
+    gui_node* n = node_for(handle); return n ? n->dy : 0;
+}
+int bpvm_gui_get_auth_width(int handle) {
+    gui_node* n = node_for(handle); return n ? n->w : -1;
+}
+int bpvm_gui_get_auth_height(int handle) {
+    gui_node* n = node_for(handle); return n ? n->h : -1;
+}
 int bpvm_gui_get_scroll_dir(int handle) {
     gui_node* n = node_for(handle); return n ? n->scroll : 0;
 }

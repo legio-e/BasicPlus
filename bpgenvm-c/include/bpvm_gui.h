@@ -83,6 +83,12 @@ int  bpvm_gui_get_width(int handle);
 int  bpvm_gui_get_height(int handle);
 void bpvm_gui_set_scroll_dir(int handle, int dir);
 int  bpvm_gui_get_scroll_dir(int handle);
+/* V6/G2-4 — geometria autorada (para el toJson() de Gui.bp): -1 = no autorada. */
+int  bpvm_gui_get_align(int handle);
+int  bpvm_gui_get_align_dx(int handle);
+int  bpvm_gui_get_align_dy(int handle);
+int  bpvm_gui_get_auth_width(int handle);
+int  bpvm_gui_get_auth_height(int handle);
 void bpvm_gui_refresh(int handle);
 /* H6 value-widgets (checkbox): estado en el modelo (n->value = verdad). */
 void bpvm_gui_set_checked(int handle, int v);

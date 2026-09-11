@@ -485,6 +485,14 @@ public final class GuiBackend {
         Node n = nodes.get(handle); if (n != null) n.scroll = dir;
     }
     public int  getScrollDir(int handle) { Node n = nodes.get(handle); return (n == null) ? 0 : n.scroll; }
+    // V6/G2-4 — la geometria AUTORADA (la del dump), para el toJson() de Gui.bp:
+    // getX/getWidth devuelven el pixel computado cuando no hay nada autorado, y eso
+    // no se serializa (PC y placa divergirian). align = -1 si mandan x,y; w/h -1 = auto.
+    public int  getAlign(int handle)      { Node n = nodes.get(handle); return (n == null || n.posSet) ? -1 : n.align; }
+    public int  getAlignDx(int handle)    { Node n = nodes.get(handle); return (n == null) ? 0 : n.dx; }
+    public int  getAlignDy(int handle)    { Node n = nodes.get(handle); return (n == null) ? 0 : n.dy; }
+    public int  getAuthWidth(int handle)  { Node n = nodes.get(handle); return (n == null) ? -1 : n.w; }
+    public int  getAuthHeight(int handle) { Node n = nodes.get(handle); return (n == null) ? -1 : n.h; }
     public void setBgColor(int handle, int rgb) {
         Node n = nodes.get(handle); if (n == null) return;
         n.comp.setOpaque(true);

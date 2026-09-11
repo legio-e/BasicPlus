@@ -34,7 +34,7 @@ module GuiListKbd
     ta.setBounds(195, 5, 270, 50)
 
     var kb: Gui.Keyboard := Gui.Keyboard(scr)
-    kb.attach(ta)
+    kb.setTextarea(ta)
 
     print "== widgets =="
     print Gui.__guiDumpTree()

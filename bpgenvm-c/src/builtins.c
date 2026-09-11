@@ -386,7 +386,14 @@ enum {
     /* V6 (9-sep) — el MICRO. La PLACA la da BUILTIN_PICO_BOARD_NAME: son DOS
      * campos distintos desde el rediseno de `Machine` (getMicro/getBoard).
      * 233 = ordinal() de MACHINE_MICRO en el enum Builtin de miVM. */
-    BUILTIN_MACHINE_MICRO        = 233  /* ()                        → string  */
+    BUILTIN_MACHINE_MICRO        = 233, /* ()                        → string  */
+    /* V6/G2-4 (11-sep) — la geometria AUTORADA del widget, para el toJson() de
+     * Gui.bp. 234..238 = ordinal() de sus gemelos en el enum Builtin de miVM. */
+    BUILTIN_GUI_GET_ALIGN        = 234, /* (id)                      → align | -1 si pos explicita */
+    BUILTIN_GUI_GET_ALIGN_DX     = 235, /* (id)                      → dx      */
+    BUILTIN_GUI_GET_ALIGN_DY     = 236, /* (id)                      → dy      */
+    BUILTIN_GUI_GET_AUTH_WIDTH   = 237, /* (id)                      → w | -1 = auto */
+    BUILTIN_GUI_GET_AUTH_HEIGHT  = 238  /* (id)                      → h | -1 = auto */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1312,6 +1319,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_GET_HEIGHT: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_height(h)); return BPVM_OK; }
     case BUILTIN_GUI_SET_SCROLL_DIR: { int d = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_scroll_dir(h, d); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_SCROLL_DIR: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_scroll_dir(h)); return BPVM_OK; }
+    /* V6/G2-4 — geometria autorada (align/dx/dy, w/h con -1 = auto). */
+    case BUILTIN_GUI_GET_ALIGN:       { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_align(h)); return BPVM_OK; }
+    case BUILTIN_GUI_GET_ALIGN_DX:    { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_align_dx(h)); return BPVM_OK; }
+    case BUILTIN_GUI_GET_ALIGN_DY:    { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_align_dy(h)); return BPVM_OK; }
+    case BUILTIN_GUI_GET_AUTH_WIDTH:  { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_auth_width(h)); return BPVM_OK; }
+    case BUILTIN_GUI_GET_AUTH_HEIGHT: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_auth_height(h)); return BPVM_OK; }
     case BUILTIN_GUI_REFRESH: { int h = pop_i32(vm, tc); bpvm_gui_refresh(h); push_i32(vm, tc, 0); return BPVM_OK; }
     /* H6 — checkbox (1er value-widget). set_checked es programático (no emite
      * onChange); __guiChange inyecta un CHANGE sintético (= toggle del usuario). */

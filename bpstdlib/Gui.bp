@@ -92,6 +92,14 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // Scroll: opt-in (NONE/HOR/VER/BOTH); default NONE en el backend.
   public intrinsic function __guiSetScrollDir(handle: integer, dir: integer)
   public intrinsic function __guiGetScrollDir(handle: integer): integer
+  // V6/G2-4 — la geometria AUTORADA (la del dump), para toJson(): align = -1 si
+  // mandan x,y explicitos; width/height = -1 si son auto. Los get de arriba
+  // devuelven el pixel computado, que no se serializa (PC y placa divergirian).
+  public intrinsic function __guiGetAlign(handle: integer): integer
+  public intrinsic function __guiGetAlignDx(handle: integer): integer
+  public intrinsic function __guiGetAlignDy(handle: integer): integer
+  public intrinsic function __guiGetAuthWidth(handle: integer): integer
+  public intrinsic function __guiGetAuthHeight(handle: integer): integer
   public intrinsic function __guiSetBgColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetTextColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetFont(handle: integer, fontId: integer)
@@ -238,6 +246,69 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       __guiRefresh(this.lvglId)
     end refresh
 
+    // -- V6/G2-4 — SERIALIZACION. El arbol es nuestro, asi que se recorre en BP y
+    //    se escribe UNA vez, con el modulo Json (paridad gratis: mismo codigo en
+    //    las dos VMs). Formato: el de los .win, para que la ida y vuelta sea la
+    //    prueba. Dos reglas para que el JSON tenga paridad de verdad y no solo de
+    //    aspecto: NO se resuelve el layout (un widget por align emite align +
+    //    desplazamientos, nunca el x,y calculado) y se OMITE lo auto (width/height
+    //    a -1 no van). Cada clase dice su typeName() y anade lo suyo en jsonProps();
+    //    Container anade "children". --
+    var handlerClic: string        // nombres EXPLICITOS del .win ("clic"/"change"):
+    var handlerChange: string      // los derivados de `name` no se guardan, se derivan
+
+    // Los anota el cargador (bindHandler es funcion de modulo y los campos son
+    // protegidos). "" = no hay nombre explicito.
+    public function setHandlerNames(clic: string, change: string)
+      this.handlerClic := clic
+      this.handlerChange := change
+    end setHandlerNames
+
+    public function typeName(): string
+      return "Component"
+    end typeName
+
+    // Lo propio de cada widget (text, checked, value...). Solo lo que no es el
+    // valor por defecto, como en un .win escrito a mano. Las hojas lo sobrescriben.
+    public function jsonProps(o: Json.JsonObject)
+    end jsonProps
+
+    public function toJson(): Json.JsonObject
+      var o: Json.JsonObject := Json.JsonObject()
+      o.put("type", Json.JsonString(this.typeName()))
+      if strlen(this.name) > 0 then o.put("name", Json.JsonString(this.name))
+      this.jsonProps(o)
+      var a: integer := __guiGetAlign(this.lvglId)
+      if a >= 0 then
+        // Por NOMBRE, como en el .win; y solo si hay algo que decir: TOP_LEFT +0,0
+        // es lo que tiene un widget recien creado.
+        var dx: integer := __guiGetAlignDx(this.lvglId)
+        var dy: integer := __guiGetAlignDy(this.lvglId)
+        if (a != 0) or (dx != 0) or (dy != 0) then o.put("align", Json.JsonString(alignName(a)))
+        if dx != 0 then o.put("x", Json.JsonInt(dx))
+        if dy != 0 then o.put("y", Json.JsonInt(dy))
+      else
+        o.put("x", Json.JsonInt(__guiGetX(this.lvglId)))
+        o.put("y", Json.JsonInt(__guiGetY(this.lvglId)))
+      endif
+      var w: integer := __guiGetAuthWidth(this.lvglId)
+      var h: integer := __guiGetAuthHeight(this.lvglId)
+      if w >= 0 then o.put("width", Json.JsonInt(w))
+      if h >= 0 then o.put("height", Json.JsonInt(h))
+      var fs: integer := __guiGetFontSize(this.lvglId)
+      if fs != 0 then o.put("fontSize", Json.JsonInt(fs))
+      if strlen(this.handlerClic) > 0 then o.put("clic", Json.JsonString(this.handlerClic))
+      if strlen(this.handlerChange) > 0 then o.put("change", Json.JsonString(this.handlerChange))
+      return o
+    end toJson
+
+    // El texto directamente: quien solo quiere guardar la ventana no tiene por
+    // que importar Json para hablar con el arbol que devuelve toJson() (los
+    // imports no son transitivos, #492).
+    public function toJsonText(): string
+      return this.toJson().toJson()
+    end toJsonText
+
     // -- V6/G2 — EL ARBOL ES NUESTRO. Quien me contiene (null = raiz). Lo pone
     //    attach(), que llama todo constructor: el alta en el padre es UN solo
     //    punto, y por eso todos los widgets pasan por aqui. --
@@ -369,6 +440,29 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       return Component(this.children.get(i))
     end childAt
 
+    public function typeName(): string
+      return "Container"
+    end typeName
+
+    // ¿Este hijo se serializa? Button dice que no a su etiqueta: va como "text".
+    public function jsonChild(c: Component): boolean
+      return true
+    end jsonChild
+
+    public function toJson(): Json.JsonObject
+      var o: Json.JsonObject := super.toJson()
+      var arr: Json.JsonArray := Json.JsonArray()
+      var n: integer := this.childCount()
+      var i: integer := 0
+      while i < n do
+        var c: Component := this.childAt(i)
+        if this.jsonChild(c) then arr.add(c.toJson())
+        i := i + 1
+      endwh
+      if arr.length() > 0 then o.put("children", arr)
+      return o
+    end toJson
+
     // Hijos antes que padre. De atras hacia delante porque cada delete() del hijo
     // lo da de baja de esta lista y los indices posteriores ya no existen.
     public function delete()
@@ -420,6 +514,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Container
+    public function typeName(): string
+      return "Screen"
+    end typeName
     public function Screen()
       super()
       this.lvglId := __guiScreenActive()
@@ -432,6 +529,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
   // ---- Panel — contenedor simple (agrupa widgets). ----
   public class Panel extends Container
+    public function typeName(): string
+      return "Panel"
+    end typeName
     public function Panel(parent: Container)
       super()
       this.lvglId := __guiCreateObj(parent.lvglId)
@@ -441,6 +541,13 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
   // ---- Label — texto. ----
   public class Label extends Component
+    public function typeName(): string
+      return "Label"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      var t: string := __guiGetText(this.lvglId)
+      if strlen(t) > 0 then o.put("text", Json.JsonString(t))
+    end jsonProps
     public function Label(parent: Container, text: string)
       this.lvglId := __guiCreateLabel(parent.lvglId)
       __guiSetText(this.lvglId, text)
@@ -459,6 +566,23 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Button — botón clicable. Lleva un Label hijo con el texto. Reacciona
   //      reescribiendo onClick. (Botón con icono = Image hijo, futura tanda.) ----
   public class Button extends Container
+    public function typeName(): string
+      return "Button"
+    end typeName
+    // El boton con texto se escribe como en el .win: "text", no un Label hijo.
+    // Lo que cuelgue del boton ADEMAS de su etiqueta (un icono) si va en children.
+    public function jsonProps(o: Json.JsonObject)
+      if this.etiqueta != null then
+        var t: string := __guiGetText(this.etiqueta.lvglId)
+        if strlen(t) > 0 then
+          o.put("text", Json.JsonString(t))
+        endif
+      endif
+    end jsonProps
+    public function jsonChild(c: Component): boolean
+      if this.etiqueta == null then return true
+      return c.lvglId != this.etiqueta.lvglId
+    end jsonChild
     // V6/G2 — el boton es un CONTENEDOR (decision de Eduardo, 11-sep): «todos los
     // botones pueden tener varios componentes; un constructor normal y otro para el
     // caso mas frecuente, el boton con un texto». La idea de un Button hoja y un
@@ -487,6 +611,14 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Checkbox — casilla on/off con etiqueta. El toggle dispara onChange
   //      (override-able); el estado se lee/escribe con la propiedad `checked`. ----
   public class Checkbox extends Component
+    public function typeName(): string
+      return "Checkbox"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      var t: string := __guiGetText(this.lvglId)
+      if strlen(t) > 0 then o.put("text", Json.JsonString(t))
+      if this.checked then o.put("checked", Json.JsonBool(true))
+    end jsonProps
     public function Checkbox(parent: Container, text: string)
       this.lvglId := __guiCreateCheckbox(parent.lvglId)
       __guiSetText(this.lvglId, text)
@@ -511,6 +643,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      "switch" en LVGL — pero `switch` es palabra reservada del lenguaje). El
   //      toggle dispara onChange; el estado se lee/escribe con `checked`. ----
   public class Toggle extends Component
+    public function typeName(): string
+      return "Toggle"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.checked then o.put("checked", Json.JsonBool(true))
+    end jsonProps
     public function Toggle(parent: Container)
       this.lvglId := __guiCreateSwitch(parent.lvglId)
       this.attach(parent)
@@ -530,6 +668,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      onChange; el estado se lee/escribe con `value` (el backend lo clampa
   //      al rango fijado con setRange; por defecto 0..100). ----
   public class Slider extends Component
+    public function typeName(): string
+      return "Slider"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.value != 0 then o.put("value", Json.JsonInt(this.value))
+    end jsonProps
     public function Slider(parent: Container)
       this.lvglId := __guiCreateSlider(parent.lvglId)
       this.attach(parent)
@@ -552,6 +696,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Bar — barra de progreso (SOLO lectura: muestra un valor, no interactúa
   //      → sin onChange ni bind). estado por `value` (clampado al rango). ----
   public class Bar extends Component
+    public function typeName(): string
+      return "Bar"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.value != 0 then o.put("value", Json.JsonInt(this.value))
+    end jsonProps
     public function Bar(parent: Container)
       this.lvglId := __guiCreateBar(parent.lvglId)
     end Bar
@@ -573,6 +723,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Spinbox — campo numérico con +/- (entero en rango). Como Slider pero
   //      con teclado/botones; el cambio dispara onChange; `value` + setRange. ----
   public class Spinbox extends Component
+    public function typeName(): string
+      return "Spinbox"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.value != 0 then o.put("value", Json.JsonInt(this.value))
+    end jsonProps
     public function Spinbox(parent: Container)
       this.lvglId := __guiCreateSpinbox(parent.lvglId)
       this.attach(parent)
@@ -595,6 +751,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Led — indicador luminoso (encendido/apagado). Solo salida: no interactúa
   //      (sin onChange ni bind). `value` 0/1 (off/on); on()/off() de conveniencia. ----
   public class Led extends Component
+    public function typeName(): string
+      return "Led"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.value != 0 then o.put("value", Json.JsonInt(this.value))
+    end jsonProps
     public function Led(parent: Container)
       this.lvglId := __guiCreateLed(parent.lvglId)
     end Led
@@ -619,6 +781,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Dropdown — lista desplegable. Opciones \n-separadas (setOptions); el
   //      índice elegido se lee/escribe con `selected` y el cambio dispara onChange. ----
   public class Dropdown extends Component
+    public function typeName(): string
+      return "Dropdown"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.selected != 0 then o.put("selected", Json.JsonInt(this.selected))
+    end jsonProps
     public function Dropdown(parent: Container)
       this.lvglId := __guiCreateDropdown(parent.lvglId)
       this.attach(parent)
@@ -641,6 +809,13 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Textarea — campo de texto editable. El contenido se lee/escribe con
   //      `text`; la edición dispara onChange. ----
   public class Textarea extends Component
+    public function typeName(): string
+      return "Textarea"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if strlen(this.text) > 0 then o.put("text", Json.JsonString(this.text))
+      if this.readOnly then o.put("readOnly", Json.JsonBool(true))
+    end jsonProps
     public function Textarea(parent: Container)
       this.lvglId := __guiCreateTextarea(parent.lvglId)
       this.attach(parent)
@@ -676,6 +851,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      de selección dispara onChange. (Mismo modelo que Dropdown, render vertical;
   //      se llama ListBox porque `List` es un tipo built-in de colecciones.) ----
   public class ListBox extends Component
+    public function typeName(): string
+      return "ListBox"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      if this.selected != 0 then o.put("selected", Json.JsonInt(this.selected))
+    end jsonProps
     public function ListBox(parent: Container)
       this.lvglId := __guiCreateList(parent.lvglId)
       this.attach(parent)
@@ -698,13 +879,20 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // ---- Keyboard — teclado en pantalla. Se ata a un Textarea con attach(); las
   //      teclas editan ese campo (que es quien dispara su onChange). ----
   public class Keyboard extends Component
+    public function typeName(): string
+      return "Keyboard"
+    end typeName
     public function Keyboard(parent: Container)
       this.lvglId := __guiCreateKeyboard(parent.lvglId)
+      this.attach(parent)
     end Keyboard
 
-    public function attach(ta: Component)
+    // Ata el teclado al campo que edita. Se llamaba attach(): al llegar
+    // Component.attach(padre) en G2-2 la llamada del usuario resolvia al de la
+    // base y el teclado se quedaba SIN textarea, en silencio (medido 11-sep).
+    public function setTextarea(ta: Textarea)
       __guiKeyboardSetTextarea(this.lvglId, ta.lvglId)
-    end attach
+    end setTextarea
   end Keyboard
 
   // ---- Msgbox — aviso (diálogo NO modal). Mensaje + botones; al pulsar un botón
@@ -713,6 +901,13 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      bombea; en LVGL single-thread = deadlock). El modal síncrono y "proceso
   //      largo desde evento" están pendientes (ver V3_BACKLOG: GUI-blocking-from-event). ----
   public class Msgbox extends Component
+    public function typeName(): string
+      return "Msgbox"
+    end typeName
+    public function jsonProps(o: Json.JsonObject)
+      var t: string := __guiGetText(this.lvglId)
+      if strlen(t) > 0 then o.put("text", Json.JsonString(t))
+    end jsonProps
     public function Msgbox(parent: Container, message: string)
       this.lvglId := __guiCreateMsgbox(parent.lvglId)
       __guiSetText(this.lvglId, message)
@@ -739,6 +934,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      (mismo patrón que Screen, que envuelve el handle de la pantalla activa).
   //      Se usa como `parent` de los widgets de esa pestaña. ----
   public class TabPage extends Container
+    public function typeName(): string
+      return "TabPage"
+    end typeName
     public function TabPage(pageId: integer)
       super()
       this.lvglId := pageId
@@ -749,6 +947,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      devuelve su página (TabPage, usable como parent). El cambio de pestaña
   //      activa dispara onChange; `active` = índice de la pestaña activa. ----
   public class Tabview extends Container
+    public function typeName(): string
+      return "Tabview"
+    end typeName
     public function Tabview(parent: Container)
       super()
       this.lvglId := __guiCreateTabview(parent.lvglId)
@@ -781,6 +982,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      Component), y setValue() sirve para rellenar un conjunto de datos ya
   //      conocido en vez de ir en streaming. ----
   public class Chart extends Component
+    public function typeName(): string
+      return "Chart"
+    end typeName
     // Tipos de gráfica para setType().
     public const Chart.LINE := 0
     public const Chart.BARS := 1
@@ -824,6 +1028,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   end Chart
 
   public class Table extends Component
+    public function typeName(): string
+      return "Table"
+    end typeName
     public function Table(parent: Container)
       this.lvglId := __guiCreateTable(parent.lvglId)
     end Table
@@ -872,6 +1079,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   //      setImage). Component normal (geometría, scroll, onClick). Varias
   //      ImageView pueden apuntar a la misma Image. ----
   public class ImageView extends Component
+    public function typeName(): string
+      return "ImageView"
+    end typeName
     public function ImageView(parent: Container)
       this.lvglId := __guiCreateImageView(parent.lvglId)
       this.attach(parent)
@@ -1061,6 +1271,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // despacha con __guiInvokeBySlot. Handler ausente (slot -1) → se ignora.
   // ============================================================
   public class Window extends Container
+    public function typeName(): string
+      return "Window"
+    end typeName
     public function Window()
       super()
       var scr: integer := __guiScreenActive()
@@ -1178,6 +1391,13 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     var nChange: string := node.getStringOr("change", "")
     var clicExplicito: boolean := strlen(nClic) > 0
     var changeExplicito: boolean := strlen(nChange) > 0
+    if clicExplicito or changeExplicito then       // V6/G2-4: toJson() los devuelve
+      var hc: string := ""
+      var hch: string := ""
+      if clicExplicito then hc := nClic
+      if changeExplicito then hch := nChange
+      w.setHandlerNames(hc, hch)
+    endif
     if (not clicExplicito) and (strlen(nom) > 0) then   nClic := nom + "_onClick"
     if (not changeExplicito) and (strlen(nom) > 0) then nChange := nom + "_onChange"
 
@@ -1271,16 +1491,24 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     // a medio construir. Es la pieza sobre la que se apoya todo lo demás —
     // la property de la ventana que lo sostiene y sus handlers se llaman IGUAL.
     if node.has("name") then     w.name := node.getStringOr("name", "")
-    if node.has("x") then        w.x := node.getIntOr("x", 0)
-    if node.has("y") then        w.y := node.getIntOr("y", 0)
+    // V6/G2-4 — con "align", x/y son DESPLAZAMIENTOS del ancla (lo que LVGL llama
+    // offset), no una posicion. Antes se aplicaban como posicion y luego align(…,0,0)
+    // los pisaba: el `"y": 12` de main.win no llegaba al modelo (medido 11-sep).
+    if node.has("align") then
+      w.align(alignFromName(node.getStringOr("align", "CENTER")), node.getIntOr("x", 0), node.getIntOr("y", 0))
+    else
+      if node.has("x") then
+        w.x := node.getIntOr("x", 0)
+      endif
+      if node.has("y") then
+        w.y := node.getIntOr("y", 0)
+      endif
+    endif
     if node.has("width") then    w.width := node.getIntOr("width", 0)
     if node.has("height") then   w.height := node.getIntOr("height", 0)
     if node.has("fontSize") then w.fontSize := node.getIntOr("fontSize", 0)
     if node.has("bgColor") then   w.setBgColor(Color(colorFromHex(node.getStringOr("bgColor", "0"))))
     if node.has("textColor") then w.setTextColor(Color(colorFromHex(node.getStringOr("textColor", "0"))))
-    if node.has("align") then
-      w.align(alignFromName(node.getStringOr("align", "CENTER")), 0, 0)
-    endif
   end applyCommon
 
   // colorFromHex — "0xRRGGBB" / "RRGGBB" → entero 0xRRGGBB (0 si inválido). Para el
@@ -1311,6 +1539,19 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     endwh
     return acc
   end colorFromHex
+
+  // alignName — constante de Align → string del .win (inverso de alignFromName).
+  public function alignName(a: integer): string
+    if a == 0 then return "TOP_LEFT"
+    if a == 1 then return "TOP_MID"
+    if a == 2 then return "TOP_RIGHT"
+    if a == 3 then return "LEFT_MID"
+    if a == 5 then return "RIGHT_MID"
+    if a == 6 then return "BOTTOM_LEFT"
+    if a == 7 then return "BOTTOM_MID"
+    if a == 8 then return "BOTTOM_RIGHT"
+    return "CENTER"
+  end alignName
 
   // alignFromName — string del .win → constante de Align (default CENTER).
   function alignFromName(a: string): integer
