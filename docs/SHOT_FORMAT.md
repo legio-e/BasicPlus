@@ -102,8 +102,9 @@ bloque donde dice su rectángulo.
   stdlib que no van en la imagen (`Gui`, `Json`, `Collections`, `Str`) van a **`/app`**, que es
   donde los deja el IDE. (Ojo `#493`: `/app` tapa a `/lib`.)
 - Números reales: DK2 800×480 → **20 bloques, 6 956 B (110×), `GET` en 643 ms** a 115 200; **C6 240×240 →
-  10 bloques, 2 862 B (40×), `GET` en 8 ms** por USB-JTAG; host 480×320 → 4,4 KB (70×); miVM (Swing,
-  códec 0) → 307 440 B.
+  10 bloques, 2 862 B (40×), `GET` en 8 ms** por USB-JTAG; **P4 1024×600 → 25 bloques, 8 885 B (138×),
+  `GET` en 820 ms**, y girado 90° la lógica 600×1024 con `rot=1`; host 480×320 → 4,4 KB (70×); miVM
+  (Swing, códec 0) → 307 440 B.
 - **En el C6 lo que manda es la DRAM de plataforma, no el tope**: tras LVGL quedan ~26 KB (bloque mayor
   14 KB). Por eso en placa se comprime **desde la banda, sin copiar** (ya es RGB565 y contigua) y el buffer
   de salida arranca en 4 KB; el `tmp` de conversión sólo existe en el host. La captura cuesta ~5 KB de DRAM.

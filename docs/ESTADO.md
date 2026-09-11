@@ -29,7 +29,7 @@
 
 ## ⏭️ AL RETOMAR (11-sep, noche) — **`C1` CONSTRUIDO** en el mismo día que `G2`; el siguiente es `T1`
 
-**`C1` — la captura de pantalla — hecha de punta a punta** (`0791bb3e`): `Gui.shot(path)` en las dos VMs,
+**`C1` — la captura de pantalla — hecha de punta a punta y vista en las CUATRO pantallas** (`0791bb3e`, `d9c6e0db`): `Gui.shot(path)` en las dos VMs,
 el fichero `.shot` (`docs/SHOT_FORMAT.md`), `tools/shot2png.py`, y **la pantalla de la Discovery vista en
 el PC** (800×480, 6 956 B, `GET` en 643 ms). Detalle y lo que corrigió del diseño, en `FICHAS` (`#475`).
 `#495` abierta a V7 por decisión de Eduardo (el `BUSY` del wire durante un RUN es de la época de un hilo).
@@ -49,7 +49,7 @@ oráculo placa↔placa existe.
 
 📌 **Estado del repo**: todo commiteado, **sin push**. Paridad **59 PASS**. Discovery grabada con el
 firmware final (17:30) y con `Gui/Json/Collections/Str` en `/app`. C6 y P4 **compilan, sin probar en placa**.
-**C6 grabada y verificada** (2 862 B, 40×; costó un «sin memoria» primero: la DRAM de plataforma, no el tope — arreglado comprimiendo desde la banda sin copiar). P4 compila, sin probar. Pico compilada. Metro sigue sin regrabar. El host queda en el sabor `gui1-lvgl0` (el del arnés); para ver la
+**C6 grabada y verificada** (2 862 B, 40×; costó un «sin memoria» primero: la DRAM de plataforma, no el tope — arreglado comprimiendo desde la banda sin copiar). **P4 grabada y verificada** (8 885 B, 138×; y girada 90°). Pico compilada. Metro sigue sin regrabar. El host queda en el sabor `gui1-lvgl0` (el del arnés); para ver la
 GUI en el PC, `make GUI=1 LVGL=1` (y el arnés se negará hasta volver).
 
 ⏭️ **Lo primero al retomar**: **`T1` fase 1** (los
