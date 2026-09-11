@@ -167,11 +167,43 @@ module Collections
   // cascadea (verificado en samples/OwnerBp.bp, con el guardian de fin de RUN
   // diciendo «0 bloques sin liberar»).
   public class OwnerList extends Core.List
+    // V6/G2 — EL ARRAY QUE POSEE, y el `items` de List es su ALIAS.
+    //
+    // Lo que habia: `propios` declarado owner y NUNCA usado — add/get/remove iban
+    // por el `items` de List, que no es owner. Asi que liberar una OwnerList no
+    // liberaba ningun elemento, y el test que la validaba solo imprimia
+    // longitudes: no podia verlo. Medido el 11-sep con samples/OwnerCascada.bp:
+    // una segunda referencia al elemento seguia VIVA tras morir la lista.
+    //
+    // Y no tiene arreglo por herencia: una subclase no puede volver owner un
+    // campo heredado (el bit es del descriptor de quien lo declara). La forma,
+    // de Eduardo: propios y items apuntan al MISMO array — propios lo posee,
+    // List lo usa por items sin enterarse. Al morir la lista, FREE_REF cascadea
+    // por propios y libera el array Y todos sus elementos (interp.c:588).
+    //
+    // Solo hay que intervenir donde List SUSTITUYE el array: grow(), que es
+    // virtual. add/get/remove quedan tal cual.
     var owner propios: Object[]
 
     public function OwnerList()
       super()
+      this.propios := this.backing()      // el mismo array: propios posee, items lo usa
     end OwnerList
+
+    public function grow()
+      var viejo: Object[] := this.backing()
+      var n: integer := this.length()
+      super.grow()                          // copia al nuevo; items ya apunta a el
+      // ⚠️ VACIAR el viejo ANTES de soltarlo: growObjArray COPIA y lo deja
+      // intacto, y `this.propios := nuevo` es SET_FIELD_OWNER — libera el
+      // anterior CON CASCADA, y mataria a los elementos recien copiados.
+      var i: integer := 0
+      while i < n do
+        viejo[i] := null
+        i := i + 1
+      endwh
+      this.propios := this.backing()      // suelta el viejo (ya vacio) y posee el nuevo
+    end grow
 
     // Quitar UN elemento liberandolo. El `var owner` local emite el FREE_REF
     // al salir del scope, que es la misma semantica que el removeAndFree

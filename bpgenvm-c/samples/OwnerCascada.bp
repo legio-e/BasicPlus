@@ -1,0 +1,63 @@
+// OwnerCascada.bp — V6/G2: ¿libera una OwnerList a sus elementos al morir?
+//
+// La OwnerList de la stdlib declaraba `var owner propios` y NUNCA lo usaba:
+// add/get/remove iban por el `items` de List, que no es owner. Asi que liberar
+// la lista no liberaba nada, y el test que la validaba (ownerlisttest) solo
+// imprimia longitudes — no podia verlo.
+//
+// ESTE si lo ve, con el instrumento que ya tiene la VM: los handles con
+// generacion de V4. Una SEGUNDA referencia (no owner) a un elemento apunta,
+// tras morir la lista, a un objeto MUERTO — y tocarlo grita. Si no grita, la
+// cascada no ocurrio. Y con 10 elementos fuerza el crecimiento (4 -> 8 -> 16),
+// que es donde el alias propios/items puede desincronizarse.
+module OwnerCascada
+  import Collections
+  import Core
+
+  class Recurso
+    var nombre: string
+    public function Recurso(n: string)
+      this.nombre := n
+    end Recurso
+    public function ver(): string
+      return this.nombre
+    end ver
+  end Recurso
+
+  class Caja
+    var r: Recurso          // referencia NO owner: sobrevive a la lista
+    public function Caja()
+    end Caja
+    public function guarda(x: Recurso)
+      this.r := x
+    end guarda
+    public function nombreDelGuardado(): string
+      return this.r.ver()
+    end nombreDelGuardado
+  end Caja
+
+  function llenar(caja: Caja)
+    var owner ol: Collections.OwnerList := Collections.OwnerList()
+    var k: integer := 0
+    while k < 10 do
+      var r: Recurso := Recurso("R" + k)
+      ol.add(r)
+      if k == 7 then
+        caja.guarda(r)      // uno de DESPUES del crecimiento
+      endif
+      k := k + 1
+    endwh
+    print "en la lista: " + ol.length()
+  end llenar                // aqui muere ol -> FREE_REF -> propios -> los 10
+
+  function Main()
+    var caja: Caja := Caja()
+    llenar(caja)
+    try
+      var v: string := caja.nombreDelGuardado()
+      print "SIN CASCADA: el recurso sigue vivo (" + v + ")"
+    catch e: RuntimeError
+      print "CASCADA OK: el recurso murio con la lista"
+    endtry
+  end Main
+end OwnerCascada

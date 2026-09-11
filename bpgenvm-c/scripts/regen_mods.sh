@@ -19,6 +19,9 @@
 # ============================================================
 set -euo pipefail
 
+INVOCACION="$*"     # V6/G2: se guarda en el generado. La lista de modulos y los --extra
+                    # vivian en la cabeza de quien lo lanzo, y el Hello embebido ya no existia
+                    # en el arbol cuando hubo que regenerar (11-sep).
 FAM="$1"; OUT="$2"; shift 2
 STDLIB="$(cd "$(dirname "$0")/../.." && pwd)/bpstdlib"
 MODS=(); EXTRA=()
@@ -46,6 +49,8 @@ C="$OUT/${FAM}_mods.c"; H="$OUT/${FAM}_mods.h"; GUARD="$(echo "${FAM}_MODS_H" | 
     echo " * La stdlib embebida de la imagen ${FAM}: SÓLO DATOS (los blobs y la tabla)."
     echo " * El bucle y la regla viven en src/bpvm_mods.c; lo que se ponga aquí a mano"
     echo " * muere en la siguiente regeneración (#422 → #446)."
+    echo " *"
+    echo " * Invocación (reproducible): scripts/regen_mods.sh $INVOCACION"
     echo " */"
     echo "#include \"${FAM}_mods.h\""
     echo ""

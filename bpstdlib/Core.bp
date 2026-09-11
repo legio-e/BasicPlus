@@ -437,12 +437,12 @@ module Core
 
     public function add(o: Object)
       if this.size >= this.cap then
-        this.cap   := this.cap * 2
-        this.items := growObjArray(this.items, this.cap)
+        this.grow()
       endif
       this.items[this.size] := o
       this.size := this.size + 1
     end add
+
 
     // Las sobrecargas: envuelven el escalar y DELEGAN. Nada de casos
     // especiales en el compilador.
@@ -538,6 +538,24 @@ module Core
       this.size := this.size - 1
       this.items[this.size] := null
     end remove
+    // V6/G2 — el crecimiento SEPARADO y virtual: es la unica operacion que
+    // sustituye el array de respaldo, y una subclase que POSEA sus elementos
+    // (OwnerList) necesita enterarse justo de eso. Sacarlo de add() es lo que
+    // permite que OwnerList no reescriba add.
+    public function grow()
+      this.cap   := this.cap * 2
+      this.items := growObjArray(this.items, this.cap)
+    end grow
+
+    // V6/G2 — el array de respaldo, para las subclases. Un descendiente que vive
+    // en OTRO modulo hoy no puede ver `items` aunque sea protegido: la interfaz
+    // de modulo exporta metodos y propiedades pero NO campos, asi que la regla
+    // «protegido = lo ven los descendientes» no cruza modulos. Es un bug del
+    // compilador, apuntado; mientras, este getter. Decision de Eduardo (11-sep):
+    // «utiliza un get para acceder al campo y de momento salimos del paso».
+    public function backing(): Object[]
+      return this.items
+    end backing
   end List
 
 

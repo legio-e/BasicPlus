@@ -1,15 +1,9 @@
 dbg 3
 module Hello
-source C:\lenguajes\pm\bpgenvm-c\samples\hello.bp
+source C:\lenguajes\pm\bpgenvm-c\pico\extra\Hello.bp
 lines
-407 8
-416 9
-430 11
-463 15
-466 16
-479 17
-488 18
-496 20
+412 9
+417 10
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -48,11 +42,7 @@ func Mutex.unlock 323
 this -20 8 0 ?
 func Mutex.__init 337
 this -20 8 0 ?
-func fib 404
-n -16 4 0 integer
-func Main 460
-i 0 4 0 integer
-func __strconcat 506
+func __strconcat 449
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

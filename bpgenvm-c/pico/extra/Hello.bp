@@ -1,0 +1,12 @@
+// Hello.bp — el programa de muestra que viaja EMBEBIDO en /app/Hello.mod de la
+// imagen de la Pico (scripts/regen_mods.sh --extra). Vive aqui, junto a la Pico,
+// y no en samples/: alli ya hay un hello.bp historico de F1 (fib, sin strings) y
+// el FS de Windows no distingue mayusculas. Neutro a proposito: mismo bytecode
+// para cualquier placa de la familia, y lo primero que ejecuta quien estrena una.
+module Hello
+  import Machine
+  function Main()
+    print "Hola desde BasicPlus"
+    print "micro: " + Machine.getMicro() + "  placa: " + Machine.getBoard()
+  end Main
+end Hello
