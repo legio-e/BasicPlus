@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **4** | ~~`G2`~~ (✅ 11-sep) → `C1` (captura) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **3** | ~~`G2`~~ (✅ 11-sep) → ~~`C1`~~ (✅ 11-sep, C6/P4 por ver en placa) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -2304,6 +2304,33 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
+
+**De dónde sale.** Al cerrar el flujo de la captura (`RUN → Gui.shot dentro → EXITED → GET`) apareció
+que el wire contesta `BUSY` a todo lo que no sea `HELLO`/`KILL`/`RESET` mientras corre un programa, en
+las cinco implementaciones (`repl_esp32.c:593`, `bpvm_sim.c:634`, `repl_v1.c:967`, `stm32_repl.c:334`
+y el host). Eduardo: *«ese `BUSY` es algo artificial: ahora, con dos hilos del SO corriendo, no hay
+nada que impida hacer un listado o copiar un archivo»*. Y es verdad en lo esencial: la regla es de
+cuando el REPL y la VM eran el mismo hilo (Pico, `#256`); desde `A1` el hilo `io` lee el cable
+durante todo el RUN.
+
+**Lo que SÍ queda por medio, comprobado en el código (ninguna de arquitectura):**
+1. **El cerrojo del cable es por LÍNEA, no por respuesta.** Un `GET_REPLY` son una línea y N bytes
+   crudos en dos llamadas (`bpvm_repl.c:251`); el `tx_mtx` de `#473` hace atómica la línea. Durante un
+   RUN, `io` saca los `OUTPUT` por el mismo cable y un `print` puede colarse **entre la cabecera y su
+   bulk**, o dentro del bulk: el IDE leería basura como fichero. Arreglo: la respuesta entera (línea +
+   bulk) bajo el mismo cerrojo, en el común.
+2. **El cerrojo del FS abarca el `read_stream` entero** (`fs_lfs.c:320`): mientras `GET` manda 60 KB a
+   11 KB/s (~5 s en la DK2), un `writeFile`/`readFile` del programa se queda parado. No es un
+   bloqueo, es una parada — pero en `T1` cambia los tiempos que se miden. Salir de ahí es trocear con
+   huecos (las N aperturas de `#453`) o aceptar la parada y decirlo.
+3. Después, levantar el `BUSY` en los cinco `poll` **sólo para `LS`/`GET`**: `PUT` sobre `/app` con el
+   programa leyendo ahí es otra conversación.
+
+⏩ **Decisión de Eduardo (11-sep): a V7** — *«lo estudiamos en V7, no es para V6»*. Para `C1` no hace
+falta: la captura se escribe cuando el programa quiere y se baja al terminar (o tras `KILL`). El
+runner de `T1` lo sabe: `RUN → EXITED → GET`.
+
 #### ✅ `#494` — EL GC DE LA miVM DESCARRILABA ANTE UN OBJETO DE PAYLOAD 0 — desde el 15-jul (abierta y CERRADA el 11-sep, `65e9f558`, de `G2`)
 
 **Qué era.** `heapAlloc` reserva `max(MIN_FREE_BLOCK=12, align4(8 + payload))` desde `5ea01557`
@@ -4235,7 +4262,53 @@ guardado desde `toJson()` no es portable entre pantallas hasta que eso se decida
 formdemo, no una copia); y el stderr **ya no se tira entero**: una línea `HEAP INCONSISTENTE` sale
 como salida y rompe la paridad.
 
-#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas (abierta 5-sep · **MEDIDA el 5-sep**)
+#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas — ✅ **CONSTRUIDA el 11-sep** (`0791bb3e`; C6/P4 por ver en placa)
+
+### ✅ LO CONSTRUIDO (11-sep) — `C1`, de punta a punta en un día
+
+**`Gui.shot(path)`** escribe la pantalla tal como LVGL la dibujó a un fichero **`.shot`** — formato y
+todas las decisiones en **`docs/SHOT_FORMAT.md`** — y el PC lo pasa a PNG con **`tools/shot2png.py`**
+(sólo stdlib de Python, descompresor LZ4 de bloque propio). Se baja con el `GET` de siempre (`wire_serie.py
+get <remoto> <local>` ya guarda). Cero verbos nuevos.
+
+**Lo que el mapa previo corrigió del diseño** (6 lectores + crítico, antes de escribir una línea):
+- 🔴 *«Las cuatro pantallas van en PARTIAL»* era **falso**: el host con ventana SDL va en **`RENDER_MODE_DIRECT`**
+  (framebuffer entero, XRGB8888). Por eso el gancho no son los cuatro `flush_cb` de familia sino
+  **`LV_EVENT_FLUSH_START`** en `gui.c`: cero líneas por familia, llega antes del swap in situ del C6, y
+  vale igual en PARTIAL (placas, host `--no-screen`) y en DIRECT.
+- 🔴 *«LZ4: 1 056 B de RAM»* sólo con `LZ4_MEMORY_USAGE 10`; el defecto (14) son **16 416 B en la pila** de
+  la tarea `vm` — 16 KB en la DK2 y 8 KB en el C6. Puesto a 10 en `lv_conf.h`, y el estado se reserva en
+  el heap con `LZ4_sizeofState()` (el tamaño lo dice el `lz4.c` compilado, no una macro).
+- El host ya capturaba (`BPVM_GUI_SHOT_MS`, F12) pero por `lv_snapshot_take` + PNG en el cwd con numeración
+  que reempieza: **no es el camino de placa** y no se reutilizó. Se queda como estaba (útil para el ojo).
+- `build/liblvgl.a` **no dependía de `lv_conf.h`**: encender el LZ4 enlazaba la lib rancia en silencio.
+  Ahora depende (regla en el Makefile).
+
+**Verificado**: host ventana (DIRECT: 14 franjas de 24, 4,4 KB, 70×) · host `--no-screen` (PARTIAL: 32
+bloques de 10 filas) · miVM (Swing, códec 0) · **la Discovery**: 800×480, 20 bloques, **6 956 B (110×),
+`GET` en 643 ms** a 115 200 — y tres capturas del mismo programa con dos reflasheos en medio,
+**byte-idénticas**: el oráculo de regresión placa↔placa del diseño existe de facto. Compila en Pico, C6, P4
+y DK2. Arnés **59 PASS** con `samples/GuiShot.bp` (en el arnés las dos VMs dicen «sin pantalla»; miVM corre
+ahora con `-Djava.awt.headless`, y el arnés se niega con nombre si el host está compilado con LVGL).
+
+**Lo que la primera captura enseñó**: *bombear antes de capturar* — el tema de LVGL anima el check del
+checkbox (~100 ms) y sin una vuelta de lazo sale vacío con `val=1` en el modelo (es lo que se **ve**, no el
+modelo); y **en la DK2 `/lib` se vacía en cada arranque** (`clear_lib`): los módulos GUI que no van en la
+imagen viven en `/app`, que es donde los deja el IDE.
+
+**La revisión adversaria** (3 lentes → 11 hallazgos → 2×2 refutadores → 2 confirmados, 7 ya arreglados en
+vuelo): el tope `BPVM_SHOT_MAX` se comparaba con el `compressBound` de la franja, no con lo que ocupa —
+en el C6 se comía 12 de los 40 KB y la misma pantalla cabía o no según cómo troceara el driver. Ahora el
+compresor escribe con salida limitada y el buffer crece hasta el tope: medido con 74 KB ruidosos, y con un
+tope de 20 KB «no cabe» y sin fichero. También: 0 bloques ya no es éxito; `remove()` no borra directorios;
+miVM crea la ventana si `shot()` llega antes de la primera vuelta del hilo (como la VM-C).
+
+⏭️ **Queda**: probar en **C6** (el tope de 40 KB y el `FLUSH_START` antes del swap DMA) y en **P4** (rotación
+por software en el flush: la captura es la lógica) cuando se conecten; y, si `T1`/`D1` lo piden, un visor
+de `.shot` en el IDE (hoy `shot2png.py`). De aquí salió **`#495`** (V7).
+
+---
+
 
 🧩 **AMPLIACIÓN DE EDUARDO (11-sep, 0:40 — sólo análisis): SERIALIZAR LA VENTANA A JSON.**
 *«Si tenemos una ventana LVGL montada con todos sus componentes dentro, lo que necesitamos es
@@ -5031,7 +5104,7 @@ tocar y cómo se comprueba.
 | **E1** | **el IDE** y el protocolo wire | ✅ **6-sep**: sus **7 puntos** cerrados — `#412` (argumento de ejecución), `#452` (`RESET` con un RUN vivo), las deps que el device ya tiene, el CRC de procedencia, las BD en el simulador, el árbol por color y el tiempo de la placa |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | ✅ **7-sep** (`a4c28062`): `Gui.start()` / `stop()` / `join()`; `Gui.run()` sigue síncrono por compatibilidad |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
-| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Va **antes** de `D1` y `F1` |
+| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ✅ **11-sep** (`0791bb3e`): `Gui.shot(path)` → `.shot` (`docs/SHOT_FORMAT.md`) + `tools/shot2png.py`; visto en host (ventana y `--no-screen`), miVM y **la Discovery** (800×480, 6 956 B, 110×). C6 y P4 **compilan, sin probar en placa** (5 min cada una cuando se conecten) |
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **Plan en dos fases (11-sep)**: los 50 puros primero, las gráficas sobre `G2`+`C1` después, y ahí se para. Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |

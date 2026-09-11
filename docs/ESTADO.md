@@ -27,6 +27,38 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (11-sep, noche) — **`C1` CONSTRUIDO** en el mismo día que `G2`; el siguiente es `T1`
+
+**`C1` — la captura de pantalla — hecha de punta a punta** (`0791bb3e`): `Gui.shot(path)` en las dos VMs,
+el fichero `.shot` (`docs/SHOT_FORMAT.md`), `tools/shot2png.py`, y **la pantalla de la Discovery vista en
+el PC** (800×480, 6 956 B, `GET` en 643 ms). Detalle y lo que corrigió del diseño, en `FICHAS` (`#475`).
+`#495` abierta a V7 por decisión de Eduardo (el `BUSY` del wire durante un RUN es de la época de un hilo).
+
+**Cómo se hizo, y por qué importa para lo siguiente:** con `ultracode`. Un mapa previo de seis lectores
+tumbó dos premisas del diseño (*el host no va en PARTIAL*, *el LZ4 pide 16 KB de pila*) antes de escribir
+nada; dos satélites en paralelo (la herramienta Python y el lado Java) contra una spec escrita primero; y
+una revisión adversaria (3 lentes, refutadores por pares) que confirmó dos hallazgos reales y descartó
+siete que ya había arreglado en vuelo. **La spec primero** es lo que hizo que tres piezas escritas por tres
+manos encajaran a la primera.
+
+⚠️ **Lo que enseñó la placa**: (1) *bombear antes de capturar* — las transiciones del tema de LVGL
+(~100 ms) hacen que una captura sin lazo salga con el checkbox vacío y `val=1` en el modelo; (2) **en la DK2
+`/lib` se vacía en cada arranque** — lo subido a mano a `/lib` muere al primer reset, los módulos GUI van a
+`/app`; (3) tres capturas del mismo programa con dos reflasheos en medio salieron **byte-idénticas**: el
+oráculo placa↔placa existe.
+
+📌 **Estado del repo**: todo commiteado, **sin push**. Paridad **59 PASS**. Discovery grabada con el
+firmware final (17:30) y con `Gui/Json/Collections/Str` en `/app`. C6 y P4 **compilan, sin probar en placa**.
+Pico compilada. Metro sigue sin regrabar. El host queda en el sabor `gui1-lvgl0` (el del arnés); para ver la
+GUI en el PC, `make GUI=1 LVGL=1` (y el arnés se negará hasta volver).
+
+⏭️ **Lo primero al retomar**: si el C6 se conecta, 5 minutos para probar `GuiShot` allí (el tope de 40 KB y
+el gancho antes del swap DMA son lo único de `C1` que no ha visto una placa). Después, **`T1` fase 1** (los
+~50 samples puros con las placas conducidas), y en la fase 2 la prueba gráfica es *ejecutar, `toJson()`,
+`shot`, `GET`, diff* — todas las piezas existen ya.
+
+---
+
 ## ⏭️ AL RETOMAR (11-sep, tarde) — **`G2` CERRADO** en tres commits; el siguiente es `C1`, y antes se PAUSA
 
 **`G2` — Revisión del modelo gráfico — hecho entero el 11-sep** (`50fcbc46` · `65a50f0e` · `65e9f558`),
