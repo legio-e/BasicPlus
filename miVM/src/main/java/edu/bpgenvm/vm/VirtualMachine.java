@@ -4371,6 +4371,19 @@ public class VirtualMachine {
             case GUI_GET_ALIGN_DY:    { int hnd = popTc(tc); pushTc(tc, gui.getAlignDy(hnd)); break; }
             case GUI_GET_AUTH_WIDTH:  { int hnd = popTc(tc); pushTc(tc, gui.getAuthWidth(hnd)); break; }
             case GUI_GET_AUTH_HEIGHT: { int hnd = popTc(tc); pushTc(tc, gui.getAuthHeight(hnd)); break; }
+            // V6/C1 — Gui.shot(path): la captura de pantalla a .shot (docs/SHOT_FORMAT.md).
+            // El path se resuelve EXACTAMENTE como writeFile (sandbox del workdir);
+            // la VM devuelve el entero (bytes > 0 | -1 sin pantalla | -2 escritura |
+            // -3 no cabe | -4 sin memoria) y el RuntimeError lo lanza Gui.bp.
+            case GUI_SHOT: {
+                String path = readVmString(popTcRef(tc));
+                // Espejo de la VM-C, donde el display existe desde Gui.Screen(): si la
+                // ventana aun no ha nacido (el hilo del GUI no ha dado su primera vuelta)
+                // se crea aqui; sin ventana posible (headless), shot() dira -1.
+                if (!guiStarted && !java.awt.GraphicsEnvironment.isHeadless()) { gui.start(); guiStarted = true; }
+                pushTc(tc, gui.shot(sandboxPath(tc, path).toString()));
+                break;
+            }
             case GUI_REFRESH: { int hnd = popTc(tc); gui.refresh(hnd); pushTc(tc, 0); break; }
             // H6 widgets — checkbox.
             case GUI_CREATE_CHECKBOX: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createCheckbox(p)); break; }

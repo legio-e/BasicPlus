@@ -523,7 +523,15 @@ public enum Builtin {
     GUI_GET_ALIGN_DX("__guiGetAlignDx"),               // (id) -> dx          [235]
     GUI_GET_ALIGN_DY("__guiGetAlignDy"),               // (id) -> dy          [236]
     GUI_GET_AUTH_WIDTH("__guiGetAuthWidth"),           // (id) -> w | -1      [237]
-    GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight");         // (id) -> h | -1      [238]
+    GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight"),         // (id) -> h | -1      [238]
+    /* V6/C1 (11-sep) — la CAPTURA de pantalla: escribe un `.shot` (RGB565 por
+     * franjas, docs/SHOT_FORMAT.md) en `path`, resuelto como writeFile. Devuelve
+     * los bytes escritos (> 0) o un codigo negativo: -1 sin pantalla, -2 error
+     * de escritura, -3 no cabe, -4 sin memoria. El RuntimeError con el mensaje
+     * fijo lo lanza Gui.bp, no la VM: la VM solo devuelve el entero, IGUAL en
+     * las dos (paridad de stdout sin depender de los pixeles). AL FINAL: el id
+     * es el ordinal y la VM-C lo lleva a mano (239). */
+    GUI_SHOT("__guiShot");                             // (path: string) -> integer [239]
 
     public final String bpName;
     public final int id;

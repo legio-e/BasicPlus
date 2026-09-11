@@ -50,7 +50,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -96,6 +96,10 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod
   # Subshell () para no alterar el CWD del propio arnes. Los binarios ($1) son
   # rutas absolutas, siguen resolviendo desde cualquier dir.
   local dir base; dir="$(dirname "$2")"; base="$(basename "$2")"
+  # V6/C1 (12-sep) — miVM SIN VENTANA (-Djava.awt.headless): el arnes compara
+  # stdout, y un sample con Gui.start() abriria un JFrame en el PC de quien lo
+  # corre; ademas asi miVM y la VM-C sin LVGL dicen lo mismo ante Gui.shot
+  # («sin pantalla»), que es lo que GuiShot.bp comprueba.
   # V6/G2-4 (11-sep) — el stderr NO se tira entero: el guardian del GC de la
   # miVM ("[gc] !! HEAP INCONSISTENTE") llevaba desde el 15-jul cantando por ahi
   # que el recorrido del heap descarrilaba, y este arnes lo tapaba con 2>/dev/null
@@ -103,7 +107,7 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod
   # como linea de salida: rompe la paridad y se VE en el diff.
   local err="$WORK/.stderr.$$"
   case "$1" in
-    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -jar "$1" "$base" 2>"$err" | filt ) ;;
+    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$1" "$base" 2>"$err" | filt ) ;;
     *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$1" "$base" 2>"$err" | filt ) ;;
   esac
   grep -E "HEAP INCONSISTENTE" "$err" 2>/dev/null | head -2 | sed 's/^/!! stderr: /'
@@ -211,6 +215,14 @@ check_emit() {
 # docs/PUBLICAR.md ("paridad dual-VM en host").
 check_parity() {
   echo "-- paridad dual-VM (frontend actual -> VM-Java == VM-C) --"
+  # V6/C1 — el arnes compara contra el host SIN LVGL (sabor gui1-lvgl0): con LVGL
+  # la VM-C abre ventana y Gui.shot captura de verdad, y su stdout ya no es el de
+  # miVM sin ventana («sin pantalla»). Un FAIL por sabor no es paridad rota: se
+  # corta aqui, con nombre, en vez de dejar un rojo que hay que interpretar.
+  if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
+    echo "  ⚠ el host esta compilado CON LVGL: el arnes necesita 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
+    return 1
+  fi
   local pass=0 fail=0 skip=0 s bp mod oj oc
   for s in $CORPUS; do
     bp="$(bp_path "$s")"

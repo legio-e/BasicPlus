@@ -799,6 +799,112 @@ public final class GuiBackend {
      *  handlers de eventos). takeEvent() sigue existiendo para el camino viejo. */
     public int[] pollEvent() { return events.poll(); }
 
+    // ---- V6/C1 — Captura de pantalla: Gui.shot(path) → fichero .shot ----
+
+    /** Filas por franja. La banda de cada placa mide distinto (C6 24, DK2 48,
+     *  P4 120, host DIRECT la pantalla entera); troceando en 24 el fichero tiene
+     *  la MISMA estructura en todas. Ver docs/SHOT_FORMAT.md. */
+    private static final int SHOT_STRIPE_ROWS = 24;
+
+    /** Escribe la pantalla tal como Swing la pinta en `rutaResuelta` (ya pasada
+     *  por el sandbox del workdir: la VM la resuelve como writeFile) con el
+     *  formato .shot de docs/SHOT_FORMAT.md — RGB565 little-endian, codec 0
+     *  (crudo: miVM no lleva LZ4), franjas de ancho completo y <= 24 filas en
+     *  orden de y. Es el espejo de la captura por FLUSH_START de la VM-C: la
+     *  imagen es la LOGICA (antes de girar nada) y la cabecera lleva `rot`.
+     *
+     *  Devuelve los bytes escritos (> 0) o un codigo negativo, EL MISMO que la
+     *  VM-C: -1 sin pantalla (headless, o aun no hay ventana), -2 error de
+     *  escritura, -3 no cabe (aqui no aplica: no hay tope de RAM), -4 sin
+     *  memoria. NO imprime nada: el RuntimeError con el mensaje fijo lo lanza
+     *  Gui.bp, y asi la paridad de stdout no depende de los pixeles.
+     *
+     *  Se pinta en el EDT (Swing no es thread-safe): si ya estamos en el, en
+     *  directo; si no, invokeAndWait — llamarlo desde el EDT con invokeAndWait
+     *  seria un deadlock, de ahi la comprobacion. */
+    public int shot(String rutaResuelta) {
+        final JFrame f = frame;
+        if (f == null || screenHandle == 0) return -1;         // headless o sin ventana: sin pantalla
+        final Node root = nodes.get(screenHandle);
+        if (root == null) return -1;
+        final int w = screenW, h = screenH;
+        if (w <= 0 || h <= 0 || w > 0xFFFF || h > 0xFFFF) return -1;
+
+        // 1) La pantalla a un BufferedImage 0xRRGGBB, pintada en el EDT.
+        final java.awt.image.BufferedImage img;
+        try {
+            img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        } catch (OutOfMemoryError oom) {
+            return -4;
+        }
+        Runnable paint = () -> {
+            Graphics2D g = img.createGraphics();
+            try {
+                g.setColor(Color.BLACK);
+                g.fillRect(0, 0, w, h);
+                root.comp.paint(g);
+            } finally {
+                g.dispose();
+            }
+        };
+        try {
+            if (SwingUtilities.isEventDispatchThread()) paint.run();
+            else SwingUtilities.invokeAndWait(paint);
+        } catch (OutOfMemoryError oom) {
+            return -4;
+        } catch (Exception e) {
+            return -2;                                         // el EDT no pudo pintar: no hay fichero
+        }
+
+        // 2) A RGB565 y al formato .shot, todo en RAM y escrito de una vez.
+        final int nblocks = (h + SHOT_STRIPE_ROWS - 1) / SHOT_STRIPE_ROWS;
+        final long total = 16L + 16L * nblocks + 2L * w * h;
+        if (total > Integer.MAX_VALUE) return -3;
+        final java.nio.ByteBuffer bb;
+        try {
+            bb = java.nio.ByteBuffer.allocate((int) total).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        } catch (OutOfMemoryError oom) {
+            return -4;
+        }
+        final int[] px = ((java.awt.image.DataBufferInt) img.getRaster().getDataBuffer()).getData();
+        final int rot = ((rotation % 360) + 360) % 360 / 90;   // 0/90/180/270 → 0/1/2/3
+
+        // Cabecera — 16 bytes.
+        bb.put((byte) 'B').put((byte) 'P').put((byte) 'S').put((byte) 'H');
+        bb.put((byte) 1);                                      // version
+        bb.put((byte) 1);                                      // fmt = RGB565
+        bb.put((byte) 0);                                      // codec = crudo
+        bb.put((byte) rot);
+        bb.putShort((short) w);
+        bb.putShort((short) h);
+        bb.putInt(nblocks);
+        // Bloques — franjas de ancho completo, <= 24 filas, en orden de y.
+        for (int y1 = 0; y1 < h; y1 += SHOT_STRIPE_ROWS) {
+            int y2 = Math.min(y1 + SHOT_STRIPE_ROWS, h) - 1;   // INCLUSIVO
+            int rawLen = w * (y2 - y1 + 1) * 2;
+            bb.putShort((short) 0).putShort((short) y1);       // x1, y1
+            bb.putShort((short) (w - 1)).putShort((short) y2); // x2, y2
+            bb.putInt(rawLen);
+            bb.putInt(rawLen);                                 // compLen = rawLen (codec 0)
+            for (int y = y1; y <= y2; y++) {
+                int base = y * w;
+                for (int x = 0; x < w; x++) {
+                    int rgb = px[base + x];
+                    int r = (rgb >> 16) & 0xFF, gg = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+                    bb.putShort((short) (((r >> 3) << 11) | ((gg >> 2) << 5) | (b >> 3)));
+                }
+            }
+        }
+
+        // 3) Al disco: crea o TRUNCA el fichero; no crea directorios (como writeFile).
+        try {
+            java.nio.file.Files.write(java.nio.file.Paths.get(rutaResuelta), bb.array());
+        } catch (java.io.IOException | RuntimeException e) {
+            return -2;
+        }
+        return (int) total;
+    }
+
     // ---- Volcado del árbol (paridad de comportamiento; NO píxeles) ----
     public String dumpTree() {
         StringBuilder sb = new StringBuilder();

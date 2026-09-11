@@ -89,6 +89,9 @@ int  bpvm_gui_get_align_dx(int handle);
 int  bpvm_gui_get_align_dy(int handle);
 int  bpvm_gui_get_auth_width(int handle);
 int  bpvm_gui_get_auth_height(int handle);
+/* V6/C1 — captura de pantalla a fichero .shot (docs/SHOT_FORMAT.md): bytes
+ * escritos, o -1 sin pantalla / -2 escritura / -3 no cabe / -4 sin memoria. */
+int  bpvm_gui_shot(const char* path);
 void bpvm_gui_refresh(int handle);
 /* H6 value-widgets (checkbox): estado en el modelo (n->value = verdad). */
 void bpvm_gui_set_checked(int handle, int v);

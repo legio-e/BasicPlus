@@ -393,7 +393,10 @@ enum {
     BUILTIN_GUI_GET_ALIGN_DX     = 235, /* (id)                      → dx      */
     BUILTIN_GUI_GET_ALIGN_DY     = 236, /* (id)                      → dy      */
     BUILTIN_GUI_GET_AUTH_WIDTH   = 237, /* (id)                      → w | -1 = auto */
-    BUILTIN_GUI_GET_AUTH_HEIGHT  = 238  /* (id)                      → h | -1 = auto */
+    BUILTIN_GUI_GET_AUTH_HEIGHT  = 238, /* (id)                      → h | -1 = auto */
+    /* V6/C1 (12-sep) — Gui.shot(path): la captura de pantalla a fichero .shot.
+     * 239 = ordinal() de GUI_SHOT en el enum Builtin de miVM. */
+    BUILTIN_GUI_SHOT             = 239  /* (path)                    → bytes | <0 codigo */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1325,6 +1328,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_GET_ALIGN_DY:    { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_align_dy(h)); return BPVM_OK; }
     case BUILTIN_GUI_GET_AUTH_WIDTH:  { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_auth_width(h)); return BPVM_OK; }
     case BUILTIN_GUI_GET_AUTH_HEIGHT: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_auth_height(h)); return BPVM_OK; }
+    /* V6/C1 — Gui.shot(path). El path se usa TAL CUAL, como writeFile. El
+     * codigo de retorno lo traduce Gui.bp a RuntimeError (un solo sitio). */
+    case BUILTIN_GUI_SHOT: {
+        uint32_t pref = pop_ref(vm, tc);
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
+        push_i32(vm, tc, bpvm_gui_shot(path));
+        return BPVM_OK;
+    }
     case BUILTIN_GUI_REFRESH: { int h = pop_i32(vm, tc); bpvm_gui_refresh(h); push_i32(vm, tc, 0); return BPVM_OK; }
     /* H6 — checkbox (1er value-widget). set_checked es programático (no emite
      * onChange); __guiChange inyecta un CHANGE sintético (= toggle del usuario). */

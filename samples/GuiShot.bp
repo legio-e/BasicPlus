@@ -1,0 +1,49 @@
+// V6/C1 — GuiShot: una pantalla con algo que ver y Gui.shot() a fichero.
+//
+// Gui.shot(path) escribe la pantalla tal como LVGL la dibujo (RGB565, franjas
+// comprimidas; docs/SHOT_FORMAT.md) por el MISMO camino en el host y en las
+// placas; se baja con el GET de siempre y el PC lo pasa a PNG:
+//
+//     python bpgenvm-c/tools/shot2png.py GuiShot.shot
+//
+// En el arnes de paridad no hay pantalla (miVM sin ventana, VM-C sin LVGL) y
+// las dos VMs tienen que decir LO MISMO: el RuntimeError «sin pantalla». Con
+// pantalla, las dos dicen «captura escrita» (los bytes NO se imprimen: miVM
+// escribe crudo y la VM-C comprime, y cada pantalla mide lo suyo). El oraculo
+// del modelo sigue siendo el dumpTree; la imagen es para el ojo.
+module GuiShot
+import Gui
+import Core
+
+  function main(arg: string)
+    var scr: Gui.Screen := Gui.Screen()
+    var p: Gui.Panel := Gui.Panel(scr)
+    p.setBounds(20, 40, 200, 120)
+    p.setBgColor(Gui.Color(0x2040C0))
+    var t: Gui.Label := Gui.Label(scr, "Hola captura")
+    t.align(Gui.Align.TOP_MID, 0, 8)
+    var b: Gui.Button := Gui.Button(scr, "Pulsa")
+    b.align(Gui.Align.CENTER, 0, 60)
+    var cb: Gui.Checkbox := Gui.Checkbox(scr, "Activo")
+    cb.align(Gui.Align.BOTTOM_LEFT, 10, -10)
+    cb.checked := true
+    var sl: Gui.Slider := Gui.Slider(scr)
+    sl.align(Gui.Align.BOTTOM_RIGHT, -10, -16)
+    sl.value := 70
+    // Bombear ANTES de capturar: el tema de LVGL anima las transiciones de estado
+    // (el check del checkbox, ~100 ms). Sin unas vueltas de lazo la captura pilla
+    // el instante cero — el checkbox sale vacio aunque el modelo diga val=1. Es
+    // una captura de lo que SE VE en ese instante, no del modelo.
+    Gui.start()
+    sleep(300)
+    try
+      var n: integer := Gui.shot("GuiShot.shot")
+      if n > 0 then print "captura escrita"
+    catch e: RuntimeError
+      print "captura: " + e.msg
+    endtry
+    Gui.stop()
+    Gui.join()
+    print Gui.__guiDumpTree()
+  end main
+end GuiShot

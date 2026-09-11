@@ -850,7 +850,17 @@
 #define LV_USE_THORVG_EXTERNAL 0
 
 /*Use lvgl built-in LZ4 lib*/
-#define LV_USE_LZ4_INTERNAL  0
+/* V6/C1 (12-sep) — ENCENDIDO: el LZ4 de LVGL comprime la captura de pantalla
+ * (Gui.shot, docs/SHOT_FORMAT.md). Solo se usa el API de bloque
+ * (LZ4_compress_fast_extState); LVGL no lo usa para nada mas.
+ * LZ4_MEMORY_USAGE 10: el estado por defecto (14) son 16 416 B EN LA PILA de la
+ * tarea vm (8 KB en el C6, 16 KB en la DK2): desbordamiento seguro. Con 10 son
+ * 1 056 B, y gui.c lo reserva en el heap con LZ4_sizeofState() de todas formas.
+ * lz4.c incluye lv_conf_internal.h ANTES de lz4.h, asi que este define manda.
+ * Host: el Makefile rehace build/liblvgl.a cuando cambia este fichero (regla
+ * `build/liblvgl.a: include/lv_conf.h`); antes no dependia y enlazaba rancia. */
+#define LV_USE_LZ4_INTERNAL  1
+#define LZ4_MEMORY_USAGE     10
 
 /*Use external LZ4 library*/
 #define LV_USE_LZ4_EXTERNAL  0

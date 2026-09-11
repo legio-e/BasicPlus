@@ -100,6 +100,9 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   public intrinsic function __guiGetAlignDy(handle: integer): integer
   public intrinsic function __guiGetAuthWidth(handle: integer): integer
   public intrinsic function __guiGetAuthHeight(handle: integer): integer
+  // V6/C1 — captura de pantalla a fichero .shot (docs/SHOT_FORMAT.md): bytes escritos
+  // o -1 sin pantalla / -2 escritura / -3 no cabe / -4 sin memoria. Envuelta en shot().
+  public intrinsic function __guiShot(path: string): integer
   public intrinsic function __guiSetBgColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetTextColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetFont(handle: integer, fontId: integer)
@@ -1252,6 +1255,21 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   public function loadFont(path: string): integer
     return __guiLoadFont(path)
   end loadFont
+
+  // V6/C1 — shot: la pantalla tal como LVGL la dibujo, a un fichero .shot (RGB565,
+  // franjas comprimidas; docs/SHOT_FORMAT.md), por el MISMO camino en el host y en
+  // las placas; se baja con el GET de siempre y el PC lo pasa a PNG con
+  // tools/shot2png.py. Es la prueba para el OJO: el oraculo automatico es toJson().
+  // Devuelve los bytes escritos. Un fallo GRITA (RuntimeError atrapable) en vez de
+  // dejar la captura anterior intacta pareciendo nueva.
+  public function shot(path: string): integer
+    var n: integer := __guiShot(path)
+    if n > 0 then return n
+    if n == -1 then throw RuntimeError("Gui.shot('" + path + "'): sin pantalla")
+    if n == -2 then throw RuntimeError("Gui.shot('" + path + "'): error de escritura")
+    if n == -3 then throw RuntimeError("Gui.shot('" + path + "'): no cabe en el tope de captura")
+    throw RuntimeError("Gui.shot('" + path + "'): sin memoria")
+  end shot
 
   // ---- setRotation — orientación del display en grados: 0, 90, 180 o 270 (otros
   //      valores se ignoran). En placa el giro lo hace el display (p.ej. panel

@@ -1035,6 +1035,186 @@ static int g_font_count = 0;
 static lv_font_t* g_loaded_fonts[GUI_MAX_FONTS];
 #endif
 
+/* ======================================================================
+ * V6/C1 — Gui.shot(path): LA CAPTURA DE PANTALLA. Formato y decisiones en
+ * docs/SHOT_FORMAT.md. En dos frases: se invalida la pantalla entera y se fuerza
+ * el refresco; LVGL emite LV_EVENT_FLUSH_START antes de cada flush con el area y
+ * lv_display_get_buf_active() es la banda — ahi se convierte a RGB565 (el host
+ * dibuja en XRGB8888), se trocea en franjas de <= 24 filas, se comprime cada una
+ * con el LZ4 de LVGL a un buffer en RAM, y al final se escribe UN fichero.
+ *
+ * Por que el evento y no los cuatro flush_cb de familia: cero lineas por
+ * familia; llega ANTES del lv_draw_sw_rgb565_swap in situ del C6; y sirve igual
+ * en PARTIAL (placas, host --no-screen) y en DIRECT (el host con ventana SDL,
+ * que NO va por bandas: un solo flush de pantalla entera con el stride del
+ * framebuffer). Por que franjas de 24: la banda mide distinto en cada placa
+ * (24/48/120/320 filas) y asi el fichero tiene la misma estructura en las
+ * cuatro, con un buffer de entrada del compresor acotado.
+ *
+ * Todo corre en el hilo vm (donde vive LVGL): la builtin llama a lv_refr_now y
+ * los eventos llegan dentro de esa llamada. Con --smp>1 no esta soportado.
+ * ====================================================================== */
+#ifdef BPVM_LVGL
+#include "../third_party/lvgl/src/libs/lz4/lz4.h"
+
+#ifndef BPVM_SHOT_MAX
+# ifdef BPVM_BOARD_C6
+#  define BPVM_SHOT_MAX (40u * 1024u)     /* 68 KB libres medidos (chip_cfg.h) */
+# else
+#  define BPVM_SHOT_MAX (256u * 1024u)
+# endif
+#endif
+#define SHOT_FRANJA 24                    /* filas por bloque */
+
+typedef struct {
+    int      activa;      /* 1 mientras dura el lv_refr_now de la captura */
+    int      err;         /* 0 | -3 no cabe | -4 sin memoria */
+    uint8_t* out;         /* el fichero entero, en RAM */
+    uint32_t len, cap;
+    uint16_t* tmp;        /* una franja en RGB565 (w * SHOT_FRANJA), para convertir/compactar */
+    void*    lz4;         /* estado del compresor (LZ4_sizeofState) */
+    uint32_t nblocks;
+    int      hooked;      /* el event cb ya esta registrado en el display */
+} shot_state_t;
+static shot_state_t g_shot;
+
+/* Dobla el buffer de salida hasta el tope. -3 si ya esta en el tope, -4 sin memoria. */
+static int shot_crece(void) {
+    if (g_shot.cap >= BPVM_SHOT_MAX) { g_shot.err = -3; return -1; }
+    uint32_t ncap = g_shot.cap ? g_shot.cap * 2u : 16384u;
+    if (ncap > BPVM_SHOT_MAX) ncap = BPVM_SHOT_MAX;
+    uint8_t* n = (uint8_t*) bpvm_realloc(g_shot.out, ncap);
+    if (!n) { g_shot.err = -4; return -1; }
+    g_shot.out = n; g_shot.cap = ncap;
+    return 0;
+}
+static void put_u16(uint8_t* p, uint32_t v) { p[0] = (uint8_t) v; p[1] = (uint8_t) (v >> 8); }
+static void put_u32(uint8_t* p, uint32_t v) { put_u16(p, v & 0xFFFFu); put_u16(p + 2, v >> 16); }
+
+/* Un bloque: el rectangulo [x1..x2]x[y1..y2] cuyos pixeles RGB565 estan en
+ * g_shot.tmp, filas contiguas. Comprime y anexa cabecera + datos. */
+static void shot_bloque(int x1, int y1, int x2, int y2) {
+    if (g_shot.err) return;
+    uint32_t raw = (uint32_t) (x2 - x1 + 1) * (uint32_t) (y2 - y1 + 1) * 2u;
+    /* Salida LIMITADA a lo que queda libre (LZ4 devuelve 0 si no cabe): asi el
+     * tope se compara con lo que la captura OCUPA, no con el compressBound de la
+     * franja — que en el C6 se comia 12 de los 40 KB y hacia que la misma
+     * pantalla cupiera o no segun como troceara el driver (revision del 11-sep). */
+    for (;;) {
+        if (g_shot.cap < g_shot.len + 16u + 1u) { if (shot_crece() != 0) return; continue; }
+        uint8_t* h = g_shot.out + g_shot.len;
+        int libre = (int) (g_shot.cap - g_shot.len - 16u);
+        int n = LZ4_compress_fast_extState(g_shot.lz4, (const char*) g_shot.tmp,
+                                           (char*) (h + 16), (int) raw, libre, 1);
+        if (n > 0) {
+            put_u16(h, (uint32_t) x1); put_u16(h + 2, (uint32_t) y1);
+            put_u16(h + 4, (uint32_t) x2); put_u16(h + 6, (uint32_t) y2);
+            put_u32(h + 8, raw); put_u32(h + 12, (uint32_t) n);
+            g_shot.len += 16u + (uint32_t) n;
+            g_shot.nblocks++;
+            return;
+        }
+        if (shot_crece() != 0) return;       /* -3 en el tope, -4 sin memoria */
+    }
+}
+
+/* El gancho: una banda de LVGL (o la pantalla entera, en DIRECT). */
+static void shot_flush_cb(lv_event_t* e) {
+    if (!g_shot.activa || g_shot.err) return;
+    lv_display_t* d = (lv_display_t*) lv_event_get_current_target(e);
+    const lv_area_t* a = (const lv_area_t*) lv_event_get_param(e);
+    lv_draw_buf_t* db = lv_display_get_buf_active(d);
+    if (!a || !db || !db->data) return;
+    int aw = (int) lv_area_get_width(a), ah = (int) lv_area_get_height(a);
+    uint32_t stride = db->header.stride;
+    int cf = (int) db->header.cf;
+    int bpp = (cf == LV_COLOR_FORMAT_RGB565) ? 2 : 4;
+    /* PARTIAL: el buffer ES la banda (origen = area). DIRECT/FULL: el buffer es
+     * la pantalla entera y el area son coordenadas absolutas dentro de el. Se
+     * distingue por el tamano del buffer, que lv_draw_buf_reshape deja en la
+     * cabecera; no hay getter publico del render_mode. */
+    const uint8_t* base = db->data;
+    if (!((int) db->header.w == aw && (int) db->header.h == ah))
+        base += (uint32_t) a->y1 * stride + (uint32_t) a->x1 * (uint32_t) bpp;
+    for (int y0 = 0; y0 < ah && !g_shot.err; y0 += SHOT_FRANJA) {
+        int rows = (ah - y0 < SHOT_FRANJA) ? (ah - y0) : SHOT_FRANJA;
+        uint16_t* dst = g_shot.tmp;
+        for (int r = 0; r < rows; r++) {
+            const uint8_t* src = base + (uint32_t) (y0 + r) * stride;
+            if (bpp == 2) {
+                memcpy(dst, src, (size_t) aw * 2u);
+            } else {                 /* XRGB8888 / ARGB8888 en memoria: B,G,R,X */
+                for (int x = 0; x < aw; x++) {
+                    uint32_t b = src[x * 4], g = src[x * 4 + 1], rr = src[x * 4 + 2];
+                    dst[x] = (uint16_t) (((rr >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+                }
+            }
+            dst += aw;
+        }
+        shot_bloque(a->x1, a->y1 + y0, a->x2, a->y1 + y0 + rows - 1);
+    }
+}
+
+static void shot_libera(void) {
+    bpvm_free(g_shot.out);  g_shot.out = NULL;
+    bpvm_free(g_shot.tmp);  g_shot.tmp = NULL;
+    bpvm_free(g_shot.lz4);  g_shot.lz4 = NULL;
+    g_shot.len = g_shot.cap = g_shot.nblocks = 0; g_shot.err = 0; g_shot.activa = 0;
+}
+#endif /* BPVM_LVGL */
+
+/* Devuelve bytes escritos (>0) o: -1 sin pantalla · -2 error de escritura ·
+ * -3 no cabe en BPVM_SHOT_MAX · -4 sin memoria. Los mensajes los pone Gui.bp
+ * (un solo sitio, paridad gratis). */
+int bpvm_gui_shot(const char* path) {
+#ifdef BPVM_LVGL
+    lvgl_ensure_init();
+    lv_display_t* d = lv_display_get_default();
+    if (!d) return -1;
+    int w = (int) lv_display_get_horizontal_resolution(d);
+    int h = (int) lv_display_get_vertical_resolution(d);
+    if (w <= 0 || h <= 0) return -1;
+    if (!g_shot.hooked) {
+        lv_display_add_event_cb(d, shot_flush_cb, LV_EVENT_FLUSH_START, NULL);
+        g_shot.hooked = 1;
+    }
+    memset(&g_shot, 0, sizeof g_shot); g_shot.hooked = 1;
+    g_shot.tmp = (uint16_t*) bpvm_malloc((size_t) w * SHOT_FRANJA * 2u);
+    g_shot.lz4 = bpvm_malloc((size_t) LZ4_sizeofState());
+    if (!g_shot.tmp || !g_shot.lz4 || shot_crece() != 0) { shot_libera(); return -4; }
+    /* cabecera (nblocks se rellena al final) */
+    memcpy(g_shot.out, "BPSH", 4);
+    g_shot.out[4] = 1; g_shot.out[5] = 1; g_shot.out[6] = 1;
+    g_shot.out[7] = (uint8_t) lv_display_get_rotation(d);
+    put_u16(g_shot.out + 8, (uint32_t) w); put_u16(g_shot.out + 10, (uint32_t) h);
+    put_u32(g_shot.out + 12, 0);
+    g_shot.len = 16;
+    /* la pantalla entera, ahora: sin invalidar todo solo llegarian las areas
+     * sucias y la captura saldria a trozos — plausible y equivocada. */
+    g_shot.activa = 1;
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(d);
+    g_shot.activa = 0;
+    int rc;
+    if (g_shot.err) {
+        rc = g_shot.err;
+    } else if (g_shot.nblocks == 0) {
+        rc = -1;                       /* ni un flush: no hay pantalla que capturar (una cabecera suelta seria un verde falso) */
+    } else if (bpvm_fs_isdir(path)) {
+        rc = -2;                       /* remove() borraria un directorio vacio en POSIX/FatFs; writeFile ahi falla */
+    } else {
+        put_u32(g_shot.out + 12, g_shot.nblocks);
+        bpvm_fs_remove(path);          /* littlefs es copy-on-write: viejo+nuevo no caben (DK2, -28) */
+        rc = (bpvm_fs_write(path, g_shot.out, g_shot.len, 0) == 0) ? (int) g_shot.len : -2;
+    }
+    shot_libera();
+    return rc;
+#else
+    (void) path;
+    return -1;
+#endif
+}
+
 int bpvm_gui_load_font(const char* path) {
     if (g_font_count >= GUI_MAX_FONTS) return 0;      /* registro lleno */
     int id = ++g_font_count;                           /* 1-based; idéntico en ambas VMs */

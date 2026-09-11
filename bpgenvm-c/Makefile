@@ -162,7 +162,10 @@ $(BIN): $(OBJ)
 # en $(shell ...) (que en w64devkit resuelve al find.exe de Windows).
 ifeq ($(LVGL),1)
 $(BIN): build/liblvgl.a build/SDL2.dll
-build/liblvgl.a:
+# V6/C1: la lib depende de lv_conf.h — tocar un interruptor (LZ4, snapshot...)
+# la rehace entera en vez de dejar una lib rancia que enlaza en silencio.
+build/liblvgl.a: include/lv_conf.h
+	@rm -rf build/lvgl
 	@mkdir -p build/lvgl
 	@echo "[lvgl] compilando fuentes de LVGL (una vez, ~1 min)..."
 	@for f in $$(find $(LVGL_DIR)/src -name '*.c'); do \

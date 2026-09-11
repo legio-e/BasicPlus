@@ -171,6 +171,7 @@ def cmd_run(w, args):
 
 def cmd_get(w, args):
     """Baja un fichero y CRONOMETRA (V6/#473 punto 4: ¿abre una vez o una por trozo?).
+    `get <remoto> [local]`: con segundo argumento, lo guarda (V6/C1).
 
     OJO, y me costo una medida invalida: NO se puede usar esperar() aqui. Ese trocea
     por lineas, asi que se COMIA el bulk crudo y lo tiraba a la basura — el control
@@ -208,6 +209,14 @@ def cmd_get(w, args):
     kbs = (len(datos) / 1024.0) / (ms / 1000.0) if ms > 0 else 0
     estado = "completo" if len(datos) >= n else ("INCOMPLETO %d/%d" % (len(datos), n))
     print("GET %-22s %7d B  %8.0f ms  %6.1f KB/s  %s" % (remoto, n, ms, kbs, estado))
+    # V6/C1 — `get <remoto> <local>` ademas GUARDA (la captura .shot se baja asi).
+    # Solo si llego completo: un fichero corto con nombre bueno es el verde falso.
+    if len(args) > 1:
+        if len(datos) >= n:
+            open(args[1], "wb").write(datos)
+            print("   guardado en %s" % args[1])
+        else:
+            print("   NO guardado: incompleto")
 
 def cmd_ciclo(w, args):
     """#379 — run -> stop -> INFO, N veces. Si el wire se desincronizara tras el

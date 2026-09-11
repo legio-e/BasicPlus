@@ -290,6 +290,8 @@ public final class Intrinsics {
         register("Gui.__guiGetAlignDy",    w -> emitBuiltin(w, Builtin.GUI_GET_ALIGN_DY));
         register("Gui.__guiGetAuthWidth",  w -> emitBuiltin(w, Builtin.GUI_GET_AUTH_WIDTH));
         register("Gui.__guiGetAuthHeight", w -> emitBuiltin(w, Builtin.GUI_GET_AUTH_HEIGHT));
+        // V6/C1 — captura de pantalla a .shot (path: string) -> integer (bytes | codigo < 0).
+        register("Gui.__guiShot",          w -> emitBuiltin(w, Builtin.GUI_SHOT));
         register("Gui.__guiRefresh",      w -> emitBuiltin(w, Builtin.GUI_REFRESH));
         // H6 widgets — checkbox.
         register("Gui.__guiCreateCheckbox", w -> emitBuiltin(w, Builtin.GUI_CREATE_CHECKBOX));
