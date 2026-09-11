@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **3** | ~~`G2`~~ (✅ 11-sep) → ~~`C1`~~ (✅ 11-sep, las cuatro pantallas) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **2** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6** (se marca al arrancar el 12-sep) → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -4999,7 +4999,51 @@ mismo que las dos anteriores: a partir de la congelación **no se pregunta «¿m
 ⏭️ Cuando llegue, se abre como entrada propia aquí y en `ESTADO.md`, con la fecha y el commit de la
 raya, igual que las anteriores.
 
-#### 🧪 `T1` — EL PLAN, INCREMENTAL (Eduardo, 11-sep)
+#### 🧪 `T1` — EL PLAN, INCREMENTAL (Eduardo, 11-sep) — ✅ **CERRADO el 11-sep** (`7be021bc` runner + prueba de fuego · `843e2d0a` los 8 arreglos)
+
+### ✅ LO HECHO (11-sep, la misma tarde que `C1`)
+
+**El runner: `bpgenvm-c/tools/tanda.py`** (manifiesto `tools/tanda_prueba.json`). Bucle **por placa** (decisión de
+Eduardo: *«todas las pruebas sobre una placa y luego la siguiente; yo voy desconectando las probadas y conectando
+las nuevas»*): descubre lo conectado (`HELLO` a cada puerto, o `--sim host:puerto`), sello (`boardName`,
+`uniqueId`, `serverBuild`, arch/variant/reloj/`resetReason`/uptime/FS/heap), inventario, sube lo que falte a
+`/app` (por trozos si > 4 KB), `RUN` y `OUTPUT` hasta `EXITED` o timeout (`KILL`), baja los artefactos tras el
+`EXITED` (`GET`; los `.shot` pasan a PNG y van a «NECESITA OJOS»), veredicto y matriz. **El oráculo es el
+`stdout` del host** normalizado como `compat.sh`; para las pruebas con pantalla se calcula **por placa** con
+`--screen=WxH` — y para eso el `INFO` de todo build con LVGL publica ahora **`screenW/screenH`**. El informe se
+**añade** por tanda (Eduardo rota placas entre tandas) y prueba que corrió: sello, CRC de cada módulo subido,
+ejecutadas-con-`EXITED` vs listadas, saltos con motivo. Primero pasó por **`bpvm-sim`** (un dispositivo wire
+completo por TCP) antes de tocar una placa.
+
+**La prueba de fuego** (`compat/informes/tanda_prueba_fuego.md`): lista corta a petición de Eduardo — `MathRango`,
+`ThrowSinAtrapar` (el estado casa: `RUNTIME_ERROR exit=1` ↔ `rc=1`), `ThreadTrasMain`, `MachineId` (no-peta),
+`GuiWinJson` (árbol `toJson()` **IDÉNTICO** al host con el `--screen` de cada placa: 240×240, 1024×600, 800×480)
+y `GuiShot` (no-peta + captura obligatoria, bajada de las tres pantallas). **Pico, C6, P4 y DK2: todo verde**; las
+gráficas SALTADAS en la Pico con motivo. Fase 2, por Eduardo: *«antes de la captura era complicada, pero con las 2
+capturas se puede verificar perfectamente»*.
+
+**La revisión adversaria del runner** (3 lentes → 8 hallazgos, 3 graves **reproducidos en el sim**; arreglados y
+verificados por un segundo agente con un **proxy TCP que inyecta fallos del wire**): el artefacto rancio de otra
+tanda que salía como captura de ésta (ahora se **borra antes del `RUN`** y se confirma con `STAT`; si no se puede,
+DUDOSO); las dependencias comprobadas en `/lib` cuando el RUN resuelve `/app` antes — **`#493` otra vez** (ahora
+`STAT` por nombre, la misma resolución que el RUN, y «sombreada por `<path>`» si no se puede arreglar); el
+`EXITED` rezagado de otra sesión atribuido a la prueba siguiente (filtro por `session`); el `BUSY` en la subida;
+la salida parcial perdida si el cable cae; las líneas no-JSON del cable (un *panic*) que no llegaban al informe;
+dos fallos distintos que salían IDÉNTICO (ahora `exitCode == rc`, y `LINK_ERROR` = fallo del arnés); y el sello
+con `uptimeMs` tras cada `EXITED` para cazar un reinicio.
+
+**Y el runner cazó algo real en la tanda de confirmación**: la **Metro** (rp2350b, firmware del **9-sep 10:04**)
+da `exit=11` donde la Pico (10-sep) y el host dan `1` en `ThrowSinAtrapar` — es la imagen anterior a `9e7f4a59`
+(`#481`). Detectado **por conducta**, sin saber qué firmware llevaba. La Metro sigue pendiente de regrabar.
+
+**Lo que se vio y NO entra en V6** (material de V7, como pidió Eduardo):
+- **«Dónde aplica» por capacidad**: la Metro tiene SD y LED RGB — una prueba de SD lleva `necesita: ["sd"]` y sólo
+  corre donde `HELLO` lo declare (Eduardo: *«para nota, se puede quedar como está»*).
+- **El sello miente**: `serverBuild` es la hora de `main.c` (el C6 dice *Sep 10* con firmware de hoy). Hace falta
+  un `imageCrc`/git-rev en `HELLO_REPLY` para atar un resultado a una imagen.
+- El descubrimiento necesita más de 3 s tras un reset (P4, DK2); `#495` (`GET` durante un RUN); `#493`.
+- Crecer del corpus corto hacia los 50 puros y los `Gui*Demo` deterministas — cuando haga falta, no antes.
+
 
 *«Yo plantearía `T1` de una forma incremental. Poder ejecutar las pruebas más sencillas (no gráficas)
 y ver qué infraestructura tenemos y qué nos falta. Una vez comprobado que eso va, podemos pasar a la
@@ -5058,7 +5102,7 @@ Los 2 del corpus más los `Gui*Demo` que sean deterministas. El oráculo es **el
 Lo que se vea en las dos fases —qué programas faltan, qué falla, qué se salta— es material de V7. **No
 se intenta hacer todo en V6.**
 
-#### 🔵 `#444` — el sistema de pruebas no escala a una docena de placas (ABIERTA, 27-ago)
+#### ✅ `#444` — el sistema de pruebas no escala a una docena de placas — **RESPONDIDA por `T1` el 11-sep**: un agente conduce las placas con `tools/tanda.py` (abierta 27-ago)
 
 Planteado por Eduardo al cerrar el día: *«hay que mejorar el sistema de test, porque si todo
 hay que verificarlo en todas las plataformas nos vamos a volver locos cuando tengamos una
@@ -5126,7 +5170,7 @@ tocar y cómo se comprueba.
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
 | **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ✅ **11-sep** (`0791bb3e`): `Gui.shot(path)` → `.shot` (`docs/SHOT_FORMAT.md`) + `tools/shot2png.py`; visto en host (ventana y `--no-screen`), miVM y **la Discovery** (800×480, 6 956 B, 110×). **C6** (240×240, 2 862 B, 40×; `GET` en 8 ms) y **P4** (1024×600, 8 885 B, 138×; y girada 90°, la lógica 600×1024) verificadas: **las cuatro pantallas** |
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
-| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **Plan en dos fases (11-sep)**: los 50 puros primero, las gráficas sobre `G2`+`C1` después, y ahí se para. Va **antes** de `D1` y `F1` |
+| **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ✅ **11-sep** (`7be021bc`, `843e2d0a`): `tools/tanda.py` + la **prueba de fuego** en Pico, C6, P4, DK2 (y la Metro, cazada con firmware viejo). Fase 2 dada por hecha por Eduardo: *«con las 2 capturas se puede verificar perfectamente»*. Lo visto, a V7 y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 | **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
 | **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |

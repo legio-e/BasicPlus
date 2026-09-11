@@ -27,6 +27,43 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (12-sep) — `G2`, `C1` y `T1` cerrados el 11-sep; **lo primero: marcar el 🧊 CODE FREEZE V6** y empezar `D1`
+
+**Decisión de Eduardo al cerrar el día (11-sep):** *«cuando terminemos `T1` congelamos código. Y por hoy
+terminaremos, la documentación la empezamos mañana.»* `T1` quedó cerrada esa misma noche (runner arreglado y
+tanda de confirmación hecha), así que **el primer commit del 12-sep es el freeze**: a partir de ahí sólo entra lo
+que esté roto (el criterio de siempre: no «¿merece la pena?» sino «¿está roto?»). Luego `D1` (documentación) y
+`F1` (pruebas finales).
+
+**Lo que pasó después del traspaso anterior, en orden:**
+1. **`C1` verificado en las cuatro pantallas** (C6 tras un «sin memoria» que era la DRAM de plataforma; P4 con
+   `idf.py -p COM14 flash`, y girado 90°). La `Gui` rancia del pack del P4 sombreaba a `/lib` disfrazada de
+   `/app` — `#493`, anotado; Eduardo borró los packs de la placa.
+2. **`T1`**: `tools/tanda.py` (bucle por placa, Eduardo rota placas) probado primero contra `bpvm-sim`; la
+   **prueba de fuego** con la lista corta en Pico, C6, P4 y DK2, todo verde (`compat/informes/tanda_prueba_fuego.md`).
+   Para las gráficas el oráculo va **por placa** con `--screen=WxH`, y el `INFO` de los builds con LVGL publica
+   `screenW/screenH` (regrabadas C6, P4 y DK2 con eso).
+3. **La revisión adversaria del runner encontró 3 formas de decir verde por motivos equivocados** (artefacto
+   rancio, dependencias comprobadas en `/lib` cuando el RUN resuelve `/app`, `EXITED` de otra sesión) y 5 menores;
+   arregladas y verificadas con un proxy TCP que inyecta fallos del wire. La tanda de confirmación cazó la
+   **Metro con firmware del 9-sep** (`exit=11` vs `1`) por conducta.
+4. Fichas: `#495` abierta a V7 (el `BUSY` del wire durante un RUN es de la época de un hilo); `#444` respondida
+   por `T1`; `#493` con el matiz del pack del P4.
+
+⚠️ **Para el runner, lo que hay que saber**: el orden es por placa; el informe se añade por tanda; `--puertos auto`
+descubre lo conectado (P4 y DK2 tardan > 3 s tras un reset: si sale «ninguna placa contesta», repetir); desde Git
+Bash, `MSYS_NO_PATHCONV=1` si se pasan rutas `/app/...`; el host tiene que estar en el sabor `gui1-lvgl0`.
+
+📌 **Estado del repo**: todo commiteado, **sin push**. Paridad 59 PASS. Grabadas hoy: C6, P4, DK2 (con `screenW/H`
+en `INFO`) y la Pico (10-sep). **La Metro sigue con el firmware del 9-sep** (regrabar con el `.uf2` de
+`pico/build/` + BOOTSEL por el wire; luego reinstalar `/lib`). Placas conectadas al cerrar: DK2 (COM12), Pico (COM22),
+Metro (COM4).
+
+⏭️ **Lo primero al retomar**: (1) el commit del **CODE FREEZE V6** (`FICHAS` + memoria, como en V4/V5); (2) `D1`
+según su plan en `FICHAS`; (3) si sobra un hueco, regrabar la Metro y pasarle la tanda.
+
+---
+
 ## ⏭️ AL RETOMAR (11-sep, noche) — **`C1` CONSTRUIDO** en el mismo día que `G2`; el siguiente es `T1`
 
 **`C1` — la captura de pantalla — hecha de punta a punta y vista en las CUATRO pantallas** (`0791bb3e`, `d9c6e0db`): `Gui.shot(path)` en las dos VMs,
