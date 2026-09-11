@@ -4138,8 +4138,36 @@ Eso mueve la decisión: no es sólo «7 intrínsecas para serializar», es **dar
 hijos** (en BP, como `owner`), y de ahí salen la serialización, la destrucción en cascada, y la
 paridad estructural con miVM, que ya la tiene.
 
-⏭️ **Recomendación: A.** Es literalmente el planteamiento de Eduardo, se escribe una vez, y sus siete
-intrínsecas son útiles por sí mismas. Si se aprueba, el orden es la cascada de siempre: las 7
+📜 **LO QUE SE DECIDIÓ EN SU DÍA, ENCONTRADO (Eduardo, 11-sep: *«los componentes se debían declarar en
+la ventana, y así debe estar ahora»*).** Está, y es `#324` tanda 2b, en `Gui.bp` (`buildForm`):
+
+> *«Un nombre, todo lo demás se deriva: `"name": "boton1"` → **property `boton1` de la ventana**
+> (`setBoton1`) → handlers `boton1_onClick` / `boton1_onChange`. […] una ventana no tiene por qué
+> declarar la property de cada widget ni atender todos sus eventos.»*
+
+O sea: **implementado y OPCIONAL por diseño**. Si la ventana declara `property boton1`, el cargador la
+rellena (`bindMember`) y la ventana tiene el componente como miembro; si no, el wrapper se crea y **se
+tira** (`buildForm(child, w, win)` sin guardar el resultado) y sólo sobrevive el nodo C.
+
+Y la cascada al destruir **se diseñó como trabajo del BACKEND**, no de BP — `Window.destroy()` lo dice
+literalmente: *«Destruye la ventana → **el backend cascadea** y borra todo el subárbol»*. El backend C
+no lo cumple (ver arriba). **Eso no es un hueco de diseño: es un bug de `gui.c`**, y se arregla ahí —
+`bpvm_gui_delete` recurriendo por padre como ya hace `dump_node`, `clean` con `node_release`, y
+`create_node` reutilizando ranuras. Unas líneas, sin tocar el lenguaje, y `destroy()` cumple lo que
+promete. ⚠️ **Es un defecto de V6 hoy**, independiente de `C1`.
+
+🔄 **Y ESTO CAMBIA LA RECOMENDACIÓN: de A a B.** Los hijos no declarados sólo existen en C, así que un
+`toJson()` en BP no puede recorrerlos sin intrínsecas que **fabriquen** wrappers por tipo (`childAt`
+devolvería un handle, no un objeto; para llamar `.toJson()` polimórfico haría falta una factoría como
+la de `makeWidget`). Con eso, el polimorfismo de A no compra nada — los datos están en C igualmente —
+y suma piezas. **El serializador tiene que vivir donde vive el árbol: en el backend**, con la forma de
+`dumpTree`. Coste: escribirlo en C y en Java, byte-idéntico — el que `dumpTree` ya paga — y la ida y
+vuelta con `main.win` lo vigila. Lo único que el modelo C no tiene y el `.win` sí es **`name`**: un
+setter (`__guiSetName`) y una cadena por nodo, y el cargador lo rellena al construir.
+
+⏭️ **Recomendación revisada: B**, más el arreglo de la cascada en `gui.c` como defecto aparte. Y `owner`
+en las properties declaradas queda como mejora natural el día que llegue el destructor (`#491`), no
+antes: sin destructor, liberar el wrapper no libera el nodo. Si se aprueba, el orden es la cascada de siempre: las 7
 intrínsecas en miVM y en la VM-C (host), `Component.toJson()` en BP, y la prueba de ida y vuelta con
 `main.win` — que entra al corpus de paridad como caso nuevo.
 
