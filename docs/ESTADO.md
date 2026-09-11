@@ -49,11 +49,10 @@ oráculo placa↔placa existe.
 
 📌 **Estado del repo**: todo commiteado, **sin push**. Paridad **59 PASS**. Discovery grabada con el
 firmware final (17:30) y con `Gui/Json/Collections/Str` en `/app`. C6 y P4 **compilan, sin probar en placa**.
-Pico compilada. Metro sigue sin regrabar. El host queda en el sabor `gui1-lvgl0` (el del arnés); para ver la
+**C6 grabada y verificada** (2 862 B, 40×; costó un «sin memoria» primero: la DRAM de plataforma, no el tope — arreglado comprimiendo desde la banda sin copiar). P4 compila, sin probar. Pico compilada. Metro sigue sin regrabar. El host queda en el sabor `gui1-lvgl0` (el del arnés); para ver la
 GUI en el PC, `make GUI=1 LVGL=1` (y el arnés se negará hasta volver).
 
-⏭️ **Lo primero al retomar**: si el C6 se conecta, 5 minutos para probar `GuiShot` allí (el tope de 40 KB y
-el gancho antes del swap DMA son lo único de `C1` que no ha visto una placa). Después, **`T1` fase 1** (los
+⏭️ **Lo primero al retomar**: **`T1` fase 1** (los
 ~50 samples puros con las placas conducidas), y en la fase 2 la prueba gráfica es *ejecutar, `toJson()`,
 `shot`, `GET`, diff* — todas las piezas existen ya.
 

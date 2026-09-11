@@ -1081,7 +1081,7 @@ static shot_state_t g_shot;
 /* Dobla el buffer de salida hasta el tope. -3 si ya esta en el tope, -4 sin memoria. */
 static int shot_crece(void) {
     if (g_shot.cap >= BPVM_SHOT_MAX) { g_shot.err = -3; return -1; }
-    uint32_t ncap = g_shot.cap ? g_shot.cap * 2u : 16384u;
+    uint32_t ncap = g_shot.cap ? g_shot.cap * 2u : 4096u;   /* pequeno: en el C6 quedan ~26 KB de DRAM y el bloque mayor son 14 */
     if (ncap > BPVM_SHOT_MAX) ncap = BPVM_SHOT_MAX;
     uint8_t* n = (uint8_t*) bpvm_realloc(g_shot.out, ncap);
     if (!n) { g_shot.err = -4; return -1; }
@@ -1092,8 +1092,8 @@ static void put_u16(uint8_t* p, uint32_t v) { p[0] = (uint8_t) v; p[1] = (uint8_
 static void put_u32(uint8_t* p, uint32_t v) { put_u16(p, v & 0xFFFFu); put_u16(p + 2, v >> 16); }
 
 /* Un bloque: el rectangulo [x1..x2]x[y1..y2] cuyos pixeles RGB565 estan en
- * g_shot.tmp, filas contiguas. Comprime y anexa cabecera + datos. */
-static void shot_bloque(int x1, int y1, int x2, int y2) {
+ * `src`, filas contiguas. Comprime y anexa cabecera + datos. */
+static void shot_bloque(int x1, int y1, int x2, int y2, const uint8_t* src) {
     if (g_shot.err) return;
     uint32_t raw = (uint32_t) (x2 - x1 + 1) * (uint32_t) (y2 - y1 + 1) * 2u;
     /* Salida LIMITADA a lo que queda libre (LZ4 devuelve 0 si no cabe): asi el
@@ -1104,7 +1104,7 @@ static void shot_bloque(int x1, int y1, int x2, int y2) {
         if (g_shot.cap < g_shot.len + 16u + 1u) { if (shot_crece() != 0) return; continue; }
         uint8_t* h = g_shot.out + g_shot.len;
         int libre = (int) (g_shot.cap - g_shot.len - 16u);
-        int n = LZ4_compress_fast_extState(g_shot.lz4, (const char*) g_shot.tmp,
+        int n = LZ4_compress_fast_extState(g_shot.lz4, (const char*) src,
                                            (char*) (h + 16), (int) raw, libre, 1);
         if (n > 0) {
             put_u16(h, (uint32_t) x1); put_u16(h + 2, (uint32_t) y1);
@@ -1138,6 +1138,18 @@ static void shot_flush_cb(lv_event_t* e) {
         base += (uint32_t) a->y1 * stride + (uint32_t) a->x1 * (uint32_t) bpp;
     for (int y0 = 0; y0 < ah && !g_shot.err; y0 += SHOT_FRANJA) {
         int rows = (ah - y0 < SHOT_FRANJA) ? (ah - y0) : SHOT_FRANJA;
+        /* En placa la banda YA es RGB565 y contigua: se comprime desde ahi, sin
+         * copiar ni reservar (en el C6 los 11,5 KB del tmp eran la diferencia
+         * entre «sin memoria» y capturar). Solo el host (XRGB8888) o un stride
+         * raro pasan por tmp, que se reserva la primera vez que hace falta. */
+        if (bpp == 2 && stride == (uint32_t) aw * 2u) {
+            shot_bloque(a->x1, a->y1 + y0, a->x2, a->y1 + y0 + rows - 1, base + (uint32_t) y0 * stride);
+            continue;
+        }
+        if (!g_shot.tmp) {
+            g_shot.tmp = (uint16_t*) bpvm_malloc((size_t) lv_display_get_horizontal_resolution(d) * SHOT_FRANJA * 2u);
+            if (!g_shot.tmp) { g_shot.err = -4; return; }
+        }
         uint16_t* dst = g_shot.tmp;
         for (int r = 0; r < rows; r++) {
             const uint8_t* src = base + (uint32_t) (y0 + r) * stride;
@@ -1151,7 +1163,7 @@ static void shot_flush_cb(lv_event_t* e) {
             }
             dst += aw;
         }
-        shot_bloque(a->x1, a->y1 + y0, a->x2, a->y1 + y0 + rows - 1);
+        shot_bloque(a->x1, a->y1 + y0, a->x2, a->y1 + y0 + rows - 1, (const uint8_t*) g_shot.tmp);
     }
 }
 
@@ -1179,9 +1191,8 @@ int bpvm_gui_shot(const char* path) {
         g_shot.hooked = 1;
     }
     memset(&g_shot, 0, sizeof g_shot); g_shot.hooked = 1;
-    g_shot.tmp = (uint16_t*) bpvm_malloc((size_t) w * SHOT_FRANJA * 2u);
     g_shot.lz4 = bpvm_malloc((size_t) LZ4_sizeofState());
-    if (!g_shot.tmp || !g_shot.lz4 || shot_crece() != 0) { shot_libera(); return -4; }
+    if (!g_shot.lz4 || shot_crece() != 0) { shot_libera(); return -4; }
     /* cabecera (nblocks se rellena al final) */
     memcpy(g_shot.out, "BPSH", 4);
     g_shot.out[4] = 1; g_shot.out[5] = 1; g_shot.out[6] = 1;

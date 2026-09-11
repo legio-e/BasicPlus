@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **3** | ~~`G2`~~ (✅ 11-sep) → ~~`C1`~~ (✅ 11-sep, C6/P4 por ver en placa) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **3** | ~~`G2`~~ (✅ 11-sep) → ~~`C1`~~ (✅ 11-sep; P4 por ver en placa) → `T1` (pruebas) → 🧊 **CODE FREEZE V6** → `D1` (documentación) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -4262,7 +4262,7 @@ guardado desde `toJson()` no es portable entre pantallas hasta que eso se decida
 formdemo, no una copia); y el stderr **ya no se tira entero**: una línea `HEAP INCONSISTENTE` sale
 como salida y rompe la paridad.
 
-#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas — ✅ **CONSTRUIDA el 11-sep** (`0791bb3e`; C6/P4 por ver en placa)
+#### 📸 `#475` — CAPTURA DE PANTALLA EN EL MICRO: el testigo de las pruebas gráficas — ✅ **CONSTRUIDA el 11-sep** (`0791bb3e`; C6 verificada; P4 por ver en placa)
 
 ### ✅ LO CONSTRUIDO (11-sep) — `C1`, de punta a punta en un día
 
@@ -4303,9 +4303,18 @@ compresor escribe con salida limitada y el buffer crece hasta el tope: medido co
 tope de 20 KB «no cabe» y sin fichero. También: 0 bloques ya no es éxito; `remove()` no borra directorios;
 miVM crea la ventana si `shot()` llega antes de la primera vuelta del hilo (como la VM-C).
 
-⏭️ **Queda**: probar en **C6** (el tope de 40 KB y el `FLUSH_START` antes del swap DMA) y en **P4** (rotación
-por software en el flush: la captura es la lógica) cuando se conecten; y, si `T1`/`D1` lo piden, un visor
-de `.shot` en el IDE (hoy `shot2png.py`). De aquí salió **`#495`** (V7).
+**El C6, la placa que el diseño temía (misma tarde)**: la primera captura dijo **«sin memoria»** — no por
+el tope de 40 KB sino por la **DRAM de plataforma**: tras LVGL quedan ~26 KB libres con un bloque mayor de
+14 KB, y el `tmp` de 11,5 KB + 16 KB iniciales de salida no cabían. Arreglo en el común: **en placa la banda ya
+es RGB565 y contigua, se comprime desde ahí sin copiar** (el `tmp` sólo existe en el host, que convierte
+de XRGB8888, y se reserva la primera vez que hace falta), y el buffer de salida arranca en 4 KB. Resultado:
+**240×240, 10 bloques, 2 862 B (40×), `GET` en 8 ms** por USB-JTAG, colores correctos (o sea, el gancho llega
+**antes** del swap in situ del C6: si llegara después el azul saldría otro color), y el mínimo histórico de
+DRAM durante el RUN subió de 9 072 a 15 824 B (la captura cuesta ~5 KB). Host y DK2 siguen dando lo mismo.
+
+⏭️ **Queda**: probar en **P4** (rotación por software en el flush: la captura es la lógica) cuando se
+conecte; y, si `T1`/`D1` lo piden, un visor de `.shot` en el IDE (hoy `shot2png.py`). De aquí salió
+**`#495`** (V7).
 
 ---
 
@@ -5104,7 +5113,7 @@ tocar y cómo se comprueba.
 | **E1** | **el IDE** y el protocolo wire | ✅ **6-sep**: sus **7 puntos** cerrados — `#412` (argumento de ejecución), `#452` (`RESET` con un RUN vivo), las deps que el device ya tiene, el CRC de procedencia, las BD en el simulador, el árbol por color y el tiempo de la placa |
 | **G1** | **GUI**: el bucle de LVGL a un **hilo BP propio** | ✅ **7-sep** (`a4c28062`): `Gui.start()` / `stop()` / `join()`; `Gui.run()` sigue síncrono por compatibilidad |
 | **P1** | **placas nuevas**: ESP32-**C3** y ESP32-**C6** | ✅ C3 (31-ago) y C6 sin pantalla (3-sep): **el ecuador de V6**; la pantalla es P2 |
-| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ✅ **11-sep** (`0791bb3e`): `Gui.shot(path)` → `.shot` (`docs/SHOT_FORMAT.md`) + `tools/shot2png.py`; visto en host (ventana y `--no-screen`), miVM y **la Discovery** (800×480, 6 956 B, 110×). C6 y P4 **compilan, sin probar en placa** (5 min cada una cuando se conecten) |
+| **C1** | **la CAPTURA DE PANTALLA en el micro** — ver `#475` | ✅ **11-sep** (`0791bb3e`): `Gui.shot(path)` → `.shot` (`docs/SHOT_FORMAT.md`) + `tools/shot2png.py`; visto en host (ventana y `--no-screen`), miVM y **la Discovery** (800×480, 6 956 B, 110×). **C6 verificada** (240×240, 2 862 B, 40×; `GET` en 8 ms por USB-JTAG). P4 compila, sin probar en placa |
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **Plan en dos fases (11-sep)**: los 50 puros primero, las gráficas sobre `G2`+`C1` después, y ahí se para. Va **antes** de `D1` y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
