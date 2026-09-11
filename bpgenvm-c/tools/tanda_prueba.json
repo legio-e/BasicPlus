@@ -1,0 +1,13 @@
+{
+  "_comentario": "T1 fase 1 - la lista CORTA de la prueba de fuego: 4 puras + 2 graficas. Rutas relativas a la raiz del repo. criterio: identico (defecto) | no-peta. necesita: [pantalla]. recursos: ficheros que van a /app. artefactos: ficheros que el programa deja en la placa y se bajan tras el EXITED.",
+  "pruebas": [
+    { "nombre": "MathRango",       "fuente": "samples/MathRango.bp" },
+    { "nombre": "ThrowSinAtrapar", "fuente": "samples/ThrowSinAtrapar.bp" },
+    { "nombre": "ThreadTrasMain",  "fuente": "samples/ThreadTrasMain.bp" },
+    { "nombre": "MachineId",       "fuente": "samples/MachineId.bp", "criterio": "no-peta" },
+    { "nombre": "GuiWinJson",      "fuente": "samples/GuiWinJson.bp", "necesita": ["pantalla"],
+      "recursos": ["samples/formdemo/resources/main.win"], "timeout_s": 60 },
+    { "nombre": "GuiShot",         "fuente": "samples/GuiShot.bp", "necesita": ["pantalla"],
+      "artefactos": ["GuiShot.shot"], "timeout_s": 60, "criterio": "no-peta"}
+  ]
+}

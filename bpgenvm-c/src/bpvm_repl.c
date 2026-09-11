@@ -12,6 +12,9 @@
 #include "bpvm_log.h"
 #include "bpvm_fs.h"
 #include "bpvm_entry.h"     /* #466: bpvm_entry_resolve — STAT por NOMBRE de módulo */
+#ifdef BPVM_LVGL
+#include "bpvm_gui.h"       /* V6/T1: screenW/H en INFO (tamano nativo del panel) */
+#endif
 #include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
 #include "bpvm_rtc.h"
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
@@ -561,6 +564,21 @@ static void repl_info(long id) {
     CAMPO_L("vmStackBytes", in.vm_stack_bytes);
     CAMPO_L("fsTotalBytes", in.fs_total_bytes);
     CAMPO_L("fsUsedBytes",  in.fs_used_bytes);
+    /* V6/T1 (11-sep) — la PANTALLA, si la placa la tiene: el runner de las
+     * tandas calcula el oraculo de una prueba grafica con `--screen=WxH` (el
+     * modelo mide lo que mide el panel), y para eso tiene que saber el panel
+     * POR EL WIRE, no por una tabla de nombres. Solo en builds con LVGL y solo
+     * si el driver dice un tamano nativo (>0): el host SDL no lo tiene (dice 0)
+     * y el sim lo publica por su propio info_extra, asi que no hay duplicados. */
+#ifdef BPVM_LVGL
+    {
+        int sw = 0, sh = 0;
+        if (bpvm_gui_disp_native_size(&sw, &sh) && sw > 0 && sh > 0) {
+            CAMPO_L("screenW", (unsigned long) sw);
+            CAMPO_L("screenH", (unsigned long) sh);
+        }
+    }
+#endif
 #undef CAMPO_S
 #undef CAMPO_L
     /* Y lo PROPIO de la familia, si tiene. */
