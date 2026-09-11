@@ -12,6 +12,8 @@
 // ============================================================
 module Gui
 import Json
+import Collections   // V6/G2: la OwnerList de hijos de Container
+import Core          // V6/G2: OwnerList extends Core.List — el import no es transitivo
 
   // ---- Frontera BP↔backend: intrínsecos (inline → CALL_BUILTIN). La VM
   //      los implementa (Swing/LVGL). No los llama el usuario: usa las
@@ -236,11 +238,50 @@ import Json
       __guiRefresh(this.lvglId)
     end refresh
 
+    // -- V6/G2 — EL ARBOL ES NUESTRO. Quien me contiene (null = raiz). Lo pone
+    //    attach(), que llama todo constructor: el alta en el padre es UN solo
+    //    punto, y por eso todos los widgets pasan por aqui. --
+    var parent: Container
+
+    public function attach(padre: Container)
+      this.parent := padre
+      if padre != null then
+        // Por una referencia tipada Component, no Container: el emisor resuelve
+        // los slots en orden de fichero y Container se declara DESPUES de esta
+        // clase. El despacho es virtual, asi que llega al register() de Container.
+        var c: Component := padre
+        c.register(this)
+      endif
+      __guiBindClick(this.lvglId, this)
+    end attach
+
+    // -- Alta y baja de hijos. En una HOJA no hacen nada: una hoja no contiene.
+    //    Container los sobrescribe. Viven aqui y no solo en Container por la
+    //    limitacion del emisor de arriba (un solo paso, en orden de fichero). --
+    public function register(c: Component)
+    end register
+    public function unregister(c: Component)
+    end unregister
+
+    public function getParent(): Container
+      return this.parent
+    end getParent
+
     public function clean()
       __guiClean(this.lvglId)
     end clean
+
+    // Borra el widget en los dos planos (el nodo del modelo y, si hay, el lv_obj)
+    // y se da de BAJA en la lista del padre: alta y baja simetricas, o el modelo
+    // miente. Idempotente y silencioso si ya no existe (decision de Eduardo: «un
+    // pequeno error que no deberia suceder pero que toleramos»).
     public function delete()
       __guiDelete(this.lvglId)
+      if this.parent != null then
+        var c: Component := this.parent   // misma razon que en attach()
+        c.unregister(this)
+        this.parent := null
+      endif
     end delete
 
     // -- Eventos (#324). Al pulsar → onClick; al cambiar de valor → onChange.
@@ -281,6 +322,76 @@ import Json
     end __fireChange
   end Component
 
+  // ============================================================================
+  // V6/G2 — Container: el que puede CONTENER a otros. Decision de Eduardo (11-sep):
+  // «el modelo LVGL es su modelo, pero el modelo de ventanas y componentes BP es
+  // NUESTRO modelo, y tiene que ser coherente: si un objeto contiene a otro,
+  // deberia poder verse». Las 16 hojas (Label, Checkbox, Slider...) descienden de
+  // Component y no pagan nada; los contenedores (Screen, Panel, Window, TabPage,
+  // Tabview, Button) descienden de esto y llevan la lista.
+  //
+  // `children` es una OwnerList: al liberarse el contenedor (FREE_REF por `owner`
+  // o por fin de ambito) la cascada del heap alcanza a los wrappers de los hijos.
+  // OJO: eso libera MEMORIA BP, no el nodo C ni el lv_obj — para eso esta delete(),
+  // que baja por los hijos. Atar «muere el wrapper» a «muere el nodo» es el
+  // destructor de #491 (V7).
+  //
+  // Regla de orden, la misma que en gui.c y en miVM: HIJOS ANTES QUE PADRE, y cada
+  // nodo borra su propio lv_obj. Asi LVGL nunca cascadea por nosotros.
+  // ============================================================================
+  public class Container extends Component
+    var owner children: Collections.OwnerList
+
+    public function Container()
+      this.children := Collections.OwnerList()
+    end Container
+
+    // Alta y baja: las llama Component (attach / delete). No las llames a mano.
+    public function register(c: Component)
+      this.children.add(c)
+    end register
+    public function unregister(c: Component)
+      var i: integer := 0
+      var n: integer := this.children.length()
+      while i < n do
+        if Component(this.children.get(i)) == c then
+          this.children.remove(i)      // quita SIN liberar: el programa puede seguir sujetandolo
+          return
+        endif
+        i := i + 1
+      endwh
+    end unregister
+
+    public function childCount(): integer
+      return this.children.length()
+    end childCount
+    public function childAt(i: integer): Component
+      return Component(this.children.get(i))
+    end childAt
+
+    // Hijos antes que padre. De atras hacia delante porque cada delete() del hijo
+    // lo da de baja de esta lista y los indices posteriores ya no existen.
+    public function delete()
+      var i: integer := this.childCount() - 1
+      while i >= 0 do
+        this.childAt(i).delete()
+        i := i - 1
+      endwh
+      super.delete()
+    end delete
+
+    // Vacia el contenedor y se queda: los hijos BP se van cada uno con su nodo, y
+    // el clean del backend barre lo que LVGL haya creado por dentro del widget.
+    public function clean()
+      var i: integer := this.childCount() - 1
+      while i >= 0 do
+        this.childAt(i).delete()
+        i := i - 1
+      endwh
+      super.clean()
+    end clean
+  end Container
+
   // ---- Eventos (upcall). __guiBindClick registra el objeto BP dueño del handle;
   //      al pulsar/cambiar, la VM llama por NOMBRE a __guiDispatch(self) →
   //      self.__fireClick() o a __guiDispatchChange(self) → self.__fireChange()
@@ -308,10 +419,11 @@ import Json
   public intrinsic function __guiSlotOf(obj: Object, name: string): integer
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
-  public class Screen extends Component
+  public class Screen extends Container
     public function Screen()
+      super()
       this.lvglId := __guiScreenActive()
-      __guiBindClick(this.lvglId, this)
+      this.attach(null)
     end Screen
     public function load()
       __guiScreenLoad(this.lvglId)
@@ -319,19 +431,20 @@ import Json
   end Screen
 
   // ---- Panel — contenedor simple (agrupa widgets). ----
-  public class Panel extends Component
-    public function Panel(parent: Component)
+  public class Panel extends Container
+    public function Panel(parent: Container)
+      super()
       this.lvglId := __guiCreateObj(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Panel
   end Panel
 
   // ---- Label — texto. ----
   public class Label extends Component
-    public function Label(parent: Component, text: string)
+    public function Label(parent: Container, text: string)
       this.lvglId := __guiCreateLabel(parent.lvglId)
       __guiSetText(this.lvglId, text)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Label
 
     public function setText(t: string)
@@ -345,21 +458,39 @@ import Json
 
   // ---- Button — botón clicable. Lleva un Label hijo con el texto. Reacciona
   //      reescribiendo onClick. (Botón con icono = Image hijo, futura tanda.) ----
-  public class Button extends Component
-    public function Button(parent: Component, text: string)
+  public class Button extends Container
+    // V6/G2 — el boton es un CONTENEDOR (decision de Eduardo, 11-sep): «todos los
+    // botones pueden tener varios componentes; un constructor normal y otro para el
+    // caso mas frecuente, el boton con un texto». La idea de un Button hoja y un
+    // ButtonEx que herede y contenga no cabe en BP: sin interfaces de clase, un
+    // ButtonEx extends Button nunca seria un Container y el parent de los
+    // constructores no tendria tipo. Y el Button de siempre YA hacia Label(this,
+    // text): era esto sin decirlo.
+    var etiqueta: Label          // la del constructor con texto (null en el vacio)
+
+    // UN solo constructor, con el texto por DEFECTO (Eduardo, 11-sep): «declarar el
+    // constructor con un parametro string pero asignarle un valor por defecto, con
+    // lo que cubres llamar al constructor sin parametro y con parametro». Cubre los
+    // dos casos y cruza modulos — los defectos viajan en la interfaz (ParamSig.
+    // defaultValue, H8.1) y la sobrecarga de constructores NO (#492). Sin texto, el
+    // boton es un contenedor vacio de verdad: ningun Label de mas.
+    public function Button(parent: Container, text: string := "")
+      super()
       this.lvglId := __guiCreateButton(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
-      var lbl: Label := Label(this, text)
+      this.attach(parent)
+      if strlen(text) > 0 then
+        this.etiqueta := Label(this, text)   // se registra sola como hijo
+      endif
     end Button
   end Button
 
   // ---- Checkbox — casilla on/off con etiqueta. El toggle dispara onChange
   //      (override-able); el estado se lee/escribe con la propiedad `checked`. ----
   public class Checkbox extends Component
-    public function Checkbox(parent: Component, text: string)
+    public function Checkbox(parent: Container, text: string)
       this.lvglId := __guiCreateCheckbox(parent.lvglId)
       __guiSetText(this.lvglId, text)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Checkbox
 
     public function setText(t: string)
@@ -380,9 +511,9 @@ import Json
   //      "switch" en LVGL — pero `switch` es palabra reservada del lenguaje). El
   //      toggle dispara onChange; el estado se lee/escribe con `checked`. ----
   public class Toggle extends Component
-    public function Toggle(parent: Component)
+    public function Toggle(parent: Container)
       this.lvglId := __guiCreateSwitch(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Toggle
 
     public property checked: boolean
@@ -399,9 +530,9 @@ import Json
   //      onChange; el estado se lee/escribe con `value` (el backend lo clampa
   //      al rango fijado con setRange; por defecto 0..100). ----
   public class Slider extends Component
-    public function Slider(parent: Component)
+    public function Slider(parent: Container)
       this.lvglId := __guiCreateSlider(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Slider
 
     public function setRange(mn: integer, mx: integer)
@@ -421,7 +552,7 @@ import Json
   // ---- Bar — barra de progreso (SOLO lectura: muestra un valor, no interactúa
   //      → sin onChange ni bind). estado por `value` (clampado al rango). ----
   public class Bar extends Component
-    public function Bar(parent: Component)
+    public function Bar(parent: Container)
       this.lvglId := __guiCreateBar(parent.lvglId)
     end Bar
 
@@ -442,9 +573,9 @@ import Json
   // ---- Spinbox — campo numérico con +/- (entero en rango). Como Slider pero
   //      con teclado/botones; el cambio dispara onChange; `value` + setRange. ----
   public class Spinbox extends Component
-    public function Spinbox(parent: Component)
+    public function Spinbox(parent: Container)
       this.lvglId := __guiCreateSpinbox(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Spinbox
 
     public function setRange(mn: integer, mx: integer)
@@ -464,7 +595,7 @@ import Json
   // ---- Led — indicador luminoso (encendido/apagado). Solo salida: no interactúa
   //      (sin onChange ni bind). `value` 0/1 (off/on); on()/off() de conveniencia. ----
   public class Led extends Component
-    public function Led(parent: Component)
+    public function Led(parent: Container)
       this.lvglId := __guiCreateLed(parent.lvglId)
     end Led
 
@@ -488,9 +619,9 @@ import Json
   // ---- Dropdown — lista desplegable. Opciones \n-separadas (setOptions); el
   //      índice elegido se lee/escribe con `selected` y el cambio dispara onChange. ----
   public class Dropdown extends Component
-    public function Dropdown(parent: Component)
+    public function Dropdown(parent: Container)
       this.lvglId := __guiCreateDropdown(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Dropdown
 
     public function setOptions(opts: string)
@@ -510,9 +641,9 @@ import Json
   // ---- Textarea — campo de texto editable. El contenido se lee/escribe con
   //      `text`; la edición dispara onChange. ----
   public class Textarea extends Component
-    public function Textarea(parent: Component)
+    public function Textarea(parent: Container)
       this.lvglId := __guiCreateTextarea(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Textarea
 
     public property text: string
@@ -545,9 +676,9 @@ import Json
   //      de selección dispara onChange. (Mismo modelo que Dropdown, render vertical;
   //      se llama ListBox porque `List` es un tipo built-in de colecciones.) ----
   public class ListBox extends Component
-    public function ListBox(parent: Component)
+    public function ListBox(parent: Container)
       this.lvglId := __guiCreateList(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end ListBox
 
     public function setItems(items: string)
@@ -567,7 +698,7 @@ import Json
   // ---- Keyboard — teclado en pantalla. Se ata a un Textarea con attach(); las
   //      teclas editan ese campo (que es quien dispara su onChange). ----
   public class Keyboard extends Component
-    public function Keyboard(parent: Component)
+    public function Keyboard(parent: Container)
       this.lvglId := __guiCreateKeyboard(parent.lvglId)
     end Keyboard
 
@@ -582,10 +713,10 @@ import Json
   //      bombea; en LVGL single-thread = deadlock). El modal síncrono y "proceso
   //      largo desde evento" están pendientes (ver V3_BACKLOG: GUI-blocking-from-event). ----
   public class Msgbox extends Component
-    public function Msgbox(parent: Component, message: string)
+    public function Msgbox(parent: Container, message: string)
       this.lvglId := __guiCreateMsgbox(parent.lvglId)
       __guiSetText(this.lvglId, message)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Msgbox
 
     public function setButtons(labels: string)
@@ -607,8 +738,9 @@ import Json
   //      Tabview.addTab(), envolviendo el handle de la página que crea el backend
   //      (mismo patrón que Screen, que envuelve el handle de la pantalla activa).
   //      Se usa como `parent` de los widgets de esa pestaña. ----
-  public class TabPage extends Component
+  public class TabPage extends Container
     public function TabPage(pageId: integer)
+      super()
       this.lvglId := pageId
     end TabPage
   end TabPage
@@ -616,14 +748,17 @@ import Json
   // ---- Tabview — contenedor de pestañas. addTab(nombre) añade una pestaña y
   //      devuelve su página (TabPage, usable como parent). El cambio de pestaña
   //      activa dispara onChange; `active` = índice de la pestaña activa. ----
-  public class Tabview extends Component
-    public function Tabview(parent: Component)
+  public class Tabview extends Container
+    public function Tabview(parent: Container)
+      super()
       this.lvglId := __guiCreateTabview(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end Tabview
 
-    public function addTab(name: string): Component
-      return TabPage(__guiTabviewAddTab(this.lvglId, name))
+    public function addTab(name: string): TabPage
+      var p: TabPage := TabPage(__guiTabviewAddTab(this.lvglId, name))
+      p.attach(this)                      // V6/G2: la pagina cuelga del Tabview
+      return p
     end addTab
 
     public property active: integer
@@ -652,7 +787,7 @@ import Json
     // Máximo de series por gráfica (mismo tope en las dos VMs).
     public const Chart.MAX_SERIES := 8
 
-    public function Chart(parent: Component)
+    public function Chart(parent: Container)
       this.lvglId := __guiCreateChart(parent.lvglId)
     end Chart
 
@@ -689,7 +824,7 @@ import Json
   end Chart
 
   public class Table extends Component
-    public function Table(parent: Component)
+    public function Table(parent: Container)
       this.lvglId := __guiCreateTable(parent.lvglId)
     end Table
 
@@ -737,9 +872,9 @@ import Json
   //      setImage). Component normal (geometría, scroll, onClick). Varias
   //      ImageView pueden apuntar a la misma Image. ----
   public class ImageView extends Component
-    public function ImageView(parent: Component)
+    public function ImageView(parent: Container)
       this.lvglId := __guiCreateImageView(parent.lvglId)
-      __guiBindClick(this.lvglId, this)
+      this.attach(parent)
     end ImageView
 
     public function setImage(img: Image)
@@ -925,13 +1060,14 @@ import Json
   // ventana por ese slot; al disparar el evento, Component.onClick/onChange
   // despacha con __guiInvokeBySlot. Handler ausente (slot -1) → se ignora.
   // ============================================================
-  public class Window extends Component
+  public class Window extends Container
     public function Window()
+      super()
       var scr: integer := __guiScreenActive()
       this.lvglId := __guiCreateObj(scr)                   // contenedor raíz propio
       this.width  := __guiGetWidth(scr)                    // ocupa toda la pantalla
       this.height := __guiGetHeight(scr)
-      __guiBindClick(this.lvglId, this)
+      this.attach(null)
     end Window
 
     // Carga un .win (JSON), construye el árbol de widgets bajo el raíz y
@@ -957,7 +1093,7 @@ import Json
   // buildForm — recursivo: crea el widget del nodo, fija sus props comunes, suscribe
   // sus handlers (por NOMBRE, resuelto en ejecución) y baja a los hijos. Función de
   // módulo PRIVADA (la recursión usa resolución por nombre con fixup tardío).
-  public function buildForm(node: Json.JsonObject, parent: Component, win: Window): Component
+  public function buildForm(node: Json.JsonObject, parent: Container, win: Window): Component
     var t: string := node.getStringOr("type", "Panel")
     var w: Component := makeWidget(t, parent, node)
     applyCommon(w, node)
@@ -977,11 +1113,16 @@ import Json
     if strlen(nom) > 0 then bindMember(win, w, nom)
     bindHandler(win, w, nom, node)
     if node.has("children") then
+      // V6/G2: solo un Container tiene hijos. Si el .win cuelga algo de una hoja
+      // (un Label con children), el cast GRITA aqui en vez de crear algo raro.
+      // (el cast Clase(x) solo se admite desde Object: se pasa por ahi, #492)
+      var o: Object := w
+      var cont: Container := Container(o)
       var arr: Json.JsonArray := node.getArray("children")
       var i: integer := 0
       while i < arr.length() do
         var child: Json.JsonValue := arr.at(i)
-        buildForm(child.asObject(), w, win)
+        buildForm(child.asObject(), cont, win)
         i := i + 1
       endwh
     endif
@@ -1054,7 +1195,7 @@ import Json
 
   // makeWidget — tipo (string) → constructor. Las props específicas del widget
   // (text/value/checked/min/max) se fijan aquí, con el tipo concreto en mano.
-  function makeWidget(t: string, parent: Component, node: Json.JsonObject): Component
+  function makeWidget(t: string, parent: Container, node: Json.JsonObject): Component
     if t == "Panel" then
       return Panel(parent)
     endif

@@ -10,7 +10,7 @@
 module GuiColorDemo
   import Gui
 
-  function mkBtn(parent: Gui.Component, text: string, x: integer, y: integer,
+  function mkBtn(parent: Gui.Container, text: string, x: integer, y: integer,
                  bg: integer, fg: integer): Gui.Button
     var b: Gui.Button := Gui.Button(parent, text)
     b.setBounds(x, y, 215, 58)

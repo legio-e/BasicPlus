@@ -39,8 +39,8 @@ module GuiParidad2
 
     var tv: Gui.Tabview := Gui.Tabview(scr)
     tv.setBounds(240, 10, 220, 200)
-    var pag1: Gui.Component := tv.addTab("A")
-    var pag2: Gui.Component := tv.addTab("B")
+    var pag1: Gui.TabPage := tv.addTab("A")   // V6/G2: la pagina es un Container
+    var pag2: Gui.TabPage := tv.addTab("B")
     var etq: Gui.Label := Gui.Label(pag1, "en la A")
     etq.setPos(4, 4)
     var bot: Gui.Button := Gui.Button(pag2, "en la B")

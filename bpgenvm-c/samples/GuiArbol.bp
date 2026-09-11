@@ -1,0 +1,38 @@
+// GuiArbol.bp — V6/G2: el arbol de componentes es NUESTRO y se ve.
+//
+// Prueba, desde un modulo de usuario (o sea, cruzando la interfaz de Gui):
+//   1. childCount/childAt: un Panel con hijos SABE cuantos tiene.
+//   2. Button(parent) es un contenedor vacio; Button(parent, "x") lleva su Label.
+//   3. delete() de un hijo lo da de BAJA en el padre (alta y baja simetricas).
+//   4. destroy() de la ventana baja por los hijos: el arbol queda vacio.
+//   5. delete() sobre algo ya destruido: tolerado, ni error ni efecto.
+// Paridad por dumpTree: el modelo es el mismo en las dos VMs.
+module GuiArbol
+  import Gui
+  import Core
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var panel: Gui.Panel := Gui.Panel(scr)
+    var l1: Gui.Label := Gui.Label(panel, "uno")
+    var l2: Gui.Label := Gui.Label(panel, "dos")
+    var bVacio: Gui.Button := Gui.Button(panel)            // sin texto: contenedor vacio
+    var bTexto: Gui.Button := Gui.Button(panel, "pulsa")   // con texto: lleva su Label
+    print "1. panel tiene " + panel.childCount() + " hijos; screen tiene " + scr.childCount()
+    print "2. boton vacio: " + bVacio.childCount() + " hijos; boton con texto: " + bTexto.childCount()
+    print "   el hijo 0 del boton con texto es el label -> padre correcto: " + (bTexto.childAt(0).getParent().lvglId == bTexto.lvglId)
+
+    l1.delete()
+    print "3. tras borrar 'uno', panel tiene " + panel.childCount() + " hijos"
+    print Gui.__guiDumpTree()
+
+    panel.delete()
+    print "4. tras borrar el panel, screen tiene " + scr.childCount() + " hijos"
+    print Gui.__guiDumpTree()
+
+    l2.delete()          // ya murio con el panel
+    bTexto.delete()      // idem
+    print "5. borrar lo ya borrado: sin ruido"
+    print "PASS"
+  end Main
+end GuiArbol

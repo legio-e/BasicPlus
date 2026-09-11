@@ -21,10 +21,10 @@ module GuiTabDemo
     var tv: Gui.Tabview := Gui.Tabview(scr)
     tv.onChange := p::tv_onChange
 
-    var p1: Gui.Component := tv.addTab("Uno")
+    var p1: Gui.TabPage := tv.addTab("Uno")   // V6/G2: la pagina es un Container
     var l1: Gui.Label := Gui.Label(p1, "Pagina 1")
 
-    var p2: Gui.Component := tv.addTab("Dos")
+    var p2: Gui.TabPage := tv.addTab("Dos")
     var l2: Gui.Label := Gui.Label(p2, "Pagina 2")
 
     tv.active := 1
