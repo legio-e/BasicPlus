@@ -4057,6 +4057,50 @@ Tres cosas del análisis:
    comparable** (diffeable, y con paridad ya demostrada) y la captura es la única que caza *«el modelo
    está bien y no se dibuja nada»*.
 
+📋 **EL CENSO, HECHO (11-sep).** Lo que emite `dump_node` (`gui.c:1192`, la verdad del modelo) contra
+lo que `Component` expone hoy en BP:
+
+| campo del modelo | ¿lo ve BP? | dónde |
+|---|---|---|
+| `w`, `h`, `x`, `y`, `scroll`, `font_size` | ✅ | `width`/`height`/`x`/`y`/`scrollDir`/`fontSize` en `Component` |
+| `text`, `value`, celdas de `Table`, asset de `ImageView` | ✅ pero **en las subclases**, no en la base | correcto para un serializador OO: cada subclase añade lo suyo |
+| `type` | ❌ como propiedad; BP lo sabe **por la clase** | `typeName()` por subclase, puro BP |
+| `align`, `dx`, `dy`, `pos_set` | ❌ **sin getter** — `align()` sólo escribe | falta |
+| `readonly` | ❌ | falta |
+| **los HIJOS** | ❌ **no hay forma de enumerarlos desde BP** | **el único bloqueo real** |
+| `name` | al revés: BP lo tiene y el modelo C **no lo emite** | ventaja del serializador en BP |
+
+Las intrínsecas GET que existen hoy: `Checked, FontSize, Height, ScrollDir, Text, Value, Width, X, Y`.
+
+🔑 **Y `dump_node` YA RECURRE EXACTAMENTE como Eduardo lo describe** (`gui.c:1245-1247`: emite el
+nodo y luego `for (i in nodos) if parent == handle → dump_node(hijo, depth+1)`). La forma no hay que
+inventarla: hay que **exponerla**.
+
+🎯 **EL FORMATO YA ESTÁ DECIDIDO: es el de los `.win`** (`samples/formdemo/resources/main.win`):
+```json
+{ "type": "Panel", "children": [
+    { "type": "Label",  "text": "…", "align": "TOP_MID", "y": 12 },
+    { "type": "Button", "text": "Saludar", "align": "CENTER", "clic": "onSaludar" } ] }
+```
+Ojo al detalle: **`align` va por NOMBRE** (`"TOP_MID"`), no por número. BP tiene las constantes, así
+que emitir el nombre es puro BP. Y usar ese formato regala **la prueba**: cargar `main.win` →
+`toJson()` → comparar con el original. **Ida y vuelta**, que verifica cargador y serializador a la vez.
+
+**Las dos opciones, con su coste:**
+
+| | **A — en BP** (`Component.toJson()` + una sobrescritura por subclase) | **B — builtin** (`dumpJson`, gemelo de `dumpTree`) |
+|---|---|---|
+| intrínsecas nuevas | **~7, todas de una línea**, ×2 VMs: `childCount/childAt`, `getAlign/getDx/getDy/isPosSet`, `isReadonly` | 0 |
+| el serializador | **UNA vez**, en BP, con el módulo `Json` que ya existe | **DOS veces** (C y Java), byte-idénticas a mano — como `dumpTree` hoy |
+| `name` y `align` por nombre | sí, sin más | el modelo C no tiene `name` |
+| paridad | gratis: mismo código BP en las dos | la que se vigile a mano |
+| lo que aporta de rebote | las 7 intrínsecas **sirven solas** (hoy un programa no puede preguntar la alineación de un widget) | nada |
+
+⏭️ **Recomendación: A.** Es literalmente el planteamiento de Eduardo, se escribe una vez, y sus siete
+intrínsecas son útiles por sí mismas. Si se aprueba, el orden es la cascada de siempre: las 7
+intrínsecas en miVM y en la VM-C (host), `Component.toJson()` en BP, y la prueba de ida y vuelta con
+`main.win` — que entra al corpus de paridad como caso nuevo.
+
 **La idea es de Eduardo**: *«una vez hablamos de hacer una captura de pantalla en el micro… para
 que cuando se probasen los programas gráficos, desde el PC se pudiese ver esa pantalla»*. Y el
 refinamiento que lo cambia todo, suyo también: **capturar a un FICHERO** en vez de mandar píxeles
