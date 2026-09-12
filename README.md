@@ -7,7 +7,7 @@ syntax, object orientation, a graphical UI and a first-class debugger.**
 
 It compiles to bytecode (`.mod`) that runs **identically** on the PC and on
 the micro: the same program you debug on your desktop later blinks an LED on
-a Raspberry Pi Pico 2, an ESP32-S3, an ESP32-P4 or an STM32 — no recompiling,
+a Raspberry Pi Pico 2, an ESP32 (S3, C3, C6 or P4) or an STM32 — no recompiling,
 no `#ifdef`, no surprises.
 
 ```basic
@@ -239,15 +239,21 @@ Documentation is available in **English** (`docs/en/`) and
 
 ## Status
 
-**V5 — the data** (August 2026). V1 proved the idea; V2 hardened and broadened
-it; V3 gave it a face; V4 fixed its foundations; **V5 gives it somewhere to put
-things**: an SD card with gigabytes, SQLite running inside the micro, an ORM that
-writes the SQL from the table declaration itself, and packs, which fit a library
-as large as SQLite into flash without charging those who never use it. Verified
-on real hardware across **six boards and three architectures**.
+**V6 — order in the micros** (September 2026). V1 proved the idea; V2 hardened and
+broadened it; V3 gave it a face; V4 fixed its foundations; V5 gave it somewhere to
+put things; **V6 puts the microcontroller code in order**: whatever did the same
+job on every micro is now shared — a bit over 90 % of each firmware, measured on
+what each image actually links; 7-8 % belongs to the family (its HAL and the
+BasicPlus HAL layer on top) and under 1 % to the board (boot and its quirks) — so
+adding a micro from a family we already support is comparatively easy. Two new
+micros come in, the **ESP32-C3** and the **ESP32-C6** (with the first SPI display);
+the GUI runs in its own thread and its component model can be saved and reloaded
+as JSON; the micro's screen can be captured from the PC; the IDE keeps talking to
+the board while a program runs; and a semi-automatic test system drives the boards.
+Verified on real hardware across **eight boards and three architectures**.
 
 Downloads and full detail: the
-**[v5.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v5.0)** and the
+**[v6.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v6.0)** and the
 **[release notes](docs/RELEASES.md)** *(Spanish)*.
 
 ## License

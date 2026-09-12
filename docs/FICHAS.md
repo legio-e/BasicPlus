@@ -2304,6 +2304,38 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### ✅ `#497` — `README.es.md` estaba DESTRUIDO desde el 22-ago, y así se publicó en v5.0 (abierta y CERRADA el 12-sep, de `D1`)
+
+**Qué era.** El commit `ff408a1e` («las CUATRO portadas anuncian V5») dejó `README.es.md` con **7,8 MB: el
+párrafo «V5 — los datos…» repetido 11 983 veces**, sin un solo encabezado — el mismo accidente de escritura de
+fichero que ya costó 83 líneas del backlog ([[escribir-ficheros-sin-destruirlos]]). Nadie lo abrió en tres
+semanas; lo encontró el inventario de `D1` al compilar los ejemplos de los documentos. **Se publicó así en v5.0.**
+
+**Arreglo.** Recuperado de `ff408a1e~1` (la versión buena, que aún decía V4) y puesto al día con V6 junto con
+`README.md`: el bloque «Estado» con la introducción de Eduardo (los porcentajes del censo por lo que enlaza cada
+imagen, HAL/HAL BP por familia, arranque por placa), C3/C6 en la lista de micros, «ocho placas y tres
+arquitecturas», enlace a la release v6.0. ⏭️ **Para `F1`/publicar**: una guarda en `docs/PUBLICAR.md` (tamaño y
+encabezados de las cuatro portadas) — un fichero de 7,8 MB con cero `#` no puede pasar otra vez.
+
+#### ✅ `#496` — `SQLite.bp` y `Orm.bp` NO COMPILABAN con el frontend actual: el pack de SQLite no se podía regenerar (abierta y CERRADA el 12-sep, de `D1`)
+
+**Qué era.** Desde `#458` (30-ago) `import Core` es obligatorio, y los dos fuentes de `bpstdlib/sqlite/` —que
+tienen su propio `.bpbuild` y no entran en el build de la stdlib— se quedaron sin él: **18 errores** en
+`SQLite.bp` (`RuntimeError`) y 2 en `Orm.bp` (`List`). El paso 1 de `docs/basedatos.html` («construir el pack»)
+fallaba. Lo encontró el inventario de `D1` **ejecutando** el comando que el documento manda, no leyéndolo.
+
+**Arreglo.** `import Core` en los dos. El pack regenerado es **byte-idéntico** al publicado (`packs/SQLite.pack`,
+20-ago): el `.mod` de agosto ya llevaba la dependencia inyectada por el compilador de entonces, así que nada
+cambia en placa; sólo se recupera la capacidad de reconstruirlo. 📌 **De paso, para `#493`**: el pack lleva
+dentro una entrada `Core` — el builder empaqueta todo `.mod` del `outDir`, y ahí cae la dependencia compilada.
+Un pack de **librería** con una copia de un módulo de la stdlib es una sombra en potencia (la de la P4 del
+11-sep era esto mismo con `Gui`). Decisión pendiente con `#493`: que el pack builder no empaquete módulos de
+la stdlib, o que el resolutor no deje que un pack tape a `/lib`.
+
+⚠️ **Y una deuda que asoma detrás**: `samples/ownerlistremove.bp` tampoco compila por la misma causa. Hace
+falta un **censo de `samples/` con el frontend actual** (la carpeta de ejemplos es en sí una prueba,
+[[samples-ok-y-samples-de-error]]) — es de `F1`.
+
 #### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
 
 **De dónde sale.** Al cerrar el flujo de la captura (`RUN → Gui.shot dentro → EXITED → GET`) apareció

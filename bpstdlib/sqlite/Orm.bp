@@ -73,6 +73,7 @@
 // gana: primero que funcione con dos tablas de verdad.
 
 module Orm
+  import Core          // V6/#496: obligatorio desde #458 (List, RuntimeError)
   import SQLite
   import Str
 

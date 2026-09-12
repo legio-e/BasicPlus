@@ -54,6 +54,7 @@
 // devuelven nada.
 // ============================================================
 module SQLite
+  import Core          // V6/#496: obligatorio desde #458 (RuntimeError es de Core)
   import v1 from pack "SQLI"
 
   // -------- Tipo del valor de una columna (Query.columnType) --------
