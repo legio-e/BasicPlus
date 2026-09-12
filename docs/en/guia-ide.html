@@ -718,7 +718,7 @@ hola, Eduardo
 <p><code>sd</code> is the only one with structure inside, because it describes a wiring and that changes with the bus:</p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, over SPI</span>
-sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
+sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
 
 <p>
   On SDIO it also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,

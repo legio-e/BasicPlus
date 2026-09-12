@@ -1869,7 +1869,7 @@ strip.show()</code></pre>
 </p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40         <span class="comment">// RP2350, over SPI</span>
-sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1      <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
+sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0      <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
 
 <p>
   The SDIO variant also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,
@@ -2004,8 +2004,10 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
 <p>
   <strong>Rail power.</strong> On boards that switch the card's supply with a transistor (the
   P4 does it on GPIO45), polarity matters: <code>pwralto:1</code> if the rail turns on with the
-  pin high, and without it active-low is assumed. Get it wrong and the card simply does not
-  answer.
+  pin high, and without it active-low is assumed — which is the P4 kit's case (a P-channel
+  MOSFET: it conducts with the gate low, measured on the board). Get it wrong and the card
+  simply does not answer: with <code>pwralto:1</code> on the kit, <code>ESP_ERR_INVALID_RESPONSE</code>
+  in the log.
 </p>
 
 <p>

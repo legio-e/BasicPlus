@@ -52,6 +52,10 @@ ORM) y `notas/p4/` (el proyecto), y eso costaba dos cosas concretas:
     nativo/SQLite.mdn.RISCV     4.054 B        compilador, pero necesita el
                                                toolchain cruzado para enlazar)
             │  + SQLite.bp y Orm.bp compilados, + Core.mod y Str.mod
+            │    ⚠️ Core.mod y Str.mod se COPIAN de bpstdlib/ (los canonicos)
+            │    justo antes de construir: en el P4 la zona de packs gana a
+            │    /lib, asi que un Str.mod rancio dentro del pack (12-sep: uno
+            │    MOD6 del 20-ago) tapa al del firmware para TODOS los programas.
             ▼
     out/SQLite.pack          1.122.304 B
 
@@ -74,7 +78,15 @@ primeros. El nativo es un ingrediente, no una salida.
 ⚠️ **El AOT es MUDO por línea de comandos**: si no puede generar los `.mdn` —por
 ejemplo, sin toolchain— no dice nada, y el pack sale 8 KB más pequeño sin una
 sola advertencia. Por eso los `.mdn` están en `nativo/`. Si tocas `SQLite.bp` o
-`Orm.bp`, hay que **regenerarlos con toolchain** y actualizarlos aquí.
+`Orm.bp` **o sube `MDN_ABI_VERSION`** (#504: los del 20-ago eran de ABI 4 y la VM
+hablaba 6 — SQLite rota en todas las placas sin que nadie lo viera), hay que
+**regenerarlos con toolchain** y actualizarlos aquí. Por línea de comandos, el
+mismo paso que da el IDE:
+
+    java -cp "BpIde/target/classes;lexer-java/target/classes;pack/target/classes;miVM/target/classes;bpgenvm-c/build/packtool"          PackAot bpstdlib/sqlite <outDir> bpstdlib/sqlite arm,riscv bpstdlib/sqlite/SQLite.bp
+
+(`bpgenvm-c/tools/packtool/PackAot.java`, compilado a `bpgenvm-c/build/packtool/`).
+Comprueba la cabecera: bytes 4-8 del `.mdn` son versión y **ABI** (`struct '<HH'`).
 
 ## Cómo se comprueba que un cambio no rompió nada
 

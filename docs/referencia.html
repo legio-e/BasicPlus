@@ -1882,7 +1882,7 @@ tira.show()</code></pre>
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40</code></pre>
 
 <p><strong>En ESP32-P4</strong> (SDIO) — así está el P4:</p>
-<pre><code>sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1</code></pre>
+<pre><code>sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0</code></pre>
 
 <p>
   Las claves que acepta la variante SDIO son <code>clk</code>, <code>cmd</code>,
@@ -2048,7 +2048,9 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <strong>La alimentación del raíl.</strong> En placas que conmutan la alimentación de la
   tarjeta con un transistor (el P4 lo hace por GPIO45), la polaridad importa:
   <code>pwralto:1</code> si el raíl se enciende con el pin alto, y sin él se asume activo
-  bajo. Si te equivocas, la tarjeta simplemente no responde, sin decir por qué.
+  bajo — que es el caso del kit P4 (un MOSFET de canal P: conduce con la puerta baja,
+  medido en placa). Si te equivocas, la tarjeta simplemente no responde, sin decir por
+  qué: con <code>pwralto:1</code> en el kit, <code>ESP_ERR_INVALID_RESPONSE</code> en el log.
 </p>
 
 <p>

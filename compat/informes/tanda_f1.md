@@ -648,3 +648,180 @@ notas de dependencias:
 
 NECESITA OJOS: GuiShot en esp32p4@COM14: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_6055F9FB058D\GuiShot.png  
 
+
+## Tanda 2026-09-12 18:34:19
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 0 (ninguna)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 05e0dfd0 | 2227 | ok | 0 | 13 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 422260e8 | 1800 | ok | 1 | 9 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 5138ea38 | 1054 | ok | 0 | 315 | 3 |
+| MachineId | MachineId | 22792db1 | 1089 | ok | 0 | 8 | 3 |
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 32 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 347 | 8 |
+
+### Matriz pruebas x placas
+
+| prueba |
+|---|
+| MathRango |
+| ThrowSinAtrapar |
+| ThreadTrasMain |
+| MachineId |
+| GuiWinJson |
+| GuiShot |
+
+(sin placas: no se ejecuto nada en dispositivo)  
+
+
+## Tanda 2026-09-12 18:34:28
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (esp32p4@COM14)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 05e0dfd0 | 2227 | ok | 0 | 12 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 422260e8 | 1800 | ok | 1 | 8 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 5138ea38 | 1054 | ok | 0 | 317 | 3 |
+| MachineId | MachineId | 22792db1 | 1089 | ok | 0 | 11 | 3 |
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 38 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 337 | 8 |
+
+### Placa esp32p4 - 6055F9FB058D
+
+- sello: boardName=`esp32p4` uniqueId=`6055F9FB058D` serverName=`bpvm-esp32p4` serverBuild=`Sep 12 2026 18:20:05` capacidades=["META", "FILES", "TERMINAL"]
+- imagen: arch=243 variant=None cpuFreqHz=360000000 resetReason=power-on uptimeMs=5746 fs=393216/7168000 B vmHeapBytes=24637440
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM14
+- pantalla: si (INFO screenW x screenH = 1024x600)
+- inventario /lib+/app: 39 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **ERROR** | - | 12 | dependencia Core sombreada por Core.mod |
+| ThrowSinAtrapar | **ERROR** | - | 8 | dependencia Core sombreada por Core.mod |
+| ThreadTrasMain | **ERROR** | - | 317 | dependencia Core sombreada por Core.mod |
+| MachineId | **ERROR** | - | 11 | dependencia Core sombreada por Core.mod |
+| GuiWinJson | **ERROR** | - | 38 | dependencia Core sombreada por Core.mod |
+| GuiShot | **ERROR** | - | 344 | dependencia Core sombreada por Core.mod |
+
+- ejecutadas (con EXITED) 0 de 6 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 6
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/Core.mod | bpstdlib\Core.mod | 13340 | e6006d29 | ok (por trozos) |
+| /app/Core.mod | bpstdlib\Core.mod | 13340 | e6006d29 | ok (por trozos) |
+| /app/Core.mod | bpstdlib\Core.mod | 13340 | e6006d29 | ok (por trozos) |
+| /app/Core.mod | bpstdlib\Core.mod | 13340 | e6006d29 | ok (por trozos) |
+| /app/Core.mod | bpstdlib\Core.mod | 13340 | e6006d29 | ok (por trozos) |
+| /app/Core.mod | bpstdlib\Core.mod | 13340 | e6006d29 | ok (por trozos) |
+
+notas de dependencias:
+
+- dependencia Core: el RUN la resuelve a Core.mod (fuera de /lib y /app), crc -1: se sube a /app
+- dependencia Core: SOMBREADA por Core.mod (crc -1) aunque se acaba de subir /app/Core.mod con crc e6006d29
+
+### Matriz pruebas x placas
+
+| prueba | esp32p4@COM14 |
+|---|---|
+| MathRango | ERROR |
+| ThrowSinAtrapar | ERROR |
+| ThreadTrasMain | ERROR |
+| MachineId | ERROR |
+| GuiWinJson | ERROR |
+| GuiShot | ERROR |
+
+
+
+## Tanda 2026-09-12 18:37:38
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (esp32p4@COM14)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 05e0dfd0 | 2227 | ok | 0 | 11 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 422260e8 | 1800 | ok | 1 | 8 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 5138ea38 | 1054 | ok | 0 | 311 | 3 |
+| MachineId | MachineId | 22792db1 | 1089 | ok | 0 | 11 | 3 |
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 35 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 346 | 8 |
+
+### Placa esp32p4 - 6055F9FB058D
+
+- sello: boardName=`esp32p4` uniqueId=`6055F9FB058D` serverName=`bpvm-esp32p4` serverBuild=`Sep 12 2026 18:20:05` capacidades=["META", "FILES", "TERMINAL"]
+- imagen: arch=243 variant=None cpuFreqHz=360000000 resetReason=power-on uptimeMs=7130 fs=409600/7168000 B vmHeapBytes=24637440
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM14
+- pantalla: si (INFO screenW x screenH = 1024x600)
+- inventario /lib+/app: 40 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 0 | 11 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 0 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 320 | 311 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 10 | 11 | EXITED OK exit=0 |
+| GuiWinJson | **IDENTICO** | 550 | 31 | EXITED OK exit=0; host rc=0 |
+| GuiShot | **NO-PETA** | 550 | 355 | EXITED OK exit=0 |
+
+- tras MathRango: uptimeMs=9146 fsUsed=409600 vmHeapBytes=24637440
+- tras ThrowSinAtrapar: uptimeMs=10486 fsUsed=409600 vmHeapBytes=24637440
+- tras ThreadTrasMain: uptimeMs=11769 fsUsed=409600 vmHeapBytes=24637440
+- tras MachineId: uptimeMs=13267 fsUsed=409600 vmHeapBytes=24637440
+- tras GuiWinJson: uptimeMs=17588 fsUsed=409600 vmHeapBytes=24637440
+- tras GuiShot: uptimeMs=21968 fsUsed=409600 vmHeapBytes=24637440
+- artefacto GuiShot.shot de GuiShot: bajado a `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_6055F9FB058D\GuiShot.shot` (9301 B, crc d8b7d24c) -> PNG `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_6055F9FB058D\GuiShot.png`; antes del RUN: existia: /GuiShot.shot (borrado)
+- ejecutadas (con EXITED) 6 de 6 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 2227 | 05e0dfd0 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 1800 | 422260e8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 1054 | 5138ea38 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 1089 | 22792db1 | ok |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 3627 | c2e655fa | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 2545 | 61c07fa6 | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /app/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Gui: ya en /lib/Gui.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Json: ya en /app/Json.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Collections: ya en /lib/Collections.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Str: ya en /lib/Str.mod (crc igual; resuelto por nombre, como el RUN)
+
+### Matriz pruebas x placas
+
+| prueba | esp32p4@COM14 |
+|---|---|
+| MathRango | IDENTICO |
+| ThrowSinAtrapar | IDENTICO |
+| ThreadTrasMain | IDENTICO |
+| MachineId | NO-PETA |
+| GuiWinJson | IDENTICO |
+| GuiShot | NO-PETA |
+
+NECESITA OJOS: GuiShot en esp32p4@COM14: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_6055F9FB058D\GuiShot.png  
+
