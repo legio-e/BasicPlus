@@ -92,6 +92,14 @@ class EncadenarCrossModuleTest {
     private static final String USO =
         "module CadUso\n"
       + "  import CadLib\n"
+      /* Desde #458 (30-ago) `import Core` es obligatorio y los imports NO son
+       * transitivos (#492): `d.list(w)` devuelve una `Core.List`, y para llamar
+       * a `length()` sobre ella ESTE modulo tiene que importar `Core` — que
+       * CadLib lo importe no le sirve. Sin esta linea el consumidor falla con
+       * «el tipo 'Core.List' no tiene miembros», que es la regla del lenguaje
+       * midiendo lo suyo, no el bug de #387/#388 que mide este test. La suite
+       * estuvo ROJA por esto del 30-ago al 12-sep (la cazo F1 de V6). */
+      + "  import Core\n"
       + "  function Main(arg: string)\n"
       + "    var w: CadLib.Where := CadLib.Where()\n"
       + "    var d: CadLib.Dao   := CadLib.Dao()\n"

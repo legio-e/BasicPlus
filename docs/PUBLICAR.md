@@ -73,11 +73,11 @@ cada casilla (número, no «OK»):
 
 | comprobación | resultado |
 |---|---|
-| Suite `lexer-java` · suite `miVM` | |
-| `samples_sweep.py` (corpus entero) | |
-| `doc_frags.py` (todos los fragmentos de docs/) | |
-| `compat/compat.sh check` | |
-| Guarda de las 4 portadas (tamaño + encabezados) | |
+| Suite `lexer-java` · suite `miVM` | 12-sep: **110/110** · **39/39**. ⚠️ La del frontend estaba ROJA desde el 30-ago (`#458`): un fixture sin `import Core`. Trece días sin correrla |
+| `samples_sweep.py` (corpus entero) | 12-sep: **348 OK, 0 FALLO** (2 avisos de import omitido, ambos a propósito y anotados) |
+| `doc_frags.py` (todos los fragmentos de docs/) | 12-sep: **152 OK, 119 trozo, 2 error-esperado, 0 FALLO** (540 bloques, 25 docs) |
+| `compat/compat.sh check` | 12-sep: **59 PASS, 0 FAIL, 0 SKIP**, ninguna línea `!! stderr:` |
+| Guarda de las 4 portadas (tamaño + encabezados) | 12-sep: **4 OK** — 14.092 / 14.515 / 20.731 / 20.580 B; 18 / 18 / 7 / 7 encabezados |
 | Las **7** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | |
 | `tanda.py` en una placa por familia (Pico/Metro · S3 · C3/C6 · P4 · Nucleo/DK2) | |
 | Micro simulado con LVGL (y decidido si con SQLite) | |
