@@ -5478,6 +5478,27 @@ pendientes»*.
    (una `native` con `double`, AOT activado: ¿corre, falla o se rechaza?) — y con el dato, V6 o V7.
 5. **Publicar**: el checklist de `PUBLICAR.md` entero, `dist/` con las siete imágenes, tag `v6.0`, push.
 
+**Avance (12-sep, noche)** — pasos 1 y 2 hechos (guardas del PC en verde; siete imágenes del árbol `27d3c848`,
+selladas en `dist/firmware/`), y las placas, cada una regrabada desde `dist` y pasada por `tanda.py`:
+
+| placa | imagen | tanda | además |
+|---|---|:---:|---|
+| **Pico 2** | `bpvm_pico.uf2` (BOOTSEL por el toque de 1200 baudios) | 4/4 | — |
+| **Metro RP2350B** | ídem | 4/4 | `ThrowSinAtrapar` ya da `exit=1` (era el firmware del 9-sep) |
+| **Discovery DK2** | `bpvm_stm32_dk2.bin` (`STM32_Programmer_CLI`) | 6/6 | captura 800×480 vista |
+| **Nucleo U575** | `bpvm_stm32_nucleo.bin` | 4/4 | el runner ya no supone pantalla por `boardName` |
+| **ESP32-C3** | `bpvm_esp32c3_merged.bin` (`esptool`, COM3) | 4/4 | — |
+| **ESP32-S3** | `bpvm_esp32_merged.bin` (COM9, puente CH343) | 4/4 | PSRAM 8 MB, VM 7,3 MB |
+| **P4 kit** | `bpvm_esp32p4_merged.bin` (COM14) | 6/6 | **`SqlDemo` == host** con el pack nuevo (`#503`, `#504`); `Bench` nativo 32 ms |
+| **P4 Waveshare** | ídem, `display=st7701` → 480×800 | 6/6 | captura vista; **`SqlDemo` y `SqlDemoSd` (tarjeta) == host**; **`#379` cerrada** (8/8) |
+| **ESP32-C6** | `bpvm_esp32c6_merged.bin` | ⏳ | Windows le dio el COM3 de la C3; falta re-enchufar |
+
+Lo que la tanda destapó, ya arreglado y en sus fichas: la stdlib embebida sin `I2c.mod` (`30f111ad`), la suite del
+frontend roja desde `#458`, `#503`, `#504`, el `Str.mod` MOD6 dentro del pack, `pwralto:1` en la referencia.
+Y lo que NO se toca en V6 y queda dicho: en el P4 la zona de packs gana a `/app` y `/lib` (`#493`), así que
+con un pack de librería grabado el runner no puede verificar qué `Core` corre y **para** — la tanda se pasa
+con la zona vacía y la BD se prueba después con el pack sellado.
+
 ##### 🔢 El PARQUE que tiene que probar `F1` — **7 imágenes, 9 placas**
 
 **La cuenta la hizo Eduardo el 7-sep** —*«a mí me salen 8 placas a probar: Pico y Metro; S3, C3,
