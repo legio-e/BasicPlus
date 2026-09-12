@@ -877,9 +877,12 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       <tr><td>ESP32-P4 (RISC-V con FPU)</td>
           <td>Acelerada por AOT (destino <code>riscv32-esp-p4</code>, desde V4).</td></tr>
       <tr><td>ESP32-C3 / ESP32-C6 (RISC-V sin FPU)</td>
-          <td>Interpretada, hoy. El único destino RISC-V del IDE es el del P4
-              (ABI con FPU); la placa rechaza ese código con mensaje y sigue
-              interpretando. Falta dar de alta un destino <code>ilp32</code>.</td></tr>
+          <td><strong>No actives AOT</strong> en un proyecto destinado a ellas. El único
+              destino RISC-V del IDE es el del P4 (ABI <code>ilp32f</code>, con FPU), y el
+              cargador del <code>.mod</code> sólo comprueba la arquitectura, no la ABI de
+              coma flotante: un blob del P4 que use la FPU no se rechaza, falla en la
+              placa. Falta dar de alta un destino <code>ilp32</code> (ficha
+              <code>#502</code>).</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
           <td>Interpretada — misma semántica, sin speedup. El AOT emite ARM y
               RISC-V, no Xtensa; sin fecha, fuera del plan.</td></tr>
@@ -1427,7 +1430,7 @@ estándar tiene 38 casos, de <code>SyncList extends Core.List</code> a
   del módulo (functions, consts, vars, properties). Tipos (clases, enums,
   namespaces de imports) siempre visibles.
 </p>
-<pre><code><span class="kw">module</span> M
+<pre data-bp="error"><code><span class="kw">module</span> M
   <span class="kw">function</span> helperPriv(): <span class="type">integer</span>     <span class="comment">// privado</span>
     <span class="kw">return</span> <span class="num">99</span>
   <span class="kw">end</span> helperPriv
@@ -1479,7 +1482,7 @@ clase pública de <code>TA</code> expone un tipo de <code>TB</code>, y la clase 
 <code>TB</code> expone a su vez un tipo de <code>TA</code>, la interfaz no se puede
 construir: para saber qué es <code>TA.Nodo</code> hay que saber antes qué es
 <code>TB.Hoja</code>, y viceversa.</p>
-<pre><code><span class="comment">// TA.bp</span>
+<pre data-bp="skip"><code><span class="comment">// TA.bp</span>
 <span class="kw">public class</span> Nodo
   <span class="kw">public property</span> vecino: TB.Hoja      <span class="comment">// TA depende de TB...</span>
 <span class="kw">end</span> Nodo
@@ -1615,7 +1618,7 @@ otra sin problema.</p>
   Los threads BP los ejecutan N <em>workers</em> (hilos reales del SO) que se
   reparten los threads encolados. Por defecto <code>N=1</code>, igual que en el
   micro (un solo core); el SMP es <em>opt-in</em>: <code>--workers=N</code> en la VM
-  Java (ver <a href="referencia.html#cli-vm">§15.2</a>) y <code>--smp=N</code> en la
+  Java (ver <a href="referencia.html#cli-vm">§16.2</a>) y <code>--smp=N</code> en la
   VM-C de PC.
 </p>
 
@@ -1773,7 +1776,7 @@ event</code> y la misma lista de parámetros. No hace falta que sea público —
 normal es que sea privado, porque nadie más lo llama.</p>
 <p>La suscripción se escribe con <code>::</code>, que ata <strong>un objeto y un
 método suyo</strong>:</p>
-<pre><code><span class="kw">class</span> Panel
+<pre data-bp="sigue"><code><span class="kw">class</span> Panel
   <span class="kw">var</span> nombre: <span class="type">string</span>
 
   <span class="kw">public function</span> Panel(n: <span class="type">string</span>)

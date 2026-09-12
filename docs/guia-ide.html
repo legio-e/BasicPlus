@@ -307,8 +307,10 @@
   más nuevo, se queda el suyo. La Consola dice de dónde carga cada uno
   (ruta y CRC) y avisa si esa copia no es la que el proyecto pondría —
   cuando algo falla por una dependencia, esa línea es la que dice de
-  dónde salió el módulo. La biblioteca estándar no se sube nunca: viaja
-  en el firmware (§6).
+  dónde salió el módulo. La biblioteca estándar sigue la misma regla: va en
+  el firmware (§6) y sólo se sube el módulo que a la placa le falte, sea de
+  versión anterior o tenga otro CRC (no toda la stdlib va embebida en todas las
+  imágenes).
 </p>
 <p>
   Al terminar, la Consola cierra con el código de salida, el motivo y
@@ -366,8 +368,10 @@
     <td>ESP32-C3 y ESP32-C6</td>
     <td>—</td>
     <td>también <em>interpretado</em>: son RISC-V <em>sin FPU</em> y el único
-        destino RISC-V del IDE es el del P4 (con FPU) — no actives AOT en un
-        proyecto destinado a ellas</td>
+        destino RISC-V del IDE es el del P4 (con FPU) — <strong>no actives AOT en un
+        proyecto destinado a ellas</strong>: el cargador del <code>.mod</code> no
+        distingue las dos ABIs y un blob del P4 que use la FPU fallaría en la placa
+        (<code>#502</code>)</td>
   </tr>
 </table>
 <p class="warn">
@@ -896,8 +900,8 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// E
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
-  Guía del IDE BasicPlus — capturas de Eduardo sobre una Metro RP2350,
-  generada al hilo del cierre de V2.
+  Guía del IDE BasicPlus — capturas de Eduardo sobre una Metro RP2350;
+  escrita al cierre de V2 y puesta al día en cada versión (V6, septiembre de 2026).
 </p>
 
 </main>

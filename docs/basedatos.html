@@ -435,16 +435,21 @@ w.<span class="fn">eq</span>(<span class="str">"sensor_id"</span>, <span class="
 
 <p><strong>Nunca edites el generado</strong>: se rehace y pierdes los cambios. Hereda:</p>
 
-<pre><code><span class="kw">public class</span> <span class="type">SensorDaoPlus</span> <span class="kw">extends</span> ModeloDao.<span class="type">SensorDao</span>
-  <span class="kw">public function</span> <span class="fn">SensorDaoPlus</span>(base: SQLite.<span class="type">Db</span>)
-    <span class="kw">super</span>(base)
-  <span class="kw">end</span> SensorDaoPlus
+<pre><code><span class="kw">import</span> SQLite
+<span class="kw">import</span> Orm
+<span class="kw">import</span> Modelo
+<span class="kw">import</span> ModeloDao        <span class="comment">// los imports no son transitivos: los cuatro</span>
 
-  <span class="comment">// Buscar por la OTRA clave. Convención: por clave, `...By&lt;algo&gt;`.</span>
-  <span class="kw">public function</span> <span class="fn">loadByNombre</span>(nombre: <span class="type">string</span>): Modelo.<span class="type">Sensor</span>
-    <span class="kw">return</span> Modelo.<span class="type">Sensor</span>(<span class="kw">this</span>.<span class="fn">uno</span>(<span class="str">"nombre = '"</span> + Orm.<span class="fn">esc</span>(nombre) + <span class="str">"'"</span>))
-  <span class="kw">end</span> loadByNombre
-<span class="kw">end</span> SensorDaoPlus</code></pre>
+<span class="kw">public class</span> <span class="type">MedidaDaoPlus</span> <span class="kw">extends</span> ModeloDao.<span class="type">MedidaDao</span>
+  <span class="kw">public function</span> <span class="fn">MedidaDaoPlus</span>(base: SQLite.<span class="type">Db</span>)
+    <span class="kw">super</span>(base)
+  <span class="kw">end</span> MedidaDaoPlus
+
+  <span class="comment">// Buscar por OTRA columna. Convención: por clave, `...By&lt;algo&gt;`.</span>
+  <span class="kw">public function</span> <span class="fn">loadBySensor</span>(sensorId: <span class="type">long</span>): Modelo.<span class="type">Medida</span>
+    <span class="kw">return</span> Modelo.<span class="type">Medida</span>(<span class="kw">this</span>.<span class="fn">uno</span>(<span class="str">"sensor_id = "</span> + sensorId))
+  <span class="kw">end</span> loadBySensor
+<span class="kw">end</span> MedidaDaoPlus</code></pre>
 
 <p>Así puedes regenerar cuando quieras, que es justo para lo que está pensado.</p>
 

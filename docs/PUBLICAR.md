@@ -103,17 +103,23 @@ trampa que ya nos mordió al menos una vez**.
       `scripts/h13-errores.sh`, córrelo también) y `holes/`, e informa aparte
       `pendientes/`. Un `AVISO:` de import omitido no es fallo pero léelo.
       ⚠️ No sustituye a `scripts/h13-lista.sh`: aquél además EJECUTA su lista.
-- [ ] **Todos los fragmentos de la documentación compilan**:
-      `python bpgenvm-c/tools/doc_frags.py` → código de salida **0**. Extrae los
-      `<pre>` de `docs/*.html` y `docs/en/*.html` y los ```` ```basic ```` de los .md
-      de usuario, envuelve los trozos sueltos en `module/main` (con `import Core` y
-      el import de cada módulo de la stdlib que nombren) y los compila uno a uno.
-      Lo que a propósito no es un programa entero se marca en el HTML:
-      `<pre data-bp="skip">` (no compilar), `data-bp="error"` (DEBE fallar: ejemplo
-      de error del compilador), `data-bp="sigue"` (continúa el trozo anterior).
-      Un fragmento con `...` es un ESQUEMA y no cuenta. **Un ejemplo que debería
-      compilar y no compila se arregla, no se marca.** `--solo docs/gui.html` para
-      uno; `-v` enseña qué imports puso el andamio.
+- [ ] **Ningún fragmento de la documentación falla**:
+      `python bpgenvm-c/tools/doc_frags.py` → código de salida **0** y `0 FALLO`.
+      Extrae los `<pre>` de `docs/*.html` y `docs/en/*.html` y los ```` ```basic ````
+      de los .md de usuario, envuelve los trozos sueltos en `module/main` (con
+      `import Core` y el import de cada módulo de la stdlib que nombren) y los
+      compila uno a uno. Un trozo cuyos ÚNICOS errores son nombres sin cualificar
+      que no declara (`edad`, `scr`, `db`: el contexto que el lector ya tiene) sale
+      como **TROZO**, no como fallo, con la lista de lo que le falta — **léela**: un
+      `Excepcion` por `Exception` saldría ahí y no en rojo. Todo lo demás (un
+      método que no existe, un `Gui.Foo`, un error de sintaxis, un módulo entero
+      que no compila) es FALLO. Lo que a propósito no es un programa se marca en
+      el HTML: `<pre data-bp="skip">` (no compilar), `data-bp="error"` (DEBE fallar:
+      ejemplo de error del compilador), `data-bp="sigue"` (continúa el trozo
+      anterior). Un fragmento con `...` es un ESQUEMA y no cuenta. **Un ejemplo que
+      debería compilar y no compila se arregla, no se marca.** `--solo docs/gui.html`
+      para uno; `-v` enseña el andamio y los errores de cada trozo. 12-sep: 152 OK,
+      119 trozo, 2 error-esperado, 0 FALLO; y con tres roturas inyectadas, tres FALLO.
 - [ ] **Stdlib canónica**: si tocaste `bpstdlib/*.bp`, recompílala y luego
       `bash bpgenvm-c/scripts/regen_all_mods.sh` para resincronizar los blobs
       embebidos de las familias.

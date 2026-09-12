@@ -2304,6 +2304,32 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### 🔴 `#502` — el AOT para el C3/C6 no se rechaza: el IDE compila el `.mdn` con la ABI del P4 (`ilp32f`) y el cargador del `.mod` no mira la ABI de coma flotante (abierta 12-sep, del verificador de `D1`)
+
+**Lo que decían cuatro documentos** (manual §8.3, referencia §16.4 y §17.4, `RELEASES` v6.0): *«en el C3/C6 la
+placa rechaza el blob del P4 por ABI de coma flotante, lo dice en el log y sigue interpretando»*. **Falso**, y
+venía de una frase de `P1` que mezclaba dos cargadores: el guardián de la float-ABI existe **en los packs
+nativos** (`bpvm_npack.c:36`, contra `bpvm_mdn_host_float_abi()`), no en la sección `native` del `.mod`
+(`loader.c:437 → mdn_load`, `mdn_loader.c:154-183`: comprueba magic, versión, ABI de los helpers y **arch** — y
+C3, C6 y P4 comparten `MDN_ARCH_RISCV`).
+
+**Lo que pasa hoy**: el IDE toma el destino del `deviceArch` del `INFO` (`FrmMain.runAotPass`), que en las tres
+placas dice `RISCV`, y compila con `RISCV_P4_FLAGS` (`-march=rv32imafc -mabi=ilp32f`); el `INFO` **sí** publica
+`floatAbi` (`ilp32` en C3/C6, `ilp32f` en P4) pero el IDE sólo lo enseña. El blob entra en el `.mod`, la placa
+lo acepta, y: una `native` **entera** (fib) probablemente corre — y más rápido —; una que toque coma flotante
+ejecuta instrucciones `F` en un núcleo sin FPU → instrucción ilegal → *panic* y reset. **Nadie lo ha medido**:
+no se ha probado AOT en un C3 ni en un C6.
+
+**Lo que se ha hecho en `D1`**: los cuatro documentos dicen ahora la verdad y la regla segura de la guía del IDE
+(*«no actives AOT en un proyecto destinado a ellas»*), con esta ficha al lado.
+
+**Lo que falta (decisión de Eduardo, V6 o V7)**: (a) reproducirlo — C6 conectada, `samples/benchmarks/Bench.bp`
+con una `native` de `double`, 5 minutos; (b) el arreglo mínimo, ~10 líneas en el IDE: si el `INFO` trae
+`floatAbi` y no casa con la del destino (`ilp32f`), **no compilar AOT y decirlo** en la consola; (c) el arreglo de
+fondo, V7: el destino `riscv32-esp-c` (`rv32imc`, `ilp32`) en `NpackReloc.DESTINOS` — y que la sección `native`
+del `.mod` lleve la float-ABI como la llevan los packs, para que el cargador la rechace con mensaje. Ojo: lo que la
+ABI no separa es la extensión `A` (el P4 la tiene, el C3 no), ya anotado en `P1`.
+
 #### ✅ `#501` — miVM: un programa cuya ÚLTIMA acción era un `sleep` moría 1 de cada 5 veces con «compareTo() no implementado» (abierta y CERRADA el 12-sep, del inventario de `D1`)
 
 **Qué era.** Lo destapó el editor de la referencia al **ejecutar** un fragmento del documento (`print` +
@@ -5097,26 +5123,64 @@ siete frases de V3.
 0. ✅ Las fichas que el freeze admite: `#496`, `#497`, `#498`, `#499` (hechas el 12-sep).
 1. ✅ Las dos portadas (`README.md` / `README.es.md`) a V6 — falta la **tabla de plataformas** con C3/C6 y la regla
    en dos mitades de `board.json`/ENV.
-2. Lo **falso** en `manual.html` y `referencia.html` (ES y EN a la vez, cada fragmento compilado).
-3. `gui.html` (ES y EN): todos los fragmentos compilados; `Container`, `parent: Container`, `Button(parent, text :=
+2. ✅ Lo **falso** en `manual.html` y `referencia.html` (ES y EN a la vez, cada fragmento compilado).
+3. ✅ `gui.html` (ES y EN): todos los fragmentos compilados; `Container`, `parent: Container`, `Button(parent, text :=
    "")`, `addTab → TabPage`, `setTextarea`, `start/stop/join`, `shot`, `toJson`, «el screen mide lo que mide el
    panel», `delete()` en cascada e idempotente.
-4. `PENDIENTES.md`: el ejemplo de L16 que no compila, la regla transitiva de `#492`, `input()`/`listDir`, lo
+4. ✅ `PENDIENTES.md`: el ejemplo de L16 que no compila, la regla transitiva de `#492`, `input()`/`listDir`, lo
    aplazado a V7 que el usuario debe saber (`#490`, `#491`, `#495`, `#500`).
-5. `QUICKSTART.md` + `INSTALAR_FIRMWARE.md` (ES y EN): C3 y C6 (`esptool --chip`, un solo USB, BOOT+RESET), DK2,
+5. ✅ `QUICKSTART.md` + `INSTALAR_FIRMWARE.md` (ES y EN): C3 y C6 (`esptool --chip`, un solo USB, BOOT+RESET), DK2,
    «siete imágenes», Metro (`board.json` sólo identidad; PSRAM por ENV).
-6. `guia-ide.html` (ES y EN): la tabla del ENV con las **nueve claves reales** y su familia; `run <fichero> <arg>`,
+6. ✅ `guia-ide.html` (ES y EN): la tabla del ENV con las **nueve claves reales** y su familia; `run <fichero> <arg>`,
    `help error`, la tabla de códigos de salida (0/1/2/3/4/130/131).
-7. `RELEASES.md` **v6.0**: la introducción de Eduardo + lo nuevo por secciones + «qué implica al actualizar desde
+7. ✅ (escrita; **pendiente de la lectura de Eduardo**) `RELEASES.md` **v6.0**: la introducción de Eduardo + lo nuevo por secciones + «qué implica al actualizar desde
    V5» (`import Core` obligatorio, `Keyboard.setTextarea`, `parent: Container`, el screen del panel, códigos de
    salida) + «lo que todavía no» revisado (los packs **sí** en S3 y C6 ahora).
-8. Portal y satélites: `index.html` (ES/EN), `cheatsheet.html`, `basedatos.html`.
-9. `bp-desde-dentro.html`: pasada de vigencia sobre las siete frases.
-10. Internos enlazados desde el portal: `BUILTINS.md`, `OPCODES.md`/`opcodes.html` (completar o desenlazar),
+8. ✅ Portal y satélites: `index.html` (ES/EN), `cheatsheet.html`, `basedatos.html`.
+9. ✅ `bp-desde-dentro.html`: pasada de vigencia sobre las siete frases.
+10. ✅ Internos enlazados desde el portal: `BUILTINS.md`, `OPCODES.md`/`opcodes.html` (completar o desenlazar),
     `SHOT_FORMAT.md` (ruta de `shot2png.py`).
-11. **La herramienta, no el artefacto** — al checklist de `PUBLICAR.md`: barrido de compilación de **todos** los
-    `samples/*.bp`, extractor de fragmentos `<pre>` de los `.html` al compilador, guarda de las cuatro portadas
-    (tamaño y encabezados), y en `F1`: `dist/firmware` con siete imágenes.
+11. ✅ **La herramienta, no el artefacto** — al checklist de `PUBLICAR.md`: barrido de compilación de **todos** los
+    `samples/*.bp` (`tools/samples_sweep.py`), extractor de fragmentos `<pre>` de los `.html` al compilador
+    (`tools/doc_frags.py`), guarda de las cuatro portadas (tamaño y encabezados), y en `F1`: `dist/firmware` con
+    siete imágenes.
+
+**Cómo se escribió (12-sep, en una sesión)**: los pasos 2-11 los escribieron **nueve editores en paralelo**, uno
+por documento, cada uno compilando sus fragmentos con el frontend congelado (commit WIP `e9fc30f0`); y detrás un
+**verificador independiente** que no editó nada: pasó las dos herramientas, hizo los greps de cada falsedad del
+inventario, contrastó las cifras de `RELEASES` con `FICHAS` y el código, comparó la estructura ES/EN y leyó las
+líneas añadidas de los 27 ficheros contra el código. **Su veredicto**: las falsedades del inventario, 0
+apariciones vivas; la introducción de Eduardo, byte-idéntica; 14 cifras de `RELEASES` correctas; y **tres
+afirmaciones nuevas contradichas por el código** — que es lo que pasa cuando nueve editores escriben deprisa, y
+para lo que estaba el verificador.
+
+**Lo que el verificador cazó y se corrigió (12-sep, segunda sesión)**:
+- 🔴 *«El C3/C6 rechaza el blob del P4 por ABI»* en cuatro documentos: **falso**, el cargador del `.mod` no mira
+  la float-ABI → ficha **`#502`**; los documentos dicen ahora *«no actives AOT»* y por qué.
+- 🔴 *«La biblioteca estándar no se sube nunca»* (guía del IDE, ES/EN): falso desde `#466` — sigue la misma regla
+  que todo (se sube si falta, es anterior o tiene otro CRC), y no toda la stdlib va en todas las imágenes.
+- 🔴 `doc_frags.py` **en rojo** con 126 «fallos» que eran todos «falta contexto» (`scr`, `db`, `edad`…): el arnés
+  estaba verde y la herramienta roja. Arreglo en la **herramienta**, no en los 126 fragmentos: la clase **TROZO**
+  — un trozo suelto cuyos únicos errores son nombres sin cualificar que no declara sale como trozo, con la lista
+  de lo que le falta; un miembro que no existe, un `Gui.Foo` o un error de sintaxis siguen siendo FALLO (el
+  analizador acumula todos los errores, así que un trozo con `scr` sin declarar Y un método mal escrito sale
+  rojo). Tres marcas en el manual (`error` en §10.5, `skip` en los dos ficheros de §10.6, `sigue` en §15.2), y
+  dos ejemplos que sí estaban mal: el §7 de `basedatos` extendía un `SensorDao` de una entidad que el documento
+  nunca define (ahora `MedidaDao`, con los cuatro imports de `#492`) y el `Par(lst.get(0))` de `PENDIENTES` sin
+  su `lst`. **Resultado: 152 OK, 119 trozo, 2 error-esperado, 0 FALLO — y el control: tres roturas inyectadas
+  en `gui.html`, tres FALLO.**
+- 🟡 `PrintBench` «3,5-5,3×» → **1,9-5,3×** (la Pico 2 da 1,9×; el inventario lo decía mal y el editor lo copió);
+  *«en el S3 y el P4 el otro núcleo atiende el cable»* era invención (`CONFIG_FREERTOS_UNICORE=y`); `tempC()` en
+  STM32 **sí** lee el sensor del die (ADC1, `BOARD_HAS_ADC_TEMP`); las dos portadas seguían anunciando «Nuevo en
+  V5», tres pantallas, `.bpi`, `.mdn` sólo en ARM y `BpIde-5.0.jar` → todo a V6; el parque baila 8/9 → **nueve
+  placas, verificadas ocho** (la P4 de Waveshare espera su reflasheo en `F1`).
+- ⚪ `ADC_CHANNELS()` = 8 en RP2350B; el §15.2 del manual que enlazaba §16.2; el SVG de `bp-desde-dentro` con
+  `.bpi`; el pie «cierre de V2» de la guía del IDE; la referencia EN sin la tabla de verbos, «Texto y bytes» y
+  «Por dónde seguir» (añadidos); `CatchSinTipo.bp` de vuelta a `samples/` (compila y da la salida de su cabecera
+  en las dos VMs; `samples_sweep`: **348/348**); `fromtest.bp`/`hello.bp` anotan que su import inexistente es a
+  propósito.
+
+⏭️ **Para cerrar `D1`**: la lectura de `RELEASES.md` v6.0 por Eduardo, y su decisión sobre `#502` (V6 o V7).
 
 #### 🧊 CODE FREEZE V6 — antes de `D1` (decidido por Eduardo, 11-sep)
 
@@ -5320,7 +5384,7 @@ tocar y cómo se comprueba.
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ✅ **11-sep** (`7be021bc`, `843e2d0a`): `tools/tanda.py` + la **prueba de fuego** en Pico, C6, P4, DK2 (y la Metro, cazada con firmware viejo). Fase 2 dada por hecha por Eduardo: *«con las 2 capturas se puede verificar perfectamente»*. Lo visto, a V7 y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
-| **D1** | **la DOCUMENTACIÓN** de V6 | 🟡 **EN CURSO desde el 12-sep** (tras el freeze). Plan en doce pasos, medido por un inventario de cuatro lectores (ver sección `D1`); hechos: pasos 0 y 1 |
+| **D1** | **la DOCUMENTACIÓN** de V6 | 🟡 **ESCRITA Y VERIFICADA el 12-sep** — los doce pasos hechos, el verificador independiente pasado y sus hallazgos corregidos (ver sección `D1`). Falta la **lectura de `RELEASES.md` por Eduardo** para cerrarla |
 | **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
 
 📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:

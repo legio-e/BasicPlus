@@ -862,9 +862,12 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       <tr><td>ESP32-P4 (RISC-V with FPU)</td>
           <td>AOT-accelerated (target <code>riscv32-esp-p4</code>, since V4).</td></tr>
       <tr><td>ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
-          <td>Interpreted, today. The IDE's only RISC-V target is the P4's
-              (FPU ABI); the board rejects that code with a message and keeps
-              interpreting. An <code>ilp32</code> target still has to be added.</td></tr>
+          <td><strong>Do not enable AOT</strong> in a project meant for them. The IDE's
+              only RISC-V target is the P4's (<code>ilp32f</code> ABI, with FPU), and the
+              <code>.mod</code> loader only checks the architecture, not the floating-point
+              ABI: a P4 blob that uses the FPU is not rejected, it fails on the board. An
+              <code>ilp32</code> target still has to be added (ticket
+              <code>#502</code>).</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
           <td>Interpreted — same semantics, no speedup. The AOT emits ARM and
               RISC-V, not Xtensa; no date, outside the plan.</td></tr>
@@ -1409,7 +1412,7 @@ cases, from <code>SyncList extends Core.List</code> to
   accessible (functions, consts, vars, properties). Types (classes, enums,
   import namespaces) are always visible.
 </p>
-<pre><code><span class="kw">module</span> M
+<pre data-bp="error"><code><span class="kw">module</span> M
   <span class="kw">function</span> helperPriv(): <span class="type">integer</span>     <span class="comment">// private</span>
     <span class="kw">return</span> <span class="num">99</span>
   <span class="kw">end</span> helperPriv
@@ -1460,7 +1463,7 @@ of <code>TA</code> exposes a type from <code>TB</code>, and <code>TB</code>'s cl
 turn exposes a type from <code>TA</code>, the interface cannot be built: to know what
 <code>TA.Nodo</code> is you first need to know what <code>TB.Hoja</code> is, and vice
 versa.</p>
-<pre><code><span class="comment">// TA.bp</span>
+<pre data-bp="skip"><code><span class="comment">// TA.bp</span>
 <span class="kw">public class</span> Nodo
   <span class="kw">public property</span> vecino: TB.Hoja      <span class="comment">// TA depends on TB...</span>
 <span class="kw">end</span> Nodo
@@ -1592,7 +1595,7 @@ Within one module, two classes may refer to each other with no problem.</p>
   BP threads are run by N <em>workers</em> (real OS threads) that share out the
   queued threads. The default is <code>N=1</code>, as on the micro (a single core);
   SMP is <em>opt-in</em>: <code>--workers=N</code> on the Java VM (see
-  <a href="referencia.html#cli-vm">§15.2</a>) and <code>--smp=N</code> on the PC C VM.
+  <a href="referencia.html#cli-vm">§16.2</a>) and <code>--smp=N</code> on the PC C VM.
 </p>
 
 <h3 id="conc-modelo">14.1 Execution model</h3>
@@ -1747,7 +1750,7 @@ and the same parameter list. It does not need to be public &mdash; normally it i
 private, because nobody else calls it.</p>
 <p>The subscription is written with <code>::</code>, which binds <strong>an object and
 one of its methods</strong>:</p>
-<pre><code><span class="kw">class</span> Panel
+<pre data-bp="sigue"><code><span class="kw">class</span> Panel
   <span class="kw">var</span> nombre: <span class="type">string</span>
 
   <span class="kw">public function</span> Panel(n: <span class="type">string</span>)

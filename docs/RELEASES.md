@@ -34,9 +34,8 @@ ST7789 de 240×240 sin táctil, con rotación 0/90/180/270. Son ya **cuatro pant
 (la DK2, las dos P4 y el C6), todas con la misma GUI. El C6 con pantalla corre con un
 bloque de VM de 128 KB.
 
-El parque de V6 son **siete imágenes y ocho placas** — nueve si se cuenta aparte la
-P4 de Waveshare, que comparte imagen con el kit de Espressif y elige su panel por el
-entorno (`display=st7701`):
+El parque de V6 son **siete imágenes y nueve placas** (la P4 de Waveshare comparte
+imagen con el kit de Espressif y elige su panel por el entorno, `display=st7701`):
 
 | imagen | placas que sirve |
 |---|---|
@@ -53,9 +52,11 @@ sin activar —8 MB parados—, y ahora la VM la usa; y los **packs funcionan ta
 el S3 y en el C6** (el mapeo de la zona vivía en el directorio del P4 y los demás no
 lo llamaban).
 
-Lo que no cambia: el S3 es Xtensa y **no tiene AOT**; y en el C3 y el C6 las funciones
-`native` corren **interpretadas** por ahora, porque el compilador sólo tiene el destino
-RISC-V con FPU del P4 — la placa rechaza el blob con mensaje y el programa sigue igual.
+Lo que no cambia: el S3 es Xtensa y **no tiene AOT**; y para el C3 y el C6 **no
+actives AOT** por ahora: el compilador sólo tiene el destino RISC-V con FPU del P4
+(`ilp32f`), y el cargador del `.mod` comprueba la arquitectura pero no la ABI de coma
+flotante, así que un blob del P4 que use la FPU no se rechaza — falla en la placa. Falta
+dar de alta el destino `ilp32` (ficha `#502`).
 
 ### Memoria por placa
 
@@ -91,9 +92,9 @@ la pantalla. FreeRTOS también en el STM32. Lo que se nota:
 - **El IDE atiende KILL, HELLO y RESET al instante** mientras el programa corre (un
   KILL llega en 3-50 ms según la placa; algo más si hay salida encolada en un puerto
   lento), y **RESET funciona con un RUN vivo** — ya no hace falta `kill` y luego `reset`.
-- **La salida va por líneas**: `PrintBench` (2.000 líneas) sale entre **3,5× y 5,3×** más
-  rápido según la placa, con seis veces menos mensajes por el cable. El cálculo puro no
-  cambia (~1 %).
+- **La salida va por líneas**: `PrintBench` (2.000 líneas) sale entre **1,9× y 5,3×** más
+  rápido según la placa (1,9× en la Pico 2, 3,5× en el P4 y los STM32, 3,6× en el C6, 5,3×
+  en el C3), con seis veces menos mensajes por el cable. El cálculo puro no cambia (~1 %).
 - **La VM cede el turno al sistema entre quanta**: en el ESP32 un programa ya no
   bloquea el resto del sistema, `stop` vuelve a funcionar en el P4 y dice siempre
   `KILLED (130)`. Y un `sleep` de menos de 10 ms en las ESP32 **duerme de verdad**
@@ -268,8 +269,8 @@ silencio); el bucle de la GUI ya no busca sus handlers por nombre en cada vuelta
 - **`help error`** explica los códigos de salida.
 - **El IDE pregunta a la placa por cada dependencia** y sólo sube lo que falta, lo que
   es de versión anterior o lo que tiene otro CRC. Dice de dónde carga cada módulo, y
-  avisa si esa copia no es la que el proyecto pondría. Ya no sube `Core`, que va
-  embebido.
+  avisa si esa copia no es la que el proyecto pondría. La stdlib sigue la misma regla
+  (va embebida en el firmware, así que normalmente no viaja nada).
 - **El firmware repone `/lib` solo** en cada arranque, en las cinco familias: un módulo
   de la stdlib que falte, que sea más viejo o que tenga otro CRC se vuelve a escribir.
   `/app` no se toca nunca.
@@ -392,8 +393,9 @@ siguen ejecutando; `Gui.run()` sigue bloqueando.
 - **Los campos protegidos no cruzan módulos**: un descendiente en otro módulo no los ve
   (usa un getter). Y sólo el primer constructor de una clase cruza la frontera del módulo.
 - **Un módulo de la stdlib olvidado en `/app` tapa al de `/lib` sin aviso.**
-- **La VM sigue en un solo núcleo** (en el S3 y el P4, el otro atiende el cable). Los dos
-  núcleos para ejecutar BP quedan fuera del plan de versiones.
+- **La VM sigue en un solo núcleo**, también en los micros que tienen dos (S3 y P4
+  arrancan con el segundo apagado: se midió que no costaba nada). Los dos núcleos para
+  ejecutar BP quedan fuera del plan de versiones.
 
 ---
 

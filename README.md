@@ -33,26 +33,28 @@ end Blink
 On a PC with no GPIO the hardware builtins log to stdout; on the board they
 drive real pins. The program is the same, byte for byte.
 
-## New in V5 — data
+## New in V6 — order in the micros
 
-V4 fixed the foundations. **V5 is about storing data**: an **SD card** with
-gigabytes, **SQLite** running inside the micro with an **ORM** that writes the
-SQL for you, and **packs**, which make it possible to ship a library as large as
-SQLite without those who do not use it paying for it — and without eating RAM,
-because a pack's code executes from flash instead of being loaded into memory.
-
-Along the way, `List` and the wrappers stopped being synthesised and are now
-written in BasicPlus, with **typed getters** that convert rather than cast, and
-`native` functions accept **`long`**.
+V5 gave the language somewhere to put things (an SD card, SQLite with an ORM,
+packs). **V6 puts the microcontroller code in order**: whatever did the same job
+on every micro is now shared — a bit over 90 % of each firmware — and two new
+micros come in almost for free, the **ESP32-C3** and the **ESP32-C6** (with the
+first SPI display). Along the way: the GUI runs in its own thread and its
+component tree can be saved and reloaded as JSON; the board's screen can be
+captured from the PC (`Gui.shot`); the IDE keeps talking to the board while a
+program runs; the firmware repairs its own `/lib` on every boot; and a
+semi-automatic test system drives the boards.
 
 Full detail in the **[release notes](docs/RELEASES.md)**.
+
 ## Graphical interfaces (since V3)
 
 Built on **LVGL**: around twenty widgets, the ability to **design screens in a
 JSON file** that becomes the window (with its event handlers already wired) at
 runtime, and touch — all with the same "paints on the PC, runs on the board".
-Verified on three screens: **STM32U5G9J-DK2** (LTDC),
-**ESP32-P4-Function-EV** (EK79007) and a **Waveshare ESP32-P4** (ST7701).
+Verified on four screens: **STM32U5G9J-DK2** (LTDC), **ESP32-P4-Function-EV**
+(EK79007), a **Waveshare ESP32-P4** (ST7701) and, since V6, the small
+**Waveshare ESP32-C6-LCD-1.3** (ST7789 240×240 over SPI).
 
 ![GuiColorDemo running on a board — GUI with LVGL](docs/img/guicolordemo.png)
 
@@ -87,19 +89,22 @@ hardware: 32-bit microcontrollers.
   network…), user-defined exception classes — across modules too.
 - **Concurrency**: BP threads on a quantum scheduler, `Mutex`,
   `synchronized`, `SyncList` queues with blocking consume.
-- **Modules** with compiled interfaces (`.bpi`, the Modula-2 DEFINITION
-  model): `import` resolves against the interface, not the source.
-- **`native function`**: functions AOT-compiled to C/Thumb-2 (`.mdn`) that
-  run at native speed on RP2350/STM32 — 40-90× over the interpreter on
-  compute kernels, with faults propagated to BP `try/catch`.
+- **Modules** (the Modula-2 DEFINITION model): `import` resolves against the
+  module's compiled interface, which travels inside the `.mod` itself — one
+  file per module.
+- **`native function`**: functions AOT-compiled to native code (Thumb-2 on
+  RP2350/STM32, RISC-V on the ESP32-P4), carried inside the `.mod` — 40-90×
+  over the interpreter on compute kernels, with faults propagated to BP
+  `try/catch`.
 - **Graphical UI**: the `Gui` module over **LVGL** — ~20 OO widgets, forms
   designed in JSON (`.win`), color and fonts, touch. The same bytecode paints
   in a window on the PC and on the board's screen.
 - **Standard library**: `Core`, `Math`, `IO` (files + prompt), `Str`,
   `Collections`, `Stats`, `Compress` (LZSS), `Log`, `Json`, `Net` (TCP
-  client) and the hardware zoo: `Gpio`, `I2c`, `Spi`, `Uart`, `Pwm`, `Adc`,
-  `Rtc`, `Wdt`, `Timer`, `Pulse`, `Neopixel`, `Pico`. All new hardware is
-  a class (`Gpio.Pin`, `I2c.Bus`, `Net.Tcp`, …).
+  client), `App`, `Packs`, `Machine` (chip id, temperature, clock, reset)
+  and the hardware zoo: `Gpio`, `I2c`, `Spi`, `Uart`, `Pwm`, `Adc`, `Rtc`,
+  `Wdt`, `Timer`, `Pulse`, `Freq`, `Neopixel`. **SQLite** and its ORM ship
+  as a pack. All hardware is a class (`Gpio.Pin`, `I2c.Bus`, `Net.Tcp`, …).
 
 ## Two twin VMs, one sacred invariant
 
@@ -164,13 +169,16 @@ validated on the board with real sensors: GPIO, **SPI** (BME688), **UART**
 those **same four buses** were validated on the board with real sensors
 (BME688 over SPI, BME280 over I2C, GPIO and UART loopbacks) — the **three
 non-graphical families are on par**. The **Metro RP2350B** shares the firmware
-image with the Pico.
+image with the Pico. In V6 the **ESP32-C3** and **ESP32-C6** joined with the
+same shared code and 128 KB of VM: the test runner passed its fire test on the
+C6 alongside the Pico 2, the P4 and the DK2.
 
 **The boards with a screen (since V3).** The GUI (LVGL) was verified on the board on
-all three: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
-**ESP32-P4-Function-EV** (EK79007 1024×600) and **Waveshare ESP32-P4** (ST7701
-480×800) — widget catalog, color, `.win` forms and touch, the same bytecode on
-all three.
+all four: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
+**ESP32-P4-Function-EV** (EK79007 1024×600), **Waveshare ESP32-P4** (ST7701
+480×800) and **Waveshare ESP32-C6-LCD-1.3** (ST7789 240×240, no touch) —
+widget catalog, color, `.win` forms and touch, the same bytecode on all of
+them.
 
 ## The IDE
 
@@ -182,9 +190,9 @@ the local VM and inside the device.
 ## Repository layout
 
 ```
-lexer-java/   compiler (frontend): .bp → .mod + .bpi + .dbg (+ AOT .mdn)
+lexer-java/   compiler (frontend): .bp → .mod + .dbg (native code inside the .mod)
 miVM/         Java VM + debugger + TCP daemon
-bpgenvm-c/    C99 VM: host, Pico/RP2350 firmware, ESP32-S3, ESP32-P4, STM32
+bpgenvm-c/    C99 VM: host + firmwares for RP2350, ESP32-S3/C3/C6/P4, STM32
 BpIde/        Swing IDE (fat-jar)
 bpstdlib/     standard library (.bp sources + compiled .mod)
 samples/      example programs
@@ -215,7 +223,7 @@ java -jar BpIde/target/BpIde-6.0.jar
 ```
 
 The firmwares are built with their usual toolchains (pico-sdk + ninja,
-ESP-IDF, STM32CubeIDE); see `bpgenvm-c/{pico,esp32,esp32p4,stm32}/`. Or grab
+ESP-IDF, STM32CubeIDE); see `bpgenvm-c/{pico,esp32,esp32c3,esp32c6,esp32p4,stm32}/`. Or grab
 the **prebuilt binaries** from the [latest release](https://github.com/legio-e/BasicPlus/releases/latest).
 
 ## Documentation
@@ -257,7 +265,7 @@ micros come in, the **ESP32-C3** and the **ESP32-C6** (with the first SPI displa
 the GUI runs in its own thread and its component model can be saved and reloaded
 as JSON; the micro's screen can be captured from the PC; the IDE keeps talking to
 the board while a program runs; and a semi-automatic test system drives the boards.
-Verified on real hardware across **eight boards and three architectures**.
+Verified on real hardware on **eight of the nine boards, three architectures**.
 
 Downloads and full detail: the
 **[v6.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v6.0)** and the

@@ -197,6 +197,7 @@
     <li class="sub"><a href="#stdlib-net">14.15 Net</a></li>
     <li class="sub"><a href="#stdlib-gui">14.16 Gui — separate volume</a></li>
     <li class="sub"><a href="#stdlib-sd">14.17 SD card</a></li>
+    <li class="group"><a href="#seguir">Where to go next</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#packs-what">15.1 What a pack is, and what it is not</a></li>
     <li class="sub"><a href="#packs-kinds">15.2 Two kinds: library and executable</a></li>
@@ -1518,8 +1519,9 @@ port.write(tx, <span class="num">4</span>)
       <td>Unique chip ID (16 hex chars). Stable across
           reboots and reflashes.</td></tr>
   <tr><td><code>tempC(): float</code></td>
-      <td>Die temperature in °C (RP2350: ADC4 sensor, ±2 °C without calibration; on
-          ESP32 and STM32 it returns 0.0 — sensor not wired).</td></tr>
+      <td>Die temperature in °C (RP2350: ADC4 sensor, ±2 °C without calibration;
+          STM32: internal sensor via ADC1, factory-calibrated; on ESP32 it returns 0.0
+          — sensor not wired).</td></tr>
   <tr><td><code>cpuFreqHz(): integer</code></td>
       <td>Current clk_sys frequency in Hz.</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>
@@ -1555,7 +1557,7 @@ port.write(tx, <span class="num">4</span>)
   <code>I2C_BUSES()</code> (2), <code>SPI_BUSES()</code> (2),
   <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (= <code>gpioCount()</code>),
   <code>ADC_CHANNELS()</code> and <code>PWM_SLICES()</code> (from the board descriptor:
-  4 and 12 on RP2350 and on the PC).
+  4 and 12 on RP2350A —Pico 2— and on the PC; 8 and 12 on RP2350B —Metro—).
 </p>
 
 <!-- =========================================================== -->
@@ -1904,6 +1906,27 @@ sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
 <span class="kw">endif</span>
 <span class="kw">var</span> cfg: <span class="type">string</span> := <span class="fn">readFile</span>(<span class="str">"/sd/config.txt"</span>)</code></pre>
 
+<p>The file verbs are built-ins; nothing to import:</p>
+
+<table>
+  <tr><th>verb</th><th>what it does</th></tr>
+  <tr><td><code>readFile(path)</code></td><td>the whole content, as a string</td></tr>
+  <tr><td><code>writeFile(path, text)</code></td><td>writes it; if it existed, <strong>truncates</strong></td></tr>
+  <tr><td><code>appendFile(path, text)</code></td><td>appends at the end</td></tr>
+  <tr><td><code>fileExists(path)</code></td><td><code>true</code> / <code>false</code></td></tr>
+  <tr><td><code>listDir(path)</code></td><td>what a directory holds — <strong>Java VM only</strong>, see <a href="#stdlib-sd-list">below</a></td></tr>
+  <tr><td><code>readFileBytes(path)</code></td><td>the content as bytes</td></tr>
+  <tr><td><code>writeFileBytes(path, data)</code></td><td>writes bytes</td></tr>
+</table>
+
+<p>
+  <strong>And the <code>IO</code> module</strong> for the rest: <code>mkdir</code>,
+  <code>rmdir</code>, <code>removeFile</code>, <code>rename</code>, <code>copyFile</code>,
+  <code>fileSize</code>, <code>isDirectory</code>, <code>lastModified</code>, and the path
+  family <code>pathJoin</code>, <code>pathParent</code>, <code>pathBasename</code>,
+  <code>pathExtension</code>, <code>pathAbsolute</code>.
+</p>
+
 <pre><code><span class="kw">import</span> IO
 
 IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
@@ -1916,6 +1939,13 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
   <code>readFile</code> <strong>brings the whole file into memory</strong>: on a micro with a
   few megabytes of heap, a 50 MB file will not end well — split it, or use a database
   (see <a href="basedatos.html">databases</a>).
+</p>
+
+<p>
+  <strong>Text and bytes.</strong> <code>readFile</code>/<code>writeFile</code> work with
+  <strong>text</strong>; <code>readFileBytes</code>/<code>writeFileBytes</code>, with
+  <strong>raw bytes</strong>. Use the byte versions for images, binaries or anything that is
+  not text: pushing a binary through the text version corrupts it.
 </p>
 
 <h4 id="stdlib-sd-list">Listing a directory — today only in the Java VM</h4>
@@ -1981,6 +2011,24 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
 <p>
   <strong>Pulling the card out while the program is writing</strong> corrupts whatever was
   half-written, exactly like on a PC.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="seguir">Where to go next</h2>
+
+<table>
+  <tr><th>I want to…</th><th>look at</th></tr>
+  <tr><td>write and read files</td><td><code>samples/FileTest.bp</code></td></tr>
+  <tr><td>the <code>IO</code> operations</td><td><code>samples/FileOpsTest.bp</code></td></tr>
+  <tr><td>raw bytes</td><td><code>samples/FileBytesTest.bp</code></td></tr>
+  <tr><td>the examples of this page, runnable</td><td><code>samples/SdDoc.bp</code></td></tr>
+  <tr><td>a database on the card</td><td><code>samples/SqlDemoSd.bp</code> and <a href="basedatos.html">databases</a></td></tr>
+</table>
+
+<p>
+  The examples of this page are <strong>executed</strong>, not assumed:
+  <code>samples/SdDoc.bp</code> runs them on both VMs with the same output. What belongs to
+  the card itself —mounting, pins, FAT— was measured on the board.
 </p>
 
 <!-- =========================================================== -->
@@ -2395,10 +2443,10 @@ imported exactly like one living in <code>/lib</code>.</p>
   <tr><td>ESP32-C3 · ESP32-C6 (RISC-V, single core) <em>— new in V6</em></td>
       <td>128 KB</td>
       <td>A single USB connector: the wire goes over USB-Serial-JTAG and the console over
-          UART0. Flashing = BOOT+RESET by hand. <code>native</code> interpreted today: they
-          are RV32 without FPU and the IDE's RISC-V target is the P4's (with FPU), so the
-          board rejects the blob on ABI grounds, says so in the log and carries on with
-          the bytecode. Packs on the C6. The <strong>ESP32-C6-LCD-1.3</strong> brings the
+          UART0. Flashing = BOOT+RESET by hand. <strong>No AOT</strong>: they are RV32
+          without FPU and the IDE's only RISC-V target is the P4's (with FPU); the loader
+          does not tell the two ABIs apart, so do not enable AOT in a project meant for
+          them (ticket <code>#502</code>). Packs on the C6. The <strong>ESP32-C6-LCD-1.3</strong> brings the
           first SPI display (ST7789 240×240, no touch) and runs the GUI within those
           128 KB.</td></tr>
   <tr><td>ESP32-P4 (RISC-V)</td>
@@ -2578,7 +2626,7 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><th>family</th><th><code>native</code></th></tr>
   <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>accelerated — target <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
   <tr><td>ESP32-P4 (RV32 with FPU)</td><td>accelerated — target <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
-  <tr><td>ESP32-C3 · C6 (RV32 without FPU)</td><td>interpreted today: the P4 blob does not match in floating-point ABI and the board rejects it with a warning</td></tr>
+  <tr><td>ESP32-C3 · C6 (RV32 without FPU)</td><td>interpreted — do not enable AOT: the only RISC-V target is the P4's (<code>ilp32f</code>) and the <code>.mod</code> loader does not check the floating-point ABI (<code>#502</code>)</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td><td>interpreted (no AOT; out of plan)</td></tr>
   <tr><td>PC (both VMs)</td><td>interpreted; the host has its own native path for tests only</td></tr>
 </table>

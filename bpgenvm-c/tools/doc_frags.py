@@ -9,8 +9,9 @@ USO
     python bpgenvm-c/tools/doc_frags.py -v                 # lista tambien lo saltado
     python bpgenvm-c/tools/doc_frags.py --json informe.json
 
-    Codigo de salida: 0 si todos los fragmentos BP compilan, 1 si alguno falla,
-    2 si falta el frontend o algun fichero pedido con --solo.
+    Codigo de salida: 0 si ningun fragmento BP falla (un TROZO no es un fallo,
+    ver abajo), 1 si alguno falla, 2 si falta el frontend o algun fichero
+    pedido con --solo.
 
 POR QUE EXISTE (D1, 12-sep)
     Documentar V5 destapo ejemplos que no compilaban; documentar V6 volvio a
@@ -44,7 +45,31 @@ QUE HACE
        compat.sh y tanda.py). Un doc = un directorio, en secuencia: asi un
        fragmento que importa el modulo de un fragmento anterior lo encuentra.
        Los documentos se compilan en paralelo (--jobs).
-    5. Informe por documento (OK / FALLO / ESQUEMA / ERROR-ESPERADO) y total.
+    5. Informe por documento (OK / TROZO / FALLO / ESQUEMA / ERROR-ESPERADO)
+       y total.
+
+LOS TROZOS (la mitad de los fragmentos de un manual)
+    Un manual ensena `if edad < 18 then ... endif` sin declarar `edad`, y una
+    guia de GUI escribe `Gui.Label(scr, "x")` dando por hecho el `scr` de la
+    primera pagina. Eso no es un programa roto: es un TROZO, y el lector lo
+    sabe. Como el andamio no inventa variables, el compilador dice
+    «identificador no resuelto: 'edad'» y nada mas — y ESO es lo que se usa
+    para clasificarlo, sin marcar nada en el doc: un trozo suelto cuyos
+    UNICOS errores son de contexto (un nombre SIN cualificar que el trozo no
+    declara — variable, tipo, funcion —, un `this` fuera de un metodo, o el
+    import de un modulo que no es de la stdlib ni de los packs) se cuenta como
+    TROZO, con la lista de nombres que le faltan, y no como FALLO. Todo lo
+    demas sigue siendo FALLO: un miembro que no existe (`'Label' no tiene
+    miembro 'setTexto'`), un tipo CUALIFICADO que no esta (`Gui.Foo`), un
+    error de sintaxis, un modulo entero que no compila. El analizador acumula
+    todos los errores antes de abortar, asi que un trozo con un `scr` sin
+    declarar Y un metodo mal escrito sale FALLO, no TROZO. Los errores en la
+    MISMA LINEA que uno de contexto se toleran (son la cascada del nombre
+    sin tipo), igual que las que el propio compilador marca con `<error>`,
+    y los miembros de una clase que extiende algo de un modulo que el doc no
+    trae (el DAO generado de basedatos). El punto ciego, dicho: un nombre sin cualificar mal escrito
+    (`Excepcion` por `Exception`) sale como «falta» y no como fallo — por
+    eso el informe los lista, para que un ojo los lea.
 
 MARCAS EN EL DOCUMENTO (para lo que a proposito no compila solo)
     HTML:  <pre data-bp="skip">   no es un programa: no se compila (se cuenta)
@@ -331,27 +356,95 @@ def envolver(nombre, codigo, stdlib):
 
 
 def preparar(f, slug, stdlib, anterior):
-    """Devuelve (piezas, andamio, codigo): piezas = lista de (nombreModulo,
-    textoBP), o None si es un ESQUEMA. `anterior` es el codigo del fragmento
-    BP suelto previo del mismo doc, para la marca `sigue`."""
+    """Devuelve (piezas, andamio, codigo, suelto): piezas = lista de
+    (nombreModulo, textoBP), o None si es un ESQUEMA; suelto = True si el
+    fragmento es un trozo envuelto por el andamio (no un modulo entero).
+    `anterior` es el codigo del fragmento BP suelto previo del mismo doc,
+    para la marca `sigue`."""
     codigo = textwrap.dedent(f["codigo"]).strip("\n")
     if f["marca"] == "sigue" and anterior:
         codigo = anterior.rstrip("\n") + "\n\n" + codigo
     if any(RE_ESQUEMA.search(sin_comentario(l)) for l in codigo.split("\n")):
-        return None, [], codigo
+        return None, [], codigo, False
     sig = [sin_comentario(l) for l in codigo.split("\n") if sin_comentario(l)]
     if sig and (RE_MODULE.match(sig[0]) or RE_LIBRARY.match(sig[0])):
         trozos = partir_modulos(codigo)
         if trozos:
-            return [(n, t.strip("\n") + "\n") for n, t in trozos], [], codigo
+            return [(n, t.strip("\n") + "\n") for n, t in trozos], [], codigo, False
     nombre = "Frag_%s_%d" % (slug, f["idx"])
     texto, andamio = envolver(nombre, codigo, stdlib)
-    return [(nombre, texto)], andamio, codigo
+    return [(nombre, texto)], andamio, codigo, True
 
 
 # ── compilacion ──────────────────────────────────────────────────────────────
 
 RE_ERR = re.compile(r"^\[\d+:\d+\]\s+error|^-- Errores|^error:|^error de I/O|compilaci.n abortada|no se localiz.*se omitir")
+
+# Los errores «de contexto» de un trozo suelto: un nombre SIN cualificar (sin
+# punto) que el trozo no declara. Capturan el nombre para el informe.
+RE_CTX = [
+    re.compile(r"identificador no resuelto: '([^'.]+)'"),
+    re.compile(r"tipo '([^'.]+)' no encontrado"),
+    re.compile(r"tipo de excepci.n '([^'.]+)' no es una clase"),
+    re.compile(r"tipo cualificado '([^'.]+)\.[^']+' no encontrado"),   # modulo del doc (si es stdlib, no cuela)
+    re.compile(r"extiende '([^'.]+)\.[^']+' y este modulo no importa"),
+    re.compile(r"el m.dulo importado '([^'.]+)' no expone"),
+    re.compile(r"no se puede llamar a '([^'.]+)'"),
+    re.compile(r"'(this|super)' s.lo es v.lido"),
+    re.compile(r"no se localiz. \.bp ni \.bpi para import '([^']+)'"),
+    re.compile(r"no se encuentra el pack '([^']+)'"),
+]
+RE_POS = re.compile(r"\[(\d+):\d+\]")
+# Cascadas SIN nombre: solo se toleran si el trozo tiene ademas algun error de
+# contexto (una clase cuya base no se resolvio, un `::` sobre un objeto sin tipo).
+RE_CASCADA = [
+    re.compile(r"la clase no tiene clase base"),
+    re.compile(r"'::' s.lo (se puede asignar|vale)"),
+]
+
+
+RE_EXTIENDE = re.compile(r"^\s*(?:public\s+)?class\s+(\w+)\s+extends\s+(\w+)\.\w+", re.M)
+RE_MIEMBRO = re.compile(r"'(\w+)' no tiene miembro")
+
+
+def clasificar_trozo(errs, stdlib, codigo=""):
+    """Si TODOS los errores de un trozo suelto son de contexto (o cascada en la
+    misma linea de uno que lo es), devuelve la lista ordenada de nombres que
+    le faltan; si hay algun error real, None. Un nombre que coincide con un
+    modulo de la stdlib o de los packs NO es contexto: es un import que falta
+    o un modulo mal escrito, y eso si es un fallo del doc."""
+    faltan, lineas_ctx, resto = set(), set(), []
+    # clases del trozo que extienden algo de un modulo que no es de la stdlib:
+    # sus miembros heredados no se pueden comprobar (cascada de la base)
+    sin_base = {c for c, m in RE_EXTIENDE.findall(codigo)
+                if m.lower() not in {x.lower() for x in stdlib}}
+    for e in errs:
+        if "compilaci" in e and "abortada" in e:
+            continue
+        if "<error>" in e or any(r.search(e) for r in RE_CASCADA):
+            continue                # el compilador ya dice que deriva de otro error
+        mm = RE_MIEMBRO.search(e)
+        if mm and mm.group(1) in sin_base:
+            pos = RE_POS.search(e)      # lo que cuelgue de esa linea es cascada
+            if pos:
+                lineas_ctx.add(pos.group(1))
+            continue
+        m = next((r.search(e) for r in RE_CTX if r.search(e)), None)
+        if m:
+            nombre = m.group(1)
+            if nombre.lower() in {x.lower() for x in stdlib} and nombre not in ("this", "super"):
+                return None
+            faltan.add(nombre)
+            pos = RE_POS.search(e)
+            if pos:
+                lineas_ctx.add(pos.group(1))
+        else:
+            resto.append(e)
+    for e in resto:
+        pos = RE_POS.search(e)
+        if not (pos and pos.group(1) in lineas_ctx):
+            return None
+    return sorted(faltan) if faltan else None
 
 
 def lineas_de_error(log):
@@ -435,14 +528,15 @@ def procesar_doc(ruta, base_work, slug, stdlib):
             r["estado"] = "SKIP-MARCA" if f["marca"] == "skip" else "NO-BP"
             res.append(r)
             continue
-        piezas, andamio, codigo = preparar(f, slug, stdlib, anterior)
+        piezas, andamio, codigo, suelto = preparar(f, slug, stdlib, anterior)
         if piezas is None:
             r["estado"] = "ESQUEMA"
             res.append(r)
             continue
-        if andamio:
+        if suelto:
             anterior = codigo          # solo los sueltos encadenan con `sigue`
-            r["andamio"] = andamio
+            if andamio:
+                r["andamio"] = andamio
         r["modulos"] = [n for n, _ in piezas]
         ok_todos, errs_todos, rc_ult = True, [], 0
         for n, t in piezas:          # todos los .bp antes de compilar el primero:
@@ -463,6 +557,11 @@ def procesar_doc(ruta, base_work, slug, stdlib):
             r["estado"] = "OK" if ok_todos else "FALLO"
             r["errores"] = errs_todos
             r["rc"] = rc_ult
+            if not ok_todos and suelto:           # solo los trozos sueltos
+                faltan = clasificar_trozo(errs_todos, stdlib, codigo)
+                if faltan:
+                    r["estado"] = "TROZO"
+                    r["faltan"] = faltan
         res.append(r)
     return res
 
@@ -477,16 +576,20 @@ def imprimir_doc(ruta, res, verbose):
     cnt = {}
     for r in res:
         cnt[r["estado"]] = cnt.get(r["estado"], 0) + 1
-        mostrar = r["estado"] in ("FALLO", "ESQUEMA", "ERROR-ESPERADO") or verbose
+        mostrar = r["estado"] in ("FALLO", "TROZO", "ESQUEMA", "ERROR-ESPERADO") or verbose
         if not mostrar:
             continue
         sec = (r["sec"][:48] + "..") if len(r["sec"]) > 50 else r["sec"]
         lineas.append("  %-14s L%-5d [%s] %s" % (r["estado"], r["linea"], sec, r["primera"]))
         if verbose and r.get("andamio"):
             lineas.append("      + andamio: import " + ", ".join(r["andamio"]))
+        if r["estado"] == "TROZO":
+            lineas.append("      ~ falta: " + ", ".join(r["faltan"]))
+            if not verbose:
+                continue
         for e in r.get("errores", [])[:4]:
             lineas.append("      ! " + e[:200])
-    partes = ["%d %s" % (cnt[k], k) for k in ("OK", "FALLO", "ERROR-ESPERADO", "ESQUEMA", "NO-BP", "SKIP-MARCA")
+    partes = ["%d %s" % (cnt[k], k) for k in ("OK", "TROZO", "FALLO", "ERROR-ESPERADO", "ESQUEMA", "NO-BP", "SKIP-MARCA")
               if k in cnt]
     lineas.append("  => " + ", ".join(partes) if partes else "  => sin bloques de codigo")
     with LOCK:
@@ -560,10 +663,12 @@ def main():
     fallos = [r for r in plano if r["estado"] == "FALLO"]
     print()
     print("=" * 72)
-    print("TOTAL: %d bloques en %d docs - BP compilados %d: %d OK, %d FALLO, %d error-esperado; "
+    print("TOTAL: %d bloques en %d docs - BP compilados %d: %d OK, %d trozo (compila salvo por "
+          "nombres que el trozo no declara), %d FALLO, %d error-esperado; "
           "%d esquema (con ...), %d no-BP saltados, %d marcados skip" % (
-              len(plano), len(docs), n.get("OK", 0) + n.get("FALLO", 0) + n.get("ERROR-ESPERADO", 0),
-              n.get("OK", 0), n.get("FALLO", 0), n.get("ERROR-ESPERADO", 0),
+              len(plano), len(docs),
+              n.get("OK", 0) + n.get("TROZO", 0) + n.get("FALLO", 0) + n.get("ERROR-ESPERADO", 0),
+              n.get("OK", 0), n.get("TROZO", 0), n.get("FALLO", 0), n.get("ERROR-ESPERADO", 0),
               n.get("ESQUEMA", 0), n.get("NO-BP", 0), n.get("SKIP-MARCA", 0)))
     if fallos:
         por_doc = {}

@@ -1,3 +1,6 @@
+// fromtest.bp — la SINTAXIS de `import X from "ruta"`. Los dos modulos no
+// existen a proposito: el frontend avisa («no se localizo ... se omitira») y
+// compila igual, que es lo que este ejemplo demuestra. No es un import roto.
 library "test.app"
 module FromTest
 

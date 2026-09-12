@@ -1523,7 +1523,8 @@ port.write(tx, <span class="num">4</span>)
           reboots y reflasheos.</td></tr>
   <tr><td><code>tempC(): float</code></td>
       <td>Temperatura del die en °C (RP2350: sensor ADC4, precisión ±2 °C sin
-          calibración; en ESP32 y STM32 devuelve 0.0 — sensor no cableado).</td></tr>
+          calibración; STM32: sensor interno por ADC1, calibrado de fábrica; en ESP32
+          devuelve 0.0 — sensor no cableado).</td></tr>
   <tr><td><code>cpuFreqHz(): integer</code></td>
       <td>Frecuencia actual del clk_sys en Hz.</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>
@@ -1559,7 +1560,7 @@ port.write(tx, <span class="num">4</span>)
   <code>I2C_BUSES()</code> (2), <code>SPI_BUSES()</code> (2),
   <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (= <code>gpioCount()</code>),
   <code>ADC_CHANNELS()</code> y <code>PWM_SLICES()</code> (según el descriptor de la placa:
-  4 y 12 en RP2350 y en el PC).
+  4 y 12 en RP2350A —Pico 2— y en el PC; 8 y 12 en RP2350B —Metro—).
 </p>
 
 <!-- =========================================================== -->
@@ -2582,9 +2583,10 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <tr><td>ESP32-C3 · ESP32-C6 (RISC-V, un núcleo) <em>— nuevas en V6</em></td>
       <td>128 KB</td>
       <td>Un solo conector USB: el wire va por el USB-Serial-JTAG y la consola por
-          UART0. Grabar = BOOT+RESET a mano. <code>native</code> interpretada hoy: son
-          RV32 sin FPU y el destino RISC-V del IDE es el del P4 (con FPU), así que la
-          placa rechaza el blob por ABI, lo dice en el log y sigue con el bytecode.
+          UART0. Grabar = BOOT+RESET a mano. <strong>Sin AOT</strong>: son RV32 sin FPU
+          y el único destino RISC-V del IDE es el del P4 (con FPU); el cargador no
+          distingue las dos ABIs, así que no actives AOT en un proyecto para ellas
+          (ficha <code>#502</code>).
           Packs en el C6. El <strong>ESP32-C6-LCD-1.3</strong> trae la primera pantalla
           SPI (ST7789 240×240, sin táctil) y corre la GUI con esos 128 KB.</td></tr>
   <tr><td>ESP32-P4 (RISC-V)</td>
@@ -2767,7 +2769,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <tr><th>familia</th><th><code>native</code></th></tr>
   <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>acelerada — destino <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
   <tr><td>ESP32-P4 (RV32 con FPU)</td><td>acelerada — destino <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
-  <tr><td>ESP32-C3 · C6 (RV32 sin FPU)</td><td>interpretada hoy: el blob del P4 no casa en ABI de coma flotante y la placa lo rechaza con aviso</td></tr>
+  <tr><td>ESP32-C3 · C6 (RV32 sin FPU)</td><td>interpretada — no actives AOT: el único destino RISC-V es el del P4 (<code>ilp32f</code>) y el cargador del <code>.mod</code> no comprueba la ABI de coma flotante (<code>#502</code>)</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td><td>interpretada (sin AOT; fuera del plan)</td></tr>
   <tr><td>PC (las dos VMs)</td><td>interpretada; el host tiene su propia ejecución nativa de prueba</td></tr>
 </table>

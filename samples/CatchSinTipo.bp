@@ -1,18 +1,17 @@
-// CatchSinTipo.bp — #459: un `catch` SIN tipo entrega un valor roto.
+// CatchSinTipo.bp — #459: un `catch` SIN tipo entregaba un valor roto.
 //
 // Caso mínimo, sacado de que `samples/trytest.bp` imprimiera basura del heap en
-// la ESP32-P4. Está aquí y no en samples/ porque COMPILA y EJECUTA: lo que falla
-// es la SALIDA, así que no se camufla entre los que fallan al compilar.
-//
-// Lo que tiene que imprimir cuando esté arreglado:
+// la ESP32-P4. Vivió en samples/pendientes/ mientras estuvo roto (compilaba y
+// ejecutaba: lo que fallaba era la SALIDA); cerrado el 30-ago, vuelve a
+// samples/ como prueba de regresión. Las dos VMs imprimen esto:
 //   TIPADO   .msg : [con tipo]
 //   ---
 //   SIN TIPO .msg : [sin tipo]
 //   FIN
 //
-// Lo que imprime hoy: la segunda línea saca bytes del heap (la tabla de símbolos,
-// normalmente) porque el emisor trata la variable del catch genérico como si
-// fuera un string — ver la ficha.
+// Lo que imprimía antes del arreglo: la segunda línea sacaba bytes del heap (la
+// tabla de símbolos, normalmente) porque el emisor trataba la variable del catch
+// genérico como si fuera un string — ver la ficha.
 module CatchSinTipo
   import Core
 

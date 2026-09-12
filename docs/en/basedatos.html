@@ -427,16 +427,21 @@ w.<span class="fn">eq</span>(<span class="str">"sensor_id"</span>, <span class="
 
 <p><strong>Never edit the generated file</strong>: it gets rebuilt and you lose the changes. Inherit:</p>
 
-<pre><code><span class="kw">public class</span> <span class="type">SensorDaoPlus</span> <span class="kw">extends</span> ModelDao.<span class="type">SensorDao</span>
-  <span class="kw">public function</span> <span class="fn">SensorDaoPlus</span>(base: SQLite.<span class="type">Db</span>)
-    <span class="kw">super</span>(base)
-  <span class="kw">end</span> SensorDaoPlus
+<pre><code><span class="kw">import</span> SQLite
+<span class="kw">import</span> Orm
+<span class="kw">import</span> Model
+<span class="kw">import</span> ModelDao        <span class="comment">// imports are not transitive: all four</span>
 
-  <span class="comment">// By the OTHER key. Convention: by key, `...By&lt;something&gt;`.</span>
-  <span class="kw">public function</span> <span class="fn">loadByName</span>(name: <span class="type">string</span>): Model.<span class="type">Sensor</span>
-    <span class="kw">return</span> Model.<span class="type">Sensor</span>(<span class="kw">this</span>.<span class="fn">uno</span>(<span class="str">"name = '"</span> + Orm.<span class="fn">esc</span>(name) + <span class="str">"'"</span>))
-  <span class="kw">end</span> loadByName
-<span class="kw">end</span> SensorDaoPlus</code></pre>
+<span class="kw">public class</span> <span class="type">ReadingDaoPlus</span> <span class="kw">extends</span> ModelDao.<span class="type">ReadingDao</span>
+  <span class="kw">public function</span> <span class="fn">ReadingDaoPlus</span>(base: SQLite.<span class="type">Db</span>)
+    <span class="kw">super</span>(base)
+  <span class="kw">end</span> ReadingDaoPlus
+
+  <span class="comment">// By ANOTHER column. Convention: by key, `...By&lt;something&gt;`.</span>
+  <span class="kw">public function</span> <span class="fn">loadBySensor</span>(sensorId: <span class="type">long</span>): Model.<span class="type">Reading</span>
+    <span class="kw">return</span> Model.<span class="type">Reading</span>(<span class="kw">this</span>.<span class="fn">uno</span>(<span class="str">"sensor_id = "</span> + sensorId))
+  <span class="kw">end</span> loadBySensor
+<span class="kw">end</span> ReadingDaoPlus</code></pre>
 
 <h2 id="verificar">8. Verifying your entities against the real database</h2>
 

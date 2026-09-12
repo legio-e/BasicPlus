@@ -307,7 +307,9 @@
   loaded from (path and CRC) and warns if that copy is not the one the
   project would put there — when something fails because of a dependency,
   that line is the one that tells where the module came from. The standard
-  library is never uploaded: it travels in the firmware (§6).
+  library follows the same rule: it travels in the firmware (§6) and only the
+  module the board lacks, has an older version of or has with a different CRC is
+  uploaded (not every image embeds the whole stdlib).
 </p>
 <p>
   On completion, the Console closes with the exit code, the reason and
@@ -364,8 +366,10 @@
     <td>ESP32-C3 and ESP32-C6</td>
     <td>—</td>
     <td>also <em>interpreted</em>: they are RISC-V <em>without FPU</em> and the
-        IDE's only RISC-V target is the P4's (with FPU) — do not enable AOT in
-        a project meant for them</td>
+        IDE's only RISC-V target is the P4's (with FPU) — <strong>do not enable AOT
+        in a project meant for them</strong>: the <code>.mod</code> loader does not
+        tell the two ABIs apart and a P4 blob that uses the FPU would fail on the
+        board (<code>#502</code>)</td>
   </tr>
 </table>
 <p class="warn">
@@ -881,8 +885,8 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// E
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
-  BasicPlus IDE guide — screenshots by Eduardo on a Metro RP2350, written
-  alongside the V2 close-out.
+  BasicPlus IDE guide — screenshots by Eduardo on a Metro RP2350; written at the
+  V2 close-out and brought up to date with every version (V6, September 2026).
 </p>
 
 </main>

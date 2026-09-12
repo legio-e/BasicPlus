@@ -20,10 +20,11 @@ fallo está arreglado y vuelven a `samples/`.
 
 ## Qué hay hoy
 
-### `CatchSinTipo.bp` — un `catch` sin tipo entregaba un valor roto
+**Nada** (12-sep). La carpeta se queda, vacía, para el siguiente.
 
-Cerrado el 30-ago (`#459`), así que **hoy ya pasa**: se queda como prueba de regresión, que
-es para lo que sirve esta carpeta. Su cabecera lleva escrita la salida correcta.
+> `CatchSinTipo.bp` (un `catch` sin tipo entregaba un valor roto, `#459`) estuvo aquí del
+> 30-ago al 12-sep. Cerrado el bug, **volvió a `samples/`** como prueba de regresión — que
+> es la regla de arriba: el barrido de `samples/` lo compila y lo ejecuta en cada cierre.
 
 ---
 
