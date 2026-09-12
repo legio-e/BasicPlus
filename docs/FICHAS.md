@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **0** | `#502` queda cerrada **a nivel de firmware** por `#503` (el C3/C6 no cargan ningún `.mdn`: `ilp32`); el destino `ilp32` del IDE sigue siendo de V7, con `#493` y `#500` |
+> | **fichas de V6** | **0** | `#502` cerrada en el cargador de `.mdn` y **medida en el C6** (antes reiniciaba la placa; ahora rechaza con mensaje y corre interpretado); el destino `ilp32` del IDE sigue siendo de V7, con `#493` y `#500` |
 > | **hitos** | **1** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6 — EN VIGOR desde el 12-sep** (sólo bugs, con ficha y reproducción) → ~~`D1`~~ (✅ 12-sep) → `F1` (pruebas finales, **en curso desde el 12-sep**) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2352,7 +2352,24 @@ el nativo **embebido** en el `.mod` (N1.4) también corre: `Bench` `fib(28)` **3
 muerta, y el que la escribe lee la intención, no el preprocesador. La prueba que la habría cazado el mismo
 día es el `.map` (¿está el símbolo?), que ahora queda en `F1`.
 
-#### ✅ `#502` — el AOT para el C3/C6 no se rechaza: el IDE compila el `.mdn` con la ABI del P4 (`ilp32f`) y el cargador del `.mod` no mira la ABI de coma flotante (abierta 12-sep, del verificador de `D1` · **CERRADA el mismo día a nivel de firmware por `#503`**: la guarda del `.mdn` en ESP32 exige `ilp32f`, así que el C3/C6 no cargan ninguno y sus `native` van interpretadas; el destino `ilp32` del IDE, a V7)
+#### ✅ `#502` — el AOT para el C3/C6 no se rechaza: el IDE compila el `.mdn` con la ABI del P4 (`ilp32f`) y el cargador del `.mod` no mira la ABI de coma flotante (abierta 12-sep, del verificador de `D1` · **CERRADA el 12-sep en el cargador, MEDIDA en el C6**; el destino `ilp32` del IDE, a V7)
+
+**Medido antes de creerlo** (12-sep, `F1`, C6 con la imagen de `dist`): un `Bench.mod` con el nativo del P4
+fundido dentro (N1.4, `ilp32f`) → **sin `EXITED` en 30 s y la placa reiniciada** (`uptime` a cero, `resetReason`
+desconocido). La guarda de `#503` en `repl_esp32.c` NO lo cubría: protege el camino de los `.mdn` sueltos y del
+pack, pero el bloque **embebido en el `.mod`** lo carga `loader.c` (común) por `mdn_load`, que sólo miraba la
+arquitectura — y C3, C6 y P4 son `MDN_ARCH_RISCV`. La primera versión de esta ficha (esta misma tarde) decía
+que «el C3/C6 no cargan ningún `.mdn`»: **falso**, y lo desmintió la placa en un minuto.
+
+**Arreglo** (`mdn_loader.c`, tras el gate de arquitectura): en un firmware RISC-V **sin FPU** (`__riscv` y ni
+`__riscv_float_abi_single` ni `_double`) todo `.mdn` RISC-V se rechaza con mensaje — *«este firmware es
+RISC-V ilp32 y el .mdn es del destino del P4 (ilp32f): se ignora y la función corre interpretada (#502)»* —
+porque por construcción no existe un `.mdn` que valga hasta que el compilador tenga el destino `ilp32`. Vale
+para los tres caminos (embebido, `.mdn` en el FS, `.mdn` del pack). **Medido después**: el mismo `Bench.mod` en
+el C6 → `fib(28)` interp 11 370 ms, «AOT» 11 370 ms, `EXITED OK`, y la línea del rechazo en el log. P4 intacto
+(`ilp32f`). Queda para V7: el destino `riscv32-esp-c` (`rv32imc`, `ilp32`) y la float-ABI en la cabecera del
+`.mdn`, como ya la llevan los packs.
+
 
 **Lo que decían cuatro documentos** (manual §8.3, referencia §16.4 y §17.4, `RELEASES` v6.0): *«en el C3/C6 la
 placa rechaza el blob del P4 por ABI de coma flotante, lo dice en el log y sigue interpretando»*. **Falso**, y

@@ -183,6 +183,24 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
         }
     }
 
+    /* #502 (12-sep, medido en el C6) — LA ARCH NO BASTA EN RISC-V: el C3 y el C6
+     * son RV32 con coma flotante por SOFTWARE (`ilp32`) y el unico destino RISC-V
+     * que emite el compilador es el del P4 (`ilp32f`, con FPU). La cabecera del
+     * .mdn no lleva la float-ABI (la del pack nativo si, y por eso los packs ya
+     * la comprobaban), asi que aqui pasaba por la arch: se cargaba el bloque
+     * embebido en el .mod y la placa se REINICIABA al ejecutarlo (Bench en el
+     * C6: sin EXITED, uptime a cero). Hasta que exista un destino `ilp32`, en un
+     * firmware RISC-V sin FPU ningun .mdn RISC-V vale por construccion: se
+     * rechaza con mensaje y la funcion sigue interpretada, que es correcto. */
+#if defined(__riscv) && !defined(__riscv_float_abi_single) && !defined(__riscv_float_abi_double)
+    if (h->arch == MDN_ARCH_RISCV) {
+        log_printf("MDN: RECHAZADO — este firmware es RISC-V ilp32 (sin FPU) y el "
+                   ".mdn es del destino del P4 (ilp32f): se ignora y la funcion "
+                   "corre interpretada (#502)");
+        return MDN_ERR_ARCH;
+    }
+#endif
+
     /* Layout sanity. */
     size_t hdr_total = sizeof(mdn_header_t)
                      + (size_t) h->sym_count * sizeof(mdn_symbol_t);

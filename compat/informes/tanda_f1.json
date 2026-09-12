@@ -6464,5 +6464,615 @@
     ]
    }
   ]
+ },
+ {
+  "fecha": "2026-09-12 18:52:16",
+  "lista": "bpgenvm-c\\tools\\tanda_prueba.json",
+  "n_listadas": 6,
+  "filtro": null,
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-09-12 12:04:08",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-09-12 12:04:44",
+   "sabor": "gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "MathRango",
+    "fuente": "samples/MathRango.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "MathRango"
+   },
+   {
+    "nombre": "ThrowSinAtrapar",
+    "fuente": "samples/ThrowSinAtrapar.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "ThrowSinAtrapar"
+   },
+   {
+    "nombre": "ThreadTrasMain",
+    "fuente": "samples/ThreadTrasMain.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "ThreadTrasMain"
+   },
+   {
+    "nombre": "MachineId",
+    "fuente": "samples/MachineId.bp",
+    "criterio": "no-peta",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "MachineId"
+   },
+   {
+    "nombre": "GuiWinJson",
+    "fuente": "samples/GuiWinJson.bp",
+    "criterio": "identico",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [
+     "samples/formdemo/resources/main.win"
+    ],
+    "artefactos": [],
+    "modulo": "GuiWinJson"
+   },
+   {
+    "nombre": "GuiShot",
+    "fuente": "samples/GuiShot.bp",
+    "criterio": "no-peta",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [],
+    "artefactos": [
+     "GuiShot.shot"
+    ],
+    "modulo": "GuiShot"
+   }
+  ],
+  "oraculos": {
+   "MathRango": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MathRango",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MathRango\\MathRango.mod",
+    "crc": 98623440,
+    "size": 2227,
+    "compilado": true,
+    "salida": "-- clamp(x, lo, hi) --\ndentro    5\npor abajo 0\npor arriba 10\nen el borde lo 0\nen el borde hi 10\nlo > hi   10\n-- wrap(x, lo, hi) --\n370 en [0,360) 10\n-10 en [0,360) 350\n  0 en [0,360) 0\n360 en [0,360) 0\n720 en [0,360) 0\n  7 en [-5,5)  -3\n -7 en [-5,5)  3\n-- hypot(x, y) --\n(3,4)     5\n(0,0)     0\n(-3,-4)   5\n(1,1)     1.414214\n(3e18,4e18) 5E18\n-- remap(x, inLo, inHi, outLo, outHi) --\n512 de [0,1023] a [0,100] 50.048878\n  0 de [0,1023] a [0,100] 0\n1023 de [0,1023] a [0,100] 100\ninvertido 100\nextrapola 200\nadc acotado 100\nFIN",
+    "rc": 0,
+    "ms": 8,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n-- clamp(x, lo, hi) --\r\ndentro    5\r\npor abajo 0\r\npor arriba 10\r\nen el borde lo 0\r\nen el borde hi 10\r\nlo > hi   10\r\n-- wrap(x, lo, hi) --\r\n370 en [0,360) 10\r\n-10 en [0,360) 350\r\n  0 en [0,360) 0\r\n360 en [0,360) 0\r\n720 en [0,360) 0\r\n  7 en [-5,5)  -3\r\n -7 en [-5,5)  3\r\n-- hypot(x, y) --\r\n(3,4)     5\r\n(0,0)     0\r\n(-3,-4)   5\r\n(1,1)     1.414214\r\n(3e18,4e18) 5E18\r\n-- remap(x, inLo, inHi, outLo, outHi) --\r\n512 de [0,1023] a [0,100] 50.048878\r\n  0 de [0,1023] a [0,100] 0\r\n1023 de [0,1023] a [0,100] 100\r\ninvertido 100\r\nextrapola 200\r\nadc acotado 100\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm] tabla de simbolos: 2 simbolos, 32 B de nombres, 1280 B en total\r\n[bpvm] OOM sin prefabricar: este modulo no exporta RuntimeError. No es un fallo; si de verdad falta memoria, se reportara sin excepcion.\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "ThrowSinAtrapar": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThrowSinAtrapar",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThrowSinAtrapar\\ThrowSinAtrapar.mod",
+    "crc": 1109549288,
+    "size": 1800,
+    "compilado": true,
+    "salida": "antes",
+    "rc": 1,
+    "ms": 8,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nantes\r\n=== FIN DE LA EJECUCION (status=RuntimeError BP no atrapado) ===\r\n",
+    "stderr_cola": " KB\r\n[bpvm] throw (interp): \"ALOAD: índice fuera de rango 99 (length=3)\"\r\n[bpvm] EXCEPCION NO ATRAPADA en el thread 0: el thread TERMINA aqui. Si esto sale dentro de un catch, el manejador se ha quedado sin memoria al construir su propio mensaje.\r\n[bpvm]   el mensaje que traia: \"ALOAD: índice fuera de rango 99 (length=3)\"\r\n[bpvm] throw (interp): construida pero SIN handler -> el RUN termina en error\r\n=== RuntimeError: excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3) ===\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "ThreadTrasMain": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThreadTrasMain",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThreadTrasMain\\ThreadTrasMain.mod",
+    "crc": 1362684472,
+    "size": 1054,
+    "compilado": true,
+    "salida": "1 main lanza el thread\n2 main termina (el thread aun no)\n3 el thread sigue vivo DESPUES de main",
+    "rc": 0,
+    "ms": 315,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n1 main lanza el thread\r\n2 main termina (el thread aun no)\r\n3 el thread sigue vivo DESPUES de main\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm] tabla de simbolos: 2 simbolos, 42 B de nombres, 1280 B en total\r\n[bpvm] OOM sin prefabricar: este modulo no exporta RuntimeError. No es un fallo; si de verdad falta memoria, se reportara sin excepcion.\r\n[bpvm] tabla de handles: 0 -> 765 slots (5 KB dentro del heap) OK — techo del heap 387096, libre 376 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "MachineId": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MachineId",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MachineId\\MachineId.mod",
+    "crc": 578366897,
+    "size": 1089,
+    "compilado": true,
+    "salida": "micro: host\nplaca: host\nobsoleta boardName() == getBoard(): true",
+    "rc": 0,
+    "ms": 7,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nmicro: host\r\nplaca: host\r\nobsoleta boardName() == getBoard(): true\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Machine' -> Machine.mod\r\n[bpvm] tabla de simbolos: 11 simbolos, 199 B de nombres, 1280 B en total\r\n[bpvm] OOM sin prefabricar: este modulo no exporta RuntimeError. No es un fallo; si de verdad falta memoria, se reportara sin excepcion.\r\n[bpvm] tabla de handles: 0 -> 763 slots (5 KB dentro del heap) OK — techo del heap 387112, libre 375 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "GuiWinJson": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 3269875194,
+    "size": 3627,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [480x320 align=0 +0,0]\n  panel [480x320 align=0 +0,0]\n    panel [480x320 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 31,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [480x320 align=0 +0,0]\r\n  panel [480x320 align=0 +0,0]\r\n    panel [480x320 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Gui' -> Gui.mod\r\n[bpvm-c] dep 'Json' -> Json.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm-c] dep 'Collections' -> Collections.mod\r\n[bpvm-c] dep 'Str' -> Str.mod\r\n[bpvm] tabla de simbolos: 1784 simbolos, 43703 B de nombres, 81920 B en total\r\n[bpvm] tabla de handles: 0 -> 681 slots (5 KB dentro del heap) OK — techo del heap 387768, libre 335 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "GuiShot": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+    "crc": 1640005542,
+    "size": 2545,
+    "compilado": true,
+    "salida": "captura: Gui.shot('GuiShot.shot'): sin pantalla\nscreen [480x320 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]",
+    "rc": 0,
+    "ms": 336,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\ncaptura: Gui.shot('GuiShot.shot'): sin pantalla\r\nscreen [480x320 align=0 +0,0]\r\n  panel [200x120 pos=20,40]\r\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\r\n  button [-1x-1 align=4 +0,60]\r\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\r\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\r\n  slider [-1x-1 align=8 +-10,-16 val=70]\r\n\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Gui' -> Gui.mod\r\n[bpvm-c] dep 'Json' -> Json.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm-c] dep 'Collections' -> Collections.mod\r\n[bpvm-c] dep 'Str' -> Str.mod\r\n[bpvm] tabla de simbolos: 1734 simbolos, 42149 B de nombres, 81920 B en total\r\n[bpvm] tabla de handles: 0 -> 682 slots (5 KB dentro del heap) OK — techo del heap 387760, libre 335 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "GuiWinJson@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 3269875194,
+    "size": 3627,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [240x240 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 41,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [240x240 align=0 +0,0]\r\n  panel [240x240 align=0 +0,0]\r\n    panel [240x240 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Gui' -> Gui.mod\r\n[bpvm-c] dep 'Json' -> Json.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm-c] dep 'Collections' -> Collections.mod\r\n[bpvm-c] dep 'Str' -> Str.mod\r\n[bpvm] tabla de simbolos: 1784 simbolos, 43703 B de nombres, 81920 B en total\r\n[bpvm] tabla de handles: 0 -> 681 slots (5 KB dentro del heap) OK — techo del heap 387768, libre 335 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "GuiShot@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+    "crc": 1640005542,
+    "size": 2545,
+    "compilado": true,
+    "salida": "captura: Gui.shot('GuiShot.shot'): sin pantalla\nscreen [240x240 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]",
+    "rc": 0,
+    "ms": 334,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\ncaptura: Gui.shot('GuiShot.shot'): sin pantalla\r\nscreen [240x240 align=0 +0,0]\r\n  panel [200x120 pos=20,40]\r\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\r\n  button [-1x-1 align=4 +0,60]\r\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\r\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\r\n  slider [-1x-1 align=8 +-10,-16 val=70]\r\n\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Gui' -> Gui.mod\r\n[bpvm-c] dep 'Json' -> Json.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm-c] dep 'Collections' -> Collections.mod\r\n[bpvm-c] dep 'Str' -> Str.mod\r\n[bpvm] tabla de simbolos: 1734 simbolos, 42149 B de nombres, 81920 B en total\r\n[bpvm] tabla de handles: 0 -> 682 slots (5 KB dentro del heap) OK — techo del heap 387760, libre 335 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "esp32c6",
+     "uniqueId": "58E6C5FFFEF9",
+     "serverName": "bpvm-esp32c6",
+     "serverBuild": "Sep 12 2026 18:28:34",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL"
+     ],
+     "arch": 243,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "unknown",
+     "uptimeMs": 7972,
+     "fsUsedBytes": 323584,
+     "fsTotalBytes": 1261568,
+     "vmHeapBytes": 65536,
+     "uptime_ultimo": 21235,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM3",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "58E6C5FFFEF9",
+      "boardName": "esp32c6",
+      "arch": 243,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 7972,
+      "resetReason": "unknown",
+      "tempMilliC": 0,
+      "gpioCount": 31,
+      "pioCount": 0,
+      "pwmSlices": 6,
+      "adcChannels": 7,
+      "flashBytes": 4194304,
+      "sramBytes": 524288,
+      "psramBytes": 0,
+      "vmHeapBytes": 65536,
+      "vmStackBytes": 65536,
+      "fsTotalBytes": 1261568,
+      "fsUsedBytes": 323584,
+      "screenW": 240,
+      "screenH": 240
+     }
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 240x240"
+    ],
+    "resultados": [
+     {
+      "prueba": "MathRango",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 0,
+      "ms_host": 8,
+      "exited": {
+       "type": "EXITED",
+       "session": 1,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 0
+      },
+      "salida_placa": "-- clamp(x, lo, hi) --\ndentro    5\npor abajo 0\npor arriba 10\nen el borde lo 0\nen el borde hi 10\nlo > hi   10\n-- wrap(x, lo, hi) --\n370 en [0,360) 10\n-10 en [0,360) 350\n  0 en [0,360) 0\n360 en [0,360) 0\n720 en [0,360) 0\n  7 en [-5,5)  -3\n -7 en [-5,5)  3\n-- hypot(x, y) --\n(3,4)     5\n(0,0)     0\n(-3,-4)   5\n(1,1)     1.414214\n(3e18,4e18) 5E18\n-- remap(x, inLo, inHi, outLo, outHi) --\n512 de [0,1023] a [0,100] 50.048878\n  0 de [0,1023] a [0,100] 0\n1023 de [0,1023] a [0,100] 100\ninvertido 100\nextrapola 200\nadc acotado 100\nFIN\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 9644,
+       "fsUsedBytes": 323584,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 416,
+      "session": 1
+     },
+     {
+      "prueba": "ThrowSinAtrapar",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3)); host rc=1",
+      "ms_placa": 0,
+      "ms_host": 8,
+      "exited": {
+       "type": "EXITED",
+       "session": 2,
+       "status": "RUNTIME_ERROR",
+       "exitCode": 1,
+       "elapsedMs": 0,
+       "errorMessage": "excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3)"
+      },
+      "salida_placa": "antes\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 10695,
+       "fsUsedBytes": 323584,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 415,
+      "session": 2
+     },
+     {
+      "prueba": "ThreadTrasMain",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 310,
+      "ms_host": 315,
+      "exited": {
+       "type": "EXITED",
+       "session": 3,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 310
+      },
+      "salida_placa": "1 main lanza el thread\n2 main termina (el thread aun no)\n3 el thread sigue vivo DESPUES de main\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 11744,
+       "fsUsedBytes": 323584,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 416,
+      "session": 3
+     },
+     {
+      "prueba": "MachineId",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 0,
+      "ms_host": 7,
+      "exited": {
+       "type": "EXITED",
+       "session": 4,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 0
+      },
+      "salida_placa": "micro: esp32c6\nplaca: generic\nobsoleta boardName() == getBoard(): true\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 13227,
+       "fsUsedBytes": 323584,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 417,
+      "session": 4
+     },
+     {
+      "prueba": "GuiWinJson",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 560,
+      "ms_host": 41,
+      "exited": {
+       "type": "EXITED",
+       "session": 5,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 560
+      },
+      "salida_placa": "J1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [240x240 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 17102,
+       "fsUsedBytes": 323584,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 1649,
+      "session": 5
+     },
+     {
+      "prueba": "GuiShot",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 420,
+      "ms_host": 334,
+      "exited": {
+       "type": "EXITED",
+       "session": 6,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 420
+      },
+      "salida_placa": "captura escrita\nscreen [240x240 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]\n\n",
+      "diff": null,
+      "artefactos": [
+       {
+        "nombre": "GuiShot.shot",
+        "ok": true,
+        "detalle": "GET /app/GuiShot.shot: NOT_FOUND no existe; ok (3038 B)",
+        "local": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\esp32c6_58E6C5FFFEF9\\GuiShot.shot",
+        "png": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\esp32c6_58E6C5FFFEF9\\GuiShot.png",
+        "previo": "existia: /GuiShot.shot (borrado)",
+        "dudoso": null,
+        "remoto": "/GuiShot.shot",
+        "size": 3038,
+        "crc": "7459129a"
+       }
+      ],
+      "necesita_ojos": [
+       "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\esp32c6_58E6C5FFFEF9\\GuiShot.png"
+      ],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {
+       "GuiShot.shot": {
+        "existia": [
+         "/GuiShot.shot (borrado)"
+        ],
+        "dudoso": null
+       }
+      },
+      "info_tras": {
+       "uptimeMs": 21235,
+       "fsUsedBytes": 323584,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 1650,
+      "session": 6
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/MathRango.mod",
+      "local": "bpgenvm-c\\build\\tanda\\MathRango\\MathRango.mod",
+      "size": 2227,
+      "crc": "05e0dfd0",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/ThrowSinAtrapar.mod",
+      "local": "bpgenvm-c\\build\\tanda\\ThrowSinAtrapar\\ThrowSinAtrapar.mod",
+      "size": 1800,
+      "crc": "422260e8",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/ThreadTrasMain.mod",
+      "local": "bpgenvm-c\\build\\tanda\\ThreadTrasMain\\ThreadTrasMain.mod",
+      "size": 1054,
+      "crc": "5138ea38",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/MachineId.mod",
+      "local": "bpgenvm-c\\build\\tanda\\MachineId\\MachineId.mod",
+      "size": 1089,
+      "crc": "22792db1",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/main.win",
+      "local": "samples\\formdemo\\resources\\main.win",
+      "size": 390,
+      "crc": "548edd67",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiWinJson.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+      "size": 3627,
+      "crc": "c2e655fa",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiShot.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+      "size": 2545,
+      "crc": "61c07fa6",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Gui: ya en /lib/Gui.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Json: ya en /lib/Json.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Collections: ya en /lib/Collections.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Str: ya en /lib/Str.mod (crc igual; resuelto por nombre, como el RUN)"
+    ],
+    "inventario_detalle": "34 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "inventario": [
+     "/app/AllocBench.mod",
+     "/app/Bench.mod",
+     "/app/EvLat2.mod",
+     "/app/EvLatPlaca.mod",
+     "/app/GuiColorDemo.mod",
+     "/app/GuiRotCycle.mod",
+     "/app/GuiShot.mod",
+     "/app/GuiWinJson.mod",
+     "/app/MachineId.mod",
+     "/app/MathRango.mod",
+     "/app/P.mod",
+     "/app/PrintBench.mod",
+     "/app/ThreadTrasMain.mod",
+     "/app/ThrowSinAtrapar.mod",
+     "/app/main.win",
+     "/lib/Adc.mod",
+     "/lib/Collections.mod",
+     "/lib/Core.mod",
+     "/lib/Gpio.mod",
+     "/lib/Gui.mod",
+     "/lib/I2c.mod",
+     "/lib/IO.mod",
+     "/lib/Json.mod",
+     "/lib/Machine.mod",
+     "/lib/Math.mod",
+     "/lib/Pico.mod",
+     "/lib/Pulse.mod",
+     "/lib/Pwm.mod",
+     "/lib/Rtc.mod",
+     "/lib/Spi.mod",
+     "/lib/Str.mod",
+     "/lib/Timer.mod",
+     "/lib/Uart.mod",
+     "/lib/Wdt.mod"
+    ]
+   }
+  ]
  }
 ]
