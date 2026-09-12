@@ -309,6 +309,11 @@ su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
   tapa a `/lib` (`#493`)— se carga sin aviso. Mientras llega la norma: no dejes módulos
   de stdlib en `/app` ni packs con stdlib dentro en la placa; el log del RUN dice de
   dónde carga cada dependencia (`dep 'Str' -> /app/Str.mod`).
+- **Una `native` larga no se puede parar**: la VM atiende el Stop (`KILL`) entre dos
+  instrucciones del intérprete, y mientras corre código nativo no hay dónde mirarlo. Una
+  `native` que tarde segundos deja el Stop esperando hasta que vuelva (`#379`: medido en el
+  P4 con tarjeta, 8 de 8 Stop limpios con código interpretado). Si necesitas parar un cálculo
+  largo, hazlo interpretado o pártelo en llamadas cortas.
 - **En el ESP32-S3 todo se ejecuta interpretado** (`#488`, fuera del plan). El AOT
   genera ARM Thumb-2 y RISC-V; **no genera Xtensa**, y de momento no se va a hacer. Las
   `native function` compilan y corren, pero a la velocidad del intérprete. **El ESP32-C3

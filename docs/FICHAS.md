@@ -11483,7 +11483,15 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   ⏭️ Sospechoso natural para empezar: qué toca un cambio de tamaño de partición que un
   formateo NO toca. Ahí está la diferencia entre lo que curó y lo que no.
 
-- 🧪 `#379` — el wire se **desincroniza tras el Stop**, y sólo en unas placas.
+- ✅ `#379` — el wire se **desincroniza tras el Stop**, y sólo en unas placas. **CERRADA el
+  12-sep en `F1`, absorbida por `#398`**: la medida que faltaba desde agosto, hecha — el P4
+  (Waveshare, `E8F60AE0B380`) **con la tarjeta montada** (`sd: montada en /sd (4 bits)`),
+  `python tools/wire_serie.py COM15 ciclo /app/Bench.mod 8` → **8 ciclos, 0 fallos**: KILL
+  222-234 ms, INFO 283-297 ms, uptimes 61285→70611 (ocho de verdad). Con la imagen de `dist`
+  de V6 (`#503` dentro). El cuelgue del 17-ago era el refresco del árbol con tarjeta (`#398`),
+  no el wire. Lo que sigue siendo cierto y queda dicho en `PENDIENTES`: la VM sólo mira el
+  Stop entre instrucciones del intérprete, así que una `native` que corra segundos no se
+  puede parar hasta que vuelva.
   **→ ASIGNADA A `F1` (pruebas finales) el 9-sep, decisión de Eduardo**: *«la podemos dejar
   pendiente para las pruebas finales»*. Deja de contar como pendiente suelto — no porque se
   aplace, sino porque **lo único que le queda ES una prueba de placa**, y `F1` es la tanda
