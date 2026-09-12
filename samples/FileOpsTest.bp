@@ -17,6 +17,7 @@
 // los directorios— funciona igual que en el PC.
 
 module FileOpsTest
+  import Core
   import IO
 
   function Main()

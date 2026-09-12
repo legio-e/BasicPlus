@@ -2304,6 +2304,39 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
+
+*«Apunta para V7. `Core.bp` nos sigue dando guerra. Aquí hay que refinar la norma: si tenemos un módulo principal
+compilado a una versión V, dependencias de una versión < V no nos deberían valer. Así que si `Core` está en un pack
+y nuestra aplicación es más moderna, el `Core` del pack no debería servir. Esto es así desde hace mucho tiempo,
+pero en la práctica no siempre se cumple.»*
+
+**Lo que hay hoy, y por qué no basta**: el gate de `#284` rechaza un `.mod` de **formato** incompatible (MOD6 frente
+a MOD7) y el enlazador grita ante un **slot** que no cuadra (`Clase#método#slot`, `#324`). Ninguno de los dos mira
+la **versión** de la stdlib con la que se compiló la app: un `Core` del mismo formato pero más viejo, con los mismos
+slots que la app usa, pasa en silencio — y si además vive en un pack, el resolutor lo prefiere al de `/lib`
+disfrazado de `/app` (`#493`, medido en el P4 el 11-sep con `Gui`; y `#496`: el pack de SQLite lleva un `Core`
+dentro). **Lo que hace falta**: que el `.mod` de la app lleve la versión de cada dependencia contra la que se
+compiló, y que el cargador **rechace** (no avise) una dependencia más antigua, venga de donde venga. Junto con
+`#493` (que un pack de librería no empaquete stdlib, o que no tape a `/lib`) es la misma conversación.
+
+#### ✅ `#499` — una ruta de 128 a 255 caracteres moría con «IO error» sin decir por qué (abierta y CERRADA el 12-sep, del inventario de `D1`)
+
+`bpvm_entry_t.resolved` medía **128** cuando la fachada y `#456` admiten **256** (`BPVM_FS_PATH_MAX`): la ruta se
+truncaba al resolver y la carga decía `load_mod …: IO error`. Reproducido en el host con una ruta de 133 caracteres
+(dos directorios de 60 `d`): antes «IO error», después `status=OK`. Arreglo: 256. La estructura vive en la pila del
+que carga (repl de cada familia): 128 B más; compilado en las cinco imágenes.
+
+#### ✅ `#498` — SEIS samples no compilaban por falta de `import Core`, y el diagnóstico mandaba a buscar una clase que existe (abierta y CERRADA el 12-sep, del inventario de `D1`)
+
+El barrido de los 326 `samples/*.bp` con el compilador congelado: **312 OK, 6 rotos** por `#458` — `FileOpsTest`,
+`FsOpsTest` (`Exception`), `MapTest`, `SyncListDiag`, `n5_popblocking`, `ownerlistremove` (usan `Collections` sin
+`Core`). Arreglados con sus imports; paridad comprobada en dos. **Y el diagnóstico era el bug de verdad**: `[0:0]
+error semántico: clase base 'Core.List' no existe` — una clase que existe de sobra, en línea 0. Ahora dice **«la
+clase 'SyncList' extiende 'Core.List' y este módulo no importa 'Core': añade `import Core` (los imports no son
+transitivos)»**. Es la regla de `#492` dicha donde hace falta. ⏭️ Para `F1`: el barrido completo de `samples/`
+entra en el checklist de `PUBLICAR.md` (V5 midió 70; hay 326).
+
 #### ✅ `#497` — `README.es.md` estaba DESTRUIDO desde el 22-ago, y así se publicó en v5.0 (abierta y CERRADA el 12-sep, de `D1`)
 
 **Qué era.** El commit `ff408a1e` («las CUATRO portadas anuncian V5») dejó `README.es.md` con **7,8 MB: el
@@ -5012,6 +5045,56 @@ estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
 </details>
 
 
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V6 (abierto 12-sep · **EN CURSO**)
+
+**Cómo se planificó**: no leyendo los documentos sino **midiéndolos**. Cuatro lectores en paralelo (qué cambió en
+V6 de cara al usuario; qué afirma cada documento de usuario; las deudas marcadas «esto es de `D1`» en las fichas; y
+**los 111 fragmentos de código de los documentos, compilados y ejecutados**) y un crítico que zanjó las
+contradicciones ejecutando. Como en V5 (`H12`), documentar destapó bugs: `#496` (SQLite/Orm no compilaban),
+`#497` (`README.es.md` destruido y publicado así), `#498` (seis samples y un diagnóstico que engañaba), `#499`
+(rutas > 127). Y salió la introducción de Eduardo para las notas de versión (la de la portada, ya en los README).
+
+**Lo falso que hay publicado hoy** (lo grave; el detalle por documento está en el inventario, y cada corrección se
+hace con el fragmento compilado): «el `import Core` es implícito» (manual, referencia, EN); el `do … while` del
+manual no existe (es `do … loop [cond]`); `step -1` no compila («for step sólo soporta literal int» — a decidir si
+es bug o límite documentado); `Str.parseInt` devuelve `(err, valor)`, no `(ok, v)`; `SyncList.get` y `Map.get`
+necesitan cast; `Collections.Integer` no existe (es `Core.Integer`); la cheatsheet enseña cinco construcciones que
+no existen (`var n := 5`, `const … =`, parámetro por defecto sin tipo, `RangeError`, `if … then return` en una
+línea con `else`); `gui.html` no tiene ni un commit en V6 (`kb.attach`, `addTab` como `Component`, `parent:
+Component`, sólo `Gui.run()`); la referencia dice que `Wdt.disable()` «se simula» en RP2350; `input()`/`listDir`
+en placa **sí** se alcanzan y lanzan «builtin N no soportado» (PENDIENTES dice «no hace nada»); `getMicro()`
+devuelve `rp2350a`/`rp2350b` (no `rp2350`) y el comentario de `Machine.bp` omite `esp32c6`; la tabla del ENV de la
+guía del IDE lista cuatro claves que **nadie lee** (`board`, `psramCsPin`, `flashSizeBytes`, `gpioCount`) y le
+falta `quantum`; `/sys/board.json` **sigue vivo en RP2350** para identidad y pines (la memoria del proyecto decía
+lo contrario: la regla es en dos mitades — identidad y pines → `board.json`; PSRAM y panel → ENV); C3 y C6 no
+aparecen en ningún documento de usuario; `OPCODES.md` documenta 117 de 175 opcodes; `bp-desde-dentro.html` tiene
+siete frases de V3.
+
+**El plan, en orden (del que induce a error al cosmético):**
+0. ✅ Las fichas que el freeze admite: `#496`, `#497`, `#498`, `#499` (hechas el 12-sep).
+1. ✅ Las dos portadas (`README.md` / `README.es.md`) a V6 — falta la **tabla de plataformas** con C3/C6 y la regla
+   en dos mitades de `board.json`/ENV.
+2. Lo **falso** en `manual.html` y `referencia.html` (ES y EN a la vez, cada fragmento compilado).
+3. `gui.html` (ES y EN): todos los fragmentos compilados; `Container`, `parent: Container`, `Button(parent, text :=
+   "")`, `addTab → TabPage`, `setTextarea`, `start/stop/join`, `shot`, `toJson`, «el screen mide lo que mide el
+   panel», `delete()` en cascada e idempotente.
+4. `PENDIENTES.md`: el ejemplo de L16 que no compila, la regla transitiva de `#492`, `input()`/`listDir`, lo
+   aplazado a V7 que el usuario debe saber (`#490`, `#491`, `#495`, `#500`).
+5. `QUICKSTART.md` + `INSTALAR_FIRMWARE.md` (ES y EN): C3 y C6 (`esptool --chip`, un solo USB, BOOT+RESET), DK2,
+   «siete imágenes», Metro (`board.json` sólo identidad; PSRAM por ENV).
+6. `guia-ide.html` (ES y EN): la tabla del ENV con las **nueve claves reales** y su familia; `run <fichero> <arg>`,
+   `help error`, la tabla de códigos de salida (0/1/2/3/4/130/131).
+7. `RELEASES.md` **v6.0**: la introducción de Eduardo + lo nuevo por secciones + «qué implica al actualizar desde
+   V5» (`import Core` obligatorio, `Keyboard.setTextarea`, `parent: Container`, el screen del panel, códigos de
+   salida) + «lo que todavía no» revisado (los packs **sí** en S3 y C6 ahora).
+8. Portal y satélites: `index.html` (ES/EN), `cheatsheet.html`, `basedatos.html`.
+9. `bp-desde-dentro.html`: pasada de vigencia sobre las siete frases.
+10. Internos enlazados desde el portal: `BUILTINS.md`, `OPCODES.md`/`opcodes.html` (completar o desenlazar),
+    `SHOT_FORMAT.md` (ruta de `shot2png.py`).
+11. **La herramienta, no el artefacto** — al checklist de `PUBLICAR.md`: barrido de compilación de **todos** los
+    `samples/*.bp`, extractor de fragmentos `<pre>` de los `.html` al compilador, guarda de las cuatro portadas
+    (tamaño y encabezados), y en `F1`: `dist/firmware` con siete imágenes.
+
 #### 🧊 CODE FREEZE V6 — antes de `D1` (decidido por Eduardo, 11-sep)
 
 *«Antes de empezar `D1` marcamos congelación de código, para prevenir que se intente implementar
@@ -5214,7 +5297,7 @@ tocar y cómo se comprueba.
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ✅ **11-sep** (`7be021bc`, `843e2d0a`): `tools/tanda.py` + la **prueba de fuego** en Pico, C6, P4, DK2 (y la Metro, cazada con firmware viejo). Fase 2 dada por hecha por Eduardo: *«con las 2 capturas se puede verificar perfectamente»*. Lo visto, a V7 y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
-| **D1** | **la DOCUMENTACIÓN** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). Penúltimo: se documenta cuando ya no se mueve nada |
+| **D1** | **la DOCUMENTACIÓN** de V6 | 🟡 **EN CURSO desde el 12-sep** (tras el freeze). Plan en doce pasos, medido por un inventario de cuatro lectores (ver sección `D1`); hechos: pasos 0 y 1 |
 | **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
 
 📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:

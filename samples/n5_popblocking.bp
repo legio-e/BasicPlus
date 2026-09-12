@@ -11,6 +11,8 @@
 // Ejecuta y verifica que el consumer recibe los 8 items que el
 // productor mete con 20ms de espera entre cada uno.
 module N5PopBlocking
+  import Core
+  import Collections
 
   public class Item
     public property n: integer

@@ -1,4 +1,6 @@
 module OwnerListRemove
+  import Core
+  import Collections
 
   class Recurso
     public property nombre: string

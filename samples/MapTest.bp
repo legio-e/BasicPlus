@@ -1,4 +1,5 @@
 module MapTest
+  import Core
   import Collections
 
   function Main()

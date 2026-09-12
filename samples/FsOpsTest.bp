@@ -19,6 +19,7 @@
 // Se limpia al empezar y al terminar, así que se puede correr las veces que haga
 // falta. Deja el árbol como estaba.
 module FsOpsTest
+  import Core
   import IO
 
   var fallos: integer

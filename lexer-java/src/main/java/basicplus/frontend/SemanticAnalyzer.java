@@ -1119,7 +1119,21 @@ public final class SemanticAnalyzer {
                     if (base != null) {
                         cls.baseClass = base;
                     } else {
-                        err(cls.line, cls.column, "clase base '" + cls.baseClassName + "' no existe");
+                        // V6/#498 — el caso que de verdad se da: la clase viene de un modulo
+                        // IMPORTADO (Collections) y su base es de OTRO que este modulo NO
+                        // importa (Core.List) — los imports no son transitivos (#492). El
+                        // mensaje generico salia en [0:0] («clase base 'Core.List' no
+                        // existe») y mandaba a buscar una clase que existe de sobra. Ahora
+                        // dice lo que falta y donde ponerlo.
+                        int dot = cls.baseClassName.indexOf('.');
+                        String alias = (dot > 0) ? cls.baseClassName.substring(0, dot) : null;
+                        if (alias != null && !(module.members.resolve(alias) instanceof Symbol.ImportedNamespaceSymbol)) {
+                            err(cls.line, cls.column, "la clase '" + cls.name + "' extiende '" + cls.baseClassName
+                                + "' y este modulo no importa '" + alias + "': anade `import " + alias
+                                + "` (los imports no son transitivos)");
+                        } else {
+                            err(cls.line, cls.column, "clase base '" + cls.baseClassName + "' no existe");
+                        }
                     }
                 }
             }

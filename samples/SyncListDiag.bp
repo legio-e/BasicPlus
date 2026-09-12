@@ -1,4 +1,6 @@
 module SyncListDiag
+  import Core
+  import Collections
 
   // Copia de synclisttest.bp CON PRINTS DE PROGRESO. No prueba nada nuevo:
   // sirve para ver HASTA DONDE llega antes del "No space in heap" en la Pico 2,

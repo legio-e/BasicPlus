@@ -50,7 +50,11 @@ typedef struct {
     /* Ruta REAL de la que salió el entry, ya resuelta (diagnóstico: "no aparece
      * por ningún lado" y "salió de /lib, no del que acabas de subir" son dos
      * ratos de búsqueda distintos). */
-    char resolved[128];
+    /* V6/#499 — 256 (= BPVM_FS_PATH_MAX), no 128: con 128, una ruta de 128
+     * a 255 caracteres —que la fachada y #456 admiten— no cabia en `resolved`,
+     * bpvm_entry_resolve la truncaba y la carga moria con «IO error» sin decir
+     * por que. La estructura vive en la pila del que carga: 128 B mas. */
+    char resolved[256];
     /* Nombre del módulo principal. Con un .pack lo dice su manifest; con un
      * .mod es el nombre del propio módulo. */
     char main_module[BPVM_PACK_NAME_LEN + 1];
