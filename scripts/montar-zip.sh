@@ -296,6 +296,18 @@ while IFS= read -r m; do
     [ "$(head -c4 "$m")" = "$MOD_ACTUAL" ] || MALOS="$MALOS
   $(printf '%-6s %s' "$(head -c4 "$m")" "${m#$OUT/}")"
 done < <(find "$OUT" -name '*.mod')
+# Y DENTRO de los packs (12-sep): packs/Stdlib.pack llevaba 27 .mod MOD6 del
+# 20-ago —la stdlib de V5— y viajó en el ZIP montado esa tarde sin que esta guarda
+# lo viera, porque un pack es un solo fichero. Un pack se graba en la zona de packs
+# y en el P4 ESA zona gana a /lib (#493): un Stdlib.pack rancio tapa la stdlib del
+# firmware a todos los programas. Se busca el magic antiguo dentro de cada .pack.
+for pk in "$OUT"/packs/*.pack; do
+    [ -f "$pk" ] || continue
+    if grep -c -a "MOD6" "$pk" >/dev/null 2>&1 && [ "$(grep -a -o "MOD6" "$pk" | wc -l)" -gt 0 ]; then
+        MALOS="$MALOS
+  $(printf '%-6s %s  (lleva %s modulos MOD6 dentro)' "PACK" "${pk#$OUT/}" "$(grep -a -o 'MOD6' "$pk" | wc -l)")"
+    fi
+done
 if [ -n "$MALOS" ]; then
     echo "  .mod CADUCADOS en el paquete (se esperaba $MOD_ACTUAL):$MALOS"
     echo "  Un .mod que la VM rechaza no se publica. Regenéralo o quítalo."

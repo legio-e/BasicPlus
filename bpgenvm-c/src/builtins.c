@@ -1122,7 +1122,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * comia el bombeo, a nivel de SO, congelando a todos los hilos BP. */
         if (vm->kill_requested) { push_i32(vm, tc, -1); return BPVM_OK; }
 #ifdef BPVM_LVGL
-        if (!bpvm_gui_lvgl_window_open()) { push_i32(vm, tc, -1); return BPVM_OK; }
+        if (!bpvm_gui_lvgl_window_open()) {
+            /* SIN VENTANA (--no-screen con LVGL, o la cerro el usuario): la salida
+             * es la MISMA regla que el headless sin LVGL de abajo, no un -1 a
+             * secas. Un `raise` desde el handler de un clic ENCOLA, y el scheduler
+             * solo inyecta el frame del handler entre quanta: salir aqui con
+             * ev_count > 0 dejaba el evento anidado sin drenar — lo cazo Eduardo
+             * el 12-sep en el micro simulado del IDE (--no-screen) con
+             * samples/GuiEvSpike.bp: «1 evento(s) sin atender», y el «3 handler»
+             * no salia. Con ventana (o panel) no pasaba porque el lazo sigue
+             * girando; sin ella, el lazo se iba a la primera vuelta. */
+            push_i32(vm, tc, (drained > 0 || vm->ev_count > 0) ? 0 : -1);
+            return BPVM_OK;
+        }
         push_i32(vm, tc, (int32_t) bpvm_gui_lvgl_pump());   /* ventana viva: el ocio que pide LVGL */
 #else
         /* Headless: "queda trabajo" = clics drenados en ESTA pasada O eventos BP

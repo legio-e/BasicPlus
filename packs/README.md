@@ -6,7 +6,7 @@ placa (o en el micro simulado) desde el panel de Packs.
 
 | Pack | Qué trae | Se construye con |
 |---|---|---|
-| `Stdlib.pack` | La librería estándar completa (27 módulos: Str, Collections, Json, IO, Math, Gui, Net, y los de hardware) | `bpstdlib/Stdlib.bpbuild` |
+| `Stdlib.pack` | La librería estándar completa (28 módulos en V6: Core, Str, Collections, Json, IO, Math, Gui, Net, App, Packs, Machine y los de hardware) — los MISMOS `.mod` que lleva el firmware en `/lib`, byte a byte; se reconstruye con cada versión (el del 20-ago era MOD6 y tapaba al `/lib` fresco del P4, `#493`) | `bpstdlib/Stdlib.bpbuild` |
 | `SQLite.pack` | El motor SQLite y su ORM: los módulos `SQLite` y `Orm`, más el código nativo precompilado (`.npk` + `.mdn`) para **ARM y RISC-V** | `bpstdlib/sqlite/SQLite.bpbuild` |
 
 ## Cómo se reconstruye

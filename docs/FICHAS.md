@@ -2304,6 +2304,24 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### ✅ `#505` — el micro simulado SIN pantalla (`--no-screen`, con LVGL) dejaba sin drenar el evento que un handler levanta: `GuiEvSpike` sin su «3 handler» (abierta y CERRADA el 12-sep; la cazó Eduardo probando el ZIP)
+
+**Reproducción**: `bpvm-sim.exe --no-screen` del ZIP + `samples/GuiEvSpike.bp` → «1 antes del clic», «2 dentro del
+upcall», **«4 tras run()»** y `[bpvm] fin de ejecución con 1 evento(s) sin atender`; en miVM y en el host sin LVGL
+sale «3 handler» entre medias. **Qué era**: `BUILTIN_GUI_RUN_ONCE` (`builtins.c`), rama `BPVM_LVGL`: si no hay
+ventana (`bpvm_gui_lvgl_window_open()` falso — que es el caso de `--no-screen`, donde el display headless nace
+«cerrado», y el de la ventana cerrada por el usuario) devolvía **-1 a secas**, y el lazo de `Gui.run()` salía a
+la primera vuelta con el `raise` del handler todavía en la cola (`vm->ev_count > 0`): el scheduler sólo inyecta
+el frame entre quanta y el lazo ya no daba ninguna. La rama sin LVGL tenía la regla buena desde `#324`
+(«queda trabajo = clics drenados o eventos encolados») y en placa no se veía porque el panel siempre está
+«abierto». **Arreglo**: sin ventana, la MISMA regla que el headless — `0` mientras haya clics drenados o
+eventos encolados, `-1` si no. Medido: el ZIP anterior falla, el nuevo imprime las cuatro líneas y `EXITED OK`.
+
+**Y de paso, otra cosa del ZIP**: `packs/Stdlib.pack` era el del **20-ago, 27 módulos MOD6** (la stdlib de V5,
+la misma que tapó al `/lib` fresco del P4 en `#493`) y viajaba en el ZIP porque la guarda del empaquetador
+mira `.mod` sueltos, no dentro de un pack. Reconstruido (`bpstdlib/Stdlib.bpbuild`: 28 MOD7, byte-idénticos a
+los canónicos) y guarda nueva en `montar-zip.sh`: ningún `MOD6` dentro de un `.pack`.
+
 #### ✅ `#504` — el PUENTE `.mdn` del pack de SQLite era de ABI 4 y la VM habla ABI 6: SQLite ROTA en todas las placas desde el 23-ago (abierta y CERRADA el 12-sep, de `F1`)
 
 **La conclusión del 25-ago era MEDIA VERDAD.** `a730aec6` dijo *«regenerar SQLite no existía: el `.npk`
