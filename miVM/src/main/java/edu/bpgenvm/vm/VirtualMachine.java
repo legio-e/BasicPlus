@@ -3952,10 +3952,17 @@ public class VirtualMachine {
             tc.ehSavedCs       = ehSavedCs;
             tc.ehExpectedClass = ehExpectedClass;
         }
-        if (tc.yieldRequested) {
-            tc.yieldRequested = false;
-            return ExitSignal.YIELD;
-        }
+        // V6/#501 — el yield NO pisa una salida TERMINAL. El timer preemptivo marca
+        // yieldRequested en cualquier tc RUNNING, tambien mientras se ejecuta el
+        // HALT (o el RET final de un worker). Aqui se devolvia YIELD si la marca
+        // estaba puesta, aunque el bucle hubiera salido por HALT: el WorkerLoop
+        // re-encolaba al thread ya acabado y lo reanudaba en el pc siguiente al
+        // HALT — la funcion de al lado en el codigo (__objCompareError), de ahi el
+        // «compareTo() no implementado» probabilistico al final de un programa
+        // cuya ultima accion era un sleep (el wait() del worker y el tick del timer
+        // despiertan en el mismo tick de 15,6 ms de Windows). Medido: 3-5 de cada
+        // 20 ejecuciones. La marca se limpia siempre; la senal manda.
+        tc.yieldRequested = false;
         return exitSignal;
     }
 

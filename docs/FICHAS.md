@@ -2304,6 +2304,29 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+#### ✅ `#501` — miVM: un programa cuya ÚLTIMA acción era un `sleep` moría 1 de cada 5 veces con «compareTo() no implementado» (abierta y CERRADA el 12-sep, del inventario de `D1`)
+
+**Qué era.** Lo destapó el editor de la referencia al **ejecutar** un fragmento del documento (`print` +
+`sleep(20)` en bucle): `rc=1` y `compareTo() no implementado: la clase no sobrescribe Object.compareTo` en
+3-5 de cada 20 ejecuciones, **después** de imprimir todo. Sólo miVM. Acotado cambiando una cosa cada vez: falla
+si el `sleep` es lo último que hace `main` (`sleep(20)`, `sleep(1)`, `sleep(100)`: 5-10 %); con cualquier
+sentencia después del `sleep`, 0/30. `--trace` lo hacía desaparecer (Heisenbug).
+
+**La causa, en el epílogo de `runOnContext`**: el timer preemptivo (cada 10 ms) marca `yieldRequested` en
+cualquier tc RUNNING — también mientras se ejecuta el **`HALT`**. El epílogo devolvía `YIELD` si la marca estaba
+puesta **aunque el bucle hubiera salido por `HALT`**; el `WorkerLoop` re-encolaba al thread ya terminado y lo
+reanudaba en el pc siguiente al `HALT`: la función de al lado en el código, `__objCompareError`, que lanza ese
+mensaje. Por qué justo tras un `sleep`: el `vmLock.wait(delta)` del worker y el tick del timer despiertan **en el
+mismo tick de 15,6 ms de Windows**, así que la marca cae dentro de las cinco instrucciones que quedaban; con una
+sentencia detrás del `sleep` la marca cae en medio (yield inofensivo) y el `HALT` llega limpio.
+
+**Arreglo.** La señal manda: la marca se limpia siempre al salir y se devuelve `HALT`/`THREAD_EXIT`/`YIELD` según
+por qué salió el bucle. Medido: 0/120 después (antes ~5-25 %). 59 PASS. La VM-C no lo tenía: su planificador no
+tiene ese epílogo.
+
+📌 **Es el patrón de `#494`**: el instrumento que lo caza (ejecutar los ejemplos de la documentación) no existía
+como paso; ahora `tools/doc_frags.py` lo hace y va en el checklist de publicar.
+
 #### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
 
 *«Apunta para V7. `Core.bp` nos sigue dando guerra. Aquí hay que refinar la norma: si tenemos un módulo principal
