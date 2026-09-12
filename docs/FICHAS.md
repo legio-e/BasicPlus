@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **2** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6** (se marca al arrancar el 12-sep) → `D1` (documentación) → `F1` (pruebas finales) |
+> | **hitos** | **2** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6 — EN VIGOR desde el 12-sep** (sólo bugs, con ficha y reproducción) → `D1` (documentación, **en curso**) → `F1` (pruebas finales) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -4996,8 +4996,18 @@ mismo que las dos anteriores: a partir de la congelación **no se pregunta «¿m
 - Después de la raya sólo entran **arreglos de bugs**, cada uno con su ficha y su reproducción.
 - `D1` documenta **lo que hay**, no lo que se quiere; y `F1` prueba **lo congelado**.
 
-⏭️ Cuando llegue, se abre como entrada propia aquí y en `ESTADO.md`, con la fecha y el commit de la
-raya, igual que las anteriores.
+### 🧊 EN VIGOR — desde el 12-sep-2026, tras cerrar `T1` (Eduardo: *«Congelamos código y empezamos»* la documentación)
+
+**La raya**: el último commit de código de V6 es **`843e2d0a`** (el runner de `T1` con los 8 arreglos) y las
+fichas hasta `b05fb62c`. A partir de aquí:
+- **Sólo bugs**, cada uno con su ficha y su reproducción (host o placa). Una mejora «de paso» es lo que más se
+  cuela: si no está roto, a V7 (sección «Aplazadas a V7»).
+- **`D1` documenta lo que hay**, no lo que se quiere. Lo que documentar destape (como en V5, donde salieron
+  tres bugs del ORM al ejecutar los ejemplos) **sí** entra: es un bug, con su ficha.
+- **`F1` prueba lo congelado** con las herramientas que van antes de la raya: `compat.sh` (59 PASS), el
+  runner `tools/tanda.py` (las placas conducidas), `toJson()` y `Gui.shot` para lo gráfico.
+- Abiertas de V6 en este momento: **ninguna**. `#493` (la sombra de `/app`) sigue sin decidir V6/V7: si
+  Eduardo la quiere en V6 es un arreglo pequeño y entra como bug; si no, V7.
 
 #### 🧪 `T1` — EL PLAN, INCREMENTAL (Eduardo, 11-sep) — ✅ **CERRADO el 11-sep** (`7be021bc` runner + prueba de fuego · `843e2d0a` los 8 arreglos)
 
