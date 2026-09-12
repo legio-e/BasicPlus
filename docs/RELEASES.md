@@ -75,8 +75,9 @@ un número medido por placa en vez de constantes escritas a mano. Lo que sale:
 | Discovery U5G9J | **1536 KB** (heredaba los 512 de la Nucleo) |
 
 Dos claves nuevas en el entorno de la placa (botón «Entorno» del IDE): **`stack=N`**, en
-KB, reparte el bloque entre pilas y montón (por defecto un 25 % para pilas; si el valor
-no cabe, el firmware lo ajusta y lo dice en el log); y **`quantum=N`**, los opcodes que
+KB, reparte el bloque entre pilas y montón (por defecto un 25 % para pilas, con un suelo
+de 64 KB — en el C3 y el C6, con 128 KB, es la mitad; si el valor no cabe, el firmware lo
+ajusta y lo dice en el log); y **`quantum=N`**, los opcodes que
 ejecuta un hilo antes de ceder el turno (1024 por defecto).
 
 Y la **tabla de handles vive dentro del bloque de la VM**: antes salía de otra bolsa y un

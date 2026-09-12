@@ -153,9 +153,12 @@ SHOT2PNG = os.path.join(AQUI, "shot2png.py")
 TROZO_PUT = 4096          # por encima de esto, PUT por trozos (#294)
 HELLO_SEGS = 3.0
 
-# Placas que se SABE que llevan panel, cuando ni HELLO ni INFO lo dicen. Se
-# anota en el informe como "supuesto por boardName": es una tabla nuestra, no
-# un dato de la placa.
+# Placas que se SABE que llevan panel, SOLO para un firmware tan viejo que no
+# conteste al INFO. Desde T1 todo build con LVGL publica screenW/screenH en el
+# INFO, asi que un INFO sin esos campos ES «sin pantalla» — y esta tabla no vale
+# para decidirlo: `stm32u5` es la Nucleo (sin panel) y la DK2 (con panel) con el
+# mismo boardName. F1 (12-sep) lanzo las graficas en la Nucleo por fiarse de
+# ella: «builtin 135 no soportado». Se anota en el informe como "supuesto".
 CON_PANTALLA = ("esp32c6", "esp32p4", "stm32u5")
 SIN_PANTALLA = ("rp2350a", "rp2350b", "pico", "esp32s3", "esp32c3", "host")
 
@@ -787,6 +790,10 @@ def tiene_pantalla(sello):
     if "screenW" in info and "screenH" in info:
         w_, h_ = info.get("screenW") or 0, info.get("screenH") or 0
         return (w_ > 0 and h_ > 0), "INFO screenW x screenH = %sx%s" % (w_, h_)
+    if info:
+        # Hay INFO y no trae screenW/H: la imagen no lleva LVGL. Es un DATO de
+        # la placa, no una suposicion (todo build con LVGL los publica).
+        return False, "INFO sin screenW/screenH: la imagen no lleva LVGL"
     nombre = str(sello.get("boardName", "")).lower()
     for pref in CON_PANTALLA:
         if nombre.startswith(pref):

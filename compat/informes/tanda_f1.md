@@ -221,3 +221,278 @@ notas de dependencias:
 
 NECESITA OJOS: GuiShot en stm32u5@COM12: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5_203538505532\GuiShot.png  
 
+
+## Tanda 2026-09-12 17:42:53
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (stm32u5@COM5)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 05e0dfd0 | 2227 | ok | 0 | 11 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 422260e8 | 1800 | ok | 1 | 8 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 5138ea38 | 1054 | ok | 0 | 324 | 3 |
+| MachineId | MachineId | 22792db1 | 1089 | ok | 0 | 10 | 3 |
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 29 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 334 | 8 |
+
+### Placa stm32u5 - 203436414230500D00350041
+
+- sello: boardName=`stm32u5` uniqueId=`203436414230500D00350041` serverName=`bpvm-stm32` serverBuild=`Sep 12 2026 17:32:56` capacidades=["META", "FILES", "TERMINAL", "PACKS"]
+- imagen: arch=40 variant=None cpuFreqHz=160000000 resetReason=pin (NRST) uptimeMs=16276 fs=344064/614400 B vmHeapBytes=393216
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM5
+- pantalla: si (supuesto por boardName 'stm32u5')
+- inventario /lib+/app: 27 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 211 | 11 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 45 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 327 | 324 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 60 | 10 | EXITED OK exit=0 |
+| GuiWinJson | **DIFIERE** | 450 | 29 | texto distinto; estado no casa (host rc=0, EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: builtin 135 no soportado en esta VM (subconjunto C))) |
+| GuiShot | **PETA** | 499 | 334 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: builtin 135 no soportado en esta VM (subconjunto C)) |
+
+- tras MathRango: uptimeMs=18535 fsUsed=352256 vmHeapBytes=393216
+- tras ThrowSinAtrapar: uptimeMs=19917 fsUsed=360448 vmHeapBytes=393216
+- tras ThreadTrasMain: uptimeMs=21062 fsUsed=368640 vmHeapBytes=393216
+- tras MachineId: uptimeMs=22798 fsUsed=376832 vmHeapBytes=393216
+- tras GuiWinJson: uptimeMs=43258 fsUsed=483328 vmHeapBytes=393216
+<details><summary>GuiWinJson: cola del stderr del host</summary>
+
+```
+[bpvm-c] dep 'Gui' -> Gui.mod
+[bpvm-c] dep 'Json' -> Json.mod
+[bpvm-c] dep 'Core' -> Core.mod
+[bpvm-c] dep 'Collections' -> Collections.mod
+[bpvm-c] dep 'Str' -> Str.mod
+[bpvm] tabla de simbolos: 1784 simbolos, 43703 B de nombres, 81920 B en total
+[bpvm] tabla de handles: 0 -> 681 slots (5 KB dentro del heap) OK — techo del heap 387768, libre 335 KB
+[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)
+
+```
+</details>
+
+<details><summary>GuiWinJson: diff oraculo vs placa</summary>
+
+```diff
+--- oraculo (host)
++++ placa
+@@ -1,17 +1 @@
+-J1: {"type":"Panel","width":480,"height":320,"children":[{"type":"Label","text":"Demo de Forms — Camino A","align":"TOP_MID","y":12},{"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"},{"type":"Checkbox","text":"Activar","align":"BOTTOM_MID","y":-20,"change":"onActivar"}]}
+--- arbol tras cargar main.win --
+-screen [480x320 align=0 +0,0]
+-  panel [480x320 align=0 +0,0]
+-    panel [480x320 align=0 +0,0]
+-      label "Demo de Forms — Camino A" [-1x-1 align=1 +0,12]
+-      button [-1x-1 align=4 +0,0]
+...
+```
+
+oraculo (host):
+
+```
+J1: {"type":"Panel","width":480,"height":320,"children":[{"type":"Label","text":"Demo de Forms — Camino A","align":"TOP_MID","y":12},{"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"},{"type":"Checkbox","text":"Activar","align":"BOTTOM_MID","y":-20,"change":"onActivar"}]}
+-- arbol tras cargar main.win --
+screen [480x320 align=0 +0,0]
+  panel [480x320 align=0 +0,0]
+    panel [480x320 align=0 +0,0]
+      label "Demo de Forms — Camino A" [-1x-1 align=1 +0,12]
+      button [-1x-1 align=4 +0,0]
+        label "Saludar" [-1x-1 align=0 +0,0]
+      checkbox "Activar" [-1x-1 align=7 +0,-20 val=0]
+
+WIN: {"type":"Window","width":480,"height":320,"children":[{"type":"Panel","width":480,"height":320,"children":[{"type":"Label","text":"Demo de Forms — Camino A","align":"TOP_MID","y":12},{"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"},{"type":"Checkbox","text":"Activar","align":"BOTTOM_MID","y":-20,"change":"onActivar"}]}]}
+J2 == J1: true
+arbol igual: true
+hijos del panel: 3
+hijos del boton (la etiqueta): 1
+boton en JSON: {"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"}
+FIN
+```
+
+placa:
+
+```
+
+```
+</details>
+
+- tras GuiShot: uptimeMs=46194 fsUsed=491520 vmHeapBytes=393216
+<details><summary>GuiShot: cola del stderr del host</summary>
+
+```
+[bpvm-c] dep 'Gui' -> Gui.mod
+[bpvm-c] dep 'Json' -> Json.mod
+[bpvm-c] dep 'Core' -> Core.mod
+[bpvm-c] dep 'Collections' -> Collections.mod
+[bpvm-c] dep 'Str' -> Str.mod
+[bpvm] tabla de simbolos: 1734 simbolos, 42149 B de nombres, 81920 B en total
+[bpvm] tabla de handles: 0 -> 682 slots (5 KB dentro del heap) OK — techo del heap 387760, libre 335 KB
+[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)
+
+```
+</details>
+
+- artefacto GuiShot.shot de GuiShot: NO bajado: GET /app/GuiShot.shot: NOT_FOUND no existe; GET /GuiShot.shot: NOT_FOUND no existe; GET GuiShot.shot: NOT_FOUND no existe; antes del RUN: no existia
+- ejecutadas (con EXITED) 6 de 6 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 2227 | 05e0dfd0 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 1800 | 422260e8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 1054 | 5138ea38 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 1089 | 22792db1 | ok |
+| /app/Gui.mod | bpstdlib\Gui.mod | 62016 | 1f305f94 | ok (por trozos) |
+| /app/Json.mod | bpstdlib\Json.mod | 24059 | 8d090549 | ok (por trozos) |
+| /app/Collections.mod | bpstdlib\Collections.mod | 8890 | 740b9a71 | ok (por trozos) |
+| /app/Str.mod | bpstdlib\Str.mod | 5487 | c2cb43dd | ok (por trozos) |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 3627 | c2e655fa | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 2545 | 61c07fa6 | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- GuiWinJson: la placa tiene pantalla pero INFO no dice su tamano; oraculo de 480x320
+- dependencia Gui: el RUN no la resuelve (NOT_FOUND: no existe): se sube a /app
+- dependencia Json: en /app con crc 9efcca31 != local 8d090549 (rancio, se vuelve a subir)
+- dependencia Collections: el RUN no la resuelve (NOT_FOUND: no existe): se sube a /app
+- dependencia Str: el RUN no la resuelve (NOT_FOUND: no existe): se sube a /app
+- GuiShot: la placa tiene pantalla pero INFO no dice su tamano; oraculo de 480x320
+
+### Matriz pruebas x placas
+
+| prueba | stm32u5@COM5 |
+|---|---|
+| MathRango | IDENTICO |
+| ThrowSinAtrapar | IDENTICO |
+| ThreadTrasMain | IDENTICO |
+| MachineId | NO-PETA |
+| GuiWinJson | DIFIERE |
+| GuiShot | PETA |
+
+
+
+## Tanda 2026-09-12 17:44:09
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas, filtro --prueba GuiWinJson,GuiShot)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (stm32u5@COM5)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 35 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 347 | 8 |
+
+### Placa stm32u5 - 203436414230500D00350041
+
+- sello: boardName=`stm32u5` uniqueId=`203436414230500D00350041` serverName=`bpvm-stm32` serverBuild=`Sep 12 2026 17:32:56` capacidades=["META", "FILES", "TERMINAL", "PACKS"]
+- imagen: arch=40 variant=None cpuFreqHz=160000000 resetReason=pin (NRST) uptimeMs=91512 fs=491520/614400 B vmHeapBytes=393216
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM5
+- pantalla: no (INFO sin screenW/screenH: la imagen no lleva LVGL)
+- inventario /lib+/app: 37 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| GuiWinJson | **SALTADA** | - | 35 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+| GuiShot | **SALTADA** | - | 347 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+
+- ejecutadas (con EXITED) 0 de 2 listadas; no terminaron 0; saltadas 2; no llegaron a arrancar 0
+
+subido a /app:
+
+(nada)
+
+### Matriz pruebas x placas
+
+| prueba | stm32u5@COM5 |
+|---|---|
+| GuiWinJson | SALTADA |
+| GuiShot | SALTADA |
+
+SALTADA: GuiWinJson en stm32u5@COM5: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+SALTADA: GuiShot en stm32u5@COM5: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+
+
+## Tanda 2026-09-12 17:44:52
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (esp32c3@COM3)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 05e0dfd0 | 2227 | ok | 0 | 8 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 422260e8 | 1800 | ok | 1 | 8 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 5138ea38 | 1054 | ok | 0 | 321 | 3 |
+| MachineId | MachineId | 22792db1 | 1089 | ok | 0 | 11 | 3 |
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 33 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 334 | 8 |
+
+### Placa esp32c3 - E072A1214078
+
+- sello: boardName=`esp32c3` uniqueId=`E072A1214078` serverName=`bpvm-esp32c3` serverBuild=`Sep 12 2026 17:33:47` capacidades=["META", "FILES", "TERMINAL"]
+- imagen: arch=243 variant=None cpuFreqHz=160000000 resetReason=unknown uptimeMs=3068 fs=126976/1523712 B vmHeapBytes=65536
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM3
+- pantalla: no (INFO sin screenW/screenH: la imagen no lleva LVGL)
+- inventario /lib+/app: 19 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 0 | 8 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 10 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 310 | 321 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 0 | 11 | EXITED OK exit=0 |
+| GuiWinJson | **SALTADA** | - | 33 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+| GuiShot | **SALTADA** | - | 334 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+
+- tras MathRango: uptimeMs=4954 fsUsed=131072 vmHeapBytes=65536
+- tras ThrowSinAtrapar: uptimeMs=6003 fsUsed=135168 vmHeapBytes=65536
+- tras ThreadTrasMain: uptimeMs=7223 fsUsed=139264 vmHeapBytes=65536
+- tras MachineId: uptimeMs=8492 fsUsed=143360 vmHeapBytes=65536
+- ejecutadas (con EXITED) 4 de 6 listadas; no terminaron 0; saltadas 2; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 2227 | 05e0dfd0 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 1800 | 422260e8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 1054 | 5138ea38 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 1089 | 22792db1 | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+
+### Matriz pruebas x placas
+
+| prueba | esp32c3@COM3 |
+|---|---|
+| MathRango | IDENTICO |
+| ThrowSinAtrapar | IDENTICO |
+| ThreadTrasMain | IDENTICO |
+| MachineId | NO-PETA |
+| GuiWinJson | SALTADA |
+| GuiShot | SALTADA |
+
+SALTADA: GuiWinJson en esp32c3@COM3: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+SALTADA: GuiShot en esp32c3@COM3: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+
