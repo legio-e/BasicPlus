@@ -188,7 +188,7 @@
     <li class="sub"><a href="#stdlib-pulse">14.6 Pulse</a></li>
     <li class="sub"><a href="#stdlib-pwm">14.7 Pwm</a></li>
     <li class="sub"><a href="#stdlib-adc">14.8 Adc</a></li>
-    <li class="sub"><a href="#stdlib-pico">14.9 Pico (información del MCU)</a></li>
+    <li class="sub"><a href="#stdlib-pico">14.9 Machine (información del micro y de la placa)</a></li>
     <li class="sub"><a href="#stdlib-rtc">14.10 Rtc</a></li>
     <li class="sub"><a href="#stdlib-wdt">14.11 Wdt (watchdog)</a></li>
     <li class="sub"><a href="#stdlib-timer">14.12 Timer (alarmas periódicas)</a></li>
@@ -213,12 +213,12 @@
     <li class="sub"><a href="#cli-frontend">16.1 Frontend</a></li>
     <li class="sub"><a href="#cli-vm">16.2 VM (bpgenvm)</a></li>
     <li class="sub"><a href="#cli-disasm">16.3 Disasm</a></li>
-    <li class="sub"><a href="#cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</a></li>
+    <li class="sub"><a href="#cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / C3 / C6 / P4 / STM32)</a></li>
     <li class="group"><a href="#artefactos">17. Artefactos en disco</a></li>
-    <li class="sub"><a href="#mod">17.1 .mod (binario, MOD6)</a></li>
+    <li class="sub"><a href="#mod">17.1 .mod (binario, MOD7)</a></li>
     <li class="sub"><a href="#bpi">17.2 Interfaz del módulo (texto, v7)</a></li>
     <li class="sub"><a href="#dbg">17.3 .dbg (info de depuración, v3)</a></li>
-    <li class="sub"><a href="#mdn">17.4 .mdn (overlay AOT)</a></li>
+    <li class="sub"><a href="#mdn">17.4 El código nativo (sección <code>native</code> y .mdn)</a></li>
     <li class="sub"><a href="#proyecto">17.5 .bpbuild / .bpproject (JSON)</a></li>
   </ul>
 </nav>
@@ -268,11 +268,11 @@
       <td><code>yield()</code> cede CPU al scheduler (ver
           <a href="manual.html#concurrencia">§14</a>)</td></tr>
   <tr><td>Sistema</td>
-      <td><code>gc()</code> · <code>input()</code></td></tr>
+      <td><code>gc()</code> · <code>input()</code> <em>&mdash; <code>input()</code> sólo en la VM Java (la del IDE); en la VM-C —host y placas— lanza <code>RuntimeError</code> atrapable «builtin 37 no soportado en esta VM (subconjunto C)»</em></td></tr>
   <tr><td>Fichero</td>
       <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
           <code>appendFile(path, content)</code> <code>fileExists(path)</code>
-          <code>listDir(path)</code> <em>&mdash; ojo: <strong>s&oacute;lo en el PC</strong>, no est&aacute; en la VM-C que corre en las placas (ver <a href="#stdlib-sd">&sect;14.17</a>)</em></td></tr>
+          <code>listDir(path)</code> <em>&mdash; ojo: <strong>s&oacute;lo en la VM Java</strong>; en la VM-C —host y placas— lanza <code>RuntimeError</code> atrapable «builtin 42 no soportado en esta VM (subconjunto C)» (ver <a href="#stdlib-sd">&sect;14.17</a>)</em></td></tr>
   <tr><td>Internos (stdlib)</td>
       <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
           <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
@@ -280,7 +280,9 @@
 
 <h3 id="stdlib-list">13.2 <code>List</code></h3>
 
-<pre><code><span class="kw">var</span> l: <span class="type">List</span> := <span class="type">List</span>()
+<pre><code><span class="kw">import</span> Core                        <span class="comment">// List, Integer, RuntimeError… viven en Core (§13.3)</span>
+
+<span class="kw">var</span> l: <span class="type">List</span> := <span class="type">List</span>()
 l.<span class="fn">add</span>(<span class="num">10</span>)                       <span class="comment">// se envuelve solo en un Integer</span>
 l.<span class="fn">add</span>(Persona(<span class="str">"Ana"</span>, <span class="num">30</span>))       <span class="comment">// un objeto, tal cual</span>
 
@@ -329,7 +331,7 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   <li><strong>Hacia <code>string</code> siempre se puede</strong>, porque no puede fallar.</li>
   <li><strong>Desde <code>string</code> NO.</strong> Un elemento que es texto no se parsea:
   eso se pide aparte con <code>Str.parseInt</code> y compañía, que devuelven
-  <code>(ok, valor)</code> en vez de lanzar. Convertir texto a número falla por el
+  <code>(err, valor)</code> en vez de lanzar. Convertir texto a número falla por el
   <em>contenido</em>, que es otra clase de problema.</li>
   <li><strong><code>double</code> → entero TRUNCA hacia cero</strong>: <code>-2,7</code> da
   <code>-2</code> (ojo, que <code>floor</code> daría <code>-3</code>). Para redondear está
@@ -349,7 +351,9 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   permite meterlos en una <code>List</code> o en un <code>Map</code>.
 </p>
 
-<pre><code><span class="kw">var</span> o: <span class="type">Object</span> := <span class="type">Integer</span>(<span class="num">5</span>)
+<pre><code><span class="kw">import</span> Core
+
+<span class="kw">var</span> o: <span class="type">Object</span> := <span class="type">Integer</span>(<span class="num">5</span>)
 <span class="kw">var</span> i: <span class="type">Integer</span> := <span class="type">Integer</span>(o)      <span class="comment">// downcast; si no lo es, lanza</span>
 <span class="kw">print</span> i.<span class="fn">value</span>()                  <span class="comment">// 5</span></code></pre>
 
@@ -389,22 +393,33 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
 </div>
 
 <p class="warn">
-  <strong>Se escriben sin cualificar.</strong> <code>Integer</code>, <code>List</code>,
-  <code>Object</code> y los demás viven en <code>Core</code>, que se importa
-  <strong>solo</strong> en todos los módulos. No hace falta <code>import Core</code> ni
-  escribir <code>Core.Integer</code>.
+  <strong>Se escriben sin cualificar, pero hay que importar <code>Core</code>.</strong>
+  <code>Integer</code>, <code>List</code>, <code>Exception</code>, <code>RuntimeError</code>
+  y los demás viven en <code>Core</code>, y desde V6 el módulo que los usa tiene que
+  llevar <code>import Core</code> (ya no se importa solo). Se escriben sin cualificar
+  (<code>Integer</code>, no <code>Core.Integer</code>). Los imports <strong>no son
+  transitivos</strong>: si importas un módulo cuyas clases extienden las de Core
+  (<code>Collections</code>), también hace falta. Sin él, el compilador lo dice:
+  «<code>tipo 'List' no encontrado</code>», «<code>tipo de excepción 'RuntimeError' no es
+  una clase</code>» o «<code>la clase 'SyncList' extiende 'Core.List' y este modulo no
+  importa 'Core': anade `import Core`</code>».
 </p>
 
 <h3 id="stdlib-ownerlist">13.4 <code>OwnerList</code></h3>
-<pre><code><span class="kw">var owner</span> ol: OwnerList := OwnerList()
+<pre><code><span class="kw">import</span> Core
+
+<span class="kw">var owner</span> ol: OwnerList := OwnerList()
 ol.add(Recurso(<span class="str">"A"</span>))
 ol.add(Recurso(<span class="str">"B"</span>))
 ol.removeAndFree(<span class="num">0</span>)               <span class="comment">// libera 'A' determinísticamente</span>
 <span class="comment">// al salir de scope: libera el array Y todos los items (cascada de FREE_REF)</span></code></pre>
 <p>
-  Hereda de <code>List</code>. Su descriptor marca el field
-  <code>items</code> como <code>owner</code>, así que al liberarse la lista
-  (por <code>var owner</code> o por cascada) los items se liberan también.
+  Hereda de <code>List</code> (vive en <code>Collections</code>; el compilador la
+  resuelve por el nombre pelado, pero hace falta <code>import Core</code>). Su descriptor
+  marca el array de elementos como <code>owner</code>, así que al liberarse la lista
+  (por <code>var owner</code> o por cascada) los items se liberan también. Desde V6 posee
+  <strong>de verdad</strong>: una segunda referencia a un elemento muere con la lista
+  (usarla después falla por handle, no corrompe).
   Métodos:
 </p>
 <ul>
@@ -415,16 +430,19 @@ ol.removeAndFree(<span class="num">0</span>)               <span class="comment"
 </ul>
 
 <h3 id="stdlib-synclist">13.5 <code>SyncList</code></h3>
-<pre><code><span class="kw">var</span> sl: SyncList := SyncList()
-sl.add(Item(<span class="num">1</span>))               <span class="comment">// atómico</span>
+<pre><code><span class="kw">import</span> Core
+
+<span class="kw">var</span> sl: SyncList := SyncList()
+sl.add(Item(<span class="num">1</span>))                     <span class="comment">// atómico</span>
 sl.add(Item(<span class="num">2</span>))
-<span class="kw">var</span> n: <span class="type">integer</span> := sl.length()  <span class="comment">// atómico</span>
-<span class="kw">var</span> it: Item := sl.get(<span class="num">0</span>)    <span class="comment">// atómico</span>
-sl.remove(<span class="num">0</span>)                  <span class="comment">// atómico</span>
-<span class="kw">var</span> last: Item := sl.pop()    <span class="comment">// atómico; null si está vacía</span></code></pre>
+<span class="kw">var</span> n: <span class="type">integer</span> := sl.length()        <span class="comment">// atómico</span>
+<span class="kw">var</span> it: Item := Item(sl.get(<span class="num">0</span>))    <span class="comment">// atómico; get devuelve Object: cast</span>
+sl.remove(<span class="num">0</span>)                        <span class="comment">// atómico</span>
+<span class="kw">var</span> last: Item := Item(sl.pop())    <span class="comment">// atómico; null si está vacía</span></code></pre>
 <p>
-  Hereda de <code>List</code> y añade un <code>Mutex</code> propio por
-  instancia (<code>__mutex</code>). Cada operación pública
+  Hereda de <code>List</code> (vive en <code>Collections</code>, como
+  <code>OwnerList</code>; hace falta <code>import Core</code>) y añade un
+  <code>Mutex</code> propio por instancia. Cada operación pública
   (<code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
   <code>remove</code>) está envuelta con <code>lock</code>/<code>unlock</code>,
   así que es segura para llamarse desde múltiples threads sin contención
@@ -432,10 +450,13 @@ sl.remove(<span class="num">0</span>)                  <span class="comment">// 
 </p>
 <ul>
   <li><code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
-      <code>remove</code>: idem a List, pero <strong>atómicos</strong>.</li>
-  <li><code>pop(): any</code>: extrae y devuelve el último elemento
+      <code>remove</code>: idem a List, pero <strong>atómicos</strong>.
+      <code>get</code> y <code>pop</code> devuelven <code>Object</code>: el cast lo pones tú.</li>
+  <li><code>pop(): Object</code>: extrae y devuelve el último elemento
       atómicamente. Si la lista está vacía, devuelve <code>null</code>
       (sentinel). Primitiva canon para producer/consumer queues.</li>
+  <li><code>popBlocking(): Object</code>: como <code>pop</code>, pero espera
+      (cediendo el turno) hasta que haya algo.</li>
 </ul>
 <p>
   <strong>Garantía</strong>: cada operación individual es serializable
@@ -454,12 +475,12 @@ sl.remove(<span class="num">0</span>)                  <span class="comment">// 
   operación atómica.
 </p>
 <p>
-  <strong>Implementación</strong>: SyncList extiende <code>List</code> y
-  añade un field <code>__mutex</code> inicializado en el constructor. Cada
-  método override hace <code>this.__mutex.lock()</code>, llama directamente
-  al método correspondiente de <code>List</code> (sin re-virtualizar) y
-  hace <code>this.__mutex.unlock()</code>. <code>pop()</code> es el único
-  método nuevo (no existe en <code>List</code>).
+  <strong>Implementación</strong>: cada método redefinido toma el cerrojo,
+  llama al método correspondiente de <code>List</code> y lo suelta. Sólo se
+  redefine <code>add(Object)</code>: las sobrecargas <code>add(integer)</code>,
+  <code>add(long)</code>… se heredan y acaban en ella, con el cerrojo puesto.
+  <code>pop()</code> y <code>popBlocking()</code> son los únicos métodos
+  nuevos (no existen en <code>List</code>).
 </p>
 
 <h3 id="stdlib-sb">13.6 <code>StringBuilder</code></h3>
@@ -475,21 +496,22 @@ sb.appendInt(<span class="num">42</span>)
 </p>
 
 <h3 id="stdlib-rterr">13.7 <code>RuntimeError</code></h3>
-<pre><code><span class="kw">throw</span> RuntimeError(<span class="str">"algo fallo"</span>)
+<pre><code><span class="kw">import</span> Core
 
 <span class="kw">try</span>
-  ...
+  <span class="kw">throw</span> RuntimeError(<span class="str">"algo fallo"</span>)
 <span class="kw">catch</span> e: RuntimeError
-  <span class="kw">print</span> e.msg
+  <span class="kw">print</span> e.msg                    <span class="comment">// algo fallo</span>
 <span class="kw">endtry</span></code></pre>
 <p>
   Error nativo de la VM (índice fuera de rango, null, división por cero,
   builtin fallido...) y también lanzable a mano. Vive en el módulo
   <code>Core</code> junto a su base <code>Exception</code> (property
-  <code>msg: string</code>); el <code>import Core</code> es implícito —
-  el código de siempre (<code>throw RuntimeError("…")</code>,
-  <code>catch e: RuntimeError</code>, <code>e.msg</code>) se escribe igual.
-  Las excepciones propias extienden <code>Exception</code> (ver
+  <code>msg: string</code>), así que el módulo que lanza o atrapa lleva
+  <code>import Core</code> (desde V6; antes era implícito). Un
+  <code>catch e</code> sin tipo es <code>catch e: Exception</code>, y
+  <code>print e</code> imprime el mensaje (<code>toString()</code> devuelve
+  <code>msg</code>). Las excepciones propias extienden <code>Exception</code> (ver
   <a href="manual.html#excepciones">§11</a>).
 </p>
 
@@ -660,6 +682,17 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
       <td>Función Γ (aproximación de Lanczos). Γ(n+1) = n! para naturales.
           Definida para <code>x &gt; 0</code>; en <code>(0, 0.5)</code> usa
           la reflexión de Euler.</td></tr>
+  <tr><td><code>clamp(x, lo, hi): float</code></td>
+      <td>Acota <code>x</code> a <code>[lo, hi]</code>. <em>V6.</em></td></tr>
+  <tr><td><code>wrap(x, lo, hi): float</code></td>
+      <td>Envuelve <code>x</code> en <code>[lo, hi)</code> cíclicamente:
+          <code>wrap(370, 0, 360)</code> = 10. Lanza si <code>hi &lt;= lo</code>. <em>V6.</em></td></tr>
+  <tr><td><code>hypot(x, y): float</code></td>
+      <td>Longitud del vector (x, y). <em>V6.</em></td></tr>
+  <tr><td><code>remap(x, inLo, inHi, outLo, outHi): float</code></td>
+      <td>Lleva <code>x</code> de un rango a otro, linealmente y sin acotar
+          (fuera del rango extrapola; <code>clamp</code> después si lo quieres acotado).
+          Lanza si <code>inHi == inLo</code>. <em>V6.</em></td></tr>
 </table>
 
 <!-- =========================================================== -->
@@ -713,7 +746,13 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <tr><td><code>pathExtension(p): string</code></td>
       <td>Extensión sin el punto. <code>""</code> si no hay.</td></tr>
   <tr><td><code>pathAbsolute(p): string</code></td>
-      <td>Resuelve a path absoluto y normalizado (<code>".."</code>, <code>"."</code>).</td></tr>
+      <td>El nombre que el FS va a usar. Función <strong>pura</strong> de
+          (<code>p</code>, <code>App.projectPath()</code>): si <code>p</code> empieza
+          por <code>/</code> o lleva esquema (<code>x:</code>), tal cual; si hay
+          proyecto, <code>&lt;projectPath&gt;/p</code>; si no, tal cual (lo relativo se
+          queda relativo). <strong>No</strong> mira el disco ni normaliza
+          <code>..</code>/<code>.</code>: así responde lo mismo en el PC y en la placa.
+          <em>Cambió en V6</em> (antes devolvía la ruta del SO del PC).</td></tr>
   <tr><td><code>mkdir(p)</code></td>
       <td>Crea el directorio (y los intermedios que falten). No falla si ya existe.</td></tr>
   <tr><td><code>rmdir(p)</code></td>
@@ -772,15 +811,16 @@ Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
 <h3 id="stdlib-str">13.13 <code>Str</code></h3>
 <p>
   Utilidades de string en BP puro. Los parsers devuelven una
-  <strong>tupla</strong> <code>(ok, valor)</code> — sin excepciones por
-  formato:
+  <strong>tupla</strong> <code>(err, valor)</code> — sin excepciones por
+  formato: <code>err</code> es <code>true</code> si el texto <em>no</em> era un
+  número (y entonces <code>valor</code> es 0):
 </p>
 <pre><code><span class="kw">import</span> Str
 
-<span class="kw">var</span> ok: <span class="type">boolean</span> := <span class="kw">false</span>
+<span class="kw">var</span> err: <span class="type">boolean</span> := <span class="kw">false</span>
 <span class="kw">var</span> v: <span class="type">integer</span> := <span class="num">0</span>
-{ ok, v } := Str.parseInt(<span class="str">"123"</span>)
-<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v
+{ err, v } := Str.parseInt(<span class="str">"123"</span>)
+<span class="kw">if not</span> err <span class="kw">then</span> <span class="kw">print</span> v          <span class="comment">// 123</span>
 
 <span class="kw">print</span> Str.formatDouble(<span class="num">3.14159d</span>, <span class="num">2</span>)   <span class="comment">// "3.14"</span>
 <span class="kw">print</span> Str.padLeft(<span class="str">"7"</span>, <span class="num">3</span>)             <span class="comment">// "  7"</span></code></pre>
@@ -796,29 +836,34 @@ Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
   <tr><td><code>compare(a, b): integer</code></td><td>&lt;0 / 0 / &gt;0 (orden por code points).</td></tr>
   <tr><td><code>padLeft(s, ancho)</code> / <code>padRight(s, ancho)</code></td><td>Relleno con espacios.</td></tr>
   <tr><td><code>parseInt/parseLong/parseDouble/parseHex(s): (boolean, T)</code></td>
-      <td>Tupla <code>(ok, valor)</code>; <code>ok=false</code> si el formato no es válido.</td></tr>
+      <td>Tupla <code>(err, valor)</code>; <code>err=true</code> si el formato no es válido
+          (<code>parseInt("12x")</code> → <code>(true, 0)</code>).</td></tr>
 </table>
 
 <h3 id="stdlib-collections">13.14 <code>Collections</code></h3>
 <p>
-  Mapa ordenado + infraestructura de comparación en BP puro. Como los
-  primitivos no son objetos, vienen wrappers <code>Integer</code>/
-  <code>Long</code>/<code>Double</code>/<code>Float</code>/<code>Boolean</code>
-  (con <code>value()</code> y <code>compareTo</code>) para usarlos como
-  claves/valores.
+  Mapa ordenado + infraestructura de comparación en BP puro, y las dos listas
+  especializadas <code>SyncList</code> (§13.5) y <code>OwnerList</code> (§13.4).
+  Los envoltorios <code>Integer</code>/<code>Long</code>/<code>Double</code>/
+  <code>Float</code>/<code>Boolean</code> con los que un primitivo entra como
+  clave o valor son los de <code>Core</code> (§13.3), no de este módulo —
+  y como sus clases extienden las de Core, <code>import Collections</code>
+  va acompañado de <code>import Core</code>.
 </p>
-<pre><code><span class="kw">import</span> Collections
+<pre><code><span class="kw">import</span> Core
+<span class="kw">import</span> Collections
 
 <span class="kw">var</span> edades: Collections.Map := Collections.stringMap()
-edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num">30</span>))
-<span class="kw">var</span> w: Collections.Integer := edades.get(<span class="str">"ana"</span>)
+edades.put(<span class="str">"ana"</span>, Integer(<span class="num">30</span>))
+<span class="kw">var</span> w: Integer := Integer(edades.get(<span class="str">"ana"</span>))   <span class="comment">// get devuelve Object: cast</span>
 <span class="kw">print</span> w.value()                          <span class="comment">// 30</span></code></pre>
 <table>
   <tr><th>API</th><th>Descripción</th></tr>
   <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
       <td>Factorías: Map con comparador de strings / numérico.</td></tr>
   <tr><td><code>Map.put/get/containsKey/remove</code></td>
-      <td>Operaciones básicas; <code>get</code> devuelve <code>null</code> si no está.</td></tr>
+      <td>Operaciones básicas; <code>get(key): Object</code> devuelve <code>null</code> si no está
+          (y el cast al tipo del valor lo pones tú).</td></tr>
   <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
       <td>Iteración por índice, en el ORDEN del comparador (mapa ordenado:
           búsqueda binaria por dentro). Thread-safe (Mutex interno).</td></tr>
@@ -883,7 +928,9 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
   <tr><td><code>JsonArray</code></td>
       <td><code>add(v)</code> · <code>at(i): JsonValue</code> · <code>length()</code>.</td></tr>
 </table>
-<pre><code><span class="kw">var</span> root: Json.<span class="type">JsonObject</span> := Json.<span class="fn">JsonObject</span>()
+<pre><code><span class="kw">import</span> Json
+
+<span class="kw">var</span> root: Json.<span class="type">JsonObject</span> := Json.<span class="fn">JsonObject</span>()
 root.<span class="fn">put</span>(<span class="str">"nombre"</span>, Json.<span class="fn">JsonString</span>(<span class="str">"Ana"</span>))
 root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span class="fn">JsonInt</span>(<span class="num">30</span>))
 <span class="kw">print</span> Json.<span class="fn">writeJson</span>(root)              <span class="comment">// {"nombre":"Ana","edad":30}</span>
@@ -948,10 +995,10 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
       usa <code>property</code> con getter (encapsulación clásica).</li>
 </ul>
 <p>
-  <strong>Excepción documentada</strong>: el módulo <code>Pico</code>
-  expone funciones + constantes sin clase porque la info del chip es
-  singleton sin recursos liberables. Misma lógica para futuros
-  módulos de información global.
+  <strong>Excepción documentada</strong>: el módulo <code>Machine</code>
+  (antes <code>Pico</code>, que sigue existiendo como alias) expone funciones
+  + constantes sin clase porque la info del chip es singleton sin recursos
+  liberables. Misma lógica para futuros módulos de información global.
 </p>
 <p>
   Estado actual de la suite OO HW:
@@ -978,8 +1025,8 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
       <td>Watchdog HW (singleton)</td></tr>
   <tr><td><code>Timer</code></td><td><code>Timer.Alarm</code></td>
       <td>Periodo + nextFire (BP puro, sin HW)</td></tr>
-  <tr><td><code>Pico</code></td><td><em>(funcs + consts)</em></td>
-      <td><em>Info MCU singleton sin recursos — excepción documentada</em></td></tr>
+  <tr><td><code>Machine</code> (alias <code>Pico</code>)</td><td><em>(funcs + consts)</em></td>
+      <td><em>Info del micro y la placa, singleton sin recursos — excepción documentada</em></td></tr>
 </table>
 
 <!-- =========================================================== -->
@@ -1194,8 +1241,9 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
   flow control (no soportado en v1 — sólo 3 wire).
 </p>
 <p>
-  El Pico 2 tiene 2 UART HW (<code>uart0</code>, <code>uart1</code>) con
-  varios mapas de pines:
+  Hay dos buses (<code>0</code> y <code>1</code>) en las cinco familias; qué pines
+  admite cada uno lo dice el micro. En el Pico 2 son 2 UART HW (<code>uart0</code>,
+  <code>uart1</code>) con varios mapas de pines:
 </p>
 <table>
   <tr><th>Bus</th><th>TX</th><th>RX</th></tr>
@@ -1206,6 +1254,15 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
   El firmware <code>bpvm_pico</code> usa USB CDC como stdio, así que
   GP0/GP1 están libres para usuario (no entran en conflicto con
   <code>print</code>).
+</p>
+<p>
+  <strong>Recepción con buffer (V6).</strong> Cada bus tiene un buffer de recepción de
+  <strong>512 bytes</strong> que se llena por interrupción aunque tu programa esté
+  haciendo otra cosa: lo que llega entre dos <code>read</code> no se pierde por encima del
+  FIFO del hardware (32 B en el RP2350, 8 B en el STM32). Si el buffer se llena, los bytes
+  de más se descartan y el log lo dice («<code>N bytes descartados, el buffer de 512 se
+  lleno</code>»). En el PC no hay puerto: los builtins escriben una línea de simulación
+  y <code>read</code> devuelve ceros.
 </p>
 <pre><code><span class="kw">import</span> Uart
 
@@ -1228,13 +1285,17 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
       <td>Envía <code>count</code> bytes. Bloquea hasta que el FIFO de
           TX los haya aceptado. Devuelve bytes escritos o <code>-1</code>.</td></tr>
   <tr><td><code>read(bus, data, count, timeoutMs): integer</code></td>
-      <td>Lee hasta <code>count</code> bytes. Si <code>timeoutMs &lt;= 0</code>
-          bloquea hasta tenerlos todos; si <code>&gt; 0</code> devuelve
-          al expirar el timeout O al recibir <code>count</code> bytes.
-          Devuelve los bytes realmente leídos (0..count).</td></tr>
+      <td>Lee hasta <code>count</code> bytes del buffer y devuelve los realmente
+          leídos (0..count). <code>timeoutMs &gt; 0</code>: vuelve al tener
+          <code>count</code> o al expirar el plazo. <code>timeoutMs &lt; 0</code>:
+          bloquea hasta tenerlos todos. <code>timeoutMs == 0</code>: en RP2350 y
+          STM32 vuelve <strong>al instante</strong> con lo que hubiera (lectura no
+          bloqueante); en ESP32 el driver lo trata como «sin plazo» y bloquea hasta
+          <code>count</code>. Para sondear sin bloquear en cualquier familia, pide
+          justo lo que hay: <code>read(data, available(), 0)</code>.</td></tr>
   <tr><td><code>available(bus): integer</code></td>
-      <td>Bytes ya recibidos esperando en el buffer RX. Útil para
-          polling no bloqueante.</td></tr>
+      <td>Cuántos bytes hay en el buffer de recepción, listos para leer sin
+          bloquear (la cuenta real, en las cinco familias).</td></tr>
 </table>
 <p>
   Constantes:
@@ -1253,7 +1314,11 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
 <pre><code><span class="kw">var</span> port: Uart.Port := Uart.Port(<span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">115200</span>,
                                   <span class="num">8</span>, <span class="num">1</span>, Uart.Port.PARITY_NONE)
 port.write(tx, <span class="num">4</span>)
-<span class="kw">var</span> n: <span class="type">integer</span> := port.read(rx, <span class="num">64</span>, <span class="num">1000</span>)</code></pre>
+<span class="kw">var</span> n: <span class="type">integer</span> := port.read(rx, <span class="num">64</span>, <span class="num">1000</span>)
+<span class="kw">var</span> hay: <span class="type">integer</span> := port.available()         <span class="comment">// sondeo sin bloquear, igual en las cinco familias:</span>
+<span class="kw">if</span> hay &gt; <span class="num">0</span> <span class="kw">then</span>                            <span class="comment">// lee justo lo que hay</span>
+  n := port.read(rx, min(hay, <span class="num">64</span>), <span class="num">0</span>)
+<span class="kw">endif</span></code></pre>
 
 <!-- =========================================================== -->
 
@@ -1362,8 +1427,13 @@ port.write(tx, <span class="num">4</span>)
 <p>
   Resolución 12-bit (0..4095), referencia Vref ≈ 3.3 V típico. Para
   leer la temperatura interna del die, NO uses <code>Adc</code> — usa
-  <code>Pico.tempC()</code> (ver <a href="#stdlib-pico">§14.9</a>)
+  <code>Machine.tempC()</code> (ver <a href="#stdlib-pico">§14.9</a>)
   que ya hace la conversión con la fórmula del sensor.
+</p>
+<p>
+  Desde V6 una conversión que falla <strong>lanza</strong> <code>RuntimeError</code>
+  (antes devolvía -1 y voltios negativos). El ADC del STM32 no tiene backend
+  todavía: allí el constructor lanza.
 </p>
 <pre><code><span class="kw">import</span> Adc
 
@@ -1396,45 +1466,84 @@ port.write(tx, <span class="num">4</span>)
 
 <!-- =========================================================== -->
 
-<h3 id="stdlib-pico">14.9 <code>Pico</code> (información del MCU)</h3>
+<h3 id="stdlib-pico">14.9 <code>Machine</code> (información del micro y de la placa)</h3>
 <p>
-  Información del microcontrolador físico: identificación, sensores
-  internos, reloj y control de la frecuencia del clk_sys.
+  Información del microcontrolador físico: qué chip es y en qué placa va,
+  identificación, sensores internos, reloj y control de la frecuencia del clk_sys.
+</p>
+<p class="note">
+  <strong>Antes se llamaba <code>Pico</code></strong>, y era un mal nombre: no es de la
+  Pico, es de todos los micros. Desde V6 el módulo es <code>Machine</code>;
+  <code>Pico</code> sigue existiendo como <strong>alias</strong> que reenvía función a
+  función, así que los programas de V4/V5 (<code>import Pico</code>,
+  <code>Pico.uniqueId()</code>) siguen compilando y corriendo. Para código nuevo,
+  <code>Machine</code>.
 </p>
 <p>
   <strong>Excepción documentada</strong> a la política HW = clase OO
-  (ver <a href="#stdlib-hw-policy">§14.1</a>): <code>Pico</code>
+  (ver <a href="#stdlib-hw-policy">§14.1</a>): <code>Machine</code>
   expone funciones + constantes sin clase porque la info del chip no
   tiene &quot;instancia&quot; (es uno y único) y no encapsula recursos
   liberables.
 </p>
-<pre><code><span class="kw">import</span> Pico
+<pre><code><span class="kw">import</span> Machine
 
 <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
-  <span class="kw">print</span> <span class="str">"Board:"</span>, Pico.boardName()
-  <span class="kw">print</span> <span class="str">"Serial:"</span>, Pico.uniqueId()
-  <span class="kw">print</span> <span class="str">"CPU MHz:"</span>, Pico.cpuFreqHz() / <span class="num">1000000</span>
-  <span class="kw">print</span> <span class="str">"Die °C:"</span>, Pico.tempC()
-  <span class="kw">print</span> <span class="str">"Uptime ms:"</span>, Pico.uptimeMs()
+  <span class="kw">print</span> <span class="str">"Micro:"</span>, Machine.getMicro()          <span class="comment">// "rp2350a", "esp32c6", "host"…</span>
+  <span class="kw">print</span> <span class="str">"Board:"</span>, Machine.getBoard()          <span class="comment">// "generic" salvo que la imagen la conozca</span>
+  <span class="kw">print</span> <span class="str">"Serial:"</span>, Machine.uniqueId()
+  <span class="kw">print</span> <span class="str">"CPU MHz:"</span>, Machine.cpuFreqHz() / <span class="num">1000000</span>
+  <span class="kw">print</span> <span class="str">"GPIOs:"</span>, Machine.gpioCount()
+  <span class="kw">print</span> <span class="str">"Reset:"</span>, Machine.resetCause()
 
-  <span class="comment">// Overclock seguro a 250 MHz (escala voltaje automáticamente)</span>
-  Pico.setCpuFreqMHz(<span class="num">250</span>)
+  <span class="kw">if</span> Machine.getMicro() == <span class="str">"rp2350a"</span> <span class="kw">then</span>
+    Machine.setCpuFreqMHz(<span class="num">250</span>)                <span class="comment">// overclock seguro (escala voltaje automáticamente)</span>
+  <span class="kw">endif</span>
 <span class="kw">end</span> main</code></pre>
 <table>
   <tr><th>Función</th><th>Descripción</th></tr>
-  <tr><td><code>uniqueId(): string</code></td>
-      <td>ID único del chip flash (16 chars hex). Estable entre
-          reboots y reflasheos.</td></tr>
+  <tr><td><code>getMicro(): string</code></td>
+      <td><strong>El chip</strong>, siempre real y específico: <code>"rp2350a"</code>
+          (Pico 2) o <code>"rp2350b"</code> (Metro) — lo lee del silicio —,
+          <code>"esp32s3"</code>, <code>"esp32c3"</code>, <code>"esp32c6"</code>,
+          <code>"esp32p4"</code>, <code>"stm32u5"</code>; en el PC, <code>"host"</code>.
+          <em>V6.</em></td></tr>
+  <tr><td><code>getBoard(): string</code></td>
+      <td><strong>La placa</strong>. <code>"generic"</code> cuando la imagen no conoce el
+          modelo, que es lo normal (las imágenes se hacen para el micro): así contestan
+          los ESP32 y un RP2350 sin <code>/sys/board.json</code>. El STM32 la conoce
+          (<code>"nucleo-u575zi"</code>, <code>"u5g9j-dk2"</code>) y en RP2350 la da la
+          clave <code>name</code> de <code>/sys/board.json</code>. En el PC,
+          <code>"host"</code>. <em>V6.</em></td></tr>
   <tr><td><code>boardName(): string</code></td>
-      <td><code>&quot;pico2&quot;</code> en RP2350; <code>&quot;host&quot;</code>
-          en VM Java/C-host.</td></tr>
+      <td><em>Obsoleta</em>: es <code>getBoard()</code>. Se conserva por los programas
+          ya escritos.</td></tr>
+  <tr><td><code>uniqueId(): string</code></td>
+      <td>ID único del chip (16 chars hex). Estable entre
+          reboots y reflasheos.</td></tr>
   <tr><td><code>tempC(): float</code></td>
-      <td>Temperatura del die en °C. Sensor ADC4 con conversión interna.
-          Precisión ±2 °C sin calibración.</td></tr>
+      <td>Temperatura del die en °C (RP2350: sensor ADC4, precisión ±2 °C sin
+          calibración; en ESP32 y STM32 devuelve 0.0 — sensor no cableado).</td></tr>
   <tr><td><code>cpuFreqHz(): integer</code></td>
       <td>Frecuencia actual del clk_sys en Hz.</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>
       <td>Ms desde el boot del firmware (32-bit, wrap a ~49 días).</td></tr>
+  <tr><td><code>gpioCount(): integer</code></td>
+      <td>GPIO disponibles en la placa, según la variante: 30 en RP2350A, 48 en RP2350B;
+          30 en el PC.</td></tr>
+  <tr><td><code>variant(): string</code></td>
+      <td><code>"A"</code> o <code>"B"</code>, derivado de <code>gpioCount()</code>
+          (RP2350A / RP2350B).</td></tr>
+  <tr><td><code>resetCause(): string</code></td>
+      <td>Por qué se reinició el micro: <code>"watchdog"</code>, <code>"power-on/run"</code>,
+          <code>"reinicio pedido"</code> (RESET del IDE)… según la familia. En el PC,
+          <code>"unknown"</code>.</td></tr>
+  <tr><td><code>setMark(code)</code> · <code>markCount()</code> · <code>markAt(i)</code> · <code>bootCount()</code></td>
+      <td>Rastro de «migas» en RAM retenida que sobrevive al reset: la app deja marcas por
+          fases y tras un reinicio inesperado lee el camino que llevó al fallo
+          (<code>markAt(0)</code> es siempre la primera). <strong>Sólo funciona en
+          STM32</strong>; en RP2350, ESP32 y el PC <code>setMark</code> no hace nada y
+          devuelven 0, 0 y 1.</td></tr>
   <tr><td><code>setCpuFreqMHz(mhz): boolean</code></td>
       <td>Cambia clk_sys. Clamp a <code>[MIN_CPU_MHZ, MAX_CPU_MHZ]</code>.
           Auto-escala Vdd_core (1.10/1.15/1.20/1.30 V según mhz).
@@ -1445,11 +1554,12 @@ port.write(tx, <span class="num">4</span>)
           inmunes (timer HW a 1 MHz independiente).</td></tr>
 </table>
 <p>
-  Constantes (devuelven literales):
+  Constantes (devuelven literales o lo que diga la placa):
   <code>MAX_CPU_MHZ()</code> (300), <code>MIN_CPU_MHZ()</code> (18),
   <code>I2C_BUSES()</code> (2), <code>SPI_BUSES()</code> (2),
-  <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (30),
-  <code>ADC_CHANNELS()</code> (4), <code>PWM_SLICES()</code> (12).
+  <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (= <code>gpioCount()</code>),
+  <code>ADC_CHANNELS()</code> y <code>PWM_SLICES()</code> (según el descriptor de la placa:
+  4 y 12 en RP2350 y en el PC).
 </p>
 
 <!-- =========================================================== -->
@@ -1513,6 +1623,22 @@ port.write(tx, <span class="num">4</span>)
   solo hay un watchdog; construir varias instancias es legal pero
   todas operan sobre el mismo HW (el último <code>enable</code> gana).
 </p>
+<p>
+  <strong>Dónde hay watchdog</strong> — la regla de V6 es «completo o no se implementa»:
+</p>
+<table>
+  <tr><th>familia</th><th>Wdt</th></tr>
+  <tr><td>RP2350 (Pico 2, Metro)</td><td>sí, completo: <code>disable()</code> lo para de verdad</td></tr>
+  <tr><td>ESP32 (S3, C3, C6, P4)</td><td>sí, completo (Task WDT; <code>disable()</code> da de baja la tarea)</td></tr>
+  <tr><td>STM32 (Nucleo, Discovery)</td><td><strong>no</strong>: el IWDG del U5 no se puede parar una vez armado, así que la imagen no lo ofrece</td></tr>
+  <tr><td>PC (las dos VMs)</td><td><strong>no</strong> (no hay chip que resetear)</td></tr>
+</table>
+<p>
+  Donde no hay, <code>Wdt.Timer(…)</code>, <code>feed()</code>, <code>disable()</code> y
+  <code>reenable()</code> lanzan un <code>RuntimeError</code> atrapable
+  («<code>Wdt.enable(2000): no implementado en esta plataforma</code>»), igual en las dos
+  VMs. Envuélvelo en <code>try/catch</code> si el programa ha de correr también ahí.
+</p>
 <pre><code><span class="kw">import</span> Wdt
 
 <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
@@ -1531,8 +1657,8 @@ port.write(tx, <span class="num">4</span>)
       <td>Alimenta el watchdog: resetea el contador al timeout
           configurado. Llamar periódicamente.</td></tr>
   <tr><td><code>disable()</code></td>
-      <td>Desactiva. En RP2350 esto se simula con un timeout muy
-          grande (no hay API real de off). Útil antes de operaciones
+      <td>Desactiva el watchdog de verdad (RP2350: <code>watchdog_disable</code>;
+          ESP32: da de baja la tarea del Task WDT). Útil antes de operaciones
           largas conocidas.</td></tr>
   <tr><td><code>reenable()</code></td>
       <td>Re-activa con el mismo timeout que tenía.</td></tr>
@@ -1695,6 +1821,18 @@ tira.show()</code></pre>
   <a href="gui.html"><strong>BasicPlus — Interfaz gráfica</strong></a> (§18–25), con la
   referencia rápida del API <code>Gui.*</code> en <a href="gui.html#referencia">§24</a>.
 </p>
+<p>
+  Lo que cambia en V6, en una línea: el lazo puede ir en su propio hilo
+  (<code>Gui.start()</code> / <code>Gui.stop()</code> / <code>Gui.join()</code>;
+  <code>Gui.run()</code> sigue bloqueando y equivale a <code>start()</code>+<code>join()</code>),
+  hay una clase <code>Container</code> y todos los constructores piden
+  <code>parent: Container</code>, <code>Keyboard.attach</code> pasa a
+  <code>setTextarea</code>, cualquier widget se serializa con <code>toJson()</code>,
+  <code>Gui.shot(ruta)</code> captura la pantalla a un <code>.shot</code>
+  (<code>bpgenvm-c/tools/shot2png.py</code> lo pasa a PNG) y el screen mide lo que mide el
+  panel de la placa (en el host, 480×320 salvo <code>--screen=WxH</code>). Cuatro pantallas
+  verificadas: DK2, P4 (kit y Waveshare) y ESP32-C6 (ST7789 240×240 por SPI).
+</p>
 
 <h3 id="stdlib-sd">14.17 Tarjeta SD</h3>
 
@@ -1795,7 +1933,7 @@ ficheros funciona bajo <code>/sd</code>.</p>
   <tr><td><code>writeFile(ruta, texto)</code></td><td>lo escribe; si existía, <strong>trunca</strong></td></tr>
   <tr><td><code>appendFile(ruta, texto)</code></td><td>añade al final</td></tr>
   <tr><td><code>fileExists(ruta)</code></td><td><code>true</code> / <code>false</code></td></tr>
-  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio — <strong>sólo en el PC</strong>, ver §6</td></tr>
+  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio — <strong>sólo en la VM Java</strong>, ver <a href="#listar">§14.17.6</a></td></tr>
   <tr><td><code>readFileBytes(ruta)</code></td><td>el contenido como bytes</td></tr>
   <tr><td><code>writeFileBytes(ruta, datos)</code></td><td>escribe bytes</td></tr>
 </table>
@@ -1845,7 +1983,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   Probadas en placa: una SanDisk de 128 GB en Metro y P4, y una de 32 GB en la Metro.
 </p>
 
-<h4 id="listar">14.17.6 Recorrer un directorio — hoy sólo en el PC</h4>
+<h4 id="listar">14.17.6 Recorrer un directorio — hoy sólo en la VM Java</h4>
 
 <pre><code><span class="kw">var</span> nombres: <span class="type">string</span>[] := <span class="fn">listDir</span>(<span class="str">"/sd/registros"</span>)
 <span class="kw">for</span> f <span class="kw">in</span> nombres <span class="kw">do</span>
@@ -1860,12 +1998,13 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 </p>
 
 <p class="warn">
-  <strong><code>listDir</code> no está en la VM-C, que es la que corre en las placas.</strong>
-  Funciona cuando pruebas con la VM de referencia en el PC, y en el micro lanza
-  <em>«builtin 42 no soportado en esta VM (subconjunto C)»</em>. Es el <strong>único</strong>
-  verbo de fichero que falta: <code>readFile</code>, <code>writeFile</code>,
-  <code>appendFile</code>, <code>fileExists</code>, <code>readFileBytes</code> y
-  <code>writeFileBytes</code> sí están en las dos.<br><br>
+  <strong><code>listDir</code> no está en la VM-C</strong> — ni en la que corre en las
+  placas ni en la de host. Funciona cuando pruebas con la VM Java (la del IDE), y en la
+  VM-C lanza un <code>RuntimeError</code> atrapable, <em>«builtin 42 no soportado en esta
+  VM (subconjunto C)»</em>; si no lo atrapas, el programa termina con código 1. Es el
+  <strong>único</strong> verbo de fichero que falta: <code>readFile</code>,
+  <code>writeFile</code>, <code>appendFile</code>, <code>fileExists</code>,
+  <code>readFileBytes</code> y <code>writeFileBytes</code> sí están en las dos.<br><br>
   No lo confundas con el árbol de ficheros del IDE, que sí lista la tarjeta: eso lo hace
   el firmware por el protocolo de depuración, no tu programa.<br><br>
   <strong>Mientras tanto</strong>, si tu programa necesita saber qué ficheros hay, llévate
@@ -2136,7 +2275,8 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   nadie se lo diga por adelantado:
 </p>
 
-<pre><code><span class="kw">import</span> Packs
+<pre><code><span class="kw">import</span> Core
+<span class="kw">import</span> Packs
 
 <span class="kw">var</span> p: <span class="type">List</span> := Packs.<span class="fn">list</span>()
 <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
@@ -2231,9 +2371,15 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
       transitivamente los imports leyendo cada <code>.mod</code> referenciado.</li>
   <li><code>--trace</code> imprime PC/Opcode/CS/SP/tid por instrucción.</li>
   <li><code>--workers=N</code> número de worker threads Java en paralelo
-      (default <code>2</code>; equivale a "cores físicos simulados").
-      <code>--workers=1</code> serializa todo: útil para reproducibilidad o
-      depurar races. Ver <a href="manual.html#concurrencia">§14</a>.</li>
+      (default <code>1</code>, que serializa todo; <code>N &gt; 1</code> es
+      opt-in y equivale a "cores físicos simulados"). Ver
+      <a href="manual.html#concurrencia">§14</a>.</li>
+  <li>Un <strong>segundo argumento posicional</strong> es el argumento de
+      ejecución que recibe <code>Main(arg)</code>
+      (<code>bpgenvm App.mod medidas.db</code>); sin él, Main recibe el valor
+      por defecto que declare el fuente. Igual en la VM-C de host
+      (<code>bpgenvm-c App.mod medidas.db</code>) y en el IDE
+      (<code>run App medidas.db</code>). <em>V6.</em></li>
   <li><code>-d</code> hace dump del bytecode (disassembler integrado).</li>
   <li><code>--config &lt;archivo&gt;</code> carga config JSON
       (<a href="#cli-vmcfg">BpVM.cfg</a>) desde la ruta indicada.</li>
@@ -2403,43 +2549,74 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   con anotaciones (nombre de función, sección, jumps con destino).
 </p>
 
-<h3 id="cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</h3>
+<h3 id="cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / C3 / C6 / P4 / STM32)</h3>
 <p>
   Desde el IDE, <em>Run on Device</em> ejecuta el módulo en un MCU conectado
   por puerto serie (protocolo «wire v1»): el IDE sube el <code>.mod</code>
-  (y las deps que falten — la stdlib a <code>/lib</code>, los drivers a
-  <code>/app</code>), lo ejecuta y muestra la salida. Los ficheros
-  persisten en el FS del dispositivo entre reinicios. Un programa en
-  ejecución se aborta con <em>Run → Stop</em> (Ctrl+F2) o el comando
-  <code>kill</code> de la consola, sin reiniciar la placa.
+  y las deps que falten (pregunta a la placa por cada una y sólo sube lo que no
+  está o está rancio; la stdlib vive en <code>/lib</code>, que el firmware repone
+  solo al arrancar, y los módulos de la app van a <code>/app</code>), lo ejecuta y
+  muestra la salida. Los ficheros persisten en el FS del dispositivo entre
+  reinicios. Un programa en ejecución se aborta con <em>Run → Stop</em> (Ctrl+F2) o
+  el comando <code>kill</code> de la consola, sin reiniciar la placa.
+</p>
+<p>
+  Cinco familias, siete imágenes, nueve placas. La memoria de la VM (heap + pilas de
+  los hilos BP) la decide cada imagen al arrancar y lo dice en el log; <code>stack=N</code>
+  (KB) en el entorno de la placa cambia el reparto entre pilas y montón.
 </p>
 <table>
-  <tr><th>MCU</th><th>Notas</th></tr>
+  <tr><th>MCU</th><th>RAM de la VM</th><th>Notas</th></tr>
   <tr><td>RP2350 (Pico 2 / Metro RP2350)</td>
-      <td>Wire v1 por USB-CDC; imagen de firmware única para ambas placas
-          (la variante se decide en runtime con <code>/sys/board.json</code>).
-          Funciones <code>native</code> aceleradas por AOT.</td></tr>
+      <td>~357 KB de SRAM; la Metro con <code>psram=1</code> en el entorno, 6 MB en PSRAM</td>
+      <td>Wire v1 por USB-CDC; imagen de firmware única para ambas placas: la
+          variante (A/B) la lee del silicio, y <code>/sys/board.json</code> sólo aporta
+          el nombre de la placa y sus pines (LED, NeoPixel).
+          Funciones <code>native</code> aceleradas por AOT (ARM). Tarjeta SD por SPI.</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td>
+      <td>~7 MB en PSRAM (V6: la PSRAM de 8 MB del módulo por fin activa; sin ella, 160 KB)</td>
       <td>Wire v1 por UART0 (puerto del bridge USB-UART); consola/logs por
           el USB nativo (USB-Serial-JTAG). FS persistente en partición
-          dedicada. <code>native</code> interpretada (sin AOT en Xtensa).</td></tr>
+          dedicada; zona de packs desde V6. <code>native</code> interpretada
+          (sin AOT en Xtensa; fuera del plan).</td></tr>
+  <tr><td>ESP32-C3 · ESP32-C6 (RISC-V, un núcleo) <em>— nuevas en V6</em></td>
+      <td>128 KB</td>
+      <td>Un solo conector USB: el wire va por el USB-Serial-JTAG y la consola por
+          UART0. Grabar = BOOT+RESET a mano. <code>native</code> interpretada hoy: son
+          RV32 sin FPU y el destino RISC-V del IDE es el del P4 (con FPU), así que la
+          placa rechaza el blob por ABI, lo dice en el log y sigue con el bytecode.
+          Packs en el C6. El <strong>ESP32-C6-LCD-1.3</strong> trae la primera pantalla
+          SPI (ST7789 240×240, sin táctil) y corre la GUI con esos 128 KB.</td></tr>
   <tr><td>ESP32-P4 (RISC-V)</td>
+      <td>en PSRAM (toda la libre menos los 4 MB del display: decenas de MB)</td>
       <td>Wire v1 por UART (puerto del bridge USB-UART). <strong>Imagen de
           firmware única</strong> para las placas P4 con pantalla: el panel se
-          elige en runtime con <code>/sys/board.json</code> (ver la
+          elige con la clave <code>display</code> del entorno de la placa
+          (<code>display=st7701</code> para la Waveshare; ver la
           <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>). FS en
-          PSRAM persistido a flash; GUI sobre pantalla MIPI-DSI con táctil.
-          <code>native</code> interpretada (sin AOT en RISC-V).</td></tr>
-  <tr><td>STM32 (ref. Nucleo-U575ZI-Q)</td>
-      <td>Wire v1 por el VCP del ST-LINK; FS persistente en los últimos
-          128 KB de la flash interna. <code>native</code> acelerada por AOT
-          (mismo Cortex-M33 que el RP2350).</td></tr>
+          PSRAM persistido a flash; GUI sobre pantalla MIPI-DSI con táctil;
+          tarjeta SD por SDIO. <code>native</code> <strong>acelerada</strong> por AOT
+          (RISC-V, desde V4).</td></tr>
+  <tr><td>STM32U5 (Nucleo-U575ZI-Q · STM32U5G9J-DK2)</td>
+      <td>Nucleo 512 KB · Discovery 1536 KB</td>
+      <td>Wire v1 por el VCP del ST-LINK; FS y packs en la flash interna que
+          queda tras el firmware. <code>native</code> acelerada por AOT
+          (mismo Cortex-M33 que el RP2350). La DK2 lleva la pantalla LTDC 800×480
+          con táctil. Sin ADC, sin watchdog (§14.11) y sin tarjeta SD todavía.</td></tr>
 </table>
 <p>
   El <strong>lenguaje y el bytecode son idénticos</strong> en todas las
-  plataformas (PC, RP2350, ESP32-S3, ESP32-P4, STM32): el mismo <code>.mod</code>
+  plataformas (PC, RP2350, ESP32-S3/C3/C6/P4, STM32): el mismo <code>.mod</code>
   corre en cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
-  SPI…) y la aceleración AOT, que es específica de arquitectura.
+  SPI…) y la aceleración AOT, que es específica de arquitectura. Qué periférico
+  falta en qué familia lo dice cada sección de §14; la fachada que no tiene backend
+  <strong>lanza</strong> <code>RuntimeError</code> en vez de inventarse un valor.
+</p>
+<p>
+  Los códigos de salida son los mismos en las dos VMs y en las cinco familias:
+  0 bien · 1 excepción BP no atrapada · 2 no se pudo cargar · 3 fallo interno de la
+  VM · 4 sin memoria · 130 Stop/KILL · 131 depurador. El IDE los explica con
+  <code>help error</code>.
 </p>
 
 <h4 id="cli-autorun">Arranque autónomo (<code>/sys/auto.txt</code>)</h4>
@@ -2470,35 +2647,47 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <!-- =========================================================== -->
 <h2 id="artefactos">17. Artefactos en disco</h2>
 
-<h3 id="mod">17.1 <code>.mod</code> (binario, MOD6)</h3>
-<pre>[MAGIC=0x4D4F4436]            4 bytes  "MOD6"
+<h3 id="mod">17.1 <code>.mod</code> (binario, MOD7)</h3>
+<pre>[MAGIC=0x4D4F4437]            4 bytes  "MOD7"
 [dataSize]                    4
 [mainOffset]                  4   offset al __startup, o -1
 [importsSize]                 4
 [exportsSize]                 4
 [codeSize]                    4
 [librarySize]                 4
-[interfaceSize]               4   0 si no lleva interfaz (sólo v6)
---- header (32) ---
+[interfaceSize]               4   texto de interfaz (v6+)
+[nativeSize]                  4   código nativo AOT (v7); 0 si no lleva
+--- header (36) ---
 [library   bytes]             librarySize
 [imports   bytes]             importsSize   pares (name, fromPath) UTF
 [exports   bytes]             exportsSize   pares (name, offset)
 [interface bytes]             interfaceSize texto de interfaz (§17.2)
+[native    bytes]             nativeSize    blobs .mdn, uno por arquitectura (§17.4)
 [data block]                  dataSize      strings, constantes, class descriptors
 [code]                        codeSize      bytecode</pre>
 <p>
-  <strong>v6 = módulo autodescriptivo.</strong> Añade <code>interfaceSize</code>
-  al header y una sección <code>interface</code> entre <code>exports</code> y
-  <code>data</code>: el <code>.mod</code> lleva dentro su propia interfaz, y el
-  fichero <code>.bpi</code> aparte <strong>ha dejado de existir</strong>. Las VMs
-  <em>no</em> la necesitan para ejecutar — leen <code>interfaceSize</code> del
-  header y saltan la sección —; quien la usa es el compilador al resolver los
-  <code>import</code>.
+  <strong>v6 = módulo autodescriptivo.</strong> Añadió <code>interfaceSize</code>
+  al header y una sección <code>interface</code>: el <code>.mod</code> lleva dentro
+  su propia interfaz, y el fichero <code>.bpi</code> aparte <strong>ha dejado de
+  existir</strong>. Las VMs <em>no</em> la necesitan para ejecutar — leen
+  <code>interfaceSize</code> del header y saltan la sección —; quien la usa es el
+  compilador al resolver los <code>import</code>.
 </p>
 <p>
-  Los cargadores siguen aceptando <strong>v5</strong> (<code>MAGIC "MOD5"</code>,
-  header de 28 bytes, sin sección de interfaz) para no romper artefactos
-  antiguos.
+  <strong>v7 = el nativo va dentro.</strong> Añade <code>nativeSize</code> (header de
+  36 bytes) y una sección <code>native</code> entre <code>interface</code> y
+  <code>data</code> con el código máquina de las <code>native function</code>, uno o
+  varios blobs según las arquitecturas para las que se compiló. Vacía en casi todos
+  los módulos. Las secciones nuevas se insertan <em>antes</em> de <code>data</code>, no
+  al final: los offsets internos de <code>data</code> y <code>code</code> son relativos
+  a su sección y no hay que recalcular nada.
+</p>
+<p>
+  Los cargadores ejecutan <strong>v6 y v7</strong> (el ABI es el mismo).
+  <strong>v5</strong> (<code>MAGIC "MOD5"</code>, header de 28 bytes) se
+  <strong>rechaza</strong>: es anterior al ensanchado de referencias 4→8 bytes y
+  correrlo corrompería en silencio. El tamaño del header depende del MAGIC:
+  28 / 32 / 36 bytes para v5 / v6 / v7.
 </p>
 
 <h3 id="bpi">17.2 Interfaz del módulo (texto, v7)</h3>
@@ -2554,27 +2743,45 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   VM local como contra el device (mismo formato).
 </p>
 
-<h3 id="mdn">17.4 <code>.mdn</code> (overlay AOT)</h3>
+<h3 id="mdn">17.4 El código nativo: sección <code>native</code> y <code>.mdn</code></h3>
 <p>
-  Código máquina Thumb-2 de las <code>native function</code> de un módulo
+  Código máquina de las <code>native function</code> de un módulo
   (ver <a href="manual.html#funciones-native">§8.3</a>). Es <strong>aditivo</strong>:
-  el <code>.mod</code> siempre lleva el bytecode; si el runtime encuentra
-  <code>&lt;Modulo&gt;.mdn</code> y es de su arquitectura, registra esas
-  funciones como nativas (carga zero-copy, datos alineados a 4). Si no,
-  todo corre interpretado. El IDE lo sube a la placa junto al
-  <code>.mod</code>.
+  el <code>.mod</code> siempre lleva el bytecode; si el runtime encuentra un blob de
+  su arquitectura, registra esas funciones como nativas (carga zero-copy, datos
+  alineados a 4). Si no, todo corre interpretado.
 </p>
+<p>
+  <strong>Desde V6 el nativo viaja DENTRO del <code>.mod</code></strong> (sección
+  <code>native</code> del formato v7, §17.1): el IDE compila las funciones
+  <code>native</code> en <em>Run on Device</em>, funde el blob en el
+  <code>.mod</code> y <strong>no escribe ningún <code>.mdn</code> suelto</strong> de la
+  aplicación (retira incluso el que quedara de una versión anterior, en el PC y en
+  la placa). Así no hay dos ficheros que puedan desparejarse. Con varias familias,
+  cada compilación añade su blob y el módulo acaba llevándolos todos, cada uno con
+  su <code>arch</code>. El fichero <code>.mdn</code> suelto sólo sigue existiendo
+  como ingrediente de los <strong>packs</strong> (<code>SQLite.mdn.RISCV</code> y
+  hermanos, §15.4).
+</p>
+<table>
+  <tr><th>familia</th><th><code>native</code></th></tr>
+  <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>acelerada — destino <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
+  <tr><td>ESP32-P4 (RV32 con FPU)</td><td>acelerada — destino <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
+  <tr><td>ESP32-C3 · C6 (RV32 sin FPU)</td><td>interpretada hoy: el blob del P4 no casa en ABI de coma flotante y la placa lo rechaza con aviso</td></tr>
+  <tr><td>ESP32-S3 (Xtensa)</td><td>interpretada (sin AOT; fuera del plan)</td></tr>
+  <tr><td>PC (las dos VMs)</td><td>interpretada; el host tiene su propia ejecución nativa de prueba</td></tr>
+</table>
 <p>
   <strong>Generación (CLI, fuera del IDE)</strong>: el <code>.mdn</code> lo
   produce el script <code>build_mdn.sh</code> en tres pasos —
-  <code>AotMain</code> emite C, <code>arm-none-eabi-gcc</code> lo compila a
-  Thumb-2 PIC, y <code>MdnPack</code> lo empaqueta. Requiere el toolchain
-  ARM bare-metal (<code>arm-none-eabi-gcc</code>) en el <code>PATH</code> o
-  en la variable de entorno <code>GCC</code>. Desde v3 el IDE ejecuta este
-  paso <strong>automáticamente</strong> en <em>Run on Device</em> (placas ARM;
-  detección/configuración del toolchain en <em>Project → AOT (toolchain)…</em>,
-  instalación en la <a href="guia-ide.html#aot">Guía del IDE §5.1</a>); el
-  script queda para builds manuales o automatizados.
+  <code>AotMain</code> emite C, el gcc de la familia lo compila
+  (<code>arm-none-eabi-gcc</code> a Thumb-2 PIC; <code>riscv32-esp-elf-gcc</code> con
+  <code>-mcmodel=medany</code> y un paso de enlace), y <code>MdnPack</code> lo
+  empaqueta. Requiere el toolchain en el <code>PATH</code> o en la variable de
+  entorno <code>GCC</code>. El IDE ejecuta este paso <strong>automáticamente</strong>
+  en <em>Run on Device</em> (detección/configuración del toolchain en <em>Project →
+  AOT (toolchain)…</em>, instalación en la <a href="guia-ide.html#aot">Guía del IDE
+  §5.1</a>); el script queda para builds manuales o automatizados.
 </p>
 
 <h3 id="proyecto">17.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
@@ -2595,8 +2802,8 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
-  Formato <code>.mod</code> v6 (interfaz embebida v7).<br>
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / C3 / C6 / P4 / STM32) ·
+  Formato <code>.mod</code> v7 (interfaz embebida + sección <code>native</code>).<br>
   BasicPlus se apoya en trabajo de otros —
   <a href="creditos.html">créditos y agradecimientos</a>.
 </p>

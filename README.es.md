@@ -121,17 +121,24 @@ no sea un eslogan.
 
 | Plataforma | Transporte | Notas |
 |---|---|---|
-| PC (Windows/Linux/macOS) | — | Ambas VMs; daemon TCP para el IDE. La VM-C + LVGL/SDL pinta la GUI en una ventana. |
-| Raspberry Pi **Pico 2** y Adafruit **Metro RP2350** | USB-CDC | **Una imagen de firmware única** para ambas placas: la variante (A/B), los pines y la PSRAM se deciden en *runtime* (`/sys/board.json`), no con macros de compilación. AOT activo. |
-| **ESP32-S3** (Xtensa) | UART0 | FS persistente en partición dedicada; consola por USB nativo. |
-| **ESP32-P4** (RISC-V) — con pantalla | UART | GUI con LVGL sobre panel MIPI-DSI + táctil. **Una imagen única** para el kit Function-EV (EK79007 1024×600) y la Waveshare 4.3" (ST7701 480×800); el panel se elige en *runtime* (`/sys/board.json`). |
-| **STM32** (Nucleo-U575ZI-Q · Discovery U5G9J-DK2) | VCP del ST-LINK | FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350). El **Discovery DK2** añade pantalla LTDC (800×480) + táctil (GUI). |
+| PC (Windows/Linux/macOS) | — | Ambas VMs; daemon TCP para el IDE. La VM-C + LVGL/SDL pinta la GUI en una ventana (`--screen=WxH` imita el panel de una placa). |
+| Raspberry Pi **Pico 2** y Adafruit **Metro RP2350** (Cortex-M33) | USB-CDC | **Una imagen de firmware única** para ambas placas: la variante (A/B) se detecta por hardware; los 8 MB de PSRAM de la Metro se activan con `psram=1` en el ENV de la placa, y la identidad/pines de la placa (`name`, `ledPin`, `neopixelPin`) salen de `/sys/board.json`. AOT activo. |
+| **ESP32-S3** (Xtensa) | bridge UART0 | 8 MB de PSRAM como memoria de la VM; FS persistente y packs en particiones dedicadas; consola por el USB nativo. `native` corre interpretado (sin AOT Xtensa). |
+| **ESP32-C3** y **ESP32-C6** (RISC-V, un núcleo) — *nuevas en V6* | USB-Serial-JTAG (el único USB) | El wire va por el único conector USB; la consola, por UART0. VM de 128 KB. La **Waveshare ESP32-C6-LCD-1.3** añade la primera pantalla por SPI (ST7789 240×240, sin táctil). `native` corre interpretado de momento (el IDE aún no tiene destino RISC-V sin FPU). |
+| **ESP32-P4** (RISC-V) — con pantalla | bridge UART | GUI con LVGL sobre panel MIPI-DSI + táctil. **Una imagen única** para el kit Function-EV (EK79007 1024×600) y la Waveshare 4.3" (ST7701 480×800); el panel se elige en *runtime* con `display=st7701` en el ENV de la placa. AOT activo (RISC-V). |
+| **STM32** (Nucleo-U575ZI-Q · Discovery U5G9J-DK2) | VCP del ST-LINK | FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350). El **Discovery DK2** añade pantalla LTDC (800×480) + táctil (GUI). Sin backend de `Adc`/`Wdt` en esta familia (lanzan). |
+
+Siete imágenes, nueve placas. La configuración de la placa vive fuera del
+programa, en dos mitades: identidad y pines en `/sys/board.json` (solo
+RP2350); PSRAM y panel en el **ENV** de la placa (botón *Entorno* del IDE).
 
 En todas: REPL "wire v1" (JSON por línea) con subida de ficheros, RUN
 remoto, **Stop** (KILL cooperativo sin resetear la placa), **autorun**
 (`/sys/auto.txt` arranca tu programa al encender — dispositivo autónomo de
 verdad, y el IDE puede conectarse en caliente y recuperar el control) y
-debug on-device con breakpoints.
+debug on-device con breakpoints. Desde V6 el firmware corre dos hilos de
+SO, `vm` e `io`, en las cinco familias: el IDE sigue atendido (Stop, reset,
+HELLO) mientras el programa corre.
 
 ## Verificado en hardware real
 

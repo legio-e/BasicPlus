@@ -122,12 +122,12 @@ Convención general:
 
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
-| 37 | `input` | `()` | `string` | Lee línea de stdin (sin newline final). |
+| 37 | `input` | `()` | `string` | **Sólo VM-Java**: con IDE abre su ventana; sin IDE lee una línea de stdin (sin newline final). En la VM-C (placas y micro simulado) lanza RTErr `builtin 37 no soportado en esta VM (subconjunto C)` — decidido, ver `PENDIENTES.md`. |
 | 38 | `readFile` | `(path: string)` | `string` | Lee fichero entero como UTF-8. RTErr si no existe / sandbox. |
 | 39 | `writeFile` | `(path, content: string)` | `void` | Sobreescribe. Crea el fichero si no existe. RTErr sandbox. |
 | 40 | `appendFile` | `(path, content: string)` | `void` | Append. RTErr sandbox. |
 | 41 | `fileExists` | `(path: string)` | `bool` | RTErr sandbox. |
-| 42 | `listDir` | `(path: string)` | `string[]` | Nombres de los entries (no recursivo). RTErr si no es dir. |
+| 42 | `listDir` | `(path: string)` | `string[]` | **Sólo VM-Java**: nombres de los entries (no recursivo). RTErr si no es dir. En la VM-C lanza RTErr `builtin 42 no soportado en esta VM (subconjunto C)`: no está implementado en placa (V7). |
 | 126 | `readFileBytes` | `(path: string)` | `byte[]` | Lee fichero entero como `byte[]` crudo (binario sin pérdidas: NUL/>127/UTF-8 inválido). #247. |
 | 127 | `writeFileBytes` | `(path, data: byte[])` | `void` | Escribe los bytes crudos del `byte[]` (sobreescribe). #247. |
 
@@ -190,7 +190,7 @@ Convención general:
 | 65 | `__pathParent` | `(p: string)` | `string` | `"" `si no tiene padre. |
 | 66 | `__pathBasename` | `(p: string)` | `string` | Último componente. |
 | 67 | `__pathExtension` | `(p: string)` | `string` | Sin punto. `""` si no. |
-| 68 | `__pathAbsolute` | `(p: string)` | `string` | Resuelve `..` y `.`. |
+| 68 | `__pathAbsolute` | `(p: string)` | `string` | **V6 (#484): el nombre que el FS va a usar**, función pura de `(p, App.projectPath())`: empieza por `/` → tal cual · tiene esquema `x:` → tal cual · hay proyecto → `<projectPath>/<p>` · si no → tal cual (lo relativo se queda relativo). **NO** normaliza `..` ni `.` y no mira el disco: `pathAbsolute("a/../b")` = `a/../b`, igual en las dos VMs. Antes devolvía la ruta del SO del PC. |
 | 69 | `__mkdir` | `(p: string)` | `void` | Recursive. No falla si existe. |
 | 70 | `__rmdir` | `(p: string)` | `void` | Sólo si vacío. |
 | 71 | `__removeFile` | `(p: string)` | `void` | |
@@ -204,7 +204,7 @@ Convención general:
 
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
-| 77 | `__prompt` | `(spec: string)` | `string` | Si no hay `PromptSender` registrado (= no IDE): RTErr BP atrapable. Si lo hay: bloquea el thread BP (`tc.status=BLOCKED_PROMPT`, registrado en `pendingPrompts[promptId]=tc`), envía `{"type":"PROMPT_REQUEST","promptId":N,"spec":...}` al IDE. El IDE responde con `{"type":"PROMPT_RESPONSE","id":M,"promptId":N,"values":...}` (wire v1) y la VM despierta el thread con el JSON empujado al stack. |
+| 77 | `__prompt` | `(spec: string)` | `string` | Si no hay `PromptSender` registrado (= no IDE): RTErr BP atrapable `prompt: no hay IDE conectado` — el mismo texto en la VM-C, que nunca tiene IDE para esto (#484). Si lo hay: bloquea el thread BP (`tc.status=BLOCKED_PROMPT`, registrado en `pendingPrompts[promptId]=tc`), envía `{"type":"PROMPT_REQUEST","promptId":N,"spec":...}` al IDE. El IDE responde con `{"type":"PROMPT_RESPONSE","id":M,"promptId":N,"values":...}` (wire v1) y la VM despierta el thread con el JSON empujado al stack. |
 
 ---
 
@@ -218,11 +218,9 @@ Convención general:
 > `string` y `byte[]` comparten el layout `TYPE_ARRAY_I8`; la conversión es una
 > copia del payload con distinto tipo estático.
 >
-> **Nota de paridad C/Java:** la VM C (host/MCU) implementa solo un *subset* de
-> builtins. Los intrínsecos de filesystem de IO (`pathBasename`… ids 64..76) y
-> algunos de Math NO están en ese subset → solo corren en la VM Java. Si se
-> portan a la C, los de string deben respetar la semántica por codepoint. Ver
-> **§ Paridad VM-C (GAP-1)** para la clasificación completa y el fallo limpio.
+> **Nota de paridad C/Java (V6):** la VM-C (host/MCU) implementa hoy **todos** los
+> builtins salvo cuatro: `input` (37), `listDir` (42), `heapFrag` (121) y
+> `heapMap` (122). Ver **§ Paridad VM-C** para el fallo limpio de esos cuatro.
 
 ---
 
@@ -240,8 +238,9 @@ dispatcher (`builtins.c`) lanza ahora un **`RuntimeError` BP atrapable**:
     RuntimeError: builtin <id> no soportado en esta VM (subconjunto C)
 
 — capturable con `try/catch e: RuntimeError`; si no se atrapa, termina el thread
-con un mensaje claro (status `RuntimeError BP no atrapado`, exit 10), nunca un
-crash silencioso.
+con un mensaje claro (status `RuntimeError BP no atrapado`, **exit 1** desde V6/#481:
+el código de «excepción BP no atrapada», igual en las dos VMs), nunca un crash
+silencioso.
 
 **2. Portados byte-exactos.** Las numéricas **enteras** `abs`/`min`/`max`
 (ids 16/17/18) se portan a la VM-C. Aritmética `int32` pura → **paridad
@@ -255,19 +254,25 @@ byte-idéntico**, invariante central del proyecto dual-VM. Portarlos exige
 verificar la igualdad bit-a-bit del resultado (o compartir implementación):
 trabajo de **H10**.
 
-### Clasificación
+### Clasificación (estado en V6, 12-sep-2026)
 
-| Clase | Builtins (ejemplos) | En VM-C |
+Lo de arriba es la historia de GAP-1 (junio). Desde entonces se portó casi todo — los
+float con el formateador canónico GAP-4 (L13) y los string por codepoint — y el FS del
+device es littlefs (V4/H2), así que «IO filesystem host-only» dejó de ser verdad. Medido
+contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 240 entradas):
+
+| Clase | Builtins | En VM-C |
 |---|---|---|
-| **Núcleo portado** | `strlen`/`substring`/`charAt`/`charCodeAt` (UTF-8), `intToString`/`parseInt`/`parseFloat`/`floatToString`/`boolToString`, `abs`/`min`/`max`, `now`/`sleep`/`gc`, `move` + helpers de array, threading (`__threadStart`/`Join`/`yield`) + Mutex, `toBytes`/`fromBytes` | ✅ sí |
-| **HW (device)** | Gpio/I2c/Spi/Uart/Pwm/Adc/Rtc/Wdt/Pulse/Pico/NeoPixel (ids 78..125) | ✅ sí (no-op donde no aplica) |
-| **Portables diferidos** | float/math (`sqrt`…`tan`, `pow`, `log*`, `exp`, `pi`/`e`, `floor`/`ceil`/`round`, `random*`); string avanzados (`upper`/`lower`/`trim`/`indexOf`/`startsWith`/`endsWith`/`contains`/`replace`/`split`); Math `__*` (`asin`…`gamma`, `sign`, `factorial`) | ❌ → fallo limpio (H10) |
-| **Host-only (PC)** | IO filesystem (`readFile`…`listDir`, `__path*`, `__mkdir`…) ids 37..42, 64..76; `input`; `__prompt` (77) | ❌ por diseño (el MCU no tiene FS de PC ni IDE) |
+| **Portados** | strings (0..15, `split`, `charCodeAt`, `toBytes`/`fromBytes`), numéricas y float/math (16..33, `random*`, Math `__*` 56..63 y `clamp`/`wrap`/`hypot`/`remap`), `now`/`sleep`/`gc`, arrays y threading/Mutex, **ficheros** (`readFile`/`writeFile`/`appendFile`/`fileExists`, `readFileBytes`/`writeFileBytes`) y **rutas/FS de IO** (`__path*` 64..68, `__mkdir`…`__lastModified` 69..76), `__throwRte`, `__longToString`/`__doubleToString`, GUI, packs, eventos, `App.*`, `Machine.*` | ✅ todos |
+| **HW (device)** | Gpio/I2c/Spi/Uart/Pwm/Adc/Rtc/Wdt/Pulse/Machine/NeoPixel | ✅ sí. **Sin backend ya no se inventan valores (V6)**: en el PC, Gpio/Pwm/Pulse/Uart/Spi/Machine escriben la misma línea de simulación en las dos VMs; NeoPixel donde no hay driver (ESP32/STM32/PC) y Wdt en STM32/PC lanzan `RuntimeError`; Adc lanza si la conversión falla. Detalle por familia en `referencia.html` §14. |
+| **Red (`Net`, 131..134)** | `tcpConnect`/`tcpSend`/`tcpRecv`/`tcpClose` | ✅ en las dos VMs del PC; **en placa no hay backend** (WiFi = V8): lanzan `Net: sin red en esta plataforma` |
+| **Sólo VM-Java, por decisión** | `input` (37), `__prompt` (77 — en la VM-C lanza `prompt: no hay IDE conectado`) | ❌ decidido (`PENDIENTES.md`) |
+| **Sólo VM-Java, sin implementar** | `listDir` (42) | ❌ → fallo limpio; V7 |
 | **Java-only (diagnóstico)** | `heapFrag`/`heapMap` (121/122) | ❌ intencional (herramientas de la VM-Java) |
 
-> Diferido ≠ imposible. Portar un builtin **float** exige respetar el caveat de
-> paridad (arriba). Portar uno de **string** exige semántica **por codepoint**
-> (los strings son `byte[]` UTF-8 desde H2).
+> `input` y `listDir` **compilan** sin import en cualquier módulo: el fallo llega en
+> ejecución, en la placa. Es el único punto donde el mismo `.mod` da salida distinta en
+> las dos VMs a propósito.
 
 ---
 
@@ -342,7 +347,9 @@ byte-idéntico entre VMs y, deliberadamente, idéntico a `print v`. Lo emite
   actual. Útil para identificación de logs.
 - **`__threadId(t: Thread)` → int**: tid de un Thread (también para
   logs).
-- Builtins de socket TCP/UDP (cuando se integre lwIP en F4/F5).
+
+(Los sockets TCP ya existen: `tcpConnect`…`tcpClose`, ids 131..134, con backend
+sólo en el PC; el de las placas llega con el WiFi, V8.)
 
 Estos van con `id` consecutivo cuando se implementen, **siempre al
 final** del enum.

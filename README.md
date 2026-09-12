@@ -119,17 +119,24 @@ slogan.
 
 | Platform | Transport | Notes |
 |---|---|---|
-| PC (Windows/Linux/macOS) | — | Both VMs; TCP daemon for the IDE. VM-C + LVGL/SDL renders the GUI in a window. |
-| Raspberry Pi **Pico 2** and Adafruit **Metro RP2350** | USB-CDC | **A single firmware image** for both boards: variant (A/B), pins and PSRAM are decided at *runtime* (`/sys/board.json`), not with compile-time macros. AOT enabled. |
-| **ESP32-S3** (Xtensa) | UART0 | Persistent FS on a dedicated partition; console over native USB. |
-| **ESP32-P4** (RISC-V) — with a screen | UART | GUI over LVGL on a MIPI-DSI panel + touch. **A single image** for the Function-EV (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at *runtime* (`/sys/board.json`). |
-| **STM32** (Nucleo-U575ZI-Q · Discovery U5G9J-DK2) | ST-LINK VCP | FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350). The **Discovery DK2** adds an LTDC screen (800×480) + touch (GUI). |
+| PC (Windows/Linux/macOS) | — | Both VMs; TCP daemon for the IDE. VM-C + LVGL/SDL renders the GUI in a window (`--screen=WxH` mimics a board's panel). |
+| Raspberry Pi **Pico 2** and Adafruit **Metro RP2350** (Cortex-M33) | USB-CDC | **A single firmware image** for both boards: the variant (A/B) is detected from the hardware; the Metro's 8 MB PSRAM is enabled with `psram=1` in the board's ENV, and the board's identity/pins (`name`, `ledPin`, `neopixelPin`) come from `/sys/board.json`. AOT enabled. |
+| **ESP32-S3** (Xtensa) | UART0 bridge | 8 MB PSRAM as VM memory; persistent FS and packs on dedicated partitions; console over the native USB. `native` runs interpreted (no Xtensa AOT). |
+| **ESP32-C3** and **ESP32-C6** (RISC-V, single core) — *new in V6* | USB-Serial-JTAG (the only USB) | The wire goes through the one USB connector; console on UART0. 128 KB VM. The **Waveshare ESP32-C6-LCD-1.3** adds the first SPI screen (ST7789 240×240, no touch). `native` runs interpreted for now (no soft-float RISC-V target in the IDE yet). |
+| **ESP32-P4** (RISC-V) — with a screen | UART bridge | GUI over LVGL on a MIPI-DSI panel + touch. **A single image** for the Function-EV (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at *runtime* with `display=st7701` in the board's ENV. AOT enabled (RISC-V). |
+| **STM32** (Nucleo-U575ZI-Q · Discovery U5G9J-DK2) | ST-LINK VCP | FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350). The **Discovery DK2** adds an LTDC screen (800×480) + touch (GUI). No `Adc`/`Wdt` backend on this family (they throw). |
+
+Seven images, nine boards. The board's own configuration lives outside your
+program, in two halves: identity and pins in `/sys/board.json` (RP2350 only);
+PSRAM and panel in the board's **ENV** (the IDE's *Entorno* button).
 
 On all of them: a "wire v1" REPL (JSON per line) with file upload, remote
 RUN, **Stop** (cooperative KILL without resetting the board), **autorun**
 (`/sys/auto.txt` starts your program on power-up — a truly standalone
 device, and the IDE can attach live and take back control) and on-device
-debugging with breakpoints.
+debugging with breakpoints. Since V6 the firmware runs two OS threads,
+`vm` and `io`, on all five families: the IDE keeps talking to the board
+(Stop, reset, HELLO) while a program runs.
 
 ## Verified on real hardware
 

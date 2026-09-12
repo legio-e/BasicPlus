@@ -108,8 +108,9 @@ bloque donde dice su rectángulo.
 - **En el C6 lo que manda es la DRAM de plataforma, no el tope**: tras LVGL quedan ~26 KB (bloque mayor
   14 KB). Por eso en placa se comprime **desde la banda, sin copiar** (ya es RGB565 y contigua) y el buffer
   de salida arranca en 4 KB; el `tmp` de conversión sólo existe en el host. La captura cuesta ~5 KB de DRAM.
-- Bajar por COM sin el IDE: `python tools/wire_serie.py COM12 get /GuiShot.shot local.shot`
-  (desde Git Bash con `MSYS_NO_PATHCONV=1`), y `python tools/shot2png.py local.shot`.
+- Bajar por COM sin el IDE: `python bpgenvm-c/tools/wire_serie.py COM12 get /GuiShot.shot local.shot`
+  (desde Git Bash con `MSYS_NO_PATHCONV=1`), y `python bpgenvm-c/tools/shot2png.py local.shot`
+  (los dos scripts viven en `bpgenvm-c/tools/`; no hay `tools/` en la raíz).
 
 ## Tamaños de referencia (crudo; la medida del 5-sep dio 21,8×–152,6× con LZ4 en pantallas reales)
 

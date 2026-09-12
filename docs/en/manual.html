@@ -207,7 +207,7 @@
     <li class="sub"><a href="#library">10.1 library</a></li>
     <li class="sub"><a href="#main">10.2 main / initializer</a></li>
     <li class="sub"><a href="#imports">10.3 import / from</a></li>
-    <li class="sub"><a href="#interfaces">10.4 module interface (retirado)</a></li>
+    <li class="sub"><a href="#interfaces">10.4 module interface (withdrawn)</a></li>
     <li class="sub"><a href="#encapsulacion">10.7 Class↔module encapsulation</a></li>
     <li class="sub"><a href="#dospasadas">10.6 Two passes and cycles between modules</a></li>
 
@@ -250,7 +250,7 @@
 <h1>BasicPlus — Language manual</h1>
 <p style="color:var(--fg-muted)">
   A structured, typed, module-oriented language. A Java frontend compiles to
-  its own bytecode (the <code>.mod</code> v6 format, "MOD6"), executed by the
+  its own bytecode (the <code>.mod</code> v7 format, "MOD7"), executed by the
   <code>bpgenvm</code> VM (mark-and-sweep GC, deterministic owner handling,
   typed exceptions).
 </p>
@@ -260,7 +260,7 @@
 <p>
   BasicPlus (BP) takes the friendly syntax of Basic / Pascal and combines it
   with modern semantics: classes with single inheritance, modules as
-  Modula-2-style units, interfaces as contracts, exception handling, and
+  Modula-2-style units, exception handling, and
   deterministic "ownership" for immediate release of resources.
 </p>
 <p>The overall pipeline is:</p>
@@ -285,7 +285,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <p>
   The minimum: a <code>module</code>, a <code>function main(arg: string)</code>,
   and matched <code>end</code>s. The VM passes an empty string to
-  <code>main</code> when there are no arguments.
+  <code>main</code> when there are no arguments; how to pass one (and give it a
+  default value) is in <a href="#main">§10.2</a>.
 </p>
 
 <!-- =========================================================== -->
@@ -308,17 +309,19 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <table>
   <tr><th>Category</th><th>Tokens</th></tr>
   <tr><td>Structure</td>
-      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code> <code>interface</code> <code>implements</code></td></tr>
+      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code>
+          (<code>interface</code> <code>implements</code>: reserved, unused — <a href="#interfaces">§10.4</a>)</td></tr>
   <tr><td>Declarations</td>
       <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
-          <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code></td></tr>
+          <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code>
+          <code>event</code> <code>raise</code></td></tr>
   <tr><td>Visibility / modifiers</td>
-      <td><code>public</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
+      <td><code>public</code> <code>private</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
   <tr><td>Instance</td>
       <td><code>this</code> <code>super</code> <code>field</code></td></tr>
   <tr><td>Control flow</td>
       <td><code>if</code> <code>then</code> <code>else</code> <code>elseif</code> <code>endif</code>
-          <code>while</code> <code>do</code> <code>endwh</code>
+          <code>while</code> <code>do</code> <code>endwh</code> <code>loop</code>
           <code>for</code> <code>to</code> <code>step</code> <code>in</code> <code>next</code>
           <code>switch</code> <code>case</code> <code>default</code> <code>endsw</code>
           <code>parallel</code> <code>endpar</code>
@@ -465,21 +468,23 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <p>
   The size is decided at run time. The array is allocated on the
   <strong>heap</strong> (opcode <code>NEWARRAY</code>) and referenced through a
-  ref (an i32 holding the pointer to the block). Managed by the GC.
+  ref — a 64-bit <em>handle</em> with a generation counter, not an address: using
+  an object that was already freed fails on the spot instead of corrupting
+  silently. Managed by the GC.
 </p>
 <pre><code><span class="comment">// From a literal: the frontend emits NEWARRAY n + an ASTORE for each element</span>
 <span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
 
 <span class="comment">// From a function: split, listDir, etc. return arrays</span>
 <span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
-<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)</code></pre>
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// PC Java VM only (§17)</span></code></pre>
 <p>
   The VM uses five physical heap types depending on the element width:
   <code>TYPE_ARRAY_I8</code> (byte/int8 and UTF-8 strings),
   <code>TYPE_ARRAY_I16</code> (word/int16),
   <code>TYPE_ARRAY_I32</code> (integer; also floats, as 4 opaque bytes),
   <code>TYPE_ARRAY_I64</code> (long/double, 8 bytes per element) and
-  <code>TYPE_ARRAY_REF</code> (4 bytes, object refs, scanned by the GC). The
+  <code>TYPE_ARRAY_REF</code> (8 bytes per element: object handles, scanned by the GC). The
   array carries its own length as the first slot. For the narrow widths, a read
   extends the value to i32 (signed or unsigned according to the type) and a
   write truncates to the element width.
@@ -546,6 +551,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   late. With <code>Object</code> the compiler makes you say what you expect, and if it is not
   that, it <strong>fails right there</strong>. For plain values there is a shortcut with no
   cast — <code>List</code>'s typed getters, in the reference.
+</p>
+<p>
+  The cast <code>Class(x)</code> only accepts an <code>Object</code> as its source. To go down
+  between two classes of the same hierarchy (<code>Dog(a)</code> with <code>a: Animal</code>)
+  the compiler reads it as a constructor call and rejects it: go through an
+  <code>Object</code> variable first (<a href="#pendientes">§17</a>).
 </p>
 
 <!-- =========================================================== -->
@@ -638,7 +649,16 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <span class="kw">do</span>
   i := i + <span class="num">1</span>
-<span class="kw">while</span> i &lt; <span class="num">100</span>          <span class="comment">// do-while: condition after the body</span></code></pre>
+<span class="kw">loop</span> i &lt; <span class="num">100</span>           <span class="comment">// do-while: the body runs at least once; keeps going while the condition holds</span>
+
+<span class="kw">do</span>
+  i := i + <span class="num">1</span>
+  <span class="kw">if</span> i &gt; <span class="num">105</span> <span class="kw">then</span> <span class="kw">break</span>
+<span class="kw">loop</span>                    <span class="comment">// no condition: infinite loop, leave it with break</span></code></pre>
+<p>
+  The loop with the condition at the end closes with <code>loop [condition]</code>
+  (there is no <code>do … while</code>).
+</p>
 
 <h3 id="for">7.3 <code>for</code></h3>
 <p>Two variants: numeric and foreach (<code>for-in</code>).</p>
@@ -647,8 +667,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <span class="kw">print</span> i
 <span class="kw">next</span> i
 
-<span class="kw">for</span> i := <span class="num">10</span> <span class="kw">to</span> <span class="num">1</span> <span class="kw">step</span> -<span class="num">1</span> <span class="kw">do</span>
-  <span class="kw">print</span> i
+<span class="kw">for</span> i := <span class="num">1</span> <span class="kw">to</span> <span class="num">10</span> <span class="kw">step</span> <span class="num">3</span> <span class="kw">do</span>
+  <span class="kw">print</span> i                <span class="comment">// 1 4 7 10</span>
 <span class="kw">next</span> i
 
 <span class="comment">// Foreach over an array (fixed or variable, any element type)</span>
@@ -660,6 +680,11 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   The body closes with <code>next [name]</code> (not <code>endfor</code>); the
   name after <code>next</code> is optional and, if present, must match the
   iteration variable (documentation use).
+</p>
+<p>
+  <strong>Current limit of <code>step</code>:</strong> it only takes a positive integer
+  literal. <code>step -1</code> (a unary over the literal) or a variable do not compile
+  ("for step solo soporta literal int"); to count downwards use <code>while</code>.
 </p>
 
 <h3 id="switch">7.4 <code>switch</code></h3>
@@ -690,11 +715,11 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <pre><code><span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
   <span class="kw">parallel</span>
     <span class="kw">case</span> t1 := Thread(<span class="num">2048</span>)
-      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">1</span>, <span class="num">50000</span>)
+      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">1</span>, <span class="num">10000</span>)
       <span class="kw">print</span> <span class="str">"t1 = "</span> + intToString(r)
 
     <span class="kw">case</span> t2 := Thread(<span class="num">2048</span>)
-      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">50001</span>, <span class="num">100000</span>)
+      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">10001</span>, <span class="num">20000</span>)
       <span class="kw">print</span> <span class="str">"t2 = "</span> + intToString(r)
 
     <span class="kw">default</span>
@@ -793,14 +818,13 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
 { n, s } := t                          <span class="comment">// ... and unpack it later</span>
 
 { arr[<span class="num">0</span>], arr[<span class="num">1</span>] } := coords()        <span class="comment">// into array elements</span>
-{ p.x, p.y } := coords()               <span class="comment">// into object fields</span>
-
-lista.add(pair())                      <span class="comment">// go into collections via any</span>
-<span class="kw">var</span> t2: (<span class="type">integer</span>, <span class="type">string</span>) := lista.get(<span class="num">0</span>)</code></pre>
+{ p.x, p.y } := coords()               <span class="comment">// into object fields</span></code></pre>
 <p>
   A tuple is not printed directly (<code>print t</code> is an error): unpack it
   first. The targets of <code>{ ... } :=</code> must already exist (it does not
-  declare variables).
+  declare variables). And a tuple <strong>does not go into a collection</strong>:
+  <code>List.add</code> takes <code>Object</code> and a tuple is not one
+  (<a href="#any">§4.5</a>); wrap it in a small class if you need it in a list.
 </p>
 
 <h3 id="funciones-native">8.3 <code>native</code> functions (AOT)</h3>
@@ -822,55 +846,68 @@ lista.add(pair())                      <span class="comment">// go into collecti
 <span class="kw">end</span> sumaCuadrados</code></pre>
 <ul>
   <li><strong>Additive</strong>: the <code>.mod</code> ALWAYS contains the
-      function's bytecode. The AOT is an optional overlay
-      (<code>.mdn</code>) that the runtime uses if it is present and matches the
-      micro's architecture; otherwise the function runs interpreted. Not
-      compiling the AOT never breaks the program.</li>
+      function's bytecode. The native code travels <strong>inside the same
+      <code>.mod</code></strong> (the <code>native</code> section of the v7
+      format; there is no longer a separate application <code>.mdn</code>) and
+      the runtime uses it if it matches the micro's architecture; otherwise the
+      function runs interpreted. Not compiling the AOT never breaks the program.</li>
   <li><strong>Per-platform behavior</strong>:
     <table>
       <tr><th>Platform</th><th><code>native</code> function</th></tr>
       <tr><td>Raspberry Pi Pico 2 / Metro (RP2350, ARM Cortex-M33)</td>
           <td>AOT-accelerated (≈40–90× on integer kernels).</td></tr>
-      <tr><td>STM32 (Nucleo-U575, ARM Cortex-M33)</td>
-          <td>AOT-accelerated — same Thumb-2 <code>.mdn</code>
+      <tr><td>STM32 (Nucleo-U575, Discovery U5G9J; ARM Cortex-M33)</td>
+          <td>AOT-accelerated — same Thumb-2 code as the RP2350
               (≈45× measured on an LZSS kernel on-board).</td></tr>
+      <tr><td>ESP32-P4 (RISC-V with FPU)</td>
+          <td>AOT-accelerated (target <code>riscv32-esp-p4</code>, since V4).</td></tr>
+      <tr><td>ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
+          <td>Interpreted, today. The IDE's only RISC-V target is the P4's
+              (FPU ABI); the board rejects that code with a message and keeps
+              interpreting. An <code>ilp32</code> target still has to be added.</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
-          <td>Interpreted — same semantics, no speedup. The <code>.mdn</code>
-              is ARM code; AOT for Xtensa is future work.</td></tr>
+          <td>Interpreted — same semantics, no speedup. The AOT emits ARM and
+              RISC-V, not Xtensa; no date, outside the plan.</td></tr>
       <tr><td>PC VM (host)</td>
           <td>Interpreted (there is a host AOT path for testing only).</td></tr>
     </table>
   </li>
-  <li><strong>Supported subset</strong>: leaf functions over primitives,
-      arrays (<code>integer[]</code>, <code>byte[]</code>, …),
-      <code>string</code>, module variables and builtins
-      (<code>print</code>, <code>now</code>, …). A runtime failure
+  <li><strong>Supported subset</strong>: functions and methods over primitives
+      (<code>integer</code>, <code>long</code>, <code>float</code>,
+      <code>double</code>, <code>boolean</code>, narrow types), <code>string</code>,
+      arrays of any element type (create them with
+      <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>/<code>newDoubleArray</code>
+      and index them), objects, module variables and a subset of the builtins
+      (<code>print</code>, <code>now</code>, <code>len</code>,
+      <code>intToString</code>, <code>substring</code>, …). A runtime failure
       (index out of range, null reference) or a
       <code>throw RuntimeError("…")</code> inside the native propagates to the
-      BP <code>try/catch</code> that wraps the call. What still does NOT fit
-      (calling object methods, <code>try/catch</code> inside the native) falls
-      back to interpreted bytecode automatically. Local fixed arrays
-      <code>type[N]</code> are not supported inside a native (compile error):
-      use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</li>
+      BP <code>try/catch</code> that wraps the call. What still does NOT fit —
+      <code>try/catch</code> inside the native, tuples, <code>instanceof</code>,
+      events, <code>parallel</code>, <code>for … in</code>, the
+      <code>double(x)</code> conversion — is rejected by the compiler with its
+      message and the line. Local fixed arrays
+      <code>type[N]</code> are not supported either (compile error):
+      use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
+      The live detail is in <code>docs/AOT_LIMITES.md</code>.</li>
   <li><strong>Calling normal BP functions from a native</strong> is possible
       (the bridge exists), but it crosses back into the interpreter: the speed
       gained is lost on every crossing. The compiler detects this and emits a
       <strong>performance warning</strong>.</li>
-  <li><strong>How the <code>.mdn</code> is generated</strong>: the IDE does it
-      <strong>automatically</strong> on <em>Run on Device</em> (v3, on ARM
-      boards: RP2350/STM32): it detects the <strong>ARM bare-metal
+  <li><strong>How the native code is generated</strong>: the IDE does it
+      <strong>automatically</strong> on <em>Run on Device</em>, according to the
+      connected board: for RP2350/STM32 it detects the <strong>ARM bare-metal
       toolchain</strong> (<code>arm-none-eabi-gcc</code> — a standard install of
       the <em>Arm GNU Toolchain</em> or on the <code>PATH</code>; set manually
       in <em>Project → AOT (toolchain)…</em>; installation:
-      <a href="guia-ide.html#aot">IDE Guide §5.1</a>), emits C, compiles
-      Thumb-2 PIC and uploads the <code>.mdn</code> alongside the
-      <code>.mod</code>. If there is no toolchain, it <strong>warns and the
-      program runs interpreted</strong> (the <code>.mdn</code> is optional and
-      additive). The step can also be done by hand with the
-      <code>build_mdn.sh</code> script (<code>AotMain</code> emits C →
-      <code>arm-none-eabi-gcc</code> → <code>MdnPack</code> packages it; it
-      looks for the compiler on the <code>PATH</code> or in the <code>GCC</code>
-      environment variable).</li>
+      <a href="guia-ide.html#aot">IDE Guide §5.1</a>); for the ESP32-P4, the
+      <code>riscv32-esp-elf-gcc</code> of the ESP-IDF install. It emits C,
+      compiles PIC code and <strong>merges it into the <code>.mod</code></strong>
+      (<code>native</code> section, v7) before uploading. If there is no
+      toolchain, it <strong>warns and the program runs interpreted</strong>. The
+      step can also be done by hand (<code>AotMain</code> emits C → the target's
+      gcc → <code>MdnPack</code> packages it; the
+      <code>bpgenvm-c/pico/build_mdn.sh</code> script chains the three for ARM).</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -893,7 +930,10 @@ fits each call.</p>
 <p>It works with <strong>free functions</strong>, <strong>static methods</strong>,
 <strong>instance methods</strong> and <strong>constructors</strong>. And also
 <strong>across modules</strong>: importing <code>Fmt</code> makes the three
-<code>Fmt.texto(...)</code> above available, resolved the same way.</p>
+<code>Fmt.texto(...)</code> above available, resolved the same way. Two exceptions,
+today: of the <strong>constructors</strong> only the <em>first</em> declared overload
+crosses the module boundary, and <strong>static methods</strong> do not cross at all
+(<a href="#static">§9.6</a>).</p>
 
 <h4>What tells one overload from another</h4>
 <p>Only <strong>the parameter list</strong> (count and types). <strong>The return type
@@ -918,7 +958,7 @@ still there:</p>
 <span class="kw">end</span> Hija
 
 <span class="kw">var</span> h: Hija := Hija()
-<span class="kw">print</span> h.saluda(), <span class="str">" / "</span>, h.saluda(<span class="num">7</span>)   <span class="comment">// -> hija / base 7</span></code></pre>
+<span class="kw">print</span> h.saluda() + <span class="str">" / "</span> + h.saluda(<span class="num">7</span>)   <span class="comment">// -> hija / base 7</span></code></pre>
 <p>That is: the override replaces the version <em>with that same signature</em>, and
 the <code>(integer)</code> one is inherited untouched.</p>
 
@@ -987,7 +1027,8 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
   <tr><th>You write</th><th>Who sees it</th><th>Virtual?</th></tr>
   <tr><td><code>public</code></td><td>Everyone</td><td>Yes</td></tr>
   <tr><td><em>(nothing)</em> &mdash; <strong>protected</strong></td>
-      <td>Its class and its descendants, even in another module</td><td>Yes</td></tr>
+      <td>Its class and its descendants, even in another module (methods and
+          properties; protected <em>fields</em> do not cross the module — below)</td><td>Yes</td></tr>
   <tr><td><code>private</code></td><td>Only its own class</td><td><strong>No</strong></td></tr>
 </table>
 <pre><code>public class Base
@@ -1023,6 +1064,13 @@ end Base</code></pre>
   change or delete that method without checking who inherits from the class. If you
   leave it unmarked, a child &mdash;yours or one written by whoever uses your
   library&mdash; may be relying on it.
+</p>
+<p>
+  <strong>Current limit across modules:</strong> a child declared in another module
+  sees the protected methods and properties of its base, but <strong>not its
+  fields</strong> (<code>this.nombre</code> gives "no tiene miembro de instancia"):
+  fields do not travel in the interface. If the child needs the data, expose a
+  property or a protected getter (<a href="#pendientes">§17</a>).
 </p>
 
 <h3 id="ctor">9.3 Constructor</h3>
@@ -1063,9 +1111,13 @@ end Base</code></pre>
   Single inheritance. <code>super.method(args)</code> explicitly invokes the
   parent's method inside an override. Inheritance also works
   <strong>cross-module</strong>: the base class can come from another imported
-  library (vtable, <code>super(...)</code>, <code>instanceof</code> and statics
-  included). <code>x instanceof Foo</code> checks the dynamic type at runtime
-  (including the <a href="#excepciones"><code>Exception</code></a> hierarchy).
+  library (vtable and <code>super(...)</code> included; what does not cross the
+  module is in <a href="#visibilidad">§9.2.1</a> and <a href="#static">§9.6</a>).
+  <code>x instanceof Foo</code> checks the dynamic type at runtime, with one
+  condition: <code>Foo</code> has to be a class <em>declared in the current
+  module</em> (a local child of an imported base is fine; the imported base, or
+  <code>Exception</code>/<code>RuntimeError</code>, is not — for exceptions use the
+  typed <code>catch</code>).
 </p>
 
 <h3 id="props">9.5 Properties</h3>
@@ -1224,7 +1276,7 @@ end Base</code></pre>
 <span class="kw">end</span> Counter
 
 <span class="comment">// Access is ALWAYS qualified, with no instance — also from instance
-// methods and from other modules (they travel in the interface):</span>
+// methods:</span>
 Counter.total := <span class="num">7</span>
 Counter.total += <span class="num">3</span>
 Counter.bump()</code></pre>
@@ -1233,6 +1285,15 @@ Counter.bump()</code></pre>
   instance); 8-byte types (<code>long</code>/<code>double</code>) work the same.
   <code>final</code> on a class: not extensible; on a method: not overridable
   (the modifier goes before <code>function</code> or <code>class</code>).
+</p>
+<p>
+  <strong>Static members do not cross the module boundary</strong>, today: the
+  compiler warns while building the interface (<code>omitidas en interfaz (1): class
+  Counter.property total: estática (no exportable v1)</code>) and from another module
+  <code>Lib.Counter.total</code> or <code>Lib.Counter.bump()</code> give "no tiene
+  miembro de instancia". Static <code>const</code>s do travel. To expose class state
+  or functions to other modules, use a module property or function
+  (<a href="#props">§9.5</a>, <a href="#pendientes">§17</a>).
 </p>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>
@@ -1269,7 +1330,7 @@ Counter.bump()</code></pre>
     <span class="kw">print</span> <span class="str">"[init] loaded"</span>
   <span class="kw">end</span> MiApp
 
-  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span> := <span class="str">"default"</span>)
     <span class="kw">print</span> <span class="str">"running with arg='"</span> + arg + <span class="str">"'"</span>
   <span class="kw">end</span> main
 <span class="kw">end</span> MiApp</code></pre>
@@ -1279,6 +1340,14 @@ Counter.bump()</code></pre>
   <li><code>function main(arg: string)</code> is the entry-point. Only the root
       module's main is called; the mains of dependencies remain as a utility
       for standalone testing.</li>
+  <li><strong>The argument</strong> is passed from the IDE console with
+      <code>run MiApp hello</code> (quotes optional if it has spaces) and on the
+      two PC VMs as a second positional (<code>java -jar bpgenvm.jar MiApp.mod hello</code>,
+      <code>bpgenvm-c MiApp.mod hello</code>). If nothing is passed, <code>arg</code>
+      takes the <strong>default value</strong> declared in the signature (<code>:= "default"</code>,
+      like any <a href="#defaults">parameter with a default</a>) or the empty string if
+      there is none. The board's <em>autorun</em> deliberately passes no argument: the
+      default in the source is the deployment configuration.</li>
   <li>Legacy form: <code>function Main()</code> with no parameters (still
       accepted).</li>
 </ul>
@@ -1296,6 +1365,26 @@ Counter.bump()</code></pre>
   <li><code>from "&lt;path&gt;"</code> tells the VM where to find the
       <code>.mod</code> at runtime. Compilable when the frontend locates the
       source <code>.bp</code> by deriving the path.</li>
+  <li><strong><code>import Core</code> is mandatory</strong> as soon as the module
+      names a <code>Core</code> type: <code>List</code>, <code>Integer</code>/<code>Long</code>/<code>Float</code>/<code>Double</code>/<code>Boolean</code>,
+      <code>Comparable</code>, <code>Exception</code>, <code>RuntimeError</code> — and
+      therefore any <code>try/catch</code> or <code>throw</code> (<a href="#excepciones">§11</a>).
+      No import is implicit (since V6); without it the compiler says "tipo 'List' no
+      encontrado" or "tipo de excepción 'RuntimeError' no es una clase".
+      <code>Thread</code>, <code>Mutex</code> and <code>StringBuilder</code> are
+      compiler builtins and do not need it.</li>
+  <li><strong>Imports are not transitive.</strong> Importing
+      <code>Collections</code> does not bring in <code>Core</code>: if its classes extend
+      <code>Core</code> types (<code>SyncList extends Core.List</code>), the module that
+      uses them has to import both — the compiler says so: "la clase 'SyncList'
+      extiende 'Core.List' y este modulo no importa 'Core': anade `import Core`". The
+      same goes for any module whose interface returns types from a third one.</li>
+  <li><strong>What crosses the module boundary:</strong> functions, classes (their
+      public and protected methods and properties, and the <em>first</em> constructor
+      overload), <code>const</code>s and module properties. What does not: fields
+      (not even protected ones, <a href="#visibilidad">§9.2.1</a>), static members other
+      than <code>const</code> (<a href="#static">§9.6</a>), and the remaining constructor
+      overloads.</li>
 </ul>
 
 <h3 id="interfaces">10.4 <code>module interface</code> — <span class="kw">WITHDRAWN</span></h3>
@@ -1420,16 +1509,22 @@ Within one module, two classes may refer to each other with no problem.</p>
 <ul>
   <li><code>try</code> installs a handler on a VM handler stack.</li>
   <li><code>catch e: Foo</code> only catches instances assignable to <code>Foo</code>.
-      <code>catch e</code> (no type) catches any exception.</li>
+      <code>catch e</code> (no type) is <code>catch e: Exception</code>: it catches
+      any exception and <code>e</code> has its <code>msg</code>. It always goes last
+      (clauses are tried in order).</li>
   <li><code>finally</code> always runs (with or without an exception).</li>
   <li><code>throw expr</code> throws the value. If it is a class, its class_ptr
       is used for the typed <code>catch</code> match.</li>
   <li>All exceptions descend from <code>Exception</code> (with its
       <code>msg</code> property), which lives in the standard module
-      <code>Core</code> along with <code>RuntimeError</code>. The
-      <code>import Core</code> is IMPLICIT: just using <code>try</code>/<code>throw</code>
-      or naming <code>Exception</code>/<code>RuntimeError</code> makes them
-      available.</li>
+      <code>Core</code> along with <code>RuntimeError</code>. <strong>The module has
+      to write <code>import Core</code></strong> to use <code>try</code>/<code>catch</code>,
+      <code>throw</code> or to name <code>Exception</code>/<code>RuntimeError</code>
+      (<a href="#imports">§10.3</a>); without it, "tipo de excepción 'RuntimeError' no
+      es una clase".</li>
+  <li><code>print e</code> prints the <strong>message</strong>:
+      <code>Exception.toString()</code> returns <code>msg</code>, and
+      <code>RuntimeError</code> and user exceptions inherit it.</li>
   <li>A user exception is a class that extends <code>Exception</code> (it
       inherits <code>msg</code>; add whatever fields you want).
       <code>throw</code> and the typed <code>catch</code> require classes that
@@ -1448,8 +1543,11 @@ Within one module, two classes may refer to each other with no problem.</p>
 <span class="kw">catch</span> e: RuntimeError
   <span class="kw">print</span> <span class="str">"it did not fit: "</span> + e.msg
 <span class="kw">endtry</span></code></pre></li>
-  <li>An uncaught exception terminates the VM, showing a stack trace with the
-      symbolic name of each frame.</li>
+  <li>An uncaught exception ends the program with <strong>exit code 1</strong>
+      (the same on both VMs and on the board); the report is diagnostic, not program
+      output: the Java VM shows a stack trace with the symbolic name of each frame,
+      the C VM the message, and the IDE picks it up in its console
+      (<code>help error</code> lists the codes).</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -1491,9 +1589,10 @@ Within one module, two classes may refer to each other with no problem.</p>
 <!-- =========================================================== -->
 <h2 id="concurrencia">14. Concurrency</h2>
 <p>
-  The VM simulates a 2-core microcontroller: by default it launches N real Java
-  workers (default <code>N=2</code>; configurable with <code>--workers=N</code>,
-  see <a href="referencia.html#cli-vm">§15.2</a>) that share out the queued BP threads.
+  BP threads are run by N <em>workers</em> (real OS threads) that share out the
+  queued threads. The default is <code>N=1</code>, as on the micro (a single core);
+  SMP is <em>opt-in</em>: <code>--workers=N</code> on the Java VM (see
+  <a href="referencia.html#cli-vm">§15.2</a>) and <code>--smp=N</code> on the PC C VM.
 </p>
 
 <h3 id="conc-modelo">14.1 Execution model</h3>
@@ -1513,6 +1612,9 @@ Within one module, two classes may refer to each other with no problem.</p>
   <li>When all BP threads finish, the VM shuts down. If main does
       <code>HALT</code> first, the in-flight workers are cut off at their next
       opcode.</li>
+  <li>The graphical interface runs on a BP thread of its own: <code>Gui.start()</code>
+      starts it and returns, <code>Gui.run()</code> also waits. It is in the
+      <a href="gui.html">graphics volume</a>.</li>
 </ul>
 
 <h3 id="conc-preempt">14.2 Preemption and <code>yield()</code></h3>
@@ -1521,7 +1623,11 @@ Within one module, two classes may refer to each other with no problem.</p>
   10&nbsp;ms) sets <code>yieldRequested=true</code> on every
   <code>RUNNING</code> BP thread. The interpreter loop observes it between
   opcodes (a <code>volatile</code> field) and abandons the inner loop with a
-  YIELD signal; the worker re-queues the thread and picks up the next RUNNABLE.
+  YIELD signal; the worker re-queues the thread and picks up the next RUNNABLE. On
+  the C VM (PC and boards) the quantum is counted in <strong>opcodes</strong>: 1024
+  by default, adjustable with <code>quantum=N</code> in the board's ENV
+  (<code>--quantum=N</code> on the PC); when it runs out the VM also yields to the
+  system, so an IDE <code>stop</code> gets through even if the program never sleeps.
 </p>
 <p>
   In parallel with preemption, BP code can yield the CPU
@@ -1600,29 +1706,13 @@ shared object</code></pre>
   whoever created it.
 </p>
 <p>
-  <strong>Known residual</strong> (~5–10 % under very high contention): some
-  allocation builtins
-  (<code>allocVmString</code>, <code>allocVmRefArray</code>,
-  <code>GROW_REF_ARRAY</code>) still release <code>vmLock</code> between the
-  allocation and the final push. When a producer/consumer pattern with many
-  simultaneous allocations materializes, occasional corruption can appear.
-  Symptoms: <code>INVOKE_VIRTUAL</code> on <code>null</code>,
-  &quot;Address 0&quot;, opcode 0xA6.
+  The SMP race <strong>B1</strong> (two workers on the same thread context) was
+  closed in V6: only the worker that owns a thread decides about it, and on the C VM
+  the <code>Mutex</code> became atomic. <code>synctest.bp</code>,
+  <code>synclisttest.bp</code> and <code>modpropsync.bp</code> are the reference
+  tests. SMP remains opt-in (one worker by default) and on the board the VM runs on
+  a single core.
 </p>
-<p>
-  When the residual manifests, only the affected thread dies &mdash; the rest
-  of the program continues because <code>BpThreadFault</code> prevents a single
-  failure from bringing down the whole VM (see the code in
-  <code>VirtualMachine.WorkerLoop</code>).
-</p>
-<p>
-  Reference tests with all the B1 fixes active:
-</p>
-<ul>
-  <li><code>synctest.bp</code> (class + sync property + 5000 iters × 2 threads): ~90 % pass-rate.</li>
-  <li><code>synclisttest.bp</code> (SyncList + 1000 prods + 2 consumers): ~93 % pass-rate.</li>
-  <li><code>modpropsync.bp</code> (module-level sync property): ~95 % pass-rate.</li>
-</ul>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -1639,8 +1729,12 @@ it works in any class.</p>
 <p>Inside the emitting class, <code>event</code> declares a name and parameters. It
 accepts <a href="#defaults">default values</a> like any other signature:</p>
 <pre><code><span class="kw">class</span> Boton
-  <span class="kw">var</span> id: <span class="type">integer</span>
+  <span class="kw">public property</span> numero: <span class="type">integer</span>
   <span class="kw">event</span> <span class="fn">onClick</span>(sender: Boton, veces: <span class="type">integer</span> := <span class="num">1</span>)
+
+  <span class="kw">public function</span> Boton(n: <span class="type">integer</span>)
+    <span class="kw">this</span>.numero := n
+  <span class="kw">end</span> Boton
 
   <span class="kw">public function</span> <span class="fn">pulsa</span>(n: <span class="type">integer</span>)
     <span class="kw">raise</span> onClick(<span class="kw">this</span>, n)      <span class="comment">// raises it</span>
@@ -1654,8 +1748,14 @@ private, because nobody else calls it.</p>
 <p>The subscription is written with <code>::</code>, which binds <strong>an object and
 one of its methods</strong>:</p>
 <pre><code><span class="kw">class</span> Panel
+  <span class="kw">var</span> nombre: <span class="type">string</span>
+
+  <span class="kw">public function</span> Panel(n: <span class="type">string</span>)
+    <span class="kw">this</span>.nombre := n
+  <span class="kw">end</span> Panel
+
   <span class="kw">function event</span> <span class="fn">pulsado</span>(b: Boton, veces: <span class="type">integer</span>)
-    <span class="kw">print</span>(<span class="str">"  handler: boton "</span> + b.numero + <span class="str">" x"</span> + veces)
+    <span class="kw">print</span>(<span class="str">"  handler: boton "</span> + b.numero + <span class="str">" x"</span> + veces + <span class="str">" en "</span> + <span class="kw">this</span>.nombre)
   <span class="kw">end</span> pulsado
 <span class="kw">end</span> Panel
 
@@ -1704,17 +1804,23 @@ that receives it.</p>
 <!-- =========================================================== -->
 
 <h2 id="pendientes">17. Pending / not supported</h2>
-<p style="color:var(--fg-muted)">Status at the close of V3 (July 2026). What
+<p style="color:var(--fg-muted)">Status at the close of V6 (September 2026). What
 was here and is now done: classes/properties in the interface
-(full cross-module), qualified types <code>Mod.Class</code>,
+(cross-module), qualified types <code>Mod.Class</code>,
 <code>Collections.Map</code>, the project file, the GC's stop-the-world
-safepoint (the Java VM also runs at 1 worker by default, like the device)
-and, in V3, automatic AOT from the IDE and the GUI
-(<a href="gui.html">separate volume</a>).</p>
+safepoint (the Java VM also runs at 1 worker by default, like the device),
+in V3 automatic AOT from the IDE and the GUI
+(<a href="gui.html">separate volume</a>), and in V6 the explicit
+<code>import Core</code> (<a href="#imports">§10.3</a>), <code>catch e</code> as
+<code>Exception</code> (<a href="#excepciones">§11</a>), the native code inside
+the <code>.mod</code> v7 (<a href="#funciones-native">§8.3</a>) and the SMP race
+B1 (<a href="#conc-gc">§14.4</a>).</p>
 <ul>
   <li><code>try/catch</code> INSIDE a <code>native function</code>
-      (throwing from the native and catching OUTSIDE does work): the
-      <code>.mdn</code> does not embed setjmp; deferred, with the design noted.</li>
+      (throwing from the native and catching OUTSIDE does work): the native
+      code does not embed setjmp; deferred, with the design noted. Nor tuples,
+      <code>instanceof</code> or events inside a native (compile error,
+      <a href="#funciones-native">§8.3</a>).</li>
   <li>Fixed-size array <code>type[N]</code> as a class field and inside a
       <code>native function</code> (compile error, with the alternative:
       <code>type[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
@@ -1722,9 +1828,25 @@ and, in V3, automatic AOT from the IDE and the GUI
       run <strong>interpreted</strong>: the AOT emits ARM (Thumb-2) and RISC-V, not
       Xtensa. The IDE says so at compile time, naming the targets that do exist, and the
       program still works — just without the speedup. <em>Measured on 22-ago on an S3
-      DevKit: <code>fib(28)</code> takes the same time either way.</em>
+      DevKit: <code>fib(28)</code> takes the same time either way.</em> No date,
+      outside the version plan.
       <br><strong>The ESP32-P4 DOES accelerate</strong> (RISC-V, since V4), like the
-      RP2350 and the STM32.</li>
+      RP2350 and the STM32. <strong>ESP32-C3 and C6</strong> (RISC-V without FPU)
+      interpret today: the <code>ilp32</code> target is missing in the IDE
+      (<a href="#funciones-native">§8.3</a>).</li>
+  <li><strong>Across modules</strong> (<a href="#imports">§10.3</a>): protected
+      fields do not cross (<a href="#visibilidad">§9.2.1</a>); static members, other
+      than <code>const</code>, do not cross (<a href="#static">§9.6</a>); of the
+      constructors only the first overload crosses (<a href="#sobrecarga">§8.4</a>);
+      <code>x instanceof Foo</code> only accepts a class declared in the current
+      module (<a href="#herencia">§9.4</a>).</li>
+  <li>The downcast <code>Class(x)</code> only accepts an <code>Object</code> source
+      (<a href="#any">§4.5</a>).</li>
+  <li><code>step</code> of the numeric <code>for</code>: only a positive integer
+      literal (<a href="#for">§7.3</a>).</li>
+  <li><code>listDir()</code> and <code>input()</code> only exist on the PC Java VM;
+      on the C VM (PC and boards) they throw <code>RuntimeError</code> ("builtin N no
+      soportado") — the same <code>.mod</code> does not give the same output on both VMs.</li>
   <li>Performance improvement (not functionality): a <code>native</code>'s call
       to a function in ANOTHER module already works, but crosses the interpreter
       bridge (the compiler warns). The improvement — dispatching native→native
@@ -1732,8 +1854,9 @@ and, in V3, automatic AOT from the IDE and the GUI
       <code>docs/AOT_CROSS_MODULE.md</code> (v4). Within the same module it is
       already a direct C call.</li>
   <li>Networking on the micros: the TCP client (the <code>Net</code> module,
-      §13.29) works on PC; on Pico 2 W / ESP32-S3 the WiFi+lwIP backend is
-      missing (v4) — for now it throws a catchable RuntimeError there.</li>
+      §13.29) works on PC; on the boards the WiFi+lwIP backend is
+      missing — for now it throws a catchable RuntimeError there. No date (the
+      long-range course puts it in V8).</li>
   <li><code>owner</code> / <code>final</code> do not apply to module properties.</li>
   <li><code>Mutex</code> is non-reentrant; no <code>Semaphore</code> /
       <code>Channel</code> in the stdlib.</li>
@@ -1743,8 +1866,9 @@ and, in V3, automatic AOT from the IDE and the GUI
       non-globals are visible — see <a href="#conc-encapsulacion">§14.3</a>).</li>
   <li><code>Adc</code>: on RP2350B boards (48 GPIO) channels 4-7 are not yet
       exposed in BP (common subset 0..3; the backend already supports them).</li>
-  <li>Dual-core on-board (the SMP VM runs single-core on the device; RP2350
-      dual-core is left for v4, with SWD debugging).</li>
+  <li>Dual-core on-board: the VM runs on a single core on the device. SMP
+      exists on the PC as opt-in (<a href="#concurrencia">§14</a>); enabling it on
+      the micro was left outside the version plan (decision of September 2026).</li>
   <li>Generics / type parameters in user classes.</li>
   <li>Explicit versioning of library contracts (covered pragmatically with
       <code>extends</code>).</li>
@@ -1754,8 +1878,8 @@ and, in V3, automatic AOT from the IDE and the GUI
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generated alongside development.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) and
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
-  Format <code>.mod</code> v6 (embedded interface v7).<br>
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-C3 / ESP32-C6 / ESP32-P4 / STM32U5) ·
+  Format <code>.mod</code> v7 (interface and native code embedded).<br>
   BasicPlus rests on other people’s work —
   <a href="creditos.html">credits and acknowledgements</a>.
 </p>

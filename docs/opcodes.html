@@ -235,7 +235,11 @@
 <header>
   <h1>Catálogo de opcodes BasicPlus VM</h1>
   <div class="subtitle">
-    Bytecode <code>.mod</code> — 80 opcodes • Fuente canónica: <code>docs/OPCODES.md</code> + <code>bpgenvm-c/include/bpvm_opcodes.h</code>
+    Bytecode <code>.mod</code> — vista navegable <strong>PARCIAL</strong>: los 110 opcodes de V1
+    (<code>0x00..0x70</code>) con su traducción AOT. Los 65 aditivos de V2–V6
+    (<code>0x6F</code>, <code>0x71..0xB0</code>: <code>long</code>, <code>double</code>, potencia,
+    <code>CHECKCAST</code>, sentinelas) <strong>no están aquí</strong>: el catálogo completo (175)
+    es <code>docs/OPCODES.md</code>; la fuente, <code>bpgenvm-c/include/bpvm_opcodes.h</code>.
   </div>
   <input type="text" id="search" placeholder="Filtrar por mnemónico, hex code, palabra en la semántica o código AOT..." autocomplete="off">
 </header>

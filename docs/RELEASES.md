@@ -1,8 +1,399 @@
 # Notas de versión — BasicPlus
 
 > Borrador del cuerpo de la *release* de GitHub. La etiqueta propuesta es
-> `v5.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`). Ajusta
-> versión/fecha al publicar.
+> `v6.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
+> `v5.0`). Ajusta versión/fecha al publicar.
+
+---
+
+## v6.0 — septiembre 2026 · «orden en los micros»
+
+En la versión 6 de BasicPlus nos hemos enfocado en el código de los microcontroladores. Más que añadir prestaciones, hemos analizado el código que había y hemos puesto orden. Había código duplicado y código muy similar entre micros: hemos puesto en común todo lo que implementaba una funcionalidad equivalente y, cuando había diferencias, nos hemos quedado con la mejor versión. Al final, medido sobre lo que enlaza cada firmware, algo más del 90 % del código es común a todos los micros; un 7-8 % es común a cada familia —la capa HAL del fabricante y la capa HAL de BasicPlus que la envuelve—; y menos de un 1 % es propio de cada placa, concentrado en el arranque y en sus particularidades. Eso ahorra código, mejora el mantenimiento y hace que añadir un micro nuevo de una de las tres familias que ya implementamos sea relativamente sencillo — aunque hay un trabajo de probar y ajustar en la placa que apenas se refleja en el código.
+
+También hemos añadido dos micros de la familia ESP32, el C3 y el C6 — y con el C6, la primera pantalla por SPI.
+
+Por el camino han entrado algunas cosas que sí se ven: la interfaz gráfica corre en su propio hilo; el modelo de componentes es coherente (cada contenedor conoce a sus hijos y una ventana se puede guardar y volver a cargar como JSON); se puede capturar la pantalla del micro desde el PC; y el IDE atiende el cable mientras el programa corre.
+
+Hemos implementado un sistema semiautomático de pruebas que las acelera y las sistematiza: un agente conduce las placas, ejecuta los programas y compara con el PC.
+
+Y, por último pero no menos importante, hemos corregido bugs y hecho pequeñas mejoras por todo el sistema.
+
+Lo que no cambia es el invariante de siempre: el mismo bytecode, la misma salida
+byte a byte en las dos VMs, y todo verificado en placa.
+
+### Placas nuevas
+
+Entran el **ESP32-C3** y el **ESP32-C6**: RISC-V de un solo núcleo, sin FPU. Los dos
+tienen **un único conector USB**, y por ahí va el cable del IDE (USB-Serial-JTAG); la
+consola del sistema sale por la UART0. Se graban con `esptool --chip esp32c3` /
+`esp32c6`, y para entrar en modo de grabación hay que pulsar BOOT+RESET a mano — no
+hay truco de DTR.
+
+Con el C6 llega la **primera pantalla por SPI**: la Waveshare ESP32-C6-LCD-1.3, un
+ST7789 de 240×240 sin táctil, con rotación 0/90/180/270. Son ya **cuatro pantallas**
+(la DK2, las dos P4 y el C6), todas con la misma GUI. El C6 con pantalla corre con un
+bloque de VM de 128 KB.
+
+El parque de V6 son **siete imágenes y ocho placas** — nueve si se cuenta aparte la
+P4 de Waveshare, que comparte imagen con el kit de Espressif y elige su panel por el
+entorno (`display=st7701`):
+
+| imagen | placas que sirve |
+|---|---|
+| `bpvm_pico.uf2` | Pico 2 · Metro RP2350B |
+| `bpvm_esp32_merged.bin` | ESP32-S3 |
+| `bpvm_esp32c3.bin` | ESP32-C3 *(nueva)* |
+| `bpvm_esp32c6.bin` | ESP32-C6 *(nueva)* |
+| `bpvm_esp32p4_merged.bin` | P4 kit · P4 Waveshare |
+| `bpvm_stm32_nucleo.bin` | Nucleo U575 |
+| `bpvm_stm32_dk2.bin` | Discovery U5G9J |
+
+Y dos cosas de las placas que ya estaban: la **PSRAM del S3** llevaba desde siempre
+sin activar —8 MB parados—, y ahora la VM la usa; y los **packs funcionan también en
+el S3 y en el C6** (el mapeo de la zona vivía en el directorio del P4 y los demás no
+lo llamaban).
+
+Lo que no cambia: el S3 es Xtensa y **no tiene AOT**; y en el C3 y el C6 las funciones
+`native` corren **interpretadas** por ahora, porque el compilador sólo tiene el destino
+RISC-V con FPU del P4 — la placa rechaza el blob con mensaje y el programa sigue igual.
+
+### Memoria por placa
+
+La memoria de la VM la decide ahora **un planificador común** a las cinco familias, con
+un número medido por placa en vez de constantes escritas a mano. Lo que sale:
+
+| placa | bloque de la VM |
+|---|---|
+| Pico 2 | ~357 KB de SRAM |
+| Metro RP2350B con `psram=1` en el entorno | 6 MB en PSRAM |
+| ESP32-S3 | 160 KB sin PSRAM · **~7 MB** con ella |
+| ESP32-C3 | 128 KB |
+| ESP32-C6 | 128 KB (imagen con pantalla) |
+| ESP32-P4 | ~28 MB en PSRAM |
+| Nucleo U575 | 512 KB |
+| Discovery U5G9J | **1536 KB** (heredaba los 512 de la Nucleo) |
+
+Dos claves nuevas en el entorno de la placa (botón «Entorno» del IDE): **`stack=N`**, en
+KB, reparte el bloque entre pilas y montón (por defecto un 25 % para pilas; si el valor
+no cabe, el firmware lo ajusta y lo dice en el log); y **`quantum=N`**, los opcodes que
+ejecuta un hilo antes de ceder el turno (1024 por defecto).
+
+Y la **tabla de handles vive dentro del bloque de la VM**: antes salía de otra bolsa y un
+programa de objetos pequeños se quedaba sin handles con el heap medio vacío. En la
+Pico 2 la batería de V4 pasa de 40/48 a **48/48**.
+
+### Ejecución
+
+Todas las familias corren ahora con **dos hilos de sistema operativo**, iguales en las
+cinco: `vm`, que sólo ejecuta opcodes, e `io`, que atiende el cable, la salida, el log y
+la pantalla. FreeRTOS también en el STM32. Lo que se nota:
+
+- **El IDE atiende KILL, HELLO y RESET al instante** mientras el programa corre (un
+  KILL llega en 3-50 ms según la placa; algo más si hay salida encolada en un puerto
+  lento), y **RESET funciona con un RUN vivo** — ya no hace falta `kill` y luego `reset`.
+- **La salida va por líneas**: `PrintBench` (2.000 líneas) sale entre **3,5× y 5,3×** más
+  rápido según la placa, con seis veces menos mensajes por el cable. El cálculo puro no
+  cambia (~1 %).
+- **La VM cede el turno al sistema entre quanta**: en el ESP32 un programa ya no
+  bloquea el resto del sistema, `stop` vuelve a funcionar en el P4 y dice siempre
+  `KILLED (130)`. Y un `sleep` de menos de 10 ms en las ESP32 **duerme de verdad**
+  (antes redondeaba a cero ticks y no esperaba).
+- El bucle de la GUI **ya no le quita tiempo a los demás hilos** del programa: duerme lo
+  que LVGL dice que puede dormir.
+
+Lo que **no** cambia todavía: `GET` y `LS` siguen contestando `BUSY` mientras hay un RUN
+en marcha — el hilo `io` ya podría atenderlos, pero falta ordenar el cable; queda para V7.
+
+### El lenguaje y la biblioteca estándar
+
+**`import Core` es obligatorio** cuando un módulo usa un tipo de `Core` — `List`, los
+envoltorios (`Integer`, `Long`…), `Comparable`, `Exception`, `RuntimeError`, y por tanto
+cualquier `catch`. Antes el compilador lo inyectaba a escondidas, y lo hacía distinto en
+la pasada de interfaz que en la completa; la norma sencilla quita el problema de raíz:
+
+```basic
+module Medidas
+  import Core
+
+  function Main()
+    var l: List := List()
+    l.add(42)
+    print l.getInteger(0)
+  end Main
+end Medidas
+```
+
+Sin el `import`, el compilador dice `tipo 'List' no encontrado`. Los imports no son
+transitivos: importar `Collections` no trae `Core`.
+
+Un **`catch e` sin tipo es `catch e: Exception`**, y una excepción **se imprime como su
+mensaje**. En V5 un `catch` sin tipo entregaba un valor roto (imprimía memoria de la VM):
+
+```basic
+try
+  var a: integer[] := [1, 2, 3]
+  print a[99]
+catch e
+  print e          // ALOAD: índice fuera de rango 99 (length=3)
+endtry
+```
+
+**Las interfaces de módulo se retiran** del manual: BasicPlus no tiene interfaces, ni
+de clase ni de módulo; sus demos se han borrado. El compilador todavía acepta `module
+interface`, pero es un cabo suelto, no una función.
+
+**`Main` acepta un argumento de ejecución**, con su valor por defecto declarado en el
+propio parámetro. El IDE lo pasa con `run <fichero> <argumento>`; los dos CLI, como
+segundo posicional. El `autorun` **no pasa ninguno**, a propósito: el valor por defecto
+es la configuración de despliegue.
+
+```basic
+public function Main(arg: string := "medidas.db")
+  print "fichero:", arg
+end Main
+```
+
+**`Math`** gana `clamp`, `wrap`, `hypot` y `remap` (`wrap` lanza si `hi <= lo`; `remap`
+si el rango de entrada es vacío):
+
+```basic
+print Math.clamp(12, 0, 10)          // 10
+print Math.wrap(370, 0, 360)         // 10
+print Math.hypot(3, 4)               // 5
+print Math.remap(5, 0, 10, 0, 100)   // 50
+```
+
+**El módulo `Pico` pasa a llamarse `Machine`** — no era de la Pico, es de todos los
+micros. `Pico` queda como alias que reenvía, así que los programas de V4 y V5 siguen
+compilando. Y la identidad son ahora **dos nombres**, para que decida el programa cuál le
+interesa:
+
+```basic
+print Machine.getMicro(), Machine.getBoard()   // en el PC: host host
+```
+
+`getMicro()` es el chip y siempre es real: `rp2350a`, `rp2350b`, `esp32s3`, `esp32c3`,
+`esp32c6`, `esp32p4`, `stm32u5`, `host`. `getBoard()` es `generic` salvo que la imagen
+conozca la placa. `boardName()` sigue existiendo y es lo mismo que `getBoard()`.
+
+**`Uart` tiene un buffer de recepción de 512 bytes** en las cinco familias, alimentado
+por interrupción. `available()` devuelve la cuenta real (en la Pico contestaba 1 ó 0, en
+el STM32 −1), ya no se pierden bytes por encima del FIFO del chip (32 B en el RP2350, 8
+en el U5), y `read(…, 0)` devuelve al instante lo que haya — en el STM32 colgaba la VM.
+
+**Las fachadas sin driver ya no inventan valores**, en las dos VMs:
+- **`Wdt`** está completo en RP2350 y ESP32 (`disable()` desactiva de verdad). En el
+  STM32 U5 el IWDG no se puede parar por software, así que allí —y en el PC—
+  `Wdt.Timer(…)`, `feed()` y `disable()` lanzan un `RuntimeError` atrapable. «Completo o
+  no se implementa.»
+- **`Adc`** lanza si la conversión falla (antes −1 y voltios negativos), y el ADC del
+  ESP32 ya no falla con una lectura 0.
+- **`Neopixel`** sólo tiene driver en el RP2350; en ESP32, STM32 y el PC lanza. La VM
+  Java fingía éxito.
+
+**`IO.pathAbsolute` cambia de significado**: es una función pura de la ruta y del
+proyecto — lo que empieza por `/` o lleva esquema va tal cual; con proyecto,
+`<proyecto>/<ruta>`; sin él, lo relativo **se queda relativo**. No mira el disco ni
+normaliza `..`. Antes devolvía la ruta del sistema operativo del PC, que no existe en un
+micro.
+
+```basic
+print IO.pathAbsolute("datos/x.txt")   // datos/x.txt
+```
+
+**`Collections.OwnerList` posee de verdad**: liberar la lista libera sus elementos.
+Estaba hueca.
+
+**Código nativo.** El `.mod` pasa a la **versión 7** y lleva el código nativo dentro: ya no
+hay un `.mdn` suelto que subir junto al programa. Los **métodos** `native` se compilan
+(en V5 sólo avisaban), `double` cruza a C, y una función `native` puede crear arrays de
+cualquier ancho y objetos. Las VMs ejecutan `.mod` v6 y v7; v5 se rechaza.
+
+### Interfaz gráfica
+
+**La GUI corre en su propio hilo.** `Gui.start()` arranca el lazo y vuelve; `Gui.stop()`
+lo para desde otro hilo o desde un handler; `Gui.join()` espera. `Gui.run()` sigue
+bloqueando: es `start()` + `join()`. `Main` puede terminar: el hilo de la GUI mantiene el
+programa vivo.
+
+**El modelo de componentes es coherente.** Hay una clase **`Container`** entre
+`Component` y los que contienen (`Screen`, `Panel`, `Window`, `TabPage`, `Tabview` y
+`Button`), con sus hijos en una `OwnerList`: `childCount()`, `childAt(i)`, `getParent()`.
+Todos los constructores con padre piden `parent: Container`, así que meter un `Label` en un
+`Checkbox` deja de compilar. `Button(parent, text := "")` es un contenedor (botones con
+icono y texto). `delete()` cascadea hijos antes que padre en los dos planos —el modelo
+y LVGL—, se da de baja del padre y es idempotente. `Tabview.addTab()` devuelve un
+`TabPage`. Y el teclado se engancha con **`Keyboard.setTextarea(ta)`** — `attach` es ahora
+el alta de cualquier componente en el árbol.
+
+**Una ventana se guarda como JSON**: `toJson()` y `toJsonText()` en cualquier componente,
+recursivo en los contenedores, en el mismo formato de los ficheros `.win`. La ida y
+vuelta con `main.win` (cargar → serializar → construir → serializar) da el mismo texto.
+Todavía no se serializan `min`/`max`, las opciones de `Dropdown`/`ListBox`, los colores ni
+`Chart`/`Table`/`ImageView`.
+
+```basic
+var scr: Gui.Screen := Gui.Screen()
+var b: Gui.Button := Gui.Button(scr, "Pulsa")
+Gui.start()             // el lazo corre en su hilo; esto vuelve
+sleep(300)
+print scr.childCount()  // 1
+print b.toJsonText()    // {"type":"Button","text":"Pulsa"}
+Gui.stop()
+Gui.join()
+```
+
+**Se puede capturar la pantalla del micro**: `Gui.shot(path)` escribe lo que LVGL dibujó a
+un fichero `.shot` (RGB565 comprimido; 2,9 KB en el C6, 7 KB en la DK2, 8,9 KB en el P4),
+por el mismo camino en el PC y en las cuatro pantallas. Se baja con el `GET` de siempre y
+`bpgenvm-c/tools/shot2png.py` lo pasa a PNG. Lanza si no hay pantalla.
+
+```basic
+var n: integer := Gui.shot("pantalla.shot")   // bytes escritos
+```
+
+**El screen mide lo que mide el panel**: en placa `scr.width`/`scr.height` dicen el
+tamaño real (240×240 en el C6, 800×480 en la DK2, 1024×600 en el P4), no los 480×320 del
+modelo. El PC sigue en 480×320 salvo que se le diga `--screen=WxH` — así imita a una placa.
+
+Y tres cosas pequeñas: la cola de eventos de la placa avisa cuando descarta uno (antes en
+silencio); el bucle de la GUI ya no busca sus handlers por nombre en cada vuelta; y
+`App.mainModule()` funciona en placas sin pantalla.
+
+### El IDE
+
+- **`run <fichero> <argumento>`** pasa el argumento a `Main`; las comillas son opcionales.
+- Al terminar dice **cuánto tardó**: `exit 0 (OK) en 94 ms` — la ejecución, medida igual
+  en el PC y en las placas.
+- **`help error`** explica los códigos de salida.
+- **El IDE pregunta a la placa por cada dependencia** y sólo sube lo que falta, lo que
+  es de versión anterior o lo que tiene otro CRC. Dice de dónde carga cada módulo, y
+  avisa si esa copia no es la que el proyecto pondría. Ya no sube `Core`, que va
+  embebido.
+- **El firmware repone `/lib` solo** en cada arranque, en las cinco familias: un módulo
+  de la stdlib que falte, que sea más viejo o que tenga otro CRC se vuelve a escribir.
+  `/app` no se toca nunca.
+- El árbol de ficheros va **por colores** según el tipo.
+- El jar pasa a `BpIde-6.0.jar` (`bpide.bat` en la raíz del repo), y el `BpVM.cfg`
+  junto al fichero manda sobre el del directorio actual.
+
+Por el cable: el `GET` de ficheros grandes funciona (abría el fichero una vez por cada
+256 bytes), el timeout mide inactividad y no tiempo total, el `PUT` crea las carpetas que
+falten, las rutas ya no se truncan en silencio (el único tope son 256 caracteres), y una
+línea del wire es atómica en las cinco imágenes.
+
+**Los códigos de salida son los mismos en las dos VMs y las cinco familias**:
+
+```
+  0  terminó bien               3  fallo interno de la VM
+  1  excepción BP no atrapada   4  sin memoria
+  2  no se pudo cargar        130  parado con Stop/KILL     131  parado por el depurador
+```
+
+Un programa que muere lanzando sale con **1** — antes la VM Java decía 0 y la VM-C 11. El
+informe del error va por `stderr` en el PC y en el `errorMessage` del `EXITED` en placa.
+
+### Pruebas
+
+- **`compat.sh`**, el arnés de paridad dual-VM, pasa de 38 a **59 casos**, con la GUI
+  dentro por primera vez, un programa que muere lanzando, y las fachadas sin hardware.
+  Y ya no tira el `stderr`: una línea `HEAP INCONSISTENTE` rompe la paridad.
+- **`bpgenvm-c/tools/tanda.py`** conduce las placas: descubre lo conectado, sube lo que
+  falte, ejecuta, compara el `stdout` con el del PC (con `--screen=WxH` para las
+  gráficas), baja las capturas y las pasa a PNG, y deja un informe que prueba que
+  corrió. La prueba de fuego pasó en Pico 2, C6, P4 y DK2 — y cazó una Metro con
+  firmware viejo por su conducta.
+- `wire_serie.py` habla con una placa por el puerto serie sin el IDE (`put`, `run`,
+  `get`, `log`, `info`).
+- Los programas de `samples/` (326) se han pasado por el compilador de V6: seis no
+  compilaban y se han arreglado; los ocho de bases de datos necesitan su pack.
+
+### Bugs de V5 corregidos
+
+- **El GC de la VM Java descarrilaba** desde julio con cualquier cadena vacía: objetos
+  vivos barridos y un `use-after-free` mucho después. El arnés de paridad lo tapaba.
+- **Guardar en un `word[]`** en la VM-C ponía a cero el elemento siguiente, y en el
+  último escribía fuera del array. Todas las placas.
+- **Un `catch` sin tipo** volcaba memoria de la VM por pantalla (arriba).
+- **Un programa que moría lanzando salía con `exit 0`** en la VM Java y con 11 en la
+  VM-C; y las dos escribían cosas distintas en `stdout`.
+- **`Uart` perdía bytes** en la Pico y en el STM32, y `available()` no contaba (arriba).
+- **La Pico moría muda**: un HardFault o un `panic` van ahora al log post-mortem con
+  `CFSR`/`PC`/`LR`; y `malloc` ya no mata la placa, con lo que el error de memoria
+  atrapable de V4 funciona también en RP2350.
+- Seis opcodes de globales `byte`/`short` que faltaban en la VM-C; y el opcode
+  desconocido dice en qué módulo y con qué bytes.
+- **La VM Java no podía tocar un bus**: los builtins de `I2c`/`Spi`/`Uart` se quedaron
+  fuera del cambio a handles de 8 bytes.
+- Las seis fachadas sin hardware del PC escribían textos distintos en cada VM (trece
+  textos, y `Uart.write` salía desordenado).
+- **El cargador de `.win` perdía la `y`** de los widgets con `align`: los formularios con
+  `y` en el fichero se mueven ahora.
+- **`SQLite.bp` y `Orm.bp` no compilaban** con el compilador actual (les faltaba `import
+  Core`), así que el pack de SQLite no se podía regenerar. Seis samples publicados,
+  igual.
+- **`README.es.md` estaba destruido** —un párrafo repetido 12.000 veces— y así se publicó
+  en v5.0.
+- El IDE resubía toda la stdlib la mitad de las veces: el CRC del wire salía negativo.
+- El SMP opcional de la VM (`--smp=2`) ya no se cuelga; sigue sin ser el defecto.
+
+### Qué implica al actualizar desde V5
+
+⚠️ **Reflashea el firmware y borra `/app` de la placa.** La stdlib va embebida en la
+imagen y el firmware repone `/lib` solo; lo que sobreviva en `/app` de otra versión **tapa**
+a lo nuevo, y el síntoma apunta a otro sitio. La instrucción de V5 decía «borra `/lib` y
+`/app`»: `/lib` ya no hace falta.
+
+📌 **Lo que rompe fuentes de V5:**
+- **`import Core`** hay que escribirlo en todo módulo que use `List`, los envoltorios,
+  `Comparable`, `Exception`, `RuntimeError` o un `catch`. Es el cambio que más ficheros
+  toca; el compilador lo dice.
+- **`parent: Container`** en todos los constructores de la GUI: un programa que declaró el
+  padre con tipo estático `Component`, o que metía hijos en una hoja, deja de compilar.
+- **`Keyboard.attach(ta)` es `Keyboard.setTextarea(ta)`**. Con `attach` ahora se resuelve
+  al alta en el árbol y no compila.
+- **`Tabview.addTab()` devuelve `TabPage`**, no `Component`.
+
+📌 **Lo que cambia de comportamiento sin que el compilador avise:**
+- **`print e`** imprime el mensaje de la excepción (antes, basura de memoria).
+- **El screen mide lo que mide el panel** en placa: un programa que asumía 480×320 cambia
+  de geometría, y un `.win` guardado desde `toJson()` lleva el tamaño del panel — no es
+  portable entre pantallas.
+- **Los handlers de la GUI se despachan dentro de `run()`**, no después.
+- **Un programa que muere lanzando sale con 1**, no con 0 ni con 11. En el repo nadie
+  miraba el 11.
+- **`IO.pathAbsolute`** ya no devuelve la ruta del sistema operativo: lo relativo se queda
+  relativo.
+- **`Wdt` en el STM32 lanza**; antes `disable()` lo reprogramaba a ~131 s y la placa se
+  reseteaba sola. **`Adc`** lanza si falla; **`Neopixel`** lanza donde no hay driver.
+- **`OwnerList` libera sus elementos**: una segunda referencia a uno de ellos muere con la
+  lista (falla por handle, no corrompe).
+
+📌 **Lo que no rompe:** `Pico.*` sigue compilando (alias de `Machine`); los `.mod` v6 se
+siguen ejecutando; `Gui.run()` sigue bloqueando.
+
+### Lo que todavía no
+
+- **`GET` y `LS` durante un RUN** contestan `BUSY`. V7.
+- **`listDir` e `input()` sólo funcionan en la VM Java**: en la VM-C —el PC y las placas—
+  lanzan `RuntimeError` («builtin no soportado»).
+- **Las bases de datos siguen pidiendo placa** con `bpgenvm-c` a secas. El micro simulado
+  del IDE lleva SQLite si se construye con `make sim SQLITE=1`.
+- **El S3 no tiene AOT** (Xtensa); **el C3 y el C6 interpretan sus `native`** hasta que
+  haya un destino RISC-V sin FPU.
+- **No hay bajo consumo**: el micro nunca duerme. Y en el STM32 la tarea ociosa no llega a
+  correr.
+- **No hay ficheros como objetos** (`open`/`seek`/`close`): `readFile` trae el fichero
+  entero al heap, así que un fichero mayor que la RAM no se puede leer.
+- **`Adc` no tiene driver en el STM32**; **`Pulse` en el C3 cuenta 0** (el chip no tiene
+  contador); el breadcrumb de `Machine` (`setMark`…) sólo funciona en el STM32;
+  **`Neopixel`** sólo en el RP2350; **la SD no llega al STM32**; la rotación no está en la
+  DK2.
+- **Los campos protegidos no cruzan módulos**: un descendiente en otro módulo no los ve
+  (usa un getter). Y sólo el primer constructor de una clase cruza la frontera del módulo.
+- **Un módulo de la stdlib olvidado en `/app` tapa al de `/lib` sin aviso.**
+- **La VM sigue en un solo núcleo** (en el S3 y el P4, el otro atiende el cable). Los dos
+  núcleos para ejecutar BP quedan fuera del plan de versiones.
 
 ---
 
@@ -134,17 +525,21 @@ Dicho sin adornos, porque conviene saberlo antes de empezar:
 
 - **Las bases de datos necesitan placa.** El motor va en un pack de código nativo
   y todavía no hay uno para PC, así que un programa con SQLite no se puede probar en el PC.
+  *(V6: el micro simulado del IDE lleva SQLite si se construye con `make sim SQLITE=1`.)*
 - **`listDir` no está en la VM-C**, o sea que un programa puede listar un
   directorio en el PC pero no en la placa. Es el único verbo de fichero que
-  falta.
+  falta. *(V6: sigue así; `listDir` e `input()` sólo funcionan en la VM Java, y en la
+  VM-C lanzan `RuntimeError`.)*
 - **exFAT no está soportado**: formatea las tarjetas en FAT32.
 - **La tarjeta SD no llega al STM32** todavía.
 - **El ESP32-S3 no tiene AOT**: sus funciones `native` corren interpretadas — el AOT
   emite ARM y RISC-V, no Xtensa. El IDE lo avisa al compilar y el programa funciona
   igual, sólo que sin acelerar. El P4 sí acelera.
-- **El S3 tampoco expone packs.** El resto de placas sí.
+- **El S3 tampoco expone packs.** El resto de placas sí. *(V6: ya sí — el mapeo de la
+  zona no se llamaba en el S3; corregido, y el C6 también los tiene.)*
 - **La sustitución entre interfaces de módulo** (un impl de `LogApiV2` donde se pide
-  `LogApi`) no funciona todavía.
+  `LogApi`) no funciona todavía. *(V6: las interfaces de módulo se retiran del lenguaje;
+  deja de ser un pendiente.)*
 
 ### Qué implica al actualizar desde V4
 
@@ -158,6 +553,9 @@ síntoma es un error al ejecutar del estilo:
 ```
 exit 11 (lib 'Core' presente pero no exporta 'Core.__cls_new_List'; ¿version vieja?)
 ```
+
+*(V6: los códigos de salida se unificaron; ese fallo de enlace sale hoy con `exit 1` y el
+mismo mensaje.)*
 
 📌 **Por qué las dos carpetas y no sólo `/lib`**: el IDE deja en `/app` las dependencias
 del programa, y lo que hay ahí **tiene preferencia** sobre `/lib`. Limpiar sólo una no

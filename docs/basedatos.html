@@ -190,6 +190,15 @@
   usar de dos maneras, y las dos son legítimas:
 </p>
 
+<p>
+  <strong>Qué placas pueden.</strong> Hacen falta dos cosas: código nativo del motor para esa
+  arquitectura y RAM para su arena (2 MB como mínimo). Las cumplen la <strong>Metro RP2350</strong>
+  con PSRAM (<code>psram=1</code> en el entorno; la Pico 2 no la tiene) y los dos
+  <strong>ESP32-P4</strong> (kit y Waveshare). El <strong>ESP32-S3</strong> tiene zona de packs pero
+  no hay binario para Xtensa; el <strong>C3</strong> y el <strong>C6</strong> no tienen PSRAM; y los
+  <strong>STM32</strong> no tienen RAM externa ni tarjeta.
+</p>
+
 <ul>
   <li><strong>con SQL</strong>, escribiendo las sentencias a mano — directo y sin sorpresas;</li>
   <li><strong>con el ORM</strong>, que las escribe por ti a partir de tus clases.</li>
@@ -229,10 +238,11 @@
 </p>
 
 <p class="warn">
-  <strong>Hoy hace falta placa.</strong> La VM-C del PC no lleva el motor: si ejecutas ahí
-  un programa con base de datos, la primera llamada lanza
-  <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>. Poder probarlo en el PC
-  está previsto, pero todavía no es posible.
+  <strong>En el PC: el micro simulado.</strong> El simulador del IDE lleva el motor
+  <strong>enlazado</strong> si se construye con <code>make sim SQLITE=1</code>
+  (<code>SQLite.mod</code> y <code>Orm.mod</code> viajan a él igual que a una placa, y no hay
+  pack que grabar). La VM-C de línea de comandos (<code>bpgenvm-c</code>) no lo lleva: la
+  primera llamada lanza <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>.
 </p>
 
 <h2 id="sinorm">2. Sin ORM: hablar SQL directamente</h2>
@@ -540,6 +550,8 @@ q.<span class="fn">release</span>()</code></pre>
 s.<span class="fn">release</span>()</code></pre>
 
 <p>
+  (<code>Orm.esc</code> es del módulo <code>Orm</code>: el fragmento necesita
+  <code>import Orm</code> además de <code>import SQLite</code>.)
   En JDBC esto obliga a abrir otra conexión, porque un <code>Statement</code> cierra su
   <code>ResultSet</code> al reutilizarse. Aquí no hace falta: los <code>execInt</code> de
   dentro abren y sueltan el suyo sin tocar el cursor de fuera.
@@ -571,12 +583,13 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 
 <p>
   <strong>El sufijo <code>L</code> de los <code>long</code>.</strong> Una marca de tiempo
-  en milisegundos no cabe en 32 bits. Sin la <code>L</code>, el literal se trunca
-  <strong>en silencio</strong> y sale un número plausible y equivocado:
+  en milisegundos no cabe en 32 bits. Desde V5 el tipo de un literal entero lo decide su
+  magnitud, así que ya no se trunca; la <code>L</code> sigue siendo buena costumbre, porque
+  dice lo que quieres:
 </p>
 
-<pre><code><span class="num">1754300000000L</span>    <span class="comment">// bien</span>
-<span class="num">1754300000000</span>     <span class="comment">// MAL: se convierte en 1953343232</span></code></pre>
+<pre><code><span class="num">1754300000000L</span>    <span class="comment">// long, explícito</span>
+<span class="num">1754300000000</span>     <span class="comment">// también long: no cabe en integer</span></code></pre>
 
 <p>
   <strong>El apóstrofo.</strong> Concatenar texto del usuario a mano parte la sentencia.
@@ -584,17 +597,28 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 </p>
 
 <p>
-  <strong>Dónde vive la base.</strong> En la placa, en la tarjeta:
-  <code>/sd/medidas.db</code>. <strong>No la pongas en <code>resources/</code></strong>,
+  <strong>Dónde vive la base.</strong> En la placa con tarjeta, en la tarjeta:
+  <code>/sd/medidas.db</code>; sin tarjeta (P4, simulador), en la flash del micro:
+  <code>medidas.db</code>. <strong>No la pongas en <code>resources/</code></strong>,
   que esa carpeta se copia al micro en cada ejecución y se machacaría tu base con la del
   proyecto.
 </p>
 
 <p>
-  <strong>El camino no puede venir por argumento.</strong> Hoy el <code>arg</code> de
-  <code>Main</code> llega siempre vacío. Por eso los ejemplos ponen el trabajo en una
-  función pública — <code>correr(camino)</code> — y quien quiera otra base escribe un
-  módulo de tres líneas que la llame.
+  <strong>El camino viene por argumento.</strong> Desde V6 <code>Main</code> recibe el
+  argumento de ejecución, y el valor por defecto se declara en el propio parámetro — que es
+  donde se configura el despliegue:
+</p>
+
+<pre><code><span class="kw">function</span> <span class="fn">Main</span>(arg: <span class="type">string</span> := <span class="str">"medidas.db"</span>)
+  correr(arg)
+<span class="kw">end</span> Main</code></pre>
+
+<p>
+  En la consola del micro del IDE, <code>run SqlDemo</code> usa el defecto y
+  <code>run SqlDemo /sd/otra.db</code> la que digas; los dos CLI del PC lo aceptan como segundo
+  argumento tras el <code>.mod</code>. El <strong>autorun</strong> no pasa argumento: arranca con
+  el defecto del fuente.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>

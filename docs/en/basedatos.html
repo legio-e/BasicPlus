@@ -190,6 +190,15 @@
   both are legitimate:
 </p>
 
+<p>
+  <strong>Which boards can.</strong> Two things are needed: native code of the engine for that
+  architecture, and RAM for its arena (2 MB at least). The <strong>Metro RP2350</strong> with
+  PSRAM (<code>psram=1</code> in the environment; the Pico 2 has none) and both
+  <strong>ESP32-P4</strong> boards (kit and Waveshare) meet them. The <strong>ESP32-S3</strong> has
+  a pack area but there is no Xtensa binary; the <strong>C3</strong> and <strong>C6</strong> have
+  no PSRAM; and the <strong>STM32</strong> boards have neither external RAM nor a card.
+</p>
+
 <ul>
   <li><strong>with SQL</strong>, writing the statements yourself — direct and no surprises;</li>
   <li><strong>with the ORM</strong>, which writes them for you from your classes.</li>
@@ -227,10 +236,11 @@
 </p>
 
 <p class="warn">
-  <strong>Today you need a board.</strong> The PC's C VM does not carry the engine: run a
-  program with a database there and the first call throws <em>«sql_open: falta el codigo nativo
-  del pack 'SQLI' v1»</em>. Being able to test it on the desktop is planned, but not possible
-  yet.
+  <strong>On the PC: the simulated micro.</strong> The IDE's simulator carries the engine
+  <strong>linked in</strong> when built with <code>make sim SQLITE=1</code>
+  (<code>SQLite.mod</code> and <code>Orm.mod</code> travel to it just as to a board, and there is
+  no pack to burn). The command-line C VM (<code>bpgenvm-c</code>) does not: the first call throws
+  <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>.
 </p>
 
 <h2 id="sinorm">2. Without the ORM: plain SQL</h2>
@@ -524,6 +534,8 @@ q.<span class="fn">release</span>()</code></pre>
 s.<span class="fn">release</span>()</code></pre>
 
 <p>
+  (<code>Orm.esc</code> belongs to the <code>Orm</code> module: the fragment needs
+  <code>import Orm</code> besides <code>import SQLite</code>.)
   In JDBC this forces a second connection, because a <code>Statement</code> closes its
   <code>ResultSet</code> when reused. Here it is not needed: the inner <code>execInt</code> calls
   open and release their own without touching the outer cursor.
@@ -555,12 +567,13 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 
 <p>
   <strong>The <code>L</code> suffix on <code>long</code> literals.</strong> A millisecond
-  timestamp does not fit in 32 bits. Without the <code>L</code>, the literal is truncated
-  <strong>silently</strong> into a plausible, wrong number:
+  timestamp does not fit in 32 bits. Since V5 the type of an integer literal is decided by its
+  magnitude, so it is no longer truncated; the <code>L</code> is still a good habit, because it
+  says what you mean:
 </p>
 
-<pre><code><span class="num">1754300000000L</span>    <span class="comment">// right</span>
-<span class="num">1754300000000</span>     <span class="comment">// WRONG: becomes 1953343232</span></code></pre>
+<pre><code><span class="num">1754300000000L</span>    <span class="comment">// long, explicit</span>
+<span class="num">1754300000000</span>     <span class="comment">// long as well: does not fit an integer</span></code></pre>
 
 <p>
   <strong>The apostrophe.</strong> Concatenating user text by hand breaks the statement. Use
@@ -568,16 +581,27 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 </p>
 
 <p>
-  <strong>Where the database lives.</strong> On the board, on the card:
-  <code>/sd/readings.db</code>. <strong>Do not put it in <code>resources/</code></strong> — that
+  <strong>Where the database lives.</strong> On a board with a card, on the card:
+  <code>/sd/readings.db</code>; without one (P4, simulator), in the micro's flash:
+  <code>readings.db</code>. <strong>Do not put it in <code>resources/</code></strong> — that
   folder is copied to the micro on every run and would overwrite your database with the project's.
 </p>
 
 <p>
-  <strong>The path cannot come as an argument.</strong> Today <code>Main</code>'s <code>arg</code>
-  always arrives empty. That is why the samples put the work in a public function —
-  <code>correr(path)</code> — and whoever wants another database writes a three-line module that
-  calls it.
+  <strong>The path comes as an argument.</strong> Since V6 <code>Main</code> receives the run
+  argument, and the default is declared on the parameter itself — which is where deployment is
+  configured:
+</p>
+
+<pre><code><span class="kw">function</span> <span class="fn">Main</span>(arg: <span class="type">string</span> := <span class="str">"medidas.db"</span>)
+  correr(arg)
+<span class="kw">end</span> Main</code></pre>
+
+<p>
+  In the IDE's micro console, <code>run SqlDemo</code> uses the default and
+  <code>run SqlDemo /sd/other.db</code> whatever you say; both PC CLIs take it as a second argument
+  after the <code>.mod</code>. <strong>Autorun</strong> passes no argument: it starts with the
+  source's default.
 </p>
 
 <h2 id="seguir">Where to go next</h2>

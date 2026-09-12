@@ -166,23 +166,31 @@
   <h1>BasicPlus</h1>
   <p class="tagline">
     A general-purpose language for 32-bit microcontrollers: modern BASIC
-    syntax, object orientation and a first-class debugger. It compiles to
-    bytecode that runs <strong>identically</strong> on the PC and on the
-    micro.
+    syntax, object orientation, a <strong>graphical interface</strong> and a
+    first-class debugger. It compiles to bytecode that runs
+    <strong>identically</strong> on the PC and on the micro.
   </p>
   <div class="badges">
-    <span class="badge">V5 · data</span>
-    <span class="badge">RP2350 · ESP32-S3/P4 · STM32</span>
+    <span class="badge">V6 · order in the micros</span>
+    <span class="badge">RP2350 · ESP32 S3/C3/C6/P4 · STM32</span>
     <span class="badge">Two VMs · one byte-identical output</span>
     <span class="badge">Handle-based memory</span>
     <span class="badge">Tested on real hardware</span>
     <span class="badge">MIT</span>
   </div>
+  <figure style="margin:2.2rem auto 0;max-width:660px">
+    <img src="../img/guicolordemo.png"
+         alt="The BasicPlus GuiColorDemo — a palette of coloured buttons — on a board with a screen"
+         style="width:100%;height:auto;border-radius:10px;border:1px solid var(--border);box-shadow:0 6px 22px rgba(0,0,0,0.12)">
+    <figcaption style="font-size:0.85rem;color:var(--fg-muted);margin-top:0.6rem;text-align:center">
+      <code>GuiColorDemo</code> on a board — GUI with LVGL. The same bytecode runs on the PC and on the micro.
+    </figcaption>
+  </figure>
 </header>
 
 <p>
   The same program you debug on your desktop later blinks an LED on a
-  Raspberry Pi Pico 2, an ESP32-S3 or an STM32 — no recompiling, no
+  Raspberry Pi Pico 2, an ESP32 (S3, C3, C6 or P4) or an STM32 — no recompiling, no
   <code>#ifdef</code>, no surprises. On a PC with no GPIO the hardware
   builtins log to the console; on the board they drive real pins. The
   bytecode is the same, byte for byte.
@@ -229,13 +237,18 @@
 
 
 <p style="margin-top:1.4rem">
-  <strong>New in V5:</strong> this release is about <strong>storing data</strong>:
-  an <strong>SD card</strong> with gigabytes, <strong>SQLite</strong> running inside the
-  micro with an <strong>ORM</strong> that writes the SQL for you, and <strong>packs</strong>,
-  which make it possible to ship a library as large as SQLite without those who do not use
-  it paying for it — and without eating RAM, since its code runs straight from flash. Along
-  the way <code>List</code> and the wrappers have been written in BasicPlus, with
-  <strong>typed getters</strong>, and <code>native</code> accepts <code>long</code>.
+  <strong>New in V6 — order in the micros:</strong> whatever did the same job on every
+  micro is now shared code (a bit over 90 % of each image, measured), so adding a micro from
+  a family we already support is comparatively easy. Two new micros come in, the
+  <strong>ESP32-C3</strong> and the <strong>ESP32-C6</strong> (with the first SPI display);
+  the GUI runs in its own thread and its component tree can be saved and reloaded as JSON;
+  the micro's screen can be <strong>captured</strong> from the PC (<code>Gui.shot</code>);
+  the IDE keeps talking to the board while a program runs; and a semi-automatic test system
+  drives the boards. Seven images for nine boards; verified on real hardware across eight
+  boards and three architectures. Everything from V5 — the SD card, SQLite, the ORM and
+  packs — is still there. Details in the
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v6.0">v6.0 release</a> and the
+  <a href="../RELEASES.md">release notes</a> <em>(Spanish)</em>.
 </p>
 
 <h2>Getting started</h2>
@@ -246,7 +259,7 @@
   </a>
   <a class="card" href="INSTALAR_FIRMWARE.md">
     <span class="t">Installing the firmware →</span>
-    <span class="d">Flash the VM on each micro (prebuilt image or built by you): Pico/Metro, ESP32-S3/P4, STM32.</span>
+    <span class="d">Flash the VM on each micro (prebuilt image or built by you): Pico/Metro, ESP32 (S3, C3, C6, P4), STM32.</span>
   </a>
 </div>
 
@@ -263,7 +276,7 @@
   </a>
   <a class="card" href="referencia.html">
     <span class="t">Reference →</span>
-    <span class="d">The complete standard library, the command line and the on-disk artifacts (<code>.mod</code>, <code>.bpi</code>, <code>.mdn</code>…).</span>
+    <span class="d">The complete standard library, the command line and the on-disk artifacts (<code>.mod</code>, <code>.dbg</code>, <code>.pack</code>…).</span>
   </a>
   <a class="card" href="gui.html">
     <span class="t">Graphical interface →</span>
@@ -298,19 +311,19 @@
     <span class="d">What BasicPlus is and what it does not want to be.</span>
   </a>
   <a class="card" href="../PENDIENTES.md">
-    <span class="t">Living backlog → <small>(Spanish)</small></span>
-    <span class="d">The project's honest diary: what's done, what was deferred to v6 and why.</span>
+    <span class="t">Known limitations → <small>(Spanish)</small></span>
+    <span class="d">What the language does not do yet, said plainly, and why.</span>
   </a>
   <a class="card" href="../RELEASES.md">
     <span class="t">Release notes → <small>(Spanish)</small></span>
-    <span class="d">What v5.0 brings, the downloadable artifacts and what was deferred to v6.</span>
+    <span class="d">What v6.0 brings, what changes when upgrading from v5, the downloadable artifacts and what is not there yet.</span>
   </a>
 </div>
 
 <p style="margin-top:1.2rem">Low-level specs <em>(Spanish)</em>:</p>
 <ul class="specs">
   <li>→ <a href="../MOD_FORMAT.md"><code>.mod</code> format</a> — the bytecode binary spec.</li>
-  <li>→ <a href="../opcodes.html">Opcodes</a> (<a href="../OPCODES.md">.md</a>) — the semantics of each instruction.</li>
+  <li>→ <a href="../OPCODES.md">Opcodes</a> — the semantics of all 175 instructions (plus a <a href="../opcodes.html">browsable view</a>, partial: the V1 opcodes with their AOT translation).</li>
   <li>→ <a href="../HEAP_LAYOUT.md">Heap layout</a> — the runtime <code>memory[]</code>.</li>
   <li>→ <a href="../BUILTINS.md">Builtins</a> — the <code>CALL_BUILTIN</code> catalog.</li>
   <li>→ <a href="../BPVM_WIRE_PROTOCOL.md">Wire protocol</a> — the JSON-per-line PC↔board link.</li>
@@ -327,25 +340,37 @@
   <tr>
     <td>Raspberry Pi <strong>Pico 2</strong> and Adafruit <strong>Metro RP2350</strong></td>
     <td>USB-CDC</td>
-    <td>A <strong>single image</strong> for both boards: variant (A/B), pins and PSRAM are decided at <em>runtime</em> (<code>/sys/board.json</code>). AOT enabled.</td>
+    <td>A <strong>single image</strong> for both boards: the variant (A/B) is detected in hardware; board name and pins come from <code>/sys/board.json</code>; the Metro's PSRAM is enabled in the environment (<code>psram=1</code>). AOT enabled.</td>
   </tr>
   <tr>
     <td><strong>ESP32-S3</strong> (Xtensa LX7)</td>
     <td>UART0</td>
-    <td>Persistent FS on a dedicated partition; console over native USB. <code>native</code> runs interpreted (no AOT on Xtensa).</td>
+    <td>Persistent FS on a dedicated partition; console over native USB. 8 MB PSRAM as the VM heap, and a pack area. <code>native</code> runs interpreted (no AOT on Xtensa).</td>
   </tr>
   <tr>
-    <td><strong>STM32</strong> (ref. Nucleo-U575ZI-Q)</td>
+    <td><strong>ESP32-C3</strong> and <strong>ESP32-C6</strong> (RISC-V, single core) — <em>new in V6</em></td>
+    <td>USB-Serial-JTAG (the only USB)</td>
+    <td>Same ESP-IDF port; the console goes over UART0. The <strong>C6</strong> (Waveshare ESP32-C6-LCD-1.3) adds the first <strong>SPI</strong> display: ST7789 240×240, no touch. A pack area on both. <code>native</code> runs interpreted (RISC-V without FPU; no compile target yet).</td>
+  </tr>
+  <tr>
+    <td><strong>ESP32-P4</strong> (RISC-V) — with a screen</td>
+    <td>UART</td>
+    <td>LVGL GUI on a MIPI-DSI panel + touch. A <strong>single image</strong> for the Function-EV kit (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at <em>runtime</em> from the environment (<code>display=st7701</code>). AOT enabled (RISC-V).</td>
+  </tr>
+  <tr>
+    <td><strong>STM32</strong> (Nucleo-U575ZI-Q · Discovery U5G9J-DK2)</td>
     <td>ST-LINK VCP</td>
-    <td>FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350).</td>
+    <td>FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350). The <strong>Discovery DK2</strong> adds an LTDC 800×480 screen + touch (GUI).</td>
   </tr>
 </table>
 <p>
-  On all of them: a "wire v1" REPL with file upload and remote RUN,
-  <strong>Stop</strong> (cooperative KILL without resetting the board),
+  On all of them: two system threads, <code>vm</code> and <code>io</code>, so the board
+  keeps answering the cable while the program runs; a "wire v1" REPL with file upload,
+  remote RUN and a run argument (<code>run X &lt;arg&gt;</code>),
+  <strong>Stop</strong> (instant KILL without resetting the board),
   <strong>autorun</strong> (<code>/sys/auto.txt</code> starts your program on
-  power-up, and the IDE can attach live) and on-device debugging with
-  breakpoints.
+  power-up, and the IDE can attach live), unified exit codes and on-device debugging with
+  breakpoints. Seven images in total.
 </p>
 
 <h2>Verified on real hardware</h2>
@@ -379,16 +404,21 @@
   loopbacks) — the <strong>three families are on par</strong>. On STM32 and
   ESP32 the non-critical peripherals (PWM/ADC/RTC/WDT) got their hardware
   backend in v3. The <strong>Metro RP2350B</strong> shares the firmware image
-  with the Pico — one <code>.uf2</code> for both, the variant is decided at
-  runtime.
+  with the Pico — one <code>.uf2</code> for both, the variant is detected at
+  runtime. V6 added the <strong>ESP32-C3</strong> and <strong>ESP32-C6</strong>, and the
+  UART gained a 512-byte receive ring on all five families (measured on Pico 2 and
+  Discovery). In all, <strong>eight boards and three architectures</strong> verified on real
+  hardware.
 </p>
 
 <p>
   <strong>Boards with a screen (since V3).</strong> The GUI (LVGL) has been verified on
-  hardware on all three: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + GT911 touch),
-  <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600) and
-  <strong>Waveshare ESP32-P4</strong> (ST7701 480×800) — widget catalogue, colour,
-  <code>.win</code> forms and touch, with the same bytecode on all three.
+  hardware on all four: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + GT911 touch),
+  <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600),
+  <strong>Waveshare ESP32-P4</strong> (ST7701 480×800) and, since V6,
+  <strong>Waveshare ESP32-C6-LCD-1.3</strong> (ST7789 240×240 over SPI) — widget catalogue,
+  colour, <code>.win</code> forms, touch and screen capture (<code>Gui.shot</code>), with the
+  same bytecode on all four. The program's screen is the size of the panel.
 </p>
 
 <h2>Credits</h2>
@@ -422,7 +452,7 @@
 <footer>
   BasicPlus — documentation written alongside the development.
   Frontend <code>lexer-java</code> · VMs <code>miVM</code> (Java) and
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) · IDE
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32 S3·C3·C6·P4 / STM32) · IDE
   <code>BpIde</code>. MIT license.
 </footer>
 

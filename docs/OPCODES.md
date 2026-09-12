@@ -1,7 +1,10 @@
 # Catálogo de opcodes de la VM BasicPlus
 
-Documento canónico de los opcodes del bytecode `.mod`. Cada entrada
-incluye:
+Documento canónico de los opcodes del bytecode `.mod`: los **175** que
+define `bpgenvm-c/include/bpvm_opcodes.h` (V6). Los de `0x00..0x70` son los
+de V1; los de `0x6F` y `0x71..0xB0` se añadieron después (long, double,
+potencia, `CHECKCAST`) y están en su propia sección al final de las tablas.
+Cada entrada incluye:
 - Byte (`code`), mnemonic.
 - Operando inmediato (si lo hay): tipo + tamaño en bytes.
 - Stack effect: `( inputs -- outputs )` con la cima a la derecha.
@@ -175,8 +178,95 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x6A | `GET_GLOBAL_S8` | `i8` soff | `( -- v )` | i32 read; offset es i8 sign-extended. |
 | 0x6B | `SET_GLOBAL_S8` | `i8` soff | `( v -- )` | |
 | 0x6C | `LEA_GLOBAL_S8` | `i8` soff | `( -- addr )` | |
+| 0x6F | `EVENT_RETURN` | — | `( pcResume ret -- )` | **Sentinela de vuelta de un handler de EVENTO (H5.c), en las DOS VMs.** NUNCA lo emite el compilador. Vive en `BPVM_SENTINEL_EVENT_RETURN_ADDR`; el scheduler inyecta el frame del handler con saved-pc apuntando aquí. Al hacer RET el handler, se tira su valor de retorno y se lee el PC de reanudación que la inyección dejó DEBAJO de los argumentos: `pc ← pcResume`; `tc.ev_depth--`. El código interrumpido no se entera. |
 | 0x70 | `THREAD_EXIT` | — | `( -- )` | Termina el thread actual sin tumbar la VM. Único byte legal después de un RET de un worker: el saved-pc apunta a `memory[0]` y allí está este byte. |
 | 0xAA | `NATIVE_RETURN` | — | `( -- )` | **Sentinela del puente native→BP (P-aot-call-bp), solo VM-C.** NUNCA lo emite el compilador en código de usuario. Vive en `memory[1]`. Cuando una función BP llamada por `bpvm_aot_call_bp_*` (código native invocando a una función BP interpretada) hace RET, su saved-pc falso apunta aquí: el dispatch ejecuta este byte, sale del bucle de intérprete anidado con status interno `BPVM_NATIVE_RETURN` y devuelve el control al helper C. Mismo patrón que THREAD_EXIT. Ver `docs/AOT_CROSS_MODULE.md` §8. |
+
+## 0x71..0x90 — `long` (i64, 8 bytes = 2 slots) — aditivos V2 (H1.2)
+
+Un `long` ocupa **8 bytes** en pila, locales, globales, campos y arrays, siempre
+big-endian. Las comparaciones dejan un `i32` (0/1). División y módulo por cero
+lanzan `RuntimeError` atrapable («División por cero» / «Módulo por cero»).
+
+| Code | Op | Operando | Stack effect | Semántica |
+|---|---|---|---|---|
+| 0x71 | `LPUSH` | `i64` value | `( -- L )` | Empuja el inmediato de 8 bytes. |
+| 0x72 | `LADD` | — | `( a b -- a+b )` | Suma i64 (wrap). |
+| 0x73 | `LSUB` | — | `( a b -- a-b )` | |
+| 0x74 | `LMUL` | — | `( a b -- a*b )` | |
+| 0x75 | `LDIV` | — | `( a b -- a/b )` | División entera con signo; `b == 0` → RuntimeError. |
+| 0x76 | `LMOD` | — | `( a b -- a%b )` | Resto con el signo del dividendo (C/Java); `b == 0` → RuntimeError. |
+| 0x77 | `LNEG` | — | `( a -- -a )` | |
+| 0x78 | `LBAND` | — | `( a b -- a&b )` | |
+| 0x79 | `LBOR` | — | `( a b -- a\|b )` | |
+| 0x7A | `LBXOR` | — | `( a b -- a^b )` | |
+| 0x7B | `LBNOT` | — | `( a -- ~a )` | |
+| 0x7C | `LSHL` | — | `( a n -- a<<(n&63) )` | El desplazamiento es un `long` en pila; se enmascara a 6 bits. |
+| 0x7D | `LSHR_S` | — | `( a n -- a>>(n&63) )` | Aritmético (propaga signo). |
+| 0x7E | `LSHR_U` | — | `( a n -- a>>>(n&63) )` | Lógico (rellena con ceros). |
+| 0x7F | `LEQ` | — | `( a b -- i32 )` | `a == b ? 1 : 0`. |
+| 0x80 | `LNEQ` | — | `( a b -- i32 )` | |
+| 0x81 | `LLT` | — | `( a b -- i32 )` | Con signo. |
+| 0x82 | `LLE` | — | `( a b -- i32 )` | |
+| 0x83 | `LGT` | — | `( a b -- i32 )` | |
+| 0x84 | `LGE` | — | `( a b -- i32 )` | |
+| 0x85 | `LPRINT` | — | `( L -- )` | Imprime el long en decimal + newline al OutputSink. |
+| 0x86 | `LPRINT_NONL` | — | `( L -- )` | Igual, sin newline. |
+| 0x87 | `I32_TO_I64` | — | `( i -- L )` | Extensión con signo 4 → 8 bytes. |
+| 0x88 | `I64_TO_I32` | — | `( L -- i )` | Truncado a los 32 bits bajos. |
+| 0x89 | `GET_LOCAL_L` | `i16` soff | `( -- L )` | Push de 8 bytes en `mem[bp + soff]`. |
+| 0x8A | `SET_LOCAL_L` | `i16` soff | `( L -- )` | |
+| 0x8B | `GET_GLOBAL_L` | `i16` soff | `( -- L )` | Push de 8 bytes en `mem[cs + soff]`. |
+| 0x8C | `SET_GLOBAL_L` | `i16` soff | `( L -- )` | |
+| 0x8D | `NEWARRAY_I64` | — | `( size -- ref )` | Array de `size` elementos de 8 bytes (tipo `ARRAY_I64`), a cero. `size < 0` es fatal; sin heap o sin handle → RuntimeError «No space in heap» (OOM atrapable, H1). Safepoint de GC. |
+| 0x8E | `ALOAD_I64` | — | `( ref idx -- L )` | Índice fuera de rango o ref liberado → RuntimeError. |
+| 0x8F | `ASTORE_I64` | — | `( ref idx L -- )` | Ídem. |
+| 0x90 | `LRET` | `u8` paramsCount | `( L -- )` | Como `RET` pero el valor de retorno tiene 8 bytes: restaura cs/bp/pc, `sp ← bp - 12 - paramsCount*4`, y deja los 8 bytes en el top del llamador. `paramsCount` cuenta **slots** de 4 bytes (un parámetro `long` son 2). |
+
+## 0x91..0xA7 — `double` (f64, 8 bytes) — aditivos V2 (H1.3)
+
+Mismo tamaño y convención que `long`; los bits IEEE-754 viajan como i64 BE.
+Las comparaciones dejan `i32`. No hay excepción por división entre cero
+(sale `inf`/`nan`, como en C y Java).
+
+| Code | Op | Operando | Stack effect | Semántica |
+|---|---|---|---|---|
+| 0x91 | `DPUSH` | `i64` bits | `( -- D )` | Empuja el inmediato (bits del double). |
+| 0x92 | `DADD` | — | `( a b -- a+b )` | |
+| 0x93 | `DSUB` | — | `( a b -- a-b )` | |
+| 0x94 | `DMUL` | — | `( a b -- a*b )` | |
+| 0x95 | `DDIV` | — | `( a b -- a/b )` | |
+| 0x96 | `DMOD` | — | `( a b -- fmod(a,b) )` | Resto con el signo del dividendo. |
+| 0x97 | `DNEG` | — | `( a -- -a )` | |
+| 0x98 | `DEQ` | — | `( a b -- i32 )` | Comparación IEEE (`nan != nan`). |
+| 0x99 | `DNEQ` | — | `( a b -- i32 )` | |
+| 0x9A | `DLT` | — | `( a b -- i32 )` | |
+| 0x9B | `DLE` | — | `( a b -- i32 )` | |
+| 0x9C | `DGT` | — | `( a b -- i32 )` | |
+| 0x9D | `DGE` | — | `( a b -- i32 )` | |
+| 0x9E | `DPRINT` | — | `( D -- )` | Imprime el double + newline (formato único de las dos VMs: `bpvm_format_double`). |
+| 0x9F | `DPRINT_NONL` | — | `( D -- )` | Igual, sin newline. |
+| 0xA0 | `I2D` | — | `( i -- D )` | i32 → double. |
+| 0xA1 | `D2I` | — | `( D -- i )` | double → i32 (truncado hacia cero, como el cast de C). |
+| 0xA2 | `L2D` | — | `( L -- D )` | |
+| 0xA3 | `D2L` | — | `( D -- L )` | Truncado hacia cero. |
+| 0xA4 | `F2D` | — | `( f -- D )` | float (4 bytes) → double. |
+| 0xA5 | `D2F` | — | `( D -- f )` | |
+| 0xA6 | `L2F` | — | `( L -- f )` | |
+| 0xA7 | `F2L` | — | `( f -- L )` | Truncado hacia cero. |
+
+## 0xA8..0xB0 — campos de 8 bytes, potencia, `CHECKCAST` — aditivos V2–V5
+
+| Code | Op | Operando | Stack effect | Semántica |
+|---|---|---|---|---|
+| 0xA8 | `GET_FIELD_LONG` | `u8` slot | `( ref -- L )` | Lee un campo de instancia de 8 bytes (`long`/`double`). `ref` nulo → fallo NULL_RECEIVER; liberado → RuntimeError (use-after-free). |
+| 0xA9 | `SET_FIELD_LONG` | `u8` slot | `( ref L -- )` | Escribe un campo de 8 bytes. Mismas comprobaciones. |
+| 0xAB | `TRY_BEGIN_EXT` | `i32` handlerRel, `i32` clsOff | `( -- )` | Ver la tabla `0x50..0x5F` (catch cross-module). |
+| 0xAC | `IPOW` | — | `( base e -- base^e )` | Potencia entera por cuadrados (i32 wrap). `e < 0` → RuntimeError «exponente negativo en potencia entera». |
+| 0xAD | `LPOW` | — | `( base e -- base^e )` | Igual en i64. |
+| 0xAE | `DPOW` | — | `( base e -- base^e )` | `bpvm_dpow`: si `e` es entero y `\|e\| <= 1024`, por cuadrados (y `1/r` si negativo); si no, `exp(e*log(base))`. Una sola copia, compartida con el AOT; byte-idéntica a miVM. |
+| 0xAF | `CHECKCAST` | `i16` clsOff, `i16` nameOff | `( ref -- ref )` | El estrechamiento dinámico de `Object` (#389): mira el top **sin sacarlo**. `null` pasa siempre. `clsOff == 0` significa «cadena» (`string(o)`); si no, sube por la cadena de padres desde el descriptor del objeto hasta `cs + clsOff`. Si no encaja → RuntimeError «conversion invalida: el valor no es un 'Nombre'» (el nombre está en `cs + nameOff`, longitud + bytes). |
+| 0xB0 | `CHECKCAST_EXT` | `i32` clsOff, `i16` nameOff | `( ref -- ref )` | Variante cross-module de `CHECKCAST` (#444): el `clsOff` lo parcha el linker por nombre cualificado (misma maquinaria que `TRY_BEGIN_EXT`, tabla lateral en XIP). Aquí `clsOff == 0` NO es el centinela de cadena. Mismo mensaje de error, byte a byte. |
 
 ---
 
@@ -293,6 +383,11 @@ acaba en algún descriptor sin parent (parentOff == 0).
 | SLOT_NUMARGS_U8U8 | 2 | INVOKE_VIRTUAL (slot u8, numArgs u8) |
 | TRY_HANDLER_I32_I16 | 6 | TRY_BEGIN (handlerRel i32, clsOff i16) |
 | TRY_HANDLER_I32_I32 | 8 | TRY_BEGIN_EXT (handlerRel i32, clsOff i32) |
+| IMM_I64 | 8 | LPUSH (i64), DPUSH (bits f64) |
+| SOFF_I16 | 2 | GET/SET_LOCAL_L, GET/SET_GLOBAL_L |
+| IMM_U8 | 1 | LRET (paramsCount en slots), GET/SET_FIELD_LONG (slot) |
+| CAST_I16_I16 | 4 | CHECKCAST (clsOff i16, nameOff i16) |
+| CAST_I32_I16 | 6 | CHECKCAST_EXT (clsOff i32, nameOff i16) |
 
 Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
 
@@ -300,10 +395,10 @@ Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
 
 ## Codes no asignados
 
-`0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). 
-`0x6D .. 0x6F` libres. `0x71 .. 0xFF` mayormente libres salvo los opcodes
-aditivos V2 (long/double en `0x80..0xA9` — ver `bpvm_opcodes.h`) y el
-sentinela `0xAA` `NATIVE_RETURN` (arriba).
+`0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). `0x6D .. 0x6E` libres
+(`0x6F` es `EVENT_RETURN`). `0x71 .. 0xB0` asignados en bloque (long, double,
+campos de 8 bytes, `NATIVE_RETURN`, `TRY_BEGIN_EXT`, potencia, `CHECKCAST`).
+**`0xB1 .. 0xFF` libres.** Total asignado: 175.
 
 Si una implementación encuentra un opcode no listado, debe fallar con
 "Opcode no implementado: 0x%02X en PC %d" — coherente con la VM Java.

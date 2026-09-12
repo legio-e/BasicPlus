@@ -87,11 +87,11 @@
   reinicio hubo. El volcado a flash sigue existiendo como red para los cortes de
   corriente, pero sólo llega hasta el último punto de guardado.
 
-  ⚠️ **Y el orden importa**: con un programa en ejecución la placa sólo atiende
-  `HELLO` y `KILL`, así que el `reset` del IDE no llega. **Primero `kill`, luego
-  `reset`.** El `kill` sí llega aunque el programa esté colgado —está probado sobre
-  un bucle cerrado que no cede el turno— y no borra el log, así que la autopsia
-  sale entera igual. Que `RESET` se pueda mandar directo queda para V6.
+  Con un programa en ejecución la placa atiende `HELLO`, `KILL` y —desde V6
+  (`#452`)— también `RESET`: el `reset` del IDE llega con un RUN vivo en las cinco
+  familias, mata el programa y reinicia después. `kill` + `reset` sigue valiendo. El
+  `kill` llega aunque el programa esté colgado —está probado sobre un bucle cerrado
+  que no cede el turno— y no borra el log, así que la autopsia sale entera igual.
 
 - **L17 — un `catch` sin tipo ES `catch e: Exception`** (V6, 30-ago). No es un caso
   aparte: el compilador le pone ese tipo al AST, así que `catch e` y
@@ -111,18 +111,28 @@
   un error también pide el import**:
 
   ```basicplus
-  module MiModulo
+  module L16
     import Core          // <- hace falta para el catch de abajo y para List
 
     function leer(): List
+      var l: List := List()
       try
-        ...
-      catch (e: RuntimeError)
-        ...
-      end try
+        l.add("uno")
+        throw RuntimeError("fallo de prueba")
+      catch e: RuntimeError
+        l.add(e.msg)
+      endtry
+      return l
     end leer
-  end MiModulo
+
+    public function Main()
+      var l: List := leer()
+      print l.length()
+    end Main
+  end L16
   ```
+
+  (Compila y ejecuta tal cual: imprime `2` en las dos VMs.)
 
   **Antes no hacía falta**: el compilador inyectaba el `import` por su cuenta. Se quitó
   porque lo inyectaba en una de sus dos pasadas y no en la otra, y eso hacía que un módulo
@@ -134,8 +144,56 @@
   **`Object` NO lo necesita**: es un tipo real, con `toString()` y `compareTo()`, pero
   vive en el lenguaje y no en `Core` — como `integer` o `string`.
 
-  Si se te olvida, el compilador lo dice con el nombre: *«`List` vive en `Core`: este
-  módulo necesita `import Core`»*.
+  Si se te olvida, lo que dice el compilador depende de por dónde tropiece:
+  - usas `List` sin el import → `tipo 'List' no encontrado` (y detrás
+    `no se puede llamar a 'List'`);
+  - `catch e: RuntimeError` sin el import → `tipo de excepción 'RuntimeError' no es
+    una clase`.
+
+  **La regla es transitiva, y los imports no lo son** (`#492`, `#498`). Si importas un
+  módulo cuyas clases extienden un tipo de `Core` —`Collections`, cuyas `SyncList`,
+  `OwnerList`… extienden `Core.List`— tienes que importar `Core` también, aunque tu
+  código no nombre `List`. Aquí el mensaje sí señala el arreglo:
+
+  ```
+  la clase 'SyncList' extiende 'Core.List' y este modulo no importa 'Core': anade `import Core` (los imports no son transitivos)
+  ```
+
+- **L18 — lo que cruza la frontera de un módulo, y lo que no** (V6, `#492` → V7). La
+  interfaz de un módulo exporta **métodos, propiedades, el primer constructor y las
+  constantes**. Tres cosas se quedan dentro, y el compilador lo dice así:
+  - **los campos protegidos no cruzan módulos.** Un `class Gato extends Base.Animal`
+    en otro módulo no ve el `var nombre` de `Animal`: `'Gato' no tiene miembro de
+    instancia 'nombre'`. Rodeo: un getter en la base (es lo que hace `Core.List` con
+    `backing()`). Dentro del mismo módulo, el descendiente sí lo ve.
+  - **sólo la primera sobrecarga del constructor cruza.** Si `Animal` tiene
+    `Animal(n: string)` y `Animal()`, desde otro módulo `Base.Animal()` da `número de
+    argumentos incorrecto: se esperaban 1, se pasaron 0`. Dentro del módulo valen las
+    dos.
+  - **los imports no son transitivos.** Si `Mid` importa `Base` y te devuelve un
+    `Base.Animal`, para nombrar ese tipo —o llamar a sus métodos— tu módulo tiene que
+    escribir `import Base` él mismo; si no, `tipo cualificado 'Base.Animal' no
+    encontrado` (o `el tipo 'Base.Animal' no tiene miembros`). Es la misma regla de
+    L16 con `Core`.
+
+- **L19 — el cast `Clase(x)` sólo acepta un `Object` como origen.** Entre dos clases
+  de la misma jerarquía no baja directo: con `a: Animal`, `Perro(a)` no compila (el
+  compilador lo toma por una llamada al constructor: `número de argumentos incorrecto:
+  se esperaban 0, se pasaron 1`). Se pasa por `Object`, y vale en las dos VMs:
+
+  ```basicplus
+  var a: Animal := Perro()
+  var o: Object := a
+  var p: Perro := Perro(o)     // imprime "perro" con p.nombre()
+  ```
+
+  Es del lenguaje, no de los módulos: pasa también dentro de un mismo fichero. Sin
+  ficha todavía; si molesta, se abre para V7.
+
+- **L20 — el `step` de un `for` numérico es un literal entero positivo.** `step 2`
+  vale; `step -1` y `step n` (una variable) dan `for step solo soporta literal int por
+  ahora` (⚠️ el compilador devuelve error pero deja escrito un `.mod` sin el bucle: no
+  lo ejecutes). Para contar hacia abajo, `while`.
 
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
@@ -150,11 +208,24 @@
   la incompatibilidad de firma sería útil.
 
 
-### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago)
+### `input()` y `listDir()` sólo funcionan en el PC, no en el micro (decidido el 26-ago)
 
 `input()` / `IO.prompt()` abre su ventana en el IDE cuando el programa corre en la **VM
-Java**. En un **micro no hace nada**: la VM-C nunca lo implementó, aunque el protocolo, el
-IDE y los tres REPL sí lo soportan.
+Java**; `listDir(path)` lista un directorio, también sólo ahí. Los dos son builtins del
+compilador (se llaman sin `import`) y **compilan igual para todo el mundo**, pero en la
+**VM-C —o sea en cualquier placa y en el micro simulado— lanzan un `RuntimeError`
+atrapable**:
+
+```
+builtin 37 no soportado en esta VM (subconjunto C)      // input()
+builtin 42 no soportado en esta VM (subconjunto C)      // listDir()
+```
+
+Si no lo atrapas, el programa **termina con código de salida 1** (`RuntimeError BP no
+atrapado`), igual que cualquier otra excepción sin `catch`. `IO.prompt()` en la VM-C lanza
+`prompt: no hay IDE conectado`. Son los únicos builtins del lenguaje que no están en la
+VM-C (además de `heapFrag`/`heapMap`, que son diagnóstico de la VM Java): el resto —
+ficheros, rutas, matemáticas, cadenas— corre igual en las dos.
 
 **Se queda así a propósito.** El razonamiento de Eduardo: `print` e `input` no son entrada
 y salida de verdad en un micro —son **herramientas de depuración**, anteriores al
@@ -162,8 +233,10 @@ debugger—, y un `input()` era el «breakpoint del pobre» para parar un progra
 debugger de verdad funcionando, eso ya está mejor resuelto.
 
 ⚠️ **Lo que hay que saber al escribir un programa**: si va a correr en placa, no uses
-`input()` para pedir datos. Para interactuar con el usuario en un micro está la GUI
-(formularios), y para pausar y mirar, el debugger.
+`input()` para pedir datos ni `listDir()` para recorrer el FS. Para interactuar con el
+usuario en un micro está la GUI (formularios), y para pausar y mirar, el debugger. Un
+programa que quiera correr en los dos sitios puede envolver la llamada en
+`try … catch e: RuntimeError`.
 
 📌 El coste de igualarlo no era pequeño: `input()` bloquea el hilo BP (estado
 `BLOCKED_PROMPT` y salida de la cola de ejecución hasta que llega la respuesta), así que en
@@ -199,8 +272,8 @@ var p: Par := Par(lst.get(0))
 ```
 
 ```basic
-var m: Map := Map()          // 2) un Map, si lo que quieres es buscar por clave
-m.put("hi", 42)
+var m: Collections.Map := Collections.Map()   // 2) un Map, si lo que quieres es buscar por clave
+m.put("hi", Integer(42))                      //    (import Collections, y Core por L16)
 ```
 
 El ejemplo `samples/TupleFirstClass.bp` lo enseña de las dos maneras.
@@ -209,6 +282,39 @@ El ejemplo `samples/TupleFirstClass.bp` lo enseña de las dos maneras.
 `lst.add(newByteArray(n))` no compila. Se envuelve igual, en una clase de una sola
 propiedad — es lo que hace `samples/MemInfo.bp`, donde la lista sólo sirve de ancla
 contra el recolector.
+
+## ⏭️ Aplazado a V7 — lo que conviene saber al programar hoy
+
+Decisiones de V6 que no son bugs sino piezas que no están. El estado de cada una vive en
+su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
+
+- **No hay bajo consumo** (`#490`). El micro nunca duerme: sin nada que hacer sigue
+  girando (y en el STM32 la tarea ociosa ni siquiera llega a correr). No existe un
+  `sleep` de placa ni fuentes de despertar en BP: un programa a batería no puede
+  ahorrar hoy.
+- **Los ficheros no son objetos: no hay `open`/`seek`/`close`** (`#491`). `readFile`
+  trae el fichero **entero** al heap y `writeFile` lo escribe entero; un fichero mayor
+  que la RAM libre no se puede leer, y no se puede leer ni escribir «a partir del byte
+  N». Para lo grande: escribir por trozos con `appendFile`, y repartir lo que haya que
+  leer en varios ficheros pequeños.
+- **`GET` y `LS` contestan `BUSY` mientras corre un programa** (`#495`). El
+  explorador de ficheros del IDE no lista ni baja nada durante un RUN; `HELLO`, `KILL` y
+  `RESET` sí llegan. Los ficheros que escribe el programa (un `.shot`, un log) se bajan
+  al terminar o tras `kill`.
+- **Una dependencia más antigua que el módulo principal pasa en silencio** (`#500`).
+  El cargador rechaza un `.mod` de formato incompatible y el enlazador grita si un slot
+  no cuadra, pero no mira la **versión** de la stdlib con la que compilaste: un `Core`
+  del mismo formato pero más viejo —el de un pack, o una copia olvidada en `/app`, que
+  tapa a `/lib` (`#493`)— se carga sin aviso. Mientras llega la norma: no dejes módulos
+  de stdlib en `/app` ni packs con stdlib dentro en la placa; el log del RUN dice de
+  dónde carga cada dependencia (`dep 'Str' -> /app/Str.mod`).
+- **En el ESP32-S3 todo se ejecuta interpretado** (`#488`, fuera del plan). El AOT
+  genera ARM Thumb-2 y RISC-V; **no genera Xtensa**, y de momento no se va a hacer. Las
+  `native function` compilan y corren, pero a la velocidad del intérprete. **El ESP32-C3
+  y el C6 también corren interpretados**: son RISC-V **sin FPU** y el único destino
+  RISC-V del IDE es el del P4 (con FPU); dar de alta el suyo quedó fuera de V6. Aceleran
+  hoy: RP2350, STM32 y ESP32-P4 (en el PC —VM Java y micro simulado— todo es
+  interpretado, y así se comparan los tiempos).
 
 ## 🟢 Pulido (no urgente)
 

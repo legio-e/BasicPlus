@@ -203,7 +203,7 @@
 </p>
 <pre><code>bpide.bat</code></pre>
 <p>or, by hand:</p>
-<pre><code>java -jar BpIde-5.0.jar</code></pre>
+<pre><code>java -jar BpIde-6.0.jar</code></pre>
 <p>
   Next to the <code>.jar</code> travel the folders the IDE finds by itself,
   <strong>with nothing to configure</strong>: the pack library
@@ -233,6 +233,15 @@
       <em>Breakpoints</em> tabs. Below, the <code>/ &gt;</code> prompt of
       the micro command console (§7).</li>
 </ul>
+<p>
+  Above them, the toolbar. On the left, files and project; in the middle,
+  execution: <em>Compile</em>, <em>Build Proj</em>, <em>Run</em>,
+  <em>Run Window</em> (runs on the PC on the VM-C, with its window — for
+  programs with a graphical interface), <em>Run on Device</em>, <em>Placa</em>
+  (board, §9), <em>Entorno</em> (environment, §9.3), <em>DAO build</em> (the
+  project's DAOs from its <code>@BD</code>), <em>Debug</em> and <em>Stop</em>;
+  on the right, indent and comment the selection.
+</p>
 
 <h2 id="proyectos">3. Projects</h2>
 <p><img src="../img/ide-proyecto.png" alt="Open project with a connected board"></p>
@@ -248,8 +257,9 @@
   <li><strong>Resources</strong> — data files that Run copies to the
       micro as-is (configuration, tables…).</li>
   <li><strong>Output</strong> — what the compiler produces: the
-      <code>.mod</code> files (bytecode, with their interface inside), the
-      <code>.mdn</code> if the project uses <code>native</code>, and the
+      <code>.mod</code> files (bytecode, with their interface inside — and,
+      if the project uses <code>native</code>, the machine code too: since
+      format v7 there is no loose <code>.mdn</code>), and the
       <code>.pack</code> if the project packages (§10).</li>
   <li><strong>Dependencies</strong> — resolved imported modules.</li>
 </ul>
@@ -286,8 +296,26 @@
   <li><strong>Run → Stop</strong> (Ctrl+F2): aborts the running program —
       local or on the board — without resetting anything. On the board it
       is a cooperative KILL: the VM dies cleanly and the micro keeps
-      responding.</li>
+      responding. The program ends with exit code 130.</li>
 </ul>
+<p>
+  <strong>Dependencies are not re-sent.</strong> Before uploading, the IDE
+  asks the board about every module the program imports and uploads only
+  the one that is missing, the one the board has in an older version, or
+  the one with the same version but a different CRC; if the board has a
+  newer one, the board's copy stays. The Console says where each one is
+  loaded from (path and CRC) and warns if that copy is not the one the
+  project would put there — when something fails because of a dependency,
+  that line is the one that tells where the module came from. The standard
+  library is never uploaded: it travels in the firmware (§6).
+</p>
+<p>
+  On completion, the Console closes with the exit code, the reason and
+  <strong>the execution time</strong> — <code>exit 0 (OK) en 94 ms</code>
+  (in seconds from 10 s up). The time is that of the execution, with the
+  module already loaded, and the Java VM and the boards measure it alike.
+  What each code means: <code>help error</code> (§7).
+</p>
 <p>
   If the program asks the user for data with <code>IO.prompt</code>, the
   IDE pops a form and execution pauses until you fill it in: text fields,
@@ -305,8 +333,9 @@
 <h3 id="aot">5.1 <code>native</code> (AOT): the C compiler</h3>
 <p>
   If the program uses <code>function native</code>, on <em>Run on Device</em> the
-  IDE compiles those functions to machine code (<code>.mdn</code>) and uploads it
-  next to the <code>.mod</code>. That step needs a <strong>cross C
+  IDE compiles those functions to machine code and fuses it <strong>inside the
+  <code>.mod</code> itself</strong> (format v7): a single file is uploaded and
+  there are no two files that can drift apart. That step needs a <strong>cross C
   compiler</strong> — and it <strong>does not ship with BasicPlus</strong>: it is
   not ours, so you install it separately. Which one depends on the board:
 </p>
@@ -330,6 +359,13 @@
     <td>ESP32-S3</td>
     <td>—</td>
     <td>in this version <code>native</code> runs <em>interpreted</em> on the S3</td>
+  </tr>
+  <tr>
+    <td>ESP32-C3 and ESP32-C6</td>
+    <td>—</td>
+    <td>also <em>interpreted</em>: they are RISC-V <em>without FPU</em> and the
+        IDE's only RISC-V target is the P4's (with FPU) — do not enable AOT in
+        a project meant for them</td>
   </tr>
 </table>
 <p class="warn">
@@ -378,12 +414,22 @@
 </p>
 <ul>
   <li><code>/app</code> — your programs (uploaded <code>.mod</code>).</li>
-  <li><code>/lib</code> — the standard library embedded in the firmware
-      (it reinstalls itself on every boot).</li>
+  <li><code>/lib</code> — the standard library embedded in the firmware.
+      The firmware restores it by itself on every boot, module by module:
+      if it is missing, if the one there is an older version, or if it is
+      the same version with a different CRC. Whatever is in
+      <code>/app</code> is never touched.</li>
   <li><code>/sys</code> — configuration: <code>board.json</code> (board
       identity), <code>device.json</code>, <code>auto.txt</code> (autorun,
       §12).</li>
 </ul>
+<p class="warn">
+  <strong>Do not upload copies of the standard library to <code>/app</code>.</strong>
+  When loading, <code>/app</code> wins over <code>/lib</code>: an old
+  <code>Gui.mod</code> forgotten in <code>/app</code> shadows the firmware's
+  with no warning at all, and the symptom points somewhere else. If you update
+  the firmware, clean <code>/app</code> of any module that is not yours.
+</p>
 <p>
   The button bar operates on the selected file: <em>Refresh</em>,
   <em>Upload</em>, <em>Run</em>, <em>Download</em>, <em>Edit</em> (opens an
@@ -461,9 +507,9 @@
   The <code>/ &gt;</code> prompt under the Console talks directly to the
   connected device. <code>help</code> lists the commands:
 </p>
-<pre><code>dir [path] · cd &lt;path&gt; · type &lt;file&gt; · edit &lt;file&gt; · new &lt;file&gt; · run &lt;file&gt; · del &lt;file&gt;
+<pre><code>dir [path] · cd &lt;path&gt; · type &lt;file&gt; · edit &lt;file&gt; · new &lt;file&gt; · run &lt;file&gt; [argument] · del &lt;file&gt;
 copy &lt;local&gt; [dest] · get &lt;remote&gt; [local]
-kill · autorun [file|off] · mem · save · log · logclr · reset · cls · help
+kill · autorun [file|off] · mem · save · log · logclr · reset · cls · help · help error
 sd · sd mount   — SD card diagnostics (see below)</code></pre>
 
 <table>
@@ -472,12 +518,52 @@ sd · sd mount   — SD card diagnostics (see below)</code></pre>
   <tr><td><code>type</code> (<code>cat</code>)</td><td>dump a file to the console</td></tr>
   <tr><td><code>edit</code> · <code>new</code></td><td>view/edit in a window · create a new file</td></tr>
   <tr><td><code>copy</code> (<code>cp</code>)</td><td><strong>uploads</strong> a file from the PC — with no destination, to the current folder (quotes if it has spaces)</td></tr>
-  <tr><td><code>get</code></td><td><strong>downloads</strong> a file from the board to the PC</td></tr>
-  <tr><td><code>run</code> · <code>kill</code> (<code>stop</code>)</td><td>run and abort</td></tr>
+  <tr><td><code>get</code></td><td><strong>downloads</strong> a file from the board to the PC, whatever its size</td></tr>
+  <tr><td><code>run &lt;file&gt; [argument]</code> · <code>kill</code> (<code>stop</code>)</td><td>run (with an optional argument, see below) and abort</td></tr>
   <tr><td><code>autorun [file|off]</code></td><td>which app starts by itself at power-on (§12)</td></tr>
   <tr><td><code>mem</code> (<code>df</code>)</td><td>free memory and space</td></tr>
   <tr><td><code>log</code> · <code>logclr</code></td><td>read the board's log · clear it</td></tr>
   <tr><td><code>save</code> · <code>reset</code> · <code>cls</code></td><td>save · reboot the device · clear the console</td></tr>
+  <tr><td><code>help error</code></td><td>what each exit code means (the table below)</td></tr>
+</table>
+
+<p>
+  <strong>The run argument.</strong> <code>Main</code> may declare a string
+  parameter with a default value; <code>run</code> passes it after the file,
+  quoted or not, and if nothing is passed the source's default applies:
+</p>
+<pre><code><span class="kw">module</span> Saludo
+  <span class="kw">public function</span> Main(arg: string := <span class="str">"mundo"</span>)
+    <span class="kw">print</span> <span class="str">"hola, "</span> + arg
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Saludo</code></pre>
+<pre><code>/ &gt; run Saludo
+hola, mundo
+  (exit 0 (OK) en 2 ms)
+/ &gt; run Saludo Eduardo
+hola, Eduardo
+  (exit 0 (OK) en 2 ms)</code></pre>
+<p>
+  Autorun (§12) deliberately passes no argument: the default declared in the
+  source <em>is</em> the deployment configuration. From the PC command line it
+  is the second positional: <code>bpgenvm-c Saludo.mod Eduardo</code>.
+</p>
+
+<p>
+  <strong>Exit codes</strong> are the same on the Java VM, the PC's VM-C and
+  the boards; the number says <em>what</em> happened and the message with it,
+  <em>why</em> (on the PC via stderr; from the board, in the EXITED the Console
+  shows):
+</p>
+<table>
+  <tr><th>exit</th><th>means</th></tr>
+  <tr><td><code>0</code></td><td>finished fine</td></tr>
+  <tr><td><code>1</code></td><td>uncaught BP exception — the program died on its own</td></tr>
+  <tr><td><code>2</code></td><td>the module could not be loaded: not there, not a <code>.mod</code>, or its ABI is old</td></tr>
+  <tr><td><code>3</code></td><td>internal VM failure (bad opcode or pc) — not the program's fault, report it</td></tr>
+  <tr><td><code>4</code></td><td>out of memory: heap exhausted or stack overflow</td></tr>
+  <tr><td><code>130</code></td><td>stopped with Stop / <code>kill</code></td></tr>
+  <tr><td><code>131</code></td><td>stopped by the debugger</td></tr>
 </table>
 
 <div class="note">
@@ -503,18 +589,23 @@ sd · sd mount   — SD card diagnostics (see below)</code></pre>
   program (equivalent to Run → Stop) and <code>autorun</code> manages the
   standalone startup (§12). If you connect while a program is running, the
   explorer will report the board as busy — <code>kill</code> takes back
-  control.
+  control. While a program runs the board only serves <code>kill</code>,
+  <code>reset</code> and the connection greeting; everything else
+  (<code>dir</code>, <code>get</code>…) answers busy until it ends.
+  <code>reset</code> does get through with the program running: no need to
+  kill it first.
 </p>
 
 <h2 id="info">8. Device INFO</h2>
 <p><img src="../img/ide-info.png" alt="Device INFO dialog of a Metro RP2350"></p>
 <p>
   The <strong>Info</strong> button interrogates the firmware. In the
-  screenshot, an Adafruit Metro RP2350: the micro and its variant (RP2350B
-  detected at runtime via <code>board.json</code> — 48 GPIO, 24 PWM
-  outputs, 8 ADC channels), the unique serial, frequency and temperature,
-  the real flash measured via JEDEC (16 MB), the SRAM, the detected and
-  self-tested PSRAM (8 MB, used as the VM heap), FS usage and uptime.
+  screenshot, an Adafruit Metro RP2350: the micro and its variant (RP2350B,
+  which the firmware detects at runtime from the chip itself — 48 GPIO, 24
+  PWM outputs, 8 ADC channels), the unique serial, frequency and
+  temperature, the real flash measured via JEDEC (16 MB), the SRAM, the
+  PSRAM enabled by the ENV (<code>psram=1</code>, §9.3) and self-tested
+  (8 MB, used as the VM heap), FS usage and uptime.
 </p>
 
 <h2 id="gestion">9. Board management: boot and partitions</h2>
@@ -594,31 +685,64 @@ sd · sd mount   — SD card diagnostics (see below)</code></pre>
   manages them, so they cannot be changed through two different doors.
 </p>
 
-<p>The ones that exist today, and what each is for:</p>
+<p>
+  The ones the firmware actually <strong>reads</strong> today, what each one
+  sets and in which family it counts (elsewhere it is stored, but nobody looks
+  at it):
+</p>
 
 <table>
-  <tr><th>key</th><th>what it sets</th></tr>
-  <tr><td><code>board</code></td><td>the board's identity</td></tr>
-  <tr><td><code>display</code></td><td>which display panel it carries (on the P4, e.g. <code>st7701</code>)</td></tr>
-  <tr><td><code>sd</code></td><td>the card reader: <strong>structured value</strong>, different per family — see below</td></tr>
-  <tr><td><code>SQLite</code></td><td>megabytes of arena for the database (minimum 2, maximum 4095)</td></tr>
-  <tr><td><code>psram</code> · <code>psramCsPin</code></td><td>whether it has PSRAM and on which pin it is selected</td></tr>
-  <tr><td><code>flashSizeBytes</code></td><td>declared flash size</td></tr>
-  <tr><td><code>gpioCount</code></td><td>how many GPIOs it exposes</td></tr>
-  <tr><td><code>log</code></td><td>the post-mortem log, on or off</td></tr>
-  <tr><td><code>gc</code></td><td>the garbage collector (RP2350)</td></tr>
-  <tr><td><code>latido</code></td><td>the heartbeat (RP2350)</td></tr>
+  <tr><th>key</th><th>what it sets</th><th>family</th></tr>
+  <tr><td><code>display</code></td><td>which display panel it carries (e.g. <code>st7701</code> on the Waveshare P4; absent = the kit's panel)</td><td>ESP32-P4</td></tr>
+  <tr><td><code>sd</code></td><td>the card reader: <strong>structured value</strong>, different per bus — see below</td><td>RP2350 · ESP32-P4</td></tr>
+  <tr><td><code>SQLite</code></td><td>megabytes of arena for the database (minimum 2, maximum 4095); absent = no database</td><td>RP2350 · ESP32-P4</td></tr>
+  <tr><td><code>psram</code></td><td><code>1</code> enables the PSRAM as the VM heap (RP2350B only; the CS is fixed, GPIO47)</td><td>RP2350</td></tr>
+  <tr><td><code>stack</code></td><td>kilobytes of stack (the rest of the VM memory goes to the heap); absent = the default split</td><td>all</td></tr>
+  <tr><td><code>quantum</code></td><td>opcodes a thread executes before yielding; absent = 1024</td><td>all</td></tr>
+  <tr><td><code>log</code></td><td>the post-mortem log: <code>1</code> on; absent = off</td><td>all</td></tr>
+  <tr><td><code>gc</code></td><td>the garbage collector: <code>0</code> turns it off (to split an experiment in two); absent = on</td><td>RP2350</td></tr>
+  <tr><td><code>latido</code></td><td>the heartbeat: <code>1</code> turns it on; absent = off</td><td>RP2350</td></tr>
 </table>
+
+<p class="note">
+  <code>board</code>, <code>psramCsPin</code>, <code>flashSizeBytes</code> and
+  <code>gpioCount</code> may show up in an older board's table: <strong>they
+  are stored but not read</strong>. The firmware detects the variant and the
+  flash from the chip itself, the PSRAM CS is fixed, and the board's identity
+  and pins (RP2350) live in <code>/sys/board.json</code>.
+</p>
 
 <p><code>sd</code> is the only one with structure inside, because it describes a wiring and that changes with the bus:</p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, over SPI</span>
-sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32, over SDIO</span></code></pre>
+sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
 
 <p>
   On SDIO it also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,
   <code>khz</code> and <code>ldo</code>; on SPI, <code>cd</code> is optional. The detail is in
   <a href="referencia.html#stdlib-sd">the SD card section</a>.
+</p>
+
+<p>
+  <code>stack</code> deserves a line of its own because it splits a scarce
+  resource. The memory the firmware gives the VM is divided in two: the
+  <em>stacks</em> of the threads and the <em>heap</em> where objects live. By
+  default 25&nbsp;% goes to stacks and the rest to the heap, and for almost
+  everything that is fine. But that ratio is a bet on the program: one with
+  many threads runs out of stack with heap to spare, and a single-threaded one
+  that moves data wastes that 25&nbsp;%. <code>stack=100</code> asks for 100 KB
+  of stacks; removing the key returns to the usual split. Each thread takes
+  2 KB and the main one 16, so the number comes from counting threads. If you
+  ask for more than fits, the firmware adjusts it and <strong>says so in the
+  log</strong> — it does not stay quiet.
+</p>
+
+<p>
+  <code>quantum</code> splits the other resource: time. The VM executes that
+  many opcodes of one thread and then yields — to the program's other threads
+  and to the micro's system, which is what lets the communications breathe on
+  a single-core chip. At 1024 nobody should need to touch it; it is there for
+  measuring, not for tuning.
 </p>
 
 <div class="note">

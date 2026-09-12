@@ -175,6 +175,7 @@
     <li class="sub"><a href="#intro-vms">18.1 The three VMs</a></li>
     <li class="sub"><a href="#intro-run">18.2 How it runs</a></li>
     <li class="sub"><a href="#intro-primeros">18.3 First steps of a GUI project</a></li>
+    <li class="sub"><a href="#intro-arranque">18.4 Two ways to start: run() and start()</a></li>
 
     <li class="group"><a href="#conceptos">19. Concepts</a></li>
     <li class="sub"><a href="#conceptos-arbol">19.1 Screen and widget tree</a></li>
@@ -201,18 +202,19 @@
     <li class="sub"><a href="#ev-handlers">22.1 Handlers: clic and change</a></li>
     <li class="sub"><a href="#ev-varios">22.2 Several widgets, several handlers</a></li>
     <li class="sub"><a href="#ev-async">22.3 Long work without freezing the GUI</a></li>
-    <li class="sub"><a href="#ev-slots">22.4 From name to slot (transparent)</a></li>
+    <li class="sub"><a href="#ev-slots">22.4 From name to method (at load time)</a></li>
     <li class="sub"><a href="#ev-codigo">22.5 Subscribing from code (no .win)</a></li>
 
     <li class="group"><a href="#ejecutar">23. Running (host and board)</a></li>
     <li class="sub"><a href="#ej-preview">23.1 Preview on the PC</a></li>
     <li class="sub"><a href="#ej-host">23.2 Real render on the PC</a></li>
     <li class="sub"><a href="#ej-placa">23.3 On the board</a></li>
-    <li class="sub"><a href="#ej-pantalla">23.4 P4 display and rotation</a></li>
+    <li class="sub"><a href="#ej-pantalla">23.4 The displays and rotation</a></li>
+    <li class="sub"><a href="#ej-shot">23.5 Screenshot: Gui.shot</a></li>
 
     <li class="group"><a href="#referencia">24. Gui.* quick reference</a></li>
     <li class="sub"><a href="#ref-modulo">24.1 Module and constants</a></li>
-    <li class="sub"><a href="#ref-component">24.2 Component (base)</a></li>
+    <li class="sub"><a href="#ref-component">24.2 Component and Container (base)</a></li>
     <li class="sub"><a href="#ref-widgets">24.3 Widgets</a></li>
 
     <li class="group"><a href="#matices">25. Fine print and limitations</a></li>
@@ -244,7 +246,8 @@
 <p>
   The BasicPlus graphical interface is just another module of the standard library: <code>Gui</code>. A
   program builds a tree of widgets (screen, labels, buttons, tables…), hooks up events and enters the
-  event loop with <code>Gui.run()</code>. The same program — the same <code>.mod</code> — runs unchanged
+  event loop with <code>Gui.run()</code> — or starts it on its own thread with <code>Gui.start()</code> and
+  carries on (§24.1). The same program — the same <code>.mod</code> — runs unchanged
   on the PC and on the microcontroller.
 </p>
 
@@ -262,7 +265,7 @@
   <tr><th>VM</th><th>Render</th><th>Where</th></tr>
   <tr><td>miVM (Java)</td><td>Swing</td><td>PC — quick preview from the IDE</td></tr>
   <tr><td>VM-C (host)</td><td>LVGL + SDL window</td><td>PC — identical to the board render</td></tr>
-  <tr><td>VM-C (device)</td><td>LVGL + display</td><td>Microcontroller (ESP32-P4, …)</td></tr>
+  <tr><td>VM-C (device)</td><td>LVGL + display</td><td>Microcontroller with a display: STM32U5G9J-DK2, ESP32-P4 (kit and Waveshare) and ESP32-C6-LCD-1.3 (§23.4)</td></tr>
 </table>
 <p>
   All three execute the <strong>same bytecode</strong> and build the <strong>same widget model</strong>;
@@ -270,9 +273,11 @@
   board without touching the code (only, if anything, the pins or the screen size).
 </p>
 <div class="note">
-  <p>The model can be dumped as text with <code>Gui.__guiDumpTree()</code>: it is the source of truth
-  shared by the three VMs and the basis of the parity checks. Throughout this volume we use it to show
-  the structure of each example without relying on a screenshot.</p>
+  <p>The model can be dumped as text with <code>Gui.__guiDumpTree()</code>, or as JSON with
+  <code>toJsonText()</code> on any widget (§24.2): it is the source of truth shared by the three VMs and
+  the basis of the parity checks. Throughout this volume we use the dump to show the structure of each
+  example without relying on a screenshot. When you do need to see the pixels, that is
+  <code>Gui.shot</code> (§23.5).</p>
 </div>
 
 <h3 id="intro-run">18.2 How it runs</h3>
@@ -302,7 +307,8 @@
       micro brings graphics support — with <strong>DSI</strong> preferably, if the display is medium or
       large.</li>
   <li><strong>A good option is a display that includes the micro</strong> — like the boards with an
-      integrated ESP32-P4 that this version supports (§23.4).</li>
+      integrated ESP32-P4; and, for small things, an SPI display like the one on the ESP32-C6-LCD-1.3
+      (240×240, no touch). The four supported displays are in §23.4.</li>
 </ul>
 <div class="note">
   <p>To get a feel for the RAM: the <em>framebuffer</em> alone of a 1024×600 display in 16-bit color
@@ -319,7 +325,8 @@
   <li>Create the screen (<code>Gui.Screen()</code>, §19.1).</li>
   <li>Set the orientation, if the default needs changing (<code>Gui.setRotation</code>, §23.4).</li>
   <li>Create the first window (§22) and, from it, the rest of the application.</li>
-  <li>Enter the event loop with <code>Gui.run()</code> — the application sits waiting for the user.</li>
+  <li>Enter the event loop with <code>Gui.run()</code> — the application sits waiting for the user. If the
+      program has more to do meanwhile, <code>Gui.start()</code> starts the loop and returns (§24.1).</li>
 </ol>
 <p>
   And none of this has to be right on the first try: the interface is <strong>iterated on the PC</strong>
@@ -330,6 +337,61 @@
 </p>
 
 <!-- ============================================================ -->
+<h3 id="intro-arranque">18.4 Two ways to start the interface: <code>run()</code> and <code>start()</code></h3>
+<p>
+  Once the tree is built, somebody has to <em>pump</em> the GUI: serve the display, the touch panel and the
+  events. There are two ways to start that loop, and the choice decides <strong>what the main thread does
+  meanwhile</strong>.
+</p>
+<table>
+  <tr><th></th><th><code>Gui.run()</code></th><th><code>Gui.start()</code></th></tr>
+  <tr><td>What it does</td><td>Starts the loop <strong>and waits for it</strong>: it is <code>start()</code> + <code>join()</code>.</td><td>Starts the loop <strong>and returns</strong>.</td></tr>
+  <tr><td>When it returns</td><td>When the GUI ends. On the PC, when the window is closed; <strong>on a board there is no window to close</strong>: it only returns if a handler calls <code>Gui.stop()</code> or the IDE kills the program. In practice, whatever follows <code>run()</code> runs "when the application ends".</td><td>Right away. The program stays alive while the loop runs, even if <code>Main</code> ends.</td></tr>
+  <tr><td>The main thread</td><td>Stays <strong>parked</strong> in the <code>join()</code>: it does nothing else until the GUI ends.</td><td><strong>Keeps running alongside</strong> the GUI: it can read sensors, wait, write into widgets…</td></tr>
+  <tr><td>Where handlers run</td><td colspan="2">In both cases, <strong>on the GUI thread</strong> (a BP thread of its own, 8&nbsp;KB stack), never on the main one. Between iterations the loop sleeps for as long as LVGL asks, with a BP <code>sleep</code>, so it does not starve the other threads.</td></tr>
+  <tr><td>To finish</td><td>From a handler, <code>Gui.stop()</code>.</td><td><code>Gui.stop()</code> asks the loop to end (does not wait; another thread or a handler may call it) and <code>Gui.join()</code> waits for it. A second <code>start()</code> does not start another loop.</td></tr>
+</table>
+<p>
+  The detail to keep in mind with <code>start()</code>: <strong><code>Main</code> and the handlers are two threads
+  touching the same data</strong>. A counter that <code>Main</code> reads and a handler writes needs the usual
+  thread discipline (a single writer, a <code>SyncList</code>, a <code>Mutex</code>). With <code>run()</code> that
+  problem does not exist, because the main thread is asleep. Widgets themselves may be touched from any thread:
+  the model lives in the VM, not in the GUI thread.
+</p>
+<p>The application that <em>is</em> its screen uses <code>run()</code>:</p>
+<pre><code><span class="kw">module</span> GuiRunDemo
+  <span class="kw">import</span> Gui
+
+  <span class="kw">function</span> <span class="fn">Main</span>()
+    <span class="kw">var</span> scr: Gui.<span class="type">Screen</span> := Gui.<span class="fn">Screen</span>()
+    <span class="kw">var</span> b: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr, <span class="str">"Press"</span>)
+    b.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)
+    Gui.<span class="fn">run</span>()                       <span class="cm">// does not return until the GUI ends</span>
+    <span class="kw">print</span> <span class="str">"the GUI has ended"</span>      <span class="cm">// on a board: only after Gui.stop() or a kill</span>
+  <span class="kw">end</span> Main
+<span class="kw">end</span> GuiRunDemo</code></pre>
+<p>The one that has work of its own plus a screen uses <code>start()</code>:</p>
+<pre><code><span class="kw">module</span> GuiStartDemo
+  <span class="kw">import</span> Gui
+
+  <span class="kw">function</span> <span class="fn">Main</span>()
+    <span class="kw">var</span> scr: Gui.<span class="type">Screen</span> := Gui.<span class="fn">Screen</span>()
+    <span class="kw">var</span> lbl: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"measuring..."</span>)
+    lbl.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)
+    Gui.<span class="fn">start</span>()                     <span class="cm">// starts the loop and RETURNS</span>
+    <span class="kw">var</span> i: integer := <span class="num">0</span>
+    <span class="kw">while</span> i &lt; <span class="num">5</span> <span class="kw">do</span>                  <span class="cm">// Main stays alive: does its own work</span>
+      <span class="fn">sleep</span>(<span class="num">200</span>)
+      lbl.<span class="fn">setText</span>(<span class="str">"sample "</span> + i)
+      i := i + <span class="num">1</span>
+    <span class="kw">endwh</span>
+    Gui.<span class="fn">stop</span>()                      <span class="cm">// asks the loop to end...</span>
+    Gui.<span class="fn">join</span>()                      <span class="cm">// ...and waits for it</span>
+    <span class="kw">print</span> <span class="str">"done"</span>
+  <span class="kw">end</span> Main
+<span class="kw">end</span> GuiStartDemo</code></pre>
+<p>Both exit with code 0 on both VMs. <code>samples/GuiShot.bp</code> is the second pattern with a screenshot in the middle.</p>
+
 <h2 id="conceptos">19. Concepts</h2>
 
 <h3 id="conceptos-arbol">19.1 Screen and widget tree</h3>
@@ -349,13 +411,20 @@
 <span class="kw">end</span> Hello</code></pre>
 <p>The resulting model (<code>Gui.__guiDumpTree()</code>):</p>
 <pre><code>screen [480x320 align=0 +0,0]
-  label "Hello, world" [-1x-1 align=9 +0,0]</code></pre>
+  label "Hello, world" [-1x-1 align=4 +0,0]</code></pre>
 <p>
   <code>-1x-1</code> means "automatic size" (the widget fits its content); further down you will see how
   to set size and position.
 </p>
+<p>
+  <strong>The screen is the size of the panel.</strong> The <code>480x320</code> above is the <em>host</em>
+  default; on the board <code>scr.width</code>/<code>scr.height</code> and the dump report the real panel
+  size: 240×240 on the C6, 800×480 on the DK2, 1024×600 on the P4 (480×800 on the Waveshare). The same
+  program gives a different dump on each display. To make the PC mimic a given board, the host C VM accepts
+  <code>--screen=WxH</code> (§23.2).
+</p>
 
-<h3 id="conceptos-component">19.2 Component (common base)</h3>
+<h3 id="conceptos-component">19.2 Component and Container (common base)</h3>
 <p>
   All widgets descend from <code>Gui.Component</code> (which in turn descends from <code>Object</code>,
   like everything in BasicPlus). <code>Component</code> provides what is common to any widget: text,
@@ -368,7 +437,18 @@
   <tr><td><code>fontSize</code></td><td>Text size in px from the compiled catalog (see 21.2).</td></tr>
   <tr><td><code>setFont(id)</code> <em>(on <code>Label</code>)</em></td><td>Applies to a label a font loaded with <code>Gui.loadFont</code> (see 21.2).</td></tr>
   <tr><td><code>setBgColor(c)</code> / <code>setTextColor(c)</code></td><td>Background and text color (see 21.1).</td></tr>
+  <tr><td><code>getParent()</code></td><td>The container that holds it (<code>null</code> at the root).</td></tr>
+  <tr><td><code>delete()</code></td><td>Removes it from the tree with its children (see 24.2).</td></tr>
 </table>
+<p>
+  The widgets that can <strong>contain</strong> others — <code>Screen</code>, <code>Panel</code>,
+  <code>Window</code>, <code>TabPage</code>, <code>Tabview</code> and <code>Button</code> — descend from
+  <code>Gui.Container</code>, which extends <code>Component</code> with the list of children
+  (<code>childCount()</code>, <code>childAt(i)</code>). The leaves (<code>Label</code>, <code>Checkbox</code>,
+  <code>Slider</code>…) descend from <code>Component</code> directly. Every constructor takes the parent as
+  <code>parent: Container</code>: a <code>Label</code> inside a <code>Checkbox</code> does not compile. The
+  tree is yours to walk and dump (<code>toJson()</code>, §24.2).
+</p>
 <div class="note">
   <p><strong>OO policy.</strong> Like the rest of the library, widgets are classes: no public fields,
   only properties. This keeps the API stable across versions and boards.</p>
@@ -422,12 +502,17 @@ p.scrollDir := Gui.ScrollDir.VER</code></pre>
 <h3 id="w-label-button">20.1 Label and Button</h3>
 <p>
   <code>Gui.Label</code> shows text; <code>Gui.Button</code> is a pressable button. Both take the parent
-  as the first argument, and the text next.
+  as the first argument, and the text next. On the button the text is <strong>optional</strong>
+  (<code>Button(parent, text := "")</code>): a button is a container, and without text it is empty, ready
+  for whatever you hang on it (an icon, a label of your own).
 </p>
 <figure><img src="../img/gui/click.png" alt="Label and button"><figcaption>GuiClickDemo — a label and a centered button.</figcaption></figure>
 <pre><code><span class="kw">var</span> lbl: Gui.<span class="type">Label</span>  := Gui.<span class="fn">Label</span>(scr, <span class="str">"waiting"</span>)
 <span class="kw">var</span> btn: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr, <span class="str">"Press me"</span>)
-btn.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)</code></pre>
+btn.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)
+
+<span class="kw">var</span> ico: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr)              <span class="comment">// no text: an empty container</span>
+<span class="kw">var</span> icoTxt: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(ico, <span class="str">"+"</span>)     <span class="comment">// whatever you hang on it</span></code></pre>
 <p>The same in the <code>.win</code> (JSON):</p>
 <pre><code>{ "type": "Label",  "text": "waiting",  "align": "TOP_MID", "y": 10 },
 { "type": "Button", "text": "Press me", "align": "CENTER", "clic": "onPress" }</code></pre>
@@ -499,11 +584,12 @@ t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">
 <h3 id="w-tab">20.6 Tabview</h3>
 <p>
   <code>Gui.Tabview</code> groups pages into tabs. <code>addTab("name")</code> creates a tab and returns
-  its page (a <code>Component</code>) on which you hang widgets; <code>active</code> is the visible tab.
+  its page (a <code>Gui.TabPage</code>, which is a <code>Container</code>) on which you hang widgets;
+  <code>active</code> is the visible tab. Pages are not built by hand: they only come from <code>addTab</code>.
 </p>
 <figure><img src="../img/gui/tab.png" alt="Tabs"><figcaption>GuiTabDemo — two tabs, second one active.</figcaption></figure>
 <pre><code><span class="kw">var</span> tv: Gui.<span class="type">Tabview</span> := Gui.<span class="fn">Tabview</span>(scr)
-<span class="kw">var</span> p1: Gui.<span class="type">Component</span> := tv.<span class="fn">addTab</span>(<span class="str">"One"</span>)
+<span class="kw">var</span> p1: Gui.<span class="type">TabPage</span> := tv.<span class="fn">addTab</span>(<span class="str">"One"</span>)
 <span class="kw">var</span> l1: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(p1, <span class="str">"Page 1"</span>)
 tv.active := <span class="num">1</span></code></pre>
 <p class="soon">In the <code>.win</code> (JSON): pending — pages/tabs are nested structure (2nd phase). For now, by code.</p>
@@ -524,8 +610,9 @@ v.<span class="fn">setImage</span>(img)</code></pre>
 
 <h3 id="w-msg">20.8 Msgbox</h3>
 <p>
-  <code>Gui.Msgbox</code> is a modal dialog with text and buttons (<code>setButtons</code>, labels
-  separated by <code>\n</code>). When pressed, <code>result</code> holds the button index.
+  <code>Gui.Msgbox</code> is a notice with text and buttons (<code>setButtons</code>, labels
+  separated by <code>\n</code>). It is not modal: it does not block the program. Pressing a button fires
+  <code>onChange</code> and <code>result</code> holds the button index.
 </p>
 <figure><img src="../img/gui/msg.png" alt="Message box"><figcaption>GuiMsgDemo — notice with an OK button.</figcaption></figure>
 <pre><code><span class="kw">var</span> mb: Gui.<span class="type">Msgbox</span> := Gui.<span class="fn">Msgbox</span>(scr, <span class="str">"Operation complete"</span>)
@@ -537,7 +624,7 @@ mb.<span class="fn">setButtons</span>(<span class="str">"OK"</span>)</code></pre
 <p>
   <code>Gui.ListBox</code> is a list of selectable items (<code>setItems</code>, separated by
   <code>\n</code>; <code>selected</code> is the index). <code>Gui.Keyboard</code> is an on-screen
-  keyboard that attaches to a <code>Textarea</code> with <code>attach</code> and auto-places itself at
+  keyboard that is tied to a <code>Textarea</code> with <code>setTextarea</code> and auto-places itself at
   the bottom. <code>setBounds(x,&nbsp;y,&nbsp;w,&nbsp;h)</code> sets position and size at once.
 </p>
 <figure><img src="../img/gui/list.png" alt="List and keyboard"><figcaption>GuiListKbd — list, text field and on-screen keyboard.</figcaption></figure>
@@ -547,12 +634,20 @@ lst.<span class="fn">setBounds</span>(<span class="num">5</span>, <span class="n
 
 <span class="kw">var</span> ta: Gui.<span class="type">Textarea</span> := Gui.<span class="fn">Textarea</span>(scr)
 <span class="kw">var</span> kb: Gui.<span class="type">Keyboard</span> := Gui.<span class="fn">Keyboard</span>(scr)
-kb.<span class="fn">attach</span>(ta)</code></pre>
+kb.<span class="fn">setTextarea</span>(ta)</code></pre>
+<div class="warn">
+  <p><strong>Changed in V6.</strong> This used to be <code>kb.attach(ta)</code>. Now <code>attach(parent)</code>
+  is how any widget registers with its container (the constructor calls it), so the keyboard is tied to its
+  field with <code>setTextarea(ta)</code>; the old <code>attach(ta)</code> no longer compiles
+  (<code>Textarea</code> is not a <code>Container</code>).</p>
+</div>
 <p>The list in the <code>.win</code> (JSON); the keyboard, for now, code-only (2nd phase):</p>
 <pre><code>{ "type": "ListBox", "items": "One\nTwo\nThree", "selected": 1 }</code></pre>
 <div class="note">
   <p>Other widgets following the same pattern, not shown here: <code>Gui.Spinbox</code> (integer with
-  arrows), <code>Gui.Led</code> (on/off indicator) and <code>Gui.Panel</code> (grouping container).</p>
+  arrows), <code>Gui.Led</code> (on/off indicator), <code>Gui.Panel</code> (grouping container) and
+  <code>Gui.Chart</code> (series chart for sensors: <code>setPointCount</code>, <code>addSeries</code>,
+  <code>push</code>; demo in <code>samples/ChartDemo.bp</code>). All of them in the table of §24.3.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -676,10 +771,10 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 
 <h3 id="ev-async">22.3 Long work from an event (without freezing the GUI)</h3>
 <p>
-  An event handler runs on the same thread that <em>pumps</em> the GUI: if the handler takes long
-  (heavy computation, waits), the screen freezes — no repaint, no touch handling — until it
-  returns. The solution is to launch the work on a <strong>separate thread</strong> and return
-  immediately:
+  An event handler runs on the thread that <em>pumps</em> the GUI (the one of <code>Gui.run()</code> /
+  <code>Gui.start()</code>, with an 8&nbsp;KB stack): if the handler takes long (heavy computation, waits),
+  the screen freezes — no repaint, no touch handling — until it returns. The solution is to launch the work
+  on a <strong>separate thread</strong> and return immediately:
 </p>
 <pre><code><span class="kw">class</span> <span class="type">Task</span> <span class="kw">extends</span> <span class="type">Thread</span>
   <span class="kw">var</span> lbl: Gui.<span class="type">Label</span>
@@ -701,17 +796,24 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   directly</strong> — each operation (<code>setText</code>…) is atomic at the quantum level.
   Full demo: <code>samples/GuiAsyncDemo.bp</code>.
 </p>
-<div class="note">
-  <p>A direct asynchronous call (<code>async(…)</code>), with no class to declare, requires
-  function values in the language and is planned for a future version.</p>
-</div>
-
-<h3 id="ev-slots">22.4 From name to slot (transparent)</h3>
 <p>
-  You write method <em>names</em> in the <code>.win</code>. On deploy, the IDE translates them to the
-  method's position (slot) in the window — it bakes <code>"clic":"onSave"</code> →
-  <code>"clicSlot": N</code> — and <code>load</code> binds each widget to its slot. It is transparent:
-  you work with names, not numbers.
+  The short form, with no class to declare, is the language's asynchronous call
+  (<a href="manual.html#ev-async">manual §15.4</a>): a method of the object itself launched on another thread.
+</p>
+<pre><code><span class="comment">// in the button's onClick: `trabajo` is a method of this same class</span>
+<span class="type">Thread</span>(<span class="kw">this</span>::<span class="fn">trabajo</span>()).<span class="fn">start</span>()</code></pre>
+
+<h3 id="ev-slots">22.4 From name to method (at load time)</h3>
+<p>
+  You write method <em>names</em> in the <code>.win</code>. When the form is loaded, <code>load</code>
+  resolves each name against the method table the <code>.mod</code> already carries and subscribes the
+  event: nothing is baked into the file and the IDE plays no part, so the <code>.win</code> goes to the
+  board as is. With <code>"name": "boton1"</code> and no <code>"clic"</code>, the handler is
+  <em>derived</em>: <code>boton1_onClick</code> / <code>boton1_onChange</code> (and the widget is assigned to
+  the window's <code>boton1</code> property, if it declares one). An explicit <code>"clic"</code> wins over the
+  derived name. An explicit name that does not exist shows up on press
+  (<code>[bpvm] evento: slot -1 no resoluble … — descartado</code>); a derived name that does not exist is
+  silently ignored, which is the normal case (a button rarely has an <code>onChange</code>).
 </p>
 <div class="note">
   <p>The <code>.win</code> and its images/fonts live in the project's <code>resources/</code> folder;
@@ -726,9 +828,8 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   events are subscribed with <code>::</code>, naming the object and the method
   that will attend to them.
 </p>
-<pre><code><span class="kw">var</span> boton: Gui.<span class="type">Button</span> := Gui.<span class="type">Button</span>(pantalla)
-boton.setText(<span class="str">"Start"</span>)
-boton.onClick := pantalla::boton_onClick     <span class="comment">// this window attends it</span></code></pre>
+<pre><code><span class="kw">var</span> boton: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(panel, <span class="str">"Start"</span>)
+boton.onClick := pantalla::boton_onClick     <span class="comment">// this object attends it</span></code></pre>
 <p>
   The handler is <strong>a function of any object</strong> — it does not have to
   inherit from anything:
@@ -785,13 +886,16 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
   (same library, same fonts). It is launched from the command line, from a folder containing the program
   and its dependencies (the project's <code>out/</code> folder works — the compiler leaves the program
   and the stdlib <code>.mod</code> it uses there; also copy the <code>.win</code>/images if the program
-  loads them):
+  loads them). From the IDE it is the <em>Run Window</em> button, which prepares that folder and launches
+  the C VM for you:
 </p>
 <pre><code>bpgenvm-c MyApp.mod</code></pre>
 <p>Useful options:</p>
 <table>
   <tr><th>Option</th><th>What for</th></tr>
   <tr><td><code>--mem=N</code></td><td>VM memory in bytes (default 512&nbsp;KiB). Handy to rehearse a specific board's budget.</td></tr>
+  <tr><td><code>--screen=WxH</code></td><td>Screen size (default 480×320). With <code>--screen=240x240</code> the PC mimics the C6: the dump and <code>toJson()</code> come out as on the board.</td></tr>
+  <tr><td><code>--no-screen</code></td><td>No window: the program runs the same (and <code>Gui.shot</code> captures the same), useful in automated tests.</td></tr>
   <tr><td><code>--basedir=DIR</code></td><td>Root for relative paths (<code>readFile</code>, <code>load</code>, images) when not launching from the project folder.</td></tr>
   <tr><td><code>--trace</code></td><td>Per-instruction trace (diagnostics).</td></tr>
 </table>
@@ -800,7 +904,7 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
 <p>
   The IDE's <em>Run on Device</em> button does everything: it compiles, uploads to the device the
   program, any missing stdlib dependencies and the project's <code>resources/</code> folder (the
-  <code>.win</code> files with handlers already translated to slots, §22.4), and runs it on the real
+  <code>.win</code> files go as they are, §22.4), and runs it on the real
   display. <code>print</code> output goes to the IDE console; <em>Stop</em> (Ctrl+F2) kills the run.
 </p>
 <p>
@@ -813,23 +917,23 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
   can be left in an inconsistent state. This is a known limitation of this version (see §25).</p>
 </div>
 
-<h3 id="ej-pantalla">23.4 The ESP32-P4 display and rotation</h3>
+<h3 id="ej-pantalla">23.4 The displays and rotation</h3>
 <p>
-  The ESP32-P4 firmware is a <strong>single image</strong> that serves different display boards: it
-  carries a panel catalog and picks one when the GUI starts by reading the <code>"display"</code> key of
-  <code>/sys/board.json</code>. With no file (or an unknown value) it uses the default panel.
+  Four supported displays. On all of them the screen is the size of the panel (§19.1):
 </p>
 <table>
-  <tr><th><code>display</code> key</th><th>Board</th><th>Panel</th></tr>
-  <tr><td><code>ek79007</code> <em>(default)</em></td><td>ESP32-P4-Function-EV</td><td>7", 1024×600</td></tr>
-  <tr><td><code>st7701</code></td><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>4.3", 480×800</td></tr>
+  <tr><th>Board</th><th>Panel</th><th>Size</th><th>Touch</th><th>How it is chosen</th></tr>
+  <tr><td>STM32U5G9J-DK2</td><td>LTDC, 5"</td><td>800×480</td><td>yes</td><td>the DK2 <code>stm32</code> image</td></tr>
+  <tr><td>ESP32-P4-Function-EV</td><td>EK79007, MIPI-DSI, 7"</td><td>1024×600</td><td>yes</td><td>ENV <code>display=ek79007</code> <em>(P4 default)</em></td></tr>
+  <tr><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>ST7701, MIPI-DSI, 4.3"</td><td>480×800 (portrait)</td><td>yes</td><td>ENV <code>display=st7701</code></td></tr>
+  <tr><td>Waveshare ESP32-C6-LCD-1.3</td><td>ST7789, SPI, 1.3"</td><td>240×240</td><td>no</td><td>the <code>esp32c6</code> image</td></tr>
 </table>
 <p>
-  The comfortable way to configure it is the <code>samples/SetDisplay.bp</code> sample: pick the panel
-  in the constant, <em>Run on Device</em> once, and done — it writes
-  <code>{"display":"st7701"}</code> to <code>/sys/board.json</code> and the file persists. The panel is
-  decided at the <strong>first</strong> GUI start after each reset; to go back to the default, just
-  delete the file (<code>del /sys/board.json</code> in the console).
+  The ESP32-P4 firmware is a <strong>single image</strong> with a panel catalog: it picks one when the GUI
+  starts by reading the <code>display</code> key of the <strong>board environment</strong> (the IDE's
+  <em>Entorno</em> button, <a href="guia-ide.html#entorno">IDE guide §9.3</a>). With no key, or an unknown
+  value, it uses the default panel. The C6 has no touch: its GUI is output only (indicators, charts,
+  status), and an image with LVGL fits in its 128&nbsp;KB of VM.
 </p>
 <p>
   The <strong>orientation</strong> is changed at runtime, LVGL style:
@@ -837,9 +941,41 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
 <pre><code>Gui.<span class="fn">setRotation</span>(<span class="num">90</span>)    <span class="comment">// 0, 90, 180 or 270 degrees</span></code></pre>
 <p>
   The rotation swaps the logical dimensions and the touch panel is transformed automatically —
-  <code>align</code> keeps working with no changes. Available on the ESP32-P4 (both boards), on the LVGL
-  host and in the Swing preview; on the STM32 (DK2) it does not rotate in this version (it warns and
-  carries on).
+  <code>align</code> keeps working with no changes. The natural place to call it is at the start, before
+  creating widgets. Available on the ESP32-P4 (both boards), on the ESP32-C6, on the LVGL host and in the
+  Swing preview; on the STM32 (DK2) it does not rotate in this version (it warns and carries on).
+</p>
+
+<h3 id="ej-shot">23.5 Screenshot: <code>Gui.shot</code></h3>
+<p>
+  <code>Gui.shot(path): integer</code> writes the screen <strong>as LVGL drew it</strong> to a
+  <code>.shot</code> file (RGB565 in strips, compressed; format in <code>docs/SHOT_FORMAT.md</code>) and
+  returns the bytes written. It goes through the same path on the host (with a window or
+  <code>--no-screen</code>), on miVM and on the four displays. On failure it throws a catchable
+  <code>RuntimeError</code>: «sin pantalla» (C VM built without LVGL, or miVM without a window), «error de
+  escritura», «no cabe en el tope de captura» or «sin memoria».
+</p>
+<pre><code>Gui.<span class="fn">start</span>()
+<span class="fn">sleep</span>(<span class="num">300</span>)                          <span class="comment">// pump BEFORE capturing</span>
+<span class="kw">var</span> n: <span class="type">integer</span> := Gui.<span class="fn">shot</span>(<span class="str">"MyApp.shot"</span>)
+Gui.<span class="fn">stop</span>()
+Gui.<span class="fn">join</span>()</code></pre>
+<p>
+  <strong>Pump before capturing.</strong> The LVGL theme animates state transitions (the check of a
+  <code>Checkbox</code> takes ~100&nbsp;ms to appear): a capture right after <code>cb.checked := true</code>,
+  without a loop iteration, comes out with the box empty. The capture is what is seen at that instant, not
+  the model.
+</p>
+<p>
+  On the board the file lands in the file system (path as is, like <code>writeFile</code>) and is
+  downloaded <strong>once the program has ended</strong> — during a RUN <code>get</code> answers BUSY —
+  with the <code>get</code> command of the IDE console. The PC turns it into a PNG with a script that only
+  needs Python:
+</p>
+<pre><code>python bpgenvm-c/tools/shot2png.py MyApp.shot        (leaves MyApp.png next to it)</code></pre>
+<p>
+  Measured sizes: C6 ~3&nbsp;KB, DK2 ~7&nbsp;KB, P4 ~9&nbsp;KB. The image is the proof for the eye; the
+  automatic oracle is still the tree (<code>toJson()</code>, §24.2). Demo: <code>samples/GuiShot.bp</code>.
 </p>
 
 <!-- ============================================================ -->
@@ -852,11 +988,22 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
 <h3 id="ref-modulo">24.1 Module functions and constants</h3>
 <table>
   <tr><th>Function</th><th>What it does</th></tr>
-  <tr><td><code>Gui.run()</code></td><td>Enters the event loop; does not return until the GUI closes. Every GUI ends with this call.</td></tr>
+  <tr><td><code>Gui.run()</code></td><td>Enters the event loop and does not return until the GUI ends. Equivalent to <code>start()</code> + <code>join()</code>.</td></tr>
+  <tr><td><code>Gui.start()</code></td><td>Starts the loop on its own BP thread and <strong>returns</strong>. The program stays alive while the loop runs, even if <code>main</code> ends. A second call does nothing.</td></tr>
+  <tr><td><code>Gui.stop()</code></td><td>Asks the loop to end; does not wait. Can be called from another thread or from a handler.</td></tr>
+  <tr><td><code>Gui.join()</code></td><td>Waits for the loop to end.</td></tr>
+  <tr><td><code>Gui.shot(path): integer</code></td><td>Captures the screen to a <code>.shot</code> and returns the bytes written; <code>RuntimeError</code> on failure (§23.5).</td></tr>
   <tr><td><code>Gui.loadFont(path): integer</code></td><td>Loads a <code>.bin</code> font (LVGL binfont) and returns its id (§21.2).</td></tr>
   <tr><td><code>Gui.setRotation(deg)</code></td><td>Screen orientation: 0, 90, 180, 270 (§23.4).</td></tr>
   <tr><td><code>Gui.Color(rgb): Color</code></td><td><code>0xRRGGBB</code> color for <code>setBgColor</code>/<code>setTextColor</code> (§21.1).</td></tr>
 </table>
+<div class="note">
+  <p>The <code>onClick</code>/<code>onChange</code> handlers are dispatched <strong>inside</strong> the loop, on
+  the GUI thread — with <code>run()</code> and with <code>start()</code> alike; what changes is the main thread,
+  which with <code>run()</code> stays parked in the <code>join()</code> (§18.4). A <code>print</code> written after
+  <code>Gui.run()</code> comes out after all the handlers, not before. A program that does
+  <code>start()</code>, works, and then <code>stop()</code> + <code>join()</code> exits with code 0 on both VMs.</p>
+</div>
 <p>Constants (constant classes):</p>
 <table>
   <tr><th>Group</th><th>Values</th></tr>
@@ -864,10 +1011,11 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
   <tr><td><code>Gui.ScrollDir</code></td><td><code>NONE · HOR · VER · BOTH</code></td></tr>
 </table>
 
-<h3 id="ref-component">24.2 Component (inherited by every widget)</h3>
+<h3 id="ref-component">24.2 Component and Container (inherited by every widget)</h3>
+<p><code>Component</code>, the base of every widget:</p>
 <table>
   <tr><th>Member</th><th>Kind</th><th>What it does</th></tr>
-  <tr><td><code>name</code></td><td>property string</td><td>Logical name of the widget (shows in the tree dump).</td></tr>
+  <tr><td><code>name</code></td><td>property string</td><td>Logical name of the widget (set by the <code>.win</code>; shows in <code>toJson</code>).</td></tr>
   <tr><td><code>x</code> / <code>y</code></td><td>property integer</td><td>Position relative to the parent, in pixels.</td></tr>
   <tr><td><code>width</code> / <code>height</code></td><td>property integer</td><td>Size in pixels; unset = automatic (shown as <code>-1</code>).</td></tr>
   <tr><td><code>fontSize</code></td><td>property integer</td><td>Text size from the compiled catalog (§21.2).</td></tr>
@@ -876,18 +1024,38 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
   <tr><td><code>align(anchor, dx, dy)</code></td><td>function</td><td>Anchor to the parent + offset (§19.3).</td></tr>
   <tr><td><code>setBgColor(c)</code> / <code>setTextColor(c)</code></td><td>function</td><td>Colors (§21.1).</td></tr>
   <tr><td><code>refresh()</code></td><td>function</td><td>Forces a repaint of the widget.</td></tr>
+  <tr><td><code>getParent(): Container</code></td><td>function</td><td>The container that holds it; <code>null</code> at the root (<code>Screen</code>, <code>Window</code>).</td></tr>
+  <tr><td><code>typeName(): string</code></td><td>function</td><td>The class name (<code>"Label"</code>, <code>"Button"</code>…), the same <code>type</code> as in the <code>.win</code>.</td></tr>
+  <tr><td><code>toJson(): Json.JsonObject</code> / <code>toJsonText(): string</code></td><td>function</td><td>The subtree in <code>.win</code> format: <code>type</code>, <code>name</code>, what is specific to the widget (<code>text</code>, <code>checked</code>, <code>value</code>…), <code>align</code> by name with <code>x</code>/<code>y</code> as offsets, <code>width</code>/<code>height</code> only when not automatic, <code>fontSize</code>, and the explicit <code>clic</code>/<code>change</code>. What <code>Window.load</code> loaded comes back out the same (round trip). <code>toJsonText</code> gives the text without having to import <code>Json</code>.</td></tr>
   <tr><td><code>clean()</code></td><td>function</td><td>Removes the widget's CHILDREN (the widget stays).</td></tr>
-  <tr><td><code>delete()</code></td><td>function</td><td>Removes the widget (and its children) from the tree.</td></tr>
+  <tr><td><code>delete()</code></td><td>function</td><td>Removes the widget and its children (children before parent) and unregisters it from its parent. <strong>Idempotent</strong>: deleting twice does not fail.</td></tr>
   <tr><td><code>onClick</code> / <code>onChange</code></td><td><strong>event</strong></td><td>Subscribed with <code>::</code>: <code>button.onClick := window::button_onClick</code>. See <a href="#ev-codigo">§22.5</a>. <em>(In V3 these were virtual methods you overrode by subclassing; not any more.)</em></td></tr>
+</table>
+<p>
+  <code>Container</code> (extends <code>Component</code>) — inherited by <code>Screen</code>, <code>Panel</code>,
+  <code>Window</code>, <code>TabPage</code>, <code>Tabview</code> and <code>Button</code>; it is the type of the
+  <code>parent</code> in every constructor:
+</p>
+<table>
+  <tr><th>Member</th><th>Kind</th><th>What it does</th></tr>
+  <tr><td><code>childCount(): integer</code></td><td>function</td><td>How many children it has.</td></tr>
+  <tr><td><code>childAt(i): Component</code></td><td>function</td><td>The i-th child, in creation order.</td></tr>
+  <tr><td><code>toJson()</code></td><td>function</td><td>What <code>Component</code> gives plus <code>children</code> with the children.</td></tr>
+  <tr><td><code>delete()</code> / <code>clean()</code></td><td>function</td><td>Cascading: children first, each one on both planes (model and LVGL).</td></tr>
+  <tr><td><code>register(c)</code> / <code>unregister(c)</code></td><td>function</td><td>Adds and removes a child. Called by the constructor (<code>attach</code>) and by <code>delete()</code>; not meant to be called by hand.</td></tr>
 </table>
 
 <h3 id="ref-widgets">24.3 Widgets</h3>
+<p>
+  In every constructor <code>parent</code> is a <code>Container</code> (§24.2). The classes marked
+  <em>(Container)</em> can have children; the rest are leaves.
+</p>
 <table>
   <tr><th>Class</th><th>Constructor</th><th>Own members</th></tr>
-  <tr><td><code>Screen</code></td><td><code>Screen()</code></td><td><code>load()</code> — makes this screen the visible one.</td></tr>
-  <tr><td><code>Panel</code></td><td><code>Panel(parent)</code></td><td>— (container; everything inherited from <code>Component</code>).</td></tr>
+  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — makes this screen the visible one. It is the size of the panel (§19.1).</td></tr>
+  <tr><td><code>Panel</code> <em>(Container)</em></td><td><code>Panel(parent)</code></td><td>— (grouping container; everything inherited).</td></tr>
   <tr><td><code>Label</code></td><td><code>Label(parent, text)</code></td><td><code>setText(t)</code>, <code>setFont(id)</code>.</td></tr>
-  <tr><td><code>Button</code></td><td><code>Button(parent, text)</code></td><td>— (the click arrives via handler or <code>onClick</code>).</td></tr>
+  <tr><td><code>Button</code> <em>(Container)</em></td><td><code>Button(parent, text := "")</code></td><td>— (the click arrives via handler or <code>onClick</code>). With text it carries a child <code>Label</code>; without text it is an empty container.</td></tr>
   <tr><td><code>Checkbox</code></td><td><code>Checkbox(parent, text)</code></td><td><code>checked: boolean</code>, <code>setText(t)</code>.</td></tr>
   <tr><td><code>Toggle</code></td><td><code>Toggle(parent)</code></td><td><code>checked: boolean</code>.</td></tr>
   <tr><td><code>Slider</code></td><td><code>Slider(parent)</code></td><td><code>setRange(mn, mx)</code>, <code>value: integer</code>.</td></tr>
@@ -897,27 +1065,37 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
   <tr><td><code>Dropdown</code></td><td><code>Dropdown(parent)</code></td><td><code>setOptions(s)</code> (separated by <code>\n</code>), <code>selected: integer</code>.</td></tr>
   <tr><td><code>Textarea</code></td><td><code>Textarea(parent)</code></td><td><code>text: string</code>, <code>readOnly: boolean</code>.</td></tr>
   <tr><td><code>ListBox</code></td><td><code>ListBox(parent)</code></td><td><code>setItems(s)</code> (separated by <code>\n</code>), <code>selected: integer</code>.</td></tr>
-  <tr><td><code>Keyboard</code></td><td><code>Keyboard(parent)</code></td><td><code>attach(textarea)</code>.</td></tr>
+  <tr><td><code>Keyboard</code></td><td><code>Keyboard(parent)</code></td><td><code>setTextarea(ta)</code> — the field it edits (formerly <code>attach</code>, §20.9).</td></tr>
   <tr><td><code>Msgbox</code></td><td><code>Msgbox(parent, msg)</code></td><td><code>setButtons(s)</code> (labels by <code>\n</code>), <code>result: integer</code>.</td></tr>
-  <tr><td><code>Tabview</code></td><td><code>Tabview(parent)</code></td><td><code>addTab(name): Component</code>, <code>active: integer</code>.</td></tr>
+  <tr><td><code>Tabview</code> <em>(Container)</em></td><td><code>Tabview(parent)</code></td><td><code>addTab(name): TabPage</code>, <code>active: integer</code>.</td></tr>
+  <tr><td><code>TabPage</code> <em>(Container)</em></td><td>— (returned by <code>addTab</code>)</td><td>The page of a tab; serves as <code>parent</code>.</td></tr>
   <tr><td><code>Table</code></td><td><code>Table(parent)</code></td><td><code>setGrid(rows, cols)</code>, <code>setCell(r, c, s)</code>, <code>getCell(r, c): string</code>.</td></tr>
+  <tr><td><code>Chart</code></td><td><code>Chart(parent)</code></td><td><code>setPointCount(n)</code>, <code>addSeries(rgb): integer</code>, <code>push(series, v)</code>, <code>setValue(series, i, v)</code>, <code>setRange(mn, mx)</code> (Y axis), <code>setType(Chart.LINE | Chart.BARS)</code>; up to <code>Chart.MAX_SERIES</code> (8) series.</td></tr>
   <tr><td><code>Image</code></td><td><code>Image()</code></td><td><code>loadFile(path): boolean</code>, <code>width(): integer</code>, <code>height(): integer</code>. (Asset, not a widget: it has no parent.)</td></tr>
   <tr><td><code>ImageView</code></td><td><code>ImageView(parent)</code></td><td><code>setImage(img)</code>, <code>refresh()</code>.</td></tr>
-  <tr><td><code>Window</code></td><td><code>Window()</code></td><td><code>load(path): Component</code> — builds a <code>.win</code> and binds handlers (§22); <code>destroy()</code>.</td></tr>
+  <tr><td><code>Window</code> <em>(Container)</em></td><td><code>Window()</code></td><td><code>load(path): Component</code> — builds a <code>.win</code> and binds handlers (§22); <code>destroy()</code> (= <code>delete()</code>).</td></tr>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="matices">25. Fine print and limitations</h2>
 <p>Worth knowing before it surprises you. None of them blocks the work; all have a way out.</p>
 
-<h3>The 480×320 model and the physical panel</h3>
+<h3>The screen is the size of the panel</h3>
 <p>
-  The widget tree models a <strong>480×320</strong> screen by default (that is what the dump in §19.1
-  shows). On the board, LVGL paints on the <em>real</em> panel (e.g. 1024×600): <code>align</code> is
-  computed correctly against the real size, but a widget that takes its size from the <em>model</em> —
-  typically a form <code>Window</code> — may cover only part of the panel. If you want a form to fill a
-  specific display, set explicit <code>width</code>/<code>height</code> on the root. The model↔panel
-  unification will come in a future version.
+  Since V6 the tree no longer models a fixed 480×320: on the board it is the size of the real panel (§19.1),
+  so a form with no size fills whatever display it runs on. Two consequences: a program that <em>assumed</em>
+  480×320 on the board changes geometry, and a <code>.win</code> saved with <code>toJson()</code> carries the
+  size of the panel it was saved on — it is not portable across displays without touching that
+  <code>width</code>/<code>height</code>. To reproduce on the PC what happens on a given board,
+  <code>--screen=WxH</code> (§23.2).
+</p>
+
+<h3>What <code>toJson()</code> does not save yet</h3>
+<p>
+  Ranges (<code>min</code>/<code>max</code>), options and items, the <code>Msgbox</code> buttons, colors and
+  tab titles. And <code>Bar</code>, <code>Led</code>, <code>Chart</code> and <code>Table</code> do not register
+  with their parent: they do not count in <code>childCount()</code> nor appear in <code>toJson()</code>, even
+  though they are painted and the <code>__guiDumpTree()</code> dump does list them.
 </p>
 
 <h3>Swing preview: an approximation</h3>
@@ -950,9 +1128,9 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this windo
 
 <h3>Rotation on STM32 (DK2)</h3>
 <p>
-  <code>Gui.setRotation</code> rotates on the ESP32-P4, on the LVGL host and in the preview; on the DK2
-  (STM32/LTDC) it is not implemented in this version — the program continues, with a warning, in the
-  native orientation.
+  <code>Gui.setRotation</code> rotates on the ESP32-P4, on the ESP32-C6, on the LVGL host and in the preview;
+  on the DK2 (STM32/LTDC) it is not implemented in this version — the program continues, with a warning, in
+  the native orientation.
 </p>
 
 </main>

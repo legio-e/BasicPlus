@@ -53,7 +53,7 @@
 <header>
   <h1>BasicPlus <span>— one page</span></h1>
   <p class="sub">A small, statically typed language for microcontrollers. One bytecode
-     runs on a PC and on RP2350, ESP32-S3, ESP32-P4 and STM32 boards.</p>
+     runs on a PC and on RP2350, ESP32 (S3, C3, C6, P4) and STM32 boards.</p>
 </header>
 
 <main>
@@ -76,7 +76,7 @@
 
 <section>
   <h2>Variables &amp; types</h2>
-<pre><span class="k">var</span> n <span class="k">:=</span> <span class="t">5</span>                  <span class="c">// inferred: integer</span>
+<pre><span class="k">var</span> n: <span class="t">integer</span> <span class="k">:=</span> <span class="t">5</span>         <span class="c">// type first, always: no inference</span>
 <span class="k">var</span> x: <span class="t">float</span> <span class="k">:=</span> <span class="t">1.5</span>
 <span class="k">var</span> big: <span class="t">long</span> <span class="k">:=</span> <span class="t">1000000000L</span>
 <span class="k">var</span> d: <span class="t">double</span> <span class="k">:=</span> <span class="t">2.0d</span>
@@ -89,7 +89,7 @@
 
 <span class="k">var</span> buf: <span class="t">byte[]</span> <span class="k">:=</span> newByteArray(<span class="t">256</span>)
 <span class="k">var</span> t: <span class="t">integer[]</span> <span class="k">:=</span> [<span class="t">1</span>, <span class="t">2</span>, <span class="t">3</span>]
-<span class="k">const</span> PI: <span class="t">float</span> = <span class="t">3.14159</span></pre>
+<span class="k">const</span> PI: <span class="t">float</span> <span class="k">:=</span> <span class="t">3.14159</span>     <span class="c">// module level; := also for const</span></pre>
   <p class="note">A <code>byte[]</code> costs <b>one byte per element</b>, not four —
      which matters when the whole machine has 512 KB.</p>
 </section>
@@ -128,14 +128,14 @@
   <span class="k">return</span> a + b
 <span class="k">end</span> add
 
-<span class="c">// default parameter values</span>
-<span class="k">function</span> label(text: <span class="t">string</span>, prefix <span class="k">:=</span> <span class="s">"["</span>): <span class="t">string</span>
+<span class="c">// default parameter values (the type stays)</span>
+<span class="k">function</span> label(text: <span class="t">string</span>, prefix: <span class="t">string</span> <span class="k">:=</span> <span class="s">"["</span>): <span class="t">string</span>
   <span class="k">return</span> prefix + text
 <span class="k">end</span> label
 
 <span class="c">// tuples: return several values, destructure them</span>
-<span class="k">var</span> ok: <span class="t">boolean</span>, v: <span class="t">integer</span>
-{ ok, v } <span class="k">:=</span> Str.parseInt(<span class="s">"123"</span>)</pre>
+<span class="k">var</span> err: <span class="t">boolean</span>, v: <span class="t">integer</span>
+{ err, v } <span class="k">:=</span> Str.parseInt(<span class="s">"123"</span>)   <span class="c">// (error?, value): false 123</span></pre>
   <p class="note"><b>Public by default? No — private.</b> Only what you mark
      <code>public</code> leaves the module.</p>
 </section>
@@ -169,33 +169,46 @@ c.bump(<span class="t">5</span>)
 <pre><span class="c">// Module-level declarations are static already —</span>
 <span class="c">// there is no keyword, and no second copy of them.</span>
 <span class="k">module</span> Config
-  <span class="k">public const</span> MAX = <span class="t">64</span>
+  <span class="k">public const</span> MAX: <span class="t">integer</span> <span class="k">:=</span> <span class="t">64</span>
   <span class="k">public function</span> clamp(n: <span class="t">integer</span>): <span class="t">integer</span> …
 <span class="k">end</span> Config
 
-Config.clamp(<span class="t">99</span>)        <span class="c">// call it qualified</span>
+Config.clamp(<span class="t">99</span>)        <span class="c">// from another module: qualified</span>
 
-<span class="c">// Inside a class, a static is told apart from an</span>
-<span class="c">// instance method by HOW YOU CALL IT:</span>
+<span class="c">// Inside a class, a static member is declared with</span>
+<span class="c">// its name QUALIFIED BY THE CLASS:</span>
+<span class="k">public const</span> Counter.START: <span class="t">integer</span> <span class="k">:=</span> <span class="t">10</span>
+<span class="k">public function</span> Counter.fromString(s: <span class="t">string</span>): Counter …
+<span class="k">end</span> Counter.fromString
+
 Counter.fromString(<span class="s">"10"</span>)   <span class="c">// class name  -&gt; static</span>
 c.bump(<span class="t">5</span>)                 <span class="c">// instance    -&gt; method</span></pre>
-  <p class="note">Coming from Java or C#, this is the one habit to drop: you don’t
-     declare <code>static</code>, you <b>call through the class name</b>.</p>
+  <p class="note">Coming from Java or C#, this is the one habit to drop: there is no
+     <code>static</code> keyword — you <b>qualify the name with the class</b>, both
+     when you declare it and when you call it.</p>
 </section>
 
 <section>
   <h2>Errors</h2>
-<pre><span class="k">try</span>
+<pre><span class="k">import</span> Core              <span class="c">// exceptions live in Core</span>
+
+<span class="k">try</span>
   <span class="k">var</span> v: <span class="t">integer</span> <span class="k">:=</span> risky()
-<span class="k">catch</span> e: RangeError
+<span class="k">catch</span> e: RuntimeError
   <span class="k">print</span> <span class="s">"caught: "</span> + e.msg
 <span class="k">endtry</span>
 
-<span class="k">throw</span> RuntimeError(<span class="s">"it broke"</span>)</pre>
+<span class="k">try</span>
+  <span class="k">throw</span> RuntimeError(<span class="s">"it broke"</span>)
+<span class="k">catch</span> e                  <span class="c">// no type = Exception</span>
+  <span class="k">print</span> e                 <span class="c">// prints its message</span>
+<span class="k">endtry</span></pre>
   <p class="note">One hierarchy: <code>Object → Exception → RuntimeError</code>.
      Runtime faults (divide by zero, index out of range, null reference) are
      <code>RuntimeError</code> and you catch them like any other — even when the
-     fault happens inside a function compiled to machine code.</p>
+     fault happens inside a function compiled to machine code. Anything from
+     <code>Core</code> (<code>Exception</code>, <code>List</code>, the wrappers)
+     needs an explicit <code>import Core</code>.</p>
 </section>
 
 <section>
@@ -217,7 +230,9 @@ w.start()
 w.join()
 
 <span class="k">var</span> m: Mutex <span class="k">:=</span> Mutex()
-m.lock()  <span class="c">// critical section</span>  m.unlock()</pre>
+m.lock()
+<span class="c">// critical section</span>
+m.unlock()</pre>
   <p class="note">Green threads, scheduled by the VM itself — same model on the PC
      and on the board. Also <code>SyncList</code> with a blocking
      <code>popBlocking()</code> for producer/consumer.</p>
@@ -226,14 +241,14 @@ m.lock()  <span class="c">// critical section</span>  m.unlock()</pre>
 <section>
   <h2>Native: real machine code</h2>
 <pre><span class="k">native function</span> fib(n: <span class="t">integer</span>): <span class="t">integer</span>
-  <span class="k">if</span> n &lt; <span class="t">2</span> <span class="k">then</span> <span class="k">return</span> n <span class="k">endif</span>
+  <span class="k">if</span> n &lt; <span class="t">2</span> <span class="k">then</span> <span class="k">return</span> n      <span class="c">// one-line if: no endif</span>
   <span class="k">return</span> fib(n-<span class="t">1</span>) + fib(n-<span class="t">2</span>)
 <span class="k">end</span> fib</pre>
-  <p class="note">The compiler also emits C for that function, builds it and ships a
-     <code>.mdn</code> next to the <code>.mod</code>. Measured on a board:
-     <b>fib(28) 8,946 ms interpreted → 85 ms native</b>. If the <code>.mdn</code>
-     is missing or the target has no AOT yet, the bytecode still runs — same
-     result, no speed-up. Bytecode is always the safety net.</p>
+  <p class="note">The compiler also emits C for that function, builds it and stores the
+     machine code <b>inside the <code>.mod</code></b>. Measured on a board:
+     <b>fib(28) 8,946 ms interpreted → 85 ms native</b>. Accelerated on RP2350, STM32
+     and ESP32-P4; on ESP32-S3/C3/C6 (no AOT target yet) the bytecode still runs —
+     same result, no speed-up. Bytecode is always the safety net.</p>
 </section>
 
 <section>

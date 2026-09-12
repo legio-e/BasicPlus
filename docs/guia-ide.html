@@ -202,7 +202,7 @@
 </p>
 <pre><code>bpide.bat</code></pre>
 <p>o, si lo prefieres a mano:</p>
-<pre><code>java -jar BpIde-5.0.jar</code></pre>
+<pre><code>java -jar BpIde-6.0.jar</code></pre>
 <p>
   Junto al <code>.jar</code> viajan las carpetas de las que el IDE tira solo,
   <strong>sin configurar nada</strong>: la biblioteca de packs
@@ -232,6 +232,15 @@
       <em>Breakpoints</em>. Abajo, el prompt <code>/ &gt;</code> de la
       consola de comandos del micro (§7).</li>
 </ul>
+<p>
+  Encima, la barra de botones. A la izquierda, ficheros y proyecto; en el
+  centro, la ejecución: <em>Compile</em>, <em>Build Proj</em>, <em>Run</em>,
+  <em>Run Window</em> (ejecuta en el PC sobre la VM-C, con su ventana — para
+  programas con interfaz gráfica), <em>Run on Device</em>, <em>Placa</em>
+  (§9), <em>Entorno</em> (§9.3), <em>DAO build</em> (los DAO del proyecto a
+  partir de sus <code>@BD</code>), <em>Debug</em> y <em>Stop</em>; a la
+  derecha, indentar y comentar la selección.
+</p>
 
 <h2 id="proyectos">3. Proyectos</h2>
 <p><img src="img/ide-proyecto.png" alt="Proyecto abierto y placa conectada"></p>
@@ -248,8 +257,9 @@
   <li><strong>Resources</strong> — ficheros de datos que el Run copia
       al micro tal cual (configuraciones, tablas…).</li>
   <li><strong>Output</strong> — lo que produce el compilador: los
-      <code>.mod</code> (bytecode, con su interfaz dentro), el
-      <code>.mdn</code> si el proyecto usa <code>native</code>, y el
+      <code>.mod</code> (bytecode, con su interfaz dentro — y, si el
+      proyecto usa <code>native</code>, también el código máquina: desde
+      el formato v7 no hay <code>.mdn</code> suelto), y el
       <code>.pack</code> si el proyecto empaqueta (§10).</li>
   <li><strong>Dependencies</strong> — módulos importados resueltos.</li>
 </ul>
@@ -287,8 +297,26 @@
   <li><strong>Run → Stop</strong> (Ctrl+F2): aborta el programa en
       marcha — local o en placa — sin reiniciar nada. En la placa es un
       KILL cooperativo: la VM muere limpia y el micro sigue
-      respondiendo.</li>
+      respondiendo. El programa termina con código 130.</li>
 </ul>
+<p>
+  <strong>Las dependencias no se retransmiten.</strong> Antes de subir,
+  el IDE pregunta a la placa por cada módulo que el programa importa y
+  sólo sube el que falta, el que la placa tiene de una versión anterior o
+  el que tiene la misma versión con CRC distinto; si la placa lo tiene
+  más nuevo, se queda el suyo. La Consola dice de dónde carga cada uno
+  (ruta y CRC) y avisa si esa copia no es la que el proyecto pondría —
+  cuando algo falla por una dependencia, esa línea es la que dice de
+  dónde salió el módulo. La biblioteca estándar no se sube nunca: viaja
+  en el firmware (§6).
+</p>
+<p>
+  Al terminar, la Consola cierra con el código de salida, el motivo y
+  <strong>el tiempo de ejecución</strong> — <code>exit 0 (OK) en 94 ms</code>
+  (en segundos a partir de los 10 s). El tiempo es el de la ejecución,
+  con el módulo ya cargado, y lo miden igual la VM Java y las placas. Qué
+  significa cada código, en <code>help error</code> (§7).
+</p>
 <p>
   Si el programa pide datos al usuario con <code>IO.prompt</code>, el
   IDE despliega un formulario y la ejecución se pausa hasta que lo
@@ -307,10 +335,12 @@
 <h3 id="aot">5.1 <code>native</code> (AOT): el compilador de C</h3>
 <p>
   Si el programa usa <code>function native</code>, en <em>Run on Device</em> el
-  IDE compila esas funciones a código máquina (<code>.mdn</code>) y lo sube
-  junto al <code>.mod</code>. Para ese paso hace falta un <strong>compilador de
-  C cruzado</strong> — y <strong>no viene con BasicPlus</strong>: no es nuestro,
-  así que se instala aparte. Cuál, depende de la placa:
+  IDE compila esas funciones a código máquina y lo funde <strong>dentro del
+  propio <code>.mod</code></strong> (formato v7): se sube un solo fichero y no
+  hay dos que puedan desparejarse. Para ese paso hace falta un
+  <strong>compilador de C cruzado</strong> — y <strong>no viene con
+  BasicPlus</strong>: no es nuestro, así que se instala aparte. Cuál, depende
+  de la placa:
 </p>
 <table>
   <tr><th>Placas</th><th>Compilador</th><th>De dónde sale</th></tr>
@@ -331,6 +361,13 @@
     <td>ESP32-S3</td>
     <td>—</td>
     <td>en esta versión <code>native</code> corre <em>interpretado</em> en el S3</td>
+  </tr>
+  <tr>
+    <td>ESP32-C3 y ESP32-C6</td>
+    <td>—</td>
+    <td>también <em>interpretado</em>: son RISC-V <em>sin FPU</em> y el único
+        destino RISC-V del IDE es el del P4 (con FPU) — no actives AOT en un
+        proyecto destinado a ellas</td>
   </tr>
 </table>
 <p class="warn">
@@ -380,11 +417,21 @@
 <ul>
   <li><code>/app</code> — tus programas (<code>.mod</code> subidos).</li>
   <li><code>/lib</code> — la biblioteca estándar embebida en el
-      firmware (se reinstala sola en cada arranque).</li>
+      firmware. El firmware la repone solo en cada arranque, módulo a
+      módulo: si falta, si el que hay es de una versión anterior o si,
+      siendo la misma, su CRC no coincide. Lo que hay en <code>/app</code>
+      no se toca nunca.</li>
   <li><code>/sys</code> — configuración: <code>board.json</code>
       (identidad de la placa), <code>device.json</code>,
       <code>auto.txt</code> (autorun, §12).</li>
 </ul>
+<p class="warn">
+  <strong>No subas copias de la biblioteca estándar a <code>/app</code>.</strong>
+  Al cargar, <code>/app</code> gana a <code>/lib</code>: un <code>Gui.mod</code>
+  viejo olvidado en <code>/app</code> tapa al del firmware sin ningún aviso, y
+  el síntoma apunta a otro sitio. Si actualizas el firmware, limpia
+  <code>/app</code> de módulos que no sean tuyos.
+</p>
 <p>
   La botonera opera sobre el fichero seleccionado:
   <em>Refresh</em>, <em>Upload</em>, <em>Run</em>, <em>Download</em>,
@@ -463,9 +510,9 @@
   El prompt <code>/ &gt;</code> bajo la Consola habla directamente con
   el dispositivo conectado. <code>help</code> lista los comandos:
 </p>
-<pre><code>dir [ruta] · cd &lt;ruta&gt; · type &lt;fich&gt; · edit &lt;fich&gt; · new &lt;fich&gt; · run &lt;fich&gt; · del &lt;fich&gt;
+<pre><code>dir [ruta] · cd &lt;ruta&gt; · type &lt;fich&gt; · edit &lt;fich&gt; · new &lt;fich&gt; · run &lt;fich&gt; [argumento] · del &lt;fich&gt;
 copy &lt;local&gt; [destino] · get &lt;remoto&gt; [local]
-kill · autorun [fich|off] · mem · save · log · logclr · reset · cls · help
+kill · autorun [fich|off] · mem · save · log · logclr · reset · cls · help · help error
 sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
 
 <table>
@@ -474,12 +521,53 @@ sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
   <tr><td><code>type</code> (<code>cat</code>)</td><td>vuelca un fichero a la consola</td></tr>
   <tr><td><code>edit</code> · <code>new</code></td><td>ver/editar en ventana · crear uno nuevo</td></tr>
   <tr><td><code>copy</code> (<code>cp</code>)</td><td><strong>sube</strong> un fichero del PC — sin destino, a la carpeta actual (comillas si hay espacios)</td></tr>
-  <tr><td><code>get</code></td><td><strong>baja</strong> un fichero de la placa al PC</td></tr>
-  <tr><td><code>run</code> · <code>kill</code> (<code>stop</code>)</td><td>ejecutar y abortar</td></tr>
+  <tr><td><code>get</code></td><td><strong>baja</strong> un fichero de la placa al PC, del tamaño que sea</td></tr>
+  <tr><td><code>run &lt;fich&gt; [argumento]</code> · <code>kill</code> (<code>stop</code>)</td><td>ejecutar (con un argumento opcional, ver abajo) y abortar</td></tr>
   <tr><td><code>autorun [fich|off]</code></td><td>qué app arranca sola al encender (§12)</td></tr>
   <tr><td><code>mem</code> (<code>df</code>)</td><td>memoria y espacio libres</td></tr>
   <tr><td><code>log</code> · <code>logclr</code></td><td>ver el log de la placa · vaciarlo</td></tr>
   <tr><td><code>save</code> · <code>reset</code> · <code>cls</code></td><td>guardar · reiniciar el dispositivo · limpiar la consola</td></tr>
+  <tr><td><code>help error</code></td><td>qué significa cada código de salida (la tabla de abajo)</td></tr>
+</table>
+
+<p>
+  <strong>El argumento de ejecución.</strong> <code>Main</code> puede declarar
+  un parámetro de texto con valor por defecto; <code>run</code> lo pasa detrás
+  del fichero, con comillas o sin ellas, y si no se pasa nada manda el defecto
+  del fuente:
+</p>
+<pre><code><span class="kw">module</span> Saludo
+  <span class="kw">public function</span> Main(arg: string := <span class="str">"mundo"</span>)
+    <span class="kw">print</span> <span class="str">"hola, "</span> + arg
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Saludo</code></pre>
+<pre><code>/ &gt; run Saludo
+hola, mundo
+  (exit 0 (OK) en 2 ms)
+/ &gt; run Saludo Eduardo
+hola, Eduardo
+  (exit 0 (OK) en 2 ms)</code></pre>
+<p>
+  El autorun (§12) no pasa argumento a propósito: el defecto que declara el
+  fuente <em>es</em> la configuración de despliegue. Desde la línea de comandos
+  del PC es el segundo posicional: <code>bpgenvm-c Saludo.mod Eduardo</code>.
+</p>
+
+<p>
+  <strong>Los códigos de salida</strong> son los mismos en la VM Java, en la
+  VM-C del PC y en las placas; el número dice <em>qué</em> pasó y el mensaje
+  que lo acompaña, <em>por qué</em> (en el PC por stderr; desde la placa, en
+  el EXITED que la Consola enseña):
+</p>
+<table>
+  <tr><th>exit</th><th>significa</th></tr>
+  <tr><td><code>0</code></td><td>terminó bien</td></tr>
+  <tr><td><code>1</code></td><td>excepción BP no atrapada — el programa se murió por su cuenta</td></tr>
+  <tr><td><code>2</code></td><td>no se pudo cargar el módulo: no está, no es un <code>.mod</code>, o su ABI es vieja</td></tr>
+  <tr><td><code>3</code></td><td>fallo interno de la VM (opcode o pc inválidos) — no es culpa del programa, repórtalo</td></tr>
+  <tr><td><code>4</code></td><td>sin memoria: heap agotado o desbordamiento de pila</td></tr>
+  <tr><td><code>130</code></td><td>parado con Stop / <code>kill</code></td></tr>
+  <tr><td><code>131</code></td><td>parado por el depurador</td></tr>
 </table>
 
 <div class="note">
@@ -507,19 +595,23 @@ sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
   en ejecución (equivale a Run → Stop) y <code>autorun</code> gestiona
   el arranque autónomo (§12). Si conectas con un programa corriendo, el
   explorador avisará «placa ocupada» — <code>kill</code> recupera el
-  control.
+  control. Con un programa en marcha la placa atiende sólo
+  <code>kill</code>, <code>reset</code> y el saludo de conexión; todo lo demás
+  (<code>dir</code>, <code>get</code>…) contesta ocupado hasta que termine.
+  <code>reset</code> sí llega con el programa corriendo: no hace falta
+  matarlo antes.
 </p>
 
 <h2 id="info">8. INFO del dispositivo</h2>
 <p><img src="img/ide-info.png" alt="Diálogo Device INFO de una Metro RP2350"></p>
 <p>
   El botón <strong>Info</strong> interroga al firmware. En la captura,
-  una Adafruit Metro RP2350: el micro y su variante (RP2350B detectada
-  en runtime vía <code>board.json</code> — 48 GPIO, 24 salidas PWM, 8
-  canales ADC), el serial único, la frecuencia y temperatura, la flash
-  real medida por JEDEC (16 MB), la SRAM, la PSRAM detectada y
-  autoprobada (8 MB, usada como heap de la VM), la ocupación del FS y
-  el uptime.
+  una Adafruit Metro RP2350: el micro y su variante (RP2350B, que el
+  firmware detecta en runtime por el propio chip — 48 GPIO, 24 salidas
+  PWM, 8 canales ADC), el serial único, la frecuencia y temperatura, la
+  flash real medida por JEDEC (16 MB), la SRAM, la PSRAM activada por el
+  ENV (<code>psram=1</code>, §9.3) y autoprobada (8 MB, usada como heap de
+  la VM), la ocupación del FS y el uptime.
 </p>
 
 <h2 id="gestion">9. Gestión de placa: arranque y particiones</h2>
@@ -603,22 +695,32 @@ sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
   sección de particiones, para que no se puedan tocar por dos caminos.
 </p>
 
-<p>Las que hay hoy, y qué significa cada una:</p>
+<p>
+  Las que el firmware <strong>lee</strong> hoy, qué ajusta cada una y en qué
+  familia cuenta (en las demás se guarda, pero nadie la mira):
+</p>
 
 <table>
-  <tr><th>clave</th><th>qué ajusta</th></tr>
-  <tr><td><code>board</code></td><td>la identidad de la placa</td></tr>
-  <tr><td><code>display</code></td><td>qué panel de pantalla lleva (en el P4, p.ej. <code>st7701</code>)</td></tr>
-  <tr><td><code>sd</code></td><td>el lector de tarjeta: <strong>valor estructurado</strong> y distinto por familia — ver abajo</td></tr>
-  <tr><td><code>SQLite</code></td><td>megabytes de arena para la base de datos (mínimo 2, máximo 4095)</td></tr>
-  <tr><td><code>psram</code> · <code>psramCsPin</code></td><td>si tiene PSRAM y por qué pin se selecciona</td></tr>
-  <tr><td><code>flashSizeBytes</code></td><td>tamaño de flash declarado</td></tr>
-  <tr><td><code>gpioCount</code></td><td>cuántos GPIO expone</td></tr>
-  <tr><td><code>stack</code></td><td>kilobytes de pila (el resto de la memoria de la VM va al montón); ausente = el reparto por defecto</td></tr>
-  <tr><td><code>log</code></td><td>el log post-mortem, encendido o apagado</td></tr>
-  <tr><td><code>gc</code></td><td>el recolector de basura (RP2350)</td></tr>
-  <tr><td><code>latido</code></td><td>el latido de vida (RP2350)</td></tr>
+  <tr><th>clave</th><th>qué ajusta</th><th>familia</th></tr>
+  <tr><td><code>display</code></td><td>qué panel de pantalla lleva (p.ej. <code>st7701</code> en el P4 de Waveshare; ausente = el panel del kit)</td><td>ESP32-P4</td></tr>
+  <tr><td><code>sd</code></td><td>el lector de tarjeta: <strong>valor estructurado</strong> y distinto por bus — ver abajo</td><td>RP2350 · ESP32-P4</td></tr>
+  <tr><td><code>SQLite</code></td><td>megabytes de arena para la base de datos (mínimo 2, máximo 4095); ausente = sin base de datos</td><td>RP2350 · ESP32-P4</td></tr>
+  <tr><td><code>psram</code></td><td><code>1</code> activa la PSRAM como heap de la VM (sólo RP2350B; el CS es fijo, GPIO47)</td><td>RP2350</td></tr>
+  <tr><td><code>stack</code></td><td>kilobytes de pila (el resto de la memoria de la VM va al montón); ausente = el reparto por defecto</td><td>todas</td></tr>
+  <tr><td><code>quantum</code></td><td>opcodes que ejecuta un hilo antes de ceder el turno; ausente = 1024</td><td>todas</td></tr>
+  <tr><td><code>log</code></td><td>el log post-mortem: <code>1</code> encendido; ausente = apagado</td><td>todas</td></tr>
+  <tr><td><code>gc</code></td><td>el recolector de basura: <code>0</code> lo apaga (para partir un experimento en dos); ausente = encendido</td><td>RP2350</td></tr>
+  <tr><td><code>latido</code></td><td>el latido de vida: <code>1</code> lo enciende; ausente = apagado</td><td>RP2350</td></tr>
 </table>
+
+<p class="note">
+  <code>board</code>, <code>psramCsPin</code>, <code>flashSizeBytes</code> y
+  <code>gpioCount</code> pueden aparecer en la tabla de una placa antigua:
+  <strong>se guardan pero no se leen</strong>. La variante y la flash las
+  detecta el firmware por el propio chip, el CS de la PSRAM es fijo, y la
+  identidad y los pines de la placa (RP2350) viven en
+  <code>/sys/board.json</code>.
+</p>
 
 <p>
   <code>sd</code> es la única con estructura dentro, porque describe un cableado y ése
@@ -626,7 +728,7 @@ sd · sd mount   — diagnóstico de la tarjeta (ver abajo)</code></pre>
 </p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, por SPI</span>
-sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32, por SDIO</span></code></pre>
+sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// ESP32-P4, por SDIO</span></code></pre>
 
 <p>
   En SDIO admite además <code>d1</code>…<code>d3</code> (para 4 bits), <code>slot</code>,
@@ -644,6 +746,14 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:1               <span class="comment">// E
   pilas; quitar la clave vuelve al reparto de siempre. Cada hilo consume 2 KB y el
   principal 16, así que el número sale de contar hilos. Si te pasas de lo que cabe, el
   firmware lo ajusta y <strong>lo dice en el log</strong> — no se queda callado.
+</p>
+
+<p>
+  <code>quantum</code> es el reparto del otro recurso: el tiempo. La VM ejecuta
+  esa cantidad de opcodes de un hilo y entonces cede el turno — a los demás
+  hilos del programa y al sistema del micro, que es lo que deja respirar a
+  las comunicaciones en un chip de un solo núcleo. Con 1024 nadie debería
+  tener que tocarlo; sirve para medir, no para afinar.
 </p>
 
 <div class="note">
