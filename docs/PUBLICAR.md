@@ -78,11 +78,11 @@ cada casilla (número, no «OK»):
 | `doc_frags.py` (todos los fragmentos de docs/) | 12-sep: **152 OK, 119 trozo, 2 error-esperado, 0 FALLO** (540 bloques, 25 docs) |
 | `compat/compat.sh check` | 12-sep: **59 PASS, 0 FAIL, 0 SKIP**, ninguna línea `!! stderr:` |
 | Guarda de las 4 portadas (tamaño + encabezados) | 12-sep: **4 OK** — 14.092 / 14.515 / 20.731 / 20.580 B; 18 / 18 / 7 / 7 encabezados |
-| Las **7** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | |
-| `tanda.py` en una placa por familia (Pico/Metro · S3 · C3/C6 · P4 · Nucleo/DK2) | |
-| Micro simulado con LVGL (y decidido si con SQLite) | |
-| ZIP montado y verificado por dentro | |
-| Desplegado en carpeta limpia y probado allí | |
+| Las **7** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | 12-sep: **7**, selladas; C6/P4/DK2 del árbol `97d61d7e~` (tras `#505`), S3/C3/Pico/Nucleo byte-idénticas a las probadas salvo sello de hora; todas con `I2c.mod` dentro (el 11-sep se regeneró sin él) |
+| `tanda.py` en una placa por familia (Pico/Metro · S3 · C3/C6 · P4 · Nucleo/DK2) | 12-sep: **las nueve placas**, cada una regrabada desde `dist` — `compat/informes/tanda_f1.md`. Además `SqlDemo` == host en los dos P4 (y `SqlDemoSd` en la tarjeta), `Bench` nativo 32 ms en el P4, `#379` 8/8 |
+| Micro simulado con LVGL (y decidido si con SQLite) | 12-sep: `make sim LVGL=1 SQLITE=1` — **con SQLite** (`SqlDemo` == host en el sim); lv_ 2026 símbolos, sqlite3_ 305; cerrar la ventana apaga el sim |
+| ZIP montado y verificado por dentro | 12-sep: `BasicPlus-6.0-win.zip`, 25 MB; el empaquetador cazó 5 drivers MOD6 y un `Stdlib.pack` MOD6; cuatro verificadores independientes (samples 345/345, docs, firmware, sim) → 4 medios corregidos |
+| Desplegado en carpeta limpia y probado allí | 12-sep: `C:	mpp6`: sellos 7/7, `ChartDemo`/`FontLoadDemo` capturados, `Bench`, `SqlDemo` == host, `GuiEvSpike --no-screen` (`#505`); **IDE probado por Eduardo: OK** |
 
 ## 1 · Pre-flight — que lo que se publica sea lo que se probó
 
