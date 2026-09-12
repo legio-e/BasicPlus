@@ -132,7 +132,32 @@ done
 
 # --- firmware: las imágenes SELLADAS, no las de los directorios de compilación
 cp "$RAIZ/dist/firmware/"*.uf2 "$RAIZ/dist/firmware/"*.bin \
-   "$RAIZ/dist/firmware/SHA256SUMS.txt" "$RAIZ/dist/firmware/README.md" "$OUT/firmware/"
+   "$RAIZ/dist/firmware/SHA256SUMS.txt" "$OUT/firmware/"
+# El README de dist/firmware es la nota INTERNA (habla de H13, PUBLICAR.md, «ayer»):
+# al usuario le vale INSTALAR_FIRMWARE.md, que viaja en docs/. Un LEEME corto apunta.
+cat > "$OUT/firmware/LEEME.md" <<'LEEME'
+# firmware/ — las siete imágenes de BasicPlus
+
+| fichero | placas |
+|---|---|
+| `bpvm_pico.uf2` | Raspberry Pi Pico 2 · Adafruit Metro RP2350 |
+| `bpvm_esp32_merged.bin` | ESP32-S3 |
+| `bpvm_esp32c3_merged.bin` | ESP32-C3 |
+| `bpvm_esp32c6_merged.bin` | ESP32-C6 (Waveshare ESP32-C6-LCD-1.3) |
+| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" |
+| `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
+| `bpvm_stm32_dk2.bin` | Discovery STM32U5G9J-DK2 |
+
+Cómo se graba cada una: `docs/INSTALAR_FIRMWARE.md` (`docs/en/INSTALAR_FIRMWARE.md`).
+Los `_merged.bin` van al **offset 0** (bootloader + particiones + aplicación en un
+solo fichero). `SHA256SUMS.txt` sella las siete: `sha256sum -c SHA256SUMS.txt`.
+`boards/` trae las plantillas de `/sys/board.json` del RP2350 (la Metro lo necesita
+para su nombre y su NeoPixel; la Pico 2 no).
+LEEME
+# Las plantillas de /sys/board.json (RP2350): INSTALAR_FIRMWARE y QUICKSTART mandan
+# subir la de la Metro y no viajaban (lo vio el verificador del ZIP, 12-sep).
+mkdir -p "$OUT/firmware/boards"
+cp "$RAIZ/bpgenvm-c/pico/boards/"*.json "$OUT/firmware/boards/"
 
 # --- samples: los del REPO, no los de mi copia de trabajo --------------------
 # `git ls-files` y no `samples/*.bp`: en la copia de trabajo viven los ficheros de

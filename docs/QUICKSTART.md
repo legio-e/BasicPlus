@@ -88,7 +88,7 @@ Lo demás va en dos sitios:
   el firmware lo lee al arrancar, así que `reset` después.
 - **Identidad y pines de la placa** (`name`, `ledPin`, `neopixelPin`): un
   `/sys/board.json` subido desde el IDE; plantilla en
-  `bpgenvm-c/pico/boards/metro-rp2350b.json`. `name` es lo que devuelve
+  `firmware/boards/metro-rp2350b.json` del paquete (`bpgenvm-c/pico/boards/` en el repo). `name` es lo que devuelve
   `Machine.getBoard()`; con `neopixelPin` el firmware enciende el NeoPixel al
   arrancar. El `psramCsPin` de la plantilla se ignora (el CS es fijo, GP47).
 

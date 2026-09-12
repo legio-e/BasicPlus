@@ -287,6 +287,19 @@ static void bpvm_gui_take_screenshot(void) {
 static int g_headless = 0;
 void bpvm_gui_disp_set_headless(int on) { g_headless = on ? 1 : 0; }
 
+/* F1 de V6 (12-sep) — CERRAR LA VENTANA = APAGAR EL MICRO SIMULADO. El driver SDL de
+ * LVGL borra el display al cerrar la ventana (lv_sdl_window.c: SDL_WINDOWEVENT_CLOSE
+ * → lv_display_delete; SDL_QUIT → SDL_Quit + lv_deinit) y aqui `g_window_closed` se
+ * queda a 1 para siempre: el simulador seguia vivo y escuchando, y CADA programa
+ * grafico posterior terminaba al instante con EXITED OK sin pintar nada — un «OK»
+ * que engañaba (lo vio el verificador del ZIP). Reabrir seria reinicializar LVGL,
+ * el display, el raton y el gancho de captura a medias de un proceso; mas honesto y
+ * mas corto: el simulador TERMINA, y el IDE dice «el simulador no esta en marcha —
+ * pulsa Arrancar». Solo el simulador lo pide (bpvm_sim.c); la VM-C de linea de
+ * comandos sigue como estaba (su programa continua tras run() con la ventana cerrada). */
+static int g_exit_on_close = 0;
+void bpvm_gui_disp_set_exit_on_close(int on) { g_exit_on_close = on ? 1 : 0; }
+
 static void headless_flush(lv_display_t* d, const lv_area_t* a, uint8_t* px) {
     (void) a; (void) px;
     lv_display_flush_ready(d);
@@ -374,6 +387,11 @@ uint32_t bpvm_gui_disp_pump(void) {
          * cierre la ventana. F12 (petición manual) no cierra: ahí SÍ hay alguien
          * delante que quiere seguir mirando. */
         if (g_shot_env_read && getenv("BPVM_GUI_SHOT_MS")) g_window_closed = 1;
+    }
+    if (g_window_closed && g_exit_on_close && !g_headless) {
+        printf("[gui] ventana cerrada: el micro simulado termina (en el IDE, pulsa Arrancar para otro)\n");
+        fflush(stdout);
+        exit(0);
     }
     /* #462 - antes aqui habia un SDL_Delay(16) INCONDICIONAL, que ademas tiraba
      * lo que lv_timer_handler acababa de contestar. Y no dormia el hilo BP del

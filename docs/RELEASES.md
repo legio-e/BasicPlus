@@ -41,8 +41,8 @@ imagen con el kit de Espressif y elige su panel por el entorno, `display=st7701`
 |---|---|
 | `bpvm_pico.uf2` | Pico 2 · Metro RP2350B |
 | `bpvm_esp32_merged.bin` | ESP32-S3 |
-| `bpvm_esp32c3.bin` | ESP32-C3 *(nueva)* |
-| `bpvm_esp32c6.bin` | ESP32-C6 *(nueva)* |
+| `bpvm_esp32c3_merged.bin` | ESP32-C3 *(nueva)* |
+| `bpvm_esp32c6_merged.bin` | ESP32-C6 *(nueva)* |
 | `bpvm_esp32p4_merged.bin` | P4 kit · P4 Waveshare |
 | `bpvm_stm32_nucleo.bin` | Nucleo U575 |
 | `bpvm_stm32_dk2.bin` | Discovery U5G9J |
@@ -402,6 +402,17 @@ siguen ejecutando; `Gui.run()` sigue bloqueando.
 - **La VM sigue en un solo núcleo**, también en los micros que tienen dos (S3 y P4
   arrancan con el segundo apagado: se midió que no costaba nada). Los dos núcleos para
   ejecutar BP quedan fuera del plan de versiones.
+
+### Artefactos de la release
+
+**Un solo adjunto**: `BasicPlus-6.0-win.zip` (~25 MB; su `sha256` va en la página de la
+release y en `dist/BasicPlus-6.0-win.zip.sha256`). Dentro: `BpIde-6.0.jar` y `bpide.bat`,
+`bin/` (el micro simulado con LVGL **y SQLite**, más `SDL2.dll`), `bpstdlib/` (fuentes y
+`.mod` de la librería), `packs/` (`SQLite.pack`, `Stdlib.pack`), `bpdevices/`, `samples/`,
+`docs/` (la ayuda que abre el IDE, ES y EN), `bpgenvm-c/` (cabeceras y fuentes que necesita
+el AOT) y **`firmware/`** con las **siete imágenes** de la tabla de arriba, su
+`SHA256SUMS.txt` y las plantillas de `board.json` del RP2350 en `firmware/boards/`. Cómo
+instalar cada una: **[INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md)**.
 
 ---
 

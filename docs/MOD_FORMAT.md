@@ -1,11 +1,14 @@
-# Formato binario `.mod` v5
+# Formato binario `.mod` (v7)
 
 Este documento es la **especificación canónica** del fichero `.mod` que
-emite el frontend (`lexer-java`) y consume cualquier VM compatible
-(`bpgenvm` Java; futura `bpgenvm-c`). Si una implementación discrepa
-del documento, **el documento gana**.
+emite el frontend (`lexer-java`) y consumen las dos VMs (`miVM` en Java y
+`bpgenvm-c` en C). Si una implementación discrepa del documento, **el
+documento gana**.
 
-Versión vigente: **5** (campo `MAGIC` = `0x4D4F4435` = ASCII `"MOD5"`).
+Versión vigente: **7** (campo `MAGIC` = `0x4D4F4437` = ASCII `"MOD7"`, desde
+V6/N1.4: la sección `native` dentro del propio `.mod`). Las VMs de V6 cargan
+también **v6** (`"MOD6"`, sin sección `native`) y **rechazan** v5 y anteriores
+con un mensaje (`#284`: el formato tiene que coincidir; si no, se recompila).
 
 Convención general:
 - Todos los enteros son **big-endian** salvo indicación expresa.

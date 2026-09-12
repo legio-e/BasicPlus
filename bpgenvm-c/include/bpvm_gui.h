@@ -170,6 +170,8 @@ int  bpvm_gui_disp_native_size(int* w, int* h);
  * el host (SDL); llamarla es cosa del host, gui.c nunca la invoca → los ports de
  * micro no tienen que definirla. En un build sin LVGL esto ya es lo que pasa. */
 void bpvm_gui_disp_set_headless(int on);
+/* Simulador: cerrar la ventana termina el proceso (ver gui_display_sdl.c). */
+void bpvm_gui_disp_set_exit_on_close(int on);
 
 /* #322 — título de la ventana. Sin llamarla, LVGL pone el suyo ("LVGL Simulator"),
  * que dice qué librería dibuja en vez de qué está corriendo. Llamar ANTES de

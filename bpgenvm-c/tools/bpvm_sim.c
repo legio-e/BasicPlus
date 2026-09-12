@@ -1130,6 +1130,7 @@ int main(int argc, char** argv) {
 #endif
 #ifdef BPVM_LVGL
     if (g_no_screen) bpvm_gui_disp_set_headless(1);
+    bpvm_gui_disp_set_exit_on_close(1);   /* cerrar la ventana = apagar el micro simulado */
     /* #322 — la ventana decía "LVGL Simulator": nombraba la librería que dibuja,
      * no lo que corre. Que se identifique como lo que es —un micro simulado, no
      * una placa— y con la resolución, que es el dato que se compara con la

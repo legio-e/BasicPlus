@@ -64,7 +64,8 @@ Después, dos ajustes:
 
 - **PSRAM** (8 MB como heap): `psram=1` en el ENV — botón **Entorno** del
   IDE, casilla PSRAM — y `reset`. Solo en RP2350B; el CS es fijo (GP47).
-- **Identidad y pines**: sube `bpgenvm-c/pico/boards/metro-rp2350b.json`
+- **Identidad y pines**: sube `firmware/boards/metro-rp2350b.json` (del paquete;
+  `bpgenvm-c/pico/boards/` en el repo)
   como `/sys/board.json` (`name`, `ledPin`, `neopixelPin`; su `psramCsPin`
   se ignora). Sin el fichero la placa se llama `generic` y no enciende el
   NeoPixel al arrancar; todo lo demás funciona igual.

@@ -90,7 +90,7 @@ detected). The rest lives in two places:
   so `reset` afterwards.
 - **Board identity and pins** (`name`, `ledPin`, `neopixelPin`): a
   `/sys/board.json` uploaded from the IDE; template in
-  `bpgenvm-c/pico/boards/metro-rp2350b.json`. `name` is what
+  `firmware/boards/metro-rp2350b.json` in the package (`bpgenvm-c/pico/boards/` in the repo). `name` is what
   `Machine.getBoard()` returns; with `neopixelPin` the firmware lights the
   NeoPixel at boot. The template's `psramCsPin` is ignored (the CS is fixed,
   GP47).
