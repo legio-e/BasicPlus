@@ -49,10 +49,16 @@ printf '@echo off\r\njava -jar "%%~dp0BpIde-%s.jar" %%*\r\n' "$VER" > "$OUT/bpid
 # Las rutas van RELATIVAS a propósito: VmConfig.resolveRelativo las resuelve
 # contra el directorio de ESTE fichero, no contra el directorio de trabajo. Así
 # la instalación se puede mover de sitio y arrancar desde donde sea.
+# `packsDir` (12-sep, F1 de V6): el IDE encuentra `packs/` solo (IdePrefs.installSubdir),
+# pero el compilador por linea de comandos —el que viaja dentro del jar— resuelve
+# `import SQLite` leyendo `packsDir` de ESTE fichero (Main.dirsDePacks). Sin la linea,
+# desde la carpeta desplegada `SqlDemo.bp` no compilaba («no se localizo .bp ni .bpi
+# para import 'SQLite'; se omitira») y el IDE si: la misma instalacion, dos respuestas.
 cat > "$OUT/BpVM.cfg" <<'CFG'
 {
   "stdlibDir":  "./bpstdlib",
-  "devicesDir": "./bpdevices"
+  "devicesDir": "./bpdevices",
+  "packsDir":   "./packs"
 }
 CFG
 
@@ -242,9 +248,13 @@ fi
 # módulo presente en stdlibDir. O sea que el intruso no era adorno: mandaba sobre
 # el módulo recién generado.
 #
-# La regla es una y no hay lista que mantener: si un .mod del paquete no es MOD6,
-# el paquete no sale. Vale igual para un intruso que para una stdlib que se quede
-# atrás en la próxima subida de formato.
+# La regla es una y no hay lista que mantener: si un .mod del paquete no es del
+# formato ACTUAL, el paquete no sale. Vale igual para un intruso que para una
+# stdlib que se quede atrás en la próxima subida de formato. El formato actual es
+# MOD7 (V6/N1.4: la sección `native` dentro del .mod; docs/MOD_FORMAT.md) — la VM
+# aún carga MOD6, pero un MOD6 en el paquete es un .mod que nadie recompiló, y eso
+# es justo lo que esta guarda caza (el 12-sep cazó… a sí misma: decía MOD6).
+MOD_ACTUAL="MOD7"
 # Y el invariante de bpstdlib/, que es donde vivían los intrusos: un módulo de la
 # librería estándar TIENE su fuente al lado. Un .mod suelto ahí no es stdlib —
 # y no es inocuo: `resolveDeviceDeps` da prioridad de stdlib a cualquier módulo
@@ -283,11 +293,11 @@ fi
 
 MALOS=""
 while IFS= read -r m; do
-    [ "$(head -c4 "$m")" = "MOD6" ] || MALOS="$MALOS
+    [ "$(head -c4 "$m")" = "$MOD_ACTUAL" ] || MALOS="$MALOS
   $(printf '%-6s %s' "$(head -c4 "$m")" "${m#$OUT/}")"
 done < <(find "$OUT" -name '*.mod')
 if [ -n "$MALOS" ]; then
-    echo "  .mod CADUCADOS en el paquete (se esperaba MOD6):$MALOS"
+    echo "  .mod CADUCADOS en el paquete (se esperaba $MOD_ACTUAL):$MALOS"
     echo "  Un .mod que la VM rechaza no se publica. Regenéralo o quítalo."
     rm -rf "$OUT"; exit 1
 fi

@@ -236,11 +236,12 @@
 </p>
 
 <p class="warn">
-  <strong>On the PC: the simulated micro.</strong> The IDE's simulator carries the engine
-  <strong>linked in</strong> when built with <code>make sim SQLITE=1</code>
-  (<code>SQLite.mod</code> and <code>Orm.mod</code> travel to it just as to a board, and there is
-  no pack to burn). The command-line C VM (<code>bpgenvm-c</code>) does not: the first call throws
-  <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>.
+  <strong>On the PC: the simulated micro.</strong> The simulator shipped with the IDE carries
+  the engine <strong>linked in</strong> since V6 (<code>SQLite.mod</code> and
+  <code>Orm.mod</code> travel to it just as to a board, and there is no pack to burn): the
+  examples on this page run without a board. If you build it yourself, that is
+  <code>make sim LVGL=1 SQLITE=1</code>. The command-line C VM (<code>bpgenvm-c</code>) does
+  not: the first call throws <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>.
 </p>
 
 <h2 id="sinorm">2. Without the ORM: plain SQL</h2>

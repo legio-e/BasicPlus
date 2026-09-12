@@ -238,11 +238,13 @@
 </p>
 
 <p class="warn">
-  <strong>En el PC: el micro simulado.</strong> El simulador del IDE lleva el motor
-  <strong>enlazado</strong> si se construye con <code>make sim SQLITE=1</code>
-  (<code>SQLite.mod</code> y <code>Orm.mod</code> viajan a él igual que a una placa, y no hay
-  pack que grabar). La VM-C de línea de comandos (<code>bpgenvm-c</code>) no lo lleva: la
-  primera llamada lanza <em>«sql_open: falta el codigo nativo del pack 'SQLI' v1»</em>.
+  <strong>En el PC: el micro simulado.</strong> El simulador que viene con el IDE lleva
+  el motor <strong>enlazado dentro</strong> desde V6 (<code>SQLite.mod</code> y
+  <code>Orm.mod</code> viajan a él igual que a una placa, y no hay pack que grabar): los
+  ejemplos de esta página corren sin placa. Si lo construyes tú, es
+  <code>make sim LVGL=1 SQLITE=1</code>. La VM-C de línea de comandos
+  (<code>bpgenvm-c</code>) no lo lleva: la primera llamada lanza <em>«sql_open: falta el
+  codigo nativo del pack 'SQLI' v1»</em>.
 </p>
 
 <h2 id="sinorm">2. Sin ORM: hablar SQL directamente</h2>

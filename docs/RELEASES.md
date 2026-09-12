@@ -383,8 +383,9 @@ siguen ejecutando; `Gui.run()` sigue bloqueando.
 - **`GET` y `LS` durante un RUN** contestan `BUSY`. V7.
 - **`listDir` e `input()` sólo funcionan en la VM Java**: en la VM-C —el PC y las placas—
   lanzan `RuntimeError` («builtin no soportado»).
-- **Las bases de datos siguen pidiendo placa** con `bpgenvm-c` a secas. El micro simulado
-  del IDE lleva SQLite si se construye con `make sim SQLITE=1`.
+- **Las bases de datos siguen pidiendo placa** con `bpgenvm-c` a secas (la VM-C de línea de
+  comandos). El micro simulado que viene con el IDE **sí** lleva SQLite dentro: `SqlDemo`
+  da en él la misma salida que en el P4.
 - **El S3 no tiene AOT** (Xtensa); **el C3 y el C6 interpretan sus `native`** hasta que
   haya un destino RISC-V sin FPU.
 - **No hay bajo consumo**: el micro nunca duerme. Y en el STM32 la tarea ociosa no llega a
@@ -532,7 +533,8 @@ Dicho sin adornos, porque conviene saberlo antes de empezar:
 
 - **Las bases de datos necesitan placa.** El motor va en un pack de código nativo
   y todavía no hay uno para PC, así que un programa con SQLite no se puede probar en el PC.
-  *(V6: el micro simulado del IDE lleva SQLite si se construye con `make sim SQLITE=1`.)*
+  *(V6: el micro simulado del IDE ya lleva SQLite dentro: los programas con BD se prueban
+  en el PC sin placa.)*
 - **`listDir` no está en la VM-C**, o sea que un programa puede listar un
   directorio en el PC pero no en la placa. Es el único verbo de fichero que
   falta. *(V6: sigue así; `listDir` e `input()` sólo funcionan en la VM Java, y en la
