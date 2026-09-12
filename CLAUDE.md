@@ -151,8 +151,8 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 ## Convenciones de trabajo
 
 - **Idioma:** español (código, docs, commits, conversación).
-- **Versión actual:** V5, **en fase de cerrar** (V4 se publicó el 6-ago). Qué queda,
-  en `docs/FICHAS.md`.
+- **Versión actual:** **V6 publicada el 12-sep-2026** (tag `v6.0`); lo siguiente es **V7**
+  (el módulo raíz, `#493`/`#500`/`#502`). Qué hay abierto, en `docs/FICHAS.md`.
 - **`docs/FICHAS.md` es la fuente única de verdad.** Decisión de Eduardo (17-ago):
   *«Estado y pendientes son ficheros de trabajo tuyos. Pero el que dice realmente
   cuál es la situación es Fichas.»* Al abrir una ficha, una línea allí; al cerrarla,

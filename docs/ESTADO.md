@@ -27,6 +27,23 @@
 
 ## Última sesión
 
+## 🚀 V6 PUBLICADA (12-sep, noche) — tag `v6.0`, release con el ZIP, Pages en V6; **V7 arranca**
+
+Con el «OK» de Eduardo: tag `v6.0` sobre `9cb1a7bd`; `git push origin main --tags` (477 commits; salió también
+el tag local `v1.0`, histórico); `gh release create v6.0 dist/BasicPlus-6.0-win.zip --notes-file
+dist/release-v6.0.md`; el build de Pages **no arrancó solo** con el push (el último era del 22-ago) y se relanzó
+con `gh api -X POST repos/legio-e/BasicPlus/pages/builds` → `built` sobre `9cb1a7bd`; portada ES y EN, `gui.html`
+y la captura comprobados en el navegador; el ZIP descargado de la propia release y su sha256 `2279292d…`
+contrastado con el montado. `CLAUDE.md` dice ya «V6 publicada; lo siguiente es V7». Memorias: `cierre-v6`,
+`abrir-puerto-reinicia-esp`, `dos-esp-mismo-com`; el freeze marcado como histórico.
+
+⏭️ **Al retomar (V7)**: leer `FICHAS` — lo que quedó dicho para V7: `#493`/`#500` (un pack de librería no tapa la
+stdlib; la norma de versiones de las dependencias), `#502` (destino `ilp32` y la float-ABI en la cabecera del
+`.mdn`), `#495` (`GET` durante un RUN), `#487`, el INFO de las ESP/STM32 sin `packsXipBase`/`sqlite*`/`floatAbi`,
+y `L1` (el módulo raíz). Y el host está en sabor `gui1-lvgl1`: `make GUI=1 LVGL=0` antes de `compat.sh check`.
+
+---
+
 ## ⏭️ AL RETOMAR (13-sep) — ✅ **`F1` CERRADA**: V6 está LISTA; falta el gesto de publicar (tag `v6.0` + push + release con el ZIP)
 
 **Lo que pasó el 12-sep por la noche** (la sesión más larga de V6; el detalle está en la sección `F1` de `FICHAS`):

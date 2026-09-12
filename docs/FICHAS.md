@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | `#502` cerrada en el cargador de `.mdn` y **medida en el C6** (antes reiniciaba la placa; ahora rechaza con mensaje y corre interpretado); el destino `ilp32` del IDE sigue siendo de V7, con `#493` y `#500` |
-> | **hitos** | **0** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ 11-sep) → 🧊 CODE FREEZE V6 (12-sep) → ~~`D1`~~ (✅ 12-sep) → ~~`F1`~~ (✅ 12-sep: nueve placas con las imágenes publicadas, el ZIP verificado y el IDE probado por Eduardo). **V6 lista para publicar: tag `v6.0` + push** |
+> | **hitos** | **0** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ ~~`D1`~~ ~~`F1`~~ — 🚀 **V6 PUBLICADA el 12-sep-2026**: tag `v6.0` sobre `9cb1a7bd`, release con `BasicPlus-6.0-win.zip` (sha256 `2279292d…`), 477 commits en un push, Pages sirviendo V6 en ES y EN, el ZIP descargado de la release y verificado. **V7 arranca** con `#493`, `#495`, `#500`, `#502` (destino `ilp32`) y `L1` (módulo raíz) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
