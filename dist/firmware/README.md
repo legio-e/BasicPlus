@@ -9,19 +9,23 @@ suben los adjuntos de la release. Los directorios de compilación (`pico/build`,
 `esp32*/build`, los `Debug/` de CubeIDE) son de trabajo: de ahí sale la imagen **una
 vez**, se copia aquí, y a partir de ese momento manda esta copia.
 
-## Las 5 imágenes (7 placas)
+## Las 7 imágenes (9 placas)
 
 | Fichero | Placas | Cómo se genera |
 |---|---|---|
 | `bpvm_pico.uf2` | Pico 2 (a1) · Metro RP2350B (a2) | `ninja -C bpgenvm-c/pico/build` |
 | `bpvm_esp32_merged.bin` | ESP32-S3 (b1) | `idf.py build` + `merge_bin` en `bpgenvm-c/esp32` |
+| `bpvm_esp32c3_merged.bin` | ESP32-C3 (b4, V6) | `idf.py build` + `merge_bin` en `bpgenvm-c/esp32c3` |
+| `bpvm_esp32c6_merged.bin` | ESP32-C6 / C6-LCD-1.3 (b5, V6) | `idf.py build` + `merge_bin` en `bpgenvm-c/esp32c6` |
 | `bpvm_esp32p4_merged.bin` | P4 Kit (b2) · P4 Waveshare (b3) | `idf.py build` + `merge_bin` en `bpgenvm-c/esp32p4` |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575 (c1) | STM32CubeIDE |
 | `bpvm_stm32_dk2.bin` | Discovery U5G9J (c2) | STM32CubeIDE |
 
 **Una imagen sirve a dos placas en dos casos**, y no es un atajo: la variante se decide
 en runtime. En RP2350 el micro se identifica solo (A/B: 30 o 48 GPIO, PSRAM); en el P4
-el panel sale del **ENV** (`display=st7701`), no de la imagen (#311).
+el panel sale del **ENV** (`display=st7701`), no de la imagen (#311). En V6 son **siete
+ficheros**: el empaquetador copia `*.uf2` y `*.bin` sin contar, así que la casilla de
+`PUBLICAR.md` cuenta siete a mano (`ls *.uf2 *.bin | wc -l`).
 
 ## Sellado
 
@@ -37,7 +41,7 @@ Y antes de publicar se comprueba que nadie la ha tocado:
 cd dist/firmware && sha256sum -c SHA256SUMS.txt
 ```
 
-`SHA256SUMS.txt` **sí va al repo**; los binarios **no** (son 4 MB y se adjuntan a la
+`SHA256SUMS.txt` **sí va al repo**; los binarios **no** (son unos 6 MB y se adjuntan a la
 release de GitHub). Así queda escrito en el historial qué se probó exactamente, sin
 engordar el repo. El manifiesto también se copia al registro de H13
 (`docs/H13_PRUEBAS.md`) cuando cada placa se da por cerrada.
@@ -51,13 +55,13 @@ mientras se probaba nos costó una cacería de un bug inexistente: el mecanismo 
 
 ## Los `_merged` se flashean en el offset 0
 
-Los dos ESP32 llevan `_merged` en el nombre y no es decorativo: son **bootloader +
+Los cuatro ESP32 llevan `_merged` en el nombre y no es decorativo: son **bootloader +
 tabla de particiones + aplicación en un solo fichero**, listos para grabar de una pieza
 en el **offset 0**. El binario suelto de la aplicación (`bpvm_esp32*.bin` del directorio
 de compilación) va en 0x10000 y **por sí solo no arranca**; publicar ese sería regalar un
 ladrillo a quien no tenga ya el bootloader puesto. El offset del bootloader NO es el
-mismo en los dos chips (0x0 en el S3, 0x2000 en el P4), otra razón para no dejar que
-nadie lo componga a mano.
+mismo en todos los chips (0x0 en S3, C3 y C6; 0x2000 en el P4), otra razón para no
+dejar que nadie lo componga a mano.
 
 Se generan con los parámetros que dice el propio build (`build/flasher_args.json`), no
 de memoria:
