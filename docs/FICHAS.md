@@ -5495,8 +5495,9 @@ pendientes»*.
    (una `native` con `double`, AOT activado: ¿corre, falla o se rechaza?) — y con el dato, V6 o V7.
 5. **Publicar**: el checklist de `PUBLICAR.md` entero, `dist/` con las siete imágenes, tag `v6.0`, push.
 
-**Avance (12-sep, noche)** — pasos 1 y 2 hechos (guardas del PC en verde; siete imágenes del árbol `27d3c848`,
-selladas en `dist/firmware/`), y las placas, cada una regrabada desde `dist` y pasada por `tanda.py`:
+**Avance (12-sep, noche)** — pasos 1 a 4 hechos (guardas del PC en verde; siete imágenes selladas en
+`dist/firmware/` — las ESP del árbol `b759b632`, Pico y STM32 byte-idénticas salvo el sello de hora a las del
+árbol anterior), y las **nueve placas**, cada una regrabada desde `dist` y pasada por `tanda.py`:
 
 | placa | imagen | tanda | además |
 |---|---|:---:|---|
@@ -5508,7 +5509,7 @@ selladas en `dist/firmware/`), y las placas, cada una regrabada desde `dist` y p
 | **ESP32-S3** | `bpvm_esp32_merged.bin` (COM9, puente CH343) | 4/4 | PSRAM 8 MB, VM 7,3 MB |
 | **P4 kit** | `bpvm_esp32p4_merged.bin` (COM14) | 6/6 | **`SqlDemo` == host** con el pack nuevo (`#503`, `#504`); `Bench` nativo 32 ms |
 | **P4 Waveshare** | ídem, `display=st7701` → 480×800 | 6/6 | captura vista; **`SqlDemo` y `SqlDemoSd` (tarjeta) == host**; **`#379` cerrada** (8/8) |
-| **ESP32-C6** | `bpvm_esp32c6_merged.bin` | ⏳ | Windows le dio el COM3 de la C3; falta re-enchufar |
+| **ESP32-C6** | `bpvm_esp32c6_merged.bin` (COM3) | 6/6 | 240×240, captura vista; **`#502` medida y cerrada** (un `.mod` con el blob del P4 reiniciaba la placa; ahora se ignora con mensaje) |
 
 Lo que la tanda destapó, ya arreglado y en sus fichas: la stdlib embebida sin `I2c.mod` (`30f111ad`), la suite del
 frontend roja desde `#458`, `#503`, `#504`, el `Str.mod` MOD6 dentro del pack, `pwralto:1` en la referencia.
