@@ -27,6 +27,42 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (12-sep, tarde — sesión cortada por el límite de tokens) — 🧊 **V6 CONGELADA** (`ae60e2e9`); `D1` a medias, **commiteada como WIP** (`e9fc30f0`)
+
+**Lo que hay que saber en un minuto:**
+1. **El freeze está marcado** (`ae60e2e9`, raya de código en `843e2d0a`). Después han entrado **seis bugs con
+   ficha y reproducción**, todos del inventario de `D1`: `#496` (SQLite/Orm sin `import Core`), `#497`
+   (`README.es.md` destruido desde el 22-ago, publicado así en v5.0), `#498` (seis samples rotos + el
+   diagnóstico que engañaba), `#499` (rutas de 128-255 → «IO error»), y **`#501`** (miVM: un `sleep` como
+   última acción de `main` mataba 1 de cada 5 ejecuciones — un yield tardío pisaba el `HALT`; `5d02dfd1`).
+   `#500` (V7, Eduardo): la norma de versiones de las dependencias. 59 PASS.
+2. **`D1` está escrita pero NO verificada ni leída**: el commit `e9fc30f0` lleva toda la documentación (ES y EN,
+   manual/referencia/gui/PENDIENTES/QUICKSTART/INSTALAR/guía IDE/RELEASES v6.0/portal) escrita por nueve
+   editores en paralelo, cada uno compilando sus fragmentos, más `tools/doc_frags.py` y `tools/samples_sweep.py`
+   y el checklist nuevo de `PUBLICAR.md`. **Un verificador independiente estaba en marcha al cortar**: su informe,
+   si terminó, está en
+   `C:/Users/Eduardo/AppData/Local/Temp/claude/C--lenguajes-pm-miVM/92dd594f-bfc5-43df-be19-03d8a397bfe5/tasks/waifpc93s.output`
+   (clave `result.verificacion`). Si no está, se repite la verificación: correr `doc_frags.py` y
+   `samples_sweep.py`, y `grep` de las falsedades de la lista de la sección `D1` de `FICHAS`.
+3. **Eduardo no ha leído aún las notas de versión** (`docs/RELEASES.md`, sección v6.0): su introducción va tal
+   cual como primer bloque; el resto lo escribió un editor desde el inventario. **Leerlas con él es lo primero.**
+   Y la sección **18.4 de `gui.html`** («Dos formas de poner en marcha la interfaz: `run()` y `start()`») la pidió
+   él con dos detalles concretos: `run()` no vuelve nunca en placa, y en las dos formas los handlers corren en el
+   hilo del GUI — lo que cambia es el principal (parado en `join()` con `run()`, corriendo a la vez con `start()`,
+   y entonces datos compartidos entre dos hilos).
+
+⏭️ **Al retomar, en orden**: (1) leer el informe del verificador (o repetirlo) y arreglar lo que señale; (2) leer
+`RELEASES.md` v6.0 con Eduardo; (3) cerrar `D1` en `FICHAS` con un commit que no diga WIP; (4) **`F1`**: el barrido
+de `samples/` (`samples_sweep.py`), `doc_frags.py`, `compat.sh check`, una tanda de `tanda.py` por familia
+(regrabar la Metro antes: sigue con el firmware del 9-sep), la dist con siete imágenes; (5) publicar v6.0 y el
+push (unos 470 commits por delante de `origin`).
+
+📌 **Estado del repo**: todo commiteado, **sin push**. Host en sabor `gui1-lvgl0`. Placas al cortar: DK2 (COM12),
+Pico (COM22), Metro (COM4). miVM reconstruida con `#501`; frontend con el diagnóstico de `#498`; los cinco
+firmwares compilan con `#499` (grabadas hoy C6, P4 y DK2 con el `INFO` de `screenW/H`, antes de `#499`).
+
+---
+
 ## ⏭️ AL RETOMAR (12-sep) — `G2`, `C1` y `T1` cerrados el 11-sep; **lo primero: marcar el 🧊 CODE FREEZE V6** y empezar `D1`
 
 **Decisión de Eduardo al cerrar el día (11-sep):** *«cuando terminemos `T1` congelamos código. Y por hoy
