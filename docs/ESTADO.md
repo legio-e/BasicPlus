@@ -42,8 +42,22 @@
    y el checklist nuevo de `PUBLICAR.md`. **Un verificador independiente estaba en marcha al cortar**: su informe,
    si terminó, está en
    `C:/Users/Eduardo/AppData/Local/Temp/claude/C--lenguajes-pm-miVM/92dd594f-bfc5-43df-be19-03d8a397bfe5/tasks/waifpc93s.output`
-   (clave `result.verificacion`). Si no está, se repite la verificación: correr `doc_frags.py` y
-   `samples_sweep.py`, y `grep` de las falsedades de la lista de la sección `D1` de `FICHAS`.
+   (clave `result.verificacion`). **Terminó justo al cortar — leído por encima, esto es lo que dice:**
+   ✅ las falsedades del inventario han desaparecido de todos los documentos (0 apariciones vivas); ✅ la
+   introducción de Eduardo en `RELEASES.md` es byte-idéntica; ✅ `samples_sweep.py` 347/347; ✅ la mayoría de
+   las cifras de v6.0 cuadran con FICHAS. ❌ **Tres graves a corregir antes de cerrar `D1`**: (a) manual §8.3,
+   referencia y RELEASES afirman que «el C3/C6 rechaza el blob nativo del P4 por ABI de coma flotante y sigue
+   interpretando» — **el código no lo respalda** (`loader.c:437 → mdn_load` valida magic/version/abi/arch;
+   comprobar qué pasa de verdad y decir eso); (b) `guia-ide.html:311` «la biblioteca estándar no se sube nunca»
+   es **falso** desde `#466` (el IDE pregunta por cada dependencia y sube a `/lib` la que falte o sea vieja);
+   (c) `doc_frags.py` como gate de `PUBLICAR.md` da **126 fallos**, todos «falta contexto» (los editores
+   compilaron con arneses privados y los fragmentos que dependen del anterior no llevan `data-bp="sigue"`):
+   o se encadenan los fragmentos en el HTML o el gate no puede exigir código 0. Medias: PrintBench «3,5-5,3×»
+   cuando la Pico da 1,9× (rango real 1,9-5,3); «en el S3 y el P4 el otro núcleo atiende el cable» es
+   **invención** (`CONFIG_FREERTOS_UNICORE=y`); `Machine.tempC` sí existe en STM32 (ADC1, `BOARD_HAS_ADC_TEMP`);
+   el resto de los README sigue anunciando V5 fuera del bloque Estado; el parque baila entre 8 y 9 placas
+   (FICHAS dice **nueve**). Bajas: desajustes ES/EN previos a V6, un SVG con `.bpi`, un pie «cierre de V2»,
+   `samples/pendientes/CatchSinTipo.bp` ya compila y debe volver a `samples/`.
 3. **Eduardo no ha leído aún las notas de versión** (`docs/RELEASES.md`, sección v6.0): su introducción va tal
    cual como primer bloque; el resto lo escribió un editor desde el inventario. **Leerlas con él es lo primero.**
    Y la sección **18.4 de `gui.html`** («Dos formas de poner en marcha la interfaz: `run()` y `start()`») la pidió
