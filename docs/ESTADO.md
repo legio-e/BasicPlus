@@ -27,6 +27,27 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (12-sep, noche) — ✅ **`D1` CERRADA** (`72f9706d`); **`F1` en curso**: las guardas del PC pasadas, faltan las siete imágenes y las nueve placas
+
+**Lo que pasó al retomar** (la sesión de la tarde se cortó con el verificador de `D1` recién terminado):
+1. **Los hallazgos del verificador, corregidos** (`72f9706d`). Los tres graves: (a) *«el C3/C6 rechaza el blob
+   del P4 por ABI»* era **falso** en cuatro documentos — el guardián de la float-ABI existe en los packs, no en la
+   sección `native` del `.mod`, y el IDE compila con los flags del P4 para cualquier RISC-V → **ficha `#502`**
+   (nadie lo ha medido; se mide en `F1` con el C6); (b) *«la stdlib no se sube nunca»* → la regla real de `#466`;
+   (c) `doc_frags.py` en rojo con 126 «fallos» que eran «falta contexto» → la clase **TROZO** en la herramienta
+   (0 FALLO; y con tres roturas inyectadas, tres FALLO). Más las medias y bajas (PrintBench 1,9-5,3×, UNICORE,
+   `tempC` en STM32, las dos portadas a V6, nueve placas / verificadas ocho, `CatchSinTipo.bp` de vuelta a
+   `samples/`…). El detalle, en la sección `D1` de `FICHAS`.
+2. **Eduardo leyó `RELEASES.md` v6.0 y la dio por buena** (*«OK»*) → `D1` cerrada en `FICHAS`, `F1` abierta con su
+   plan en cinco pasos (guardas del PC → siete imágenes → nueve placas por `tanda.py` → lo manual: BD en P4,
+   `#379`, `#502` → publicar).
+
+⏭️ **Al retomar**: seguir el plan de `F1` en `FICHAS` por donde diga la entrada de abajo de ésta (las guardas del
+PC se corren primero y se anota su resultado aquí). Placas al escribir esto: sólo la **Pico (COM22)**; Eduardo va
+conectando por el orden del plan (Pico → Metro → C3 → C6 → S3 → P4 kit → P4 Waveshare → Nucleo → DK2).
+
+---
+
 ## ⏭️ AL RETOMAR (12-sep, tarde — sesión cortada por el límite de tokens) — 🧊 **V6 CONGELADA** (`ae60e2e9`); `D1` a medias, **commiteada como WIP** (`e9fc30f0`)
 
 **Lo que hay que saber en un minuto:**

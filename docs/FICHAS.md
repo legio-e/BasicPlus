@@ -103,8 +103,8 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **0** | — (`#473` cerrada el 10-sep) |
-> | **hitos** | **2** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6 — EN VIGOR desde el 12-sep** (sólo bugs, con ficha y reproducción) → `D1` (documentación, **en curso**) → `F1` (pruebas finales) |
+> | **fichas de V6** | **1 por decidir** | `#502` (el AOT del C3/C6 no se rechaza): V6 si se reproduce en la tanda de `F1` con el C6 y el arreglo son las ~10 líneas del IDE; si no, V7 con `#493` y `#500` |
+> | **hitos** | **1** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6 — EN VIGOR desde el 12-sep** (sólo bugs, con ficha y reproducción) → ~~`D1`~~ (✅ 12-sep) → `F1` (pruebas finales, **en curso desde el 12-sep**) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -5094,7 +5094,7 @@ estas N no se repiten», el 27-ago habría sido una consulta y no una tarde.
 </details>
 
 
-#### 📚 `D1` — LA DOCUMENTACIÓN DE V6 (abierto 12-sep · **EN CURSO**)
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V6 (abierto 12-sep · ✅ **CERRADO el 12-sep**, `72f9706d`)
 
 **Cómo se planificó**: no leyendo los documentos sino **midiéndolos**. Cuatro lectores en paralelo (qué cambió en
 V6 de cara al usuario; qué afirma cada documento de usuario; las deudas marcadas «esto es de `D1`» en las fichas; y
@@ -5180,7 +5180,7 @@ para lo que estaba el verificador.
   en las dos VMs; `samples_sweep`: **348/348**); `fromtest.bp`/`hello.bp` anotan que su import inexistente es a
   propósito.
 
-⏭️ **Para cerrar `D1`**: la lectura de `RELEASES.md` v6.0 por Eduardo, y su decisión sobre `#502` (V6 o V7).
+✅ **Cerrada el 12-sep**: Eduardo leyó `RELEASES.md` v6.0 y la dio por buena. `#502` queda para decidirlo con datos en `F1` (el C6 pasa por la tanda de todas formas).
 
 #### 🧊 CODE FREEZE V6 — antes de `D1` (decidido por Eduardo, 11-sep)
 
@@ -5384,8 +5384,8 @@ tocar y cómo se comprueba.
 | **G2** | **Revisión del modelo gráfico**: contenedores con sus hijos, cascada nuestra, serializador | ✅ **11-sep**, en tres commits: `50fcbc46` (los 3 arreglos de C), `65a50f0e` (`Container` + `OwnerList` + cascada BP), `65e9f558` (`toJson()` + ida y vuelta con `main.win`, 58 PASS, Discovery). Y de paso `#494` |
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ✅ **11-sep** (`7be021bc`, `843e2d0a`): `tools/tanda.py` + la **prueba de fuego** en Pico, C6, P4, DK2 (y la Metro, cazada con firmware viejo). Fase 2 dada por hecha por Eduardo: *«con las 2 capturas se puede verificar perfectamente»*. Lo visto, a V7 y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
-| **D1** | **la DOCUMENTACIÓN** de V6 | 🟡 **ESCRITA Y VERIFICADA el 12-sep** — los doce pasos hechos, el verificador independiente pasado y sus hallazgos corregidos (ver sección `D1`). Falta la **lectura de `RELEASES.md` por Eduardo** para cerrarla |
-| **F1** | **las PRUEBAS FINALES** de V6 | ⬜ **ABIERTO · V6** (Eduardo, 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
+| **D1** | **la DOCUMENTACIÓN** de V6 | ✅ **12-sep** (`e9fc30f0` los nueve editores · `72f9706d` lo que cazó el verificador). Los doce pasos hechos, el verificador independiente pasado, `RELEASES.md` v6.0 leída y dada por buena por Eduardo (*«OK»*). Dejó dos herramientas en el checklist: `samples_sweep.py` y `doc_frags.py` |
+| **F1** | **las PRUEBAS FINALES** de V6 | 🟡 **EN CURSO desde el 12-sep** (abierto por Eduardo el 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
 
 📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:
 *«`#475` y `#444` hay que darle un ítem propio ya que es implementación nueva. Del resto, hay que ir
@@ -5408,6 +5408,27 @@ son suyos. **El orden de cierre de V6 queda así:**
 
 Y la consecuencia práctica, dicha por él: *«lo que toca durante unos días es ir resolviendo
 pendientes»*.
+
+##### 🧪 `F1` — EL PLAN (12-sep, al cerrar `D1`)
+
+**Orden**: primero lo que no necesita placa, luego las imágenes, luego las placas — y las placas
+**por placa** con la tanda de `T1`, Eduardo rotando (*«probada / en curso / conecta»*), del mismo
+árbol y con las imágenes recién grabadas.
+
+1. **Las guardas del PC** (sin placa): `compat/compat.sh check` (59 PASS y ninguna línea `!! stderr:`),
+   `tools/samples_sweep.py` (348/348), `tools/doc_frags.py` (0 FALLO), `scripts/h13-errores.sh`, la guarda
+   de las cuatro portadas.
+2. **Las siete imágenes del mismo árbol**, en una tanda: `bpvm_pico.uf2` (ninja), S3/C3/C6/P4 (`idf.py build`
+   en cada carpeta), Nucleo y DK2 (`stm32cubeidec` headless). Verificar el **artefacto** (fecha y tamaño), no el
+   log; `serverBuild` no identifica la imagen (`T1`), así que se anota el CRC/sello de cada fichero.
+3. **Nueve placas, cada una regrabada con su imagen y pasada por `tanda.py`** con la lista de la prueba de fuego
+   (4 puras + 2 gráficas donde haya pantalla). Orden propuesto: Pico 2 → Metro (regrabar: lleva firmware del
+   9-sep, `T1` la cazó por conducta) → C3 → C6 → S3 → P4 kit → **P4 Waveshare (regrabar + `display=st7701`,
+   la única prueba del panel por ENV)** → Nucleo → DK2.
+4. **Lo que la tanda no cubre y se hace a mano en su placa**: BD en el P4 (y en la Metro si lleva PSRAM):
+   `SqlDemoSd`/`SqlDemo`; **`#379`** en el P4 con la tarjeta (`tools/wire_serie.py ciclo`); **`#502`** en el C6
+   (una `native` con `double`, AOT activado: ¿corre, falla o se rechaza?) — y con el dato, V6 o V7.
+5. **Publicar**: el checklist de `PUBLICAR.md` entero, `dist/` con las siete imágenes, tag `v6.0`, push.
 
 ##### 🔢 El PARQUE que tiene que probar `F1` — **7 imágenes, 9 placas**
 
