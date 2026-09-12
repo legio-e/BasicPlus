@@ -368,10 +368,9 @@
     <td>ESP32-C3 y ESP32-C6</td>
     <td>—</td>
     <td>también <em>interpretado</em>: son RISC-V <em>sin FPU</em> y el único
-        destino RISC-V del IDE es el del P4 (con FPU) — <strong>no actives AOT en un
-        proyecto destinado a ellas</strong>: el cargador del <code>.mod</code> no
-        distingue las dos ABIs y un blob del P4 que use la FPU fallaría en la placa
-        (<code>#502</code>)</td>
+        destino RISC-V del IDE es el del P4 (con FPU); su firmware no carga bloques
+        nativos, así que si activas AOT el blob del P4 se ignora y la función corre
+        interpretada (<code>#502</code>, V7)</td>
   </tr>
 </table>
 <p class="warn">

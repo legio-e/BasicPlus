@@ -2444,9 +2444,9 @@ imported exactly like one living in <code>/lib</code>.</p>
       <td>128 KB</td>
       <td>A single USB connector: the wire goes over USB-Serial-JTAG and the console over
           UART0. Flashing = BOOT+RESET by hand. <strong>No AOT</strong>: they are RV32
-          without FPU and the IDE's only RISC-V target is the P4's (with FPU); the loader
-          does not tell the two ABIs apart, so do not enable AOT in a project meant for
-          them (ticket <code>#502</code>). Packs on the C6. The <strong>ESP32-C6-LCD-1.3</strong> brings the
+          without FPU and the IDE's only RISC-V target is the P4's (with FPU); their
+          firmware loads no native block and <code>native</code> functions run
+          interpreted (ticket <code>#502</code>, V7). Packs on the C6. The <strong>ESP32-C6-LCD-1.3</strong> brings the
           first SPI display (ST7789 240×240, no touch) and runs the GUI within those
           128 KB.</td></tr>
   <tr><td>ESP32-P4 (RISC-V)</td>
@@ -2626,7 +2626,7 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><th>family</th><th><code>native</code></th></tr>
   <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>accelerated — target <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
   <tr><td>ESP32-P4 (RV32 with FPU)</td><td>accelerated — target <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
-  <tr><td>ESP32-C3 · C6 (RV32 without FPU)</td><td>interpreted — do not enable AOT: the only RISC-V target is the P4's (<code>ilp32f</code>) and the <code>.mod</code> loader does not check the floating-point ABI (<code>#502</code>)</td></tr>
+  <tr><td>ESP32-C3 · C6 (RV32 without FPU)</td><td>interpreted: the only RISC-V target is the P4's (<code>ilp32f</code>) and this firmware (<code>ilp32</code>) loads no native blocks — a P4 blob is ignored (<code>#502</code>, V7)</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td><td>interpreted (no AOT; out of plan)</td></tr>
   <tr><td>PC (both VMs)</td><td>interpreted; the host has its own native path for tests only</td></tr>
 </table>

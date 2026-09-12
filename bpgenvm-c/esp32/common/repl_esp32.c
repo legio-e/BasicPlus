@@ -69,8 +69,26 @@
  * O sea que la puerta por capacidad sigue siendo lo correcto —y sigue haciendo
  * falta para el S3—, pero el diagnóstico que la motivó atribuía al chip lo que
  * era un descuido del build. Un «no se puede» que era un «no está pedido». */
-#if BPVM_ESP_AOT_MDN && defined(__has_include)
-#  if __has_include("esp_cache.h")
+/* #503 (12-sep, F1) — LA GUARDA DE ARRIBA ESTUVO MUERTA DEL 31-AGO AL 12-SEP.
+ * Decia `#if BPVM_ESP_AOT_MDN && defined(__has_include)`: como nadie define
+ * BPVM_ESP_AOT_MDN antes de llegar aqui, el preprocesador lo evalua a 0, el
+ * `__has_include` no se pregunta nunca y el `#ifndef` de abajo lo deja en 0 —
+ * en el P4 tambien. Consecuencia: `bpvm_mdn_escanear` no se enlazaba en NINGUNA
+ * imagen ESP32 (el .map del P4 no lo tenia), el puente `.mdn` del pack de SQLite
+ * no se cargaba y `SqlDemo` moria con «falta el codigo nativo del pack 'SQLI'»
+ * — una funcion de V5 rota trece dias sin que nada lo dijera, porque Bench
+ * interpretado imprime los mismos numeros y la BD no se volvio a probar en el
+ * P4 hasta las pruebas finales de V6. Lo cazo F1.
+ *
+ * La condicion que se queria escribir es por CAPACIDAD (#465), y son DOS:
+ *   (a) la API de cache (esp_cache.h): sin ella no hay RAM ejecutable coherente;
+ *   (b) que la ABI de coma flotante del firmware sea la que el IDE emite para
+ *       RISC-V (`ilp32f`, destino riscv32-esp-p4). El C3 y el C6 son `ilp32`:
+ *       cargarian un blob del P4 y fallarian al tocar la FPU (#502). Hasta que
+ *       tengan su destino, aqui NO se carga nada y sus `native` van interpretadas
+ *       — que es lo que la documentacion de V6 dice de ellos. */
+#if !defined(BPVM_ESP_AOT_MDN) && defined(__has_include)
+#  if __has_include("esp_cache.h") && defined(__riscv_float_abi_single)
 #    define BPVM_ESP_AOT_MDN 1
 #  endif
 #endif

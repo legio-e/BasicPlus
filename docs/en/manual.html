@@ -862,12 +862,11 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       <tr><td>ESP32-P4 (RISC-V with FPU)</td>
           <td>AOT-accelerated (target <code>riscv32-esp-p4</code>, since V4).</td></tr>
       <tr><td>ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
-          <td><strong>Do not enable AOT</strong> in a project meant for them. The IDE's
-              only RISC-V target is the P4's (<code>ilp32f</code> ABI, with FPU), and the
-              <code>.mod</code> loader only checks the architecture, not the floating-point
-              ABI: a P4 blob that uses the FPU is not rejected, it fails on the board. An
-              <code>ilp32</code> target still has to be added (ticket
-              <code>#502</code>).</td></tr>
+          <td>Interpreted. The IDE's only RISC-V target is the P4's (<code>ilp32f</code>
+              ABI, with FPU); the C3/C6 firmware (<code>ilp32</code>) loads no native block,
+              so a P4 blob is ignored and the function runs interpreted. An
+              <code>ilp32</code> target still has to be added (ticket <code>#502</code>,
+              V7).</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
           <td>Interpreted — same semantics, no speedup. The AOT emits ARM and
               RISC-V, not Xtensa; no date, outside the plan.</td></tr>

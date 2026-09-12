@@ -52,11 +52,10 @@ sin activar —8 MB parados—, y ahora la VM la usa; y los **packs funcionan ta
 el S3 y en el C6** (el mapeo de la zona vivía en el directorio del P4 y los demás no
 lo llamaban).
 
-Lo que no cambia: el S3 es Xtensa y **no tiene AOT**; y para el C3 y el C6 **no
-actives AOT** por ahora: el compilador sólo tiene el destino RISC-V con FPU del P4
-(`ilp32f`), y el cargador del `.mod` comprueba la arquitectura pero no la ABI de coma
-flotante, así que un blob del P4 que use la FPU no se rechaza — falla en la placa. Falta
-dar de alta el destino `ilp32` (ficha `#502`).
+Lo que no cambia: el S3 es Xtensa y **no tiene AOT**; y en el C3 y el C6 las funciones
+`native` corren **interpretadas**: el compilador sólo tiene el destino RISC-V con FPU del
+P4 (`ilp32f`) y el firmware de esos dos (`ilp32`) no carga ningún bloque nativo — un blob
+del P4 se ignora. Falta dar de alta el destino `ilp32` (ficha `#502`, V7).
 
 ### Memoria por placa
 
@@ -314,6 +313,11 @@ informe del error va por `stderr` en el PC y en el `errorMessage` del `EXITED` e
 
 - **El GC de la VM Java descarrilaba** desde julio con cualquier cadena vacía: objetos
   vivos barridos y un `use-after-free` mucho después. El arnés de paridad lo tapaba.
+- **SQLite estaba rota** (las pruebas finales de V6 lo cazaron): el puente nativo del
+  pack era de una ABI anterior a la de la VM de V6 y se rechazaba al cargar, y en el P4
+  además el firmware llevaba desde final de agosto sin cargar ningún bloque nativo. Pack
+  regenerado (`packs/SQLite.pack`, hay que **volver a grabarlo** en la placa) y firmware
+  del P4 arreglado: `SqlDemo` da en el P4 la misma salida que en el PC.
 - **Guardar en un `word[]`** en la VM-C ponía a cero el elemento siguiente, y en el
   último escribía fuera del array. Todas las placas.
 - **Un `catch` sin tipo** volcaba memoria de la VM por pantalla (arriba).

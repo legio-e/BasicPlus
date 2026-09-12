@@ -103,7 +103,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V6** | **1 por decidir** | `#502` (el AOT del C3/C6 no se rechaza): V6 si se reproduce en la tanda de `F1` con el C6 y el arreglo son las ~10 líneas del IDE; si no, V7 con `#493` y `#500` |
+> | **fichas de V6** | **0** | `#502` queda cerrada **a nivel de firmware** por `#503` (el C3/C6 no cargan ningún `.mdn`: `ilp32`); el destino `ilp32` del IDE sigue siendo de V7, con `#493` y `#500` |
 > | **hitos** | **1** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6 — EN VIGOR desde el 12-sep** (sólo bugs, con ficha y reproducción) → ~~`D1`~~ (✅ 12-sep) → `F1` (pruebas finales, **en curso desde el 12-sep**) |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
@@ -2304,7 +2304,55 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
-#### 🔴 `#502` — el AOT para el C3/C6 no se rechaza: el IDE compila el `.mdn` con la ABI del P4 (`ilp32f`) y el cargador del `.mod` no mira la ABI de coma flotante (abierta 12-sep, del verificador de `D1`)
+#### ✅ `#504` — el PUENTE `.mdn` del pack de SQLite era de ABI 4 y la VM habla ABI 6: SQLite ROTA en todas las placas desde el 23-ago (abierta y CERRADA el 12-sep, de `F1`)
+
+**La conclusión del 25-ago era MEDIA VERDAD.** `a730aec6` dijo *«regenerar SQLite no existía: el `.npk`
+no lleva el ABI de los helpers»* — cierto para el **motor** (`sqlite.npk.*`, que se valida por arquitectura y
+float-ABI), pero el pack lleva **dos** piezas por familia y la otra, el **puente** `SQLite.mdn.ARMV8/RISCV`
+(las `native` de `SQLite.bp` compiladas), **sí** pasa por `MDN_ABI_VERSION`. Los del pack eran del 20-ago
+(ABI 4); la VM subió a 6 el 23-ago (N1). Desde entonces el puente se rechazaba —`MDN: RECHAZADO — ABI 4, esta
+VM habla 6`— y cada `sql_open` caía al cuerpo interpretado: *«falta el código nativo del pack 'SQLI' v1»*.
+El propio 25-ago lo dejó escrito: *«confirmado al cargar; confirmarlo en uso pide correr un sample del ORM,
+que es otra cosa y no está hecho»*. No se hizo hasta `F1`. **Y en el P4 ni se veía**: `#503` tapaba este.
+
+**Arreglo**: los dos `.mdn` regenerados con los toolchains cruzados por el mismo paso que da el IDE
+(`AotBuild.buildPackTargets`, ahora también por línea de comandos: `tools/packtool/PackAot.java`), ABI 6 y 16
+thunks cada uno; `bpstdlib/sqlite/nativo/` actualizado, `SQLite.pack` reconstruido (mismo tamaño, 1 130 496 B;
+distinto contenido) y `packs/SQLite.pack` con él. **Medido en el P4**: `SqlDemo` da la salida **byte-idéntica**
+a la del host (`make test-sqldemo`): 6 filas, media 21, dos sensores. `LEEME.md` de `bpstdlib/sqlite/` ya lo
+decía: *«si tocas `SQLite.bp` hay que regenerarlos con toolchain»* — faltaba decir «y si sube
+`MDN_ABI_VERSION`, también».
+
+📌 Lo que enseña, otra vez: **un pack con nativo son DOS artefactos por familia y dos gates distintos**; y
+*«confirmado al cargar»* no es *«confirmado en uso»* — la prueba de la BD tiene que EJECUTAR una consulta,
+que es lo que hace ahora el paso 4 de `F1`.
+
+#### ✅ `#503` — el P4 llevaba TRECE DÍAS sin cargar ningún `.mdn`: una guarda muerta en `repl_esp32.c` desde `#465` (abierta y CERRADA el 12-sep, de `F1`)
+
+**Qué era.** `#465` (31-ago) cambió la guarda del AOT dinámico del ESP32 de `#if defined(__riscv)` a una por
+capacidad: `#if BPVM_ESP_AOT_MDN && defined(__has_include)` … `#define BPVM_ESP_AOT_MDN 1`. Como nadie define
+`BPVM_ESP_AOT_MDN` antes, el preprocesador lo evalúa a 0, el `__has_include("esp_cache.h")` no se pregunta
+nunca y el `#ifndef` de debajo lo deja en 0 — **en el P4 también**. El comentario decía *«para el S3 y el P4
+el resultado es EXACTAMENTE el mismo que antes»*, y era falso. **Medido**: `bpvm_mdn_escanear` no estaba en
+el `.map` del P4 (0 referencias; la Pico, 3). Consecuencia: el escaneo de `.mdn` (FS + pack) no existía en el
+P4 → el puente del pack de SQLite nunca se buscaba, y con `#504` detrás, la BD estaba rota por dos causas
+superpuestas. Nada lo dijo en trece días: `Bench` interpretado imprime los mismos números (H13 hallazgo 40,
+otra vez) y la BD no se volvió a ejecutar en el P4 hasta `F1`.
+
+**Arreglo** (`repl_esp32.c`): la condición que se quería escribir, y con las DOS capacidades:
+`#if !defined(BPVM_ESP_AOT_MDN) && defined(__has_include)` / `__has_include("esp_cache.h") &&
+defined(__riscv_float_abi_single)`. La segunda es **`#502` cerrada a nivel de firmware para V6**: el C3 y el C6
+son `ilp32` y no cargan ningún `.mdn` hasta que exista su destino; sus `native` van interpretadas, que es lo
+que la documentación dice de ellos. S3, C3 y C6 salen **byte-idénticos** salvo el descriptor de la app
+(`git describe` + hora). **Medido en el P4 tras el arreglo**: `SqlDemo` byte-idéntico al host (con `#504`), y
+el nativo **embebido** en el `.mod` (N1.4) también corre: `Bench` `fib(28)` **32 ms** nativo frente a
+**4 540 ms** interpretado (142×).
+
+📌 **Lo que enseña**: una guarda por capacidad que se autoalimenta (`#if X … #define X`) es una guarda
+muerta, y el que la escribe lee la intención, no el preprocesador. La prueba que la habría cazado el mismo
+día es el `.map` (¿está el símbolo?), que ahora queda en `F1`.
+
+#### ✅ `#502` — el AOT para el C3/C6 no se rechaza: el IDE compila el `.mdn` con la ABI del P4 (`ilp32f`) y el cargador del `.mod` no mira la ABI de coma flotante (abierta 12-sep, del verificador de `D1` · **CERRADA el mismo día a nivel de firmware por `#503`**: la guarda del `.mdn` en ESP32 exige `ilp32f`, así que el C3/C6 no cargan ninguno y sus `native` van interpretadas; el destino `ilp32` del IDE, a V7)
 
 **Lo que decían cuatro documentos** (manual §8.3, referencia §16.4 y §17.4, `RELEASES` v6.0): *«en el C3/C6 la
 placa rechaza el blob del P4 por ABI de coma flotante, lo dice en el log y sigue interpretando»*. **Falso**, y

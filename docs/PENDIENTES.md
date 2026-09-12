@@ -311,11 +311,11 @@ su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
   dónde carga cada dependencia (`dep 'Str' -> /app/Str.mod`).
 - **En el ESP32-S3 todo se ejecuta interpretado** (`#488`, fuera del plan). El AOT
   genera ARM Thumb-2 y RISC-V; **no genera Xtensa**, y de momento no se va a hacer. Las
-  `native function` compilan y corren, pero a la velocidad del intérprete. **En el
-  ESP32-C3 y el C6, no actives AOT** (`#502`): son RISC-V **sin FPU** y el único destino
-  RISC-V del IDE es el del P4 (con FPU, `ilp32f`); el cargador del `.mod` comprueba la
-  arquitectura pero **no la ABI de coma flotante**, así que un blob del P4 que use la FPU
-  no se rechaza — falla en la placa. Dar de alta su destino (`ilp32`) quedó fuera de V6.
+  `native function` compilan y corren, pero a la velocidad del intérprete. **El ESP32-C3
+  y el C6 también corren interpretados** (`#502`): son RISC-V **sin FPU** y el único
+  destino RISC-V del IDE es el del P4 (con FPU, `ilp32f`); su firmware (`ilp32`) no carga
+  ningún bloque nativo, así que un blob del P4 se ignora. Dar de alta su destino (`ilp32`)
+  quedó fuera de V6.
   Aceleran hoy: RP2350, STM32 y ESP32-P4 (en el PC —VM Java y micro simulado— todo es
   interpretado, y así se comparan los tiempos).
 

@@ -14,6 +14,18 @@ diagnosticar (HELLO, PING, LIST, INFO, RUN, KILL, LOG_DUMP).
 
 ⚠️ Desde Git Bash, un argumento que empieza por "/" lo convierte MSYS en una ruta
 de Windows y la placa contesta NOT_FOUND. Usa `MSYS_NO_PATHCONV=1` o cmd.
+
+⚠️ ABRIR EL PUERTO REINICIA LAS ESP (12-sep): el puente USB-UART del P4 (y el de la
+S3) lleva DTR/RTS al EN del chip, como espera esptool, y pyserial los mueve al
+abrir y cerrar. Cada invocacion de esta herramienta es un arranque nuevo: el
+`uptimeMs` del INFO sale de 2-3 s, el log muestra un boot por comando y lo que un
+RUN dejo en RAM (el pack cargado) no sobrevive al siguiente comando. `tanda.py`
+no lo sufre porque mantiene UNA conexion. Para encadenar verbos sin reinicio,
+hacerlo en un solo proceso.
+
+Verbos de packs y env (F1, 12-sep): `packs` (PACK_LS), `pack <f.pack> [arm|riscv]`
+(graba; con arch PODA y SELLA como el panel del IDE, via tools/packtool/PackTool),
+`packfmt` (PACK_FORMAT: pide OK a Eduardo), `env [clave valor | clave -]`, `reset`.
 """
 import json, sys, time
 
@@ -245,8 +257,128 @@ def cmd_ciclo(w, args):
     print("--- %d ciclos, %d con fallo ---" % (n, malos))
 
 
+def cmd_packs(w, _):
+    """Que packs hay grabados (PACK_LS)."""
+    w.send("PACK_LS")
+    r = w.esperar("PACK_LS_REPLY", 10)
+    if r is None:
+        print("PACK_LS:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+    print("zona %s B, libres %s, cadena %s, %s pack(s)" % (r.get("regionSize"), r.get("free"),
+          "ok" if r.get("chainOk") else "ROTA", r.get("count")))
+    for pk in r.get("packs") or []:
+        print("  %-12s v%-8s %8s B  %s ficheros" % (pk.get("name"), pk.get("version"), pk.get("size"), pk.get("files")))
+
+
+def cmd_pack(w, args):
+    """Graba un .pack en la zona de packs (F1, 12-sep) por el MISMO camino que el
+    panel de Packs del IDE: `pack <fichero.pack> [arch]`. Con `arch` (arm | riscv)
+    se hace lo que hace el IDE con un pack que lleva motor nativo — PODAR las
+    entradas de las otras familias (el tamano final se declara en el BEGIN) y
+    SELLAR el motor para la direccion que la placa elige (flashAddr/ramBase del
+    BEGIN_REPLY) — llamando a PackBurn.podar/sellar del frontend via un PackTool
+    de scratchpad (`java -cp lexer-java/target/classes;pack/target/classes`).
+    Sin `arch` se graba tal cual: vale para un pack SIN nativo. Un pack universal
+    con .npk grabado tal cual NO sirve: la placa lo ve «SIN realojar».
+    Variables: PACKTOOL_CP y PACKTOOL_DIR (donde este PackTool.class)."""
+    import os, subprocess, tempfile
+    arch = args[1] if len(args) > 1 else None
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    cp = os.environ.get("PACKTOOL_CP", os.path.join(raiz, "lexer-java", "target", "classes") + ";"
+                        + os.path.join(raiz, "pack", "target", "classes"))
+    # PackTool.java vive en tools/packtool/ y se compila a build/packtool/ si falta
+    pt = os.environ.get("PACKTOOL_DIR", os.path.join(raiz, "bpgenvm-c", "build", "packtool"))
+    if not os.path.isfile(os.path.join(pt, "PackTool.class")):
+        os.makedirs(pt, exist_ok=True)
+        jc = subprocess.run(["javac", "-cp", cp, "-d", pt,
+                             os.path.join(raiz, "bpgenvm-c", "tools", "packtool", "PackTool.java")],
+                            capture_output=True, text=True)
+        if jc.returncode != 0: print("javac PackTool:", jc.stderr[-400:]); return
+    tmpd = tempfile.mkdtemp(prefix="pack_")
+    if arch:
+        podado = os.path.join(tmpd, "podado.pack")
+        out = subprocess.run(["java", "-cp", cp + ";" + pt, "PackTool", "podar", args[0], arch, podado],
+                             capture_output=True, text=True)
+        print(out.stdout.strip()); 
+        if out.returncode != 0: print(out.stderr[-400:]); return
+        img = open(podado, "rb").read()
+    else:
+        img = open(args[0], "rb").read()
+    w.send("PACK_BURN_BEGIN", size=len(img))
+    r = w.esperar("PACK_BURN_BEGIN_REPLY", 15)
+    if r is None:
+        print("PACK_BURN_BEGIN:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+    if arch:
+        flash, ram = r.get("flashAddr"), r.get("ramBase")
+        if not flash:
+            print("la placa no dice flashAddr en el BEGIN: no se puede sellar un motor nativo"); return
+        sellado = os.path.join(tmpd, "sellado.pack")
+        out = subprocess.run(["java", "-cp", cp + ";" + pt, "PackTool", "sellar", args[0], arch,
+                              str(flash), str(ram or 0), sellado], capture_output=True, text=True)
+        print(out.stdout.strip())
+        if out.returncode != 0: print(out.stderr[-400:]); return
+        sell = open(sellado, "rb").read()
+        if len(sell) != len(img):
+            print("el sellado cambio el tamano (%d -> %d): no se envia" % (len(img), len(sell))); return
+        img = sell
+    trozo = int(r.get("chunkMax") or 1024)
+    enviados = 0
+    while enviados < len(img):
+        cacho = img[enviados:enviados + trozo]
+        w.id += 1
+        cab = json.dumps({"type": "PACK_BURN_DATA", "id": w.id, "bulk": len(cacho)})
+        w.s.write((cab + chr(10)).encode() + cacho)
+        if w.esperar("PACK_BURN_DATA_REPLY", 20) is None:
+            print("PACK_BURN_DATA fallo en %d B:" % enviados,
+                  [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+        enviados += len(cacho)
+    w.send("PACK_BURN_END")
+    r = w.esperar("PACK_BURN_END_REPLY", 30)
+    print("pack %s : %s" % (args[0], ("grabado en offset %s (%d B)" % (r.get("offset"), len(img))) if r
+          else "FALLO al cerrar %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2]))
+
+
+def cmd_env(w, args):
+    """`env` lista el entorno de la placa; `env clave valor` fija una; `env clave -` la borra."""
+    if not args:
+        w.send("ENV_LS")
+        r = w.esperar("ENV_LS_REPLY", 10)
+        for e in (r.get("entries") or r.get("vars") or []) if r else []:
+            print("  %s=%s" % (e.get("key"), e.get("value")))
+        return
+    if len(args) == 2 and args[1] == "-":
+        w.send("ENV_DEL", key=args[0]); typ = "ENV_DEL_REPLY"
+    else:
+        w.send("ENV_SET", key=args[0], value=" ".join(args[1:])); typ = "ENV_SET_REPLY"
+    r = w.esperar(typ, 10)
+    print("%s %s: %s" % (typ[:-6], args[0], "ok" if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2]))
+
+
+def cmd_packformat(w, _):
+    """PACK_FORMAT: deja la zona de packs VACIA (borra todo lo grabado). Pide
+    confirm=YES en el wire; aqui la confirmacion es haberlo tecleado."""
+    w.send("PACK_FORMAT", confirm="YES")
+    r = w.esperar("PACK_FORMAT_REPLY", 120)
+    print("packformat:", "zona vacia" if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+
+
+def cmd_reset(w, _):
+    """El verbo RESET del wire (reinicia la placa; el USB puede irse y volver)."""
+    w.send("RESET")
+    r = w.esperar("RESET_REPLY", 5)
+    print("reset:", "aceptado" if r else "sin RESET_REPLY (la placa puede haber reiniciado antes de contestar)")
+
+
+def cmd_packfmt(w, _):
+    """PACK_FORMAT: deja la zona de packs VACIA (borra todos). Pide OK a Eduardo antes."""
+    w.send("PACK_FORMAT", confirm="YES")
+    r = w.esperar("PACK_FORMAT_REPLY", 60)
+    print("PACK_FORMAT:", "ok" if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+
+
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
-            "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get}
+            "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get,
+            "packs": cmd_packs, "pack": cmd_pack, "packfmt": cmd_packfmt,
+            "env": cmd_env, "reset": cmd_reset}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:
