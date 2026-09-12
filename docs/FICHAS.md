@@ -104,7 +104,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V6** | **0** | `#502` cerrada en el cargador de `.mdn` y **medida en el C6** (antes reiniciaba la placa; ahora rechaza con mensaje y corre interpretado); el destino `ilp32` del IDE sigue siendo de V7, con `#493` y `#500` |
-> | **hitos** | **1** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ los tres el 11-sep) → 🧊 **CODE FREEZE V6 — EN VIGOR desde el 12-sep** (sólo bugs, con ficha y reproducción) → ~~`D1`~~ (✅ 12-sep) → `F1` (pruebas finales, **en curso desde el 12-sep**) |
+> | **hitos** | **0** | ~~`G2`~~ ~~`C1`~~ ~~`T1`~~ (✅ 11-sep) → 🧊 CODE FREEZE V6 (12-sep) → ~~`D1`~~ (✅ 12-sep) → ~~`F1`~~ (✅ 12-sep: nueve placas con las imágenes publicadas, el ZIP verificado y el IDE probado por Eduardo). **V6 lista para publicar: tag `v6.0` + push** |
 >
 > ✅ **De los hitos de unificación y arquitectura no queda ninguno abierto**: U1–U6, A1–A3, N1,
 > E1, G1, P1 y P2, todos cerrados; `L1` se fue a V7. 🧊 **`A4` ya no cuenta**: el 9-sep salió del
@@ -5468,7 +5468,7 @@ tocar y cómo se comprueba.
 | **T1** | **el SISTEMA DE PRUEBAS** con las placas conducidas — ver `#444` | ✅ **11-sep** (`7be021bc`, `843e2d0a`): `tools/tanda.py` + la **prueba de fuego** en Pico, C6, P4, DK2 (y la Metro, cazada con firmware viejo). Fase 2 dada por hecha por Eduardo: *«con las 2 capturas se puede verificar perfectamente»*. Lo visto, a V7 y `F1` |
 | **P2** | **pantallas SPI** — *después de P1* | ✅ HECHA (4-sep): la pantalla del C6 (ST7789 por SPI), vista y girada en placa |
 | **D1** | **la DOCUMENTACIÓN** de V6 | ✅ **12-sep** (`e9fc30f0` los nueve editores · `72f9706d` lo que cazó el verificador). Los doce pasos hechos, el verificador independiente pasado, `RELEASES.md` v6.0 leída y dada por buena por Eduardo (*«OK»*). Dejó dos herramientas en el checklist: `samples_sweep.py` y `doc_frags.py` |
-| **F1** | **las PRUEBAS FINALES** de V6 | 🟡 **EN CURSO desde el 12-sep** (abierto por Eduardo el 7-sep). **El último.** Se apoya en `C1` y `T1`, que es la razón de que esos dos se queden en V6. 🧪 **Lleva dentro `#379`** (9-sep): lo único que le queda es una prueba de placa —el P4 **con la tarjeta**, `tools/wire_serie.py ciclo`— y ésta es la tanda donde las placas se conducen |
+| **F1** | **las PRUEBAS FINALES** de V6 | ✅ **12-sep** (de `00b605c0` a `7ffa04b6`, ~20 commits). Las guardas del PC, las siete imágenes selladas, **las nueve placas** por `tanda.py` con lo que se publica, la BD en los dos P4 y en el simulador, `#379` cerrada, el ZIP verificado por cuatro lentes y desplegado en carpeta limpia, **el IDE probado por Eduardo (*«IDE OK»*)**. Destapó y cerró `#503`, `#504`, `#505` y `#502` en el firmware, la stdlib embebida sin `I2c.mod`, la suite del frontend roja desde `#458`, un `Str.mod` y un `Stdlib.pack` MOD6 en los packs, cinco drivers MOD6, `pwralto:1` en la referencia. Tabla por placa en la sección `F1` |
 
 📌 **`#475` Y `#444` PASAN A SER HITOS PROPIOS (`C1` y `T1`), decidido el 6-sep.** Eduardo:
 *«`#475` y `#444` hay que darle un ítem propio ya que es implementación nueva. Del resto, hay que ir
@@ -5492,7 +5492,7 @@ son suyos. **El orden de cierre de V6 queda así:**
 Y la consecuencia práctica, dicha por él: *«lo que toca durante unos días es ir resolviendo
 pendientes»*.
 
-##### 🧪 `F1` — EL PLAN (12-sep, al cerrar `D1`)
+##### 🧪 `F1` — EL PLAN (12-sep, al cerrar `D1`) — ✅ **CERRADO el 12-sep**: los cinco pasos hechos; queda el gesto de publicar (tag y push)
 
 **Orden**: primero lo que no necesita placa, luego las imágenes, luego las placas — y las placas
 **por placa** con la tanda de `T1`, Eduardo rotando (*«probada / en curso / conecta»*), del mismo
@@ -5531,6 +5531,28 @@ pendientes»*.
 
 Lo que la tanda destapó, ya arreglado y en sus fichas: la stdlib embebida sin `I2c.mod` (`30f111ad`), la suite del
 frontend roja desde `#458`, `#503`, `#504`, el `Str.mod` MOD6 dentro del pack, `pwralto:1` en la referencia.
+
+**El paso 5 (12-sep, noche)**: BpIde-6.0.jar reconstruido con el IDE cerrado; micro simulado `make sim LVGL=1
+SQLITE=1` (decidido: **el simulador del ZIP lleva SQLite**; `SqlDemo` == host en él); `montar-zip.sh` cazó **cinco
+drivers de `bpdevices/` MOD6** (su guarda decía MOD6 y V6 es MOD7 — se cazó a sí misma) y ganó `packsDir` en el
+`BpVM.cfg` del paquete (sin él `SqlDemo.bp` no compilaba desde la instalación por CLI). ZIP desplegado en
+`C:\tmp\bp6` y probado: `ChartDemo`/`FontLoadDemo` capturados, `Bench`, `SqlDemo` == host. **Eduardo probó el
+IDE desde el ZIP y cazó `#505`** (`GuiEvSpike` sin su «3 handler» en el simulador sin pantalla). **Cuatro
+verificadores independientes** sobre la carpeta desplegada (345/345 samples con el compilador del ZIP, docs
+byte-idénticas y 138 enlaces sanos, sellos 7/7 y las nueve placas verdes, el simulador con LVGL y SQLite) →
+cuatro hallazgos medios, corregidos: cerrar la ventana del simulador lo dejaba vivo y sin ventana (ahora lo
+apaga), las plantillas de `board.json` no viajaban (`firmware/boards/`), `RELEASES` nombraba dos imágenes sin
+`_merged`, `MOD_FORMAT.md` abría diciendo v5; y `packs/Stdlib.pack` era **la stdlib MOD6 del 20-ago** (la
+misma de `#493`): reconstruido, y la guarda del empaquetador mira ahora dentro de los packs. Tras `#505` (un
+fichero común) las tres imágenes con LVGL (C6, P4, DK2) se reconstruyeron y **se volvieron a pasar** en las
+placas; las otras cuatro, byte-idénticas salvo sello. ZIP final: `BasicPlus-6.0-win.zip`, 25 MB, sha256
+`2279292d…`; cuerpo de la release (ES + EN) en `dist/release-v6.0.md`.
+
+📌 **Lo que enseña F1 de V6**, en una frase: la tanda de las nueve placas fue lo de menos (nueve verdes a la
+primera con lo que ya estaba probado); lo que cazó fue **lo que ninguna prueba miraba** — la BD que llevaba
+tres semanas rota por dos causas superpuestas, la suite del frontend roja trece días, un empaquetador cuya
+guarda no podía ver dentro de un pack. Sistemático no es «más rápido»: es que la cobertura deja de depender
+de quién esté cansado a las siete de la tarde.
 Y lo que NO se toca en V6 y queda dicho: en el P4 la zona de packs gana a `/app` y `/lib` (`#493`), así que
 con un pack de librería grabado el runner no puede verificar qué `Core` corre y **para** — la tanda se pasa
 con la zona vacía y la BD se prueba después con el pack sellado.

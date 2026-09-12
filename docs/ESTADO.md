@@ -27,6 +27,40 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (13-sep) — ✅ **`F1` CERRADA**: V6 está LISTA; falta el gesto de publicar (tag `v6.0` + push + release con el ZIP)
+
+**Lo que pasó el 12-sep por la noche** (la sesión más larga de V6; el detalle está en la sección `F1` de `FICHAS`):
+1. **Guardas del PC** en verde — y la suite del frontend estaba ROJA desde `#458` (fixture sin `import Core`).
+2. **Siete imágenes** del mismo árbol; la regeneración de la stdlib embebida destapó que iba **sin `I2c.mod`**.
+3. **Nueve placas** regrabadas desde `dist` y pasadas por `tanda.py` (Eduardo rotó: Pico, Metro, DK2, Nucleo, C3,
+   S3, P4 kit, P4 Waveshare, C6). Todo verde. Aprendido: Windows dio el mismo COM3 a la C3 y la C6; abrir el
+   puerto serie reinicia las ESP (DTR/RTS al EN); en el P4 un pack grabado gana a `/app` y `/lib` y el runner
+   **para** (correcto: `#493`).
+4. **La BD estaba ROTA en placa desde el 23-ago** por dos causas superpuestas — `#503` (guarda muerta: el P4 no
+   cargaba ningún `.mdn` desde `#465`) y `#504` (el puente `.mdn` del pack de SQLite era de ABI 4) — y nadie lo
+   vio porque nadie ejecutó una consulta. `SqlDemo` == host en los dos P4 (y en la tarjeta), `Bench` nativo 32 ms.
+5. **`#502` medida y cerrada** en el cargador de `.mdn` (un blob del P4 REINICIABA la C6; ahora se ignora con
+   mensaje); **`#379` cerrada** (8/8 con la tarjeta); **`#505`** (el simulador sin pantalla no drenaba el evento
+   del handler — lo cazó Eduardo probando el ZIP).
+6. **El ZIP**: montado, verificado por cuatro lentes independientes (workflow), desplegado en `C:	mpp6` y
+   probado; **el IDE lo probó Eduardo: OK**. Lo que cazaron las lentes y el empaquetador está corregido (cinco
+   drivers MOD6, `Stdlib.pack` MOD6 del 20-ago, cerrar la ventana del simulador, `board.json` de la Metro,
+   `packsDir` en `BpVM.cfg`). Decisión tomada por mí, dicha a Eduardo: **el simulador del ZIP lleva SQLite**.
+
+⏭️ **Al retomar — PUBLICAR, con el OK de Eduardo** (es lo único que falta y es de fuera): (1) `git status`
+limpio; (2) tag `v6.0` sobre el último commit; (3) `git push origin main --tags` (~480 commits por delante);
+(4) `gh release create v6.0 dist/BasicPlus-6.0-win.zip --title "BasicPlus v6.0 — orden en los micros"
+--notes-file dist/release-v6.0.md` (el cuerpo ya está escrito, ES + EN, con el sha256 del ZIP `2279292d…`);
+(5) comprobar el build de Pages (`gh api repos/legio-e/BasicPlus/pages/builds/latest --jq .status`) y abrir la
+web; (6) descargar el ZIP de la release y verificar el sha256; (7) `docs/HECHO_V6.md` (snapshot inmutable) y la
+memoria de cierre. ⚠️ Antes de montar el ZIP otra vez por lo que sea: el IDE cerrado, y el host está en sabor
+`gui1-lvgl1` (para `compat.sh check` hay que volver a `make GUI=1 LVGL=0`).
+
+📌 **Estado del repo**: todo commiteado, sin push. Placas al escribir esto: Waveshare P4 (COM15), DK2 (COM12),
+C6 (COM3). El P4 kit y la Waveshare llevan el `SQLite.pack` nuevo sellado y `SQLite=4` en el ENV.
+
+---
+
 ## ⏭️ AL RETOMAR (12-sep, noche) — ✅ **`D1` CERRADA** (`72f9706d`); **`F1` en curso**: las guardas del PC pasadas, faltan las siete imágenes y las nueve placas
 
 **Lo que pasó al retomar** (la sesión de la tarde se cortó con el verificador de `D1` recién terminado):
