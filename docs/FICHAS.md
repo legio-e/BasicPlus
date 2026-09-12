@@ -5505,7 +5505,7 @@ pendientes»*.
 | **Metro RP2350B** | ídem | 4/4 | `ThrowSinAtrapar` ya da `exit=1` (era el firmware del 9-sep) |
 | **Discovery DK2** | `bpvm_stm32_dk2.bin` (`STM32_Programmer_CLI`) | 6/6 | captura 800×480 vista |
 | **Nucleo U575** | `bpvm_stm32_nucleo.bin` | 4/4 | el runner ya no supone pantalla por `boardName` |
-| **ESP32-C3** | `bpvm_esp32c3_merged.bin` (`esptool`, COM3) | 4/4 | — |
+| **ESP32-C3** | `bpvm_esp32c3_merged.bin` (`esptool`, COM3) | 4/4 | regrabada con la imagen final; el `Bench` con el blob del P4 corre interpretado (11,7 s / 11,7 s, `EXITED OK`), como la C6 |
 | **ESP32-S3** | `bpvm_esp32_merged.bin` (COM9, puente CH343) | 4/4 | PSRAM 8 MB, VM 7,3 MB |
 | **P4 kit** | `bpvm_esp32p4_merged.bin` (COM14) | 6/6 | **`SqlDemo` == host** con el pack nuevo (`#503`, `#504`); `Bench` nativo 32 ms |
 | **P4 Waveshare** | ídem, `display=st7701` → 480×800 | 6/6 | captura vista; **`SqlDemo` y `SqlDemoSd` (tarjeta) == host**; **`#379` cerrada** (8/8) |
