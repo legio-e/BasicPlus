@@ -496,3 +496,74 @@ notas de dependencias:
 SALTADA: GuiWinJson en esp32c3@COM3: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
 SALTADA: GuiShot en esp32c3@COM3: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
 
+
+## Tanda 2026-09-12 17:49:11
+
+- manifiesto: `bpgenvm-c\tools\tanda_prueba.json` (6 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-12 12:04:08) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-12 12:04:44) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (esp32s3@COM9)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 05e0dfd0 | 2227 | ok | 0 | 12 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 422260e8 | 1800 | ok | 1 | 8 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 5138ea38 | 1054 | ok | 0 | 311 | 3 |
+| MachineId | MachineId | 22792db1 | 1089 | ok | 0 | 8 | 3 |
+| GuiWinJson | GuiWinJson | c2e655fa | 3627 | ok | 0 | 45 | 17 |
+| GuiShot | GuiShot | 61c07fa6 | 2545 | ok | 0 | 352 | 8 |
+
+### Placa esp32s3 - 98A316E6EE90
+
+- sello: boardName=`esp32s3` uniqueId=`98A316E6EE90` serverName=`bpvm-esp32` serverBuild=`Sep 12 2026 17:33:10` capacidades=["META", "FILES", "TERMINAL"]
+- imagen: arch=94 variant=None cpuFreqHz=240000000 resetReason=power-on uptimeMs=12391 fs=323584/10248192 B vmHeapBytes=7336960
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM9
+- pantalla: no (INFO sin screenW/screenH: la imagen no lleva LVGL)
+- inventario /lib+/app: 32 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 0 | 12 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 10 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 310 | 311 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 10 | 8 | EXITED OK exit=0 |
+| GuiWinJson | **SALTADA** | - | 45 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+| GuiShot | **SALTADA** | - | 352 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+
+- tras MathRango: uptimeMs=14879 fsUsed=327680 vmHeapBytes=7336960
+- tras ThrowSinAtrapar: uptimeMs=16295 fsUsed=331776 vmHeapBytes=7336960
+- tras ThreadTrasMain: uptimeMs=17463 fsUsed=335872 vmHeapBytes=7336960
+- tras MachineId: uptimeMs=19082 fsUsed=335872 vmHeapBytes=7336960
+- ejecutadas (con EXITED) 4 de 6 listadas; no terminaron 0; saltadas 2; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 2227 | 05e0dfd0 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 1800 | 422260e8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 1054 | 5138ea38 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 1089 | 22792db1 | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+
+### Matriz pruebas x placas
+
+| prueba | esp32s3@COM9 |
+|---|---|
+| MathRango | IDENTICO |
+| ThrowSinAtrapar | IDENTICO |
+| ThreadTrasMain | IDENTICO |
+| MachineId | NO-PETA |
+| GuiWinJson | SALTADA |
+| GuiShot | SALTADA |
+
+SALTADA: GuiWinJson en esp32s3@COM9: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+SALTADA: GuiShot en esp32s3@COM9: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+
