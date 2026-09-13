@@ -86,8 +86,10 @@ parar»*): **`H6` es estratégico** — *«Meter LVGL en un pack es estratégico
 **7. Lo que añadí yo, con su permiso** (*«eres libre de hacerlo, a fin de cuentas somos socios»*), como PROPUESTAS en
 `V7_BACKLOG.md` §🤝 y resumidas en `FICHAS`: cerrar por hito y no al final (definición de «cerrado»: fichas + prueba que
 lo ejercita + docs + índice tachado); lo silencioso salta la cola (`L20`, los diez de `#473`); `H2` es la red de `H1`;
-`H6` se demuestra en la C5 y nace segura para `H12`; un repaso del índice a los seis hitos. **Pendientes de que él las
-acepte o tache** — no se dan por decididas.
+`H6` se demuestra en la C5 y nace segura para `H12`; un repaso del índice a los seis hitos. **Contestadas la misma
+tarde**: *«de acuerdo en todo salvo en el punto 1»* — no un `F1` por hito, sino **un cierre pequeño por hito** (ronda corta
+de tests) **y uno casi completo a mitad de V7**. Y la forma de `H6`: `H6.a` el pack en la C5 (*«inofensivo»*), `H6.b`
+quitar LVGL de C6/P4/DK2 (*«más delicado»*) sólo tras **una prueba completa sellada como punto de restauración**.
 
 ⏭️ **Al retomar**: elegir por dónde empezar a cerrar — la sugerencia sigue siendo `H2` (`#500`/`#493`/`#492`, pequeño
 y cierra lo que mordió en `F1`) y `H1` después; pero es de Eduardo. Sin decidir nada se pueden cerrar ya `N2`

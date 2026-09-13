@@ -126,12 +126,18 @@ el PC sin placa, como en el host.
 > Y la regla que hace distinta a V7: **«intentaremos no dejar pendientes para V8»** — lo que se abra se
 > cierra o se cancela dentro de la versión; aplazar deja de ser una salida.
 >
-> 🤝 **Lo que añadí yo el mismo día, con su permiso** (*«somos socios»*), como propuestas en `V7_BACKLOG.md` §🤝:
-> **cerrar por hito, no al final** (cada hito cierra con una prueba que lo EJERCITA en el banco, los docs al día y su
-> bloque del índice tachado — `F1` deja de ser un día); **lo silencioso salta la cola** (`L20` y los diez de `#473`);
-> **`H2` es la red de `H1`** (`#500` antes de regenerar el `Core.mod` embebido en cinco imágenes); **`H6` se
-> demuestra en la C5** y su API nace segura para `H12`; y **un repaso del índice a los seis hitos**, con cancelar
-> como resultado válido, para que «nada a V8» no se convierta en «V7 no cierra».
+> 🤝 **Lo que añadí yo el mismo día, con su permiso** (*«somos socios»*), en `V7_BACKLOG.md` §🤝 — y **contestado por
+> Eduardo esa tarde**: *«de acuerdo en todo salvo en el punto 1»*. Queda así: **un cierre PEQUEÑO por hito** (la ronda
+> corta de `tanda.py` en las placas tocadas, `compat.sh`, y una prueba que EJERCITE lo nuevo) **y uno casi completo a
+> mitad de V7** (la ronda de `F1` entera + el repaso del índice a los seis hitos, con cancelar como resultado válido);
+> **lo silencioso salta la cola** (`L20` y los diez de `#473`); **`H2` es la red de `H1`** (`#500` antes de regenerar el
+> `Core.mod` embebido en cinco imágenes); **`H6` se demuestra en la C5** y su API nace segura para `H12`.
+>
+> 🛡️ **Y la forma de `H6`, suya**: *«si lo hacemos sobre C5 es inofensivo; quitar LVGL de las imágenes que la lleven es
+> otro tema, más delicado: una prueba completa antes de quitar nada nos dará un punto para restaurar»*. `H6.a` = el
+> pack en la C5 (sólo añade); `H6.b` = retirarlo de C6/P4/DK2, **precedido de la ronda de `F1` sellada como punto de
+> restauración** (commit + informe + binarios conocidos-buenos). Si `H6.b` se rompe y no se arregla, se vuelve al
+> punto y se cancela sin perder `H6.a`.
 >
 > 📌 **Lo que Eduardo nombró de memoria al abrir V7** (13-sep), sin mirar el registro: *«la
 > caracterización de los periféricos de cada micro, limitaciones de los `.mod` a la hora de guardar

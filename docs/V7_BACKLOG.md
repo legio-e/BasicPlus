@@ -54,15 +54,19 @@ los cuatro caen en el mismo sitio del mapa:
 
 ### 🤝 Lo que añado yo (13-sep) — Eduardo: *«si quieres añadir algo que consideres importante eres libre de hacerlo, a fin de cuentas somos socios»*
 
-Cinco cosas, todas pequeñas de escribir y grandes de olvidar. Son propuestas: las que él no quiera, se tachan.
+Cinco cosas, todas pequeñas de escribir y grandes de olvidar. Propuestas el 13-sep y **contestadas el mismo día**:
+cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado en cada una.
 
-1. **Cerrar por hito, no al final.** En V6 la documentación (`D1`) y las pruebas finales (`F1`) fueron los dos
-   últimos días, y `F1` cazó una BD rota tres semanas, una suite roja trece días y un pack MOD6 en el ZIP: nadie
-   *usaba* lo que se daba por hecho. Con doce hitos y la regla «nada a V8», eso no puede esperar al final. Un hito
-   está **cerrado** cuando: (a) sus fichas están cerradas o canceladas con motivo; (b) hay **una prueba que lo
-   EJERCITA** en el banco (`tanda.py` en placa o `compat.sh` en host), no que lo carga — *«confirmado al cargar no
-   es confirmado en uso»*; (c) el manual, la referencia y `PENDIENTES` dicen lo que hay; (d) su bloque de este
-   índice está tachado. `F1` deja de ser un día y pasa a ser un gesto por hito.
+1. **Un cierre PEQUEÑO por hito, y uno casi completo a mitad de V7** — ✅ así lo dejó Eduardo (*«cerrar después
+   de cada hito es mucho trabajo, pero se puede hacer un pequeño cierre, una ronda pequeña de test; y a mitad
+   podemos hacer un cierre casi completo»*). Lo que yo proponía —`F1` entero por hito— no; lo que queda:
+   - **al cerrar un hito, la ronda pequeña**: la prueba de fuego de `tanda.py` (el corpus corto) en las placas que
+     el hito tocó, `compat.sh` en host, y **una prueba que EJERCITE lo nuevo** (no que lo cargue: *«confirmado al
+     cargar no es confirmado en uso»*, la lección de `F1`); las fichas cerradas o canceladas con motivo; su bloque
+     de este índice tachado. Los docs, cuando cambie lo que ven los usuarios, no como ceremonia.
+   - **a mitad de V7, el cierre casi completo**: la ronda de `F1` entera (las nueve placas con lo construido, el
+     ZIP montado y probado, las guardas) más el repaso del índice del punto 5. Es también el **punto de
+     restauración** que pide `H6` antes de quitar LVGL de ninguna imagen (ver abajo).
 2. **Lo silencioso salta la cola.** Sin orden prefijado, una excepción: lo que **falla sin decirlo** se mira
    antes que cualquier hito. Hoy son dos: `L20` (el compilador escribe el `.mod` tras dar error: un programa
    ejecuta sin su bucle) y los diez «rompe-el-modelo» de `#473` (la puerta de arranque que deja pasar
@@ -79,11 +83,13 @@ Cinco cosas, todas pequeñas de escribir y grandes de olvidar. Son propuestas: l
    decisión; pero el pack tiene que llegar a probarse ahí). Y como `H12` va al final: la API de `H6`
    (`publica()`/`busca()`, la arena por código nativo) se diseña **segura con dos núcleos desde el primer día**
    — un candado hoy es barato; ponerlo en `H12` sobre un pack ya en uso, no.
-5. **Un repaso a mitad de V7.** «Nada a V8» tiene un riesgo simétrico: que V7 no cierre nunca. En V6 el repaso
-   del 7-sep (*«15 pendientes → 2»*) fue lo que la hizo cerrable. Propongo fijarlo: cuando se cierren **seis
-   hitos**, un día de triaje de este índice con la pregunta de siempre —«¿está roto?»— y cancelar como resultado
-   válido. Y el rótulo de `FICHAS` (cuántas quedan) **se cuenta, no se escribe**: en V6 el desfase del 8-sep
-   salió de escribirlo a mano.
+5. **Un repaso a mitad de V7** — ✅ aceptado, y va junto al cierre casi completo del punto 1. «Nada a V8» tiene
+   un riesgo simétrico: que V7 no cierre nunca. En V6 el repaso del 7-sep (*«15 pendientes → 2»*) fue lo que la
+   hizo cerrable. Cuando se cierren **seis hitos**: un día de triaje de este índice con la pregunta de siempre
+   —«¿está roto?»— y cancelar como resultado válido. Y el rótulo de `FICHAS` (cuántas quedan) **se cuenta, no se
+   escribe**: en V6 el desfase del 8-sep salió de escribirlo a mano.
+
+📌 **Los puntos 2, 3 y 4, aceptados tal cual** (Eduardo, 13-sep: *«de acuerdo en todo salvo en el punto 1»*).
 
 
 ---
@@ -159,6 +165,22 @@ Cinco cosas, todas pequeñas de escribir y grandes de olvidar. Son propuestas: l
 > *«El encapsulado de LVGL en un pack tiene que tener su propio hito.»* Y el porqué, del mismo día: *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»*. Es el primer cliente de verdad del
 > diseño del código nativo empotrable (el encargo del 21-ago), así que las dos cosas van juntas: la disciplina
 > alrededor de `publica()`/`busca()` se construye con LVGL delante.
+>
+> **La forma del hito, en dos mitades de riesgo distinto** (Eduardo, 13-sep): *«La migración de LVGL es un hito, y
+> si lo hacemos sobre C5 es inofensivo. Ahora, quitar LVGL de las imágenes que la lleven es otro tema, más
+> delicado. Por eso una prueba completa antes de quitar nada nos dará un punto para restaurar en caso de
+> problemas.»*
+>
+> 1. **`H6.a` — LVGL como pack, en la C5.** Inofensivo: la C5 no lleva LVGL en la imagen, así que el pack sólo puede
+>    añadir. Aquí se construye y se prueba todo: el contrato bidireccional, el driver del panel en el pack,
+>    `Gui.mod` dentro, la arena por código nativo, la reja de `publica()`. Las tres imágenes con LVGL (C6, P4, DK2)
+>    **no se tocan**.
+> 2. **`H6.b` — quitar LVGL de las imágenes que la llevan** (C6, P4, DK2). Delicado, y por eso con precondición:
+>    **una prueba completa antes de quitar nada** —la ronda de `F1`: las nueve placas con lo construido, el ZIP,
+>    las guardas— cuyo resultado se sella como **punto de restauración** (commit + informe de tanda + los binarios
+>    conocidos-buenos de cada placa en `dist/firmware/`, como manda la memoria «redes de seguridad y recuperabilidad»). Si al
+>    quitarlo algo se rompe y no se arregla, se vuelve a ese punto y `H6.b` se cancela sin que `H6.a` se pierda.
+>    Encaja con el cierre casi completo de mitad de V7 (§🤝 punto 1): puede ser el mismo día.
 
 | asunto | dónde |
 |---|---|
