@@ -80,6 +80,9 @@ la posición dentro de un fichero (`#491`) y la clase `File` (`#491` + el destru
 Todo escrito en `FICHAS` §ABIERTAS (la tabla «LOS HITOS DE V7») y en `V7_BACKLOG.md` (§🧭 y los rótulos `H1`–`H11`;
 `H6` y `H11` con sección propia; el P4X en «fuera del plan»).
 
+**6. Y dos cosas de fondo, de Eduardo, la misma tarde** (*«hoy no implementamos, solamente analizar; llevamos 3 semanas sin
+parar»*): **`H6` es estratégico** — *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»* — y **`A4` vuelve como `H12`**: *«Al final de V7 podemos hacer una prueba a ver si se puede trabajar con 2 núcleos reales: si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*. Escritas en `FICHAS` (tabla de hitos) y en `V7_BACKLOG.md` (§🧭, `H6`, `H12`).
+
 ⏭️ **Al retomar**: elegir por dónde empezar a cerrar — la sugerencia sigue siendo `H2` (`#500`/`#493`/`#492`, pequeño
 y cierra lo que mordió en `F1`) y `H1` después; pero es de Eduardo. Sin decidir nada se pueden cerrar ya `N2`
 (minutos) y la limpieza de `H9` (`samples/out` MOD6; los `.mod` de prueba en las placas, con OK placa a placa).

@@ -16,7 +16,7 @@ entero, `ESTADO.md`, `V6_BACKLOG`, `V6_IDEAS`, `V7_IDEAS` y `PENDIENTES` (448 ca
 había cerrado después: 92 cayeron (cerradas, duplicadas o superadas), quedan las
 de abajo. Los punteros `FICHAS:Lnnnn` son líneas del `FICHAS.md` del 13-sep.
 
-**Recuento:** **11 hitos** (`H1`–`H11`); dentro, **18 fichas con número**, **28 restos** de fichas cerradas de V6, **~40 sueltos** sin ficha; y **7 fuera del plan** — 95 entradas en este índice.
+**Recuento:** **12 hitos** (`H1`–`H12`); dentro, **18 fichas con número**, **28 restos** de fichas cerradas de V6, **~40 sueltos** sin ficha; y **6 fuera del plan** — 100 entradas en este índice.
 
 ---
 
@@ -37,8 +37,8 @@ los cuatro caen en el mismo sitio del mapa:
 
 ## 🧭 CÓMO SE TRABAJA V7 — decisión de Eduardo (13-sep)
 
-- **Un hito por tema, `H1`–`H11`** (*«prefiero que los hitos empiecen por H y numerados, así es más fácil
-  hacer el seguimiento»*). Los grupos de abajo SON los hitos. `L1` pasa a llamarse `H1`.
+- **Un hito por tema, y los hitos se llaman `H` + número** (*«prefiero que los hitos empiecen por H y numerados, así es más
+  fácil hacer el seguimiento»*). Los grupos de abajo SON los hitos. `L1` pasa a llamarse `H1`.
 - **`H6` LVGL en un pack** y **`H11` la ESP32-C5** tienen hito propio por decisión suya.
 - **Sin orden prefijado** — *«como hay muchas cosas pendientes hay que ir cerrando algunos pendientes»*.
   La propuesta que había aquí (dependencias → módulo raíz → cursor → HAL BP → AOT) queda como sugerencia
@@ -46,6 +46,9 @@ los cuatro caen en el mismo sitio del mapa:
 - **V7 será distinta: «intentaremos no dejar pendientes para V8».** Lo que se abra se cierra o se
   cancela dentro de la versión; aplazar deja de ser una salida. Y sigue la regla de V6: **una entrada es
   una cosa**, y los restos que cuelgan de una ficha cerrada se numeran cuando se les mete mano.
+- **`H6` es estratégico**, y el porqué es suyo: *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»*. Es el criterio «la base es finita, lo demás en packs» aplicado a la pantalla: la
+  base no decide si hay pantalla; el usuario la mete como pack, o no.
+- **`H12` — los dos núcleos, al final de V7 y reversible**: *«Al final de V7 podemos hacer una prueba a ver si se puede trabajar con 2 núcleos reales: si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*. `A4` deja de estar fuera del plan; el criterio de salida queda escrito antes de empezar.
 - El **P4X no tiene fecha** (pedido; llegó un P4): fuera del plan hasta que haya placa. En su lugar, la
   **ESP32-C5** — la Waveshare **ESP32-C5-Touch-LCD-2.8** (2,8", 240×320, táctil), con 8 MB de PSRAM y 32 MB de flash, comprada el 5-sep — es `H11`.
 
@@ -119,7 +122,7 @@ los cuatro caen en el mismo sitio del mapa:
 
 ## H6 · LVGL en un pack — y el código nativo empotrable (hito propio por decisión de Eduardo, 13-sep)
 
-> *«El encapsulado de LVGL en un pack tiene que tener su propio hito.»* Es el primer cliente de verdad del
+> *«El encapsulado de LVGL en un pack tiene que tener su propio hito.»* Y el porqué, del mismo día: *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»*. Es el primer cliente de verdad del
 > diseño del código nativo empotrable (el encargo del 21-ago), así que las dos cosas van juntas: la disciplina
 > alrededor de `publica()`/`busca()` se construye con LVGL delante.
 
@@ -211,9 +214,23 @@ con conector MX1.25 (sin batería); *«flexible clock and multiple power modes t
 | **El banco de pruebas**: `tanda.py` con la C5 como una columna más; con PSRAM y pantalla es la primera placa pequeña que puede correr los `Gui*Demo`, y candidata a **juez de memoria apretada** (lo que `V7_IDEAS` pedía del C6, H9) | H9 |
 | Lo que se decide cuando esté en la mesa: `boardName`, qué expone (`getMicro()`/`getBoard()`, H4), y si su USB es el serial-JTAG nativo del chip (la trampa del COM3 compartido con C3/C6; un solo USB → la consola por UART0 como en el C3) | memorias `dos-esp-mismo-com`, `c3-un-solo-usb-sin-dtr` |
 
+## H12 · La prueba de los dos núcleos — al FINAL de V7, y reversible (era `A4`)
+
+> Eduardo, 13-sep: *«Al final de V7 podemos hacer una prueba a ver si se puede trabajar con 2 núcleos reales: si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*. `A4` estaba
+> 🧊 fuera del plan desde el 9-sep (*«no es V6 y probablemente tampoco V7»*); hoy vuelve, con dos condiciones
+> que son la forma del hito: **va al final** (cuando todo lo demás esté cerrado y probado en un núcleo) y
+> **tiene criterio de salida escrito antes de empezar** — revertir es un resultado válido, no un fracaso.
+
+| asunto | dónde |
+|---|---|
+| **Lo que `A4` dejó hecho y medido**: el inventario del estado compartido; la carrera de `s_line_buf` arreglada (`64b6f2fb`); `CONFIG_FREERTOS_UNICORE=y` en S3 y P4 (`c080e1f0`); las tres carreras del SMP de host cerradas en `#474` (0/40 cuelgues) | `FICHAS` `A4` (L6915) |
+| **Antes de activar el segundo núcleo**, en este orden: (1) `vm->kill_requested` como atómico con orden explícito (hoy `volatile int`); (2) en la Pico, el `printf` de consola comparte el USB con el wire y no toma `wire_v1_tx_lock`; (3) lo que el inventario marcó como compartido sin dueño | `FICHAS` `A4` |
+| **La forma**: `io` en un núcleo y `vm` en el otro (la arquitectura de `A1`: tres colas y nada más); después, si aguanta, **las dos VM sobre una cola de threads BP** (el camino SMP de host, `scheduler_smp.c`, rehecho sobre `io` — y entonces `comm_pico.c`/`comm_host.c` se borran, `A1.4`); el modelo «a piñón» vs parquear y la cola de hilos de SO (H7) se deciden midiendo la latencia de despertar | `FICHAS` `A1` (L6371), H7 |
+| **Dónde se prueba**: las placas con dos núcleos son la Pico 2 (dos Cortex-M33 / Hazard3), el S3 y el P4 (dual RISC-V); el C3, C6, C5 y los STM32 son de un núcleo y se quedan como están. El banco es `tanda.py` con la misma tanda de `F1` en las dos configuraciones, y `Bench`/`PrintBench`/`AllocBench` con cronómetro: **si no es medible, no es mejora** | H9; memoria `impresion-no-es-medida-cronometro` |
+| **El criterio de salida**, literal: *«si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*. Lo que se conserva en cualquier caso: los atómicos y los candados que la prueba obligue a poner, que son correctos también con un núcleo | — |
+
 ## Fuera del plan de versiones (decidido; se lista para no perderlo)
 
-- 🧊 **`A4` — los dos núcleos** (*«no es V6 y probablemente tampoco V7; hay muchas cosas antes»*, 9-sep). Inventario hecho; antes de activar: `kill_requested` atómico, el `printf` de la Pico comparte USB con el wire. Con él van **las dos VM sobre una cola de threads BP** (el camino SMP rehecho sobre `io`) y **borrar `comm_pico.c`/`comm_host.c`** (`A1.4`, inertes). → `FICHAS` `A4` (L6915)
 - 🧊 **`#488` — el AOT no genera Xtensa** (*«de momento no»*): el S3 corre todo interpretado. Con él, `bios_s3.c` (sin consumidor) y los **packs nativos en S3/STM32**. → `FICHAS` `#488` (L4063)
 - **La red en placa** (backend WiFi/Ethernet de `Net`): **V8**, rumbo del 10-ago. → `FICHAS` L6310
 - **Linux**: el IDE en Linux + la Raspberry Pi como placa — `[SIN VERSIÓN, V6+]`. → `FICHAS` L11901
