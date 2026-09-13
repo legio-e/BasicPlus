@@ -67,16 +67,24 @@ micro (`#378`/`#470`/`#479`), las dependencias entre clases de módulos distinto
 la posición dentro de un fichero (`#491`) y la clase `File` (`#491` + el destructor de `L1`). Está escrito en
 `FICHAS` y en `V7_BACKLOG.md` §🎯.
 
-⏭️ **Al retomar — dos decisiones de Eduardo, y después trabajo:**
-1. **El orden de V7.** Propuesta en `V7_BACKLOG.md` §🧭: (1) las dependencias `#500`/`#493`/`#492` — pequeño y
-   cierra lo que mordió en `F1`; (2) `L1` el módulo raíz; (3) `#491` el cursor y `File`; (4) la HAL BP de
-   periféricos; (5) `#502`+`#441` en un solo salto de formato del `.mdn`. Entre medias, `#495`, `#452` y las
-   medidas pendientes; `#490` cuando haya amperímetro.
-2. **Numerar o no**: la norma del 9-sep dice «todo pendiente tiene número»; el censo deja los 28 restos y ~40
-   sueltos colgando de su ficha (como los 55 de `#473`) y propone numerar al entrar en el plan, no al censar.
-   Y los 10 «rompe-el-modelo» de `#473` sin ficha: decidir qué entra.
-3. Sin decidir nada se puede cerrar ya `N2` (documentar un invariante de `JavaMutex`, minutos) y hacer la limpieza
-   de §H (`samples/out` MOD6, los `.mod` de prueba en las placas — con OK placa a placa).
+**5. Las decisiones de Eduardo, la misma tarde**, tras ver los pendientes agrupados por temas:
+- **Un hito por tema, y los hitos se llaman `H` + número** (*«así es más fácil hacer el seguimiento»*): `H1` el
+  módulo raíz (era `L1`), `H2` dependencias del `.mod`, `H3` ficheros y `File`, `H4` la HAL BP de periféricos, `H5`
+  AOT, **`H6` LVGL en un pack** (hito propio por decisión suya), `H7` memoria y arranque, `H8` IDE y wire, `H9`
+  pruebas, `H10` placas y drivers, **`H11` la ESP32-C5 con PSRAM y pantalla de 3"** (placa nueva, pedida el 13-sep).
+- **El P4X no tiene fecha** (*«lo pedí pero me enviaron la versión P4»*): sale del plan; la C5 lo sustituye.
+- **Sin orden prefijado**: *«como hay muchas cosas pendientes hay que ir cerrando algunos pendientes»*.
+- **La regla que hace distinta a V7**: *«intentaremos no dejar pendientes para V8»* — lo que se abra se cierra o se
+  cancela dentro de la versión; aplazar deja de ser una salida. Y la norma de numerar (una entrada es una cosa)
+  se aplica al meter mano a un resto, no al censar.
+Todo escrito en `FICHAS` §ABIERTAS (la tabla «LOS HITOS DE V7») y en `V7_BACKLOG.md` (§🧭 y los rótulos `H1`–`H11`;
+`H6` y `H11` con sección propia; el P4X en «fuera del plan»).
+
+⏭️ **Al retomar**: elegir por dónde empezar a cerrar — la sugerencia sigue siendo `H2` (`#500`/`#493`/`#492`, pequeño
+y cierra lo que mordió en `F1`) y `H1` después; pero es de Eduardo. Sin decidir nada se pueden cerrar ya `N2`
+(minutos) y la limpieza de `H9` (`samples/out` MOD6; los `.mod` de prueba en las placas, con OK placa a placa).
+Cuando llegue la C5: `H11` por el camino de `P1`/`P2`, y comprobar en la hoja del chip si lleva FPU (decide el
+destino AOT, `#502`).
 
 📌 **Estado del repo**: todo commiteado, **sin push** (V7 en curso: push sólo al cerrar versión). Host en sabor
 `gui1-lvgl1`: `make GUI=1 LVGL=0` antes de `compat.sh check`. El IDE del ZIP sigue desplegado en `C:\tmp\bp6`.

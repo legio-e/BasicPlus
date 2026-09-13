@@ -98,10 +98,32 @@ el PC sin placa, como en el host.
 > | dónde | cuántas | cuáles |
 > |---|---|---|
 > | **fichas de V7 con número** | **18** | las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
-> | **hitos** | **1** | `L1` — **el módulo raíz** (movido a V7 el 5-sep; la columna vertebral de la versión) |
+> | **hitos** | **11** | `H1`–`H11`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
-> | **fuera del plan de versiones** (decidido) | **6** | `A4` (los dos núcleos), `#488` (AOT Xtensa), la red en placa (V8), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción |
+> | **fuera del plan de versiones** (decidido) | **7** | `A4` (los dos núcleos), `#488` (AOT Xtensa), la red en placa (V8), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción, y el P4X (sin fecha) |
+>
+> ### 🏁 LOS HITOS DE V7 — decisión de Eduardo (13-sep): *«cada grupo corresponde a un hito propio; prefiero que empiecen por H y numerados, así es más fácil hacer el seguimiento»*
+>
+> | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
+> |---|---|---|
+> | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` `#493` `#441` |
+> | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
+> | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
+> | **H5** | **AOT y código nativo** | `#502` `#441`(con H2) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
+> | **H6** | **LVGL en un pack** — hito propio por decisión de Eduardo | el primer cliente del código nativo empotrable, y la disciplina alrededor de `publica()`/`busca()`: la reja, la resolución perezosa, las ranuras, la arena de RAM por código nativo |
+> | **H7** | **memoria, arranque y arquitectura** | los restos de `U6`, `U6.F1`, `U1.4`; Boot 1/Boot 2 y las capas del SO; unificar el montaje de packs; los 32 MB del P4; `CALL_REL`; el muro heap/pilas; diagnóstico del heap desde BP; `#356` `#494`; la Pico a `platform_freertos.c`; el SMP de host |
+> | **H8** | **IDE y wire** | `#495` `#452`; los restos de `E1`; el `INFO` de ESP32/STM32; el guardián del fat-jar; `Run on Device` con `/lib` vacío |
+> | **H9** | **pruebas y medida** | los restos de `T1` y lo que `V7_IDEAS` pedía del arnés; `compat.sh` y el código de salida; las medidas en placa pendientes; `test-listtrunc`; la batería de rendimiento (= eje 4 del censo); resistencia larga; el simulador con disfraces; inyección de eventos; limpieza |
+> | **H10** | **placas y drivers** | `#490` (estudio); `Rtc`; `#466`; el STM32 (`Debug`, el FS que baila); el C3 (`sdkconfig`, log del bootloader); el ENV de la Pico 2; la S31 cuando haya placa; la GUI (`#477`, `G2`, `Command`); los diez «rompe-el-modelo» de `#473` y los lotes D/E; DMA de `Uart` |
+> | **H11** | **ESP32-C5 con PSRAM y pantalla de 3"** — placa nueva, pedida el 13-sep | por el camino de `P1`/`P2` de V6: la familia ESP32 se activa, la placa se describe; la pantalla por el ENV; el AOT decide su destino por la float-ABI (`#502`) |
+>
+> 📌 **Y las otras decisiones del mismo día:** el **P4X no tiene fecha** (*«lo pedí pero me enviaron la
+> versión P4»*) → sale del plan, a la lista de «fuera del plan» hasta que haya placa. **Sin orden
+> prefijado** entre hitos — *«como hay muchas cosas pendientes hay que ir cerrando algunos pendientes»*.
+> Y la regla que hace distinta a V7: **«intentaremos no dejar pendientes para V8»** — lo que se abra se
+> cierra o se cancela dentro de la versión; aplazar deja de ser una salida.
 >
 > 📌 **Lo que Eduardo nombró de memoria al abrir V7** (13-sep), sin mirar el registro: *«la
 > caracterización de los periféricos de cada micro, limitaciones de los `.mod` a la hora de guardar
@@ -118,7 +140,7 @@ el PC sin placa, como en el host.
 > ⚠️ **Un hallazgo del censo que no es una ficha**: el triaje de `#473` (10-sep) pedía **ficha nueva**
 > para diez «rompe-el-modelo» vivos (`RUN` ×4, el sink de `OUTPUT` ×5, la puerta de arranque ×3…) y
 > para los lotes D (FS, 15) y E (GUI, 10) de `473_TRIAJE_COLA.md`, y **no se abrieron**. Están en
-> `V7_BACKLOG.md` §I hasta que Eduardo decida qué entra.
+> `V7_BACKLOG.md` §H10 hasta que Eduardo decida qué entra.
 
 ### ═══ V7 — LA VERSIÓN EN CURSO ═══
 
@@ -1052,7 +1074,7 @@ van en la imagen) o tabla embebida XIP; (2) si la tabla de símbolos por referen
 mismo lote. Con eso se abre la implementación, en este orden: mapear la zona en `esp32/common`
 (activar), el nudo del eclipse (instalador + `STAT`), el pack de la stdlib desde el IDE, medir.
 
-#### 🧩 L1 — lenguaje y compilador
+#### 🧩 H1 — el módulo raíz: lenguaje y compilador *(era `L1`; renombrado el 13-sep al abrir V7, cuando Eduardo pidió los hitos como `H` numerados)*
 
 Agrupa lo que ya está fichado y suelto por el registro. **No duplica: agrupa** — el texto
 de cada una sigue en su sitio.
@@ -11910,7 +11932,7 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 
 - `#426` `[V6]` — ✅ **HECHO EN V6 (23-ago, `N1.2`: 19 helpers, `MDN_ABI` 4→5, verificado en
   Pico, P4 y STM32) — la viñeta se quedó sin marcar y la cazó el censo del 13-sep.** Restos a V7
-  (`V7_BACKLOG.md` §E): `double(x)` escrita DENTRO de una native sigue rechazada, cronometrar
+  (`V7_BACKLOG.md` §H5): `double(x)` escrita DENTRO de una native sigue rechazada, cronometrar
   native contra interpretado, decirlo en el manual, y la instrucción nativa si algún día hay
   FPU doble. Lo que decía la viñeta: **`double` en una función `native`. APLAZADO A V6 por decisión
   de Eduardo (16-ago)**, y no por coste sino porque *falta pensar el diseño*:

@@ -16,7 +16,7 @@ entero, `ESTADO.md`, `V6_BACKLOG`, `V6_IDEAS`, `V7_IDEAS` y `PENDIENTES` (448 ca
 había cerrado después: 92 cayeron (cerradas, duplicadas o superadas), quedan las
 de abajo. Los punteros `FICHAS:Lnnnn` son líneas del `FICHAS.md` del 13-sep.
 
-**Recuento:** **19 con número** (18 fichas + el hito `L1`), **28 restos** de fichas cerradas de V6, **~40 sueltos** sin ficha y **6 fuera del plan** — 90 entradas en este índice.
+**Recuento:** **11 hitos** (`H1`–`H11`); dentro, **18 fichas con número**, **28 restos** de fichas cerradas de V6, **~40 sueltos** sin ficha; y **7 fuera del plan** — 95 entradas en este índice.
 
 ---
 
@@ -30,34 +30,28 @@ los cuatro caen en el mismo sitio del mapa:
 
 | lo que nombró | dónde vive |
 |---|---|
-| **los periféricos de cada micro** | §D: `#470` (los cuatro números → arrays por micro), `#479` (mapa de pines y analógicos), `#378` (que cada micro DIGA lo que tiene), los restos de `#469` (el ADC del STM32) y de `#480` (el `Pulse` del C3) |
-| **las dependencias entre clases de módulos distintos en el `.mod`** | §B: `#492` (la interfaz no exporta campos), `#460` (herencia entre módulos, aparcada hasta tener versiones), `#500` (la norma de versiones) |
-| **acceder a una posición concreta de un fichero** | §C: `#491`, el cursor |
-| **la clase `File` en BP** | §C: la mitad de arriba de `#491` (`File` + `TextFile`) sobre el destructor de `L1` |
+| **los periféricos de cada micro** | §H4: `#470` (los cuatro números → arrays por micro), `#479` (mapa de pines y analógicos), `#378` (que cada micro DIGA lo que tiene), los restos de `#469` (el ADC del STM32) y de `#480` (el `Pulse` del C3) |
+| **las dependencias entre clases de módulos distintos en el `.mod`** | §H2: `#492` (la interfaz no exporta campos), `#460` (herencia entre módulos, aparcada hasta tener versiones), `#500` (la norma de versiones) |
+| **acceder a una posición concreta de un fichero** | §H3: `#491`, el cursor |
+| **la clase `File` en BP** | §H3: la mitad de arriba de `#491` (`File` + `TextFile`) sobre el destructor de `H1` |
 
-## 🧭 EL PLAN DE V7 — propuesta, por decidir con Eduardo
+## 🧭 CÓMO SE TRABAJA V7 — decisión de Eduardo (13-sep)
 
-El criterio con el que se ordena es el suyo al cerrar V6: *«llevamos varias versiones (V4 y V6)
-sentando las bases para una VM más robusta; todavía no hemos llegado a meta»*. Lo que **cierra
-clases de fallo** va delante de lo que añade; y lo pequeño que desbloquea, delante de lo grande.
-
-| orden | qué | por qué ahí |
-|---|---|---|
-| **1** | **§B — las dependencias**: `#500` la norma de versiones, `#493` la sombra de `/app` y del pack, `#492` los campos que no cruzan | Es lo que mordió en `F1` (un `Stdlib.pack` MOD6 y un `Core` rancio) y lo que Eduardo nombra segundo. Cierra una clase de fallo **silencioso**. Pequeño: una o dos sesiones |
-| **2** | **`L1` — el módulo raíz** | La columna vertebral de V7 (decidido el 5-sep): los tipos y las intrínsecas en un fichero legible, las dos tablas generadas. Encima de él se diseñan los añadidos: destructor, `Map`, `Time`, `#19` (`Object` comodín ya está hecho: el censo lo cazó sin tachar). Y desbloquea la sobrecarga de intrínsecas |
-| **3** | **§C — `#491` el cursor y `File`/`TextFile`** | Lo tercero y lo cuarto que nombró. Necesita el destructor (paso 2) y arregla la enfermedad que ha vuelto tres veces (`read_stream` sólo en littlefs, sin escritura en streaming, aperturas duplicadas) |
-| **4** | **§D — la HAL BP de periféricos**: `#378` → `#470` + `#479` + restos | Lo primero que nombró. Cambia `Adc.bp`/`Gpio.bp` embebidos en las cinco imágenes (ABI y blobs): mejor con el módulo raíz ya hecho, que es quien decide dónde se declaran |
-| **5** | **§E — `#502` + `#441`**: el destino `ilp32` y la cabecera del `.mdn` con float-ABI y huella de flags | Un solo salto de formato para las dos; y la red del AOT (resto de `N1`) |
-| entre medias | `#495`, `#452`, los restos de `T1`, las medidas pendientes (§H) | Sesiones cortas para cambiar de aire entre los grandes |
-| cuando haya amperímetro | `#490` bajo consumo (estudio) | Sin números no hay estudio |
-
-📌 **Regla de V6 que sigue:** los pendientes de la lista se **cierran o se cancelan**, no se
-acumulan; cancelar es un resultado válido. Y **una entrada es una cosa**: los restos que aquí
-cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
+- **Un hito por tema, `H1`–`H11`** (*«prefiero que los hitos empiecen por H y numerados, así es más fácil
+  hacer el seguimiento»*). Los grupos de abajo SON los hitos. `L1` pasa a llamarse `H1`.
+- **`H6` LVGL en un pack** y **`H11` la ESP32-C5** tienen hito propio por decisión suya.
+- **Sin orden prefijado** — *«como hay muchas cosas pendientes hay que ir cerrando algunos pendientes»*.
+  La propuesta que había aquí (dependencias → módulo raíz → cursor → HAL BP → AOT) queda como sugerencia
+  de por dónde tirar cuando haya que elegir, no como plan.
+- **V7 será distinta: «intentaremos no dejar pendientes para V8».** Lo que se abra se cierra o se
+  cancela dentro de la versión; aplazar deja de ser una salida. Y sigue la regla de V6: **una entrada es
+  una cosa**, y los restos que cuelgan de una ficha cerrada se numeran cuando se les mete mano.
+- El **P4X no tiene fecha** (pedido; llegó un P4): fuera del plan hasta que haya placa. En su lugar, la
+  **ESP32-C5 con PSRAM y pantalla de 3"** (pedida el 13-sep) es `H11`.
 
 ---
 
-## A · El módulo raíz — lenguaje y compilador (`L1`)
+## H1 · El módulo raíz — lenguaje y compilador (era `L1`)
 
 | asunto | dónde |
 |---|---|
@@ -75,16 +69,16 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | `M4` — prohibir el prefijo `__` en identificadores de usuario (hoy el lexer lo acepta y comparte namespace con los sintéticos `__prop_get_X`…) · `N9` — una clase sintetizada (`Thread`/`Mutex`/`StringBuilder`) redeclarada a medias por el usuario gana sin diagnóstico · `M5` — comprobar que el debugger enseña las properties heredadas | `PENDIENTES` M4, N9, M5 |
 | `N2` — documentar como invariante que `JavaMutex.{ownerTid, waiters}` sólo se toca bajo `vmLock` (minutos; el código ya lo cumple) | `PENDIENTES` N2 |
 
-## B · Lo que un `.mod` exporta y cómo se resuelven las dependencias
+## H2 · Lo que un `.mod` exporta y cómo se resuelven las dependencias
 
 | asunto | dónde |
 |---|---|
 | **`#492` — los campos PROTEGIDOS no cruzan módulos**: la interfaz exporta métodos y propiedades, pero no campos (`field <nombre>:<tipo> slot <n>` en `ClassSig`); el rodeo es un getter. Coste: rehacer la cadena entera | `FICHAS` `#492` (L135) |
 | **`#500` — la norma de versiones de las dependencias**: el `.mod` de la app lleva la versión de cada dependencia y el cargador **rechaza** una más antigua, venga del pack, de `/app` o de `/lib`. *«`Core.bp` nos sigue dando guerra»* | `FICHAS` `#500` (L160) |
 | **`#493` — la sombra de `/app`** (y de un pack): una copia de stdlib en `/app` o un pack de librería tapa a `/lib` sin ruido. Dos mitades: el aviso en `OUTPUT`, y la decisión con `#500`/`#496` (que el pack builder no empaquete stdlib, o que el resolutor no deje que un pack tape a `/lib`). La mitad del runner ya está (`T1`, `843e2d0a`) | `FICHAS` `#493` (L203) |
-| **`#441` — el `.mdn` no recuerda su RECETA**: huella de los flags de compilación en la cabecera, comparada al cargar como ya se compara `arch`. Mismo salto de formato que el resto de `#502` (§E): hacerlas juntas | `FICHAS` L11637 |
+| **`#441` — el `.mdn` no recuerda su RECETA**: huella de los flags de compilación en la cabecera, comparada al cargar como ya se compara `arch`. Mismo salto de formato que el resto de `#502` (§H5): hacerlas juntas | `FICHAS` L11637 |
 
-## C · Ficheros: el cursor y la clase `File`
+## H3 · Ficheros: el cursor y la clase `File`
 
 | asunto | dónde |
 |---|---|
@@ -96,7 +90,7 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | **`listDir` en la VM-C** — a medio nacer: id y código en miVM, sin declaración BP y sin C (resto de `#484`; `input()` se queda fuera por decisión del 26-ago, y `PENDIENTES` mete a `listDir` en esa misma decisión: corregirlo) | `FICHAS` L4236 |
 | `#456` resto — **el tope de un path es de la VM-C, no del lenguaje**: `BPVM_FS_PATH_MAX` = 256 sólo en C; miVM abre lo que sea. Que el tope sea de la spec, lo compruebe miVM igual, y un sample de paridad lo fuerce | `FICHAS` L9476 |
 
-## D · La caracterización de los periféricos de cada micro — la HAL BP
+## H4 · La caracterización de los periféricos de cada micro — la HAL BP
 
 | asunto | dónde |
 |---|---|
@@ -110,7 +104,7 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | **El tamaño de flash lo dice la placa** (ESP32 y STM32): sobre grande + JEDEC en runtime, como el RP2350 desde `#292`; nadie lee `flashSizeBytes` del ENV | `FICHAS` L11855 |
 | El botón BOOT (GPIO9) del C6 como entrada — un «quizá» de `P2` que cayó en silencio | `FICHAS` L8186 |
 
-## E · AOT y código nativo
+## H5 · AOT y código nativo
 
 | asunto | dónde |
 |---|---|
@@ -119,13 +113,22 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | **`#379` resto — una `native` larga no atiende el Stop**: `kill_requested` sólo se mira entre instrucciones del intérprete. Diseño en `V7_IDEAS` §«¿Podemos parar un código AOT?» | `FICHAS` L1287; `V7_IDEAS.md` |
 | **`#426` restos** — lo que la ficha pedía (que `double` cruce a una `native`) **se hizo en V6** por helpers y la viñeta de §Aplazadas no lleva su ✅. Quedan: la conversión `double(x)` escrita DENTRO de una native sigue rechazada; cronometrar `double` native contra interpretado (≈3× estimado, nunca medido); decirlo en el manual; y la instrucción nativa donde haya FPU doble (hoy ninguna placa del sobre) | `FICHAS` L11906, L10896 |
 | **`#468` — la stdlib en flash (XIP) en vez de en RAM** (la C6): decidir si se prueba el XIP del blob embebido salvo que `/lib` la sustituya; la tabla de símbolos por referencia; *«si LVGL sube a un pack, ese pack lleva `Gui.mod`»* | `FICHAS` `#468` (L932) |
-| **El código nativo empotrable — el diseño** (encargo del 21-ago: *«código independiente que ya sabemos recolocar; lo que hay que mejorar es cómo publica su API y cómo interactúa con el resto»*), en cuatro puntos: (1) **reja en `publica()`** — leer marca y versión de la tabla en vez de aceptar un `const void*` (una tarde, con test); (2) dependencias entre códigos nativos con **`busca()` perezoso** en el primer uso (propuesta, sin decidir); (3) si las **cuatro ranuras** (`BPVM_PACK_MAX 4`) valen cuando crezca el catálogo — medir antes; (4) **la arena de RAM por código nativo**, no por pack: hoy es singular y se llama `SQLite`, y los `malloc` de la BIOS son chivatos | `V7_IDEAS.md` §1; `V6_IDEAS.md` §arena |
-| **LVGL a un pack — el primer cliente**: contrato bidireccional y con estado (`flush_cb`/`read_cb`/eventos), qué pasa con `src/gui.c`, el pack lleva `Gui.mod` (`#468`), y el driver del pack pone la pantalla del usuario (`P2.3`); se mira junto a `#434`. *«Merece un trabajo separado, con una evaluación previa»* (26-ago) | `V7_IDEAS.md` §1; `FICHAS` L8243 |
 | **Los cabos sueltos del AOT** — en qué línea falló el nativo (`bpvm_aot_fault_t` viaja sin origen), **parar/expropiar un thunk** (hoy un bucle infinito nativo sólo se recupera desenchufando), y el debugger que se pierde dentro. Propuesta de Eduardo (24-ago): **una marca (safepoint) que sirve para las tres cosas**, y el primer paso es MEDIR su coste en los saltos hacia atrás con `samples/NatV7.bp` (1 ms en la Pico). Sin fecha: *«todo eso para el futuro»* | `V7_IDEAS.md` §2 |
 | La cola de la **fusión `.mod`/`.mdn`**: el `.mod` multifamilia (hoy N=1: el IDE funde sólo el blob de la placa conectada), la poda como UNA función (Run y packs), `putIfChanged` comparando lo podado | `FICHAS` L11519; `V6_IDEAS.md` §.mdn |
 | **El `INFO` no publica la ABI de helpers** (`MDN_ABI_VERSION`): un `.mdn` de ABI vieja se rechaza en el log de la placa y el programa cae a interpretado sin ruido — así se tapó `#504` tres semanas | `FICHAS` L11129 |
 
-## F · Memoria, arranque y arquitectura
+## H6 · LVGL en un pack — y el código nativo empotrable (hito propio por decisión de Eduardo, 13-sep)
+
+> *«El encapsulado de LVGL en un pack tiene que tener su propio hito.»* Es el primer cliente de verdad del
+> diseño del código nativo empotrable (el encargo del 21-ago), así que las dos cosas van juntas: la disciplina
+> alrededor de `publica()`/`busca()` se construye con LVGL delante.
+
+| asunto | dónde |
+|---|---|
+| **LVGL a un pack — el primer cliente**: contrato bidireccional y con estado (`flush_cb`/`read_cb`/eventos), qué pasa con `src/gui.c`, el pack lleva `Gui.mod` (`#468`), y el driver del pack pone la pantalla del usuario (`P2.3`); se mira junto a `#434`. *«Merece un trabajo separado, con una evaluación previa»* (26-ago) | `V7_IDEAS.md` §1; `FICHAS` L8243 |
+| **El código nativo empotrable — el diseño** (encargo del 21-ago: *«código independiente que ya sabemos recolocar; lo que hay que mejorar es cómo publica su API y cómo interactúa con el resto»*), en cuatro puntos: (1) **reja en `publica()`** — leer marca y versión de la tabla en vez de aceptar un `const void*` (una tarde, con test); (2) dependencias entre códigos nativos con **`busca()` perezoso** en el primer uso (propuesta, sin decidir); (3) si las **cuatro ranuras** (`BPVM_PACK_MAX 4`) valen cuando crezca el catálogo — medir antes; (4) **la arena de RAM por código nativo**, no por pack: hoy es singular y se llama `SQLite`, y los `malloc` de la BIOS son chivatos | `V7_IDEAS.md` §1; `V6_IDEAS.md` §arena |
+
+## H7 · Memoria, arranque y arquitectura
 
 | asunto | dónde |
 |---|---|
@@ -143,7 +146,7 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | `#494` resto — el guardián del heap del GC (`HEAP INCONSISTENTE` / `DESCARRILADO`): ¿fatal o aviso? | `FICHAS` L4000 |
 | `scheduler_smp.c` llama al `poll_cb` sin la guarda `vm->io == NULL` (latente: SMP es opt-in); **decidir si `--smp=2` va por defecto** en el host (×1,7–1,9 medido, 0/40 cuelgues tras `#474`); y el **modelo final del SMP**: VMs ociosas «a piñón» o parqueadas (medir la latencia de despertar antes) y los workers como cola de hilos de SO en vez de N fijos — rumbo de Eduardo del 9-sep | `ESTADO` 5-sep; `FICHAS` L6850; `V6_IDEAS.md` §SMP |
 
-## G · IDE y protocolo wire
+## H8 · IDE y protocolo wire
 
 | asunto | dónde |
 |---|---|
@@ -154,7 +157,7 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | El guardián del fat-jar (`#429`) no vigila la **miVM embebida**, sólo el compilador | `ESTADO` 5-sep |
 | Confirmar desde el IDE 6.0 que `Run on Device` sube `Gui`+`Json` solo (C6 con `/lib` vacío) — una comprobación | `FICHAS` L8238 |
 
-## H · Pruebas y medida
+## H9 · Pruebas y medida
 
 | asunto | dónde |
 |---|---|
@@ -170,7 +173,7 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | **Inyección de eventos en el device** (resto de `#475`/`C1`): la captura en placa sólo ve la pantalla inicial; el host tiene guion, la placa sólo el dedo · `Window.load()` **hornea el tamaño del panel** en el `.win` (no portable entre pantallas) | `FICHAS` L5506, L5179 |
 | Limpieza: los 11 `.mod` de stdlib **hermanos** en `bpgenvm-c/samples/` que nadie refresca (un run manual carga stdlib rancia) · `samples/out` con la stdlib MOD6 de V5 (resto de `#467`, sólo `rm`) · los `.mod` de prueba que quedaron en las placas (`/app/P.mod`, `adc.mod`…; con OK placa a placa) | `ESTADO` 25-ago; `FICHAS` L3336 |
 
-## I · Placas y drivers
+## H10 · Placas y drivers
 
 | asunto | dónde |
 |---|---|
@@ -181,17 +184,31 @@ cuelgan de una ficha cerrada se numeran el día que entren en el plan, no antes.
 | El `sdkconfig` generado del C3 está **trackeado** (S3, C6 y P4 lo ignoran): `.gitignore` + `git rm --cached` | `FICHAS` L7969 |
 | Cosmético: el log del bootloader sale por el USB nativo **antes del `HELLO`** (C6/C3); el IDE lo salta | `FICHAS` L8241 |
 | El ENV de la Pico 2 **cambió solo** al flashear (28-ago; FS 1512→1024 KB): sin causa ni reproducción — si vuelve, capturar el log del arranque | `ESTADO` 28-ago |
-| **[P4] segunda imagen para el silicio nuevo (P4X)** manteniendo las dos · **ESP32-S31** (RISC-V, sucesora de la S3) cuando haya placa, por el camino de `P1.C3` | `FICHAS` L11696, L7641 |
+| **ESP32-S31** (RISC-V, sucesora de la S3) cuando haya placa, por el camino de `P1.C3` | `FICHAS` L7641 |
 | **GUI**: `#477` resto — los tres agujeros del oráculo `__guiDumpTree` (el chart no vuelca datos, ciego a la rotación en la DK2, color/fuente sólo de render) · `G2` resto — `owner` en las properties de la ventana y un `~Component` que libere el nodo (necesita el destructor); `toJson()` no emite min/max, options, colores, ni Chart/Table/ImageView | `FICHAS` L5036, L5103 |
 | **GUI — una cola de tareas hacia el hilo que bombea** (el `invokeLater` de Swing) y la vía intermedia de Eduardo: una clase base **`Command`** en la stdlib (`ejecutar()`/`habilitado`, encolable). La reentrada de LVGL que lo motivaba ya la cerró `G1`; queda la utilidad de «ejecutar esto en aquel hilo» — y si entra, entera de una vez (una base nueva corre las ranuras de la vtable) | `V7_IDEAS.md` §3 |
 | **Los 10 «rompe-el-modelo» vivos de `#473`** que el triaje pedía con ficha nueva y no la tienen: `RUN` ×4, sink de `OUTPUT` ×5, puerta de arranque ×3 con agujeros, fachada FS↔littlefs, clasificación de fallo en 1/3, `board_mgr_*` ×3, `lv_conf.h` duplicado, `setRotation` en la DK2, el camino de error de `scheduler_smp.c` que no une workers, y los lotes D (FS, 15) y E (GUI, 10) de `473_TRIAJE_COLA.md` | `FICHAS` `#473` (L4597); `docs/473_TRIAJE_COLA.md` §3 |
 | El DMA de `Uart` donde la familia lo tenga (V6 dejó el anillo por IRQ) | `FICHAS` L4798 |
 
-## J · Fuera del plan de versiones (decidido; se lista para no perderlo)
+## H11 · ESP32-C5 con PSRAM y pantalla de 3" — la placa nueva de V7 (pedida el 13-sep)
+
+> Sustituye al P4X en el plan. Entra por el camino que V6 dejó hecho para el C3 y el C6 (`P1`/`P2`): la
+> familia ESP32 se **activa**, no se construye — y lo que costó en V6 fue la placa, no la familia.
+
+| asunto | dónde |
+|---|---|
+| **La placa**: carpeta `esp32c5/` clonando `esp32c6/` — `chip_cfg.h`, `<chip>_board_id.c`, `partitions.csv`, `sdkconfig.defaults` (comprobar que el IDF instalado, `C:\esp6.0.1`, ya trae el target), el enumerador de memoria para `bpvm_mem_plan` **con la PSRAM** (el reparto del S3/P4, no el del C6) | `FICHAS` `P1` (V6); `ESTADO` 31-ago/3-sep |
+| **El AOT**: el destino se decide por la float-ABI que publique el `INFO` — si el C5 lleva FPU de simple precisión va como el P4 (`ilp32f`); si no, como el C3/C6 (`ilp32`, que es justo el resto de `#502`, H5). Comprobar en la hoja del chip, no suponer | `#502` |
+| **La pantalla de 3"**: el panel por el ENV (`display=…`) como en `P2`; el driver, si es SPI, ya está (ST7789 del C6); si es otra cosa, es un driver más, no un modelo nuevo. El `screen` mide lo que mide el panel | `FICHAS` `P2` (V6); memoria `gui-screen-es-el-panel` |
+| **El banco de pruebas**: `tanda.py` con la C5 como una columna más; con PSRAM y pantalla es la primera placa pequeña que puede correr los `Gui*Demo`, y por tanto una candidata a **juez de memoria apretada** (lo que `V7_IDEAS` pedía del C6, H9) | H9 |
+| Lo que se decide cuando esté en la mesa: nombre de placa (`boardName`), qué expone (`getMicro()`/`getBoard()`, H4), y si su USB es serial-JTAG nativo (la trampa del COM3 compartido con C3/C6) | memorias `dos-esp-mismo-com`, `c3-un-solo-usb-sin-dtr` |
+
+## Fuera del plan de versiones (decidido; se lista para no perderlo)
 
 - 🧊 **`A4` — los dos núcleos** (*«no es V6 y probablemente tampoco V7; hay muchas cosas antes»*, 9-sep). Inventario hecho; antes de activar: `kill_requested` atómico, el `printf` de la Pico comparte USB con el wire. Con él van **las dos VM sobre una cola de threads BP** (el camino SMP rehecho sobre `io`) y **borrar `comm_pico.c`/`comm_host.c`** (`A1.4`, inertes). → `FICHAS` `A4` (L6915)
 - 🧊 **`#488` — el AOT no genera Xtensa** (*«de momento no»*): el S3 corre todo interpretado. Con él, `bios_s3.c` (sin consumidor) y los **packs nativos en S3/STM32**. → `FICHAS` `#488` (L4063)
 - **La red en placa** (backend WiFi/Ethernet de `Net`): **V8**, rumbo del 10-ago. → `FICHAS` L6310
 - **Linux**: el IDE en Linux + la Raspberry Pi como placa — `[SIN VERSIÓN, V6+]`. → `FICHAS` L11901
 - `Gui.setBrightness` / PWM del backlight — «no tiene a quién servir» (4-sep).
+- **[P4] la segunda imagen para el silicio nuevo (P4X)** — **sin fecha** (Eduardo, 13-sep: *«lo pedí pero me enviaron la versión P4, así que de momento no lo tengo»*). Cuando haya placa: otra carpeta de build sin las dos líneas que clavan al silicio viejo; se mantienen las dos imágenes. → `FICHAS` L11696
 - «Faltan módulos» al ejecutar desde `run` de consola tras el IDE — en suspenso, sin reproducción (la asimetría del `basedir` sigue: `fs_facade.c:98`).
