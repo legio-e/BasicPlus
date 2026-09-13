@@ -52,6 +52,40 @@ los cuatro caen en el mismo sitio del mapa:
 - El **P4X no tiene fecha** (pedido; llegó un P4): fuera del plan hasta que haya placa. En su lugar, la
   **ESP32-C5** — la Waveshare **ESP32-C5-Touch-LCD-2.8** (2,8", 240×320, táctil), con 8 MB de PSRAM y 32 MB de flash, comprada el 5-sep — es `H11`.
 
+### 🤝 Lo que añado yo (13-sep) — Eduardo: *«si quieres añadir algo que consideres importante eres libre de hacerlo, a fin de cuentas somos socios»*
+
+Cinco cosas, todas pequeñas de escribir y grandes de olvidar. Son propuestas: las que él no quiera, se tachan.
+
+1. **Cerrar por hito, no al final.** En V6 la documentación (`D1`) y las pruebas finales (`F1`) fueron los dos
+   últimos días, y `F1` cazó una BD rota tres semanas, una suite roja trece días y un pack MOD6 en el ZIP: nadie
+   *usaba* lo que se daba por hecho. Con doce hitos y la regla «nada a V8», eso no puede esperar al final. Un hito
+   está **cerrado** cuando: (a) sus fichas están cerradas o canceladas con motivo; (b) hay **una prueba que lo
+   EJERCITA** en el banco (`tanda.py` en placa o `compat.sh` en host), no que lo carga — *«confirmado al cargar no
+   es confirmado en uso»*; (c) el manual, la referencia y `PENDIENTES` dicen lo que hay; (d) su bloque de este
+   índice está tachado. `F1` deja de ser un día y pasa a ser un gesto por hito.
+2. **Lo silencioso salta la cola.** Sin orden prefijado, una excepción: lo que **falla sin decirlo** se mira
+   antes que cualquier hito. Hoy son dos: `L20` (el compilador escribe el `.mod` tras dar error: un programa
+   ejecuta sin su bucle) y los diez «rompe-el-modelo» de `#473` (la puerta de arranque que deja pasar
+   `LIST_DIR`/`SAVE` sin FS, el `RUN` copiado cuatro veces…). Es el criterio de siempre —*errores sí, silenciosos
+   no*— convertido en regla de cola.
+3. **`H2` es la red de `H1`.** El módulo raíz regenera `Core.mod`, que va **embebido en las cinco imágenes**; el
+   riesgo de `H1` es justo un `Core` rancio en algún sitio que pase en silencio — y `#500` (una dependencia más
+   antigua que el módulo principal NO vale) es la reja que lo cazaría. No es «H2 es pequeño»: es que sin `H2`
+   hecho, `H1` se prueba sin red. Sugiero `H2` antes de tocar `H1`.
+4. **`H6` se demuestra en la C5, y nace pensando en `H12`.** La tesis de `H6` es «cualquier micro pequeño puede
+   llevar una pantalla si su dueño quiere»; la prueba de la tesis no es el P4 (que ya lleva LVGL en la imagen),
+   es la **C5**: una placa pequeña cuya pantalla llega **como pack**. Propongo que `H11` entre sin pantalla por el
+   camino de `P1`, y que su pantalla sea el primer pack de `H6` (si hace falta antes, por el camino de `P2`, es su
+   decisión; pero el pack tiene que llegar a probarse ahí). Y como `H12` va al final: la API de `H6`
+   (`publica()`/`busca()`, la arena por código nativo) se diseña **segura con dos núcleos desde el primer día**
+   — un candado hoy es barato; ponerlo en `H12` sobre un pack ya en uso, no.
+5. **Un repaso a mitad de V7.** «Nada a V8» tiene un riesgo simétrico: que V7 no cierre nunca. En V6 el repaso
+   del 7-sep (*«15 pendientes → 2»*) fue lo que la hizo cerrable. Propongo fijarlo: cuando se cierren **seis
+   hitos**, un día de triaje de este índice con la pregunta de siempre —«¿está roto?»— y cancelar como resultado
+   válido. Y el rótulo de `FICHAS` (cuántas quedan) **se cuenta, no se escribe**: en V6 el desfase del 8-sep
+   salió de escribirlo a mano.
+
+
 ---
 
 ## H1 · El módulo raíz — lenguaje y compilador (era `L1`)

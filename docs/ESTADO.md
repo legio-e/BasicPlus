@@ -83,6 +83,12 @@ Todo escrito en `FICHAS` §ABIERTAS (la tabla «LOS HITOS DE V7») y en `V7_BACK
 **6. Y dos cosas de fondo, de Eduardo, la misma tarde** (*«hoy no implementamos, solamente analizar; llevamos 3 semanas sin
 parar»*): **`H6` es estratégico** — *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»* — y **`A4` vuelve como `H12`**: *«Al final de V7 podemos hacer una prueba a ver si se puede trabajar con 2 núcleos reales: si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*. Escritas en `FICHAS` (tabla de hitos) y en `V7_BACKLOG.md` (§🧭, `H6`, `H12`).
 
+**7. Lo que añadí yo, con su permiso** (*«eres libre de hacerlo, a fin de cuentas somos socios»*), como PROPUESTAS en
+`V7_BACKLOG.md` §🤝 y resumidas en `FICHAS`: cerrar por hito y no al final (definición de «cerrado»: fichas + prueba que
+lo ejercita + docs + índice tachado); lo silencioso salta la cola (`L20`, los diez de `#473`); `H2` es la red de `H1`;
+`H6` se demuestra en la C5 y nace segura para `H12`; un repaso del índice a los seis hitos. **Pendientes de que él las
+acepte o tache** — no se dan por decididas.
+
 ⏭️ **Al retomar**: elegir por dónde empezar a cerrar — la sugerencia sigue siendo `H2` (`#500`/`#493`/`#492`, pequeño
 y cierra lo que mordió en `F1`) y `H1` después; pero es de Eduardo. Sin decidir nada se pueden cerrar ya `N2`
 (minutos) y la limpieza de `H9` (`samples/out` MOD6; los `.mod` de prueba en las placas, con OK placa a placa).
