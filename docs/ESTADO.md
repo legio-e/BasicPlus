@@ -91,6 +91,10 @@ tarde**: *«de acuerdo en todo salvo en el punto 1»* — no un `F1` por hito, s
 de tests) **y uno casi completo a mitad de V7**. Y la forma de `H6`: `H6.a` el pack en la C5 (*«inofensivo»*), `H6.b`
 quitar LVGL de C6/P4/DK2 (*«más delicado»*) sólo tras **una prueba completa sellada como punto de restauración**.
 
+**8. Y el cierre del día** (Eduardo): *«con esto V7 queda bastante completo. En principio no hace falta añadir nada
+más, salvo los bugs que vayan apareciendo»*. **El alcance de V7 está cerrado el mismo día que se abre**: doce hitos y su
+índice; a partir de aquí sólo entran bugs, con su ficha. Día de análisis, sin una línea de código.
+
 ⏭️ **Al retomar**: elegir por dónde empezar a cerrar — la sugerencia sigue siendo `H2` (`#500`/`#493`/`#492`, pequeño
 y cierra lo que mordió en `F1`) y `H1` después; pero es de Eduardo. Sin decidir nada se pueden cerrar ya `N2`
 (minutos) y la limpieza de `H9` (`samples/out` MOD6; los `.mod` de prueba en las placas, con OK placa a placa).
