@@ -1,8 +1,16 @@
 # V7 — ideas y diseño
 
+> 🚀 **Desde el 13-sep-2026, V7 es la versión en curso** (V6 se publicó el 12-sep, tag
+> `v6.0`). Éste es el cuaderno de diseño vivo del hito, hermano de `V6_IDEAS.md`: las
+> charlas de diseño van aquí **antes** de escribir código. El estado vive en `FICHAS.md`
+> §ABIERTAS (bloque V7) y el índice de lo aplazado en `V7_BACKLOG.md`.
+>
 > Documento abierto el 21-ago con la visión de Eduardo sobre el código nativo en packs.
 > **Va en `docs/` y no en `notas/` a propósito**: `notas/` está en el `.gitignore` y por
 > esa vía ya se perdió un fichero (el `SqlDemo.bpbuild`, reconstruido el 19-ago).
+>
+> ℹ️ La última sección («Sistematizar las pruebas EN PLACA», 29-ago) **se hizo en V6**: es
+> el hito `T1` (`tools/tanda.py`, 11-sep). Se deja como está porque es el diseño del que salió.
 
 ---
 
@@ -415,7 +423,7 @@ añadido después es otra corrida de ranuras y otra tanda de reconstrucciones.
 
 ---
 
-## Sistematizar las pruebas EN PLACA — un arnés que recorra la matriz (Eduardo, 29-ago)
+## Sistematizar las pruebas EN PLACA — un arnés que recorra la matriz (Eduardo, 29-ago) — ✅ HECHO EN V6 como `T1` (`tools/tanda.py`, 11-sep)
 
 ### El problema, y cómo se manifestó
 

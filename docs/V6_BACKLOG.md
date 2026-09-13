@@ -1,9 +1,15 @@
-# V6 — el mapa del hito EN CURSO
+# V6 — el mapa del hito (ARCHIVO)
 
-> 🚀 **Desde el 23-ago-2026, V6 es la versión en curso** (V5 se publicó el 22). Este
-> fichero nació como índice de lo aplazado; ahora es además la puerta de entrada al hito.
-> El estado sigue en `FICHAS.md` §ABIERTAS, cuyo primer bloque es ya **V6**; los diseños,
-> en `V6_IDEAS.md` (guardado en `docs/` ese mismo día: antes vivía fuera del repositorio).
+> 📦 **ARCHIVO — V6 se publicó el 12-sep-2026** (tag `v6.0`, «orden en los micros»). Este
+> documento ya no dirige trabajo: queda como registro de cómo se planificó el hito. Lo que
+> quedó vivo al cerrar V6 está en `FICHAS.md` §ABIERTAS (bloque **V7**), y el índice de lo
+> aplazado, en `V7_BACKLOG.md`.
+>
+> *(Cabecera original, 23-ago:)* Desde el 23-ago-2026, V6 es la versión en curso (V5 se
+> publicó el 22). Este fichero nació como índice de lo aplazado; ahora es además la puerta
+> de entrada al hito. El estado sigue en `FICHAS.md` §ABIERTAS, cuyo primer bloque es ya
+> V6; los diseños, en `V6_IDEAS.md` (guardado en `docs/` ese mismo día: antes vivía fuera
+> del repositorio).
 
 > **Qué es esto y qué NO es.** Un **índice**, hecho el 21-ago a petición de Eduardo
 > («hay muchas cosas aplazadas a V6, dame un listado»). Una línea por asunto y un

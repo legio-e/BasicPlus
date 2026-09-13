@@ -4,8 +4,11 @@ Documento hermano de `V3_IDEAS.md`, `V4_IDEAS.md` y `V5_IDEAS.md`: aquí se
 registran las charlas de diseño de V6 **antes** de escribir código, que es el
 método de la casa.
 
-**V5 se publicó el 22-ago-2026** (release `v5.0`), así que V6 es la versión EN CURSO y
-esto ya no es material aparcado: es el cuaderno de diseño vivo del hito. Guardado en
+> 📦 **V6 se publicó el 12-sep-2026** (tag `v6.0`): este cuaderno queda como registro de
+> cómo se diseñó el hito. El cuaderno vivo es ahora **`V7_IDEAS.md`**.
+
+**V5 se publicó el 22-ago-2026** (release `v5.0`), así que V6 fue la versión EN CURSO
+entre el 23-ago y el 12-sep y esto era el cuaderno de diseño vivo del hito. Guardado en
 `docs/` el 23-ago al abrir V6, por decisión de Eduardo — hasta entonces vivía fuera del
 repositorio porque era material de la versión siguiente.
 
