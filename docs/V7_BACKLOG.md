@@ -47,7 +47,7 @@ los cuatro caen en el mismo sitio del mapa:
   cancela dentro de la versión; aplazar deja de ser una salida. Y sigue la regla de V6: **una entrada es
   una cosa**, y los restos que cuelgan de una ficha cerrada se numeran cuando se les mete mano.
 - El **P4X no tiene fecha** (pedido; llegó un P4): fuera del plan hasta que haya placa. En su lugar, la
-  **ESP32-C5 con PSRAM y pantalla de 3"** (pedida el 13-sep) es `H11`.
+  **ESP32-C5** — la Waveshare **ESP32-C5-Touch-LCD-2.8** (2,8", 240×320, táctil), con 8 MB de PSRAM y 32 MB de flash, comprada el 5-sep — es `H11`.
 
 ---
 
@@ -190,18 +190,26 @@ los cuatro caen en el mismo sitio del mapa:
 | **Los 10 «rompe-el-modelo» vivos de `#473`** que el triaje pedía con ficha nueva y no la tienen: `RUN` ×4, sink de `OUTPUT` ×5, puerta de arranque ×3 con agujeros, fachada FS↔littlefs, clasificación de fallo en 1/3, `board_mgr_*` ×3, `lv_conf.h` duplicado, `setRotation` en la DK2, el camino de error de `scheduler_smp.c` que no une workers, y los lotes D (FS, 15) y E (GUI, 10) de `473_TRIAJE_COLA.md` | `FICHAS` `#473` (L4597); `docs/473_TRIAJE_COLA.md` §3 |
 | El DMA de `Uart` donde la familia lo tenga (V6 dejó el anillo por IRQ) | `FICHAS` L4798 |
 
-## H11 · ESP32-C5 con PSRAM y pantalla de 3" — la placa nueva de V7 (pedida el 13-sep)
+## H11 · La ESP32-C5 — Waveshare ESP32-C5-Touch-LCD-2.8 (comprada el 5-sep; la placa nueva de V7)
 
 > Sustituye al P4X en el plan. Entra por el camino que V6 dejó hecho para el C3 y el C6 (`P1`/`P2`): la
 > familia ESP32 se **activa**, no se construye — y lo que costó en V6 fue la placa, no la familia.
 
+**La placa, según su ficha** (Amazon, 13-sep; *«5-point capacitive touch, no batt»*): módulo **ESP32-C5-WROOM-1**,
+RISC-V a 240 MHz, **384 KB de SRAM, 320 KB de ROM, 8 MB de PSRAM, 32 MB de flash**; Wi-Fi **2,4 y 5 GHz**, BT 5 LE
+y **802.15.4** (Zigbee/Thread); USB-C con USB *full-speed*; pantalla IPS **2,8" de 240×320, 262K colores, táctil
+capacitiva de 5 puntos por I2C con interrupción**; **ranura TF**; IMU QMI8658 (6 ejes), sensor RTC, SHTC3
+(temperatura y humedad); códec de audio ES8311 + amplificador NS4150B, micrófono y altavoz; gestión de batería
+con conector MX1.25 (sin batería); *«flexible clock and multiple power modes to realize low power consumption»*.
+
 | asunto | dónde |
 |---|---|
-| **La placa**: carpeta `esp32c5/` clonando `esp32c6/` — `chip_cfg.h`, `<chip>_board_id.c`, `partitions.csv`, `sdkconfig.defaults` (comprobar que el IDF instalado, `C:\esp6.0.1`, ya trae el target), el enumerador de memoria para `bpvm_mem_plan` **con la PSRAM** (el reparto del S3/P4, no el del C6) | `FICHAS` `P1` (V6); `ESTADO` 31-ago/3-sep |
+| **La placa**: carpeta `esp32c5/` clonando `esp32c6/` — `chip_cfg.h`, `<chip>_board_id.c`, `partitions.csv`, `sdkconfig.defaults` (comprobar que el IDF instalado, `C:\esp6.0.1`, ya trae el target `esp32c5`), y el enumerador de memoria para `bpvm_mem_plan` **con los 8 MB de PSRAM** (el reparto del S3/P4 —heap de la VM y FS en PSRAM—, no el del C6) | `FICHAS` `P1` (V6); `ESTADO` 31-ago/3-sep |
 | **El AOT**: el destino se decide por la float-ABI que publique el `INFO` — si el C5 lleva FPU de simple precisión va como el P4 (`ilp32f`); si no, como el C3/C6 (`ilp32`, que es justo el resto de `#502`, H5). Comprobar en la hoja del chip, no suponer | `#502` |
-| **La pantalla de 3"**: el panel por el ENV (`display=…`) como en `P2`; el driver, si es SPI, ya está (ST7789 del C6); si es otra cosa, es un driver más, no un modelo nuevo. El `screen` mide lo que mide el panel | `FICHAS` `P2` (V6); memoria `gui-screen-es-el-panel` |
-| **El banco de pruebas**: `tanda.py` con la C5 como una columna más; con PSRAM y pantalla es la primera placa pequeña que puede correr los `Gui*Demo`, y por tanto una candidata a **juez de memoria apretada** (lo que `V7_IDEAS` pedía del C6, H9) | H9 |
-| Lo que se decide cuando esté en la mesa: nombre de placa (`boardName`), qué expone (`getMicro()`/`getBoard()`, H4), y si su USB es serial-JTAG nativo (la trampa del COM3 compartido con C3/C6) | memorias `dos-esp-mismo-com`, `c3-un-solo-usb-sin-dtr` |
+| **La pantalla de 2,8" 240×320**: el panel por el ENV (`display=…`) como en `P2`; el controlador exacto lo dice el esquema de Waveshare (si es un ST7789 por SPI, el driver del C6 vale con otra geometría; si es otro, es un driver más, no un modelo nuevo). **El táctil de 5 puntos por I2C es nuevo en una placa pequeña**: hasta hoy sólo el P4 (GT911) y la DK2 tienen táctil — el modelo de eventos de la GUI se prueba por primera vez en un micro con 384 KB | `FICHAS` `P2` (V6); memoria `gui-screen-es-el-panel` |
+| **Lo que trae y ya tiene sitio en otros hitos**: la **ranura TF** (la SD por SPI del motor común → H3, y una placa más para `SdDemo`); el **sensor RTC** y los **modos de bajo consumo** que anuncia (→ `#490`, H10: candidata al estudio junto al STM32, que hoy es la única con RTC de hardware); los **32 MB de flash** (¿mapea XIP más allá de 16 MB, o tiene el mismo techo que el P4? → H7); Wi-Fi 6 dual y 802.15.4 (→ la red en placa, V8) | H3, H10, H7 |
+| **El banco de pruebas**: `tanda.py` con la C5 como una columna más; con PSRAM y pantalla es la primera placa pequeña que puede correr los `Gui*Demo`, y candidata a **juez de memoria apretada** (lo que `V7_IDEAS` pedía del C6, H9) | H9 |
+| Lo que se decide cuando esté en la mesa: `boardName`, qué expone (`getMicro()`/`getBoard()`, H4), y si su USB es el serial-JTAG nativo del chip (la trampa del COM3 compartido con C3/C6; un solo USB → la consola por UART0 como en el C3) | memorias `dos-esp-mismo-com`, `c3-un-solo-usb-sin-dtr` |
 
 ## Fuera del plan de versiones (decidido; se lista para no perderlo)
 

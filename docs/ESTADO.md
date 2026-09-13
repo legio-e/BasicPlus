@@ -71,7 +71,7 @@ la posición dentro de un fichero (`#491`) y la clase `File` (`#491` + el destru
 - **Un hito por tema, y los hitos se llaman `H` + número** (*«así es más fácil hacer el seguimiento»*): `H1` el
   módulo raíz (era `L1`), `H2` dependencias del `.mod`, `H3` ficheros y `File`, `H4` la HAL BP de periféricos, `H5`
   AOT, **`H6` LVGL en un pack** (hito propio por decisión suya), `H7` memoria y arranque, `H8` IDE y wire, `H9`
-  pruebas, `H10` placas y drivers, **`H11` la ESP32-C5 con PSRAM y pantalla de 3"** (placa nueva, pedida el 13-sep).
+  pruebas, `H10` placas y drivers, **`H11` la ESP32-C5** — Waveshare **ESP32-C5-Touch-LCD-2.8** (2,8", 240×320, táctil), 8 MB PSRAM, 32 MB flash, TF, RTC; comprada el 5-sep.
 - **El P4X no tiene fecha** (*«lo pedí pero me enviaron la versión P4»*): sale del plan; la C5 lo sustituye.
 - **Sin orden prefijado**: *«como hay muchas cosas pendientes hay que ir cerrando algunos pendientes»*.
 - **La regla que hace distinta a V7**: *«intentaremos no dejar pendientes para V8»* — lo que se abra se cierra o se

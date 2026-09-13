@@ -117,7 +117,7 @@ el PC sin placa, como en el host.
 > | **H8** | **IDE y wire** | `#495` `#452`; los restos de `E1`; el `INFO` de ESP32/STM32; el guardián del fat-jar; `Run on Device` con `/lib` vacío |
 > | **H9** | **pruebas y medida** | los restos de `T1` y lo que `V7_IDEAS` pedía del arnés; `compat.sh` y el código de salida; las medidas en placa pendientes; `test-listtrunc`; la batería de rendimiento (= eje 4 del censo); resistencia larga; el simulador con disfraces; inyección de eventos; limpieza |
 > | **H10** | **placas y drivers** | `#490` (estudio); `Rtc`; `#466`; el STM32 (`Debug`, el FS que baila); el C3 (`sdkconfig`, log del bootloader); el ENV de la Pico 2; la S31 cuando haya placa; la GUI (`#477`, `G2`, `Command`); los diez «rompe-el-modelo» de `#473` y los lotes D/E; DMA de `Uart` |
-> | **H11** | **ESP32-C5 con PSRAM y pantalla de 3"** — placa nueva, pedida el 13-sep | por el camino de `P1`/`P2` de V6: la familia ESP32 se activa, la placa se describe; la pantalla por el ENV; el AOT decide su destino por la float-ABI (`#502`) |
+> | **H11** | **la ESP32-C5**: Waveshare **ESP32-C5-Touch-LCD-2.8** (2,8", 240×320, táctil) — ESP32-C5-WROOM-1, 384 KB SRAM + **8 MB PSRAM**, 32 MB flash, táctil de 5 puntos por I2C, ranura TF, RTC, IMU, audio; comprada el 5-sep | por el camino de `P1`/`P2` de V6: la familia ESP32 se activa, la placa se describe; la pantalla por el ENV; el AOT decide su destino por la float-ABI (`#502`); su TF, su RTC y sus modos de bajo consumo alimentan H3, `#490` y H7 |
 >
 > 📌 **Y las otras decisiones del mismo día:** el **P4X no tiene fecha** (*«lo pedí pero me enviaron la
 > versión P4»*) → sale del plan, a la lista de «fuera del plan» hasta que haya placa. **Sin orden
