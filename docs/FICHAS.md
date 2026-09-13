@@ -36,45 +36,1565 @@
 
 ---
 
-## 🚀 V5 PUBLICADA — 22-ago-2026
+## 🚀 V6 PUBLICADA — 12-sep-2026 · «orden en los micros»
 
-Los cuatro pasos del plan de cierre, hechos. **El congelado queda levantado** y lo que
-entre a partir de ahora es V6 (índice en `V6_BACKLOG.md`).
+Los cinco pasos del plan de cierre (`C1` → `T1` → 🧊 → `D1` → `F1`), hechos en su orden.
+**El congelado queda levantado** y lo que entre a partir del 13-sep es **V7** (mapa en
+`V7_BACKLOG.md`, diseños en `V7_IDEAS.md`; el estado, aquí en §ABIERTAS).
 
 | qué | dónde |
 |---|---|
-| commit publicado | `ff408a1e` |
-| etiqueta | `v5.0` |
-| release | https://github.com/legio-e/BasicPlus/releases/tag/v5.0 |
-| artefacto **único** | `BasicPlus-5.0-win.zip` — 24.403.893 B, `sha256 093789a6…a5f9` |
-| web | https://legio-e.github.io/BasicPlus/ y `/en/`, build `built` sobre `ff408a1e` |
+| commit publicado | `9cb1a7bd` (el tag) · `84dce0d0` (el traspaso, después) |
+| etiqueta | `v6.0` |
+| release | https://github.com/legio-e/BasicPlus/releases/tag/v6.0 |
+| artefacto **único** | `BasicPlus-6.0-win.zip` — 26.169.531 B, `sha256 2279292d…8434` |
+| web | https://legio-e.github.io/BasicPlus/ y `/en/`, build `built` sobre `84dce0d0` |
+| lo que va dentro | el compilador, las dos VMs, el IDE (`BpIde-6.0.jar`), el micro simulado **con LVGL y SQLite**, la stdlib (28 módulos MOD7) y `Stdlib.pack`, las **siete imágenes** `*_merged.bin`/`.uf2`/`.bin` de las nueve placas, `firmware/boards/*.json`, la documentación ES y EN |
 
 **Verificado, no supuesto:** el ZIP se **descargó desde la propia release** y su sha256
-coincide con el que se montó y se probó; las dos webs se consultaron con `curl` y sirven
-V5 (no bastaba con que el build dijera `built` — el fallo de V4 fue exactamente ése).
+coincide con el montado y probado; las dos webs se consultaron en el navegador y sirven V6;
+las **nueve placas** pasaron `tanda.py` con las imágenes del ZIP (tabla en `F1`); y el IDE
+lo probó Eduardo desde la carpeta desplegada (*«IDE OK»*). Comprobado de nuevo el 13-sep al
+abrir V7: `main` == `origin/main`, el tag sobre `9cb1a7bd`, la release con su único
+artefacto, Pages `built`.
 
-📌 **Tres cosas que se encontraron al publicar y que ya están corregidas en
-`PUBLICAR.md`**, para que no vuelvan a morder:
+📌 **Tres cosas que se encontraron al publicar y que ya están en `PUBLICAR.md`**, para que
+no vuelvan a morder:
 
-1. **Las cuatro portadas seguían en `v4.0`** —las dos del repo y las dos de Pages— y las
-   tarjetas de la web ofrecían «lo diferido a v5», que ya era v6.
-2. **El número de versión hay que subirlo ANTES de montar el ZIP**, porque `docs/` viaja
-   dentro: se hizo al revés, hubo que rehacer el ZIP *después* de que Eduardo lo hubiera
-   probado y volver a verificarlo. Salió barato de milagro (la lista de ficheros quedó
-   idéntica porque las sustituciones conservaban la longitud).
-3. **El checklist mentía sobre el cuerpo de la release**: decía «= sección de
-   `RELEASES.md`», que es sólo español; V4 publicó de verdad un cuerpo **bilingüe** con
-   Descarga y Documentación. Se descubrió comparando con lo que V4 hizo, no con lo que
-   el doc decía.
+1. **El push no disparó el build de Pages** (el último era del 22-ago, V5): hubo que
+   relanzarlo con `gh api -X POST repos/legio-e/BasicPlus/pages/builds` y comprobar
+   *después* que la web servía V6. «`built`» sin mirar la portada no vale — ya era la
+   lección de V4 y V5.
+2. **Un pack es opaco para las guardas**: `Stdlib.pack` llevaba la stdlib **MOD6** del
+   20-ago y viajó en el primer ZIP; la guarda del empaquetador esperaba MOD6 (se cazó a sí
+   misma al pasarla a MOD7) y no miraba dentro de los packs. Ahora mira.
+3. **«Confirmado al cargar» no es «confirmado en uso»**: la BD llevaba tres semanas rota en
+   placa (`#503` + `#504`) y ninguna prueba ejecutaba una consulta. `F1` la ejecuta; y el
+   `.map` del enlazador habría cazado `#503` el mismo día (`bpvm_mdn_escanear` no estaba).
 
-📌 **Y una decisión de contenido:** entran al repo público `bp_propuesta_modelo_memoria/`
-(el estudio de mayo-julio del modelo de memoria) y `diag/orm-slots/`. Al primero se le
-escribió **portada** (`0517af68`) porque no se abría por ninguna parte y citaba 13 veces
-unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
+📌 **Y una decisión de contenido, tomada por mí y dicha a Eduardo:** el micro simulado del
+ZIP se construye `make sim LVGL=1 SQLITE=1` — **lleva SQLite**, para que `SqlDemo` corra en
+el PC sin placa, como en el host.
 
 ---
 
 ## ABIERTAS
+
+> **Desde el 13-sep-2026 TODO lo de esta sección es de V7.** V6 se publicó el 12-sep; **lo que
+> quedó pendiente pasa a V7 y deja de ser de V6** — la misma decisión de Eduardo del 23-ago, aplicada
+> igual. Hay tres bloques: las fichas que se abran en V7 (arriba), las que vienen de V6 (movidas
+> enteras, con su texto intacto) y la cola que venía de V5 y V6 no llegó a abrir.
+>
+> ### 📊 EL CENSO DE V7, al 13-sep-2026 — hecho al abrir la versión, ficha a ficha
+>
+> **Cómo se hizo** (el método del 7-sep, que es el que funcionó: *no clasificar por la marca*): 26
+> agentes leyeron `FICHAS.md` entero, `ESTADO.md`, los dos backlogs, `V6_IDEAS`/`V7_IDEAS` y
+> `PENDIENTES` — 448 candidatas en bruto, 261 únicas — y **cada candidata se releyó en su sitio y se
+> buscó en todo el registro** por si se había cerrado después. **92 cayeron**: cerradas sin tachar
+> (`Object` comodín estaba hecho desde el 18-ago y su viñeta de §Aplazadas seguía sin ✅; `#446`,
+> `#462`, `#474`, `U3`, `G1`…), duplicadas o superadas por los hechos. Lo que queda, **por temas y con
+> qué falta de cada una, está en `V7_BACKLOG.md`** (90 entradas). Aquí, la cuenta:
+>
+> | dónde | cuántas | cuáles |
+> |---|---|---|
+> | **fichas de V7 con número** | **18** | las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **hitos** | **1** | `L1` — **el módulo raíz** (movido a V7 el 5-sep; la columna vertebral de la versión) |
+> | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
+> | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
+> | **fuera del plan de versiones** (decidido) | **6** | `A4` (los dos núcleos), `#488` (AOT Xtensa), la red en placa (V8), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción |
+>
+> 📌 **Lo que Eduardo nombró de memoria al abrir V7** (13-sep), sin mirar el registro: *«la
+> caracterización de los periféricos de cada micro, limitaciones de los `.mod` a la hora de guardar
+> dependencias intra-clases cuando estaban en diferentes módulos, el sistema de archivos a la hora de
+> acceder a una posición concreta dentro de un archivo, así como la implementación en BP de una clase
+> `File`»*. Son `#378`/`#470`/`#479`, `#492`/`#500`/`#460`, y `#491` dos veces — y los cuatro se diseñan
+> encima de `L1`. Es la mejor señal de por dónde empezar; la propuesta de orden está en `V7_BACKLOG.md`.
+>
+> 📌 **La norma del 9-sep** (*«todo pendiente tiene número, y una entrada es una cosa»*) **se aplica al
+> entrar en el plan, no al censar**: los 28 restos y los ~40 sueltos cuelgan de la ficha o del cuaderno
+> que los posee, como se hizo con los 55 hallazgos de `#473`. Numerarlos hoy haría crecer la lista de
+> 19 a 90 sin que nada cambiara; el día que uno entre en el plan, se le da número y línea aquí.
+>
+> ⚠️ **Un hallazgo del censo que no es una ficha**: el triaje de `#473` (10-sep) pedía **ficha nueva**
+> para diez «rompe-el-modelo» vivos (`RUN` ×4, el sink de `OUTPUT` ×5, la puerta de arranque ×3…) y
+> para los lotes D (FS, 15) y E (GUI, 10) de `473_TRIAJE_COLA.md`, y **no se abrieron**. Están en
+> `V7_BACKLOG.md` §I hasta que Eduardo decida qué entra.
+
+### ═══ V7 — LA VERSIÓN EN CURSO ═══
+
+> Aquí entran las fichas que se abran a partir del 13-sep-2026, arriba las más recientes.
+> Las que vienen de V6 están en el bloque siguiente, con su texto intacto.
+
+### ═══ V7 — lo que viene de V6 y AHORA ES DE V7 ═══
+
+> Fichas abiertas al publicar V6 (12-sep-2026) o mandadas a V7 durante V6, **movidas aquí enteras** el
+> 13-sep al abrir V7, sin tocar una línea de su texto. Decisión de Eduardo (23-ago, al abrir V6) que
+> se aplica igual: *lo que quedó pendiente pasa a la versión siguiente y deja de ser de la anterior*.
+> El resto que dejan fichas CERRADAS de V6 no se mueve: está en `V7_BACKLOG.md`, con su puntero.
+
+#### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
+
+**La regla, de Eduardo (11-sep):** *«Una variable es `protected` si no se indica nada, `private` si se
+declara como tal, y no puede ser pública salvo que sea una propiedad.»* Protegido = lo ven la clase y
+sus descendientes.
+
+**Lo que hace el compilador**: un descendiente que vive en **otro módulo** no ve los campos protegidos
+de la base — `OwnerList extends Core.List` recibía *«'OwnerList' no tiene miembro de instancia
+'items'»*. La causa está en el contrato de módulos: `ClassSig` (`ModuleInterface.java`) exporta
+**métodos, propiedades, constructor, constantes estáticas y el layout binario** (cuántos campos, para
+que el descendiente coloque los suyos), **pero no los nombres ni los tipos de los campos**. Su propio
+comentario lo dice: *«Sin fields públicos (se exponen vía property)»* — correcto, pero se dejó fuera
+también a los protegidos. `lookupInstance` sí sube por `baseClass`; lo que no encuentra es lo que
+nunca se dio de alta.
+
+**El arreglo, y su forma**: la interfaz es texto (`method …`, `prop …`, `staticconst …`, `event …`);
+falta una línea **`field <nombre>:<tipo> slot <n>`** por cada campo **no privado**, y que el
+importador los dé de alta como protegidos. `checkVisibility` ya aplica la regla. Las VMs no cambian:
+el acceso es por slot. **Coste**: rehacer la cadena entera (jar, stdlib como proyecto, samples, fat-jar
+del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
+
+⏭️ **Aplazado por Eduardo**: *«utiliza un get para acceder al campo y de momento salimos del paso»*.
+Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
+que toque un campo protegido de `Window` se estrella igual.
+
+#### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
+
+*«Apunta para V7. `Core.bp` nos sigue dando guerra. Aquí hay que refinar la norma: si tenemos un módulo principal
+compilado a una versión V, dependencias de una versión < V no nos deberían valer. Así que si `Core` está en un pack
+y nuestra aplicación es más moderna, el `Core` del pack no debería servir. Esto es así desde hace mucho tiempo,
+pero en la práctica no siempre se cumple.»*
+
+**Lo que hay hoy, y por qué no basta**: el gate de `#284` rechaza un `.mod` de **formato** incompatible (MOD6 frente
+a MOD7) y el enlazador grita ante un **slot** que no cuadra (`Clase#método#slot`, `#324`). Ninguno de los dos mira
+la **versión** de la stdlib con la que se compiló la app: un `Core` del mismo formato pero más viejo, con los mismos
+slots que la app usa, pasa en silencio — y si además vive en un pack, el resolutor lo prefiere al de `/lib`
+disfrazado de `/app` (`#493`, medido en el P4 el 11-sep con `Gui`; y `#496`: el pack de SQLite lleva un `Core`
+dentro). **Lo que hace falta**: que el `.mod` de la app lleve la versión de cada dependencia contra la que se
+compiló, y que el cargador **rechace** (no avise) una dependencia más antigua, venga de donde venga. Junto con
+`#493` (que un pack de librería no empaquete stdlib, o que no tape a `/lib`) es la misma conversación.
+
+#### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
+
+**De dónde sale.** Al cerrar el flujo de la captura (`RUN → Gui.shot dentro → EXITED → GET`) apareció
+que el wire contesta `BUSY` a todo lo que no sea `HELLO`/`KILL`/`RESET` mientras corre un programa, en
+las cinco implementaciones (`repl_esp32.c:593`, `bpvm_sim.c:634`, `repl_v1.c:967`, `stm32_repl.c:334`
+y el host). Eduardo: *«ese `BUSY` es algo artificial: ahora, con dos hilos del SO corriendo, no hay
+nada que impida hacer un listado o copiar un archivo»*. Y es verdad en lo esencial: la regla es de
+cuando el REPL y la VM eran el mismo hilo (Pico, `#256`); desde `A1` el hilo `io` lee el cable
+durante todo el RUN.
+
+**Lo que SÍ queda por medio, comprobado en el código (ninguna de arquitectura):**
+1. **El cerrojo del cable es por LÍNEA, no por respuesta.** Un `GET_REPLY` son una línea y N bytes
+   crudos en dos llamadas (`bpvm_repl.c:251`); el `tx_mtx` de `#473` hace atómica la línea. Durante un
+   RUN, `io` saca los `OUTPUT` por el mismo cable y un `print` puede colarse **entre la cabecera y su
+   bulk**, o dentro del bulk: el IDE leería basura como fichero. Arreglo: la respuesta entera (línea +
+   bulk) bajo el mismo cerrojo, en el común.
+2. **El cerrojo del FS abarca el `read_stream` entero** (`fs_lfs.c:320`): mientras `GET` manda 60 KB a
+   11 KB/s (~5 s en la DK2), un `writeFile`/`readFile` del programa se queda parado. No es un
+   bloqueo, es una parada — pero en `T1` cambia los tiempos que se miden. Salir de ahí es trocear con
+   huecos (las N aperturas de `#453`) o aceptar la parada y decirlo.
+3. Después, levantar el `BUSY` en los cinco `poll` **sólo para `LS`/`GET`**: `PUT` sobre `/app` con el
+   programa leyendo ahí es otra conversación.
+
+⏩ **Decisión de Eduardo (11-sep): a V7** — *«lo estudiamos en V7, no es para V6»*. Para `C1` no hace
+falta: la captura se escribe cuando el programa quiere y se baja al terminar (o tras `KILL`). El
+runner de `T1` lo sabe: `RUN → EXITED → GET`.
+
+#### 🔵 `#493` — un módulo de stdlib en `/app` TAPA al de `/lib`, y el usuario no se entera (abierta 11-sep, de `G2`)
+
+**Medido en la Pico (11-sep)**: había `Collections.mod`, `Json.mod` y `Str.mod` **viejos** en `/app`
+—restos de subidas a mano de otras sesiones— y `/app` (el directorio de trabajo) **se resuelve antes
+que `/lib`**. `OwnerCascada` moría con `INVOKE_VIRTUAL sobre null` y **el arreglo no tenía nada que
+ver**: cargaba la `Collections` vieja. Sólo se vio en el log: `dep 'Str' -> /app/Str.mod`.
+
+📌 **Es la misma familia que la `Gui` rancia en la zona de packs de la P4**: una copia que sombrea a la
+buena, y un síntoma que apunta a otro sitio. **Medido otra vez el 11-sep en el P4 (`C1`)**: con
+`/lib/Gui.mod` fresco, `GuiShot` enlazaba contra la `Gui` del `Stdlib.pack` del 20-ago — el overlay de
+packs de la fachada (`fs_facade.c:fallback_claims`) contesta al `stat` de **`/app/Gui.mod`**, el primer
+candidato del resolutor, y `/lib` no llega a mirarse. O sea, el pack sombrea a `/lib` **disfrazado de
+`/app`**, y el aviso «el FS eclipsa al del pack» sale al revés. Se resolvió borrando los packs de la placa. Y el linker **sí** grita en el desfase de métodos
+(*«no exporta `Core.List#length#16`; ¿versión vieja?»*); **lo que no vigila es la sombra**.
+
+⏭️ **Lo que falta es ruido, no lógica**: una línea por el `OUTPUT` cuando un módulo con **nombre de
+stdlib** se resuelve desde `/app` en vez de `/lib` (o del embebido). El log ya lo sabe; que lo diga
+donde el usuario mira. ⚠️ Y para el runner de `T1`: **comprobar que `/app` no tapa a `/lib` antes de
+correr nada**, o los resultados en placa no significan lo que parecen. ¿V6 o V7? Es pequeño y es un
+fallo silencioso — a decidir.
+
+#### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
+
+🔎 **Y NO ES NUEVO: EL DISEÑO YA ESTABA DECIDIDO, Y SE PERDIÓ POR NO SER FICHA.** Eduardo lo recordaba
+(*«se habló que los ficheros de BP fuesen objetos y que open/read/write/close trabajasen con
+handles»*) y estaba: **`docs/V6_IDEAS.md:253`, del 17-ago**, bajo el título *«Ficheros: no hay `seek`
+porque no hay `open`»* — y arrancó de una pregunta suya, la del `fseek`.
+
+Allí hay **dos decisiones suyas, marcadas como DECIDIDO**:
+1. *«Un fichero para BP debe ser una clase, con los métodos habituales: open, close, read, write,
+   seek. Read tendrán que ser varios (readByte, readStr…) mientras que write se puede sobrecargar.»*
+   Y **la variante SIN handles quedó explícitamente descartada** (`readFileAt(path, off, n)`).
+2. *«Podemos tener un tipo `File` con las funciones básicas que trabaja a nivel de bytes. Después un
+   2º tipo que herede del anterior y que trabaje con strings (UTF-8).»* — con la regla que lo deja
+   limpio: **`TextFile` AÑADE sobrecargas, nunca redefine**, y lo formateado va por `print`.
+
+📌 **El documento ya había visto lo que se volvió a descubrir el 10-sep**, y con estas palabras:
+*«la trampa de `#398` desaparece sola cuando el fichero se abre UNA vez… **la apertura persistente ES
+el handle**»*. Y sus dos preguntas abiertas son exactamente las que hacían falta: **¿qué pasa si no se
+cierra?** (BP no tiene destructores; la red que ya existe es el guardián de fin de RUN de `#339`) y
+**¿cuántos ficheros a la vez?** — la misma que se planteó de cero al abrir esta ficha.
+
+⚠️ **CORRECCIÓN — dónde se quedó: dentro de `L1`, que se fue a V7 el 5-sep.** `docs/FICHAS.md:4572`
+lo lista explícitamente entre lo que `L1` se lleva —*«destructores + `var owner`, **ficheros como
+clase**, `Object` comodín, `Map` con objetos, el módulo `Time`»*—, con el criterio de que son
+*«añadidos, no arreglos»*. Estaba pensado para V6 (`docs/ESTADO.md:3008`), pero **nunca tuvo ficha
+propia**. Y no hay ni una línea de código: `grep TextFile` en stdlib, miVM, frontend y VM-C da cero,
+ni un id de builtin reservado.
+
+📌 **La lección es más pequeña de lo que yo dije, pero sigue siendo lección**: no se perdió —está en
+`L1`— pero **una decisión sin ficha propia es invisible en la práctica**, porque *«¿qué hay abierto?»*
+se contesta con la lista de fichas, no releyendo los hitos uno por uno. Por eso esta ficha existe.
+
+🧱 **CÓMO SE CIERRAN LAS DOS PREGUNTAS ABIERTAS — propuesta de Eduardo (10-sep):** *«Si hacemos que un
+fichero BP sea un objeto, éste se alojaría en el heap. Dentro del objeto puede haber un array de bytes
+que sirva de buffer. Así no haría falta limitar el número de handlers de ficheros, y en caso de cuelgue
+o error el GC acabaría recolectando el objeto.»*
+
+Contesta de una vez a las dos que `V6_IDEAS.md:404-431` dejó sin cerrar, y **el terreno lo aguanta**:
+
+- ✅ **El GC NO COMPACTA** (`src/heap.c:119`: *«F2 v1: no compacta (no mueve objetos)»*; `:364`:
+  *«este GC no compacta, así que retener nunca corrompe»*). Es justo la condición que hacía falta: el
+  driver del FS puede quedarse con el puntero al buffer entre llamadas sin que se le mueva debajo.
+- ✅ **Y no rompe la regla de la casa.** `src/fs_lfs.c:86` exige *«CERO malloc en las ops de fichero
+  (obligatorio en micro)»*, y por eso hoy hay **dos** buffers estáticos de 256 B — o sea que el límite
+  real de littlefs son **DOS ficheros abiertos**, no el `FIL` de FatFs. Un array en el heap de la VM
+  **no es malloc**: la regla sobrevive y el límite arbitrario desaparece.
+- ✅ **El límite deja de ser un número inventado y pasa a ser el honesto**: la memoria — y visible,
+  porque el guardián de fin de RUN (`#339`) ya dice quién se quedó qué.
+
+🔓 **Y LO QUE CIERRA EL CÍRCULO: el destructor ya está diseñado, y esta propuesta DESARMA la única
+objeción que tenía.** Eduardo, el mismo día: *«si el GC va a liberar el objeto y ejecuta el
+destructor, éste puede encargarse de cerrar el fichero.»*
+
+El diseño de destructores es suyo y es de **cuatro capas** (`docs/V5_IDEAS.md:2496`, 9-ago), con
+`~Clase()` disparado por **fin de ámbito** —desazucarado a `try/finally`, **cero cambios en las VMs**—
+y con las capas 3 y 4 (el agotamiento GRITA, y el fin de RUN suelta y CUENTA) como red. Sintaxis ya
+decidida: `function ~Db()`, y verificado que `~` no se usa en ninguna fuente del frontend.
+
+Dejó **una sola cosa abierta**: *«¿corre `~Clase()` si el objeto muere SIN `owner` ni bloque, recogido
+por el GC?»*. Y la recomendación escrita era **que no**, con este argumento:
+
+> *«el GC corre por presión de MEMORIA, y un descriptor o un statement son otro recurso escaso. Con 8
+> descriptores agotados y el heap al 3 %, el GC no tiene motivo para pasar y el destructor no correría
+> nunca.»*
+
+🔑 **Ese argumento deja de aplicar si el buffer vive DENTRO del objeto**, y ahí está lo elegante de la
+propuesta: si el recurso escaso **es** el heap, quedarse sin ficheros abiertos **es** presión de
+memoria — así que el GC sí tiene motivo para pasar y el destructor sí corre. La objeción no se rebate:
+**se disuelve**, porque desaparece la premisa.
+
+📐 **De ahí sale una regla de diseño, y conviene fijarla**: **todo el estado por fichero va en el
+objeto**, no sólo el buffer. Si una parte se queda en un `FIL` estático del driver, para esa parte la
+objeción original sigue viva y se vuelve al mismo sitio. Con todo dentro, la contabilidad es honesta:
+un fichero abierto cuesta heap, se ve, y se recupera por el mismo camino que todo lo demás.
+
+⚠️ **Lo que la propuesta NO resuelve sola:**
+1. **El GC hoy no avisa a nadie al recoger**: no hay finalizador ni gancho (`grep finaliz|destructor|
+   on_collect` en `heap.c` e `bpvm_internal.h` → cero). Liberar la memoria **no cierra el fichero**:
+   littlefs y FatFs guardan su propio estado. Hace falta que el GC llame al destructor al recoger —
+   maquinaria nueva, pequeña y acotada, y **es la quinta capa** que el diseño de 9-ago dejó fuera a
+   propósito.
+
+   🔬 **«¿Y si el destructor lo hacemos como función NATIVA?» (Eduardo, 10-sep) — analizado, y sí:
+   cambia el problema.** Las cuatro razones por las que un destructor en BP no puede correr dentro
+   del GC se caen casi todas:
+
+   | razón | ¿sobrevive siendo nativo? |
+   |---|---|
+   | hace falta el intérprete y un marco de pila | **no**: una función C/Java no lo necesita |
+   | puede ASIGNAR memoria → reentra en el GC | **no**, si se prohíbe; y un `close()` no asigna |
+   | puede RESUCITAR el objeto guardando `this` | **no**: un nativo no lo hace salvo que se escriba aposta |
+   | puede reentrar el cerrojo de la VM | manejable: es una llamada hoja |
+
+   ✅ **Y el sitio ya existe, con la información ya puesta.** `gc_sweep_phase` (`src/heap.c:564`) lee
+   la cabecera de cada bloque muerto, y para un objeto **la segunda palabra ES el `class_ptr`**
+   (`heap.c:7`, `:55`). Así que saber «este muerto es un `File`» es UNA lectura, no una búsqueda:
+   basta un bit en el descriptor de clase. El tag además ya distingue objeto de array
+   (`BPVM_TYPE_OBJECT`), así que los arrays ni se miran.
+
+   📐 **Pero NO dentro del barrido: justo DESPUÉS.** El barrido recorre el heap linealmente
+   fusionando huecos (`heap.c:564-600`), y cualquier cosa que asigne o mueva en mitad de ese paseo lo
+   corrompe. Recoger las direcciones en una lista y vaciarla al terminar cuesta casi nada y elimina
+   la clase entera de errores **sin tener que razonar sobre qué hace cada nativo** — que es
+   precisamente lo que no se quiere estar comprobando en cada destructor nuevo.
+
+   📌 **Tres condiciones para un destructor nativo**, y conviene que sean del contrato: **no asigna**,
+   **no llama a código BP**, y **es IDEMPOTENTE** — porque las capas 1 y 2 pueden haberlo cerrado ya,
+   y lo normal es que así sea.
+
+   ⚠️ **Lo que ser nativo NO arregla, y es lo que hay que decidir: la PARIDAD.** Los dos GC corren en
+   momentos distintos, así que *cuándo* se dispara el destructor **difiere entre miVM y la VM-C**. Para
+   un `close()` eso es invisible en `stdout`… **salvo que el cierre vuelque escrituras pendientes**:
+   entonces un programa que relea su propio fichero puede ver cosas distintas en el PC y en la placa.
+   De ahí la regla que cierra el asunto, y que ya estaba en el diseño de las cuatro capas: **todo lo
+   observable va por `try`/`owner`; el camino del GC es sólo la red para lo anormal.** Y miVM no puede
+   apoyarse en `finalize()` de Java —deprecado en la 9, quitado en la 18—, así que el mecanismo se
+   escribe explícito en las dos.
+2. **La red no sustituye a `close()`**: el GC recoge cuando recoge, así que un fichero puede quedar
+   abierto mucho después de ser inalcanzable — y en un micro eso importa (estado del driver, y en la SD
+   la caché de escritura). Que es como Eduardo lo planteó: *«en caso de cuelgue o error»*.
+3. **Aperturas duplicadas**: FatFs está con `FF_FS_LOCK 0`, sin control de abrir dos veces el mismo
+   fichero. Sin límite de handles, N escritores sobre el mismo fichero no se quejan. Decisión aparte, y
+   de corrección, no de memoria.
+
+📏 **PUNTO 4 DE `#473`: MEDIDO Y RESUELTO** (10-sep, en la Metro con su SD de 32 GB), con su control:
+
+| | 120 KB | 480 KB | caudal |
+|---|---|---|---|
+| **littlefs** (`/app`, **con** `read_stream`) — el CONTROL | **212 ms** | — | 566 KB/s |
+| **FAT** (`/sd`, **sin** `read_stream`) | **1368 ms** | **6040 ms** | ~80-88 KB/s |
+
+**Es 6,4× más lento, pero NO está roto**: 1,4 s para 120 KB, lejos de los 10 s del timeout del IDE. Y
+**no es cuadrático** — 4× el tamaño da **4,4×** el tiempo, no 16×. La medida prestada de `#453` (que sí
+reventaba los 10 s) era de **littlefs en un S3**: otro backend y otro chip. ⏭️ **El punto 4 no entra en
+V6: se queda aquí**, y desaparece solo el día que exista el cursor.
+
+⚠️ **Y la primera medida fue INVÁLIDA — lo dijo el control**: el `GET` de littlefs, que es el caso
+bueno, salía peor que el sospechoso. El fallo era mío: `cmd_get` usaba `esperar()`, que trocea por
+líneas y **se comía el bulk crudo**. Sin control, habría publicado que las dos zonas son igual de
+lentas. Arreglado leyendo el payload a pelo, y el porqué queda en la docstring de la herramienta.
+
+🩹 **Hay una CUARTA recaída, y es de ESCRITURA**: la ficha `#475` dice *«no existe escritura en
+streaming: sólo hay `read_stream`. Escribir por bandas con la fachada de hoy son N commits, no uno —
+el patrón que costó 45× en `#398`»*. La enfermedad ya ha salido por los dos lados.
+
+⏭️ **Así que esta ficha ABSORBE aquel diseño** y son la misma cosa por los dos lados: `File`/`TextFile`
+es la mitad de arriba (superficie BP) y el cursor de la fachada es la de abajo. La de abajo hace falta
+igual: hoy las 17 ops del backend reciben ruta, así que un `File.seek()` no tendría dónde apoyarse.
+
+**Sale del punto 4 de `#473`** —que `read_stream` no existe en el backend FAT, así que bajar un
+fichero grande de `/sd` cuesta cuadrático— y lo reencuadra **Eduardo**: *«Esto ya se habló cuando te
+pedí un comando `fseek`. La idea es tener un cursor y poder hacer desplazamientos relativos.»*
+
+**Y con el historial delante, tiene la forma de una enfermedad que ya ha recaído dos veces:**
+
+| | quién sufría | qué se hizo |
+|---|---|---|
+| `#398`/`#424` | `crc32` reabría el fichero cada 256 B — **5432 aperturas para 1,3 MB** | se añadió `crc32` al interfaz de backend: abre una vez. 16,5× medido |
+| `#453` | el `GET` reabría cada 256 B — **472 aperturas para 120 KB** | se añadió `read_stream`: abre una vez. Sólo en littlefs |
+| **hoy** | el `GET` desde `/sd` | se propone añadir `read_stream` **también** a FAT |
+
+Tres veces el mismo síntoma y tres arreglos **por llamador**, no por causa. Y la causa estaba escrita
+desde `#453`, en la cabecera del propio arreglo: *«el backend es el único que puede hacerlo, **la
+fachada no tiene descriptores**»*.
+
+📐 **Medido, no supuesto**: de las 17 operaciones del interfaz de backend
+(`include/bpvm_fs.h`), **16 reciben un `path`**. No hay handle, ni posición, ni nada abierto — ni en
+la fachada, ni en el backend, ni en BP. Y **tres de esas 17 existen sólo para esquivar la ausencia de
+cursor**: `read_at`, `crc32` y `read_stream`. Cada una se añadió el día que un llamador concreto se
+puso demasiado lento.
+
+🔑 **Y lo que de verdad falta no es velocidad, es una CAPACIDAD.** `readFile` hace `stat` y se trae el
+fichero **entero** al heap (`builtins.c`, `BUILTIN_READ_FILE`). O sea que hoy, desde BP, **un fichero
+más grande que la RAM no se puede leer**: un CSV de 1 MB en la SD es ilegible en una placa con 271 KB
+de heap. Eso no lo arregla ningún `read_stream` más — lo arregla el cursor.
+
+⏭️ **Lo que hay que decidir en V7** (aquí no se diseña nada todavía):
+- El cursor en la **fachada**: abrir / desplazar (absoluto y **relativo**, que es lo que pide
+  Eduardo) / leer / escribir / cerrar. Con eso, `read_at`, `crc32` y `read_stream` dejan de ser
+  operaciones especiales y pasan a ser bucles sobre el cursor.
+- El cursor en **BP**: el `fseek` que pidió Eduardo, o sea un fichero abierto como objeto. Eso **es
+  superficie de lenguaje**, así que es V7 por definición.
+- ⚠️ Y una pregunta que hay que contestar antes de escribir código: **cuántos descriptores caben**.
+  Un handle abierto es RAM en el micro, y FatFs quiere su `FIL` (~550 B) por fichero. Que el modelo
+  sea «uno por programa», «N con límite declarado» o «uno por hilo BP» cambia el diseño entero.
+
+📌 **Relación con el punto 4 de `#473`**: son la solución estrecha y la ancha del mismo problema.
+La estrecha —`read_stream` en FAT, gemelo exacto de `fat_crc32`— sigue siendo válida para V6 **si la
+medida la justifica**, y no estorba al cursor: el día que exista, desaparece con las otras dos.
+
+#### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V7** (abierta 10-sep, decidida a V7 el mismo día)
+
+**La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
+nada que hacer, en un micro con alimentación da igual lo que haga, pero si fuese un micro que
+funciona con baterías lo ideal es que se durmiese. ¿Cómo está ahora?»*
+
+Y acto seguido, la frase que decide el diseño entero: 🔑 ***«casi todos los micros tienen un modo de
+bajo consumo; lo difícil no es entrar en él, lo difícil es programar qué es lo que lo hace salir»***.
+
+**Por qué eso lo cambia todo.** Entrar es una instrucción (`WFI`, `esp_light_sleep_start`, el Stop
+del U5). Salir es un **contrato**: hay que declarar *de antemano* qué evento despierta, y ese
+contrato es lo que no existe hoy en BP. Un `Machine.sleep()` a secas sería un cuelgue con otro
+nombre. Las preguntas reales son de lenguaje, no de silicio:
+- ¿Quién declara las fuentes de despertar — el programa, o la placa?
+- ¿Qué pasa con los hilos BP dormidos: el `sleep(200)` de un hilo, ¿es una fuente de despertar?
+- ¿Y el wire? Si el IDE está conectado, la placa **no puede** dormirse sin perder la conexión; si no
+  lo está, sí. Eso hace que el modo dependa de si hay alguien mirando.
+- ¿Y la GUI? Un panel encendido consume más que el core; dormir el micro con la pantalla viva no
+  ahorra gran cosa.
+
+📌 **Es la misma forma que `#479` (el mapa de pines) y que los arrays de buses de `#470`**: qué pines
+y qué periféricos pueden despertar, y qué se conserva en cada modo, es **verdad de silicio** — va en
+la cintura de cada micro y viaja compilada en su imagen, no en el ENV. Conviene resolverlas juntas.
+
+**Lo que se sabe ya, y es poco**: no hay ni una línea escrita sobre consumo en todo `docs/`. Y hay un
+dato duro, medido el 10-sep por otro motivo (`#473`/R16): **en el STM32 la tarea ociosa no corre
+nunca** —su lazo del wire gira con `continue` sin ceder y la tarea `vm` va a `tskIDLE_PRIORITY+2`—,
+así que esa familia ni siquiera llega al escalón previo de poder dormir. Y es la familia de bajo
+consumo de ST, o sea el peor sitio donde tener eso.
+
+⚠️ **Los tres escalones que se confunden**, y hay que mantenerlos separados en todo el estudio:
+(a) el hilo cede la CPU · (b) la tarea ociosa corre · (c) el **micro** entra en bajo consumo.
+Sólo (c) se nota en el amperímetro. Hoy la Pico y el ESP32 llegan a (a) con seguridad; (b) y (c)
+están por censar.
+
+🎯 **POR DÓNDE EMPEZAR — decidido por Eduardo el 10-sep:** *«No creo que haya una solución común
+para todos los casos, pero podemos empezar por algo sencillo e ir creciendo. Empezar por el timer o
+el RTC y programar un sleep que despierte cada cierto tiempo, y si no hay nada se vuelva a dormir.»*
+
+**Por qué es el punto de partida correcto, y no un atajo.** Convierte el problema difícil —*declarar
+qué despierta*— en uno fácil: *mirar cada cierto tiempo*. Con una sola fuente de despertar (el
+temporizador) no hay contrato que diseñar, no hay mapa de pines que resolver antes, y no hay que
+tocar el lenguaje. La parte difícil no se resuelve: **se aplaza a propósito**, y eso permite que
+haya algo funcionando antes de decidir lo demás.
+
+⚠️ **El precio, y choca de frente con `#462`.** Despertar cada N ms significa que un evento puede
+llegar hasta N ms tarde. Esta misma sesión bajamos el suelo de descubrimiento de un evento de 48 ms
+a **7 ms**, medido en la C6; un periodo de dormir de 100 ms lo devolvería a ~100 ms. Así que **el
+periodo no es una constante: es una política**, y quién la elige (el programa, la placa, o el modo
+en que esté) es ya una pregunta de lenguaje. La forma sana de decirlo: *dormir es cambiar latencia
+por consumo*, y el que sabe cuánta latencia se puede permitir es el programa.
+
+📌 **«Si no hay nada» hay que definirlo, y la lista es reveladora.** Al despertar hay que mirar:
+¿hay bytes en el wire? ¿hay algún hilo BP listo para correr? ¿ha vencido algún `sleep` de hilo?
+¿hay un evento en la cola? **Es exactamente la misma lista que las fuentes de despertar**, sólo que
+sondeada en vez de por interrupción — que es justo por lo que este camino es más barato de empezar,
+y también por lo que crece de forma natural: cada elemento de esa lista que se convierta en
+interrupción real es un paso más, sin rehacer lo anterior.
+
+📌 **Timer y RTC NO son intercambiables**, y ésta es de las primeras cosas que el estudio tiene que
+poner en tabla: qué reloj sobrevive a qué modo de bajo consumo es **verdad de silicio y distinta por
+micro**. Un temporizador general suele morir en los modos profundos; el RTC suele sobrevivir, con
+menos resolución. Elegir uno u otro fija de rebote **hasta dónde se puede dormir**.
+
+📌 **Y hay que mirar lo que FreeRTOS ya trae hecho**: `configUSE_TICKLESS_IDLE` es literalmente este
+patrón —«ninguna tarea estará lista en N ticks → paro el tick, bajo consumo, programo el despertar»—
+implementado por el RTOS. La primera pregunta del estudio no es *cómo lo hacemos*, sino **si eso
+está encendido y por qué hoy no sirve**. La sospecha, con lo medido el 10-sep: no llega a ejecutarse,
+porque la capa de encima (el lazo del wire, y el scheduler de la VM) no cede el turno a la ociosa.
+
+🪜 **LA ESCALERA — Eduardo, 10-sep:** *«Lo de dormir se puede hacer progresivo: primero pausas
+cortas y, según se va avanzando sin actividad, pausas más largas.»*
+
+**Esto deshace la tensión con la latencia, y la deshace en el sitio correcto.** El problema del
+periodo fijo era elegir N: corto gasta, largo tarda. Con la escalera **no hay N que elegir** — el
+sistema se calibra solo, y el coste cae donde menos se paga: justo después de actividad (que es
+cuando es más probable que venga más) la pausa es corta y la latencia sigue siendo la de hoy; tras
+un rato largo de silencio (cuando es menos probable que venga nada) la pausa crece. Se paga latencia
+sólo en el caso en que casi nunca hay nadie esperándola.
+
+⚠️ **El caso malo, dicho sin adornos: el PRIMER evento tras un silencio largo** — que es exactamente
+la persona que deja el aparato quieto y vuelve a tocar un botón. La escalera empeora justo ése. De
+ahí que **el tope de la escalera sea una decisión de producto, no técnica**: un cacharro con pantalla
+no debería pasar de unas decenas de ms porque un toque se notaría lento; un registrador de datos
+puede irse a segundos. Y el escape es limpio: **una fuente que sea interrupción de verdad se salta el
+tope entero** (un táctil con línea de IRQ despierta al instante, esté la escalera donde esté). O sea
+que subir el tope y convertir fuentes en interrupciones son la misma mejora vista desde dos lados.
+
+🔑 **Y lo importante: media escalera YA ESTÁ CONSTRUIDA, y no la habíamos visto así.** Al cerrar
+`#462` el bombeo de la GUI dejó de dormir por su cuenta y pasó a **devolver cuánto tiempo dice LVGL
+que puede estar ocioso** (`lv_timer_handler()`), topado a `BPVM_GUI_OCIO_MAX_MS` = 10 ms
+(`src/gui_display_sdl.c:340,382`), y es el lazo BP quien duerme eso (`bpstdlib/Gui.bp:850-853`). Eso
+no es una pausa fija: es **preguntarle al que sabe**.
+
+Con eso a la vista, las dos formas de decidir cuánto dormir se ven claras, y **se componen**:
+- **Preguntar** — el que sabe, contesta. LVGL ya lo hace. `configUSE_TICKLESS_IDLE` de FreeRTOS hace
+  lo mismo con las tareas: sabe cuándo vence el próximo `vTaskDelay`.
+- **La escalera** — el respaldo para lo que **nadie puede contestar**: cuándo llegará el próximo byte
+  del wire, o el próximo toque. Ahí no hay a quién preguntar, y la progresión es la respuesta.
+
+⏭️ Así que la pausa de cada vuelta sale de un `min()`: lo que digan todos los que saben, contra el
+peldaño actual de la escalera. La escalera no sustituye a nada de lo que ya hay — **rellena el hueco
+que queda**.
+
+🧭 **LOS DOS CASOS — Eduardo, 10-sep:** *«Tal como yo lo veo hay 2 casos: 1 — el usuario indica
+expresamente que no va a hacer nada; 2 — el usuario no está prestando atención y la tarea se ha
+terminado.»*
+
+**Y no son dos formas de detectar lo mismo: son dos regímenes distintos, porque cambia QUIÉN ACEPTA
+LAS CONSECUENCIAS.** Ahí está la utilidad de partirlo así:
+
+| | **caso 1 — declarado** | **caso 2 — inferido** |
+|---|---|---|
+| quién decide | el programa, con un verbo | el sistema, solo |
+| quién acepta el coste | **el programador** | **nadie** |
+| qué se puede apagar | mucho: periféricos, relojes, incluso perder el wire — porque alguien lo pidió | sólo lo que se pueda recuperar **como si no hubiera pasado nada** |
+| profundidad | hasta donde diga el verbo | topada por la transparencia |
+| latencia al volver | asumida | no se puede notar |
+
+🔑 **La consecuencia práctica, y es la que más ordena el diseño: el caso 2 tiene que ser
+TRANSPARENTE.** Si nadie ha pedido dormir, nadie ha aceptado perder nada — así que el caso 2 **no
+puede tirar la conexión del wire** (el IDE podría estar enganchado), ni perder un evento, ni
+retrasar un `sleep` de un hilo BP. Es una optimización invisible o no es. El caso 1 sí puede tirar el
+wire, **porque el programa lo ha pedido**.
+
+📌 **No son alternativas, se componen**: el caso 2 es el **suelo** —siempre puesto, automático,
+invisible, y es exactamente donde encaja la escalera— y el caso 1 es la **salida explícita** para
+cuando el programa sabe más de lo que el sistema puede inferir («voy a estar 10 minutos sin hacer
+nada, despiértame con el botón»).
+
+⚠️ **La trampa del caso 2, dicha entera: «el usuario no está prestando atención» NO es observable
+por el micro.** Lo que el micro puede observar es *no hay nada pendiente ni nada que venza pronto*.
+No es lo mismo: un registrador de datos sin ningún usuario delante está *siempre* desatendido y no
+debe dormirse a través de su siguiente muestreo. Así que el disparador del caso 2 no es «nadie mira»
+sino **«nada pendiente Y nada que venza antes de que yo despierte»** — que es, otra vez, la misma
+lista de antes (wire, hilos BP listos, `sleep` que vence, eventos en cola), ahora usada para decidir
+*cuánto* dormir y no sólo *si* dormir.
+
+📊 **EL CENSO, HECHO (10-sep) → `docs/BAJO_CONSUMO_CENSO.md`.** Seis lecturas + refutación
+adversarial (**57 de 73 hallazgos vivos**, 16 tumbados) + crítico de completitud. **Sin amperímetro:
+ni un mA en él, a propósito.** El titular:
+
+> 🔴 **Ninguna de las siete placas llega a dormir. Ni una. No hay una sola línea en el árbol que meta
+> a un micro en un modo de bajo consumo.**
+
+Con los cuatro escalones separados, que es como hay que leerlo:
+
+| familia | el hilo cede | la ociosa corre | el **núcleo** se para (`WFI`) | el **micro** baja consumo |
+|---|---|---|---|---|
+| **RP2350** (Pico 2 / Metro) | sí | sí | **no** | **no** |
+| **ESP32** (S3, C3, C6, P4) | sí | sí | **sí** (`waiti`/`wfi`) | **no** |
+| **STM32U5** (DK2 y Nucleo) | **no** | **no** | **no** | **no** |
+
+Verificado **contra el artefacto**, no leyendo: `wfi` = 0 en el desensamblado de la Pico
+(82 898 líneas) y en los `.list` de la DK2 y la Nucleo. En los ESP el núcleo sí se para porque el
+kernel de IDF llama **siempre** a su idle hook.
+
+🔑 **Y el hallazgo que va contra el punto de partida elegido: el RTC de hardware SÓLO tiene backend
+en el STM32** (`stm32/port/gpio_stm32.c:790`, `:1009`). El ESP usa a propósito el stub portable
+(`esp32/common/gpio_esp32.c:595`) y la Pico no registra ninguno. **El reloj que se propone como
+despertador existe justo en la familia que hoy no llega ni a ejecutar su tarea ociosa, y no existe en
+las otras cuatro.** Empezar por el RTC significa construirlo en tres familias antes de poder probar
+nada; empezar por el timer, no.
+
+🔑 **Y el que cambia el encuadre entero: miVM YA HACE LO CORRECTO.** Calcula
+`earliestSleepWakeMs()` y espera **el delta completo** en `vmLock.wait(delta)`, sin tope, porque
+quien llega lo despierta con un `notify` (`VirtualMachine.java:543`, `:2305-2317`). O sea que el
+patrón *«duerme hasta el próximo vencimiento y que un evento te despierte»* **ya está escrito en la
+implementación de referencia**, y el tope de 50 ms de `src/scheduler.c:144` es una limitación de la
+VM-C, no del diseño. ⚠️ Y eso significa que tocarlo **roza el invariante dual-VM**.
+
+**Lo demás que salió y que conviene tener a mano** (el detalle, en el documento):
+- ⏰ **El techo del sueño lo pone el reloj de sondeo más rápido**, y hoy con un programa cargado son
+  el hilo `io` a 5 ms y el tope de 50 ms del planificador — que además **ya no lo usa nadie** durante
+  un RUN con `io`. Aunque todo lo demás estuviera encendido, **ningún micro podría dormir más de un
+  tick seguido**.
+- ⏰ **Los ESP tienen un límite duro que nadie había censado como tal**: el Interrupt WDT por
+  hardware a **300 ms** en las cuatro imágenes. La Pico sí para su watchdog de verdad; el STM32 hoy
+  no registra backend a propósito.
+- 🔋 **El caso real de una placa a pilas —autorun sin IDE— no estaba censado.** Existe en las tres
+  familias, y es el modo en que vive un aparato con batería: arranca solo y **no hay nadie al otro
+  lado del cable**. Los 200 sondeos/s del hilo `io` se pagan íntegros para atender un `KILL` que no
+  puede llegar.
+- 🔌 **Cargas estáticas que no dependen de la CPU y que no apaga nadie**: en la DK2 se inicializan
+  **19 periféricos incondicionalmente** en el arranque (cinco UART, tres SPI, el PHY del USB HS…) y
+  16 en la Nucleo; el **LTDC escanea el panel desde el arranque** corra o no una GUI; el NeoPixel de
+  la Metro se enciende verde tenue en el arranque *(un `test H7.4.a` que se quedó)* y no lo apaga
+  nadie. Contraste que prueba que no es inevitable: en la Pico el ADC es perezoso.
+- 🐛 **`sleepUs()` es espera activa pura** y su nombre no lo delata: `sleepUs(500000)` son 0,5 s de
+  micro a plena carga sin ceder ni el hilo BP ni la CPU.
+- 🐛 **`Machine.MIN_CPU_MHZ()` declara 18 MHz para las cinco familias y sólo la Pico lo implementa**
+  (y bien: escala Vdd_core por tabla). El STM32 y el ESP devuelven 0. Es la palanca que Eduardo
+  recordaba de las pruebas de overclocking, y está declarada donde no existe.
+- ⚠️ **Un consumo invisible en el parque**: `Gui.mod` no viaja en el blob embebido y el IDE no
+  reinstala la stdlib en cada Run, así que **cualquier placa cuya stdlib no se haya reinstalado tras
+  `a5a00daa` tiene el lazo de GUI viejo, que no tiene pausa ninguna y gira a tope**. El síntoma no es
+  un fallo: es consumo.
+
+🔧 **EL DATO DE HARDWARE QUE CORRIGE EL VOCABULARIO (Eduardo, 10-sep).** *«El RP2350 no tiene un
+RTC dedicado en su hardware, a diferencia del RP2040. Lo que incluye es un temporizador AON
+(Always-On): un contador de 64 bits en el dominio de energía siempre encendido que mide
+milisegundos, y sirve para programar eventos de encendido. Si una placa RP2350 comercial trae RTC,
+es por un chip externo añadido en la placa (tipo PCF85063), no por una función nativa del micro.»*
+
+**Esto explica el hallazgo del censo en vez de contradecirlo**: que la Pico no registre backend de
+RTC no es un olvido — **es que no hay nada nativo que registrar**.
+
+🔑 **Y cambia cómo hay que llamar a la pieza.** Lo que hace falta no es un *reloj de calendario*: es
+**un contador en el dominio siempre encendido capaz de generar un evento de despertar**. Eso lo
+tienen todas las familias, con nombres distintos:
+
+| familia | la pieza | ¿la alcanzamos hoy? |
+|---|---|---|
+| **RP2350** | **AON Timer**, 64 bits en ms, dentro de POWMAN | **no**: no enlazamos `hardware_powman` ni `pico_sleep` (`pico/CMakeLists.txt:195-213`, 12 librerías y ninguna es ésa) |
+| **STM32U5** | RTC de hardware con dominio de respaldo (y además LPTIM) | **sí**, es el único con backend (`gpio_stm32.c:790`, `:1009`) |
+| **ESP32-S3 / C3 / C6** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
+| **ESP32-P4** | **igual, pero con más silicio**: controlador RTC con lógica de wake-up para deep-sleep **y dominio VBAT** con respaldo por batería y cristal externo de 32,768 kHz | **no**, y con matiz — ver abajo |
+
+🔬 **EL P4 NO ES «UN ESP32» MÁS EN ESTO (dato de Eduardo, 10-sep, comprobado en nuestras imágenes).**
+El P4 integra controlador RTC con lógica de activación para deep-sleep **y un dominio VBAT** con
+entrada para cristal de 32,768 kHz y conmutación de energía, de modo que la hora sobrevive a un corte
+de la alimentación principal. *(Su aviso, y hay que mantenerlo escrito: el soporte de ESP-IDF para el
+mantenimiento avanzado con VBAT sigue en pruebas.)*
+
+Lo que dicen **nuestros** `sdkconfig`, que es la pregunta útil:
+
+| | S3 | C3 | C6 | **P4** |
+|---|---|---|---|---|
+| `CONFIG_SOC_VBAT_SUPPORTED` | — | — | — | **`y`** |
+| `CONFIG_ESP_VBAT_INIT_AUTO` | — | — | — | **not set** |
+| fuente del reloj RTC | `INT_RC` | `INT_RC` | `INT_RC` | **`INT_RC`** |
+
+O sea: **el silicio del P4 lo soporta, IDF lo sabe (`SOC_VBAT_SUPPORTED=y`) y nuestra imagen no lo
+usa** — y las cuatro, el P4 incluido, corren el RTC sobre el **oscilador RC interno**, no sobre un
+cristal.
+
+🔑 **Y eso separa limpiamente los dos usos, que hasta ahora iban juntos:**
+- **Como DESPERTADOR** («despiértame dentro de N ms»): el RC interno **basta**. Que derive un 5 % con
+  la temperatura da igual cuando lo que se pide es volver a mirar dentro de un rato. Para el caso 2
+  —la escalera— no hace falta cristal ni VBAT.
+- **Como CALENDARIO** («qué hora es tras un corte»): ahí **sí** hacen falta cristal y VBAT, y eso es
+  del P4 y del STM32, no de los otros tres.
+
+Así que el punto de partida no se mueve: **empezar por el despertador, que se puede en todas**, y
+dejar el calendario como una capacidad que unas placas tienen y otras no —y que, como todo lo de
+`#479`, hay que poder **preguntar** en vez de suponer.
+
+❓ **No determinado, y es de placa, no de micro**: si la Waveshare P4 que usamos tiene realmente
+cableados el cristal de 32,768 kHz y la entrada VBAT. Eso no sale del código: sale del esquemático o
+del multímetro.
+
+⚠️ **Un RTC externo NO es un despertador.** Un PCF85063 por I2C es un **driver de placa**, no silicio:
+da la hora, pero **sólo despierta al micro si su línea INT está cableada a un pin capaz de
+despertar**. Tenerlo no da la fuente de despertar; es una pregunta de la placa concreta, no del
+micro. Es exactamente la distinción de `#479`: hay verdades de silicio y verdades de placa, y viven
+en sitios distintos.
+
+📌 **Y una consecuencia que no es de consumo pero está aquí al lado**: en la Pico y el ESP, `Rtc` es
+hoy **un offset por software sobre el reloj monotónico** (`src/rtc.c:28`). Muere en cada reset, y el
+programa **no tiene forma de saber si la hora es real o inventada** — la misma forma que `#469`.
+Anotado en la cabecera de `src/rtc.c`, que además decía que el backend lo registraba la Pico: era
+falso, lo registra el STM32.
+
+⏭️ **V7, y es un ESTUDIO, no una implementación.** Lo que falta: **sin amperímetro no hay números** —
+decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y hay una medida que
+**no** necesita amperímetro y tampoco se tiene: **cuánto cuesta hoy una vuelta en reposo**. El único
+número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `lv_timer_handler`, y su
+propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
+contra qué compararse.
+
+#### 🧬 `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, de `#480` · **→ V7** el mismo día)
+
+El cuarteto `setMark`/`markCount`/`markAt`/`bootCount` sólo lo rellena el STM32
+(`gpio_stm32.c:310-325`); Pico, ESP32 y P4 dejan esos slots a **NULL**, y `src/pico.c:121-140`
+responde no-op **mudo**, `0`, `0` y `1`. En placa, `samples/BreadcrumbDemo.bp` imprime «Arranque #1»
+y «Migas: 0» para siempre, y su línea final **promete en voz alta algo falso**.
+
+🔑 Es el «instrumento mudo» **en la herramienta que existe justo para cuando ya estás en problemas**.
+
+📌 **Y es una clase de fallo distinta a `#469`**: no es «nadie registró backend», es **backend
+registrado con la mitad de los slots a NULL**. Por eso el arreglo genérico de `#469` no la cubre: la
+fachada tiene que distinguir «slot NULL» de «backend ausente».
+
+
+### 🧬 9-sep — A **V7** (Eduardo)
+
+> *«Lo pasamos a V7. Ahora mismo, con las nuevas placas ya hechas, casi nos da igual.»*
+
+**El motivo es de oportunidad, no de dificultad**: el breadcrumb es la herramienta de las traídas de
+placa —dejar marcas por fases y leer el rastro tras un reset inesperado—, y las placas nuevas ya
+están arrancadas. Su momento de máximo valor ya pasó; volverá cuando haya silicio nuevo o una
+campaña de fallos en campo.
+
+### Lo que queda medido para cuando se retome, que es la mitad del trabajo
+
+📌 **NO es un caso «el hardware no puede», como el watchdog del STM32.** Comprobado el 9-sep:
+
+| | memoria que sobrevive al reset | |
+|---|---|---|
+| **STM32 U5** | registros de backup | ✅ **es el único que lo implementa** |
+| **RP2350** | *scratch* del watchdog | el propio SDK usa el registro 4 para marcar el motivo del reboot |
+| **ESP32** | `RTC_NOINIT_ATTR` (memoria RTC sin inicializar) | ⚠️ hay chips donde el IDF lo rechaza (`static_assert`) — mirar uno a uno |
+
+Así que en V7 la decisión no es «se puede o no»: es **implementarlo en RP2350 y ESP32, o declarar
+que no está**.
+
+### Y la mitad barata, que va con ello
+
+Sea cual sea la decisión, **la fachada tiene que aprender a distinguir «slot NULL» de «nada que
+informar»**. Hoy no puede:
+
+```c
+void bpvm_pico_set_mark(int code) {
+    if (g_backend && g_backend->setMark) g_backend->setMark(code);
+    /* Host: no-op (sin RAM retenida). */
+}
+```
+
+`markCount()` devuelve **0**, que en BP se lee como *«no hay marcas»* cuando la verdad es *«yo no
+guardo marcas»*. Las dos frases se parecen y llevan a sitios opuestos: la primera dice que el reset
+fue limpio, la segunda que no tienes instrumento. 🔑 **Y es el instrumento mudo dentro del aparato
+que existe para cuando ya estás en problemas** — por eso, aunque se decida no implementarlo,
+`BreadcrumbDemo.bp` no puede seguir prometiendo *«si reseteas ahora, el rastro será 10..50»*.
+
+#### 🧬 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143` · **los cuatro números → V7** el 9-sep)
+
+✅ **LOS NOMBRES, RESUELTOS el 9-sep — y no «arreglados»: DISUELTOS.**
+
+**La corrección es de Eduardo, y llegó antes de que yo escribiera nada:** *«hay que hacerlo por el
+camino correcto. Todos han de llamar a una misma función en HAL BP, una para el micro y otra para
+la placa. Lo que es diferente de cada imagen es la IMPLEMENTACIÓN de estas funciones.»* Yo iba a
+hacer que la fachada leyera del **repl**, que invierte las capas.
+
+📐 **Y al medirlo salió que el patrón correcto YA EXISTÍA en la familia de referencia:** el wire de
+la Pico llama a `bpvm_pico_board_name()` (`pico/repl_v1.c:625`), o sea a HAL BP. La ESP32 estaba
+**medio migrada** —lee `reset_cause` de la fachada pero el nombre de su propia tabla— y el STM32
+tenía `BOARD_NAME` y hasta un `gpio_count = 114` **literal en el wire**. Es el mismo patrón que en
+`#469` y en los packs: **la RP2350 lo hacía bien y las otras derivaron.**
+
+```
+HAL BP   bpvm_pico_micro_name()  +  bpvm_pico_board_name()
+           ↑ implementadas por las CUATRO cinturas (Pico, ESP32, P4, STM32)
+           ↓ leídas por LOS DOS consumidores
+BP       Machine.getMicro() / getBoard()   (builtin 233; el gate, en verde)
+wire     el INFO de las tres familias      (ya no tienen tabla propia)
+```
+
+🔑 **Y DOS nombres en vez de uno mal definido**, que es lo que hace que la pregunta desaparezca en
+vez de contestarse. El micro sale de `CHIP_MICRO`, una entrada **por micro** en el `chip_cfg.h` de
+cada uno; la placa dice `generic` salvo que la imagen conozca el modelo.
+
+✅ **VERIFICADO EN LAS DOS PLACAS RP2350 Y POR LOS DOS CAMINOS (9-sep, en placa, Eduardo):**
+
+| | por el WIRE (INFO) | por el PROGRAMA BP (`Machine.getMicro`) |
+|---|---|---|
+| **Pico 2** | `rp2350a` | `rp2350a` |
+| **Metro** | `rp2350b (RP2350B)` | `rp2350b` / placa `generic` |
+
+📌 **Y esto es lo que se gana haciéndolo por el camino correcto**: los dos consumidores leen la
+MISMA función de la HAL BP (`bpvm_pico_micro_name()`), así que no hay dos verdades que puedan
+divergir — que es exactamente como se desincronizaron el C3 y el C6. La función «inteligente» que
+pidió Eduardo queda probada: la distinción sale de `SYSINFO.PACKAGE_SEL` (QFN-60 = RP2350A de 61
+pines, QFN-80 = RP2350B de 81), que es de sólo lectura y **no depende del FS**.
+
+✅ **Verificado en dos placas**, no en el log:
+
+| | por el wire | por el programa BP |
+|---|---|---|
+| **Pico 2** | `rp2350` | `micro: rp2350` · `placa: generic` |
+| **ESP32-S3** | `esp32s3` | `micro: esp32s3` · `placa: generic` |
+
+📌 Dos cosas del camino: **el P4 no tenía `chip_cfg.h`** y el include entró en el fichero compartido
+→ no compilaba (ahora la tiene, que es lo que significa «una entrada por micro»); y **la Pico ya
+decía `rp2350-generic`**, o sea que el reparto estaba medio inventado en la placa de referencia, con
+micro y placa mezclados en un solo campo.
+
+⏭️ **LO QUE QUEDA, y necesita criterio de Eduardo**: los otros **cuatro** campos siguen con dos
+fuentes, y unificarlos exige decidir qué significan. La tabla de abajo sigue vigente para ellos —
+`pwm_slices` son *slices* en la Pico, *salidas* en el STM32 y *canales LEDC* en el ESP32.
+
+
+Los mismos seis datos (nombre, MHz, GPIO, ADC, PWM, causa de reset) se responden **dos veces por
+familia**: una para BasicPlus (la fachada `bpvm_pico_*`) y otra para el wire (`bpvm_repl_info_t`,
+rellenada a mano). Ya no coinciden:
+
+| | por el wire | por la fachada (lo que ve el programa BP) |
+|---|---|---|
+| **ESP32-C3** | «ESP32-C3», 160 MHz, 22 GPIO | **«esp32s3-devkitc», 240 MHz, 45 GPIO** |
+| **STM32** | 114 GPIO (`stm32_repl.c:146`) | 128 (`gpio_stm32.c:139`) |
+| **Pico** | 24 PWM (`repl_v1.c:632`) | 12 (`main.c:679`) |
+
+**El caso grave es el C3 y el C6**: su identidad se arregló *sólo* en la vía del wire
+(`c3_board_id.c` llama a `repl_set_board_id`, pero **nadie llama a `bpvm_pico_set_backend`**), así
+que un programa BasicPlus corriendo en un C3 **se cree un S3** — cinco de seis campos falsos,
+incluido el nombre de la placa. Es el mismo bug que la cabecera de `c3_board_id.c` dice haber
+arreglado: corregido en un camino y vivo en el otro.
+
+📌 Antes de arreglarlo hay que **decidir qué significa cada campo**, porque hoy no está claro: el
+114 del STM32 son las I/O del encapsulado y el 128 el rango direccionable del driver; y
+`pwm_slices` significa *slices* en la Pico (12), *salidas* en el STM32 (28) y *canales LEDC* en el
+ESP32 (8). Unificar sin decidir eso sólo cambiaría de sitio la mentira.
+
+### 🧬 LOS CUATRO NÚMEROS → **V7**, y con el diseño ya decidido (Eduardo, 9-sep)
+
+*«Para cada micro creamos unos arrays, por ejemplo `[0, 1, 3]`, que indican los números válidos, ya
+sean UARTs, I2C, SPI, etc. **El número es la longitud del array.** Pero esto va a V7, que es donde
+concretaremos los arrays de cada micro.»*
+
+🔑 **Y eso no aplaza la pregunta: la disuelve.** El problema de arriba era «¿qué significa cada
+campo?», y la respuesta es que **no hay campo**: lo que hay es el CONJUNTO válido, y el número es su
+`length`. Con eso el contador deja de ser un dato aparte que puede contradecir al conjunto — que es
+exactamente cómo miente hoy:
+
+| lo que dice hoy | lo que pasa de verdad |
+|---|---|
+| el S3 declara **45 GPIO** | `Gpio.Pin` **rechaza el GPIO48** (el LED RGB de casi toda placa S3) y **acepta el GPIO23**, que no existe |
+| la fachada de ADC deja usar **`0..3`** | son los cuatro pines analógicos del **RP2350** congelados en la API común; el S3 tiene 20 canales y el STM32 otros 20 |
+| `pwm_slices` | *slices* en la Pico (12), *salidas* en el STM32 (28), *canales LEDC* en el ESP32 (8) |
+
+Con arrays, «cuántos» y «cuáles» **no pueden discrepar**, porque son la misma cosa preguntada de dos
+maneras. Es el mismo movimiento que `#456`: quitar el número en vez de elegirlo.
+
+🔗 **Va con `#479`** (el mapa de pines y los pines analógicos), que ya se fue a V7 el 6-sep por
+decisión de Eduardo —*«prefiero no hacer parches»*— y es la misma forma: **tablas por micro que
+viajan compiladas en su imagen**, en la HAL BP. Conviene hacerlas de una vez y no tocar ese camino
+dos veces.
+
+⏭️ **Lo que queda para V7**, entonces: concretar los arrays de cada micro (UART, I2C, SPI, ADC, PWM,
+GPIO) y que `gpioCount()` y compañía pasen a ser su longitud. **En V6 no se toca**, y por tanto esta
+ficha sale de la lista de pendientes de V6.
+
+#### 🧬 `#479` — EL MAPA DE PINES Y LOS PINES ANALÓGICOS → **V7** (abierta 6-sep, decidida a V7 el mismo día)
+
+**Decisión de Eduardo, y con su motivo**: *«Lo desarrollamos en V7. Ahora en V6 no lo desarrollamos,
+prefiero no hacer parches.»* Incluye rechazar el trozo intermedio que le ofrecí (hacer que
+`initChannel(ch)` significara «el canal ch de esta placa» sin tocar el lenguaje): media reforma es
+un parche.
+
+**De dónde sale.** Tirando de `#469` apareció que el `0..3` de la fachada de ADC **son los cuatro
+pines analógicos del RP2350 congelados en la API común** — la forma de la primera placa convertida
+en contrato de todas. Con los números delante:
+
+| familia | canales ADC que declara | los que la fachada deja usar |
+|---|---|---|
+| RP2350 | 4 (GP26–29) | 0..3 |
+| ESP32-S3 | 20 | 0..3 |
+| ESP32-C3 | 6 | 0..3 |
+| ESP32-C6 | 7 | 0..3 |
+| STM32U5 | 20 | 0..3 |
+
+**El planteamiento es de Eduardo**: *«seguro que hay más de 4 pines. Hay pines que solamente pueden
+ser digitales, pero hay pines que pueden ser o analógicos o digitales. Eso se tiene que soportar en
+todas las familias.»* Y luego: *«esto es hardware, así que afecta a la capa HAL BP. El mapa de pines
+es algo propio de cada micro y se tiene que construir con la imagen del micro. Lo que afecta al
+lenguaje BP: o hacemos una clase nueva `AdcPin` o extendemos la clase `Pin` (o las dos cosas). Lo
+que está claro es que si un pin es analógico no puede ser digital al mismo tiempo.»*
+
+**Las tres piezas, y en qué capa cae cada una** (comprobado qué hay hoy de cada una):
+
+1. **El mapa de pines — NO EXISTE.** Sólo hay **contadores**: `gpioCount()`, `adcChannels()`,
+   `pwmSlices()` (`include/bpvm_pico.h:48,62,63`). El runtime sabe *cuántos*, nunca *cuáles*. Va en
+   la cintura de cada familia y viaja compilado en su imagen. ⚠️ **El ENV NO es el sitio** —yo lo
+   propuse y me corrigió—: el ENV es config de placa (panel, tamaño de FS); esto es verdad de silicio.
+2. **El estado del pin — TAMPOCO, y sin él el invariante no es comprobable.** `src/gpio.c` sólo
+   reenvía al backend y no guarda nada; el único que lleva cuenta es el STM32, y en privado
+   (`s_mode[128]`, `s_pull[128]`, `gpio_stm32.c:50-51`). Puesto en el común, la regla «analógico ⇒
+   no digital» se escribe **una vez** y vale para las cinco familias.
+3. **El lenguaje — DECIDIDO por Eduardo el 6-sep.** `Gpio.Pin` ya existe (`Gpio.bp:92`:
+   `Pin(num, mode)` con `on/off/toggle/value/isHigh`).
+
+   ❌ **`Adc.Pin` NO**: *«estamos llamando a 2 clases diferentes `Pin` y eso en la práctica va a
+   crear confusión»*. El nombre es **`AnPin`**.
+   ✅ **`AnPin` DESCIENDE de `Pin`**, y el modelo no es artificial: *«como un pin físico puede ser
+   digital y/o analógico, tener una clase que lo permita es un buen modelo»*. Yo objeté que un
+   `AnPin` heredaría `on()`/`off()` —lo que su propio invariante prohíbe— y propuse partir `Pin`;
+   la respuesta cierra la objeción sin partir nada: *«en BP los métodos pueden ser virtuales y los
+   valores se exportan como propiedades, así que no hay ningún problema en extender la clase `Pin`,
+   sobrescribiendo lo que haga falta.»*
+
+   **El modelo, entero:**
+   - **`Pin`** — el pin FÍSICO: `num` y `mode`. Modos digitales **`INPUT` / `OUTPUT` /
+     `OPEN_COLLECTOR`**; modo analógico **`ANALOG`**. El `pull` (none/up/down) aplica **sólo en
+     digital**.
+   - **`AnPin extends Pin`** — sobrescribe lo que haga falta y añade `read()` / `readVolts()` /
+     `readAvg()`.
+   - 🔑 **La exclusividad no hay que vigilarla: es el mismo campo `mode`.** Pedir analógico sobre un
+     pin en modo digital falla **por construcción**, no porque alguien se acuerde de comprobarlo.
+
+   **`OPEN_COLLECTOR` es de Eduardo y es nuevo entero** — *«importante para cuando se conectan
+   varias salidas entre sí»*. Comprobado: **no existe en ninguna parte** (ni en BP, ni en la fachada
+   —`init(pin,mode)` sólo conoce `0=INPUT, 1=OUTPUT`, `bpvm_gpio.h:31`—, ni en las cinco cinturas).
+   Y no cuesta lo mismo en todas, que es el argumento de que esto vive en la HAL BP:
+
+   | familia | colector abierto |
+   |---|---|
+   | **ESP32** | nativo — `GPIO_MODE_OUTPUT_OD` (`hal/gpio_types.h:112` del IDF) |
+   | **STM32** | nativo — `GPIO_MODE_OUTPUT_OD` (`stm32u5xx_hal_gpio.h`) |
+   | **RP2350** | ❌ **el pad NO lo tiene**: hay que emularlo — conducir a bajo / soltar a alta impedancia |
+
+   ⚠️ **Y la semántica que hay que fijar en el contrato, no dejarla a quien implemente**: en modo
+   colector abierto **`write(1)` no significa «pon a alto», significa «suelta»** — el alto lo pone
+   el pull-up (externo, o el interno si se activa). Es el modo en que `write` cambia de significado;
+   sin escribirlo acabaría significando cinco cosas distintas.
+
+   ✅ **De las tres cosas del modo digital, `pull` YA EXISTE** en la fachada común
+   (`pull(pin, 0=none/1=up/2=down)`, `bpvm_gpio.h:32`). Lo que falta es `OPEN_COLLECTOR`.
+
+📌 **Y el dato que explica por qué esto es de lenguaje**: `Adc` es **la única fachada que no
+habla de pines**. Sus vecinas ya hacen lo que Eduardo pide — `Gpio.init(pin, mode)`,
+`Pwm.initSlice(pin, freqHz)`, `Pulse.initSlice(pin, edgeKind)`. La rara es ésta.
+
+⚠️ **Coste**: toca `Adc.bp`/`Gpio.bp`, que van **embebidos en las cinco imágenes** → ABI y blobs
+regenerados. Encaja con `L1` y el módulo raíz, que ya están en V7 por el mismo motivo.
+
+✅ **Lo que SÍ se queda de V6**: el arreglo de `#469`. No es un parche hacia este diseño —no añade
+media funcionalidad—: **quita una mentira**. Hasta V7, en una placa sin backend de ADC la fachada
+falla en vez de devolver una rampa que parece una lectura.
+
+#### ⏩ `#468` — la stdlib en flash en vez de en RAM (memoria de la C6) → **V7** (abierta 4-sep · **APLAZADA el 8-sep por Eduardo**)
+
+⏩ **APLAZADA A V7 el 8-sep. Decisión de Eduardo, con su criterio de siempre:** *«para V6 no
+inventamos cosas nuevas. Se puede plantear para V7, pero en V6 seguimos como hasta ahora.»*
+
+📌 **Y la salida para quien la necesite HOY, que es suya y ya funciona:** *«si alguien quiere
+ahorrar memoria puede montar su propio pack y subirlo»*. Eso dejó de ser teórico esta misma tarde:
+hasta el 8-sep la zona de packs sólo la mapeaba el P4, y desde `630a221e` la tienen también el S3,
+el C3 y el C6. O sea que el usuario que quiera sacar `Gui`/`Json` de la RAM puede hacerlo por el
+camino normal, sin que nosotros toquemos la imagen.
+
+🔮 **Y el apunte que le da forma a la ficha en V7**, también suyo: *«si en V7 LVGL lo subimos a un
+pack, éste puede incluir `Gui.mod`»*. Es la pieza que faltaba — el ahorro deja de ser un mecanismo
+inventado para la stdlib y pasa a ser **una consecuencia** de empaquetar LVGL, que es algo que se
+quiere hacer por su cuenta. El `Gui.mod` viaja con el motor al que envuelve, que es donde debe ir.
+
+⚠️ Lo que sigue valiendo de la medida, para cuando se retome: los **22 268 B** son reales y salen de
+que el `code` se quede en flash; la **otra mitad** de los «40-50 K» es la tabla de símbolos por
+referencia, que es un cambio del enlazador y va aparte. Lo de abajo se conserva porque es el
+análisis que sostiene las dos cosas.
+
+⛔ **8-sep — EL PACK NO PUEDE SER EL MECANISMO, y la objeción es de Eduardo:** *«los micros, cuando
+arrancan por primera vez, no tienen la partición definida, así que no se puede usar para subir
+ningún pack. La librería estándar de fábrica viene con la imagen del sistema y se copia a `/lib`.»*
+
+📐 **Comprobado en el código, las tres patas:**
+- El layout de particiones sale del **ENV** (`esp32/common/board_mgr_esp32.c:327`,
+  `bpvm_part_layout(&s_env, …)`). Una placa virgen no tiene ENV escrito.
+- Sin él no hay zona: *«sin zona de packs (el arranque no llegó a particiones)»*.
+- Y la stdlib de fábrica son blobs **dentro de la imagen** (`esp32_mods.c`:
+  `static const unsigned char core_mod[]`), que `esp32_mods_install()` copia a `/lib`.
+
+O sea: un pack sirve para lo que el USUARIO grabe, no para lo que la placa necesita **antes** de
+tener particiones. La stdlib de fábrica es justo eso.
+
+🔑 **Pero el ahorro medido NO necesita un pack**, y esto es lo que queda por decidir. Los 22 268 B
+salen de que el `code` se quede en **flash** en vez de copiarse al bloque de la VM — y los blobs de
+fábrica **ya están en flash**: son `static const`, o sea `.rodata`, mapeada y direccionable. Y el
+cargador ya lo contempla, no hay que construirlo:
+
+```
+loader.c:26    «base != NULL → blob ya en RAM/flash (embebido en la imagen, XIP, host)»
+loader.c:105   ... const char* name_hint, int xip)      ← XIP es un PARAMETRO, no una politica
+loader.c:109   if (xip && !data) return BPVM_ERR_IO;    /* exige blob mapeado */
+```
+
+⚠️ **Lo que hoy lo impide es el rodeo**: blob → se copia a `/lib` → se carga **desde el FS**, y
+desde el FS no hay puntero, así que no se puede XIP. La forma sería: cargar el módulo **desde el
+blob embebido** salvo que el usuario lo haya sustituido en `/lib`, que es el «shadow de desarrollo»
+de `#310` pero al revés.
+
+⏭️ **Lo que queda por decidir (Eduardo):** ¿se prueba esa vía —cargar la stdlib de fábrica en sitio
+desde la imagen— o se deja la memoria de la C6 como está? **No está probada**: lo medido es el
+ahorro (22 KB) y que el cargador acepta XIP con un blob; que funcione con estos blobs concretos hay
+que verlo. La otra mitad de los «40-50 K» sigue siendo la tabla de símbolos por referencia, que es
+un cambio del enlazador y va aparte.
+
+📌 Y lo que la objeción **no** tumba: llevar el mapeo de la zona a `esp32/common` seguía valiendo por
+sí solo, y se hizo el 8-sep (`630a221e`) — el S3 y el C6 ya tienen zona de packs para lo que el
+usuario quiera grabar.
+
+**La dirección la dio Eduardo (4-sep):** *«En cuanto al consumo de memoria es cierto que vamos
+justos. Aquí lo suyo es subir el pack de la librería estándar+Json+Gui, y con eso podemos ahorrar
+40 o 50 Ks.»* Antes de escribir código, lo que cuesta hoy y lo que daría, medido en la C6 con
+`GuiColorDemo` (imagen 128 KB, `log=1`):
+
+```
+[bpvm-c] dep 'Gui' -> /lib/Gui.mod · dep 'Json' -> /lib/Json.mod · dep 'Core' -> /lib/Core.mod
+[bpvm] tabla de simbolos: 1294 simbolos, 30554 B de nombres, 49152 B en total
+[bpvm] tabla de handles: 0 -> 256 slots (2 KB dentro del heap) OK — techo del heap 63488, libre 31 KB
+```
+
+**Dónde viven los módulos.** El cargador los pone DENTRO del bloque de la VM, delante del heap
+(`memory[]`: ext-table + data + code, desde `next_free_address`; `heap_start` empieza donde acaban).
+Con XIP (H3.c, ya implementado para la zona de packs montada) el `code` se queda en flash y a RAM
+sólo van ext-table + data. Cabeceras de los `.mod` de hoy:
+
+| módulo | fichero | data | code | en el bloque de la VM | con XIP |
+|---|---|---|---|---|---|
+| Core | 13 111 | 992 | 5 039 | 6 031 | 992 |
+| Json | 24 059 | 1 788 | 8 877 | 10 665 | 1 788 |
+| Gui | 44 003 | 4 176 | 8 352 | 12 528 | 4 176 |
+| **suma** | 81 173 | | | **29 224** | **6 956** |
+
+→ un pack XIP con los tres devuelve **22 268 B (21,7 KB) al heap de la VM**: de 31 KB libres a ~53
+tras cargar el demo. Eso es la mitad de la cifra de Eduardo. **La otra mitad es la tabla de
+símbolos**: 49 152 B (1 294 entradas × 8 B, redondeadas a 16 KB, + un pool de nombres de 32 KB con
+30 554 B usados) que sale del `malloc` de PLATAFORMA — está dentro de los 103 824 B de margen del
+sistema, no en el bloque de la VM. Un pack por sí solo no la toca: para ahorrarla haría falta que
+los nombres se leyeran POR REFERENCIA desde la flash mapeada (el pool desaparece: ~32 KB de DRAM)
+— un cambio de diseño del enlazador (`bpvm_symbol_name` devuelve hoy punteros a un pool que se
+realoja; los nombres del `.mod` van con longitud, no terminados en 0). Las dos cosas juntas son
+los «40 o 50 K».
+
+**Lo que ya hay y lo que falta:**
+- El cargador ya carga XIP desde la zona montada y el orden de búsqueda es pack-en-ejecución → FS
+  → zona (`#310`, spec §4). **El FS ECLIPSA a la zona** («shadow de desarrollo, con aviso»).
+- En la familia ESP32 la zona sólo la mapea el P4 (`pack_p4.c`: `esp_partition_mmap` INST+DATA y
+  `board_mgr_esp32_set_packs_view`, ~40 líneas). Llevarlo a `esp32/common` la activa en S3, C3 y
+  C6 sin construir nada nuevo. La C6 ya tiene partición `packs` (la propuso `PART_DEFAULTS`).
+- El frontend construye packs (`PackStep`, con el cierre de deps externas): un «pack de la
+  stdlib» es un pack sin app; falta la forma de pedirlo y el botón del IDE para grabarlo.
+
+**El nudo, que es el que decide el diseño:** con el orden actual, `/lib/*.mod` tapa al pack. Y en
+`/lib` los pone (a) el instalador de `#466` en cada arranque, desde la tabla embebida, y (b) el
+IDE cuando `STAT` dice que falta (Json y Gui hoy). Para que el pack cuente hacen falta tres cosas
+pequeñas y coherentes: el instalador no repone en `/lib` lo que la zona ya sirve con el mismo
+MAGIC+CRC; `STAT`/`bpvm_entry_resolve` miran también la zona (el IDE dirá «ya en la placa»); y la
+regla de versión de `#466` se aplica igual (un módulo más nuevo en `/app` o `/lib` sigue ganando,
+que para eso el FS eclipsa).
+
+**Alternativa sin subir nada:** la tabla embebida de la imagen (`esp32_mods`: 14 módulos, 48 KB)
+YA está en flash mapeada (`.rodata` es XIP en ESP32, RP2350 y STM32). Cargar XIP desde ahí —una
+fuente más en el orden— ahorra lo mismo que el pack para los módulos embebidos, sin partición ni
+grabación; a cambio Gui y Json tendrían que entrar en la imagen del C6 (+68 KB de flash de los 440
+libres) y el instalador dejaría de copiarlos a `/lib` (con `STAT` contestando desde la tabla). El
+mismo nudo del párrafo anterior, resuelto en el mismo sitio.
+
+⏭️ Decisión de Eduardo: (1) pack en la zona (lo que él propone; sirve también para módulos que no
+van en la imagen) o tabla embebida XIP; (2) si la tabla de símbolos por referencia entra en el
+mismo lote. Con eso se abre la implementación, en este orden: mapear la zona en `esp32/common`
+(activar), el nudo del eclipse (instalador + `STAT`), el pack de la stdlib desde el IDE, medir.
+
+#### 🧩 L1 — lenguaje y compilador
+
+Agrupa lo que ya está fichado y suelto por el registro. **No duplica: agrupa** — el texto
+de cada una sigue en su sitio.
+
+- ✅ ~~**La pasada de INTERFAZ no resuelve `Core` implícito**~~ — **CERRADA el 30-ago**
+  (`#458`), y no como estaba previsto: en vez de enseñar a esa pasada a inyectar el
+  `import`, se quitó el implícito y la norma pasó a ser explícita. Con ella cayó también
+  la mitad que nadie había visto: la pasada de interfaz **tiraba miembros en silencio**
+  cuando un tipo no resolvía.
+- ~~**La sustitución por LSP entre interfaces de módulo**~~ — 🧊 **DEJA DE SER UN BUG el
+  30-ago**: las interfaces de módulo se retiran del lenguaje (`#460`), así que era la
+  prueba de una función que ya no existe. No se arregla: se va con ella.
+- **`Object` = comodín por referencia** — decidido y diseñado.
+- **Liberación de recursos**: destructor `~Clase()` + `var owner` + `FREE_REF`.
+- **Ficheros como CLASE** — decidido: dos clases y la segunda hereda.
+- **`Map`**: objetos internos para claves **y** valores + `add` sobrecargado *(decidido el
+  23-ago; ver arriba)*.
+- ✅ **`Math`, ampliar — HECHO el 30-ago**: entran `clamp`, `wrap`, `hypot` y `remap`
+  (ids 228-231, al final del enum porque el id es `ordinal()`). Oráculo en
+  `samples/MathRango.bp`: **29 líneas byte-idénticas en las dos VMs**, con las esquinas
+  fijadas a propósito (rango del revés, `hi` excluido en `wrap`, extrapolación de
+  `remap`, `hypot(3e18,4e18)`). `hypot` NO llama al de libm ni al `Math.hypot()` de
+  Java —son algoritmos distintos y podrían separarse—: las dos VMs hacen
+  `sqrt(x*x+y*y)` en `double`, que con entradas f32 no puede desbordar.
+  ⚠️ Y los mensajes de error **no llevan números en coma flotante**: un `%g` de C y un
+  `String.valueOf(double)` de Java no dan la misma cadena, y ese texto sale por stdout.
+  ℹ️ De la lista original eran cinco: **`atan2` ya estaba hecha** y esta ficha la pidió
+  hasta el 30-ago (existe en `Math.bp`, la registra `Intrinsics.java` y la implementan las
+  dos VMs — comprobado corriendo `samples/mathtest.bp`, 17 líneas byte-idénticas).
+
+- 🟡 **Lo que queda de `Math` NO es matemática, es el COMPILADOR.** Los dos deseos que
+  siguen abiertos son el mismo problema:
+  - *«`factorial` sobrecargada y f64»*. Observación de Eduardo: **nuestro factorial es
+    `Γ(x+1)`**, y `gamma` ya existe — comprobado con `samples/GammaFact.bp`, que fija
+    `gamma(n+1) == factorial(n)` para n=0..12 en las dos VMs, y sigue contestando donde el
+    entero lanza (`13! = 6227020800`, `20! = 2.432902E18`). O sea que **no hace falta
+    builtin nuevo: el cálculo ya está**.
+  - `sign(integer)` y `signF(float)`: dos nombres para una idea, herencia de cuando no
+    había sobrecarga.
+  🔒 **Y lo que bloquea a los dos es lo mismo: una intrínseca NO se puede sobrecargar.**
+  `Intrinsics.REGISTRY` es un `Map` con clave el nombre cualificado y `register()` revienta
+  si se repite; y el call-site (`MivmEmitter.java:3924`) compone la clave con **`fs.name`,
+  el nombre PELADO** — no el mangleado de `H5.a`. Así que las dos firmas caerían en la
+  misma entrada. Arreglarlo es la tarea de verdad, y de paso desbloquea las dos.
+- **`#19`** array fijo LOCAL: que sea inline de verdad · **`#396`** módulo `Time`.
+
+#### ⏸️ `#452` — CINCO verbos del wire que ningún cliente manda (APLAZADA al script de test, 31-ago)
+
+Salió de una pregunta de Eduardo al probar `U3.17` —*«df / mem ?»*— y de tirar del hilo.
+En la línea de comandos del IDE `df` y `mem` son **el mismo comando**, y no manda `DF`:
+`SerialBackend.mem()` se lo sintetiza con `INFO` + `LIST`.
+
+Censados los 40 verbos que el IDE emite (`sendRequest`) contra los 20 del REPL común:
+
+| verbo | ¿lo manda algún cliente? |
+|---|---|
+| `PING` · `DF` · `FORMAT` · `RENAME` · `RMDIR` | ❌ **cero ocurrencias en todo el IDE** |
+| los otros 15 | sí |
+
+⚠️ **Por qué importa, y no es "código de más":**
+1. **No se pueden probar.** Ningún gesto del IDE los alcanza — se vio migrándolos: `U3.13`
+   dio al ESP32 `FORMAT`/`RENAME`/`RMDIR` y **no hubo forma de verificarlo por uso**, hubo
+   que cambiar el plan y verificar con el paso siguiente.
+2. **Y por eso se pudren en silencio**: si uno se rompe, nadie se entera. Es superficie
+   viva del protocolo que nadie ejercita.
+3. **El arnés de V7 tampoco los cubrirá**, porque su modelo es «lo que hace el IDE». Van a
+   necesitar un cliente de pruebas que hable el wire a pelo — lo cual, de paso, es la
+   respuesta a *cómo* se prueban.
+
+### 🧭 EL CRITERIO, y por qué la ficha se APLAZA (Eduardo, 31-ago)
+
+*«Con los comandos tenemos 3 casos de uso: 1 — el usuario, 2 — el IDE internamente, 3 — el
+futuro script para automatizar los test en placa. Creo que podemos dejar para cuando
+abordemos el script la revisión de TODOS los verbos.»*
+
+📌 **El cambio de enfoque importa**: la pregunta deja de ser «¿sobra este verbo?» y pasa a
+ser «¿a cuál de los tres consumidores sirve?». Y el tercero **todavía no existe**, así que
+juzgarlos ahora sería decidir con un consumidor de menos a la vista — justo el error de
+censar sin tener delante a todos los que llaman.
+
+⏸️ **Se aparca hasta el script (`#444`)**, y entonces se repasan **los 29 verbos**, no sólo
+estos cinco. Lo medido el 30/31-ago se conserva porque será el punto de partida:
+
+| verbo | ¿usuario? | ¿IDE? | ¿script? |
+|---|---|---|---|
+| **`FORMAT`** | **sí, y hoy falta**: tras flashear hay que formatear el FS y **no hay forma desde el IDE** (ni botón ni comando de consola) | no lo manda | seguro |
+| **`RENAME`** | sí — renombrar en el árbol es algo que al usuario le falta | no lo manda | probable |
+| **`RMDIR`** | sí — el IDE ya manda `MKDIR`, falta el par | no lo manda | probable |
+| **`PING`** | no | no lo manda | **sí**: saber si la placa sigue viva entre test y test |
+| **`DF`** | sí, pero **duplicado**: la consola tiene `df` y `SerialBackend.mem()` lo sintetiza con `INFO` + `LIST` — dos viajes y una cuenta para lo que el firmware da en uno | no lo manda | probable |
+
+⏩ **Lo que decía la ficha antes de aplazarse**: o el IDE los usa, o se declaran
+explícitamente «del protocolo, sin cliente todavía» y el arnés los cubre aparte. Lo que no
+vale es dejarlos como están: implementados, documentados y sin tocar.
+
+### ═══ V7 — lo que viene de V5, pasó por V6 sin abrirse y AHORA ES DE V7 ═══
+
+> 🧹 **TRIAJE del 26-ago-2026.** Esta cola tenía **59 fichas y 47 ya estaban cerradas**
+> —con su ✅ y su commit— pero seguían aquí dentro: la lista de pendientes **mentía al
+> alza**. Las 47 se movieron íntegras al **📦 ARCHIVO** del final de este documento
+> (ni una línea borrada: comprobado comparando contra git, 0 líneas de contenido perdidas).
+>
+> De las **12 supervivientes**, verificadas **contra el código y git, no de memoria**:
+> una estaba cerrada sin marcar (el `native` en método, que resolvió N1.1) y otra tenía el
+> enunciado equivocado (los packs del S3: la región SÍ existe). **Quedan 9 vivas** (dos H2-P5 más llevaban «CERRADO»/«ya no aplica» en su propio texto sin tachar).
+>
+> 📌 Es [[no-acumular-pendientes]] aplicado a la propia libreta. En V5 esto costó tiempo
+> real: dos bugs cerrados que seguían apareciendo como abiertos.
+
+> **Decisión de Eduardo (23-ago):** *«lo que haya de V5 que quedó pendiente pasa a V6 y
+> deja de ser de V5»*. Así que esto **no es un limbo ni una lista de espera**: son fichas
+> de V6 como las de arriba. Lo único que las distingue es de dónde vienen, y eso se
+> conserva porque el contexto de un bug incluye cuándo salió.
+>
+> Los títulos de sección siguen nombrando hitos de V5 (`V5/H10`, «la cola de H2») **a
+> propósito**: dicen la procedencia, no el hito al que pertenecen.
+
+### IDE — V5/H10 «lo pendiente que no son bugs»
+
+### Módulos y arranque (nuevas del 14-ago, en placa)
+
+- ✅ ~~**🐛 [ESP32 y STM32] un módulo rancio sobrevive y NADIE lo dice — y `/app` es el punto ciego de los DOS**~~ — **CERRADA el 3-sep por `#466`** (nota al final). Encontrado el
+  22-ago comparando las tres familias. **No es regresión de V5**: es así desde que existe
+  el mecanismo.
+  📐 **El hecho**: `esp32_mods_install` (`esp32/main/esp32_mods.c:4840`) instala un módulo
+  **sólo si NO existe** (`if (bpvm_fs_stat(...) != 0)`). Un `Core.mod` de un firmware
+  anterior se queda ahí indefinidamente. Y a diferencia del RP2350, el ESP32 **no tiene el
+  aviso** `NO es el de esta imagen` — ése vive sólo en `pico/main.c`.
+  🩸 **Lo que le llega al usuario**: `exit 11` con *«lib 'Core' presente pero no exporta
+  'Core.__cls_new_List'; ¿versión vieja?»* — y ni una pista de que la causa esté en `/lib`
+  ni de que borrarlo lo arregle. En la Pico lo dice la placa al arrancar; aquí no.
+  📌 **La POLÍTICA no es el problema y no hay que cambiarla.** Su comentario la justifica:
+  *«No sobreescribas si ya está (p.ej. el usuario subió una versión)»*, que es razonable —
+  respetar lo que el usuario puso a mano. Lo que falta es **decirlo**.
+  ⏭️ **El arreglo barato**: comparar el tamaño del fichero con el del blob embebido y
+  emitir la misma línea que la Pico. No lee el fichero entero (la Pico ya resolvió eso en
+  `H11`: preguntar sólo si EXISTE costaba menos que leerlo). Es el mismo criterio de «que
+  el desfase GRITE» que el proyecto aplica en el gate del `.mod`, el `magic` de la BIOS, el
+  sello del `.npk` y la marca del punto de encuentro.
+  🩸 **AMPLIADO el 22-ago, con el Nucleo delante**: el problema **no es sólo del ESP32 ni
+  sólo de `/lib`**. El IDE sube las dependencias del programa a **`/app`**, y lo que hay
+  ahí **tapa** a lo de `/lib`. El STM32 vacía `/lib` en cada arranque pero **no toca
+  `/app`**, así que un `Core.mod` rancio ahí sobrevive a todo — y eso es exactamente lo que
+  dio el `exit 11` en el Nucleo con `/lib` recién reembebido. Lo encontró Eduardo con
+  `dir /app`.
+  ✅ **El RP2350 es la única familia con la red completa**: su comprobación recorre una
+  tabla que incluye las dos carpetas, y por eso en la Metro salía
+  `lib: /app/Hello.mod NO es el de esta imagen` (`pico/main.c:1323`).
+  🔗 **Y emparenta con la ficha de V6** *«NO copiar dependencias que el dispositivo YA
+  TIENE»*: si el IDE no dejara copias en `/app`, no habría nada que envejecer. Esa ficha
+  deja de ser sólo una optimización de tiempo de subida.
+  ⚖️ **Y hay una TERCERA vía ya escrita en el propio proyecto**: el STM32 vacía `/lib` y lo
+  reembebe fresco cada arranque (*«evita stdlib rancia tras actualizar el firmware»*,
+  `fs_lfs_stm32.c:196`). Se autocura, a cambio de desgaste de flash. **Tres familias, tres
+  estrategias, ninguna decidida como LA buena** — eso es material del eje común/hardware de
+  V6 (`#427`), no de un parche suelto.
+  ✅ **CÓMO SE CERRÓ (3-sep, `#466`), y con la regla de Eduardo, no con el parche barato de
+  arriba.** Las tres estrategias se fueron: ahora las tres familias corren el MISMO
+  instalador (`bpvm_mods_sincronizar`, sobre la tabla embebida de `U4`): por cada módulo de
+  la imagen, si falta en `/lib` se instala; si el de `/lib` es de MAGIC anterior, o del mismo
+  MAGIC con otro tamaño/CRC, **se repone y lo dice en el log** («repuesto»); si es más nuevo,
+  se respeta. Y el punto ciego de `/app` lo cubre el IDE por el otro lado: antes de subir una
+  dependencia pregunta a la placa con `STAT` por nombre (resuelve proyecto → `/app` → `/lib`)
+  y, si la copia que encuentra es de versión anterior o de CRC distinto, **la reemplaza donde
+  está** — un `Core.mod` rancio en `/app` cae en el siguiente `Run`. Verificado en Pico 2, S3
+  (13 repuestos), Nucleo, Discovery y C6. Lo único que no toca nadie: un módulo rancio en
+  `/app` que ningún programa importe, que tampoco carga nadie.
+
+### Familias — lo que dejó el censo (`#427`)
+
+- **🕳️ [S3] los packs: encaminados pero SIN REGIÓN — el mismo agujero que `#327` en la
+  ⚠️ **Matizado en el triaje (26-ago), porque el enunciado despista**: el S3 **sí tiene `bpdata`** (`partitions.csv`: 0x118000, ~15 MB) — la región existe desde que se arregló la tabla que acababa en 2 MB. Lo que falta es el **reparto FS|Packs dentro de bpdata** (el «mando» del env) y el camino de grabación. Medir antes de tocar: no es «no hay región», es «nadie le ha dado su mitad».
+  Pico, ahora en el S3** (visto el 22-ago probando H13).
+  📐 **El hecho**: no existe `esp32/main/pack_s3.c`. El único que llama a
+  `board_mgr_esp32_set_packs_view()` es `esp32p4/main/pack_p4.c`, así que en el S3
+  `s_packs_view` es NULL para siempre → `bm.packs_*` se queda a cero → la placa contesta
+  *«la placa no expone packs (configura las particiones primero)»*.
+  🩸 **Y el mensaje ENGAÑA, igual que engañó en la Pico**: invita a tocar las particiones,
+  y en el S3 eso **no puede** arreglarlo. El comentario de `#327` en `board_mgr_pico.c:41`
+  ya lo decía con estas palabras: *«el LS contestaba —correctamente— "esta placa no expone
+  packs", **hiciera Eduardo lo que hiciera con las particiones**»*.
+  📌 **Y la frase de `#327` que define el patrón**: *«Encaminar los comandos y no dar la
+  zona es media función»*. Entonces el hueco era la Pico y lo tenían el STM32 y el
+  simulado; hoy lo tienen las otras cuatro y el hueco es el S3. Es
+  [[arreglo-que-no-viaja-entre-familias]] otra vez: el común creció y una copia privada
+  no.
+  ✅ **No es regresión de V5 ni bloquea**: la tabla de la Puerta 2 nunca listó packs para
+  el S3. Pero conviene DECIRLO, porque hoy sólo se descubre intentándolo y el mensaje
+  manda a otro sitio.
+  ⏭️ **Dos trabajos, separables**:
+  1. **Barato y honesto**: que la placa distinga *«esta familia no tiene zona de packs»* de
+     *«hay zona pero no está configurada»*. Hoy las dos dan la misma frase y una de ellas
+     es un consejo imposible. Es el mismo criterio que ya se aplicó al `BAD_ALIGN` y al
+     `exit 11`: **que el mensaje diga qué encontró, no lo que supone**.
+  2. **El de fondo**: escribir `pack_s3.c`. La flash del S3 son 16 MB y la zona caería por
+     debajo del límite del caché, así que no tiene el problema del P4 con los 32 MB —
+     debería ser un port directo del mapeo del P4.
+
+### Placas y hardware
+
+- **🐛🔴 [placa] un estado persistente deja la Metro SIN PODER EJECUTAR NADA, y sólo lo
+  cura REPARTICIONAR** — visto el 21-ago al final de la sesión de H13. **Sin causa
+  identificada**; se ficha con la cronología porque el rodeo no es evidente y a un
+  usuario le puede pasar.
+  📐 **El síntoma**: no corre **ningún** programa. Ni los de la sesión, ni el
+  `/app/Hello.mod` que preinstala el propio firmware —que no usa strings, ni builtins,
+  ni un solo `import`—. Se cuelga mudo, sin línea de error.
+  🔍 **Lo que DESCARTA el firmware, y es el dato que más vale**: se volvió a flashear la
+  imagen del 20-ago —la misma que esa mañana había corrido `ListGets`, `SqlDemo`,
+  `DaoDemo`, `GenDemo`, `SdDoc`, `SdCard` y `Bench` sin una queja— **y tampoco
+  funcionaba**. Con lo cual lo roto sobrevive al flasheo: es FS, ENV o zona de packs.
+  ⚠️ **Y formatear NO bastó.** Se formateó (FS + zona de packs) y siguió igual. Lo único
+  que lo curó fue **cambiar el tamaño de la partición**, que fuerza a rehacer el reparto
+  entero. Es la SEGUNDA vez en el mismo día que reparticionar arregla algo.
+  📋 **Cronología, por si la pista está aquí** (todo entre «funcionaba» y «no
+  funciona»): formatear FS+packs → regrabar `SQLite.pack` (1,13 MB por streaming) →
+  reformatear la SD a exFAT → reiniciar → reformatear la SD a FAT32 → flashear imagen
+  nueva → flashear la de ayer.
+  🔬 **LO QUE FALTA MEDIR, y no se capturó**: el log **durante el intento de ejecución**.
+  Si sale la línea `RUN/v1 /app/X.mod session=N` el programa llega a lanzarse y se
+  atasca dentro; si no sale, no llega ni a arrancar. Eso parte el problema en dos y sin
+  ello sólo se puede especular. **Si vuelve a pasar, lo PRIMERO es ese log.**
+  ⏭️ Sospechoso natural para empezar: qué toca un cambio de tamaño de partición que un
+  formateo NO toca. Ahí está la diferencia entre lo que curó y lo que no.
+
+- ✅ `#379` — el wire se **desincroniza tras el Stop**, y sólo en unas placas. **CERRADA el
+  12-sep en `F1`, absorbida por `#398`**: la medida que faltaba desde agosto, hecha — el P4
+  (Waveshare, `E8F60AE0B380`) **con la tarjeta montada** (`sd: montada en /sd (4 bits)`),
+  `python tools/wire_serie.py COM15 ciclo /app/Bench.mod 8` → **8 ciclos, 0 fallos**: KILL
+  222-234 ms, INFO 283-297 ms, uptimes 61285→70611 (ocho de verdad). Con la imagen de `dist`
+  de V6 (`#503` dentro). El cuelgue del 17-ago era el refresco del árbol con tarjeta (`#398`),
+  no el wire. Lo que sigue siendo cierto y queda dicho en `PENDIENTES`: la VM sólo mira el
+  Stop entre instrucciones del intérprete, así que una `native` que corra segundos no se
+  puede parar hasta que vuelva.
+  **→ ASIGNADA A `F1` (pruebas finales) el 9-sep, decisión de Eduardo**: *«la podemos dejar
+  pendiente para las pruebas finales»*. Deja de contar como pendiente suelto — no porque se
+  aplace, sino porque **lo único que le queda ES una prueba de placa**, y `F1` es la tanda
+  donde las placas se conducen. La medida exacta y su herramienta están abajo.
+  🔎 **HIPÓTESIS FUERTE (17-ago): esto era `#398`, no una desincronización.**
+  Eduardo, al proponerle repetir la prueba en el P4: *«lo de la P4 con SD con
+  comportamiento extraño era ANTES de que se solucionara el problema del refresco
+  del árbol»*. Y con eso encajan TODOS los síntomas sin necesidad de que el wire
+  se desordene — bastaba con preguntar mientras el device estaba ocupado:
+  antes de `#398`, un refresco con tarjeta tenía al firmware **siete segundos**
+  calculando el CRC de cada fichero.
+  · «timeout esperando `INFO`» → el device no atendía, estaba listando.
+  · «se recupera solo» → en cuanto acaba el listado, contesta.
+  · «sólo en unas placas» → las que tienen SD, donde el listado era lento.
+  · «el AOT no sabe la arquitectura» → el `arch` viaja en ESE `INFO`.
+  📐 **Medido el 17-ago: la Metro, 5 de 5 ciclos `run`→`stop`→`Info` limpios**
+  (uptimes 994/1094/1146/1177/1214 s: son cinco de verdad, no la misma respuesta
+  repetida). Consistente con la hipótesis.
+  ⏭️ **La prueba que decide: los mismos 5 ciclos en el P4 CON la tarjeta**, que
+  era la combinación donde peor se veía. 5/5 → la explicación se sostiene y esta
+  ficha se cierra como absorbida por `#398`. Un fallo → la hipótesis es mala y hay
+  una desincronización de verdad que buscar.
+  🔴 **17-ago, en el P4: el Stop CUELGA.** Eduardo, probando esto mismo: *«he
+  hecho stop y se cuelga (y como se cuelga no hay log)»*. O sea que la hipótesis
+  de absorción **NO se sostiene tal cual**: un Stop que cuelga no es «el firmware
+  estaba ocupado listando». La ficha sigue ABIERTA.
+  ⏭️ Lo siguiente cuando se retome, y en este orden (no se hizo, se paró aquí):
+  1. **¿está colgado el device o el IDE?** Con el cuelgue puesto, pedir `Info` por
+     la consola. Contesta → el device está sano y lo colgado es el IDE. Timeout →
+     el device está parado. Es la misma pregunta que separa «tarda más que su
+     timeout» de «se pierde», y sigue sin hacerse.
+  2. **qué estaba corriendo**: con `native`/`.mdn` o interpretado. Importa porque la
+     VM sólo mira el Stop **dentro del bucle del intérprete**
+     (`interp.c:676`, al principio de cada instrucción): mientras corre código
+     nativo del `.mdn` no hay dónde verlo.
+  3. si se recupera solo o hay que desenchufar.
+  Síntoma conocido: timeout esperando respuesta a `INFO`, y se recupera solo.
+  🔗 **Puede ser la raíz de más cosas de las que parece** (Eduardo, 15-ago: *«la
+  P4 con la SD funciona raro, yo creo que puede venir de ese comportamiento
+  extraño»*):
+  - el aviso del AOT *«no sé la arquitectura del dispositivo — desconecta y
+    vuelve a conectar»* sale cuando el IDE no logra el `arch`, **y el `arch` se
+    pide por el INFO**, que es justo el verbo que esta ficha dice que se pierde.
+    `98183ef` dejó de fiarse del valor cacheado *para grabar* por este motivo,
+    pero el camino del **Run** sigue cogiéndolo de la caché: con un programa que
+    tenga funciones `native`, eso significa ejecutarlas INTERPRETADAS sin que
+    nadie lo pida.
+  - y lo raro de la SD en el P4, que Eduardo tiene pendiente de revisar.
+  ⚠️ La medida que separa las hipótesis sigue siendo la misma y no se ha hecho:
+  **cronometrar la respuesta en el FIRMWARE, no en el IDE**. «Tarda más que su
+  timeout» y «se pierde» son dos fallos distintos y desde fuera se ven igual.
+
+  ### 🔬 9-sep — EL PASO 1, HECHO POR FIN (y con herramienta, que era lo que faltaba)
+
+  **Idea de Eduardo:** *«A ver si se desincronizan, se puede enviar un código de sincronización tipo
+  UUUUUUUU.»* Buena en general — y al mirarlo resulta que **el wire ya la tiene, y es el `\n`**:
+
+  - **camino de líneas** (todo salvo el bulk): es `{...}\n`, y cada familia **descarta lo que no
+    empiece por `{`** y reintenta al desbordar (`repl_esp32.c:1223`, `repl_v1.c:1727`). Cualquier
+    basura se pierde hasta el siguiente salto de línea, o sea que **ya resincroniza en el siguiente
+    mensaje**. Un patrón `UUUU` no añadiría nada aquí.
+  - **camino bulk** (`PUT` + N bytes crudos): éste **sí** es donde se puede perder el framing de
+    verdad — si los dos lados no coinciden en N, el receptor se come bytes crudos creyendo que son
+    líneas. Es el único sitio donde un código de sincronización tendría trabajo, y hoy se cubre con
+    `drain_bulk` y un caso del arnés («…y el wire sigue en sincronía después»).
+
+  ### Lo que faltaba de verdad: ¿el device o el IDE?
+
+  Era el **paso 1** de esta ficha y llevaba desde agosto sin hacerse, porque no había forma de
+  preguntarle a la placa **sin el IDE por medio**. Ahora la hay: `bpgenvm-c/tools/wire_serie.py`, un
+  cliente del wire por serie que no es el IDE. Con él, `run → stop → INFO`:
+
+  | | ciclos | fallos | KILL | INFO |
+  |---|---|---|---|---|
+  | **ESP32-C3** | 8 | **0** | ~215 ms | contesta siempre |
+  | **ESP32-S3** | 8 | **0** | ~233 ms | contesta siempre |
+
+  Los `uptime` avanzan en cada ciclo, así que son **dieciséis ciclos de verdad**, no la misma
+  respuesta repetida — el control que faltaba en la medida de la Metro del 17-ago.
+
+  ⚠️ **Lo que esto NO prueba, y hay que decirlo**: ninguna de las dos placas tiene **SD**, y el caso
+  de la ficha era el **P4 con la tarjeta**, donde además el Stop *colgaba*. Así que esto **no cierra
+  `#379`: lo estrecha**. Descarta que haya una desincronización de base en el wire —que era la
+  hipótesis del título— y deja la sospecha donde ya la puso Eduardo el 17-ago: el árbol/CRC con
+  tarjeta, o sea `#398`.
+
+  ⏭️ **La medida que queda es la misma de siempre y ahora es de dos minutos**: el P4 con la tarjeta,
+  `python tools/wire_serie.py COM<n> ciclo /app/Bench.mod 8`. Si sale 8/8, la ficha se cierra como
+  absorbida por `#398`; si falla, hay desincronización de verdad y entonces sí toca hablar del
+  código de sincronización — en el camino bulk, que es donde vive el problema.
+
+- ~~`#408` — medir **los dos cuellos** que se ven comparando P4 y Metro (árbol en la
+  P4 / formateo en la Metro).~~ ✅ **CERRADA**: las dos mitades medidas (21 y 22-ago) —
+  el detalle, en la viñeta siguiente. *(Este enunciado se leía como pendiente mientras
+  la respuesta estaba dos líneas más abajo; corregido el 7-sep.)*
+- ✅ **`#408` — CERRADA. La mitad de la METRO, MEDIDA el 21-ago: el formateo son ~15 s**, y es el
+  de la **zona de packs** (4,2 MB en esta placa) → unos **280 KB/s de borrado de
+  flash**, que para un RP2350 es lo esperable. 📌 Anotado como *explicado*, no como
+  pendiente: nadie tiene que perseguirlo pensando que es un fallo. Borrar 4,2 MB cuesta
+  eso.
+  ✅ **Y LA OTRA MITAD, MEDIDA el 22-ago en el P4 — `#408` QUEDA CERRADA.** El árbol
+  **no es un cuello**: `ls: 23 ent en 145 ms | app:1/0ms lib:14/61ms sd:8/36ms`. 145 ms
+  para 23 entradas, y encima **desglosado por carpeta**, que era justo lo que la ficha
+  pedía para poder distinguir quién tarda. El grueso se lo lleva `/lib` (14 entradas en
+  61 ms) y la SD (8 en 36 ms); `/app` es instantáneo.
+  📌 **Las dos mitades, entonces, tienen respuestas opuestas y las dos son buenas
+  noticias**: el formateo tarda lo que cuesta borrar flash (explicado, no patológico) y el
+  árbol ya no tarda —lo arregló `#424` el 17-ago— así que no queda nada que optimizar.
+  Cerrar una ficha midiendo y descubriendo que no hay problema también es cerrarla.
+  🔎 **Y de camino salió esto**: `save` responde «FS guardado en flash» y nada más, pero
+  el firmware **sí se cronometra** y manda `durationMs` en el `SAVE_REPLY`
+  (`pico/repl_v1.c:929-943`). **El dato viaja por el wire y el IDE lo descarta.**
+  Enseñarlo no cuesta nada y es exactamente la medida que esta ficha pedía. No es un
+  bug, así que con el freeze va a V6 → ver «Aplazadas».
+### Pulido (no urgente) — subidos desde `PENDIENTES` el 17-ago
+
+> Estaban en `PENDIENTES.md`, que es documentación de cara al usuario. Tienen estado de
+> trabajo («hay que hacer X»), así que su sitio es éste.
+
+### Lenguaje y VM
+
+> 🧊 **CERRADA POR RETIRADA (30-ago, `#460`)**: las interfaces de módulo salen del
+> lenguaje, así que este bug se va con ellas. El texto se conserva porque documenta bien
+> el mecanismo y **el diagnóstico que dejó escrito resultó dudoso** — la traza del 30-ago
+> imprime el `extends` que aquí se daba por ausente. Sirve de recordatorio: una explicación
+> que no se vuelve a comprobar envejece igual que el código.
+
+- ~~**🐛 [compilador] la sustitución por LSP entre interfaces de módulo NO funciona**~~ —
+  ✅ **CERRADA POR RETIRADA (30-ago, `#460`)**, como dice la nota de arriba: las interfaces
+  de módulo salen del lenguaje. *(La viñeta se leía como pendiente; corregido el 7-sep.)*
+  El enunciado original, que se conserva porque documenta el mecanismo:
+  encontrado el 21-ago censando los 277 `.bp` del ZIP. **Dos samples publicados que no
+  compilan**, y no por V5: nada que ver con `any`→`Object`.
+  📐 **El caso**, que el propio sample explica en su cabecera: `appv1lsp.bp` importa
+  `com.example.LogApi:BufferedLogger`; `BufferedLogger` declara
+  `implements com.example.LogApiV2`; y `logapiv2.bp` dice
+  `module interface LogApiV2 extends com.example.LogApi`. Transitivamente lo cumple, y
+  el comentario del código lo da por bueno:
+  *«El impl puede implementar la interfaz pedida directamente o cualquier descendiente
+  de ella (subinterfaz)»* (`Main.java:1958`). Pero el compilador lo rechaza:
+  ```
+  error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o
+  transitivamente; declara com.example.LogApiV2)
+  ```
+  Y `appv2.bp` cae por lo mismo visto del otro lado: *«el módulo importado 'LogApiV2'
+  no expone 'log' / 'level' / 'VERSION'»* — que son los miembros que HEREDA de `LogApi`.
+  🔍 **Hasta dónde llegué (21-ago)**: el algoritmo de `implSatisfies`
+  (`Main.java:1357`) es correcto en forma —sube `implements` → `extends` hasta dar con
+  la pedida— así que falla el dato, no la lógica. Y el dato falta porque **una
+  `module interface` pura no genera `.mod`**: compilado el conjunto como proyecto, sale
+  `com.example.BufferedLogger.mod` y **no** `com.example.LogApiV2.mod`. Sin artefacto,
+  la cadena sólo puede recorrerse recompilando la interfaz desde el fuente en modo
+  `INTERFACE_ONLY`… que es **la pasada con el bug ya aparcado** («la pasada
+  interfaz-only tira firmas»). Muy probablemente son el mismo problema visto dos veces.
+  📌 **Por qué no se arregló al encontrarlo**: code freeze, y esto **no es regresión de
+  V5** — es del subsistema de interfaces de módulo, que es delicado. Se ficha y lo
+  decide Eduardo.
+  ✅ **La decisión de publicación YA SE TOMÓ** (y este párrafo decía lo contrario hasta el
+  30-ago): `appv1lsp.bp` y `appv2.bp` **no viajan** — viven en `samples/pendientes/`, una
+  tercera carpeta creada para esto, con su `LEEME` explicando por qué no van a
+  `samples/errores/` (esa es para los que fallan **a propósito**; meter aquí un bug sería
+  camuflarlo) y por qué no se borran (**son la prueba de regresión**: el día que compilen,
+  está arreglado). En `dist/BasicPlus-5.0-win/samples/` sólo quedan `logapi.bp` y
+  `logapiv2.bp`, que compilan solos.
+
+  🔁 **Sigue vivo — reproducido el 30-ago** con el compilador actual:
+  ```
+  error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o transitivamente;
+  declara com.example.LogApiV2)
+  ```
+  📌 **Y la traza de hoy discute la hipótesis de arriba, así que conviene comprobarlo antes
+  de arreglar.** Se dijo que *«falla el dato»* porque una `module interface` pura no genera
+  `.mod` y la cadena no se puede recorrer. Pero en esta corrida el dato **sí está**: la
+  pasada imprime `interfaz : com.example.LogApiV2 (… interface=true,
+  extends=com.example.LogApi)` — o sea que el `extends` se conoce y aun así el impl se
+  rechaza. Puede que el dato exista y no llegue a donde mira `implSatisfies`. **Primer
+  gesto al retomarlo: mirar si `implSatisfies` recibe ese `extends` o una copia sin él**,
+  en vez de dar por buena la explicación escrita.
+
+### AOT / native
+
+- ~~**🐛 [AOT] `native` en un MÉTODO se ignora en SILENCIO**~~ — ✅ **CERRADA (triaje del 26-ago): la resolvió V6/N1.1** (`631f55fa`), y con test (`AotNativeEnMetodoTest`). El emisor APLANA el método a función con `this` de primer parámetro. Y el 24-ago se cerró además su cola oculta: el nombre del símbolo no casaba con el `.mod` (`Caja_doble` vs `Caja.doble`), así que registraba 3 de 4 thunks — también en silencio. Red: `AotSimboloEnModTest`. — encontrado el 21-ago, y lo
+  destapó Eduardo dudando de un diagnóstico mío: *«¿ningún método de clase puede ser
+  native? Me parece una limitación tonta, teniendo en cuenta que `miObjeto.miMetodo(...)`
+  en realidad internamente es `miMetodo(miObjeto, ...)`»*. Tenía razón.
+  📐 **La causa, en una línea** (`AotCEmitter.java:259`): el pre-pass que recolecta las
+  `native` recorre `module.defs` y sólo mira los `Ast.FuncDef`. **Un `ClassDef` no entra**,
+  así que los métodos ni se abren. No se rechazan: no se miran.
+  🩸 **Y por eso el fallo es MUDO, que es lo grave.** Probado con una clase con
+  `public native function doble(): integer` devolviendo `this.n * 2`: el compilador no da
+  error, `AotMain` dice *«no tiene funciones `native` — sin emisión»*, y el método corre
+  **interpretado** mientras el programador cree que va a velocidad AOT. Pedir velocidad y
+  que te la nieguen sin avisar.
+  ⏭️ **Dos trabajos, y el primero NO espera a V6**: (a) que `native` en un método **avise**
+  — es el mismo criterio de «que el desfase grite» que el proyecto ya aplica en el gate del
+  `.mod`, el `magic` de la BIOS, el sello del `.npk`, la marca del punto de encuentro y el
+  aviso de `/lib` rancio; (b) abrir el barrido a los métodos, pasando el objeto como primer
+  parámetro — que es lo que ya ocurre por debajo.
+  📌 **Y una corrección de un diagnóstico mío**, para que no se herede el error: escribí que
+  la barrera era *«no hay `this`»*. Falso. El emisor **ya sabe emitir `MemberAccessExpr`**,
+  que es lo que `this.n` necesita. La barrera era el barrido, no la semántica — y eso hace
+  el trabajo bastante más pequeño de lo que yo había dicho.
+
+### Arrastres de V4 y varios
+
+### Cola de H2 (la SD), anotada al cerrarlo el 8-ago
+
+- ~~**`H2-P5` (exFAT / «superfloppy»)**~~ — ✅ **CERRADO el 21-ago con una PRUEBA, no con una
+  suposición.** Tarjeta reformateada a exFAT en el PC y metida en la Metro:
+  ```
+  [ 7809] sd: no hay FAT32 en la particion (exFAT? reformatea a FAT32)
+  ```
+  ✅ **El resultado es el bueno**: exFAT no está soportado —se sabía— pero el firmware
+  **lo detecta y lo dice con la salida incluida**, en vez de callarse o montar basura.
+  Y ya estaba documentado en los dos idiomas (`referencia.html` §SD y su gemelo inglés):
+  *«Formatea las tarjetas en FAT32… exFAT todavía no está soportado»*. Nada que arreglar.
+  📌 **Y de regalo, el pin de detección quedó probado en sus TRES casos**, que no era el
+  objetivo de la prueba: `tarjeta RETIRADA — /sd desmontado` al sacarla,
+  `zocalo VACIO (pin de deteccion) — no se monta` al arrancar sin ella, y detección **en
+  caliente** al meterla (leyó la tarjeta a los 7,8 s del arranque). Los tres correctos.
+
+- ~~`H2-P5` — **variedad de tarjetas**~~ — ✅ **CERRADA (triaje 26-ago): el enunciado ya NO aplica**: era
+  *«una sola tarjeta y una sola placa»* y son **dos y dos** (Eduardo, 17-ago): la
+  SanDisk de **128 GB en las dos placas** (Metro y P4) y la de **32 GB en la
+  Metro** —la medida que documenta `#425`: 38 ficheros, `ls` 99 ms—.
+  📌 **Ojo con el nombre**, que ya despistó una vez: la **Pico no tiene lector de
+  SD**, así que ninguna prueba de tarjeta puede ser suya. Lo que se llama «Pico»
+  es la **imagen** del firmware, que es **única para Pico y Metro** (RP2350, la
+  variante se decide en runtime). Placa ≠ imagen.
+  📐 **Qué queda cubierto de verdad** — mirando sobre qué se bifurca el driver
+  (`bpvm_sd.c:129`), no la etiqueta comercial. Hay **dos caminos**, no tres:
+  **CSD v1 = SDSC** (capacidad por tres campos, direcciona **por BYTE**) y
+  **CSD v2 = SDHC *y* SDXC juntas** (un solo campo, direcciona **por BLOQUE**).
+  La de 32 GB es SDHC y la de 128 GB es SDXC —*la ficha la llamaba «SDHC»: error
+  de etiqueta, aunque para el driver den lo mismo*—, o sea que **las dos clases de
+  alta capacidad están probadas** y el driver **no está afinado a una tarjeta ni a
+  una placa**. Eso era el grueso de la ficha, y está hecho.
+  ⏭️ **Lo que queda es sólo esto, y son dos cosas de capas distintas:**
+  1. 🟢 **SDSC — la parte que corrompe en silencio, YA PROBADA sin tarjeta**
+     (17-ago, `make test-sdsc`). Eduardo: *«no tengo tarjetas de 2G ni voy a
+     tener, están obsoletas»* — y tiene razón, pero lo que daba miedo de SDSC no
+     era la tarjeta, era **una cuenta**: `arg = alta_cap ? lba : lba*512`
+     (`bpvm_sd.c:400` y `:415`). En SDHC/SDXC el argumento de CMD17/CMD24 es el
+     BLOQUE y en SDSC el BYTE, y confundirlos no da error: lee o escribe otro
+     sitio. Eso es aritmética pura sobre un dato del OCR, y lo único que tocaba
+     el hardware eran dos funciones de plataforma — `bpvm_spi_transfer` y
+     `bpvm_gpio_write` —, que el test pone él. **No hacía falta la tarjeta.**
+     Cada caso va con su gemelo de alta capacidad (lba 2 → 1024 vs 2), y el
+     bloque 0 se comprueba aparte porque es el único donde un driver roto
+     acierta por casualidad — o sea que arrancar no distingue el fallo.
+     **Verificado en las dos direcciones**: invirtiendo la línea del driver, el
+     test se pone rojo SÓLO en los casos SDSC y el gemelo sigue verde.
+     *(El decodificador del CSD v1 ya estaba cubierto en `test_sd.c` desde H1.)*
+     ⚠️ **Lo que sigue sin poderse medir**, y así se queda: las rarezas
+     eléctricas y de arranque de una SDSC real (no contesta a CMD8, negociación
+     distinta). Sin tarjeta no hay forma, y suponerlo sería peor que decirlo.
+     Mismo criterio que L14: si no se puede medir, se dice.
+  2. 🟡 **exFAT y «superfloppy» sin MBR** — NO son del driver SD sino de **FatFs y
+     del arranque de partición**, o sea otra capa. Se prueban **reformateando
+     cualquiera de las dos tarjetas que ya hay**, sin comprar nada: es lo barato
+     que queda de esta ficha.
+- ~~🔴 **La VM-C normal NO puede correr bases de datos: hace falta placa**~~ — ✅ **CERRADA el
+  6-sep**: `make sim SQLITE=1`, y un programa BasicPlus consulta una BD **en el simulador**, por
+  el wire, `status: OK` en 181 ms. Ganó **el tercer camino** de los que esta misma viñeta
+  proponía —el micro simulado del IDE—, y por la razón que aquí se anticipaba: el usuario prueba
+  sin placa y sin binario especial. El detalle y el porqué de enlazar en vez de cargar un pack
+  nativo (x86-64 es ELF64 y `NpackReloc` sólo lee ELF32), en el punto de `E1`.
+  *(Se leía como 🔴 abierta mientras `E1` la daba por hecha; corregido el 7-sep.)*
+  El enunciado original, que se conserva porque su análisis es el que llevó a la solución —
+  abierta el
+  19-ago al preguntarlo Eduardo (*«¿ahora se puede testear una consulta a una BD en la
+  VM-C? Es la que puede probar el usuario sin placa»*).
+  🩸 **Choca con la promesa del proyecto.** Los demos de BD SI corren en el PC, pero con
+  `bpgenvm-c/build/sqldemo.exe`, un binario de PRUEBAS que produce `make test-sqldemo`
+  con SQLite enlazado dentro. La VM-C que usaria un usuario contesta *«sql_open: falta
+  el codigo nativo del pack 'SQLI' v1»*. O sea que «depura en el PC, despliega en el
+  micro» no se cumple para la mitad de lo que V5 añade.
+  ⏭️ **Dos caminos**, y el segundo es el bueno:
+  1. enlazar SQLite en la VM-C de host cuando se compile con un flag — rapido, pero
+     mete 400 KB de C ajeno en el binario de todo el mundo;
+  2. **que la VM-C de host sepa CARGAR un pack**, como hace la placa. Es mas trabajo
+     —el pack es nativo por arquitectura, harian falta `.npk` de x86-64— pero es lo
+     coherente: el PC dejaria de ser un caso especial.
+  📌 Y hay un tercer camino que quiza gane: el **micro simulado del IDE** (V4/H10,
+  `bpvm-sim`) ya habla wire v1 completo. Si el simulador carga packs, el usuario prueba
+  sin placa Y sin binario especial.
+  📌 Mientras tanto, decirlo en `docs/BASEDATOS.md`: hoy la prueba real es en placa.
+
+- 🔴 **`listDir` NO esta en la VM-C: un programa BP no puede listar un directorio en
+  placa** — encontrado el 19-ago escribiendo `docs/TARJETA_SD.md`.
+  🩸 Se puso un ejemplo de recorrer un directorio, se ejecuto, y la VM-C contesto
+  *«builtin 42 no soportado en esta VM (subconjunto C)»*. miVM si lo tiene, o sea que
+  **funciona en el PC y no en el micro** — la peor forma de faltar.
+  📌 **Acotado**: es el UNICO verbo de fichero que falta. `readFile`, `writeFile`,
+  `appendFile`, `fileExists`, `readFileBytes` y `writeFileBytes` estan en las dos
+  (comprobado sobre `bpgenvm-c/src/builtins.c`).
+  📌 **No confundirlo** con el arbol de ficheros del IDE, que si lista la tarjeta: eso
+  lo hace el firmware por el wire (`LIST`/`LIST_DIR`), no el programa del usuario.
+  ⏭️ Implementarlo es un builtin en la VM-C sobre la fachada de FS que ya existe. **No
+  se hizo: es una FEATURE que falta, no un bug, y estamos en freeze** — decision de
+  Eduardo. Documentado como limitacion en `TARJETA_SD.md` §6, con el rodeo mientras
+  tanto (llevarse la cuenta uno mismo, o nombres predecibles por fecha).
+
+## 📦 CERRADAS EN V6 (con su commit, para no volver a darlas por abiertas) — V6 publicada el 12-sep-2026
+
+> **El censo con el que se cerró V6**, tal como estaba en la cabecera de §ABIERTAS el 12-sep (se deja
+> entero: es el registro de cómo se fue vaciando la lista, de 15 pendientes a cero):
+
 
 > **Desde el 23-ago-2026 TODO lo de esta sección es de V6.** V5 se publicó el 22-ago;
 > las secciones ya terminadas bajaron a «CERRADAS EN V5», y **lo que quedó pendiente pasó
@@ -127,7 +1647,7 @@ unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 > por retirada y la viñeta sin decirlo; y la de las bases de datos en 🔴 mientras `E1` la daba por
 > hecha. **Una lista larga esconde**: seis de las que parecían pendientes no lo eran.
 
-### ═══ V6 — LA VERSIÓN EN CURSO ═══
+### ═══ V6 — LA QUE FUE LA VERSIÓN EN CURSO (23-ago → 12-sep-2026) ═══
 
 ### 🏁 LA UNIFICACIÓN, CONCLUIDA (Eduardo, 5-sep-2026)
 
@@ -2279,31 +3799,6 @@ disparó el escepticismo de Eduardo (*«¿seguro? Antes de nada hay que verifica
 📌 De paso, **la C3 quedó al día**: llevaba firmware anterior al 8-sep, y ahora monta la zona de
 packs y trae `Machine.mod` y el `Adc.mod` nuevo.
 
-#### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
-
-**La regla, de Eduardo (11-sep):** *«Una variable es `protected` si no se indica nada, `private` si se
-declara como tal, y no puede ser pública salvo que sea una propiedad.»* Protegido = lo ven la clase y
-sus descendientes.
-
-**Lo que hace el compilador**: un descendiente que vive en **otro módulo** no ve los campos protegidos
-de la base — `OwnerList extends Core.List` recibía *«'OwnerList' no tiene miembro de instancia
-'items'»*. La causa está en el contrato de módulos: `ClassSig` (`ModuleInterface.java`) exporta
-**métodos, propiedades, constructor, constantes estáticas y el layout binario** (cuántos campos, para
-que el descendiente coloque los suyos), **pero no los nombres ni los tipos de los campos**. Su propio
-comentario lo dice: *«Sin fields públicos (se exponen vía property)»* — correcto, pero se dejó fuera
-también a los protegidos. `lookupInstance` sí sube por `baseClass`; lo que no encuentra es lo que
-nunca se dio de alta.
-
-**El arreglo, y su forma**: la interfaz es texto (`method …`, `prop …`, `staticconst …`, `event …`);
-falta una línea **`field <nombre>:<tipo> slot <n>`** por cada campo **no privado**, y que el
-importador los dé de alta como protegidos. `checkVisibility` ya aplica la regla. Las VMs no cambian:
-el acceso es por slot. **Coste**: rehacer la cadena entera (jar, stdlib como proyecto, samples, fat-jar
-del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
-
-⏭️ **Aplazado por Eduardo**: *«utiliza un get para acceder al campo y de momento salimos del paso»*.
-Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
-que toque un campo protegido de `Window` se estrella igual.
-
 #### ✅ `#505` — el micro simulado SIN pantalla (`--no-screen`, con LVGL) dejaba sin drenar el evento que un handler levanta: `GuiEvSpike` sin su «3 handler» (abierta y CERRADA el 12-sep; la cazó Eduardo probando el ZIP)
 
 **Reproducción**: `bpvm-sim.exe --no-screen` del ZIP + `samples/GuiEvSpike.bp` → «1 antes del clic», «2 dentro del
@@ -2436,22 +3931,6 @@ tiene ese epílogo.
 📌 **Es el patrón de `#494`**: el instrumento que lo caza (ejecutar los ejemplos de la documentación) no existía
 como paso; ahora `tools/doc_frags.py` lo hace y va en el checklist de publicar.
 
-#### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
-
-*«Apunta para V7. `Core.bp` nos sigue dando guerra. Aquí hay que refinar la norma: si tenemos un módulo principal
-compilado a una versión V, dependencias de una versión < V no nos deberían valer. Así que si `Core` está en un pack
-y nuestra aplicación es más moderna, el `Core` del pack no debería servir. Esto es así desde hace mucho tiempo,
-pero en la práctica no siempre se cumple.»*
-
-**Lo que hay hoy, y por qué no basta**: el gate de `#284` rechaza un `.mod` de **formato** incompatible (MOD6 frente
-a MOD7) y el enlazador grita ante un **slot** que no cuadra (`Clase#método#slot`, `#324`). Ninguno de los dos mira
-la **versión** de la stdlib con la que se compiló la app: un `Core` del mismo formato pero más viejo, con los mismos
-slots que la app usa, pasa en silencio — y si además vive en un pack, el resolutor lo prefiere al de `/lib`
-disfrazado de `/app` (`#493`, medido en el P4 el 11-sep con `Gui`; y `#496`: el pack de SQLite lleva un `Core`
-dentro). **Lo que hace falta**: que el `.mod` de la app lleve la versión de cada dependencia contra la que se
-compiló, y que el cargador **rechace** (no avise) una dependencia más antigua, venga de donde venga. Junto con
-`#493` (que un pack de librería no empaquete stdlib, o que no tape a `/lib`) es la misma conversación.
-
 #### ✅ `#499` — una ruta de 128 a 255 caracteres moría con «IO error» sin decir por qué (abierta y CERRADA el 12-sep, del inventario de `D1`)
 
 `bpvm_entry_t.resolved` medía **128** cuando la fachada y `#456` admiten **256** (`BPVM_FS_PATH_MAX`): la ruta se
@@ -2501,33 +3980,6 @@ la stdlib, o que el resolutor no deje que un pack tape a `/lib`.
 falta un **censo de `samples/` con el frontend actual** (la carpeta de ejemplos es en sí una prueba,
 [[samples-ok-y-samples-de-error]]) — es de `F1`.
 
-#### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
-
-**De dónde sale.** Al cerrar el flujo de la captura (`RUN → Gui.shot dentro → EXITED → GET`) apareció
-que el wire contesta `BUSY` a todo lo que no sea `HELLO`/`KILL`/`RESET` mientras corre un programa, en
-las cinco implementaciones (`repl_esp32.c:593`, `bpvm_sim.c:634`, `repl_v1.c:967`, `stm32_repl.c:334`
-y el host). Eduardo: *«ese `BUSY` es algo artificial: ahora, con dos hilos del SO corriendo, no hay
-nada que impida hacer un listado o copiar un archivo»*. Y es verdad en lo esencial: la regla es de
-cuando el REPL y la VM eran el mismo hilo (Pico, `#256`); desde `A1` el hilo `io` lee el cable
-durante todo el RUN.
-
-**Lo que SÍ queda por medio, comprobado en el código (ninguna de arquitectura):**
-1. **El cerrojo del cable es por LÍNEA, no por respuesta.** Un `GET_REPLY` son una línea y N bytes
-   crudos en dos llamadas (`bpvm_repl.c:251`); el `tx_mtx` de `#473` hace atómica la línea. Durante un
-   RUN, `io` saca los `OUTPUT` por el mismo cable y un `print` puede colarse **entre la cabecera y su
-   bulk**, o dentro del bulk: el IDE leería basura como fichero. Arreglo: la respuesta entera (línea +
-   bulk) bajo el mismo cerrojo, en el común.
-2. **El cerrojo del FS abarca el `read_stream` entero** (`fs_lfs.c:320`): mientras `GET` manda 60 KB a
-   11 KB/s (~5 s en la DK2), un `writeFile`/`readFile` del programa se queda parado. No es un
-   bloqueo, es una parada — pero en `T1` cambia los tiempos que se miden. Salir de ahí es trocear con
-   huecos (las N aperturas de `#453`) o aceptar la parada y decirlo.
-3. Después, levantar el `BUSY` en los cinco `poll` **sólo para `LS`/`GET`**: `PUT` sobre `/app` con el
-   programa leyendo ahí es otra conversación.
-
-⏩ **Decisión de Eduardo (11-sep): a V7** — *«lo estudiamos en V7, no es para V6»*. Para `C1` no hace
-falta: la captura se escribe cuando el programa quiere y se baja al terminar (o tras `KILL`). El
-runner de `T1` lo sabe: `RUN → EXITED → GET`.
-
 #### ✅ `#494` — EL GC DE LA miVM DESCARRILABA ANTE UN OBJETO DE PAYLOAD 0 — desde el 15-jul (abierta y CERRADA el 11-sep, `65e9f558`, de `G2`)
 
 **Qué era.** `heapAlloc` reserva `max(MIN_FREE_BLOCK=12, align4(8 + payload))` desde `5ea01557`
@@ -2547,487 +3999,6 @@ la VM-C, y la bisección llegó a un `var basura: string := ""` + 3000 concatena
 **Arreglo.** El mismo clamp en `objectTotalSize` (objetos y arrays). Y el arnés vuelca esa línea de
 stderr como salida (rompe la paridad y se ve en el diff). ⏭️ Queda por decidir si el guardián debe
 ser **fatal** en vez de un aviso: si el recorrido se desincroniza, seguir es corromper.
-
-#### 🔵 `#493` — un módulo de stdlib en `/app` TAPA al de `/lib`, y el usuario no se entera (abierta 11-sep, de `G2`)
-
-**Medido en la Pico (11-sep)**: había `Collections.mod`, `Json.mod` y `Str.mod` **viejos** en `/app`
-—restos de subidas a mano de otras sesiones— y `/app` (el directorio de trabajo) **se resuelve antes
-que `/lib`**. `OwnerCascada` moría con `INVOKE_VIRTUAL sobre null` y **el arreglo no tenía nada que
-ver**: cargaba la `Collections` vieja. Sólo se vio en el log: `dep 'Str' -> /app/Str.mod`.
-
-📌 **Es la misma familia que la `Gui` rancia en la zona de packs de la P4**: una copia que sombrea a la
-buena, y un síntoma que apunta a otro sitio. **Medido otra vez el 11-sep en el P4 (`C1`)**: con
-`/lib/Gui.mod` fresco, `GuiShot` enlazaba contra la `Gui` del `Stdlib.pack` del 20-ago — el overlay de
-packs de la fachada (`fs_facade.c:fallback_claims`) contesta al `stat` de **`/app/Gui.mod`**, el primer
-candidato del resolutor, y `/lib` no llega a mirarse. O sea, el pack sombrea a `/lib` **disfrazado de
-`/app`**, y el aviso «el FS eclipsa al del pack» sale al revés. Se resolvió borrando los packs de la placa. Y el linker **sí** grita en el desfase de métodos
-(*«no exporta `Core.List#length#16`; ¿versión vieja?»*); **lo que no vigila es la sombra**.
-
-⏭️ **Lo que falta es ruido, no lógica**: una línea por el `OUTPUT` cuando un módulo con **nombre de
-stdlib** se resuelve desde `/app` en vez de `/lib` (o del embebido). El log ya lo sabe; que lo diga
-donde el usuario mira. ⚠️ Y para el runner de `T1`: **comprobar que `/app` no tapa a `/lib` antes de
-correr nada**, o los resultados en placa no significan lo que parecen. ¿V6 o V7? Es pequeño y es un
-fallo silencioso — a decidir.
-
-#### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
-
-🔎 **Y NO ES NUEVO: EL DISEÑO YA ESTABA DECIDIDO, Y SE PERDIÓ POR NO SER FICHA.** Eduardo lo recordaba
-(*«se habló que los ficheros de BP fuesen objetos y que open/read/write/close trabajasen con
-handles»*) y estaba: **`docs/V6_IDEAS.md:253`, del 17-ago**, bajo el título *«Ficheros: no hay `seek`
-porque no hay `open`»* — y arrancó de una pregunta suya, la del `fseek`.
-
-Allí hay **dos decisiones suyas, marcadas como DECIDIDO**:
-1. *«Un fichero para BP debe ser una clase, con los métodos habituales: open, close, read, write,
-   seek. Read tendrán que ser varios (readByte, readStr…) mientras que write se puede sobrecargar.»*
-   Y **la variante SIN handles quedó explícitamente descartada** (`readFileAt(path, off, n)`).
-2. *«Podemos tener un tipo `File` con las funciones básicas que trabaja a nivel de bytes. Después un
-   2º tipo que herede del anterior y que trabaje con strings (UTF-8).»* — con la regla que lo deja
-   limpio: **`TextFile` AÑADE sobrecargas, nunca redefine**, y lo formateado va por `print`.
-
-📌 **El documento ya había visto lo que se volvió a descubrir el 10-sep**, y con estas palabras:
-*«la trampa de `#398` desaparece sola cuando el fichero se abre UNA vez… **la apertura persistente ES
-el handle**»*. Y sus dos preguntas abiertas son exactamente las que hacían falta: **¿qué pasa si no se
-cierra?** (BP no tiene destructores; la red que ya existe es el guardián de fin de RUN de `#339`) y
-**¿cuántos ficheros a la vez?** — la misma que se planteó de cero al abrir esta ficha.
-
-⚠️ **CORRECCIÓN — dónde se quedó: dentro de `L1`, que se fue a V7 el 5-sep.** `docs/FICHAS.md:4572`
-lo lista explícitamente entre lo que `L1` se lleva —*«destructores + `var owner`, **ficheros como
-clase**, `Object` comodín, `Map` con objetos, el módulo `Time`»*—, con el criterio de que son
-*«añadidos, no arreglos»*. Estaba pensado para V6 (`docs/ESTADO.md:3008`), pero **nunca tuvo ficha
-propia**. Y no hay ni una línea de código: `grep TextFile` en stdlib, miVM, frontend y VM-C da cero,
-ni un id de builtin reservado.
-
-📌 **La lección es más pequeña de lo que yo dije, pero sigue siendo lección**: no se perdió —está en
-`L1`— pero **una decisión sin ficha propia es invisible en la práctica**, porque *«¿qué hay abierto?»*
-se contesta con la lista de fichas, no releyendo los hitos uno por uno. Por eso esta ficha existe.
-
-🧱 **CÓMO SE CIERRAN LAS DOS PREGUNTAS ABIERTAS — propuesta de Eduardo (10-sep):** *«Si hacemos que un
-fichero BP sea un objeto, éste se alojaría en el heap. Dentro del objeto puede haber un array de bytes
-que sirva de buffer. Así no haría falta limitar el número de handlers de ficheros, y en caso de cuelgue
-o error el GC acabaría recolectando el objeto.»*
-
-Contesta de una vez a las dos que `V6_IDEAS.md:404-431` dejó sin cerrar, y **el terreno lo aguanta**:
-
-- ✅ **El GC NO COMPACTA** (`src/heap.c:119`: *«F2 v1: no compacta (no mueve objetos)»*; `:364`:
-  *«este GC no compacta, así que retener nunca corrompe»*). Es justo la condición que hacía falta: el
-  driver del FS puede quedarse con el puntero al buffer entre llamadas sin que se le mueva debajo.
-- ✅ **Y no rompe la regla de la casa.** `src/fs_lfs.c:86` exige *«CERO malloc en las ops de fichero
-  (obligatorio en micro)»*, y por eso hoy hay **dos** buffers estáticos de 256 B — o sea que el límite
-  real de littlefs son **DOS ficheros abiertos**, no el `FIL` de FatFs. Un array en el heap de la VM
-  **no es malloc**: la regla sobrevive y el límite arbitrario desaparece.
-- ✅ **El límite deja de ser un número inventado y pasa a ser el honesto**: la memoria — y visible,
-  porque el guardián de fin de RUN (`#339`) ya dice quién se quedó qué.
-
-🔓 **Y LO QUE CIERRA EL CÍRCULO: el destructor ya está diseñado, y esta propuesta DESARMA la única
-objeción que tenía.** Eduardo, el mismo día: *«si el GC va a liberar el objeto y ejecuta el
-destructor, éste puede encargarse de cerrar el fichero.»*
-
-El diseño de destructores es suyo y es de **cuatro capas** (`docs/V5_IDEAS.md:2496`, 9-ago), con
-`~Clase()` disparado por **fin de ámbito** —desazucarado a `try/finally`, **cero cambios en las VMs**—
-y con las capas 3 y 4 (el agotamiento GRITA, y el fin de RUN suelta y CUENTA) como red. Sintaxis ya
-decidida: `function ~Db()`, y verificado que `~` no se usa en ninguna fuente del frontend.
-
-Dejó **una sola cosa abierta**: *«¿corre `~Clase()` si el objeto muere SIN `owner` ni bloque, recogido
-por el GC?»*. Y la recomendación escrita era **que no**, con este argumento:
-
-> *«el GC corre por presión de MEMORIA, y un descriptor o un statement son otro recurso escaso. Con 8
-> descriptores agotados y el heap al 3 %, el GC no tiene motivo para pasar y el destructor no correría
-> nunca.»*
-
-🔑 **Ese argumento deja de aplicar si el buffer vive DENTRO del objeto**, y ahí está lo elegante de la
-propuesta: si el recurso escaso **es** el heap, quedarse sin ficheros abiertos **es** presión de
-memoria — así que el GC sí tiene motivo para pasar y el destructor sí corre. La objeción no se rebate:
-**se disuelve**, porque desaparece la premisa.
-
-📐 **De ahí sale una regla de diseño, y conviene fijarla**: **todo el estado por fichero va en el
-objeto**, no sólo el buffer. Si una parte se queda en un `FIL` estático del driver, para esa parte la
-objeción original sigue viva y se vuelve al mismo sitio. Con todo dentro, la contabilidad es honesta:
-un fichero abierto cuesta heap, se ve, y se recupera por el mismo camino que todo lo demás.
-
-⚠️ **Lo que la propuesta NO resuelve sola:**
-1. **El GC hoy no avisa a nadie al recoger**: no hay finalizador ni gancho (`grep finaliz|destructor|
-   on_collect` en `heap.c` e `bpvm_internal.h` → cero). Liberar la memoria **no cierra el fichero**:
-   littlefs y FatFs guardan su propio estado. Hace falta que el GC llame al destructor al recoger —
-   maquinaria nueva, pequeña y acotada, y **es la quinta capa** que el diseño de 9-ago dejó fuera a
-   propósito.
-
-   🔬 **«¿Y si el destructor lo hacemos como función NATIVA?» (Eduardo, 10-sep) — analizado, y sí:
-   cambia el problema.** Las cuatro razones por las que un destructor en BP no puede correr dentro
-   del GC se caen casi todas:
-
-   | razón | ¿sobrevive siendo nativo? |
-   |---|---|
-   | hace falta el intérprete y un marco de pila | **no**: una función C/Java no lo necesita |
-   | puede ASIGNAR memoria → reentra en el GC | **no**, si se prohíbe; y un `close()` no asigna |
-   | puede RESUCITAR el objeto guardando `this` | **no**: un nativo no lo hace salvo que se escriba aposta |
-   | puede reentrar el cerrojo de la VM | manejable: es una llamada hoja |
-
-   ✅ **Y el sitio ya existe, con la información ya puesta.** `gc_sweep_phase` (`src/heap.c:564`) lee
-   la cabecera de cada bloque muerto, y para un objeto **la segunda palabra ES el `class_ptr`**
-   (`heap.c:7`, `:55`). Así que saber «este muerto es un `File`» es UNA lectura, no una búsqueda:
-   basta un bit en el descriptor de clase. El tag además ya distingue objeto de array
-   (`BPVM_TYPE_OBJECT`), así que los arrays ni se miran.
-
-   📐 **Pero NO dentro del barrido: justo DESPUÉS.** El barrido recorre el heap linealmente
-   fusionando huecos (`heap.c:564-600`), y cualquier cosa que asigne o mueva en mitad de ese paseo lo
-   corrompe. Recoger las direcciones en una lista y vaciarla al terminar cuesta casi nada y elimina
-   la clase entera de errores **sin tener que razonar sobre qué hace cada nativo** — que es
-   precisamente lo que no se quiere estar comprobando en cada destructor nuevo.
-
-   📌 **Tres condiciones para un destructor nativo**, y conviene que sean del contrato: **no asigna**,
-   **no llama a código BP**, y **es IDEMPOTENTE** — porque las capas 1 y 2 pueden haberlo cerrado ya,
-   y lo normal es que así sea.
-
-   ⚠️ **Lo que ser nativo NO arregla, y es lo que hay que decidir: la PARIDAD.** Los dos GC corren en
-   momentos distintos, así que *cuándo* se dispara el destructor **difiere entre miVM y la VM-C**. Para
-   un `close()` eso es invisible en `stdout`… **salvo que el cierre vuelque escrituras pendientes**:
-   entonces un programa que relea su propio fichero puede ver cosas distintas en el PC y en la placa.
-   De ahí la regla que cierra el asunto, y que ya estaba en el diseño de las cuatro capas: **todo lo
-   observable va por `try`/`owner`; el camino del GC es sólo la red para lo anormal.** Y miVM no puede
-   apoyarse en `finalize()` de Java —deprecado en la 9, quitado en la 18—, así que el mecanismo se
-   escribe explícito en las dos.
-2. **La red no sustituye a `close()`**: el GC recoge cuando recoge, así que un fichero puede quedar
-   abierto mucho después de ser inalcanzable — y en un micro eso importa (estado del driver, y en la SD
-   la caché de escritura). Que es como Eduardo lo planteó: *«en caso de cuelgue o error»*.
-3. **Aperturas duplicadas**: FatFs está con `FF_FS_LOCK 0`, sin control de abrir dos veces el mismo
-   fichero. Sin límite de handles, N escritores sobre el mismo fichero no se quejan. Decisión aparte, y
-   de corrección, no de memoria.
-
-📏 **PUNTO 4 DE `#473`: MEDIDO Y RESUELTO** (10-sep, en la Metro con su SD de 32 GB), con su control:
-
-| | 120 KB | 480 KB | caudal |
-|---|---|---|---|
-| **littlefs** (`/app`, **con** `read_stream`) — el CONTROL | **212 ms** | — | 566 KB/s |
-| **FAT** (`/sd`, **sin** `read_stream`) | **1368 ms** | **6040 ms** | ~80-88 KB/s |
-
-**Es 6,4× más lento, pero NO está roto**: 1,4 s para 120 KB, lejos de los 10 s del timeout del IDE. Y
-**no es cuadrático** — 4× el tamaño da **4,4×** el tiempo, no 16×. La medida prestada de `#453` (que sí
-reventaba los 10 s) era de **littlefs en un S3**: otro backend y otro chip. ⏭️ **El punto 4 no entra en
-V6: se queda aquí**, y desaparece solo el día que exista el cursor.
-
-⚠️ **Y la primera medida fue INVÁLIDA — lo dijo el control**: el `GET` de littlefs, que es el caso
-bueno, salía peor que el sospechoso. El fallo era mío: `cmd_get` usaba `esperar()`, que trocea por
-líneas y **se comía el bulk crudo**. Sin control, habría publicado que las dos zonas son igual de
-lentas. Arreglado leyendo el payload a pelo, y el porqué queda en la docstring de la herramienta.
-
-🩹 **Hay una CUARTA recaída, y es de ESCRITURA**: la ficha `#475` dice *«no existe escritura en
-streaming: sólo hay `read_stream`. Escribir por bandas con la fachada de hoy son N commits, no uno —
-el patrón que costó 45× en `#398`»*. La enfermedad ya ha salido por los dos lados.
-
-⏭️ **Así que esta ficha ABSORBE aquel diseño** y son la misma cosa por los dos lados: `File`/`TextFile`
-es la mitad de arriba (superficie BP) y el cursor de la fachada es la de abajo. La de abajo hace falta
-igual: hoy las 17 ops del backend reciben ruta, así que un `File.seek()` no tendría dónde apoyarse.
-
-**Sale del punto 4 de `#473`** —que `read_stream` no existe en el backend FAT, así que bajar un
-fichero grande de `/sd` cuesta cuadrático— y lo reencuadra **Eduardo**: *«Esto ya se habló cuando te
-pedí un comando `fseek`. La idea es tener un cursor y poder hacer desplazamientos relativos.»*
-
-**Y con el historial delante, tiene la forma de una enfermedad que ya ha recaído dos veces:**
-
-| | quién sufría | qué se hizo |
-|---|---|---|
-| `#398`/`#424` | `crc32` reabría el fichero cada 256 B — **5432 aperturas para 1,3 MB** | se añadió `crc32` al interfaz de backend: abre una vez. 16,5× medido |
-| `#453` | el `GET` reabría cada 256 B — **472 aperturas para 120 KB** | se añadió `read_stream`: abre una vez. Sólo en littlefs |
-| **hoy** | el `GET` desde `/sd` | se propone añadir `read_stream` **también** a FAT |
-
-Tres veces el mismo síntoma y tres arreglos **por llamador**, no por causa. Y la causa estaba escrita
-desde `#453`, en la cabecera del propio arreglo: *«el backend es el único que puede hacerlo, **la
-fachada no tiene descriptores**»*.
-
-📐 **Medido, no supuesto**: de las 17 operaciones del interfaz de backend
-(`include/bpvm_fs.h`), **16 reciben un `path`**. No hay handle, ni posición, ni nada abierto — ni en
-la fachada, ni en el backend, ni en BP. Y **tres de esas 17 existen sólo para esquivar la ausencia de
-cursor**: `read_at`, `crc32` y `read_stream`. Cada una se añadió el día que un llamador concreto se
-puso demasiado lento.
-
-🔑 **Y lo que de verdad falta no es velocidad, es una CAPACIDAD.** `readFile` hace `stat` y se trae el
-fichero **entero** al heap (`builtins.c`, `BUILTIN_READ_FILE`). O sea que hoy, desde BP, **un fichero
-más grande que la RAM no se puede leer**: un CSV de 1 MB en la SD es ilegible en una placa con 271 KB
-de heap. Eso no lo arregla ningún `read_stream` más — lo arregla el cursor.
-
-⏭️ **Lo que hay que decidir en V7** (aquí no se diseña nada todavía):
-- El cursor en la **fachada**: abrir / desplazar (absoluto y **relativo**, que es lo que pide
-  Eduardo) / leer / escribir / cerrar. Con eso, `read_at`, `crc32` y `read_stream` dejan de ser
-  operaciones especiales y pasan a ser bucles sobre el cursor.
-- El cursor en **BP**: el `fseek` que pidió Eduardo, o sea un fichero abierto como objeto. Eso **es
-  superficie de lenguaje**, así que es V7 por definición.
-- ⚠️ Y una pregunta que hay que contestar antes de escribir código: **cuántos descriptores caben**.
-  Un handle abierto es RAM en el micro, y FatFs quiere su `FIL` (~550 B) por fichero. Que el modelo
-  sea «uno por programa», «N con límite declarado» o «uno por hilo BP» cambia el diseño entero.
-
-📌 **Relación con el punto 4 de `#473`**: son la solución estrecha y la ancha del mismo problema.
-La estrecha —`read_stream` en FAT, gemelo exacto de `fat_crc32`— sigue siendo válida para V6 **si la
-medida la justifica**, y no estorba al cursor: el día que exista, desaparece con las otras dos.
-
-#### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V7** (abierta 10-sep, decidida a V7 el mismo día)
-
-**La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
-nada que hacer, en un micro con alimentación da igual lo que haga, pero si fuese un micro que
-funciona con baterías lo ideal es que se durmiese. ¿Cómo está ahora?»*
-
-Y acto seguido, la frase que decide el diseño entero: 🔑 ***«casi todos los micros tienen un modo de
-bajo consumo; lo difícil no es entrar en él, lo difícil es programar qué es lo que lo hace salir»***.
-
-**Por qué eso lo cambia todo.** Entrar es una instrucción (`WFI`, `esp_light_sleep_start`, el Stop
-del U5). Salir es un **contrato**: hay que declarar *de antemano* qué evento despierta, y ese
-contrato es lo que no existe hoy en BP. Un `Machine.sleep()` a secas sería un cuelgue con otro
-nombre. Las preguntas reales son de lenguaje, no de silicio:
-- ¿Quién declara las fuentes de despertar — el programa, o la placa?
-- ¿Qué pasa con los hilos BP dormidos: el `sleep(200)` de un hilo, ¿es una fuente de despertar?
-- ¿Y el wire? Si el IDE está conectado, la placa **no puede** dormirse sin perder la conexión; si no
-  lo está, sí. Eso hace que el modo dependa de si hay alguien mirando.
-- ¿Y la GUI? Un panel encendido consume más que el core; dormir el micro con la pantalla viva no
-  ahorra gran cosa.
-
-📌 **Es la misma forma que `#479` (el mapa de pines) y que los arrays de buses de `#470`**: qué pines
-y qué periféricos pueden despertar, y qué se conserva en cada modo, es **verdad de silicio** — va en
-la cintura de cada micro y viaja compilada en su imagen, no en el ENV. Conviene resolverlas juntas.
-
-**Lo que se sabe ya, y es poco**: no hay ni una línea escrita sobre consumo en todo `docs/`. Y hay un
-dato duro, medido el 10-sep por otro motivo (`#473`/R16): **en el STM32 la tarea ociosa no corre
-nunca** —su lazo del wire gira con `continue` sin ceder y la tarea `vm` va a `tskIDLE_PRIORITY+2`—,
-así que esa familia ni siquiera llega al escalón previo de poder dormir. Y es la familia de bajo
-consumo de ST, o sea el peor sitio donde tener eso.
-
-⚠️ **Los tres escalones que se confunden**, y hay que mantenerlos separados en todo el estudio:
-(a) el hilo cede la CPU · (b) la tarea ociosa corre · (c) el **micro** entra en bajo consumo.
-Sólo (c) se nota en el amperímetro. Hoy la Pico y el ESP32 llegan a (a) con seguridad; (b) y (c)
-están por censar.
-
-🎯 **POR DÓNDE EMPEZAR — decidido por Eduardo el 10-sep:** *«No creo que haya una solución común
-para todos los casos, pero podemos empezar por algo sencillo e ir creciendo. Empezar por el timer o
-el RTC y programar un sleep que despierte cada cierto tiempo, y si no hay nada se vuelva a dormir.»*
-
-**Por qué es el punto de partida correcto, y no un atajo.** Convierte el problema difícil —*declarar
-qué despierta*— en uno fácil: *mirar cada cierto tiempo*. Con una sola fuente de despertar (el
-temporizador) no hay contrato que diseñar, no hay mapa de pines que resolver antes, y no hay que
-tocar el lenguaje. La parte difícil no se resuelve: **se aplaza a propósito**, y eso permite que
-haya algo funcionando antes de decidir lo demás.
-
-⚠️ **El precio, y choca de frente con `#462`.** Despertar cada N ms significa que un evento puede
-llegar hasta N ms tarde. Esta misma sesión bajamos el suelo de descubrimiento de un evento de 48 ms
-a **7 ms**, medido en la C6; un periodo de dormir de 100 ms lo devolvería a ~100 ms. Así que **el
-periodo no es una constante: es una política**, y quién la elige (el programa, la placa, o el modo
-en que esté) es ya una pregunta de lenguaje. La forma sana de decirlo: *dormir es cambiar latencia
-por consumo*, y el que sabe cuánta latencia se puede permitir es el programa.
-
-📌 **«Si no hay nada» hay que definirlo, y la lista es reveladora.** Al despertar hay que mirar:
-¿hay bytes en el wire? ¿hay algún hilo BP listo para correr? ¿ha vencido algún `sleep` de hilo?
-¿hay un evento en la cola? **Es exactamente la misma lista que las fuentes de despertar**, sólo que
-sondeada en vez de por interrupción — que es justo por lo que este camino es más barato de empezar,
-y también por lo que crece de forma natural: cada elemento de esa lista que se convierta en
-interrupción real es un paso más, sin rehacer lo anterior.
-
-📌 **Timer y RTC NO son intercambiables**, y ésta es de las primeras cosas que el estudio tiene que
-poner en tabla: qué reloj sobrevive a qué modo de bajo consumo es **verdad de silicio y distinta por
-micro**. Un temporizador general suele morir en los modos profundos; el RTC suele sobrevivir, con
-menos resolución. Elegir uno u otro fija de rebote **hasta dónde se puede dormir**.
-
-📌 **Y hay que mirar lo que FreeRTOS ya trae hecho**: `configUSE_TICKLESS_IDLE` es literalmente este
-patrón —«ninguna tarea estará lista en N ticks → paro el tick, bajo consumo, programo el despertar»—
-implementado por el RTOS. La primera pregunta del estudio no es *cómo lo hacemos*, sino **si eso
-está encendido y por qué hoy no sirve**. La sospecha, con lo medido el 10-sep: no llega a ejecutarse,
-porque la capa de encima (el lazo del wire, y el scheduler de la VM) no cede el turno a la ociosa.
-
-🪜 **LA ESCALERA — Eduardo, 10-sep:** *«Lo de dormir se puede hacer progresivo: primero pausas
-cortas y, según se va avanzando sin actividad, pausas más largas.»*
-
-**Esto deshace la tensión con la latencia, y la deshace en el sitio correcto.** El problema del
-periodo fijo era elegir N: corto gasta, largo tarda. Con la escalera **no hay N que elegir** — el
-sistema se calibra solo, y el coste cae donde menos se paga: justo después de actividad (que es
-cuando es más probable que venga más) la pausa es corta y la latencia sigue siendo la de hoy; tras
-un rato largo de silencio (cuando es menos probable que venga nada) la pausa crece. Se paga latencia
-sólo en el caso en que casi nunca hay nadie esperándola.
-
-⚠️ **El caso malo, dicho sin adornos: el PRIMER evento tras un silencio largo** — que es exactamente
-la persona que deja el aparato quieto y vuelve a tocar un botón. La escalera empeora justo ése. De
-ahí que **el tope de la escalera sea una decisión de producto, no técnica**: un cacharro con pantalla
-no debería pasar de unas decenas de ms porque un toque se notaría lento; un registrador de datos
-puede irse a segundos. Y el escape es limpio: **una fuente que sea interrupción de verdad se salta el
-tope entero** (un táctil con línea de IRQ despierta al instante, esté la escalera donde esté). O sea
-que subir el tope y convertir fuentes en interrupciones son la misma mejora vista desde dos lados.
-
-🔑 **Y lo importante: media escalera YA ESTÁ CONSTRUIDA, y no la habíamos visto así.** Al cerrar
-`#462` el bombeo de la GUI dejó de dormir por su cuenta y pasó a **devolver cuánto tiempo dice LVGL
-que puede estar ocioso** (`lv_timer_handler()`), topado a `BPVM_GUI_OCIO_MAX_MS` = 10 ms
-(`src/gui_display_sdl.c:340,382`), y es el lazo BP quien duerme eso (`bpstdlib/Gui.bp:850-853`). Eso
-no es una pausa fija: es **preguntarle al que sabe**.
-
-Con eso a la vista, las dos formas de decidir cuánto dormir se ven claras, y **se componen**:
-- **Preguntar** — el que sabe, contesta. LVGL ya lo hace. `configUSE_TICKLESS_IDLE` de FreeRTOS hace
-  lo mismo con las tareas: sabe cuándo vence el próximo `vTaskDelay`.
-- **La escalera** — el respaldo para lo que **nadie puede contestar**: cuándo llegará el próximo byte
-  del wire, o el próximo toque. Ahí no hay a quién preguntar, y la progresión es la respuesta.
-
-⏭️ Así que la pausa de cada vuelta sale de un `min()`: lo que digan todos los que saben, contra el
-peldaño actual de la escalera. La escalera no sustituye a nada de lo que ya hay — **rellena el hueco
-que queda**.
-
-🧭 **LOS DOS CASOS — Eduardo, 10-sep:** *«Tal como yo lo veo hay 2 casos: 1 — el usuario indica
-expresamente que no va a hacer nada; 2 — el usuario no está prestando atención y la tarea se ha
-terminado.»*
-
-**Y no son dos formas de detectar lo mismo: son dos regímenes distintos, porque cambia QUIÉN ACEPTA
-LAS CONSECUENCIAS.** Ahí está la utilidad de partirlo así:
-
-| | **caso 1 — declarado** | **caso 2 — inferido** |
-|---|---|---|
-| quién decide | el programa, con un verbo | el sistema, solo |
-| quién acepta el coste | **el programador** | **nadie** |
-| qué se puede apagar | mucho: periféricos, relojes, incluso perder el wire — porque alguien lo pidió | sólo lo que se pueda recuperar **como si no hubiera pasado nada** |
-| profundidad | hasta donde diga el verbo | topada por la transparencia |
-| latencia al volver | asumida | no se puede notar |
-
-🔑 **La consecuencia práctica, y es la que más ordena el diseño: el caso 2 tiene que ser
-TRANSPARENTE.** Si nadie ha pedido dormir, nadie ha aceptado perder nada — así que el caso 2 **no
-puede tirar la conexión del wire** (el IDE podría estar enganchado), ni perder un evento, ni
-retrasar un `sleep` de un hilo BP. Es una optimización invisible o no es. El caso 1 sí puede tirar el
-wire, **porque el programa lo ha pedido**.
-
-📌 **No son alternativas, se componen**: el caso 2 es el **suelo** —siempre puesto, automático,
-invisible, y es exactamente donde encaja la escalera— y el caso 1 es la **salida explícita** para
-cuando el programa sabe más de lo que el sistema puede inferir («voy a estar 10 minutos sin hacer
-nada, despiértame con el botón»).
-
-⚠️ **La trampa del caso 2, dicha entera: «el usuario no está prestando atención» NO es observable
-por el micro.** Lo que el micro puede observar es *no hay nada pendiente ni nada que venza pronto*.
-No es lo mismo: un registrador de datos sin ningún usuario delante está *siempre* desatendido y no
-debe dormirse a través de su siguiente muestreo. Así que el disparador del caso 2 no es «nadie mira»
-sino **«nada pendiente Y nada que venza antes de que yo despierte»** — que es, otra vez, la misma
-lista de antes (wire, hilos BP listos, `sleep` que vence, eventos en cola), ahora usada para decidir
-*cuánto* dormir y no sólo *si* dormir.
-
-📊 **EL CENSO, HECHO (10-sep) → `docs/BAJO_CONSUMO_CENSO.md`.** Seis lecturas + refutación
-adversarial (**57 de 73 hallazgos vivos**, 16 tumbados) + crítico de completitud. **Sin amperímetro:
-ni un mA en él, a propósito.** El titular:
-
-> 🔴 **Ninguna de las siete placas llega a dormir. Ni una. No hay una sola línea en el árbol que meta
-> a un micro en un modo de bajo consumo.**
-
-Con los cuatro escalones separados, que es como hay que leerlo:
-
-| familia | el hilo cede | la ociosa corre | el **núcleo** se para (`WFI`) | el **micro** baja consumo |
-|---|---|---|---|---|
-| **RP2350** (Pico 2 / Metro) | sí | sí | **no** | **no** |
-| **ESP32** (S3, C3, C6, P4) | sí | sí | **sí** (`waiti`/`wfi`) | **no** |
-| **STM32U5** (DK2 y Nucleo) | **no** | **no** | **no** | **no** |
-
-Verificado **contra el artefacto**, no leyendo: `wfi` = 0 en el desensamblado de la Pico
-(82 898 líneas) y en los `.list` de la DK2 y la Nucleo. En los ESP el núcleo sí se para porque el
-kernel de IDF llama **siempre** a su idle hook.
-
-🔑 **Y el hallazgo que va contra el punto de partida elegido: el RTC de hardware SÓLO tiene backend
-en el STM32** (`stm32/port/gpio_stm32.c:790`, `:1009`). El ESP usa a propósito el stub portable
-(`esp32/common/gpio_esp32.c:595`) y la Pico no registra ninguno. **El reloj que se propone como
-despertador existe justo en la familia que hoy no llega ni a ejecutar su tarea ociosa, y no existe en
-las otras cuatro.** Empezar por el RTC significa construirlo en tres familias antes de poder probar
-nada; empezar por el timer, no.
-
-🔑 **Y el que cambia el encuadre entero: miVM YA HACE LO CORRECTO.** Calcula
-`earliestSleepWakeMs()` y espera **el delta completo** en `vmLock.wait(delta)`, sin tope, porque
-quien llega lo despierta con un `notify` (`VirtualMachine.java:543`, `:2305-2317`). O sea que el
-patrón *«duerme hasta el próximo vencimiento y que un evento te despierte»* **ya está escrito en la
-implementación de referencia**, y el tope de 50 ms de `src/scheduler.c:144` es una limitación de la
-VM-C, no del diseño. ⚠️ Y eso significa que tocarlo **roza el invariante dual-VM**.
-
-**Lo demás que salió y que conviene tener a mano** (el detalle, en el documento):
-- ⏰ **El techo del sueño lo pone el reloj de sondeo más rápido**, y hoy con un programa cargado son
-  el hilo `io` a 5 ms y el tope de 50 ms del planificador — que además **ya no lo usa nadie** durante
-  un RUN con `io`. Aunque todo lo demás estuviera encendido, **ningún micro podría dormir más de un
-  tick seguido**.
-- ⏰ **Los ESP tienen un límite duro que nadie había censado como tal**: el Interrupt WDT por
-  hardware a **300 ms** en las cuatro imágenes. La Pico sí para su watchdog de verdad; el STM32 hoy
-  no registra backend a propósito.
-- 🔋 **El caso real de una placa a pilas —autorun sin IDE— no estaba censado.** Existe en las tres
-  familias, y es el modo en que vive un aparato con batería: arranca solo y **no hay nadie al otro
-  lado del cable**. Los 200 sondeos/s del hilo `io` se pagan íntegros para atender un `KILL` que no
-  puede llegar.
-- 🔌 **Cargas estáticas que no dependen de la CPU y que no apaga nadie**: en la DK2 se inicializan
-  **19 periféricos incondicionalmente** en el arranque (cinco UART, tres SPI, el PHY del USB HS…) y
-  16 en la Nucleo; el **LTDC escanea el panel desde el arranque** corra o no una GUI; el NeoPixel de
-  la Metro se enciende verde tenue en el arranque *(un `test H7.4.a` que se quedó)* y no lo apaga
-  nadie. Contraste que prueba que no es inevitable: en la Pico el ADC es perezoso.
-- 🐛 **`sleepUs()` es espera activa pura** y su nombre no lo delata: `sleepUs(500000)` son 0,5 s de
-  micro a plena carga sin ceder ni el hilo BP ni la CPU.
-- 🐛 **`Machine.MIN_CPU_MHZ()` declara 18 MHz para las cinco familias y sólo la Pico lo implementa**
-  (y bien: escala Vdd_core por tabla). El STM32 y el ESP devuelven 0. Es la palanca que Eduardo
-  recordaba de las pruebas de overclocking, y está declarada donde no existe.
-- ⚠️ **Un consumo invisible en el parque**: `Gui.mod` no viaja en el blob embebido y el IDE no
-  reinstala la stdlib en cada Run, así que **cualquier placa cuya stdlib no se haya reinstalado tras
-  `a5a00daa` tiene el lazo de GUI viejo, que no tiene pausa ninguna y gira a tope**. El síntoma no es
-  un fallo: es consumo.
-
-🔧 **EL DATO DE HARDWARE QUE CORRIGE EL VOCABULARIO (Eduardo, 10-sep).** *«El RP2350 no tiene un
-RTC dedicado en su hardware, a diferencia del RP2040. Lo que incluye es un temporizador AON
-(Always-On): un contador de 64 bits en el dominio de energía siempre encendido que mide
-milisegundos, y sirve para programar eventos de encendido. Si una placa RP2350 comercial trae RTC,
-es por un chip externo añadido en la placa (tipo PCF85063), no por una función nativa del micro.»*
-
-**Esto explica el hallazgo del censo en vez de contradecirlo**: que la Pico no registre backend de
-RTC no es un olvido — **es que no hay nada nativo que registrar**.
-
-🔑 **Y cambia cómo hay que llamar a la pieza.** Lo que hace falta no es un *reloj de calendario*: es
-**un contador en el dominio siempre encendido capaz de generar un evento de despertar**. Eso lo
-tienen todas las familias, con nombres distintos:
-
-| familia | la pieza | ¿la alcanzamos hoy? |
-|---|---|---|
-| **RP2350** | **AON Timer**, 64 bits en ms, dentro de POWMAN | **no**: no enlazamos `hardware_powman` ni `pico_sleep` (`pico/CMakeLists.txt:195-213`, 12 librerías y ninguna es ésa) |
-| **STM32U5** | RTC de hardware con dominio de respaldo (y además LPTIM) | **sí**, es el único con backend (`gpio_stm32.c:790`, `:1009`) |
-| **ESP32-S3 / C3 / C6** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
-| **ESP32-P4** | **igual, pero con más silicio**: controlador RTC con lógica de wake-up para deep-sleep **y dominio VBAT** con respaldo por batería y cristal externo de 32,768 kHz | **no**, y con matiz — ver abajo |
-
-🔬 **EL P4 NO ES «UN ESP32» MÁS EN ESTO (dato de Eduardo, 10-sep, comprobado en nuestras imágenes).**
-El P4 integra controlador RTC con lógica de activación para deep-sleep **y un dominio VBAT** con
-entrada para cristal de 32,768 kHz y conmutación de energía, de modo que la hora sobrevive a un corte
-de la alimentación principal. *(Su aviso, y hay que mantenerlo escrito: el soporte de ESP-IDF para el
-mantenimiento avanzado con VBAT sigue en pruebas.)*
-
-Lo que dicen **nuestros** `sdkconfig`, que es la pregunta útil:
-
-| | S3 | C3 | C6 | **P4** |
-|---|---|---|---|---|
-| `CONFIG_SOC_VBAT_SUPPORTED` | — | — | — | **`y`** |
-| `CONFIG_ESP_VBAT_INIT_AUTO` | — | — | — | **not set** |
-| fuente del reloj RTC | `INT_RC` | `INT_RC` | `INT_RC` | **`INT_RC`** |
-
-O sea: **el silicio del P4 lo soporta, IDF lo sabe (`SOC_VBAT_SUPPORTED=y`) y nuestra imagen no lo
-usa** — y las cuatro, el P4 incluido, corren el RTC sobre el **oscilador RC interno**, no sobre un
-cristal.
-
-🔑 **Y eso separa limpiamente los dos usos, que hasta ahora iban juntos:**
-- **Como DESPERTADOR** («despiértame dentro de N ms»): el RC interno **basta**. Que derive un 5 % con
-  la temperatura da igual cuando lo que se pide es volver a mirar dentro de un rato. Para el caso 2
-  —la escalera— no hace falta cristal ni VBAT.
-- **Como CALENDARIO** («qué hora es tras un corte»): ahí **sí** hacen falta cristal y VBAT, y eso es
-  del P4 y del STM32, no de los otros tres.
-
-Así que el punto de partida no se mueve: **empezar por el despertador, que se puede en todas**, y
-dejar el calendario como una capacidad que unas placas tienen y otras no —y que, como todo lo de
-`#479`, hay que poder **preguntar** en vez de suponer.
-
-❓ **No determinado, y es de placa, no de micro**: si la Waveshare P4 que usamos tiene realmente
-cableados el cristal de 32,768 kHz y la entrada VBAT. Eso no sale del código: sale del esquemático o
-del multímetro.
-
-⚠️ **Un RTC externo NO es un despertador.** Un PCF85063 por I2C es un **driver de placa**, no silicio:
-da la hora, pero **sólo despierta al micro si su línea INT está cableada a un pin capaz de
-despertar**. Tenerlo no da la fuente de despertar; es una pregunta de la placa concreta, no del
-micro. Es exactamente la distinción de `#479`: hay verdades de silicio y verdades de placa, y viven
-en sitios distintos.
-
-📌 **Y una consecuencia que no es de consumo pero está aquí al lado**: en la Pico y el ESP, `Rtc` es
-hoy **un offset por software sobre el reloj monotónico** (`src/rtc.c:28`). Muere en cada reset, y el
-programa **no tiene forma de saber si la hora es real o inventada** — la misma forma que `#469`.
-Anotado en la cabecera de `src/rtc.c`, que además decía que el backend lo registraba la Pico: era
-falso, lo registra el STM32.
-
-⏭️ **V7, y es un ESTUDIO, no una implementación.** Lo que falta: **sin amperímetro no hay números** —
-decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y hay una medida que
-**no** necesita amperímetro y tampoco se tiene: **cuánto cuesta hoy una vuelta en reposo**. El único
-número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `lv_timer_handler`, y su
-propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
-contra qué compararse.
 
 #### ✅ `#489` — ~~la cola del GUI de la VM-C descarta EN SILENCIO cuando se llena~~ (abierta 10-sep · **CERRADA el 10-sep**)
 
@@ -3405,167 +4376,6 @@ backend); un `throw` de un programa BP construye el objeto con opcodes normales 
 **Conclusión: tras `#486` no queda ningún barrido de la tabla en un camino caliente**, así que
 ordenarla no compra nada hoy. **No se abre ficha** — pero queda escrito por si algún día un camino
 nuevo empieza a buscar por nombre en un bucle.
-
-#### 🧬 `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, de `#480` · **→ V7** el mismo día)
-
-El cuarteto `setMark`/`markCount`/`markAt`/`bootCount` sólo lo rellena el STM32
-(`gpio_stm32.c:310-325`); Pico, ESP32 y P4 dejan esos slots a **NULL**, y `src/pico.c:121-140`
-responde no-op **mudo**, `0`, `0` y `1`. En placa, `samples/BreadcrumbDemo.bp` imprime «Arranque #1»
-y «Migas: 0» para siempre, y su línea final **promete en voz alta algo falso**.
-
-🔑 Es el «instrumento mudo» **en la herramienta que existe justo para cuando ya estás en problemas**.
-
-📌 **Y es una clase de fallo distinta a `#469`**: no es «nadie registró backend», es **backend
-registrado con la mitad de los slots a NULL**. Por eso el arreglo genérico de `#469` no la cubre: la
-fachada tiene que distinguir «slot NULL» de «backend ausente».
-
-
-### 🧬 9-sep — A **V7** (Eduardo)
-
-> *«Lo pasamos a V7. Ahora mismo, con las nuevas placas ya hechas, casi nos da igual.»*
-
-**El motivo es de oportunidad, no de dificultad**: el breadcrumb es la herramienta de las traídas de
-placa —dejar marcas por fases y leer el rastro tras un reset inesperado—, y las placas nuevas ya
-están arrancadas. Su momento de máximo valor ya pasó; volverá cuando haya silicio nuevo o una
-campaña de fallos en campo.
-
-### Lo que queda medido para cuando se retome, que es la mitad del trabajo
-
-📌 **NO es un caso «el hardware no puede», como el watchdog del STM32.** Comprobado el 9-sep:
-
-| | memoria que sobrevive al reset | |
-|---|---|---|
-| **STM32 U5** | registros de backup | ✅ **es el único que lo implementa** |
-| **RP2350** | *scratch* del watchdog | el propio SDK usa el registro 4 para marcar el motivo del reboot |
-| **ESP32** | `RTC_NOINIT_ATTR` (memoria RTC sin inicializar) | ⚠️ hay chips donde el IDF lo rechaza (`static_assert`) — mirar uno a uno |
-
-Así que en V7 la decisión no es «se puede o no»: es **implementarlo en RP2350 y ESP32, o declarar
-que no está**.
-
-### Y la mitad barata, que va con ello
-
-Sea cual sea la decisión, **la fachada tiene que aprender a distinguir «slot NULL» de «nada que
-informar»**. Hoy no puede:
-
-```c
-void bpvm_pico_set_mark(int code) {
-    if (g_backend && g_backend->setMark) g_backend->setMark(code);
-    /* Host: no-op (sin RAM retenida). */
-}
-```
-
-`markCount()` devuelve **0**, que en BP se lee como *«no hay marcas»* cuando la verdad es *«yo no
-guardo marcas»*. Las dos frases se parecen y llevan a sitios opuestos: la primera dice que el reset
-fue limpio, la segunda que no tienes instrumento. 🔑 **Y es el instrumento mudo dentro del aparato
-que existe para cuando ya estás en problemas** — por eso, aunque se decida no implementarlo,
-`BreadcrumbDemo.bp` no puede seguir prometiendo *«si reseteas ahora, el rastro será 10..50»*.
-
-#### 🧬 `#470` — la identidad de la placa se contesta por DOS caminos (abierta 5-sep, de `A3` · **los NOMBRES unificados el 9-sep**, `38e1d143` · **los cuatro números → V7** el 9-sep)
-
-✅ **LOS NOMBRES, RESUELTOS el 9-sep — y no «arreglados»: DISUELTOS.**
-
-**La corrección es de Eduardo, y llegó antes de que yo escribiera nada:** *«hay que hacerlo por el
-camino correcto. Todos han de llamar a una misma función en HAL BP, una para el micro y otra para
-la placa. Lo que es diferente de cada imagen es la IMPLEMENTACIÓN de estas funciones.»* Yo iba a
-hacer que la fachada leyera del **repl**, que invierte las capas.
-
-📐 **Y al medirlo salió que el patrón correcto YA EXISTÍA en la familia de referencia:** el wire de
-la Pico llama a `bpvm_pico_board_name()` (`pico/repl_v1.c:625`), o sea a HAL BP. La ESP32 estaba
-**medio migrada** —lee `reset_cause` de la fachada pero el nombre de su propia tabla— y el STM32
-tenía `BOARD_NAME` y hasta un `gpio_count = 114` **literal en el wire**. Es el mismo patrón que en
-`#469` y en los packs: **la RP2350 lo hacía bien y las otras derivaron.**
-
-```
-HAL BP   bpvm_pico_micro_name()  +  bpvm_pico_board_name()
-           ↑ implementadas por las CUATRO cinturas (Pico, ESP32, P4, STM32)
-           ↓ leídas por LOS DOS consumidores
-BP       Machine.getMicro() / getBoard()   (builtin 233; el gate, en verde)
-wire     el INFO de las tres familias      (ya no tienen tabla propia)
-```
-
-🔑 **Y DOS nombres en vez de uno mal definido**, que es lo que hace que la pregunta desaparezca en
-vez de contestarse. El micro sale de `CHIP_MICRO`, una entrada **por micro** en el `chip_cfg.h` de
-cada uno; la placa dice `generic` salvo que la imagen conozca el modelo.
-
-✅ **VERIFICADO EN LAS DOS PLACAS RP2350 Y POR LOS DOS CAMINOS (9-sep, en placa, Eduardo):**
-
-| | por el WIRE (INFO) | por el PROGRAMA BP (`Machine.getMicro`) |
-|---|---|---|
-| **Pico 2** | `rp2350a` | `rp2350a` |
-| **Metro** | `rp2350b (RP2350B)` | `rp2350b` / placa `generic` |
-
-📌 **Y esto es lo que se gana haciéndolo por el camino correcto**: los dos consumidores leen la
-MISMA función de la HAL BP (`bpvm_pico_micro_name()`), así que no hay dos verdades que puedan
-divergir — que es exactamente como se desincronizaron el C3 y el C6. La función «inteligente» que
-pidió Eduardo queda probada: la distinción sale de `SYSINFO.PACKAGE_SEL` (QFN-60 = RP2350A de 61
-pines, QFN-80 = RP2350B de 81), que es de sólo lectura y **no depende del FS**.
-
-✅ **Verificado en dos placas**, no en el log:
-
-| | por el wire | por el programa BP |
-|---|---|---|
-| **Pico 2** | `rp2350` | `micro: rp2350` · `placa: generic` |
-| **ESP32-S3** | `esp32s3` | `micro: esp32s3` · `placa: generic` |
-
-📌 Dos cosas del camino: **el P4 no tenía `chip_cfg.h`** y el include entró en el fichero compartido
-→ no compilaba (ahora la tiene, que es lo que significa «una entrada por micro»); y **la Pico ya
-decía `rp2350-generic`**, o sea que el reparto estaba medio inventado en la placa de referencia, con
-micro y placa mezclados en un solo campo.
-
-⏭️ **LO QUE QUEDA, y necesita criterio de Eduardo**: los otros **cuatro** campos siguen con dos
-fuentes, y unificarlos exige decidir qué significan. La tabla de abajo sigue vigente para ellos —
-`pwm_slices` son *slices* en la Pico, *salidas* en el STM32 y *canales LEDC* en el ESP32.
-
-
-Los mismos seis datos (nombre, MHz, GPIO, ADC, PWM, causa de reset) se responden **dos veces por
-familia**: una para BasicPlus (la fachada `bpvm_pico_*`) y otra para el wire (`bpvm_repl_info_t`,
-rellenada a mano). Ya no coinciden:
-
-| | por el wire | por la fachada (lo que ve el programa BP) |
-|---|---|---|
-| **ESP32-C3** | «ESP32-C3», 160 MHz, 22 GPIO | **«esp32s3-devkitc», 240 MHz, 45 GPIO** |
-| **STM32** | 114 GPIO (`stm32_repl.c:146`) | 128 (`gpio_stm32.c:139`) |
-| **Pico** | 24 PWM (`repl_v1.c:632`) | 12 (`main.c:679`) |
-
-**El caso grave es el C3 y el C6**: su identidad se arregló *sólo* en la vía del wire
-(`c3_board_id.c` llama a `repl_set_board_id`, pero **nadie llama a `bpvm_pico_set_backend`**), así
-que un programa BasicPlus corriendo en un C3 **se cree un S3** — cinco de seis campos falsos,
-incluido el nombre de la placa. Es el mismo bug que la cabecera de `c3_board_id.c` dice haber
-arreglado: corregido en un camino y vivo en el otro.
-
-📌 Antes de arreglarlo hay que **decidir qué significa cada campo**, porque hoy no está claro: el
-114 del STM32 son las I/O del encapsulado y el 128 el rango direccionable del driver; y
-`pwm_slices` significa *slices* en la Pico (12), *salidas* en el STM32 (28) y *canales LEDC* en el
-ESP32 (8). Unificar sin decidir eso sólo cambiaría de sitio la mentira.
-
-### 🧬 LOS CUATRO NÚMEROS → **V7**, y con el diseño ya decidido (Eduardo, 9-sep)
-
-*«Para cada micro creamos unos arrays, por ejemplo `[0, 1, 3]`, que indican los números válidos, ya
-sean UARTs, I2C, SPI, etc. **El número es la longitud del array.** Pero esto va a V7, que es donde
-concretaremos los arrays de cada micro.»*
-
-🔑 **Y eso no aplaza la pregunta: la disuelve.** El problema de arriba era «¿qué significa cada
-campo?», y la respuesta es que **no hay campo**: lo que hay es el CONJUNTO válido, y el número es su
-`length`. Con eso el contador deja de ser un dato aparte que puede contradecir al conjunto — que es
-exactamente cómo miente hoy:
-
-| lo que dice hoy | lo que pasa de verdad |
-|---|---|
-| el S3 declara **45 GPIO** | `Gpio.Pin` **rechaza el GPIO48** (el LED RGB de casi toda placa S3) y **acepta el GPIO23**, que no existe |
-| la fachada de ADC deja usar **`0..3`** | son los cuatro pines analógicos del **RP2350** congelados en la API común; el S3 tiene 20 canales y el STM32 otros 20 |
-| `pwm_slices` | *slices* en la Pico (12), *salidas* en el STM32 (28), *canales LEDC* en el ESP32 (8) |
-
-Con arrays, «cuántos» y «cuáles» **no pueden discrepar**, porque son la misma cosa preguntada de dos
-maneras. Es el mismo movimiento que `#456`: quitar el número en vez de elegirlo.
-
-🔗 **Va con `#479`** (el mapa de pines y los pines analógicos), que ya se fue a V7 el 6-sep por
-decisión de Eduardo —*«prefiero no hacer parches»*— y es la misma forma: **tablas por micro que
-viajan compiladas en su imagen**, en la HAL BP. Conviene hacerlas de una vez y no tocar ese camino
-dos veces.
-
-⏭️ **Lo que queda para V7**, entonces: concretar los arrays de cada micro (UART, I2C, SPI, ADC, PWM,
-GPIO) y que `gpioCount()` y compañía pasen a ser su longitud. **En V6 no se toca**, y por tanto esta
-ficha sale de la lista de pendientes de V6.
 
 #### ✅ `#471` — el nombre `Pico` atraviesa todas las capas y llega al usuario (abierta 5-sep, de `A3` · **RENOMBRADO el 8-sep** `a9b6cb8b` · **CERRADA el 9-sep** `b79a6c1b`; los métodos NUEVOS, a V7)
 
@@ -4008,93 +4818,6 @@ cerró habiendo arreglado sólo la capa de usuario. Y una nota que
 no es ficha porque no tiene consecuencia conocida hoy: en el STM32 **la tarea ociosa no corre nunca**,
 así que cualquier cosa que FreeRTOS difiera a la ociosa allí no ocurre. El único que se apoyaba en
 ella era el borrado de tareas, y ya no.
-
-#### 🧬 `#479` — EL MAPA DE PINES Y LOS PINES ANALÓGICOS → **V7** (abierta 6-sep, decidida a V7 el mismo día)
-
-**Decisión de Eduardo, y con su motivo**: *«Lo desarrollamos en V7. Ahora en V6 no lo desarrollamos,
-prefiero no hacer parches.»* Incluye rechazar el trozo intermedio que le ofrecí (hacer que
-`initChannel(ch)` significara «el canal ch de esta placa» sin tocar el lenguaje): media reforma es
-un parche.
-
-**De dónde sale.** Tirando de `#469` apareció que el `0..3` de la fachada de ADC **son los cuatro
-pines analógicos del RP2350 congelados en la API común** — la forma de la primera placa convertida
-en contrato de todas. Con los números delante:
-
-| familia | canales ADC que declara | los que la fachada deja usar |
-|---|---|---|
-| RP2350 | 4 (GP26–29) | 0..3 |
-| ESP32-S3 | 20 | 0..3 |
-| ESP32-C3 | 6 | 0..3 |
-| ESP32-C6 | 7 | 0..3 |
-| STM32U5 | 20 | 0..3 |
-
-**El planteamiento es de Eduardo**: *«seguro que hay más de 4 pines. Hay pines que solamente pueden
-ser digitales, pero hay pines que pueden ser o analógicos o digitales. Eso se tiene que soportar en
-todas las familias.»* Y luego: *«esto es hardware, así que afecta a la capa HAL BP. El mapa de pines
-es algo propio de cada micro y se tiene que construir con la imagen del micro. Lo que afecta al
-lenguaje BP: o hacemos una clase nueva `AdcPin` o extendemos la clase `Pin` (o las dos cosas). Lo
-que está claro es que si un pin es analógico no puede ser digital al mismo tiempo.»*
-
-**Las tres piezas, y en qué capa cae cada una** (comprobado qué hay hoy de cada una):
-
-1. **El mapa de pines — NO EXISTE.** Sólo hay **contadores**: `gpioCount()`, `adcChannels()`,
-   `pwmSlices()` (`include/bpvm_pico.h:48,62,63`). El runtime sabe *cuántos*, nunca *cuáles*. Va en
-   la cintura de cada familia y viaja compilado en su imagen. ⚠️ **El ENV NO es el sitio** —yo lo
-   propuse y me corrigió—: el ENV es config de placa (panel, tamaño de FS); esto es verdad de silicio.
-2. **El estado del pin — TAMPOCO, y sin él el invariante no es comprobable.** `src/gpio.c` sólo
-   reenvía al backend y no guarda nada; el único que lleva cuenta es el STM32, y en privado
-   (`s_mode[128]`, `s_pull[128]`, `gpio_stm32.c:50-51`). Puesto en el común, la regla «analógico ⇒
-   no digital» se escribe **una vez** y vale para las cinco familias.
-3. **El lenguaje — DECIDIDO por Eduardo el 6-sep.** `Gpio.Pin` ya existe (`Gpio.bp:92`:
-   `Pin(num, mode)` con `on/off/toggle/value/isHigh`).
-
-   ❌ **`Adc.Pin` NO**: *«estamos llamando a 2 clases diferentes `Pin` y eso en la práctica va a
-   crear confusión»*. El nombre es **`AnPin`**.
-   ✅ **`AnPin` DESCIENDE de `Pin`**, y el modelo no es artificial: *«como un pin físico puede ser
-   digital y/o analógico, tener una clase que lo permita es un buen modelo»*. Yo objeté que un
-   `AnPin` heredaría `on()`/`off()` —lo que su propio invariante prohíbe— y propuse partir `Pin`;
-   la respuesta cierra la objeción sin partir nada: *«en BP los métodos pueden ser virtuales y los
-   valores se exportan como propiedades, así que no hay ningún problema en extender la clase `Pin`,
-   sobrescribiendo lo que haga falta.»*
-
-   **El modelo, entero:**
-   - **`Pin`** — el pin FÍSICO: `num` y `mode`. Modos digitales **`INPUT` / `OUTPUT` /
-     `OPEN_COLLECTOR`**; modo analógico **`ANALOG`**. El `pull` (none/up/down) aplica **sólo en
-     digital**.
-   - **`AnPin extends Pin`** — sobrescribe lo que haga falta y añade `read()` / `readVolts()` /
-     `readAvg()`.
-   - 🔑 **La exclusividad no hay que vigilarla: es el mismo campo `mode`.** Pedir analógico sobre un
-     pin en modo digital falla **por construcción**, no porque alguien se acuerde de comprobarlo.
-
-   **`OPEN_COLLECTOR` es de Eduardo y es nuevo entero** — *«importante para cuando se conectan
-   varias salidas entre sí»*. Comprobado: **no existe en ninguna parte** (ni en BP, ni en la fachada
-   —`init(pin,mode)` sólo conoce `0=INPUT, 1=OUTPUT`, `bpvm_gpio.h:31`—, ni en las cinco cinturas).
-   Y no cuesta lo mismo en todas, que es el argumento de que esto vive en la HAL BP:
-
-   | familia | colector abierto |
-   |---|---|
-   | **ESP32** | nativo — `GPIO_MODE_OUTPUT_OD` (`hal/gpio_types.h:112` del IDF) |
-   | **STM32** | nativo — `GPIO_MODE_OUTPUT_OD` (`stm32u5xx_hal_gpio.h`) |
-   | **RP2350** | ❌ **el pad NO lo tiene**: hay que emularlo — conducir a bajo / soltar a alta impedancia |
-
-   ⚠️ **Y la semántica que hay que fijar en el contrato, no dejarla a quien implemente**: en modo
-   colector abierto **`write(1)` no significa «pon a alto», significa «suelta»** — el alto lo pone
-   el pull-up (externo, o el interno si se activa). Es el modo en que `write` cambia de significado;
-   sin escribirlo acabaría significando cinco cosas distintas.
-
-   ✅ **De las tres cosas del modo digital, `pull` YA EXISTE** en la fachada común
-   (`pull(pin, 0=none/1=up/2=down)`, `bpvm_gpio.h:32`). Lo que falta es `OPEN_COLLECTOR`.
-
-📌 **Y el dato que explica por qué esto es de lenguaje**: `Adc` es **la única fachada que no
-habla de pines**. Sus vecinas ya hacen lo que Eduardo pide — `Gpio.init(pin, mode)`,
-`Pwm.initSlice(pin, freqHz)`, `Pulse.initSlice(pin, edgeKind)`. La rara es ésta.
-
-⚠️ **Coste**: toca `Adc.bp`/`Gpio.bp`, que van **embebidos en las cinco imágenes** → ABI y blobs
-regenerados. Encaja con `L1` y el módulo raíz, que ya están en V7 por el mismo motivo.
-
-✅ **Lo que SÍ se queda de V6**: el arreglo de `#469`. No es un parche hacia este diseño —no añade
-media funcionalidad—: **quita una mentira**. Hasta V7, en una placa sin backend de ADC la fachada
-falla en vez de devolver una rampa que parece una lectura.
 
 #### ✅ `#478` — ~~miVM NO PUEDE TOCAR UN BUS~~: los builtins de I2c/Spi/Uart se quedaron fuera del 4→8B (abierta y **CERRADA el 6-sep**, `c27a85fe` + `163be329`)
 
@@ -4805,129 +5528,6 @@ ancho completo en orden.
 ⚠️ Trampa de artefacto en el propio host: `bp_shot_%04d` reempieza en 0001 en cada ejecución y
 escribe en el cwd — una captura rancia es **indistinguible** de la nueva. Verde falso de manual.
 
-#### ⏩ `#468` — la stdlib en flash en vez de en RAM (memoria de la C6) → **V7** (abierta 4-sep · **APLAZADA el 8-sep por Eduardo**)
-
-⏩ **APLAZADA A V7 el 8-sep. Decisión de Eduardo, con su criterio de siempre:** *«para V6 no
-inventamos cosas nuevas. Se puede plantear para V7, pero en V6 seguimos como hasta ahora.»*
-
-📌 **Y la salida para quien la necesite HOY, que es suya y ya funciona:** *«si alguien quiere
-ahorrar memoria puede montar su propio pack y subirlo»*. Eso dejó de ser teórico esta misma tarde:
-hasta el 8-sep la zona de packs sólo la mapeaba el P4, y desde `630a221e` la tienen también el S3,
-el C3 y el C6. O sea que el usuario que quiera sacar `Gui`/`Json` de la RAM puede hacerlo por el
-camino normal, sin que nosotros toquemos la imagen.
-
-🔮 **Y el apunte que le da forma a la ficha en V7**, también suyo: *«si en V7 LVGL lo subimos a un
-pack, éste puede incluir `Gui.mod`»*. Es la pieza que faltaba — el ahorro deja de ser un mecanismo
-inventado para la stdlib y pasa a ser **una consecuencia** de empaquetar LVGL, que es algo que se
-quiere hacer por su cuenta. El `Gui.mod` viaja con el motor al que envuelve, que es donde debe ir.
-
-⚠️ Lo que sigue valiendo de la medida, para cuando se retome: los **22 268 B** son reales y salen de
-que el `code` se quede en flash; la **otra mitad** de los «40-50 K» es la tabla de símbolos por
-referencia, que es un cambio del enlazador y va aparte. Lo de abajo se conserva porque es el
-análisis que sostiene las dos cosas.
-
-⛔ **8-sep — EL PACK NO PUEDE SER EL MECANISMO, y la objeción es de Eduardo:** *«los micros, cuando
-arrancan por primera vez, no tienen la partición definida, así que no se puede usar para subir
-ningún pack. La librería estándar de fábrica viene con la imagen del sistema y se copia a `/lib`.»*
-
-📐 **Comprobado en el código, las tres patas:**
-- El layout de particiones sale del **ENV** (`esp32/common/board_mgr_esp32.c:327`,
-  `bpvm_part_layout(&s_env, …)`). Una placa virgen no tiene ENV escrito.
-- Sin él no hay zona: *«sin zona de packs (el arranque no llegó a particiones)»*.
-- Y la stdlib de fábrica son blobs **dentro de la imagen** (`esp32_mods.c`:
-  `static const unsigned char core_mod[]`), que `esp32_mods_install()` copia a `/lib`.
-
-O sea: un pack sirve para lo que el USUARIO grabe, no para lo que la placa necesita **antes** de
-tener particiones. La stdlib de fábrica es justo eso.
-
-🔑 **Pero el ahorro medido NO necesita un pack**, y esto es lo que queda por decidir. Los 22 268 B
-salen de que el `code` se quede en **flash** en vez de copiarse al bloque de la VM — y los blobs de
-fábrica **ya están en flash**: son `static const`, o sea `.rodata`, mapeada y direccionable. Y el
-cargador ya lo contempla, no hay que construirlo:
-
-```
-loader.c:26    «base != NULL → blob ya en RAM/flash (embebido en la imagen, XIP, host)»
-loader.c:105   ... const char* name_hint, int xip)      ← XIP es un PARAMETRO, no una politica
-loader.c:109   if (xip && !data) return BPVM_ERR_IO;    /* exige blob mapeado */
-```
-
-⚠️ **Lo que hoy lo impide es el rodeo**: blob → se copia a `/lib` → se carga **desde el FS**, y
-desde el FS no hay puntero, así que no se puede XIP. La forma sería: cargar el módulo **desde el
-blob embebido** salvo que el usuario lo haya sustituido en `/lib`, que es el «shadow de desarrollo»
-de `#310` pero al revés.
-
-⏭️ **Lo que queda por decidir (Eduardo):** ¿se prueba esa vía —cargar la stdlib de fábrica en sitio
-desde la imagen— o se deja la memoria de la C6 como está? **No está probada**: lo medido es el
-ahorro (22 KB) y que el cargador acepta XIP con un blob; que funcione con estos blobs concretos hay
-que verlo. La otra mitad de los «40-50 K» sigue siendo la tabla de símbolos por referencia, que es
-un cambio del enlazador y va aparte.
-
-📌 Y lo que la objeción **no** tumba: llevar el mapeo de la zona a `esp32/common` seguía valiendo por
-sí solo, y se hizo el 8-sep (`630a221e`) — el S3 y el C6 ya tienen zona de packs para lo que el
-usuario quiera grabar.
-
-**La dirección la dio Eduardo (4-sep):** *«En cuanto al consumo de memoria es cierto que vamos
-justos. Aquí lo suyo es subir el pack de la librería estándar+Json+Gui, y con eso podemos ahorrar
-40 o 50 Ks.»* Antes de escribir código, lo que cuesta hoy y lo que daría, medido en la C6 con
-`GuiColorDemo` (imagen 128 KB, `log=1`):
-
-```
-[bpvm-c] dep 'Gui' -> /lib/Gui.mod · dep 'Json' -> /lib/Json.mod · dep 'Core' -> /lib/Core.mod
-[bpvm] tabla de simbolos: 1294 simbolos, 30554 B de nombres, 49152 B en total
-[bpvm] tabla de handles: 0 -> 256 slots (2 KB dentro del heap) OK — techo del heap 63488, libre 31 KB
-```
-
-**Dónde viven los módulos.** El cargador los pone DENTRO del bloque de la VM, delante del heap
-(`memory[]`: ext-table + data + code, desde `next_free_address`; `heap_start` empieza donde acaban).
-Con XIP (H3.c, ya implementado para la zona de packs montada) el `code` se queda en flash y a RAM
-sólo van ext-table + data. Cabeceras de los `.mod` de hoy:
-
-| módulo | fichero | data | code | en el bloque de la VM | con XIP |
-|---|---|---|---|---|---|
-| Core | 13 111 | 992 | 5 039 | 6 031 | 992 |
-| Json | 24 059 | 1 788 | 8 877 | 10 665 | 1 788 |
-| Gui | 44 003 | 4 176 | 8 352 | 12 528 | 4 176 |
-| **suma** | 81 173 | | | **29 224** | **6 956** |
-
-→ un pack XIP con los tres devuelve **22 268 B (21,7 KB) al heap de la VM**: de 31 KB libres a ~53
-tras cargar el demo. Eso es la mitad de la cifra de Eduardo. **La otra mitad es la tabla de
-símbolos**: 49 152 B (1 294 entradas × 8 B, redondeadas a 16 KB, + un pool de nombres de 32 KB con
-30 554 B usados) que sale del `malloc` de PLATAFORMA — está dentro de los 103 824 B de margen del
-sistema, no en el bloque de la VM. Un pack por sí solo no la toca: para ahorrarla haría falta que
-los nombres se leyeran POR REFERENCIA desde la flash mapeada (el pool desaparece: ~32 KB de DRAM)
-— un cambio de diseño del enlazador (`bpvm_symbol_name` devuelve hoy punteros a un pool que se
-realoja; los nombres del `.mod` van con longitud, no terminados en 0). Las dos cosas juntas son
-los «40 o 50 K».
-
-**Lo que ya hay y lo que falta:**
-- El cargador ya carga XIP desde la zona montada y el orden de búsqueda es pack-en-ejecución → FS
-  → zona (`#310`, spec §4). **El FS ECLIPSA a la zona** («shadow de desarrollo, con aviso»).
-- En la familia ESP32 la zona sólo la mapea el P4 (`pack_p4.c`: `esp_partition_mmap` INST+DATA y
-  `board_mgr_esp32_set_packs_view`, ~40 líneas). Llevarlo a `esp32/common` la activa en S3, C3 y
-  C6 sin construir nada nuevo. La C6 ya tiene partición `packs` (la propuso `PART_DEFAULTS`).
-- El frontend construye packs (`PackStep`, con el cierre de deps externas): un «pack de la
-  stdlib» es un pack sin app; falta la forma de pedirlo y el botón del IDE para grabarlo.
-
-**El nudo, que es el que decide el diseño:** con el orden actual, `/lib/*.mod` tapa al pack. Y en
-`/lib` los pone (a) el instalador de `#466` en cada arranque, desde la tabla embebida, y (b) el
-IDE cuando `STAT` dice que falta (Json y Gui hoy). Para que el pack cuente hacen falta tres cosas
-pequeñas y coherentes: el instalador no repone en `/lib` lo que la zona ya sirve con el mismo
-MAGIC+CRC; `STAT`/`bpvm_entry_resolve` miran también la zona (el IDE dirá «ya en la placa»); y la
-regla de versión de `#466` se aplica igual (un módulo más nuevo en `/app` o `/lib` sigue ganando,
-que para eso el FS eclipsa).
-
-**Alternativa sin subir nada:** la tabla embebida de la imagen (`esp32_mods`: 14 módulos, 48 KB)
-YA está en flash mapeada (`.rodata` es XIP en ESP32, RP2350 y STM32). Cargar XIP desde ahí —una
-fuente más en el orden— ahorra lo mismo que el pack para los módulos embebidos, sin partición ni
-grabación; a cambio Gui y Json tendrían que entrar en la imagen del C6 (+68 KB de flash de los 440
-libres) y el instalador dejaría de copiarlos a `/lib` (con `STAT` contestando desde la tabla). El
-mismo nudo del párrafo anterior, resuelto en el mismo sitio.
-
-⏭️ Decisión de Eduardo: (1) pack en la zona (lo que él propone; sirve también para módulos que no
-van en la imagen) o tabla embebida XIP; (2) si la tabla de símbolos por referencia entra en el
-mismo lote. Con eso se abre la implementación, en este orden: mapear la zona en `esp32/common`
-(activar), el nudo del eclipse (instalador + `STAT`), el pack de la stdlib desde el IDE, medir.
-
 #### ✅ `#449` — la reserva de `malloc` de la Pico 2 se dimensionó para otra cosa (abierta 28-ago · **CERRADA 29-ago** · `e4957d7c`)
 
 > ✅ **Verde en placa** (`JsonDemo`, `exit 0`, salida byte-idéntica a las dos VMs).
@@ -5281,7 +5881,7 @@ mismo que las dos anteriores: a partir de la congelación **no se pregunta «¿m
 - Después de la raya sólo entran **arreglos de bugs**, cada uno con su ficha y su reproducción.
 - `D1` documenta **lo que hay**, no lo que se quiere; y `F1` prueba **lo congelado**.
 
-### 🧊 EN VIGOR — desde el 12-sep-2026, tras cerrar `T1` (Eduardo: *«Congelamos código y empezamos»* la documentación)
+### 🧊 ESTUVO EN VIGOR del 12-sep-2026 (✅ **LEVANTADO esa misma noche, al publicar V6**), tras cerrar `T1` (Eduardo: *«Congelamos código y empezamos»* la documentación)
 
 **La raya**: el último commit de código de V6 es **`843e2d0a`** (el runner de `T1` con los 8 arreglos) y las
 fichas hasta `b05fb62c`. A partir de aquí:
@@ -6684,53 +7284,6 @@ la GUI entra en la red de paridad. Detalle y medida, en `#477`.
 creer que el sample lo usa es un error — decía «el módulo Gui no expone 'start'» mientras el `.mod`
 nuevo estaba al lado sin instalar. **Para probar un cambio en la stdlib hay que instalar el `.mod`.**
 
-
-#### 🧩 L1 — lenguaje y compilador
-
-Agrupa lo que ya está fichado y suelto por el registro. **No duplica: agrupa** — el texto
-de cada una sigue en su sitio.
-
-- ✅ ~~**La pasada de INTERFAZ no resuelve `Core` implícito**~~ — **CERRADA el 30-ago**
-  (`#458`), y no como estaba previsto: en vez de enseñar a esa pasada a inyectar el
-  `import`, se quitó el implícito y la norma pasó a ser explícita. Con ella cayó también
-  la mitad que nadie había visto: la pasada de interfaz **tiraba miembros en silencio**
-  cuando un tipo no resolvía.
-- ~~**La sustitución por LSP entre interfaces de módulo**~~ — 🧊 **DEJA DE SER UN BUG el
-  30-ago**: las interfaces de módulo se retiran del lenguaje (`#460`), así que era la
-  prueba de una función que ya no existe. No se arregla: se va con ella.
-- **`Object` = comodín por referencia** — decidido y diseñado.
-- **Liberación de recursos**: destructor `~Clase()` + `var owner` + `FREE_REF`.
-- **Ficheros como CLASE** — decidido: dos clases y la segunda hereda.
-- **`Map`**: objetos internos para claves **y** valores + `add` sobrecargado *(decidido el
-  23-ago; ver arriba)*.
-- ✅ **`Math`, ampliar — HECHO el 30-ago**: entran `clamp`, `wrap`, `hypot` y `remap`
-  (ids 228-231, al final del enum porque el id es `ordinal()`). Oráculo en
-  `samples/MathRango.bp`: **29 líneas byte-idénticas en las dos VMs**, con las esquinas
-  fijadas a propósito (rango del revés, `hi` excluido en `wrap`, extrapolación de
-  `remap`, `hypot(3e18,4e18)`). `hypot` NO llama al de libm ni al `Math.hypot()` de
-  Java —son algoritmos distintos y podrían separarse—: las dos VMs hacen
-  `sqrt(x*x+y*y)` en `double`, que con entradas f32 no puede desbordar.
-  ⚠️ Y los mensajes de error **no llevan números en coma flotante**: un `%g` de C y un
-  `String.valueOf(double)` de Java no dan la misma cadena, y ese texto sale por stdout.
-  ℹ️ De la lista original eran cinco: **`atan2` ya estaba hecha** y esta ficha la pidió
-  hasta el 30-ago (existe en `Math.bp`, la registra `Intrinsics.java` y la implementan las
-  dos VMs — comprobado corriendo `samples/mathtest.bp`, 17 líneas byte-idénticas).
-
-- 🟡 **Lo que queda de `Math` NO es matemática, es el COMPILADOR.** Los dos deseos que
-  siguen abiertos son el mismo problema:
-  - *«`factorial` sobrecargada y f64»*. Observación de Eduardo: **nuestro factorial es
-    `Γ(x+1)`**, y `gamma` ya existe — comprobado con `samples/GammaFact.bp`, que fija
-    `gamma(n+1) == factorial(n)` para n=0..12 en las dos VMs, y sigue contestando donde el
-    entero lanza (`13! = 6227020800`, `20! = 2.432902E18`). O sea que **no hace falta
-    builtin nuevo: el cálculo ya está**.
-  - `sign(integer)` y `signF(float)`: dos nombres para una idea, herencia de cuando no
-    había sobrecarga.
-  🔒 **Y lo que bloquea a los dos es lo mismo: una intrínseca NO se puede sobrecargar.**
-  `Intrinsics.REGISTRY` es un `Map` con clave el nombre cualificado y `register()` revienta
-  si se repite; y el call-site (`MivmEmitter.java:3924`) compone la clave con **`fs.name`,
-  el nombre PELADO** — no el mangleado de `H5.a`. Así que las dos firmas caerían en la
-  misma entrada. Arreglarlo es la tarea de verdad, y de paso desbloquea las dos.
-- **`#19`** array fijo LOCAL: que sea inline de verdad · **`#396`** módulo `Time`.
 
 #### ✅ E1 — ~~el IDE y el wire~~ (**CERRADO el 6-sep**, 7/7)
 
@@ -9041,55 +9594,6 @@ fichero corrupto **sin error**, porque el `bulk` anunciado seguiría cuadrando.
 Comprobado además que **sabe ver rojo** (se corrompió un byte a propósito). 58 →
 119 asserts.
 
-#### ⏸️ `#452` — CINCO verbos del wire que ningún cliente manda (APLAZADA al script de test, 31-ago)
-
-Salió de una pregunta de Eduardo al probar `U3.17` —*«df / mem ?»*— y de tirar del hilo.
-En la línea de comandos del IDE `df` y `mem` son **el mismo comando**, y no manda `DF`:
-`SerialBackend.mem()` se lo sintetiza con `INFO` + `LIST`.
-
-Censados los 40 verbos que el IDE emite (`sendRequest`) contra los 20 del REPL común:
-
-| verbo | ¿lo manda algún cliente? |
-|---|---|
-| `PING` · `DF` · `FORMAT` · `RENAME` · `RMDIR` | ❌ **cero ocurrencias en todo el IDE** |
-| los otros 15 | sí |
-
-⚠️ **Por qué importa, y no es "código de más":**
-1. **No se pueden probar.** Ningún gesto del IDE los alcanza — se vio migrándolos: `U3.13`
-   dio al ESP32 `FORMAT`/`RENAME`/`RMDIR` y **no hubo forma de verificarlo por uso**, hubo
-   que cambiar el plan y verificar con el paso siguiente.
-2. **Y por eso se pudren en silencio**: si uno se rompe, nadie se entera. Es superficie
-   viva del protocolo que nadie ejercita.
-3. **El arnés de V7 tampoco los cubrirá**, porque su modelo es «lo que hace el IDE». Van a
-   necesitar un cliente de pruebas que hable el wire a pelo — lo cual, de paso, es la
-   respuesta a *cómo* se prueban.
-
-### 🧭 EL CRITERIO, y por qué la ficha se APLAZA (Eduardo, 31-ago)
-
-*«Con los comandos tenemos 3 casos de uso: 1 — el usuario, 2 — el IDE internamente, 3 — el
-futuro script para automatizar los test en placa. Creo que podemos dejar para cuando
-abordemos el script la revisión de TODOS los verbos.»*
-
-📌 **El cambio de enfoque importa**: la pregunta deja de ser «¿sobra este verbo?» y pasa a
-ser «¿a cuál de los tres consumidores sirve?». Y el tercero **todavía no existe**, así que
-juzgarlos ahora sería decidir con un consumidor de menos a la vista — justo el error de
-censar sin tener delante a todos los que llaman.
-
-⏸️ **Se aparca hasta el script (`#444`)**, y entonces se repasan **los 29 verbos**, no sólo
-estos cinco. Lo medido el 30/31-ago se conserva porque será el punto de partida:
-
-| verbo | ¿usuario? | ¿IDE? | ¿script? |
-|---|---|---|---|
-| **`FORMAT`** | **sí, y hoy falta**: tras flashear hay que formatear el FS y **no hay forma desde el IDE** (ni botón ni comando de consola) | no lo manda | seguro |
-| **`RENAME`** | sí — renombrar en el árbol es algo que al usuario le falta | no lo manda | probable |
-| **`RMDIR`** | sí — el IDE ya manda `MKDIR`, falta el par | no lo manda | probable |
-| **`PING`** | no | no lo manda | **sí**: saber si la placa sigue viva entre test y test |
-| **`DF`** | sí, pero **duplicado**: la consola tiene `df` y `SerialBackend.mem()` lo sintetiza con `INFO` + `LIST` — dos viajes y una cuenta para lo que el firmware da en uno | no lo manda | probable |
-
-⏩ **Lo que decía la ficha antes de aplazarse**: o el IDE los usa, o se declaran
-explícitamente «del protocolo, sin cliente todavía» y el arnés los cubre aparte. Lo que no
-vale es dejarlos como están: implementados, documentados y sin tocar.
-
 #### ✅ U2 — el transporte (CERRADO 26-ago; sus cuatro pasos, verificados en placa)
 
 > Los cuatro pasos están ✅ y verificados en las tres familias con wire. Lo único que
@@ -11354,10 +11858,15 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 - (sin número) — **la S3 no tiene `bios_s3.c`**: no ofrece tabla BIOS, así que no
   puede alojar un pack nativo. Familia por hacer, no prueba pendiente.
 
-- `[V6]` `Object` = comodín por referencia — decidido y diseñado en
+- ✅ ~~`[V6]` `Object` = comodín por referencia — decidido y diseñado en
   `docs/OBJECT_COMODIN.md`. **Ojo**: estaba clasificado V6 y su mitad estática se
   hizo en V5 el 14-ago. Falta la **clase contenedora** (nombre sin decidir, si
-  distingue vacío de `null`, y cómo se saca un escalar).
+  distingue vacío de `null`, y cómo se saca un escalar).~~ **CERRADA — lo cazó el
+  censo del 13-sep sin tachar**: la clase contenedora (`Box`, `#438`) la canceló
+  Eduardo el 18-ago (`OBJECT_COMODIN.md` §«Refinamiento del 18-ago: sin Box» — el
+  comodín ES `Object`), y las cuatro decisiones abiertas las cerraron `#450` (listas a
+  `Object` + `add` sobrecargado, 18-ago), los captadores tipados de `List` (19-ago) y
+  `#446`. No queda resto.
 
 - (sin número) — **liberación de recursos**: destructor `~Clase()` + `var owner` +
   bloque. Diseño de Eduardo.
@@ -11399,7 +11908,11 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 - (de H6) — `SD_INFO` y `SD_MOUNT` siguen sólo en `pico/repl_v1.c`; no han subido
   a código común. Verificado el 14-ago: siguen ahí.
 
-- `#426` `[V6]` — **`double` en una función `native`. APLAZADO A V6 por decisión
+- `#426` `[V6]` — ✅ **HECHO EN V6 (23-ago, `N1.2`: 19 helpers, `MDN_ABI` 4→5, verificado en
+  Pico, P4 y STM32) — la viñeta se quedó sin marcar y la cazó el censo del 13-sep.** Restos a V7
+  (`V7_BACKLOG.md` §E): `double(x)` escrita DENTRO de una native sigue rechazada, cronometrar
+  native contra interpretado, decirlo en el manual, y la instrucción nativa si algún día hay
+  FPU doble. Lo que decía la viñeta: **`double` en una función `native`. APLAZADO A V6 por decisión
   de Eduardo (16-ago)**, y no por coste sino porque *falta pensar el diseño*:
   *«los micros como los STM32F7 tienen coprocesador que soporta float y double.
   Lo correcto sería: si el micro soporta double por hardware, por hardware; si
@@ -11432,447 +11945,43 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
 ---
 
 
-### ═══ V6 — lo que viene de V5 y AHORA ES DE V6 ═══
+## 🚀 V5 PUBLICADA — 22-ago-2026
 
-> 🧹 **TRIAJE del 26-ago-2026.** Esta cola tenía **59 fichas y 47 ya estaban cerradas**
-> —con su ✅ y su commit— pero seguían aquí dentro: la lista de pendientes **mentía al
-> alza**. Las 47 se movieron íntegras al **📦 ARCHIVO** del final de este documento
-> (ni una línea borrada: comprobado comparando contra git, 0 líneas de contenido perdidas).
->
-> De las **12 supervivientes**, verificadas **contra el código y git, no de memoria**:
-> una estaba cerrada sin marcar (el `native` en método, que resolvió N1.1) y otra tenía el
-> enunciado equivocado (los packs del S3: la región SÍ existe). **Quedan 9 vivas** (dos H2-P5 más llevaban «CERRADO»/«ya no aplica» en su propio texto sin tachar).
->
-> 📌 Es [[no-acumular-pendientes]] aplicado a la propia libreta. En V5 esto costó tiempo
-> real: dos bugs cerrados que seguían apareciendo como abiertos.
+Los cuatro pasos del plan de cierre, hechos. **El congelado queda levantado** y lo que
+entre a partir de ahora es V6 (índice en `V6_BACKLOG.md`).
 
-> **Decisión de Eduardo (23-ago):** *«lo que haya de V5 que quedó pendiente pasa a V6 y
-> deja de ser de V5»*. Así que esto **no es un limbo ni una lista de espera**: son fichas
-> de V6 como las de arriba. Lo único que las distingue es de dónde vienen, y eso se
-> conserva porque el contexto de un bug incluye cuándo salió.
->
-> Los títulos de sección siguen nombrando hitos de V5 (`V5/H10`, «la cola de H2») **a
-> propósito**: dicen la procedencia, no el hito al que pertenecen.
+| qué | dónde |
+|---|---|
+| commit publicado | `ff408a1e` |
+| etiqueta | `v5.0` |
+| release | https://github.com/legio-e/BasicPlus/releases/tag/v5.0 |
+| artefacto **único** | `BasicPlus-5.0-win.zip` — 24.403.893 B, `sha256 093789a6…a5f9` |
+| web | https://legio-e.github.io/BasicPlus/ y `/en/`, build `built` sobre `ff408a1e` |
 
-### IDE — V5/H10 «lo pendiente que no son bugs»
+**Verificado, no supuesto:** el ZIP se **descargó desde la propia release** y su sha256
+coincide con el que se montó y se probó; las dos webs se consultaron con `curl` y sirven
+V5 (no bastaba con que el build dijera `built` — el fallo de V4 fue exactamente ése).
 
-### Módulos y arranque (nuevas del 14-ago, en placa)
+📌 **Tres cosas que se encontraron al publicar y que ya están corregidas en
+`PUBLICAR.md`**, para que no vuelvan a morder:
 
-- ✅ ~~**🐛 [ESP32 y STM32] un módulo rancio sobrevive y NADIE lo dice — y `/app` es el punto ciego de los DOS**~~ — **CERRADA el 3-sep por `#466`** (nota al final). Encontrado el
-  22-ago comparando las tres familias. **No es regresión de V5**: es así desde que existe
-  el mecanismo.
-  📐 **El hecho**: `esp32_mods_install` (`esp32/main/esp32_mods.c:4840`) instala un módulo
-  **sólo si NO existe** (`if (bpvm_fs_stat(...) != 0)`). Un `Core.mod` de un firmware
-  anterior se queda ahí indefinidamente. Y a diferencia del RP2350, el ESP32 **no tiene el
-  aviso** `NO es el de esta imagen` — ése vive sólo en `pico/main.c`.
-  🩸 **Lo que le llega al usuario**: `exit 11` con *«lib 'Core' presente pero no exporta
-  'Core.__cls_new_List'; ¿versión vieja?»* — y ni una pista de que la causa esté en `/lib`
-  ni de que borrarlo lo arregle. En la Pico lo dice la placa al arrancar; aquí no.
-  📌 **La POLÍTICA no es el problema y no hay que cambiarla.** Su comentario la justifica:
-  *«No sobreescribas si ya está (p.ej. el usuario subió una versión)»*, que es razonable —
-  respetar lo que el usuario puso a mano. Lo que falta es **decirlo**.
-  ⏭️ **El arreglo barato**: comparar el tamaño del fichero con el del blob embebido y
-  emitir la misma línea que la Pico. No lee el fichero entero (la Pico ya resolvió eso en
-  `H11`: preguntar sólo si EXISTE costaba menos que leerlo). Es el mismo criterio de «que
-  el desfase GRITE» que el proyecto aplica en el gate del `.mod`, el `magic` de la BIOS, el
-  sello del `.npk` y la marca del punto de encuentro.
-  🩸 **AMPLIADO el 22-ago, con el Nucleo delante**: el problema **no es sólo del ESP32 ni
-  sólo de `/lib`**. El IDE sube las dependencias del programa a **`/app`**, y lo que hay
-  ahí **tapa** a lo de `/lib`. El STM32 vacía `/lib` en cada arranque pero **no toca
-  `/app`**, así que un `Core.mod` rancio ahí sobrevive a todo — y eso es exactamente lo que
-  dio el `exit 11` en el Nucleo con `/lib` recién reembebido. Lo encontró Eduardo con
-  `dir /app`.
-  ✅ **El RP2350 es la única familia con la red completa**: su comprobación recorre una
-  tabla que incluye las dos carpetas, y por eso en la Metro salía
-  `lib: /app/Hello.mod NO es el de esta imagen` (`pico/main.c:1323`).
-  🔗 **Y emparenta con la ficha de V6** *«NO copiar dependencias que el dispositivo YA
-  TIENE»*: si el IDE no dejara copias en `/app`, no habría nada que envejecer. Esa ficha
-  deja de ser sólo una optimización de tiempo de subida.
-  ⚖️ **Y hay una TERCERA vía ya escrita en el propio proyecto**: el STM32 vacía `/lib` y lo
-  reembebe fresco cada arranque (*«evita stdlib rancia tras actualizar el firmware»*,
-  `fs_lfs_stm32.c:196`). Se autocura, a cambio de desgaste de flash. **Tres familias, tres
-  estrategias, ninguna decidida como LA buena** — eso es material del eje común/hardware de
-  V6 (`#427`), no de un parche suelto.
-  ✅ **CÓMO SE CERRÓ (3-sep, `#466`), y con la regla de Eduardo, no con el parche barato de
-  arriba.** Las tres estrategias se fueron: ahora las tres familias corren el MISMO
-  instalador (`bpvm_mods_sincronizar`, sobre la tabla embebida de `U4`): por cada módulo de
-  la imagen, si falta en `/lib` se instala; si el de `/lib` es de MAGIC anterior, o del mismo
-  MAGIC con otro tamaño/CRC, **se repone y lo dice en el log** («repuesto»); si es más nuevo,
-  se respeta. Y el punto ciego de `/app` lo cubre el IDE por el otro lado: antes de subir una
-  dependencia pregunta a la placa con `STAT` por nombre (resuelve proyecto → `/app` → `/lib`)
-  y, si la copia que encuentra es de versión anterior o de CRC distinto, **la reemplaza donde
-  está** — un `Core.mod` rancio en `/app` cae en el siguiente `Run`. Verificado en Pico 2, S3
-  (13 repuestos), Nucleo, Discovery y C6. Lo único que no toca nadie: un módulo rancio en
-  `/app` que ningún programa importe, que tampoco carga nadie.
+1. **Las cuatro portadas seguían en `v4.0`** —las dos del repo y las dos de Pages— y las
+   tarjetas de la web ofrecían «lo diferido a v5», que ya era v6.
+2. **El número de versión hay que subirlo ANTES de montar el ZIP**, porque `docs/` viaja
+   dentro: se hizo al revés, hubo que rehacer el ZIP *después* de que Eduardo lo hubiera
+   probado y volver a verificarlo. Salió barato de milagro (la lista de ficheros quedó
+   idéntica porque las sustituciones conservaban la longitud).
+3. **El checklist mentía sobre el cuerpo de la release**: decía «= sección de
+   `RELEASES.md`», que es sólo español; V4 publicó de verdad un cuerpo **bilingüe** con
+   Descarga y Documentación. Se descubrió comparando con lo que V4 hizo, no con lo que
+   el doc decía.
 
-### Familias — lo que dejó el censo (`#427`)
+📌 **Y una decisión de contenido:** entran al repo público `bp_propuesta_modelo_memoria/`
+(el estudio de mayo-julio del modelo de memoria) y `diag/orm-slots/`. Al primero se le
+escribió **portada** (`0517af68`) porque no se abría por ninguna parte y citaba 13 veces
+unas carpetas `hallazgos/` y `fuentes/` que nunca estuvieron en el repo.
 
-- **🕳️ [S3] los packs: encaminados pero SIN REGIÓN — el mismo agujero que `#327` en la
-  ⚠️ **Matizado en el triaje (26-ago), porque el enunciado despista**: el S3 **sí tiene `bpdata`** (`partitions.csv`: 0x118000, ~15 MB) — la región existe desde que se arregló la tabla que acababa en 2 MB. Lo que falta es el **reparto FS|Packs dentro de bpdata** (el «mando» del env) y el camino de grabación. Medir antes de tocar: no es «no hay región», es «nadie le ha dado su mitad».
-  Pico, ahora en el S3** (visto el 22-ago probando H13).
-  📐 **El hecho**: no existe `esp32/main/pack_s3.c`. El único que llama a
-  `board_mgr_esp32_set_packs_view()` es `esp32p4/main/pack_p4.c`, así que en el S3
-  `s_packs_view` es NULL para siempre → `bm.packs_*` se queda a cero → la placa contesta
-  *«la placa no expone packs (configura las particiones primero)»*.
-  🩸 **Y el mensaje ENGAÑA, igual que engañó en la Pico**: invita a tocar las particiones,
-  y en el S3 eso **no puede** arreglarlo. El comentario de `#327` en `board_mgr_pico.c:41`
-  ya lo decía con estas palabras: *«el LS contestaba —correctamente— "esta placa no expone
-  packs", **hiciera Eduardo lo que hiciera con las particiones**»*.
-  📌 **Y la frase de `#327` que define el patrón**: *«Encaminar los comandos y no dar la
-  zona es media función»*. Entonces el hueco era la Pico y lo tenían el STM32 y el
-  simulado; hoy lo tienen las otras cuatro y el hueco es el S3. Es
-  [[arreglo-que-no-viaja-entre-familias]] otra vez: el común creció y una copia privada
-  no.
-  ✅ **No es regresión de V5 ni bloquea**: la tabla de la Puerta 2 nunca listó packs para
-  el S3. Pero conviene DECIRLO, porque hoy sólo se descubre intentándolo y el mensaje
-  manda a otro sitio.
-  ⏭️ **Dos trabajos, separables**:
-  1. **Barato y honesto**: que la placa distinga *«esta familia no tiene zona de packs»* de
-     *«hay zona pero no está configurada»*. Hoy las dos dan la misma frase y una de ellas
-     es un consejo imposible. Es el mismo criterio que ya se aplicó al `BAD_ALIGN` y al
-     `exit 11`: **que el mensaje diga qué encontró, no lo que supone**.
-  2. **El de fondo**: escribir `pack_s3.c`. La flash del S3 son 16 MB y la zona caería por
-     debajo del límite del caché, así que no tiene el problema del P4 con los 32 MB —
-     debería ser un port directo del mapeo del P4.
-
-### Placas y hardware
-
-- **🐛🔴 [placa] un estado persistente deja la Metro SIN PODER EJECUTAR NADA, y sólo lo
-  cura REPARTICIONAR** — visto el 21-ago al final de la sesión de H13. **Sin causa
-  identificada**; se ficha con la cronología porque el rodeo no es evidente y a un
-  usuario le puede pasar.
-  📐 **El síntoma**: no corre **ningún** programa. Ni los de la sesión, ni el
-  `/app/Hello.mod` que preinstala el propio firmware —que no usa strings, ni builtins,
-  ni un solo `import`—. Se cuelga mudo, sin línea de error.
-  🔍 **Lo que DESCARTA el firmware, y es el dato que más vale**: se volvió a flashear la
-  imagen del 20-ago —la misma que esa mañana había corrido `ListGets`, `SqlDemo`,
-  `DaoDemo`, `GenDemo`, `SdDoc`, `SdCard` y `Bench` sin una queja— **y tampoco
-  funcionaba**. Con lo cual lo roto sobrevive al flasheo: es FS, ENV o zona de packs.
-  ⚠️ **Y formatear NO bastó.** Se formateó (FS + zona de packs) y siguió igual. Lo único
-  que lo curó fue **cambiar el tamaño de la partición**, que fuerza a rehacer el reparto
-  entero. Es la SEGUNDA vez en el mismo día que reparticionar arregla algo.
-  📋 **Cronología, por si la pista está aquí** (todo entre «funcionaba» y «no
-  funciona»): formatear FS+packs → regrabar `SQLite.pack` (1,13 MB por streaming) →
-  reformatear la SD a exFAT → reiniciar → reformatear la SD a FAT32 → flashear imagen
-  nueva → flashear la de ayer.
-  🔬 **LO QUE FALTA MEDIR, y no se capturó**: el log **durante el intento de ejecución**.
-  Si sale la línea `RUN/v1 /app/X.mod session=N` el programa llega a lanzarse y se
-  atasca dentro; si no sale, no llega ni a arrancar. Eso parte el problema en dos y sin
-  ello sólo se puede especular. **Si vuelve a pasar, lo PRIMERO es ese log.**
-  ⏭️ Sospechoso natural para empezar: qué toca un cambio de tamaño de partición que un
-  formateo NO toca. Ahí está la diferencia entre lo que curó y lo que no.
-
-- ✅ `#379` — el wire se **desincroniza tras el Stop**, y sólo en unas placas. **CERRADA el
-  12-sep en `F1`, absorbida por `#398`**: la medida que faltaba desde agosto, hecha — el P4
-  (Waveshare, `E8F60AE0B380`) **con la tarjeta montada** (`sd: montada en /sd (4 bits)`),
-  `python tools/wire_serie.py COM15 ciclo /app/Bench.mod 8` → **8 ciclos, 0 fallos**: KILL
-  222-234 ms, INFO 283-297 ms, uptimes 61285→70611 (ocho de verdad). Con la imagen de `dist`
-  de V6 (`#503` dentro). El cuelgue del 17-ago era el refresco del árbol con tarjeta (`#398`),
-  no el wire. Lo que sigue siendo cierto y queda dicho en `PENDIENTES`: la VM sólo mira el
-  Stop entre instrucciones del intérprete, así que una `native` que corra segundos no se
-  puede parar hasta que vuelva.
-  **→ ASIGNADA A `F1` (pruebas finales) el 9-sep, decisión de Eduardo**: *«la podemos dejar
-  pendiente para las pruebas finales»*. Deja de contar como pendiente suelto — no porque se
-  aplace, sino porque **lo único que le queda ES una prueba de placa**, y `F1` es la tanda
-  donde las placas se conducen. La medida exacta y su herramienta están abajo.
-  🔎 **HIPÓTESIS FUERTE (17-ago): esto era `#398`, no una desincronización.**
-  Eduardo, al proponerle repetir la prueba en el P4: *«lo de la P4 con SD con
-  comportamiento extraño era ANTES de que se solucionara el problema del refresco
-  del árbol»*. Y con eso encajan TODOS los síntomas sin necesidad de que el wire
-  se desordene — bastaba con preguntar mientras el device estaba ocupado:
-  antes de `#398`, un refresco con tarjeta tenía al firmware **siete segundos**
-  calculando el CRC de cada fichero.
-  · «timeout esperando `INFO`» → el device no atendía, estaba listando.
-  · «se recupera solo» → en cuanto acaba el listado, contesta.
-  · «sólo en unas placas» → las que tienen SD, donde el listado era lento.
-  · «el AOT no sabe la arquitectura» → el `arch` viaja en ESE `INFO`.
-  📐 **Medido el 17-ago: la Metro, 5 de 5 ciclos `run`→`stop`→`Info` limpios**
-  (uptimes 994/1094/1146/1177/1214 s: son cinco de verdad, no la misma respuesta
-  repetida). Consistente con la hipótesis.
-  ⏭️ **La prueba que decide: los mismos 5 ciclos en el P4 CON la tarjeta**, que
-  era la combinación donde peor se veía. 5/5 → la explicación se sostiene y esta
-  ficha se cierra como absorbida por `#398`. Un fallo → la hipótesis es mala y hay
-  una desincronización de verdad que buscar.
-  🔴 **17-ago, en el P4: el Stop CUELGA.** Eduardo, probando esto mismo: *«he
-  hecho stop y se cuelga (y como se cuelga no hay log)»*. O sea que la hipótesis
-  de absorción **NO se sostiene tal cual**: un Stop que cuelga no es «el firmware
-  estaba ocupado listando». La ficha sigue ABIERTA.
-  ⏭️ Lo siguiente cuando se retome, y en este orden (no se hizo, se paró aquí):
-  1. **¿está colgado el device o el IDE?** Con el cuelgue puesto, pedir `Info` por
-     la consola. Contesta → el device está sano y lo colgado es el IDE. Timeout →
-     el device está parado. Es la misma pregunta que separa «tarda más que su
-     timeout» de «se pierde», y sigue sin hacerse.
-  2. **qué estaba corriendo**: con `native`/`.mdn` o interpretado. Importa porque la
-     VM sólo mira el Stop **dentro del bucle del intérprete**
-     (`interp.c:676`, al principio de cada instrucción): mientras corre código
-     nativo del `.mdn` no hay dónde verlo.
-  3. si se recupera solo o hay que desenchufar.
-  Síntoma conocido: timeout esperando respuesta a `INFO`, y se recupera solo.
-  🔗 **Puede ser la raíz de más cosas de las que parece** (Eduardo, 15-ago: *«la
-  P4 con la SD funciona raro, yo creo que puede venir de ese comportamiento
-  extraño»*):
-  - el aviso del AOT *«no sé la arquitectura del dispositivo — desconecta y
-    vuelve a conectar»* sale cuando el IDE no logra el `arch`, **y el `arch` se
-    pide por el INFO**, que es justo el verbo que esta ficha dice que se pierde.
-    `98183ef` dejó de fiarse del valor cacheado *para grabar* por este motivo,
-    pero el camino del **Run** sigue cogiéndolo de la caché: con un programa que
-    tenga funciones `native`, eso significa ejecutarlas INTERPRETADAS sin que
-    nadie lo pida.
-  - y lo raro de la SD en el P4, que Eduardo tiene pendiente de revisar.
-  ⚠️ La medida que separa las hipótesis sigue siendo la misma y no se ha hecho:
-  **cronometrar la respuesta en el FIRMWARE, no en el IDE**. «Tarda más que su
-  timeout» y «se pierde» son dos fallos distintos y desde fuera se ven igual.
-
-  ### 🔬 9-sep — EL PASO 1, HECHO POR FIN (y con herramienta, que era lo que faltaba)
-
-  **Idea de Eduardo:** *«A ver si se desincronizan, se puede enviar un código de sincronización tipo
-  UUUUUUUU.»* Buena en general — y al mirarlo resulta que **el wire ya la tiene, y es el `\n`**:
-
-  - **camino de líneas** (todo salvo el bulk): es `{...}\n`, y cada familia **descarta lo que no
-    empiece por `{`** y reintenta al desbordar (`repl_esp32.c:1223`, `repl_v1.c:1727`). Cualquier
-    basura se pierde hasta el siguiente salto de línea, o sea que **ya resincroniza en el siguiente
-    mensaje**. Un patrón `UUUU` no añadiría nada aquí.
-  - **camino bulk** (`PUT` + N bytes crudos): éste **sí** es donde se puede perder el framing de
-    verdad — si los dos lados no coinciden en N, el receptor se come bytes crudos creyendo que son
-    líneas. Es el único sitio donde un código de sincronización tendría trabajo, y hoy se cubre con
-    `drain_bulk` y un caso del arnés («…y el wire sigue en sincronía después»).
-
-  ### Lo que faltaba de verdad: ¿el device o el IDE?
-
-  Era el **paso 1** de esta ficha y llevaba desde agosto sin hacerse, porque no había forma de
-  preguntarle a la placa **sin el IDE por medio**. Ahora la hay: `bpgenvm-c/tools/wire_serie.py`, un
-  cliente del wire por serie que no es el IDE. Con él, `run → stop → INFO`:
-
-  | | ciclos | fallos | KILL | INFO |
-  |---|---|---|---|---|
-  | **ESP32-C3** | 8 | **0** | ~215 ms | contesta siempre |
-  | **ESP32-S3** | 8 | **0** | ~233 ms | contesta siempre |
-
-  Los `uptime` avanzan en cada ciclo, así que son **dieciséis ciclos de verdad**, no la misma
-  respuesta repetida — el control que faltaba en la medida de la Metro del 17-ago.
-
-  ⚠️ **Lo que esto NO prueba, y hay que decirlo**: ninguna de las dos placas tiene **SD**, y el caso
-  de la ficha era el **P4 con la tarjeta**, donde además el Stop *colgaba*. Así que esto **no cierra
-  `#379`: lo estrecha**. Descarta que haya una desincronización de base en el wire —que era la
-  hipótesis del título— y deja la sospecha donde ya la puso Eduardo el 17-ago: el árbol/CRC con
-  tarjeta, o sea `#398`.
-
-  ⏭️ **La medida que queda es la misma de siempre y ahora es de dos minutos**: el P4 con la tarjeta,
-  `python tools/wire_serie.py COM<n> ciclo /app/Bench.mod 8`. Si sale 8/8, la ficha se cierra como
-  absorbida por `#398`; si falla, hay desincronización de verdad y entonces sí toca hablar del
-  código de sincronización — en el camino bulk, que es donde vive el problema.
-
-- ~~`#408` — medir **los dos cuellos** que se ven comparando P4 y Metro (árbol en la
-  P4 / formateo en la Metro).~~ ✅ **CERRADA**: las dos mitades medidas (21 y 22-ago) —
-  el detalle, en la viñeta siguiente. *(Este enunciado se leía como pendiente mientras
-  la respuesta estaba dos líneas más abajo; corregido el 7-sep.)*
-- ✅ **`#408` — CERRADA. La mitad de la METRO, MEDIDA el 21-ago: el formateo son ~15 s**, y es el
-  de la **zona de packs** (4,2 MB en esta placa) → unos **280 KB/s de borrado de
-  flash**, que para un RP2350 es lo esperable. 📌 Anotado como *explicado*, no como
-  pendiente: nadie tiene que perseguirlo pensando que es un fallo. Borrar 4,2 MB cuesta
-  eso.
-  ✅ **Y LA OTRA MITAD, MEDIDA el 22-ago en el P4 — `#408` QUEDA CERRADA.** El árbol
-  **no es un cuello**: `ls: 23 ent en 145 ms | app:1/0ms lib:14/61ms sd:8/36ms`. 145 ms
-  para 23 entradas, y encima **desglosado por carpeta**, que era justo lo que la ficha
-  pedía para poder distinguir quién tarda. El grueso se lo lleva `/lib` (14 entradas en
-  61 ms) y la SD (8 en 36 ms); `/app` es instantáneo.
-  📌 **Las dos mitades, entonces, tienen respuestas opuestas y las dos son buenas
-  noticias**: el formateo tarda lo que cuesta borrar flash (explicado, no patológico) y el
-  árbol ya no tarda —lo arregló `#424` el 17-ago— así que no queda nada que optimizar.
-  Cerrar una ficha midiendo y descubriendo que no hay problema también es cerrarla.
-  🔎 **Y de camino salió esto**: `save` responde «FS guardado en flash» y nada más, pero
-  el firmware **sí se cronometra** y manda `durationMs` en el `SAVE_REPLY`
-  (`pico/repl_v1.c:929-943`). **El dato viaja por el wire y el IDE lo descarta.**
-  Enseñarlo no cuesta nada y es exactamente la medida que esta ficha pedía. No es un
-  bug, así que con el freeze va a V6 → ver «Aplazadas».
-### Pulido (no urgente) — subidos desde `PENDIENTES` el 17-ago
-
-> Estaban en `PENDIENTES.md`, que es documentación de cara al usuario. Tienen estado de
-> trabajo («hay que hacer X»), así que su sitio es éste.
-
-### Lenguaje y VM
-
-> 🧊 **CERRADA POR RETIRADA (30-ago, `#460`)**: las interfaces de módulo salen del
-> lenguaje, así que este bug se va con ellas. El texto se conserva porque documenta bien
-> el mecanismo y **el diagnóstico que dejó escrito resultó dudoso** — la traza del 30-ago
-> imprime el `extends` que aquí se daba por ausente. Sirve de recordatorio: una explicación
-> que no se vuelve a comprobar envejece igual que el código.
-
-- ~~**🐛 [compilador] la sustitución por LSP entre interfaces de módulo NO funciona**~~ —
-  ✅ **CERRADA POR RETIRADA (30-ago, `#460`)**, como dice la nota de arriba: las interfaces
-  de módulo salen del lenguaje. *(La viñeta se leía como pendiente; corregido el 7-sep.)*
-  El enunciado original, que se conserva porque documenta el mecanismo:
-  encontrado el 21-ago censando los 277 `.bp` del ZIP. **Dos samples publicados que no
-  compilan**, y no por V5: nada que ver con `any`→`Object`.
-  📐 **El caso**, que el propio sample explica en su cabecera: `appv1lsp.bp` importa
-  `com.example.LogApi:BufferedLogger`; `BufferedLogger` declara
-  `implements com.example.LogApiV2`; y `logapiv2.bp` dice
-  `module interface LogApiV2 extends com.example.LogApi`. Transitivamente lo cumple, y
-  el comentario del código lo da por bueno:
-  *«El impl puede implementar la interfaz pedida directamente o cualquier descendiente
-  de ella (subinterfaz)»* (`Main.java:1958`). Pero el compilador lo rechaza:
-  ```
-  error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o
-  transitivamente; declara com.example.LogApiV2)
-  ```
-  Y `appv2.bp` cae por lo mismo visto del otro lado: *«el módulo importado 'LogApiV2'
-  no expone 'log' / 'level' / 'VERSION'»* — que son los miembros que HEREDA de `LogApi`.
-  🔍 **Hasta dónde llegué (21-ago)**: el algoritmo de `implSatisfies`
-  (`Main.java:1357`) es correcto en forma —sube `implements` → `extends` hasta dar con
-  la pedida— así que falla el dato, no la lógica. Y el dato falta porque **una
-  `module interface` pura no genera `.mod`**: compilado el conjunto como proyecto, sale
-  `com.example.BufferedLogger.mod` y **no** `com.example.LogApiV2.mod`. Sin artefacto,
-  la cadena sólo puede recorrerse recompilando la interfaz desde el fuente en modo
-  `INTERFACE_ONLY`… que es **la pasada con el bug ya aparcado** («la pasada
-  interfaz-only tira firmas»). Muy probablemente son el mismo problema visto dos veces.
-  📌 **Por qué no se arregló al encontrarlo**: code freeze, y esto **no es regresión de
-  V5** — es del subsistema de interfaces de módulo, que es delicado. Se ficha y lo
-  decide Eduardo.
-  ✅ **La decisión de publicación YA SE TOMÓ** (y este párrafo decía lo contrario hasta el
-  30-ago): `appv1lsp.bp` y `appv2.bp` **no viajan** — viven en `samples/pendientes/`, una
-  tercera carpeta creada para esto, con su `LEEME` explicando por qué no van a
-  `samples/errores/` (esa es para los que fallan **a propósito**; meter aquí un bug sería
-  camuflarlo) y por qué no se borran (**son la prueba de regresión**: el día que compilen,
-  está arreglado). En `dist/BasicPlus-5.0-win/samples/` sólo quedan `logapi.bp` y
-  `logapiv2.bp`, que compilan solos.
-
-  🔁 **Sigue vivo — reproducido el 30-ago** con el compilador actual:
-  ```
-  error: 'BufferedLogger' no implementa 'com.example.LogApi' (directa o transitivamente;
-  declara com.example.LogApiV2)
-  ```
-  📌 **Y la traza de hoy discute la hipótesis de arriba, así que conviene comprobarlo antes
-  de arreglar.** Se dijo que *«falla el dato»* porque una `module interface` pura no genera
-  `.mod` y la cadena no se puede recorrer. Pero en esta corrida el dato **sí está**: la
-  pasada imprime `interfaz : com.example.LogApiV2 (… interface=true,
-  extends=com.example.LogApi)` — o sea que el `extends` se conoce y aun así el impl se
-  rechaza. Puede que el dato exista y no llegue a donde mira `implSatisfies`. **Primer
-  gesto al retomarlo: mirar si `implSatisfies` recibe ese `extends` o una copia sin él**,
-  en vez de dar por buena la explicación escrita.
-
-### AOT / native
-
-- ~~**🐛 [AOT] `native` en un MÉTODO se ignora en SILENCIO**~~ — ✅ **CERRADA (triaje del 26-ago): la resolvió V6/N1.1** (`631f55fa`), y con test (`AotNativeEnMetodoTest`). El emisor APLANA el método a función con `this` de primer parámetro. Y el 24-ago se cerró además su cola oculta: el nombre del símbolo no casaba con el `.mod` (`Caja_doble` vs `Caja.doble`), así que registraba 3 de 4 thunks — también en silencio. Red: `AotSimboloEnModTest`. — encontrado el 21-ago, y lo
-  destapó Eduardo dudando de un diagnóstico mío: *«¿ningún método de clase puede ser
-  native? Me parece una limitación tonta, teniendo en cuenta que `miObjeto.miMetodo(...)`
-  en realidad internamente es `miMetodo(miObjeto, ...)`»*. Tenía razón.
-  📐 **La causa, en una línea** (`AotCEmitter.java:259`): el pre-pass que recolecta las
-  `native` recorre `module.defs` y sólo mira los `Ast.FuncDef`. **Un `ClassDef` no entra**,
-  así que los métodos ni se abren. No se rechazan: no se miran.
-  🩸 **Y por eso el fallo es MUDO, que es lo grave.** Probado con una clase con
-  `public native function doble(): integer` devolviendo `this.n * 2`: el compilador no da
-  error, `AotMain` dice *«no tiene funciones `native` — sin emisión»*, y el método corre
-  **interpretado** mientras el programador cree que va a velocidad AOT. Pedir velocidad y
-  que te la nieguen sin avisar.
-  ⏭️ **Dos trabajos, y el primero NO espera a V6**: (a) que `native` en un método **avise**
-  — es el mismo criterio de «que el desfase grite» que el proyecto ya aplica en el gate del
-  `.mod`, el `magic` de la BIOS, el sello del `.npk`, la marca del punto de encuentro y el
-  aviso de `/lib` rancio; (b) abrir el barrido a los métodos, pasando el objeto como primer
-  parámetro — que es lo que ya ocurre por debajo.
-  📌 **Y una corrección de un diagnóstico mío**, para que no se herede el error: escribí que
-  la barrera era *«no hay `this`»*. Falso. El emisor **ya sabe emitir `MemberAccessExpr`**,
-  que es lo que `this.n` necesita. La barrera era el barrido, no la semántica — y eso hace
-  el trabajo bastante más pequeño de lo que yo había dicho.
-
-### Arrastres de V4 y varios
-
-### Cola de H2 (la SD), anotada al cerrarlo el 8-ago
-
-- ~~**`H2-P5` (exFAT / «superfloppy»)**~~ — ✅ **CERRADO el 21-ago con una PRUEBA, no con una
-  suposición.** Tarjeta reformateada a exFAT en el PC y metida en la Metro:
-  ```
-  [ 7809] sd: no hay FAT32 en la particion (exFAT? reformatea a FAT32)
-  ```
-  ✅ **El resultado es el bueno**: exFAT no está soportado —se sabía— pero el firmware
-  **lo detecta y lo dice con la salida incluida**, en vez de callarse o montar basura.
-  Y ya estaba documentado en los dos idiomas (`referencia.html` §SD y su gemelo inglés):
-  *«Formatea las tarjetas en FAT32… exFAT todavía no está soportado»*. Nada que arreglar.
-  📌 **Y de regalo, el pin de detección quedó probado en sus TRES casos**, que no era el
-  objetivo de la prueba: `tarjeta RETIRADA — /sd desmontado` al sacarla,
-  `zocalo VACIO (pin de deteccion) — no se monta` al arrancar sin ella, y detección **en
-  caliente** al meterla (leyó la tarjeta a los 7,8 s del arranque). Los tres correctos.
-
-- ~~`H2-P5` — **variedad de tarjetas**~~ — ✅ **CERRADA (triaje 26-ago): el enunciado ya NO aplica**: era
-  *«una sola tarjeta y una sola placa»* y son **dos y dos** (Eduardo, 17-ago): la
-  SanDisk de **128 GB en las dos placas** (Metro y P4) y la de **32 GB en la
-  Metro** —la medida que documenta `#425`: 38 ficheros, `ls` 99 ms—.
-  📌 **Ojo con el nombre**, que ya despistó una vez: la **Pico no tiene lector de
-  SD**, así que ninguna prueba de tarjeta puede ser suya. Lo que se llama «Pico»
-  es la **imagen** del firmware, que es **única para Pico y Metro** (RP2350, la
-  variante se decide en runtime). Placa ≠ imagen.
-  📐 **Qué queda cubierto de verdad** — mirando sobre qué se bifurca el driver
-  (`bpvm_sd.c:129`), no la etiqueta comercial. Hay **dos caminos**, no tres:
-  **CSD v1 = SDSC** (capacidad por tres campos, direcciona **por BYTE**) y
-  **CSD v2 = SDHC *y* SDXC juntas** (un solo campo, direcciona **por BLOQUE**).
-  La de 32 GB es SDHC y la de 128 GB es SDXC —*la ficha la llamaba «SDHC»: error
-  de etiqueta, aunque para el driver den lo mismo*—, o sea que **las dos clases de
-  alta capacidad están probadas** y el driver **no está afinado a una tarjeta ni a
-  una placa**. Eso era el grueso de la ficha, y está hecho.
-  ⏭️ **Lo que queda es sólo esto, y son dos cosas de capas distintas:**
-  1. 🟢 **SDSC — la parte que corrompe en silencio, YA PROBADA sin tarjeta**
-     (17-ago, `make test-sdsc`). Eduardo: *«no tengo tarjetas de 2G ni voy a
-     tener, están obsoletas»* — y tiene razón, pero lo que daba miedo de SDSC no
-     era la tarjeta, era **una cuenta**: `arg = alta_cap ? lba : lba*512`
-     (`bpvm_sd.c:400` y `:415`). En SDHC/SDXC el argumento de CMD17/CMD24 es el
-     BLOQUE y en SDSC el BYTE, y confundirlos no da error: lee o escribe otro
-     sitio. Eso es aritmética pura sobre un dato del OCR, y lo único que tocaba
-     el hardware eran dos funciones de plataforma — `bpvm_spi_transfer` y
-     `bpvm_gpio_write` —, que el test pone él. **No hacía falta la tarjeta.**
-     Cada caso va con su gemelo de alta capacidad (lba 2 → 1024 vs 2), y el
-     bloque 0 se comprueba aparte porque es el único donde un driver roto
-     acierta por casualidad — o sea que arrancar no distingue el fallo.
-     **Verificado en las dos direcciones**: invirtiendo la línea del driver, el
-     test se pone rojo SÓLO en los casos SDSC y el gemelo sigue verde.
-     *(El decodificador del CSD v1 ya estaba cubierto en `test_sd.c` desde H1.)*
-     ⚠️ **Lo que sigue sin poderse medir**, y así se queda: las rarezas
-     eléctricas y de arranque de una SDSC real (no contesta a CMD8, negociación
-     distinta). Sin tarjeta no hay forma, y suponerlo sería peor que decirlo.
-     Mismo criterio que L14: si no se puede medir, se dice.
-  2. 🟡 **exFAT y «superfloppy» sin MBR** — NO son del driver SD sino de **FatFs y
-     del arranque de partición**, o sea otra capa. Se prueban **reformateando
-     cualquiera de las dos tarjetas que ya hay**, sin comprar nada: es lo barato
-     que queda de esta ficha.
-- ~~🔴 **La VM-C normal NO puede correr bases de datos: hace falta placa**~~ — ✅ **CERRADA el
-  6-sep**: `make sim SQLITE=1`, y un programa BasicPlus consulta una BD **en el simulador**, por
-  el wire, `status: OK` en 181 ms. Ganó **el tercer camino** de los que esta misma viñeta
-  proponía —el micro simulado del IDE—, y por la razón que aquí se anticipaba: el usuario prueba
-  sin placa y sin binario especial. El detalle y el porqué de enlazar en vez de cargar un pack
-  nativo (x86-64 es ELF64 y `NpackReloc` sólo lee ELF32), en el punto de `E1`.
-  *(Se leía como 🔴 abierta mientras `E1` la daba por hecha; corregido el 7-sep.)*
-  El enunciado original, que se conserva porque su análisis es el que llevó a la solución —
-  abierta el
-  19-ago al preguntarlo Eduardo (*«¿ahora se puede testear una consulta a una BD en la
-  VM-C? Es la que puede probar el usuario sin placa»*).
-  🩸 **Choca con la promesa del proyecto.** Los demos de BD SI corren en el PC, pero con
-  `bpgenvm-c/build/sqldemo.exe`, un binario de PRUEBAS que produce `make test-sqldemo`
-  con SQLite enlazado dentro. La VM-C que usaria un usuario contesta *«sql_open: falta
-  el codigo nativo del pack 'SQLI' v1»*. O sea que «depura en el PC, despliega en el
-  micro» no se cumple para la mitad de lo que V5 añade.
-  ⏭️ **Dos caminos**, y el segundo es el bueno:
-  1. enlazar SQLite en la VM-C de host cuando se compile con un flag — rapido, pero
-     mete 400 KB de C ajeno en el binario de todo el mundo;
-  2. **que la VM-C de host sepa CARGAR un pack**, como hace la placa. Es mas trabajo
-     —el pack es nativo por arquitectura, harian falta `.npk` de x86-64— pero es lo
-     coherente: el PC dejaria de ser un caso especial.
-  📌 Y hay un tercer camino que quiza gane: el **micro simulado del IDE** (V4/H10,
-  `bpvm-sim`) ya habla wire v1 completo. Si el simulador carga packs, el usuario prueba
-  sin placa Y sin binario especial.
-  📌 Mientras tanto, decirlo en `docs/BASEDATOS.md`: hoy la prueba real es en placa.
-
-- 🔴 **`listDir` NO esta en la VM-C: un programa BP no puede listar un directorio en
-  placa** — encontrado el 19-ago escribiendo `docs/TARJETA_SD.md`.
-  🩸 Se puso un ejemplo de recorrer un directorio, se ejecuto, y la VM-C contesto
-  *«builtin 42 no soportado en esta VM (subconjunto C)»*. miVM si lo tiene, o sea que
-  **funciona en el PC y no en el micro** — la peor forma de faltar.
-  📌 **Acotado**: es el UNICO verbo de fichero que falta. `readFile`, `writeFile`,
-  `appendFile`, `fileExists`, `readFileBytes` y `writeFileBytes` estan en las dos
-  (comprobado sobre `bpgenvm-c/src/builtins.c`).
-  📌 **No confundirlo** con el arbol de ficheros del IDE, que si lista la tarjeta: eso
-  lo hace el firmware por el wire (`LIST`/`LIST_DIR`), no el programa del usuario.
-  ⏭️ Implementarlo es un builtin en la VM-C sobre la fachada de FS que ya existe. **No
-  se hizo: es una FEATURE que falta, no un bug, y estamos en freeze** — decision de
-  Eduardo. Documentado como limitacion en `TARJETA_SD.md` §6, con el rodeo mientras
-  tanto (llevarse la cuenta uno mismo, o nombres predecibles por fecha).
+---
 
 ## CERRADAS EN V5 (con su commit, para no volver a darlas por abiertas)
 
@@ -12504,7 +12613,7 @@ trababa el hito por trabajo que no era suyo (Eduardo, 15-ago).
     `bigfile.bin`) y **27 `.slots`**, que además pasan a `.gitignore` para que no vuelvan.
     Los de `bpstdlib/` y `bpdevices/` **siguen versionados**: son la distribución.
 
-- ~~**Vaciar `C:	mp`**~~ — ✅ **HECHO el 19-ago** (encargo de Eduardo el mismo día).
+- ~~**Vaciar `C:\tmp`**~~ — ✅ **HECHO el 19-ago** (encargo de Eduardo el mismo día).
   **157 MB → 0.** 146 MB eran tres árboles de build sin una sola fuente dentro (el
   `hello_world` de ESP-IDF y dos workspaces de CubeIDE). Los 12 MB restantes NO eran
   temporales, y por eso se miraron uno a uno antes de tirarlos:

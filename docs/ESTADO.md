@@ -27,6 +27,62 @@
 
 ## Última sesión
 
+## 🧬 V7 ABIERTA (13-sep) — V6 comprobada cerrada, el censo de V7 hecho ficha a ficha, y `FICHAS` con V7 en el centro
+
+**Encargo de Eduardo:** *«Comenzamos, V7. Quizás lo primero es asegurar que V6 está cerrado y poner V7 en
+el centro del trabajo.»*
+
+**1. V6, cerrada — medido, no supuesto.** `main` == `origin/main`; tag `v6.0` sobre `9cb1a7bd`; la release con su
+único artefacto; Pages `built` sobre `84dce0d0`; `FICHAS` con 0 fichas y 0 hitos de V6. Lo que aún decía «V6 en
+curso» ya no lo dice: `V6_BACKLOG.md` marcado **ARCHIVO** (molde de V5), `V6_IDEAS.md` remite a `V7_IDEAS.md`,
+`PENDIENTES.md` apunta a `V7_*`, `CLAUDE.md` dice «V7, en curso desde el 13-sep», el pre-flight de `PUBLICAR.md`
+deja de decir «por pasar». El paso (7) del plan de publicar (`HECHO_V6.md`) queda cumplido como se hizo en V5: el
+`V6_BACKLOG.md` archivado ES el snapshot; `HECHO_V*` era la convención de V1/V2. De paso: `C:\tmp\bp6` había
+llegado a `ESTADO`, `PUBLICAR` y `FICHAS` como `C:<TAB>mp<BS>p6` (el heredoc de anoche se comió las barras) —
+reparado, y la memoria del heredoc anotada porque volvió a morder hoy al repararlo. Y la raíz del repo limpia de
+temporales (con el OK de Eduardo): `TestPacks/`, `boardsim.flash.fs`, los `.log`/`.txt`/`.bin` de samples y los
+compilados rancios de `samples/benchmarks/` (el `VivoLargo.mod` estaba versionado: restaurado).
+
+**2. El censo de V7** — con un workflow (288 agentes, ~26 M tokens; se cortó a mitad por el límite de sesión de
+Eduardo y se reanudó desde la caché): 26 barridos sobre `FICHAS.md` entero, `ESTADO.md`, los dos backlogs,
+`V6_IDEAS`/`V7_IDEAS` y `PENDIENTES` → 448 candidatas en bruto, 261 únicas; **cada una releída en su sitio y
+buscada en todo el registro** por si se había cerrado después; un crítico de completitud hizo el `grep V7` contra
+la lista (1 hueco). Resultado: **92 cayeron** (cerradas sin tachar —`Object` comodín hecho desde el 18-ago—,
+duplicadas, superadas) y quedan **19 con número** (18 fichas + `L1`), **28 restos** de fichas cerradas de V6,
+**~40 sueltos** y **6 fuera del plan**. Todo en **`docs/V7_BACKLOG.md`** (nuevo, 90 entradas por temas A–J, con
+qué queda de cada una y su puntero a línea del `FICHAS` nuevo), y la cuenta en la cabecera de `FICHAS` §ABIERTAS.
+Un hallazgo que no es una ficha: el triaje de `#473` pedía ficha nueva para 10 «rompe-el-modelo» vivos y los
+lotes D/E de `473_TRIAJE_COLA.md`, y nunca se abrieron.
+
+**3. `FICHAS.md` reestructurado sin borrar una línea** (verificado por multiconjunto: las únicas 6 líneas cuyo
+texto cambia son 3 rótulos, la del freeze V6 —ahora LEVANTADO— y las dos viñetas de §Aplazadas que el censo
+encontró sin tachar: `Object` comodín y `#426`): arriba el bloque **🚀 V6 PUBLICADA** (molde del de V5, que baja
+junto a «CERRADAS EN V5»); §ABIERTAS es V7 con el censo; las **12 fichas abiertas** (`#452` `#468` `#470` `#479`
+`#487` `#490` `#491` `#492` `#493` `#495` `#500` y `L1`) **movidas enteras** al bloque «V7 — lo que viene de V6»;
+la cola heredada de V5 (que V6 no abrió) también, con su rótulo puesto al día; y el resto de V6 bajo
+«📦 CERRADAS EN V6», encabezado por el censo del 12-sep tal como estaba. Script y piezas en `notas/v7-apertura/`.
+
+**4. Lo que Eduardo nombró de memoria al abrir V7** (la mejor señal de por dónde empezar): los periféricos de cada
+micro (`#378`/`#470`/`#479`), las dependencias entre clases de módulos distintos en el `.mod` (`#492`/`#500`/`#460`),
+la posición dentro de un fichero (`#491`) y la clase `File` (`#491` + el destructor de `L1`). Está escrito en
+`FICHAS` y en `V7_BACKLOG.md` §🎯.
+
+⏭️ **Al retomar — dos decisiones de Eduardo, y después trabajo:**
+1. **El orden de V7.** Propuesta en `V7_BACKLOG.md` §🧭: (1) las dependencias `#500`/`#493`/`#492` — pequeño y
+   cierra lo que mordió en `F1`; (2) `L1` el módulo raíz; (3) `#491` el cursor y `File`; (4) la HAL BP de
+   periféricos; (5) `#502`+`#441` en un solo salto de formato del `.mdn`. Entre medias, `#495`, `#452` y las
+   medidas pendientes; `#490` cuando haya amperímetro.
+2. **Numerar o no**: la norma del 9-sep dice «todo pendiente tiene número»; el censo deja los 28 restos y ~40
+   sueltos colgando de su ficha (como los 55 de `#473`) y propone numerar al entrar en el plan, no al censar.
+   Y los 10 «rompe-el-modelo» de `#473` sin ficha: decidir qué entra.
+3. Sin decidir nada se puede cerrar ya `N2` (documentar un invariante de `JavaMutex`, minutos) y hacer la limpieza
+   de §H (`samples/out` MOD6, los `.mod` de prueba en las placas — con OK placa a placa).
+
+📌 **Estado del repo**: todo commiteado, **sin push** (V7 en curso: push sólo al cerrar versión). Host en sabor
+`gui1-lvgl1`: `make GUI=1 LVGL=0` antes de `compat.sh check`. El IDE del ZIP sigue desplegado en `C:\tmp\bp6`.
+
+---
+
 ## 🚀 V6 PUBLICADA (12-sep, noche) — tag `v6.0`, release con el ZIP, Pages en V6; **V7 arranca**
 
 Con el «OK» de Eduardo: tag `v6.0` sobre `9cb1a7bd`; `git push origin main --tags` (477 commits; salió también
@@ -59,7 +115,7 @@ y `L1` (el módulo raíz). Y el host está en sabor `gui1-lvgl1`: `make GUI=1 LV
 5. **`#502` medida y cerrada** en el cargador de `.mdn` (un blob del P4 REINICIABA la C6; ahora se ignora con
    mensaje); **`#379` cerrada** (8/8 con la tarjeta); **`#505`** (el simulador sin pantalla no drenaba el evento
    del handler — lo cazó Eduardo probando el ZIP).
-6. **El ZIP**: montado, verificado por cuatro lentes independientes (workflow), desplegado en `C:	mpp6` y
+6. **El ZIP**: montado, verificado por cuatro lentes independientes (workflow), desplegado en `C:\tmp\bp6` y
    probado; **el IDE lo probó Eduardo: OK**. Lo que cazaron las lentes y el empaquetador está corregido (cinco
    drivers MOD6, `Stdlib.pack` MOD6 del 20-ago, cerrar la ventana del simulador, `board.json` de la Metro,
    `packsDir` en `BpVM.cfg`). Decisión tomada por mí, dicha a Eduardo: **el simulador del ZIP lleva SQLite**.
@@ -3061,7 +3117,7 @@ encoge 5.789 -> 5.578 B), y `packs/Stdlib.pack` es del 15-ago, anterior al cambi
 De las 11 copias de `Str.mod` del arbol solo la de `bpstdlib/` esta en git, asi que
 esta acotado — pero es el desfase de siempre.
 
-**Y `C:	mp` vaciado**, encargo del mismo dia: **157 MB -> 0**. 146 MB eran tres
+**Y `C:\tmp` vaciado**, encargo del mismo dia: **157 MB -> 0**. 146 MB eran tres
 arboles de build; los 12 MB restantes NO eran temporales (el ELF known-good de la
 Discovery, un `.bak` de `gpio_stm32`, dos experimentos con `.uf2` y 42 sondas `.bp`
 unicas) y se miraron uno a uno: superados o ya registrados, ninguno referenciado.
