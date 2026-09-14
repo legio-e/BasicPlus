@@ -1,0 +1,42 @@
+// StrNulo.bp — #512 (V7, 14-sep): un string o array SIN inicializar es una referencia
+// nula, y las dos VMs tienen que tratarla IGUAL: longitud 0, concatena como "", se
+// imprime como "", y un acceso por índice lanza (fuera de rango) — atrapable.
+// miVM moría aquí con «No space in heap» (leía memory[0] como longitud) y la VM-C
+// imprimía vacío: paridad rota desde siempre, cazada por el oráculo de #492.
+module StrNulo
+  import Core
+
+  public class Caja
+    var etiqueta: string
+    var datos: integer[]
+    public function Caja()
+    end Caja
+    public function describe(): string
+      return "[" + this.etiqueta + "]"
+    end describe
+    public function datosLen(): integer
+      return len(this.datos)
+    end datosLen
+    public function primero(): integer
+      return this.datos[0]
+    end primero
+  end Caja
+
+  public function main()
+    var c: Caja := Caja()
+    var s: string
+    print c.describe()
+    print "s=" + s + "|len=" + len(s)
+    print "concat de dos nulos=" + (s + s) + "|"
+    print "datos len=" + c.datosLen()
+    try
+      print c.primero()
+      print "NO deberia llegar aqui"
+    catch e: Exception
+      print "indice sobre nulo: excepcion atrapada"
+    endtry
+    s := "ya"
+    print "s=" + s
+  end main
+
+end StrNulo

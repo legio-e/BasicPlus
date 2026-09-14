@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **25** | las siete abiertas EN V7 (14-sep, de la matriz y el oráculo de `#492`): `#506` `#507` ~~`#508`~~ `#509` `#510` `#511` `#512` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **25** | las siete abiertas EN V7 (14-sep, de la matriz y el oráculo de `#492`): `#506` `#507` ~~`#508`~~ `#509` `#510` `#511` ~~`#512`~~ · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -176,7 +176,7 @@ constructor de la clase, tras el `super()` (implícito o escrito), en orden de d
 rechazarlo — error de compilación «un campo de instancia se inicializa en el constructor». Lo que no vale es lo de hoy:
 aceptarlo y tirarlo. Va con `#509`/`#510` (H1, el compilador) y se cierra con un caso en la matriz y un oráculo de paridad.
 
-#### 🔴 `#512` — miVM MUERE («No space in heap») al CONCATENAR un string sin inicializar; la VM-C imprime vacío — paridad rota y la VM de referencia caída (abierta 14-sep, al escribir el oráculo de `#492`; H1/H7)
+#### ✅ `#512` — miVM MUERE («No space in heap») al CONCATENAR un string sin inicializar; la VM-C imprime vacío — paridad rota y la VM de referencia caída (abierta 14-sep, al escribir el oráculo de `#492`; H1/H7 · **CERRADA el 14-sep**)
 
 **Medido** (`C:/tmp/v7_campos/NullStr.bp`): `var s: string` (campo de clase o local) y `print "s=" + s` → miVM:
 `VM [GC]: heap=56 bytes (alive=56, libres=0, …)` y `[bpgenvm worker 0, tid=0] "No space in heap"`, exit ≠ 0; VM-C:
@@ -186,6 +186,15 @@ un programa válido, y las dos VMs no coinciden (la VM-C decide «vacío» por s
 string sin inicializar es `""` o es `null` y concatenarlo es error?) y que las DOS la apliquen igual, con un oráculo
 en el corpus de paridad; y que miVM no muera nunca por esto: si es error, excepción BP atrapable; si es `""`, `""`.
 Silencioso en la VM-C (imprime algo y sigue) y ruidoso a destiempo en miVM: salta la cola (regla 2 de V7).
+
+✅ **Cerrada el 14-sep, el mismo día.** Acotado en dos pasos: el helper `__strconcat` que emite el compilador hace
+`ALEN(a)` + `ALEN(b)` + `NEWARRAY_I8`; y **`ALEN` de una referencia nula divergía**: la VM-C ya devolvía 0
+(`bpref_arr_len`: null → 0, `bpvm_internal.h:782`) y miVM hacía `readI32(mem, refDeref(0))` = leer la cabecera de
+`memory[0]` como longitud → un array absurdo → OOM. **El contrato, el que ya tenía la VM-C y que `readVmString`
+(null → `""`) asumía en miVM: un array o string nulo tiene longitud 0**; `arrLen` en miVM lo aplica (una guarda).
+Oráculo en el corpus: `bpgenvm-c/samples/StrNulo.bp` (campo y local nulos concatenados e impresos, `len` = 0, índice
+sobre un array nulo → excepción atrapable en las dos). Paridad 61/61. Si Eduardo prefiere que un nulo sea error en
+vez de vacío, se cambia en las dos VMs a la vez con ese mismo oráculo.
 
 #### ✅ `#508` — `private` se PIERDE en el parser para `var` y `property`: una subclase lee un campo privado, y el error desde fuera lo llama «protegido» (abierta 14-sep, de la matriz de `#492`; H1 — y precondición de B · **CERRADA el 14-sep**, `4a6ea0f4`)
 

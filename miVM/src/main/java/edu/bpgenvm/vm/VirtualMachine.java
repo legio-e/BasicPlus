@@ -2115,7 +2115,13 @@ public class VirtualMachine {
         return (((long) handleGen[idx]) << 32) | (word & HANDLE_LOW);
     }
     /** Longitud (nº de elementos) de un array, de su cabecera. V4: deref primero. */
-    private int arrLen(byte[] mem, long arr) { return readI32(mem, refDeref(arr)); }
+    /** Longitud de un array (o string: byte[] UTF-8). #512 (V7, 14-sep): una ref NULA tiene
+     *  longitud 0 — es el contrato que la VM-C ya aplicaba (`bpref_arr_len`: null → 0) y el
+     *  que `readVmString` asume aquí (null → ""). Sin la guarda, refDeref(0) = 0 y se leía
+     *  la cabecera de memory[0] como longitud: concatenar un string sin inicializar pedía
+     *  un array absurdo y la VM de referencia moría con «No space in heap» mientras la
+     *  VM-C imprimía vacío. Paridad rota desde siempre, cazada por el oráculo de #492. */
+    private int arrLen(byte[] mem, long arr) { return (arr == 0L) ? 0 : readI32(mem, refDeref(arr)); }
     /** Offset del elemento idx: deref + cabecera + idx*elem_size. */
     private int arrElem(long arr, int idx, int elemSize) {
         return refDeref(arr) + ARR_DATA_OFF + idx * elemSize;
