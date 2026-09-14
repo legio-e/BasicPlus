@@ -125,7 +125,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 
 | asunto | dónde |
 |---|---|
-| **`#492` — los campos PROTEGIDOS no cruzan módulos**: la interfaz exporta métodos y propiedades, pero no campos (`field <nombre>:<tipo> slot <n>` en `ClassSig`); el rodeo es un getter. Coste: rehacer la cadena entera | `FICHAS` `#492` (L135) |
+| **`#492` — B, casi entera (14-sep)**: la interfaz publica campos no privados, `final`/`private`, estáticos (alias plano `__cls_s_<Cls>#m$firma`) y todas las sobrecargas del constructor (cadena efectiva); `#509` `#510` `#513` cerradas con ella. Queda el marcador de layout, que va con MOD8. De la revisión adversarial salieron `#514`–`#519` (preexistentes) | `FICHAS` `#492` |
 | **`#500` — la norma de versiones de las dependencias**: el `.mod` de la app lleva la versión de cada dependencia y el cargador **rechaza** una más antigua, venga del pack, de `/app` o de `/lib`. *«`Core.bp` nos sigue dando guerra»* | `FICHAS` `#500` (L160) |
 | **`#493` — la sombra de `/app`** (y de un pack): una copia de stdlib en `/app` o un pack de librería tapa a `/lib` sin ruido. Dos mitades: el aviso en `OUTPUT`, y la decisión con `#500`/`#496` (que el pack builder no empaquete stdlib, o que el resolutor no deje que un pack tape a `/lib`). La mitad del runner ya está (`T1`, `843e2d0a`) | `FICHAS` `#493` (L203) |
 | **`#441` — el `.mdn` no recuerda su RECETA**: huella de los flags de compilación en la cabecera, comparada al cargar como ya se compara `arch`. Mismo salto de formato que el resto de `#502` (§H5): hacerlas juntas | `FICHAS` L11637 |

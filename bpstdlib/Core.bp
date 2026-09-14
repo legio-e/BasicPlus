@@ -547,12 +547,12 @@ module Core
       this.items := growObjArray(this.items, this.cap)
     end grow
 
-    // V6/G2 — el array de respaldo, para las subclases. Un descendiente que vive
-    // en OTRO modulo hoy no puede ver `items` aunque sea protegido: la interfaz
-    // de modulo exporta metodos y propiedades pero NO campos, asi que la regla
-    // «protegido = lo ven los descendientes» no cruza modulos. Es un bug del
-    // compilador, apuntado; mientras, este getter. Decision de Eduardo (11-sep):
-    // «utiliza un get para acceder al campo y de momento salimos del paso».
+    // V6/G2 — el array de respaldo, para las subclases. Nacio como rodeo: hasta
+    // V7 (#492, 14-sep-2026) un descendiente de OTRO modulo no veia `items`
+    // porque la interfaz no publicaba campos. Desde V7 los campos protegidos
+    // cruzan (`field items:Object[] slot n` en la interfaz) y `this.items` vale
+    // desde cualquier modulo; el getter se queda por compatibilidad con quien
+    // ya lo usa.
     public function backing(): Object[]
       return this.items
     end backing

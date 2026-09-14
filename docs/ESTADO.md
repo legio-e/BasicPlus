@@ -44,9 +44,21 @@ cargadores parten mal (penúltimo punto = módulo).
 
 **Método del día**: un mapa de 7 lectores + 7 refutadores ANTES de tocar (todo verificado línea a línea; sacó `#513`,
 la trampa del flag `static` en `method` —un lector viejo daría ranura en silencio— y la causa exacta de `#510`), y
-al final una **revisión adversarial** (5 lentes + refutadores) de los tres commits: **estaba corriendo al cortar la
-sesión** (`wf_ab68d33b-627`; su journal en `.claude/projects/C--lenguajes-pm-miVM/576fc834…/subagents/workflows/`).
-⚠️ **Al retomar, leer ese journal antes de nada**: si hay hallazgos reales, van delante.
+al final una **revisión adversarial** (5 lentes + 5 refutadores con reproducción) de los tres commits: **34
+hallazgos, 30 reales** — seis regresiones del día (la factoría por ctor efectivo sin que la interfaz lo publicara,
+la clave posicional de los estáticos, el separador `_` del alias, la colisión con funciones de usuario que rompía
+la paridad 7/7 vs 999/999, `super()` ambiguo, el rótulo del Disasm), cinco preexistentes del mismo camino, y seis
+preexistentes con ficha (`#514`–`#519`). Todo lo arreglable el mismo día: `720392a6` (+ `e439d310` y el lote de
+docs). **Lección del día**: el mapa previo (7 lectores + 7 refutadores) evitó errores de diseño; la revisión
+posterior cazó lo que el diseño no ve — los casos que nadie escribe (cabeza privada, `A_b.c`, una función llamada
+como el alias, `extends Thread` sin ctor). Las dos juntas, ~4,3 M tokens de agentes; ningún test de la red los
+habría visto (compilan limpio y ejecutan con paridad lo que no es).
+
+**La norma de Eduardo (14-sep, tarde)**: *«tanto las constantes como las variables estáticas están pensadas para
+acceder a ellas a través del CS … si queremos acceder desde fuera de un módulo debería ser a través de getters y
+setters del módulo»*; *«no hay nada que impida que se acceda desde otros módulos o AOT siempre que se cumplan las
+normas de visibilidad y se utilicen getters y setters»*; *«el CS es válido para el código del módulo, no para
+código externo»*. Consecuencia escrita: la `var` estática no cruza; cruza la property.
 
 **Queda de H2** (`V7_IDEAS.md` §H2): la subida de formato **MOD8** (`gen` + `ifaceCrc`, `#500`), el marcador de
 layout `Clase#layout#nF#nM` al enlazar, `#441` (huella del `.mdn`), `#493` (fallback de packs, `fromPath` en la

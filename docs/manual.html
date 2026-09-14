@@ -902,10 +902,15 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       al <code>try/catch</code> BP que envuelva la llamada. Lo que aún NO
       cabe — <code>try/catch</code> dentro de la native, tuplas,
       <code>instanceof</code>, eventos, <code>parallel</code>,
-      <code>for … in</code>, la conversión <code>double(x)</code> — lo rechaza el
+      <code>for … in</code>, la conversión <code>double(x)</code>, <strong>leer o
+      escribir campos</strong> (propios o heredados: usa un getter), <strong>llamar a
+      métodos o properties estáticos</strong> y <code>super</code> — lo rechaza el
       compilador con su mensaje y la línea. Los arrays
       fijos locales <code>tipo[N]</code> tampoco (error de compilación): usa
       <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
+      Ojo: un método <code>native</code> <em>de clase</em> que use algo de eso hoy
+      compila y corre interpretado; sólo avisa si el módulo tiene además alguna
+      native de nivel módulo (<code>#519</code>).
       El detalle vivo está en <code>docs/AOT_LIMITES.md</code>.</li>
   <li><strong>Llamar funciones BP normales desde una native</strong> es
       posible (el puente existe), pero cruza de vuelta al intérprete: lo
@@ -1316,6 +1321,17 @@ Counter.bump()</code></pre>
   una hija de otro módulo ve los estáticos protegidos de su base. Las
   <code>const</code> estáticas viajaban ya. Lo único que no llama a un estático es una
   función <code>native</code> (<a href="#funciones-native">§8.3</a>).
+</p>
+<p>
+  <strong>La <code>var</code> estática no cruza — y no es una limitación, es el
+  modelo.</strong> Una <code>var</code> (de módulo o de clase) vive en el segmento de
+  datos del módulo, y ese segmento sólo es válido para el código del propio módulo.
+  Por eso ninguna <code>var</code> puede ser <code>public</code>: <em>el estado sale
+  del módulo únicamente por getters y setters</em>. Si un descendiente de otro módulo
+  necesita ese dato, declara una <code>property</code> (protegida, sin
+  <code>public</code>): cruza por sus accesores igual que la property de módulo. Los
+  campos de instancia son el caso aparte: cruzan por ranura porque el hijo <em>es</em>
+  el objeto.
 </p>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>

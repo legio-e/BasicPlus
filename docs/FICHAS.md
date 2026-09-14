@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **26** | las ocho abiertas EN V7 (14-sep, de la matriz, el oráculo y el mapa de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **32** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` `#518` `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -254,6 +254,65 @@ constructor** (que vive ahí con el nombre de la clase, `declareClass`); `typeOf
 existía para la clase ACTUAL, generalizado a cualquier ancestro. La matriz voltea el control de `const_estatica`,
 `metodo_estatico` y `prop_estatica` a true.
 
+#### 🔴 `#514` — sobrecargas de MÉTODOS DE INSTANCIA cross-module: si la interfaz omite la cabeza (private o tipo no exportable), el consumidor numera las claves por POSICIÓN y llama al método equivocado en silencio (abierta 14-sep, de la revisión adversarial; preexistente; H2)
+
+**Medido** (`C:/tmp/v7_rev/refuta-silencioso-y-tests/h1_inst`, también con el compilador de V6): `Base.m(c: Color)`
+de cabeza (enum: no exportable, se omite con aviso) y `Base.m(v: integer)` después → desde otro módulo `b.m(4)`
+imprime `100` (el cuerpo de la del enum) en las DOS VMs, y compila limpio. Causa: el dueño da la clave por posición
+(1ª = nombre pelado, resto `$firma`, `assignKeysInChain`) y la interfaz **pierde la posición** al saltar una firma
+(`ModuleInterface.extractClass`); el importador (`Main.java`, bucle de `method`) reconstruye la cadena con lo que ve y
+renumera. El marcador `Cls#m#slot` sólo lo caza si hay un método declarado detrás (error de enlace con diagnóstico
+engañoso «¿versión vieja?»). Los estáticos tenían el mismo agujero y se cerró el 14-sep haciendo la clave **por
+firma** (`__cls_s_<Cls>#m$firma`); pero la ranura de vtable de un método de instancia ES posicional por diseño.
+⏭️ Que la interfaz **no pierda posiciones**: publicar la firma omitida como opaca (`method m(?) opaque`, ocupa su
+ranura y no se puede llamar), o que la clave de vtable sea por firma en los dos lados. Test en la matriz con una
+sobrecarga no exportable en la CABEZA. Silencioso: salta la cola.
+
+#### 🔴 `#515` — la VISIBILIDAD de un constructor no se comprueba en ningún sitio: un `private function Base(s: string)` se construye desde `main` del propio módulo, y desde otro módulo (`ctor+` lo publica) y con `super("h")` (abierta 14-sep, de la revisión adversarial; preexistente; H1)
+
+**Medido** (`C:/tmp/v7_rev/refuta-semantico-resolucion/h2`, y con V6): `checkVisibility` sólo se invoca en accesos a
+miembro y bound calls, nunca para constructores ni para `super(...)`; la interfaz no lleva visibilidad en
+`ctor`/`ctor+` y el importador los crea `isPublic=true`. Lo nuevo del 14-sep es la superficie (las sobrecargas 2..N,
+incluida la `private`, cruzan). ⏭️ Decidir la norma (¿constructor protegido = sólo `super` y la propia clase;
+private = sólo la propia clase?), llevar la marca en `ctor(...)`, y `checkVisibility` en construcción y `super`.
+
+#### 🔴 `#516` — un `enum` NO es exportable como tipo de parámetro aunque el enum viaje en la interfaz; y si va en el ctor CABEZA la clase entera desaparece de la interfaz, mientras que en una sobrecarga sólo se omite esa firma (abierta 14-sep, de la revisión adversarial; preexistente; H2)
+
+**Medido** (`C:/tmp/v7_rev/refuta-semantico-resolucion/h3`, igual con V6): `isExportableType` no tiene rama para
+`EnumType`; `class Base` con `Base(c: Color)` primero y `Base()` después → `class Base` NO está en la interfaz («el
+módulo importado no expone 'Base'»); con el orden inverso, cruza sin la firma del enum. El aviso «omitidas en
+interfaz» sólo lo ve quien compila el dueño. ⏭️ Exportar `EnumType` en firmas (el enum ya viaja como `enum Color
+public`, con sus valores) — cierra también la mitad «tipo no exportable» de `#514`.
+
+#### 🔴 `#517` — una clase con `sync property` y SIN ctor propio que hereda un ctor con argumentos: `S(5)` llama a `Base.__init` y el mutex nunca se inicializa → «INVOKE_VIRTUAL sobre null receiver» en las dos VMs (abierta 14-sep, de la revisión adversarial; preexistente; H1)
+
+**Medido** (`C:/tmp/v7_rev/refuta-emisor-caminos/h5`, igual con V6): `synthesizeSyncMutexCtor` registra un `S.__init`
+de 0 params que sólo crea el mutex y lo pone como `cls.constructor` **sin encadenar** al ctor de la base, después de
+que el semántico resolviera `S(5)` contra `Base(v)`. Compila limpio. ⏭️ Que el ctor sintético inicialice el mutex y
+DELEGUE en el efectivo de la base (uno por sobrecarga), o que la clase exija ctor propio si hereda uno con args.
+
+#### 🔴 `#518` — la VM-C y `library`: (a) el marcador de vtable `Mod.Cls#m#slot` no lleva el prefijo de library (miVM lo resuelve, la VM-C no enlaza); (b) un módulo con `library` cargado como DEPENDENCIA desde el FS no casa con `module_loaded` (nombre lógico del basename) y aborta «falta el módulo» (abierta 14-sep, de la revisión adversarial; preexistente; H2)
+
+**Medido** (`C:/tmp/v7_rev/refuta-emisor-caminos/h4`, `C:/tmp/v7_rev/formato/src/LibEst.bp`): (a)
+`emitInvokeVirtualSmart` construye `externalModule + "." + Cls + "#" + m + "#" + slot` sin `externalLibrary`, mientras
+todos los demás símbolos (`__cls_*`, `qualifyForOwner`) sí lo llevan → la VM-C busca `LibB.mod` en vez de
+`com.acme.lib.LibB.mod`. (b) `loader.c:derive_module_name` toma el basename (`acme.LibEst`) sin quitar el prefijo
+de library que luego lee de la sección `library` → `export_prefix` = `acme.acme.LibEst.` y `module_loaded("acme",
+"LibEst")` nunca casa: recarga 7 veces y aborta; con una función pelada igual. Sólo `packlib` cubre library como
+RAÍZ. Los dos en V6. ⏭️ (a) prefijo en el marcador; (b) `derive_module_name` quita la library; test de host con
+un `library` como dependencia en las dos VMs.
+
+#### 🔴 `#519` — un método `native` DE CLASE que el AOT no puede traducir compila sin ningún diagnóstico y corre interpretado; sólo avisa si el módulo tiene además alguna native de nivel módulo (abierta 14-sep, de la revisión adversarial; preexistente; H4/AOT)
+
+**Medido** (`C:/tmp/v7_rev/refuta-docs-y-consumidores/h2`, igual con V6): `Main.hasNative` sólo recorre
+`module.defs instanceof FuncDef`; sin una native de módulo el `AotCEmitter` ni se instancia, y `public native
+function lee(): integer return this.n` en una clase → «compilado» sin aviso, corre interpretado. Con una native de
+módulo al lado, el método cae en `metodosAplanados` → aviso «no se ha podido traducir a C: corre interpretado»
+(nunca error). Contraste: la native de MÓDULO con estático/campo → error y compilación abortada. Silencioso
+(«native» que no lo es): salta la cola. ⏭️ Que `hasNative` cuente también los métodos de clase, y que un método
+`native` no traducible sea el mismo error que en una función de módulo (o, si se decide que «corre interpretado»
+vale, que lo diga siempre).
+
 #### ✅ `#513` — una clase derivada SIN constructor propio, construida desde OTRO módulo, PIERDE los argumentos en silencio: `Mod.Der(7)` compila y las dos VMs dan 0 (abierta 14-sep, por un lector del mapa de H2; H2 · **CERRADA el 14-sep**, `9381c607`)
 
 **Medido** (dueño: `Base` con `Base(v: integer)`, `Der extends Base` sin ctor; consumidor: `Mod.Der(7)`): el
@@ -269,6 +328,11 @@ las dos veces: salta la cola (regla 2 de V7).
 vive en otro módulo (`emitCallInitOf`, el mismo helper para `super(...)` explícito e implícito). En el oráculo
 `CtorHijo`: `CtorBase.Der(7)` → `Der/int:7`, y `Nieto extends CtorBase.Der` con `super(v, "nieto")` → `Der/nieto:10`.
 La stdlib reconstruida es byte-idéntica: ninguna clase suya hereda el constructor sin definir el suyo.
+**Y el 4º camino, el mismo día** (`720392a6`, lo sacó la revisión adversarial): la construcción LOCAL de una hija
+sin ctor propio de una base externa (`Hija(9)` con `Hija extends NBase.Base`) reventaba el ModWriter sin línea
+(«Función no encontrada: Base.__init») — `emitCallInitOf` también ahí. Y la interfaz publica ahora la cadena de
+constructores **efectiva** (la misma que la factoría): con sólo el propio, `class Plain extends Thread` sin ctor
+dejaba al stub sin `ctor`, el consumidor llamaba con 0 args y la factoría leía `stackSize` de debajo del frame.
 
 #### 🔴 `#507` — construir la PROPIA clase dentro de un método suyo (`return Nodo()` en `Nodo.clon()`) hace saltar una excepción del emisor: *«Clase no declarada (¿endClass antes de emitNewObject?)»* (abierta 14-sep, al montar la matriz de `#492`; H1)
 
@@ -375,12 +439,22 @@ padre que crece no corrompa al hijo en silencio. Precondición: `#508`. Diseño 
   `EstaticosBase`/`EstaticosHijo`. **`#510` cerrada** en el mismo commit.
 - `9381c607` **constructores ×N** (`#509`) y **`#513`** (derivada sin ctor propio).
 
+- `720392a6` **la revisión adversarial** de los tres commits (5 lentes + 5 refutadores con reproducción, 34
+  hallazgos, 30 reales): seis regresiones del día y cinco preexistentes del mismo camino, arregladas — la clave de
+  los alias va **por firma y con `#`** (`__cls_s_<Cls>#m$firma`; también `__cls_m_`), la interfaz publica la cadena
+  de ctors **efectiva**, `__cls_`/`__prop_` reservados, desempate de sobrecargas por «menos defaults», campo
+  redeclarado = error, el aviso de base no resuelta vivo, AOT con la sobrecarga elegida, el stub de `Thread` sin
+  ranura fantasma, y la interfaz sin las clases de Core re-publicadas. Lo preexistente que no era del camino tiene
+  ficha: `#514` `#515` `#516` `#517` `#518` `#519`. Docs: `e439d310` + el lote de la revisión (manual ×3, PENDIENTES
+  L18, MOD_FORMAT §4.1/§4.5, AOT_LIMITES §6, la cabecera de `ModuleInterface.java`).
+- **La norma, de Eduardo (14-sep)**: *«el estado sale del módulo por getters y setters; el CS es válido para el
+  código del módulo, no para código externo»*. Por eso la **`var` estática no cruza** (ni de módulo ni de clase) y
+  lo que cruza es la property; escrito en el manual junto a `#static` y en `PENDIENTES` L18.
+
 **Lo que queda de B**: el marcador de layout (`Clase#layout#nF#nM`) al enlazar, que va con la subida de formato
-(`#500`, MOD8) — y con ella la cadena (stdlib final, samples, fat-jar del IDE, blobs, `Stdlib.pack`, docs: el
-manual dice en tres copias que *«los miembros estáticos no cruzan la frontera del módulo»* y `PENDIENTES` L18 que
-*«sólo la primera sobrecarga del constructor cruza»*: ya no es verdad; `MOD_FORMAT.md` §4.1 debe decir que varios
-nombres pueden apuntar al mismo offset y listar los `__cls_*`). El AOT sigue sin llamar a estáticos ni leer
-campos: límite documentado, no silencioso (`UnsupportedAotException`).
+(`#500`, MOD8) — y con ella la cadena (stdlib final, samples, fat-jar del IDE, blobs, `Stdlib.pack`). El AOT sigue
+sin llamar a estáticos ni leer campos desde una native de módulo (error claro); desde un método native de clase,
+`#519`.
 
 #### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
 

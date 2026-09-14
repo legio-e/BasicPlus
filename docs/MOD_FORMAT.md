@@ -122,7 +122,10 @@ loader lo absolutiza con `codeStart + relativeOffset` y lo registra en
 **Varios nombres pueden apuntar al mismo offset** (V7/H2, 14-sep-2026): un
 *alias* es una entrada más de esta sub-sección, con el offset de una función ya
 emitida — cero bytecode, y un cargador anterior lo ve como una función exportada
-normal. Ni `name` ni `relativeOffset` tienen que ser únicos.
+normal. `relativeOffset` puede repetirse; **`name` NO**: miVM se quedaría con la
+última entrada y la VM-C con la primera (paridad rota). El escritor lo rechaza
+(`ModWriter.addFunction`/`addExportAlias`) y el compilador reserva al usuario los
+nombres `__cls_*`/`__prop_*`.
 
 **Los símbolos planos `__cls_*`.** El nombre de un import es `<Module>.<sym>`
 y los dos cargadores derivan el módulo por el **penúltimo punto** (§3), así que
@@ -132,16 +135,21 @@ el dueño exporta (`$` y `#` no son separadores):
 
 | símbolo | qué es | desde |
 |---|---|---|
-| `__cls_new_<Cls>[$clave]` | factoría: `NEW_OBJECT` + `__init` del ctor **efectivo** (heredable); una por sobrecarga, la cabeza sin sufijo | L2 · V7/H2 (`$clave`) |
-| `__cls_init_<Cls>[$clave]` | `super(...)` cross-module: `this` + args → `<Cls>.__init[$clave]`; una por ctor **propio** | L2 v3 · V7/H2 |
-| `__cls_m_<Cls>_<clave>` | `super.metodo()` cross-module: salto NO virtual a la implementación de la base | `#451` |
-| `__cls_s_<Cls>_<clave>` | **alias** del método estático `Cls.m[$clave]` | V7/H2 |
-| `__cls_sg_<Cls>_<prop>` / `__cls_ss_<Cls>_<prop>` | **alias** de los accesores de la property estática `Cls.__prop_get_x` / `Cls.__prop_set_x` | V7/H2 |
+| `__cls_new_<Cls>[$sufijo]` | factoría: `NEW_OBJECT` + `__init` del ctor **efectivo** (propio o heredado, `findConstructor`); una por sobrecarga, la cabeza sin sufijo | L2 · V7/H2 (`$sufijo`) |
+| `__cls_init_<Cls>[$sufijo]` | `super(...)` cross-module: `this` + args → el `__init` de la clase que **declara** el ctor (local o `CALL_EXT`); una por ctor **efectivo** | L2 v3 · V7/H2 |
+| `__cls_m_<Cls>#<firma>` | `super.metodo()` cross-module: salto NO virtual a la implementación de la base; uno por sobrecarga | `#451` · V7/H2 (`#`, firma) |
+| `__cls_s_<Cls>#<firma>` | **alias** del método estático `Cls.m[$…]` | V7/H2 |
+| `__cls_sg_<Cls>#<prop>` / `__cls_ss_<Cls>#<prop>` | **alias** de los accesores de la property estática `Cls.__prop_get_x` / `Cls.__prop_set_x` | V7/H2 |
 | `<Cls>#<metodo>#<slot>` | marcador de vtable (§4.2, data): el linker lo resuelve por nombre; si la ranura cambió, no resuelve | `#324` |
 
-`<clave>` es el nombre del método con el sufijo de sobrecarga de H5.a (`f`, `f$i`,
-`f$LBase;`); la cabeza de una cadena no lleva sufijo, así que un `.mod` compilado
-con una sola firma no cambia de símbolo al añadir otra.
+Dos reglas de forma (14-sep-2026, medidas por la revisión): el separador
+clase/miembro es **`#`** — `_` es un carácter legal de identificador y `A_b.c` y
+`A.b_c` daban el mismo nombre —; y el miembro va **siempre por firma**
+(`nombre$códigos`, `overloadMangle`: `cuantos$`, `cuantos$i`, `f$LBase;`), nunca
+por su posición en la cadena de sobrecargas — si la interfaz omite la cabeza
+(private, tipo no exportable) el consumidor renumeraba y llamaba a otra función.
+El `$sufijo` de los constructores es el de H5.a: la cabeza sin sufijo (un `.mod`
+con un solo ctor no cambia de símbolo al añadir otro), las demás `$códigos`.
 
 ### 4.2 Sub-sección de data exports (opcional — B3 v2 / L2 v3)
 
@@ -246,13 +254,14 @@ imports sin recompilar el módulo dueño.
 `ModuleInterface.java` (`writeTo`/`fromBytes`), y la ida y vuelta es byte a byte
 (`InterfazIdaYVueltaTest`). A nivel de módulo: `bpi <ver>`, `module`, `library`,
 `interface`, `implements`, `extends`, `func <n>(<params>):<ret> [public] [static] [intrinsic]`,
-`const`, `enum`, `prop`, `import`. Dentro de `class <n> public … end class`:
+`const`, `enum`, `prop`. Sólo las clases **propias** del módulo (los stubs de Core
+que el compilador aliasa no se re-publican). Dentro de `class <n> public [extends <Base>] … end class`:
 
 | directiva | qué publica |
 |---|---|
 | `layout <nF> <nM> <fbm> <obm>` | el layout binario del descriptor (campos y ranuras de vtable, con los bitmaps de refs y owners) — lo que un hijo de otro módulo necesita para colocar lo suyo detrás |
 | `field <n>:<tipo> slot <s> [owner]` | un campo **no privado** con su ranura absoluta (V7/H2): el hijo emite `GET_FIELD`/`SET_FIELD` por ranura |
-| `ctor(<params>)` · `ctor+(<params>)` | el constructor (cabeza) y, desde V7/H2, cada sobrecarga más, en orden de cadena |
+| `ctor(<params>)` · `ctor+(<params>)` | el constructor **efectivo** (propio o heredado: el mismo que usa la factoría) — la cabeza y, desde V7/H2, cada sobrecarga más, en orden de cadena |
 | `prop <n>:<tipo> [public] [sync] [final] [private]` | una property de instancia (siempre se publica: sus dos accesores ocupan ranura; publicar NO es hacer público, `#316`) |
 | `staticconst <n>:<tipo>=<literal> public` | constante estática: el consumidor la inlinea |
 | `staticprop <n>:<tipo> [public] [final]` | property estática (V7/H2): sin ranura; el consumidor llama por `CALL_EXT` a los alias `__cls_sg_/__cls_ss_` |
@@ -262,9 +271,13 @@ imports sin recompilar el módulo dueño.
 
 `staticmethod`, `staticprop` y `ctor+` son directivas **nuevas** y no flags de
 `method`/`prop`/`ctor` a propósito: un lector anterior (`tolerant`, versión mayor
-que la suya) las **salta**, mientras que un flag desconocido en `method` lo habría
-contado como método de instancia y corrido las ranuras de todo lo declarado
-detrás — en silencio.
+que la suya) las **salta**. Un flag que el lector anterior ya conociera (`static`
+en `method`: `parseFunc` lo acepta desde V4) lo habría contado como método de
+instancia y corrido las ranuras de todo lo declarado detrás — en silencio. Los
+flags `final`/`private` de `method`/`prop`, en cambio, el compilador de V6 no los
+conoce y **aborta** con «flag desconocido»: ruidoso, y asumido — un compilador
+anterior no lee módulos de un formato posterior; lo que se garantiza es que las
+**VMs** ejecutan los módulos anteriores (MOD7).
 
 ## 4.6 Sección NATIVE (v7)
 

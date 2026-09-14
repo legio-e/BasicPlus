@@ -167,8 +167,12 @@
   no existen (`class Gato extends Base.Animal` en otro módulo ve `var nombre`;
   `Base.Animal()` y `Base.Animal("Rex")` valen las dos, y `super(...)` elige por
   firma). Lo que sigue dentro:
-  - **una `native` no lee campos ni llama a estáticos** (ni propios ni heredados): el
-    AOT lo rechaza con un error claro; rodeo: un getter/método normal.
+  - **una `native` no lee campos ni llama a estáticos** (ni propios ni heredados): una
+    native de nivel módulo lo rechaza con un error claro; un método `native` de
+    clase hoy compila y corre interpretado sin decirlo (`#519`). Rodeo: un getter.
+  - **una `var` estática no cruza** (ni de módulo ni de clase): vive en el segmento
+    de datos del módulo, que sólo vale para su propio código. El estado sale del
+    módulo por getters y setters: declárala `property` (protegida) y cruza.
   - **`Clase(o)` con `o: Object` decide cast-o-construcción mirando sólo la primera
     sobrecarga del constructor** (`#389`): si hay un `Animal(o: Object)` que no es la
     cabeza, `Animal(x)` se toma como cast.

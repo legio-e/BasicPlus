@@ -7,39 +7,41 @@
 // X que importa M pueda chequear tipos contra M sin necesidad de
 // compilar el cuerpo de M.
 //
-// Formato textual del fichero .bpi (BasicPlus Interface):
+// Formato textual de la interfaz (desde V4/H6.a va EMBEBIDA en el .mod, sección
+// `interface`; el fichero .bpi aparte ya no existe). Versión actual: `bpi 8`.
+// La gramática completa y viva está en docs/MOD_FORMAT.md §4.5; en resumen:
 //
-//   bpi 2
-//   library com.example.app
+//   bpi 8
+//   library com.example.app            (opcional)
 //   module Util
-//   func sum(a:integer,b:integer):integer public
-//   func sqrt(x:float):float public
-//   func saludar(nombre:string):void public
+//   func sum(a:integer,b:integer):integer public [static] [intrinsic]
 //   const PI:float=3.14159 public
-//   const VERSION:string="1.0" public
-//   enum Color public
-//     ROJO=0
-//     VERDE=1
-//     AZUL=2
-//   end enum
+//   enum Color public / ROJO=0 / … / end enum
+//   prop nombre:tipo [public] [sync]   (property de MÓDULO)
+//   class Cosa public [extends Base]
+//     layout <nF> <nM> <fbm> <obm>
+//     field n:integer slot 0 [owner]                 (campos no privados, V7/H2)
+//     ctor(<params>) · ctor+(<params>)               (cadena EFECTIVA de ctors, V7/H2)
+//     prop x:tipo [public] [sync] [final] [private]
+//     staticconst MAX:integer=3 public
+//     staticprop t:tipo [public] [final]             (V7/H2)
+//     event onX(v:integer) recv <slot> [opaque]
+//     method m(<params>):<ret> [public] [final]
+//     staticmethod s(<params>):<ret> [public] [final] (V7/H2)
+//   end class
 //
 // Reglas:
-//   - 1ª línea: "bpi <version>"
-//   - "library <name>": opcional; si se omite, library = ""
-//   - "module <name>": obligatorio, una sola vez
-//   - "func <name>(<params>):<ret> [public] [static]":
-//       params es lista separada por comas, vacía permitida; cada uno es nombre:tipo
-//       ret es un tipo primitivo o "void"
-//       tipos primitivos soportados: integer, float, string, boolean
-//   - "const <name>:<type>=<value> public":
-//       sólo se exportan consts cuyo valor literal es conocido (int/float/string).
-//   - "enum <name> public" + entradas "<MIEMBRO>=<int>" + "end enum":
-//       enums públicos; los valores son los efectivos tras resolver alias.
+//   - 1ª línea: "bpi <version>". Una versión MAYOR que la nuestra se lee
+//     best-effort (tolerant: se saltan las directivas desconocidas); una menor
+//     que MIN_SUPPORTED_VERSION se rechaza.
+//   - Sólo se publica lo que un consumidor puede nombrar o necesita para el
+//     layout: lo `private` no sale (salvo `prop … private`, que ocupa ranura).
+//   - Publicar NO es hacer público: las marcas de visibilidad viajan y es
+//     checkVisibility quien decide (#316, #390).
+//   - Los tipos de clase van por nombre simple (la misma clase o un stub ya
+//     resuelto por el consumidor); enum aún NO es exportable como tipo de
+//     parámetro (#516).
 //   - Líneas vacías y las que empiezan por "#" se ignoran.
-//
-// Tipos no-primitivos en signatures de func (clases, arrays) se siguen
-// omitiendo en esta versión y se reportan en `skipped`. Cross-library
-// con tipos referencia es una expansión posterior.
 // ============================================================
 package basicplus.frontend;
 
@@ -228,18 +230,20 @@ public final class ModuleInterface {
      * vtSlot correcto.
      *
      * Para construir cross-module sin opcode nuevo, el módulo dueño sintetiza
-     * una factoría pública `__cls_new_&lt;Cls&gt;(args)` que el importador
-     * llama vía CALL_EXT. La signature de la factoría (params) coincide con
-     * el constructor.
+     * una factoría pública `__cls_new_&lt;Cls&gt;[$sufijo](args)` por cada
+     * constructor EFECTIVO (propio o heredado) que el importador llama vía
+     * CALL_EXT; las firmas que publica `ctor`/`ctor+` son exactamente las de
+     * esas factorías.
      *
-     * v1 (.bpi v4): sin herencia cross-module (baseClassName se guarda
-     * pero el importador lo ignora). Estáticos en staticMethods/staticProps (V7/H2). Sin fields
-     * públicos (se exponen vía property).
+     * Herencia cross-module desde L2 v3 (`baseClassName` + `layout`); estáticos en
+     * staticMethods/staticProps (V7/H2); campos no privados en fields (V7/H2);
+     * ctors efectivos en ctorParams/ctorOverloads (V7/H2).
      */
     public static final class ClassSig {
         public final String name;
         public final boolean isPublic;
-        /** Padre, sólo informativo en v1 (no se usa para construir vtables). */
+        /** Padre (`Base` local al dueño, o `Mod.Base` si es de otro módulo): el
+         *  importador enlaza el stub y siembra la vtable a partir de él. */
         public final String baseClassName;
         /** Parámetros del constructor. null = no hay constructor de usuario;
          *  la factoría no toma argumentos. Con sobrecarga (V7/H2, #509) es la
@@ -570,10 +574,11 @@ public final class ModuleInterface {
         sig.staticMethods = staticMethods;   // V7/H2 (#492-B)
         sig.staticProps   = staticProps;
 
-        // L2 v3.d — static consts públicos (con literal exportable). Vars
-        // estáticos quedan pendientes (requieren opcodes nuevos para
-        // GET/SET global cross-module). Mismo criterio que ConstSig a nivel
-        // módulo: tipo exportable + valor literal accesible.
+        // L2 v3.d — static consts públicos (con literal exportable). Las VARS
+        // estáticas NO cruzan por diseño (Eduardo, 14-sep-2026): viven en el CS del
+        // módulo, que sólo vale para su propio código; lo que cruza es la property
+        // (por sus accesores). Mismo criterio que ConstSig a nivel módulo: tipo
+        // exportable + valor literal accesible.
         for (Symbol s2 : cls.staticMembers.getSymbols()) {
             if (!(s2 instanceof Symbol.ConstSymbol)) continue;
             Symbol.ConstSymbol cst = (Symbol.ConstSymbol) s2;

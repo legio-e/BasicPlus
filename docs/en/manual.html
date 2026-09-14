@@ -887,10 +887,15 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       BP <code>try/catch</code> that wraps the call. What still does NOT fit —
       <code>try/catch</code> inside the native, tuples, <code>instanceof</code>,
       events, <code>parallel</code>, <code>for … in</code>, the
-      <code>double(x)</code> conversion — is rejected by the compiler with its
+      <code>double(x)</code> conversion, <strong>reading or writing fields</strong>
+      (own or inherited: use a getter), <strong>calling static methods or
+      properties</strong> and <code>super</code> — is rejected by the compiler with its
       message and the line. Local fixed arrays
       <code>type[N]</code> are not supported either (compile error):
       use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
+      Note: a <code>native</code> <em>class method</em> using any of those compiles
+      today and runs interpreted; it only warns when the module also has a
+      module-level native (<code>#519</code>).
       The live detail is in <code>docs/AOT_LIMITES.md</code>.</li>
   <li><strong>Calling normal BP functions from a native</strong> is possible
       (the bridge exists), but it crosses back into the interpreter: the speed
@@ -1297,6 +1302,17 @@ Counter.bump()</code></pre>
   and a child in another module sees the protected statics of its base. Static
   <code>const</code>s travelled already. The only thing that cannot call a static is a
   <code>native</code> function (<a href="#funciones-native">§8.3</a>).
+</p>
+<p>
+  <strong>A static <code>var</code> does not cross — and that is the model, not a
+  limitation.</strong> A <code>var</code> (module-level or class-level) lives in the
+  module's data segment, and that segment is only valid for the module's own code.
+  That is why no <code>var</code> can be <code>public</code>: <em>state leaves the
+  module only through getters and setters</em>. If a descendant in another module
+  needs that value, declare a <code>property</code> (protected, without
+  <code>public</code>): it crosses through its accessors, just like a module property.
+  Instance fields are the separate case: they cross by slot because the child
+  <em>is</em> the object.
 </p>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>
