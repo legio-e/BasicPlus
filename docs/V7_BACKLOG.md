@@ -109,6 +109,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | `#460` — cabo suelto: **quitar del compilador** `module interface`/`implements` (paso aparte, con su verificación); la **herencia entre módulos** aparcada hasta tener *«un control de versiones efectivo»* — el caso con el que medirla es `Core` | `FICHAS` `#460` (L8414) |
 | 🐛 **`L20` — el compilador ESCRIBE el `.mod` aunque dé error**: `for … step -1` falla (exit 2) y aun así deja un `.mod` que ejecuta sin el bucle. Silencioso: va delante. Y la decisión de lenguaje que `D1` dejó sin zanjar: `step` negativo o variable (hoy sólo literal entero positivo) | `PENDIENTES` L20 |
 | `L19` — el cast `Clase(x)` sólo baja desde `Object`: `Perro(a)` con `a: Animal` se toma por constructor | `PENDIENTES` L19 |
+| ✅ ~~`#508` — `private var`/`property` perdido en el parser~~ — **cerrada el 14-sep** (`4a6ea0f4`); y la matriz de `#492` es ya `HerenciaCrossModuleTest` (50 casos) | `FICHAS` `#508` |
 | `M4` — prohibir el prefijo `__` en identificadores de usuario (hoy el lexer lo acepta y comparte namespace con los sintéticos `__prop_get_X`…) · `N9` — una clase sintetizada (`Thread`/`Mutex`/`StringBuilder`) redeclarada a medias por el usuario gana sin diagnóstico · `M5` — comprobar que el debugger enseña las properties heredadas | `PENDIENTES` M4, N9, M5 |
 | `N2` — documentar como invariante que `JavaMutex.{ownerTid, waiters}` sólo se toca bajo `vmLock` (minutos; el código ya lo cumple) | `PENDIENTES` N2 |
 

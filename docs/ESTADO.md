@@ -69,6 +69,12 @@ ni una línea de código de producto.
    de layout, la matriz entera, la sombra y el XIP en el sim, y byte-idéntico con V6 en lo que no cambia). **Primero los
    tests, luego el formato.** Los constructores sobrecargados (`#509`) viajan en la misma subida.
 
+7. **Y empezó el código de H2** (Eduardo: *«cuando quieras podemos empezar»*): **`#508` cerrada** (`4a6ea0f4`) — el `private`
+   de `var`/`property` ya vive en el AST, los símbolos y `checkVisibility`; stdlib byte-idéntica (28/28, sin regenerar blobs),
+   `samples_sweep` 348/348; y **la matriz de `#492` es un test de la suite** (`HerenciaCrossModuleTest`, 50 casos de
+   caracterización con los agujeros anotados; la suite del frontend pasa de 110 a **160**, todos verdes). El fat-jar del IDE
+   NO se ha rehecho (se rehace con la subida de formato; hasta entonces el IDE no aplica `#508`).
+
 ⏭️ **Al retomar: cuatro decisiones de Eduardo** (`V7_IDEAS.md` §H2 punto 5) y a programar H2 en el orden del punto 3:
 (1) `gen` = versión del proyecto (`.bpbuild`) ¿o por módulo?; (2) con `gen` mayor, ¿basta que enlace?; (3) `fromPath`
 en las dos VMs o fuera; (4) el pack de librería sin stdlib por defecto; (5) una sola subida de formato para H2 y `#441`.

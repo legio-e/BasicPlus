@@ -161,7 +161,7 @@ el PC sin placa, como en el host.
 > Aquí entran las fichas que se abran a partir del 13-sep-2026, arriba las más recientes.
 > Las que vienen de V6 están en el bloque siguiente, con su texto intacto.
 
-#### 🔴 `#508` — `private` se PIERDE en el parser para `var` y `property`: una subclase lee un campo privado, y el error desde fuera lo llama «protegido» (abierta 14-sep, de la matriz de `#492`; H1 — y precondición de B)
+#### ✅ `#508` — `private` se PIERDE en el parser para `var` y `property`: una subclase lee un campo privado, y el error desde fuera lo llama «protegido» (abierta 14-sep, de la matriz de `#492`; H1 — y precondición de B · **CERRADA el 14-sep**, `4a6ea0f4`)
 
 **Medido (14-sep, `notas/v7-apertura/matriz492.py`)**: `private var p` en `Base`; `Der extends Base` en el MISMO módulo
 hace `return this.p` y **compila**. Desde `main`, `b.p` da *«'p' es protegido de 'Base'…»*. En métodos sí funciona
@@ -171,6 +171,14 @@ tiran. `isPrivate` sólo existe en `Ast.FuncDef` y `Symbol.FunctionSymbol`; `Var
 `checkVisibility` (`SemanticAnalyzer.java:3622-3660`) aplica «protegido» a `VarSymbol` y `private` sólo a funciones.
 ⏭️ Conservar `isPrivate` en `VarDecl`/`PropertyDef` y en sus símbolos; que `checkVisibility` lo aplique; test en la
 matriz (control negativo). **Va antes que B** (`#492`): sin esto, «exportar los campos no privados» exportaría los privados.
+
+✅ **Hecho el 14-sep** (`4a6ea0f4`): `isPrivate` en `VarDecl`/`PropertyDef` (se pega tras construir el nodo, como en
+`FuncDef`), en `VarSymbol`/`PropertySymbol`, y `checkVisibility` pregunta por la clase DECLARANTE para funciones, campos
+y properties. La stdlib recompilada es **byte-idéntica** (28/28: es visibilidad, no código) → sin regenerar blobs;
+`samples_sweep` 348/348; suite del frontend **160/160** con la matriz dentro (`HerenciaCrossModuleTest`, 50 casos:
+25 de control + 25 de frontera, caracterización con los agujeros anotados). Queda para B (`bpi 8`): la interfaz no
+lleva `private` en `prop`, así que una property privada sigue cruzando a un hijo de otro módulo (caso `prop_priv`
+del test, anotado). ⚠️ El fat-jar del IDE sigue con el compilador anterior: se rehace con la subida de formato.
 
 #### 🔴 `#509` — `super(5)` con constructor SOBRECARGADO: *«se esperaban 0, se pasaron 1»* — `super` sólo ve la primera sobrecarga, también en el mismo módulo (abierta 14-sep, de la matriz de `#492`; H1)
 
