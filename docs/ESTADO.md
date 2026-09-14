@@ -60,6 +60,11 @@ setters del módulo»*; *«no hay nada que impida que se acceda desde otros mód
 normas de visibilidad y se utilicen getters y setters»*; *«el CS es válido para el código del módulo, no para
 código externo»*. Consecuencia escrita: la `var` estática no cruza; cruza la property.
 
+**Orden para retomar (acordado con Eduardo al cerrar el 14-sep — «¿H2 queda cerrado?» No: cerrada la pieza 3)**:
+(1) MOD8 + marcador de layout + `#441` en UNA subida de formato; (2) `#493`; (3) `#514` `#516` `#518` con la
+interfaz y los cargadores aún abiertos; (4) la cadena (stdlib, samples, fat-jar del IDE con el IDE cerrado, blobs
+de las cinco imágenes, `Stdlib.pack`, `MOD_FORMAT.md` a v8) y el cierre pequeño. `#515` `#517` `#519` son de H1/AOT.
+
 **Queda de H2** (`V7_IDEAS.md` §H2): la subida de formato **MOD8** (`gen` + `ifaceCrc`, `#500`), el marcador de
 layout `Clase#layout#nF#nM` al enlazar, `#441` (huella del `.mdn`), `#493` (fallback de packs, `fromPath` en la
 VM-C, ruido en OUTPUT, pack sin stdlib, orden de arranque STM32), y con ello **la cadena**: stdlib final, samples,
