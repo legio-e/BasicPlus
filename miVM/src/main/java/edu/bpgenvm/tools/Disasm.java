@@ -55,21 +55,29 @@ public class Disasm {
     public static void dump(String filename, PrintStream out) throws IOException {
         try (DataInputStream in = new DataInputStream(new FileInputStream(filename))) {
             int magic       = in.readInt();
-            boolean v6      = (magic == ModFormat.MAGIC_NUMBER_V6);
+            // V7/H2 (14-sep) — Disasm sólo conocía MOD6: con un MOD7 no leía nativeSize y
+            // desplazaba data y code (justo el error que el cargador dice que «corrompe
+            // un módulo en silencio»). La herramienta «module info» de #284 tiene que
+            // hablar el formato de hoy, y es la que usa el test de la cabecera.
+            boolean v7      = (magic == ModFormat.MAGIC_NUMBER_V7);
+            boolean v6      = (magic == ModFormat.MAGIC_NUMBER_V6) || v7;
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
             int importsSize = in.readInt();
             int exportsSize = in.readInt();
             int codeSize    = in.readInt();
             int librarySize = in.readInt();
-            int interfaceSize = v6 ? in.readInt() : 0;   // H6.a: sección interface (v6)
+            int interfaceSize = v6 ? in.readInt() : 0;   // H6.a: sección interface (v6+)
+            int nativeSize    = v7 ? in.readInt() : 0;   // V6/N1.4: sección native (v7)
 
             byte[] libraryBuf   = readN(in, librarySize);
             byte[] importsBuf   = readN(in, importsSize);
             byte[] exportsBuf   = readN(in, exportsSize);
-            byte[] interfaceBuf = readN(in, interfaceSize);   // entre exports y data (v6)
+            byte[] interfaceBuf = readN(in, interfaceSize);   // entre exports y data (v6+)
+            byte[] nativeBuf    = readN(in, nativeSize);      // entre interface y data (v7)
             byte[] dataBuf      = readN(in, dataSize);
             byte[] codeBuf      = readN(in, codeSize);
+            int sobrantes       = in.available();             // 0 si la cabecera dice la verdad
 
             String library = new String(libraryBuf, StandardCharsets.UTF_8);
 
@@ -79,6 +87,7 @@ public class Disasm {
 
             out.println("=== HEADER ===");
             String magicOk = (magic == ModFormat.MAGIC_NUMBER) ? " (MOD5)"
+                    : (magic == ModFormat.MAGIC_NUMBER_V7) ? " (MOD7, OK)"
                     : (magic == ModFormat.MAGIC_NUMBER_V6) ? " (MOD6, OK)"
                     : " (NO MATCH, esperado MOD6)";
             out.printf ("  magic         0x%08X%s%n", magic, magicOk);
@@ -101,7 +110,14 @@ public class Disasm {
             out.printf ("  codeSize      %d bytes%n", codeSize);
             out.printf ("  librarySize   %d bytes%n", librarySize);
             if (v6) out.printf ("  interfaceSize %d bytes%n", interfaceSize);
+            if (v7) out.printf ("  nativeSize    %d bytes%n", nativeSize);
             out.printf ("  library       %s%n", library.isEmpty() ? "(none)" : "\"" + library + "\"");
+            // Una línea por sección con su CRC32: es lo que un test puede comparar contra
+            // lo que el escritor quiso escribir, y lo que dice si las secciones quedaron
+            // donde deben (sobrantes == 0 y cada CRC en su sitio).
+            out.printf ("  secciones     library=%08x imports=%08x exports=%08x interface=%08x native=%08x data=%08x code=%08x sobrantes=%d%n",
+                    crc32(libraryBuf), crc32(importsBuf), crc32(exportsBuf), crc32(interfaceBuf),
+                    crc32(nativeBuf), crc32(dataBuf), crc32(codeBuf), sobrantes);
 
             List<ImportEntry> imports = parseImports(importsBuf);
             out.println();
@@ -146,6 +162,20 @@ public class Disasm {
                 }
             }
 
+            if (v7) {
+                out.println();
+                out.printf ("=== NATIVE (%d bytes, sección v7) ===%n", nativeSize);
+                if (nativeSize == 0) {
+                    out.println("  (vacía)");
+                } else {
+                    // El relleno inicial (0-3 B) depende del OFFSET ABSOLUTO de la sección en el
+                    // fichero (MOD_FORMAT.md §4.6: el blob se ejecuta por XIP en su sitio), no de
+                    // su posición relativa: hay que decirle dónde empezaba.
+                    int nativeOff = ModFormat.headerSizeDe(magic) + librarySize + importsSize + exportsSize + interfaceSize;
+                    for (String l : describirNative(nativeBuf, nativeOff)) out.printf("  %s%n", l);
+                }
+            }
+
             if (mdn != null) {
                 out.println();
                 out.printf ("=== COMPANION .mdn (\"%s\") ===%n", mdn.path);
@@ -166,6 +196,52 @@ public class Disasm {
             out.printf ("=== CODE (%d bytes) ===%n", codeSize);
             dumpCode(codeBuf, exportsByOffset, imports, out);
         }
+    }
+
+    private static long crc32(byte[] b) {
+        java.util.zip.CRC32 c = new java.util.zip.CRC32();
+        c.update(b, 0, b.length);
+        return c.getValue();
+    }
+
+    /** V7/H2 — recorre la sección native de un MOD7 blob a blob (MOD_FORMAT.md §4.6:
+     *  N cabeceras mdn concatenadas, cada una alineada a 4, sin tabla de contenidos:
+     *  el tamaño de cada blob sale de su propia cabecera). Devuelve una línea por
+     *  blob con su arquitectura, versión, ABI, símbolos y código. Tolerante: si un
+     *  blob no cuadra, lo dice y para. */
+    static List<String> describirNative(byte[] sec, int offsetEnFichero) {
+        List<String> out = new ArrayList<>();
+        int pos = (4 - (offsetEnFichero & 3)) & 3;   // relleno inicial: hasta el múltiplo de 4 ABSOLUTO
+        if (pos > 0) out.add(String.format("(%d B de relleno: la sección empieza en +%d del fichero)", pos, offsetEnFichero));
+        int n = 0;
+        while (pos + MDN_HEADER_SIZE <= sec.length) {
+            if (sec[pos] == 0 && pos + 4 <= sec.length) {          // relleno entre blobs / cola
+                boolean todoCero = true;
+                for (int i = pos; i < sec.length; i++) if (sec[i] != 0) { todoCero = false; break; }
+                if (todoCero) break;
+            }
+            if (sec[pos] != 'M' || sec[pos + 1] != 'D' || sec[pos + 2] != 'N') {
+                out.add(String.format("blob %d @+%d: no empieza por MDN (%02x %02x %02x) — sección corrupta o desplazada", n, pos, sec[pos] & 0xff, sec[pos + 1] & 0xff, sec[pos + 2] & 0xff));
+                return out;
+            }
+            ByteBuffer bb = ByteBuffer.wrap(sec, pos, sec.length - pos).order(ByteOrder.LITTLE_ENDIAN);
+            int version  = bb.getShort(pos + 4) & 0xFFFF;
+            int abi      = bb.getShort(pos + 6) & 0xFFFF;
+            int codeSize = bb.getInt(pos + 8);
+            int symCount = bb.getInt(pos + 12);
+            int arch     = bb.getInt(pos + 16);
+            long total   = (long) MDN_HEADER_SIZE + (long) symCount * MDN_SYM_SIZE + codeSize;
+            long alineado = (total + 3) & ~3L;
+            // mdn_format.h: MDN_ARCH_NONE=0 (legacy ARM), ARM=40 (EM_ARM), RISCV=243 (EM_RISCV), XTENSA=94
+            String archStr = (arch == 40) ? "ARM" : (arch == 243) ? "RISCV" : (arch == 94) ? "XTENSA" : (arch == 0) ? "NONE(legacy ARM)" : String.valueOf(arch);
+            out.add(String.format("blob %d @+%d: MDN v%d abi=%d arch=%s symbols=%d code=%d bytes (total %d, alineado %d)",
+                    n, pos, version, abi, archStr, symCount, codeSize, total, alineado));
+            if (pos + total > sec.length) { out.add("  ¡truncado! la cabecera pide más de lo que hay en la sección"); return out; }
+            pos += (int) alineado;
+            n++;
+        }
+        if (n == 0) out.add("(sin blobs legibles)");
+        return out;
     }
 
     /** #284 — CRC32 del fichero entero. Identifica un .mod de un vistazo: permite

@@ -779,6 +779,20 @@ test-packres: $(LIBOBJ)
 	@echo "--- #362 recursos desde la zona de packs (esperado: solo 'ok', [status=OK]) ---"
 	@cd build && ./test_packres.exe packres/iconos.pack packres/otros.pack
 
+# V7/H2 — LA CABECERA DEL .mod Y SUS SECCIONES contra el cargador (test/test_modhdr.c):
+# para .mod con TODAS las secciones (native ARM y RISC-V con relleno de 0, 1 y 3 B,
+# library no vacia), la suma de secciones es el fichero, el cargador deja en RAM
+# los bytes exactos de code/data (CRC) y la seccion native se recorre blob a blob.
+# Es la segunda opinion del formato ANTES de subirlo a MOD8. Fixtures congelados en
+# test/fixtures/modhdr/ (NatV7/NatNew: samples con native; Bench_riscv: nativo
+# RISC-V del P4; acme.LibHdr: library, fuente al lado); la stdlib fresca al lado.
+test-modhdr: $(LIBOBJ)
+	@mkdir -p build/modhdr
+	$(CC) $(CFLAGS) -Isrc test/test_modhdr.c $(LIBOBJ) -o build/test_modhdr.exe $(LDFLAGS)
+	@cp ../bpstdlib/*.mod build/modhdr/ && cp test/fixtures/modhdr/*.mod build/modhdr/
+	@echo "--- V7/H2 cabecera y secciones del .mod vs cargador (esperado: solo 'ok', [status=OK]) ---"
+	@cd build/modhdr && ../test_modhdr.exe NatV7.mod NatNew.mod Bench_riscv.mod acme.LibHdr.mod Core.mod 2>/dev/null
+
 test-crc:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_crc.c src/crc32.c src/fs_facade.c src/fs_host.c -o build/test_crc.exe
