@@ -29,8 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * constantes estáticas y layouts), no sobre un módulo de juguete.
  *
  * <p>Y sobre UN módulo de juguete además: la stdlib no tiene ni un método ni una property
- * estáticos de clase (sólo `const`), así que sin él las directivas `staticmethod`/`staticprop`
- * (V7/H2, #492-B) pasarían por aquí sin ejercitarse — verde falso.
+ * estáticos de clase (sólo `const`) ni una clase con dos constructores, así que sin él las directivas
+ * `staticmethod`/`staticprop`/`ctor+` (V7/H2, #492-B y #509) pasarían por aquí sin ejercitarse — verde falso.
  */
 class InterfazIdaYVueltaTest {
 
@@ -68,6 +68,12 @@ class InterfazIdaYVueltaTest {
       + "    property Base.prot: long := 0L\n"
       + "    public function Base()\n"
       + "      this.n := 1\n"
+      + "    end Base\n"
+      + "    public function Base(v: integer)\n"
+      + "      this.n := v\n"
+      + "    end Base\n"
+      + "    public function Base(o: Base)\n"
+      + "      this.n := o.n\n"
       + "    end Base\n"
       + "    public function Base.cuantos(): integer\n"
       + "      return 7\n"
@@ -114,6 +120,9 @@ class InterfazIdaYVueltaTest {
                 "staticprop total:integer public",
                 "staticprop prot:long",
                 "staticconst MAX:integer=3 public",
+                "ctor()",
+                "ctor+(v:integer)",
+                "ctor+(o:Base)",
                 "method valor():integer public"}) {
             assertTrue(texto.contains(linea), "falta «" + linea + "» en la interfaz:\n" + texto);
         }

@@ -1765,8 +1765,14 @@ public final class SemanticAnalyzer {
                 && currentClass != null && currentClass.baseClass != null) {
             FunctionSymbol baseCtor = currentClass.baseClass.findConstructor();
             if (baseCtor != null) {
-                if (baseCtor.params.isEmpty()) {
+                // V7/H2 (#509) — con sobrecarga, la sin argumentos puede no ser la
+                // cabeza: se busca en la cadena y se guarda CUÁL para el emisor.
+                FunctionSymbol sinArgs = null;
+                for (FunctionSymbol c = baseCtor; c != null; c = c.nextOverload)
+                    if (c.params.isEmpty()) { sinArgs = c; break; }
+                if (sinArgs != null) {
                     fs.implicitSuper = true;   // el emisor inyecta super()
+                    fs.implicitSuperCtor = sinArgs;
                 } else {
                     err(f.line, f.column, "el constructor de '" + currentClass.name
                             + "' debe llamar a 'super(...)': el constructor de la clase base '"
@@ -2784,6 +2790,16 @@ public final class SemanticAnalyzer {
         if (baseCtor == null) {
             if (!sc.args.isEmpty())
                 err(sc.line, sc.column, "la clase base '" + currentClass.baseClass.name + "' no define constructor; super() no puede llevar argumentos");
+        } else if (baseCtor.overloaded) {
+            // V7/H2 (#509) — `super(5)` con constructor sobrecargado sólo veía la
+            // cabeza («se esperaban 0, se pasaron 1»). Misma resolución por firma que
+            // `Base(5)` (H5.a-E4), anotada en el nodo para que el emisor llame al
+            // `__init` de la sobrecarga elegida.
+            List<FunctionSymbol> cands = new ArrayList<>();
+            for (FunctionSymbol c = baseCtor; c != null; c = c.nextOverload) cands.add(c);
+            FunctionSymbol chosen = resolveOverloadArgs(cands, baseCtor.name, sc.args, sc.line, sc.column, scope);
+            if (chosen == null) return ErrorType.INSTANCE;
+            info.exprSymbols.put(sc, chosen);
         } else {
             checkArgs(sc.line, sc.column, baseCtor.params, sc.args, scope);
         }
@@ -3348,10 +3364,19 @@ public final class SemanticAnalyzer {
 
     private FunctionSymbol resolveOverloadCall(List<FunctionSymbol> cands, String name,
                                                CallExpr ce, Scope scope) {
+        return resolveOverloadArgs(cands, name, ce.args, ce.line, ce.column, scope);
+    }
+
+    /** V7/H2 (#509) — el núcleo de la resolución por firma, sobre una lista de
+     *  argumentos: lo comparten la llamada normal (CallExpr) y `super(...)`
+     *  (SuperCallExpr, que no es un CallExpr). `args` es la lista DEL NODO: los
+     *  defaults omitidos se rellenan en ella. */
+    private FunctionSymbol resolveOverloadArgs(List<FunctionSymbol> cands, String name,
+                                               List<IExpr> args, int line, int column, Scope scope) {
         // Tipo estático (natural, sin hint de parámetro) de cada argumento: la
         // selección de sobrecarga se hace sobre esos tipos.
         List<BpType> at = new ArrayList<>();
-        for (IExpr a : ce.args) at.add(analyzeExpr(a, scope, null));
+        for (IExpr a : args) at.add(analyzeExpr(a, scope, null));
 
         FunctionSymbol best = null;
         int bestCost = Integer.MAX_VALUE;
@@ -3363,18 +3388,18 @@ public final class SemanticAnalyzer {
             else if (cost == bestCost) ambiguous = true;
         }
         if (best == null) {
-            err(ce.line, ce.column, "ninguna sobrecarga de '" + name
+            err(line, column, "ninguna sobrecarga de '" + name
                     + "' acepta los argumentos " + argTypeList(at));
             return null;
         }
         if (ambiguous) {
-            err(ce.line, ce.column, "llamada ambigua a '" + name + "' con "
+            err(line, column, "llamada ambigua a '" + name + "' con "
                     + argTypeList(at) + ": varias sobrecargas encajan por igual (usa un cast)");
             return null;
         }
         // Rellena los defaults omitidos del elegido (clon del literal), como checkArgs.
-        for (int i = ce.args.size(); i < best.params.size(); i++)
-            ce.args.add(cloneConstExpr(best.params.get(i).defaultExpr, ce.line, ce.column));
+        for (int i = args.size(); i < best.params.size(); i++)
+            args.add(cloneConstExpr(best.params.get(i).defaultExpr, line, column));
         return best;
     }
 

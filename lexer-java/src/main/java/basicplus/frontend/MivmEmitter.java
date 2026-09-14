@@ -1424,10 +1424,21 @@ public final class MivmEmitter {
      * sólo NEW_OBJECT + return.
      */
     private void synthesizeCrossModuleFactory(ClassSymbol cls) throws IOException {
-        String factoryName = "__cls_new_" + cls.name;
+        // V7/H2 (#509/#513) — una factoría por cada constructor EFECTIVO de la clase:
+        // la cadena de findConstructor(), que puede ser HEREDADA. Antes se miraba sólo
+        // `cls.constructor` (el propio): una derivada sin ctor propio exportaba
+        // `__cls_new_Der` con 0 params y sin llamar a ningún __init, y `Mod.Der(7)`
+        // compilaba y perdía el 7 en silencio (las dos VMs imprimían 0). Y sólo la
+        // cabeza: la 2ª sobrecarga no tenía factoría.
+        FunctionSymbol efectivo = cls.findConstructor();
+        if (efectivo == null) { synthesizeCrossModuleFactoryDe(cls, null); return; }
+        for (FunctionSymbol c = efectivo; c != null; c = c.nextOverload) synthesizeCrossModuleFactoryDe(cls, c);
+    }
+
+    private void synthesizeCrossModuleFactoryDe(ClassSymbol cls, FunctionSymbol ctor) throws IOException {
+        String factoryName = crossModuleNewName(cls, ctor);
         w.addFunction(factoryName, true);   // pública: cross-module
 
-        FunctionSymbol ctor = cls.constructor;
         // Declarar params iguales al ctor (sin contar `this`).
         if (ctor != null) {
             for (ParamSymbol p : ctor.params) {
@@ -1459,10 +1470,8 @@ public final class MivmEmitter {
             // (Si llegamos aquí y ctor != null por synth, mismo path.)
             if (hasInit) {
                 w.emitGetLocal(newref);
-                if (ctor != null) {
-                    for (ParamSymbol p : ctor.params) w.emitGetParam(p.name);
-                }
-                w.emitCall(cls.name + ".__init");
+                for (ParamSymbol p : ctor.params) w.emitGetParam(p.name);
+                emitCallInitOf(ctor);   // V7/H2: el __init de la clase que lo declara (local o externa), con su sufijo
                 w.emitSetLocal(discard);
             }
             // __result := newref
@@ -1524,24 +1533,27 @@ public final class MivmEmitter {
     }
 
     private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
-        String initName = "__cls_init_" + cls.name;
-        w.addFunction(initName, true);   // pública: cross-module
-        declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-        FunctionSymbol ctor = cls.constructor;
-        for (ParamSymbol p : ctor.params) {
-            declareParamByType(p.name, p.type);   // H1.8 (antes: ?8:4 aquí). BUG-6: long/double = 8 bytes
-        }
-        FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
-        beginFunctionScope(synthFs, null);   // void
-        try {
-            // Empujamos this + args, luego CALL local al __init real.
-            w.emitGetParam("this");
+        // V7/H2 (#509) — una por cada sobrecarga PROPIA: `__cls_init_<Cls>` (cabeza,
+        // como hasta hoy: aditivo) y `__cls_init_<Cls>$clave` para las demás.
+        for (FunctionSymbol ctor = cls.constructor; ctor != null; ctor = ctor.nextOverload) {
+            String initName = crossModuleInitName(cls, ctor);
+            w.addFunction(initName, true);   // pública: cross-module
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             for (ParamSymbol p : ctor.params) {
-                w.emitGetParam(p.name);
+                declareParamByType(p.name, p.type);   // H1.8 (antes: ?8:4 aquí). BUG-6: long/double = 8 bytes
             }
-            w.emitCall(cls.name + ".__init");
-            emitFunctionEnd();
-        } finally { scopeStack.pop(); }
+            FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
+            beginFunctionScope(synthFs, null);   // void
+            try {
+                // Empujamos this + args, luego CALL local al __init real.
+                w.emitGetParam("this");
+                for (ParamSymbol p : ctor.params) {
+                    w.emitGetParam(p.name);
+                }
+                w.emitCall(ctorInitName(cls, ctor));
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        }
     }
 
     /** true si el namespace importado es 100% intrínsecos sin estado: todas
@@ -1708,7 +1720,7 @@ public final class MivmEmitter {
             // compilador inyecta aquí la llamada al constructor del padre SIN
             // argumentos (lo marcó el semántico). Va antes del cuerpo → el padre
             // queda inicializado primero, igual que un super() escrito a mano.
-            if (fs.implicitSuper) emitImplicitSuperCall(cls);
+            if (fs.implicitSuper) emitImplicitSuperCall(cls, fs);
             for (IStmt s : fn.body) emitStmt(s);
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
@@ -1719,19 +1731,16 @@ public final class MivmEmitter {
      *  ya garantizó que el padre tiene un constructor invocable sin args. Mismo
      *  camino que emitSuperCall (CALL local / CALL_EXT a __cls_init_X si external),
      *  pero sin empujar argumentos; descarta el valor de retorno del __init. */
-    private void emitImplicitSuperCall(ClassSymbol cls) throws IOException {
+    private void emitImplicitSuperCall(ClassSymbol cls, FunctionSymbol ctorFs) throws IOException {
         ClassSymbol parent = (cls != null) ? cls.baseClass : null;
         if (parent == null || parent.findConstructor() == null) return;
+        // V7/H2 (#509/#513) — la sobrecarga sin args que eligió el semántico (puede
+        // no ser la cabeza), llamada por la clase que la DECLARA: si el padre no
+        // tiene ctor propio, es la del abuelo, y ése puede vivir en otro módulo.
+        FunctionSymbol elegido = (ctorFs != null && ctorFs.implicitSuperCtor != null)
+                ? ctorFs.implicitSuperCtor : parent.findConstructor();
         w.emitGetParam("this");
-        if (parent.isExternal) {
-            StringBuilder qname = new StringBuilder();
-            if (parent.externalLibrary != null && !parent.externalLibrary.isEmpty())
-                qname.append(parent.externalLibrary).append('.');
-            qname.append(parent.externalModule).append('.').append("__cls_init_").append(parent.name);
-            w.emitCallExt(qname.toString(), parent.externalFromPath);
-        } else {
-            w.emitCall(parent.name + ".__init");
-        }
+        emitCallInitOf(elegido);
         declareLocal("__discardSuper");
         w.emitSetLocal("__discardSuper");
     }
@@ -1750,10 +1759,30 @@ public final class MivmEmitter {
      *  (`<Cls>.__init$dd`). Al ser aditivo, un `.mod` ya compilado con un solo
      *  constructor no cambia de símbolo. */
     static String ctorInitName(ClassSymbol cls, FunctionSymbol ctor) {
-        String suffix = "";
-        if (ctor != null && !ctor.slotKey().equals(ctor.name))
-            suffix = ctor.slotKey().substring(ctor.name.length());   // "$dd"
-        return cls.name + ".__init" + suffix;
+        return cls.name + ".__init" + ctorSuffix(ctor);
+    }
+
+    /** V7/H2 (#509) — el sufijo de clave de un constructor: "" para la cabeza,
+     *  "$dd" para las sobrecargas. UN helper para `<Cls>.__init`, `__cls_init_<Cls>`
+     *  y `__cls_new_<Cls>` a los dos lados de la frontera. */
+    static String ctorSuffix(FunctionSymbol ctor) {
+        if (ctor == null || ctor.slotKey().equals(ctor.name)) return "";
+        return ctor.slotKey().substring(ctor.name.length());
+    }
+    static String crossModuleInitName(ClassSymbol cls, FunctionSymbol ctor) { return "__cls_init_" + cls.name + ctorSuffix(ctor); }
+    static String crossModuleNewName(ClassSymbol cls, FunctionSymbol ctor)  { return "__cls_new_" + cls.name + ctorSuffix(ctor); }
+
+    /** V7/H2 (#509/#513) — `this` (+ args) ya en pila: llama al `__init` del
+     *  constructor `ctor` por la clase que lo DECLARA (puede ser una base, y puede
+     *  vivir en otro módulo: entonces CALL_EXT a su `__cls_init_<Owner>$s`). */
+    private void emitCallInitOf(FunctionSymbol ctor) throws IOException {
+        ClassSymbol owner = ctor.ownerClass;
+        if (owner != null && owner.isExternal) {
+            String qn = qualifyForOwner(owner, crossModuleInitName(owner, ctor));
+            w.emitCallExt(qn, fromPathFor(qn));
+        } else {
+            w.emitCall(ctorInitName(owner, ctor));
+        }
     }
 
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
@@ -4045,7 +4074,8 @@ public final class MivmEmitter {
             Symbol mSym = info.exprSymbols.get(c.callee);
             // L2: `Module.ClassName(args)` — construcción cross-module.
             if (mSym instanceof ClassSymbol) {
-                emitConstruction((ClassSymbol) mSym, c.args);
+                Symbol ck = info.exprSymbols.get(c);   // V7/H2 (#509): la sobrecarga elegida, si la hay
+                emitConstruction((ClassSymbol) mSym, c.args, (ck instanceof FunctionSymbol) ? (FunctionSymbol) ck : null);
                 return;
             }
             if (!(mSym instanceof FunctionSymbol)) {
@@ -5358,7 +5388,16 @@ public final class MivmEmitter {
             errors.add("super(...) fuera de constructor con padre"); return;
         }
         ClassSymbol parent = sc2.fs.ownerClass.baseClass;
-        FunctionSymbol parentCtor = parent.findConstructor();
+        // V7/H2 (#509) — la sobrecarga que eligió el semántico por firma (anotada en
+        // el nodo); sin anotación, la única/heredada. Se llama por la clase que la
+        // DECLARA (#513: el padre puede no tener ctor propio) — local por nombre, o
+        // CALL_EXT a `__cls_init_<Owner>$clave` si vive en otro módulo: el símbolo
+        // no tiene puntos, así que el loader lo lee como del módulo dueño, y `this`
+        // del hijo vale como ref del padre porque los campos heredados ocupan los
+        // slots 0..N-1.
+        Symbol anotado = info.exprSymbols.get(sc);
+        FunctionSymbol parentCtor = (anotado instanceof FunctionSymbol) ? (FunctionSymbol) anotado
+                                                                        : parent.findConstructor();
         w.emitGetParam("this");
         for (int i = 0; i < sc.args.size(); i++) {
             emitExpr(sc.args.get(i));
@@ -5366,22 +5405,8 @@ public final class MivmEmitter {
                 coerceToTarget(sc.args.get(i), parentCtor.params.get(i).type);
             }
         }
-        if (parent.isExternal) {
-            // L2 v3 — emitimos CALL_EXT a `__cls_init_<Cls>(this, args)` —
-            // la factoría sintetizada en el módulo dueño que internamente llama
-            // a `<Cls>.__init`. El símbolo `__cls_init_X` no tiene puntos, así
-            // que el loader lo interpreta como símbolo del módulo dueño
-            // (parts[len-2]=módulo). El receiver `this` del child es válido
-            // como ref de Cls porque los fields heredados ocupan los slots
-            // 0..N-1 del descriptor.
-            StringBuilder qname = new StringBuilder();
-            if (parent.externalLibrary != null && !parent.externalLibrary.isEmpty())
-                qname.append(parent.externalLibrary).append('.');
-            qname.append(parent.externalModule).append('.').append("__cls_init_").append(parent.name);
-            w.emitCallExt(qname.toString(), parent.externalFromPath);
-            return;
-        }
-        w.emitCall(parent.name + ".__init");
+        if (parentCtor == null) { errors.add("super(...): la clase base '" + parent.name + "' no tiene constructor"); return; }
+        emitCallInitOf(parentCtor);
     }
 
     /**
@@ -5410,17 +5435,17 @@ public final class MivmEmitter {
         // NEW_OBJECT en SU contexto y devuelve el ref.
         if (cls.isExternal) {
             // Empujar args en orden — la factoría tiene la misma firma que el ctor.
-            FunctionSymbol ctor = cls.constructor;
+            // V7/H2 (#509/#513): el ctor ELEGIDO (anotado por el semántico) o el
+            // efectivo (findConstructor: puede ser heredado); la factoría del dueño
+            // lleva el mismo sufijo de clave (`__cls_new_<Cls>$clave`).
+            FunctionSymbol ctor = (chosenCtor != null) ? chosenCtor : cls.findConstructor();
             for (int i = 0; i < args.size(); i++) {
                 emitExpr(args.get(i));
                 if (ctor != null && i < ctor.params.size())
                     coerceToTarget(args.get(i), ctor.params.get(i).type);
             }
-            StringBuilder qname = new StringBuilder();
-            if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
-                qname.append(cls.externalLibrary).append('.');
-            qname.append(cls.externalModule).append('.').append("__cls_new_").append(cls.name);
-            w.emitCallExt(qname.toString(), cls.externalFromPath);
+            String qn = qualifyForOwner(cls, crossModuleNewName(cls, ctor));
+            w.emitCallExt(qn, cls.externalFromPath);
             // La factoría deja el ref en la pila como retorno; lo dejamos ahí.
             return;
         }

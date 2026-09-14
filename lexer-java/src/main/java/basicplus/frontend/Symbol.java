@@ -227,6 +227,9 @@ public abstract class Symbol {
          *  padre tiene un constructor invocable sin argumentos → el emisor inyecta
          *  la llamada implícita al __init del padre. Lo marca el SemanticAnalyzer. */
         public boolean implicitSuper;
+        /** V7/H2 (#509) — QUÉ constructor del padre llama el super implícito: con
+         *  sobrecarga, el que no lleva parámetros puede no ser la cabeza. */
+        public FunctionSymbol implicitSuperCtor;
         public boolean isModuleInitializer;
         /** Función intrínseca: declarada sólo como signature; el emisor inlinea
          *  opcodes en cada call-site en lugar de generar CALL / CALL_EXT. El

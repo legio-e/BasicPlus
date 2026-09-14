@@ -2378,6 +2378,29 @@ public final class Main {
                         }
                         stub.constructor = ctor;
                         stub.instanceMembers.tryDefine(ctor);
+                        ctor.slotKey = ctor.name;
+                        // V7/H2 (#509) — las demás sobrecargas, ENCADENADAS como los
+                        // métodos (H5.a-E5): la clave mangleada sale del mismo
+                        // overloadMangle que en el dueño, así `__cls_new_<Cls>$clave`
+                        // y `__cls_init_<Cls>$clave` casan a los dos lados.
+                        Symbol.FunctionSymbol tailC = ctor;
+                        for (List<ModuleInterface.ParamSig> ov : cs.ctorOverloads) {
+                            Symbol.FunctionSymbol oc = new Symbol.FunctionSymbol(
+                                    cs.name, true, false, false, stub, null);
+                            oc.isConstructor = true;
+                            for (ModuleInterface.ParamSig pp : ov) {
+                                Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
+                                psm.type = pp.type;
+                                if (pp.defaultValue != null)
+                                    psm.defaultExpr = SemanticAnalyzer.literalExprFromValue(pp.defaultValue, pp.type, 0, 0);
+                                oc.params.add(psm);
+                            }
+                            tailC.nextOverload = oc;
+                            tailC = oc;
+                            ctor.overloaded = true;
+                            oc.overloaded = true;
+                            oc.slotKey = oc.overloadMangle();
+                        }
                     }
                     // Resolver UnresolvedClassRef en params/return de métodos
                     // y del ctor, contra el propio stub o contra otros stubs

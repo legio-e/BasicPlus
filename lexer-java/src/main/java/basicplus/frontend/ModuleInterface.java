@@ -242,8 +242,14 @@ public final class ModuleInterface {
         /** Padre, sólo informativo en v1 (no se usa para construir vtables). */
         public final String baseClassName;
         /** Parámetros del constructor. null = no hay constructor de usuario;
-         *  la factoría no toma argumentos. */
+         *  la factoría no toma argumentos. Con sobrecarga (V7/H2, #509) es la
+         *  CABEZA de la cadena — la que se queda con el nombre pelado — y las
+         *  demás firmas van en {@link #ctorOverloads}, en orden de cadena. */
         public final List<ParamSig> ctorParams;
+        /** V7/H2 (#509) — las sobrecargas del constructor a partir de la 2ª, en el
+         *  orden de la cadena (el consumidor las encadena igual y su clave
+         *  mangleada coincide con la del dueño). Directiva `ctor+(...)`. */
+        public List<List<ParamSig>> ctorOverloads = new ArrayList<>();
         /** Properties de la clase, en orden de declaración. Cada una añade
          *  un getX y un setX a la vtable (en ese orden). */
         public final List<PropSig> properties;
@@ -445,6 +451,20 @@ public final class ModuleInterface {
             ctorParams = new ArrayList<>();
             for (ParamSymbol p : ctor.params) ctorParams.add(new ParamSig(p.name, p.type, paramDefault(p)));
         }
+        // V7/H2 (#509) — las demás sobrecargas del constructor, en orden de cadena.
+        // Una que no sea exportable se salta CON aviso pero no renumera: la cabeza
+        // sigue siendo la cabeza y cada firma se identifica por su clave, no por
+        // su posición.
+        List<List<ParamSig>> ctorOverloads = new ArrayList<>();
+        if (cls.constructor != null) {
+            for (FunctionSymbol c = cls.constructor.nextOverload; c != null; c = c.nextOverload) {
+                String issue = signatureIssue(c);
+                if (issue != null) { skipped.add("class " + cls.name + ": constructor (sobrecarga): " + issue); continue; }
+                List<ParamSig> ps = new ArrayList<>();
+                for (ParamSymbol p : c.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                ctorOverloads.add(ps);
+            }
+        }
 
         // ---- Properties + métodos en orden de declaración del AST ----
         List<PropSig> properties = new ArrayList<>();
@@ -534,6 +554,7 @@ public final class ModuleInterface {
             }
         }
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
+        sig.ctorOverloads = ctorOverloads;   // V7/H2 (#509)
         sig.staticMethods = staticMethods;   // V7/H2 (#492-B)
         sig.staticProps   = staticProps;
 
@@ -1142,6 +1163,17 @@ public final class ModuleInterface {
                     cs.append(')');
                     pw.println(cs.toString());
                 }
+                // V7/H2 (#509) — `ctor+(<params>)` por cada sobrecarga más, en orden.
+                for (List<ParamSig> ov : c.ctorOverloads) {
+                    StringBuilder cs = new StringBuilder();
+                    cs.append("  ctor+(");
+                    for (int i = 0; i < ov.size(); i++) {
+                        if (i > 0) cs.append(',');
+                        appendParam(cs, ov.get(i));
+                    }
+                    cs.append(')');
+                    pw.println(cs.toString());
+                }
                 for (PropSig p : c.properties) {
                     // #316 — sin el flag `public` = property no pública: se exporta
                     // SOLO para que el consumidor cuente sus 2 slots de accesor.
@@ -1395,6 +1427,7 @@ public final class ModuleInterface {
             String       clsName     = null;
             String       clsParent   = null;
             List<ParamSig> clsCtorParams = null;
+            List<List<ParamSig>> clsCtorOverloads = new ArrayList<>();   // V7/H2 (#509)
             List<PropSig>  clsProps   = null;
             List<FuncSig>  clsMethods = null;
             // L2 v3 — layout binario opcional (-1 = no presente).
@@ -1466,6 +1499,7 @@ public final class ModuleInterface {
                         cs.fields = clsFields;   // V7/H2
                         cs.staticMethods = clsStaticMethods;   // V7/H2 (#492-B)
                         cs.staticProps   = clsStaticProps;
+                        cs.ctorOverloads = clsCtorOverloads;   // V7/H2 (#509)
                         iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
@@ -1476,12 +1510,25 @@ public final class ModuleInterface {
                         clsFields = new ArrayList<>();   // V7/H2
                         clsStaticMethods = new ArrayList<>();   // V7/H2 (#492-B)
                         clsStaticProps   = new ArrayList<>();
+                        clsCtorOverloads = new ArrayList<>();   // V7/H2 (#509)
+                        continue;
+                    }
+                    if (trimmed.startsWith("ctor+(")) {   // V7/H2 (#509): sobrecarga del ctor
+                        int lp = trimmed.indexOf('(');
+                        int rp = matchParen(trimmed, lp);
+                        if (rp < 0) throw new IOException(file + ":" + lineNo + ": ctor+ sin ')'");
+                        if (clsCtorParams == null)
+                            throw new IOException(file + ":" + lineNo + ": ctor+ sin un ctor de cabeza antes");
+                        clsCtorOverloads.add(parseParamList(file, lineNo, trimmed.substring(lp + 1, rp)));
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
                         int lp = trimmed.indexOf('(');
                         int rp = matchParen(trimmed, lp);
                         if (rp < 0) throw new IOException(file + ":" + lineNo + ": ctor sin ')'");
+                        // V7/H2 (#509) — una 2ª línea `ctor(` pisaba a la cabeza en silencio.
+                        if (clsCtorParams != null)
+                            throw new IOException(file + ":" + lineNo + ": segundo `ctor(` en la clase (las sobrecargas van como `ctor+(`)");
                         clsCtorParams = parseParamList(file, lineNo, trimmed.substring(lp + 1, rp));
                         continue;
                     }
@@ -1576,6 +1623,7 @@ public final class ModuleInterface {
                     }
                     if (!sawPub) throw new IOException(file + ":" + lineNo + ": class sin 'public'");
                     clsCtorParams = null;          // null = sin ctor de usuario
+                    clsCtorOverloads = new ArrayList<>();   // V7/H2 (#509)
                     clsProps   = new ArrayList<>();
                     clsMethods = new ArrayList<>();
                 } else if (!tolerant) {

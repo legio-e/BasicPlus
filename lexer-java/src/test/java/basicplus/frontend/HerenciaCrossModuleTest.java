@@ -136,7 +136,7 @@ class HerenciaCrossModuleTest {
             new Caso("prop_prot",       "this.tam := 5\n      return this.tam",          "",           "super()", true,  true,  ""),
             new Caso("prop_priv",       "return this.oculta",                            "",           "super()", false, false, "control negativo (#508); cross: B desde bpi 8 (`prop … private` viaja)"),
             new Caso("sobrecarga",      "return this.f(1) + this.f(\"a\")",              "",           "super()", true,  true,  ""),
-            new Caso("ctor_sobrecarga", "return this.n",                                 "",           "super(5)", false, false, "bug #509: super sólo ve la 1ª sobrecarga"),
+            new Caso("ctor_sobrecarga", "return this.n",                                 "",           "super(5)", true,  true,  "#509 cerrado el 14-sep: super(args) por firma; cross: `ctor+` + `__cls_init_<Cls>$clave`"),
             new Caso("ctor_default",    "return 0",                                      "",           "super()", true,  true,  ""),
             new Caso("super_metodo",    "return this.pub()",                             SUPER_PUB,    "super()", true,  true,  ""),
             new Caso("const_estatica",  "return {MOD}Base.MAX",                          "",           "super()", true,  true,  "control: #510 cerrado el 14-sep (el ctor tapaba a la clase base)"),
