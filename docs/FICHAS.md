@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **25** | las siete abiertas EN V7 (14-sep, de la matriz y el oráculo de `#492`): `#506` `#507` ~~`#508`~~ `#509` `#510` `#511` ~~`#512`~~ · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **26** | las ocho abiertas EN V7 (14-sep, de la matriz, el oráculo y el mapa de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -215,7 +215,7 @@ y properties. La stdlib recompilada es **byte-idéntica** (28/28: es visibilidad
 lleva `private` en `prop`, así que una property privada sigue cruzando a un hijo de otro módulo (caso `prop_priv`
 del test, anotado). ⚠️ El fat-jar del IDE sigue con el compilador anterior: se rehace con la subida de formato.
 
-#### 🔴 `#509` — `super(5)` con constructor SOBRECARGADO: *«se esperaban 0, se pasaron 1»* — `super` sólo ve la primera sobrecarga, también en el mismo módulo (abierta 14-sep, de la matriz de `#492`; H1)
+#### ✅ `#509` — `super(5)` con constructor SOBRECARGADO: *«se esperaban 0, se pasaron 1»* — `super` sólo ve la primera sobrecarga, también en el mismo módulo (abierta 14-sep, de la matriz de `#492`; H1 · **CERRADA el 14-sep**, `9381c607`)
 
 **Medido**: `Base` con `Base()` y `Base(v: integer)`; `Der` con `super(5)` en su constructor → error semántico en el
 mismo módulo y cross-module. `PENDIENTES` L18 lo contaba como «sólo la primera sobrecarga del constructor cruza», pero
@@ -223,13 +223,52 @@ no es de la frontera: `super(...)` resuelve contra la cabeza de la cadena de sob
 no recorre `nextOverload`. ⏭️ Resolver `super(args)` por aridad/tipos como una llamada sobrecargada normal (H5.a);
 y la interfaz exporta un solo `ctor` (`ClassSig.ctorParams`): al hacer B, exportar todas las sobrecargas del constructor.
 
-#### 🔴 `#510` — `Base.MAX` / `Base.cuantos()` DENTRO de una clase derivada: *«el tipo 'void' no tiene miembros»* (abierta 14-sep, de la matriz de `#492`; H1)
+✅ **Cerrada el 14-sep** (`9381c607`). Eran **tres caminos** que sólo miraban la cabeza, y los tres van juntos:
+(a) `super(args)` — `analyzeSuperCall` resuelve por firma con el mismo núcleo que `Base(5)` (`resolveOverloadArgs`,
+compartido por `CallExpr` y `SuperCallExpr`) y anota la elegida en el nodo; el emisor la lee. (b) El super
+**implícito** — exigía que la cabeza fuera la sin-args; ahora la busca en la cadena y guarda cuál
+(`implicitSuperCtor`). (c) Cross-module — la interfaz publica `ctor(...)` (cabeza, como hoy: aditivo) **+
+`ctor+(...)` por sobrecarga** (directiva nueva: un lector anterior la salta y se queda con la cabeza, que es lo que
+hacía; un segundo `ctor(` ya no pisa al primero en silencio: error); el importador encadena con el mismo
+`overloadMangle` que el dueño; el dueño sintetiza `__cls_init_<Cls>$clave` por cada ctor propio y `__cls_new_<Cls>$clave`
+por cada ctor efectivo. Un helper de sufijo (`ctorSuffix`) para los tres nombres a los dos lados. Oráculo
+`CtorBase`/`CtorHijo` en el corpus (la sin-args NO es la cabeza; una sobrecarga con parámetro de clase, `$LBase;`);
+la matriz voltea `ctor_sobrecarga` a true/true. **Queda anotado, no hecho**: `Cls(o)` con `o: Object` decide
+cast-vs-construcción mirando sólo la cabeza (`#389`, limitación documentada); el puente AOT de `__cls_new_` valida
+la aridad contra la cabeza; el backend JVM obsoleto no cambia.
+
+#### ✅ `#510` — `Base.MAX` / `Base.cuantos()` DENTRO de una clase derivada: *«el tipo 'void' no tiene miembros»* (abierta 14-sep, de la matriz de `#492`; H1 · **CERRADA el 14-sep**, `024f5b24`)
 
 **Medido**: desde `main()` y desde un método de la propia `Base`, `Base.MAX` y `Base.cuantos()` funcionan; desde un
 método de `Der extends Base` (mismo módulo), el nombre `Base` se resuelve a otra cosa (¿el constructor heredado, una
 función `void`?) y el acceso estático falla. Cross-module con nombre cualificado (`Basemod.Base.MAX`) la const funciona;
 el método y la property estáticos no cruzan por diseño «v1» (eso es de `#492`/B). ⏭️ Acotar en el resolutor de nombres
 qué encuentra `Base` dentro de una derivada; test en la matriz.
+
+✅ **Cerrada el 14-sep** (`024f5b24`). Causa exacta (la acotó un lector del mapa de H2 con tres reproducciones:
+hace falta que `Base` declare constructor, que `Der` herede de ella y que el uso esté en un método NO estático): en
+`analyzeIdentifier`, `currentClass.lookupInstance("Base")` sube a `Base.instanceMembers` y encuentra **el
+constructor** (que vive ahí con el nombre de la clase, `declareClass`); `typeOfSymbol(ctor)` = void → «el tipo
+'void' no tiene miembros». Un identificador pelado nunca nombra un constructor (`Base(...)` va por `analyzeCall` y
+`super(...)` es `SuperExpr`): se descarta y se cae a `module.members`, donde está la clase — el caso especial que ya
+existía para la clase ACTUAL, generalizado a cualquier ancestro. La matriz voltea el control de `const_estatica`,
+`metodo_estatico` y `prop_estatica` a true.
+
+#### ✅ `#513` — una clase derivada SIN constructor propio, construida desde OTRO módulo, PIERDE los argumentos en silencio: `Mod.Der(7)` compila y las dos VMs dan 0 (abierta 14-sep, por un lector del mapa de H2; H2 · **CERRADA el 14-sep**, `9381c607`)
+
+**Medido** (dueño: `Base` con `Base(v: integer)`, `Der extends Base` sin ctor; consumidor: `Mod.Der(7)`): el
+consumidor **compilaba** (el stub `Der` hereda el ctor del stub `Base`) y las dos VMs imprimían `0`. Causa:
+`synthesizeCrossModuleFactory` construía `__cls_new_Der` desde `cls.constructor` (el **propio**, null) → factoría
+con 0 params y **sin llamar a ningún `__init`**, mientras que la construcción local usa `findConstructor()` (el
+**heredado**) y llama a `Base.__init`. El emisor externo empujaba el 7 sin coacción y la factoría lo ignoraba. Y
+un nieto de otro módulo con `super(...)` sobre `Der` llamaba a `Mod.__cls_init_Der`, que no existía. Silencioso
+las dos veces: salta la cola (regla 2 de V7).
+
+✅ **Cerrada el 14-sep** (`9381c607`): la factoría va por la cadena **efectiva** (`findConstructor`) y llama al
+`__init` de la clase que **declara** el ctor — local por nombre, o `CALL_EXT` a su `__cls_init_<Owner>$clave` si
+vive en otro módulo (`emitCallInitOf`, el mismo helper para `super(...)` explícito e implícito). En el oráculo
+`CtorHijo`: `CtorBase.Der(7)` → `Der/int:7`, y `Nieto extends CtorBase.Der` con `super(v, "nieto")` → `Der/nieto:10`.
+La stdlib reconstruida es byte-idéntica: ninguna clase suya hereda el constructor sin definir el suyo.
 
 #### 🔴 `#507` — construir la PROPIA clase dentro de un método suyo (`return Nodo()` en `Nodo.clon()`) hace saltar una excepción del emisor: *«Clase no declarada (¿endClass antes de emitNewObject?)»* (abierta 14-sep, al montar la matriz de `#492`; H1)
 
@@ -315,6 +354,33 @@ descendiente puede tocar: `field <nombre>:<tipo> slot <n>` por cada campo no pri
 los estáticos, y el emisor de `raise` resolviendo el evento heredado por la interfaz. Con la red que la hace segura:
 **un marcador de layout** (`Clase#layout#nF#nM`) que el enlazador comprueba como los de método (`#324`), para que un
 padre que crece no corrompa al hijo en silencio. Precondición: `#508`. Diseño entero en `V7_IDEAS.md` §H2.
+
+### 🧱 14-sep — B, hecho por piezas (`bpi 8`; el contenedor sigue en MOD7 hasta la subida de formato)
+
+- `160e849b` **campos**: `field <n>:<tipo> slot <s> [owner]` (los `private` NO se publican: nadie de fuera los
+  nombra, y el layout ya viaja en los bitmaps); el importador los da de alta con su ranura y el emisor accede por
+  ranura cuando la clase es externa (`emitGetFieldDe`/`emitSetFieldDe`). Oráculo `CamposBase`/`CamposHijo`.
+- `f4a3ca7e` **`final` y `private`** viajan en `method`/`prop`; el `raise` de un evento heredado de otro módulo va
+  por la ranura de la interfaz (petaba el emisor). La matriz voltea `evento`, `final_override`, `prop_priv`.
+- `024f5b24` **estáticos**: Eduardo preguntó si no se exportaban ya como funciones de módulo — **sí, desde siempre**
+  (`Cls.m`, con punto), pero la interfaz nunca los publicó (*«v1: sin estáticos»*) y no podía tal cual: **los dos
+  cargadores parten un import por el penúltimo punto** (`Mod.Cls.m` → library=Mod, módulo=Cls). Y la stdlib no tiene
+  ni un método ni una property estática de clase (sólo `const`, que cruzaba por inlineado): nadie lo echó en falta.
+  Lo que se AÑADE sin tocar lo hecho: `ModWriter.addExportAlias` (un nombre plano más en la tabla de exports, al
+  offset de la función real: cero bytecode, nada en el `.dbg`); directivas **nuevas** `staticmethod`/`staticprop`
+  (no un flag de `method`: un lector anterior las salta en vez de darles ranura de vtable en silencio); el importador
+  a `staticMembers` sin ranura y sin `isExternal` (la rama de funciones de módulo ganaría y llamaría a `Mod.cuantos`);
+  el emisor decide por `ownerClass.isExternal` como el `super` de `#451`. Guardianes: estático delante de `read` y de
+  `despues` en `SlotsVtableCrossModuleTest`; módulo de juguete en `InterfazIdaYVueltaTest`; oráculo
+  `EstaticosBase`/`EstaticosHijo`. **`#510` cerrada** en el mismo commit.
+- `9381c607` **constructores ×N** (`#509`) y **`#513`** (derivada sin ctor propio).
+
+**Lo que queda de B**: el marcador de layout (`Clase#layout#nF#nM`) al enlazar, que va con la subida de formato
+(`#500`, MOD8) — y con ella la cadena (stdlib final, samples, fat-jar del IDE, blobs, `Stdlib.pack`, docs: el
+manual dice en tres copias que *«los miembros estáticos no cruzan la frontera del módulo»* y `PENDIENTES` L18 que
+*«sólo la primera sobrecarga del constructor cruza»*: ya no es verdad; `MOD_FORMAT.md` §4.1 debe decir que varios
+nombres pueden apuntar al mismo offset y listar los `__cls_*`). El AOT sigue sin llamar a estáticos ni leer
+campos: límite documentado, no silencioso (`UnsupportedAotException`).
 
 #### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
 

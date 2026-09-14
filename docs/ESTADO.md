@@ -27,6 +27,35 @@
 
 ## Última sesión
 
+## ⏭️ AL RETOMAR (14-sep, tarde) — B de `#492` casi entera: campos, `final`/`private`, ESTÁTICOS y CONSTRUCTORES ×N cruzan el módulo; `#509` `#510` `#513` cerradas. Falta la subida de formato (MOD8/`#500`) y su cadena
+
+**Commits del día, en orden**: `4a6ea0f4` (`#508`) · `160e849b` (campos, `bpi 8`) · `7680998a` (`#512`) ·
+`f4a3ca7e` (`final`/`private` en la interfaz, `raise` heredado por ranura, campos privados fuera) · `024f5b24`
+(**estáticos**: `staticmethod`/`staticprop` + alias plano `__cls_s_`/`__cls_sg_`/`__cls_ss_`; **`#510`**) ·
+`9381c607` (**ctor ×N**: `ctor+(...)`, `__cls_init_/__cls_new_<Cls>$clave`, `super(args)` por firma; **`#509`** y
+**`#513`**). Estado de la red al último commit: frontend **189/189**, miVM 39/39, paridad **63/63** (tres oráculos
+nuevos: `CamposHijo`, `EstaticosHijo`, `CtorHijo`), cápsula V6 59/59, samples 348/348, test-modhdr OK. **La stdlib
+es byte-idéntica** (no usa estáticos de clase ni hereda constructores): sus `.mod` y blobs NO cambian por esto.
+
+**Lo que Eduardo dijo hoy y manda**: *«sólo preguntaba, no hace falta que modifiques algo que ya está hecho»* (los
+estáticos siguen emitiéndose y exportándose como `Cls.m`; se AÑADE el alias y la línea de interfaz) y *«los métodos
+estáticos siempre van precedidos por el nombre de la clase»* — justo el nudo: el punto en el nombre es lo que los
+cargadores parten mal (penúltimo punto = módulo).
+
+**Método del día**: un mapa de 7 lectores + 7 refutadores ANTES de tocar (todo verificado línea a línea; sacó `#513`,
+la trampa del flag `static` en `method` —un lector viejo daría ranura en silencio— y la causa exacta de `#510`), y
+al final una **revisión adversarial** (5 lentes + refutadores) de los tres commits: **estaba corriendo al cortar la
+sesión** (`wf_ab68d33b-627`; su journal en `.claude/projects/C--lenguajes-pm-miVM/576fc834…/subagents/workflows/`).
+⚠️ **Al retomar, leer ese journal antes de nada**: si hay hallazgos reales, van delante.
+
+**Queda de H2** (`V7_IDEAS.md` §H2): la subida de formato **MOD8** (`gen` + `ifaceCrc`, `#500`), el marcador de
+layout `Clase#layout#nF#nM` al enlazar, `#441` (huella del `.mdn`), `#493` (fallback de packs, `fromPath` en la
+VM-C, ruido en OUTPUT, pack sin stdlib, orden de arranque STM32), y con ello **la cadena**: stdlib final, samples,
+fat-jar del IDE (⚠️ con el IDE cerrado), blobs de las cinco imágenes, `Stdlib.pack`, docs (`MOD_FORMAT.md` §4.1:
+varios nombres por offset y los `__cls_*`; el manual ×3 dice *«los estáticos no cruzan»* y `PENDIENTES` L18 *«sólo
+la primera sobrecarga del constructor cruza»*: ya es falso). Tests pendientes de H2: la norma (4 casos), el
+marcador de layout, sombra/XIP en el sim. De H1 siguen `#506`, `#507`, `#511` (decisión de Eduardo).
+
 ## 📐 H2 ANALIZADA (14-sep) — la matriz de `#492`, B decidido, el mapa de las dependencias y el diseño de H2 en `V7_IDEAS`
 
 **Eduardo abrió el día con «Empezamos V7» y, a mi primer desvío (`L20`), «¿Empezábamos con H2, no?».** Día de análisis:
