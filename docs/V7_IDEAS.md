@@ -852,15 +852,56 @@ esta placa»* antes de subirlo (hoy lo decide por `mtime`). Misma subida de form
    STM32, el builder sin stdlib, los tests.
 5. La cadena: jar, stdlib como proyecto, samples, fat-jar del IDE (cerrado), los blobs de las cinco imágenes,
    `packs/Stdlib.pack`; `MOD_FORMAT.md` a v8, manual/referencia (`#492`, `L18`), `PENDIENTES` (L18 fuera).
-6. **Cierre pequeño de H2**: la matriz de `#492` como test de la suite del frontend (24 casos + controles
-   negativos); un test de host de la norma de versiones (un `Core` con `gen` menor, uno con la misma `gen` y otra
-   interfaz, uno mayor que enlaza y otro mayor que no); `compat.sh`; y la ronda corta de `tanda.py` en una placa
-   con pack (P4) y una sin él (Pico), que es donde la sombra y el XIP se ven.
+6. **Cierre pequeño de H2**: todo lo del apartado 4 — los siete tests a medida en verde, las redes de siempre con
+   número, y la ronda corta de `tanda.py` en una placa por familia (los blobs cambian en las cinco).
 
 Los tres bugs sueltos del compilador (`super` con constructor sobrecargado, `Base.X` dentro de una derivada,
 `#507`) y `#506` son de `H1`: ficha propia, se hacen cuando toque.
 
-### 4. Lo que hay que decidir (Eduardo)
+### 4. Cómo se prueba la subida de formato — «con los ejemplos de siempre más tests a medida» (Eduardo, 14-sep)
+
+> *«El cambio de formato de los `.mod` puede ser fuente de problemas de compatibilidad. Hay que probarlo bien, con los
+> ejemplos de siempre más tests hechos a medida para verificar estos cambios.»* La subida de `MOD6`→`MOD7` en V6 se
+> probó con las redes de siempre y aun así un `Stdlib.pack` MOD6 viajó en el primer ZIP y cinco drivers MOD6 se
+> quedaron en `bpdevices/` (los cazó el empaquetador en `F1`, no una prueba). Esta vez, las dos cosas desde el principio.
+
+**Las redes de siempre**, todas, y con número (no «verde»): la suite del frontend (110) y la de miVM (39);
+`compat.sh check` (59 PASS, sin `!! stderr:`); `samples_sweep.py` (348 OK); `doc_frags.py`; la guarda del
+empaquetador (que ya mira dentro de los packs); y la ronda corta de `tanda.py` en **una placa por familia**
+(Pico · S3 · C6 · P4 · DK2), porque los blobs embebidos de las cinco imágenes se regeneran.
+
+**Los tests a medida**, uno por cada cosa que cambia — se escriben ANTES de tocar el formato, con el `.mod` de hoy
+como control:
+
+1. **El gate del formato, en las dos direcciones.** `MOD7` en una VM de `MOD8` → rechazo con mensaje accionable (la
+   norma de `#284`), en las dos VMs, mismo texto. Y **`MOD8` en las VMs de V6**: el ZIP publicado
+   (`BasicPlus-6.0-win.zip`, el oráculo) tiene que **rechazarlo con mensaje, no petar ni cargarlo mal** — es la única
+   prueba real de compatibilidad hacia atrás que existe, y hoy no se hace.
+2. **La cabecera y las secciones.** Un `.mod` con TODAS las secciones no vacías (imports con `gen`/`ifaceCrc`,
+   interface con `field`/`final`/estáticos/`ctor`×N, native con dos bloques, data, code) cargado por las dos VMs y
+   por `Disasm`, comprobando que `data` y `code` quedan donde deben (CRC de cada sección contra el escritor) — el
+   comentario de `loader.c` lo dice: *«saltarla mal desplazaría `data` y `code`, que es como se corrompe un módulo en
+   silencio»*. Hoy ese test no existe y `Disasm` ya se desplaza con `MOD7`.
+3. **La norma de versiones, los cuatro casos** (`#500`), en host y en las dos VMs con el mismo texto: dependencia con
+   `gen` menor → rechazo; misma `gen` y otra interfaz → rechazo; `gen` mayor que enlaza → carga; `gen` mayor que no
+   enlaza (una ranura movida) → rechazo por marcador. Con `Core` de verdad, no con un módulo de juguete.
+4. **El marcador de layout.** `Base` gana un campo; `Der` compilado contra la vieja → rechazo al enlazar (las dos
+   VMs); `Der` recompilado → carga y `tanda` byte a byte. Y el mismo test en el AOT: una `native` del hijo leyendo el
+   campo heredado.
+5. **La interfaz: la matriz de `#492` entera** (24 casos + los controles negativos: lo privado NO cruza, `final` NO se
+   salta, `super(5)` resuelve) como test de la suite del frontend; y una ida y vuelta de la interfaz (escribir →
+   leer → escribir, byte-idéntica) para `field`, `final`, estáticos y `ctor` ×N.
+6. **La sombra y el XIP** (`#493`), en el simulador con `--pack`: `/app` real gana a `/lib`, `/lib` gana a la zona, la
+   zona sólo contesta en su espacio; **un módulo servido por un pack se carga XIP** (`en_pack=1`), que hoy es
+   inalcanzable; el aviso por `OUTPUT` sale cuando toca y sólo entonces; `test_fsfallback.c` afirmando lo contrario de
+   hoy. Y en placa: el P4 con la zona grabada (`SqlDemo` sigue igual al host) y la Pico sin ella.
+7. **Lo que no cambia**: la paridad de los 59 casos y las salidas de la tanda **byte-idénticas** a las de V6 en todo
+   lo que no sea el mensaje nuevo — el ZIP de V6 como oráculo: lo que allí daba X sigue dando X.
+
+📌 El orden manda: **primero los tests (en rojo o inexistentes hoy), luego el formato.** Un test que se escribe después
+prueba lo que se hizo, no lo que se quería.
+
+### 5. Lo que hay que decidir (Eduardo)
 
 1. **`gen` = la versión declarada del proyecto** (`"version"` del `.bpbuild`; la stdlib entera va con una) — ¿o
    una versión por módulo? La primera es la que ya existe para el pack (`pack.version`) y no obliga a tocar cada

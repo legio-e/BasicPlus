@@ -62,7 +62,14 @@ ni una línea de código de producto.
    el `.mdn`. Orden de trabajo y el cierre pequeño de H2 (la matriz como test de la suite, test de la norma, `compat`,
    `tanda` corta en P4 y Pico) al final del apartado.
 
-⏭️ **Al retomar: cinco decisiones de Eduardo** (`V7_IDEAS.md` §H2 punto 4) y a programar H2 en el orden del punto 3:
+6. **Y la condición de Eduardo para la subida de formato**: *«puede ser fuente de problemas de compatibilidad; hay que
+   probarlo bien, con los ejemplos de siempre más tests hechos a medida»*. Escrita como §H2 punto 4: las redes de
+   siempre con número + siete tests a medida (el gate en las dos direcciones — incluido **`MOD8` en las VMs del ZIP de
+   V6**, que debe rechazar con mensaje —, la cabecera con todas las secciones, los cuatro casos de la norma, el marcador
+   de layout, la matriz entera, la sombra y el XIP en el sim, y byte-idéntico con V6 en lo que no cambia). **Primero los
+   tests, luego el formato.** Los constructores sobrecargados (`#509`) viajan en la misma subida.
+
+⏭️ **Al retomar: cuatro decisiones de Eduardo** (`V7_IDEAS.md` §H2 punto 5) y a programar H2 en el orden del punto 3:
 (1) `gen` = versión del proyecto (`.bpbuild`) ¿o por módulo?; (2) con `gen` mayor, ¿basta que enlace?; (3) `fromPath`
 en las dos VMs o fuera; (4) el pack de librería sin stdlib por defecto; (5) una sola subida de formato para H2 y `#441`.
 Primer código: `#508` (parser) → la subida de formato. ⚠️ Toca el frontend: rehacer stdlib (`rm -rf bpstdlib/out`),
