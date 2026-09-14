@@ -18,6 +18,7 @@ module CamposHijo
       this.pi := this.pi + 0.5d              // double, dos ranuras
       this.nombre := this.nombre + "+hijo"   // string (ref)
       this.otro := this                      // ref a la propia clase base
+      raise onCambio(this.n)                 // evento HEREDADO de otro módulo (petaba el emisor)
       return this.resumen() + " propio=" + this.propio + " otroNombre=" + this.otro.nombre
     end toca
     public function suma(): long
@@ -25,10 +26,22 @@ module CamposHijo
     end suma
   end Hijo
 
+  public class Oyente
+    public function Oyente()
+    end Oyente
+    function event cambio(v: integer)
+      print "  handler: onCambio(" + v + ")"
+    end cambio
+  end Oyente
+
   public function main()
     var h: Hijo := Hijo()
+    var o: Oyente := Oyente()
+    h.onCambio := o::cambio                 // suscribirse a un evento heredado, desde fuera
     print h.resumen()
-    print h.toca()
+    var r: string := h.toca()              // el raise ENCOLA: el handler corre entre quanta,
+    sleep(30)                               // y cuándo exactamente no es igual en las dos VMs
+    print r                                 // → se espera antes de imprimir nada más
     print h.suma()
     print "secreto=" + h.secretoDeBase()
   end main

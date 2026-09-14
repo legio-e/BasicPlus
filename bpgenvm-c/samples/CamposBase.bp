@@ -11,6 +11,7 @@ module CamposBase
     var nombre: string
     var otro: Base
     private var secreto: integer
+    event onCambio(v: integer)      // el hijo, en otro módulo, hace `raise` de este evento
     // Se asigna en el constructor y no con `:=` en la declaración: los inicializadores
     // de campo se IGNORAN en silencio hoy (#511), y un string sin inicializar mata a
     // la miVM al concatenarlo (#512). Los dos, fichados el 14-sep al escribir esto.

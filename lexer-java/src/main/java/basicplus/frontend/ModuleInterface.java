@@ -93,6 +93,10 @@ public final class ModuleInterface {
         /** Función intrínseca: el call-site emite opcodes inline en lugar de CALL_EXT.
          *  El .mod del módulo dueño NO contiene código para esta función. */
         public final boolean isIntrinsic;
+        /** V7/H2 (bpi 8) — `final`: un hijo de otro módulo no puede sobreescribirlo.
+         *  Hasta el 14-sep no viajaba y la matriz de #492 lo cazó: el mismo `final` que el
+         *  compilador hacía cumplir en el mismo módulo se saltaba cruzando la frontera. */
+        public boolean isFinal = false;
         public final List<ParamSig> params;
         /** Tipo de retorno; null = void. */
         public final BpType returnType;
@@ -170,14 +174,16 @@ public final class ModuleInterface {
 
     /** V7/H2 (#492, opción B) — un CAMPO de instancia de una clase exportada:
      *  nombre, tipo, su RANURA en el objeto (slots de 4 B; un long/double/ref
-     *  ocupa dos y la ranura es la primera) y sus marcas. Se exportan TODOS los
-     *  campos, los privados también, marcados: el hijo de otro módulo necesita
-     *  el nombre y la ranura para emitir GET_FIELD/SET_FIELD por slot igual que
-     *  si estuviera en el mismo módulo, y es el semántico (checkVisibility)
-     *  quien decide quién puede tocarlo — publicar NO es hacer público, como con
-     *  `prop` (#316) y `method` (#390). Medido el 14-sep: convertir cada campo
-     *  en property costaba ×2,25 por acceso y ~74 B de RAM; una línea aquí
-     *  cuesta ~25 B de flash que la VM salta. */
+     *  ocupa dos y la ranura es la primera) y sus marcas. Se exportan los campos
+     *  NO privados: el hijo de otro módulo necesita el nombre y la ranura para
+     *  emitir GET_FIELD/SET_FIELD por slot igual que si estuviera en el mismo
+     *  módulo. Los privados NO viajan (Eduardo, 14-sep: «¿private en el
+     *  interface? ¿por qué?» — no hay motivo: el hijo nunca los toca y su ranura
+     *  ya cuenta en el `layout`). Ojo: con `prop` es distinto — una property
+     *  privada SÍ se exporta, marcada, porque sus accesores ocupan ranuras de la
+     *  vtable que el hijo tiene que contar (#316). Medido el 14-sep: convertir
+     *  cada campo en property costaba ×2,25 por acceso y ~74 B de RAM; una línea
+     *  aquí cuesta ~25 B de flash que la VM salta. */
     public static final class FieldSig {
         public final String name;
         public final BpType type;
@@ -201,6 +207,9 @@ public final class ModuleInterface {
          *  sirve). Las properties de MÓDULO no tienen vtable: siguen siendo
          *  solo-públicas. */
         public final boolean isPublic;
+        /** V7/H2 (bpi 8) — `final` y `private` de la property también viajan. */
+        public boolean isFinal = false;
+        public boolean isPrivate = false;
         public PropSig(String name, BpType type, boolean isSync) {
             this(name, type, isSync, true);
         }
@@ -450,7 +459,10 @@ public final class ModuleInterface {
                                 + (psym.type == null ? "<null>" : psym.type.display()));
                         continue;
                     }
-                    properties.add(new PropSig(psym.name, psym.type, psym.isSync, psym.isPublic));
+                    PropSig psig = new PropSig(psym.name, psym.type, psym.isSync, psym.isPublic);
+                    psig.isFinal = psym.isFinal;       // V7/H2 (bpi 8)
+                    psig.isPrivate = psym.isPrivate;
+                    properties.add(psig);
                 } else if (m instanceof Ast.FuncDef) {
                     Ast.FuncDef fn = (Ast.FuncDef) m;
                     // H5.a-E5 — con sobrecarga hay VARIOS FuncDef con el mismo
@@ -481,7 +493,9 @@ public final class ModuleInterface {
                     }
                     List<ParamSig> ps = new ArrayList<>(fsym.params.size());
                     for (ParamSymbol p : fsym.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
-                    methods.add(new FuncSig(fsym.name, fsym.isPublic, false, ps, fsym.returnType));
+                    FuncSig msig = new FuncSig(fsym.name, fsym.isPublic, false, ps, fsym.returnType);
+                    msig.isFinal = fsym.isFinal;       // V7/H2 (bpi 8)
+                    methods.add(msig);
                 }
             }
         }
@@ -568,6 +582,7 @@ public final class ModuleInterface {
         // conocería) se omite con aviso: el hijo verá el layout (sus ranuras están en
         // los bitmaps) pero no podrá nombrarlo — como hasta hoy con todos.
         for (FieldSig f : lay.ownFields) {
+            if (f.isPrivate) continue;   // de la clase y de nadie más: no viaja (Eduardo, 14-sep)
             if (!isExportableType(f.type)) {
                 skipped.add("class " + cls.name + ".field " + f.name + ": tipo no exportable: "
                         + (f.type == null ? "<null>" : f.type.display()));
@@ -1113,9 +1128,10 @@ public final class ModuleInterface {
                 for (PropSig p : c.properties) {
                     // #316 — sin el flag `public` = property no pública: se exporta
                     // SOLO para que el consumidor cuente sus 2 slots de accesor.
-                    pw.printf("  prop %s:%s%s%s%n",
+                    pw.printf("  prop %s:%s%s%s%s%s%n",
                             p.name, typeToString(p.type),
-                            p.isPublic ? " public" : "", p.isSync ? " sync" : "");
+                            p.isPublic ? " public" : "", p.isSync ? " sync" : "",
+                            p.isFinal ? " final" : "", p.isPrivate ? " private" : "");   // V7/H2 (bpi 8)
                 }
                 for (ConstSig sc : c.staticConsts) {
                     pw.printf("  staticconst %s:%s=%s public%n",
@@ -1144,6 +1160,7 @@ public final class ModuleInterface {
                     }
                     sb.append("):").append(typeToString(m.returnType));
                     if (m.isPublic) sb.append(" public");   // #390: como en `prop`
+                    if (m.isFinal)  sb.append(" final");    // V7/H2 (bpi 8)
                     pw.println(sb.toString());
                 }
                 pw.println("end class");
@@ -1615,14 +1632,19 @@ public final class ModuleInterface {
         BpType type = parseType(file, lineNo, typeStr);
         boolean isSync = false;
         boolean isPublic = false;   // #316: sin el flag ⇒ property NO pública (solo cuenta slots)
+        boolean isFinal = false, isPrivate = false;   // V7/H2 (bpi 8)
         if (!flagsStr.isEmpty()) {
             for (String tk : flagsStr.split("\\s+")) {
                 if ("public".equals(tk)) isPublic = true;
                 else if ("sync".equals(tk)) isSync = true;
+                else if ("final".equals(tk)) isFinal = true;
+                else if ("private".equals(tk)) isPrivate = true;
                 else throw new IOException(file + ":" + lineNo + ": flag desconocido en prop '" + tk + "'");
             }
         }
-        return new PropSig(name, type, isSync, isPublic);
+        PropSig ps = new PropSig(name, type, isSync, isPublic);
+        ps.isFinal = isFinal; ps.isPrivate = isPrivate;
+        return ps;
     }
 
     /** V7/H2 (bpi 8) — "<name>:<type> slot <n> [private] [owner]". */
@@ -1729,19 +1751,22 @@ public final class ModuleInterface {
 
         boolean isPublic = false;
         boolean isStatic = false;
-        boolean isIntrinsic = false;
+        boolean isIntrinsic = false, isFinal = false;
         if (!flagsStr.isEmpty()) {
             for (String tk : flagsStr.split("\\s+")) {
                 if ("public".equals(tk)) isPublic = true;
                 else if ("static".equals(tk)) isStatic = true;
                 else if ("intrinsic".equals(tk)) isIntrinsic = true;
+                else if ("final".equals(tk)) isFinal = true;   // V7/H2 (bpi 8)
                 else throw new IOException(file + ":" + lineNo + ": flag desconocido '" + tk + "'");
             }
         }
 
         List<ParamSig> params = parseParamList(file, lineNo, paramsRaw);
 
-        return new FuncSig(name, isPublic, isStatic, isIntrinsic, params, ret);
+        FuncSig fs = new FuncSig(name, isPublic, isStatic, isIntrinsic, params, ret);
+        fs.isFinal = isFinal;   // V7/H2 (bpi 8)
+        return fs;
     }
 
     private static BpType parseType(Path file, int lineNo, String s) throws IOException {

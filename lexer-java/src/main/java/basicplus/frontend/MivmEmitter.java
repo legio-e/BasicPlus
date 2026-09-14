@@ -2365,8 +2365,17 @@ public final class MivmEmitter {
         // ---- y encima la cabecera, para que el despachador la saque primero ----
         emitInt(masks);                                                // ref|ancho (4B)
         emitInt(n);                                                    // nº de argumentos (4B)
-        w.emitGetParam("this"); w.emitGetField(cls, ev.destField());   // destino (4B)
-        w.emitGetParam("this"); w.emitGetField(cls, ev.recvField());   // receptor (8B)
+        // V7/H2 (#492-B) — un evento HEREDADO de una clase de otro módulo: sus campos no
+        // están en este ModWriter («Clase no declarada: Base», petaba el compilador); la
+        // interfaz publicó el slot del receptor (`event … recv n`), y el destino va en +2.
+        // Mismo par de ranuras que ya usa el suscriptor (emitEventBind).
+        if (ev.externalRecvSlot >= 0) {
+            w.emitGetParam("this"); w.emitGetFieldBySlot(ev.externalRecvSlot + 2, false);   // destino (4B)
+            w.emitGetParam("this"); w.emitGetFieldBySlot(ev.externalRecvSlot, true);        // receptor (8B)
+        } else {
+            w.emitGetParam("this"); w.emitGetField(cls, ev.destField());   // destino (4B)
+            w.emitGetParam("this"); w.emitGetField(cls, ev.recvField());   // receptor (8B)
+        }
         w.emit(OpCode.CALL_BUILTIN);
         w.emitShort((short) Builtin.EVENT_RAISE.id);
     }

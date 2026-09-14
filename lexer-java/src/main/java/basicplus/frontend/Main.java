@@ -2233,8 +2233,9 @@ public final class Main {
                         // checkVisibility sigue prohibiendo el acceso desde fuera y
                         // permitiéndoselo a las subclases (que es su razón de ser).
                         Symbol.PropertySymbol psym = new Symbol.PropertySymbol(
-                                p.name, p.isPublic, false, false, stub, null);
+                                p.name, p.isPublic, p.isFinal, false, stub, null);   // V7/H2: final viaja
                         psym.type = p.type;
+                        psym.isPrivate = p.isPrivate;   // V7/H2 (bpi 8)
                         stub.instanceMembers.tryDefine(psym);
                         String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
                         clavesPropias.add("get" + capName);
@@ -2265,6 +2266,7 @@ public final class Main {
                         Symbol.FunctionSymbol fsym = new Symbol.FunctionSymbol(
                                 m.name, m.isPublic, false, false, stub, null);
                         fsym.returnType = m.returnType;
+                        fsym.isFinal = m.isFinal;   // V7/H2 (bpi 8): el hijo de otro módulo tampoco lo sobreescribe
                         for (ModuleInterface.ParamSig pp : m.params) {
                             Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                             psm.type = pp.type;
