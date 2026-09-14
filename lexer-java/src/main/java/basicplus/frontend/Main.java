@@ -2318,6 +2318,47 @@ public final class Main {
                         cst.literalValue = sc.value;
                         stub.staticMembers.tryDefine(cst);
                     }
+                    // V7/H2 (#492-B) — MÉTODOS y PROPERTIES ESTÁTICOS del stub. Van a
+                    // staticMembers (el semántico resuelve `Mod.Cls.x` con lookupStatic)
+                    // y NO gastan ranura de vtable: no entran en clavesPropias. Sin
+                    // isExternal: la rama de funciones de módulo del emisor ganaría y
+                    // llamaría a `Mod.cuantos` (sin clase); el emisor decide por
+                    // ownerClass.isExternal, como el `super` cross-module (#451), y
+                    // llama al alias plano `__cls_s_<Cls>_<clave>`. La clave de
+                    // sobrecarga se calcula como en el dueño (overloadMangle); no se
+                    // guarda ningún alias en slotKey porque assignSlotKeys lo recalcula.
+                    for (ModuleInterface.FuncSig m : cs.staticMethods) {
+                        Symbol.FunctionSymbol fsym = new Symbol.FunctionSymbol(
+                                m.name, m.isPublic, m.isFinal, true, stub, null);
+                        fsym.returnType = m.returnType;
+                        for (ModuleInterface.ParamSig pp : m.params) {
+                            Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
+                            psm.type = pp.type;
+                            if (pp.defaultValue != null)
+                                psm.defaultExpr = SemanticAnalyzer.literalExprFromValue(pp.defaultValue, pp.type, 0, 0);
+                            fsym.params.add(psm);
+                        }
+                        Symbol prevS = stub.staticMembers.tryLookup(m.name);
+                        if (prevS instanceof Symbol.FunctionSymbol) {
+                            Symbol.FunctionSymbol headS = (Symbol.FunctionSymbol) prevS;
+                            Symbol.FunctionSymbol tailS = headS;
+                            while (tailS.nextOverload != null) tailS = tailS.nextOverload;
+                            tailS.nextOverload = fsym;
+                            headS.overloaded = true;
+                            fsym.overloaded  = true;
+                            fsym.slotKey = fsym.overloadMangle();
+                        } else {
+                            stub.staticMembers.tryDefine(fsym);
+                            fsym.slotKey = fsym.name;
+                        }
+                    }
+                    for (ModuleInterface.PropSig p : cs.staticProps) {
+                        Symbol.PropertySymbol psym = new Symbol.PropertySymbol(
+                                p.name, p.isPublic, p.isFinal, true, stub, null);   // isStatic=true
+                        psym.type = p.type;
+                        psym.isPrivate = p.isPrivate;
+                        stub.staticMembers.tryDefine(psym);
+                    }
 
                     // Constructor: como FunctionSymbol cross-module. Lo expone-
                     // mos en realidad vía la factoría `__cls_new_<Cls>`, pero
@@ -2346,7 +2387,11 @@ public final class Main {
                 }
                 // 2nd pass: resolver UnresolvedClassRef contra stubs creados.
                 for (Symbol.ClassSymbol stub : ns.classes.values()) {
-                    for (Symbol mem : stub.instanceMembers.getSymbols()) {
+                    // V7/H2 (#492-B) — los estáticos también: `function Base.crea(): Base`
+                    // o `property Base.actual: Otra` llegan como UnresolvedClassRef.
+                    List<Symbol> miembros = new ArrayList<>(stub.instanceMembers.getSymbols());
+                    miembros.addAll(stub.staticMembers.getSymbols());
+                    for (Symbol mem : miembros) {
                         if (mem instanceof Symbol.FunctionSymbol) {
                             // #387 — la cadena ENTERA: las sobrecargas no están en el mapa.
                             for (Symbol.FunctionSymbol f : firmasDe((Symbol.FunctionSymbol) mem)) {
@@ -2445,7 +2490,9 @@ public final class Main {
                 }
             }
             for (Symbol.ClassSymbol stub : ns.classes.values()) {
-                for (Symbol mem : stub.instanceMembers.getSymbols()) {
+                List<Symbol> miembros = new ArrayList<>(stub.instanceMembers.getSymbols());
+                miembros.addAll(stub.staticMembers.getSymbols());   // V7/H2 (#492-B)
+                for (Symbol mem : miembros) {
                     if (mem instanceof Symbol.FunctionSymbol) {
                         for (Symbol.FunctionSymbol f : firmasDe((Symbol.FunctionSymbol) mem)) {
                             f.returnType = resolveCrossModuleType(f.returnType, loadedNs);
@@ -2455,6 +2502,11 @@ public final class Main {
                     } else if (mem instanceof Symbol.PropertySymbol) {
                         Symbol.PropertySymbol p = (Symbol.PropertySymbol) mem;
                         p.type = resolveCrossModuleType(p.type, loadedNs);
+                    } else if (mem instanceof Symbol.VarSymbol) {
+                        // V7/H2 — un campo con tipo de OTRO namespace (`var x: OtraLib.Foo`)
+                        // sólo lo resolvía la 1ª pasada, que no ve otros namespaces.
+                        Symbol.VarSymbol vv = (Symbol.VarSymbol) mem;
+                        vv.type = resolveCrossModuleType(vv.type, loadedNs);
                     }
                 }
             }

@@ -143,10 +143,11 @@ public class Disasm {
             out.printf ("=== EXPORTS (%d) ===%n", exportsByOffset.size());
             if (exportsByOffset.isEmpty()) out.println("  (ninguno)");
             for (Map.Entry<Integer, String> e : exportsByOffset.entrySet()) {
-                String aotTag = (mdn != null && mdn.hasSymbol(e.getValue(), library))
-                        ? "  [AOT]" : "";
-                out.printf("  %-25s @code +%d%s%n",
-                        e.getValue(), e.getKey(), aotTag);
+                String nombre = e.getValue();
+                int ali = nombre.indexOf("  (alias:");
+                String base = (ali >= 0) ? nombre.substring(0, ali) : nombre;
+                String aotTag = (mdn != null && mdn.hasSymbol(base, library)) ? "  [AOT]" : "";
+                out.printf("  %-25s @code +%d%s%n", nombre, e.getKey(), aotTag);
             }
 
             if (v6) {
@@ -296,7 +297,10 @@ public class Disasm {
         for (int i = 0; i < n; i++) {
             String name = in.readUTF();
             int off = in.readInt();
-            result.put(off, name);
+            // V7/H2 — un ALIAS (`__cls_s_…`) comparte offset con la función real: el
+            // primer nombre (el real) etiqueta el código; el alias se lista aparte.
+            if (result.containsKey(off)) result.put(off, result.get(off) + "  (alias: " + name + ")");
+            else result.put(off, name);
         }
         return result;
     }

@@ -2830,8 +2830,17 @@ public final class SemanticAnalyzer {
             if (clsSym instanceof ClassSymbol) sym = clsSym;
         }
 
-        if (sym == null && currentClass != null && currentFunction != null && !currentFunction.isStatic)
+        if (sym == null && currentClass != null && currentFunction != null && !currentFunction.isStatic) {
             sym = currentClass.lookupInstance(id.name);
+            // #510 (V7) — el CONSTRUCTOR de una clase base vive en sus instanceMembers
+            // con el nombre de la clase: dentro de `Der extends Base`, `Base.MAX` o
+            // `Base.cuantos()` resolvía `Base` al ctor (tipo void → «el tipo 'void' no
+            // tiene miembros»). Un identificador pelado nunca nombra un constructor
+            // (`Base(...)` va por analyzeCall y `super(...)` es SuperExpr): se descarta
+            // y se cae a module.members, donde está la clase. Es el caso especial de
+            // arriba (la clase ACTUAL) generalizado a cualquier ancestro.
+            if (sym instanceof FunctionSymbol && ((FunctionSymbol) sym).isConstructor) sym = null;
+        }
         if (sym == null) {
             Symbol moduleSym = module.members.resolve(id.name);
             // Gating: dentro de una clase, los símbolos de "estado" del módulo

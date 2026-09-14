@@ -914,6 +914,57 @@ public final class MivmEmitter {
     static String staticGetterName(String clsName, String propName)  { return clsName + ".__prop_get_" + propName; }
     static String staticSetterName(String clsName, String propName)  { return clsName + ".__prop_set_" + propName; }
 
+    /* V7/H2 (#492-B) — ALIAS PLANOS de los estáticos de clase. La función local
+     * se llama `Cls.m` (con punto) y un import `Mod.Cls.m` lo parten mal los dos
+     * cargadores (leen library=Mod, módulo=Cls). El dueño exporta un alias sin
+     * puntos al mismo offset (ModWriter.addExportAlias: cero bytecode) y el
+     * consumidor lo importa. DEFINICIÓN y LLAMADA usan SIEMPRE estos helpers —
+     * misma regla que emitName/crossModuleMethodName. La clave de un método es
+     * emitName(fs) = slotKey (con el `$…` de la sobrecarga). */
+    static String crossModuleStaticName(ClassSymbol cls, FunctionSymbol fs) { return "__cls_s_" + cls.name + "_" + emitName(fs); }
+    static String crossModuleStaticGetter(String clsName, String propName) { return "__cls_sg_" + clsName + "_" + propName; }
+    static String crossModuleStaticSetter(String clsName, String propName) { return "__cls_ss_" + clsName + "_" + propName; }
+
+    /** `[lib.]Mod.<plano>` para un símbolo del módulo dueño de una clase EXTERNA. */
+    private static String qualifyForOwner(ClassSymbol owner, String plain) {
+        StringBuilder qn = new StringBuilder();
+        if (owner.externalLibrary != null && !owner.externalLibrary.isEmpty())
+            qn.append(owner.externalLibrary).append('.');
+        qn.append(owner.externalModule).append('.').append(plain);
+        return qn.toString();
+    }
+
+    /** Llamada a un método ESTÁTICO (args ya en pila): local por nombre, o CALL_EXT
+     *  al alias si la clase que lo DECLARA es de otro módulo (`Hija.cuantos()` con
+     *  Hija local hija de una Base externa resuelve al símbolo de Base). */
+    private void emitStaticCall(FunctionSymbol fs) throws IOException {
+        ClassSymbol duena = fs.ownerClass;
+        if (duena != null && duena.isExternal) {
+            String qn = qualifyForOwner(duena, crossModuleStaticName(duena, fs));
+            w.emitCallExt(qn, fromPathFor(qn));
+        } else {
+            w.emitCall(duena.name + "." + emitName(fs));   // H5.a
+        }
+    }
+    private void emitStaticGetter(PropertySymbol ps) throws IOException {
+        ClassSymbol duena = ps.ownerClass;
+        if (duena != null && duena.isExternal) {
+            String qn = qualifyForOwner(duena, crossModuleStaticGetter(duena.name, ps.name));
+            w.emitCallExt(qn, fromPathFor(qn));
+        } else {
+            w.emitCall(staticGetterName(duena.name, ps.name));
+        }
+    }
+    private void emitStaticSetter(PropertySymbol ps) throws IOException {
+        ClassSymbol duena = ps.ownerClass;
+        if (duena != null && duena.isExternal) {
+            String qn = qualifyForOwner(duena, crossModuleStaticSetter(duena.name, ps.name));
+            w.emitCallExt(qn, fromPathFor(qn));
+        } else {
+            w.emitCall(staticSetterName(duena.name, ps.name));
+        }
+    }
+
     /** Construye el qualified name de un accesor externo (`lib.Mod.__prop_get_x`). */
     private static String buildExternalAccessorName(PropertySymbol ps, boolean setter) {
         StringBuilder sb = new StringBuilder();
@@ -1707,6 +1758,11 @@ public final class MivmEmitter {
 
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
         w.addFunction(cls.name + "." + emitName(fs), fs.isPublic);
+        // V7/H2 (#492-B) — alias plano importable, para todo lo que la interfaz
+        // publica (clase pública, método no private; lo protegido lo llama una
+        // hija de otro módulo y checkVisibility ya decide quién puede).
+        if (cls.astNode != null && cls.astNode.isPublic && !fs.isPrivate)
+            w.addExportAlias(crossModuleStaticName(cls, fs), cls.name + "." + emitName(fs));
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
         try {
@@ -1814,6 +1870,11 @@ public final class MivmEmitter {
             String backing = staticBackingName(cls.name, pd.name.name);
             String getter  = staticGetterName(cls.name, pd.name.name);
             String setter  = staticSetterName(cls.name, pd.name.name);
+            // V7/H2 (#492-B) — alias planos importables (ver crossModuleStaticName).
+            if (cls.astNode != null && cls.astNode.isPublic && !pd.isPrivate) {
+                w.addExportAlias(crossModuleStaticGetter(cls.name, pd.name.name), getter);
+                w.addExportAlias(crossModuleStaticSetter(cls.name, pd.name.name), setter);
+            }
 
             // ---- Getter ----
             w.addFunction(getter, pd.isPublic);
@@ -2557,19 +2618,13 @@ public final class MivmEmitter {
                     }
                 }
                 // ---------- L6: static property de clase ----------
+                // V7/H2 (#492-B): local o de otro módulo, por emitStaticGetter/Setter.
                 if (ps.isStatic) {
-                    if (ps.isExternal) {
-                        errors.add("static property cross-module no soportada (v1): "
-                                + ps.ownerClass.name + "." + ps.name);
-                        return;
-                    }
-                    String sGet = staticGetterName(ps.ownerClass.name, ps.name);
-                    String sSet = staticSetterName(ps.ownerClass.name, ps.name);
                     switch (a.op) {
                         case ASSIGN: {
                             emitExpr(a.value);
                             coerceToTarget(a.value, tType);
-                            w.emitCall(sSet);
+                            emitStaticSetter(ps);
                             declareLocal("__discard");
                             w.emitSetLocal("__discard");
                             return;
@@ -2577,11 +2632,11 @@ public final class MivmEmitter {
                         case PLUS_ASSIGN:
                         case MINUS_ASSIGN: {
                             // val := getter() op rhs; setter(val)
-                            w.emitCall(sGet);
+                            emitStaticGetter(ps);
                             emitExpr(a.value);
                             coerceToTarget(a.value, tType);
                             emitCompoundOp(a.op, tType);
-                            w.emitCall(sSet);
+                            emitStaticSetter(ps);
                             declareLocal("__discard");
                             w.emitSetLocal("__discard");
                             return;
@@ -4027,7 +4082,7 @@ public final class MivmEmitter {
                     emitExpr(c.args.get(i));
                     if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
                 }
-                w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a
+                emitStaticCall(fs);   // V7/H2 (#492-B): CALL local o CALL_EXT al alias si la clase es externa
                 return;
             }
             // Método de instancia: ¿es super.foo() o p.foo()?
@@ -5439,12 +5494,7 @@ public final class MivmEmitter {
             // L6 — static property: Cls.prop lee via CALL al getter cualificado
             // (el target es el NOMBRE de la clase, no una instancia — no se evalúa).
             if (ps.isStatic) {
-                if (ps.isExternal) {
-                    errors.add("static property cross-module no soportada (v1): "
-                            + ps.ownerClass.name + "." + ps.name);
-                    return;
-                }
-                w.emitCall(staticGetterName(ps.ownerClass.name, ps.name));
+                emitStaticGetter(ps);   // V7/H2 (#492-B)
                 return;
             }
             emitExpr(ma.target);
@@ -5720,7 +5770,7 @@ public final class MivmEmitter {
                     declareLocal("__discard"); w.emitSetLocal("__discard");
                 } else if (ps.isStatic) {                    // L6: static property
                     w.emitGetLocal(valLocal);
-                    w.emitCall(staticSetterName(ps.ownerClass.name, ps.name));
+                    emitStaticSetter(ps);   // V7/H2 (#492-B)
                     declareLocal("__discard"); w.emitSetLocal("__discard");
                 } else {                                     // property de clase (instancia)
                     emitExpr(ma.target);
@@ -5959,7 +6009,7 @@ public final class MivmEmitter {
             }
             if (ps.isStatic) {
                 // L6: CALL al getter cualificado (sin this).
-                w.emitCall(staticGetterName(ps.ownerClass.name, ps.name));
+                emitStaticGetter(ps);   // V7/H2 (#492-B)
                 return;
             }
             w.emitGetParam("this");
@@ -6035,7 +6085,7 @@ public final class MivmEmitter {
             }
             if (ps.isStatic) {
                 // L6: pila ..., val → CALL al setter cualificado (consume val).
-                w.emitCall(staticSetterName(ps.ownerClass.name, ps.name));
+                emitStaticSetter(ps);   // V7/H2 (#492-B)
                 declareLocal("__discard");
                 w.emitSetLocal("__discard");
                 return;

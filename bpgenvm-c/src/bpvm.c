@@ -439,9 +439,13 @@ static int module_loaded(const bpvm_t* vm, const char* library, const char* name
  * (library, module) que apunta. Convención del frontend:
  *   - "Mod.sym"             → library="",  module="Mod"
  *   - "Lib.Mod.sym"         → library="Lib", module="Mod"
- *   - "Lib.Mod.Cls.sym"     → library="Lib", module="Mod"  (frontend pone
- *                              el nombre del módulo en parts[-2] cuando
- *                              hay 3+ componentes; F3 simple asume eso) */
+ * El SÍMBOLO es siempre el último componente y NUNCA lleva puntos: el
+ * penúltimo es el módulo. Por eso un miembro de clase no viaja como
+ * "Mod.Cls.sym" (se leería library=Mod, módulo=Cls) sino con un nombre
+ * plano que el dueño exporta: "__cls_new_Cls", "__cls_m_Cls_m",
+ * "__cls_s_Cls_m" (V7/H2, estáticos), "Cls#m#slot" (marcadores).
+ * (Hasta el 14-sep-2026 este comentario prometía un caso "Lib.Mod.Cls.sym"
+ * que el código de abajo nunca implementó.) */
 static void derive_owner(const char* qualified, char* lib, size_t lib_size,
                          char* mod, size_t mod_size) {
     /* Split por '.'. parts[length-1] = símbolo, parts[length-2] = módulo,

@@ -870,6 +870,9 @@ public class ModuleManager {
             if (addr <= pc && addr > bestAddr) {
                 bestAddr = addr;
                 bestName = key;
+            } else if (addr == bestAddr && bestName != null && bestName.contains(".__cls_")
+                       && !key.contains(".__cls_")) {
+                bestName = key;   // V7/H2: a igual dirección, el nombre real antes que su alias `__cls_*`
             }
         }
         String base;

@@ -1,0 +1,32 @@
+// V7/H2 (#492-B) — oráculo de paridad: los miembros ESTÁTICOS de una clase cruzan el módulo.
+// La mitad DUEÑA: método estático (y sobrecargado, y protegido, y que devuelve la clase),
+// property estática (integer y long; pública y protegida) y una const estática.
+// El consumidor es EstaticosHijo.bp. Pareja de CamposBase/CamposHijo.
+module EstaticosBase
+  public class Base
+    var n: integer := 0
+    public const Base.MAX: integer := 3
+    public property Base.total: integer := 0
+    public property Base.grande: long := 0L
+    property Base.prot: integer := 0
+    public function Base()
+      this.n := 1
+    end Base
+    public function Base.cuantos(): integer
+      return 7
+    end Base.cuantos
+    public function Base.cuantos(v: integer): integer
+      return v * 10
+    end Base.cuantos
+    public function Base.crea(): Base
+      return Base()
+    end Base.crea
+    function Base.protegido(): integer
+      Base.prot += 1
+      return 40 + Base.prot
+    end Base.protegido
+    public function valor(): integer
+      return this.n
+    end valor
+  end Base
+end EstaticosBase

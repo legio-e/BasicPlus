@@ -50,6 +50,14 @@ public class ModWriter {
     private final List<ExternalRef> externalFunctions = new ArrayList<>();
     private final Map<String, Integer> functionAddresses = new HashMap<>();
     private final List<String> exportFunctions = new ArrayList<>();
+    /** V7/H2 (#492-B) — ALIAS de export: un nombre más en la tabla de exports que
+     *  apunta al offset de una función ya emitida. Cero bytecode, cero entradas en
+     *  el .dbg (no pasa por functionAddresses). Sirve para dar a un miembro
+     *  ESTÁTICO de clase —cuya función local se llama `Clase.metodo`, con punto—
+     *  un nombre PLANO importable: los dos cargadores parten el import por el
+     *  penúltimo punto, así que `Mod.Clase.metodo` se leería como library=Mod,
+     *  módulo=Clase. Mismo motivo por el que los marcadores de vtable usan '#'. */
+    private final java.util.LinkedHashMap<String, String> exportAliases = new java.util.LinkedHashMap<>();
 
     /** B3 v2 — Data symbols exportados con nombre. Hoy se usa SÓLO para
      *  exponer el class_ptr de `RuntimeError` (que el emisor sintetiza en
@@ -417,6 +425,18 @@ public class ModWriter {
                 exportDataSymbols.add(marker);
             }
         }
+    }
+
+    /** V7/H2 (#492-B) — registra `alias` como un export más con la dirección de
+     *  `targetFunction` (una función local, exportada o no). El offset se resuelve al
+     *  escribir, así que da igual el orden entre el alias y la función. Un alias no
+     *  puede llevar puntos (ver {@link #exportAliases}). */
+    public void addExportAlias(String alias, String targetFunction) {
+        if (alias.indexOf('.') >= 0)
+            throw new RuntimeException("alias de export con punto (no importable): " + alias);
+        if (functionAddresses.containsKey(alias) || exportAliases.containsKey(alias))
+            throw new RuntimeException("alias de export duplicado: " + alias);
+        exportAliases.put(alias, targetFunction);
     }
 
     private int registerSymbol(String name, byte[] bytes) {
@@ -2059,10 +2079,19 @@ public class ModWriter {
             rawCode[idx + 3] = (byte) ( relativeOffset        & 0xFF);
         }
 
-        exportOut.writeInt(exportFunctions.size());
+        exportOut.writeInt(exportFunctions.size() + exportAliases.size());
         for (String func : exportFunctions) {
             exportOut.writeUTF(func);
             exportOut.writeInt(functionAddresses.get(func));
+        }
+        // V7/H2 — los alias van DENTRO de la subsección 4.1 (cuentan en el count):
+        // un cargador anterior los ve como funciones exportadas normales.
+        for (Map.Entry<String, String> a : exportAliases.entrySet()) {
+            Integer rel = functionAddresses.get(a.getValue());
+            if (rel == null)
+                throw new RuntimeException("alias de export '" + a.getKey() + "' → función no encontrada: " + a.getValue());
+            exportOut.writeUTF(a.getKey());
+            exportOut.writeInt(rel);
         }
         // B3 v2 — subsección de data symbols exportados. Si no hay
         // ninguno, NO escribimos nada (compat con loaders viejos que no
@@ -2150,7 +2179,7 @@ public class ModWriter {
          *
          * El contenido es «cero o más blobs `.mdn` concatenados», y no hace falta
          * inventar un formato para separarlos: un `.mdn` YA se describe a sí mismo
-         * —cabecera `MDN ` con `arch`, `abi_version`, `code_size` y `sym_count`—,
+         * —cabecera `MDN\0` con `arch`, `abi_version`, `code_size` y `sym_count`—,
          * así que el lector avanza blob a blob. El caso de UNA plataforma es
          * simplemente N=1, y el multifamilia sale del mismo diseño sin tocarlo.
          *

@@ -53,6 +53,14 @@ class SlotsVtableCrossModuleTest {
       + "    public function Base()\n"
       + "      this.n := 0\n"
       + "    end Base\n"
+      // V7/H2 (#492-B) — un método y una property ESTÁTICOS delante de `read`: se
+      // publican en la interfaz (staticmethod/staticprop) y NO ocupan ranura. Si el
+      // importador de SlotDao los contara, `read` ya no sería la 4 y todo CosaDao
+      // se correría — y cruzarSlots no lo vería (no compara con el dueño).
+      + "    public function Base.cuenta(): integer\n"
+      + "      return 1\n"
+      + "    end Base.cuenta\n"
+      + "    public property Base.total: integer := 0\n"
       + "    public function read(i: integer): Object\n"
       + "      return null\n"
       + "    end read\n"
@@ -86,6 +94,9 @@ class SlotsVtableCrossModuleTest {
       + "    public function buscar(c: Cosa): integer\n"      // 3ª: idem
       + "      return 3\n"
       + "    end buscar\n"
+      + "    public function CosaDao.estatico(): integer\n"   // V7/H2: estático, sin ranura
+      + "      return 4\n"
+      + "    end CosaDao.estatico\n"
       + "    public function despues(): string\n"             // el que quedaba corrido
       + "      return \"ok\"\n"
       + "    end despues\n"
@@ -100,6 +111,7 @@ class SlotsVtableCrossModuleTest {
       + "    var dao: SlotDao.CosaDao := SlotDao.CosaDao()\n"
       + "    print dao.etiqueta()\n"
       + "    print dao.despues()\n"
+      + "    print SlotDao.CosaDao.estatico() + SlotBase.Base.cuenta() + SlotBase.Base.total\n"   // V7/H2
       + "  end Main\n"
       + "end SlotUso\n";
 

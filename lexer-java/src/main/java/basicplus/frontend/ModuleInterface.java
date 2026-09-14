@@ -233,7 +233,7 @@ public final class ModuleInterface {
      * el constructor.
      *
      * v1 (.bpi v4): sin herencia cross-module (baseClassName se guarda
-     * pero el importador lo ignora). Sin static members. Sin fields
+     * pero el importador lo ignora). Estáticos en staticMethods/staticProps (V7/H2). Sin fields
      * públicos (se exponen vía property).
      */
     public static final class ClassSig {
@@ -269,6 +269,17 @@ public final class ModuleInterface {
         public List<ConstSig> staticConsts = new ArrayList<>();
         /** V7/H2 — los campos de instancia, con su ranura (ver {@link FieldSig}). */
         public List<FieldSig> fields = new ArrayList<>();
+        /** V7/H2 (#492-B) — métodos y properties ESTÁTICOS de la clase. Van en
+         *  directivas propias (`staticmethod`, `staticprop`), no como flag de
+         *  `method`/`prop`: no ocupan ranura de vtable, y un lector anterior que
+         *  no las conozca las salta (tolerant) en vez de contarlas como instancia
+         *  y correr los slots de todo lo declarado detrás. El consumidor los llama
+         *  por CALL_EXT a un alias PLANO (`__cls_s_<Cls>_<clave>`,
+         *  `__cls_sg_/__cls_ss_<Cls>_<prop>`) que exporta el módulo dueño: la
+         *  función local se llama `Cls.m` (con punto) y un import
+         *  `Mod.Cls.m` lo parten mal los dos cargadores. Sólo lo no-private. */
+        public List<FuncSig> staticMethods = new ArrayList<>();
+        public List<PropSig> staticProps   = new ArrayList<>();
 
         /** H5.c-E2 — eventos PROPIOS de la clase (los heredados los ve el
          *  consumidor recorriendo la cadena de bases, igual que los métodos).
@@ -438,21 +449,22 @@ public final class ModuleInterface {
         // ---- Properties + métodos en orden de declaración del AST ----
         List<PropSig> properties = new ArrayList<>();
         List<FuncSig> methods    = new ArrayList<>();
+        List<PropSig> staticProps   = new ArrayList<>();   // V7/H2 (#492-B)
+        List<FuncSig> staticMethods = new ArrayList<>();
         if (cls.astNode != null && cls.astNode.members != null) {
             for (Ast.ITopLevelDecl m : cls.astNode.members) {
                 if (m instanceof Ast.PropertyDef) {
                     Ast.PropertyDef pd = (Ast.PropertyDef) m;
                     // #316 — las NO públicas también se exportan (por sus SLOTS);
                     // van marcadas como no-públicas y el consumidor no puede usarlas.
-                    // Property estática no soportada cross-module por ahora.
-                    if (pd.name != null && pd.name.isStatic()) {
-                        skipped.add("class " + cls.name + ".property " + pd.name.name
-                                + ": estática (no exportable v1)");
-                        continue;
-                    }
-                    Symbol ps = cls.instanceMembers.tryLookup(pd.name.name);
+                    // V7/H2 (#492-B) — la ESTÁTICA vive en staticMembers y va a su
+                    // propia lista: no tiene ranura; lo private no sale (nadie de
+                    // fuera puede nombrarlo) y `sync` no existe en estáticas.
+                    boolean pEstatica = pd.name != null && pd.name.isStatic();
+                    Symbol ps = (pEstatica ? cls.staticMembers : cls.instanceMembers).tryLookup(pd.name.name);
                     if (!(ps instanceof PropertySymbol)) continue;
                     PropertySymbol psym = (PropertySymbol) ps;
+                    if (pEstatica && psym.isPrivate) continue;
                     if (psym.type == null || !isExportableType(psym.type)) {
                         skipped.add("class " + cls.name + ".property " + psym.name
                                 + ": tipo no exportable: "
@@ -462,14 +474,18 @@ public final class ModuleInterface {
                     PropSig psig = new PropSig(psym.name, psym.type, psym.isSync, psym.isPublic);
                     psig.isFinal = psym.isFinal;       // V7/H2 (bpi 8)
                     psig.isPrivate = psym.isPrivate;
-                    properties.add(psig);
+                    if (pEstatica) staticProps.add(psig); else properties.add(psig);
                 } else if (m instanceof Ast.FuncDef) {
                     Ast.FuncDef fn = (Ast.FuncDef) m;
                     // H5.a-E5 — con sobrecarga hay VARIOS FuncDef con el mismo
                     // nombre: casar cada uno con SU símbolo por identidad del nodo
                     // (tryLookup devuelve la cabeza → se exportaría N veces la misma
                     // firma y el consumidor solo vería una).
-                    Symbol head = cls.instanceMembers.tryLookup(fn.name.name);
+                    // V7/H2 (#492-B) — un método estático vive en staticMembers: hasta
+                    // el 14-sep se buscaba sólo en instanceMembers y el `continue` de
+                    // abajo lo tiraba sin que el «v1: sin estáticos» llegara a verse.
+                    boolean mEstatico = fn.name != null && fn.name.isStatic();
+                    Symbol head = (mEstatico ? cls.staticMembers : cls.instanceMembers).tryLookup(fn.name.name);
                     FunctionSymbol fsym = null;
                     for (FunctionSymbol o = (head instanceof FunctionSymbol) ? (FunctionSymbol) head : null;
                          o != null; o = o.nextOverload) {
@@ -485,7 +501,6 @@ public final class ModuleInterface {
                     // publicar NO es hacer público, y de eso se encarga checkVisibility.
                     if (fsym.isPrivate) continue;
                     if (fsym.isConstructor) continue;          // se exporta vía ctorParams
-                    if (fsym.isStatic) continue;               // v1: sin estáticos
                     String issue = signatureIssue(fsym);
                     if (issue != null) {
                         skipped.add("class " + cls.name + ".method " + fsym.name + ": " + issue);
@@ -493,9 +508,9 @@ public final class ModuleInterface {
                     }
                     List<ParamSig> ps = new ArrayList<>(fsym.params.size());
                     for (ParamSymbol p : fsym.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
-                    FuncSig msig = new FuncSig(fsym.name, fsym.isPublic, false, ps, fsym.returnType);
+                    FuncSig msig = new FuncSig(fsym.name, fsym.isPublic, fsym.isStatic, ps, fsym.returnType);
                     msig.isFinal = fsym.isFinal;       // V7/H2 (bpi 8)
-                    methods.add(msig);
+                    if (fsym.isStatic) staticMethods.add(msig); else methods.add(msig);   // V7/H2 (#492-B)
                 }
             }
         }
@@ -519,6 +534,8 @@ public final class ModuleInterface {
             }
         }
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
+        sig.staticMethods = staticMethods;   // V7/H2 (#492-B)
+        sig.staticProps   = staticProps;
 
         // L2 v3.d — static consts públicos (con literal exportable). Vars
         // estáticos quedan pendientes (requieren opcodes nuevos para
@@ -1137,6 +1154,12 @@ public final class ModuleInterface {
                     pw.printf("  staticconst %s:%s=%s public%n",
                             sc.name, typeToString(sc.type), encodeLiteral(sc.value));
                 }
+                // V7/H2 (#492-B) — `staticprop <n>:<tipo> [public] [final]`: sin ranura;
+                // el consumidor va por CALL_EXT a los alias __cls_sg_/__cls_ss_.
+                for (PropSig p : c.staticProps) {
+                    pw.printf("  staticprop %s:%s%s%s%n", p.name, typeToString(p.type),
+                            p.isPublic ? " public" : "", p.isFinal ? " final" : "");
+                }
                 // H5.c-E2 — `event <nombre>(<firma>) recv <slot>` [opaque].
                 // El slot va explícito porque lo calcula la función única del
                 // layout; el consumidor lo LEE, no lo recalcula.
@@ -1161,6 +1184,19 @@ public final class ModuleInterface {
                     sb.append("):").append(typeToString(m.returnType));
                     if (m.isPublic) sb.append(" public");   // #390: como en `prop`
                     if (m.isFinal)  sb.append(" final");    // V7/H2 (bpi 8)
+                    pw.println(sb.toString());
+                }
+                // V7/H2 (#492-B) — `staticmethod <n>(<params>):<ret> [public] [final]`.
+                for (FuncSig m : c.staticMethods) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("  staticmethod ").append(m.name).append('(');
+                    for (int i = 0; i < m.params.size(); i++) {
+                        if (i > 0) sb.append(',');
+                        appendParam(sb, m.params.get(i));
+                    }
+                    sb.append("):").append(typeToString(m.returnType));
+                    if (m.isPublic) sb.append(" public");
+                    if (m.isFinal)  sb.append(" final");
                     pw.println(sb.toString());
                 }
                 pw.println("end class");
@@ -1368,6 +1404,8 @@ public final class ModuleInterface {
             List<ConstSig> clsStaticConsts = new ArrayList<>();
             List<EventSig> clsEvents = new ArrayList<>();
             List<FieldSig> clsFields = new ArrayList<>();   // V7/H2 (bpi 8)
+            List<FuncSig>  clsStaticMethods = new ArrayList<>();   // V7/H2 (#492-B)
+            List<PropSig>  clsStaticProps   = new ArrayList<>();
             // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
             // leemos best-effort (forward-compat): saltamos las directivas que este
             // compilador no conoce, en lugar de abortar. El formato .bpi es aditivo.
@@ -1426,6 +1464,8 @@ public final class ModuleInterface {
                         cs.staticConsts = clsStaticConsts;
                         cs.events = clsEvents;
                         cs.fields = clsFields;   // V7/H2
+                        cs.staticMethods = clsStaticMethods;   // V7/H2 (#492-B)
+                        cs.staticProps   = clsStaticProps;
                         iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
@@ -1434,6 +1474,8 @@ public final class ModuleInterface {
                         clsStaticConsts = new ArrayList<>();
                         clsEvents = new ArrayList<>();
                         clsFields = new ArrayList<>();   // V7/H2
+                        clsStaticMethods = new ArrayList<>();   // V7/H2 (#492-B)
+                        clsStaticProps   = new ArrayList<>();
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
@@ -1457,6 +1499,17 @@ public final class ModuleInterface {
                     }
                     if (trimmed.startsWith("staticconst ")) {
                         clsStaticConsts.add(parseConst(file, lineNo, trimmed.substring("staticconst ".length())));
+                        continue;
+                    }
+                    if (trimmed.startsWith("staticmethod ")) {   // V7/H2 (#492-B)
+                        FuncSig sm = parseFunc(file, lineNo, trimmed.substring("staticmethod ".length()));
+                        FuncSig sm2 = new FuncSig(sm.name, sm.isPublic, true, sm.isIntrinsic, sm.params, sm.returnType);
+                        sm2.isFinal = sm.isFinal;
+                        clsStaticMethods.add(sm2);
+                        continue;
+                    }
+                    if (trimmed.startsWith("staticprop ")) {   // V7/H2 (#492-B)
+                        clsStaticProps.add(parseProp(file, lineNo, trimmed.substring("staticprop ".length())));
                         continue;
                     }
                     if (trimmed.startsWith("event ")) {
