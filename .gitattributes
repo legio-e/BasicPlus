@@ -4,3 +4,11 @@
 compat/**/*.out text eol=lf
 compat/**/*.mod binary
 compat/**/*.win text eol=lf
+
+# Los artefactos binarios de BasicPlus, digan lo que digan las heuristicas: sin conversion de finales de linea nunca.
+*.mod binary
+*.mdn binary
+*.pack binary
+*.npk binary
+*.uf2 binary
+*.bin binary
