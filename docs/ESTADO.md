@@ -75,6 +75,13 @@ ni una línea de código de producto.
    caracterización con los agujeros anotados; la suite del frontend pasa de 110 a **160**, todos verdes). El fat-jar del IDE
    NO se ha rehecho (se rehace con la subida de formato; hasta entonces el IDE no aplica `#508`).
 
+8. **Decisiones de Eduardo sobre la subida de formato** (14-sep, tarde): *«el compilador compila una versión concreta, no
+   varias; claramente V8, es un cambio importante; compatibilidad hacia atrás sí — es aditivo, los V7 tienen que poderse
+   ejecutar sin problemas; la stdlib se rehace cuando terminemos todos los cambios del formato, mientras tanto se recompila lo
+   necesario»*. → El compilador emite sólo `MOD8`; **las VMs cargan `MOD7` y `MOD8`** (sin `gen`/`ifaceCrc` la norma no se
+   aplica y el módulo corre como hoy); `MOD8` en las VMs de V6 se rechaza con mensaje; la stdlib `MOD7` de hoy sigue cargando
+   durante todo el trabajo (la prueba de compatibilidad, de gratis). Escrito en `V7_IDEAS.md` §H2 (pieza 1 y apartado 4).
+
 ⏭️ **Al retomar: cuatro decisiones de Eduardo** (`V7_IDEAS.md` §H2 punto 5) y a programar H2 en el orden del punto 3:
 (1) `gen` = versión del proyecto (`.bpbuild`) ¿o por módulo?; (2) con `gen` mayor, ¿basta que enlace?; (3) `fromPath`
 en las dos VMs o fuera; (4) el pack de librería sin stdlib por defecto; (5) una sola subida de formato para H2 y `#441`.

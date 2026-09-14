@@ -790,11 +790,27 @@ ifaceCrc)` de la dependencia con la que se compiló. **La norma, al cargar, en l
 4. El rechazo sale por **`OUTPUT`** (donde mira el usuario), no sólo por el log de la placa; mismo texto en las
    dos VMs (es lo agnóstico de rol).
 
-Formato: es cambio de cabecera y de la sección `imports` → **`MOD8`**, y por la norma de `#284` (formato igual o
-rechazo) toda la cadena se regenera — el coste de siempre al tocar el frontend, y es UNA sola subida para todo H2:
-en el mismo salto entran el `field`/`final`/estáticos de la interfaz (`bpi 8`) y la huella de flags del `.mdn`
-(`#441`, pieza 4). ⚠️ El `bpi` de la interfaz y el `MOD` del contenedor son versiones distintas; conviene que las dos
-suban a la vez y que `Disasm` aprenda `MOD7`/`MOD8` de paso.
+Formato: es cambio de cabecera y de la sección `imports` → **`MOD8`**. ✅ **Decidido por Eduardo (14-sep)**: *«el
+compilador compila una versión concreta, no compila varias. Ahora mantenemos V7 o pasamos a V8: claramente V8, es un
+cambio importante. Compatibilidad hacia atrás, sí: es un cambio aditivo, por lo que los V7 tendrían que poderse ejecutar
+sin problemas.»* Es decir — y esto es DISTINTO de la subida `MOD6`→`MOD7` de V6, que fue por ABI y por eso «formato igual
+o rechazo» (`#284`):
+
+- **El compilador emite sólo `MOD8`.** No hay modo de compatibilidad ni doble emisión.
+- **Las dos VMs cargan `MOD7` y `MOD8`.** Un `MOD7` es un `MOD8` sin los campos nuevos: sin `gen` ni `ifaceCrc` la norma
+  de versiones no tiene qué comparar y **no se aplica** (se anota en el log: «sin datos de versión»), y el módulo corre
+  exactamente como hoy — byte-idéntico. Lo aditivo es eso: todo lo que existe sigue valiendo; lo nuevo sólo actúa
+  cuando está.
+- `MOD8` en las VMs de V6 (el ZIP publicado) se rechaza con mensaje (magic desconocido), como debe: hacia delante no hay
+  compatibilidad, hacia atrás sí.
+- **La stdlib se rehace UNA vez, al terminar todos los cambios de formato** (*«mientras tanto se recompila lo que sea
+  necesario»*): durante el trabajo, la stdlib `MOD7` de hoy sigue cargando en las VMs `MOD8` — que es justo la prueba de
+  la compatibilidad hacia atrás, de gratis y todos los días.
+
+Es UNA sola subida para todo H2: en el mismo salto entran el `field`/`final`/estáticos/`ctor`×N de la interfaz
+(`bpi 8`) y la huella de flags del `.mdn` (`#441`, pieza 4; el `.mdn` pasa de versión 1 a 2 y el cargador acepta las
+dos). ⚠️ El `bpi` de la interfaz y el `MOD` del contenedor son versiones distintas; suben a la vez, y `Disasm` aprende
+`MOD7`/`MOD8` de paso.
 
 **Pieza 2 · `#493`: la zona de packs deja de disfrazarse de `/app`.**
 
@@ -873,10 +889,11 @@ empaquetador (que ya mira dentro de los packs); y la ronda corta de `tanda.py` e
 **Los tests a medida**, uno por cada cosa que cambia — se escriben ANTES de tocar el formato, con el `.mod` de hoy
 como control:
 
-1. **El gate del formato, en las dos direcciones.** `MOD7` en una VM de `MOD8` → rechazo con mensaje accionable (la
-   norma de `#284`), en las dos VMs, mismo texto. Y **`MOD8` en las VMs de V6**: el ZIP publicado
-   (`BasicPlus-6.0-win.zip`, el oráculo) tiene que **rechazarlo con mensaje, no petar ni cargarlo mal** — es la única
-   prueba real de compatibilidad hacia atrás que existe, y hoy no se hace.
+1. **El formato, en las dos direcciones.** Hacia atrás: **`MOD7` en las VMs `MOD8` carga y corre byte-idéntico** —
+   el corpus entero de hoy (`samples/*.mod`, la stdlib `MOD7`, los 59 de paridad) sin recompilar, en las dos VMs, con
+   la línea «sin datos de versión» en el log y nada en `OUTPUT`. Hacia delante: **`MOD8` en las VMs de V6** (el ZIP
+   publicado, el oráculo) tiene que **rechazarlo con mensaje, no petar ni cargarlo mal**. `MOD5` sigue rechazado por
+   ABI (`#284`). Hoy no se prueba ninguna de las tres cosas.
 2. **La cabecera y las secciones.** Un `.mod` con TODAS las secciones no vacías (imports con `gen`/`ifaceCrc`,
    interface con `field`/`final`/estáticos/`ctor`×N, native con dos bloques, data, code) cargado por las dos VMs y
    por `Disasm`, comprobando que `data` y `code` quedan donde deben (CRC de cada sección contra el escritor) — el
@@ -911,7 +928,9 @@ prueba lo que se hizo, no lo que se quería.
    use.
 3. `fromPath`: honrarlo en las dos VMs, o quitarlo del `.mod`.
 4. El pack de librería **sin** la stdlib por defecto (y `requires-pack` que se lea, o fuera).
-5. Una sola subida de formato (`MOD8`/`bpi 8`/`.mdn`) para H2, `#441` y los constructores sobrecargados — ✅ Eduardo,
-   14-sep: *«si vamos a modificar el formato de los `.mod`, se puede hacer todo»*. Lo otro que toca el formato y podría
-   subirse al mismo tren: `CALL_REL` (H7: el `CALL` local PC-relativo que retira la base `cb` transitoria del XIP) —
-   es cambio de compilador y de las DOS VMs, más grande; se decide aparte.
+5. ✅ Una sola subida de formato (`MOD8`/`bpi 8`/`.mdn`) para H2, `#441` y los constructores sobrecargados — Eduardo,
+   14-sep: *«si vamos a modificar el formato de los `.mod`, se puede hacer todo»*. Y **cómo**: el compilador emite sólo
+   `MOD8`; las VMs cargan `MOD7` y `MOD8` (aditivo: los `MOD7` corren sin problemas); la stdlib se rehace una vez al
+   final, y mientras tanto se recompila lo necesario. Lo otro que toca el formato y podría subirse al mismo tren:
+   `CALL_REL` (H7: el `CALL` local PC-relativo que retira la base `cb` transitoria del XIP) — es cambio de compilador y
+   de las DOS VMs, más grande; se decide aparte.
