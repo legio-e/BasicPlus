@@ -159,17 +159,19 @@
   la clase 'SyncList' extiende 'Core.List' y este modulo no importa 'Core': anade `import Core` (los imports no son transitivos)
   ```
 
-- **L18 — lo que cruza la frontera de un módulo, y lo que no** (V6, `#492` → V7). La
-  interfaz de un módulo exporta **métodos, propiedades, el primer constructor y las
-  constantes**. Tres cosas se quedan dentro, y el compilador lo dice así:
-  - **los campos protegidos no cruzan módulos.** Un `class Gato extends Base.Animal`
-    en otro módulo no ve el `var nombre` de `Animal`: `'Gato' no tiene miembro de
-    instancia 'nombre'`. Rodeo: un getter en la base (es lo que hace `Core.List` con
-    `backing()`). Dentro del mismo módulo, el descendiente sí lo ve.
-  - **sólo la primera sobrecarga del constructor cruza.** Si `Animal` tiene
-    `Animal(n: string)` y `Animal()`, desde otro módulo `Base.Animal()` da `número de
-    argumentos incorrecto: se esperaban 1, se pasaron 0`. Dentro del módulo valen las
-    dos.
+- **L18 — lo que cruza la frontera de un módulo, y lo que no** (V6, `#492` → ✅ V7,
+  14-sep-2026). Desde V7 la interfaz de un módulo exporta **todo lo que un descendiente
+  puede tocar**: métodos, propiedades, **los campos protegidos**, **todas las
+  sobrecargas del constructor**, **los métodos y properties estáticos** y las
+  constantes — con `final` y `private` respetados. Los dos primeros límites de V6 ya
+  no existen (`class Gato extends Base.Animal` en otro módulo ve `var nombre`;
+  `Base.Animal()` y `Base.Animal("Rex")` valen las dos, y `super(...)` elige por
+  firma). Lo que sigue dentro:
+  - **una `native` no lee campos ni llama a estáticos** (ni propios ni heredados): el
+    AOT lo rechaza con un error claro; rodeo: un getter/método normal.
+  - **`Clase(o)` con `o: Object` decide cast-o-construcción mirando sólo la primera
+    sobrecarga del constructor** (`#389`): si hay un `Animal(o: Object)` que no es la
+    cabeza, `Animal(x)` se toma como cast.
   - **los imports no son transitivos.** Si `Mid` importa `Base` y te devuelve un
     `Base.Animal`, para nombrar ese tipo —o llamar a sus métodos— tu módulo tiene que
     escribir `import Base` él mismo; si no, `tipo cualificado 'Base.Animal' no

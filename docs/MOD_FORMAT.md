@@ -119,6 +119,30 @@ loader lo absolutiza con `codeStart + relativeOffset` y lo registra en
 `globalSymbolTable` con la clave `<library>.<module>.<name>` (o
 `<module>.<name>` si no hay library).
 
+**Varios nombres pueden apuntar al mismo offset** (V7/H2, 14-sep-2026): un
+*alias* es una entrada más de esta sub-sección, con el offset de una función ya
+emitida — cero bytecode, y un cargador anterior lo ve como una función exportada
+normal. Ni `name` ni `relativeOffset` tienen que ser únicos.
+
+**Los símbolos planos `__cls_*`.** El nombre de un import es `<Module>.<sym>`
+y los dos cargadores derivan el módulo por el **penúltimo punto** (§3), así que
+`<sym>` **no puede llevar puntos**. Como la función local de un miembro de clase
+se llama `Clase.miembro`, lo que cruza el módulo es siempre un nombre plano que
+el dueño exporta (`$` y `#` no son separadores):
+
+| símbolo | qué es | desde |
+|---|---|---|
+| `__cls_new_<Cls>[$clave]` | factoría: `NEW_OBJECT` + `__init` del ctor **efectivo** (heredable); una por sobrecarga, la cabeza sin sufijo | L2 · V7/H2 (`$clave`) |
+| `__cls_init_<Cls>[$clave]` | `super(...)` cross-module: `this` + args → `<Cls>.__init[$clave]`; una por ctor **propio** | L2 v3 · V7/H2 |
+| `__cls_m_<Cls>_<clave>` | `super.metodo()` cross-module: salto NO virtual a la implementación de la base | `#451` |
+| `__cls_s_<Cls>_<clave>` | **alias** del método estático `Cls.m[$clave]` | V7/H2 |
+| `__cls_sg_<Cls>_<prop>` / `__cls_ss_<Cls>_<prop>` | **alias** de los accesores de la property estática `Cls.__prop_get_x` / `Cls.__prop_set_x` | V7/H2 |
+| `<Cls>#<metodo>#<slot>` | marcador de vtable (§4.2, data): el linker lo resuelve por nombre; si la ranura cambió, no resuelve | `#324` |
+
+`<clave>` es el nombre del método con el sufijo de sobrecarga de H5.a (`f`, `f$i`,
+`f$LBase;`); la cabeza de una cadena no lleva sufijo, así que un `.mod` compilado
+con una sola firma no cambia de símbolo al añadir otra.
+
 ### 4.2 Sub-sección de data exports (opcional — B3 v2 / L2 v3)
 
 Presente sólo si quedan bytes después de leer la sub-sección 4.1.
@@ -217,6 +241,30 @@ y con ellos una clase entera de fallo. Es el mismo argumento que justifica §4.6
 
 Las VMs la **saltan**: ejecutan sin ella. La usa el compilador, para resolver
 imports sin recompilar el módulo dueño.
+
+**Las directivas (`bpi 8`, V7/H2).** Texto, una por línea; la escribe y la lee
+`ModuleInterface.java` (`writeTo`/`fromBytes`), y la ida y vuelta es byte a byte
+(`InterfazIdaYVueltaTest`). A nivel de módulo: `bpi <ver>`, `module`, `library`,
+`interface`, `implements`, `extends`, `func <n>(<params>):<ret> [public] [static] [intrinsic]`,
+`const`, `enum`, `prop`, `import`. Dentro de `class <n> public … end class`:
+
+| directiva | qué publica |
+|---|---|
+| `layout <nF> <nM> <fbm> <obm>` | el layout binario del descriptor (campos y ranuras de vtable, con los bitmaps de refs y owners) — lo que un hijo de otro módulo necesita para colocar lo suyo detrás |
+| `field <n>:<tipo> slot <s> [owner]` | un campo **no privado** con su ranura absoluta (V7/H2): el hijo emite `GET_FIELD`/`SET_FIELD` por ranura |
+| `ctor(<params>)` · `ctor+(<params>)` | el constructor (cabeza) y, desde V7/H2, cada sobrecarga más, en orden de cadena |
+| `prop <n>:<tipo> [public] [sync] [final] [private]` | una property de instancia (siempre se publica: sus dos accesores ocupan ranura; publicar NO es hacer público, `#316`) |
+| `staticconst <n>:<tipo>=<literal> public` | constante estática: el consumidor la inlinea |
+| `staticprop <n>:<tipo> [public] [final]` | property estática (V7/H2): sin ranura; el consumidor llama por `CALL_EXT` a los alias `__cls_sg_/__cls_ss_` |
+| `event <n>(<params>) recv <slot> [opaque]` | evento propio con la ranura de su campo receptor |
+| `method <n>(<params>):<ret> [public] [final]` | método de instancia (todo menos lo `private`: lo protegido ocupa ranura y la hija lo ve, `#390`) |
+| `staticmethod <n>(<params>):<ret> [public] [final]` | método estático (V7/H2): sin ranura; `CALL_EXT` al alias `__cls_s_` |
+
+`staticmethod`, `staticprop` y `ctor+` son directivas **nuevas** y no flags de
+`method`/`prop`/`ctor` a propósito: un lector anterior (`tolerant`, versión mayor
+que la suya) las **salta**, mientras que un flag desconocido en `method` lo habría
+contado como método de instancia y corrido las ranuras de todo lo declarado
+detrás — en silencio.
 
 ## 4.6 Sección NATIVE (v7)
 

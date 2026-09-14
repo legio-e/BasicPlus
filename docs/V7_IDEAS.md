@@ -832,25 +832,41 @@ dos). ⚠️ El `bpi` de la interfaz y el `MOD` del contenedor son versiones dis
 5. Tests: `test_fsfallback.c` pasa a afirmar lo contrario (la zona NO contesta a `/app`); un test de host de la
    precedencia con `/lib` real; y `tanda.py` ya comprueba la sombra antes de correr (`T1`, `843e2d0a`).
 
-**Pieza 3 · `#492`: la interfaz exporta la superficie completa que un descendiente puede tocar (B).**
+**Pieza 3 · `#492`: la interfaz exporta la superficie completa que un descendiente puede tocar (B).** ✅ **Hecha el
+14-sep** salvo el marcador de layout (que va con la pieza 1). Lo que cambió respecto a lo escrito aquí por la mañana
+está marcado; el resto salió como estaba.
 
-0. Antes: el parser **conserva `private` en `var` y `property`** y `checkVisibility` lo aplica — sin esto, exportar
-   «los campos no privados» exportaría los privados.
-1. `field <nombre>:<tipo> slot <n> [owner]` por cada campo no privado; el importador los da de alta como
-   protegidos (`VarSymbol`), y el emisor del hijo emite `GET_FIELD`/`SET_FIELD` por ranura como en el mismo módulo.
-   El AOT del hijo lee campos heredados igual que los propios (el caso de la `native`).
-2. `final` en `method`/`prop` (un bit), y el importador lo marca: la comprobación de sobreescritura ya existe.
-3. Estáticos: `method` estático como función con nombre cualificado (`CALL_EXT`), `prop` estática con su global y
-   accesores — se quita el «v1: sin estáticos».
-3-bis. **Los constructores sobrecargados** (Eduardo, 14-sep: *«había un problema con la sobrecarga de constructores;
-   si vamos a modificar el formato de los `.mod`, se puede hacer todo»*): la interfaz exporta hoy UN `ctor`
-   (`ClassSig.ctorParams`); pasa a exportar **todas las sobrecargas** (`ctor` ×N, como los `method`), y `super(args)`
-   resuelve por firma como cualquier llamada sobrecargada (`#509`, que hoy falla incluso en el mismo módulo). Es de
-   `H1`, pero viaja en esta misma subida de formato.
-4. El emisor de `raise` con evento heredado de otro módulo: resolver los campos del evento por la interfaz (el
-   `EventSig` ya viaja) en vez de buscar el descriptor local.
+0. ✅ `4a6ea0f4` — el parser **conserva `private` en `var` y `property`** y `checkVisibility` lo aplica.
+1. ✅ `160e849b` — `field <nombre>:<tipo> slot <n> [owner]` por cada campo **no privado** (Eduardo: los privados no
+   viajan; nadie de fuera los nombra y el layout ya va en los bitmaps); el importador los da de alta con su ranura y
+   el emisor accede por ranura cuando la clase es externa. El AOT sigue sin leer campos (límite documentado, no
+   silencioso: `UnsupportedAotException`).
+2. ✅ `f4a3ca7e` — `final` en `method`/`prop`, `private` en `prop`; el importador los marca.
+3. ✅ `024f5b24` — Estáticos. **Distinto de lo escrito aquí**: NO «función con nombre cualificado». Los estáticos ya
+   se exportaban como funciones de módulo desde siempre (`Cls.m`, con punto) — lo que faltaba era publicarlos, y no
+   se podía tal cual porque **los dos cargadores parten un import por el penúltimo punto** (`Mod.Cls.m` → library=Mod,
+   módulo=Cls). Lo que se añadió sin tocar lo hecho (Eduardo: *«no hace falta que modifiques algo que ya está
+   hecho»*): un **alias de export plano** al mismo offset (`ModWriter.addExportAlias`: `__cls_s_<Cls>_<clave>`,
+   `__cls_sg_/__cls_ss_<Cls>_<prop>`; cero bytecode, nada en el `.dbg`) y **directivas nuevas** `staticmethod`/
+   `staticprop` — no un flag de `method`: un lector anterior las salta (tolerant) en vez de darles ranura de vtable
+   en silencio. El stub va a `staticMembers` sin ranura y sin `isExternal`; el emisor decide por
+   `ownerClass.isExternal` como el `super` de `#451`. La stdlib no tiene ningún estático de clase: sus bytes no cambian.
+3-bis. ✅ `9381c607` — **Los constructores sobrecargados** (Eduardo, 14-sep: *«había un problema con la sobrecarga de
+   constructores; si vamos a modificar el formato de los `.mod`, se puede hacer todo»*). `ctor(...)` = cabeza (como
+   hoy, aditivo) **+ `ctor+(...)` por sobrecarga** (directiva nueva por la misma razón; un 2º `ctor(` ya no pisa al
+   primero en silencio: error). El importador encadena con el mismo `overloadMangle`; el dueño sintetiza
+   `__cls_init_<Cls>$clave` por ctor **propio** y `__cls_new_<Cls>$clave` por ctor **efectivo**; `super(args)` resuelve
+   por firma (también en el mismo módulo: `#509`) y el super implícito busca la sin-args en la cadena. **`#513`**, que
+   salió del mapa: la derivada sin ctor propio exportaba `__cls_new_Der` con 0 params y sin `__init` — `Mod.Der(7)`
+   daba 0 en silencio; la factoría va por la cadena efectiva y llama al `__init` de la clase que **declara** el ctor
+   (local o `CALL_EXT`), igual que `super(...)` explícito e implícito.
+4. ✅ `f4a3ca7e` — el `raise` con evento heredado de otro módulo va por la ranura que publicó `event … recv n`.
 5. Las VMs no cambian en nada de esto: el acceso es por ranura. Lo que las protege de un hijo compilado contra otra
-   base es el marcador de layout de la pieza 1.
+   base es el marcador de layout de la pieza 1. ⏭️ **Pendiente** (va con la subida de formato).
+
+**Cómo se hizo (el método, para repetirlo)**: un mapa de 7 lectores + 7 refutadores ANTES de tocar (cada afirmación
+con fichero:línea, refutada o confirmada; sacó `#513`, la trampa del flag `static` y la causa exacta de `#510`), luego
+el código por tandas con oráculo de paridad al final de cada una, y una revisión adversarial del diff al terminar.
 
 **Pieza 4 · `#441`: la receta del `.mdn`.** Una huella (CRC32 de los flags de compilación de `AotBuild`, por
 destino) en la cabecera del `.mdn` — un campo más en los 20 B — comparada al cargar como ya se compara `arch`, y
@@ -859,10 +875,11 @@ esta placa»* antes de subirlo (hoy lo decide por `mtime`). Misma subida de form
 
 ### 3. El orden de trabajo y el cierre pequeño
 
-1. `private` en el parser + `checkVisibility` (precondición de B; y cierra el bug de la matriz).
-2. **La subida de formato, de una vez**: `MOD8` (gen + ifaceCrc en cabecera e imports), `bpi 8` (`field`, `final`,
-   estáticos), `.mdn` con huella. Compilador (`ModWriter`, `ModuleInterface`, importador, emisor de `raise`),
-   `Disasm`, y los dos cargadores con la norma y sus mensajes — paridad: mismo texto de rechazo.
+1. ✅ `private` en el parser + `checkVisibility` (precondición de B; y cierra el bug de la matriz).
+2. **La subida de formato, de una vez**: `MOD8` (gen + ifaceCrc en cabecera e imports), ✅ `bpi 8` (`field`, `final`,
+   estáticos, `ctor+` — hecho por piezas el 14-sep, el contenedor sigue en MOD7), `.mdn` con huella. Compilador
+   (`ModWriter`, `ModuleInterface`, importador, emisor de `raise`), `Disasm`, y los dos cargadores con la norma y
+   sus mensajes — paridad: mismo texto de rechazo.
 3. El marcador de layout en el enlace (las dos VMs).
 4. `#493`: el respaldo en su espacio, el orden único, `fromPath` en las dos, el ruido por `OUTPUT`, el arranque de
    STM32, el builder sin stdlib, los tests.
@@ -872,7 +889,8 @@ esta placa»* antes de subirlo (hoy lo decide por `mtime`). Misma subida de form
    número, y la ronda corta de `tanda.py` en una placa por familia (los blobs cambian en las cinco).
 
 Los tres bugs sueltos del compilador (`super` con constructor sobrecargado, `Base.X` dentro de una derivada,
-`#507`) y `#506` son de `H1`: ficha propia, se hacen cuando toque.
+`#507`) y `#506` son de `H1`: ficha propia, se hacen cuando toque. — ✅ `#509` y `#510` cayeron el 14-sep con B
+(eran el mismo código); quedan `#506`, `#507` y `#511` (decisión de Eduardo).
 
 ### 4. Cómo se prueba la subida de formato — «con los ejemplos de siempre más tests a medida» (Eduardo, 14-sep)
 

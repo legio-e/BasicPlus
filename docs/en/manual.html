@@ -932,10 +932,10 @@ fits each call.</p>
 <p>It works with <strong>free functions</strong>, <strong>static methods</strong>,
 <strong>instance methods</strong> and <strong>constructors</strong>. And also
 <strong>across modules</strong>: importing <code>Fmt</code> makes the three
-<code>Fmt.texto(...)</code> above available, resolved the same way. Two exceptions,
-today: of the <strong>constructors</strong> only the <em>first</em> declared overload
-crosses the module boundary, and <strong>static methods</strong> do not cross at all
-(<a href="#static">§9.6</a>).</p>
+<code>Fmt.texto(...)</code> above available, resolved the same way — and since V7
+also the overloads of <strong>constructors</strong> (<code>Lib.Punto(1, 2)</code> and
+<code>Lib.Punto()</code>, with <code>super(...)</code> picking by signature) and of
+<strong>static methods</strong> (<a href="#static">§9.6</a>).</p>
 
 <h4>What tells one overload from another</h4>
 <p>Only <strong>the parameter list</strong> (count and types). <strong>The return type
@@ -1007,9 +1007,10 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
   A field does NOT allow a fixed-size array <code>type[N]</code> (compile
   error): declare <code>type[]</code> and initialize it in the constructor with
   <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
-  Fields do not travel in the interface — they are private to the
-  owning module by OO design; expose a <code>property</code> if you need
-  cross-module access.
+  A field is <em>protected</em> (or <code>private</code>): its class and its
+  descendants see it, also those in another module — since V7 the interface publishes
+  the non-private fields with their slot (<a href="#visibilidad">§9.2.1</a>); to
+  expose a value to <em>anyone</em>, use a <code>property</code>.
 </p>
 
 <h3 id="metodos">9.2 Methods</h3>
@@ -1030,7 +1031,7 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
   <tr><td><code>public</code></td><td>Everyone</td><td>Yes</td></tr>
   <tr><td><em>(nothing)</em> &mdash; <strong>protected</strong></td>
       <td>Its class and its descendants, even in another module (methods and
-          properties; protected <em>fields</em> do not cross the module — below)</td><td>Yes</td></tr>
+          properties and, since V7, <em>fields</em> too)</td><td>Yes</td></tr>
   <tr><td><code>private</code></td><td>Only its own class</td><td><strong>No</strong></td></tr>
 </table>
 <pre><code>public class Base
@@ -1068,11 +1069,12 @@ end Base</code></pre>
   library&mdash; may be relying on it.
 </p>
 <p>
-  <strong>Current limit across modules:</strong> a child declared in another module
-  sees the protected methods and properties of its base, but <strong>not its
-  fields</strong> (<code>this.nombre</code> gives "no tiene miembro de instancia"):
-  fields do not travel in the interface. If the child needs the data, expose a
-  property or a protected getter (<a href="#pendientes">§17</a>).
+  <strong>Across modules</strong> (since V7): a child declared in another module sees
+  exactly what a same-module child sees — the protected methods, properties and
+  <strong>fields</strong> of its base (<code>this.nombre</code> works), with
+  <code>final</code> and <code>private</code> honoured. The one place where an
+  inherited field still cannot be read is inside a <code>native</code> function
+  (<a href="#funciones-native">§8.3</a>): use a getter there.
 </p>
 
 <h3 id="ctor">9.3 Constructor</h3>
@@ -1113,8 +1115,8 @@ end Base</code></pre>
   Single inheritance. <code>super.method(args)</code> explicitly invokes the
   parent's method inside an override. Inheritance also works
   <strong>cross-module</strong>: the base class can come from another imported
-  library (vtable and <code>super(...)</code> included; what does not cross the
-  module is in <a href="#visibilidad">§9.2.1</a> and <a href="#static">§9.6</a>).
+  library (vtable, protected fields, statics and <code>super(...)</code> by
+  signature included: <a href="#visibilidad">§9.2.1</a> and <a href="#static">§9.6</a>).
   <code>x instanceof Foo</code> checks the dynamic type at runtime, with one
   condition: <code>Foo</code> has to be a class <em>declared in the current
   module</em> (a local child of an imported base is fine; the imported base, or
@@ -1289,13 +1291,12 @@ Counter.bump()</code></pre>
   (the modifier goes before <code>function</code> or <code>class</code>).
 </p>
 <p>
-  <strong>Static members do not cross the module boundary</strong>, today: the
-  compiler warns while building the interface (<code>omitidas en interfaz (1): class
-  Counter.property total: estática (no exportable v1)</code>) and from another module
-  <code>Lib.Counter.total</code> or <code>Lib.Counter.bump()</code> give "no tiene
-  miembro de instancia". Static <code>const</code>s do travel. To expose class state
-  or functions to other modules, use a module property or function
-  (<a href="#props">§9.5</a>, <a href="#pendientes">§17</a>).
+  <strong>Static members cross the module boundary</strong> (since V7):
+  <code>Lib.Counter.total := 3</code>, <code>Lib.Counter.total += 1</code> and
+  <code>Lib.Counter.bump()</code> work from another module just like from their own,
+  and a child in another module sees the protected statics of its base. Static
+  <code>const</code>s travelled already. The only thing that cannot call a static is a
+  <code>native</code> function (<a href="#funciones-native">§8.3</a>).
 </p>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>
@@ -1381,12 +1382,12 @@ Counter.bump()</code></pre>
       uses them has to import both — the compiler says so: "la clase 'SyncList'
       extiende 'Core.List' y este modulo no importa 'Core': anade `import Core`". The
       same goes for any module whose interface returns types from a third one.</li>
-  <li><strong>What crosses the module boundary:</strong> functions, classes (their
-      public and protected methods and properties, and the <em>first</em> constructor
-      overload), <code>const</code>s and module properties. What does not: fields
-      (not even protected ones, <a href="#visibilidad">§9.2.1</a>), static members other
-      than <code>const</code> (<a href="#static">§9.6</a>), and the remaining constructor
-      overloads.</li>
+  <li><strong>What crosses the module boundary</strong> (since V7): everything a
+      descendant or a client can name — functions, classes with their public and
+      protected methods, properties and fields, <em>all</em> constructor overloads
+      (<code>super(...)</code> picks by signature), static members
+      (<a href="#static">§9.6</a>), <code>const</code>s and module properties.
+      <code>private</code> does not cross — not within the module either.</li>
 </ul>
 
 <h3 id="interfaces">10.4 <code>module interface</code> — <span class="kw">WITHDRAWN</span></h3>
@@ -1836,12 +1837,10 @@ B1 (<a href="#conc-gc">§14.4</a>).</p>
       RP2350 and the STM32. <strong>ESP32-C3 and C6</strong> (RISC-V without FPU)
       interpret today: the <code>ilp32</code> target is missing in the IDE
       (<a href="#funciones-native">§8.3</a>).</li>
-  <li><strong>Across modules</strong> (<a href="#imports">§10.3</a>): protected
-      fields do not cross (<a href="#visibilidad">§9.2.1</a>); static members, other
-      than <code>const</code>, do not cross (<a href="#static">§9.6</a>); of the
-      constructors only the first overload crosses (<a href="#sobrecarga">§8.4</a>);
+  <li><strong>Across modules</strong> (<a href="#imports">§10.3</a>):
       <code>x instanceof Foo</code> only accepts a class declared in the current
-      module (<a href="#herencia">§9.4</a>).</li>
+      module (<a href="#herencia">§9.4</a>). (Protected fields, statics and constructor
+      overloads cross since V7.)</li>
   <li>The downcast <code>Class(x)</code> only accepts an <code>Object</code> source
       (<a href="#any">§4.5</a>).</li>
   <li><code>step</code> of the numeric <code>for</code>: only a positive integer
