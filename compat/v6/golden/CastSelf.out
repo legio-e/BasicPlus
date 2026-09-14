@@ -1,0 +1,6 @@
+menor  : -1
+mayor  : 1
+igual  : 0
+control: 1
+lanza : conversion invalida: el valor no es un 'Cosa'
+fin

@@ -1,0 +1,8 @@
+captura: Gui.shot('GuiShot.shot'): sin pantalla
+screen [480x320 align=0 +0,0]
+  panel [200x120 pos=20,40]
+  label "Hola captura" [-1x-1 align=1 +0,8]
+  button [-1x-1 align=4 +0,60]
+    label "Pulsa" [-1x-1 align=0 +0,0]
+  checkbox "Activo" [-1x-1 align=6 +10,-10 val=1]
+  slider [-1x-1 align=8 +-10,-16 val=70]

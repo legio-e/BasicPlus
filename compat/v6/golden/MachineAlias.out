@@ -1,0 +1,5 @@
+micro por Machine: host
+micro por Pico   : host
+gpio  por Machine: 30
+gpio  por Pico   : 30
+alias OK

@@ -1,0 +1,7 @@
+1: inicio
+[i2c] init bus=0 sda=20 scl=21 baud=100000
+2: ctor ok
+3: array ok  buf[0]= 7
+[i2c] read bus=0 addr=0x76 count=1 (sim → ceros)
+4: read ok  rc= 1   buf[0]= 0
+5: fin

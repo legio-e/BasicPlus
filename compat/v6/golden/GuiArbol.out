@@ -1,0 +1,16 @@
+1. panel tiene 4 hijos; screen tiene 1
+2. boton vacio: 0 hijos; boton con texto: 1
+   el hijo 0 del boton con texto es el label -> padre correcto: true
+3. tras borrar 'uno', panel tiene 3 hijos
+screen [480x320 align=0 +0,0]
+  panel [-1x-1 align=0 +0,0]
+    label "dos" [-1x-1 align=0 +0,0]
+    button [-1x-1 align=0 +0,0]
+    button [-1x-1 align=0 +0,0]
+      label "pulsa" [-1x-1 align=0 +0,0]
+
+4. tras borrar el panel, screen tiene 0 hijos
+screen [480x320 align=0 +0,0]
+
+5. borrar lo ya borrado: sin ruido
+PASS

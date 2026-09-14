@@ -1,0 +1,4 @@
+base: marca=Base ultimo=7
+sub : marca=Sub ultimo=70
+poli: marca=Sub ultimo=70
+fin

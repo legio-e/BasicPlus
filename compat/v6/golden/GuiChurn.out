@@ -1,0 +1,5 @@
+vueltas completadas: 600
+screen [480x320 align=0 +0,0]
+  label "superviviente" [-1x-1 align=0 +0,0]
+
+PASS

@@ -1,5 +1,36 @@
 # compat/ — Arnés de no-regresión V3 → V2
 
+> ## 🧬 V7/H2 (14-sep-2026) — la CÁPSULA V6 y la compatibilidad binaria que SÍ se sostiene
+>
+> La subida de formato `MOD7` → `MOD8` de V7 es **aditiva** por decisión de Eduardo (*«los V7
+> tendrían que poderse ejecutar sin problemas»*), así que la compatibilidad binaria vuelve a ser
+> verificable — esta vez contra **V6**, y con el **artefacto publicado como oráculo**: no hay
+> `v6/bin/`; el compilador y la miVM de V6 se sacan de `dist/BasicPlus-6.0-win.zip`
+> (`BpIde-6.0.jar` los lleva dentro) cada vez, igual que la stdlib `MOD7`.
+>
+> ```
+> compat/
+>   v6/golden/        59 casos: <Modulo>.mod (compilado por el compilador PUBLICADO de V6,
+>                     MOD7 congelado) + <Modulo>.out (su salida, idéntica en las dos VMs);
+>                     las librerías hermanas sin .out (SuperExtBase…); los recursos (.win);
+>                     stdlib/*.mod — los 28 MOD7 del ZIP.
+> ```
+>
+> ```sh
+> bash compat/compat.sh gen-v6       # recaptura la cápsula (sólo si cambia el corpus)
+> bash compat/compat.sh check-mod7   # HACIA ATRÁS: las VMs de hoy ejecutan los MOD7 congelados byte a byte
+> bash compat/compat.sh check-fwd    # HACIA DELANTE: un .mod de hoy en la miVM publicada de V6 corre o
+>                                    #   se rechaza con mensaje — nunca peta (con MOD8 se exige el rechazo)
+> bash compat/compat.sh check        # paridad dual-VM + las dos de arriba: el gate
+> ```
+>
+> Hasta que el compilador emita `MOD8`, `check-mod7` y la paridad ejecutan el mismo formato y
+> `check-fwd` ve que V6 ejecuta lo de hoy: es la **línea base** que valida el propio arnés
+> (59/59 el 14-sep). A partir de la subida, un rojo en `check-mod7` es «un V7 ya no corre», y un
+> `check-fwd` que no rechace con mensaje es «la VM vieja se traga un formato que no conoce».
+> Con el mismo criterio de siempre: **0 PASS no es verde**; la cápsula se regenera a conciencia.
+
+
 Las herramientas que hacen **verificable** el principio rector nº 7 de V3
 (`docs/V3_ROADMAP.md` §4): *un programa de V2 corre sin cambios en V3*. La
 versión nueva ejecuta lo viejo; nunca al revés (como `.class` de Java 8 en el

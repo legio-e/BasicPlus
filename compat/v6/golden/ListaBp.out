@@ -1,0 +1,11 @@
+0 integer: 42
+1 long   : 7000000000
+2 double : 2.5
+3 string : hola
+4 objeto : 99
+largo    : 5
+tras crecer, largo: 45
+ultimo   : 39
+el 0 sigue: 42
+3 sigue   : hola
+fin

@@ -1,0 +1,12 @@
+micro: host
+placa: host
+serie: host-pc
+tempC: 25
+gpio: 30
+cpu inicial: 150000000
+set(200): [pico] setCpuFreqMHz(200) (host, simulado)
+true
+cpu tras set: 200000000
+set(999): [pico] setCpuFreqMHz(300) (host, simulado)
+true
+cpu con clamp: 300000000  (max  300 )

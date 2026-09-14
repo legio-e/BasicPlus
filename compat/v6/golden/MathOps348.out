@@ -1,0 +1,70 @@
+== raices, potencias, logaritmos ==
+sqrt(9)   
+3
+sqrt(2)   
+1.414214
+sqrt(0.1) 
+0.316228
+pow(2,10) 
+1024
+pow(2,0.5)
+1.414214
+Math.ln(3)
+1.098612
+log10(100)
+2
+exp(1)    
+2.718282
+== trigonometria ==
+sin(0)    
+0
+sin(1)    
+0.841471
+cos(1)    
+0.540302
+tan(1)    
+1.557408
+asin(0.5) 
+0.523599
+acos(0.5) 
+1.047198
+atan(1)   
+0.785398
+atan2(1,1)
+0.785398
+atan2(1,-1)
+2.356194
+== constantes ==
+pi        
+3.141593
+e         
+2.718282
+== floor / ceil / round (devuelven integer) ==
+floor(2.7)    -> 2
+floor(-2.7)   -> -3
+ceil(2.1)     -> 3
+ceil(-2.1)    -> -2
+round(2.4)    -> 2
+round(2.5)    -> 3
+round(-2.5)   -> -2
+round(-2.6)   -> -3
+== signo ==
+sign(-7)      -> -1
+sign(0)       -> 0
+sign(7)       -> 1
+signF(-0.5)   -> -1
+signF(0.0)    -> 0
+signF(0.5)    -> 1
+== factorial (y sus dos errores) ==
+factorial(0)  -> 1
+factorial(5)  -> 120
+factorial(12) -> 479001600
+factorial(-1) -> RuntimeError (correcto)
+factorial(13) -> RuntimeError (correcto)
+== gamma (Lanczos: para natural da (x-1)!) ==
+gamma(1)  
+1
+gamma(5)  
+24
+gamma(0.5)
+1.772454

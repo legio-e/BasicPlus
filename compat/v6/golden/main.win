@@ -1,0 +1,9 @@
+{
+  "class": "MainWin",
+  "type": "Panel",
+  "children": [
+    { "type": "Label",    "text": "Demo de Forms — Camino A", "align": "TOP_MID",    "y": 12 },
+    { "type": "Button",   "text": "Saludar",                  "align": "CENTER",     "clic": "onSaludar" },
+    { "type": "Checkbox", "text": "Activar",                  "align": "BOTTOM_MID", "y": -20, "change": "onActivar" }
+  ]
+}

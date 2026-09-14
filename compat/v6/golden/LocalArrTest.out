@@ -1,0 +1,8 @@
+suma integer[10] = 45
+suma via funcion = 45
+bytes = 1,2,250,0  len=4
+words = 1000,2000,0  len=3
+int16 = -5,-300,0
+longs = 5,4000000000,0  len=3
+dobles = 1.5,0  len=2
+fin

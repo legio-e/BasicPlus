@@ -1,0 +1,29 @@
+-- clamp(x, lo, hi) --
+dentro    5
+por abajo 0
+por arriba 10
+en el borde lo 0
+en el borde hi 10
+lo > hi   10
+-- wrap(x, lo, hi) --
+370 en [0,360) 10
+-10 en [0,360) 350
+  0 en [0,360) 0
+360 en [0,360) 0
+720 en [0,360) 0
+  7 en [-5,5)  -3
+ -7 en [-5,5)  3
+-- hypot(x, y) --
+(3,4)     5
+(0,0)     0
+(-3,-4)   5
+(1,1)     1.414214
+(3e18,4e18) 5E18
+-- remap(x, inLo, inHi, outLo, outHi) --
+512 de [0,1023] a [0,100] 50.048878
+  0 de [0,1023] a [0,100] 0
+1023 de [0,1023] a [0,100] 100
+invertido 100
+extrapola 200
+adc acotado 100
+FIN

@@ -1,0 +1,5 @@
+antes
+atrapada: Wdt.enable(2000): no implementado en esta plataforma
+atrapada: Wdt.feed(): no implementado en esta plataforma
+atrapada: Wdt.disable(): no implementado en esta plataforma
+despues

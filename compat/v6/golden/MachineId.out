@@ -1,0 +1,3 @@
+micro: host
+placa: host
+obsoleta boardName() == getBoard(): true

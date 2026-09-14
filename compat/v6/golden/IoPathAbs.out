@@ -1,0 +1,5 @@
+relativo: x.txt
+absoluto: /app/x.txt
+con carpeta: sub/x.txt
+con esquema: pack:Iconos/logo.png
+vacio: 

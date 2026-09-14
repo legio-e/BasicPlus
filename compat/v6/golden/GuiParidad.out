@@ -1,0 +1,14 @@
+== arbol ==
+screen [480x320 align=0 +0,0]
+  panel [200x120 pos=10,20]
+    label "paridad" [-1x-1 pos=4,4]
+    button [80x28 pos=4,30]
+      label "OK" [-1x-1 align=0 +0,0]
+  checkbox "activo" [-1x-1 pos=10,160 val=1]
+  toggle [-1x-1 pos=120,160 val=1]
+  slider [180x12 pos=10,200 val=42]
+  bar [180x12 pos=10,230 val=7]
+  led [-1x-1 pos=220,160 val=0]
+  table [-1x-1 pos=240,20 grid=2x2 "a|b|c|d"]
+
+== fin ==

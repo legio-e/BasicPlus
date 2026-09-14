@@ -1,0 +1,13 @@
+Base.di(int)
+7
+Base.di(str)
+hola
+Base.saluda
+Base.di(int)
+7
+Base.di(str)
+hola
+Hijo.di(float)
+2.5
+Hijo.saluda
+Hijo.saluda

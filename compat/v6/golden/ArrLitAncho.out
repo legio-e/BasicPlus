@@ -1,0 +1,15 @@
+== 4 bytes (el control: es lo que YA funcionaba) ==
+int    : 10 20 30  len=3
+== 8 bytes primitivos ==
+long   : 10000000000 20000000000 30000000000  len=3
+double : 1.5 2.5 3.5  len=3
+== referencias ==
+string : uno dos tres  len=3
+objeto : 7 8 9
+== escribir despues del literal ==
+tras set: DOS 42
+== un solo elemento (el borde) ==
+n=1    : solo otra vez solo  len=1
+== con el GC de por medio ==
+tras GC : uno tres 7 9
+fin

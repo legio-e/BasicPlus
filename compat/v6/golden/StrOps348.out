@@ -1,0 +1,51 @@
+== upper / lower (Latin-1) ==
+upper('hola mundo') -> [HOLA MUNDO]
+upper('canion')      -> [CANCIÓN]
+lower('CANION')      -> [canción]
+upper('aeiou')       -> [ÁÉÍÓÚ]
+lower('AEIOU')       -> [áéíóú]
+upper('nn')          -> [ÑÑ]
+upper('ss alemana')  -> [ß]
+upper('123-abc')     -> [123-ABC]
+== trim ==
+trim('  x  ')        -> [x]
+trim(tab x tab)      -> [x]
+trim('')             -> []
+trim('   ')          -> []
+trim('sin espacios') -> [sin espacios]
+== indexOf (indices en CODEPOINTS) ==
+indexOf('hola','la')   -> 2
+indexOf('hola','z')    -> -1
+indexOf('canion','on') -> 5
+indexOf('aXbXc','X')   -> 1
+indexOf('abc','')      -> 0
+indexOf('aaaeee-x','x') -> 5
+longitud de 'aaee-x'    -> 6
+== startsWith / endsWith / contains ==
+'hola' empieza 'ho'    -> si
+'hola' empieza 'la'    -> no
+'hola' acaba 'la'      -> si
+'canion' acaba 'on'    -> si
+'hola' contiene 'ol'   -> si
+'hola' contiene 'zz'   -> no
+'hola' empieza ''      -> si
+== replace ==
+replace('aXa','X','-')   -> [a-a]
+replace('aaa','a','bb')  -> [bbbbbb]
+replace('aba','a','')    -> [b]
+replace('hola','z','!')  -> [hola]
+replace('ab','','-')     -> [-a-b-]
+replace('canion','o','O') -> [canciOn]
+== split ==
+split(',a,,b,' , ',') partes -> 5
+  parte 0 -> []
+  parte 1 -> [a]
+  parte 2 -> []
+  parte 3 -> [b]
+  parte 4 -> []
+split('uno dos tres',' ') partes -> 3
+  primera -> [uno]
+  ultima  -> [tres]
+split sin separador partes -> 1
+  entera -> [sin-separador]
+split de cadena vacia partes -> 1

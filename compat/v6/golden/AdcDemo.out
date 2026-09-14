@@ -1,0 +1,17 @@
+--- Adc.Channel demo ---
+[adc] initChannel(0) → GP26 (host)
+[adc] initChannel(1) → GP27 (host)
+[adc] initChannel(2) → GP28 (host)
+[adc] initChannel(3) → GP29 (host)
+Tomando 5 muestras de cada canal...
+   0 : CH0= 0   CH1= 1097   CH2= 2194   CH3= 3291
+   1 : CH0= 292   CH1= 1389   CH2= 2486   CH3= 3583
+   2 : CH0= 584   CH1= 1681   CH2= 2778   CH3= 3875
+   3 : CH0= 876   CH1= 1973   CH2= 3070   CH3= 71
+   4 : CH0= 1168   CH1= 2265   CH2= 3362   CH3= 363
+
+Voltaje CH1 (Vref=3.3V):
+   2.001758 V
+Media de 16 lecturas CH1 (reduce ruido):
+  raw= 3104  V1= 2.530435
+--- fin ---

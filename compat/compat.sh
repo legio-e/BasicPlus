@@ -23,6 +23,27 @@
 #                       Solo se re-ejecuta cuando cambia V2 (raro: V2 esta congelada).
 #
 #   ./compat.sh check   DESACTIVADO: explica por que y no verifica nada.
+#
+# V7/H2 (14-sep-2026) — LA CAPSULA V6, y esta vez la compatibilidad binaria SI se
+# sostiene: la subida MOD7 -> MOD8 es ADITIVA por decision de Eduardo («los V7
+# tendrian que poderse ejecutar sin problemas»). Se verifica con el ARTEFACTO
+# PUBLICADO como oraculo — dist/BasicPlus-6.0-win.zip lleva el compilador y la
+# miVM de V6 dentro de BpIde-6.0.jar, y la stdlib MOD7 —, no con lo que haya en
+# el arbol de trabajo:
+#
+#   ./compat.sh gen-v6      Captura la capsula v6/golden: el corpus compilado
+#                           por el COMPILADOR PUBLICADO de V6 (MOD7 congelado),
+#                           la stdlib MOD7 del ZIP, y la salida de cada .mod con
+#                           las dos VMs de hoy (que coinciden entre si o el caso
+#                           no entra). Solo se re-ejecuta si cambia el corpus.
+#   ./compat.sh check-mod7  Las VMs ACTUALES ejecutan los .mod MOD7 congelados
+#                           (sin recompilar nada) y reproducen el .out byte a
+#                           byte. Es la prueba de «hacia atras». Entra en check.
+#   ./compat.sh check-fwd   Un .mod del compilador ACTUAL en la miVM PUBLICADA
+#                           de V6: o corre igual (mismo formato) o lo rechaza
+#                           con mensaje; nunca peta. Es la prueba de «hacia
+#                           delante» (cuando el compilador emita MOD8, aqui se
+#                           exige el rechazo). Entra en check.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -42,6 +63,9 @@ V3_FE="$ROOT/lexer-java/target/basicplus-frontend.jar"
 V3_JAVA="$ROOT/miVM/target/bpgenvm-1.0.jar"
 V3_C="$ROOT/bpgenvm-c/build/bpgenvm-c.exe"
 JAVA_OPC="$ROOT/miVM/src/main/java/edu/bpgenvm/bytecode/OpCode.java"
+# --- Capsula V6: el ZIP publicado (dist/, versionado a proposito) ---
+V6_ZIP="$ROOT/dist/BasicPlus-6.0-win.zip"
+V6_GOLD="$HERE/v6/golden"
 C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 
 # Corpus: nombres de fichero .bp (sin extension) en bpgenvm-c/samples/.
@@ -313,6 +337,133 @@ check_parity() {
   [ "$fail" -eq 0 ]
 }
 
+# ------------------------------------------------------------- capsula V6
+# Saca de dist/BasicPlus-6.0-win.zip lo que hace falta: BpIde-6.0.jar (lleva el
+# compilador basicplus.frontend.Main y la miVM edu.bpgenvm.Main de V6) y la
+# stdlib MOD7. Se extrae a $WORK/v6 cada vez: el ZIP es el oraculo, no una copia.
+v6_extraer() {
+  [ -f "$V6_ZIP" ] || { echo "  no existe $V6_ZIP (el ZIP publicado de V6 es el oraculo)"; return 1; }
+  mkdir -p "$WORK/v6"
+  ( cd "$WORK/v6" && unzip -q -o "$V6_ZIP" 'BasicPlus-6.0-win/BpIde-6.0.jar' 'BasicPlus-6.0-win/bpstdlib/*.mod' ) || return 1
+  V6_JAR="$WORK/v6/BasicPlus-6.0-win/BpIde-6.0.jar"
+  V6_STD="$WORK/v6/BasicPlus-6.0-win/bpstdlib"
+  [ -f "$V6_JAR" ] && ls "$V6_STD"/*.mod >/dev/null 2>&1
+}
+
+# Compila un item del corpus con el compilador de V6 (suelto o por proyecto,
+# como check_parity) y deja el .mod raiz en $1. Devuelve el nombre del modulo.
+v6_compilar() {  # $1=dir de trabajo  $2=item del corpus
+  local dir="$1" s="$2" bp mname
+  bp="$(bp_path "$s")"
+  [ -f "$bp" ] || return 1
+  rm -rf "$dir"/*.mod "$dir/src" "$dir/p.bpbuild"
+  sed -nE 's|^//[[:space:]]*recurso:[[:space:]]*([^[:space:]]+).*|\1|p' "$bp" | while read -r rec; do
+    cp "$ROOT/$rec" "$dir/" 2>/dev/null
+  done
+  mname="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "$bp" | head -1)"
+  [ -n "$mname" ] || return 1
+  cp "$V6_STD"/*.mod "$dir/" 2>/dev/null
+  if ! java -cp "$V6_JAR" basicplus.frontend.Main "$bp" --compile "$dir" --backend=mivm >/dev/null 2>&1; then
+    mkdir -p "$dir/src"; cp "$bp" "$dir/src/"
+    printf '{ "sourceDir": "src", "outDir": ".", "main": "%s", "dependencies": ["%s"] }\n' "$mname" "$V6_STD" > "$dir/p.bpbuild"
+    ( cd "$dir" && java -cp "$V6_JAR" basicplus.frontend.Main --project p.bpbuild --backend=mivm ) >/dev/null 2>&1 || return 1
+  fi
+  [ -f "$dir/$mname.mod" ] || return 1
+  echo "$mname"
+}
+
+gen_v6() {
+  echo "== gen-v6: capsula V6 — el corpus compilado por el compilador PUBLICADO (MOD7), salida con las VMs de hoy =="
+  v6_extraer || return 1
+  if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
+    echo "  ⚠ el host esta compilado CON LVGL: hace falta 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"; return 1
+  fi
+  rm -rf "$V6_GOLD"; mkdir -p "$V6_GOLD/stdlib"
+  cp "$V6_STD"/*.mod "$V6_GOLD/stdlib/"
+  local ok=0 skip=0 s mname oj oc dir="$WORK/g6"
+  mkdir -p "$dir"
+  for s in $CORPUS; do
+    mname="$(v6_compilar "$dir" "$s")" || { echo "  SKIP $s (no compila con el compilador de V6)"; skip=$((skip+1)); continue; }
+    oj="$(run_vm "$V3_JAVA" "$dir/$mname.mod")"; oc="$(run_vm "$V3_C" "$dir/$mname.mod")"
+    if [ -z "$oj" ] && [ -z "$oc" ]; then echo "  SKIP $s (caso mudo)"; skip=$((skip+1)); continue; fi
+    if [ "$oj" != "$oc" ]; then echo "  SKIP $s (las dos VMs de hoy no coinciden: fuera de la capsula)"; skip=$((skip+1)); continue; fi
+    cp "$dir/$mname.mod" "$V6_GOLD/$mname.mod"; printf '%s\n' "$oj" > "$V6_GOLD/$mname.out"
+    # Las DEPENDENCIAS hermanas que el compilador produjo al lado (SuperExt importa
+    # SuperExtBase, CastExt su base...) viajan tambien, sin .out: son librerias.
+    # Sin esto el golden corre en gen (el dir las acumula) y falla en check.
+    local dep
+    for dep in "$dir"/*.mod; do
+      [ -f "$V6_STD/$(basename "$dep")" ] && continue
+      [ -f "$V6_GOLD/$(basename "$dep")" ] || cp "$dep" "$V6_GOLD/"
+    done
+    # los recursos que el sample declara viajan con el golden (GuiWinJson carga main.win)
+    sed -nE 's|^//[[:space:]]*recurso:[[:space:]]*([^[:space:]]+).*|\1|p' "$(bp_path "$s")" | while read -r rec; do
+      cp "$ROOT/$rec" "$V6_GOLD/" 2>/dev/null
+    done
+    ok=$((ok+1))
+  done
+  echo "  magic de la capsula: $(head -c 4 "$V6_GOLD/stdlib/Core.mod")  ($(ls "$V6_GOLD"/*.out | wc -l) casos, $(ls "$V6_GOLD"/*.mod | wc -l) modulos, $(ls "$V6_GOLD"/stdlib/*.mod | wc -l) de stdlib)"
+  echo "== gen-v6: $ok goldens, $skip omitidos =="
+}
+
+# Las VMs de HOY ejecutan cada .mod CONGELADO (compilado por V6, MOD7) con la
+# stdlib MOD7 congelada al lado, y tienen que reproducir el .out byte a byte.
+# Cuando las VMs hablen MOD8, esto es exactamente «los V7 corren sin problemas».
+check_mod7() {
+  echo "-- hacia atras: las VMs actuales ejecutan los .mod MOD7 congelados de la capsula V6 --"
+  if ! ls "$V6_GOLD"/*.mod >/dev/null 2>&1; then
+    echo "  no hay capsula: ./compat.sh gen-v6 primero"; return 1
+  fi
+  if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
+    echo "  ⚠ el host esta compilado CON LVGL: hace falta 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"; return 1
+  fi
+  local pass=0 fail=0 g base dir="$WORK/c7" oj oc esperado
+  rm -rf "$dir"; mkdir -p "$dir"
+  # la stdlib congelada y TODOS los .mod de la capsula (los que no tienen .out son
+  # librerias hermanas de algun caso); los recursos (.win) tambien
+  cp "$V6_GOLD"/stdlib/*.mod "$V6_GOLD"/*.mod "$dir/"; cp "$V6_GOLD"/*.win "$dir/" 2>/dev/null
+  for g in "$V6_GOLD"/*.out; do
+    base="$(basename "$g" .out)"
+    esperado="$(cat "$g")"
+    oj="$(run_vm "$V3_JAVA" "$dir/$base.mod")"; oc="$(run_vm "$V3_C" "$dir/$base.mod")"
+    if [ "$oj" = "$esperado" ] && [ "$oc" = "$esperado" ]; then
+      pass=$((pass+1))
+    else
+      fail=$((fail+1)); echo "  FAIL $base — un MOD7 congelado ya no da lo mismo:"
+      [ "$oj" != "$esperado" ] && diff <(printf '%s\n' "$esperado") <(printf '%s\n' "$oj") | head -4 | sed 's/^/       java: /'
+      [ "$oc" != "$esperado" ] && diff <(printf '%s\n' "$esperado") <(printf '%s\n' "$oc") | head -4 | sed 's/^/       c:    /'
+    fi
+  done
+  echo "  hacia atras: $pass PASS, $fail FAIL (capsula $(head -c 4 "$V6_GOLD/stdlib/Core.mod"))"
+  [ "$pass" -gt 0 ] && [ "$fail" -eq 0 ]
+}
+
+# Un .mod del compilador ACTUAL en la miVM PUBLICADA de V6. Con el mismo formato
+# corre igual; con un formato mas nuevo la VM vieja tiene que RECHAZARLO con un
+# mensaje que lo diga — nunca petar ni cargarlo mal. Se mira el codigo de salida
+# y que, si no corre, la salida nombre el formato.
+check_fwd() {
+  echo "-- hacia delante: un .mod del compilador actual en la miVM publicada de V6 --"
+  v6_extraer || return 1
+  local dir="$WORK/fw" out rc magic
+  rm -rf "$dir"; mkdir -p "$dir"
+  cp "$V6_STD"/*.mod "$dir/"
+  java -jar "$V3_FE" "$SAMPLES/hello.bp" --compile "$dir" --backend=mivm >/dev/null 2>&1 || { echo "  hello.bp no compila con el compilador actual"; return 1; }
+  magic="$(head -c 4 "$dir/Hello.mod" 2>/dev/null || head -c 4 "$(ls "$dir"/*.mod | grep -v -i core | head -1)")"
+  out="$( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -cp "$V6_JAR" edu.bpgenvm.Main "$(ls *.mod | grep -iv '^Core\|^Str\|^IO\|^Math' | head -1)" 2>&1 )"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "  la miVM de V6 EJECUTA el .mod actual (magic $magic): mismo formato, hacia delante no hay nada que rechazar"
+    [ "$magic" = "MOD7" ] && return 0
+    echo "  ⚠ pero el magic no es MOD7: una VM vieja NO deberia ejecutar un formato que no conoce"; return 1
+  fi
+  if printf '%s' "$out" | grep -qiE 'MOD[0-9]|formato|magic|version'; then
+    echo "  la miVM de V6 RECHAZA el .mod actual (magic $magic) con mensaje: $(printf '%s' "$out" | grep -iE 'MOD[0-9]|formato|magic|version' | head -1)"
+    return 0
+  fi
+  echo "  ✗ la miVM de V6 falla (rc=$rc) SIN decir que es el formato:"; printf '%s\n' "$out" | head -5 | sed 's/^/       /'
+  return 1
+}
+
 # check_behaviour / check_opcodes / check_emit se conservan intactas arriba: son
 # el registro de lo que se verificaba contra V2 y siguen siendo reutilizables si
 # algun dia hay algo que comparar. Desde V4 NO se llaman (ver el aviso de abajo).
@@ -344,12 +495,19 @@ Lo que SI seguimos garantizando, y es lo que verifica este check:
 EOF
   local fails=0
   check_parity || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM VERDE' || echo 'paridad dual-VM en ROJO') =="
+  # V7/H2 — la compatibilidad binaria VUELVE, esta vez con V6 y aditiva: los .mod
+  # MOD7 congelados corren en las VMs de hoy, y los de hoy no rompen la VM de V6.
+  check_mod7 || fails=$((fails+1))
+  check_fwd  || fails=$((fails+1))
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM + capsula V6 VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
 case "${1:-}" in
-  gen)   gen ;;
-  check) check ;;
-  *) echo "uso: $0 {gen|check}"; exit 2 ;;
+  gen)        gen ;;
+  gen-v6)     gen_v6 ;;
+  check)      check ;;
+  check-mod7) check_mod7 ;;
+  check-fwd)  check_fwd ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd}"; exit 2 ;;
 esac

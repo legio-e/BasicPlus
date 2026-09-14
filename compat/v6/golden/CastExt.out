@@ -1,0 +1,9 @@
+1 downcast cross-module que vale
+   valor = 5
+2 subiendo por la herencia (Integer es Comparable)
+   compareTo consigo mismo = 0
+3 downcast cross-module que NO vale
+   lanzo: conversion invalida: el valor no es un 'Integer'
+4 el control local, que ya funcionaba
+   lanzo: conversion invalida: el valor no es un 'Integer'
+fin

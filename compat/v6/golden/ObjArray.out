@@ -1,0 +1,5 @@
+len      : 3
+0 cadena : hola
+1 objeto : 42
+2 vacio  : si, arranca a null
+fin

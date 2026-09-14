@@ -1,0 +1,19 @@
+== arbol ==
+screen [480x320 align=0 +0,0]
+  dropdown "uno
+dos
+tres" [120x28 pos=10,10 val=1]
+  textarea "hola" [200x60 pos=10,50]
+  list "rojo
+verde
+azul" [120x80 pos=10,120 val=2]
+  spinbox [90x30 pos=150,120 val=13]
+  tabview [220x200 pos=240,10 val=1]
+    tabpage "A" [-1x-1 align=0 +0,0]
+      label "en la A" [-1x-1 pos=4,4]
+    tabpage "B" [-1x-1 align=0 +0,0]
+      button [90x26 pos=4,4]
+        label "en la B" [-1x-1 align=0 +0,0]
+  chart [220x90 pos=10,220]
+
+== fin ==
