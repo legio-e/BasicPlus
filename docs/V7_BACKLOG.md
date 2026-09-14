@@ -114,6 +114,11 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 
 ## H2 · Lo que un `.mod` exporta y cómo se resuelven las dependencias
 
+> 📐 **Diseño hecho el 14-sep** (`V7_IDEAS.md` §H2), sobre un mapa verificado y una matriz medida: `#492` decidido **B**
+> (exportar en la interfaz: campos, `final`, estáticos; ×2,25 y +74 B por campo era el precio de la alternativa); `#500`
+> con `gen` + `ifaceCrc` y `MOD8`; `#493` con el respaldo en su espacio (y de paso vuelve el XIP de los packs, hoy
+> inalcanzable). Salieron cuatro bugs del compilador (`#507`–`#510`, en H1). Esperan cinco decisiones de Eduardo.
+
 | asunto | dónde |
 |---|---|
 | **`#492` — los campos PROTEGIDOS no cruzan módulos**: la interfaz exporta métodos y propiedades, pero no campos (`field <nombre>:<tipo> slot <n>` en `ClassSig`); el rodeo es un getter. Coste: rehacer la cadena entera | `FICHAS` `#492` (L135) |

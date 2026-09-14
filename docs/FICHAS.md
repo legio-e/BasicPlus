@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **18** | las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **23** | las cinco abiertas EN V7 (14-sep, de la matriz de `#492`): `#506` `#507` `#508` `#509` `#510` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -161,6 +161,42 @@ el PC sin placa, como en el host.
 > Aquí entran las fichas que se abran a partir del 13-sep-2026, arriba las más recientes.
 > Las que vienen de V6 están en el bloque siguiente, con su texto intacto.
 
+#### 🔴 `#508` — `private` se PIERDE en el parser para `var` y `property`: una subclase lee un campo privado, y el error desde fuera lo llama «protegido» (abierta 14-sep, de la matriz de `#492`; H1 — y precondición de B)
+
+**Medido (14-sep, `notas/v7-apertura/matriz492.py`)**: `private var p` en `Base`; `Der extends Base` en el MISMO módulo
+hace `return this.p` y **compila**. Desde `main`, `b.p` da *«'p' es protegido de 'Base'…»*. En métodos sí funciona
+(`this.priv()` desde `Der` falla como debe). **Causa**: `Parser.java:347-356` consume `private`, pero sólo `:419` lo pega
+(`fd.isPrivate`, a `FuncDef`); `:405 parseVarDecl(isPublic)` y `:426 parsePropertyDef(isPublic, isFinal, isSync)` lo
+tiran. `isPrivate` sólo existe en `Ast.FuncDef` y `Symbol.FunctionSymbol`; `VarSymbol` sólo tiene `isPublic`.
+`checkVisibility` (`SemanticAnalyzer.java:3622-3660`) aplica «protegido» a `VarSymbol` y `private` sólo a funciones.
+⏭️ Conservar `isPrivate` en `VarDecl`/`PropertyDef` y en sus símbolos; que `checkVisibility` lo aplique; test en la
+matriz (control negativo). **Va antes que B** (`#492`): sin esto, «exportar los campos no privados» exportaría los privados.
+
+#### 🔴 `#509` — `super(5)` con constructor SOBRECARGADO: *«se esperaban 0, se pasaron 1»* — `super` sólo ve la primera sobrecarga, también en el mismo módulo (abierta 14-sep, de la matriz de `#492`; H1)
+
+**Medido**: `Base` con `Base()` y `Base(v: integer)`; `Der` con `super(5)` en su constructor → error semántico en el
+mismo módulo y cross-module. `PENDIENTES` L18 lo contaba como «sólo la primera sobrecarga del constructor cruza», pero
+no es de la frontera: `super(...)` resuelve contra la cabeza de la cadena de sobrecargas (`ClassSymbol.constructor`) y
+no recorre `nextOverload`. ⏭️ Resolver `super(args)` por aridad/tipos como una llamada sobrecargada normal (H5.a);
+y la interfaz exporta un solo `ctor` (`ClassSig.ctorParams`): al hacer B, exportar todas las sobrecargas del constructor.
+
+#### 🔴 `#510` — `Base.MAX` / `Base.cuantos()` DENTRO de una clase derivada: *«el tipo 'void' no tiene miembros»* (abierta 14-sep, de la matriz de `#492`; H1)
+
+**Medido**: desde `main()` y desde un método de la propia `Base`, `Base.MAX` y `Base.cuantos()` funcionan; desde un
+método de `Der extends Base` (mismo módulo), el nombre `Base` se resuelve a otra cosa (¿el constructor heredado, una
+función `void`?) y el acceso estático falla. Cross-module con nombre cualificado (`Basemod.Base.MAX`) la const funciona;
+el método y la property estáticos no cruzan por diseño «v1» (eso es de `#492`/B). ⏭️ Acotar en el resolutor de nombres
+qué encuentra `Base` dentro de una derivada; test en la matriz.
+
+#### 🔴 `#507` — construir la PROPIA clase dentro de un método suyo (`return Nodo()` en `Nodo.clon()`) hace saltar una excepción del emisor: *«Clase no declarada (¿endClass antes de emitNewObject?)»* (abierta 14-sep, al montar la matriz de `#492`; H1)
+
+**Reproducido** con `samples`-style mínimo (`C:/tmp/v7_self/SelfNew.bp`): `public class Nodo … public function clon(): Nodo
+return Nodo() end clon` → `Exception in thread "main" java.lang.RuntimeException` en `ModWriter.emitNewObject:1126`,
+sin diagnóstico, exit 1. Una factoría que devuelve una instancia de su propia clase es un patrón normal. ⏭️ El
+descriptor de la clase se registra al cerrarla (`endClass`); `emitNewObject` dentro de sus propios métodos lo pide antes.
+Hace falta un forward-ref al descriptor propio (como ya hay para funciones), y que una excepción del emisor sea un
+diagnóstico con línea, no un stack trace (`#506` va de lo mismo: que el emisor no escriba con errores).
+
 #### 🔴 `#506` — el compilador ESCRIBE el `.mod` aunque dé error: un programa ejecuta sin su bucle (abierta 14-sep, de `L20`; H1)
 
 **Reproducido el 14-sep** con `for i := 3 to 1 step -1 do … next i` (`C:\tmp\v7l20\StepNeg.bp`): el frontend
@@ -213,6 +249,30 @@ del IDE, blobs de las cinco imágenes) — el de siempre al tocar el frontend.
 Mientras, `List.backing()`. Y ojo: **`G2` lo va a pisar** — un `MainWin extends Gui.Window` de usuario
 que toque un campo protegido de `Window` se estrella igual.
 
+### 📐 14-sep — LA MATRIZ (24 casos, cada uno con su control en el mismo módulo) y la DECISIÓN: B
+
+Pregunta de Eduardo: *«lo que hay que verificar es si es el único caso o hay más»*. Medido con
+`notas/v7-apertura/matriz492.py` (una base con un miembro de cada clase; `Der extends Basemod.Base` en otro módulo
+que usa uno cada vez): **no cruzan** el campo protegido (también si es de tipo objeto), **el campo heredado leído
+desde una `native` del hijo** (el caso que recordaba Eduardo — mismo agujero), y el `raise` de un evento de la base
+(**el emisor peta**: *«RuntimeException: Clase no declarada: Base»*, sin diagnóstico); **cruza lo que no debería**: un
+hijo en otro módulo sobreescribe un método `final` (la interfaz no lleva el bit); **no cruzan por diseño «v1»**: método
+y property estáticos (la const estática sí). Cruzan bien: métodos públicos y protegidos, sobrecargas, properties públicas
+y protegidas, `super.metodo()`, el constructor por defecto, firmas con la propia clase y con arrays, los enums del módulo.
+Salieron además cuatro bugs del compilador que no son de la frontera: `#508` (`private` perdido en el parser), `#509`
+(`super` con constructor sobrecargado), `#510` (`Base.X` dentro de una derivada), `#507` (construir la propia clase).
+
+**Las dos opciones, medidas** (host, 2 000 000 de `this.n := this.n + 1`): campo 86 ms / property 193 ms → **×2,25**;
+y **+91 B** en el `.mod` por cada campo convertido en property (8 de data, 32 de código, 34 de exports, 17 de
+interfaz) ≈ 74 B de RAM. Exportar el campo en la interfaz: ≈25 B de flash en una sección que la VM salta, 0 de RAM,
+0 de tiempo. Y sólo B tiene la forma de los otros agujeros (`final`, estáticos, el evento).
+
+✅ **Decidido por Eduardo (14-sep): B** — *«OK B, me parece bien»*. La interfaz exporta la superficie completa que un
+descendiente puede tocar: `field <nombre>:<tipo> slot <n>` por cada campo no privado, `final` en métodos y properties,
+los estáticos, y el emisor de `raise` resolviendo el evento heredado por la interfaz. Con la red que la hace segura:
+**un marcador de layout** (`Clase#layout#nF#nM`) que el enlazador comprueba como los de método (`#324`), para que un
+padre que crece no corrompa al hijo en silencio. Precondición: `#508`. Diseño entero en `V7_IDEAS.md` §H2.
+
 #### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
 
 *«Apunta para V7. `Core.bp` nos sigue dando guerra. Aquí hay que refinar la norma: si tenemos un módulo principal
@@ -228,6 +288,21 @@ disfrazado de `/app` (`#493`, medido en el P4 el 11-sep con `Gui`; y `#496`: el 
 dentro). **Lo que hace falta**: que el `.mod` de la app lleve la versión de cada dependencia contra la que se
 compiló, y que el cargador **rechace** (no avise) una dependencia más antigua, venga de donde venga. Junto con
 `#493` (que un pack de librería no empaquete stdlib, o que no tape a `/lib`) es la misma conversación.
+
+### 🔬 14-sep — NO HAY NINGÚN DATO QUE COMPARAR (mapa de H2), y el diseño
+
+El `.mod` no lleva versión de sí mismo ni de sus dependencias: la cabecera son nueve enteros (`ModWriter.java:2173-2189`,
+`loader.c:119-141`), cada import es `(nombre, fromPath)` (`:1983-1987`), `ModFormat.FORMAT_VERSION = 7` es
+«informativa» y no se escribe. La única «versión» del ecosistema es **el dígito del `MAGIC`** (`bpvm_mods.c:12-15`, el
+`STAT` del wire, `PicoExplorer.java:1120-1131`). El compilador sabe la ruta exacta de cada dependencia usada
+(`ctx.modsUsados`) y no la escribe; sí la mete en el pack (`PackStep.java:139-147`, stdlib incluida: `#496`), y el
+manifest lleva `requires-pack`, **que nadie lee**. Los dos enlazadores comprueban existencia de símbolos por nombre
+(`Clase#metodo#slot`, `link.c:170-181`) y el *class-fixup* sólo parchea `parentOff` (`:211-224`): **nadie compara el
+`numFields` del padre horneado en el hijo con el real** — un `Core.List` con un campo más corrompe a `OwnerList` en
+silencio. ⏭️ Diseño en `V7_IDEAS.md` §H2, pieza 1: `gen` (la versión declarada del proyecto) + `ifaceCrc` (CRC de la
+sección `interface`) por módulo y por import; la norma en el cargador (más antiguo → rechazo; misma `gen` y otra
+interfaz → rechazo; más nuevo → si enlaza, con un marcador de layout nuevo); `MOD8`; rechazo por `OUTPUT`. Con cinco
+decisiones para Eduardo al final del apartado.
 
 #### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
 
@@ -276,6 +351,23 @@ stdlib** se resuelve desde `/app` en vez de `/lib` (o del embebido). El log ya l
 donde el usuario mira. ⚠️ Y para el runner de `T1`: **comprobar que `/app` no tapa a `/lib` antes de
 correr nada**, o los resultados en placa no significan lo que parecen. ¿V6 o V7? Es pequeño y es un
 fallo silencioso — a decidir.
+
+### 🔬 14-sep — EL MECANISMO, verificado línea a línea (mapa de H2) — y es peor de lo que decía la ficha
+
+`bpvm_pack_mount` instala la zona de packs como **respaldo del FS** (`bpvm_pack.c:125-131`) y ese respaldo contesta al
+`stat`/`read`/`read_at` de **cualquier ruta** cuyo nombre de fichero coincida: `bpvm_pack_key_de_path` se queda con el
+basename y tira el directorio (`:167-181`); `bpvm_fs_stat` consulta overlay → backend → respaldo (`fs_facade.c:179-186`).
+`discover_deps` (`bpvm.c:490-605`) hace `have_fs = bpvm_fs_stat(<dir del entry>/X.mod)`: con la app en `/app` el pack
+contesta a `/app/X.mod`, **`/lib` no se prueba nunca**, el rastro dice `dep 'X' -> /app/X.mod` (`:579`) y el aviso «del
+FS eclipsa al del pack» (`:583-586`) sale cuando el que reclamó fue el pack. **Y la rama XIP (`:588-601`, `!have_fs`)
+es inalcanzable**: un módulo servido por un pack se carga por *stream* a RAM con `en_pack=0` (`loader.c:276`) — el
+beneficio del XIP se perdió con el respaldo. `test_fsfallback.c:44-49` consagra la sombra como correcta. El orden de
+arranque difiere por familia (STM32 monta la zona ANTES de sincronizar `/lib`, `stm32_repl.c:805` vs `:814`; ESP32 al
+revés; la Pico en el primer RUN). Todo el rastro va por `bpvm_diag`, nunca por `OUTPUT`; miVM no rastrea nada y tiene la
+misma forma de sombra (workdir → … → `stdlibDir` el último), y honra `fromPath` mientras la VM-C lo tira
+(`loader.c:173-183`). El compilador resuelve la stdlib PRIMERO (`Main.java:1520-1531`); las dos VMs, la ÚLTIMA.
+⏭️ Diseño en `V7_IDEAS.md` §H2, pieza 2: el respaldo contesta sólo en su espacio, un orden único en las dos VMs, el
+ruido por `OUTPUT`, el builder sin stdlib, el arranque de STM32, y `test_fsfallback.c` del revés.
 
 #### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
 

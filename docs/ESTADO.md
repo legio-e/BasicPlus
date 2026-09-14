@@ -27,6 +27,52 @@
 
 ## Última sesión
 
+## 📐 H2 ANALIZADA (14-sep) — la matriz de `#492`, B decidido, el mapa de las dependencias y el diseño de H2 en `V7_IDEAS`
+
+**Eduardo abrió el día con «Empezamos V7» y, a mi primer desvío (`L20`), «¿Empezábamos con H2, no?».** Día de análisis:
+ni una línea de código de producto.
+
+1. **`#506` abierta** de paso (L20 reproducido: el compilador devuelve exit 2 y escribe `.mod`/`.dbg`/`.slots`; las dos VMs
+   ejecutan el programa sin su bucle; causa en `MivmEmitter.emitTo:364-380` y `Main.emitMivmMod:975`; `step -1` falla sólo
+   porque `-1` llega como `UnaryExpr`).
+2. **La pregunta de Eduardo sobre `#492`** — *«si es el único caso o hay más»* — contestada con una **matriz** de 24 casos
+   (`notas/v7-apertura/matriz492.py`: una base con un miembro de cada clase, `Der extends Basemod.Base` en otro módulo,
+   y el control en el mismo módulo). **No cruzan**: el campo protegido, el campo heredado leído desde una `native` (el
+   caso que él recordaba: mismo agujero), y el `raise` de un evento de la base (el emisor peta). **Cruza lo que no
+   debería**: `final`. **No cruzan por «v1»**: método y property estáticos. Y cuatro bugs del compilador que no son de
+   la frontera, fichados: `#507` (construir la propia clase → excepción del emisor), `#508` (`private` perdido en el
+   parser para `var`/`property`: una subclase lee un campo privado), `#509` (`super(5)` con constructor sobrecargado),
+   `#510` (`Base.MAX` dentro de una derivada: *«el tipo 'void' no tiene miembros»*).
+3. **Las dos opciones de `#492`, medidas**: campo → property cuesta **×2,25** por acceso (86 → 193 ms en VM-C, 2 M
+   accesos) y **+91 B** por campo (≈74 de RAM); exportar el campo en la interfaz, ≈25 B de flash en una sección que la
+   VM salta. **Eduardo decidió B** (*«OK B, me parece bien»*), generalizada: la interfaz exporta la superficie completa
+   que un descendiente puede tocar (campos, `final`, estáticos) + el emisor de eventos + un marcador de layout en el
+   enlace. `#508` va antes (sin `private` de verdad, B exportaría los privados).
+4. **El mapa de H2** (workflow: seis lectores + un verificador, 1,3 M tokens, `notas/v7-apertura/mapa_h2.json`) — tres
+   hallazgos que cambian el diseño: el `.mod` **no lleva ningún dato de versión** (la única «versión» del ecosistema es
+   el dígito del `MAGIC`) y el enlace **no compara el layout del padre** horneado en el hijo; la zona de packs contesta
+   al `stat` de **cualquier ruta** por basename (por eso tapa `/app` y `/lib`), y **la rama XIP de `discover_deps` es
+   inalcanzable** — los módulos de un pack se cargan a RAM por stream; el compilador resuelve la stdlib PRIMERO y las
+   dos VMs la ÚLTIMA; miVM honra `fromPath` y la VM-C lo tira.
+5. **El diseño de H2, escrito en `V7_IDEAS.md` §H2** (cuatro piezas, una sola subida de formato `MOD8`/`bpi 8`/`.mdn`):
+   `#500` con `gen` (versión declarada del proyecto) + `ifaceCrc` por módulo y por import, la norma en el cargador
+   (más antiguo → rechazo; misma `gen` y otra interfaz → rechazo; más nuevo → si enlaza, con marcador de layout) y el
+   rechazo por `OUTPUT`; `#493` con el respaldo contestando sólo en su espacio (vuelve el XIP), orden único, ruido por
+   `OUTPUT`, builder sin stdlib, arranque de STM32, `test_fsfallback.c` del revés; `#492` = B; `#441` huella de flags en
+   el `.mdn`. Orden de trabajo y el cierre pequeño de H2 (la matriz como test de la suite, test de la norma, `compat`,
+   `tanda` corta en P4 y Pico) al final del apartado.
+
+⏭️ **Al retomar: cinco decisiones de Eduardo** (`V7_IDEAS.md` §H2 punto 4) y a programar H2 en el orden del punto 3:
+(1) `gen` = versión del proyecto (`.bpbuild`) ¿o por módulo?; (2) con `gen` mayor, ¿basta que enlace?; (3) `fromPath`
+en las dos VMs o fuera; (4) el pack de librería sin stdlib por defecto; (5) una sola subida de formato para H2 y `#441`.
+Primer código: `#508` (parser) → la subida de formato. ⚠️ Toca el frontend: rehacer stdlib (`rm -rf bpstdlib/out`),
+samples, fat-jar del IDE (cerrado), blobs de las cinco imágenes. Host sigue en sabor `gui1-lvgl1`.
+
+📌 **Estado del repo**: todo commiteado, sin push. Temporales de hoy en `C:/tmp/v7l20`, `C:/tmp/v7_492`, `C:/tmp/v7_self`,
+`C:/tmp/v7_coste` (desechables).
+
+---
+
 ## 🧬 V7 ABIERTA (13-sep) — V6 comprobada cerrada, el censo de V7 hecho ficha a ficha, y `FICHAS` con V7 en el centro
 
 **Encargo de Eduardo:** *«Comenzamos, V7. Quizás lo primero es asegurar que V6 está cerrado y poner V7 en

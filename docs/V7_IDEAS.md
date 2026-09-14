@@ -684,3 +684,193 @@ que el scheduler no ha cambiado.
 prints que localizó este bug— es **todavía menos comparable** que el original, porque sus
 prints van DENTRO de los hilos y exponen el entrelazado entero. Es una herramienta de
 diagnóstico, no un test: no debe entrar en la batería.
+
+---
+
+## H2 — lo que un `.mod` exporta y cómo se resuelven las dependencias (14-sep, día de análisis)
+
+> Fichas: `#500` (la norma de versiones), `#493` (la sombra de `/app` y del pack), `#492` (los campos protegidos
+> no cruzan módulos), `#441` (el `.mdn` no recuerda su receta). Lo que Eduardo nombró de memoria al abrir V7:
+> *«limitaciones de los `.mod` a la hora de guardar dependencias intra-clases cuando estaban en diferentes módulos»*.
+> Este apartado es el diseño; se escribió **antes** de tocar código, sobre un mapa del mecanismo verificado línea
+> a línea (seis lectores + un verificador, 14-sep) y sobre una matriz medida (24 casos, `notas/v7-apertura/matriz492.py`).
+
+### 1. Lo que hay hoy, medido — y lo que no hay
+
+**El `.mod` no sabe nada de versiones.** La cabecera `MOD7` son nueve enteros (magic + ocho tamaños;
+`ModWriter.java:2173-2189`, `loader.c:119-141`); cada import es `(nombre cualificado, fromPath)` y nada más
+(`ModWriter.java:1983-1987`). Ni versión del módulo, ni de sus dependencias, ni CRC, ni compilador. La única
+«versión» que existe en todo el ecosistema es **el dígito del `MAGIC`** (`bpvm_mods.c:12-15`, el `STAT` del wire,
+`PicoExplorer.java:1120-1131`): dos `MOD7` distintos son «misma versión, CRC distinto», y el `/lib` de la placa y
+el IDE **reemplazan** en ese caso. `ModFormat.FORMAT_VERSION = 7` es «informativa» y no se escribe. No hay sintaxis
+`version` en el parser: sólo `import vN from pack "XXXX"`, que es la API nativa del `.mdn` (`bpvm_pack_api_verify`),
+no el `.mod`.
+
+**El compilador sabe contra qué compiló y no lo escribe.** Resuelve cada import buscando **la stdlib primero**
+(`stdlibDir`, `#467`; `Main.java:1520-1531`) y guarda la ruta real de cada `.mod` usado en memoria
+(`ctx.modsUsados`) — y de ahí sólo sale al pack (`PackStep.java:139-147`, que **mete en el pack cada `.mod` usado,
+stdlib incluida**, y si el `outDir` tiene uno con ese nombre, «el del outDir manda»: así entró `Core` en
+`SQLite.pack`, `#496`). El manifest lleva `requires-pack`, que **nadie lee**.
+
+**Las dos VMs resuelven al revés que el compilador: la stdlib la última.** miVM: pack en ejecución → `workdir` →
+tal cual → `modulePaths` → carpeta del raíz (`#431`) → `stdlibDir` (`ModuleManager.java:153-198`), y **usa**
+`fromPath`. VM-C: pack en ejecución → `bpvm_fs_stat(<dir del entry>/X.mod)` → `bpvm_entry_resolve`: basedir →
+tal cual → `/app` → `/lib` → `/sys` → zona XIP (`bpvm.c:490-605`, `:777-806`), y **tira** `fromPath`
+(`loader.c:173-183`). Ninguna de las dos avisa por `OUTPUT` de dónde salió una dependencia; la VM-C lo dice por
+`bpvm_diag` (`dep 'X' -> ruta`) y miVM no lo dice.
+
+**La sombra de `#493`, con su mecanismo exacto.** `bpvm_pack_mount` instala la zona de packs como **respaldo del
+FS** (`bpvm_pack.c:125-131`) y ese respaldo contesta al `stat`/`read` de **cualquier ruta** cuyo nombre de fichero
+coincida (`bpvm_pack_key_de_path` se queda con el basename, `:167-181`). Con la app en `/app`, el pack contesta a
+`/app/Gui.mod`: `have_fs = 1`, `/lib` no se prueba, el rastro dice `dep 'Gui' -> /app/Gui.mod`, el aviso «del FS
+eclipsa al del pack» sale **cuando el que reclamó fue el pack**, y — lo que nadie había visto — **la rama XIP de
+`discover_deps` es inalcanzable** (`bpvm.c:588-601` exige `!have_fs`): un módulo servido por un pack se carga por
+*stream* a RAM con `en_pack=0` (`loader.c:276`) en vez de ejecutarse desde flash. `test_fsfallback.c:44-49`
+consagra la sombra como correcta. Y el orden de arranque difiere por familia: STM32 monta la zona **antes** de
+sincronizar `/lib` (`stm32_repl.c:805` vs `:814`), así que `bpvm_mods.c:24` ve «existe» por el respaldo; ESP32 al
+revés; la Pico monta la zona en el primer RUN.
+
+**Lo que el enlazador comprueba y lo que no.** Los dos enlazan **por nombre**, con marcadores
+`Clase#metodo#slot` exportados como símbolos de datos (`ModWriter.java:409-421`; `link.c:170-181`: *«lib presente
+pero no exporta … ¿versión vieja?»*; `ModuleManager.java:800-807`). Es el «modelo JRE»: hacia delante vale si es
+*append-only*. Pero el *class-fixup* sólo parchea `parentOff` (`link.c:211-224`): **nadie compara el `numFields` /
+`numMethods` del padre horneado en el hijo con el real** — si `Core.List` gana un campo, un `OwnerList` compilado
+contra la vieja coloca los suyos encima y se corrompe en silencio. `#500` no tiene hoy ningún dato que comparar y
+`#493` es exactamente el tramo del respaldo.
+
+**La interfaz y la matriz (`#492`).** La sección `interface` es texto (`bpi 7`) con `class / layout nF nM bitmaps /
+ctor / prop / staticconst / event / method`; no existe `field` (`ModuleInterface.java:1035-1097`), el importador no
+crea ningún `VarSymbol` (`Main.java:2130-2330`), y **`private` se pierde en el parser para `var` y `property`**
+(`Parser.java:405, :426`; sólo `:419` lo pega a `FuncDef`). La matriz de 24 casos (cada uno con su control en el
+mismo módulo) dio: **no cruzan** el campo protegido (`#492`), el campo protegido leído desde una `native` del hijo
+(el caso de Eduardo: mismo agujero), y el `raise` de un evento de la base (**el emisor peta**: *«Clase no
+declarada: Base»*); **cruza lo que no debería**: un hijo en otro módulo sobreescribe un método `final` (la interfaz
+no lleva `final`); **no cruzan por diseño «v1»**: método y property estáticos (la const estática sí). Y cuatro bugs
+del compilador que no son de la frontera: `private var` leído por la subclase (es lo del parser), `super(5)` con
+constructor sobrecargado (*«se esperaban 0, se pasaron 1»* — `super` sólo ve la primera sobrecarga), `Base.MAX` /
+`Base.cuantos()` **dentro de una derivada** (*«el tipo 'void' no tiene miembros»*), y `return Nodo()` dentro de un
+método de `Nodo` (`#507`: excepción del emisor).
+
+**El coste de la alternativa a B, medido** (host, 2 000 000 de `this.n := this.n + 1`): campo 86 ms, property
+193 ms → **×2,25**; y **+91 B** en el `.mod` por cada campo convertido (8 de data, 32 de código, 34 de exports, 17
+de interfaz) ≈ 74 B de RAM. Exportar el campo en la interfaz: ≈25 B de flash en una sección que la VM salta, 0 de
+RAM, 0 de tiempo. **Decidido con Eduardo (14-sep): B.**
+
+**Y el `.mdn` (`#441`)**: cabecera de 20 B (`magic, version=1, abi=6, code_size, sym_count, arch`;
+`mdn_format.h:93-101`); el cargador compara `version==1`, `abi==6` y `arch`; el IDE da un `.mdn` por rancio por
+`mtime` o `arch`. Los flags viven en `AotBuild.java:53-54,108-109` y nadie calcula huella. El bloque nativo
+embebido en el `MOD7` pasa por el mismo gate. De paso: `Disasm.java:56-66` sólo entiende `MOD6` (la herramienta
+«module info» de `#284` desplaza las secciones con un `MOD7`).
+
+### 2. El diseño — cuatro piezas, una sola subida de formato
+
+**Pieza 1 · `#500`: el `.mod` lleva contra qué se compiló, y el cargador lo exige.**
+
+Dos números por dependencia, los dos **automáticos** (sin sintaxis nueva):
+
+- **`ifaceCrc`** — el CRC32 de la sección `interface` de la dependencia contra la que el compilador compiló. Es la
+  *identidad exacta de la API*: dice «¿es la misma interfaz que vi?».
+- **`gen`** — la *generación* de la dependencia: un entero monótono que el compilador estampa en cada `.mod` a
+  partir de la **versión declarada del proyecto** (`"version"` en el `.bpbuild`; la stdlib de V7 sería `7`, y un
+  proyecto sin versión, `0`). Es lo que da **orden** — sin él no existe «más antigua».
+
+El módulo lleva en su cabecera su propio `gen` y su `ifaceCrc`; cada import lleva `(nombre, fromPath, gen,
+ifaceCrc)` de la dependencia con la que se compiló. **La norma, al cargar, en las dos VMs:**
+
+1. `dep.gen < necesitada.gen` → **rechazo**: *«'Core' (gen 6) es más antiguo que el que 'App' necesita (gen 7):
+   actualiza /lib o recompila»*. Es la regla de Eduardo (12-sep) tal cual, venga la dependencia del pack, de
+   `/app` o de `/lib`.
+2. `dep.gen == necesitada.gen` y `dep.ifaceCrc != necesitada.ifaceCrc` → **rechazo**: *«'Core' (gen 7) no es la
+   interfaz con la que se compiló 'App': recompila»*. Es el desfase de siempre (una stdlib reconstruida sin subir
+   la versión), que hoy pasa en silencio si las ranuras coinciden.
+3. `dep.gen > necesitada.gen` → **se acepta** si enlaza: los marcadores `Clase#metodo#slot` de `#324` **más un
+   marcador de layout nuevo** por cada clase base extendida (`Clase#layout#nF#nM`, el mismo mecanismo, un símbolo
+   más) — la promesa *append-only* del «modelo JRE» pasa de convención a comprobación. Si el padre creció por el
+   medio, el marcador de layout no resuelve y grita en vez de corromper.
+4. El rechazo sale por **`OUTPUT`** (donde mira el usuario), no sólo por el log de la placa; mismo texto en las
+   dos VMs (es lo agnóstico de rol).
+
+Formato: es cambio de cabecera y de la sección `imports` → **`MOD8`**, y por la norma de `#284` (formato igual o
+rechazo) toda la cadena se regenera — el coste de siempre al tocar el frontend, y es UNA sola subida para todo H2:
+en el mismo salto entran el `field`/`final`/estáticos de la interfaz (`bpi 8`) y la huella de flags del `.mdn`
+(`#441`, pieza 4). ⚠️ El `bpi` de la interfaz y el `MOD` del contenedor son versiones distintas; conviene que las dos
+suban a la vez y que `Disasm` aprenda `MOD7`/`MOD8` de paso.
+
+**Pieza 2 · `#493`: la zona de packs deja de disfrazarse de `/app`.**
+
+1. **El respaldo contesta sólo en su propio espacio.** La zona de packs deja de reclamar rutas ajenas por basename:
+   contesta a `/packs/<nombre>/X.mod` (o al `stat` sin directorio que haga `discover_deps` a propósito), nunca a
+   `/app/X.mod` ni a `/lib/X.mod`. Con eso `bpvm_fs_stat("/app/Gui.mod")` dice la verdad, `/lib` vuelve a mirarse,
+   el aviso «eclipsa» vuelve a su sentido — y **la rama XIP de `discover_deps` vuelve a ser alcanzable**: un módulo
+   de pack se ejecuta desde flash, que es para lo que están los packs (y lo que `#468` quiere para la C6).
+2. **Un solo orden, escrito, igual en las dos VMs**: pack en ejecución → `/app` (la carpeta del programa) → `/lib` →
+   embebido → zona de packs. Lo que hoy difiere (miVM honra `fromPath` y la VM-C lo tira): se decide y se iguala
+   (propuesta: honrarlo en las dos como *pista* de primer candidato, que es lo que el compilador quiso decir).
+3. **Ruido donde mira el usuario**: cuando una dependencia **con nombre de stdlib** (existe en la tabla embebida /
+   en `stdlibDir`) se resuelve fuera de `/lib`, una línea por `OUTPUT`: *«aviso: 'Str' cargado desde /app/Str.mod
+   (la stdlib está en /lib)»*. En las dos VMs (miVM hoy no rastrea nada). Es la mitad «ruido, no lógica» de la
+   ficha; con la pieza 1 detrás, la sombra que además sea vieja se **rechaza**.
+4. **El pack builder no empaqueta la stdlib** por defecto (`PackStep` distingue lo que vino de `stdlibDir`), con una
+   opción explícita para packs autocontenidos; `requires-pack` o se lee o se quita. Y el arranque sincroniza `/lib`
+   **antes** de montar la zona en las tres familias (hoy STM32 al revés).
+5. Tests: `test_fsfallback.c` pasa a afirmar lo contrario (la zona NO contesta a `/app`); un test de host de la
+   precedencia con `/lib` real; y `tanda.py` ya comprueba la sombra antes de correr (`T1`, `843e2d0a`).
+
+**Pieza 3 · `#492`: la interfaz exporta la superficie completa que un descendiente puede tocar (B).**
+
+0. Antes: el parser **conserva `private` en `var` y `property`** y `checkVisibility` lo aplica — sin esto, exportar
+   «los campos no privados» exportaría los privados.
+1. `field <nombre>:<tipo> slot <n> [owner]` por cada campo no privado; el importador los da de alta como
+   protegidos (`VarSymbol`), y el emisor del hijo emite `GET_FIELD`/`SET_FIELD` por ranura como en el mismo módulo.
+   El AOT del hijo lee campos heredados igual que los propios (el caso de la `native`).
+2. `final` en `method`/`prop` (un bit), y el importador lo marca: la comprobación de sobreescritura ya existe.
+3. Estáticos: `method` estático como función con nombre cualificado (`CALL_EXT`), `prop` estática con su global y
+   accesores — se quita el «v1: sin estáticos».
+3-bis. **Los constructores sobrecargados** (Eduardo, 14-sep: *«había un problema con la sobrecarga de constructores;
+   si vamos a modificar el formato de los `.mod`, se puede hacer todo»*): la interfaz exporta hoy UN `ctor`
+   (`ClassSig.ctorParams`); pasa a exportar **todas las sobrecargas** (`ctor` ×N, como los `method`), y `super(args)`
+   resuelve por firma como cualquier llamada sobrecargada (`#509`, que hoy falla incluso en el mismo módulo). Es de
+   `H1`, pero viaja en esta misma subida de formato.
+4. El emisor de `raise` con evento heredado de otro módulo: resolver los campos del evento por la interfaz (el
+   `EventSig` ya viaja) en vez de buscar el descriptor local.
+5. Las VMs no cambian en nada de esto: el acceso es por ranura. Lo que las protege de un hijo compilado contra otra
+   base es el marcador de layout de la pieza 1.
+
+**Pieza 4 · `#441`: la receta del `.mdn`.** Una huella (CRC32 de los flags de compilación de `AotBuild`, por
+destino) en la cabecera del `.mdn` — un campo más en los 20 B — comparada al cargar como ya se compara `arch`, y
+publicada por el `INFO` de la placa junto con la ABI de helpers para que el IDE pueda decir *«este `.mdn` no es de
+esta placa»* antes de subirlo (hoy lo decide por `mtime`). Misma subida de formato que la pieza 1.
+
+### 3. El orden de trabajo y el cierre pequeño
+
+1. `private` en el parser + `checkVisibility` (precondición de B; y cierra el bug de la matriz).
+2. **La subida de formato, de una vez**: `MOD8` (gen + ifaceCrc en cabecera e imports), `bpi 8` (`field`, `final`,
+   estáticos), `.mdn` con huella. Compilador (`ModWriter`, `ModuleInterface`, importador, emisor de `raise`),
+   `Disasm`, y los dos cargadores con la norma y sus mensajes — paridad: mismo texto de rechazo.
+3. El marcador de layout en el enlace (las dos VMs).
+4. `#493`: el respaldo en su espacio, el orden único, `fromPath` en las dos, el ruido por `OUTPUT`, el arranque de
+   STM32, el builder sin stdlib, los tests.
+5. La cadena: jar, stdlib como proyecto, samples, fat-jar del IDE (cerrado), los blobs de las cinco imágenes,
+   `packs/Stdlib.pack`; `MOD_FORMAT.md` a v8, manual/referencia (`#492`, `L18`), `PENDIENTES` (L18 fuera).
+6. **Cierre pequeño de H2**: la matriz de `#492` como test de la suite del frontend (24 casos + controles
+   negativos); un test de host de la norma de versiones (un `Core` con `gen` menor, uno con la misma `gen` y otra
+   interfaz, uno mayor que enlaza y otro mayor que no); `compat.sh`; y la ronda corta de `tanda.py` en una placa
+   con pack (P4) y una sin él (Pico), que es donde la sombra y el XIP se ven.
+
+Los tres bugs sueltos del compilador (`super` con constructor sobrecargado, `Base.X` dentro de una derivada,
+`#507`) y `#506` son de `H1`: ficha propia, se hacen cuando toque.
+
+### 4. Lo que hay que decidir (Eduardo)
+
+1. **`gen` = la versión declarada del proyecto** (`"version"` del `.bpbuild`; la stdlib entera va con una) — ¿o
+   una versión por módulo? La primera es la que ya existe para el pack (`pack.version`) y no obliga a tocar cada
+   `.bp`.
+2. Con `gen` mayor: ¿aceptar si enlaza (marcadores de método y de layout), como propongo, o exigir también la
+   misma interfaz? Lo segundo obliga a recompilar la app en cada release de la stdlib aunque no cambie nada que
+   use.
+3. `fromPath`: honrarlo en las dos VMs, o quitarlo del `.mod`.
+4. El pack de librería **sin** la stdlib por defecto (y `requires-pack` que se lea, o fuera).
+5. Una sola subida de formato (`MOD8`/`bpi 8`/`.mdn`) para H2, `#441` y los constructores sobrecargados — ✅ Eduardo,
+   14-sep: *«si vamos a modificar el formato de los `.mod`, se puede hacer todo»*. Lo otro que toca el formato y podría
+   subirse al mismo tren: `CALL_REL` (H7: el `CALL` local PC-relativo que retira la base `cb` transitoria del XIP) —
+   es cambio de compilador y de las DOS VMs, más grande; se decide aparte.
