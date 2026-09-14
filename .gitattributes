@@ -1,0 +1,6 @@
+# V7/H2 (14-sep-2026) — los goldens del arnes se comparan byte a byte desde bash:
+# con autocrlf=true un checkout en Windows los convertiria a CRLF y todo saldria en rojo.
+# Los .mod son binarios (llevan NULs; git lo detecta, pero mejor dicho).
+compat/**/*.out text eol=lf
+compat/**/*.mod binary
+compat/**/*.win text eol=lf
