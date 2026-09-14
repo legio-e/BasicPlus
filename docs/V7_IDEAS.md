@@ -894,11 +894,22 @@ como control:
    la línea «sin datos de versión» en el log y nada en `OUTPUT`. Hacia delante: **`MOD8` en las VMs de V6** (el ZIP
    publicado, el oráculo) tiene que **rechazarlo con mensaje, no petar ni cargarlo mal**. `MOD5` sigue rechazado por
    ABI (`#284`). Hoy no se prueba ninguna de las tres cosas.
+   ✅ **Hecho el 14-sep** (`50f73178`): la **cápsula V6** en `compat/compat.sh` — `gen-v6` congela el corpus (59 casos)
+   compilado por el **compilador publicado** (sacado de `dist/BasicPlus-6.0-win.zip` en cada ejecución) más la stdlib
+   MOD7 del ZIP y las librerías hermanas; `check-mod7` ejecuta los `.mod` congelados con las VMs de hoy byte a byte
+   (59/59); `check-fwd` mete un `.mod` de hoy en la miVM publicada de V6 (corre o rechaza con mensaje; con `MOD8`
+   exigirá el rechazo). Los dos entran en `check`. `.gitattributes` protege los goldens del CRLF.
 2. **La cabecera y las secciones.** Un `.mod` con TODAS las secciones no vacías (imports con `gen`/`ifaceCrc`,
    interface con `field`/`final`/estáticos/`ctor`×N, native con dos bloques, data, code) cargado por las dos VMs y
    por `Disasm`, comprobando que `data` y `code` quedan donde deben (CRC de cada sección contra el escritor) — el
    comentario de `loader.c` lo dice: *«saltarla mal desplazaría `data` y `code`, que es como se corrompe un módulo en
    silencio»*. Hoy ese test no existe y `Disasm` ya se desplaza con `MOD7`.
+   ✅ **Hecho el 14-sep** (`050739bf`): `make test-modhdr` (`test/test_modhdr.c`) recorre el fichero por la
+   especificación —sin el loader— y comprueba que la suma de secciones es el fichero, que la sección native se
+   recorre blob a blob con el relleno ABSOLUTO a 4 (fixtures con 0, 1 y 3 B de relleno, ARM y RISC-V), y que el
+   cargador deja en RAM los bytes exactos de `code` y `data` (CRC). Cinco fixtures en `test/fixtures/modhdr/` (con
+   `library` no vacía incluida). Y `Disasm` aprende `MOD7` (`nativeSize`, blobs, CRC por sección): sus CRC coinciden
+   con los del test de C — dos lectores independientes de acuerdo. El test se extiende a `MOD8` con la subida.
 3. **La norma de versiones, los cuatro casos** (`#500`), en host y en las dos VMs con el mismo texto: dependencia con
    `gen` menor → rechazo; misma `gen` y otra interfaz → rechazo; `gen` mayor que enlaza → carga; `gen` mayor que no
    enlaza (una ranura movida) → rechazo por marcador. Con `Core` de verdad, no con un módulo de juguete.
@@ -908,6 +919,10 @@ como control:
 5. **La interfaz: la matriz de `#492` entera** (24 casos + los controles negativos: lo privado NO cruza, `final` NO se
    salta, `super(5)` resuelve) como test de la suite del frontend; y una ida y vuelta de la interfaz (escribir →
    leer → escribir, byte-idéntica) para `field`, `final`, estáticos y `ctor` ×N.
+   ✅ **Hecho el 14-sep**: la matriz es `HerenciaCrossModuleTest` (50 casos de caracterización, `4a6ea0f4`) y la ida
+   y vuelta es `InterfazIdaYVueltaTest` (los 28 módulos de la stdlib, `e86f9f3f`). Suite del frontend: **188/188**.
+   Al llegar `bpi 8`, los dos se amplían (los casos de la matriz cambian de valor esperado; la ida y vuelta cubre las
+   directivas nuevas).
 6. **La sombra y el XIP** (`#493`), en el simulador con `--pack`: `/app` real gana a `/lib`, `/lib` gana a la zona, la
    zona sólo contesta en su espacio; **un módulo servido por un pack se carga XIP** (`en_pack=1`), que hoy es
    inalcanzable; el aviso por `OUTPUT` sale cuando toca y sólo entonces; `test_fsfallback.c` afirmando lo contrario de

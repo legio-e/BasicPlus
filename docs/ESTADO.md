@@ -82,6 +82,14 @@ ni una línea de código de producto.
    aplica y el módulo corre como hoy); `MOD8` en las VMs de V6 se rechaza con mensaje; la stdlib `MOD7` de hoy sigue cargando
    durante todo el trabajo (la prueba de compatibilidad, de gratis). Escrito en `V7_IDEAS.md` §H2 (pieza 1 y apartado 4).
 
+9. **Los tests que no dependen de las decisiones, hechos** (Eduardo: *«adelante con los tests»*): (1) la **cápsula V6**
+   en `compat/compat.sh` — `gen-v6`/`check-mod7`/`check-fwd`, con el ZIP publicado como oráculo; **59/59 hacia atrás**,
+   hacia delante «V6 ejecuta lo de hoy» (`50f73178`); (2) **`make test-modhdr`** — la cabecera y las secciones del `.mod`
+   contra el cargador, cinco fixtures con native ARM/RISC-V (relleno 0/1/3 B) y `library`; y **`Disasm` aprende `MOD7`**
+   (se desplazaba: no leía `nativeSize`) (`050739bf`); (3) **`InterfazIdaYVueltaTest`** — la interfaz embebida de los 28
+   módulos de la stdlib, byte a byte (`e86f9f3f`). Suite del frontend **188/188**; `compat.sh check` = paridad 59 +
+   mod7 59 + fwd, todo verde. `.gitattributes` nuevo: goldens LF, binarios binarios.
+
 ⏭️ **Al retomar: cuatro decisiones de Eduardo** (`V7_IDEAS.md` §H2 punto 5) y a programar H2 en el orden del punto 3:
 (1) `gen` = versión del proyecto (`.bpbuild`) ¿o por módulo?; (2) con `gen` mayor, ¿basta que enlace?; (3) `fromPath`
 en las dos VMs o fuera; (4) el pack de librería sin stdlib por defecto; (5) una sola subida de formato para H2 y `#441`.

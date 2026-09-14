@@ -118,7 +118,10 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 > 📐 **Diseño hecho el 14-sep** (`V7_IDEAS.md` §H2), sobre un mapa verificado y una matriz medida: `#492` decidido **B**
 > (exportar en la interfaz: campos, `final`, estáticos; ×2,25 y +74 B por campo era el precio de la alternativa); `#500`
 > con `gen` + `ifaceCrc` y `MOD8`; `#493` con el respaldo en su espacio (y de paso vuelve el XIP de los packs, hoy
-> inalcanzable). Salieron cuatro bugs del compilador (`#507`–`#510`, en H1). Esperan cinco decisiones de Eduardo.
+> inalcanzable). Salieron cuatro bugs del compilador (`#507`–`#510`, en H1). **Decidido**: la subida es ADITIVA (las
+> VMs cargan `MOD7` y `MOD8`; la stdlib se rehace al final). **Tests hechos antes del formato** (14-sep): la cápsula V6
+> en `compat.sh` (59/59), `make test-modhdr`, la matriz (50) y la ida y vuelta de la interfaz (28) en la suite del
+> frontend (188/188). Esperan cuatro decisiones de Eduardo (`V7_IDEAS.md` §H2 punto 5).
 
 | asunto | dónde |
 |---|---|
