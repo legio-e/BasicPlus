@@ -428,6 +428,8 @@ public abstract class Symbol {
 
     public static final class VarSymbol extends Symbol {
         public final boolean isPublic;
+        /** #508 — `private var`: de su clase y de nadie más (checkVisibility). */
+        public boolean isPrivate = false;
         public final boolean isStatic;
         public final ClassSymbol ownerClass;
         public final boolean isLocal;
@@ -477,6 +479,8 @@ public abstract class Symbol {
 
     public static final class PropertySymbol extends Symbol {
         public final boolean isPublic;
+        /** #508 — `private property`. */
+        public boolean isPrivate = false;
         public boolean isFinal;
         public final boolean isStatic;
         public final boolean isOwner;

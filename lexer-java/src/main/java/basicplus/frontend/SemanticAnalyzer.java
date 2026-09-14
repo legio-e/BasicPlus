@@ -998,6 +998,7 @@ public final class SemanticAnalyzer {
             VarSymbol sym = new VarSymbol(n.name, v.isPublic, isStatic, owner, false, n.line, n.column);
             sym.decl = v;
             sym.isOwner = v.isOwner;
+            sym.isPrivate = v.isPrivate;   // #508
             if (!scope.tryDefine(sym))
                 err(n.line, n.column, "nombre duplicado: '" + n.name + "' en " + scope.tag);
             if (!info.declSymbols.containsKey(v))
@@ -1062,6 +1063,7 @@ public final class SemanticAnalyzer {
         if (p.isOwner && owner == null)
             err(p.line, p.column, "'property owner' solo válida en propiedades de instancia de clase");
         PropertySymbol sym = new PropertySymbol(p.name.name, p.isPublic, p.isFinal, isStatic, owner, p);
+        sym.isPrivate = p.isPrivate;   // #508
         if (!scope.tryDefine(sym))
             err(p.line, p.column, "nombre duplicado: '" + p.name.name + "' en " + scope.tag);
         info.declSymbols.put(p, sym);
@@ -3638,9 +3640,15 @@ public final class SemanticAnalyzer {
         // mientras «clase o descendiente» tuvieran los mismos permisos; con
         // `private` sí, porque es justo a la hija a quien hay que decirle que no.
         // Para eso se pregunta por la clase DECLARANTE (FunctionSymbol.ownerClass).
-        boolean esPrivado = (sub instanceof FunctionSymbol) && ((FunctionSymbol) sub).isPrivate;
+        // #508 — y lo mismo para campos y properties, que hasta el 14-sep no llevaban la
+        // marca (el parser la tiraba) y una subclase leía un `private var` sin queja.
+        boolean esPrivado;
+        ClassSymbol declarante;
+        if      (sub instanceof FunctionSymbol) { esPrivado = ((FunctionSymbol) sub).isPrivate; declarante = ((FunctionSymbol) sub).ownerClass; }
+        else if (sub instanceof VarSymbol)      { esPrivado = ((VarSymbol) sub).isPrivate;      declarante = ((VarSymbol) sub).ownerClass; }
+        else if (sub instanceof PropertySymbol) { esPrivado = ((PropertySymbol) sub).isPrivate; declarante = ((PropertySymbol) sub).ownerClass; }
+        else                                    { esPrivado = false; declarante = null; }
         if (esPrivado) {
-            ClassSymbol declarante = ((FunctionSymbol) sub).ownerClass;
             if (currentClass == null || currentClass != declarante) {
                 err(line, col, "'" + sub.name + "' es private de '"
                         + (declarante != null ? declarante.name : "?") + "': sólo lo usa"

@@ -402,7 +402,13 @@ public final class Parser {
         }
         switch (tok.type) {
             case CONST:    return parseConstDecl(isPublic);
-            case VAR:      return parseVarDecl(isPublic);
+            case VAR: {
+                // #508 — `private` se pegaba sólo a FuncDef: var y property lo perdían, y una
+                // subclase leía un campo privado sin queja (lo cazó la matriz de #492).
+                VarDecl vd = parseVarDecl(isPublic);
+                if (vd != null) vd.isPrivate = isPrivate;
+                return vd;
+            }
             case FUNCTION:
                 // Recovery específico para función rota: en lugar del
                 // sync genérico que pararía en el primer NEWLINE o
@@ -423,7 +429,11 @@ public final class Parser {
                     synchronizeToFunctionEnd();
                     return null;
                 }
-            case PROPERTY: return parsePropertyDef(isPublic, isFinal, isSync);
+            case PROPERTY: {
+                PropertyDef pd = parsePropertyDef(isPublic, isFinal, isSync);
+                if (pd != null) pd.isPrivate = isPrivate;   // #508
+                return pd;
+            }
             case EVENT:    return parseEventDef(isPublic);
             case CLASS:    return parseClassDef(isPublic);
             case ENUM:     return parseEnumDef(isPublic);

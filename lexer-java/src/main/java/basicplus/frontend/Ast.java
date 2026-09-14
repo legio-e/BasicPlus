@@ -270,6 +270,9 @@ public final class Ast {
 
     public static final class VarDecl extends Node implements ITopLevelDecl, IStmt {
         public final boolean isPublic;
+        /** #508 — `private var`: sólo lo ve su propia clase, ni sus descendientes. Se pega
+         *  tras construir el nodo (como en FuncDef); hasta el 14-sep el parser lo tiraba. */
+        public boolean isPrivate = false;
         public final boolean isOwner;        // `var owner x: T := ...`
         public final List<DeclName> names;   // soporta 'var x, y, z: integer'
         public final TypeRef type;
@@ -458,6 +461,8 @@ public final class Ast {
 
     public static final class PropertyDef extends Node implements ITopLevelDecl {
         public final boolean isPublic;
+        /** #508 — `private property`: como en VarDecl. */
+        public boolean isPrivate = false;
         public final boolean isFinal;
         public final boolean isOwner;        // `public property owner foo: T := ...`
         public final boolean isSync;         // `public sync property foo: T` — getter/setter envuelven con un Mutex compartido por instancia.
