@@ -161,6 +161,26 @@ el PC sin placa, como en el host.
 > Aquí entran las fichas que se abran a partir del 13-sep-2026, arriba las más recientes.
 > Las que vienen de V6 están en el bloque siguiente, con su texto intacto.
 
+#### 🔴 `#506` — el compilador ESCRIBE el `.mod` aunque dé error: un programa ejecuta sin su bucle (abierta 14-sep, de `L20`; H1)
+
+**Reproducido el 14-sep** con `for i := 3 to 1 step -1 do … next i` (`C:\tmp\v7l20\StepNeg.bp`): el frontend
+imprime `-- Errores del emisor mivm (1) -- for step solo soporta literal int por ahora`, devuelve **exit=2** y aun
+así escribe `StepNeg.mod`, `.dbg` y `.slots` y dice «compilado:». Las dos VMs ejecutan ese `.mod` e imprimen
+«antes / despues» **sin el bucle**, con exit 0. Silencioso del todo: desde la CLI, `tanda.py` o cualquier script no
+hay forma de saber que ese `.mod` es de una compilación fallida (el IDE sí lo sabe: `compileFile` devuelve false y
+no lo arranca — pero el fichero rancio se queda en `out/`).
+
+**Causa, localizada**: `MivmEmitter.emitTo` (`:364-380`) escribe el `.mod` y el `.dbg` al final sin mirar
+`errors`; `Main.emitMivmMod` (`:975-983`) cuenta los errores DESPUÉS de escribir y sigue escribiendo la interfaz y
+el `.slots`. **Y el `step -1` sólo falla porque `-1` llega como `UnaryExpr("-", IntLitExpr(1))`** y el emisor
+(`:2744`) sólo acepta `IntLitExpr` — la comparación `LE`/`GE` para step negativo ya está escrita (`:2753`).
+
+⏭️ **Lo que hay que hacer** (dos mitades, la primera es el bug): (1) no escribir nada con errores del emisor y
+**borrar** el `.mod`/`.dbg` rancios del mismo módulo, abortar en `Main` como en los errores semánticos (sin `.bpi`
+ni `.slots`), con test en la suite del frontend; (2) `step` con literal negativo (plegar el `-`) y con variable
+(evaluar una vez a un local y elegir la comparación en tiempo de ejecución), sample de paridad y el manual
+(«Límite actual» de L20) al día. Ambas son del compilador: las dos VMs no cambian.
+
 ### ═══ V7 — lo que viene de V6 y AHORA ES DE V7 ═══
 
 > Fichas abiertas al publicar V6 (12-sep-2026) o mandadas a V7 durante V6, **movidas aquí enteras** el
