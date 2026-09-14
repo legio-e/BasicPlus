@@ -1,0 +1,36 @@
+// CamposHijo.bp — V7/H2 (#492-B): un hijo en OTRO módulo lee y escribe los campos
+// protegidos de CamposBase.Base por la ranura que publica la interfaz (`field … slot n`).
+// Antes de bpi 8 esto no compilaba («'Hijo' no tiene miembro de instancia 'n'»).
+// Oráculo de paridad: la salida tiene que ser byte a byte la misma en las dos VMs.
+module CamposHijo
+  import Core
+  import CamposBase
+
+  public class Hijo extends CamposBase.Base
+    var propio: integer
+    public function Hijo()
+      super()
+      this.propio := 7
+    end Hijo
+    public function toca(): string
+      this.n := this.n + 10                  // integer, ranura 0
+      this.grande := this.grande * 2L        // long, dos ranuras
+      this.pi := this.pi + 0.5d              // double, dos ranuras
+      this.nombre := this.nombre + "+hijo"   // string (ref)
+      this.otro := this                      // ref a la propia clase base
+      return this.resumen() + " propio=" + this.propio + " otroNombre=" + this.otro.nombre
+    end toca
+    public function suma(): long
+      return this.grande + this.n + this.propio
+    end suma
+  end Hijo
+
+  public function main()
+    var h: Hijo := Hijo()
+    print h.resumen()
+    print h.toca()
+    print h.suma()
+    print "secreto=" + h.secretoDeBase()
+  end main
+
+end CamposHijo

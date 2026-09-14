@@ -66,7 +66,7 @@ import java.util.Map;
 public final class ModuleInterface {
 
     /** Versión mínima del .bpi que sabemos leer (cuando se sube, lo bumpamos). */
-    public static final int CURRENT_VERSION = 7;   // v7: H8.1 valores por defecto de params
+    public static final int CURRENT_VERSION = 8;   // v8 (V7/H2, #492-B): `field` por clase — los campos cruzan el módulo
     public static final int MIN_SUPPORTED_VERSION = 1;
 
     public String library = "";
@@ -168,6 +168,27 @@ public final class ModuleInterface {
         }
     }
 
+    /** V7/H2 (#492, opción B) — un CAMPO de instancia de una clase exportada:
+     *  nombre, tipo, su RANURA en el objeto (slots de 4 B; un long/double/ref
+     *  ocupa dos y la ranura es la primera) y sus marcas. Se exportan TODOS los
+     *  campos, los privados también, marcados: el hijo de otro módulo necesita
+     *  el nombre y la ranura para emitir GET_FIELD/SET_FIELD por slot igual que
+     *  si estuviera en el mismo módulo, y es el semántico (checkVisibility)
+     *  quien decide quién puede tocarlo — publicar NO es hacer público, como con
+     *  `prop` (#316) y `method` (#390). Medido el 14-sep: convertir cada campo
+     *  en property costaba ×2,25 por acceso y ~74 B de RAM; una línea aquí
+     *  cuesta ~25 B de flash que la VM salta. */
+    public static final class FieldSig {
+        public final String name;
+        public final BpType type;
+        public final int slot;
+        public final boolean isPrivate;
+        public final boolean isOwner;
+        public FieldSig(String name, BpType type, int slot, boolean isPrivate, boolean isOwner) {
+            this.name = name; this.type = type; this.slot = slot; this.isPrivate = isPrivate; this.isOwner = isOwner;
+        }
+    }
+
     public static final class PropSig {
         public final String name;
         public final BpType type;
@@ -237,6 +258,8 @@ public final class ModuleInterface {
          *  inlinean en el call-site (mismo patrón que consts de módulo).
          *  Lista vacía si la clase no expone ninguno. */
         public List<ConstSig> staticConsts = new ArrayList<>();
+        /** V7/H2 — los campos de instancia, con su ranura (ver {@link FieldSig}). */
+        public List<FieldSig> fields = new ArrayList<>();
 
         /** H5.c-E2 — eventos PROPIOS de la clase (los heredados los ve el
          *  consumidor recorriendo la cadena de bases, igual que los métodos).
@@ -540,6 +563,19 @@ public final class ModuleInterface {
         sig.binaryOwnerBitmap = lay.ownerBitmap;
         localLayouts.put(cls.name, lay);
 
+        // V7/H2 (#492-B) — LOS CAMPOS, con la ranura que les dio la función única. Un
+        // campo de tipo no exportable (una clase de otro módulo que el consumidor no
+        // conocería) se omite con aviso: el hijo verá el layout (sus ranuras están en
+        // los bitmaps) pero no podrá nombrarlo — como hasta hoy con todos.
+        for (FieldSig f : lay.ownFields) {
+            if (!isExportableType(f.type)) {
+                skipped.add("class " + cls.name + ".field " + f.name + ": tipo no exportable: "
+                        + (f.type == null ? "<null>" : f.type.display()));
+                continue;
+            }
+            sig.fields.add(f);
+        }
+
         // H5.c-E2 — EVENTOS. El slot sale de `lay` (la función única); aquí sólo
         // se le pega la firma. Se exportan TODOS, en el mismo orden en que la
         // función única les dio slot: un evento omitido no es "uno menos que
@@ -685,6 +721,11 @@ public final class ModuleInterface {
          *  cuenta: ésa es justo la duplicación que cerró #299. */
         final List<String>  ownEventNames     = new ArrayList<>();
         final List<Integer> ownEventRecvSlots = new ArrayList<>();
+        /** V7/H2 — los CAMPOS propios (var, no property) con su ranura ABSOLUTA,
+         *  tipo y marcas, en orden de declaración. Los rellena computeClassLayout
+         *  —la función única— por la misma razón que los eventos: la interfaz no
+         *  rehace la aritmética del layout. */
+        final List<FieldSig> ownFields = new ArrayList<>();
         LayoutAndNames(int nf, int nm, int[] fb, int[] ob, List<String> names) {
             numFields = nf; numMethods = nm; fieldBitmap = fb; ownerBitmap = ob; methodNames = names;
         }
@@ -809,6 +850,7 @@ public final class ModuleInterface {
         // H5.c-E2: se recogen aquí para publicarlos en la interfaz (ver LayoutAndNames).
         List<String>  eventNames     = new ArrayList<>();
         List<Integer> eventRecvSlots = new ArrayList<>();
+        List<FieldSig> ownFields     = new ArrayList<>();   // V7/H2
         if (astHasOwnSyncProperty(cls.astNode) && !ancestorHasSyncProperty(cls)) {
             // __syncMutex es una REF (handle de 8B): el ModWriter FUERZA is8 para
             // toda ref en declareField (fix del censo #1), así que son 2 SLOTS
@@ -825,6 +867,7 @@ public final class ModuleInterface {
                     Symbol vsym = cls.instanceMembers.tryLookup(dn.name);
                     BpType t = (vsym instanceof VarSymbol) ? ((VarSymbol) vsym).type : null;
                     refMarks.add(new int[]{slot, MivmEmitter.isGcRef(t) ? 1 : 0, vd.isOwner ? 1 : 0});
+                    ownFields.add(new FieldSig(dn.name, t, slot, vd.isPrivate, vd.isOwner));   // V7/H2
                     slot += MivmEmitter.occupies8Bytes(t) ? 2 : 1;
                 }
             }
@@ -907,6 +950,7 @@ public final class ModuleInterface {
         LayoutAndNames out = new LayoutAndNames(numFields, names.size(), fieldBitmap, ownerBitmap, names);
         out.ownEventNames.addAll(eventNames);
         out.ownEventRecvSlots.addAll(eventRecvSlots);
+        out.ownFields.addAll(ownFields);   // V7/H2
         localLayouts.put(cls.name, out);
         return out;
     }
@@ -1050,6 +1094,12 @@ public final class ModuleInterface {
                     pw.println(lay.toString());
                 }
 
+                // V7/H2 (#492-B) — `field <nombre>:<tipo> slot <n> [private] [owner]`, en el
+                // orden de ranura. Publicar no es hacer público: el flag `private` viaja.
+                for (FieldSig f : c.fields) {
+                    pw.printf("  field %s:%s slot %d%s%s%n", f.name, typeToString(f.type), f.slot,
+                            f.isPrivate ? " private" : "", f.isOwner ? " owner" : "");
+                }
                 if (c.ctorParams != null) {
                     StringBuilder cs = new StringBuilder();
                     cs.append("  ctor(");
@@ -1300,6 +1350,7 @@ public final class ModuleInterface {
             // L2 v3.d — static consts del bloque class.
             List<ConstSig> clsStaticConsts = new ArrayList<>();
             List<EventSig> clsEvents = new ArrayList<>();
+            List<FieldSig> clsFields = new ArrayList<>();   // V7/H2 (bpi 8)
             // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
             // leemos best-effort (forward-compat): saltamos las directivas que este
             // compilador no conoce, en lugar de abortar. El formato .bpi es aditivo.
@@ -1357,6 +1408,7 @@ public final class ModuleInterface {
                         cs.binaryOwnerBitmap = clsBinOwnerBitmap;
                         cs.staticConsts = clsStaticConsts;
                         cs.events = clsEvents;
+                        cs.fields = clsFields;   // V7/H2
                         iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
@@ -1364,6 +1416,7 @@ public final class ModuleInterface {
                         clsBinFieldBitmap = new int[0]; clsBinOwnerBitmap = new int[0];
                         clsStaticConsts = new ArrayList<>();
                         clsEvents = new ArrayList<>();
+                        clsFields = new ArrayList<>();   // V7/H2
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
@@ -1375,6 +1428,10 @@ public final class ModuleInterface {
                     }
                     if (trimmed.startsWith("prop ")) {
                         clsProps.add(parseProp(file, lineNo, trimmed.substring("prop ".length())));
+                        continue;
+                    }
+                    if (trimmed.startsWith("field ")) {   // V7/H2 (bpi 8)
+                        clsFields.add(parseField(file, lineNo, trimmed.substring("field ".length())));
                         continue;
                     }
                     if (trimmed.startsWith("method ")) {
@@ -1566,6 +1623,27 @@ public final class ModuleInterface {
             }
         }
         return new PropSig(name, type, isSync, isPublic);
+    }
+
+    /** V7/H2 (bpi 8) — "<name>:<type> slot <n> [private] [owner]". */
+    private static FieldSig parseField(Path file, int lineNo, String body) throws IOException {
+        int colon = body.indexOf(':');
+        if (colon < 0) throw new IOException(file + ":" + lineNo + ": field mal formado (falta ':')");
+        String name = body.substring(0, colon).trim();
+        String[] tok = body.substring(colon + 1).trim().split("\\s+");
+        if (tok.length < 3 || !"slot".equals(tok[1]))
+            throw new IOException(file + ":" + lineNo + ": field mal formado (esperado: <tipo> slot <n> [private] [owner])");
+        BpType type = parseType(file, lineNo, tok[0]);
+        int slot;
+        try { slot = Integer.parseInt(tok[2]); }
+        catch (NumberFormatException nfe) { throw new IOException(file + ":" + lineNo + ": field: slot no entero '" + tok[2] + "'"); }
+        boolean isPrivate = false, isOwner = false;
+        for (int i = 3; i < tok.length; i++) {
+            if ("private".equals(tok[i])) isPrivate = true;
+            else if ("owner".equals(tok[i])) isOwner = true;
+            else throw new IOException(file + ":" + lineNo + ": flag desconocido en field '" + tok[i] + "'");
+        }
+        return new FieldSig(name, type, slot, isPrivate, isOwner);
     }
 
     private static ConstSig parseConst(Path file, int lineNo, String body) throws IOException {

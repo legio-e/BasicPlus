@@ -1,0 +1,32 @@
+// CamposBase.bp — V7/H2 (#492-B): la BASE de CamposHijo.bp. Campos de anchos
+// distintos (integer, long, double, ref, string) y uno privado, para que el hijo
+// —en OTRO módulo— los lea y escriba por la ranura que publica la interfaz.
+module CamposBase
+  import Core
+
+  public class Base
+    var n: integer
+    var grande: long
+    var pi: double
+    var nombre: string
+    var otro: Base
+    private var secreto: integer
+    // Se asigna en el constructor y no con `:=` en la declaración: los inicializadores
+    // de campo se IGNORAN en silencio hoy (#511), y un string sin inicializar mata a
+    // la miVM al concatenarlo (#512). Los dos, fichados el 14-sep al escribir esto.
+    public function Base()
+      this.n := 1
+      this.grande := 5000000000L
+      this.pi := 3.25d
+      this.nombre := "base"
+      this.secreto := 99
+    end Base
+    public function secretoDeBase(): integer
+      return this.secreto
+    end secretoDeBase
+    public function resumen(): string
+      return "n=" + this.n + " grande=" + this.grande + " pi=" + this.pi + " nombre=" + this.nombre
+    end resumen
+  end Base
+
+end CamposBase

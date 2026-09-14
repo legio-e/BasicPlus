@@ -430,6 +430,11 @@ public abstract class Symbol {
         public final boolean isPublic;
         /** #508 — `private var`: de su clase y de nadie más (checkVisibility). */
         public boolean isPrivate = false;
+        /** V7/H2 (#492-B) — campo de una clase de OTRO módulo: su ranura en el
+         *  objeto, tal como la publicó la interfaz del dueño (`field … slot n`).
+         *  -1 = campo local (la ranura la conoce el ModWriter por nombre). El
+         *  emisor accede por ranura cuando el dueño es externo. */
+        public int externalSlot = -1;
         public final boolean isStatic;
         public final ClassSymbol ownerClass;
         public final boolean isLocal;

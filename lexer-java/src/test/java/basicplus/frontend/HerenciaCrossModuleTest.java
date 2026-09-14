@@ -126,9 +126,9 @@ class HerenciaCrossModuleTest {
     static Stream<Caso> casos() {
         return Stream.of(
             //        clave              uso                                              extras        ctor       control cross  nota
-            new Caso("campo_prot",      "return this.n",                                 "",           "super()", true,  false, "B"),
+            new Caso("campo_prot",      "return this.n",                                 "",           "super()", true,  true,  "B: cruza desde bpi 8 (14-sep)"),
             new Caso("campo_priv",      "return this.p",                                 "",           "super()", false, false, "control negativo (#508)"),
-            new Caso("campo_prot_ref",  "this.otro := this\n      return 1",             "",           "super()", true,  false, "B"),
+            new Caso("campo_prot_ref",  "this.otro := this\n      return 1",             "",           "super()", true,  true,  "B: cruza desde bpi 8"),
             new Caso("metodo_prot",     "return this.prot()",                            "",           "super()", true,  true,  ""),
             new Caso("metodo_pub",      "return this.pub()",                             "",           "super()", true,  true,  ""),
             new Caso("metodo_priv",     "return this.priv()",                            "",           "super()", false, false, "control negativo"),
@@ -148,7 +148,7 @@ class HerenciaCrossModuleTest {
             new Caso("devuelve_base",   "var b: {MOD}Base := this.crea()\n      return b.pub()", "",  "super()", true,  true,  ""),
             new Caso("final_override",  "return this.fin()",                             FIN_OVERRIDE, "super()", false, true,  "control negativo; cross: B (la interfaz no lleva `final`)"),
             new Caso("nat_campo_propio", "return this.nat()",                            NAT_PROPIO,   "super()", true,  true,  ""),
-            new Caso("nat_campo_heredado", "return this.nat()",                          NAT_HEREDADO, "super()", true,  false, "B (el caso de la native, mismo agujero)"),
+            new Caso("nat_campo_heredado", "return this.nat()",                          NAT_HEREDADO, "super()", true,  true,  "B: cruza desde bpi 8 (el semántico; el AOT sigue sin leer campos: por getter)"),
             new Caso("nat_prop_heredada", "return this.nat()",                           NAT_PROP,     "super()", true,  true,  ""),
             new Caso("enum_modulo",     "var c: {MOD}Color := {MOD}Color.VERDE\n      return 0", "",  "super()", true,  true,  "")
         );

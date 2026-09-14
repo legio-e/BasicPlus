@@ -2042,6 +2042,28 @@ public final class MivmEmitter {
         }
     }
 
+    /** V7/H2 (#492-B) — lee/escribe el campo `v` sobre la referencia que hay en la pila.
+     *  Si la clase que lo DECLARA es de otro módulo, el ModWriter no la conoce por nombre
+     *  («Clase no declarada»): se va por la ranura que publicó su interfaz. Si es local,
+     *  por nombre, como siempre. Es el gemelo de emitInvokeVirtualSmart para campos. */
+    private void emitGetFieldDe(VarSymbol v) throws IOException {
+        if (v.ownerClass != null && v.ownerClass.isExternal) {
+            if (v.externalSlot < 0) { errors.add("campo '" + v.name + "' de la clase externa '" + v.ownerClass.name + "' sin ranura publicada: recompila el módulo dueño (interfaz anterior a bpi 8)"); return; }
+            w.emitGetFieldBySlot(v.externalSlot, occupies8Bytes(v.type));
+        } else {
+            w.emitGetField(v.ownerClass.name, v.name);
+        }
+    }
+    private void emitSetFieldDe(VarSymbol v) throws IOException {
+        if (v.ownerClass != null && v.ownerClass.isExternal) {
+            if (v.externalSlot < 0) { errors.add("campo '" + v.name + "' de la clase externa '" + v.ownerClass.name + "' sin ranura publicada: recompila el módulo dueño (interfaz anterior a bpi 8)"); return; }
+            if (v.isOwner) w.emitSetFieldOwnerBySlot(v.externalSlot);
+            else           w.emitSetFieldBySlot(v.externalSlot, occupies8Bytes(v.type));
+        } else {
+            emitSetFieldAuto(v.ownerClass.name, v.name);
+        }
+    }
+
     /** True si `src` es un IdentifierExpr que resuelve al mismo símbolo que `target`. */
     private boolean isSameOwnerVar(IExpr src, Symbol target) {
         if (!(src instanceof IdentifierExpr)) return false;
@@ -2618,7 +2640,7 @@ public final class MivmEmitter {
                         emitExpr(ma.target);
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
-                        emitSetFieldAuto(v.ownerClass.name, v.name);
+                        emitSetFieldDe(v);   // V7/H2: por ranura si la clase es externa
                         if (v.isOwner) emitMoveNullifySource(a.value);
                         return;
                     case PLUS_ASSIGN:
@@ -2629,11 +2651,11 @@ public final class MivmEmitter {
                         //   SET_FIELD (pop newval, pop ref)
                         emitExpr(ma.target);
                         emitExpr(ma.target);
-                        w.emitGetField(v.ownerClass.name, v.name);
+                        emitGetFieldDe(v);   // V7/H2
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         emitCompoundOp(a.op, tType);
-                        emitSetFieldAuto(v.ownerClass.name, v.name);
+                        emitSetFieldDe(v);
                         return;
                     }
                 }
@@ -5437,7 +5459,7 @@ public final class MivmEmitter {
                 w.emitGetGlobal(v.ownerClass.name + "." + v.name);
             } else {                                          // campo de instancia
                 emitExpr(ma.target);
-                w.emitGetField(v.ownerClass.name, v.name);
+                emitGetFieldDe(v);   // V7/H2: por ranura si la clase es externa
             }
             return;
         }
@@ -5912,7 +5934,7 @@ public final class MivmEmitter {
             else {
                 // Campo de instancia con implicit this (estamos en un método de la clase).
                 w.emitGetParam("this");
-                w.emitGetField(v.ownerClass.name, v.name);
+                emitGetFieldDe(v);   // V7/H2: heredado de una clase externa → por ranura
             }
         } else if (sym instanceof PropertySymbol) {
             PropertySymbol ps = (PropertySymbol) sym;
@@ -5986,7 +6008,7 @@ public final class MivmEmitter {
                 w.emitSetLocal(temp);
                 w.emitGetParam("this");
                 w.emitGetLocal(temp);
-                emitSetFieldAuto(v.ownerClass.name, v.name);
+                emitSetFieldDe(v);   // V7/H2
             }
         } else if (sym instanceof PropertySymbol) {
             PropertySymbol ps = (PropertySymbol) sym;

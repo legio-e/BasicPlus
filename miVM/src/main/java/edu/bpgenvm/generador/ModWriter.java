@@ -1163,6 +1163,23 @@ public class ModWriter {
         currentBytecodeSize += 2;
     }
 
+    /** V7/H2 (#492-B) — gemelo de {@link #emitGetField} por ranura: el campo es de
+     *  una clase de OTRO módulo y la ranura la publicó su interfaz (`field … slot n`). */
+    public void emitGetFieldBySlot(int slot, boolean is8) throws IOException {
+        if (slot < 0 || slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + slot);
+        codeOut.writeByte(is8 ? OpCode.GET_FIELD_LONG.code : OpCode.GET_FIELD.code);
+        codeOut.writeByte((byte) slot);
+        currentBytecodeSize += 2;
+    }
+
+    /** V7/H2 — gemelo de {@link #emitSetFieldOwner} por ranura. */
+    public void emitSetFieldOwnerBySlot(int slot) throws IOException {
+        if (slot < 0 || slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + slot);
+        codeOut.writeByte(OpCode.SET_FIELD_OWNER.code);
+        codeOut.writeByte((byte) slot);
+        currentBytecodeSize += 2;
+    }
+
     /**
      * Variante para campos owner: libera el valor anterior del campo antes de
      * escribir el nuevo. Stack: pop val, pop ref; field[slot] = val (con FREE

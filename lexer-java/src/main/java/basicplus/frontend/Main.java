@@ -2214,6 +2214,17 @@ public final class Main {
                         // INVOKE_VIRTUAL a la ranura equivocada (getCode → toString).
                         deferSlots = true;
                     }
+                    // V7/H2 (#492-B) — CAMPOS de instancia, con su ranura. Un hijo de
+                    // otro módulo los ve como si estuvieran en el suyo: checkVisibility
+                    // aplica protegido/privado, y el emisor accede por externalSlot.
+                    for (ModuleInterface.FieldSig f : cs.fields) {
+                        Symbol.VarSymbol vsym = new Symbol.VarSymbol(f.name, false, false, stub, false, 0, 0);
+                        vsym.type = f.type;
+                        vsym.isPrivate = f.isPrivate;
+                        vsym.isOwner = f.isOwner;
+                        vsym.externalSlot = f.slot;
+                        stub.instanceMembers.tryDefine(vsym);
+                    }
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {
                         // #316 — respeta la visibilidad declarada: una property NO
@@ -2344,6 +2355,11 @@ public final class Main {
                         } else if (mem instanceof Symbol.PropertySymbol) {
                             Symbol.PropertySymbol p = (Symbol.PropertySymbol) mem;
                             p.type = resolveTypeAgainst(p.type, ns);
+                        } else if (mem instanceof Symbol.VarSymbol) {
+                            // V7/H2 (#492-B) — los campos importados también: `var otro: Base`
+                            // llega como UnresolvedClassRef y sin esto «el tipo 'Base' no tiene miembros».
+                            Symbol.VarSymbol vv = (Symbol.VarSymbol) mem;
+                            vv.type = resolveTypeAgainst(vv.type, ns);
                         }
                     }
                 }
