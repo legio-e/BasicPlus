@@ -892,11 +892,22 @@ public final class SemanticAnalyzer {
         if (!info.declSymbols.containsKey(ed)) info.declSymbols.put(ed, sym);
     }
 
+    /** 14-sep — `__cls_…` y `__prop_…` son del compilador: nombres de factorías,
+     *  alias y accesores que exporta el módulo. Una función de usuario llamada
+     *  `__cls_s_Base_cuantos` producía DOS exports con el mismo nombre y distinto
+     *  offset, y cada VM se quedaba con uno (7 en miVM, 999 en la VM-C: paridad
+     *  rota). Se corta aquí, con línea. */
+    private void checkNombreReservado(String nombre, int line, int col) {
+        if (nombre != null && (nombre.startsWith("__cls_") || nombre.startsWith("__prop_")))
+            err(line, col, "'" + nombre + "' es un nombre reservado del compilador (los que empiezan por `__cls_` o `__prop_`)");
+    }
+
     private void declareClass(ClassDef cd) {
         if (currentClass != null) {
             err(cd.line, cd.column, "no se permiten clases anidadas");
             return;
         }
+        checkNombreReservado(cd.name, cd.line, cd.column);
         ClassSymbol cls = new ClassSymbol(cd.name, cd.isPublic, cd.baseClass, cd, cd.line, cd.column);
         if (!module.members.tryDefine(cls))
             err(cd.line, cd.column, "nombre duplicado: '" + cd.name + "'");
@@ -991,8 +1002,8 @@ public final class SemanticAnalyzer {
             if (v.isPublic) {
                 String ambito = (owner != null) ? "de clase" : "de módulo";
                 err(n.line, n.column, "una variable " + ambito + " no puede ser public: '" + n.name
-                        + "'. Un field no cruza la frontera del .bpi (sólo se exporta el get/set"
-                        + " de una property); declárala `public property " + n.name + "` y su"
+                        + "'. El estado sale del módulo sólo por getters y setters:"
+                        + " declárala `public property " + n.name + "` y su"
                         + " backing field queda privado");
             }
             VarSymbol sym = new VarSymbol(n.name, v.isPublic, isStatic, owner, false, n.line, n.column);
@@ -1009,6 +1020,7 @@ public final class SemanticAnalyzer {
     private void declareFunc(FuncDef f, ClassSymbol owner, Scope scope) {
         boolean isStatic = f.name.isStatic();
         validateStaticPrefix(f.name, owner);
+        checkNombreReservado(f.name.name, f.line, f.column);
         if (f.isFinal && owner == null)
             err(f.line, f.column, "'final' solo es válido en métodos de clase");
         if (f.isIntrinsic && owner != null)
@@ -3380,12 +3392,17 @@ public final class SemanticAnalyzer {
 
         FunctionSymbol best = null;
         int bestCost = Integer.MAX_VALUE;
+        int bestDefaults = Integer.MAX_VALUE;   // 14-sep: a igual coste, la que rellena MENOS defaults
         boolean ambiguous = false;
         for (FunctionSymbol c : cands) {
             int cost = overloadMatchCost(c, at);
             if (cost < 0) continue;
-            if (cost < bestCost) { bestCost = cost; best = c; ambiguous = false; }
-            else if (cost == bestCost) ambiguous = true;
+            int defaults = c.params.size() - at.size();   // params omitidos que hay que rellenar
+            if (cost < bestCost || (cost == bestCost && defaults < bestDefaults)) {
+                bestCost = cost; bestDefaults = defaults; best = c; ambiguous = false;
+            } else if (cost == bestCost && defaults == bestDefaults) {
+                ambiguous = true;
+            }
         }
         if (best == null) {
             err(line, column, "ninguna sobrecarga de '" + name
@@ -3648,6 +3665,21 @@ public final class SemanticAnalyzer {
                 Symbol baseSym = cls.baseClass.lookupInstance(pp.name);
                 if (baseSym instanceof PropertySymbol && ((PropertySymbol) baseSym).isFinal)
                     err(pp.line, pp.column, "propiedad '" + pp.name + "' es final en la base, no se puede sobreescribir");
+            } else if (s instanceof VarSymbol && !((VarSymbol) s).isStatic) {
+                // 14-sep — un campo no puede REDECLARAR uno protegido de un ancestro: en
+                // el mismo módulo lo cazaba el ModWriter sin línea («Campo ya declarado»)
+                // y cruzando la frontera nadie: la hija obtenía un SEGUNDO campo con el
+                // mismo nombre y `this.q` eran dos variables. Los private no se ven
+                // (ni viajan), así que ahí sí se puede reutilizar el nombre.
+                VarSymbol vv = (VarSymbol) s;
+                for (ClassSymbol a = cls.baseClass; a != null; a = a.baseClass) {
+                    Symbol as = a.instanceMembers.tryLookup(vv.name);
+                    if (as instanceof VarSymbol && !((VarSymbol) as).isPrivate && !((VarSymbol) as).isStatic) {
+                        err(vv.line, vv.column, "el campo '" + vv.name + "' ya existe en la clase base '" + a.name
+                                + "' (protegido): no se puede redeclarar");
+                        break;
+                    }
+                }
             }
         }
     }

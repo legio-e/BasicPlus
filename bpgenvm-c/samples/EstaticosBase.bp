@@ -28,5 +28,35 @@ module EstaticosBase
     public function valor(): integer
       return this.n
     end valor
+    // Revisión del 14-sep: la CABEZA de la cadena es private y no viaja; el consumidor
+    // debe llamar a `f(v)` por su firma, no por su posición (antes: llamaba a la privada)
+    private function Base.f(): integer
+      return -1
+    end Base.f
+    public function Base.f(v: integer): integer
+      return v * 3
+    end Base.f
   end Base
+
+  // Revisión del 14-sep: `A_b.c` y `A.b_c` daban el MISMO nombre de alias con el separador '_'
+  public class A_b
+    public function A_b()
+    end A_b
+    public function A_b.c(): integer
+      return 1
+    end A_b.c
+    public function m(): integer
+      return 10
+    end m
+  end A_b
+  public class A
+    public function A()
+    end A
+    public function A.b_c(): integer
+      return 2
+    end A.b_c
+    public function m(): integer
+      return 20
+    end m
+  end A
 end EstaticosBase

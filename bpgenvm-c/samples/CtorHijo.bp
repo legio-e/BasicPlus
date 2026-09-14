@@ -41,5 +41,16 @@ module CtorHijo
     var n: Nieto := Nieto(10)
     var n2: Nieto := Nieto()
     print n.marca() + " " + n2.marca()
+    // Revisión del 14-sep: hija LOCAL sin ctor propio de una base externa, construida aquí
+    var hs: HijaSin := HijaSin(21)
+    var hs2: HijaSin := HijaSin()
+    print hs.quien() + " " + hs2.quien()
+    var t: CtorBase.Tarea := CtorBase.Tarea(4096)
+    t.start()
+    t.join()
+    print "tarea " + t.cuenta()
   end main
+
+  public class HijaSin extends CtorBase.Base
+  end HijaSin
 end CtorHijo

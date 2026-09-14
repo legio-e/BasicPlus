@@ -140,7 +140,7 @@ public class Disasm {
             MdnInfo mdn = tryLoadMdnCompanion(filename, library);
 
             out.println();
-            out.printf ("=== EXPORTS (%d) ===%n", exportsByOffset.size());
+            out.printf ("=== EXPORTS (%d entradas, %d direcciones) ===%n", exportEntries, exportsByOffset.size());
             if (exportsByOffset.isEmpty()) out.println("  (ninguno)");
             for (Map.Entry<Integer, String> e : exportsByOffset.entrySet()) {
                 String nombre = e.getValue();
@@ -302,8 +302,10 @@ public class Disasm {
             if (result.containsKey(off)) result.put(off, result.get(off) + "  (alias: " + name + ")");
             else result.put(off, name);
         }
+        exportEntries = n;   // 14-sep: el rótulo cuenta ENTRADAS de la tabla, no offsets
         return result;
     }
+    private static int exportEntries = 0;
 
     private static void dumpData(byte[] data, PrintStream out) {
         if (data.length == 0) {

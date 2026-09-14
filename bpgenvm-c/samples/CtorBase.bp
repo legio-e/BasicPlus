@@ -49,6 +49,18 @@ module CtorBase
     end marca
   end DerCon
 
+  // Revisión del 14-sep: subclase de Thread SIN ctor propio — la interfaz publica el ctor
+  // efectivo `Thread(stackSize)`, igual que la factoría (antes: 0 args → basura en pila)
+  public class Tarea extends Thread
+    var veces: integer := 0
+    public function run()
+      this.veces := this.veces + 1
+    end run
+    public function cuenta(): integer
+      return this.veces
+    end cuenta
+  end Tarea
+
   public function local(): string
     var a: Base := Base(5)
     var b: Base := Base()

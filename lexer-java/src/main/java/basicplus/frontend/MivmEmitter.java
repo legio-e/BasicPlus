@@ -921,9 +921,18 @@ public final class MivmEmitter {
      * consumidor lo importa. DEFINICIÓN y LLAMADA usan SIEMPRE estos helpers —
      * misma regla que emitName/crossModuleMethodName. La clave de un método es
      * emitName(fs) = slotKey (con el `$…` de la sobrecarga). */
-    static String crossModuleStaticName(ClassSymbol cls, FunctionSymbol fs) { return "__cls_s_" + cls.name + "_" + emitName(fs); }
-    static String crossModuleStaticGetter(String clsName, String propName) { return "__cls_sg_" + clsName + "_" + propName; }
-    static String crossModuleStaticSetter(String clsName, String propName) { return "__cls_ss_" + clsName + "_" + propName; }
+    /* Dos reglas de forma, medidas el 14-sep por la revisión adversarial:
+     * (1) el separador clase/miembro es '#' y no '_': '_' es un carácter legal de
+     *     identificador y `A_b.c` / `A.b_c` daban el MISMO nombre (`__cls_m_` lo
+     *     arrastraba desde #451: un `super.c()` llamaba al método equivocado);
+     * (2) la clave del miembro va SIEMPRE por FIRMA (`name$códigos`, overloadMangle),
+     *     nunca por posición en la cadena (`emitName` = slotKey): si la interfaz
+     *     omite la cabeza (private, tipo no exportable) el consumidor renumera y
+     *     llamaba a la sobrecarga equivocada en silencio. Con la firma, los dos
+     *     lados calculan lo mismo sin saber qué omitió el otro. */
+    static String crossModuleStaticName(ClassSymbol cls, FunctionSymbol fs) { return "__cls_s_" + cls.name + "#" + fs.overloadMangle(); }
+    static String crossModuleStaticGetter(String clsName, String propName) { return "__cls_sg_" + clsName + "#" + propName; }
+    static String crossModuleStaticSetter(String clsName, String propName) { return "__cls_ss_" + clsName + "#" + propName; }
 
     /** `[lib.]Mod.<plano>` para un símbolo del módulo dueño de una clase EXTERNA. */
     private static String qualifyForOwner(ClassSymbol owner, String plain) {
@@ -1392,9 +1401,7 @@ public final class MivmEmitter {
                 // pasar por NEW_OBJECT. El nombre no contiene puntos, así que el
                 // loader lo interpreta como símbolo de este módulo (no como
                 // submódulo cualificado).
-                if (cls.constructor != null) {
-                    synthesizeCrossModuleInit(cls);
-                }
+                synthesizeCrossModuleInit(cls);
                 /* #451 — y una factoria por METODO, por el mismo motivo y con la
                  * misma forma. `super.metodo()` desde otro modulo no tenia a que
                  * llamar: los metodos no se exportan, se llega a ellos por vtable
@@ -1500,14 +1507,23 @@ public final class MivmEmitter {
         if (cls == null) return;   /* el llamante ya filtra por clase publica */
         for (Symbol sym : cls.instanceMembers.getSymbols()) {
             if (!(sym instanceof FunctionSymbol)) continue;
-            FunctionSymbol fs = (FunctionSymbol) sym;
-            if (fs.isConstructor || fs.isStatic || !fs.isPublic) continue;
+            // 14-sep — la CADENA entera: getSymbols() sólo da la cabeza, y las
+            // sobrecargas 2..N no tenían thunk (un `super.f("a")` cross-module no
+            // tenía a qué llamar).
+            for (FunctionSymbol fs = (FunctionSymbol) sym; fs != null; fs = fs.nextOverload)
+                synthesizeCrossModuleMethod(cls, fs);
+        }
+    }
+
+    private void synthesizeCrossModuleMethod(ClassSymbol cls, FunctionSymbol fs) throws IOException {
+        {
+            if (fs.isConstructor || fs.isStatic || !fs.isPublic) return;
             /* SOLO los declarados en ESTA clase. Los heredados (toString,
              * compareTo...) no tienen implementacion local a la que llamar:
              * generarles factoria daba «Funcion no encontrada: Base.toString».
              * Y no hace falta — quien herede de Base y quiera el toString del
              * abuelo sube por la cadena, que es donde vive. */
-            if (fs.astNode == null) continue;   /* sin cuerpo aqui: es heredado */
+            if (fs.astNode == null) return;   /* sin cuerpo aqui: es heredado */
             String fname = crossModuleMethodName(cls, fs);
             w.addFunction(fname, true);   // publica: cross-module
             declareParamRef("this");
@@ -1527,15 +1543,20 @@ public final class MivmEmitter {
         }
     }
 
-    /** Nombre plano de la factoria de un metodo (sin puntos, ver arriba). */
+    /** Nombre plano de la factoria de un metodo (sin puntos, ver arriba). Por FIRMA
+     *  y con '#': ver crossModuleStaticName. */
     static String crossModuleMethodName(ClassSymbol cls, FunctionSymbol fs) {
-        return "__cls_m_" + cls.name + "_" + emitName(fs);
+        return "__cls_m_" + cls.name + "#" + fs.overloadMangle();
     }
 
     private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
-        // V7/H2 (#509) — una por cada sobrecarga PROPIA: `__cls_init_<Cls>` (cabeza,
-        // como hasta hoy: aditivo) y `__cls_init_<Cls>$clave` para las demás.
-        for (FunctionSymbol ctor = cls.constructor; ctor != null; ctor = ctor.nextOverload) {
+        // V7/H2 (#509) — una por cada sobrecarga: `__cls_init_<Cls>` (cabeza, como
+        // hasta hoy: aditivo) y `__cls_init_<Cls>$clave` para las demás. Por la
+        // cadena EFECTIVA (findConstructor), igual que la factoría y que la
+        // interfaz: si la clase no tiene ctor propio, delega en el de la clase que
+        // lo declara (local o de otro módulo) — así un nieto de otro módulo hace
+        // `super(...)` sobre esta clase sin importar al abuelo (14-sep).
+        for (FunctionSymbol ctor = cls.findConstructor(); ctor != null; ctor = ctor.nextOverload) {
             String initName = crossModuleInitName(cls, ctor);
             w.addFunction(initName, true);   // pública: cross-module
             declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
@@ -1545,12 +1566,12 @@ public final class MivmEmitter {
             FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
             beginFunctionScope(synthFs, null);   // void
             try {
-                // Empujamos this + args, luego CALL local al __init real.
+                // Empujamos this + args, luego el __init real (por su clase declarante).
                 w.emitGetParam("this");
                 for (ParamSymbol p : ctor.params) {
                     w.emitGetParam(p.name);
                 }
-                w.emitCall(ctorInitName(cls, ctor));
+                emitCallInitOf(ctor);
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
         }
@@ -5470,8 +5491,10 @@ public final class MivmEmitter {
                 emitExpr(args.get(i));
                 if (i < ctor.params.size()) coerceToTarget(args.get(i), ctor.params.get(i).type);
             }
-            // El ctor puede ser heredado: usar el nombre de SU clase dueña, no de la subclase.
-            w.emitCall(ctorInitName(ctor.ownerClass, ctor));
+            // El ctor puede ser heredado: por SU clase dueña — que puede vivir en otro
+            // módulo (hija local sin ctor de una base importada: petaba el ModWriter
+            // con «Función no encontrada: Base.__init», sin línea; 14-sep).
+            emitCallInitOf(ctor);
             w.emitSetLocal(discard);
         }
         w.emitGetLocal(newref);

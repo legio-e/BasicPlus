@@ -415,6 +415,13 @@ public final class ModuleInterface {
             if (s instanceof Symbol.ClassSymbol) {
                 Symbol.ClassSymbol cls = (Symbol.ClassSymbol) s;
                 if (!cls.isPublic) continue;
+                // 14-sep — sólo las clases PROPIAS. Los stubs de Core que injectImports
+                // aliasa en module.members (RuntimeError, Integer, Double…) se
+                // re-publicaban en la interfaz de cada módulo que importa Core, como
+                // `class RuntimeError public extends Core.Exception` — sin código
+                // detrás (un `Pulse.RuntimeError(...)` desde fuera no enlazaría) y con
+                // una base que el consumidor que no importe Core no puede resolver.
+                if (cls.isExternal) continue;
                 ClassSig cs = extractClass(cls, skipped, localLayouts);
                 if (cs != null) iface.classes.add(cs);
                 continue;
@@ -436,10 +443,15 @@ public final class ModuleInterface {
      */
     private static ClassSig extractClass(Symbol.ClassSymbol cls, List<String> skipped,
                                          Map<String, LayoutAndNames> localLayouts) {
-        // ---- Constructor (sólo el de la propia clase, no heredado) ----
+        // ---- Constructor: la cadena EFECTIVA (propia o heredada, findConstructor) ----
+        // Es la misma que usa la factoría `__cls_new_<Cls>$clave`: publicar sólo el
+        // propio dejaba al stub sin ctor cuando la clase lo hereda, el consumidor
+        // construía con 0 args y la factoría leía sus parámetros de debajo del frame
+        // (`class Plain extends Thread` sin ctor: miVM moría; 14-sep).
         List<ParamSig> ctorParams = null;
-        if (cls.constructor != null) {
-            FunctionSymbol ctor = cls.constructor;
+        FunctionSymbol ctorHead = cls.findConstructor();
+        if (ctorHead != null) {
+            FunctionSymbol ctor = ctorHead;
             String issue = signatureIssue(ctor);
             if (issue != null) {
                 skipped.add("class " + cls.name + ": constructor: " + issue);
@@ -456,8 +468,8 @@ public final class ModuleInterface {
         // sigue siendo la cabeza y cada firma se identifica por su clave, no por
         // su posición.
         List<List<ParamSig>> ctorOverloads = new ArrayList<>();
-        if (cls.constructor != null) {
-            for (FunctionSymbol c = cls.constructor.nextOverload; c != null; c = c.nextOverload) {
+        if (ctorHead != null) {
+            for (FunctionSymbol c = ctorHead.nextOverload; c != null; c = c.nextOverload) {
                 String issue = signatureIssue(c);
                 if (issue != null) { skipped.add("class " + cls.name + ": constructor (sobrecarga): " + issue); continue; }
                 List<ParamSig> ps = new ArrayList<>();
@@ -1150,8 +1162,8 @@ public final class ModuleInterface {
                 // V7/H2 (#492-B) — `field <nombre>:<tipo> slot <n> [private] [owner]`, en el
                 // orden de ranura. Publicar no es hacer público: el flag `private` viaja.
                 for (FieldSig f : c.fields) {
-                    pw.printf("  field %s:%s slot %d%s%s%n", f.name, typeToString(f.type), f.slot,
-                            f.isPrivate ? " private" : "", f.isOwner ? " owner" : "");
+                    pw.printf("  field %s:%s slot %d%s%n", f.name, typeToString(f.type), f.slot,
+                            f.isOwner ? " owner" : "");   // los private no se publican: sin flag
                 }
                 if (c.ctorParams != null) {
                     StringBuilder cs = new StringBuilder();

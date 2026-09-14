@@ -1371,13 +1371,20 @@ public final class AotCEmitter {
                 + "cross-module __cls_new_" + cls.name + ", que solo se sintetiza para "
                 + "clases public. Declárala `public class` o quita native.");
         }
-        Symbol.FunctionSymbol ctor = cls.constructor;
+        // 14-sep — la sobrecarga que ELIGIÓ el semántico (anotada en el nodo), no la
+        // cabeza: con `Base(v: integer)` y `Base(t: string)`, `Base("texto")` llamaba a
+        // `__cls_new_Base` con el string como `v`, sin aviso. La factoría lleva el
+        // mismo sufijo de clave que en el emisor mivm (ctorSuffix).
+        Symbol anot = (semInfo != null) ? semInfo.exprSymbols.get(c) : null;
+        Symbol.FunctionSymbol ctor = (anot instanceof Symbol.FunctionSymbol) ? (Symbol.FunctionSymbol) anot
+                                                                              : cls.findConstructor();
+        String factoria = MivmEmitter.crossModuleNewName(cls, ctor);
         int expected = (ctor != null) ? ctor.params.size() : 0;
         if (c.args.size() != expected) {
             throw new UnsupportedAotException(
                 "AOT: `" + gesto + "` (line " + line + "): " + c.args.size()
-                + " args pero la factory __cls_new_" + cls.name + " espera " + expected
-                + " (firma del ctor propio de la clase).");
+                + " args pero la factory " + factoria + " espera " + expected
+                + " (firma del constructor elegido).");
         }
         if (ctor != null) {
             for (Symbol.ParamSymbol p : ctor.params) {
@@ -1397,7 +1404,7 @@ public final class AotCEmitter {
         } else {
             qn.append(moduleName);
         }
-        qn.append(".__cls_new_").append(cls.name);
+        qn.append('.').append(factoria);
 
         /* La factory __cls_new_* SIEMPRE devuelve la instancia (una ref) → ret_is_ref=1. */
         int ctorMask = (ctor != null) ? refMaskOfParams(ctor.params) : 0;

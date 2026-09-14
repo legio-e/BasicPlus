@@ -256,6 +256,7 @@ public class ModWriter {
     public void addModulo(String name) {
         importStream.reset(); exportStream.reset(); codeStream.reset();
         externalFunctions.clear(); functionAddresses.clear(); exportFunctions.clear();
+        exportAliases.clear();
         symbolBytes.clear();
         dataSymbolOffset.clear();
         currentNegativeOffset = 0;
@@ -370,6 +371,13 @@ public class ModWriter {
             captureFunctionVarsDbg(lastFunctionName);
         }
 
+        // 14-sep — un nombre repetido (función o alias) daría dos exports con distinto
+        // offset y cada VM se quedaría con uno: paridad rota. El semántico ya reserva
+        // `__cls_`/`__prop_` al usuario; esto es el cinturón para un bug del emisor.
+        if (functionAddresses.containsKey(name))
+            throw new RuntimeException("función repetida en el módulo: " + name);
+        if (exportAliases.containsKey(name))
+            throw new RuntimeException("función con el nombre de un alias de export: " + name);
         functionAddresses.put(name, currentBytecodeSize);
         if (isPublic) exportFunctions.add(name);
 

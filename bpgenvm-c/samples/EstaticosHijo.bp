@@ -39,5 +39,19 @@ module EstaticosHijo
     var x: integer
     { x, EstaticosBase.Base.total } := par()
     print x + EstaticosBase.Base.total
+    print EstaticosBase.Base.f(5)
+    print EstaticosBase.A_b.c() + EstaticosBase.A.b_c()
+    var sab: SubAb := SubAb()
+    print sab.m()
   end main
+
+  // `super.m()` cross-module sobre A_b: con '_' llamaba a A.m() (a través de __cls_m_A_b_c…)
+  public class SubAb extends EstaticosBase.A_b
+    public function SubAb()
+      super()
+    end SubAb
+    public function m(): integer
+      return super.m() + 100
+    end m
+  end SubAb
 end EstaticosHijo

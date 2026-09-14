@@ -2199,7 +2199,16 @@ public final class Main {
                         stub.externalMethodSlots.put("run",   0);
                         stub.externalMethodSlots.put("start", 1);
                         stub.externalMethodSlots.put("join",  2);
+                        // 14-sep — sólo los que la interfaz NO trae: si la clase sobreescribe
+                        // `run` (lo normal), su `method run` llega abajo y, con el stub ya
+                        // definido, se ENCADENABA como sobrecarga (`run$`) en vez de
+                        // reconocerse como override → ranura nueva, y todo lo declarado
+                        // detrás corrido («Símbolo no resuelto: Tarea#cuenta#4», el dueño
+                        // exporta #3). Preexistente; lo cazó el oráculo CtorHijo.
+                        java.util.Set<String> traidos = new java.util.HashSet<>();
+                        for (ModuleInterface.FuncSig m : cs.methods) traidos.add(m.name);
                         for (String mn : new String[]{"run", "start", "join"}) {
+                            if (traidos.contains(mn)) continue;
                             Symbol.FunctionSymbol thf = new Symbol.FunctionSymbol(
                                     mn, true, false, false, stub, null);
                             thf.returnType = null;   // void (misma convención que FuncSig)
@@ -2468,15 +2477,7 @@ public final class Main {
                     Symbol.ClassSymbol stub = (Symbol.ClassSymbol) e[1];
                     ModuleInterface.ClassSig cs = (ModuleInterface.ClassSig) e[2];
                     Symbol.ClassSymbol base = findImportedClass(cs.baseClassName, ownNs, loadedNs);
-                    if (base == null) {
-                        if (round == 7) {
-                            indent(depth); System.err.printf(
-                                "-- aviso: base cross-module '%s' de la clase importada '%s.%s' no resuelta"
-                                + " (¿falta el import de su módulo?) — vtable incompleta --%n",
-                                cs.baseClassName, ownNs.moduleName, cs.name);
-                        }
-                        continue;
-                    }
+                    if (base == null) continue;   // se avisa al salir del bucle (abajo)
                     // Si la base es a su vez pendiente y aún no sembrada, espera
                     // a la siguiente ronda (sus slots todavía no están).
                     boolean baseStillPending = false;
@@ -2494,6 +2495,18 @@ public final class Main {
                     progress = true;
                 }
                 if (!progress) break;
+            }
+            // 14-sep — el aviso estaba dentro del bucle condicionado a `round == 7`, y
+            // sin progreso el bucle salía en la ronda 0: nunca se imprimía. Lo que
+            // quedaba era una clase con base desconocida, sin ctor ni métodos
+            // heredados, y errores que no decían por qué («no define constructor»).
+            for (Object[] e : pend) {
+                Symbol.ImportedNamespaceSymbol ownNs = (Symbol.ImportedNamespaceSymbol) e[0];
+                ModuleInterface.ClassSig cs = (ModuleInterface.ClassSig) e[2];
+                indent(depth); System.err.printf(
+                    "-- aviso: base cross-module '%s' de la clase importada '%s.%s' no resuelta"
+                    + " (¿falta el import de su módulo?) — sin sus miembros heredados --%n",
+                    cs.baseClassName, ownNs.moduleName, cs.name);
             }
         }
 
