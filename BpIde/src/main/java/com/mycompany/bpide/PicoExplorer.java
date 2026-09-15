@@ -326,6 +326,13 @@ public final class PicoExplorer extends JPanel {
      */
     private volatile int deviceArch = 0;
     public int deviceArch() { return deviceArch; }
+    /* [V7/H2, #441] LA RECETA que la placa exige al nativo: nombre y huella
+     * (`aotReceta`/`aotFlagsCrc` del INFO). 0 / "" = firmware sin receta (PC,
+     * Xtensa) o de antes de V7/H2 — entonces no se compara, como con la arch. */
+    private volatile long   deviceFlagsCrc = 0;
+    private volatile String deviceReceta   = "";
+    public long   deviceFlagsCrc() { return deviceFlagsCrc; }
+    public String deviceReceta()   { return deviceReceta; }
 
     /** Prompt actual: ruta del device + "> ". */
     public String consolePrompt() { return consoleCwd + "> "; }
@@ -1421,8 +1428,13 @@ public final class PicoExplorer extends JPanel {
             return "es MÁS VIEJO que su .mod";
         }
         int suyo = mdnArchOf(mdnFile);
-        return "es de otra ARQUITECTURA (" + archName(suyo) + ", y la placa es "
-             + archName(deviceArch) + ")";
+        if (suyo != 0 && deviceArch != 0 && suyo != deviceArch) {
+            return "es de otra ARQUITECTURA (" + archName(suyo) + ", y la placa es "
+                 + archName(deviceArch) + ")";
+        }
+        /* #441 (V7/H2) — la RECETA: misma arquitectura, otros flags. */
+        return String.format("es de otra RECETA de compilación (huella %08x, y la placa exige %s %08x): regenéralo",
+                             mdnFlagsCrcOf(mdnFile), deviceReceta, deviceFlagsCrc);
     }
 
     private boolean mdnIsStale(File mdnFile, File modFile) {
@@ -1434,7 +1446,32 @@ public final class PicoExplorer extends JPanel {
          * tan contento y el gate del loader lo rechazaba ya en la placa.
          * Comparar aquí convierte un fallo remoto en un "regenéralo" local. */
         int suyo = mdnArchOf(mdnFile);
-        return suyo != 0 && deviceArch != 0 && suyo != deviceArch;
+        if (suyo != 0 && deviceArch != 0 && suyo != deviceArch) return true;
+        /* #441 (V7/H2) — y la RECETA, la segunda mitad de la ficha: misma
+         * arquitectura y otros flags (`-mcmodel=medany`, 17-ago) es código
+         * inservible que ni la arch ni las fechas ven. La cabecera v2 lleva el
+         * CRC del literal de bpvm_aot_recetas.h y la placa publica el suyo. Un
+         * `.mdn` v1 (sin huella) no se compara: la placa lo carga y avisa. */
+        long crc = mdnFlagsCrcOf(mdnFile);
+        return crc != 0 && deviceFlagsCrc != 0 && crc != deviceFlagsCrc;
+    }
+
+    /** #441 — la huella de la receta de un `.mdn` v2 (`flags_crc`, offset 20,
+     *  little-endian); 0 si es v1, ilegible o no es un .mdn. */
+    public static long mdnFlagsCrcOf(File f) {
+        try (java.io.DataInputStream in = new java.io.DataInputStream(
+                new java.io.BufferedInputStream(new java.io.FileInputStream(f)))) {
+            byte[] hdr = new byte[24];
+            in.readFully(hdr, 0, 20);
+            if (hdr[0] != 'M' || hdr[1] != 'D' || hdr[2] != 'N') return 0;
+            java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            int version = bb.getShort(4) & 0xFFFF;
+            if (version < 2) return 0;
+            in.readFully(hdr, 20, 4);
+            return bb.getInt(20) & 0xFFFFFFFFL;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     /** #441 — la `arch` del header de un `.mdn` (0 = no se pudo leer o legacy).
@@ -1570,6 +1607,7 @@ public final class PicoExplorer extends JPanel {
             backend.close();
             backend = null;
             deviceArch = 0;              // H11: la arch se va con la conexión
+            deviceFlagsCrc = 0; deviceReceta = "";   // #441: y la receta
             setConnectedUI(false);
             rootNode.removeAllChildren();
             treeModel.reload();
@@ -2123,9 +2161,15 @@ public final class PicoExplorer extends JPanel {
             if (m == null) return;
             long a = ilong(m, "arch");
             deviceArch = (int) a;
+            /* #441 — y la receta, si el firmware la publica (V7/H2). */
+            deviceFlagsCrc = ilong(m, "aotFlagsCrc") & 0xFFFFFFFFL;
+            deviceReceta   = istr(m, "aotReceta");
             if (a != 0 && outputSink != null) {
                 outputSink.accept("[Explorer] la placa ejecuta nativo "
-                        + archName((int) a) + " (arch=" + a + ")");
+                        + archName((int) a) + " (arch=" + a + ")"
+                        + (deviceFlagsCrc != 0
+                           ? String.format(", receta %s (huella %08x)", deviceReceta, deviceFlagsCrc)
+                           : ""));
             }
         });
     }
@@ -2239,6 +2283,16 @@ public final class PicoExplorer extends JPanel {
         if (!fabi.isEmpty())
             sb.append("Coma flot.  : ").append(fabi)
               .append("  (sello del pack nativo; arch sola NO distingue hard de softfp)\n");
+        // V7/H2 (#441) — la receta del .mdn que esta imagen exige. Sale siempre
+        // que el firmware mande el campo: "(sin receta)" es una respuesta.
+        if (m.containsKey("aotReceta")) {
+            String rc = istr(m, "aotReceta");
+            long   rh = ilong(m, "aotFlagsCrc") & 0xFFFFFFFFL;
+            sb.append("Receta AOT  : ")
+              .append(rc.isEmpty() ? "(sin receta: esta imagen no ejecuta .mdn)"
+                                   : String.format("%s  (huella %08x; bpvm_aot_recetas.h)", rc, rh))
+              .append('\n');
+        }
         // #354 — lo que FreeRTOS sabe y nunca le habíamos preguntado: cuánto de
         // lo reservado llegó a usarse. SOLO DIAGNÓSTICO (no se recorta nada
         // hasta ver los números con carga real; en la duda se deja como está).

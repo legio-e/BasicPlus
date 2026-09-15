@@ -372,13 +372,43 @@ mismo. Su cabecera (`src/mdn_format.h`) trae `code_size` y `sym_count`, así que
 el tamaño total de un blob se calcula desde él:
 
 ```
-total = sizeof(mdn_header_t) + sym_count * sizeof(mdn_symbol_t) + code_size
+total = mdn_header_size(version) + sym_count * sizeof(mdn_symbol_t) + code_size
 ```
 
 redondeado a 4. Con eso un lector camina de blob en blob hasta agotar
 `nativeSize`. Y cada blob dice **para qué arquitectura es**, en su campo `arch`
 (`MDN_ARCH_ARM`, `_RISCV`, `_XTENSA`), así que el cargador se queda con el suyo y
 salta los demás.
+
+### La cabecera del blob (`.mdn`), por versión — `src/mdn_format.h`
+
+Little-endian (al revés que el `.mod`: el consumidor es la CPU del micro).
+
+```
++00  magic[4]     "MDN\0"
++04  version      u16   1 (cabecera de 20 B) · 2 (24 B, desde V7/H2 15-sep-2026)
++06  abi_version  u16   MDN_ABI_VERSION: la tabla de helpers que el código espera (#284: igual, o rechazo)
++08  code_size    u32
++12  sym_count    u32   N × { name[32], thunk_offset u32 } detrás de la cabecera
++16  arch         u32   e_machine del ELF: 40 ARM · 243 RISC-V · 94 Xtensa · 0 = legacy ARM
++20  flags_crc    u32   SÓLO v2 (`#441`): CRC32 IEEE de los bytes del literal de la RECETA
+```
+
+**La receta (`#441`, V7/H2).** Los flags con que se compila un `.mdn` viven en
+**un solo sitio**, `bpgenvm-c/include/bpvm_aot_recetas.h`, una receta por juego de
+instrucciones y ABI —no por placa—: `ARMV8M_MAIN_SOFTFP` (Cortex-M33: Pico 2 y
+STM32U5 comparten `.mdn`), `RV32IMAFC_ILP32F` (ESP32-P4), `RV32IMC_ILP32` (C3/C6,
+sin destino en el IDE todavía). El IDE parsea el `.h`, compila con esa receta y
+estampa en `flags_crc` el CRC32 de sus bytes; el firmware elige la suya por las
+macros de su ISA (`__ARM_ARCH_8M_MAIN__`, `__riscv_float_abi_*`), hashea el mismo
+literal y **rechaza** (`MDN_ERR_RECETA`, la función sigue interpretada, mensaje al
+log) el blob que traiga otra: misma arquitectura y otros flags es lo que ni `arch`
+ni las fechas ven (`-mcmodel=medany`, 17-ago, dejó inservibles todos los `.mdn`
+RISC-V). Un blob **v1** no lleva huella y se carga «a ciegas» con aviso, como un
+MOD7 sin datos de versión. La placa publica su receta en el INFO (`aotReceta`,
+`aotFlagsCrc`) y el IDE no sube un `.mdn` de otra. Sólo entran los flags de
+COMPILACIÓN: los de enlace y el guión `aot/mdn.ld` los vigila el guardián de
+relocalizaciones de `MdnPack` en el build.
 
 📌 **Por eso el formato de N familias es el mismo que el de una.** Hoy se emite
 N=1 —la familia de la placa conectada— y el multifamilia no pide ningún cambio de
@@ -397,12 +427,15 @@ y las dos nos han pasado:
   etiquetados **dentro**, elegir el equivocado deja de ser posible por
   construcción.
 
-### Estado (23-ago-2026)
+### Estado
 
-El **formato** está cerrado y los dos cargadores lo leen. La sección se emite
-**vacía**: falta que el compilador meta el blob y que el cargador registre sus
-thunks desde ahí en vez de buscar un `.mdn` en el FS. Ver `FICHAS.md`, hito N1
-punto 4.
+- **23-ago-2026**: el formato cerrado y los dos cargadores lo leen; la sección se
+  emitía vacía.
+- **25-ago-2026** (N1.4): el IDE funde el blob en el `.mod` y las familias lo
+  cargan desde ahí; el `.mdn` suelto de la app ya no se escribe.
+- **15-sep-2026** (V7/H2, `#441`): blob **v2** con la huella de la receta; los
+  lectores (cargadores, `Disasm`, `MdnInspect`, `test_modhdr`) caminan por la
+  versión de cada blob. Fixture `test/fixtures/modhdr/NatNew8.mod` (MOD8 + blob v2).
 ---
 
 ## 5. Sección DATA
@@ -592,7 +625,9 @@ cambios incompatibles se sube el número.
   `gen` e `ifaceCrc` en la cabecera (44 bytes) y la subtabla `deps` en `imports`
   (§3); las VMs aplican la norma de versiones (§3.1). La interfaz se escribe con
   `\n` fijo (el CRC es la identidad de esos bytes: igual en Windows y Linux).
-  **Aditivo**: v6 y v7 se siguen ejecutando (sin datos de versión).
+  **Aditivo**: v6 y v7 se siguen ejecutando (sin datos de versión). El mismo día,
+  el blob `.mdn` de la sección `native` pasa a **v2** (24 B, `flags_crc`: la
+  huella de la receta, `#441`, §4.6); los blobs v1 se siguen cargando con aviso.
 - **v7** (23-ago-2026): sección **`native`** entre `interface` y `data`
   (§4.6) — el `.mdn` deja de ser un fichero aparte. Header de 36 bytes.
   **Aditivo**: no cambia el ABI, así que los `.mod` v6 se siguen ejecutando y no

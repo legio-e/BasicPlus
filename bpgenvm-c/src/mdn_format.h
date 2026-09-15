@@ -30,7 +30,13 @@
 #include <stdint.h>
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
-#define MDN_VERSION        1   /* incrementar si cambia el header layout */
+#define MDN_VERSION        2   /* [V7/H2, #441] 15-sep — `flags_crc`: la huella
+                                * de la RECETA (bpvm_aot_recetas.h). Cabecera de
+                                * 24 B; la v1 (20 B, sin huella) se sigue
+                                * cargando «a ciegas» con aviso, como un MOD7
+                                * sin datos de versión. El escritor emite v2. */
+#define MDN_HEADER_SIZE_V1 20
+#define MDN_HEADER_SIZE_V2 24
 #define MDN_ABI_VERSION    6   /* [V6/N1.5] 24-ago — un slot nuevo al final
                                 * (`newarray_i64`) y tres que dejaron de ser
                                 * stubs. Lo primero mueve el tamaño de la tabla;
@@ -91,21 +97,40 @@
 
 typedef struct {
     uint8_t  magic[4];     /* "MDN\0" */
-    uint16_t version;      /* formato del header — actualmente 1 */
+    uint16_t version;      /* formato del header — 1 (20 B) o 2 (24 B) */
     uint16_t abi_version;  /* mínimo aot_helpers_vN_t que necesita */
     uint32_t code_size;    /* bytes del code section */
     uint32_t sym_count;    /* nº de entradas mdn_symbol_t que siguen */
     /* Arquitectura del código = e_machine del ELF (MDN_ARCH_*). Antes _reserved
      * (0); el loader trata 0 como legacy-ARM por compat. Gate de arch estilo #284. */
     uint32_t arch;
+    /* [V7/H2, #441] SÓLO v2 — CRC32 (IEEE) de los bytes del literal de la receta
+     * con que se compiló el código (`BPVM_AOT_RECETA_*` en bpvm_aot_recetas.h).
+     * El firmware calcula el de SU receta y, si no coincide, rechaza: misma
+     * arquitectura y otros flags (`-mcmodel`, `-mabi`…) es código inservible que
+     * ni `arch` ni las fechas ven. En un v1 este campo NO EXISTE en el fichero:
+     * leerlo es leer el primer símbolo. Usar `mdn_header_size(version)`. */
+    uint32_t flags_crc;
 } mdn_header_t;
+
+/* Bytes de cabecera que hay DE VERDAD en el fichero, según su versión. Todo el
+ * que camine por un `.mdn` (el cargador, el recorrido de blobs del `.mod`, los
+ * tests) usa esto y no `sizeof(mdn_header_t)`, que es el de la versión actual. */
+static inline uint32_t mdn_header_size(uint16_t version) {
+    return version >= 2 ? MDN_HEADER_SIZE_V2 : MDN_HEADER_SIZE_V1;
+}
 
 typedef struct {
     char     name[MDN_NAME_MAX];  /* qualified BP name, e.g. "Bench.fib" */
     uint32_t thunk_offset;        /* offset del thunk dentro del code section */
 } mdn_symbol_t;
 
-/* Total header + N symbols, alineado a 4. El code section empieza
- * inmediatamente después. */
+/* Total header + N symbols, alineado a 4 (20 y 24 lo son; 36 por símbolo). El
+ * code section empieza inmediatamente después. */
+/* Asertos de compilacion en C99 puro (sin _Static_assert): un typedef con un
+ * array de tamano -1 no compila. Que la cabecera mida 24 y el simbolo 36 es lo
+ * que todos los lectores dan por hecho. */
+typedef char mdn_aserto_cabecera_v2_24[(sizeof(mdn_header_t) == MDN_HEADER_SIZE_V2) ? 1 : -1];
+typedef char mdn_aserto_simbolo_36[(sizeof(mdn_symbol_t) == MDN_NAME_MAX + 4) ? 1 : -1];
 
 #endif /* BPVM_MDN_FORMAT_H */

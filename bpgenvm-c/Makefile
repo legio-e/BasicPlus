@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -604,11 +604,26 @@ test-bios:
 # saltar y se distinga de las demas: "no cabe" y "otra arquitectura" llevan a
 # sitios distintos. Incluye el bit Thumb de la direccion de salto (olvidarlo es
 # hard fault inmediato).
-test-npack:
+# (V7/H2, 15-sep) Se enlaza con LIBOBJ entero: la lista suelta de tres .c se
+# quedo corta cuando mdn_loader.c paso a usar el log comun y bpvm_pack (V6), y el
+# target llevaba desde entonces sin enlazar — un guardian mudo.
+test-npack: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_npack.c src/bpvm_npack.c src/mdn_loader.c src/aot_registry.c -o build/test_npack.exe
+	$(CC) $(CFLAGS) test/test_npack.c $(LIBOBJ) -o build/test_npack.exe $(LDFLAGS)
 	@echo "--- V5/I escalera del pack nativo (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_npack.exe
+
+# V7/H2 (#441) — el gate de la RECETA del .mdn. El PC no tiene receta, asi que
+# mdn_loader.c se compila APARTE con una forzada (la costura de
+# bpvm_aot_recetas.h) y se fabrican blobs de la arch del host: v1 se carga a
+# ciegas, v2 con mi huella se carga, v2 con otra se RECHAZA (MDN_ERR_RECETA).
+test-mdnreceta: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc -DBPVM_AOT_HOST_RECETA_FORZADA=BPVM_AOT_RECETA_ARMV8M_MAIN_SOFTFP \
+	  test/test_mdnreceta.c src/mdn_loader.c $(filter-out build/src/mdn_loader.o,$(LIBOBJ)) \
+	  -o build/test_mdnreceta.exe $(LDFLAGS)
+	@echo "--- V7/H2 (#441) el gate de la receta del .mdn (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_mdnreceta.exe
 
 # V5/H1 — decodificadores del CSD/CID de la tarjeta SD. Host-only y a proposito:
 # el dialogo con la tarjeta necesita tarjeta, pero sacar la CAPACIDAD del CSD es
@@ -784,14 +799,16 @@ test-packres: $(LIBOBJ)
 # library no vacia), la suma de secciones es el fichero, el cargador deja en RAM
 # los bytes exactos de code/data (CRC) y la seccion native se recorre blob a blob.
 # Es la segunda opinion del formato ANTES de subirlo a MOD8. Fixtures congelados en
-# test/fixtures/modhdr/ (NatV7/NatNew: samples con native; Bench_riscv: nativo
-# RISC-V del P4; acme.LibHdr: library, fuente al lado); la stdlib fresca al lado.
+# test/fixtures/modhdr/ (NatV7/NatNew: samples con native, blob .mdn v1; Bench_riscv:
+# nativo RISC-V del P4; acme.LibHdr: library, fuente al lado; Ocho: MOD8 con deps;
+# NatNew8: MOD8 con blob .mdn v2 — la huella de la receta, V7/H2 #441); la stdlib
+# fresca al lado.
 test-modhdr: $(LIBOBJ)
 	@mkdir -p build/modhdr
 	$(CC) $(CFLAGS) -Isrc test/test_modhdr.c $(LIBOBJ) -o build/test_modhdr.exe $(LDFLAGS)
 	@cp ../bpstdlib/*.mod build/modhdr/ && cp test/fixtures/modhdr/*.mod build/modhdr/
 	@echo "--- V7/H2 cabecera y secciones del .mod vs cargador (esperado: solo 'ok', [status=OK]) ---"
-	@cd build/modhdr && ../test_modhdr.exe NatV7.mod NatNew.mod Bench_riscv.mod acme.LibHdr.mod Core.mod Ocho.mod
+	@cd build/modhdr && ../test_modhdr.exe NatV7.mod NatNew.mod Bench_riscv.mod acme.LibHdr.mod Core.mod Ocho.mod NatNew8.mod
 
 test-crc:
 	@mkdir -p build

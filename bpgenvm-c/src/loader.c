@@ -548,10 +548,12 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
         uint32_t p = 0;   /* `sec` YA apunta al primer blob, en los dos caminos */
         int cargados = 0;
-        while (p + sizeof(mdn_header_t) <= largo) {
+        while (p + MDN_HEADER_SIZE_V1 <= largo) {
             const mdn_header_t* h = (const mdn_header_t*) (const void*) (sec + p);
             if (h->magic[0] != 'M' || h->magic[1] != 'D' || h->magic[2] != 'N') break;
-            uint32_t tam = (uint32_t) sizeof(mdn_header_t)
+            /* [V7/H2, #441] la cabecera mide segun su version (v1 20 B, v2 24 B):
+             * un blob v1 en un .mod de antes sigue recorriendose bien. */
+            uint32_t tam = mdn_header_size(h->version)
                          + h->sym_count * (uint32_t) sizeof(mdn_symbol_t)
                          + h->code_size;
             tam = (tam + 3u) & ~3u;

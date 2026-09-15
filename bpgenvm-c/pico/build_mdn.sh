@@ -88,9 +88,20 @@ if [ ! -f "$C_FILE" ]; then
     exit 4
 fi
 
-echo "[2/4] arm-none-eabi-gcc → ${MOD}.o (PIC Thumb-2)"
-"$GCC" -mcpu=cortex-m33 -mthumb -mfloat-abi=softfp -mfpu=fpv5-sp-d16 \
-    -fpic -fno-jump-tables -Os \
+# V7/H2 (#441) — LA RECETA sale del .h, que es la unica fuente: el IDE la parsea
+# y el firmware la hashea; aqui se lee con sed y se le pasa a MdnPack, que estampa
+# su CRC en la cabecera (v2). Copiar los flags aqui a mano era justo el desfase
+# que la ficha persigue.
+RECETAS_H="$PM_ROOT/bpgenvm-c/include/bpvm_aot_recetas.h"
+RECETA="ARMV8M_MAIN_SOFTFP"
+CFLAGS_RECETA="$(sed -nE "s/^[[:space:]]*#define[[:space:]]+BPVM_AOT_RECETA_${RECETA}[[:space:]]+\"([^\"]*)\".*/\1/p" "$RECETAS_H" | head -1)"
+if [ -z "$CFLAGS_RECETA" ]; then
+    echo "ERROR: no encuentro la receta $RECETA en $RECETAS_H" >&2
+    exit 5
+fi
+echo "[2/4] arm-none-eabi-gcc → ${MOD}.o (receta $RECETA: $CFLAGS_RECETA)"
+# shellcheck disable=SC2086  # la receta se parte por espacios a proposito
+"$GCC" $CFLAGS_RECETA \
     -I"$PM_ROOT/bpgenvm-c/include" \
     -I"$PM_ROOT/bpgenvm-c/src" \
     -c "$C_FILE" -o "$O_FILE"
@@ -114,7 +125,7 @@ echo "[3/4] enlace → ${MOD}.elf (literales dentro del .text)"
 
 echo "[4/4] MdnPack → ${MOD}.mdn (en samples/out/)"
 java -cp "$CP" basicplus.frontend.MdnPack \
-    "$ELF_FILE" "$MDN_FILE" "$MOD"
+    "$ELF_FILE" "$MDN_FILE" "$MOD" "$RECETAS_H" "$RECETA"
 
 echo ""
 echo "=== OK ==="

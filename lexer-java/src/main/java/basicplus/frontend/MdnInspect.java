@@ -42,7 +42,10 @@ public final class MdnInspect {
     private static final int    MDN_MAGIC_1 = 'D';
     private static final int    MDN_MAGIC_2 = 'N';
     private static final int    MDN_MAGIC_3 = 0;
-    private static final int    MDN_VERSION     = 1;
+    /* [V7/H2, #441] v1 (20 B, sin huella) y v2 (24 B, con `flags_crc`): las dos
+     * valen, como en el cargador. */
+    private static final int    MDN_VERSION_MIN = 1;
+    private static final int    MDN_VERSION     = 2;
     /* La ABI NO se copia aquí: se lee de MdnPack, que es quien la ESTAMPA.
      * Tenerla dos veces ya salió caro — esta copia se quedó en 1 mientras la
      * de verdad iba por 2, así que la herramienta de diagnóstico daba FAIL a
@@ -62,7 +65,7 @@ public final class MdnInspect {
     }
     private static final int    MDN_NAME_MAX    = 32;
 
-    private static final int    HEADER_SIZE = 20;
+    private static final int    HEADER_SIZE = 20;   /* la MINIMA (v1); la v2 mide 24 */
     private static final int    SYM_SIZE    = 36;
 
     public static void main(String[] args) throws IOException {
@@ -104,9 +107,15 @@ public final class MdnInspect {
         // 3. Version + abi
         int version = bb.getShort(4) & 0xffff;
         int abi     = bb.getShort(6) & 0xffff;
-        if (version != MDN_VERSION) {
-            System.err.println("FAIL: version=" + version + " (esperaba " + MDN_VERSION + ")");
+        if (version < MDN_VERSION_MIN || version > MDN_VERSION) {
+            System.err.println("FAIL: version=" + version + " (esperaba " + MDN_VERSION_MIN + ".." + MDN_VERSION + ")");
             return 12;
+        }
+        final int hdrSize = version >= 2 ? 24 : HEADER_SIZE;
+        if (data.length < hdrSize) {
+            System.err.println("FAIL: archivo demasiado pequeño para una cabecera v" + version
+                + " (" + data.length + " < " + hdrSize + ")");
+            return 11;
         }
         if (abi > MDN_ABI_VERSION) {
             System.err.println("FAIL: abi_version=" + abi + " > soportado=" + MDN_ABI_VERSION);
@@ -120,6 +129,14 @@ public final class MdnInspect {
         long reserved  = bb.getInt(16) & 0xffffffffL;
         System.out.println("code_size=" + codeSize + " sym_count=" + symCount
             + " arch=" + reserved + " (" + nombreArch(reserved) + ")");
+        /* [V7/H2, #441] la huella de la receta: el firmware la compara con la de
+         * bpvm_aot_recetas.h para su ISA; un v1 no la lleva y se carga a ciegas. */
+        if (version >= 2) {
+            System.out.printf("flags_crc=%08x (huella de la receta; el nombre lo da bpvm_aot_recetas.h)%n",
+                bb.getInt(20));
+        } else {
+            System.out.println("flags_crc: (v1, sin huella de receta — la placa lo carga a ciegas y avisa)");
+        }
         if (codeSize == 0) {
             System.err.println("FAIL: code_size=0 — .mdn sin código");
             return 14;
@@ -143,7 +160,7 @@ public final class MdnInspect {
         }
 
         // 5. Tamaño total
-        long hdrTotal = HEADER_SIZE + symCount * SYM_SIZE;
+        long hdrTotal = hdrSize + symCount * SYM_SIZE;
         long expectedSize = hdrTotal + codeSize;
         if (data.length < expectedSize) {
             System.err.println("FAIL: archivo truncado. esperaba >=" + expectedSize
@@ -154,13 +171,13 @@ public final class MdnInspect {
             System.err.println("WARN: archivo con " + (data.length - expectedSize)
                 + " bytes de trailing — posible contaminación");
         }
-        System.out.println("size layout OK: header(" + HEADER_SIZE + ") + syms("
+        System.out.println("size layout OK: header(" + hdrSize + ") + syms("
             + (symCount * SYM_SIZE) + ") + code(" + codeSize + ") = " + expectedSize);
 
         // 6. Iterar símbolos
         System.out.println("symbols:");
         for (long i = 0; i < symCount; i++) {
-            int symOff = HEADER_SIZE + (int) i * SYM_SIZE;
+            int symOff = hdrSize + (int) i * SYM_SIZE;
             // Name: hasta MDN_NAME_MAX bytes, terminado en NUL.
             int nameLen = 0;
             while (nameLen < MDN_NAME_MAX && data[symOff + nameLen] != 0) nameLen++;

@@ -115,6 +115,7 @@ public final class AotRiscvPicSmoke {
         }
         List<String> cmd = new ArrayList<>();
         cmd.add(gcc);
+        /* V7/H2 (#441): la receta real de bpvm_aot_recetas.h, no una copia. */
         for (String f : AotBuild.flagsRiscvParaPruebas()) {
             if (!medany && "-mcmodel=medany".equals(f)) continue;
             cmd.add(f);

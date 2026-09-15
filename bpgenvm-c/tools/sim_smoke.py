@@ -111,6 +111,11 @@ def main():
               and r.get("psramBytes") == 8 * 1024 * 1024
               and r.get("flashBytes") == 4 * 1024 * 1024,
               "INFO → RAM 1M / PSRAM 8M / flash 4M (los del --mem/--psram/--flash)")
+        # V7/H2 (#441): el INFO común publica la receta del .mdn SIEMPRE (el PC no
+        # tiene: "" y 0), para que el IDE distinga «sin receta» de «firmware viejo».
+        check("aotReceta" in r and "aotFlagsCrc" in r
+              and r.get("aotReceta") == "" and r.get("aotFlagsCrc") == 0,
+              "INFO → aotReceta/aotFlagsCrc presentes (vacíos en el PC: sin receta)")
 
         # 3. FS virgen
         r = w.call("FORMAT", confirm="YES")

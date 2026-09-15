@@ -4,11 +4,14 @@
 // produce un .mdn listo para subir al Pico (H3 #158).
 //
 // Uso:
-//   java basicplus.frontend.MdnPack <input.o> <output.mdn> <ModuleName>
+//   java basicplus.frontend.MdnPack <input.o> <output.mdn> <ModuleName> <bpvm_aot_recetas.h> <RECETA>
 //
 //   input.o:    ELF generado por arm-none-eabi-gcc.
 //   output.mdn: archivo .mdn resultante.
 //   ModuleName: prefijo de los símbolos del BP (e.g., "Bench").
+//   recetas.h:  bpgenvm-c/include/bpvm_aot_recetas.h — la única fuente de los flags.
+//   RECETA:     con cuál se compiló el .o (ARMV8M_MAIN_SOFTFP, RV32IMAFC_ILP32F…):
+//               su CRC32 va en la cabecera (v2, V7/H2 #441) y el firmware lo exige.
 //
 // Estrategia:
 //   1. Parsea el ELF (mínimo: section headers, .text, .symtab, .strtab).
@@ -48,7 +51,10 @@ public final class MdnPack {
      * código nativo contra helpers que ya no coincidían → corrupción y reset
      * mudo en placa. Se destapó el 26-jul al arreglar el gate. */
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
-    private static final int MDN_VERSION = 1;
+    /* [V7/H2, #441] 15-sep: 2 — la cabecera lleva `flags_crc`, la huella de la
+     * receta (24 B en vez de 20). La autoridad es mdn_format.h; esto lo copia. */
+    private static final int MDN_VERSION = 2;
+    private static final int MDN_HEADER_SIZE = 24;
     /* [V6/N1.5] 24-ago: 6 — slot `newarray_i64` nuevo, y tres newarray_* que
      * dejaron de ser stubs. Histórico: 5 = 11-ago, el .mdn depende también del
      * OFFSET de `memory` y `aot_helpers` dentro de `struct bpvm`, no sólo de la
@@ -68,15 +74,18 @@ public final class MdnPack {
     }
 
     public static void main(String[] args) throws IOException {
-        if (args.length != 3) {
-            System.err.println("Uso: MdnPack <input.o> <output.mdn> <ModuleName>");
+        if (args.length != 5) {
+            System.err.println("Uso: MdnPack <input.o> <output.mdn> <ModuleName> <bpvm_aot_recetas.h> <RECETA>");
+            System.err.println("  RECETA: con cual se compilo el .o (ARMV8M_MAIN_SOFTFP, RV32IMAFC_ILP32F...)");
             System.exit(2);
         }
         try {
-            PackResult r = pack(Paths.get(args[0]), Paths.get(args[1]), args[2]);
+            String receta = AotRecetas.leer(Paths.get(args[3])).exigir(args[4]);
+            PackResult r = pack(Paths.get(args[0]), Paths.get(args[1]), args[2], receta);
             System.out.println("emitido: " + args[1]);
             System.out.println("  code:    " + r.codeBytes + " bytes");
             System.out.println("  symbols: " + r.symbols);
+            System.out.printf ("  receta:  %s (%08x)%n", args[4], AotRecetas.crc(receta));
         } catch (PackException ex) {
             System.err.println(ex.getMessage());
             System.exit(3);
@@ -100,9 +109,9 @@ public final class MdnPack {
      * el CLI (main) y desde el IDE (compilación AOT automática, H12) — sin
      * System.exit; lanza PackException con un mensaje claro en caso de error.
      */
-    public static PackResult pack(Path inPath, Path outPath, String moduleName)
+    public static PackResult pack(Path inPath, Path outPath, String moduleName, String receta)
             throws IOException, PackException {
-        Empaquetado e = empaquetar(inPath, moduleName);
+        Empaquetado e = empaquetar(inPath, moduleName, receta);
         Files.write(outPath, e.bytes);
         return e.resultado;
     }
@@ -128,12 +137,34 @@ public final class MdnPack {
      * <p>{@link #pack} se queda como está —el `.mdn` suelto sigue existiendo
      * mientras la fusión no esté completa— y ahora delega aquí, así que no hay
      * dos implementaciones que puedan separarse.
+     *
+     * @param receta [V7/H2, #441] el literal de la receta con que se compiló el
+     *        `.o` (de {@link AotRecetas}); su CRC32 va en la cabecera y el firmware
+     *        rechaza el `.mdn` si no es el de SU receta. Obligatoria: un `.mdn` v2
+     *        sin huella no existe, y uno con huella inventada es peor que ninguno.
      */
-    public static Empaquetado empaquetar(Path inPath, String moduleName)
+    public static Empaquetado empaquetar(Path inPath, String moduleName, String receta)
             throws IOException, PackException {
+        if (receta == null || receta.trim().isEmpty()) {
+            throw new PackException("falta la receta de compilacion (bpvm_aot_recetas.h): "
+                    + "un .mdn v2 lleva la huella de sus flags y el firmware la exige (#441)");
+        }
         byte[] elf = Files.readAllBytes(inPath);
 
         Elf32 f = Elf32.parse(elf);
+
+        /* [V7/H2, #441] La receta tiene que ser de la ISA del .o: pasar la de ARM
+         * con un .o RISC-V (un copy-paste en un script) daria un .mdn que la placa
+         * rechaza por la huella, y aqui se sabe antes y con el motivo. */
+        String mabi = flagDeReceta(receta, "-mabi=");
+        boolean recetaRiscv = receta.contains("-march=rv32") || (mabi != null && mabi.startsWith("ilp32"));
+        boolean recetaArm   = receta.contains("-mthumb") || receta.contains("-mcpu=cortex");
+        if (f.machine() == 243 && !recetaRiscv) {
+            throw new PackException("el .o es RISC-V y la receta no (" + receta + ")");
+        }
+        if (f.machine() == 40 && !recetaArm) {
+            throw new PackException("el .o es ARM y la receta no (" + receta + ")");
+        }
         byte[] code = f.getSectionBytes(".text");
         if (code == null) {
             throw new PackException("ELF sin sección .text — ¿gcc -ffunction-sections? "
@@ -246,27 +277,31 @@ public final class MdnPack {
          *   1. la ABI de coma flotante de `e_flags` (bits 1-2);
          *   2. si el repertorio declarado lleva `d`.
          *
-         * ⚠️ Hoy RISC-V solo significa ESP32-P4. El dia que haya otra placa
-         * RISC-V con otra ABI, esto tiene que preguntarselo a la familia en vez
-         * de darlo por sabido — pero un valor fijo y comprobado es infinitamente
-         * mejor que ninguna comprobacion. */
+         * [V7/H2, #441] La ABI esperada ya no se da por sabida («hoy RISC-V solo
+         * significa ESP32-P4»): la dice el `-mabi=` de la RECETA con que se
+         * compilo, que es la del firmware que va a cargarlo. Asi el dia que haya
+         * un destino ilp32 (C3/C6) este guardian vale sin tocarlo. */
         if (f.machine() == 243) {   /* EM_RISCV */
+            int esperado = 0x2;      /* sin -mabi en la receta: el P4 de siempre */
+            if (mabi != null) esperado = mabi.equals("ilp32d") ? 0x4 : mabi.equals("ilp32f") ? 0x2 : 0x0;
             int fabi = f.flags() & 0x6;
-            if (fabi != 0x2) {      /* 0=soft, 2=single, 4=double */
+            if (fabi != esperado) {      /* 0=soft, 2=single, 4=double */
                 String cual = (fabi == 0) ? "soft-float" : (fabi == 4 ? "double-float" : "?");
+                String debe = (esperado == 0) ? "SOFT-FLOAT (ilp32)" : (esperado == 4 ? "DOUBLE-FLOAT (ilp32d)" : "SINGLE-FLOAT (ilp32f)");
                 throw new PackException(
-                    "el .o es " + cual + " y el ESP32-P4 va con SINGLE-FLOAT (ilp32f).\n"
+                    "el .o es " + cual + " y la receta va con " + debe + ".\n"
                     + "  Los `float` viajarian por registros distintos que en el firmware.\n"
-                    + "  Compila con:  -march=rv32imafc_zicsr_zifencei -mabi=ilp32f");
+                    + "  Compila con:  " + receta);
             }
             String arch = f.riscvArch();
-            if (arch.matches(".*_d[0-9].*") || arch.matches(".*[0-9]d[0-9].*")) {
+            boolean recetaConD = receta.matches(".*-march=rv32[a-z]*d.*");
+            if (!recetaConD && (arch.matches(".*_d[0-9].*") || arch.matches(".*[0-9]d[0-9].*"))) {
                 throw new PackException(
                     "el .o declara la extension `d` (coma flotante de DOBLE en hardware)\n"
-                    + "  y el ESP32-P4 NO la tiene: gcc derrama los double con fld/fsd y la\n"
+                    + "  y la receta NO la lleva: gcc derrama los double con fld/fsd y la\n"
                     + "  placa se CUELGA (instruccion ilegal), sin mensaje.\n"
                     + "  arch del .o: " + arch + "\n"
-                    + "  Compila con:  -march=rv32imafc_zicsr_zifencei -mabi=ilp32f");
+                    + "  Compila con:  " + receta);
             }
         }
 
@@ -302,14 +337,15 @@ public final class MdnPack {
             throw new PackException(sb.toString());
         }
 
-        // Construir .mdn — header LE + symbol table + code bytes.
-        ByteBuffer hdr = ByteBuffer.allocate(20).order(ByteOrder.LITTLE_ENDIAN);
+        // Construir .mdn — header LE (v2: 24 B) + symbol table + code bytes.
+        ByteBuffer hdr = ByteBuffer.allocate(MDN_HEADER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
         hdr.put(MAGIC);
         hdr.putShort((short) MDN_VERSION);
         hdr.putShort((short) MDN_ABI_VERSION);
         hdr.putInt(code.length);
         hdr.putInt(exports.size());
         hdr.putInt(f.machine());  // arch = e_machine del ELF (H4 — gate del loader)
+        hdr.putInt(AotRecetas.crc(receta));   // flags_crc = la huella de la receta (V7/H2, #441)
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(hdr.array());
@@ -326,6 +362,13 @@ public final class MdnPack {
 
         return new Empaquetado(out.toByteArray(),
                                new PackResult(code.length, exports.size()));
+    }
+
+    /** El valor de `<flag>` en la receta (`-mabi=ilp32f` → "ilp32f"), o null. */
+    private static String flagDeReceta(String receta, String flag) {
+        for (String f : AotRecetas.flags(receta))
+            if (f.startsWith(flag)) return f.substring(flag.length());
+        return null;
     }
 
     /**

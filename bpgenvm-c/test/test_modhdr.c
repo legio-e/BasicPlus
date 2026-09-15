@@ -13,7 +13,10 @@
  *      fichero (CRC32 idéntico) y con el `data_size`/`code_size` de la cabecera
  *      — o sea, no se ha desplazado ninguna sección al saltar interface/native;
  *   3. la sección native, si la hay, se recorre blob a blob por su propia
- *      cabecera (MOD_FORMAT.md §4.6) y cierra justo en `nativeSize`.
+ *      cabecera (MOD_FORMAT.md §4.6) y cierra justo en `nativeSize`; un blob v2
+ *      (V7/H2, #441) lleva la huella de su receta, y tiene que ser el CRC32 del
+ *      literal de `bpvm_aot_recetas.h` para su arquitectura — es la prueba de
+ *      que el IDE (Java) y el firmware (C) hashean los mismos bytes.
  *
  * El recorrido del fichero se hace AQUÍ, por la especificación, sin llamar al
  * loader: es la segunda opinión. Si el loader y esta prueba discrepan, uno de
@@ -25,6 +28,7 @@
 #include "bpvm_internal.h"
 #include "bpvm_fs.h"
 #include "crc32.h"
+#include "bpvm_aot_recetas.h"   /* V7/H2 (#441): la huella de un blob v2 es la de SU receta */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,8 +74,19 @@ static int leer_cabecera(const uint8_t* f, size_t n, cab_t* c) {
     return 1;
 }
 
-/* Recorre la sección native blob a blob. Devuelve el nº de blobs, o -1 si no cuadra. */
-static int recorrer_native(const uint8_t* f, const cab_t* c, char* detalle, size_t dn) {
+/* La receta que un blob de esa arquitectura DEBE llevar (V7/H2, #441): la del .h.
+ * Sólo las dos que el IDE produce hoy; para otra arch no se comprueba. */
+static uint32_t crc_receta_de(uint32_t arch) {
+    const char* r = (arch == 40) ? BPVM_AOT_RECETA_ARMV8M_MAIN_SOFTFP
+                  : (arch == 243) ? BPVM_AOT_RECETA_RV32IMAFC_ILP32F : NULL;
+    return r ? bpvm_crc32((const uint8_t*) r, strlen(r)) : 0;
+}
+
+/* Recorre la sección native blob a blob. Devuelve el nº de blobs, o -1 si no cuadra.
+ * V7/H2 (#441): la cabecera mide según su versión (v1 = 20 B, v2 = 24 B con `flags_crc`);
+ * *huellas_mal cuenta los blobs v2 cuya huella no es la de la receta del .h. */
+static int recorrer_native(const uint8_t* f, const cab_t* c, char* detalle, size_t dn, int* huellas_mal) {
+    *huellas_mal = 0;
     if (c->native == 0) { snprintf(detalle, dn, "vacía"); return 0; }
     uint32_t pos = c->off_native + ((4 - (c->off_native & 3)) & 3);   /* relleno hasta múltiplo de 4 ABSOLUTO */
     uint32_t fin = c->off_native + c->native;
@@ -82,11 +97,20 @@ static int recorrer_native(const uint8_t* f, const cab_t* c, char* detalle, size
             if (todo_cero) break;
             snprintf(detalle + usado, dn - usado, " [+%u no es MDN]", pos); return -1;
         }
+        uint32_t version = le16(f + pos + 4), hdr = version >= 2 ? 24 : 20;
         uint32_t code_size = le32(f + pos + 8), sym_count = le32(f + pos + 12), arch = le32(f + pos + 16);
-        uint32_t total = 20 + sym_count * 36 + code_size, alineado = (total + 3) & ~3u;
+        uint32_t total = hdr + sym_count * 36 + code_size, alineado = (total + 3) & ~3u;
         if (pos + total > fin) { snprintf(detalle + usado, dn - usado, " [blob %d truncado]", n); return -1; }
         usado += (size_t)snprintf(detalle + usado, dn - usado, "%sblob %d: MDN v%u abi=%u arch=%u syms=%u code=%u",
-                                  n ? "; " : "", n, le16(f + pos + 4), le16(f + pos + 6), arch, sym_count, code_size);
+                                  n ? "; " : "", n, version, le16(f + pos + 6), arch, sym_count, code_size);
+        if (version >= 2) {
+            uint32_t huella = le32(f + pos + 20), esperada = crc_receta_de(arch);
+            usado += (size_t)snprintf(detalle + usado, dn - usado, " receta=%08x%s", huella,
+                                      esperada == 0 ? "" : (huella == esperada ? " (la del .h)" : " (NO es la del .h)"));
+            if (esperada != 0 && huella != esperada) (*huellas_mal)++;
+        } else {
+            usado += (size_t)snprintf(detalle + usado, dn - usado, " sin-huella");
+        }
         pos += alineado; n++;
     }
     return n;
@@ -152,9 +176,12 @@ static int probar(const char* path) {
 
     /* 3. La sección native se recorre por su propia cabecera y cierra en nativeSize. */
     char det[512] = "";
-    int blobs = recorrer_native(f, &c, det, sizeof det);
+    int huellas_mal = 0;
+    int blobs = recorrer_native(f, &c, det, sizeof det, &huellas_mal);
     snprintf(msg, sizeof msg, "sección native recorrible blob a blob: %s", det);
     ok(blobs >= 0, msg);
+    /* V7/H2 (#441): un blob v2 lleva la huella de la receta del .h (mismo CRC que el IDE). */
+    if (blobs > 0) ok(huellas_mal == 0, "cada blob v2 lleva la huella de la receta de bpvm_aot_recetas.h");
 
     /* 2. El CARGADOR deja en RAM lo que hay en el fichero, sin desplazar nada. */
     uint32_t crc_code_fichero = bpvm_crc32(f + c.off_code, c.code);

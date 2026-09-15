@@ -17,6 +17,7 @@
 #endif
 #include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
 #include "bpvm_rtc.h"
+#include "mdn_loader.h"     /* V7/H2 (#441): aotReceta/aotFlagsCrc en INFO */
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
 
 #include <stdio.h>
@@ -546,9 +547,17 @@ static void repl_info(long id) {
     if (off < 0) goto err;
 #define CAMPO_S(k, v)  do { off = wire_v1_field_string(buf, sizeof buf, (size_t) off, (k), (v));                             if (off < 0) goto err; } while (0)
 #define CAMPO_L(k, v)  do { off = wire_v1_field_long(buf, sizeof buf, (size_t) off, (k), (long) (v));                             if (off < 0) goto err; } while (0)
+#define CAMPO_UL(k, v) do { off = wire_v1_field_ulong(buf, sizeof buf, (size_t) off, (k), (unsigned long) (v));                   if (off < 0) goto err; } while (0)
     CAMPO_S("uniqueId",     in.unique_id);
     CAMPO_S("boardName",    in.board_name);
     CAMPO_L("arch",         in.arch);
+    /* [V7/H2, #441] LA RECETA del nativo que esta imagen exige — nombre y CRC
+     * del literal (bpvm_aot_recetas.h). No la rellena la familia: es
+     * compile-time y la sabe el comun por la ISA con que se compilo, asi que
+     * ninguna imagen puede olvidarla. "" / 0 donde no hay receta (PC, Xtensa).
+     * Sin signo: un CRC con el bit alto en un `long` de 32 saldria negativo. */
+    CAMPO_S ("aotReceta",   bpvm_mdn_host_receta_nombre());
+    CAMPO_UL("aotFlagsCrc", bpvm_mdn_host_receta_crc());
     CAMPO_L("cpuFreqHz",    in.cpu_hz);
     CAMPO_L("uptimeMs",     in.uptime_ms);
     CAMPO_S("resetReason",  in.reset_reason);
@@ -581,6 +590,7 @@ static void repl_info(long id) {
 #endif
 #undef CAMPO_S
 #undef CAMPO_L
+#undef CAMPO_UL
     /* Y lo PROPIO de la familia, si tiene. */
     if (s_ops->info_extra) {
         off = s_ops->info_extra(buf, (unsigned long) sizeof buf, off);

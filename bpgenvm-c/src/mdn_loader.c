@@ -23,6 +23,8 @@
 #include "mdn_loader.h"
 #include "bpvm_log.h"   /* las trazas van al log comun (antes: hook débil) */
 #include "mdn_format.h"
+#include "bpvm_aot_recetas.h"   /* [V7/H2, #441] la receta que ESTE firmware exige */
+#include "crc32.h"              /* bpvm_crc32: la huella de la receta */
 #include "bpvm_pack.h"   /* bpvm_pack_exec_ptr: la vista ejecutable de la zona */
 #include "aot_registry.h"
 
@@ -107,6 +109,24 @@ const char* bpvm_mdn_host_float_abi(void) {
 #endif
 }
 
+/* [V7/H2, #441] LA RECETA, publicada al lado de la arch y la float-abi y por el
+ * mismo motivo: es la tercera cosa que hace inservible un `.mdn` sin que nada
+ * lo diga. La elige `bpvm_aot_recetas.h` por las macros de la ISA con que se
+ * compila ESTE fichero; el CRC se calcula una vez sobre los bytes del literal —
+ * los mismos que el IDE hashea al escribir la cabecera. */
+const char* bpvm_mdn_host_receta_nombre(void) { return BPVM_AOT_HOST_RECETA_NOMBRE; }
+
+uint32_t bpvm_mdn_host_receta_crc(void) {
+    static uint32_t s_crc = 0;
+    static int      s_hecho = 0;
+    if (!s_hecho) {
+        const char* r = BPVM_AOT_HOST_RECETA;
+        s_crc = r[0] ? bpvm_crc32((const uint8_t*) r, strlen(r)) : 0u;
+        s_hecho = 1;
+    }
+    return s_crc;
+}
+
 /* [V6, 24-ago-2026] LAS TRAZAS VAN AL LOG COMÚN, sin intermediario.
  *
  * Aquí había un hook débil (`bpvm_mdn_log`, no-op) que cada port podía
@@ -134,11 +154,14 @@ void   bpvm_mdn_reset(void)        { /* no-op en zero-copy */ }
 size_t bpvm_mdn_used_bytes(void)   { return 0; }
 
 int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
-    if (!data || size < sizeof(mdn_header_t)) return MDN_ERR_TRUNCATED;
+    /* La cabecera mínima es la v1 (20 B); la v2 (24 B) se comprueba en cuanto
+     * se sabe la versión. `sizeof(mdn_header_t)` es la actual y NO vale aquí:
+     * rechazaría por «truncado» un v1 de 20 bytes justos. */
+    if (!data || size < MDN_HEADER_SIZE_V1) return MDN_ERR_TRUNCATED;
 
     /* Validar alineación. Thumb-2 requiere PC bit 1 = 0, lo que exige
      * que el code_base (= data + hdr_total) sea al menos 2-aligned.
-     * Como hdr_total siempre es múltiplo de 4 (header=20, sym=36 cada
+     * Como hdr_total siempre es múltiplo de 4 (header=20/24, sym=36 cada
      * uno), basta con que data sea 4-aligned. El FS v4 lo garantiza
      * para ficheros del FS; los .mdn embebidos en .data del firmware
      * también vienen alineados por el compilador. Si llega misaligned,
@@ -154,7 +177,11 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     /* Magic + version + ABI. */
     static const uint8_t expected[4] = MDN_MAGIC;
     if (memcmp(h->magic, expected, 4) != 0) return MDN_ERR_MAGIC;
-    if (h->version != MDN_VERSION)          return MDN_ERR_VERSION;
+    /* v1 (sin huella de receta) y v2 (con ella). Un v1 se carga «a ciegas» con
+     * aviso, más abajo; es la transición, como un MOD7 sin datos de versión. */
+    if (h->version != 1 && h->version != MDN_VERSION) return MDN_ERR_VERSION;
+    const uint32_t hsz = mdn_header_size(h->version);
+    if (size < hsz) return MDN_ERR_TRUNCATED;
     /* Gate de ABI — IGUAL, no "menor o igual" (norma #284: el formato debe
      * COINCIDIR; si no, se recompila). El `>` de antes sólo protegía de los
      * .mdn del FUTURO y dejaba pasar los RANCIOS, que son el caso real: un
@@ -189,20 +216,44 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * .mdn no lleva la float-ABI (la del pack nativo si, y por eso los packs ya
      * la comprobaban), asi que aqui pasaba por la arch: se cargaba el bloque
      * embebido en el .mod y la placa se REINICIABA al ejecutarlo (Bench en el
-     * C6: sin EXITED, uptime a cero). Hasta que exista un destino `ilp32`, en un
-     * firmware RISC-V sin FPU ningun .mdn RISC-V vale por construccion: se
-     * rechaza con mensaje y la funcion sigue interpretada, que es correcto. */
+     * C6: sin EXITED, uptime a cero). Un .mdn v1 no dice su receta, y hasta V7
+     * solo se emitian para el P4: en un firmware RISC-V sin FPU ninguno vale
+     * por construccion — se rechaza con mensaje y la funcion sigue interpretada.
+     *
+     * [V7/H2, #441] SOLO para v1. Un v2 lleva la huella de su receta y lo juzga
+     * el gate de abajo: la de este firmware es `RV32IMC_ILP32` y la del P4
+     * `RV32IMAFC_ILP32F`, asi que el del P4 se rechaza igual (MDN_ERR_RECETA) y
+     * el dia que el IDE tenga el destino ilp32 su .mdn entra sin tocar nada. */
 #if defined(__riscv) && !defined(__riscv_float_abi_single) && !defined(__riscv_float_abi_double)
-    if (h->arch == MDN_ARCH_RISCV) {
-        log_printf("MDN: RECHAZADO — este firmware es RISC-V ilp32 (sin FPU) y el "
-                   ".mdn es del destino del P4 (ilp32f): se ignora y la funcion "
-                   "corre interpretada (#502)");
+    if (h->arch == MDN_ARCH_RISCV && h->version < 2) {
+        log_printf("MDN: RECHAZADO — este firmware es RISC-V ilp32 (sin FPU) y un "
+                   ".mdn v1 no dice su receta (hasta V7 solo los habia del P4, ilp32f): "
+                   "se ignora y la funcion corre interpretada (#502)");
         return MDN_ERR_ARCH;
     }
 #endif
 
+    /* [V7/H2, #441] EL GATE DE LA RECETA — tras el de arch (un blob de otra ISA
+     * se salta en silencio, es lo normal en un `.mod` multifamilia; uno de la
+     * MISMA ISA con otros flags es el fallo real y se dice). El caso que lo
+     * motivó: `-mcmodel=medany` (#440) dejó inservibles todos los `.mdn` RISC-V
+     * ya generados, misma arch, misma fecha, y lo que fallaba era la placa,
+     * muda. Sin receta en este firmware (CRC 0: PC, Xtensa) no hay gate. */
+    {
+        uint32_t mia = bpvm_mdn_host_receta_crc();
+        if (h->version < 2) {
+            log_printf("MDN: sin huella de receta (formato v1) — se carga a ciegas; "
+                       "regenera el .mdn para que la lleve (#441)");
+        } else if (mia != 0 && h->flags_crc != mia) {
+            log_printf("MDN: RECHAZADO — receta %08x, este firmware es %s (%08x): "
+                       "el .mdn se compilo con OTROS FLAGS, hay que REGENERARLO (#441)",
+                       (unsigned) h->flags_crc, bpvm_mdn_host_receta_nombre(), (unsigned) mia);
+            return MDN_ERR_RECETA;
+        }
+    }
+
     /* Layout sanity. */
-    size_t hdr_total = sizeof(mdn_header_t)
+    size_t hdr_total = (size_t) hsz
                      + (size_t) h->sym_count * sizeof(mdn_symbol_t);
     if (size < hdr_total + h->code_size) return MDN_ERR_TRUNCATED;
 
@@ -223,7 +274,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * `.mod` no esta en la zona y pasa de largo igualmente. */
     const uint8_t*      code_base = bpvm_pack_exec_ptr(data + hdr_total);
     const mdn_symbol_t* syms      = (const mdn_symbol_t*)
-                                      (data + sizeof(mdn_header_t));
+                                      (data + hsz);
     int registered = 0;
     for (uint32_t i = 0; i < h->sym_count; i++) {
         uintptr_t thunk_addr = (uintptr_t)(code_base + syms[i].thunk_offset)

@@ -158,6 +158,12 @@ public final class NpackReloc {
          * .npk y la compara el dispositivo. Un desajuste NO da error: da
          * NUMEROS MAL, asi que sale de aqui y no de quien empaqueta. */
         public final String floatAbi;
+        /* [V7/H2, #441] LA RECETA del `.mdn` de este destino: el nombre del
+         * literal `BPVM_AOT_RECETA_<receta>` de bpgenvm-c/include/bpvm_aot_recetas.h
+         * (por juego de instrucciones y ABI, no por placa). Los flags NO viven
+         * aqui: el IDE los lee del `.h` en el momento y el firmware exige el
+         * CRC del mismo literal. Aqui solo se dice CUAL. */
+        public final String receta;
         public final int machine;          /* e_machine que debe traer el ELF */
         public final boolean rela;         /* true = addend explícito */
         public final List<String> flashSecs, dataSecs, bssSecs;
@@ -165,11 +171,11 @@ public final class NpackReloc {
         final Parcheador patch;
 
         Destino(String nombre, String sufijo, String targetAot, String floatAbi,
-                int machine, boolean rela,
+                String receta, int machine, boolean rela,
                 String[] flashSecs, String[] dataSecs, String[] bssSecs,
                 Integer[] ignorar, Parcheador patch) {
             this.nombre = nombre; this.sufijo = sufijo; this.targetAot = targetAot;
-            this.floatAbi = floatAbi;
+            this.floatAbi = floatAbi; this.receta = receta;
             this.machine = machine; this.rela = rela;
             this.flashSecs = Arrays.asList(flashSecs);
             this.dataSecs  = Arrays.asList(dataSecs);
@@ -181,7 +187,8 @@ public final class NpackReloc {
 
     /** ARM Cortex-M33 (ARMv8-M Mainline, FPU simple): Metro RP2350 y STM32. */
     public static final Destino ARM_CORTEX_M33 = new Destino(
-            "arm-cortex-m33", "ARMV8", "arm", "softfp", Elf32Machine.ARM, /*rela*/ false,
+            "arm-cortex-m33", "ARMV8", "arm", "softfp", "ARMV8M_MAIN_SOFTFP",
+            Elf32Machine.ARM, /*rela*/ false,
             new String[]{".text", ".rodata"},
             new String[]{".data"},
             new String[]{".bss"},
@@ -193,7 +200,8 @@ public final class NpackReloc {
 
     /** RISC-V RV32 del ESP32-P4 (ilp32f). */
     public static final Destino RISCV32_ESP_P4 = new Destino(
-            "riscv32-esp-p4", "RISCV", "riscv", "ilp32f", Elf32Machine.RISCV, /*rela*/ true,
+            "riscv32-esp-p4", "RISCV", "riscv", "ilp32f", "RV32IMAFC_ILP32F",
+            Elf32Machine.RISCV, /*rela*/ true,
             /* `.eh_frame` viaja aunque nadie desenrolle: son unos cientos de
              * bytes y asi la imagen de flash es LITERALMENTE lo que el
              * enlazador puso, sin huecos que justificar. */
@@ -262,6 +270,16 @@ public final class NpackReloc {
     }
 
     /** Por el sufijo de la doble extensión (`RISCV`), SIN el punto. */
+    /** [V7/H2, #441] El destino cuya receta es ésa (`ARMV8M_MAIN_SOFTFP`…), o null:
+     *  la placa publica su receta en el INFO y el IDE compila para ella; si no
+     *  hay destino (los C3/C6, `RV32IMC_ILP32`), mejor decirlo que compilar el del
+     *  P4 y que la placa lo rechace. */
+    public static Destino porReceta(String receta) {
+        if (receta == null) return null;
+        for (Destino d : DESTINOS) if (d.receta.equals(receta)) return d;
+        return null;
+    }
+
     public static Destino porSufijo(String s) {
         if (s == null) return null;
         for (Destino d : DESTINOS) if (d.sufijo.equals(s)) return d;

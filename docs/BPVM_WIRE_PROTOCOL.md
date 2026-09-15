@@ -204,12 +204,30 @@ Reply:
 {"type":"INFO_REPLY","id":N,
  "uniqueId":"164BCBA4363DA887",
  "boardName":"pico2",
+ "arch":40,
+ "aotReceta":"ARMV8M_MAIN_SOFTFP",
+ "aotFlagsCrc":100061591,
  "cpuFreqHz":150000000,
  "uptimeMs":12345,
  "tempC":43.5,
  "fsTotalBytes":131072,
  "fsUsedBytes":18432}
 ```
+
+Los campos **comunes** los pone `src/bpvm_repl.c` a partir de la struct que
+rellena cada familia (`bpvm_repl_info_t`); lo propio de una familia entra por
+`info_extra`. Tres de ellos describen **el código nativo que esta imagen puede
+ejecutar**, y el IDE los usa para compilar a la ISA correcta y no subir un `.mdn`
+que la placa rechazaría:
+
+| campo | quién lo sabe | qué es |
+|---|---|---|
+| `arch` | la familia (`bpvm_mdn_host_arch()`) | `e_machine` del ELF: 40 ARM · 243 RISC-V · 94 Xtensa · 0 = sin nativo |
+| `aotReceta` | el común, compile-time | **V7/H2 (`#441`)**: la receta de `bpvm_aot_recetas.h` que este firmware exige (`ARMV8M_MAIN_SOFTFP`, `RV32IMAFC_ILP32F`, `RV32IMC_ILP32`); `""` donde no hay (PC, Xtensa) |
+| `aotFlagsCrc` | el común, compile-time | CRC32 IEEE del literal de esa receta, **sin signo** (0 sin receta); es lo que la cabecera v2 del `.mdn` lleva en `flags_crc` |
+
+Un firmware de antes de V7/H2 no manda `aotReceta`/`aotFlagsCrc`: el IDE lee por
+nombre y distingue «ausente» (firmware viejo: no compara) de «vacío» (sin receta).
 
 #### `TIME` (request)
 

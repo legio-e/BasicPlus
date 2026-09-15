@@ -46,22 +46,31 @@ public final class AotBuild {
 
     private AotBuild() {}
 
-    /** Flags fijos del target "arm" = Cortex-M33 (RP2350 + STM32: mismo .mdn
-     *  PIC). DEBEN coincidir con bpgenvm-c/pico/build_mdn.sh y con el loader del
-     *  firmware — si cambian aquí sin cambiar allí, el .mdn no será cargable. */
-    private static final String[] ARM_M33_FLAGS = {
-        "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=softfp", "-mfpu=fpv5-sp-d16",
-        "-fpic", "-fno-jump-tables", "-Os",
-    };
-
-    /** Flags de compilación del target "riscv" = ESP32-P4 (RV32IMAFC).
+    /* ═══ [V7/H2, #441] LOS FLAGS YA NO VIVEN AQUÍ ═══════════════════════════
+     *
+     * Aquí había dos arrays (`ARM_M33_FLAGS`, `RISCV_P4_FLAGS`) con un aviso:
+     * «DEBEN coincidir con build_mdn.sh y con el loader del firmware». Tres
+     * sitios para el mismo dato y NADIE que los comparara: el 17-ago añadir
+     * `-mcmodel=medany` dejó inservibles todos los `.mdn` RISC-V ya generados
+     * sin que ni el gate de `arch` ni las fechas lo vieran.
+     *
+     * Ahora la ÚNICA fuente es `bpgenvm-c/include/bpvm_aot_recetas.h`: una
+     * receta por juego de instrucciones y ABI (`ARMV8M_MAIN_SOFTFP`,
+     * `RV32IMAFC_ILP32F`), que el IDE parsea aquí ({@link basicplus.frontend.AotRecetas})
+     * y el firmware hashea con las macros de su ISA. El `.mdn` (v2) lleva el CRC32
+     * del literal; la placa rechaza el que no coincide y lo publica en el INFO
+     * (`aotReceta`/`aotFlagsCrc`) para que el IDE no lo suba.
+     *
+     * Qué receta usa cada destino lo dice `NpackReloc.Destino.receta`. Lo que
+     * sigue es la HISTORIA de por qué cada flag está en la receta de RISC-V —
+     * se queda, porque cada uno costó un cuelgue mudo.
      *
      *  ⚠️ Este comentario decía que NO hacía falta fijar `-march`/`-mabi` porque
      *  «casan por construcción». Era falso y costó un cuelgue — ver la nota larga
-     *  sobre {@link #RISCV_P4_FLAGS}. A diferencia de ARM, el .text
+     *  de abajo (25-ago). A diferencia de ARM, el .text
      *  RISC-V NO sale autocontenido (la llamada recursiva, refs PC-relativas dejan
      *  relocalizaciones que MdnPack no resuelve) → hace falta el paso de enlace
-     *  (RISCV_LINK_FLAGS). -mno-relax evita las relocs de relajación.
+     *  (LINK_FLAGS_COMUNES + `--no-relax`). -mno-relax evita las relocs de relajación.
      *
      *  #440 — `-mcmodel=medany` NO es opcional: es lo que hace el .mdn cargable
      *  fuera de la dirección 0. Enlazar a -Ttext=0 deja relativos los SALTOS,
@@ -104,15 +113,17 @@ public final class AotBuild {
      * 📌 No se copia la cadena entera del firmware: lleva extensiones propias de
      * Espressif (`xesploop`, `xespv`) que el `.mdn` no necesita. Lo que tiene que
      * casar es lo que decide la ABI y el repertorio: `imafc` + `ilp32f`. */
-    private static final String[] RISCV_P4_FLAGS = {
-        "-march=rv32imafc_zicsr_zifencei", "-mabi=ilp32f",
-        "-fno-pic", "-mcmodel=medany", "-mno-relax", "-fno-jump-tables", "-Os",
-    };
 
     /** Para `AotRiscvPicSmoke`, que compila el mismo `.c` con y sin `medany`:
-     *  los flags los coge de aquí para que el experimento use los REALES y no
-     *  una copia que se quede rancia. */
-    static String[] flagsRiscvParaPruebas() { return RISCV_P4_FLAGS.clone(); }
+     *  los flags salen de la receta REAL del `.h` (la del destino RISC-V), no de
+     *  una copia que se quede rancia. Falla si no se encuentra bpgenvm-c. */
+    static String[] flagsRiscvParaPruebas() throws IOException {
+        String bpgenvm = resolveBpgenvm(null, null);
+        if (bpgenvm == null) throw new IOException("no encuentro la raíz de bpgenvm-c (las recetas del .mdn)");
+        basicplus.frontend.AotRecetas r = basicplus.frontend.AotRecetas.deBpgenvm(Paths.get(bpgenvm));
+        return basicplus.frontend.AotRecetas.flags(
+                r.exigir(basicplus.frontend.NpackReloc.RISCV32_ESP_P4.receta));
+    }
 
     /** Paso EXTRA de RISC-V (bifurcación A, decidida con Eduardo): enlazar el .o a
      *  -Ttext=0 resolviendo las relocalizaciones internas PC-relativas → el .text
@@ -130,12 +141,6 @@ public final class AotBuild {
         "-Wl,--unresolved-symbols=ignore-all", "-Wl,-e,0",
     };
 
-    private static final String[] RISCV_LINK_FLAGS = {
-        "-nostdlib", "-nostartfiles",
-        "-Wl,--no-relax", "-Wl,--unresolved-symbols=ignore-all",
-        "-Wl,-Ttext=0", "-Wl,-e,0",
-    };
-
     /**
      * UNA FAMILIA: su toolchain y sus flags. Lo demás —el nombre canónico y el
      * sufijo de la doble extensión— sale del catálogo de
@@ -146,11 +151,14 @@ public final class AotBuild {
     private static final class Familia {
         final basicplus.frontend.NpackReloc.Destino destino;
         final String   gcc;
-        final String[] cflags;
+        final String   receta;       /* [V7/H2, #441] el literal del .h: se hashea en la cabecera */
+        final String[] cflags;       /* la receta partida, para gcc */
         final boolean  enlazar;      /* #428 — hoy SIEMPRE: ver LINK_FLAGS_COMUNES */
         Familia(basicplus.frontend.NpackReloc.Destino d, String gcc,
-                String[] cflags, boolean enlazar) {
-            this.destino = d; this.gcc = gcc; this.cflags = cflags; this.enlazar = enlazar;
+                String receta, boolean enlazar) {
+            this.destino = d; this.gcc = gcc; this.receta = receta;
+            this.cflags = basicplus.frontend.AotRecetas.flags(receta);
+            this.enlazar = enlazar;
         }
         String target() { return destino.targetAot; }
         String sufijo() { return destino.sufijo; }
@@ -251,6 +259,28 @@ public final class AotBuild {
                                 IdePrefs prefs, Consumer<String> log) {
         Result res = new Result();
 
+        /* La raíz de bpgenvm-c va PRIMERO: de ahí salen los includes nativos y,
+         * desde V7/H2 (#441), las recetas de compilación de cada destino. */
+        String bpgenvm = resolveBpgenvm(prefs, outDir);
+        if (bpgenvm == null) {
+            res.toolchainMissing = true;
+            String w = "AOT: no encuentro la raíz de bpgenvm-c (includes nativos). "
+                + "Configúrala en Ajustes → AOT. El proyecto se ejecutará interpretado.";
+            res.warnings.add(w);
+            log.accept("[aot] " + w);
+            return res;
+        }
+        basicplus.frontend.AotRecetas recetas;
+        try {
+            recetas = basicplus.frontend.AotRecetas.deBpgenvm(Paths.get(bpgenvm));
+        } catch (IOException e) {
+            res.toolchainMissing = true;
+            String w = "AOT: " + e.getMessage() + ". Los módulos se ejecutarán interpretados.";
+            res.warnings.add(w);
+            log.accept("[aot] " + w);
+            return res;
+        }
+
         List<Familia> familias = new ArrayList<>();
         for (String target : targets) {
             basicplus.frontend.NpackReloc.Destino d =
@@ -269,23 +299,24 @@ public final class AotBuild {
              * un literal de cadena: el literal se queda en `.rodata`, fuera de
              * lo único que un `.mdn` se lleva. El guión de enlace lo mete
              * DENTRO de `.text`, y eso hace falta en las dos familias. */
+            String receta;
+            try {
+                receta = recetas.exigir(d.receta);
+            } catch (IOException e) {
+                String w = "AOT: " + e.getMessage() + ". Los módulos se ejecutarán interpretados.";
+                res.warnings.add(w);
+                log.accept("[aot] " + w);
+                return res;
+            }
+            log.accept(String.format("[aot] %s: receta %s (huella %08x) de %s", d.targetAot,
+                    d.receta, basicplus.frontend.AotRecetas.crc(receta), recetas.origen().getFileName()));
             familias.add(new Familia(d,
                     riscv ? resolveRiscvGcc(prefs) : resolveGcc(prefs),
-                    riscv ? RISCV_P4_FLAGS : ARM_M33_FLAGS,
+                    receta,
                     /*enlazar*/ true));
         }
         if (familias.isEmpty()) {
             log.accept("[aot] no se ha dicho para qué familia compilar");
-            return res;
-        }
-
-        String bpgenvm = resolveBpgenvm(prefs, outDir);
-        if (bpgenvm == null) {
-            res.toolchainMissing = true;
-            String w = "AOT: no encuentro la raíz de bpgenvm-c (includes nativos). "
-                + "Configúrala en Ajustes → AOT. El proyecto se ejecutará interpretado.";
-            res.warnings.add(w);
-            log.accept("[aot] " + w);
             return res;
         }
 
@@ -414,7 +445,7 @@ public final class AotBuild {
             // 2c) MdnPack → .mdn.
             /* [V6/N1.4] El empaquetado se hace EN MEMORIA y de ahí salen las DOS
              * cosas, sin releer nada del disco. Idea de Eduardo. */
-            MdnPack.Empaquetado emp = MdnPack.empaquetar(packInput, mod);
+            MdnPack.Empaquetado emp = MdnPack.empaquetar(packInput, mod, f.receta);
             MdnPack.PackResult pr = emp.resultado;
 
             /* [25-ago-2026] AQUEL «se invierte hasta que el .mdn suelto
@@ -435,7 +466,7 @@ public final class AotBuild {
                 byte[] fundido = edu.bpgenvm.bytecode.ModFormat.conBloqueNativo(antes, emp.bytes);
                 java.nio.file.Files.write(modFile, fundido);
                 log.accept("[aot] " + modFile.getFileName() + " lleva dentro el nativo de "
-                    + f.target() + " (" + emp.bytes.length + " B, .mod v7 — "
+                    + f.target() + " (" + emp.bytes.length + " B, sección native — "
                     + antes.length + " -> " + fundido.length + " B)");
             } else {
                 log.accept("[aot] aviso: no encuentro " + modFile.getFileName()
@@ -500,7 +531,7 @@ public final class AotBuild {
                 "AOT " + mod + " (" + f.target() + "): el .o direcciona datos en ABSOLUTO ("
                 + abs + " relocalización(es) R_RISCV_HI20/LO12). El .mdn se carga en"
                 + " cualquier dirección, así que en la placa saldría un puntero salvaje"
-                + " y un cuelgue mudo. Falta '-mcmodel=medany' en RISCV_P4_FLAGS (#440).");
+                + " y un cuelgue mudo. Falta '-mcmodel=medany' en la receta RISC-V de bpvm_aot_recetas.h (#440).");
         }
     }
 

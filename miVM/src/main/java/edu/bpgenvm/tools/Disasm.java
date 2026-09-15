@@ -204,8 +204,9 @@ public class Disasm {
             if (mdn != null) {
                 out.println();
                 out.printf ("=== COMPANION .mdn (\"%s\") ===%n", mdn.path);
-                out.printf ("  magic         MDN/%d  abi=%d%n",
-                            mdn.version, mdn.abiVersion);
+                out.printf ("  magic         MDN/%d  abi=%d%s%n",
+                            mdn.version, mdn.abiVersion,
+                            mdn.version >= 2 ? String.format("  receta=%08x", mdn.flagsCrc) : "  (v1, sin huella de receta)");
                 out.printf ("  code_size     %d bytes (Thumb-2 PIC)%n", mdn.codeSize);
                 out.printf ("  symbols       %d%n", mdn.symbols.size());
                 for (MdnSymbol s : mdn.symbols) {
@@ -239,7 +240,7 @@ public class Disasm {
         int pos = (4 - (offsetEnFichero & 3)) & 3;   // relleno inicial: hasta el múltiplo de 4 ABSOLUTO
         if (pos > 0) out.add(String.format("(%d B de relleno: la sección empieza en +%d del fichero)", pos, offsetEnFichero));
         int n = 0;
-        while (pos + MDN_HEADER_SIZE <= sec.length) {
+        while (pos + MDN_HEADER_SIZE_V1 <= sec.length) {
             if (sec[pos] == 0 && pos + 4 <= sec.length) {          // relleno entre blobs / cola
                 boolean todoCero = true;
                 for (int i = pos; i < sec.length; i++) if (sec[i] != 0) { todoCero = false; break; }
@@ -255,12 +256,16 @@ public class Disasm {
             int codeSize = bb.getInt(pos + 8);
             int symCount = bb.getInt(pos + 12);
             int arch     = bb.getInt(pos + 16);
-            long total   = (long) MDN_HEADER_SIZE + (long) symCount * MDN_SYM_SIZE + codeSize;
+            int hdr      = mdnHeaderSize(version);                 // V7/H2 (#441): v1 20 B, v2 24 B
+            long total   = (long) hdr + (long) symCount * MDN_SYM_SIZE + codeSize;
             long alineado = (total + 3) & ~3L;
             // mdn_format.h: MDN_ARCH_NONE=0 (legacy ARM), ARM=40 (EM_ARM), RISCV=243 (EM_RISCV), XTENSA=94
             String archStr = (arch == 40) ? "ARM" : (arch == 243) ? "RISCV" : (arch == 94) ? "XTENSA" : (arch == 0) ? "NONE(legacy ARM)" : String.valueOf(arch);
-            out.add(String.format("blob %d @+%d: MDN v%d abi=%d arch=%s symbols=%d code=%d bytes (total %d, alineado %d)",
-                    n, pos, version, abi, archStr, symCount, codeSize, total, alineado));
+            // la huella de la receta (v2): el firmware la compara con la de bpvm_aot_recetas.h
+            String receta = (version >= 2 && pos + hdr <= sec.length)
+                    ? String.format(" receta=%08x", bb.getInt(pos + 20)) : " sin-huella(v1)";
+            out.add(String.format("blob %d @+%d: MDN v%d abi=%d arch=%s%s symbols=%d code=%d bytes (total %d, alineado %d)",
+                    n, pos, version, abi, archStr, receta, symCount, codeSize, total, alineado));
             if (pos + total > sec.length) { out.add("  ¡truncado! la cabecera pide más de lo que hay en la sección"); return out; }
             pos += (int) alineado;
             n++;
@@ -638,9 +643,15 @@ public class Disasm {
     /*    code (code_size bytes — Thumb-2 PIC)                       */
     /* ============================================================ */
 
-    private static final int MDN_HEADER_SIZE = 20;
+    private static final int MDN_HEADER_SIZE_V1 = 20;   /* sin huella de receta */
+    private static final int MDN_HEADER_SIZE_V2 = 24;   /* V7/H2 (#441): + flags_crc u32 */
     private static final int MDN_NAME_MAX    = 32;
     private static final int MDN_SYM_SIZE    = MDN_NAME_MAX + 4;
+
+    /** Bytes de cabecera que hay de verdad en el fichero, según su versión (mdn_format.h). */
+    private static int mdnHeaderSize(int version) {
+        return version >= 2 ? MDN_HEADER_SIZE_V2 : MDN_HEADER_SIZE_V1;
+    }
 
     private static final class MdnSymbol {
         final String name;
@@ -655,13 +666,15 @@ public class Disasm {
         final String path;
         final int version;
         final int abiVersion;
+        final int flagsCrc;     /* V7/H2 (#441): solo v2; 0 en v1 */
         final int codeSize;
         final List<MdnSymbol> symbols;
-        MdnInfo(String path, int version, int abiVersion, int codeSize,
+        MdnInfo(String path, int version, int abiVersion, int flagsCrc, int codeSize,
                 List<MdnSymbol> symbols) {
             this.path = path;
             this.version = version;
             this.abiVersion = abiVersion;
+            this.flagsCrc = flagsCrc;
             this.codeSize = codeSize;
             this.symbols = symbols;
         }
@@ -700,7 +713,7 @@ public class Disasm {
 
         try {
             byte[] all = Files.readAllBytes(mdnFile.toPath());
-            if (all.length < MDN_HEADER_SIZE) {
+            if (all.length < MDN_HEADER_SIZE_V1) {
                 throw new IOException("tamaño < header (" + all.length + ")");
             }
             ByteBuffer bb = ByteBuffer.wrap(all).order(ByteOrder.LITTLE_ENDIAN);
@@ -711,8 +724,10 @@ public class Disasm {
             int abiVersion = bb.getShort(6) & 0xFFFF;
             int codeSize   = bb.getInt(8);
             int symCount   = bb.getInt(12);
-            // bb.getInt(16) = _reserved (ignorado)
-            long needed = (long) MDN_HEADER_SIZE
+            // bb.getInt(16) = arch; bb.getInt(20) = flags_crc (solo v2)
+            int hdr = mdnHeaderSize(version);
+            if (all.length < hdr) throw new IOException("tamaño < header v" + version + " (" + all.length + ")");
+            long needed = (long) hdr
                         + (long) symCount * MDN_SYM_SIZE
                         + (long) codeSize;
             if (all.length < needed) {
@@ -721,7 +736,7 @@ public class Disasm {
             }
             List<MdnSymbol> syms = new ArrayList<>(symCount);
             for (int i = 0; i < symCount; i++) {
-                int symOff = MDN_HEADER_SIZE + i * MDN_SYM_SIZE;
+                int symOff = hdr + i * MDN_SYM_SIZE;
                 int nameLen = 0;
                 while (nameLen < MDN_NAME_MAX && all[symOff + nameLen] != 0) nameLen++;
                 String n = new String(all, symOff, nameLen, StandardCharsets.UTF_8);
@@ -729,7 +744,7 @@ public class Disasm {
                 syms.add(new MdnSymbol(n, off));
             }
             return new MdnInfo(mdnFile.getPath(), version, abiVersion,
-                                codeSize, syms);
+                                version >= 2 ? bb.getInt(20) : 0, codeSize, syms);
         } catch (IOException ioe) {
             throw new IllegalArgumentException(
                     "fallo leyendo companion .mdn: " + ioe.getMessage(), ioe);

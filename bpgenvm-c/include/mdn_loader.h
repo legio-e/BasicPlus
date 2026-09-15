@@ -33,6 +33,7 @@ extern "C" {
 #define MDN_ERR_TOO_LARGE  -4   /* code section excede el pool */
 #define MDN_ERR_TRUNCATED  -5   /* size < layout esperado */
 #define MDN_ERR_ARCH       -6   /* arch del .mdn != arch del firmware (H4 gate) */
+#define MDN_ERR_RECETA     -7   /* [V7/H2, #441] flags_crc != el de la receta de este firmware */
 
 /* Carga un .mdn ya en memoria (data + size).
  * Tras OK, los símbolos están registrados en el aot_registry y
@@ -55,6 +56,14 @@ uint16_t bpvm_mdn_host_arch(void);
  * enlace — da números mal en silencio. El IDE la necesita para sellar el pack
  * nativo. Nunca NULL. */
 const char* bpvm_mdn_host_float_abi(void);
+
+/* [V7/H2, #441] LA RECETA de este firmware: el nombre (`ARMV8M_MAIN_SOFTFP`,
+ * `RV32IMAFC_ILP32F`…, "" si esta ISA no tiene receta — PC, Xtensa) y el CRC32
+ * del literal de `bpvm_aot_recetas.h` (0 sin receta). Es lo que el cargador
+ * exige a un `.mdn` v2, y lo publica el INFO (`aotReceta`/`aotFlagsCrc`) para
+ * que el IDE compile con la misma y no suba uno de otra. */
+const char* bpvm_mdn_host_receta_nombre(void);
+uint32_t    bpvm_mdn_host_receta_crc(void);
 
 /* Legacy del approach con copy/pool. Hoy son no-ops — el registry
  * se limpia vía bpvm_aot_clear() (del aot_registry) y no hay pool

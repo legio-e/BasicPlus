@@ -2617,6 +2617,22 @@ public class FrmMain extends javax.swing.JFrame
                 ? PicoExplorer.archName(picoExplorer.deviceArch()) : "";
         boolean haveProject = currentProject != null;
         if (haveProject && !currentProject.aotEnabled) return;   // apagado a propósito
+        /* V7/H2 (#441) — y si la placa dice su RECETA, manda ella sobre la arch:
+         * dentro de RISC-V, el P4 (ilp32f) y los C3/C6 (ilp32) son la misma
+         * `arch` y NO ejecutan el mismo código. Con la receta se compila para
+         * el destino exacto; y si el IDE no tiene destino para esa receta, se
+         * dice aquí en vez de compilar el del P4 para que la placa lo rechace. */
+        String deviceReceta = picoExplorer != null ? picoExplorer.deviceReceta() : "";
+        if (deviceReceta != null && !deviceReceta.isEmpty()) {
+            basicplus.frontend.NpackReloc.Destino d = basicplus.frontend.NpackReloc.porReceta(deviceReceta);
+            if (d == null) {
+                log.accept("== AOT: la placa exige la receta " + deviceReceta
+                        + " y el IDE no tiene destino para ella (#502): las funciones "
+                        + "`native` se ejecutan INTERPRETADAS ==\n");
+                return;
+            }
+            deviceTarget = d.targetAot;
+        }
         String target = !deviceTarget.isEmpty() ? deviceTarget
                       : haveProject ? currentProject.aotTarget : "";
         if (target == null || target.isEmpty()) {
