@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **33** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **35** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): `#521` `#522` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#520` |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` `#521` (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -309,6 +309,70 @@ firma** (`__cls_s_<Cls>#m$firma`); pero la ranura de vtable de un método de ins
 ranura y no se puede llamar), o que la clave de vtable sea por firma en los dos lados. Test en la matriz con una
 sobrecarga no exportable en la CABEZA. Silencioso: salta la cola.
 
+### 🔬 15-sep (tarde) — EL MAPA VERIFICADO (5 lectores + 4 refutadores + crítico, `C:/tmp/v7_514/`): la ficha se quedaba corta, y es la familia entera
+
+**Paridad byte-idéntica en todos los casos** (miVM = VM-C, exit 0): el fallo es del compilador con LA MISMA clase, no
+de una versión distinta. **Tres cálculos que tienen que coincidir**: la vtable la da `computeClassLayout`
+(`ModuleInterface.java:989-1018`, `names` = índice → ranura, entra lo que `esVirtual()` = `!isPrivate || isEventHandler`,
+`Symbol.java:225`); la interfaz la escribe **otro** recorrido (`extractClass:522-549`: salta `private` **sin aviso**
+(`:538`), salta `signatureIssue` con aviso, y `FuncSig` no lleva ni clave ni ranura — `FieldSig` sí, `:189-198`); y el
+consumidor **reconstruye** contando lo que ve (`Main.java:2371-2409`: la «1ª firma» es la 1ª que VE → nombre pelado;
+`sembrarSlotsDeVtable:1935-1945` = `next++`). El marcador `Mod.Cls#clave#slot` (`MivmEmitter.java:4270-4289`; miVM
+`ModuleManager.java:1002-1011`, VM-C `link.c:138-209`) compara la cadena literal: una reconstrucción equivocada de
+forma consistente **pasa**. Medido, cada uno en las dos VMs:
+
+- **Enum de cabeza** (la ficha): dueño `Base#m#2 Base#m$i#3`; el consumidor pide `Base#m#2` → `100`. Silencioso.
+  Con la enum EN MEDIO o con un método DETRÁS → error de enlace «¿versión vieja?» (por el método equivocado).
+- **`private` a secas de cabeza: NO es silencioso** (la ficha lo decía): no ocupa ranura, el dueño exporta
+  `Base#m$i#2`, el consumidor pide `Base#m#2` → error de enlace. Ruidoso y engañoso, pero ruidoso.
+- **`private function event` de cabeza** (ocupa ranura y **no se publica ni se avisa**, `:538`): `100` silencioso; con
+  `m(v: long)` detrás muere «No space in heap» en las dos VMs. Delante de otros métodos → error de enlace; detrás →
+  correcto por los `__inhN`. El comentario de `cruzarSlots` (`Main.java:1960-1969`) cita la regla mal
+  (`isPublic ||` → `!isPrivate ||`) y el de `ModuleInterface.java:531-535` («lo private no ocupa ranura») es falso
+  para el manejador.
+- **Property de tipo no exportable**: se omite y sus DOS accesores ocupan ranura → error de enlace en todo lo de
+  detrás (`Base#getTono#2 Base#setTono#3`, el consumidor pide `despues#2`).
+- **Override en una hija cross-module** con enum de cabeza omitida y nada detrás: el override cae en la ranura del
+  enum (`Hija#m#2`), `m$i` queda sin sobreescribir; `this.m(ROJO)` desde la base sobre una Hija ejecuta
+  `Hija.m(integer)` con `v=0`, y `this.m(4)` no ve el override. Compila y enlaza limpio. **El más grave.**
+- **Bug hermano SIN omisión**: una hija importada que sobrecarga un nombre HEREDADO (`m(string)` sobre
+  `Base.m(int)`) o que sobreescribe sólo una sobrecarga no cabeza, consumida por un TERCER módulo: el importador le
+  da clave pelada `m` (`Main.java:2395` sólo mira los miembros propios del stub) → la toma por override de la
+  heredada → `m0.m("z")` ejecuta `A.Base.m(integer)` con basura (`v=284`), o «el receptor no es un objeto». Y
+  `assignKeysInClass` (`SemanticAnalyzer.java:1403`) **re-manglea los stubs** por posición (`keysAssigned` sólo se
+  pone ahí): con hija salta «método externo no encontrado en stub: Media.m$s», sin hija despacha mal.
+- **Funciones de MÓDULO sobrecargadas** con cabeza omitida (`public f(c: Color)` + `f(int)`; o `function g(s)` no
+  pública + `public g(int)`): `f(4)` = `100`, `g(4)` = `200`. Sin marcador ni aviso. No estaba en ninguna ficha.
+- **Evento opaco** (firma con enum): cruza `event cambio() recv N opaque`, `externalOpaque` se escribe
+  (`Main.java:2362`) y **nadie lo lee**: un handler `()` se suscribe, compila, y al disparar el frame se corrompe en
+  las dos VMs. El precedente exacto de «opaco sin guardián».
+- Estáticos con enum de cabeza: `4`, correcto (el cierre del 14-sep, alias por firma, verificado en presente).
+- **La stdlib no tiene el patrón** (28/28, 0 «omitidas», 0 enums, 0 `private`, 0 `function event`; las sobrecargas
+  de instancia todas con cabeza pública: `Core.List.add` ×6, `Orm.Where.*`). Ningún caso del corpus ni de la matriz
+  `#492` (`HerenciaCrossModuleTest`) tiene enum como parámetro ni cabeza omitida — por eso 193/193 y 68/68 en verde.
+- El sidecar `.slots` (`Main.java:796-808`) va por nombre y cabeza: `"m": 2, "m": 2` con sobrecarga; `bpstdlib/Core.slots`
+  (18-ago) ya no coincide con los marcadores. Su único consumidor sería el IDE (Forms); nadie lo ejecutó.
+
+**Lo que las propuestas de la ficha no cierran**: «`method m(?) opaque`» abortaría en todo lector (bien) pero sin
+clave+ranura no sirve — el importador **no puede recalcular la clave** de una firma que no ve (el mangle del stub se
+calcula ANTES de resolver tipos: `L<nombre>;` vs `E<nombre>;`, medido con un `.mod` parcheado) — y no cubre al
+hermano ni a las funciones de módulo. «Clave por firma en los dos lados» convierte los silenciosos en errores de
+enlace pero no publica la ranura: los desplazamientos siguen, y cambia los marcadores de 20 módulos de stdlib.
+
+⏭️ **La forma que cierra la causa (C, en `V7_IDEAS.md` §H2.6)**: la interfaz publica, por cada ranura PROPIA, su
+**clave y su número** (`method m(v:integer):integer public key m$i slot 3`), lo que no puede describir viaja `opaque`
+con clave y ranura (como `event … recv N opaque` y `field … slot n`), **escrito desde `computeClassLayout`** (un solo
+recorrido), las properties con sus dos ranuras, `func` de módulo con su clave; el importador **copia** (`slotKey`
+del texto, `externalMethodSlots.put` directo; opaca → sólo el mapa, sin `FunctionSymbol`), `assignKeysInClass` salta
+los stubs, `cruzarSlots` comprueba por fin «sin huecos hasta `numMethods`», y opaco = no invocable ni sobreescribible
+**con guardián** (la lección del evento). Las VMs no cambian. Las filas nuevas de la matriz, **con ejecución** en
+las dos VMs (hoy sólo compila): enum cabeza + consumidor, + hija con override, property no exportable delante,
+manejador privado delante y detrás, hermano (hija importada consumida por un tercero), enum en medio, evento opaco
+suscrito, `f`/`g` de módulo; un caso al corpus. El hermano, las funciones de módulo y el evento opaco **se absorben
+aquí** (mismo arreglo) salvo que Eduardo prefiera ficha propia. Un `.mod` con errores del emisor sigue
+escribiéndose y corre con basura idéntica en las dos VMs: `#521`. **Pendiente de la decisión de Eduardo sobre §H2.6**
+(la fragilidad de la tabla: C, enlace tardío, o una tabla por nivel).
+
 #### 🔴 `#515` — la VISIBILIDAD de un constructor no se comprueba en ningún sitio: un `private function Base(s: string)` se construye desde `main` del propio módulo, y desde otro módulo (`ctor+` lo publica) y con `super("h")` (abierta 14-sep, de la revisión adversarial; preexistente; H1)
 
 **Medido** (`C:/tmp/v7_rev/refuta-semantico-resolucion/h2`, y con V6): `checkVisibility` sólo se invoca en accesos a
@@ -324,6 +388,23 @@ private = sólo la propia clase?), llevar la marca en `ctor(...)`, y `checkVisib
 módulo importado no expone 'Base'»); con el orden inverso, cruza sin la firma del enum. El aviso «omitidas en
 interfaz» sólo lo ve quien compila el dueño. ⏭️ Exportar `EnumType` en firmas (el enum ya viaja como `enum Color
 public`, con sus valores) — cierra también la mitad «tipo no exportable» de `#514`.
+
+**El mapa (15-sep, tarde; el mismo de `#514`)**: `EnumType extends BpType` (no `ClassType`), `isReference()=false`
+(4 B, 1 slot), `sameAs` por identidad del `EnumSymbol` (`BpType.java:265-284`); el `EnumSymbol` **no sabe de qué
+módulo es** (`Symbol.java:560-568`); `typeCode` ya manglea `E<nombre>;` (`:361-362`). Tipado nominal cerrado (ni
+`==`/`+`/asignación con `integer`); `Mod.Color.X` se inlinea. **El consumidor ya nombra, declara, compara y hace
+`switch` con el enum ajeno** — lo único que no cruza son las firmas (`isExportableType:1057-1080` sin rama;
+`typeToString:1414` escribiría `void`; `parseType:1957-1966` convierte todo identificador en `UnresolvedClassRef`,
+8 B, y el importador resuelve **sólo** contra `ns.classes`, `Main.java:2856-2884`, nunca `ns.enums`). En la práctica el
+enum es **el único** tipo no exportable que existe (una clase no pública sí lo es, `:1064`). Medido con un `.mod`
+parcheado: publicar el enum por nombre en la cabeza da `4` (no perder la posición basta), pero en 2ª posición la
+clave `m$LColor;` ≠ `m$EColor;` → **el texto tiene que distinguir enum de clase** y el placeholder no puede ser una
+referencia. Laterales medidos que van a `#522`. El aviso «omitidas» va a stdout (`Main.java:1072`), no cuenta como
+diagnóstico, y en el build de un tiro sale como línea informativa. ⏭️ **E2** (`V7_IDEAS.md` §H2.6): rama `EnumType`
+en `isExportableType`/`typeToString`/`parseType` con marcador de enum en el texto, `EnumSymbol` con origen, resolución
+contra `ns.enums` (misma instancia, para que `sameAs` case), `decodeLiteral` para `const`; **enum de un tercer módulo
+que el consumidor no importa = error semántico** (un enum sin resolver empujaría 2 slots donde el dueño lee 1). El
+`return null` del ctor cabeza se queda: tras E2 no hay cabeza legítima que publicar opaca. 0 módulos de stdlib cambian.
 
 #### 🔴 `#517` — una clase con `sync property` y SIN ctor propio que hereda un ctor con argumentos: `S(5)` llama a `Base.__init` y el mutex nunca se inicializa → «INVOKE_VIRTUAL sobre null receiver» en las dos VMs (abierta 14-sep, de la revisión adversarial; preexistente; H1)
 
@@ -366,6 +447,23 @@ profundidad, la VM-C `first_missing`); entry inexistente: exit 1 en miVM, 2 en l
 «IO error» (`BPVM_FS_PATH_MAX`); (f) sin `--libdir`, `/app/X.mod` y `/lib/X.mod` son `fopen` literales de la unidad
 actual (`C:\lib`): un fichero ahí se cargaría (y avisaría). ⏭️ Una tanda de limpieza con un caso de paridad por
 rincón; la de `packResource` con `pack:` es la que toca al lenguaje.
+
+#### 🔴 `#521` — un `.mod` con ERRORES DEL EMISOR se escribe igual, dice «compilado:», enlaza y corre con basura idéntica en las dos VMs (abierta 15-sep, del mapa de `#514`; preexistente; H2)
+
+**Medido** (`C:/tmp/v7_514/rhija/5c`): «método externo no encontrado en stub: Media.m$s» sale por stderr, el `.mod` se
+escribe antes de contar los errores del emisor (`Main.java:1017-1025`) y `h.m("x") -> 288` en miVM y en la VM-C.
+Es «verificar el artefacto, no el log» al revés: el log dice error y el artefacto existe. ⏭️ No escribir (o borrar)
+el `.mod` si el emisor contó errores, y que el código de salida lo diga; un test que lo fuerce.
+
+#### 🔴 `#522` — enum: `"c=" + c` compila y REVIENTA EL HEAP en las dos VMs; `Color(1)` compila y devuelve basura; el orden de los valores en la interfaz es el de un `HashMap` (abierta 15-sep, del mapa de `#516`; preexistente; H1)
+
+**Medido** (`C:/tmp/v7_514/r516/`): `coerceToString` sin rama enum (`MivmEmitter.java:6029-6036`, `SemanticAnalyzer.java:3507`)
+→ `"c=" + c` compila y muere «No space in heap» / corrupción en las dos VMs; `analyzeCall:3331-3334` deja pasar
+`Color(1)` como llamada → `488`; `ModuleInterface.java:410-414` vuelca `es.values` (un `HashMap`) en la interfaz: el
+orden no es el de declaración ni es garantizado estable — importa para el determinismo del `ifaceCrc`. Y
+`PENDIENTES.md` M6 («const con enum requiere literal») es falso: `public const FAV := Color.VERDE` compila. ⏭️ Error
+de compilación en las dos mezclas (coherente con el tipo nominal cerrado), orden de declaración en la interfaz
+(`LinkedHashMap` desde el parser), y M6 fuera de `PENDIENTES`.
 
 #### 🔴 `#519` — un método `native` DE CLASE que el AOT no puede traducir compila sin ningún diagnóstico y corre interpretado; sólo avisa si el módulo tiene además alguna native de nivel módulo (abierta 14-sep, de la revisión adversarial; preexistente; H4/AOT)
 

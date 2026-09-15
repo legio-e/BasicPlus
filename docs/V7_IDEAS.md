@@ -975,3 +975,72 @@ prueba lo que se hizo, no lo que se quería.
    final, y mientras tanto se recompila lo necesario. Lo otro que toca el formato y podría subirse al mismo tren:
    `CALL_REL` (H7: el `CALL` local PC-relativo que retira la base `cb` transitoria del XIP) — es cambio de compilador y
    de las DOS VMs, más grande; se decide aparte.
+
+### 6. La fragilidad de la tabla (15-sep, tarde) — «llevamos cinco versiones dando vueltas a los slots»
+
+Eduardo, al ver el mapa de `#514`/`#516`: *«la tabla ha demostrado ser frágil frente a cambios de versiones. Deberíamos
+pensar en un mecanismo más robusto. No sé, igual en vez de una vtable deberíamos tener una por cada herencia»*. Y
+después, afinando: *«se juntan varias cosas. Siguiendo nuestra norma, el compilador puede resolver lo que sabe en tiempo
+de compilación. El problema aquí es que si se utiliza una clase diferente en runtime de la que utilizó el compilador el
+castillo de naipes se cae»*. Esto es lo que se junta, separado, con lo que el mapa midió (5 lectores + 4 refutadores +
+crítico, `C:/tmp/v7_514/`, 2,05 M tokens; el detalle en `FICHAS` `#514`).
+
+**La familia, por versiones**: `BUG-4` de V2 (1-jun: los privados desalineaban la vtable; se decidió «vtable = sólo
+públicos = exactamente el `.bpi`»), `#324` (los manejadores de evento), `#390` (tres visibilidades: lo protegido
+ocupa ranura y hay que publicarlo), `#392` (la hija con sobrecargas), `#393` (el guardián que sólo mira la mitad),
+`#451`, `#509`/`#513` (los constructores), `#518` (`library`), `#514`/`#516`. **Nueve fichas, un solo mecanismo.**
+
+**Son DOS fragilidades, y el mapa demuestra que la que nos ha mordido nueve veces es la primera:**
+
+1. **El compilador se equivoca con LA MISMA clase.** En todos los casos medidos de `#514` el `.mod` que corre es el
+   que el compilador usó —paridad byte-idéntica, exit 0— y aun así llama al método equivocado. No es una versión
+   distinta: es que la vtable la calcula un recorrido (`computeClassLayout`, la función única), la interfaz la escribe
+   **otro** (`extractClass` sobre el AST, con sus exclusiones), y el consumidor **reconstruye** las ranuras contando lo
+   que le llegó (`sembrarSlotsDeVtable`, posicional puro). Tres cálculos que tienen que coincidir por construcción, y
+   cada feature (eventos, `protected`, estáticos, sobrecargas, ctors) añadió una regla a un lado que los otros tenían
+   que imitar. Lo que el mapa midió que hoy se pierde: una firma con enum de cabeza (`100` en vez de `4`, silencioso);
+   un `private function event` delante (ocupa ranura y **no se publica ni se avisa**); una property de tipo no
+   exportable (dos ranuras); una hija importada que sobrecarga un nombre heredado, consumida por un tercero (silencioso
+   **sin ninguna omisión**: `Main.java:2395` sólo mira los miembros propios del stub); el override en una hija
+   cross-module cae en la ranura del enum omitido (el peor: `this.m(ROJO)` desde la base ejecuta `Hija.m(integer)`);
+   las funciones de MÓDULO sobrecargadas con cabeza omitida (`f(4)` = `100`, sin marcador); y un evento opaco al que
+   se puede suscribir (`externalOpaque` se escribe y nadie lo lee: el frame se corrompe en las dos VMs). El marcador
+   `Cls#clave#slot` comprueba una **coincidencia**: cuando la reconstrucción se equivoca de forma consistente, pasa.
+
+2. **En runtime hay otra clase que la que vio el compilador.** Es la que Eduardo nombra, y **desde el 15-sep tiene
+   respuesta completa en `#500`, por rechazo**: `gen` (más antigua → no), `ifaceCrc` (misma `gen` y otra interfaz →
+   no), regla 3 (un padre nunca más reciente que sus hijos → no), y para el uso puro de una dependencia más nueva, los
+   marcadores (una ranura que se movió no existe con ese nombre → error de enlace nombrándola). El castillo no se cae
+   en silencio: **se rechaza al cargar**. Lo que pasa es que **la reja aún no está en vigor**: la stdlib sigue en
+   MOD7 (`«sin datos de version»`) hasta que se haga la cadena. Nada de la familia de arriba se habría evitado con
+   ella: todos son «misma clase».
+
+**La norma, aplicada** (*«el compilador resuelve lo que sabe»*): lo que el compilador sabe de otro módulo es **una
+versión concreta de su interfaz**. Con eso sólo hay dos diseños coherentes: (a) **identidad o rechazo** — los
+números compilados valen para esa interfaz y para ninguna otra, y el runtime lo comprueba entero (`#500`); (b)
+**enlace tardío** — el `.mod` lleva nombres y el cargador construye las tablas contra la clase real (el modelo de
+Java). Lo frágil es el punto medio en el que llevamos cinco versiones: números + una comprobación parcial. Hoy ya
+estamos en (a) por diseño; falta que la comprobación sea **completa** y que el compilador no mienta.
+
+**Los tres caminos, con el censo delante:**
+
+| | C · la interfaz es la vtable | B · enlace tardío (Java) | T · una tabla por nivel (Eduardo) |
+|---|---|---|---|
+| qué cierra | la fragilidad 1 entera (las nueve de la familia, y las siete medidas del 15-sep) | la 1 y la 2: `Base` puede añadir métodos/campos sin recompilar hijos | la parte de MÉTODOS de la 2; los campos y el tamaño del objeto siguen horneados |
+| cómo | `method … key k slot n`; lo que no se puede describir viaja `opaque` con clave y ranura (como `event … recv N opaque` y `field … slot n`); la interfaz se escribe **desde `computeClassLayout`**, no desde un segundo recorrido; el consumidor **copia**, no cuenta; `cruzarSlots` comprueba «sin huecos hasta `numMethods`»; opaco = no invocable ni sobreescribible (con guardián) | el `.mod` lleva `(Clase, clave)` por llamada cross-module (los marcadores ya son ese mapa); el cargador copia la vtable del padre real, sustituye overrides por clave, añade lo propio, rebasa los campos del hijo y el `numFields`; las llamadas se resuelven a su ranura al enlazar (tabla de referencias en RAM: en XIP no se parchea código) | cada clase lleva una tabla por ancestro; la llamada codifica (clase declarante, índice); las tablas del padre se construyen igualmente al cargar (el hijo no sabe qué añadirá el padre) — es B con una indirección más por llamada y sin tabla de referencias |
+| VMs | **no cambian** (una ranura es un número en los dos lados) | cargador + enlazador de las DOS VMs, `INVOKE_VIRTUAL`/`GET_FIELD` por referencia (o parcheo en RAM), MOD9, el AOT (`slotOf` horneado en el `.mdn`) | como B, más el despacho nuevo del intérprete |
+| coste por llamada | igual | +1 acceso indexado (la tabla de referencias) | +1 indirección |
+| interfaz | claves y ranuras | sólo claves | sólo claves |
+| `#500` | se queda entera | regla 3 sobra; `ifaceCrc` deja de ser fatal | regla 3 sobra para métodos, no para campos |
+| tamaño | un día de compilador + stdlib regenerada + tests | días: cascada Java → C → Pico entera | como B |
+
+**Lo que cambia mi recomendación de la tarde** (dije «ir a enlace tardío directamente»): con el mapa delante, la
+robustez que pide Eduardo **no la da el enlace tardío, la da que la reja sea completa** — y `#500` ya lo es, por
+rechazo, en cuanto la cadena la ponga en vigor. El enlace tardío compra otra cosa: **compatibilidad binaria** (actualizar
+la stdlib sin recompilar las apps). Que haga falta depende del producto, no de la robustez: el usuario compila en el
+IDE contra la stdlib que viene con él, la imagen lleva el `Core` de esa misma versión, y un pack es autocontenido
+(`#493`) — la forma del producto **ya es (a)**. Y T es B con un coste más.
+
+⏭️ **Propuesta**: **C ahora** (es el arreglo de la causa, no del caso; `bpi 8` sigue abierto y la stdlib se rehace en
+la cadena de todas formas) + **la cadena** (que pone `#500` en vigor) = el bloque cerrado bajo la norma. **B queda
+escrita aquí** como el camino si algún día se quiere compatibilidad binaria; no es un pendiente. Decisión de Eduardo.
