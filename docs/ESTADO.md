@@ -27,6 +27,34 @@
 
 ## Última sesión
 
+## 🌗 `#493` CERRADA (15-sep, tarde-noche) — la zona de packs deja de disfrazarse de `/app`: un orden de módulos en las dos VMs, el aviso «tapa al de /lib», el XIP vuelve, un pack es un docker
+
+**Commits**: `a4cec0a3` (el grueso), `be7dc131` (STAT por nombre mira la zona), `6442b839` (los arreglos de la revisión
+adversarial). Método: mapa verificado (6 lectores + 5 refutadores + crítico, 3,2 M tokens) → las decisiones de Eduardo
+→ implementación → revisión adversarial (5 lentes + crítico, 1,6 M tokens) → 8 arreglos. **Lo que la revisión cazó y
+habría llegado a placa**: el principal de la zona daba `NOT_FOUND` por el wire (las cinco imágenes), un overlay sin
+apagar (use-after-free) que hacía mentir al STAT, `fileExists` ciego a la zona, un aviso falso al ejecutar desde `/lib`
+(paridad), y **miVM no ejecutaba ningún módulo con `library` que importara la stdlib** — preexistente, la VM de
+referencia derivaba la library al revés que el compilador y la VM-C, y ninguna red lo veía (ahora `libimport.bp` en
+el corpus). Detalle en la ficha.
+
+**Red al cierre**: paridad 68/68, cápsula 59/59, norma 9/9, **sombra 12/12** (nuevo `check-sombra`, con el wire contra
+el sim por `compat/sim_sombra.py`), miVM 40/40, frontend 193/193, test-fsfb/packres/packskip/pack (rotos desde el
+31-ago, enlazan otra vez), test-modhdr/mdnreceta/npack/loaderr/sim-smoke; los cinco firmwares compilan. Fichas:
+`#493` ✅, `#520` abierta (los rincones preexistentes de la resolución, todos de línea de comandos).
+
+**Dos preguntas para Eduardo** (en la ficha): el pack en ejecución reclama recursos por basename en cualquier ruta
+mientras la zona sólo contesta a `pack:` (asimetría de `#310`); y el paso 0 no avisa cuando un pack autocontenido
+lleva su propio `Core` (es «docker», pero es la forma de `#496`).
+
+**Orden para retomar H2**: (1) `#514` `#516`; (2) **la cadena**: `Stdlib.bpbuild` con `"version": 7`, `rm -rf
+bpstdlib/out` y la stdlib rehecha (MOD8, LF), samples, fat-jar del IDE (⚠️ con el IDE cerrado; `compileFile` del Run
+debe pasar la `version`), blobs de las cinco imágenes, `Stdlib.pack`/`SQLite.pack` (`#496`: su puente `.mdn` saldrá v2;
+y con `#493` un pack de librería ya no tapa a `/lib`), `montar-zip.sh` a MOD8, el `exitCode` de carga de la Pico por la
+tabla `#481`; (3) el cierre pequeño (redes con número + tanda corta en una placa por familia — con el XIP de verdad,
+el aviso «sin huella» de un `.mdn` v1, el rechazo de un v2 ajeno, la Pico con `Stdlib.pack` y `STAT name=` antes del
+primer RUN, y el sync → mount del STM32 en la lista); `#520` cuando toque limpiar.
+
 ## 🔏 `#441` CERRADA (15-sep, tarde) — el `.mdn` lleva la huella de su receta y las recetas viven en UN `.h`, por juego de instrucciones
 
 **Commit**: `7e722ef8`. La decisión de Eduardo que lo moldeó: las recetas se nombran **por ISA/ABI, no por placa**

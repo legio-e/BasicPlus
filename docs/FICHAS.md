@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **32** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **33** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` `#493` ~~`#441`~~ |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#520` |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -350,6 +350,23 @@ igual que miVM. Oráculos en el corpus: `LibMarcaBase`/`LibMarcaUsa` (marcador c
 `BPVM_MAX_MODULES`; ahora `[MathUtil init] … useA = 30 useB = 25` en las dos VMs). El arnés localiza el `.mod`
 raíz de un módulo con library (`x.y.Modulo.mod`). Paridad 65/65.
 
+#### 🧹 `#520` — los rincones de la resolución de módulos que la revisión de `#493` destapó y NO son de `#493` (abierta 15-sep; preexistentes, sin efecto en el IDE ni en placa; H2)
+
+Todos medidos en host por los refutadores del 15-sep (`C:/tmp/v7_493/rev/`), todos anteriores a `#493` (comprobados
+contra el binario pre-`#493` o con `git blame`), y todos de la línea de comandos: el IDE lanza `RUN` con el nombre
+plano y `workdir == carpeta del raíz`, así que no los ve. **miVM**: (a) `packResource` resuelve por basename y no
+conoce el esquema `pack:` — con un pack en ejecución, `readFile("pack:Otro/x")` devuelve el `x` del propio pack
+(`ModuleManager.java:438-441`; la VM-C filtra por nombre desde `#362`); (b) `executeRootPack` no fija
+`rootModuleDir`: las dependencias que el pack no lleva no se buscan junto al `.pack` (la VM-C sí); (c) dentro de
+«/app», miVM prueba el workdir antes que la carpeta del raíz y la VM-C el directorio del entry antes que el basedir —
+con los dos distintos, cada una carga una copia; y `rootModuleDir` sale del nombre crudo del `.mod` (con `--workdir`
+y un entry pelado, «No existe el fichero»); (d) dos dependencias ausentes → cada VM nombra una (miVM la primera en
+profundidad, la VM-C `first_missing`); entry inexistente: exit 1 en miVM, 2 en la VM-C. **VM-C host**: (e)
+`found[192]`/`gemelo[192]` en `discover_deps` truncan una ruta de proyecto de 200+ caracteres y el `stat` falla con
+«IO error» (`BPVM_FS_PATH_MAX`); (f) sin `--libdir`, `/app/X.mod` y `/lib/X.mod` son `fopen` literales de la unidad
+actual (`C:\lib`): un fichero ahí se cargaría (y avisaría). ⏭️ Una tanda de limpieza con un caso de paridad por
+rincón; la de `packResource` con `pack:` es la que toca al lenguaje.
+
 #### 🔴 `#519` — un método `native` DE CLASE que el AOT no puede traducir compila sin ningún diagnóstico y corre interpretado; sólo avisa si el módulo tiene además alguna native de nivel módulo (abierta 14-sep, de la revisión adversarial; preexistente; H4/AOT)
 
 **Medido** (`C:/tmp/v7_rev/refuta-docs-y-consumidores/h2`, igual con V6): `Main.hasNative` sólo recorre
@@ -589,7 +606,7 @@ durante todo el RUN.
 falta: la captura se escribe cuando el programa quiere y se baja al terminar (o tras `KILL`). El
 runner de `T1` lo sabe: `RUN → EXITED → GET`.
 
-#### 🔵 `#493` — un módulo de stdlib en `/app` TAPA al de `/lib`, y el usuario no se entera (abierta 11-sep, de `G2`)
+#### ✅ `#493` — un módulo de stdlib en `/app` TAPA al de `/lib`, y el usuario no se entera (abierta 11-sep, de `G2` · **CERRADA el 15-sep**, `a4cec0a3` + `be7dc131` + `6442b839`)
 
 **Medido en la Pico (11-sep)**: había `Collections.mod`, `Json.mod` y `Str.mod` **viejos** en `/app`
 —restos de subidas a mano de otras sesiones— y `/app` (el directorio de trabajo) **se resuelve antes
@@ -688,6 +705,55 @@ paso 0). **Para Eduardo**: (A) el orden único de módulos (qué es `/app` en el
 (B) `fromPath` = pista del COMPILADOR y nada más (las VMs no lo usan); (C) el criterio «gemelo tapado» del aviso; (D) qué
 mete el builder en un pack (hoy ni sin stdlib ni autocontenido: los imports directos y no `Core` → `AppPack` no carga);
 (E) `requires-pack`, que nadie lee.
+
+### ✅ 15-sep (tarde) — HECHA, con las decisiones de Eduardo (`a4cec0a3`, `be7dc131`, y `6442b839` tras la revisión)
+
+**Las decisiones** (15-sep): *«El orden siempre ha sido /app → /lib → packs. Si el módulo principal está en un pack:
+pack del principal → /app → /lib → packs. /sys es para ficheros de configuración, no va en el path. El compilador
+trabaja con la stdlib y, en los proyectos, con los directorios del proyecto. Un pack debería ser como un docker,
+autocontenido (salvo SQLite u otros similares).»*
+
+**Lo hecho**: (1) la zona de packs **sólo contesta a `pack:<Pack>/x`** (`bpvm_pack.c`); para «¿alguien tiene x?» hay
+`locate`, que `bpvm_fs_resolve` prueba como ÚLTIMO candidato de un recurso — `readFile`, `fileExists`, `IO.fileSize`,
+fuentes e imágenes siguen saliendo de la zona, a propósito; `read_stream` y `crc32` consultan overlay y respaldo (el
+`GET` de un fichero de la zona mandaba la cabecera y nada). (2) **El orden único** en las dos VMs: pack en ejecución →
+`/app` (carpeta del principal, basedir, `/app`) → `/lib` → zona (XIP); fuera el cwd y `/sys`; `fromPath` no cuenta
+(es la pista del compilador). La VM-C del PC gana `--libdir=` (el espejo de `--stdlibDir`); miVM el mismo orden, sin
+el «tal cual» del cwd. **El XIP vuelve** (`dep 'Str' -> PACK (XIP)`, +8 KB de heap). Y la zona es también el último
+candidato del **principal**: un módulo que sólo vive en un pack grabado se ejecuta XIP con SU pack primero, por el CLI y
+por el wire (`RUN X.mod` ≡ `RUN pack:P/X.mod`; el STAT por nombre contesta `pack:<P>/X.mod` y el IDE no lo sube).
+(3) **El aviso**, por OUTPUT y byte-idéntico: `aviso: 'Str' cargado desde /app, tapa al de /lib` — sólo si la copia de
+`/app` es DISTINTA (tamaño + CRC) de la de `/lib` («gemelo tapado»); mudo donde no hay `/lib`. El compilador dice de
+dónde toma una interfaz cuando no es de la stdlib teniendo la stdlib ese módulo. (4) **Docker**: `PackStep` cierra las
+dependencias transitivamente (`AppPack` llevaba `Str` y no `Core`); `requires-pack` lo lee el IDE al grabar (`PACK_LS`).
+(5) La norma `#500` en el mismo orden en las dos VMs (comprobar antes de recurrir) y también en el pack en ejecución;
+STM32 monta la zona tras sincronizar `/lib`; la Pico la monta al arrancar (sólo lo hacía en el primer RUN); STM32 y sim
+usan el escáner común de `.mdn`; `tanda.py` sube la stdlib a `/lib` y borra una copia rancia de `/app`.
+
+**La revisión adversarial** (cinco lentes + crítico, 6442b839) cazó y se arregló: el principal de la zona daba
+`NOT_FOUND` por el wire (los cuatro REPL sondean con `bpvm_entry_resolve` antes de cargar: rompía las cinco placas);
+`RUN pack:P/X.mod` se cargaba por stream con un aviso falso; un STAT contestaba con la Str de un pack muerto
+(overlay sin apagar: use-after-free); ejecutar un módulo que vive en `/lib` avisaba de `Core` y `Str` en la VM-C y
+miVM callaba (paridad); `fileExists`/`fileSize` no veían un recurso que `readFile` sí leía; miVM avisaba después de
+intentar cargar (y la copia rancia que no carga es EL caso de la ficha); **miVM no ejecutaba ningún módulo con `library`
+que importara la stdlib** (`acme.Str.mod`: la VM de referencia derivaba la library al revés que el compilador y la
+VM-C; ninguna red lo veía) y su cola de descubrimiento colisionaba `acme.Util`/`beta.Util`; `read_stream` repetía trozos
+ante un fallo a mitad. Los rincones preexistentes que destapó, en `#520`.
+
+**Red**: `compat.sh check-sombra` 12/12 (sólo /lib; app tapa a lib con aviso; desde otro cwd; el cwd no cuenta; XIP;
+/lib eclipsa al pack; el principal de la zona; dos incumplimientos en cadena; el principal en /lib sin aviso; los
+cuatro lectores de recursos; el wire contra el sim con `compat/sim_sombra.py`), paridad 68/68 (con `frompathtest`,
+`fromtest` y `libimport` nuevos en el corpus), cápsula 59/59, norma 9/9, `test_fsfallback` del revés,
+`test-fsfb`/`test-packskip`/`test-pack` enlazando otra vez, `test_packres`, miVM 40/40, frontend 193/193; los cinco
+firmwares compilan. Docs: referencia §15.6/§15.7/§17.1, manual (`from`), gui.html (`--libdir`), guía del IDE,
+MOD_FORMAT (`fromPath` informativo), el wire (STAT por nombre → `pack:`).
+
+**Dos preguntas para Eduardo, no bugs**: (a) el pack EN EJECUCIÓN sigue reclamando recursos por basename en cualquier
+ruta (`/app/x` sale del pack) mientras la zona sólo contesta a `pack:` — asimetría heredada de `#310`; (b) el paso 0 no
+avisa: un pack autocontenido que lleve su propio `Core` tapa a `/lib` en silencio en las dos VMs — es «docker», pero
+es la misma forma que `#496`. ⏭️ **En placa** (sin placas hoy): el XIP de verdad (`cargado XIP desde pack` en el log,
+heap libre), la Pico con `Stdlib.pack` grabado y `STAT name=` antes del primer RUN, el orden sync → mount del STM32, el
+autorun desde un pack.
 
 #### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
 
