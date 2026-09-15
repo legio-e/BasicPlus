@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **35** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): `#521` `#522` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **36** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): `#521` `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` `#521` (y `#522`, de H1) |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la decisión)** · `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` `#521` (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -533,6 +533,45 @@ ni `.slots`), con test en la suite del frontend; (2) `step` con literal negativo
 > se aplica igual: *lo que quedó pendiente pasa a la versión siguiente y deja de ser de la anterior*.
 > El resto que dejan fichas CERRADAS de V6 no se mueve: está en `V7_BACKLOG.md`, con su puntero.
 
+#### 🧬 `#523` — ENLACE TARDÍO: la clase se adapta al cargar a la clase que tiene delante — compatibilidad hacia atrás como Java (abierta 15-sep, noche; decisión de Eduardo; H2)
+
+**La decisión, de Eduardo (15-sep)**, tras el mapa de `#514`/`#516` (§H2.6) y la medida de la mezcla (`#500`, arriba):
+*«Llevamos como 5 versiones dando vueltas a los slots, los métodos y las dependencias. Me gustaría cerrar el tema de
+forma definitiva»* → *«la tabla ha demostrado ser frágil frente a cambios de versiones; deberíamos pensar en un
+mecanismo más robusto»* → *«de alguna manera la clase tendría que adaptarse en tiempo de ejecución a la clase de la que
+dispone en ese momento»* → *«En Java hay compatibilidad hacia atrás: un programa antiguo corre con JRE más moderna.
+Traducido a dependencias, puede importar clases más modernas sin problema. Lo ideal es que nosotros pudiésemos hacer
+algo similar»* → *«Lo veo más sólido ya que combina tiempo de compilación y runtime»* → **«Por mí bien, creo que merece
+la pena intentarlo. Pero cuando terminemos hay que validarlo al 100x100, no quiero más problemas.»** Sus dos
+preocupaciones, con número (§H2.7): la carga (los nombres YA se resuelven hoy por `strcmp` lineal, `link.c:138`; el
+enlazador se toca y pasa a hash) y la RAM (hoy los marcadores son el 20-35 % de cada `.mod` de stdlib — `Gui`: 1.068
+cadenas, 21,8 KB de 61,5 — porque cada clase re-exporta lo heredado; con lo propio por clase, encoge).
+
+**Qué es**: el `.mod` lleva **referencias simbólicas** (clase, nombre, firma completa con retorno) donde hoy lleva
+números que dependen de otro módulo; el cargador **construye la vtable de cada clase al cargar** (copia la del padre
+real, sustituye los overrides por firma, añade lo propio), rebasa los campos propios y el tamaño del objeto, y
+resuelve las referencias a ranura/offset **una vez** (tabla en RAM: obligatorio para XIP). Lo local sigue resuelto al
+compilar (la norma: «el compilador resuelve lo que sabe»). **Criterio de aceptación = el de Java**: donde Java correría
+(método, campo o property añadidos en cualquier sitio, reorden — también para subclases), corremos con la salida
+correcta; donde Java lanzaría (quitado, firma o retorno cambiados, tipo de property), **rechazo al cargar nombrando el
+símbolo**; **cero silenciosos**. Una dependencia más antigua que la sellada sigue rechazándose (`gen`).
+
+**Qué sustituye**: la opción C de `#514` (publicar ranuras en la interfaz), el camino tolerante de `#500` con sus cuatro
+agujeros, la regla 3 (padre más reciente), `layout nF nM`, `__inhN`, `sembrarSlotsDeVtable`, `cruzarSlots`, la regla
+«1ª firma = nombre pelado» — y **toda la familia de `#514`** (no queda reconstrucción posicional en ningún sitio: `#514`
+y `#516` se cierran «por construcción», y no antes). Va **antes de la cadena** (MOD9 en la misma subida que la stdlib
+rehecha). El `.mdn` (AOT) se queda estricto en una primera fase (es por proyecto).
+
+**Validado al 100 %** significa, escrito de antemano: (1) `mezcla.py` entera con el criterio de Java, como
+`check-mezcla` de `compat.sh`; (2) paridad, cápsula V6 (MOD7/MOD8 siguen cargando), norma, sombra, suite del frontend,
+`test-*` de C; (3) **la medida**: ms de carga y RAM libre antes/después en el sim y en la Pico, con criterio escrito; (4)
+en placa: tanda corta por familia + las filas que sólo se ven ahí (XIP desde pack, `Core` embebido contra `/lib` más
+nuevo, el arranque que repone — `bpvm_mods_sincronizar` compara sólo el `MAGIC`, `bpvm_mods.c:37`: con MOD8 pisaría un
+`Core` gen 8 con el gen 7 de la imagen; hay que comparar `gen`); (5) revisión adversarial del código al terminar; (6)
+la cadena una vez, en el formato final. ⏭️ **Diseño en curso** (mapa verificado de los dos cargadores, los dos
+enlazadores, el emisor, el formato, XIP, el AOT y los consumidores de `numFields`/`numMethods`; tres diseños
+independientes juzgados; crítico) → `V7_IDEAS.md` §H2.7; después, por la cascada: compilador + miVM → VM-C → firmwares.
+
 #### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
 
 **La regla, de Eduardo (11-sep):** *«Una variable es `protected` si no se indica nada, `private` si se
@@ -676,6 +715,43 @@ primera el bug aparcado de la pasada interfaz-only (`const INFO := 1` sin tipo s
 los blobs de las cinco imágenes, `Stdlib.pack` y el pack de SQLite (`#496`: su `Core` de dentro tendrá gen y
 CRC), el fat-jar del IDE, `montar-zip.sh` a MOD8 — y en la Pico el `exitCode` del fallo de carga por la tabla
 `#481` (hoy manda el ordinal del enum). Y `#493` (la sombra), que con la norma detrás deja de ser silenciosa.
+
+### 🔬 15-sep (noche) — MEZCLAR VERSIONES DE VERDAD: `compat/mezcla.py`, 84 filas en las dos VMs — la norma cumple lo que dice, y el camino tolerante tiene cuatro agujeros
+
+Eduardo: *«Tú defiendes que con los cambios nada de esto es posible, pero yo no termino de creer. Lo que se puede hacer
+son los cambios necesarios y después mezclar versiones y ver lo que ocurre de verdad.»* El instrumento: una librería
+`Lib` (clase con campos, property, sobrecargas, función de módulo, enum) en **16 variantes** (método al final / en
+medio / quitado / quitado sin usar, firma de la cabeza, campo más / menos, property más, reorden, manejador privado,
+enum de cabeza, sólo el cuerpo, tipo de retorno, tipo de property, firma de función de módulo) × gen 6/7/8, y tres
+apps: `Usa`, `Ext` (extiende) y `Puente` (`A` sellado contra v1 crea el objeto; `B` sellado contra otra versión le
+asigna una property y llama a un método — la pregunta de Eduardo). **Medido antes de tocar nada**, línea base:
+
+- **Bloque I, misma versión** (app compilada contra X, ejecutada contra X): 20/24. Los 4 son `#514`: `ev_privado` ×2
+  (error de enlace engañoso), `enum_cabeza` con `Usa` (error de enlace) y **`Ext` contra `enum_cabeza`: `h.m(4)` = `100`,
+  silencioso**; y en `Puente`, `B` compilado contra `enum_cabeza`: `k3/4/100`.
+- **Bloque II, mezcla** (app sellada contra v1 gen 7): 40/44. Todo lo que la norma rechaza lo rechaza con su texto en las
+  dos VMs (más antigua; misma gen y otra interfaz; más nueva y la extiende; más nueva con ranura movida: método en medio,
+  quitado, property nueva, reorden, manejador). **El camino tolerante («más nueva, sólo la usa: corre si enlaza») deja
+  pasar cuatro cambios que conservan el NOMBRE en la misma ranura**, porque el marcador lleva nombre + ranura y la firma
+  sólo en las sobrecargas que no son cabeza — nunca el retorno, nunca el tipo de una property, nunca la firma de una
+  función de módulo:
+
+  | la stdlib nueva… | predicho | real |
+  |---|---|---|
+  | `m(integer)` de cabeza → `m(long)` | no enlaza | **corre**: `2` donde debía `k5/8/2` (lee 8 B donde se pusieron 4) |
+  | `k(): string` → `k(): integer` | no enlaza | **corre**: la línea de `k()` desaparece |
+  | `property p: integer` → `string` | no enlaza | **muere** (rc=1) tras `k3`, sin mensaje |
+  | `f()` → `f(x: integer)` | no enlaza | **corre**: `0` en vez de `7` |
+
+- **Bloque P, Puente**: 15/16 — un objeto creado por `A` (v1) y usado por `B` (otra versión) **o corre bien o se rechaza
+  al cargar**; la mala es la del compilador (`B` contra `enum_cabeza`).
+
+**Conclusión**: la afirmación «cambio de firma → clave distinta → error de enlace» era **falsa para la cabeza** (y para
+retorno, property y función de módulo). Y la compatibilidad hacia atrás con ranuras horneadas depende de que la
+stdlib nueva no mueva nada — una property nueva mueve todo, y una subclase nunca es compatible. **De aquí sale `#523`**
+(Eduardo: *«en Java hay compatibilidad hacia atrás… lo ideal es que nosotros pudiésemos hacer algo similar»*), y
+`mezcla.py` es su prueba de aceptación con el criterio de Java. Hasta entonces las cuatro filas quedan como están,
+medidas, y el camino tolerante es un riesgo conocido (la stdlib no cambia hasta la cadena).
 
 #### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
 
