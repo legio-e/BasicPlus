@@ -817,7 +817,10 @@ Es UNA sola subida para todo H2: en el mismo salto entran el `field`/`final`/est
 dos). ⚠️ El `bpi` de la interfaz y el `MOD` del contenedor son versiones distintas; suben a la vez, y `Disasm` aprende
 `MOD7`/`MOD8` de paso.
 
-**Pieza 2 · `#493`: la zona de packs deja de disfrazarse de `/app`.**
+**Pieza 2 · `#493`: la zona de packs deja de disfrazarse de `/app`.** *(15-sep, tras el mapa verificado — ver la ficha
+en FICHAS: el «espacio propio» es `pack:<Pack>/X` (no `/packs/`), el «stat sin directorio» se tacha, el peldaño
+«embebido» no existe, «honrar `fromPath`» se tacha, el criterio del aviso es «gemelo tapado», y los recursos siguen
+saliendo de la zona como último candidato de `bpvm_fs_resolve`. El texto de abajo es el diseño del 14-sep.)*
 
 1. **El respaldo contesta sólo en su propio espacio.** La zona de packs deja de reclamar rutas ajenas por basename:
    contesta a `/packs/<nombre>/X.mod` (o al `stat` sin directorio que haga `discover_deps` a propósito), nunca a

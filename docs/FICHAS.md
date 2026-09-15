@@ -627,6 +627,68 @@ misma forma de sombra (workdir → … → `stdlibDir` el último), y honra `fro
 ⏭️ Diseño en `V7_IDEAS.md` §H2, pieza 2: el respaldo contesta sólo en su espacio, un orden único en las dos VMs, el
 ruido por `OUTPUT`, el builder sin stdlib, el arranque de STM32, y `test_fsfallback.c` del revés.
 
+### 🔬 15-sep (tarde) — EL MAPA VERIFICADO de `#493` (6 lectores + 5 refutadores + crítico), y lo que cambia del diseño
+
+**Reproducido en host, sin placa** (`C:/tmp/v7_493/`, recetas en ESTADO): (1) la zona de packs contesta a **cualquier**
+ruta cuyo basename coincida —`/app/X.mod`, `/lib/X.mod`, `/sys/X.mod`, `/packs/Otro/X.mod`, el nombre pelado— y sólo
+`pack:<Pack>/X.mod` cualifica; con `--pack=StrPk.pack` la VM-C imprime `PK-ff` (la Str del pack) y miVM `ff` con el
+mismo `.mod`: **la sombra rompe la paridad en silencio** (exit 0 las dos). (2) **El XIP está muerto desde el 13-ago**
+(`d5552ed6`, `#362`): `bpvm_loader_load_xip` tiene dos llamadores y los dos son inalcanzables con el respaldo montado;
+un módulo de la zona se copia a RAM con `en_pack=0`; la única ejecución XIP medida en toda la historia es la del host
+del 23-jul (`80f10b6b`), nunca en placa. Medido: cerrar el respaldo a `pack:` (una copia experimental de `bpvm_pack.c`,
+sin tocar `bpvm.c`) devuelve `dep 'Str' -> PACK (XIP)`, stdout byte-idéntico y **+8 KB de heap libre** — el invariante
+de paridad es ciego a esta regresión por construcción (mismo stdout con y sin XIP). (3) **`/app` tapa a `/lib` en las
+dos VMs en silencio** y con paridad verde (E1); ninguna dice de dónde cargó (miVM nada; la VM-C sólo por stderr). (4)
+**Las dos VMs NO tienen el mismo orden**: con un `.mod` homónimo en el cwd, miVM lo coge («tal cual», antes que la
+carpeta del raíz) y la VM-C coge el de la carpeta del entry → **mismo `.mod`, mismo cwd, stdout distinto** (E3) — y es
+el estado real de `C:/lenguajes/pm`, que tenía 28 `.mod` de stdlib del 11-sep sueltos en la raíz (copia de
+`samples_sweep --work`; borrados el 15-sep). (5) **`fromPath` no es una pista**: el compilador escribe el literal del
+`from` («"" en los 28 de la stdlib y en todo el corpus salvo dos samples»); cuando no es «""» es una ruta del árbol de
+FUENTES relativa al `.bp` cuyo basename ni siquiera coincide con el fichero emitido (`helper.mod` frente a
+`ext.tools.Helper.mod`); miVM lo honra relativo al **cwd de la JVM** (el mismo `.mod` carga cosas distintas según desde
+dónde se lance; y se salta el sandbox del workdir) y la VM-C lo tira: `samples/frompathtest` falla en miVM y corre en la
+VM-C (E4). (6) **La norma `#500` no es byte-idéntica con dos incumplimientos en cadena**: miVM recurre y luego comprueba
+(nombra el más profundo), la VM-C comprueba y luego recurre (nombra el primero) — el comentario de `bpvm.c` «como miVM»
+dice lo contrario de lo que miVM hace; y el paso 0 (dependencia servida por el pack en ejecución) no pasa por la norma.
+(7) **La norma no ve la sombra real de la ficha**: toda la stdlib publicada es MOD7 (regla 5, «sin datos»), así que la
+`Collections` vieja pasa; y al revés, un módulo de stdlib **recompilado del mismo fuente** se rechaza hasta rehacer la
+stdlib (la interfaz publicada lleva CRLF, la nueva LF: `ifaceCrc` distinto con texto idéntico). (8) **El compilador
+fabrica la sombra**: una `Str.bp` fuente junto al programa, más nueva que `bpstdlib/Str.mod`, gana a la stdlib con
+`BpVM.cfg` alcanzable, sin aviso, y escribe `out/Str.mod` —justo lo que el IDE sube a `/app`—; `import Str from
+"Str.mod"` gana a `stdlibDir`; sin `BpVM.cfg` alcanzable no hay stdlib («identificador no resuelto: 'Str'»); la línea
+de log «interfaz de 'Str' desde Str.mod (embebida)» es idéntica en los cuatro casos. (9) **STM32 monta la zona antes de
+sincronizar `/lib`** (confirmado, sin razón técnica: el mount se apendió el 23-jul dentro de `board_mgr_stm32_boot` y
+el respaldo por basename nació tres semanas después); ESP32/P4/Pico sincronizan antes; el sim no sincroniza. Con los
+artefactos de hoy el efecto es «repuesto: no se pudo leer» ×15 por arranque (`crc32` no cae al respaldo, `stat` sí);
+con un pack MOD8 sería «`/lib/X` no se instala nunca». (10) **`bpvm_fs_crc32` y `bpvm_fs_read_stream` no caen al
+respaldo**: en littlefs (sim y placa) `STAT{crc}` de un fichero de la zona da -1 y `GET` manda la cabecera bulk y luego
+nada — también para la forma propia `pack:StrPk/Str.mod`. (11) `test-fsfb`, `test-packskip` y `test-pack` **no enlazan
+desde el 31-ago** (`#461`: `bpvm_fs_log_fail` vive en `fs_lfs.c`) y ningún agregado los corre: el test que «consagra la
+sombra» lleva semanas sin poder ejecutarse. (12) El IDE también fabrica la sombra él solo: con una stdlib en la zona,
+`STAT name=` contesta `path=/app/<proj>/X.mod` inexistente con `crc=-1`, `PicoExplorer` lo lee como «misma versión, CRC
+distinto» y hace PUT a `/app/<proj>/`; y `tanda.py` recibe `path="Str.mod"` antes y después del PUT (`DepSombreada`):
+hoy no puede correr en una placa con `Stdlib.pack` grabado. Las dos cosas se arreglan solas al cerrar el respaldo.
+
+**Lo que cambia del diseño (pieza 2)**: (a) el «espacio propio» es `pack:<Pack>/X` — `/packs/<P>/X` no existe en
+ningún sitio y `key_de_path` tiraría `<P>` igual; (b) «o al `stat` sin directorio que haga `discover_deps`» **se tacha**:
+contestar al nombre pelado reabre la sombra por `bpvm_entry_resolve` (paso «tal cual») y `discover_deps` no lo
+necesita (ya usa `bpvm_pack_find` para la rama XIP); (c) el peldaño «embebido» no existe como tal (la tabla se instala
+en `/lib` al arrancar); (d) «honrar `fromPath` como pista» **se tacha**: no hay nada que honrar; (e) el criterio del
+aviso no puede ser una lista de nombres ni `stdlibDir` (la VM-C host no lo tiene; el sim carga toda la stdlib de la
+zona): el que sale de la evidencia es **«gemelo tapado»** — tras resolver `X` fuera de `/lib`, si `/lib/X.mod` (miVM:
+`stdlibDir/X.mod`) existe, aviso por OUTPUT con ruta lógica (`/app/X.mod`), no la resuelta (las VMs resuelven rutas
+distintas); (f) los recursos por ruta relativa (`readFile("logo.png")`, fuentes, imágenes: `#362`) siguen saliendo de
+la zona **como último candidato explícito de `bpvm_fs_resolve`**, no por el disfraz — mismo comportamiento para el
+usuario, sin sombra para los módulos.
+
+⏭️ **Sin decisión**: cerrar el respaldo a `pack:` + `bpvm_fs_resolve` con la zona al final + `.mdn` de pack por el
+escáner común en STM32 y sim + paso de zona (XIP) en `bpvm_load_entry`; `crc32`/`read_stream` al respaldo; los tres
+tests enlazando y `test_fsfallback` del revés; STM32 sync → mount; la norma en el mismo orden en las dos VMs (y en el
+paso 0). **Para Eduardo**: (A) el orden único de módulos (qué es `/app` en el PC, si el cwd cuenta, `--basedir`, `/sys`);
+(B) `fromPath` = pista del COMPILADOR y nada más (las VMs no lo usan); (C) el criterio «gemelo tapado» del aviso; (D) qué
+mete el builder en un pack (hoy ni sin stdlib ni autocontenido: los imports directos y no `Core` → `AppPack` no carga);
+(E) `requires-pack`, que nadie lee.
+
 #### 🧬 `#491` — EL CURSOR: la fachada de FS no tiene descriptores, y por eso la misma enfermedad ha vuelto TRES veces → **V7** (abierta 10-sep, de `#473`)
 
 🔎 **Y NO ES NUEVO: EL DISEÑO YA ESTABA DECIDIDO, Y SE PERDIÓ POR NO SER FICHA.** Eduardo lo recordaba
