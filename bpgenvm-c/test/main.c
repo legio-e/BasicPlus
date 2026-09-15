@@ -347,8 +347,10 @@ int main(int argc, char** argv) {
     bpvm_entry_t entry;
     memset(&entry, 0, sizeof entry);
     bpvm_status_t s = bpvm_load_entry(vm, path, &entry);
+    /* V7/H2 (#493): a stderr, como el resto del rastro del CLI — por stdout
+     * rompía la paridad de cualquier pack con miVM, que no lo imprime. */
     if (s == BPVM_OK && entry.from_pack)
-        printf("[packs] ejecutando '%s' (main=%s)\n", path, entry.main_module);
+        fprintf(stderr, "[packs] ejecutando '%s' (main=%s)\n", path, entry.main_module);
     if (s != BPVM_OK) {
         if (entry.missing[0])
             fprintf(stderr, "load %s: falta el modulo '%s'\n", path, entry.missing);

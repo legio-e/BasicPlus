@@ -550,6 +550,16 @@ static bpvm_status_t load_from_pack(bpvm_t* vm, const bpvm_pack_src_t* src,
  * el fallo que de verdad le pasa a la gente no es el del módulo principal. */
 static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path);
 
+/* [V7/H2, #493] ¿Dos ficheros con los mismos bytes? Tamaño y CRC32 por la
+ * fachada: es lo que el IDE compara para decidir si sube, y lo que miVM hace
+ * para el mismo aviso (Files.size + CRC32). */
+static int mismo_contenido(const char* a, uint32_t asz, const char* b, uint32_t bsz) {
+    if (asz != bsz) return 0;
+    uint32_t ca = 0, cb = 0;
+    if (bpvm_fs_crc32(a, &ca) != 0 || bpvm_fs_crc32(b, &cb) != 0) return 0;
+    return ca == cb;
+}
+
 static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_dir) {
     /* Re-snapshot del import_count: si cargamos un dep, vm->modules crece
      * pero el mod actual no muta. */
@@ -696,7 +706,13 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         if (have_fs && !en_lib) {
             char gemelo[192]; uint32_t gsz = 0;
             snprintf(gemelo, sizeof gemelo, "/lib/%s", pname_file);
-            if (bpvm_fs_stat(gemelo, &gsz) == 0)
+            /* «Tapa» = hay OTRO fichero en /lib con ese nombre y es DISTINTO
+             * (tamaño o CRC). Una copia idéntica no tapa nada (y puede ser el
+             * mismo fichero visto por dos rutas: el principal que vive en /lib,
+             * o el /lib del PC montado con --libdir — la revisión lo cazó
+             * avisando de `Core` al ejecutar un módulo desde /lib). */
+            if (strcmp(gemelo, found) != 0 && bpvm_fs_stat(gemelo, &gsz) == 0
+                    && !mismo_contenido(found, fsz, gemelo, gsz))
                 bpvm_out("aviso: '%s' cargado desde /app, tapa al de /lib\n", pname);
         }
         /* RASTRO — una línea por dependencia resuelta, diciendo DE DÓNDE.
@@ -918,6 +934,27 @@ bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
  * exactamente el mismo código.
  * ========================================================================== */
 
+/* [V7/H2, #493] ¿Algún pack grabado lleva este `.mod`? → `pack:<P>/X.mod` (el
+ * último de la cadena que lo tenga, la regla de siempre). Sólo nombres pelados
+ * de módulo: con directorio o esquema no es cosa de la zona. */
+static int zona_resolve(const char* name, char* out, size_t cap, uint32_t* size) {
+    uint32_t zsz = 0;
+    const uint8_t* zona = bpvm_pack_mounted(&zsz);
+    if (!zona || !zsz || !name) return -1;
+    size_t n = strlen(name);
+    if (n <= 4 || strcmp(name + n - 4, ".mod") != 0 || n - 4 > BPVM_PACK_NAME_LEN) return -1;
+    for (size_t i = 0; i < n; i++) if (name[i] == '/' || name[i] == '\\' || name[i] == ':') return -1;
+    char base[BPVM_PACK_NAME_LEN + 1];
+    memcpy(base, name, n - 4); base[n - 4] = '\0';
+    bpvm_pack_src_t src; bpvm_pack_entry_t e; char pk[BPVM_PACK_NAME_LEN + 1];
+    bpvm_pack_src_mem(&src, zona, zsz);
+    if (!bpvm_pack_find_src_pack(&src, "mod", base, &e, pk)) return -1;
+    int w = snprintf(out, cap, "%s%s/%s", BPVM_PACK_URI, pk, name);
+    if (w <= 0 || (size_t) w >= cap) return -1;
+    if (size) *size = e.len;
+    return 0;
+}
+
 int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
                        uint32_t* size_out) {
     if (!name || !out || out_cap == 0) return -1;
@@ -939,7 +976,15 @@ int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
     /* [V7/H2, #493] `/sys` YA NO ESTÁ. Entró el 14-ago (#418) como último
      * candidato, con `FontLoadDemo` en el P4; el 15-sep Eduardo lo quita del
      * path: «/sys es más bien para ficheros de configuración». Los RECURSOS
-     * (fuentes) siguen resolviéndose por ruta absoluta o por bpvm_fs_resolve. */
+     * (fuentes) siguen resolviéndose por ruta absoluta o por bpvm_fs_resolve.
+     *
+     * Y EL ÚLTIMO ES LA ZONA DE PACKS: un módulo que sólo vive en un pack
+     * grabado resuelve a `pack:<Pack>/X.mod`. Aquí y no sólo en
+     * bpvm_load_entry, porque los cuatro REPL (sim, Pico, ESP32, STM32)
+     * SONDEAN con esta función antes de cargar y contestaban NOT_FOUND al RUN
+     * de ese módulo (lo cazó la revisión adversarial: por el CLI del host iba,
+     * por el wire no). Así RUN, STAT por nombre y autorun ven lo mismo. */
+    if (zona_resolve(name, out, out_cap, size_out) == 0) return 0;
     out[0] = '\0';
     return -1;
 }
@@ -1102,29 +1147,34 @@ static int first_missing(const bpvm_t* vm, char* out, size_t cap) {
  * el «pack en ejecución» —la zona entera como fuente, filtrada por su nombre—
  * para que sus módulos y recursos vayan primero. Devuelve BPVM_ERR_IO con
  * e->fallo vacío si no está en la zona (el llamante pone el mensaje). */
-static bpvm_status_t cargar_principal_de_la_zona(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
+static void apagar_pack_en_ejecucion(bpvm_t* vm);
+
+static bpvm_status_t cargar_principal_de_la_zona(bpvm_t* vm, bpvm_entry_t* e) {
+    /* e->resolved = "pack:<P>/X.mod", lo que devolvió bpvm_entry_resolve (o lo
+     * que el usuario dio tal cual: `RUN pack:P/X.mod` tiene que dar lo mismo
+     * que `RUN X.mod` — la revisión lo cazó cargándolo por stream y con un
+     * aviso falso). */
     uint32_t zsz = 0;
     const uint8_t* zona = bpvm_pack_mounted(&zsz);
-    if (!zona || !zsz) return BPVM_ERR_IO;
-    size_t n = strlen(path);
-    if (n <= 4 || strcmp(path + n - 4, ".mod") != 0) return BPVM_ERR_IO;
-    for (size_t i = 0; i < n; i++) if (path[i] == '/' || path[i] == '\\') return BPVM_ERR_IO;
-    char base[BPVM_PACK_NAME_LEN + 1];
-    if (n - 4 > BPVM_PACK_NAME_LEN) return BPVM_ERR_IO;
-    memcpy(base, path, n - 4); base[n - 4] = '\0';
-
-    bpvm_pack_src_t zsrc; bpvm_pack_entry_t pe; char pk[BPVM_PACK_NAME_LEN + 1];
+    if (!zona || !zsz) { snprintf(e->fallo, sizeof e->fallo, "'%.100s': no hay zona de packs montada", e->resolved); return BPVM_ERR_IO; }
+    char pk[BPVM_PACK_NAME_LEN + 1], tipo[BPVM_PACK_TYPE_LEN + 1], base[BPVM_PACK_NAME_LEN + 1];
+    if (!bpvm_pack_key_de_path(e->resolved, tipo, base, pk) || !pk[0] || strcmp(tipo, "mod") != 0) {
+        snprintf(e->fallo, sizeof e->fallo, "'%.100s' no es un modulo de un pack (pack:<Pack>/X.mod)", e->resolved);
+        return BPVM_ERR_IO;
+    }
+    bpvm_pack_src_t zsrc; bpvm_pack_entry_t pe;
     bpvm_pack_src_mem(&zsrc, zona, zsz);
-    if (!bpvm_pack_find_src_pack(&zsrc, "mod", base, &pe, pk)) return BPVM_ERR_IO;
-
-    snprintf(e->resolved, sizeof e->resolved, "%s%s/%s", BPVM_PACK_URI, pk, path);
+    if (!bpvm_pack_find_in_src(&zsrc, pk, "mod", base, &pe)) {
+        snprintf(e->fallo, sizeof e->fallo, "el pack '%s' de la zona no lleva '%s.mod'", pk, base);
+        return BPVM_ERR_IO;
+    }
     int idx_before = vm->module_count;
     bpvm_status_t s = load_from_pack(vm, &zsrc, &pe, base);
     if (s != BPVM_OK) {
-        snprintf(e->fallo, sizeof e->fallo, "'%s' esta en el pack '%s' de la zona pero no carga", path, pk);
+        snprintf(e->fallo, sizeof e->fallo, "'%s.mod' esta en el pack '%s' de la zona pero no carga", base, pk);
         return s;
     }
-    bpvm_diag("[bpvm-c] '%s' cargado XIP desde el pack '%s' de la zona", path, pk);
+    bpvm_diag("[bpvm-c] '%s.mod' cargado XIP desde el pack '%s' de la zona", base, pk);
     /* Pack en ejecución = la zona filtrada por ESTE pack. Como en bpvm_load_pack,
      * se enciende después de cargar el main para que un pack roto no deje la
      * resolución tocada. `run_pack_st.path` vacío: no hay fichero que proteger. */
@@ -1137,9 +1187,20 @@ static bpvm_status_t cargar_principal_de_la_zona(bpvm_t* vm, const char* path, b
     snprintf(e->main_module, sizeof e->main_module, "%.*s", (int)(sizeof e->main_module - 1), base);
     for (int j = idx_before; j < vm->module_count; j++) {
         s = discover_deps(vm, j, "/app");
-        if (s != BPVM_OK) { recoge_fallo(vm, e); return s; }
+        if (s != BPVM_OK) { recoge_fallo(vm, e); apagar_pack_en_ejecucion(vm); return s; }
     }
     return BPVM_OK;
+}
+
+/* [V7/H2, #493] Un pack en ejecución que no llega a arrancar NO deja la
+ * resolución tocada: ni el overlay de recursos (que apuntaba a un `vm` que a
+ * lo mejor se libera: la revisión midió un STAT contestando con la Str de un
+ * pack muerto), ni el filtro de la zona. Lo mismo que hacen bpvm_run y
+ * bpvm_run_smp al terminar, aquí para los caminos de error y para destroy. */
+static void apagar_pack_en_ejecucion(bpvm_t* vm) {
+    vm->run_pack_on = 0;
+    vm->run_pack_only[0] = '\0';
+    bpvm_fs_set_overlay(NULL, NULL, NULL);
 }
 
 /* El cierre de bpvm_load_entry, para los dos caminos (FS/pack del FS, y la
@@ -1166,18 +1227,9 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
         return BPVM_ERR_IO;
     }
 
-    /* 1. La regla de búsqueda, una sola. */
+    /* 1. La regla de búsqueda, una sola (…, /lib y, la última, la zona de packs). */
     uint32_t size = 0;
     if (bpvm_entry_resolve(path, e->resolved, sizeof e->resolved, &size) != 0) {
-        /* [V7/H2, #493] EL ÚLTIMO SITIO ES LA ZONA DE PACKS, también para el
-         * principal: un módulo que sólo vive en un pack grabado se ejecuta
-         * XIP desde ahí, y sus dependencias se buscan PRIMERO en su propio
-         * pack (el orden de Eduardo: pack del principal → /app → /lib →
-         * packs). Hasta hoy esto «funcionaba» por el disfraz de la zona —
-         * copiado a RAM y sin saber de qué pack venía. */
-        bpvm_status_t zs = cargar_principal_de_la_zona(vm, path, e);
-        if (zs == BPVM_OK) return cerrar_entry(vm, e, 0);
-        if (zs != BPVM_ERR_IO || e->fallo[0]) return zs;
         /* #421 — «no aparece» y «aparece pero no se puede leer» son dos ratos de
          * búsqueda distintos, y hasta ahora los dos decían `IO error`. Decir
          * DÓNDE se ha buscado ahorra la mitad: si el fichero está donde el
@@ -1186,6 +1238,17 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
                  "no encuentro '%s' (buscado en el proyecto, tal cual, en /app, /lib y en la zona de packs)",
                  path);
         return BPVM_ERR_IO;
+    }
+    /* [V7/H2, #493] UN MÓDULO DE LA ZONA (`pack:<P>/X.mod`, lo devuelva el
+     * resolvedor o lo dé el usuario tal cual): se ejecuta XIP desde ahí, y sus
+     * dependencias se buscan PRIMERO en su propio pack (el orden de Eduardo:
+     * pack del principal → /app → /lib → packs). Nunca por el camino del FS:
+     * por ahí se copiaría a RAM y el aviso de la sombra saldría falso. */
+    if (strncmp(e->resolved, BPVM_PACK_URI, sizeof(BPVM_PACK_URI) - 1) == 0) {
+        int idx0 = vm->module_count;
+        bpvm_status_t zs = cargar_principal_de_la_zona(vm, e);
+        if (zs != BPVM_OK) return zs;
+        return cerrar_entry(vm, e, idx0);
     }
     /* 2. EL `if` DE .mod/.pack, y vive AQUÍ. Antes sólo el CLI del host sabía
      *    despachar packs; por eso llevarlos a la placa era copiar la regla en
@@ -1197,7 +1260,7 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
     int idx_before = vm->module_count;
     if (e->from_pack) {
         s = bpvm_load_pack(vm, e->resolved, e->main_module, (int) sizeof e->main_module);
-        if (s != BPVM_OK) { recoge_fallo(vm, e); return s; }   /* #421 */
+        if (s != BPVM_OK) { recoge_fallo(vm, e); apagar_pack_en_ejecucion(vm); return s; }   /* #421 */
         /* bpvm_load_pack ya descubre las deps del main (dentro del pack primero,
          * y luego junto al propio pack); aquí sólo queda el barrido final. */
     } else {
@@ -1524,6 +1587,7 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_out_set_vm(NULL);   /* #478 */
 
     if (!vm) return;
+    apagar_pack_en_ejecucion(vm);   /* V7/H2 (#493): el overlay no puede apuntar a un vm muerto */
     /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido
      * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */
     uint64_t run_mark = vm->run_mark;

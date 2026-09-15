@@ -73,4 +73,12 @@ extern uint32_t s_sqlite_size;
  *   <  0  no se saltó; -valor es el peldaño (bpvm_npack_res_t) */
 int32_t pack_pico_cargar(void);
 
+/* [V7/H2, #493] Monta la zona de packs (XIP) SIN buscar codigo nativo: para el
+ * arranque, despues de sincronizar /lib, como ESP32 y STM32. Idempotente. Hasta
+ * hoy la zona solo se montaba en el primer RUN (pack_pico_cargar): desde que no
+ * se disfraza de /app, el IDE pregunta STAT name= ANTES del primer Run y sin
+ * zona montada veia NOT_FOUND, subia la stdlib a /lib y el pack quedaba
+ * eclipsado en todos los arranques. */
+void pack_pico_montar(void);
+
 #endif /* PACK_PICO_H */

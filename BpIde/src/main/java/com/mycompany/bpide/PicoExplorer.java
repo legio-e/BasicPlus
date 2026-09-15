@@ -1161,7 +1161,7 @@ public final class PicoExplorer extends JPanel {
                     // dependencia, esta linea es la que dice de donde salio el modulo.
                     final String donde = (st == null) ? "" : "  [la placa lo tiene en " + st.path
                             + (st.crc >= 0 ? String.format(", crc %08X", st.crc) : "") + "]";
-                    final String ojo = (st != null && !st.path.equals(donde_le_tocaria))
+                    final String ojo = (st != null && !st.path.equals(donde_le_tocaria) && !st.path.startsWith("pack:"))
                             ? "  ⚠ OJO: no es donde este proyecto lo pondria (" + donde_le_tocaria
                               + ") — la placa carga esa OTRA copia"
                             : "";

@@ -497,8 +497,12 @@ long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
     uint32_t osz = 0;
     if (!overlay_claims(path, &osz) && be_rs_op_ok(path)) {
         const bpvm_fs_backend_t* be_rs = route(path);
-        long r = be_rs->read_stream(path, cb, user);
-        if (r >= 0) return r;
+        /* Si el backend TIENE el fichero, su read_stream manda, con su error
+         * incluido: repetir por el bucle un fichero que falló a medias mandaría
+         * los primeros trozos dos veces (la revisión lo señaló). Al bucle sólo
+         * se cae cuando el backend no lo tiene (entonces es del respaldo). */
+        uint32_t bsz = 0;
+        if (be_rs->stat && be_rs->stat(path, &bsz) == 0) return be_rs->read_stream(path, cb, user);
     }
 
     uint32_t size = 0;

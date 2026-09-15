@@ -214,14 +214,24 @@ public class ModuleManager {
     private void avisarSiTapa(String canon, String resuelto) {
         java.io.File gemelo = enStdlib(new java.io.File(resuelto).getName());
         if (gemelo == null) return;
+        java.nio.file.Path a = java.nio.file.Paths.get(resuelto), b = gemelo.toPath();
         try {
-            if (java.nio.file.Files.isSameFile(gemelo.toPath(), java.nio.file.Paths.get(resuelto))) return;
+            if (java.nio.file.Files.isSameFile(a, b)) return;
+            /* «Tapa» = hay OTRO fichero en /lib y es DISTINTO (tamaño o CRC), la
+             * misma regla que la VM-C: una copia idéntica no tapa nada. */
+            if (java.nio.file.Files.size(a) == java.nio.file.Files.size(b) && crc32De(a) == crc32De(b)) return;
         } catch (IOException e) {
             return;   // uno de los dos no se puede abrir: que lo diga la carga
         }
         if (!sombrasAvisadas.add(canon)) return;
         vm.getProgramOut().writeText("aviso: '" + canon + "' cargado desde /app, tapa al de /lib");
         vm.getProgramOut().newline();
+    }
+
+    private static long crc32De(java.nio.file.Path p) throws IOException {
+        java.util.zip.CRC32 c = new java.util.zip.CRC32();
+        c.update(java.nio.file.Files.readAllBytes(p));
+        return c.getValue();
     }
 
     // ============================================================
@@ -605,13 +615,18 @@ public class ModuleManager {
         ModSource src; String myLibrary; byte[] importBuffer; boolean v8a;
     }
 
-    /** Resuelve la fuente, la mete en la cola y lee su cabecera. NO recurre. */
-    private Cabecera abrirCabecera(String filename, String moduleName, boolean esRaiz) throws IOException {
+    /** Resuelve la fuente, la mete en la cola y lee su cabecera. NO recurre.
+     *  `canon` es el nombre canónico `[lib.]Mod` (la clave de la cola). */
+    private Cabecera abrirCabecera(String filename, String canon, boolean esRaiz) throws IOException {
         // Resolver (#310: pack en ejecución primero; si no, /app → /lib) — y
         // cachear la FUENTE en la cola para que loadModuleToMemory abra
         // exactamente los mismos bytes.
         ModSource src = resolveModuleSource(filename, esRaiz);
-        discoveryQueue.put(moduleName, src);
+        discoveryQueue.put(canon, src);
+        /* #493 — el aviso de la sombra ANTES de abrir: si la copia de /app ni
+         * siquiera carga (restos viejos: EL caso de la ficha), el aviso es la
+         * pista, y la VM-C lo da antes de intentar cargar. */
+        if (!esRaiz && src.path != null) avisarSiTapa(canon, src.path);
         Cabecera c = new Cabecera();
         c.src = src;
         try (DataInputStream in = src.open()) {
@@ -688,46 +703,53 @@ public class ModuleManager {
                     String fromPath = importIn.readUTF();
                     // [V7/H2, #493] `fromPath` NO se usa para resolver: es la pista
                     // del compilador (`import X from "..."`, una ruta del árbol de
-                    // FUENTES relativa al .bp), no de la VM. Se deriva por convención:
-                    //     "Module.func"           → Module.mod                (misma library que el importer)
+                    // FUENTES relativa al .bp), no de la VM. Se deriva por convención
+                    // (la del compilador y la VM-C, `derive_owner`):
+                    //     "Module.func"           → Module.mod                (SIN library)
                     //     "lib.path.Module.func"  → lib.path.Module.mod
                     String[] parts = imp.split("\\.");
                     if (parts.length < 2) continue;
                     String requiredModule = parts[parts.length - 2];
-                    String canon = requiredLibraryDe(imp, parts, myLibrary, fromPath, requiredModule);
+                    String canon = requiredLibraryDe(parts, requiredModule);
                     String requiredFilename = canon + ".mod";
-                    ModSource dep = discoveryQueue.get(requiredModule);
+                    /* La cola va por el nombre CANÓNICO: `acme.Util` y `beta.Util` son
+                     * dos módulos (la revisión los vio colisionar por el nombre corto). */
+                    ModSource dep = discoveryQueue.get(canon);
                     Cabecera cabDep = null;
                     if (dep == null) {
-                        cabDep = abrirCabecera(requiredFilename, requiredModule, false);
+                        cabDep = abrirCabecera(requiredFilename, canon, false);
                         dep = cabDep.src;
-                        if (dep.path != null) avisarSiTapa(canon, dep.path);   /* #493 */
                     }
                     // V7/H2 (#500) — LA NORMA, con la cabecera de la dependencia recién
                     // leída y ANTES de recurrir a sus imports (como la VM-C). También
                     // cuando ya estaba en la cola: cada importador exige lo suyo.
                     if (v8a) {
                         int[] req = requeridos.get(canon);
-                        if (req != null) comprobarNorma(moduleName, canon, req, dep);
+                        /* El texto nombra al importador por su nombre CORTO, como la
+                         * VM-C (`imp->name`, sin el prefijo de library desde #518). */
+                        if (req != null) comprobarNorma(moduleName.substring(moduleName.lastIndexOf('.') + 1), canon, req, dep);
                     }
-                    if (cabDep != null) descubrirImports(cabDep, requiredModule);
+                    if (cabDep != null) descubrirImports(cabDep, canon);
                 }
             }
         }
     }
 
     /** Nombre canónico `[lib.]Mod` de la dependencia de un import, con la misma regla
-     *  que el compilador usa para sellarla (ns.library + moduleName). */
-    private static String requiredLibraryDe(String imp, String[] parts, String myLibrary, String fromPath, String requiredModule) {
-        String lib;
-        if (parts.length >= 3) {
-            StringBuilder sb = new StringBuilder();
-            for (int k = 0; k < parts.length - 2; k++) { if (k > 0) sb.append('.'); sb.append(parts[k]); }
-            lib = sb.toString();
-        } else {
-            lib = myLibrary;
-        }
-        return lib.isEmpty() ? requiredModule : lib + "." + requiredModule;
+     *  que el compilador usa para sellarla y la VM-C para resolverla (`derive_owner`):
+     *  el símbolo es el último componente, el módulo el penúltimo, y lo que quede
+     *  delante es la library. Dos partes = SIN library.
+     *
+     *  [V7/H2, #493] Aquí se ponía «misma library que el importador» para dos
+     *  partes: un módulo con `library "acme"` que importara `Str` buscaba
+     *  `acme.Str.mod` y no corría en miVM (la VM de referencia era la que estaba
+     *  mal; lo cazó la revisión adversarial, y ninguna red lo veía porque el
+     *  corpus no tenía un módulo con library que importara la stdlib). */
+    private static String requiredLibraryDe(String[] parts, String requiredModule) {
+        if (parts.length < 3) return requiredModule;
+        StringBuilder sb = new StringBuilder();
+        for (int k = 0; k < parts.length - 2; k++) { if (k > 0) sb.append('.'); sb.append(parts[k]); }
+        return sb + "." + requiredModule;
     }
 
     /** V7/H2 (#500) — la norma de versiones de las dependencias, la misma en las dos

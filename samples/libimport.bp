@@ -1,0 +1,7 @@
+library "acme"
+module LibImport
+  import Str
+  public function main()
+    print "hex " + Str.toHex(255L)
+  end main
+end LibImport

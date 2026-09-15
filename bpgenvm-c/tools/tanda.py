@@ -898,6 +898,12 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
             anotar(notas, "dependencia %s: ya en %s (crc igual; resuelto por nombre, como el RUN)" % (d, path))
             verificadas.add(d)
             continue
+        # V7/H2 (#493): si solo la tiene un pack grabado (path pack:<P>/X) con el crc
+        # local, la placa la ejecuta XIP desde ahi: verificada, y no se sube nada.
+        if isinstance(path, str) and path.startswith("pack:") and crc_placa == crc_local:
+            anotar(notas, "dependencia %s: en la zona de packs (%s, crc igual): se ejecuta XIP, no se sube" % (d, path))
+            verificadas.add(d)
+            continue
         crc_txt = ("%08x" % crc_placa) if isinstance(crc_placa, int) and crc_placa >= 0 else str(crc_placa)
         if path is None:
             anotar(notas, "dependencia %s: el RUN no la resuelve (%s): se sube a /lib" % (d, w.errores()))
@@ -908,8 +914,14 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
             anotar(notas, "dependencia %s: en /lib con crc %s != local %08x (DESFASE, se sube la de bpstdlib a /lib)"
                          % (d, crc_txt, crc_local))
         else:
-            anotar(notas, "dependencia %s: en /app con crc %s != local %08x (una copia rancia TAPA a /lib: se sube a /lib, y /app la sigue tapando)"
+            # Una copia RANCIA en /app tapa a /lib y desde #493 el programa lo dice por
+            # OUTPUT (rompe el oraculo): se BORRA, y la buena va a /lib.
+            anotar(notas, "dependencia %s: en /app con crc %s != local %08x (una copia rancia que TAPA a /lib: se borra y se sube a /lib)"
                          % (d, crc_txt, crc_local))
+            try:
+                w.llamar("DEL", "DEL_REPLY", 10, path="/app/" + fich)
+            except Exception as e:
+                anotar(notas, "dependencia %s: no se pudo borrar /app/%s (%s)" % (d, fich, e))
         with open(local, "rb") as f:
             data = f.read()
         ok, det = put_con_busy(w, data, "/lib/" + fich)
@@ -1116,6 +1128,9 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         up, up0 = info2.get("uptimeMs"), sello.get("uptime_ultimo")
         if isinstance(up, int) and isinstance(up0, int) and up < up0:
             r["reinicio"] = True
+            # V7/H2 (#493): tras un reinicio, lo verificado ya no vale (la DK2 vacia
+            # /lib en cada arranque): se vuelve a preguntar en la siguiente prueba.
+            verificadas.clear()
             r["detalle"] += "; la placa SE REINICIO durante la prueba (uptimeMs %d -> %d)" % (up0, up)
             notas.append("%s: la placa SE REINICIO durante la prueba (uptimeMs %d -> %d, resetReason=%s)" % (
                 p["nombre"], up0, up, info2.get("resetReason")))

@@ -1399,6 +1399,9 @@ static void vm_task(void* arg) {
      * Aquí ya no hay tabla a mano: la de antes guardaba la longitud por dirección
      * porque los `_len` eran `extern` de 16 ficheros; ahora es `sizeof` en uno. */
     (void) bpvm_mods_instalar_tabla(pico_mods, pico_mods_n, pico_mods_put, pico_mods_log);
+    /* V7/H2 (#493) — la zona de packs, DESPUES de /lib y en el arranque (como
+     * ESP32 y STM32): el STAT por nombre del IDE la necesita antes del primer RUN. */
+    pack_pico_montar();
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),

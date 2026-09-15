@@ -417,6 +417,7 @@ public final class PackStep {
             if (v6) in.readInt();                            /* interfaceSize */
             if (v7) in.readInt();                            /* nativeSize */
             if (v8) { in.readInt(); in.readInt(); }          /* gen, ifaceCrc */
+            if (librarySize < 0 || importSize < 0 || (long) librarySize + importSize > mod.length) return out;
             in.skipBytes(librarySize);
             byte[] imports = new byte[importSize];
             in.readFully(imports);
@@ -429,7 +430,7 @@ public final class PackStep {
                 String dueno = name.substring(0, p);
                 if (!out.contains(dueno)) out.add(dueno);
             }
-        } catch (IOException ignore) { /* no legible: nada */ }
+        } catch (IOException | RuntimeException ignore) { /* no legible o corrupto: nada */ }
         return out;
     }
 

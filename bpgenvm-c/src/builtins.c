@@ -1565,7 +1565,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
             return builtin_throw(vm, tc, "path demasiado largo");
-        push_i32(vm, tc, bpvm_fs_exists(path) ? 1 : 0);
+        /* [V7/H2, #493] Se RESUELVE como readFile (basedir → tal cual → /app →
+         * la zona de packs): «if fileExists(x) then readFile(x)» tiene que ver
+         * lo mismo que readFile. Antes pasaba por el disfraz de la zona; la
+         * revisión lo cazó con un recurso de un pack: readFile sí, fileExists no. */
+        char eff[BPVM_FS_PATH_MAX];
+        push_i32(vm, tc, bpvm_fs_exists(bpvm_fs_resolve(path, eff, sizeof(eff))) ? 1 : 0);
         return BPVM_OK;
     }
 
@@ -1606,7 +1611,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
             return builtin_throw(vm, tc, "path demasiado largo");
         uint32_t sz = 0;
-        if (bpvm_fs_stat(path, &sz) != 0) {
+        char eff[BPVM_FS_PATH_MAX];   /* V7/H2 (#493): resuelto como readFile */
+        if (bpvm_fs_stat(bpvm_fs_resolve(path, eff, sizeof(eff)), &sz) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "fileSize('%s'): no se pudo leer el tamaño", path);
             return builtin_throw(vm, tc, em);

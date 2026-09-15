@@ -80,6 +80,17 @@ static int hay_algun_pack(const uint8_t* base, uint32_t bytes) {
     return bpvm_pack_scan(base, bytes, 0, 0, 0, &fin) > 0;
 }
 
+void pack_pico_montar(void)
+{
+    const bpvm_part_layout_t* lay = board_partitions();
+    const bpvm_part_t* pp = lay ? bpvm_part_get(lay, BPVM_PART_PACKS) : 0;
+    if (!pp || pp->size == 0) return;
+    const void* base = (const void*) (uintptr_t) (XIP_BASE + pp->offset);
+    bpvm_pack_mount((const uint8_t*) base, (const uint8_t*) base, (uint32_t) pp->size);
+    log_printf("pack: zona montada en 0x%08lX (%u KB) — modulos y .mdn visibles",
+               (unsigned long) (uintptr_t) base, (unsigned) (pp->size / 1024));
+}
+
 int32_t pack_pico_cargar(void)
 {
     /* 1 — ¿dónde está la zona de packs? La dice la tabla de particiones, no una

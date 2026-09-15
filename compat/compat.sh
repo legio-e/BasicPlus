@@ -74,7 +74,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -620,7 +620,50 @@ EOF
   cp "$S/var2/Str.mod" "$S/app/Str.mod"
   sombra_caso "dos incumplimientos en cadena: el primero" "$S" lib8 app/Sombra.mod "'Str' \(gen 0, interfaz [0-9a-f]+\) no es la interfaz con la que se compilo 'Sombra'" "compilo 'Str'" || fails=$((fails+1))
   rm -f "$S/app/Str.mod"
-  echo "  sombra: $((9 - fails))/9 casos"
+  # 10) el PRINCIPAL vive en /lib (o el /lib del PC es la carpeta del programa): la
+  #     copia es LA MISMA, no tapa nada, y no se avisa en ninguna de las dos.
+  cp "$S/app/Limpio.mod" "$S/lib/Limpio.mod"
+  sombra_caso "el principal en /lib: sin aviso" "$S" lib lib/Limpio.mod "toHex\(255\) = ff" "aviso" || fails=$((fails+1))
+  rm -f "$S/lib/Limpio.mod"
+  # 11) LOS RECURSOS DE LA ZONA por los cuatro lectores (VM-C): readFile, fileExists,
+  #     IO.fileSize — la revision cazo que readFile los veia y fileExists no.
+  if [ -f "$PACKJAR" ]; then
+    mkdir -p "$S/res"
+    printf 'DE-LA-ZONA' > "$S/res/datos.txt"
+    cat > "$S/src/Recurso.bp" <<'EOF'
+module Recurso
+  import Core
+  import IO
+  public function main()
+    print "existe " + fileExists("datos.txt")
+    print "tam " + IO.fileSize("datos.txt")
+    print "lee " + readFile("datos.txt")
+  end main
+end Recurso
+EOF
+    ( cd "$ROOT" && java -jar "$V3_FE" "$S/src/Recurso.bp" --compile "$S/app" --backend=mivm ) >"$S/rec.log" 2>&1 \
+      || { echo "  ✗ Recurso.bp no compila: $S/rec.log"; return 1; }
+    ( cd "$S/res" && java -cp "$PACKJAR" basicplus.pack.PackCli build --out "$S/ResPk.pack" --name ResPk --version 1 --date 0 datos.txt ) >>"$S/pack.log" 2>&1 \
+      || { echo "  ✗ no se pudo construir ResPk.pack"; return 1; }
+    local o
+    o="$( cd "$S" && "$V3_C" --libdir=lib --pack=ResPk.pack app/Recurso.mod 2>/dev/null | filt )"
+    if printf '%s' "$o" | grep -q "existe true" && printf '%s' "$o" | grep -q "tam 10" && printf '%s' "$o" | grep -q "lee DE-LA-ZONA"; then
+      echo "  ok  recursos de la zona (VM-C): fileExists, fileSize y readFile ven el mismo fichero"
+    else echo "  ✗ recursos de la zona:"; printf '%s\n' "$o" | head -4 | sed 's/^/       /'; fails=$((fails+1)); fi
+    # 12) EL WIRE contra el micro simulado (la cintura de las placas): STAT name= del
+    #     principal que solo vive en la zona, RUN por nombre y por pack:, y el overlay
+    #     de un pack que no arranca. Ocho comprobaciones en compat/sim_sombra.py.
+    local SIMEXE="$ROOT/bpgenvm-c/build/bpvm-sim.exe"
+    if [ -x "$SIMEXE" ]; then
+      local sal
+      sal="$( python "$HERE/sim_sombra.py" "$SIMEXE" "$S/AppPk.pack" "$STDLIB/Core.mod" AppPk Sombra "VARIANTE:ff" --port=5461 2>&1 )"
+      if printf '%s' "$sal" | grep -q "^\[status=OK\]"; then echo "  ok  el wire (sim): $(printf '%s' "$sal" | grep -c '  ok  ') comprobaciones (STAT/RUN del principal de la zona, pack:, overlay muerto)"
+      else echo "  ✗ el wire (sim):"; printf '%s\n' "$sal" | grep -E "FAIL|Traceback|Error" | head -4 | sed 's/^/       /'; fails=$((fails+1)); fi
+    else
+      echo "  (sin $SIMEXE: el caso del wire no se prueba — make sim)"
+    fi
+  fi
+  echo "  sombra: $((12 - fails))/12 casos"
   [ "$fails" -eq 0 ]
 }
 
