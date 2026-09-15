@@ -309,10 +309,15 @@ Request: `{"type":"STAT","id":N,"name":"Math.mod","base":"/app/proj","crc":true}
 Reply: `{"type":"STAT_REPLY","id":N,"path":"/lib/Math.mod","size":1708,"magic":"MOD7","crc":123456,"isDir":false,"mtime":0}`
 
 El device lo resuelve con **su propio resolvedor**, el del RUN (`base` → literal → `/app` → `/lib`
-→ `/sys`), para que el IDE no lleve una copia del orden de búsqueda. `base` es opcional: la carpeta
-del proyecto que se va a ejecutar. `path` dice dónde lo tiene — si hay que reemplazarlo, se
-reemplaza ahí. La regla del IDE con esta respuesta: se sube si no está (`NOT_FOUND`), si su `magic`
-es anterior, o si es el mismo y el `crc` es distinto; si el del device es más nuevo, no se sube.
+→ la zona de packs; V7/H2 `#493`: sin `/sys`), para que el IDE no lleve una copia del orden de
+búsqueda. `base` es opcional: la carpeta del proyecto que se va a ejecutar. `path` dice dónde lo
+tiene — si hay que reemplazarlo, se reemplaza ahí. Si sólo lo tiene un **pack grabado**, `path` es
+la ruta cualificada `pack:<Pack>/Math.mod` (la placa lo ejecuta XIP desde ahí; `magic` y `crc`
+salen igual): la zona ya no contesta al `stat` de `/app/X.mod` por el nombre, así que un `path`
+de `/app` o `/lib` es un fichero de verdad. La regla del IDE con esta respuesta: se sube si no
+está (`NOT_FOUND`), si su `magic` es anterior, o si es el mismo y el `crc` es distinto; si el del
+device es más nuevo, no se sube; y si está en un pack, idéntico no se sube y distinto se sube a
+donde le toca (`/lib` o la app), que va delante del pack — un pack no se borra por un `DEL`.
 
 #### `GET` (request, reply con bulk)
 

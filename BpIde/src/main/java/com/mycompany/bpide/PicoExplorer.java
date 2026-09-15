@@ -1122,6 +1122,17 @@ public final class PicoExplorer extends JPanel {
                     // No lo tiene (o firmware sin STAT por nombre): a donde le toca.
                     depRemote = isLib ? ("/lib/" + dep.getName()) : appPath(prefix, dep.getName());
                     motivo = "la placa no lo tiene"; subir = true;
+                } else if (st.path.startsWith("pack:")) {
+                    /* [V7/H2, #493] Lo tiene UN PACK GRABADO (la placa lo ejecuta XIP
+                     * desde ahí). Idéntico → no se sube nada. Distinto → se sube a
+                     * donde le toca (/lib o la app), que va DELANTE del pack en la
+                     * resolución; el pack no se toca (no hay DEL de un pack). */
+                    if (st.crc >= 0 && st.crc == crc32(depBytes)) {
+                        depRemote = st.path; motivo = "ya en la placa, en un pack (XIP), idéntico"; subir = false;
+                    } else {
+                        depRemote = donde_le_tocaria;
+                        motivo = "un pack lo tiene distinto: se sube delante del pack"; subir = true;
+                    }
                 } else {
                     depRemote = st.path;                         // se reemplaza DONDE está
                     final int vDev = st.version();
@@ -1139,7 +1150,7 @@ public final class PicoExplorer extends JPanel {
                 }
                 if (depRemote.startsWith(prefix + "/")) deployed.add(depRemote);   // F2: bajo el prefijo
                 if (subir) {
-                    if (st != null) {           // DEL-before-PUT: economía de flash (#111)
+                    if (st != null && !st.path.startsWith("pack:")) {   // DEL-before-PUT: economía de flash (#111)
                         try { b.del(depRemote); } catch (java.io.IOException delErr) { /* tolerable */ }
                     }
                     b.put(depRemote, depBytes);

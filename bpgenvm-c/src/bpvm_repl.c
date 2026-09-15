@@ -18,6 +18,8 @@
 #include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
 #include "bpvm_rtc.h"
 #include "mdn_loader.h"     /* V7/H2 (#441): aotReceta/aotFlagsCrc en INFO */
+#include "bpvm_pack.h"      /* V7/H2 (#493): STAT por nombre mira también la zona de packs */
+static int stat_en_la_zona(const char* name, char* out, size_t cap, uint32_t* size);
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
 
 #include <stdio.h>
@@ -174,6 +176,12 @@ static void repl_stat(long id, json_obj_t* obj) {
         }
         int r = bpvm_entry_resolve(name, resuelto, sizeof(resuelto), &size);
         if (base) bpvm_fs_set_basedir(antes);
+        /* [V7/H2, #493] Y LA ZONA DE PACKS, la última, como el RUN: la zona ya
+         * no contesta al stat de /app/X.mod por basename, así que si el módulo
+         * sólo está en un pack grabado se dice AQUÍ, con su ruta cualificada
+         * (`pack:<P>/X.mod`), y el IDE sabe que no hace falta subirlo (y de
+         * dónde lo carga la placa: XIP). */
+        if (r != 0) r = stat_en_la_zona(name, resuelto, sizeof(resuelto), &size);
         if (r != 0) {
             wire_v1_send_error(id, "NOT_FOUND", "no existe");
             return;
@@ -529,6 +537,25 @@ static int falta_pieza(long id, const char* verbo, int hay,
     snprintf(m, sizeof m, "%s: la cintura de este firmware no trae '%s'", verbo, nombre);
     wire_v1_send_error(id, "UNSUPPORTED", m);
     return 1;
+}
+
+/* [V7/H2, #493] ¿Algún pack grabado lleva este `.mod`? → `pack:<P>/X.mod`. */
+static int stat_en_la_zona(const char* name, char* out, size_t cap, uint32_t* size) {
+    uint32_t zsz = 0;
+    const uint8_t* zona = bpvm_pack_mounted(&zsz);
+    if (!zona || !zsz || !name) return -1;
+    size_t n = strlen(name);
+    if (n <= 4 || strcmp(name + n - 4, ".mod") != 0 || n - 4 > BPVM_PACK_NAME_LEN) return -1;
+    for (size_t i = 0; i < n; i++) if (name[i] == '/' || name[i] == ':') return -1;
+    char base[BPVM_PACK_NAME_LEN + 1];
+    memcpy(base, name, n - 4); base[n - 4] = '\0';
+    bpvm_pack_src_t src; bpvm_pack_entry_t e; char pk[BPVM_PACK_NAME_LEN + 1];
+    bpvm_pack_src_mem(&src, zona, zsz);
+    if (!bpvm_pack_find_src_pack(&src, "mod", base, &e, pk)) return -1;
+    int w = snprintf(out, cap, "%s%s/%s", BPVM_PACK_URI, pk, name);
+    if (w <= 0 || (size_t) w >= cap) return -1;
+    if (size) *size = e.len;
+    return 0;
 }
 
 static void repl_info(long id) {
