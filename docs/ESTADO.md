@@ -27,6 +27,34 @@
 
 ## Última sesión
 
+## 🔏 `#441` CERRADA (15-sep, tarde) — el `.mdn` lleva la huella de su receta y las recetas viven en UN `.h`, por juego de instrucciones
+
+**Commit**: `7e722ef8`. La decisión de Eduardo que lo moldeó: las recetas se nombran **por ISA/ABI, no por placa**
+(«¿`RISCV32_ESP_P4`? No debería ser por juego de instrucciones nada más») → `ARMV8M_MAIN_SOFTFP` (Pico 2 y STM32U5
+comparten `.mdn`), `RV32IMAFC_ILP32F` (P4), `RV32IMC_ILP32` (C3/C6, sin destino en el IDE aún). El `.h`
+(`bpgenvm-c/include/bpvm_aot_recetas.h`) es la única fuente: el firmware la elige por las macros de su ISA y la hashea,
+el IDE la parsea y compila con ella, `MdnPack` estampa el CRC en la cabecera v2 (24 B). El cargador rechaza un v2 de
+otra receta (`MDN_ERR_RECETA`) y carga un v1 «a ciegas» con aviso. INFO publica `aotReceta`/`aotFlagsCrc`; el IDE
+elige el destino por la receta de la placa y no sube un `.mdn` de otra. Detalle en la ficha (FICHAS §V7).
+
+**Red al cierre**: frontend 193/193 (+`AotRecetasTest`), miVM 40/40, paridad 65/65, cápsula 59/59, fwd rechaza, norma
+9/9, `test-mdnreceta` 10/10, `test-modhdr` 7 fixtures (con `NatNew8.mod`: MOD8 + blob v2, huella igual en Java y C),
+`test-npack` revivido, `sim-smoke` OK; los cinco firmwares compilan y cada uno lleva su receta.
+
+⚠️ **Trampa de sesión**: los heredocs de Bash me mangaron `\0`, `\n` y tabs en tres scripts seguidos → todo script
+por el Write tool (memoria `escribir-ficheros-sin-destruirlos`). Y `sed -i` en MSYS convierte CRLF→LF: para tocar un
+fichero CRLF, Python con `newline=''`. Un `git stash` + `pop` renormaliza a CRLF los ficheros con LF (inocuo: el
+índice es LF).
+
+**Orden para retomar H2**: (1) `#493` (la sombra: fallback sólo en el propio namespace, un orden de búsqueda, `fromPath`
+en la VM-C, aviso por OUTPUT «cargado desde /app», `PackStep` sin stdlib, orden de arranque STM32, `test_fsfallback`
+invertido, prueba de sombra/XIP en el sim); (2) `#514` `#516`; (3) **la cadena**: `Stdlib.bpbuild` con `"version": 7`,
+`rm -rf bpstdlib/out` y la stdlib rehecha (MOD8), samples, fat-jar del IDE (⚠️ con el IDE cerrado; y `compileFile` del
+Run del IDE debe pasar la `version` del proyecto), blobs de las cinco imágenes, `Stdlib.pack`/`SQLite.pack` (`#496`: su
+puente `.mdn` saldrá v2), `montar-zip.sh` a MOD8, el `exitCode` de carga de la Pico por la tabla `#481`; (4) el cierre
+pequeño (redes con número + tanda corta en una placa por familia — con el aviso «sin huella» de un v1 y el rechazo de
+un v2 ajeno en la lista).
+
 ## 🧱 MOD8 HECHO (15-sep) — la norma de versiones de `#500` en las dos VMs con el mismo texto, `#518` cerrada; queda la cadena, `#441` (`.mdn` v2) y `#493`
 
 **Commits**: `5fc59ae4` (MOD8 + la norma + check-norma 9/9 + `#518b`) · `8d7e2674` (oráculos de `#518` en el corpus,

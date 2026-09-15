@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **32** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **32** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -108,10 +108,10 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` `#493` `#441` |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | `#492` `#500` `#493` ~~`#441`~~ |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
-> | **H5** | **AOT y código nativo** | `#502` `#441`(con H2) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
+> | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
 > | **H6** | **LVGL en un pack** — hito propio, y **estratégico** (Eduardo, 13-sep): *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»* | el primer cliente del código nativo empotrable, y la disciplina alrededor de `publica()`/`busca()`: la reja, la resolución perezosa, las ranuras, la arena de RAM por código nativo; el pack lleva `Gui.mod` (`#468`) |
 > | **H7** | **memoria, arranque y arquitectura** | los restos de `U6`, `U6.F1`, `U1.4`; Boot 1/Boot 2 y las capas del SO; unificar el montaje de packs; los 32 MB del P4; `CALL_REL`; el muro heap/pilas; diagnóstico del heap desde BP; `#356` `#494`; la Pico a `platform_freertos.c`; el SMP de host |
 > | **H8** | **IDE y wire** | `#495` `#452`; los restos de `E1`; el `INFO` de ESP32/STM32; el guardián del fat-jar; `Run on Device` con `/lib` vacío |
@@ -160,6 +160,47 @@ el PC sin placa, como en el host.
 
 > Aquí entran las fichas que se abran a partir del 13-sep-2026, arriba las más recientes.
 > Las que vienen de V6 están en el bloque siguiente, con su texto intacto.
+
+#### ✅ `#441` — el `.mdn` no recordaba su RECETA: la huella de los flags, y las recetas en UN sitio por juego de instrucciones (la mitad aplazada desde el 18-ago · **CERRADA el 15-sep**, `7e722ef8`; H2/H5)
+
+🩸 **El caso** (17-ago): añadir `-mcmodel=medany` dejó malos **todos** los `.mdn` de RISC-V ya generados. Misma
+arquitectura, misma fecha, código inservible — ni el gate de `arch` ni las fechas lo ven, y lo que falla es la placa,
+muda. Se aplazó porque pedía cambiar el formato del `.mdn` (*«ahora no vamos a modificar formatos»*).
+
+**Lo hecho.** (1) **`bpgenvm-c/include/bpvm_aot_recetas.h`, la única fuente de los flags**: una receta por **juego de
+instrucciones y ABI**, no por placa — decisión de Eduardo (*«¿`RISCV32_ESP_P4`? No debería ser por juego de
+instrucciones nada más»*): `ARMV8M_MAIN_SOFTFP` (Cortex-M33: Pico 2 y STM32U5 comparten `.mdn`, la frontera con los
+helpers ya iba fijada a aapcs), `RV32IMAFC_ILP32F` (P4), `RV32IMC_ILP32` (C3/C6; el IDE no tiene destino todavía,
+`#502`). El firmware elige la suya por las macros de su ISA (`__ARM_ARCH_8M_MAIN__`, `__riscv_float_abi_*`) y la
+hashea con `bpvm_crc32`; el IDE la parsea en el momento (`AotRecetas`) y compila con ella; `pico/build_mdn.sh` la lee
+con `sed`. Fuera los dos arrays copiados de `AotBuild` («DEBEN coincidir con build_mdn.sh y con el loader» — tres
+sitios y nadie que los comparara). (2) **`.mdn` v2**: cabecera de 24 B con `flags_crc` = CRC32 IEEE de los bytes del
+literal (`MOD_FORMAT.md` §4.6); todos los lectores caminan por la versión de cada blob (loader C, recorrido de blobs
+del `.mod`, `Disasm`, `MdnInspect`, `test_modhdr`); `MdnPack` emite v2 y **exige** la receta, y su guardián RISC-V
+pregunta la ABI a la receta en vez de dar por sabido el P4. (3) **El gate** en `mdn_loader.c`: un v1 se carga «a
+ciegas» con aviso (como un MOD7 sin datos de versión); un v2 con otra huella → `MDN_ERR_RECETA`, mensaje al log
+(*«receta X, este firmware es ARMV8M_MAIN_SOFTFP (Y): el .mdn se compilo con OTROS FLAGS, hay que REGENERARLO»*) y la
+función sigue interpretada. El bloque de `#502` (RISC-V sin FPU rechaza todo `.mdn` RISC-V) queda sólo para v1: un v2
+lo juzga la receta, así el día que haya destino `ilp32` no hay que tocarlo. (4) **INFO** publica `aotReceta` y
+`aotFlagsCrc` (los pone el común, compile-time: ninguna imagen puede olvidarlos; `BPVM_WIRE_PROTOCOL.md`). (5) **El
+IDE** elige el destino por la receta que dice la placa —y si no tiene destino para ella (un C6) lo dice en vez de
+compilar el del P4 para que la placa lo rechace—, y `mdnIsStale` compara la huella del `.mdn` con la de la placa
+(*«es de otra RECETA de compilación: regenéralo»*), la tercera comparación tras la fecha y la arch.
+
+**Probado**: `AotRecetasTest` (el `.h` real, CRC32 IEEE, escapes rechazados); `make test-mdnreceta` (host, con una
+receta forzada por la costura del `.h`: v1 pasa, v2 buena pasa, v2 ajena y v2 con huella 0 RECHAZADAS, v3 VERSION,
+truncados); `test-modhdr` con el fixture nuevo `NatNew8.mod` (MOD8 + blob v2 hecho con el pipeline real del IDE):
+**la huella del blob es la del `.h`, mismo CRC en Java y en C** (`05f4d197`); `test-npack` revivido (llevaba sin
+enlazar desde V6, un guardián mudo); `sim-smoke` con los campos nuevos; la red entera en verde. Los **cinco firmwares
+compilan** y cada uno lleva su receta (se ve en las `strings` del `.elf`): Pico y STM32 `ARMV8M_MAIN_SOFTFP`, P4
+`RV32IMAFC_ILP32F`, C6 `RV32IMC_ILP32`, S3 ninguna.
+
+**Fuera, a propósito**: los flags de enlace y `aot/mdn.ld` (si cambian y el `.text` deja de bastarse, lo caza el
+guardián de relocalizaciones de `MdnPack` en el build, no en la placa); y el `.npk` (lleva `arch` + `float_abi` y se
+relocaliza: no sufre la clase de fallo de `#440`; su puente `SQLite.mdn.*` sí pasa por aquí y saldrá v2 al rehacer el
+pack, `#496`). ⏭️ Queda para la tanda en placa: ver el aviso «sin huella» con un v1 y el rechazo con un v2 ajeno;
+y cuando exista el destino `ilp32`, el blob del P4 en un `.mod` multifamilia saldrá como «rechazado (rc=-7)» en el
+diag del C6 — es otra ISA, pero la misma `arch`.
 
 #### 🔴 `#511` — los INICIALIZADORES de campos y properties de INSTANCIA se ignoran en silencio: `var x: integer := 5` en una clase vale 0 (abierta 14-sep, al escribir el oráculo de `#492`; H1)
 
@@ -11999,7 +12040,9 @@ se revisa EXCLUYENDO lo de V6. Nada se pierde: está aquí, con su texto.)*
   post-mortem ya lo resuelve, pero hay que comprobarlo, no suponerlo. Las de ESP32 no
   hacen flush (van directas a `esp_restart()`), así que ahí no aplica.
 
-- **[AOT] el `.mdn` no recuerda su RECETA — la huella de los FLAGS** *(mitad abierta de
+- ~~**[AOT] el `.mdn` no recuerda su RECETA — la huella de los FLAGS**~~ — ✅ **CERRADA en V7 el
+  15-sep (`7e722ef8`)**: `.mdn` v2 con `flags_crc` y las recetas en `bpvm_aot_recetas.h`; la ficha
+  viva está arriba, en «V7 — la versión en curso». *(Texto original: mitad abierta de
   `#441`; aplazada a V6 el 18-ago. Eduardo: «ahora no vamos a modificar formatos». La
   otra mitad, la arquitectura, sí entró en V5: `9fcff33`.)*
   🩸 **El caso real que la motivó, el 17-ago**: añadir `-mcmodel=medany` dejó malos
@@ -14261,7 +14304,8 @@ eventos EN LA P4. Movida a Placas como `#424`.)*
   podría estar contando siempre cero.
 - ~~`#441`~~ — ✅ **CERRADA en V5 el 18-ago (`9fcff33`): el IDE ya compara la ARQUITECTURA
   del `.mdn`.** *(La otra mitad —los flags— se aplazó a V6 el mismo día: pide cambiar el
-  formato del `.mdn`, y esta versión no toca formatos. Su texto está en «Aplazadas a V6».)*
+  formato del `.mdn`, y esta versión no toca formatos. Su texto está en «Aplazadas a V6».
+  **Hecha en V7 el 15-sep, `7e722ef8`.**)*
   📐 Idea de Eduardo: *«¿los `.mdn` tienen cabecera? porque si tienen cabecera lo que
   corresponde añadir [es] ARM o RISCV»*. Y en efecto **ya la llevaban**: `arch` =
   `e_machine` del ELF (ARM 40 · RISC-V 243 · Xtensa 94 · 0 = legacy), y la placa dice
