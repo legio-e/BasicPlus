@@ -547,6 +547,8 @@ preocupaciones, con número (§H2.7): la carga (los nombres YA se resuelven hoy 
 enlazador se toca y pasa a hash) y la RAM (hoy los marcadores son el 20-35 % de cada `.mod` de stdlib — `Gui`: 1.068
 cadenas, 21,8 KB de 61,5 — porque cada clase re-exporta lo heredado; con lo propio por clase, encoge).
 
+**LA NORMA, de Eduardo (15-sep, noche)** — la que decide dónde vive cada resolución: *«Probablemente este diseño funcione y el anterior no podía funcionar nunca. Por la regla de lo que puede resolver el compilador es estático y lo que puede resolver el cargador es dinámico. Como en tiempo de compilación no podemos saber qué módulos realmente nos vamos a encontrar, es un problema que el compilador no puede resolver. Y por la misma razón el cargador sí lo puede resolver.»* La frontera es el módulo: dentro, todo estático (como hoy); al cruzarlo, dinámico. Y el marcador `Cls#clave#slot` era la prueba del error: un guardián de coincidencias para tapar que lo estático había decidido algo dinámico. Queda una línea por fijar en el diseño: todas las clases extienden `Core.Object`, así que o el layout de `Object` es parte del contrato de la VM (congelado: sin campos, `toString`/`compareTo` en 0 y 1 — como hoy de hecho) o hasta las clases locales se rebasan; decisión de Eduardo, recomendado congelarlo (es de la VM, no de una versión).
+
 **Qué es**: el `.mod` lleva **referencias simbólicas** (clase, nombre, firma completa con retorno) donde hoy lleva
 números que dependen de otro módulo; el cargador **construye la vtable de cada clase al cargar** (copia la del padre
 real, sustituye los overrides por firma, añade lo propio), rebasa los campos propios y el tamaño del objeto, y
