@@ -38,7 +38,9 @@ property, firma de función de módulo: el marcador conserva el nombre en la ran
 compilador es estático y lo que puede resolver el cargador es dinámico»* → `#523` (`dd541e7c`) → el diseño en `V7_IDEAS.md` §H2.7
 (`8bab1fd3`: 6 lectores + 3 diseños + 2 jueces + síntesis + crítico; las 11 correcciones del crítico incorporadas).
 
-**Estado**: diseño escrito, código sin tocar. **Esperan las decisiones D1-D10** (final de §H2.7). Tamaño: 17-23 sesiones en cascada.
+**Estado**: diseño escrito, código sin tocar. **Esperan las decisiones D1-D10** (final de §H2.7). Tamaño: 17-23 sesiones en cascada. **El criterio de Eduardo al cerrar el día** (15-sep, noche): *«Me da igual lo que tardemos, lo importante es que sea una
+buena solución y que no tengamos que estar revisando en cada versión.»* — el tiempo no es la restricción; la calidad y la
+validación al 100 % sí. Mañana se empieza por las decisiones D1-D10, y después V0 (la línea base, antes de tocar nada).
 Fichas abiertas hoy: `#521` (el `.mod` se escribe con errores del emisor), `#522` (enum: `"c=" + c` revienta el heap).
 
 **Orden para retomar H2 (cambia)**: (1) las decisiones de Eduardo; (2) **`#523`** por la cascada — V0 línea base con cronómetro en las
