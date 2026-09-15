@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **32** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` `#518` `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **32** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` `#493` `#495` `#500` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` `#441` y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -291,7 +291,7 @@ de 0 params que sólo crea el mutex y lo pone como `cls.constructor` **sin encad
 que el semántico resolviera `S(5)` contra `Base(v)`. Compila limpio. ⏭️ Que el ctor sintético inicialice el mutex y
 DELEGUE en el efectivo de la base (uno por sobrecarga), o que la clase exija ctor propio si hereda uno con args.
 
-#### 🔴 `#518` — la VM-C y `library`: (a) el marcador de vtable `Mod.Cls#m#slot` no lleva el prefijo de library (miVM lo resuelve, la VM-C no enlaza); (b) un módulo con `library` cargado como DEPENDENCIA desde el FS no casa con `module_loaded` (nombre lógico del basename) y aborta «falta el módulo» (abierta 14-sep, de la revisión adversarial; preexistente; H2)
+#### ✅ `#518` — la VM-C y `library`: (a) el marcador de vtable `Mod.Cls#m#slot` no lleva el prefijo de library (miVM lo resuelve, la VM-C no enlaza); (b) un módulo con `library` cargado como DEPENDENCIA desde el FS no casa con `module_loaded` (nombre lógico del basename) y aborta «falta el módulo» (abierta 14-sep, de la revisión adversarial; preexistente; H2 · **CERRADA el 15-sep**, `5fc59ae4` + `8d7e2674`)
 
 **Medido** (`C:/tmp/v7_rev/refuta-emisor-caminos/h4`, `C:/tmp/v7_rev/formato/src/LibEst.bp`): (a)
 `emitInvokeVirtualSmart` construye `externalModule + "." + Cls + "#" + m + "#" + slot` sin `externalLibrary`, mientras
@@ -301,6 +301,13 @@ de library que luego lee de la sección `library` → `export_prefix` = `acme.ac
 "LibEst")` nunca casa: recarga 7 veces y aborta; con una función pelada igual. Sólo `packlib` cubre library como
 RAÍZ. Los dos en V6. ⏭️ (a) prefijo en el marcador; (b) `derive_module_name` quita la library; test de host con
 un `library` como dependencia en las dos VMs.
+
+✅ **Cerrada el 15-sep** (con MOD8): (a) el marcador de vtable va por `qualifyForOwner` como el resto de símbolos
+cross-module; (b) el cargador C recorta el prefijo de library del nombre lógico tras leer la sección `library`,
+igual que miVM. Oráculos en el corpus: `LibMarcaBase`/`LibMarcaUsa` (marcador con library) y `samples/diamondtest.bp`
+(cuatro módulos con library como dependencias: antes la VM-C recargaba `MathUtil` 16 veces hasta agotar
+`BPVM_MAX_MODULES`; ahora `[MathUtil init] … useA = 30 useB = 25` en las dos VMs). El arnés localiza el `.mod`
+raíz de un módulo con library (`x.y.Modulo.mod`). Paridad 65/65.
 
 #### 🔴 `#519` — un método `native` DE CLASE que el AOT no puede traducir compila sin ningún diagnóstico y corre interpretado; sólo avisa si el módulo tiene además alguna native de nivel módulo (abierta 14-sep, de la revisión adversarial; preexistente; H4/AOT)
 
@@ -451,10 +458,10 @@ padre que crece no corrompa al hijo en silencio. Precondición: `#508`. Diseño 
   código del módulo, no para código externo»*. Por eso la **`var` estática no cruza** (ni de módulo ni de clase) y
   lo que cruza es la property; escrito en el manual junto a `#static` y en `PENDIENTES` L18.
 
-**Lo que queda de B**: el marcador de layout (`Clase#layout#nF#nM`) al enlazar, que va con la subida de formato
-(`#500`, MOD8) — y con ella la cadena (stdlib final, samples, fat-jar del IDE, blobs, `Stdlib.pack`). El AOT sigue
-sin llamar a estáticos ni leer campos desde una native de módulo (error claro); desde un método native de clase,
-`#519`.
+**B, completa (15-sep)**: el marcador de layout se sustituyó por la norma de `extends` de Eduardo (`#500`, regla 3:
+un padre nunca más reciente que sus hijos) — mismo efecto, sin un símbolo más. Queda la cadena (con `#500`). El AOT
+sigue sin llamar a estáticos ni leer campos desde una native de módulo (error claro); desde un método native de
+clase, `#519`.
 
 #### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
 
@@ -486,6 +493,33 @@ silencio. ⏭️ Diseño en `V7_IDEAS.md` §H2, pieza 1: `gen` (la versión decl
 sección `interface`) por módulo y por import; la norma en el cargador (más antiguo → rechazo; misma `gen` y otra
 interfaz → rechazo; más nuevo → si enlaza, con un marcador de layout nuevo); `MOD8`; rechazo por `OUTPUT`. Con cinco
 decisiones para Eduardo al final del apartado.
+
+### 🧱 15-sep — HECHA la norma y el formato (`5fc59ae4`); el cierre de la ficha es la cadena
+
+**MOD8** (`docs/MOD_FORMAT.md` v8, §3 y §3.1): cabecera de 11 enteros (`gen` + `ifaceCrc`), subtabla `deps` en la
+sección imports **por módulo** (no por import: un import repite el sello del dueño y `Math`, toda intrínseca, no
+deja ninguno) con `(módulo, fromPath, gen, ifaceCrc, flags)`; el compilador emite sólo MOD8; las VMs cargan v6/v7/v8;
+la miVM de V6 rechaza un v8 con mensaje. **`gen` = `"version"` del `.bpbuild`** (entero; 0 en fichero suelto).
+**Lo que cambió respecto al diseño**: (1) sin marcador de layout — **la norma de Eduardo para `extends`** (15-sep):
+*«los hijos pueden ser más recientes que los padres; los padres no pueden ser más recientes que los hijos»* → el
+sello lleva la marca `EXTIENDE` y una dependencia de generación mayor se rechaza si se la extiende (regla 3); para
+quien sólo la usa, se acepta si enlaza (los marcadores de vtable). (2) Una dependencia MOD6/MOD7 cuenta como `gen` 0
+y CRC desconocido: si la app exige `gen` > 0 es «más antigua» (regla 1, sin excepción); si exige 0, «sin datos de
+version» por el diag y sigue — así la norma es real también en la transición. (3) El rechazo va por **OUTPUT** con
+el mismo texto ASCII en las dos VMs y exit 2 (miVM daba 1); los errores de enlace de miVM salen como los de la VM-C
+(`=== ERROR DE LINK: … ===`), no como una traza Java.
+
+**Probado**: `compat.sh check-norma` — cinco stdlibs fabricadas como proyecto a partir de `bpstdlib/*.bp` (versiones
+6, 7, 7 con un método al final de `List`, 8, 8 con un método en medio) y dos apps (`NormaUsa`, `NormaExt`) → **9
+casos en las dos VMs con el mismo texto**, incluidos los dos de transición con el `Core` MOD7 de la cápsula V6.
+`test_modhdr` a v8 con fixture MOD8; `check_fwd` exige el rechazo (y ejecuta `Hello.mod` por nombre: antes corría
+`Adc.mod` de la stdlib copiada — verde falso). El cross-check «interfaz de la pasada == interfaz emitida» cazó a la
+primera el bug aparcado de la pasada interfaz-only (`const INFO := 1` sin tipo se caía de la interfaz): arreglado.
+
+⏭️ **Lo que cierra la ficha es la cadena**: `Stdlib.bpbuild` con `"version": 7` y la stdlib rehecha (MOD8, gen 7),
+los blobs de las cinco imágenes, `Stdlib.pack` y el pack de SQLite (`#496`: su `Core` de dentro tendrá gen y
+CRC), el fat-jar del IDE, `montar-zip.sh` a MOD8 — y en la Pico el `exitCode` del fallo de carga por la tabla
+`#481` (hoy manda el ordinal del enum). Y `#493` (la sombra), que con la norma detrás deja de ser silenciosa.
 
 #### 🧵 `#495` — `GET`/`LS` DURANTE UN RUN: el `BUSY` es de la época de un solo hilo → **V7** (abierta 11-sep, de `C1`)
 

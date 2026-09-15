@@ -27,6 +27,27 @@
 
 ## Última sesión
 
+## 🧱 MOD8 HECHO (15-sep) — la norma de versiones de `#500` en las dos VMs con el mismo texto, `#518` cerrada; queda la cadena, `#441` (`.mdn` v2) y `#493`
+
+**Commits**: `5fc59ae4` (MOD8 + la norma + check-norma 9/9 + `#518b`) · `8d7e2674` (oráculos de `#518` en el corpus,
+65/65). Método: mapa de 7 lectores + 7 refutadores antes de tocar (3,1 M tokens; sacó, entre otras cosas, que
+`check_fwd` estaba en verde sin ejecutar el módulo compilado, que `Math` no deja imports —por eso el sello va por
+módulo—, y que la pasada interfaz-only pierde las const sin tipo). Red al cierre: frontend 189/189, miVM 40/40,
+paridad **65/65** (apps MOD8 sobre stdlib MOD7), cápsula V6 59/59, fwd RECHAZA, norma 9/9, samples 348/348,
+test-modhdr y los test-* con fixture OK.
+
+**Las decisiones de Eduardo hoy**: la norma de `extends` («los hijos pueden ser más recientes que los padres; los
+padres no pueden ser más recientes que los hijos») en vez del marcador de layout — pidió el marco y el detalle caso
+por caso antes de decidir (usar ≠ extender). Pendiente de su respuesta: **la huella del `.mdn`** (pieza 4, `#441`):
+propuesta `bpgenvm-c/include/bpvm_aot_recetas.h` como única fuente (un literal por destino que el firmware hashea y
+`AotBuild` parsea), cabecera v2 de 24 B, INFO publica `aotFlagsCrc`; el mapa tiene el detalle (14 sitios).
+
+**Orden para retomar**: (1) `#441` (`.mdn` v2) si Eduardo da el visto bueno a las recetas; (2) `#493`; (3) `#514`
+`#516`; (4) **la cadena**: `Stdlib.bpbuild` con `"version": 7`, `rm -rf bpstdlib/out` y la stdlib rehecha (MOD8),
+samples, fat-jar del IDE (⚠️ con el IDE cerrado; y `compileFile` del Run del IDE debe pasar la `version` del proyecto),
+blobs de las cinco imágenes, `Stdlib.pack`/SQLite.pack, `montar-zip.sh` a MOD8, el `exitCode` de carga de la Pico
+por la tabla `#481`; (5) el cierre pequeño (redes con número + tanda corta en una placa por familia).
+
 ## ⏭️ AL RETOMAR (14-sep, tarde) — B de `#492` casi entera: campos, `final`/`private`, ESTÁTICOS y CONSTRUCTORES ×N cruzan el módulo; `#509` `#510` `#513` cerradas. Falta la subida de formato (MOD8/`#500`) y su cadena
 
 **Commits del día, en orden**: `4a6ea0f4` (`#508`) · `160e849b` (campos, `bpi 8`) · `7680998a` (`#512`) ·

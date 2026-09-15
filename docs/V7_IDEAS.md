@@ -764,7 +764,12 @@ embebido en el `MOD7` pasa por el mismo gate. De paso: `Disasm.java:56-66` sólo
 
 ### 2. El diseño — cuatro piezas, una sola subida de formato
 
-**Pieza 1 · `#500`: el `.mod` lleva contra qué se compiló, y el cargador lo exige.**
+**Pieza 1 · `#500`: el `.mod` lleva contra qué se compiló, y el cargador lo exige.** ✅ **Hecha el 15-sep**
+(`5fc59ae4`; la especificación viva está en `MOD_FORMAT.md` §3/§3.1). Lo que cambió al hacerla: el sello va **por
+módulo** en una subtabla `deps` (no por import); una dependencia MOD7 cuenta como gen 0 (si se exige más, «más
+antigua»); y **el marcador de layout se cae**: lo sustituye la norma de Eduardo para `extends` (*«los hijos pueden
+ser más recientes que los padres; los padres no pueden ser más recientes que los hijos»*) con una marca `EXTIENDE` en
+el sello. El texto de abajo es el diseño de la mañana del 14-sep, que se conserva como registro.
 
 Dos números por dependencia, los dos **automáticos** (sin sintaxis nueva):
 
