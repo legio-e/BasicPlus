@@ -27,6 +27,26 @@
 
 ## Última sesión
 
+## 🧬 `#523` DECIDIDA Y DISEÑADA (15-sep, noche) — enlace tardío: la clase se adapta al cargar; «validado al 100x100» escrito antes del código
+
+**Cómo se llegó**: el mapa de `#514`/`#516` (`3fa48e69`) → Eduardo: *«llevamos como 5 versiones dando vueltas a los slots… cerrar el tema de
+forma definitiva»* → tres rondas de diseño en chat (§H2.6) → *«tú defiendes que nada de esto es posible, pero yo no termino de creer»* →
+**`compat/mezcla.py`** (`59558202`): 84 filas en las dos VMs, línea base ANTES de tocar nada — la norma cumple lo que dice (75), el
+compilador falla con la misma clase (5, `#514`) y **el camino tolerante tiene cuatro agujeros** (firma de cabeza, retorno, tipo de
+property, firma de función de módulo: el marcador conserva el nombre en la ranura y pasa; yo había afirmado lo contrario) → Eduardo:
+*«en Java hay compatibilidad hacia atrás… lo ideal es que pudiésemos hacer algo similar»* → **la norma**: *«lo que puede resolver el
+compilador es estático y lo que puede resolver el cargador es dinámico»* → `#523` (`dd541e7c`) → el diseño en `V7_IDEAS.md` §H2.7
+(`8bab1fd3`: 6 lectores + 3 diseños + 2 jueces + síntesis + crítico; las 11 correcciones del crítico incorporadas).
+
+**Estado**: diseño escrito, código sin tocar. **Esperan las decisiones D1-D10** (final de §H2.7). Tamaño: 17-23 sesiones en cascada.
+Fichas abiertas hoy: `#521` (el `.mod` se escribe con errores del emisor), `#522` (enum: `"c=" + c` revienta el heap).
+
+**Orden para retomar H2 (cambia)**: (1) las decisiones de Eduardo; (2) **`#523`** por la cascada — V0 línea base con cronómetro en las
+dos VMs y ciclos en la Pico (ANTES de tocar nada) → frontend (`claveCanonica`, bpi 9, refs 3.3, CLASES 4.5, 11 sitios `_REF`,
+`--barajar`) → miVM (cargador + 11 opcodes + tests JUnit V3) → VM-C host → Pico → stdlib MOD9 + docs → V4-V10; (3) **la cadena una sola
+vez, en MOD9** (con `bpvm_mods_sincronizar` comparando `gen`); (4) `#514`/`#516` se cierran «por construcción» al final, no antes;
+`#520`/`#521`/`#522` cuando toque. **La Pico está conectada** (Eduardo, tarde): sirve para V0 (ciclos del enlace hoy) y para V8.
+
 ## 🌗 `#493` CERRADA (15-sep, tarde-noche) — la zona de packs deja de disfrazarse de `/app`: un orden de módulos en las dos VMs, el aviso «tapa al de /lib», el XIP vuelve, un pack es un docker
 
 **Commits**: `a4cec0a3` (el grueso), `be7dc131` (STAT por nombre mira la zona), `6442b839` (los arreglos de la revisión
