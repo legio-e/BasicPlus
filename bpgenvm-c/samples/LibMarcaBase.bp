@@ -1,0 +1,15 @@
+// V7/H2 (#518) — oraculo: una LIBRARY como dependencia. (a) el marcador de vtable lleva el prefijo
+// de library (la VM-C buscaba LibB.mod en vez de com.acme.lib.LibB.mod); (b) la VM-C no cargaba una
+// dependencia con library desde el FS (nombre logico con el prefijo → module_loaded nunca casaba).
+library "com.acme.lib"
+module LibMarcaBase
+  public class Base
+    var n: integer := 0
+    public function Base(v: integer)
+      this.n := v
+    end Base
+    public function quien(): string
+      return "n=" + this.n
+    end quien
+  end Base
+end LibMarcaBase

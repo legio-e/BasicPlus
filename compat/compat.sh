@@ -74,7 +74,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -302,9 +302,12 @@ check_parity() {
     # el primero alfabetico pasa a ser Adc.mod — una libreria sin main — y las
     # dos VMs fallan IGUAL al ejecutarla: 38/38 en verde sin haber ejecutado NI
     # UN sample. El falso-PAR exacto contra el que este arnes advierte.
-    local rootname
+    local rootname rootlib
     rootname="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "$bp" | head -1)"
+    # V7/H2 (#518) - un modulo con `library "x.y"` se escribe como x.y.Modulo.mod.
+    rootlib="$(sed -nE 's/^[[:space:]]*library[[:space:]]+"([A-Za-z0-9_.]+)".*/\1/p' "$bp" | head -1)"
     mod="$WORK/$rootname.mod"
+    [ -n "$rootlib" ] && mod="$WORK/$rootlib.$rootname.mod"
     if [ -z "$rootname" ] || [ ! -f "$mod" ]; then
       echo "  SKIP $s (no se encontro $rootname.mod tras compilar)"; skip=$((skip+1)); continue
     fi
