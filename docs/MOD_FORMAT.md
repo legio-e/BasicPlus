@@ -1,14 +1,18 @@
-# Formato binario `.mod` (v7)
+# Formato binario `.mod` (v8)
 
 Este documento es la **especificación canónica** del fichero `.mod` que
 emite el frontend (`lexer-java`) y consumen las dos VMs (`miVM` en Java y
 `bpgenvm-c` en C). Si una implementación discrepa del documento, **el
 documento gana**.
 
-Versión vigente: **7** (campo `MAGIC` = `0x4D4F4437` = ASCII `"MOD7"`, desde
-V6/N1.4: la sección `native` dentro del propio `.mod`). Las VMs de V6 cargan
-también **v6** (`"MOD6"`, sin sección `native`) y **rechazan** v5 y anteriores
-con un mensaje (`#284`: el formato tiene que coincidir; si no, se recompila).
+Versión vigente: **8** (campo `MAGIC` = `0x4D4F4438` = ASCII `"MOD8"`, desde
+V7/H2, 15-sep-2026: el módulo lleva **contra qué se compiló** — su generación
+`gen`, el CRC32 de su interfaz, y el sello de cada dependencia — y las VMs aplican
+**la norma de versiones** de `#500` al cargar, §3.1). Las VMs de V7 cargan también
+**v7** y **v6** (sin datos de versión: cuentan como generación 0 y CRC desconocido)
+y **rechazan** v5 y anteriores con un mensaje (`#284`). El compilador emite **sólo
+v8**. Las VMs de V6 rechazan un v8 con «MAGIC no reconocido»: hacia delante no hay
+compatibilidad, hacia atrás sí (decisión de Eduardo, 14-sep).
 
 Convención general:
 - Todos los enteros son **big-endian** salvo indicación expresa.
@@ -33,8 +37,8 @@ Convención general:
 > según el MAGIC no es una precaución: es el contrato.
 
 ```
-+─────────────────────── header (36 bytes en v7) ───────────────────────────+
-│  +00  MAGIC          i32  0x4D4F4437 ("MOD7")                            │
++─────────────────────── header (44 bytes en v8) ───────────────────────────+
+│  +00  MAGIC          i32  0x4D4F4438 ("MOD8")                            │
 │  +04  dataSize       i32  bytes de la sección data                       │
 │  +08  mainOffset     i32  offset del entrypoint dentro de code (-1 = no) │
 │  +12  importsSize    i32  bytes de la sección imports                    │
@@ -42,7 +46,9 @@ Convención general:
 │  +20  codeSize       i32  bytes de la sección code                       │
 │  +24  librarySize    i32  bytes de la sección library (0 si no hay)      │
 │  +28  interfaceSize  i32  bytes de la sección interface   ← v6 y v7      │
-│  +32  nativeSize     i32  bytes de la sección native      ← sólo v7      │
+│  +32  nativeSize     i32  bytes de la sección native      ← v7 y v8      │
+│  +36  gen            i32  generación del módulo (`version` del proyecto; 0 si suelto) ← v8
+│  +40  ifaceCrc       i32  CRC32 (IEEE) de los bytes de la sección interface        ← v8
 +──────────────────────────────────────────────────────────────────────────+
 +── library   ──+  librarySize   bytes, UTF-8 raw (sin length prefix)
 +── imports   ──+  importsSize   bytes (ver §3)
@@ -80,10 +86,55 @@ Cuando hay library `L` y módulo `M`:
 ## 3. Sección IMPORTS
 
 ```
-imports ::= count:i32  import_entry*
+imports ::= count:i32  import_entry*  [ deps ]            (deps: sólo v8)
 
 import_entry ::= name:UTF  fromPath:UTF
+
+deps       ::= count:i32  dep_entry*
+dep_entry  ::= module:UTF  fromPath:UTF  gen:i32  ifaceCrc:i32  flags:i32
 ```
+
+**La subtabla `deps` (v8, V7/H2)** va DETRÁS de las entradas de import, dentro
+de `importsSize`, y se detecta por los bytes remanentes (aditivo). Es el
+**sello** de cada dependencia contra la que el compilador compiló este módulo:
+una entrada por **módulo** (nombre lógico cualificado, `Core` o `acme.LibHdr`),
+no por import — un import repite el sello de su dueño, y una dependencia toda
+intrínseca (`Math`) no deja ningún import. `gen` e `ifaceCrc` son los de la
+cabecera del `.mod` de la dependencia tal como el compilador la leyó (para una
+dependencia v6/v7, `gen` = 0 y `ifaceCrc` = CRC32 de su sección interface).
+`flags` bit 0 = **EXTIENDE**: este módulo tiene una clase cuya base vive en esa
+dependencia. Un lector que no conozca la subtabla la salta por `importsSize`.
+Una subtabla vacía significa «no exige nada» (módulos escritos a mano con el
+`ModWriter`, tests).
+
+### 3.1 La norma de versiones (`#500`), igual en las dos VMs
+
+Al resolver cada dependencia `D` de un módulo `M` (v8) — también si `D` ya estaba
+cargada por otro módulo — con el sello `(gen_req, crc_req, flags)` que `M` lleva
+para `D`:
+
+1. `D.gen < gen_req` → **rechazo**: `'D' (gen X) es mas antiguo que el que 'M'
+   necesita (gen Y): actualiza /lib o recompila`.
+2. `D.gen == gen_req` y `D.ifaceCrc != crc_req` → **rechazo**: `'D' (gen X, interfaz
+   AAAAAAAA) no es la interfaz con la que se compilo 'M' (interfaz BBBBBBBB): recompila`.
+3. `D.gen > gen_req` y `M` **extiende** una clase de `D` → **rechazo**: `'D' (gen X)
+   es mas reciente que 'M' (compilado contra gen Y) y 'M' extiende una clase suya:
+   recompila 'M'` — norma de Eduardo (15-sep): *«los hijos pueden ser más recientes
+   que los padres; los padres no pueden ser más recientes que los hijos»*. Un hijo
+   coloca sus campos y métodos detrás de los del padre: si el padre cambia de
+   forma (aunque sólo añada al final), el hijo pisa sus ranuras.
+4. `D.gen > gen_req` y `M` sólo la **usa** → se acepta **si enlaza**: los
+   marcadores `Cls#m#slot` (§4.2) deciden; añadir al final no rompe a un cliente.
+5. `D` es v6/v7 (sin datos): `gen` = 0 → si `gen_req > 0`, regla 1; si `gen_req` = 0,
+   se anota «sin datos de version» por el diagnóstico (stderr en host, log en placa)
+   y no se comprueba la interfaz.
+
+El texto del rechazo sale por **OUTPUT** (el `stdout` del programa: mismo texto
+byte a byte en miVM y bpgenvm-c, ASCII, sin rutas) y la carga falla con **exit 2**
+(«no se pudo cargar»; `BPVM_ERR_DEP_VERSION` en C, `IOException` en Java, y
+`load: <texto>` en el `errorMessage` del wire). Un símbolo que no enlaza sale como
+`=== ERROR DE LINK: <texto> ===` con el texto de `link.c` en las dos VMs, exit 1.
+Lo prueba `compat/compat.sh check-norma` con `Core` de verdad (9 casos).
 
 - `name` es el qualifiedName del símbolo importado:
   - `"<Module>.<func>"` si el dueño no declara library.
@@ -499,15 +550,16 @@ guarda type+size — ver `HEAP_LAYOUT.md` §2 para detalle.
 El loader debe:
 1. Leer 4 bytes y mirar el MAGIC. **No hay byte de versión separado**: el MAGIC
    ES la versión, y también la declaración de ABI (ver `#284`).
-2. **El tamaño del header depende del MAGIC** — 28 / 32 / 36 bytes para v5 / v6 /
-   v7. Leerlo mal desplaza todas las secciones. En Java está resuelto en
-   `ModFormat.headerSizeDe(magic)`.
-3. **Qué se ejecuta hoy: v6 y v7.** v5 se **rechaza** — es anterior al ensanchado
-   de refs 4→8B y su ABI no se puede garantizar, así que correrlo corrompería en
-   silencio.
-4. 📌 **v7 NO obliga a regenerar nada.** Sólo añade una sección; el ABI (el ancho
-   de referencia) no cambia, y por eso v6 sigue siendo ejecutable. El gate de
-   `#284` vigila el ABI, no el número.
+2. **El tamaño del header depende del MAGIC** — 28 / 32 / 36 / 44 bytes para v5 /
+   v6 / v7 / v8. Leerlo mal desplaza todas las secciones. En Java está resuelto en
+   `ModFormat.headerSizeDe(magic)`; en C, `BPVM_HEADER_SIZE_V8`.
+3. **Qué se ejecuta hoy: v6, v7 y v8.** v5 se **rechaza** — es anterior al
+   ensanchado de refs 4→8B y su ABI no se puede garantizar, así que correrlo
+   corrompería en silencio.
+4. 📌 **v7 y v8 NO obligan a regenerar nada.** Sólo añaden secciones y campos; el
+   ABI (el ancho de referencia) no cambia, y por eso v6 sigue siendo ejecutable.
+   El gate de `#284` vigila el ABI, no el número; la norma de §3.1 vigila las
+   VERSIONES, y sólo actúa cuando el módulo lleva los datos (v8).
 
 Para añadir un campo sin romper compat se usa el truco de subsección
 opcional detectable por bytes remanentes (ver §4.2 / §4.3). Para
@@ -522,8 +574,9 @@ cambios incompatibles se sube el número.
 | `MAGIC` | `0x4D4F4435` | "MOD5" — rechazado (ABI ambiguo) |
 | `MAGIC_V6` | `0x4D4F4436` | "MOD6" — con sección `interface` |
 | `MAGIC_V7` | `0x4D4F4437` | "MOD7" — con sección `native` |
-| `HEADER_SIZE` / `_V6` / `_V7` | 28 / 32 / 36 | bytes del header, según MAGIC |
-| `FORMAT_VERSION` | 7 | versión lógica (informativa) |
+| `MAGIC_V8` | `0x4D4F4438` | "MOD8" — con `gen`, `ifaceCrc` y la subtabla `deps` (§3) |
+| `HEADER_SIZE` / `_V6` / `_V7` / `_V8` | 28 / 32 / 36 / 44 | bytes del header, según MAGIC |
+| `FORMAT_VERSION` | 8 | versión lógica (informativa) |
 | `CLS_OFF_NUM_FIELDS` | 0 | offset del campo en el class descriptor |
 | `CLS_OFF_NUM_METHODS` | 2 | |
 | `CLS_OFF_BITMAP_WORDS` | 4 | |
@@ -535,7 +588,12 @@ cambios incompatibles se sube el número.
 
 ## 12. Cambios entre versiones
 
-- **v7** (actual, 23-ago-2026): sección **`native`** entre `interface` y `data`
+- **v8** (actual, 15-sep-2026, V7/H2): el módulo lleva **contra qué se compiló**:
+  `gen` e `ifaceCrc` en la cabecera (44 bytes) y la subtabla `deps` en `imports`
+  (§3); las VMs aplican la norma de versiones (§3.1). La interfaz se escribe con
+  `\n` fijo (el CRC es la identidad de esos bytes: igual en Windows y Linux).
+  **Aditivo**: v6 y v7 se siguen ejecutando (sin datos de versión).
+- **v7** (23-ago-2026): sección **`native`** entre `interface` y `data`
   (§4.6) — el `.mdn` deja de ser un fichero aparte. Header de 36 bytes.
   **Aditivo**: no cambia el ABI, así que los `.mod` v6 se siguen ejecutando y no
   hubo que regenerar ninguno.

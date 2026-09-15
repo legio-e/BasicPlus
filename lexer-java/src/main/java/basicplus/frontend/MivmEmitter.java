@@ -83,6 +83,15 @@ public final class MivmEmitter {
     private String sourcePath = null;
     public void setSourcePath(String sourcePath) { this.sourcePath = sourcePath; }
 
+    /** V7/H2 (MOD8, #500) — la generación de este módulo y el sello (gen, ifaceCrc)
+     *  de cada dependencia por nombre canónico; los rellena Main. */
+    private int generacion = 0;
+    private java.util.Map<String, int[]> versionesDeps = java.util.Collections.emptyMap();
+    public void setGeneracion(int gen) { this.generacion = gen; }
+    public void setVersionesDeps(java.util.Map<String, int[]> m) { this.versionesDeps = (m == null) ? java.util.Collections.emptyMap() : m; }
+    /** El CRC de la sección interface tal como se escribió (válido tras emitTo). */
+    public int getInterfaceCrc() { return w.getInterfaceCrc(); }
+
     /**
      * Mapeo (relPc → línea fuente). Se rellena durante {@link #emitStmt}
      * justo antes de despachar cada sentencia: capturamos el offset del
@@ -227,6 +236,37 @@ public final class MivmEmitter {
                 String key = sb.toString();
                 String from = (imp.fromPath == null) ? "" : imp.fromPath;
                 importFromPaths.put(key, from);
+            }
+        }
+        // V7/H2 (MOD8, #500) — la generación propia y el SELLO de cada dependencia:
+        // por cada namespace importado (con `import I:M` el que cuenta es el IMPL, que
+        // es contra quien van los CALL_EXT), su nombre canónico `[lib.]Mod` y el
+        // (gen, ifaceCrc) que Main leyó al resolver su interfaz. Sin sello es un bug
+        // del compilador: se dice, no se escribe (0,0) en silencio.
+        w.setGeneracion(generacion);
+        if (moduleAst.imports != null && info.module != null) {
+            for (ImportNode imp : moduleAst.imports) {
+                if (imp.path == null || imp.path.isEmpty()) continue;
+                Symbol sym = info.module.members.tryLookup(imp.path.get(imp.path.size() - 1));
+                if (!(sym instanceof Symbol.ImportedNamespaceSymbol)) continue;   // «phantom»: sin interfaz, sin CALL_EXT
+                Symbol.ImportedNamespaceSymbol ns = (Symbol.ImportedNamespaceSymbol) sym;
+                String canon = (ns.library == null || ns.library.isEmpty()) ? ns.moduleName : ns.library + "." + ns.moduleName;
+                int[] sello = versionesDeps.get(canon);
+                if (sello == null)
+                    throw new RuntimeException("el módulo '" + canon + "' se importa sin sello de versión (gen, ifaceCrc): bug del compilador");
+                w.declareDependency(canon, ns.fromPath, sello[0], sello[1]);
+            }
+            // Y la marca EXTIENDE: cada clase de este módulo cuya base vive en una
+            // dependencia (norma de Eduardo: un padre nunca más reciente que sus hijos).
+            for (ITopLevelDecl d : moduleAst.defs) {
+                if (!(d instanceof ClassDef)) continue;
+                Symbol cs = info.declSymbols.get(d);
+                if (!(cs instanceof ClassSymbol)) continue;
+                ClassSymbol base = ((ClassSymbol) cs).baseClass;
+                if (base == null || !base.isExternal || base.externalModule == null || base.externalModule.isEmpty()) continue;
+                String canon = (base.externalLibrary == null || base.externalLibrary.isEmpty())
+                        ? base.externalModule : base.externalLibrary + "." + base.externalModule;
+                w.markDependency(canon, edu.bpgenvm.generador.ModWriter.DEP_EXTIENDE);
             }
         }
 
@@ -4241,7 +4281,10 @@ public final class MivmEmitter {
             // el marker no existe → error de link claro en vez de misdispatch.
             // Compat hacia adelante: añadir métodos al final no mueve los markers.
             if (cls.externalModule != null && !cls.externalModule.isEmpty()) {
-                String marker = cls.externalModule + "." + cls.name + "#" + methodName + "#" + slot;
+                // #518(a) — CON el prefijo de library (qualifyForOwner), como el resto de
+                // símbolos cross-module: sin él la VM-C buscaba `LibB.mod` en vez de
+                // `com.acme.lib.LibB.mod` y no enlazaba (miVM lo tapaba con su clave corta).
+                String marker = qualifyForOwner(cls, cls.name + "#" + methodName + "#" + slot);
                 w.requireExternalSymbol(marker, fromPathFor(marker));
             }
         } else {

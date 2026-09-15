@@ -89,20 +89,31 @@ public final class ModFormat {
     /** Tamaño del header v7 en bytes (9 enteros: añade nativeSize). */
     public static final int HEADER_SIZE_V7 = 36;
 
+    /** Identificador de los .mod v8 (V7/H2, #500 — el módulo lleva contra qué se
+     *  compiló: su generación `gen` y el CRC32 de su interfaz, y una subtabla
+     *  `deps` en la sección imports con el (gen, ifaceCrc) de cada dependencia).
+     *  Aditivo: las VMs cargan MOD7 y MOD8; el compilador emite sólo MOD8. */
+    public static final int MAGIC_NUMBER_V8 = 0x4D4F4438; // "MOD8"
+
+    /** Tamaño del header v8 en bytes (11 enteros: añade gen e ifaceCrc AL FINAL,
+     *  para que los 9 primeros no se muevan). */
+    public static final int HEADER_SIZE_V8 = 44;
+
     /** Versión lógica del formato; informativa. */
-    public static final int FORMAT_VERSION = 7;
+    public static final int FORMAT_VERSION = 8;
 
     /** True si {@code magic} es un MAGIC de .mod RECONOCIBLE (v5 o v6). Sirve
      *  para INSPECCIONAR (disasm / module info): saber qué es un fichero. NO
      *  implica que se pueda ejecutar — para eso está {@link #isAbiSupported}. */
     public static boolean isKnownMagic(int magic) {
         return magic == MAGIC_NUMBER || magic == MAGIC_NUMBER_V6
-            || magic == MAGIC_NUMBER_V7;
+            || magic == MAGIC_NUMBER_V7 || magic == MAGIC_NUMBER_V8;
     }
 
     /** Bytes de header que le corresponden a este magic. El header CRECE con la
      *  versión, así que leerlo mal desplaza TODAS las secciones. */
     public static int headerSizeDe(int magic) {
+        if (magic == MAGIC_NUMBER_V8) return HEADER_SIZE_V8;
         if (magic == MAGIC_NUMBER_V7) return HEADER_SIZE_V7;
         if (magic == MAGIC_NUMBER_V6) return HEADER_SIZE_V6;
         return HEADER_SIZE;
@@ -141,8 +152,11 @@ public final class ModFormat {
      *  <p>Por eso el salto a v7 <b>no obliga a regenerar</b> los `.mod` que ya
      *  hay. v5 sigue rechazado, y por el motivo de siempre: su ABI es ambiguo. */
     public static boolean isAbiSupported(int magic) {
-        return magic == MAGIC_NUMBER_V6 || magic == MAGIC_NUMBER_V7;
+        return magic == MAGIC_NUMBER_V6 || magic == MAGIC_NUMBER_V7 || magic == MAGIC_NUMBER_V8;
     }
+
+    /** V7/H2 — ¿lleva este magic los campos de versión (gen, ifaceCrc, subtabla deps)? */
+    public static boolean tieneVersion(int magic) { return magic == MAGIC_NUMBER_V8; }
 
     /** Motivo de rechazo, claro y accionable, para un magic no ejecutable. */
     public static String abiRejectReason(int magic) {
@@ -152,7 +166,7 @@ public final class ModFormat {
                  + "corrompería memoria en silencio). Recompílalo con el compilador actual.";
         }
         return String.format(
-                "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\" o \"MOD7\")", magic);
+                "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\", \"MOD7\" o \"MOD8\")", magic);
     }
 
     // ============================================================
@@ -189,7 +203,8 @@ public final class ModFormat {
         if (!isAbiSupported(magic)) {
             throw new IllegalArgumentException(abiRejectReason(magic));
         }
-        boolean v7 = (magic == MAGIC_NUMBER_V7);
+        boolean v8 = (magic == MAGIC_NUMBER_V8);
+        boolean v7 = (magic == MAGIC_NUMBER_V7) || v8;
         int dataSize   = b.getInt();
         int mainOffset = b.getInt();
         int impSize    = b.getInt();
@@ -198,27 +213,33 @@ public final class ModFormat {
         int libSize    = b.getInt();
         int ifaceSize  = b.getInt();
         int natSize    = v7 ? b.getInt() : 0;
+        int gen        = v8 ? b.getInt() : 0;      // V7/H2 (MOD8)
+        int ifaceCrc   = v8 ? b.getInt() : 0;
 
-        int hdr    = v7 ? HEADER_SIZE_V7 : HEADER_SIZE_V6;
+        int hdr    = headerSizeDe(magic);
         int iniLib = hdr;
         int iniNat = iniLib + libSize + impSize + expSize + ifaceSize;
         int iniData = iniNat + natSize;
 
-        /* El relleno se calcula sobre dónde caerá el blob en el fichero NUEVO,
-         * que siempre tiene header v7 (36). Si el módulo venía en v6 el header
-         * crece 4 bytes — múltiplo de 4, así que no descoloca lo de delante. */
-        int finNatNuevo = HEADER_SIZE_V7 + libSize + impSize + expSize + ifaceSize + natSize;
+        /* V7/H2 — se CONSERVA la versión de entrada (un MOD7 sale MOD7; un MOD8, MOD8):
+         * fundir un blob no cambia la interfaz ni la generación, y un MOD7 no tiene
+         * de dónde sacar un gen. Un v6 sube a v7 como siempre (gana la sección native).
+         * El relleno se calcula sobre dónde caerá el blob en el fichero NUEVO. */
+        int magicSalida = v8 ? MAGIC_NUMBER_V8 : MAGIC_NUMBER_V7;
+        int hdrSalida   = headerSizeDe(magicSalida);
+        int finNatNuevo = hdrSalida + libSize + impSize + expSize + ifaceSize + natSize;
         int pad = (4 - (finNatNuevo & 3)) & 3;
 
         int natSizeNuevo = natSize + pad + blob.length;
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(
-                mod.length + pad + blob.length + 4);
-        java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(HEADER_SIZE_V7);
-        h.putInt(MAGIC_NUMBER_V7);
+                mod.length + pad + blob.length + 12);
+        java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(hdrSalida);
+        h.putInt(magicSalida);
         h.putInt(dataSize); h.putInt(mainOffset); h.putInt(impSize);
         h.putInt(expSize);  h.putInt(codeSize);   h.putInt(libSize);
         h.putInt(ifaceSize); h.putInt(natSizeNuevo);
-        out.write(h.array(), 0, HEADER_SIZE_V7);
+        if (v8) { h.putInt(gen); h.putInt(ifaceCrc); }
+        out.write(h.array(), 0, hdrSalida);
 
         out.write(mod, iniLib, iniNat - iniLib);        // library+imports+exports+interface
         if (natSize > 0) out.write(mod, iniNat, natSize);   // los blobs que ya había

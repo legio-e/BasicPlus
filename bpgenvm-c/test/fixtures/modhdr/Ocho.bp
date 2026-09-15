@@ -1,0 +1,19 @@
+// V7/H2 — fixture MOD8 para test_modhdr: cabecera de 11 enteros (gen + ifaceCrc) y la
+// subtabla `deps` de la sección imports (importa Core: List). Compilado suelto → gen 0.
+module Ocho
+  import Core
+  public class Cosa
+    var n: integer := 0
+    public function Cosa()
+      this.n := 8
+    end Cosa
+    public function valor(): integer
+      return this.n
+    end valor
+  end Cosa
+  public function main()
+    var l: Core.List := Core.List()
+    l.add(Cosa())
+    print "ocho " + l.length()
+  end main
+end Ocho

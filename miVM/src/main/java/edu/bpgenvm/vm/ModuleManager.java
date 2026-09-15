@@ -224,6 +224,10 @@ public class ModuleManager {
         final String path;    // != null → fichero del FS (y sitio donde buscar el .dbg)
         final byte[] bytes;   // != null → entrada del pack en ejecución
         final String label;   // para los mensajes de error
+        /** V7/H2 (MOD8) — lo que dice su cabecera: magic, generación y CRC de su
+         *  interfaz (0/0 si es MOD6/MOD7). Se rellenan en discoverDependencies al
+         *  leer la cabecera, ANTES de recurrir a sus imports. */
+        int magic, gen, ifaceCrc;
 
         private ModSource(String path, byte[] bytes, String label) {
             this.path = path; this.bytes = bytes; this.label = label;
@@ -253,6 +257,20 @@ public class ModuleManager {
                     ? new java.io.ByteArrayInputStream(bytes)
                     : new FileInputStream(path));
         }
+    }
+
+    /** V7/H2 — un símbolo cross-module que no resuelve al enlazar. Lleva el MISMO
+     *  texto que la VM-C (link.c: «lib 'X' presente pero no exporta 'X.sym' (la usa
+     *  'Y'; version vieja?)») para que el host lo imprima igual. */
+    public static final class LinkException extends RuntimeException {
+        public LinkException(String msg) { super(msg); }
+    }
+
+    /** V7/H2 (#500) — el rechazo de la norma de versiones: el texto ya salió por el
+     *  OUTPUT del programa (mismo texto en las dos VMs); el mensaje de la excepción
+     *  es ese mismo texto, y el host lo repite por stderr como «load X: …». */
+    public static final class VersionRechazada extends IOException {
+        public VersionRechazada(String msg) { super(msg); }
     }
 
     /** Ruta del pack en ejecución, o null si se ejecuta un .mod suelto. */
@@ -416,6 +434,7 @@ public class ModuleManager {
     private static class ModuleMetadata {
         String name;
         String library;          // "" si el .mod no declara library
+        int magic, gen, ifaceCrc;   // V7/H2 (MOD8): lo que dice su cabecera (0/0 en MOD6/MOD7)
         int moduleBase;
         int extTableAddress;
         int dataStart;
@@ -472,7 +491,28 @@ public class ModuleManager {
         }
     }
 
+    /** V7/H2 — el texto de un símbolo no resuelto, calcado de link.c (bpvm_link_set_error):
+     *  la lib es lo que va antes del PRIMER punto; «presente» si hay un módulo cargado
+     *  con ese nombre. Y una pista cuando es un marcador de LAYOUT: el padre cambió de
+     *  forma y la clase hija hay que recompilarla. */
+    private String textoDeEnlace(String needed, String who) {
+        int p = needed.indexOf('.');
+        String lib = (p < 0) ? "" : needed.substring(0, p);
+        boolean loaded = false;
+        for (ModuleMetadata m : loadedModules) if (m.name.equals(lib)) { loaded = true; break; }
+        String msg;
+        if (!lib.isEmpty() && !loaded)
+            msg = "falta la lib '" + lib + "' (la usa '" + who + "'; simbolo '" + needed + "')";
+        else if (!lib.isEmpty())
+            msg = "lib '" + lib + "' presente pero no exporta '" + needed + "' (la usa '" + who + "'; version vieja?)";
+        else
+            msg = "simbolo no resuelto '" + needed + "' (la usa '" + who + "')";
+        if (needed.contains("#layout#")) msg += " [el padre cambio de forma: recompila la clase hija]";
+        return msg;
+    }
+
     private static class LinkTask {
+        String moduleName;            // V7/H2: quién pide (para el texto de enlace)
         int extTableAddress;
         int moduleCodeStart;          // CS del módulo dueño (= codeStart)
         String[] requiredImports;
@@ -546,7 +586,8 @@ public class ModuleManager {
                         + ModFormat.abiRejectReason(magic0));
             }
             boolean v6a = (magic0 != ModFormat.MAGIC_NUMBER);   // v6 o v7: llevan interfaceSize
-            boolean v7a = (magic0 == ModFormat.MAGIC_NUMBER_V7);
+            boolean v8a = (magic0 == ModFormat.MAGIC_NUMBER_V8);
+            boolean v7a = (magic0 == ModFormat.MAGIC_NUMBER_V7) || v8a;
             in.readInt(); // dataSize
             in.readInt(); // mainOffset
 
@@ -556,6 +597,8 @@ public class ModuleManager {
             int librarySize = in.readInt();
             if (v6a) in.readInt();   // interfaceSize (v6): irrelevante para el discovery de imports
             if (v7a) in.readInt();   // nativeSize (v7): idem — aqui solo se buscan imports
+            src.magic = magic0;
+            if (v8a) { src.gen = in.readInt(); src.ifaceCrc = in.readInt(); }   // V7/H2 (MOD8)
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
@@ -567,6 +610,22 @@ public class ModuleManager {
             if (importSize > 0) {
                 DataInputStream importIn = new DataInputStream(new java.io.ByteArrayInputStream(importBuffer));
                 int extCount = importIn.readInt();
+                // V7/H2 (MOD8, #500) — la subtabla `deps` va DETRÁS de las entradas de
+                // import: count + (modulo, fromPath, gen, ifaceCrc)*. Se lee primero
+                // (saltando las entradas) para tenerla a mano al resolver cada import.
+                java.util.Map<String, int[]> requeridos = new java.util.HashMap<>();
+                if (v8a) {
+                    DataInputStream depIn = new DataInputStream(new java.io.ByteArrayInputStream(importBuffer));
+                    int n = depIn.readInt();
+                    for (int i = 0; i < n; i++) { depIn.readUTF(); depIn.readUTF(); }
+                    if (depIn.available() >= 4) {
+                        int nd = depIn.readInt();
+                        for (int i = 0; i < nd; i++) {
+                            String mod = depIn.readUTF(); depIn.readUTF();
+                            requeridos.put(mod, new int[]{depIn.readInt(), depIn.readInt(), depIn.readInt()});
+                        }
+                    }
+                }
                 for (int i = 0; i < extCount; i++) {
                     String imp = importIn.readUTF();
                     String fromPath = importIn.readUTF();
@@ -599,9 +658,76 @@ public class ModuleManager {
                                 : requiredLibrary + "." + requiredModule + ".mod";
                     }
                     discoverDependencies(requiredFilename, requiredModule);
+                    // V7/H2 (#500) — LA NORMA, aquí en el llamante y no dentro (si la
+                    // dependencia ya estaba en la cola, el `return` de arriba se la
+                    // saltaría): la cabecera del dependiente ya está leída, que es lo
+                    // único que hace falta.
+                    if (v8a) {
+                        String canon = requiredLibraryDe(imp, parts, myLibrary, fromPath, requiredModule);
+                        int[] req = requeridos.get(canon);
+                        ModSource dep = discoveryQueue.get(requiredModule);
+                        if (req != null && dep != null) comprobarNorma(moduleName, canon, req, dep);
+                    }
                 }
             }
         }
+    }
+
+    /** Nombre canónico `[lib.]Mod` de la dependencia de un import, con la misma regla
+     *  que el compilador usa para sellarla (ns.library + moduleName). */
+    private static String requiredLibraryDe(String imp, String[] parts, String myLibrary, String fromPath, String requiredModule) {
+        String lib;
+        if (parts.length >= 3) {
+            StringBuilder sb = new StringBuilder();
+            for (int k = 0; k < parts.length - 2; k++) { if (k > 0) sb.append('.'); sb.append(parts[k]); }
+            lib = sb.toString();
+        } else {
+            lib = myLibrary;
+        }
+        return lib.isEmpty() ? requiredModule : lib + "." + requiredModule;
+    }
+
+    /** V7/H2 (#500) — la norma de versiones de las dependencias, la misma en las dos
+     *  VMs y con el MISMO texto por OUTPUT (ASCII, sin rutas):
+     *   1. dep.gen < requerida → rechazo («mas antiguo»);
+     *   2. misma gen y otra ifaceCrc → rechazo («no es la interfaz con la que se compilo»);
+     *   3. gen mayor → se acepta si enlaza (los marcadores deciden);
+     *   una dependencia MOD6/MOD7 no lleva datos: cuenta como gen 0 y CRC desconocido —
+     *   si el importador exige gen > 0 es «mas antiguo» (regla 1); si exige 0, se anota
+     *   «sin datos de version» por el log y no se comprueba la interfaz. */
+    private final java.util.Set<String> sinDatosAvisados = new java.util.HashSet<>();
+
+    private void comprobarNorma(String importador, String canon, int[] req, ModSource dep) throws IOException {
+        int reqGen = req[0], reqCrc = req[1], flags = req[2];
+        boolean extiende = (flags & 1) != 0;
+        boolean depConDatos = ModFormat.tieneVersion(dep.magic);
+        int depGen = depConDatos ? dep.gen : 0;
+        String msg = null;
+        if (depGen < reqGen) {
+            msg = String.format("'%s' (gen %d) es mas antiguo que el que '%s' necesita (gen %d): actualiza /lib o recompila",
+                    canon, depGen, importador, reqGen);
+        } else if (!depConDatos) {
+            if (sinDatosAvisados.add(importador + "->" + canon))
+                System.err.printf("[miVM] dep '%s' sin datos de version (%s): no se comprueba su interfaz%n",
+                        canon, magicTexto(dep.magic));
+        } else if (depGen == reqGen && dep.ifaceCrc != reqCrc) {
+            msg = String.format("'%s' (gen %d, interfaz %08x) no es la interfaz con la que se compilo '%s' (interfaz %08x): recompila",
+                    canon, depGen, dep.ifaceCrc, importador, reqCrc);
+        } else if (depGen > reqGen && extiende) {
+            // Norma de Eduardo (15-sep): un padre nunca más reciente que sus hijos.
+            msg = String.format("'%s' (gen %d) es mas reciente que '%s' (compilado contra gen %d) y '%s' extiende una clase suya: recompila '%s'",
+                    canon, depGen, importador, reqGen, importador, importador);
+        }
+        if (msg != null) {
+            vm.getProgramOut().writeText(msg);
+            vm.getProgramOut().newline();
+            throw new VersionRechazada(msg);
+        }
+    }
+
+    private static String magicTexto(int magic) {
+        return new String(new byte[]{(byte) (magic >> 24), (byte) (magic >> 16), (byte) (magic >> 8), (byte) magic},
+                          StandardCharsets.US_ASCII);
     }
 
     private void loadModuleToMemory(ModSource source, String moduleName) throws IOException {
@@ -614,7 +740,8 @@ public class ModuleManager {
                         + ModFormat.abiRejectReason(magic1));
             }
             boolean v6 = (magic1 != ModFormat.MAGIC_NUMBER);   // v6 o v7 llevan interfaceSize
-            boolean v7 = (magic1 == ModFormat.MAGIC_NUMBER_V7);
+            boolean v8 = (magic1 == ModFormat.MAGIC_NUMBER_V8);
+            boolean v7 = (magic1 == ModFormat.MAGIC_NUMBER_V7) || v8;
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
             int importSize  = in.readInt();
@@ -628,6 +755,8 @@ public class ModuleManager {
              * —sus `native` corren interpretadas— asi que la SALTA; pero tiene que
              * saltarla BIEN, o todo lo que viene detras se desplaza. */
             int nativeSize = v7 ? in.readInt() : 0;
+            int gen = 0, ifaceCrc = 0;
+            if (v8) { gen = in.readInt(); ifaceCrc = in.readInt(); }   // V7/H2 (MOD8)
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
@@ -640,13 +769,19 @@ public class ModuleManager {
                 moduleName = moduleName.substring(library.length() + 1);
             }
 
-            int extCount = in.readInt();
+            // V7/H2 — la sección imports ENTERA a un buffer y se parsea de ahí: así la
+            // subtabla `deps` de MOD8 (detrás de las entradas) queda consumida por
+            // tamaño, y ningún byte de más o de menos corre la sección exports.
+            byte[] importBuf = new byte[importSize];
+            in.readFully(importBuf);
+            DataInputStream impIn = new DataInputStream(new java.io.ByteArrayInputStream(importBuf));
+            int extCount = impIn.readInt();
             String[] imports = new String[extCount];
             for (int i = 0; i < extCount; i++) {
-                imports[i] = in.readUTF();
+                imports[i] = impIn.readUTF();
                 // fromPath: solo lo usa el loader en discoverDependencies. Aquí
                 // ya estamos enlazando, así que lo consumimos y lo descartamos.
-                in.readUTF();
+                impIn.readUTF();
             }
 
             int extTableSize = extCount * 4;
@@ -767,6 +902,7 @@ public class ModuleManager {
             ModuleMetadata meta = new ModuleMetadata();
             meta.name = moduleName;
             meta.library = library;
+            meta.magic = magic1; meta.gen = gen; meta.ifaceCrc = ifaceCrc;   // V7/H2
             meta.moduleBase = moduleBase;
             meta.extTableAddress = extTableAddress;
             meta.dataStart = dataStart;
@@ -782,6 +918,7 @@ public class ModuleManager {
             loadedModules.add(meta);
 
             LinkTask task = new LinkTask();
+            task.moduleName = moduleName;
             task.extTableAddress = extTableAddress;
             task.moduleCodeStart = codeStart;
             task.requiredImports = imports;
@@ -803,7 +940,7 @@ public class ModuleManager {
                 String symbolNeeded = task.requiredImports[i];
                 Integer absoluteAddr = globalSymbolTable.get(symbolNeeded);
                 if (absoluteAddr == null) {
-                    throw new RuntimeException("Símbolo no resuelto: " + symbolNeeded);
+                    throw new LinkException(textoDeEnlace(symbolNeeded, task.moduleName));
                 }
                 vm.writeInt32(task.extTableAddress + (i * 4), absoluteAddr);
             }

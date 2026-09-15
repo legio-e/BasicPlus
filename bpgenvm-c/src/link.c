@@ -177,6 +177,14 @@ static void bpvm_link_set_error(bpvm_t* vm, const char* needed, const char* who)
         snprintf(vm->link_error, sizeof(vm->link_error),
                  "simbolo no resuelto '%s' (la usa '%s')", needed, who);
     }
+    /* V7/H2 (#500) — el marcador de LAYOUT (`Cls#layout#nF#nM#…`) no resuelve
+     * cuando el padre cambió de forma: la clase hija se compiló con otra idea de
+     * dónde caen sus campos y métodos. Misma pista que miVM. */
+    if (strstr(needed, "#layout#")) {
+        size_t l = strlen(vm->link_error);
+        snprintf(vm->link_error + l, sizeof(vm->link_error) - l,
+                 " [el padre cambio de forma: recompila la clase hija]");
+    }
 }
 
 /* Paso 4 (V3) — accessor público del detalle de fallo de link (ver bpvm.h). */

@@ -122,10 +122,12 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      * no se pueda garantizar se RECHAZA aquí, en la carga, con un error claro
      * -- nunca se ejecuta a ciegas. */
     if (magic == BPVM_MAGIC)                           return BPVM_ERR_ABI_MOD_V5;
-    if (magic != BPVM_MAGIC_V6 && magic != BPVM_MAGIC_V7)
+    if (magic != BPVM_MAGIC_V6 && magic != BPVM_MAGIC_V7 && magic != BPVM_MAGIC_V8)
                                                        return BPVM_ERR_BAD_MAGIC;
-    int is_v6 = 1;                       /* v6 y v7 llevan interfaceSize */
-    int is_v7 = (magic == BPVM_MAGIC_V7);
+    int is_v6 = 1;                       /* v6, v7 y v8 llevan interfaceSize */
+    int is_v8 = (magic == BPVM_MAGIC_V8);   /* V7/H2: gen + ifaceCrc + subtabla deps */
+    int is_v7 = (magic == BPVM_MAGIC_V7) || is_v8;
+    uint32_t gen = 0, iface_crc = 0;
     if (bc_read_be32(&c, &data_size) != 0)             return BPVM_ERR_IO;
     {
         uint32_t mo;
@@ -138,9 +140,14 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     if (bc_read_be32(&c, &library_size) != 0)          return BPVM_ERR_IO;
     if (is_v6 && bc_read_be32(&c, &interface_size) != 0) return BPVM_ERR_IO;
     if (is_v7 && bc_read_be32(&c, &native_size) != 0)    return BPVM_ERR_IO;
+    if (is_v8 && (bc_read_be32(&c, &gen) != 0 || bc_read_be32(&c, &iface_crc) != 0))
+                                                       return BPVM_ERR_IO;
 
     bpvm_module_t* mod = &vm->modules[vm->module_count];
     memset(mod, 0, sizeof(*mod));
+    mod->fmt = (uint8_t) (is_v8 ? 8 : (is_v7 ? 7 : 6));
+    mod->gen = gen;
+    mod->iface_crc = iface_crc;
     /* Nombre lógico: si tenemos hint úsalo, si no "embedded<idx>". */
     if (name_hint && name_hint[0]) {
         derive_module_name(name_hint, mod->name, sizeof(mod->name));
@@ -160,9 +167,19 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
         if (n < library_size && bc_skip(&c, library_size - n) != 0) {
             return BPVM_ERR_IO;
         }
+        /* #518(b) — el nombre lógico NO lleva la library: el fichero se llama
+         * `acme.LibHdr.mod` y el hint era el basename entero, así que `name`
+         * salía «acme.LibHdr», el prefijo de exports «acme.acme.LibHdr.» y
+         * module_loaded(lib, mod) no casaba nunca: la VM-C recargaba el mismo
+         * módulo hasta agotar BPVM_MAX_MODULES. miVM ya lo recortaba. */
+        size_t ll = strlen(mod->library);
+        if (ll > 0 && strncmp(mod->name, mod->library, ll) == 0 && mod->name[ll] == '.') {
+            memmove(mod->name, mod->name + ll + 1, strlen(mod->name + ll + 1) + 1);
+        }
     }
 
     /* --- Imports (count + (name UTF, fromPath UTF) * count) --- */
+    size_t imports_ini = c.pos;
     uint32_t ext_count;
     if (bc_read_be32(&c, &ext_count) != 0)             return BPVM_ERR_IO;
     mod->ext_count = ext_count;
@@ -183,7 +200,38 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             if (!mod->imports[i]) return BPVM_ERR_OOM;
         }
     }
-    (void) imports_size;
+    /* V7/H2 (MOD8, #500) — la subtabla `deps` va DETRÁS de las entradas, dentro
+     * de la sección: count + (modulo UTF, fromPath UTF, gen be32, ifaceCrc be32)*.
+     * Se detecta por los bytes que quedan de imports_size (aditivo), y lo que
+     * sobre después se salta por tamaño: así ninguna versión futura de esta
+     * sección corre la de exports. */
+    if (is_v8 && c.pos - imports_ini + 4 <= imports_size) {
+        uint32_t nd;
+        if (bc_read_be32(&c, &nd) != 0)                return BPVM_ERR_IO;
+        if (nd > 0) {
+            mod->dep_names   = (char**) bpvm_calloc(nd, sizeof(char*));
+            mod->dep_gen     = (uint32_t*) bpvm_calloc(nd, sizeof(uint32_t));
+            mod->dep_crc     = (uint32_t*) bpvm_calloc(nd, sizeof(uint32_t));
+            mod->dep_flags   = (uint32_t*) bpvm_calloc(nd, sizeof(uint32_t));
+            mod->dep_avisado = (uint8_t*)  bpvm_calloc(nd, sizeof(uint8_t));
+            if (!mod->dep_names || !mod->dep_gen || !mod->dep_crc || !mod->dep_flags || !mod->dep_avisado)
+                return BPVM_ERR_OOM;
+            for (uint32_t i = 0; i < nd; i++) {
+                char tmp_mod[160], tmp_from[256];
+                if (bc_read_writeutf(&c, tmp_mod, sizeof(tmp_mod)) != 0)   return BPVM_ERR_IO;
+                if (bc_read_writeutf(&c, tmp_from, sizeof(tmp_from)) != 0) return BPVM_ERR_IO;
+                if (bc_read_be32(&c, &mod->dep_gen[i]) != 0)               return BPVM_ERR_IO;
+                if (bc_read_be32(&c, &mod->dep_crc[i]) != 0)               return BPVM_ERR_IO;
+                if (bc_read_be32(&c, &mod->dep_flags[i]) != 0)             return BPVM_ERR_IO;
+                mod->dep_names[i] = bpvm_strdup(tmp_mod);
+                if (!mod->dep_names[i]) return BPVM_ERR_OOM;
+                mod->dep_count = (int) (i + 1);
+            }
+        }
+    }
+    if (c.pos - imports_ini < imports_size) {
+        if (bc_skip(&c, imports_size - (c.pos - imports_ini)) != 0) return BPVM_ERR_IO;
+    }
 
     /* --- Layout en memory[] ---
      *    moduleBase ─┬─ ext-table (ext_count * 4 bytes, zeroed)

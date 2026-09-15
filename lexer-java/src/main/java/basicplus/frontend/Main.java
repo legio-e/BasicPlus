@@ -65,6 +65,12 @@ public final class Main {
          *  disco. Sustituye al .bpi como vía de paso de interfaces DENTRO de un
          *  build. Se descarta con el Ctx (uso acotado al cierre transitivo). */
         final Map<String, ModuleInterface> interfaceCache = new java.util.LinkedHashMap<>();
+        /** V7/H2 (MOD8, #500) — la generación de ESTE build (la `version` del proyecto;
+         *  0 en fichero suelto) y, por nombre canónico (`Core`, `acme.LibHdr`), el
+         *  (gen, ifaceCrc) de cada módulo cuya interfaz se ha leído o producido aquí:
+         *  es lo que cada importador sella en su subtabla `deps`. */
+        int gen = 0;
+        final Map<String, int[]> versionesDeps = new java.util.LinkedHashMap<>();
 
         /** Mapa de "<library>.<Module>" → ruta del .bp. Construido lazy. */
         Map<String, Path> bpSources;
@@ -295,6 +301,7 @@ public final class Main {
         ctx.showAst    = false;
         ctx.rootSrcDir = Paths.get(proj.sourceDir);
         ctx.outDir     = Paths.get(proj.outDir);
+        ctx.gen        = proj.version;   // V7/H2 (MOD8): la generación del proyecto
         Files.createDirectories(ctx.outDir);
         for (String d : proj.dependencies) ctx.dependencyPaths.add(Paths.get(d));
         ctx.pruneBpi = pruneBpi;
@@ -971,7 +978,37 @@ public final class Main {
         emitter.setInterfaceSupplier(() -> ModuleInterface.extractFrom(
                 ifaceLib, module.name, module.isInterface, module.implementsName,
                 info.module, new ArrayList<>()).toBytes());
+        // V7/H2 (MOD8, #500) — la generación de este módulo y el sello de cada
+        // dependencia contra la que se compiló (leído del .mod de disco, del pack, o
+        // de la pasada de interfaz de un módulo de este mismo build).
+        emitter.setGeneracion(ctx.gen);
+        emitter.setVersionesDeps(ctx.versionesDeps);
         emitter.emitTo(ctx.outDir);
+        // El sello propio: el CRC que el ModWriter ESCRIBIÓ. Si un consumidor de este
+        // build ya selló este módulo (pasada INTERFACE previa), tienen que coincidir;
+        // si no, la interfaz cambió entre el análisis y la emisión — bug del
+        // compilador, y se dice aquí, no en el cargador tres meses después.
+        {
+            String cacheKey = ifaceLib.isEmpty() ? module.name : ifaceLib + "." + module.name;
+            int crcReal = emitter.getInterfaceCrc();
+            int[] previo = ctx.versionesDeps.get(cacheKey);
+            if (previo != null && previo[1] != crcReal) {
+                // La evidencia al lado del .mod: las dos serializaciones, para diff.
+                try {
+                    ModuleInterface cachedIf = ctx.interfaceCache.get(cacheKey);
+                    if (cachedIf != null) Files.write(ctx.outDir.resolve(cacheKey + ".iface-pasada.txt"), cachedIf.toBytes());
+                    byte[] emitida = ModuleInterface.extractFrom(ifaceLib, module.name, module.isInterface,
+                            module.implementsName, info.module, new ArrayList<>()).toBytes();
+                    Files.write(ctx.outDir.resolve(cacheKey + ".iface-emision.txt"), emitida);
+                } catch (IOException ignorada) { /* diagnóstico: si no se puede escribir, el error de abajo basta */ }
+                indent(depth); System.err.printf(
+                    "error: la interfaz de '%s' cambió entre la pasada de interfaz (crc %08x) y la emisión (crc %08x):"
+                    + " bug del compilador — los módulos que la importan llevarían un sello equivocado%n",
+                    cacheKey, previo[1], crcReal);
+                ctx.totalErrors++;
+            }
+            ctx.versionesDeps.put(cacheKey, new int[]{ctx.gen, crcReal});
+        }
         if (!emitter.errors.isEmpty()) {
             indent(depth); System.out.printf("-- Errores del emisor mivm (%d) --%n", emitter.errors.size());
             for (String e : emitter.errors) System.out.println("  " + e);
@@ -1007,7 +1044,13 @@ public final class Main {
         // serialización sea 100% sin pérdidas. Esto es lo que permitirá dejar de
         // escribir el .bpi (los consumidores lo encuentran en el caché).
         String cacheKey = lib.isEmpty() ? module.name : lib + "." + module.name;
-        ctx.interfaceCache.put(cacheKey, ModuleInterface.fromBytes(iface.toBytes(), cacheKey));
+        byte[] ifaceBytes = iface.toBytes();
+        ctx.interfaceCache.put(cacheKey, ModuleInterface.fromBytes(ifaceBytes, cacheKey));
+        // V7/H2 (MOD8) — el sello de este módulo para quien lo importe en este build
+        // (pasada INTERFACE: aún no hay .mod). Si la emisión ya lo selló, gana el suyo
+        // (es el CRC de los bytes que de verdad están en el fichero).
+        if (!ctx.versionesDeps.containsKey(cacheKey))
+            ctx.versionesDeps.put(cacheKey, new int[]{ctx.gen, crc32De(ifaceBytes)});
         // H6.a — YA NO se escribe el .bpi a disco. La interfaz vive (1) en el
         // caché en memoria (arriba) para el resto de ESTE build, y (2) embebida
         // en el .mod (sección `interface`) para builds futuros. El .bpi era el
@@ -1570,6 +1613,23 @@ public final class Main {
     }
 
     private static byte[] extractInterfaceSection(java.io.InputStream src) throws IOException {
+        ModLeido ml = leerMod(src);
+        return (ml == null) ? null : ml.iface;
+    }
+
+    /** V7/H2 — lo que el compilador lee de la cabecera de un `.mod` ajeno: el magic,
+     *  su generación y el CRC de su interfaz (MOD8; 0/0 en MOD6/MOD7) y los bytes de
+     *  la sección interface (null si no la lleva). */
+    static final class ModLeido {
+        int magic, gen, ifaceCrc;
+        byte[] iface;
+    }
+
+    static int crc32De(byte[] b) {
+        java.util.zip.CRC32 c = new java.util.zip.CRC32(); c.update(b); return (int) c.getValue();
+    }
+
+    private static ModLeido leerMod(java.io.InputStream src) throws IOException {
         {
             java.io.DataInputStream in = new java.io.DataInputStream(src);
             int magic = in.readInt();
@@ -1584,8 +1644,14 @@ public final class Main {
             // generaron antes del salto) y porque los módulos que se compilan
             // JUNTOS resuelven su interfaz en memoria, sin pasar por disco. Muerde
             // en cuanto se regenera uno.
-            boolean v7 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V7);
+            // V7/H2 — y TAMBIÉN v8 (MOD8: gen + ifaceCrc detrás de nativeSize). Es el
+            // mismo bug de #457 esperando a repetirse con cada subida: el lector de
+            // cabecera del compilador tiene que aprenderla el mismo día que el escritor.
+            boolean v8 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V8);
+            boolean v7 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V7) || v8;
             if (!v7 && magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6) return null;
+            ModLeido ml = new ModLeido();
+            ml.magic = magic;
             in.readInt();                 // dataSize
             in.readInt();                 // mainOffset
             int importsSize = in.readInt();
@@ -1595,16 +1661,18 @@ public final class Main {
             int interfaceSize = in.readInt();
             // El header v7 tiene UN entero más, `nativeSize`, justo detrás de
             // `interfaceSize` (ver ModFormat: HEADER_SIZE_V6=32 → V7=36). Hay que
-            // consumirlo o las secciones se leen 4 bytes corridas.
+            // consumirlo o las secciones se leen 4 bytes corridas. El v8, dos más.
             if (v7) in.readInt();         // nativeSize
-            if (interfaceSize <= 0) return null;
+            if (v8) { ml.gen = in.readInt(); ml.ifaceCrc = in.readInt(); }
+            if (interfaceSize <= 0) return ml;
             // Orden de secciones: library, imports, exports, [interface], data,
             // code. La interfaz va tras exports → saltamos library+imports+exports.
             byte[] skip = new byte[librarySize + importsSize + exportsSize];
             in.readFully(skip);
             byte[] iface = new byte[interfaceSize];
             in.readFully(iface);
-            return iface;
+            ml.iface = iface;
+            return ml;
         }
     }
 
@@ -1665,7 +1733,8 @@ public final class Main {
                     + ") no contiene el módulo '" + want + "'. Módulos del pack: ["
                     + hay + "]");
         }
-        byte[] ifaceBytes = extractInterfaceSection(modBytes);
+        ModLeido ml = leerMod(new java.io.ByteArrayInputStream(modBytes));
+        byte[] ifaceBytes = (ml == null) ? null : ml.iface;
         if (ifaceBytes == null) {
             throw new IOException("el módulo '" + want + "' dentro del pack '" + etiquetaPack
                     + "' no lleva interfaz embebida (¿.mod de una versión anterior?); recompílalo");
@@ -1673,6 +1742,7 @@ public final class Main {
         ModuleInterface iface = ModuleInterface.fromBytes(ifaceBytes,
                 packFile.getFileName() + "!" + want);
         ctx.interfaceCache.put(ifaceCacheKey, iface);
+        ctx.versionesDeps.put(ifaceCacheKey, new int[]{ml.gen, crc32De(ifaceBytes)});   // V7/H2
         /* V5/H8 — el pack del que salió queda apuntado, venga de `from pack` o de
          * la búsqueda. Antes sólo se anotaba la vía del `.mod` suelto, así que un
          * proyecto que importara de un pack construía su manifest SIN el
@@ -1920,11 +1990,16 @@ public final class Main {
         if (cached != null) return cached;
         ModuleInterface iface;
         if (path.getFileName().toString().endsWith(".mod")) {
-            byte[] bytes = extractInterfaceSection(path);
-            if (bytes == null) return null;   // .mod v5 sin interfaz
-            iface = ModuleInterface.fromBytes(bytes, path.toString());
+            ModLeido ml;
+            try (java.io.InputStream raw = new java.io.BufferedInputStream(Files.newInputStream(path))) {
+                ml = leerMod(raw);
+            }
+            if (ml == null || ml.iface == null) return null;   // .mod v5 sin interfaz
+            iface = ModuleInterface.fromBytes(ml.iface, path.toString());
+            ctx.versionesDeps.put(key, new int[]{ml.gen, crc32De(ml.iface)});   // V7/H2: el sello de la dependencia
         } else {
             iface = ModuleInterface.readFrom(path);
+            // Un .bpi suelto (vía muerta desde H6.a) no tiene cabecera: sin sello.
         }
         ctx.interfaceCache.put(key, iface);
         return iface;

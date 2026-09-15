@@ -237,6 +237,23 @@ public class ModWriter {
     private String currentModuleName = "";
     /** Library del módulo actual. Vacía si no se ha llamado setLibrary. */
     private String currentLibrary = "";
+    /** V7/H2 (MOD8, #500) — la GENERACIÓN de este módulo (la `version` entera del
+     *  proyecto; 0 si se compila suelto) y, por cada dependencia contra la que se
+     *  compiló, su (gen, ifaceCrc): van a la subtabla `deps` de la sección imports.
+     *  La clave es el nombre lógico cualificado del módulo (`Core`, `acme.LibHdr`),
+     *  el mismo con el que los cargadores derivan el dueño de un import. */
+    private int generacion = 0;
+    /** Por módulo: {gen, ifaceCrc, flags}. flags bit 0 = DEP_EXTIENDE. */
+    private final java.util.LinkedHashMap<String, int[]> depsVersion = new java.util.LinkedHashMap<>();
+    /** V7/H2 — flag de la subtabla `deps`: este módulo EXTIENDE una clase de esa
+     *  dependencia. Norma de Eduardo (15-sep): «los hijos pueden ser más recientes
+     *  que los padres; los padres no pueden ser más recientes que los hijos» — el
+     *  cargador rechaza una dependencia de generación MAYOR si se la extiende. */
+    public static final int DEP_EXTIENDE = 1;
+    private final java.util.Map<String, String> depsFromPath = new java.util.HashMap<>();
+    /** CRC32 (IEEE, java.util.zip) de los bytes de la sección interface tal como se
+     *  escribió; válido tras writeToFile. Es la identidad de la API de este .mod. */
+    private int interfaceCrc = 0;
     /**
      * Nombre de la función que la VM debe ejecutar al cargar este módulo
      * como root. Si es null, se usa "main" por compatibilidad legacy.
@@ -276,6 +293,7 @@ public class ModWriter {
         clearFunctionScope();
         currentModuleName = name;
         currentLibrary = "";
+        generacion = 0; depsVersion.clear(); depsFromPath.clear(); interfaceCrc = 0;   // V7/H2
         mainEntryFunction = null;
     }
 
@@ -283,6 +301,25 @@ public class ModWriter {
      *  del fichero ".mod" pasa a ser "library.module.mod" (o "module.mod" si
      *  library está vacío). Debe llamarse después de addModulo y antes de
      *  writeToFile. */
+    /** V7/H2 (MOD8) — generación de este módulo. */
+    public void setGeneracion(int gen) { this.generacion = gen; }
+    /** V7/H2 (MOD8) — una dependencia contra la que se compiló: nombre lógico
+     *  cualificado, fromPath (o ""), y su (gen, ifaceCrc). Una entrada por módulo. */
+    public void declareDependency(String moduloCualificado, String fromPath, int gen, int ifaceCrc) {
+        int[] prev = depsVersion.get(moduloCualificado);
+        int flags = (prev == null) ? 0 : prev[2];
+        depsVersion.put(moduloCualificado, new int[]{gen, ifaceCrc, flags});
+        depsFromPath.put(moduloCualificado, fromPath == null ? "" : fromPath);
+    }
+    /** V7/H2 — marca una dependencia (ya declarada) con un flag de la subtabla `deps`. */
+    public void markDependency(String moduloCualificado, int flag) {
+        int[] d = depsVersion.get(moduloCualificado);
+        if (d == null) throw new RuntimeException("markDependency de un módulo sin declarar: " + moduloCualificado);
+        d[2] |= flag;
+    }
+    public int getInterfaceCrc() { return interfaceCrc; }
+    public int getGeneracion() { return generacion; }
+
     public void setLibrary(String library) {
         this.currentLibrary = (library == null) ? "" : library;
     }
@@ -2018,6 +2055,14 @@ public class ModWriter {
 
     // --- Escritura final ---
 
+    /** V7/H2 — el módulo dueño de un nombre de import (`Core.List#add#3` → `Core`,
+     *  `acme.LibHdr.__cls_new_Caja` → `acme.LibHdr`): todo menos el último componente,
+     *  que es la regla de los dos cargadores (el símbolo nunca lleva puntos). */
+    static String duenoDe(String nombreImport) {
+        int i = nombreImport.lastIndexOf('.');
+        return (i < 0) ? nombreImport : nombreImport.substring(0, i);
+    }
+
     public void writeToFile(String filename) throws IOException {
         if (lastFunctionName != null) {
             functionLocalsBytesMap.put(lastFunctionName, currentLocalsBytes);
@@ -2029,6 +2074,30 @@ public class ModWriter {
         for (ExternalRef ext : externalFunctions) {
             importOut.writeUTF(ext.name);
             importOut.writeUTF(ext.fromPath);
+        }
+        // V7/H2 (MOD8, #500) — subtabla `deps`: count + (modulo UTF, fromPath UTF,
+        // gen i32, ifaceCrc i32)*. Por MÓDULO, no por import: un import repite el
+        // sello de su dueño, y una dependencia toda-intrínseca (Math) no deja ningún
+        // import. Todo import tiene que tener su dueño aquí — si no, es un bug del
+        // emisor y se dice (errores sí, silenciosos no).
+        // (Un módulo escrito A MANO con el ModWriter —los Main*.java y tests de miVM— no
+        // declara ninguna dependencia: subtabla vacía = «no exige nada», y el cargador
+        // no comprueba. Lo que no vale es declarar unas y olvidar otras.)
+        if (!depsVersion.isEmpty()) {
+            for (ExternalRef ext : externalFunctions) {
+                String dueno = duenoDe(ext.name);
+                if (!depsVersion.containsKey(dueno))
+                    throw new RuntimeException("import '" + ext.name + "' sin sello de versión de su módulo '" + dueno
+                            + "' (declareDependency): bug del emisor");
+            }
+        }
+        importOut.writeInt(depsVersion.size());
+        for (Map.Entry<String, int[]> d : depsVersion.entrySet()) {
+            importOut.writeUTF(d.getKey());
+            importOut.writeUTF(depsFromPath.getOrDefault(d.getKey(), ""));
+            importOut.writeInt(d.getValue()[0]);
+            importOut.writeInt(d.getValue()[1]);
+            importOut.writeInt(d.getValue()[2]);   // flags (DEP_EXTIENDE)
         }
         importOut.flush();
 
@@ -2181,6 +2250,7 @@ public class ModWriter {
         // "posible era de refs 4B" y lo rechaza; un .mod recién generado NUNCA debe
         // dispararlo. (Los .mod v5 genuinamente antiguos siguen rechazados.)
         byte[] iface = (interfaceBytes != null) ? interfaceBytes : new byte[0];
+        { java.util.zip.CRC32 c = new java.util.zip.CRC32(); c.update(iface); interfaceCrc = (int) c.getValue(); }   // V7/H2
 
         /* [V6/N1.4] v7 — sección `native`: el `.mdn` deja de ser un fichero aparte
          * y viaja DENTRO del módulo. Mismo movimiento que hizo v6 con el `.bpi`.
@@ -2214,7 +2284,7 @@ public class ModWriter {
          * `inicio_del_primer_blob = align4(inicio_de_la_seccion)`. */
         byte[] nativo = nativoRaw;
         if (nativoRaw.length > 0) {
-            int inicio = 36 + libraryBytes.length + importStream.size()
+            int inicio = ModFormat.HEADER_SIZE_V8 + libraryBytes.length + importStream.size()
                        + exportStream.size() + iface.length;
             int pad = (4 - (inicio & 3)) & 3;
             if (pad > 0) {
@@ -2224,7 +2294,7 @@ public class ModWriter {
         }
 
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filename))) {
-            out.writeInt(ModFormat.MAGIC_NUMBER_V7);
+            out.writeInt(ModFormat.MAGIC_NUMBER_V8);   // V7/H2: el compilador emite SÓLO MOD8
             out.writeInt(dataSize);
             out.writeInt(mainOffset);
             out.writeInt(importStream.size());
@@ -2233,6 +2303,8 @@ public class ModWriter {
             out.writeInt(libraryBytes.length);
             out.writeInt(iface.length);                // 8º entero del header v6
             out.writeInt(nativo.length);               // 9º entero del header v7
+            out.writeInt(generacion);                  // 10º entero del header v8 (#500)
+            out.writeInt(interfaceCrc);                // 11º: CRC32 de la sección interface
 
             out.write(libraryBytes);
             out.write(importStream.toByteArray());

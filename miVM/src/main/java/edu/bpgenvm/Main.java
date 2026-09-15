@@ -357,8 +357,19 @@ public class Main {
                 }
             } catch (IOException carga) {
                 System.err.println("load " + runMod + ": " + carga.getMessage());
-                exitCode = 1;
+                exitCode = 2;   // V7/H2: la tabla #481 («no se pudo cargar»), como la VM-C (antes 1)
                 exitReason = "load: " + carga.getMessage();
+                cargado = false;
+                falloDeCarga = true;
+            } catch (edu.bpgenvm.vm.ModuleManager.LinkException enlace) {
+                // V7/H2 — un símbolo cross-module que no resuelve: la misma línea por
+                // stdout que el host de la VM-C (test/main.c) y exit 1, en vez de una
+                // traza de Java. Los marcadores de vtable y de layout (#500) caen aquí.
+                System.out.println("=== ERROR DE LINK: " + enlace.getMessage() + " ===");
+                System.out.flush();
+                System.err.println("link " + runMod + ": " + enlace.getMessage());
+                exitCode = 1;
+                exitReason = "link: " + enlace.getMessage();
                 cargado = false;
                 falloDeCarga = true;
             }

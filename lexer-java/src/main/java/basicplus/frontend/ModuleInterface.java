@@ -1099,7 +1099,18 @@ public final class ModuleInterface {
                 new java.io.OutputStreamWriter(bos, StandardCharsets.UTF_8))) {
             writeTo(pw);
         }
-        return bos.toByteArray();
+        // V7/H2 (MOD8) — finales de línea FIJOS a LF: println/%n usan el separador
+        // de la plataforma (CRLF en Windows) y el ifaceCrc es la identidad de estos
+        // bytes: sin esto, la misma interfaz tendría dos CRC según dónde se compiló, y
+        // la stdlib no sería byte-idéntica entre Windows y Linux.
+        byte[] raw = bos.toByteArray();
+        int cr = 0;
+        for (byte x : raw) if (x == 13) cr++;
+        if (cr == 0) return raw;
+        byte[] out = new byte[raw.length - cr];
+        int k = 0;
+        for (byte x : raw) if (x != 13) out[k++] = x;
+        return out;
     }
 
     /** Cuerpo compartido de la serialización: vuelca el texto de directivas al

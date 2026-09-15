@@ -59,7 +59,8 @@ public class Disasm {
             // desplazaba data y code (justo el error que el cargador dice que «corrompe
             // un módulo en silencio»). La herramienta «module info» de #284 tiene que
             // hablar el formato de hoy, y es la que usa el test de la cabecera.
-            boolean v7      = (magic == ModFormat.MAGIC_NUMBER_V7);
+            boolean v8      = (magic == ModFormat.MAGIC_NUMBER_V8);   // V7/H2: gen + ifaceCrc + subtabla deps
+            boolean v7      = (magic == ModFormat.MAGIC_NUMBER_V7) || v8;
             boolean v6      = (magic == ModFormat.MAGIC_NUMBER_V6) || v7;
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
@@ -69,6 +70,8 @@ public class Disasm {
             int librarySize = in.readInt();
             int interfaceSize = v6 ? in.readInt() : 0;   // H6.a: sección interface (v6+)
             int nativeSize    = v7 ? in.readInt() : 0;   // V6/N1.4: sección native (v7)
+            int gen           = v8 ? in.readInt() : 0;   // V7/H2 (MOD8, #500)
+            int ifaceCrc      = v8 ? in.readInt() : 0;
 
             byte[] libraryBuf   = readN(in, librarySize);
             byte[] importsBuf   = readN(in, importsSize);
@@ -87,9 +90,10 @@ public class Disasm {
 
             out.println("=== HEADER ===");
             String magicOk = (magic == ModFormat.MAGIC_NUMBER) ? " (MOD5)"
+                    : (magic == ModFormat.MAGIC_NUMBER_V8) ? " (MOD8, OK)"
                     : (magic == ModFormat.MAGIC_NUMBER_V7) ? " (MOD7, OK)"
                     : (magic == ModFormat.MAGIC_NUMBER_V6) ? " (MOD6, OK)"
-                    : " (NO MATCH, esperado MOD6)";
+                    : " (NO MATCH, esperado MOD8)";
             out.printf ("  magic         0x%08X%s%n", magic, magicOk);
             // #284 — la versión ES la declaración de ABI: qué garantiza este .mod
             // y si esta VM lo ejecutaría. Lo que faltaba para no ir a ciegas con
@@ -111,6 +115,15 @@ public class Disasm {
             out.printf ("  librarySize   %d bytes%n", librarySize);
             if (v6) out.printf ("  interfaceSize %d bytes%n", interfaceSize);
             if (v7) out.printf ("  nativeSize    %d bytes%n", nativeSize);
+            if (v8) {
+                // V7/H2 — el sello propio, y la autocomprobación: el CRC declarado debe
+                // ser el de los bytes de la sección interface de este mismo fichero.
+                int real = (int) crc32(interfaceBuf);
+                out.printf ("  gen           %d%n", gen);
+                out.printf ("  ifaceCrc      %08x %s%n", ifaceCrc,
+                        (ifaceCrc == real) ? "(coincide con la seccion interface)"
+                                           : String.format("NO CUADRA con la seccion interface (%08x)", real));
+            }
             out.printf ("  library       %s%n", library.isEmpty() ? "(none)" : "\"" + library + "\"");
             // Una línea por sección con su CRC32: es lo que un test puede comparar contra
             // lo que el escritor quiso escribir, y lo que dice si las secciones quedaron
@@ -129,6 +142,17 @@ public class Disasm {
                     out.printf("  [%d] %s%n", i, e.name);
                 } else {
                     out.printf("  [%d] %s   from \"%s\"%n", i, e.name, e.fromPath);
+                }
+            }
+            if (v8) {
+                // V7/H2 (MOD8, #500) — la subtabla `deps`: contra qué se compiló.
+                List<String[]> deps = parseDeps(importsBuf);
+                out.println();
+                out.printf ("=== DEPS (%d) — (gen, ifaceCrc) contra los que se compilo ===%n", deps.size());
+                if (deps.isEmpty()) out.println("  (ninguna)");
+                for (String[] d : deps) {
+                    out.printf("  %-24s gen=%s ifaceCrc=%s%s%s%n", d[0], d[2], d[3], d[4],
+                            d[1].isEmpty() ? "" : "   from \"" + d[1] + "\"");
                 }
             }
 
@@ -274,6 +298,25 @@ public class Disasm {
         @Override public String toString() {
             return fromPath.isEmpty() ? name : name + " (from \"" + fromPath + "\")";
         }
+    }
+
+    /** V7/H2 — la subtabla `deps` de la sección imports (MOD8): tras las entradas de
+     *  import, count + (modulo, fromPath, gen, ifaceCrc)*. Vacía si no hay. */
+    private static List<String[]> parseDeps(byte[] buf) throws IOException {
+        List<String[]> result = new ArrayList<>();
+        if (buf.length == 0) return result;
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(buf));
+        int n = in.readInt();
+        for (int i = 0; i < n; i++) { in.readUTF(); in.readUTF(); }
+        if (in.available() < 4) return result;
+        int nd = in.readInt();
+        for (int i = 0; i < nd; i++) {
+            String mod = in.readUTF(); String from = in.readUTF();
+            int gen = in.readInt(); int crc = in.readInt(); int flags = in.readInt();
+            result.add(new String[]{mod, from, Integer.toString(gen), String.format("%08x", crc),
+                                    ((flags & 1) != 0) ? " EXTIENDE" : ""});
+        }
+        return result;
     }
 
     private static List<ImportEntry> parseImports(byte[] buf) throws IOException {

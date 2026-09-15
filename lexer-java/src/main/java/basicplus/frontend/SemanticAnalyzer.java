@@ -1269,8 +1269,23 @@ public final class SemanticAnalyzer {
         if (def instanceof ConstDecl) {
             ConstDecl c = (ConstDecl) def;
             Symbol sym = info.declSymbols.get(c);
-            if (sym instanceof ConstSymbol && c.type != null)
+            if (sym instanceof ConstSymbol && c.type != null) {
                 ((ConstSymbol) sym).type = resolveType(c.type);
+            } else if (sym instanceof ConstSymbol && c.value != null) {
+                // V7/H2 (15-sep) — `const INFO := 1` SIN tipo: se infería en bodyPass,
+                // que la pasada de INTERFAZ no corre, así que la const se caía de la
+                // interfaz («tipo no exportable: <null>») y la interfaz de la pasada
+                // difería de la emitida — con el sello (ifaceCrc) eso es un rechazo en
+                // el cargador. Un inicializador LITERAL (o un miembro de enum) no
+                // necesita scope ni puede fallar: se infiere aquí, y bodyPass sólo
+                // confirma. Era el bug aparcado «la pasada interfaz-only tira firmas».
+                Long folded = foldEnumMemberToLiteral(c.value);
+                if (folded != null || constLiteralValue(c.value) != null) {
+                    ConstSymbol cs = (ConstSymbol) sym;
+                    cs.type = analyzeExpr(c.value, null, null);
+                    cs.literalValue = (folded != null) ? folded : constLiteralValue(c.value);
+                }
+            }
         } else if (def instanceof VarDecl) {
             VarDecl v = (VarDecl) def;
             BpType t = resolveType(v.type);

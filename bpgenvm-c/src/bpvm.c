@@ -423,16 +423,75 @@ static void path_dirname(const char* path, char* dst, size_t dst_size) {
     dst[n] = '\0';
 }
 
-/* Comprueba si un módulo con nombre dado ya está cargado. */
-static int module_loaded(const bpvm_t* vm, const char* library, const char* name) {
+static void load_err(bpvm_t* vm, const char* fmt, ...);   /* definida más abajo (#421) */
+
+/* Índice del módulo cargado con ese (library, name), o -1. */
+static int module_index(const bpvm_t* vm, const char* library, const char* name) {
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
         if (strcmp(m->name, name) == 0
                 && strcmp(m->library, library ? library : "") == 0) {
-            return 1;
+            return i;
         }
     }
-    return 0;
+    return -1;
+}
+
+/* Comprueba si un módulo con nombre dado ya está cargado. */
+static int module_loaded(const bpvm_t* vm, const char* library, const char* name) {
+    return module_index(vm, library, name) >= 0;
+}
+
+/* V7/H2 (#500) — LA NORMA de versiones de las dependencias, la misma que miVM y
+ * con el MISMO texto por OUTPUT (ASCII, sin rutas):
+ *   1. dep.gen < requerida → rechazo («mas antiguo»);
+ *   2. misma gen y otra ifaceCrc → rechazo («no es la interfaz con la que se compilo»);
+ *   3. gen mayor → se acepta si enlaza (los marcadores deciden);
+ *   una dependencia MOD6/MOD7 no lleva datos: cuenta como gen 0 y CRC desconocido —
+ *   si el importador exige gen > 0 es «mas antiguo»; si exige 0, se anota «sin
+ *   datos de version» por el diag y no se comprueba la interfaz.
+ * `canon` es el nombre lógico cualificado (`Core`, `acme.LibHdr`), la clave con
+ * la que el compilador selló la subtabla `deps` del importador. */
+static bpvm_status_t comprobar_norma(bpvm_t* vm, bpvm_module_t* imp, const char* canon,
+                                     const bpvm_module_t* dep) {
+    if (imp->fmt < 8) return BPVM_OK;          /* el importador no exige nada */
+    int k = -1;
+    for (int i = 0; i < imp->dep_count; i++) {
+        if (strcmp(imp->dep_names[i], canon) == 0) { k = i; break; }
+    }
+    if (k < 0) return BPVM_OK;                 /* no lo selló (intrínsecos, o import sin dueño) */
+    uint32_t req_gen = imp->dep_gen[k], req_crc = imp->dep_crc[k];
+    int extiende = (imp->dep_flags[k] & 1u) != 0;
+    int con_datos = (dep->fmt >= 8);
+    uint32_t dep_gen = con_datos ? dep->gen : 0u;
+    char msg[320];   /* la linea de OUTPUT entera; load_error recorta a lo suyo */
+    msg[0] = '\0';
+    if (dep_gen < req_gen) {
+        snprintf(msg, sizeof msg,
+                 "'%s' (gen %u) es mas antiguo que el que '%s' necesita (gen %u): actualiza /lib o recompila",
+                 canon, (unsigned) dep_gen, imp->name, (unsigned) req_gen);
+    } else if (!con_datos) {
+        if (!imp->dep_avisado[k]) {
+            imp->dep_avisado[k] = 1;
+            bpvm_diag("[bpvm-c] dep '%s' sin datos de version (MOD%u): no se comprueba su interfaz",
+                      canon, (unsigned) dep->fmt);
+        }
+    } else if (dep_gen > req_gen && extiende) {
+        /* Norma de Eduardo (15-sep): un padre nunca más reciente que sus hijos. */
+        snprintf(msg, sizeof msg,
+                 "'%s' (gen %u) es mas reciente que '%s' (compilado contra gen %u) y '%s' extiende una clase suya: recompila '%s'",
+                 canon, (unsigned) dep_gen, imp->name, (unsigned) req_gen, imp->name, imp->name);
+    } else if (dep_gen == req_gen && dep->iface_crc != req_crc) {
+        snprintf(msg, sizeof msg,
+                 "'%s' (gen %u, interfaz %08x) no es la interfaz con la que se compilo '%s' (interfaz %08x): recompila",
+                 canon, (unsigned) dep_gen, (unsigned) dep->iface_crc, imp->name, (unsigned) req_crc);
+    }
+    if (msg[0]) {
+        bpvm_out("%s\n", msg);
+        load_err(vm, "%s", msg);
+        return BPVM_ERR_DEP_VERSION;
+    }
+    return BPVM_OK;
 }
 
 /* Para un import qualified (e.g. "L2Lib.Counter.__init"), deriva el
@@ -502,7 +561,19 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         char lib[64], mod[64];
         derive_owner(imp, lib, sizeof(lib), mod, sizeof(mod));
         if (!mod[0]) continue;
-        if (module_loaded(vm, lib, mod)) continue;
+        char canon[132];
+        if (lib[0]) snprintf(canon, sizeof canon, "%s.%s", lib, mod);
+        else        snprintf(canon, sizeof canon, "%s", mod);
+        {
+            int ya = module_index(vm, lib, mod);
+            if (ya >= 0) {
+                /* V7/H2 (#500) — también cuando ya estaba cargada (otro importador
+                 * la trajo): cada importador exige lo suyo. */
+                bpvm_status_t nr = comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
+                if (nr != BPVM_OK) return nr;
+                continue;
+            }
+        }
         /* Derivar filename + nombre de entrada en pack (mismo base-name).
          * `pname_file` = el nombre de fichero SIN directorio, que es lo que
          * come la regla de búsqueda común cuando search_dir no acierta. */
@@ -600,6 +671,15 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
             }
         }
         if (s != BPVM_OK) return s;
+        /* V7/H2 (#500) — la norma, con la cabecera de la dependencia recién leída
+         * (antes de recurrir a sus imports, como miVM). */
+        {
+            int ya = module_index(vm, lib, mod);
+            if (ya >= 0) {
+                bpvm_status_t nr = comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
+                if (nr != BPVM_OK) return nr;
+            }
+        }
         /* Recursivo: descubre las deps de esta nueva carga. */
         for (int j = idx_before; j < vm->module_count; j++) {
             bpvm_status_t r = discover_deps(vm, j, search_dir);
@@ -1347,6 +1427,14 @@ void bpvm_destroy(bpvm_t* vm) {
             for (int k = 0; k < m->import_count; k++) bpvm_free(m->imports[k]);
             bpvm_free(m->imports);
         }
+        if (m->dep_names) {   /* V7/H2 (MOD8) */
+            for (int k = 0; k < m->dep_count; k++) bpvm_free(m->dep_names[k]);
+            bpvm_free(m->dep_names);
+        }
+        bpvm_free(m->dep_gen);
+        bpvm_free(m->dep_crc);
+        bpvm_free(m->dep_flags);
+        bpvm_free(m->dep_avisado);
         bpvm_free(m->class_fixups);
         bpvm_free(m->eh_class_fixups);
     }
@@ -1412,7 +1500,8 @@ int bpvm_exit_code(bpvm_status_t s) {
         case BPVM_ERR_IO:
         case BPVM_ERR_BAD_MAGIC:
         case BPVM_ERR_ABI_MOD_V5:
-        case BPVM_ERR_BAD_HEADER:     return 2;
+        case BPVM_ERR_BAD_HEADER:
+        case BPVM_ERR_DEP_VERSION:    return 2;   /* V7/H2 (#500): «no se pudo cargar» */
 
         /* Esto NO es culpa del programa: es un bug nuestro o un .mod corrupto
          * que paso los chequeos. Merece numero propio para no confundirlo con
@@ -1452,7 +1541,8 @@ const char* bpvm_status_str(bpvm_status_t s) {
     switch (s) {
     case BPVM_OK:                 return "OK";
     case BPVM_ERR_IO:             return "IO error";
-    case BPVM_ERR_BAD_MAGIC:      return "MAGIC inválido (no es un .mod; se esperaba \"MOD6\")";
+    case BPVM_ERR_BAD_MAGIC:      return "MAGIC inválido (no es un .mod; se esperaba \"MOD6\", \"MOD7\" o \"MOD8\")";
+    case BPVM_ERR_DEP_VERSION:    return "dependencia de otra version (ver el detalle en la salida)";
     case BPVM_ERR_ABI_MOD_V5:     return ".mod v5: es anterior al ensanchado de refs 4->8B, "
                                          "su ABI no se puede garantizar (si es de la era 4B "
                                          "corrompería memoria). Recompílalo con el compilador actual";

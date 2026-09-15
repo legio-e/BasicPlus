@@ -31,9 +31,16 @@ typedef struct { uint64_t v; } bpref_t;
  * hay que regenerar los .mod que ya existen. Mismo movimiento que hizo v6 con
  * el `.bpi` sobre v5. */
 #define BPVM_MAGIC_V7       0x4D4F4437u   /* "MOD7" big-endian */
+/* V7/H2 (#500) — v8: el módulo lleva contra qué se compiló: su generación `gen`
+ * (10º entero) y el CRC32 de su sección interface (11º), y en la sección imports
+ * una subtabla `deps` con el (gen, ifaceCrc) de cada dependencia. Aditivo: v6 y
+ * v7 se siguen cargando (sin datos de versión: gen 0, CRC desconocido). */
+#define BPVM_MAGIC_V8       0x4D4F4438u   /* "MOD8" big-endian */
 #define BPVM_HEADER_SIZE    28            /* header v5; v6 = 32 (añade interfaceSize) */
 #define BPVM_HEADER_SIZE_V6 32
-#define BPVM_FORMAT_VERSION 6
+#define BPVM_HEADER_SIZE_V7 36            /* añade nativeSize */
+#define BPVM_HEADER_SIZE_V8 44            /* añade gen + ifaceCrc */
+#define BPVM_FORMAT_VERSION 8
 
 /* Tamaño en bytes de una entrada de la ext-table (per-module). */
 #define BPVM_EXT_ENTRY_SIZE 4
@@ -178,11 +185,24 @@ typedef struct {
      * de deducirse de [xip_lo, xip_hi) porque esa unión cubre también los
      * huecos entre packs: deducirlo sería cierto hoy y frágil siempre. */
     uint8_t  en_pack;
+    /* V7/H2 (MOD8, #500) — versión del formato (6/7/8) y, si es 8, la generación
+     * y el CRC de la interfaz que dice su cabecera. */
+    uint8_t  fmt;
+    uint32_t gen;
+    uint32_t iface_crc;
 
     /* F3 — imports cualificados (e.g. "L2Lib.Counter.__init"). Cada
      * entry k corresponde al slot k de la ext-table. */
     char**   imports;          /* malloc-ed; cada slot también malloc-ed */
     int      import_count;     /* = ext_count si las leemos */
+    /* V7/H2 (MOD8) — la subtabla `deps`: contra qué (gen, ifaceCrc) se compiló
+     * cada dependencia, por nombre lógico cualificado (`Core`, `acme.LibHdr`). */
+    char**    dep_names;       /* malloc-ed */
+    uint32_t* dep_gen;
+    uint32_t* dep_crc;
+    uint32_t* dep_flags;       /* bit 0 = EXTIENDE (una clase de aquí tiene base allí) */
+    uint8_t*  dep_avisado;     /* «sin datos de version» dicho ya (una vez por dep) */
+    int       dep_count;
 
     /* L2 v3 — class fixups del módulo. */
     bpvm_class_fixup_t* class_fixups;

@@ -134,7 +134,9 @@ class InterfazIdaYVueltaTest {
         assertTrue(original != null && original.length > 0, mod + ": el .mod lleva sección interface");
         ModuleInterface iface = ModuleInterface.fromBytes(original, mod.toString());
         byte[] reescrita = iface.toBytes();
-        String a = new String(original, StandardCharsets.UTF_8);
+        // V7/H2 (MOD8) - el escritor emite LF fijo desde el 15-sep; un .mod escrito antes
+        // lleva CRLF (Windows). La ida y vuelta se compara sin el separador de linea.
+        String a = new String(original, StandardCharsets.UTF_8).replace("\r\n", "\n");
         String b = new String(reescrita, StandardCharsets.UTF_8);
         assertEquals(a, b, mod.getFileName() + ": la interfaz reescrita difiere de la embebida (¿una directiva que el lector"
                 + " acepta y el escritor no reproduce, o al revés?)");

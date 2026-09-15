@@ -119,7 +119,7 @@ endif
 # Un test que falla por su andamio enseña a ignorarlo, que es la peor avería.
 # ---------------------------------------------------------------------------
 define fixture
-@want=$$(sed -n 's/.*BPVM_MAGIC_V7[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p' include/bpvm_internal.h | head -1 | tr a-z A-Z); \
+@want=$$(sed -n 's/.*BPVM_MAGIC_V8[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p' include/bpvm_internal.h | head -1 | tr a-z A-Z); \
 for m in $(1); do \
   why=""; \
   if [ ! -f samples/$$m.mod ]; then why="no existe"; \
@@ -791,7 +791,7 @@ test-modhdr: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_modhdr.c $(LIBOBJ) -o build/test_modhdr.exe $(LDFLAGS)
 	@cp ../bpstdlib/*.mod build/modhdr/ && cp test/fixtures/modhdr/*.mod build/modhdr/
 	@echo "--- V7/H2 cabecera y secciones del .mod vs cargador (esperado: solo 'ok', [status=OK]) ---"
-	@cd build/modhdr && ../test_modhdr.exe NatV7.mod NatNew.mod Bench_riscv.mod acme.LibHdr.mod Core.mod 2>/dev/null
+	@cd build/modhdr && ../test_modhdr.exe NatV7.mod NatNew.mod Bench_riscv.mod acme.LibHdr.mod Core.mod Ocho.mod
 
 test-crc:
 	@mkdir -p build

@@ -449,12 +449,19 @@ check_fwd() {
   rm -rf "$dir"; mkdir -p "$dir"
   cp "$V6_STD"/*.mod "$dir/"
   java -jar "$V3_FE" "$SAMPLES/hello.bp" --compile "$dir" --backend=mivm >/dev/null 2>&1 || { echo "  hello.bp no compila con el compilador actual"; return 1; }
-  magic="$(head -c 4 "$dir/Hello.mod" 2>/dev/null || head -c 4 "$(ls "$dir"/*.mod | grep -v -i core | head -1)")"
-  out="$( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -cp "$V6_JAR" edu.bpgenvm.Main "$(ls *.mod | grep -iv '^Core\|^Str\|^IO\|^Math' | head -1)" 2>&1 )"; rc=$?
+  magic="$(head -c 4 "$dir/Hello.mod")"
+  # V7/H2 (15-sep) — EL .mod recien compilado, POR NOMBRE. Antes se elegia «el primer
+  # .mod que no sea Core/Str/IO/Math» sobre un directorio que lleva los 28 de la
+  # stdlib copiada: salia Adc.mod (de V6, sin main), la miVM de V6 lo «ejecutaba» y
+  # el check estaba verde sin probar nada (lo cazo un refutador del mapa de MOD8).
+  out="$( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -cp "$V6_JAR" edu.bpgenvm.Main Hello.mod 2>&1 )"; rc=$?
   if [ "$rc" -eq 0 ]; then
     echo "  la miVM de V6 EJECUTA el .mod actual (magic $magic): mismo formato, hacia delante no hay nada que rechazar"
     [ "$magic" = "MOD7" ] && return 0
-    echo "  ⚠ pero el magic no es MOD7: una VM vieja NO deberia ejecutar un formato que no conoce"; return 1
+    echo "  ✗ pero el magic no es MOD7: una VM vieja NO deberia ejecutar un formato que no conoce"; return 1
+  fi
+  if [ "$magic" = "MOD7" ]; then
+    echo "  ✗ la miVM de V6 RECHAZA un MOD7 (rc=$rc), que es su propio formato:"; printf '%s\n' "$out" | head -3 | sed 's/^/       /'; return 1
   fi
   if printf '%s' "$out" | grep -qiE 'MOD[0-9]|formato|magic|version'; then
     echo "  la miVM de V6 RECHAZA el .mod actual (magic $magic) con mensaje: $(printf '%s' "$out" | grep -iE 'MOD[0-9]|formato|magic|version' | head -1)"
@@ -462,6 +469,120 @@ check_fwd() {
   fi
   echo "  ✗ la miVM de V6 falla (rc=$rc) SIN decir que es el formato:"; printf '%s\n' "$out" | head -5 | sed 's/^/       /'
   return 1
+}
+
+# ── V7/H2 (#500) — LA NORMA DE VERSIONES, con Core de verdad, en las DOS VMs ────
+# Cuatro stdlibs fabricadas como proyecto a partir de bpstdlib/*.bp (version 6, 7,
+# 7 con un metodo mas al final de List, 8, y 8 con un metodo INSERTADO en medio de
+# List), dos apps compiladas contra la de version 7 (NormaUsa: usa List; NormaExt:
+# extiende List), y cada combinacion ejecutada en miVM y en la VM-C: el stdout
+# filtrado tiene que ser IDENTICO entre VMs Y contener el texto esperado (o la
+# salida normal cuando se acepta). Es la prueba de que «compilar contra una era y
+# ejecutar contra otra» ya no pasa en silencio (V7_IDEAS §H2, apartado 4.3).
+norma_stdlib() {  # $1=dir destino  $2=version  [$3=sed sobre Core.bp]
+  local d="$1"
+  rm -rf "$d"; mkdir -p "$d/src"
+  cp "$STDLIB"/*.bp "$d/src/"
+  [ -n "${3:-}" ] && sed -i "$3" "$d/src/Core.bp"
+  printf '{ "sourceDir": "src", "outDir": ".", "main": "Stdlib", "version": %s, "dependencies": [] }\n' "$2" > "$d/p.bpbuild"
+  ( cd "$d" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm ) >"$d/build.log" 2>&1 || { echo "  ✗ la stdlib de prueba (version $2) no compila: $d/build.log"; return 1; }
+}
+norma_caso() {  # $1=etiqueta $2=dir con app+stdlib $3=modulo $4=texto esperado en stdout (regex) | "" = debe correr
+  local et="$1" dir="$2" mod="$3" esperado="$4" oj oc
+  oj="$(run_vm "$V3_JAVA" "$dir/$mod.mod")"
+  oc="$(run_vm "$V3_C"    "$dir/$mod.mod")"
+  if [ "$oj" != "$oc" ]; then
+    echo "  ✗ $et: las VMs DIFIEREN"; echo "     java: $(printf '%s' "$oj" | head -3 | tr '\n' '|')"; echo "     c:    $(printf '%s' "$oc" | head -3 | tr '\n' '|')"; return 1
+  fi
+  if [ -n "$esperado" ]; then
+    printf '%s' "$oj" | grep -qE "$esperado" || { echo "  ✗ $et: no dice lo esperado (/$esperado/):"; printf '%s\n' "$oj" | head -3 | sed 's/^/       /'; return 1; }
+    echo "  ok  $et: $(printf '%s' "$oj" | grep -E "$esperado" | head -1 | cut -c1-110)"
+  else
+    printf '%s' "$oj" | grep -qE "mas antiguo|no es la interfaz|mas reciente|ERROR DE LINK" && { echo "  ✗ $et: deberia correr y rechaza:"; printf '%s\n' "$oj" | head -3 | sed 's/^/       /'; return 1; }
+    echo "  ok  $et: corre ($(printf '%s' "$oj" | tr '\n' ' ' | cut -c1-60))"
+  fi
+}
+check_norma() {
+  echo "-- la norma de versiones (#500): Core de verdad, dos VMs, mismo texto --"
+  local N="$WORK/norma" fails=0
+  rm -rf "$N"; mkdir -p "$N"
+  # La app: USA List (NormaUsa) y EXTIENDE List (NormaExt).
+  cat > "$N/NormaUsa.bp" <<'EOF'
+module NormaUsa
+  import Core
+  public function main()
+    var l: Core.List := Core.List()
+    l.add(Core.Integer(7))
+    print "usa len=" + l.length()
+  end main
+end NormaUsa
+EOF
+  cat > "$N/NormaExt.bp" <<'EOF'
+module NormaExt
+  import Core
+  public class Mia extends Core.List
+    var extra: integer := 0
+    public function Mia()
+      super()
+    end Mia
+    public function marca(): string
+      return "mia/" + this.length()
+    end marca
+  end Mia
+  public function main()
+    var m: Mia := Mia()
+    m.add(Core.Integer(1))
+    print "ext " + m.marca()
+  end main
+end NormaExt
+EOF
+  # Las stdlibs: 6, 7, 7 con un metodo mas al FINAL de List (misma gen, otra
+  # interfaz), 8 (misma fuente), 8 con un metodo INSERTADO al PRINCIPIO de List.
+  local INS_FINAL='s/^  end List$/    public function normaNuevo(): integer\n      return 1\n    end normaNuevo\n  end List/'
+  local INS_MEDIO='0,/^  public class List/s//  public class List\n    public function normaPrimero(): integer\n      return 0\n    end normaPrimero/'
+  norma_stdlib "$N/s6" 6 || return 1
+  norma_stdlib "$N/s7" 7 || return 1
+  norma_stdlib "$N/s7b" 7 "$INS_FINAL" || return 1
+  norma_stdlib "$N/s8" 8 || return 1
+  norma_stdlib "$N/s8m" 8 "$INS_MEDIO" || return 1
+  grep -q "normaNuevo" "$N/s7b/src/Core.bp" || { echo "  ✗ el sed de INS_FINAL no ha entrado"; return 1; }
+  grep -q "normaPrimero" "$N/s8m/src/Core.bp" || { echo "  ✗ el sed de INS_MEDIO no ha entrado"; return 1; }
+  # Compilar las dos apps contra la 7 (desde $N: sin BpVM.cfg a la vista, resuelve por outDir).
+  local A="$N/app"; rm -rf "$A"; mkdir -p "$A"; cp "$N/s7"/*.mod "$A/"
+  ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app --backend=mivm && java -jar "$V3_FE" NormaExt.bp --compile app --backend=mivm ) >"$N/app.log" 2>&1 || { echo "  ✗ las apps no compilan contra la stdlib 7: $N/app.log"; return 1; }
+  # Un directorio por caso: la app + la stdlib de ese caso.
+  caso_dir() { local d="$N/c_$1"; rm -rf "$d"; mkdir -p "$d"; cp "$N/$2"/*.mod "$d/"; cp "$A/NormaUsa.mod" "$A/NormaExt.mod" "$d/"; echo "$d"; }
+  local d
+  d="$(caso_dir ok7 s7)"
+  norma_caso "gen igual, misma interfaz: usa"     "$d" NormaUsa "" || fails=$((fails+1))
+  norma_caso "gen igual, misma interfaz: extiende" "$d" NormaExt "" || fails=$((fails+1))
+  d="$(caso_dir viejo s6)"
+  norma_caso "gen menor (Core 6 < 7): rechazo"     "$d" NormaUsa "'Core' \(gen 6\) es mas antiguo que el que 'NormaUsa' necesita \(gen 7\)" || fails=$((fails+1))
+  d="$(caso_dir iface s7b)"
+  norma_caso "misma gen, otra interfaz: rechazo"   "$d" NormaUsa "'Core' \(gen 7, interfaz [0-9a-f]{8}\) no es la interfaz con la que se compilo 'NormaUsa'" || fails=$((fails+1))
+  d="$(caso_dir nuevo s8)"
+  norma_caso "gen mayor (8 > 7), usa: corre"       "$d" NormaUsa "" || fails=$((fails+1))
+  norma_caso "gen mayor (8 > 7), extiende: rechazo" "$d" NormaExt "'Core' \(gen 8\) es mas reciente que 'NormaExt' \(compilado contra gen 7\) y 'NormaExt' extiende una clase suya" || fails=$((fails+1))
+  d="$(caso_dir medio s8m)"
+  norma_caso "gen mayor con ranura movida: no enlaza" "$d" NormaUsa "ERROR DE LINK: lib 'Core' presente pero no exporta 'Core.List#" || fails=$((fails+1))
+  # La TRANSICION: una dependencia MOD7 (sin datos: gen 0, CRC desconocido). Con el Core
+  # MOD7 congelado de la capsula V6 — si existe; si no, se fabrica sin `version`.
+  local V6C="$V6_GOLD/stdlib"
+  if [ -f "$V6C/Core.mod" ] && [ "$(head -c 4 "$V6C/Core.mod")" = "MOD7" ]; then
+    d="$N/c_mod7"; rm -rf "$d"; mkdir -p "$d"; cp "$V6C"/*.mod "$d/"; cp "$A/NormaUsa.mod" "$d/"
+    norma_caso "dep MOD7 con app que exige gen 7: rechazo (mas antiguo)" "$d" NormaUsa "'Core' \(gen 0\) es mas antiguo que el que 'NormaUsa' necesita \(gen 7\)" || fails=$((fails+1))
+    # Y una app compilada SIN exigir gen (proyecto sin version): con Core MOD7 corre.
+    norma_stdlib "$N/s0" 0 || return 1
+    local A0="$N/app0"; rm -rf "$A0"; mkdir -p "$A0"; cp "$N/s0"/*.mod "$A0/"
+    ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app0 --backend=mivm ) >"$N/app0.log" 2>&1 || { echo "  ✗ NormaUsa no compila contra la stdlib 0"; return 1; }
+    d="$N/c_mod7b"; rm -rf "$d"; mkdir -p "$d"; cp "$V6C"/*.mod "$d/"; cp "$A0/NormaUsa.mod" "$d/"
+    norma_caso "dep MOD7 con app sin gen: corre (sin datos, al log)" "$d" NormaUsa "" || fails=$((fails+1))
+    echo "  norma: $((9-fails))/9 casos"
+  else
+    echo "  (sin capsula V6: los dos casos de dependencia MOD7 no se prueban — ejecuta gen-v6)"
+    echo "  norma: $((7-fails))/7 casos"
+  fi
+  [ "$fails" -eq 0 ]
 }
 
 # check_behaviour / check_opcodes / check_emit se conservan intactas arriba: son
@@ -499,6 +620,7 @@ EOF
   # MOD7 congelados corren en las VMs de hoy, y los de hoy no rompen la VM de V6.
   check_mod7 || fails=$((fails+1))
   check_fwd  || fails=$((fails+1))
+  check_norma || fails=$((fails+1))
   echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM + capsula V6 VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
@@ -509,5 +631,6 @@ case "${1:-}" in
   check)      check ;;
   check-mod7) check_mod7 ;;
   check-fwd)  check_fwd ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd}"; exit 2 ;;
+  check-norma) check_norma ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma}"; exit 2 ;;
 esac

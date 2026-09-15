@@ -36,10 +36,13 @@ static uint32_t be32(const uint8_t* p) { return ((uint32_t)p[0] << 24) | ((uint3
 static uint32_t le32(const uint8_t* p) { return ((uint32_t)p[3] << 24) | ((uint32_t)p[2] << 16) | ((uint32_t)p[1] << 8) | p[0]; }
 static uint32_t le16(const uint8_t* p) { return ((uint32_t)p[1] << 8) | p[0]; }
 
-/* La cabecera tal como la describe docs/MOD_FORMAT.md: 9 enteros BE en MOD7. */
+/* La cabecera tal como la describe docs/MOD_FORMAT.md: 9 enteros BE en MOD7, 11 en MOD8
+ * (V7/H2: gen + ifaceCrc al final). */
 typedef struct {
     char     magic[5];
     uint32_t data, main_off, imports, exports, code, library, iface, native;
+    uint32_t gen, iface_crc;   /* MOD8 */
+    int      v8;
     int      hdr;          /* bytes de cabecera según el magic */
     uint32_t off_library, off_imports, off_exports, off_iface, off_native, off_data, off_code, fin;
 } cab_t;
@@ -47,12 +50,15 @@ typedef struct {
 static int leer_cabecera(const uint8_t* f, size_t n, cab_t* c) {
     if (n < 4) return 0;
     memcpy(c->magic, f, 4); c->magic[4] = 0;
-    int v6 = !strcmp(c->magic, "MOD6"), v7 = !strcmp(c->magic, "MOD7");
+    int v6 = !strcmp(c->magic, "MOD6"), v8 = !strcmp(c->magic, "MOD8");
+    int v7 = !strcmp(c->magic, "MOD7") || v8;
     if (!v6 && !v7) return 0;
-    c->hdr = v7 ? 36 : 32;
+    c->v8  = v8;
+    c->hdr = v8 ? 44 : (v7 ? 36 : 32);
     if (n < (size_t)c->hdr) return 0;
     c->data = be32(f + 4);  c->main_off = be32(f + 8);  c->imports = be32(f + 12); c->exports = be32(f + 16);
     c->code = be32(f + 20); c->library = be32(f + 24);  c->iface = be32(f + 28);   c->native = v7 ? be32(f + 32) : 0;
+    c->gen  = v8 ? be32(f + 36) : 0; c->iface_crc = v8 ? be32(f + 40) : 0;
     c->off_library = (uint32_t)c->hdr;
     c->off_imports = c->off_library + c->library;
     c->off_exports = c->off_imports + c->imports;
@@ -96,7 +102,7 @@ static int probar(const char* path) {
     fclose(fp);
 
     cab_t c;
-    if (!leer_cabecera(f, (size_t)n, &c)) { ok(0, "magic conocido (MOD6/MOD7)"); free(f); return 1; }
+    if (!leer_cabecera(f, (size_t)n, &c)) { ok(0, "magic conocido (MOD6/MOD7/MOD8)"); free(f); return 1; }
     char msg[256];
     snprintf(msg, sizeof msg, "%s: cabecera %d B; library=%u imports=%u exports=%u interface=%u native=%u data=%u code=%u",
              c.magic, c.hdr, c.library, c.imports, c.exports, c.iface, c.native, c.data, c.code);
@@ -105,6 +111,38 @@ static int probar(const char* path) {
     /* 1. La cabecera dice la verdad: las secciones cubren el fichero entero. */
     snprintf(msg, sizeof msg, "la suma de las secciones es el fichero entero (%u == %ld, sobrantes %ld)", c.fin, n, n - (long)c.fin);
     ok(c.fin == (uint32_t)n, msg);
+
+    /* 1b. V7/H2 (MOD8) — el sello propio: ifaceCrc de la cabecera == CRC32 de la
+     * sección interface (segunda opinión, sin el cargador); y la subtabla `deps`
+     * de la sección imports se recorre entera por tamaño: count + entradas
+     * (name UTF, fromPath UTF) + count + (modulo UTF, fromPath UTF, gen, crc, flags). */
+    if (c.v8) {
+        uint32_t crc_real = bpvm_crc32(f + c.off_iface, c.iface);
+        snprintf(msg, sizeof msg, "MOD8: ifaceCrc de la cabecera (%08x) == crc32 de la seccion interface (%08x); gen=%u",
+                 c.iface_crc, crc_real, c.gen);
+        ok(c.iface_crc == crc_real, msg);
+        const uint8_t* p = f + c.off_imports; const uint8_t* fin = f + c.off_exports;
+        int bien = 1; uint32_t nimp = 0, ndep = 0;
+        if (fin - p >= 4) {
+            nimp = be32(p); p += 4;
+            for (uint32_t i = 0; i < nimp && bien; i++) {
+                if (fin - p < 2) { bien = 0; break; } uint32_t l = ((uint32_t)p[0] << 8) | p[1]; p += 2 + l;   /* name */
+                if (fin - p < 2) { bien = 0; break; } l = ((uint32_t)p[0] << 8) | p[1]; p += 2 + l;            /* fromPath */
+            }
+            if (bien && fin - p >= 4) {
+                ndep = be32(p); p += 4;
+                for (uint32_t i = 0; i < ndep && bien; i++) {
+                    if (fin - p < 2) { bien = 0; break; } uint32_t l = ((uint32_t)p[0] << 8) | p[1]; p += 2 + l;
+                    if (fin - p < 2) { bien = 0; break; } l = ((uint32_t)p[0] << 8) | p[1]; p += 2 + l;
+                    if (fin - p < 12) { bien = 0; break; } p += 12;   /* gen, ifaceCrc, flags */
+                }
+            }
+            if (p > fin) bien = 0;
+        }
+        snprintf(msg, sizeof msg, "MOD8: la seccion imports se recorre entera (%u imports + %u deps, %ld B sobrantes)",
+                 nimp, ndep, (long)(fin - p));
+        ok(bien && p == fin, msg);
+    }
 
     /* Un .mod «con todo» para probar la subida de formato tiene que tener TODAS las
      * secciones no vacías; se dice cuáles faltan para que el fixture no mienta. */

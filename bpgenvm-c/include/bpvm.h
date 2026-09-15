@@ -54,10 +54,15 @@ typedef enum {
                               * bpvm_run. No es un error. */
     BPVM_DBG_STOPPED,        /* H6.b — el debugger abortó la ejecución
                               * (pause_cb devolvió BPVM_DBG_STOP). */
-    BPVM_KILLED              /* P-run-stop (#257) — ejecución abortada por
+    BPVM_KILLED,             /* P-run-stop (#257) — ejecución abortada por
                               * bpvm_request_kill() / poll_cb (KILL del wire).
                               * Parada limpia ENTRE opcodes: heap y FS quedan
                               * consistentes; la VM puede recargar y re-correr. */
+    BPVM_ERR_DEP_VERSION     /* V7/H2 (#500) — una dependencia más antigua que
+                              * la que el módulo necesita, o con otra interfaz
+                              * en la misma generación: no se carga. El texto
+                              * (el mismo que miVM) ya salió por OUTPUT y está
+                              * en bpvm_load_error(). Exit 2: «no se pudo cargar». */
 } bpvm_status_t;
 
 /*

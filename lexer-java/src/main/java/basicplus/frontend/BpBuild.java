@@ -51,6 +51,12 @@ public final class BpBuild {
     public String outDir;
     /** Nombre lógico del módulo principal (sin extensión). */
     public String main;
+    /** V7/H2 (MOD8, #500) — la GENERACIÓN del proyecto: `"version": 7` (entero; se
+     *  admite "7.1" y se toma la parte entera). Es lo que da ORDEN a la norma de
+     *  versiones de las dependencias («una más antigua no vale»): cada .mod del
+     *  proyecto la lleva en su cabecera. 0 = sin versión declarada. Distinta de
+     *  `pack.version` (texto libre para la cabecera del pack). */
+    public int version = 0;
     /** Cada entrada es un path absoluto que puede ser un directorio o un
      *  fichero .mod / .bpi específico. El compilador la prueba al
      *  resolver imports cuando no encuentra la dep en sources/outDir. */
@@ -307,6 +313,20 @@ public final class BpBuild {
             b.main = nombreSinExtension(file);
         } else {
             b.main = (String) mainVal;
+        }
+        // V7/H2 — `version` del proyecto (gen).
+        Object verVal = map.get("version");
+        if (verVal != null) {
+            if (verVal instanceof Number) {
+                b.version = ((Number) verVal).intValue();
+            } else {
+                String vs = String.valueOf(verVal).trim();
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d+)").matcher(vs);
+                if (!m.find())
+                    throw new IOException(file + ": 'version' debe ser un entero (o empezar por uno): '" + vs + "'");
+                b.version = Integer.parseInt(m.group(1));
+            }
+            if (b.version < 0) throw new IOException(file + ": 'version' no puede ser negativa");
         }
 
         /* El nombre del pack: su entrada si la hay, y si no la hay, el del

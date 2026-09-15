@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * El `.mod` v7 y su sección `native` — sobre todo, que empieza ALINEADA A 4.
+ * El `.mod` v7/v8 y su sección `native` — sobre todo, que empieza ALINEADA A 4.
  *
  * <h3>Por qué este test existe</h3>
  *
@@ -50,28 +50,49 @@ class ModV7SeccionNativaTest {
         return f;
     }
 
-    /** Los 9 enteros del header v7. */
+    /** Los 11 enteros del header v8 (V7/H2: los 9 de v7 + gen + ifaceCrc). */
     private static int[] header(Path f) throws IOException {
         byte[] d = Files.readAllBytes(f);
         ByteBuffer b = ByteBuffer.wrap(d);   // big-endian por defecto
-        int[] h = new int[9];
-        for (int i = 0; i < 9; i++) h[i] = b.getInt();
+        int[] h = new int[11];
+        for (int i = 0; i < 11; i++) h[i] = b.getInt();
         return h;
     }
 
     /** Offset donde empieza la sección `native` = header + todo lo que va antes. */
     private static int inicioNative(int[] h) {
         //     header  library  imports  exports  interface
-        return 36 + h[6] + h[3] + h[4] + h[7];
+        return ModFormat.HEADER_SIZE_V8 + h[6] + h[3] + h[4] + h[7];
     }
 
     @Test
-    @DisplayName("un .mod recién escrito es v7 y su header tiene 9 enteros")
-    void esV7(@TempDir Path dir) throws IOException {
+    @DisplayName("un .mod recién escrito es v8 y su header tiene 11 enteros")
+    void esV8(@TempDir Path dir) throws IOException {
         int[] h = header(escribeModulo(dir, "SinNativo", null));
-        assertEquals(ModFormat.MAGIC_NUMBER_V7, h[0],
-                "el compilador debe emitir siempre la versión actual");
+        assertEquals(ModFormat.MAGIC_NUMBER_V8, h[0],
+                "el compilador debe emitir siempre la versión actual (MOD8)");
         assertEquals(0, h[8], "sin código nativo, la sección va vacía");
+        assertEquals(0, h[9], "sin setGeneracion, gen es 0");
+        // El sello propio: CRC32 de la sección interface (vacía aquí → crc de 0 bytes = 0).
+        assertEquals(0, h[10], "interfaz vacía → ifaceCrc 0");
+    }
+
+    @Test
+    @DisplayName("MOD8: la generación y el CRC de la interfaz viajan en la cabecera")
+    void selloPropio(@TempDir Path dir) throws IOException {
+        ModWriter w = new ModWriter();
+        w.addModulo("Sello");
+        w.setGeneracion(7);
+        byte[] iface = "bpi 8\nmodule Sello\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        w.setInterfaceBytes(iface);
+        w.addFunction("main", true);
+        Path f = dir.resolve("Sello.mod");
+        w.writeToFile(f.toString());
+        int[] h = header(f);
+        java.util.zip.CRC32 c = new java.util.zip.CRC32(); c.update(iface);
+        assertEquals(7, h[9], "gen = setGeneracion");
+        assertEquals((int) c.getValue(), h[10], "ifaceCrc = CRC32 de la sección interface escrita");
+        assertEquals((int) c.getValue(), w.getInterfaceCrc(), "getInterfaceCrc devuelve lo escrito");
     }
 
     @Test
@@ -102,7 +123,7 @@ class ModV7SeccionNativaTest {
 
             // Y el fichero tiene que seguir cuadrando: el relleno va DENTRO de
             // nativeSize, así que la suma no puede descuadrar.
-            long suma = 36L + h[6] + h[3] + h[4] + h[7] + h[8] + h[1] + h[5];
+            long suma = (long) ModFormat.HEADER_SIZE_V8 + h[6] + h[3] + h[4] + h[7] + h[8] + h[1] + h[5];
             assertEquals(Files.size(f), suma,
                     "header + secciones no suma el tamaño del fichero (blob de " + n + ")");
 
@@ -119,14 +140,14 @@ class ModV7SeccionNativaTest {
         int dataSize = b.getInt(); b.getInt();        // dataSize, mainOffset
         int imp = b.getInt(), exp = b.getInt(), code = b.getInt();
         int lib = b.getInt(), iface = b.getInt(), nat = b.getInt();
-        int ini = 36 + lib + imp + exp + iface + nat;
+        int ini = ModFormat.HEADER_SIZE_V8 + lib + imp + exp + iface + nat;
         byte[] cola = new byte[dataSize + code];
         System.arraycopy(mod, ini, cola, 0, cola.length);
         return cola;
     }
 
     @Test
-    @DisplayName("fundir un blob: el módulo sube a v7 y data/code no se mueven")
+    @DisplayName("fundir un blob: el módulo conserva su versión (v8) y data/code no se mueven")
     void fundirUnBlob(@TempDir Path dir) throws IOException {
         byte[] original = Files.readAllBytes(escribeModulo(dir, "Fundir", null));
         byte[] colaAntes = colaDe(original);
@@ -136,7 +157,12 @@ class ModV7SeccionNativaTest {
         byte[] fundido = edu.bpgenvm.bytecode.ModFormat.conBloqueNativo(original, blob);
 
         ByteBuffer b = ByteBuffer.wrap(fundido);
-        assertEquals(ModFormat.MAGIC_NUMBER_V7, b.getInt(), "debe salir v7");
+        assertEquals(ModFormat.MAGIC_NUMBER_V8, b.getInt(), "un MOD8 fundido sigue siendo MOD8 (conserva gen e ifaceCrc)");
+        ByteBuffer o = ByteBuffer.wrap(original);
+        for (int i = 0; i < 9; i++) { o.getInt(); if (i < 8) b.getInt(); }
+        b.getInt();   // nativeSize (cambia)
+        assertEquals(o.getInt(), b.getInt(), "gen se conserva al fundir");
+        assertEquals(o.getInt(), b.getInt(), "ifaceCrc se conserva al fundir");
         // data y code son lo que EJECUTA la VM: si se mueven o se cortan, el
         // módulo queda roto de una forma que no se ve hasta ejecutarlo.
         org.junit.jupiter.api.Assertions.assertArrayEquals(colaAntes, colaDe(fundido),
@@ -154,10 +180,10 @@ class ModV7SeccionNativaTest {
         byte[] uno = ModFormat.conBloqueNativo(mod, arm);
         byte[] dos = ModFormat.conBloqueNativo(uno, riscv);   // acumulativa
 
-        int[] h = new int[9];
+        int[] h = new int[11];
         ByteBuffer b = ByteBuffer.wrap(dos);
-        for (int i = 0; i < 9; i++) h[i] = b.getInt();
-        int iniSeccion = 36 + h[6] + h[3] + h[4] + h[7];
+        for (int i = 0; i < 11; i++) h[i] = b.getInt();
+        int iniSeccion = ModFormat.HEADER_SIZE_V8 + h[6] + h[3] + h[4] + h[7];
 
         // Los dos blobs tienen que estar, y cada uno en múltiplo de 4. Se buscan
         // por su primer byte, que es distinto a propósito.
