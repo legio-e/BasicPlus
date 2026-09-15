@@ -53,7 +53,8 @@ invertido, prueba de sombra/XIP en el sim); (2) `#514` `#516`; (3) **la cadena**
 Run del IDE debe pasar la `version` del proyecto), blobs de las cinco imágenes, `Stdlib.pack`/`SQLite.pack` (`#496`: su
 puente `.mdn` saldrá v2), `montar-zip.sh` a MOD8, el `exitCode` de carga de la Pico por la tabla `#481`; (4) el cierre
 pequeño (redes con número + tanda corta en una placa por familia — con el aviso «sin huella» de un v1 y el rechazo de
-un v2 ajeno en la lista).
+un v2 ajeno en la lista). **Eduardo (15-sep, mediodía): «ahora no puedo pruebas con placas, lo aplazamos»** → las
+comprobaciones en placa de `#441` se quedan en esa lista; nada de lo que sigue en H2 depende de ellas.
 
 ## 🧱 MOD8 HECHO (15-sep) — la norma de versiones de `#500` en las dos VMs con el mismo texto, `#518` cerrada; queda la cadena, `#441` (`.mdn` v2) y `#493`
 
