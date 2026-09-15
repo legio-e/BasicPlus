@@ -32,6 +32,7 @@
 #include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
 #include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
+#include "bpvm_mdn_scan.h"   /* V7/H2 (#493): el escaner comun de .mdn (FS + zona) */
 #include "aot_registry.h"
 #include "bpvm_repl.h"       /* V6/U3: los verbos COMUNES del REPL (grupo 1: meta) */
 #include "bpvm_mem.h"        /* V6/U6.11: el planificador de memoria COMÚN (una regla, cinco placas) */
@@ -342,6 +343,41 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
  * un puntero, y sostenerlo costaba un espejo estático del tamaño de la arena del
  * FS viejo: 496 KB en la Discovery, 96 KB en la Nucleo. Ahora el llamante abre
  * por esa ruta y lee por trozos. Mismo cambio que #305 en el Pico. */
+static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_t* size);
+
+/* V7/H2 (#493) — la cintura del escáner común de `.mdn` (bpvm_mdn_scan.h): del
+ * FS al buffer ejecutable. H11 — el .mdn es ZERO-COPY: los thunks se registran
+ * como punteros DENTRO de este buffer, así que tiene que seguir vivo y en RAM
+ * toda la ejecución; se reserva de la arena de la VM exactamente lo que ocupa,
+ * 4-alineado (Thumb-2). El código ejecuta desde SRAM (S-bus); el ICACHE del U5
+ * cachea la ruta de flash (C-bus), así que no hace falta invalidación. */
+static const uint8_t* stm32_mdn_del_fs(void* user, const char* nombre, uint32_t* len) {
+    bpvm_t* vm = (bpvm_t*) user;
+    char real[80]; uint32_t size = 0;
+    if (stm32_fs_resolve(nombre, real, sizeof real, &size) != 0) return NULL;
+    uint8_t* dst = bpvm_arena_reserve(vm, size, 4);
+    if (!dst) {
+        log_printf("AOT: %s (%lu B) no cabe en la arena — sin overlay", real, (unsigned long) size);
+        return NULL;
+    }
+    if (bpvm_fs_read(real, dst, size) != (long) size) {
+        log_printf("AOT: %s no se pudo leer — sin overlay", real);
+        return NULL;
+    }
+    *len = size;
+    return dst;
+}
+
+/* Visible en la consola del IDE Y en el log: un fallo de carga que cayera a
+ * interpretado en silencio es justo lo que luego se investiga como «va lento». */
+static void stm32_mdn_decir(void* user, const char* msg) {
+    (void) user;
+    log_printf("%s", msg);
+    char linea[240];
+    int n = snprintf(linea, sizeof linea, "[%s]\n", msg);
+    if (n > 0) v1_output_sink(linea, (size_t) n, NULL);
+}
+
 static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_t* size) {
     /* #344 — la REGLA vive en el núcleo (bpvm_entry_resolve): basedir del
      * proyecto → tal cual → /app → /lib. Estas 15 líneas estaban COPIADAS
@@ -454,38 +490,13 @@ static void run_module_path(const char* path, long id, const char* arg) {
      * Desde [V6/N1.4] un `.mod` puede traer su bloque nativo DENTRO y el
      * cargador registra sus thunks durante `bpvm_load_entry`: vaciar el
      * registro después borraba justo eso. */
+    /* [V7/H2, #493] EL BUCLE COMÚN, como la Pico y el ESP32. Éste era uno de los
+     * dos que quedaban propios (el otro, el sim): resolvía el `.mdn` por el FS
+     * y encontraba el de un pack sólo porque la zona se disfrazaba de /app.
+     * Con el respaldo cerrado a su espacio, el escáner común es quien mira la
+     * zona a propósito (y el puente sigue a su módulo: pack → FS o FS → pack). */
     if (st == BPVM_OK && !missing[0]) {
-        for (int mi = 0; mi < vm->module_count; mi++) {
-            const char* mname = vm->modules[mi].name;
-            if (!mname || !mname[0]) continue;
-            char mdn_path[72];   /* name[64] + ".mdn" + NUL: sin -Wformat-truncation */
-            snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
-            char mdn_real[80]; uint32_t mdn_size;
-            if (stm32_fs_resolve(mdn_path, mdn_real, sizeof(mdn_real), &mdn_size) != 0) continue;
-            /* H11 — el .mdn es ZERO-COPY: los thunks se registran como punteros
-             * DENTRO de este buffer, así que tiene que seguir vivo y en RAM toda
-             * la ejecución. Antes vivía en el espejo del fs_get (la razón de que
-             * el espejo fuera permanente y del tamaño de la arena); ahora se le
-             * reserva de la arena de la VM exactamente lo que ocupa, 4-alineado
-             * que es lo que pide Thumb-2. Mismo remedio que el Pico. */
-            uint8_t* mdn_data = bpvm_arena_reserve(vm, mdn_size, 4);
-            if (!mdn_data) {
-                log_printf("AOT: %s (%lu B) no cabe en la arena — sin overlay",
-                           mdn_real, (unsigned long) mdn_size);
-                continue;
-            }
-            if (bpvm_fs_read(mdn_real, mdn_data, mdn_size) != (long) mdn_size) {
-                log_printf("AOT: %s no se pudo leer — sin overlay", mdn_real);
-                continue;
-            }
-            int mrc = bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
-            /* Visible en la consola del IDE: sin esto, un fallo de carga
-             * (p.ej. buffer desalineado) caía a interpretado EN SILENCIO. */
-            char mmsg[96];
-            int mn = snprintf(mmsg, sizeof(mmsg), "[AOT] %s %s (rc=%d)\n",
-                              mdn_path, (mrc == 0) ? "OK" : "FALLO -> interpretado", mrc);
-            if (mn > 0) v1_output_sink(mmsg, (size_t) mn, NULL);
-        }
+        bpvm_mdn_escanear(vm, stm32_mdn_del_fs, stm32_mdn_decir, vm);
     }
 
     /* P-run-stop (#257) — poll del wire entre quanta (KILL/HELLO/BUSY). */
@@ -816,6 +827,9 @@ void stm32_repl_run(void) {
         log_printf("fs: %u/%u bytes usados", (unsigned) fs_used_bytes(),
                    (unsigned) fs_total_bytes());
     }
+    /* V7/H2 (#493) — la zona de packs, DESPUÉS de /lib (como ESP32, P4 y Pico) y
+     * fuera del gate del FS: sólo necesita las particiones. */
+    board_mgr_stm32_montar_packs();
     stm32_hw_register();            /* backends de HW (GPIO, info de MCU) — siempre */
     log_flush();                    /* persiste la historia del boot (post-mortem tras corte) */
 

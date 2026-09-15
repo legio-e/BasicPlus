@@ -21,6 +21,11 @@ extern "C" {
  * 1ª capa que falla. Lo llama el repl EN LUGAR de fs_load(). Tras esto,
  * board_boot_status() refleja el estado alcanzado. */
 void board_mgr_stm32_boot(void);
+/* [V7/H2, #493] Monta la zona de packs (XIP). Va APARTE del climb y se llama
+ * DESPUÉS de sincronizar /lib: con la zona montada antes, el `stat` del sync
+ * la veía y /lib se reponía cada arranque con un motivo falso. Sólo necesita
+ * las particiones (no el FS). Idempotente. */
+void board_mgr_stm32_montar_packs(void);
 
 /* Estado REAL del boot (para STATE del wire y el gating de FS/RUN en el repl). */
 const bpvm_boot_status_t* board_boot_status(void);

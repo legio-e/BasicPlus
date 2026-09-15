@@ -16,6 +16,7 @@
 #include "bpvm_pack.h"
 #include "bpvm_fs.h"   /* #362: la zona se engancha como respaldo de LECTURA */
 #include <string.h>
+#include <stdio.h>     /* V7/H2 (#493): snprintf de la ruta pack:<Pack>/x */
 
 /* ── offsets de cabecera (espejo de PackFormat.java) ── */
 #define OFF_MAGIC       0
@@ -121,13 +122,14 @@ static const uint8_t* s_mounted_exec = 0;   /* vista EJECUTABLE; == base salvo S
 static int  zone_res_stat(void* user, const char* path, uint32_t* size);
 static long zone_res_read(void* user, const char* path, uint32_t off,
                           uint8_t* dst, uint32_t cap);
+static int  zone_res_locate(void* user, const char* nombre, char* out, size_t cap);
 
 void bpvm_pack_mount(const uint8_t* base_lectura, const uint8_t* base_ejecucion,
                      uint32_t size) {
     s_mounted_base = base_lectura;
     s_mounted_exec = base_ejecucion ? base_ejecucion : base_lectura;
     s_mounted_size = size;
-    bpvm_fs_set_fallback(zone_res_stat, zone_res_read, NULL);
+    bpvm_fs_set_fallback(zone_res_stat, zone_res_read, zone_res_locate, NULL);
 }
 
 const uint8_t* bpvm_pack_exec_ptr(const uint8_t* p) {
@@ -183,14 +185,45 @@ int bpvm_pack_key_de_path(const char* path, char* tipo, char* nombre, char* pack
 static int zone_res_entry(const char* path, bpvm_pack_src_t* src,
                           bpvm_pack_entry_t* out) {
     if (!s_mounted_base || s_mounted_size == 0) return 0;    /* sin zona montada */
+    /* [V7/H2, #493] SÓLO EN SU ESPACIO: la zona contesta a `pack:<Pack>/x` y a
+     * nada más. Hasta el 15-sep reclamaba cualquier ruta por su basename —
+     * `/app/Str.mod`, `/lib/Str.mod`, `Str.mod`, `/lo/que/sea/Str.mod`— y con eso
+     * se disfrazaba de `/app`: la resolución de módulos creía que el módulo
+     * estaba en el FS, lo cargaba por stream (el XIP llevaba muerto desde el
+     * 13-ago) y un pack con una stdlib vieja tapaba a /lib. «¿Alguien tiene
+     * x?» es otra pregunta y tiene otra puerta: `zone_res_locate`. */
+    if (!path || strncmp(path, BPVM_PACK_URI, sizeof(BPVM_PACK_URI) - 1) != 0) return 0;
     char tipo[BPVM_PACK_TYPE_LEN + 1], nombre[BPVM_PACK_NAME_LEN + 1];
     char pack[BPVM_PACK_NAME_LEN + 1];
     if (!bpvm_pack_key_de_path(path, tipo, nombre, pack)) return 0;
+    if (!pack[0]) return 0;                                  /* `pack:` sin nombre de pack */
     bpvm_pack_src_mem(src, s_mounted_base, s_mounted_size);
-    /* Cualificado → SÓLO ese pack. Sin cualificar → toda la cadena, y gana el
-     * último grabado (la regla de siempre: actualizar es añadir + tumbar). */
-    return pack[0] ? bpvm_pack_find_in_src(src, pack, tipo, nombre, out)
-                   : bpvm_pack_find_src(src, tipo, nombre, out);
+    return bpvm_pack_find_in_src(src, pack, tipo, nombre, out);
+}
+
+/* [V7/H2, #493] «¿Algún pack grabado tiene este fichero?» → su ruta cualificada.
+ * Es lo que `bpvm_fs_resolve` prueba como ÚLTIMO candidato de un recurso
+ * relativo (`readFile("logo.png")`, una fuente, un icono): la zona sigue
+ * sirviendo recursos (#362), pero se le pregunta a propósito y en su sitio,
+ * después del FS. Gana el último pack grabado que lo tenga, como siempre. Un
+ * nombre ya cualificado o con esquema no es cosa de esta puerta. */
+static int zone_res_locate(void* user, const char* nombre, char* out, size_t cap) {
+    (void) user;
+    if (!s_mounted_base || s_mounted_size == 0 || !nombre || !out || cap == 0) return -1;
+    for (const char* p = nombre; *p; p++) {
+        if (*p == '/' || *p == '\\') break;
+        if (*p == ':') return -1;                            /* ya lleva esquema */
+    }
+    char tipo[BPVM_PACK_TYPE_LEN + 1], base[BPVM_PACK_NAME_LEN + 1];
+    char pack[BPVM_PACK_NAME_LEN + 1];
+    if (!bpvm_pack_key_de_path(nombre, tipo, base, pack)) return -1;
+    bpvm_pack_src_t src; bpvm_pack_entry_t e;
+    bpvm_pack_src_mem(&src, s_mounted_base, s_mounted_size);
+    if (!bpvm_pack_find_src_pack(&src, tipo, base, &e, pack)) return -1;
+    /* El fichero dentro del pack se nombra por (tipo, nombre): la ruta que se
+     * devuelve lleva ese basename, no el directorio que el llamante pidiera. */
+    int n = snprintf(out, cap, "%s%s/%s.%s", BPVM_PACK_URI, pack, base, tipo);
+    return (n > 0 && (size_t) n < cap) ? 0 : -1;
 }
 
 static int zone_res_stat(void* user, const char* path, uint32_t* size) {
@@ -490,8 +523,9 @@ int bpvm_pack_iter_entry_info(const bpvm_pack_src_t* src, int32_t pack_cur,
  * separando en cuanto una cambiase. */
 static int find_src_en(const bpvm_pack_src_t* src, const char* solo_pack,
                        const char* tipo, const char* nombre,
-                       bpvm_pack_entry_t* out) {
+                       bpvm_pack_entry_t* out, char* pack_out) {
     int found = 0;
+    if (pack_out) pack_out[0] = '\0';
     uint32_t off = 0;
     for (;;) {
         if (off + 4 > src->size) break;
@@ -506,6 +540,7 @@ static int find_src_en(const bpvm_pack_src_t* src, const char* solo_pack,
             while (next_entry(src, off, info.size_total, &rel, &e) == 1) {
                 if (strcmp(e.tipo, tipo) == 0 && strcmp(e.nombre, nombre) == 0) {
                     if (out) *out = e;                      /* el ÚLTIMO de la cadena gana */
+                    if (pack_out) snprintf(pack_out, BPVM_PACK_NAME_LEN + 1, "%s", info.nombre);
                     found = 1;
                 }
             }
@@ -518,14 +553,20 @@ static int find_src_en(const bpvm_pack_src_t* src, const char* solo_pack,
 int bpvm_pack_find_src(const bpvm_pack_src_t* src,
                        const char* tipo, const char* nombre,
                        bpvm_pack_entry_t* out) {
-    return find_src_en(src, NULL, tipo, nombre, out);
+    return find_src_en(src, NULL, tipo, nombre, out, NULL);
+}
+
+int bpvm_pack_find_src_pack(const bpvm_pack_src_t* src,
+                            const char* tipo, const char* nombre,
+                            bpvm_pack_entry_t* out, char* pack_out) {
+    return find_src_en(src, NULL, tipo, nombre, out, pack_out);
 }
 
 int bpvm_pack_find_in_src(const bpvm_pack_src_t* src, const char* pack,
                           const char* tipo, const char* nombre,
                           bpvm_pack_entry_t* out) {
     if (!pack || !*pack) return 0;      /* sin nombre no hay búsqueda cualificada */
-    return find_src_en(src, pack, tipo, nombre, out);
+    return find_src_en(src, pack, tipo, nombre, out, NULL);
 }
 
 int bpvm_pack_src_is_pack(const bpvm_pack_src_t* src) {

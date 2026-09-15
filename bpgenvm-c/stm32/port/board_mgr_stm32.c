@@ -147,10 +147,20 @@ void board_mgr_stm32_boot(void) {
     layers.max_state     = BPVM_BOOT_APP;
     bpvm_boot_climb(&layers, &s_boot);
     /* Sin log de consola (el STM32 no tiene una): el estado se consulta por STATE. */
+}
 
-    /* H3.c — montar la zona de packs (XIP) para la resolución de módulos del
-     * RUN: el repl la consulta como fallback tras el FS (el FS eclipsa). El
-     * mismo montaje que hace el host con --pack=, aquí sobre la flash real. */
+/* H3.c — montar la zona de packs (XIP) para la resolución de módulos del RUN:
+ * el último candidato tras /app y /lib. El mismo montaje que hace el host con
+ * --pack=, aquí sobre la flash real.
+ *
+ * [V7/H2, #493] Vivía dentro de `board_mgr_stm32_boot`, ANTES de que el repl
+ * sincronizara /lib desde la tabla embebida — comodidad de sitio del 23-jul,
+ * inocua hasta que el 13-ago (#362) la zona empezó a contestar al `stat` de
+ * cualquier ruta: el sync veía «/lib/Core.mod» en la zona, no podía leerle el
+ * CRC y lo REPONÍA cada arranque con «no se pudo leer»; con un pack de MAGIC
+ * mayor, /lib no se instalaba nunca. Las otras tres familias sincronizan antes
+ * de montar; ahora ésta también. */
+void board_mgr_stm32_montar_packs(void) {
     if (s_layout_ok) {
         const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
         if (pp && pp->size > 0) {

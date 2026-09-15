@@ -139,62 +139,89 @@ public class ModuleManager {
     }
 
     /**
-     * Resuelve la ruta real de un fichero .mod probando, en orden:
-     *   1) `filename` tal cual (absoluto o relativo al cwd);
-     *   2) cada directorio de `modulePaths` (vienen del .bpproject);
-     *   3) `stdlibDir/<basename>` (del BpVM.cfg) — los módulos del lenguaje;
-     *   4) si nada existe, devuelve `filename` para que el caller falle con
-     *      FileNotFound y dé un mensaje claro.
+     * Resuelve la ruta real de un fichero .mod.
      *
-     * En todos los casos se usa el BASENAME del filename solicitado para
-     * los pasos 2 y 3 (los imports vienen con nombres como
-     * "lib.Module.mod" o "Module.mod" — no rutas relativas con subdir).
+     * <p><b>La raíz</b> (lo que se manda ejecutar) es una RUTA: se toma tal cual
+     * (absoluta o relativa al cwd), o dentro del workdir si lo hay.
+     *
+     * <p><b>Una dependencia</b> es un NOMBRE (`Str.mod`, `acme.LibHdr.mod`), y
+     * se busca por el orden único de las dos VMs — [V7/H2, #493] decisión de
+     * Eduardo (15-sep): <i>«el orden siempre ha sido /app → /lib → packs»</i>,
+     * el mismo que `discover_deps` en la VM-C:
+     * <ol>
+     *   <li>el pack en ejecución (lo mira {@link #resolveModuleSource} antes);</li>
+     *   <li><b>/app</b>: el workdir si lo hay (sandbox), la carpeta del módulo
+     *       raíz (#431) y los `modulePaths` del .bpproject;</li>
+     *   <li><b>/lib</b>: `stdlibDir` del BpVM.cfg.</li>
+     * </ol>
+     * Lo que YA NO se prueba para una dependencia: el nombre «tal cual» contra
+     * el cwd de la JVM — con un `.mod` homónimo en el directorio actual miVM lo
+     * cogía y la VM-C cogía el de la carpeta del programa: mismo `.mod`, mismo
+     * cwd, stdout distinto —; y el `fromPath` del import, que es la pista del
+     * COMPILADOR (`import X from "..."`), no de la VM (miVM lo honraba relativo
+     * al cwd de la JVM, y se saltaba el sandbox con ello). Si nada existe,
+     * devuelve el nombre para que el caller falle con «falta el modulo 'X'».
      */
-    private String resolveModulePath(String filename) {
-        // A2.1 — orden con workdir:
-        //   1) si workdir está activo y `filename` es relativo, probamos
-        //      workdir/filename (con sandbox).
-        //   2) `filename` tal cual (absoluto o relativo al cwd — sólo
-        //      útil cuando no hay workdir).
-        //   3) modulePaths del proyecto.
-        //   4) stdlibDir del BpVM.cfg.
+    private String resolveModulePath(String filename, boolean esRaiz) {
         java.io.File asGiven = new java.io.File(filename);
         String base = asGiven.getName();
-        if (workdir != null && !asGiven.isAbsolute()) {
-            java.nio.file.Path safe = resolveInWorkdirOrNull(filename);
-            if (safe != null && java.nio.file.Files.isRegularFile(safe)) {
-                return safe.toString();
+        if (esRaiz) {
+            if (workdir != null && !asGiven.isAbsolute()) {
+                java.nio.file.Path safe = resolveInWorkdirOrNull(filename);
+                if (safe != null && java.nio.file.Files.isRegularFile(safe)) return safe.toString();
             }
-            // Si el path original tenía subdir y no apareció, probamos sólo basename
-            // dentro del workdir (los imports llegan típicamente como "Util.mod").
-            if (!base.equals(filename)) {
-                java.nio.file.Path baseInWd = resolveInWorkdirOrNull(base);
-                if (baseInWd != null && java.nio.file.Files.isRegularFile(baseInWd)) {
-                    return baseInWd.toString();
-                }
-            }
+            return filename;
         }
-        if (asGiven.isFile()) return filename;
-        // 3) modulePaths del proyecto (orden de declaración).
+        // 1) /app: el workdir (sandbox), la carpeta de la raíz, los modulePaths.
+        if (workdir != null) {
+            java.nio.file.Path baseInWd = resolveInWorkdirOrNull(base);
+            if (baseInWd != null && java.nio.file.Files.isRegularFile(baseInWd)) return baseInWd.toString();
+        }
+        if (rootModuleDir != null) {
+            java.io.File junto = new java.io.File(rootModuleDir, base);
+            if (junto.isFile()) return junto.getPath();
+        }
         for (String dir : modulePaths) {
             if (dir == null || dir.isEmpty()) continue;
             java.io.File cand = new java.io.File(dir, base);
             if (cand.isFile()) return cand.getPath();
         }
-        // 3b) #431 — LA CARPETA DE LA RAÍZ. Va aquí y no antes a propósito: es
-        //     ADITIVO, no cambia dónde se encontraba nada que ya se encontrara.
-        //     Es lo que hace la VM-C, y sin esto un `.mod` con dependencias sólo
-        //     arrancaba si el directorio actual resultaba ser el suyo.
-        if (rootModuleDir != null) {
-            java.io.File junto = new java.io.File(rootModuleDir, base);
-            if (junto.isFile()) return junto.getPath();
+        // 2) /lib: stdlibDir del BpVM.cfg.
+        java.io.File inStd = enStdlib(base);
+        if (inStd != null) return inStd.getPath();
+        // Nada: una ruta que NO existe, junto a la raíz. El nombre pelado no vale
+        // aquí — el cwd de la JVM lo abriría si por casualidad lo tuviera, que
+        // es justo la puerta que se cierra.
+        return rootModuleDir != null ? new java.io.File(rootModuleDir, base).getPath() : base;
+    }
+
+    /** `stdlibDir/<base>` si existe; null si no hay stdlibDir o no está. */
+    private java.io.File enStdlib(String base) {
+        if (stdlibDir == null || stdlibDir.isEmpty()) return null;
+        java.io.File f = new java.io.File(stdlibDir, base);
+        return f.isFile() ? f : null;
+    }
+
+    /** [V7/H2, #493] EL AVISO DE LA SOMBRA, por OUTPUT y con el mismo texto que la
+     *  VM-C: una dependencia resuelta fuera de /lib que tiene un GEMELO en /lib
+     *  está tapando a la stdlib — el caso real de la ficha (una `Collections`
+     *  vieja en /app y una tarde mirando otro sitio). Criterio «gemelo tapado»:
+     *  mudo sin stdlibDir (el arnés de paridad copia la stdlib al lado del
+     *  sample y no fija ninguno), y suena justo donde tapa. Una vez por
+     *  dependencia. ASCII, sin la ruta resuelta (cada VM resuelve una distinta). */
+    private final java.util.Set<String> sombrasAvisadas = new java.util.HashSet<>();
+
+    private void avisarSiTapa(String canon, String resuelto) {
+        java.io.File gemelo = enStdlib(new java.io.File(resuelto).getName());
+        if (gemelo == null) return;
+        try {
+            if (java.nio.file.Files.isSameFile(gemelo.toPath(), java.nio.file.Paths.get(resuelto))) return;
+        } catch (IOException e) {
+            return;   // uno de los dos no se puede abrir: que lo diga la carga
         }
-        // 4) stdlibDir del BpVM.cfg.
-        if (stdlibDir != null && !stdlibDir.isEmpty()) {
-            java.io.File inStd = new java.io.File(stdlibDir, base);
-            if (inStd.isFile()) return inStd.getPath();
-        }
-        return filename;
+        if (!sombrasAvisadas.add(canon)) return;
+        vm.getProgramOut().writeText("aviso: '" + canon + "' cargado desde /app, tapa al de /lib");
+        vm.getProgramOut().newline();
     }
 
     // ============================================================
@@ -329,7 +356,7 @@ public class ModuleManager {
             discoveryQueue.clear();
             // El main se busca por su nombre de entrada: ya está DENTRO, así que
             // resolveModuleSource lo encuentra en el pack sin tocar el FS.
-            discoverDependencies(main + ".mod", main);
+            discoverDependencies(main + ".mod", main, false);
             for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
                 loadModuleToMemory(entry.getValue(), entry.getKey());
             }
@@ -423,12 +450,12 @@ public class ModuleManager {
      * primero sería dejar que el entorno le cambie las tripas a una app que
      * viene cerrada.
      */
-    private ModSource resolveModuleSource(String filename) {
+    private ModSource resolveModuleSource(String filename, boolean esRaiz) {
         if (runPackPath != null) {
             basicplus.pack.PackEntry e = runPackIndex.get("mod:" + packEntryName(filename));
             if (e != null) return ModSource.ofPack(e.data, packEntryName(filename), runPackPath);
         }
-        return ModSource.ofFile(resolveModulePath(filename));
+        return ModSource.ofFile(resolveModulePath(filename, esRaiz));
     }
 
     private static class ModuleMetadata {
@@ -563,7 +590,8 @@ public class ModuleManager {
             rootModuleDir = (dir != null && dir.isDirectory()) ? dir.getPath() : null;
         }
         discoveryQueue.clear();
-        discoverDependencies(filename, moduleName);
+        sombrasAvisadas.clear();
+        discoverDependencies(filename, moduleName, true);
         for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
             loadModuleToMemory(entry.getValue(), entry.getKey());
         }
@@ -571,14 +599,21 @@ public class ModuleManager {
         vm.setHeapStart(nextFreeAddress);
     }
 
-    private void discoverDependencies(String filename, String moduleName) throws IOException {
-        if (discoveryQueue.containsKey(moduleName)) return;
-        // Resolver (#310: pack en ejecución primero; si no, vía stdlib como
-        // siempre) — y cachear la FUENTE en la cola para que loadModuleToMemory
-        // abra exactamente los mismos bytes.
-        ModSource src = resolveModuleSource(filename);
-        discoveryQueue.put(moduleName, src);
+    /** La cabecera de un módulo recién resuelto: lo que hace falta para aplicar la
+     *  norma (#500) y para recorrer sus imports. Se lee ANTES de recurrir. */
+    private static final class Cabecera {
+        ModSource src; String myLibrary; byte[] importBuffer; boolean v8a;
+    }
 
+    /** Resuelve la fuente, la mete en la cola y lee su cabecera. NO recurre. */
+    private Cabecera abrirCabecera(String filename, String moduleName, boolean esRaiz) throws IOException {
+        // Resolver (#310: pack en ejecución primero; si no, /app → /lib) — y
+        // cachear la FUENTE en la cola para que loadModuleToMemory abra
+        // exactamente los mismos bytes.
+        ModSource src = resolveModuleSource(filename, esRaiz);
+        discoveryQueue.put(moduleName, src);
+        Cabecera c = new Cabecera();
+        c.src = src;
         try (DataInputStream in = src.open()) {
             int magic0 = in.readInt();
             if (!ModFormat.isAbiSupported(magic0)) {   // #284 — gate de ABI
@@ -602,11 +637,33 @@ public class ModuleManager {
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
-            String myLibrary = new String(libraryBytes, StandardCharsets.UTF_8);
+            c.myLibrary = new String(libraryBytes, StandardCharsets.UTF_8);
 
-            byte[] importBuffer = new byte[importSize];
-            in.readFully(importBuffer);
+            c.importBuffer = new byte[importSize];
+            in.readFully(c.importBuffer);
+            c.v8a = v8a;
+        }
+        return c;
+    }
 
+    /** [V7/H2, #493/#500] El descubrimiento, en el MISMO orden que `discover_deps`
+     *  de la VM-C: se resuelve la dependencia, se lee su cabecera, se aplica la
+     *  norma, y sólo entonces se recurre a sus imports. miVM recurría antes de
+     *  comprobar, así que con dos incumplimientos en cadena nombraba el más
+     *  profundo y la VM-C el primero: el texto por OUTPUT no era byte-idéntico. */
+    private void discoverDependencies(String filename, String moduleName, boolean esRaiz) throws IOException {
+        if (discoveryQueue.containsKey(moduleName)) return;
+        Cabecera c = abrirCabecera(filename, moduleName, esRaiz);
+        descubrirImports(c, moduleName);
+    }
+
+    private void descubrirImports(Cabecera c, String moduleName) throws IOException {
+        ModSource src = c.src;
+        String myLibrary = c.myLibrary;
+        byte[] importBuffer = c.importBuffer;
+        int importSize = importBuffer.length;
+        boolean v8a = c.v8a;
+        {
             if (importSize > 0) {
                 DataInputStream importIn = new DataInputStream(new java.io.ByteArrayInputStream(importBuffer));
                 int extCount = importIn.readInt();
@@ -629,45 +686,31 @@ public class ModuleManager {
                 for (int i = 0; i < extCount; i++) {
                     String imp = importIn.readUTF();
                     String fromPath = importIn.readUTF();
-                    // Resolución de filename:
-                    //   - Si fromPath no es vacío, lo usamos tal cual (el linker
-                    //     sigue trabajando con `imp`, el nombre lógico).
-                    //   - Si está vacío, derivamos por convención:
+                    // [V7/H2, #493] `fromPath` NO se usa para resolver: es la pista
+                    // del compilador (`import X from "..."`, una ruta del árbol de
+                    // FUENTES relativa al .bp), no de la VM. Se deriva por convención:
                     //     "Module.func"           → Module.mod                (misma library que el importer)
                     //     "lib.path.Module.func"  → lib.path.Module.mod
                     String[] parts = imp.split("\\.");
                     if (parts.length < 2) continue;
                     String requiredModule = parts[parts.length - 2];
-                    String requiredFilename;
-                    if (!fromPath.isEmpty()) {
-                        requiredFilename = fromPath;
-                    } else {
-                        String requiredLibrary;
-                        if (parts.length >= 3) {
-                            StringBuilder sb = new StringBuilder();
-                            for (int k = 0; k < parts.length - 2; k++) {
-                                if (k > 0) sb.append('.');
-                                sb.append(parts[k]);
-                            }
-                            requiredLibrary = sb.toString();
-                        } else {
-                            requiredLibrary = myLibrary;
-                        }
-                        requiredFilename = requiredLibrary.isEmpty()
-                                ? requiredModule + ".mod"
-                                : requiredLibrary + "." + requiredModule + ".mod";
+                    String canon = requiredLibraryDe(imp, parts, myLibrary, fromPath, requiredModule);
+                    String requiredFilename = canon + ".mod";
+                    ModSource dep = discoveryQueue.get(requiredModule);
+                    Cabecera cabDep = null;
+                    if (dep == null) {
+                        cabDep = abrirCabecera(requiredFilename, requiredModule, false);
+                        dep = cabDep.src;
+                        if (dep.path != null) avisarSiTapa(canon, dep.path);   /* #493 */
                     }
-                    discoverDependencies(requiredFilename, requiredModule);
-                    // V7/H2 (#500) — LA NORMA, aquí en el llamante y no dentro (si la
-                    // dependencia ya estaba en la cola, el `return` de arriba se la
-                    // saltaría): la cabecera del dependiente ya está leída, que es lo
-                    // único que hace falta.
+                    // V7/H2 (#500) — LA NORMA, con la cabecera de la dependencia recién
+                    // leída y ANTES de recurrir a sus imports (como la VM-C). También
+                    // cuando ya estaba en la cola: cada importador exige lo suyo.
                     if (v8a) {
-                        String canon = requiredLibraryDe(imp, parts, myLibrary, fromPath, requiredModule);
                         int[] req = requeridos.get(canon);
-                        ModSource dep = discoveryQueue.get(requiredModule);
-                        if (req != null && dep != null) comprobarNorma(moduleName, canon, req, dep);
+                        if (req != null) comprobarNorma(moduleName, canon, req, dep);
                     }
+                    if (cabDep != null) descubrirImports(cabDep, requiredModule);
                 }
             }
         }

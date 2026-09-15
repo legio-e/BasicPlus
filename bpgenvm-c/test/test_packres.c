@@ -52,12 +52,17 @@ static uint8_t* leer(const char* path, uint32_t* len) {
     fclose(f); *len = (uint32_t) n; return b;
 }
 
-/* Lee un recurso por la FACHADA (que es por donde van loadFont y las imágenes)
- * y devuelve 1 si existe, dejando el contenido en dst. */
+/* Lee un recurso COMO LO HACEN readFile, loadFont y las imágenes: primero
+ * `bpvm_fs_resolve` (basedir → tal cual → /app → y, desde V7/H2 #493, la zona
+ * de packs como ÚLTIMO candidato, ya cualificado) y luego la fachada. Antes
+ * este helper llamaba a `stat` a pelo y pasaba porque la zona reclamaba
+ * cualquier ruta por su basename — el disfraz que #493 cierra. */
 static int leer_recurso(const char* path, char* dst, size_t cap) {
     uint32_t sz = 0;
-    if (bpvm_fs_stat(path, &sz) != 0) return 0;
-    long n = bpvm_fs_read(path, (uint8_t*) dst, (uint32_t) cap - 1);
+    char eff[256];
+    const char* r = bpvm_fs_resolve(path, eff, sizeof eff);
+    if (bpvm_fs_stat(r, &sz) != 0) return 0;
+    long n = bpvm_fs_read(r, (uint8_t*) dst, (uint32_t) cap - 1);
     if (n < 0) return 0;
     dst[n] = '\0';
     return 1;

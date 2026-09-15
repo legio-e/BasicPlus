@@ -50,6 +50,7 @@
 #include "bpvm_rtc.h"
 #include "crc32.h"
 #include "mdn_loader.h"
+#include "bpvm_mdn_scan.h"   /* V7/H2 (#493): el escaner comun de .mdn (FS + zona) */
 #include "aot_registry.h"
 #include "json_min.h"
 #include "bpvm_repl.h"      /* U3.24: el REPL comun */
@@ -654,6 +655,26 @@ static uint8_t* sim_fs_resolve(const char* name, uint32_t* size) {
     return NULL;
 }
 
+/* V7/H2 (#493) — la cintura del escáner común de `.mdn`: del FS a un buffer que
+ * vive todo el RUN (keep_buf). En el PC cualquier memoria vale para «ejecutar»:
+ * el gate de arch rechaza el blob de todas formas (x64 frente a ARM/RISC-V). */
+static void keep_buf(uint8_t* p);
+static const uint8_t* sim_mdn_del_fs(void* user, const char* nombre, uint32_t* len) {
+    (void) user;
+    uint32_t msz = 0;
+    uint8_t* mdn = sim_fs_resolve(nombre, &msz);
+    if (!mdn) return NULL;
+    keep_buf(mdn);
+    *len = msz;
+    return mdn;
+}
+static void sim_mdn_decir(void* user, const char* msg) {
+    (void) user;
+    char linea[240];
+    int n = snprintf(linea, sizeof linea, "[%s]\n", msg);
+    if (n > 0) sim_output_sink(linea, (size_t) n, NULL);
+}
+
 /* Los buffers de los .mod cargados tienen que seguir VIVOS mientras corre la VM
  * (el loader NO copia el código: apunta al buffer). Se liberan al terminar. */
 #define MAX_LOADED_BUFS 64
@@ -807,21 +828,11 @@ static void handle_run(sock_t c, long id, json_obj_t* obj) {
     /* Overlay AOT (.mdn) del FS, si lo hay. El registry es GLOBAL → clear antes
      * de cada RUN para no arrastrar thunks de una sesión anterior. */
     bpvm_aot_clear();
+    /* [V7/H2, #493] EL BUCLE COMÚN (bpvm_mdn_escanear): FS + zona, el puente
+     * sigue a su módulo. El bucle propio de aquí encontraba el `.mdn` de un pack
+     * sólo porque la zona se disfrazaba de /app. */
     if (st == BPVM_OK && !missing[0]) {
-        for (int mi = 0; mi < vm->module_count; mi++) {
-            const char* mname = vm->modules[mi].name;
-            if (!mname || !mname[0]) continue;
-            char mdn_path[96]; snprintf(mdn_path, sizeof mdn_path, "%s.mdn", mname);
-            uint32_t msz = 0;
-            uint8_t* mdn = sim_fs_resolve(mdn_path, &msz);
-            if (!mdn) continue;
-            keep_buf(mdn);
-            int mrc = bpvm_load_mdn(vm, mdn, (size_t) msz);
-            char mmsg[128];
-            int mn = snprintf(mmsg, sizeof mmsg, "[AOT] %s %s (rc=%d)\n",
-                              mdn_path, (mrc == 0) ? "OK" : "FALLO -> interpretado", mrc);
-            if (mn > 0) sim_output_sink(mmsg, (size_t) mn, NULL);
-        }
+        bpvm_mdn_escanear(vm, sim_mdn_del_fs, sim_mdn_decir, vm);
     }
 
     g_kill_ack_id = -1;

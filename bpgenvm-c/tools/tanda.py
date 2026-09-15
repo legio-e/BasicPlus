@@ -78,17 +78,18 @@ TRAMPAS CONOCIDAS
       rezagado (el KILL del run anterior, que en la Pico sale tras drenar la
       cola) NO es de esta prueba: se descarta y se anota («rezagado de la
       sesion N»).
-    - DEPENDENCIAS: el RUN resuelve basedir -> tal cual -> /app -> /lib ->
-      /sys (bpvm.c bpvm_entry_resolve) y el overlay de packs contesta al stat
-      de /app/X.mod sin salir en LIST (#493). Mirar el CRC de /lib/X.mod no
-      dice nada de lo que va a cargar el RUN: se pregunta con STAT name=
-      (mismo resolvedor) y se exige que resuelva a /lib/X o /app/X con el
-      crc local; si no, se sube a /app y se vuelve a preguntar; si sigue
+    - DEPENDENCIAS: el RUN resuelve pack en ejecucion -> /app -> /lib -> zona
+      de packs (V7/H2 #493: sin cwd ni /sys, y la zona ya no contesta al stat
+      de /app/X.mod por basename). Mirar el CRC de /lib/X.mod no dice lo que
+      va a cargar el RUN si hay una copia en /app: se pregunta con STAT name=
+      (el mismo resolvedor) y se exige que resuelva a /lib/X o /app/X con el
+      crc local; si no, se sube a /lib y se vuelve a preguntar; si sigue
       resolviendo a otro sitio, «dependencia X sombreada por <path>» = ERROR.
+      A /lib y no a /app: una copia en /app TAPA a /lib y desde #493 el
+      programa lo dice por OUTPUT, lo que romperia el oraculo de la prueba.
     - /lib de la DK2 (STM32U5G9J-DK2): se VACIA en cada arranque y los modulos
       de la GUI no van embebidos. Por eso las dependencias se comprueban en
-      cada tanda y lo que falte se sube a /app (donde el RUN lo busca antes
-      que en /lib).
+      cada tanda y lo que falte se sube a /lib.
     - ARTEFACTOS RANCIOS: un GuiShot.shot de otra tanda se bajaria como
       captura de esta. Antes del RUN se borra cada candidato (/app/X, /X, X)
       con DEL y se confirma con STAT que NO existe; si no se puede garantizar,
@@ -852,9 +853,10 @@ def put_con_busy(w, data, remoto):
 
 
 def stat_por_nombre(w, fich):
-    """STAT name= : la placa resuelve con bpvm_entry_resolve, EL MISMO que usa el
-    RUN (basedir -> tal cual -> /app -> /lib -> /sys), y dice path y crc.
-    Devuelve (path, crc) o (None, None) si no resuelve."""
+    """STAT name= : la placa resuelve con bpvm_entry_resolve (basedir -> tal cual
+    -> /app -> /lib; desde V7/H2 #493 sin /sys y sin que la zona de packs conteste
+    por basename), y dice path y crc. El RUN busca sus dependencias en ese
+    mismo orden salvo el «tal cual». Devuelve (path, crc) o (None, None)."""
     st = w.llamar("STAT", "STAT_REPLY", 10, name=fich, crc=True)
     if st is None:
         return None, None
@@ -873,11 +875,15 @@ def anotar(notas, n):
 def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
     """Cada dependencia se comprueba COMO LA RESUELVE EL RUN (STAT por nombre,
     hallazgo 2): si resuelve a /lib/X o /app/X con el crc local, vale; si no
-    (no resuelve, resuelve a otro sitio, o el crc difiere), se sube a /app y se
-    vuelve a preguntar; si aun asi no resuelve a /app/X con el crc local, la
-    dependencia esta SOMBREADA y la prueba es ERROR. Mirar el CRC del fichero
-    de /lib no vale: el RUN busca /app antes que /lib, y el overlay de packs
-    contesta al stat de /app/X.mod sin salir en LIST (#493)."""
+    (no resuelve, resuelve a otro sitio, o el crc difiere), se sube a /lib y se
+    vuelve a preguntar; si aun asi no resuelve a /lib/X con el crc local, la
+    dependencia esta SOMBREADA (por algo en /app) y la prueba es ERROR.
+
+    V7/H2 (#493): se sube a /lib, no a /app. La stdlib vive en /lib; una copia
+    en /app la TAPA y desde #493 el programa lo dice por OUTPUT («aviso: 'Str'
+    cargado desde /app, tapa al de /lib»), que rompería el oráculo de cada
+    prueba. Y la zona de packs ya no contesta al STAT de /app/X.mod: lo que
+    diga el STAT es lo que hay en el FS."""
     for d in deps:
         if d in verificadas:
             continue
@@ -894,27 +900,27 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
             continue
         crc_txt = ("%08x" % crc_placa) if isinstance(crc_placa, int) and crc_placa >= 0 else str(crc_placa)
         if path is None:
-            anotar(notas, "dependencia %s: el RUN no la resuelve (%s): se sube a /app" % (d, w.errores()))
+            anotar(notas, "dependencia %s: el RUN no la resuelve (%s): se sube a /lib" % (d, w.errores()))
         elif path not in ("/lib/" + fich, "/app/" + fich):
-            anotar(notas, "dependencia %s: el RUN la resuelve a %s (fuera de /lib y /app), crc %s: se sube a /app"
+            anotar(notas, "dependencia %s: el RUN la resuelve a %s (fuera de /lib y /app), crc %s: se sube a /lib"
                          % (d, path, crc_txt))
         elif path.startswith("/lib/"):
-            anotar(notas, "dependencia %s: en /lib con crc %s != local %08x (DESFASE, se sube a /app por delante)"
+            anotar(notas, "dependencia %s: en /lib con crc %s != local %08x (DESFASE, se sube la de bpstdlib a /lib)"
                          % (d, crc_txt, crc_local))
         else:
-            anotar(notas, "dependencia %s: en /app con crc %s != local %08x (rancio, se vuelve a subir)"
+            anotar(notas, "dependencia %s: en /app con crc %s != local %08x (una copia rancia TAPA a /lib: se sube a /lib, y /app la sigue tapando)"
                          % (d, crc_txt, crc_local))
         with open(local, "rb") as f:
             data = f.read()
-        ok, det = put_con_busy(w, data, "/app/" + fich)
-        subidos.append({"remoto": "/app/" + fich, "local": os.path.relpath(local, RAIZ),
+        ok, det = put_con_busy(w, data, "/lib/" + fich)
+        subidos.append({"remoto": "/lib/" + fich, "local": os.path.relpath(local, RAIZ),
                         "size": len(data), "crc": "%08x" % crc_local, "ok": ok, "detalle": det})
         if not ok:
             raise RuntimeError("no se pudo subir %s: %s" % (fich, det))
-        inv["/app/" + fich] = len(data)
+        inv["/lib/" + fich] = len(data)
         path2, crc2 = stat_por_nombre(w, fich)
-        if path2 != "/app/" + fich or crc2 != crc_local:
-            n = "dependencia %s: SOMBREADA por %s (crc %s) aunque se acaba de subir /app/%s con crc %08x" % (
+        if path2 != "/lib/" + fich or crc2 != crc_local:
+            n = "dependencia %s: SOMBREADA por %s (crc %s) aunque se acaba de subir /lib/%s con crc %08x" % (
                 d, path2, ("%08x" % crc2) if isinstance(crc2, int) and crc2 >= 0 else crc2, fich, crc_local)
             anotar(notas, n)
             raise DepSombreada("dependencia %s sombreada por %s" % (d, path2))

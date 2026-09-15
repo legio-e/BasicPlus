@@ -221,6 +221,14 @@ int bpvm_pack_key_de_path(const char* path, char* tipo, char* nombre, char* pack
  * no lo tiene): devuelve la ENTRADA (data_off + len) y el caller decide con
  * bpvm_pack_src_ptr() si puede usarla en sitio o tiene que leerla por trozos.
  * 1 = encontrada, 0 = no está. */
+/* [V7/H2, #493] Como bpvm_pack_find_src, y además dice EN QUÉ PACK está (el
+ * último de la cadena que la tenga, la regla de siempre): `pack_out` recibe su
+ * nombre (BPVM_PACK_NAME_LEN + 1). Para construir la ruta cualificada
+ * `pack:<Pack>/x` que es la única que el respaldo contesta. */
+int bpvm_pack_find_src_pack(const bpvm_pack_src_t* src,
+                            const char* tipo, const char* nombre,
+                            bpvm_pack_entry_t* out, char* pack_out);
+
 int bpvm_pack_find_src(const bpvm_pack_src_t* src,
                        const char* tipo, const char* nombre,
                        bpvm_pack_entry_t* out);

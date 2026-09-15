@@ -890,6 +890,7 @@ boton1.onClick := pantalla::boton1_onClick</code></pre>
   <tr><td><code>--screen=WxH</code></td><td>Tamaño del screen (por defecto 480×320). Con <code>--screen=240x240</code> el PC imita al C6: el volcado y <code>toJson()</code> salen como en la placa.</td></tr>
   <tr><td><code>--no-screen</code></td><td>Sin ventana: el programa corre igual (y <code>Gui.shot</code> captura igual), útil en pruebas automáticas.</td></tr>
   <tr><td><code>--basedir=DIR</code></td><td>Raíz para rutas relativas (<code>readFile</code>, <code>load</code>, imágenes) si no se lanza desde la carpeta del proyecto.</td></tr>
+  <tr><td><code>--libdir=DIR</code></td><td>El <code>/lib</code> del PC: dónde está la biblioteca estándar cuando no está junto al programa (lo que <code>stdlibDir</code> de <code>BpVM.cfg</code> es para la VM Java). Los módulos se buscan en la carpeta del programa, luego aquí, luego en los packs (<code>--pack=</code>).</td></tr>
   <tr><td><code>--trace</code></td><td>Traza por instrucción (diagnóstico).</td></tr>
 </table>
 

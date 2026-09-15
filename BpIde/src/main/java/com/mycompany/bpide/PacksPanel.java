@@ -221,6 +221,39 @@ public final class PacksPanel extends JPanel {
      *  manda aquí el `.pack` seleccionado con el botón «Añadir». Un solo camino
      *  de grabado para las dos entradas — si fueran dos, el día que cambie la
      *  poda o el relocalizado se arreglaría uno y el otro se quedaría atrás. */
+    /** [V7/H2, #493] Los packs que este pack declara necesitar (`requires-pack=`
+     *  del manifest) y que la placa no tiene grabados, al log. */
+    private void avisarPacksRequeridos(byte[] img) {
+        try {
+            basicplus.pack.PackReader.Pack p = basicplus.pack.PackReader.read(img);
+            String manifest = null;
+            for (basicplus.pack.PackEntry e : p.entries) {
+                if (basicplus.pack.PackFormat.TYPE_MANIFEST.equals(e.tipo)
+                        && basicplus.pack.PackFormat.MANIFEST_NAME.equals(e.nombre))
+                    manifest = new String(e.data, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            if (manifest == null) return;
+            java.util.List<String> requiere = new java.util.ArrayList<>();
+            for (String linea : manifest.split("\n")) {
+                linea = linea.trim();
+                if (linea.startsWith("requires-pack="))
+                    for (String r : linea.substring("requires-pack=".length()).split(","))
+                        if (!r.trim().isEmpty()) requiere.add(r.trim());
+            }
+            if (requiere.isEmpty()) return;
+            BpvmClient.PackTable t = client.packList(T);
+            java.util.Set<String> grabados = new java.util.HashSet<>();
+            for (BpvmClient.PackInfo pi : t.packs) if (pi.active) grabados.add(pi.name);
+            for (String r : requiere) {
+                if (!grabados.contains(r))
+                    log.accept("[Packs] AVISO: '" + p.nombre + "' declara requires-pack=" + r
+                        + " y la placa no tiene ese pack grabado: grabalo tambien, o el RUN dira que falta un modulo\n");
+            }
+        } catch (Exception e) {
+            /* Un pack que no se deja leer lo dirá el grabado, no este aviso. */
+        }
+    }
+
     public void grabarPack(final java.io.File f) {
         if (client == null) { summaryLabel.setText("(sin conexión)"); return; }
         if (f == null || !f.isFile()) { summaryLabel.setText("(no es un fichero)"); return; }
@@ -228,6 +261,17 @@ public final class PacksPanel extends JPanel {
         summaryLabel.setText("grabando " + f.getName() + "…");
         bg(() -> {
             byte[] img = java.nio.file.Files.readAllBytes(f.toPath());
+
+            /* ── [V7/H2, #493] `requires-pack=`: SE LEE AQUÍ, al grabar ─────
+             *
+             * El manifest lo escribe el compilador (los `import ... from pack X`
+             * que vio) y nadie lo leía. El único que puede comprobarlo es el
+             * IDE con la placa delante: el PC no sabe qué hay grabado y las VMs
+             * no pueden (miVM no tiene zona de packs: avisaría siempre y nunca
+             * igual que la VM-C). Si falta, se avisa y se graba igual — un
+             * pack es autocontenido salvo por estos (Eduardo: «como un docker
+             * ... salvo SQLite u otros similares»). */
+            avisarPacksRequeridos(img);
 
             /* ── V5/H8: EL PACK SE PREPARA PARA ESTA PLACA ──────────────────
              *

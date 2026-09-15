@@ -145,6 +145,7 @@ int main(int argc, char** argv) {
     unsigned long stack_kb = 0;   /* --stack=N (KB); 0 = el reparto de siempre */
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
+    const char* libdir  = NULL;   /* V7/H2 (#493): el /lib del PC (--libdir=) */
     const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
     const char* pack_files[PACKS_MAX_FILES]; int n_pack_files = 0;  /* H3 --pack= */
     const char* pack_dels[PACKS_MAX_DELS];   int n_pack_dels  = 0;  /* H3 --pack-del= */
@@ -214,6 +215,7 @@ int main(int argc, char** argv) {
             bpvm_gui_disp_set_headless(1);
 #endif
         }
+        else if (strncmp(a, "--libdir=", 9) == 0) { libdir = a + 9; }   /* V7/H2 (#493): /lib del PC */
         else if (strncmp(a, "--pack=", 7) == 0) {
             if (n_pack_files >= PACKS_MAX_FILES) {
                 fprintf(stderr, "Demasiados --pack (max %d)\n", PACKS_MAX_FILES);
@@ -305,6 +307,14 @@ int main(int argc, char** argv) {
      * (Antes daba igual porque el loader hacía fopen a pelo — un atajo que
      * escondía justo esta distinción.) */
     bpvm_fs_register_host();
+    /* [V7/H2, #493] `--libdir=<dir>` = el /lib del PC (el espejo del --stdlibDir
+     * de miVM): sin él, `/lib/X.mod` es un fopen literal y el orden /app → /lib
+     * y el aviso «tapa al de /lib» no se pueden probar aquí. */
+    if (libdir && bpvm_fs_register_host_dir("/lib", libdir) != 0) {
+        fprintf(stderr, "--libdir: no se pudo montar '%s' en /lib\n", libdir);
+        bpvm_destroy(vm); free(mem);
+        return 2;
+    }
     if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
     bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
@@ -342,6 +352,8 @@ int main(int argc, char** argv) {
     if (s != BPVM_OK) {
         if (entry.missing[0])
             fprintf(stderr, "load %s: falta el modulo '%s'\n", path, entry.missing);
+        else if (entry.fallo[0])            /* #421 — el porqué, que el CLI tiraba (visto en #493) */
+            fprintf(stderr, "load_mod %s: %s (%s)\n", path, bpvm_status_str(s), entry.fallo);
         else
             fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
         bpvm_destroy(vm); free(mem);

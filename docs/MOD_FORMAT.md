@@ -139,9 +139,14 @@ Lo prueba `compat/compat.sh check-norma` con `Core` de verdad (9 casos).
 - `name` es el qualifiedName del símbolo importado:
   - `"<Module>.<func>"` si el dueño no declara library.
   - `"<library>.<Module>.<func>"` si declara library.
-- `fromPath`: string libre que el loader usa para localizar el `.mod`
-  dueño en disco. `""` = aplica la convención por defecto
-  (`<library>.<Module>.mod` o `<Module>.mod`).
+- `fromPath`: el literal del `import X from "..."` del fuente (`""` si no lo
+  hay). **Informativo desde V7/H2 (`#493`)**: es la pista del COMPILADOR para
+  localizar la interfaz al compilar; ninguna VM lo usa para resolver el `.mod`
+  en ejecución — el dueño se busca por su nombre canónico
+  (`<library>.<Module>.mod` o `<Module>.mod`) en el orden único: pack en
+  ejecución → `/app` → `/lib` → zona de packs. Hasta el 15-sep miVM lo honraba
+  (relativo al cwd de la JVM) y la VM-C lo tiraba: mismo `.mod`, distinto
+  resultado.
 
 Una vez resuelto el dueño en el linker, el loader escribe la dirección
 absoluta del símbolo en la **tabla de ext** (ver §7), entrada `i` → byte

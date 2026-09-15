@@ -114,6 +114,8 @@ void bpvm_fs_set_basedir_from_module(const char* modpath) {
     bpvm_fs_set_basedir(NULL);                        /* plano */
 }
 
+static int fallback_locate(const char* nombre, char* out, size_t cap);   /* V7/H2 (#493) */
+
 const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz) {
     if (!path || outsz == 0) { if (outsz) out[0] = '\0'; return out; }
     if (path[0] == '/') {                             /* absoluto → tal cual */
@@ -143,6 +145,13 @@ const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz) {
     if (bpvm_fs_stat(out, &sz) == 0) return out;
     snprintf(out, outsz, "/app/%s", path);            /* (3) modo plano */
     if (bpvm_fs_stat(out, &sz) == 0) return out;
+    /* (4) [V7/H2, #493] el RESPALDO (la zona de packs), a propósito y el
+     * último: si algún pack tiene un fichero con ese nombre, devuelve su ruta
+     * cualificada (`pack:<Pack>/<path>`), que es la única a la que el respaldo
+     * contesta desde hoy. Antes esto no hacía falta porque la zona reclamaba
+     * `<basedir>/<path>` en el paso (1) — y por ese mismo disfraz tapaba a /lib
+     * y mataba el XIP. */
+    if (fallback_locate(path, out, outsz)) return out;
     /* nada existe → mejor candidata para el error (proyecto si lo hay). */
     if (g_basedir[0]) snprintf(out, outsz, "%s/%s", g_basedir, path);
     return out;
@@ -158,12 +167,26 @@ void bpvm_fs_set_overlay(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* use
 }
 
 /* #362 — respaldo de lectura: el espejo del overlay, por DEBAJO del backend. */
-static bpvm_fs_ov_stat_fn g_fb_stat = NULL;
-static bpvm_fs_ov_read_fn g_fb_read = NULL;
-static void*              g_fb_user = NULL;
+static bpvm_fs_ov_stat_fn   g_fb_stat   = NULL;
+static bpvm_fs_ov_read_fn   g_fb_read   = NULL;
+static bpvm_fs_ov_locate_fn g_fb_locate = NULL;    /* V7/H2 (#493) */
+static void*                g_fb_user   = NULL;
 
-void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user) {
-    g_fb_stat = st; g_fb_read = rd; g_fb_user = user;
+void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd,
+                          bpvm_fs_ov_locate_fn locate, void* user) {
+    g_fb_stat = st; g_fb_read = rd; g_fb_locate = locate; g_fb_user = user;
+}
+
+/* 1 = el respaldo tiene un fichero con ese nombre y deja su ruta CUALIFICADA en
+ * out. Es la pregunta «¿alguien lo tiene?», separada de «¿es tuya esta ruta?». */
+static int fallback_locate(const char* nombre, char* out, size_t cap) {
+    return g_fb_locate && g_fb_locate(g_fb_user, nombre, out, cap) == 0;
+}
+
+/* ¿El backend de esta ruta sabe leer en secuencia? (V7/H2, #493) */
+static int be_rs_op_ok(const char* path) {
+    const bpvm_fs_backend_t* be = route(path);
+    return be && be->read_stream;
 }
 
 /* 1 = el overlay reclama este path (y deja el tamaño en *size). */
@@ -465,8 +488,18 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
  * el bucle de siempre: mas lento, pero correcto -- y es lo que ya habia. */
 long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
     if (!cb) return -1;
-    const bpvm_fs_backend_t* be_rs = route(path);
-    if (be_rs && be_rs->read_stream) return be_rs->read_stream(path, cb, user);
+    /* [V7/H2, #493] OVERLAY Y RESPALDO TAMBIÉN AQUÍ. Esta op y `crc32` iban
+     * directas al backend si éste las traía, y en littlefs (placa y sim) las
+     * trae: un fichero de la zona de packs tenía `stat` pero el `GET` del wire
+     * mandaba la cabecera bulk y luego NADA, y `STAT{crc}` daba -1. Medido en
+     * el sim el 15-sep. La regla es la misma que restableció `read_at` el
+     * 16-ago: si `stat` dice que existe, se tiene que poder leer, como sea. */
+    uint32_t osz = 0;
+    if (!overlay_claims(path, &osz) && be_rs_op_ok(path)) {
+        const bpvm_fs_backend_t* be_rs = route(path);
+        long r = be_rs->read_stream(path, cb, user);
+        if (r >= 0) return r;
+    }
 
     uint32_t size = 0;
     if (bpvm_fs_stat(path, &size) != 0) return -1;
@@ -489,8 +522,11 @@ int bpvm_fs_crc32(const char* path, uint32_t* crc_out) {
      * Se queda como camino de respaldo para backends sin `crc32`, y como
      * ORÁCULO del nuevo en `test/test_fscrc.c`: los dos tienen que dar el mismo
      * número, que además es el de `java.util.zip.CRC32`. */
-    const bpvm_fs_backend_t* be_crc = route(path);
-    if (be_crc && be_crc->crc32) return be_crc->crc32(path, crc_out);
+    uint32_t osz = 0;
+    if (!overlay_claims(path, &osz)) {      /* V7/H2 (#493): ver read_stream */
+        const bpvm_fs_backend_t* be_crc = route(path);
+        if (be_crc && be_crc->crc32 && be_crc->crc32(path, crc_out) == 0) return 0;
+    }
 
     uint32_t size = 0;
     if (bpvm_fs_stat(path, &size) != 0) return -1;

@@ -1400,9 +1400,11 @@ Counter.bump()</code></pre>
 <ul>
   <li>El último segmento del path es el alias local (<code>Util</code>,
       <code>Helper</code>). Lo usas como <code>Util.foo()</code>.</li>
-  <li><code>from "&lt;path&gt;"</code> dice a la VM dónde encontrar el
-      <code>.mod</code> en runtime. Compilable cuando el frontend localiza el
-      <code>.bp</code> fuente derivando la ruta.</li>
+  <li><code>from "&lt;path&gt;"</code> dice al <strong>compilador</strong> dónde encontrar
+      el <code>.mod</code> (o el <code>.bp</code>) del que sacar la interfaz. En ejecución
+      la VM busca el módulo por su nombre, siempre en el mismo orden: el pack en
+      ejecución, la carpeta del programa (<code>/app</code>), la biblioteca estándar
+      (<code>/lib</code>) y la zona de packs — la ruta del <code>from</code> no se usa.</li>
   <li><strong><code>import Core</code> es obligatorio</strong> en cuanto el módulo
       nombra un tipo de <code>Core</code>: <code>List</code>, <code>Integer</code>/<code>Long</code>/<code>Float</code>/<code>Double</code>/<code>Boolean</code>,
       <code>Comparable</code>, <code>Exception</code>, <code>RuntimeError</code> — y por

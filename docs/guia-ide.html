@@ -811,10 +811,13 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <pre><code><span class="kw">import</span> Graficas                        <span class="comment">// donde se encuentre</span>
 <span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// de ese pack y no de otro</span></code></pre>
 <p>
-  Sin cualificar, se resuelve buscando; con <code>from pack</code>, se fija el
-  origen. El sistema de archivos tiene preferencia sobre la zona de packs, así
-  que un módulo suelto en <code>/lib</code> eclipsa al del pack — cómodo para
-  probar un arreglo sin regrabar nada.
+  Sin cualificar, se resuelve buscando (<code>/app</code>, <code>/lib</code>, la zona de
+  packs, por ese orden); con <code>from pack</code>, se fija el origen. El sistema de
+  archivos tiene preferencia sobre la zona de packs, así que un módulo suelto en
+  <code>/lib</code> eclipsa al del pack — cómodo para probar un arreglo sin regrabar
+  nada. Y un módulo de la stdlib que se quede en <code>/app</code> tapa al de
+  <code>/lib</code>: desde V7 la consola lo avisa (<code>aviso: 'Str' cargado desde /app,
+  tapa al de /lib</code>).
 </p>
 <p><strong>Como aplicación.</strong> Un pack con <code>main</code> se ejecuta
   directamente, y mientras corre <strong>sus recursos se leen solos</strong>: no

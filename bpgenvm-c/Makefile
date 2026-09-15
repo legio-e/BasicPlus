@@ -519,19 +519,23 @@ test-loaderr: $(LIBOBJ)
 # V5/H7 — cuando NO hace falta barrer la zona buscando el ancla (338 ms medidos
 # en la P4). Protege sobre todo el caso POSITIVO: un falso «no hay pack» dejaria
 # uno grabado sin cargar, en silencio.
-test-packskip:
+# (V7/H2, 15-sep) Los tres targets de packs (packskip, fsfb, pack) enlazan con
+# LIBOBJ: la lista suelta de .c se quedo corta el 31-ago (#461: fs_facade.c
+# llama a bpvm_fs_log_fail, que vive en fs_lfs.c) y llevaban desde entonces sin
+# poder ejecutarse — el que «consagraba la sombra» de #493 entre ellos.
+test-packskip: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_packskip.c src/bpvm_pack.c src/crc32.c 	  src/fs_facade.c src/fs_host.c -o build/test_packskip.exe
+	$(CC) $(CFLAGS) test/test_packskip.c $(LIBOBJ) -o build/test_packskip.exe $(LDFLAGS)
 	@echo "--- V5/H7 saltarse el barrido sin packs (esperado: solo 'ok') ---"
 	@./build/test_packskip.exe samples/PackFixA.pack
 
 # La regla de la fachada: si `stat` dice que un fichero existe, se tiene que
 # poder LEER — entero y POR TROZOS. Se rompio (read_at no miraba la zona de
 # packs) y costo una tarde en la P4 con el SQLite.pack grabado.
-test-fsfb:
+test-fsfb: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_fsfallback.c src/fs_facade.c src/fs_host.c 	  src/bpvm_pack.c src/crc32.c -o build/test_fsfb.exe
-	@echo "--- stat/read/read_at miran los mismos sitios (esperado: solo 'ok') ---"
+	$(CC) $(CFLAGS) test/test_fsfallback.c $(LIBOBJ) -o build/test_fsfb.exe $(LDFLAGS)
+	@echo "--- V7/H2 (#493) la zona solo en su espacio; stat/read/read_at/read_stream/crc32 miran lo mismo (esperado: solo 'ok') ---"
 	@./build/test_fsfb.exe samples/PackFixA.pack
 
 test-logsw:
@@ -690,11 +694,9 @@ test-bmgr:
 # de flash. PARIDAD: las fixtures samples/PackFix*.pack las genera Pack.jar
 # (lado PC) — el test recalcula los CRCs en C sobre esos bytes; un byte distinto
 # entre C y Java = rojo (el micro rechazaría los packs del PC).
-test-pack:
+test-pack: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_pack.c src/bpvm_pack.c src/bpvm_util.c \
-	      src/bpvm_bmgr_wire.c src/bpvm_bmgr.c src/bpvm_env.c src/bpvm_part.c \
-	      src/bpvm_boot.c src/crc32.c src/fs_facade.c -o build/test_pack.exe
+	$(CC) $(CFLAGS) test/test_pack.c $(LIBOBJ) -o build/test_pack.exe $(LDFLAGS)
 	@echo "--- H3 zona de packs (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_pack.exe
 

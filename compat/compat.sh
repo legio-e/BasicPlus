@@ -74,7 +74,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -96,8 +96,12 @@ bp_path() {
 # tres opciones ocupa tres lineas). Borrando todos los blancos, una VM que
 # emitiera una linea vacia de mas donde la otra no emite nada saldria VERDE.
 filt() {
-  grep -vE 'INICIANDO|FIN DE|heapStart|^config:' |
+  # V7/H2 (#493) — el banner se quita CON las lineas en blanco que lo preceden
+  # (miVM imprime una antes de «=== INICIANDO»): con un aviso por OUTPUT antes
+  # del banner (la carga habla antes de arrancar), ese blanco era una linea de
+  # diferencia entre las VMs que no es del programa.
   awk '{
+     if ($0 ~ /INICIANDO|FIN DE|heapStart|^config:/) { n=0; next }
      if (!vista) { if ($0 ~ /^[[:space:]]*$/) next; vista=1 }
      if ($0 ~ /^[[:space:]]*$/) { pend[n++]=$0; next }
      for (i=0;i<n;i++) print pend[i]; n=0; print
@@ -505,6 +509,121 @@ norma_caso() {  # $1=etiqueta $2=dir con app+stdlib $3=modulo $4=texto esperado 
     echo "  ok  $et: corre ($(printf '%s' "$oj" | tr '\n' ' ' | cut -c1-60))"
   fi
 }
+# ---------------------------------------------------------------- check-sombra
+# V7/H2 (#493) — LA SOMBRA: el orden de resolucion de modulos, UNO en las dos VMs
+# (Eduardo, 15-sep: «/app -> /lib -> packs; si el principal esta en un pack,
+# pack del principal -> /app -> /lib -> packs»), y el aviso por OUTPUT cuando
+# un modulo de /app TAPA a uno de /lib (criterio «gemelo tapado»). En el PC,
+# /app es la carpeta del programa y /lib es --stdlibDir (miVM) / --libdir (VM-C).
+# El cwd NO cuenta (rompia la paridad: un .mod homonimo en el directorio actual
+# lo cogia miVM y la VM-C no). La zona de packs solo la tiene la VM-C: ahi se
+# comprueba que el modulo de un pack se carga XIP, que /lib lo eclipsa, y que un
+# principal que solo vive en la zona arranca con su pack primero.
+sombra_vm() {  # $1=jar|exe $2=cwd $3=libdir $4=mod [$5=args extra VM-C]
+  local bin="$1" cwd="$2" lib="$3" mod="$4" extra="${5:-}" err="$WORK/.sombra.err"
+  case "$bin" in
+    *.jar) ( cd "$cwd" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" --no-config ${lib:+--stdlibDir=$lib} "$mod" 2>"$err" | filt ) ;;
+    *)     ( cd "$cwd" && timeout "$VM_TIMEOUT" "$bin" ${lib:+--libdir=$lib} $extra "$mod" 2>"$err" | filt ) ;;
+  esac
+}
+sombra_caso() {  # $1=etiqueta $2=cwd $3=libdir $4=mod $5=regex que DEBE salir $6=regex que NO debe salir
+  local et="$1" cwd="$2" lib="$3" mod="$4" si="$5" no="$6" oj oc
+  oj="$(sombra_vm "$V3_JAVA" "$cwd" "$lib" "$mod")"
+  oc="$(sombra_vm "$V3_C"    "$cwd" "$lib" "$mod")"
+  if [ "$oj" != "$oc" ]; then
+    echo "  ✗ $et: las VMs DIFIEREN"; echo "     java: $(printf '%s' "$oj" | head -3 | tr '\n' '|')"; echo "     c:    $(printf '%s' "$oc" | head -3 | tr '\n' '|')"; return 1
+  fi
+  printf '%s' "$oj" | grep -qE "$si" || { echo "  ✗ $et: falta /$si/:"; printf '%s\n' "$oj" | head -4 | sed 's/^/       /'; return 1; }
+  if [ -n "$no" ] && printf '%s' "$oj" | grep -qE "$no"; then echo "  ✗ $et: sale /$no/ y no debia:"; printf '%s\n' "$oj" | head -4 | sed 's/^/       /'; return 1; fi
+  echo "  ok  $et: $(printf '%s' "$oj" | grep -E "$si" | head -1 | cut -c1-100)"
+}
+check_sombra() {
+  echo "-- la sombra (#493): /app -> /lib -> packs, igual en las dos VMs; el aviso «tapa al de /lib» --"
+  local S="$WORK/sombra" fails=0 PACKJAR="$ROOT/pack/target/pack-1.0.jar"
+  rm -rf "$S"; mkdir -p "$S/src" "$S/var" "$S/app" "$S/lib" "$S/lib2" "$S/cwd" "$S/vacio"
+  cp "$STDLIB"/*.mod "$S/lib/"; cp "$STDLIB/Core.mod" "$S/lib2/"; cp "$STDLIB"/*.mod "$S/cwd/"
+  # La Str VARIANTE: el mismo fuente con toHex marcado. Se compila a var/ y se
+  # copia junto al programa que la importa con `from`, para que el compilador
+  # la tome a ella (y el sello de la app sea el suyo) sin depender de mtimes.
+  sed 's/^    return sb.toString()$/    return "VARIANTE:" + sb.toString()/' "$STDLIB/Str.bp" > "$S/var/Str.bp"
+  ( cd "$ROOT" && java -jar "$V3_FE" "$S/var/Str.bp" --compile "$S/var" --backend=mivm ) >"$S/var.log" 2>&1 \
+    || { echo "  ✗ la Str variante no compila: $S/var.log"; return 1; }
+  cp "$S/var/Str.mod" "$S/src/Str.mod"
+  cat > "$S/src/Sombra.bp" <<'EOF'
+module Sombra
+  import Str from "Str.mod"
+  public function main()
+    print "toHex(255) = " + Str.toHex(255L)
+  end main
+end Sombra
+EOF
+  cat > "$S/src/Limpio.bp" <<'EOF'
+module Limpio
+  import Str
+  public function main()
+    print "toHex(255) = " + Str.toHex(255L)
+  end main
+end Limpio
+EOF
+  ( cd "$ROOT" && java -jar "$V3_FE" "$S/src/Sombra.bp" --compile "$S/app" --backend=mivm && java -jar "$V3_FE" "$S/src/Limpio.bp" --compile "$S/app" --backend=mivm ) >"$S/app.log" 2>&1 \
+    || { echo "  ✗ los programas no compilan: $S/app.log"; return 1; }
+  rm -f "$S/app/Str.mod"
+  local AV="aviso: 'Str' cargado desde /app, tapa al de /lib"
+  # 1) sin gemelo: Str solo en /lib -> corre, sin aviso, en las dos.
+  sombra_caso "solo /lib" "$S" lib app/Limpio.mod "toHex\(255\) = ff" "aviso" || fails=$((fails+1))
+  # 2) la sombra: la variante en /app y la real en /lib -> gana /app y las DOS avisan igual.
+  cp "$S/var/Str.mod" "$S/app/Str.mod"
+  sombra_caso "app tapa a lib (aviso)" "$S" lib app/Sombra.mod "$AV" "" || fails=$((fails+1))
+  sombra_caso "app tapa a lib (corre la de /app)" "$S" lib app/Sombra.mod "toHex\(255\) = VARIANTE:ff" "" || fails=$((fails+1))
+  # 3) el mismo caso desde OTRO cwd (el de /lib): mismo resultado — el cwd no cambia nada.
+  sombra_caso "mismo resultado desde otro cwd" "$S/lib" . ../app/Sombra.mod "$AV" "" || fails=$((fails+1))
+  # 4) sin /lib configurado, la stdlib ENTERA en el cwd NO cuenta: las dos dicen que falta Str.
+  rm -f "$S/app/Str.mod"
+  { local oj oc
+    oj="$( cd "$S/cwd" && java -Djava.awt.headless=true -jar "$V3_JAVA" --no-config ../app/Limpio.mod 2>&1 | grep -oE "falta el modulo 'Str'" | head -1 )"
+    oc="$( cd "$S/cwd" && "$V3_C" ../app/Limpio.mod 2>&1 | grep -oE "falta el modulo 'Str'" | head -1 )"
+    if [ "$oj" = "falta el modulo 'Str'" ] && [ "$oc" = "$oj" ]; then echo "  ok  el cwd no cuenta: las dos dicen «$oj»"
+    else echo "  ✗ el cwd no cuenta: java=[$oj] c=[$oc]"; fails=$((fails+1)); fi
+  }
+  # 5) la zona de packs (solo VM-C): la Str del pack se carga XIP cuando /lib no la tiene...
+  if [ -f "$PACKJAR" ]; then
+    ( cd "$S/var" && java -cp "$PACKJAR" basicplus.pack.PackCli build --out "$S/StrPk.pack" --name StrPk --version 1 --date 0 Str.mod \
+      && java -cp "$PACKJAR" basicplus.pack.PackCli build --out "$S/AppPk.pack" --name AppPk --version 1 --date 0 "$S/app/Sombra.mod" Str.mod ) >"$S/pack.log" 2>&1 \
+      || { echo "  ✗ no se pudo construir el pack: $S/pack.log"; return 1; }
+    local o e
+    o="$( cd "$S" && "$V3_C" --libdir=lib2 --pack=StrPk.pack app/Sombra.mod 2>"$S/xip.err" | filt )"
+    if printf '%s' "$o" | grep -q "VARIANTE:ff" && grep -q "cargado XIP desde pack" "$S/xip.err"; then echo "  ok  zona (VM-C): sin /lib/Str.mod, la Str del pack se carga XIP"
+    else echo "  ✗ zona: esperaba XIP y VARIANTE:"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; grep -E "dep 'Str'|XIP" "$S/xip.err" | sed 's/^/       /'; fails=$((fails+1)); fi
+    # ...y /lib la ECLIPSA cuando la tiene (sin aviso: /lib es la stdlib), y lo dice por el diag.
+    o="$( cd "$S" && "$V3_C" --libdir=lib --pack=StrPk.pack app/Limpio.mod 2>"$S/ecl.err" | filt )"
+    if printf '%s' "$o" | grep -q "toHex(255) = ff" && ! printf '%s' "$o" | grep -q "aviso" && grep -q "eclipsa al del pack" "$S/ecl.err"; then echo "  ok  zona (VM-C): /lib eclipsa al pack (y el diag lo dice)"
+    else echo "  ✗ zona: /lib deberia eclipsar al pack:"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; fails=$((fails+1)); fi
+    # ...y un principal que SOLO vive en la zona arranca XIP con su pack primero.
+    o="$( cd "$S/vacio" && "$V3_C" --libdir=../lib2 --pack=../AppPk.pack Sombra.mod 2>"$S/zona.err" | filt )"
+    if printf '%s' "$o" | grep -q "VARIANTE:ff" && grep -q "cargado XIP desde el pack 'AppPk'" "$S/zona.err" && grep -q "dep 'Str' -> pack EN EJECUCION" "$S/zona.err"; then echo "  ok  zona (VM-C): el principal que solo vive en la zona corre XIP, su pack primero"
+    else echo "  ✗ zona: el principal de la zona:"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; grep -E "dep |XIP|load" "$S/zona.err" | sed 's/^/       /'; fails=$((fails+1)); fi
+  else
+    echo "  (sin $PACKJAR: los casos de la zona no se prueban)"
+  fi
+  # 9) DOS incumplimientos de la norma (#500) en cadena: Sombra -> Str (otra
+  #    interfaz: la variante con una funcion mas) y Str -> Core (un Core con
+  #    otra interfaz en /lib). Las dos VMs tienen que nombrar el PRIMERO, en el
+  #    mismo orden de descubrimiento: miVM recurria antes de comprobar y
+  #    nombraba el mas profundo (medido el 15-sep en el mapa de #493).
+  mkdir -p "$S/var2" "$S/lib8/src"
+  sed 's/^end Str$/  public function sombraExtra(): integer\n    return 9\n  end sombraExtra\nend Str/' "$S/var/Str.bp" > "$S/var2/Str.bp"
+  cp "$STDLIB/Core.bp" "$S/lib8/src/Core.bp"
+  sed -i 's/^  end List$/    public function normaNuevo(): integer\n      return 1\n    end normaNuevo\n  end List/' "$S/lib8/src/Core.bp"
+  cp "$S/lib"/*.mod "$S/lib8/"
+  ( cd "$ROOT" && java -jar "$V3_FE" "$S/var2/Str.bp" --compile "$S/var2" --backend=mivm && java -jar "$V3_FE" "$S/lib8/src/Core.bp" --compile "$S/lib8" --backend=mivm ) >"$S/cadena.log" 2>&1 \
+    || { echo "  ✗ la cadena no compila: $S/cadena.log"; return 1; }
+  cp "$S/var2/Str.mod" "$S/app/Str.mod"
+  sombra_caso "dos incumplimientos en cadena: el primero" "$S" lib8 app/Sombra.mod "'Str' \(gen 0, interfaz [0-9a-f]+\) no es la interfaz con la que se compilo 'Sombra'" "compilo 'Str'" || fails=$((fails+1))
+  rm -f "$S/app/Str.mod"
+  echo "  sombra: $((9 - fails))/9 casos"
+  [ "$fails" -eq 0 ]
+}
+
 check_norma() {
   echo "-- la norma de versiones (#500): Core de verdad, dos VMs, mismo texto --"
   local N="$WORK/norma" fails=0
@@ -624,6 +743,7 @@ EOF
   check_mod7 || fails=$((fails+1))
   check_fwd  || fails=$((fails+1))
   check_norma || fails=$((fails+1))
+  check_sombra || fails=$((fails+1))
   echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM + capsula V6 VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
@@ -635,5 +755,6 @@ case "${1:-}" in
   check-mod7) check_mod7 ;;
   check-fwd)  check_fwd ;;
   check-norma) check_norma ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma}"; exit 2 ;;
+  check-sombra) check_sombra ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sombra}"; exit 2 ;;
 esac

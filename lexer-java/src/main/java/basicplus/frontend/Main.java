@@ -328,9 +328,14 @@ public final class Main {
             /* El pack se lleva lo que el build SUPO: los `.mod` que resolvió,
              * los packs de los que importa, y si la raíz tiene `main`. Nada de
              * esto se declara aparte — se sabe. */
+            /* V7/H2 (#493) — y dónde buscar lo que falte para CERRAR el pack (un
+             * pack es autocontenido): la stdlib y las dependencias del proyecto. */
+            java.util.List<Path> dondeBuscar = new java.util.ArrayList<>();
+            if (ctx.stdlibDir != null) dondeBuscar.add(ctx.stdlibDir);
+            dondeBuscar.addAll(ctx.dependencyPaths);
             Path packPath = PackStep.buildPack(proj, new PackStep.Cierre(
                     ctx.modsUsados, ctx.packsRequeridos, ctx.raizTieneMain,
-                    ctx.raizEntry));
+                    ctx.raizEntry, dondeBuscar));
             System.out.println("pack generado: " + packPath);
         }
         return success;
@@ -1132,6 +1137,7 @@ public final class Main {
                 && readInterfaceCached(preMod, ctx) != null) {
             indent(depth); System.out.printf("-- interfaz de '%s' desde %s (embebida) --%n",
                     qualifiedName, preMod.getFileName());
+            avisarSiTapaStdlib(qualifiedName, modName, preMod, ctx, depth);   /* V7/H2 (#493) */
             /* V5/H8 — apuntar de DÓNDE salió. Si este build acaba en un pack,
              * el pack se lleva ESTE fichero: el mismo contra el que se ha
              * compilado, no uno que se parezca. */
@@ -1197,6 +1203,7 @@ public final class Main {
             indent(depth); System.out.printf("-- no se localizó .bp ni .bpi para import '%s'; se omitirá --%n", qualifiedName);
             return;
         }
+        avisarSiTapaStdlib(qualifiedName, modName, bpSource, ctx, depth);   /* V7/H2 (#493) */
         compileInterface(bpSource, ctx, depth);
     }
 
@@ -1545,6 +1552,25 @@ public final class Main {
         if (mod != null) ctx.modsUsados.put(nombre, mod.toAbsolutePath().normalize());
         if (imp != null && imp.packName != null && !imp.packName.isEmpty())
             ctx.packsRequeridos.add(imp.packName);
+    }
+
+    /** [V7/H2, #493] EL COMPILADOR TAMBIÉN FABRICA LA SOMBRA, y hasta hoy en
+     *  silencio: una `Str.bp` junto al programa más nueva que `bpstdlib/Str.mod`
+     *  gana a la stdlib y deja `out/Str.mod` —justo lo que el IDE sube a /app—;
+     *  un `import Str from "Str.mod"` gana a stdlibDir; una copia en outDir gana
+     *  si no hay BpVM.cfg. Y la línea de log era la misma en todos los casos
+     *  («desde Str.mod (embebida)»). No cambia lo que se elige —eso lo decide el
+     *  orden de arriba—: lo DICE cuando lo elegido no es la stdlib y la stdlib
+     *  tiene ese módulo, con la ruta real. Mismo criterio que el aviso de las
+     *  VMs («gemelo tapado»). */
+    private static void avisarSiTapaStdlib(String qualifiedName, String modName, Path elegido, Ctx ctx, int depth) {
+        if (ctx.stdlibDir == null || elegido == null) return;
+        Path enStdlib = ctx.stdlibDir.resolve(modName).toAbsolutePath().normalize();
+        Path real = elegido.toAbsolutePath().normalize();
+        if (real.equals(enStdlib) || real.startsWith(ctx.stdlibDir.toAbsolutePath().normalize())) return;
+        if (!Files.isRegularFile(enStdlib)) return;
+        indent(depth); System.out.printf("-- aviso: '%s' se toma de %s y NO de la stdlib (%s); si no es a propósito, quita esa copia --%n",
+                qualifiedName, real, enStdlib);
     }
 
     /** H6.a — localiza el .mod PRECOMPILADO de un import. Mismo orden de

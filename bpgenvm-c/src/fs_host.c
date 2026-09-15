@@ -256,3 +256,71 @@ static const bpvm_fs_backend_t s_host_fs = {
 void bpvm_fs_register_host(void) {
     bpvm_fs_set_backend(&s_host_fs);
 }
+
+/* ── [V7/H2, #493] `/lib` EN EL HOST ─────────────────────────────────────────
+ * Un backend de SÓLO LECTURA montado en un prefijo y enraizado en un directorio
+ * del PC: `/lib/Str.mod` → `<root>/Str.mod`. Es el espejo de `--stdlibDir` de
+ * miVM. Sin esto la VM-C del PC no tenía manera de decir dónde vive la stdlib
+ * (`/lib/X.mod` era un `fopen` literal, o sea `C:\lib`), y por eso el aviso de
+ * «tapa al de /lib» y el orden /app → /lib no se podían probar por paridad.
+ * Una sola raíz: la última llamada manda. Lo que no sea leer (escribir, borrar,
+ * listar) no está: la stdlib del PC no se toca desde un programa. */
+static char   s_dir_root[512];
+static char   s_dir_prefix[32];
+static size_t s_dir_prefix_len;
+
+/* `/lib/X` → `<root>/X`; 0 si la ruta no cuelga del prefijo o no cabe. */
+static int dir_map(const char* path, char* out, size_t cap) {
+    if (!path || !s_dir_root[0]) return 0;
+    if (strncmp(path, s_dir_prefix, s_dir_prefix_len) != 0) return 0;
+    const char* resto = path + s_dir_prefix_len;
+    if (*resto == '/') resto++;
+    else if (*resto != '\0') return 0;
+    int n = snprintf(out, cap, "%s/%s", s_dir_root, resto);
+    return n > 0 && (size_t) n < cap;
+}
+
+static int dir_stat(const char* path, uint32_t* size) {
+    char real[768]; if (!dir_map(path, real, sizeof real)) return -1;
+    return host_stat(real, size);
+}
+static long dir_read(const char* path, uint8_t* dst, uint32_t cap) {
+    char real[768]; if (!dir_map(path, real, sizeof real)) return -1;
+    return host_read(real, dst, cap);
+}
+static long dir_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
+    char real[768]; if (!dir_map(path, real, sizeof real)) return -1;
+    return host_read_at(real, off, dst, cap);
+}
+static int dir_crc32(const char* path, uint32_t* crc_out) {
+    char real[768]; if (!dir_map(path, real, sizeof real)) return -1;
+    return host_crc32(real, crc_out);
+}
+static int dir_isdir(const char* path) {
+    char real[768]; if (!dir_map(path, real, sizeof real)) return 0;
+    return host_isdir(real);
+}
+static long long dir_mtime_ms(const char* path) {
+    char real[768]; if (!dir_map(path, real, sizeof real)) return -1;
+    return host_mtime_ms(real);
+}
+
+static const bpvm_fs_backend_t s_host_dir_fs = {
+    .stat     = dir_stat,
+    .read     = dir_read,
+    .isdir    = dir_isdir,
+    .mtime_ms = dir_mtime_ms,
+    .read_at  = dir_read_at,
+    .crc32    = dir_crc32,
+};
+
+int bpvm_fs_register_host_dir(const char* prefix, const char* root) {
+    if (!prefix || prefix[0] != '/' || !root || !root[0]) return -1;
+    size_t pl = strlen(prefix), rl = strlen(root);
+    if (pl >= sizeof s_dir_prefix || rl >= sizeof s_dir_root) return -1;
+    memcpy(s_dir_prefix, prefix, pl + 1);
+    s_dir_prefix_len = pl;
+    memcpy(s_dir_root, root, rl + 1);
+    while (rl > 1 && (s_dir_root[rl - 1] == '/' || s_dir_root[rl - 1] == '\\')) s_dir_root[--rl] = '\0';
+    return bpvm_fs_mount(prefix, &s_host_dir_fs);
+}

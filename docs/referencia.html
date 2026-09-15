@@ -2245,14 +2245,39 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 
 <pre><code><span class="kw">import</span> SQLite</code></pre>
 
+<p>
+  <strong>El orden en que se busca un módulo</strong> es uno solo, el mismo en el PC y en
+  la placa, y en las dos VMs:
+</p>
+<ol>
+  <li>el <strong>pack en ejecución</strong>, si el programa arrancó desde un pack (sus módulos
+      van primero: un pack es como un contenedor, autocontenido, y nada de fuera le cambia
+      las tripas);</li>
+  <li><strong><code>/app</code></strong> — la carpeta del programa (en el PC, la del
+      <code>.mod</code> que se ejecuta; en un proyecto, <code>/app/&lt;proyecto&gt;/</code>);</li>
+  <li><strong><code>/lib</code></strong> — la biblioteca estándar (en el PC, el
+      <code>stdlibDir</code> de <code>BpVM.cfg</code> para la VM Java y <code>--libdir=</code>
+      para la VM C);</li>
+  <li>la <strong>zona de packs grabados</strong>, y ahí el módulo se ejecuta <em>en sitio</em>
+      (XIP), sin copiarse a RAM.</li>
+</ol>
+<p>
+  Ni el directorio desde el que se lanza la VM ni <code>/sys</code> (que es para ficheros de
+  configuración) forman parte de esa lista.
+</p>
 <p class="warn">
-  <strong>El sistema de ficheros ECLIPSA al pack.</strong> Si hay un
-  <code>Core.mod</code> en el FS y otro dentro de un pack, gana el del FS — y el arranque
-  lo avisa: <em>«'Core' del FS eclipsa al del pack»</em>.<br><br>
+  <strong><code>/lib</code> eclipsa al pack, y <code>/app</code> eclipsa a <code>/lib</code>.</strong>
+  Si hay un <code>Core.mod</code> en <code>/lib</code> y otro dentro de un pack, gana el de
+  <code>/lib</code> — y el diagnóstico lo dice: <em>«'Core' del FS eclipsa al del pack»</em>.
   Es una regla útil (puedes sustituir un módulo del pack sin regrabarlo) y una trampa a
-  partes iguales: si subes al dispositivo una copia vieja de algo que ya trae el pack, el
-  programa usará la vieja y no dirá nada más que ese aviso. Cuando algo se comporte como
-  una versión anterior, mira esa línea.
+  partes iguales.<br><br>
+  La trampa más común es la otra: una copia vieja de un módulo de la stdlib en
+  <code>/app</code> (un resto de otra sesión) tapa al de <code>/lib</code>, y el programa se
+  comporta como una versión anterior. Desde V7 eso <strong>se dice en la salida del
+  programa</strong>, no sólo en el log:
+  <code>aviso: 'Str' cargado desde /app, tapa al de /lib</code>. Cuando algo se comporte como
+  una versión anterior, mira esa línea; y si el módulo de <code>/app</code> es además de otra
+  versión, la norma de versiones (§17.1) lo rechaza directamente.
 </p>
 
 <h3 id="from">15.7 Decir de dónde viene un módulo</h3>
@@ -2266,9 +2291,15 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <span class="kw">import</span> lib.Util <span class="kw">from</span> <span class="str">"../shared/util.mod"</span></code></pre>
 
 <p>
-  El nombre puede ir cualificado (<code>lib.Util</code>), y la ruta es relativa al
-  proyecto. Es lo mismo que hace <code>dependencies</code> en el <code>.bpbuild</code>,
+  El nombre puede ir cualificado (<code>lib.Util</code>), y la ruta es relativa al fichero
+  que lo declara. Es lo mismo que hace <code>dependencies</code> en el <code>.bpbuild</code>,
   pero declarado en el fichero que lo usa en vez de en el proyecto entero.
+</p>
+<p>
+  <strong>Es una pista para el compilador, no para la VM.</strong> El <code>from</code> dice
+  dónde está el <code>.mod</code> (su interfaz) <em>al compilar</em>. En ejecución el módulo se
+  busca por su nombre y por el orden de §15.6, igual que cualquier otro: la ruta del árbol de
+  fuentes del PC no significa nada en la placa.
 </p>
 
 <h3 id="descubrir">15.8 Descubrirlos en ejecución</h3>
@@ -2651,8 +2682,8 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <!-- =========================================================== -->
 <h2 id="artefactos">17. Artefactos en disco</h2>
 
-<h3 id="mod">17.1 <code>.mod</code> (binario, MOD7)</h3>
-<pre>[MAGIC=0x4D4F4437]            4 bytes  "MOD7"
+<h3 id="mod">17.1 <code>.mod</code> (binario, MOD8)</h3>
+<pre>[MAGIC=0x4D4F4438]            4 bytes  "MOD8"
 [dataSize]                    4
 [mainOffset]                  4   offset al __startup, o -1
 [importsSize]                 4
@@ -2661,9 +2692,11 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 [librarySize]                 4
 [interfaceSize]               4   texto de interfaz (v6+)
 [nativeSize]                  4   código nativo AOT (v7); 0 si no lleva
---- header (36) ---
+[gen]                         4   generación: la "version" del proyecto (v8); 0 si suelto
+[ifaceCrc]                    4   CRC32 de la sección interface (v8)
+--- header (44) ---
 [library   bytes]             librarySize
-[imports   bytes]             importsSize   pares (name, fromPath) UTF
+[imports   bytes]             importsSize   pares (name, fromPath) UTF + subtabla deps (v8)
 [exports   bytes]             exportsSize   pares (name, offset)
 [interface bytes]             interfaceSize texto de interfaz (§17.2)
 [native    bytes]             nativeSize    blobs .mdn, uno por arquitectura (§17.4)
@@ -2687,11 +2720,32 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   a su sección y no hay que recalcular nada.
 </p>
 <p>
-  Los cargadores ejecutan <strong>v6 y v7</strong> (el ABI es el mismo).
+  <strong>v8 = el módulo lleva contra qué se compiló</strong> (V7). Añade al header
+  <code>gen</code> (la <code>"version"</code> del proyecto que lo compiló; 0 en un fichero
+  suelto) e <code>ifaceCrc</code> (el CRC32 de su sección <code>interface</code>), y en
+  <code>imports</code> una subtabla <code>deps</code> con, por cada módulo del que depende,
+  la generación y el CRC de interfaz contra los que se compiló, y si extiende alguna clase
+  suya. Con eso las VMs aplican <strong>la norma de versiones</strong> al cargar, y la
+  dicen por la salida del programa con el mismo texto en las dos:
+</p>
+<ul>
+  <li>una dependencia <em>más antigua</em> de lo que el módulo necesita se rechaza:
+      <code>'Core' (gen 6) es mas antiguo que el que 'App' necesita (gen 7): actualiza /lib o recompila</code>;</li>
+  <li>la misma generación con <em>otra interfaz</em> se rechaza:
+      <code>'Str' (gen 7, interfaz 3e1a...) no es la interfaz con la que se compilo 'App' (interfaz 9c02...): recompila</code>;</li>
+  <li>una dependencia <em>más reciente</em> se acepta si enlaza — salvo que el módulo
+      <strong>extienda</strong> una clase suya: los hijos pueden ser más recientes que los
+      padres, los padres no pueden ser más recientes que los hijos (el hijo coloca sus
+      campos y métodos detrás de los del padre);</li>
+  <li>una dependencia v6/v7 no lleva datos: cuenta como generación 0 y su interfaz no
+      se comprueba (se anota en el diagnóstico).</li>
+</ul>
+<p>
+  Los cargadores ejecutan <strong>v6, v7 y v8</strong> (el ABI es el mismo).
   <strong>v5</strong> (<code>MAGIC "MOD5"</code>, header de 28 bytes) se
   <strong>rechaza</strong>: es anterior al ensanchado de referencias 4→8 bytes y
   correrlo corrompería en silencio. El tamaño del header depende del MAGIC:
-  28 / 32 / 36 bytes para v5 / v6 / v7.
+  28 / 32 / 36 / 44 bytes para v5 / v6 / v7 / v8.
 </p>
 
 <h3 id="bpi">17.2 Interfaz del módulo (texto, v7)</h3>

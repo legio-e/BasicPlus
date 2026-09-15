@@ -414,6 +414,11 @@ struct bpvm {
     int             run_pack_on;
     bpvm_pack_src_t run_pack_src;
     bpvm_pack_fs_t  run_pack_st;
+    /* [V7/H2, #493] Si el principal vive en la ZONA de packs (RUN por nombre de
+     * un modulo que solo esta ahi), la fuente en ejecucion es la zona entera y
+     * aqui va el nombre de SU pack: sus modulos y recursos van primero, los de
+     * los otros packs de la zona los ultimos. "" = pack del FS (#310), sin filtro. */
+    char            run_pack_only[BPVM_PACK_NAME_LEN + 1];
 
     /* Allocator del data block (bump). */
     uint32_t next_free_address;

@@ -84,13 +84,22 @@ public final class PackStep {
          *  fichero fuente (`Demo.bp`) y no hay forma de escribir ahí el nombre
          *  cualificado — ése era exactamente el callejón sin salida de #365. */
         public final String mainEntry;
+        /** [V7/H2, #493] Dónde buscar los módulos que faltan para cerrar el pack
+         *  (la stdlib, los `dependencies` del proyecto): los mismos sitios en los
+         *  que busca el compilador. Vacío = no se completa el cierre. */
+        public final List<Path> dondeBuscar;
 
         public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec) {
-            this(mods, packs, ejec, "");
+            this(mods, packs, ejec, "", java.util.Collections.emptyList());
         }
         public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec, String mainEntry) {
+            this(mods, packs, ejec, mainEntry, java.util.Collections.emptyList());
+        }
+        public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec, String mainEntry,
+                      List<Path> dondeBuscar) {
             this.modsExternos = mods; this.packsRequeridos = packs; this.ejecutable = ejec;
             this.mainEntry = (mainEntry == null) ? "" : mainEntry;
+            this.dondeBuscar = (dondeBuscar == null) ? java.util.Collections.<Path>emptyList() : dondeBuscar;
         }
         /** Para los llamantes que aún no lo calculan: se comporta como antes. */
         public static Cierre desconocido() {
@@ -149,6 +158,44 @@ public final class PackStep {
         if (externos > 0)
             System.out.println("pack: " + externos
                 + " modulo(s) de dependencia incluidos (los MISMOS contra los que se compilo)");
+
+        /* 1c) [V7/H2, #493] EL CIERRE TRANSITIVO — un pack es como un docker.
+         *
+         * Decisión de Eduardo (15-sep): «Un pack debería ser como un docker,
+         * autocontenido y así asegurar que no haya nada externo que le afecte
+         * (salvo SQLite u otros similares)». Hasta hoy entraban sólo los imports
+         * DIRECTOS que resolvió el compilador: `AppPack` llevaba `Str` y `Json` y
+         * no `Core` (que Str importa), y al ejecutarlo: «falta el modulo 'Core'».
+         * Ni autocontenido ni lo contrario.
+         *
+         * Aquí se recorren los imports de cada `.mod` que ya va en el pack —los
+         * dueños de sus símbolos importados— y lo que falte se trae de donde el
+         * compilador lo habría buscado (la stdlib, `dependencies`, el outDir),
+         * hasta que no falte nada. Y como en el RUN el pack en ejecución va
+         * PRIMERO en la resolución, lo que lleva dentro es lo que se ejecuta. Lo
+         * que no se encuentre se dice: es una dependencia que el pack necesitará
+         * de fuera (un pack nativo grabado aparte, o el /lib de la placa). */
+        int cerrados = 0;
+        for (;;) {
+            Set<String> faltan = duenosQueFaltan(entries);
+            if (faltan.isEmpty()) break;
+            int antes = entries.size();
+            for (String canon : faltan) {
+                Path mod = localizarModulo(canon + ".mod", cierre.dondeBuscar, outDir);
+                if (mod == null) {
+                    System.out.println("pack: aviso — '" + canon + "' lo importa un modulo del pack y no se "
+                        + "encuentra en la stdlib ni en las dependencias: el pack lo necesitara de fuera");
+                    continue;
+                }
+                entries.add(new PackEntry("mod", canon, Files.readAllBytes(mod)));
+                modulos.add(entries.get(entries.size() - 1));
+                cerrados++;
+            }
+            if (entries.size() == antes) break;              /* nada nuevo: no insistir */
+        }
+        if (cerrados > 0)
+            System.out.println("pack: " + cerrados + " modulo(s) mas para cerrar las dependencias "
+                + "(un pack es autocontenido: lo que importa va dentro)");
 
         // 2) resources del proyecto (cualquier extensión), si hay carpeta
         Path resDir = Paths.get(proj.projectDir, "resources");
@@ -337,6 +384,69 @@ public final class PackStep {
      * minúsculas, nombre = basename). Si {@code onlyTypes} != null, filtra a esas
      * extensiones. Orden determinista (alfabético). Ficheros sin extensión: skip.
      */
+    /* ── [V7/H2, #493] el cierre: los dueños de los imports de cada .mod ─────── */
+
+    /** Los módulos (nombre canónico `[lib.]Mod`) que algún `.mod` del pack importa y
+     *  que el pack no lleva. Lee la sección `imports` de cada uno (MOD6/7/8). */
+    static Set<String> duenosQueFaltan(List<PackEntry> entries) {
+        Set<String> hay = new java.util.HashSet<>();
+        for (PackEntry e : entries) if ("mod".equals(e.tipo)) hay.add(e.nombre);
+        Set<String> faltan = new java.util.LinkedHashSet<>();
+        for (PackEntry e : entries) {
+            if (!"mod".equals(e.tipo)) continue;
+            for (String d : duenosDeImports(e.data)) if (!hay.contains(d)) faltan.add(d);
+        }
+        return faltan;
+    }
+
+    /** Los dueños de los símbolos importados por un `.mod`: `Str.toHex` → `Str`,
+     *  `acme.LibHdr.__init` → `acme.LibHdr`. Un `.mod` que no se pueda leer no
+     *  aporta nada (el pack se valida en otro sitio). */
+    static java.util.List<String> duenosDeImports(byte[] mod) {
+        java.util.List<String> out = new ArrayList<>();
+        try {
+            java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(mod));
+            int magic = in.readInt();
+            boolean v6 = magic != 0x4D4F4435, v8 = magic == 0x4D4F4438;
+            boolean v7 = magic == 0x4D4F4437 || v8;
+            if (magic != 0x4D4F4436 && !v7) return out;      /* MOD6, MOD7 o MOD8 */
+            in.readInt(); in.readInt();                      /* dataSize, mainOffset */
+            int importSize = in.readInt();
+            in.readInt(); in.readInt();                      /* exportSize, codeSize */
+            int librarySize = in.readInt();
+            if (v6) in.readInt();                            /* interfaceSize */
+            if (v7) in.readInt();                            /* nativeSize */
+            if (v8) { in.readInt(); in.readInt(); }          /* gen, ifaceCrc */
+            in.skipBytes(librarySize);
+            byte[] imports = new byte[importSize];
+            in.readFully(imports);
+            java.io.DataInputStream ii = new java.io.DataInputStream(new java.io.ByteArrayInputStream(imports));
+            int n = ii.readInt();
+            for (int i = 0; i < n; i++) {
+                String name = ii.readUTF(); ii.readUTF();    /* fromPath: no cuenta (#493) */
+                int p = name.lastIndexOf('.');
+                if (p <= 0) continue;
+                String dueno = name.substring(0, p);
+                if (!out.contains(dueno)) out.add(dueno);
+            }
+        } catch (IOException ignore) { /* no legible: nada */ }
+        return out;
+    }
+
+    /** Dónde busca el compilador: los `dondeBuscar` del cierre (stdlibDir,
+     *  dependencies), y el outDir. Un `.mod` sin sección de interfaz (v5) no vale. */
+    private static Path localizarModulo(String fichero, List<Path> dondeBuscar, Path outDir) {
+        java.util.List<Path> sitios = new ArrayList<>(dondeBuscar);
+        sitios.add(outDir);
+        for (Path d : sitios) {
+            if (d == null) continue;
+            Path cand = Files.isDirectory(d) ? d.resolve(fichero)
+                      : (d.getFileName() != null && d.getFileName().toString().equals(fichero) ? d : null);
+            if (cand != null && Files.isRegularFile(cand)) return cand;
+        }
+        return null;
+    }
+
     private static void collectDir(Path dir, List<PackEntry> entries, Set<String> onlyTypes)
             throws IOException {
         if (!Files.isDirectory(dir)) return;

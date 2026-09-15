@@ -234,8 +234,12 @@ const char* bpvm_fs_main_module_path(void);         /* "" si no hay módulo fija
 void        bpvm_fs_set_basedir_from_module(const char* modpath);
 /* Resuelve un path de recurso BP a su ruta efectiva en el FS. Absoluto → tal
  * cual. Relativo → (1) <basedir>/<path> si hay proyecto y existe; (2) <path>
- * tal cual; (3) "/app/<path>" (modo plano). Escribe en out[outsz] y lo devuelve.
- * Para los builtins de lectura de recursos (readFile, load de .win, imágenes). */
+ * tal cual; (3) "/app/<path>" (modo plano); (4) [V7/H2, #493] lo que el
+ * RESPALDO diga que tiene con ese nombre, ya cualificado ("pack:<Pack>/<path>"):
+ * la zona de packs es el ÚLTIMO sitio donde se busca un recurso, y se busca
+ * ahí A PROPÓSITO, no porque conteste a rutas ajenas. Escribe en out[outsz] y
+ * lo devuelve. Para los builtins de lectura de recursos (readFile, load de
+ * .win, imágenes). */
 const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz);
 
 /* ── #310: OVERLAY de lectura ────────────────────────────────────────────────
@@ -270,12 +274,33 @@ void bpvm_fs_set_overlay(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* use
  * podría tapar al de un pack grabado — que es justo lo que el FS debe poder
  * hacer (spec §4: el FS ECLIPSA al pack).
  *
- * Sólo LECTURA, igual que el overlay, y coste cero sin instalar. */
-void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user);
+ * [V7/H2, #493] EL RESPALDO CONTESTA SÓLO EN SU PROPIO ESPACIO. Hasta el 15-sep
+ * reclamaba CUALQUIER ruta cuyo basename coincidiera (`/app/Str.mod`,
+ * `/lib/Str.mod`, el nombre pelado...): `stat("/app/Str.mod")` decía que sí sin
+ * que en /app hubiera nada, la resolución de módulos se creía que el módulo
+ * estaba en el FS, lo copiaba a RAM (el XIP llevaba muerto desde el 13-ago) y
+ * un pack con una stdlib vieja TAPABA a /lib disfrazado de /app. Ahora `stat`
+ * y `read` sólo reclaman rutas cualificadas (`pack:<Pack>/x`), y para "¿alguien
+ * tiene x?" está `locate`: devuelve la ruta cualificada del que lo tiene, y la
+ * fachada la prueba como ÚLTIMO candidato de `bpvm_fs_resolve`. Los recursos
+ * siguen saliendo de la zona; los módulos, por la rama XIP de discover_deps.
+ *
+ * Sólo LECTURA, igual que el overlay, y coste cero sin instalar. `locate` puede
+ * ser NULL. */
+typedef int (*bpvm_fs_ov_locate_fn)(void* user, const char* nombre, char* out, size_t cap);
+void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd,
+                          bpvm_fs_ov_locate_fn locate, void* user);
 
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */
 void bpvm_fs_register_host(void);
+
+/* [V7/H2, #493] `/lib` EN EL HOST: monta en `prefix` (p.ej. "/lib") un backend
+ * host de sólo lectura enraizado en `root`: `/lib/Str.mod` → `<root>/Str.mod`.
+ * Es el espejo del `--stdlibDir` de miVM; sin él la VM-C del PC no tenía forma
+ * de decir dónde está la stdlib y `/lib/X.mod` era un `fopen` literal. Una sola
+ * raíz (la última llamada manda). 0 = OK. */
+int bpvm_fs_register_host_dir(const char* prefix, const char* root);
 
 /* H2 fase A (B1.1) — backend littlefs sobre una IMAGEN en fichero (host-only,
  * fs_lfs_host.c): el modo ORÁCULO de la VM-C en PC (mismo motor que el micro).
