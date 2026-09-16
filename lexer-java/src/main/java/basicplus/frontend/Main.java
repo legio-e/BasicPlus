@@ -49,6 +49,9 @@ public final class Main {
     /** Contexto de compilación que viaja por la recursión. */
     /** V7/H2 (#523) — ver Ctx.formato. */
     public static int FORMATO = 8;
+    /** V7/H2 (#523, V1) — el guardián del compilador: permutar las ranuras propias de cada clase
+     *  (semilla; 0 = identidad) y meter n miembros privados de relleno. Ver {@link Barajar}. */
+    public static int BARAJAR = 0, RELLENO = 0;
 
     static final class Ctx {
         Path outDir;                                // donde se emiten .mod y .bpi
@@ -428,6 +431,15 @@ public final class Main {
                 String f = a.substring("--formato=".length());
                 if (!f.equals("8") && !f.equals("9")) { System.err.println("--formato desconocido: " + f + " (usa 8|9)"); System.exit(1); return; }
                 FORMATO = Integer.parseInt(f);
+            }
+            else if (a.startsWith("--barajar=")) {   // V7/H2 (#523, V1): el guardián
+                try { BARAJAR = Integer.parseInt(a.substring("--barajar=".length())); }
+                catch (NumberFormatException ex) { System.err.println("--barajar necesita una semilla entera: " + a); System.exit(1); return; }
+            }
+            else if (a.startsWith("--relleno=")) {
+                try { RELLENO = Integer.parseInt(a.substring("--relleno=".length())); }
+                catch (NumberFormatException ex) { System.err.println("--relleno necesita un entero: " + a); System.exit(1); return; }
+                if (RELLENO < 0) { System.err.println("--relleno no puede ser negativo"); System.exit(1); return; }
             }
             else if (a.startsWith("--backend=")) {
                 backend = a.substring("--backend=".length()).toLowerCase();
@@ -3284,6 +3296,7 @@ public final class Main {
 
         r.parser = new Parser(tokens);
         r.module = r.parser.parseModule();
+        Barajar.aplicar(r.module);   // V7/H2 (#523, V1): --barajar / --relleno, si se pidieron
 
         if (isRoot && ctx.showAst) {
             if (r.module != null) {

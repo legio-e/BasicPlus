@@ -24,7 +24,19 @@
 # (corre, exit 0, y NO imprime lo esperado: lo que nadie ve) / RUIDOSO-otro (rechaza
 # por otra razon que la predicha) / PARIDAD (las VMs difieren) / CRASH.
 #
-#   python compat/mezcla.py [--solo=I|II|P] [--keep] [--work=DIR] [--formato=8|9] [--vms=ambas|java|c]
+#   python compat/mezcla.py [--solo=I|II|P|B] [--keep] [--work=DIR] [--formato=8|9] [--vms=ambas|java|c]
+#
+# Bloque B (solo con --formato=9, V7/H2 #523 V1): EL GUARDIAN. La misma Lib compilada con
+# `--barajar=<semilla>` (las ranuras propias de cada clase permutadas) y con `--relleno=3`
+# (tres properties privadas de relleno por clase); las apps selladas contra la semilla 0
+# tienen que dar el MISMO stdout contra cualquier semilla, en las dos VMs. Caza cualquier
+# numero horneado que se escape del censo, sin leer el censo. Se comprueba el ARTEFACTO:
+# si dos Lib.mod barajadas salen identicas, el flag no ha hecho nada y se aborta.
+#
+# La fila «derived_deja_de_extender» (A1): Lib tiene `Derived extends Base`; la app UsaD hace
+# `var b: Lib.Base := Lib.Derived(1)` y llama b.k(). En la variante, Derived deja de extender
+# Base (con los mismos miembros). Con MOD9 el .mod de UsaD lleva la asuncion (ref SUBTIPO) y el
+# cargador rechaza nombrandola (E10); con MOD8 se mide lo que pasa.
 #
 # --formato=9 (V7/H2 #523, ENLACE TARDIO): compila todo como MOD9 y predice con EL CRITERIO
 # DE JAVA — donde Java correria (miembro anadido en cualquier sitio, property nueva, campo
@@ -77,6 +89,16 @@ public class Base
     return 99
   end z
 end Base
+public class Derived extends Base
+  var d: integer
+  public function Derived(n: integer)
+    super(n)
+    this.d := n + 100
+  end Derived
+  public function dd(): integer
+    return this.d
+  end dd
+end Derived
 public function f(): integer
   return 7
 end f
@@ -105,6 +127,10 @@ VARIANTES = {
   'retorno':      ('k() pasa de devolver string a integer (misma ranura, mismo nombre)', lambda s: _sub(s, 'public function k(): string\n    return "k" + this.n', 'public function k(): integer\n    return this.n')),
   'prop_tipo':    ('la property p pasa de integer a string (mismos accesores)',        lambda s: _sub(_sub(s, 'public property p: integer', 'public property p: string'), 'this.p := n * 10', 'this.p := "p"')),
   'f_firma':      ('la funcion de modulo f() pasa a f(x: integer)',                    lambda s: _sub(s, 'public function f(): integer\n  return 7', 'public function f(x: integer): integer\n  return x')),
+  'derived_deja_de_extender': ('Derived DEJA de extender Base (conserva k() propio): la asuncion S<:T del consumidor ya no vale',
+                   lambda s: _sub(_sub(s, 'public class Derived extends Base\n', 'public class Derived\n'),
+                                  '    super(n)\n    this.d := n + 100\n  end Derived\n',
+                                  '    this.d := n + 100\n  end Derived\n  public function k(): string\n    return "dk" + this.d\n  end k\n')),
 }
 
 # ------------------------------------------------------------------ las apps
@@ -158,6 +184,16 @@ public function main()
 end main
 end Ext
 """
+USA_D = """module UsaD
+import Core
+import Lib
+public function main()
+  var b: Lib.Base := Lib.Derived(1)
+  print b.k()
+  print "fin"
+end main
+end UsaD
+"""
 A_SRC = """module A
 import Core
 import Lib
@@ -194,10 +230,11 @@ ESPERADO = {
   'Usa':    "k3\n5\nx!\n8\n7\nk5/8/2\nfin",
   'Ext':    "hija/k3/3/6\n9\n5\nhija/k3/3/6\n9\nfin",
   'Puente': "k3/4/2\nfin",
+  'UsaD':   "k1\nfin",
 }
 def esperado(app, variante):
     s = ESPERADO[app]
-    if variante == 'cuerpo': s = s.replace('k3', 'K3').replace('k5', 'K5')
+    if variante == 'cuerpo': s = s.replace('k3', 'K3').replace('k5', 'K5').replace('k1', 'K1')
     if variante == 'f_firma' and FORMATO == 9: s = s   # (F3b: se rechazara; hoy se mide)
     if variante == 'firma':  s = s.replace('\n5\n', '\n2\n', 1)   # m(4) -> 2 (m(1) ya daba 2)
     return s
@@ -229,17 +266,19 @@ def run_vm(vm, d, mod):
 FORMATO = 8
 VMS = 'ambas'
 
-def lib(work, variante, gen):
-    d = os.path.join(work, 'lib_%s_g%d' % (variante, gen))
+def lib(work, variante, gen, extra=(), etiqueta=''):
+    """La variante compilada (cache por dir). `extra`: flags mas del compilador (--barajar=, --relleno=);
+    `etiqueta` los distingue en el nombre del dir (si no, la cache devolveria la lib sin flags)."""
+    d = os.path.join(work, 'lib_%s%s_g%d' % (variante, etiqueta, gen))
     if os.path.isdir(d): return d
     os.makedirs(os.path.join(d, 'src'))
     io.open(os.path.join(d, 'src', 'Lib.bp'), 'w', encoding='utf-8', newline='\n').write(VARIANTES[variante][1](LIB_V1))
     io.open(os.path.join(d, 'p.bpbuild'), 'w', encoding='utf-8', newline='\n').write(
         '{ "sourceDir": "src", "outDir": ".", "main": "Lib", "version": %d, "dependencies": [] }\n' % gen)
     shutil.copy(CORE, d)
-    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=%d' % FORMATO], d)
+    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=%d' % FORMATO] + list(extra), d)
     if rc != 0 or not os.path.isfile(os.path.join(d, 'Lib.mod')):
-        raise SystemExit('la variante %s (gen %d) no compila:\n%s%s' % (variante, gen, out, err))
+        raise SystemExit('la variante %s%s (gen %d) no compila:\n%s%s' % (variante, etiqueta, gen, out, err))
     io.open(os.path.join(d, 'build.log'), 'w', encoding='utf-8').write(out + err)
     return d
 
@@ -315,6 +354,7 @@ MUEVE = {'met_medio', 'met_quitado', 'prop_mas', 'reorden', 'ev_privado'}
 ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo', 'f_firma'}
 def prediccion_java(variante, gen, app):
     if gen < 7: return 'mas antiguo'
+    if variante == 'derived_deja_de_extender': return 'no enlaza' if app == 'UsaD' else 'corre'   # A1: solo UsaD asume Derived<:Base
     if variante in ROMPE_JAVA:
         if variante == 'f_firma' and app != 'Usa': return 'corre'   # solo Usa llama a f()
         return 'no enlaza'
@@ -326,6 +366,9 @@ def prediccion_usa(variante, gen):
     if gen == 7: return 'corre' if variante in ('igual', 'cuerpo') else 'otra interfaz'
     if variante in MUEVE or variante in ('firma', 'enum_cabeza', 'met_quitado', 'retorno', 'prop_tipo', 'f_firma'): return 'no enlaza'
     return 'corre'
+def prediccion_usad(variante, gen):
+    if FORMATO == 9: return prediccion_java(variante, gen, 'UsaD')
+    return prediccion_usa(variante, gen)   # la norma MOD8 no ve la cadena: predice lo mismo que para Usa (se mide)
 def prediccion_ext(variante, gen):
     if FORMATO == 9: return prediccion_java(variante, gen, 'Ext')
     if gen < 7: return 'mas antiguo'
@@ -341,12 +384,14 @@ def main():
         elif a.startswith('--work='): work = a[7:]
         elif a.startswith('--formato='): FORMATO = int(a[10:])
         elif a.startswith('--vms='): VMS = a[6:]
+        else: raise SystemExit('argumento desconocido: ' + a)
+    if solo not in (None, 'I', 'II', 'P', 'B'): raise SystemExit('--solo=' + solo + ': bloques I, II, P o B')
     for f in (FE, JVM, CVM, CORE):
         if not os.path.isfile(f): raise SystemExit('falta ' + f)
     work = work or tempfile.mkdtemp(prefix='mezcla_')
     print('trabajo en', work, '| formato', FORMATO, '| vms', VMS, '| criterio', 'Java (enlace tardio)' if FORMATO == 9 else 'norma #500')
     v1 = lib(work, 'igual', 7)
-    usa1 = app(work, 'Usa', USA, v1, 'v1'); ext1 = app(work, 'Ext', EXT, v1, 'v1')
+    usa1 = app(work, 'Usa', USA, v1, 'v1'); ext1 = app(work, 'Ext', EXT, v1, 'v1'); usad1 = app(work, 'UsaD', USA_D, v1, 'v1')
 
     if solo in (None, 'I'):
         print('\n== BLOQUE I: MISMA VERSION (app compilada contra X, ejecutada contra X): tiene que correr siempre ==')
@@ -365,9 +410,11 @@ def main():
                 if gen == 6 and v not in ('igual', 'met_final'): continue          # mas antiguo: dos muestras bastan
                 if gen == 7 and v not in ('igual', 'cuerpo', 'met_final', 'campo_mas'): continue
                 d = lib(work, v, gen)
-                cd = caso_dir(work, 'II_%s_g%d' % (v, gen), d, [os.path.join(usa1, 'Usa.mod'), os.path.join(ext1, 'Ext.mod')])
+                cd = caso_dir(work, 'II_%s_g%d' % (v, gen), d, [os.path.join(usa1, 'Usa.mod'), os.path.join(ext1, 'Ext.mod'), os.path.join(usad1, 'UsaD.mod')])
                 fila('II', 'Usa v1 contra %s g%d' % (v, gen), cd, 'Usa', prediccion_usa(v, gen), esperado('Usa', v))
                 fila('II', 'Ext v1 contra %s g%d' % (v, gen), cd, 'Ext', prediccion_ext(v, gen), esperado('Ext', v))
+                if v in ('igual', 'derived_deja_de_extender') and gen == 8:   # A1: la asuncion Derived<:Base, verdadera y falsa
+                    fila('II', 'UsaD v1 contra %s g%d' % (v, gen), cd, 'UsaD', prediccion_usad(v, gen), esperado('UsaD', v))
 
     if solo in (None, 'P'):
         print('\n== BLOQUE P: PUENTE (A sellado contra v1 g7 crea el objeto; B sellado contra X lo usa; runtime = X o v1) ==')
@@ -396,6 +443,19 @@ def main():
                     # runtime = v1 (gen 7): B esta sellado contra gen 8 -> «mas antiguo».
                     cd = caso_dir(work, 'P_%s_g%d_rtv1' % (v, gen), v1, [os.path.join(a1, 'A.mod'), os.path.join(bx, 'B.mod'), os.path.join(pd, 'Puente.mod')])
                     fila('P', 'A(v1)+B(%s g%d), runtime v1 g7' % (v, gen), cd, 'Puente', 'mas antiguo', esperado('Puente', 'igual'))
+
+    if solo in (None, 'B') and FORMATO == 9:
+        print('\n== BLOQUE B: EL GUARDIAN (apps selladas contra la semilla 0; Lib con --barajar=k / --relleno=3): mismo stdout siempre ==')
+        lib0 = io.open(os.path.join(v1, 'Lib.mod'), 'rb').read()
+        casos = [('--barajar=%d' % k,) for k in range(1, 8)] + [('--barajar=%d' % k, '--relleno=3') for k in range(1, 4)]
+        for flags in casos:
+            etq = '_'.join(f.lstrip('-').replace('=', '') for f in flags)
+            d = lib(work, 'igual', 7, extra=flags, etiqueta='_' + etq)
+            if io.open(os.path.join(d, 'Lib.mod'), 'rb').read() == lib0:
+                raise SystemExit('Lib.mod con %s es IDENTICA a la de la semilla 0: el flag no ha hecho nada (jar rancio?)' % ' '.join(flags))
+            cd = caso_dir(work, 'B_' + etq, d, [os.path.join(usa1, 'Usa.mod'), os.path.join(ext1, 'Ext.mod'), os.path.join(usad1, 'UsaD.mod')])
+            for nombre in ('Usa', 'Ext', 'UsaD'):
+                fila('B', '%s v1 contra Lib %s' % (nombre, ' '.join(flags)), cd, nombre, 'corre', esperado(nombre, 'igual'))
 
     # ---- resumen
     malos = [f for f in filas if f[4] != 'ok']

@@ -174,6 +174,24 @@ public final class MivmEmitter {
     private int refEvento(ClassSymbol c, String clave, boolean dest) {
         return w.requireRef(dest ? ModWriter.REF_EV_DEST : ModWriter.REF_EV_RECV, depRef(c), claseRef(c), clave);
     }
+    /** V7/H2 (#523, A1) — el compilador ASUME que S es subtipo de T (un upcast implícito:
+     *  asignación, argumento, return, elemento de array…) y luego llama a T sobre el
+     *  objeto. Si en ejecución la cadena de S ya no pasa por T («`Derived` deja de
+     *  extender `Base`» en otra versión de Lib), el despacho por la ranura de T sobre un
+     *  S daría basura; Java lanza `VerifyError`. La ref SUBTIPO deja la asunción escrita
+     *  y el cargador la verifica al enlazar (E10). Hace falta sólo cuando T es EXTERNA:
+     *  con T local, todo el tramo S..T es local (una clase ajena no puede descender de
+     *  una de aquí) y se compiló junto. Nunca con T del lenguaje (`Object`: cada módulo
+     *  sintetiza el suyo y el cargador la cualificaría con el consumidor → E10 falso). La
+     *  clave es el nombre cualificado de T CON PUNTOS (como registra el cargador), no un
+     *  código de tipo. Dedupe en el escritor: N sitios = una entrada. */
+    private void asumirSubtipo(BpType s, BpType t) {
+        if (!mod9() || !(s instanceof ClassType) || !(t instanceof ClassType)) return;
+        ClassSymbol S = ((ClassType) s).cls, T = ((ClassType) t).cls;
+        if (S == null || T == null || S == T || !T.isExternal || T.isBuiltin || S.isBuiltin) return;
+        if (!porRef(S)) return;   // una cerrada local no desciende de una externa: si llega aquí es ErrorType/any
+        w.requireRef(ModWriter.REF_SUBTIPO, depRef(S), claseRef(S), Symbol.ClaveCanonica.clase(T, moduloLocal()));
+    }
     /** La clave canónica de un método/función, o null (y error) si algún tipo no está resuelto. */
     private String claveDe(FunctionSymbol fs) {
         if (!mod9()) return "";   // en MOD8 no se calcula (ni se exige que los tipos de un stub resuelvan)
@@ -2372,7 +2390,9 @@ public final class MivmEmitter {
             }
             if (vd.init != null) {
                 emitExpr(vd.init);
-                coerceToTarget(vd.init, declT);
+                // V7/H2 (#523, A1): declT es null para una clase → el tipo real (widthT), para que
+                // `var b: Lib.Base := h` anote la asunción SUBTIPO. Para primitivos, el de siempre.
+                coerceToTarget(vd.init, declT != null ? declT : widthT);
                 w.emitSetLocal(dn.name);
                 // Si esta var es owner y la fuente es otra var owner local
                 // (IdentifierExpr → ParamSymbol/VarSymbol con isOwner=true),
@@ -6152,6 +6172,7 @@ public final class MivmEmitter {
     /** Conversión de ensanchado entre primitivos (mismo criterio que coerceToTarget),
      *  con tipos de origen/destino explícitos (no hay nodo IExpr de origen). */
     private void emitWiden(BpType from, BpType to) throws IOException {
+        asumirSubtipo(from, to);   // V7/H2 (#523, A1): `{b, _} := f()` con b: Lib.Base
         if (!(to instanceof PrimitiveType) || !(from instanceof PrimitiveType)) return;
         PrimitiveType pf = (PrimitiveType) from, pt = (PrimitiveType) to;
         if (pf.tag == pt.tag) return;
@@ -6245,6 +6266,7 @@ public final class MivmEmitter {
         if (target == null) return;
         BpType srcT = info.exprTypes.get(src);
         if (srcT == null) return;
+        asumirSubtipo(srcT, target);   // V7/H2 (#523, A1): un upcast de referencia es un no-op en bytecode, pero se ANOTA
         // H1.2a (V4) — destino `any` = 8 bytes. Un valor de 4 bytes (int/narrow/
         // bool) debe ensancharse a 8B para ocupar los 2 slots que el llamante
         // reserva (numArgs cuenta `any` como 2). Sin esto el arg viaja 4B, el sp

@@ -154,6 +154,71 @@ class Mod9EmisorTest {
         assertTrue(rs.contains("CAMPO Lib.Base.n:i [dep1]"), "el campo protegido heredado, por ref al dueño: " + rs);
         assertTrue(rs.contains("MET Hija.m(i)i [local]"), "h.m(4): la ref lleva la clase ESTATICA del receptor (Hija); el cargador sube hasta Lib.Base: " + rs);
         assertTrue(rs.contains("MET Lib.Base.k()s [dep1]"), "b.k() con b: Lib.Base: " + rs);
+        assertTrue(rs.contains("SUBTIPO Hija.Lib.Base [local]"), "A1: `var b: Lib.Base := h` ASUME Hija<:Lib.Base y lo deja escrito (E10 si ya no): " + rs);
+    }
+
+    /** V7/H2 (#523, A1) — la ref SUBTIPO: cada upcast implícito hacia una clase EXTERNA deja la
+     *  asunción escrita (una entrada por par, dedupe); hacia una local o hacia `Object`, ninguna. */
+    @Test @DisplayName("A1: el upcast implicito (asignacion, argumento, return, elemento, tupla) emite UNA ref SUBTIPO por par; hacia Object o hacia una clase local, ninguna")
+    void subtipo(@TempDir Path tmp) throws IOException {
+        String lib = LIB.replace("end Base\npublic function f()",
+            "end Base\npublic class Derived extends Base\n  public function Derived(n: integer)\n    super(n)\n  end Derived\nend Derived\npublic function f()");
+        String usa = String.join("\n",
+            "module Usa", "import Core", "import Lib",
+            "public class Local", "  public property x: integer", "end Local",
+            "public class LocalHija extends Local", "  var y: integer", "end LocalHija",
+            "function toma(b: Lib.Base): integer", "  return b.m(1)", "end toma",
+            "function devuelve(): Lib.Base", "  return Lib.Derived(2)", "end devuelve",
+            "function par(): (Lib.Derived, integer)", "  return (Lib.Derived(4), 1)", "end par",
+            "public function main()",
+            "  var d: Lib.Derived := Lib.Derived(1)",
+            "  var b: Lib.Base := d",                       // asignacion en la declaracion
+            "  b := d",                                     // asignacion suelta
+            "  print toma(d)",                              // argumento
+            "  print devuelve().m(2)",                      // return (dentro de devuelve)
+            "  var bb: Lib.Base := Lib.Base(9)",             // S == T: NO
+            "  var arr: Lib.Base[] := [bb]", "  arr[0] := d",   // elemento de array
+            "  var o: Object := d",                          // hacia Object: NO
+            "  var l: Local := LocalHija()",                 // hacia una local: NO
+            "  var e: Lib.Base", "  var n: integer",
+            "  { e, n } := par()", "  print e.m(n)",         // tupla: elemento Derived a destino Base
+            "  print b.k() + l.x + o.toString() + arr[0].k()",
+            "end main", "end Usa", "");
+        Path out = compila(tmp, "Usa", new String[]{"Lib", lib}, new String[]{"Usa", usa});
+        List<String> rs = refs(TablasMod9.leerRefs(secciones(Files.readAllBytes(out.resolve("Usa.mod")))[1]));
+        List<String> sub = new ArrayList<>();
+        for (String r : rs) if (r.startsWith("SUBTIPO")) sub.add(r);
+        assertEquals(java.util.Arrays.asList("SUBTIPO Lib.Derived.Lib.Base [dep1]"), sub,
+            "un solo par (Derived, Base) por muchos sitios que lo asuman; ni Object ni Local: " + rs);
+    }
+
+    /** Cada sitio POR SEPARADO (el dedupe del test anterior no dice cuál de ellos emitió). */
+    @Test @DisplayName("A1: cada sitio de upcast, solo, emite la SUBTIPO: declaracion, asignacion, argumento, return, elemento de array, tupla")
+    void subtipoCadaSitio(@TempDir Path tmp) throws IOException {
+        String lib = LIB.replace("end Base\npublic function f()",
+            "end Base\npublic class Derived extends Base\n  public function Derived(n: integer)\n    super(n)\n  end Derived\nend Derived\npublic function f()");
+        String[][] sitios = {
+            { "declaracion", "  var b: Lib.Base := d", "  print b.k()" },
+            { "asignacion",  "  var b: Lib.Base := Lib.Base(1)", "  b := d", "  print b.k()" },
+            { "argumento",   "  print toma(d)" },
+            { "return",      "  print devuelve().k()" },
+            { "elemento",    "  var arr: Lib.Base[] := [Lib.Base(1)]", "  arr[0] := d", "  print arr[0].k()" },
+            { "tupla",       "  var e: Lib.Base", "  var n: integer", "  { e, n } := par()", "  print e.k() + n" },
+        };
+        int i = 0;
+        for (String[] sitio : sitios) {
+            List<String> lineas = new ArrayList<>(java.util.Arrays.asList(
+                "module Usa", "import Core", "import Lib",
+                "function toma(b: Lib.Base): string", "  return b.k()", "end toma",
+                "function devuelve(): Lib.Base", "  return Lib.Derived(2)", "end devuelve",
+                "function par(): (Lib.Derived, integer)", "  return (Lib.Derived(4), 1)", "end par",
+                "public function main()", "  var d: Lib.Derived := Lib.Derived(1)"));
+            for (int k = 1; k < sitio.length; k++) lineas.add(sitio[k]);
+            lineas.add("end main"); lineas.add("end Usa"); lineas.add("");
+            Path out = compila(tmp.resolve("s" + (i++)), "Usa", new String[]{"Lib", lib}, new String[]{"Usa", String.join("\n", lineas)});
+            List<String> rs = refs(TablasMod9.leerRefs(secciones(Files.readAllBytes(out.resolve("Usa.mod")))[1]));
+            assertTrue(rs.contains("SUBTIPO Lib.Derived.Lib.Base [dep1]"), sitio[0] + ": sin SUBTIPO: " + rs);
+        }
     }
 
     @Test @DisplayName("en formato 8 (el de hoy) el mismo fuente sale MOD8 con marcadores, como siempre")
