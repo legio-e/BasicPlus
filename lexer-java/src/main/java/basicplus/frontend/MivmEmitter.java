@@ -4488,6 +4488,15 @@ public final class MivmEmitter {
                  * importada (lo comprobado: la excepcion saltaba al ESCRIBIR el
                  * fichero, o sea que el CALL se habia emitido con nombre local). */
                 ClassSymbol duena = fs.ownerClass;
+                // V10/J-3 (16-sep) — en MOD9 `super.m()` a un padre de otro módulo va por la ref SUPER
+                // (clase ESTÁTICA del padre, clave): el cargador resuelve «el m efectivo del padre» por su
+                // cadena real. Con el nombre exacto `__cls_m_Padre#m()`, si `m` SUBÍA al abuelo en otra
+                // versión de Lib, era rechazo al enlazar donde Java corre (invokespecial resuelve por la cadena).
+                ClassSymbol padre = (claseActual() != null) ? claseActual().baseClass : null;
+                if (mod9() && padre != null && porRef(padre)) {
+                    w.emitCallRef(w.requireRef(ModWriter.REF_SUPER, depRef(padre), claseRef(padre), claveDe(fs)));
+                    return;
+                }
                 if (duena != null && duena.isExternal) {
                     StringBuilder qn = new StringBuilder();
                     if (duena.externalLibrary != null && !duena.externalLibrary.isEmpty())

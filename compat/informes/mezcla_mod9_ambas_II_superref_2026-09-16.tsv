@@ -1,0 +1,56 @@
+II	Usa v1 contra igual g6	mas antiguo	mas antiguo	ok	'Lib' (gen 6) es mas antiguo que el que 'Usa' necesita (gen 7): actualiza /lib o recompila
+II	Ext v1 contra igual g6	mas antiguo	mas antiguo	ok	'Lib' (gen 6) es mas antiguo que el que 'Ext' necesita (gen 7): actualiza /lib o recompila
+II	Usa v1 contra igual g7	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra igual g7	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra igual g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra igual g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	UsaD v1 contra igual g8	corre	corre	ok	k1|fin
+II	ExtD v1 contra igual g8	corre	corre	ok	nieta/k2|nieta/k2|fin
+II	Usa v1 contra cuerpo g7	corre	corre	ok	K3|5|x!|8|7|K5/8/2|fin
+II	Ext v1 contra cuerpo g7	corre	corre	ok	hija/K3/3/6|9|5|hija/K3/3/6|9|fin
+II	Usa v1 contra cuerpo g8	corre	corre	ok	K3|5|x!|8|7|K5/8/2|fin
+II	Ext v1 contra cuerpo g8	corre	corre	ok	hija/K3/3/6|9|5|hija/K3/3/6|9|fin
+II	ExtD v1 contra cuerpo g8	corre	corre	ok	nieta/K2|nieta/K2|fin
+II	Usa v1 contra met_final g6	mas antiguo	mas antiguo	ok	'Lib' (gen 6) es mas antiguo que el que 'Usa' necesita (gen 7): actualiza /lib o recompila
+II	Ext v1 contra met_final g6	mas antiguo	mas antiguo	ok	'Lib' (gen 6) es mas antiguo que el que 'Ext' necesita (gen 7): actualiza /lib o recompila
+II	Usa v1 contra met_final g7	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra met_final g7	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra met_final g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra met_final g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra met_medio g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra met_medio g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	ExtD v1 contra met_medio g8	corre	corre	ok	nieta/k2|nieta/k2|fin
+II	Usa v1 contra met_quitado g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene: recompila 'Usa' ===
+II	Ext v1 contra met_quitado g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Ext.Hija' redefine 'k()s' y 'Lib' (gen 8) ya no lo tiene: recompila 'Ext' ===
+II	Usa v1 contra met_quitado_nousado g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra met_quitado_nousado g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra firma g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.m(i)i' y 'Lib' (gen 8) no lo tiene (tiene 'm(j)i', 'm(s)s'): recom
+II	Ext v1 contra firma g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Ext' necesita 'Ext.Hija.m(i)i' y 'Ext' (gen 0) no lo tiene (tiene 'm(j)i', 'm(s)s'): recom
+II	Usa v1 contra campo_mas g7	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra campo_mas g7	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra campo_mas g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra campo_mas g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra campo_menos g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra campo_menos g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra prop_mas g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra prop_mas g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra reorden g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra reorden g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	ExtD v1 contra reorden g8	corre	corre	ok	nieta/k2|nieta/k2|fin
+II	Usa v1 contra ev_privado g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra ev_privado g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra enum_cabeza g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra enum_cabeza g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra retorno g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene (tiene 'k()i'): recompila 'Usa' 
+II	Ext v1 contra retorno g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Ext.Hija' redefine 'k()s' y 'Lib' (gen 8) ya no lo tiene: recompila 'Ext' ===
+II	Usa v1 contra prop_tipo g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.setP(i)V' y 'Lib' (gen 8) no lo tiene (tiene 'setP(s)V'): recompil
+II	Ext v1 contra prop_tipo g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Ext' necesita 'Lib.Base.setP(i)V' y 'Lib' (gen 8) no lo tiene (tiene 'setP(s)V'): recompil
+II	Usa v1 contra f_firma g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: lib 'Lib' presente pero no exporta 'Lib.f()i' (la usa 'Usa'; version vieja?) ===
+II	Ext v1 contra f_firma g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	Usa v1 contra derived_k_propio g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra derived_k_propio g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	ExtD v1 contra derived_k_propio g8	corre	corre	ok	nieta/dk2|nieta/dk2|fin
+II	Usa v1 contra derived_deja_de_extender g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
+II	Ext v1 contra derived_deja_de_extender g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
+II	UsaD v1 contra derived_deja_de_extender g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'UsaD' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'UsaD' 
+II	ExtD v1 contra derived_deja_de_extender g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'ExtD' asume que 'ExtD.Nieta' extiende 'Lib.Base' y 'ExtD' (gen 0) ya no: recompila 'ExtD' 

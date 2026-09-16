@@ -27,7 +27,7 @@ import java.util.List;
 public final class TablasMod9 {
     private TablasMod9() {}
 
-    public static final int REF_CLASE = 0, REF_MET = 1, REF_CAMPO = 2, REF_EV_RECV = 3, REF_EV_DEST = 4, REF_SUBTIPO = 5;
+    public static final int REF_CLASE = 0, REF_MET = 1, REF_CAMPO = 2, REF_EV_RECV = 3, REF_EV_DEST = 4, REF_SUBTIPO = 5, REF_SUPER = 6;
     public static final int DEP_RAIZ = -1, DEP_LOCAL = -2;
 
     public static final class Ref {
@@ -36,7 +36,7 @@ public final class TablasMod9 {
         public String kindNombre() {
             switch (kind) {
                 case REF_CLASE: return "CLASE"; case REF_MET: return "MET"; case REF_CAMPO: return "CAMPO";
-                case REF_EV_RECV: return "EV_RECV"; case REF_EV_DEST: return "EV_DEST"; case REF_SUBTIPO: return "SUBTIPO";
+                case REF_EV_RECV: return "EV_RECV"; case REF_EV_DEST: return "EV_DEST"; case REF_SUBTIPO: return "SUBTIPO"; case REF_SUPER: return "SUPER";
                 default: return "?" + kind;
             }
         }

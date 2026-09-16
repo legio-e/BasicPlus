@@ -249,6 +249,15 @@ final class EnlaceTardio {
                     throw new ModuleManager.LinkException("'" + m.name + "' necesita el evento '" + q + "." + r.clave + "' y " + duenoTxt + " no lo tiene: recompila '" + m.name + "'");
                 return r.kind == TablasMod9.REF_EV_DEST ? s + 2 : s;
             }
+            case TablasMod9.REF_SUPER: {
+                // V10/J-3: el método EFECTIVO de la clase (el padre estático del que llama): la primera
+                // fila con esa clave subiendo por la cadena real → su dirección absoluta (para CALL_EXT).
+                // Un privado de otro módulo no cuenta (como en MET).
+                for (Clase a = k; a != null; a = a.padre)
+                    for (TablasMod9.Metodo mt : a.c.metodos)
+                        if (mt.clave.equals(r.clave) && !(mt.privado && a.mod != m)) return a.mod.codeStart + mt.codeOff;
+                throw new ModuleManager.LinkException("'" + m.name + "' necesita '" + q + "." + r.clave + "' y " + duenoTxt + " no lo tiene" + tiene(k, r.clave) + ": recompila '" + m.name + "'");
+            }
             case TablasMod9.REF_SUBTIPO: {
                 // E10: la clase asumida como supertipo tiene que estar en la cadena efectiva
                 String qs = r.clave.contains(".") ? r.clave : m.exportPrefix + r.clave;

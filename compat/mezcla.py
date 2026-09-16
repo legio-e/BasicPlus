@@ -127,6 +127,8 @@ VARIANTES = {
   'retorno':      ('k() pasa de devolver string a integer (misma ranura, mismo nombre)', lambda s: _sub(s, 'public function k(): string\n    return "k" + this.n', 'public function k(): integer\n    return this.n')),
   'prop_tipo':    ('la property p pasa de integer a string (mismos accesores)',        lambda s: _sub(_sub(s, 'public property p: integer', 'public property p: string'), 'this.p := n * 10', 'this.p := "p"')),
   'f_firma':      ('la funcion de modulo f() pasa a f(x: integer)',                    lambda s: _sub(s, 'public function f(): integer\n  return 7', 'public function f(x: integer): integer\n  return x')),
+  'derived_k_propio': ('Derived declara su PROPIO k(): el super.k() de ExtD (sellado cuando k() vivia en el abuelo) tiene que ir al padre',
+                   lambda s: _sub(s, '  public function dd(): integer\n', '  public function k(): string\n    return "dk" + this.n\n  end k\n  public function dd(): integer\n')),
   'derived_deja_de_extender': ('Derived DEJA de extender Base (conserva k() propio): la asuncion S<:T del consumidor ya no vale',
                    lambda s: _sub(_sub(s, 'public class Derived extends Base\n', 'public class Derived\n'),
                                   '    super(n)\n    this.d := n + 100\n  end Derived\n',
@@ -184,6 +186,26 @@ public function main()
 end main
 end Ext
 """
+EXT_D = """module ExtD
+import Core
+import Lib
+public class Nieta extends Lib.Derived
+  public function Nieta(n: integer)
+    super(n)
+  end Nieta
+  public function k(): string
+    return "nieta/" + super.k()
+  end k
+end Nieta
+public function main()
+  var x: Nieta := Nieta(2)
+  print x.k()
+  var b: Lib.Base := x
+  print b.k()
+  print "fin"
+end main
+end ExtD
+"""
 USA_D = """module UsaD
 import Core
 import Lib
@@ -231,10 +253,12 @@ ESPERADO = {
   'Ext':    "hija/k3/3/6\n9\n5\nhija/k3/3/6\n9\nfin",
   'Puente': "k3/4/2\nfin",
   'UsaD':   "k1\nfin",
+  'ExtD':   "nieta/k2\nnieta/k2\nfin",
 }
 def esperado(app, variante):
     s = ESPERADO[app]
-    if variante == 'cuerpo': s = s.replace('k3', 'K3').replace('k5', 'K5').replace('k1', 'K1')
+    if variante == 'cuerpo': s = s.replace('k3', 'K3').replace('k5', 'K5').replace('k1', 'K1').replace('k2', 'K2')
+    if variante == 'derived_k_propio' and app == 'ExtD': s = s.replace('nieta/k2', 'nieta/dk2')   # J-3: el super va al padre NUEVO
     if variante == 'f_firma' and FORMATO == 9: s = s   # (F3b: se rechazara; hoy se mide)
     if variante == 'firma':  s = s.replace('\n5\n', '\n2\n', 1)   # m(4) -> 2 (m(1) ya daba 2)
     return s
@@ -354,7 +378,7 @@ MUEVE = {'met_medio', 'met_quitado', 'prop_mas', 'reorden', 'ev_privado'}
 ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo', 'f_firma'}
 def prediccion_java(variante, gen, app):
     if gen < 7: return 'mas antiguo'
-    if variante == 'derived_deja_de_extender': return 'no enlaza' if app == 'UsaD' else 'corre'   # A1: solo UsaD asume Derived<:Base
+    if variante == 'derived_deja_de_extender': return 'no enlaza' if app in ('UsaD', 'ExtD') else 'corre'   # A1: UsaD asume Derived<:Base; ExtD extiende Derived y usa Base
     if variante in ROMPE_JAVA:
         if variante == 'f_firma' and app != 'Usa': return 'corre'   # solo Usa llama a f()
         return 'no enlaza'
@@ -392,6 +416,7 @@ def main():
     print('trabajo en', work, '| formato', FORMATO, '| vms', VMS, '| criterio', 'Java (enlace tardio)' if FORMATO == 9 else 'norma #500')
     v1 = lib(work, 'igual', 7)
     usa1 = app(work, 'Usa', USA, v1, 'v1'); ext1 = app(work, 'Ext', EXT, v1, 'v1'); usad1 = app(work, 'UsaD', USA_D, v1, 'v1')
+    extd1 = app(work, 'ExtD', EXT_D, v1, 'v1') if FORMATO == 9 else None   # J-3: super.k() por ref SUPER (solo MOD9)
 
     if solo in (None, 'I'):
         print('\n== BLOQUE I: MISMA VERSION (app compilada contra X, ejecutada contra X): tiene que correr siempre ==')
@@ -415,6 +440,10 @@ def main():
                 fila('II', 'Ext v1 contra %s g%d' % (v, gen), cd, 'Ext', prediccion_ext(v, gen), esperado('Ext', v))
                 if v in ('igual', 'derived_deja_de_extender') and gen == 8:   # A1: la asuncion Derived<:Base, verdadera y falsa
                     fila('II', 'UsaD v1 contra %s g%d' % (v, gen), cd, 'UsaD', prediccion_usad(v, gen), esperado('UsaD', v))
+                if extd1 and v in ('igual', 'cuerpo', 'met_medio', 'reorden', 'derived_k_propio', 'derived_deja_de_extender') and gen == 8:
+                    # J-3: super.k() sellado con k() en el ABUELO; con k() movido al padre, o el abuelo reordenado, tiene que seguir
+                    shutil.copy(os.path.join(extd1, 'ExtD.mod'), cd)
+                    fila('II', 'ExtD v1 contra %s g%d' % (v, gen), cd, 'ExtD', prediccion_java(v, gen, 'ExtD'), esperado('ExtD', v))
 
     if solo in (None, 'P'):
         print('\n== BLOQUE P: PUENTE (A sellado contra v1 g7 crea el objeto; B sellado contra X lo usa; runtime = X o v1) ==')

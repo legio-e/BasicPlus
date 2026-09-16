@@ -670,6 +670,30 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
                 }
                 valor = (r->kind == BPVM_REF_EV_DEST) ? (uint32_t) recv + 2u : recv; break;
             }
+            case BPVM_REF_SUPER: {
+                /* V10/J-3: la primera fila con la clave subiendo por la cadena desde el padre; un privado
+                 * de otro modulo no cuenta (como MET). El valor es la direccion ABSOLUTA del metodo
+                 * (base de CODIGO del modulo dueno + codeOff: en XIP, la flash), la misma que un import. */
+                int hallado = 0;
+                for (int c = ci; c >= 0 && !hallado; c = x->reg[c].padre) {
+                    const lt_clase_t* k = &x->reg[c];
+                    const uint8_t* p = k->metodos;
+                    for (uint16_t i2 = 0; i2 < k->n_met; i2++) {
+                        const uint8_t* fq = lt_utf_skip(p);
+                        if (lt_utf_eq_c(p, r->clave)) {
+                            uint8_t fl = fq[2 + 4];
+                            if (!((fl & 2) && k->mod != mi)) { valor = vm->modules[k->mod].cb + (uint32_t) bpvm_read_i32_be(fq + 2); hallado = 1; break; }
+                        }
+                        p = fq + 2 + 4 + 1;
+                    }
+                }
+                if (!hallado) {
+                    static char tiene[1400]; lt_tiene(x, ci, r->clave, '(', tiene, sizeof tiene);
+                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
+                    return BPVM_ERR_RUNTIME;
+                }
+                break;
+            }
             case BPVM_REF_SUBTIPO: {
                 char qs[320];
                 if (strchr(r->clave, '.')) snprintf(qs, sizeof qs, "%s", r->clave); else snprintf(qs, sizeof qs, "%s.%s", canon_m, r->clave);

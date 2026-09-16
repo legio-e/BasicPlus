@@ -161,6 +161,7 @@ typedef struct {
 #define BPVM_REF_EV_RECV 3
 #define BPVM_REF_EV_DEST 4
 #define BPVM_REF_SUBTIPO 5
+#define BPVM_REF_SUPER   6   /* V10/J-3: `super.m()` → direccion absoluta del m EFECTIVO del padre (por la cadena) */
 #define BPVM_DEP_RAIZ   (-1)
 #define BPVM_DEP_LOCAL  (-2)
 typedef struct {

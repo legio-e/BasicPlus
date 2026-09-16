@@ -920,7 +920,11 @@ public class ModWriter {
     }
 
     /** Los `kind` de una referencia (3.3). */
-    public static final int REF_CLASE = 0, REF_MET = 1, REF_CAMPO = 2, REF_EV_RECV = 3, REF_EV_DEST = 4, REF_SUBTIPO = 5;
+    public static final int REF_CLASE = 0, REF_MET = 1, REF_CAMPO = 2, REF_EV_RECV = 3, REF_EV_DEST = 4, REF_SUBTIPO = 5,
+    /** V10/J-3 (16-sep, Eduardo): `super.m()` es la única llamada no virtual y significa «el `m` EFECTIVO del padre»
+     *  (el suyo o el que herede) — dónde viva en esa versión lo sabe el cargador: la ref lleva (clase del padre,
+     *  clave) y se resuelve a la DIRECCIÓN ABSOLUTA del método subiendo por la cadena desde el padre. */
+    REF_SUPER = 6;
     /** `depIdx` de una clase de ESTE módulo (una abierta que se pide por ref desde su propio módulo). */
     public static final int DEP_LOCAL = -2;
 
@@ -949,7 +953,7 @@ public class ModWriter {
      */
     public int requireRef(int kind, int depIdx, String clase, String clave) {
         exigeFormato9("requireRef");
-        if (kind < REF_CLASE || kind > REF_SUBTIPO) throw new IllegalArgumentException("kind de ref: " + kind);
+        if (kind < REF_CLASE || kind > REF_SUPER) throw new IllegalArgumentException("kind de ref: " + kind);
         if (depIdx < DEP_LOCAL || (depIdx >= 0 && depIdx >= depsVersion.size()))
             throw new RuntimeException("ref a '" + clase + "': depIdx " + depIdx + " fuera de la subtabla deps (" + depsVersion.size() + ")");
         if (clase == null || clase.isEmpty()) throw new RuntimeException("ref sin clase (kind " + kind + ", clave '" + clave + "')");
@@ -978,6 +982,15 @@ public class ModWriter {
         currentBytecodeSize += 2;
     }
 
+    /** `super.m()` a un padre de otro módulo: CALL_EXT cuyo operando es la ref SUPER (el cargador deja en
+     *  ext[…] la dirección absoluta del método efectivo del padre, como en cualquier import). */
+    public void emitCallRef(int refIdx) throws IOException {
+        exigeFormato9("CALL_EXT por ref");
+        if (refs.get(refIdx).kind != REF_SUPER) throw new IllegalArgumentException("CALL por ref solo con una ref SUPER");
+        codeOut.writeByte(OpCode.CALL_EXT.code);
+        currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
     public void emitInvokeVirtualRef(int refIdx, int numArgs) throws IOException {
         exigeFormato9("INVOKE_VIRTUAL_REF");
         if (numArgs < 0 || numArgs > 255) throw new RuntimeException("INVOKE_VIRTUAL_REF: numArgs fuera de rango: " + numArgs);

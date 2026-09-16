@@ -36,10 +36,12 @@ dos VMs (`4d075d65`), EC-2 (`8fd40d91`: un try con dos catch dejaba vivo el segu
 entrada). `compat/v10_casos.py` reproduce lo arreglado (13/13). Redes: frontend 220/220, miVM 51/51, C tests OK, compat
 check verde (69/59/9/12), mezcla MOD9 120/120, la stdlib como MOD8 y MOD9 sin errores, Pico enlaza.
 
-**Orden para retomar**: (1) la decisión J-3 de Eduardo (`super.m()` cuando el método SUBE a un ancestro: hoy rechazo; Java
-corre; propuesta: el cargador prueba el símbolo en cada ancestro); (2) las 8 fichas nuevas `#525`-`#532` son preexistentes:
-`#525` (null en campos, miVM en silencio) y `#526` (print de un Thread ejecuta run) son las graves; (3) el plan de `#523`:
-filas de V4, V6, V5, V9, V8 (la Pico), la cadena en MOD9 (V11) y los docs.
+**J-3 decidido y hecho** (Eduardo: «salvo los private todos son virtuales»; `super.m()` = el m EFECTIVO del padre): ref
+SUPER (kind 6) resuelta por la cadena en los dos cargadores; mezcla MOD9 130/130 con `ExtD`.
+
+**Orden para retomar**: (1) las 8 fichas nuevas `#525`-`#532` son preexistentes: `#525` (null en campos, miVM en silencio)
+y `#526` (print de un Thread ejecuta run) son las graves; (2) el plan de `#523`: filas de V4, V6, V5, V9, V8 (la Pico), la
+cadena en MOD9 (V11: MOD_FORMAT con la ref SUPER y la 4.5, OPCODES, HEAP_LAYOUT `+6`, WIRE E0-E10) y los docs.
 
 ## 🧬 `#523` EN LAS DOS VMs (16-sep) — el enlace tardío corre: MOD9 se compila, se carga en miVM y en la VM-C, y la mezcla da 84/84 con el criterio de Java
 

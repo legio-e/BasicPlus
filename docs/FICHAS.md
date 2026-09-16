@@ -706,16 +706,22 @@ llama a `super()`, y una excepción nacida en una llamada deja el mutex tomado; 
 módulos distintos (clave por nombre simple); `#529` dos trazas del compilador (property redeclarada; >255 métodos);
 `#530` `Thread.run()` heredada de otro módulo (C rechaza, Java corre); `#531` el orden de entrega de dos eventos en cola
 difiere entre VMs; `#532` los rincones de las excepciones (`finally` solo, la clase no se nombra, el throw de un
-no-Exception a mano). ★ **Decisión pendiente (J-3)**: `super.m()` cruza por el nombre EXACTO `__cls_m_<Clase>#clave`; si
-`m` SUBE a un ancestro en otra versión de Lib, hoy es rechazo al enlazar («no exporta `Lib.__cls_m_Padre#m()s`») donde
-Java correría (invokespecial resuelve por la cadena). Propuesta: que el cargador pruebe el mismo símbolo en cada ancestro
-de la cadena (las dos VMs) — coherente con el criterio (a). Notas sin ficha: D4 (un solo cerrojo) cambia la semántica
+no-Exception a mano). ★ **J-3, decidido por Eduardo (16-sep, noche)**: *«salvo los métodos private todos son virtuales»* —
+`super.m()` es la única llamada no virtual de BP y significa «el `m` EFECTIVO del padre», el suyo o el que herede, viva
+donde viva en esa versión de la librería; en qué eslabón está lo sabe el cargador, no el compilador. **Hecho**: en MOD9
+`super.m()` a un padre externo o abierto es un `CALL_EXT` cuyo operando es una **ref SUPER (kind 6)** = (clase estática
+del padre, clave); los dos cargadores la resuelven a la dirección absoluta de la primera fila con esa clave subiendo por
+la cadena real desde el padre (un privado de otro módulo no cuenta, como MET; si no está: el E3 de siempre). Antes cruzaba
+por el nombre exacto `__cls_m_Padre#m()` y, si `m` subía al abuelo, era rechazo donde Java corre. `compat/mezcla.py`: app
+`ExtD` (`Nieta extends Lib.Derived` con `super.k()` sellada cuando `k()` vivía en el ABUELO) contra `igual`, `cuerpo`,
+`met_medio`, `reorden`, **`derived_k_propio`** (k() baja al padre → «nieta/dk2», al padre NUEVO, como `invokespecial`) y
+`derived_deja_de_extender` (E10): **130/130** en las dos VMs. Notas sin ficha: D4 (un solo cerrojo) cambia la semántica
 del parque MOD8 (aceptado); el consumidor MOD9 contra una dep MOD7/8 dice «no exporta `Core.__cls_new_List(…)`» en vez
 de un E9 claro (sólo durante la transición); los mensajes citan al dueño por nombre simple y, con una abierta local,
 al propio consumidor; formato hostil aún sin cerrar: `idx` de los `_REF` sin acotar, UTF inválido decodificado distinto,
 «load X.mod: null» en miVM, tamaños hostiles de cabecera; el E6 no se alcanza en C con la memoria por defecto.
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): la decisión J-3; las filas que faltan de V4 (override huérfano, abuelo, dos
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): las filas que faltan de V4 (override huérfano, abuelo, dos
 averías, MOD8×MOD9); V6 (GC con bitmaps reconstruidos como fila fija); V5 (todos los samples en MOD9); V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera) y los docs. Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
