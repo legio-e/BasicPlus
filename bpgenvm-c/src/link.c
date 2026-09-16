@@ -17,6 +17,13 @@
 #include <stdio.h>
 #include <string.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
+#include "bpvm_platform.h" /* V7/H2 #523 (V0): el cronometro del enlace */
+
+/* V7/H2 (#523, V0) — LA LINEA BASE del enlace: cuantas busquedas por nombre hace
+ * un enlace y cuantos strcmp cuestan, para comparar antes/despues del enlace
+ * tardio con numero y no con impresion. Estaticos: no tocan bpvm_t (el .mdn
+ * depende de su layout). Se ponen a cero al empezar bpvm_link_all. */
+static unsigned s_link_busquedas, s_link_strcmp;
 
 /* ---- Helpers de mapeo addr → módulo ---- */
 
@@ -136,7 +143,9 @@ bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
 }
 
 uint32_t bpvm_link_lookup(const bpvm_t* vm, const char* qualified) {
+    s_link_busquedas++;
     for (int i = 0; i < vm->symbol_count; i++) {
+        s_link_strcmp++;
         if (strcmp(bpvm_symbol_name(vm, i), qualified) == 0) {
             return vm->symbols[i].abs_addr;
         }
@@ -195,6 +204,8 @@ const char* bpvm_link_error(const bpvm_t* vm) {
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
 bpvm_status_t bpvm_link_all(bpvm_t* vm) {
+    int64_t t0 = bpvm_platform_now_us();
+    s_link_busquedas = 0; s_link_strcmp = 0;
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];
 
@@ -262,5 +273,9 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
               vm->symbol_count, (unsigned) vm->sym_pool_len,
               (unsigned)((size_t) vm->symbol_capacity * sizeof(bpvm_symbol_t)
                          + vm->sym_pool_cap));
+    /* V7/H2 (#523, V0) — el cronometro del enlace, misma forma en las dos VMs. */
+    bpvm_diag("[bpvm] enlace: %d modulos, %u busquedas, %u strcmp, %ld us",
+              vm->module_count, s_link_busquedas, s_link_strcmp,
+              (long) (bpvm_platform_now_us() - t0));
     return BPVM_OK;
 }

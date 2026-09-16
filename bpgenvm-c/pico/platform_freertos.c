@@ -368,6 +368,8 @@ int64_t bpvm_platform_now_ms(void) {
     return (int64_t) (time_us_64() / 1000ULL);
 }
 
+int64_t bpvm_platform_now_us(void) { return (int64_t) time_us_64(); }
+
 void bpvm_platform_busy_wait_us(int us) {
     if (us <= 0) return;
     /* busy_wait_us() del Pico SDK lee el timer hardware del RP2350 y

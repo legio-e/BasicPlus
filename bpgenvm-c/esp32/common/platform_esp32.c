@@ -296,6 +296,8 @@ int64_t bpvm_platform_now_ms(void) {
     return (int64_t) (esp_timer_get_time() / 1000LL);
 }
 
+int64_t bpvm_platform_now_us(void) { return (int64_t) esp_timer_get_time(); }
+
 void bpvm_platform_busy_wait_us(int us) {
     if (us <= 0) return;
     /* esp_rom_delay_us gira sin ceder al scheduler — para timings

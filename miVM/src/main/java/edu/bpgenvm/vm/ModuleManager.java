@@ -1000,9 +1000,15 @@ public class ModuleManager {
     }
 
     public void linkAll() {
+        // V7/H2 (#523, V0) — el cronometro del enlace, misma linea que la VM-C
+        // ("[bpvm] enlace: …"): cuantas busquedas por nombre y cuanto duran. Aqui
+        // la tabla es un HashMap (0 strcmp lineales); en C es un barrido.
+        final long t0 = System.nanoTime();
+        int busquedas = 0;
         for (LinkTask task : pendingLinks) {
             for (int i = 0; i < task.requiredImports.length; i++) {
                 String symbolNeeded = task.requiredImports[i];
+                busquedas++;
                 Integer absoluteAddr = globalSymbolTable.get(symbolNeeded);
                 if (absoluteAddr == null) {
                     throw new LinkException(textoDeEnlace(symbolNeeded, task.moduleName));
@@ -1040,6 +1046,9 @@ public class ModuleManager {
         }
         vm.setPC(mainAbsoluteAddress);
         vm.setCS(getModuleBaseFromPC(mainAbsoluteAddress));
+        System.err.printf("[miVM] tabla de simbolos: %d simbolos%n", globalSymbolTable.size());
+        System.err.printf("[miVM] enlace: %d modulos, %d busquedas, 0 strcmp, %d us%n",
+                loadedModules.size(), busquedas, (int) ((System.nanoTime() - t0) / 1000L));
     }
 
     public int getModuleBaseFromPC(int pc) {

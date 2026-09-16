@@ -37,6 +37,18 @@
 
 int64_t bpvm_platform_now_ms(void) { return (int64_t) HAL_GetTick(); }
 
+/* V7/H2 (#523, V0) — us por el DWT (ciclos / MHz): HAL_GetTick es de 1 ms y el
+ * enlace de un módulo dura menos. Sólo vale para DIFERENCIAS cortas (< 2^32
+ * ciclos ≈ 26 s a 160 MHz), que es lo que se mide con él. */
+int64_t bpvm_platform_now_us(void) {
+    if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+        DWT->CYCCNT = 0;
+        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    }
+    return (int64_t) (DWT->CYCCNT / (SystemCoreClock / 1000000U));
+}
+
 void bpvm_platform_busy_wait_us(int us) {
     if (us <= 0) return;
     /* DWT cycle counter (Cortex-M33). Habilitado perezosamente la 1ª vez. */

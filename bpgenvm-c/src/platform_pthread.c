@@ -164,6 +164,12 @@ int64_t bpvm_platform_now_ms(void) {
     return (int64_t) ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+int64_t bpvm_platform_now_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t) ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
 void bpvm_platform_busy_wait_us(int us) {
     if (us <= 0) return;
     struct timespec start, now;

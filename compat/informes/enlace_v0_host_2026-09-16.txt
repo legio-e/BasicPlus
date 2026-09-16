@@ -1,0 +1,41 @@
+# Linea base del enlace (V0, #523) -- 2026-09-16 08:17
+# host: 7 ejecuciones por programa y VM; us = mediana
+
+programa       VM     modulos   simbolos  nombres    total  busquedas     strcmp       us
+Hello          java         2        196        0        0          2          0      142
+Hello          c            2        196     4854    10240          3        182       43
+JsonDemo       java         3        470        0        0         30          0      104
+JsonDemo       c            3        470    12161    20480         30       6374      102
+GuiTableDemo   java         6       1739        0        0         63          0      128
+GuiTableDemo   c            6       1739    43181    81920         66      91200      287
+
+# tamanos de la stdlib (bpstdlib/*.mod)
+Adc.mod                 2383
+App.mod                  928
+Collections.mod         8387
+Compress.mod            2041
+Core.mod               13883
+Freq.mod                2369
+Gpio.mod                3185
+Gui.mod                61558
+I2c.mod                 3287
+IO.mod                  1524
+Json.mod               23426
+Log.mod                 2288
+Machine.mod             2155
+Math.mod                1708
+Neopixel.mod            2343
+Net.mod                 2466
+Packs.mod               1574
+Pico.mod                2614
+Pulse.mod               2672
+Pwm.mod                 2541
+Rtc.mod                 1380
+Spi.mod                 4031
+Stats.mod               9574
+Stdlib.mod              1266
+Str.mod                 4626
+Timer.mod               1930
+Uart.mod                4323
+Wdt.mod                 1910
+TOTAL                 172372

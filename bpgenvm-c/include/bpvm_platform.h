@@ -107,6 +107,11 @@ int  bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
  * El offset 0 es arbitrario; sólo importan diferencias. */
 int64_t bpvm_platform_now_ms(void);
 
+/* V7/H2 (#523, V0) — el mismo reloj en MICROsegundos, para medir lo que dura
+ * menos de un ms (el enlace de un módulo en el host son cientos de us). Misma
+ * fuente que now_ms en cada familia (time_us_64 / esp_timer / DWT / monotonic). */
+int64_t bpvm_platform_now_us(void);
+
 /* Busy-wait sub-milisegundo. NO cede CPU al scheduler — gira en un
  * loop comprobando el reloj hasta que pasan `us` microsegundos. Útil
  * para timing crítico (setup/hold de chips, bit-bang fino) donde un
