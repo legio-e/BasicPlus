@@ -1494,7 +1494,12 @@ public final class Parser {
                 return left;
             }
             Token typeTok = current(); advance();
-            return new InstanceOfExpr(left, typeTok.lexeme, op.line, op.column);
+            String nombre = typeTok.lexeme;
+            // V7/H2 (#523, D7) — `instanceof Mod.Cls`: el mismo nombre cualificado que
+            // acepta un tipo (`var b: Lib.Base`). Sin esto, con dos módulos que exportan
+            // una clase homónima no había forma de decir cuál.
+            if (match(TokenType.DOT)) nombre = nombre + "." + consumeIdentifier("nombre tras '" + nombre + ".'");
+            return new InstanceOfExpr(left, nombre, op.line, op.column);
         }
         return left;
     }

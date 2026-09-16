@@ -3486,6 +3486,13 @@ public final class SemanticAnalyzer {
         // Lado derecho: nombre de clase.
         Symbol sym = scope.resolve(ie.typeName);
         if (sym == null) sym = module.members.resolve(ie.typeName);
+        // V7/H2 (#523, D7) — `instanceof Mod.Cls` (o una clase importada sin cualificar):
+        // se resuelve como cualquier tipo nombrado, por el mismo camino que `var b: Lib.Base`.
+        if (sym == null) {
+            BpType t = resolveNamedType(new SimpleTypeRef(ie.typeName, ie.line, ie.column));
+            if (t instanceof ClassType) sym = ((ClassType) t).cls;
+            else if (t instanceof ErrorType) return PrimitiveType.BOOLEAN;   // ya se dijo «tipo cualificado … no encontrado»
+        }
         if (!(sym instanceof ClassSymbol)) {
             err(ie.line, ie.column, "'instanceof' espera un nombre de clase, '"
                     + ie.typeName + "' no lo es");
