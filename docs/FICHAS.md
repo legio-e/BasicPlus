@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **37** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: ~~`#524`~~ · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **45** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: ~~`#524`~~ · de la revisión V10 (16-sep, tarde): `#525` `#526` `#527` `#528` `#529` `#530` `#531` `#532` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -107,13 +107,13 @@ el PC sin placa, como en el host.
 >
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
-> | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
+> | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | **de V10 (16-sep): `#527` `#528` `#529` `#532`** · los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
 > | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la decisión)** · `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` ~~`#521`~~ (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
 > | **H6** | **LVGL en un pack** — hito propio, y **estratégico** (Eduardo, 13-sep): *«Meter LVGL en un pack es estratégico, ya que hoy en día cualquier micro puede llevar una pequeña pantalla, así que le corresponde al usuario si quiere una pantalla o no, y no a nosotros»* | el primer cliente del código nativo empotrable, y la disciplina alrededor de `publica()`/`busca()`: la reja, la resolución perezosa, las ranuras, la arena de RAM por código nativo; el pack lleva `Gui.mod` (`#468`) |
-> | **H7** | **memoria, arranque y arquitectura** | los restos de `U6`, `U6.F1`, `U1.4`; Boot 1/Boot 2 y las capas del SO; unificar el montaje de packs; los 32 MB del P4; `CALL_REL`; el muro heap/pilas; diagnóstico del heap desde BP; `#356` `#494`; la Pico a `platform_freertos.c`; el SMP de host |
+> | **H7** | **memoria, arranque y arquitectura** | **de V10 (16-sep): `#525` `#526` `#530` `#531`** · los restos de `U6`, `U6.F1`, `U1.4`; Boot 1/Boot 2 y las capas del SO; unificar el montaje de packs; los 32 MB del P4; `CALL_REL`; el muro heap/pilas; diagnóstico del heap desde BP; `#356` `#494`; la Pico a `platform_freertos.c`; el SMP de host |
 > | **H8** | **IDE y wire** | `#495` `#452`; los restos de `E1`; el `INFO` de ESP32/STM32; el guardián del fat-jar; `Run on Device` con `/lib` vacío |
 > | **H9** | **pruebas y medida** | los restos de `T1` y lo que `V7_IDEAS` pedía del arnés; `compat.sh` y el código de salida; las medidas en placa pendientes; `test-listtrunc`; la batería de rendimiento (= eje 4 del censo); resistencia larga; el simulador con disfraces; inyección de eventos; limpieza |
 > | **H10** | **placas y drivers** | `#490` (estudio); `Rtc`; `#466`; el STM32 (`Debug`, el FS que baila); el C3 (`sdkconfig`, log del bootloader); el ENV de la Pico 2; la S31 cuando haya placa; la GUI (`#477`, `G2`, `Command`); los diez «rompe-el-modelo» de `#473` y los lotes D/E; DMA de `Uart` |
@@ -663,12 +663,63 @@ los métodos y reparten por orden de fila. De ahí la forma de V1.
 barajar todas las clases del módulo y nunca Core; SUBTIPO ocupa entrada de ext (valor 1) y el doc se corrige al código;
 mezcla.py sigue fuera de `compat.sh check` (31 s; se ejecuta a mano en cada tanda y su informe va a `compat/informes/`).
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): **V10 la revisión adversarial del código** (antes de tocar la cadena), las filas
-que faltan de V4 (override huérfano, abuelo, dos averías, MOD8×MOD9), V3 (fixtures del cargador), V6 (GC con bitmaps
-reconstruidos), V5 (todos los samples en MOD9), V9 (medidas antes/después), V8 (placas; la Pico), la cadena en MOD9 (V11,
-con `build_mdn.sh`/`AotBuild` pasando el formato al AOT y `.slots` fuera) y los docs. Colaterales sin ficha que el mapa
-destapó (a fichar en V10): `field := expr` en un accesor sin chequeo ni coerción; `switch` sobre referencias con sujeto de
-4 B; `resolveOverloadArgs` compara `display()` (nombre simple) en `raise`.
+### 🔬 16-sep (tarde-noche) — V10, LA REVISIÓN ADVERSARIAL: 85 hallazgos, 25 arreglados, 8 fichas nuevas, 1 decisión
+
+**Cómo**: 5 rompedores (jerarquías grandes, homónimos y tipos en las claves, eventos/sync/GC, excepciones y casts, los
+rechazos E1-E10 y los bordes del formato) escribiendo y ejecutando programas MOD9 en las dos VMs + 4 lectores de código con
+lente (¿son el mismo algoritmo los dos cargadores?, ¿cumple R2/R4 el emisor sin excepción?, robustez ante formato hostil,
+los 11 opcodes `_REF` en los dos intérpretes) → 85 hallazgos con reproducción. La verificación por agente se cayó dos veces
+por el límite de uso (6 veredictos de 85): se triaron a mano con sus reproducciones, y las que se arreglaron viven en
+**`compat/v10_casos.py`** (13 casos en las dos VMs, todos en verde). Coste: ~6,5 M tokens.
+
+**Arreglado** (`4d075d65` el lote, `8fd40d91` EC-2, `11237843`): en el compilador — los accesores de property y los
+campos iban en la ref con la clase DECLARANTE en vez de la ESTÁTICA del receptor (EC-1: `Derived` que deja de extender
+`Base` leía OTRA property en silencio; ahora E3 nombrando `Lib.Derived.getP()i`); `esOverride` marcaba override sobre un
+privado del ancestro (E2 falso); `throw e` sin SUBTIPO hacia `Core.Exception` (segfault en la VM-C al lanzar lo que ya
+no es una excepción → E10); el enum importado sin módulo en la clave (override perdido en silencio); los parámetros de un
+EVENTO importado sin resolver (la GUI entera no compilaba en MOD9); el manejador casaba con el evento por texto; la clave
+de una dep transitiva; un tipo sin cualificar resuelto «en el primer ns que lo tenga» (homónimos según el orden de los
+imports); un `RuntimeException` del emisor como traza; y **un .mod que no está en outDir pero cuyo fuente es del proyecto
+es un RESTO, no una entrada** (la interfaz sale de la fuente: era «la interfaz cambió entre la pasada y la emisión» en los
+26 módulos de la stdlib, sellados con el CRC de los `.mod` versionados de antes del 15-sep, con CRLF — preexistente a la
+tarde). Límites del lenguaje que hacen inútiles los truncados de la VM-C: identificador ≤ 63, firma canónica ≤ 160. En
+miVM — `privados` era MONÓTONO (rechazaba E3/E2 falsos donde la VM-C ejecutaba: manda la declaración más cercana);
+«(tiene …)» cita todas ordenadas y como mucho 8, igual que C. En la VM-C — la reflexión por nombre devolvía OTRA ranura
+que miVM con sobrecargas homónimas (la de Forms: otro ancho de frame, pila corrupta); el cerrojo `sync` desde la raíz con
+tope de 32 eslabones; la subtabla `refs` sin liberar (todo RUN MOD9 acababa en «FUGA»); `link_error` de 256 B truncaba
+el texto de rechazo a media palabra; y la 4.5 sin comprobar límites (nClases=65535 → segfault; ahora se rechaza con
+motivo). Y **EC-2, preexistente y grave**: un `try` con DOS catch dejaba vivo el segundo cuando casaba el primero —
+un throw posterior volvía a entrar en un catch rancio y re-ejecutaba lo que hubiera detrás, byte-idéntico en las dos VMs
+(`samples/ExcDosCatch.bp`, en el corpus de paridad: 69).
+
+**Lo que V10 confirmó que FUNCIONA** (censo de los rompedores, 100+ pruebas en verde): jerarquías de 3 niveles en 3
+módulos con 40+ métodos y 30+ campos mezclados, barajadas con `--barajar` y con el padre recompilado; más de 255 métodos
+en la cadena y bitmaps de más de una palabra; overrides y `super` encadenados; ctores sobrecargados por nivel; eventos
+declarados en Lib y suscritos en App sobre objetos de App con el padre recompilado delante; `sync` con un solo cerrojo
+(dos hilos, miles de incrementos); GC con bitmaps reconstruidos (miles de objetos, owner, padre con refs nuevas delante);
+excepciones cross-module en 3 niveles con catch por cada nivel; casts y `instanceof` con null; E1-E6, E9, E10 provocados
+uno a uno con texto byte-idéntico; homónimos cualificados en dos módulos; libraries con puntos.
+
+**Fichas nuevas** (preexistentes, no de MOD9): `#525` receptor null en los opcodes de campo (miVM lee memoria baja en
+silencio); `#526` `print obj` hornea la ranura 0 (= `run()` si la raíz es Thread); `#527` `sync`: el ctor sintético no
+llama a `super()`, y una excepción nacida en una llamada deja el mutex tomado; `#528` sobrecargas con clases HOMÓNIMAS de
+módulos distintos (clave por nombre simple); `#529` dos trazas del compilador (property redeclarada; >255 métodos);
+`#530` `Thread.run()` heredada de otro módulo (C rechaza, Java corre); `#531` el orden de entrega de dos eventos en cola
+difiere entre VMs; `#532` los rincones de las excepciones (`finally` solo, la clase no se nombra, el throw de un
+no-Exception a mano). ★ **Decisión pendiente (J-3)**: `super.m()` cruza por el nombre EXACTO `__cls_m_<Clase>#clave`; si
+`m` SUBE a un ancestro en otra versión de Lib, hoy es rechazo al enlazar («no exporta `Lib.__cls_m_Padre#m()s`») donde
+Java correría (invokespecial resuelve por la cadena). Propuesta: que el cargador pruebe el mismo símbolo en cada ancestro
+de la cadena (las dos VMs) — coherente con el criterio (a). Notas sin ficha: D4 (un solo cerrojo) cambia la semántica
+del parque MOD8 (aceptado); el consumidor MOD9 contra una dep MOD7/8 dice «no exporta `Core.__cls_new_List(…)`» en vez
+de un E9 claro (sólo durante la transición); los mensajes citan al dueño por nombre simple y, con una abierta local,
+al propio consumidor; formato hostil aún sin cerrar: `idx` de los `_REF` sin acotar, UTF inválido decodificado distinto,
+«load X.mod: null» en miVM, tamaños hostiles de cabecera; el E6 no se alcanza en C con la memoria por defecto.
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): la decisión J-3; las filas que faltan de V4 (override huérfano, abuelo, dos
+averías, MOD8×MOD9); V6 (GC con bitmaps reconstruidos como fila fija); V5 (todos los samples en MOD9); V9 (medidas
+antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
+y `.slots` fuera) y los docs. Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
+ni coerción; `switch` sobre referencias con sujeto de 4 B.
 
 #### ✅ `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1 · **CERRADA el 16-sep con `#521`**)
 
@@ -679,6 +730,66 @@ destapó (a fichar en V10): `field := expr` en un accesor sin chequeo ni coerci�
 defecto. ✅ **Era `#521`**: el emisor YA daba los dos errores («`Refl.__guiSlotOf`: función intrínseca desconocida — añade
 su emisor a basicplus.frontend.Intrinsics» y «intrínseco no implementado en el emisor mivm»), pero el `.mod` se escribía
 igual y decía «compilado:». Con `#521` cerrada no hay `.mod`: el error es el que pedía la ficha (`EmisorConErroresTest`).
+
+#### 🔴 `#525` — receptor NULL en los opcodes de CAMPO: miVM lee y escribe la memoria baja de la VM en silencio; la VM-C para con NULL_RECEIVER; y en INVOKE_VIRTUAL sobre null los textos difieren (abierta 16-sep, de V10; preexistente, MOD8 = MOD9; H7)
+
+**Medido** (V10, REF-5/REF-6): `h.leeF(null)` con un campo de la clase → miVM imprime un valor real de su `memory[]`
+(`fieldAddr(0, slot)` = 4 + slot·4, dentro del primer módulo) y con un campo de 8 B se cae con un mensaje sin texto
+(`[bpgenvm worker 0, tid=0] 2416737`); la VM-C para en el primer null con `status=NULL_RECEIVER`. INVOKE_VIRTUAL sobre
+null: miVM lanza un RuntimeError ATRAPABLE (con el número de ranura en el texto) y la VM-C termina el RUN. `VirtualMachine.java`
+`fieldAddr` y sus usos en GET/SET_FIELD(_LONG)(_REF) y SET_FIELD_OWNER sin guardia. ⏭️ La misma guardia y el mismo texto en
+las dos VMs; sample de paridad con lectura, escritura y llamada sobre null.
+
+#### 🔴 `#526` — `print obj` / `"" + obj` hornea INVOKE_VIRTUAL con la ranura 0 (`toString`): en una clase que desciende de Thread la 0 es `run()` → el hilo corre en el principal (abierta 16-sep, de V10; preexistente; H7/H1)
+
+**Medido** (E-R2-3): `class Worker extends Thread` con `run()`; `print "w = " + w` → las dos VMs ejecutan `run()` en el hilo
+principal y el RUN aborta («NEWARRAY_I8: tamaño negativo»). `MivmEmitter.emitObjectToStringOnStack` (`emitInvokeVirtualBySlot(0, 0)`)
+es la ÚNICA emisión por ranura que queda sin guarda: R5 la salva sólo cuando la raíz es `Object`. ⏭️ `toString` por clave
+(MOD9: MET `toString()s` por ref sobre la clase estática; MOD8: por nombre), y que `Thread` tenga `toString` en su tabla.
+
+#### 🔴 `#527` — `sync`: (a) una clase con `sync property` y SIN constructor NO llama a `super()`; (b) una excepción nacida en una LLAMADA dentro de un accesor `sync` deja el mutex tomado (abierta 16-sep, de V10; preexistente; H1)
+
+**Medido** (E-R2-6, EC-4): `Padre{property p; ctor p:=7}`, `ConSync extends Padre` con `public sync property q` y sin ctor →
+`ConSync.p=0` (esperado 7): `synthesizeSyncMutexCtor` emite `<Cls>.__init` con el mutex y sin `emitImplicitSuperCall`
+(cross-module en MOD8 acaba además en «INVOKE_VIRTUAL sobre null receiver»). Y sólo el `throw` directo dentro del accesor
+suelta el cerrojo (`emitThrowStmt`): una excepción que llega desde una llamada o un fallo de ejecución lo deja tomado → el
+siguiente `lock` del objeto «re-entrada». ⏭️ el ctor sintético llama a `super()`; el accesor `sync` envuelto en un handler
+que suelta y relanza.
+
+#### 🔴 `#528` — sobrecargas con clases HOMÓNIMAS de módulos distintos: la clave interna va por nombre SIMPLE (`m$LBase;`) → el semántico pierde una y el emisor MOD8 revienta «función repetida» (abierta 16-sep, de V10; preexistente; H1)
+
+**Medido** (H4, H5, H10, H11): `Mid.Caja` con `m(x: Lib.Base)`, `m(x: Otra.Base)`, `m(x: integer)` → en MOD9 la 4.5 va bien
+(`m(LLib/Base;)s` y `m(LOtra/Base;)s`) pero el consumidor falla «ninguna sobrecarga de 'm' acepta los argumentos (Base)»
+(`collectInstanceCandidates` deduplica por `signatureKey`, que escribe `LBase;`); en MOD8 el dueño peta con traza:
+«función repetida en el módulo: g$LBase;» (funciones de módulo, constructores y métodos: `overloadMangle`). Los mensajes de
+tipos no cualifican («'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no se pueden importar
+en el mismo fichero. ⏭️ clave cualificada en `signatureKey`/`overloadMangle` — cambia los nombres exportados MOD8: con la
+cadena en MOD9.
+
+#### 🔴 `#529` — dos trazas de Java del compilador: redeclarar una property en una subclase del MISMO módulo, y una clase cerrada con más de 255 métodos («Method slot u8 desbordado») (abierta 16-sep, de V10; preexistente; H1)
+
+**Medido** (J-4, J-5). ⏭️ Error de compilación con línea en los dos; el tope de 255 métodos por clase cerrada (`slot u8`
+de INVOKE_VIRTUAL) se dice como límite del lenguaje (una abierta en MOD9 no lo tiene: idx u16).
+
+#### 🔴 `#530` — `Thread.run()` heredada de una clase Thread de OTRO módulo: la VM-C rechaza («no soportado F4 v1») y miVM la ejecuta → paridad rota; y `var t: Thread := w` no compila si `w` extiende un Thread importado (abierta 16-sep, de V10; preexistente; H7/H1)
+
+**Medido** (V10-THR-4/5): `Lib.Worker extends Thread` con `run()`; `App.Sumador extends Lib.Worker` sin redefinirla; `s.start()` →
+miVM «w2 W2 run total=15150»; VM-C «Thread.run() en slot 0 = -1 (heredada; no soportado F4 v1)» + «Thread.start falló».
+`threading.c` (off == -1) frente a `VirtualMachine.java` (lee vt[0] y salta). ⏭️ con el despacho por cadena de MOD9 la
+VM-C puede resolverla como miVM; y el subtipado cross-module hacia `Thread` en el semántico.
+
+#### 🟡 `#531` — el orden de entrega de los EVENTOS respecto al hilo principal difiere entre las VMs cuando hay DOS en cola: «onB» sale tras «fin» en miVM y en medio del bucle en la VM-C (abierta 16-sep, de V10; preexistente; H7)
+
+**Medido** (E-R2-4, F9, REF-7): un solo módulo, `raise a(7)` y `raise b("hola")` seguidos, `sleep(300)` y 12 `print` →
+determinista 3/3 en cada VM y distinto entre ellas (quantum por TIEMPO en Java, por instrucciones en C). Con un solo `raise`
+por punto de espera coinciden. ⏭️ definir el punto de drenaje de la cola (el diseño §H2.7 no lo cubre) y medirlo en el arnés.
+
+#### 🟡 `#532` — los rincones de las excepciones: `try … finally` sin catch lo rechaza el emisor; una excepción no atrapada no nombra su CLASE en ninguna VM; el `throw` de un objeto que no es Exception hace segfault en la VM-C (abierta 16-sep, de V10; preexistente; H1/H7)
+
+**Medido** (EC-9, EC-8, E-09): «'try' sin cláusulas catch no soportado todavía» aunque la gramática lo admite; la VM-C
+etiqueta «RuntimeError» cualquier excepción no atrapada aunque sea `Lib.MiError`, y miVM da `classPtr=7538`; un `throw` de
+un objeto que no desciende de Exception (a mano; desde una dep lo para el E10 desde hoy) muere sin diagnóstico en la VM-C.
+⏭️ `finally` solo; el nombre de la clase en el mensaje (por el sello +6 y la 4.5 en MOD9); guardia en `bpvm_eh_unwind`.
 
 #### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
 

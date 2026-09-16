@@ -1143,7 +1143,7 @@ Elección frente a reutilizar CHECKCAST_EXT/TRY_BEGIN_EXT: un solo mecanismo (le
 - E4 `enlace: 'App' necesita el campo 'Lib.Base.p:i' y 'Lib' (gen 8) no lo tiene (tiene 'p:s'): recompila 'App'`
 - E5 `enlace: 'App' necesita el evento 'Lib.Base.cambio(i)' y 'Lib' (gen 8) no lo tiene: recompila 'App'`
 - E6 `enlace: 'App.Hijo' tendria N ranuras de campo|vtable (maximo 65535)`
-- E7 `enlace: ciclo de herencia entre 'A.X' y 'B.Y'`
+- E7 `ciclo de herencia en 'A.X'` (el código nombra la clase donde se cierra el ciclo, no el par)
 - E8 `enlace: la clase 'App.Hijo' construida es inconsistente (<detalle>): .mod corrupto o bug del cargador`
 - E9 `enlace: 'Lib' es MOD7 y 'App' necesita su tabla de clases: recompila 'Lib'` (§10)
 - E10 `'App' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'App'` (sin prefijo `enlace:`, como el resto: sale dentro de `=== ERROR DE LINK: … ===`; el dueño citado es el de S)

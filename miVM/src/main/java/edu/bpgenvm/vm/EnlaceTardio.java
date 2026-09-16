@@ -300,7 +300,7 @@ final class EnlaceTardio {
             if (bw != ((k.nF + 31) >>> 5)) throw inconsistente(k, "bitmapWords");
             int vt = k.descAbs + CLS_FIELD_BITMAP + 8 * bw;
             for (int s = 0; s < k.nM; s++) {
-                if (vm.readInt32(vt + s * 4) == -1 && (k.padre == null || s >= k.padre.nM)) throw inconsistente(k, "ranura " + s + " sin dueño");
+                if (vm.readInt32(vt + s * 4) == -1 && (k.padre == null || s >= k.padre.nM)) throw inconsistente(k, "ranura " + s + " sin dueno");   // ASCII, como la VM-C (V10, E-08)
             }
         }
         for (ModuleManager.ModuleMetadata m : modulos) {

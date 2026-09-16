@@ -27,6 +27,20 @@
 
 ## Última sesión
 
+## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
+
+**Hecho** (ver `FICHAS` `#523` §V10): dos workflows de revisión (9 buscadores; la verificación por agente murió dos veces por el
+límite de uso → triaje a mano con las reproducciones). Arreglado el lote grave de programas legítimos en el compilador y en las
+dos VMs (`4d075d65`), EC-2 (`8fd40d91`: un try con dos catch dejaba vivo el segundo, preexistente, las dos VMs), y el
+«la interfaz cambió entre la pasada y la emisión» de la stdlib (un .mod versionado con CRLF fuera de outDir se tomaba como
+entrada). `compat/v10_casos.py` reproduce lo arreglado (13/13). Redes: frontend 220/220, miVM 51/51, C tests OK, compat
+check verde (69/59/9/12), mezcla MOD9 120/120, la stdlib como MOD8 y MOD9 sin errores, Pico enlaza.
+
+**Orden para retomar**: (1) la decisión J-3 de Eduardo (`super.m()` cuando el método SUBE a un ancestro: hoy rechazo; Java
+corre; propuesta: el cargador prueba el símbolo en cada ancestro); (2) las 8 fichas nuevas `#525`-`#532` son preexistentes:
+`#525` (null en campos, miVM en silencio) y `#526` (print de un Thread ejecuta run) son las graves; (3) el plan de `#523`:
+filas de V4, V6, V5, V9, V8 (la Pico), la cadena en MOD9 (V11) y los docs.
+
 ## 🧬 `#523` EN LAS DOS VMs (16-sep) — el enlace tardío corre: MOD9 se compila, se carga en miVM y en la VM-C, y la mezcla da 84/84 con el criterio de Java
 
 **Hecho hoy, por la cascada** (commits `c0f116b0` → `eb13a8bf`, ver `FICHAS` `#523` §16-sep): V0 línea base (cronómetro del enlace; la Pico no
