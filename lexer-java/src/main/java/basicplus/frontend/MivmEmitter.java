@@ -139,14 +139,17 @@ public final class MivmEmitter {
     }
     /** La clave canónica de un método/función, o null (y error) si algún tipo no está resuelto. */
     private String claveDe(FunctionSymbol fs) {
+        if (!mod9()) return "";   // en MOD8 no se calcula (ni se exige que los tipos de un stub resuelvan)
         try { return Symbol.ClaveCanonica.metodo(fs, moduloLocal()); }
         catch (Symbol.ClaveCanonica.TipoSinResolver e) { errors.add(e.getMessage() + " (en '" + fs.name + "')"); return "?"; }
     }
     private String claveCampo(String nombre, BpType t) {
+        if (!mod9()) return "";
         try { return Symbol.ClaveCanonica.campo(nombre, t, moduloLocal()); }
         catch (Symbol.ClaveCanonica.TipoSinResolver e) { errors.add(e.getMessage() + " (campo '" + nombre + "')"); return "?"; }
     }
     private String claveEvento(Symbol.EventSymbol ev) {
+        if (!mod9()) return "";
         try { return Symbol.ClaveCanonica.evento(ev, moduloLocal()); }
         catch (Symbol.ClaveCanonica.TipoSinResolver e) { errors.add(e.getMessage() + " (evento '" + ev.name + "')"); return "?"; }
     }
@@ -154,6 +157,7 @@ public final class MivmEmitter {
     private String claveGetter(String prop, BpType t) { return "get" + capitalize(prop) + "()" + tipoClave(t); }
     private String claveSetter(String prop, BpType t) { return "set" + capitalize(prop) + "(" + tipoClave(t) + ")V"; }
     private String tipoClave(BpType t) {
+        if (!mod9()) return "";
         try { return Symbol.ClaveCanonica.tipo(t, moduloLocal()); }
         catch (Symbol.ClaveCanonica.TipoSinResolver e) { errors.add(e.getMessage()); return "?"; }
     }

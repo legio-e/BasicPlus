@@ -2646,6 +2646,17 @@ public class VirtualMachine {
                     break;
                 }
 
+                /* V7/H2 (#523) — los opcodes _REF (MOD9): el operando `idx u16` es una entrada de
+                 * la ext-table del módulo actual que el enlazador rellenó al cargar (ranura de
+                 * vtable, ranura de campo o dirección absoluta de un descriptor). Leído el
+                 * valor, cada uno sigue por el MISMO camino que su hermano sin _REF: por eso
+                 * comparten `case`. Nada del código se parchea: vale para XIP. */
+                case 0xBB: { // PUSH_REF — push i32 ext[idx] (la ranura del handler de un evento)
+                    int idx = readI16(mem, pc) & 0xFFFF; pc += 2;
+                    int v = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4);
+                    writeI32(mem, sp, v); sp += 4;
+                    break;
+                }
                 case 0x06: { // CALL_EXT
                     if (moduleManager == null) throw new RuntimeException("ModuleManager no conectado.");
                     short extFuncIdx = (short) readI16(mem, pc); pc += 2;
@@ -3202,9 +3213,10 @@ public class VirtualMachine {
                 }
 
                 // --- Clases y objetos ---
-                case 0x52: { // NEW_OBJECT
-                    short csOff = (short) readI16(mem, pc); pc += 2;
-                    int classPtr = cs + csOff;
+                case 0x52: case 0xB7: { // NEW_OBJECT | NEW_OBJECT_REF (#523: desc = ext[idx], absoluto)
+                    int classPtr;
+                    if (rawOp == 0x52) { short csOff = (short) readI16(mem, pc); pc += 2; classPtr = cs + csOff; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; classPtr = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     int numFields = readI16(mem, classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     // B1: mantenemos vmLock hasta publicar el ref al stack
@@ -3221,15 +3233,19 @@ public class VirtualMachine {
                     }
                     break;
                 }
-                case 0x53: { // GET_FIELD
-                    int slot = mem[pc] & 0xFF; pc++;
+                case 0x53: case 0xB2: { // GET_FIELD | GET_FIELD_REF (#523: slot = ext[idx])
+                    int slot;
+                    if (rawOp == 0x53) { slot = mem[pc] & 0xFF; pc++; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, sp, readI32(mem, fieldAddr(obj, slot))); sp += 4;
                     break;
                 }
-                case 0x54: { // SET_FIELD
-                    int slot = mem[pc] & 0xFF; pc++;
+                case 0x54: case 0xB3: { // SET_FIELD | SET_FIELD_REF
+                    int slot;
+                    if (rawOp == 0x54) { slot = mem[pc] & 0xFF; pc++; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
@@ -3238,15 +3254,19 @@ public class VirtualMachine {
                 }
                 // BUG-6: campos de instancia de 8 bytes (long/double/ref). slot = índice
                 // de slot de 4 bytes; el valor ocupa 2 slots consecutivos en el campo.
-                case 0xA8: { // GET_FIELD_LONG
-                    int slot = mem[pc] & 0xFF; pc++;
+                case 0xA8: case 0xB4: { // GET_FIELD_LONG | GET_FIELD_LONG_REF
+                    int slot;
+                    if (rawOp == 0xA8) { slot = mem[pc] & 0xFF; pc++; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, sp, readI64(mem, fieldAddr(obj, slot))); sp += 8;
                     break;
                 }
-                case 0xA9: { // SET_FIELD_LONG
-                    int slot = mem[pc] & 0xFF; pc++;
+                case 0xA9: case 0xB5: { // SET_FIELD_LONG | SET_FIELD_LONG_REF
+                    int slot;
+                    if (rawOp == 0xA9) { slot = mem[pc] & 0xFF; pc++; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
@@ -3615,12 +3635,13 @@ public class VirtualMachine {
                     ehExpectedClass  = expectedClassPtr;
                     break;
                 }
-                case 0xAB: { // TRY_BEGIN_EXT (BUG-2): clsOff i32 (catch cross-module)
+                case 0xAB: case 0xBA: { // TRY_BEGIN_EXT (BUG-2): clsOff i32 (catch cross-module) | TRY_BEGIN_REF (#523)
                     int instrAddr = currentPC;
                     int relOff = readI32(mem, pc); pc += 4;
-                    int expectedCsOff = readI32(mem, pc); pc += 4;
+                    int expectedClassPtr;
+                    if (rawOp == 0xAB) { int expectedCsOff = readI32(mem, pc); pc += 4; expectedClassPtr = (expectedCsOff != 0) ? (cs + expectedCsOff) : 0; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; expectedClassPtr = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     int newHandlerPc = instrAddr + relOff;
-                    int expectedClassPtr = (expectedCsOff != 0) ? (cs + expectedCsOff) : 0;
                     handlerStack.push(new int[]{ehHandlerPc, ehSavedSp, ehSavedBp, ehSavedCs, ehExpectedClass});
                     ehHandlerPc      = newHandlerPc;
                     ehSavedSp        = sp;
@@ -3678,8 +3699,10 @@ public class VirtualMachine {
                     freeOwnedObject(ref);
                     break;
                 }
-                case 0x60: { // SET_FIELD_OWNER
-                    int slot = mem[pc] & 0xFF; pc++;
+                case 0x60: case 0xB6: { // SET_FIELD_OWNER | SET_FIELD_OWNER_REF
+                    int slot;
+                    if (rawOp == 0x60) { slot = mem[pc] & 0xFF; pc++; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long val = refLoad(mem, sp);   // V4: valor = ref nueva (8B, era 4B → drift + high-word)
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
@@ -3691,9 +3714,10 @@ public class VirtualMachine {
                     break;
                 }
 
-                case 0x5E: { // INSTANCEOF
-                    short csOff = (short) readI16(mem, pc); pc += 2;
-                    int expected = cs + csOff;
+                case 0x5E: case 0xB8: { // INSTANCEOF | INSTANCEOF_REF (#523: desc absoluto de ext[idx])
+                    int expected;
+                    if (rawOp == 0x5E) { short csOff = (short) readI16(mem, pc); pc += 2; expected = cs + csOff; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; expected = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long ref = refLoad(mem, sp);
                     int objClass = classPtrOfRefOr0(ref);
                     boolean ok = (objClass != 0) && isDescendantOf(objClass, expected);
@@ -3729,18 +3753,21 @@ public class VirtualMachine {
                     break;
                 }
 
-                case 0xB0: { // CHECKCAST_EXT — #444, el cast a una clase de OTRO módulo
+                case 0xB0: case 0xB9: { // CHECKCAST_EXT — #444, el cast a una clase de OTRO módulo | CHECKCAST_REF (#523)
                     // Idéntico al 0xAF salvo el ancho del cls_off (i32, lo parcha
                     // el linker con la dirección cs-relativa de la clase externa).
                     // Aquí cls_off == 0 NO es el centinela de cadena: `string(o)`
                     // no cruza módulos y sigue por el 0xAF.
-                    int clsOff    = readI32(mem, pc); pc += 4;
+                    // CHECKCAST_REF: el descriptor (absoluto) viene de ext[idx].
+                    int expectedAbs;
+                    if (rawOp == 0xB0) { int clsOff = readI32(mem, pc); pc += 4; expectedAbs = cs + clsOff; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; expectedAbs = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     short nameOff = (short) readI16(mem, pc); pc += 2;
                     long ref = refLoad(mem, sp - REF_SIZE);   // peek: no consume
                     boolean ok = true;
                     if (ref != 0) {
                         int objClass = classPtrOfRefOr0(ref);
-                        ok = (objClass != 0) && isDescendantOf(objClass, cs + clsOff);
+                        ok = (objClass != 0) && isDescendantOf(objClass, expectedAbs);
                     }
                     if (!ok) {
                         int naddr = cs + nameOff;
@@ -3837,10 +3864,17 @@ public class VirtualMachine {
                     break;
                 }
 
-                case 0x55: { // INVOKE_VIRTUAL
-                    int vtSlot  = mem[pc]     & 0xFF;
-                    int numArgs = mem[pc + 1] & 0xFF;
-                    pc += 2;
+                case 0x55: case 0xB1: { // INVOKE_VIRTUAL | INVOKE_VIRTUAL_REF (#523: la ranura viene de ext[idx])
+                    int vtSlot, numArgs;
+                    if (rawOp == 0x55) {
+                        vtSlot  = mem[pc]     & 0xFF;
+                        numArgs = mem[pc + 1] & 0xFF;
+                        pc += 2;
+                    } else {
+                        int idx = readI16(mem, pc) & 0xFFFF; pc += 2;
+                        vtSlot  = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4);
+                        numArgs = mem[pc] & 0xFF; pc++;
+                    }
                     // H1.2a (V4): el receptor es una ref = 8 bytes (bajo los args, que ya
                     // van contados en slots) → sp-8-numArgs*4; readI64 + (int) low32.
                     long thisRef    = refLoad(mem, sp - REF_SIZE - numArgs * 4);
@@ -6403,8 +6437,16 @@ public class VirtualMachine {
              |  (memory[addr + 3] & 0xFF);
     }
 
-    private int readInt16(int addr) {
+    public int readInt16(int addr) {
         return ((memory[addr] & 0xFF) << 8) | (memory[addr + 1] & 0xFF);
+    }
+    public void writeInt16(int addr, int value) {
+        memory[addr]     = (byte) ((value >> 8) & 0xFF);
+        memory[addr + 1] = (byte) ( value       & 0xFF);
+    }
+    /** V7/H2 (#523) — la arena de los descriptores construidos tiene que caber en memoria. */
+    public void reservarArena(int hasta) {
+        if (hasta > memory.length) throw new RuntimeException("sin memoria para los descriptores del enlace tardio (" + hasta + " > " + memory.length + ")");
     }
 
     // =================================================================

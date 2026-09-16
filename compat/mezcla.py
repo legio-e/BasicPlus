@@ -24,7 +24,15 @@
 # (corre, exit 0, y NO imprime lo esperado: lo que nadie ve) / RUIDOSO-otro (rechaza
 # por otra razon que la predicha) / PARIDAD (las VMs difieren) / CRASH.
 #
-#   python compat/mezcla.py [--solo=I|II|P] [--keep] [--work=DIR]
+#   python compat/mezcla.py [--solo=I|II|P] [--keep] [--work=DIR] [--formato=8|9] [--vms=ambas|java|c]
+#
+# --formato=9 (V7/H2 #523, ENLACE TARDIO): compila todo como MOD9 y predice con EL CRITERIO
+# DE JAVA — donde Java correria (miembro anadido en cualquier sitio, property nueva, campo
+# nuevo, reorden, manejador privado, sobrecarga delante de la cabeza; TAMBIEN para la
+# subclase Ext), corre con la salida correcta; donde Java lanzaria (quitado, firma o retorno
+# cambiados, tipo de property cambiado), rechazo AL ENLAZAR nombrando el simbolo. Una
+# dependencia mas antigua que la sellada sigue rechazandose (gen).
+# --vms=java mientras la VM-C no cargue MOD9 (la paridad no se comprueba: una sola VM).
 #
 # Sale 0 si todo es «ok»; 1 si hay algun SILENCIOSO/PARIDAD/CRASH/RUIDOSO-otro.
 import io, os, re, shutil, subprocess, sys, tempfile
@@ -190,6 +198,7 @@ ESPERADO = {
 def esperado(app, variante):
     s = ESPERADO[app]
     if variante == 'cuerpo': s = s.replace('k3', 'K3').replace('k5', 'K5')
+    if variante == 'f_firma' and FORMATO == 9: s = s   # (F3b: se rechazara; hoy se mide)
     if variante == 'firma':  s = s.replace('\n5\n', '\n2\n', 1)   # m(4) -> 2 (m(1) ya daba 2)
     return s
 
@@ -217,6 +226,9 @@ def run_vm(vm, d, mod):
     except subprocess.TimeoutExpired: return -99, '<timeout>'
     return rc, filt(out)
 
+FORMATO = 8
+VMS = 'ambas'
+
 def lib(work, variante, gen):
     d = os.path.join(work, 'lib_%s_g%d' % (variante, gen))
     if os.path.isdir(d): return d
@@ -225,7 +237,7 @@ def lib(work, variante, gen):
     io.open(os.path.join(d, 'p.bpbuild'), 'w', encoding='utf-8', newline='\n').write(
         '{ "sourceDir": "src", "outDir": ".", "main": "Lib", "version": %d, "dependencies": [] }\n' % gen)
     shutil.copy(CORE, d)
-    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm'], d)
+    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=%d' % FORMATO], d)
     if rc != 0 or not os.path.isfile(os.path.join(d, 'Lib.mod')):
         raise SystemExit('la variante %s (gen %d) no compila:\n%s%s' % (variante, gen, out, err))
     io.open(os.path.join(d, 'build.log'), 'w', encoding='utf-8').write(out + err)
@@ -239,7 +251,7 @@ def app(work, nombre, src, libdir, etiqueta):
     for f in os.listdir(libdir):
         if f.endswith('.mod'): shutil.copy(os.path.join(libdir, f), d)
     io.open(os.path.join(d, nombre + '.bp'), 'w', encoding='utf-8', newline='\n').write(src)
-    rc, out, err = sh(['java', '-jar', FE, nombre + '.bp', '--compile', '.', '--backend=mivm'], d)
+    rc, out, err = sh(['java', '-jar', FE, nombre + '.bp', '--compile', '.', '--backend=mivm', '--formato=%d' % FORMATO], d)
     io.open(os.path.join(d, 'compile.log'), 'w', encoding='utf-8').write(out + err)
     if rc != 0 or not os.path.isfile(os.path.join(d, nombre + '.mod')):
         raise SystemExit('%s no compila contra %s:\n%s%s' % (nombre, etiqueta, out, err))
@@ -256,7 +268,8 @@ def caso_dir(work, etiqueta, libdir, mods):
     return d
 
 RECHAZOS = [('mas antiguo', r'es mas antiguo que el que'), ('otra interfaz', r'no es la interfaz con la que se compilo'),
-            ('mas reciente+extiende', r'es mas reciente que .* extiende una clase suya'), ('no enlaza', r'ERROR DE LINK|no exporta')]
+            ('mas reciente+extiende', r'es mas reciente que .* extiende una clase suya'),
+            ('no enlaza', r'ERROR DE LINK|no exporta|necesita |redefine |asume que ')]
 def clasificar(rc, out):
     for nombre, rx in RECHAZOS:
         if re.search(rx, out): return nombre
@@ -265,8 +278,11 @@ def clasificar(rc, out):
 filas = []
 def fila(bloque, etiqueta, d, mod, predicho, esperado_out=None):
     """predicho: 'corre' | uno de RECHAZOS[*][0]. esperado_out: stdout exacto si corre."""
-    rj, oj = run_vm(JVM, d, mod + '.mod')
-    rc_, oc = run_vm(CVM, d, mod + '.mod')
+    if VMS == 'java':   rj, oj = run_vm(JVM, d, mod + '.mod'); rc_, oc = rj, oj
+    elif VMS == 'c':    rc_, oc = run_vm(CVM, d, mod + '.mod'); rj, oj = rc_, oc
+    else:
+        rj, oj = run_vm(JVM, d, mod + '.mod')
+        rc_, oc = run_vm(CVM, d, mod + '.mod')
     cj, cc = clasificar(rj, oj), clasificar(rc_, oc)
     if oj != oc:
         veredicto = 'PARIDAD'
@@ -294,26 +310,40 @@ MUEVE = {'met_medio', 'met_quitado', 'prop_mas', 'reorden', 'ev_privado'}
 # Lo que HOY se sabe que el marcador NO ve (la cabeza `m` es un nombre pelado sin firma):
 #   'firma' y 'enum_cabeza' dejan `Base#m#N` en su sitio con OTRA firma -> la prediccion
 #   de la norma es «no enlaza», y lo que pase de verdad es lo que se mide.
+# EL CRITERIO DE JAVA (formato 9): estructura cambiada -> corre; miembro usado quitado o con
+# otra firma/retorno -> rechazo al enlazar. `f_firma` queda como SILENCIOSO conocido hasta F3b
+# (los nombres R4 de las funciones de modulo: hoy CALL_EXT `Lib.f` a pelo).
+ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo'}
+def prediccion_java(variante, gen, app):
+    if gen < 7: return 'mas antiguo'
+    if variante in ROMPE_JAVA: return 'no enlaza'
+    return 'corre'
+
 def prediccion_usa(variante, gen):
+    if FORMATO == 9: return prediccion_java(variante, gen, 'Usa')
     if gen < 7: return 'mas antiguo'
     if gen == 7: return 'corre' if variante in ('igual', 'cuerpo') else 'otra interfaz'
     if variante in MUEVE or variante in ('firma', 'enum_cabeza', 'met_quitado', 'retorno', 'prop_tipo', 'f_firma'): return 'no enlaza'
     return 'corre'
 def prediccion_ext(variante, gen):
+    if FORMATO == 9: return prediccion_java(variante, gen, 'Ext')
     if gen < 7: return 'mas antiguo'
     if gen == 7: return 'corre' if variante in ('igual', 'cuerpo') else 'otra interfaz'
     return 'mas reciente+extiende'
 
 def main():
+    global FORMATO, VMS
     solo = None; keep = False; work = None
     for a in sys.argv[1:]:
         if a.startswith('--solo='): solo = a[7:]
         elif a == '--keep': keep = True
         elif a.startswith('--work='): work = a[7:]
+        elif a.startswith('--formato='): FORMATO = int(a[10:])
+        elif a.startswith('--vms='): VMS = a[6:]
     for f in (FE, JVM, CVM, CORE):
         if not os.path.isfile(f): raise SystemExit('falta ' + f)
     work = work or tempfile.mkdtemp(prefix='mezcla_')
-    print('trabajo en', work)
+    print('trabajo en', work, '| formato', FORMATO, '| vms', VMS, '| criterio', 'Java (enlace tardio)' if FORMATO == 9 else 'norma #500')
     v1 = lib(work, 'igual', 7)
     usa1 = app(work, 'Usa', USA, v1, 'v1'); ext1 = app(work, 'Ext', EXT, v1, 'v1')
 
@@ -354,7 +384,7 @@ def main():
                         if f.endswith('.mod'): shutil.copy(os.path.join(dx, f), pd)
                     shutil.copy(os.path.join(a1, 'A.mod'), pd); shutil.copy(os.path.join(bx, 'B.mod'), pd)
                     io.open(os.path.join(pd, 'Puente.bp'), 'w', encoding='utf-8', newline='\n').write(PUENTE)
-                    rc, out, err = sh(['java', '-jar', FE, 'Puente.bp', '--compile', '.', '--backend=mivm'], pd)
+                    rc, out, err = sh(['java', '-jar', FE, 'Puente.bp', '--compile', '.', '--backend=mivm', '--formato=%d' % FORMATO], pd)
                     if rc != 0 or not os.path.isfile(os.path.join(pd, 'Puente.mod')):
                         raise SystemExit('Puente no compila contra %s g%d:\n%s%s' % (v, gen, out, err))
                 # runtime = X: A (sellado v1) solo construye (por nombre) -> «gen mayor, usa: enlaza»; B y Puente son de X.

@@ -1686,7 +1686,9 @@ public final class Main {
             // V7/H2 — y TAMBIÉN v8 (MOD8: gen + ifaceCrc detrás de nativeSize). Es el
             // mismo bug de #457 esperando a repetirse con cada subida: el lector de
             // cabecera del compilador tiene que aprenderla el mismo día que el escritor.
-            boolean v8 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V8);
+            // V7/H2 (#523) — y v9 (MOD9, enlace tardío): misma cabecera que v8.
+            boolean v8 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V8)
+                      || (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V9);
             boolean v7 = (magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V7) || v8;
             if (!v7 && magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6) return null;
             ModLeido ml = new ModLeido();
@@ -2869,6 +2871,21 @@ public final class Main {
     private static basicplus.frontend.BpType resolveCrossModuleType(
             basicplus.frontend.BpType t,
             java.util.List<Symbol.ImportedNamespaceSymbol> allNs) {
+        // V7/H2 (#523) — también DENTRO de un array o una tupla: `backing(): Object[]` llegaba
+        // con su elemento sin resolver y la clave canónica no se podía calcular.
+        if (t instanceof basicplus.frontend.BpType.ArrayType) {
+            basicplus.frontend.BpType el = ((basicplus.frontend.BpType.ArrayType) t).element;
+            basicplus.frontend.BpType r = resolveCrossModuleType(el, allNs);
+            return (r == el) ? t : new basicplus.frontend.BpType.ArrayType(r);
+        }
+        if (t instanceof basicplus.frontend.BpType.TupleType) {
+            java.util.List<basicplus.frontend.BpType> els = new java.util.ArrayList<>();
+            boolean cambio = false;
+            for (basicplus.frontend.BpType e : ((basicplus.frontend.BpType.TupleType) t).elements) {
+                basicplus.frontend.BpType r = resolveCrossModuleType(e, allNs); cambio |= (r != e); els.add(r);
+            }
+            return cambio ? new basicplus.frontend.BpType.TupleType(els) : t;
+        }
         if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
         int lastDot = name.lastIndexOf('.');
@@ -2944,6 +2961,19 @@ public final class Main {
      */
     private static basicplus.frontend.BpType resolveTypeAgainst(
             basicplus.frontend.BpType t, Symbol.ImportedNamespaceSymbol ns) {
+        if (t instanceof basicplus.frontend.BpType.ArrayType) {   // V7/H2 (#523): recursivo
+            basicplus.frontend.BpType el = ((basicplus.frontend.BpType.ArrayType) t).element;
+            basicplus.frontend.BpType r = resolveTypeAgainst(el, ns);
+            return (r == el) ? t : new basicplus.frontend.BpType.ArrayType(r);
+        }
+        if (t instanceof basicplus.frontend.BpType.TupleType) {
+            java.util.List<basicplus.frontend.BpType> els = new java.util.ArrayList<>();
+            boolean cambio = false;
+            for (basicplus.frontend.BpType e : ((basicplus.frontend.BpType.TupleType) t).elements) {
+                basicplus.frontend.BpType r = resolveTypeAgainst(e, ns); cambio |= (r != e); els.add(r);
+            }
+            return cambio ? new basicplus.frontend.BpType.TupleType(els) : t;
+        }
         if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
         Symbol.ClassSymbol cls = ns.classes.get(name);

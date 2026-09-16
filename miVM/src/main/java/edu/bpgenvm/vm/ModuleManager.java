@@ -468,10 +468,16 @@ public class ModuleManager {
         return ModSource.ofFile(resolveModulePath(filename, esRaiz));
     }
 
-    private static class ModuleMetadata {
+    static class ModuleMetadata {
         String name;
         String library;          // "" si el .mod no declara library
         int magic, gen, ifaceCrc;   // V7/H2 (MOD8): lo que dice su cabecera (0/0 en MOD6/MOD7)
+        // V7/H2 (#523, MOD9) — el enlace tardío
+        String exportPrefix;                          // "[lib.]Mod."
+        java.util.List<String> depNames;              // 3.2: nombre canónico de cada dependencia, por índice
+        java.util.List<edu.bpgenvm.bytecode.TablasMod9.Ref>   refs;    // 3.3 (null si no es MOD9)
+        java.util.List<edu.bpgenvm.bytecode.TablasMod9.Clase> clases;  // 4.5 (null si no es MOD9)
+        int extCount31;                               // entradas de 3.1: la ref i vive en ext[extCount31 + i]
         int moduleBase;
         int extTableAddress;
         int dataStart;
@@ -636,7 +642,7 @@ public class ModuleManager {
                         + ModFormat.abiRejectReason(magic0));
             }
             boolean v6a = (magic0 != ModFormat.MAGIC_NUMBER);   // v6 o v7: llevan interfaceSize
-            boolean v8a = (magic0 == ModFormat.MAGIC_NUMBER_V8);
+            boolean v8a = (magic0 == ModFormat.MAGIC_NUMBER_V8) || (magic0 == ModFormat.MAGIC_NUMBER_V9);   // V7/H2 (#523): MOD9 lleva la misma cabecera
             boolean v7a = (magic0 == ModFormat.MAGIC_NUMBER_V7) || v8a;
             in.readInt(); // dataSize
             in.readInt(); // mainOffset
@@ -775,6 +781,14 @@ public class ModuleManager {
             if (sinDatosAvisados.add(importador + "->" + canon))
                 System.err.printf("[miVM] dep '%s' sin datos de version (%s): no se comprueba su interfaz%n",
                         canon, magicTexto(dep.magic));
+        } else if (ModFormat.esEnlaceTardio(dep.magic)) {
+            // V7/H2 (#523, D9) — con ENLACE TARDIO la verdad la dice el enlace, símbolo a
+            // símbolo, contra la clase que hay: ni la interfaz distinta (regla 2) ni el padre
+            // más nuevo (regla 3) se rechazan aquí. Queda la regla 1 (más antigua → no) y,
+            // como pista, el diag de que se compiló contra otra interfaz.
+            if (dep.ifaceCrc != reqCrc && sinDatosAvisados.add(importador + "=>" + canon))
+                System.err.printf("[miVM] dep '%s' (gen %d): compilado contra otra interfaz (%08x != %08x); enlace tardio%n",
+                        canon, depGen, reqCrc, dep.ifaceCrc);
         } else if (depGen == reqGen && dep.ifaceCrc != reqCrc) {
             msg = String.format("'%s' (gen %d, interfaz %08x) no es la interfaz con la que se compilo '%s' (interfaz %08x): recompila",
                     canon, depGen, dep.ifaceCrc, importador, reqCrc);
@@ -805,7 +819,8 @@ public class ModuleManager {
                         + ModFormat.abiRejectReason(magic1));
             }
             boolean v6 = (magic1 != ModFormat.MAGIC_NUMBER);   // v6 o v7 llevan interfaceSize
-            boolean v8 = (magic1 == ModFormat.MAGIC_NUMBER_V8);
+            boolean v9 = (magic1 == ModFormat.MAGIC_NUMBER_V9);   // V7/H2 (#523): enlace tardío
+            boolean v8 = (magic1 == ModFormat.MAGIC_NUMBER_V8) || v9;
             boolean v7 = (magic1 == ModFormat.MAGIC_NUMBER_V7) || v8;
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
@@ -849,13 +864,26 @@ public class ModuleManager {
                 impIn.readUTF();
             }
 
-            int extTableSize = extCount * 4;
+            // V7/H2 (#523, MOD9) — la subtabla 3.2 (nombres de las deps, por índice) y la 3.3
+            // (las refs): la ext-table crece para alojar las refs detrás de los imports, y sus
+            // entradas nacen a 0xFFFFFFFF (la ranura 0 es legítima: toString).
+            java.util.List<String> depNames = null;
+            java.util.List<edu.bpgenvm.bytecode.TablasMod9.Ref> refs = null;
+            if (v9) {
+                depNames = new java.util.ArrayList<>();
+                int nd = impIn.readInt();
+                for (int i = 0; i < nd; i++) { depNames.add(impIn.readUTF()); impIn.readUTF(); impIn.readInt(); impIn.readInt(); impIn.readInt(); }
+                refs = edu.bpgenvm.bytecode.TablasMod9.leerRefs(importBuf);
+            }
+            int extTableSize = (extCount + (refs == null ? 0 : refs.size())) * 4;
             int extTableAddress = moduleBase;
             int dataStart = moduleBase + extTableSize;
             int codeStart = dataStart + dataSize;
 
             if (extTableSize > 0) {
-                vm.injectMemory(extTableAddress, new byte[extTableSize]);
+                byte[] ext = new byte[extTableSize];
+                if (refs != null) for (int i = extCount * 4; i < extTableSize; i++) ext[i] = (byte) 0xFF;   // sin resolver
+                vm.injectMemory(extTableAddress, ext);
             }
 
             // Las claves de exports se prefijan con la library cuando ésta no
@@ -924,7 +952,8 @@ public class ModuleManager {
                 // L2 v3 — subsección opcional de class fixups (parejas
                 // childClassName + childCsOff + parentQualified). Sólo
                 // presente si el módulo declara clases con padre cross-module.
-                if (expIn.available() > 0) {
+                // V7/H2 (#523): en MOD9 detrás de 4.2 viene la subtabla CLASES (4.5), no fixups.
+                if (!v9 && expIn.available() > 0) {
                     int fxCount = expIn.readInt();
                     for (int i = 0; i < fxCount; i++) {
                         ClassFixupEntry fx = new ClassFixupEntry();
@@ -968,6 +997,9 @@ public class ModuleManager {
             meta.name = moduleName;
             meta.library = library;
             meta.magic = magic1; meta.gen = gen; meta.ifaceCrc = ifaceCrc;   // V7/H2
+            meta.exportPrefix = exportPrefix;                                // V7/H2 (#523)
+            meta.depNames = depNames; meta.refs = refs; meta.extCount31 = extCount;
+            if (v9) meta.clases = edu.bpgenvm.bytecode.TablasMod9.leerClases(expBuf);
             meta.moduleBase = moduleBase;
             meta.extTableAddress = extTableAddress;
             meta.dataStart = dataStart;
@@ -1015,6 +1047,21 @@ public class ModuleManager {
                 }
                 vm.writeInt32(task.extTableAddress + (i * 4), absoluteAddr);
             }
+        }
+        // V7/H2 (#523) — EL ENLACE TARDÍO: registrar las clases de los módulos MOD9, construir
+        // las abiertas contra su padre real, resolver las refs a la ext-table, verificar.
+        // La arena de los descriptores construidos empieza donde acabó el último módulo y
+        // el heap arranca detrás (setHeapStart lee nextFreeAddress después de linkAll).
+        enlaceTardio = new EnlaceTardio(this, vm, nextFreeAddress);
+        enlaceTardio.registrar(loadedModules);
+        for (ModuleMetadata m : loadedModules) {
+            if (m.clases == null) continue;
+            for (edu.bpgenvm.bytecode.TablasMod9.Clase c : m.clases) enlaceTardio.asegurar(enlaceTardio.buscar(m.exportPrefix + c.name));
+        }
+        for (ModuleMetadata m : loadedModules) enlaceTardio.resolverRefs(m);
+        enlaceTardio.verificar(loadedModules);
+        if (enlaceTardio.arenaFin() > nextFreeAddress) nextFreeAddress = ((enlaceTardio.arenaFin() + 63) & ~63);
+        for (LinkTask task : pendingLinks) {
             // L2 v3 — parcha parentOff de clases con padre cross-module. El
             // descriptor del child quedó con parentOff=0 al emitir; aquí
             // resolvemos el parent vía globalSymbolTable y escribimos el offset
@@ -1049,6 +1096,28 @@ public class ModuleManager {
         System.err.printf("[miVM] tabla de simbolos: %d simbolos%n", globalSymbolTable.size());
         System.err.printf("[miVM] enlace: %d modulos, %d busquedas, 0 strcmp, %d us%n",
                 loadedModules.size(), busquedas, (int) ((System.nanoTime() - t0) / 1000L));
+        if (enlaceTardio.clasesConstruidas > 0 || enlaceTardio.refsResueltas > 0)
+            System.err.printf("[miVM] enlace tardio: %d clases construidas, %d refs, %d bytes de arena%n",
+                    enlaceTardio.clasesConstruidas, enlaceTardio.refsResueltas, enlaceTardio.bytesArena);
+    }
+
+    /** V7/H2 (#523) — el enlazador tardío del último linkAll (la reflexión de Forms le pregunta). */
+    private EnlaceTardio enlaceTardio;
+
+    /** El módulo cargado cuyo nombre canónico (`[lib.]Mod`) es éste, o null. */
+    ModuleMetadata moduloPorNombreCanonico(String canon) {
+        for (ModuleMetadata m : loadedModules) {
+            String c = m.exportPrefix != null ? m.exportPrefix.substring(0, m.exportPrefix.length() - 1)
+                    : (m.library.isEmpty() ? m.name : m.library + "." + m.name);
+            if (c.equals(canon)) return m;
+        }
+        return null;
+    }
+    int indiceDe(ModuleMetadata m) { return loadedModules.indexOf(m); }
+    /** Un data-symbol nuevo (el descriptor construido de una clase abierta), como los de 4.2. */
+    void registrarDataSymbol(ModuleMetadata m, String clase, int abs) {
+        globalSymbolTable.put(m.exportPrefix + clase, abs);
+        if (!m.library.isEmpty()) globalSymbolTable.putIfAbsent(m.name + "." + clase, abs);
     }
 
     public int getModuleBaseFromPC(int pc) {
@@ -1317,6 +1386,11 @@ public class ModuleManager {
      * al módulo donde está definida la clase, independientemente del CS del caller.
      */
     public int getCSForDataAddr(int addr) {
+        // V7/H2 (#523) — el sello del dueño (+6 = índice + 1) que el enlazador escribe en todo
+        // descriptor MOD9, cerrado o construido: un descriptor construido vive en la arena,
+        // fuera de todo módulo, y sin el sello no tendría CS. 0 = MOD7/8: por rango, como siempre.
+        int sello = vm.readInt16(addr + EnlaceTardio.CLS_MODULO);
+        if (sello > 0 && sello <= loadedModules.size()) return loadedModules.get(sello - 1).codeStart;
         for (ModuleMetadata meta : loadedModules) {
             if (addr >= meta.dataStart && addr < meta.codeStart) return meta.codeStart;
         }
@@ -1338,6 +1412,10 @@ public class ModuleManager {
      * @return el slot, o -1 si esa clase no tiene un método así.
      */
     public int slotOfMarker(int classPtr, String simple) {
+        if (enlaceTardio != null) {   // V7/H2 (#523): una clase MOD9 no tiene marcadores; su tabla 4.5 sí
+            int s = enlaceTardio.slotPorNombre(classPtr, simple);
+            if (s >= 0) return s;
+        }
         String needle = "#" + simple + "#";
         for (Map.Entry<String, Integer> e : globalSymbolTable.entrySet()) {
             if (e.getValue() != classPtr) continue;

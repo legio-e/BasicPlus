@@ -167,7 +167,8 @@ public final class ModFormat {
      *  <p>Por eso el salto a v7 <b>no obliga a regenerar</b> los `.mod` que ya
      *  hay. v5 sigue rechazado, y por el motivo de siempre: su ABI es ambiguo. */
     public static boolean isAbiSupported(int magic) {
-        return magic == MAGIC_NUMBER_V6 || magic == MAGIC_NUMBER_V7 || magic == MAGIC_NUMBER_V8;
+        return magic == MAGIC_NUMBER_V6 || magic == MAGIC_NUMBER_V7 || magic == MAGIC_NUMBER_V8
+            || magic == MAGIC_NUMBER_V9;   // V7/H2 (#523): el enlace tardío no toca el ABI de refs
     }
 
     /** V7/H2 — ¿lleva este magic los campos de versión (gen, ifaceCrc, subtabla deps)? */
@@ -182,9 +183,6 @@ public final class ModFormat {
             return "formato v5 (\"MOD5\"): es anterior al ensanchado de refs 4->8B, "
                  + "así que su ABI no se puede garantizar (si es de la era 4B, "
                  + "corrompería memoria en silencio). Recompílalo con el compilador actual.";
-        }
-        if (magic == MAGIC_NUMBER_V9) {
-            return "formato v9 (\"MOD9\", enlace tardio): esta VM aun no lo carga (#523, en construccion)";
         }
         return String.format(
                 "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\", \"MOD7\" o \"MOD8\")", magic);
