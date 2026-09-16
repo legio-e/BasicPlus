@@ -623,9 +623,10 @@ public abstract class Symbol {
      *   evento                              {@code nombre(códigos)}
      *
      * Códigos: los de {@link FunctionSymbol#typeCode} con tres cambios que son la razón
-     * de ser de esta clase — (1) una clase DECLARADA va CUALIFICADA ({@code L<Mod.Cls>;},
-     * con library si la hay), así dos clases homónimas de módulos distintos no se
-     * confunden; (2) una clase del LENGUAJE (las que sintetiza el semántico: Object,
+     * de ser de esta clase — (1) una clase DECLARADA va CUALIFICADA ({@code L<Mod/Cls>;},
+     * con library si la hay, y con '/' como en los descriptores de la JVM porque los dos
+     * cargadores partan los nombres de import por sus puntos), así dos clases homónimas de
+     * módulos distintos no se confunden; (2) una clase del LENGUAJE (las que sintetiza el semántico: Object,
      * Thread, Mutex, StringBuilder — {@code isBuiltin}) va SIMPLE, porque no es de
      * ningún módulo; (3) un enum va {@code E<Mod.Enum>;}, cualificado igual. Y la
      * cuarta: un tipo SIN RESOLVER es un error de compilación, nunca un {@code ?}: el
@@ -656,7 +657,9 @@ public abstract class Symbol {
             }
             if (t instanceof BpType.ArrayType) return "[" + tipo(((BpType.ArrayType) t).element, moduloLocal);
             if (t instanceof BpType.AnyType)   return "a";
-            if (t instanceof BpType.ClassType) return "L" + clase(((BpType.ClassType) t).cls, moduloLocal) + ";";
+            // Dentro de un código el cualificador va con '/' (como los descriptores de la JVM): los dos
+            // cargadores partan un nombre de import por sus PUNTOS (`Mod.f(LLib/Base;)s` → módulo `Mod`).
+            if (t instanceof BpType.ClassType) return "L" + clase(((BpType.ClassType) t).cls, moduloLocal).replace('.', '/') + ";";
             if (t instanceof BpType.EnumType) {
                 EnumSymbol en = ((BpType.EnumType) t).en;
                 StringBuilder sb = new StringBuilder("E");
@@ -667,7 +670,7 @@ public abstract class Symbol {
                     if (moduloLocal == null || moduloLocal.isEmpty()) throw new TipoSinResolver("modulo local del enum '" + en.name + "'");
                     sb.append(moduloLocal);
                 }
-                return sb.append('.').append(en.name).append(';').toString();
+                return "E" + sb.substring(1).replace('.', '/') + "/" + en.name + ";";
             }
             if (t instanceof BpType.TupleType) {
                 StringBuilder sb = new StringBuilder("T");

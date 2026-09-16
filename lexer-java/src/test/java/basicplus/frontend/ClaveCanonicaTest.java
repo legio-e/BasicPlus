@@ -21,7 +21,7 @@ import basicplus.frontend.BpType.PrimitiveType;
  * el consumidor pide: si el dueño y el consumidor la calculan distinto, el enlace
  * tardío rechaza lo que Java aceptaría (o peor, casa lo que no debería). Esta tabla
  * fija la codificación de una vez, con los ejemplos escritos en V7_IDEAS §H2.7:
- * {@code toString()s}, {@code compareTo(LObject;)i}, {@code m(LLib.Base;)i},
+ * {@code toString()s}, {@code compareTo(LObject;)i}, {@code m(LLib/Base;)i},
  * {@code getP()i}, {@code setP(i)V}, {@code __cls_new_Box(i)}, {@code n:i}, {@code cambio(i)}.
  *
  * Lo que la distingue de {@code overloadMangle} y por lo que existe: la firma va
@@ -64,15 +64,15 @@ class ClaveCanonicaTest {
     @Test @DisplayName("Una clase DECLARADA va cualificada por su módulo; una del lenguaje, simple; una externa, con su library")
     void clasesCualificadas() {
         ClassSymbol base = clase("Base");                       // declarada en el módulo que compila
-        assertEquals("m(LLib.Base;)i", ClaveCanonica.metodo(fn("m", base, PrimitiveType.INTEGER, new BpType.ClassType(base)), "Lib"));
+        assertEquals("m(LLib/Base;)i", ClaveCanonica.metodo(fn("m", base, PrimitiveType.INTEGER, new BpType.ClassType(base)), "Lib"));
         ClassSymbol lista = externa("", "Core", "List");          // importada de Core
-        assertEquals("addAll(LCore.List;)V", ClaveCanonica.metodo(fn("addAll", base, null, new BpType.ClassType(lista)), "Collections"));
+        assertEquals("addAll(LCore/List;)V", ClaveCanonica.metodo(fn("addAll", base, null, new BpType.ClassType(lista)), "Collections"));
         ClassSymbol dao = externa("com.acme", "Orm", "Dao");      // importada con library
-        assertEquals("Lcom.acme.Orm.Dao;", ClaveCanonica.tipo(new BpType.ClassType(dao), "App"));
+        assertEquals("Lcom/acme/Orm/Dao;", ClaveCanonica.tipo(new BpType.ClassType(dao), "App"));
         assertEquals("LThread;", ClaveCanonica.tipo(new BpType.ClassType(delLenguaje("Thread")), "App"));
         // el mismo nombre en dos módulos son DOS claves distintas (D2)
-        assertEquals("LA.Punto;", ClaveCanonica.tipo(new BpType.ClassType(externa("", "A", "Punto")), "App"));
-        assertEquals("LB.Punto;", ClaveCanonica.tipo(new BpType.ClassType(externa("", "B", "Punto")), "App"));
+        assertEquals("LA/Punto;", ClaveCanonica.tipo(new BpType.ClassType(externa("", "A", "Punto")), "App"));
+        assertEquals("LB/Punto;", ClaveCanonica.tipo(new BpType.ClassType(externa("", "B", "Punto")), "App"));
     }
 
     @Test @DisplayName("El mismo tipo da la MISMA clave visto desde el dueño y desde el consumidor")
@@ -83,20 +83,20 @@ class ClaveCanonicaTest {
         // En Collections, List es un stub importado de Core.
         String enConsumidor = ClaveCanonica.tipo(new BpType.ClassType(externa("", "Core", "List")), "Collections");
         assertEquals(enDueno, enConsumidor);
-        assertEquals("LCore.List;", enDueno);
+        assertEquals("LCore/List;", enDueno);
     }
 
     @Test @DisplayName("Enums, arrays, any y tuplas")
     void enumsArraysTuplas() {
         EnumSymbol color = new EnumSymbol("Color", true, 0, 0);            // declarado aquí
-        assertEquals("ELib.Color;", ClaveCanonica.tipo(new BpType.EnumType(color), "Lib"));
+        assertEquals("ELib/Color;", ClaveCanonica.tipo(new BpType.EnumType(color), "Lib"));
         EnumSymbol ajeno = new EnumSymbol("Color", true, 0, 0); ajeno.externalModule = "Lib";   // importado
-        assertEquals("ELib.Color;", ClaveCanonica.tipo(new BpType.EnumType(ajeno), "App"));
+        assertEquals("ELib/Color;", ClaveCanonica.tipo(new BpType.EnumType(ajeno), "App"));
         assertEquals("[i", ClaveCanonica.tipo(new BpType.ArrayType(PrimitiveType.INTEGER), "X"));
-        assertEquals("[LCore.List;", ClaveCanonica.tipo(new BpType.ArrayType(new BpType.ClassType(externa("", "Core", "List"))), "X"));
+        assertEquals("[LCore/List;", ClaveCanonica.tipo(new BpType.ArrayType(new BpType.ClassType(externa("", "Core", "List"))), "X"));
         assertEquals("a", ClaveCanonica.tipo(BpType.AnyType.INSTANCE, "X"));
         assertEquals("Tis;", ClaveCanonica.tipo(new BpType.TupleType(Arrays.asList(PrimitiveType.INTEGER, PrimitiveType.STRING)), "X"));
-        assertEquals("f(Ei.Color;)V", ClaveCanonica.metodo(fn("f", null, null, new BpType.EnumType(color)), "i"));
+        assertEquals("f(Ei/Color;)V", ClaveCanonica.metodo(fn("f", null, null, new BpType.EnumType(color)), "i"));
     }
 
     @Test @DisplayName("Un tipo SIN RESOLVER es un error con nombre, nunca un «?» (la trampa L/E de #514)")

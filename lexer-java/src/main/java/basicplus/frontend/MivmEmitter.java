@@ -105,8 +105,36 @@ public final class MivmEmitter {
     // sabe: qué clase es abierta, las claves de cada miembro, y las referencias a
     // clases EXTERNAS.
     private int formato = 8;
-    public void setFormato(int f) { this.formato = f; }
+    public void setFormato(int f) { this.formato = f; formatoActual = f; }
     private boolean mod9() { return formato == 9; }
+    /** Los nombres cross-module son funciones ESTÁTICAS (las usa también el AOT), así que el
+     *  formato y el módulo local se publican aquí mientras conviven MOD8 y MOD9. */
+    static int formatoActual = 8;
+    static String moduloLocalActual = "";
+    private static boolean mod9Estatico() { return formatoActual == 9; }
+
+    /* R4 (D1): en MOD9 TODO lo que cruza lleva la firma canónica completa —también lo que ya
+     * era simbólico: funciones de módulo `f(i)i`, factorías `__cls_new_Cls(i)`, inits
+     * `__cls_init_Cls(i)`, el `super` `__cls_m_Cls#k()s`, los estáticos `__cls_s_Cls#m(i)i`,
+     * `__cls_sg_Cls#x()i` / `__cls_ss_Cls#x(i)V`, los accesores de módulo `__prop_get_x()i`.
+     * Así cambiar la firma de la CABEZA (hoy pelada: `f`, `__cls_new_Cls`) deja de casar en
+     * silencio (mezcla.py «f_firma»). En MOD8 todo sigue como estaba. */
+    /** `(códigos)` de los parámetros, o "" en MOD8. */
+    static String firmaParams(FunctionSymbol f) {
+        if (!mod9Estatico()) return "";
+        StringBuilder sb = new StringBuilder("(");
+        for (Symbol.ParamSymbol pr : f.params) sb.append(Symbol.ClaveCanonica.tipo(pr.type, moduloLocalActual));
+        return sb.append(')').toString();
+    }
+    /** `(códigos)ret`, o "" en MOD8. */
+    static String firmaCompleta(FunctionSymbol f) {
+        if (!mod9Estatico()) return "";
+        return firmaParams(f) + Symbol.ClaveCanonica.tipo(f.returnType, moduloLocalActual);
+    }
+    /** El nombre canónico de una función de módulo o método tal como CRUZA: MOD9 `f(i)i`; MOD8 la clave de siempre. */
+    static String nombreCruce(FunctionSymbol f) {
+        return mod9Estatico() ? Symbol.ClaveCanonica.metodo(f, moduloLocalActual) : f.slotKey();
+    }
 
     /** El nombre cualificado (library incluida) del módulo que se está compilando. */
     private String moduloLocal() {
@@ -192,6 +220,15 @@ public final class MivmEmitter {
     /** Ídem para un campo interno de una clase del lenguaje: privado, con la clave que se le da. */
     private void metaCampoBuiltin(String campo, String clave) {
         if (mod9()) w.setFieldMeta(campo, clave, true);
+    }
+
+    /** El nombre cualificado con el que se pide una función de OTRO módulo: `[lib.]Mod.f(i)i` en MOD9,
+     *  `[lib.]Mod.f` / `Mod.f$s` en MOD8 (externalQualifiedName). */
+    private String nombreExterno(FunctionSymbol fs) {
+        if (!mod9()) return fs.externalQualifiedName();
+        StringBuilder sb = new StringBuilder();
+        if (fs.externalLibrary != null && !fs.externalLibrary.isEmpty()) sb.append(fs.externalLibrary).append('.');
+        return sb.append(fs.externalModule).append('.').append(claveDe(fs)).toString();
     }
 
     /** La clase ESTÁTICA del receptor de una expresión (para la ref), o `porDefecto`. */
@@ -327,6 +364,7 @@ public final class MivmEmitter {
 
     public void emitTo(Path outputDir) throws IOException {
         w.setFormato(formato);   // V7/H2 (#523): 8 o 9
+        formatoActual = formato; moduloLocalActual = moduloLocal();
         w.addModulo(moduleAst.name);
         if (moduleAst.library != null && !moduleAst.library.isEmpty()) {
             w.setLibrary(moduleAst.library);
@@ -1082,9 +1120,9 @@ public final class MivmEmitter {
      *     omite la cabeza (private, tipo no exportable) el consumidor renumera y
      *     llamaba a la sobrecarga equivocada en silencio. Con la firma, los dos
      *     lados calculan lo mismo sin saber qué omitió el otro. */
-    static String crossModuleStaticName(ClassSymbol cls, FunctionSymbol fs) { return "__cls_s_" + cls.name + "#" + fs.overloadMangle(); }
-    static String crossModuleStaticGetter(String clsName, String propName) { return "__cls_sg_" + clsName + "#" + propName; }
-    static String crossModuleStaticSetter(String clsName, String propName) { return "__cls_ss_" + clsName + "#" + propName; }
+    static String crossModuleStaticName(ClassSymbol cls, FunctionSymbol fs) { return "__cls_s_" + cls.name + "#" + (mod9Estatico() ? Symbol.ClaveCanonica.metodo(fs, moduloLocalActual) : fs.overloadMangle()); }
+    static String crossModuleStaticGetter(String clsName, String propName, BpType t) { return "__cls_sg_" + clsName + "#" + propName + (mod9Estatico() ? "()" + Symbol.ClaveCanonica.tipo(t, moduloLocalActual) : ""); }
+    static String crossModuleStaticSetter(String clsName, String propName, BpType t) { return "__cls_ss_" + clsName + "#" + propName + (mod9Estatico() ? "(" + Symbol.ClaveCanonica.tipo(t, moduloLocalActual) + ")V" : ""); }
 
     /** `[lib.]Mod.<plano>` para un símbolo del módulo dueño de una clase EXTERNA. */
     private static String qualifyForOwner(ClassSymbol owner, String plain) {
@@ -1110,7 +1148,7 @@ public final class MivmEmitter {
     private void emitStaticGetter(PropertySymbol ps) throws IOException {
         ClassSymbol duena = ps.ownerClass;
         if (duena != null && duena.isExternal) {
-            String qn = qualifyForOwner(duena, crossModuleStaticGetter(duena.name, ps.name));
+            String qn = qualifyForOwner(duena, crossModuleStaticGetter(duena.name, ps.name, ps.type));
             w.emitCallExt(qn, fromPathFor(qn));
         } else {
             w.emitCall(staticGetterName(duena.name, ps.name));
@@ -1119,7 +1157,7 @@ public final class MivmEmitter {
     private void emitStaticSetter(PropertySymbol ps) throws IOException {
         ClassSymbol duena = ps.ownerClass;
         if (duena != null && duena.isExternal) {
-            String qn = qualifyForOwner(duena, crossModuleStaticSetter(duena.name, ps.name));
+            String qn = qualifyForOwner(duena, crossModuleStaticSetter(duena.name, ps.name, ps.type));
             w.emitCallExt(qn, fromPathFor(qn));
         } else {
             w.emitCall(staticSetterName(duena.name, ps.name));
@@ -1134,7 +1172,14 @@ public final class MivmEmitter {
         }
         sb.append(ps.externalModule).append('.');
         sb.append(setter ? moduleSetterName(ps.name) : moduleGetterName(ps.name));
+        sb.append(sufijoAccesor(ps.type, setter));   // V7/H2 (#523, R4): `()i` / `(i)V` en MOD9
         return sb.toString();
+    }
+    /** R4: el sufijo tipado de un accesor de property (`()t` getter, `(t)V` setter), "" en MOD8. */
+    static String sufijoAccesor(BpType t, boolean setter) {
+        if (!mod9Estatico()) return "";
+        String c = Symbol.ClaveCanonica.tipo(t, moduloLocalActual);
+        return setter ? "(" + c + ")V" : "()" + c;
     }
 
     /** Devuelve true si algún PropertyDef a nivel módulo está marcado sync. */
@@ -1215,6 +1260,10 @@ public final class MivmEmitter {
             String backing = moduleBackingName(pd.name.name);
             String getter  = moduleGetterName(pd.name.name);
             String setter  = moduleSetterName(pd.name.name);
+            if (mod9() && pd.isPublic) {   // V7/H2 (#523, R4): los nombres con los que cruzan
+                w.addExportAlias(getter + sufijoAccesor(propType, false), getter);
+                w.addExportAlias(setter + sufijoAccesor(propType, true), setter);
+            }
 
             // ---- Getter ----
             w.addFunction(getter, pd.isPublic);
@@ -1301,6 +1350,9 @@ public final class MivmEmitter {
             // sean privadas en BP. La privacidad de BP se enforza en compile-time
             // (lookup en SemanticAnalyzer), no a nivel de runtime.
             w.addFunction(name, true);
+            // V7/H2 (#523, R4) — y en MOD9 el nombre con el que CRUZA: `f(i)i`. El pelado se
+            // queda (stack traces, y el parque MOD8 que aún pida `Mod.f`).
+            if (mod9() && fs.isPublic && !name.equals("main")) w.addExportAlias(claveDe(fs), name);
 
             // Declarar params (H1.2: width-aware, long = 8 bytes)
             declareParamsWidthAware(fs);
@@ -1718,7 +1770,7 @@ public final class MivmEmitter {
     /** Nombre plano de la factoria de un metodo (sin puntos, ver arriba). Por FIRMA
      *  y con '#': ver crossModuleStaticName. */
     static String crossModuleMethodName(ClassSymbol cls, FunctionSymbol fs) {
-        return "__cls_m_" + cls.name + "#" + fs.overloadMangle();
+        return "__cls_m_" + cls.name + "#" + (mod9Estatico() ? Symbol.ClaveCanonica.metodo(fs, moduloLocalActual) : fs.overloadMangle());
     }
 
     private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
@@ -1962,8 +2014,8 @@ public final class MivmEmitter {
         if (ctor == null || ctor.slotKey().equals(ctor.name)) return "";
         return ctor.slotKey().substring(ctor.name.length());
     }
-    static String crossModuleInitName(ClassSymbol cls, FunctionSymbol ctor) { return "__cls_init_" + cls.name + ctorSuffix(ctor); }
-    static String crossModuleNewName(ClassSymbol cls, FunctionSymbol ctor)  { return "__cls_new_" + cls.name + ctorSuffix(ctor); }
+    static String crossModuleInitName(ClassSymbol cls, FunctionSymbol ctor) { return "__cls_init_" + cls.name + (mod9Estatico() ? firmaParams(ctor) : ctorSuffix(ctor)); }
+    static String crossModuleNewName(ClassSymbol cls, FunctionSymbol ctor)  { return "__cls_new_" + cls.name + (mod9Estatico() ? firmaParams(ctor) : ctorSuffix(ctor)); }
 
     /** V7/H2 (#509/#513) — `this` (+ args) ya en pila: llama al `__init` del
      *  constructor `ctor` por la clase que lo DECLARA (puede ser una base, y puede
@@ -2100,8 +2152,8 @@ public final class MivmEmitter {
             String setter  = staticSetterName(cls.name, pd.name.name);
             // V7/H2 (#492-B) — alias planos importables (ver crossModuleStaticName).
             if (cls.astNode != null && cls.astNode.isPublic && !pd.isPrivate) {
-                w.addExportAlias(crossModuleStaticGetter(cls.name, pd.name.name), getter);
-                w.addExportAlias(crossModuleStaticSetter(cls.name, pd.name.name), setter);
+                w.addExportAlias(crossModuleStaticGetter(cls.name, pd.name.name, propType), getter);
+                w.addExportAlias(crossModuleStaticSetter(cls.name, pd.name.name, propType), setter);
             }
 
             // ---- Getter ----
@@ -4280,7 +4332,7 @@ public final class MivmEmitter {
                     return;
                 }
                 if (fs.isExternal) {
-                    w.emitCallExt(fs.externalQualifiedName(), fs.externalFromPath);
+                    w.emitCallExt(nombreExterno(fs), fs.externalFromPath);
                 } else {
                     w.emitCall(emitName(fs));   // H5.a
                 }
@@ -4326,7 +4378,7 @@ public final class MivmEmitter {
                     ie.emit(w);
                     return;
                 }
-                w.emitCallExt(fs.externalQualifiedName(), fs.externalFromPath);
+                w.emitCallExt(nombreExterno(fs), fs.externalFromPath);
                 return;
             }
             if (fs.isStatic) {

@@ -108,7 +108,7 @@ class Mod9EmisorTest {
         List<TablasMod9.Clase> clases = TablasMod9.leerClases(secciones(lib)[2]);
         TablasMod9.Clase base = clase(clases, "Base");
         assertFalse(base.abierta); assertEquals(TablasMod9.DEP_LOCAL, base.parentDepIdx); assertEquals("Object", base.parentName);
-        assertEquals(java.util.Arrays.asList("getP()i", "setP(i)V", "k()s", "m(i)i", "m(s)s", "suma(LLib.Base;)i"), claves(base.metodos),
+        assertEquals(java.util.Arrays.asList("getP()i", "setP(i)V", "k()s", "m(i)i", "m(s)s", "suma(LLib/Base;)i"), claves(base.metodos),
                 "solo lo PROPIO, en orden de ranura, con la firma completa tambien en la cabeza m(i)i");
         assertEquals(2, base.metodos.get(0).slot, "los accesores van detras de toString/compareTo");
         assertEquals("n:i", base.campos.get(0).clave); assertFalse(base.campos.get(0).privado);
@@ -126,7 +126,7 @@ class Mod9EmisorTest {
         List<String> rs = refs(TablasMod9.leerRefs(secciones(usa)[1]));
         assertTrue(rs.contains("MET Lib.Base.k()s [dep1]"), rs.toString());
         assertTrue(rs.contains("MET Lib.Base.m(i)i [dep1]") && rs.contains("MET Lib.Base.m(s)s [dep1]"), "las DOS sobrecargas con su firma: " + rs);
-        assertTrue(rs.contains("MET Lib.Base.suma(LLib.Base;)i [dep1]"), rs.toString());
+        assertTrue(rs.contains("MET Lib.Base.suma(LLib/Base;)i [dep1]"), rs.toString());
         assertTrue(rs.contains("MET Lib.Base.getP()i [dep1]") && rs.contains("MET Lib.Base.setP(i)V [dep1]"), rs.toString());
         assertEquals(6, rs.size(), "y nada mas (dedupe): " + rs);
         String bytes = new String(usa, StandardCharsets.ISO_8859_1);

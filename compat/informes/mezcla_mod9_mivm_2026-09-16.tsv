@@ -41,7 +41,7 @@ II	Ext v1 contra met_final g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
 II	Usa v1 contra met_medio g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
 II	Ext v1 contra met_medio g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
 II	Usa v1 contra met_quitado g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene: recompila 'Usa' ===
-II	Ext v1 contra met_quitado g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: lib 'Lib' presente pero no exporta 'Lib.__cls_m_Base#k$' (la usa 'Ext'; version vieja?) ===
+II	Ext v1 contra met_quitado g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: lib 'Lib' presente pero no exporta 'Lib.__cls_m_Base#k()s' (la usa 'Ext'; version vieja?) =
 II	Usa v1 contra met_quitado_nousado g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
 II	Ext v1 contra met_quitado_nousado g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
 II	Usa v1 contra firma g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.m(i)i' y 'Lib' (gen 8) no lo tiene (tiene 'm(s)s', 'm(j)i'): recom
@@ -61,10 +61,10 @@ II	Ext v1 contra ev_privado g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
 II	Usa v1 contra enum_cabeza g8	corre	corre	ok	k3|5|x!|8|7|k5/8/2|fin
 II	Ext v1 contra enum_cabeza g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
 II	Usa v1 contra retorno g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene (tiene 'k()i'): recompila 'Usa' 
-II	Ext v1 contra retorno g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Ext.Hija' redefine 'k()s' y 'Lib' (gen 8) ya no lo tiene: recompila 'Ext' ===
+II	Ext v1 contra retorno g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: lib 'Lib' presente pero no exporta 'Lib.__cls_m_Base#k()s' (la usa 'Ext'; version vieja?) =
 II	Usa v1 contra prop_tipo g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Usa' necesita 'Lib.Base.setP(i)V' y 'Lib' (gen 8) no lo tiene (tiene 'setP(s)V'): recompil
 II	Ext v1 contra prop_tipo g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: 'Ext' necesita 'Lib.Base.setP(i)V' y 'Lib' (gen 8) no lo tiene (tiene 'setP(s)V'): recompil
-II	Usa v1 contra f_firma g8	corre	corre	SILENCIOSO	k3|5|x!|8|0|k5/8/2|fin
+II	Usa v1 contra f_firma g8	no enlaza	no enlaza	ok	=== ERROR DE LINK: lib 'Lib' presente pero no exporta 'Lib.f()i' (la usa 'Usa'; version vieja?) ===
 II	Ext v1 contra f_firma g8	corre	corre	ok	hija/k3/3/6|9|5|hija/k3/3/6|9|fin
 P	A(v1)+B(igual g7), runtime igual g7	corre	corre	ok	k3/4/2|fin
 P	A(v1)+B(igual g8), runtime igual g8	corre	corre	ok	k3/4/2|fin

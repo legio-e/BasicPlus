@@ -311,12 +311,13 @@ MUEVE = {'met_medio', 'met_quitado', 'prop_mas', 'reorden', 'ev_privado'}
 #   'firma' y 'enum_cabeza' dejan `Base#m#N` en su sitio con OTRA firma -> la prediccion
 #   de la norma es «no enlaza», y lo que pase de verdad es lo que se mide.
 # EL CRITERIO DE JAVA (formato 9): estructura cambiada -> corre; miembro usado quitado o con
-# otra firma/retorno -> rechazo al enlazar. `f_firma` queda como SILENCIOSO conocido hasta F3b
-# (los nombres R4 de las funciones de modulo: hoy CALL_EXT `Lib.f` a pelo).
-ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo'}
+# otra firma/retorno -> rechazo al enlazar (tambien una funcion de modulo: R4, `Lib.f()i`).
+ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo', 'f_firma'}
 def prediccion_java(variante, gen, app):
     if gen < 7: return 'mas antiguo'
-    if variante in ROMPE_JAVA: return 'no enlaza'
+    if variante in ROMPE_JAVA:
+        if variante == 'f_firma' and app != 'Usa': return 'corre'   # solo Usa llama a f()
+        return 'no enlaza'
     return 'corre'
 
 def prediccion_usa(variante, gen):
