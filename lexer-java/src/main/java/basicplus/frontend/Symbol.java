@@ -560,6 +560,11 @@ public abstract class Symbol {
     public static final class EnumSymbol extends Symbol {
         public final boolean isPublic;
         public final Map<String, Long> values = new HashMap<>();
+        /** V7/H2 (#523) — de qué módulo es un enum IMPORTADO ("" = declarado aquí).
+         *  Sin esto el enum no podía viajar en una firma (#516): la clave canónica
+         *  lo cualifica como a las clases. Lo rellena el importador. */
+        public String externalLibrary = "";
+        public String externalModule  = "";
 
         public EnumSymbol(String name, boolean isPublic, int line, int column) {
             super(name, line, column);
@@ -601,6 +606,118 @@ public abstract class Symbol {
                 s = s.parent;
             }
             return null;
+        }
+    }
+
+    // ============================================================
+    // V7/H2 (#523, regla R3) — LA CLAVE CANÓNICA
+    // ============================================================
+    /**
+     * El nombre con el que un miembro CRUZA la frontera de un módulo, calculado en UN
+     * sitio y de una sola manera, para que el dueño que lo exporta y el consumidor
+     * que lo pide lleguen a la misma cadena sin ponerse de acuerdo:
+     *
+     *   método / accesor / función / ctor   {@code nombre(códigos)ret}   ({@code ret} = {@code V} si no
+     *                                        devuelve; el ctor no lleva retorno)
+     *   campo / property                    {@code nombre:código}
+     *   evento                              {@code nombre(códigos)}
+     *
+     * Códigos: los de {@link FunctionSymbol#typeCode} con tres cambios que son la razón
+     * de ser de esta clase — (1) una clase DECLARADA va CUALIFICADA ({@code L<Mod.Cls>;},
+     * con library si la hay), así dos clases homónimas de módulos distintos no se
+     * confunden; (2) una clase del LENGUAJE (las que sintetiza el semántico: Object,
+     * Thread, Mutex, StringBuilder — {@code isBuiltin}) va SIMPLE, porque no es de
+     * ningún módulo; (3) un enum va {@code E<Mod.Enum>;}, cualificado igual. Y la
+     * cuarta: un tipo SIN RESOLVER es un error de compilación, nunca un {@code ?}: el
+     * {@code L} contra {@code E} de un stub mangleado antes de resolver tipos fue lo
+     * que hizo imposible reconstruir claves en el importador (#514, medido el 15-sep).
+     *
+     * A diferencia de {@code overloadMangle}, aquí SIEMPRE va la firma completa, también
+     * en la cabeza de una cadena de sobrecargas y también el tipo de retorno: cambiar
+     * cualquiera de los dos en el dueño tiene que dejar de casar (V7_IDEAS §H2.7, D1).
+     *
+     * {@code moduloLocal} es el nombre cualificado (library incluida) del módulo que
+     * está compilando: es lo que cualifica a sus propias clases y enums.
+     */
+    public static final class ClaveCanonica {
+        private ClaveCanonica() {}
+
+        /** Un tipo que no se ha resuelto no puede cruzar: se aborta con nombre. */
+        public static final class TipoSinResolver extends RuntimeException {
+            public TipoSinResolver(String que) { super("clave canonica: tipo sin resolver: " + que); }
+        }
+
+        public static String tipo(BpType t, String moduloLocal) {
+            if (t == null || t instanceof BpType.VoidType) return "V";
+            if (t instanceof BpType.PrimitiveType) {
+                String c = FunctionSymbol.typeCode(t);
+                if ("?".equals(c)) throw new TipoSinResolver(t.display());
+                return c;
+            }
+            if (t instanceof BpType.ArrayType) return "[" + tipo(((BpType.ArrayType) t).element, moduloLocal);
+            if (t instanceof BpType.AnyType)   return "a";
+            if (t instanceof BpType.ClassType) return "L" + clase(((BpType.ClassType) t).cls, moduloLocal) + ";";
+            if (t instanceof BpType.EnumType) {
+                EnumSymbol en = ((BpType.EnumType) t).en;
+                StringBuilder sb = new StringBuilder("E");
+                if (en.externalModule != null && !en.externalModule.isEmpty()) {
+                    if (en.externalLibrary != null && !en.externalLibrary.isEmpty()) sb.append(en.externalLibrary).append('.');
+                    sb.append(en.externalModule);
+                } else {
+                    if (moduloLocal == null || moduloLocal.isEmpty()) throw new TipoSinResolver("modulo local del enum '" + en.name + "'");
+                    sb.append(moduloLocal);
+                }
+                return sb.append('.').append(en.name).append(';').toString();
+            }
+            if (t instanceof BpType.TupleType) {
+                StringBuilder sb = new StringBuilder("T");
+                for (BpType e : ((BpType.TupleType) t).elements) sb.append(tipo(e, moduloLocal));
+                return sb.append(';').toString();
+            }
+            if (t instanceof BpType.UnresolvedClassRef) throw new TipoSinResolver(((BpType.UnresolvedClassRef) t).name);
+            throw new TipoSinResolver(t.display());
+        }
+
+        /** El nombre cualificado de una clase tal como va dentro de {@code L…;}. */
+        public static String clase(ClassSymbol cls, String moduloLocal) {
+            if (cls.isBuiltin) return cls.name;                       // del lenguaje: sin módulo
+            StringBuilder sb = new StringBuilder();
+            if (cls.isExternal) {
+                if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty()) sb.append(cls.externalLibrary).append('.');
+                sb.append(cls.externalModule);
+            } else {
+                if (moduloLocal == null || moduloLocal.isEmpty()) throw new TipoSinResolver("modulo local de '" + cls.name + "'");
+                sb.append(moduloLocal);
+            }
+            return sb.append('.').append(cls.name).toString();
+        }
+
+        /** {@code nombre(códigos)ret}; un constructor no lleva retorno. */
+        public static String metodo(FunctionSymbol f, String moduloLocal) {
+            StringBuilder sb = new StringBuilder(f.name).append('(');
+            for (ParamSymbol p : f.params) {
+                if (p.type == null) throw new TipoSinResolver("parametro '" + p.name + "' de '" + f.name + "'");
+                sb.append(tipo(p.type, moduloLocal));
+            }
+            sb.append(')');
+            if (!f.isConstructor) sb.append(tipo(f.returnType, moduloLocal));
+            return sb.toString();
+        }
+
+        /** {@code nombre:código} — campos y properties (el accesor de una property es un método: {@code getX()t}). */
+        public static String campo(String nombre, BpType t, String moduloLocal) {
+            if (t == null) throw new TipoSinResolver("campo '" + nombre + "'");
+            return nombre + ":" + tipo(t, moduloLocal);
+        }
+
+        /** {@code nombre(códigos)} — la firma que el handler tiene que casar. */
+        public static String evento(EventSymbol e, String moduloLocal) {
+            StringBuilder sb = new StringBuilder(e.name).append('(');
+            for (ParamSymbol p : e.params) {
+                if (p.type == null) throw new TipoSinResolver("parametro '" + p.name + "' del evento '" + e.name + "'");
+                sb.append(tipo(p.type, moduloLocal));
+            }
+            return sb.append(')').toString();
         }
     }
 }
