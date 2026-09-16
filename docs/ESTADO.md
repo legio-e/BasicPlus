@@ -39,6 +39,10 @@ check verde (69/59/9/12), mezcla MOD9 120/120, la stdlib como MOD8 y MOD9 sin er
 **J-3 decidido y hecho** (Eduardo: «salvo los private todos son virtuales»; `super.m()` = el m EFECTIVO del padre): ref
 SUPER (kind 6) resuelta por la cadena en los dos cargadores; mezcla MOD9 130/130 con `ExtD`.
 
+**La Pico carga MOD9** (noche, firmware de hoy grabado con `flash_pico.py` sin BOOTSEL): `Ext` MOD8 y MOD9 con el stdout
+esperado; enlace 995 µs (MOD8) → 1.655 µs (MOD9: 1 clase construida, 11 refs, 66 B de arena, 4× menos strcmp). Ver `FICHAS`
+`#523` §16-sep noche. Quedan en `/app` de la Pico `Lib.mod`/`Ext.mod` (inofensivos; el IDE los pisa en cada Run).
+
 **Orden para retomar**: (1) las 8 fichas nuevas `#525`-`#532` son preexistentes: `#525` (null en campos, miVM en silencio)
 y `#526` (print de un Thread ejecuta run) son las graves; (2) el plan de `#523`: filas de V4, V6, V5, V9, V8 (la Pico), la
 cadena en MOD9 (V11: MOD_FORMAT con la ref SUPER y la 4.5, OPCODES, HEAP_LAYOUT `+6`, WIRE E0-E10) y los docs.

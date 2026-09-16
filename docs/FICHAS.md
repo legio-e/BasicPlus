@@ -721,6 +721,21 @@ de un E9 claro (sólo durante la transición); los mensajes citan al dueño por 
 al propio consumidor; formato hostil aún sin cerrar: `idx` de los `_REF` sin acotar, UTF inválido decodificado distinto,
 «load X.mod: null» en miVM, tamaños hostiles de cabecera; el E6 no se alcanza en C con la memoria por defecto.
 
+### 🧪 16-sep (noche) — LA PICO CARGA Y EJECUTA MOD9 (el tercer escalón de la cascada)
+
+Firmware de hoy grabado sin tocar BOOTSEL (`tools/flash_pico.py`: el verbo `BOOTSEL` del wire + la unidad `RP2350`); una
+sola conexión; el mismo programa (`Lib`+`Ext` de mezcla, el override llamado por referencia base) en las dos versiones
+(`scratchpad/pico_mod9.py`):
+
+| | stdout | enlace (log de la Pico) |
+|---|---|---|
+| MOD8 | el esperado, `EXITED OK 8 ms` | 3 módulos, 10 búsquedas, 1.561 strcmp, **995 µs** |
+| MOD9 | el esperado, `EXITED OK 11 ms` | «enlace tardío: 1 clase construida, 11 refs, 66 B de arena» · 3 módulos, 4 búsquedas, 354 strcmp, **1.655 µs** |
+
+Primer dato de V9 en placa: en un programa de tres módulos el enlace tardío cuesta +660 µs (construir la abierta y resolver
+11 refs) y hace 4× menos `strcmp` (menos marcadores). El `Core` de la Pico siguió siendo el MOD8 de la imagen (D9: sólo la
+regla 1) — subir el MOD9 de 14 KB exige `puts` por trozos (`#294`), pendiente para la tanda de V8/V9 con `GuiTableDemo`.
+
 ⏭️ **Queda del plan** (V7_IDEAS §H2.7): las filas que faltan de V4 (override huérfano, abuelo, dos
 averías, MOD8×MOD9); V6 (GC con bitmaps reconstruidos como fila fija); V5 (todos los samples en MOD9); V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
