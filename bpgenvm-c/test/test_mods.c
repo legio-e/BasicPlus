@@ -85,6 +85,31 @@ int main(void) {
     CHECK(bpvm_mods_version((const uint8_t*) "MOD7") == 7 && bpvm_mods_version((const uint8_t*) "xMOD") == 0,
           "version(): MOD7 → 7, otra cosa → 0");
 
+    /* V7/H2 (#523) — mismo MAGIC (MOD8) y GENERACIONES distintas: la gen va be32 en el
+     * offset 36. El caso real: el IDE sube a /lib el Core gen 9 que su app necesita; al
+     * arrancar, la imagen (gen 8) no debe pisarlo. Y al revés, un /lib gen 7 rancio bajo
+     * una imagen gen 8 se repone diciendo por qué. */
+    {
+        uint8_t emb8[48], lib9[48], lib7[48];
+        memset(emb8, 0, sizeof emb8); memcpy(emb8, "MOD8", 4); emb8[39] = 8;
+        memcpy(lib9, emb8, sizeof emb8); lib9[39] = 9; lib9[44] = 0x55;   /* otro contenido, otro CRC */
+        memcpy(lib7, emb8, sizeof emb8); lib7[39] = 7;
+        CHECK(bpvm_mods_gen(emb8, sizeof emb8) == 8 && bpvm_mods_gen(lib9, sizeof lib9) == 9
+              && bpvm_mods_gen(EMB, L) == 0 && bpvm_mods_gen(emb8, 20) == 0,
+              "gen(): MOD8 → su décimo entero; MOD7 → 0; cabecera corta → 0");
+        bpvm_fs_write("/lib/Core.mod", lib9, sizeof lib9, 0);
+        r = bpvm_mods_sincronizar("/lib/Core.mod", emb8, sizeof emb8, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_SE_DEJA && strstr(linea, "gen 9 > gen 8"), "MOD8 gen 9 en /lib bajo imagen gen 8 → SE DEJA: %s", linea);
+        CHECK(mismo_contenido("/lib/Core.mod", lib9, sizeof lib9), "y el FS conserva el gen 9 (antes lo pisaba: mismo MAGIC, CRC distinto)");
+        bpvm_fs_write("/lib/Core.mod", lib7, sizeof lib7, 0);
+        r = bpvm_mods_sincronizar("/lib/Core.mod", emb8, sizeof emb8, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_REPUESTO && strstr(linea, "generación anterior") && strstr(linea, "gen 7 -> MOD8 gen 8"),
+              "MOD8 gen 7 bajo imagen gen 8 → REPUESTO: %s", linea);
+        CHECK(mismo_contenido("/lib/Core.mod", emb8, sizeof emb8), "y el FS tiene el embebido");
+        r = bpvm_mods_sincronizar("/lib/Core.mod", emb8, sizeof emb8, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_IGUAL, "misma gen, idéntico → IGUAL");
+    }
+
     /* U4 — el bucle común sobre una tabla como la que genera regen_mods.sh. */
     {
         static const bpvm_mod_embebido_t T[] = {

@@ -51,6 +51,10 @@ bpvm_mods_res_t bpvm_mods_sincronizar(const char* path, const uint8_t* data, uin
 
 /* La versión de un módulo por su MAGIC ("MOD7" → 7); 0 si no empieza por "MOD". */
 int bpvm_mods_version(const uint8_t* cabecera4);
+/* V7/H2 (#523) — bytes de cabecera que hace falta leer para tener también la generación. */
+#define BPVM_MODS_CABECERA 40
+/* La generación (`gen`, be32 en el offset 36) de un módulo MOD8+; 0 si es anterior o no cabe. */
+uint32_t bpvm_mods_gen(const uint8_t* m, uint32_t len);
 
 /* V6/U4 — la tabla de la stdlib embebida de una imagen: la genera
  * scripts/regen_mods.sh (UN fichero de SÓLO DATOS por familia) y la recorre
