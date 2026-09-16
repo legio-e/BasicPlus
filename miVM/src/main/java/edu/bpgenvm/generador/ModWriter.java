@@ -955,6 +955,9 @@ public class ModWriter {
         if (clase == null || clase.isEmpty()) throw new RuntimeException("ref sin clase (kind " + kind + ", clave '" + clave + "')");
         if (clave == null) clave = "";
         if (kind != REF_CLASE && clave.isEmpty()) throw new RuntimeException("ref " + kind + " a '" + clase + "' sin clave");
+        // V10 (16-sep, E-05/F8/J-1): una clave de mas de 160 caracteres no cabe en los buffers de la VM-C
+        // (tmp_k[256], «(tiene …)» con 8 candidatas) — se rechaza AQUI, con el nombre, no se trunca alla.
+        exigirClaveCorta(clave, clase);
         String k = kind + "|" + depIdx + "|" + clase + "|" + clave;
         Integer idx = refIndex.get(k);
         if (idx != null) return idx;
@@ -1076,7 +1079,14 @@ public class ModWriter {
      *  sin padre es raíz (-1). Nada que declarar. */
 
     /** Metadatos MOD9 de un método ya declarado (addMethod/declareMethodSlot) de la clase actual. */
+    /** V10 (16-sep, E-05/F8/J-1): una clave de mas de 160 caracteres no cabe en los buffers de la VM-C
+     *  (tmp_k[256], «(tiene …)» con 8 candidatas) — se rechaza AQUI, con el nombre, no se trunca alla. */
+    static void exigirClaveCorta(String clave, String de) {
+        if (clave != null && clave.length() > 160) throw new RuntimeException("la firma '" + clave.substring(0, 40) + "…' de '" + de + "' tiene "
+                + clave.length() + " caracteres (maximo 160): acorta los nombres o divide la funcion");
+    }
     public void setMethodMeta(String simpleName, String clave, boolean override, boolean privado) {
+        exigirClaveCorta(clave, simpleName);
         exigeFormato9("setMethodMeta");
         if (currentClass == null) throw new RuntimeException("setMethodMeta fuera de una clase");
         if (clave == null || clave.isEmpty()) throw new RuntimeException("metodo '" + simpleName + "' sin clave canonica");
@@ -1090,6 +1100,7 @@ public class ModWriter {
     }
     /** Metadatos MOD9 de un campo ya declarado (declareField) de la clase actual. */
     public void setFieldMeta(String fieldName, String clave, boolean privado) {
+        exigirClaveCorta(clave, fieldName);
         exigeFormato9("setFieldMeta");
         if (currentClass == null) throw new RuntimeException("setFieldMeta fuera de una clase");
         if (clave == null || clave.isEmpty()) throw new RuntimeException("campo '" + fieldName + "' sin clave canonica");
@@ -1100,6 +1111,7 @@ public class ModWriter {
     }
     /** Un evento propio: su clave `nombre(códigos)` y el campo `$recv` ya declarado. */
     public void declareEventMeta(String clave, String recvFieldName) {
+        exigirClaveCorta(clave, recvFieldName);
         exigeFormato9("declareEventMeta");
         if (currentClass == null) throw new RuntimeException("declareEventMeta fuera de una clase");
         for (FieldInfo f : currentClass.fields) {

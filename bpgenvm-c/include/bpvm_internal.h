@@ -609,7 +609,7 @@ struct bpvm {
      * resuelto). Lo rellena bpvm_link_all; el handler de RUN lo manda al wire
      * en vez del exit-code mudo (antes el detalle solo iba a stderr). "" = sin
      * error. Tamaño fijo (sin malloc → MCU-friendly). */
-    char link_error[256];   /* V7/H2 (#523): un E3 con nombres reales supera 160 (paridad con miVM) */
+    char link_error[1536];  /* V7/H2 (#523): un E3 con hasta 8 candidatas de 160 B (paridad con miVM: nunca se trunca) */
 
     /* Detalle del ÚLTIMO RuntimeError lanzado (msg de bpvm_throw_runtime_error):
      * p.ej. "referencia a objeto eliminado (use-after-free)". Espejo de
@@ -994,6 +994,10 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm);
 uint32_t      bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr);
 /* V7/H2 (#523) — reflexion de Forms con MOD9: slot de un metodo por nombre simple, o -1. */
 int           bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre);
+/* V10 (16-sep, R2/R3/R6/R9) — la subtabla CLASES (4.5) recien retenida: filas dentro de la seccion, csOff dentro del
+ * modulo, parentDepIdx en rango, ranuras coherentes. 0 si vale; si no, deja el motivo en vm->load_error y devuelve
+ * BPVM_ERR_BAD_HEADER (un .mod corrupto se RECHAZA, no se lee basura). */
+int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod);
 uint32_t      bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr);
 uint32_t      bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs);
 

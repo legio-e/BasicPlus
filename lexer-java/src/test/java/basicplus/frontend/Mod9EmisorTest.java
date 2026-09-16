@@ -151,7 +151,8 @@ class Mod9EmisorTest {
         assertTrue(rs.contains("CAMPO Hija.q:i [local]"), "su propio campo, por ref (R2): " + rs);
         assertTrue(rs.contains("MET Hija.propio()i [local]") && rs.contains("MET Hija.k()s [local]"), "sus propios metodos, por ref: " + rs);
         assertTrue(rs.contains("CLASE Hija [local]"), "el new de una abierta, por ref: " + rs);
-        assertTrue(rs.contains("CAMPO Lib.Base.n:i [dep1]"), "el campo protegido heredado, por ref al dueño: " + rs);
+        assertTrue(rs.contains("CAMPO Hija.n:i [local]"), "el campo protegido heredado (this.n): la ref lleva la clase ESTATICA del receptor (V10, EC-1), el cargador sube hasta Lib.Base: " + rs);
+        assertFalse(rs.contains("CAMPO Lib.Base.n:i [dep1]"), "ya no por la declarante: " + rs);
         assertTrue(rs.contains("MET Hija.m(i)i [local]"), "h.m(4): la ref lleva la clase ESTATICA del receptor (Hija); el cargador sube hasta Lib.Base: " + rs);
         assertTrue(rs.contains("MET Lib.Base.k()s [dep1]"), "b.k() con b: Lib.Base: " + rs);
         assertTrue(rs.contains("SUBTIPO Hija.Lib.Base [local]"), "A1: `var b: Lib.Base := h` ASUME Hija<:Lib.Base y lo deja escrito (E10 si ya no): " + rs);

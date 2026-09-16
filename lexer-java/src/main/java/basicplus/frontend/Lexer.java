@@ -411,6 +411,12 @@ public final class Lexer {
             return new Token(kw, lexeme, null, startLine, startColumn);
         }
         // Identificador normal: valor = el propio nombre (case-sensitive).
+        // V10 (16-sep, R1/E-04/F7): un nombre de mas de 63 caracteres es un error del lenguaje —
+        // asi ningun buffer de la VM-C (nombres de simbolo, de clase) trunca jamas, y las dos
+        // VMs dicen lo mismo. Nadie escribe uno de 64.
+        if (lexeme.length() > 63)
+            errors.add(new LexerError("identificador demasiado largo (" + lexeme.length() + " caracteres; el maximo es 63): '"
+                    + lexeme.substring(0, 20) + "…'", startLine, startColumn));
         return new Token(TokenType.IDENTIFIER, lexeme, lexeme, startLine, startColumn);
     }
 

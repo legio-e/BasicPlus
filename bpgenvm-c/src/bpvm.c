@@ -1625,6 +1625,10 @@ void bpvm_destroy(bpvm_t* vm) {
         bpvm_free(m->dep_avisado);
         bpvm_free(m->class_fixups);
         bpvm_free(m->eh_class_fixups);
+        if (m->refs) {   /* V7/H2 (#523) — V10 (R4/J-2): la subtabla refs se quedaba viva → «FUGA» en todo RUN MOD9 */
+            for (int k = 0; k < m->ref_count; k++) { bpvm_free(m->refs[k].clase); bpvm_free(m->refs[k].clave); }
+            bpvm_free(m->refs);
+        }
     }
     /* Liberar EH stacks y mutex waiters. */
     for (int i = 0; i < vm->thread_count; i++) {

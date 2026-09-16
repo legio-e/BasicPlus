@@ -101,9 +101,12 @@ class ClaveCanonicaTest {
 
     @Test @DisplayName("Un tipo SIN RESOLVER es un error con nombre, nunca un «?» (la trampa L/E de #514)")
     void sinResolverEsError() {
+        // V10 (H1): un nombre CUALIFICADO sin ClassSymbol (dep transitiva que este módulo no importa)
+        // SÍ tiene clave: es lo único que la clave necesita. Sin punto, no hay de dónde sacar el módulo.
+        assertEquals("LLib/Base;", ClaveCanonica.tipo(new BpType.UnresolvedClassRef("Lib.Base"), "App"));
         ClaveCanonica.TipoSinResolver e = assertThrows(ClaveCanonica.TipoSinResolver.class,
-                () -> ClaveCanonica.tipo(new BpType.UnresolvedClassRef("Lib.Base"), "App"));
-        assertEquals("clave canonica: tipo sin resolver: Lib.Base", e.getMessage());
+                () -> ClaveCanonica.tipo(new BpType.UnresolvedClassRef("Base"), "App"));
+        assertEquals("clave canonica: tipo sin resolver: Base", e.getMessage());
         FunctionSymbol f = fn("m", clase("C"), PrimitiveType.INTEGER, (BpType) null);   // parámetro sin tipo
         assertThrows(ClaveCanonica.TipoSinResolver.class, () -> ClaveCanonica.metodo(f, "Lib"));
         // una clase local sin módulo local tampoco: no hay con qué cualificarla

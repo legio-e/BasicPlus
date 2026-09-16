@@ -134,7 +134,9 @@ final class EnlaceTardio {
         if (p != null) { k.metodos.putAll(p.metodos); k.campos.putAll(p.campos); k.eventos.putAll(p.eventos); k.privados.addAll(p.privados); }
         if (!k.c.abierta) {
             // CERRADA: ranuras absolutas ya en su fila; sólo se indexa
-            for (TablasMod9.Metodo m : k.c.metodos) { k.metodos.put(m.clave, m.slot); if (m.privado) k.privados.add(m.clave); }
+            // V10 (16-sep, F1/REF-2): manda la declaración MÁS CERCANA — si esta clase publica una
+            // clave que un ancestro tenía privada, deja de ser privada (la VM-C ya lo hacía así).
+            for (TablasMod9.Metodo m : k.c.metodos) { k.metodos.put(m.clave, m.slot); if (m.privado) k.privados.add(m.clave); else k.privados.remove(m.clave); }
             for (TablasMod9.Campo f : k.c.campos)   k.campos.put(f.clave, f.slot);
             for (TablasMod9.Evento e : k.c.eventos) k.eventos.put(e.clave, e.recvSlot);
             k.construyendo = false;
@@ -157,7 +159,7 @@ final class EnlaceTardio {
                 ranuraDe[i] = nM++;
             }
             k.metodos.put(m.clave, ranuraDe[i]);
-            if (m.privado) k.privados.add(m.clave);
+            if (m.privado) k.privados.add(m.clave); else k.privados.remove(m.clave);   // V10 (F1): la más cercana manda
         }
         if (nF > 0xFFFF || nM > 0xFFFF)
             throw new ModuleManager.LinkException("'" + k.mod.name + "." + k.c.name + "' tendria " + Math.max(nF, nM) + " ranuras (maximo 65535)");
@@ -270,22 +272,23 @@ final class EnlaceTardio {
     }
 
     /** «(tiene 'k()i')»: si existe otra clave con el mismo nombre, se cita — es el caso de la firma o el retorno cambiados. */
-    private static String tiene(Clase k, String clave) {
-        String nombre = clave.substring(0, clave.indexOf('('));
-        java.util.TreeSet<String> otras = new java.util.TreeSet<>();   // ordenadas: mismo texto que la VM-C
-        for (String otra : k.metodos.keySet())
-            if (otra.startsWith(nombre + "(") && !otra.equals(clave)) otras.add(otra);
+    private static String tiene(Clase k, String clave) { return citar(k.metodos.keySet(), clave, '('); }
+    private static String tieneCampo(Clase k, String clave) { return citar(k.campos.keySet(), clave, ':'); }
+    /** V10 (16-sep, E-01/E-03/F3/F5): las otras claves con el mismo nombre, ORDENADAS y como mucho
+     *  {@link #MAX_CANDIDATAS} — el mismo texto en métodos y campos y el mismo que la VM-C. */
+    static final int MAX_CANDIDATAS = 8;
+    private static String citar(java.util.Collection<String> claves, String clave, char sep) {
+        int corte = clave.indexOf(sep);
+        if (corte < 0) return "";   // una clave sin separador no es de este tipo: nada que citar (R10)
+        String nombre = clave.substring(0, corte);
+        java.util.TreeSet<String> otras = new java.util.TreeSet<>();
+        for (String otra : claves)
+            if (otra.startsWith(nombre + sep) && !otra.equals(clave)) otras.add(otra);
         if (otras.isEmpty()) return "";
         StringBuilder sb = new StringBuilder(" (tiene ");
         int i = 0;
-        for (String o : otras) { if (i++ > 0) sb.append(", "); sb.append("'").append(o).append("'"); }
+        for (String o : otras) { if (i == MAX_CANDIDATAS) break; if (i++ > 0) sb.append(", "); sb.append("'").append(o).append("'"); }
         return sb.append(')').toString();
-    }
-    private static String tieneCampo(Clase k, String clave) {
-        String nombre = clave.substring(0, clave.indexOf(':'));
-        for (String otra : k.campos.keySet())
-            if (otra.startsWith(nombre + ":") && !otra.equals(clave)) return " (tiene '" + otra + "')";
-        return "";
     }
     private static int versionDe(int magic) { return (magic & 0xFF) - 0x30; }
 

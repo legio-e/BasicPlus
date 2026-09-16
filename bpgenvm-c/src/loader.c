@@ -432,6 +432,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                         mod->end_addr = end_addr;   /* la copia es del modulo: el siguiente empieza detras */
                     }
                     mod->clases_len = len;
+                    { int vr = bpvm_link_validar_clases(vm, mod); if (vr != 0) return vr; }   /* V10: limites antes de leerla */
                 }
                 exp_off = exports_size;
             }

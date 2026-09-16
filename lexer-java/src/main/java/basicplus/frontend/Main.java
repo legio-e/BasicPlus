@@ -722,7 +722,16 @@ public final class Main {
                 return true;
             }
             if ("mivm".equals(ctx.backend)) {
-                if (!emitMivmMod(module, info, ctx, depth, srcAbs)) return false;   // #521: sin .mod no hay build
+                try {
+                    if (!emitMivmMod(module, info, ctx, depth, srcAbs)) return false;   // #521: sin .mod no hay build
+                } catch (RuntimeException ex) {
+                    // V10 (16-sep, E-10): lo que el emisor o la interfaz no pueden hacer se DICE
+                    // («la base cross-module … no publica layout (bpi 9) — compila con --formato=9»),
+                    // sin traza de Java, y cuenta como error del build.
+                    indent(depth); System.err.println("error: " + ex.getMessage());
+                    ctx.totalErrors++;
+                    return false;
+                }
             } else {
                 try {
                     emitJvmClass(module, info, ctx, depth);
@@ -1014,7 +1023,15 @@ public final class Main {
         emitter.setGeneracion(ctx.gen);
         emitter.setFormato(ctx.formato);   // V7/H2 (#523)
         emitter.setVersionesDeps(ctx.versionesDeps);
-        emitter.emitTo(ctx.outDir);
+        try {
+            emitter.emitTo(ctx.outDir);
+        } catch (RuntimeException ex) {
+            // V10 (E-10): si el emisor reventó, lo que ya había anotado en `errors` es la causa
+            // legible («parent cross-module sin layout (bpi 9) — compila con --formato=9»); la
+            // excepción («Clase no declarada») es la consecuencia. Se dicen las dos.
+            for (String e : emitter.errors) { indent(depth); System.err.println("  " + e); }
+            throw ex;
+        }
         String modFilename = (module.library != null && !module.library.isEmpty())
                 ? module.library + "." + module.name + ".mod"
                 : module.name + ".mod";
@@ -1165,6 +1182,19 @@ public final class Main {
         //    .mod es v5 (sin sección) → caemos al camino de siempre.
         String modName = library.isEmpty() ? moduleName + ".mod" : library + "." + moduleName + ".mod";
         Path preMod = locateImportMod(imp, modName, importerDir, ctx);
+        // V10 (16-sep) — un .mod que NO está en el outDir del build y cuyo FUENTE sí está en el
+        // proyecto es un resto de otra compilación, no una entrada: su interfaz puede ser la de
+        // otro compilador (la stdlib versionada, con CRLF de antes del 15-sep), y el módulo se
+        // va a recompilar a outDir de todos modos. Sellar a los consumidores con el CRC del
+        // resto y emitir luego otro era el «la interfaz cambió entre la pasada y la emisión»
+        // en los 26 módulos de la stdlib. La interfaz sale de la fuente (pasada INTERFACE).
+        if (preMod != null && bpSource != null && ctx.outDir != null && ctx.rootSrcDir != null
+                && bpSource.toAbsolutePath().getParent().equals(ctx.rootSrcDir.toAbsolutePath())   // del PROYECTO (no una dep con fuente a mano)
+                && !preMod.toAbsolutePath().getParent().equals(ctx.outDir.toAbsolutePath())) {
+            indent(depth); System.out.printf("-- %s es un resto fuera de outDir: la interfaz de '%s' sale de su fuente --%n",
+                    preMod.getFileName(), qualifiedName);
+            preMod = null;
+        }
         if (preMod != null && !isStale(preMod, bpSource)
                 && readInterfaceCached(preMod, ctx) != null) {
             indent(depth); System.out.printf("-- interfaz de '%s' desde %s (embebida) --%n",
@@ -2248,6 +2278,11 @@ public final class Main {
                     Symbol.EnumSymbol e =
                             new Symbol.EnumSymbol(es.name, true, 0, 0);
                     e.values.putAll(es.values);
+                    // V10 (16-sep, H6) — de qué módulo es: sin esto la clave canónica lo cualificaba
+                    // con el módulo LOCAL (`EMid/Color;` por `ELib/Color;`) y un override con un enum
+                    // ajeno en la firma no casaba nunca (ranura nueva, en silencio).
+                    e.externalLibrary = ns.library;
+                    e.externalModule  = ns.moduleName;
                     ns.enums.put(es.name, e);
                 }
                 for (ModuleInterface.PropSig ps : ifaceBpi.properties) {
@@ -2574,6 +2609,12 @@ public final class Main {
                             // llega como UnresolvedClassRef y sin esto «el tipo 'Base' no tiene miembros».
                             Symbol.VarSymbol vv = (Symbol.VarSymbol) mem;
                             vv.type = resolveTypeAgainst(vv.type, ns);
+                        } else if (mem instanceof Symbol.EventSymbol) {
+                            // V10 (16-sep, H2/V10-EV-1) — los parámetros de un EVENTO también: con una
+                            // clase en la firma, la clave canónica no resolvía y ningún consumidor MOD9
+                            // podía suscribirse (la GUI entera: onClick(Component)).
+                            for (Symbol.ParamSymbol p : ((Symbol.EventSymbol) mem).params)
+                                p.type = resolveTypeAgainst(p.type, ns);
                         }
                     }
                 }
@@ -2653,10 +2694,12 @@ public final class Main {
         for (Symbol.ImportedNamespaceSymbol ns : loadedNs) {
             for (Symbol.FunctionSymbol head : ns.functions.values()) {
                 // #387 — idem con las funciones LIBRES: el mapa guarda la 1ª firma.
+                // V10 (H7): primero contra su PROPIO ns (`load(Medida)` nombra la clase del módulo sin
+                // cualificar), luego los demás por nombre cualificado; nunca «el primer ns que la tenga».
                 for (Symbol.FunctionSymbol fn : firmasDe(head)) {
-                    fn.returnType = resolveCrossModuleType(fn.returnType, loadedNs);
+                    fn.returnType = resolveCrossModuleType(resolveTypeAgainst(fn.returnType, ns), loadedNs);
                     for (Symbol.ParamSymbol p : fn.params) {
-                        p.type = resolveCrossModuleType(p.type, loadedNs);
+                        p.type = resolveCrossModuleType(resolveTypeAgainst(p.type, ns), loadedNs);
                     }
                 }
             }
@@ -2678,6 +2721,9 @@ public final class Main {
                         // sólo lo resolvía la 1ª pasada, que no ve otros namespaces.
                         Symbol.VarSymbol vv = (Symbol.VarSymbol) mem;
                         vv.type = resolveCrossModuleType(vv.type, loadedNs);
+                    } else if (mem instanceof Symbol.EventSymbol) {   // V10 (H2/H3)
+                        for (Symbol.ParamSymbol p : ((Symbol.EventSymbol) mem).params)
+                            p.type = resolveCrossModuleType(p.type, loadedNs);
                     }
                 }
             }
@@ -2922,11 +2968,9 @@ public final class Main {
             }
             return t;   // no se encontró
         }
-        // Sin punto: busca en cualquier ns que exponga esa clase.
-        for (Symbol.ImportedNamespaceSymbol candidate : allNs) {
-            Symbol.ClassSymbol cls = candidate.classes.get(name);
-            if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
-        }
+        // Sin punto: la interfaz publica sin cualificar SOLO las clases de su propio módulo (ya
+        // resueltas en la 1ª pasada contra su ns) y las del lenguaje. Buscarlo «en cualquier ns»
+        // cogía un HOMÓNIMO de otro módulo según el orden de los imports (V10, 16-sep, H7).
         return resolverComoBuiltin(t, name);   // #388 — List/Map/… no son de nadie
     }
 

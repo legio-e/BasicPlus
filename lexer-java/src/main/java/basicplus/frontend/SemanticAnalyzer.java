@@ -2199,7 +2199,9 @@ public final class SemanticAnalyzer {
             boolean ok = true;
             for (int i = 0; i < f.params.size(); i++) {
                 BpType a = f.params.get(i).type, b = ev.params.get(i).type;
-                if (a == null || b == null || !a.display().equals(b.display())) { ok = false; break; }
+                // V10 (16-sep, H3): por TIPO (sameAs); el display de una clase importada es
+                // «Lib.Base» y el del handler «Base» — el mismo símbolo, textos distintos.
+                if (a == null || b == null || !(a.sameAs(b) || a.display().equals(b.display()))) { ok = false; break; }
             }
             if (ok) return f;
         }

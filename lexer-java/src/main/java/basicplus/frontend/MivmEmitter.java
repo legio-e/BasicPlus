@@ -221,6 +221,9 @@ public final class MivmEmitter {
         for (ClassSymbol a = cls.baseClass; a != null; a = a.baseClass) {
             Symbol m = a.instanceMembers.tryLookup(nombre);
             for (FunctionSymbol o = (m instanceof FunctionSymbol) ? (FunctionSymbol) m : null; o != null; o = o.nextOverload) {
+                // V10 (16-sep, E-R2-2): lo PRIVADO de un ancestro no se sobreescribe — el cargador lo
+                // salta (A2) y da ranura nueva; marcarlo override aquí era un E2 falso al enlazar.
+                if (o.isPrivate) continue;
                 try { if (Symbol.ClaveCanonica.metodo(o, moduloLocal()).equals(clave)) return true; }
                 catch (Symbol.ClaveCanonica.TipoSinResolver e) { /* un ancestro con tipo sin resolver no casa */ }
             }
@@ -229,9 +232,15 @@ public final class MivmEmitter {
     }
     /** ¿Redeclara una property de un ancestro? (sus accesores sobreescriben los de él) */
     private boolean esOverrideProperty(ClassSymbol cls, String prop) {
-        for (ClassSymbol a = cls.baseClass; a != null; a = a.baseClass)
-            if (a.instanceMembers.tryLookup(prop) instanceof PropertySymbol) return true;
+        for (ClassSymbol a = cls.baseClass; a != null; a = a.baseClass) {
+            Symbol p = a.instanceMembers.tryLookup(prop);
+            if (p instanceof PropertySymbol && !((PropertySymbol) p).isPrivate) return true;   // V10 (F10): la privada no cuenta
+        }
         return false;
+    }
+    /** La clase del método que se está emitiendo (el `this` implícito), o null fuera de una clase. */
+    private ClassSymbol claseActual() {
+        return (scopeStack.isEmpty() || scopeStack.peek().fs == null) ? null : scopeStack.peek().fs.ownerClass;
     }
     /** V7/H2 (#523) — metadatos MOD9 de un método de una clase del LENGUAJE que este módulo
      *  sintetiza (Object, Thread, Mutex, StringBuilder): la clave sale de su símbolo, que el
@@ -2428,9 +2437,18 @@ public final class MivmEmitter {
      *  Si la clase que lo DECLARA es de otro módulo, el ModWriter no la conoce por nombre
      *  («Clase no declarada»): se va por la ranura que publicó su interfaz. Si es local,
      *  por nombre, como siempre. Es el gemelo de emitInvokeVirtualSmart para campos. */
-    private void emitGetFieldDe(VarSymbol v) throws IOException {
-        if (mod9() && v.ownerClass != null && v.ownerClass.isExternal) {   // V7/H2 (#523): por referencia
-            w.emitGetFieldRef(refCampo(v.ownerClass, claveCampo(v.name, v.type)), occupies8Bytes(v.type));
+    /** V10 (16-sep, EC-1/E-R2-1) — la clase que va en la ref: la ESTÁTICA del receptor si es externa o
+     *  abierta (como en los métodos: así el cargador resuelve por la cadena REAL y un `Derived` que ya no
+     *  extiende `Base` da E3, no la ranura de otro miembro); si no, la que declara el miembro. */
+    private ClassSymbol claseDeLaRef(ClassSymbol receptor, ClassSymbol declarante) {
+        return (receptor != null && porRef(receptor)) ? receptor : declarante;
+    }
+    private void emitGetFieldDe(VarSymbol v) throws IOException { emitGetFieldDe(v, null); }
+    private void emitSetFieldDe(VarSymbol v) throws IOException { emitSetFieldDe(v, null); }
+    private void emitGetFieldDe(VarSymbol v, ClassSymbol receptor) throws IOException {
+        ClassSymbol c = claseDeLaRef(receptor, v.ownerClass);
+        if (mod9() && c != null && porRef(c)) {   // V7/H2 (#523): por referencia
+            w.emitGetFieldRef(refCampo(c, claveCampo(v.name, v.type)), occupies8Bytes(v.type));
             return;
         }
         if (v.ownerClass != null && v.ownerClass.isExternal) {
@@ -2440,9 +2458,10 @@ public final class MivmEmitter {
             w.emitGetField(v.ownerClass.name, v.name);
         }
     }
-    private void emitSetFieldDe(VarSymbol v) throws IOException {
-        if (mod9() && v.ownerClass != null && v.ownerClass.isExternal) {   // V7/H2 (#523): por referencia
-            int r = refCampo(v.ownerClass, claveCampo(v.name, v.type));
+    private void emitSetFieldDe(VarSymbol v, ClassSymbol receptor) throws IOException {
+        ClassSymbol c = claseDeLaRef(receptor, v.ownerClass);
+        if (mod9() && c != null && porRef(c)) {   // V7/H2 (#523): por referencia
+            int r = refCampo(c, claveCampo(v.name, v.type));
             if (v.isOwner) w.emitSetFieldOwnerRef(r); else w.emitSetFieldRef(r, occupies8Bytes(v.type));
             return;
         }
@@ -2991,7 +3010,8 @@ public final class MivmEmitter {
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         // BUG-6: numArgs = slots (long/double = 2).
-                        emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
+                        // V10 (EC-1): el receptor ESTÁTICO en la ref, como en los métodos.
+                        emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         // El FREE del valor anterior lo hace el propio setter
@@ -3004,11 +3024,11 @@ public final class MivmEmitter {
                     case MINUS_ASSIGN: {
                         emitExpr(ma.target);
                         emitExpr(ma.target);
-                        emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
+                        emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         emitCompoundOp(a.op, tType);
-                        emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
+                        emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         return;
@@ -3044,7 +3064,7 @@ public final class MivmEmitter {
                         emitExpr(ma.target);
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
-                        emitSetFieldDe(v);   // V7/H2: por ranura si la clase es externa
+                        emitSetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2: por ranura si la clase es externa
                         if (v.isOwner) emitMoveNullifySource(a.value);
                         return;
                     case PLUS_ASSIGN:
@@ -3055,11 +3075,11 @@ public final class MivmEmitter {
                         //   SET_FIELD (pop newval, pop ref)
                         emitExpr(ma.target);
                         emitExpr(ma.target);
-                        emitGetFieldDe(v);   // V7/H2
+                        emitGetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         emitCompoundOp(a.op, tType);
-                        emitSetFieldDe(v);
+                        emitSetFieldDe(v, receptorDe(ma.target, v.ownerClass));
                         return;
                     }
                 }
@@ -3940,8 +3960,21 @@ public final class MivmEmitter {
         w.declareLabel(endLabel);
     }
 
+    /** La clase `Exception` de Core tal como la ve este módulo (el stub importado), o null. */
+    private ClassSymbol claseExceptionDeCore() {
+        for (Symbol m : info.module.members.getSymbols())
+            if (m instanceof Symbol.ImportedNamespaceSymbol && "Core".equals(((Symbol.ImportedNamespaceSymbol) m).moduleName))
+                return ((Symbol.ImportedNamespaceSymbol) m).classes.get("Exception");
+        return null;
+    }
     private void emitThrowStmt(ThrowStmt s) throws IOException {
         emitExpr(s.value);
+        // V10 (16-sep, EC-3/E-09): `throw e` ASUME e <: Core.Exception — el semántico lo comprobó
+        // contra la versión de entonces; la ref SUBTIPO lo deja escrito para que el cargador lo
+        // verifique contra la real (E10) en vez de lanzar un objeto que no es una excepción.
+        BpType tv = info.exprTypes.get(s.value);
+        ClassSymbol exc = claseExceptionDeCore();
+        if (tv instanceof ClassType && exc != null) asumirSubtipo(tv, new ClassType(exc));
         // B2 (parte 2): si estamos dentro del cuerpo de un getter/setter
         // de una sync property, hay que liberar el mutex antes de
         // propagar la excepción. Sin esto, un throw deja el mutex tomado
@@ -5869,7 +5902,7 @@ public final class MivmEmitter {
                 return;
             }
             emitExpr(ma.target);
-            emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
+            emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
             return;
         }
         if (mSym instanceof ConstSymbol) {
@@ -5889,7 +5922,7 @@ public final class MivmEmitter {
                 w.emitGetGlobal(v.ownerClass.name + "." + v.name);
             } else {                                          // campo de instancia
                 emitExpr(ma.target);
-                emitGetFieldDe(v);   // V7/H2: por ranura si la clase es externa
+                emitGetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2: por ranura si la clase es externa
             }
             return;
         }
@@ -6147,7 +6180,7 @@ public final class MivmEmitter {
                 } else {                                     // property de clase (instancia)
                     emitExpr(ma.target);
                     w.emitGetLocal(valLocal);
-                    emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, "set" + capitalize(ps.name), claveSetter(ps.name, ps.type), occupies8Bytes(vt) ? 2 : 1);
+                    emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "set" + capitalize(ps.name), claveSetter(ps.name, ps.type), occupies8Bytes(vt) ? 2 : 1);
                     declareLocal("__discard"); w.emitSetLocal("__discard");
                 }
                 return;
@@ -6367,7 +6400,7 @@ public final class MivmEmitter {
             else {
                 // Campo de instancia con implicit this (estamos en un método de la clase).
                 w.emitGetParam("this");
-                emitGetFieldDe(v);   // V7/H2: heredado de una clase externa → por ranura
+                emitGetFieldDe(v, claseActual());   // V7/H2: heredado de una clase externa → por ranura
             }
         } else if (sym instanceof PropertySymbol) {
             PropertySymbol ps = (PropertySymbol) sym;
@@ -6387,7 +6420,7 @@ public final class MivmEmitter {
                 return;
             }
             w.emitGetParam("this");
-            emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
+            emitInvokeVirtualSmart(claseActual() != null ? claseActual() : ps.ownerClass, ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
         } else if (sym instanceof ConstSymbol) {
             ConstSymbol c = (ConstSymbol) sym;
             // L8 v2 — valor literal conocido: INLINE (PUSH/LPUSH/DPUSH/LEA),
@@ -6441,7 +6474,7 @@ public final class MivmEmitter {
                 w.emitSetLocal(temp);
                 w.emitGetParam("this");
                 w.emitGetLocal(temp);
-                emitSetFieldDe(v);   // V7/H2
+                emitSetFieldDe(v, claseActual());   // V7/H2
             }
         } else if (sym instanceof PropertySymbol) {
             PropertySymbol ps = (PropertySymbol) sym;
@@ -6472,7 +6505,7 @@ public final class MivmEmitter {
             w.emitSetLocal(temp);
             w.emitGetParam("this");
             w.emitGetLocal(temp);
-            emitInvokeVirtualSmart(ps.ownerClass, ps.ownerClass, "set" + capitalize(ps.name), claveSetter(ps.name, ps.type), ps8 ? 2 : 1);
+            emitInvokeVirtualSmart(claseActual() != null ? claseActual() : ps.ownerClass, ps.ownerClass, "set" + capitalize(ps.name), claveSetter(ps.name, ps.type), ps8 ? 2 : 1);
             declareLocal("__discard");
             w.emitSetLocal("__discard");
         } else if (sym instanceof ConstSymbol) {

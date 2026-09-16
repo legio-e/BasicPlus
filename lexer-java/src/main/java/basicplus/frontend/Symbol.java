@@ -677,7 +677,14 @@ public abstract class Symbol {
                 for (BpType e : ((BpType.TupleType) t).elements) sb.append(tipo(e, moduloLocal));
                 return sb.append(';').toString();
             }
-            if (t instanceof BpType.UnresolvedClassRef) throw new TipoSinResolver(((BpType.UnresolvedClassRef) t).name);
+            if (t instanceof BpType.UnresolvedClassRef) {
+                // V10 (16-sep, H1): una clase de una dependencia TRANSITIVA que este módulo no importa
+                // (`Lib.Base` en la interfaz de `Mid`) no tiene ClassSymbol, pero su nombre ya viene
+                // cualificado: la clave sólo necesita eso. Sin punto no hay de dónde sacar el módulo.
+                String n = ((BpType.UnresolvedClassRef) t).name;
+                if (n.indexOf('.') > 0) return "L" + n.replace('.', '/') + ";";
+                throw new TipoSinResolver(n);
+            }
             throw new TipoSinResolver(t.display());
         }
 

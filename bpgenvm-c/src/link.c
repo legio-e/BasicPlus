@@ -451,10 +451,13 @@ static int lt_buscar_evento(const lt_ctx_t* x, int ci, const char* clave, uint16
 }
 /* D4: el cerrojo `sync` es UNO por objeto, el del PRIMER eslabon desde la raiz que lo declara */
 static int lt_mutex_desde_la_raiz(const lt_ctx_t* x, int ci, uint16_t* slot) {
-    int cadena[32]; int n = 0;
-    for (int c = ci; c >= 0 && n < 32; c = x->reg[c].padre) cadena[n++] = c;
+    /* V10 (16-sep, F2): sin tope de profundidad (antes `cadena[32]`: con 33 eslabones la VM-C
+     * cerraba OTRO cerrojo que miVM). De la raiz hacia abajo: el i-esimo ancestro se busca andando. */
+    int n = 0;
+    for (int c = ci; c >= 0; c = x->reg[c].padre) n++;
     for (int i = n - 1; i >= 0; i--) {
-        const lt_clase_t* k = &x->reg[cadena[i]];
+        int ac = ci; for (int s = 0; s < i; s++) ac = x->reg[ac].padre;
+        const lt_clase_t* k = &x->reg[ac];
         const uint8_t* p = k->campos;
         for (uint16_t j = 0; j < k->n_cam; j++) {
             const uint8_t* q = lt_utf_skip(p);
@@ -469,7 +472,7 @@ static void lt_tiene(const lt_ctx_t* x, int ci, const char* clave, char sep, cha
     out[0] = 0;
     const char* fin = strchr(clave, sep); if (!fin) return;
     size_t nl = (size_t)(fin - clave);
-    const uint8_t* cand[8]; int nc = 0;
+    const uint8_t* cand[64]; int nc = 0;   /* V10 (F3): se recogen TODAS, se ordenan, y se citan 8 (como miVM) */
     for (int c = ci; c >= 0; c = x->reg[c].padre) {
         const lt_clase_t* k = &x->reg[c];
         const uint8_t* p = (sep == '(') ? k->metodos : k->campos;
@@ -479,7 +482,7 @@ static void lt_tiene(const lt_ctx_t* x, int ci, const char* clave, char sep, cha
             uint16_t len = lt_u16(p);
             if (len > nl && memcmp(p + 2, clave, nl) == 0 && p[2 + nl] == (uint8_t) sep && !lt_utf_eq_c(p, clave)) {
                 int dup = 0; for (int d = 0; d < nc; d++) if (lt_utf_eq(cand[d], p)) { dup = 1; break; }
-                if (!dup && nc < 8) cand[nc++] = p;
+                if (!dup && nc < 64) cand[nc++] = p;
             }
             p = q + ((sep == '(') ? 2 + 4 + 1 : 2 + 1 + 1);
         }
@@ -491,6 +494,7 @@ static void lt_tiene(const lt_ctx_t* x, int ci, const char* clave, char sep, cha
         if (strcmp(a, b) > 0) { const uint8_t* t = cand[j]; cand[j] = cand[j - 1]; cand[j - 1] = t; } else break;
     }
     size_t l = 0;
+    if (nc > 8) nc = 8;   /* MAX_CANDIDATAS de EnlaceTardio.java */
     l += (size_t) snprintf(out + l, cap - l, " (tiene ");
     for (int i = 0; i < nc && l < cap; i++) {
         char a[256]; lt_utf_copy(cand[i], a, sizeof a);
@@ -643,7 +647,7 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
                 uint16_t slot; int priv = 0, en = -1;
                 int hay = lt_buscar_metodo(x, ci, r->clave, &slot, &priv, &en);
                 if (!hay || (priv && x->reg[en].mod != mi)) {
-                    char tiene[200]; lt_tiene(x, ci, r->clave, '(', tiene, sizeof tiene);
+                    static char tiene[1400]; lt_tiene(x, ci, r->clave, '(', tiene, sizeof tiene);   /* 8 x 160 + el texto; static: el enlace no es reentrante */
                     lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
                     return BPVM_ERR_RUNTIME;
                 }
@@ -652,7 +656,7 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
             case BPVM_REF_CAMPO: {
                 uint16_t slot; int hay = (strcmp(r->clave, "__syncMutex:LMutex;") == 0) ? lt_mutex_desde_la_raiz(x, ci, &slot) : lt_buscar_campo(x, ci, r->clave, &slot);
                 if (!hay) {
-                    char tiene[200]; lt_tiene(x, ci, r->clave, ':', tiene, sizeof tiene);
+                    static char tiene[1400]; lt_tiene(x, ci, r->clave, ':', tiene, sizeof tiene);
                     lt_error(x, "'%s' necesita el campo '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
                     return BPVM_ERR_RUNTIME;
                 }
@@ -740,9 +744,14 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
  * entrada cuyo codeOff es el suyo); el registro del enlace ya no existe. -1 = no esta
  * o la clase no es MOD9 (el llamante prueba los marcadores). */
 int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre) {
+    /* V10 (16-sep, F6/REF-1): la ranura MINIMA entre todas las claves `nombre(` de la cadena
+     * entera — la misma regla que slotPorNombre en miVM y que los marcadores MOD8 (la primera
+     * declarada). Antes devolvia la primera fila de la clase mas derivada que tuviera una, y
+     * con sobrecargas homonimas cada VM elegia otra (y otro ancho de frame). */
     size_t nl = strlen(nombre);
     uint32_t desc = class_ptr;
-    for (int prof = 0; prof < 32 && desc != 0; prof++) {
+    int mejor = -1;
+    for (int prof = 0; prof < 64 && desc != 0; prof++) {
         uint16_t sello = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_MODULO);
         if (sello == 0 || sello > (uint16_t) vm->module_count) return -1;
         const bpvm_module_t* m = &vm->modules[sello - 1];
@@ -763,25 +772,93 @@ int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* 
                 const uint8_t* r = lt_utf_skip(q);
                 uint16_t len = lt_u16(q);
                 if (len > nl && memcmp(q + 2, nombre, nl) == 0 && q[2 + nl] == '(') {
-                    if (!(c.flags & 1)) return (int) lt_u16(r);
-                    /* construida: la entrada de SU vtable con este codeOff */
-                    int32_t code_off = bpvm_read_i32_be(r + 2);
-                    uint16_t bw = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_BITMAP_WORDS);
-                    uint16_t nm2 = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_NUM_METHODS);
-                    const uint8_t* vt = vm->memory + desc + BPVM_CLS_OFF_FIELD_BITMAP + 8u * bw;
-                    for (uint16_t s2 = 0; s2 < nm2; s2++) if (bpvm_read_i32_be(vt + 4u * s2) == code_off) return (int) s2;
-                    return -1;
+                    int s = -1;
+                    if (!(c.flags & 1)) s = (int) lt_u16(r);
+                    else {
+                        /* construida: la entrada de SU vtable con este codeOff */
+                        int32_t code_off = bpvm_read_i32_be(r + 2);
+                        uint16_t bw = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_BITMAP_WORDS);
+                        uint16_t nm2 = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_NUM_METHODS);
+                        const uint8_t* vt = vm->memory + desc + BPVM_CLS_OFF_FIELD_BITMAP + 8u * bw;
+                        for (uint16_t s2 = 0; s2 < nm2; s2++) if (bpvm_read_i32_be(vt + 4u * s2) == code_off) { s = (int) s2; break; }
+                    }
+                    if (s >= 0 && (mejor < 0 || s < mejor)) mejor = s;
                 }
                 q = r + 2 + 4 + 1;
             }
         }
-        if (!hallada) return -1;
+        if (!hallada) break;
         int32_t parent_off = bpvm_read_i32_be(vm->memory + desc + BPVM_CLS_OFF_PARENT_OFF);
-        if (parent_off == 0) return -1;
+        if (parent_off == 0) break;
         desc = (uint32_t)((int32_t) bpvm_get_cs_for_data_addr(vm, desc) + parent_off);
     }
-    return -1;
+    return mejor;
 }
+
+/* V10 (16-sep, R2/R3/R6/R9) — la 4.5 recien retenida, con los limites comprobados ANTES de que
+ * nadie la lea (el registro, la reflexion, la construccion): un .mod corrupto o truncado se
+ * rechaza con motivo en vez de leer basura o escribir fuera de rango. */
+#define LTV_NEED(n) do { if ((size_t)(end - p) < (size_t)(n)) { motivo = "fila truncada"; goto mal; } } while (0)
+static const uint8_t* ltv_utf(const uint8_t* p, const uint8_t* end, const char** motivo_out) {
+    if ((size_t)(end - p) < 2) { *motivo_out = "fila truncada"; return NULL; }
+    uint16_t len = lt_u16(p);
+    if ((size_t)(end - p) < 2u + len) { *motivo_out = "nombre truncado"; return NULL; }
+    return p + 2 + len;
+}
+int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod) {
+    const char* motivo = NULL;
+    const uint8_t* p = mod->clases;
+    const uint8_t* end = mod->clases + mod->clases_len;
+    if (!p || mod->clases_len < 4) { motivo = "sin cabecera"; goto mal; }
+    if (lt_u16(p) != 1) { snprintf(vm->load_error, sizeof vm->load_error, "'%s': subtabla CLASES de version %u (esperada 1)", mod->name, (unsigned) lt_u16(p)); return BPVM_ERR_BAD_HEADER; }
+    uint16_t n = lt_u16(p + 2); p += 4;
+    for (uint16_t k = 0; k < n; k++) {
+        const uint8_t* q;
+        if (!(q = ltv_utf(p, end, &motivo))) goto mal;          /* name */
+        p = q; LTV_NEED(1 + 4 + 2);
+        uint8_t flags = *p++;
+        int32_t cs_off = bpvm_read_i32_be(p); p += 4;
+        int16_t pdep = (int16_t) lt_u16(p); p += 2;
+        if (!(q = ltv_utf(p, end, &motivo))) goto mal;          /* parent name */
+        p = q; LTV_NEED(6);
+        uint16_t nf_own = lt_u16(p), nm_own = lt_u16(p + 2), bw_own = lt_u16(p + 4); p += 6;
+        LTV_NEED(8u * bw_own); p += 8u * bw_own;
+        if (bw_own != (uint16_t)((nf_own + 31u) >> 5)) { motivo = "bitmap incoherente con nFieldsOwn"; goto mal; }
+        if (pdep < -2 || pdep >= mod->dep_count) { motivo = "parentDepIdx fuera de la subtabla deps"; goto mal; }
+        uint32_t desc_nf = 0, desc_nm = 0;
+        if (!(flags & 1)) {
+            uint32_t abs = (uint32_t)((int32_t) mod->code_start + cs_off);
+            if (abs < mod->data_start || abs + 12u > mod->data_start + mod->data_size) { motivo = "csOff fuera de la seccion de datos del modulo"; goto mal; }
+            desc_nf = bpvm_read_u16_be(vm->memory + abs); desc_nm = bpvm_read_u16_be(vm->memory + abs + 2);
+        }
+        LTV_NEED(2); uint16_t n_met = lt_u16(p); p += 2;
+        for (uint16_t i = 0; i < n_met; i++) {
+            if (!(q = ltv_utf(p, end, &motivo))) goto mal;
+            p = q; LTV_NEED(2 + 4 + 1);
+            uint16_t slot = lt_u16(p); p += 2 + 4 + 1;
+            if ((flags & 1) ? slot >= nm_own : slot >= desc_nm) { motivo = "ranura de metodo fuera de la clase"; goto mal; }
+        }
+        LTV_NEED(2); uint16_t n_cam = lt_u16(p); p += 2;
+        for (uint16_t i = 0; i < n_cam; i++) {
+            if (!(q = ltv_utf(p, end, &motivo))) goto mal;
+            p = q; LTV_NEED(2 + 1 + 1);
+            uint16_t slot = lt_u16(p); uint8_t ancho = p[2]; p += 2 + 1 + 1;
+            if (ancho < 1 || ancho > 2 || ((flags & 1) ? slot + ancho > nf_own : slot + ancho > desc_nf)) { motivo = "ranura de campo fuera de la clase"; goto mal; }
+        }
+        LTV_NEED(2); uint16_t n_ev = lt_u16(p); p += 2;
+        for (uint16_t i = 0; i < n_ev; i++) {
+            if (!(q = ltv_utf(p, end, &motivo))) goto mal;
+            p = q; LTV_NEED(2);
+            uint16_t recv = lt_u16(p); p += 2;
+            if ((flags & 1) ? recv + 3u > nf_own : recv + 3u > desc_nf) { motivo = "ranura de evento fuera de la clase"; goto mal; }
+        }
+    }
+    return 0;
+mal:
+    snprintf(vm->load_error, sizeof vm->load_error, "'%s': subtabla CLASES corrupta (%s): .mod corrupto", mod->name, motivo ? motivo : "?");
+    return BPVM_ERR_BAD_HEADER;
+}
+#undef LTV_NEED
 
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
