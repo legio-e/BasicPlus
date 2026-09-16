@@ -596,11 +596,35 @@ con la salida correcta, también para la subclase `Ext`; `k()` quitada, `m(integ
 `f()`→`f(x)` → **rechazo al enlazar** nombrando el símbolo. La stdlib entera compila como MOD9: `Gui.mod` 61.558 → 43.564 B,
 `Core` 13.883 → 14.360. `Ext`: 1 clase construida, 9 refs, 60 B de arena (miVM) / 67 B (VM-C).
 
+**El AOT en MOD9, fase 1 (16-sep, la pregunta de Eduardo: *«en AOT había alguna vez que se llamaba a un método de clase por
+la Vtable, ¿eso funcionará o no? ¿Se ha revisado?»*).** Estaba en el diseño (§H2.7 §8, hallazgo A3 del crítico) y NO en el
+código: `AotCEmitter` hornea en el `.mdn` la ranura que le da `ClassSymbol.slotOf` en DOS sitios (`call_method_i32(vm, this,
+<slot>, …)`: el método de instancia, y el getter de una property), y con `--formato=9` seguía igual — la ranura de una clase
+EXTERNA es la de la versión contra la que se compiló, y la de una ABIERTA la asigna el cargador contra el padre real: la familia
+de `#514` dentro del código nativo, en silencio. Censo de lo que el `.mdn` sabe de la forma de una clase: sólo esos dos
+`call_method_i32`; los campos no los lee (límite documentado) y todo lo demás cruza por NOMBRE (`find_function`). **Hecho**:
+(a) `exigirClaseCerradaLocal` en los dos sitios — en MOD9 una `native` sólo hornea ranuras de clases CERRADAS de su propio
+módulo; externa o abierta → `UnsupportedAotException` nombrando la clase (error de compilación en la `native` de módulo, que es
+una promesa del autor; aviso + interpretado en el método `native` aplanado); en MOD8 nada cambia. (b) Los nombres que el `.mdn`
+pide al intérprete son los R4 del `.mod` en MOD9 (`Lib.f(i)i`, `Lib.__cls_new_Base(i)`): `MivmEmitter.fijarContextoEstatico`
+al entrar en `emitModule` (la validación AOT corre ANTES que el emisor mivm, y `AotMain` no lo tiene) — así la fila «f_firma»
+tampoco casa en silencio desde el nativo. (c) `aot_<Mod>_busca(vm, nombre, aviso)` en el C generado: si el símbolo no está, lo
+DICE (`AOT: la native 'rapida' pide 'Lib.f(i)i' y no está en los módulos cargados (¿otra versión de la dependencia?): recompila
+'Usa'`) en vez del «función destino no encontrada» sin nombre de `call_bp_i32`. (d) `AotMain --formato=8|9`. **Y un bug
+preexistente que salió al compilar ese aviso**: `cEscapeBytes` escapaba los bytes UTF-8 en hex (`\xc3\xb3dulos`) y `\x` en C
+es glotón — gcc leía `\xb3d` («hex escape sequence out of range»): en todo literal de una `native` con un acento seguido de
+[0-9a-f] faltaba un byte y se comía una letra. Ahora en octal (`\303\263`, tres dígitos siempre). `AotMod9Test` (8 casos),
+frontend 211/211; el C generado de NatNew/NatV7 en MOD9 compila limpio con la receta ARMv8-M real y el `.mdn` de NatNew se
+construye con `build_mdn.sh`. **Lo que el gate por `layoutCrc` del diseño (§8 b) pretendía queda vacío por construcción**: con
+(a) ninguna dependencia puede mover un número horneado en el `.mdn`; el desfase `.mdn`↔`.mod` del PROPIO módulo es
+preexistente e independiente de MOD9 (el bloque embebido lo resuelve por ser el mismo fichero; el `.mdn` suelto es cola de H5).
+V10 lo confirma o lo refuta. Fase 2 (medida, después): leer `ext[idx]` en ejecución en vez de rechazar.
+
 ⏭️ **Queda del plan** (V7_IDEAS §H2.7): el guardián `--barajar` (V1), las refs SUBTIPO al hacer upcast (A1), `instanceof
-Mod.Cls` en el parser (D7), `bpvm_mods_sincronizar` comparando `gen`, el gate del AOT por `layoutCrc` (fase 1), bpi 9 (la
-interfaz sin `layout`/`slot`/`recv`), las filas nuevas de V4 (derived_deja_de_extender, override huérfano, abuelo, dos averías…),
-V3 (fixtures del cargador), V6 (GC con bitmaps reconstruidos), V9 (medidas antes/después), V8 (placas), V10 (revisión
-adversarial), y la cadena en MOD9. Hallazgo lateral: `#524`.
+Mod.Cls` en el parser (D7), `bpvm_mods_sincronizar` comparando `gen`, bpi 9 (la interfaz sin `layout`/`slot`/`recv`), las
+filas nuevas de V4 (derived_deja_de_extender, override huérfano, abuelo, dos averías…), V3 (fixtures del cargador), V6 (GC
+con bitmaps reconstruidos), V9 (medidas antes/después), V8 (placas), V10 (revisión adversarial), y la cadena en MOD9 (con
+`build_mdn.sh`/`AotBuild` pasando el formato del proyecto al AOT). Hallazgo lateral: `#524`.
 
 #### 🔴 `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1)
 

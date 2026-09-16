@@ -39,10 +39,15 @@ Pico, DK2, P4 y sim compilan (S3/C6 no reconstruidos hoy: comparten el mismo loa
 comentario de `#457` lo predecía; la discovery de miVM leía mal la cabecera MOD9 (v8a); `gen` regenera los goldens V2 versionados
 (NO ejecutarlo: `check` basta); los heredocs de bash siguen comiéndose `\n` y `'` (Write tool para los scripts, siempre).
 
+**El AOT en MOD9 (fase 1), a pregunta de Eduardo** (*«en AOT se llamaba a un método de clase por la Vtable, ¿funcionará?»*): estaba
+en el diseño y no en el código. Hecho: en MOD9 una `native` sólo hornea ranuras de clases CERRADAS del propio módulo (externa o
+abierta → rechazo nombrando la clase); los nombres que pide al intérprete son los R4 con firma; si un símbolo no está, el C
+generado lo DICE; y `cEscapeBytes` pasa de hex a octal (bug preexistente: `\x` glotón se comía una letra). Ver `FICHAS` `#523`.
+
 **Orden para retomar**: (1) el guardián `--barajar` (V1) y las refs SUBTIPO (A1); (2) `instanceof Mod.Cls` (D7), `bpvm_mods` por `gen`,
-el gate del AOT (`layoutCrc`), bpi 9; (3) las filas nuevas de la matriz (V4) y los fixtures del cargador (V3); (4) **la revisión
-adversarial del código** (V10) antes de tocar la cadena; (5) V9 medidas y V8 placas (la Pico); (6) la cadena en MOD9 (V11).
-`#524` abierta (intrínseca desconocida → builtin 3 en silencio).
+bpi 9; (3) las filas nuevas de la matriz (V4) y los fixtures del cargador (V3); (4) **la revisión adversarial del código** (V10)
+antes de tocar la cadena; (5) V9 medidas y V8 placas (la Pico); (6) la cadena en MOD9 (V11), con `build_mdn.sh`/`AotBuild`
+pasando el formato al AOT. `#524` abierta (intrínseca desconocida → builtin 3 en silencio).
 
 ## 🧬 `#523` DECIDIDA Y DISEÑADA (15-sep, noche) — enlace tardío: la clase se adapta al cargar; «validado al 100x100» escrito antes del código
 

@@ -138,9 +138,17 @@ public final class MivmEmitter {
     }
 
     /** El nombre cualificado (library incluida) del módulo que se está compilando. */
-    private String moduloLocal() {
-        return (moduleAst.library == null || moduleAst.library.isEmpty()) ? moduleAst.name
-                : moduleAst.library + "." + moduleAst.name;
+    private String moduloLocal() { return moduloLocalDe(moduleAst); }
+    static String moduloLocalDe(Ast.ModuleNode m) {
+        return (m.library == null || m.library.isEmpty()) ? m.name : m.library + "." + m.name;
+    }
+    /** V7/H2 (#523) — los nombres R4 (`crossModuleNewName`, `nombreCruce`…) leen el formato
+     *  y el módulo local de estos dos estáticos, que `emitTo` fija al emitir el `.mod`. El
+     *  AOT los necesita ANTES (la validación de las `native` corre delante de la emisión, y
+     *  `AotMain` construye el `.mdn` sin emisor mivm): el `.mdn` tiene que pedir al
+     *  intérprete los MISMOS nombres que el `.mod` exporta. */
+    static void fijarContextoEstatico(int formato, Ast.ModuleNode m) {
+        formatoActual = formato; moduloLocalActual = moduloLocalDe(m);
     }
     /** R1: abierta = algún eslabón de su cadena de `extends` vive en otro módulo. */
     static boolean esAbierta(ClassSymbol c) {

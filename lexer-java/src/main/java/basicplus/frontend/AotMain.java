@@ -31,7 +31,7 @@ public final class AotMain {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn]");
+            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn] [--formato=8|9]");
             System.exit(2);
         }
         // Separar flags y posicionales.
@@ -40,6 +40,10 @@ public final class AotMain {
         for (String a : args) {
             if ("--mdn".equals(a)) {
                 mdnMode = true;
+            } else if (a.startsWith("--formato=")) {
+                // V7/H2 (#523) — el `.mdn` se construye con el MISMO formato que el
+                // `.mod` al que acompaña: en MOD9 el AOT no hornea ranuras ajenas.
+                Main.FORMATO = Integer.parseInt(a.substring("--formato=".length()));
             } else {
                 positional.add(a);
             }

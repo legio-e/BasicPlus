@@ -406,7 +406,12 @@ public final class AotCEmitter {
                 case '\r': sb.append("\\r");  break;
                 case '\t': sb.append("\\t");  break;
                 default:
-                    if (c < 0x20 || c > 0x7e) sb.append(String.format("\\x%02x", c));
+                    // 16-sep — en OCTAL, no en hex: `\x` en C es GLOTÓN (coge todos los
+                    // dígitos hex que sigan), así que "módulos" salía `\xc3\xb3dulos` y
+                    // gcc leía `\xb3d` («hex escape sequence out of range»): un byte de
+                    // menos y una letra comida, en todo literal con un acento seguido de
+                    // [0-9a-f]. `\ooo` son exactamente tres dígitos, siempre.
+                    if (c < 0x20 || c > 0x7e) sb.append(String.format("\\%03o", c));
                     else sb.append((char) c);
             }
         }
@@ -429,6 +434,10 @@ public final class AotCEmitter {
      * emite (el flag native se ignora y solo queda el bytecode normal).
      */
     public String emitModule(Ast.ModuleNode module) {
+        // V7/H2 (#523) — el formato del build y el módulo local, para que los nombres
+        // que el `.mdn` pide al intérprete (factorías, funciones ajenas) sean los R4
+        // que el `.mod` exporta en MOD9 (y los de siempre en MOD8).
+        MivmEmitter.fijarContextoEstatico(Main.FORMATO, module);
         // Pre-pass: recolectar nombres de funciones native para
         // que el emisor reconozca self-calls como C calls directas.
         List<Ast.FuncDef> nativeFuncs = new ArrayList<>();
@@ -572,6 +581,17 @@ public final class AotCEmitter {
         w.println("#include \"bpvm.h\"");
         w.println("#include \"bpvm_internal.h\"");
         w.println("#include \"bpvm_aot_helpers.h\"   /* H3 #158 — helpers indirect */");
+        w.println();
+        /* V7/H2 (#523) — el puente native→BP pide al intérprete por NOMBRE; en MOD9 el
+         * nombre lleva la firma (`Lib.f(i)i`), así que con otra versión de la dep puede no
+         * existir. `find_function` devuelve 0 y `call_bp_i32` sólo sabía decir «función
+         * destino no encontrada»: este helper la nombra, y nombra a quién la pedía. */
+        w.println("/* V7/H2 (#523) — busca un símbolo BP por nombre; si no está, lo DICE (no un 0 mudo). */");
+        w.println("static inline uint32_t aot_" + moduleName + "_busca(struct bpvm* vm, const char* nombre, const char* aviso) {");
+        w.println("    uint32_t f = vm->aot_helpers->find_function(vm, nombre);");
+        w.println("    if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */");
+        w.println("    return f;");
+        w.println("}");
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
         for (Ast.FuncDef f : nativeFuncDefs.values()) {
@@ -1886,6 +1906,7 @@ public final class AotCEmitter {
                 }
                 String getter = "get" + Character.toUpperCase(ps.name.charAt(0))
                               + ps.name.substring(1);
+                exigirClaseCerradaLocal(ps.ownerClass, "la property '" + ps.name + "'", ma.line);
                 int slot = ps.ownerClass.slotOf(getter);
                 if (slot < 0) {
                     throw new UnsupportedAotException(
@@ -1949,7 +1970,14 @@ public final class AotCEmitter {
      *  el puente. La firma viene de la FunctionSymbol externa (.bpi del módulo
      *  dueño). El runtime resuelve la dirección y el CS del módulo destino. */
     private void emitCrossModuleBridgeCall(Symbol.FunctionSymbol fs, Ast.CallExpr c) {
-        String qn = fs.externalQualifiedName();
+        // V7/H2 (#523) — en MOD9 el nombre que cruza lleva la firma (R4: `Lib.f(i)i`),
+        // como en el `.mod`: si `f` cambia de firma en otra versión de `Lib`, el
+        // puente no la encuentra y lo dice, en vez de llamarla con los argumentos
+        // de la vieja (la fila «f_firma» de mezcla.py, ahora también para el nativo).
+        String qn = (Main.FORMATO == 9)
+            ? ((fs.externalLibrary == null || fs.externalLibrary.isEmpty()) ? "" : fs.externalLibrary + ".")
+              + fs.externalModule + "." + Symbol.ClaveCanonica.metodo(fs, MivmEmitter.moduloLocalActual)
+            : fs.externalQualifiedName();
         if (!isBridgeI32Type(fs.returnType)) {
             throw new UnsupportedAotException(
                 "AOT: call native→BP cross-module a '" + qn + "' (line " + c.line + "): el puente "
@@ -1971,6 +1999,29 @@ public final class AotCEmitter {
             refMaskOfParams(fs.params), isRefBp(fs.returnType));
     }
 
+    /** V7/H2 (#523) — el AOT en MOD9, fase 1: una `native` sólo HORNEA ranuras de
+     *  vtable de clases CERRADAS de su propio módulo. Las dos únicas salidas del
+     *  `.mdn` que dependen de la forma de una clase son `call_method_i32(vm, this,
+     *  slot, …)` (un método, o el getter de una property), y ese `slot` sale de
+     *  `ClassSymbol.slotOf` en tiempo de compilación. Con una clase EXTERNA el número
+     *  es el de la versión contra la que se compiló —en ejecución puede haber otra, y
+     *  el `.mod` ya la llama por referencia (R2)—; con una clase ABIERTA (R1) el
+     *  número lo asigna el CARGADOR contra el padre real y el compilador ni lo
+     *  conoce. Hornearlo sería la familia de #514 dentro del código nativo, en
+     *  silencio. Así que se rechaza: la función de módulo con `native` da error de
+     *  compilación (la promesa del autor no se puede cumplir), y el método `native`
+     *  aplanado se degrada a aviso y corre interpretado (donde va por ref). Fase 2,
+     *  cuando toque: leer `ext[idx]` en ejecución en vez de hornear. */
+    private static void exigirClaseCerradaLocal(Symbol.ClassSymbol cls, String que, int line) {
+        if (Main.FORMATO != 9 || cls == null || cls.isBuiltin) return;
+        if (!cls.isExternal && !MivmEmitter.esAbierta(cls)) return;
+        throw new UnsupportedAotException(
+            "AOT (MOD9): " + que + " es de la clase " + (cls.isExternal ? "EXTERNA" : "ABIERTA")
+            + " '" + cls.name + "' (line " + line + "): su ranura de vtable la fija el cargador al "
+            + "enlazar, no el compilador, y una `native` la hornearía. Llámalo desde código "
+            + "interpretado (va por referencia) o quita `native`.");
+    }
+
     /** #174b — emite una llamada a método PÚBLICO de instancia (virtual) desde
      *  native vía call_method_i32. El slot lo computa el frontend
      *  (ClassSymbol.slotOf) y MivmEmitter lo verifica contra ModWriter. La VM
@@ -1989,6 +2040,7 @@ public final class AotCEmitter {
                     + "solo soporta params i32; tipos mixtos → pendiente.");
             }
         }
+        exigirClaseCerradaLocal(fs.ownerClass, "el método '" + fs.name + "'", c.line);
         int slot = (fs.ownerClass != null) ? fs.ownerClass.slotOf(fs.name) : -1;
         if (slot < 0) {
             throw new UnsupportedAotException(
@@ -2060,8 +2112,11 @@ public final class AotCEmitter {
         /* #302 paso 2 — ref_mask + ret_is_ref: los args-ref se ensanchan a 8 bytes
          * con regen en el puente y el retorno-ref popea 8 (ver bridge_run_bp_frame). */
         String tail = ", " + refMask + "u, " + (retIsRef ? 1 : 0) + ")";
-        w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, \""
-            + qualified + "\"), ");
+        String aviso = "AOT: la native '" + currentFuncName + "' pide '" + qualified
+            + "' y no está en los módulos cargados (¿otra versión de la dependencia?): recompila '"
+            + moduleName + "'";
+        w.print("vm->aot_helpers->call_bp_i32(vm, aot_" + moduleName + "_busca(vm, \"" + qualified + "\", \""
+            + cEscapeBytes(aviso.getBytes(java.nio.charset.StandardCharsets.UTF_8)) + "\"), ");
         int n = args.size();
         if (n == 0) {
             w.print("(const int32_t*) 0, 0" + tail);
