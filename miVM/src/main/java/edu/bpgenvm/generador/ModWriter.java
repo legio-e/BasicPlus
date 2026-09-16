@@ -1117,6 +1117,37 @@ public class ModWriter {
         return c != null && c.abierta;
     }
 
+    /* V7/H2 (#523) — REGLA R2 EN EL ESCRITOR: una clase ABIERTA de este módulo se
+     * usa SIEMPRE por referencia, también desde su propio módulo (sus ranuras dependen
+     * del padre real, y en XIP no se renumera nada). Los puntos de entrada POR NOMBRE
+     * (emitGetField, emitSetField, emitInvokeVirtual, emitNewObject, emitInstanceOf,
+     * emitCheckCast, emitTryBegin) lo hacen solos: el emisor no tiene que saber si la
+     * clase es abierta — sólo tiene que haber dado las claves (setMethodMeta /
+     * setFieldMeta / declareEventMeta) ANTES de emitir el código que la usa. */
+    private ClassInfo abiertaLocal(String className) {
+        if (formato != 9) return null;
+        ClassInfo c = classes.get(className);
+        return (c != null && c.abierta) ? c : null;
+    }
+    private int refCampoLocal(ClassInfo c, FieldInfo f) {
+        if (f.clave != null) return requireRef(REF_CAMPO, DEP_LOCAL, c.name, f.clave);
+        for (EventInfo e : c.events) {
+            String ev = e.clave.substring(0, e.clave.indexOf('('));
+            if (f.name.equals(ev + "$recv")) return requireRef(REF_EV_RECV, DEP_LOCAL, c.name, e.clave);
+            if (f.name.equals(ev + "$dest")) return requireRef(REF_EV_DEST, DEP_LOCAL, c.name, e.clave);
+        }
+        throw new RuntimeException("campo '" + f.name + "' de la clase abierta '" + c.name + "' sin clave canonica (setFieldMeta / declareEventMeta)");
+    }
+    private int refMetodoLocal(ClassInfo c, String methodSimpleName) {
+        for (MethodInfo m : c.methods) {
+            if (m.simpleName.equals(methodSimpleName)) {
+                if (m.clave == null) throw new RuntimeException("metodo '" + c.name + "." + methodSimpleName + "' sin clave canonica (setMethodMeta antes de usarlo)");
+                return requireRef(REF_MET, DEP_LOCAL, c.name, m.clave);
+            }
+        }
+        throw new RuntimeException("Método no encontrado en " + c.name + ": " + methodSimpleName);
+    }
+
     /** Layout binario mínimo de un parent cross-module, derivado del .bpi del
      *  módulo dueño. fieldBitmap y ownerBitmap son arrays de int (cada int =
      *  32 slots; mismo formato que el descriptor binario). */
@@ -1460,6 +1491,8 @@ public class ModWriter {
     // --- Emisores para objetos ---
 
     public void emitNewObject(String className) throws IOException {
+        ClassInfo ab = abiertaLocal(className);
+        if (ab != null) { emitNewObjectRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }
         Integer csOff = dataSymbolOffset.get(className);
         if (csOff == null) {
             throw new RuntimeException("Clase no declarada (¿endClass antes de emitNewObject?): " + className);
@@ -1471,6 +1504,8 @@ public class ModWriter {
 
     public void emitGetField(String className, String fieldName) throws IOException {
         FieldInfo f = resolveFieldInfo(className, fieldName);
+        ClassInfo ab = abiertaLocal(className);
+        if (ab != null) { emitGetFieldRef(refCampoLocal(ab, f), f.is8); return; }
         if (f.slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + f.slot + " en " + className);
         // BUG-6: campo de 8 bytes (long/double) → opcode ancho que lee 8 bytes.
         codeOut.writeByte(f.is8 ? OpCode.GET_FIELD_LONG.code : OpCode.GET_FIELD.code);
@@ -1480,6 +1515,8 @@ public class ModWriter {
 
     public void emitSetField(String className, String fieldName) throws IOException {
         FieldInfo f = resolveFieldInfo(className, fieldName);
+        ClassInfo ab = abiertaLocal(className);
+        if (ab != null) { emitSetFieldRef(refCampoLocal(ab, f), f.is8); return; }
         if (f.slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + f.slot + " en " + className);
         codeOut.writeByte(f.is8 ? OpCode.SET_FIELD_LONG.code : OpCode.SET_FIELD.code);
         codeOut.writeByte((byte) f.slot);
@@ -1525,6 +1562,8 @@ public class ModWriter {
      * del valor que tenía).
      */
     public void emitSetFieldOwner(String className, String fieldName) throws IOException {
+        ClassInfo ab = abiertaLocal(className);
+        if (ab != null) { emitSetFieldOwnerRef(refCampoLocal(ab, resolveFieldInfo(className, fieldName))); return; }
         int slot = resolveFieldSlot(className, fieldName);
         if (slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + slot + " en " + className);
         codeOut.writeByte(OpCode.SET_FIELD_OWNER.code);
@@ -1533,6 +1572,8 @@ public class ModWriter {
     }
 
     public void emitInvokeVirtual(String className, String methodSimpleName, int numArgs) throws IOException {
+        ClassInfo ab = abiertaLocal(className);
+        if (ab != null) { emitInvokeVirtualRef(refMetodoLocal(ab, methodSimpleName), numArgs); return; }
         int slot = resolveMethodSlot(className, methodSimpleName);
         emitInvokeVirtualBySlot(slot, numArgs);
     }
@@ -1913,6 +1954,10 @@ public class ModWriter {
      * Si expectedClassName == null o no resuelve, se emite 0 (catch genérico).
      */
     public void emitTryBegin(int handlerLabel, String expectedClassName) throws IOException {
+        if (expectedClassName != null && abiertaLocal(expectedClassName) != null) {
+            emitTryBeginRef(handlerLabel, requireRef(REF_CLASE, DEP_LOCAL, expectedClassName, ""));
+            return;
+        }
         Integer addr = currentLabelMap.get(handlerLabel);
         if (addr == null) throw new RuntimeException("Etiqueta no existe: " + handlerLabel);
         int instrAddr = currentBytecodeSize;
@@ -1994,6 +2039,7 @@ public class ModWriter {
     }
 
     public void emitInstanceOf(String className) throws IOException {
+        if (abiertaLocal(className) != null) { emitInstanceOfRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }
         Integer csOff = dataSymbolOffset.get(className);
         if (csOff == null) throw new RuntimeException("Clase '" + className + "' no declarada para INSTANCEOF");
         codeOut.writeByte(OpCode.INSTANCEOF.code);
@@ -2004,6 +2050,7 @@ public class ModWriter {
     /** #389 — CHECKCAST a una CLASE: el cast `Cosa(o)` comprueba en ejecución.
      *  `nameSym` es el literal internado con el nombre (para el mensaje). */
     public void emitCheckCast(String className, String nameSym) throws IOException {
+        if (abiertaLocal(className) != null) { emitCheckCastRef(requireRef(REF_CLASE, DEP_LOCAL, className, ""), nameSym); return; }
         Integer clsOff = dataSymbolOffset.get(className);
         /* #447 — si la clase se esta emitiendo AHORA, su descriptor aun no
          * existe (se registra en endClass, porque su tamano depende del numero

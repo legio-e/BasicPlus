@@ -165,9 +165,10 @@ public class Disasm {
                 out.println();
                 out.printf ("=== REFS (%d) — referencias simbolicas del enlace tardio; ext[%d..] ===%n", refs.size(), imports.size());
                 if (refs.isEmpty()) out.println("  (ninguna)");
+                int base = imports.size();
                 for (int i = 0; i < refs.size(); i++) {
                     TablasMod9.Ref r = refs.get(i);
-                    out.printf("  ext[%d] = %s%n", imports.size() + i, r);
+                    out.printf("  ext[%d] = %s%n", base + i, r);
                     imports.add(new ImportEntry("ref " + r, ""));   // para que los operandos idx u16 se rotulen
                 }
             }

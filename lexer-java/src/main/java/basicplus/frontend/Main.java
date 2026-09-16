@@ -47,6 +47,9 @@ public final class Main {
     enum Mode { FULL, INTERFACE_ONLY }
 
     /** Contexto de compilación que viaja por la recursión. */
+    /** V7/H2 (#523) — ver Ctx.formato. */
+    public static int FORMATO = 8;
+
     static final class Ctx {
         Path outDir;                                // donde se emiten .mod y .bpi
         String backend = "mivm";                    // sólo afecta al modo FULL
@@ -71,6 +74,10 @@ public final class Main {
          *  es lo que cada importador sella en su subtabla `deps`. */
         int gen = 0;
         final Map<String, int[]> versionesDeps = new java.util.LinkedHashMap<>();
+        /** V7/H2 (#523) — el FORMATO del .mod que se emite: 8 (el de hoy) o 9 (enlace
+         *  tardío). Lo fija `--formato=9` mientras las VMs aprenden a cargar MOD9; después
+         *  9 será el único. Estático a propósito: vale para los tres caminos de compilación. */
+        int formato = FORMATO;
 
         /** Mapa de "<library>.<Module>" → ruta del .bp. Construido lazy. */
         Map<String, Path> bpSources;
@@ -416,6 +423,11 @@ public final class Main {
                 // del DAO generado, y regenerarlo dentro del build le
                 // reescribiría por debajo la clase de la que cuelga su código.
                 showAst = false; showTokens = false; daoBuild = true;
+            }
+            else if (a.startsWith("--formato=")) {   // V7/H2 (#523): 8 | 9
+                String f = a.substring("--formato=".length());
+                if (!f.equals("8") && !f.equals("9")) { System.err.println("--formato desconocido: " + f + " (usa 8|9)"); System.exit(1); return; }
+                FORMATO = Integer.parseInt(f);
             }
             else if (a.startsWith("--backend=")) {
                 backend = a.substring("--backend=".length()).toLowerCase();
@@ -987,6 +999,7 @@ public final class Main {
         // dependencia contra la que se compiló (leído del .mod de disco, del pack, o
         // de la pasada de interfaz de un módulo de este mismo build).
         emitter.setGeneracion(ctx.gen);
+        emitter.setFormato(ctx.formato);   // V7/H2 (#523)
         emitter.setVersionesDeps(ctx.versionesDeps);
         emitter.emitTo(ctx.outDir);
         // El sello propio: el CRC que el ModWriter ESCRIBIÓ. Si un consumidor de este
