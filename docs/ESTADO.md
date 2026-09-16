@@ -27,6 +27,23 @@
 
 ## Última sesión
 
+## 🧬 `#523` EN LAS DOS VMs (16-sep) — el enlace tardío corre: MOD9 se compila, se carga en miVM y en la VM-C, y la mezcla da 84/84 con el criterio de Java
+
+**Hecho hoy, por la cascada** (commits `c0f116b0` → `eb13a8bf`, ver `FICHAS` `#523` §16-sep): V0 línea base (cronómetro del enlace; la Pico no
+estaba conectada — sus ciclos quedan para cuando lo esté), F1 clave canónica, F2 formato MOD9 (escritor + `TablasMod9`), F3a el emisor
+(`--formato=9`), F4 miVM carga MOD9 (`EnlaceTardio.java`), F3b nombres R4 con firma, la VM-C carga MOD9 (`link.c`), la reflexión de
+Forms en C. **84/84 en las dos VMs, byte-idénticas**; MOD8 (el formato por defecto) intacto con todas las redes en verde;
+Pico, DK2, P4 y sim compilan (S3/C6 no reconstruidos hoy: comparten el mismo loader).
+
+**Trampas del día**: el lector de cabecera del compilador (`Main.java:1690`) rechazaba MOD9 en silencio («no se localizó .bpi») — el
+comentario de `#457` lo predecía; la discovery de miVM leía mal la cabecera MOD9 (v8a); `gen` regenera los goldens V2 versionados
+(NO ejecutarlo: `check` basta); los heredocs de bash siguen comiéndose `\n` y `'` (Write tool para los scripts, siempre).
+
+**Orden para retomar**: (1) el guardián `--barajar` (V1) y las refs SUBTIPO (A1); (2) `instanceof Mod.Cls` (D7), `bpvm_mods` por `gen`,
+el gate del AOT (`layoutCrc`), bpi 9; (3) las filas nuevas de la matriz (V4) y los fixtures del cargador (V3); (4) **la revisión
+adversarial del código** (V10) antes de tocar la cadena; (5) V9 medidas y V8 placas (la Pico); (6) la cadena en MOD9 (V11).
+`#524` abierta (intrínseca desconocida → builtin 3 en silencio).
+
 ## 🧬 `#523` DECIDIDA Y DISEÑADA (15-sep, noche) — enlace tardío: la clase se adapta al cargar; «validado al 100x100» escrito antes del código
 
 **Cómo se llegó**: el mapa de `#514`/`#516` (`3fa48e69`) → Eduardo: *«llevamos como 5 versiones dando vueltas a los slots… cerrar el tema de

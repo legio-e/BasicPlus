@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **36** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): `#521` `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **37** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): `#521` `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: `#524` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -571,6 +571,44 @@ en placa: tanda corta por familia + las filas que sólo se ven ahí (XIP desde p
 nuevo, el arranque que repone — `bpvm_mods_sincronizar` compara sólo el `MAGIC`, `bpvm_mods.c:37`: con MOD8 pisaría un
 `Core` gen 8 con el gen 7 de la imagen; hay que comparar `gen`); (5) revisión adversarial del código al terminar; (6)
 la cadena una vez, en el formato final. ✅ **Diseño escrito (15-sep, noche): `V7_IDEAS.md` §H2.7** (`8bab1fd3`; mapa de 6 lectores + 3 diseños + 2 jueces + síntesis + crítico adversarial, 2,6 M tokens). Lo esencial: el `.mod` lleva **referencias** `(clase, miembro, firma con retorno)` en una subtabla de imports (3.3) que el cargador resuelve a la ext-table del módulo (RAM, patrón `CALL_EXT`: nada se parchea, XIP intacto); una subtabla **CLASES** (4.5) con lo PROPIO de cada clase (claves, ranuras relativas, bitmaps propios); las clases **abiertas** (algún `extends` cruza módulo — hoy 11 de 219 en el corpus, dos en la stdlib: `Collections.SyncList/OwnerList`) no llevan descriptor: el cargador lo construye contra el padre real; las cerradas se hornean como hoy (el `code` de Core/Gui/Json no cambia un operando). 11 opcodes `_REF`; mensajes E0-E10 byte-idénticos; el AOT estricto en fase 1 (sólo cerradas del propio módulo, gate por `layoutCrc`); `+6` del descriptor = módulo dueño (despacho O(1)). **El crítico cazó 11 agujeros en el diseño y están incorporados**: el más grave, SUBTIPO — «`Derived` deja de extender `Base`» daría basura donde Java lanza `VerifyError` → ref kind 5 verificada al enlazar (E10); los privados con ranura no se sobreescriben; la ref lleva la clase estática del receptor (como `javac`); un solo cerrojo `sync` desde la raíz (y una carrera PREEXISTENTE: `Main.java:2345` pierde `isSync` → dos cerrojos); `List` es declarada, no sintetizada. **Presupuesto medido** (VM-C host): hoy `GuiTableDemo` enlaza 1.739 símbolos (1.290 marcadores) con 79 búsquedas × 1.199 `strcmp`; con MOD9 ≈ 450 símbolos y ≈ 10 K `strcmp`, `Gui.mod` de 61,5 a ≈ 45 KB, RAM de plataforma ≈ −25 KB (stream) / −35 KB (XIP). Criterios numéricos escritos (V9). **Tamaño honesto: 17-23 sesiones** (frontend 5-7, miVM 3-4, VM-C 3-4, placas 1-2, stdlib+docs 1,5, validación 3-4). ⏭️ **D1-D10 aceptadas por Eduardo el 16-sep** (*«OK en principio. Luego si algo no funciona siempre estamos a tiempo de cambiarlo»*): firma con retorno en todo lo que cruza, tipos cualificados, rechazo MOD9→MOD7/8, CLASES en RAM, AOT con gate grueso, `instanceof Mod.Cls`, `staticconst` documentada, `.slots`/regla 3/`ifaceCrc`-gate fuera en el mismo commit, y el parque MOD8 de V6 VALIDADO contra la tabla nueva. Después, por la cascada: línea base (cronómetro) → frontend → miVM → VM-C → Pico → stdlib/docs → validación V4-V10.
+
+### 🧱 16-sep — HECHO EN LAS DOS VMs: el enlace tardío corre, y la mezcla da 84/84 con el criterio de Java
+
+**Commits** (por la cascada, uno por paso): `c0f116b0` V0 (cronómetro del enlace en las dos VMs + `bpvm_platform_now_us()` en las
+cuatro familias; línea base en `compat/informes/`), `2b59b35d` F1 (la clave canónica), `e0c78d92` F2 (el formato MOD9 en el
+escritor y `TablasMod9`, el lector único; 11 opcodes `_REF`), `abc65c9e` F3a (el emisor: clases abiertas, claves, todo lo
+externo o abierto por referencia), `50b99076` F4 (**miVM carga MOD9**: `EnlaceTardio.java`), `0881c503` F3b (los nombres R4 con
+firma; el cualificador con `/` dentro de un código porque los dos cargadores partan los imports por sus puntos),
+`a3d02ad2` (**la VM-C carga MOD9**: el mismo algoritmo en `link.c`, sin materializar tablas), `eb13a8bf` (la reflexión de
+Forms con MOD9 en C).
+
+**Lo que hay**: con `--formato=9` el compilador emite MOD9 — subtabla `refs` (3.3) con `(kind, dep, clase, clave)`, subtabla
+CLASES (4.5) con lo PROPIO de cada clase, las abiertas sin descriptor, sin marcadores ni fixups; las dos VMs construyen las
+abiertas contra el padre real al cargar, resuelven las refs a `ext[count3.1 + i]`, y rechazan nombrando con el MISMO texto
+(`'Usa' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene (tiene 'k()i'): recompila 'Usa'`). El sello `+6` del descriptor da
+el módulo dueño en O(1). La norma `#500` con una dependencia MOD9 aplica sólo la regla 1 (D9). MOD8 sigue siendo el formato por
+defecto y está intacto: paridad 68/68, cápsula 59/59, norma 9/9, sombra 12/12, `test-*` de C, miVM 44/44, frontend 203/203.
+
+**La medida** (`compat/mezcla.py --formato=9 --vms=ambas`, `compat/informes/mezcla_mod9_ambas_2026-09-16.tsv`): **84/84**,
+stdout y texto de rechazo byte-idénticos entre las dos VMs. Bloque I 24/24 (la familia de `#514` desaparece por
+construcción). Mezcla: método en medio, property nueva, campo nuevo, reorden, manejador privado, enum de cabeza → **corren**
+con la salida correcta, también para la subclase `Ext`; `k()` quitada, `m(integer)`→`m(long)`, `k(): integer`, `p: string`,
+`f()`→`f(x)` → **rechazo al enlazar** nombrando el símbolo. La stdlib entera compila como MOD9: `Gui.mod` 61.558 → 43.564 B,
+`Core` 13.883 → 14.360. `Ext`: 1 clase construida, 9 refs, 60 B de arena (miVM) / 67 B (VM-C).
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): el guardián `--barajar` (V1), las refs SUBTIPO al hacer upcast (A1), `instanceof
+Mod.Cls` en el parser (D7), `bpvm_mods_sincronizar` comparando `gen`, el gate del AOT por `layoutCrc` (fase 1), bpi 9 (la
+interfaz sin `layout`/`slot`/`recv`), las filas nuevas de V4 (derived_deja_de_extender, override huérfano, abuelo, dos averías…),
+V3 (fixtures del cargador), V6 (GC con bitmaps reconstruidos), V9 (medidas antes/después), V8 (placas), V10 (revisión
+adversarial), y la cadena en MOD9. Hallazgo lateral: `#524`.
+
+#### 🔴 `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1)
+
+**Medido**: `public intrinsic function __guiSlotOf(obj: Object, name: string): integer` en un módulo de usuario (copiado de
+`Gui.bp:516`) → la llamada `__guiSlotOf(v, "onClick")` se emite `CALL_BUILTIN [3] ; intToString` (disasm), y el programa muere
+«No space in heap» en las dos VMs. Las intrínsecas se enganchan por «Módulo.función» (memoria `tocar-frontend-obliga-a-rehacer`):
+`Refl.__guiSlotOf` no es ninguna y el id por defecto es 3. ⏭️ Error de compilación «intrínseca desconocida», nunca un id por
+defecto.
 
 #### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
 
