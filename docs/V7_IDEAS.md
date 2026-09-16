@@ -1079,7 +1079,7 @@ escrita aquí** como el camino si algún día se quiere compatibilidad binaria; 
 **§3 imports (v9):**
 - 3.1 entradas: `count + (name UTF, fromPath UTF)*` — como hoy; nombres por R4.
 - 3.2 deps: como v8 (`module, fromPath, gen, ifaceCrc, flags`). `gen` sigue siendo gate; `ifaceCrc` pasa a informativo (y gate del `.mdn`, §8); el bit EXTIENDE deja de rechazar.
-- **3.3 refs (nueva):** `count u16` + por ref: `kind u8, depIdx i16, clase UTF, clave UTF`. `depIdx` ≥0 = índice en 3.2; `-2` = clase abierta de ESTE módulo. `kind`: 0 CLASE (clave vacía → dirección absoluta del descriptor efectivo), 1 MET (→ ranura de vtable), 2 CAMPO (→ ranura de campo), 3 EV_RECV (→ ranura del recv), 4 EV_DEST (→ recv+2), **5 SUBTIPO** (clave = `Mod.Super`; no ocupa entrada en la ext-table: se verifica al enlazar → E10). Una entrada por (kind, dep, clase, clave) distinta (dedupe). **La ref i vive en `ext[count3.1 + i]`**: la ext-table se dimensiona a `(count3.1 + count3.3) × 4`.
+- **3.3 refs (nueva):** `count u16` + por ref: `kind u8, depIdx i16, clase UTF, clave UTF`. `depIdx` ≥0 = índice en 3.2; `-2` = clase abierta de ESTE módulo. `kind`: 0 CLASE (clave vacía → dirección absoluta del descriptor efectivo), 1 MET (→ ranura de vtable), 2 CAMPO (→ ranura de campo), 3 EV_RECV (→ ranura del recv), 4 EV_DEST (→ recv+2), **5 SUBTIPO** (clave = `Mod.Super`; se verifica al enlazar → E10. *Corrección 16-sep, al código:* SÍ ocupa su entrada posicional en la ext-table como las demás, con valor 1 que nadie lee — cuatro bytes por par a cambio de un solo dimensionado en escritor y dos cargadores). Una entrada por (kind, dep, clase, clave) distinta (dedupe). **La ref i vive en `ext[count3.1 + i]`**: la ext-table se dimensiona a `(count3.1 + count3.3) × 4`.
 
 **§4 exports (v9):**
 - 4.1 funcs: como hoy, nombres por R4. Sin alias pelados.
@@ -1146,7 +1146,7 @@ Elección frente a reutilizar CHECKCAST_EXT/TRY_BEGIN_EXT: un solo mecanismo (le
 - E7 `enlace: ciclo de herencia entre 'A.X' y 'B.Y'`
 - E8 `enlace: la clase 'App.Hijo' construida es inconsistente (<detalle>): .mod corrupto o bug del cargador`
 - E9 `enlace: 'Lib' es MOD7 y 'App' necesita su tabla de clases: recompila 'Lib'` (§10)
-- E10 `enlace: 'App' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'App'`
+- E10 `'App' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'App'` (sin prefijo `enlace:`, como el resto: sale dentro de `=== ERROR DE LINK: … ===`; el dueño citado es el de S)
 
 **Reflexión (Forms `__guiSlotOf`/`__methodRef`):** `slotOfMarker` (`ModuleManager.java:1331-1343`) y `builtins.c:1172-1185` pasan a: `class_ptr → +6 → módulo → cls_reg (por descAbs) → 4.5 de la clase y sus padres → primera clave cuyo nombre simple coincide` (misma semántica que `#nombre#`; documentado: Forms no sobrecarga manejadores). En XIP lee 4.5 de flash; en stream de la arena.
 

@@ -629,11 +629,46 @@ construye con `build_mdn.sh`. **Lo que el gate por `layoutCrc` del diseño (§8 
 preexistente e independiente de MOD9 (el bloque embebido lo resuelve por ser el mismo fichero; el `.mdn` suelto es cola de H5).
 V10 lo confirma o lo refuta. Fase 2 (medida, después): leer `ext[idx]` en ejecución en vez de rechazar.
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): el guardián `--barajar` (V1), las refs SUBTIPO al hacer upcast (A1), `instanceof
-Mod.Cls` en el parser (D7), `bpvm_mods_sincronizar` comparando `gen`, bpi 9 (la interfaz sin `layout`/`slot`/`recv`), las
-filas nuevas de V4 (derived_deja_de_extender, override huérfano, abuelo, dos averías…), V3 (fixtures del cargador), V6 (GC
-con bitmaps reconstruidos), V9 (medidas antes/después), V8 (placas), V10 (revisión adversarial), y la cadena en MOD9 (con
-`build_mdn.sh`/`AotBuild` pasando el formato del proyecto al AOT). Hallazgo lateral: `#524`.
+### 🧱 16-sep (tarde) — V1 el guardián, A1 las refs SUBTIPO, D7, bpi 9, `bpvm_mods` por gen: mezcla MOD9 **120/120** en las dos VMs
+
+Con el **mapa verificado** del workflow (4 lectores + 4 refutadores, 1,8 M tokens; ni una afirmación refutada, 51 hechos
+que los lectores no habían dicho): NO hay punto único que numere ranuras — `computeClassLayout` por su cuenta, el ModWriter
+por orden de llamada, el importador MOD8 por el orden del `.bpi`; y los cargadores en una ABIERTA ignoran el `slot u16` de
+los métodos y reparten por orden de fila. De ahí la forma de V1.
+
+- **V1 `--barajar=<semilla>` / `--relleno=<n>`** (`0bfb3d3c`, `Barajar.java`): permuta la lista de miembros del AST de cada
+  clase justo después de parsear —así los quince sitios que recorren `members` ven el mismo orden sin tocarlos— y mete n
+  properties privadas de relleno (un método privado no ocupa vtable). Semilla 0 = identidad. No es para la stdlib (R5:
+  `msg`=campo 0, `toString`=vt[0] horneados en las VMs). **Bloque B de mezcla.py**: Usa/Ext/UsaD selladas contra la semilla 0
+  contra Lib con semillas 1-7 y con `--relleno=3` → 30/30 mismo stdout en las dos VMs; el script aborta si dos `Lib.mod`
+  barajadas salen idénticas (el verde falso del flag que no hace nada). **`BarajarTest`** (estático): el `Usa.mod` compilado
+  contra cada semilla es byte-idéntico en TODAS las secciones menos imports — y **cazó una fuga**: la interfaz embebida
+  llevaba `layout 5 10 …` y `field q slot 4` de la abierta `Hija`, números de la forma de `Lib.Base`. De ahí bpi 9.
+- **A1 refs SUBTIPO** (`0bfb3d3c`): `asumirSubtipo(S, T)` en `coerceToTarget` (el cuello de botella de las conversiones
+  implícitas) + `emitWiden` (tuplas) + el init de var local (pasaba `declT` null para clases). Sólo con T EXTERNA no del
+  lenguaje (con T local el tramo S..T es local; `Object` daría E10 falso). Cada sitio probado por separado. **La fila
+  `derived_deja_de_extender`**: `'UsaD' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'UsaD'`
+  byte-idéntico en las dos VMs; en MOD8 la misma fila es CRASH rc=1 con stdout vacío. La stdlib como MOD9: `Gui` asume 5
+  subtipos de `Json` (`JsonString<:JsonValue`…), que E10 vigilará.
+- **D7 `instanceof Mod.Cls`** (`dc7805c1`): parser + `resolveNamedType`; en MOD9 `INSTANCEOF_REF`; paridad true/true/false.
+  (En MOD8 el `instanceof` de una clase ajena nunca existió.)
+- **bpi 9** (`b8b69eba`): con `--formato=9` la interfaz no publica `layout`, `slot` ni `recv`; el lector acepta ambas formas;
+  `baseLayoutOf` numera lo propio de una abierta RELATIVO desde 0 (como `addClassAbierta`) sin pedir el layout del padre.
+  Un build MOD8 contra una dep bpi 9 lo dice. `InterfazIdaYVueltaTest.bpi9SinNumeros`.
+- **`bpvm_mods_sincronizar` compara `gen`** (`5193ab85`): un `/lib` MOD8 gen 9 ya no lo pisa la imagen gen 8 al arrancar.
+- **`#521` cerrada** (`55542548`; y `#524` con ella).
+
+**Decisiones tomadas sin consulta (rutinarias, reversibles)**: pares (S,T) en el emisor y no en el analizador (1 sitio +
+2 escapes frente a ~12 + sobrecargas especulativas); permutar el AST y no los calculadores; SUBTIPO sólo con T externa;
+barajar todas las clases del módulo y nunca Core; SUBTIPO ocupa entrada de ext (valor 1) y el doc se corrige al código;
+mezcla.py sigue fuera de `compat.sh check` (31 s; se ejecuta a mano en cada tanda y su informe va a `compat/informes/`).
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): **V10 la revisión adversarial del código** (antes de tocar la cadena), las filas
+que faltan de V4 (override huérfano, abuelo, dos averías, MOD8×MOD9), V3 (fixtures del cargador), V6 (GC con bitmaps
+reconstruidos), V5 (todos los samples en MOD9), V9 (medidas antes/después), V8 (placas; la Pico), la cadena en MOD9 (V11,
+con `build_mdn.sh`/`AotBuild` pasando el formato al AOT y `.slots` fuera) y los docs. Colaterales sin ficha que el mapa
+destapó (a fichar en V10): `field := expr` en un accesor sin chequeo ni coerción; `switch` sobre referencias con sujeto de
+4 B; `resolveOverloadArgs` compara `display()` (nombre simple) en `raise`.
 
 #### ✅ `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1 · **CERRADA el 16-sep con `#521`**)
 
