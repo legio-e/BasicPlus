@@ -22,6 +22,7 @@ package edu.bpgenvm.tools;
  */
 import edu.bpgenvm.bytecode.Builtin;
 import edu.bpgenvm.bytecode.ModFormat;
+import edu.bpgenvm.bytecode.TablasMod9;
 import edu.bpgenvm.bytecode.OpCode;
 import edu.bpgenvm.bytecode.OpCode.OperandKind;
 import java.io.ByteArrayInputStream;
@@ -59,7 +60,8 @@ public class Disasm {
             // desplazaba data y code (justo el error que el cargador dice que «corrompe
             // un módulo en silencio»). La herramienta «module info» de #284 tiene que
             // hablar el formato de hoy, y es la que usa el test de la cabecera.
-            boolean v8      = (magic == ModFormat.MAGIC_NUMBER_V8);   // V7/H2: gen + ifaceCrc + subtabla deps
+            boolean v9      = (magic == ModFormat.MAGIC_NUMBER_V9);   // V7/H2 (#523): enlace tardio (refs 3.3 + CLASES 4.5)
+            boolean v8      = (magic == ModFormat.MAGIC_NUMBER_V8) || v9;   // V7/H2: gen + ifaceCrc + subtabla deps
             boolean v7      = (magic == ModFormat.MAGIC_NUMBER_V7) || v8;
             boolean v6      = (magic == ModFormat.MAGIC_NUMBER_V6) || v7;
             int dataSize    = in.readInt();
@@ -150,9 +152,23 @@ public class Disasm {
                 out.println();
                 out.printf ("=== DEPS (%d) — (gen, ifaceCrc) contra los que se compilo ===%n", deps.size());
                 if (deps.isEmpty()) out.println("  (ninguna)");
+                int di = 0;
                 for (String[] d : deps) {
-                    out.printf("  %-24s gen=%s ifaceCrc=%s%s%s%n", d[0], d[2], d[3], d[4],
+                    out.printf("  [dep%d] %-24s gen=%s ifaceCrc=%s%s%s%n", di++, d[0], d[2], d[3], d[4],
                             d[1].isEmpty() ? "" : "   from \"" + d[1] + "\"");
+                }
+            }
+            if (v9) {
+                // V7/H2 (#523) — la subtabla `refs` (3.3): lo que este modulo pide a otros por
+                // NOMBRE Y FIRMA; la ref i vive en ext[count3.1 + i], y ahi la buscan los _REF.
+                List<TablasMod9.Ref> refs = TablasMod9.leerRefs(importsBuf);
+                out.println();
+                out.printf ("=== REFS (%d) — referencias simbolicas del enlace tardio; ext[%d..] ===%n", refs.size(), imports.size());
+                if (refs.isEmpty()) out.println("  (ninguna)");
+                for (int i = 0; i < refs.size(); i++) {
+                    TablasMod9.Ref r = refs.get(i);
+                    out.printf("  ext[%d] = %s%n", imports.size() + i, r);
+                    imports.add(new ImportEntry("ref " + r, ""));   // para que los operandos idx u16 se rotulen
                 }
             }
 
@@ -172,6 +188,29 @@ public class Disasm {
                 String base = (ali >= 0) ? nombre.substring(0, ali) : nombre;
                 String aotTag = (mdn != null && mdn.hasSymbol(base, library)) ? "  [AOT]" : "";
                 out.printf("  %-25s @code +%d%s%n", nombre, e.getKey(), aotTag);
+            }
+
+            if (v9) {
+                // V7/H2 (#523) — la subtabla CLASES (4.5): lo PROPIO de cada clase, con clave.
+                List<TablasMod9.Clase> clases = TablasMod9.leerClases(exportsBuf);
+                out.println();
+                out.printf ("=== CLASES (%d, subtabla 4.5 del enlace tardio) ===%n", clases.size());
+                for (TablasMod9.Clase c : clases) {
+                    String padre = c.parentDepIdx == TablasMod9.DEP_RAIZ ? "raiz"
+                            : (c.parentDepIdx == TablasMod9.DEP_LOCAL ? "local " : "dep" + c.parentDepIdx + " ") + c.parentName;
+                    out.printf("  class %s%s%s  padre=%s  %s  propios: %d ranuras de campo, %d metodos%n",
+                            c.name, c.publica ? " public" : "", c.abierta ? " ABIERTA" : "", padre,
+                            c.abierta ? "sin descriptor (lo construye el cargador)" : String.format("descriptor@CS%+d", c.csOff),
+                            c.nFieldsOwn, c.nMethodsOwn);
+                    for (TablasMod9.Metodo m : c.metodos)
+                        out.printf("    method %-32s slot %-3d @code +%d%s%s%n", m.clave, m.slot, m.codeOff,
+                                m.override ? " override" : "", m.privado ? " private" : "");
+                    for (TablasMod9.Campo f : c.campos)
+                        out.printf("    field  %-32s slot %-3d ancho %d%s%s%s%n", f.clave, f.slot, f.ancho,
+                                f.ref ? " ref" : "", f.owner ? " owner" : "", f.privado ? " private" : "");
+                    for (TablasMod9.Evento e : c.eventos)
+                        out.printf("    event  %-32s recv %d%n", e.clave, e.recvSlot);
+                }
             }
 
             if (v6) {
@@ -618,9 +657,30 @@ public class Disasm {
                 return String.format("handler=%+d (-> @%d), catch=%s [ext]",
                         rel, absHnd, catchPart);
             }
+            /* V7/H2 (#523) — los operandos de los opcodes _REF: idx u16 = ext[idx]. */
+            case IDX_U16_NUMARGS_U8: {
+                int idx = (int) ((raw >> 8) & 0xFFFF);
+                int numArgs = (int) (raw & 0xFF);
+                return String.format("ext[%d] args=%d  ; %s", idx, numArgs, nombreExt(idx, imports));
+            }
+            case IDX_U16_NAME_I16: {
+                int idx = (int) ((raw >> 16) & 0xFFFF);
+                int nameOff = (short) (raw & 0xFFFF);
+                return String.format("ext[%d] name@CS%+d  ; %s", idx, nameOff, nombreExt(idx, imports));
+            }
+            case TRY_HANDLER_I32_IDX_U16: {
+                int rel = (int) (raw >> 16);
+                int idx = (int) (raw & 0xFFFF);
+                return String.format("handler=%+d (-> @%d), catch=ext[%d]  ; %s", rel, instAddr + rel, idx, nombreExt(idx, imports));
+            }
             default:
                 return "?";
         }
+    }
+
+    /** V7/H2 (#523) — el rótulo de una entrada de la ext-table (import o ref). */
+    private static String nombreExt(int idx, List<ImportEntry> imports) {
+        return (idx >= 0 && idx < imports.size()) ? imports.get(idx).toString() : "?";
     }
 
     /* ============================================================ */

@@ -99,6 +99,20 @@ public final class ModFormat {
      *  para que los 9 primeros no se muevan). */
     public static final int HEADER_SIZE_V8 = 44;
 
+    /** Identificador de los .mod v9 (V7/H2, #523 — ENLACE TARDÍO). Misma cabecera
+     *  que v8 (11 enteros). Lo nuevo: la subtabla `refs` (3.3) en imports —las
+     *  referencias simbólicas (clase, miembro, firma con retorno) que el cargador
+     *  resuelve a la ext-table— y la subtabla CLASES (4.5) en exports —lo PROPIO de
+     *  cada clase: claves, ranuras relativas, bitmaps propios, padre—; las clases
+     *  ABIERTAS (algún `extends` cruza módulo) no llevan descriptor: lo construye
+     *  el cargador contra el padre real. Sin marcadores `Cls#clave#slot`, sin
+     *  fixups 4.3/4.4. El compilador lo emite con `--formato=9` mientras las VMs
+     *  aprenden a cargarlo; después será el único. */
+    public static final int MAGIC_NUMBER_V9 = 0x4D4F4439; // "MOD9"
+
+    /** Tamaño del header v9: el mismo que v8 (la novedad va en subtablas). */
+    public static final int HEADER_SIZE_V9 = 44;
+
     /** Versión lógica del formato; informativa. */
     public static final int FORMAT_VERSION = 8;
 
@@ -107,12 +121,13 @@ public final class ModFormat {
      *  implica que se pueda ejecutar — para eso está {@link #isAbiSupported}. */
     public static boolean isKnownMagic(int magic) {
         return magic == MAGIC_NUMBER || magic == MAGIC_NUMBER_V6
-            || magic == MAGIC_NUMBER_V7 || magic == MAGIC_NUMBER_V8;
+            || magic == MAGIC_NUMBER_V7 || magic == MAGIC_NUMBER_V8 || magic == MAGIC_NUMBER_V9;
     }
 
     /** Bytes de header que le corresponden a este magic. El header CRECE con la
      *  versión, así que leerlo mal desplaza TODAS las secciones. */
     public static int headerSizeDe(int magic) {
+        if (magic == MAGIC_NUMBER_V9) return HEADER_SIZE_V9;
         if (magic == MAGIC_NUMBER_V8) return HEADER_SIZE_V8;
         if (magic == MAGIC_NUMBER_V7) return HEADER_SIZE_V7;
         if (magic == MAGIC_NUMBER_V6) return HEADER_SIZE_V6;
@@ -156,7 +171,10 @@ public final class ModFormat {
     }
 
     /** V7/H2 — ¿lleva este magic los campos de versión (gen, ifaceCrc, subtabla deps)? */
-    public static boolean tieneVersion(int magic) { return magic == MAGIC_NUMBER_V8; }
+    public static boolean tieneVersion(int magic) { return magic == MAGIC_NUMBER_V8 || magic == MAGIC_NUMBER_V9; }
+
+    /** V7/H2 (#523) — ¿es un módulo de ENLACE TARDÍO (refs 3.3 + CLASES 4.5)? */
+    public static boolean esEnlaceTardio(int magic) { return magic == MAGIC_NUMBER_V9; }
 
     /** Motivo de rechazo, claro y accionable, para un magic no ejecutable. */
     public static String abiRejectReason(int magic) {
@@ -164,6 +182,9 @@ public final class ModFormat {
             return "formato v5 (\"MOD5\"): es anterior al ensanchado de refs 4->8B, "
                  + "así que su ABI no se puede garantizar (si es de la era 4B, "
                  + "corrompería memoria en silencio). Recompílalo con el compilador actual.";
+        }
+        if (magic == MAGIC_NUMBER_V9) {
+            return "formato v9 (\"MOD9\", enlace tardio): esta VM aun no lo carga (#523, en construccion)";
         }
         return String.format(
                 "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\", \"MOD7\" o \"MOD8\")", magic);

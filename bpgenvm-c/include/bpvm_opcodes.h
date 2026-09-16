@@ -261,4 +261,25 @@
  * cadena no vive en otro modulo, asi que `string(o)` sigue usando 0xAF. */
 #define OP_CHECKCAST_EXT   0xB0
 
+/* 0xB1-0xBB — V7/H2 (#523): ENLACE TARDIO, los opcodes _REF (MOD9).
+ * Donde hoy el operando es un NUMERO que depende de otro modulo (ranura de
+ * vtable, ranura de campo, descriptor ajeno) aqui va `idx u16`: la entrada de la
+ * ext-table del modulo actual (la misma de CALL_EXT) que el enlazador rellena
+ * UNA vez resolviendo la referencia simbolica (clase, miembro, firma con
+ * retorno) de la subtabla 3.3 del .mod. Despues cada uno es identico a su
+ * hermano sin _REF. Nada del codigo se parchea: vale para XIP. Quien los usa lo
+ * dice la regla R2 (V7_IDEAS §H2.7): clases de otro modulo y clases ABIERTAS.
+ * Misma numeracion que OpCode.java (compat.sh la compara). */
+#define OP_INVOKE_VIRTUAL_REF  0xB1   /* idx u16, nargs u8 : slot = ext[idx] */
+#define OP_GET_FIELD_REF       0xB2   /* idx u16           : slot = ext[idx], 4 B */
+#define OP_SET_FIELD_REF       0xB3
+#define OP_GET_FIELD_LONG_REF  0xB4   /* 8 B */
+#define OP_SET_FIELD_LONG_REF  0xB5
+#define OP_SET_FIELD_OWNER_REF 0xB6
+#define OP_NEW_OBJECT_REF      0xB7   /* idx u16           : desc = ext[idx] (absoluto) */
+#define OP_INSTANCEOF_REF      0xB8
+#define OP_CHECKCAST_REF       0xB9   /* idx u16, name_off i16 (literal local del mensaje) */
+#define OP_TRY_BEGIN_REF       0xBA   /* handler i32, idx u16 */
+#define OP_PUSH_REF            0xBB   /* idx u16           : push i32 ext[idx] */
+
 #endif /* BPVM_OPCODES_H */

@@ -291,7 +291,31 @@ public enum OpCode {
     CHECKCAST      (0xAF, OperandKind.CLS_NAME_I16_I16),
     /* #444 — variante cross-module: cls_off i32 parcheado en link-time por la
      * misma via que TRY_BEGIN_EXT (ehClassFixups). Ver bpvm_opcodes.h. */
-    CHECKCAST_EXT  (0xB0, OperandKind.CLS_NAME_I32_I16);
+    CHECKCAST_EXT  (0xB0, OperandKind.CLS_NAME_I32_I16),
+
+    /* ---- V7/H2 (#523) — ENLACE TARDÍO: los opcodes _REF (MOD9) --------------
+     * Donde hoy el operando es un NÚMERO que depende de otro módulo (una ranura de
+     * vtable, una ranura de campo, un descriptor ajeno), aquí va `idx u16`: la
+     * entrada de la ext-table del módulo actual (la misma tabla de CALL_EXT) que
+     * el cargador rellena UNA vez al enlazar resolviendo la referencia simbólica
+     * (clase, miembro, firma con retorno) de la subtabla 3.3 del .mod. Después
+     * cada opcode es idéntico a su hermano sin _REF: INVOKE_VIRTUAL_REF lee la
+     * ranura de ext[idx] y despacha igual que INVOKE_VIRTUAL (paseo por -1 y
+     * parentOff incluido). Nada del código se parchea: vale para XIP.
+     * La regla de quién los usa es R2 (V7_IDEAS §H2.7): una clase de otro módulo
+     * o una clase ABIERTA (algún `extends` cruza módulo), también desde su
+     * propio módulo. Lo demás sigue horneado. Misma numeración en bpvm_opcodes.h. */
+    INVOKE_VIRTUAL_REF   (0xB1, OperandKind.IDX_U16_NUMARGS_U8),   // ranura de vtable por ref
+    GET_FIELD_REF        (0xB2, OperandKind.IDX_U16),              // ranura de campo (4 B) por ref
+    SET_FIELD_REF        (0xB3, OperandKind.IDX_U16),
+    GET_FIELD_LONG_REF   (0xB4, OperandKind.IDX_U16),              // ranura de campo (8 B) por ref
+    SET_FIELD_LONG_REF   (0xB5, OperandKind.IDX_U16),
+    SET_FIELD_OWNER_REF  (0xB6, OperandKind.IDX_U16),
+    NEW_OBJECT_REF       (0xB7, OperandKind.IDX_U16),              // descriptor (dirección absoluta) por ref
+    INSTANCEOF_REF       (0xB8, OperandKind.IDX_U16),
+    CHECKCAST_REF        (0xB9, OperandKind.IDX_U16_NAME_I16),     // + name_off local del literal del mensaje
+    TRY_BEGIN_REF        (0xBA, OperandKind.TRY_HANDLER_I32_IDX_U16),
+    PUSH_REF             (0xBB, OperandKind.IDX_U16);              // push i32 ext[idx] (ranura del handler para $dest)
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;
@@ -326,7 +350,13 @@ public enum OpCode {
         // #444 — cls_off:i32 (cross-module, parcheado) + name_off:i16 (local)
         CLS_NAME_I32_I16 (6),
         // BUG-2 — i32 (handler offset) + i32 (cs_off de clase cross-module)
-        TRY_HANDLER_I32_I32 (8);
+        TRY_HANDLER_I32_I32 (8),
+        // V7/H2 (#523) — idx u16 de la ext-table + numArgs u8 (INVOKE_VIRTUAL_REF)
+        IDX_U16_NUMARGS_U8 (3),
+        // V7/H2 (#523) — idx u16 + name_off i16 local (CHECKCAST_REF)
+        IDX_U16_NAME_I16 (4),
+        // V7/H2 (#523) — i32 (handler offset) + idx u16 (TRY_BEGIN_REF)
+        TRY_HANDLER_I32_IDX_U16 (6);
 
         public final int bytes;
         OperandKind(int bytes) { this.bytes = bytes; }

@@ -113,17 +113,37 @@ public class ModWriter {
         boolean isOwner;   // true ⇒ al liberar la instancia, liberar también este campo
         int slot;          // BUG-6: índice de slot (4 bytes/slot) dentro de la instancia
         boolean is8;       // BUG-6: campo de 8 bytes (long/double) → ocupa 2 slots
+        // V7/H2 (#523, MOD9) — lo que viaja en la subtabla CLASES (4.5)
+        boolean heredado;  // copiado del padre local: NO es propio, no va en 4.5
+        String clave;      // clave canónica `nombre:código` (null = no publicado: __inh, $recv…)
+        boolean privado;
     }
     private static class MethodInfo {
         String simpleName;       // "hablar"
         String qualifiedName;    // "Animal.hablar" — clave en functionAddresses
         int slot;                // posición en la vtable
+        // V7/H2 (#523, MOD9)
+        boolean heredado;        // entrada copiada del padre local (no propia)
+        String clave;            // clave canónica `nombre(códigos)ret`
+        boolean override;        // sobreescribe una del padre (el cargador la casa por clave)
+        boolean privado;         // ocupa ranura pero no se sobreescribe ni se llama de fuera
+    }
+    /** V7/H2 (#523, MOD9) — un evento propio: `nombre(códigos)` + la ranura de su `$recv`. */
+    private static class EventInfo {
+        String clave;
+        int recvSlot;
     }
     private static class ClassInfo {
         String name;
         String parent;           // null si no hereda; nombre LOCAL si parent del mismo módulo.
         final List<FieldInfo> fields = new ArrayList<>();
         final List<MethodInfo> methods = new ArrayList<>(); // ordenadas por slot
+        // V7/H2 (#523, MOD9) — la subtabla CLASES (4.5)
+        boolean abierta;         // algún `extends` de su cadena cruza módulo: SIN descriptor; lo construye el cargador
+        boolean publica;
+        int parentDepIdx = -1;   // -1 raíz; -2 padre local (parent); >= 0 índice en la subtabla deps
+        String parentQualified;  // nombre del padre tal como lo conoce el cargador (Mod.Cls o local)
+        final List<EventInfo> events = new ArrayList<>();
         // L2 v3 — herencia cross-module. Si parent vive en otro módulo, el
         // ModWriter local no tiene su descriptor; se cargan placeholders (campos
         // dummy + slots vacíos) sólo para preservar el slot/field numbering y
@@ -437,6 +457,10 @@ public class ModWriter {
      *  para ser exportado en el .mod. El loader lo cargará en su tabla de
      *  símbolos globales con la dirección absoluta del descriptor. */
     public void exportDataSymbol(String name) {
+        if (formato == 9) {
+            ClassInfo c = classes.get(name);
+            if (c != null && c.abierta) return;   // V7/H2 (#523): una abierta no tiene descriptor que exportar
+        }
         if (!dataSymbolOffset.containsKey(name)) {
             throw new RuntimeException("exportDataSymbol: símbolo '" + name + "' no registrado");
         }
@@ -455,6 +479,8 @@ public class ModWriter {
      *  versión nueva es superconjunto append-only de la anterior). Llamar tras
      *  exportDataSymbol(className). */
     public void exportVtableMarkers(String className) {
+        if (formato == 9) return;   // V7/H2 (#523): MOD9 no lleva marcadores; lo publica la subtabla CLASES
+
         ClassInfo ci = classes.get(className);
         if (ci == null) return;
         Integer descOff = dataSymbolOffset.get(className);
@@ -835,6 +861,8 @@ public class ModWriter {
                 throw new RuntimeException("Clase padre no declarada: " + parentName + " (en addClass " + name + ")");
             }
             c.parent = parentName;
+            c.parentDepIdx = -2;                       // V7/H2 (#523): padre LOCAL
+            c.parentQualified = parentName;
             for (FieldInfo pf : p.fields) {
                 FieldInfo f = new FieldInfo();
                 f.name = pf.name;
@@ -842,6 +870,7 @@ public class ModWriter {
                 f.isOwner = pf.isOwner;
                 f.slot = pf.slot;     // BUG-6: preservar slot/ancho heredados
                 f.is8 = pf.is8;
+                f.heredado = true;    // V7/H2 (#523): no es propio, no va en 4.5
                 c.fields.add(f);
             }
             for (MethodInfo pm : p.methods) {
@@ -849,11 +878,243 @@ public class ModWriter {
                 m.simpleName = pm.simpleName;
                 m.qualifiedName = pm.qualifiedName;
                 m.slot = pm.slot;
+                m.heredado = true;    // V7/H2 (#523): se vuelve propia si el hijo la sobreescribe
+                m.clave = pm.clave;
+                m.privado = pm.privado;
                 c.methods.add(m);
             }
         }
         classes.put(name, c);
+        ordenDeClases.add(c);
         currentClass = c;
+    }
+
+    // ============================================================
+    // V7/H2 (#523) — MOD9: ENLACE TARDÍO
+    // ============================================================
+    //
+    // Un .mod MOD9 no lleva ningún NÚMERO que dependa de otro módulo. Donde hoy va
+    // una ranura o un descriptor ajeno va una REFERENCIA (kind, dep, clase, clave
+    // canónica) en la subtabla 3.3 de imports, que el cargador resuelve UNA vez a
+    // la ext-table del módulo (ext[count3.1 + i]); los opcodes _REF la leen. Y
+    // cada clase publica lo PROPIO en la subtabla CLASES (4.5) de exports: sus
+    // métodos (clave, ranura, offset de código), sus campos (clave, ranura,
+    // ancho), sus eventos (clave, ranura del recv), sus bitmaps propios y su
+    // padre. Una clase ABIERTA (algún `extends` de su cadena cruza módulo) NO
+    // lleva descriptor en data: lo construye el cargador contra el padre REAL
+    // (copia su vtable, casa los overrides por clave, añade lo propio, rebasa
+    // los campos). Diseño completo en docs/V7_IDEAS.md §H2.7.
+    //
+    // `formato` decide qué se escribe: 8 = lo de siempre (mientras las VMs
+    // aprenden a cargar MOD9), 9 = enlace tardío. Los métodos de esta sección
+    // exigen formato 9 donde su uso en formato 8 sería un error del emisor.
+
+    private int formato = 8;
+    public void setFormato(int f) {
+        if (f != 8 && f != 9) throw new IllegalArgumentException("formato de .mod desconocido: " + f);
+        this.formato = f;
+    }
+    public int getFormato() { return formato; }
+    private void exigeFormato9(String que) {
+        if (formato != 9) throw new RuntimeException(que + " es de MOD9 (enlace tardio) y el ModWriter esta en formato " + formato);
+    }
+
+    /** Los `kind` de una referencia (3.3). */
+    public static final int REF_CLASE = 0, REF_MET = 1, REF_CAMPO = 2, REF_EV_RECV = 3, REF_EV_DEST = 4, REF_SUBTIPO = 5;
+    /** `depIdx` de una clase de ESTE módulo (una abierta que se pide por ref desde su propio módulo). */
+    public static final int DEP_LOCAL = -2;
+
+    private static final class RefInfo {
+        int kind; int depIdx; String clase; String clave;
+    }
+    private final List<RefInfo> refs = new ArrayList<>();
+    private final Map<String, Integer> refIndex = new HashMap<>();
+    /** Operandos `idx u16` ya escritos con el índice de ref (0-based): al cerrar se les suma count3.1. */
+    private final List<int[]> refOperandFixups = new ArrayList<>();
+
+    /** Índice de un módulo en la subtabla deps (3.2), o -1 si no está declarado. */
+    public int depIdxDe(String moduloCualificado) {
+        int i = 0;
+        for (String k : depsVersion.keySet()) { if (k.equals(moduloCualificado)) return i; i++; }
+        return -1;
+    }
+
+    /**
+     * Da de alta (o reutiliza) una referencia simbólica y devuelve su índice en 3.3.
+     * `depIdx` >= 0 es el módulo dueño (índice en deps); {@link #DEP_LOCAL} una clase
+     * abierta de este módulo. `clave` vacía para {@link #REF_CLASE}; para
+     * {@link #REF_SUBTIPO} es el nombre cualificado del supertipo que se asume.
+     * Dedupe por (kind, dep, clase, clave): una misma llamada desde N sitios es UNA
+     * entrada de la ext-table.
+     */
+    public int requireRef(int kind, int depIdx, String clase, String clave) {
+        exigeFormato9("requireRef");
+        if (kind < REF_CLASE || kind > REF_SUBTIPO) throw new IllegalArgumentException("kind de ref: " + kind);
+        if (depIdx < DEP_LOCAL || (depIdx >= 0 && depIdx >= depsVersion.size()))
+            throw new RuntimeException("ref a '" + clase + "': depIdx " + depIdx + " fuera de la subtabla deps (" + depsVersion.size() + ")");
+        if (clase == null || clase.isEmpty()) throw new RuntimeException("ref sin clase (kind " + kind + ", clave '" + clave + "')");
+        if (clave == null) clave = "";
+        if (kind != REF_CLASE && clave.isEmpty()) throw new RuntimeException("ref " + kind + " a '" + clase + "' sin clave");
+        String k = kind + "|" + depIdx + "|" + clase + "|" + clave;
+        Integer idx = refIndex.get(k);
+        if (idx != null) return idx;
+        RefInfo r = new RefInfo();
+        r.kind = kind; r.depIdx = depIdx; r.clase = clase; r.clave = clave;
+        refs.add(r);
+        refIndex.put(k, refs.size() - 1);
+        return refs.size() - 1;
+    }
+    public int refCount() { return refs.size(); }
+
+    /** Escribe el operando `idx u16` de una ref: el índice de ref, que al cerrar el
+     *  módulo pasa a ext-index (idx + count3.1), como los saltos y los CALL. */
+    private void emitRefOperand(int refIdx) throws IOException {
+        if (refIdx < 0 || refIdx >= refs.size()) throw new RuntimeException("ref " + refIdx + " no existe");
+        refOperandFixups.add(new int[]{ currentBytecodeSize, refIdx });
+        codeOut.writeShort(refIdx);
+        currentBytecodeSize += 2;
+    }
+
+    public void emitInvokeVirtualRef(int refIdx, int numArgs) throws IOException {
+        exigeFormato9("INVOKE_VIRTUAL_REF");
+        if (numArgs < 0 || numArgs > 255) throw new RuntimeException("INVOKE_VIRTUAL_REF: numArgs fuera de rango: " + numArgs);
+        codeOut.writeByte(OpCode.INVOKE_VIRTUAL_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+        codeOut.writeByte(numArgs); currentBytecodeSize += 1;
+    }
+    public void emitGetFieldRef(int refIdx, boolean is8) throws IOException {
+        exigeFormato9("GET_FIELD_REF");
+        codeOut.writeByte((is8 ? OpCode.GET_FIELD_LONG_REF : OpCode.GET_FIELD_REF).code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
+    public void emitSetFieldRef(int refIdx, boolean is8) throws IOException {
+        exigeFormato9("SET_FIELD_REF");
+        codeOut.writeByte((is8 ? OpCode.SET_FIELD_LONG_REF : OpCode.SET_FIELD_REF).code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
+    public void emitSetFieldOwnerRef(int refIdx) throws IOException {
+        exigeFormato9("SET_FIELD_OWNER_REF");
+        codeOut.writeByte(OpCode.SET_FIELD_OWNER_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
+    public void emitNewObjectRef(int refIdx) throws IOException {
+        exigeFormato9("NEW_OBJECT_REF");
+        codeOut.writeByte(OpCode.NEW_OBJECT_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
+    public void emitInstanceOfRef(int refIdx) throws IOException {
+        exigeFormato9("INSTANCEOF_REF");
+        codeOut.writeByte(OpCode.INSTANCEOF_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
+    /** CHECKCAST por ref + el literal LOCAL del nombre para el mensaje (como CHECKCAST_EXT). */
+    public void emitCheckCastRef(int refIdx, String nameSym) throws IOException {
+        exigeFormato9("CHECKCAST_REF");
+        Integer nameOff = dataSymbolOffset.get(nameSym);
+        if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST_REF");
+        codeOut.writeByte(OpCode.CHECKCAST_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+        codeOut.writeShort(nameOff.shortValue()); currentBytecodeSize += 2;
+    }
+    /** TRY_BEGIN por ref: handler i32 (relativo, como los demás TRY_BEGIN) + idx u16. Sin fixup lateral. */
+    public void emitTryBeginRef(int handlerLabel, int refIdx) throws IOException {
+        exigeFormato9("TRY_BEGIN_REF");
+        Integer addr = currentLabelMap.get(handlerLabel);
+        if (addr == null) throw new RuntimeException("Etiqueta no existe: " + handlerLabel);
+        int instrAddr = currentBytecodeSize;
+        codeOut.writeByte(OpCode.TRY_BEGIN_REF.code);
+        if (addr != UNDECLARED) {
+            codeOut.writeInt(addr - instrAddr);
+        } else {
+            pendingJumps.add(new JumpFixup(lastFunctionName, handlerLabel, instrAddr, currentBytecodeSize + 1));
+            codeOut.writeInt(0);
+        }
+        currentBytecodeSize += 5;
+        emitRefOperand(refIdx);
+    }
+    public void emitPushRef(int refIdx) throws IOException {
+        exigeFormato9("PUSH_REF");
+        codeOut.writeByte(OpCode.PUSH_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
+    }
+
+    /**
+     * Abre una clase ABIERTA (regla R1: algún `extends` de su cadena cruza módulo).
+     * Sin placeholders del padre: sus campos y métodos propios se numeran desde 0,
+     * RELATIVOS, y el cargador los rebasa contra el padre real. No tendrá descriptor
+     * en data (endClass no lo registra): construir un objeto, leer un campo o llamar
+     * un método suyo va SIEMPRE por ref, también desde este módulo.
+     * `parentQualified` = nombre del padre tal como lo publica su dueño (Mod.Cls);
+     * `parentDepIdx` = su módulo en la subtabla deps, o {@link #DEP_LOCAL} si el
+     * padre es otra clase abierta de ESTE módulo.
+     */
+    public void addClassAbierta(String name, boolean publica, String parentQualified, int parentDepIdx) {
+        exigeFormato9("addClassAbierta");
+        if (currentClass != null) throw new RuntimeException("addClassAbierta dentro de otra clase abierta: cierra primero con endClass()");
+        if (classes.containsKey(name)) throw new RuntimeException("Clase ya declarada: " + name);
+        if (parentQualified == null || parentQualified.isEmpty()) throw new RuntimeException("una clase abierta tiene padre por definicion: " + name);
+        if (parentDepIdx == DEP_LOCAL) {
+            ClassInfo p = classes.get(parentQualified);
+            if (p == null || !p.abierta) throw new RuntimeException("padre local '" + parentQualified + "' de la abierta '" + name + "' no es una clase abierta declarada antes");
+        } else if (parentDepIdx < 0 || parentDepIdx >= depsVersion.size()) {
+            throw new RuntimeException("clase abierta '" + name + "': depIdx del padre " + parentDepIdx + " fuera de la subtabla deps");
+        }
+        ClassInfo c = new ClassInfo();
+        c.name = name; c.abierta = true; c.publica = publica;
+        c.parent = null; c.parentDepIdx = parentDepIdx; c.parentQualified = parentQualified;
+        classes.put(name, c);
+        ordenDeClases.add(c);
+        currentClass = c;
+    }
+    /** Marca la clase abierta (la actual) como pública en 4.5. Las cerradas ya se exportan por su descriptor. */
+    public void setClassPublica(boolean publica) {
+        if (currentClass == null) throw new RuntimeException("setClassPublica fuera de una clase");
+        currentClass.publica = publica;
+    }
+    /** El padre de una clase CERRADA raíz de este módulo que extiende una clase del lenguaje
+     *  sintetizada aquí (Object, Thread…) ya queda con parentDepIdx -2 por addClass; una
+     *  sin padre es raíz (-1). Nada que declarar. */
+
+    /** Metadatos MOD9 de un método ya declarado (addMethod/declareMethodSlot) de la clase actual. */
+    public void setMethodMeta(String simpleName, String clave, boolean override, boolean privado) {
+        exigeFormato9("setMethodMeta");
+        if (currentClass == null) throw new RuntimeException("setMethodMeta fuera de una clase");
+        if (clave == null || clave.isEmpty()) throw new RuntimeException("metodo '" + simpleName + "' sin clave canonica");
+        for (MethodInfo m : currentClass.methods) {
+            if (m.simpleName.equals(simpleName)) {
+                m.clave = clave; m.override = override; m.privado = privado; m.heredado = false;
+                return;
+            }
+        }
+        throw new RuntimeException("setMethodMeta: metodo '" + simpleName + "' no declarado en " + currentClass.name);
+    }
+    /** Metadatos MOD9 de un campo ya declarado (declareField) de la clase actual. */
+    public void setFieldMeta(String fieldName, String clave, boolean privado) {
+        exigeFormato9("setFieldMeta");
+        if (currentClass == null) throw new RuntimeException("setFieldMeta fuera de una clase");
+        if (clave == null || clave.isEmpty()) throw new RuntimeException("campo '" + fieldName + "' sin clave canonica");
+        for (FieldInfo f : currentClass.fields) {
+            if (f.name.equals(fieldName)) { f.clave = clave; f.privado = privado; return; }
+        }
+        throw new RuntimeException("setFieldMeta: campo '" + fieldName + "' no declarado en " + currentClass.name);
+    }
+    /** Un evento propio: su clave `nombre(códigos)` y el campo `$recv` ya declarado. */
+    public void declareEventMeta(String clave, String recvFieldName) {
+        exigeFormato9("declareEventMeta");
+        if (currentClass == null) throw new RuntimeException("declareEventMeta fuera de una clase");
+        for (FieldInfo f : currentClass.fields) {
+            if (f.name.equals(recvFieldName)) {
+                EventInfo e = new EventInfo(); e.clave = clave; e.recvSlot = f.slot;
+                currentClass.events.add(e);
+                return;
+            }
+        }
+        throw new RuntimeException("declareEventMeta: campo '" + recvFieldName + "' no declarado en " + currentClass.name);
+    }
+    /** ¿Es abierta la clase `name` (declarada en este módulo)? Para que el emisor decida _REF. */
+    public boolean esClaseAbierta(String name) {
+        ClassInfo c = classes.get(name);
+        return c != null && c.abierta;
     }
 
     /** Layout binario mínimo de un parent cross-module, derivado del .bpi del
@@ -993,6 +1254,7 @@ public class ModWriter {
             if (m.simpleName.equals(simpleName)) {
                 slot = m.slot;
                 m.qualifiedName = qualifiedName;
+                m.heredado = false;            // V7/H2 (#523): el hijo la redefine → propia (override)
                 break;
             }
         }
@@ -1029,6 +1291,7 @@ public class ModWriter {
         for (MethodInfo m : currentClass.methods) {
             if (m.simpleName.equals(simpleName)) {
                 m.qualifiedName = qualifiedName;   // override: el vtable apunta al child
+                m.heredado = false;                // V7/H2 (#523): propia
                 return;
             }
         }
@@ -1086,6 +1349,17 @@ public class ModWriter {
             throw new RuntimeException("endClass sin addClass previo");
         }
         ClassInfo c = currentClass;
+        if (c.abierta) {
+            // V7/H2 (#523) — SIN descriptor: lo construye el cargador contra el padre
+            // real. Sólo se comprueba que cada método propio tenga cuerpo y clave.
+            for (MethodInfo m : c.methods) {
+                if (m.qualifiedName == null || !functionAddresses.containsKey(m.qualifiedName))
+                    throw new RuntimeException("Metodo sin cuerpo en clase abierta: " + c.name + "." + m.simpleName);
+                if (m.clave == null) throw new RuntimeException("Metodo sin clave canonica en clase abierta: " + c.name + "." + m.simpleName + " (setMethodMeta)");
+            }
+            currentClass = null;
+            return;
+        }
         // BUG-6: num_fields es el nº de SLOTS de 4 bytes de la instancia. Un campo
         // de 8 bytes (long/double) ocupa 2 slots, así que num_slots = suma de
         // anchos, NO el nº de campos. NEW_OBJECT aloca num_fields*4 bytes.
@@ -2063,6 +2337,98 @@ public class ModWriter {
         return (i < 0) ? nombreImport : nombreImport.substring(0, i);
     }
 
+    /**
+     * V7/H2 (#523, MOD9) — subtabla 4.5 CLASES: `ver u16 (=1)`, `nClases u16`, y por
+     * clase (TODAS las del módulo, sintetizadas incluidas, en orden de declaración):
+     *   name UTF; flags u8 (bit0 ABIERTA, bit1 PÚBLICA); csOff i32 (cerrada: offset
+     *   CS-relativo de su descriptor en data; abierta: 0 y sin descriptor);
+     *   parentDepIdx i16 (-1 raíz, -2 local, >=0 deps) + parentName UTF;
+     *   nFieldsOwn u16 (ranuras propias de 4 B), nMethodsOwn u16 (entradas propias,
+     *   overrides incluidos), bwOwn u16 + ownFieldBitmap[bw] + ownOwnerBitmap[bw]
+     *   (relativos a la ranura propia 0);
+     *   métodos: n u16 + (clave UTF, slot u16, codeOff i32, flags u8: bit0 OVERRIDE, bit1 PRIVADO)*
+     *   campos:  n u16 + (clave UTF, slot u16, ancho u8 (ranuras), flags u8: bit0 REF, bit1 OWNER, bit2 PRIVADO)*
+     *   eventos: n u16 + (clave UTF, recvSlot u16)*
+     * Las ranuras de métodos, campos y recv son ABSOLUTAS en la cerrada (su vtable/objeto)
+     * y RELATIVAS en la abierta (empiezan en 0: no hay placeholders del padre); los bitmaps
+     * propios van siempre relativos a la primera ranura propia.
+     * Cerrada: sólo lo PROPIO (no lo heredado) con ranuras absolutas en SU vtable/objeto;
+     * la cadena está entera en este mismo 4.5 (padre -2) y quien busque sube localmente.
+     * Abierta: lo propio con ranuras RELATIVAS (desde 0); el cargador rebasa.
+     * Los campos sin clave (los `$recv`/`$dest` de un evento, los `__inh`) no se listan
+     * como campos: el evento los publica; los `__inh` no existen en MOD9.
+     */
+    private void escribirSubtablaClases(DataOutputStream out) throws IOException {
+        // Orden de declaración: `classes` es un HashMap → ordenamos por el offset de
+        // registro del descriptor (cerradas) y, para las abiertas, por orden de alta.
+        List<ClassInfo> orden = new ArrayList<>(ordenDeClases);
+        out.writeShort(1);
+        out.writeShort(orden.size());
+        for (ClassInfo c : orden) {
+            out.writeUTF(c.name);
+            out.writeByte((c.abierta ? 1 : 0) | (c.publica ? 2 : 0));
+            Integer csOff = c.abierta ? null : dataSymbolOffset.get(c.name);
+            if (!c.abierta && csOff == null) throw new RuntimeException("clase cerrada '" + c.name + "' sin descriptor al escribir 4.5");
+            out.writeInt(c.abierta ? 0 : csOff);
+            out.writeShort(c.parentDepIdx);
+            out.writeUTF(c.parentQualified == null ? "" : c.parentQualified);
+            // propios
+            List<FieldInfo> campos = new ArrayList<>();
+            int baseCampos = Integer.MAX_VALUE, topeCampos = 0;
+            for (FieldInfo f : c.fields) {
+                if (f.heredado) continue;
+                campos.add(f);
+                baseCampos = Math.min(baseCampos, f.slot);
+                topeCampos = Math.max(topeCampos, f.slot + (f.is8 ? 2 : 1));
+            }
+            if (campos.isEmpty()) baseCampos = 0;
+            int nFieldsOwn = topeCampos == 0 ? 0 : topeCampos - baseCampos;
+            List<MethodInfo> metodos = new ArrayList<>();
+            for (MethodInfo m : c.methods) if (!m.heredado) metodos.add(m);
+            out.writeShort(nFieldsOwn);
+            out.writeShort(metodos.size());
+            int bw = (nFieldsOwn + 31) >>> 5;
+            int[] fb = new int[bw], ob = new int[bw];
+            for (FieldInfo f : campos) {
+                int rel = f.slot - baseCampos;
+                if (f.isRef)   fb[rel >>> 5] |= (1 << (rel & 31));
+                if (f.isOwner) ob[rel >>> 5] |= (1 << (rel & 31));
+            }
+            out.writeShort(bw);
+            for (int w : fb) out.writeInt(w);
+            for (int w : ob) out.writeInt(w);
+            // métodos propios (la ranura: absoluta en cerradas, relativa en abiertas — en las
+            // abiertas los métodos se numeran desde 0 porque no hay placeholders del padre)
+            out.writeShort(metodos.size());
+            for (MethodInfo m : metodos) {
+                if (m.clave == null) throw new RuntimeException("metodo '" + c.name + "." + m.simpleName + "' sin clave canonica en MOD9 (setMethodMeta)");
+                Integer rel = functionAddresses.get(m.qualifiedName);
+                if (rel == null) throw new RuntimeException("metodo sin cuerpo en 4.5: " + m.qualifiedName);
+                out.writeUTF(m.clave);
+                out.writeShort(m.slot);
+                out.writeInt(rel);
+                out.writeByte((m.override ? 1 : 0) | (m.privado ? 2 : 0));
+            }
+            // campos propios con clave (los del usuario); los $recv/$dest van con su evento
+            List<FieldInfo> conClave = new ArrayList<>();
+            for (FieldInfo f : campos) if (f.clave != null) conClave.add(f);
+            out.writeShort(conClave.size());
+            for (FieldInfo f : conClave) {
+                out.writeUTF(f.clave);
+                out.writeShort(f.slot);          // absoluta en la cerrada; en la abierta ya empieza en 0
+                out.writeByte(f.is8 ? 2 : 1);
+                out.writeByte((f.isRef ? 1 : 0) | (f.isOwner ? 2 : 0) | (f.privado ? 4 : 0));
+            }
+            out.writeShort(c.events.size());
+            for (EventInfo e : c.events) {
+                out.writeUTF(e.clave);
+                out.writeShort(e.recvSlot);      // idem
+            }
+        }
+    }
+    /** V7/H2 (#523) — el orden de alta de las clases (classes es un HashMap). */
+    private final List<ClassInfo> ordenDeClases = new ArrayList<>();
+
     public void writeToFile(String filename) throws IOException {
         if (lastFunctionName != null) {
             functionLocalsBytesMap.put(lastFunctionName, currentLocalsBytes);
@@ -2099,9 +2465,32 @@ public class ModWriter {
             importOut.writeInt(d.getValue()[1]);
             importOut.writeInt(d.getValue()[2]);   // flags (DEP_EXTIENDE)
         }
+        // V7/H2 (#523, MOD9) — subtabla 3.3 `refs`: count u16 + (kind u8, depIdx i16,
+        // clase UTF, clave UTF)*. La ref i vive en ext[count3.1 + i]: el cargador
+        // dimensiona la ext-table a (count3.1 + count3.3) * 4 y la rellena al enlazar.
+        if (formato == 9) {
+            if (refs.size() > 0xFFFF) throw new RuntimeException("mas de 65535 refs en un modulo");
+            importOut.writeShort(refs.size());
+            for (RefInfo r : refs) {
+                importOut.writeByte(r.kind);
+                importOut.writeShort(r.depIdx);
+                importOut.writeUTF(r.clase);
+                importOut.writeUTF(r.clave);
+            }
+        } else if (!refs.isEmpty()) {
+            throw new RuntimeException("hay refs (MOD9) en un modulo que se escribe como MOD8: bug del emisor");
+        }
         importOut.flush();
 
         byte[] rawCode = codeStream.toByteArray();
+
+        // V7/H2 (#523, MOD9) — los operandos `idx u16` de las refs: índice de ref → ext-index.
+        for (int[] fx : refOperandFixups) {
+            int extIdx = externalFunctions.size() + fx[1];
+            if (extIdx > 0xFFFF) throw new RuntimeException("ext-index de ref fuera de u16: " + extIdx);
+            rawCode[fx[0]]     = (byte) ((extIdx >> 8) & 0xFF);
+            rawCode[fx[0] + 1] = (byte) ( extIdx       & 0xFF);
+        }
 
         for (Map.Entry<String, Integer> entry : functionEnterOperandPos.entrySet()) {
             int idx = entry.getValue();
@@ -2179,7 +2568,9 @@ public class ModWriter {
         // que existir aunque sea vacía, para que el loader sepa dónde
         // empieza la subsección de fixups (la detecta por bytes remanentes).
         boolean writeDataExports = !exportDataSymbols.isEmpty() || !classFixups.isEmpty()
-                || !ehClassFixups.isEmpty();
+                || !ehClassFixups.isEmpty() || formato == 9;   // MOD9: 4.2 SIEMPRE (el cargador espera 4.1, 4.2, 4.5)
+        if (formato == 9 && (!classFixups.isEmpty() || !ehClassFixups.isEmpty()))
+            throw new RuntimeException("fixups 4.3/4.4 en un modulo MOD9: el emisor tenia que usar _REF");
         if (writeDataExports) {
             exportOut.writeInt(exportDataSymbols.size());
             for (String name : exportDataSymbols) {
@@ -2210,6 +2601,7 @@ public class ModWriter {
                 exportOut.writeUTF(fx.parentQualified);
             }
         }
+        if (formato == 9) escribirSubtablaClases(exportOut);
         exportOut.flush();
 
         // GC-2 (v3.0.1): cada símbolo se registró en un slot múltiplo de 4 (ver
@@ -2294,7 +2686,7 @@ public class ModWriter {
         }
 
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filename))) {
-            out.writeInt(ModFormat.MAGIC_NUMBER_V8);   // V7/H2: el compilador emite SÓLO MOD8
+            out.writeInt(formato == 9 ? ModFormat.MAGIC_NUMBER_V9 : ModFormat.MAGIC_NUMBER_V8);   // V7/H2: MOD8, o MOD9 (#523)
             out.writeInt(dataSize);
             out.writeInt(mainOffset);
             out.writeInt(importStream.size());
