@@ -122,6 +122,7 @@ public final class MivmEmitter {
     /** `(códigos)` de los parámetros, o "" en MOD8. */
     static String firmaParams(FunctionSymbol f) {
         if (!mod9Estatico()) return "";
+        if (f == null) return "()";   // sin constructor propio ni heredado: la factoría sin argumentos
         StringBuilder sb = new StringBuilder("(");
         for (Symbol.ParamSymbol pr : f.params) sb.append(Symbol.ClaveCanonica.tipo(pr.type, moduloLocalActual));
         return sb.append(')').toString();

@@ -733,6 +733,56 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
     return st;
 }
 
+/* La reflexion de Forms (#324) con MOD9: el slot de un metodo por su nombre simple, a
+ * partir del descriptor de la clase. Sin marcadores: se busca la fila de la clase en la
+ * subtabla CLASES de su modulo (el sello +6 dice cual), y su cadena. Para una clase
+ * CONSTRUIDA la ranura efectiva de un metodo propio se lee de su propia vtable (la
+ * entrada cuyo codeOff es el suyo); el registro del enlace ya no existe. -1 = no esta
+ * o la clase no es MOD9 (el llamante prueba los marcadores). */
+int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre) {
+    size_t nl = strlen(nombre);
+    uint32_t desc = class_ptr;
+    for (int prof = 0; prof < 32 && desc != 0; prof++) {
+        uint16_t sello = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_MODULO);
+        if (sello == 0 || sello > (uint16_t) vm->module_count) return -1;
+        const bpvm_module_t* m = &vm->modules[sello - 1];
+        if (!m->clases || m->clases_len < 4) return -1;
+        char canon[160]; lt_canon(m, canon, sizeof canon);
+        uint16_t n = lt_u16(m->clases + 2);
+        const uint8_t* p = m->clases + 4;
+        int hallada = 0;
+        for (uint16_t k = 0; k < n && !hallada; k++) {
+            lt_clase_t c; p = lt_leer_fila(p, &c);
+            uint32_t abs;
+            if (!(c.flags & 1)) abs = (uint32_t)((int32_t) m->code_start + c.cs_off);
+            else { char nm[128], q[320]; lt_utf_copy(c.name, nm, sizeof nm); snprintf(q, sizeof q, "%.120s.%.120s", canon, nm); abs = bpvm_link_lookup(vm, q); }
+            if (abs != desc) continue;
+            hallada = 1;
+            const uint8_t* q = c.metodos;
+            for (uint16_t i = 0; i < c.n_met; i++) {
+                const uint8_t* r = lt_utf_skip(q);
+                uint16_t len = lt_u16(q);
+                if (len > nl && memcmp(q + 2, nombre, nl) == 0 && q[2 + nl] == '(') {
+                    if (!(c.flags & 1)) return (int) lt_u16(r);
+                    /* construida: la entrada de SU vtable con este codeOff */
+                    int32_t code_off = bpvm_read_i32_be(r + 2);
+                    uint16_t bw = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_BITMAP_WORDS);
+                    uint16_t nm2 = bpvm_read_u16_be(vm->memory + desc + BPVM_CLS_OFF_NUM_METHODS);
+                    const uint8_t* vt = vm->memory + desc + BPVM_CLS_OFF_FIELD_BITMAP + 8u * bw;
+                    for (uint16_t s2 = 0; s2 < nm2; s2++) if (bpvm_read_i32_be(vt + 4u * s2) == code_off) return (int) s2;
+                    return -1;
+                }
+                q = r + 2 + 4 + 1;
+            }
+        }
+        if (!hallada) return -1;
+        int32_t parent_off = bpvm_read_i32_be(vm->memory + desc + BPVM_CLS_OFF_PARENT_OFF);
+        if (parent_off == 0) return -1;
+        desc = (uint32_t)((int32_t) bpvm_get_cs_for_data_addr(vm, desc) + parent_off);
+    }
+    return -1;
+}
+
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
 bpvm_status_t bpvm_link_all(bpvm_t* vm) {

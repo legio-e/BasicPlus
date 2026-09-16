@@ -1171,6 +1171,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t oa = ref_addr(vm, obj);
         uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + oa);
         size_t nlen = strlen(nm);
+        {   /* V7/H2 (#523) — una clase MOD9 no tiene marcadores: su subtabla CLASES si. */
+            int s9 = bpvm_link_slot_por_nombre(vm, class_ptr, nm);
+            if (s9 >= 0) { push_i32(vm, tc, s9); return BPVM_OK; }
+        }
         for (int i = 0; i < vm->symbol_count; i++) {
             if (vm->symbols[i].abs_addr != class_ptr) continue;
             /* Formato: <Clase>#<metodo>#<slot>. Se busca "#<metodo>#" y se lee

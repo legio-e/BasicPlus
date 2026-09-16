@@ -992,6 +992,8 @@ uint32_t      bpvm_link_lookup(const bpvm_t* vm, const char* qualified);
 const char*   bpvm_symbol_name(const bpvm_t* vm, int i);   /* #449 — ver el pool */
 bpvm_status_t bpvm_link_all(bpvm_t* vm);
 uint32_t      bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr);
+/* V7/H2 (#523) — reflexion de Forms con MOD9: slot de un metodo por nombre simple, o -1. */
+int           bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre);
 uint32_t      bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr);
 uint32_t      bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs);
 
