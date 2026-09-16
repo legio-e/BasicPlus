@@ -92,10 +92,10 @@ class BarajarTest {
     }
 
     /** Orden de secciones en el fichero: 0 lib, 1 imports, 2 exports (con la 4.5 CLASES), 3 iface, 4 native, 5 data, 6 code.
-     *  ⏭️ La 3 (la INTERFAZ embebida de Usa) HOY lleva `layout 5 10 …` y `field q slot 4` de la clase abierta Hija: números
-     *  que dependen de la forma de Lib.Base — lo que la «bpi 9» tiene que dejar de publicar en MOD9. Hasta entonces se excluye
-     *  aquí A SABIENDAS (data y code, donde viven los números que ejecutan, SÍ se comparan). Poner a -1 al cerrar bpi 9. */
-    static final int SECCION_IFACE = 3;
+     *  La 3 (la INTERFAZ embebida de Usa) llevaba en bpi 8 `layout 5 10 …` y `field q slot 4` de la clase abierta Hija:
+     *  números que dependían de la forma de Lib.Base — este test los cazó el 16-sep, y la «bpi 9» dejó de publicarlos en MOD9.
+     *  Se compara también (-1 = ninguna excluida). */
+    static final int SECCION_IFACE = -1;   // bpi 9 hecha (16-sep): la interfaz ya no lleva números; se compara también
 
     private static byte[][] secciones(byte[] mod) {
         ByteBuffer b = ByteBuffer.wrap(mod);

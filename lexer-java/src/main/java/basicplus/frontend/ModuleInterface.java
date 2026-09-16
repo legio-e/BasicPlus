@@ -68,7 +68,10 @@ import java.util.Map;
 public final class ModuleInterface {
 
     /** Versión mínima del .bpi que sabemos leer (cuando se sube, lo bumpamos). */
-    public static final int CURRENT_VERSION = 8;   // v8 (V7/H2, #492-B): `field` por clase — los campos cruzan el módulo
+    public static final int CURRENT_VERSION = 9;   // v9 (V7/H2, #523): SIN NÚMEROS — ni `layout`, ni `slot`, ni `recv`
+    /** La versión que ESCRIBE este build: 9 con `--formato=9` (enlace tardío: las ranuras son del cargador,
+     *  la interfaz no publica ninguna); 8 en MOD8 (`field … slot n`, `event … recv n`, `layout`). */
+    static int versionQueSeEscribe() { return Main.FORMATO == 9 ? 9 : 8; }
     public static final int MIN_SUPPORTED_VERSION = 1;
 
     public String library = "";
@@ -823,10 +826,17 @@ public final class ModuleInterface {
         Symbol.ClassSymbol b = cls.baseClass;
         if (b == null) return objectBaseLayout();
         if (b.isExternal) {
+            // V7/H2 (#523, bpi 9) — en MOD9 la clase es ABIERTA (R1): lo heredado lo coloca el
+            // CARGADOR contra el padre real, y lo propio se numera RELATIVO desde 0, igual que
+            // hace el ModWriter (`addClassAbierta`, sin placeholders). La interfaz del padre no
+            // publica números (bpi 9) y, aunque los publicara (una dep bpi 8), no se usan: serían
+            // los de UNA versión del padre.
+            if (Main.FORMATO == 9) return new LayoutAndNames(0, 0, new int[0], new int[0], new ArrayList<>());
             LayoutAndNames pub = publishedLayoutOf(b);
             if (pub == null) {
                 throw new RuntimeException("clase '" + cls.name + "': la base cross-module '"
-                        + b.name + "' no publica layout binario en su interfaz — recompila el módulo dueño");
+                        + b.name + "' no publica layout binario en su interfaz (bpi 9, enlace tardio: las ranuras son del cargador)"
+                        + " — compila este modulo con --formato=9, o recompila el dueño en MOD8");
             }
             return pub;
         }
@@ -1116,7 +1126,9 @@ public final class ModuleInterface {
     /** Cuerpo compartido de la serialización: vuelca el texto de directivas al
      *  PrintWriter dado (fichero .bpi o buffer en memoria para el .mod). */
     public void writeTo(PrintWriter pw) {
-            pw.println("bpi " + CURRENT_VERSION);
+            int ver = versionQueSeEscribe();
+            boolean conNumeros = ver < 9;   // bpi 9: la forma de una clase la decide el cargador; aquí no viaja ningún número
+            pw.println("bpi " + ver);
             if (library != null && !library.isEmpty()) pw.println("library " + library);
             pw.println("module " + moduleName);
             if (isInterface) pw.println("interface true");
@@ -1167,7 +1179,7 @@ public final class ModuleInterface {
                 // donde fbm y obm son hex (little-endian de ints). El reader
                 // viejo (v5) ignora líneas desconocidas, así que es backward
                 // compatible. La línea sólo se emite si binaryNumFields >= 0.
-                if (c.binaryNumFields >= 0) {
+                if (conNumeros && c.binaryNumFields >= 0) {
                     StringBuilder lay = new StringBuilder();
                     lay.append("  layout ").append(c.binaryNumFields).append(' ').append(c.binaryNumMethods);
                     lay.append(' '); appendHexInts(lay, c.binaryFieldBitmap);
@@ -1178,8 +1190,9 @@ public final class ModuleInterface {
                 // V7/H2 (#492-B) — `field <nombre>:<tipo> slot <n> [private] [owner]`, en el
                 // orden de ranura. Publicar no es hacer público: el flag `private` viaja.
                 for (FieldSig f : c.fields) {
-                    pw.printf("  field %s:%s slot %d%s%n", f.name, typeToString(f.type), f.slot,
+                    if (conNumeros) pw.printf("  field %s:%s slot %d%s%n", f.name, typeToString(f.type), f.slot,
                             f.isOwner ? " owner" : "");   // los private no se publican: sin flag
+                    else pw.printf("  field %s:%s%s%n", f.name, typeToString(f.type), f.isOwner ? " owner" : "");
                 }
                 if (c.ctorParams != null) {
                     StringBuilder cs = new StringBuilder();
@@ -1230,7 +1243,7 @@ public final class ModuleInterface {
                         if (i > 0) sb.append(',');
                         appendParam(sb, ev.params.get(i));
                     }
-                    sb.append(") recv ").append(ev.recvSlot);
+                    if (conNumeros) sb.append(") recv ").append(ev.recvSlot); else sb.append(')');
                     if (ev.opaque) sb.append(" opaque");
                     pw.println(sb.toString());
                 }
@@ -1782,14 +1795,18 @@ public final class ModuleInterface {
         if (colon < 0) throw new IOException(file + ":" + lineNo + ": field mal formado (falta ':')");
         String name = body.substring(0, colon).trim();
         String[] tok = body.substring(colon + 1).trim().split("\\s+");
-        if (tok.length < 3 || !"slot".equals(tok[1]))
-            throw new IOException(file + ":" + lineNo + ": field mal formado (esperado: <tipo> slot <n> [private] [owner])");
+        if (tok.length < 1 || tok[0].isEmpty())
+            throw new IOException(file + ":" + lineNo + ": field mal formado (esperado: <tipo> [slot <n>] [private] [owner])");
         BpType type = parseType(file, lineNo, tok[0]);
-        int slot;
-        try { slot = Integer.parseInt(tok[2]); }
-        catch (NumberFormatException nfe) { throw new IOException(file + ":" + lineNo + ": field: slot no entero '" + tok[2] + "'"); }
+        // bpi 8: `slot n` obligatorio (el consumidor MOD8 accede por ranura). bpi 9: no viaja (-1): las ranuras son del cargador.
+        int slot = -1, i = 1;
+        if (tok.length >= 3 && "slot".equals(tok[1])) {
+            try { slot = Integer.parseInt(tok[2]); }
+            catch (NumberFormatException nfe) { throw new IOException(file + ":" + lineNo + ": field: slot no entero '" + tok[2] + "'"); }
+            i = 3;
+        }
         boolean isPrivate = false, isOwner = false;
-        for (int i = 3; i < tok.length; i++) {
+        for (; i < tok.length; i++) {
             if ("private".equals(tok[i])) isPrivate = true;
             else if ("owner".equals(tok[i])) isOwner = true;
             else throw new IOException(file + ":" + lineNo + ": flag desconocido en field '" + tok[i] + "'");
@@ -1841,16 +1858,20 @@ public final class ModuleInterface {
         List<ParamSig> ps = parseParamList(file, lineNo, body.substring(lp + 1, rp));
 
         String[] tail = body.substring(rp + 1).trim().split("\\s+");
-        if (tail.length < 2 || !"recv".equals(tail[0]))
-            throw new IOException(file + ":" + lineNo + ": event '" + name
-                    + "' sin 'recv <slot>' — sin el slot no se puede suscribir cross-module");
-        int recvSlot;
-        try { recvSlot = Integer.parseInt(tail[1]); }
-        catch (NumberFormatException nfe) {
-            throw new IOException(file + ":" + lineNo + ": event '" + name + "': slot recv no entero");
+        // bpi 8: `recv <slot>` obligatorio (sin él el suscriptor MOD8 no sabe dónde escribir);
+        // bpi 9: no viaja (-1) — el suscriptor va por ref EV_RECV/EV_DEST y el cargador resuelve.
+        int recvSlot = -1;
+        int desde = 0;
+        if (tail.length >= 2 && "recv".equals(tail[0])) {
+            desde = 2;
+            try { recvSlot = Integer.parseInt(tail[1]); }
+            catch (NumberFormatException nfe) {
+                throw new IOException(file + ":" + lineNo + ": event '" + name + "': slot recv no entero");
+            }
         }
         boolean opaque = false;
-        for (int i = 2; i < tail.length; i++) {
+        for (int i = desde; i < tail.length; i++) {
+            if (tail[i].isEmpty()) continue;
             if ("opaque".equals(tail[i])) opaque = true;
             else throw new IOException(file + ":" + lineNo + ": event '" + name
                     + "': flag desconocido '" + tail[i] + "'");

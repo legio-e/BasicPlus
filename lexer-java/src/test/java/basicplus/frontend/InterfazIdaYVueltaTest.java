@@ -129,6 +129,66 @@ class InterfazIdaYVueltaTest {
         idaYVueltaDe(mod);
     }
 
+    /** V7/H2 (#523) — bpi 9: con `--formato=9` la interfaz NO publica ningún número de forma
+     *  (`layout`, `field … slot n`, `event … recv n`): las ranuras son del cargador. Se afirma el texto
+     *  (campo, evento, clase abierta) y que hace la ida y vuelta; y que el lector deja -1 donde no hay número. */
+    private static final String CON_EVENTO =
+        "module Juguete\n"
+      + "  import Core\n"
+      + "  public class Base\n"
+      + "    var n: integer\n"
+      + "    var owner hijo: Base\n"
+      + "    event cambio(x: integer)\n"
+      + "    public function Base(v: integer)\n"
+      + "      this.n := v\n"
+      + "    end Base\n"
+      + "    public function valor(): integer\n"
+      + "      return this.n\n"
+      + "    end valor\n"
+      + "  end Base\n"
+      + "  public class Hija extends Core.Exception\n"
+      + "    var q: integer\n"
+      + "    public function Hija()\n"
+      + "      super(\"h\")\n"
+      + "    end Hija\n"
+      + "  end Hija\n"
+      + "  public function main()\n"
+      + "    print Base(1).valor()\n"
+      + "  end main\n"
+      + "end Juguete\n";
+
+    @Test
+    @DisplayName("bpi 9 (--formato=9): sin layout, sin slot, sin recv — y la ida y vuelta; el lector deja -1")
+    void bpi9SinNumeros(@TempDir Path tmp) throws Exception {
+        int antes = Main.FORMATO; Main.FORMATO = 9;
+        try {
+            Path src = Files.createDirectories(tmp.resolve("src"));
+            Path out = Files.createDirectories(tmp.resolve("out"));
+            Files.write(src.resolve("Juguete.bp"), CON_EVENTO.getBytes(StandardCharsets.UTF_8));
+            BpBuild b = new BpBuild();
+            b.projectDir = tmp.toString(); b.sourceDir = src.toString(); b.outDir = out.toString(); b.main = "Juguete";
+            b.version = 7;
+            b.dependencies.add(new File("../bpstdlib").getAbsolutePath());
+            assertTrue(Main.buildProject(b, "mivm", false), "el módulo de juguete debe compilar en MOD9");
+            Path mod = out.resolve("Juguete.mod");
+            String texto = new String(seccionInterface(mod), StandardCharsets.UTF_8).replace("\r\n", "\n");
+            assertTrue(texto.startsWith("bpi 9\n"), texto);
+            for (String linea : new String[]{ "field n:integer\n", "field hijo:Base owner\n", "event cambio(x:integer)\n",
+                                              "class Hija public extends Core.Exception\n", "field q:integer\n" })
+                assertTrue(texto.contains(linea), "falta «" + linea.trim() + "» en:\n" + texto);
+            for (String no : new String[]{ "layout", " slot ", " recv " })
+                assertTrue(!texto.contains(no), "bpi 9 no lleva «" + no.trim() + "»:\n" + texto);
+            idaYVueltaDe(mod);
+            ModuleInterface iface = ModuleInterface.fromBytes(seccionInterface(mod), mod.toString());
+            ModuleInterface.ClassSig base = null;
+            for (ModuleInterface.ClassSig c : iface.classes) if (c.name.equals("Base")) base = c;
+            assertTrue(base != null, "Base en la interfaz");
+            assertEquals(-1, base.binaryNumFields, "sin layout");
+            assertEquals(-1, base.fields.get(0).slot, "sin slot");
+            assertEquals(-1, base.events.get(0).recvSlot, "sin recv");
+        } finally { Main.FORMATO = antes; }
+    }
+
     private static void idaYVueltaDe(Path mod) throws Exception {
         byte[] original = seccionInterface(mod);
         assertTrue(original != null && original.length > 0, mod + ": el .mod lleva sección interface");

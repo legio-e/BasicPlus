@@ -1445,13 +1445,14 @@ public final class MivmEmitter {
             // CS de este módulo).
             String parentForModWriter = null;
             edu.bpgenvm.generador.ModWriter.ExternalParentLayout externalParent = null;
-            if (cls.baseClass != null) {
+            boolean abierta9 = mod9() && esAbierta(cls);   // V7/H2 (#523): sin placeholders del padre; su layout no hace falta (bpi 9 no lo trae)
+            if (cls.baseClass != null && !abierta9) {
                 if (cls.baseClass.isExternal) {
                     SemanticInfo.ClassBinaryLayout layout = (cls.baseClass.binaryLayout != null)
                             ? cls.baseClass.binaryLayout : null;
                     if (layout == null) {
                         errors.add("L2 v3: parent cross-module '" + cls.baseClass.name
-                                + "' sin layout binario en .bpi — recompila el módulo dueño");
+                                + "' sin layout binario en .bpi (bpi 9, enlace tardio) — compila con --formato=9, o recompila el dueño en MOD8");
                         return;
                     }
                     StringBuilder qname = new StringBuilder();
@@ -1480,10 +1481,10 @@ public final class MivmEmitter {
             // H5.1.a — sin base explícita ⇒ raíz Object (vtable slots 0/1 =
             // toString/compareTo). Las clases que extienden Thread van por la
             // rama de arriba (base = Thread) y heredan la excepción Object.
-            if (parentForModWriter == null && externalParent == null) {
+            if (parentForModWriter == null && externalParent == null && !abierta9) {
                 parentForModWriter = "Object";
             }
-            if (mod9() && esAbierta(cls)) {
+            if (abierta9) {
                 // V7/H2 (#523) — ABIERTA: sin placeholders del padre y sin descriptor; el
                 // cargador la construye contra el padre real. Su padre es o externo (dep)
                 // u otra abierta de este módulo (local).
