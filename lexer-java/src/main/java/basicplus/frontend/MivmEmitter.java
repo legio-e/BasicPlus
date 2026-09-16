@@ -3923,9 +3923,15 @@ public final class MivmEmitter {
                 declareLocalLong("__discard");   // H1.2a: hay que sacar los 8 bytes del ref de excepción
                 w.emitSetLocal("__discard");
             }
-            // Al entrar al handler, el VM ya pop'eó todos los N handlers.
-            // El catch_context lleva activeHandlers=0 pero mantiene el finally
-            // para los returns dentro del catch.
+            // V10 (16-sep, EC-2) — al entrar al handler, las DOS VMs han sacado de la pila los
+            // handlers de ENCIMA del que casa y ese mismo; los HERMANOS DE DEBAJO (los catch
+            // posteriores de este try, empujados antes) seguían vivos. Un throw posterior, fuera
+            // de todo try, volvía a entrar en un catch rancio de este try (y re-ejecutaba lo que
+            // hubiera detrás): `1 catch RuntimeError / antes del throw / 2 catch Exception (NO
+            // deberia salir) / antes del throw …` en las dos VMs. Se sacan aquí; así el
+            // catch_context lleva activeHandlers=0 de verdad (y mantiene el finally para los
+            // returns dentro del catch).
+            for (int j = i + 1; j < N; j++) w.emitTryEnd();
             TryFrame catchContext = new TryFrame(finallyBody, 0);
             TryFrame wrapFrame = null;
             if (finallyBody != null) {

@@ -1,0 +1,28 @@
+// ExcDosCatch — V10 (16-sep, EC-2): un `try` con DOS catch. Si casa el primero, el segundo
+// (empujado antes, más abajo en la pila de handlers) NO puede quedarse vivo: un throw posterior
+// tiene que ir al catch EXTERIOR, no volver a entrar en el catch rancio del try ya cerrado.
+// Con el bug (las dos VMs, byte-idénticas) salía «2 catch Exception (NO deberia salir)» y se
+// re-ejecutaba «entre los dos try» hasta morir. Esperado:
+//   1 catch RuntimeError
+//   entre los dos try
+//   outer: b
+//   fin
+module ExcDosCatch
+  import Core
+  public function main()
+    try
+      try
+        throw RuntimeError("a")
+      catch e: RuntimeError
+        print "1 catch RuntimeError"
+      catch e2: Core.Exception
+        print "2 catch Exception (NO deberia salir)"
+      endtry
+      print "entre los dos try"
+      throw RuntimeError("b")
+    catch e3: Core.Exception
+      print "outer: " + e3.msg
+    endtry
+    print "fin"
+  end main
+end ExcDosCatch
