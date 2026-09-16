@@ -1665,9 +1665,22 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
 
         /* ---- F3: clases ---- */
-        case OP_NEW_OBJECT: {
-            int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2;
-            uint32_t class_ptr = (uint32_t)((int32_t) cs + cs_off);
+        /* V7/H2 (#523) — los opcodes _REF (MOD9): el operando `idx u16` es una entrada de
+         * la ext-table del modulo actual que el enlazador rellenó al cargar (ranura de
+         * vtable, ranura de campo, o direccion absoluta de un descriptor). Leido el
+         * valor, cada uno sigue por el MISMO camino que su hermano sin _REF: por eso
+         * comparten `case`. Nada del codigo se parchea: vale para XIP. */
+#define BPVM_REF_LEE(dst) do { uint16_t idx_ = bpvm_read_u16_be(mem + pc); pc += 2; \
+        (dst) = bpvm_read_u32_be(mem + bpvm_get_ext_table_addr(vm, cs) + (uint32_t) idx_ * 4u); } while (0)
+        case OP_PUSH_REF: {   /* push i32 ext[idx]: la ranura del handler de un evento */
+            uint32_t v_; BPVM_REF_LEE(v_);
+            bpvm_write_i32_be(mem + sp, (int32_t) v_); sp += 4;
+            break;
+        }
+        case OP_NEW_OBJECT: case OP_NEW_OBJECT_REF: {
+            uint32_t class_ptr;
+            if (op == OP_NEW_OBJECT) { int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2; class_ptr = (uint32_t)((int32_t) cs + cs_off); }
+            else BPVM_REF_LEE(class_ptr);
             uint16_t num_fields = bpvm_read_u16_be(mem + class_ptr
                                                     + BPVM_CLS_OFF_NUM_FIELDS);
             tc->sp = sp;   /* SAFEPOINT GC */
@@ -1682,8 +1695,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             mem = vm->memory;
             break;
         }
-        case OP_GET_FIELD: {
-            uint8_t slot = mem[pc++];
+        case OP_GET_FIELD: case OP_GET_FIELD_REF: {
+            uint32_t slot; if (op == OP_GET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
@@ -1691,8 +1704,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
         }
-        case OP_SET_FIELD: {
-            uint8_t slot = mem[pc++];
+        case OP_SET_FIELD: case OP_SET_FIELD_REF: {
+            uint32_t slot; if (op == OP_SET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
@@ -1702,8 +1715,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         /* BUG-6: campos de instancia de 8 bytes (long/double/ref). slot = índice de
          * slot de 4 bytes; el valor ocupa 2 slots consecutivos en el campo. */
-        case OP_GET_FIELD_LONG: {
-            uint8_t slot = mem[pc++];
+        case OP_GET_FIELD_LONG: case OP_GET_FIELD_LONG_REF: {
+            uint32_t slot; if (op == OP_GET_FIELD_LONG) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
@@ -1711,8 +1724,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
         }
-        case OP_SET_FIELD_LONG: {
-            uint8_t slot = mem[pc++];
+        case OP_SET_FIELD_LONG: case OP_SET_FIELD_LONG_REF: {
+            uint32_t slot; if (op == OP_SET_FIELD_LONG) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
@@ -1721,9 +1734,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
-        case OP_INVOKE_VIRTUAL: {
-            uint8_t vt_slot = mem[pc++];
-            uint8_t num_args = mem[pc++];
+        case OP_INVOKE_VIRTUAL: case OP_INVOKE_VIRTUAL_REF: {
+            uint32_t vt_slot; uint8_t num_args;
+            if (op == OP_INVOKE_VIRTUAL) { vt_slot = mem[pc++]; num_args = mem[pc++]; }
+            else { BPVM_REF_LEE(vt_slot); num_args = mem[pc++]; }
             uint32_t this_addr = sp - BPVM_REF_SIZE - (uint32_t) num_args * 4;   /* receptor ref */
             bpref_t this_obj = bpref_load(vm, this_addr);
             if (bpref_is_null(this_obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
@@ -1761,7 +1775,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 if (parent_off == 0) {
                     bpvm_diag_urgente(
                             "[bpvm-c] INVOKE_VIRTUAL slot %u no resoluble en cadena de herencia",
-                            vt_slot);
+                            (unsigned) vt_slot);
                     exit_status = BPVM_ERR_RUNTIME;
                     goto done;
                 }
@@ -1782,9 +1796,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
-        case OP_INSTANCEOF: {
-            int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2;
-            uint32_t expected = (uint32_t)((int32_t) cs + cs_off);
+        case OP_INSTANCEOF: case OP_INSTANCEOF_REF: {
+            uint32_t expected;
+            if (op == OP_INSTANCEOF) { int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2; expected = (uint32_t)((int32_t) cs + cs_off); }
+            else BPVM_REF_LEE(expected);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             int32_t result = 0;
             {   /* #389 — el class_ptr, VALIDADO: una cadena o un array dentro de
@@ -1850,35 +1865,42 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
-        case OP_CHECKCAST_EXT: {
+        case OP_CHECKCAST_EXT: case OP_CHECKCAST_REF: {
             /* #444 — como OP_CHECKCAST pero el cls_off es i32 y viene PARCHEADO
              * por el enlazador (nombre cualificado → dirección cs-relativa de la
              * clase de otro módulo). Misma via que OP_TRY_BEGIN_EXT, incluido el
              * camino frío de XIP: en un módulo que corre desde FLASH el operando
-             * no se pudo escribir y el valor vive en la tabla lateral. */
+             * no se pudo escribir y el valor vive en la tabla lateral.
+             * V7/H2 (#523) — CHECKCAST_REF: el descriptor (absoluto) sale de ext[idx]. */
             uint32_t instr_addr   = pc - 1;
             uint32_t operand_addr = pc;
-            int32_t cls_off  = bpvm_read_i32_be(mem + pc); pc += 4;
-            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
-            {
-                const bpvm_module_t* xm = bpvm_module_for_code_addr(vm, instr_addr);
-                if (xm && xm->cb != xm->code_start) {
-                    int32_t rel = (int32_t)(operand_addr - xm->cb);
-                    for (int fi = 0; fi < xm->eh_class_fixup_count; fi++) {
-                        const bpvm_eh_class_fixup_t* fx = &xm->eh_class_fixups[fi];
-                        if (fx->code_off == rel && fx->resolved) {
-                            cls_off = fx->resolved_cls_off;
-                            break;
+            uint32_t expected_abs = 0;
+            if (op == OP_CHECKCAST_REF) {
+                BPVM_REF_LEE(expected_abs);
+            } else {
+                int32_t cls_off  = bpvm_read_i32_be(mem + pc); pc += 4;
+                {
+                    const bpvm_module_t* xm = bpvm_module_for_code_addr(vm, instr_addr);
+                    if (xm && xm->cb != xm->code_start) {
+                        int32_t rel = (int32_t)(operand_addr - xm->cb);
+                        for (int fi = 0; fi < xm->eh_class_fixup_count; fi++) {
+                            const bpvm_eh_class_fixup_t* fx = &xm->eh_class_fixups[fi];
+                            if (fx->code_off == rel && fx->resolved) {
+                                cls_off = fx->resolved_cls_off;
+                                break;
+                            }
                         }
                     }
                 }
+                expected_abs = (uint32_t)((int32_t) cs + cls_off);
             }
+            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
             bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
             int ok = 1;
             if (!bpref_is_null(obj)) {
                 /* Aqui cls_off == 0 NO es el centinela de cadena (una cadena no
                  * vive en otro modulo): `string(o)` sigue por OP_CHECKCAST. */
-                uint32_t expected = (uint32_t)((int32_t) cs + cls_off);
+                uint32_t expected = expected_abs;
                 uint32_t cur = class_ptr_of_ref_or0(vm, obj);
                 ok = 0;
                 while (cur != 0) {
@@ -1921,8 +1943,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
-        case OP_SET_FIELD_OWNER: {
-            uint8_t slot = mem[pc++];
+        case OP_SET_FIELD_OWNER: case OP_SET_FIELD_OWNER_REF: {
+            uint32_t slot; if (op == OP_SET_FIELD_OWNER) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t val = bpref_load(vm, sp);   /* V4: valor = ref nueva (8B; era 4B → drift + high-word) */
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
@@ -1995,11 +2017,18 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                          (int32_t) cs, expected_cls);
             break;
         }
-        case OP_TRY_BEGIN_EXT: {
-            /* BUG-2 — como TRY_BEGIN pero cls_off es i32 (catch cross-module). */
+        case OP_TRY_BEGIN_EXT: case OP_TRY_BEGIN_REF: {
+            /* BUG-2 — como TRY_BEGIN pero cls_off es i32 (catch cross-module).
+             * V7/H2 (#523) — TRY_BEGIN_REF: handler i32 + idx u16; la clase, absoluta, de ext[idx]. */
             uint32_t instr_addr = pc - 1;
-            uint32_t operand_addr = pc;
             int32_t handler_rel = bpvm_read_i32_be(mem + pc); pc += 4;
+            if (op == OP_TRY_BEGIN_REF) {
+                uint32_t cls_abs; BPVM_REF_LEE(cls_abs);
+                bpvm_eh_push(tc, (int32_t) instr_addr + handler_rel, (int32_t) sp, (int32_t) bp,
+                             (int32_t) cs, (int32_t) cls_abs);
+                break;
+            }
+            uint32_t operand_addr = pc;
             int32_t cls_off     = bpvm_read_i32_be(mem + pc); pc += 4;
             /* H3.c — en un módulo XIP el operando cls_off vive en FLASH y el
              * link no pudo parchearlo → el valor resuelto está en la tabla

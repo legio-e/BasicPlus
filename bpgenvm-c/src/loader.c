@@ -122,10 +122,11 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      * no se pueda garantizar se RECHAZA aquí, en la carga, con un error claro
      * -- nunca se ejecuta a ciegas. */
     if (magic == BPVM_MAGIC)                           return BPVM_ERR_ABI_MOD_V5;
-    if (magic != BPVM_MAGIC_V6 && magic != BPVM_MAGIC_V7 && magic != BPVM_MAGIC_V8)
-                                                       return BPVM_ERR_BAD_MAGIC;
+    if (magic != BPVM_MAGIC_V6 && magic != BPVM_MAGIC_V7 && magic != BPVM_MAGIC_V8
+        && magic != BPVM_MAGIC_V9)                     return BPVM_ERR_BAD_MAGIC;
     int is_v6 = 1;                       /* v6, v7 y v8 llevan interfaceSize */
-    int is_v8 = (magic == BPVM_MAGIC_V8);   /* V7/H2: gen + ifaceCrc + subtabla deps */
+    int is_v9 = (magic == BPVM_MAGIC_V9);   /* V7/H2 (#523): enlace tardio (refs 3.3 + CLASES 4.5) */
+    int is_v8 = (magic == BPVM_MAGIC_V8) || is_v9;   /* V7/H2: gen + ifaceCrc + subtabla deps */
     int is_v7 = (magic == BPVM_MAGIC_V7) || is_v8;
     uint32_t gen = 0, iface_crc = 0;
     if (bc_read_be32(&c, &data_size) != 0)             return BPVM_ERR_IO;
@@ -145,7 +146,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
     bpvm_module_t* mod = &vm->modules[vm->module_count];
     memset(mod, 0, sizeof(*mod));
-    mod->fmt = (uint8_t) (is_v8 ? 8 : (is_v7 ? 7 : 6));
+    mod->fmt = (uint8_t) (is_v9 ? 9 : (is_v8 ? 8 : (is_v7 ? 7 : 6)));
     mod->gen = gen;
     mod->iface_crc = iface_crc;
     /* Nombre lógico: si tenemos hint úsalo, si no "embedded<idx>". */
@@ -229,6 +230,30 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             }
         }
     }
+    /* V7/H2 (#523, MOD9) — la subtabla `refs` (3.3): count u16 + (kind u8, depIdx i16,
+     * clase UTF, clave UTF)*. La ref i vivira en ext[ext_count + i]. */
+    mod->ext_count31 = ext_count;
+    if (is_v9 && c.pos - imports_ini + 2 <= imports_size) {
+        uint8_t b2[2];
+        if (bc_read(&c, b2, 2) != 0) return BPVM_ERR_IO;
+        uint32_t nr = ((uint32_t) b2[0] << 8) | b2[1];
+        if (nr > 0) {
+            mod->refs = (bpvm_ref_t*) bpvm_calloc(nr, sizeof(bpvm_ref_t));
+            if (!mod->refs) return BPVM_ERR_OOM;
+            for (uint32_t i = 0; i < nr; i++) {
+                uint8_t k[3]; char tmp_c[160], tmp_k[256];
+                if (bc_read(&c, k, 3) != 0)                              return BPVM_ERR_IO;
+                if (bc_read_writeutf(&c, tmp_c, sizeof(tmp_c)) != 0)     return BPVM_ERR_IO;
+                if (bc_read_writeutf(&c, tmp_k, sizeof(tmp_k)) != 0)     return BPVM_ERR_IO;
+                mod->refs[i].kind    = k[0];
+                mod->refs[i].dep_idx = (int16_t) (((uint16_t) k[1] << 8) | k[2]);
+                mod->refs[i].clase   = bpvm_strdup(tmp_c);
+                mod->refs[i].clave   = bpvm_strdup(tmp_k);
+                if (!mod->refs[i].clase || !mod->refs[i].clave) return BPVM_ERR_OOM;
+                mod->ref_count = (int) (i + 1);
+            }
+        }
+    }
     if (c.pos - imports_ini < imports_size) {
         if (bc_skip(&c, imports_size - (c.pos - imports_ini)) != 0) return BPVM_ERR_IO;
     }
@@ -239,7 +264,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      *                └─ code block (code_size bytes)   [XIP: NO ocupa RAM]
      */
     uint32_t module_base = vm->next_free_address;
-    uint32_t ext_table_size = ext_count * BPVM_EXT_ENTRY_SIZE;
+    uint32_t ext_table_size = (ext_count + (uint32_t) mod->ref_count) * BPVM_EXT_ENTRY_SIZE;   /* V7/H2 (#523): + las refs */
     uint32_t data_start  = module_base + ext_table_size;
     uint32_t code_start  = data_start + data_size;      /* = CS (ancla, SIEMPRE RAM) */
     uint32_t end_addr    = xip ? code_start : code_start + code_size;
@@ -250,6 +275,11 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
     if (ext_table_size > 0) {
         memset(vm->memory + module_base, 0, ext_table_size);
+        /* V7/H2 (#523) — las entradas de las refs nacen SIN RESOLVER (0xFFFFFFFF: la
+         * ranura 0 es legitima, toString); el enlazador las rellena o rechaza. */
+        if (mod->ref_count > 0)
+            memset(vm->memory + module_base + ext_count * BPVM_EXT_ENTRY_SIZE, 0xFF,
+                   (size_t) mod->ref_count * BPVM_EXT_ENTRY_SIZE);
     }
 
     /* Sección exports: leerla completa a un buffer (puntero al cursor mismo)
@@ -385,8 +415,28 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 }
             }
 
+            /* V7/H2 (#523, MOD9) — detras de 4.2 viene la subtabla CLASES (4.5), y no hay
+             * 4.3/4.4. Se retiene tal cual: XIP → puntero a la flash (0 B de RAM); RAM o
+             * stream → copia detras del modulo (el buffer de exports es temporal). */
+            if (is_v9) {
+                if (exp_off < exports_size) {
+                    uint32_t len = exports_size - (uint32_t) exp_off;
+                    if (xip) {
+                        mod->clases = exp_buf + exp_off;
+                    } else {
+                        uint32_t dst = (end_addr + 3u) & ~3u;
+                        if (dst + len > vm->heap_top) return BPVM_ERR_OOM;
+                        memmove(vm->memory + dst, exp_buf + exp_off, len);
+                        mod->clases = vm->memory + dst;
+                        end_addr = dst + len;
+                        mod->end_addr = end_addr;   /* la copia es del modulo: el siguiente empieza detras */
+                    }
+                    mod->clases_len = len;
+                }
+                exp_off = exports_size;
+            }
             /* 4.3 class fixups opcional. */
-            if (exp_off + 4 <= exports_size) {
+            if (!is_v9 && exp_off + 4 <= exports_size) {
                 uint32_t fxcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
                 if (fxcount > 0) {
                     mod->class_fixups = (bpvm_class_fixup_t*) bpvm_calloc(fxcount,
@@ -419,7 +469,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 }
             }
             /* 4.4 eh-class fixups opcional (BUG-2 — catch cross-module). */
-            if (exp_off + 4 <= exports_size) {
+            if (!is_v9 && exp_off + 4 <= exports_size) {
                 uint32_t ehcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
                 if (ehcount > 0) {
                     mod->eh_class_fixups = (bpvm_eh_class_fixup_t*) bpvm_calloc(ehcount,

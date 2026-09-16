@@ -80,7 +80,7 @@ typedef struct {
      * Lo rellena quien detecta el fallo, que es quien sabe lo que pasó; el REPL
      * sólo lo reenvía. Si está vacío, se manda lo de siempre.
      */
-    char fallo[160];
+    char fallo[256];   /* V7/H2 (#523): como load_error/link_error */
 
     /* --- ENTRADA (opcional; 0/NULL = nada) --- */
     /* Se llama por cada módulo cargado, para que el REPL pueda contarlo por la

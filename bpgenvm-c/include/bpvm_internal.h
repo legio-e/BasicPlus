@@ -36,6 +36,11 @@ typedef struct { uint64_t v; } bpref_t;
  * una subtabla `deps` con el (gen, ifaceCrc) de cada dependencia. Aditivo: v6 y
  * v7 se siguen cargando (sin datos de versión: gen 0, CRC desconocido). */
 #define BPVM_MAGIC_V8       0x4D4F4438u   /* "MOD8" big-endian */
+/* V7/H2 (#523) — MOD9: ENLACE TARDIO. Misma cabecera que MOD8; lo nuevo son la
+ * subtabla `refs` (3.3) en imports y la subtabla CLASES (4.5) en exports. Sin
+ * marcadores Cls#clave#slot ni fixups 4.3/4.4: las clases ABIERTAS las construye
+ * el enlazador contra el padre real, y las referencias se resuelven a la ext-table. */
+#define BPVM_MAGIC_V9       0x4D4F4439u   /* "MOD9" big-endian */
 #define BPVM_HEADER_SIZE    28            /* header v5; v6 = 32 (añade interfaceSize) */
 #define BPVM_HEADER_SIZE_V6 32
 #define BPVM_HEADER_SIZE_V7 36            /* añade nativeSize */
@@ -74,6 +79,7 @@ typedef struct { uint64_t v; } bpref_t;
 #define BPVM_CLS_OFF_NUM_FIELDS   0
 #define BPVM_CLS_OFF_NUM_METHODS  2
 #define BPVM_CLS_OFF_BITMAP_WORDS 4
+#define BPVM_CLS_OFF_MODULO       6   /* V7/H2 (#523): indice del modulo dueno + 1 (0 = MOD7/8: por rango) */
 #define BPVM_CLS_OFF_PARENT_OFF   8
 #define BPVM_CLS_OFF_FIELD_BITMAP 12
 
@@ -148,6 +154,22 @@ typedef struct {
     int      resolved;           /* XIP: 1 si resolved_cls_off es válido */
 } bpvm_eh_class_fixup_t;
 
+/* V7/H2 (#523) — una referencia simbólica de la subtabla 3.3 (ver TablasMod9.java). */
+#define BPVM_REF_CLASE   0
+#define BPVM_REF_MET     1
+#define BPVM_REF_CAMPO   2
+#define BPVM_REF_EV_RECV 3
+#define BPVM_REF_EV_DEST 4
+#define BPVM_REF_SUBTIPO 5
+#define BPVM_DEP_RAIZ   (-1)
+#define BPVM_DEP_LOCAL  (-2)
+typedef struct {
+    uint8_t  kind;
+    int16_t  dep_idx;     /* >= 0 índice en deps; BPVM_DEP_LOCAL = clase de este módulo */
+    char*    clase;       /* malloc-ed: `[lib.]Mod.Cls` o el simple si es local */
+    char*    clave;       /* malloc-ed: la clave canónica ("" en CLASE) */
+} bpvm_ref_t;
+
 typedef struct {
     char     library[64];      /* "" si no hay */
     char     name[64];
@@ -211,6 +233,18 @@ typedef struct {
     /* BUG-2 — eh-class fixups (catch cross-module). */
     bpvm_eh_class_fixup_t* eh_class_fixups;
     int                    eh_class_fixup_count;
+
+    /* V7/H2 (#523, MOD9) — el enlace tardío. `ext_count31` = entradas de imports
+     * (3.1): la ref i vive en ext[ext_count31 + i]. `refs` se libera tras enlazar,
+     * como los imports. `clases` es la subtabla 4.5 tal como viene en el fichero:
+     * en XIP apunta a la flash; en RAM/stream se copia detrás del módulo (la lee el
+     * enlazador y, después, la reflexión de Forms). */
+    uint32_t     ext_count31;
+    bpvm_ref_t*  refs;
+    int          ref_count;
+    const uint8_t* clases;
+    uint32_t     clases_len;
+    uint8_t      enlazado_tarde;   /* compilado contra otra interfaz: el enlace decidió (diag) */
 } bpvm_module_t;
 
 /* Tabla global de símbolos exportados (F3).
@@ -575,7 +609,7 @@ struct bpvm {
      * resuelto). Lo rellena bpvm_link_all; el handler de RUN lo manda al wire
      * en vez del exit-code mudo (antes el detalle solo iba a stderr). "" = sin
      * error. Tamaño fijo (sin malloc → MCU-friendly). */
-    char link_error[160];
+    char link_error[256];   /* V7/H2 (#523): un E3 con nombres reales supera 160 (paridad con miVM) */
 
     /* Detalle del ÚLTIMO RuntimeError lanzado (msg de bpvm_throw_runtime_error):
      * p.ej. "referencia a objeto eliminado (use-after-free)". Espejo de
@@ -596,7 +630,7 @@ struct bpvm {
      * en `discover_deps`, que es recursiva y no ve la estructura del llamante.
      * Ése fue el agujero del primer intento (16-ago): se arregló el camino menos
      * frecuente. "" = sin error. Fijo, sin malloc. */
-    char load_error[160];
+    char load_error[256];
 
     /* V6/#412 — EL ARGUMENTO DE EJECUCION. Lo fija quien lanza el programa (el
      * verbo RUN del wire, o el CLI), y lo lee el builtin __runArg antes de que
@@ -676,6 +710,10 @@ static inline void bpvm_write_u32_be(uint8_t* p, uint32_t v) {
     p[1] = (uint8_t)(v >> 16);
     p[2] = (uint8_t)(v >>  8);
     p[3] = (uint8_t) v;
+}
+/* V7/H2 (#523) — u16 big-endian (el sello +6 del descriptor y las ranuras efectivas). */
+static inline void bpvm_write_u16_be(uint8_t* p, uint16_t v) {
+    p[0] = (uint8_t) (v >> 8); p[1] = (uint8_t) v;
 }
 static inline void bpvm_write_i32_be(uint8_t* p, int32_t v) {
     bpvm_write_u32_be(p, (uint32_t) v);

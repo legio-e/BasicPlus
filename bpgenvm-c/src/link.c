@@ -16,6 +16,7 @@
 #include "bpvm_internal.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include "bpvm_platform.h" /* V7/H2 #523 (V0): el cronometro del enlace */
 
@@ -28,6 +29,14 @@ static unsigned s_link_busquedas, s_link_strcmp;
 /* ---- Helpers de mapeo addr → módulo ---- */
 
 uint32_t bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr) {
+    /* V7/H2 (#523) — el sello del dueño (+6 = indice + 1) que el enlazador escribe en
+     * todo descriptor MOD9, cerrado o CONSTRUIDO: un descriptor construido vive en la
+     * arena, fuera de todo modulo, y sin el sello no tendria CS. 0 = MOD7/8: por rango. */
+    {
+        uint16_t sello = bpvm_read_u16_be(vm->memory + addr + BPVM_CLS_OFF_MODULO);
+        if (sello > 0 && sello <= (uint16_t) vm->module_count)
+            return vm->modules[sello - 1].code_start;
+    }
     /* Busca el módulo cuyo rango RAM [module_base, end_addr) contiene addr.
      * Devolvemos code_start (= CS del módulo).
      *
@@ -201,6 +210,529 @@ const char* bpvm_link_error(const bpvm_t* vm) {
     return (vm && vm->link_error[0]) ? vm->link_error : "";
 }
 
+/* ============================================================================
+ * V7/H2 (#523) — EL ENLACE TARDÍO (MOD9). El MISMO algoritmo que EnlaceTardio.java
+ * (miVM es la referencia), en C y sin materializar tablas: lo que en Java es un
+ * HashMap efectivo por clase aqui se recalcula subiendo por la cadena y leyendo
+ * las filas de la subtabla CLASES (4.5) tal como vienen en el fichero (flash en
+ * XIP, RAM si no). Lo unico que se aloja de verdad son los descriptores
+ * CONSTRUIDOS de las clases abiertas y la tabla de ranuras efectivas de sus
+ * metodos propios: en la arena de memory[], entre el ultimo modulo y el heap.
+ * Los textos de rechazo son byte-identicos a los de miVM (mezcla.py los compara).
+ * ========================================================================== */
+
+typedef struct {
+    uint8_t  mod;                 /* indice del modulo */
+    uint8_t  flags;               /* bit0 ABIERTA, bit1 PUBLICA */
+    uint8_t  estado;              /* 0 pendiente, 1 construyendo, 2 hecha */
+    int16_t  padre;               /* indice en el registro; -1 raiz */
+    int16_t  parent_dep;          /* -1 raiz, -2 local, >=0 dep */
+    int32_t  cs_off;
+    const uint8_t* name;          /* UTF: u16 len + bytes */
+    const uint8_t* parent_name;   /* UTF */
+    uint16_t nf_own, nm_own, bw_own;
+    const uint8_t* fb_own;        /* bw_own words, luego ob_own */
+    const uint8_t* metodos; uint16_t n_met;   /* (clave UTF, slot u16, codeOff i32, flags u8)* */
+    const uint8_t* campos;  uint16_t n_cam;   /* (clave UTF, slot u16, ancho u8, flags u8)* */
+    const uint8_t* eventos; uint16_t n_ev;    /* (clave UTF, recv u16)* */
+    /* efectivo */
+    uint32_t desc_abs;            /* descriptor (cerrada: data; abierta: arena) */
+    uint16_t nf, nm;              /* efectivos */
+    uint16_t base_f, base_m;      /* abierta: donde empiezan los propios */
+    uint32_t ranuras_off;         /* abierta: arena, u16[n_met] ranura efectiva de cada metodo propio */
+} lt_clase_t;
+
+typedef struct {
+    bpvm_t*     vm;
+    lt_clase_t* reg;
+    int         n;
+    uint32_t    arena;            /* siguiente libre */
+    uint32_t    arena_ini;
+    int         construidas, refs;
+    int         fallo;            /* 1 = link_error puesto */
+} lt_ctx_t;
+
+static uint16_t lt_u16(const uint8_t* p) { return bpvm_read_u16_be(p); }
+static const uint8_t* lt_utf_skip(const uint8_t* p) { return p + 2 + lt_u16(p); }
+static int lt_utf_eq_c(const uint8_t* u, const char* s) {
+    size_t n = strlen(s);
+    return lt_u16(u) == n && memcmp(u + 2, s, n) == 0;
+}
+static int lt_utf_eq(const uint8_t* a, const uint8_t* b) {
+    uint16_t n = lt_u16(a);
+    return n == lt_u16(b) && memcmp(a + 2, b + 2, n) == 0;
+}
+static void lt_utf_copy(const uint8_t* u, char* out, size_t cap) {
+    uint16_t n = lt_u16(u); if (n >= cap) n = (uint16_t) (cap - 1);
+    memcpy(out, u + 2, n); out[n] = '\0';
+}
+/* el nombre canonico del modulo ([lib.]Mod) */
+static void lt_canon(const bpvm_module_t* m, char* out, size_t cap) {
+    if (m->library[0]) snprintf(out, cap, "%s.%s", m->library, m->name);
+    else               snprintf(out, cap, "%s", m->name);
+}
+/* «'Lib' (gen 8)» o «'Lib' (no cargado)» */
+static void lt_quien(const bpvm_t* vm, const char* canon, char* out, size_t cap) {
+    for (int i = 0; i < vm->module_count; i++) {
+        char c[160]; lt_canon(&vm->modules[i], c, sizeof c);
+        if (strcmp(c, canon) == 0) { snprintf(out, cap, "'%s' (gen %u)", vm->modules[i].name, (unsigned) vm->modules[i].gen); return; }
+    }
+    snprintf(out, cap, "'%s' (no cargado)", canon);
+}
+static void lt_error(lt_ctx_t* x, const char* fmt, ...) {
+    if (x->fallo) return;
+    va_list ap; va_start(ap, fmt);
+    vsnprintf(x->vm->link_error, sizeof(x->vm->link_error), fmt, ap);
+    va_end(ap);
+    x->fallo = 1;
+}
+
+/* Lee una fila de 4.5 en `c`; devuelve el puntero a la siguiente. */
+static const uint8_t* lt_leer_fila(const uint8_t* p, lt_clase_t* c) {
+    c->name = p; p = lt_utf_skip(p);
+    c->flags = *p++;
+    c->cs_off = bpvm_read_i32_be(p); p += 4;
+    c->parent_dep = (int16_t) lt_u16(p); p += 2;
+    c->parent_name = p; p = lt_utf_skip(p);
+    c->nf_own = lt_u16(p); p += 2;
+    c->nm_own = lt_u16(p); p += 2;
+    c->bw_own = lt_u16(p); p += 2;
+    c->fb_own = p; p += 8u * c->bw_own;
+    c->n_met = lt_u16(p); p += 2; c->metodos = p;
+    for (uint16_t i = 0; i < c->n_met; i++) { p = lt_utf_skip(p); p += 2 + 4 + 1; }
+    c->n_cam = lt_u16(p); p += 2; c->campos = p;
+    for (uint16_t i = 0; i < c->n_cam; i++) { p = lt_utf_skip(p); p += 2 + 1 + 1; }
+    c->n_ev = lt_u16(p); p += 2; c->eventos = p;
+    for (uint16_t i = 0; i < c->n_ev; i++) { p = lt_utf_skip(p); p += 2; }
+    c->padre = -1; c->estado = 0; c->desc_abs = 0;
+    return p;
+}
+
+/* ¿la clase `i` del registro es `[lib.]Mod.Cls`? */
+static int lt_es(const lt_ctx_t* x, int i, const char* cualificado) {
+    const lt_clase_t* c = &x->reg[i];
+    char canon[160]; lt_canon(&x->vm->modules[c->mod], canon, sizeof canon);
+    size_t cl = strlen(canon);
+    if (strncmp(cualificado, canon, cl) != 0 || cualificado[cl] != '.') return 0;
+    return lt_utf_eq_c(c->name, cualificado + cl + 1);
+}
+static int lt_buscar_clase(const lt_ctx_t* x, const char* cualificado) {
+    for (int i = 0; i < x->n; i++) if (lt_es(x, i, cualificado)) return i;
+    return -1;
+}
+/* la clase `nombre` (UTF) del modulo `mod` */
+static int lt_buscar_local(const lt_ctx_t* x, uint8_t mod, const uint8_t* nombre) {
+    for (int i = 0; i < x->n; i++)
+        if (x->reg[i].mod == mod && lt_utf_eq(x->reg[i].name, nombre)) return i;
+    return -1;
+}
+static void lt_nombre_cualificado(const lt_ctx_t* x, int i, char* out, size_t cap) {
+    char canon[160], nm[128];
+    lt_canon(&x->vm->modules[x->reg[i].mod], canon, sizeof canon);
+    lt_utf_copy(x->reg[i].name, nm, sizeof nm);
+    snprintf(out, cap, "%.120s.%.120s", canon, nm);
+}
+/* «MOD7» del magic */
+static int lt_version(const bpvm_module_t* m) { return m->fmt; }
+
+/* 1. registro: todas las clases de todos los modulos MOD9; sello +6 en las cerradas */
+static bpvm_status_t lt_registrar(lt_ctx_t* x) {
+    bpvm_t* vm = x->vm;
+    int total = 0;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (!m->clases || m->clases_len < 4) continue;
+        if (lt_u16(m->clases) != 1) { lt_error(x, "'%s': subtabla CLASES de version %u desconocida", m->name, (unsigned) lt_u16(m->clases)); return BPVM_ERR_RUNTIME; }
+        total += lt_u16(m->clases + 2);
+    }
+    x->n = 0;
+    if (total == 0) return BPVM_OK;
+    x->reg = (lt_clase_t*) bpvm_calloc((size_t) total, sizeof(lt_clase_t));
+    if (!x->reg) return BPVM_ERR_OOM;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (!m->clases || m->clases_len < 4) continue;
+        uint16_t n = lt_u16(m->clases + 2);
+        const uint8_t* p = m->clases + 4;
+        for (uint16_t k = 0; k < n; k++) {
+            lt_clase_t* c = &x->reg[x->n++];
+            p = lt_leer_fila(p, c);
+            c->mod = (uint8_t) i;
+            if (!(c->flags & 1)) {
+                c->desc_abs = (uint32_t)((int32_t) m->code_start + c->cs_off);
+                bpvm_write_u16_be(vm->memory + c->desc_abs + BPVM_CLS_OFF_MODULO, (uint16_t) (i + 1));
+                c->nf = bpvm_read_u16_be(vm->memory + c->desc_abs + BPVM_CLS_OFF_NUM_FIELDS);
+                c->nm = bpvm_read_u16_be(vm->memory + c->desc_abs + BPVM_CLS_OFF_NUM_METHODS);
+            }
+        }
+    }
+    return BPVM_OK;
+}
+
+/* el padre de una fila: indice en el registro, -1 raiz, -2 + error */
+static int lt_padre_de(lt_ctx_t* x, int ci) {
+    lt_clase_t* c = &x->reg[ci];
+    const bpvm_module_t* m = &x->vm->modules[c->mod];
+    if (c->parent_dep == BPVM_DEP_RAIZ) return -1;
+    if (c->parent_dep == BPVM_DEP_LOCAL) {
+        int p = lt_buscar_local(x, c->mod, c->parent_name);
+        if (p >= 0) return p;
+        char nm[128], pn[128]; lt_utf_copy(c->name, nm, sizeof nm); lt_utf_copy(c->parent_name, pn, sizeof pn);
+        lt_error(x, "'%s' extiende la clase '%s.%s' y '%s' (gen %u) no la tiene: recompila '%s'", m->name, m->name, pn, m->name, (unsigned) m->gen, m->name);
+        return -2;
+    }
+    char q[256]; lt_utf_copy(c->parent_name, q, sizeof q);
+    int p = lt_buscar_clase(x, q);
+    if (p >= 0) return p;
+    /* E1 (padre) o E9 (el dueno es MOD7/8) */
+    char modp[160]; { const char* d = strrchr(q, '.'); size_t l = d ? (size_t)(d - q) : strlen(q); if (l >= sizeof modp) l = sizeof modp - 1; memcpy(modp, q, l); modp[l] = 0; }
+    for (int i = 0; i < x->vm->module_count; i++) {
+        char canon[160]; lt_canon(&x->vm->modules[i], canon, sizeof canon);
+        if (strcmp(canon, modp) == 0 && !x->vm->modules[i].clases) {
+            lt_error(x, "'%s' es MOD%d y '%s' necesita su tabla de clases: recompila '%s'", x->vm->modules[i].name, lt_version(&x->vm->modules[i]), m->name, x->vm->modules[i].name);
+            return -2;
+        }
+    }
+    char quien[200]; lt_quien(x->vm, modp, quien, sizeof quien);
+    lt_error(x, "'%s' extiende la clase '%s' y %s no la tiene: recompila '%s'", m->name, q, quien, m->name);
+    return -2;
+}
+
+/* ranura efectiva del metodo propio k de la clase ci */
+static uint16_t lt_ranura_propia(const lt_ctx_t* x, int ci, uint16_t k, const uint8_t* fila_met) {
+    const lt_clase_t* c = &x->reg[ci];
+    if (c->flags & 1) return bpvm_read_u16_be(x->vm->memory + c->ranuras_off + 2u * k);
+    return lt_u16(lt_utf_skip(fila_met));   /* cerrada: absoluta en su fila */
+}
+/* Busca `clave` (C string) entre los metodos de la cadena efectiva de ci.
+ * Devuelve 1 y (slot, privado, en) si esta. Si `saltar_privados`, una privada no cuenta. */
+static int lt_buscar_metodo(const lt_ctx_t* x, int ci, const char* clave, uint16_t* slot, int* privado, int* en) {
+    for (int c = ci; c >= 0; c = x->reg[c].padre) {
+        const lt_clase_t* k = &x->reg[c];
+        const uint8_t* p = k->metodos;
+        for (uint16_t i = 0; i < k->n_met; i++) {
+            const uint8_t* fila = p;
+            const uint8_t* q = lt_utf_skip(p);            /* clave */
+            uint8_t fl = q[2 + 4];
+            if (lt_utf_eq_c(p, clave)) {
+                if (slot) *slot = lt_ranura_propia(x, c, i, fila);
+                if (privado) *privado = (fl & 2) != 0;
+                if (en) *en = c;
+                return 1;
+            }
+            p = q + 2 + 4 + 1;
+        }
+    }
+    return 0;
+}
+static int lt_buscar_campo(const lt_ctx_t* x, int ci, const char* clave, uint16_t* slot) {
+    for (int c = ci; c >= 0; c = x->reg[c].padre) {
+        const lt_clase_t* k = &x->reg[c];
+        const uint8_t* p = k->campos;
+        for (uint16_t i = 0; i < k->n_cam; i++) {
+            const uint8_t* q = lt_utf_skip(p);
+            if (lt_utf_eq_c(p, clave)) { if (slot) *slot = (uint16_t) (lt_u16(q) + ((k->flags & 1) ? k->base_f : 0)); return 1; }
+            p = q + 2 + 1 + 1;
+        }
+    }
+    return 0;
+}
+static int lt_buscar_evento(const lt_ctx_t* x, int ci, const char* clave, uint16_t* recv) {
+    for (int c = ci; c >= 0; c = x->reg[c].padre) {
+        const lt_clase_t* k = &x->reg[c];
+        const uint8_t* p = k->eventos;
+        for (uint16_t i = 0; i < k->n_ev; i++) {
+            const uint8_t* q = lt_utf_skip(p);
+            if (lt_utf_eq_c(p, clave)) { if (recv) *recv = (uint16_t) (lt_u16(q) + ((k->flags & 1) ? k->base_f : 0)); return 1; }
+            p = q + 2;
+        }
+    }
+    return 0;
+}
+/* D4: el cerrojo `sync` es UNO por objeto, el del PRIMER eslabon desde la raiz que lo declara */
+static int lt_mutex_desde_la_raiz(const lt_ctx_t* x, int ci, uint16_t* slot) {
+    int cadena[32]; int n = 0;
+    for (int c = ci; c >= 0 && n < 32; c = x->reg[c].padre) cadena[n++] = c;
+    for (int i = n - 1; i >= 0; i--) {
+        const lt_clase_t* k = &x->reg[cadena[i]];
+        const uint8_t* p = k->campos;
+        for (uint16_t j = 0; j < k->n_cam; j++) {
+            const uint8_t* q = lt_utf_skip(p);
+            if (lt_utf_eq_c(p, "__syncMutex:LMutex;")) { *slot = (uint16_t) (lt_u16(q) + ((k->flags & 1) ? k->base_f : 0)); return 1; }
+            p = q + 2 + 1 + 1;
+        }
+    }
+    return 0;
+}
+/* « (tiene 'k()i')»: las otras claves con el mismo nombre en la cadena, ordenadas, sin repetir */
+static void lt_tiene(const lt_ctx_t* x, int ci, const char* clave, char sep, char* out, size_t cap) {
+    out[0] = 0;
+    const char* fin = strchr(clave, sep); if (!fin) return;
+    size_t nl = (size_t)(fin - clave);
+    const uint8_t* cand[8]; int nc = 0;
+    for (int c = ci; c >= 0; c = x->reg[c].padre) {
+        const lt_clase_t* k = &x->reg[c];
+        const uint8_t* p = (sep == '(') ? k->metodos : k->campos;
+        uint16_t n = (sep == '(') ? k->n_met : k->n_cam;
+        for (uint16_t i = 0; i < n; i++) {
+            const uint8_t* q = lt_utf_skip(p);
+            uint16_t len = lt_u16(p);
+            if (len > nl && memcmp(p + 2, clave, nl) == 0 && p[2 + nl] == (uint8_t) sep && !lt_utf_eq_c(p, clave)) {
+                int dup = 0; for (int d = 0; d < nc; d++) if (lt_utf_eq(cand[d], p)) { dup = 1; break; }
+                if (!dup && nc < 8) cand[nc++] = p;
+            }
+            p = q + ((sep == '(') ? 2 + 4 + 1 : 2 + 1 + 1);
+        }
+    }
+    if (nc == 0) return;
+    /* orden lexicografico (como el TreeSet de miVM) */
+    for (int i = 1; i < nc; i++) for (int j = i; j > 0; j--) {
+        char a[256], b[256]; lt_utf_copy(cand[j - 1], a, sizeof a); lt_utf_copy(cand[j], b, sizeof b);
+        if (strcmp(a, b) > 0) { const uint8_t* t = cand[j]; cand[j] = cand[j - 1]; cand[j - 1] = t; } else break;
+    }
+    size_t l = 0;
+    l += (size_t) snprintf(out + l, cap - l, " (tiene ");
+    for (int i = 0; i < nc && l < cap; i++) {
+        char a[256]; lt_utf_copy(cand[i], a, sizeof a);
+        l += (size_t) snprintf(out + l, cap - l, "%s'%s'", i ? ", " : "", a);
+    }
+    if (l < cap) snprintf(out + l, cap - l, ")");
+}
+
+/* 2. construccion memoizada padre -> hijo */
+static bpvm_status_t lt_asegurar(lt_ctx_t* x, int ci) {
+    lt_clase_t* c = &x->reg[ci];
+    bpvm_t* vm = x->vm;
+    if (c->estado == 2) return BPVM_OK;
+    if (c->estado == 1) { char q[256]; lt_nombre_cualificado(x, ci, q, sizeof q); lt_error(x, "ciclo de herencia en '%s'", q); return BPVM_ERR_RUNTIME; }
+    c->estado = 1;
+    int p = lt_padre_de(x, ci);
+    if (p == -2) return BPVM_ERR_RUNTIME;
+    c->padre = (int16_t) p;
+    if (p >= 0) { bpvm_status_t st = lt_asegurar(x, p); if (st != BPVM_OK) return st; }
+    if (!(c->flags & 1)) { c->estado = 2; return BPVM_OK; }   /* cerrada: solo se indexa */
+    /* ABIERTA: contra el padre real */
+    const bpvm_module_t* m = &vm->modules[c->mod];
+    if (p < 0) { char q[256]; lt_nombre_cualificado(x, ci, q, sizeof q); lt_error(x, "la clase abierta '%s' no tiene padre: .mod corrupto", q); return BPVM_ERR_RUNTIME; }
+    const lt_clase_t* P = &x->reg[p];
+    c->base_f = P->nf; c->base_m = P->nm;
+    uint32_t nf = (uint32_t) P->nf + c->nf_own;
+    uint32_t nm = P->nm;
+    /* las ranuras efectivas de los metodos propios: u16[n_met] en la arena */
+    uint32_t ran = (x->arena + 3u) & ~3u;
+    if (ran + 2u * c->n_met > vm->heap_top) return BPVM_ERR_OOM;
+    c->ranuras_off = ran; x->arena = ran + 2u * c->n_met;
+    {
+        const uint8_t* q = c->metodos;
+        for (uint16_t i = 0; i < c->n_met; i++) {
+            char clave[256]; lt_utf_copy(q, clave, sizeof clave);
+            const uint8_t* r = lt_utf_skip(q);
+            uint8_t fl = r[2 + 4];
+            uint16_t her; int priv = 0;
+            int hay = lt_buscar_metodo(x, p, clave, &her, &priv, NULL);
+            uint16_t ranura;
+            if (hay && !priv) {
+                ranura = her;                                  /* override (criterio JVM) */
+            } else {
+                if (fl & 1) {                                  /* E2: override huerfano */
+                    char nm[128], canon[160], quien[200]; lt_utf_copy(c->name, nm, sizeof nm);
+                    lt_canon(&vm->modules[P->mod], canon, sizeof canon); lt_quien(vm, canon, quien, sizeof quien);
+                    lt_error(x, "'%s.%s' redefine '%s' y %s ya no lo tiene: recompila '%s'", m->name, nm, clave, quien, m->name);
+                    return BPVM_ERR_RUNTIME;
+                }
+                ranura = (uint16_t) nm++;
+            }
+            bpvm_write_u16_be(vm->memory + ran + 2u * i, ranura);
+            q = r + 2 + 4 + 1;
+        }
+    }
+    if (nf > 0xFFFF || nm > 0xFFFF) {
+        char nm2[128]; lt_utf_copy(c->name, nm2, sizeof nm2);
+        lt_error(x, "'%s.%s' tendria %u ranuras (maximo 65535)", m->name, nm2, (unsigned) (nf > nm ? nf : nm));
+        return BPVM_ERR_RUNTIME;
+    }
+    /* el descriptor: cabecera, bitmaps (padre OR propios desplazados), vtable */
+    uint32_t bw = (nf + 31u) >> 5;
+    uint32_t tam = 12u + 8u * bw + 4u * nm;
+    uint32_t desc = (x->arena + 3u) & ~3u;
+    if (desc + tam > vm->heap_top) return BPVM_ERR_OOM;
+    x->arena = desc + tam;
+    uint8_t* d = vm->memory + desc;
+    memset(d, 0, tam);
+    bpvm_write_u16_be(d + BPVM_CLS_OFF_NUM_FIELDS, (uint16_t) nf);
+    bpvm_write_u16_be(d + BPVM_CLS_OFF_NUM_METHODS, (uint16_t) nm);
+    bpvm_write_u16_be(d + BPVM_CLS_OFF_BITMAP_WORDS, (uint16_t) bw);
+    bpvm_write_u16_be(d + BPVM_CLS_OFF_MODULO, (uint16_t) (c->mod + 1));
+    bpvm_write_i32_be(d + BPVM_CLS_OFF_PARENT_OFF, (int32_t) P->desc_abs - (int32_t) m->code_start);
+    {
+        const uint8_t* pd = vm->memory + P->desc_abs;
+        uint16_t pbw = bpvm_read_u16_be(pd + BPVM_CLS_OFF_BITMAP_WORDS);
+        for (uint32_t w = 0; w < pbw && w < bw; w++) {
+            bpvm_write_u32_be(d + BPVM_CLS_OFF_FIELD_BITMAP + 4u * w, bpvm_read_u32_be(pd + BPVM_CLS_OFF_FIELD_BITMAP + 4u * w));
+            bpvm_write_u32_be(d + BPVM_CLS_OFF_FIELD_BITMAP + 4u * bw + 4u * w, bpvm_read_u32_be(pd + BPVM_CLS_OFF_FIELD_BITMAP + 4u * pbw + 4u * w));
+        }
+        for (uint32_t bit = 0; bit < c->nf_own; bit++) {
+            uint32_t w = bit >> 5, mk = 1u << (bit & 31);
+            uint32_t fb = (w < c->bw_own) ? bpvm_read_u32_be(c->fb_own + 4u * w) : 0;
+            uint32_t ob = (w < c->bw_own) ? bpvm_read_u32_be(c->fb_own + 4u * c->bw_own + 4u * w) : 0;
+            uint32_t abs = P->nf + bit;
+            uint8_t* pf = d + BPVM_CLS_OFF_FIELD_BITMAP + 4u * (abs >> 5);
+            uint8_t* po = d + BPVM_CLS_OFF_FIELD_BITMAP + 4u * bw + 4u * (abs >> 5);
+            if (fb & mk) bpvm_write_u32_be(pf, bpvm_read_u32_be(pf) | (1u << (abs & 31)));
+            if (ob & mk) bpvm_write_u32_be(po, bpvm_read_u32_be(po) | (1u << (abs & 31)));
+        }
+    }
+    {
+        uint8_t* vt = d + BPVM_CLS_OFF_FIELD_BITMAP + 8u * bw;
+        for (uint32_t s2 = 0; s2 < nm; s2++) bpvm_write_i32_be(vt + 4u * s2, -1);
+        const uint8_t* q = c->metodos;
+        for (uint16_t i = 0; i < c->n_met; i++) {
+            const uint8_t* r = lt_utf_skip(q);
+            int32_t code_off = bpvm_read_i32_be(r + 2);
+            uint16_t ranura = bpvm_read_u16_be(vm->memory + ran + 2u * i);
+            bpvm_write_i32_be(vt + 4u * ranura, code_off);
+            q = r + 2 + 4 + 1;
+        }
+    }
+    c->desc_abs = desc; c->nf = (uint16_t) nf; c->nm = (uint16_t) nm;
+    x->construidas++;
+    /* el data-symbol, para quien la pida por nombre (nietos, refs CLASE, la reflexion) */
+    {
+        char canon[160], nm2[128], qual[320];
+        lt_canon(m, canon, sizeof canon); lt_utf_copy(c->name, nm2, sizeof nm2);
+        snprintf(qual, sizeof qual, "%s.%s", canon, nm2);
+        bpvm_link_register_symbol(vm, qual, desc);
+        if (m->library[0]) { char sq[320]; snprintf(sq, sizeof sq, "%s.%s", m->name, nm2); if (bpvm_link_lookup(vm, sq) == 0) bpvm_link_register_symbol(vm, sq, desc); }
+    }
+    c->estado = 2;
+    return BPVM_OK;
+}
+
+/* 3. las refs de un modulo -> ext[ext_count31 + i] */
+static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
+    bpvm_t* vm = x->vm;
+    bpvm_module_t* m = &vm->modules[mi];
+    char canon_m[160]; lt_canon(m, canon_m, sizeof canon_m);
+    for (int i = 0; i < m->ref_count; i++) {
+        const bpvm_ref_t* r = &m->refs[i];
+        char q[320];
+        if (r->dep_idx == BPVM_DEP_LOCAL) snprintf(q, sizeof q, "%s.%s", canon_m, r->clase);
+        else                              snprintf(q, sizeof q, "%s", r->clase);
+        char modc[160]; { const char* d = strrchr(q, '.'); size_t l = d ? (size_t)(d - q) : strlen(q); if (l >= sizeof modc) l = sizeof modc - 1; memcpy(modc, q, l); modc[l] = 0; }
+        int ci = lt_buscar_clase(x, q);
+        if (ci < 0) {
+            for (int k = 0; k < vm->module_count; k++) {
+                char canon[160]; lt_canon(&vm->modules[k], canon, sizeof canon);
+                if (strcmp(canon, modc) == 0 && !vm->modules[k].clases) {
+                    lt_error(x, "'%s' es MOD%d y '%s' necesita su tabla de clases: recompila '%s'", vm->modules[k].name, lt_version(&vm->modules[k]), m->name, vm->modules[k].name);
+                    return BPVM_ERR_RUNTIME;
+                }
+            }
+            char quien[200]; lt_quien(vm, modc, quien, sizeof quien);
+            lt_error(x, "'%s' necesita la clase '%s' y %s no la tiene: recompila '%s'", m->name, q, quien, m->name);
+            return BPVM_ERR_RUNTIME;
+        }
+        bpvm_status_t st = lt_asegurar(x, ci); if (st != BPVM_OK) return st;
+        char dueno_canon[160], quien[200];
+        lt_canon(&vm->modules[x->reg[ci].mod], dueno_canon, sizeof dueno_canon);
+        lt_quien(vm, dueno_canon, quien, sizeof quien);
+        uint32_t valor = 0;
+        switch (r->kind) {
+            case BPVM_REF_CLASE: valor = x->reg[ci].desc_abs; break;
+            case BPVM_REF_MET: {
+                uint16_t slot; int priv = 0, en = -1;
+                int hay = lt_buscar_metodo(x, ci, r->clave, &slot, &priv, &en);
+                if (!hay || (priv && x->reg[en].mod != mi)) {
+                    char tiene[200]; lt_tiene(x, ci, r->clave, '(', tiene, sizeof tiene);
+                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
+                    return BPVM_ERR_RUNTIME;
+                }
+                valor = slot; break;
+            }
+            case BPVM_REF_CAMPO: {
+                uint16_t slot; int hay = (strcmp(r->clave, "__syncMutex:LMutex;") == 0) ? lt_mutex_desde_la_raiz(x, ci, &slot) : lt_buscar_campo(x, ci, r->clave, &slot);
+                if (!hay) {
+                    char tiene[200]; lt_tiene(x, ci, r->clave, ':', tiene, sizeof tiene);
+                    lt_error(x, "'%s' necesita el campo '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
+                    return BPVM_ERR_RUNTIME;
+                }
+                valor = slot; break;
+            }
+            case BPVM_REF_EV_RECV: case BPVM_REF_EV_DEST: {
+                uint16_t recv;
+                if (!lt_buscar_evento(x, ci, r->clave, &recv)) {
+                    lt_error(x, "'%s' necesita el evento '%s.%s' y %s no lo tiene: recompila '%s'", m->name, q, r->clave, quien, m->name);
+                    return BPVM_ERR_RUNTIME;
+                }
+                valor = (r->kind == BPVM_REF_EV_DEST) ? (uint32_t) recv + 2u : recv; break;
+            }
+            case BPVM_REF_SUBTIPO: {
+                char qs[320];
+                if (strchr(r->clave, '.')) snprintf(qs, sizeof qs, "%s", r->clave); else snprintf(qs, sizeof qs, "%s.%s", canon_m, r->clave);
+                int ok = 0;
+                for (int a = ci; a >= 0; a = x->reg[a].padre) if (lt_es(x, a, qs)) { ok = 1; break; }
+                if (!ok) { lt_error(x, "'%s' asume que '%s' extiende '%s' y %s ya no: recompila '%s'", m->name, q, qs, quien, m->name); return BPVM_ERR_RUNTIME; }
+                valor = 1; break;
+            }
+            default:
+                lt_error(x, "'%s' pide una referencia de tipo desconocido (%u): .mod corrupto", m->name, (unsigned) r->kind);
+                return BPVM_ERR_RUNTIME;
+        }
+        bpvm_write_u32_be(vm->memory + m->ext_table_addr + (m->ext_count31 + (uint32_t) i) * 4u, valor);
+        x->refs++;
+    }
+    return BPVM_OK;
+}
+
+/* 4. verificacion: ninguna ref sin resolver; ninguna ranura heredada sin dueno */
+static bpvm_status_t lt_verificar(lt_ctx_t* x) {
+    bpvm_t* vm = x->vm;
+    for (int i = 0; i < x->n; i++) {
+        const lt_clase_t* c = &x->reg[i];
+        if (!(c->flags & 1) || c->estado != 2) continue;
+        const uint8_t* d = vm->memory + c->desc_abs;
+        uint16_t bw = bpvm_read_u16_be(d + BPVM_CLS_OFF_BITMAP_WORDS);
+        const uint8_t* vt = d + BPVM_CLS_OFF_FIELD_BITMAP + 8u * bw;
+        for (uint32_t s2 = 0; s2 < c->nm; s2++) {
+            if (bpvm_read_i32_be(vt + 4u * s2) == -1 && (c->padre < 0 || s2 >= x->reg[c->padre].nm)) {
+                char nm[128]; lt_utf_copy(c->name, nm, sizeof nm);
+                lt_error(x, "la clase '%s.%s' construida es inconsistente (ranura %u sin dueno): .mod corrupto o bug del cargador", vm->modules[c->mod].name, nm, (unsigned) s2);
+                return BPVM_ERR_RUNTIME;
+            }
+        }
+    }
+    for (int mi = 0; mi < vm->module_count; mi++) {
+        const bpvm_module_t* m = &vm->modules[mi];
+        for (int i = 0; i < m->ref_count; i++)
+            if (bpvm_read_u32_be(vm->memory + m->ext_table_addr + (m->ext_count31 + (uint32_t) i) * 4u) == 0xFFFFFFFFu) {
+                lt_error(x, "la referencia %s.%s de '%s' quedo sin resolver: bug del cargador", m->refs[i].clase, m->refs[i].clave, m->name);
+                return BPVM_ERR_RUNTIME;
+            }
+    }
+    return BPVM_OK;
+}
+
+static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
+    lt_ctx_t x; memset(&x, 0, sizeof x);
+    x.vm = vm; x.arena = x.arena_ini = vm->next_free_address;
+    bpvm_status_t st = lt_registrar(&x);
+    if (st == BPVM_OK) for (int i = 0; i < x.n && st == BPVM_OK; i++) st = lt_asegurar(&x, i);
+    if (st == BPVM_OK) for (int i = 0; i < vm->module_count && st == BPVM_OK; i++) st = lt_resolver_refs(&x, i);
+    if (st == BPVM_OK) st = lt_verificar(&x);
+    if (st == BPVM_OK && x.arena > x.arena_ini) {
+        /* la arena es del RUN: el heap empieza detras (mismo gesto que el final de la carga) */
+        uint32_t nf = (x.arena + 63u) & ~63u;
+        vm->next_free_address = nf; vm->heap_start = nf; vm->heap_next = nf;
+        vm->last_gc_heap_next = nf; vm->free_list_head = 0;
+    }
+    if (x.construidas > 0 || x.refs > 0)
+        bpvm_diag("[bpvm] enlace tardio: %d clases construidas, %d refs, %u bytes de arena",
+                  x.construidas, x.refs, (unsigned) (x.arena - x.arena_ini));
+    if (x.reg) bpvm_free(x.reg);
+    if (st != BPVM_OK && !x.fallo) snprintf(vm->link_error, sizeof(vm->link_error), "enlace tardio: sin memoria para construir las clases");
+    return st;
+}
+
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
 bpvm_status_t bpvm_link_all(bpvm_t* vm) {
@@ -210,7 +742,7 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
         bpvm_module_t* m = &vm->modules[i];
 
         /* Resolver imports: m->imports[k] → ext_table_addr + k*4. */
-        for (int k = 0; k < (int) m->ext_count; k++) {
+        for (int k = 0; k < (int) m->import_count; k++) {
             const char* needed = m->imports[k];
             if (!needed || !needed[0]) continue;
             uint32_t addr = bpvm_link_lookup(vm, needed);
@@ -265,6 +797,13 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
         }
     }
 
+    /* V7/H2 (#523) — EL ENLACE TARDIO: clases abiertas contra su padre real, refs a la
+     * ext-table, verificacion. Despues de los imports de TODOS los modulos (el mismo
+     * orden que miVM: el primer error que se ve es el mismo en las dos VMs). */
+    {
+        bpvm_status_t st = bpvm_enlace_tardio(vm);
+        if (st != BPVM_OK) { bpvm_diag_urgente("[bpvm-c link] %s", vm->link_error); return BPVM_ERR_RUNTIME; }
+    }
     /* #449 — que la tabla DIGA lo que ocupa, igual que la de handles. Sale del
      * `malloc` de plataforma, que en la Pico 2 es un margen de 64 KB: cuando
      * este numero se acerca, el siguiente import no cabe. Sin esta linea el

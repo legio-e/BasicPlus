@@ -476,6 +476,17 @@ static bpvm_status_t comprobar_norma(bpvm_t* vm, bpvm_module_t* imp, const char*
             bpvm_diag("[bpvm-c] dep '%s' sin datos de version (MOD%u): no se comprueba su interfaz",
                       canon, (unsigned) dep->fmt);
         }
+    } else if (dep->fmt >= 9) {
+        /* V7/H2 (#523, D9) — con ENLACE TARDIO la verdad la dice el enlace, simbolo a
+         * simbolo, contra la clase que hay: ni la interfaz distinta (regla 2) ni el
+         * padre mas nuevo (regla 3) se rechazan aqui. Queda la regla 1 y, como pista,
+         * el diag de que se compilo contra otra interfaz. */
+        if (dep->iface_crc != req_crc && !imp->dep_avisado[k]) {
+            imp->dep_avisado[k] = 1;
+            imp->enlazado_tarde = 1;
+            bpvm_diag("[bpvm-c] dep '%s' (gen %u): compilado contra otra interfaz (%08x != %08x); enlace tardio",
+                      canon, (unsigned) dep_gen, (unsigned) req_crc, (unsigned) dep->iface_crc);
+        }
     } else if (dep_gen > req_gen && extiende) {
         /* Norma de Eduardo (15-sep): un padre nunca más reciente que sus hijos. */
         snprintf(msg, sizeof msg,

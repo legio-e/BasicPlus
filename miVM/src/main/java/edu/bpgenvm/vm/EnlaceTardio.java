@@ -272,10 +272,14 @@ final class EnlaceTardio {
     /** «(tiene 'k()i')»: si existe otra clave con el mismo nombre, se cita — es el caso de la firma o el retorno cambiados. */
     private static String tiene(Clase k, String clave) {
         String nombre = clave.substring(0, clave.indexOf('('));
-        StringBuilder sb = new StringBuilder();
+        java.util.TreeSet<String> otras = new java.util.TreeSet<>();   // ordenadas: mismo texto que la VM-C
         for (String otra : k.metodos.keySet())
-            if (otra.startsWith(nombre + "(") && !otra.equals(clave)) sb.append(sb.length() == 0 ? " (tiene '" : "', '").append(otra);
-        return sb.length() == 0 ? "" : sb.append("')").toString();
+            if (otra.startsWith(nombre + "(") && !otra.equals(clave)) otras.add(otra);
+        if (otras.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder(" (tiene ");
+        int i = 0;
+        for (String o : otras) { if (i++ > 0) sb.append(", "); sb.append("'").append(o).append("'"); }
+        return sb.append(')').toString();
     }
     private static String tieneCampo(Clase k, String clave) {
         String nombre = clave.substring(0, clave.indexOf(':'));
