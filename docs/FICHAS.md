@@ -97,7 +97,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **37** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): `#521` `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: `#524` · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **37** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): `#506` `#507` ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ `#511` ~~`#512`~~ ~~`#513`~~ `#514` `#515` `#516` `#517` ~~`#518`~~ `#519` · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` `#491` `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ `#522` · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: ~~`#524`~~ · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la decisión)** · `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` `#521` (y `#522`, de H1) |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la decisión)** · `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` ~~`#521`~~ (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -448,12 +448,21 @@ profundidad, la VM-C `first_missing`); entry inexistente: exit 1 en miVM, 2 en l
 actual (`C:\lib`): un fichero ahí se cargaría (y avisaría). ⏭️ Una tanda de limpieza con un caso de paridad por
 rincón; la de `packResource` con `pack:` es la que toca al lenguaje.
 
-#### 🔴 `#521` — un `.mod` con ERRORES DEL EMISOR se escribe igual, dice «compilado:», enlaza y corre con basura idéntica en las dos VMs (abierta 15-sep, del mapa de `#514`; preexistente; H2)
+#### ✅ `#521` — un `.mod` con ERRORES DEL EMISOR se escribe igual, dice «compilado:», enlaza y corre con basura idéntica en las dos VMs (abierta 15-sep, del mapa de `#514`; preexistente; H2 · **CERRADA el 16-sep**)
 
 **Medido** (`C:/tmp/v7_514/rhija/5c`): «método externo no encontrado en stub: Media.m$s» sale por stderr, el `.mod` se
 escribe antes de contar los errores del emisor (`Main.java:1017-1025`) y `h.m("x") -> 288` en miVM y en la VM-C.
 Es «verificar el artefacto, no el log» al revés: el log dice error y el artefacto existe. ⏭️ No escribir (o borrar)
 el `.mod` si el emisor contó errores, y que el código de salida lo diga; un test que lo fuerce.
+
+✅ **Hecho (16-sep)**: `MivmEmitter.emitTo` no escribe `.mod` ni `.dbg` si `errors` no está vacío y **borra el gemelo
+rancio** de una compilación anterior (que si no taparía el fallo); `Main.emitMivmMod` devuelve `false`, imprime los
+errores y «`NO compilado: X.mod (N errores del emisor: no se escribe el .mod)`» por stderr, los cuenta en `totalErrors`
+(código de salida) y el build se para ahí (ni interfaz en caché, ni `.slots`, ni pasada recursiva). `EmisorConErroresTest`
+(gemelo rancio pre-creado → desaparece). La stdlib entera (28 módulos) y los 68 samples de paridad compilan sin ningún
+«NO compilado»: no había errores de emisor escondidos. **Y cerró `#524` de paso**: la intrínseca desconocida SÍ daba dos
+errores de emisor («función intrínseca desconocida», «intrínseco no implementado en el emisor mivm») — el `.mod` con
+`CALL_BUILTIN 3` existía por esta ficha, no por aquélla.
 
 #### 🔴 `#522` — enum: `"c=" + c` compila y REVIENTA EL HEAP en las dos VMs; `Color(1)` compila y devuelve basura; el orden de los valores en la interfaz es el de un `HashMap` (abierta 15-sep, del mapa de `#516`; preexistente; H1)
 
@@ -626,13 +635,15 @@ filas nuevas de V4 (derived_deja_de_extender, override huérfano, abuelo, dos av
 con bitmaps reconstruidos), V9 (medidas antes/después), V8 (placas), V10 (revisión adversarial), y la cadena en MOD9 (con
 `build_mdn.sh`/`AotBuild` pasando el formato del proyecto al AOT). Hallazgo lateral: `#524`.
 
-#### 🔴 `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1)
+#### ✅ `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1 · **CERRADA el 16-sep con `#521`**)
 
 **Medido**: `public intrinsic function __guiSlotOf(obj: Object, name: string): integer` en un módulo de usuario (copiado de
 `Gui.bp:516`) → la llamada `__guiSlotOf(v, "onClick")` se emite `CALL_BUILTIN [3] ; intToString` (disasm), y el programa muere
 «No space in heap» en las dos VMs. Las intrínsecas se enganchan por «Módulo.función» (memoria `tocar-frontend-obliga-a-rehacer`):
 `Refl.__guiSlotOf` no es ninguna y el id por defecto es 3. ⏭️ Error de compilación «intrínseca desconocida», nunca un id por
-defecto.
+defecto. ✅ **Era `#521`**: el emisor YA daba los dos errores («`Refl.__guiSlotOf`: función intrínseca desconocida — añade
+su emisor a basicplus.frontend.Intrinsics» y «intrínseco no implementado en el emisor mivm»), pero el `.mod` se escribía
+igual y decía «compilado:». Con `#521` cerrada no hay `.mod`: el error es el que pedía la ficha (`EmisorConErroresTest`).
 
 #### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
 

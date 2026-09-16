@@ -562,6 +562,17 @@ public final class MivmEmitter {
 
         Files.createDirectories(outputDir);
         Path out = outputDir.resolve(w.getCanonicalFilename());
+        // #521 (16-sep) — con ERRORES DEL EMISOR no hay artefacto. Antes el .mod se
+        // escribía igual, Main decía «compilado:», y el programa enlazaba y corría con
+        // basura idéntica en las dos VMs («verificar el artefacto, no el log» al
+        // revés: el log decía error y el artefacto existía). Y se borra el gemelo
+        // rancio de una compilación anterior, que si no taparía el fallo.
+        if (!errors.isEmpty()) {
+            String modName = w.getCanonicalFilename();
+            Files.deleteIfExists(out);
+            Files.deleteIfExists(outputDir.resolve(modName.substring(0, modName.length() - 4) + ".dbg"));
+            return;
+        }
         // H6.a — embebe la interfaz del módulo en el .mod (sección `interface`,
         // formato v6). Si no se ha fijado, writeToFile emite v5 como antes.
         // El supplier se invoca AQUÍ, no antes: a estas alturas ya se han emitido

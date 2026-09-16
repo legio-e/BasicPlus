@@ -710,7 +710,7 @@ public final class Main {
                 return true;
             }
             if ("mivm".equals(ctx.backend)) {
-                emitMivmMod(module, info, ctx, depth, srcAbs);
+                if (!emitMivmMod(module, info, ctx, depth, srcAbs)) return false;   // #521: sin .mod no hay build
             } else {
                 try {
                     emitJvmClass(module, info, ctx, depth);
@@ -973,8 +973,9 @@ public final class Main {
         }
     }
 
-    private static void emitMivmMod(Ast.ModuleNode module, SemanticInfo info, Ctx ctx, int depth,
-                                    java.nio.file.Path sourcePath) throws IOException {
+    /** @return false si el emisor contó errores (#521: entonces NO hay .mod). */
+    private static boolean emitMivmMod(Ast.ModuleNode module, SemanticInfo info, Ctx ctx, int depth,
+                                       java.nio.file.Path sourcePath) throws IOException {
         MivmEmitter emitter = new MivmEmitter(module, info);
         if (sourcePath != null) {
             emitter.setSourcePath(sourcePath.toString());
@@ -1002,6 +1003,19 @@ public final class Main {
         emitter.setFormato(ctx.formato);   // V7/H2 (#523)
         emitter.setVersionesDeps(ctx.versionesDeps);
         emitter.emitTo(ctx.outDir);
+        String modFilename = (module.library != null && !module.library.isEmpty())
+                ? module.library + "." + module.name + ".mod"
+                : module.name + ".mod";
+        // #521 (16-sep) — errores del emisor: NO hay .mod (emitTo no lo escribe y borra el
+        // rancio), se dice «NO compilado», y cuentan en totalErrors (código de salida).
+        if (!emitter.errors.isEmpty()) {
+            indent(depth); System.err.printf("-- Errores del emisor mivm (%d) --%n", emitter.errors.size());
+            for (String e : emitter.errors) { indent(depth); System.err.println("  " + e); }
+            ctx.totalErrors += emitter.errors.size();
+            indent(depth); System.err.println("NO compilado: " + ctx.outDir.toAbsolutePath().resolve(modFilename)
+                    + " (" + emitter.errors.size() + " errores del emisor: no se escribe el .mod)");
+            return false;
+        }
         // El sello propio: el CRC que el ModWriter ESCRIBIÓ. Si un consumidor de este
         // build ya selló este módulo (pasada INTERFACE previa), tienen que coincidir;
         // si no, la interfaz cambió entre el análisis y la emisión — bug del
@@ -1027,15 +1041,8 @@ public final class Main {
             }
             ctx.versionesDeps.put(cacheKey, new int[]{ctx.gen, crcReal});
         }
-        if (!emitter.errors.isEmpty()) {
-            indent(depth); System.out.printf("-- Errores del emisor mivm (%d) --%n", emitter.errors.size());
-            for (String e : emitter.errors) System.out.println("  " + e);
-            ctx.totalErrors += emitter.errors.size();
-        }
-        String modFilename = (module.library != null && !module.library.isEmpty())
-                ? module.library + "." + module.name + ".mod"
-                : module.name + ".mod";
         indent(depth); System.out.println("compilado: " + ctx.outDir.toAbsolutePath().resolve(modFilename));
+        return true;
     }
 
     private static void emitJvmClass(Ast.ModuleNode module, SemanticInfo info, Ctx ctx, int depth) throws IOException {
