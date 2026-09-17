@@ -770,10 +770,20 @@ plan: lo que corre en MOD8 corre igual en MOD9, con la stdlib incluida, y queda 
   exigirDuenosConClases`, `lt_exigir_duenos_con_clases`): «'Lib' es MOD8 y 'Ext' necesita su tabla de clases:
   **recompila 'Lib'**». Mismo conjunto de programas rechazados; sólo cambia qué error se ve primero.
 
-Mezcla MOD9 completa **167/167** (`compat/informes/mezcla_mod9_ambas_V_2026-09-17.tsv`); miVM 51/51; tests C OK; `check`
-verde (69/59/9/12/69).
+Mezcla MOD9 completa **167/167**; miVM 51/51; tests C OK; `check` verde (69/59/9/12/69).
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): V6 (GC con bitmaps reconstruidos como fila fija); V9 (medidas
+### ✅ 17-sep — V6: el GC con los bitmaps reconstruidos, como filas fijas de la mezcla (194/194)
+
+App `Gc` (MOD9): `Bolsa extends Lib.Base` con dos campos de referencia propios (`nombre`, `otra`) detrás de los del
+padre; 300 objetos vivos encadenados por `otra`, basura entre medias y `gc()` forzado cada 100 y al final; la suma, el
+último eslabón y el recuento dicen si la cadena sobrevivió entera. Contra `igual`, `campo_mas`, **`campo_ref_mas`** (un
+`string` nuevo en Base delante de los del hijo, inicializado), **`campos_33`** (33 enteros nuevos: los campos del hijo
+caen en la SEGUNDA palabra del bitmap, `bw=2`), `campo_menos`, `met_medio`, `dos_mueven` → 7/7 con el mismo stdout; y en
+el bloque B contra la Lib barajada y rellena (10/10). Control del instrumento, en las dos VMs: la clase se construye
+(«1 clase construida, 9 refs») y el GC corre y libera con la cadena viva (miVM: tres pasadas con `alive` creciendo;
+VM-C: `vivo=16236 liberado=6372`). Mezcla MOD9 **194/194** (`compat/informes/mezcla_mod9_ambas_V_2026-09-17.tsv`).
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera) y los docs. Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.

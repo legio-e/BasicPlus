@@ -31,7 +31,10 @@
 # modulos (Lib -> Mid -> Abu, sellados contra v1, cambia solo Lib: 21 variantes), DOS averias a la
 # vez (dos_mueven corre; dos_una_rompe: el mismo primer error en las dos VMs) y MOD8 x MOD9 en las
 # dos direcciones (nunca corre, nunca peta; E9 «recompila 'Lib'» cuando la app MOD9 esta sellada
-# contra la Lib MOD8, la norma #500 cuando las generaciones no casan).
+# contra la Lib MOD8, la norma #500 cuando las generaciones no casan). Y V6: el GC con los bitmaps
+# que el cargador reconstruye (app Gc: 300 objetos vivos de una clase abierta con dos campos de
+# referencia propios, gc() forzado; Base con un campo de referencia nuevo delante, con 33 campos
+# —la segunda palabra del bitmap—, y barajada/rellena en el bloque B).
 #
 # Bloque B (solo con --formato=9, V7/H2 #523 V1): EL GUARDIAN. La misma Lib compilada con
 # `--barajar=<semilla>` (las ranuras propias de cada clase permutadas) y con `--relleno=3`
@@ -144,6 +147,12 @@ VARIANTES = {
   # quitado -> el rechazo nombra el miembro (y las dos VMs dicen el MISMO primer error).
   'dos_mueven':   ('met_medio + campo_mas (dos cambios de forma a la vez)',   lambda s: VARIANTES['campo_mas'][1](VARIANTES['met_medio'][1](s))),
   'dos_una_rompe': ('met_medio + met_quitado (se mueve todo Y falta k())',    lambda s: VARIANTES['met_quitado'][1](VARIANTES['met_medio'][1](s))),
+  # V6 (17-sep): el GC con los bitmaps que el cargador reconstruye. Un campo de REFERENCIA nuevo en Base delante de
+  # los del hijo, y 33 campos enteros (los del hijo caen en la SEGUNDA palabra del bitmap).
+  'campo_ref_mas': ('campo de REFERENCIA nuevo en Base (var r: string) delante de s, inicializado',
+                   lambda s: _sub(_sub(s, '  var n: integer\n', '  var n: integer\n  var r: string\n'), '    this.s := "s"\n', '    this.s := "s"\n    this.r := "r" + n\n')),
+  'campos_33':    ('33 campos enteros nuevos en Base delante de s (el hijo cruza la palabra del bitmap)',
+                   lambda s: _sub(s, '  var n: integer\n', '  var n: integer\n  var f0: integer\n  var f1: integer\n  var f2: integer\n  var f3: integer\n  var f4: integer\n  var f5: integer\n  var f6: integer\n  var f7: integer\n  var f8: integer\n  var f9: integer\n  var f10: integer\n  var f11: integer\n  var f12: integer\n  var f13: integer\n  var f14: integer\n  var f15: integer\n  var f16: integer\n  var f17: integer\n  var f18: integer\n  var f19: integer\n  var f20: integer\n  var f21: integer\n  var f22: integer\n  var f23: integer\n  var f24: integer\n  var f25: integer\n  var f26: integer\n  var f27: integer\n  var f28: integer\n  var f29: integer\n  var f30: integer\n  var f31: integer\n  var f32: integer\n')),
 }
 
 # ------------------------------------------------------------------ las apps
@@ -300,6 +309,67 @@ public function main()
 end main
 end Abu
 """
+# V6 (17-sep) — el GC con los bitmaps RECONSTRUIDOS: Bolsa (abierta) tiene dos campos de referencia propios detras
+# de los del padre; 300 objetos vivos encadenados, basura entre medias y gc() forzado cada 100. Si el bitmap del hijo
+# no siguiera al padre (campo nuevo delante, 33 campos, barajado), el GC recogeria un vivo (falla el handle) o
+# marcaria un entero como referencia; la suma y el ultimo eslabon dicen si la cadena sobrevivio entera.
+GC_SRC = """module Gc
+import Core
+import Lib
+public class Bolsa extends Lib.Base
+  var nombre: string
+  var otra: Bolsa
+  var cnt: integer
+  public function Bolsa(n: integer, nombre: string)
+    super(n)
+    this.nombre := nombre
+    this.cnt := n
+  end Bolsa
+  public function link(o: Bolsa)
+    this.otra := o
+  end link
+  public function sig(): Bolsa
+    return this.otra
+  end sig
+  public function peso(): integer
+    return this.cnt
+  end peso
+  public function describe(): string
+    return this.nombre + "/" + this.k() + "/" + this.cnt
+  end describe
+end Bolsa
+public function main()
+  var raiz: Bolsa := Bolsa(1, "raiz")
+  var prev: Bolsa := raiz
+  var i: integer := 2
+  while i <= 300 do
+    var b: Bolsa := Bolsa(i, "b" + i)
+    prev.link(b)
+    prev := b
+    var basura: string := "x" + i + "y" + i
+    if i mod 100 == 0 then
+      gc()
+    endif
+    i := i + 1
+  endwh
+  gc()
+  var p: Bolsa := raiz
+  var suma: integer := 0
+  var ultimo: string := ""
+  var n: integer := 0
+  while p != null do
+    suma := suma + p.peso()
+    ultimo := p.describe()
+    n := n + 1
+    p := p.sig()
+  endwh
+  print suma
+  print ultimo
+  print n
+  print "fin"
+end main
+end Gc
+"""
 A_SRC = """module A
 import Core
 import Lib
@@ -339,6 +409,7 @@ ESPERADO = {
   'UsaD':   "k1\nfin",
   'ExtD':   "nieta/k2\nnieta/k2\nfin",
   'Huer':   "1\n1\nfin",
+  'Gc':     "45150\nb300/k300/300\n300\nfin",
   'Abu':    "nieta/media/k2/6\n52\n5\nnieta/media/k2/6\n9\n4\nfin",
 }
 def esperado(app, variante):
@@ -568,8 +639,9 @@ def main():
             d = lib(work, 'igual', 7, extra=flags, etiqueta='_' + etq)
             if io.open(os.path.join(d, 'Lib.mod'), 'rb').read() == lib0:
                 raise SystemExit('Lib.mod con %s es IDENTICA a la de la semilla 0: el flag no ha hecho nada (jar rancio?)' % ' '.join(flags))
-            cd = caso_dir(work, 'B_' + etq, d, [os.path.join(usa1, 'Usa.mod'), os.path.join(ext1, 'Ext.mod'), os.path.join(usad1, 'UsaD.mod')])
-            for nombre in ('Usa', 'Ext', 'UsaD'):
+            gcb = app(work, 'Gc', GC_SRC, v1, 'v1')   # V6: los campos de referencia del hijo tras un padre barajado/relleno
+            cd = caso_dir(work, 'B_' + etq, d, [os.path.join(usa1, 'Usa.mod'), os.path.join(ext1, 'Ext.mod'), os.path.join(usad1, 'UsaD.mod'), os.path.join(gcb, 'Gc.mod')])
+            for nombre in ('Usa', 'Ext', 'UsaD', 'Gc'):
                 fila('B', '%s v1 contra Lib %s' % (nombre, ' '.join(flags)), cd, nombre, 'corre', esperado(nombre, 'igual'))
 
     if solo in (None, 'V') and FORMATO == 9:
@@ -587,6 +659,12 @@ def main():
             d = lib(work, v, 8)
             cd = caso_dir(work, 'V_abu_%s' % v, d, [os.path.join(mid1, 'Mid.mod'), os.path.join(abu1, 'Abu.mod')])
             fila('V', 'Abu v1 (via Mid v1) contra %s g8' % v, cd, 'Abu', prediccion_java(v, 8, 'Abu'), esperado('Abu', v))
+        # V6: el GC con los bitmaps reconstruidos (campo de referencia nuevo delante, 33 campos, y las de forma de siempre)
+        gc1 = app(work, 'Gc', GC_SRC, v1, 'v1')
+        for v in ('igual', 'campo_mas', 'campo_ref_mas', 'campos_33', 'campo_menos', 'met_medio', 'dos_mueven'):
+            d = lib(work, v, 8)
+            cd = caso_dir(work, 'V_gc_%s' % v, d, [os.path.join(gc1, 'Gc.mod')])
+            fila('V', 'Gc v1 contra %s g8 (GC forzado)' % v, cd, 'Gc', 'corre', esperado('Gc', v))
         # MOD8 x MOD9 (medido el 17-sep). Con el dueno MOD8, la norma #500 (que sigue viva para MOD7/8) habla ANTES
         # que E9: misma gen -> «otra interfaz» (el CRC de la bpi 8 nunca es el de la bpi 9); gen mayor -> Ext cae por
         # la regla 3 («mas reciente y extiende») y Usa por el import 3.1 de su constructor con firma («no exporta

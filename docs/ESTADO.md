@@ -43,6 +43,11 @@ cargadores lo comprueban ahora antes de los imports (mismo texto, mismo momento)
 reconstruidos como fila fija), V9 (medidas), V8 (placas), la cadena en MOD9 (V11: `build_mdn.sh`/`AotBuild` con el
 formato, `.slots` fuera) y los docs (MOD_FORMAT con la ref SUPER y la 4.5, OPCODES, HEAP_LAYOUT `+6`, WIRE E0-E10).
 
+**V6 también** (misma tarde): el GC con los bitmaps reconstruidos como filas fijas de la mezcla (app `Gc`: clase abierta
+con campos de referencia propios, 300 vivos, `gc()` forzado; Base con un campo de referencia delante, con 33 campos
+—segunda palabra del bitmap— y barajada en B): 17 filas, todas ok; mezcla MOD9 **194/194**. Queda de `#523`: V9, V8,
+V11 (la cadena) y los docs.
+
 ## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
 
 **Hecho** (ver `FICHAS` `#523` §V10): dos workflows de revisión (9 buscadores; la verificación por agente murió dos veces por el
