@@ -881,11 +881,18 @@ PSRAM (`0x11000000`) → «hay 2 candidatos pero NINGUNO vale → realojado para
 nombre; el sello es de la placa tal como está). Regrabado (`wire_serie.py pack … arm`, sellado en `0x10CAA000`/RAM
 `0x11000000`, 2791 sitios) y reiniciado: **`SqlDemo` MOD9 corre en la Metro contra el pack MOD9, byte-idéntico al host**
 (21 líneas, `sqldemo.exe` == `EXITED OK` 1,6 s; `bd: reservada (SQLite=2) -> 2048 KB @ 0x11000000`, «la entrada devolvió
-0», 16/16 thunks). El `.mdn` de RISC-V queda por ver en el P4. Y la **Nucleo** (imagen de hoy): `CoreRefs` MOD9 contra su
-Core embebido OK, MOD8 rechazado con nombre — cuatro placas hoy (Pico, DK2, Metro, Nucleo).
+0», 16/16 thunks). Y la **Nucleo** (imagen de hoy): `CoreRefs` MOD9 contra su Core embebido OK, MOD8 rechazado con nombre.
+**El P4** (imagen de hoy por `idf.py -p COM15 flash`): primero E9 en vivo — `/app` tenía un `Core.mod` **MOD7** de sesiones
+anteriores que tapaba al de `/lib` («'Core' es MOD7 y 'CoreRefs' necesita su tabla de clases: recompila 'Core'»), y el
+`CoreRefs` MOD8 corría contra él (hacia atrás sí); borradas las copias rancias de la stdlib en `/app` (y, por un `LIST`
+que devuelve el árbol entero, también `/lib`: la imagen lo repuso al reiniciar, 15 módulos MOD9 gen 7; `Gui`/`Json`/
+`Collections`/`Str` MOD9 repuestos a mano en `/lib`, donde estaban). Después: `CoreRefs` MOD9 contra el Core embebido OK
+(1.191 µs), MOD8 rechazado con nombre; el pack de SQLite podado a **RISC-V** y sellado (`0x40144000`, RAM `0x48001000`,
+5.087 sitios; `bd: bloque 4096 KB @0x48001000 (SQLite=4 MB)`), y **`SqlDemo` MOD9 byte-idéntico al host** (21 líneas,
+`EXITED OK` 5,3 s). Los dos `.mdn` del pack, verificados en silicio. **Cinco placas hoy**: Pico, DK2, Metro, Nucleo, P4.
 
-⏭️ **Queda**: grabar las **ESP32** cuando estén conectadas (las imágenes ya están; en el P4, además, `SqlDemo` contra el
-pack: el `.mdn` RISC-V); `montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
+⏭️ **Queda**: grabar la **S3/C6/C3** cuando estén conectadas (las imágenes ya están); `montar-zip.sh` al publicar; `#533`
+(AOT fase 2). Del plan de `#523`: V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
