@@ -783,9 +783,21 @@ el bloque B contra la Lib barajada y rellena (10/10). Control del instrumento, e
 («1 clase construida, 9 refs») y el GC corre y libera con la cadena viva (miVM: tres pasadas con `alive` creciendo;
 VM-C: `vivo=16236 liberado=6372`). Mezcla MOD9 **194/194** (`compat/informes/mezcla_mod9_ambas_V_2026-09-17.tsv`).
 
+### ✅ 17-sep — los docs de MOD9 (la parte de V11 que no es la cadena) y un hueco del wire
+
+`MOD_FORMAT.md` **§13** (v9 entero: el problema y el criterio, R1-R4, la subtabla `refs` 3.3 con los siete `kind` y lo
+que cada uno deja en `ext[count3.1 + i]`, la subtabla `CLASES` 4.5 byte a byte con sus flags, lo que hace el cargador,
+la `bpi 9` y la norma para un dueño v9, los rechazos **E0-E10** con su texto, la mezcla de formatos D10 y la red que lo
+sostiene; §3 y §12 al día); `OPCODES.md` (bloque `0xB1..0xBB` con los once `_REF`, sus operandos y la regla de quién los
+usa; 186 opcodes; tamaños de operando); `HEAP_LAYOUT.md` (el `+6` del descriptor: el sello del dueño, y
+`getCSForDataAddr` sin buscar por rango); `BPVM_WIRE_PROTOCOL.md` (`EXITED.status = LINK_ERROR` con el texto del
+cargador). **Hueco encontrado al escribirlo**: la miVM mandaba un fallo de enlace por el wire como `RUNTIME_ERROR` con
+`errorMessage: "link: …"` y el device como `LINK_ERROR` con el texto pelado — el IDE enseñaba dos cosas distintas para
+el mismo fallo. `DebugServer` lo manda ahora como el device (test `exitedDeEnlaceEsLinkErrorComoEnElDevice`).
+
 ⏭️ **Queda del plan** (V7_IDEAS §H2.7): V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
-y `.slots` fuera) y los docs. Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
+y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
 
 #### ✅ `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1 · **CERRADA el 16-sep con `#521`**)

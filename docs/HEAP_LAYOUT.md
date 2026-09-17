@@ -145,10 +145,17 @@ desde `MOD_FORMAT.md §8`:
 +0    u16   num_fields
 +2    u16   num_methods
 +4    u16   bitmap_words   = ceil(num_fields/32)
-+6    u16   _pad           (= 0)
++6    i16   modulo         el sello del dueño. 0 = MOD7/8 (era _pad):
+                           el CS se busca por rango. MOD9: el cargador
+                           escribe índice del módulo dueño + 1 en TODO
+                           descriptor al registrarlo, cerrado o
+                           construido — un construido (clase abierta)
+                           vive en la arena, fuera de todo módulo, y
+                           sin el sello no tendría CS.
 +8    i32   parent_offset  CS-relative al CS del módulo dueño;
                            0 = sin padre; sentinel cross-module
-                           se PARCHA en linkAll.
+                           se PARCHA en linkAll (v8); en MOD9 lo
+                           escribe el cargador al construir.
 +12   bw*4  field_bitmap   bit k=1 ⇒ field[k] es ref (GC trace)
 +12+bw*4 bw*4 owner_bitmap bit k=1 ⇒ field[k] es owner (FREE recursivo)
 +12+2*bw*4 num_methods*4 vtable  i32 offsets relativos al codeStart
@@ -166,6 +173,9 @@ parentAbs = moduleManager.getCSForDataAddr(childDesc) + parent_offset
 
 `getCSForDataAddr` busca en `loadedModules` cuál módulo contiene `childDesc`
 en su rango `[moduleBase, codeStart + codeSize)` y devuelve su `codeStart`.
+**MOD9**: si `+6 != 0` devuelve el `codeStart` de `modules[+6 − 1]` sin buscar —
+los descriptores construidos viven en la **arena** (detrás del último módulo, delante
+del heap; `MOD_FORMAT.md` §13.4) y ningún rango los contiene.
 
 ---
 

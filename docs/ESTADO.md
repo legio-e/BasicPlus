@@ -45,8 +45,13 @@ formato, `.slots` fuera) y los docs (MOD_FORMAT con la ref SUPER y la 4.5, OPCOD
 
 **V6 también** (misma tarde): el GC con los bitmaps reconstruidos como filas fijas de la mezcla (app `Gc`: clase abierta
 con campos de referencia propios, 300 vivos, `gc()` forzado; Base con un campo de referencia delante, con 33 campos
-—segunda palabra del bitmap— y barajada en B): 17 filas, todas ok; mezcla MOD9 **194/194**. Queda de `#523`: V9, V8,
-V11 (la cadena) y los docs.
+—segunda palabra del bitmap— y barajada en B): 17 filas, todas ok; mezcla MOD9 **194/194**.
+
+**Los docs de MOD9** (tarde): `MOD_FORMAT.md` §13 (v9 entero, E0-E10 con texto), `OPCODES.md` (`0xB1..0xBB`),
+`HEAP_LAYOUT.md` (`+6`), `BPVM_WIRE_PROTOCOL.md` (`LINK_ERROR`). Al escribir el wire salió que la miVM mandaba el fallo
+de enlace como `RUNTIME_ERROR` con prefijo «link: » y el device como `LINK_ERROR` pelado: igualado (test). **Queda de
+`#523`**: V9 (medidas host + Pico, `GuiTableDemo`, el Core MOD9 a la Pico por `puts`), V8 (placas) y V11 (la cadena en
+MOD9: stdlib, blobs, packs, IDE, `build_mdn.sh`/`AotBuild` con el formato, `.slots` fuera).
 
 ## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
 

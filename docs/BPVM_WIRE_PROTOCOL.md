@@ -492,9 +492,19 @@ Event:
  "elapsedMs":123}
 ```
 
-`status` ∈ `OK | RUNTIME_ERROR | KILLED | INTERNAL_ERROR`.
+`status` ∈ `OK | RUNTIME_ERROR | LINK_ERROR | KILLED | INTERNAL_ERROR`.
 Si `status=RUNTIME_ERROR`, también `errorMessage` y opcionalmente
 `stackTrace`.
+
+**`LINK_ERROR`** (el programa no llegó a arrancar: falló el enlace de sus
+módulos): `errorMessage` lleva el texto del cargador, **byte-idéntico en las dos
+VMs** y el mismo que el CLI imprime entre `=== ERROR DE LINK: … ===`. Los textos:
+los de la norma de versiones (`MOD_FORMAT.md` §3.1: «es mas antiguo que…», «no es
+la interfaz con la que se compilo…», «es mas reciente que … y extiende una clase
+suya»), el «lib 'X' presente pero no exporta 'S' (la usa 'M'; version vieja?)» de
+un símbolo ausente, y en MOD9 los rechazos **E0–E10** del enlace tardío
+(`MOD_FORMAT.md` §13.7): siempre nombran el módulo, la clase y el miembro, y
+terminan en «recompila 'X'». El IDE los muestra tal cual.
 
 ---
 

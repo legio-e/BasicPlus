@@ -216,6 +216,33 @@ class DebugServerTest {
 
     @Test
     @Timeout(10)
+    void exitedDeEnlaceEsLinkErrorComoEnElDevice() throws Exception {
+        // V7/H2 (#523, 17-sep) — Main pone exitReason = "link: <texto del cargador>" cuando
+        // falla el enlace; por el wire tiene que salir como en el device (repl_v1.c):
+        // status LINK_ERROR y errorMessage con el texto PELADO, sin el prefijo.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                controller.emitEvent(new edu.bpgenvm.vm.debug.ExitedEvent(1,
+                        "link: 'Lib' es MOD8 y 'App' necesita su tabla de clases: recompila 'Lib'"));
+                Map<String,Object> m = Json.parseFlatObject(in.readLine());
+                assertEquals("EXITED",     Json.getString(m, "type", ""));
+                assertEquals(1L,           Json.getLong(m, "exitCode", -1));
+                assertEquals("LINK_ERROR", Json.getString(m, "status", ""));
+                assertEquals("'Lib' es MOD8 y 'App' necesita su tabla de clases: recompila 'Lib'",
+                             Json.getString(m, "errorMessage", ""));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
     void serverEnviaBpHitJsonConCamposEsperados() throws Exception {
         int port = freePort();
         VirtualMachine vm = new VirtualMachine();

@@ -246,16 +246,23 @@ public final class DebugServer implements AutoCloseable {
                 long elapsed = activeSessionStartMs > 0
                         ? System.currentTimeMillis() - activeSessionStartMs
                         : 0;
+                // V7/H2 (#523, 17-sep) — un fallo de ENLACE sale como en el device (repl_v1.c):
+                // status LINK_ERROR y errorMessage con el texto pelado del cargador, sin el
+                // prefijo «link: » del exitReason del CLI. Antes iba como RUNTIME_ERROR con el
+                // prefijo, y el IDE enseñaba dos cosas distintas para el mismo fallo.
+                boolean enlace = e.reason != null && e.reason.startsWith("link: ");
                 String status = (e.exitCode == 0)   ? "OK"
                               : (e.exitCode == 130) ? "KILLED"     // P-run-stop
+                              : enlace              ? "LINK_ERROR"
                                                     : "RUNTIME_ERROR";
+                String mensaje = enlace ? e.reason.substring("link: ".length()) : e.reason;
                 StringBuilder sb = new StringBuilder(128);
                 sb.append("{\"type\":\"EXITED\",\"session\":").append(sess)
                   .append(",\"status\":\"").append(status).append('"')
                   .append(",\"exitCode\":").append(e.exitCode)
                   .append(",\"elapsedMs\":").append(elapsed);
-                if (e.reason != null && !e.reason.isEmpty()) {
-                    sb.append(",\"errorMessage\":\"").append(Json.escape(e.reason)).append('"');
+                if (mensaje != null && !mensaje.isEmpty()) {
+                    sb.append(",\"errorMessage\":\"").append(Json.escape(mensaje)).append('"');
                 }
                 sb.append('}');
                 send(sb.toString());

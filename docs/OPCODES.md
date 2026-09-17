@@ -1,9 +1,10 @@
 # Catálogo de opcodes de la VM BasicPlus
 
-Documento canónico de los opcodes del bytecode `.mod`: los **175** que
-define `bpgenvm-c/include/bpvm_opcodes.h` (V6). Los de `0x00..0x70` son los
+Documento canónico de los opcodes del bytecode `.mod`: los **186** que
+define `bpgenvm-c/include/bpvm_opcodes.h` (V7). Los de `0x00..0x70` son los
 de V1; los de `0x6F` y `0x71..0xB0` se añadieron después (long, double,
-potencia, `CHECKCAST`) y están en su propia sección al final de las tablas.
+potencia, `CHECKCAST`) y los `0xB1..0xBB` son los `_REF` del enlace tardío
+(MOD9, V7/H2); están en sus propias secciones al final de las tablas.
 Cada entrada incluye:
 - Byte (`code`), mnemonic.
 - Operando inmediato (si lo hay): tipo + tamaño en bytes.
@@ -388,8 +389,44 @@ acaba en algún descriptor sin parent (parentOff == 0).
 | IMM_U8 | 1 | LRET (paramsCount en slots), GET/SET_FIELD_LONG (slot) |
 | CAST_I16_I16 | 4 | CHECKCAST (clsOff i16, nameOff i16) |
 | CAST_I32_I16 | 6 | CHECKCAST_EXT (clsOff i32, nameOff i16) |
+| IDX_U16 | 2 | los `_REF` de un operando (GET/SET_FIELD*_REF, NEW_OBJECT_REF, INSTANCEOF_REF, PUSH_REF) |
+| IDX_U16_NUMARGS_U8 | 3 | INVOKE_VIRTUAL_REF (idx u16, numArgs u8) |
+| IDX_U16_NAME_I16 | 4 | CHECKCAST_REF (idx u16, nameOff i16) |
+| TRY_HANDLER_I32_IDX_U16 | 6 | TRY_BEGIN_REF (handlerRel i32, idx u16) |
 
 Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
+
+---
+
+## 0xB1..0xBB — los opcodes `_REF` del enlace tardío (MOD9, V7/H2 `#523`)
+
+Cada uno es **idéntico a su hermano sin `_REF`** salvo en el operando: donde el
+hermano lleva un número horneado que depende de la forma de una clase de OTRO módulo
+(una ranura de vtable, una ranura de campo, un descriptor), aquí va `idx u16`, la
+entrada de la **ext-table** del módulo (la misma tabla que `CALL_EXT`) que el cargador
+rellena una vez al enlazar resolviendo la referencia simbólica de la subtabla 3.3
+(`MOD_FORMAT.md` §13.2). Después el opcode lee `ext[idx]` y hace exactamente lo que
+hace el hermano (paseo por `-1` y `parent_offset` incluido). Nada del código se
+parchea: vale para XIP. Los usa toda clase de otro módulo y toda clase **abierta**
+(R2); las clases cerradas del propio módulo siguen con los opcodes horneados.
+Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` antes).
+
+| Code | Op | Operando | Stack effect | Semántica |
+|---|---|---|---|---|
+| 0xB1 | `INVOKE_VIRTUAL_REF` | `u16` idx, `u8` numArgs | `( ...args this -- )` | `INVOKE_VIRTUAL` con `slot = ext[idx]` (ref `MET`; la ranura puede ser > 255). |
+| 0xB2 | `GET_FIELD_REF` | `u16` idx | `( ref -- v )` | `GET_FIELD` con `slot = ext[idx]` (ref `CAMPO`). |
+| 0xB3 | `SET_FIELD_REF` | `u16` idx | `( ref v -- )` | `SET_FIELD` con `slot = ext[idx]`. |
+| 0xB4 | `GET_FIELD_LONG_REF` | `u16` idx | `( ref -- L )` | `GET_FIELD_LONG` con `slot = ext[idx]`. |
+| 0xB5 | `SET_FIELD_LONG_REF` | `u16` idx | `( ref L -- )` | `SET_FIELD_LONG` con `slot = ext[idx]`. |
+| 0xB6 | `SET_FIELD_OWNER_REF` | `u16` idx | `( ref v -- )` | `SET_FIELD_OWNER` con `slot = ext[idx]`. |
+| 0xB7 | `NEW_OBJECT_REF` | `u16` idx | `( -- ref )` | `NEW_OBJECT` con `classPtr = ext[idx]` (ref `CLASE`: dirección **absoluta** del descriptor, construido o no). |
+| 0xB8 | `INSTANCEOF_REF` | `u16` idx | `( ref -- 1\|0 )` | `INSTANCEOF` con `expected = ext[idx]`. |
+| 0xB9 | `CHECKCAST_REF` | `u16` idx, `i16` nameOff | `( ref -- ref )` | `CHECKCAST` con `expected = ext[idx]`; `nameOff` es el literal local del mensaje. |
+| 0xBA | `TRY_BEGIN_REF` | `i32` handlerRel, `u16` idx | `( -- )` | `TRY_BEGIN` con `expectedClass = ext[idx]` (el `catch` de una excepción de otro módulo). |
+| 0xBB | `PUSH_REF` | `u16` idx | `( -- i32 )` | Empuja `ext[idx]` tal cual (la ranura del `$dest` de un handler: ref `EV_DEST`). |
+
+`super.m()` a un padre por ref **no** tiene opcode nuevo: es `CALL_EXT idx` con una ref
+`SUPER`, que el cargador resuelve a la dirección absoluta del método efectivo del padre.
 
 ---
 
@@ -398,7 +435,8 @@ Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
 `0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). `0x6D .. 0x6E` libres
 (`0x6F` es `EVENT_RETURN`). `0x71 .. 0xB0` asignados en bloque (long, double,
 campos de 8 bytes, `NATIVE_RETURN`, `TRY_BEGIN_EXT`, potencia, `CHECKCAST`).
-**`0xB1 .. 0xFF` libres.** Total asignado: 175.
+`0xB1 .. 0xBB` los `_REF` del enlace tardío (MOD9). **`0xBC .. 0xFF` libres.**
+Total asignado: 186.
 
 Si una implementación encuentra un opcode no listado, debe fallar con
 "Opcode no implementado: 0x%02X en PC %d" — coherente con la VM Java.

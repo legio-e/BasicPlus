@@ -14,6 +14,14 @@ y **rechazan** v5 y anteriores con un mensaje (`#284`). El compilador emite **s�
 v8**. Las VMs de V6 rechazan un v8 con «MAGIC no reconocido»: hacia delante no hay
 compatibilidad, hacia atrás sí (decisión de Eduardo, 14-sep).
 
+> **v9 — el enlace tardío (`"MOD9"`, V7/H2 `#523`, 16-sep-2026).** Misma cabecera de
+> 44 bytes; cambia lo que el módulo dice de las clases de OTROS módulos: en vez de
+> números horneados (ranuras, offsets, descriptores) lleva **referencias simbólicas**
+> (subtabla `refs` 3.3) que el cargador resuelve al enlazar, y publica su propia
+> tabla de clases (subtabla `CLASES` 4.5) para que los demás resuelvan contra ella.
+> Hoy se emite con `--formato=9` (el compilador emite v8 por defecto hasta que la
+> cadena entera pase a MOD9, V11). Todo en **§13**.
+
 Convención general:
 - Todos los enteros son **big-endian** salvo indicación expresa.
 - Todos los strings se serializan con la convención `writeUTF` de Java
@@ -86,7 +94,7 @@ Cuando hay library `L` y módulo `M`:
 ## 3. Sección IMPORTS
 
 ```
-imports ::= count:i32  import_entry*  [ deps ]            (deps: sólo v8)
+imports ::= count:i32  import_entry*  [ deps ]  [ refs ]   (deps: v8+; refs: sólo v9, §13.2)
 
 import_entry ::= name:UTF  fromPath:UTF
 
@@ -626,7 +634,13 @@ cambios incompatibles se sube el número.
 
 ## 12. Cambios entre versiones
 
-- **v8** (actual, 15-sep-2026, V7/H2): el módulo lleva **contra qué se compiló**:
+- **v9** (16-sep-2026, V7/H2 `#523`, se emite con `--formato=9`): **enlace tardío**.
+  Subtabla `refs` (3.3) en `imports`, subtabla `CLASES` (4.5) en `exports` (y ya no
+  hay 4.3/4.4), la interfaz sin números (`bpi 9`: sin `layout`, `slot`, `recv`),
+  once opcodes `_REF` (`0xB1..0xBB`) y el campo `+6` del descriptor (§13). Misma
+  cabecera de 44 bytes, mismo ABI de refs: las VMs de V7 cargan v6/v7/v8/v9 y un
+  MOD9 con un dueño MOD7/8 se rechaza con E9 (§13.7).
+- **v8** (15-sep-2026, V7/H2): el módulo lleva **contra qué se compiló**:
   `gen` e `ifaceCrc` en la cabecera (44 bytes) y la subtabla `deps` en `imports`
   (§3); las VMs aplican la norma de versiones (§3.1). La interfaz se escribe con
   `\n` fijo (el CRC es la identidad de esos bytes: igual en Windows y Linux).
@@ -649,3 +663,166 @@ cambios incompatibles se sube el número.
 
 Los .mod v4 e inferiores ya no se cargan (el MAGIC cambió). El frontend
 emite siempre la versión actual.
+
+---
+
+## 13. v9 — el enlace tardío (`MOD9`, V7/H2 `#523`)
+
+**El problema que resuelve.** Hasta v8, un módulo que usa una clase de otro lleva
+horneados los números que dependen de la forma de esa clase: la ranura de vtable de
+cada método, el offset de cada campo, el descriptor que construye, el layout del
+padre que extiende. Un cambio de forma en la librería (un método nuevo en medio, un
+campo más) invalida esos números y la norma `#500` (§3.1) obliga a recompilar al
+consumidor — y lo que la norma no ve (misma ranura, otra firma) corre en silencio con
+la ranura equivocada. **Criterio decidido (Eduardo, 15-sep): el de Java.** Un cambio
+de FORMA corre; un miembro usado que desaparece o cambia de firma se rechaza al
+enlazar nombrándolo; nada en silencio; y el `stdout` es byte-idéntico en las dos VMs.
+**La norma de Eduardo**: *«lo que puede resolver el compilador es estático y lo que
+puede resolver el cargador es dinámico»* — el módulo lleva referencias y el cargador
+construye vtables, offsets y descriptores al cargar.
+
+### 13.1 Qué lleva referencias (R1–R4)
+
+- **R2 — quién va por ref**: toda clase de OTRO módulo, y toda clase **abierta** (R1:
+  alguna de sus `extends` cruza módulo), también desde su propio módulo. Lo demás
+  (clases cerradas del propio módulo) sigue horneado como en v8.
+- **R4 — el nombre lleva la firma**: la clave canónica de un método es
+  `nombre(tipos)retorno` (`k()s`, `m(i)i`, `suma(LLib/Base;)i`), la de un campo
+  `nombre:tipo` (`n:i`, `s:Ls;`), la de un evento `nombre(tipos)`. Cambiar la firma
+  o el retorno cambia la clave → el consumidor no la encuentra → rechazo E3/E4/E5.
+  Las funciones de módulo importadas (3.1) también llevan la firma (`Lib.f()i`).
+- **La clase estática del receptor**: la ref de un miembro se hace contra la clase
+  estática del receptor (no contra la que lo declara): `Hija.k()s` aunque `k` viva en
+  `Base`. El cargador la busca subiendo por la cadena real.
+- **Límites**: identificador ≤ 63 caracteres (error del lexer), clave ≤ 160 bytes.
+
+### 13.2 Subtabla `refs` (3.3) — al final de `imports`
+
+```
+refs      ::= count:u16  ref_entry*
+ref_entry ::= kind:u8  depIdx:i16  clase:UTF  clave:UTF
+```
+
+| `kind` | nombre | `clase` / `clave` | lo que el cargador escribe en `ext[count3.1 + i]` |
+|---|---|---|---|
+| 0 | `CLASE` | `Mod.Cls` / `""` | dirección **absoluta** del descriptor (`NEW_OBJECT_REF`, `INSTANCEOF_REF`, `CHECKCAST_REF`, `TRY_BEGIN_REF`) |
+| 1 | `MET` | clase estática / `nombre(tipos)ret` | ranura de vtable (`INVOKE_VIRTUAL_REF`) |
+| 2 | `CAMPO` | clase estática / `nombre:tipo` | ranura de campo (`GET/SET_FIELD[_LONG\|_OWNER]_REF`); la clave `__syncMutex:LMutex;` es la ranura del mutex de `sync` (la de la raíz de la cadena) |
+| 3 | `EV_RECV` | clase / `evento(tipos)` | ranura receptora del evento |
+| 4 | `EV_DEST` | clase / `evento(tipos)` | ranura receptora + 2 (el `$dest` del handler, `PUSH_REF`) |
+| 5 | `SUBTIPO` | `S` / `T` | `1` si `T` sigue en la cadena efectiva de `S`; si no, E10. Ocupa una entrada de la ext-table aunque ningún opcode la lea: es la **asunción** `S <: T` que el consumidor hizo al compilar (una asignación, un `throw`, un ensanchado) |
+| 6 | `SUPER` | clase estática del padre / `nombre(tipos)ret` | dirección **absoluta** de código del método EFECTIVO del padre (la primera fila con esa clave subiendo desde el padre por la cadena real; un privado de otro módulo no cuenta). Es el operando de `CALL_EXT` para `super.m()`: la única llamada no virtual de BP (J-3, 16-sep) |
+
+`depIdx` indexa la subtabla `deps` (§3); **`-2` = local** (`clase` va sin cualificar:
+una clase abierta del propio módulo). La ref `i` vive en la ext-table del módulo en
+`ext[count3.1 + i]` — la misma tabla que `CALL_EXT`; los opcodes `_REF` llevan ese
+índice `u16` y **nada del código se parchea** (vale para XIP).
+
+### 13.3 Subtabla `CLASES` (4.5) — en `exports`, tras 4.1 y 4.2
+
+En v9 **no hay 4.3 ni 4.4** (los class fixups eran la forma v8 de parchear el
+`parent_offset`; ahora lo escribe el cargador al construir).
+
+```
+clases    ::= ver:u16 (=1)  nClases:u16  clase*
+clase     ::= name:UTF  flags:u8  csOff:i32  parentDepIdx:i16  parentName:UTF
+              nFieldsOwn:u16  nMethodsOwn:u16  bwOwn:u16
+              ownFieldBitmap[bwOwn]:i32  ownOwnerBitmap[bwOwn]:i32
+              nMet:u16 (clave:UTF slot:u16 codeOff:i32 flags:u8)*
+              nCam:u16 (clave:UTF slot:u16 ancho:u8 flags:u8)*
+              nEv:u16  (clave:UTF recvSlot:u16)*
+```
+
+- `flags` de clase: bit 0 **abierta** (R1), bit 1 pública. `csOff`: offset del
+  descriptor en la sección `data` del módulo (las cerradas lo traen hecho; en una
+  abierta es el descriptor *provisional*, que no se usa: el cargador construye otro).
+- `parentDepIdx` / `parentName`: el padre (`-1` = la raíz `Object`, `-2` = local).
+- `nFieldsOwn`, `nMethodsOwn`, `bwOwn = ceil(nFieldsOwn/32)` y los dos bitmaps son
+  **sólo los propios** (los del padre los aporta el padre efectivo al construir).
+- Método: `slot` (ranura propia, relativa), `codeOff` (relativo al `codeStart` del
+  módulo), `flags` bit 0 **override** (marcado al compilar: si el padre efectivo ya no
+  tiene esa clave → E2), bit 1 **privado** (ocupa ranura, no se publica: otro módulo no
+  la ve, y una property privada del padre no se sobreescribe desde el hijo).
+- Campo: `slot`, `ancho` (4 u 8 bytes), `flags` bit 0 ref, bit 1 owner, bit 2 privado.
+- Evento: `recvSlot` (ranura receptora propia).
+
+El cargador **valida la subtabla al cargar** (versión, coherencia de `bwOwn`,
+`parentDepIdx` dentro de `deps`, `csOff` dentro de `data`, ranuras dentro de rango) y
+rechaza el `.mod` como corrupto antes de enlazar (`bpvm_link_validar_clases`).
+
+### 13.4 Lo que hace el cargador (las dos VMs, el mismo algoritmo)
+
+1. **Registrar** todas las clases de los módulos v9 (`Mod.Cls → fila 4.5`).
+2. **Construir** las abiertas, memoizado padre→hijo: `P` = el padre real (E1 si no está;
+   E9 si su módulo es MOD7/8; E7 si hay ciclo); `nF = P.nF + nFieldsOwn`; por cada
+   método propio, `buscarClave` en la cadena de `P` ignorando las filas privadas de
+   otro módulo → si existe, **override en esa ranura**; si no existe y estaba marcado
+   override → E2; si no, ranura nueva `nM++`. E6 si `nF` o `nM` > 65535. El descriptor
+   nuevo va a la **arena** (detrás del último módulo; el heap arranca detrás): cabecera,
+   `+6 = índice del módulo del hijo + 1` (§8), `parent_offset` hacia el descriptor
+   efectivo del padre, bitmaps = los efectivos del padre OR los propios desplazados
+   `P.nF`, vtable = `-1` en `[0, P.nM)` y `codeOff` en las propias y los overrides.
+   Los privados: **gana la declaración más cercana** (una clave privada en el padre y
+   pública en el hijo es pública para el hijo).
+3. **Resolver las refs** 3.3 de cada módulo (§13.2) escribiendo la ext-table.
+4. **Verificar**: ninguna ref sin resolver; cada descriptor construido coherente.
+
+Antes de todo eso, los **imports 3.1** y, antes aún, **E9** (§13.7): un consumidor v9
+con una ref a un módulo sin 4.5 se rechaza nombrando al dueño (medido el 17-sep:
+si no, el import del constructor con firma caía antes con «no exporta … version
+vieja?» y el mensaje útil no se veía nunca).
+
+**Coste** (Pico 2, tres módulos, una clase construida, 11 refs): 995 µs de enlace en
+MOD8 → 1.655 µs en MOD9, 66 B de arena, 4× menos `strcmp` (menos marcadores).
+
+### 13.5 La interfaz (`bpi 9`) y la norma de versiones
+
+La sección `interface` de un v9 no lleva números: sin `layout`, sin `field … slot n`,
+sin `event … recv n` (el lector acepta las dos formas; el `layout` de una base
+externa es vacío). `gen` e `ifaceCrc` siguen en la cabecera y en `deps`, pero para un
+**dueño v9** la norma `#500` sólo aplica la regla 1 (**E0**: gen más antigua que la
+sellada → rechazo); un `ifaceCrc` distinto es un diag informativo («compilado contra
+otra interfaz … enlace tardío») y el enlace decide. Para un dueño MOD7/8 la norma
+sigue entera (§3.1).
+
+### 13.6 Los opcodes `_REF` (`0xB1..0xBB`)
+
+Cada uno es idéntico a su hermano sin `_REF` salvo en el operando: `idx u16` de la
+ext-table en vez del número horneado. Tabla completa en `OPCODES.md` §`0xB1..0xBB`.
+`super.m()` a un padre por ref es `CALL_EXT` con el índice de una ref `SUPER`.
+
+### 13.7 Los rechazos del enlace (E0–E10), byte-idénticos en las dos VMs
+
+| | cuándo | texto |
+|---|---|---|
+| E0 | el dueño es más antiguo que el sellado | el de la norma (§3.1, regla 1) |
+| E1 | el padre (o la clase) ya no existe | `'App' extiende la clase 'Lib.Base' y 'Lib' (gen 8) no la tiene: recompila 'App'` · `'App' necesita la clase 'Lib.Base' y …` |
+| E2 | override huérfano | `'App.Hija' redefine 'k()s' y 'Lib' (gen 8) ya no lo tiene: recompila 'App'` |
+| E3 | método usado sin esa clave | `'App' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene (tiene 'k()i'): recompila 'App'` — cita hasta 8 candidatas con el mismo nombre |
+| E4 | campo | `'App' necesita el campo 'Lib.Base.p:i' y 'Lib' (gen 8) no lo tiene (tiene 'p:s'): recompila 'App'` |
+| E5 | evento | `'App' necesita el evento 'Lib.Base.cambio(i)' y 'Lib' (gen 8) no lo tiene: recompila 'App'` |
+| E6 | más de 65535 ranuras | `'App.Hija' tendria N ranuras (maximo 65535)` |
+| E7 | ciclo de herencia | `ciclo de herencia en 'App.Hija'` |
+| E8 | la verificación tras construir falla (una ranura sin dueño, dos claves iguales) | `la clase 'App.Hija' construida es inconsistente (ranura 7 sin dueno): .mod corrupto o bug del cargador` |
+| E9 | dueño MOD7/8 de un consumidor v9 | `'Lib' es MOD8 y 'App' necesita su tabla de clases: recompila 'Lib'` |
+| E10 | asunción de subtipo rota | `'App' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'App'` |
+
+Por el wire llegan en `EXITED` con `status: "LINK_ERROR"` y `errorMessage`
+(`BPVM_WIRE_PROTOCOL.md` §6.3); por el CLI, `=== ERROR DE LINK: … ===`.
+
+### 13.8 Mezcla de formatos (D10, decisión de Eduardo)
+
+- **Consumidor v9 + dueño MOD7/8**: **E9**. Sin camino degradado (sintetizar claves
+  desde los marcadores reabriría los cuatro silenciosos medidos).
+- **Consumidor MOD7/8 + dueño v9**: sus marcadores (`__cls_m_Base#k$`, `Base#setP#3`)
+  no existen en v9 → el «no exporta … version vieja?» de siempre. Hacia atrás sí,
+  hacia delante no.
+- **Parque instalado**: el `.mod` MOD8 de una app en `/app` de una placa con firmware
+  V7 (stdlib v9 embebida) muere en el enlace nombrando el símbolo: se recompila.
+
+La red que lo sostiene: `compat/mezcla.py --formato=9` (194 filas, predicción escrita
+antes de correr, las dos VMs; bloque B = la librería barajada con `--barajar`/
+`--relleno`, el guardián contra cualquier número horneado que se escape), `compat/
+compat.sh check-mod9` (el corpus entero y la stdlib en v9 con el `stdout` de v8),
+`EnlaceTardioFixturesTest` (miVM, vtables y bitmaps escritos de antemano) y
+`compat/v10_casos.py` (las reproducciones de la revisión adversarial).
