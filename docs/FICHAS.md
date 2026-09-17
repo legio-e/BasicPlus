@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | **de V10 (16-sep): `#527` `#528` `#529` `#532`** · los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la decisión)** · `#492` `#500` ~~`#493`~~ ~~`#441`~~ · `#514` `#516` `#520` ~~`#521`~~ (y `#522`, de H1) |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la cadena en MOD9 desde el 17-sep)** · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ `#516` `#520` ~~`#521`~~ `#533` (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -956,7 +956,7 @@ arreglado el guardián del Makefile). El test se queda en `--formato=8` a propó
 cargador ya rellena) o con `bpvm_link_slot_por_nombre(vm, class_ptr, clave)` cacheada; lo mismo para el getter de
 property. Cuando esté, `test-xmethodnat` vuelve a 9 y el `.mdn` deja de hornear ranuras ajenas. Se cruza con `#519`.
 
-#### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
+#### ✅ `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2` · **CERRADA el 17-sep con la cadena en MOD9, `d9b6981c`**: B completa desde el 15-sep y sólo quedaba la cadena; en MOD9 el campo cruza por ref `CAMPO` con su clave `n:i` y la interfaz lo publica como `field n:integer` — `Ext.Hija.k()` lee `this.n` de `Lib.Base` en `compat/mezcla.py`, 194/194 en las dos VMs; la stdlib, los blobs y las imágenes van con esa interfaz)
 
 **La regla, de Eduardo (11-sep):** *«Una variable es `protected` si no se indica nada, `private` si se
 declara como tal, y no puede ser pública salvo que sea una propiedad.»* Protegido = lo ven la clase y
