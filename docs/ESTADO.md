@@ -36,7 +36,8 @@ guardián de fixtures que grita. Cierra `#514` y `#500`; abre `#533` (AOT fase 2
 
 **Orden para retomar**: (1) `#496` el pack de SQLite (MOD7 por dentro → E9 para cualquier consumidor MOD9 de sus clases):
 rehacer con los dos `.mdn` regenerados por toolchain cruzado; (2) grabar las ESP32 con las imágenes ya construidas y
-pasar `placas_v9.py --embebida`; (3) `#525`/`#526` (graves, preexistentes); (4) `#533`. Ojo: cualquier `.mod` MOD7/8 que
+pasar `placas_v9.py --embebida`; (3) `#533` (AOT fase 2); (4) `#525`/`#526` (graves, preexistentes); y de H2 quedan
+`#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 
 ## 🧪 `#523` V5 (17-sep) — el corpus entero en MOD9 entra en la red diaria
