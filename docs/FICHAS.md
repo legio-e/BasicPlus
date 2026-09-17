@@ -875,12 +875,17 @@ dice su LEEME: la primera pasada los recompiló con el `version` del pack —nin
 rechazó con razón: «'Str' (gen 0) es mas antiguo que el que 'SqlDemo' necesita (gen 7)»). Verificado en host: `make
 test-sqldemo` con TODO regenerado en MOD9 (`aot_SQLite.c` nuevo, el gemelo del `.mdn`): `status=OK`. En la **Metro**
 (imagen de hoy): el pack monta en XIP, `SQLite`/`Str` MOD9 enlazan desde él, los 16 thunks se registran — y el motor no
-arranca porque esa placa dice `psram=0MB` y el arena de SQLite (≥1 MB) no cabe: es la placa, no el pack. La prueba de punta
-a punta en placa queda para el **P4** (RISC-V, con PSRAM). Y la **Nucleo** (imagen de hoy): `CoreRefs` MOD9 contra su Core
-embebido OK, MOD8 rechazado con nombre — cuatro placas hoy (Pico, DK2, Metro, Nucleo).
+arranca porque esa placa decía `psram=0MB` y el arena de SQLite (≥1 MB) no cabe. Eduardo la dejó lista (`psram=8MB`) y
+entonces el pack tampoco valía: su motor se había SELLADO para la RAM de antes (`0x2007E000`, SRAM) y ahora la placa le da
+PSRAM (`0x11000000`) → «hay 2 candidatos pero NINGUNO vale → realojado para OTRA dirección, regrábalo» (correcto y con
+nombre; el sello es de la placa tal como está). Regrabado (`wire_serie.py pack … arm`, sellado en `0x10CAA000`/RAM
+`0x11000000`, 2791 sitios) y reiniciado: **`SqlDemo` MOD9 corre en la Metro contra el pack MOD9, byte-idéntico al host**
+(21 líneas, `sqldemo.exe` == `EXITED OK` 1,6 s; `bd: reservada (SQLite=2) -> 2048 KB @ 0x11000000`, «la entrada devolvió
+0», 16/16 thunks). El `.mdn` de RISC-V queda por ver en el P4. Y la **Nucleo** (imagen de hoy): `CoreRefs` MOD9 contra su
+Core embebido OK, MOD8 rechazado con nombre — cuatro placas hoy (Pico, DK2, Metro, Nucleo).
 
-⏭️ **Queda**: `SqlDemo` en el P4 contra el pack nuevo; grabar las **ESP32** cuando estén conectadas (las imágenes ya
-están); `montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
+⏭️ **Queda**: grabar las **ESP32** cuando estén conectadas (las imágenes ya están; en el P4, además, `SqlDemo` contra el
+pack: el `.mdn` RISC-V); `montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
