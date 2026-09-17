@@ -49,9 +49,13 @@ con campos de referencia propios, 300 vivos, `gc()` forzado; Base con un campo d
 
 **Los docs de MOD9** (tarde): `MOD_FORMAT.md` §13 (v9 entero, E0-E10 con texto), `OPCODES.md` (`0xB1..0xBB`),
 `HEAP_LAYOUT.md` (`+6`), `BPVM_WIRE_PROTOCOL.md` (`LINK_ERROR`). Al escribir el wire salió que la miVM mandaba el fallo
-de enlace como `RUNTIME_ERROR` con prefijo «link: » y el device como `LINK_ERROR` pelado: igualado (test). **Queda de
-`#523`**: V9 (medidas host + Pico, `GuiTableDemo`, el Core MOD9 a la Pico por `puts`), V8 (placas) y V11 (la cadena en
-MOD9: stdlib, blobs, packs, IDE, `build_mdn.sh`/`AotBuild` con el formato, `.slots` fuera).
+de enlace como `RUNTIME_ERROR` con prefijo «link: » y el device como `LINK_ERROR` pelado: igualado (test).
+
+**V9 en el host** (`compat/v9_medidas.py`, 69 samples): `.mod` +32 % — y no por las refs: son los 484 B de la 4.5 con
+las cuatro clases builtin que cada módulo lleva copiadas (el módulo raíz, L1, es el arreglo); enlace VM-C 80 → 98 µs
+(mediana), `strcmp` 10× menos en los samples con GUI, los GUI más pequeños en MOD9. **Queda de `#523`**: V9 en placa
+(`GuiTableDemo`, el Core MOD9 a la Pico por `puts`), V8 (placas) y V11 (la cadena en MOD9: stdlib, blobs, packs, IDE,
+`build_mdn.sh`/`AotBuild` con el formato, `.slots` fuera) — V11 es cambiar el formato por defecto: lo decide Eduardo.
 
 ## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
 

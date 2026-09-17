@@ -795,7 +795,29 @@ cargador). **Hueco encontrado al escribirlo**: la miVM mandaba un fallo de enlac
 `errorMessage: "link: …"` y el device como `LINK_ERROR` con el texto pelado — el IDE enseñaba dos cosas distintas para
 el mismo fallo. `DebugServer` lo manda ahora como el device (test `exitedDeEnlaceEsLinkErrorComoEnElDevice`).
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): V9 (medidas
+### 📏 17-sep — V9 en el host: MOD8 contra MOD9, los 69 samples del corpus (`compat/v9_medidas.py`)
+
+Cada sample compilado en los dos formatos (MOD9 contra la stdlib MOD9), ejecutado en las dos VMs, y de cada uno el
+tamaño del `.mod` raíz y las líneas de coste que las VMs imprimen (`enlace: … us`, `enlace tardio: … arena`). Informe:
+`compat/informes/v9_medidas_2026-09-17.tsv`. Lo que dice (medianas):
+
+| | MOD8 | MOD9 |
+|---|---|---|
+| `.mod` raíz | 1.264 B | 1.776 B (total del corpus 107.893 → 142.772 B, **+32 %**) |
+| VM-C, enlace | 80 µs | 98 µs |
+| VM-C, `strcmp` en los samples con GUI | 99.878 (`GuiWinJson`) | 9.239 (**10× menos**: sin marcadores) |
+| enlace tardío (máximos del corpus) | — | 3 clases construidas, 72 refs, 439 B de arena |
+
+**El +32 % no son las refs**: `hello` (sin clases ni refs) pasa de 934 a 1.420 B, y los 484 B de más son la subtabla
+4.5 con las **cuatro clases builtin** (`Object`, `StringBuilder`, `Thread`, `Mutex`) que cada módulo lleva copiadas
+desde V4 (sus descriptores ya estaban en `data` en MOD8: 224 B iguales; lo nuevo es listarlas con sus claves). No se
+recortan: `Object` y `Thread` son raíz de cadena y el cargador las necesita en la 4.5 del módulo (`parentDepIdx = -1`);
+el arreglo de verdad es el **módulo raíz** (L1: las clases builtin una sola vez, en `Core`), que ya está en V7. Los
+samples con GUI se hacen MÁS PEQUEÑOS en MOD9 (`GuiWinJson` 3.694 → 3.147 B: las refs pesan menos que los marcadores y
+los fixups 4.3/4.4). La miVM no se mide (6 ms de enlace en frío es la JVM, no el algoritmo). En la Pico, medido el
+16-sep: 995 → 1.655 µs en un programa de tres módulos con una clase construida.
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): V9 en placa con `GuiTableDemo` (y el Core MOD9 a la Pico por `puts`); V8 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
