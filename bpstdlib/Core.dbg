@@ -92,96 +92,98 @@ lines
 3092 268
 3298 439
 3314 440
-3326 441
-3349 443
-3363 444
-3381 450
-3416 453
-3452 456
-3488 459
-3523 462
-3558 466
-3582 470
-3599 489
-3610 496
-3617 497
-3648 500
-3670 504
-3686 505
-3706 509
-3722 510
-3744 514
-3760 515
-3780 519
-3796 520
-3818 524
-3834 525
-3854 529
-3873 533
-3877 534
-3892 535
-3910 536
-3918 538
-3930 539
-3949 433
-3955 434
-3961 435
-4250 322
-4262 323
-4268 324
-4275 325
-4287 327
-4292 328
-4295 329
-4305 330
-4318 331
-4326 333
-4345 334
-4356 335
-4364 337
-4374 338
-4384 339
-4406 340
-4413 341
-4431 343
-4447 344
-4456 345
-4469 346
-4480 347
-4491 348
-4494 349
-4504 350
-4517 351
-4525 353
-4541 355
-4563 359
-4579 360
-4587 361
-4623 362
-4631 364
-4667 365
-4678 367
-4703 372
-4714 373
-4730 375
-4738 376
-4744 377
-4752 378
-4764 380
-4775 381
-4778 382
-4789 383
-4803 384
-4811 385
-4817 386
-4832 388
-4854 389
-4861 390
-4879 392
-4885 393
-4894 394
-4914 395
-4922 397
+3327 442
+3341 443
+3359 450
+3394 453
+3430 456
+3466 459
+3501 462
+3536 466
+3560 470
+3577 489
+3588 496
+3595 497
+3626 500
+3648 504
+3664 505
+3684 509
+3700 510
+3722 514
+3738 515
+3758 519
+3774 520
+3796 524
+3812 525
+3832 529
+3851 533
+3855 534
+3870 535
+3888 536
+3896 538
+3908 539
+3927 546
+3939 547
+3963 557
+3984 433
+3990 434
+3996 435
+4400 322
+4412 323
+4418 324
+4425 325
+4437 327
+4442 328
+4445 329
+4455 330
+4468 331
+4476 333
+4495 334
+4506 335
+4514 337
+4524 338
+4534 339
+4556 340
+4563 341
+4581 343
+4597 344
+4606 345
+4619 346
+4630 347
+4641 348
+4644 349
+4654 350
+4667 351
+4675 353
+4691 355
+4713 359
+4729 360
+4737 361
+4773 362
+4781 364
+4817 365
+4828 367
+4853 372
+4864 373
+4880 375
+4888 376
+4894 377
+4902 378
+4914 380
+4925 381
+4928 382
+4939 383
+4953 384
+4961 385
+4967 386
+4982 388
+5004 389
+5011 390
+5029 392
+5035 393
+5044 394
+5064 395
+5072 397
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -229,19 +231,19 @@ this -20 8 0 ?
 func Exception.__init 433
 this -28 8 0 ?
 m -20 8 0 string
-func __cls_new_Exception 450
+func __cls_new_Exception(s) 450
 m -20 8 0 string
-func __cls_init_Exception 483
+func __cls_init_Exception(s) 483
 this -28 8 0 ?
 m -20 8 0 string
-func __cls_m_Exception_toString 500
+func __cls_m_Exception#toString()s 500
 this -20 8 0 ?
 func RuntimeError.__init 519
 this -28 8 0 ?
 m -20 8 0 string
-func __cls_new_RuntimeError 538
+func __cls_new_RuntimeError(s) 538
 m -20 8 0 string
-func __cls_init_RuntimeError 571
+func __cls_init_RuntimeError(s) 571
 this -28 8 0 ?
 m -20 8 0 string
 func Comparable.compareTo 588
@@ -259,19 +261,19 @@ func Comparable.toBoolean 725
 this -20 8 0 ?
 func Comparable.__init 755
 this -20 8 0 ?
-func __cls_init_Comparable 791
+func __cls_init_Comparable() 791
 this -20 8 0 ?
-func __cls_m_Comparable_toInteger 805
+func __cls_m_Comparable#toInteger()i 805
 this -20 8 0 ?
-func __cls_m_Comparable_toDouble 822
+func __cls_m_Comparable#toDouble()d 822
 this -20 8 0 ?
-func __cls_m_Comparable_toLong 841
+func __cls_m_Comparable#toLong()j 841
 this -20 8 0 ?
-func __cls_m_Comparable_toBoolean 860
+func __cls_m_Comparable#toBoolean()z 860
 this -20 8 0 ?
-func __cls_m_Comparable_toFloat 877
+func __cls_m_Comparable#toFloat()f 877
 this -20 8 0 ?
-func __cls_m_Comparable_compareTo 894
+func __cls_m_Comparable#compareTo(LObject;)i 894
 this -28 8 0 ?
 other -20 8 0 ref
 func Integer.value 914
@@ -293,25 +295,25 @@ this -20 8 0 ?
 func Integer.__init 1125
 this -24 8 0 ?
 x -16 4 0 integer
-func __cls_new_Integer 1148
+func __cls_new_Integer(i) 1148
 x -16 4 0 integer
-func __cls_init_Integer 1180
+func __cls_init_Integer(i) 1180
 this -24 8 0 ?
 x -16 4 0 integer
-func __cls_m_Integer_toInteger 1196
+func __cls_m_Integer#toInteger()i 1196
 this -20 8 0 ?
-func __cls_m_Integer_toDouble 1213
+func __cls_m_Integer#toDouble()d 1213
 this -20 8 0 ?
-func __cls_m_Integer_toLong 1232
+func __cls_m_Integer#toLong()j 1232
 this -20 8 0 ?
-func __cls_m_Integer_toFloat 1251
+func __cls_m_Integer#toFloat()f 1251
 this -20 8 0 ?
-func __cls_m_Integer_toString 1268
+func __cls_m_Integer#toString()s 1268
 this -20 8 0 ?
-func __cls_m_Integer_compareTo 1287
+func __cls_m_Integer#compareTo(LObject;)i 1287
 this -28 8 0 ?
 other -20 8 0 ref
-func __cls_m_Integer_value 1307
+func __cls_m_Integer#value()i 1307
 this -20 8 0 ?
 func Long.value 1324
 this -20 8 0 ?
@@ -332,25 +334,25 @@ this -20 8 0 ?
 func Long.__init 1615
 this -28 8 0 ?
 x -20 8 0 long
-func __cls_new_Long 1639
+func __cls_new_Long(j) 1639
 x -20 8 0 long
-func __cls_init_Long 1672
+func __cls_init_Long(j) 1672
 this -28 8 0 ?
 x -20 8 0 long
-func __cls_m_Long_toInteger 1689
+func __cls_m_Long#toInteger()i 1689
 this -20 8 0 ?
-func __cls_m_Long_toDouble 1706
+func __cls_m_Long#toDouble()d 1706
 this -20 8 0 ?
-func __cls_m_Long_toLong 1725
+func __cls_m_Long#toLong()j 1725
 this -20 8 0 ?
-func __cls_m_Long_toFloat 1744
+func __cls_m_Long#toFloat()f 1744
 this -20 8 0 ?
-func __cls_m_Long_toString 1761
+func __cls_m_Long#toString()s 1761
 this -20 8 0 ?
-func __cls_m_Long_compareTo 1780
+func __cls_m_Long#compareTo(LObject;)i 1780
 this -28 8 0 ?
 other -20 8 0 ref
-func __cls_m_Long_value 1800
+func __cls_m_Long#value()j 1800
 this -20 8 0 ?
 func Double.value 1819
 this -20 8 0 ?
@@ -371,25 +373,25 @@ this -20 8 0 ?
 func Double.__init 2110
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_new_Double 2134
+func __cls_new_Double(d) 2134
 x -20 8 0 double
-func __cls_init_Double 2167
+func __cls_init_Double(d) 2167
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_Double_toInteger 2184
+func __cls_m_Double#toInteger()i 2184
 this -20 8 0 ?
-func __cls_m_Double_toDouble 2201
+func __cls_m_Double#toDouble()d 2201
 this -20 8 0 ?
-func __cls_m_Double_toLong 2220
+func __cls_m_Double#toLong()j 2220
 this -20 8 0 ?
-func __cls_m_Double_toFloat 2239
+func __cls_m_Double#toFloat()f 2239
 this -20 8 0 ?
-func __cls_m_Double_toString 2256
+func __cls_m_Double#toString()s 2256
 this -20 8 0 ?
-func __cls_m_Double_compareTo 2275
+func __cls_m_Double#compareTo(LObject;)i 2275
 this -28 8 0 ?
 other -20 8 0 ref
-func __cls_m_Double_value 2295
+func __cls_m_Double#value()d 2295
 this -20 8 0 ?
 func Float.value 2314
 this -20 8 0 ?
@@ -410,25 +412,25 @@ this -20 8 0 ?
 func Float.__init 2606
 this -24 8 0 ?
 x -16 4 0 float
-func __cls_new_Float 2629
+func __cls_new_Float(f) 2629
 x -16 4 0 float
-func __cls_init_Float 2661
+func __cls_init_Float(f) 2661
 this -24 8 0 ?
 x -16 4 0 float
-func __cls_m_Float_toInteger 2677
+func __cls_m_Float#toInteger()i 2677
 this -20 8 0 ?
-func __cls_m_Float_toDouble 2694
+func __cls_m_Float#toDouble()d 2694
 this -20 8 0 ?
-func __cls_m_Float_toLong 2713
+func __cls_m_Float#toLong()j 2713
 this -20 8 0 ?
-func __cls_m_Float_toFloat 2732
+func __cls_m_Float#toFloat()f 2732
 this -20 8 0 ?
-func __cls_m_Float_toString 2749
+func __cls_m_Float#toString()s 2749
 this -20 8 0 ?
-func __cls_m_Float_compareTo 2768
+func __cls_m_Float#compareTo(LObject;)i 2768
 this -28 8 0 ?
 other -20 8 0 ref
-func __cls_m_Float_value 2788
+func __cls_m_Float#value()f 2788
 this -20 8 0 ?
 func Boolean.value 2805
 this -20 8 0 ?
@@ -451,122 +453,145 @@ this -20 8 0 ?
 func Boolean.__init 3079
 this -24 8 0 ?
 x -16 4 0 boolean
-func __cls_new_Boolean 3102
+func __cls_new_Boolean(z) 3102
 x -16 4 0 boolean
-func __cls_init_Boolean 3134
+func __cls_init_Boolean(z) 3134
 this -24 8 0 ?
 x -16 4 0 boolean
-func __cls_m_Boolean_toInteger 3150
+func __cls_m_Boolean#toInteger()i 3150
 this -20 8 0 ?
-func __cls_m_Boolean_toDouble 3167
+func __cls_m_Boolean#toDouble()d 3167
 this -20 8 0 ?
-func __cls_m_Boolean_toLong 3186
+func __cls_m_Boolean#toLong()j 3186
 this -20 8 0 ?
-func __cls_m_Boolean_toBoolean 3205
+func __cls_m_Boolean#toBoolean()z 3205
 this -20 8 0 ?
-func __cls_m_Boolean_toFloat 3222
+func __cls_m_Boolean#toFloat()f 3222
 this -20 8 0 ?
-func __cls_m_Boolean_toString 3239
+func __cls_m_Boolean#toString()s 3239
 this -20 8 0 ?
-func __cls_m_Boolean_compareTo 3258
+func __cls_m_Boolean#compareTo(LObject;)i 3258
 this -28 8 0 ?
 other -20 8 0 ref
-func __cls_m_Boolean_value 3278
+func __cls_m_Boolean#value()z 3278
 this -20 8 0 ?
 func List.add 3295
 this -28 8 0 ?
 o -20 8 0 ref
-func List.add$i 3378
+func List.add$i 3356
 this -24 8 0 ?
 i -16 4 0 integer
-func List.add$j 3413
+func List.add$j 3391
 this -28 8 0 ?
 l -20 8 0 long
-func List.add$d 3449
+func List.add$d 3427
 this -28 8 0 ?
 d -20 8 0 double
-func List.add$f 3485
+func List.add$f 3463
 this -24 8 0 ?
 f -16 4 0 float
-func List.add$z 3520
+func List.add$z 3498
 this -24 8 0 ?
 b -16 4 0 boolean
-func List.get 3555
+func List.get 3533
 this -24 8 0 ?
 idx -16 4 0 integer
-func List.set 3579
+func List.set 3557
 this -32 8 0 ?
 idx -24 4 0 integer
 o -20 8 0 ref
-func List.getString 3596
+func List.getString 3574
 this -24 8 0 ?
 idx -16 4 0 integer
 o 8 8 0 ?
 e 16 8 0 ?
-func List.getInteger 3667
+func List.getInteger 3645
 this -24 8 0 ?
 idx -16 4 0 integer
 c 4 8 0 ?
-func List.getLong 3703
+func List.getLong 3681
 this -24 8 0 ?
 idx -16 4 0 integer
 c 8 8 0 ?
-func List.getFloat 3741
+func List.getFloat 3719
 this -24 8 0 ?
 idx -16 4 0 integer
 c 4 8 0 ?
-func List.getDouble 3777
+func List.getDouble 3755
 this -24 8 0 ?
 idx -16 4 0 integer
 c 8 8 0 ?
-func List.getBoolean 3815
+func List.getBoolean 3793
 this -24 8 0 ?
 idx -16 4 0 integer
 c 4 8 0 ?
-func List.length 3851
+func List.length 3829
 this -20 8 0 ?
-func List.remove 3870
+func List.remove 3848
 this -24 8 0 ?
 idx -16 4 0 integer
 i 0 4 0 integer
-func List.__init 3946
+func List.grow 3924
 this -20 8 0 ?
-func __cls_init_List 4007
+func List.backing 3960
 this -20 8 0 ?
-func __cls_m_List_add 4021
+func List.__init 3981
+this -20 8 0 ?
+func __cls_init_List() 4042
+this -20 8 0 ?
+func __cls_m_List#add(LObject;)V 4056
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_List_set 4038
+func __cls_m_List#add(i)V 4073
+this -24 8 0 ?
+i -16 4 0 integer
+func __cls_m_List#add(j)V 4089
+this -28 8 0 ?
+l -20 8 0 long
+func __cls_m_List#add(d)V 4106
+this -28 8 0 ?
+d -20 8 0 double
+func __cls_m_List#add(f)V 4123
+this -24 8 0 ?
+f -16 4 0 float
+func __cls_m_List#add(z)V 4139
+this -24 8 0 ?
+b -16 4 0 boolean
+func __cls_m_List#set(iLObject;)V 4155
 this -32 8 0 ?
 idx -24 4 0 integer
 o -20 8 0 ref
-func __cls_m_List_length 4057
+func __cls_m_List#grow()V 4174
 this -20 8 0 ?
-func __cls_m_List_getDouble 4074
+func __cls_m_List#length()i 4188
+this -20 8 0 ?
+func __cls_m_List#getDouble(i)d 4205
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_getInteger 4095
+func __cls_m_List#getInteger(i)i 4226
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_getString 4114
+func __cls_m_List#getString(i)s 4245
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_getFloat 4135
+func __cls_m_List#getFloat(i)f 4266
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_remove 4154
+func __cls_m_List#remove(i)V 4285
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_getLong 4170
+func __cls_m_List#getLong(i)j 4301
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_get 4191
+func __cls_m_List#backing()[LObject; 4322
+this -20 8 0 ?
+func __cls_m_List#get(i)LObject; 4341
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_List_getBoolean 4212
+func __cls_m_List#getBoolean(i)z 4362
 this -24 8 0 ?
 idx -16 4 0 integer
-func formatDouble 4247
+func formatDouble 4397
 x -24 8 0 double
 dec -16 4 0 integer
 neg 8 4 0 boolean
@@ -580,11 +605,11 @@ sb 56 8 0 ?
 fs 80 8 0 string
 pad 88 4 0 integer
 k 92 4 0 integer
-func doubleToString 4560
+func doubleToString 4710
 x -20 8 0 double
 s 8 8 0 string
 stop 16 4 0 integer
-func longToString 4700
+func longToString 4850
 x -20 8 0 long
 neg 8 4 0 boolean
 v 12 8 0 long
@@ -593,7 +618,7 @@ nd 28 4 0 integer
 d 32 4 0 integer
 sb 36 8 0 ?
 i 60 4 0 integer
-func __strconcat 4941
+func __strconcat 5091
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

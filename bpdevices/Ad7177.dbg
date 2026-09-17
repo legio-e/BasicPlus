@@ -253,80 +253,80 @@ this -32 8 0 ?
 bus -24 4 0 integer
 cs -20 4 0 integer
 syncP -16 4 0 integer
-func __cls_new_Adc 1979
+func __cls_new_Adc(iii) 1979
 bus -24 4 0 integer
 cs -20 4 0 integer
 syncP -16 4 0 integer
-func __cls_init_Adc 2015
+func __cls_init_Adc(iii) 2015
 this -32 8 0 ?
 bus -24 4 0 integer
 cs -20 4 0 integer
 syncP -16 4 0 integer
-func __cls_m_Adc_setInterface 2035
+func __cls_m_Adc#setInterface(zzz)V 2035
 this -32 8 0 ?
 altSync -24 4 0 boolean
 ioStrength -20 4 0 boolean
 contRead -16 4 0 boolean
-func __cls_m_Adc_waitReadyMax 2055
+func __cls_m_Adc#waitReadyMax(ii)z 2055
 this -28 8 0 ?
 maxIter -20 4 0 integer
 stepMs -16 4 0 integer
-func __cls_m_Adc_isReady 2076
+func __cls_m_Adc#isReady()z 2076
 this -20 8 0 ?
-func __cls_m_Adc_leerPowerV 2093
+func __cls_m_Adc#leerPowerV()f 2093
 this -20 8 0 ?
-func __cls_m_Adc_wreg 2110
+func __cls_m_Adc#wreg(i[ii)V 2110
 this -36 8 0 ?
 register -28 4 0 integer
 data -24 8 0 ref
 n -16 4 0 integer
-func __cls_m_Adc_setChannel 2131
+func __cls_m_Adc#setChannel(iziii)V 2131
 this -40 8 0 ?
 channel -32 4 0 integer
 enab -28 4 0 boolean
 setupSel -24 4 0 integer
 ainp -20 4 0 integer
 ainn -16 4 0 integer
-func __cls_m_Adc_test0 2155
+func __cls_m_Adc#test0()i 2155
 this -20 8 0 ?
-func __cls_m_Adc_enabled 2172
+func __cls_m_Adc#enabled()V 2172
 this -20 8 0 ?
-func __cls_m_Adc_setChSetup 2186
+func __cls_m_Adc#setChSetup(iii)V 2186
 this -32 8 0 ?
 channel -24 4 0 integer
 bipolar -20 4 0 integer
 ref -16 4 0 integer
-func __cls_m_Adc_rreg 2206
+func __cls_m_Adc#rreg(ii)[i 2206
 this -28 8 0 ?
 register -20 4 0 integer
 n -16 4 0 integer
-func __cls_m_Adc_disabled 2229
+func __cls_m_Adc#disabled()V 2229
 this -20 8 0 ?
-func __cls_m_Adc_waitReady 2243
+func __cls_m_Adc#waitReady()V 2243
 this -20 8 0 ?
-func __cls_m_Adc_readData 2257
+func __cls_m_Adc#readData()i 2257
 this -20 8 0 ?
-func __cls_m_Adc_wreg16 2274
+func __cls_m_Adc#wreg16(ii)V 2274
 this -28 8 0 ?
 register -20 4 0 integer
 value -16 4 0 integer
-func __cls_m_Adc_setMode 2292
+func __cls_m_Adc#setMode(ziii)V 2292
 this -36 8 0 ?
 intRef -28 4 0 boolean
 delay -24 4 0 integer
 mode -20 4 0 integer
 clock -16 4 0 integer
-func __cls_m_Adc_leerId 2314
+func __cls_m_Adc#leerId()i 2314
 this -20 8 0 ?
-func __cls_m_Adc_leerStatus 2331
+func __cls_m_Adc#leerStatus()i 2331
 this -20 8 0 ?
-func __cls_m_Adc_setSPS 2348
+func __cls_m_Adc#setSPS(ii)V 2348
 this -28 8 0 ?
 channel -20 4 0 integer
 sps -16 4 0 integer
-func __cls_m_Adc_reset 2366
+func __cls_m_Adc#reset()V 2366
 this -20 8 0 ?
-func __cls_m_Adc_rreg16 2380
+func __cls_m_Adc#rreg16(i)i 2380
 this -24 8 0 ?
 register -16 4 0 integer
 func __strconcat 2415

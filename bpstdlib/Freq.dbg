@@ -3,28 +3,28 @@ module Freq
 source C:\lenguajes\pm\bpstdlib\Freq.bp
 lines
 443 76
-453 77
-463 78
-470 79
-480 80
-490 81
-515 87
-519 88
-528 89
-536 91
-539 92
-542 93
-552 94
-565 95
-573 97
-592 103
-620 108
-636 67
-646 68
-656 69
-815 46
-830 49
-845 52
+454 77
+465 78
+472 79
+483 80
+494 81
+519 87
+523 88
+532 89
+540 91
+543 92
+546 93
+556 94
+569 95
+577 97
+596 103
+624 108
+641 67
+651 68
+661 69
+820 46
+835 49
+850 52
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -75,42 +75,42 @@ func Meter.measureHz 440
 this -24 8 0 ?
 windowMs -16 4 0 integer
 n 8 4 0 integer
-func Meter.measureHzAvg 512
+func Meter.measureHzAvg 516
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
 s 4 4 0 integer
 sum 8 4 0 integer
 i 12 4 0 integer
-func Meter.maxHz 589
+func Meter.maxHz 593
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func Meter.close 617
+func Meter.close 621
 this -20 8 0 ?
-func Meter.__init 633
+func Meter.__init 638
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_new_Meter 671
+func __cls_new_Meter(ii) 676
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_init_Meter 705
+func __cls_init_Meter(ii) 710
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_m_Meter_measureHz 723
+func __cls_m_Meter#measureHz(i)i 728
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func __cls_m_Meter_measureHzAvg 742
+func __cls_m_Meter#measureHzAvg(ii)i 747
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
-func __cls_m_Meter_maxHz 763
+func __cls_m_Meter#maxHz(i)i 768
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func __cls_m_Meter_close 782
+func __cls_m_Meter#close()V 787
 this -20 8 0 ?
-func __strconcat 857
+func __strconcat 862
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -109,14 +109,14 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Bus 713
+func __cls_new_Bus(iiiiii) 713
 id -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Bus 755
+func __cls_init_Bus(iiiiii) 755
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -124,16 +124,16 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Bus_read 781
+func __cls_m_Bus#read([ii)i 781
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus_transfer 803
+func __cls_m_Bus#transfer([i[ii)i 803
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus_write 828
+func __cls_m_Bus#write([ii)i 828
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer

@@ -89,29 +89,29 @@ func Strip.__init 664
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_new_Strip 710
+func __cls_new_Strip(ii) 710
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_init_Strip 744
+func __cls_init_Strip(ii) 744
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_m_Strip_setPixel 762
+func __cls_m_Strip#setPixel(iiii)V 762
 this -36 8 0 ?
 i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func __cls_m_Strip_setColor 784
+func __cls_m_Strip#setColor(iii)V 784
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func __cls_m_Strip_clear 804
+func __cls_m_Strip#clear()V 804
 this -20 8 0 ?
-func __cls_m_Strip_show 818
+func __cls_m_Strip#show()V 818
 this -20 8 0 ?
-func __cls_m_Strip_count 832
+func __cls_m_Strip#count()i 832
 this -20 8 0 ?
 func __strconcat 865
 a -28 8 0 ?

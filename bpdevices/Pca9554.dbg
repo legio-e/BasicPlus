@@ -87,36 +87,36 @@ func Expander.__init 663
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Expander 683
+func __cls_new_Expander(ii) 683
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Expander 717
+func __cls_init_Expander(ii) 717
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_m_Expander_getInvert 735
+func __cls_m_Expander#getInvert()i 735
 this -20 8 0 ?
-func __cls_m_Expander_setInvert 752
+func __cls_m_Expander#setInvert(i)V 752
 this -24 8 0 ?
 value -16 4 0 integer
-func __cls_m_Expander_setDir 768
+func __cls_m_Expander#setDir(i)V 768
 this -24 8 0 ?
 value -16 4 0 integer
-func __cls_m_Expander_wreg 784
+func __cls_m_Expander#wreg(ii)V 784
 this -28 8 0 ?
 reg -20 4 0 integer
 value -16 4 0 integer
-func __cls_m_Expander_getOut 802
+func __cls_m_Expander#getOut()i 802
 this -20 8 0 ?
-func __cls_m_Expander_rreg 819
+func __cls_m_Expander#rreg(i)i 819
 this -24 8 0 ?
 reg -16 4 0 integer
-func __cls_m_Expander_readIn 838
+func __cls_m_Expander#readIn()i 838
 this -20 8 0 ?
-func __cls_m_Expander_writeOut 855
+func __cls_m_Expander#writeOut(i)V 855
 this -24 8 0 ?
 value -16 4 0 integer
-func __cls_m_Expander_getDir 871
+func __cls_m_Expander#getDir()i 871
 this -20 8 0 ?
 func __strconcat 904
 a -28 8 0 ?

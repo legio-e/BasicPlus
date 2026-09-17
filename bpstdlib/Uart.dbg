@@ -116,7 +116,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_new_Port 746
+func __cls_new_Port(iiiiiii) 746
 id -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -124,7 +124,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_init_Port 790
+func __cls_init_Port(iiiiiii) 790
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -133,14 +133,14 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_m_Port_read 818
+func __cls_m_Port#read([iii)i 818
 this -36 8 0 ?
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Port_available 842
+func __cls_m_Port#available()i 842
 this -20 8 0 ?
-func __cls_m_Port_write 859
+func __cls_m_Port#write([ii)i 859
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer

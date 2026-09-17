@@ -78,20 +78,20 @@ this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Counter 631
+func __cls_new_Counter(ii) 631
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter 665
+func __cls_init_Counter(ii) 665
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_m_Counter_stop 683
+func __cls_m_Counter#stop()V 683
 this -20 8 0 ?
-func __cls_m_Counter_start 697
+func __cls_m_Counter#start()V 697
 this -20 8 0 ?
-func __cls_m_Counter_reset 711
+func __cls_m_Counter#reset()V 711
 this -20 8 0 ?
-func __cls_m_Counter_value 725
+func __cls_m_Counter#value()i 725
 this -20 8 0 ?
 func __strconcat 803
 a -28 8 0 ?

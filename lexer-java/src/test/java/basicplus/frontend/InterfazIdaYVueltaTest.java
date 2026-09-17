@@ -193,7 +193,13 @@ class InterfazIdaYVueltaTest {
         byte[] original = seccionInterface(mod);
         assertTrue(original != null && original.length > 0, mod + ": el .mod lleva sección interface");
         ModuleInterface iface = ModuleInterface.fromBytes(original, mod.toString());
-        byte[] reescrita = iface.toBytes();
+        // V7/H2 (#523, V11) — el escritor emite la version de Main.FORMATO (9 por defecto desde el
+        // 17-sep); la ida y vuelta se hace en la version que el .mod TRAE (bpi 8 en un MOD7/8,
+        // bpi 9 en un MOD9), no en la del compilador de hoy.
+        int formatoAntes = Main.FORMATO;
+        Main.FORMATO = new String(original, 0, Math.min(6, original.length), StandardCharsets.UTF_8).startsWith("bpi 9") ? 9 : 8;
+        byte[] reescrita;
+        try { reescrita = iface.toBytes(); } finally { Main.FORMATO = formatoAntes; }
         // V7/H2 (MOD8) - el escritor emite LF fijo desde el 15-sep; un .mod escrito antes
         // lleva CRLF (Windows). La ida y vuelta se compara sin el separador de linea.
         String a = new String(original, StandardCharsets.UTF_8).replace("\r\n", "\n");

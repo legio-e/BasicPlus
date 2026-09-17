@@ -92,27 +92,27 @@ this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
 msg 0 8 0 string
-func __cls_new_Pin 747
+func __cls_new_Pin(ii) 747
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Pin 781
+func __cls_init_Pin(ii) 781
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Pin_isLow 799
+func __cls_m_Pin#isLow()z 799
 this -20 8 0 ?
-func __cls_m_Pin_setPull 816
+func __cls_m_Pin#setPull(i)V 816
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func __cls_m_Pin_toggle 832
+func __cls_m_Pin#toggle()V 832
 this -20 8 0 ?
-func __cls_m_Pin_value 846
+func __cls_m_Pin#value()i 846
 this -20 8 0 ?
-func __cls_m_Pin_off 863
+func __cls_m_Pin#off()V 863
 this -20 8 0 ?
-func __cls_m_Pin_on 877
+func __cls_m_Pin#on()V 877
 this -20 8 0 ?
-func __cls_m_Pin_isHigh 891
+func __cls_m_Pin#isHigh()z 891
 this -20 8 0 ?
 func __strconcat 1029
 a -28 8 0 ?

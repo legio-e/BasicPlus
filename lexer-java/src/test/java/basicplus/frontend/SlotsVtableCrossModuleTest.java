@@ -41,6 +41,13 @@ import java.util.regex.Pattern;
  * también tiene que dejar de moverse.
  */
 class SlotsVtableCrossModuleTest {
+    // V7/H2 (#523, V11) — este test es del emisor MOD8 (marcadores `Mod.Cls#clave#slot`): desde el
+    // 17-sep el compilador emite MOD9 por defecto y en MOD9 no hay marcadores; se prueba con
+    // --formato=8, que sigue existiendo hasta cerrar V7.
+    private int formatoAntes;
+    @org.junit.jupiter.api.BeforeEach void mod8() { formatoAntes = Main.FORMATO; Main.FORMATO = 8; }
+    @org.junit.jupiter.api.AfterEach  void restaurar() { Main.FORMATO = formatoAntes; }
+
 
     // ── Los tres módulos. La HIJA vive en otro módulo que la BASE a propósito:
     //    es la combinación que fallaba, y es además la real (nuestra base en la

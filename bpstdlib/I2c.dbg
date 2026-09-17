@@ -120,25 +120,25 @@ id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_new_Bus 754
+func __cls_new_Bus(iiii) 754
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_init_Bus 792
+func __cls_init_Bus(iiii) 792
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_m_Bus_read 814
+func __cls_m_Bus#read(i[ii)i 814
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus_scan 838
+func __cls_m_Bus#scan()[i 838
 this -20 8 0 ?
-func __cls_m_Bus_write 857
+func __cls_m_Bus#write(i[ii)i 857
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref

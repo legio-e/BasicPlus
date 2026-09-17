@@ -1,5 +1,0 @@
-{
-  "Counter": { "setPin": 3, "setEdgeKind": 5, "setId": 7, "start": 8, "stop": 9, "value": 10, "reset": 11 },
-  "RuntimeError": {  },
-  "Exception": {  }
-}

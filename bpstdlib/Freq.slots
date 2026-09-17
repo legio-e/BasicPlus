@@ -1,3 +1,0 @@
-{
-  "Meter": { "setPin": 3, "setEdge": 5, "measureHz": 6, "measureHzAvg": 7, "maxHz": 8, "close": 9 }
-}

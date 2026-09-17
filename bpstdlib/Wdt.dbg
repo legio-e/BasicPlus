@@ -4,10 +4,10 @@ source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
 438 77
 449 78
-465 87
-474 88
-485 93
-494 94
+465 105
+474 106
+485 111
+494 112
 511 64
 515 65
 528 66
@@ -70,16 +70,16 @@ func Timer.__init 508
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer 569
+func __cls_new_Timer(i) 569
 timeoutMs -16 4 0 integer
-func __cls_init_Timer 601
+func __cls_init_Timer(i) 601
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __cls_m_Timer_feed 617
+func __cls_m_Timer#feed()V 617
 this -20 8 0 ?
-func __cls_m_Timer_disable 631
+func __cls_m_Timer#disable()V 631
 this -20 8 0 ?
-func __cls_m_Timer_reenable 645
+func __cls_m_Timer#reenable()V 645
 this -20 8 0 ?
 func __strconcat 675
 a -28 8 0 ?

@@ -83,17 +83,17 @@ func Channel.__init 644
 this -24 8 0 ?
 ch -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Channel 722
+func __cls_new_Channel(i) 722
 ch -16 4 0 integer
-func __cls_init_Channel 754
+func __cls_init_Channel(i) 754
 this -24 8 0 ?
 ch -16 4 0 integer
-func __cls_m_Channel_read 770
+func __cls_m_Channel#read()i 770
 this -20 8 0 ?
-func __cls_m_Channel_readAvg 787
+func __cls_m_Channel#readAvg(i)i 787
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Channel_readVolts 806
+func __cls_m_Channel#readVolts()f 806
 this -20 8 0 ?
 func __strconcat 839
 a -28 8 0 ?

@@ -66,14 +66,14 @@ func Sensor.__init 597
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Sensor 617
+func __cls_new_Sensor(ii) 617
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Sensor 651
+func __cls_init_Sensor(ii) 651
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_m_Sensor_readTemp 669
+func __cls_m_Sensor#readTemp()f 669
 this -20 8 0 ?
 func __strconcat 702
 a -28 8 0 ?

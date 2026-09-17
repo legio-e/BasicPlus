@@ -297,22 +297,22 @@ func Accumulator.max 791
 this -20 8 0 ?
 func Accumulator.__init 846
 this -20 8 0 ?
-func __cls_init_Accumulator 944
+func __cls_init_Accumulator() 944
 this -20 8 0 ?
-func __cls_m_Accumulator_add 958
+func __cls_m_Accumulator#add(d)V 958
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_Accumulator_max 975
+func __cls_m_Accumulator#max()d 975
 this -20 8 0 ?
-func __cls_m_Accumulator_count 994
+func __cls_m_Accumulator#count()i 994
 this -20 8 0 ?
-func __cls_m_Accumulator_min 1011
+func __cls_m_Accumulator#min()d 1011
 this -20 8 0 ?
-func __cls_m_Accumulator_variance 1030
+func __cls_m_Accumulator#variance()d 1030
 this -20 8 0 ?
-func __cls_m_Accumulator_mean 1049
+func __cls_m_Accumulator#mean()d 1049
 this -20 8 0 ?
-func __cls_m_Accumulator_stdDev 1068
+func __cls_m_Accumulator#stdDev()d 1068
 this -20 8 0 ?
 func LinReg.clearData 1087
 this -20 8 0 ?
@@ -362,41 +362,41 @@ this -28 8 0 ?
 x -20 8 0 double
 func LinReg.__init 2330
 this -20 8 0 ?
-func __cls_init_LinReg 2442
+func __cls_init_LinReg() 2442
 this -20 8 0 ?
-func __cls_m_LinReg_subPoint 2456
+func __cls_m_LinReg#subPoint(dd)V 2456
 this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
-func __cls_m_LinReg_stdDevX 2476
+func __cls_m_LinReg#stdDevX()d 2476
 this -20 8 0 ?
-func __cls_m_LinReg_stdDevY 2495
+func __cls_m_LinReg#stdDevY()d 2495
 this -20 8 0 ?
-func __cls_m_LinReg_count 2514
+func __cls_m_LinReg#count()i 2514
 this -20 8 0 ?
-func __cls_m_LinReg_addData 2531
+func __cls_m_LinReg#addData([d[di)V 2531
 this -40 8 0 ?
 dataX -32 8 0 ref
 dataY -24 8 0 ref
 n -16 4 0 integer
-func __cls_m_LinReg_slope 2553
+func __cls_m_LinReg#slope()d 2553
 this -20 8 0 ?
-func __cls_m_LinReg_addPoint 2572
+func __cls_m_LinReg#addPoint(dd)V 2572
 this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
-func __cls_m_LinReg_clearData 2592
+func __cls_m_LinReg#clearData()V 2592
 this -20 8 0 ?
-func __cls_m_LinReg_r 2606
+func __cls_m_LinReg#r()d 2606
 this -20 8 0 ?
-func __cls_m_LinReg_intercept 2625
+func __cls_m_LinReg#intercept()d 2625
 this -20 8 0 ?
-func __cls_m_LinReg_predict 2644
+func __cls_m_LinReg#predict(d)d 2644
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_LinReg_meanY 2666
+func __cls_m_LinReg#meanY()d 2666
 this -20 8 0 ?
-func __cls_m_LinReg_meanX 2685
+func __cls_m_LinReg#meanX()d 2685
 this -20 8 0 ?
 func LinFit.slope 2704
 this -20 8 0 ?
@@ -409,19 +409,19 @@ func LinFit.__init 2777
 this -36 8 0 ?
 slope -28 8 0 double
 intercept -20 8 0 double
-func __cls_new_LinFit 2799
+func __cls_new_LinFit(dd) 2799
 slope -28 8 0 double
 intercept -20 8 0 double
-func __cls_init_LinFit 2835
+func __cls_init_LinFit(dd) 2835
 this -36 8 0 ?
 slope -28 8 0 double
 intercept -20 8 0 double
-func __cls_m_LinFit_intercept 2855
+func __cls_m_LinFit#intercept()d 2855
 this -20 8 0 ?
-func __cls_m_LinFit_predict 2874
+func __cls_m_LinFit#predict(d)d 2874
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_LinFit_slope 2896
+func __cls_m_LinFit#slope()d 2896
 this -20 8 0 ?
 func sqrtD 2931
 x -20 8 0 double

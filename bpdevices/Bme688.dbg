@@ -327,88 +327,88 @@ func Sensor.__init 3832
 this -28 8 0 ?
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Sensor 3866
+func __cls_new_Sensor(ii) 3866
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Sensor 3900
+func __cls_init_Sensor(ii) 3900
 this -28 8 0 ?
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_m_Sensor_readCalibration 3918
+func __cls_m_Sensor#readCalibration()V 3918
 this -20 8 0 ?
-func __cls_m_Sensor_humidity 3932
+func __cls_m_Sensor#humidity()d 3932
 this -20 8 0 ?
-func __cls_m_Sensor_computeFromRaw 3951
+func __cls_m_Sensor#computeFromRaw(iiiii)V 3951
 this -40 8 0 ?
 rawT -32 4 0 integer
 rawP -28 4 0 integer
 rawH -24 4 0 integer
 rawGas -20 4 0 integer
 gasRange -16 4 0 integer
-func __cls_m_Sensor_s8 3975
+func __cls_m_Sensor#s8(i)i 3975
 this -24 8 0 ?
 v -16 4 0 integer
-func __cls_m_Sensor_compPress 3994
+func __cls_m_Sensor#compPress(i)d 3994
 this -24 8 0 ?
 adc -16 4 0 integer
-func __cls_m_Sensor_airIndex 4015
+func __cls_m_Sensor#airIndex()i 4015
 this -20 8 0 ?
-func __cls_m_Sensor_pressure 4032
+func __cls_m_Sensor#pressure()d 4032
 this -20 8 0 ?
-func __cls_m_Sensor_measure 4051
+func __cls_m_Sensor#measure()V 4051
 this -20 8 0 ?
-func __cls_m_Sensor_gasIsValid 4065
+func __cls_m_Sensor#gasIsValid()z 4065
 this -20 8 0 ?
-func __cls_m_Sensor_compTemp 4082
+func __cls_m_Sensor#compTemp(i)d 4082
 this -24 8 0 ?
 adc -16 4 0 integer
-func __cls_m_Sensor_begin 4103
+func __cls_m_Sensor#begin()z 4103
 this -20 8 0 ?
-func __cls_m_Sensor_chipID 4120
+func __cls_m_Sensor#chipID()i 4120
 this -20 8 0 ?
-func __cls_m_Sensor_writeReg 4137
+func __cls_m_Sensor#writeReg(ii)V 4137
 this -28 8 0 ?
 reg -20 4 0 integer
 val -16 4 0 integer
-func __cls_m_Sensor_compGasHigh 4155
+func __cls_m_Sensor#compGasHigh(ii)d 4155
 this -28 8 0 ?
 adc -20 4 0 integer
 gasRange -16 4 0 integer
-func __cls_m_Sensor_compHum 4178
+func __cls_m_Sensor#compHum(i)d 4178
 this -24 8 0 ?
 adc -16 4 0 integer
-func __cls_m_Sensor_temperature 4199
+func __cls_m_Sensor#temperature()d 4199
 this -20 8 0 ?
-func __cls_m_Sensor_gas 4218
+func __cls_m_Sensor#gas()d 4218
 this -20 8 0 ?
-func __cls_m_Sensor_s16 4237
+func __cls_m_Sensor#s16(i)i 4237
 this -24 8 0 ?
 v -16 4 0 integer
-func __cls_m_Sensor_readRegs 4256
+func __cls_m_Sensor#readRegs(i[ii)V 4256
 this -36 8 0 ?
 reg -28 4 0 integer
 buf -24 8 0 ref
 n -16 4 0 integer
-func __cls_m_Sensor_calcResHeat 4277
+func __cls_m_Sensor#calcResHeat(ii)i 4277
 this -28 8 0 ?
 target -20 4 0 integer
 amb -16 4 0 integer
-func __cls_m_Sensor_injectCalibration 4298
+func __cls_m_Sensor#injectCalibration([i)V 4298
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Sensor_setGasBaseline 4315
+func __cls_m_Sensor#setGasBaseline(d)V 4315
 this -28 8 0 ?
 b -20 8 0 double
-func __cls_m_Sensor_configure 4332
+func __cls_m_Sensor#configure()V 4332
 this -20 8 0 ?
-func __cls_m_Sensor_calcIaq 4346
+func __cls_m_Sensor#calcIaq()i 4346
 this -20 8 0 ?
-func __cls_m_Sensor_heaterStable 4363
+func __cls_m_Sensor#heaterStable()z 4363
 this -20 8 0 ?
-func __cls_m_Sensor_readReg 4380
+func __cls_m_Sensor#readReg(i)i 4380
 this -24 8 0 ?
 reg -16 4 0 integer
-func __cls_m_Sensor_variantID 4399
+func __cls_m_Sensor#variantID()i 4399
 this -20 8 0 ?
 func __strconcat 4432
 a -28 8 0 ?

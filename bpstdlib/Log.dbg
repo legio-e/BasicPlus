@@ -26,14 +26,14 @@ lines
 716 129
 726 131
 733 132
-742 133
-757 134
-785 138
-788 139
-838 142
-852 149
-863 150
-880 151
+740 133
+755 134
+783 138
+786 139
+837 142
+851 149
+862 150
+879 151
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -98,9 +98,9 @@ etiqueta -28 8 0 string
 msg -20 8 0 string
 linea 0 8 0 string
 e 12 8 0 ?
-func rotaSiHaceFalta 849
+func rotaSiHaceFalta 848
 entrante -16 4 0 integer
-func __strconcat 912
+func __strconcat 911
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

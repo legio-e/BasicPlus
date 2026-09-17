@@ -84,22 +84,22 @@ this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Slice 691
+func __cls_new_Slice(ii) 691
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice 725
+func __cls_init_Slice(ii) 725
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_m_Slice_setFreq 743
+func __cls_m_Slice#setFreq(i)V 743
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func __cls_m_Slice_setDuty 759
+func __cls_m_Slice#setDuty(i)V 759
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func __cls_m_Slice_stop 775
+func __cls_m_Slice#stop()V 775
 this -20 8 0 ?
-func __cls_m_Slice_start 789
+func __cls_m_Slice#start()V 789
 this -20 8 0 ?
 func __strconcat 819
 a -28 8 0 ?

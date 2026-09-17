@@ -157,45 +157,45 @@ func Sensor.__init 1912
 this -28 8 0 ?
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Sensor 1932
+func __cls_new_Sensor(ii) 1932
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Sensor 1966
+func __cls_init_Sensor(ii) 1966
 this -28 8 0 ?
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_m_Sensor_writeReg 1984
+func __cls_m_Sensor#writeReg(ii)V 1984
 this -28 8 0 ?
 reg -20 4 0 integer
 val -16 4 0 integer
-func __cls_m_Sensor_readCalibration 2002
+func __cls_m_Sensor#readCalibration()V 2002
 this -20 8 0 ?
-func __cls_m_Sensor_temperature 2016
+func __cls_m_Sensor#temperature()d 2016
 this -20 8 0 ?
-func __cls_m_Sensor_s16 2035
+func __cls_m_Sensor#s16(i)i 2035
 this -24 8 0 ?
 v -16 4 0 integer
-func __cls_m_Sensor_readRegs 2054
+func __cls_m_Sensor#readRegs(i[ii)V 2054
 this -36 8 0 ?
 reg -28 4 0 integer
 buf -24 8 0 ref
 n -16 4 0 integer
-func __cls_m_Sensor_compPress 2075
+func __cls_m_Sensor#compPress(i)d 2075
 this -24 8 0 ?
 adc -16 4 0 integer
-func __cls_m_Sensor_pressure 2096
+func __cls_m_Sensor#pressure()d 2096
 this -20 8 0 ?
-func __cls_m_Sensor_measure 2115
+func __cls_m_Sensor#measure()V 2115
 this -20 8 0 ?
-func __cls_m_Sensor_compTemp 2129
+func __cls_m_Sensor#compTemp(i)d 2129
 this -24 8 0 ?
 adc -16 4 0 integer
-func __cls_m_Sensor_readReg 2150
+func __cls_m_Sensor#readReg(i)i 2150
 this -24 8 0 ?
 reg -16 4 0 integer
-func __cls_m_Sensor_begin 2169
+func __cls_m_Sensor#begin()z 2169
 this -20 8 0 ?
-func __cls_m_Sensor_chipID 2186
+func __cls_m_Sensor#chipID()i 2186
 this -20 8 0 ?
 func __strconcat 2219
 a -28 8 0 ?

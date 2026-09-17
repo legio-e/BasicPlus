@@ -31,7 +31,7 @@ public final class AotMain {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn] [--formato=8|9]");
+            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn] [--formato=9|8]  (9 por defecto)");
             System.exit(2);
         }
         // Separar flags y posicionales.

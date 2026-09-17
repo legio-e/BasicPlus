@@ -76,18 +76,18 @@ this -20 8 0 ?
 func Alarm.__init 649
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_new_Alarm 679
+func __cls_new_Alarm(i) 679
 periodMs -16 4 0 integer
-func __cls_init_Alarm 711
+func __cls_init_Alarm(i) 711
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_m_Alarm_wait 727
+func __cls_m_Alarm#wait()V 727
 this -20 8 0 ?
-func __cls_m_Alarm_reset 741
+func __cls_m_Alarm#reset()V 741
 this -20 8 0 ?
-func __cls_m_Alarm_check 755
+func __cls_m_Alarm#check()z 755
 this -20 8 0 ?
-func __cls_m_Alarm_since 772
+func __cls_m_Alarm#since()i 772
 this -20 8 0 ?
 func __strconcat 805
 a -28 8 0 ?

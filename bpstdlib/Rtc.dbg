@@ -49,11 +49,11 @@ this -24 8 0 ?
 sec -16 4 0 integer
 func Clock.__init 411
 this -20 8 0 ?
-func __cls_init_Clock 447
+func __cls_init_Clock() 447
 this -20 8 0 ?
-func __cls_m_Clock_epochSec 461
+func __cls_m_Clock#epochSec()i 461
 this -20 8 0 ?
-func __cls_m_Clock_setEpochSec 478
+func __cls_m_Clock#setEpochSec(i)V 478
 this -24 8 0 ?
 sec -16 4 0 integer
 func __strconcat 510

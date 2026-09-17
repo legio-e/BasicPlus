@@ -47,8 +47,10 @@ public final class Main {
     enum Mode { FULL, INTERFACE_ONLY }
 
     /** Contexto de compilación que viaja por la recursión. */
-    /** V7/H2 (#523) — ver Ctx.formato. */
-    public static int FORMATO = 8;
+    /** V7/H2 (#523) — ver Ctx.formato. MOD9 por defecto desde el 17-sep (V11, decisión de
+     *  Eduardo: «no se puede mantener la mezcla de versiones»); `--formato=8` sigue existiendo
+     *  como salida de emergencia hasta cerrar V7 (la foto «antes» de compat/mezcla.py). */
+    public static int FORMATO = 9;
     /** V7/H2 (#523, V1) — el guardián del compilador: permutar las ranuras propias de cada clase
      *  (semilla; 0 = identidad) y meter n miembros privados de relleno. Ver {@link Barajar}. */
     public static int BARAJAR = 0, RELLENO = 0;
@@ -77,9 +79,9 @@ public final class Main {
          *  es lo que cada importador sella en su subtabla `deps`. */
         int gen = 0;
         final Map<String, int[]> versionesDeps = new java.util.LinkedHashMap<>();
-        /** V7/H2 (#523) — el FORMATO del .mod que se emite: 8 (el de hoy) o 9 (enlace
-         *  tardío). Lo fija `--formato=9` mientras las VMs aprenden a cargar MOD9; después
-         *  9 será el único. Estático a propósito: vale para los tres caminos de compilación. */
+        /** V7/H2 (#523) — el FORMATO del .mod que se emite: 9 (enlace tardío, el de hoy) u 8
+         *  (el anterior, sólo con `--formato=8`). Estático a propósito: vale para los tres
+         *  caminos de compilación. */
         int formato = FORMATO;
 
         /** Mapa de "<library>.<Module>" → ruta del .bp. Construido lazy. */
@@ -755,7 +757,10 @@ public final class Main {
             // H13.1 (4.0) — sidecar <Módulo>.slots (JSON método→slot de cada clase
             // pública) para que el IDE HORNEE el slot del handler en el .win (Forms
             // Camino A). Sólo el módulo raíz: es el que compila el IDE.
-            if (depth == 0) writeSlotsFile(module, info, ctx, depth);
+            // V7/H2 (#523, V11) — en MOD9 no hay ranuras que hornear (Gui resuelve el
+            // handler por nombre al cargar con __guiSlotOf, y el IDE sólo abría el
+            // fichero como JSON): sólo se escribe con --formato=8.
+            if (depth == 0 && FORMATO != 9) writeSlotsFile(module, info, ctx, depth);
 
             // 5) Pasada recursiva FULL para deps con .bpi pero sin .mod.
             //    Para imports bindeados, queremos el .mod del IMPL, no de la
