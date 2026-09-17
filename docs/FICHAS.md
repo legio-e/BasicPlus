@@ -891,8 +891,9 @@ que devuelve el árbol entero, también `/lib`: la imagen lo repuso al reiniciar
 5.087 sitios; `bd: bloque 4096 KB @0x48001000 (SQLite=4 MB)`), y **`SqlDemo` MOD9 byte-idéntico al host** (21 líneas,
 `EXITED OK` 5,3 s). Los dos `.mdn` del pack, verificados en silicio. **Cinco placas hoy**: Pico, DK2, Metro, Nucleo, P4.
 
-⏭️ **Queda**: grabar la **S3/C6/C3** cuando estén conectadas (las imágenes ya están); `montar-zip.sh` al publicar; `#533`
-(AOT fase 2). Del plan de `#523`: V9 (medidas
+Decisión de Eduardo: la S3/C6/C3 **no se graban a propósito** («ya está bastante probado todo»: el cargador es común y
+está en cinco placas de las tres familias); sus imágenes están construidas y se graban cuando toquen (la tanda del cierre,
+o el día que se usen). ⏭️ **Queda**: `montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.

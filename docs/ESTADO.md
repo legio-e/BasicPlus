@@ -44,8 +44,11 @@ byte-idéntico al host**. Metro y Nucleo grabadas con la imagen de hoy y verific
 repuesto por la imagen y `Gui`/`Json`/`Collections`/`Str` MOD9 repuestos a mano en `/lib`); `CoreRefs` MOD9 OK; el pack de
 SQLite RISC-V grabado y sellado, **`SqlDemo` MOD9 byte-idéntico al host**. Cinco placas con la imagen de hoy.
 
-**Orden para retomar**: (1) grabar S3/C6/C3 (imágenes construidas) con `placas_v9.py --embebida` cuando estén
-conectadas; (2) `#533` (AOT fase 2); (3) `#525`/`#526` (graves, preexistentes); y de H2 quedan
+S3/C6/C3 no se graban a propósito (Eduardo: «ya está bastante probado»; las imágenes están construidas — ojo al usarlas:
+un `/app` con `.mod` MOD7/8 deja de enlazar, se recompila desde el IDE).
+
+**Orden para retomar**: (1) `#533` (AOT fase 2: el `.mdn` pide la ranura por nombre); (2) `#525`/`#526` (graves,
+preexistentes); y de H2 quedan
 `#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 
