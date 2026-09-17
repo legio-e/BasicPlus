@@ -51,6 +51,13 @@ public final class Main {
      *  Eduardo: «no se puede mantener la mezcla de versiones»); `--formato=8` sigue existiendo
      *  como salida de emergencia hasta cerrar V7 (la foto «antes» de compat/mezcla.py). */
     public static int FORMATO = 9;
+    /** V7/H2 (#523, V11, 17-sep) — `--stdlibDir=DIR`: la stdlib contra la que se compila, dicha
+     *  desde la línea de órdenes (como el `--stdlibDir` de la miVM). Manda sobre el `stdlibDir`
+     *  del BpVM.cfg autodescubierto (#467: la stdlib PRIMERO, y ésta es «la más específica»).
+     *  Lo necesita cualquier arnés que compile un .bp del repo contra una stdlib que no es la
+     *  de bpstdlib/ (la MOD8 del temporal, la que se sube a una placa): sin esto el sello
+     *  `ifaceCrc` del consumidor era el de OTRA interfaz y la norma #500 rechazaba con razón. */
+    public static String STDLIB_DIR = null;
     /** V7/H2 (#523, V1) — el guardián del compilador: permutar las ranuras propias de cada clase
      *  (semilla; 0 = identidad) y meter n miembros privados de relleno. Ver {@link Barajar}. */
     public static int BARAJAR = 0, RELLENO = 0;
@@ -184,6 +191,12 @@ public final class Main {
                 }
             } catch (Throwable ignored) {
                 // Sin config; sigue funcionando para módulos que no importan stdlib.
+            }
+            // V11 — la de la línea de órdenes gana siempre (se aplica en cada llamada, que es
+            // justo lo que hace «más específico» al último en llamar).
+            if (STDLIB_DIR != null) {
+                addDepDirIfPresent(STDLIB_DIR);
+                if (Files.isDirectory(Paths.get(STDLIB_DIR))) stdlibDir = Paths.get(STDLIB_DIR);
             }
         }
 
@@ -428,6 +441,10 @@ public final class Main {
                 // del DAO generado, y regenerarlo dentro del build le
                 // reescribiría por debajo la clase de la que cuelga su código.
                 showAst = false; showTokens = false; daoBuild = true;
+            }
+            else if (a.startsWith("--stdlibDir=")) {   // V7/H2 (#523, V11): la stdlib dicha a mano
+                STDLIB_DIR = a.substring("--stdlibDir=".length());
+                if (!Files.isDirectory(Paths.get(STDLIB_DIR))) { System.err.println("--stdlibDir: no es un directorio: " + STDLIB_DIR); System.exit(1); return; }
             }
             else if (a.startsWith("--formato=")) {   // V7/H2 (#523): 8 | 9
                 String f = a.substring("--formato=".length());

@@ -21,8 +21,8 @@
 > bash compat/compat.sh check-mod7   # HACIA ATRÁS: las VMs de hoy ejecutan los MOD7 congelados byte a byte
 > bash compat/compat.sh check-fwd    # HACIA DELANTE: un .mod de hoy en la miVM publicada de V6 corre o
 >                                    #   se rechaza con mensaje — nunca peta (con MOD8 se exige el rechazo)
-> bash compat/compat.sh check-mod9   # V7/H2 #523 V5: la stdlib y el corpus en MOD9 — paridad y el stdout de MOD8
-> bash compat/compat.sh check        # paridad dual-VM + las tres de arriba + norma + sombra: el gate
+> bash compat/compat.sh check-mod8   # V7/H2 #523 V11: la foto «antes» — la stdlib y el corpus con --formato=8, paridad y el stdout de MOD9
+> bash compat/compat.sh check        # paridad dual-VM (MOD9) + las tres de arriba + norma (MOD8) + sombra: el gate
 > ```
 >
 > Hasta que el compilador emita `MOD8`, `check-mod7` y la paridad ejecutan el mismo formato y

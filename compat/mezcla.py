@@ -444,7 +444,7 @@ def run_vm(vm, d, mod):
     except subprocess.TimeoutExpired: return -99, '<timeout>'
     return rc, filt(out)
 
-FORMATO = 8
+FORMATO = 9   # V11 (17-sep): MOD9 es el formato del compilador; --formato=8 da la foto «antes» (norma #500)
 VMS = 'ambas'
 
 def lib(work, variante, gen, extra=(), etiqueta=''):

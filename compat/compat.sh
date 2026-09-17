@@ -51,14 +51,14 @@ ROOT="$(cd "$HERE/.." && pwd)"
 SAMPLES="$ROOT/bpgenvm-c/samples"
 STDLIB="$ROOT/bpstdlib"
 GOLD="$HERE/v2/golden"
-# V7/H2 (#523 V5, 17-sep) — el MISMO corpus en MOD9. check-mod9 construye la
-# stdlib como MOD9, compila cada sample con --formato=9 contra ella y exige (a)
-# paridad Java == C y (b) el stdout IGUAL al del mismo sample en MOD8 (la
-# referencia se guarda en la pasada MOD8 del mismo run). Las tres las fija
-# check_mod9; check_parity las respeta y con ellas vacias hace lo de siempre.
-PAR_FORMATO=""   # "9" -> --formato=9 en las dos compilaciones del corpus
+# V7/H2 (#523 V5/V11, 17-sep) — la paridad principal es MOD9 (lo que emite el
+# compilador sin flag, contra la stdlib MOD9 de bpstdlib/) y exige el magic MOD9 en
+# cada .mod raiz. check-mod8 es la foto «antes»: la stdlib construida como MOD8 en
+# el temporal y el corpus con --formato=8, con paridad Java == C y el stdout IGUAL
+# al de la pasada MOD9 (que check guarda). Vive mientras exista --formato=8.
+PAR_FORMATO=""   # vacio = el del compilador (9); "8" -> --formato=8 en las dos compilaciones
 PAR_SAVE=""      # dir donde guardar <s>.out (la salida de la VM-Java) como referencia
-PAR_REF=""       # dir con <s>.out de referencia: un stdout distinto es FAIL (MOD9 != MOD8)
+PAR_REF=""       # dir con <s>.out de referencia: un stdout distinto es FAIL (MOD8 != MOD9)
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -284,7 +284,13 @@ check_parity() {
     # exporta #7) con un diagnostico equivocado de "stdlib rancia". La stdlib
     # estaba bien; el arnes mezclaba las dos.
     cp "$STDLIB"/*.mod "$WORK/" 2>/dev/null
-    if ! java -jar "$V3_FE" "$bp" --compile "$WORK" --backend=mivm $fmt >/dev/null 2>&1; then
+    # V11 (17-sep) — `--stdlibDir=$WORK`: la stdlib es la copiada a $WORK, dicha a mano.
+    # Sin esto el frontend autodescubre BpVM.cfg subiendo desde el FUENTE y toma la de
+    # bpstdlib/ (#467: la stdlib PRIMERO): en la pasada MOD8 sellaba la interfaz MOD9
+    # de bpstdlib/ y la norma rechazaba con razon («no es la interfaz con la que se
+    # compilo»). (Compilar una COPIA del .bp en $WORK no vale: siete samples importan
+    # a sus hermanos del directorio del fuente.)
+    if ! java -jar "$V3_FE" "$bp" --compile "$WORK" --backend=mivm --stdlibDir="$WORK" $fmt >/dev/null 2>&1; then
       # 2o intento POR PROYECTO. Un sample que importa stdlib (Math, IO, ...) no
       # compila con --compile a secas: el frontend no sabe donde buscar, y eso
       # hoy solo se le dice con un .bpbuild. Antes esos samples caian a SKIP, o
@@ -300,7 +306,7 @@ check_parity() {
       mkdir -p "$WORK/src"; cp "$bp" "$WORK/src/"
       printf '{ "sourceDir": "src", "outDir": ".", "main": "%s", "dependencies": ["%s"] }\n' \
              "$mname" "$STDLIB" > "$WORK/p.bpbuild"
-      if ! ( cd "$WORK" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm $fmt ) >/dev/null 2>&1; then
+      if ! ( cd "$WORK" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm --stdlibDir="$WORK" $fmt ) >/dev/null 2>&1; then
         echo "  SKIP $s (no compila con el frontend actual, ni suelto ni por proyecto)"
         skip=$((skip+1)); continue
       fi
@@ -325,11 +331,12 @@ check_parity() {
       echo "  SKIP $s (no se encontro $rootname.mod tras compilar)"; skip=$((skip+1)); continue
     fi
     [ -f "$WORK/Core.mod" ] || cp "$STDLIB/Core.mod" "$WORK/" 2>/dev/null
-    # V7/H2 (#523 V5) — el ARTEFACTO, no el log: si se pidio un formato, el .mod
-    # raiz tiene que llevar ese magic. Un $fmt ignorado por el frontend daria
-    # una pasada «MOD9» que en realidad repite la de MOD8, en verde.
-    if [ -n "$PAR_FORMATO" ] && [ "$(head -c 4 "$mod")" != "MOD$PAR_FORMATO" ]; then
-      echo "  FAIL $s — el .mod es $(head -c 4 "$mod") y no MOD$PAR_FORMATO: el arnes no compilo lo que dice"
+    # V7/H2 (#523 V5) — el ARTEFACTO, no el log: el .mod raiz tiene que llevar el
+    # magic del formato de la pasada (el del compilador, 9, o el pedido con $fmt).
+    # Un $fmt ignorado por el frontend daria una pasada «MOD8» que en realidad
+    # repite la de MOD9, en verde.
+    if [ "$(head -c 4 "$mod")" != "MOD${PAR_FORMATO:-9}" ]; then
+      echo "  FAIL $s — el .mod es $(head -c 4 "$mod") y no MOD${PAR_FORMATO:-9}: el arnes no compilo lo que dice"
       fail=$((fail+1)); continue
     fi
     oj="$(run_vm "$V3_JAVA" "$mod")"; oc="$(run_vm "$V3_C" "$mod")"
@@ -349,7 +356,7 @@ check_parity() {
       # semantica sin que nadie lo oiga.
       local outname="${s//\//_}.out"
       if [ -n "$PAR_REF" ] && [ -f "$PAR_REF/$outname" ] && [ "$oj" != "$(cat "$PAR_REF/$outname")" ]; then
-        echo "  FAIL $s — paridad OK pero el stdout NO es el de la referencia (MOD8)"; fail=$((fail+1))
+        echo "  FAIL $s — paridad OK pero el stdout NO es el de la referencia (la pasada MOD9)"; fail=$((fail+1))
         diff "$PAR_REF/$outname" <(printf '%s\n' "$oj") 2>/dev/null | head -6 | sed 's/^/       /'
         continue
       fi
@@ -371,38 +378,39 @@ check_parity() {
   [ "$fail" -eq 0 ]
 }
 
-# ------------------------------------------------------------- MOD9 (V7/H2 #523 V5)
-# Todo el corpus en MOD9 contra la stdlib MOD9: primero la pasada MOD8 de siempre
-# guardando su stdout; luego la stdlib ENTERA compilada como MOD9 (en $WORK; la
-# de bpstdlib/ no se toca) y el corpus con --formato=9, exigiendo paridad Java ==
-# C y el mismo stdout que en MOD8, sample a sample. Es la V5 del plan de #523:
-# «lo que corre en MOD8 corre igual en MOD9», con la stdlib incluida.
-build_stdlib9() {
-  local d="$WORK/std9"; rm -rf "$d"; mkdir -p "$d/src"
+# ------------------------------------------------------------- MOD8 (V7/H2 #523 V5/V11)
+# La foto «antes». Desde el 17-sep (V11) el compilador emite MOD9 y la paridad
+# principal ya es MOD9 contra la stdlib MOD9 de bpstdlib/; este frente construye
+# la stdlib ENTERA como MOD8 en $WORK y compila el corpus con --formato=8,
+# exigiendo paridad Java == C y el mismo stdout que la pasada MOD9, sample a
+# sample: «lo que corre en MOD9 corre igual en MOD8» — el emisor MOD8 sigue vivo
+# mientras exista --formato=8 (salida de emergencia hasta cerrar V7).
+build_stdlib_fmt() {   # $1 = formato
+  local d="$WORK/std$1"; rm -rf "$d"; mkdir -p "$d/src"
   cp "$STDLIB"/*.bp "$d/src/"
   printf '{ "sourceDir": "src", "outDir": ".", "main": "Stdlib", "dependencies": [] }\n' > "$d/p.bpbuild"
-  if ! ( cd "$d" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm --formato=9 ) > "$d/build.log" 2>&1; then
-    echo "  la stdlib NO compila como MOD9:"; tail -5 "$d/build.log" | sed 's/^/       /'; return 1
+  if ! ( cd "$d" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm --formato=$1 ) > "$d/build.log" 2>&1; then
+    echo "  la stdlib NO compila como MOD$1:"; tail -5 "$d/build.log" | sed 's/^/       /'; return 1
   fi
-  echo "  stdlib MOD9: $(ls "$d"/*.mod | wc -l) modulos (magic $(head -c 4 "$d/Core.mod"))"
+  echo "  stdlib MOD$1: $(ls "$d"/*.mod | wc -l) modulos (magic $(head -c 4 "$d/Core.mod"))"
 }
-REF8="$WORK/ref8"   # el stdout MOD8 de cada sample del corpus (lo guarda check_parity con PAR_SAVE)
-check_mod9() {   # $1 = "sin-referencia" cuando check ya hizo la pasada MOD8 guardando en $REF8
-  echo "-- el corpus en MOD9 (stdlib MOD9 + --formato=9: paridad Java == C y el stdout de MOD8) --"
-  local ref="$REF8" rc std_old; mkdir -p "$ref"
+REF_PAR="$WORK/ref_par"   # el stdout de cada sample en la pasada principal (MOD9); lo guarda check_parity con PAR_SAVE
+check_mod8() {   # $1 = "sin-referencia" cuando check ya hizo la pasada MOD9 guardando en $REF_PAR
+  echo "-- el corpus en MOD8 (stdlib MOD8 + --formato=8: paridad Java == C y el stdout de la pasada MOD9) --"
+  local ref="$REF_PAR" rc std_old; mkdir -p "$ref"
   if [ "${1:-}" != "sin-referencia" ]; then
-    echo "  [MOD8: la referencia]"
+    echo "  [MOD9: la referencia]"
     PAR_SAVE="$ref"; check_parity; rc=$?; PAR_SAVE=""
     [ "$rc" -eq 0 ] || return 1
   elif [ -z "$(ls "$ref"/*.out 2>/dev/null)" ]; then
-    echo "  no hay referencia MOD8 en $ref: la pasada MOD8 no guardo nada"; return 1
+    echo "  no hay referencia en $ref: la pasada MOD9 no guardo nada"; return 1
   fi
-  build_stdlib9 || return 1
-  echo "  [MOD9]"
-  std_old="$STDLIB"; STDLIB="$WORK/std9"; PAR_FORMATO=9; PAR_REF="$ref"
+  build_stdlib_fmt 8 || return 1
+  echo "  [MOD8]"
+  std_old="$STDLIB"; STDLIB="$WORK/std8"; PAR_FORMATO=8; PAR_REF="$ref"
   check_parity; rc=$?
   STDLIB="$std_old"; PAR_FORMATO=""; PAR_REF=""
-  echo "  mod9: $([ "$rc" -eq 0 ] && echo 'el corpus corre en MOD9 como en MOD8' || echo 'MOD9 en ROJO')"
+  echo "  mod8: $([ "$rc" -eq 0 ] && echo 'el corpus corre en MOD8 como en MOD9' || echo 'MOD8 en ROJO')"
   return "$rc"
 }
 
@@ -554,7 +562,7 @@ norma_stdlib() {  # $1=dir destino  $2=version  [$3=sed sobre Core.bp]
   cp "$STDLIB"/*.bp "$d/src/"
   [ -n "${3:-}" ] && sed -i "$3" "$d/src/Core.bp"
   printf '{ "sourceDir": "src", "outDir": ".", "main": "Stdlib", "version": %s, "dependencies": [] }\n' "$2" > "$d/p.bpbuild"
-  ( cd "$d" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm ) >"$d/build.log" 2>&1 || { echo "  ✗ la stdlib de prueba (version $2) no compila: $d/build.log"; return 1; }
+  ( cd "$d" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm --formato=8 ) >"$d/build.log" 2>&1 || { echo "  ✗ la stdlib de prueba (version $2) no compila: $d/build.log"; return 1; }
 }
 norma_caso() {  # $1=etiqueta $2=dir con app+stdlib $3=modulo $4=texto esperado en stdout (regex) | "" = debe correr
   local et="$1" dir="$2" mod="$3" esperado="$4" oj oc
@@ -677,7 +685,10 @@ EOF
   cp "$STDLIB/Core.bp" "$S/lib8/src/Core.bp"
   sed -i 's/^  end List$/    public function normaNuevo(): integer\n      return 1\n    end normaNuevo\n  end List/' "$S/lib8/src/Core.bp"
   cp "$S/lib"/*.mod "$S/lib8/"
-  ( cd "$ROOT" && java -jar "$V3_FE" "$S/var2/Str.bp" --compile "$S/var2" --backend=mivm && java -jar "$V3_FE" "$S/lib8/src/Core.bp" --compile "$S/lib8" --backend=mivm ) >"$S/cadena.log" 2>&1 \
+  # V11 (17-sep): los dos duenos de la cadena se compilan como MOD8 a proposito — el caso es
+  # de la regla 2 de la norma #500 (misma gen, otra interfaz), que solo rige para duenos MOD7/8;
+  # con duenos MOD9 no hay incumplimiento que nombrar: decide el enlace tardio.
+  ( cd "$ROOT" && java -jar "$V3_FE" "$S/var2/Str.bp" --compile "$S/var2" --backend=mivm --formato=8 && java -jar "$V3_FE" "$S/lib8/src/Core.bp" --compile "$S/lib8" --backend=mivm --formato=8 ) >"$S/cadena.log" 2>&1 \
     || { echo "  ✗ la cadena no compila: $S/cadena.log"; return 1; }
   cp "$S/var2/Str.mod" "$S/app/Str.mod"
   sombra_caso "dos incumplimientos en cadena: el primero" "$S" lib8 app/Sombra.mod "'Str' \(gen 0, interfaz [0-9a-f]+\) no es la interfaz con la que se compilo 'Sombra'" "compilo 'Str'" || fails=$((fails+1))
@@ -729,6 +740,10 @@ EOF
   [ "$fails" -eq 0 ]
 }
 
+# V7/H2 (#523 V11, 17-sep) — la norma de las TRES reglas es la de los duenos
+# MOD7/MOD8 (con un dueno MOD9 solo queda la regla 1, E0, y decide el enlace
+# tardio: eso lo mide compat/mezcla.py). Por eso este frente compila todo con
+# --formato=8 mientras el emisor MOD8 exista; el dia que se quite, se va con el.
 check_norma() {
   echo "-- la norma de versiones (#500): Core de verdad, dos VMs, mismo texto --"
   local N="$WORK/norma" fails=0
@@ -776,7 +791,7 @@ EOF
   grep -q "normaPrimero" "$N/s8m/src/Core.bp" || { echo "  ✗ el sed de INS_MEDIO no ha entrado"; return 1; }
   # Compilar las dos apps contra la 7 (desde $N: sin BpVM.cfg a la vista, resuelve por outDir).
   local A="$N/app"; rm -rf "$A"; mkdir -p "$A"; cp "$N/s7"/*.mod "$A/"
-  ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app --backend=mivm && java -jar "$V3_FE" NormaExt.bp --compile app --backend=mivm ) >"$N/app.log" 2>&1 || { echo "  ✗ las apps no compilan contra la stdlib 7: $N/app.log"; return 1; }
+  ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app --backend=mivm --formato=8 && java -jar "$V3_FE" NormaExt.bp --compile app --backend=mivm --formato=8 ) >"$N/app.log" 2>&1 || { echo "  ✗ las apps no compilan contra la stdlib 7: $N/app.log"; return 1; }
   # Un directorio por caso: la app + la stdlib de ese caso.
   caso_dir() { local d="$N/c_$1"; rm -rf "$d"; mkdir -p "$d"; cp "$N/$2"/*.mod "$d/"; cp "$A/NormaUsa.mod" "$A/NormaExt.mod" "$d/"; echo "$d"; }
   local d
@@ -801,7 +816,7 @@ EOF
     # Y una app compilada SIN exigir gen (proyecto sin version): con Core MOD7 corre.
     norma_stdlib "$N/s0" 0 || return 1
     local A0="$N/app0"; rm -rf "$A0"; mkdir -p "$A0"; cp "$N/s0"/*.mod "$A0/"
-    ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app0 --backend=mivm ) >"$N/app0.log" 2>&1 || { echo "  ✗ NormaUsa no compila contra la stdlib 0"; return 1; }
+    ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app0 --backend=mivm --formato=8 ) >"$N/app0.log" 2>&1 || { echo "  ✗ NormaUsa no compila contra la stdlib 0"; return 1; }
     d="$N/c_mod7b"; rm -rf "$d"; mkdir -p "$d"; cp "$V6C"/*.mod "$d/"; cp "$A0/NormaUsa.mod" "$d/"
     norma_caso "dep MOD7 con app sin gen: corre (sin datos, al log)" "$d" NormaUsa "" || fails=$((fails+1))
     echo "  norma: $((9-fails))/9 casos"
@@ -842,10 +857,10 @@ Lo que SI seguimos garantizando, y es lo que verifica este check:
 
 EOF
   local fails=0
-  # V7/H2 (#523 V5) — la pasada MOD8 guarda su stdout: es la referencia del
-  # frente MOD9 de abajo (el mismo corpus, compilado como MOD9, tiene que decir
-  # lo mismo).
-  mkdir -p "$REF8"; PAR_SAVE="$REF8"
+  # V7/H2 (#523 V5/V11) — la pasada principal (MOD9) guarda su stdout: es la
+  # referencia del frente MOD8 de abajo (el mismo corpus, compilado como MOD8,
+  # tiene que decir lo mismo).
+  mkdir -p "$REF_PAR"; PAR_SAVE="$REF_PAR"
   check_parity || fails=$((fails+1))
   PAR_SAVE=""
   # V7/H2 — la compatibilidad binaria VUELVE, esta vez con V6 y aditiva: los .mod
@@ -854,8 +869,8 @@ EOF
   check_fwd  || fails=$((fails+1))
   check_norma || fails=$((fails+1))
   check_sombra || fails=$((fails+1))
-  check_mod9 sin-referencia || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM + capsula V6 + MOD9 VERDE' || echo "$fails frente(s) en ROJO") =="
+  check_mod8 sin-referencia || fails=$((fails+1))
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sombra + MOD8 VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -867,6 +882,6 @@ case "${1:-}" in
   check-fwd)  check_fwd ;;
   check-norma) check_norma ;;
   check-sombra) check_sombra ;;
-  check-mod9) check_mod9 ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sombra|check-mod9}"; exit 2 ;;
+  check-mod8) check_mod8 ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sombra|check-mod8}"; exit 2 ;;
 esac

@@ -6,7 +6,10 @@
 # De cada RUN: el stdout, el EXITED y las lineas NUEVAS del log de la placa («enlace: ... us», «enlace
 # tardio: ...», el aviso «tapa al de /lib»). El log de la placa se enciende (env log=1 + RESET) si estaba
 # apagado (#423) y se deja como estaba. Al final se borra lo subido: un Core MOD9 en /app taparia al de /lib.
-#   python compat/placas_v9.py [--pico=COM22] [--dk2=COM12] [--work=DIR]
+#   python compat/placas_v9.py [--pico=COM22] [--dk2=COM12] [--work=DIR] [--embebida]
+# --embebida (V11, 17-sep): la imagen ya lleva la stdlib MOD9 en /lib. No se sube Core: CoreRefs MOD9 tiene que
+# enlazar contra el de /lib (sin el aviso «tapa»), GuiTableDemo MOD9 en la DK2 solo con Gui/Json/Collections/Str,
+# y un CoreRefs MOD8 tiene que RECHAZARSE nombrando el simbolo (hacia delante no, D10).
 # Pico: samples/CoreRefs.bp (refs a Core: List, excepciones, una clase que extiende Exception).
 # DK2:  CoreRefs y samples/GuiTableDemo.bp (Gui+Json+Collections+Str a /app; Gui.run() se mata a los 6 s).
 import io, os, re, sys, time, json, shutil, tempfile, datetime
@@ -97,11 +100,12 @@ def caso(placa, etiqueta, mods, raiz, esperado, secs, matar):
     return {'placa': placa.nombre, 'caso': etiqueta, 'status': ex.get('status'), 'elapsedMs': ex.get('elapsedMs'), 'veredicto': veredicto, 'log': ' | '.join(log), 'stdout': salida}
 
 def main():
-    pico = dk2 = None; work = None
+    pico = dk2 = None; work = None; embebida = False
     for a in sys.argv[1:]:
         if a.startswith('--pico='): pico = a[7:]
         elif a.startswith('--dk2='): dk2 = a[6:]
         elif a.startswith('--work='): work = a[7:]
+        elif a == '--embebida': embebida = True
         else: raise SystemExit('argumento desconocido: ' + a)
     if not pico and not dk2: raise SystemExit('dame --pico=COMx y/o --dk2=COMy')
     work = work or tempfile.mkdtemp(prefix='placas9_')
@@ -120,6 +124,16 @@ def main():
     def libs(f, nombres): return [(os.path.join(std[f], m + '.mod'), '/app/%s.mod' % m) for m in nombres]
     filas = []
     try:
+        if embebida:
+            for nombre, puerto in (('Pico', pico), ('DK2', dk2)):
+                if not puerto: continue
+                b = Placa(nombre, puerto)
+                filas.append(caso(b, 'CoreRefs MOD9 contra el Core MOD9 EMBEBIDO (/lib)', [(mod('samples/CoreRefs.bp', 9, 'CoreRefs'), '/app/CoreRefs.mod')], '/app/CoreRefs.mod', esp_core, 30, False))
+                filas.append(caso(b, 'CoreRefs MOD8 contra el Core MOD9 embebido (hacia delante NO: rechazo con nombre)', [(mod('samples/CoreRefs.bp', 8, 'CoreRefs'), '/app/CoreRefs.mod')], '/app/CoreRefs.mod', None, 30, False))
+                if nombre == 'DK2':
+                    filas.append(caso(b, 'GuiTableDemo MOD9 (Str/Collections/Json/Gui MOD9 en /app; Core de /lib)', libs(9, ['Str', 'Collections', 'Json', 'Gui']) + [(mod('samples/GuiTableDemo.bp', 9, 'GuiTableDemo'), '/app/GuiTableDemo.mod')], '/app/GuiTableDemo.mod', None, 6, True))
+                b.cerrar()
+            pico = dk2 = None
         if pico:
             p = Placa('Pico', pico)
             filas.append(caso(p, 'CoreRefs MOD8 (Core embebido de /lib)', [(mod('samples/CoreRefs.bp', 8, 'CoreRefs'), '/app/CoreRefs.mod')], '/app/CoreRefs.mod', esp_core, 30, False))

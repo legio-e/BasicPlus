@@ -110,7 +110,7 @@ endif
 # Por eso el guardián mira las tres cosas, y la tercera es la que importa:
 #   1. no está           -> generar
 #   2. el .bp es más nuevo -> regenerar
-#   3. su MAGIC no es el que habla ESTA VM -> regenerar
+#   3. su MAGIC no es el que EMITE el compilador de hoy (BPVM_MAGIC_V9) -> regenerar
 #
 # El magic sale de include/bpvm_internal.h, que es donde el loader lo lee: si
 # mañana el formato sube a v7, este guardián se entera solo. Comparación en
@@ -118,8 +118,13 @@ endif
 #
 # Un test que falla por su andamio enseña a ignorarlo, que es la peor avería.
 # ---------------------------------------------------------------------------
+# V7/H2 (#523 V11, 17-sep) — $(2) = formato del .mod (9 si se omite): el guardián
+# compara con el magic de ESE formato y compila con --formato=$(2). Y tras regenerar
+# vuelve a mirar el magic: si el compilador falló, el .mod viejo seguía ahí y el
+# `|| true` lo tapaba (así se coló un XMethodNat MOD8 «regenerado» a MOD9 — la
+# native no traduce en MOD9 y el .mod no se escribe). Ahora lo canta y para.
 define fixture
-@want=$$(sed -n 's/.*BPVM_MAGIC_V8[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p' include/bpvm_internal.h | head -1 | tr a-z A-Z); \
+@fmt=$(if $(2),$(2),9); want=$$(sed -n "s/.*BPVM_MAGIC_V$$fmt[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p" include/bpvm_internal.h | head -1 | tr a-z A-Z); \
 for m in $(1); do \
   why=""; \
   if [ ! -f samples/$$m.mod ]; then why="no existe"; \
@@ -131,7 +136,13 @@ for m in $(1); do \
   if [ -n "$$why" ]; then \
     echo "  (regenerando samples/$$m.mod — $$why)"; \
     java -jar ../lexer-java/target/basicplus-frontend.jar \
-         samples/$$m.bp --compile samples --backend=mivm >/dev/null 2>&1 || true; \
+         samples/$$m.bp --compile samples --backend=mivm --formato=$$fmt >/dev/null 2>&1 || true; \
+    got=$$(od -An -tx1 -N4 samples/$$m.mod 2>/dev/null | tr -d ' \n' | tr a-z A-Z); \
+    if [ "$$got" != "$$want" ]; then \
+      echo "  ✗ samples/$$m.mod NO se ha regenerado como MOD$$fmt (el compilador ha fallado; míralo a mano):"; \
+      java -jar ../lexer-java/target/basicplus-frontend.jar samples/$$m.bp --compile samples --backend=mivm --formato=$$fmt 2>&1 | grep -i "error\|no compilado" | head -3 | sed 's/^/     /'; \
+      exit 1; \
+    fi; \
   fi; \
 done
 endef
@@ -327,7 +338,7 @@ test-compressbench: $(LIBOBJ) $(BIN)
 XMOD_BIN = build/test_xmodule.exe
 test-xmodule: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,BridgeApp)
+	$(call fixture,BridgeLib BridgeApp)
 	@if [ ! -f samples/BridgeApp.mod ]; then \
 	  echo "(skip test-xmodule: falta samples/BridgeApp.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -346,7 +357,7 @@ test-xmodule: $(LIBOBJ)
 XMODNAT_BIN = build/test_xmodnat.exe
 test-xmodnat: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,XmodNat)
+	$(call fixture,Helper XmodNat)
 	@if [ ! -f samples/XmodNat.mod ]; then \
 	  echo "(skip test-xmodnat: falta samples/XmodNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -361,10 +372,14 @@ test-xmodnat: $(LIBOBJ)
 # #169 — método de clase EXTERNA desde native: XMethodNat.useBox (native) llama a
 # XClassLib.Box.getDoubled() vía call_method_i32 con el slot resuelto del .bpi
 # (ClassSig/slotOf, base H13.1). El loader auto-carga XClassLib.mod vía discover_deps.
+# V7/H2 (#523 V11, 17-sep) — en --formato=8 A PROPÓSITO: es el AOT de un método de clase
+# EXTERNA por ranura horneada, que en MOD9 la fase 1 del AOT rechaza (la ranura la da el
+# cargador). La fase 2 (la ranura por nombre desde el .mdn) es la ficha #533; cuando
+# esté, este fixture pasa a 9 y el .mdn deja de hornear.
 XMETHODNAT_BIN = build/test_xmethodnat.exe
 test-xmethodnat: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,XMethodNat)
+	$(call fixture,XClassLib XMethodNat,8)
 	@if [ ! -f samples/XMethodNat.mod ]; then \
 	  echo "(skip test-xmethodnat: falta samples/XMethodNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
