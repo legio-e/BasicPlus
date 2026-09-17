@@ -1,12 +1,14 @@
-# Formato binario `.mod` (v8)
+# Formato binario `.mod` (v9)
 
 Este documento es la **especificación canónica** del fichero `.mod` que
 emite el frontend (`lexer-java`) y consumen las dos VMs (`miVM` en Java y
 `bpgenvm-c` en C). Si una implementación discrepa del documento, **el
 documento gana**.
 
-Versión vigente: **8** (campo `MAGIC` = `0x4D4F4438` = ASCII `"MOD8"`, desde
-V7/H2, 15-sep-2026: el módulo lleva **contra qué se compiló** — su generación
+Versión vigente: **9** (`"MOD9"`, el enlace tardío, §13: el compilador lo emite sin
+flag desde el 17-sep-2026, V7/H2 `#523` V11; `--formato=8` sigue existiendo como
+salida de emergencia hasta cerrar V7). Lo que sigue describe **v8** (`0x4D4F4438` =
+`"MOD8"`, 15-sep-2026), que es la base de v9: el módulo lleva **contra qué se compiló** — su generación
 `gen`, el CRC32 de su interfaz, y el sello de cada dependencia — y las VMs aplican
 **la norma de versiones** de `#500` al cargar, §3.1). Las VMs de V7 cargan también
 **v7** y **v6** (sin datos de versión: cuentan como generación 0 y CRC desconocido)
@@ -19,8 +21,8 @@ compatibilidad, hacia atrás sí (decisión de Eduardo, 14-sep).
 > números horneados (ranuras, offsets, descriptores) lleva **referencias simbólicas**
 > (subtabla `refs` 3.3) que el cargador resuelve al enlazar, y publica su propia
 > tabla de clases (subtabla `CLASES` 4.5) para que los demás resuelvan contra ella.
-> Hoy se emite con `--formato=9` (el compilador emite v8 por defecto hasta que la
-> cadena entera pase a MOD9, V11). Todo en **§13**.
+> Desde el 17-sep (V11) es lo que el compilador emite sin flag, y la stdlib, los
+> blobs de las cinco imágenes, `Stdlib.pack` y el IDE van en v9. Todo en **§13**.
 
 Convención general:
 - Todos los enteros son **big-endian** salvo indicación expresa.
@@ -634,7 +636,7 @@ cambios incompatibles se sube el número.
 
 ## 12. Cambios entre versiones
 
-- **v9** (16-sep-2026, V7/H2 `#523`, se emite con `--formato=9`): **enlace tardío**.
+- **v9** (actual: diseñado el 16-sep-2026, el formato del compilador desde el 17-sep, V7/H2 `#523`): **enlace tardío**.
   Subtabla `refs` (3.3) en `imports`, subtabla `CLASES` (4.5) en `exports` (y ya no
   hay 4.3/4.4), la interfaz sin números (`bpi 9`: sin `layout`, `slot`, `recv`),
   once opcodes `_REF` (`0xB1..0xBB`) y el campo `+6` del descriptor (§13). Misma

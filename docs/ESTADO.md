@@ -27,6 +27,18 @@
 
 ## Última sesión
 
+## 🧬 `#523` V11 (17-sep, noche) — LA CADENA EN MOD9: el compilador, la stdlib (gen 7), los blobs, las seis imágenes, el pack, el IDE
+
+Decisión de Eduardo: «pasamos a MOD9 y vamos arreglando lo que surja». Hecho y verificado en placa (Pico y DK2 grabadas:
+un MOD9 enlaza contra el Core MOD9 embebido; un MOD8 se rechaza con nombre). `--stdlibDir=DIR` nuevo en el frontend; el
+`.slots` fuera; `check` con la paridad principal en MOD9 y `check-mod8` como foto «antes»; mezcla 194/194; tests C con el
+guardián de fixtures que grita. Cierra `#514` y `#500`; abre `#533` (AOT fase 2: método de clase externa desde el `.mdn`).
+
+**Orden para retomar**: (1) `#496` el pack de SQLite (MOD7 por dentro → E9 para cualquier consumidor MOD9 de sus clases):
+rehacer con los dos `.mdn` regenerados por toolchain cruzado; (2) grabar las ESP32 con las imágenes ya construidas y
+pasar `placas_v9.py --embebida`; (3) `#525`/`#526` (graves, preexistentes); (4) `#533`. Ojo: cualquier `.mod` MOD7/8 que
+haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
+
 ## 🧪 `#523` V5 (17-sep) — el corpus entero en MOD9 entra en la red diaria
 
 Sesión corta (créditos justos: nada de workflows). `compat/compat.sh check-mod9`, y como sexto frente de `check`: la

@@ -295,7 +295,7 @@ constructor** (que vive ahí con el nombre de la clase, `declareClass`); `typeOf
 existía para la clase ACTUAL, generalizado a cualquier ancestro. La matriz voltea el control de `const_estatica`,
 `metodo_estatico` y `prop_estatica` a true.
 
-#### 🔴 `#514` — sobrecargas de MÉTODOS DE INSTANCIA cross-module: si la interfaz omite la cabeza (private o tipo no exportable), el consumidor numera las claves por POSICIÓN y llama al método equivocado en silencio (abierta 14-sep, de la revisión adversarial; preexistente; H2)
+#### ✅ `#514` — sobrecargas de MÉTODOS DE INSTANCIA cross-module: si la interfaz omite la cabeza (private o tipo no exportable), el consumidor numera las claves por POSICIÓN y llama al método equivocado en silencio · **CERRADA el 17-sep POR CONSTRUCCIÓN (MOD9, `#523` V11)**: la ref lleva la clave con la firma (R4) y el cargador la resuelve por nombre contra la cadena real — no hay posición que perder; la variante `enum_cabeza` de `compat/mezcla.py` (la reproducción de esta ficha) corre con la salida esperada en las dos VMs, y el camino por posición sólo queda en el emisor MOD8 (`--formato=8`), que se va con él (abierta 14-sep, de la revisión adversarial; preexistente; H2)
 
 **Medido** (`C:/tmp/v7_rev/refuta-silencioso-y-tests/h1_inst`, también con el compilador de V6): `Base.m(c: Color)`
 de cabeza (enum: no exportable, se omite con aviso) y `Base.m(v: integer)` después → desde otro módulo `b.m(4)`
@@ -847,8 +847,31 @@ interfaz; enlace tardío»). Los arneses de placa compilan ahora una COPIA del `
 **cadena en MOD9 (V11)**: regenerar `bpstdlib/*.mod`, los blobs de las cinco imágenes y los packs desde la fuente.
 `samples/CoreRefs.bp` nuevo (paridad host OK). Informe: `compat/informes/placas_v9_2026-09-17.tsv`.
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): V8 en las otras familias (ESP32-S3/C6/P4: el cargador es común; compilar y
-correr `placas_v9.py` cuando estén conectadas); V9 (medidas
+### ✅ 17-sep (noche) — V11: LA CADENA EN MOD9. Decisión de Eduardo: *«no creo que se pueda mantener esta situación de mezcla de versiones, es complejo de gestionar. Pasamos a MOD9 y vamos arreglando lo que surja»*
+
+- **Compilador**: MOD9 sin flag (`Main.FORMATO = 9`; `AotMain` igual); `--formato=8` queda como salida de emergencia hasta
+  cerrar V7 (la foto «antes» de la mezcla y de `check-mod8`, los dos tests de marcadores, `test-xmethodnat`). El `.slots`
+  deja de escribirse en MOD9 (Gui resuelve los handlers por nombre al cargar; el IDE sólo lo abría como JSON) y se quitan los
+  26 versionados. **`--stdlibDir=DIR`** nuevo: la stdlib dicha a mano manda sobre el `BpVM.cfg` autodescubierto (`#467`).
+- **La stdlib**: `Stdlib.bpbuild` con `"version": 7`; `bpstdlib/*.mod` (+`.dbg`) MOD9 gen 7 (28), `packs/Stdlib.pack`,
+  `bpdevices/*.mod` (5). Los blobs de las **tres familias** regenerados (`regen_all_mods.sh`) y las **seis imágenes**
+  construidas: Pico, Discovery, Nucleo, ESP32-S3/C6/P4/C3.
+- **Verificado en placa** (`placas_v9.py --embebida`, Pico y DK2 grabadas): `CoreRefs` MOD9 enlaza contra el `Core` MOD9
+  de `/lib` sin subir nada (1 clase construida, 10 refs; Pico 1.890 µs, DK2 2.190 µs); `GuiTableDemo` MOD9 en la DK2 con
+  la GUI en `/app` y el Core de `/lib`, la tabla en pantalla; y un `CoreRefs` **MOD8** se rechaza nombrando el símbolo
+  («no exporta 'Core.Exception#getMsg#2'… version vieja?»): hacia delante no, como D10.
+- **Las redes**: frontend 220/220; `check` verde con la paridad principal en MOD9 (guardia de magic) y `check-mod8` como
+  foto «antes» (69/69 con el mismo stdout); `norma` y el caso «dos incumplimientos» de `sombra` en MOD8 (son de la norma de
+  los dueños MOD7/8); mezcla MOD9 por defecto 194/194; `v10_casos` 13/13; tests C OK con el guardián de fixtures mirando
+  MOD9 (y GRITANDO si el `.mod` no se regenera: así se había colado un `XMethodNat` MOD8 «regenerado»).
+- **Lo que salió**: el AOT de un método de clase externa no traduce en MOD9 (fase 1 → `#533`); `bpstdlib/*.mod` y los
+  blobs eran MOD7 y la `Collections` de hoy no enlazaba en ninguna placa (ya no); el IDE fat-jar reconstruido.
+- **Cierra**: `#514` (por construcción), `#500` (la cadena).
+
+⏭️ **Queda**: `#496` **el pack de SQLite** (MOD7 por dentro: un consumidor MOD9 que use sus clases recibe E9 «recompila
+'SQLite'»; rehacerlo exige regenerar los dos `.mdn` con los toolchains cruzados — ARM y RISC-V — con los nombres R4, y
+comprobar el tamaño del pack como dice su LEEME); grabar las **ESP32** cuando estén conectadas (las imágenes ya están);
+`montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
@@ -922,6 +945,16 @@ por punto de espera coinciden. ⏭️ definir el punto de drenaje de la cola (el
 etiqueta «RuntimeError» cualquier excepción no atrapada aunque sea `Lib.MiError`, y miVM da `classPtr=7538`; un `throw` de
 un objeto que no desciende de Exception (a mano; desde una dep lo para el E10 desde hoy) muere sin diagnóstico en la VM-C.
 ⏭️ `finally` solo; el nombre de la clase en el mensaje (por el sello +6 y la 4.5 en MOD9); guardia en `bpvm_eh_unwind`.
+
+#### 🟡 `#533` — el AOT en MOD9, fase 2: una `native` que llama a un método de una clase EXTERNA o ABIERTA (`b.getDoubled()` con `b: XClassLib.Box`) no se traduce — la fase 1 la rechaza con mensaje porque la ranura la fija el cargador, y el `.mdn` necesita pedirla por nombre (abierta 17-sep, al pasar la cadena a MOD9; H5)
+
+**Medido**: `bpgenvm-c/samples/XMethodNat.bp` («AOT método de clase externa», `test-xmethodnat`) no compila en MOD9: «AOT
+(MOD9): el método 'getDoubled' es de la clase EXTERNA 'Box': su ranura de vtable la fija el cargador al enlazar, no el
+compilador» (fase 1, 16-sep: correcto y ruidoso, y antes ese `.mod` se «regeneraba» en silencio quedándose en MOD8 —
+arreglado el guardián del Makefile). El test se queda en `--formato=8` a propósito hasta que exista la fase 2.
+⏭️ El `.mdn` resuelve la ranura como los opcodes `_REF`: por clave contra la ext-table del módulo (`ext[idx]`, que el
+cargador ya rellena) o con `bpvm_link_slot_por_nombre(vm, class_ptr, clave)` cacheada; lo mismo para el getter de
+property. Cuando esté, `test-xmethodnat` vuelve a 9 y el `.mdn` deja de hornear ranuras ajenas. Se cruza con `#519`.
 
 #### 🧬 `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2`)
 
@@ -1009,7 +1042,7 @@ un padre nunca más reciente que sus hijos) — mismo efecto, sin un símbolo m�
 sigue sin llamar a estáticos ni leer campos desde una native de módulo (error claro); desde un método native de
 clase, `#519`.
 
-#### 🧬 `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo)
+#### ✅ `#500` — LA NORMA DE VERSIONES DE LAS DEPENDENCIAS: una dependencia más antigua que el módulo principal NO vale (el `Core` de un pack) → **V7** (abierta 12-sep, Eduardo · **CERRADA el 17-sep con la cadena en MOD9, `#523` V11**: `Stdlib.bpbuild` lleva `"version": 7`, la stdlib entera va con gen 7 en `bpstdlib/`, en los blobs de las cinco imágenes, en `Stdlib.pack` y en `bpdevices/`; la regla 1 (E0, «más antiguo que el que necesita») rige en las dos VMs para todo dueño, y para un dueño MOD9 lo demás lo decide el enlace tardío por nombre (las reglas 2 y 3 quedan para los dueños MOD7/8, `check-norma` 9/9). Lo que queda de la lista de abajo es `#496`, el pack de SQLite, aún MOD7 por dentro)
 
 *«Apunta para V7. `Core.bp` nos sigue dando guerra. Aquí hay que refinar la norma: si tenemos un módulo principal
 compilado a una versión V, dependencias de una versión < V no nos deberían valer. Así que si `Core` está en un pack

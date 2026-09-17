@@ -23,6 +23,7 @@
   "sourceDir": ".",
   "outDir": "out",
   "main": "Stdlib",
+  "version": 7,
   "dependencies": [],
   "out": "pack"
 }
