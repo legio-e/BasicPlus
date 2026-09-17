@@ -736,8 +736,17 @@ Primer dato de V9 en placa: en un programa de tres módulos el enlace tardío cu
 11 refs) y hace 4× menos `strcmp` (menos marcadores). El `Core` de la Pico siguió siendo el MOD8 de la imagen (D9: sólo la
 regla 1) — subir el MOD9 de 14 KB exige `puts` por trozos (`#294`), pendiente para la tanda de V8/V9 con `GuiTableDemo`.
 
+### ✅ 17-sep — V5: TODO EL CORPUS EN MOD9, con la stdlib MOD9, en las dos VMs, con el stdout de MOD8
+
+`compat/compat.sh check-mod9` (y dentro de `check`, como sexto frente): la pasada MOD8 de siempre guarda el stdout de cada
+sample; la stdlib ENTERA se compila como MOD9 en el temporal (28 módulos, magic `MOD9`; `bpstdlib/` no se toca); y el
+corpus se compila con `--formato=9` contra ella exigiendo tres cosas por sample: que el `.mod` raíz lleve el magic `MOD9`
+(el artefacto, no el log: con el `--formato` neutralizado a propósito los 69 caen en FAIL «el arnés no compiló lo que
+dice»), paridad Java == C, y el stdout IGUAL al de MOD8. **69/69** (`check` verde: 69/59/9/12/69, 4m15). Es la V5 del
+plan: lo que corre en MOD8 corre igual en MOD9, con la stdlib incluida, y queda en la red diaria.
+
 ⏭️ **Queda del plan** (V7_IDEAS §H2.7): las filas que faltan de V4 (override huérfano, abuelo, dos
-averías, MOD8×MOD9); V6 (GC con bitmaps reconstruidos como fila fija); V5 (todos los samples en MOD9); V9 (medidas
+averías, MOD8×MOD9); V6 (GC con bitmaps reconstruidos como fila fija); V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera) y los docs. Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.

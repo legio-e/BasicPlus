@@ -27,6 +27,16 @@
 
 ## Última sesión
 
+## 🧪 `#523` V5 (17-sep) — el corpus entero en MOD9 entra en la red diaria
+
+Sesión corta (créditos justos: nada de workflows). `compat/compat.sh check-mod9`, y como sexto frente de `check`: la
+stdlib compilada como MOD9 en el temporal + los 69 samples del corpus con `--formato=9`, exigiendo magic `MOD9` en el
+`.mod` (control hecho: con el flag neutralizado caen los 69), paridad Java == C y el mismo stdout que la pasada MOD8.
+**69/69**; `check` verde en 4m15 (69/59/9/12/69). Ver `FICHAS` `#523` §17-sep.
+
+**Orden para retomar**: igual que abajo, menos V5: (1) `#525`/`#526` (graves, preexistentes); (2) las filas de V4 en
+`mezcla.py` (override huérfano, abuelo, dos averías, MOD8×MOD9), V6, V9, V8, la cadena en MOD9 (V11) y los docs.
+
 ## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
 
 **Hecho** (ver `FICHAS` `#523` §V10): dos workflows de revisión (9 buscadores; la verificación por agente murió dos veces por el
