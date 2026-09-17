@@ -24,7 +24,14 @@
 # (corre, exit 0, y NO imprime lo esperado: lo que nadie ve) / RUIDOSO-otro (rechaza
 # por otra razon que la predicha) / PARIDAD (las VMs difieren) / CRASH.
 #
-#   python compat/mezcla.py [--solo=I|II|P|B] [--keep] [--work=DIR] [--formato=8|9] [--vms=ambas|java|c]
+#   python compat/mezcla.py [--solo=I|II|P|B|V] [--keep] [--work=DIR] [--formato=8|9] [--vms=ambas|java|c]
+#
+# Bloque V (solo con --formato=9, V7/H2 #523 V4, 17-sep): las filas que faltaban de la matriz. El
+# override HUERFANO (H redefine z() y Base pierde z(): E2 nombrando el metodo), el ABUELO en tres
+# modulos (Lib -> Mid -> Abu, sellados contra v1, cambia solo Lib: 21 variantes), DOS averias a la
+# vez (dos_mueven corre; dos_una_rompe: el mismo primer error en las dos VMs) y MOD8 x MOD9 en las
+# dos direcciones (nunca corre, nunca peta; E9 «recompila 'Lib'» cuando la app MOD9 esta sellada
+# contra la Lib MOD8, la norma #500 cuando las generaciones no casan).
 #
 # Bloque B (solo con --formato=9, V7/H2 #523 V1): EL GUARDIAN. La misma Lib compilada con
 # `--barajar=<semilla>` (las ranuras propias de cada clase permutadas) y con `--relleno=3`
@@ -133,6 +140,10 @@ VARIANTES = {
                    lambda s: _sub(_sub(s, 'public class Derived extends Base\n', 'public class Derived\n'),
                                   '    super(n)\n    this.d := n + 100\n  end Derived\n',
                                   '    this.d := n + 100\n  end Derived\n  public function k(): string\n    return "dk" + this.d\n  end k\n')),
+  # V4 (17-sep): DOS averias a la vez. Las dos estructurales -> corre; una estructural y un miembro usado
+  # quitado -> el rechazo nombra el miembro (y las dos VMs dicen el MISMO primer error).
+  'dos_mueven':   ('met_medio + campo_mas (dos cambios de forma a la vez)',   lambda s: VARIANTES['campo_mas'][1](VARIANTES['met_medio'][1](s))),
+  'dos_una_rompe': ('met_medio + met_quitado (se mueve todo Y falta k())',    lambda s: VARIANTES['met_quitado'][1](VARIANTES['met_medio'][1](s))),
 }
 
 # ------------------------------------------------------------------ las apps
@@ -216,6 +227,79 @@ public function main()
 end main
 end UsaD
 """
+# V4 (17-sep) — override HUERFANO: H redefine z() sin llamar a super; si Base pierde z(), el override ya no
+# redefine nada. Decision de diseno (V7_IDEAS §H2 E2, fixture e2 de miVM): rechazo nombrando el metodo, no
+# «metodo nuevo en silencio» (Java lo dejaria correr; aqui el programador escribio una redefinicion y el
+# cargador se lo dice).
+HUER = """module Huer
+import Core
+import Lib
+public class H extends Lib.Base
+  public function H(n: integer)
+    super(n)
+  end H
+  public function z(): integer
+    return 1
+  end z
+end H
+public function main()
+  var h: H := H(1)
+  print h.z()
+  var b: Lib.Base := h
+  print b.z()
+  print "fin"
+end main
+end Huer
+"""
+# V4 (17-sep) — el ABUELO en tres modulos: Lib (Base) -> Mid (Media extends Lib.Base, sellado contra v1)
+# -> Abu (Nieta extends Mid.Media, sellado contra v1 + Mid). Cambia SOLO Lib: las dos clases abiertas se
+# reconstruyen en cadena (campos, ranuras y el super.k() de cada eslabon).
+MID = """module Mid
+import Core
+import Lib
+public class Media extends Lib.Base
+  var mm: integer
+  public function Media(n: integer)
+    super(n)
+    this.mm := n + 50
+  end Media
+  public function k(): string
+    return "media/" + super.k()
+  end k
+  public function getMm(): integer
+    return this.mm
+  end getMm
+end Media
+end Mid
+"""
+ABU = """module Abu
+import Core
+import Lib
+import Mid
+public class Nieta extends Mid.Media
+  var qq: integer
+  public function Nieta(n: integer)
+    super(n)
+    this.qq := n * 3
+  end Nieta
+  public function k(): string
+    return "nieta/" + super.k() + "/" + this.qq
+  end k
+end Nieta
+public function main()
+  var x: Nieta := Nieta(2)
+  print x.k()
+  print x.getMm()
+  print x.m(4)
+  var b: Lib.Base := x
+  print b.k()
+  b.p := 9
+  print b.p
+  print x.suma(b)
+  print "fin"
+end main
+end Abu
+"""
 A_SRC = """module A
 import Core
 import Lib
@@ -254,6 +338,8 @@ ESPERADO = {
   'Puente': "k3/4/2\nfin",
   'UsaD':   "k1\nfin",
   'ExtD':   "nieta/k2\nnieta/k2\nfin",
+  'Huer':   "1\n1\nfin",
+  'Abu':    "nieta/media/k2/6\n52\n5\nnieta/media/k2/6\n9\n4\nfin",
 }
 def esperado(app, variante):
     s = ESPERADO[app]
@@ -369,13 +455,13 @@ def fila(bloque, etiqueta, d, mod, predicho, esperado_out=None):
 # ------------------------------------------------------------------ los bloques
 # Lo que la norma predice para la MEZCLA (app sellada contra v1 gen 7, solo USA):
 #   mueve ranuras usadas -> no enlaza; lo demas -> corre (gen 8) / otra interfaz (gen 7)
-MUEVE = {'met_medio', 'met_quitado', 'prop_mas', 'reorden', 'ev_privado'}
+MUEVE = {'met_medio', 'met_quitado', 'prop_mas', 'reorden', 'ev_privado', 'dos_mueven', 'dos_una_rompe'}
 # Lo que HOY se sabe que el marcador NO ve (la cabeza `m` es un nombre pelado sin firma):
 #   'firma' y 'enum_cabeza' dejan `Base#m#N` en su sitio con OTRA firma -> la prediccion
 #   de la norma es «no enlaza», y lo que pase de verdad es lo que se mide.
 # EL CRITERIO DE JAVA (formato 9): estructura cambiada -> corre; miembro usado quitado o con
 # otra firma/retorno -> rechazo al enlazar (tambien una funcion de modulo: R4, `Lib.f()i`).
-ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo', 'f_firma'}
+ROMPE_JAVA = {'met_quitado', 'firma', 'retorno', 'prop_tipo', 'f_firma', 'dos_una_rompe'}
 def prediccion_java(variante, gen, app):
     if gen < 7: return 'mas antiguo'
     if variante == 'derived_deja_de_extender': return 'no enlaza' if app in ('UsaD', 'ExtD') else 'corre'   # A1: UsaD asume Derived<:Base; ExtD extiende Derived y usa Base
@@ -409,7 +495,7 @@ def main():
         elif a.startswith('--formato='): FORMATO = int(a[10:])
         elif a.startswith('--vms='): VMS = a[6:]
         else: raise SystemExit('argumento desconocido: ' + a)
-    if solo not in (None, 'I', 'II', 'P', 'B'): raise SystemExit('--solo=' + solo + ': bloques I, II, P o B')
+    if solo not in (None, 'I', 'II', 'P', 'B', 'V'): raise SystemExit('--solo=' + solo + ': bloques I, II, P, B o V')
     for f in (FE, JVM, CVM, CORE):
         if not os.path.isfile(f): raise SystemExit('falta ' + f)
     work = work or tempfile.mkdtemp(prefix='mezcla_')
@@ -423,7 +509,7 @@ def main():
         for v in VARIANTES:
             d = lib(work, v, 7)
             for nombre, src in (('Usa', USA), ('Ext', EXT)):
-                if v in ('met_quitado', 'retorno', 'prop_tipo', 'f_firma'): continue   # las apps no compilan contra ellas: no son casos de I
+                if v in ('met_quitado', 'retorno', 'prop_tipo', 'f_firma', 'dos_una_rompe'): continue   # las apps no compilan contra ellas: no son casos de I
                 ad = app(work, nombre, src, d, v)
                 cd = caso_dir(work, 'I_%s_%s' % (v, nombre), d, [os.path.join(ad, nombre + '.mod')])
                 fila('I', '%s contra %s' % (nombre, v), cd, nombre, 'corre', esperado(nombre, v))
@@ -485,6 +571,44 @@ def main():
             cd = caso_dir(work, 'B_' + etq, d, [os.path.join(usa1, 'Usa.mod'), os.path.join(ext1, 'Ext.mod'), os.path.join(usad1, 'UsaD.mod')])
             for nombre in ('Usa', 'Ext', 'UsaD'):
                 fila('B', '%s v1 contra Lib %s' % (nombre, ' '.join(flags)), cd, nombre, 'corre', esperado(nombre, 'igual'))
+
+    if solo in (None, 'V') and FORMATO == 9:
+        print('\n== BLOQUE V (V4 de #523): override huerfano (E2), el abuelo en tres modulos, dos averias, MOD8 x MOD9 ==')
+        # override huerfano: H redefine z(); con z() quitado de Base el cargador lo rechaza nombrandolo (E2), no lo cuela como metodo nuevo
+        huer1 = app(work, 'Huer', HUER, v1, 'v1')
+        for v in ('igual', 'met_medio', 'met_quitado_nousado'):
+            d = lib(work, v, 8)
+            cd = caso_dir(work, 'V_huer_%s' % v, d, [os.path.join(huer1, 'Huer.mod')])
+            fila('V', 'Huer v1 contra %s g8' % v, cd, 'Huer', 'no enlaza' if v == 'met_quitado_nousado' else 'corre', esperado('Huer', v))
+        # el abuelo: Mid sellado contra v1; Abu sellado contra v1 + Mid; en runtime cambia SOLO Lib
+        mid1 = app(work, 'Mid', MID, v1, 'v1')
+        abu1 = app(work, 'Abu', ABU, mid1, 'v1')   # mid1 lleva Lib.mod (v1) y Mid.mod
+        for v in VARIANTES:
+            d = lib(work, v, 8)
+            cd = caso_dir(work, 'V_abu_%s' % v, d, [os.path.join(mid1, 'Mid.mod'), os.path.join(abu1, 'Abu.mod')])
+            fila('V', 'Abu v1 (via Mid v1) contra %s g8' % v, cd, 'Abu', prediccion_java(v, 8, 'Abu'), esperado('Abu', v))
+        # MOD8 x MOD9 (medido el 17-sep). Con el dueno MOD8, la norma #500 (que sigue viva para MOD7/8) habla ANTES
+        # que E9: misma gen -> «otra interfaz» (el CRC de la bpi 8 nunca es el de la bpi 9); gen mayor -> Ext cae por
+        # la regla 3 («mas reciente y extiende») y Usa por el import 3.1 de su constructor con firma («no exporta
+        # 'Lib.__cls_new_Base(i)' ... version vieja?»). E9 («'Lib' es MOD8 y 'Ext' necesita su tabla de clases:
+        # recompila 'Lib'») solo puede hablar en el caso REALISTA: la app MOD9 sellada contra la propia Lib MOD8 (el
+        # usuario recompila su app con el compilador nuevo y deja la libreria vieja). Consumidor MOD8 con dueno MOD9:
+        # sus marcadores no existen («no exporta 'Lib.__cls_m_Base#k$'»). Nunca corre, nunca peta; mismo texto en las dos VMs.
+        FORMATO = 8
+        v1m8 = lib(work, 'igual', 7, etiqueta='_m8')
+        usa8 = app(work, 'Usa', USA, v1m8, 'v1_m8'); ext8 = app(work, 'Ext', EXT, v1m8, 'v1_m8')
+        lib8 = lib(work, 'igual', 8, etiqueta='_m8')
+        FORMATO = 9
+        lib9 = lib(work, 'igual', 8)
+        usa9c8 = app(work, 'Usa', USA, v1m8, 'v1_m8_app9'); ext9c8 = app(work, 'Ext', EXT, v1m8, 'v1_m8_app9')   # MOD9 sellada contra la MOD8
+        casos_m = (('app MOD9 (sellada MOD9) contra Lib MOD8 g7', v1m8, (usa1, ext1), {'Usa': 'otra interfaz', 'Ext': 'otra interfaz'}),
+                   ('app MOD9 (sellada MOD9) contra Lib MOD8 g8', lib8, (usa1, ext1), {'Usa': 'no enlaza', 'Ext': 'mas reciente+extiende'}),
+                   ('app MOD9 sellada contra ESA Lib MOD8 g7', v1m8, (usa9c8, ext9c8), {'Usa': 'no enlaza', 'Ext': 'no enlaza'}),
+                   ('app MOD8 contra Lib MOD9 g8', lib9, (usa8, ext8), {'Usa': 'no enlaza', 'Ext': 'no enlaza'}))
+        for etq, libdir, mods, pred in casos_m:
+            cd = caso_dir(work, 'V_' + etq.replace(' ', '_'), libdir, [os.path.join(mods[0], 'Usa.mod'), os.path.join(mods[1], 'Ext.mod')])
+            for nombre in ('Usa', 'Ext'):
+                fila('V', '%s %s' % (nombre, etq), cd, nombre, pred[nombre], esperado(nombre, 'igual'))
 
     # ---- resumen
     malos = [f for f in filas if f[4] != 'ok']

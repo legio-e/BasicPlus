@@ -204,6 +204,25 @@ final class EnlaceTardio {
         return m.exportPrefix.substring(0, m.exportPrefix.length() - 1);
     }
 
+    // ------------------------------------------------------------------ 0. E9 antes que nada
+    // V4 de #523 (17-sep) — medido en mezcla.py: si el dueño es MOD7/8, el import 3.1 del constructor con
+    // firma («no exporta 'Lib.__cls_new_Base(i)' ... version vieja?») caía ANTES de que ninguna ref llegara
+    // a resolverse, y el mensaje que dice lo que hay que hacer («recompila 'Lib'») no se veía nunca. Así que
+    // se comprueba lo primero, antes de los imports 3.1: un consumidor MOD9 con una ref a un módulo que no
+    // tiene tabla de clases es E9, diga lo que diga la 3.1. Mismo orden en la VM-C.
+    void exigirDuenosConClases(List<ModuleManager.ModuleMetadata> mods) {
+        for (ModuleManager.ModuleMetadata m : mods) {
+            if (m.refs == null) continue;
+            for (TablasMod9.Ref r : m.refs) {
+                if (r.depIdx == TablasMod9.DEP_LOCAL) continue;
+                String modClase = r.clase.contains(".") ? r.clase.substring(0, r.clase.lastIndexOf('.')) : r.clase;
+                ModuleManager.ModuleMetadata mp = mm.moduloPorNombreCanonico(modClase);
+                if (mp != null && mp.clases == null)
+                    throw new ModuleManager.LinkException("'" + mp.name + "' es MOD" + versionDe(mp.magic) + " y '" + m.name + "' necesita su tabla de clases: recompila '" + mp.name + "'");
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ 3. las refs
     void resolverRefs(ModuleManager.ModuleMetadata m) {
         if (m.refs == null) return;

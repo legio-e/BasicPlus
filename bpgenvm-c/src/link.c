@@ -884,11 +884,40 @@ mal:
 }
 #undef LTV_NEED
 
+/* V4 de #523 (17-sep) — E9 ANTES que los imports 3.1. Medido en mezcla.py: si el dueno es
+ * MOD7/8, el import 3.1 del constructor con firma («no exporta 'Lib.__cls_new_Base(i)' ...
+ * version vieja?») caia antes de que ninguna ref llegara a resolverse, y el mensaje que dice
+ * lo que hay que hacer («recompila 'Lib'») no se veia nunca. Un consumidor MOD9 con una ref a
+ * un modulo sin tabla de clases es E9, diga lo que diga la 3.1. Mismo orden que miVM. */
+static bpvm_status_t lt_exigir_duenos_con_clases(bpvm_t* vm) {
+    lt_ctx_t x; memset(&x, 0, sizeof x); x.vm = vm;
+    for (int mi = 0; mi < vm->module_count; mi++) {
+        const bpvm_module_t* m = &vm->modules[mi];
+        for (int i = 0; i < m->ref_count; i++) {
+            const bpvm_ref_t* r = &m->refs[i];
+            if (r->dep_idx == BPVM_DEP_LOCAL) continue;
+            char modc[160]; { const char* d = strrchr(r->clase, '.'); size_t l = d ? (size_t)(d - r->clase) : strlen(r->clase); if (l >= sizeof modc) l = sizeof modc - 1; memcpy(modc, r->clase, l); modc[l] = 0; }
+            for (int k = 0; k < vm->module_count; k++) {
+                char canon[160]; lt_canon(&vm->modules[k], canon, sizeof canon);
+                if (strcmp(canon, modc) == 0 && !vm->modules[k].clases) {
+                    lt_error(&x, "'%s' es MOD%d y '%s' necesita su tabla de clases: recompila '%s'", vm->modules[k].name, lt_version(&vm->modules[k]), m->name, vm->modules[k].name);
+                    return BPVM_ERR_RUNTIME;
+                }
+            }
+        }
+    }
+    return BPVM_OK;
+}
+
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
 bpvm_status_t bpvm_link_all(bpvm_t* vm) {
     int64_t t0 = bpvm_platform_now_us();
     s_link_busquedas = 0; s_link_strcmp = 0;
+    {
+        bpvm_status_t st = lt_exigir_duenos_con_clases(vm);
+        if (st != BPVM_OK) { bpvm_diag_urgente("[bpvm-c link] %s", vm->link_error); return BPVM_ERR_RUNTIME; }
+    }
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];
 

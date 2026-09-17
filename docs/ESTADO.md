@@ -34,8 +34,14 @@ stdlib compilada como MOD9 en el temporal + los 69 samples del corpus con `--for
 `.mod` (control hecho: con el flag neutralizado caen los 69), paridad Java == C y el mismo stdout que la pasada MOD8.
 **69/69**; `check` verde en 4m15 (69/59/9/12/69). Ver `FICHAS` `#523` §17-sep.
 
-**Orden para retomar**: igual que abajo, menos V5: (1) `#525`/`#526` (graves, preexistentes); (2) las filas de V4 en
-`mezcla.py` (override huérfano, abuelo, dos averías, MOD8×MOD9), V6, V9, V8, la cadena en MOD9 (V11) y los docs.
+**V4, las filas que faltaban** (bloque V de `mezcla.py`, 31 filas: override huérfano → E2, el abuelo en tres módulos ×
+21 variantes, dos averías, MOD8×MOD9 en las dos direcciones): **167/167** en MOD9. Hallazgo por el camino: E9
+(«recompila 'Lib'») no llegaba a hablar nunca porque el import 3.1 del constructor con firma caía antes; los dos
+cargadores lo comprueban ahora antes de los imports (mismo texto, mismo momento). miVM 51/51, tests C OK, `check` verde.
+
+**Orden para retomar**: (1) `#525`/`#526` (graves, preexistentes); (2) lo que queda de `#523`: V6 (GC con bitmaps
+reconstruidos como fila fija), V9 (medidas), V8 (placas), la cadena en MOD9 (V11: `build_mdn.sh`/`AotBuild` con el
+formato, `.slots` fuera) y los docs (MOD_FORMAT con la ref SUPER y la 4.5, OPCODES, HEAP_LAYOUT `+6`, WIRE E0-E10).
 
 ## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
 

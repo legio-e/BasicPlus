@@ -745,8 +745,35 @@ corpus se compila con `--formato=9` contra ella exigiendo tres cosas por sample:
 dice»), paridad Java == C, y el stdout IGUAL al de MOD8. **69/69** (`check` verde: 69/59/9/12/69, 4m15). Es la V5 del
 plan: lo que corre en MOD8 corre igual en MOD9, con la stdlib incluida, y queda en la red diaria.
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): las filas que faltan de V4 (override huérfano, abuelo, dos
-averías, MOD8×MOD9); V6 (GC con bitmaps reconstruidos como fila fija); V9 (medidas
+### ✅ 17-sep — V4: las filas que faltaban de la matriz (bloque V de `mezcla.py`): 167/167 en MOD9
+
+`compat/mezcla.py --formato=9 --solo=V`, 31 filas nuevas, todas predichas antes de correr:
+
+- **Override huérfano** (app `Huer`: `H extends Lib.Base` redefine `z()` sin `super`): contra `igual` y `met_medio` corre;
+  contra `met_quitado_nousado` (Base pierde `z`) → **E2** «'Huer.H' redefine 'z()i' y 'Lib' (gen 8) ya no lo tiene:
+  recompila 'Huer'». Más estricto que Java a propósito (V7_IDEAS §H2: el programador escribió una redefinición y el
+  cargador se lo dice); las dos VMs, el mismo texto.
+- **El abuelo en tres módulos** (`Lib` → `Mid` con `Media extends Lib.Base`, sellado g7 → `Abu` con `Nieta extends
+  Mid.Media`, sellado contra v1+Mid; cambia SOLO `Lib`): las 21 variantes con `prediccion_java` — las de forma corren con
+  el stdout de v1 (dos clases abiertas reconstruidas en cadena, campos, ranuras y el `super.k()` de cada eslabón); las que
+  quitan/cambian un miembro usado rechazan nombrándolo.
+- **Dos averías a la vez**: `dos_mueven` (met_medio + campo_mas) corre; `dos_una_rompe` (met_medio + met_quitado) → el
+  **mismo primer error** en las dos VMs (E2 en `Mid`: «'Mid.Media' redefine 'k()s' y 'Lib' (gen 8) ya no lo tiene»).
+  Entran también en I/II (MOD8: 100 filas, los 10 silenciosos de siempre; MOD9: todo ok).
+- **MOD8 × MOD9, las dos direcciones**: nunca corre, nunca peta, mismo texto. Consumidor MOD8 con dueño MOD9 → «no
+  exporta 'Lib.__cls_m_Base#k$' … version vieja?» (los marcadores no existen; hacia delante no, como se decidió).
+  Consumidor MOD9 con dueño MOD8: si las generaciones no casan habla antes la norma `#500` (misma gen → «otra interfaz»,
+  porque el CRC de la bpi 8 nunca es el de la bpi 9; gen mayor y extiende → regla 3). **Hallazgo y arreglo**: en el caso
+  realista (la app recompilada como MOD9 contra la Lib MOD8 que ya tenía) **E9 no hablaba nunca** — el import 3.1 del
+  constructor con firma caía antes («no exporta 'Lib.__cls_new_Base(i)' … version vieja?»: rechazo con nombre, pero sin
+  decir lo que hay que hacer). Ahora los dos cargadores comprueban E9 **antes de los imports 3.1** (`EnlaceTardio.
+  exigirDuenosConClases`, `lt_exigir_duenos_con_clases`): «'Lib' es MOD8 y 'Ext' necesita su tabla de clases:
+  **recompila 'Lib'**». Mismo conjunto de programas rechazados; sólo cambia qué error se ve primero.
+
+Mezcla MOD9 completa **167/167** (`compat/informes/mezcla_mod9_ambas_V_2026-09-17.tsv`); miVM 51/51; tests C OK; `check`
+verde (69/59/9/12/69).
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): V6 (GC con bitmaps reconstruidos como fila fija); V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera) y los docs. Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.

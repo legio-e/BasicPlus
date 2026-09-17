@@ -1037,6 +1037,11 @@ public class ModuleManager {
         // la tabla es un HashMap (0 strcmp lineales); en C es un barrido.
         final long t0 = System.nanoTime();
         int busquedas = 0;
+        // V7/H2 (#523, V4) — E9 antes que los imports 3.1: un consumidor MOD9 cuyo dueño es MOD7/8
+        // se rechaza nombrando al dueño («recompila 'Lib'»), no por el primer símbolo con firma que
+        // la 3.1 no encuentre. Misma secuencia en la VM-C (bpvm_link_all).
+        enlaceTardio = new EnlaceTardio(this, vm, nextFreeAddress);
+        enlaceTardio.exigirDuenosConClases(loadedModules);
         for (LinkTask task : pendingLinks) {
             for (int i = 0; i < task.requiredImports.length; i++) {
                 String symbolNeeded = task.requiredImports[i];
@@ -1052,7 +1057,6 @@ public class ModuleManager {
         // las abiertas contra su padre real, resolver las refs a la ext-table, verificar.
         // La arena de los descriptores construidos empieza donde acabó el último módulo y
         // el heap arranca detrás (setHeapStart lee nextFreeAddress después de linkAll).
-        enlaceTardio = new EnlaceTardio(this, vm, nextFreeAddress);
         enlaceTardio.registrar(loadedModules);
         for (ModuleMetadata m : loadedModules) {
             if (m.clases == null) continue;
