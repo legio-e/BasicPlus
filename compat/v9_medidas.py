@@ -36,17 +36,19 @@ def modulo_de(bp):
     lib = re.search(r'^\s*library\s+"([A-Za-z0-9_.]+)"', s, re.M)
     return (m.group(1) if m else None), (lib.group(1) if lib else None)
 
-def stdlib9(work):
-    d = os.path.join(work, 'std9')
+def stdlib_de(work, formato):
+    """La stdlib ENTERA compilada de su fuente como MOD<formato>, en work/std<formato> (cache por dir)."""
+    d = os.path.join(work, 'std%d' % formato)
     if os.path.isdir(d): return d
     os.makedirs(os.path.join(d, 'src'))
     for f in os.listdir(STD8):
         if f.endswith('.bp'): shutil.copy(os.path.join(STD8, f), os.path.join(d, 'src', f))
     io.open(os.path.join(d, 'p.bpbuild'), 'w', encoding='utf-8', newline='\n').write(
         '{ "sourceDir": "src", "outDir": ".", "main": "Stdlib", "dependencies": [] }\n')
-    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=9'], d, 600)
-    if rc != 0 or not os.path.isfile(os.path.join(d, 'Core.mod')): raise SystemExit('la stdlib no compila como MOD9:\n' + out + err)
+    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=%d' % formato], d, 600)
+    if rc != 0 or not os.path.isfile(os.path.join(d, 'Core.mod')): raise SystemExit('la stdlib no compila como MOD%d:\n%s%s' % (formato, out, err))
     return d
+def stdlib9(work): return stdlib_de(work, 9)
 
 def compilar(work, item, formato, std):
     """Como compat.sh: suelto; si no, por proyecto. Devuelve (dir, .mod raiz) o (None, motivo)."""
@@ -62,7 +64,13 @@ def compilar(work, item, formato, std):
     for f in os.listdir(std):
         if f.endswith('.mod'): shutil.copy(os.path.join(std, f), d)
     fmt = '--formato=%d' % formato
-    rc, out, err = sh(['java', '-jar', FE, bp, '--compile', '.', '--backend=mivm', fmt], d, 120)
+    # Se compila una COPIA del .bp en el temporal, no el original: el frontend autodescubre BpVM.cfg
+    # subiendo desde el FUENTE, y el BpVM.cfg de la raiz del repo apunta a bpstdlib/ (stdlibDir), cuyos
+    # .mod son MOD7 mas viejos que sus .bp -> «rancios» -> la interfaz de Core saldria de la fuente y el
+    # sello (ifaceCrc) no seria el de la stdlib que se sube a la placa (medido el 17-sep: 81399848 en
+    # vez de cca7de33). Aqui la stdlib es la que hay al lado, y punto.
+    shutil.copy(bp, d)
+    rc, out, err = sh(['java', '-jar', FE, os.path.basename(bp), '--compile', '.', '--backend=mivm', fmt], d, 120)
     raiz = os.path.join(d, (lib + '.' if lib else '') + nombre + '.mod')
     if rc != 0 or not os.path.isfile(raiz):
         os.makedirs(os.path.join(d, 'src'), exist_ok=True); shutil.copy(bp, os.path.join(d, 'src'))

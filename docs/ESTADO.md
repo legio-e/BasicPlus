@@ -53,9 +53,16 @@ de enlace como `RUNTIME_ERROR` con prefijo «link: » y el device como `LINK_ERR
 
 **V9 en el host** (`compat/v9_medidas.py`, 69 samples): `.mod` +32 % — y no por las refs: son los 484 B de la 4.5 con
 las cuatro clases builtin que cada módulo lleva copiadas (el módulo raíz, L1, es el arreglo); enlace VM-C 80 → 98 µs
-(mediana), `strcmp` 10× menos en los samples con GUI, los GUI más pequeños en MOD9. **Queda de `#523`**: V9 en placa
-(`GuiTableDemo`, el Core MOD9 a la Pico por `puts`), V8 (placas) y V11 (la cadena en MOD9: stdlib, blobs, packs, IDE,
-`build_mdn.sh`/`AotBuild` con el formato, `.slots` fuera) — V11 es cambiar el formato por defecto: lo decide Eduardo.
+(mediana), `strcmp` 10× menos en los samples con GUI, los GUI más pequeños en MOD9.
+
+**V8/V9 en placa** (tarde, Pico y DK2 con el firmware de hoy; `compat/placas_v9.py`): `CoreRefs` MOD8 y MOD9 con el stdout
+esperado en las dos placas (Core MOD9 a `/app` por `puts`); `GuiTableDemo` en la DK2 con toda la stdlib MOD9 en `/app`:
+**mismo stdout que MOD8 y enlaza más rápido** (30,4 → 27,2 ms; 91.200 → 8.623 strcmp; `Gui.mod` 61 → 44 KB). Salió el
+desfase de stdlib: el Core embebido de las dos imágenes es MOD7 y la `Collections` MOD8 de hoy no enlaza contra él
+(«no exporta List#add$LObject;»); en MOD9 corre. Y el compilador sella `Core` desde `bpstdlib/` (BpVM.cfg) y no desde
+el `.mod` de al lado: los arneses compilan una copia fuera del repo. **Queda de `#523`**: V8 en ESP32-S3/C6/P4 (cuando
+estén conectadas; cargador común) y V11 (la cadena en MOD9: `bpstdlib/*.mod`, los blobs de las cinco imágenes, packs,
+IDE, `build_mdn.sh`/`AotBuild` con el formato, `.slots` fuera) — V11 es cambiar el formato por defecto: lo decide Eduardo.
 
 ## 🔬 `#523` V10 (16-sep, tarde-noche) — la revisión adversarial del enlace tardío: 85 hallazgos, 25 arreglados, 8 fichas, 1 decisión
 

@@ -733,8 +733,8 @@ sola conexión; el mismo programa (`Lib`+`Ext` de mezcla, el override llamado po
 | MOD9 | el esperado, `EXITED OK 11 ms` | «enlace tardío: 1 clase construida, 11 refs, 66 B de arena» · 3 módulos, 4 búsquedas, 354 strcmp, **1.655 µs** |
 
 Primer dato de V9 en placa: en un programa de tres módulos el enlace tardío cuesta +660 µs (construir la abierta y resolver
-11 refs) y hace 4× menos `strcmp` (menos marcadores). El `Core` de la Pico siguió siendo el MOD8 de la imagen (D9: sólo la
-regla 1) — subir el MOD9 de 14 KB exige `puts` por trozos (`#294`), pendiente para la tanda de V8/V9 con `GuiTableDemo`.
+11 refs) y hace 4× menos `strcmp` (menos marcadores). El `Core` de la Pico siguió siendo el de la imagen (MOD7, medido
+el 17-sep; D9: sólo la regla 1) — subir el MOD9 de 14 KB exige `puts` por trozos (`#294`): hecho el 17-sep (§tarde).
 
 ### ✅ 17-sep — V5: TODO EL CORPUS EN MOD9, con la stdlib MOD9, en las dos VMs, con el stdout de MOD8
 
@@ -817,7 +817,38 @@ samples con GUI se hacen MÁS PEQUEÑOS en MOD9 (`GuiWinJson` 3.694 → 3.147 B:
 los fixups 4.3/4.4). La miVM no se mide (6 ms de enlace en frío es la JVM, no el algoritmo). En la Pico, medido el
 16-sep: 995 → 1.655 µs en un programa de tres módulos con una clase construida.
 
-⏭️ **Queda del plan** (V7_IDEAS §H2.7): V9 en placa con `GuiTableDemo` (y el Core MOD9 a la Pico por `puts`); V8 (medidas
+### ✅ 17-sep (tarde) — V8/V9 EN PLACA: la Pico y la DK2 cargan MOD9 con la stdlib MOD9 subida por `puts` (`compat/placas_v9.py`)
+
+Firmware de hoy en las dos (Pico: `flash_pico.py`; DK2: build headless de CubeIDE + `STM32_Programmer_CLI` por `sn`),
+el `link.c` común con el E9 de esta mañana. Una conexión por placa; la stdlib **fresca de la fuente** en cada formato
+(`v9_medidas.stdlib_de`) sube a `/app` por `puts` (#294): Core 14 KB, Gui 61/44 KB, Json, Collections, Str. El log de la
+placa se enciende (`env log=1` + RESET, #423) y se toman sólo sus líneas nuevas; al final se borra todo lo subido.
+
+| placa | programa | MOD8 | MOD9 |
+|---|---|---|---|
+| Pico 2 | `CoreRefs` (2 módulos; `MiError extends Exception`, `List`, `catch RuntimeError`) | 802 µs, 868 strcmp | 1.725 µs, 80 strcmp; 1 clase construida, 10 refs, 45 B |
+| DK2 | `CoreRefs` | 898 µs, 868 strcmp | 2.245 µs, 80 strcmp; 1 clase, 10 refs, 45 B |
+| DK2 | **`GuiTableDemo`** (6 módulos, la tabla en pantalla) | **30.362 µs**, 66 búsquedas, 91.200 strcmp | **27.194 µs**, 28 búsquedas, 8.623 strcmp; 2 clases construidas, 53 refs, 235 B |
+
+`stdout` esperado en los cuatro RUN de `CoreRefs` (el de la miVM del host) y **idéntico MOD8 == MOD9** en `GuiTableDemo`
+(6 líneas: celdas y árbol de widgets; `Gui.run()` se mata a los 6 s), más el aviso «tapa al de /lib» de `#493` cuando
+`Core` va en `/app`. La lectura: en un programa pequeño el enlace tardío cuesta +1 ms (construir la clase y resolver
+por clave); en uno real con GUI **es más rápido** (−10 %: 10× menos `strcmp` sin marcadores). `Gui.mod` −28 %.
+
+**Lo que salió por el camino (el desfase de stdlib, medido)**: el `Core` embebido en las DOS imágenes es **MOD7**
+(«dep 'Core' sin datos de version (MOD7)» en los dos logs — no MOD8 como decía la nota del 16-sep), y `bpstdlib/*.mod`
+versionados también son MOD7. Con la `Collections` MOD8 de hoy, `GuiTableDemo` MOD8 **no enlaza** contra ese Core
+(«no exporta `Core.__cls_m_List#add$LObject;` (la usa 'Collections'; version vieja?)»): hubo que subir también el Core
+MOD8 fresco para tener línea base. En MOD9 el mismo programa corre contra el Core MOD9 subido — el escenario D10 en vivo.
+Y el compilador toma la interfaz de `Core` de `bpstdlib/` (`BpVM.cfg` → `stdlibDir`, autodescubierto subiendo desde el
+FUENTE, y ese `Core.mod` MOD7 es más viejo que `Core.bp` → «rancio» → de la fuente), no del `.mod` que está al lado: el
+sello `ifaceCrc` del consumidor no era el de la stdlib subida (`81399848` ≠ `cca7de33`, diag «compilado contra otra
+interfaz; enlace tardío»). Los arneses de placa compilan ahora una COPIA del `.bp` en el temporal. Todo esto es la
+**cadena en MOD9 (V11)**: regenerar `bpstdlib/*.mod`, los blobs de las cinco imágenes y los packs desde la fuente.
+`samples/CoreRefs.bp` nuevo (paridad host OK). Informe: `compat/informes/placas_v9_2026-09-17.tsv`.
+
+⏭️ **Queda del plan** (V7_IDEAS §H2.7): V8 en las otras familias (ESP32-S3/C6/P4: el cargador es común; compilar y
+correr `placas_v9.py` cuando estén conectadas); V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.

@@ -1,0 +1,40 @@
+// V7/H2 (#523, V9/V8 en placa, 17-sep) — un programa cuyas referencias cruzan a CORE:
+// una clase propia que extiende Core.Exception (abierta: la construye el cargador contra el
+// Core que haya), List por ref (add/length/getInteger), un throw/catch de la clase propia y
+// un RuntimeError de la VM atrapado por su clase de Core. En MOD9 enlaza contra el Core MOD9
+// (en la placa, subido a /app por puts); en MOD8, contra el de /lib. Mismo stdout en los dos.
+module CoreRefs
+import Core
+public class MiError extends Exception
+  var codigo: integer
+  public function MiError(m: string, codigo: integer)
+    super(m)
+    this.codigo := codigo
+  end MiError
+  public function describe(): string
+    return this.msg + "#" + this.codigo
+  end describe
+end MiError
+public function main()
+  var l: List := List()
+  var i: integer := 0
+  while i < 5 do
+    l.add(i * i)
+    i := i + 1
+  endwh
+  print l.length()
+  print l.getInteger(3)
+  try
+    throw MiError("boom", 7)
+  catch e: MiError
+    print "propia: " + e.describe()
+  endtry
+  try
+    var z: integer := 0
+    print 10 / z
+  catch e: RuntimeError
+    print "rte: " + e.msg
+  endtry
+  print "fin"
+end main
+end CoreRefs
