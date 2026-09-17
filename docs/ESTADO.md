@@ -34,9 +34,14 @@ un MOD9 enlaza contra el Core MOD9 embebido; un MOD8 se rechaza con nombre). `--
 `.slots` fuera; `check` con la paridad principal en MOD9 y `check-mod8` como foto «antes»; mezcla 194/194; tests C con el
 guardián de fixtures que grita. Cierra `#514` y `#500`; abre `#533` (AOT fase 2: método de clase externa desde el `.mdn`).
 
-**Orden para retomar**: (1) `#496` el pack de SQLite (MOD7 por dentro → E9 para cualquier consumidor MOD9 de sus clases):
-rehacer con los dos `.mdn` regenerados por toolchain cruzado; (2) grabar las ESP32 con las imágenes ya construidas y
-pasar `placas_v9.py --embebida`; (3) `#533` (AOT fase 2); (4) `#525`/`#526` (graves, preexistentes); y de H2 quedan
+**El pack de SQLite ya está en MOD9** (noche): `.mdn` ARM/RISC-V regenerados, `Core`/`Str` de dentro gen 7 (copiarlos a
+`out/` antes de construir, o salen gen 0 y E0 los rechaza), `test-sqldemo` OK en host con todo MOD9; en la Metro el pack
+monta y enlaza pero el motor no arranca (`psram=0MB`: no cabe el arena) → la prueba completa, en el P4. Metro y Nucleo
+grabadas con la imagen de hoy y verificadas (`CoreRefs` MOD9 OK, MOD8 rechazado); `/app` de la Metro limpio de copias
+rancias (`Core`, `Json`), ENV `SQLite=2` como estaba.
+
+**Orden para retomar**: (1) `SqlDemo` en el P4 contra el pack nuevo y grabar las ESP32 (imágenes construidas) con
+`placas_v9.py --embebida`; (2) `#533` (AOT fase 2); (3) `#525`/`#526` (graves, preexistentes); y de H2 quedan
 `#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 

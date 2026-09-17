@@ -868,10 +868,19 @@ interfaz; enlace tardío»). Los arneses de placa compilan ahora una COPIA del `
   blobs eran MOD7 y la `Collections` de hoy no enlazaba en ninguna placa (ya no); el IDE fat-jar reconstruido.
 - **Cierra**: `#514` (por construcción), `#500` (la cadena).
 
-⏭️ **Queda**: `#496` **el pack de SQLite** (MOD7 por dentro: un consumidor MOD9 que use sus clases recibe E9 «recompila
-'SQLite'»; rehacerlo exige regenerar los dos `.mdn` con los toolchains cruzados — ARM y RISC-V — con los nombres R4, y
-comprobar el tamaño del pack como dice su LEEME); grabar las **ESP32** cuando estén conectadas (las imágenes ya están);
-`montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
+**El pack de SQLite, rehecho en MOD9 (17-sep, noche)**: `SQLite.mdn.ARMV8`/`.RISCV` regenerados con `PackAot` (blob v2,
+ABI 6, 16 thunks cada uno; toolchains autodetectados), `SQLite.pack` con las mismas 9 entradas y el mismo tamaño de bloques
+(sólo crecen los `.mod`); `Core`/`Str` de dentro son los canónicos **gen 7** (copiados a `out/` ANTES de construir, como
+dice su LEEME: la primera pasada los recompiló con el `version` del pack —ninguno— y salieron gen 0, y en la Metro E0 los
+rechazó con razón: «'Str' (gen 0) es mas antiguo que el que 'SqlDemo' necesita (gen 7)»). Verificado en host: `make
+test-sqldemo` con TODO regenerado en MOD9 (`aot_SQLite.c` nuevo, el gemelo del `.mdn`): `status=OK`. En la **Metro**
+(imagen de hoy): el pack monta en XIP, `SQLite`/`Str` MOD9 enlazan desde él, los 16 thunks se registran — y el motor no
+arranca porque esa placa dice `psram=0MB` y el arena de SQLite (≥1 MB) no cabe: es la placa, no el pack. La prueba de punta
+a punta en placa queda para el **P4** (RISC-V, con PSRAM). Y la **Nucleo** (imagen de hoy): `CoreRefs` MOD9 contra su Core
+embebido OK, MOD8 rechazado con nombre — cuatro placas hoy (Pico, DK2, Metro, Nucleo).
+
+⏭️ **Queda**: `SqlDemo` en el P4 contra el pack nuevo; grabar las **ESP32** cuando estén conectadas (las imágenes ya
+están); `montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
