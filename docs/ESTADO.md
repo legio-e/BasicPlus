@@ -47,8 +47,16 @@ SQLite RISC-V grabado y sellado, **`SqlDemo` MOD9 byte-idéntico al host**. Cinc
 S3/C6/C3 no se graban a propósito (Eduardo: «ya está bastante probado»; las imágenes están construidas — ojo al usarlas:
 un `/app` con `.mod` MOD7/8 deja de enlazar, se recompila desde el IDE).
 
-**Orden para retomar**: (1) `#533` (AOT fase 2: el `.mdn` pide la ranura por nombre); (2) `#525`/`#526` (graves,
-preexistentes); y de H2 quedan
+## 🧬 `#533` (18-sep) — el AOT en MOD9, fase 2: el `.mdn` pide la ranura por clave
+
+Helper `slot_por_clave` en la tabla del `.mdn` (`MDN_ABI_VERSION` 7 en `mdn_format.h` y `MdnPack`), `aot_<Mod>_ranura`
+en el C generado para clases externas/abiertas (método y getter de property), `bpvm_link_slot_por_clave` en `link.c`
+(la búsqueda exacta, privados ajenos no cuentan). Verificado en host y en la Pico 2 (con control: un `.mdn` marcado
+da 110). Regenerados: `test/aot_XMethodNat.c`, los `.mdn` del pack de SQLite (ABI 7), `packs/SQLite.pack`; las seis
+imágenes reconstruidas (Pico grabada; las demás cuando toquen — y al grabarlas, el pack de SQLite de la Metro y del P4
+hay que regrabarlo: su `.mdn` es ABI 6 y el cargador lo rechazará con nombre). Frontend 220/220, tests C OK.
+
+**Orden para retomar**: (1) `#525`/`#526` (graves, preexistentes); y de H2 quedan
 `#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 

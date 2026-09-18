@@ -80,6 +80,9 @@ public final class AotCEmitter {
     /** #211 — nombre de la función AOT que se está emitiendo (para mensajes
      *  de aviso). Fijado al inicio de cada emitFunction. */
     private String currentFuncName = "?";
+    /** V7/H2 (#533) — el nombre canónico del módulo que se emite (`Mod` o `lib.Mod`), para las
+     *  claves R4 y los nombres de clase que el `.mdn` pide al cargador en ejecución. */
+    private String moduloLocal = null;
 
     /** Contador para nombres únicos en for-loops (avoid colisión de
      *  __end/__step entre fors anidados). */
@@ -438,6 +441,7 @@ public final class AotCEmitter {
         // que el `.mdn` pide al intérprete (factorías, funciones ajenas) sean los R4
         // que el `.mod` exporta en MOD9 (y los de siempre en MOD8).
         MivmEmitter.fijarContextoEstatico(Main.FORMATO, module);
+        moduloLocal = MivmEmitter.moduloLocalDe(module);
         // Pre-pass: recolectar nombres de funciones native para
         // que el emisor reconozca self-calls como C calls directas.
         List<Ast.FuncDef> nativeFuncs = new ArrayList<>();
@@ -592,6 +596,20 @@ public final class AotCEmitter {
         w.println("    if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */");
         w.println("    return f;");
         w.println("}");
+        if (Main.FORMATO == 9) {
+            /* V7/H2 (#533) — el AOT en MOD9, fase 2: la ranura de vtable de un método de una
+             * clase EXTERNA o ABIERTA no se hornea (la fija el cargador al enlazar): el `.mdn`
+             * la PIDE por clave en ejecución, como los opcodes `_REF` piden la suya a la
+             * ext-table. `slot_por_clave` resuelve el descriptor de la clase ESTÁTICA por su
+             * data-symbol y busca la clave por la cadena real (saltando privados ajenos), y si
+             * no está, se DICE con nombre — el E3 del enlace, en nativo. */
+            w.println("/* V7/H2 (#533) — la ranura de un método de clase externa/abierta, por clave y en ejecución; si no está, lo DICE. */");
+            w.println("static inline int32_t aot_" + moduleName + "_ranura(struct bpvm* vm, const char* clase, const char* clave, const char* aviso) {");
+            w.println("    int32_t s = vm->aot_helpers->slot_por_clave(vm, clase, clave, \"" + moduloLocal + "\");");
+            w.println("    if (s < 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */");
+            w.println("    return s;");
+            w.println("}");
+        }
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
         for (Ast.FuncDef f : nativeFuncDefs.values()) {
@@ -1906,12 +1924,20 @@ public final class AotCEmitter {
                 }
                 String getter = "get" + Character.toUpperCase(ps.name.charAt(0))
                               + ps.name.substring(1);
-                exigirClaseCerradaLocal(ps.ownerClass, "la property '" + ps.name + "'", ma.line);
-                int slot = ps.ownerClass.slotOf(getter);
-                if (slot < 0) {
-                    throw new UnsupportedAotException(
-                        "AOT: no se pudo resolver el slot del getter '" + getter
-                        + "' de '" + ps.ownerClass.name + "' (line " + ma.line + ").");
+                String slotExpr;
+                Symbol.ClassSymbol recvCls = claseEstaticaDe(ma.target, ps.ownerClass);
+                if (porRef9(recvCls) || porRef9(ps.ownerClass)) {
+                    /* V7/H2 (#533) — clase externa o abierta: la ranura por clave, en ejecución. */
+                    String clave = getter + "()" + tipoClave(ps.type, "la property '" + ps.name + "'", ma.line);
+                    slotExpr = ranuraExpr(recvCls, clave, "la property '" + ps.name + "'", ma.line);
+                } else {
+                    int slot = ps.ownerClass.slotOf(getter);
+                    if (slot < 0) {
+                        throw new UnsupportedAotException(
+                            "AOT: no se pudo resolver el slot del getter '" + getter
+                            + "' de '" + ps.ownerClass.name + "' (line " + ma.line + ").");
+                    }
+                    slotExpr = String.valueOf(slot);
                 }
                 boolean retIsRef = isRefBp(ps.type);
                 if (!isBridgeI32Type(ps.type) && !retIsRef) {
@@ -1924,7 +1950,7 @@ public final class AotCEmitter {
                     + "por el puente native→BP (getter virtual) y NO se acelera por AOT.");
                 w.print("vm->aot_helpers->call_method_i32(vm, ");
                 emitExpr(ma.target);
-                w.print(", " + slot + ", (const int32_t*) 0, 0, 0u, " + (retIsRef ? 1 : 0) + ")");
+                w.print(", " + slotExpr + ", (const int32_t*) 0, 0, 0u, " + (retIsRef ? 1 : 0) + ")");
                 return;
             }
         }
@@ -1999,27 +2025,44 @@ public final class AotCEmitter {
             refMaskOfParams(fs.params), isRefBp(fs.returnType));
     }
 
-    /** V7/H2 (#523) — el AOT en MOD9, fase 1: una `native` sólo HORNEA ranuras de
-     *  vtable de clases CERRADAS de su propio módulo. Las dos únicas salidas del
-     *  `.mdn` que dependen de la forma de una clase son `call_method_i32(vm, this,
-     *  slot, …)` (un método, o el getter de una property), y ese `slot` sale de
-     *  `ClassSymbol.slotOf` en tiempo de compilación. Con una clase EXTERNA el número
-     *  es el de la versión contra la que se compiló —en ejecución puede haber otra, y
-     *  el `.mod` ya la llama por referencia (R2)—; con una clase ABIERTA (R1) el
-     *  número lo asigna el CARGADOR contra el padre real y el compilador ni lo
-     *  conoce. Hornearlo sería la familia de #514 dentro del código nativo, en
-     *  silencio. Así que se rechaza: la función de módulo con `native` da error de
-     *  compilación (la promesa del autor no se puede cumplir), y el método `native`
-     *  aplanado se degrada a aviso y corre interpretado (donde va por ref). Fase 2,
-     *  cuando toque: leer `ext[idx]` en ejecución en vez de hornear. */
-    private static void exigirClaseCerradaLocal(Symbol.ClassSymbol cls, String que, int line) {
-        if (Main.FORMATO != 9 || cls == null || cls.isBuiltin) return;
-        if (!cls.isExternal && !MivmEmitter.esAbierta(cls)) return;
-        throw new UnsupportedAotException(
-            "AOT (MOD9): " + que + " es de la clase " + (cls.isExternal ? "EXTERNA" : "ABIERTA")
-            + " '" + cls.name + "' (line " + line + "): su ranura de vtable la fija el cargador al "
-            + "enlazar, no el compilador, y una `native` la hornearía. Llámalo desde código "
-            + "interpretado (va por referencia) o quita `native`.");
+    /** V7/H2 (#523 fase 1 → #533 fase 2) — las dos únicas salidas del `.mdn` que dependen
+     *  de la forma de una clase son `call_method_i32(vm, this, slot, …)` (un método, o el
+     *  getter de una property). Una `native` sólo HORNEA ese `slot` (`ClassSymbol.slotOf`)
+     *  para una clase CERRADA de su propio módulo: con una EXTERNA el número es el de la
+     *  versión contra la que se compiló, y con una ABIERTA (R1) lo asigna el CARGADOR contra
+     *  el padre real — hornearlo sería la familia de #514 dentro del código nativo, en
+     *  silencio. La fase 1 (16-sep) rechazaba; la fase 2 (18-sep) hace lo que hace el
+     *  `.mod` con sus opcodes `_REF`: pedir la ranura por CLAVE en ejecución
+     *  (`aot_<Mod>_ranura` → `slot_por_clave`, el E3 del enlace si no está). En MOD8 nada
+     *  cambia: se hornea como siempre. */
+    private boolean porRef9(Symbol.ClassSymbol cls) {
+        return Main.FORMATO == 9 && cls != null && !cls.isBuiltin
+            && (cls.isExternal || MivmEmitter.esAbierta(cls));
+    }
+    /** La clase ESTÁTICA del receptor (la misma que usa el emisor mivm para la ref, R2);
+     *  si el tipo del receptor no es una clase, la que declara el miembro. */
+    private Symbol.ClassSymbol claseEstaticaDe(Ast.IExpr target, Symbol.ClassSymbol porDefecto) {
+        BpType t = (semInfo != null) ? semInfo.exprTypes.get(target) : null;
+        return (t instanceof BpType.ClassType && ((BpType.ClassType) t).cls != null) ? ((BpType.ClassType) t).cls : porDefecto;
+    }
+    private String tipoClave(BpType t, String que, int line) {
+        try { return Symbol.ClaveCanonica.tipo(t, moduloLocal); }
+        catch (Symbol.ClaveCanonica.TipoSinResolver e) {
+            throw new UnsupportedAotException("AOT: " + e.getMessage() + " (" + que + ", line " + line + ")");
+        }
+    }
+    /** `aot_<Mod>_ranura(vm, "Mod.Cls", "clave", "aviso")`: el aviso nombra la native, el
+     *  método y a quién recompilar, como el E3 del enlace. */
+    private String ranuraExpr(Symbol.ClassSymbol clase, String clave, String que, int line) {
+        String qn;
+        try { qn = Symbol.ClaveCanonica.clase(clase, moduloLocal); }
+        catch (Symbol.ClaveCanonica.TipoSinResolver e) {
+            throw new UnsupportedAotException("AOT: " + e.getMessage() + " (" + que + ", line " + line + ")");
+        }
+        String aviso = "AOT: la native '" + currentFuncName + "' pide '" + qn + "." + clave
+            + "' y la clase cargada no lo tiene (¿otra versión de la dependencia?): recompila '" + moduleName + "'";
+        byte[] b = aviso.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return "aot_" + moduleName + "_ranura(vm, \"" + qn + "\", \"" + clave + "\", \"" + cEscapeBytes(b) + "\")";
     }
 
     /** #174b — emite una llamada a método PÚBLICO de instancia (virtual) desde
@@ -2040,12 +2083,24 @@ public final class AotCEmitter {
                     + "solo soporta params i32; tipos mixtos → pendiente.");
             }
         }
-        exigirClaseCerradaLocal(fs.ownerClass, "el método '" + fs.name + "'", c.line);
-        int slot = (fs.ownerClass != null) ? fs.ownerClass.slotOf(fs.name) : -1;
-        if (slot < 0) {
-            throw new UnsupportedAotException(
-                "AOT: no se pudo resolver el slot de vtable de '" + fs.name + "' (line "
-                + c.line + ").");
+        String slotExpr;
+        Symbol.ClassSymbol recvCls = claseEstaticaDe(ma.target, fs.ownerClass);
+        if (porRef9(recvCls) || porRef9(fs.ownerClass)) {
+            /* V7/H2 (#533) — clase externa o abierta: la ranura por clave, en ejecución. */
+            String clave;
+            try { clave = Symbol.ClaveCanonica.metodo(fs, moduloLocal); }
+            catch (Symbol.ClaveCanonica.TipoSinResolver e) {
+                throw new UnsupportedAotException("AOT: " + e.getMessage() + " (método '" + fs.name + "', line " + c.line + ")");
+            }
+            slotExpr = ranuraExpr(recvCls, clave, "el método '" + fs.name + "'", c.line);
+        } else {
+            int slot = (fs.ownerClass != null) ? fs.ownerClass.slotOf(fs.name) : -1;
+            if (slot < 0) {
+                throw new UnsupportedAotException(
+                    "AOT: no se pudo resolver el slot de vtable de '" + fs.name + "' (line "
+                    + c.line + ").");
+            }
+            slotExpr = String.valueOf(slot);
         }
         if (c.args.size() != fs.params.size()) {
             throw new UnsupportedAotException(
@@ -2063,7 +2118,7 @@ public final class AotCEmitter {
         String tail = ", " + refMask + "u, " + (retIsRef ? 1 : 0) + ")";
         w.print("vm->aot_helpers->call_method_i32(vm, ");
         emitExpr(ma.target);   // receptor (this)
-        w.print(", " + slot + ", ");
+        w.print(", " + slotExpr + ", ");
         int n = c.args.size();
         if (n == 0) {
             w.print("(const int32_t*) 0, 0" + tail);

@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | **de V10 (16-sep): `#527` `#528` `#529` `#532`** · los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la cadena en MOD9 desde el 17-sep)** · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ `#516` `#520` ~~`#521`~~ `#533` (y `#522`, de H1) |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la cadena en MOD9 desde el 17-sep)** · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ `#516` `#520` ~~`#521`~~ ~~`#533`~~ (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -893,7 +893,9 @@ que devuelve el árbol entero, también `/lib`: la imagen lo repuso al reiniciar
 
 Decisión de Eduardo: la S3/C6/C3 **no se graban a propósito** («ya está bastante probado todo»: el cargador es común y
 está en cinco placas de las tres familias); sus imágenes están construidas y se graban cuando toquen (la tanda del cierre,
-o el día que se usen). ⏭️ **Queda**: `montar-zip.sh` al publicar; `#533` (AOT fase 2). Del plan de `#523`: V9 (medidas
+o el día que se usen). **18-sep**: `#533` cerrada (la fase 2 del AOT, `.mdn` ABI 7; `test-xmethodnat` de vuelta a MOD9; los `.mdn` del pack de
+SQLite regenerados — las placas que lleven el pack con ABI 6 lo verán rechazado con nombre al recibir el firmware nuevo y
+hay que regrabarlo). ⏭️ **Queda**: `montar-zip.sh` al publicar. Del plan de `#523`: V9 (medidas
 antes/después); V8 (placas; la Pico); la cadena en MOD9 (V11, con `build_mdn.sh`/`AotBuild` pasando el formato al AOT
 y `.slots` fuera). Colaterales del mapa del mediodía aún sin ficha: `field := expr` en un accesor sin chequeo
 ni coerción; `switch` sobre referencias con sujeto de 4 B.
@@ -968,15 +970,16 @@ etiqueta «RuntimeError» cualquier excepción no atrapada aunque sea `Lib.MiErr
 un objeto que no desciende de Exception (a mano; desde una dep lo para el E10 desde hoy) muere sin diagnóstico en la VM-C.
 ⏭️ `finally` solo; el nombre de la clase en el mensaje (por el sello +6 y la 4.5 en MOD9); guardia en `bpvm_eh_unwind`.
 
-#### 🟡 `#533` — el AOT en MOD9, fase 2: una `native` que llama a un método de una clase EXTERNA o ABIERTA (`b.getDoubled()` con `b: XClassLib.Box`) no se traduce — la fase 1 la rechaza con mensaje porque la ranura la fija el cargador, y el `.mdn` necesita pedirla por nombre (abierta 17-sep, al pasar la cadena a MOD9; H5)
+#### ✅ `#533` — el AOT en MOD9, fase 2: una `native` que llama a un método de una clase EXTERNA o ABIERTA (`b.getDoubled()` con `b: XClassLib.Box`) no se traduce — la fase 1 la rechaza con mensaje porque la ranura la fija el cargador, y el `.mdn` necesita pedirla por nombre (abierta 17-sep, al pasar la cadena a MOD9; H5 · **CERRADA el 18-sep**: el `.mdn` pide la ranura por CLAVE en ejecución —`aot_<Mod>_ranura` → helper `slot_por_clave` (descriptor por data-symbol + la clave R4 por la cadena, privados ajenos no cuentan), `MDN_ABI_VERSION` 6 → 7 (MdnPack, mdn_format.h), los `.mdn` del pack de SQLite regenerados; `test-xmethodnat` de vuelta a MOD9 y `AotMod9Test` con el contrato nuevo (8/8); verificado en host con la ranura movida y en la **Pico 2** con un `.mdn` marcado como control (110 ≠ 11: corre el nativo). Docs: `AOT_CROSS_MODULE.md` §8.5)
 
-**Medido**: `bpgenvm-c/samples/XMethodNat.bp` («AOT método de clase externa», `test-xmethodnat`) no compila en MOD9: «AOT
-(MOD9): el método 'getDoubled' es de la clase EXTERNA 'Box': su ranura de vtable la fija el cargador al enlazar, no el
-compilador» (fase 1, 16-sep: correcto y ruidoso, y antes ese `.mod` se «regeneraba» en silencio quedándose en MOD8 —
-arreglado el guardián del Makefile). El test se queda en `--formato=8` a propósito hasta que exista la fase 2.
-⏭️ El `.mdn` resuelve la ranura como los opcodes `_REF`: por clave contra la ext-table del módulo (`ext[idx]`, que el
-cargador ya rellena) o con `bpvm_link_slot_por_nombre(vm, class_ptr, clave)` cacheada; lo mismo para el getter de
-property. Cuando esté, `test-xmethodnat` vuelve a 9 y el `.mdn` deja de hornear ranuras ajenas. Se cruza con `#519`.
+**Medido** (17-sep): `bpgenvm-c/samples/XMethodNat.bp` («AOT método de clase externa», `test-xmethodnat`) no compilaba en
+MOD9: «AOT (MOD9): el método 'getDoubled' es de la clase EXTERNA 'Box': su ranura de vtable la fija el cargador al
+enlazar, no el compilador» (fase 1, 16-sep: correcto y ruidoso, y antes ese `.mod` se «regeneraba» en silencio
+quedándose en MOD8 — arreglado el guardián del Makefile). **Hecho (18-sep)**: la fase 2, como los opcodes `_REF` pero
+por nombre (el `.mdn` no tiene ext-table): `slot_por_clave(vm, "XClassLib.Box", "getDoubled()i", "XMethodNat")`, nuevo
+en la tabla de helpers (ABI 7). La premisa de junio («el slot es inmutable, opción C descartada porque exigiría nombres
+en el descriptor») ya no vale: los nombres están en la 4.5 y la ranura ajena la pone el cargador. Sin caché a propósito
+(el `.mdn` no tiene RAM; la llamada ya cruza al intérprete). Se cruza con `#519` (sigue abierta).
 
 #### ✅ `#492` — los campos PROTEGIDOS no cruzan módulos: la interfaz exporta métodos y propiedades, pero no campos → **V7** (abierta 11-sep, de `G2` · **CERRADA el 17-sep con la cadena en MOD9, `d9b6981c`**: B completa desde el 15-sep y sólo quedaba la cadena; en MOD9 el campo cruza por ref `CAMPO` con su clave `n:i` y la interfaz lo publica como `field n:integer` — `Ext.Hija.k()` lee `this.n` de `Lib.Base` en `compat/mezcla.py`, 194/194 en las dos VMs; la stdlib, los blobs y las imágenes van con esa interfaz)
 

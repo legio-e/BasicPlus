@@ -995,6 +995,10 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm);
 uint32_t      bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr);
 /* V7/H2 (#523) — reflexion de Forms con MOD9: slot de un metodo por nombre simple, o -1. */
 int           bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre);
+/* V7/H2 (#533) — la ranura de la CLAVE exacta (`m(i)i`) subiendo por la cadena desde class_ptr;
+ * un privado de un módulo distinto de `modulo_llamante` (nombre canónico; NULL = ninguno) no
+ * cuenta, como en el enlace. -1 = no está. */
+int           bpvm_link_slot_por_clave(const bpvm_t* vm, uint32_t class_ptr, const char* clave, const char* modulo_llamante);
 /* V10 (16-sep, R2/R3/R6/R9) — la subtabla CLASES (4.5) recien retenida: filas dentro de la seccion, csOff dentro del
  * modulo, parentDepIdx en rango, ranuras coherentes. 0 si vale; si no, deja el motivo en vm->load_error y devuelve
  * BPVM_ERR_BAD_HEADER (un .mod corrupto se RECHAZA, no se lee basura). */

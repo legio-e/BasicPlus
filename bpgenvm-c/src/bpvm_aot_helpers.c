@@ -650,6 +650,15 @@ static uint32_t h_find_module_cs(bpvm_t* vm, const char* module_name) {
  * la tabla global de símbolos (la misma que usa bpvm_aot_register_by_name).
  * Devuelve 0 si no existe. El thunk lo llama UNA vez y cachea el resultado.
  * (call_bp_i32 vive en interp.c — necesita las convenciones de frame.) */
+/* [V7/H2 #533] la ranura de un método de clase externa/abierta, por clave: el descriptor de
+ * la clase ESTÁTICA por su data-symbol (`Lib.Base`, lo registra el cargador para toda clase
+ * pública o construida) y la clave por su cadena real, con la regla del enlace. */
+static int32_t h_slot_por_clave(bpvm_t* vm, const char* clase, const char* clave, const char* modulo_llamante) {
+    if (!vm || !clase || !clave) return -1;
+    uint32_t desc = bpvm_link_lookup(vm, clase);
+    if (desc == 0) return -1;
+    return bpvm_link_slot_por_clave(vm, desc, clave, modulo_llamante);
+}
 static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
     if (!vm || !qualified) return 0;
     for (int i = 0; i < vm->symbol_count; i++) {
@@ -926,6 +935,8 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .array_store_ref     = h_array_store_ref,
     .array_load_f32      = h_array_load_f32,
     .array_store_f32     = h_array_store_f32,
+    /* [V7/H2 #533] la ranura por clave (ABI 7). */
+    .slot_por_clave      = h_slot_por_clave,
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

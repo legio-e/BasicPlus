@@ -379,7 +379,7 @@ test-xmodnat: $(LIBOBJ)
 XMETHODNAT_BIN = build/test_xmethodnat.exe
 test-xmethodnat: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,XClassLib XMethodNat,8)
+	$(call fixture,XClassLib XMethodNat)
 	@if [ ! -f samples/XMethodNat.mod ]; then \
 	  echo "(skip test-xmethodnat: falta samples/XMethodNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \

@@ -103,13 +103,14 @@ class AotMod9Test {
         return new Object[]{ ok, new String(buf.toByteArray(), StandardCharsets.UTF_8) };
     }
 
-    @Test @DisplayName("MOD9: una native que llama a un método de una clase EXTERNA no compila, y el error nombra la clase")
-    void externaRechazada(@TempDir Path tmp) throws IOException {
+    @Test @DisplayName("MOD9 (#533, fase 2): una native que llama a un método de una clase EXTERNA compila, y el C pide la ranura por CLAVE en ejecución (no la hornea)")
+    void externaPorClave(@TempDir Path tmp) throws Exception {
         Main.FORMATO = 9;
-        Object[] r = compila(tmp, "Usa", new String[]{"Lib", LIB}, new String[]{"Usa", USA_EXTERNA});
-        assertFalse((Boolean) r[0], "no debe compilar: la ranura de Lib.Base.m la fija el cargador\n" + r[1]);
-        String t = (String) r[1];
-        assertTrue(t.contains("AOT (MOD9)") && t.contains("EXTERNA") && t.contains("'Base'") && t.contains("'m'"), t);
+        String c = emiteC(tmp, "Lib", LIB, "Usa", USA_EXTERNA);
+        assertTrue(c.contains("_ranura(vm, \"Lib.Base\", \"m(i)i\","), "la ranura por clave R4 contra la clase estatica:\n" + c);
+        assertTrue(c.contains("slot_por_clave(vm, clase, clave, \"Usa\")"), "el helper pasa el modulo llamante (privados ajenos no cuentan):\n" + c);
+        assertFalse(c.contains("call_method_i32(vm, b, 2,") || c.contains("call_method_i32(vm, b, 3,"), "no debe hornear un numero de ranura ajeno:\n" + c);
+        assertTrue(c.contains("la native 'rapida' pide 'Lib.Base.m(i)i'"), "el aviso nombra la native, la clase y la clave:\n" + c);
     }
 
     @Test @DisplayName("MOD9: la misma native sobre una clase CERRADA del propio módulo sigue compilando (se acelera)")
@@ -120,13 +121,13 @@ class AotMod9Test {
         assertFalse(((String) r[1]).contains("AOT (MOD9)"), (String) r[1]);
     }
 
-    @Test @DisplayName("MOD9: un método native aplanado de una clase ABIERTA se degrada a aviso y el módulo compila (corre interpretado)")
-    void abiertaAviso(@TempDir Path tmp) throws IOException {
+    @Test @DisplayName("MOD9 (#533, fase 2): un método native aplanado de una clase ABIERTA compila sin el aviso de la fase 1 (la ranura va por clave)")
+    void abiertaPorClave(@TempDir Path tmp) throws IOException {
         Main.FORMATO = 9;
         Object[] r = compila(tmp, "Ext", new String[]{"Lib", LIB}, new String[]{"Ext", EXT_ABIERTA});
         assertTrue((Boolean) r[0], (String) r[1]);
         String t = (String) r[1];
-        assertTrue(t.contains("aviso AOT") && t.contains("AOT (MOD9)") && t.contains("ABIERTA") && t.contains("'Hija'"), t);
+        assertFalse(t.contains("AOT (MOD9)") && t.contains("ABIERTA"), "la fase 1 rechazaba/avisaba; la fase 2 pide la ranura por clave:\n" + t);
     }
 
     /** El C que AotMain emite para Usa, tras compilar el proyecto (las deps se leen del out). */

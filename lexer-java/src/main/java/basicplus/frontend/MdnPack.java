@@ -55,11 +55,13 @@ public final class MdnPack {
      * receta (24 B en vez de 20). La autoridad es mdn_format.h; esto lo copia. */
     private static final int MDN_VERSION = 2;
     private static final int MDN_HEADER_SIZE = 24;
-    /* [V6/N1.5] 24-ago: 6 — slot `newarray_i64` nuevo, y tres newarray_* que
-     * dejaron de ser stubs. Histórico: 5 = 11-ago, el .mdn depende también del
-     * OFFSET de `memory` y `aot_helpers` dentro de `struct bpvm`, no sólo de la
-     * tabla. La autoridad del número es mdn_format.h; esto lo copia. */
-    static final int MDN_ABI_VERSION = 6;
+    /* [V7/H2 #533] 18-sep: 7 — slot `slot_por_clave` nuevo al final (la ranura de un
+     * método de clase externa/abierta, por clave y en ejecución: el AOT en MOD9, fase 2).
+     * Histórico: 6 = [V6/N1.5] 24-ago, slot `newarray_i64` nuevo y tres newarray_* que
+     * dejaron de ser stubs; 5 = 11-ago, el .mdn depende también del OFFSET de `memory` y
+     * `aot_helpers` dentro de `struct bpvm`, no sólo de la tabla. La autoridad del número
+     * es mdn_format.h; esto lo copia. */
+    static final int MDN_ABI_VERSION = 7;
     private static final int MDN_NAME_MAX = 32;
 
     /** Sufijos que gcc le pega a un simbolo cuando lo clona o especializa. Son

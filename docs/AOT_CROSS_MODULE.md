@@ -391,3 +391,46 @@ de formato `.mod` + RAM, para resolver algo que ya es inmutable.)
 
 El caso **privado/`super`** desde native (sin asidero runtime) necesitaría
 exportar métodos o exponer su offset — decisión separada, menor prioridad.
+
+### 8.5 MOD9: la ranura de una clase EXTERNA o ABIERTA ya no es inmutable — se pide por clave (V7/H2 `#533`, 18-sep-2026)
+
+La premisa de B («el slot es inmutable: forma estática de la clase») dejó de ser cierta
+con el enlace tardío (`#523`, `MOD_FORMAT.md` §13): la ranura de un método de una clase
+de OTRO módulo es la de la versión contra la que se compiló (puede haber otra en
+ejecución), y la de una clase ABIERTA la asigna el **cargador** contra el padre real.
+Hornearla en el `.mdn` era la familia de `#514` dentro del código nativo, en silencio.
+Y la objeción a la opción C («guardar nombres de método en el descriptor = cambio de
+formato + RAM») ya está pagada: la subtabla `CLASES` 4.5 lleva las claves de todos los
+métodos, y es lo que el cargador usa para resolver las refs `MET` del bytecode.
+
+**Fase 1 (16-sep)**: rechazo con mensaje (`exigirClaseCerradaLocal`). **Fase 2 (18-sep)**:
+en MOD9, si la clase estática del receptor (o la que declara el miembro) es externa o
+abierta, el C generado no lleva número:
+
+```c
+vm->aot_helpers->call_method_i32(vm, b,
+    aot_XMethodNat_ranura(vm, "XClassLib.Box", "getDoubled()i", "AOT: la native 'useBox' pide ..."),
+    (const int32_t*) 0, 0, 0u, 0)
+```
+
+`aot_<Mod>_ranura` es un `static inline` del generado que llama al helper nuevo de la
+tabla, `slot_por_clave(vm, clase, clave, modulo_llamante)` (**`MDN_ABI_VERSION` 6 → 7**:
+la tabla crece; todo `.mdn` anterior se rechaza con nombre, `#504`): el descriptor de la
+clase ESTÁTICA por su data-symbol (`bpvm_link_lookup("XClassLib.Box")`, lo registra el
+cargador para toda clase pública o construida) y la clave R4 subiendo por la cadena real
+(`bpvm_link_slot_por_clave`: la primera fila con esa clave; un privado de un módulo
+distinto del llamante no cuenta, como en el enlace). Si no está, `throw_runtime` con el
+aviso — el E3 del enlace, en nativo (en la práctica el `.mod` lo canta antes: la misma
+ref existe en el bytecode). Lo mismo para el getter de una property (`getP()i`). Las
+clases CERRADAS del propio módulo siguen horneando como B; en MOD8 nada cambia.
+
+**Coste**: una búsqueda por nombre en cada llamada (símbolos + filas de la 4.5); no hay
+caché porque el `.mdn` no tiene RAM propia (XIP, zero-copy) y la llamada ya cruza al
+intérprete, que es lo que domina. Si alguna vez se mide que importa, la caché vive en la
+VM (por `(descriptor, clave)`), no en el `.mdn`.
+
+**Verificado**: host (`test-xmethodnat` de vuelta a MOD9: `useBox = 11`; con dos métodos
+insertados delante de `getDoubled` en `XClassLib`, sigue 11; sin `getDoubled`, rechazo con
+nombre) y **Pico 2** (`.mdn` ABI 7 cargado, `useBox = 11` con la ranura movida; control:
+un `.mdn` marcado con `+ 100` imprime 110, o sea que corre el nativo y no el intérprete).
+Los dos `.mdn` del pack de SQLite regenerados a ABI 7.

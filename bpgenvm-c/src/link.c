@@ -767,12 +767,14 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
  * CONSTRUIDA la ranura efectiva de un metodo propio se lee de su propia vtable (la
  * entrada cuyo codeOff es el suyo); el registro del enlace ya no existe. -1 = no esta
  * o la clase no es MOD9 (el llamante prueba los marcadores). */
-int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre) {
-    /* V10 (16-sep, F6/REF-1): la ranura MINIMA entre todas las claves `nombre(` de la cadena
-     * entera — la misma regla que slotPorNombre en miVM y que los marcadores MOD8 (la primera
-     * declarada). Antes devolvia la primera fila de la clase mas derivada que tuviera una, y
-     * con sobrecargas homonimas cada VM elegia otra (y otro ancho de frame). */
-    size_t nl = strlen(nombre);
+/* V7/H2 (#533) — la busqueda comun de las dos de abajo. `exacto` = la CLAVE entera (`m(i)i`),
+ * la primera fila que la tenga subiendo por la cadena (un override tiene la misma ranura que
+ * el metodo del padre, asi que la primera vale); no exacto = el nombre simple `nombre(`, la
+ * ranura MINIMA de la cadena (la reflexion de Forms). Con `modulo_llamante` (canonico), una
+ * fila PRIVADA de otro modulo no cuenta: la misma regla que el enlace (MET, SUPER). */
+static int lt_slot_por(const bpvm_t* vm, uint32_t class_ptr, const char* texto, int exacto, const char* modulo_llamante) {
+    size_t nl = strlen(texto);
+    const char* nombre = texto;
     uint32_t desc = class_ptr;
     int mejor = -1;
     for (int prof = 0; prof < 64 && desc != 0; prof++) {
@@ -795,7 +797,10 @@ int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* 
             for (uint16_t i = 0; i < c.n_met; i++) {
                 const uint8_t* r = lt_utf_skip(q);
                 uint16_t len = lt_u16(q);
-                if (len > nl && memcmp(q + 2, nombre, nl) == 0 && q[2 + nl] == '(') {
+                int casa = exacto ? (len == nl && memcmp(q + 2, nombre, nl) == 0)
+                                  : (len > nl && memcmp(q + 2, nombre, nl) == 0 && q[2 + nl] == '(');
+                if (casa && (r[2 + 4] & 2) && modulo_llamante && strcmp(canon, modulo_llamante) != 0) casa = 0;   /* privado ajeno: no cuenta */
+                if (casa) {
                     int s = -1;
                     if (!(c.flags & 1)) s = (int) lt_u16(r);
                     else {
@@ -807,6 +812,7 @@ int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* 
                         for (uint16_t s2 = 0; s2 < nm2; s2++) if (bpvm_read_i32_be(vt + 4u * s2) == code_off) { s = (int) s2; break; }
                     }
                     if (s >= 0 && (mejor < 0 || s < mejor)) mejor = s;
+                    if (s >= 0 && exacto) return s;   /* la primera fila con la clave, subiendo */
                 }
                 q = r + 2 + 4 + 1;
             }
@@ -817,6 +823,16 @@ int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* 
         desc = (uint32_t)((int32_t) bpvm_get_cs_for_data_addr(vm, desc) + parent_off);
     }
     return mejor;
+}
+int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* nombre) {
+    /* V10 (16-sep, F6/REF-1): la ranura MINIMA entre todas las claves `nombre(` de la cadena
+     * entera — la misma regla que slotPorNombre en miVM y que los marcadores MOD8 (la primera
+     * declarada). Antes devolvia la primera fila de la clase mas derivada que tuviera una, y
+     * con sobrecargas homonimas cada VM elegia otra (y otro ancho de frame). */
+    return lt_slot_por(vm, class_ptr, nombre, 0, NULL);
+}
+int bpvm_link_slot_por_clave(const bpvm_t* vm, uint32_t class_ptr, const char* clave, const char* modulo_llamante) {
+    return lt_slot_por(vm, class_ptr, clave, 1, modulo_llamante);
 }
 
 /* V10 (16-sep, R2/R3/R6/R9) — la 4.5 recien retenida, con los limites comprobados ANTES de que

@@ -455,6 +455,16 @@ struct aot_helpers_v2 {
     void    (*array_store_ref)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
     float   (BPVM_AOT_FP_ABI *array_load_f32) (struct bpvm* vm, uint32_t ref, int32_t idx);
     void    (BPVM_AOT_FP_ABI *array_store_f32)(struct bpvm* vm, uint32_t ref, int32_t idx, float v);
+
+    /* [V7/H2 #533, 18-sep] El AOT en MOD9, fase 2: la ranura de vtable de un método de una
+     * clase EXTERNA o ABIERTA no se hornea en el `.mdn` (la fija el cargador al enlazar): el
+     * código nativo la PIDE por clave en ejecución, como los opcodes `_REF` piden la suya a
+     * la ext-table. `clase` es el nombre cualificado de la clase ESTÁTICA del receptor
+     * (`Lib.Base`, el data-symbol que registra el cargador), `clave` la R4 del método
+     * (`m(i)i`, `getP()i`) y `modulo_llamante` el módulo del `.mdn` (un privado de OTRO
+     * módulo no cuenta, como en el enlace). -1 = no está (el generado lo convierte en el
+     * E3 del enlace, con nombre). Sube MDN_ABI_VERSION a 7: la tabla crece. */
+    int32_t (*slot_por_clave)(struct bpvm* vm, const char* clase, const char* clave, const char* modulo_llamante);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

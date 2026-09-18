@@ -37,7 +37,14 @@
                                 * sin datos de versión. El escritor emite v2. */
 #define MDN_HEADER_SIZE_V1 20
 #define MDN_HEADER_SIZE_V2 24
-#define MDN_ABI_VERSION    6   /* [V6/N1.5] 24-ago — un slot nuevo al final
+#define MDN_ABI_VERSION    7   /* [V7/H2 #533] 18-sep — un slot nuevo al final
+                                * (`slot_por_clave`: la ranura de un método de
+                                * clase externa/abierta, por clave y en
+                                * ejecución). Todo .mdn anterior se rechaza con
+                                * nombre (#504) y se regenera: los del pack de
+                                * SQLite, los de los tests, los de los samples.
+                                *
+                                * Histórico: 6 = [V6/N1.5] 24-ago — un slot nuevo al final
                                 * (`newarray_i64`) y tres que dejaron de ser
                                 * stubs. Lo primero mueve el tamaño de la tabla;
                                 * lo segundo cambia lo que hace un .mdn ya
