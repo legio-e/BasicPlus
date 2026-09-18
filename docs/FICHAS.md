@@ -108,7 +108,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | **de V10 (16-sep): `#527` `#528` `#529` `#532`** · los tipos y las intrínsecas en un fichero legible, las tablas generadas; encima: sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`; `#460`; los huecos `L20`/`L19`/`M4`/`N9`/`M5`/`N2` |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la cadena en MOD9 desde el 17-sep)** · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ `#516` `#520` ~~`#521`~~ ~~`#533`~~ (y `#522`, de H1) |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la cadena en MOD9 desde el 17-sep)** · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ ~~`#516`~~ ~~`#520`~~ ~~`#521`~~ ~~`#533`~~ (y `#522`, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | `#491`; `/sd` reservado; `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; `listDir`; el tope de path (`#456`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | `#378` `#470` `#479` `#487`; los restos de `#471`, `#469` (ADC STM32), `#480` (`Pulse` C3); NeoPixel ESP32/STM32; el nombre `pico` en la capa C; el tamaño de flash lo dice la placa |
 > | **H5** | **AOT y código nativo** | `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -431,7 +431,7 @@ igual que miVM. Oráculos en el corpus: `LibMarcaBase`/`LibMarcaUsa` (marcador c
 `BPVM_MAX_MODULES`; ahora `[MathUtil init] … useA = 30 useB = 25` en las dos VMs). El arnés localiza el `.mod`
 raíz de un módulo con library (`x.y.Modulo.mod`). Paridad 65/65.
 
-#### 🧹 `#520` — los rincones de la resolución de módulos que la revisión de `#493` destapó y NO son de `#493` (abierta 15-sep; preexistentes, sin efecto en el IDE ni en placa; H2)
+#### ✅ `#520` — los rincones de la resolución de módulos que la revisión de `#493` destapó y NO son de `#493` (abierta 15-sep; preexistentes, sin efecto en el IDE ni en placa; H2 · **CERRADA el 18-sep**: (a) miVM entiende `pack:<Pack>/x` como la VM-C (`bpvm_pack_key_de_path`): el del propio pack se lee, el de OTRO no es suyo y sigue al FS —sin pasar por `Paths.get`, que en Windows reventaba con el ':'— (caso 13 de `check-sombra`, mismo stdout); (b) `executeRootPack` fija `rootModuleDir` al directorio del `.pack`; (c) miVM busca junto a la raíz ANTES que en el workdir, como la VM-C; (d) el fichero que no existe sale con 2 en las dos; (e) `found`/`gemelo` en `discover_deps` a `BPVM_FS_PATH_MAX`. Se quedan escritos y sin ficha: con DOS deps ausentes cada VM nombra una distinta (texto de un fallo de carga, fuera del corpus), y en el host sin `--libdir` `/app`/`/lib` siguen siendo `fopen` literales de la unidad actual)
 
 Todos medidos en host por los refutadores del 15-sep (`C:/tmp/v7_493/rev/`), todos anteriores a `#493` (comprobados
 contra el binario pre-`#493` o con `git blame`), y todos de la línea de comandos: el IDE lanza `RUN` con el nombre

@@ -673,7 +673,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
 
         /* 1) /app y 2) /lib, por la FACHADA (#344: así las cinco familias corren
          * este mismo código). `en_lib` recuerda si ganó /lib, para el aviso. */
-        char found[192];
+        char found[BPVM_FS_PATH_MAX];   /* #520 (e): era 192 y truncaba una ruta de proyecto de 200+ («IO error») */
         uint32_t fsz = 0;
         int have_fs = 0, en_lib = 0;
         /* La precisión explícita no es cosmética: sin ella gcc avisa de posible
@@ -715,7 +715,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
          * usuario. ASCII y sin la ruta resuelta (cada VM resuelve una distinta;
          * el texto tiene que ser byte-idéntico). */
         if (have_fs && !en_lib) {
-            char gemelo[192]; uint32_t gsz = 0;
+            char gemelo[BPVM_FS_PATH_MAX]; uint32_t gsz = 0;   /* #520 (e) */
             snprintf(gemelo, sizeof gemelo, "/lib/%s", pname_file);
             /* «Tapa» = hay OTRO fichero en /lib con ese nombre y es DISTINTO
              * (tamaño o CRC). Una copia idéntica no tapa nada (y puede ser el

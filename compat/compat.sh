@@ -736,7 +736,25 @@ EOF
       echo "  (sin $SIMEXE: el caso del wire no se prueba — make sim)"
     fi
   fi
-  echo "  sombra: $((12 - fails))/12 casos"
+  # V7/#520 (a), 18-sep — el ESQUEMA `pack:<Pack>/x` en un pack EJECUTABLE: el recurso
+  # cualificado del propio pack se lee; el de OTRO pack (`pack:Otro/x`) NO es mio y sigue
+  # al FS, donde no existe (fileExists false; readFile «no se pudo abrir»); el pelado sale
+  # del pack. miVM ignoraba el esquema (contestaba por el basename) y ademas reventaba
+  # en Windows con el ':' («Illegal char <:>»). Mismo stdout en las dos VMs.
+  local R="$S/packres"; rm -rf "$R"; mkdir -p "$R"; cp "$STDLIB/Core.mod" "$R/"
+  printf 'module PackRes\nimport Core\nfunction main()\n  print "propio: " + readFile("pack:PackRes/hola.txt")\n  print "otro existe: " + fileExists("pack:Otro/hola.txt")\n  print "pelado: " + readFile("hola.txt")\n  try\n    print readFile("pack:Otro/hola.txt")\n  catch e: RuntimeError\n    print "otro: " + e.msg\n  endtry\n  print "fin"\nend main\nend PackRes\n' > "$R/PackRes.bp"
+  printf 'hola desde el pack' > "$R/hola.txt"; printf 'main=PackRes\n' > "$R/manifest.mft"
+  if ( cd "$R" && java -jar "$V3_FE" PackRes.bp --compile . --backend=mivm --stdlibDir=. && java -cp "$PACKJAR" basicplus.pack.PackCli build --out PackRes.pack --name PackRes --version 1 --date 0 PackRes.mod Core.mod hola.txt manifest.mft ) >"$R/build.log" 2>&1; then
+    rm -f "$R/hola.txt" "$R/PackRes.mod" "$R/manifest.mft"
+    local pj pc esp
+    pj="$(run_vm "$V3_JAVA" "$R/PackRes.pack")"; pc="$(run_vm "$V3_C" "$R/PackRes.pack")"
+    esp="$(printf 'propio: hola desde el pack\notro existe: false\npelado: hola desde el pack\notro: readFile('"'"'pack:Otro/hola.txt'"'"'): no se pudo abrir\nfin')"
+    if [ "$pj" = "$pc" ] && [ "$pj" = "$esp" ]; then echo "  ok  el esquema pack:<Pack>/x (propio, ajeno, pelado): mismo stdout en las dos VMs"
+    else echo "  ✗ el esquema pack:"; echo "     java: $(printf '%s' "$pj" | tr '\n' '|' | cut -c1-160)"; echo "     c:    $(printf '%s' "$pc" | tr '\n' '|' | cut -c1-160)"; fails=$((fails+1)); fi
+  else
+    echo "  ✗ el esquema pack: no se pudo construir el pack ($R/build.log)"; fails=$((fails+1))
+  fi
+  echo "  sombra: $((13 - fails))/13 casos"
   [ "$fails" -eq 0 ]
 }
 

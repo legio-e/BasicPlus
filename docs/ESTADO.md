@@ -65,7 +65,17 @@ por el camino la tercera tabla de Thread (el importador) se desincronizó y `Cto
 (`builtinBaseMethodNames`); `samples/ThreadPrint.bp` en el corpus (71). La cadena rehecha (stdlib, packs, blobs; Pico
 grabada; STM32/ESP32 reconstruidas), el IDE fat-jar también. check verde 71/59/9/12/71, mezcla 194/194.
 
-**Orden para retomar**: de H2 quedan
+## 🧹 `#516` y `#520` (18-sep, noche) — H2 sin fichas abiertas
+
+`#516`: el enum cruza en las firmas (`enum:Color` / `enum:Lib.Color` en la interfaz, `UnresolvedEnumRef` de 4 B, resuelto
+contra `ns.enums`; un enum de un tercer módulo no importado es error con nombre); samples `EnumFirmaLib`/`EnumFirma` en
+el corpus (72). `#520`: `pack:<Pack>/x` en miVM como en la VM-C (caso 13 de sombra), `rootModuleDir` del pack, orden
+raíz→workdir, exit 2 al no existir el fichero, buffers de `discover_deps` a `BPVM_FS_PATH_MAX`. check verde
+72/59/9/13/72. **H2 queda sin fichas abiertas** (sólo `#522`, que es de H1); `#523` sigue abierta con lo de siempre:
+`montar-zip.sh` al publicar y la decisión de quitar `--formato=8` al cerrar V7.
+
+**Orden para retomar**: H2 hecho. Lo que sigue lo decide Eduardo entre los hitos abiertos de `V7_BACKLOG.md`
+(`#522` enum en H1; `#527`-`#532` de V10; `#519`; H5/H6/H7…). El IDE fat-jar lleva el compilador y la miVM de hoy. De H2 quedaba
 `#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 

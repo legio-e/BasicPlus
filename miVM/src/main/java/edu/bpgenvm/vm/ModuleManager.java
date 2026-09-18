@@ -173,13 +173,16 @@ public class ModuleManager {
             return filename;
         }
         // 1) /app: el workdir (sandbox), la carpeta de la raíz, los modulePaths.
-        if (workdir != null) {
-            java.nio.file.Path baseInWd = resolveInWorkdirOrNull(base);
-            if (baseInWd != null && java.nio.file.Files.isRegularFile(baseInWd)) return baseInWd.toString();
-        }
+        // #520 (c) — junto a la raíz ANTES que el workdir: el mismo orden que la VM-C (el
+        // directorio del entry antes que el basedir). Con los dos distintos, cada VM
+        // cargaba una copia. Desde el IDE son el mismo directorio y no cambia nada.
         if (rootModuleDir != null) {
             java.io.File junto = new java.io.File(rootModuleDir, base);
             if (junto.isFile()) return junto.getPath();
+        }
+        if (workdir != null) {
+            java.nio.file.Path baseInWd = resolveInWorkdirOrNull(base);
+            if (baseInWd != null && java.nio.file.Files.isRegularFile(baseInWd)) return baseInWd.toString();
         }
         for (String dir : modulePaths) {
             if (dir == null || dir.isEmpty()) continue;
@@ -312,6 +315,8 @@ public class ModuleManager {
 
     /** Ruta del pack en ejecución, o null si se ejecuta un .mod suelto. */
     private String runPackPath = null;
+    /** #520 (a) — el nombre del pack en ejecución (su cabecera), para `pack:<Pack>/x`. */
+    private String runPackName = null;
 
     /** Índice {@code tipo:nombre} → entrada del pack en ejecución. Se construye
      *  en orden, así que el ÚLTIMO gana — igual que {@code bpvm_pack_find_src}. */
@@ -361,6 +366,10 @@ public class ModuleManager {
      */
     public String executeRootPack(String packPath) throws IOException {
         String main = openRunPack(packPath);
+        {   // #520 (b) — dónde vive el pack, para resolver al lado las deps que NO lleva (la VM-C ya lo hacía)
+            java.io.File dir = new java.io.File(packPath).getAbsoluteFile().getParentFile();
+            rootModuleDir = (dir != null && dir.isDirectory()) ? dir.getPath() : null;
+        }
         boolean ok = false;
         try {
             discoveryQueue.clear();
@@ -416,6 +425,7 @@ public class ModuleManager {
         runPackIndex.clear();
         runPackIndex.putAll(idx);
         runPackPath = packPath;
+        runPackName = p.nombre;
         return main;
     }
 
@@ -445,6 +455,19 @@ public class ModuleManager {
         // Nunca reclamar el fichero del PROPIO pack: se lee por el FS de
         // verdad, y reclamarlo aquí sería morderse la cola.
         if (path.equals(runPackPath)) return null;
+        // #520 (a) — la forma CUALIFICADA `pack:<Pack>/x` (espejo de bpvm_pack_key_de_path):
+        // dice de QUÉ pack se quiere el recurso. Si nombra otro pack, este no es mío y el
+        // recurso sigue su camino (el FS). Antes miVM ignoraba el esquema y contestaba por
+        // el basename: `readFile("pack:Otro/x")` devolvía el x del propio pack.
+        if (path.startsWith("pack:")) {
+            String resto = path.substring(5);
+            int barra = -1;
+            for (int i = 0; i < resto.length(); i++) { char c = resto.charAt(i); if (c == '/' || c == '\\') { barra = i; break; } }
+            if (barra <= 0) return null;                          // sin nombre de pack o sin fichero
+            String pack = resto.substring(0, barra);
+            if (runPackName != null && !runPackName.equals(pack)) return null;
+            path = resto.substring(barra + 1);
+        }
         String tipo = packEntryType(path);
         if (tipo.isEmpty()) return null;
         basicplus.pack.PackEntry e = runPackIndex.get(tipo + ":" + packEntryName(path));

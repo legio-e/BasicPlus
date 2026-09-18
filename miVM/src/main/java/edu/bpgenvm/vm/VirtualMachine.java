@@ -1177,6 +1177,10 @@ public class VirtualMachine {
         return c;
     }
 
+    /** #520 (a) — `pack:<Otro>/x` que NO es del pack en ejecución: en la VM-C sigue al FS tal cual
+     *  (la fachada no le pone base-dir a un esquema) y allí no existe; aquí igual — y sin pasar
+     *  por Paths.get, que en Windows revienta con el ':' («Illegal char <:>»). */
+    private static boolean esPackAjeno(String path) { return path != null && path.startsWith("pack:"); }
     private byte[] packResource(String path) {
         ModuleManager mm = getModuleManager();
         return (mm != null) ? mm.packResource(path) : null;
@@ -4672,6 +4676,7 @@ public class VirtualMachine {
                 String path = readVmString(popTcRef(tc));
                 try {
                     byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                    if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
                     if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
@@ -4714,7 +4719,7 @@ public class VirtualMachine {
             case FILE_EXISTS: {
                 String path = readVmString(popTcRef(tc));
                 boolean hay = (packResource(path) != null)   // #310 — el pack en ejecución va primero
-                        || java.nio.file.Files.exists(sandboxPath(tc, path));
+                        || (!esPackAjeno(path) && java.nio.file.Files.exists(sandboxPath(tc, path)));   // #520 (a)
                 pushTc(tc, hay ? 1 : 0);
                 break;
             }
@@ -4725,6 +4730,7 @@ public class VirtualMachine {
                 String path = readVmString(popTcRef(tc));
                 try {
                     byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                    if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
                     if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
                     writeInt32(ref, data.length);
@@ -5299,6 +5305,7 @@ public class VirtualMachine {
                 byte[] enPack = packResource(p);   // #310 — el pack en ejecución va primero
                 if (enPack != null) { pushTc(tc, enPack.length); break; }
                 try {
+                    if (esPackAjeno(p)) throw new java.io.IOException("no se pudo abrir");   // #520 (a)
                     long sz = java.nio.file.Files.size(sandboxPath(tc, p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.
                     if (sz > Integer.MAX_VALUE)

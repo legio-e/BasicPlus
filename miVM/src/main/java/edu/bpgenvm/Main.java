@@ -195,7 +195,7 @@ public class Main {
         }
         if (!daemonMode && !new File(file).isFile()) {
             System.err.println("No existe el fichero: " + file);
-            System.exit(1);
+            System.exit(2);   // #520 (d): «no se pudo cargar» = 2 (la tabla #481), como la VM-C
             return;
         }
 
