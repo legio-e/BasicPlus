@@ -2,19 +2,19 @@ dbg 3
 module Pulse
 source C:\lenguajes\pm\bpstdlib\Pulse.bp
 lines
-470 100
-487 106
-504 113
-527 118
-544 88
-554 89
-564 90
-579 91
-592 92
-616 93
-761 53
-776 56
-791 59
+494 100
+511 106
+528 113
+551 118
+568 88
+578 89
+588 90
+603 91
+616 92
+640 93
+785 53
+800 56
+815 59
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -44,56 +44,58 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Counter.getPin 386
+func Counter.getPin 410
 this -20 8 0 ?
-func Counter.setPin 400
+func Counter.setPin 424
 this -24 8 0 ?
-func Counter.getEdgeKind 413
+func Counter.getEdgeKind 437
 this -20 8 0 ?
-func Counter.setEdgeKind 427
+func Counter.setEdgeKind 451
 this -24 8 0 ?
-func Counter.getId 440
+func Counter.getId 464
 this -20 8 0 ?
-func Counter.setId 454
+func Counter.setId 478
 this -24 8 0 ?
-func Counter.start 467
+func Counter.start 491
 this -20 8 0 ?
-func Counter.stop 484
+func Counter.stop 508
 this -20 8 0 ?
-func Counter.value 501
+func Counter.value 525
 this -20 8 0 ?
-func Counter.reset 524
+func Counter.reset 548
 this -20 8 0 ?
-func Counter.__init 541
+func Counter.__init 565
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Counter(ii) 631
+func __cls_new_Counter(ii) 655
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter(ii) 665
+func __cls_init_Counter(ii) 689
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_m_Counter#stop()V 683
+func __cls_m_Counter#stop()V 707
 this -20 8 0 ?
-func __cls_m_Counter#start()V 697
+func __cls_m_Counter#start()V 721
 this -20 8 0 ?
-func __cls_m_Counter#reset()V 711
+func __cls_m_Counter#reset()V 735
 this -20 8 0 ?
-func __cls_m_Counter#value()i 725
+func __cls_m_Counter#value()i 749
 this -20 8 0 ?
-func __strconcat 803
+func __strconcat 827
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

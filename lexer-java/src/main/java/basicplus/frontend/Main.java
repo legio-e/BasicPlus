@@ -1992,6 +1992,13 @@ public final class Main {
         return out;
     }
 
+    /** #526 — siembra en el stub las ranuras de una raíz builtin (`Object`: toString 0,
+     *  compareTo 1; `Thread`: run 0, start 1, join 2, toString 3) desde la fuente única. */
+    private static void sembrarRaizBuiltin(Symbol.ClassSymbol stub, String base) {
+        java.util.List<String> nombres = ModuleInterface.builtinBaseMethodNames(base);
+        for (int i = 0; i < nombres.size(); i++) stub.externalMethodSlots.put(nombres.get(i), i);
+    }
+
     /**
      * #392 — reparte los slots de vtable de una clase IMPORTADA. UNA sola
      * función, porque hay dos momentos en que se puede sembrar (al leer la
@@ -2371,15 +2378,13 @@ public final class Main {
                         // numeran desde 2. Sembramos esos 2 slots aquí para que
                         // INVOKE_VIRTUAL cross-module despache a la ranura
                         // correcta (mismo riesgo BUG-5 si se omite).
-                        stub.externalMethodSlots.put("toString", 0);
-                        stub.externalMethodSlots.put("compareTo", 1);
+                        sembrarRaizBuiltin(stub, "Object");
                     } else if ("Object".equals(cs.baseClassName)) {
                         // #291 — base builtin EXPLÍCITA `extends Object`: misma
                         // siembra que la raíz implícita. Antes caía al defer de
                         // abajo buscando un módulo "Object" que no existe → los
                         // métodos propios numeraban desde 0 (slot de toString).
-                        stub.externalMethodSlots.put("toString", 0);
-                        stub.externalMethodSlots.put("compareTo", 1);
+                        sembrarRaizBuiltin(stub, "Object");
                     } else if ("Thread".equals(cs.baseClassName)) {
                         // #291 — base builtin Thread (SIN Object: run=0 lo asume
                         // __threadStart en las VMs). Antes este caso caía al
@@ -2387,10 +2392,9 @@ public final class Main {
                         // heredados → `w.start()` sobre una subclase de Thread
                         // importada era "no tiene miembro 'start'": las
                         // subclases de Thread no se podían usar cross-module.
-                        // Mismos números que computeClassLayout (la función única).
-                        stub.externalMethodSlots.put("run",   0);
-                        stub.externalMethodSlots.put("start", 1);
-                        stub.externalMethodSlots.put("join",  2);
+                        // Mismos números que computeClassLayout: SE LEEN de ahí (#526: la tercera
+                        // copia a mano de la tabla de Thread se desincronizó al añadir toString).
+                        sembrarRaizBuiltin(stub, "Thread");
                         // 14-sep — sólo los que la interfaz NO trae: si la clase sobreescribe
                         // `run` (lo normal), su `method run` llega abajo y, con el stub ya
                         // definido, se ENCADENABA como sobrecarga (`run$`) en vez de
@@ -2399,11 +2403,11 @@ public final class Main {
                         // exporta #3). Preexistente; lo cazó el oráculo CtorHijo.
                         java.util.Set<String> traidos = new java.util.HashSet<>();
                         for (ModuleInterface.FuncSig m : cs.methods) traidos.add(m.name);
-                        for (String mn : new String[]{"run", "start", "join"}) {
+                        for (String mn : ModuleInterface.builtinBaseMethodNames("Thread")) {
                             if (traidos.contains(mn)) continue;
                             Symbol.FunctionSymbol thf = new Symbol.FunctionSymbol(
                                     mn, true, false, false, stub, null);
-                            thf.returnType = null;   // void (misma convención que FuncSig)
+                            thf.returnType = "toString".equals(mn) ? BpType.PrimitiveType.STRING : null;   // void (misma convención que FuncSig)
                             stub.instanceMembers.tryDefine(thf);
                         }
                     } else {

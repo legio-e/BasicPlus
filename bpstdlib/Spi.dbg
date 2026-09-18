@@ -2,30 +2,30 @@ dbg 3
 module Spi
 source C:\lenguajes\pm\bpstdlib\Spi.bp
 lines
-546 156
-574 161
-602 166
-633 145
-643 146
-653 147
-663 148
-673 149
-683 150
-693 151
-869 54
-892 58
-916 62
-940 66
-967 71
-982 74
-997 77
-1012 80
-1027 83
-1042 86
-1057 90
-1076 93
-1095 96
-1114 99
+570 156
+598 161
+626 166
+657 145
+667 146
+677 147
+687 148
+697 149
+707 150
+717 151
+893 54
+916 58
+940 62
+964 66
+991 71
+1006 74
+1021 77
+1036 80
+1051 83
+1066 86
+1081 90
+1100 93
+1119 96
+1138 99
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -55,53 +55,55 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Bus.getId 381
+func Bus.getId 405
 this -20 8 0 ?
-func Bus.setId 395
+func Bus.setId 419
 this -24 8 0 ?
-func Bus.getSck 408
+func Bus.getSck 432
 this -20 8 0 ?
-func Bus.setSck 422
+func Bus.setSck 446
 this -24 8 0 ?
-func Bus.getMosi 435
+func Bus.getMosi 459
 this -20 8 0 ?
-func Bus.setMosi 449
+func Bus.setMosi 473
 this -24 8 0 ?
-func Bus.getMiso 462
+func Bus.getMiso 486
 this -20 8 0 ?
-func Bus.setMiso 476
+func Bus.setMiso 500
 this -24 8 0 ?
-func Bus.getBaudrate 489
+func Bus.getBaudrate 513
 this -20 8 0 ?
-func Bus.setBaudrate 503
+func Bus.setBaudrate 527
 this -24 8 0 ?
-func Bus.getMode 516
+func Bus.getMode 540
 this -20 8 0 ?
-func Bus.setMode 530
+func Bus.setMode 554
 this -24 8 0 ?
-func Bus.write 543
+func Bus.write 567
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.read 571
+func Bus.read 595
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.transfer 599
+func Bus.transfer 623
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func Bus.__init 630
+func Bus.__init 654
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -109,14 +111,14 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Bus(iiiiii) 713
+func __cls_new_Bus(iiiiii) 737
 id -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Bus(iiiiii) 755
+func __cls_init_Bus(iiiiii) 779
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -124,40 +126,40 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Bus#read([ii)i 781
+func __cls_m_Bus#read([ii)i 805
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#transfer([i[ii)i 803
+func __cls_m_Bus#transfer([i[ii)i 827
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#write([ii)i 828
+func __cls_m_Bus#write([ii)i 852
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func init 866
+func init 890
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 889
+func write 913
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 913
+func read 937
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 937
+func transfer 961
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __strconcat 1130
+func __strconcat 1154
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

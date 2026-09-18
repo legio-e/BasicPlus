@@ -2,28 +2,28 @@ dbg 3
 module Packs
 source C:\lenguajes\pm\bpstdlib\Packs.bp
 lines
-410 43
-416 44
-422 45
-432 46
-446 47
-455 49
-474 55
-480 56
-486 57
-496 58
-514 59
-522 60
-532 61
-542 62
-558 63
-575 65
-591 68
-600 70
-619 77
-632 78
-645 80
-659 81
+434 43
+440 44
+446 45
+456 46
+470 47
+479 49
+498 55
+504 56
+510 57
+520 58
+538 59
+546 60
+556 61
+566 62
+582 63
+599 65
+615 68
+624 70
+643 77
+656 78
+669 80
+683 81
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -53,30 +53,32 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func list 407
+func list 431
 l 8 8 0 ?
 c 16 4 0 integer
-func listIn 471
+func listIn 495
 pack -28 8 0 string
 ext -20 8 0 string
 l 8 8 0 ?
 p 16 4 0 integer
 e 20 4 0 integer
 f 24 8 0 string
-func acaba 616
+func acaba 640
 f -28 8 0 string
 ext -20 8 0 string
 suf 4 8 0 string
-func __strconcat 693
+func __strconcat 717
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

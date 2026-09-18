@@ -2,21 +2,21 @@ dbg 3
 module Mcp9804
 source C:\lenguajes\pm\bpdevices\Mcp9804.bp
 lines
-389 38
-410 39
-429 41
-452 42
-471 43
-478 44
-485 46
-495 47
-502 48
-521 51
-531 52
-563 55
-584 57
-600 30
-607 31
+413 38
+434 39
+453 41
+476 42
+495 43
+502 44
+509 46
+519 47
+526 48
+545 51
+555 52
+587 55
+608 57
+624 30
+631 31
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -46,36 +46,38 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Sensor.readTemp 386
+func Sensor.readTemp 410
 this -20 8 0 ?
 ptr 4 8 0 ?
 data 24 8 0 ?
 msb 40 4 0 integer
 lsb 44 4 0 integer
 temp 48 4 0 float
-func Sensor.__init 597
+func Sensor.__init 621
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Sensor(ii) 617
+func __cls_new_Sensor(ii) 641
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Sensor(ii) 651
+func __cls_init_Sensor(ii) 675
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_m_Sensor#readTemp()f 669
+func __cls_m_Sensor#readTemp()f 693
 this -20 8 0 ?
-func __strconcat 702
+func __strconcat 726
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

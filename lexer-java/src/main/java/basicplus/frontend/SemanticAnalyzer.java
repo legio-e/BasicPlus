@@ -476,6 +476,9 @@ public final class SemanticAnalyzer {
                     new String[]{}, new BpType[]{}));
             threadCls.instanceMembers.tryDefine(makeMethod("join",  threadCls, VoidType.INSTANCE,
                     new String[]{}, new BpType[]{}));
+            // #526 — Thread no desciende de Object: sin esto, `print w` despachaba la ranura 0 (run).
+            threadCls.instanceMembers.tryDefine(makeMethod("toString", threadCls, PrimitiveType.STRING,
+                    new String[]{}, new BpType[]{}));
         }
         s.tryDefine(threadCls);
 

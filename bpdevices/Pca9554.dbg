@@ -2,22 +2,22 @@ dbg 3
 module Pca9554
 source C:\lenguajes\pm\bpdevices\Pca9554.bp
 lines
-389 43
-414 44
-439 49
-457 50
-476 51
-493 52
-512 53
-531 60
-552 65
-573 70
-590 75
-611 78
-628 83
-649 86
-666 36
-673 37
+413 43
+438 44
+463 49
+481 50
+500 51
+517 52
+536 53
+555 60
+576 65
+597 70
+614 75
+635 78
+652 83
+673 86
+690 36
+697 37
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -47,78 +47,80 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Expander.wreg 386
+func Expander.wreg 410
 this -28 8 0 ?
 reg -20 4 0 integer
 value -16 4 0 integer
 buf 0 8 0 ?
-func Expander.rreg 436
+func Expander.rreg 460
 this -24 8 0 ?
 reg -16 4 0 integer
 ptr 4 8 0 ?
 rx 24 8 0 ?
-func Expander.readIn 528
+func Expander.readIn 552
 this -20 8 0 ?
-func Expander.getOut 549
+func Expander.getOut 573
 this -20 8 0 ?
-func Expander.writeOut 570
+func Expander.writeOut 594
 this -24 8 0 ?
 value -16 4 0 integer
-func Expander.getInvert 587
+func Expander.getInvert 611
 this -20 8 0 ?
-func Expander.setInvert 608
+func Expander.setInvert 632
 this -24 8 0 ?
 value -16 4 0 integer
-func Expander.getDir 625
+func Expander.getDir 649
 this -20 8 0 ?
-func Expander.setDir 646
+func Expander.setDir 670
 this -24 8 0 ?
 value -16 4 0 integer
-func Expander.__init 663
+func Expander.__init 687
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Expander(ii) 683
+func __cls_new_Expander(ii) 707
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Expander(ii) 717
+func __cls_init_Expander(ii) 741
 this -28 8 0 ?
 bus -20 4 0 integer
 addr -16 4 0 integer
-func __cls_m_Expander#getInvert()i 735
+func __cls_m_Expander#getInvert()i 759
 this -20 8 0 ?
-func __cls_m_Expander#setInvert(i)V 752
+func __cls_m_Expander#setInvert(i)V 776
 this -24 8 0 ?
 value -16 4 0 integer
-func __cls_m_Expander#setDir(i)V 768
+func __cls_m_Expander#setDir(i)V 792
 this -24 8 0 ?
 value -16 4 0 integer
-func __cls_m_Expander#wreg(ii)V 784
+func __cls_m_Expander#wreg(ii)V 808
 this -28 8 0 ?
 reg -20 4 0 integer
 value -16 4 0 integer
-func __cls_m_Expander#getOut()i 802
+func __cls_m_Expander#getOut()i 826
 this -20 8 0 ?
-func __cls_m_Expander#rreg(i)i 819
+func __cls_m_Expander#rreg(i)i 843
 this -24 8 0 ?
 reg -16 4 0 integer
-func __cls_m_Expander#readIn()i 838
+func __cls_m_Expander#readIn()i 862
 this -20 8 0 ?
-func __cls_m_Expander#writeOut(i)V 855
+func __cls_m_Expander#writeOut(i)V 879
 this -24 8 0 ?
 value -16 4 0 integer
-func __cls_m_Expander#getDir()i 871
+func __cls_m_Expander#getDir()i 895
 this -20 8 0 ?
-func __strconcat 904
+func __strconcat 928
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

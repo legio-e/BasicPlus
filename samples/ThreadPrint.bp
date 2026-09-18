@@ -1,0 +1,43 @@
+// #526 (V7, 18-sep) — `print obj` y `"" + obj` despachaban toString por la RANURA 0 de toda
+// clase; en una que desciende de Thread la 0 es run(): el hilo corría en el principal (y el
+// RUN abortaba). Ahora Thread tiene toString (al final de su tabla) y el emisor despacha por
+// nombre/clave sobre la clase estática. Lo que se comprueba: imprimir un Worker NO ejecuta
+// run(), start()+join() lo ejecuta una vez, y el texto lleva el prefijo de cada raíz. El
+// handle no se imprime (su número no es parte del contrato): sólo el prefijo.
+module ThreadPrint
+import Core
+public class Worker extends Thread
+  var veces: integer
+  public function Worker()
+    super(0)
+    this.veces := 0
+  end Worker
+  public function run()
+    this.veces := this.veces + 1
+    print "run!"
+  end run
+  public function cuenta(): integer
+    return this.veces
+  end cuenta
+end Worker
+public class Cosa
+  public function Cosa()
+  end Cosa
+end Cosa
+public function main()
+  var w: Worker := Worker()
+  var t: string := "w = " + w
+  print "imprimir no arranca: veces=" + w.cuenta()
+  print "prefijo: " + substring(t, 0, 11)
+  print "explicito: " + startsWith(w.toString(), "thread@")
+  w.start()
+  w.join()
+  print "tras join: veces=" + w.cuenta()
+  var c: Cosa := Cosa()
+  var u: string := "c = " + c
+  print "prefijo: " + substring(u, 0, 11)
+  var nulo: Worker := null
+  print "nulo: " + nulo
+  print "fin"
+end main
+end ThreadPrint

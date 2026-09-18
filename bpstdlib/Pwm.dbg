@@ -2,19 +2,19 @@ dbg 3
 module Pwm
 source C:\lenguajes\pm\bpstdlib\Pwm.bp
 lines
-497 86
-507 87
-532 94
-542 95
-561 101
-578 106
-595 73
-605 74
-615 75
-624 76
-639 77
-652 78
-676 79
+521 86
+531 87
+556 94
+566 95
+585 101
+602 106
+619 73
+629 74
+639 75
+648 76
+663 77
+676 78
+700 79
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -44,64 +44,66 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Slice.getPin 386
+func Slice.getPin 410
 this -20 8 0 ?
-func Slice.setPin 400
+func Slice.setPin 424
 this -24 8 0 ?
-func Slice.getId 413
+func Slice.getId 437
 this -20 8 0 ?
-func Slice.setId 427
+func Slice.setId 451
 this -24 8 0 ?
-func Slice.getFreqHz 440
+func Slice.getFreqHz 464
 this -20 8 0 ?
-func Slice.setFreqHz 454
+func Slice.setFreqHz 478
 this -24 8 0 ?
-func Slice.getDutyPct 467
+func Slice.getDutyPct 491
 this -20 8 0 ?
-func Slice.setDutyPct 481
+func Slice.setDutyPct 505
 this -24 8 0 ?
-func Slice.setDuty 494
+func Slice.setDuty 518
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func Slice.setFreq 529
+func Slice.setFreq 553
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func Slice.start 558
+func Slice.start 582
 this -20 8 0 ?
-func Slice.stop 575
+func Slice.stop 599
 this -20 8 0 ?
-func Slice.__init 592
+func Slice.__init 616
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Slice(ii) 691
+func __cls_new_Slice(ii) 715
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice(ii) 725
+func __cls_init_Slice(ii) 749
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_m_Slice#setFreq(i)V 743
+func __cls_m_Slice#setFreq(i)V 767
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func __cls_m_Slice#setDuty(i)V 759
+func __cls_m_Slice#setDuty(i)V 783
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func __cls_m_Slice#stop()V 775
+func __cls_m_Slice#stop()V 799
 this -20 8 0 ?
-func __cls_m_Slice#start()V 789
+func __cls_m_Slice#start()V 813
 this -20 8 0 ?
-func __strconcat 819
+func __strconcat 843
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

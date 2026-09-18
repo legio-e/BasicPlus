@@ -2,38 +2,38 @@ dbg 3
 module Log
 source C:\lenguajes\pm\bpstdlib\Log.bp
 lines
-417 57
-445 65
-453 66
-459 67
-462 68
-476 73
-486 78
-496 83
-506 89
-516 94
-526 100
-546 104
-566 108
-586 112
-606 118
-616 119
-626 122
-656 123
-663 124
-701 127
-709 128
-716 129
-726 131
-733 132
-740 133
-755 134
-783 138
-786 139
-837 142
-851 149
-862 150
-879 151
+442 57
+470 65
+478 66
+484 67
+487 68
+501 73
+511 78
+521 83
+531 89
+541 94
+551 100
+571 104
+591 108
+611 112
+631 118
+641 119
+651 122
+681 123
+688 124
+726 127
+734 128
+741 129
+751 131
+758 132
+765 133
+780 134
+808 138
+811 139
+862 142
+876 149
+887 150
+904 151
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -63,44 +63,46 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 315
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 334
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 348
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 362
 this -20 8 0 ?
-func setFile 442
+func setFile 467
 p -20 8 0 string
-func setLevel 473
+func setLevel 498
 n -16 4 0 integer
-func setConsole 483
+func setConsole 508
 b -16 4 0 boolean
-func setFileEnabled 493
+func setFileEnabled 518
 b -16 4 0 boolean
-func setTimestamp 503
+func setTimestamp 528
 b -16 4 0 boolean
-func setMaxSize 513
+func setMaxSize 538
 n -16 4 0 integer
-func debug 523
+func debug 548
 msg -20 8 0 string
-func info 543
+func info 568
 msg -20 8 0 string
-func warn 563
+func warn 588
 msg -20 8 0 string
-func error 583
+func error 608
 msg -20 8 0 string
-func escribe 603
+func escribe 628
 nivel -32 4 0 integer
 etiqueta -28 8 0 string
 msg -20 8 0 string
 linea 0 8 0 string
 e 12 8 0 ?
-func rotaSiHaceFalta 848
+func rotaSiHaceFalta 873
 entrante -16 4 0 integer
-func __strconcat 911
+func __strconcat 936
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

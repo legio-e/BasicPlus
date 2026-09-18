@@ -2,21 +2,21 @@ dbg 3
 module Timer
 source C:\lenguajes\pm\bpstdlib\Timer.bp
 lines
-438 75
-443 76
-457 77
-470 78
-484 79
-512 82
-525 84
-540 93
-552 94
-561 95
-573 97
-597 104
-621 110
-652 64
-662 65
+462 75
+467 76
+481 77
+494 78
+508 79
+536 82
+549 84
+564 93
+576 94
+585 95
+597 97
+621 104
+645 110
+676 64
+686 65
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -46,50 +46,52 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Alarm.getPeriodMs_ 381
+func Alarm.getPeriodMs_ 405
 this -20 8 0 ?
-func Alarm.setPeriodMs_ 395
+func Alarm.setPeriodMs_ 419
 this -24 8 0 ?
-func Alarm.getNextFire_ 408
+func Alarm.getNextFire_ 432
 this -20 8 0 ?
-func Alarm.setNextFire_ 422
+func Alarm.setNextFire_ 446
 this -24 8 0 ?
-func Alarm.check 435
+func Alarm.check 459
 this -20 8 0 ?
 cur 4 4 0 integer
-func Alarm.wait 537
+func Alarm.wait 561
 this -20 8 0 ?
 rem 0 4 0 integer
-func Alarm.reset 594
+func Alarm.reset 618
 this -20 8 0 ?
-func Alarm.since 618
+func Alarm.since 642
 this -20 8 0 ?
-func Alarm.__init 649
+func Alarm.__init 673
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_new_Alarm(i) 679
+func __cls_new_Alarm(i) 703
 periodMs -16 4 0 integer
-func __cls_init_Alarm(i) 711
+func __cls_init_Alarm(i) 735
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_m_Alarm#wait()V 727
+func __cls_m_Alarm#wait()V 751
 this -20 8 0 ?
-func __cls_m_Alarm#reset()V 741
+func __cls_m_Alarm#reset()V 765
 this -20 8 0 ?
-func __cls_m_Alarm#check()z 755
+func __cls_m_Alarm#check()z 779
 this -20 8 0 ?
-func __cls_m_Alarm#since()i 772
+func __cls_m_Alarm#since()i 796
 this -20 8 0 ?
-func __strconcat 805
+func __strconcat 829
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

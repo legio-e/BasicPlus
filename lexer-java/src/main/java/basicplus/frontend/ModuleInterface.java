@@ -804,6 +804,17 @@ public final class ModuleInterface {
         }
     }
 
+    /** #526 (18-sep) — LA fuente de las ranuras de las raíces builtin (`Object`, `Thread`) para
+     *  quien no pase por {@code computeClassLayout}: el importador siembra con esto el stub de
+     *  una clase ajena que las extiende. Había tres tablas a mano (emisor, esta, importador) y
+     *  al añadir `Thread.toString` se desincronizaron el mismo día — lo cazó el oráculo
+     *  `CtorHijo` («no exporta 'CtorBase.Tarea#cuenta#3'», el dueño la emite en la 4). */
+    static List<String> builtinBaseMethodNames(String base) {
+        if ("Object".equals(base)) return objectBaseLayout().methodNames;
+        if ("Thread".equals(base)) return threadBaseLayout().methodNames;
+        return java.util.Collections.emptyList();
+    }
+
     private static LayoutAndNames objectBaseLayout() {
         List<String> names = new ArrayList<>();
         names.add("toString");
@@ -816,8 +827,9 @@ public final class ModuleInterface {
         names.add("run");
         names.add("start");
         names.add("join");
+        names.add("toString");   // #526 — al FINAL (run sigue en la 0); mismo orden que MivmEmitter
         // __tid + __stackSize = 2 slots, ninguno ref/owner.
-        return new LayoutAndNames(2, 3, new int[]{0}, new int[]{0}, names);
+        return new LayoutAndNames(2, 4, new int[]{0}, new int[]{0}, names);
     }
 
     /** Resuelve el layout de la BASE de {@code cls} (null = sin base ⇒ Object). */

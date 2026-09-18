@@ -2,18 +2,18 @@ dbg 3
 module Wdt
 source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
-438 77
-449 78
-465 105
-474 106
-485 111
-494 112
-511 64
-515 65
-528 66
-540 68
-550 69
-559 70
+462 77
+473 78
+489 105
+498 106
+509 111
+518 112
+535 64
+539 65
+552 66
+564 68
+574 69
+583 70
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -43,45 +43,47 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Timer.getTimeoutMs_ 381
+func Timer.getTimeoutMs_ 405
 this -20 8 0 ?
-func Timer.setTimeoutMs_ 395
+func Timer.setTimeoutMs_ 419
 this -24 8 0 ?
-func Timer.getActive_ 408
+func Timer.getActive_ 432
 this -20 8 0 ?
-func Timer.setActive_ 422
+func Timer.setActive_ 446
 this -24 8 0 ?
-func Timer.feed 435
+func Timer.feed 459
 this -20 8 0 ?
-func Timer.disable 462
+func Timer.disable 486
 this -20 8 0 ?
-func Timer.reenable 482
+func Timer.reenable 506
 this -20 8 0 ?
-func Timer.__init 508
+func Timer.__init 532
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer(i) 569
+func __cls_new_Timer(i) 593
 timeoutMs -16 4 0 integer
-func __cls_init_Timer(i) 601
+func __cls_init_Timer(i) 625
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __cls_m_Timer#feed()V 617
+func __cls_m_Timer#feed()V 641
 this -20 8 0 ?
-func __cls_m_Timer#disable()V 631
+func __cls_m_Timer#disable()V 655
 this -20 8 0 ?
-func __cls_m_Timer#reenable()V 645
+func __cls_m_Timer#reenable()V 669
 this -20 8 0 ?
-func __strconcat 675
+func __strconcat 699
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

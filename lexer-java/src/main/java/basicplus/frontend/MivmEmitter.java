@@ -3802,9 +3802,9 @@ public final class MivmEmitter {
             } else if (t instanceof EnumType) {
                 w.emit(OpCode.PRINT_NONL);
             } else if (t instanceof ClassType) {
-                // H5.1.b — objeto: auto-toString() polimórfico (slot 0) con
-                // guarda null→"null". El ref ya está en la pila.
-                emitObjectToStringOnStack();
+                // H5.1.b — objeto: auto-toString() polimórfico con guarda null→"null".
+                // El ref ya está en la pila. #526: por nombre sobre la clase estática.
+                emitObjectToStringOnStack(((ClassType) t).cls);
                 w.emit(OpCode.PRINT_STR_NONL);
             } else if (t == null || t instanceof BpType.ErrorType) {
                 // Sucede con variables de 'catch' genérico (analyzer las tipa como
@@ -3824,7 +3824,10 @@ public final class MivmEmitter {
      * guarda {@code null}→"null". Consume el ref y deja el string ref en pila.
      * Reutilizable por print y, más adelante, por concatenación con `+`.
      */
-    private void emitObjectToStringOnStack() throws IOException {
+    /** #526 — `print obj` / `"" + obj`: toString despachado por NOMBRE (o por clave, R2) sobre
+     *  la clase ESTÁTICA del valor, no por la ranura 0 «de toda instancia»: en una clase que
+     *  desciende de Thread la 0 es run(). Con `cls == null` (un `Object` sin más) sigue la 0. */
+    private void emitObjectToStringOnStack(ClassSymbol cls) throws IOException {
         String tmp = "__o2s_" + (stringPoolCounter++);
         // #292f (4→8B): tmp guarda un REF de objeto = 8 bytes. Con declareLocal (4B),
         // el SET_LOCAL truncaba el handle y dejaba la palabra `gen` HUÉRFANA en la
@@ -3845,7 +3848,13 @@ public final class MivmEmitter {
         w.emit(OpCode.LNEQ);                  // bool: handle != null
         w.emitJumpIfFalse(nullL);             // == null → "null"
         w.emitGetLocal(tmp);                  // this = ref (8 bytes)
-        w.emitInvokeVirtualBySlot(0, 0);      // toString() → string ref
+        if (cls == null || cls.isBuiltin) {
+            w.emitInvokeVirtualBySlot(cls != null ? Math.max(0, cls.slotOf("toString")) : 0, 0);   // Object/StringBuilder: 0; Thread: 3
+        } else {
+            Symbol ts = cls.lookupInstance("toString");
+            ClassSymbol declarante = (ts instanceof FunctionSymbol && ((FunctionSymbol) ts).ownerClass != null) ? ((FunctionSymbol) ts).ownerClass : cls;
+            emitInvokeVirtualSmart(cls, declarante, "toString", mod9() ? "toString()s" : "", 0);   // toString() → string ref
+        }
         w.emitJump(doneL);
         w.declareLabel(nullL);
         w.emitLeaGlobal(internString("null"));
@@ -5387,6 +5396,25 @@ public final class MivmEmitter {
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
 
+            // -------------------------- toString(): string (#526, slot 3) --------------------------
+            // Thread NO desciende de Object, y `print w` / `"" + w` despachaban toString por la
+            // ranura 0 de TODA clase — que en la raíz Thread es run(): el hilo corría en el
+            // principal. Ahora Thread tiene su toString (al FINAL: run sigue en la 0, que es lo
+            // que asume __threadStart) y el emisor despacha por nombre/clave sobre la clase
+            // estática. Mismo cuerpo que Object.toString, con su propio prefijo.
+            w.addMethod("toString");
+            metaBuiltin("Thread", "toString", false);
+            beginFunctionScope(makeSynthFs("toString", PrimitiveType.STRING), null);
+            try {
+                String prefix = internString("thread@");
+                w.emitLeaGlobal(prefix);                  // "thread@"
+                w.emitGetParam("this");                   // this = ref = handle de 8 BYTES
+                emitBuiltinCall(Builtin.LONG_TO_STRING);  // "<handle>"
+                emitStringConcatCall();                   // "thread@<handle>"
+                w.emitSetLocal("__result");
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+
             w.endClass();
 
             // -------------------------- Constructor Thread(stackSize) --------------------------
@@ -6361,7 +6389,7 @@ public final class MivmEmitter {
         // H5.1.c-2 — objeto en concatenación `+`: auto-toString() polimórfico
         // (slot 0) con guarda null→"null". Mismo helper que usa print.
         if (src instanceof ClassType) {
-            emitObjectToStringOnStack();
+            emitObjectToStringOnStack(((ClassType) src).cls);
             return;
         }
         if (!(src instanceof PrimitiveType)) return;

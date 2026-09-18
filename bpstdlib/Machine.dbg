@@ -2,21 +2,21 @@ dbg 3
 module Machine
 source C:\lenguajes\pm\bpstdlib\Machine.bp
 lines
-400 100
-414 101
-430 103
-449 117
-468 123
-487 145
-491 146
-504 147
-516 149
-529 150
-541 152
-560 167
-575 171
-590 175
-605 182
+424 100
+438 101
+454 103
+473 117
+492 123
+511 145
+515 146
+528 147
+540 149
+553 150
+565 152
+584 167
+599 171
+614 175
+629 182
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -46,19 +46,21 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func setCpuFreqMHz 484
+func setCpuFreqMHz 508
 mhz -16 4 0 integer
 clamped 4 4 0 integer
-func __strconcat 619
+func __strconcat 643
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

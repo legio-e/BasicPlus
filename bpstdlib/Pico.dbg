@@ -2,30 +2,30 @@ dbg 3
 module Pico
 source C:\lenguajes\pm\bpstdlib\Pico.bp
 lines
-405 20
-424 24
-443 28
-462 32
-481 36
-498 40
-515 44
-532 48
-549 52
-568 56
-581 60
-598 64
-617 68
-634 72
-653 76
-670 80
-687 84
-706 88
-725 92
-742 96
-759 100
-776 104
-793 108
-810 112
+429 20
+448 24
+467 28
+486 32
+505 36
+522 40
+539 44
+556 48
+573 52
+592 56
+605 60
+622 64
+641 68
+658 72
+677 76
+694 80
+711 84
+730 88
+749 92
+766 96
+783 100
+800 104
+817 108
+834 112
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -55,24 +55,26 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func setMark 565
+func setMark 589
 code -16 4 0 integer
-func markAt 595
+func markAt 619
 i -16 4 0 integer
-func setCpuFreqMHz 684
+func setCpuFreqMHz 708
 mhz -16 4 0 integer
-func setCpuFreqMHzRaw 703
+func setCpuFreqMHzRaw 727
 mhz -16 4 0 integer
-func __strconcat 824
+func __strconcat 848
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

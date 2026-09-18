@@ -2,501 +2,501 @@ dbg 3
 module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
-426 122
-587 165
-614 168
-633 173
-660 176
-679 181
-706 184
-725 189
-752 192
-771 199
-798 202
-817 210
-844 213
-863 219
-876 220
-895 223
-908 224
-927 227
-940 228
-953 229
-966 230
-985 234
-1008 238
-1031 244
-1054 249
-1071 266
-1079 267
-1093 271
-1118 280
-1124 281
-1145 282
-1161 282
-1187 283
-1198 284
-1209 285
-1218 288
-1229 289
-1240 290
-1281 290
-1308 291
-1317 291
-1339 292
-1348 292
-1375 294
-1399 295
-1423 297
-1434 298
-1445 299
-1454 299
-1476 300
-1485 300
-1507 301
-1518 302
-1527 302
-1549 303
-1564 303
-1589 304
-1604 304
-1629 305
-1648 312
-1674 321
-1682 322
-1693 326
-1699 327
-1715 329
-1747 341
-1768 345
-1785 353
-1796 354
-1809 355
-1817 356
-1828 357
-1846 392
-1874 395
-2268 425
-2288 428
-2291 429
-2302 430
-2312 431
-2337 432
-2350 433
-2360 435
-2374 440
-2397 443
-2429 447
-2448 452
-2463 456
-2474 457
-2480 458
-2488 459
-2491 460
-2501 461
-2512 462
-2526 462
-2546 463
-2554 465
-2568 465
-2588 466
-2607 472
-2617 473
-2626 474
-2639 475
-2647 477
-2663 483
-2673 484
-2682 485
-2695 486
-2703 488
-2719 420
-2935 521
-2954 529
-2971 524
-2981 525
-2992 526
-3085 536
-3104 539
-3114 540
-3131 541
-3217 548
-3236 551
-3248 552
-3261 552
-3290 561
-3310 565
-3329 555
-3346 556
-3360 557
-3502 573
-3521 578
-3534 579
-3548 580
-3561 581
-3595 586
-3608 586
-3621 587
-3650 605
-3660 606
-3677 607
-3688 608
-3701 609
-3854 637
-3881 640
-3900 618
-3919 621
-3931 622
-3944 622
-3967 623
-3978 623
-4005 632
-4025 626
-4042 627
-4056 628
-4182 662
-4209 665
-4228 650
-4247 653
-4258 653
-4285 656
-4302 657
-4405 691
-4432 694
-4451 675
-4470 678
-4483 678
-4515 686
-4536 681
-4553 682
-4674 718
-4701 721
-4720 703
-4739 706
-4752 706
-4784 713
-4805 709
-4932 746
-4959 749
-4978 730
-4997 733
-5010 733
-5042 741
-5063 736
-5080 737
-5201 776
-5228 779
-5247 758
-5266 761
-5279 761
-5311 768
-5329 771
-5347 764
-5484 804
-5511 807
-5530 788
-5549 791
-5562 791
-5594 799
-5614 794
-5631 795
-5751 829
-5782 832
-5802 840
-5831 843
-5838 844
-5855 846
-5873 816
-5892 819
-5908 819
-5934 820
-5945 820
-5972 823
-5989 824
-6092 874
-6119 877
-6138 858
-6157 861
-6170 861
-6202 869
-6222 864
-6239 865
-6359 886
-6378 897
-6401 889
-6418 890
-6521 927
-6548 930
-6567 908
-6586 911
-6598 912
-6611 912
-6640 921
-6660 915
-6677 916
-6691 917
-6817 941
-6836 944
-6846 945
-6929 970
-6956 973
-6975 954
-6994 963
-7028 964
-7039 965
-7058 957
-7068 958
-7085 959
-7193 989
-7212 1004
-7233 1009
-7252 1014
-7277 1019
-7298 1024
-7321 1029
-7340 998
-7539 1035
-7558 1042
-7579 1046
-7603 1050
-7632 1038
-7813 1069
-7841 1074
-7864 1077
-7887 1064
-8002 1086
-8021 1094
-8044 1100
-8055 1101
-8072 1089
-8089 1090
-8206 1171
-8218 1198
-8221 1199
-8232 1200
-8237 1201
-8246 1202
-8257 1204
-8266 1205
-8286 1165
-8301 1166
-8313 1293
-8332 1307
-8341 1308
-8351 1309
-8368 1312
-8373 1313
-8389 1313
-8407 1314
-8423 1314
-8441 1315
-8460 1320
-8474 1296
-8484 1297
-8489 1298
-8502 1299
-8515 1300
-8528 1301
-8659 1112
-8673 1116
-8687 1217
-8698 1218
-8708 1220
-8730 1221
-8744 1227
-8755 1228
-8774 1234
-8785 1235
-8793 1236
-8809 1246
-8816 1247
-8829 1256
-8849 1266
-8857 1267
-8866 1267
-8880 1268
-8890 1268
-8918 1269
-8928 1269
-8956 1270
-8966 1270
-8994 1271
-9024 1280
-9037 1328
-9053 1329
-9070 1330
-9083 1343
-9099 1344
-9112 1344
-9133 1345
-9152 1346
-9167 1350
-9173 1351
-9184 1352
-9197 1353
-9200 1354
-9215 1355
-9227 1356
-9247 1357
-9260 1360
-9279 1372
-9287 1373
-9296 1373
-9306 1374
-9314 1375
-9317 1376
-9327 1377
-9341 1378
-9349 1380
-9387 1380
-9408 1381
-9432 1382
-9441 1382
-9465 1408
-9481 1409
-9497 1410
-9507 1411
-9517 1412
-9538 1413
-9544 1414
-9550 1415
-9557 1415
-9568 1416
-9575 1416
-9586 1417
-9605 1419
-9632 1419
-9651 1420
-9678 1420
-9697 1422
-9710 1423
-9740 1424
-9772 1427
-9785 1428
-9815 1429
-9853 1437
-9869 1438
-9904 1440
-9920 1441
-9968 1443
-9984 1444
-10032 1446
-10048 1447
-10086 1448
-10105 1449
-10121 1451
-10137 1452
-10162 1453
-10181 1454
-10197 1456
-10213 1457
-10238 1458
-10272 1459
-10291 1460
-10307 1462
-10323 1463
-10348 1464
-10369 1465
-10385 1467
-10401 1468
-10427 1469
-10461 1470
-10480 1471
-10496 1473
-10512 1474
-10538 1475
-10572 1476
-10591 1477
-10607 1479
-10623 1480
-10649 1481
-10668 1482
-10684 1484
-10700 1485
-10726 1486
-10747 1487
-10766 1488
-10782 1490
-10798 1491
-10824 1492
-10845 1493
-10864 1494
-10880 1496
-10896 1497
-10935 1498
-10950 1498
-10976 1499
-10992 1501
-11013 1502
-11052 1511
-11067 1511
-11093 1515
-11108 1516
-11161 1518
-11176 1519
-11200 1521
-11215 1522
-11239 1525
-11254 1525
-11278 1526
-11293 1526
-11317 1527
-11332 1527
-11356 1528
-11371 1528
-11421 1529
-11436 1529
-11492 1536
-11500 1537
-11503 1538
-11585 1539
-11593 1541
-11596 1542
-11606 1543
-11616 1544
-11620 1545
-11652 1546
-11699 1548
-11752 1550
-11773 1552
-11782 1553
-11795 1555
-11808 1556
-11817 1558
-11833 1563
-11842 1563
-11858 1564
-11867 1564
-11883 1565
-11892 1565
-11908 1566
-11917 1566
-11933 1567
-11946 1567
-11962 1568
-11975 1568
-11991 1569
-12004 1569
-12020 1570
-12033 1570
-12049 1571
-12068 1576
-12084 1576
-12097 1577
-12113 1577
-12126 1578
-12142 1578
-12155 1579
-12171 1579
-12184 1580
-12200 1580
-12217 1581
-12233 1581
-12250 1582
-12266 1582
-12283 1583
-12299 1583
-12316 1584
+450 122
+611 165
+638 168
+657 173
+684 176
+703 181
+730 184
+749 189
+776 192
+795 199
+822 202
+841 210
+868 213
+887 219
+900 220
+919 223
+932 224
+951 227
+964 228
+977 229
+990 230
+1009 234
+1032 238
+1055 244
+1078 249
+1095 266
+1103 267
+1117 271
+1142 280
+1148 281
+1169 282
+1185 282
+1211 283
+1222 284
+1233 285
+1242 288
+1253 289
+1264 290
+1305 290
+1332 291
+1341 291
+1363 292
+1372 292
+1399 294
+1423 295
+1447 297
+1458 298
+1469 299
+1478 299
+1500 300
+1509 300
+1531 301
+1542 302
+1551 302
+1573 303
+1588 303
+1613 304
+1628 304
+1653 305
+1672 312
+1698 321
+1706 322
+1717 326
+1723 327
+1739 329
+1771 341
+1792 345
+1809 353
+1820 354
+1833 355
+1841 356
+1852 357
+1870 392
+1898 395
+2292 425
+2312 428
+2315 429
+2326 430
+2336 431
+2361 432
+2374 433
+2384 435
+2398 440
+2421 443
+2453 447
+2472 452
+2487 456
+2498 457
+2504 458
+2512 459
+2515 460
+2525 461
+2536 462
+2550 462
+2570 463
+2578 465
+2592 465
+2612 466
+2631 472
+2641 473
+2650 474
+2663 475
+2671 477
+2687 483
+2697 484
+2706 485
+2719 486
+2727 488
+2743 420
+2959 521
+2978 529
+2995 524
+3005 525
+3016 526
+3109 536
+3128 539
+3138 540
+3155 541
+3241 548
+3260 551
+3272 552
+3285 552
+3314 561
+3334 565
+3353 555
+3370 556
+3384 557
+3526 573
+3545 578
+3558 579
+3572 580
+3585 581
+3619 586
+3632 586
+3645 587
+3674 605
+3684 606
+3701 607
+3712 608
+3725 609
+3878 637
+3905 640
+3924 618
+3943 621
+3955 622
+3968 622
+3991 623
+4002 623
+4029 632
+4049 626
+4066 627
+4080 628
+4206 662
+4233 665
+4252 650
+4271 653
+4282 653
+4309 656
+4326 657
+4429 691
+4456 694
+4475 675
+4494 678
+4507 678
+4539 686
+4560 681
+4577 682
+4698 718
+4725 721
+4744 703
+4763 706
+4776 706
+4808 713
+4829 709
+4956 746
+4983 749
+5002 730
+5021 733
+5034 733
+5066 741
+5087 736
+5104 737
+5225 776
+5252 779
+5271 758
+5290 761
+5303 761
+5335 768
+5353 771
+5371 764
+5508 804
+5535 807
+5554 788
+5573 791
+5586 791
+5618 799
+5638 794
+5655 795
+5775 829
+5806 832
+5826 840
+5855 843
+5862 844
+5879 846
+5897 816
+5916 819
+5932 819
+5958 820
+5969 820
+5996 823
+6013 824
+6116 874
+6143 877
+6162 858
+6181 861
+6194 861
+6226 869
+6246 864
+6263 865
+6383 886
+6402 897
+6425 889
+6442 890
+6545 927
+6572 930
+6591 908
+6610 911
+6622 912
+6635 912
+6664 921
+6684 915
+6701 916
+6715 917
+6841 941
+6860 944
+6870 945
+6953 970
+6980 973
+6999 954
+7018 963
+7052 964
+7063 965
+7082 957
+7092 958
+7109 959
+7217 989
+7236 1004
+7257 1009
+7276 1014
+7301 1019
+7322 1024
+7345 1029
+7364 998
+7563 1035
+7582 1042
+7603 1046
+7627 1050
+7656 1038
+7837 1069
+7865 1074
+7888 1077
+7911 1064
+8026 1086
+8045 1094
+8068 1100
+8079 1101
+8096 1089
+8113 1090
+8230 1171
+8242 1198
+8245 1199
+8256 1200
+8261 1201
+8270 1202
+8281 1204
+8290 1205
+8310 1165
+8325 1166
+8337 1293
+8356 1307
+8365 1308
+8375 1309
+8392 1312
+8397 1313
+8413 1313
+8431 1314
+8447 1314
+8465 1315
+8484 1320
+8498 1296
+8508 1297
+8513 1298
+8526 1299
+8539 1300
+8552 1301
+8683 1112
+8697 1116
+8711 1217
+8722 1218
+8732 1220
+8754 1221
+8768 1227
+8779 1228
+8798 1234
+8809 1235
+8817 1236
+8833 1246
+8840 1247
+8853 1256
+8873 1266
+8881 1267
+8890 1267
+8904 1268
+8914 1268
+8942 1269
+8952 1269
+8980 1270
+8990 1270
+9018 1271
+9048 1280
+9061 1328
+9077 1329
+9094 1330
+9107 1343
+9123 1344
+9136 1344
+9157 1345
+9176 1346
+9191 1350
+9197 1351
+9208 1352
+9221 1353
+9224 1354
+9239 1355
+9251 1356
+9271 1357
+9284 1360
+9303 1372
+9311 1373
+9320 1373
+9330 1374
+9338 1375
+9341 1376
+9351 1377
+9365 1378
+9373 1380
+9411 1380
+9432 1381
+9456 1382
+9465 1382
+9489 1408
+9505 1409
+9521 1410
+9531 1411
+9541 1412
+9562 1413
+9568 1414
+9574 1415
+9581 1415
+9592 1416
+9599 1416
+9610 1417
+9629 1419
+9656 1419
+9675 1420
+9702 1420
+9721 1422
+9734 1423
+9764 1424
+9796 1427
+9809 1428
+9839 1429
+9877 1437
+9893 1438
+9928 1440
+9944 1441
+9992 1443
+10008 1444
+10056 1446
+10072 1447
+10110 1448
+10129 1449
+10145 1451
+10161 1452
+10186 1453
+10205 1454
+10221 1456
+10237 1457
+10262 1458
+10296 1459
+10315 1460
+10331 1462
+10347 1463
+10372 1464
+10393 1465
+10409 1467
+10425 1468
+10451 1469
+10485 1470
+10504 1471
+10520 1473
+10536 1474
+10562 1475
+10596 1476
+10615 1477
+10631 1479
+10647 1480
+10673 1481
+10692 1482
+10708 1484
+10724 1485
+10750 1486
+10771 1487
+10790 1488
+10806 1490
+10822 1491
+10848 1492
+10869 1493
+10888 1494
+10904 1496
+10920 1497
+10959 1498
+10974 1498
+11000 1499
+11016 1501
+11037 1502
+11076 1511
+11091 1511
+11117 1515
+11132 1516
+11185 1518
+11200 1519
+11224 1521
+11239 1522
+11263 1525
+11278 1525
+11302 1526
+11317 1526
+11341 1527
+11356 1527
+11380 1528
+11395 1528
+11445 1529
+11460 1529
+11516 1536
+11524 1537
+11527 1538
+11609 1539
+11617 1541
+11620 1542
+11630 1543
+11640 1544
+11644 1545
+11676 1546
+11723 1548
+11776 1550
+11797 1552
+11806 1553
+11819 1555
+11832 1556
+11841 1558
+11857 1563
+11866 1563
+11882 1564
+11891 1564
+11907 1565
+11916 1565
+11932 1566
+11941 1566
+11957 1567
+11970 1567
+11986 1568
+11999 1568
+12015 1569
+12028 1569
+12044 1570
+12057 1570
+12073 1571
+12092 1576
+12108 1576
+12121 1577
+12137 1577
+12150 1578
+12166 1578
+12179 1579
+12195 1579
+12208 1580
+12224 1580
+12241 1581
+12257 1581
+12274 1582
+12290 1582
+12307 1583
+12323 1583
+12340 1584
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -526,102 +526,104 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Color.getRgb 396
+func Color.getRgb 420
 this -20 8 0 ?
-func Color.setRgb 410
+func Color.setRgb 434
 this -24 8 0 ?
-func Color.__init 423
-this -24 8 0 ?
-rgb -16 4 0 integer
-func __cls_new_Color(i) 439
-rgb -16 4 0 integer
-func __cls_init_Color(i) 471
+func Color.__init 447
 this -24 8 0 ?
 rgb -16 4 0 integer
-func Component.getLvglId 527
-this -20 8 0 ?
-func Component.setLvglId 541
+func __cls_new_Color(i) 463
+rgb -16 4 0 integer
+func __cls_init_Color(i) 495
 this -24 8 0 ?
-func Component.getName 554
+rgb -16 4 0 integer
+func Component.getLvglId 551
 this -20 8 0 ?
-func Component.setName 570
+func Component.setLvglId 565
+this -24 8 0 ?
+func Component.getName 578
+this -20 8 0 ?
+func Component.setName 594
 this -28 8 0 ?
-func Component.getX 584
+func Component.getX 608
 this -20 8 0 ?
-func Component.setX 607
+func Component.setX 631
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getY 630
+func Component.getY 654
 this -20 8 0 ?
-func Component.setY 653
+func Component.setY 677
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getWidth 676
+func Component.getWidth 700
 this -20 8 0 ?
-func Component.setWidth 699
+func Component.setWidth 723
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getHeight 722
+func Component.getHeight 746
 this -20 8 0 ?
-func Component.setHeight 745
+func Component.setHeight 769
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getScrollDir 768
+func Component.getScrollDir 792
 this -20 8 0 ?
-func Component.setScrollDir 791
+func Component.setScrollDir 815
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getFontSize 814
+func Component.getFontSize 838
 this -20 8 0 ?
-func Component.setFontSize 837
+func Component.setFontSize 861
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.setPos 860
+func Component.setPos 884
 this -28 8 0 ?
 px -20 4 0 integer
 py -16 4 0 integer
-func Component.setSize 892
+func Component.setSize 916
 this -28 8 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
-func Component.setBounds 924
+func Component.setBounds 948
 this -36 8 0 ?
 px -28 4 0 integer
 py -24 4 0 integer
 w -20 4 0 integer
 h -16 4 0 integer
-func Component.align 982
+func Component.align 1006
 this -32 8 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
-func Component.setBgColor 1005
+func Component.setBgColor 1029
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.setTextColor 1028
+func Component.setTextColor 1052
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.refresh 1051
+func Component.refresh 1075
 this -20 8 0 ?
-func Component.setHandlerNames 1068
+func Component.setHandlerNames 1092
 this -36 8 0 ?
 clic -28 8 0 string
 change -20 8 0 string
-func Component.typeName 1090
+func Component.typeName 1114
 this -20 8 0 ?
-func Component.jsonProps 1109
+func Component.jsonProps 1133
 this -28 8 0 ?
 o -20 8 0 ref
-func Component.toJson 1115
+func Component.toJson 1139
 this -20 8 0 ?
 o 8 8 0 ?
 a 20 4 0 integer
@@ -630,764 +632,764 @@ dy 28 4 0 integer
 w 32 4 0 integer
 h 36 4 0 integer
 fs 40 4 0 integer
-func Component.toJsonText 1645
+func Component.toJsonText 1669
 this -20 8 0 ?
-func Component.attach 1671
+func Component.attach 1695
 this -28 8 0 ?
 padre -20 8 0 ref
 c 0 8 0 ?
-func Component.register 1732
+func Component.register 1756
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.unregister 1738
+func Component.unregister 1762
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.getParent 1744
+func Component.getParent 1768
 this -20 8 0 ?
-func Component.clean 1765
+func Component.clean 1789
 this -20 8 0 ?
-func Component.delete 1782
+func Component.delete 1806
 this -20 8 0 ?
 c 4 8 0 ?
-func Component.__fireClick 1843
+func Component.__fireClick 1867
 this -20 8 0 ?
-func Component.__fireChange 1871
+func Component.__fireChange 1895
 this -20 8 0 ?
-func __cls_m_Component#toJsonText()s 1919
+func __cls_m_Component#toJsonText()s 1943
 this -20 8 0 ?
-func __cls_m_Component#typeName()s 1938
+func __cls_m_Component#typeName()s 1962
 this -20 8 0 ?
-func __cls_m_Component#jsonProps(LJson/JsonObject;)V 1957
+func __cls_m_Component#jsonProps(LJson/JsonObject;)V 1981
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Component#align(iii)V 1974
+func __cls_m_Component#align(iii)V 1998
 this -32 8 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
-func __cls_m_Component#delete()V 1994
+func __cls_m_Component#delete()V 2018
 this -20 8 0 ?
-func __cls_m_Component#setHandlerNames(ss)V 2008
+func __cls_m_Component#setHandlerNames(ss)V 2032
 this -36 8 0 ?
 clic -28 8 0 string
 change -20 8 0 string
-func __cls_m_Component#setPos(ii)V 2028
+func __cls_m_Component#setPos(ii)V 2052
 this -28 8 0 ?
 px -20 4 0 integer
 py -16 4 0 integer
-func __cls_m_Component#__fireChange()V 2046
+func __cls_m_Component#__fireChange()V 2070
 this -20 8 0 ?
-func __cls_m_Component#setSize(ii)V 2060
+func __cls_m_Component#setSize(ii)V 2084
 this -28 8 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
-func __cls_m_Component#__fireClick()V 2078
+func __cls_m_Component#__fireClick()V 2102
 this -20 8 0 ?
-func __cls_m_Component#setBgColor(LGui/Color;)V 2092
+func __cls_m_Component#setBgColor(LGui/Color;)V 2116
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Component#attach(LGui/Container;)V 2109
+func __cls_m_Component#attach(LGui/Container;)V 2133
 this -28 8 0 ?
 padre -20 8 0 ref
-func __cls_m_Component#getParent()LGui/Container; 2126
+func __cls_m_Component#getParent()LGui/Container; 2150
 this -20 8 0 ?
-func __cls_m_Component#setTextColor(LGui/Color;)V 2145
+func __cls_m_Component#setTextColor(LGui/Color;)V 2169
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Component#unregister(LGui/Component;)V 2162
+func __cls_m_Component#unregister(LGui/Component;)V 2186
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Component#refresh()V 2179
+func __cls_m_Component#refresh()V 2203
 this -20 8 0 ?
-func __cls_m_Component#clean()V 2193
+func __cls_m_Component#clean()V 2217
 this -20 8 0 ?
-func __cls_m_Component#setBounds(iiii)V 2207
+func __cls_m_Component#setBounds(iiii)V 2231
 this -36 8 0 ?
 px -28 4 0 integer
 py -24 4 0 integer
 w -20 4 0 integer
 h -16 4 0 integer
-func __cls_m_Component#toJson()LJson/JsonObject; 2229
+func __cls_m_Component#toJson()LJson/JsonObject; 2253
 this -20 8 0 ?
-func __cls_m_Component#register(LGui/Component;)V 2248
+func __cls_m_Component#register(LGui/Component;)V 2272
 this -28 8 0 ?
 c -20 8 0 ref
-func Container.register 2265
+func Container.register 2289
 this -28 8 0 ?
 c -20 8 0 ref
-func Container.unregister 2285
+func Container.unregister 2309
 this -28 8 0 ?
 c -20 8 0 ref
 i 0 4 0 integer
 n 4 4 0 integer
-func Container.childCount 2371
+func Container.childCount 2395
 this -20 8 0 ?
-func Container.childAt 2394
+func Container.childAt 2418
 this -24 8 0 ?
 i -16 4 0 integer
-func Container.typeName 2426
+func Container.typeName 2450
 this -20 8 0 ?
-func Container.jsonChild 2445
+func Container.jsonChild 2469
 this -28 8 0 ?
 c -20 8 0 ref
-func Container.toJson 2460
+func Container.toJson 2484
 this -20 8 0 ?
 o 8 8 0 ?
 arr 16 8 0 ?
 n 24 4 0 integer
 i 28 4 0 integer
 c 32 8 0 ?
-func Container.delete 2604
+func Container.delete 2628
 this -20 8 0 ?
 i 0 4 0 integer
-func Container.clean 2660
+func Container.clean 2684
 this -20 8 0 ?
 i 0 4 0 integer
-func Container.__init 2716
+func Container.__init 2740
 this -20 8 0 ?
-func __cls_init_Container() 2760
+func __cls_init_Container() 2784
 this -20 8 0 ?
-func __cls_m_Container#unregister(LGui/Component;)V 2774
+func __cls_m_Container#unregister(LGui/Component;)V 2798
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Container#typeName()s 2791
+func __cls_m_Container#typeName()s 2815
 this -20 8 0 ?
-func __cls_m_Container#childCount()i 2810
+func __cls_m_Container#childCount()i 2834
 this -20 8 0 ?
-func __cls_m_Container#clean()V 2827
+func __cls_m_Container#clean()V 2851
 this -20 8 0 ?
-func __cls_m_Container#delete()V 2841
+func __cls_m_Container#delete()V 2865
 this -20 8 0 ?
-func __cls_m_Container#jsonChild(LGui/Component;)z 2855
+func __cls_m_Container#jsonChild(LGui/Component;)z 2879
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Container#toJson()LJson/JsonObject; 2875
+func __cls_m_Container#toJson()LJson/JsonObject; 2899
 this -20 8 0 ?
-func __cls_m_Container#childAt(i)LGui/Component; 2894
+func __cls_m_Container#childAt(i)LGui/Component; 2918
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Container#register(LGui/Component;)V 2915
+func __cls_m_Container#register(LGui/Component;)V 2939
 this -28 8 0 ?
 c -20 8 0 ref
-func Screen.typeName 2932
+func Screen.typeName 2956
 this -20 8 0 ?
-func Screen.load 2951
+func Screen.load 2975
 this -20 8 0 ?
-func Screen.__init 2968
+func Screen.__init 2992
 this -20 8 0 ?
-func __cls_init_Screen() 3035
+func __cls_init_Screen() 3059
 this -20 8 0 ?
-func __cls_m_Screen#load()V 3049
+func __cls_m_Screen#load()V 3073
 this -20 8 0 ?
-func __cls_m_Screen#typeName()s 3063
+func __cls_m_Screen#typeName()s 3087
 this -20 8 0 ?
-func Panel.typeName 3082
+func Panel.typeName 3106
 this -20 8 0 ?
-func Panel.__init 3101
+func Panel.__init 3125
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Panel(LGui/Container;) 3145
+func __cls_new_Panel(LGui/Container;) 3169
 parent -20 8 0 ref
-func __cls_init_Panel(LGui/Container;) 3178
+func __cls_init_Panel(LGui/Container;) 3202
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Panel#typeName()s 3195
+func __cls_m_Panel#typeName()s 3219
 this -20 8 0 ?
-func Label.typeName 3214
+func Label.typeName 3238
 this -20 8 0 ?
-func Label.jsonProps 3233
+func Label.jsonProps 3257
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Label.setText 3287
+func Label.setText 3311
 this -28 8 0 ?
 t -20 8 0 string
-func Label.setFont 3307
+func Label.setFont 3331
 this -24 8 0 ?
 font -16 4 0 integer
-func Label.__init 3326
+func Label.__init 3350
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Label(LGui/Container;s) 3374
+func __cls_new_Label(LGui/Container;s) 3398
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Label(LGui/Container;s) 3410
+func __cls_init_Label(LGui/Container;s) 3434
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_m_Label#typeName()s 3430
+func __cls_m_Label#typeName()s 3454
 this -20 8 0 ?
-func __cls_m_Label#jsonProps(LJson/JsonObject;)V 3449
+func __cls_m_Label#jsonProps(LJson/JsonObject;)V 3473
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Label#setFont(i)V 3466
+func __cls_m_Label#setFont(i)V 3490
 this -24 8 0 ?
 font -16 4 0 integer
-func __cls_m_Label#setText(s)V 3482
+func __cls_m_Label#setText(s)V 3506
 this -28 8 0 ?
 t -20 8 0 string
-func Button.typeName 3499
+func Button.typeName 3523
 this -20 8 0 ?
-func Button.jsonProps 3518
+func Button.jsonProps 3542
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Button.jsonChild 3592
+func Button.jsonChild 3616
 this -28 8 0 ?
 c -20 8 0 ref
-func Button.__init 3647
+func Button.__init 3671
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Button(LGui/Container;s) 3739
+func __cls_new_Button(LGui/Container;s) 3763
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Button(LGui/Container;s) 3775
+func __cls_init_Button(LGui/Container;s) 3799
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_m_Button#jsonChild(LGui/Component;)z 3795
+func __cls_m_Button#jsonChild(LGui/Component;)z 3819
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Button#typeName()s 3815
+func __cls_m_Button#typeName()s 3839
 this -20 8 0 ?
-func __cls_m_Button#jsonProps(LJson/JsonObject;)V 3834
+func __cls_m_Button#jsonProps(LJson/JsonObject;)V 3858
 this -28 8 0 ?
 o -20 8 0 ref
-func Checkbox.getChecked 3851
+func Checkbox.getChecked 3875
 this -20 8 0 ?
-func Checkbox.setChecked 3874
+func Checkbox.setChecked 3898
 this -24 8 0 ?
 v 0 4 0 ?
-func Checkbox.typeName 3897
+func Checkbox.typeName 3921
 this -20 8 0 ?
-func Checkbox.jsonProps 3916
+func Checkbox.jsonProps 3940
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Checkbox.setText 4002
+func Checkbox.setText 4026
 this -28 8 0 ?
 t -20 8 0 string
-func Checkbox.__init 4022
+func Checkbox.__init 4046
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Checkbox(LGui/Container;s) 4070
+func __cls_new_Checkbox(LGui/Container;s) 4094
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Checkbox(LGui/Container;s) 4106
+func __cls_init_Checkbox(LGui/Container;s) 4130
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_m_Checkbox#typeName()s 4126
+func __cls_m_Checkbox#typeName()s 4150
 this -20 8 0 ?
-func __cls_m_Checkbox#jsonProps(LJson/JsonObject;)V 4145
+func __cls_m_Checkbox#jsonProps(LJson/JsonObject;)V 4169
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Checkbox#setText(s)V 4162
+func __cls_m_Checkbox#setText(s)V 4186
 this -28 8 0 ?
 t -20 8 0 string
-func Toggle.getChecked 4179
+func Toggle.getChecked 4203
 this -20 8 0 ?
-func Toggle.setChecked 4202
+func Toggle.setChecked 4226
 this -24 8 0 ?
 v 0 4 0 ?
-func Toggle.typeName 4225
+func Toggle.typeName 4249
 this -20 8 0 ?
-func Toggle.jsonProps 4244
+func Toggle.jsonProps 4268
 this -28 8 0 ?
 o -20 8 0 ref
-func Toggle.__init 4282
+func Toggle.__init 4306
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Toggle(LGui/Container;) 4316
+func __cls_new_Toggle(LGui/Container;) 4340
 parent -20 8 0 ref
-func __cls_init_Toggle(LGui/Container;) 4349
+func __cls_init_Toggle(LGui/Container;) 4373
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Toggle#typeName()s 4366
+func __cls_m_Toggle#typeName()s 4390
 this -20 8 0 ?
-func __cls_m_Toggle#jsonProps(LJson/JsonObject;)V 4385
+func __cls_m_Toggle#jsonProps(LJson/JsonObject;)V 4409
 this -28 8 0 ?
 o -20 8 0 ref
-func Slider.getValue 4402
+func Slider.getValue 4426
 this -20 8 0 ?
-func Slider.setValue 4425
+func Slider.setValue 4449
 this -24 8 0 ?
 v 0 4 0 ?
-func Slider.typeName 4448
+func Slider.typeName 4472
 this -20 8 0 ?
-func Slider.jsonProps 4467
+func Slider.jsonProps 4491
 this -28 8 0 ?
 o -20 8 0 ref
-func Slider.setRange 4512
+func Slider.setRange 4536
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Slider.__init 4533
+func Slider.__init 4557
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Slider(LGui/Container;) 4567
+func __cls_new_Slider(LGui/Container;) 4591
 parent -20 8 0 ref
-func __cls_init_Slider(LGui/Container;) 4600
+func __cls_init_Slider(LGui/Container;) 4624
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Slider#setRange(ii)V 4617
+func __cls_m_Slider#setRange(ii)V 4641
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Slider#typeName()s 4635
+func __cls_m_Slider#typeName()s 4659
 this -20 8 0 ?
-func __cls_m_Slider#jsonProps(LJson/JsonObject;)V 4654
+func __cls_m_Slider#jsonProps(LJson/JsonObject;)V 4678
 this -28 8 0 ?
 o -20 8 0 ref
-func Bar.getValue 4671
+func Bar.getValue 4695
 this -20 8 0 ?
-func Bar.setValue 4694
+func Bar.setValue 4718
 this -24 8 0 ?
 v 0 4 0 ?
-func Bar.typeName 4717
+func Bar.typeName 4741
 this -20 8 0 ?
-func Bar.jsonProps 4736
+func Bar.jsonProps 4760
 this -28 8 0 ?
 o -20 8 0 ref
-func Bar.setRange 4781
+func Bar.setRange 4805
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Bar.__init 4802
+func Bar.__init 4826
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Bar(LGui/Container;) 4825
+func __cls_new_Bar(LGui/Container;) 4849
 parent -20 8 0 ref
-func __cls_init_Bar(LGui/Container;) 4858
+func __cls_init_Bar(LGui/Container;) 4882
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Bar#setRange(ii)V 4875
+func __cls_m_Bar#setRange(ii)V 4899
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Bar#typeName()s 4893
+func __cls_m_Bar#typeName()s 4917
 this -20 8 0 ?
-func __cls_m_Bar#jsonProps(LJson/JsonObject;)V 4912
+func __cls_m_Bar#jsonProps(LJson/JsonObject;)V 4936
 this -28 8 0 ?
 o -20 8 0 ref
-func Spinbox.getValue 4929
+func Spinbox.getValue 4953
 this -20 8 0 ?
-func Spinbox.setValue 4952
+func Spinbox.setValue 4976
 this -24 8 0 ?
 v 0 4 0 ?
-func Spinbox.typeName 4975
+func Spinbox.typeName 4999
 this -20 8 0 ?
-func Spinbox.jsonProps 4994
+func Spinbox.jsonProps 5018
 this -28 8 0 ?
 o -20 8 0 ref
-func Spinbox.setRange 5039
+func Spinbox.setRange 5063
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Spinbox.__init 5060
+func Spinbox.__init 5084
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Spinbox(LGui/Container;) 5094
+func __cls_new_Spinbox(LGui/Container;) 5118
 parent -20 8 0 ref
-func __cls_init_Spinbox(LGui/Container;) 5127
+func __cls_init_Spinbox(LGui/Container;) 5151
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Spinbox#setRange(ii)V 5144
+func __cls_m_Spinbox#setRange(ii)V 5168
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Spinbox#typeName()s 5162
+func __cls_m_Spinbox#typeName()s 5186
 this -20 8 0 ?
-func __cls_m_Spinbox#jsonProps(LJson/JsonObject;)V 5181
+func __cls_m_Spinbox#jsonProps(LJson/JsonObject;)V 5205
 this -28 8 0 ?
 o -20 8 0 ref
-func Led.getValue 5198
+func Led.getValue 5222
 this -20 8 0 ?
-func Led.setValue 5221
+func Led.setValue 5245
 this -24 8 0 ?
 v 0 4 0 ?
-func Led.typeName 5244
+func Led.typeName 5268
 this -20 8 0 ?
-func Led.jsonProps 5263
+func Led.jsonProps 5287
 this -28 8 0 ?
 o -20 8 0 ref
-func Led.on 5308
+func Led.on 5332
 this -20 8 0 ?
-func Led.off 5326
+func Led.off 5350
 this -20 8 0 ?
-func Led.__init 5344
+func Led.__init 5368
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Led(LGui/Container;) 5367
+func __cls_new_Led(LGui/Container;) 5391
 parent -20 8 0 ref
-func __cls_init_Led(LGui/Container;) 5400
+func __cls_init_Led(LGui/Container;) 5424
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Led#typeName()s 5417
+func __cls_m_Led#typeName()s 5441
 this -20 8 0 ?
-func __cls_m_Led#jsonProps(LJson/JsonObject;)V 5436
+func __cls_m_Led#jsonProps(LJson/JsonObject;)V 5460
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Led#off()V 5453
+func __cls_m_Led#off()V 5477
 this -20 8 0 ?
-func __cls_m_Led#on()V 5467
+func __cls_m_Led#on()V 5491
 this -20 8 0 ?
-func Dropdown.getSelected 5481
+func Dropdown.getSelected 5505
 this -20 8 0 ?
-func Dropdown.setSelected 5504
+func Dropdown.setSelected 5528
 this -24 8 0 ?
 v 0 4 0 ?
-func Dropdown.typeName 5527
+func Dropdown.typeName 5551
 this -20 8 0 ?
-func Dropdown.jsonProps 5546
+func Dropdown.jsonProps 5570
 this -28 8 0 ?
 o -20 8 0 ref
-func Dropdown.setOptions 5591
+func Dropdown.setOptions 5615
 this -28 8 0 ?
 opts -20 8 0 string
-func Dropdown.__init 5611
+func Dropdown.__init 5635
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Dropdown(LGui/Container;) 5645
+func __cls_new_Dropdown(LGui/Container;) 5669
 parent -20 8 0 ref
-func __cls_init_Dropdown(LGui/Container;) 5678
+func __cls_init_Dropdown(LGui/Container;) 5702
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Dropdown#typeName()s 5695
+func __cls_m_Dropdown#typeName()s 5719
 this -20 8 0 ?
-func __cls_m_Dropdown#setOptions(s)V 5714
+func __cls_m_Dropdown#setOptions(s)V 5738
 this -28 8 0 ?
 opts -20 8 0 string
-func __cls_m_Dropdown#jsonProps(LJson/JsonObject;)V 5731
+func __cls_m_Dropdown#jsonProps(LJson/JsonObject;)V 5755
 this -28 8 0 ?
 o -20 8 0 ref
-func Textarea.getText 5748
+func Textarea.getText 5772
 this -20 8 0 ?
-func Textarea.setText 5773
+func Textarea.setText 5797
 this -28 8 0 ?
 v 0 8 0 ?
-func Textarea.getReadOnly 5799
+func Textarea.getReadOnly 5823
 this -20 8 0 ?
-func Textarea.setReadOnly 5824
+func Textarea.setReadOnly 5848
 this -24 8 0 ?
 v 0 4 0 ?
-func Textarea.typeName 5870
+func Textarea.typeName 5894
 this -20 8 0 ?
-func Textarea.jsonProps 5889
+func Textarea.jsonProps 5913
 this -28 8 0 ?
 o -20 8 0 ref
-func Textarea.__init 5969
+func Textarea.__init 5993
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Textarea(LGui/Container;) 6003
+func __cls_new_Textarea(LGui/Container;) 6027
 parent -20 8 0 ref
-func __cls_init_Textarea(LGui/Container;) 6036
+func __cls_init_Textarea(LGui/Container;) 6060
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Textarea#typeName()s 6053
+func __cls_m_Textarea#typeName()s 6077
 this -20 8 0 ?
-func __cls_m_Textarea#jsonProps(LJson/JsonObject;)V 6072
+func __cls_m_Textarea#jsonProps(LJson/JsonObject;)V 6096
 this -28 8 0 ?
 o -20 8 0 ref
-func ListBox.getSelected 6089
+func ListBox.getSelected 6113
 this -20 8 0 ?
-func ListBox.setSelected 6112
+func ListBox.setSelected 6136
 this -24 8 0 ?
 v 0 4 0 ?
-func ListBox.typeName 6135
+func ListBox.typeName 6159
 this -20 8 0 ?
-func ListBox.jsonProps 6154
+func ListBox.jsonProps 6178
 this -28 8 0 ?
 o -20 8 0 ref
-func ListBox.setItems 6199
+func ListBox.setItems 6223
 this -28 8 0 ?
 items -20 8 0 string
-func ListBox.__init 6219
+func ListBox.__init 6243
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_ListBox(LGui/Container;) 6253
+func __cls_new_ListBox(LGui/Container;) 6277
 parent -20 8 0 ref
-func __cls_init_ListBox(LGui/Container;) 6286
+func __cls_init_ListBox(LGui/Container;) 6310
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_ListBox#setItems(s)V 6303
+func __cls_m_ListBox#setItems(s)V 6327
 this -28 8 0 ?
 items -20 8 0 string
-func __cls_m_ListBox#typeName()s 6320
+func __cls_m_ListBox#typeName()s 6344
 this -20 8 0 ?
-func __cls_m_ListBox#jsonProps(LJson/JsonObject;)V 6339
+func __cls_m_ListBox#jsonProps(LJson/JsonObject;)V 6363
 this -28 8 0 ?
 o -20 8 0 ref
-func Keyboard.typeName 6356
+func Keyboard.typeName 6380
 this -20 8 0 ?
-func Keyboard.setTextarea 6375
+func Keyboard.setTextarea 6399
 this -28 8 0 ?
 ta -20 8 0 ref
-func Keyboard.__init 6398
+func Keyboard.__init 6422
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Keyboard(LGui/Container;) 6432
+func __cls_new_Keyboard(LGui/Container;) 6456
 parent -20 8 0 ref
-func __cls_init_Keyboard(LGui/Container;) 6465
+func __cls_init_Keyboard(LGui/Container;) 6489
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Keyboard#typeName()s 6482
+func __cls_m_Keyboard#typeName()s 6506
 this -20 8 0 ?
-func __cls_m_Keyboard#setTextarea(LGui/Textarea;)V 6501
+func __cls_m_Keyboard#setTextarea(LGui/Textarea;)V 6525
 this -28 8 0 ?
 ta -20 8 0 ref
-func Msgbox.getResult 6518
+func Msgbox.getResult 6542
 this -20 8 0 ?
-func Msgbox.setResult 6541
+func Msgbox.setResult 6565
 this -24 8 0 ?
 v 0 4 0 ?
-func Msgbox.typeName 6564
+func Msgbox.typeName 6588
 this -20 8 0 ?
-func Msgbox.jsonProps 6583
+func Msgbox.jsonProps 6607
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Msgbox.setButtons 6637
+func Msgbox.setButtons 6661
 this -28 8 0 ?
 labels -20 8 0 string
-func Msgbox.__init 6657
+func Msgbox.__init 6681
 this -36 8 0 ?
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_new_Msgbox(LGui/Container;s) 6705
+func __cls_new_Msgbox(LGui/Container;s) 6729
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_init_Msgbox(LGui/Container;s) 6741
+func __cls_init_Msgbox(LGui/Container;s) 6765
 this -36 8 0 ?
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_m_Msgbox#typeName()s 6761
+func __cls_m_Msgbox#typeName()s 6785
 this -20 8 0 ?
-func __cls_m_Msgbox#jsonProps(LJson/JsonObject;)V 6780
+func __cls_m_Msgbox#jsonProps(LJson/JsonObject;)V 6804
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Msgbox#setButtons(s)V 6797
+func __cls_m_Msgbox#setButtons(s)V 6821
 this -28 8 0 ?
 labels -20 8 0 string
-func TabPage.typeName 6814
+func TabPage.typeName 6838
 this -20 8 0 ?
-func TabPage.__init 6833
+func TabPage.__init 6857
 this -24 8 0 ?
 pageId -16 4 0 integer
-func __cls_new_TabPage(i) 6859
+func __cls_new_TabPage(i) 6883
 pageId -16 4 0 integer
-func __cls_init_TabPage(i) 6891
+func __cls_init_TabPage(i) 6915
 this -24 8 0 ?
 pageId -16 4 0 integer
-func __cls_m_TabPage#typeName()s 6907
+func __cls_m_TabPage#typeName()s 6931
 this -20 8 0 ?
-func Tabview.getActive 6926
+func Tabview.getActive 6950
 this -20 8 0 ?
-func Tabview.setActive 6949
+func Tabview.setActive 6973
 this -24 8 0 ?
 v 0 4 0 ?
-func Tabview.typeName 6972
+func Tabview.typeName 6996
 this -20 8 0 ?
-func Tabview.addTab 6991
+func Tabview.addTab 7015
 this -28 8 0 ?
 name -20 8 0 string
 p 8 8 0 ?
-func Tabview.__init 7055
+func Tabview.__init 7079
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Tabview(LGui/Container;) 7099
+func __cls_new_Tabview(LGui/Container;) 7123
 parent -20 8 0 ref
-func __cls_init_Tabview(LGui/Container;) 7132
+func __cls_init_Tabview(LGui/Container;) 7156
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Tabview#addTab(s)LGui/TabPage; 7149
+func __cls_m_Tabview#addTab(s)LGui/TabPage; 7173
 this -28 8 0 ?
 name -20 8 0 string
-func __cls_m_Tabview#typeName()s 7171
+func __cls_m_Tabview#typeName()s 7195
 this -20 8 0 ?
-func Chart.typeName 7190
+func Chart.typeName 7214
 this -20 8 0 ?
-func Chart.setRange 7209
+func Chart.setRange 7233
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Chart.setPointCount 7230
+func Chart.setPointCount 7254
 this -24 8 0 ?
 n -16 4 0 integer
-func Chart.addSeries 7249
+func Chart.addSeries 7273
 this -24 8 0 ?
 rgb -16 4 0 integer
-func Chart.push 7274
+func Chart.push 7298
 this -28 8 0 ?
 series -20 4 0 integer
 v -16 4 0 integer
-func Chart.setValue 7295
+func Chart.setValue 7319
 this -32 8 0 ?
 series -24 4 0 integer
 idx -20 4 0 integer
 v -16 4 0 integer
-func Chart.setType 7318
+func Chart.setType 7342
 this -24 8 0 ?
 t -16 4 0 integer
-func Chart.__init 7337
+func Chart.__init 7361
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Chart(LGui/Container;) 7360
+func __cls_new_Chart(LGui/Container;) 7384
 parent -20 8 0 ref
-func __cls_init_Chart(LGui/Container;) 7393
+func __cls_init_Chart(LGui/Container;) 7417
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Chart#addSeries(i)i 7410
+func __cls_m_Chart#addSeries(i)i 7434
 this -24 8 0 ?
 rgb -16 4 0 integer
-func __cls_m_Chart#setPointCount(i)V 7429
+func __cls_m_Chart#setPointCount(i)V 7453
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Chart#setRange(ii)V 7445
+func __cls_m_Chart#setRange(ii)V 7469
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Chart#setValue(iii)V 7463
+func __cls_m_Chart#setValue(iii)V 7487
 this -32 8 0 ?
 series -24 4 0 integer
 idx -20 4 0 integer
 v -16 4 0 integer
-func __cls_m_Chart#typeName()s 7483
+func __cls_m_Chart#typeName()s 7507
 this -20 8 0 ?
-func __cls_m_Chart#setType(i)V 7502
+func __cls_m_Chart#setType(i)V 7526
 this -24 8 0 ?
 t -16 4 0 integer
-func __cls_m_Chart#push(ii)V 7518
+func __cls_m_Chart#push(ii)V 7542
 this -28 8 0 ?
 series -20 4 0 integer
 v -16 4 0 integer
-func Table.typeName 7536
+func Table.typeName 7560
 this -20 8 0 ?
-func Table.setGrid 7555
+func Table.setGrid 7579
 this -28 8 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
-func Table.setCell 7576
+func Table.setCell 7600
 this -36 8 0 ?
 row -28 4 0 integer
 col -24 4 0 integer
 text -20 8 0 string
-func Table.getCell 7600
+func Table.getCell 7624
 this -28 8 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
-func Table.__init 7629
+func Table.__init 7653
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Table(LGui/Container;) 7652
+func __cls_new_Table(LGui/Container;) 7676
 parent -20 8 0 ref
-func __cls_init_Table(LGui/Container;) 7685
+func __cls_init_Table(LGui/Container;) 7709
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Table#setGrid(ii)V 7702
+func __cls_m_Table#setGrid(ii)V 7726
 this -28 8 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
-func __cls_m_Table#getCell(ii)s 7720
+func __cls_m_Table#getCell(ii)s 7744
 this -28 8 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
-func __cls_m_Table#typeName()s 7743
+func __cls_m_Table#typeName()s 7767
 this -20 8 0 ?
-func __cls_m_Table#setCell(iis)V 7762
+func __cls_m_Table#setCell(iis)V 7786
 this -36 8 0 ?
 row -28 4 0 integer
 col -24 4 0 integer
 text -20 8 0 string
-func Image.getAssetId 7783
+func Image.getAssetId 7807
 this -20 8 0 ?
-func Image.setAssetId 7797
+func Image.setAssetId 7821
 this -24 8 0 ?
-func Image.loadFile 7810
+func Image.loadFile 7834
 this -28 8 0 ?
 path -20 8 0 string
-func Image.width 7838
+func Image.width 7862
 this -20 8 0 ?
-func Image.height 7861
+func Image.height 7885
 this -20 8 0 ?
-func Image.__init 7884
+func Image.__init 7908
 this -20 8 0 ?
-func __cls_init_Image() 7931
+func __cls_init_Image() 7955
 this -20 8 0 ?
-func __cls_m_Image#width()i 7945
+func __cls_m_Image#width()i 7969
 this -20 8 0 ?
-func __cls_m_Image#loadFile(s)z 7962
+func __cls_m_Image#loadFile(s)z 7986
 this -28 8 0 ?
 path -20 8 0 string
-func __cls_m_Image#height()i 7982
+func __cls_m_Image#height()i 8006
 this -20 8 0 ?
-func ImageView.typeName 7999
+func ImageView.typeName 8023
 this -20 8 0 ?
-func ImageView.setImage 8018
+func ImageView.setImage 8042
 this -28 8 0 ?
 img -20 8 0 ref
-func ImageView.refresh 8041
+func ImageView.refresh 8065
 this -20 8 0 ?
-func ImageView.__init 8069
+func ImageView.__init 8093
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_ImageView(LGui/Container;) 8103
+func __cls_new_ImageView(LGui/Container;) 8127
 parent -20 8 0 ref
-func __cls_init_ImageView(LGui/Container;) 8136
+func __cls_init_ImageView(LGui/Container;) 8160
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_ImageView#typeName()s 8153
+func __cls_m_ImageView#typeName()s 8177
 this -20 8 0 ?
-func __cls_m_ImageView#refresh()V 8172
+func __cls_m_ImageView#refresh()V 8196
 this -20 8 0 ?
-func __cls_m_ImageView#setImage(LGui/Image;)V 8186
+func __cls_m_ImageView#setImage(LGui/Image;)V 8210
 this -28 8 0 ?
 img -20 8 0 ref
-func HiloGui.pedirParada 8203
+func HiloGui.pedirParada 8227
 this -20 8 0 ?
-func HiloGui.run 8215
+func HiloGui.run 8239
 this -20 8 0 ?
 ocio 0 4 0 integer
-func HiloGui.__init 8283
+func HiloGui.__init 8307
 this -20 8 0 ?
-func Window.typeName 8310
+func Window.typeName 8334
 this -20 8 0 ?
-func Window.load 8329
+func Window.load 8353
 this -28 8 0 ?
 path -20 8 0 string
 root 8 8 0 ?
 node 16 8 0 ?
 w 24 8 0 ?
 scr 32 4 0 integer
-func Window.destroy 8457
+func Window.destroy 8481
 this -20 8 0 ?
-func Window.__init 8471
+func Window.__init 8495
 this -20 8 0 ?
 scr 4 4 0 integer
-func __cls_init_Window() 8571
+func __cls_init_Window() 8595
 this -20 8 0 ?
-func __cls_m_Window#load(s)LGui/Component; 8585
+func __cls_m_Window#load(s)LGui/Component; 8609
 this -28 8 0 ?
 path -20 8 0 string
-func __cls_m_Window#typeName()s 8607
+func __cls_m_Window#typeName()s 8631
 this -20 8 0 ?
-func __cls_m_Window#destroy()V 8626
+func __cls_m_Window#destroy()V 8650
 this -20 8 0 ?
-func __guiDispatch 8656
+func __guiDispatch 8680
 self -20 8 0 ref
-func __guiDispatchChange 8670
+func __guiDispatchChange 8694
 self -20 8 0 ref
-func loadFont 8826
+func loadFont 8850
 path -20 8 0 string
-func shot 8846
+func shot 8870
 path -20 8 0 string
 n 4 4 0 integer
-func setRotation 9021
+func setRotation 9045
 deg -16 4 0 integer
-func buildForm 9034
+func buildForm 9058
 node -36 8 0 ref
 parent -28 8 0 ref
 win -20 8 0 ref
@@ -1399,7 +1401,7 @@ cont 44 8 0 ?
 arr 52 8 0 ?
 i 60 4 0 integer
 child 64 8 0 ?
-func bindMember 9276
+func bindMember 9300
 win -36 8 0 ref
 w -28 8 0 ref
 nom -20 8 0 string
@@ -1407,7 +1409,7 @@ n 0 4 0 integer
 cs 4 8 0 ?
 i 12 4 0 integer
 slot 16 4 0 integer
-func bindHandler 9462
+func bindHandler 9486
 win -44 8 0 ref
 w -36 8 0 ref
 nom -28 8 0 string
@@ -1418,7 +1420,7 @@ clicExplicito 16 4 0 boolean
 changeExplicito 20 4 0 boolean
 hc 24 8 0 string
 hch 32 8 0 string
-func makeWidget 9850
+func makeWidget 9874
 t -36 8 0 string
 parent -28 8 0 ref
 node -20 8 0 ref
@@ -1432,28 +1434,28 @@ ld 168 8 0 ?
 dd 188 8 0 ?
 lb 208 8 0 ?
 mb 228 8 0 ?
-func applyCommon 11049
+func applyCommon 11073
 w -28 8 0 ref
 node -20 8 0 ref
-func colorFromHex 11489
+func colorFromHex 11513
 s -20 8 0 string
 n 4 4 0 integer
 i 8 4 0 integer
 acc 12 4 0 integer
 c 16 4 0 integer
 d 20 4 0 integer
-func alignName 11830
+func alignName 11854
 a -16 4 0 integer
-func alignFromName 12065
+func alignFromName 12089
 a -20 8 0 string
-func __strconcat 12328
+func __strconcat 12352
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 i 16 4 0 ?
-func __strequals 12426
+func __strequals 12450
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

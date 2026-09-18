@@ -2,17 +2,17 @@ dbg 3
 module Net
 source C:\lenguajes\pm\bpstdlib\Net.bp
 lines
-411 58
-429 59
-451 63
-473 68
-499 73
-528 78
-557 83
-589 87
-602 88
-613 89
-633 53
+435 58
+453 59
+475 63
+497 68
+523 73
+552 78
+581 83
+613 87
+626 88
+637 89
+657 53
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -42,70 +42,72 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Tcp.getH 381
+func Tcp.getH 405
 this -20 8 0 ?
-func Tcp.setH 395
+func Tcp.setH 419
 this -24 8 0 ?
-func Tcp.connect 408
+func Tcp.connect 432
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.isOpen 448
+func Tcp.isOpen 472
 this -20 8 0 ?
-func Tcp.send 470
+func Tcp.send 494
 this -28 8 0 ?
 data -20 8 0 ref
-func Tcp.sendStr 496
+func Tcp.sendStr 520
 this -28 8 0 ?
 s -20 8 0 string
-func Tcp.recv 525
+func Tcp.recv 549
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.recvStr 554
+func Tcp.recvStr 578
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.close 586
+func Tcp.close 610
 this -20 8 0 ?
-func Tcp.__init 630
+func Tcp.__init 654
 this -20 8 0 ?
-func __cls_init_Tcp() 675
+func __cls_init_Tcp() 699
 this -20 8 0 ?
-func __cls_m_Tcp#recvStr(ii)s 689
+func __cls_m_Tcp#recvStr(ii)s 713
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Tcp#isOpen()z 712
+func __cls_m_Tcp#isOpen()z 736
 this -20 8 0 ?
-func __cls_m_Tcp#recv(ii)[B 729
+func __cls_m_Tcp#recv(ii)[B 753
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Tcp#sendStr(s)i 752
+func __cls_m_Tcp#sendStr(s)i 776
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_Tcp#send([B)i 772
+func __cls_m_Tcp#send([B)i 796
 this -28 8 0 ?
 data -20 8 0 ref
-func __cls_m_Tcp#close()V 792
+func __cls_m_Tcp#close()V 816
 this -20 8 0 ?
-func __cls_m_Tcp#connect(sii)z 806
+func __cls_m_Tcp#connect(sii)z 830
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __strconcat 846
+func __strconcat 870
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

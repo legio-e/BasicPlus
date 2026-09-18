@@ -2,8 +2,8 @@ dbg 3
 module Rtc
 source C:\lenguajes\pm\bpstdlib\Rtc.bp
 lines
-384 63
-401 69
+408 63
+425 69
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -33,30 +33,32 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Clock.epochSec 381
+func Clock.epochSec 405
 this -20 8 0 ?
-func Clock.setEpochSec 398
+func Clock.setEpochSec 422
 this -24 8 0 ?
 sec -16 4 0 integer
-func Clock.__init 411
+func Clock.__init 435
 this -20 8 0 ?
-func __cls_init_Clock() 447
+func __cls_init_Clock() 471
 this -20 8 0 ?
-func __cls_m_Clock#epochSec()i 461
+func __cls_m_Clock#epochSec()i 485
 this -20 8 0 ?
-func __cls_m_Clock#setEpochSec(i)V 478
+func __cls_m_Clock#setEpochSec(i)V 502
 this -24 8 0 ?
 sec -16 4 0 integer
-func __strconcat 510
+func __strconcat 534
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

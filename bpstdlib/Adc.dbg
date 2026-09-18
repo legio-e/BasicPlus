@@ -2,25 +2,25 @@ dbg 3
 module Adc
 source C:\lenguajes\pm\bpstdlib\Adc.bp
 lines
-443 72
-454 73
-463 74
-497 76
-513 81
-533 86
-566 92
-575 93
-593 95
-596 96
-599 97
-609 98
-620 99
-628 101
-647 58
-657 59
-670 60
-683 61
-707 62
+467 72
+478 73
+487 74
+521 76
+537 81
+557 86
+590 92
+599 93
+617 95
+620 96
+623 97
+633 98
+644 99
+652 101
+671 58
+681 59
+694 60
+707 61
+731 62
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -50,52 +50,54 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Channel.getCh_ 386
+func Channel.getCh_ 410
 this -20 8 0 ?
-func Channel.setCh_ 400
+func Channel.setCh_ 424
 this -24 8 0 ?
-func Channel.getPin_ 413
+func Channel.getPin_ 437
 this -20 8 0 ?
-func Channel.setPin_ 427
+func Channel.setPin_ 451
 this -24 8 0 ?
-func Channel.leer 440
+func Channel.leer 464
 this -20 8 0 ?
 raw 4 4 0 integer
-func Channel.read 510
+func Channel.read 534
 this -20 8 0 ?
-func Channel.readVolts 530
+func Channel.readVolts 554
 this -20 8 0 ?
-func Channel.readAvg 563
+func Channel.readAvg 587
 this -24 8 0 ?
 n -16 4 0 integer
 sum 4 4 0 integer
 i 8 4 0 integer
-func Channel.__init 644
+func Channel.__init 668
 this -24 8 0 ?
 ch -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Channel(i) 722
+func __cls_new_Channel(i) 746
 ch -16 4 0 integer
-func __cls_init_Channel(i) 754
+func __cls_init_Channel(i) 778
 this -24 8 0 ?
 ch -16 4 0 integer
-func __cls_m_Channel#read()i 770
+func __cls_m_Channel#read()i 794
 this -20 8 0 ?
-func __cls_m_Channel#readAvg(i)i 787
+func __cls_m_Channel#readAvg(i)i 811
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Channel#readVolts()f 806
+func __cls_m_Channel#readVolts()f 830
 this -20 8 0 ?
-func __strconcat 839
+func __strconcat 863
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

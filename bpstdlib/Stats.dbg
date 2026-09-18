@@ -2,244 +2,244 @@ dbg 3
 module Stats
 source C:\lenguajes\pm\bpstdlib\Stats.bp
 lines
-384 53
-396 54
-408 55
-416 56
-430 57
-438 58
-451 60
-463 61
-484 62
-496 63
-514 64
-528 65
-541 67
-555 68
-574 74
-593 78
-605 79
-627 81
-648 86
-660 87
-682 89
-712 93
-739 97
-751 98
-773 100
-794 104
-806 105
-828 107
-849 44
-855 45
-869 46
-883 47
-897 48
-1090 144
-1096 145
-1110 146
-1124 147
-1138 148
-1152 149
-1172 154
-1184 155
-1198 156
-1212 157
-1230 158
-1248 159
-1272 164
-1284 165
-1294 167
-1306 168
-1320 169
-1334 170
-1352 171
-1370 172
-1394 182
-1397 183
-1407 184
-1427 185
-1441 191
-1460 196
-1472 197
-1494 199
-1522 204
-1534 205
-1556 207
-1584 212
-1596 213
-1618 215
-1627 216
-1651 217
-1669 218
-1691 220
-1715 221
-1738 226
-1750 227
-1772 229
-1808 234
-1820 235
-1842 237
-1851 238
-1875 239
-1899 240
-1942 241
-1964 243
-1988 244
-2020 249
-2032 250
-2054 252
-2063 253
-2087 254
-2105 255
-2127 257
-2160 262
-2172 263
-2194 265
-2203 266
-2227 267
-2245 268
-2267 270
-2300 275
-2333 134
-2339 135
-2353 136
-2367 137
-2381 138
-2395 139
-2707 291
-2728 294
-2749 298
-2780 287
-2788 288
-2934 306
-2952 307
-2974 309
-2980 310
-2983 311
-2986 312
-3013 313
-3037 314
-3047 315
-3065 316
-3077 318
-3083 319
-3105 320
-3113 322
-3122 324
-3141 332
-3153 333
-3156 334
-3166 335
-3182 336
-3190 338
-3209 342
-3218 343
-3240 345
-3272 349
-3281 350
-3303 352
-3312 353
-3315 354
-3325 355
-3343 356
-3360 358
-3368 360
-3387 364
-3396 365
-3418 367
-3427 368
-3430 369
-3440 370
-3458 371
-3475 373
-3483 375
-3502 379
-3511 380
-3533 382
-3574 387
-3583 388
-3605 390
-3620 391
-3632 392
-3635 393
-3645 394
-3661 395
-3675 396
-3683 398
-3708 402
-3741 407
-3750 408
-3772 410
-3787 411
-3793 412
-3804 413
-3823 415
-3864 420
-3873 421
-3895 423
-3913 424
-3938 426
-3956 427
-3981 429
-3996 430
-4005 431
-4023 433
-4045 434
-4051 435
-4061 436
-4073 437
-4094 439
-4136 444
-4145 445
-4167 447
-4182 448
-4197 449
-4209 450
-4212 451
-4222 452
-4256 453
-4264 455
-4289 460
-4298 461
-4320 463
-4335 464
-4350 465
-4360 466
-4378 467
-4400 469
-4437 475
-4446 476
-4496 478
-4511 479
-4526 480
-4538 481
-4550 482
-4553 483
-4563 484
-4579 485
-4603 486
-4617 487
-4625 489
-4643 490
-4687 492
-4697 493
-4711 494
-4752 501
-4758 502
-4761 503
-4771 504
-4786 505
-4794 508
-4797 509
-4807 510
-4816 511
-4822 512
-4852 513
-4866 514
-4874 516
-4885 517
-4893 519
+408 53
+420 54
+432 55
+440 56
+454 57
+462 58
+475 60
+487 61
+508 62
+520 63
+538 64
+552 65
+565 67
+579 68
+598 74
+617 78
+629 79
+651 81
+672 86
+684 87
+706 89
+736 93
+763 97
+775 98
+797 100
+818 104
+830 105
+852 107
+873 44
+879 45
+893 46
+907 47
+921 48
+1114 144
+1120 145
+1134 146
+1148 147
+1162 148
+1176 149
+1196 154
+1208 155
+1222 156
+1236 157
+1254 158
+1272 159
+1296 164
+1308 165
+1318 167
+1330 168
+1344 169
+1358 170
+1376 171
+1394 172
+1418 182
+1421 183
+1431 184
+1451 185
+1465 191
+1484 196
+1496 197
+1518 199
+1546 204
+1558 205
+1580 207
+1608 212
+1620 213
+1642 215
+1651 216
+1675 217
+1693 218
+1715 220
+1739 221
+1762 226
+1774 227
+1796 229
+1832 234
+1844 235
+1866 237
+1875 238
+1899 239
+1923 240
+1966 241
+1988 243
+2012 244
+2044 249
+2056 250
+2078 252
+2087 253
+2111 254
+2129 255
+2151 257
+2184 262
+2196 263
+2218 265
+2227 266
+2251 267
+2269 268
+2291 270
+2324 275
+2357 134
+2363 135
+2377 136
+2391 137
+2405 138
+2419 139
+2731 291
+2752 294
+2773 298
+2804 287
+2812 288
+2958 306
+2976 307
+2998 309
+3004 310
+3007 311
+3010 312
+3037 313
+3061 314
+3071 315
+3089 316
+3101 318
+3107 319
+3129 320
+3137 322
+3146 324
+3165 332
+3177 333
+3180 334
+3190 335
+3206 336
+3214 338
+3233 342
+3242 343
+3264 345
+3296 349
+3305 350
+3327 352
+3336 353
+3339 354
+3349 355
+3367 356
+3384 358
+3392 360
+3411 364
+3420 365
+3442 367
+3451 368
+3454 369
+3464 370
+3482 371
+3499 373
+3507 375
+3526 379
+3535 380
+3557 382
+3598 387
+3607 388
+3629 390
+3644 391
+3656 392
+3659 393
+3669 394
+3685 395
+3699 396
+3707 398
+3732 402
+3765 407
+3774 408
+3796 410
+3811 411
+3817 412
+3828 413
+3847 415
+3888 420
+3897 421
+3919 423
+3937 424
+3962 426
+3980 427
+4005 429
+4020 430
+4029 431
+4047 433
+4069 434
+4075 435
+4085 436
+4097 437
+4118 439
+4160 444
+4169 445
+4191 447
+4206 448
+4221 449
+4233 450
+4236 451
+4246 452
+4280 453
+4288 455
+4313 460
+4322 461
+4344 463
+4359 464
+4374 465
+4384 466
+4402 467
+4424 469
+4461 475
+4470 476
+4520 478
+4535 479
+4550 480
+4562 481
+4574 482
+4577 483
+4587 484
+4603 485
+4627 486
+4641 487
+4649 489
+4667 490
+4711 492
+4721 493
+4735 494
+4776 501
+4782 502
+4785 503
+4795 504
+4810 505
+4818 508
+4821 509
+4831 510
+4840 511
+4846 512
+4876 513
+4890 514
+4898 516
+4909 517
+4917 519
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -269,194 +269,196 @@ func Thread.start 262
 this -20 8 0 ?
 func Thread.join 276
 this -20 8 0 ?
-func Thread.__init 290
+func Thread.toString 290
+this -20 8 0 ?
+func Thread.__init 314
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 309
+func Mutex.lock 333
 this -20 8 0 ?
-func Mutex.unlock 323
+func Mutex.unlock 347
 this -20 8 0 ?
-func Mutex.__init 337
+func Mutex.__init 361
 this -20 8 0 ?
-func Accumulator.add 381
+func Accumulator.add 405
 this -28 8 0 ?
 x -20 8 0 double
 delta 0 8 0 double
 delta2 8 8 0 double
-func Accumulator.count 571
+func Accumulator.count 595
 this -20 8 0 ?
-func Accumulator.mean 590
+func Accumulator.mean 614
 this -20 8 0 ?
-func Accumulator.variance 645
+func Accumulator.variance 669
 this -20 8 0 ?
-func Accumulator.stdDev 709
+func Accumulator.stdDev 733
 this -20 8 0 ?
-func Accumulator.min 736
+func Accumulator.min 760
 this -20 8 0 ?
-func Accumulator.max 791
+func Accumulator.max 815
 this -20 8 0 ?
-func Accumulator.__init 846
+func Accumulator.__init 870
 this -20 8 0 ?
-func __cls_init_Accumulator() 944
+func __cls_init_Accumulator() 968
 this -20 8 0 ?
-func __cls_m_Accumulator#add(d)V 958
+func __cls_m_Accumulator#add(d)V 982
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_Accumulator#max()d 975
+func __cls_m_Accumulator#max()d 999
 this -20 8 0 ?
-func __cls_m_Accumulator#count()i 994
+func __cls_m_Accumulator#count()i 1018
 this -20 8 0 ?
-func __cls_m_Accumulator#min()d 1011
+func __cls_m_Accumulator#min()d 1035
 this -20 8 0 ?
-func __cls_m_Accumulator#variance()d 1030
+func __cls_m_Accumulator#variance()d 1054
 this -20 8 0 ?
-func __cls_m_Accumulator#mean()d 1049
+func __cls_m_Accumulator#mean()d 1073
 this -20 8 0 ?
-func __cls_m_Accumulator#stdDev()d 1068
+func __cls_m_Accumulator#stdDev()d 1092
 this -20 8 0 ?
-func LinReg.clearData 1087
+func LinReg.clearData 1111
 this -20 8 0 ?
-func LinReg.addPoint 1169
+func LinReg.addPoint 1193
 this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
-func LinReg.subPoint 1269
+func LinReg.subPoint 1293
 this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
-func LinReg.addData 1391
+func LinReg.addData 1415
 this -40 8 0 ?
 dataX -32 8 0 ref
 dataY -24 8 0 ref
 n -16 4 0 integer
 i 0 4 0 integer
-func LinReg.count 1438
+func LinReg.count 1462
 this -20 8 0 ?
-func LinReg.meanX 1457
+func LinReg.meanX 1481
 this -20 8 0 ?
-func LinReg.meanY 1519
+func LinReg.meanY 1543
 this -20 8 0 ?
-func LinReg.slope 1581
+func LinReg.slope 1605
 this -20 8 0 ?
 nn 8 8 0 double
 sxx 16 8 0 double
 sxy 24 8 0 double
-func LinReg.intercept 1735
+func LinReg.intercept 1759
 this -20 8 0 ?
-func LinReg.r 1805
+func LinReg.r 1829
 this -20 8 0 ?
 nn 8 8 0 double
 sxx 16 8 0 double
 syy 24 8 0 double
 sxy 32 8 0 double
-func LinReg.stdDevX 2017
+func LinReg.stdDevX 2041
 this -20 8 0 ?
 nn 8 8 0 double
 sxx 16 8 0 double
-func LinReg.stdDevY 2157
+func LinReg.stdDevY 2181
 this -20 8 0 ?
 nn 8 8 0 double
 syy 16 8 0 double
-func LinReg.predict 2297
+func LinReg.predict 2321
 this -28 8 0 ?
 x -20 8 0 double
-func LinReg.__init 2330
+func LinReg.__init 2354
 this -20 8 0 ?
-func __cls_init_LinReg() 2442
+func __cls_init_LinReg() 2466
 this -20 8 0 ?
-func __cls_m_LinReg#subPoint(dd)V 2456
+func __cls_m_LinReg#subPoint(dd)V 2480
 this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
-func __cls_m_LinReg#stdDevX()d 2476
+func __cls_m_LinReg#stdDevX()d 2500
 this -20 8 0 ?
-func __cls_m_LinReg#stdDevY()d 2495
+func __cls_m_LinReg#stdDevY()d 2519
 this -20 8 0 ?
-func __cls_m_LinReg#count()i 2514
+func __cls_m_LinReg#count()i 2538
 this -20 8 0 ?
-func __cls_m_LinReg#addData([d[di)V 2531
+func __cls_m_LinReg#addData([d[di)V 2555
 this -40 8 0 ?
 dataX -32 8 0 ref
 dataY -24 8 0 ref
 n -16 4 0 integer
-func __cls_m_LinReg#slope()d 2553
+func __cls_m_LinReg#slope()d 2577
 this -20 8 0 ?
-func __cls_m_LinReg#addPoint(dd)V 2572
+func __cls_m_LinReg#addPoint(dd)V 2596
 this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
-func __cls_m_LinReg#clearData()V 2592
+func __cls_m_LinReg#clearData()V 2616
 this -20 8 0 ?
-func __cls_m_LinReg#r()d 2606
+func __cls_m_LinReg#r()d 2630
 this -20 8 0 ?
-func __cls_m_LinReg#intercept()d 2625
+func __cls_m_LinReg#intercept()d 2649
 this -20 8 0 ?
-func __cls_m_LinReg#predict(d)d 2644
+func __cls_m_LinReg#predict(d)d 2668
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_LinReg#meanY()d 2666
+func __cls_m_LinReg#meanY()d 2690
 this -20 8 0 ?
-func __cls_m_LinReg#meanX()d 2685
+func __cls_m_LinReg#meanX()d 2709
 this -20 8 0 ?
-func LinFit.slope 2704
+func LinFit.slope 2728
 this -20 8 0 ?
-func LinFit.intercept 2725
+func LinFit.intercept 2749
 this -20 8 0 ?
-func LinFit.predict 2746
+func LinFit.predict 2770
 this -28 8 0 ?
 x -20 8 0 double
-func LinFit.__init 2777
+func LinFit.__init 2801
 this -36 8 0 ?
 slope -28 8 0 double
 intercept -20 8 0 double
-func __cls_new_LinFit(dd) 2799
+func __cls_new_LinFit(dd) 2823
 slope -28 8 0 double
 intercept -20 8 0 double
-func __cls_init_LinFit(dd) 2835
+func __cls_init_LinFit(dd) 2859
 this -36 8 0 ?
 slope -28 8 0 double
 intercept -20 8 0 double
-func __cls_m_LinFit#intercept()d 2855
+func __cls_m_LinFit#intercept()d 2879
 this -20 8 0 ?
-func __cls_m_LinFit#predict(d)d 2874
+func __cls_m_LinFit#predict(d)d 2898
 this -28 8 0 ?
 x -20 8 0 double
-func __cls_m_LinFit#slope()d 2896
+func __cls_m_LinFit#slope()d 2920
 this -20 8 0 ?
-func sqrtD 2931
+func sqrtD 2955
 x -20 8 0 double
 g 8 8 0 double
 i 16 4 0 integer
 done 20 4 0 boolean
 ng 24 8 0 double
 d 32 8 0 double
-func sum 3138
+func sum 3162
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 s 8 8 0 double
 i 16 4 0 integer
-func mean 3206
+func mean 3230
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
-func min 3269
-data -28 8 0 ref
-off -20 4 0 integer
-n -16 4 0 integer
-m 8 8 0 double
-i 16 4 0 integer
-func max 3384
+func min 3293
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 m 8 8 0 double
 i 16 4 0 integer
-func range 3499
+func max 3408
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
-func variance 3571
+m 8 8 0 double
+i 16 4 0 integer
+func range 3523
+data -28 8 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+func variance 3595
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
@@ -464,17 +466,17 @@ mu 8 8 0 double
 ss 16 8 0 double
 i 24 4 0 integer
 dx 28 8 0 double
-func stdDev 3705
+func stdDev 3729
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
-func median 3738
+func median 3762
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 tmp 8 8 0 ?
 mid 16 4 0 integer
-func percentile 3861
+func percentile 3885
 data -36 8 0 ref
 off -28 4 0 integer
 n -24 4 0 integer
@@ -483,7 +485,7 @@ tmp 8 8 0 ?
 rank 16 8 0 double
 lo 24 4 0 integer
 frac 28 8 0 double
-func covariance 4133
+func covariance 4157
 xs -40 8 0 ref
 xoff -32 4 0 integer
 ys -28 8 0 ref
@@ -493,7 +495,7 @@ mx 8 8 0 double
 my 16 8 0 double
 s 24 8 0 double
 i 32 4 0 integer
-func correlation 4286
+func correlation 4310
 xs -40 8 0 ref
 xoff -32 4 0 integer
 ys -28 8 0 ref
@@ -502,7 +504,7 @@ n -16 4 0 integer
 sx 8 8 0 double
 sy 16 8 0 double
 denom 24 8 0 double
-func linfit 4434
+func linfit 4458
 xs -40 8 0 ref
 xoff -32 4 0 integer
 ys -28 8 0 ref
@@ -516,7 +518,7 @@ i 52 4 0 integer
 dx 56 8 0 double
 slope 76 8 0 double
 intercept 84 8 0 double
-func sortedCopy 4749
+func sortedCopy 4773
 data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
@@ -525,7 +527,7 @@ i 16 4 0 integer
 j 20 4 0 integer
 key 24 8 0 double
 k 32 4 0 integer
-func __strconcat 4909
+func __strconcat 4933
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
