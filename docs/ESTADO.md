@@ -56,7 +56,16 @@ da 110). Regenerados: `test/aot_XMethodNat.c`, los `.mdn` del pack de SQLite (AB
 imágenes reconstruidas (Pico grabada; las demás cuando toquen — y al grabarlas, el pack de SQLite de la Metro y del P4
 hay que regrabarlo: su `.mdn` es ABI 6 y el cargador lo rechazará con nombre). Frontend 220/220, tests C OK.
 
-**Orden para retomar**: (1) `#525`/`#526` (graves, preexistentes); y de H2 quedan
+## 🐛 `#525` y `#526` (18-sep, tarde) — las dos graves de V10, cerradas
+
+`#525`: un receptor null en los opcodes de campo y en INVOKE_VIRTUAL es un `RuntimeError` atrapable con el mismo texto en
+las dos VMs (miVM leía `memory[4+slot*4]`; la VM-C paraba el RUN); `samples/NullRecv.bp` en el corpus. `#526`: `print obj`
+despachaba la ranura 0 (en un Thread, `run`); ahora `Thread` tiene `toString` (la 3) y el emisor despacha por nombre/clave;
+por el camino la tercera tabla de Thread (el importador) se desincronizó y `CtorHijo` la cazó → fuente única
+(`builtinBaseMethodNames`); `samples/ThreadPrint.bp` en el corpus (71). La cadena rehecha (stdlib, packs, blobs; Pico
+grabada; STM32/ESP32 reconstruidas), el IDE fat-jar también. check verde 71/59/9/12/71, mezcla 194/194.
+
+**Orden para retomar**: de H2 quedan
 `#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 
