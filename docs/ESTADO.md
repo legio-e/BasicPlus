@@ -74,8 +74,10 @@ raíz→workdir, exit 2 al no existir el fichero, buffers de `discover_deps` a `
 72/59/9/13/72. **H2 queda sin fichas abiertas** (sólo `#522`, que es de H1); `#523` sigue abierta con lo de siempre:
 `montar-zip.sh` al publicar y la decisión de quitar `--formato=8` al cerrar V7.
 
-**Orden para retomar**: H2 hecho. Lo que sigue lo decide Eduardo entre los hitos abiertos de `V7_BACKLOG.md`
-(`#522` enum en H1; `#527`-`#532` de V10; `#519`; H5/H6/H7…). El IDE fat-jar lleva el compilador y la miVM de hoy. De H2 quedaba
+**Orden para retomar** (decisión de Eduardo, 18-sep, noche): **H1, el módulo raíz**. Arrancar por `#522` (enum:
+`"c=" + c` revienta el heap y `Color(1)` devuelve basura, dentro del propio módulo — hermana de `#516`), luego las de
+V10 en H1 (`#527` `#528` `#529` `#532`) y de ahí el módulo raíz propiamente (los tipos y las intrínsecas en un fichero
+legible, las tablas generadas). El IDE fat-jar lleva el compilador y la miVM de hoy. De H2 quedaba
 `#516` (enum en firmas) y `#520` (rincones de la resolución por CLI) detrás. Ojo: cualquier `.mod` MOD7/8 que
 haya en `/app` de una placa con el firmware de hoy deja de enlazar — se recompila desde el IDE (que ya emite MOD9).
 
