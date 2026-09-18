@@ -1,0 +1,3 @@
+placa	caso	status	elapsedMs	veredicto	log
+Pico	CoreRefs MOD9 contra el Core MOD9 EMBEBIDO (/lib)	OK	9	ESPERADO OK	[340522] [bpvm-c] dep 'Core' -> /lib/Core.mod | [340563] [bpvm] enlace tardio: 1 clases construidas, 10 refs, 45 bytes de arena | [340563] [bpvm] enlace: 2 modulos, 3 busquedas, 80 strcmp, 1735 us
+Pico	CoreRefs MOD8 contra el Core MOD9 embebido (hacia delante NO: rechazo con nombre)	LINK_ERROR	2	sin esperado fijo	[341837] [bpvm-c] dep 'Core' -> /lib/Core.mod | [341868] [bpvm-c] dep 'Core' (gen 7): compilado contra otra interfaz (53d2d32e != cca7de33); enlace tardio
