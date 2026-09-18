@@ -1087,6 +1087,13 @@ public final class ModuleInterface {
         // serializa como "any" y el lector lo recupera (parseType case "any").
         // Necesario para contenedores genéricos cross-module (Map.put/get...).
         if (t instanceof BpType.AnyType) return true;
+        // #516 (18-sep) — un ENUM cruza en una firma: se escribe `enum:<nombre>` (el
+        // marcador distingue enum de clase: la clave `m(ELib/Color;)` ≠ `m(LLib/Color;)`
+        // y el importador no debe crear una referencia de 8 B donde va un escalar de 4).
+        // Era el ÚNICO tipo no exportable que existía, y si iba en el ctor cabeza la
+        // clase entera desaparecía de la interfaz.
+        if (t instanceof BpType.EnumType) return true;
+        if (t instanceof BpType.UnresolvedEnumRef) return true;
         // L-arr-export: ArrayType es exportable si su elemento lo es.
         // Permite firmas como `data: integer[]` cross-module (útil para
         // buffers de bytes en I2c/SPI, samples de ADC, etc.).
@@ -1424,6 +1431,17 @@ public final class ModuleInterface {
             return cls.name;
         }
         if (t instanceof BpType.UnresolvedClassRef) return ((BpType.UnresolvedClassRef) t).name;
+        // #516 — `enum:Color` (del propio módulo) o `enum:Lib.Color` (importado de otro).
+        if (t instanceof BpType.EnumType) {
+            Symbol.EnumSymbol en = ((BpType.EnumType) t).en;
+            StringBuilder sb = new StringBuilder("enum:");
+            if (en.externalModule != null && !en.externalModule.isEmpty()) {
+                if (en.externalLibrary != null && !en.externalLibrary.isEmpty()) sb.append(en.externalLibrary).append('.');
+                sb.append(en.externalModule).append('.');
+            }
+            return sb.append(en.name).toString();
+        }
+        if (t instanceof BpType.UnresolvedEnumRef) return "enum:" + ((BpType.UnresolvedEnumRef) t).name;
         if (t instanceof BpType.AnyType) return "any";   // H5 — tipo raíz universal
         // Tuplas (retorno múltiple): `(t1,t2,...)`. El importador conoce así la
         // forma para emitir el desempaquetado cross-module (T3).
@@ -1932,6 +1950,13 @@ public final class ModuleInterface {
     }
 
     private static BpType parseType(Path file, int lineNo, String s) throws IOException {
+        // #516 — el marcador de enum, antes que nada (un array de enums es `enum:Color[]`).
+        if (s.startsWith("enum:")) {
+            String resto = s.substring(5);
+            if (resto.endsWith("[]")) return new BpType.ArrayType(parseType(file, lineNo, "enum:" + resto.substring(0, resto.length() - 2)));
+            if (resto.isEmpty()) throw new IOException(file + ":" + lineNo + ": enum sin nombre en la interfaz: " + s);
+            return new BpType.UnresolvedEnumRef(resto);
+        }
         // L-arr-export: si termina en "[]", procesamos array recursivamente.
         if (s.endsWith("[]")) {
             BpType elem = parseType(file, lineNo, s.substring(0, s.length() - 2));

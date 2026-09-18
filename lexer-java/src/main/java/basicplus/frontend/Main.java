@@ -2727,6 +2727,7 @@ public final class Main {
                     for (Symbol.ParamSymbol p : fn.params) {
                         p.type = resolveCrossModuleType(resolveTypeAgainst(p.type, ns), loadedNs);
                     }
+                    exigirEnumsResueltos(ns, fn.name, fn.params, fn.returnType, analyzer);   // #516
                 }
             }
             for (Symbol.ClassSymbol stub : ns.classes.values()) {
@@ -2738,6 +2739,7 @@ public final class Main {
                             f.returnType = resolveCrossModuleType(f.returnType, loadedNs);
                             for (Symbol.ParamSymbol p : f.params)
                                 p.type = resolveCrossModuleType(p.type, loadedNs);
+                            exigirEnumsResueltos(ns, stub.name + "." + f.name, f.params, f.returnType, analyzer);   // #516
                         }
                     } else if (mem instanceof Symbol.PropertySymbol) {
                         Symbol.PropertySymbol p = (Symbol.PropertySymbol) mem;
@@ -2977,6 +2979,21 @@ public final class Main {
             }
             return cambio ? new basicplus.frontend.BpType.TupleType(els) : t;
         }
+        if (t instanceof basicplus.frontend.BpType.UnresolvedEnumRef) {   // #516 — `enum:Lib.Color`
+            String name = ((basicplus.frontend.BpType.UnresolvedEnumRef) t).name;
+            int lastDot = name.lastIndexOf('.');
+            if (lastDot > 0) {
+                String modPart = name.substring(0, lastDot), enPart = name.substring(lastDot + 1);
+                for (Symbol.ImportedNamespaceSymbol candidate : allNs) {
+                    String full = candidate.library.isEmpty() ? candidate.moduleName : candidate.library + "." + candidate.moduleName;
+                    if (full.equals(modPart) || candidate.moduleName.equals(modPart)) {
+                        Symbol.EnumSymbol es = candidate.enums.get(enPart);
+                        if (es != null) return new basicplus.frontend.BpType.EnumType(es);
+                    }
+                }
+            }
+            return t;   // sin resolver: exigirEnumsResueltos lo convierte en error
+        }
         if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
         int lastDot = name.lastIndexOf('.');
@@ -3063,11 +3080,40 @@ public final class Main {
             }
             return cambio ? new basicplus.frontend.BpType.TupleType(els) : t;
         }
+        if (t instanceof basicplus.frontend.BpType.UnresolvedEnumRef) {   // #516
+            String en = ((basicplus.frontend.BpType.UnresolvedEnumRef) t).name;
+            if (en.indexOf('.') < 0) {
+                Symbol.EnumSymbol es = ns.enums.get(en);
+                if (es != null) return new basicplus.frontend.BpType.EnumType(es);
+            }
+            return t;   // de otro módulo (con punto) o desconocido: lo resuelve la pasada 2 o es error
+        }
         if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
         Symbol.ClassSymbol cls = ns.classes.get(name);
         if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
         return resolverComoBuiltin(t, name);
+    }
+
+    /** #516 — un enum que sigue sin resolver tras las dos pasadas (o dentro de un array/tupla):
+     *  su nombre, o null. Un enum sin resolver NO puede cruzar: el dueño lee 1 slot (escalar de
+     *  4 B) y una referencia serían 2. */
+    private static String enumSinResolver(basicplus.frontend.BpType t) {
+        if (t instanceof basicplus.frontend.BpType.UnresolvedEnumRef) return ((basicplus.frontend.BpType.UnresolvedEnumRef) t).name;
+        if (t instanceof basicplus.frontend.BpType.ArrayType) return enumSinResolver(((basicplus.frontend.BpType.ArrayType) t).element);
+        if (t instanceof basicplus.frontend.BpType.TupleType)
+            for (basicplus.frontend.BpType e : ((basicplus.frontend.BpType.TupleType) t).elements) { String r = enumSinResolver(e); if (r != null) return r; }
+        return null;
+    }
+    private static void exigirEnumsResueltos(Symbol.ImportedNamespaceSymbol ns, String donde, java.util.List<Symbol.ParamSymbol> params,
+                                             basicplus.frontend.BpType retorno, SemanticAnalyzer analyzer) {
+        String en = enumSinResolver(retorno);
+        if (en == null) for (Symbol.ParamSymbol p : params) { en = enumSinResolver(p.type); if (en != null) break; }
+        if (en == null) return;
+        int punto = en.lastIndexOf('.');
+        String mod = punto > 0 ? en.substring(0, punto) : ns.moduleName;
+        analyzer.errorDeImport("la firma de '" + ns.moduleName + "." + donde + "' usa el enum '" + en
+            + "' y este módulo no importa '" + mod + "' (un enum no puede cruzar sin resolver): añade `import " + mod + "`");
     }
 
     /**

@@ -4047,6 +4047,11 @@ public final class SemanticAnalyzer {
     private void err(int line, int col, String msg) {
         info.diagnostics.add(new SemanticDiagnostic(SemanticDiagnostic.Kind.ERROR, msg, line, col));
     }
+    /** #516 — un error detectado al IMPORTAR (una firma ajena con un enum de un módulo que
+     *  este no importa): va por el mismo canal que los semánticos, sin línea. */
+    public void errorDeImport(String msg) {
+        info.diagnostics.add(new SemanticDiagnostic(SemanticDiagnostic.Kind.ERROR, msg, 0, 0));
+    }
 
     private void warn(int line, int col, String msg) {
         info.diagnostics.add(new SemanticDiagnostic(SemanticDiagnostic.Kind.WARNING, msg, line, col));

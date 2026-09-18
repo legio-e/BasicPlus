@@ -406,6 +406,24 @@ public abstract class BpType {
     // un ClassType real una vez creados todos los stubs de clase.
     // Se trata como ref-type para que typecheck básico funcione.
     // ============================================================
+    /** #516 (18-sep) — un ENUM nombrado en la interfaz de otro módulo (`enum:Color`,
+     *  `enum:Lib.Color`) hasta que el importador lo resuelve contra `ns.enums` (la misma
+     *  instancia, para que {@code sameAs} case). Es un escalar de 4 bytes, no una
+     *  referencia: un enum sin resolver que se colara como clase empujaría 2 slots donde
+     *  el dueño lee 1 — por eso si queda sin resolver es un ERROR del import, no un aviso. */
+    public static final class UnresolvedEnumRef extends BpType {
+        public final String name;
+        public UnresolvedEnumRef(String name) { this.name = name; }
+        @Override public String  display()     { return name; }
+        @Override public boolean isEnum()      { return true; }
+        @Override public boolean isScalar()    { return true; }
+        @Override public boolean isReference() { return false; }
+        @Override public boolean sameAs(BpType other) {
+            return other instanceof UnresolvedEnumRef && ((UnresolvedEnumRef) other).name.equals(name);
+        }
+        @Override public boolean isAssignableFrom(BpType source) { return source instanceof ErrorType || sameAs(source); }
+    }
+
     public static final class UnresolvedClassRef extends BpType {
         public final String name;
         public UnresolvedClassRef(String name) { this.name = name; }
