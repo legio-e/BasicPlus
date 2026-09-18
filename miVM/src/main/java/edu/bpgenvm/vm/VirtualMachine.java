@@ -2073,6 +2073,13 @@ public class VirtualMachine {
      *  refDeref interno (GC/free) sigue siendo tolerante a muertos.
      *  Paso 4a NEUTRO: aún compara con el dead-flag (handleGen[idx] != 0), no con la
      *  gen del handle — eso llega en 4b (handleGen[idx] != handleGenOf(ref)). */
+    /** #525 (V10 REF-5/REF-6) — un receptor NULL en un opcode de campo o de método es un
+     *  RuntimeError ATRAPABLE con el mismo texto en las dos VMs (como «División por cero»).
+     *  Antes miVM leía y escribía `memory[4 + slot*4]` (el primer módulo) en silencio, y la
+     *  VM-C paraba el RUN con NULL_RECEIVER: ni atrapable ni el mismo comportamiento. */
+    private void requireReceptor(ThreadContext tc, int sp, long ref, String texto) {
+        if (ref == 0) { tc.sp = sp; throwBpRuntimeError(tc, texto); }
+    }
     private void requireAlive(ThreadContext tc, int sp, long ref) {
         if ((ref & HANDLE_TAG) == 0) return;           // null/constante: siempre vivo
         int idx = handleIdx(ref);
@@ -3238,6 +3245,7 @@ public class VirtualMachine {
                     if (rawOp == 0x53) { slot = mem[pc] & 0xFF; pc++; }
                     else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
+                    requireReceptor(tc, sp, obj, "referencia nula: acceso a un campo de un objeto null");   // #525: null grita, no lee memory[4+slot*4]
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, sp, readI32(mem, fieldAddr(obj, slot))); sp += 4;
                     break;
@@ -3248,6 +3256,7 @@ public class VirtualMachine {
                     else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
+                    requireReceptor(tc, sp, obj, "referencia nula: acceso a un campo de un objeto null");   // #525
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, fieldAddr(obj, slot), val);
                     break;
@@ -3259,6 +3268,7 @@ public class VirtualMachine {
                     if (rawOp == 0xA8) { slot = mem[pc] & 0xFF; pc++; }
                     else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
+                    requireReceptor(tc, sp, obj, "referencia nula: acceso a un campo de un objeto null");   // #525
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, sp, readI64(mem, fieldAddr(obj, slot))); sp += 8;
                     break;
@@ -3269,6 +3279,7 @@ public class VirtualMachine {
                     else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
+                    requireReceptor(tc, sp, obj, "referencia nula: acceso a un campo de un objeto null");   // #525
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, fieldAddr(obj, slot), val);
                     break;
@@ -3705,6 +3716,7 @@ public class VirtualMachine {
                     else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
                     sp -= REF_SIZE; long val = refLoad(mem, sp);   // V4: valor = ref nueva (8B, era 4B → drift + high-word)
                     sp -= REF_SIZE; long obj = refLoad(mem, sp);
+                    requireReceptor(tc, sp, obj, "referencia nula: acceso a un campo de un objeto null");   // #525
                     requireAlive(tc, sp, obj);   // contrato B
                     int slotAddr = fieldAddr(obj, slot);
                     long old = refLoad(mem, slotAddr);             // V4: ref vieja (8B flat; era readI32 = high-word=0 → leak)
@@ -3879,9 +3891,10 @@ public class VirtualMachine {
                     // van contados en slots) → sp-8-numArgs*4; readI64 + (int) low32.
                     long thisRef    = refLoad(mem, sp - REF_SIZE - numArgs * 4);
                     if (thisRef == 0) {
+                        // #525 — el MISMO texto que interp.c, byte a byte (antes llevaba la ranura y el
+                        // numero de args, y la VM-C ni siquiera lanzaba: paraba el RUN).
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "INVOKE_VIRTUAL sobre null receiver"
-                                + " (vtSlot=" + vtSlot + ", numArgs=" + numArgs + ")");
+                        throwBpRuntimeError(tc, "referencia nula: llamada a un método de un objeto null");
                         break;
                     }
                     requireAlive(tc, sp, thisRef);   // contrato B: método sobre objeto liberado → grita

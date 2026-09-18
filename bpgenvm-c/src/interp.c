@@ -1698,7 +1698,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_GET_FIELD: case OP_GET_FIELD_REF: {
             uint32_t slot; if (op == OP_GET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             int32_t v = bpvm_read_i32_be(bpref_field(vm, obj, slot));
             bpvm_write_i32_be(mem + sp, v); sp += 4;
@@ -1708,7 +1708,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t slot; if (op == OP_SET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             bpvm_write_i32_be(bpref_field(vm, obj, slot), v);
             break;
@@ -1718,7 +1718,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_GET_FIELD_LONG: case OP_GET_FIELD_LONG_REF: {
             uint32_t slot; if (op == OP_GET_FIELD_LONG) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             int64_t v = bpvm_read_i64_be(bpref_field(vm, obj, slot));
             bpvm_write_i64_be(mem + sp, v); sp += 8;
@@ -1728,7 +1728,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t slot; if (op == OP_SET_FIELD_LONG) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             bpvm_write_i64_be(bpref_field(vm, obj, slot), v);
             break;
@@ -1740,7 +1740,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             else { BPVM_REF_LEE(vt_slot); num_args = mem[pc++]; }
             uint32_t this_addr = sp - BPVM_REF_SIZE - (uint32_t) num_args * 4;   /* receptor ref */
             bpref_t this_obj = bpref_load(vm, this_addr);
-            if (bpref_is_null(this_obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpref_is_null(this_obj)) BPVM_RT_THROW("referencia nula: llamada a un método de un objeto null");   /* #525: atrapable, mismo texto que miVM */
             if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B: método sobre objeto liberado */
             /* #389 — el "hermano" del cast: despachar un método sobre un Object
              * que lleva una CADENA leía su longitud como class_ptr y el error
@@ -1947,7 +1947,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t slot; if (op == OP_SET_FIELD_OWNER) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t val = bpref_load(vm, sp);   /* V4: valor = ref nueva (8B; era 4B → drift + high-word) */
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
             if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t field_addr = bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + (uint32_t) slot * 4u;
             bpref_t old = bpref_load(vm, field_addr);               /* V4: ref vieja (8B flat; era readi32=high-word=0 → leak) */

@@ -1,0 +1,82 @@
+// #525 (V7/H2, 18-sep) — un receptor NULL en los opcodes de campo y de método es un
+// RuntimeError ATRAPABLE con el mismo texto en las dos VMs. Antes miVM leía y escribía
+// memory[4 + slot*4] en silencio (un valor real del primer módulo) y la VM-C paraba el
+// RUN con NULL_RECEIVER: ni atrapable ni el mismo comportamiento. Paridad: byte a byte.
+module NullRecv
+import Core
+public class Caja
+  var n: integer
+  var big: long
+  var s: string
+  public function Caja(n: integer)
+    this.n := n
+    this.big := 5L
+    this.s := "x"
+  end Caja
+  public function leeN(): integer
+    return this.n
+  end leeN
+  public function leeDe(o: Caja): integer
+    return o.n
+  end leeDe
+  public function escribeEn(o: Caja)
+    o.n := 3
+  end escribeEn
+  public function leeBigDe(o: Caja): long
+    return o.big
+  end leeBigDe
+  public function escribeBigEn(o: Caja)
+    o.big := 7L
+  end escribeBigEn
+  public function leeSDe(o: Caja): string
+    return o.s
+  end leeSDe
+  public function escribeSEn(o: Caja)
+    o.s := "y"
+  end escribeSEn
+end Caja
+public function main()
+  var nada: Caja := null
+  var viva: Caja := Caja(1)
+  try
+    print nada.leeN()
+  catch e: RuntimeError
+    print "llamada: " + e.msg
+  endtry
+  try
+    print viva.leeDe(nada)
+  catch e: RuntimeError
+    print "lectura i32: " + e.msg
+  endtry
+  try
+    viva.escribeEn(nada)
+    print "escribio?"
+  catch e: RuntimeError
+    print "escritura i32: " + e.msg
+  endtry
+  try
+    print viva.leeBigDe(nada)
+  catch e: RuntimeError
+    print "lectura long: " + e.msg
+  endtry
+  try
+    viva.escribeBigEn(nada)
+    print "escribio?"
+  catch e: RuntimeError
+    print "escritura long: " + e.msg
+  endtry
+  try
+    print viva.leeSDe(nada)
+  catch e: RuntimeError
+    print "lectura ref: " + e.msg
+  endtry
+  try
+    viva.escribeSEn(nada)
+    print "escribio?"
+  catch e: RuntimeError
+    print "escritura ref: " + e.msg
+  endtry
+  print "la viva sigue: " + viva.leeN() + " " + viva.leeDe(viva)
+  print "fin"
+end main
+end NullRecv

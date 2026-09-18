@@ -910,7 +910,7 @@ defecto. ✅ **Era `#521`**: el emisor YA daba los dos errores («`Refl.__guiSlo
 su emisor a basicplus.frontend.Intrinsics» y «intrínseco no implementado en el emisor mivm»), pero el `.mod` se escribía
 igual y decía «compilado:». Con `#521` cerrada no hay `.mod`: el error es el que pedía la ficha (`EmisorConErroresTest`).
 
-#### 🔴 `#525` — receptor NULL en los opcodes de CAMPO: miVM lee y escribe la memoria baja de la VM en silencio; la VM-C para con NULL_RECEIVER; y en INVOKE_VIRTUAL sobre null los textos difieren (abierta 16-sep, de V10; preexistente, MOD8 = MOD9; H7)
+#### ✅ `#525` — receptor NULL en los opcodes de CAMPO: miVM lee y escribe la memoria baja de la VM en silencio; la VM-C para con NULL_RECEIVER; y en INVOKE_VIRTUAL sobre null los textos difieren (abierta 16-sep, de V10; **CERRADA el 18-sep**: un receptor null en GET/SET_FIELD(_LONG)(_REF), SET_FIELD_OWNER e INVOKE_VIRTUAL es un `RuntimeError` ATRAPABLE con el mismo texto en las dos VMs —«referencia nula: acceso a un campo de un objeto null» / «…llamada a un método de un objeto null», como «División por cero»—: `requireReceptor` en miVM (antes de `fieldAddr`) y `BPVM_RT_THROW` en `interp.c` donde había `NULL_RECEIVER`+`goto done`; `samples/NullRecv.bp` (siete situaciones: llamada, lectura/escritura i32, long y ref, y el objeto vivo sigue) en el corpus de paridad, 70; preexistente, MOD8 = MOD9; H7)
 
 **Medido** (V10, REF-5/REF-6): `h.leeF(null)` con un campo de la clase → miVM imprime un valor real de su `memory[]`
 (`fieldAddr(0, slot)` = 4 + slot·4, dentro del primer módulo) y con un campo de 8 B se cae con un mensaje sin texto
