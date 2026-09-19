@@ -217,6 +217,18 @@ constructor de la clase, tras el `super()` (implícito o escrito), en orden de d
 rechazarlo — error de compilación «un campo de instancia se inicializa en el constructor». Lo que no vale es lo de hoy:
 aceptarlo y tirarlo. Va con `#509`/`#510` (H1, el compilador) y se cierra con un caso en la matriz y un oráculo de paridad.
 
+**Decisión de Eduardo (19-sep, noche): (a), «en principio igual que en Java», con el modelo dicho así:** si un
+constructor no dice nada, llama a `this()` de forma implícita, y ese `this()` implícito llama a `super()`; si el
+constructor escribe `super(...)`, está escribiendo su propio `this()` y no se llama a ningún otro; y como hay sobrecarga
+de constructores, desde un constructor se puede llamar a OTRO constructor de la misma clase (`this(args)`), pero nunca a
+sí mismo (sería recursivo y no terminaría). Traducido a reglas: (1) los inicializadores de campos y properties de
+instancia corren UNA vez, en orden de declaración, después del `super(...)` (escrito o inyectado) y antes del cuerpo,
+en el constructor que hace el `super`; (2) `this(args)` es nuevo: delegación a otra sobrecarga, primera sentencia,
+excluyente con `super(...)`, y el constructor que delega NO corre los inicializadores (los corre el delegado); la
+propia firma o un ciclo (A→B→A) es error de compilación con nombre; (3) una clase con inicializadores y sin
+constructor recibe uno sintético (como el del `sync` desde `#527`) que hace `super()` y los corre; (4) manual §9.3,
+caso en la matriz de `#492` y oráculo de paridad.
+
 #### ✅ `#512` — miVM MUERE («No space in heap») al CONCATENAR un string sin inicializar; la VM-C imprime vacío — paridad rota y la VM de referencia caída (abierta 14-sep, al escribir el oráculo de `#492`; H1/H7 · **CERRADA el 14-sep**)
 
 **Medido** (`C:/tmp/v7_campos/NullStr.bp`): `var s: string` (campo de clase o local) y `print "s=" + s` → miVM:
