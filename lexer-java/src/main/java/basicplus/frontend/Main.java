@@ -2572,8 +2572,9 @@ public final class Main {
                     // ción de clase externa cambia el CALL al de la factoría.
                     if (cs.ctorParams != null) {
                         Symbol.FunctionSymbol ctor = new Symbol.FunctionSymbol(
-                                cs.name, true, false, false, stub, null);
+                                cs.name, "public".equals(cs.ctorVis), false, false, stub, null);
                         ctor.isConstructor = true;
+                        ctor.isPrivate = "private".equals(cs.ctorVis);   // #515: la marca viaja en `ctor(...) private|protected`
                         for (ModuleInterface.ParamSig pp : cs.ctorParams) {
                             Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                             psm.type = pp.type;
@@ -2589,10 +2590,13 @@ public final class Main {
                         // overloadMangle que en el dueño, así `__cls_new_<Cls>$clave`
                         // y `__cls_init_<Cls>$clave` casan a los dos lados.
                         Symbol.FunctionSymbol tailC = ctor;
-                        for (List<ModuleInterface.ParamSig> ov : cs.ctorOverloads) {
+                        for (int k = 0; k < cs.ctorOverloads.size(); k++) {
+                            List<ModuleInterface.ParamSig> ov = cs.ctorOverloads.get(k);
+                            String visK = (k < cs.ctorOverloadsVis.size()) ? cs.ctorOverloadsVis.get(k) : "public";
                             Symbol.FunctionSymbol oc = new Symbol.FunctionSymbol(
-                                    cs.name, true, false, false, stub, null);
+                                    cs.name, "public".equals(visK), false, false, stub, null);
                             oc.isConstructor = true;
+                            oc.isPrivate = "private".equals(visK);   // #515
                             for (ModuleInterface.ParamSig pp : ov) {
                                 Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                                 psm.type = pp.type;

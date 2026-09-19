@@ -1,0 +1,30 @@
+// #511/#515 (19-sep) — una clase con inicializadores y constructores de las tres visibilidades,
+// consumida desde OTRO modulo (VisUsa): la marca viaja en la interfaz (`ctor(...) protected|private`).
+module VisLib
+  import Core
+  public class Cuenta
+    var saldo: integer := 100
+    public property nombre: string := "anonima"
+    public function Cuenta()
+    end Cuenta
+    function Cuenta(saldo: integer)
+      this.saldo := saldo
+    end Cuenta
+    private function Cuenta(nombre: string, saldo: integer)
+      this.nombre := nombre
+      this.saldo := saldo
+    end Cuenta
+    public function especial(): Cuenta
+      return Cuenta("especial", 999)
+    end especial
+    public function texto(): string
+      return this.nombre + "=" + this.saldo
+    end texto
+  end Cuenta
+  public class Sencilla
+    var v: integer := 7
+    public function valor(): integer
+      return this.v
+    end valor
+  end Sencilla
+end VisLib

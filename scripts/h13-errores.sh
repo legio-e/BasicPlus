@@ -42,9 +42,14 @@ EnumMal|'string' y 'null' (no hay conversi
 EnumMal|'string' y 'void' (no hay conversi
 TopeClase|la clase 'Ancha' ocupa 258 ranuras de campos
 TopeClase|la clase 'Larga' tiene 257 m
-SyncSinCtor|declara un constructor que llame a 'super(...)'
 StepCero|no puede ser 0
 StepCero|debe ser integer, no 'float'
+CtorMal|no puede delegar en s
+CtorMal|se delegan en ciclo
+CtorMal|no puede llamar adem
+CtorMal|'Cerrada()' es private
+CtorMal|'Familiar()' es protegido
+CtorMal|'Base()' es private
 "
 
 ok=0; mal=0

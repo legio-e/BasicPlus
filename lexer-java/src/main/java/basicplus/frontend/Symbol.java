@@ -267,6 +267,10 @@ public abstract class Symbol {
          *  en otro módulo no necesita re-manglearse cuando una subclase añade una
          *  sobrecarga de ese nombre. null ⇒ aún sin asignar: vale el nombre. */
         public String slotKey;
+        /** #511 (19-sep) — el constructor de la MISMA clase en el que éste delega
+         *  (`MiClase(args)` como primera sentencia), o null. El que delega no hace
+         *  mutex, ni super(), ni inicializadores: los hace el delegado. */
+        public FunctionSymbol delegaA;
 
         /** Clave efectiva (ver {@link #slotKey}). Nunca null. */
         public String slotKey() { return slotKey != null ? slotKey : name; }

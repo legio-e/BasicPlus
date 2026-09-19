@@ -1,0 +1,80 @@
+// CtorInit.bp — #511 (19-sep): los INICIALIZADORES de campos y properties de instancia, y la
+// DELEGACIÓN entre constructores. Modelo de Eduardo, «igual que en Java»: la primera línea del
+// constructor dice cómo se construye el objeto — nada = super() implícito; `super(...)` escrito;
+// o `MiClase(args)` = esta otra sobrecarga—; los inicializadores corren UNA vez, tras el super,
+// en orden de declaración, en el constructor que hace el super (el que delega no los repite).
+// Antes: `var x: integer := 5` en una clase valía 0 en silencio, y `Punto(1, 2)` de primera
+// línea creaba un objeto nuevo que se tiraba.
+module CtorInit
+  import Core
+  public class Contador
+    var n: integer := 5
+    var s: string := "hola"
+    var g: long := 7L
+    var d: double := 1.5
+    var ok: boolean := true
+    public property etiqueta: string := "sin nombre"
+    public function Contador()
+    end Contador
+    public function Contador(n: integer)
+      this.n := n
+    end Contador
+    public function texto(): string
+      return this.etiqueta + ":" + this.n + "," + this.s + "," + this.g + "," + this.d + "," + this.ok
+    end texto
+  end Contador
+  // sin constructor: uno sintético que corre los inicializadores
+  public class Sencilla
+    var v: integer := 42
+    public function valor(): integer
+      return this.v
+    end valor
+  end Sencilla
+  // herencia: los del padre en el super, los del hijo después
+  public class Hijo extends Contador
+    var extra: integer := 100
+    public function Hijo()
+      super(9)
+      this.extra := this.extra + 1
+    end Hijo
+    public function todo(): string
+      return this.texto() + "|" + this.extra
+    end todo
+  end Hijo
+  // delegación entre sobrecargas
+  public class Punto
+    var x: integer := -1
+    var y: integer := -1
+    public property veces: integer := 0
+    public function Punto(x: integer, y: integer)
+      this.x := x
+      this.y := y
+      this.veces := this.veces + 1
+    end Punto
+    public function Punto(x: integer)
+      Punto(x, x)
+      this.veces := this.veces + 10
+    end Punto
+    public function Punto()
+      Punto(3)
+      this.veces := this.veces + 100
+    end Punto
+    public function texto(): string
+      return "(" + this.x + "," + this.y + ") veces=" + this.veces
+    end texto
+  end Punto
+  function main()
+    print Contador().texto()
+    print Contador(8).texto()
+    print Sencilla().valor()
+    print Hijo().todo()
+    print Punto(1, 2).texto()
+    print Punto(5).texto()
+    print Punto().texto()
+    // un objeto NUEVO de la propia clase en cualquier otro sitio sigue siendo nuevo
+    var p: Punto := Punto(7, 8)
+    var q: Punto := Punto(p.veces + 8)
+    print q.texto()
+    print "fin"
+  end main
+end CtorInit

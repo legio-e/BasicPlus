@@ -912,6 +912,47 @@ public final class SemanticAnalyzer {
             if (m instanceof PropertyDef && ((PropertyDef) m).isSync) return true;
         return false;
     }
+    /** #527/#511 — ver el punto 2.a de resolveTypesPass. */
+    private void sintetizarCtores(ClassSymbol cls, int prof) {
+        if (cls.isExternal || cls.astNode == null || cls.constructor != null || prof > 64) return;
+        if (cls.baseClass != null) sintetizarCtores(cls.baseClass, prof + 1);   // el padre primero
+        boolean porSync = tieneSyncPropia(cls.astNode) && !ancestroConSync(cls);
+        if (!porSync && !tieneInicializadores(cls.astNode)) return;
+        ClassSymbol base = cls.baseClass;
+        FunctionSymbol baseCtor = (base != null) ? base.findConstructor() : null;
+        FunctionSymbol cabeza = null, cola = null;
+        int cuantos = 0;
+        for (FunctionSymbol c = baseCtor; c != null || cabeza == null; c = (c != null) ? c.nextOverload : null) {
+            FunctionSymbol synth = new FunctionSymbol(cls.name, true, false, false, cls, null);
+            synth.isConstructor = true;
+            if (c != null) {
+                for (ParamSymbol p : c.params) {
+                    ParamSymbol q = new ParamSymbol(p.name, p.line, p.column);
+                    q.type = p.type; q.defaultExpr = p.defaultExpr;
+                    synth.params.add(q);
+                }
+                synth.implicitSuper = true; synth.implicitSuperCtor = c;   // super(MIS params) a ESA sobrecarga
+                ClassSymbol save = currentClass; currentClass = cls;
+                try { checkVisibilidadCtor(cls.line, cls.column, c, base); } finally { currentClass = save; }   // #515
+            }
+            if (cabeza == null) cabeza = synth; else { cola.nextOverload = synth; }
+            cola = synth; cuantos++;
+            if (c == null) break;
+        }
+        if (cuantos > 1)
+            for (FunctionSymbol k = cabeza; k != null; k = k.nextOverload) { k.overloaded = true; k.slotKey = (k == cabeza) ? k.name : k.overloadMangle(); }
+        cls.constructor = cabeza;
+    }
+
+    /** #511 — ¿algún campo o property de INSTANCIA de la clase lleva `:= valor`? */
+    static boolean tieneInicializadores(ClassDef cd) {
+        for (ITopLevelDecl m : cd.members) {
+            if (m instanceof VarDecl && ((VarDecl) m).init != null
+                    && !((VarDecl) m).names.isEmpty() && !((VarDecl) m).names.get(0).isStatic()) return true;
+            if (m instanceof PropertyDef && ((PropertyDef) m).init != null && !((PropertyDef) m).name.isStatic()) return true;
+        }
+        return false;
+    }
     private static boolean ancestroConSync(ClassSymbol cls) {
         for (ClassSymbol p = cls.baseClass; p != null; p = p.baseClass)
             for (Symbol s : p.instanceMembers.getSymbols())
@@ -1186,32 +1227,6 @@ public final class SemanticAnalyzer {
             }
         }
 
-        // 1.a) #527 (19-sep) — una clase con `sync property` propia y SIN constructor recibe
-        // un constructor SINTÉTICO (el emisor lo emite: crea el mutex). Se registra AQUÍ,
-        // con la cadena de bases ya resuelta, para que (1) tenga la misma regla de
-        // `super()` implícito que un constructor escrito —antes el `__init` sintético
-        // sólo creaba el mutex y `ConSync.p` valía 0—, (2) `ConSync(7)` no resuelva al
-        // ctor del PADRE, y (3) la interfaz lo exporte como lo que es (sin args): el
-        // consumidor de otro módulo llamaba al `__init` del padre y el mutex quedaba null.
-        for (Symbol s : module.members.getSymbols()) {
-            if (!(s instanceof ClassSymbol)) continue;
-            ClassSymbol cls = (ClassSymbol) s;
-            if (cls.isExternal || cls.astNode == null || cls.constructor != null) continue;
-            if (!tieneSyncPropia(cls.astNode) || ancestroConSync(cls)) continue;
-            FunctionSymbol synth = new FunctionSymbol(cls.name, true, false, false, cls, null);
-            synth.isConstructor = true;
-            cls.constructor = synth;
-            ClassSymbol base = cls.baseClass;
-            FunctionSymbol baseCtor = (base != null) ? base.findConstructor() : null;
-            if (baseCtor == null) continue;
-            FunctionSymbol sinArgs = null;
-            for (FunctionSymbol c = baseCtor; c != null; c = c.nextOverload)
-                if (c.params.isEmpty()) { sinArgs = c; break; }
-            if (sinArgs != null) { synth.implicitSuper = true; synth.implicitSuperCtor = sinArgs; }
-            else err(cls.line, cls.column, "la clase '" + cls.name + "' tiene una `sync property` y ningún constructor, y el constructor de la clase base '"
-                    + base.name + "' requiere argumentos: declara un constructor que llame a 'super(...)'");
-        }
-
         // 1.b) H5.c — un miembro NO puede llamarse igual que un evento heredado
         // (ni al revés). Ver validateEventShadowing: con la cadena de bases ya
         // resuelta y antes de tocar tipos, que es cuando el nombre es lo único
@@ -1230,6 +1245,18 @@ public final class SemanticAnalyzer {
                     resolveDefTypes(m, cls);
             }
         }
+
+        // 2.a) #527/#511 (19-sep) — los constructores SINTÉTICOS de una clase sin constructor que
+        // los necesita (una `sync property` propia: el mutex; campos o properties con `:= valor`:
+        // los inicializadores). Se registran AQUÍ, con los tipos ya resueltos, para que (1) la
+        // clase siga ofreciendo las MISMAS firmas que heredaba —en BasicPlus una clase sin
+        // constructor hereda los del padre (`Tarea(4096)` con `Tarea extends Thread`)—: uno
+        // por sobrecarga del padre, que hace `super(esos args)` y luego lo suyo; (2) `S(5)`
+        // no resuelva al ctor del padre a secas saltándose el mutex (era `#517`); y (3) la
+        // interfaz los exporte como propios. Los padres primero: el sintético del hijo copia
+        // la cadena EFECTIVA del padre, que puede ser sintética también.
+        for (Symbol s : module.members.getSymbols())
+            if (s instanceof ClassSymbol) sintetizarCtores((ClassSymbol) s, 0);
 
         // H5.a — con los tipos ya resueltos, valida que no haya dos sobrecargas
         // con la MISMA firma (mismo nombre + mismos tipos de parámetros).
@@ -1677,6 +1704,7 @@ public final class SemanticAnalyzer {
                 checkOverridesAndFinal(cls);
                 for (ITopLevelDecl m : cls.astNode.members)
                     bodyForDef(m, cls);
+                checkCiclosDeDelegacion(cls);   // #511
             }
         }
     }
@@ -1852,12 +1880,31 @@ public final class SemanticAnalyzer {
 
         analyzeBody(f.body, localScope);
 
+        // #511 (19-sep) — DELEGACIÓN: `MiClase(args)` como PRIMERA sentencia de un constructor
+        // inicializa ESTE objeto por esa otra sobrecarga (Eduardo: «la primera línea del
+        // constructor dice cómo se construye el objeto»). En cualquier otro sitio `MiClase(...)`
+        // es un objeto nuevo. El que delega no hace super() ni inicializadores: los hace el
+        // delegado. Antes esto compilaba como un objeto nuevo que se tiraba (mudo).
+        if (fs.isConstructor && currentClass != null) {
+            CallExpr d = llamadaAlPropioCtor(f.body, currentClass);
+            if (d != null) {
+                Symbol anotado = info.exprSymbols.get(d);
+                FunctionSymbol elegido = (anotado instanceof FunctionSymbol) ? (FunctionSymbol) anotado : currentClass.findConstructor();
+                if (elegido == fs)
+                    err(d.line, d.column, "el constructor '" + currentClass.name + "(" + firmaDe(fs) + ")' no puede delegar en sí mismo (sería recursivo)");
+                else if (seenSuperCallInCtor)
+                    err(d.line, d.column, "un constructor que delega en '" + currentClass.name + "(" + firmaDe(elegido) + ")' no puede llamar además a 'super(...)': lo hace el delegado");
+                else if (elegido != null && elegido.ownerClass == currentClass)
+                    fs.delegaA = elegido;
+            }
+        }
+
         // Auto-super (modelo Java): un constructor que no llama super() explícito
         // invoca implícitamente al constructor del padre SIN argumentos. Si el
         // constructor del padre EXIGE argumentos, la llamada debe ser explícita →
         // error. Si el padre no tiene constructor (NEW_OBJECT ya inicializa los
         // campos), no hay nada que llamar.
-        if (fs.isConstructor && !seenSuperCallInCtor
+        if (fs.isConstructor && !seenSuperCallInCtor && fs.delegaA == null
                 && currentClass != null && currentClass.baseClass != null) {
             FunctionSymbol baseCtor = currentClass.baseClass.findConstructor();
             if (baseCtor != null) {
@@ -1869,6 +1916,7 @@ public final class SemanticAnalyzer {
                 if (sinArgs != null) {
                     fs.implicitSuper = true;   // el emisor inyecta super()
                     fs.implicitSuperCtor = sinArgs;
+                    checkVisibilidadCtor(f.line, f.column, sinArgs, currentClass.baseClass);   // #515
                 } else {
                     err(f.line, f.column, "el constructor de '" + currentClass.name
                             + "' debe llamar a 'super(...)': el constructor de la clase base '"
@@ -1881,6 +1929,63 @@ public final class SemanticAnalyzer {
         currentFunctionIsNative = saveNative;
     }
 
+    /** #511 — la llamada `MiClase(args)` si es la PRIMERA sentencia del cuerpo, o null. */
+    private static CallExpr llamadaAlPropioCtor(List<IStmt> body, ClassSymbol cls) {
+        if (body == null || body.isEmpty() || !(body.get(0) instanceof ExprStmt)) return null;
+        IExpr e = ((ExprStmt) body.get(0)).expr;
+        if (!(e instanceof CallExpr)) return null;
+        CallExpr ce = (CallExpr) e;
+        if (ce.callee instanceof IdentifierExpr && ((IdentifierExpr) ce.callee).name.equals(cls.name)) return ce;
+        return null;
+    }
+    private static String firmaDe(FunctionSymbol f) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < f.params.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(f.params.get(i).type != null ? f.params.get(i).type.display() : "?");
+        }
+        return sb.toString();
+    }
+
+    /** #515 (19-sep) — la visibilidad de un constructor es la de cualquier miembro (Eduardo: «si se
+     *  indica private es privado, si se indica public es público y si no se dice nada es
+     *  protegido»): `private` → sólo la propia clase lo construye o delega en él; protegido →
+     *  además sus subclases (`super(...)`, o construirla); `public` → cualquiera. Vale igual
+     *  para la construcción, `super(...)` explícito o implícito y la delegación. Antes no se
+     *  comprobaba en ningún sitio. */
+    private void checkVisibilidadCtor(int line, int col, FunctionSymbol ctor, ClassSymbol cls) {
+        if (ctor == null || cls == null) return;
+        ClassSymbol declarante = (ctor.ownerClass != null) ? ctor.ownerClass : cls;
+        if (ctor.isPrivate) {
+            if (currentClass != declarante)
+                err(line, col, "el constructor '" + declarante.name + "(" + firmaDe(ctor) + ")' es private: sólo lo usa '"
+                    + declarante.name + "'. Si quieres que también lo usen sus subclases, quítale 'private' — un constructor sin marcar ya es protegido");
+            return;
+        }
+        if (ctor.isPublic) return;
+        if (currentClass != null && (currentClass == declarante || currentClass.isSubclassOf(declarante))) return;
+        err(line, col, "el constructor '" + declarante.name + "(" + firmaDe(ctor) + ")' es protegido: lo usan esa clase y sus subclases"
+            + " (desde 'super(...)' o construyéndola), no desde fuera. Hazlo 'public' si tiene que construirse desde cualquier sitio");
+    }
+
+    /** #511 — un ciclo de delegación (A → B → A) no termina nunca: se comprueba con todos los
+     *  constructores de la clase ya analizados. */
+    private void checkCiclosDeDelegacion(ClassSymbol cls) {
+        for (FunctionSymbol c = cls.constructor; c != null; c = c.nextOverload) {
+            if (c.delegaA == null) continue;
+            java.util.List<FunctionSymbol> camino = new ArrayList<>();
+            FunctionSymbol k = c;
+            while (k != null && !camino.contains(k)) { camino.add(k); k = k.delegaA; }
+            if (k == c) {
+                StringBuilder sb = new StringBuilder();
+                for (FunctionSymbol p : camino) sb.append(cls.name).append('(').append(firmaDe(p)).append(") → ");
+                sb.append(cls.name).append('(').append(firmaDe(c)).append(')');
+                err(c.line, c.column, "los constructores de '" + cls.name + "' se delegan en ciclo: " + sb + " (no terminaría nunca)");
+                return;
+            }
+        }
+    }
+
     private void analyzeProperty(PropertyDef p) {
         Symbol s = info.declSymbols.get(p);
         if (!(s instanceof PropertySymbol)) return;
@@ -1891,7 +1996,7 @@ public final class SemanticAnalyzer {
             if (ps.type != null && !ps.type.isAssignableFrom(t))
                 err(p.line, p.column, "valor inicial de tipo '" + t.display() + "' no asignable a propiedad '" + ps.type.display() + "'");
             // L8: el init de una property a NIVEL MÓDULO se ignora hoy.
-            //     (Propiedades de instancia se inicializan vía constructor.)
+            //     (#511: las de INSTANCIA sí se inicializan, en el constructor tras el super().)
             // L6: ídem para static property de clase (backing global, arranca a 0).
             if (ps.ownerClass == null) {
                 warn(p.line, p.column, "inicializador de property a nivel módulo se ignora; "
@@ -2906,8 +3011,10 @@ public final class SemanticAnalyzer {
             FunctionSymbol chosen = resolveOverloadArgs(cands, baseCtor.name, sc.args, sc.line, sc.column, scope);
             if (chosen == null) return ErrorType.INSTANCE;
             info.exprSymbols.put(sc, chosen);
+            checkVisibilidadCtor(sc.line, sc.column, chosen, currentClass.baseClass);   // #515
         } else {
             checkArgs(sc.line, sc.column, baseCtor.params, sc.args, scope);
+            checkVisibilidadCtor(sc.line, sc.column, baseCtor, currentClass.baseClass);   // #515
         }
         return VoidType.INSTANCE;
     }
@@ -3351,8 +3458,10 @@ public final class SemanticAnalyzer {
                 FunctionSymbol chosen = resolveOverloadCall(ctor, ce, scope);
                 if (chosen == null) return ErrorType.INSTANCE;
                 info.exprSymbols.put(ce, chosen);
+                checkVisibilidadCtor(ce.line, ce.column, chosen, cls);   // #515
             } else {
                 checkArgs(ce.line, ce.column, ctor.params, ce.args, scope);
+                checkVisibilidadCtor(ce.line, ce.column, ctor, cls);   // #515
             }
             return new ClassType(cls);
         }

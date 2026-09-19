@@ -257,6 +257,13 @@ public final class ModuleInterface {
          *  orden de la cadena (el consumidor las encadena igual y su clave
          *  mangleada coincide con la del dueño). Directiva `ctor+(...)`. */
         public List<List<ParamSig>> ctorOverloads = new ArrayList<>();
+        /** #515 (19-sep) — visibilidad del ctor de cabeza y de cada sobrecarga (alineada con
+         *  {@link #ctorOverloads}): "public" (sin flag en la línea: lo de siempre, así los `.mod`
+         *  de la stdlib no cambian), "protected" o "private". Un ctor no público viaja igual —la
+         *  cabeza sigue siendo la cabeza y las claves no se renumeran—; quien lo comprueba es el
+         *  semántico del consumidor. */
+        public String ctorVis = "public";
+        public List<String> ctorOverloadsVis = new ArrayList<>();
         /** Properties de la clase, en orden de declaración. Cada una añade
          *  un getX y un setX a la vtable (en ese orden). */
         public final List<PropSig> properties;
@@ -476,6 +483,7 @@ public final class ModuleInterface {
         // sigue siendo la cabeza y cada firma se identifica por su clave, no por
         // su posición.
         List<List<ParamSig>> ctorOverloads = new ArrayList<>();
+        List<String> ctorOverloadsVis = new ArrayList<>();   // #515
         if (ctorHead != null) {
             for (FunctionSymbol c = ctorHead.nextOverload; c != null; c = c.nextOverload) {
                 String issue = signatureIssue(c);
@@ -483,6 +491,7 @@ public final class ModuleInterface {
                 List<ParamSig> ps = new ArrayList<>();
                 for (ParamSymbol p : c.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
                 ctorOverloads.add(ps);
+                ctorOverloadsVis.add(visDeCtor(c));   // #515
             }
         }
 
@@ -575,6 +584,8 @@ public final class ModuleInterface {
         }
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
         sig.ctorOverloads = ctorOverloads;   // V7/H2 (#509)
+        sig.ctorVis = (ctorHead != null) ? visDeCtor(ctorHead) : "public";   // #515
+        sig.ctorOverloadsVis = ctorOverloadsVis;
         sig.staticMethods = staticMethods;   // V7/H2 (#492-B)
         sig.staticProps   = staticProps;
 
@@ -814,6 +825,11 @@ public final class ModuleInterface {
         if ("Object".equals(base)) return objectBaseLayout().methodNames;
         if ("Thread".equals(base)) return threadBaseLayout().methodNames;
         return java.util.Collections.emptyList();
+    }
+
+    /** #515 — "public" / "protected" / "private" de un constructor. */
+    static String visDeCtor(FunctionSymbol c) {
+        return c.isPrivate ? "private" : (c.isPublic ? "public" : "protected");
     }
 
     private static LayoutAndNames objectBaseLayout() {
@@ -1222,10 +1238,12 @@ public final class ModuleInterface {
                         appendParam(cs, c.ctorParams.get(i));
                     }
                     cs.append(')');
+                    if (!"public".equals(c.ctorVis)) cs.append(' ').append(c.ctorVis);   // #515
                     pw.println(cs.toString());
                 }
                 // V7/H2 (#509) — `ctor+(<params>)` por cada sobrecarga más, en orden.
-                for (List<ParamSig> ov : c.ctorOverloads) {
+                for (int k = 0; k < c.ctorOverloads.size(); k++) {
+                    List<ParamSig> ov = c.ctorOverloads.get(k);
                     StringBuilder cs = new StringBuilder();
                     cs.append("  ctor+(");
                     for (int i = 0; i < ov.size(); i++) {
@@ -1233,6 +1251,8 @@ public final class ModuleInterface {
                         appendParam(cs, ov.get(i));
                     }
                     cs.append(')');
+                    String vis = (k < c.ctorOverloadsVis.size()) ? c.ctorOverloadsVis.get(k) : "public";
+                    if (!"public".equals(vis)) cs.append(' ').append(vis);   // #515
                     pw.println(cs.toString());
                 }
                 for (PropSig p : c.properties) {
@@ -1500,6 +1520,7 @@ public final class ModuleInterface {
             String       clsParent   = null;
             List<ParamSig> clsCtorParams = null;
             List<List<ParamSig>> clsCtorOverloads = new ArrayList<>();   // V7/H2 (#509)
+            String clsCtorVis = "public"; List<String> clsCtorOverloadsVis = new ArrayList<>();   // #515
             List<PropSig>  clsProps   = null;
             List<FuncSig>  clsMethods = null;
             // L2 v3 — layout binario opcional (-1 = no presente).
@@ -1572,6 +1593,7 @@ public final class ModuleInterface {
                         cs.staticMethods = clsStaticMethods;   // V7/H2 (#492-B)
                         cs.staticProps   = clsStaticProps;
                         cs.ctorOverloads = clsCtorOverloads;   // V7/H2 (#509)
+                        cs.ctorVis = clsCtorVis; cs.ctorOverloadsVis = clsCtorOverloadsVis;   // #515
                         iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
@@ -1583,6 +1605,7 @@ public final class ModuleInterface {
                         clsStaticMethods = new ArrayList<>();   // V7/H2 (#492-B)
                         clsStaticProps   = new ArrayList<>();
                         clsCtorOverloads = new ArrayList<>();   // V7/H2 (#509)
+                        clsCtorVis = "public"; clsCtorOverloadsVis = new ArrayList<>();   // #515
                         continue;
                     }
                     if (trimmed.startsWith("ctor+(")) {   // V7/H2 (#509): sobrecarga del ctor
@@ -1592,6 +1615,7 @@ public final class ModuleInterface {
                         if (clsCtorParams == null)
                             throw new IOException(file + ":" + lineNo + ": ctor+ sin un ctor de cabeza antes");
                         clsCtorOverloads.add(parseParamList(file, lineNo, trimmed.substring(lp + 1, rp)));
+                        clsCtorOverloadsVis.add(visDeLinea(file, lineNo, trimmed.substring(rp + 1)));   // #515
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
@@ -1602,6 +1626,7 @@ public final class ModuleInterface {
                         if (clsCtorParams != null)
                             throw new IOException(file + ":" + lineNo + ": segundo `ctor(` en la clase (las sobrecargas van como `ctor+(`)");
                         clsCtorParams = parseParamList(file, lineNo, trimmed.substring(lp + 1, rp));
+                        clsCtorVis = visDeLinea(file, lineNo, trimmed.substring(rp + 1));   // #515
                         continue;
                     }
                     if (trimmed.startsWith("prop ")) {
@@ -1696,6 +1721,7 @@ public final class ModuleInterface {
                     if (!sawPub) throw new IOException(file + ":" + lineNo + ": class sin 'public'");
                     clsCtorParams = null;          // null = sin ctor de usuario
                     clsCtorOverloads = new ArrayList<>();   // V7/H2 (#509)
+                    clsCtorVis = "public"; clsCtorOverloadsVis = new ArrayList<>();   // #515
                     clsProps   = new ArrayList<>();
                     clsMethods = new ArrayList<>();
                 } else if (!tolerant) {
@@ -1777,6 +1803,14 @@ public final class ModuleInterface {
     }
 
     /** Índice del ')' que cierra el '(' en 'open', respetando "..." y anidación. */
+    /** #515 — lo que sigue al `)` de un `ctor(...)`/`ctor+(...)`: nada = public, o `protected` / `private`. */
+    private static String visDeLinea(Object file, int lineNo, String resto) throws IOException {
+        String r = resto.trim();
+        if (r.isEmpty()) return "public";
+        if (r.equals("protected") || r.equals("private") || r.equals("public")) return r;
+        throw new IOException(file + ":" + lineNo + ": tras el constructor se esperaba 'protected' o 'private', no '" + r + "'");
+    }
+
     private static int matchParen(String s, int open) {
         int depth = 0; boolean inStr = false, esc = false;
         for (int i = open; i < s.length(); i++) {

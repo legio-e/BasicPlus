@@ -1,0 +1,27 @@
+// SyncSinCtor.bp — #517/#527/#511 (19-sep): una clase con `sync property` y SIN constructor cuyo
+// padre EXIGE argumentos: hereda las firmas del padre (en BasicPlus una clase sin constructor
+// hereda los del padre), con un constructor sintetico por sobrecarga que hace super(esos args)
+// y luego lo suyo (el mutex, los inicializadores). Antes `S(5)` iba al __init del padre a secas y
+// el mutex quedaba null («INVOKE_VIRTUAL sobre null receiver» en las dos VMs).
+module SyncSinCtor
+  import Core
+  public class Base
+    var v: integer
+    public function valor(): integer
+      return this.v
+    end valor
+    public function Base(v: integer)
+      this.v := v
+    end Base
+  end Base
+  public class S extends Base
+    public sync property q: integer
+  end S
+  function main()
+    var s: S := S(5)
+    s.q := 1
+    print s.q
+    print s.valor()
+    print "fin"
+  end main
+end SyncSinCtor

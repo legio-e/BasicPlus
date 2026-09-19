@@ -695,9 +695,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   con la variable de iteración (uso documental).
 </p>
 <p>
-  <strong>Límite actual de <code>step</code>:</strong> sólo admite un literal entero
-  positivo. <code>step -1</code> (un unario sobre el literal) o una variable no compilan
-  («for step solo soporta literal int»); para contar hacia atrás usa <code>while</code>.
+  <code>step</code> es un <code>integer</code> con signo: una constante (<code>step -1</code>
+  cuenta hacia abajo) o una expresión, que se evalúa una sola vez antes de entrar; si el
+  paso es negativo el bucle sigue mientras <code>i &gt;= hasta</code>. <code>step 0</code>
+  escrito es error de compilación.
 </p>
 
 <h3 id="switch">7.4 <code>switch</code></h3>
@@ -1035,6 +1036,16 @@ mismo caso.</p>
   campos no privados con su ranura (<a href="#visibilidad">§9.2.1</a>); para
   exponer un dato a <em>cualquiera</em>, una <code>property</code>.
 </p>
+<p>
+  <strong>Inicializadores.</strong> Un campo (o una property) de instancia puede llevar
+  <code>:= valor</code>: <code>var n: integer := 5</code>, <code>var s: string := "hola"</code>,
+  <code>public property etiqueta: string := "sin nombre"</code>. Se ejecutan <em>una</em> vez por
+  objeto, en orden de declaración, dentro del constructor justo después del <code>super(...)</code>
+  (escrito o implícito) y antes de su cuerpo — como en Java. Una clase con inicializadores y sin
+  constructor recibe uno sin argumentos que los ejecuta. El valor es una expresión cualquiera
+  (un literal, una construcción, una llamada), pero no puede usar <code>this</code> ni otros
+  campos: para eso está el constructor.
+</p>
 
 <h3 id="metodos">9.2 Métodos</h3>
 <p>
@@ -1103,15 +1114,35 @@ end Base</code></pre>
 <h3 id="ctor">9.3 Constructor</h3>
 <p>
   Función con el mismo nombre que la clase. Se ejecuta al hacer
-  <code>NombreClase(args)</code>. Cuando se llama a <code>super(args)</code>,
-  debe ser la primera sentencia.
+  <code>NombreClase(args)</code>. <strong>La primera línea del constructor dice cómo se
+  construye el objeto</strong>, y hay tres formas:
+</p>
+<ul>
+  <li><strong>Nada</strong> — <code>super()</code> implícito (modelo Java): si la clase tiene base,
+      el compilador <em>inyecta</em> la llamada al constructor sin argumentos del padre. Si el
+      constructor del padre <em>exige</em> argumentos, la llamada explícita es obligatoria (error
+      de compilación si falta). Si el padre no tiene constructor, no hay nada que llamar.</li>
+  <li><strong><code>super(args)</code></strong> — el padre por ese constructor; debe ser la
+      primera sentencia.</li>
+  <li><strong><code>NombreClase(args)</code></strong> — <em>delegación</em>: este mismo objeto
+      se inicializa por esa otra sobrecarga del constructor (que a su vez hace su
+      <code>super</code> y los inicializadores), y después sigue el cuerpo. Sólo como primera
+      sentencia: en cualquier otro sitio <code>NombreClase(args)</code> es un objeto nuevo, como
+      siempre. Un constructor no puede delegar en sí mismo ni en ciclo, ni delegar y además
+      llamar a <code>super(...)</code>.</li>
+</ul>
+<p>
+  Los <a href="#campos">inicializadores</a> de campos y properties corren después del
+  <code>super</code> y antes del cuerpo, en el constructor que hace el <code>super</code>; el
+  que delega no los repite.
 </p>
 <p>
-  <strong><code>super()</code> implícito (modelo Java).</strong> Si la clase tiene base y su
-  constructor no llama a <code>super(...)</code>, el compilador <em>inyecta</em> la llamada
-  al constructor sin argumentos del padre. Si el constructor del padre <em>exige</em>
-  argumentos, la llamada explícita es obligatoria (error de compilación si falta). Si el
-  padre no tiene constructor, no hay nada que llamar y no se inyecta nada.
+  <strong>Visibilidad.</strong> La de cualquier miembro: <code>private</code> es privado (sólo
+  la propia clase lo construye o delega en él), <code>public</code> es público, y sin decir nada
+  es <em>protegido</em>: lo usan la clase y sus subclases (desde <code>super(...)</code> o
+  construyéndola), también las de otro módulo, pero no cualquiera. Un constructor no público
+  de una clase pública viaja en la interfaz con su marca, y es el módulo que lo usa quien
+  recibe el error.
 </p>
 
 <h3 id="herencia">9.4 Herencia</h3>
@@ -1886,8 +1917,6 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       sobrecargas del constructor cruzan desde V7.)</li>
   <li>El downcast <code>Clase(x)</code> sólo acepta un origen <code>Object</code>
       (<a href="#any">§4.5</a>).</li>
-  <li><code>step</code> del <code>for</code> numérico: sólo un literal entero
-      positivo (<a href="#for">§7.3</a>).</li>
   <li><code>listDir()</code> e <code>input()</code> sólo existen en la VM Java del
       PC; en la VM-C (PC y placas) lanzan <code>RuntimeError</code> («builtin N no
       soportado») — el mismo <code>.mod</code> no da la misma salida en las dos VMs.</li>

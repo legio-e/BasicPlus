@@ -1660,8 +1660,8 @@ public final class MivmEmitter {
             //    sólo hace `this.__syncMutex := Mutex()`. Sin esto, las
             //    sync properties operarían sobre un mutex "null" y los
             //    locks petarían.
-            if (declaresSyncMutex && !hasUserCtor) {
-                synthesizeSyncMutexCtor(cls);
+            if ((declaresSyncMutex || SemanticAnalyzer.tieneInicializadores(cd)) && !hasUserCtor) {
+                synthesizeSyncMutexCtor(cls, declaresSyncMutex, cd);   // #511: también por inicializadores
             }
 
             // 5) L2: factory cross-module. Para cada `public class` emitimos
@@ -1921,15 +1921,36 @@ public final class MivmEmitter {
      * property y sin ctor de usuario salía con __syncMutex=null y el
      * primer lock petaba con "INVOKE_VIRTUAL sobre null receiver").
      */
-    private void synthesizeSyncMutexCtor(ClassSymbol cls) throws IOException {
+    private void synthesizeSyncMutexCtor(ClassSymbol cls, boolean conMutex, ClassDef cd) throws IOException {
+        // #527/#511 — uno por sobrecarga de la cadena que registró el semántico (una por cada
+        // constructor del padre, con sus mismos parámetros; o una sin args): mutex si toca,
+        // `super(mis params)` a la sobrecarga del padre que le corresponde, inicializadores.
+        for (FunctionSymbol c = cls.constructor; c != null; c = c.nextOverload) {
+            if (c.astNode != null) continue;   // de usuario: no es sintético
+            w.addFunction(ctorInitName(cls, c), false);
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
+            declareParamsWidthAware(c);
+            beginFunctionScope(c, null);
+            try {
+                if (conMutex) emitSyncMutexInit(cls.name);
+                if (c.implicitSuper && c.implicitSuperCtor != null) {
+                    w.emitGetParam("this");
+                    for (ParamSymbol p : c.params) w.emitGetParam(p.name);
+                    emitCallInitOf(c.implicitSuperCtor);
+                    declareLocal("__discardSuper");
+                    w.emitSetLocal("__discardSuper");
+                }
+                if (cd != null) emitInicializadores(cls, cd);   // #511
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        }
+        if (cls.constructor != null) return;
+        // (red: si el semántico no registró ninguno, el mínimo de siempre)
         w.addFunction(cls.name + ".__init", false);
-        declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
+        declareParamRef("this");
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
-            emitSyncMutexInit(cls.name);
-            // #527 — el mismo super() implícito que un ctor escrito (lo decidió el
-            // semántico al registrar este ctor: la sobrecarga sin args del padre).
-            if (cls.constructor != null && cls.constructor.implicitSuper) emitImplicitSuperCall(cls, cls.constructor);
+            if (conMutex) emitSyncMutexInit(cls.name);
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
 
@@ -2045,6 +2066,23 @@ public final class MivmEmitter {
             // el __init del padre lo habrá inicializado vía super().
             ClassDef cd = (fs.ownerClass != null && fs.ownerClass.decl instanceof ClassDef)
                     ? (ClassDef) fs.ownerClass.decl : null;
+            // #511 (19-sep) — DELEGACIÓN: `MiClase(args)` de primera sentencia inicializa ESTE
+            // objeto por esa otra sobrecarga; ni mutex, ni super(), ni inicializadores aquí
+            // (los hace el delegado). El resto del cuerpo, después.
+            if (fs.delegaA != null) {
+                CallExpr d = (CallExpr) ((ExprStmt) fn.body.get(0)).expr;
+                w.emitGetParam("this");
+                for (int i = 0; i < d.args.size(); i++) {
+                    emitExpr(d.args.get(i));
+                    if (i < fs.delegaA.params.size()) coerceToTarget(d.args.get(i), fs.delegaA.params.get(i).type);
+                }
+                emitCallInitOf(fs.delegaA);
+                declareLocal("__discardDelega");
+                w.emitSetLocal("__discardDelega");
+                for (int i = 1; i < fn.body.size(); i++) emitStmt(fn.body.get(i));
+                emitFunctionEnd();
+                return;
+            }
             if (cd != null && hasOwnSyncProperty(cd) && !ancestorHasSyncProperty(cls)) {
                 emitSyncMutexInit(cls.name);
             }
@@ -2053,9 +2091,48 @@ public final class MivmEmitter {
             // argumentos (lo marcó el semántico). Va antes del cuerpo → el padre
             // queda inicializado primero, igual que un super() escrito a mano.
             if (fs.implicitSuper) emitImplicitSuperCall(cls, fs);
-            for (IStmt s : fn.body) emitStmt(s);
+            // #511 — los inicializadores de campos y properties de instancia, UNA vez, tras el
+            // super() (escrito: justo después de esa primera sentencia; inyectado: aquí) y antes
+            // del cuerpo, en orden de declaración. Antes el `:= valor` de un campo se aceptaba y
+            // se tiraba en silencio (x=0).
+            boolean superEscrito = !fn.body.isEmpty() && fn.body.get(0) instanceof ExprStmt
+                    && ((ExprStmt) fn.body.get(0)).expr instanceof SuperCallExpr;
+            if (!superEscrito && cd != null) emitInicializadores(cls, cd);
+            for (int i = 0; i < fn.body.size(); i++) {
+                emitStmt(fn.body.get(i));
+                if (i == 0 && superEscrito && cd != null) emitInicializadores(cls, cd);
+            }
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
+    }
+
+    /** #511 — `this.<campo> := valor` por cada campo/property de instancia con `:= valor`, en
+     *  orden de declaración. Un array de tamaño fijo como campo no se inicializa aquí. */
+    private void emitInicializadores(ClassSymbol cls, ClassDef cd) throws IOException {
+        for (ITopLevelDecl m : cd.members) {
+            if (m instanceof VarDecl) {
+                VarDecl vd = (VarDecl) m;
+                if (vd.init == null || vd.names.isEmpty() || vd.names.get(0).isStatic()) continue;
+                Symbol s0 = info.declSymbols.get(vd);
+                if (s0 instanceof VarSymbol && ((VarSymbol) s0).fixedArraySize >= 0) continue;
+                BpType t = (s0 instanceof VarSymbol) ? ((VarSymbol) s0).type : null;
+                for (DeclName n : vd.names) {
+                    w.emitGetParam("this");
+                    emitExpr(vd.init);
+                    coerceToTarget(vd.init, t);
+                    emitSetFieldAuto(cls.name, n.name);
+                }
+            } else if (m instanceof PropertyDef) {
+                PropertyDef pd = (PropertyDef) m;
+                if (pd.init == null || pd.name.isStatic()) continue;
+                Symbol s0 = info.declSymbols.get(pd);
+                BpType t = (s0 instanceof PropertySymbol) ? ((PropertySymbol) s0).type : null;
+                w.emitGetParam("this");
+                emitExpr(pd.init);
+                coerceToTarget(pd.init, t);
+                emitSetFieldAuto(cls.name, pd.name.name);   // el backing, como un campo (Java)
+            }
+        }
     }
 
     /** Auto-super: emite la llamada implícita al constructor del padre (sin
