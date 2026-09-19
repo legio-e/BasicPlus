@@ -52,7 +52,9 @@ Arranque por `#522` como estaba escrito, y de ahí las cuatro de V10 en H1, en o
 - De paso, tres refs de 8 B en local de 4 (hallazgo 34): `__pending_exc` del rethrow de `finally`, el parámetro de
   un setter escrito de una property de MÓDULO, y el `__sync_exc` nuevo ya nace de 8.
 - **La stdlib no cambia**: los 28 `.mod` recompilados salen byte-idénticos (sólo la generación difiere si se compila
-  sin `version`); ni blobs, ni imágenes, ni placas. El IDE fat-jar sí lleva el compilador y la miVM de hoy.
+  sin `version`); ni blobs. El IDE fat-jar sí lleva el compilador y la miVM de hoy. La VM-C sí cambió (`#532`:
+  `exceptions.c`, `link.c`): el firmware de la Pico compila limpio con ello y NO se grabó — las imágenes del 17-sep
+  no nombran la clase de una excepción no atrapada; la próxima grabación sí.
 
 **Orden para retomar**: en H1 quedan `#511` (inicializadores de instancia ignorados), `#515` (visibilidad del
 constructor), `#507` (construir la propia clase dentro de un método suyo), `#506` (el `.mod` se escribe con error) y
