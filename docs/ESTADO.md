@@ -66,11 +66,13 @@ en BasicPlus una clase sin constructor HEREDA las firmas del padre (`Tarea(4096)
 que el sintético es uno por sobrecarga del padre. Eduardo: «los constructores son métodos estáticos; una clase
 puede no tener ninguno, uno o varios sobrecargados». H1 no tiene fichas de V10 abiertas.
 
-**H1 CERRADO** (Eduardo, 19-sep, tarde: «cerramos H1 y damos por terminado el día», con pocos tokens semanales): las
-diez fichas del compilador cerradas; el módulo raíz como fichero legible + tablas generadas y los extras de la fila
-(sobrecarga de intrínsecas, destructor, `Map`, `#396`, `#19`, `#460`, huecos) NO entraron y quedan sin hito en V7
-(a la cola de V8 salvo que se abra otro). **Orden para retomar**: el siguiente hito lo elige Eduardo; abiertas
-quedan `#519` (H4/AOT), `#530` y `#531` (H7). En H7 esperan `#530` (Thread.run heredada
+**H1 sigue ABIERTO** (Eduardo, 19-sep, al cierre: «no vale cerrar en falso; si falta mucho código pendiente lo vamos
+haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas pendientes, no los pasamos a V8» —
+la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
+intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
+la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+Empezar por el mapa: dónde viven hoy las 226 intrínsecas y los tipos en el compilador y en las dos VMs, y qué se
+generaría de qué. Abiertas además: `#519` (H4/AOT), `#530` y `#531` (H7). En H7 esperan `#530` (Thread.run heredada
 cross-module) y `#531` (orden de los eventos). Quedan escritos sin ficha: los mensajes de tipos no cualifican
 («'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no se pueden importar en el mismo
 fichero (`#528`); un inicializador de campo no puede usar `this` ni otros campos (manual §9.1).
