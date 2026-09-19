@@ -56,12 +56,21 @@ Arranque por `#522` como estaba escrito, y de ahí las cuatro de V10 en H1, en o
   `exceptions.c`, `link.c`): el firmware de la Pico compila limpio con ello y NO se grabó — las imágenes del 17-sep
   no nombran la clase de una excepción no atrapada; la próxima grabación sí.
 
-**Orden para retomar**: en H1 quedan `#511` (inicializadores de instancia ignorados), `#515` (visibilidad del
-constructor), `#507` (construir la propia clase dentro de un método suyo), `#506` (el `.mod` se escribe con error) y
-el módulo raíz propiamente (los tipos y las 226 intrínsecas en un fichero legible, las tablas generadas). En H7
-esperan `#530` (Thread.run heredada cross-module) y `#531` (orden de los eventos). Quedan escritos sin ficha: los
-mensajes de tipos no cualifican («'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no
-se pueden importar en el mismo fichero (`#528`).
+**Tarde (19-sep): las cuatro que quedaban** — `#507` (`05628196`, con una trampa de build cazada al medirlo: el
+jar-plugin reutilizaba el SHADED anterior como «original» y el compilador seguía con el writer viejo aunque `.m2`
+tuviera el nuevo — `forceCreation=true`), `#506` (el `step` con signo y con expresión), y `#511`+`#515` (`6dcb67a9`)
+con las decisiones de Eduardo de la noche anterior: inicializadores como en Java, delegación `MiClase(args)` como
+primera línea del constructor, visibilidad del constructor como la de cualquier miembro. Lo que enseñó el oráculo:
+`CtorHijo` dejó de compilar con la primera versión (un solo sintético sin args para la clase sin constructor) —
+en BasicPlus una clase sin constructor HEREDA las firmas del padre (`Tarea(4096)` con `Tarea extends Thread`), así
+que el sintético es uno por sobrecarga del padre. Eduardo: «los constructores son métodos estáticos; una clase
+puede no tener ninguno, uno o varios sobrecargados». H1 no tiene fichas de V10 abiertas.
+
+**Orden para retomar**: H1, el módulo raíz propiamente (los tipos y las 226 intrínsecas en un fichero legible, las
+tablas generadas) — es lo que queda del hito, más `#519` (H4/AOT). En H7 esperan `#530` (Thread.run heredada
+cross-module) y `#531` (orden de los eventos). Quedan escritos sin ficha: los mensajes de tipos no cualifican
+(«'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no se pueden importar en el mismo
+fichero (`#528`); un inicializador de campo no puede usar `this` ni otros campos (manual §9.1).
 
 ## 🧬 `#523` V11 (17-sep, noche) — LA CADENA EN MOD9: el compilador, la stdlib (gen 7), los blobs, las seis imágenes, el pack, el IDE
 
