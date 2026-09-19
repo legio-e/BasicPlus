@@ -47,7 +47,11 @@ void bpvm_eh_pop(bpvm_thread_t* tc) {
  * Equivalente a VirtualMachine.isDescendantOf. */
 static int is_descendant_of(const bpvm_t* vm, uint32_t obj_class, uint32_t target) {
     uint32_t cur = obj_class;
-    while (cur != 0) {
+    for (int prof = 0; cur != 0 && prof < 64; prof++) {
+        /* #532 — un `throw` de algo que no es un objeto (un .mod hecho a mano) traia una
+         * «clase» que no es un descriptor: leer su padre era un segfault. Fuera de la
+         * memoria de la VM no hay descriptor que valga. */
+        if (cur + BPVM_CLS_OFF_FIELD_BITMAP > vm->memory_size) return 0;
         if (cur == target) return 1;
         int32_t parent_off = bpvm_read_i32_be(vm->memory + cur + BPVM_CLS_OFF_PARENT_OFF);
         if (parent_off == 0) return 0;
@@ -97,6 +101,19 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     bpvm_diag_urgente("[bpvm] EXCEPCION NO ATRAPADA en el thread %" PRId32 ": el thread "
               "TERMINA aqui. Si esto sale dentro de un catch, el manejador se ha "
               "quedado sin memoria al construir su propio mensaje.", tc->id);
+    /* #532 — la CLASE de la excepcion, por su nombre (la 4.5 de su modulo: en MOD7/8 no hay y
+     * se queda como estaba), y la guardia de que DESCIENDE de Core.Exception antes de leer
+     * su campo 0 como el mensaje: un `throw` de un objeto que no es una excepcion (a mano;
+     * desde una dep lo para el E10) derefenciaba un entero como handle y hacia segfault. */
+    thrown_class = bpref_is_null(ref) ? 0u : (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, ref));
+    char clase[256]; bpvm_link_nombre_de_clase(vm, thrown_class, clase, sizeof clase);
+    uint32_t exc_cls = bpvm_link_lookup(vm, "Core.Exception");
+    int es_excepcion = (exc_cls == 0u) || (thrown_class != 0u && is_descendant_of(vm, thrown_class, exc_cls));
+    if (!es_excepcion) {
+        bpvm_diag("[bpvm]   lo lanzado no es una excepcion (clase %s)", clase[0] ? clase : "desconocida");
+        if (clase[0]) snprintf(vm->runtime_error, sizeof(vm->runtime_error), "throw de un objeto que no es una excepcion: %.140s", clase);
+        else          snprintf(vm->runtime_error, sizeof(vm->runtime_error), "throw de un objeto que no es una excepcion");
+    } else
     if (!bpref_is_null(ref)) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
         bpref_t msg_r; msg_r.v = (uint64_t) bpvm_read_i64_be(vm->memory + bpref_deref(vm, ref) + 4);   /* msg = handle 64b */
@@ -133,9 +150,16 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
              * nada detras es medio mensaje, y este arreglo va justo de eso. La
              * cadena puede existir y estar vacia, asi que no basta con mirar si
              * hay objeto. */
-            if (n > 0) {
+            /* #532 — con la clase delante cuando se sabe: «excepcion no atrapada: Lib.MiError: texto». */
+            if (n > 0 && clase[0]) {
+                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
+                         "excepcion no atrapada: %.70s: %.90s", clase, buf);
+            } else if (n > 0) {
                 snprintf(vm->runtime_error, sizeof(vm->runtime_error),
                          "excepcion no atrapada: %.160s", buf);
+            } else if (clase[0]) {
+                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
+                         "excepcion no atrapada: %.150s (sin mensaje)", clase);
             } else {
                 snprintf(vm->runtime_error, sizeof(vm->runtime_error),
                          "excepcion no atrapada (sin mensaje)");
@@ -143,8 +167,8 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
         } else {
             /* Ni siquiera hay objeto de mensaje. Que se sepa QUE paso: «exit 11»
              * a secas no distingue esto de un fallo de la propia VM. */
-            snprintf(vm->runtime_error, sizeof(vm->runtime_error),
-                     "excepcion no atrapada (sin mensaje)");
+            if (clase[0]) snprintf(vm->runtime_error, sizeof(vm->runtime_error), "excepcion no atrapada: %.150s (sin mensaje)", clase);
+            else          snprintf(vm->runtime_error, sizeof(vm->runtime_error), "excepcion no atrapada (sin mensaje)");
         }
     }
     tc->status = BPVM_THREAD_TERMINATED;

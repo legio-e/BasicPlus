@@ -999,6 +999,9 @@ int           bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, co
  * un privado de un módulo distinto de `modulo_llamante` (nombre canónico; NULL = ninguno) no
  * cuenta, como en el enlace. -1 = no está. */
 int           bpvm_link_slot_por_clave(const bpvm_t* vm, uint32_t class_ptr, const char* clave, const char* modulo_llamante);
+/* #532 — el nombre cualificado (`Mod.Cls`) de la clase cuyo descriptor es class_ptr, por la 4.5
+ * de su modulo (el sello +6). 1 si lo encontro; 0 (y out vacio) si no hay 4.5 (MOD7/8) o no casa. */
+int           bpvm_link_nombre_de_clase(const bpvm_t* vm, uint32_t class_ptr, char* out, size_t cap);
 /* V10 (16-sep, R2/R3/R6/R9) — la subtabla CLASES (4.5) recien retenida: filas dentro de la seccion, csOff dentro del
  * modulo, parentDepIdx en rango, ranuras coherentes. 0 si vale; si no, deja el motivo en vm->load_error y devuelve
  * BPVM_ERR_BAD_HEADER (un .mod corrupto se RECHAZA, no se lee basura). */

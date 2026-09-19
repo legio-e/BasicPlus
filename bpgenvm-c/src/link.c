@@ -831,6 +831,29 @@ int bpvm_link_slot_por_nombre(const bpvm_t* vm, uint32_t class_ptr, const char* 
      * con sobrecargas homonimas cada VM elegia otra (y otro ancho de frame). */
     return lt_slot_por(vm, class_ptr, nombre, 0, NULL);
 }
+int bpvm_link_nombre_de_clase(const bpvm_t* vm, uint32_t class_ptr, char* out, size_t cap) {
+    if (cap) out[0] = '\0';
+    if (class_ptr == 0 || class_ptr + BPVM_CLS_OFF_FIELD_BITMAP > vm->memory_size) return 0;
+    uint16_t sello = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_MODULO);
+    if (sello == 0 || sello > (uint16_t) vm->module_count) return 0;
+    const bpvm_module_t* m = &vm->modules[sello - 1];
+    if (!m->clases || m->clases_len < 4) return 0;
+    char canon[160]; lt_canon(m, canon, sizeof canon);
+    uint16_t n = lt_u16(m->clases + 2);
+    const uint8_t* p = m->clases + 4;
+    for (uint16_t k = 0; k < n; k++) {
+        lt_clase_t c; p = lt_leer_fila(p, &c);
+        char nm[128]; lt_utf_copy(c.name, nm, sizeof nm);
+        uint32_t abs;
+        if (!(c.flags & 1)) abs = (uint32_t)((int32_t) m->code_start + c.cs_off);
+        else { char q[320]; snprintf(q, sizeof q, "%.120s.%.120s", canon, nm); abs = bpvm_link_lookup(vm, q); }
+        if (abs != class_ptr) continue;
+        snprintf(out, cap, "%.120s.%.120s", canon, nm);
+        return 1;
+    }
+    return 0;
+}
+
 int bpvm_link_slot_por_clave(const bpvm_t* vm, uint32_t class_ptr, const char* clave, const char* modulo_llamante) {
     return lt_slot_por(vm, class_ptr, clave, 1, modulo_llamante);
 }

@@ -5999,7 +5999,27 @@ public class VirtualMachine {
     private String buildUnhandledExceptionMessage(int currentPC, int value, int thrownClass,
                                                   int bpStart, int stackBase) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Excepción no atrapada (valor=").append(value);
+        // #532 — la CLASE por su nombre y el MENSAJE (campo 0, sólo si desciende de Core.Exception:
+        // lo lanzado puede no ser una excepción y su campo 0 no ser un handle). Antes: «valor=…,
+        // classPtr=7529», que no le dice nada a nadie.
+        String clase = (moduleManager != null) ? moduleManager.nombreDeClase(thrownClass) : null;
+        Integer excCls = (moduleManager != null) ? moduleManager.resolveGlobal("Core.Exception") : null;
+        boolean esExcepcion = excCls == null || (thrownClass != 0 && isDescendantOf(thrownClass, excCls));
+        if (!esExcepcion) {
+            sb.append("throw de un objeto que no es una excepción");
+            if (clase != null) sb.append(": ").append(clase);
+        } else {
+            sb.append("Excepción no atrapada");
+            String msg = null;
+            if (thrownClass != 0) {
+                try { long msgRef = refLoad(memory, refDeref(value) + 4); if (msgRef != 0) msg = readVmString(msgRef); }
+                catch (RuntimeException e) { msg = null; }
+            }
+            if (clase != null) sb.append(": ").append(clase);
+            if (msg != null && !msg.isEmpty()) sb.append(": ").append(msg);
+            else if (clase != null) sb.append(" (sin mensaje)");
+        }
+        sb.append(" (valor=").append(value);
         if (thrownClass != 0) sb.append(", classPtr=").append(thrownClass);
         sb.append(")\nStack trace (innermost first):");
         int curPc = currentPC;

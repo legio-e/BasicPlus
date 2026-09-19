@@ -27,6 +27,40 @@
 
 ## Última sesión
 
+## 🧱 H1 (19-sep) — las seis de V10 en el compilador, cerradas: `#522` `#527` `#528` `#529` `#532` y `#517` de rebote
+
+Sesión corta de créditos (sin agentes): todo a mano, sample por sample, verificando el artefacto en las dos VMs.
+Arranque por `#522` como estaba escrito, y de ahí las cuatro de V10 en H1, en orden.
+
+- **`#522`** (`f09401e6`): un enum en un `+` con string es su ENTERO (`"c=" + c` → `c=1`), coherente con `print c`,
+  que ya imprimía el entero — la ficha proponía error de compilación, pero eso dejaba al programador sin NINGUNA forma
+  de meter un enum en una cadena (`integer(c)` también se rechaza). Y lo que salió al lado: el `+` con string aceptaba
+  CUALQUIER tipo (array, tupla, `null`, una llamada void) y todos rompían el heap igual; ahora error con línea.
+  `Color(1)` es error semántico; `EnumSymbol.values` en orden de declaración; M6 fuera de PENDIENTES (era falso).
+- **`#527` `#528` `#529` `#517`** (`1af6ff6d`): el ctor sintético del `sync` lo registra el semántico con la regla del
+  `super()` implícito (y si el padre exige argumentos, error: eso cierra `#517`); una GUARDA (TRY_BEGIN sin clase)
+  alrededor de cada accesor `sync` suelta el mutex ante cualquier excepción. `#528` con una lección: la clave de
+  sobrecarga cualifica la clase ajena RELATIVA A LA FUNCIÓN DUEÑA, no «lo externo» — el primer intento hizo que el
+  consumidor pidiera `__cls_init_Base$LCtorBase/Base;` donde el dueño exporta `$LBase;`, y lo cazó el oráculo
+  `CtorHijo` en la pasada MOD8 del check (la red hizo su trabajo). `#529`: la property redeclarada en una subclase
+  del mismo módulo es una redefinición (como ya lo era cross-module: medido antes de decidir), y el tope de 256
+  ranuras de una clase cerrada lo dice el semántico con línea.
+- **`#532`**: `try … finally` sin catch se emite; las dos VMs nombran la clase de una excepción no atrapada por
+  la 4.5 (`NoAtrapa.MiError: se escapa`); guardia contra el `throw` de lo que no es Exception. Y dos rancios del
+  Makefile de la VM-C: el snapshot `test/aot_ThrowUser.c` (de junio; regenerado con `AotMain`, no a mano) y un
+  `samples/Core.mod` gen 0 del 25-ago que mataba `test-throwmsg` (el `fixture` ahora copia de `bpstdlib/`).
+- De paso, tres refs de 8 B en local de 4 (hallazgo 34): `__pending_exc` del rethrow de `finally`, el parámetro de
+  un setter escrito de una property de MÓDULO, y el `__sync_exc` nuevo ya nace de 8.
+- **La stdlib no cambia**: los 28 `.mod` recompilados salen byte-idénticos (sólo la generación difiere si se compila
+  sin `version`); ni blobs, ni imágenes, ni placas. El IDE fat-jar sí lleva el compilador y la miVM de hoy.
+
+**Orden para retomar**: en H1 quedan `#511` (inicializadores de instancia ignorados), `#515` (visibilidad del
+constructor), `#507` (construir la propia clase dentro de un método suyo), `#506` (el `.mod` se escribe con error) y
+el módulo raíz propiamente (los tipos y las 226 intrínsecas en un fichero legible, las tablas generadas). En H7
+esperan `#530` (Thread.run heredada cross-module) y `#531` (orden de los eventos). Quedan escritos sin ficha: los
+mensajes de tipos no cualifican («'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no
+se pueden importar en el mismo fichero (`#528`).
+
 ## 🧬 `#523` V11 (17-sep, noche) — LA CADENA EN MOD9: el compilador, la stdlib (gen 7), los blobs, las seis imágenes, el pack, el IDE
 
 Decisión de Eduardo: «pasamos a MOD9 y vamos arreglando lo que surja». Hecho y verificado en placa (Pico y DK2 grabadas:

@@ -12,6 +12,19 @@
 #include "bpvm_internal.h"
 #include "bpvm_aot_helpers.h"   /* H3 #158 — helpers indirect */
 
+/* V7/H2 (#523) — busca un símbolo BP por nombre; si no está, lo DICE (no un 0 mudo). */
+static inline uint32_t aot_ThrowUser_busca(struct bpvm* vm, const char* nombre, const char* aviso) {
+    uint32_t f = vm->aot_helpers->find_function(vm, nombre);
+    if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
+    return f;
+}
+/* V7/H2 (#533) — la ranura de un método de clase externa/abierta, por clave y en ejecución; si no está, lo DICE. */
+static inline int32_t aot_ThrowUser_ranura(struct bpvm* vm, const char* clase, const char* clave, const char* aviso) {
+    int32_t s = vm->aot_helpers->slot_por_clave(vm, clase, clave, "ThrowUser");
+    if (s < 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
+    return s;
+}
+
 /* Forward decls de las funciones AOT de este módulo. */
 static int32_t aot_ThrowUser_checkRange(struct bpvm* vm, int32_t n);
 
@@ -20,7 +33,7 @@ static int32_t aot_ThrowUser_checkRange(struct bpvm* vm, int32_t n) {
                   *  globals/arrays/builtins. */
     (void) n;
     if ((n < 0)) {
-        vm->aot_helpers->throw_ref(vm, (uint32_t) vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "ThrowUser.__cls_new_RangoError"), (int32_t[]){ vm->aot_helpers->string_from_cstr(vm, "valor negativo", 14), n }, 2, 1u, 1));
+        vm->aot_helpers->throw_ref(vm, (uint32_t) vm->aot_helpers->call_bp_i32(vm, aot_ThrowUser_busca(vm, "ThrowUser.__cls_new_RangoError(si)", "AOT: la native 'checkRange' pide 'ThrowUser.__cls_new_RangoError(si)' y no est\303\241 en los m\303\263dulos cargados (\302\277otra versi\303\263n de la dependencia?): recompila 'ThrowUser'"), (int32_t[]){ vm->aot_helpers->string_from_cstr(vm, "valor negativo", 14), n }, 2, 1u, 1));
     }
     return (n * 2);
 }

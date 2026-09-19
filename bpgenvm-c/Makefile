@@ -124,6 +124,7 @@ endif
 # `|| true` lo tapaba (así se coló un XMethodNat MOD8 «regenerado» a MOD9 — la
 # native no traduce en MOD9 y el .mod no se escribe). Ahora lo canta y para.
 define fixture
+@for s in ../bpstdlib/*.mod; do b=$$(basename $$s); if [ -f samples/$$b ] && ! cmp -s $$s samples/$$b; then echo "  (samples/$$b era otra version de la stdlib: se copia la de bpstdlib)"; cp $$s samples/$$b; fi; done
 @fmt=$(if $(2),$(2),9); want=$$(sed -n "s/.*BPVM_MAGIC_V$$fmt[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p" include/bpvm_internal.h | head -1 | tr a-z A-Z); \
 for m in $(1); do \
   why=""; \

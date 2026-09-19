@@ -90,6 +90,11 @@ final class EnlaceTardio {
 
     /** La clase `[lib.]Mod.Cls`, o null. */
     Clase buscar(String cualificado) { return registro.get(cualificado); }
+    /** #532 — el nombre cualificado de la clase cuyo descriptor es `abs`, o null. */
+    String nombrePorDescriptor(int abs) {
+        for (Clase k : registro.values()) if (k.descAbs == abs && abs != 0) return k.nombreCualificado();
+        return null;
+    }
 
     /** La clase que una fila de 4.5 nombra como padre. */
     private Clase padreDe(Clase k) {

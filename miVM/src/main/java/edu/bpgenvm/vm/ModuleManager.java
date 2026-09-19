@@ -1141,6 +1141,17 @@ public class ModuleManager {
         return null;
     }
     int indiceDe(ModuleMetadata m) { return loadedModules.indexOf(m); }
+    /** #532 — el nombre cualificado (`Mod.Cls`) de la clase cuyo descriptor es `classPtr`, o null:
+     *  por el registro del enlace tardío (MOD9) y, si no, por el data-symbol `Mod.Cls` de 4.2. */
+    public String nombreDeClase(int classPtr) {
+        if (classPtr == 0) return null;
+        if (enlaceTardio != null) { String n = enlaceTardio.nombrePorDescriptor(classPtr); if (n != null) return n; }
+        for (Map.Entry<String, Integer> e : globalSymbolTable.entrySet()) {
+            String k = e.getKey();
+            if (e.getValue() == classPtr && k.indexOf('#') < 0 && k.indexOf('$') < 0 && k.indexOf('(') < 0 && k.indexOf('.') > 0) return k;
+        }
+        return null;
+    }
     /** Un data-symbol nuevo (el descriptor construido de una clase abierta), como los de 4.2. */
     void registrarDataSymbol(ModuleMetadata m, String clase, int abs) {
         globalSymbolTable.put(m.exportPrefix + clase, abs);
