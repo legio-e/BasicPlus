@@ -20,6 +20,7 @@ fallan por diseño.
 | `DefaultParamsBad.bp` | las tres reglas de los parámetros por defecto (H8.1) | `debe ser una constante literal` · `sin valor por defecto no puede ir tras uno con valor por defecto` · `no asignable a` |
 | `classleak.bp` | una clase **no** puede llamar a una función privada de su módulo | `la clase 'Indiscreta' no puede llamar a 'helperPrivado' del módulo (no es public)` |
 | `narrowtypes_errors.bp` | los rangos de los enteros estrechos se comprueban en compilación (L10) | `literal 300 fuera del rango de byte (0..255)` y tres más: `int8`, `word`… |
+| `EnumMal.bp` | un enum es nominal y cerrado (`Color(1)` no es una conversión), y en un `+` con string el otro operando tiene que tener conversión a string: primitivos, enums (su entero) y objetos; un array, una tupla, `null` o una llamada void, no (#522) | `'Color' es un enum: no se llama ni se convierte desde un entero` · `'+' incompatible: 'string' y 'integer[]' (no hay conversión a string)` y tres más |
 | `paralleltest_scope_violate.bp` | dentro de un `parallel`, un `case` no puede tocar una variable global | `no puede acceder a la variable global 'globalVar'; usa una const, una función o un objeto compartido` |
 
 Fíjate en que los mensajes **dicen qué hacer**, no sólo qué está mal: el de `parallel`

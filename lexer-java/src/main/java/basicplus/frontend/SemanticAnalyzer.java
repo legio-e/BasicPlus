@@ -3213,6 +3213,16 @@ public final class SemanticAnalyzer {
             target = info.exprSymbols.get(ma);
         }
 
+        // #522 — `Color(1)`: un enum no se construye ni se convierte desde un entero (el
+        // tipo es nominal y cerrado: `integer(c)` tampoco vale). Antes caía al final en
+        // silencio y lo paraba el emisor sin línea (o, cualificado, seguía y devolvía basura).
+        if (target instanceof EnumSymbol) {
+            for (IExpr a : ce.args) analyzeExpr(a, scope, null);
+            err(ce.line, ce.column, "'" + ((EnumSymbol) target).name
+                + "' es un enum: no se llama ni se convierte desde un entero (usa "
+                + ((EnumSymbol) target).name + ".VALOR)");
+            return ErrorType.INSTANCE;
+        }
         // Llamada a clase ⇒ construcción
         if (target instanceof ClassSymbol) {
             ClassSymbol cls = (ClassSymbol) target;
@@ -3516,7 +3526,20 @@ public final class SemanticAnalyzer {
         if (lt instanceof ErrorType || rt instanceof ErrorType) return ErrorType.INSTANCE;
         switch (b.op) {
             case "+":
-                if (isString(lt) || isString(rt)) return PrimitiveType.STRING;
+                if (isString(lt) || isString(rt)) {
+                    // #522 — el otro operando tiene que TENER conversión a string: el emisor
+                    // (coerceToString) sólo convierte primitivos, enums (su entero, como
+                    // `print`) y objetos (toString). Un array, una tupla, `null` o una
+                    // llamada void pasaban aquí y el concat leía su valor como handle de
+                    // string: heap roto en las dos VMs sin ningún diagnóstico.
+                    BpType otro = isString(lt) ? rt : lt;
+                    if (!convertibleAString(otro)) {
+                        err(b.line, b.column, "'+' incompatible: '" + lt.display() + "' y '" + rt.display()
+                            + "' (no hay conversión a string)");
+                        return ErrorType.INSTANCE;
+                    }
+                    return PrimitiveType.STRING;
+                }
                 if (lt.isNumeric() && rt.isNumeric()) return promote(lt, rt);
                 err(b.line, b.column, "'+' incompatible: '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
@@ -3573,6 +3596,14 @@ public final class SemanticAnalyzer {
 
     private static boolean isString(BpType t) {
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING;
+    }
+
+    /** #522 — lo que `coerceToString` del emisor sabe convertir en una concatenación:
+     *  primitivos, enums (a su entero), objetos (toString) y `any` (la escapatoria de la
+     *  stdlib). Arrays, tuplas, `null` y void, no. */
+    private static boolean convertibleAString(BpType t) {
+        return t instanceof PrimitiveType || t instanceof EnumType || t instanceof ClassType
+            || t instanceof AnyType || t instanceof ErrorType;
     }
 
     /** L10 — `integer-like`: INTEGER o cualquiera de los tipos estrechos.

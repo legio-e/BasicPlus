@@ -411,8 +411,9 @@ public final class ModuleInterface {
             if (s instanceof EnumSymbol) {
                 EnumSymbol es = (EnumSymbol) s;
                 if (!es.isPublic) continue;
-                // Preservar orden de declaración no es trivial (values es HashMap);
-                // como mínimo metemos las entradas tal cual.
+                // #522 — `values` es un LinkedHashMap desde el analizador: el orden es el de
+                // DECLARACIÓN (antes era un HashMap y la interfaz salía en un orden que no
+                // era el del programador ni era estable: importa para el ifaceCrc).
                 Map<String, Long> ordered = new LinkedHashMap<>(es.values);
                 iface.enums.add(new EnumSig(es.name, ordered));
                 continue;

@@ -35,6 +35,11 @@ classleak|no puede llamar a 'helperPrivado'
 narrowtypes_errors|literal 300 fuera del rango de byte
 narrowtypes_errors|fuera del rango de int8
 paralleltest_scope_violate|no puede acceder a la variable global 'globalVar'
+EnumMal|'Color' es un enum: no se llama ni se convierte desde un entero
+EnumMal|'string' y 'integer[]' (no hay conversi
+EnumMal|'string' y '(integer, string)' (no hay conversi
+EnumMal|'string' y 'null' (no hay conversi
+EnumMal|'string' y 'void' (no hay conversi
 "
 
 ok=0; mal=0

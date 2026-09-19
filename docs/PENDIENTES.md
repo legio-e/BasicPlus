@@ -341,10 +341,6 @@ el 17-ago: tienen trabajo pendiente, así que su sitio es el registro.)*
   `__strconcat`…; el prefijo `__` ya está reservado — sería un check explícito).
 - **M5 — debugger: inspección de properties heredadas** (verificar que se recorre
   la cadena de herencia al inspeccionar; relacionado con N11).
-- **M6 — `const` con valor de enum (`const C := Color.RED`)** hoy da "requiere
-  literal" (el valor de enum es conocido en compilación). Mejora natural: tratarlo
-  como literal e inlinarlo desde `EnumSymbol.values`. (Sale de N17, resuelto: una
-  const de clase no-literal ya da diagnóstico limpio en vez de tumbar el emisor.)
 
 ## 🔬 Prueba de resistencia larga (idea de Eduardo, 3-ago — post-V4)
 

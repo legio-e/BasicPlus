@@ -1,0 +1,27 @@
+// EnumMal.bp — #522 (19-sep): lo que un enum NO admite, y lo que un `+` con string NO
+// convierte. Todo esto compilaba y reventaba el heap en las dos VMs (o devolvia basura).
+module EnumMal
+  import Core
+  public enum Color
+    ROJO
+    VERDE
+    AZUL
+  end Color
+  function pareja(): (integer, string)
+    return (1, "x")
+  end pareja
+  function nada()
+  end nada
+  function main()
+    // 1. un enum no se construye ni se convierte desde un entero (tipo nominal cerrado)
+    var d: Color := Color(1)
+    // 2..5. en un `+` con string, el otro operando tiene que tener conversion a string:
+    //       primitivos, enums (su entero) y objetos (toString). Esto no:
+    var a: integer[] := [1, 2]
+    var t: (integer, string) := pareja()
+    print "a=" + a
+    print "t=" + t
+    print "n=" + null
+    print "v=" + nada()
+  end main
+end EnumMal

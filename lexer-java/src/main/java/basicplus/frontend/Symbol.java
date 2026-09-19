@@ -559,7 +559,7 @@ public abstract class Symbol {
     // ============================================================
     public static final class EnumSymbol extends Symbol {
         public final boolean isPublic;
-        public final Map<String, Long> values = new HashMap<>();
+        public final Map<String, Long> values = new java.util.LinkedHashMap<>();   // #522: orden de declaración (la interfaz lo vuelca y el ifaceCrc lo sella)
         /** V7/H2 (#523) — de qué módulo es un enum IMPORTADO ("" = declarado aquí).
          *  Sin esto el enum no podía viajar en una firma (#516): la clave canónica
          *  lo cualifica como a las clases. Lo rellena el importador. */

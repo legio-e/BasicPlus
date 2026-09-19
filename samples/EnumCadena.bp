@@ -1,0 +1,37 @@
+// EnumCadena.bp — #522 (19-sep): un enum en una concatenación es su ENTERO, como en
+// `print c` (el manual: «nombres simbólicos para constantes integer»). Antes el emisor
+// no lo convertía y el concat leía el entero como handle de string: «No space in heap»
+// en las dos VMs. Su hermano de error (Color(1), array/tupla/null/void en un `+` con
+// string) está en samples/errores/EnumMal.bp.
+module EnumCadena
+  import Core
+  public enum Color
+    ROJO
+    VERDE
+    AZUL := 10
+  end Color
+  public class Caja
+    var c: Color
+    public function Caja(c: Color)
+      this.c := c
+    end Caja
+    public function toString(): string
+      return "Caja(" + this.c + ")"
+    end toString
+  end Caja
+  function nombre(c: Color): string
+    return "color " + c
+  end nombre
+  function main()
+    var c: Color := Color.VERDE
+    print c
+    print "c=" + c
+    print c + "!"
+    print nombre(Color.AZUL)
+    var k: Caja := Caja(Color.ROJO)
+    print k
+    print "k=" + k
+    var s: string := "azul=" + Color.AZUL + " rojo=" + Color.ROJO
+    print s
+  end main
+end EnumCadena

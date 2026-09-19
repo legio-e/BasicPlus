@@ -6392,6 +6392,11 @@ public final class MivmEmitter {
             emitObjectToStringOnStack(((ClassType) src).cls);
             return;
         }
+        if (src instanceof EnumType) {   // #522 — su entero, como `print c`
+            w.emit(OpCode.CALL_BUILTIN);
+            w.emitShort((short) Builtin.INT_TO_STRING.id);
+            return;
+        }
         if (!(src instanceof PrimitiveType)) return;
         switch (((PrimitiveType) src).tag) {
             case STRING: return;
