@@ -397,6 +397,14 @@ miembro y bound calls, nunca para constructores ni para `super(...)`; la interfa
 incluida la `private`, cruzan). ⏭️ Decidir la norma (¿constructor protegido = sólo `super` y la propia clase;
 private = sólo la propia clase?), llevar la marca en `ctor(...)`, y `checkVisibility` en construcción y `super`.
 
+**Decisión de Eduardo (19-sep, noche): la misma regla que cualquier miembro** (manual §9.2): `private` es privado,
+`public` es público y sin decir nada es **protegido**. Para un constructor: `private` → sólo la propia clase lo
+construye o delega en él (`MiClase(args)`, `#511`); protegido (sin modificador) → además las subclases vía
+`super(...)`; `public` → cualquiera. Hacer: la marca de visibilidad en `ctor`/`ctor+` de la interfaz (hoy el
+importador los crea `isPublic=true`), y `checkVisibility` en la construcción, en `super(...)` y en la delegación —
+con línea y nombre—, en el propio módulo y cross-module. Sale con `#511` (comparten el sitio: la primera línea del
+constructor).
+
 #### ✅ `#516` — un `enum` NO es exportable como tipo de parámetro aunque el enum viaje en la interfaz; y si va en el ctor CABEZA la clase entera desaparece de la interfaz, mientras que en una sobrecarga sólo se omite esa firma (**CERRADA el 18-sep**, la E2 del mapa: `EnumType` exportable; la interfaz lo escribe con marcador —`enum:Color` propio, `enum:Lib.Color` importado— y lo lee como `UnresolvedEnumRef` (escalar de 4 B, no una referencia); el importador lo resuelve contra `ns.enums` (la misma instancia: `sameAs` casa) en la pasada 1 y contra el ns del módulo con punto en la 2; **un enum de un tercer módulo que el consumidor no importa es error semántico con nombre** («la firma de 'Mid.doble' usa el enum 'Lib.Color' y este módulo no importa 'Lib'… añade `import Lib`»); la clave canónica ya lo cualificaba (`ELib/Color;`). `bpgenvm-c/samples/EnumFirmaLib.bp`+`EnumFirma.bp` en el corpus (ctor cabeza con enum, sobrecarga `m(Color)`/`m(integer)` bien despachada, enum de vuelta y a una función de módulo): paridad 72/72; frontend 220/220; mezcla `enum_cabeza` sigue ok; 0 módulos de la stdlib cambian. abierta 14-sep, de la revisión adversarial; preexistente; H2)
 
 **Medido** (`C:/tmp/v7_rev/refuta-semantico-resolucion/h3`, igual con V6): `isExportableType` no tiene rama para
