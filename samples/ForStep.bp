@@ -1,0 +1,35 @@
+// ForStep.bp — #506 (19-sep): el `step` de un `for` numérico ya no es sólo un literal positivo.
+// Constante con signo (`step -1`: el parser lo trae como un unario sobre el literal, y el
+// emisor lo rechazaba «for step solo soporta literal int por ahora»), y una EXPRESIÓN: se
+// evalúa una vez y la dirección (hacia arriba si step >= 0, hacia abajo si no) se decide en
+// ejecución. `step 0` escrito es error de compilación.
+module ForStep
+  import Core
+  function cuenta(desde: integer, hasta: integer, paso: integer): string
+    var s: string := ""
+    for i := desde to hasta step paso do
+      s := s + i + " "
+    next i
+    return s
+  end cuenta
+  function main()
+    for i := 3 to 1 step -1 do
+      print "abajo " + i
+    next i
+    for i := 0 to 10 step 5 do
+      print "arriba " + i
+    next i
+    for i := 10 to 0 step -4 do
+      print "salto " + i
+    next i
+    print cuenta(1, 5, 2)
+    print cuenta(5, 1, -2)
+    print cuenta(1, 5, -1)
+    print cuenta(5, 1, 1)
+    var n: integer := 3
+    for i := 9 to 0 step -n do
+      print "var " + i
+    next i
+    print "fin"
+  end main
+end ForStep

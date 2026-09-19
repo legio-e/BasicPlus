@@ -43,6 +43,8 @@ EnumMal|'string' y 'void' (no hay conversi
 TopeClase|la clase 'Ancha' ocupa 258 ranuras de campos
 TopeClase|la clase 'Larga' tiene 257 m
 SyncSinCtor|declara un constructor que llame a 'super(...)'
+StepCero|no puede ser 0
+StepCero|debe ser integer, no 'float'
 "
 
 ok=0; mal=0

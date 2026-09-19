@@ -1,0 +1,52 @@
+// SelfNew.bp — #507 (19-sep): una clase se usa a sí misma DENTRO de sus propios métodos:
+// construir (`return Nodo(...)` en una factoría), `instanceof`, la conversión `Nodo(o)` y un
+// `catch` de su propia clase. El descriptor de la clase se registra al cerrarla (endClass) y
+// estos cuatro operandos lo pedían antes: el compilador moría con una excepción del emisor
+// sin línea («Clase no declarada (¿endClass antes de emitNewObject?)»). Eduardo: «los
+// constructores son métodos estáticos: no tiene que afectarles desde dónde se llamen».
+module SelfNew
+  import Core
+  public class Nodo
+    var v: integer
+    public function Nodo(v: integer)
+      this.v := v
+    end Nodo
+    public function clon(): Nodo
+      return Nodo(this.v + 1)
+    end clon
+    public function esNodo(o: Object): boolean
+      return o instanceof Nodo
+    end esNodo
+    public function desde(o: Object): Nodo
+      return Nodo(o)
+    end desde
+    public function valor(): integer
+      return this.v
+    end valor
+  end Nodo
+  public class Fallo extends Exception
+    public function Fallo(m: string)
+      super(m)
+    end Fallo
+    public function prueba(): string
+      try
+        throw Fallo("propio")
+      catch e: Fallo
+        return "cazado " + e.msg
+      endtry
+      return "no"
+    end prueba
+  end Fallo
+  function main()
+    var n: Nodo := Nodo(1)
+    var m: Nodo := n.clon()
+    print m.valor()
+    print n.esNodo(m)
+    print n.esNodo("texto")
+    var o: Object := m
+    print n.desde(o).valor()
+    var f: Fallo := Fallo("x")
+    print f.prueba()
+    print "fin"
+  end main
+end SelfNew

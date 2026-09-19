@@ -196,11 +196,6 @@
   Es del lenguaje, no de los módulos: pasa también dentro de un mismo fichero. Sin
   ficha todavía; si molesta, se abre para V7.
 
-- **L20 — el `step` de un `for` numérico es un literal entero positivo.** `step 2`
-  vale; `step -1` y `step n` (una variable) dan `for step solo soporta literal int por
-  ahora` (⚠️ el compilador devuelve error pero deja escrito un `.mod` sin el bucle: no
-  lo ejecutes). Para contar hacia abajo, `while`.
-
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
   (los módulos no la tienen). Reabrible si surge caso de uso.

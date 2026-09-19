@@ -2617,7 +2617,15 @@ public final class SemanticAnalyzer {
             ForNumericRange nr = (ForNumericRange) f.range;
             BpType fromT = analyzeExpr(nr.from, scope, PrimitiveType.INTEGER);
             BpType toT   = analyzeExpr(nr.to,   scope, PrimitiveType.INTEGER);
-            if (nr.step != null) analyzeExpr(nr.step, scope, PrimitiveType.INTEGER);
+            if (nr.step != null) {
+                BpType stepT = analyzeExpr(nr.step, scope, PrimitiveType.INTEGER);
+                // #506 — el step es integer (constante con signo o expresión); 0 escrito no
+                // avanza nunca y se rechaza aquí.
+                if (!(stepT instanceof ErrorType) && !PrimitiveType.INTEGER.isAssignableFrom(stepT))
+                    err(f.line, f.column, "el 'step' del 'for' debe ser integer, no '" + stepT.display() + "'");
+                Long k = MivmEmitter.constanteEntera(nr.step);
+                if (k != null && k == 0) err(f.line, f.column, "el 'step' del 'for' no puede ser 0 (el bucle no avanzaría nunca)");
+            }
             if (!PrimitiveType.INTEGER.isAssignableFrom(fromT)
                     || !PrimitiveType.INTEGER.isAssignableFrom(toT))
                 err(f.line, f.column, "los límites del 'for' numérico deben ser integer");

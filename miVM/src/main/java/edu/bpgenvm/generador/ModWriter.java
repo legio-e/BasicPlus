@@ -228,6 +228,19 @@ public class ModWriter {
     }
     private final List<SelfCastFixup> pendingSelfCasts = new ArrayList<>();
 
+    /** #507 (19-sep) — el operando u16 (offset CS del descriptor) de una clase LOCAL cerrada, para
+     *  NEW_OBJECT / INSTANCEOF / TRY_BEGIN / CHECKCAST. Si la clase es la que se está emitiendo
+     *  AHORA (declarada y sin descriptor todavía: éste se registra en endClass), devuelve 0 y
+     *  deja el fixup de #447 para parcharlo al cerrar el módulo: `return Nodo()` dentro de un
+     *  método de `Nodo` —una factoría de la propia clase— reventaba el compilador con una
+     *  excepción sin línea. `operandOff` es dónde va a quedar el u16 en el código. */
+    private short descriptorOAplazado(String className, int operandOff, String que) {
+        Integer csOff = dataSymbolOffset.get(className);
+        if (csOff != null) return csOff.shortValue();
+        if (classes.containsKey(className)) { pendingSelfCasts.add(new SelfCastFixup(operandOff, className)); return 0; }
+        throw new RuntimeException("Clase '" + className + "' no declarada para " + que);
+    }
+
     public static class CallFixup {
         String targetFunction;
         int bytecodeIndex;
@@ -1521,12 +1534,9 @@ public class ModWriter {
     public void emitNewObject(String className) throws IOException {
         ClassInfo ab = abiertaLocal(className);
         if (ab != null) { emitNewObjectRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }
-        Integer csOff = dataSymbolOffset.get(className);
-        if (csOff == null) {
-            throw new RuntimeException("Clase no declarada (¿endClass antes de emitNewObject?): " + className);
-        }
+        short csOff = descriptorOAplazado(className, currentBytecodeSize + 1, "NEW_OBJECT");   // #507
         codeOut.writeByte(OpCode.NEW_OBJECT.code);
-        codeOut.writeShort(csOff.shortValue());
+        codeOut.writeShort(csOff);
         currentBytecodeSize += 3;
     }
 
@@ -2003,13 +2013,8 @@ public class ModWriter {
             codeOut.writeInt(0);
         }
         short expectedOff = 0;
-        if (expectedClassName != null) {
-            Integer csOff = dataSymbolOffset.get(expectedClassName);
-            if (csOff == null) {
-                throw new RuntimeException("Clase '" + expectedClassName + "' no declarada para TRY_BEGIN");
-            }
-            expectedOff = csOff.shortValue();
-        }
+        if (expectedClassName != null)
+            expectedOff = descriptorOAplazado(expectedClassName, currentBytecodeSize + 5, "TRY_BEGIN");   // #507: tras opcode(1) + handler(4)
         codeOut.writeShort(expectedOff);
         currentBytecodeSize += 7;
     }
@@ -2074,10 +2079,9 @@ public class ModWriter {
 
     public void emitInstanceOf(String className) throws IOException {
         if (abiertaLocal(className) != null) { emitInstanceOfRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }
-        Integer csOff = dataSymbolOffset.get(className);
-        if (csOff == null) throw new RuntimeException("Clase '" + className + "' no declarada para INSTANCEOF");
+        short csOff = descriptorOAplazado(className, currentBytecodeSize + 1, "INSTANCEOF");   // #507
         codeOut.writeByte(OpCode.INSTANCEOF.code);
-        codeOut.writeShort(csOff.shortValue());
+        codeOut.writeShort(csOff);
         currentBytecodeSize += 3;
     }
 
@@ -2094,11 +2098,9 @@ public class ModWriter {
          * sin que nadie lo notara (su .mod ya estaba hecho).
          * Se aplaza el operando en vez de reventar. */
         boolean aplazado = false;
-        if (clsOff == null && classes.containsKey(className)) {
-            pendingSelfCasts.add(new SelfCastFixup(currentBytecodeSize + 1, className));
+        if (clsOff == null) {   // #507: la misma regla que NEW_OBJECT/INSTANCEOF/TRY_BEGIN
+            descriptorOAplazado(className, currentBytecodeSize + 1, "CHECKCAST");
             aplazado = true;
-        } else if (clsOff == null) {
-            throw new RuntimeException("Clase '" + className + "' no declarada para CHECKCAST");
         }
         Integer nameOff = dataSymbolOffset.get(nameSym);
         if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST");

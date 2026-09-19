@@ -46,6 +46,16 @@
 
     <build>
         <plugins>
+            <!-- 19-sep: SIEMPRE rehacer el jar (ver lexer-java/pom.xml): sin esto, con las fuentes del IDE
+                 sin tocar, el jar-plugin reutiliza el fat-jar anterior como «original» y el shade deja
+                 dentro el compilador y la miVM rancios aunque .m2 tenga los nuevos. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
             <!--
               Sincroniza el manual HTML del IDE con el manual canónico de
               docs/. Single source of truth: docs/manual.html. En cada

@@ -695,9 +695,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   con la variable de iteración (uso documental).
 </p>
 <p>
-  <strong>Límite actual de <code>step</code>:</strong> sólo admite un literal entero
-  positivo. <code>step -1</code> (un unario sobre el literal) o una variable no compilan
-  («for step solo soporta literal int»); para contar hacia atrás usa <code>while</code>.
+  <code>step</code> es un <code>integer</code> con signo: una constante (<code>step -1</code>
+  cuenta hacia abajo) o una expresión, que se evalúa una sola vez antes de entrar; si el
+  paso es negativo el bucle sigue mientras <code>i &gt;= hasta</code>. <code>step 0</code>
+  escrito es error de compilación.
 </p>
 
 <h3 id="switch">7.4 <code>switch</code></h3>
@@ -1886,8 +1887,6 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       sobrecargas del constructor cruzan desde V7.)</li>
   <li>El downcast <code>Clase(x)</code> sólo acepta un origen <code>Object</code>
       (<a href="#any">§4.5</a>).</li>
-  <li><code>step</code> del <code>for</code> numérico: sólo un literal entero
-      positivo (<a href="#for">§7.3</a>).</li>
   <li><code>listDir()</code> e <code>input()</code> sólo existen en la VM Java del
       PC; en la VM-C (PC y placas) lanzan <code>RuntimeError</code> («builtin N no
       soportado») — el mismo <code>.mod</code> no da la misma salida en las dos VMs.</li>

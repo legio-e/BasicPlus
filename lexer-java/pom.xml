@@ -72,6 +72,11 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.4.1</version>
                 <configuration>
+                    <!-- 19-sep (#507): SIEMPRE rehacer el jar. Sin esto, si sólo cambió una dependencia
+                         (la miVM: el ModWriter vive allí), el jar-plugin daba el jar por «al día» y reutilizaba
+                         el SHADED de la vez anterior como «original»: el shade metía primero sus clases rancias
+                         de edu/bpgenvm y el frontend seguía con el writer viejo aunque .m2 tuviera el nuevo. -->
+                    <forceCreation>true</forceCreation>
                     <archive>
                         <manifest>
                             <mainClass>basicplus.frontend.Main</mainClass>

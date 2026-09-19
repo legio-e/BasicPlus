@@ -1,0 +1,14 @@
+// StepCero.bp — #506 (19-sep): el `step` de un `for` numerico es integer y no puede ser 0 escrito
+// (el bucle no avanzaria nunca). Un step con signo o una variable si valen (samples/ForStep.bp).
+module StepCero
+  import Core
+  function main()
+    for i := 1 to 3 step 0 do
+      print i
+    next i
+    var f: float := 1.5
+    for j := 1 to 3 step f do
+      print j
+    next j
+  end main
+end StepCero

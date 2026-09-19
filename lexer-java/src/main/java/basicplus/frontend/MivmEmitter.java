@@ -3194,6 +3194,15 @@ public final class MivmEmitter {
         w.declareLabel(end);
     }
 
+    /** #506 — el valor de una constante entera escrita: un literal, o `-literal` (el parser lo
+     *  deja como UnaryExpr sobre el literal). null si no es constante. */
+    static Long constanteEntera(IExpr e) {
+        if (e instanceof IntLitExpr) return ((IntLitExpr) e).value;
+        if (e instanceof UnaryExpr && "-".equals(((UnaryExpr) e).op) && ((UnaryExpr) e).operand instanceof IntLitExpr)
+            return -((IntLitExpr) ((UnaryExpr) e).operand).value;
+        return null;
+    }
+
     private void emitDoLoop(DoLoopStmt s) throws IOException {
         int top = w.newLabel();
         int end = w.newLabel();
@@ -3225,27 +3234,52 @@ public final class MivmEmitter {
             declareLocal(endLocal);
             emitExpr(r.to);
             w.emitSetLocal(endLocal);
-            // step (default 1)
-            int step = 1;
-            if (r.step != null) {
-                if (r.step instanceof IntLitExpr) step = (int) ((IntLitExpr) r.step).value;
-                else { errors.add("for step solo soporta literal int por ahora"); return; }
+            // step (default 1). #506 (19-sep): antes sólo un IntLitExpr positivo; `step -1` llega
+            // como UnaryExpr("-", 1) y una variable ni se contemplaba («for step solo soporta
+            // literal int por ahora»). Constante (con signo) → se pliega y la comparación se
+            // elige aquí; expresión → se evalúa UNA vez a un local y la dirección se decide en
+            // ejecución (step >= 0 → mientras i <= end; si no → mientras i >= end).
+            Long stepK = (r.step == null) ? Long.valueOf(1) : constanteEntera(r.step);
+            String stepLocal = null;
+            if (stepK == null) {
+                stepLocal = "__for_step_" + System.identityHashCode(s);
+                declareLocal(stepLocal);
+                emitExpr(r.step);
+                w.emitSetLocal(stepLocal);
             }
             int top = w.newLabel();
             int end = w.newLabel();
             w.declareLabel(top);
-            // Comparación: si step > 0 → mientras i <= end; si step < 0 → mientras i >= end
-            w.emitGetLocal(s.iteratorName);
-            w.emitGetLocal(endLocal);
-            w.emit(step >= 0 ? OpCode.LE : OpCode.GE);
-            w.emitJumpIfFalse(end);
+            if (stepK != null) {
+                w.emitGetLocal(s.iteratorName);
+                w.emitGetLocal(endLocal);
+                w.emit(stepK >= 0 ? OpCode.LE : OpCode.GE);
+                w.emitJumpIfFalse(end);
+            } else {
+                int haciaAbajo = w.newLabel(), cuerpo = w.newLabel();
+                w.emitGetLocal(stepLocal);
+                emitInt(0);
+                w.emit(OpCode.GE);
+                w.emitJumpIfFalse(haciaAbajo);
+                w.emitGetLocal(s.iteratorName);
+                w.emitGetLocal(endLocal);
+                w.emit(OpCode.LE);
+                w.emitJumpIfFalse(end);
+                w.emitJump(cuerpo);
+                w.declareLabel(haciaAbajo);
+                w.emitGetLocal(s.iteratorName);
+                w.emitGetLocal(endLocal);
+                w.emit(OpCode.GE);
+                w.emitJumpIfFalse(end);
+                w.declareLabel(cuerpo);
+            }
             loopStack.push(new LoopLabels(top, end));
             try {
                 for (IStmt st : s.body) emitStmt(st);
             } finally { loopStack.pop(); }
             // i += step
             w.emitGetLocal(s.iteratorName);
-            emitInt(step);
+            if (stepK != null) emitInt(stepK.intValue()); else w.emitGetLocal(stepLocal);
             w.emit(OpCode.ADD);
             w.emitSetLocal(s.iteratorName);
             w.emitJump(top);
