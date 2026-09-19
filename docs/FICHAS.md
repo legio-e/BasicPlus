@@ -223,9 +223,13 @@ constructor escribe `super(...)`, está escribiendo su propio `this()` y no se l
 de constructores, desde un constructor se puede llamar a OTRO constructor de la misma clase (`this(args)`), pero nunca a
 sí mismo (sería recursivo y no terminaría). Traducido a reglas: (1) los inicializadores de campos y properties de
 instancia corren UNA vez, en orden de declaración, después del `super(...)` (escrito o inyectado) y antes del cuerpo,
-en el constructor que hace el `super`; (2) `this(args)` es nuevo: delegación a otra sobrecarga, primera sentencia,
-excluyente con `super(...)`, y el constructor que delega NO corre los inicializadores (los corre el delegado); la
-propia firma o un ciclo (A→B→A) es error de compilación con nombre; (3) una clase con inicializadores y sin
+en el constructor que hace el `super`; (2) la delegación se escribe con el NOMBRE DE LA CLASE, no con `this`
+(Eduardo: «`this(args)` es en realidad `MiClase(args)`; en cuanto se añadió la sobrecarga de métodos se habilitó la
+de constructores»): `MiClase(args)` como PRIMERA sentencia de un constructor inicializa ESTE objeto por esa otra
+sobrecarga —excluyente con `super(...)`, y el que delega NO corre los inicializadores (los corre el delegado)—; en
+cualquier otro sitio `MiClase(args)` construye un objeto nuevo, como siempre (`#507`). **Medido el 19-sep** (`C:/tmp/e529/Delega.bp`):
+hoy `Punto()` con `Punto(1, 2)` de primera sentencia compila, crea un objeto NUEVO que se tira y `suma()` da 0 — mudo.
+La propia firma o un ciclo (A→B→A) es error de compilación con nombre; (3) una clase con inicializadores y sin
 constructor recibe uno sintético (como el del `sync` desde `#527`) que hace `super()` y los corre; (4) manual §9.3,
 caso en la matriz de `#492` y oráculo de paridad.
 
