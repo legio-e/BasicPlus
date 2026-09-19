@@ -40,6 +40,9 @@ EnumMal|'string' y 'integer[]' (no hay conversi
 EnumMal|'string' y '(integer, string)' (no hay conversi
 EnumMal|'string' y 'null' (no hay conversi
 EnumMal|'string' y 'void' (no hay conversi
+TopeClase|la clase 'Ancha' ocupa 258 ranuras de campos
+TopeClase|la clase 'Larga' tiene 257 m
+SyncSinCtor|declara un constructor que llame a 'super(...)'
 "
 
 ok=0; mal=0

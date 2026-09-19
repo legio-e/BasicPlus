@@ -1,0 +1,21 @@
+// SyncSinCtor.bp — #517/#527 (19-sep): una clase con `sync property` y SIN constructor cuyo padre
+// EXIGE argumentos en el suyo: el ctor sintetico del mutex no puede llamar a super() sin saber
+// que pasarle. Antes compilaba limpio, `S(5)` iba al __init del padre y el mutex quedaba null
+// («INVOKE_VIRTUAL sobre null receiver» en las dos VMs).
+module SyncSinCtor
+  import Core
+  public class Base
+    var v: integer
+    public function Base(v: integer)
+      this.v := v
+    end Base
+  end Base
+  public class S extends Base
+    public sync property q: integer
+  end S
+  function main()
+    var s: S := S(5)
+    s.q := 1
+    print s.q
+  end main
+end SyncSinCtor

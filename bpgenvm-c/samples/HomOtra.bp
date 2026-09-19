@@ -1,0 +1,12 @@
+module HomOtra
+  import Core
+  public class Base
+    var s: string
+    public function Base(s: string)
+      this.s := s
+    end Base
+    public function txt(): string
+      return this.s
+    end txt
+  end Base
+end HomOtra

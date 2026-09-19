@@ -276,7 +276,7 @@ public abstract class Symbol {
          *  OVERRIDE de otro. Misma codificación que el mangling. */
         public String signatureKey() {
             StringBuilder sb = new StringBuilder();
-            for (ParamSymbol p : params) sb.append(typeCode(p.type));
+            for (ParamSymbol p : params) sb.append(typeCode(p.type, this));
             return sb.toString();
         }
 
@@ -328,14 +328,34 @@ public abstract class Symbol {
          *  Requiere que los tipos de los parámetros estén resueltos. */
         public String overloadMangle() {
             StringBuilder sb = new StringBuilder(name).append('$');
-            for (ParamSymbol p : params) sb.append(typeCode(p.type));
+            for (ParamSymbol p : params) sb.append(typeCode(p.type, this));
             return sb.toString();
+        }
+
+        /** #528 — el módulo DUEÑO de esta función (cualificado con su librería), o "" si es
+         *  de este módulo. Es respecto a él como se cualifica una clase en su mangling. */
+        private String moduloDueno() {
+            if (externalModule != null && !externalModule.isEmpty()) return modulo(externalLibrary, externalModule);
+            // un método o constructor de un stub importado no lleva externalModule: lo lleva su clase
+            if (ownerClass != null && ownerClass.isExternal) return modulo(ownerClass.externalLibrary, ownerClass.externalModule);
+            return "";
         }
 
         /** H5.a — código de tipo para el mangling de sobrecargas. Debe ser
          *  DETERMINISTA e IDÉNTICO en la definición, en la llamada y cross-module
          *  (por eso vive en UN solo sitio). Estilo descriptor de Java. */
-        public static String typeCode(BpType t) {
+        public static String typeCode(BpType t) { return typeCode(t, null); }
+
+        /** #528 (19-sep) — el código de tipo RELATIVO a la función `fs`: una clase (o enum)
+         *  del MISMO módulo que la función va simple (`LBase;`) y una de otro módulo va
+         *  cualificada con el suyo (`LLib/Base;`, con '/' como la clave canónica). Así la
+         *  definición y la llamada cross-module producen el MISMO nombre: el dueño ve su
+         *  clase como local y el consumidor la ve como externa del módulo de la función.
+         *  (Cualificar sólo «lo externo» rompía eso: el consumidor pedía
+         *  `__cls_init_Base$LCtorBase/Base;` y el dueño exportaba `$LBase;`.) Por nombre
+         *  simple a secas, `m(Lib.Base)` y `m(Otra.Base)` eran la MISMA sobrecarga. Los
+         *  nombres que exporta la stdlib no se mueven (sus clases son de sus módulos). */
+        public static String typeCode(BpType t, FunctionSymbol fs) {
             if (t == null) return "?";
             if (t instanceof BpType.PrimitiveType) {
                 switch (((BpType.PrimitiveType) t).tag) {
@@ -353,17 +373,30 @@ public abstract class Symbol {
                 }
             }
             if (t instanceof BpType.ArrayType)
-                return "[" + typeCode(((BpType.ArrayType) t).element);
-            if (t instanceof BpType.ClassType)
-                return "L" + simpleClassName(((BpType.ClassType) t).cls.name) + ";";
-            if (t instanceof BpType.UnresolvedClassRef)
-                return "L" + simpleClassName(((BpType.UnresolvedClassRef) t).name) + ";";
-            if (t instanceof BpType.EnumType)
-                return "E" + ((BpType.EnumType) t).en.name + ";";
+                return "[" + typeCode(((BpType.ArrayType) t).element, fs);
+            String dueno = (fs != null) ? fs.moduloDueno() : "";
+            if (t instanceof BpType.ClassType) {
+                ClassSymbol cls = ((BpType.ClassType) t).cls;
+                String suyo = cls.isBuiltin ? "" : modulo(cls.externalLibrary, cls.externalModule);
+                return "L" + (suyo.isEmpty() || suyo.equals(dueno) ? "" : suyo.replace('.', '/') + "/") + simpleClassName(cls.name) + ";";
+            }
+            if (t instanceof BpType.UnresolvedClassRef) {
+                // transitiva (`Lib.Base` en la interfaz de `Mid`, sin ClassSymbol): ya viene con módulo
+                String n = ((BpType.UnresolvedClassRef) t).name;
+                int i = n.lastIndexOf('.');
+                if (i < 0) return "L" + n + ";";
+                String suyo = n.substring(0, i);
+                return "L" + (suyo.equals(dueno) ? "" : suyo.replace('.', '/') + "/") + n.substring(i + 1) + ";";
+            }
+            if (t instanceof BpType.EnumType) {
+                EnumSymbol en = ((BpType.EnumType) t).en;
+                String suyo = modulo(en.externalLibrary, en.externalModule);
+                return "E" + (suyo.isEmpty() || suyo.equals(dueno) ? "" : suyo.replace('.', '/') + "/") + en.name + ";";
+            }
             if (t instanceof BpType.AnyType) return "a";
             if (t instanceof BpType.TupleType) {
                 StringBuilder sb = new StringBuilder("T");
-                for (BpType e : ((BpType.TupleType) t).elements) sb.append(typeCode(e));
+                for (BpType e : ((BpType.TupleType) t).elements) sb.append(typeCode(e, fs));
                 return sb.append(";").toString();
             }
             return "?";
@@ -376,6 +409,11 @@ public abstract class Symbol {
         private static String simpleClassName(String n) {
             int i = n.lastIndexOf('.');
             return (i < 0) ? n : n.substring(i + 1);
+        }
+        /** #528 — el módulo cualificado (`lib.Mod`) de una clase o enum EXTERNO, o "" si es local. */
+        private static String modulo(String lib, String mod) {
+            if (mod == null || mod.isEmpty()) return "";
+            return (lib != null && !lib.isEmpty()) ? lib + "." + mod : mod;
         }
     }
 

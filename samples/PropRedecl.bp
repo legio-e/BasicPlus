@@ -1,0 +1,31 @@
+// PropRedecl.bp — #529 (19-sep): una property REDECLARADA en una subclase del MISMO modulo es una
+// redefinicion (los accesores son virtuales y el hijo trae su backing), exactamente como ya lo era
+// con un padre de OTRO modulo; antes el writer tiraba «Campo ya declarado en Hijo: p» sin linea.
+module PropRedecl
+  import Core
+  public class Padre
+    public property p: integer
+    public function Padre()
+      this.p := 1
+    end Padre
+    public function dime(): integer
+      return this.p
+    end dime
+  end Padre
+  public class Hijo extends Padre
+    public property p: integer
+    public function Hijo()
+      this.p := 2
+    end Hijo
+  end Hijo
+  function main()
+    var h: Hijo := Hijo()
+    print h.p
+    var b: Padre := h
+    print b.p
+    print h.dime()
+    var a: Padre := Padre()
+    print a.p
+    print "fin"
+  end main
+end PropRedecl

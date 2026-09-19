@@ -1,0 +1,915 @@
+// TopeClase.bp — #529 (19-sep): el TOPE de una clase CERRADA (toda su cadena en el modulo): las
+// ranuras de metodo (INVOKE_VIRTUAL) y de campo (GET/SET_FIELD) son de 8 bits, 256 entradas.
+// Es un limite del lenguaje y se dice con la linea de la clase; antes reventaba el writer sin
+// linea («Method slot u8 desbordado: 256»). Una clase ABIERTA (extiende a una de otro modulo)
+// va por referencia en MOD9 (indice de 16 bits) y no lo tiene.
+module TopeClase
+  import Core
+  // 1. 129 campos string = 258 ranuras (una referencia ocupa 2)
+  public class Ancha
+    var s0: string
+    var s1: string
+    var s2: string
+    var s3: string
+    var s4: string
+    var s5: string
+    var s6: string
+    var s7: string
+    var s8: string
+    var s9: string
+    var s10: string
+    var s11: string
+    var s12: string
+    var s13: string
+    var s14: string
+    var s15: string
+    var s16: string
+    var s17: string
+    var s18: string
+    var s19: string
+    var s20: string
+    var s21: string
+    var s22: string
+    var s23: string
+    var s24: string
+    var s25: string
+    var s26: string
+    var s27: string
+    var s28: string
+    var s29: string
+    var s30: string
+    var s31: string
+    var s32: string
+    var s33: string
+    var s34: string
+    var s35: string
+    var s36: string
+    var s37: string
+    var s38: string
+    var s39: string
+    var s40: string
+    var s41: string
+    var s42: string
+    var s43: string
+    var s44: string
+    var s45: string
+    var s46: string
+    var s47: string
+    var s48: string
+    var s49: string
+    var s50: string
+    var s51: string
+    var s52: string
+    var s53: string
+    var s54: string
+    var s55: string
+    var s56: string
+    var s57: string
+    var s58: string
+    var s59: string
+    var s60: string
+    var s61: string
+    var s62: string
+    var s63: string
+    var s64: string
+    var s65: string
+    var s66: string
+    var s67: string
+    var s68: string
+    var s69: string
+    var s70: string
+    var s71: string
+    var s72: string
+    var s73: string
+    var s74: string
+    var s75: string
+    var s76: string
+    var s77: string
+    var s78: string
+    var s79: string
+    var s80: string
+    var s81: string
+    var s82: string
+    var s83: string
+    var s84: string
+    var s85: string
+    var s86: string
+    var s87: string
+    var s88: string
+    var s89: string
+    var s90: string
+    var s91: string
+    var s92: string
+    var s93: string
+    var s94: string
+    var s95: string
+    var s96: string
+    var s97: string
+    var s98: string
+    var s99: string
+    var s100: string
+    var s101: string
+    var s102: string
+    var s103: string
+    var s104: string
+    var s105: string
+    var s106: string
+    var s107: string
+    var s108: string
+    var s109: string
+    var s110: string
+    var s111: string
+    var s112: string
+    var s113: string
+    var s114: string
+    var s115: string
+    var s116: string
+    var s117: string
+    var s118: string
+    var s119: string
+    var s120: string
+    var s121: string
+    var s122: string
+    var s123: string
+    var s124: string
+    var s125: string
+    var s126: string
+    var s127: string
+    var s128: string
+    public function Ancha()
+    end Ancha
+  end Ancha
+  // 2. 255 metodos propios + toString + compareTo = 257 > 256
+  public class Larga
+    public function Larga()
+    end Larga
+    public function m0(): integer
+      return 0
+    end m0
+    public function m1(): integer
+      return 1
+    end m1
+    public function m2(): integer
+      return 2
+    end m2
+    public function m3(): integer
+      return 3
+    end m3
+    public function m4(): integer
+      return 4
+    end m4
+    public function m5(): integer
+      return 5
+    end m5
+    public function m6(): integer
+      return 6
+    end m6
+    public function m7(): integer
+      return 7
+    end m7
+    public function m8(): integer
+      return 8
+    end m8
+    public function m9(): integer
+      return 9
+    end m9
+    public function m10(): integer
+      return 10
+    end m10
+    public function m11(): integer
+      return 11
+    end m11
+    public function m12(): integer
+      return 12
+    end m12
+    public function m13(): integer
+      return 13
+    end m13
+    public function m14(): integer
+      return 14
+    end m14
+    public function m15(): integer
+      return 15
+    end m15
+    public function m16(): integer
+      return 16
+    end m16
+    public function m17(): integer
+      return 17
+    end m17
+    public function m18(): integer
+      return 18
+    end m18
+    public function m19(): integer
+      return 19
+    end m19
+    public function m20(): integer
+      return 20
+    end m20
+    public function m21(): integer
+      return 21
+    end m21
+    public function m22(): integer
+      return 22
+    end m22
+    public function m23(): integer
+      return 23
+    end m23
+    public function m24(): integer
+      return 24
+    end m24
+    public function m25(): integer
+      return 25
+    end m25
+    public function m26(): integer
+      return 26
+    end m26
+    public function m27(): integer
+      return 27
+    end m27
+    public function m28(): integer
+      return 28
+    end m28
+    public function m29(): integer
+      return 29
+    end m29
+    public function m30(): integer
+      return 30
+    end m30
+    public function m31(): integer
+      return 31
+    end m31
+    public function m32(): integer
+      return 32
+    end m32
+    public function m33(): integer
+      return 33
+    end m33
+    public function m34(): integer
+      return 34
+    end m34
+    public function m35(): integer
+      return 35
+    end m35
+    public function m36(): integer
+      return 36
+    end m36
+    public function m37(): integer
+      return 37
+    end m37
+    public function m38(): integer
+      return 38
+    end m38
+    public function m39(): integer
+      return 39
+    end m39
+    public function m40(): integer
+      return 40
+    end m40
+    public function m41(): integer
+      return 41
+    end m41
+    public function m42(): integer
+      return 42
+    end m42
+    public function m43(): integer
+      return 43
+    end m43
+    public function m44(): integer
+      return 44
+    end m44
+    public function m45(): integer
+      return 45
+    end m45
+    public function m46(): integer
+      return 46
+    end m46
+    public function m47(): integer
+      return 47
+    end m47
+    public function m48(): integer
+      return 48
+    end m48
+    public function m49(): integer
+      return 49
+    end m49
+    public function m50(): integer
+      return 50
+    end m50
+    public function m51(): integer
+      return 51
+    end m51
+    public function m52(): integer
+      return 52
+    end m52
+    public function m53(): integer
+      return 53
+    end m53
+    public function m54(): integer
+      return 54
+    end m54
+    public function m55(): integer
+      return 55
+    end m55
+    public function m56(): integer
+      return 56
+    end m56
+    public function m57(): integer
+      return 57
+    end m57
+    public function m58(): integer
+      return 58
+    end m58
+    public function m59(): integer
+      return 59
+    end m59
+    public function m60(): integer
+      return 60
+    end m60
+    public function m61(): integer
+      return 61
+    end m61
+    public function m62(): integer
+      return 62
+    end m62
+    public function m63(): integer
+      return 63
+    end m63
+    public function m64(): integer
+      return 64
+    end m64
+    public function m65(): integer
+      return 65
+    end m65
+    public function m66(): integer
+      return 66
+    end m66
+    public function m67(): integer
+      return 67
+    end m67
+    public function m68(): integer
+      return 68
+    end m68
+    public function m69(): integer
+      return 69
+    end m69
+    public function m70(): integer
+      return 70
+    end m70
+    public function m71(): integer
+      return 71
+    end m71
+    public function m72(): integer
+      return 72
+    end m72
+    public function m73(): integer
+      return 73
+    end m73
+    public function m74(): integer
+      return 74
+    end m74
+    public function m75(): integer
+      return 75
+    end m75
+    public function m76(): integer
+      return 76
+    end m76
+    public function m77(): integer
+      return 77
+    end m77
+    public function m78(): integer
+      return 78
+    end m78
+    public function m79(): integer
+      return 79
+    end m79
+    public function m80(): integer
+      return 80
+    end m80
+    public function m81(): integer
+      return 81
+    end m81
+    public function m82(): integer
+      return 82
+    end m82
+    public function m83(): integer
+      return 83
+    end m83
+    public function m84(): integer
+      return 84
+    end m84
+    public function m85(): integer
+      return 85
+    end m85
+    public function m86(): integer
+      return 86
+    end m86
+    public function m87(): integer
+      return 87
+    end m87
+    public function m88(): integer
+      return 88
+    end m88
+    public function m89(): integer
+      return 89
+    end m89
+    public function m90(): integer
+      return 90
+    end m90
+    public function m91(): integer
+      return 91
+    end m91
+    public function m92(): integer
+      return 92
+    end m92
+    public function m93(): integer
+      return 93
+    end m93
+    public function m94(): integer
+      return 94
+    end m94
+    public function m95(): integer
+      return 95
+    end m95
+    public function m96(): integer
+      return 96
+    end m96
+    public function m97(): integer
+      return 97
+    end m97
+    public function m98(): integer
+      return 98
+    end m98
+    public function m99(): integer
+      return 99
+    end m99
+    public function m100(): integer
+      return 100
+    end m100
+    public function m101(): integer
+      return 101
+    end m101
+    public function m102(): integer
+      return 102
+    end m102
+    public function m103(): integer
+      return 103
+    end m103
+    public function m104(): integer
+      return 104
+    end m104
+    public function m105(): integer
+      return 105
+    end m105
+    public function m106(): integer
+      return 106
+    end m106
+    public function m107(): integer
+      return 107
+    end m107
+    public function m108(): integer
+      return 108
+    end m108
+    public function m109(): integer
+      return 109
+    end m109
+    public function m110(): integer
+      return 110
+    end m110
+    public function m111(): integer
+      return 111
+    end m111
+    public function m112(): integer
+      return 112
+    end m112
+    public function m113(): integer
+      return 113
+    end m113
+    public function m114(): integer
+      return 114
+    end m114
+    public function m115(): integer
+      return 115
+    end m115
+    public function m116(): integer
+      return 116
+    end m116
+    public function m117(): integer
+      return 117
+    end m117
+    public function m118(): integer
+      return 118
+    end m118
+    public function m119(): integer
+      return 119
+    end m119
+    public function m120(): integer
+      return 120
+    end m120
+    public function m121(): integer
+      return 121
+    end m121
+    public function m122(): integer
+      return 122
+    end m122
+    public function m123(): integer
+      return 123
+    end m123
+    public function m124(): integer
+      return 124
+    end m124
+    public function m125(): integer
+      return 125
+    end m125
+    public function m126(): integer
+      return 126
+    end m126
+    public function m127(): integer
+      return 127
+    end m127
+    public function m128(): integer
+      return 128
+    end m128
+    public function m129(): integer
+      return 129
+    end m129
+    public function m130(): integer
+      return 130
+    end m130
+    public function m131(): integer
+      return 131
+    end m131
+    public function m132(): integer
+      return 132
+    end m132
+    public function m133(): integer
+      return 133
+    end m133
+    public function m134(): integer
+      return 134
+    end m134
+    public function m135(): integer
+      return 135
+    end m135
+    public function m136(): integer
+      return 136
+    end m136
+    public function m137(): integer
+      return 137
+    end m137
+    public function m138(): integer
+      return 138
+    end m138
+    public function m139(): integer
+      return 139
+    end m139
+    public function m140(): integer
+      return 140
+    end m140
+    public function m141(): integer
+      return 141
+    end m141
+    public function m142(): integer
+      return 142
+    end m142
+    public function m143(): integer
+      return 143
+    end m143
+    public function m144(): integer
+      return 144
+    end m144
+    public function m145(): integer
+      return 145
+    end m145
+    public function m146(): integer
+      return 146
+    end m146
+    public function m147(): integer
+      return 147
+    end m147
+    public function m148(): integer
+      return 148
+    end m148
+    public function m149(): integer
+      return 149
+    end m149
+    public function m150(): integer
+      return 150
+    end m150
+    public function m151(): integer
+      return 151
+    end m151
+    public function m152(): integer
+      return 152
+    end m152
+    public function m153(): integer
+      return 153
+    end m153
+    public function m154(): integer
+      return 154
+    end m154
+    public function m155(): integer
+      return 155
+    end m155
+    public function m156(): integer
+      return 156
+    end m156
+    public function m157(): integer
+      return 157
+    end m157
+    public function m158(): integer
+      return 158
+    end m158
+    public function m159(): integer
+      return 159
+    end m159
+    public function m160(): integer
+      return 160
+    end m160
+    public function m161(): integer
+      return 161
+    end m161
+    public function m162(): integer
+      return 162
+    end m162
+    public function m163(): integer
+      return 163
+    end m163
+    public function m164(): integer
+      return 164
+    end m164
+    public function m165(): integer
+      return 165
+    end m165
+    public function m166(): integer
+      return 166
+    end m166
+    public function m167(): integer
+      return 167
+    end m167
+    public function m168(): integer
+      return 168
+    end m168
+    public function m169(): integer
+      return 169
+    end m169
+    public function m170(): integer
+      return 170
+    end m170
+    public function m171(): integer
+      return 171
+    end m171
+    public function m172(): integer
+      return 172
+    end m172
+    public function m173(): integer
+      return 173
+    end m173
+    public function m174(): integer
+      return 174
+    end m174
+    public function m175(): integer
+      return 175
+    end m175
+    public function m176(): integer
+      return 176
+    end m176
+    public function m177(): integer
+      return 177
+    end m177
+    public function m178(): integer
+      return 178
+    end m178
+    public function m179(): integer
+      return 179
+    end m179
+    public function m180(): integer
+      return 180
+    end m180
+    public function m181(): integer
+      return 181
+    end m181
+    public function m182(): integer
+      return 182
+    end m182
+    public function m183(): integer
+      return 183
+    end m183
+    public function m184(): integer
+      return 184
+    end m184
+    public function m185(): integer
+      return 185
+    end m185
+    public function m186(): integer
+      return 186
+    end m186
+    public function m187(): integer
+      return 187
+    end m187
+    public function m188(): integer
+      return 188
+    end m188
+    public function m189(): integer
+      return 189
+    end m189
+    public function m190(): integer
+      return 190
+    end m190
+    public function m191(): integer
+      return 191
+    end m191
+    public function m192(): integer
+      return 192
+    end m192
+    public function m193(): integer
+      return 193
+    end m193
+    public function m194(): integer
+      return 194
+    end m194
+    public function m195(): integer
+      return 195
+    end m195
+    public function m196(): integer
+      return 196
+    end m196
+    public function m197(): integer
+      return 197
+    end m197
+    public function m198(): integer
+      return 198
+    end m198
+    public function m199(): integer
+      return 199
+    end m199
+    public function m200(): integer
+      return 200
+    end m200
+    public function m201(): integer
+      return 201
+    end m201
+    public function m202(): integer
+      return 202
+    end m202
+    public function m203(): integer
+      return 203
+    end m203
+    public function m204(): integer
+      return 204
+    end m204
+    public function m205(): integer
+      return 205
+    end m205
+    public function m206(): integer
+      return 206
+    end m206
+    public function m207(): integer
+      return 207
+    end m207
+    public function m208(): integer
+      return 208
+    end m208
+    public function m209(): integer
+      return 209
+    end m209
+    public function m210(): integer
+      return 210
+    end m210
+    public function m211(): integer
+      return 211
+    end m211
+    public function m212(): integer
+      return 212
+    end m212
+    public function m213(): integer
+      return 213
+    end m213
+    public function m214(): integer
+      return 214
+    end m214
+    public function m215(): integer
+      return 215
+    end m215
+    public function m216(): integer
+      return 216
+    end m216
+    public function m217(): integer
+      return 217
+    end m217
+    public function m218(): integer
+      return 218
+    end m218
+    public function m219(): integer
+      return 219
+    end m219
+    public function m220(): integer
+      return 220
+    end m220
+    public function m221(): integer
+      return 221
+    end m221
+    public function m222(): integer
+      return 222
+    end m222
+    public function m223(): integer
+      return 223
+    end m223
+    public function m224(): integer
+      return 224
+    end m224
+    public function m225(): integer
+      return 225
+    end m225
+    public function m226(): integer
+      return 226
+    end m226
+    public function m227(): integer
+      return 227
+    end m227
+    public function m228(): integer
+      return 228
+    end m228
+    public function m229(): integer
+      return 229
+    end m229
+    public function m230(): integer
+      return 230
+    end m230
+    public function m231(): integer
+      return 231
+    end m231
+    public function m232(): integer
+      return 232
+    end m232
+    public function m233(): integer
+      return 233
+    end m233
+    public function m234(): integer
+      return 234
+    end m234
+    public function m235(): integer
+      return 235
+    end m235
+    public function m236(): integer
+      return 236
+    end m236
+    public function m237(): integer
+      return 237
+    end m237
+    public function m238(): integer
+      return 238
+    end m238
+    public function m239(): integer
+      return 239
+    end m239
+    public function m240(): integer
+      return 240
+    end m240
+    public function m241(): integer
+      return 241
+    end m241
+    public function m242(): integer
+      return 242
+    end m242
+    public function m243(): integer
+      return 243
+    end m243
+    public function m244(): integer
+      return 244
+    end m244
+    public function m245(): integer
+      return 245
+    end m245
+    public function m246(): integer
+      return 246
+    end m246
+    public function m247(): integer
+      return 247
+    end m247
+    public function m248(): integer
+      return 248
+    end m248
+    public function m249(): integer
+      return 249
+    end m249
+    public function m250(): integer
+      return 250
+    end m250
+    public function m251(): integer
+      return 251
+    end m251
+    public function m252(): integer
+      return 252
+    end m252
+    public function m253(): integer
+      return 253
+    end m253
+    public function m254(): integer
+      return 254
+    end m254
+  end Larga
+  function main()
+    print "no compila"
+  end main
+end TopeClase

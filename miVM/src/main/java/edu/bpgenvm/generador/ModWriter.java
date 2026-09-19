@@ -1117,9 +1117,8 @@ public class ModWriter {
         exigeFormato9("setFieldMeta");
         if (currentClass == null) throw new RuntimeException("setFieldMeta fuera de una clase");
         if (clave == null || clave.isEmpty()) throw new RuntimeException("campo '" + fieldName + "' sin clave canonica");
-        for (FieldInfo f : currentClass.fields) {
-            if (f.name.equals(fieldName)) { f.clave = clave; f.privado = privado; return; }
-        }
+        FieldInfo f = campoPorNombre(currentClass, fieldName);   // #529: el propio, no el heredado homónimo
+        if (f != null) { f.clave = clave; f.privado = privado; return; }
         throw new RuntimeException("setFieldMeta: campo '" + fieldName + "' no declarado en " + currentClass.name);
     }
     /** Un evento propio: su clave `nombre(códigos)` y el campo `$recv` ya declarado. */
@@ -1127,12 +1126,11 @@ public class ModWriter {
         exigirClaveCorta(clave, recvFieldName);
         exigeFormato9("declareEventMeta");
         if (currentClass == null) throw new RuntimeException("declareEventMeta fuera de una clase");
-        for (FieldInfo f : currentClass.fields) {
-            if (f.name.equals(recvFieldName)) {
-                EventInfo e = new EventInfo(); e.clave = clave; e.recvSlot = f.slot;
-                currentClass.events.add(e);
-                return;
-            }
+        FieldInfo f = campoPorNombre(currentClass, recvFieldName);   // #529
+        if (f != null) {
+            EventInfo e = new EventInfo(); e.clave = clave; e.recvSlot = f.slot;
+            currentClass.events.add(e);
+            return;
         }
         throw new RuntimeException("declareEventMeta: campo '" + recvFieldName + "' no declarado en " + currentClass.name);
     }
@@ -1212,6 +1210,12 @@ public class ModWriter {
         }
         for (FieldInfo f : currentClass.fields) {
             if (f.name.equals(fieldName)) {
+                // #529 (19-sep) — un campo HEREDADO del mismo nombre no es una colisión: la
+                // subclase lo redeclara con slot PROPIO (una property redefinida trae su
+                // backing). Es lo que ya pasaba con un padre de OTRO módulo (no hay lista
+                // heredada y el hijo declara el suyo); en el mismo módulo esto tiraba
+                // «Campo ya declarado» sin línea. El propio tapa al heredado (campoPropio).
+                if (f.heredado) continue;
                 throw new RuntimeException("Campo ya declarado en " + currentClass.name + ": " + fieldName);
             }
         }
@@ -1257,9 +1261,8 @@ public class ModWriter {
         if (currentClass == null) {
             throw new RuntimeException("setFieldOwner fuera de una clase abierta");
         }
-        for (FieldInfo f : currentClass.fields) {
-            if (f.name.equals(fieldName)) { f.isOwner = isOwner; return; }
-        }
+        FieldInfo f = campoPorNombre(currentClass, fieldName);   // #529
+        if (f != null) { f.isOwner = isOwner; return; }
         throw new RuntimeException("Campo no encontrado en " + currentClass.name + ": " + fieldName);
     }
 
@@ -1623,10 +1626,16 @@ public class ModWriter {
     private FieldInfo resolveFieldInfo(String className, String fieldName) {
         ClassInfo c = classes.get(className);
         if (c == null) throw new RuntimeException("Clase no declarada: " + className);
-        for (FieldInfo f : c.fields) {
-            if (f.name.equals(fieldName)) return f;
-        }
+        FieldInfo f = campoPorNombre(c, fieldName);
+        if (f != null) return f;
         throw new RuntimeException("Campo no encontrado en " + className + ": " + fieldName);
+    }
+    /** #529 — el campo `name` de la clase: el PROPIO si lo hay (va detrás de los heredados
+     *  en la lista y los tapa), si no el heredado. Una sola regla para declarar y resolver. */
+    private static FieldInfo campoPorNombre(ClassInfo c, String name) {
+        FieldInfo hallado = null;
+        for (FieldInfo f : c.fields) if (f.name.equals(name)) hallado = f;
+        return hallado;
     }
 
     private int resolveFieldSlot(String className, String fieldName) {

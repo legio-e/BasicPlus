@@ -1,0 +1,16 @@
+// #528 (19-sep) — usa HomMid: las tres sobrecargas de m y las dos de g, bien despachadas.
+module HomUsa
+  import Core
+  import HomLib
+  import HomOtra
+  import HomMid
+  function main()
+    var c: HomMid.Caja := HomMid.Caja()
+    print c.m(HomLib.Base(4))
+    print c.m(HomOtra.Base("x"))
+    print c.m(9)
+    print HomMid.g(HomLib.Base(5))
+    print HomMid.g(HomOtra.Base("y"))
+    print "fin"
+  end main
+end HomUsa

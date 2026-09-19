@@ -1,0 +1,13 @@
+// #527 (19-sep) — usa SyncLib.ConSync desde otro modulo: p=7 (el super() implicito del
+// ctor sintetico) y el mutex de q inicializado.
+module SyncUsa
+  import Core
+  import SyncLib
+  function main()
+    var c: SyncLib.ConSync := SyncLib.ConSync()
+    print "p=" + c.p
+    c.q := 3
+    print "q=" + c.q
+    print "fin"
+  end main
+end SyncUsa

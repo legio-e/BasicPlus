@@ -1,0 +1,65 @@
+// FinallySolo.bp — #532 (19-sep): `try … finally` SIN catch. La gramática lo admitía y el
+// emisor lo rechazaba («'try' sin cláusulas catch no soportado todavía»). Tres caminos: salida
+// normal, excepción que atraviesa (el finally corre y la excepción sigue hasta el catch de
+// fuera) y `return` desde dentro (el finally corre antes de salir). Y anidado dentro de un
+// try/catch/finally, para que el rethrow del finally (ref de 8 B) también se ejercite.
+module FinallySolo
+  import Core
+  var traza: string := ""
+  function normal(): integer
+    try
+      traza := traza + "n"
+    finally
+      traza := traza + "F"
+    endtry
+    return 1
+  end normal
+  function conReturn(): integer
+    try
+      traza := traza + "r"
+      return 2
+    finally
+      traza := traza + "F"
+    endtry
+    return 0
+  end conReturn
+  function atraviesa(): integer
+    try
+      traza := traza + "a"
+      throw RuntimeError("desde dentro")
+    finally
+      traza := traza + "F"
+    endtry
+    return 3
+  end atraviesa
+  function main()
+    print normal()
+    print conReturn()
+    try
+      print atraviesa()
+    catch e: RuntimeError
+      print "fuera: " + e.msg
+    endtry
+    print traza
+    // anidado: el finally exterior corre tras el interior, y la excepción sigue
+    traza := ""
+    try
+      try
+        try
+          throw RuntimeError("hondo")
+        finally
+          traza := traza + "1"
+        endtry
+      catch e: Exception
+        traza := traza + "x"
+        throw RuntimeError("relanzada " + e.msg)
+      finally
+        traza := traza + "2"
+      endtry
+    catch e: RuntimeError
+      print e.msg
+    endtry
+    print traza
+    print "fin"
+  end main
+end FinallySolo

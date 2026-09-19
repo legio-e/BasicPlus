@@ -1,0 +1,27 @@
+// #528 (19-sep) — sobrecargas con clases HOMONIMAS de modulos distintos: m(HomLib.Base) y
+// m(HomOtra.Base) son DOS sobrecargas (la clave interna cualifica la clase ajena con su modulo,
+// `LHomLib/Base;`); por nombre simple eran la misma y el consumidor no encontraba ninguna.
+module HomMid
+  import Core
+  import HomLib
+  import HomOtra
+  public class Caja
+    public function Caja()
+    end Caja
+    public function m(x: HomLib.Base): string
+      return "lib " + x.num()
+    end m
+    public function m(x: HomOtra.Base): string
+      return "otra " + x.txt()
+    end m
+    public function m(x: integer): string
+      return "int " + x
+    end m
+  end Caja
+  public function g(x: HomLib.Base): string
+    return "g lib " + x.num()
+  end g
+  public function g(x: HomOtra.Base): string
+    return "g otra " + x.txt()
+  end g
+end HomMid

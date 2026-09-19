@@ -1,0 +1,24 @@
+// #527 (19-sep) — una clase con `sync property` y SIN constructor, construida desde OTRO
+// modulo (SyncUsa): la interfaz exporta el ctor sintetico (sin args) y el consumidor lo
+// llama; antes el stub no tenia ctor, el consumidor llamaba al __init del PADRE y el
+// mutex quedaba null («INVOKE_VIRTUAL sobre null receiver»).
+module SyncLib
+  import Core
+  public class Padre
+    public property p: integer
+    public function Padre()
+      this.p := 7
+    end Padre
+  end Padre
+  public class ConSync extends Padre
+    var v: integer
+    public sync property q: integer
+      get
+        return this.v
+      endget
+      set(value)
+        this.v := value
+      endset
+    endprop
+  end ConSync
+end SyncLib

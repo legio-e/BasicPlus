@@ -1,0 +1,98 @@
+// SyncHijo.bp — #527 (19-sep): (a) una clase con `sync property` y SIN constructor
+// hereda de una con constructor: el ctor sintético del mutex tiene que llamar a
+// super() (antes ConSync.p valía 0: el __init sintético sólo creaba el mutex).
+// (b) una excepción que NACE EN UNA LLAMADA dentro de un accesor sync tiene que
+// soltar el mutex (antes sólo lo soltaba el `throw` escrito en el accesor: el
+// siguiente lock del mismo objeto decía «re-entrada»).
+module SyncHijo
+  import Core
+  public class Padre
+    public property p: integer
+    public function Padre()
+      this.p := 7
+    end Padre
+  end Padre
+  public class ConSync extends Padre
+    var v: integer
+    public sync property q: integer
+      get
+        return this.v
+      endget
+      set(value)
+        this.v := value
+      endset
+    endprop
+  end ConSync
+  public function revienta(n: integer): integer
+    if n > 5 then
+      throw RuntimeError("n=" + n)
+    endif
+    return n * 2
+  end revienta
+  public class Nervioso
+    var v: integer
+    public function Nervioso()
+      this.v := 1
+    end Nervioso
+    public sync property w: integer
+      get
+        return revienta(this.v)
+      endget
+      set(value)
+        this.v := revienta(value)
+      endset
+    endprop
+  end Nervioso
+  // (c) property sync de MODULO con `throw` escrito en el setter y `return` temprano en el
+  // getter: los dos caminos que ya soltaban el mutex tienen que seguir soltandolo UNA vez.
+  var guardado: integer := 0
+  public sync property tope: integer
+    get
+      if guardado < 0 then
+        return 0
+      endif
+      return guardado
+    endget
+    set(v)
+      if v > 100 then
+        throw RuntimeError("tope=" + v)
+      endif
+      guardado := v
+    endset
+  endprop
+  function main()
+    var c: ConSync := ConSync()
+    print "p=" + c.p
+    c.q := 3
+    print "q=" + c.q
+    var n: Nervioso := Nervioso()
+    n.w := 2
+    print "w=" + n.w
+    try
+      n.w := 9
+    catch e: RuntimeError
+      print "set: " + e.msg
+    endtry
+    print "w=" + n.w
+    n.w := 4
+    try
+      print n.w
+    catch e: RuntimeError
+      print "get: " + e.msg
+    endtry
+    n.w := 1
+    print "w=" + n.w
+    tope := 5
+    print "tope=" + tope
+    try
+      tope := 500
+    catch e: RuntimeError
+      print "set: " + e.msg
+    endtry
+    tope := -1
+    print "tope=" + tope
+    tope := 6
+    print "tope=" + tope
+    print "fin"
+  end main
+end SyncHijo

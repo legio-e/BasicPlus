@@ -1320,7 +1320,8 @@ public final class MivmEmitter {
             currentModulePropertyBacking = backing;
             if (pd.isSync) scopeStack.peek().syncModule = true;
             try {
-                if (pd.isSync) emitModuleSyncLock();
+                int guarda = -1;
+                if (pd.isSync) { emitModuleSyncLock(); guarda = abrirGuardaSync(); }
                 if (pd.getter != null) {
                     for (IStmt s : pd.getter.body) emitStmt(s);
                 } else {
@@ -1328,7 +1329,7 @@ public final class MivmEmitter {
                     w.emitGetGlobal(backing);
                     w.emitSetLocal("__result");
                 }
-                if (pd.isSync) emitModuleSyncUnlock();
+                if (pd.isSync) cerrarGuardaSync(guarda, null);   // #527 (b)
                 emitFunctionEnd();
             } finally {
                 currentModulePropertyBacking = null;
@@ -1345,9 +1346,13 @@ public final class MivmEmitter {
             currentModulePropertyBacking = backing;
             if (pd.isSync) scopeStack.peek().syncModule = true;
             try {
-                if (pd.isSync) emitModuleSyncLock();
+                int guarda = -1;
+                if (pd.isSync) { emitModuleSyncLock(); guarda = abrirGuardaSync(); }
                 if (pd.setter != null) {
-                    declareLocal(pd.setter.paramName);
+                    // #527 (de paso) — por su TIPO, como el de clase: era declareLocal (4 B) y
+                    // un setter escrito de una property string/objeto/long de módulo truncaba
+                    // el valor (hallazgo 34: con generación 0 funciona igual).
+                    declareLocalByType(pd.setter.paramName, propType, null);
                     w.emitGetParam("__val");
                     w.emitSetLocal(pd.setter.paramName);
                     for (IStmt s : pd.setter.body) emitStmt(s);
@@ -1356,7 +1361,7 @@ public final class MivmEmitter {
                     w.emitGetParam("__val");
                     w.emitSetGlobal(backing);
                 }
-                if (pd.isSync) emitModuleSyncUnlock();
+                if (pd.isSync) cerrarGuardaSync(guarda, null);   // #527 (b)
                 emitFunctionEnd();
             } finally {
                 currentModulePropertyBacking = null;
@@ -1922,11 +1927,15 @@ public final class MivmEmitter {
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
             emitSyncMutexInit(cls.name);
+            // #527 — el mismo super() implícito que un ctor escrito (lo decidió el
+            // semántico al registrar este ctor: la sobrecarga sin args del padre).
+            if (cls.constructor != null && cls.constructor.implicitSuper) emitImplicitSuperCall(cls, cls.constructor);
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
 
         // Si no había ctor registrado, registra uno sintético sin params.
         // emitConstruction llamará a Cls.__init y se inicializará __syncMutex.
+        // (#527: desde el 19-sep lo registra el semántico; esto queda de red.)
         if (cls.constructor == null) {
             FunctionSymbol synthCtor = new FunctionSymbol(cls.name, true, false, false, cls, null);
             synthCtor.isConstructor = true;
@@ -1935,6 +1944,36 @@ public final class MivmEmitter {
             // validó las llamadas (sin ctor → sin args). Sólo necesitamos
             // que findConstructor lo encuentre.
         }
+    }
+
+    /** #527 (b) — abre la GUARDA de un accesor `sync`: un handler que atrapa CUALQUIER
+     *  excepción que salga del cuerpo (nacida en una llamada, un fallo de ejecución o un
+     *  `throw`), suelta el mutex y la relanza. Antes sólo el `throw` escrito en el propio
+     *  accesor soltaba el cerrojo (emitThrowStmt) y el siguiente lock decía «re-entrada».
+     *  Devuelve la etiqueta del handler; {@link #cerrarGuardaSync} la cierra. El `return`
+     *  interno ya pasa por tryStack (TRY_END) y por el unlock de FuncScope. */
+    private int abrirGuardaSync() throws IOException {
+        int handler = w.newLabel();
+        w.emitTryBegin(handler, null);   // null = cualquier excepción
+        tryStack.push(new TryFrame(null, 1));
+        return handler;
+    }
+    /** El cierre de {@link #abrirGuardaSync}: fall-through (pop del handler, unlock, salto
+     *  al final) y el handler (guardar la excepción, unlock, relanzar). `className` null =
+     *  property de MÓDULO (mutex global). */
+    private void cerrarGuardaSync(int handler, String className) throws IOException {
+        tryStack.pop();
+        w.emitTryEnd();
+        if (className != null) emitSyncUnlock(className); else emitModuleSyncUnlock();
+        int fin = w.newLabel();
+        w.emitJump(fin);
+        w.declareLabel(handler);
+        declareLocalLong("__sync_exc");   // la excepción es una REF de 8 B (hallazgo 34)
+        w.emitSetLocal("__sync_exc");
+        if (className != null) emitSyncUnlock(className); else emitModuleSyncUnlock();
+        w.emitGetLocal("__sync_exc");
+        w.emitThrow();
+        w.declareLabel(fin);
     }
 
     /** Helpers lock/unlock contra this.__syncMutex (resuelto vía className). */
@@ -2127,7 +2166,8 @@ public final class MivmEmitter {
         currentPropertyField = pd.name.name;
         if (pd.isSync) scopeStack.peek().syncClassName = cls.name;
         try {
-            if (pd.isSync) emitSyncLock(cls.name);
+            int guarda = -1;
+            if (pd.isSync) { emitSyncLock(cls.name); guarda = abrirGuardaSync(); }
             if (pd.getter != null) {
                 for (IStmt s : pd.getter.body) emitStmt(s);
             } else {
@@ -2136,7 +2176,7 @@ public final class MivmEmitter {
                 w.emitGetField(cls.name, pd.name.name);
                 w.emitSetLocal("__result");
             }
-            if (pd.isSync) emitSyncUnlock(cls.name);
+            if (pd.isSync) cerrarGuardaSync(guarda, cls.name);   // #527 (b)
             emitFunctionEnd();
         } finally { currentPropertyField = null; scopeStack.pop(); }
 
@@ -2151,7 +2191,8 @@ public final class MivmEmitter {
         currentPropertyField = pd.name.name;
         if (pd.isSync) scopeStack.peek().syncClassName = cls.name;
         try {
-            if (pd.isSync) emitSyncLock(cls.name);
+            int guarda = -1;
+            if (pd.isSync) { emitSyncLock(cls.name); guarda = abrirGuardaSync(); }
             if (pd.setter != null) {
                 // Alias el param al nombre que el usuario escribió (BUG-6: 8 bytes si long/double).
                 declareLocalByType(pd.setter.paramName, propType, null);   // H1.8
@@ -2164,7 +2205,7 @@ public final class MivmEmitter {
                 w.emitGetParam("__val");
                 emitSetFieldAuto(cls.name, pd.name.name);
             }
-            if (pd.isSync) emitSyncUnlock(cls.name);
+            if (pd.isSync) cerrarGuardaSync(guarda, cls.name);   // #527 (b)
             emitFunctionEnd();
         } finally { currentPropertyField = null; scopeStack.pop(); }
     }
@@ -3872,13 +3913,39 @@ public final class MivmEmitter {
     }
 
     private void emitTryStmt(TryStmt s) throws IOException {
+        List<IStmt> finallyBody = (s.finallyBody != null && !s.finallyBody.isEmpty())
+                ? s.finallyBody : null;
         if (s.catches.isEmpty()) {
-            errors.add("'try' sin cláusulas catch no soportado todavía");
+            if (finallyBody == null) {   // ni catch ni finally: el cuerpo a secas
+                for (IStmt st : s.body) emitStmt(st);
+                return;
+            }
+            // #532 (19-sep) — `try … finally` SIN catch (la gramática lo admite; el emisor lo
+            // rechazaba «no soportado todavía»): la misma guarda que el rethrow de un
+            // try/catch/finally, sin handlers de por medio. Salida normal: pop + finally en
+            // línea; excepción: finally y relanzar; `return` dentro: TRY_END + finally
+            // (emitReturn, por el TryFrame).
+            int rethrow = w.newLabel(), fin = w.newLabel();
+            w.emitTryBegin(rethrow, null);
+            tryStack.push(new TryFrame(finallyBody, 1));
+            try {
+                for (IStmt st : s.body) emitStmt(st);
+            } finally {
+                tryStack.pop();
+            }
+            w.emitTryEnd();
+            for (IStmt st : finallyBody) emitStmt(st);
+            w.emitJump(fin);
+            w.declareLabel(rethrow);
+            declareLocalLong("__pending_exc");   // ref de 8 B
+            w.emitSetLocal("__pending_exc");
+            for (IStmt st : finallyBody) emitStmt(st);
+            w.emitGetLocal("__pending_exc");
+            w.emitThrow();
+            w.declareLabel(fin);
             return;
         }
         int N = s.catches.size();
-        List<IStmt> finallyBody = (s.finallyBody != null && !s.finallyBody.isEmpty())
-                ? s.finallyBody : null;
 
         int endLabel     = w.newLabel();
         int rethrowLabel = (finallyBody != null) ? w.newLabel() : -1;
@@ -3965,7 +4032,7 @@ public final class MivmEmitter {
         // === Rethrow handler compartido (sólo si hay finally) ===
         if (finallyBody != null) {
             w.declareLabel(rethrowLabel);
-            declareLocal("__pending_exc");
+            declareLocalLong("__pending_exc");   // #527 (de paso): era declareLocal (4 B) para una ref de 8 (hallazgo 34)
             w.emitSetLocal("__pending_exc");
             for (IStmt st : finallyBody) emitStmt(st);
             w.emitGetLocal("__pending_exc");
@@ -3996,12 +4063,9 @@ public final class MivmEmitter {
         // y los próximos lock's del mismo objeto petan con "re-entrada".
         // Las exceptional paths necesitan el mismo tratamiento que
         // `return`, no sólo el flujo normal de salida.
-        FuncScope scope = scopeStack.peek();
-        if (scope.syncClassName != null) {
-            emitSyncUnlock(scope.syncClassName);
-        } else if (scope.syncModule) {
-            emitModuleSyncUnlock();
-        }
+        // #527 (b) — el unlock del `throw` escrito lo hace ahora la GUARDA del accesor
+        // (abrirGuardaSync): aquí soltarlo sería un doble unlock. El `return` sigue
+        // soltándolo él (emitReturn), que no pasa por el handler.
         w.emitThrow();
     }
 

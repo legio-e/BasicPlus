@@ -905,6 +905,20 @@ public final class SemanticAnalyzer {
             err(line, col, "'" + nombre + "' es un nombre reservado del compilador (los que empiezan por `__cls_` o `__prop_`)");
     }
 
+    /** #527 — mismo criterio que el emisor (hasOwnSyncProperty / ancestorHasSyncProperty):
+     *  quién introduce el `__syncMutex` y por tanto necesita el ctor sintético. */
+    private static boolean tieneSyncPropia(ClassDef cd) {
+        for (ITopLevelDecl m : cd.members)
+            if (m instanceof PropertyDef && ((PropertyDef) m).isSync) return true;
+        return false;
+    }
+    private static boolean ancestroConSync(ClassSymbol cls) {
+        for (ClassSymbol p = cls.baseClass; p != null; p = p.baseClass)
+            for (Symbol s : p.instanceMembers.getSymbols())
+                if (s instanceof PropertySymbol && ((PropertySymbol) s).isSync) return true;
+        return false;
+    }
+
     private void declareClass(ClassDef cd) {
         if (currentClass != null) {
             err(cd.line, cd.column, "no se permiten clases anidadas");
@@ -1172,6 +1186,32 @@ public final class SemanticAnalyzer {
             }
         }
 
+        // 1.a) #527 (19-sep) — una clase con `sync property` propia y SIN constructor recibe
+        // un constructor SINTÉTICO (el emisor lo emite: crea el mutex). Se registra AQUÍ,
+        // con la cadena de bases ya resuelta, para que (1) tenga la misma regla de
+        // `super()` implícito que un constructor escrito —antes el `__init` sintético
+        // sólo creaba el mutex y `ConSync.p` valía 0—, (2) `ConSync(7)` no resuelva al
+        // ctor del PADRE, y (3) la interfaz lo exporte como lo que es (sin args): el
+        // consumidor de otro módulo llamaba al `__init` del padre y el mutex quedaba null.
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol)) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (cls.isExternal || cls.astNode == null || cls.constructor != null) continue;
+            if (!tieneSyncPropia(cls.astNode) || ancestroConSync(cls)) continue;
+            FunctionSymbol synth = new FunctionSymbol(cls.name, true, false, false, cls, null);
+            synth.isConstructor = true;
+            cls.constructor = synth;
+            ClassSymbol base = cls.baseClass;
+            FunctionSymbol baseCtor = (base != null) ? base.findConstructor() : null;
+            if (baseCtor == null) continue;
+            FunctionSymbol sinArgs = null;
+            for (FunctionSymbol c = baseCtor; c != null; c = c.nextOverload)
+                if (c.params.isEmpty()) { sinArgs = c; break; }
+            if (sinArgs != null) { synth.implicitSuper = true; synth.implicitSuperCtor = sinArgs; }
+            else err(cls.line, cls.column, "la clase '" + cls.name + "' tiene una `sync property` y ningún constructor, y el constructor de la clase base '"
+                    + base.name + "' requiere argumentos: declara un constructor que llame a 'super(...)'");
+        }
+
         // 1.b) H5.c — un miembro NO puede llamarse igual que un evento heredado
         // (ni al revés). Ver validateEventShadowing: con la cadena de bases ya
         // resuelta y antes de tocar tipos, que es cuando el nombre es lo único
@@ -1219,6 +1259,32 @@ public final class SemanticAnalyzer {
                         new String[]{"other"}, new BpType[]{AnyType.INSTANCE}));
             }
         }
+
+        // #529 (19-sep) — el TOPE de una clase CERRADA (toda su cadena en este módulo): la
+        // ranura de método de INVOKE_VIRTUAL y la de campo de GET/SET_FIELD son de 8 bits,
+        // 256 entradas. Es un límite del lenguaje y se dice AQUÍ, con la línea de la clase;
+        // antes reventaba el writer sin línea («Method slot u8 desbordado: 256»). Una clase
+        // ABIERTA (extiende a una de otro módulo) va por referencia en MOD9 (idx u16) y no
+        // lo tiene.
+        java.util.Map<String, ModuleInterface.LayoutAndNames> layouts = new java.util.HashMap<>();
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol)) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (cls.isExternal || cls.astNode == null || !cadenaLocal(cls)) continue;
+            ModuleInterface.LayoutAndNames l;
+            try { l = ModuleInterface.computeClassLayout(cls, layouts); } catch (RuntimeException e) { continue; }   // lo dirá el emisor
+            if (l.numMethods > 256)
+                err(cls.line, cls.column, "la clase '" + cls.name + "' tiene " + l.numMethods + " métodos (con los heredados y los accesores) y una clase cerrada admite 256 como máximo (la ranura de la vtable es de 8 bits)");
+            if (l.numFields > 256)
+                err(cls.line, cls.column, "la clase '" + cls.name + "' ocupa " + l.numFields + " ranuras de campos (con las heredadas; una referencia, un long o un double ocupan 2) y una clase cerrada admite 256 como máximo (la ranura de campo es de 8 bits)");
+        }
+    }
+
+    /** #529 — ¿toda la cadena de bases de `cls` vive en este módulo (clase CERRADA)? */
+    private static boolean cadenaLocal(ClassSymbol cls) {
+        for (ClassSymbol c = cls.baseClass; c != null; c = c.baseClass)
+            if (c.isExternal && !c.isBuiltin) return false;
+        return true;
     }
 
     /**
