@@ -1,92 +1,46 @@
 dbg 3
 module Wdt
-source C:\tmp\std9\src\Wdt.bp
+source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
-462 83
-473 84
-489 111
-498 112
-509 117
-518 118
-535 70
-539 71
-552 72
-564 74
-574 75
-583 76
+96 83
+108 84
+124 111
+134 112
+145 117
+155 118
+173 70
+177 71
+190 72
+202 74
+213 75
+223 76
 vars
-func Object.toString 0
+func Timer.getTimeoutMs_ 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Timer.setTimeoutMs_ 50
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Timer.getActive_ 64
+this -20 8 0 ?
+func Timer.setActive_ 79
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
+func Timer.feed 93
 this -20 8 0 ?
-func StringBuilder.length 209
+func Timer.disable 121
 this -20 8 0 ?
-func StringBuilder.__init 223
+func Timer.reenable 142
 this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Timer.getTimeoutMs_ 405
-this -20 8 0 ?
-func Timer.setTimeoutMs_ 419
-this -24 8 0 ?
-func Timer.getActive_ 432
-this -20 8 0 ?
-func Timer.setActive_ 446
-this -24 8 0 ?
-func Timer.feed 459
-this -20 8 0 ?
-func Timer.disable 486
-this -20 8 0 ?
-func Timer.reenable 506
-this -20 8 0 ?
-func Timer.__init 532
+func Timer.__init 170
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer(i) 593
+func __cls_new_Timer(i) 233
 timeoutMs -16 4 0 integer
-func __cls_init_Timer(i) 625
+func __cls_init_Timer(i) 265
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __cls_m_Timer#feed()V 641
+func __cls_m_Timer#feed()V 281
 this -20 8 0 ?
-func __cls_m_Timer#disable()V 655
+func __cls_m_Timer#disable()V 295
 this -20 8 0 ?
-func __cls_m_Timer#reenable()V 669
+func __cls_m_Timer#reenable()V 309
 this -20 8 0 ?
-func __strconcat 699
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?

@@ -1,103 +1,64 @@
 dbg 3
 module Adc
-source C:\tmp\std9\src\Adc.bp
+source C:\lenguajes\pm\bpstdlib\Adc.bp
 lines
-467 76
-478 77
-487 78
-521 80
-537 85
-557 90
-590 96
-599 97
-617 99
-620 100
-623 101
-633 102
-644 103
-652 105
-671 62
-681 63
-694 64
-707 65
-731 66
+96 76
+108 77
+117 78
+150 80
+166 85
+187 90
+221 96
+230 97
+249 99
+252 100
+255 101
+265 102
+277 103
+285 105
+304 62
+315 63
+329 64
+343 65
+365 66
 vars
-func Object.toString 0
+func Channel.getCh_ 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Channel.setCh_ 50
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Channel.getPin_ 64
+this -20 8 0 ?
+func Channel.setPin_ 79
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
-this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Channel.getCh_ 410
-this -20 8 0 ?
-func Channel.setCh_ 424
-this -24 8 0 ?
-func Channel.getPin_ 437
-this -20 8 0 ?
-func Channel.setPin_ 451
-this -24 8 0 ?
-func Channel.leer 464
+func Channel.leer 93
 this -20 8 0 ?
 raw 4 4 0 integer
-func Channel.read 534
+func Channel.read 163
 this -20 8 0 ?
-func Channel.readVolts 554
+func Channel.readVolts 184
 this -20 8 0 ?
-func Channel.readAvg 587
+func Channel.readAvg 218
 this -24 8 0 ?
 n -16 4 0 integer
 sum 4 4 0 integer
 i 8 4 0 integer
-func Channel.__init 668
+func Channel.__init 301
 this -24 8 0 ?
 ch -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Channel(i) 746
+func __cls_new_Channel(i) 380
 ch -16 4 0 integer
-func __cls_init_Channel(i) 778
+func __cls_init_Channel(i) 412
 this -24 8 0 ?
 ch -16 4 0 integer
-func __cls_m_Channel#read()i 794
+func __cls_m_Channel#read()i 428
 this -20 8 0 ?
-func __cls_m_Channel#readAvg(i)i 811
+func __cls_m_Channel#readAvg(i)i 445
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Channel#readVolts()f 830
+func __cls_m_Channel#readVolts()f 464
 this -20 8 0 ?
-func __strconcat 863
+func __strconcat 481
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

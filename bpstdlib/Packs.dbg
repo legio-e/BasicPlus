@@ -1,84 +1,45 @@
 dbg 3
 module Packs
-source C:\tmp\std9\src\Packs.bp
+source C:\lenguajes\pm\bpstdlib\Packs.bp
 lines
-434 51
-440 52
-446 53
-456 54
-470 55
-479 57
-498 63
-504 64
-510 65
-520 66
-538 67
-546 68
-556 69
-566 70
-582 71
-599 73
-615 76
-624 78
-643 85
-656 86
-669 88
-683 89
+43 51
+49 52
+55 53
+65 54
+79 55
+88 57
+107 63
+113 64
+119 65
+129 66
+147 67
+155 68
+165 69
+175 70
+191 71
+208 73
+224 76
+233 78
+252 85
+265 86
+278 88
+291 89
 vars
-func Object.toString 0
-this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
-this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
-this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
-this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func list 431
+func list 40
 l 8 8 0 ?
 c 16 4 0 integer
-func listIn 495
+func listIn 104
 pack -28 8 0 string
 ext -20 8 0 string
 l 8 8 0 ?
 p 16 4 0 integer
 e 20 4 0 integer
 f 24 8 0 string
-func acaba 640
+func acaba 249
 f -28 8 0 string
 ext -20 8 0 string
 suf 4 8 0 string
-func __strconcat 717
+func __strconcat 325
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

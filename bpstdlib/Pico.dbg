@@ -1,83 +1,37 @@
 dbg 3
 module Pico
-source C:\tmp\std9\src\Pico.bp
+source C:\lenguajes\pm\bpstdlib\Pico.bp
 lines
-429 20
-448 24
-467 28
-486 32
-505 36
-522 40
-539 44
-556 48
-573 52
-592 56
-605 60
-622 64
-641 68
-658 72
-677 76
-694 80
-711 84
-730 88
-749 92
-766 96
-783 100
-800 104
-817 108
-834 112
+43 20
+62 24
+81 28
+100 32
+119 36
+136 40
+153 44
+170 48
+187 52
+206 56
+219 60
+236 64
+255 68
+272 72
+291 76
+308 80
+325 84
+344 88
+363 92
+380 96
+397 100
+414 104
+431 108
+448 112
 vars
-func Object.toString 0
-this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
-this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
-this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
-this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func setMark 589
+func setMark 203
 code -16 4 0 integer
-func markAt 619
+func markAt 233
 i -16 4 0 integer
-func setCpuFreqMHz 708
+func setCpuFreqMHz 322
 mhz -16 4 0 integer
-func setCpuFreqMHzRaw 727
+func setCpuFreqMHzRaw 341
 mhz -16 4 0 integer
-func __strconcat 848
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?

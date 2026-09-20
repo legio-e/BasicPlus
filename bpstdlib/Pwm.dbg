@@ -1,109 +1,70 @@
 dbg 3
 module Pwm
-source C:\tmp\std9\src\Pwm.bp
+source C:\lenguajes\pm\bpstdlib\Pwm.bp
 lines
-521 96
-531 97
-556 104
-566 105
-585 111
-602 116
-619 83
-629 84
-639 85
-648 86
-663 87
-676 88
-700 89
+154 96
+165 97
+192 104
+203 105
+223 111
+241 116
+259 83
+270 84
+281 85
+291 86
+307 87
+321 88
+343 89
 vars
-func Object.toString 0
+func Slice.getPin 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Slice.setPin 50
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Slice.getId 64
+this -20 8 0 ?
+func Slice.setId 79
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
+func Slice.getFreqHz 93
 this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
+func Slice.setFreqHz 108
 this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
+func Slice.getDutyPct 122
 this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Slice.getPin 410
-this -20 8 0 ?
-func Slice.setPin 424
+func Slice.setDutyPct 137
 this -24 8 0 ?
-func Slice.getId 437
-this -20 8 0 ?
-func Slice.setId 451
-this -24 8 0 ?
-func Slice.getFreqHz 464
-this -20 8 0 ?
-func Slice.setFreqHz 478
-this -24 8 0 ?
-func Slice.getDutyPct 491
-this -20 8 0 ?
-func Slice.setDutyPct 505
-this -24 8 0 ?
-func Slice.setDuty 518
+func Slice.setDuty 151
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func Slice.setFreq 553
+func Slice.setFreq 189
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func Slice.start 582
+func Slice.start 220
 this -20 8 0 ?
-func Slice.stop 599
+func Slice.stop 238
 this -20 8 0 ?
-func Slice.__init 616
+func Slice.__init 256
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Slice(ii) 715
+func __cls_new_Slice(ii) 358
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice(ii) 749
+func __cls_init_Slice(ii) 392
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_m_Slice#setFreq(i)V 767
+func __cls_m_Slice#setFreq(i)V 410
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func __cls_m_Slice#setDuty(i)V 783
+func __cls_m_Slice#setDuty(i)V 426
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func __cls_m_Slice#stop()V 799
+func __cls_m_Slice#stop()V 442
 this -20 8 0 ?
-func __cls_m_Slice#start()V 813
+func __cls_m_Slice#start()V 456
 this -20 8 0 ?
-func __strconcat 843
+func __strconcat 470
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

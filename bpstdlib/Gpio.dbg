@@ -1,122 +1,83 @@
 dbg 3
 module Gpio
-source C:\tmp\std9\src\Gpio.bp
+source C:\lenguajes\pm\bpstdlib\Gpio.bp
 lines
-472 127
-490 132
-508 137
-519 138
-528 139
-545 141
-563 147
-586 152
-611 157
-636 165
-655 116
-682 117
-727 118
-739 120
-749 121
-759 122
-951 56
-966 59
-981 62
-996 65
-1011 68
-1026 71
-1041 74
+101 127
+120 132
+139 137
+151 138
+160 139
+178 141
+197 147
+221 152
+247 157
+273 165
+293 116
+320 117
+362 118
+374 120
+385 121
+396 122
+572 56
+587 59
+602 62
+617 65
+632 68
+647 71
+662 74
 vars
-func Object.toString 0
+func Pin.getNum 40
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Pin.setNum 55
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Pin.getMode 69
+this -20 8 0 ?
+func Pin.setMode 84
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
+func Pin.on 98
 this -20 8 0 ?
-func StringBuilder.length 209
+func Pin.off 117
 this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Pin.getNum 415
-this -20 8 0 ?
-func Pin.setNum 429
-this -24 8 0 ?
-func Pin.getMode 442
-this -20 8 0 ?
-func Pin.setMode 456
-this -24 8 0 ?
-func Pin.on 469
-this -20 8 0 ?
-func Pin.off 487
-this -20 8 0 ?
-func Pin.toggle 505
+func Pin.toggle 136
 this -20 8 0 ?
 v 0 4 0 integer
-func Pin.value 560
+func Pin.value 194
 this -20 8 0 ?
-func Pin.isHigh 583
+func Pin.isHigh 218
 this -20 8 0 ?
-func Pin.isLow 608
+func Pin.isLow 244
 this -20 8 0 ?
-func Pin.setPull 633
+func Pin.setPull 270
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func Pin.__init 652
+func Pin.__init 290
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
 msg 0 8 0 string
-func __cls_new_Pin(ii) 771
+func __cls_new_Pin(ii) 408
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Pin(ii) 805
+func __cls_init_Pin(ii) 442
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Pin#isLow()z 823
+func __cls_m_Pin#isLow()z 460
 this -20 8 0 ?
-func __cls_m_Pin#setPull(i)V 840
+func __cls_m_Pin#setPull(i)V 477
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func __cls_m_Pin#toggle()V 856
+func __cls_m_Pin#toggle()V 493
 this -20 8 0 ?
-func __cls_m_Pin#value()i 870
+func __cls_m_Pin#value()i 507
 this -20 8 0 ?
-func __cls_m_Pin#off()V 887
+func __cls_m_Pin#off()V 524
 this -20 8 0 ?
-func __cls_m_Pin#on()V 901
+func __cls_m_Pin#on()V 538
 this -20 8 0 ?
-func __cls_m_Pin#isHigh()z 915
+func __cls_m_Pin#isHigh()z 552
 this -20 8 0 ?
-func __strconcat 1053
+func __strconcat 674
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

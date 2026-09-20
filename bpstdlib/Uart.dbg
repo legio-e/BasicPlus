@@ -1,115 +1,76 @@
 dbg 3
 module Uart
-source C:\tmp\std9\src\Uart.bp
+source C:\lenguajes\pm\bpstdlib\Uart.bp
 lines
-597 181
-625 187
-655 193
-678 168
-688 169
-698 170
-708 171
-718 172
-728 173
-738 174
-748 175
-924 71
-949 75
-973 79
-999 83
-1018 88
-1033 91
-1048 96
-1063 99
-1078 102
-1093 107
-1112 110
-1131 113
-1150 116
-1169 119
-1188 122
-1207 125
-1226 128
+241 181
+270 187
+301 193
+325 168
+336 169
+347 170
+358 171
+369 172
+380 173
+391 174
+402 175
+562 71
+587 75
+611 79
+637 83
+656 88
+671 91
+686 96
+701 99
+716 102
+731 107
+750 110
+769 113
+788 116
+807 119
+826 122
+845 125
+864 128
 vars
-func Object.toString 0
+func Port.getId 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Port.setId 50
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Port.getTx 64
+this -20 8 0 ?
+func Port.setTx 79
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
+func Port.getRx 93
 this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
+func Port.setRx 108
 this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
+func Port.getBaudrate 122
 this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Port.getId 405
-this -20 8 0 ?
-func Port.setId 419
+func Port.setBaudrate 137
 this -24 8 0 ?
-func Port.getTx 432
+func Port.getDataBits 151
 this -20 8 0 ?
-func Port.setTx 446
+func Port.setDataBits 166
 this -24 8 0 ?
-func Port.getRx 459
+func Port.getStopBits 180
 this -20 8 0 ?
-func Port.setRx 473
+func Port.setStopBits 195
 this -24 8 0 ?
-func Port.getBaudrate 486
+func Port.getParity 209
 this -20 8 0 ?
-func Port.setBaudrate 500
+func Port.setParity 224
 this -24 8 0 ?
-func Port.getDataBits 513
-this -20 8 0 ?
-func Port.setDataBits 527
-this -24 8 0 ?
-func Port.getStopBits 540
-this -20 8 0 ?
-func Port.setStopBits 554
-this -24 8 0 ?
-func Port.getParity 567
-this -20 8 0 ?
-func Port.setParity 581
-this -24 8 0 ?
-func Port.write 594
+func Port.write 238
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Port.read 622
+func Port.read 267
 this -36 8 0 ?
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Port.available 652
+func Port.available 298
 this -20 8 0 ?
-func Port.__init 675
+func Port.__init 322
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -118,7 +79,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_new_Port(iiiiiii) 770
+func __cls_new_Port(iiiiiii) 424
 id -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -126,7 +87,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_init_Port(iiiiiii) 814
+func __cls_init_Port(iiiiiii) 468
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -135,18 +96,18 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_m_Port#read([iii)i 842
+func __cls_m_Port#read([iii)i 496
 this -36 8 0 ?
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Port#available()i 866
+func __cls_m_Port#available()i 520
 this -20 8 0 ?
-func __cls_m_Port#write([ii)i 883
+func __cls_m_Port#write([ii)i 537
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func init 921
+func init 559
 bus -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -154,21 +115,14 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func write 946
+func write 584
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 970
+func read 608
 bus -32 4 0 integer
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func available 996
+func available 634
 bus -16 4 0 integer
-func __strconcat 1242
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?

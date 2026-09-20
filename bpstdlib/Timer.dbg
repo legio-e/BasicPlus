@@ -1,100 +1,54 @@
 dbg 3
 module Timer
-source C:\tmp\std9\src\Timer.bp
+source C:\lenguajes\pm\bpstdlib\Timer.bp
 lines
-462 75
-467 76
-481 77
-494 78
-508 79
-536 82
-549 84
-564 93
-576 94
-585 95
-597 97
-621 104
-645 110
-676 64
-686 65
+96 75
+101 76
+116 77
+130 78
+145 79
+176 82
+189 84
+204 93
+217 94
+226 95
+238 97
+264 104
+290 110
+323 64
+334 65
 vars
-func Object.toString 0
+func Alarm.getPeriodMs_ 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Alarm.setPeriodMs_ 50
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Alarm.getNextFire_ 64
+this -20 8 0 ?
+func Alarm.setNextFire_ 79
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
-this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Alarm.getPeriodMs_ 405
-this -20 8 0 ?
-func Alarm.setPeriodMs_ 419
-this -24 8 0 ?
-func Alarm.getNextFire_ 432
-this -20 8 0 ?
-func Alarm.setNextFire_ 446
-this -24 8 0 ?
-func Alarm.check 459
+func Alarm.check 93
 this -20 8 0 ?
 cur 4 4 0 integer
-func Alarm.wait 561
+func Alarm.wait 201
 this -20 8 0 ?
 rem 0 4 0 integer
-func Alarm.reset 618
+func Alarm.reset 261
 this -20 8 0 ?
-func Alarm.since 642
+func Alarm.since 287
 this -20 8 0 ?
-func Alarm.__init 673
+func Alarm.__init 320
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_new_Alarm(i) 703
+func __cls_new_Alarm(i) 352
 periodMs -16 4 0 integer
-func __cls_init_Alarm(i) 735
+func __cls_init_Alarm(i) 384
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_m_Alarm#wait()V 751
+func __cls_m_Alarm#wait()V 400
 this -20 8 0 ?
-func __cls_m_Alarm#reset()V 765
+func __cls_m_Alarm#reset()V 414
 this -20 8 0 ?
-func __cls_m_Alarm#check()z 779
+func __cls_m_Alarm#check()z 428
 this -20 8 0 ?
-func __cls_m_Alarm#since()i 796
+func __cls_m_Alarm#since()i 445
 this -20 8 0 ?
-func __strconcat 829
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?

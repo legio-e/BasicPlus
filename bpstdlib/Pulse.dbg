@@ -1,101 +1,62 @@
 dbg 3
 module Pulse
-source C:\tmp\std9\src\Pulse.bp
+source C:\lenguajes\pm\bpstdlib\Pulse.bp
 lines
-494 110
-511 116
-528 123
-551 128
-568 98
-578 99
-588 100
-603 101
-616 102
-640 103
-785 63
-800 66
-815 69
+125 110
+143 116
+161 123
+185 128
+203 98
+214 99
+225 100
+241 101
+255 102
+277 103
+406 63
+421 66
+436 69
 vars
-func Object.toString 0
+func Counter.getPin 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
+func Counter.setPin 50
 this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
+func Counter.getEdgeKind 64
+this -20 8 0 ?
+func Counter.setEdgeKind 79
 this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
+func Counter.getId 93
 this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
+func Counter.setId 108
 this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
+func Counter.start 122
 this -20 8 0 ?
-func Mutex.unlock 347
+func Counter.stop 140
 this -20 8 0 ?
-func Mutex.__init 361
+func Counter.value 158
 this -20 8 0 ?
-func Counter.getPin 410
+func Counter.reset 182
 this -20 8 0 ?
-func Counter.setPin 424
-this -24 8 0 ?
-func Counter.getEdgeKind 437
-this -20 8 0 ?
-func Counter.setEdgeKind 451
-this -24 8 0 ?
-func Counter.getId 464
-this -20 8 0 ?
-func Counter.setId 478
-this -24 8 0 ?
-func Counter.start 491
-this -20 8 0 ?
-func Counter.stop 508
-this -20 8 0 ?
-func Counter.value 525
-this -20 8 0 ?
-func Counter.reset 548
-this -20 8 0 ?
-func Counter.__init 565
+func Counter.__init 200
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Counter(ii) 655
+func __cls_new_Counter(ii) 292
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter(ii) 689
+func __cls_init_Counter(ii) 326
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_m_Counter#stop()V 707
+func __cls_m_Counter#stop()V 344
 this -20 8 0 ?
-func __cls_m_Counter#start()V 721
+func __cls_m_Counter#start()V 358
 this -20 8 0 ?
-func __cls_m_Counter#reset()V 735
+func __cls_m_Counter#reset()V 372
 this -20 8 0 ?
-func __cls_m_Counter#value()i 749
+func __cls_m_Counter#value()i 386
 this -20 8 0 ?
-func __strconcat 827
+func __strconcat 448
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

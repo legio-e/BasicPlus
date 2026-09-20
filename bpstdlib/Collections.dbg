@@ -1,276 +1,237 @@
 dbg 3
 module Collections
-source C:\tmp\std9\src\Collections.bp
+source C:\lenguajes\pm\bpstdlib\Collections.bp
 lines
-418 34
-506 44
-517 45
-528 46
-551 41
-634 60
-645 61
-669 57
-752 106
-763 107
-774 108
-791 112
-802 113
-813 114
-824 115
-843 119
-854 120
-867 121
-884 125
-895 126
-903 127
-914 128
-930 132
-941 133
-951 134
-968 139
-979 140
-984 141
-992 142
-1001 143
-1014 144
-1031 146
-1042 147
-1061 154
-1071 155
-1082 156
-1088 157
-1100 159
-1119 97
-1127 98
-1330 194
-1340 195
-1349 196
-1357 200
-1360 201
-1370 202
-1378 203
-1386 205
-1405 212
-1417 213
-1438 189
-1446 190
-1539 237
-1549 238
-1557 239
-1567 240
-1586 246
-1589 247
-1602 248
-1612 249
-1621 250
-1635 251
-1651 252
-1660 253
-1674 255
-1683 256
-1694 258
-1702 261
-1721 266
-1735 267
-1749 268
-1762 269
-1772 270
-1798 271
-1824 272
-1832 274
-1848 275
-1870 280
-1880 281
-1891 282
-1901 283
-1917 288
-1927 289
-1938 290
-1947 291
-1968 293
-1987 295
-2003 300
-2013 301
-2024 302
-2029 303
-2038 304
-2057 306
-2067 307
-2086 311
-2096 312
-2109 313
-2119 314
-2135 319
-2145 320
-2156 321
-2159 322
-2168 323
-2181 324
-2194 325
-2202 327
-2212 328
-2228 340
-2238 341
-2252 342
-2262 343
-2281 347
-2291 348
-2305 349
-2315 350
-2334 228
-2342 229
-2350 230
-2374 231
-2627 364
-2662 369
+43 34
+131 44
+142 45
+153 46
+176 41
+259 60
+270 61
+294 57
+377 106
+389 107
+400 108
+418 112
+430 113
+441 114
+453 115
+472 119
+484 120
+497 121
+515 125
+527 126
+535 127
+547 128
+563 132
+575 133
+585 134
+603 139
+615 140
+620 141
+628 142
+637 143
+650 144
+667 146
+679 147
+698 154
+708 155
+719 156
+725 157
+737 159
+756 97
+764 98
+951 194
+961 195
+970 196
+978 200
+981 201
+991 202
+999 203
+1007 205
+1026 212
+1038 213
+1059 189
+1067 190
+1160 237
+1172 238
+1181 239
+1193 240
+1212 246
+1215 247
+1229 248
+1239 249
+1248 250
+1263 251
+1281 252
+1290 253
+1304 255
+1313 256
+1324 258
+1332 261
+1351 266
+1366 267
+1381 268
+1395 269
+1405 270
+1433 271
+1461 272
+1469 274
+1486 275
+1509 280
+1521 281
+1533 282
+1545 283
+1561 288
+1573 289
+1585 290
+1594 291
+1616 293
+1636 295
+1654 300
+1666 301
+1678 302
+1683 303
+1692 304
+1712 306
+1724 307
+1743 311
+1755 312
+1769 313
+1781 314
+1797 319
+1809 320
+1821 321
+1824 322
+1833 323
+1847 324
+1861 325
+1869 327
+1881 328
+1897 340
+1909 341
+1924 342
+1936 343
+1955 347
+1967 348
+1982 349
+1994 350
+2013 228
+2022 229
+2031 230
+2056 231
+2278 364
+2313 369
 vars
-func Object.toString 0
-this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
-this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
-this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
-this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Comparator.compare 415
+func Comparator.compare 40
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
-func Comparator.__init 430
+func Comparator.__init 55
 this -20 8 0 ?
-func __cls_init_Comparator() 466
+func __cls_init_Comparator() 91
 this -20 8 0 ?
-func __cls_m_Comparator#compare(LObject;LObject;)i 480
+func __cls_m_Comparator#compare(LObject;LObject;)i 105
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
-func StringComparator.compare 503
+func StringComparator.compare 128
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 sa 4 8 0 string
 sb 12 8 0 string
-func StringComparator.__init 548
+func StringComparator.__init 173
 this -20 8 0 ?
-func __cls_init_StringComparator() 594
+func __cls_init_StringComparator() 219
 this -20 8 0 ?
-func __cls_m_StringComparator#compare(LObject;LObject;)i 608
+func __cls_m_StringComparator#compare(LObject;LObject;)i 233
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
-func NaturalComparator.compare 631
+func NaturalComparator.compare 256
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
 ca 4 8 0 ?
-func NaturalComparator.__init 666
+func NaturalComparator.__init 291
 this -20 8 0 ?
-func __cls_init_NaturalComparator() 712
+func __cls_init_NaturalComparator() 337
 this -20 8 0 ?
-func __cls_m_NaturalComparator#compare(LObject;LObject;)i 726
+func __cls_m_NaturalComparator#compare(LObject;LObject;)i 351
 this -36 8 0 ?
 a -28 8 0 ref
 b -20 8 0 ref
-func SyncList.add 749
+func SyncList.add 374
 this -28 8 0 ?
 o -20 8 0 ref
-func SyncList.get 788
+func SyncList.get 415
 this -24 8 0 ?
 idx -16 4 0 integer
 r 12 8 0 ?
-func SyncList.set 840
+func SyncList.set 469
 this -32 8 0 ?
 idx -24 4 0 integer
 o -20 8 0 ref
-func SyncList.length 881
+func SyncList.length 512
 this -20 8 0 ?
 n 8 4 0 integer
-func SyncList.remove 927
+func SyncList.remove 560
 this -24 8 0 ?
 idx -16 4 0 integer
-func SyncList.pop 965
+func SyncList.pop 600
 this -20 8 0 ?
 r 12 8 0 ?
 n 20 4 0 integer
-func SyncList.popBlocking 1058
+func SyncList.popBlocking 695
 this -20 8 0 ?
 r 8 8 0 ?
-func SyncList.__init 1116
+func SyncList.__init 753
 this -20 8 0 ?
-func __cls_init_SyncList() 1185
+func __cls_init_SyncList() 806
 this -20 8 0 ?
-func __cls_m_SyncList#add(LObject;)V 1199
+func __cls_m_SyncList#add(LObject;)V 820
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_SyncList#pop()LObject; 1216
+func __cls_m_SyncList#pop()LObject; 837
 this -20 8 0 ?
-func __cls_m_SyncList#popBlocking()LObject; 1235
+func __cls_m_SyncList#popBlocking()LObject; 856
 this -20 8 0 ?
-func __cls_m_SyncList#set(iLObject;)V 1254
+func __cls_m_SyncList#set(iLObject;)V 875
 this -32 8 0 ?
 idx -24 4 0 integer
 o -20 8 0 ref
-func __cls_m_SyncList#get(i)LObject; 1273
+func __cls_m_SyncList#get(i)LObject; 894
 this -24 8 0 ?
 idx -16 4 0 integer
-func __cls_m_SyncList#length()i 1294
+func __cls_m_SyncList#length()i 915
 this -20 8 0 ?
-func __cls_m_SyncList#remove(i)V 1311
+func __cls_m_SyncList#remove(i)V 932
 this -24 8 0 ?
 idx -16 4 0 integer
-func OwnerList.grow 1327
+func OwnerList.grow 948
 this -20 8 0 ?
 viejo 0 8 0 ?
 n 8 4 0 integer
 i 16 4 0 integer
-func OwnerList.removeAndFree 1402
+func OwnerList.removeAndFree 1023
 this -24 8 0 ?
 idx -16 4 0 integer
 muerto 0 8 0 ?
-func OwnerList.__init 1435
+func OwnerList.__init 1056
 this -20 8 0 ?
-func __cls_init_OwnerList() 1492
+func __cls_init_OwnerList() 1113
 this -20 8 0 ?
-func __cls_m_OwnerList#grow()V 1506
+func __cls_m_OwnerList#grow()V 1127
 this -20 8 0 ?
-func __cls_m_OwnerList#removeAndFree(i)V 1520
+func __cls_m_OwnerList#removeAndFree(i)V 1141
 this -24 8 0 ?
 idx -16 4 0 integer
-func Map.withComparator 1536
+func Map.withComparator 1157
 this -28 8 0 ?
 c -20 8 0 ref
-func Map.bsearch 1583
+func Map.bsearch 1209
 this -28 8 0 ?
 key -20 8 0 ref
 lo 4 4 0 integer
@@ -278,74 +239,67 @@ hi 8 4 0 integer
 mid 12 4 0 integer
 midKey 16 8 0 ?
 c 24 4 0 integer
-func Map.insertAt 1718
+func Map.insertAt 1348
 this -40 8 0 ?
 ip -32 4 0 integer
 key -28 8 0 ref
 val -20 8 0 ref
 i 4 4 0 integer
-func Map.size 1867
+func Map.size 1506
 this -20 8 0 ?
 n 8 4 0 integer
-func Map.put 1914
+func Map.put 1558
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
 idx 4 4 0 integer
-func Map.get 2000
+func Map.get 1651
 this -28 8 0 ?
 key -20 8 0 ref
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 2083
+func Map.containsKey 1740
 this -28 8 0 ?
 key -20 8 0 ref
 found 8 4 0 boolean
-func Map.remove 2132
+func Map.remove 1794
 this -28 8 0 ?
 key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 2225
+func Map.keyAt 1894
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 2278
+func Map.valueAt 1952
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 2331
+func Map.__init 2010
 this -20 8 0 ?
-func __cls_init_Map() 2431
+func __cls_init_Map() 2098
 this -20 8 0 ?
-func __cls_m_Map#keyAt(i)LObject; 2445
+func __cls_m_Map#keyAt(i)LObject; 2112
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Map#containsKey(LObject;)z 2466
+func __cls_m_Map#containsKey(LObject;)z 2133
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#valueAt(i)LObject; 2486
+func __cls_m_Map#valueAt(i)LObject; 2153
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Map#withComparator(LCollections/Comparator;)LCollections/Map; 2507
+func __cls_m_Map#withComparator(LCollections/Comparator;)LCollections/Map; 2174
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Map#put(LObject;LObject;)V 2529
+func __cls_m_Map#put(LObject;LObject;)V 2196
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
-func __cls_m_Map#remove(LObject;)z 2549
+func __cls_m_Map#remove(LObject;)z 2216
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#size()i 2569
+func __cls_m_Map#size()i 2236
 this -20 8 0 ?
-func __cls_m_Map#get(LObject;)LObject; 2586
+func __cls_m_Map#get(LObject;)LObject; 2253
 this -28 8 0 ?
 key -20 8 0 ref
-func __strconcat 2716
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?

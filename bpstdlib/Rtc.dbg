@@ -1,67 +1,21 @@
 dbg 3
 module Rtc
-source C:\tmp\std9\src\Rtc.bp
+source C:\lenguajes\pm\bpstdlib\Rtc.bp
 lines
-408 67
-425 73
+38 67
+55 73
 vars
-func Object.toString 0
+func Clock.epochSec 35
 this -20 8 0 ?
-func Object.compareTo 24
-this -28 8 0 ?
-other -20 8 0 ?
-func StringBuilder.appendChar 38
-this -24 8 0 ?
-c -16 4 0 ?
-func StringBuilder.appendStr 115
-this -28 8 0 ?
-s -20 8 0 string
-i 0 4 0 ?
-n 4 4 0 ?
-func StringBuilder.appendInt 166
-this -24 8 0 ?
-n -16 4 0 ?
-func StringBuilder.toString 185
-this -20 8 0 ?
-func StringBuilder.length 209
-this -20 8 0 ?
-func StringBuilder.__init 223
-this -20 8 0 ?
-func Thread.run 256
-this -20 8 0 ?
-func Thread.start 262
-this -20 8 0 ?
-func Thread.join 276
-this -20 8 0 ?
-func Thread.toString 290
-this -20 8 0 ?
-func Thread.__init 314
-this -24 8 0 ?
-stackSize -16 4 0 ?
-func Mutex.lock 333
-this -20 8 0 ?
-func Mutex.unlock 347
-this -20 8 0 ?
-func Mutex.__init 361
-this -20 8 0 ?
-func Clock.epochSec 405
-this -20 8 0 ?
-func Clock.setEpochSec 422
+func Clock.setEpochSec 52
 this -24 8 0 ?
 sec -16 4 0 integer
-func Clock.__init 435
+func Clock.__init 65
 this -20 8 0 ?
-func __cls_init_Clock() 471
+func __cls_init_Clock() 101
 this -20 8 0 ?
-func __cls_m_Clock#epochSec()i 485
+func __cls_m_Clock#epochSec()i 115
 this -20 8 0 ?
-func __cls_m_Clock#setEpochSec(i)V 502
+func __cls_m_Clock#setEpochSec(i)V 132
 this -24 8 0 ?
 sec -16 4 0 integer
-func __strconcat 534
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?
