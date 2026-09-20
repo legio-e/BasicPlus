@@ -111,6 +111,10 @@ compilador sabe (lo propio): `TopeClase` pasa a 257 métodos propios. Manual §9
 Core cambiada, clases abiertas contra `Core.Object`) NO enlazan allí hasta la cascada (P5). Y el coste de carga en
 la Pico de «todas las clases abiertas» no está medido: se mide en P5 con una app grande (Gui).
 
+**P5, primer tramo (16:00)**: blobs de las tres familias regenerados (`regen_all_mods.sh`) con la stdlib de P3 y
+el firmware de la Pico compilado (`bpvm_pico.uf2`, 657 KB; sin grabar). Faltan: las cinco imágenes ESP32/STM32,
+el pack de la stdlib (`packs/Stdlib.pack`), `bpdevices/*.mod`, y grabar/verificar en placa cuando Eduardo diga.
+
 **Orden para retomar**: P4 (¿los primitivos como declaraciones de la raíz? decidir con P3 hecho: hoy es un `switch`
 en `resolveType` y no parece que compense), P5 (la cascada: stdlib ya rehecha; blobs con `regen_all_mods.sh`, las
 seis imágenes, packs; placas cuando Eduardo diga), y los extras de la fila H1 (destructor `~Clase()`, `Map`, `#396`
