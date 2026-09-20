@@ -1411,6 +1411,15 @@ Counter.bump()</code></pre>
   Sus <em>tipos</em> (<code>Exception</code>, <code>Integer</code>…) sí se importan: «si se usa un
   tipo de Core, se importa Core».
 </p>
+<p>
+  Una intrínseca es una función normal, y <strong>se sobrecarga</strong> como cualquier otra:
+  <code>Math.sign(x: integer)</code> y <code>Math.sign(x: float)</code> son dos funciones con el
+  mismo nombre (hasta V7 la segunda se llamaba <code>signF</code>), y <code>len</code> son dos
+  sobrecargas de la raíz — <code>len(s: string)</code> y <code>len(a: any[])</code> — en vez de un
+  caso especial del compilador. <code>any[]</code> («un array de lo que sea», cualquier
+  <code>T[]</code> encaja) sólo puede escribirse en <code>Core</code>, como <code>any</code>. Sobre
+  una clase no hay azúcar: la longitud de una <code>List</code> es <code>lista.length()</code>.
+</p>
 
 <h3 id="library">10.1 <code>library</code> opcional</h3>
 <pre><code><span class="kw">library</span> <span class="str">"com.example.app"</span>

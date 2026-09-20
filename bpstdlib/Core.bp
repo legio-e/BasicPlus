@@ -1302,4 +1302,15 @@ module Core
     inline NEWARRAY_I64
   end newDoubleArray
 
+  // len(x) — H1 P2c (20-sep): hasta V7 era un caso especial del compilador («dirigido por
+  // tipo»); ahora son dos sobrecargas normales de la raíz. `any[]` es «un array de lo que
+  // sea» (sólo la raíz puede escribirlo): la VM mide cualquier array con el mismo opcode.
+  // Sobre una clase con size()/length() ya no hay azúcar: se llama al método.
+  public function len(s: string): integer   // alias de strlen
+    inline CALL_BUILTIN 0
+  end len
+  public function len(a: any[]): integer   // opcode, no builtin
+    inline ALEN
+  end len
+
 end Core

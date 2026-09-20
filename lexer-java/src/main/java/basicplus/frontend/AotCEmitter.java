@@ -2286,10 +2286,9 @@ public final class AotCEmitter {
             case "newByteArray":   return newArrayBuiltin(name, args, "i8");
             case "newLongArray":   return newArrayBuiltin(name, args, "i64");
             case "newDoubleArray": return newArrayBuiltin(name, args, "i64");   /* 8 B opacos */
-            /* `len(x)` es POLIMORFICO en BP (array, string, o clase con
-             * length()/size()), asi que aqui se decide por el TIPO del
-             * argumento — no por el nombre. Las clases se rechazan: eso es una
-             * llamada a metodo y va por su camino, no por un helper. */
+            /* `len(x)` son dos sobrecargas de la raiz (H1 P2c, 20-sep: `len(s: string)`
+             * y `len(a: any[])`, en Core.bp); aqui se decide por el TIPO del argumento,
+             * que es lo que el semantico ya resolvio. */
             case "len": {
                 requireArgc(name, args, 1);
                 Ast.IExpr x = args.get(0);
@@ -2305,8 +2304,7 @@ public final class AotCEmitter {
                     return true;
                 }
                 throw new UnsupportedAotException(
-                    "AOT: len() en native soporta arrays y strings; sobre una clase "
-                    + "es una llamada a su length()/size() y esa va por su camino "
+                    "AOT: len() en native soporta arrays y strings "
                     + "(line " + ((Ast.Node) x).line + ").");
             }
             default:

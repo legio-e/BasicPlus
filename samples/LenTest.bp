@@ -26,7 +26,7 @@ module LenTest
     var lst: List := List()
     lst.add("uno")
     lst.add("dos")
-    print "len list =", len(lst)
+    print "len list =", lst.length()   // H1 P2c: sobre una clase, su método
   end Main
 
 end LenTest

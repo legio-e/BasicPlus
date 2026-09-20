@@ -301,7 +301,10 @@ public abstract class BpType {
         public boolean isAssignableFrom(BpType source) {
             if (source instanceof ErrorType) return true;
             if (source instanceof NullType)  return true;
-            if (source instanceof ArrayType) return element.sameAs(((ArrayType) source).element);
+            if (source instanceof ArrayType) {
+                if (element instanceof AnyType) return true;   // H1 P2c (20-sep): `any[]` (sólo la raíz lo escribe) es «un array de lo que sea»
+                return element.sameAs(((ArrayType) source).element);
+            }
             return false;
         }
     }
