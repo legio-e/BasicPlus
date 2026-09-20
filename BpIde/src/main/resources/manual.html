@@ -205,6 +205,7 @@
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
 
     <li class="group"><a href="#modulos">10. Módulos</a></li>
+    <li class="sub"><a href="#raiz">10.0 El módulo raíz: Core</a></li>
     <li class="sub"><a href="#library">10.1 library</a></li>
     <li class="sub"><a href="#main">10.2 main / initializer</a></li>
     <li class="sub"><a href="#imports">10.3 import / from</a></li>
@@ -1398,6 +1399,18 @@ Counter.bump()</code></pre>
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="modulos">10. Módulos</h2>
+<h3 id="raiz">10.0 El módulo raíz: <code>Core</code></h3>
+<p>
+  <code>Core</code> es el módulo del sistema (la unidad <code>System</code> de Turbo Pascal), escrito en
+  BasicPlus y compilado como <strong>raíz</strong>: sus funciones públicas se ven <em>sin cualificar</em>
+  en todo programa, importe <code>Core</code> o no — <code>strlen</code>, <code>abs</code>,
+  <code>parseInt</code>, <code>now</code>, <code>newIntArray</code>… Están declaradas en
+  <code>bpstdlib/Core.bp</code>, una por línea, como funciones con cuerpo <code>inline</code>
+  (<a href="#inline">§8.3b</a>), y ese fichero es la única fuente de la tabla de primitivas de las
+  dos máquinas virtuales: <code>Builtin.java</code> y <code>builtin_ids.h</code> se generan de él.
+  Sus <em>tipos</em> (<code>Exception</code>, <code>Integer</code>…) sí se importan: «si se usa un
+  tipo de Core, se importa Core».
+</p>
 
 <h3 id="library">10.1 <code>library</code> opcional</h3>
 <pre><code><span class="kw">library</span> <span class="str">"com.example.app"</span>

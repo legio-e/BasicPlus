@@ -85,11 +85,24 @@ llevan los viejos → un programa compilado hoy que importe uno de esos 20 no en
 ErroresTest`) usaba la `intrinsic` sin registro como «error del emisor»; el caso que queda a mano es `c.m := 5`
 (asignar a un método), que el semántico debería rechazar con línea y hoy no.
 
+**P2, el mismo domingo (mediodía).** `Core.bp` es la raíz: la sección «LAS PRIMITIVAS DE LA VM» (240 funciones,
+una por id, con su firma y su bytecode; generada UNA vez de lo que había con `scripts/gen_core_raiz.py`), las 64
+globales (`strlen`, `abs`, `parseInt`, `newIntArray`, las `__` del compilador…) `public` y visibles sin cualificar en
+todo programa (`Main.cargarRaiz` lee Core.mod como un import y las mete en el scope global; sin Core.mod, aviso
+ruidoso), las 176 restantes privadas: sólo la tabla. Fuera los 65 `addBuiltin` (quedan 4: `byte()`/`int8()`/`word()`/
+`int16()`, palabras reservadas que BP no puede declarar). `scripts/gen_builtins.py --escribir` GENERA `Builtin.java` y
+`bpgenvm-c/src/builtin_ids.h` (que `builtins.c` incluye; sus notas históricas, en un `#if 0`); las 5 constantes que
+no seguían la regla, renombradas (`NP_INIT`, `GUI_IMAGE_VIEW_*`); `check_builtins.py` borrado. Core.mod: 14,3 → 19,3 KB
+(sólo interfaz); 12 `.mod` de la stdlib cambian (los sellos). Firmware de la Pico compilado (sin grabar). Manual §10.0.
+Lo que pide cuidado mañana: `any` sólo lo puede escribir la raíz (por nombre `Core`), y una `inline` privada vale
+(antes «intrinsic implica public»).
+
 El mapa está hecho (20-sep): `docs/V7_IDEAS.md` §H1 — son 240 intrínsecas en CINCO sitios a mano (los ids en
 `Builtin.java` y `builtins.c`, las firmas en 65 `addBuiltin` y en las `intrinsic` de los `.bp`, el enlace en
 162 `register` de `Intrinsics.java`), y el plan en cinco pasos (P1 el generador de las dos tablas desde `Core.bp`;
 P2 las 65 globales de `addBuiltin` a `Core.bp` como raíz (y entonces `gen_builtins.py` ESCRIBE `Builtin.java` y el enum de C); P3 `Object`/`Thread`/`Mutex`/`StringBuilder` en BP; P4 primitivos; P5 la
-cascada). P1 hecho el 20-sep; las decisiones de §H1 punto 4 tomadas (el cuerpo `inline`). Abiertas además: `#519` (H4/AOT), `#530` y `#531` (H7). En H7 esperan `#530` (Thread.run heredada
+cascada). P1 y P2 hechos el 20-sep. **Orden para retomar**: P2c (sobrecargar intrínsecas: `sign`/`signF` → `sign` ×2, y la
+idea de Eduardo con `len`) y P3 (las clases del lenguaje en BP); P2b es de H4. Abiertas además: `#519` (H4/AOT), `#530` y `#531` (H7). En H7 esperan `#530` (Thread.run heredada
 cross-module) y `#531` (orden de los eventos). Quedan escritos sin ficha: los mensajes de tipos no cualifican
 («'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no se pueden importar en el mismo
 fichero (`#528`); un inicializador de campo no puede usar `this` ni otros campos (manual §9.1).

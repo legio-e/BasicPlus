@@ -236,169 +236,19 @@ public final class SemanticAnalyzer {
         // aliasa sin cualificar). Así hay UNA clase real por VM en lugar de
         // una copia por módulo.
 
-        // input(): string
-        FunctionSymbol input = new FunctionSymbol("input", true, false, true, null, null);
-        input.returnType = PrimitiveType.STRING;
-        s.tryDefine(input);
+        // H1 P2 (20-sep) — las intrínsecas GLOBALES (`strlen`, `abs`, `parseInt`, las `__` del
+        // compilador…) ya NO se declaran aquí: viven en `bpstdlib/Core.bp` (el módulo raíz) con
+        // su firma y su bytecode (`inline …`), y `Main.cargarRaiz` las registra en este scope al
+        // arrancar cada compilación (registrarGlobalDeRaiz). Aquí quedan sólo las CLASES del
+        // lenguaje (Object, Thread, Mutex, StringBuilder…): P3.
+        // Las CUATRO excepciones: los casts estrechos `byte(i)`/`int8(i)`/`word(i)`/`int16(i)`.
+        // Son palabras reservadas del lenguaje (tipos) y BP no puede declarar una función con
+        // ese nombre, así que siguen aquí, como los casts `integer()`/`long()` (numericCastTarget).
+        addBuiltin(s, "byte",  PrimitiveType.UINT8,  new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "int8",  PrimitiveType.INT8,   new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "word",  PrimitiveType.UINT16, new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "int16", PrimitiveType.INT16,  new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
 
-        // parseInt(s: string): integer
-        FunctionSymbol pi = new FunctionSymbol("parseInt", true, false, true, null, null);
-        ParamSymbol piA = new ParamSymbol("s", 0, 0); piA.type = PrimitiveType.STRING;
-        pi.params.add(piA);
-        pi.returnType = PrimitiveType.INTEGER;
-        s.tryDefine(pi);
-
-        // parseFloat(s: string): float
-        FunctionSymbol pf = new FunctionSymbol("parseFloat", true, false, true, null, null);
-        ParamSymbol pfA = new ParamSymbol("s", 0, 0); pfA.type = PrimitiveType.STRING;
-        pf.params.add(pfA);
-        pf.returnType = PrimitiveType.FLOAT;
-        s.tryDefine(pf);
-
-        // strlen(s: string): integer
-        addBuiltin(s, "strlen", PrimitiveType.INTEGER, new String[]{"s"}, new BpType[]{PrimitiveType.STRING});
-
-        // ---- Numéricas integer ----
-        addBuiltin(s, "abs",  PrimitiveType.INTEGER, new String[]{"x"},      new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "min",  PrimitiveType.INTEGER, new String[]{"a","b"},  new BpType[]{PrimitiveType.INTEGER, PrimitiveType.INTEGER});
-        addBuiltin(s, "max",  PrimitiveType.INTEGER, new String[]{"a","b"},  new BpType[]{PrimitiveType.INTEGER, PrimitiveType.INTEGER});
-
-        // ---- Numéricas float ----
-        addBuiltin(s, "sqrt",   PrimitiveType.FLOAT, new String[]{"x"},     new BpType[]{PrimitiveType.FLOAT});
-        addBuiltin(s, "pow",    PrimitiveType.FLOAT, new String[]{"b","e"}, new BpType[]{PrimitiveType.FLOAT, PrimitiveType.FLOAT});
-        addBuiltin(s, "random", PrimitiveType.FLOAT, new String[]{},        new BpType[]{});
-
-        // ---- Conversión float → integer ----
-        addBuiltin(s, "floor", PrimitiveType.INTEGER, new String[]{"x"}, new BpType[]{PrimitiveType.FLOAT});
-        addBuiltin(s, "ceil",  PrimitiveType.INTEGER, new String[]{"x"}, new BpType[]{PrimitiveType.FLOAT});
-        addBuiltin(s, "round", PrimitiveType.INTEGER, new String[]{"x"}, new BpType[]{PrimitiveType.FLOAT});
-
-        // ---- Conversión a string ----
-        addBuiltin(s, "intToString",   PrimitiveType.STRING, new String[]{"n"}, new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "floatToString", PrimitiveType.STRING, new String[]{"x"}, new BpType[]{PrimitiveType.FLOAT});
-        addBuiltin(s, "boolToString",  PrimitiveType.STRING, new String[]{"b"}, new BpType[]{PrimitiveType.BOOLEAN});
-
-        // ---- H7 — eval("expr"): calculadora de constantes (+ - * / paréntesis,
-        //      unario). Evalúa sobre la marcha (sin AST). Devuelve FLOAT, consistente
-        //      con todo el Math (sin/cos/sqrt/exp/ln son float); calcula en double por
-        //      dentro y estrecha al final. Error de sintaxis -> NaN. ----
-        addBuiltin(s, "eval", PrimitiveType.FLOAT, new String[]{"expr"}, new BpType[]{PrimitiveType.STRING});
-
-        // ---- Strings ----
-        addBuiltin(s, "upper",  PrimitiveType.STRING,  new String[]{"s"},                  new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "lower",  PrimitiveType.STRING,  new String[]{"s"},                  new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "trim",   PrimitiveType.STRING,  new String[]{"s"},                  new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "substring",  PrimitiveType.STRING,  new String[]{"s","start","end"}, new BpType[]{PrimitiveType.STRING, PrimitiveType.INTEGER, PrimitiveType.INTEGER});
-        addBuiltin(s, "indexOf",    PrimitiveType.INTEGER, new String[]{"s","target"},      new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "startsWith", PrimitiveType.BOOLEAN, new String[]{"s","prefix"},      new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "endsWith",   PrimitiveType.BOOLEAN, new String[]{"s","suffix"},      new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "contains",   PrimitiveType.BOOLEAN, new String[]{"s","sub"},         new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "charAt",     PrimitiveType.STRING,  new String[]{"s","i"},           new BpType[]{PrimitiveType.STRING, PrimitiveType.INTEGER});
-
-        // ---- Strings extra ----
-        BpType STRING_ARRAY = new ArrayType(PrimitiveType.STRING);
-        addBuiltin(s, "split",   STRING_ARRAY,         new String[]{"s","sep"},                         new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "replace", PrimitiveType.STRING, new String[]{"s","target","replacement"},        new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING, PrimitiveType.STRING});
-
-        // ---- Matemáticas extra (float) ----
-        //   `exp` queda implícito (pareja natural con muchos usos cotidianos).
-        //   sin/cos/tan/pi/e/ln/log10 se MOVIERON a Math.mod como intrínsecos
-        //   (decisión: las matemáticas de "namespace académico" mejor con import).
-        addBuiltin(s, "exp",       PrimitiveType.FLOAT, new String[]{"x"}, new BpType[]{PrimitiveType.FLOAT});
-        addBuiltin(s, "randomInt", PrimitiveType.INTEGER, new String[]{"lo","hi"}, new BpType[]{PrimitiveType.INTEGER, PrimitiveType.INTEGER});
-
-        // ---- Tiempo ----
-        addBuiltin(s, "now",      PrimitiveType.INTEGER, new String[]{},     new BpType[]{});
-        addBuiltin(s, "sleep",    VoidType.INSTANCE,     new String[]{"ms"}, new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "sleepSec", VoidType.INSTANCE,     new String[]{"s"},  new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "sleepUs",  VoidType.INSTANCE,     new String[]{"us"}, new BpType[]{PrimitiveType.INTEGER});
-
-        // ---- Debug ----
-        addBuiltin(s, "gc",    VoidType.INSTANCE,     new String[]{},     new BpType[]{});
-
-        // ---- I/O archivos ----
-        addBuiltin(s, "readFile",   PrimitiveType.STRING,  new String[]{"path"},           new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "writeFile",  VoidType.INSTANCE,     new String[]{"path","content"}, new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "appendFile", VoidType.INSTANCE,     new String[]{"path","content"}, new BpType[]{PrimitiveType.STRING, PrimitiveType.STRING});
-        addBuiltin(s, "fileExists", PrimitiveType.BOOLEAN, new String[]{"path"},           new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "listDir",    STRING_ARRAY,          new String[]{"path"},           new BpType[]{PrimitiveType.STRING});
-
-        // ---- L10: casts de tipos estrechos ----
-        // `byte(i)`, `int8(i)`, `word(i)`, `int16(i)`: tomar un integer
-        // y devolver el tipo estrecho correspondiente. La VM hace check
-        // de rango en runtime (I32_TO_{U8,I8,U16,I16} → BpThreadFault si
-        // se sale). El SemanticAnalyzer pre-evalúa literales para
-        // dar el error en compile-time cuando es posible. `short` es
-        // alias gramatical de `int16` y se normaliza en el parser.
-        addBuiltin(s, "byte",  PrimitiveType.UINT8,
-                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "int8",  PrimitiveType.INT8,
-                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "word",  PrimitiveType.UINT16,
-                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "int16", PrimitiveType.INT16,
-                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
-
-        // ---- Arrays ----
-        // move(src, dst, srcStart, dstStart, count) → void
-        // Polimórfico: src y dst pueden ser arrays de cualquier tipo (i8/i16/i32/ref).
-        // La VM valida en runtime que ambos sean arrays del MISMO tipo de elemento.
-        // Usamos `any` para no forzar inferencia de un tipo de elemento concreto en el
-        // frontend; el chequeo estructural lo hace el runtime.
-        addBuiltin(s, "move", VoidType.INSTANCE,
-                new String[]{"src","dst","srcStart","dstStart","count"},
-                new BpType[]{AnyType.INSTANCE, AnyType.INSTANCE,
-                             PrimitiveType.INTEGER, PrimitiveType.INTEGER, PrimitiveType.INTEGER});
-
-        // ---- Soporte stdlib (List, StringBuilder). Los nombres con __ son
-        //      internal-ish: BP los puede llamar pero típicamente sólo lo
-        //      hacen las clases sintetizadas. ----
-        BpType INT_ARRAY = new ArrayType(PrimitiveType.INTEGER);
-        addBuiltin(s, "__newRefArray",  INT_ARRAY,           new String[]{"cap"},           new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "__growRefArray", INT_ARRAY,           new String[]{"old","newCap"},  new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
-        addBuiltin(s, "__growIntArray", INT_ARRAY,           new String[]{"old","newCap"},  new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
-        // Versión llamable desde user BP (sin __): aloca int array de tamaño `size`
-        // inicializado a ceros. Equivalente a __growIntArray(null, size).
-        addBuiltin(s, "newIntArray",    INT_ARRAY,           new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
-        // H1.1 (V2) — byte[] first-class: aloca un byte[] (UINT8, 1 byte/elem,
-        // zero-init). El emisor lo traduce a NEWARRAY_I8 inline (la VM ya lo
-        // implementa; sin builtin nuevo). Paralelo a newIntArray.
-        BpType BYTE_ARRAY = new ArrayType(PrimitiveType.UINT8);
-        addBuiltin(s, "newByteArray",   BYTE_ARRAY,          new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
-        // H2 (V2) — conversión string <-> byte[] (UTF-8). string y byte[] son
-        // el mismo layout TYPE_ARRAY_I8; la conversión copia los bytes a un
-        // objeto nuevo (defensiva, por la inmutabilidad del string).
-        //   toBytes(s): byte[]   — los bytes UTF-8 del string.
-        //   fromBytes(b): string — interpreta los bytes como UTF-8.
-        addBuiltin(s, "toBytes",   BYTE_ARRAY,           new String[]{"s"}, new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "fromBytes", PrimitiveType.STRING, new String[]{"b"}, new BpType[]{BYTE_ARRAY});
-        // #247 — file I/O BINARIO (byte[] crudo, sin pérdidas): lo que necesita la
-        // descompresión (un fichero comprimido es binario; readFile→string es lossy).
-        addBuiltin(s, "readFileBytes",  BYTE_ARRAY,        new String[]{"path"},        new BpType[]{PrimitiveType.STRING});
-        addBuiltin(s, "writeFileBytes", VoidType.INSTANCE, new String[]{"path","data"}, new BpType[]{PrimitiveType.STRING, BYTE_ARRAY});
-        // H3 — diagnóstico de heap (SOLO VM-Java; mide fragmentación del GC).
-        addBuiltin(s, "heapFrag",  PrimitiveType.STRING, new String[]{},      new BpType[]{});
-        addBuiltin(s, "heapMap",   PrimitiveType.STRING, new String[]{"cols"}, new BpType[]{PrimitiveType.INTEGER});
-        // H1.2 (V2) — long[]: aloca un long[] (8 bytes/elem, zero-init).
-        // El emisor lo traduce a NEWARRAY_I64 inline (la VM ya lo implementa).
-        BpType LONG_ARRAY = new ArrayType(PrimitiveType.LONG);
-        addBuiltin(s, "newLongArray",   LONG_ARRAY,          new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
-        // H1.3 (V2) — double[]: aloca un double[] (8 bytes/elem, zero-init).
-        // Reusa NEWARRAY_I64 (almacenamiento opaco de 8 bytes).
-        BpType DOUBLE_ARRAY = new ArrayType(PrimitiveType.DOUBLE);
-        addBuiltin(s, "newDoubleArray", DOUBLE_ARRAY,        new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
-        addBuiltin(s, "__charsToString", PrimitiveType.STRING, new String[]{"chars","len"},   new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
-        addBuiltin(s, "charCodeAt",     PrimitiveType.INTEGER, new String[]{"s","i"},          new BpType[]{PrimitiveType.STRING, PrimitiveType.INTEGER});
-
-        // ---- Threading ----
-        addBuiltin(s, "yield",          VoidType.INSTANCE,     new String[]{},                 new BpType[]{});
-        addBuiltin(s, "__threadStart",  VoidType.INSTANCE,     new String[]{"t"},              new BpType[]{AnyType.INSTANCE});
-        addBuiltin(s, "__threadJoin",   VoidType.INSTANCE,     new String[]{"t"},              new BpType[]{AnyType.INSTANCE});
-
-        // ---- Sync (Mutex) ----
-        addBuiltin(s, "__mutexCreate",  PrimitiveType.INTEGER, new String[]{},                 new BpType[]{});
-        addBuiltin(s, "__mutexLock",    VoidType.INSTANCE,     new String[]{"m"},              new BpType[]{AnyType.INSTANCE});
-        addBuiltin(s, "__mutexUnlock",  VoidType.INSTANCE,     new String[]{"m"},              new BpType[]{AnyType.INSTANCE});
 
         // ---- Clase RAÍZ del lenguaje: Object ----
         // La clase existía ya, pero sólo en el EMISOR: `MivmEmitter`
@@ -431,24 +281,7 @@ public final class SemanticAnalyzer {
         }
         s.tryDefine(objectCls);
 
-        /* #443 — el allocator que le faltaba a las REFERENCIAS. Hasta hoy sólo
-         * estaba `__newRefArray`, interno y MINTIENDO en su tipo (declaraba
-         * `integer[]`), así que un array de objetos no se podía crear por tamaño:
-         * o literal, o nada. Hermano público de `newIntArray`/`newLongArray`.
-         *
-         * Va AQUÍ y no con los otros builtins porque su tipo de retorno es
-         * `Object[]`, y `Object` es una CLASE de verdad desde #389 — arriba, donde
-         * se registran los demás, `objectCls` todavía no existe. (Cuando `Object`
-         * era un alias de `any` habría dado igual; ya no: el semántico distingue
-         * `any[]` de `Object[]`, y lo dijo él solo al intentarlo.) */
-        addBuiltin(s, "newObjArray", new ArrayType(new BpType.ClassType(objectCls)),
-                   new String[]{"size"}, new BpType[]{PrimitiveType.INTEGER});
-        /* Y su hermano para CRECER: sin él, una lista que se llena tendría que
-         * copiar elemento a elemento en un bucle de BP en vez de un memcpy. */
-        addBuiltin(s, "growObjArray", new ArrayType(new BpType.ClassType(objectCls)),
-                   new String[]{"old", "newCap"},
-                   new BpType[]{new ArrayType(new BpType.ClassType(objectCls)),
-                                PrimitiveType.INTEGER});
+        // H1 P2 — `newObjArray`/`growObjArray` también viven en Core.bp (alias de __newRefArray/__growRefArray).
 
         /* #450 — `List` ya NO se registra aqui: vive en BP y llega por
          * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
@@ -761,6 +594,17 @@ public final class SemanticAnalyzer {
         return (sym instanceof ClassSymbol && ((ClassSymbol) sym).isBuiltin)
                 ? (ClassSymbol) sym : null;
     }
+
+    /** H1 P2 (20-sep) — una función PÚBLICA del módulo raíz (`Core.bp`, con cuerpo `inline`) entra
+     *  en el scope global: visible sin cualificar en todo programa, como la unidad `System` de
+     *  Turbo Pascal. Idempotente (el scope es una caché por JVM). Lo llama Main.cargarRaiz. */
+    /** H1 P2 — ¿se está compilando el módulo raíz? Es `Core`, por nombre (el módulo del sistema). */
+    private boolean esRaiz() { return module != null && "Core".equals(module.name); }
+    static void registrarGlobalDeRaiz(FunctionSymbol fs) {
+        builtinScope().tryDefine(fs);
+    }
+    /** ¿Ya se registró la raíz en esta JVM? (para no volver a leer Core.mod por cada módulo) */
+    static boolean raizRegistrada() { return builtinScope().tryLookup("strlen") != null; }   // strlen: la primera de Core.bp
 
     /** ¿Es 's' un símbolo built-in (no del usuario)? */
     public static boolean isBuiltin(Symbol sym) {
@@ -1082,9 +926,10 @@ public final class SemanticAnalyzer {
         if (f.isFinal && owner == null)
             err(f.line, f.column, "'final' solo es válido en métodos de clase");
         if (f.isIntrinsic && owner != null)
-            err(f.line, f.column, "'intrinsic' sólo es válido en funciones a nivel módulo, no en métodos");
-        if (f.isIntrinsic && !f.isPublic)
-            err(f.line, f.column, "'intrinsic' implica visibilidad pública — añade 'public'");
+            err(f.line, f.column, "una función con cuerpo 'inline' sólo puede ir a nivel de módulo, no como método");
+        // H1 P2 (20-sep) — una intrínseca PRIVADA vale: en Core.bp (la raíz) las 172 que no son
+        // globales son sólo la tabla de ids de la VM (nadie las llama; no se exportan). Antes
+        // «'intrinsic' implica visibilidad pública» — con `intrinsic` sin cuerpo tenía sentido.
         // #390 — `private` sólo tiene sentido DENTRO de una clase: a nivel de
         // módulo la visibilidad ya la da `public`/nada, y ahí no hay descendientes
         // a quien proteger. Decirlo evita que alguien lo escriba esperando algo.
@@ -1577,6 +1422,7 @@ public final class SemanticAnalyzer {
             SimpleTypeRef st = (SimpleTypeRef) t;
             switch (st.name) {
                 case "integer": return PrimitiveType.INTEGER;
+                case "any":     if (esRaiz()) return AnyType.INSTANCE; break;   // H1 P2: sólo Core (la raíz) declara `any`
                 case "float":   return PrimitiveType.FLOAT;
                 case "string":  return PrimitiveType.STRING;
                 case "boolean": return PrimitiveType.BOOLEAN;

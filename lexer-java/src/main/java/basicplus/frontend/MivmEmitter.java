@@ -4525,6 +4525,17 @@ public final class MivmEmitter {
                     return;
                 }
                 // ¿Built-in del analyzer? → CALL_BUILTIN id, salvo casts L10.
+                if (fs.isIntrinsic && fs.inlineOps != null && SemanticAnalyzer.isBuiltin(fs)) {
+                    // H1 P2 (20-sep) — una global del módulo raíz: su bytecode, con los args coercidos
+                    // a los tipos de la firma (como cualquier intrínseca). Va antes de la rama de
+                    // builtins «por nombre», que se queda para lo que el semántico aún declara a mano.
+                    for (int i = 0; i < c.args.size(); i++) {
+                        emitExpr(c.args.get(i));
+                        if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                    }
+                    emitInline(fs.inlineOps);
+                    return;
+                }
                 if (SemanticAnalyzer.isBuiltin(fs)) {
                     // L10 — casts a tipos estrechos: NO son CALL_BUILTIN, son un
                     // opcode único I32_TO_{U8,I8,U16,I16} tras evaluar el arg.

@@ -558,6 +558,748 @@ module Core
     end backing
   end List
 
-
+  // ------------------------------------------------------------------------------
+  // LAS PRIMITIVAS DE LA VM (H1, 20-sep) — una función por builtin, en orden de id. El
+  // cuerpo es su bytecode (`inline CALL_BUILTIN <id>`, o el opcode directo): Builtin.java y
+  // el enum de builtins.c se GENERAN de estas líneas (scripts/gen_builtins.py), y el id es
+  // el número escrito: no se mueve. Las `public` se ven sin cualificar en todo programa
+  // (Core es el módulo raíz); las demás son sólo la tabla: cada módulo de la stdlib declara
+  // las suyas con el mismo número (Math.sin → 24). Las `__` son del compilador.
+  // ------------------------------------------------------------------------------
+  public function strlen(s: string): integer
+    inline CALL_BUILTIN 0
+  end strlen
+  public function parseInt(s: string): integer
+    inline CALL_BUILTIN 1
+  end parseInt
+  public function parseFloat(s: string): float
+    inline CALL_BUILTIN 2
+  end parseFloat
+  public function intToString(n: integer): string
+    inline CALL_BUILTIN 3
+  end intToString
+  public function floatToString(x: float): string
+    inline CALL_BUILTIN 4
+  end floatToString
+  public function boolToString(b: boolean): string
+    inline CALL_BUILTIN 5
+  end boolToString
+  public function upper(s: string): string
+    inline CALL_BUILTIN 6
+  end upper
+  public function lower(s: string): string
+    inline CALL_BUILTIN 7
+  end lower
+  public function trim(s: string): string
+    inline CALL_BUILTIN 8
+  end trim
+  public function substring(s: string, start: integer, hasta: integer): string
+    inline CALL_BUILTIN 9
+  end substring
+  public function indexOf(s: string, target: string): integer
+    inline CALL_BUILTIN 10
+  end indexOf
+  public function startsWith(s: string, prefix: string): boolean
+    inline CALL_BUILTIN 11
+  end startsWith
+  public function endsWith(s: string, suffix: string): boolean
+    inline CALL_BUILTIN 12
+  end endsWith
+  public function contains(s: string, sub: string): boolean
+    inline CALL_BUILTIN 13
+  end contains
+  public function charAt(s: string, i: integer): string
+    inline CALL_BUILTIN 14
+  end charAt
+  public function replace(s: string, target: string, replacement: string): string
+    inline CALL_BUILTIN 15
+  end replace
+  public function abs(x: integer): integer
+    inline CALL_BUILTIN 16
+  end abs
+  public function min(a: integer, b: integer): integer
+    inline CALL_BUILTIN 17
+  end min
+  public function max(a: integer, b: integer): integer
+    inline CALL_BUILTIN 18
+  end max
+  public function sqrt(x: float): float
+    inline CALL_BUILTIN 19
+  end sqrt
+  public function pow(b: float, e: float): float
+    inline CALL_BUILTIN 20
+  end pow
+  function log(x: float): float   // Math.ln
+    inline CALL_BUILTIN 21
+  end log
+  function log10(x: float): float   // Math.log10
+    inline CALL_BUILTIN 22
+  end log10
+  public function exp(x: float): float
+    inline CALL_BUILTIN 23
+  end exp
+  function sin(x: float): float   // Math.sin
+    inline CALL_BUILTIN 24
+  end sin
+  function cos(x: float): float   // Math.cos
+    inline CALL_BUILTIN 25
+  end cos
+  function tan(x: float): float   // Math.tan
+    inline CALL_BUILTIN 26
+  end tan
+  public function random(): float
+    inline CALL_BUILTIN 27
+  end random
+  public function randomInt(lo: integer, hi: integer): integer
+    inline CALL_BUILTIN 28
+  end randomInt
+  function pi(): float   // Math.pi
+    inline CALL_BUILTIN 29
+  end pi
+  function e(): float   // Math.e
+    inline CALL_BUILTIN 30
+  end e
+  public function floor(x: float): integer
+    inline CALL_BUILTIN 31
+  end floor
+  public function ceil(x: float): integer
+    inline CALL_BUILTIN 32
+  end ceil
+  public function round(x: float): integer
+    inline CALL_BUILTIN 33
+  end round
+  public function now(): integer
+    inline CALL_BUILTIN 34
+  end now
+  public function sleep(ms: integer)
+    inline CALL_BUILTIN 35
+  end sleep
+  public function split(s: string, sep: string): string[]
+    inline CALL_BUILTIN 36
+  end split
+  public function input(): string
+    inline CALL_BUILTIN 37
+  end input
+  public function readFile(path: string): string
+    inline CALL_BUILTIN 38
+  end readFile
+  public function writeFile(path: string, content: string)
+    inline CALL_BUILTIN 39
+  end writeFile
+  public function appendFile(path: string, content: string)
+    inline CALL_BUILTIN 40
+  end appendFile
+  public function fileExists(path: string): boolean
+    inline CALL_BUILTIN 41
+  end fileExists
+  public function listDir(path: string): string[]
+    inline CALL_BUILTIN 42
+  end listDir
+  public function gc()
+    inline CALL_BUILTIN 43
+  end gc
+  public function __newRefArray(cap: integer): integer[]
+    inline CALL_BUILTIN 44
+  end __newRefArray
+  public function newObjArray(size: integer): Object[]   // alias de __newRefArray
+    inline CALL_BUILTIN 44
+  end newObjArray
+  public function __growRefArray(old: integer[], newCap: integer): integer[]
+    inline CALL_BUILTIN 45
+  end __growRefArray
+  public function growObjArray(old: Object[], newCap: integer): Object[]   // alias de __growRefArray
+    inline CALL_BUILTIN 45
+  end growObjArray
+  public function __growIntArray(old: integer[], newCap: integer): integer[]
+    inline CALL_BUILTIN 46
+  end __growIntArray
+  public function __charsToString(chars: integer[], len: integer): string
+    inline CALL_BUILTIN 47
+  end __charsToString
+  public function charCodeAt(s: string, i: integer): integer
+    inline CALL_BUILTIN 48
+  end charCodeAt
+  public function __threadStart(t: any)
+    inline CALL_BUILTIN 49
+  end __threadStart
+  public function __threadJoin(t: any)
+    inline CALL_BUILTIN 50
+  end __threadJoin
+  public function yield()
+    inline CALL_BUILTIN 51
+  end yield
+  public function __mutexCreate(): integer
+    inline CALL_BUILTIN 52
+  end __mutexCreate
+  public function __mutexLock(m: any)
+    inline CALL_BUILTIN 53
+  end __mutexLock
+  public function __mutexUnlock(m: any)
+    inline CALL_BUILTIN 54
+  end __mutexUnlock
+  public function move(src: any, dst: any, srcStart: integer, dstStart: integer, count: integer)
+    inline CALL_BUILTIN 55
+  end move
+  function __sign_i(x: integer): integer   // Math.sign
+    inline CALL_BUILTIN 56
+  end __sign_i
+  function __sign_f(x: float): integer   // Math.signF
+    inline CALL_BUILTIN 57
+  end __sign_f
+  function __asin(x: float): float   // Math.asin
+    inline CALL_BUILTIN 58
+  end __asin
+  function __acos(x: float): float   // Math.acos
+    inline CALL_BUILTIN 59
+  end __acos
+  function __atan(x: float): float   // Math.atan
+    inline CALL_BUILTIN 60
+  end __atan
+  function __atan2(y: float, x: float): float   // Math.atan2
+    inline CALL_BUILTIN 61
+  end __atan2
+  function __factorial_i(n: integer): integer   // Math.factorial
+    inline CALL_BUILTIN 62
+  end __factorial_i
+  function __gamma_f(x: float): float   // Math.gamma
+    inline CALL_BUILTIN 63
+  end __gamma_f
+  function __pathJoin(a: string, b: string): string   // IO.pathJoin
+    inline CALL_BUILTIN 64
+  end __pathJoin
+  function __pathParent(p: string): string   // IO.pathParent
+    inline CALL_BUILTIN 65
+  end __pathParent
+  function __pathBasename(p: string): string   // IO.pathBasename
+    inline CALL_BUILTIN 66
+  end __pathBasename
+  function __pathExtension(p: string): string   // IO.pathExtension
+    inline CALL_BUILTIN 67
+  end __pathExtension
+  function __pathAbsolute(p: string): string   // IO.pathAbsolute
+    inline CALL_BUILTIN 68
+  end __pathAbsolute
+  function __mkdir(p: string)   // IO.mkdir
+    inline CALL_BUILTIN 69
+  end __mkdir
+  function __rmdir(p: string)   // IO.rmdir
+    inline CALL_BUILTIN 70
+  end __rmdir
+  function __removeFile(p: string)   // IO.removeFile
+    inline CALL_BUILTIN 71
+  end __removeFile
+  function __rename(src: string, dst: string)   // IO.rename
+    inline CALL_BUILTIN 72
+  end __rename
+  function __copyFile(src: string, dst: string)   // IO.copyFile
+    inline CALL_BUILTIN 73
+  end __copyFile
+  function __fileSize(p: string): integer   // IO.fileSize
+    inline CALL_BUILTIN 74
+  end __fileSize
+  function __isDirectory(p: string): boolean   // IO.isDirectory
+    inline CALL_BUILTIN 75
+  end __isDirectory
+  function __lastModified(p: string): integer   // IO.lastModified
+    inline CALL_BUILTIN 76
+  end __lastModified
+  function __prompt(spec: string): string   // IO.prompt
+    inline CALL_BUILTIN 77
+  end __prompt
+  function __gpioInit(pin: integer, mode: integer)   // Gpio.init
+    inline CALL_BUILTIN 78
+  end __gpioInit
+  function __gpioWrite(pin: integer, value: integer)   // Gpio.write
+    inline CALL_BUILTIN 79
+  end __gpioWrite
+  function __gpioRead(pin: integer): integer   // Gpio.read
+    inline CALL_BUILTIN 80
+  end __gpioRead
+  function __gpioPull(pin: integer, pullMode: integer)   // Gpio.pull
+    inline CALL_BUILTIN 81
+  end __gpioPull
+  function __i2cInit(bus: integer, sda: integer, scl: integer, baudrate: integer)   // I2c.initBus
+    inline CALL_BUILTIN 82
+  end __i2cInit
+  function __i2cWrite(bus: integer, addr: integer, data: integer[], count: integer): integer   // I2c.writeBus
+    inline CALL_BUILTIN 83
+  end __i2cWrite
+  function __i2cRead(bus: integer, addr: integer, data: integer[], count: integer): integer   // I2c.readBus
+    inline CALL_BUILTIN 84
+  end __i2cRead
+  public function newIntArray(size: integer): integer[]
+    inline CALL_BUILTIN 85
+  end newIntArray
+  function __spiInit(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)   // Spi.initBus
+    inline CALL_BUILTIN 86
+  end __spiInit
+  function __spiWrite(bus: integer, data: integer[], count: integer): integer   // Spi.writeBus
+    inline CALL_BUILTIN 87
+  end __spiWrite
+  function __spiRead(bus: integer, data: integer[], count: integer): integer   // Spi.readBus
+    inline CALL_BUILTIN 88
+  end __spiRead
+  function __spiTransfer(bus: integer, tx: integer[], rx: integer[], count: integer): integer   // Spi.transferBus
+    inline CALL_BUILTIN 89
+  end __spiTransfer
+  function __uartInit(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)   // Uart.initPort
+    inline CALL_BUILTIN 90
+  end __uartInit
+  function __uartWrite(bus: integer, data: integer[], count: integer): integer   // Uart.writePort
+    inline CALL_BUILTIN 91
+  end __uartWrite
+  function __uartRead(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer   // Uart.readPort
+    inline CALL_BUILTIN 92
+  end __uartRead
+  function __uartAvailable(bus: integer): integer   // Uart.availablePort
+    inline CALL_BUILTIN 93
+  end __uartAvailable
+  function __pulseInit(pin: integer, edgeKind: integer): integer   // Pulse.initSlice
+    inline CALL_BUILTIN 94
+  end __pulseInit
+  function __pulseStart(counterId: integer)   // Pulse.startSlice
+    inline CALL_BUILTIN 95
+  end __pulseStart
+  function __pulseStop(counterId: integer)   // Pulse.stopSlice
+    inline CALL_BUILTIN 96
+  end __pulseStop
+  function __pulseValue(counterId: integer): integer   // Pulse.readSlice
+    inline CALL_BUILTIN 97
+  end __pulseValue
+  function __pulseReset(counterId: integer)   // Pulse.resetSlice
+    inline CALL_BUILTIN 98
+  end __pulseReset
+  function __pwmInit(pin: integer, freqHz: integer): integer   // Pwm.initSlice
+    inline CALL_BUILTIN 99
+  end __pwmInit
+  function __pwmSetFreq(sliceId: integer, freqHz: integer)   // Pwm.setFreqHz
+    inline CALL_BUILTIN 100
+  end __pwmSetFreq
+  function __pwmSetDuty(sliceId: integer, pin: integer, dutyPct: integer)   // Pwm.setDutyPct
+    inline CALL_BUILTIN 101
+  end __pwmSetDuty
+  function __pwmStart(sliceId: integer)   // Pwm.startSlice
+    inline CALL_BUILTIN 102
+  end __pwmStart
+  function __pwmStop(sliceId: integer)   // Pwm.stopSlice
+    inline CALL_BUILTIN 103
+  end __pwmStop
+  function __picoUniqueId(): string   // Machine.uniqueId
+    inline CALL_BUILTIN 104
+  end __picoUniqueId
+  function __picoBoardName(): string   // Machine.getBoard
+    inline CALL_BUILTIN 105
+  end __picoBoardName
+  function __picoTempC(): float   // Machine.tempC
+    inline CALL_BUILTIN 106
+  end __picoTempC
+  function __picoCpuFreqHz(): integer   // Machine.cpuFreqHz
+    inline CALL_BUILTIN 107
+  end __picoCpuFreqHz
+  function __picoUptimeMs(): integer   // Machine.uptimeMs
+    inline CALL_BUILTIN 108
+  end __picoUptimeMs
+  public function sleepSec(s: integer)
+    inline CALL_BUILTIN 109
+  end sleepSec
+  public function sleepUs(us: integer)
+    inline CALL_BUILTIN 110
+  end sleepUs
+  function __picoSetCpuFreqMHz(mhz: integer): boolean   // Machine.setCpuFreqMHzRaw
+    inline CALL_BUILTIN 111
+  end __picoSetCpuFreqMHz
+  function __rtcNowSec(): integer   // Rtc.nowSec
+    inline CALL_BUILTIN 112
+  end __rtcNowSec
+  function __rtcSetNowSec(sec: integer)   // Rtc.setNowSec
+    inline CALL_BUILTIN 113
+  end __rtcSetNowSec
+  function __adcInitChannel(ch: integer): integer   // Adc.initChannel
+    inline CALL_BUILTIN 114
+  end __adcInitChannel
+  function __adcReadChannel(ch: integer): integer   // Adc.readChannel
+    inline CALL_BUILTIN 115
+  end __adcReadChannel
+  function __wdtEnable(timeoutMs: integer)   // Wdt.enableRaw
+    inline CALL_BUILTIN 116
+  end __wdtEnable
+  function __wdtFeed()   // Wdt.feedRaw
+    inline CALL_BUILTIN 117
+  end __wdtFeed
+  function __wdtDisable()   // Wdt.disableRaw
+    inline CALL_BUILTIN 118
+  end __wdtDisable
+  public function toBytes(s: string): byte[]
+    inline CALL_BUILTIN 119
+  end toBytes
+  public function fromBytes(b: byte[]): string
+    inline CALL_BUILTIN 120
+  end fromBytes
+  public function heapFrag(): string
+    inline CALL_BUILTIN 121
+  end heapFrag
+  public function heapMap(cols: integer): string
+    inline CALL_BUILTIN 122
+  end heapMap
+  function __picoGpioCount(): integer   // Machine.gpioCount
+    inline CALL_BUILTIN 123
+  end __picoGpioCount
+  function __npInit(pin: integer)   // Neopixel.__npInit
+    inline CALL_BUILTIN 124
+  end __npInit
+  function __npShow(pin: integer, grb: integer[], count: integer)   // Neopixel.__npShow
+    inline CALL_BUILTIN 125
+  end __npShow
+  public function readFileBytes(path: string): byte[]
+    inline CALL_BUILTIN 126
+  end readFileBytes
+  public function writeFileBytes(path: string, data: byte[])
+    inline CALL_BUILTIN 127
+  end writeFileBytes
+  function __throwRte(msg: string)   // sólo el compilador
+    inline CALL_BUILTIN 128
+  end __throwRte
+  function __longToString(v: long): string   // sólo el compilador
+    inline CALL_BUILTIN 129
+  end __longToString
+  function __doubleToString(v: double): string   // sólo el compilador
+    inline CALL_BUILTIN 130
+  end __doubleToString
+  function __tcpConnect(host: string, port: integer, timeoutMs: integer): integer   // Net.tcpConnect
+    inline CALL_BUILTIN 131
+  end __tcpConnect
+  function __tcpSend(h: integer, data: byte[]): integer   // Net.tcpSend
+    inline CALL_BUILTIN 132
+  end __tcpSend
+  function __tcpRecv(h: integer, max: integer, timeoutMs: integer): byte[]   // Net.tcpRecv
+    inline CALL_BUILTIN 133
+  end __tcpRecv
+  function __tcpClose(h: integer)   // Net.tcpClose
+    inline CALL_BUILTIN 134
+  end __tcpClose
+  function __guiScreenActive(): integer   // Gui.__guiScreenActive
+    inline CALL_BUILTIN 135
+  end __guiScreenActive
+  function __guiCreateObj(parent: integer): integer   // Gui.__guiCreateObj
+    inline CALL_BUILTIN 136
+  end __guiCreateObj
+  function __guiCreateLabel(parent: integer): integer   // Gui.__guiCreateLabel
+    inline CALL_BUILTIN 137
+  end __guiCreateLabel
+  function __guiCreateButton(parent: integer): integer   // Gui.__guiCreateButton
+    inline CALL_BUILTIN 138
+  end __guiCreateButton
+  function __guiSetText(handle: integer, t: string)   // Gui.__guiSetText
+    inline CALL_BUILTIN 139
+  end __guiSetText
+  function __guiSetWidth(handle: integer, w: integer)   // Gui.__guiSetWidth
+    inline CALL_BUILTIN 140
+  end __guiSetWidth
+  function __guiSetHeight(handle: integer, h: integer)   // Gui.__guiSetHeight
+    inline CALL_BUILTIN 141
+  end __guiSetHeight
+  function __guiAlign(handle: integer, a: integer, dx: integer, dy: integer)   // Gui.__guiAlign
+    inline CALL_BUILTIN 142
+  end __guiAlign
+  function __guiSetBgColor(handle: integer, rgb: integer)   // Gui.__guiSetBgColor
+    inline CALL_BUILTIN 143
+  end __guiSetBgColor
+  function __guiSetTextColor(handle: integer, rgb: integer)   // Gui.__guiSetTextColor
+    inline CALL_BUILTIN 144
+  end __guiSetTextColor
+  function __guiSetFont(handle: integer, fontId: integer)   // Gui.__guiSetFont
+    inline CALL_BUILTIN 145
+  end __guiSetFont
+  function __guiClean(handle: integer)   // Gui.__guiClean
+    inline CALL_BUILTIN 146
+  end __guiClean
+  function __guiDelete(handle: integer)   // Gui.__guiDelete
+    inline CALL_BUILTIN 147
+  end __guiDelete
+  function __guiScreenLoad(handle: integer)   // Gui.__guiScreenLoad
+    inline CALL_BUILTIN 148
+  end __guiScreenLoad
+  function __guiRun()   // Gui.__guiRun
+    inline CALL_BUILTIN 149
+  end __guiRun
+  function __guiDumpTree(): string   // Gui.__guiDumpTree
+    inline CALL_BUILTIN 150
+  end __guiDumpTree
+  function __guiBindClick(handle: integer, self: any)   // Gui.__guiBindClick
+    inline CALL_BUILTIN 151
+  end __guiBindClick
+  function __guiClick(w: any)   // Gui.__guiClick
+    inline CALL_BUILTIN 152
+  end __guiClick
+  function __guiSetX(handle: integer, x: integer)   // Gui.__guiSetX
+    inline CALL_BUILTIN 153
+  end __guiSetX
+  function __guiGetX(handle: integer): integer   // Gui.__guiGetX
+    inline CALL_BUILTIN 154
+  end __guiGetX
+  function __guiSetY(handle: integer, y: integer)   // Gui.__guiSetY
+    inline CALL_BUILTIN 155
+  end __guiSetY
+  function __guiGetY(handle: integer): integer   // Gui.__guiGetY
+    inline CALL_BUILTIN 156
+  end __guiGetY
+  function __guiGetWidth(handle: integer): integer   // Gui.__guiGetWidth
+    inline CALL_BUILTIN 157
+  end __guiGetWidth
+  function __guiGetHeight(handle: integer): integer   // Gui.__guiGetHeight
+    inline CALL_BUILTIN 158
+  end __guiGetHeight
+  function __guiSetScrollDir(handle: integer, dir: integer)   // Gui.__guiSetScrollDir
+    inline CALL_BUILTIN 159
+  end __guiSetScrollDir
+  function __guiGetScrollDir(handle: integer): integer   // Gui.__guiGetScrollDir
+    inline CALL_BUILTIN 160
+  end __guiGetScrollDir
+  function __guiRefresh(handle: integer)   // Gui.__guiRefresh
+    inline CALL_BUILTIN 161
+  end __guiRefresh
+  function __guiCreateCheckbox(parent: integer): integer   // Gui.__guiCreateCheckbox
+    inline CALL_BUILTIN 162
+  end __guiCreateCheckbox
+  function __guiSetChecked(handle: integer, v: boolean)   // Gui.__guiSetChecked
+    inline CALL_BUILTIN 163
+  end __guiSetChecked
+  function __guiGetChecked(handle: integer): boolean   // Gui.__guiGetChecked
+    inline CALL_BUILTIN 164
+  end __guiGetChecked
+  function __guiChange(w: any)   // Gui.__guiChange
+    inline CALL_BUILTIN 165
+  end __guiChange
+  function __guiCreateSwitch(parent: integer): integer   // Gui.__guiCreateSwitch
+    inline CALL_BUILTIN 166
+  end __guiCreateSwitch
+  function __guiCreateSlider(parent: integer): integer   // Gui.__guiCreateSlider
+    inline CALL_BUILTIN 167
+  end __guiCreateSlider
+  function __guiCreateBar(parent: integer): integer   // Gui.__guiCreateBar
+    inline CALL_BUILTIN 168
+  end __guiCreateBar
+  function __guiSetValue(handle: integer, v: integer)   // Gui.__guiSetValue
+    inline CALL_BUILTIN 169
+  end __guiSetValue
+  function __guiGetValue(handle: integer): integer   // Gui.__guiGetValue
+    inline CALL_BUILTIN 170
+  end __guiGetValue
+  function __guiSetRange(handle: integer, mn: integer, mx: integer)   // Gui.__guiSetRange
+    inline CALL_BUILTIN 171
+  end __guiSetRange
+  function __guiCreateSpinbox(parent: integer): integer   // Gui.__guiCreateSpinbox
+    inline CALL_BUILTIN 172
+  end __guiCreateSpinbox
+  function __guiCreateLed(parent: integer): integer   // Gui.__guiCreateLed
+    inline CALL_BUILTIN 173
+  end __guiCreateLed
+  function __guiCreateDropdown(parent: integer): integer   // Gui.__guiCreateDropdown
+    inline CALL_BUILTIN 174
+  end __guiCreateDropdown
+  function __guiSetOptions(handle: integer, opts: string)   // Gui.__guiSetOptions
+    inline CALL_BUILTIN 175
+  end __guiSetOptions
+  function __guiCreateTextarea(parent: integer): integer   // Gui.__guiCreateTextarea
+    inline CALL_BUILTIN 176
+  end __guiCreateTextarea
+  function __guiGetText(handle: integer): string   // Gui.__guiGetText
+    inline CALL_BUILTIN 177
+  end __guiGetText
+  function __guiCreateList(parent: integer): integer   // Gui.__guiCreateList
+    inline CALL_BUILTIN 178
+  end __guiCreateList
+  function __guiCreateKeyboard(parent: integer): integer   // Gui.__guiCreateKeyboard
+    inline CALL_BUILTIN 179
+  end __guiCreateKeyboard
+  function __guiKeyboardSetTextarea(handle: integer, ta: integer)   // Gui.__guiKeyboardSetTextarea
+    inline CALL_BUILTIN 180
+  end __guiKeyboardSetTextarea
+  function __guiCreateMsgbox(parent: integer): integer   // Gui.__guiCreateMsgbox
+    inline CALL_BUILTIN 181
+  end __guiCreateMsgbox
+  function __guiSetButtons(handle: integer, labels: string)   // Gui.__guiSetButtons
+    inline CALL_BUILTIN 182
+  end __guiSetButtons
+  function __guiCreateTabview(parent: integer): integer   // Gui.__guiCreateTabview
+    inline CALL_BUILTIN 183
+  end __guiCreateTabview
+  function __guiTabviewAddTab(handle: integer, name: string): integer   // Gui.__guiTabviewAddTab
+    inline CALL_BUILTIN 184
+  end __guiTabviewAddTab
+  function __guiCreateTable(parent: integer): integer   // Gui.__guiCreateTable
+    inline CALL_BUILTIN 185
+  end __guiCreateTable
+  function __guiTableSetGrid(handle: integer, rows: integer, cols: integer)   // Gui.__guiTableSetGrid
+    inline CALL_BUILTIN 186
+  end __guiTableSetGrid
+  function __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)   // Gui.__guiTableSetCell
+    inline CALL_BUILTIN 187
+  end __guiTableSetCell
+  function __guiTableGetCell(handle: integer, row: integer, col: integer): string   // Gui.__guiTableGetCell
+    inline CALL_BUILTIN 188
+  end __guiTableGetCell
+  function __guiImageNew(): integer   // Gui.__guiImageNew
+    inline CALL_BUILTIN 189
+  end __guiImageNew
+  function __guiImageLoadFile(handle: integer, path: string): integer   // Gui.__guiImageLoadFile
+    inline CALL_BUILTIN 190
+  end __guiImageLoadFile
+  function __guiImageWidth(handle: integer): integer   // Gui.__guiImageWidth
+    inline CALL_BUILTIN 191
+  end __guiImageWidth
+  function __guiImageHeight(handle: integer): integer   // Gui.__guiImageHeight
+    inline CALL_BUILTIN 192
+  end __guiImageHeight
+  function __guiCreateImageView(parent: integer): integer   // Gui.__guiCreateImageView
+    inline CALL_BUILTIN 193
+  end __guiCreateImageView
+  function __guiImageViewSetImage(view: integer, image: integer)   // Gui.__guiImageViewSetImage
+    inline CALL_BUILTIN 194
+  end __guiImageViewSetImage
+  function __guiImageViewRefresh(view: integer)   // Gui.__guiImageViewRefresh
+    inline CALL_BUILTIN 195
+  end __guiImageViewRefresh
+  function __guiSetFontSize(handle: integer, px: integer)   // Gui.__guiSetFontSize
+    inline CALL_BUILTIN 196
+  end __guiSetFontSize
+  function __guiGetFontSize(handle: integer): integer   // Gui.__guiGetFontSize
+    inline CALL_BUILTIN 197
+  end __guiGetFontSize
+  function __guiTextareaSetReadonly(handle: integer, ro: integer)   // Gui.__guiTextareaSetReadonly
+    inline CALL_BUILTIN 198
+  end __guiTextareaSetReadonly
+  function __guiTextareaGetReadonly(handle: integer): integer   // Gui.__guiTextareaGetReadonly
+    inline CALL_BUILTIN 199
+  end __guiTextareaGetReadonly
+  public function eval(expr: string): float
+    inline CALL_BUILTIN 200
+  end eval
+  function __picoResetCause(): string   // Machine.resetCause
+    inline CALL_BUILTIN 201
+  end __picoResetCause
+  function __picoSetMark(code: integer)   // Machine.setMark
+    inline CALL_BUILTIN 202
+  end __picoSetMark
+  function __picoMarkCount(): integer   // Machine.markCount
+    inline CALL_BUILTIN 203
+  end __picoMarkCount
+  function __picoMarkAt(i: integer): integer   // Machine.markAt
+    inline CALL_BUILTIN 204
+  end __picoMarkAt
+  function __picoBootCount(): integer   // Machine.bootCount
+    inline CALL_BUILTIN 205
+  end __picoBootCount
+  function __guiInvokeByName(host: Object, name: string, sender: Object)   // Gui.__guiInvokeByName
+    inline CALL_BUILTIN 206
+  end __guiInvokeByName
+  function __guiInvokeBySlot(win: Object, slot: integer, sender: Object)   // Gui.__guiInvokeBySlot
+    inline CALL_BUILTIN 207
+  end __guiInvokeBySlot
+  function __picoAdcChannels(): integer   // Machine.ADC_CHANNELS
+    inline CALL_BUILTIN 208
+  end __picoAdcChannels
+  function __picoPwmSlices(): integer   // Machine.PWM_SLICES
+    inline CALL_BUILTIN 209
+  end __picoPwmSlices
+  function __guiLoadFont(path: string): integer   // Gui.__guiLoadFont
+    inline CALL_BUILTIN 210
+  end __guiLoadFont
+  function __appMainModule(): string   // App.mainModule
+    inline CALL_BUILTIN 211
+  end __appMainModule
+  function __appMainModulePath(): string   // App.mainModulePath
+    inline CALL_BUILTIN 212
+  end __appMainModulePath
+  function __appProjectPath(): string   // App.projectPath
+    inline CALL_BUILTIN 213
+  end __appProjectPath
+  function __guiSetRotation(deg: integer)   // Gui.__guiSetRotation
+    inline CALL_BUILTIN 214
+  end __guiSetRotation
+  function __guiCreateChart(parent: integer): integer   // Gui.__guiCreateChart
+    inline CALL_BUILTIN 215
+  end __guiCreateChart
+  function __guiChartSetPoints(handle: integer, n: integer)   // Gui.__guiChartSetPoints
+    inline CALL_BUILTIN 216
+  end __guiChartSetPoints
+  function __guiChartAddSeries(handle: integer, rgb: integer): integer   // Gui.__guiChartAddSeries
+    inline CALL_BUILTIN 217
+  end __guiChartAddSeries
+  function __guiChartPush(handle: integer, series: integer, v: integer)   // Gui.__guiChartPush
+    inline CALL_BUILTIN 218
+  end __guiChartPush
+  function __guiChartSetValue(handle: integer, series: integer, idx: integer, v: integer)   // Gui.__guiChartSetValue
+    inline CALL_BUILTIN 219
+  end __guiChartSetValue
+  function __guiChartSetType(handle: integer, t: integer)   // Gui.__guiChartSetType
+    inline CALL_BUILTIN 220
+  end __guiChartSetType
+  function __eventRaise(recv: any, dest: any, nargs: integer, masks: integer)   // sólo el compilador
+    inline CALL_BUILTIN 221
+  end __eventRaise
+  function __guiRunOnce(): integer   // Gui.__guiRunOnce
+    inline CALL_BUILTIN 222
+  end __guiRunOnce
+  function __guiSlotOf(obj: Object, name: string): integer   // Gui.__guiSlotOf
+    inline CALL_BUILTIN 223
+  end __guiSlotOf
+  function __packNext(cur: integer): integer   // Packs.__packNext
+    inline CALL_BUILTIN 224
+  end __packNext
+  function __packInfo(cur: integer): string   // Packs.__packInfo
+    inline CALL_BUILTIN 225
+  end __packInfo
+  function __packEntryNext(pack: integer, cur: integer): integer   // Packs.__packEntryNext
+    inline CALL_BUILTIN 226
+  end __packEntryNext
+  function __packEntryInfo(pack: integer, cur: integer): string   // Packs.__packEntryInfo
+    inline CALL_BUILTIN 227
+  end __packEntryInfo
+  function __clamp_f(x: float, lo: float, hi: float): float   // Math.clamp
+    inline CALL_BUILTIN 228
+  end __clamp_f
+  function __wrap_f(x: float, lo: float, hi: float): float   // Math.wrap
+    inline CALL_BUILTIN 229
+  end __wrap_f
+  function __hypot_f(x: float, y: float): float   // Math.hypot
+    inline CALL_BUILTIN 230
+  end __hypot_f
+  function __remap_f(x: float, inLo: float, inHi: float, outLo: float, outHi: float): float   // Math.remap
+    inline CALL_BUILTIN 231
+  end __remap_f
+  function __runArg(defecto: string): string   // sólo el compilador
+    inline CALL_BUILTIN 232
+  end __runArg
+  function __machineMicro(): string   // Machine.getMicro
+    inline CALL_BUILTIN 233
+  end __machineMicro
+  function __guiGetAlign(handle: integer): integer   // Gui.__guiGetAlign
+    inline CALL_BUILTIN 234
+  end __guiGetAlign
+  function __guiGetAlignDx(handle: integer): integer   // Gui.__guiGetAlignDx
+    inline CALL_BUILTIN 235
+  end __guiGetAlignDx
+  function __guiGetAlignDy(handle: integer): integer   // Gui.__guiGetAlignDy
+    inline CALL_BUILTIN 236
+  end __guiGetAlignDy
+  function __guiGetAuthWidth(handle: integer): integer   // Gui.__guiGetAuthWidth
+    inline CALL_BUILTIN 237
+  end __guiGetAuthWidth
+  function __guiGetAuthHeight(handle: integer): integer   // Gui.__guiGetAuthHeight
+    inline CALL_BUILTIN 238
+  end __guiGetAuthHeight
+  function __guiShot(path: string): integer   // Gui.__guiShot
+    inline CALL_BUILTIN 239
+  end __guiShot
+  public function newByteArray(size: integer): byte[]   // opcode, no builtin
+    inline NEWARRAY_I8
+  end newByteArray
+  public function newLongArray(size: integer): long[]   // opcode, no builtin
+    inline NEWARRAY_I64
+  end newLongArray
+  public function newDoubleArray(size: integer): double[]   // opcode, no builtin
+    inline NEWARRAY_I64
+  end newDoubleArray
 
 end Core

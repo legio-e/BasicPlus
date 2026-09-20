@@ -3,7 +3,7 @@
  *
  * Mismo patrón que bpvm_gpio/bpvm_pico: el firmware registra un backend que
  * conecta con el driver PIO (neopixel.c); en host (sin HW) los stubs son no-op.
- * El builtin NEOPIXEL_SHOW lee el array GRB del heap y lo pasa aquí.
+ * El builtin NP_SHOW lee el array GRB del heap y lo pasa aquí.
  */
 #ifndef BPVM_NEOPIXEL_H
 #define BPVM_NEOPIXEL_H

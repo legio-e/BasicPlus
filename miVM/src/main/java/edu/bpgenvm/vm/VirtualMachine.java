@@ -4489,9 +4489,9 @@ public class VirtualMachine {
             case GUI_IMAGE_LOAD_FILE: { long p = popTcRef(tc); int id = popTc(tc); pushTc(tc, gui.imageLoadFile(id, readVmString(p))); break; }   // 4→8B: path = string ref 8B
             case GUI_IMAGE_WIDTH: { int id = popTc(tc); pushTc(tc, gui.imageWidth(id)); break; }
             case GUI_IMAGE_HEIGHT: { int id = popTc(tc); pushTc(tc, gui.imageHeight(id)); break; }
-            case GUI_CREATE_IMAGEVIEW: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createImageView(p)); break; }
-            case GUI_IMAGEVIEW_SET_IMAGE: { int img = popTc(tc); int view = popTc(tc); gui.imageViewSetImage(view, img); pushTc(tc, 0); break; }
-            case GUI_IMAGEVIEW_REFRESH: { int view = popTc(tc); gui.imageViewRefresh(view); pushTc(tc, 0); break; }
+            case GUI_CREATE_IMAGE_VIEW: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createImageView(p)); break; }
+            case GUI_IMAGE_VIEW_SET_IMAGE: { int img = popTc(tc); int view = popTc(tc); gui.imageViewSetImage(view, img); pushTc(tc, 0); break; }
+            case GUI_IMAGE_VIEW_REFRESH: { int view = popTc(tc); gui.imageViewRefresh(view); pushTc(tc, 0); break; }
             case GUI_SET_FONT_SIZE: { int px = popTc(tc); int h = popTc(tc); gui.setFontSize(h, px); pushTc(tc, 0); break; }
             case GUI_GET_FONT_SIZE: { int h = popTc(tc); pushTc(tc, gui.getFontSize(h)); break; }
             case GUI_TEXTAREA_SET_READONLY: { int ro = popTc(tc); int h = popTc(tc); gui.setReadonly(h, ro); pushTc(tc, 0); break; }
@@ -5756,7 +5756,7 @@ public class VirtualMachine {
             }
             case PICO_ADC_CHANNELS: { pushTc(tc, 4);  break; }   /* host: perfil RP2350 */
             case PICO_PWM_SLICES:   { pushTc(tc, 12); break; }   /* host: perfil RP2350 */
-            case NEOPIXEL_INIT: {
+            case NP_INIT: {
                 /* #469/HAL-BP — LANZA, no finge. Antes esto era un no-op que
                  * empujaba 0, o sea que el MISMO .mod terminaba tranquilamente
                  * en miVM y moría con RuntimeError en la VM-C: el invariante
@@ -5777,7 +5777,7 @@ public class VirtualMachine {
                         "Neopixel(" + npPin + "): no implementado en esta plataforma");
                 break;
             }
-            case NEOPIXEL_SHOW: {
+            case NP_SHOW: {
                 popTc(tc);            /* count */
                 popTcRef(tc);         /* grbRef — #478: 8B, aunque no se use */
                 popTc(tc);            /* pin */

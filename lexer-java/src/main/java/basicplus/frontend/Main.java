@@ -2129,6 +2129,7 @@ public final class Main {
     // analizador (no compila deps; deben existir ya).
     static void loadImportsForAnalyzer(Ast.ModuleNode module, Path importerSrc, Ctx ctx,
                                                SemanticAnalyzer analyzer, int depth) throws IOException {
+        cargarRaiz(module, importerSrc, ctx, depth);   // H1 P2: antes que nada, y aunque no haya imports
         if (module.imports == null || module.imports.isEmpty()) return;
         Path importerDir = importerSrc.toAbsolutePath().getParent();
         // L2 v3.e — recolectamos todos los namespaces que se cargan para
@@ -2769,6 +2770,63 @@ public final class Main {
      *  resuelven a las clases ÚNICAS de Core (stubs del .bpi, aliasadas sin
      *  cualificar por injectImports) y los módulos sin excepciones no ganan
      *  ninguna dependencia. */
+    /** H1 P2 (20-sep) — EL MÓDULO RAÍZ. `Core.bp` declara las intrínsecas globales (`strlen`,
+     *  `abs`, `parseInt`, las `__` del compilador…) como funciones con cuerpo `inline`, y sus
+     *  públicas se ven sin cualificar en TODO programa, importe Core o no (la unidad `System` de
+     *  Turbo Pascal). Aquí se localiza `Core.mod` como para un import cualquiera, se lee su
+     *  interfaz (`func … inline …`) y se registran en el scope global del semántico. Una vez por
+     *  JVM (el scope es una caché). Si no aparece Core.mod, se dice — y las globales no están:
+     *  el error que sigue («'strlen' no resuelto») ya no engaña. Al compilar el propio Core, sus
+     *  funciones son locales y no hace falta nada. */
+    static void cargarRaiz(Ast.ModuleNode module, Path importerSrc, Ctx ctx, int depth) throws IOException {
+        if (module == null || "Core".equals(module.name) || SemanticAnalyzer.raizRegistrada()) return;
+        Path importerDir = importerSrc.toAbsolutePath().getParent();
+        java.util.List<String> p = new java.util.ArrayList<>(); p.add("Core");
+        Ast.ImportNode imp = new Ast.ImportNode(p, null, module.line, module.column);
+        ModuleInterface iface = ctx.interfaceCache.get("Core");
+        if (iface == null) {
+            Path mod = locateImportBpi(imp, "Core.bpi", "", "Core", importerDir, ctx);
+            if (mod == null) mod = locateImportMod(imp, "Core.mod", importerDir, ctx);
+            if (mod == null) {
+                indent(depth); System.out.println("-- aviso: no encuentro el módulo raíz (Core.mod): las intrínsecas globales (strlen, abs, parseInt…) no estarán --");
+                return;
+            }
+            iface = readInterfaceCached(mod, ctx);
+            if (iface == null) return;
+        }
+        int n = 0;
+        for (ModuleInterface.FuncSig fs : iface.functions) {
+            if (!fs.isPublic || fs.inlineText == null) continue;
+            Symbol.FunctionSymbol f = new Symbol.FunctionSymbol(fs.name, true, false, true, null, null);
+            f.returnType = tipoDeRaiz(fs.returnType);
+            f.isExternal = true;
+            f.isIntrinsic = true;
+            f.inlineOps = Ast.InlineStmt.deTexto(fs.inlineText);
+            f.externalModule = "Core";
+            for (ModuleInterface.ParamSig ps : fs.params) {
+                Symbol.ParamSymbol psym = new Symbol.ParamSymbol(ps.name, 0, 0);
+                psym.type = tipoDeRaiz(ps.type);
+                if (ps.defaultValue != null) psym.defaultExpr = SemanticAnalyzer.literalExprFromValue(ps.defaultValue, ps.type, 0, 0);
+                f.params.add(psym);
+            }
+            SemanticAnalyzer.registrarGlobalDeRaiz(f);
+            n++;
+        }
+        indent(depth); System.out.printf("-- módulo raíz: %d intrínsecas globales de Core --%n", n);
+    }
+
+    /** H1 P2 — en la firma de una global de la raíz, `Object` (y `Thread`, `Mutex`…) es LA clase
+     *  del lenguaje que el semántico ya tiene, no un stub nuevo: si no, `Object[]` de la firma y
+     *  `Object[]` del programa eran dos tipos («'Object[]' no asignable a 'Object[]'»). */
+    private static BpType tipoDeRaiz(BpType t) {
+        if (t instanceof BpType.UnresolvedClassRef) {
+            Symbol.ClassSymbol b = SemanticAnalyzer.claseBuiltin(((BpType.UnresolvedClassRef) t).name);
+            return (b != null) ? new BpType.ClassType(b) : t;
+        }
+        if (t instanceof BpType.ArrayType) return new BpType.ArrayType(tipoDeRaiz(((BpType.ArrayType) t).element));
+        return t;
+    }
+
     static void injectImplicitCoreImport(Ast.ModuleNode module) {
         if (module == null || "Core".equals(module.name)) return;
         if (module.imports != null) {

@@ -1,7 +1,8 @@
 /*
- * Catálogo de funciones built-in invocables por bytecode con CALL_BUILTIN id.
- * El ID es el `ordinal()` del enum, así que el ORDEN ES ESTABLE: añadir nuevos
- * built-ins al final.
+ * GENERADO por scripts/gen_builtins.py de bpstdlib/Core.bp (el módulo raíz, H1) — NO EDITAR A MANO.
+ * Cada builtin es una función de Core.bp con cuerpo `inline CALL_BUILTIN <id>`; el id es el número
+ * escrito allí y aquí es el ordinal(). Para añadir uno: declararlo en Core.bp (al final, con el
+ * número siguiente), implementarlo en VirtualMachine.dispatchBuiltin y en builtins.c, y regenerar.
  */
 package edu.bpgenvm.bytecode;
 
@@ -9,529 +10,246 @@ import java.util.HashMap;
 import java.util.Map;
 
 public enum Builtin {
-    // Strings utilitarios
-    STRLEN("strlen"),
-    PARSE_INT("parseInt"),
-    PARSE_FLOAT("parseFloat"),
-    INT_TO_STRING("intToString"),
-    FLOAT_TO_STRING("floatToString"),
-    BOOL_TO_STRING("boolToString"),
-    UPPER("upper"),
-    LOWER("lower"),
-    TRIM("trim"),
-    SUBSTRING("substring"),
-    INDEX_OF("indexOf"),
-    STARTS_WITH("startsWith"),
-    ENDS_WITH("endsWith"),
-    CONTAINS("contains"),
-    CHAR_AT("charAt"),
-    REPLACE("replace"),
-
-    // Numéricas enteras
-    ABS("abs"),
-    MIN("min"),
-    MAX("max"),
-
-    // Numéricas float
-    SQRT("sqrt"),
-    POW("pow"),
-    LOG("log"),
-    LOG10("log10"),
-    EXP("exp"),
-    SIN("sin"),
-    COS("cos"),
-    TAN("tan"),
-    RANDOM("random"),
-    RANDOM_INT("randomInt"),
-
-    // Constantes
-    PI("pi"),
-    E("e"),
-
-    // Conversión float→int
-    FLOOR("floor"),
-    CEIL("ceil"),
-    ROUND("round"),
-
-    // Tiempo
-    NOW("now"),
-    SLEEP("sleep"),
-
-    // Strings que devuelven arrays
-    SPLIT("split"),
-
-    // I/O
-    INPUT("input"),
-    READ_FILE("readFile"),
-    WRITE_FILE("writeFile"),
-    APPEND_FILE("appendFile"),
-    FILE_EXISTS("fileExists"),
-    LIST_DIR("listDir"),
-
-    // Debug
-    GC("gc"),
-
-    // ---- Soporte para clases stdlib (List, StringBuilder). Los nombres
-    //      empiezan por __ para señalar uso interno (aunque cualquier código
-    //      BP puede llamarlos también). ----
-    NEW_REF_ARRAY("__newRefArray"),      // (cap)        → array TYPE_ARRAY_REF (slots a 0)
-    GROW_REF_ARRAY("__growRefArray"),    // (old, newCap)→ array TYPE_ARRAY_REF copiado
-    GROW_INT_ARRAY("__growIntArray"),    // (old, newCap)→ array TYPE_ARRAY_I32 copiado
-    CHARS_TO_STRING("__charsToString"),  // (chars, len) → string heap-allocado
-    CHAR_CODE_AT("charCodeAt"),          // (s, i)       → integer (code point del char i)
-
-    // ---- Threading ----
-    THREAD_START("__threadStart"),       // (threadRef)  → void; spawnea + arranca run() del thread
-    THREAD_JOIN("__threadJoin"),         // (threadRef)  → void; bloquea hasta que termine
-    YIELD("yield"),                      // ()           → void; cede CPU al scheduler
-
-    // ---- Sync ----
-    MUTEX_CREATE("__mutexCreate"),       // ()           → integer (id de mutex en VM)
-    MUTEX_LOCK("__mutexLock"),           // (mutexRef)   → void; bloquea si está tomado
-    MUTEX_UNLOCK("__mutexUnlock"),       // (mutexRef)   → void; libera; despierta primer waiter
-
-    // ---- Arrays ----
-    MOVE("move"),                        // (src,dst,srcStart,dstStart,count) → void
-                                         //   copia `count` elementos. Soporta overlapping
-                                         //   en el mismo array. RuntimeError si:
-                                         //   - src/dst null o no son arrays;
-                                         //   - tipos de array distintos (i8/i16/i32/ref);
-                                         //   - count negativo o rango fuera de los arrays.
-
-    // ---- Math (intrínsecos accesibles vía `import Math`) ----
-    SIGN_I("__sign_i"),                  // (i: int)   → int   (-1/0/1)
-    SIGN_F("__sign_f"),                  // (f: float) → int   (-1/0/1)
-    ASIN("__asin"),                      // (f: float) → float
-    ACOS("__acos"),                      // (f: float) → float
-    ATAN("__atan"),                      // (f: float) → float
-    ATAN2("__atan2"),                    // (y: float, x: float) → float
-    FACTORIAL_I("__factorial_i"),        // (n: int)   → int    (n>=0 y resultado i32)
-    GAMMA_F("__gamma_f"),                // (x: float) → float  (Lanczos)
-
-    // ---- IO (intrínsecos accesibles vía `import IO`) ----
-    PATH_JOIN("__pathJoin"),             // (a, b)        → string
-    PATH_PARENT("__pathParent"),         // (p: string)   → string (puede ser "")
-    PATH_BASENAME("__pathBasename"),     // (p: string)   → string
-    PATH_EXTENSION("__pathExtension"),   // (p: string)   → string (sin punto, "" si no hay)
-    PATH_ABSOLUTE("__pathAbsolute"),     // (p: string)   → string
-    MKDIR("__mkdir"),                    // (p: string)   → void  (crea dirs intermedios)
-    RMDIR("__rmdir"),                    // (p: string)   → void  (sólo si vacío)
-    REMOVE_FILE("__removeFile"),         // (p: string)   → void
-    RENAME("__rename"),                  // (from, to)    → void
-    COPY_FILE("__copyFile"),             // (from, to)    → void
-    FILE_SIZE("__fileSize"),             // (p: string)   → int   (bytes)
-    IS_DIRECTORY("__isDirectory"),       // (p: string)   → boolean
-    LAST_MODIFIED("__lastModified"),     // (p: string)   → int   (epoch ms truncado i32)
-
-    // ---- N20 — UI via IDE conectado ----
-    PROMPT("__prompt"),                  // (spec: string) → string
-                                         //   Envía formRequest al IDE, bloquea el
-                                         //   thread BP hasta respuesta. Devuelve
-                                         //   el JSON con los valores. Si no hay
-                                         //   IDE, RuntimeError BP atrapable.
-
-    // ---- Gpio — control de pines ----
-    GPIO_INIT("__gpioInit"),             // (pin: int, mode: int) → void
-                                         //   mode: 0=INPUT, 1=OUTPUT
-    GPIO_WRITE("__gpioWrite"),           // (pin: int, value: int) → void
-                                         //   value: 0 (LOW) o !=0 (HIGH)
-    GPIO_READ("__gpioRead"),             // (pin: int) → int   (0 o 1)
-    GPIO_PULL("__gpioPull"),             // (pin: int, pull: int) → void
-                                         //   pull: 0=none, 1=up, 2=down
-
-    // ---- I2C — bus serial síncrono multi-slave ----
-    I2C_INIT("__i2cInit"),               // (bus, sda, scl, baudrate) → void
-                                         //   bus: 0 o 1
-    I2C_WRITE("__i2cWrite"),             // (bus, addr, data: int[], n) → int
-                                         //   bytes escritos; -1 en error
-    I2C_READ("__i2cRead"),               // (bus, addr, data: int[], n) → int
-                                         //   bytes leídos; -1 en error
-
-    // ---- Allocators dinámicos accesibles desde user BP ----
-    NEW_INT_ARRAY("newIntArray"),        // (size: int) → integer[] (zeros)
-
-    // ---- SPI — bus serial síncrono full-duplex master ----
-    SPI_INIT("__spiInit"),               // (bus, sck, mosi, miso, baudrate, mode) → void
-    SPI_WRITE("__spiWrite"),             // (bus, data: int[], n) → int (bytes escritos)
-    SPI_READ("__spiRead"),               // (bus, data: int[], n) → int (bytes leídos; envía 0xFF dummy)
-    SPI_TRANSFER("__spiTransfer"),       // (bus, tx: int[], rx: int[], n) → int (bytes intercambiados)
-
-    // ---- UART — bus serial asíncrono punto a punto ----
-    UART_INIT("__uartInit"),             // (bus, tx, rx, baud, dataBits, stopBits, parity) → void
-                                         //   bus: 0=uart0, 1=uart1
-                                         //   dataBits: 5..8 (típico 8)
-                                         //   stopBits: 1 ó 2
-                                         //   parity:   0=NONE, 1=ODD, 2=EVEN
-    UART_WRITE("__uartWrite"),           // (bus, data: int[], n) → int (bytes escritos; bloquea hasta vaciar TX)
-    UART_READ("__uartRead"),             // (bus, data: int[], n, timeoutMs) → int
-                                         //   lee hasta n bytes; devuelve los bytes recibidos
-                                         //   (puede ser menos que n si expira el timeout).
-                                         //   timeoutMs<=0 bloquea hasta tener todos.
-    UART_AVAILABLE("__uartAvailable"),   // (bus) → int (bytes disponibles para leer sin bloquear)
-
-    // ---- Pulse counter — contador de pulsos hardware en un GPIO ----
-    PULSE_INIT("__pulseInit"),           // (pin, edgeKind) → int counterId, o -1 si pin inválido.
-                                         //   edgeKind: 0=RISING, 1=FALLING, 2=BOTH.
-                                         //   En RP2350 usa el slice PWM correspondiente al pin
-                                         //   en modo "input gate edge counting" — pin debe ser
-                                         //   un canal B de slice (impares: GP1,3,5,7,9,11,...).
-    PULSE_START("__pulseStart"),         // (counterId) → void
-    PULSE_STOP("__pulseStop"),           // (counterId) → void
-    PULSE_VALUE("__pulseValue"),         // (counterId) → int (cuenta actual, 0..65535 en RP2350)
-    PULSE_RESET("__pulseReset"),         // (counterId) → void
-
-    // ---- PWM — generación de señal hardware ----
-    PWM_INIT("__pwmInit"),               // (pin, freqHz) → int sliceId, o -1 si pin inválido.
-                                         //   El pin determina el slice (cualquier canal A/B sirve).
-                                         //   freqHz: objetivo. El backend calcula clkdiv+wrap.
-    PWM_SET_FREQ("__pwmSetFreq"),        // (sliceId, freqHz) → void
-    PWM_SET_DUTY("__pwmSetDuty"),        // (sliceId, pin, dutyPct) → void
-                                         //   pin para escoger canal A o B del slice.
-                                         //   dutyPct: 0..100.
-    PWM_START("__pwmStart"),             // (sliceId) → void
-    PWM_STOP("__pwmStop"),               // (sliceId) → void
-
-    // ---- Pico (info del microcontrolador) ----
-    PICO_UNIQUE_ID("__picoUniqueId"),    // () → string (16 hex chars del flash chip ID)
-    PICO_BOARD_NAME("__picoBoardName"),  // () → string ("pico2" / "host" / ...)
-    PICO_TEMP_C("__picoTempC"),          // () → float  (°C del sensor interno)
-    PICO_CPU_FREQ_HZ("__picoCpuFreqHz"), // () → integer (Hz del clk_sys)
-    PICO_UPTIME_MS("__picoUptimeMs"),    // () → integer (ms desde boot, 32-bit wrap)
-
-    // ---- Time (variantes de sleep) ----
-    SLEEP_SEC("sleepSec"),               // (s: integer) → void
-                                         //   Cede el thread BP al scheduler durante s segundos.
-                                         //   Equivalente a sleep(s * 1000) pero más legible
-                                         //   para pausas largas.
-    SLEEP_US("sleepUs"),                 // (us: integer) → void
-                                         //   Busy-wait que NO cede el thread BP. Para pausas
-                                         //   tan cortas (< 1 ms) el coste de un context switch
-                                         //   supera la pausa misma. Útil para timing crítico
-                                         //   (setup/hold de chips, bit-banging de protocolos
-                                         //   rápidos, etc.). En multi-thread el resto de
-                                         //   threads BP NO corren durante el wait.
-
-    PICO_SET_CPU_FREQ_MHZ("__picoSetCpuFreqMHz"), // (mhz: int) → boolean
-                                         //   Cambia el clk_sys del RP2350 a la frecuencia
-                                         //   pedida en MHz. Si mhz > MAX_CPU_MHZ se aplica
-                                         //   MAX_CPU_MHZ (clamp). Devuelve true si la PLL
-                                         //   pudo configurarse, false en caso contrario.
-                                         //   Afecta a periféricos derivados de clk_peri
-                                         //   (UART/SPI/I2C/PWM): llamar ANTES de
-                                         //   configurarlos. Las funciones sleep* NO se ven
-                                         //   afectadas (timer HW corre a 1 MHz independiente).
-
-    // ---- Rtc — wall clock con sincronización IDE→Pico ----
-    RTC_NOW_SEC("__rtcNowSec"),          // () → integer
-                                         //   Segundos desde epoch Unix (1970-01-01 UTC).
-                                         //   Si no se ha sincronizado, devuelve segundos
-                                         //   desde el boot del firmware/JVM.
-    RTC_SET_NOW_SEC("__rtcSetNowSec"),   // (sec: integer) → void
-                                         //   Calibra el reloj: a partir de aquí
-                                         //   nowSec() devuelve sec + tiempo transcurrido
-                                         //   desde esta llamada.
-
-    // ---- Adc — 4 canales ADC del RP2350 (CH0..CH3 → GP26..GP29) ----
-    ADC_INIT_CHANNEL("__adcInitChannel"),// (ch: int) → int (pin físico, -1 si error)
-    ADC_READ_CHANNEL("__adcReadChannel"),// (ch: int) → int (raw 0..4095)
-
-    // ---- Wdt — watchdog timer singleton del MCU ----
-    WDT_ENABLE("__wdtEnable"),           // (timeoutMs: int) → void
-    WDT_FEED("__wdtFeed"),               // () → void
-    WDT_DISABLE("__wdtDisable"),         // () → void
-                                         //   En RP2350 "disable" se aproxima con un
-                                         //   timeout muy grande (no hay way real de
-                                         //   deshabilitar el watchdog una vez activado).
-                                         //   Cambia el clk_sys del RP2350 a la frecuencia
-                                         //   pedida en MHz. Si mhz > MAX_CPU_MHZ se aplica
-                                         //   MAX_CPU_MHZ (clamp). Devuelve true si la PLL
-                                         //   pudo configurarse, false en caso contrario.
-                                         //   Afecta a periféricos derivados de clk_peri
-                                         //   (UART/SPI/I2C/PWM): llamar ANTES de
-                                         //   configurarlos. Las funciones sleep* NO se ven
-                                         //   afectadas (timer HW corre a 1 MHz independiente).
-
-    // ---- H2 (V2) — conversión string <-> byte[] (ambos TYPE_ARRAY_I8;
-    //      copia defensiva por la inmutabilidad del string) ----
-    TO_BYTES("toBytes"),                 // (s: string) → byte[]
-    FROM_BYTES("fromBytes"),             // (b: byte[]) → string
-
-    // ---- H3 — diagnóstico de heap (SOLO VM-Java; la VM C no las implementa) ----
-    HEAP_FRAG("heapFrag"),               // () → string  (resumen de fragmentación)
-    HEAP_MAP("heapMap"),                 // (cols: int) → string (mapa ASCII)
-
-    // ---- H7.3 — board-aware (RP2350A/B). El device lo resuelve desde el
-    //      board_desc (variante/board.json); host = perfil RP2350A. ----
-    PICO_GPIO_COUNT("__picoGpioCount"),  // () → integer (GPIO de la variante)
-
-    // ---- H7.4 — NeoPixel WS2812 (device-only vía PIO; no-op en host) ----
-    NEOPIXEL_INIT("__npInit"),           // (pin) → void
-    NEOPIXEL_SHOW("__npShow"),            // (pin, grb: int[], count) → void
-
-    // ---- H10/#247 — file I/O BINARIO (byte[]). Mismos bytes en heap que
-    //      readFile/writeFile (TYPE_ARRAY_I8), pero el frontend los tipa byte[]
-    //      y la VM-Java NO los pasa por String → binario sin pérdidas (NUL, >127,
-    //      UTF-8 inválido). Es lo que necesita la descompresión (#240). Ids al
-    //      FINAL (126/127) para no desplazar ordinales existentes. ----
-    READ_FILE_BYTES("readFileBytes"),    // (path: string)              → byte[]
-    WRITE_FILE_BYTES("writeFileBytes"),  // (path: string, data: byte[]) → void
-
-    // ---- #248 — id 128, al FINAL. ----
-    THROW_RTE("__throwRte"),             // (msg: string) → no retorna; lanza el
-                                         //   RuntimeError NATIVO de la VM (mismo
-                                         //   path que div0/null deref). Lo usa el
-                                         //   compareTo por defecto de Object para
-                                         //   no depender del descriptor local de
-                                         //   RuntimeError (que #248 retira).
-
-    // ---- L13 — ids 129/130: concat string + long/double. ----
-    LONG_TO_STRING("__longToString"),    // (v: long)   → string (decimal)
-    DOUBLE_TO_STRING("__doubleToString"),// (v: double) → string (formateo
-                                         //   canónico GAP-4 — el mismo de
-                                         //   DPRINT, byte-idéntico en C)
-
-    // ---- H11 (#241) — ids 131-134: cliente TCP simple (módulo Net). ----
-    TCP_CONNECT("__tcpConnect"),         // (host, port, timeoutMs) → handle (0 = no conectado)
-    TCP_SEND("__tcpSend"),               // (h, data: byte[]) → n enviados; error → RuntimeError
-    TCP_RECV("__tcpRecv"),               // (h, max, timeoutMs) → byte[] (vacío = timeout)
-    TCP_CLOSE("__tcpClose"),             // (h) → void, tolerante
-
-    // ---- H3 (V3) — GUI (módulo Gui). Las clases Gui.* son bindings sobre un
-    //      `handle` (id del lv_obj). El render/transporte vive en el backend
-    //      (Swing en miVM, LVGL en VM-C); estos builtins son la frontera
-    //      BP↔backend. Ids al FINAL (aditivo, principio 7 — no mueven los V2). ----
-    GUI_SCREEN_ACTIVE("__guiScreenActive"),  // () → id de la pantalla raíz
-    GUI_CREATE_OBJ("__guiCreateObj"),        // (parent) → id  (Panel/contenedor)
-    GUI_CREATE_LABEL("__guiCreateLabel"),    // (parent) → id
-    GUI_CREATE_BUTTON("__guiCreateButton"),  // (parent) → id
-    GUI_SET_TEXT("__guiSetText"),            // (id, s: string) → void
-    GUI_SET_WIDTH("__guiSetWidth"),          // (id, w) → void
-    GUI_SET_HEIGHT("__guiSetHeight"),        // (id, h) → void
-    GUI_ALIGN("__guiAlign"),                 // (id, align, dx, dy) → void
-    GUI_SET_BG_COLOR("__guiSetBgColor"),     // (id, rgb) → void
-    GUI_SET_TEXT_COLOR("__guiSetTextColor"), // (id, rgb) → void
-    GUI_SET_FONT("__guiSetFont"),            // (id, fontId) → void
-    GUI_CLEAN("__guiClean"),                 // (id) → void
-    GUI_DELETE("__guiDelete"),               // (id) → void
-    GUI_SCREEN_LOAD("__guiScreenLoad"),      // (id) → void
-    GUI_RUN("__guiRun"),                     // () → void; lazo de eventos (bloquea)
-    GUI_DUMP_TREE("__guiDumpTree"),          // () → string; volcado del árbol (paridad)
-
-    // H3.4 — eventos (upcall). BIND_CLICK registra handle→objptr; CLICK inyecta
-    // un clic sintetico (diagnostico/pruebas). El dispatch onClick lo hace la VM
-    // llamando por NOMBRE a la funcion BP Gui.__guiDispatch (no es builtin).
-    GUI_BIND_CLICK("__guiBindClick"),        // (handle, self) → void
-    GUI_CLICK("__guiClick"),                 // (handle) → void; clic sintetico
-
-    // V3/H6 — geometría (backend = la verdad: get/set → intrínsecos), scroll
-    // (opt-in, default NONE) y refresh (invalidar). Ids al final (aditivo).
-    GUI_SET_X("__guiSetX"),                  // (id, x) → void
-    GUI_GET_X("__guiGetX"),                  // (id) → x
-    GUI_SET_Y("__guiSetY"),                  // (id, y) → void
-    GUI_GET_Y("__guiGetY"),                  // (id) → y
-    GUI_GET_WIDTH("__guiGetWidth"),          // (id) → w
-    GUI_GET_HEIGHT("__guiGetHeight"),        // (id) → h
-    GUI_SET_SCROLL_DIR("__guiSetScrollDir"), // (id, dir) → void
-    GUI_GET_SCROLL_DIR("__guiGetScrollDir"), // (id) → dir
-    GUI_REFRESH("__guiRefresh"),             // (id) → void
-
-    // H6 widgets — checkbox (1er value-widget): create + checked + change.
-    GUI_CREATE_CHECKBOX("__guiCreateCheckbox"), // (parent) → id
-    GUI_SET_CHECKED("__guiSetChecked"),         // (id, bool) → void
-    GUI_GET_CHECKED("__guiGetChecked"),         // (id) → bool
-    GUI_CHANGE("__guiChange"),                  // (id) → void; cambio sintético
-
-    // H6 widgets — value-widgets enteros (switch booleano + slider/bar enteros).
-    GUI_CREATE_SWITCH("__guiCreateSwitch"),     // (parent) → id
-    GUI_CREATE_SLIDER("__guiCreateSlider"),     // (parent) → id
-    GUI_CREATE_BAR("__guiCreateBar"),           // (parent) → id
-    GUI_SET_VALUE("__guiSetValue"),             // (id, int) → void (clampa al rango)
-    GUI_GET_VALUE("__guiGetValue"),             // (id) → int
-    GUI_SET_RANGE("__guiSetRange"),             // (id, min, max) → void
-
-    // H6 widgets — spinbox (entero+rango como slider) + led (indicador on/off).
-    GUI_CREATE_SPINBOX("__guiCreateSpinbox"),   // (parent) → id
-    GUI_CREATE_LED("__guiCreateLed"),           // (parent) → id
-
-    // H6 widgets — dropdown (opciones + índice sel.) + textarea (texto editable).
-    GUI_CREATE_DROPDOWN("__guiCreateDropdown"), // (parent) → id
-    GUI_SET_OPTIONS("__guiSetOptions"),         // (id, "a\nb\nc") → void
-    GUI_CREATE_TEXTAREA("__guiCreateTextarea"), // (parent) → id
-    GUI_GET_TEXT("__guiGetText"),               // (id) → string
-
-    // H6 widgets — list (ítems + índice, reusa options/value) + keyboard.
-    GUI_CREATE_LIST("__guiCreateList"),         // (parent) → id
-    GUI_CREATE_KEYBOARD("__guiCreateKeyboard"), // (parent) → id
-    GUI_KEYBOARD_SET_TEXTAREA("__guiKeyboardSetTextarea"), // (id, taId) → void
-
-    // H6 widgets — msgbox (aviso async: mensaje + botones, resultado por onChange).
-    GUI_CREATE_MSGBOX("__guiCreateMsgbox"),     // (parent) → id
-    GUI_SET_BUTTONS("__guiSetButtons"),         // (id, "Si\nNo") → void
-
-    // H6 widgets — tabview (pestañas; addTab devuelve el handle de la página).
-    GUI_CREATE_TABVIEW("__guiCreateTabview"),   // (parent) → id
-    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab"),  // (id, name) → pageId
-
-    // H6 widgets — table (rejilla de celdas filas×columnas).
-    GUI_CREATE_TABLE("__guiCreateTable"),       // (parent) → id
-    GUI_TABLE_SET_GRID("__guiTableSetGrid"),    // (id, rows, cols) → void
-    GUI_TABLE_SET_CELL("__guiTableSetCell"),    // (id, row, col, text) → void
-    GUI_TABLE_GET_CELL("__guiTableGetCell"),    // (id, row, col) → string
-
-    // H6 widgets — image (asset separado del control que lo muestra).
-    GUI_IMAGE_NEW("__guiImageNew"),                   // () → assetId
-    GUI_IMAGE_LOAD_FILE("__guiImageLoadFile"),        // (assetId, path) → int(bool)
-    GUI_IMAGE_WIDTH("__guiImageWidth"),               // (assetId) → int
-    GUI_IMAGE_HEIGHT("__guiImageHeight"),             // (assetId) → int
-    GUI_CREATE_IMAGEVIEW("__guiCreateImageView"),     // (parent) → id
-    GUI_IMAGEVIEW_SET_IMAGE("__guiImageViewSetImage"),// (viewId, assetId) → void
-    GUI_IMAGEVIEW_REFRESH("__guiImageViewRefresh"),   // (viewId) → void (recarga si cambió)
-
-    // H6 — fuente: tamaño de texto por componente (catálogo de fuentes).
-    GUI_SET_FONT_SIZE("__guiSetFontSize"),            // (handle, px) → void
-    GUI_GET_FONT_SIZE("__guiGetFontSize"),            // (handle) → px
-
-    // H6 — textarea read-only (sin cursor, no editable).
-    GUI_TEXTAREA_SET_READONLY("__guiTextareaSetReadonly"), // (handle, ro) → void
-    GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"), // (handle) → int
-
-    // H7 — eval("expr"): calculadora de constantes (descenso recursivo, evalúa
-    // sobre la marcha; + - * / paréntesis y unario; sin variables/funciones). id 200.
-    EVAL("eval"),                                      // (s: string) → float
-
-    // H10 — Pico.resetCause(): causa del último reset como string. id 201.
-    PICO_RESET_CAUSE("__picoResetCause"),             // () → string
-
-    // H10 — breadcrumb en RAM retenida (migas que sobreviven al reset). ids 202-205.
-    PICO_SET_MARK("__picoSetMark"),                   // (code: integer) → void
-    PICO_MARK_COUNT("__picoMarkCount"),               // () → integer
-    PICO_MARK_AT("__picoMarkAt"),                     // (i: integer) → integer
-    PICO_BOOT_COUNT("__picoBootCount"),               // () → integer
-
-    // H13 (V3) — Forms: dispatch de evento por NOMBRE. Resuelve la función
-    // pública `name` en el MÓDULO de `owner` (la ventana) y la llama con
-    // `sender` como arg0. Es el call-by-name de los handlers del .win (que son
-    // funciones de módulo); reutiliza resolveExportInModule + el frame anidado
-    // del upcall. id 206.
-    GUI_INVOKE_BY_NAME("__guiInvokeByName"),           // (owner, name: string, sender) → void
-
-    // H13.1 (V3) — Forms Camino A: dispatch de evento por SLOT de vtable. Igual
-    // que GUI_INVOKE_BY_NAME pero el handler es un MÉTODO de la ventana cuyo slot
-    // ya horneó el IDE en el .win (resuelto vía .bpi/slotOf). Lee vtable[slot] del
-    // class_ptr de `win` y monta el frame de método [this=win, sender, ...]. id 207.
-    GUI_INVOKE_BY_SLOT("__guiInvokeBySlot"),           // (win, slot: integer, sender) → void
-
-    // H14 — counts de periféricos board-aware (del board_desc / board.json del
-    // device). Como gpioCount: host = perfil RP2350 (4 ADC / 12 PWM); el device
-    // los resuelve desde su descriptor. ids 208 / 209.
-    PICO_ADC_CHANNELS("__picoAdcChannels"),            // () → integer
-    PICO_PWM_SLICES("__picoPwmSlices"),                // () → integer
-
-    // V3 (gráficos) — carga de fuente .bin (LVGL binfont) en runtime → id 1-based.
-    // setFont(id) la aplica. El host LVGL la materializa; miVM/Swing asigna el id
-    // (paridad de ids) pero no puede usar la .bin → render con la fuente por
-    // defecto. No afecta al dumpTree. id 210.
-    GUI_LOAD_FONT("__guiLoadFont"),                    // (path: string) → integer
-
-    // V3 (H19) — introspección del proyecto en ejecución (módulo App). ids 211-213.
-    APP_MAIN_MODULE("__appMainModule"),                // () → string: nombre del módulo principal
-    APP_MAIN_MODULE_PATH("__appMainModulePath"),       // () → string: ruta completa del entry
-    APP_PROJECT_PATH("__appProjectPath"),              // () → string: carpeta del proyecto
-
-    // Orientación del display en runtime (id 214).
-    GUI_SET_ROTATION("__guiSetRotation"),              // (deg: integer) → void; 0/90/180/270, inválidos se ignoran
-
-    // ---- H7 — Chart (gráfica de series). El id es el ORDINAL, así que estas
-    //      entradas van SIEMPRE AL FINAL: insertarlas en medio desplazaría los
-    //      ids de todo lo posterior y rompería el contrato con la VM-C, donde
-    //      son números explícitos (builtins.c). Rango: 215..220.
-    //      El eje Y y el repintado reusan los genéricos __guiSetRange/__guiRefresh.
-    GUI_CREATE_CHART("__guiCreateChart"),              // (parent) → id                       [215]
-    GUI_CHART_SET_POINTS("__guiChartSetPoints"),       // (h, n) → void: nº de puntos          [216]
-    GUI_CHART_ADD_SERIES("__guiChartAddSeries"),       // (h, rgb) → índice de serie           [217]
-    GUI_CHART_PUSH("__guiChartPush"),                  // (h, serie, v) → void: desplaza+añade [218]
-    GUI_CHART_SET_VALUE("__guiChartSetValue"),         // (h, serie, idx, v) → void            [219]
-    GUI_CHART_SET_TYPE("__guiChartSetType"),           // (h, tipo) → void: 0=línea, 1=barras  [220]
-
-    /** H5.c — `raise ev(args)`. (recv, dest, sender, kind, args) → void.
-     *  Encola; NO ejecuta el handler. Si no hay destino vivo —evento sin
-     *  suscriptor, o receptor cuya generación ya no casa— vuelve en silencio,
-     *  que es la semántica decidida: nadie escuchando es un estado legítimo.
-     *  Va AL FINAL del enum a propósito: el id es ordinal(), así que meterlo
-     *  en medio renumeraría todos los de después y todo .mod existente
-     *  llamaría a otro builtin. */
-    EVENT_RAISE("__eventRaise"),                       // args..,masks,nargs,dest,recv → void   [221]
-
-    /** #324 — UNA pasada del bombeo del GUI. () → boolean: true "vuelve a
-     *  llamarme", false "no queda nada". El lazo pasa a Gui.run() (BP), que es
-     *  lo que da la frontera de instrucción donde el scheduler inyecta los
-     *  handlers de eventos. También AL FINAL: el id es ordinal(). */
-    GUI_RUN_ONCE("__guiRunOnce"),                      // () → boolean                          [222]
-    // #324 tanda 2b — reflexión mínima: (obj, nombre) → slot de vtable (-1 = no existe).
-    GUI_SLOT_OF("__guiSlotOf"),                        // (Object, string) → integer            [223]
-
-    /* ── #414 — que un programa BP recorra los packs GRABADOS y su contenido ──
-     *
-     * Modelo de Eduardo: una llamada devuelve la POSICIÓN siguiente y otra el
-     * texto de esa posición — dos funciones en vez de una que devuelva dos
-     * cosas. La lista se arma en BP, así que ningún builtin tiene que construir
-     * un objeto (hoy ninguno lo hace).
-     *
-     * El cursor es un VALOR que lleva el programa: 0 empieza, -1 termina. No hay
-     * estado aquí, y eso importa con hilos preemptivos — dos hilos listando no
-     * se pisan, no hay nada que cerrar y nada sobrevive al RUN.
-     *
-     * ⚠️ El cursor es OPACO: un `print` de él rompería la paridad (es un offset
-     * de región, y miVM no tiene zona). Va dicho en la doc de Packs.bp.
-     *
-     * En miVM no hay zona de packs: los `next` devuelven -1 a la primera y los
-     * `info` cadena vacía, así que `Packs.list()` da una lista vacía y la salida
-     * es byte-idéntica a la de la VM-C sin un solo caso especial.
-     *
-     * AL FINAL del enum, como los tres de arriba: el id es ordinal(). */
-    PACK_NEXT("__packNext"),                           // (cur) → cur siguiente, -1 fin         [224]
-    PACK_INFO("__packInfo"),                           // (cur) → string (nombre del pack)      [225]
-    PACK_ENTRY_NEXT("__packEntryNext"),                // (packCur, cur) → cur, -1 fin          [226]
-    PACK_ENTRY_INFO("__packEntryInfo"),                // (packCur, cur) → string (fichero.ext) [227]
-
-    /** V6/L1 — los cuatro que le faltaban a `Math` (`remap`, `clamp`, `hypot`,
-     *  `wrap`). AL FINAL del enum, como todo lo de arriba: el id es ordinal(),
-     *  así que intercalarlos correría los de detrás y todo `.mod` compilado
-     *  antes ejecutaría otro builtin — en silencio. */
-    CLAMP_F("__clamp_f"),                              // (x, lo, hi)              → float      [228]
-    WRAP_F("__wrap_f"),                                // (x, lo, hi)              → float      [229]
-    HYPOT_F("__hypot_f"),                              // (x, y)                   → float      [230]
-    REMAP_F("__remap_f"),                              // (x, inLo, inHi, oLo, oHi) → float     [231]
-
-    /* V6/#412 — EL ARGUMENTO DE EJECUCION, SIEMPRE EN EL HEAP.
-     * Lo emite `__startup` pasandole el valor POR DEFECTO que declare el fuente
-     * (`Main(arg: string := "...")`); devuelve el argumento de ejecucion si lo
-     * hay, y si no una COPIA del defecto, alojada igual. Asi Main recibe siempre
-     * una referencia del HEAP y desaparece la asimetria con el literal de la
-     * zona de datos. AL FINAL, que el id es el ordinal(). */
-    RUN_ARG("__runArg"),                               // (defecto) -> string
-    /* V6 (9-sep) — el MICRO. El nombre de la PLACA ya lo daba PICO_BOARD_NAME, y
-     * ahora son dos campos distintos: `Machine.getMicro()` y `Machine.getBoard()`.
-     * VA AL FINAL a proposito: el id es el ordinal() de este enum y la VM-C los
-     * lleva escritos a mano — insertarlo en medio correria todos los de detras. */
-    MACHINE_MICRO("__machineMicro"),                   // () -> string           [233]
-    /* V6/G2-4 (11-sep) — la geometria AUTORADA del widget, para el toJson() de
-     * Gui.bp: align/dx/dy (align = -1 si mandan x,y explicitos) y w/h con -1 =
-     * auto. getX/getWidth devuelven el pixel computado y eso no se serializa.
-     * AL FINAL: el id es el ordinal y la VM-C los lleva a mano (234..238). */
-    GUI_GET_ALIGN("__guiGetAlign"),                    // (id) -> align | -1  [234]
-    GUI_GET_ALIGN_DX("__guiGetAlignDx"),               // (id) -> dx          [235]
-    GUI_GET_ALIGN_DY("__guiGetAlignDy"),               // (id) -> dy          [236]
-    GUI_GET_AUTH_WIDTH("__guiGetAuthWidth"),           // (id) -> w | -1      [237]
-    GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight"),         // (id) -> h | -1      [238]
-    /* V6/C1 (11-sep) — la CAPTURA de pantalla: escribe un `.shot` (RGB565 por
-     * franjas, docs/SHOT_FORMAT.md) en `path`, resuelto como writeFile. Devuelve
-     * los bytes escritos (> 0) o un codigo negativo: -1 sin pantalla, -2 error
-     * de escritura, -3 no cabe, -4 sin memoria. El RuntimeError con el mensaje
-     * fijo lo lanza Gui.bp, no la VM: la VM solo devuelve el entero, IGUAL en
-     * las dos (paridad de stdout sin depender de los pixeles). AL FINAL: el id
-     * es el ordinal y la VM-C lo lleva a mano (239). */
-    GUI_SHOT("__guiShot");                             // (path: string) -> integer [239]
+    STRLEN("strlen"),   // [0] strlen(s: string): integer
+    PARSE_INT("parseInt"),   // [1] parseInt(s: string): integer
+    PARSE_FLOAT("parseFloat"),   // [2] parseFloat(s: string): float
+    INT_TO_STRING("intToString"),   // [3] intToString(n: integer): string
+    FLOAT_TO_STRING("floatToString"),   // [4] floatToString(x: float): string
+    BOOL_TO_STRING("boolToString"),   // [5] boolToString(b: boolean): string
+    UPPER("upper"),   // [6] upper(s: string): string
+    LOWER("lower"),   // [7] lower(s: string): string
+    TRIM("trim"),   // [8] trim(s: string): string
+    SUBSTRING("substring"),   // [9] substring(s: string, start: integer, hasta: integer): string
+    INDEX_OF("indexOf"),   // [10] indexOf(s: string, target: string): integer
+    STARTS_WITH("startsWith"),   // [11] startsWith(s: string, prefix: string): boolean
+    ENDS_WITH("endsWith"),   // [12] endsWith(s: string, suffix: string): boolean
+    CONTAINS("contains"),   // [13] contains(s: string, sub: string): boolean
+    CHAR_AT("charAt"),   // [14] charAt(s: string, i: integer): string
+    REPLACE("replace"),   // [15] replace(s: string, target: string, replacement: string): string
+    ABS("abs"),   // [16] abs(x: integer): integer
+    MIN("min"),   // [17] min(a: integer, b: integer): integer
+    MAX("max"),   // [18] max(a: integer, b: integer): integer
+    SQRT("sqrt"),   // [19] sqrt(x: float): float
+    POW("pow"),   // [20] pow(b: float, e: float): float
+    LOG("log"),   // [21] log(x: float): float
+    LOG10("log10"),   // [22] log10(x: float): float
+    EXP("exp"),   // [23] exp(x: float): float
+    SIN("sin"),   // [24] sin(x: float): float
+    COS("cos"),   // [25] cos(x: float): float
+    TAN("tan"),   // [26] tan(x: float): float
+    RANDOM("random"),   // [27] random(): float
+    RANDOM_INT("randomInt"),   // [28] randomInt(lo: integer, hi: integer): integer
+    PI("pi"),   // [29] pi(): float
+    E("e"),   // [30] e(): float
+    FLOOR("floor"),   // [31] floor(x: float): integer
+    CEIL("ceil"),   // [32] ceil(x: float): integer
+    ROUND("round"),   // [33] round(x: float): integer
+    NOW("now"),   // [34] now(): integer
+    SLEEP("sleep"),   // [35] sleep(ms: integer)
+    SPLIT("split"),   // [36] split(s: string, sep: string): string[]
+    INPUT("input"),   // [37] input(): string
+    READ_FILE("readFile"),   // [38] readFile(path: string): string
+    WRITE_FILE("writeFile"),   // [39] writeFile(path: string, content: string)
+    APPEND_FILE("appendFile"),   // [40] appendFile(path: string, content: string)
+    FILE_EXISTS("fileExists"),   // [41] fileExists(path: string): boolean
+    LIST_DIR("listDir"),   // [42] listDir(path: string): string[]
+    GC("gc"),   // [43] gc()
+    NEW_REF_ARRAY("__newRefArray"),   // [44] __newRefArray(cap: integer): integer[]
+    GROW_REF_ARRAY("__growRefArray"),   // [45] __growRefArray(old: integer[], newCap: integer): integer[]
+    GROW_INT_ARRAY("__growIntArray"),   // [46] __growIntArray(old: integer[], newCap: integer): integer[]
+    CHARS_TO_STRING("__charsToString"),   // [47] __charsToString(chars: integer[], len: integer): string
+    CHAR_CODE_AT("charCodeAt"),   // [48] charCodeAt(s: string, i: integer): integer
+    THREAD_START("__threadStart"),   // [49] __threadStart(t: any)
+    THREAD_JOIN("__threadJoin"),   // [50] __threadJoin(t: any)
+    YIELD("yield"),   // [51] yield()
+    MUTEX_CREATE("__mutexCreate"),   // [52] __mutexCreate(): integer
+    MUTEX_LOCK("__mutexLock"),   // [53] __mutexLock(m: any)
+    MUTEX_UNLOCK("__mutexUnlock"),   // [54] __mutexUnlock(m: any)
+    MOVE("move"),   // [55] move(src: any, dst: any, srcStart: integer, dstStart: integer, count: integer)
+    SIGN_I("__sign_i"),   // [56] __sign_i(x: integer): integer
+    SIGN_F("__sign_f"),   // [57] __sign_f(x: float): integer
+    ASIN("__asin"),   // [58] __asin(x: float): float
+    ACOS("__acos"),   // [59] __acos(x: float): float
+    ATAN("__atan"),   // [60] __atan(x: float): float
+    ATAN2("__atan2"),   // [61] __atan2(y: float, x: float): float
+    FACTORIAL_I("__factorial_i"),   // [62] __factorial_i(n: integer): integer
+    GAMMA_F("__gamma_f"),   // [63] __gamma_f(x: float): float
+    PATH_JOIN("__pathJoin"),   // [64] __pathJoin(a: string, b: string): string
+    PATH_PARENT("__pathParent"),   // [65] __pathParent(p: string): string
+    PATH_BASENAME("__pathBasename"),   // [66] __pathBasename(p: string): string
+    PATH_EXTENSION("__pathExtension"),   // [67] __pathExtension(p: string): string
+    PATH_ABSOLUTE("__pathAbsolute"),   // [68] __pathAbsolute(p: string): string
+    MKDIR("__mkdir"),   // [69] __mkdir(p: string)
+    RMDIR("__rmdir"),   // [70] __rmdir(p: string)
+    REMOVE_FILE("__removeFile"),   // [71] __removeFile(p: string)
+    RENAME("__rename"),   // [72] __rename(src: string, dst: string)
+    COPY_FILE("__copyFile"),   // [73] __copyFile(src: string, dst: string)
+    FILE_SIZE("__fileSize"),   // [74] __fileSize(p: string): integer
+    IS_DIRECTORY("__isDirectory"),   // [75] __isDirectory(p: string): boolean
+    LAST_MODIFIED("__lastModified"),   // [76] __lastModified(p: string): integer
+    PROMPT("__prompt"),   // [77] __prompt(spec: string): string
+    GPIO_INIT("__gpioInit"),   // [78] __gpioInit(pin: integer, mode: integer)
+    GPIO_WRITE("__gpioWrite"),   // [79] __gpioWrite(pin: integer, value: integer)
+    GPIO_READ("__gpioRead"),   // [80] __gpioRead(pin: integer): integer
+    GPIO_PULL("__gpioPull"),   // [81] __gpioPull(pin: integer, pullMode: integer)
+    I2C_INIT("__i2cInit"),   // [82] __i2cInit(bus: integer, sda: integer, scl: integer, baudrate: integer)
+    I2C_WRITE("__i2cWrite"),   // [83] __i2cWrite(bus: integer, addr: integer, data: integer[], count: integer): integer
+    I2C_READ("__i2cRead"),   // [84] __i2cRead(bus: integer, addr: integer, data: integer[], count: integer): integer
+    NEW_INT_ARRAY("newIntArray"),   // [85] newIntArray(size: integer): integer[]
+    SPI_INIT("__spiInit"),   // [86] __spiInit(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+    SPI_WRITE("__spiWrite"),   // [87] __spiWrite(bus: integer, data: integer[], count: integer): integer
+    SPI_READ("__spiRead"),   // [88] __spiRead(bus: integer, data: integer[], count: integer): integer
+    SPI_TRANSFER("__spiTransfer"),   // [89] __spiTransfer(bus: integer, tx: integer[], rx: integer[], count: integer): integer
+    UART_INIT("__uartInit"),   // [90] __uartInit(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+    UART_WRITE("__uartWrite"),   // [91] __uartWrite(bus: integer, data: integer[], count: integer): integer
+    UART_READ("__uartRead"),   // [92] __uartRead(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
+    UART_AVAILABLE("__uartAvailable"),   // [93] __uartAvailable(bus: integer): integer
+    PULSE_INIT("__pulseInit"),   // [94] __pulseInit(pin: integer, edgeKind: integer): integer
+    PULSE_START("__pulseStart"),   // [95] __pulseStart(counterId: integer)
+    PULSE_STOP("__pulseStop"),   // [96] __pulseStop(counterId: integer)
+    PULSE_VALUE("__pulseValue"),   // [97] __pulseValue(counterId: integer): integer
+    PULSE_RESET("__pulseReset"),   // [98] __pulseReset(counterId: integer)
+    PWM_INIT("__pwmInit"),   // [99] __pwmInit(pin: integer, freqHz: integer): integer
+    PWM_SET_FREQ("__pwmSetFreq"),   // [100] __pwmSetFreq(sliceId: integer, freqHz: integer)
+    PWM_SET_DUTY("__pwmSetDuty"),   // [101] __pwmSetDuty(sliceId: integer, pin: integer, dutyPct: integer)
+    PWM_START("__pwmStart"),   // [102] __pwmStart(sliceId: integer)
+    PWM_STOP("__pwmStop"),   // [103] __pwmStop(sliceId: integer)
+    PICO_UNIQUE_ID("__picoUniqueId"),   // [104] __picoUniqueId(): string
+    PICO_BOARD_NAME("__picoBoardName"),   // [105] __picoBoardName(): string
+    PICO_TEMP_C("__picoTempC"),   // [106] __picoTempC(): float
+    PICO_CPU_FREQ_HZ("__picoCpuFreqHz"),   // [107] __picoCpuFreqHz(): integer
+    PICO_UPTIME_MS("__picoUptimeMs"),   // [108] __picoUptimeMs(): integer
+    SLEEP_SEC("sleepSec"),   // [109] sleepSec(s: integer)
+    SLEEP_US("sleepUs"),   // [110] sleepUs(us: integer)
+    PICO_SET_CPU_FREQ_MHZ("__picoSetCpuFreqMHz"),   // [111] __picoSetCpuFreqMHz(mhz: integer): boolean
+    RTC_NOW_SEC("__rtcNowSec"),   // [112] __rtcNowSec(): integer
+    RTC_SET_NOW_SEC("__rtcSetNowSec"),   // [113] __rtcSetNowSec(sec: integer)
+    ADC_INIT_CHANNEL("__adcInitChannel"),   // [114] __adcInitChannel(ch: integer): integer
+    ADC_READ_CHANNEL("__adcReadChannel"),   // [115] __adcReadChannel(ch: integer): integer
+    WDT_ENABLE("__wdtEnable"),   // [116] __wdtEnable(timeoutMs: integer)
+    WDT_FEED("__wdtFeed"),   // [117] __wdtFeed()
+    WDT_DISABLE("__wdtDisable"),   // [118] __wdtDisable()
+    TO_BYTES("toBytes"),   // [119] toBytes(s: string): byte[]
+    FROM_BYTES("fromBytes"),   // [120] fromBytes(b: byte[]): string
+    HEAP_FRAG("heapFrag"),   // [121] heapFrag(): string
+    HEAP_MAP("heapMap"),   // [122] heapMap(cols: integer): string
+    PICO_GPIO_COUNT("__picoGpioCount"),   // [123] __picoGpioCount(): integer
+    NP_INIT("__npInit"),   // [124] __npInit(pin: integer)
+    NP_SHOW("__npShow"),   // [125] __npShow(pin: integer, grb: integer[], count: integer)
+    READ_FILE_BYTES("readFileBytes"),   // [126] readFileBytes(path: string): byte[]
+    WRITE_FILE_BYTES("writeFileBytes"),   // [127] writeFileBytes(path: string, data: byte[])
+    THROW_RTE("__throwRte"),   // [128] __throwRte(msg: string)
+    LONG_TO_STRING("__longToString"),   // [129] __longToString(v: long): string
+    DOUBLE_TO_STRING("__doubleToString"),   // [130] __doubleToString(v: double): string
+    TCP_CONNECT("__tcpConnect"),   // [131] __tcpConnect(host: string, port: integer, timeoutMs: integer): integer
+    TCP_SEND("__tcpSend"),   // [132] __tcpSend(h: integer, data: byte[]): integer
+    TCP_RECV("__tcpRecv"),   // [133] __tcpRecv(h: integer, max: integer, timeoutMs: integer): byte[]
+    TCP_CLOSE("__tcpClose"),   // [134] __tcpClose(h: integer)
+    GUI_SCREEN_ACTIVE("__guiScreenActive"),   // [135] __guiScreenActive(): integer
+    GUI_CREATE_OBJ("__guiCreateObj"),   // [136] __guiCreateObj(parent: integer): integer
+    GUI_CREATE_LABEL("__guiCreateLabel"),   // [137] __guiCreateLabel(parent: integer): integer
+    GUI_CREATE_BUTTON("__guiCreateButton"),   // [138] __guiCreateButton(parent: integer): integer
+    GUI_SET_TEXT("__guiSetText"),   // [139] __guiSetText(handle: integer, t: string)
+    GUI_SET_WIDTH("__guiSetWidth"),   // [140] __guiSetWidth(handle: integer, w: integer)
+    GUI_SET_HEIGHT("__guiSetHeight"),   // [141] __guiSetHeight(handle: integer, h: integer)
+    GUI_ALIGN("__guiAlign"),   // [142] __guiAlign(handle: integer, a: integer, dx: integer, dy: integer)
+    GUI_SET_BG_COLOR("__guiSetBgColor"),   // [143] __guiSetBgColor(handle: integer, rgb: integer)
+    GUI_SET_TEXT_COLOR("__guiSetTextColor"),   // [144] __guiSetTextColor(handle: integer, rgb: integer)
+    GUI_SET_FONT("__guiSetFont"),   // [145] __guiSetFont(handle: integer, fontId: integer)
+    GUI_CLEAN("__guiClean"),   // [146] __guiClean(handle: integer)
+    GUI_DELETE("__guiDelete"),   // [147] __guiDelete(handle: integer)
+    GUI_SCREEN_LOAD("__guiScreenLoad"),   // [148] __guiScreenLoad(handle: integer)
+    GUI_RUN("__guiRun"),   // [149] __guiRun()
+    GUI_DUMP_TREE("__guiDumpTree"),   // [150] __guiDumpTree(): string
+    GUI_BIND_CLICK("__guiBindClick"),   // [151] __guiBindClick(handle: integer, self: any)
+    GUI_CLICK("__guiClick"),   // [152] __guiClick(w: any)
+    GUI_SET_X("__guiSetX"),   // [153] __guiSetX(handle: integer, x: integer)
+    GUI_GET_X("__guiGetX"),   // [154] __guiGetX(handle: integer): integer
+    GUI_SET_Y("__guiSetY"),   // [155] __guiSetY(handle: integer, y: integer)
+    GUI_GET_Y("__guiGetY"),   // [156] __guiGetY(handle: integer): integer
+    GUI_GET_WIDTH("__guiGetWidth"),   // [157] __guiGetWidth(handle: integer): integer
+    GUI_GET_HEIGHT("__guiGetHeight"),   // [158] __guiGetHeight(handle: integer): integer
+    GUI_SET_SCROLL_DIR("__guiSetScrollDir"),   // [159] __guiSetScrollDir(handle: integer, dir: integer)
+    GUI_GET_SCROLL_DIR("__guiGetScrollDir"),   // [160] __guiGetScrollDir(handle: integer): integer
+    GUI_REFRESH("__guiRefresh"),   // [161] __guiRefresh(handle: integer)
+    GUI_CREATE_CHECKBOX("__guiCreateCheckbox"),   // [162] __guiCreateCheckbox(parent: integer): integer
+    GUI_SET_CHECKED("__guiSetChecked"),   // [163] __guiSetChecked(handle: integer, v: boolean)
+    GUI_GET_CHECKED("__guiGetChecked"),   // [164] __guiGetChecked(handle: integer): boolean
+    GUI_CHANGE("__guiChange"),   // [165] __guiChange(w: any)
+    GUI_CREATE_SWITCH("__guiCreateSwitch"),   // [166] __guiCreateSwitch(parent: integer): integer
+    GUI_CREATE_SLIDER("__guiCreateSlider"),   // [167] __guiCreateSlider(parent: integer): integer
+    GUI_CREATE_BAR("__guiCreateBar"),   // [168] __guiCreateBar(parent: integer): integer
+    GUI_SET_VALUE("__guiSetValue"),   // [169] __guiSetValue(handle: integer, v: integer)
+    GUI_GET_VALUE("__guiGetValue"),   // [170] __guiGetValue(handle: integer): integer
+    GUI_SET_RANGE("__guiSetRange"),   // [171] __guiSetRange(handle: integer, mn: integer, mx: integer)
+    GUI_CREATE_SPINBOX("__guiCreateSpinbox"),   // [172] __guiCreateSpinbox(parent: integer): integer
+    GUI_CREATE_LED("__guiCreateLed"),   // [173] __guiCreateLed(parent: integer): integer
+    GUI_CREATE_DROPDOWN("__guiCreateDropdown"),   // [174] __guiCreateDropdown(parent: integer): integer
+    GUI_SET_OPTIONS("__guiSetOptions"),   // [175] __guiSetOptions(handle: integer, opts: string)
+    GUI_CREATE_TEXTAREA("__guiCreateTextarea"),   // [176] __guiCreateTextarea(parent: integer): integer
+    GUI_GET_TEXT("__guiGetText"),   // [177] __guiGetText(handle: integer): string
+    GUI_CREATE_LIST("__guiCreateList"),   // [178] __guiCreateList(parent: integer): integer
+    GUI_CREATE_KEYBOARD("__guiCreateKeyboard"),   // [179] __guiCreateKeyboard(parent: integer): integer
+    GUI_KEYBOARD_SET_TEXTAREA("__guiKeyboardSetTextarea"),   // [180] __guiKeyboardSetTextarea(handle: integer, ta: integer)
+    GUI_CREATE_MSGBOX("__guiCreateMsgbox"),   // [181] __guiCreateMsgbox(parent: integer): integer
+    GUI_SET_BUTTONS("__guiSetButtons"),   // [182] __guiSetButtons(handle: integer, labels: string)
+    GUI_CREATE_TABVIEW("__guiCreateTabview"),   // [183] __guiCreateTabview(parent: integer): integer
+    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab"),   // [184] __guiTabviewAddTab(handle: integer, name: string): integer
+    GUI_CREATE_TABLE("__guiCreateTable"),   // [185] __guiCreateTable(parent: integer): integer
+    GUI_TABLE_SET_GRID("__guiTableSetGrid"),   // [186] __guiTableSetGrid(handle: integer, rows: integer, cols: integer)
+    GUI_TABLE_SET_CELL("__guiTableSetCell"),   // [187] __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)
+    GUI_TABLE_GET_CELL("__guiTableGetCell"),   // [188] __guiTableGetCell(handle: integer, row: integer, col: integer): string
+    GUI_IMAGE_NEW("__guiImageNew"),   // [189] __guiImageNew(): integer
+    GUI_IMAGE_LOAD_FILE("__guiImageLoadFile"),   // [190] __guiImageLoadFile(handle: integer, path: string): integer
+    GUI_IMAGE_WIDTH("__guiImageWidth"),   // [191] __guiImageWidth(handle: integer): integer
+    GUI_IMAGE_HEIGHT("__guiImageHeight"),   // [192] __guiImageHeight(handle: integer): integer
+    GUI_CREATE_IMAGE_VIEW("__guiCreateImageView"),   // [193] __guiCreateImageView(parent: integer): integer
+    GUI_IMAGE_VIEW_SET_IMAGE("__guiImageViewSetImage"),   // [194] __guiImageViewSetImage(view: integer, image: integer)
+    GUI_IMAGE_VIEW_REFRESH("__guiImageViewRefresh"),   // [195] __guiImageViewRefresh(view: integer)
+    GUI_SET_FONT_SIZE("__guiSetFontSize"),   // [196] __guiSetFontSize(handle: integer, px: integer)
+    GUI_GET_FONT_SIZE("__guiGetFontSize"),   // [197] __guiGetFontSize(handle: integer): integer
+    GUI_TEXTAREA_SET_READONLY("__guiTextareaSetReadonly"),   // [198] __guiTextareaSetReadonly(handle: integer, ro: integer)
+    GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"),   // [199] __guiTextareaGetReadonly(handle: integer): integer
+    EVAL("eval"),   // [200] eval(expr: string): float
+    PICO_RESET_CAUSE("__picoResetCause"),   // [201] __picoResetCause(): string
+    PICO_SET_MARK("__picoSetMark"),   // [202] __picoSetMark(code: integer)
+    PICO_MARK_COUNT("__picoMarkCount"),   // [203] __picoMarkCount(): integer
+    PICO_MARK_AT("__picoMarkAt"),   // [204] __picoMarkAt(i: integer): integer
+    PICO_BOOT_COUNT("__picoBootCount"),   // [205] __picoBootCount(): integer
+    GUI_INVOKE_BY_NAME("__guiInvokeByName"),   // [206] __guiInvokeByName(host: Object, name: string, sender: Object)
+    GUI_INVOKE_BY_SLOT("__guiInvokeBySlot"),   // [207] __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
+    PICO_ADC_CHANNELS("__picoAdcChannels"),   // [208] __picoAdcChannels(): integer
+    PICO_PWM_SLICES("__picoPwmSlices"),   // [209] __picoPwmSlices(): integer
+    GUI_LOAD_FONT("__guiLoadFont"),   // [210] __guiLoadFont(path: string): integer
+    APP_MAIN_MODULE("__appMainModule"),   // [211] __appMainModule(): string
+    APP_MAIN_MODULE_PATH("__appMainModulePath"),   // [212] __appMainModulePath(): string
+    APP_PROJECT_PATH("__appProjectPath"),   // [213] __appProjectPath(): string
+    GUI_SET_ROTATION("__guiSetRotation"),   // [214] __guiSetRotation(deg: integer)
+    GUI_CREATE_CHART("__guiCreateChart"),   // [215] __guiCreateChart(parent: integer): integer
+    GUI_CHART_SET_POINTS("__guiChartSetPoints"),   // [216] __guiChartSetPoints(handle: integer, n: integer)
+    GUI_CHART_ADD_SERIES("__guiChartAddSeries"),   // [217] __guiChartAddSeries(handle: integer, rgb: integer): integer
+    GUI_CHART_PUSH("__guiChartPush"),   // [218] __guiChartPush(handle: integer, series: integer, v: integer)
+    GUI_CHART_SET_VALUE("__guiChartSetValue"),   // [219] __guiChartSetValue(handle: integer, series: integer, idx: integer, v: integer)
+    GUI_CHART_SET_TYPE("__guiChartSetType"),   // [220] __guiChartSetType(handle: integer, t: integer)
+    EVENT_RAISE("__eventRaise"),   // [221] __eventRaise(recv: any, dest: any, nargs: integer, masks: integer)
+    GUI_RUN_ONCE("__guiRunOnce"),   // [222] __guiRunOnce(): integer
+    GUI_SLOT_OF("__guiSlotOf"),   // [223] __guiSlotOf(obj: Object, name: string): integer
+    PACK_NEXT("__packNext"),   // [224] __packNext(cur: integer): integer
+    PACK_INFO("__packInfo"),   // [225] __packInfo(cur: integer): string
+    PACK_ENTRY_NEXT("__packEntryNext"),   // [226] __packEntryNext(pack: integer, cur: integer): integer
+    PACK_ENTRY_INFO("__packEntryInfo"),   // [227] __packEntryInfo(pack: integer, cur: integer): string
+    CLAMP_F("__clamp_f"),   // [228] __clamp_f(x: float, lo: float, hi: float): float
+    WRAP_F("__wrap_f"),   // [229] __wrap_f(x: float, lo: float, hi: float): float
+    HYPOT_F("__hypot_f"),   // [230] __hypot_f(x: float, y: float): float
+    REMAP_F("__remap_f"),   // [231] __remap_f(x: float, inLo: float, inHi: float, outLo: float, outHi: float): float
+    RUN_ARG("__runArg"),   // [232] __runArg(defecto: string): string
+    MACHINE_MICRO("__machineMicro"),   // [233] __machineMicro(): string
+    GUI_GET_ALIGN("__guiGetAlign"),   // [234] __guiGetAlign(handle: integer): integer
+    GUI_GET_ALIGN_DX("__guiGetAlignDx"),   // [235] __guiGetAlignDx(handle: integer): integer
+    GUI_GET_ALIGN_DY("__guiGetAlignDy"),   // [236] __guiGetAlignDy(handle: integer): integer
+    GUI_GET_AUTH_WIDTH("__guiGetAuthWidth"),   // [237] __guiGetAuthWidth(handle: integer): integer
+    GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight"),   // [238] __guiGetAuthHeight(handle: integer): integer
+    GUI_SHOT("__guiShot");   // [239] __guiShot(path: string): integer
 
     public final String bpName;
     public final int id;
@@ -541,19 +259,8 @@ public enum Builtin {
     private static final Map<String, Builtin> BY_NAME = new HashMap<>();
     static {
         for (Builtin b : values()) BY_NAME.put(b.bpName, b);
-        /* #443 — `newObjArray` es un SEGUNDO NOMBRE de NEW_REF_ARRAY, no un
-         * builtin nuevo: hace exactamente lo mismo (array TYPE_ARRAY_REF con
-         * los slots a 0) y lo que cambia es a quien va dirigido. `__newRefArray`
-         * lleva `__` de interno, para las clases que sintetiza el compilador;
-         * `newObjArray` es el nombre PUBLICO, hermano de newIntArray/newLongArray,
-         * y su tipo de retorno declarado es `Object[]`.
-         *
-         * Alias y no entrada de enum PORQUE EL ID ES `ordinal()`: una constante
-         * nueva se llevaria un id nuevo que ninguna VM conoce, y habria que
-         * implementarlo dos veces para no ganar nada. Asi el bytecode emitido es
-         * el de siempre y las VMs no se tocan. */
-        BY_NAME.put("newObjArray", NEW_REF_ARRAY);
-        BY_NAME.put("growObjArray", GROW_REF_ARRAY);
+        BY_NAME.put("newObjArray", NEW_REF_ARRAY);   // alias en Core.bp
+        BY_NAME.put("growObjArray", GROW_REF_ARRAY);   // alias en Core.bp
     }
 
     public static Builtin byName(String name) { return BY_NAME.get(name); }

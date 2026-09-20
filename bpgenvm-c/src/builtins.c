@@ -35,62 +35,22 @@
 #include "bpvm_gui.h"   /* V3 / H4 — backend GUI (modelo). Sólo en el build con GUI. */
 #endif
 
-/* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
- * implementa; los demás devuelven BAD_OPCODE para que el caller sepa
- * que falta. */
-enum {
-    BUILTIN_STRLEN          = 0,
-    BUILTIN_PARSE_INT       = 1,
-    BUILTIN_PARSE_FLOAT     = 2,   /* string -> float (f32); strtod, parity-safe */
-    BUILTIN_INT_TO_STRING   = 3,
-    BUILTIN_BOOL_TO_STRING  = 5,
-    BUILTIN_SUBSTRING       = 9,   /* #173: substring(s, start, end) */
-    BUILTIN_CHAR_AT         = 14,
+/* H1 P2 (20-sep) — LOS IDS YA NO SE ESCRIBEN AQUÍ: se generan de bpstdlib/Core.bp (el módulo raíz)
+ * con scripts/gen_builtins.py, en builtin_ids.h — los mismos que el ordinal del enum Builtin de miVM,
+ * del mismo fichero. Lo que sigue son las NOTAS que acompañaban a los números (se conservan; el
+ * número de cada una está en la cabecera, con su firma BP). */
+#include "builtin_ids.h"
+
+#if 0   /* notas de los ids (histórico; el enum vive en builtin_ids.h) */
     /* #348 — cadenas de cómputo puro. Estaban SÓLO en miVM: un programa que
      * las usara pasaba en el host y moría en la placa. Ids del enum Builtin. */
-    BUILTIN_UPPER           = 6,
-    BUILTIN_LOWER           = 7,
-    BUILTIN_TRIM            = 8,
-    BUILTIN_INDEX_OF        = 10,
-    BUILTIN_STARTS_WITH     = 11,
-    BUILTIN_ENDS_WITH       = 12,
-    BUILTIN_CONTAINS        = 13,
-    BUILTIN_REPLACE         = 15,
-    BUILTIN_SPLIT           = 36,
     /* #348 tanda 2 — matemáticas de cómputo puro. Todas calculan en DOUBLE y
      * estrechan a float AL FINAL, igual que miVM (Math.* de Java toma double y
      * el resultado se castea a (float)). Usar las variantes 'f' de libm daría
      * otro último bit y rompería la paridad. */
-    BUILTIN_SQRT            = 19,
-    BUILTIN_POW             = 20,
-    BUILTIN_LOG             = 21,
-    BUILTIN_LOG10           = 22,
-    BUILTIN_EXP             = 23,
-    BUILTIN_SIN             = 24,
-    BUILTIN_COS             = 25,
-    BUILTIN_TAN             = 26,
-    BUILTIN_RANDOM          = 27,
-    BUILTIN_RANDOM_INT      = 28,
-    BUILTIN_PI              = 29,
-    BUILTIN_E               = 30,
-    BUILTIN_FLOOR           = 31,
-    BUILTIN_CEIL            = 32,
-    BUILTIN_ROUND           = 33,
-    BUILTIN_SIGN_I          = 56,
-    BUILTIN_SIGN_F          = 57,
-    BUILTIN_ASIN            = 58,
-    BUILTIN_ACOS            = 59,
-    BUILTIN_ATAN            = 60,
-    BUILTIN_ATAN2           = 61,
-    BUILTIN_FACTORIAL_I     = 62,
-    BUILTIN_GAMMA_F         = 63,
     /* #348 tanda 3 — rutas. SIEMPRE con '/' (decisión de Eduardo): el FS del
      * dispositivo es '/', y la semántica la definimos nosotros en vez de
      * heredar la de java.nio.file, que es dependiente de plataforma. */
-    BUILTIN_PATH_JOIN       = 64,
-    BUILTIN_PATH_PARENT     = 65,
-    BUILTIN_PATH_BASENAME   = 66,
-    BUILTIN_PATH_EXTENSION  = 67,
     /* #484 - `IO.prompt` SI existe en la VM-C, y lo que hace es DECIR QUE NO
      * PUEDE. El dialogo lo pinta el IDE (verbo PROMPT_REQUEST del wire, que aqui
      * no esta implementado), asi que en esta VM nunca hay quien lo conteste.
@@ -99,246 +59,71 @@ enum {
      * ademas es lo que promete la doc de IO.bp. Dos mensajes distintos para el
      * mismo programa = paridad rota, y no lo veia nadie porque no habia ningun
      * sample suyo en el corpus. */
-    BUILTIN_PATH_ABSOLUTE   = 68,   /* #484 - ver el case, cambia de significado */
-    BUILTIN_PROMPT          = 77,
     /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
-    BUILTIN_ABS             = 16,
-    BUILTIN_MIN             = 17,
-    BUILTIN_MAX             = 18,
     /* File I/O (V2/H10/#247) — paridad con enum Builtin Java (ids 38..41). */
-    BUILTIN_READ_FILE       = 38,
-    BUILTIN_WRITE_FILE      = 39,
-    BUILTIN_APPEND_FILE     = 40,
-    BUILTIN_FILE_EXISTS     = 41,
     /* #240 (logger) — gestión de ficheros via IO.bp. */
-    BUILTIN_REMOVE_FILE     = 71,
-    BUILTIN_RENAME          = 72,
-    BUILTIN_FILE_SIZE       = 74,
     /* #240 (2ª pasada) — resto de IO.bp. */
-    BUILTIN_MKDIR           = 69,
-    BUILTIN_RMDIR           = 70,
-    BUILTIN_COPY_FILE       = 73,
-    BUILTIN_IS_DIRECTORY    = 75,
-    BUILTIN_LAST_MODIFIED   = 76,
     /* L13 — concat string + float/long/double (formateo canónico GAP-4). */
-    BUILTIN_FLOAT_TO_STRING  = 4,
-    BUILTIN_LONG_TO_STRING   = 129,
-    BUILTIN_DOUBLE_TO_STRING = 130,
     /* H11 (#241) — cliente TCP simple via fachada bpvm_net. */
-    BUILTIN_TCP_CONNECT      = 131,
-    BUILTIN_TCP_SEND         = 132,
-    BUILTIN_TCP_RECV         = 133,
-    BUILTIN_TCP_CLOSE        = 134,
-    BUILTIN_NOW             = 34,
-    BUILTIN_SLEEP           = 35,
-    BUILTIN_GC              = 43,
-    BUILTIN_NEW_REF_ARRAY   = 44,
-    BUILTIN_GROW_REF_ARRAY  = 45,   /* V4: faltaba (paridad con miVM) */
-    BUILTIN_GROW_INT_ARRAY  = 46,
-    BUILTIN_CHARS_TO_STRING = 47,
-    BUILTIN_CHAR_CODE_AT    = 48,
-    BUILTIN_THREAD_START    = 49,
-    BUILTIN_THREAD_JOIN     = 50,
-    BUILTIN_YIELD           = 51,
-    BUILTIN_MUTEX_CREATE    = 52,
-    BUILTIN_MUTEX_LOCK      = 53,
-    BUILTIN_MUTEX_UNLOCK    = 54,
-    BUILTIN_MOVE            = 55,
     /* Gpio.* — paridad con enum Builtin Java (ordinals 78..81). */
-    BUILTIN_GPIO_INIT       = 78,
-    BUILTIN_GPIO_WRITE      = 79,
-    BUILTIN_GPIO_READ       = 80,
-    BUILTIN_GPIO_PULL       = 81,
     /* I2c.* — ordinals 82..84. */
-    BUILTIN_I2C_INIT        = 82,
-    BUILTIN_I2C_WRITE       = 83,
-    BUILTIN_I2C_READ        = 84,
     /* Allocator visible al user (ordinal 85). */
-    BUILTIN_NEW_INT_ARRAY   = 85,
     /* Spi.* — ordinals 86..89. */
-    BUILTIN_SPI_INIT        = 86,
-    BUILTIN_SPI_WRITE       = 87,
-    BUILTIN_SPI_READ        = 88,
-    BUILTIN_SPI_TRANSFER    = 89,
     /* Uart.* — ordinals 90..93. */
-    BUILTIN_UART_INIT       = 90,
-    BUILTIN_UART_WRITE      = 91,
-    BUILTIN_UART_READ       = 92,
-    BUILTIN_UART_AVAILABLE  = 93,
     /* Pulse counter — ordinals 94..98. */
-    BUILTIN_PULSE_INIT      = 94,
-    BUILTIN_PULSE_START     = 95,
-    BUILTIN_PULSE_STOP      = 96,
-    BUILTIN_PULSE_VALUE     = 97,
-    BUILTIN_PULSE_RESET     = 98,
     /* PWM — ordinals 99..103. */
-    BUILTIN_PWM_INIT        = 99,
-    BUILTIN_PWM_SET_FREQ    = 100,
-    BUILTIN_PWM_SET_DUTY    = 101,
-    BUILTIN_PWM_START       = 102,
-    BUILTIN_PWM_STOP        = 103,
     /* Pico (info MCU) — ordinals 104..108. */
-    BUILTIN_PICO_UNIQUE_ID  = 104,
-    BUILTIN_PICO_BOARD_NAME = 105,
-    BUILTIN_PICO_TEMP_C     = 106,
-    BUILTIN_PICO_CPU_FREQ_HZ = 107,
-    BUILTIN_PICO_UPTIME_MS  = 108,
     /* Time (sleep variantes) — ordinals 109..110. */
-    BUILTIN_SLEEP_SEC       = 109,
-    BUILTIN_SLEEP_US        = 110,
     /* Pico overclock — ordinal 111. */
-    BUILTIN_PICO_SET_CPU_FREQ_MHZ = 111,
     /* Rtc — ordinales 112..113. */
-    BUILTIN_RTC_NOW_SEC     = 112,
-    BUILTIN_RTC_SET_NOW_SEC = 113,
     /* Adc — ordinales 114..115. */
-    BUILTIN_ADC_INIT_CHANNEL = 114,
-    BUILTIN_ADC_READ_CHANNEL = 115,
     /* Wdt — ordinales 116..118. */
-    BUILTIN_WDT_ENABLE       = 116,
-    BUILTIN_WDT_FEED         = 117,
-    BUILTIN_WDT_DISABLE      = 118,
     /* H2 (V2) — conversión string <-> byte[] (ambos TYPE_ARRAY_I8). */
-    BUILTIN_TO_BYTES         = 119,
-    BUILTIN_FROM_BYTES       = 120,
     /* 121/122 = HEAP_FRAG/HEAP_MAP: diagnósticos SÓLO de la VM-Java; la VM C
      * no los implementa. Hueco intencional para mantener el id alineado al
      * ordinal del enum Builtin.java. */
     /* H7.3 — board-aware (RP2350A/B): GPIO de la variante desde board_desc. */
-    BUILTIN_PICO_GPIO_COUNT  = 123,
     /* H7.4 — NeoPixel WS2812 (device-only; no-op en host). */
-    BUILTIN_NEOPIXEL_INIT    = 124,
-    BUILTIN_NEOPIXEL_SHOW    = 125,
     /* H10/#247 — file I/O binario (byte[]). Mismo cuerpo que READ_FILE/WRITE_FILE
      * (heap TYPE_ARRAY_I8, bytes crudos sin pasar por string); el frontend los
      * tipa byte[]. Ids al final, alineados con el enum Builtin.java (126/127). */
-    BUILTIN_READ_FILE_BYTES  = 126,
-    BUILTIN_WRITE_FILE_BYTES = 127,
-    BUILTIN_THROW_RTE        = 128,  /* #248: lanza RuntimeError nativo (msg) */
     /* V3 / H4 — GUI (modelo de comportamiento + dumpTree). Ids 135..152 =
      * ordinal del enum Builtin Java. Sólo se despachan en el build con BPVM_GUI;
      * sin él caen al default (= micro sin-GUI). */
-    BUILTIN_GUI_SCREEN_ACTIVE = 135,
-    BUILTIN_GUI_CREATE_OBJ    = 136,
-    BUILTIN_GUI_CREATE_LABEL  = 137,
-    BUILTIN_GUI_CREATE_BUTTON = 138,
-    BUILTIN_GUI_SET_TEXT      = 139,
-    BUILTIN_GUI_SET_WIDTH     = 140,
-    BUILTIN_GUI_SET_HEIGHT    = 141,
-    BUILTIN_GUI_ALIGN         = 142,
-    BUILTIN_GUI_SET_BG_COLOR  = 143,
-    BUILTIN_GUI_SET_TEXT_COLOR = 144,
-    BUILTIN_GUI_SET_FONT      = 145,
-    BUILTIN_GUI_CLEAN         = 146,
-    BUILTIN_GUI_DELETE        = 147,
-    BUILTIN_GUI_SCREEN_LOAD   = 148,
-    BUILTIN_GUI_RUN           = 149,
-    BUILTIN_GUI_DUMP_TREE     = 150,
-    BUILTIN_GUI_BIND_CLICK    = 151,
-    BUILTIN_GUI_CLICK         = 152,
     /* H6 — geometría (backend=verdad) + scroll (opt-in) + refresh. Ids = ordinal
      * del enum Builtin Java (idénticos en ambas VMs; aditivo). */
-    BUILTIN_GUI_SET_X          = 153,
-    BUILTIN_GUI_GET_X          = 154,
-    BUILTIN_GUI_SET_Y          = 155,
-    BUILTIN_GUI_GET_Y          = 156,
-    BUILTIN_GUI_GET_WIDTH      = 157,
-    BUILTIN_GUI_GET_HEIGHT     = 158,
-    BUILTIN_GUI_SET_SCROLL_DIR = 159,
-    BUILTIN_GUI_GET_SCROLL_DIR = 160,
-    BUILTIN_GUI_REFRESH        = 161,
     /* H6 — checkbox (1er value-widget): create + checked + el inyector __guiChange
      * que cierra el camino onChange (kind=CHANGE). Ids = ordinal del enum Java. */
-    BUILTIN_GUI_CREATE_CHECKBOX = 162,
-    BUILTIN_GUI_SET_CHECKED     = 163,
-    BUILTIN_GUI_GET_CHECKED     = 164,
-    BUILTIN_GUI_CHANGE          = 165,
     /* H6 widgets — switch + slider + bar (value-widgets enteros). */
-    BUILTIN_GUI_CREATE_SWITCH   = 166,
-    BUILTIN_GUI_CREATE_SLIDER   = 167,
-    BUILTIN_GUI_CREATE_BAR      = 168,
-    BUILTIN_GUI_SET_VALUE       = 169,
-    BUILTIN_GUI_GET_VALUE       = 170,
-    BUILTIN_GUI_SET_RANGE       = 171,
     /* H6 widgets — spinbox (entero+rango) + led (indicador on/off). */
-    BUILTIN_GUI_CREATE_SPINBOX  = 172,
-    BUILTIN_GUI_CREATE_LED      = 173,
     /* H6 widgets — dropdown (opciones + índice) + textarea (texto editable). */
-    BUILTIN_GUI_CREATE_DROPDOWN = 174,
-    BUILTIN_GUI_SET_OPTIONS     = 175,
-    BUILTIN_GUI_CREATE_TEXTAREA = 176,
-    BUILTIN_GUI_GET_TEXT        = 177,
     /* H6 widgets — list (ítems + índice) + keyboard. */
-    BUILTIN_GUI_CREATE_LIST     = 178,
-    BUILTIN_GUI_CREATE_KEYBOARD = 179,
-    BUILTIN_GUI_KEYBOARD_SET_TEXTAREA = 180,
     /* H6 widgets — msgbox (aviso async: mensaje + botones). */
-    BUILTIN_GUI_CREATE_MSGBOX   = 181,
-    BUILTIN_GUI_SET_BUTTONS     = 182,
     /* H6 widgets — tabview (pestañas; addTab devuelve el handle de la página). */
-    BUILTIN_GUI_CREATE_TABVIEW  = 183,
-    BUILTIN_GUI_TABVIEW_ADD_TAB = 184,
     /* H6 widgets — table (rejilla de celdas filas×columnas). */
-    BUILTIN_GUI_CREATE_TABLE    = 185,
-    BUILTIN_GUI_TABLE_SET_GRID  = 186,
-    BUILTIN_GUI_TABLE_SET_CELL  = 187,
-    BUILTIN_GUI_TABLE_GET_CELL  = 188,
     /* H6 widgets — image (asset separado del control que lo muestra). */
-    BUILTIN_GUI_IMAGE_NEW        = 189,
-    BUILTIN_GUI_IMAGE_LOAD_FILE  = 190,
-    BUILTIN_GUI_IMAGE_WIDTH      = 191,
-    BUILTIN_GUI_IMAGE_HEIGHT     = 192,
-    BUILTIN_GUI_CREATE_IMAGEVIEW = 193,
-    BUILTIN_GUI_IMAGEVIEW_SET_IMAGE = 194,
-    BUILTIN_GUI_IMAGEVIEW_REFRESH = 195,
     /* H6 — fuente: tamaño de texto por componente (catálogo). */
-    BUILTIN_GUI_SET_FONT_SIZE = 196,
-    BUILTIN_GUI_GET_FONT_SIZE = 197,
     /* H6 — textarea read-only (sin cursor, no editable). */
-    BUILTIN_GUI_TEXTAREA_SET_READONLY = 198,
-    BUILTIN_GUI_TEXTAREA_GET_READONLY = 199,
     /* H7 — eval("expr"): calculadora de constantes (id 200). */
-    BUILTIN_EVAL = 200,
     /* H10 — Pico.resetCause(): causa del último reset como string (id 201). */
-    BUILTIN_PICO_RESET_CAUSE = 201,
     /* H10 — breadcrumb en RAM retenida: migas que sobreviven al reset (202-205). */
-    BUILTIN_PICO_SET_MARK   = 202,   /* setMark(code): deja una miga */
-    BUILTIN_PICO_MARK_COUNT = 203,   /* markCount(): nº de migas del trail previo */
-    BUILTIN_PICO_MARK_AT    = 204,   /* markAt(i): i-ésima (0=origen pegajoso) */
-    BUILTIN_PICO_BOOT_COUNT = 205,   /* bootCount(): arranques desde power-on */
     /* H13 (V3) — Forms: call-by-name del handler (host, name, sender) → void. */
-    BUILTIN_GUI_INVOKE_BY_NAME = 206,
     /* H13.1 (V3) — Forms Camino A: dispatch del handler por SLOT de vtable
      * (win, slot, sender) → void. El handler es un MÉTODO de la ventana cuyo slot
      * horneó el IDE en el .win (resuelto vía .bpi/slotOf). */
-    BUILTIN_GUI_INVOKE_BY_SLOT = 207,
     /* H14 — counts de periféricos board-aware (del board_desc / board.json). */
-    BUILTIN_PICO_ADC_CHANNELS  = 208,   /* () → canales ADC de la placa */
-    BUILTIN_PICO_PWM_SLICES    = 209,   /* () → slices PWM de la placa */
 
-    BUILTIN_GUI_LOAD_FONT      = 210,   /* (path: string) → id de fuente (1-based); setFont(id) la aplica */
 
     /* H19 — introspección del proyecto en ejecución (módulo App). */
-    BUILTIN_APP_MAIN_MODULE      = 211, /* () → string: nombre del módulo principal ("Main") */
-    BUILTIN_APP_MAIN_MODULE_PATH = 212, /* () → string: ruta completa del entry ("/app/<proj>/Main.mod") */
-    BUILTIN_APP_PROJECT_PATH     = 213, /* () → string: carpeta del proyecto ("/app/<proj>"); "" si plano */
 
     /* Orientación del display en runtime (0/90/180/270 grados). */
-    BUILTIN_GUI_SET_ROTATION     = 214, /* (deg: integer) → void */
 
     /* H7 — Chart. Los ids DEBEN coincidir con el ordinal del enum Builtin.java
      * (allí id = ordinal(), por eso las entradas nuevas van al final). El eje Y
      * y el repintado reusan los genéricos SET_RANGE / REFRESH. */
-    BUILTIN_GUI_CREATE_CHART     = 215, /* (parent) → id */
-    BUILTIN_GUI_CHART_SET_POINTS = 216, /* (h, n) → void */
-    BUILTIN_GUI_CHART_ADD_SERIES = 217, /* (h, rgb) → índice de serie */
-    BUILTIN_GUI_CHART_PUSH       = 218, /* (h, serie, v) → void */
-    BUILTIN_GUI_CHART_SET_VALUE  = 219, /* (h, serie, idx, v) → void */
-    BUILTIN_GUI_CHART_SET_TYPE   = 220, /* (h, tipo) → void: 0=línea, 1=barras */
 
     /* H5.c — `raise ev(args)`. Encola; NO llama al handler (lo inyecta el
      * scheduler entre quanta). Ver docs/V4_IDEAS.md §contrato de __eventRaise. */
-    BUILTIN_EVENT_RAISE          = 221,
 
     /* #324 — UNA PASADA del bombeo del GUI, en vez del lazo entero.
      *   devuelve 1 = "queda trabajo, vuelve a llamarme"
@@ -354,8 +139,6 @@ enum {
      *
      * En headless devuelve 1 si esta pasada drenó algo: así el lazo da UNA VUELTA
      * MÁS y el scheduler tiene dónde correr los handlers antes de salir. */
-    BUILTIN_GUI_RUN_ONCE         = 222,
-    BUILTIN_GUI_SLOT_OF          = 223,
 
     /* #414 — recorrer los packs GRABADOS y su contenido desde BP. Dos por
      * nivel: uno AVANZA (devuelve la posición siguiente, -1 al final) y otro
@@ -365,39 +148,23 @@ enum {
      * ⚠️ Estos números se escriben A MANO aquí y tienen que ser el ordinal() del
      * enum Builtin de miVM. Si divergen, la VM-C ejecuta OTRO builtin y el
      * síntoma no apunta a esto. */
-    BUILTIN_PACK_NEXT            = 224,
-    BUILTIN_PACK_INFO            = 225,
-    BUILTIN_PACK_ENTRY_NEXT      = 226,
-    BUILTIN_PACK_ENTRY_INFO      = 227,
 
     /* V6/L1 — los cuatro que le faltaban a `Math`. AL FINAL, y los ids son los
      * MISMOS que el ordinal() del enum Builtin de la VM-Java: si aquí y allí no
      * coinciden, un `.mod` ejecuta otra funcion y no lo dice nadie. */
-    BUILTIN_CLAMP_F              = 228, /* (x, lo, hi)               → float */
-    BUILTIN_WRAP_F               = 229, /* (x, lo, hi)               → float */
-    BUILTIN_HYPOT_F              = 230, /* (x, y)                    → float */
-    BUILTIN_REMAP_F              = 231, /* (x, inLo, inHi, oLo, oHi) → float */
 
     /* V6/#412 — el argumento de ejecucion, SIEMPRE en el heap. Lo emite
      * `__startup` pasandole el valor POR DEFECTO que diga el fuente; devuelve
      * el argumento de ejecucion si lo hay, y si no una COPIA del defecto —
      * alojada igual. Asi Main recibe siempre una referencia del heap. */
-    BUILTIN_RUN_ARG              = 232,  /* (defecto: string)         → string */
     /* V6 (9-sep) — el MICRO. La PLACA la da BUILTIN_PICO_BOARD_NAME: son DOS
      * campos distintos desde el rediseno de `Machine` (getMicro/getBoard).
      * 233 = ordinal() de MACHINE_MICRO en el enum Builtin de miVM. */
-    BUILTIN_MACHINE_MICRO        = 233, /* ()                        → string  */
     /* V6/G2-4 (11-sep) — la geometria AUTORADA del widget, para el toJson() de
      * Gui.bp. 234..238 = ordinal() de sus gemelos en el enum Builtin de miVM. */
-    BUILTIN_GUI_GET_ALIGN        = 234, /* (id)                      → align | -1 si pos explicita */
-    BUILTIN_GUI_GET_ALIGN_DX     = 235, /* (id)                      → dx      */
-    BUILTIN_GUI_GET_ALIGN_DY     = 236, /* (id)                      → dy      */
-    BUILTIN_GUI_GET_AUTH_WIDTH   = 237, /* (id)                      → w | -1 = auto */
-    BUILTIN_GUI_GET_AUTH_HEIGHT  = 238, /* (id)                      → h | -1 = auto */
     /* V6/C1 (12-sep) — Gui.shot(path): la captura de pantalla a fichero .shot.
      * 239 = ordinal() de GUI_SHOT en el enum Builtin de miVM. */
-    BUILTIN_GUI_SHOT             = 239  /* (path)                    → bytes | <0 codigo */
-};
+#endif
 
 /* Helpers: pop / push del thread actual. */
 static int32_t pop_i32(bpvm_t* vm, bpvm_thread_t* tc) {
@@ -1448,12 +1215,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_GUI_IMAGE_WIDTH:  { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_width(id));  return BPVM_OK; }
     case BUILTIN_GUI_IMAGE_HEIGHT: { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_height(id)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_IMAGEVIEW: return gui_make_child(vm, tc, bpvm_gui_create_imageview);
-    case BUILTIN_GUI_IMAGEVIEW_SET_IMAGE: {
+    case BUILTIN_GUI_CREATE_IMAGE_VIEW: return gui_make_child(vm, tc, bpvm_gui_create_imageview);
+    case BUILTIN_GUI_IMAGE_VIEW_SET_IMAGE: {
         int img = pop_i32(vm, tc); int view = pop_i32(vm, tc);
         bpvm_gui_imageview_set_image(view, img); push_i32(vm, tc, 0); return BPVM_OK;
     }
-    case BUILTIN_GUI_IMAGEVIEW_REFRESH: {
+    case BUILTIN_GUI_IMAGE_VIEW_REFRESH: {
         int view = pop_i32(vm, tc);
         bpvm_gui_imageview_refresh(view); push_i32(vm, tc, 0); return BPVM_OK;
     }
@@ -3086,7 +2853,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, (int32_t) bpvm_pico_pwm_slices());
         return BPVM_OK;
     }
-    case BUILTIN_NEOPIXEL_INIT: {
+    case BUILTIN_NP_INIT: {
         /* __npInit(pin): void
          *
          * H13 hallazgo 21(b) — ANTES se llamaba y se TIRABA el resultado, asi que
@@ -3108,7 +2875,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
-    case BUILTIN_NEOPIXEL_SHOW: {
+    case BUILTIN_NP_SHOW: {
         /* __npShow(pin, grb: integer[], count): void — empuja count palabras
          * GRB del array (mismo layout que I2C/SPI: ref+4 = primer i32 BE). */
         int count = pop_i32(vm, tc);

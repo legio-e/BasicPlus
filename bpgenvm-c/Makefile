@@ -224,7 +224,7 @@ clean:
 # apunta a esto. Texto contra texto, sin build ni placa. Andamio hasta que el
 # modulo raiz (V7) las GENERE de un fichero unico.
 check-builtins:
-	python scripts/check_builtins.py
+	python ../scripts/gen_builtins.py   # H1 P2: las tablas se GENERAN de Core.bp; esto comprueba que casan
 
 # H3: incluye los .d generados por -MMD (deps de cabecera). En el primer build
 # aún no existen → el prefijo '-' los ignora silenciosamente.
