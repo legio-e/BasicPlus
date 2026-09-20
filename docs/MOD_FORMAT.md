@@ -319,7 +319,9 @@ imports sin recompilar el módulo dueño.
 **Las directivas (`bpi 8`, V7/H2).** Texto, una por línea; la escribe y la lee
 `ModuleInterface.java` (`writeTo`/`fromBytes`), y la ida y vuelta es byte a byte
 (`InterfazIdaYVueltaTest`). A nivel de módulo: `bpi <ver>`, `module`, `library`,
-`interface`, `implements`, `extends`, `func <n>(<params>):<ret> [public] [static] [intrinsic]`,
+`interface`, `implements`, `extends`, `func <n>(<params>):<ret> [public] [static] [intrinsic] [inline <bytecode>]`
+(H1, 20-sep: `inline` va el último y se lleva el resto de la línea, `CALL_BUILTIN 24; …` — el cuerpo de una
+intrínseca, que el consumidor inlina en cada llamada),
 `const`, `enum`, `prop`. Sólo las clases **propias** del módulo (los stubs de Core
 que el compilador aliasa no se re-publican). Dentro de `class <n> public [extends <Base>] … end class`:
 

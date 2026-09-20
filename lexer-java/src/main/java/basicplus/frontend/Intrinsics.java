@@ -71,37 +71,20 @@ public final class Intrinsics {
     static {
         // ---- Math ----
         // Constantes (sin args): cada llamada empuja el valor.
-        register("Math.pi",       w -> emitBuiltin(w, Builtin.PI));
-        register("Math.e",        w -> emitBuiltin(w, Builtin.E));
         // Trig directa.
-        register("Math.sin",      w -> emitBuiltin(w, Builtin.SIN));
-        register("Math.cos",      w -> emitBuiltin(w, Builtin.COS));
-        register("Math.tan",      w -> emitBuiltin(w, Builtin.TAN));
         // Logaritmos. ln(x) reusa el builtin LOG (que ya es log natural en la VM).
-        register("Math.ln",       w -> emitBuiltin(w, Builtin.LOG));
-        register("Math.log10",    w -> emitBuiltin(w, Builtin.LOG10));
         // sign(x: integer): integer  →  builtin SIGN_I
-        register("Math.sign",     w -> emitBuiltin(w, Builtin.SIGN_I));
         // signF(x: float): integer →  builtin SIGN_F
-        register("Math.signF",    w -> emitBuiltin(w, Builtin.SIGN_F));
         // asin / acos / atan / atan2
-        register("Math.asin",     w -> emitBuiltin(w, Builtin.ASIN));
-        register("Math.acos",     w -> emitBuiltin(w, Builtin.ACOS));
-        register("Math.atan",     w -> emitBuiltin(w, Builtin.ATAN));
-        register("Math.atan2",    w -> emitBuiltin(w, Builtin.ATAN2));
         // factorial(n: integer): integer  → producto exacto. Error en runtime si n<0
         //   o si el resultado se desborda i32 (n>12).
-        register("Math.factorial",w -> emitBuiltin(w, Builtin.FACTORIAL_I));
         // gamma(x: float): float — factorial real (Lanczos approximation).
-        register("Math.gamma",    w -> emitBuiltin(w, Builtin.GAMMA_F));
         // V6/L1 — rango y geometría. clamp/hypot no fallan nunca; wrap y remap
         // lanzan RuntimeError con el rango degenerado (ver Math.bp).
-        register("Math.clamp",    w -> emitBuiltin(w, Builtin.CLAMP_F));
-        register("Math.wrap",     w -> emitBuiltin(w, Builtin.WRAP_F));
-        register("Math.hypot",    w -> emitBuiltin(w, Builtin.HYPOT_F));
-        register("Math.remap",    w -> emitBuiltin(w, Builtin.REMAP_F));
 
         // ---- IO ----
+        // H1 (20-sep) — Math ya no está aquí: sus intrínsecas llevan el bytecode en el cuerpo
+        // (`inline CALL_BUILTIN n` en Math.bp) y viaja en la interfaz. El resto, hasta que migre.
         register("IO.pathJoin",     w -> emitBuiltin(w, Builtin.PATH_JOIN));
         register("IO.pathParent",   w -> emitBuiltin(w, Builtin.PATH_PARENT));
         register("IO.pathBasename", w -> emitBuiltin(w, Builtin.PATH_BASENAME));

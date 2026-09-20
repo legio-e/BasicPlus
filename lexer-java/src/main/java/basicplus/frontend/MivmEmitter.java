@@ -1390,6 +1390,7 @@ public final class MivmEmitter {
                 // Verificamos contra el registro para detectar typos en el nombre
                 // antes de que el .bpi llegue a un consumidor.
                 String qn = (moduleAst != null ? moduleAst.name : "?") + "." + fs.name;
+                if (fs.inlineOps != null) return;   // H1 (20-sep): el bytecode está escrito en el cuerpo
                 if (!Intrinsics.isKnown(qn)) {
                     errors.add(qn + ": función intrínseca desconocida — añade su"
                             + " emisor a basicplus.frontend.Intrinsics");
@@ -4585,6 +4586,7 @@ public final class MivmEmitter {
                     if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
                 }
                 if (fs.isIntrinsic) {
+                    if (fs.inlineOps != null) { emitInline(fs.inlineOps); return; }   // H1 (20-sep)
                     String qn = (fs.isExternal ? fs.externalModule : (moduleAst != null ? moduleAst.name : "?"))
                             + "." + fs.name;
                     Intrinsics.IntrinsicEmitter ie = Intrinsics.lookup(qn);
@@ -4633,6 +4635,7 @@ public final class MivmEmitter {
                     // mete opcodes inline. No se añade entrada a la tabla de
                     // imports, así que el .mod del módulo dueño no es necesario
                     // en runtime.
+                    if (fs.inlineOps != null) { emitInline(fs.inlineOps); return; }   // H1 (20-sep): viene de la interfaz
                     String qn = fs.externalModule + "." + fs.name;
                     Intrinsics.IntrinsicEmitter ie = Intrinsics.lookup(qn);
                     if (ie == null) {
@@ -5974,6 +5977,23 @@ public final class MivmEmitter {
         ClassSymbol cls = scopeStack.peek().fs.ownerClass;
         w.emitGetParam("this");
         w.emitGetField(cls.name, currentPropertyField);
+    }
+
+    /** H1 (20-sep) — el bytecode escrito en el cuerpo `inline` de una intrínseca, tal cual, en el
+     *  sitio de llamada (los args ya están en la pila; deja UN valor, como CALL_BUILTIN). El
+     *  semántico ya comprobó mnemónico y operandos. */
+    private void emitInline(List<InlineStmt> ops) throws IOException {
+        for (InlineStmt in : ops) {
+            OpCode op = OpCode.valueOf(in.mnemonic);
+            w.emit(op);
+            switch (op.operandKind) {
+                case NONE: break;
+                case IMM_I32: w.emitInt(in.operands.get(0).intValue()); break;
+                case IDX_U16: w.emitShort((short) in.operands.get(0).intValue()); break;
+                case IMM_U8:  w.emitByte(in.operands.get(0).intValue()); break;
+                default: errors.add("inline " + in.mnemonic + ": operandos " + op.operandKind + " no soportados"); return;
+            }
+        }
     }
 
     private void emitSuperCall(SuperCallExpr sc) throws IOException {

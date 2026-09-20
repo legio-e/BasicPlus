@@ -45,6 +45,7 @@ public enum TokenType {
     // ---- Modificador para funciones de stdlib que se compilan inline
     //      (el frontend reemplaza la llamada por opcodes en lugar de CALL_EXT). ----
     INTRINSIC,
+    INLINE,        // H1 (20-sep): el cuerpo de una intrínseca es bytecode escrito: `inline CALL_BUILTIN 23`
 
     // ---- Modificador para funciones AOT (H3 #162). Marca la función
     //      como candidata a tener una versión C-nativa. El bytecode

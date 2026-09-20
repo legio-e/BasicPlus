@@ -102,6 +102,8 @@ public final class ModuleInterface {
          *  Hasta el 14-sep no viajaba y la matriz de #492 lo cazó: el mismo `final` que el
          *  compilador hacía cumplir en el mismo módulo se saltaba cruzando la frontera. */
         public boolean isFinal = false;
+        /** H1 (20-sep) — el bytecode de una intrínseca con cuerpo `inline` (`CALL_BUILTIN 23; …`), o null. */
+        public String inlineText = null;
         public final List<ParamSig> params;
         /** Tipo de retorno; null = void. */
         public final BpType returnType;
@@ -372,7 +374,9 @@ public final class ModuleInterface {
                     }
                     List<ParamSig> ps = new ArrayList<>(fs.params.size());
                     for (ParamSymbol p : fs.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
-                    iface.functions.add(new FuncSig(fs.name, true, fs.isStatic, fs.isIntrinsic, ps, fs.returnType));
+                    FuncSig fsig = new FuncSig(fs.name, true, fs.isStatic, fs.isIntrinsic, ps, fs.returnType);
+                    if (fs.inlineOps != null) fsig.inlineText = Ast.InlineStmt.textoDe(fs.inlineOps);   // H1 (20-sep)
+                    iface.functions.add(fsig);
                 }
                 continue;
             }
@@ -1184,6 +1188,7 @@ public final class ModuleInterface {
                 if (f.isPublic) sb.append(" public");
                 if (f.isStatic) sb.append(" static");
                 if (f.isIntrinsic) sb.append(" intrinsic");
+                if (f.inlineText != null) sb.append(" inline ").append(f.inlineText);   // H1 (20-sep): va el último, hasta el fin de línea
                 pw.println(sb.toString());
             }
 
@@ -1967,6 +1972,9 @@ public final class ModuleInterface {
         boolean isPublic = false;
         boolean isStatic = false;
         boolean isIntrinsic = false, isFinal = false;
+        String inlineText = null;   // H1 (20-sep): `inline …` es el último flag y se lleva el resto de la línea
+        int posInline = (" " + flagsStr + " ").indexOf(" inline ");
+        if (posInline >= 0) { inlineText = flagsStr.substring(posInline + "inline ".length()).trim(); flagsStr = flagsStr.substring(0, posInline).trim(); }
         if (!flagsStr.isEmpty()) {
             for (String tk : flagsStr.split("\\s+")) {
                 if ("public".equals(tk)) isPublic = true;
@@ -1981,6 +1989,7 @@ public final class ModuleInterface {
 
         FuncSig fs = new FuncSig(name, isPublic, isStatic, isIntrinsic, params, ret);
         fs.isFinal = isFinal;   // V7/H2 (bpi 8)
+        fs.inlineText = inlineText;   // H1 (20-sep)
         return fs;
     }
 

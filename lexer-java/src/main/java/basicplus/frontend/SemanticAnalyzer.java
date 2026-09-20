@@ -1095,6 +1095,11 @@ public final class SemanticAnalyzer {
         sym.isEventHandler = f.isEventHandler;   // H5.c — `function event`
         sym.isPrivate = f.isPrivate && owner != null;   // #390
         sym.isIntrinsic = f.isIntrinsic;
+        if (f.isIntrinsic && f.body != null && !f.body.isEmpty()) {   // H1 (20-sep): cuerpo `inline`; AQUÍ (al declarar) y
+            List<InlineStmt> ops = new ArrayList<>();                  // no al analizar el cuerpo: la pasada de interfaz lo necesita
+            for (IStmt st : f.body) if (st instanceof InlineStmt) ops.add((InlineStmt) st);
+            sym.inlineOps = ops;
+        }
         for (Param p : f.params) {
             ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
             psym.defaultExpr = p.defaultValue;   // H8.1: crudo aquí; se valida/normaliza al resolver tipos
@@ -2068,7 +2073,8 @@ public final class SemanticAnalyzer {
         boolean isSuperCallStmt = s instanceof ExprStmt && ((ExprStmt) s).expr instanceof SuperCallExpr;
         if (!isSuperCallStmt) isFirstStmtOfCtor = false;
 
-        if      (s instanceof VarDecl)      analyzeLocalVarDecl((VarDecl) s, scope);
+        if      (s instanceof InlineStmt)   analyzeInline((InlineStmt) s);   // H1 (20-sep)
+        else if (s instanceof VarDecl)      analyzeLocalVarDecl((VarDecl) s, scope);
         else if (s instanceof ConstDecl)    analyzeLocalConstDecl((ConstDecl) s, scope);
         else if (s instanceof AssignStmt)   analyzeAssign((AssignStmt) s, scope);
         else if (s instanceof Ast.RaiseStmt) analyzeRaise((Ast.RaiseStmt) s, scope);
@@ -2983,6 +2989,33 @@ public final class SemanticAnalyzer {
             return ErrorType.INSTANCE;
         }
         return new ClassType(currentClass.baseClass);
+    }
+
+    /** H1 (20-sep) — una línea `inline`: el mnemónico existe (OpCode), los operandos son los
+     *  que ese opcode lleva (hoy: ninguno, o UNO de i32/u16/u8 — lo que necesita la stdlib),
+     *  y sólo dentro de una función cuyo cuerpo sea TODO inline (una intrínseca). */
+    private void analyzeInline(InlineStmt in) {
+        if (currentFunction == null || !currentFunction.isIntrinsic) {
+            err(in.line, in.column, "'inline' sólo puede ir en una función cuyo cuerpo sea todo líneas 'inline' (una intrínseca)");
+            return;
+        }
+        edu.bpgenvm.bytecode.OpCode op;
+        try { op = edu.bpgenvm.bytecode.OpCode.valueOf(in.mnemonic); }
+        catch (IllegalArgumentException e) { err(in.line, in.column, "'" + in.mnemonic + "' no es un opcode (ver docs/OPCODES.md)"); return; }
+        int esperados;
+        switch (op.operandKind) {
+            case NONE: esperados = 0; break;
+            case IMM_I32: case IDX_U16: case IMM_U8: esperados = 1; break;
+            default:
+                err(in.line, in.column, "'inline " + in.mnemonic + "': el compilador no sabe escribir todavía los operandos de ese opcode (" + op.operandKind + ")");
+                return;
+        }
+        if (in.operands.size() != esperados)
+            err(in.line, in.column, "'inline " + in.mnemonic + "' lleva " + esperados + " operando" + (esperados == 1 ? "" : "s") + ", no " + in.operands.size());
+        else if (op.operandKind == edu.bpgenvm.bytecode.OpCode.OperandKind.IDX_U16 && (in.operands.get(0) < 0 || in.operands.get(0) > 0xFFFF))
+            err(in.line, in.column, "'inline " + in.mnemonic + "': el operando tiene que estar entre 0 y 65535");
+        else if (op.operandKind == edu.bpgenvm.bytecode.OpCode.OperandKind.IMM_U8 && (in.operands.get(0) < 0 || in.operands.get(0) > 0xFF))
+            err(in.line, in.column, "'inline " + in.mnemonic + "': el operando tiene que estar entre 0 y 255");
     }
 
     private BpType analyzeSuperCall(SuperCallExpr sc, Scope scope) {

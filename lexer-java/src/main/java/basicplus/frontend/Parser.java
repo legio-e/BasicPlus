@@ -742,7 +742,12 @@ public final class Parser {
             parseDeclName();
         }
         consumeStmtTerminator("se esperaba salto de línea tras 'end'");
-        FuncDef fd = new FuncDef(isPublic, isFinal, false, isNative, name, paramList, retType, body, tok.line, tok.column);
+        // H1 (20-sep) — un cuerpo hecho SÓLO de líneas `inline` = intrínseca (la forma de Turbo
+        // Pascal: una función normal cuyo cuerpo es bytecode). Sustituye a la palabra
+        // `intrinsic`, que sigue valiendo mientras dure la migración de la stdlib.
+        boolean todoInline = !body.isEmpty();
+        for (IStmt st : body) if (!(st instanceof InlineStmt)) { todoInline = false; break; }
+        FuncDef fd = new FuncDef(isPublic, isFinal, todoInline, isNative, name, paramList, retType, body, tok.line, tok.column);
         fd.isEventHandler = isEventHandler;   // H5.c
         return fd;
     }
@@ -998,6 +1003,7 @@ public final class Parser {
             case DO:       return parseDoLoopStmt();
             case FOR:      return parseForStmt();
             case TRY:      return parseTryStmt();
+            case INLINE:   return parseInlineStmt();   // H1 (20-sep)
             case RETURN:   return parseReturnStmt();
             case THROW:    return parseThrowStmt();
             case RAISE:    return parseRaiseStmt();
@@ -1300,6 +1306,22 @@ public final class Parser {
     }
 
     // ---------- TRY ----------
+    /** H1 (20-sep) — `inline MNEMÓNICO [n]*` hasta el fin de línea. Los mnemónicos son los de
+     *  docs/OPCODES.md; los operandos, enteros (con signo). El semántico comprueba que existen. */
+    private InlineStmt parseInlineStmt() {
+        Token tok = consume(TokenType.INLINE, "se esperaba 'inline'");
+        Token m = consume(TokenType.IDENTIFIER, "tras 'inline' se esperaba el mnemónico del opcode (p.ej. CALL_BUILTIN)");
+        List<Long> ops = new ArrayList<>();
+        while (!check(TokenType.NEWLINE) && !check(TokenType.EOF)) {
+            boolean neg = match(TokenType.MINUS);
+            Token n = consume(TokenType.INTEGER_LIT, "el operando de 'inline' tiene que ser un entero");
+            long v = (n.value instanceof Long) ? (Long) n.value : Long.parseLong(n.lexeme);
+            ops.add(neg ? -v : v);
+        }
+        consumeStmtTerminator("se esperaba salto de línea tras la línea 'inline'");
+        return new InlineStmt(m.lexeme, ops, tok.line, tok.column);
+    }
+
     private TryStmt parseTryStmt() {
         Token tok = current();
         match(TokenType.TRY);

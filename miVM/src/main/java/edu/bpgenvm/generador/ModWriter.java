@@ -1688,6 +1688,12 @@ public class ModWriter {
         currentBytecodeSize += 4;
     }
 
+    /** H1 (20-sep) — un operando de 1 byte (IMM_U8), para el bytecode escrito con `inline`. */
+    public void emitByte(int value) throws IOException {
+        codeOut.writeByte(value & 0xFF);
+        currentBytecodeSize += 1;
+    }
+
     public void emitShort(short value) throws IOException {
         codeOut.writeShort(value);
         currentBytecodeSize += 2;

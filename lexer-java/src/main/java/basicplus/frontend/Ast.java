@@ -13,6 +13,7 @@
 // ============================================================
 package basicplus.frontend;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class Ast {
@@ -751,6 +752,44 @@ public final class Ast {
 
     public static final class ContinueStmt extends Node implements IStmt {
         public ContinueStmt(int line, int column) { super(line, column); }
+    }
+
+    /** H1 (20-sep) — `inline <MNEMÓNICO> [operandos]`: una línea de bytecode escrita en el
+     *  cuerpo de una función. Una función cuyo cuerpo son SÓLO líneas `inline` es una
+     *  intrínseca (Eduardo, de Turbo Pascal: «una función normal; la diferencia es el
+     *  cuerpo»): no se emite en el .mod y cada llamada la inlina. El id de un builtin es el
+     *  número escrito: `inline CALL_BUILTIN 23`. */
+    public static final class InlineStmt extends Node implements IStmt {
+        public final String mnemonic;
+        public final List<Long> operands;
+        public InlineStmt(String mnemonic, List<Long> operands, int line, int column) {
+            super(line, column);
+            this.mnemonic = mnemonic;
+            this.operands = operands;
+        }
+        /** El texto canónico, el que viaja en la interfaz: `CALL_BUILTIN 23`. */
+        public String texto() {
+            StringBuilder sb = new StringBuilder(mnemonic);
+            for (Long o : operands) sb.append(' ').append(o);
+            return sb.toString();
+        }
+        /** La lectura del texto de la interfaz: `CALL_BUILTIN 23; DUP` → lista. */
+        public static List<InlineStmt> deTexto(String texto) {
+            List<InlineStmt> out = new ArrayList<>();
+            for (String linea : texto.split(";")) {
+                String[] t = linea.trim().split("\\s+");
+                if (t.length == 0 || t[0].isEmpty()) continue;
+                List<Long> ops = new ArrayList<>();
+                for (int i = 1; i < t.length; i++) ops.add(Long.parseLong(t[i]));
+                out.add(new InlineStmt(t[0], ops, 0, 0));
+            }
+            return out;
+        }
+        public static String textoDe(List<InlineStmt> ops) {
+            StringBuilder sb = new StringBuilder();
+            for (InlineStmt s : ops) { if (sb.length() > 0) sb.append("; "); sb.append(s.texto()); }
+            return sb.toString();
+        }
     }
 
     public static final class ExprStmt extends Node implements IStmt {

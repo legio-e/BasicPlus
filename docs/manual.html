@@ -193,6 +193,7 @@
     <li class="sub"><a href="#defaults">8.1 Parámetros con valor por defecto</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuplas (retorno múltiple)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 Funciones native (AOT)</a></li>
+    <li class="sub"><a href="#inline">8.3b Funciones intrínsecas: <code>inline</code></a></li>
     <li class="sub"><a href="#sobrecarga">8.4 Sobrecarga de funciones</a></li>
     <li class="group"><a href="#clases">9. Clases</a></li>
     <li class="sub"><a href="#campos">9.1 Campos</a></li>
@@ -934,6 +935,23 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
 </ul>
 
 <!-- =========================================================== -->
+
+<h3 id="inline">8.3b Funciones intrínsecas: el cuerpo <code>inline</code></h3>
+<p>
+  Una <strong>intrínseca</strong> es una función normal cuyo cuerpo es bytecode escrito, una
+  instrucción por línea, como el <code>inline($CD/$21)</code> de Turbo Pascal:
+</p>
+<pre><code><span class="kw">public function</span> <span class="fn">sin</span>(x: <span class="type">float</span>): <span class="type">float</span>
+  <span class="kw">inline</span> CALL_BUILTIN 24
+<span class="kw">end</span> sin</code></pre>
+<p>
+  El compilador no genera código para ella en el <code>.mod</code>: en cada llamada mete ese
+  bytecode tal cual, con los argumentos ya en la pila (el mnemónico es el de
+  <code>docs/OPCODES.md</code>; el número, el id del builtin en las dos VMs). Así están escritas
+  las funciones de <code>Math</code>, y su firma viaja en la interfaz del módulo como la de
+  cualquier otra. Es la sintaxis de la biblioteca estándar y del módulo raíz; en un programa
+  normal no hace falta.
+</p>
 
 <h3 id="sobrecarga">8.4 Sobrecarga de funciones</h3>
 <p>Puedes declarar <strong>varias funciones con el mismo nombre</strong> siempre

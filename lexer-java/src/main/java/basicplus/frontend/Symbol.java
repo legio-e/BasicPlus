@@ -236,6 +236,10 @@ public abstract class Symbol {
          *  cuerpo (si existe en el AST) se ignora; el .mod no contiene código
          *  para esta función. */
         public boolean isIntrinsic;
+        /** H1 (20-sep) — el bytecode de una intrínseca con cuerpo `inline` (local: del AST;
+         *  importada: de la interfaz). null = intrínseca de la palabra `intrinsic`, que
+         *  todavía se resuelve en Intrinsics.java (hasta que la stdlib migre). */
+        public List<Ast.InlineStmt> inlineOps;
         public final Ast.FuncDef astNode;
 
         // ----- Función externa (importada vía .bpi) -----

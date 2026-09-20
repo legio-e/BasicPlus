@@ -1,6 +1,6 @@
 dbg 3
 module Math
-source C:\lenguajes\pm\bpstdlib\Math.bp
+source C:\tmp\std9\src\Math.bp
 lines
 vars
 func Object.toString 0

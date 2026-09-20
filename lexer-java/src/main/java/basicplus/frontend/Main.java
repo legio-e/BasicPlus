@@ -2269,6 +2269,7 @@ public final class Main {
                     f.returnType = fs.returnType;
                     f.isExternal = true;
                     f.isIntrinsic = fs.isIntrinsic;
+                    if (fs.inlineText != null) f.inlineOps = Ast.InlineStmt.deTexto(fs.inlineText);   // H1 (20-sep)
                     f.externalLibrary = implLibrary;
                     f.externalModule  = implModule;
                     f.externalFromPath = fromPath;
