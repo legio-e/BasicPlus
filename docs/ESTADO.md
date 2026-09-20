@@ -133,10 +133,15 @@ Quedan por grabar S3/C3/C6/Nucleo/DK2 (construidas). Informe: `compat/informes/p
 no un campo»); ya no queda ningún error que sólo dé el emisor desde un fuente válido, así que `#521`
 (EmisorConErroresTest) lo fuerza con `MivmEmitter.PRUEBA_ERROR_DE_EMISOR` (andamio, sólo tests). Frontend 221/221.
 
-**Orden para retomar**: P4 (¿los primitivos como declaraciones de la raíz? decidir con P3 hecho: hoy es un `switch`
-en `resolveType` y no parece que compense), P5 (la cascada: stdlib ya rehecha; blobs con `regen_all_mods.sh`, las
-seis imágenes, packs; placas cuando Eduardo diga), y los extras de la fila H1 (destructor `~Clase()`, `Map`, `#396`
-`Time`, `#19`, `#460`, huecos). P2b es de H4.
+**H1 NO está cerrado** (pregunta de Eduardo al cerrar el día): el módulo raíz sí (P1-P3; P4 propuesto como no),
+pero la fila lleva encima lo que sigue. **Orden para retomar** (propuesto, Eduardo no lo ha vetado): (1) lo barato
+que P3 pudo resolver — `N9` (ya no hay clases sintetizadas que redeclarar) y `#460` (herencia entre módulos, con
+#523): COMPROBAR y cerrar o reabrir, no asumir; (2) `N2` (documentar el invariante de JavaMutex) y `M4` (prohibir
+`__` en identificadores de usuario); (3) `L19` (`Perro(a)` con `a: Animal` se toma por constructor); (4) los de
+diseño con Eduardo: destructor `~Clase()` + `var owner` local, `Map` (captadores tipados, `put` sobrecargado),
+`#396` `Time`; (5) `#19` (array fijo local inline). Además: grabar S3/C3/C6/Nucleo/DK2 cuando estén conectadas;
+y sin ficha: los mensajes de tipos no cualifican, dos módulos homónimos de librerías distintas no se importan
+juntos. P2b es de H4.
 
 ## 🧬 H1 (20-sep, domingo por la mañana) — el cuerpo `inline`: la stdlib entera declara sus intrínsecas en BP
 
