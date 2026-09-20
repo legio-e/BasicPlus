@@ -1329,3 +1329,53 @@ la diferencia es el cuerpo de la función, utilizamos `inline opCode`. Y al fina
 utilizaba Turbo Pascal.»* Con eso las dos preguntas de arriba desaparecen: no hay que atar nada (el bytecode va en
 el cuerpo y viaja en la interfaz), y los nombres internos se quedan como están donde están (cada módulo declara
 las suyas). Pendiente para P2: los nombres `__x` de `Core.bp` sólo los puede declarar la raíz (`M4`).
+
+### 5. P3 — las clases del lenguaje en BP: el mapa y las dos decisiones (20-sep, tarde)
+
+**Lo que hay.** `Object`, `Thread`, `Mutex` y `StringBuilder` viven en TRES sitios a mano, y además se COPIAN en
+cada `.mod`:
+
+- el semántico las da de alta con 20 `makeMethod` (`SemanticAnalyzer.builtinScope`, líneas 255-370): símbolos
+  «fake» sin AST, `isBuiltin = true`;
+- el emisor las **sintetiza en cada módulo** (`synthesizeObjectClass`/`StringBuilderClass`/`ThreadClass`/
+  `MutexClass`, ~900 líneas de Java que escriben bytecode a mano): `Str.mod` —que no usa hilos— lleva las cuatro
+  clases (`class Object padre=raiz`, `StringBuilder`, `Thread`, `Mutex` + las tuplas), ≈1,3 KB de código y
+  descriptores por módulo, ×28 en la stdlib y en cada app;
+- las tablas de layout (`ModuleInterface.objectBaseLayout`/`threadBaseLayout`/`builtinBaseMethodNames`) y el
+  sembrado del importador (`Main.sembrarRaizBuiltin`) repiten el orden de campos y métodos para que los slots
+  cuadren (la tercera copia de la tabla de Thread se desincronizó el 19-sep, `#526`).
+
+Las dos VMs sólo dependen de **convenciones de layout**: `THREAD_START` lee el tid en el campo 0 y el `stackSize`
+en el 1, y arranca `run()` en la **ranura 0 de la vtable**; `MUTEX_LOCK/UNLOCK` leen `__mid` en el campo 0;
+`StringBuilder` es BP puro (`chars`/`size`/`cap` + `__charsToString`). Es lo que hace posible P3 sin tocar la VM:
+`Core.bp` las declara con **el mismo orden** de campos y métodos y las convenciones siguen valiendo — y ahora se
+LEEN en un fichero en vez de estar repartidas en Java.
+
+**Lo que se quiere.** Las cuatro clases escritas en `Core.bp` (sus primitivas ya están: `__threadStart`,
+`__threadJoin`, `__mutexCreate/Lock/Unlock`, `__charsToString`…), compiladas UNA vez en `Core.mod`, y todo módulo
+las referencia por enlace tardío (`#523`), como ya hace con `List` desde `#450`. Fuera los `makeMethod`, las
+síntesis del emisor, las tablas de layout y el sembrado: **una fuente**. Cada `.mod` adelgaza ≈1,3 KB; toda clase de
+usuario pasa a ser «abierta» (su padre, `Core.Object`, es externo) y la construye el cargador — es lo que `#523`
+diseñó; el coste de carga en la Pico se mide en P5.
+
+**Decisión 1 — `Thread` no desciende de `Object`** (así es hoy, `#526`; por la ranura 0 = `run()`). ¿Cómo se
+escribe eso en BP? (a) **regla de la raíz: en `Core.bp` una clase sin `extends` no tiene padre** — es la raíz la
+que declara de quién se hereda; `Object` y `Thread` no llevan `extends`, y `Exception`, `Comparable`, `List`
+escriben `extends Object` (tres líneas); fuera de la raíz sigue el implícito de siempre. La VM no cambia. (b) que
+`Thread` descienda de `Object` y las dos VMs arranquen `run()` por su nombre (o ranura 2) según la gen: tocar VM,
+gen 8 y cascada. (c) una sintaxis nueva (`extends none`). Recomiendo (a): cero VM, explícito en el único fichero que
+puede decirlo, y el «salvo Thread» del modelo de objetos se lee en `Core.bp`.
+
+**Decisión 2 — ¿se ven sin `import Core`?** Hoy `Thread`/`Mutex`/`StringBuilder` están en todo programa (24 samples
++ 6 de la VM-C + 1 de la stdlib los usan sin importar Core) y `Object` es el padre implícito de toda clase. La norma
+de `#458` (30-ago) dice «si se usa un tipo de Core, se importa Core». Opciones: (i) **todo lo público de la raíz se
+ve sin cualificar, funciones Y clases** —la unidad `System` entera, como P2 hizo con las funciones; `import Core`
+pasa a ser redundante (no error) y `#458` queda como historia (su causa técnica, «las dos pasadas veían cosas
+distintas», ya no existe: `cargarRaiz` corre en las dos); (ii) sólo las cuatro «del lenguaje» globales y el resto
+(`List`, `Exception`, `Integer`…) por import: dos clases de público; (iii) las cuatro por import como cualquier tipo
+de Core: 31 ficheros a tocar y toda clase obligaría a `import Core` por `Object` (o `Object` especial). Recomiendo
+(i): una regla, y es la de Turbo Pascal.
+
+**Lo que NO cambia:** la sintaxis del usuario; el orden de slots (`run` 0, `tid` 0…); los `.mod` viejos (la cápsula
+V6 lleva sus copias y las VMs no distinguen); MOD8 (el padre externo va por placeholders, como `List` hoy).
+
