@@ -119,6 +119,16 @@ de la stdlib no se versiona (`bpstdlib/out/Stdlib.pack` sale del build; `montar-
 verificar en placa cuando Eduardo diga (Pico con `placas_v9.py --embebida`; medir la carga de una app con clases,
 que ahora son todas abiertas).
 
+**Tramo 4 (17:00) — Pico y P4 GRABADAS y verificadas** (Eduardo las conectó). Pico (`flash_pico.py` por BOOTSEL del
+wire): `placas_v9.py --embebida` verde — CoreRefs MOD9 contra el Core embebido (1 clase construida, 10 refs, 45 B de
+arena, enlace 1573 µs) y CoreRefs MOD8 rechazado con nombre; CtorInit (4 clases): 4 construidas, 23 refs, 181 B,
+1959 µs. P4 (`idf.py -p COM15 flash`; el CH343 ahora es COM15, no COM14): CtorInit OK; GuiParidad OK con la Gui
+vieja de su /lib (sellada contra el Core del 17-sep: «otra interfaz» → enlace tardío, 2 clases) y, tras subir a
+/lib Gui/Json/Collections/Str de hoy (el blob ESP no las lleva), **la medida que faltaba**: 43 clases construidas,
+315 refs, **6 217 B de arena y 23,9 ms de enlace** (6 módulos; antes 9,9 ms) en el P4 a 400 MHz. Ése es el coste
+de «todas las clases abiertas» en una app con Gui; en la Pico (150 MHz, sin Gui) las apps son mucho más pequeñas.
+Quedan por grabar S3/C3/C6/Nucleo/DK2 (construidas). Informe: `compat/informes/placas_v9_2026-09-20.tsv`.
+
 **Hueco cerrado (16:30)**: asignar a un método (`c.m := 5`) lo rechaza el semántico con línea («'m' es un método,
 no un campo»); ya no queda ningún error que sólo dé el emisor desde un fuente válido, así que `#521`
 (EmisorConErroresTest) lo fuerza con `MivmEmitter.PRUEBA_ERROR_DE_EMISOR` (andamio, sólo tests). Frontend 221/221.
