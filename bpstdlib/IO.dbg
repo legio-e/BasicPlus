@@ -1,6 +1,6 @@
 dbg 3
 module IO
-source C:\lenguajes\pm\bpstdlib\IO.bp
+source C:\tmp\std9\src\IO.bp
 lines
 vars
 func Object.toString 0

@@ -1,6 +1,6 @@
 dbg 3
 module Stdlib
-source C:\lenguajes\pm\bpstdlib\Stdlib.bp
+source C:\tmp\std9\src\Stdlib.bp
 lines
 vars
 func Object.toString 0

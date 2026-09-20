@@ -1,20 +1,20 @@
 dbg 3
 module Pulse
-source C:\lenguajes\pm\bpstdlib\Pulse.bp
+source C:\tmp\std9\src\Pulse.bp
 lines
-494 100
-511 106
-528 113
-551 118
-568 88
-578 89
-588 90
-603 91
-616 92
-640 93
-785 53
-800 56
-815 59
+494 110
+511 116
+528 123
+551 128
+568 98
+578 99
+588 100
+603 101
+616 102
+640 103
+785 63
+800 66
+815 69
 vars
 func Object.toString 0
 this -20 8 0 ?

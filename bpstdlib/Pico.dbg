@@ -1,6 +1,6 @@
 dbg 3
 module Pico
-source C:\lenguajes\pm\bpstdlib\Pico.bp
+source C:\tmp\std9\src\Pico.bp
 lines
 429 20
 448 24

@@ -71,11 +71,25 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 🧬 H1 (20-sep, domingo por la mañana) — el cuerpo `inline`: la stdlib entera declara sus intrínsecas en BP
+
+La decisión de Eduardo a las 8: *«una función intrínseca se declara como una función normal; la diferencia es el
+cuerpo: `inline opCode`, y al final `end`. Es la sintaxis de Turbo Pascal»*. Eso cambió P1 de forma (ya no hay que
+«atar» nada) y salió entero en la mañana (`b27ab09d` + el commit de hoy): `inline` entra en el lenguaje y `intrinsic`
+sale; el bytecode viaja en la interfaz (`func … inline CALL_BUILTIN 24`) y el consumidor lo inlina; la stdlib
+entera migrada (177 funciones, 17 módulos, guion de una vez); `Intrinsics.java` borrado (162 registros a mano);
+`scripts/gen_builtins.py` comprueba los ids contra `Builtin.java` y será el generador cuando las 65 globales de
+`addBuiltin` pasen a `Core.bp` (P2). 20 `.mod` de la stdlib cambian sólo en la interfaz: las imágenes del 17-sep
+llevan los viejos → un programa compilado hoy que importe uno de esos 20 no enlaza en placa hasta la cascada de P5
+(las intrínsecas no llaman al módulo: es el sello `ifaceCrc`). Lección de la mañana: un test del frontend (`EmisorCon
+ErroresTest`) usaba la `intrinsic` sin registro como «error del emisor»; el caso que queda a mano es `c.m := 5`
+(asignar a un método), que el semántico debería rechazar con línea y hoy no.
+
 El mapa está hecho (20-sep): `docs/V7_IDEAS.md` §H1 — son 240 intrínsecas en CINCO sitios a mano (los ids en
 `Builtin.java` y `builtins.c`, las firmas en 65 `addBuiltin` y en las `intrinsic` de los `.bp`, el enlace en
 162 `register` de `Intrinsics.java`), y el plan en cinco pasos (P1 el generador de las dos tablas desde `Core.bp`;
-P2 el compilador ata por la declaración; P3 `Object`/`Thread`/`Mutex`/`StringBuilder` en BP; P4 primitivos; P5 la
-cascada). Esperan dos decisiones de Eduardo (§H1 punto 4). Abiertas además: `#519` (H4/AOT), `#530` y `#531` (H7). En H7 esperan `#530` (Thread.run heredada
+P2 las 65 globales de `addBuiltin` a `Core.bp` como raíz (y entonces `gen_builtins.py` ESCRIBE `Builtin.java` y el enum de C); P3 `Object`/`Thread`/`Mutex`/`StringBuilder` en BP; P4 primitivos; P5 la
+cascada). P1 hecho el 20-sep; las decisiones de §H1 punto 4 tomadas (el cuerpo `inline`). Abiertas además: `#519` (H4/AOT), `#530` y `#531` (H7). En H7 esperan `#530` (Thread.run heredada
 cross-module) y `#531` (orden de los eventos). Quedan escritos sin ficha: los mensajes de tipos no cualifican
 («'Base' no asignable a 'Base'»), y dos módulos homónimos de librerías distintas no se pueden importar en el mismo
 fichero (`#528`); un inicializador de campo no puede usar `this` ni otros campos (manual §9.1).

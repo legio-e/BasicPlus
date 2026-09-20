@@ -1,20 +1,20 @@
 dbg 3
 module Pwm
-source C:\lenguajes\pm\bpstdlib\Pwm.bp
+source C:\tmp\std9\src\Pwm.bp
 lines
-521 86
-531 87
-556 94
-566 95
-585 101
-602 106
-619 73
-629 74
-639 75
-648 76
-663 77
-676 78
-700 79
+521 96
+531 97
+556 104
+566 105
+585 111
+602 116
+619 83
+629 84
+639 85
+648 86
+663 87
+676 88
+700 89
 vars
 func Object.toString 0
 this -20 8 0 ?

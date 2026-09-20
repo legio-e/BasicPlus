@@ -24,8 +24,12 @@ module Neopixel
   // los implementa vía PIO; en host/VM Java son no-op.
   //   __npInit(pin): reclama PIO+SM y carga el programa WS2812.
   //   __npShow(pin, grb, count): empuja `count` palabras GRB de `grb`.
-  public intrinsic function __npInit(pin: integer)
-  public intrinsic function __npShow(pin: integer, grb: integer[], count: integer)
+  public function __npInit(pin: integer)
+    inline CALL_BUILTIN 124
+  end __npInit
+  public function __npShow(pin: integer, grb: integer[], count: integer)
+    inline CALL_BUILTIN 125
+  end __npShow
 
   // ----------------------------------------------------------
   // Clase Strip — una tira (o un único LED, con count=1).

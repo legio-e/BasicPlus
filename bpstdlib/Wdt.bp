@@ -43,9 +43,15 @@
 module Wdt
 
   // ---- Intrínsecos de bajo nivel ----
-  public intrinsic function enableRaw(timeoutMs: integer)
-  public intrinsic function feedRaw()
-  public intrinsic function disableRaw()
+  public function enableRaw(timeoutMs: integer)
+    inline CALL_BUILTIN 116
+  end enableRaw
+  public function feedRaw()
+    inline CALL_BUILTIN 117
+  end feedRaw
+  public function disableRaw()
+    inline CALL_BUILTIN 118
+  end disableRaw
 
   // ============================================================
   // Clase Timer — watchdog encapsulado.

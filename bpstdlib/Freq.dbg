@@ -1,6 +1,6 @@
 dbg 3
 module Freq
-source C:\lenguajes\pm\bpstdlib\Freq.bp
+source C:\tmp\std9\src\Freq.bp
 lines
 467 76
 478 77

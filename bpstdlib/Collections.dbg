@@ -1,6 +1,6 @@
 dbg 3
 module Collections
-source C:\lenguajes\pm\bpstdlib\Collections.bp
+source C:\tmp\std9\src\Collections.bp
 lines
 418 34
 506 44

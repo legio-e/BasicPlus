@@ -1,6 +1,6 @@
 dbg 3
 module App
-source C:\lenguajes\pm\bpstdlib\App.bp
+source C:\tmp\std9\src\App.bp
 lines
 vars
 func Object.toString 0

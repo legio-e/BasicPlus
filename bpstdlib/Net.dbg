@@ -1,18 +1,18 @@
 dbg 3
 module Net
-source C:\lenguajes\pm\bpstdlib\Net.bp
+source C:\tmp\std9\src\Net.bp
 lines
-435 58
-453 59
-475 63
-497 68
-523 73
-552 78
-581 83
-613 87
-626 88
-637 89
-657 53
+435 66
+453 67
+475 71
+497 76
+523 81
+552 86
+581 91
+613 95
+626 96
+637 97
+657 61
 vars
 func Object.toString 0
 this -20 8 0 ?

@@ -1387,14 +1387,10 @@ public final class MivmEmitter {
             // Funciones intrinsic: sólo signature en el .bpi, no se emite cuerpo
             // en el .mod. Cada call-site las reemplaza por opcodes inline.
             if (fs.isIntrinsic) {
-                // Verificamos contra el registro para detectar typos en el nombre
-                // antes de que el .bpi llegue a un consumidor.
-                String qn = (moduleAst != null ? moduleAst.name : "?") + "." + fs.name;
-                if (fs.inlineOps != null) return;   // H1 (20-sep): el bytecode está escrito en el cuerpo
-                if (!Intrinsics.isKnown(qn)) {
-                    errors.add(qn + ": función intrínseca desconocida — añade su"
-                            + " emisor a basicplus.frontend.Intrinsics");
-                }
+                // H1 (20-sep) — una intrínseca lleva su bytecode en el cuerpo (`inline …`) y no se
+                // emite en el .mod: cada llamada lo inlina. (Hasta hoy: la palabra `intrinsic` +
+                // un registro a mano en Intrinsics.java, que ya no existe.)
+                if (fs.inlineOps == null) errors.add(fs.name + ": intrínseca sin cuerpo inline");
                 return;
             }
 
@@ -4585,16 +4581,9 @@ public final class MivmEmitter {
                     emitExpr(c.args.get(i));
                     if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
                 }
-                if (fs.isIntrinsic) {
-                    if (fs.inlineOps != null) { emitInline(fs.inlineOps); return; }   // H1 (20-sep)
-                    String qn = (fs.isExternal ? fs.externalModule : (moduleAst != null ? moduleAst.name : "?"))
-                            + "." + fs.name;
-                    Intrinsics.IntrinsicEmitter ie = Intrinsics.lookup(qn);
-                    if (ie == null) {
-                        errors.add("intrínseco no implementado en el emisor mivm: " + qn);
-                        return;
-                    }
-                    ie.emit(w);
+                if (fs.isIntrinsic) {   // H1 (20-sep): el bytecode del cuerpo `inline`, aquí
+                    if (fs.inlineOps == null) { errors.add("intrínseca sin cuerpo inline: " + fs.name); return; }
+                    emitInline(fs.inlineOps);
                     return;
                 }
                 if (fs.isExternal) {
@@ -4632,17 +4621,11 @@ public final class MivmEmitter {
                 }
                 if (fs.isIntrinsic) {
                     // Intrínseco cross-module: en lugar de CALL_EXT, el emisor
-                    // mete opcodes inline. No se añade entrada a la tabla de
-                    // imports, así que el .mod del módulo dueño no es necesario
-                    // en runtime.
-                    if (fs.inlineOps != null) { emitInline(fs.inlineOps); return; }   // H1 (20-sep): viene de la interfaz
-                    String qn = fs.externalModule + "." + fs.name;
-                    Intrinsics.IntrinsicEmitter ie = Intrinsics.lookup(qn);
-                    if (ie == null) {
-                        errors.add("intrínseco no implementado en el emisor mivm: " + qn);
-                        return;
-                    }
-                    ie.emit(w);
+                    // mete el bytecode que viene en la interfaz del dueño (H1, 20-sep:
+                    // `func … inline …`). No se añade entrada a la tabla de imports,
+                    // así que el .mod del módulo dueño no es necesario en runtime.
+                    if (fs.inlineOps == null) { errors.add("intrínseca sin cuerpo inline en la interfaz: " + fs.externalModule + "." + fs.name); return; }
+                    emitInline(fs.inlineOps);
                     return;
                 }
                 w.emitCallExt(nombreExterno(fs), fs.externalFromPath);

@@ -24,11 +24,15 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class EmisorConErroresTest {
 
-    /** La intrínseca que no existe: error del EMISOR (`emitFunctionDef`), no del semántico. */
+    /** Un error que sólo da el EMISOR, no el semántico. Hasta el 20-sep era una `intrinsic` sin
+     *  registro; con H1 (`inline`) eso ya no existe, y el que queda a mano es asignar a un
+     *  MÉTODO (`c.m := 5`: «asignación a member-access no es campo ni property»). Si algún
+     *  día el semántico lo rechaza con línea —que debería—, cambiar aquí el caso. */
     private static final String REFL = String.join("\n",
         "module Refl", "import Core",
-        "public intrinsic function __noExiste(x: integer): integer",
-        "public function main()", "  print __noExiste(3)", "end main",
+        "public class C", "  public function C()", "  end C",
+        "  public function m(): integer", "    return 1", "  end m", "end C",
+        "public function main()", "  var c: C := C()", "  c.m := 5", "end main",
         "end Refl", "");
 
     private static Object[] compila(Path tmp, String main, String[]... fuentes) throws IOException {
@@ -58,7 +62,7 @@ class EmisorConErroresTest {
         Object[] r = compila(tmp, "Refl", new String[]{"Refl", REFL});
         String t = (String) r[1];
         assertFalse((Boolean) r[0], "el build tiene que fallar:\n" + t);
-        assertTrue(t.contains("intrínseca desconocida"), t);
+        assertTrue(t.contains("no es campo ni property"), t);
         assertTrue(t.contains("NO compilado:"), t);
         for (String linea : t.split("\n"))
             assertFalse(linea.trim().startsWith("compilado:"), "no puede decir «compilado:»: " + linea);

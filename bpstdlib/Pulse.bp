@@ -42,11 +42,21 @@ module Pulse
   // métodos start/stop/value/reset de la clase Counter — dentro
   // de un método de Counter, un `start(this.id)` sin sufijo se
   // resolvería al propio método (recursión infinita).
-  public intrinsic function initSlice(pin: integer, edgeKind: integer): integer
-  public intrinsic function startSlice(counterId: integer)
-  public intrinsic function stopSlice(counterId: integer)
-  public intrinsic function readSlice(counterId: integer): integer
-  public intrinsic function resetSlice(counterId: integer)
+  public function initSlice(pin: integer, edgeKind: integer): integer
+    inline CALL_BUILTIN 94
+  end initSlice
+  public function startSlice(counterId: integer)
+    inline CALL_BUILTIN 95
+  end startSlice
+  public function stopSlice(counterId: integer)
+    inline CALL_BUILTIN 96
+  end stopSlice
+  public function readSlice(counterId: integer): integer
+    inline CALL_BUILTIN 97
+  end readSlice
+  public function resetSlice(counterId: integer)
+    inline CALL_BUILTIN 98
+  end resetSlice
 
   // ---- Constantes de flanco ----
   public function RISING(): integer

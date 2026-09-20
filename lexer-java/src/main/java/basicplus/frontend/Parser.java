@@ -367,11 +367,7 @@ public final class Parser {
             advance();
         }
 
-        boolean isIntrinsic = false;
-        if (check(TokenType.INTRINSIC)) {
-            isIntrinsic = true;
-            advance();
-        }
+        boolean isIntrinsic = false;   // H1 (20-sep): ya no hay palabra `intrinsic`; lo dice el cuerpo `inline`
 
         // H3 #162 — modificador `native`. Marca la función como AOT'd.
         // El bytecode .mod se emite IGUAL (sin cambios). El flag solo
@@ -683,7 +679,7 @@ public final class Parser {
             while (k < tokens.size() && tokens.get(k).type == TokenType.NEWLINE) k++;
             TokenType sig = (k < tokens.size()) ? tokens.get(k).type : TokenType.EOF;
             if (sig != TokenType.PUBLIC && sig != TokenType.NATIVE
-                    && sig != TokenType.INTRINSIC && sig != TokenType.FUNCTION
+                    && sig != TokenType.FUNCTION
                     && sig != TokenType.CLASS && sig != TokenType.CONST
                     && sig != TokenType.VAR && sig != TokenType.END
                     && sig != TokenType.EOF) {
@@ -747,6 +743,7 @@ public final class Parser {
         // `intrinsic`, que sigue valiendo mientras dure la migración de la stdlib.
         boolean todoInline = !body.isEmpty();
         for (IStmt st : body) if (!(st instanceof InlineStmt)) { todoInline = false; break; }
+        if (todoInline && isNative) { error("una función 'native' no puede tener cuerpo 'inline' (es una intrínseca: no hay nada que compilar a C)"); todoInline = false; }
         FuncDef fd = new FuncDef(isPublic, isFinal, todoInline, isNative, name, paramList, retType, body, tok.line, tok.column);
         fd.isEventHandler = isEventHandler;   // H5.c
         return fd;

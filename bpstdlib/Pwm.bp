@@ -40,11 +40,21 @@ module Pwm
   // ---- Intrínsecos de bajo nivel ----
   // initSlice devuelve un sliceId opaco (>= 0) o -1 si el pin
   // no es válido. Los demás operan sobre ese sliceId.
-  public intrinsic function initSlice(pin: integer, freqHz: integer): integer
-  public intrinsic function setFreqHz(sliceId: integer, freqHz: integer)
-  public intrinsic function setDutyPct(sliceId: integer, pin: integer, dutyPct: integer)
-  public intrinsic function startSlice(sliceId: integer)
-  public intrinsic function stopSlice(sliceId: integer)
+  public function initSlice(pin: integer, freqHz: integer): integer
+    inline CALL_BUILTIN 99
+  end initSlice
+  public function setFreqHz(sliceId: integer, freqHz: integer)
+    inline CALL_BUILTIN 100
+  end setFreqHz
+  public function setDutyPct(sliceId: integer, pin: integer, dutyPct: integer)
+    inline CALL_BUILTIN 101
+  end setDutyPct
+  public function startSlice(sliceId: integer)
+    inline CALL_BUILTIN 102
+  end startSlice
+  public function stopSlice(sliceId: integer)
+    inline CALL_BUILTIN 103
+  end stopSlice
 
   // ============================================================
   // Clase Slice — wrapper OO sobre los intrínsecos.

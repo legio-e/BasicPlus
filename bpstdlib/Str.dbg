@@ -1,6 +1,6 @@
 dbg 3
 module Str
-source C:\lenguajes\pm\bpstdlib\Str.bp
+source C:\tmp\std9\src\Str.bp
 lines
 429 36
 442 37

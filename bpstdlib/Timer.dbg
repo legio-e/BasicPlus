@@ -1,6 +1,6 @@
 dbg 3
 module Timer
-source C:\lenguajes\pm\bpstdlib\Timer.bp
+source C:\tmp\std9\src\Timer.bp
 lines
 462 75
 467 76

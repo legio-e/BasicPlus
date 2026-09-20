@@ -27,17 +27,25 @@ module Gpio
 
   // Configura el modo del pin (entrada o salida).
   // Llamar UNA vez por pin antes de read/write.
-  public intrinsic function init(pin: integer, mode: integer)
+  public function init(pin: integer, mode: integer)
+    inline CALL_BUILTIN 78
+  end init
 
   // Configura resistencia de pull-up/pull-down. 0=none, 1=up, 2=down.
-  public intrinsic function pull(pin: integer, pullMode: integer)
+  public function pull(pin: integer, pullMode: integer)
+    inline CALL_BUILTIN 81
+  end pull
 
   // Escribe en un pin configurado como OUTPUT.
   // value: 0=LOW, !=0=HIGH.
-  public intrinsic function write(pin: integer, value: integer)
+  public function write(pin: integer, value: integer)
+    inline CALL_BUILTIN 79
+  end write
 
   // Lee un pin configurado como INPUT. Devuelve 0 o 1.
-  public intrinsic function read(pin: integer): integer
+  public function read(pin: integer): integer
+    inline CALL_BUILTIN 80
+  end read
 
   // -------- Constantes públicas para los enums --------
   // (Definidas como funciones intrínsecas de 0 args para mantener la

@@ -1,21 +1,21 @@
 dbg 3
 module Neopixel
-source C:\lenguajes\pm\bpstdlib\Neopixel.bp
+source C:\tmp\std9\src\Neopixel.bp
 lines
-492 50
-521 51
-561 57
-583 58
-586 59
-600 60
-611 61
-625 67
-642 72
-671 77
-691 41
-701 42
-711 43
-724 44
+492 54
+521 55
+561 61
+583 62
+586 63
+600 64
+611 65
+625 71
+642 76
+671 81
+691 45
+701 46
+711 47
+724 48
 vars
 func Object.toString 0
 this -20 8 0 ?

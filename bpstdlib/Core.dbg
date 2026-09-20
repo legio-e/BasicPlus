@@ -1,6 +1,6 @@
 dbg 3
 module Core
-source C:\lenguajes\pm\bpstdlib\Core.bp
+source C:\tmp\std9\src\Core.bp
 lines
 438 33
 460 24

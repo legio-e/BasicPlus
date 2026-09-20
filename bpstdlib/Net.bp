@@ -29,19 +29,27 @@ module Net
 
   // Conecta a host:port. timeoutMs <= 0 → 5000. Devuelve un handle
   // >= 1, o 0 si no se pudo conectar (resultado normal, no error).
-  public intrinsic function tcpConnect(host: string, port: integer, timeoutMs: integer): integer
+  public function tcpConnect(host: string, port: integer, timeoutMs: integer): integer
+    inline CALL_BUILTIN 131
+  end tcpConnect
 
   // Envía TODOS los bytes del array. Devuelve los bytes enviados
   // (== len(data)). Conexión rota/handle inválido → RuntimeError.
-  public intrinsic function tcpSend(h: integer, data: byte[]): integer
+  public function tcpSend(h: integer, data: byte[]): integer
+    inline CALL_BUILTIN 132
+  end tcpSend
 
   // Lee hasta `max` bytes (tope 65536) esperando como máximo
   // timeoutMs (<= 0 → 1 ms). Timeout → byte[] vacío. El peer cerró →
   // RuntimeError "Net.recv: conexión cerrada por el peer".
-  public intrinsic function tcpRecv(h: integer, max: integer, timeoutMs: integer): byte[]
+  public function tcpRecv(h: integer, max: integer, timeoutMs: integer): byte[]
+    inline CALL_BUILTIN 133
+  end tcpRecv
 
   // Cierra el handle. Tolerante: handle inválido = no-op.
-  public intrinsic function tcpClose(h: integer)
+  public function tcpClose(h: integer)
+    inline CALL_BUILTIN 134
+  end tcpClose
 
   // -------- Clase OO (forma recomendada) --------
 

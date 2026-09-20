@@ -1,9 +1,9 @@
 dbg 3
 module Rtc
-source C:\lenguajes\pm\bpstdlib\Rtc.bp
+source C:\tmp\std9\src\Rtc.bp
 lines
-408 63
-425 69
+408 67
+425 73
 vars
 func Object.toString 0
 this -20 8 0 ?

@@ -21,21 +21,29 @@ module IO
   // Une dos componentes de path con el separador adecuado.
   //   pathJoin("dir", "file.txt")    → "dir/file.txt" (o "dir\file.txt" en Windows)
   //   pathJoin("/a/b", "../c")       → "/a/b/../c"  (no resuelve "..")
-  public intrinsic function pathJoin(a: string, b: string): string
+  public function pathJoin(a: string, b: string): string
+    inline CALL_BUILTIN 64
+  end pathJoin
 
   // Devuelve el directorio padre del path. "" si no tiene padre.
   //   pathParent("/a/b/c") → "/a/b"
   //   pathParent("c")      → ""
-  public intrinsic function pathParent(p: string): string
+  public function pathParent(p: string): string
+    inline CALL_BUILTIN 65
+  end pathParent
 
   // Devuelve el nombre del fichero (último componente).
   //   pathBasename("/a/b/c.txt") → "c.txt"
-  public intrinsic function pathBasename(p: string): string
+  public function pathBasename(p: string): string
+    inline CALL_BUILTIN 66
+  end pathBasename
 
   // Devuelve la extensión SIN el punto. "" si no tiene.
   //   pathExtension("foo.tar.gz") → "gz"
   //   pathExtension("README")      → ""
-  public intrinsic function pathExtension(p: string): string
+  public function pathExtension(p: string): string
+    inline CALL_BUILTIN 67
+  end pathExtension
 
   // #484 - EL NOMBRE QUE EL FS VA A USAR. Funcion pura de (path, projectPath):
   //
@@ -50,33 +58,51 @@ module IO
   // OPERATIVO del PC, que filtra el host y no existe en un micro.
   // Criterio de Eduardo (9-sep): «trabajamos con paths relativos siempre que
   // podamos, eso lo hace mas transportable».
-  public intrinsic function pathAbsolute(p: string): string
+  public function pathAbsolute(p: string): string
+    inline CALL_BUILTIN 68
+  end pathAbsolute
 
   // ---- Operaciones sobre filesystem ----
 
   // Crea el directorio. Crea intermedios si faltan. No falla si ya existe.
-  public intrinsic function mkdir(p: string)
+  public function mkdir(p: string)
+    inline CALL_BUILTIN 69
+  end mkdir
 
   // Borra un directorio. Sólo si está vacío.
-  public intrinsic function rmdir(p: string)
+  public function rmdir(p: string)
+    inline CALL_BUILTIN 70
+  end rmdir
 
   // Borra un fichero.
-  public intrinsic function removeFile(p: string)
+  public function removeFile(p: string)
+    inline CALL_BUILTIN 71
+  end removeFile
 
   // Renombra/mueve. Si el destino existe, lo sobreescribe.
-  public intrinsic function rename(src: string, dst: string)
+  public function rename(src: string, dst: string)
+    inline CALL_BUILTIN 72
+  end rename
 
   // Copia un fichero. Si el destino existe, lo sobreescribe.
-  public intrinsic function copyFile(src: string, dst: string)
+  public function copyFile(src: string, dst: string)
+    inline CALL_BUILTIN 73
+  end copyFile
 
   // Tamaño del fichero en bytes. Falla si > 2 GB (no representable en integer).
-  public intrinsic function fileSize(p: string): integer
+  public function fileSize(p: string): integer
+    inline CALL_BUILTIN 74
+  end fileSize
 
   // true si p apunta a un directorio existente.
-  public intrinsic function isDirectory(p: string): boolean
+  public function isDirectory(p: string): boolean
+    inline CALL_BUILTIN 75
+  end isDirectory
 
   // Última fecha de modificación, en milisegundos epoch (truncado a i32).
-  public intrinsic function lastModified(p: string): integer
+  public function lastModified(p: string): integer
+    inline CALL_BUILTIN 76
+  end lastModified
 
   // ---- N20 — UI con supervisión del IDE ----
   // Pide al IDE conectado que muestre un formulario y espera a que el
@@ -90,6 +116,8 @@ module IO
   //
   // Si NO hay IDE conectado (modo headless en dispositivo) lanza
   // RuntimeError BP atrapable con try/catch.
-  public intrinsic function prompt(spec: string): string
+  public function prompt(spec: string): string
+    inline CALL_BUILTIN 77
+  end prompt
 
 end IO

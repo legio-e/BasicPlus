@@ -44,10 +44,18 @@ module Spi
   // ---- Intrínsecos de bajo nivel ----
   //
   // Sufijo "Bus" para no colisionar con los métodos de Spi.Bus.
-  public intrinsic function initBus(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
-  public intrinsic function writeBus(bus: integer, data: integer[], count: integer): integer
-  public intrinsic function readBus(bus: integer, data: integer[], count: integer): integer
-  public intrinsic function transferBus(bus: integer, tx: integer[], rx: integer[], count: integer): integer
+  public function initBus(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+    inline CALL_BUILTIN 86
+  end initBus
+  public function writeBus(bus: integer, data: integer[], count: integer): integer
+    inline CALL_BUILTIN 87
+  end writeBus
+  public function readBus(bus: integer, data: integer[], count: integer): integer
+    inline CALL_BUILTIN 88
+  end readBus
+  public function transferBus(bus: integer, tx: integer[], rx: integer[], count: integer): integer
+    inline CALL_BUILTIN 89
+  end transferBus
 
   // ---- Funciones top-level de compatibilidad ----
   public function init(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)

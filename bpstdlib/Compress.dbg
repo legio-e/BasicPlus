@@ -1,6 +1,6 @@
 dbg 3
 module Compress
-source C:\lenguajes\pm\bpstdlib\Compress.bp
+source C:\tmp\std9\src\Compress.bp
 lines
 424 20
 433 21

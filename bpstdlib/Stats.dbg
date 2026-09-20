@@ -1,6 +1,6 @@
 dbg 3
 module Stats
-source C:\lenguajes\pm\bpstdlib\Stats.bp
+source C:\tmp\std9\src\Stats.bp
 lines
 408 53
 420 54

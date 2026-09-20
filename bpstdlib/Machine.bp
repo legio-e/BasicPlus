@@ -20,7 +20,9 @@ module Machine
   // ---- Identificación ----
   // ID único del chip flash (16 chars hex). Permanece estable
   // entre reboots y entre flasheos del firmware.
-  public intrinsic function uniqueId(): string
+  public function uniqueId(): string
+    inline CALL_BUILTIN 104
+  end uniqueId
 
   // Nombre legible de la board. "pico2" en RP2350, "host" en VM
   // Java sin HW.
@@ -35,42 +37,58 @@ module Machine
   //   getBoard()  la PLACA: "generic" cuando la imagen no conoce el modelo, que
   //               es lo normal — las imagenes se hacen para el MICRO. El RP2350
   //               y el STM32 si la conocen ("pico2", "nucleo-u575zi"...).
-  public intrinsic function getMicro(): string
-  public intrinsic function getBoard(): string
+  public function getMicro(): string
+    inline CALL_BUILTIN 233
+  end getMicro
+  public function getBoard(): string
+    inline CALL_BUILTIN 105
+  end getBoard
 
   // Obsoleta: es lo mismo que getBoard(). Se conserva por los programas ya
   // escritos; para codigo nuevo, usa getMicro() o getBoard() segun lo que
   // quieras saber, que es la distincion que esta funcion no sabia hacer.
-  public intrinsic function boardName(): string
+  public function boardName(): string
+    inline CALL_BUILTIN 105
+  end boardName
 
   // ---- Sensores internos ----
   // Temperatura del die en °C. Lee el sensor interno del ADC
   // (canal 4 en RP2350). Precisión típica ±2 °C sin calibración.
-  public intrinsic function tempC(): float
+  public function tempC(): float
+    inline CALL_BUILTIN 106
+  end tempC
 
   // ---- Reloj ----
   // Frecuencia actual del clk_sys en Hz. En RP2350 con config por
   // defecto es 150_000_000 (150 MHz).
-  public intrinsic function cpuFreqHz(): integer
+  public function cpuFreqHz(): integer
+    inline CALL_BUILTIN 107
+  end cpuFreqHz
 
   // Milisegundos desde el boot del firmware. 32-bit unsigned con
   // wrap ≈ 49 días. Para uptimes más largos, usar un acumulador en
   // BP que detecte el wrap.
-  public intrinsic function uptimeMs(): integer
+  public function uptimeMs(): integer
+    inline CALL_BUILTIN 108
+  end uptimeMs
 
   // ---- Board-aware (H7.3) ----
   // Número de GPIO disponibles en la PLACA. Lo resuelve el firmware
   // desde el board_desc (variante RP2350A=30 / RP2350B=48, u override
   // de /sys/board.json). En la VM Java (host) devuelve 30 (perfil A).
   // GPIO_COUNT() delega aquí para que sea board-aware automáticamente.
-  public intrinsic function gpioCount(): integer
+  public function gpioCount(): integer
+    inline CALL_BUILTIN 123
+  end gpioCount
 
   // ---- Causa del último reset (H10) ----
   // Devuelve por qué se reinició el MCU como string: "watchdog (IWDG)",
   // "power-on/brown-out", "software", "pin (NRST)", "low-power", ... En la
   // VM Java (host) devuelve "unknown" (un PC no tiene causa de reset de MCU).
   // Útil para diagnosticar reinicios inesperados (p.ej. un watchdog que saltó).
-  public intrinsic function resetCause(): string
+  public function resetCause(): string
+    inline CALL_BUILTIN 201
+  end resetCause
 
   // ---- Breadcrumb en RAM retenida (H10) ----
   // "Migas" que sobreviven al reset (registros de backup del MCU). La app deja
@@ -88,10 +106,18 @@ module Machine
   //     print "  miga " + intToString(i) + ": " + intToString(Pico.markAt(i))
   //     i := i + 1
   //   endwh
-  public intrinsic function setMark(code: integer)
-  public intrinsic function markCount(): integer
-  public intrinsic function markAt(i: integer): integer
-  public intrinsic function bootCount(): integer
+  public function setMark(code: integer)
+    inline CALL_BUILTIN 202
+  end setMark
+  public function markCount(): integer
+    inline CALL_BUILTIN 203
+  end markCount
+  public function markAt(i: integer): integer
+    inline CALL_BUILTIN 204
+  end markAt
+  public function bootCount(): integer
+    inline CALL_BUILTIN 205
+  end bootCount
 
   // Variante del chip como string ("A" / "B"), derivada de gpioCount()
   // — no necesita su propio intrínseco. RP2350A bondea 30 GPIO, RP2350B
@@ -158,7 +184,9 @@ module Machine
   // Se expone como `public` porque la infraestructura intrinsic
   // exige visibilidad pública, pero no debería usarse directo
   // desde BP de usuario.
-  public intrinsic function setCpuFreqMHzRaw(mhz: integer): boolean
+  public function setCpuFreqMHzRaw(mhz: integer): boolean
+    inline CALL_BUILTIN 111
+  end setCpuFreqMHzRaw
 
   // ---- Constantes de capacidades del MCU ----
   // Permiten que código BP defensivo valide rangos antes de usar
@@ -185,8 +213,12 @@ module Machine
   // Board-aware (H14): los resuelve el firmware desde su DESCRIPTOR de placa
   // (board_desc / board.json en RP2350; p4_board_id en ESP32). En host/RP2350
   // = perfil RP2350 (4 ADC externos GP26..29 / 12 slices PWM); en el P4 → 14/14.
-  public intrinsic function ADC_CHANNELS(): integer
+  public function ADC_CHANNELS(): integer
+    inline CALL_BUILTIN 208
+  end ADC_CHANNELS
 
-  public intrinsic function PWM_SLICES(): integer
+  public function PWM_SLICES(): integer
+    inline CALL_BUILTIN 209
+  end PWM_SLICES
 
 end Machine

@@ -32,8 +32,12 @@ module Adc
   import Core   // V6: los tipos de Core se importan
 
   // ---- Intrínsecos de bajo nivel ----
-  public intrinsic function initChannel(ch: integer): integer
-  public intrinsic function readChannel(ch: integer): integer
+  public function initChannel(ch: integer): integer
+    inline CALL_BUILTIN 114
+  end initChannel
+  public function readChannel(ch: integer): integer
+    inline CALL_BUILTIN 115
+  end readChannel
 
   // ============================================================
   // Clase Channel — un canal ADC encapsulado.

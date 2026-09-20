@@ -1311,8 +1311,8 @@ toque).
 
 | paso | qué | verifica |
 |---|---|---|
-| **P1** | `scripts/gen_builtins.py`: lee las `intrinsic` de `Core.bp` (sección nueva, en orden de id, con las 240 y sus firmas) y **escribe** `Builtin.java` y `bpgenvm-c/src/builtin_ids.h` (el `enum`, que `builtins.c` pasa a incluir). Primero se genera y se comprueba que sale **idéntico** a lo que hay a mano; `check_builtins.py` se tira | diff de los dos generados contra los de hoy = vacío; `make`; check |
-| **P2** | el compilador ata las intrínsecas **por la declaración de Core**: las globales (`addBuiltin` ×65 → las firmas de `Core.bp`, visibles sin cualificar por ser la raíz) y las de módulo (`Intrinsics.java` → `:= Core.__x` en cada `.bp`); una `intrinsic` sin atar es error | frontend 220 + check + mezcla; los `.mod` de la stdlib cambian sólo en la interfaz |
+| **P1** ✅ (20-sep) | **Cambió de forma con la decisión de Eduardo de la mañana**: una intrínseca es una función normal cuyo cuerpo es el bytecode escrito —`inline CALL_BUILTIN 24 … end sin`, el `inline($CD/$21)` de Turbo Pascal— y no hay que «atar» nada: el número ES el id, viaja en la interfaz del `.mod` (`func … inline …`) y el consumidor lo inlina. Hecho: la palabra `inline` (entra ella, sale `intrinsic`), parser/semántico/emisor/interfaz/importador; la stdlib entera migrada (177 funciones en 17 módulos, con `scripts/migrar_intrinsic_a_inline.py`, una vez); `Intrinsics.java` (162 `register`) borrado; `scripts/gen_builtins.py` comprueba los ids de los cuerpos contra `Builtin.java` (será el generador). Quedan en el compilador los 65 `addBuiltin` (las globales sin cualificar): son P2 | check 83/59/9/13/83, mezcla 194, frontend 220 |
+| **P2** | las 65 globales sin cualificar (`strlen`, `abs`, `print`-helpers, `__threadStart`…) de `addBuiltin` pasan a `Core.bp` como funciones `inline`, y `Core` se compila como RAÍZ: sus funciones públicas se ven sin cualificar en todo programa (la unidad `System`). Con eso `Builtin.java` y el `enum` de C se GENERAN de los cuerpos `inline` (`gen_builtins.py` escribe en vez de comprobar) y `check_builtins.py` se tira | frontend + check + mezcla; `Core.mod` crece en su interfaz |
 | **P3** | `Object`/`Thread`/`Mutex`/`StringBuilder` declarados en `Core.bp`; fuera los `makeMethod` y las tablas paralelas | idem + `builtinBaseMethodNames` desaparece |
 | **P4** | los tipos primitivos como declaraciones de la raíz (o se deja como `switch` si no compensa: se decide con P3 hecho) | — |
 | **P5** | la cascada: stdlib, blobs, imágenes; manual (§Core como raíz) | check + placas cuando Eduardo diga |
@@ -1320,9 +1320,10 @@ toque).
 Después, encima del módulo raíz: sobrecarga de intrínsecas (`sign`/`signF`), destructor `~Clase()`, `Map`, `#396`
 `Time`, `#19`, `#460`, los huecos.
 
-### 4. Lo que hay que decidir antes de P1 (Eduardo)
+### 4. Lo decidido (Eduardo, 20-sep, 8:00)
 
-- **La forma de atar** una intrínseca de módulo a la de la raíz: `public intrinsic function sin(x: float): float :=
-  Core.__sin` (propuesta), o dejar que case por el nombre pelado cuando coincida.
-- **Los nombres internos** (`__guiShot`, `__threadStart`…): ¿se quedan con `__` en `Core.bp` (sólo la raíz puede
-  declararlos: `M4` prohíbe el prefijo al usuario), o se les da nombre?
+*«Una función intrínseca se declara como una función normal, por ejemplo `public function abs(d: double): double`;
+la diferencia es el cuerpo de la función, utilizamos `inline opCode`. Y al final `end abs`. Es la sintaxis que
+utilizaba Turbo Pascal.»* Con eso las dos preguntas de arriba desaparecen: no hay que atar nada (el bytecode va en
+el cuerpo y viaja en la interfaz), y los nombres internos se quedan como están donde están (cada módulo declara
+las suyas). Pendiente para P2: los nombres `__x` de `Core.bp` sólo los puede declarar la raíz (`M4`).

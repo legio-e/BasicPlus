@@ -13,16 +13,22 @@
 module App
 
   // Nombre del módulo principal (entry), sin ruta ni extensión (p.ej. "Main").
-  public intrinsic function mainModule(): string
+  public function mainModule(): string
+    inline CALL_BUILTIN 211
+  end mainModule
 
   // Ruta completa del módulo principal (p.ej. "/app/calc/Main.mod").
-  public intrinsic function mainModulePath(): string
+  public function mainModulePath(): string
+    inline CALL_BUILTIN 212
+  end mainModulePath
 
   // Carpeta del proyecto en ejecución (p.ej. "/app/calc"); "" si modo plano.
   // Úsala para construir rutas de recursos a mano:
   //   readFile(App.projectPath() + "/datos/x.csv")
   // (Los recursos RELATIVOS —readFile("x"), load(".win"), imágenes— ya resuelven
   //  implícitamente bajo esta raíz; estas funciones son la vía EXPLÍCITA.)
-  public intrinsic function projectPath(): string
+  public function projectPath(): string
+    inline CALL_BUILTIN 213
+  end projectPath
 
 end App

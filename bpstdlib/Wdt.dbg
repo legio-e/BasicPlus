@@ -1,19 +1,19 @@
 dbg 3
 module Wdt
-source C:\lenguajes\pm\bpstdlib\Wdt.bp
+source C:\tmp\std9\src\Wdt.bp
 lines
-462 77
-473 78
-489 105
-498 106
-509 111
-518 112
-535 64
-539 65
-552 66
-564 68
-574 69
-583 70
+462 83
+473 84
+489 111
+498 112
+509 117
+518 118
+535 70
+539 71
+552 72
+564 74
+574 75
+583 76
 vars
 func Object.toString 0
 this -20 8 0 ?

@@ -1,22 +1,22 @@
 dbg 3
 module Machine
-source C:\lenguajes\pm\bpstdlib\Machine.bp
+source C:\tmp\std9\src\Machine.bp
 lines
-424 100
-438 101
-454 103
-473 117
-492 123
-511 145
-515 146
-528 147
-540 149
-553 150
-565 152
-584 167
-599 171
-614 175
-629 182
+424 126
+438 127
+454 129
+473 143
+492 149
+511 171
+515 172
+528 173
+540 175
+553 176
+565 178
+584 195
+599 199
+614 203
+629 210
 vars
 func Object.toString 0
 this -20 8 0 ?

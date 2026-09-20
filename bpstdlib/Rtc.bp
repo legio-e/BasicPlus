@@ -33,8 +33,12 @@
 module Rtc
 
   // ---- Intrínsecos de bajo nivel ----
-  public intrinsic function nowSec(): integer
-  public intrinsic function setNowSec(sec: integer)
+  public function nowSec(): integer
+    inline CALL_BUILTIN 112
+  end nowSec
+  public function setNowSec(sec: integer)
+    inline CALL_BUILTIN 113
+  end setNowSec
 
   // ============================================================
   // Clase Clock — wrapper OO del wall clock.

@@ -33,10 +33,18 @@ module Packs
 
   import Str
 
-  public intrinsic function __packNext(cur: integer): integer
-  public intrinsic function __packInfo(cur: integer): string
-  public intrinsic function __packEntryNext(pack: integer, cur: integer): integer
-  public intrinsic function __packEntryInfo(pack: integer, cur: integer): string
+  public function __packNext(cur: integer): integer
+    inline CALL_BUILTIN 224
+  end __packNext
+  public function __packInfo(cur: integer): string
+    inline CALL_BUILTIN 225
+  end __packInfo
+  public function __packEntryNext(pack: integer, cur: integer): integer
+    inline CALL_BUILTIN 226
+  end __packEntryNext
+  public function __packEntryInfo(pack: integer, cur: integer): string
+    inline CALL_BUILTIN 227
+  end __packEntryInfo
 
   // Los packs grabados, por orden de la cadena. Lista vacía si no hay ninguno.
   public function list(): List

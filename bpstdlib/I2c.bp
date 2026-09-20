@@ -36,9 +36,15 @@ module I2c
   // Sufijo "Bus" para evitar colisión con los métodos init/write/
   // read de la clase Bus envolvente (dentro de un método de la
   // clase, `write(...)` resolvería a sí mismo → recursión).
-  public intrinsic function initBus(bus: integer, sda: integer, scl: integer, baudrate: integer)
-  public intrinsic function writeBus(bus: integer, addr: integer, data: integer[], count: integer): integer
-  public intrinsic function readBus(bus: integer, addr: integer, data: integer[], count: integer): integer
+  public function initBus(bus: integer, sda: integer, scl: integer, baudrate: integer)
+    inline CALL_BUILTIN 82
+  end initBus
+  public function writeBus(bus: integer, addr: integer, data: integer[], count: integer): integer
+    inline CALL_BUILTIN 83
+  end writeBus
+  public function readBus(bus: integer, addr: integer, data: integer[], count: integer): integer
+    inline CALL_BUILTIN 84
+  end readBus
 
   // ---- Funciones top-level de compatibilidad ----
   //

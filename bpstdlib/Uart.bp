@@ -53,10 +53,18 @@ module Uart
   //
   // Sufijo "Port" para evitar colisión con los métodos de la clase
   // Uart.Port (init/write/read/available).
-  public intrinsic function initPort(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
-  public intrinsic function writePort(bus: integer, data: integer[], count: integer): integer
-  public intrinsic function readPort(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
-  public intrinsic function availablePort(bus: integer): integer
+  public function initPort(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+    inline CALL_BUILTIN 90
+  end initPort
+  public function writePort(bus: integer, data: integer[], count: integer): integer
+    inline CALL_BUILTIN 91
+  end writePort
+  public function readPort(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
+    inline CALL_BUILTIN 92
+  end readPort
+  public function availablePort(bus: integer): integer
+    inline CALL_BUILTIN 93
+  end availablePort
 
   // ---- Funciones top-level de compatibilidad ----
   public function init(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)

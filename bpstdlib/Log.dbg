@@ -1,6 +1,6 @@
 dbg 3
 module Log
-source C:\lenguajes\pm\bpstdlib\Log.bp
+source C:\tmp\std9\src\Log.bp
 lines
 442 57
 470 65
