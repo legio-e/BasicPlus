@@ -1259,3 +1259,70 @@ Partida medida hoy (VM-C host): JsonDemo «470 simbolos, 12161 B de nombres, 204
 **6. Validación (3-4 sesiones).** V4 (≈250 filas con predicción escrita antes), V5/V6/V7, V8 en placas, V9 medidas, V10 adversarial hasta 0 hallazgos.
 
 **Total ≈ 17-23 sesiones**, en cascada Java → C → Pico, con commit por paso y `dist/v6` como oráculo. Fuera de esta tanda (fase 2, sólo si la medida lo pide): vtable plana de 8 B, hash FNV en claves/símbolos, helpers AOT `_ref` con ABI 7 y gate fino.
+
+
+## H1 — el módulo raíz: el mapa de lo que hay y el plan (20-sep, día de análisis)
+
+> La idea es de Eduardo (5-sep, de Turbo Pascal): *«el módulo del sistema se escribía en Pascal mismo, se compilaba
+> con un comando especial para indicar que era el módulo raíz. Eso permitía tener todos los tipos definidos y las
+> funciones intrínsecas. Me da más tranquilidad tener algo que se pueda LEER que algo que sólo existe en memoria. Y
+> esto también es importante: un solo archivo, sin posibilidad de diferencias entre compilador y VM.»*
+
+### 1. Dónde vive hoy cada cosa (medido el 20-sep)
+
+Las **240 intrínsecas** (ids 0..239) están repartidas en **cinco sitios mantenidos a mano**:
+
+| qué | dónde | cuántas | cómo se atan |
+|---|---|---|---|
+| el **id** (Java) | `miVM/…/bytecode/Builtin.java`, un `enum`: `STRLEN("strlen")` … el id es el `ordinal()` | 240 | el nombre BP (`bpName`) y el orden |
+| el **id** (C) | `bpgenvm-c/src/builtins.c:41-400`, `enum { BUILTIN_STRLEN = 0, … }` escrito a mano, y el `switch` del despacho | 236 (faltan 4 sólo-host: `HEAP_FRAG`, `HEAP_MAP`, `INPUT`, `LIST_DIR`) | por el número; `scripts/check_builtins.py` (`#476`) es el andamio que compara las dos tablas |
+| la **firma** de las globales sin cualificar (`strlen`, `abs`, `print`…) y de las internas `__x` que usa la stdlib | `SemanticAnalyzer.java`, 65 `addBuiltin(s, "nombre", ret, params, tipos)` | 65 | el emisor las emite con `Builtin.byName(fs.name)` (`MivmEmitter.java:4563`) |
+| la **firma** de las intrínsecas de módulo | los `.bp` de la stdlib: `public intrinsic function sin(x: float): float` (Gui 84, Math 20, Machine 17, IO 15, Net 5, Gpio 5, App 4, I2c 3, Adc 2, Neopixel 2…) | ~175 | viajan en la interfaz del `.mod` sin código |
+| el **enlace** nombre → id de esas intrínsecas de módulo | `lexer-java/…/Intrinsics.java`, 162 `register("Math.sin", w -> emitBuiltin(w, Builtin.SIN))` (algunas emiten una secuencia, no un solo builtin) | 162 | por el nombre cualificado; una `intrinsic` declarada sin `register` **compila y devuelve basura** (hueco conocido) |
+
+Y los **tipos**: `integer`/`float`/… son un `case` de un `switch` en `resolveType` (`SemanticAnalyzer.java:1574` y
+`:3828`, dos copias); `Object`, `Thread`, `Mutex` y `StringBuilder` se construyen a mano con 20 `makeMethod(...)`
+(`SemanticAnalyzer.java:423-529`) + sus layouts en `ModuleInterface.objectBaseLayout/threadBaseLayout` (la fuente
+única desde `#526`) + los métodos sintetizados en `MivmEmitter`; `Integer`, `Comparable`, `Exception`,
+`RuntimeError`… son fuente en `bpstdlib/Core.bp`. La frontera «escrito en BP» / «cableado en Java» no responde a
+ningún criterio: es lo que se pudo expresar en cada momento.
+
+### 2. Lo que se quiere: UN fichero, y que el compilador y las VMs beban de él
+
+`Core.bp` es «el módulo del sistema». El fichero legible es **`Core.bp`, compilado como raíz** (una marca: `--raiz`,
+o el propio `module Core`): sus símbolos públicos son visibles **sin cualificar** en todo programa (como la unidad
+`System`), y contiene:
+
+1. **Las intrínsecas**, una línea cada una, con su firma BP y su id: `intrinsic function strlen(s: string): integer`.
+   El id es el **orden de declaración** (como hoy el `ordinal()`), y el generador se niega a mover un id existente
+   salvo que se le diga (errores sí, silenciosos no). Las de módulo (`Math.sin`) se declaran en su módulo como hoy y
+   se atan a la raíz **por declaración**, no en `Intrinsics.java`: `public intrinsic function sin(x: float): float
+   := Core.__sin` (o la forma que decida Eduardo). Una `intrinsic` sin atar es error de compilación.
+2. **Los tipos del lenguaje** que hoy son Java: `Object`, `Thread`, `Mutex`, `StringBuilder` declarados en BP (sus
+   métodos `intrinsic`, su layout el de siempre) — se quitan los 20 `makeMethod` y las tres copias de tablas.
+3. De él se **generan** `Builtin.java` y el `enum` de `builtins.c` (y `check_builtins.py` se tira). El despacho de
+   las dos VMs (los `switch`) sigue escrito a mano: es la implementación, no la tabla.
+
+Lo que cuesta: `Core.mod` crece (≈240 firmas más en su interfaz; «declarar no cuesta RAM»: el cargador la salta) y va
+embebido en las cinco imágenes → al final de H1, la cascada de siempre (stdlib, blobs, imágenes; sin grabar hasta que
+toque).
+
+### 3. El plan, por pasos que CIERRAN algo cada uno
+
+| paso | qué | verifica |
+|---|---|---|
+| **P1** | `scripts/gen_builtins.py`: lee las `intrinsic` de `Core.bp` (sección nueva, en orden de id, con las 240 y sus firmas) y **escribe** `Builtin.java` y `bpgenvm-c/src/builtin_ids.h` (el `enum`, que `builtins.c` pasa a incluir). Primero se genera y se comprueba que sale **idéntico** a lo que hay a mano; `check_builtins.py` se tira | diff de los dos generados contra los de hoy = vacío; `make`; check |
+| **P2** | el compilador ata las intrínsecas **por la declaración de Core**: las globales (`addBuiltin` ×65 → las firmas de `Core.bp`, visibles sin cualificar por ser la raíz) y las de módulo (`Intrinsics.java` → `:= Core.__x` en cada `.bp`); una `intrinsic` sin atar es error | frontend 220 + check + mezcla; los `.mod` de la stdlib cambian sólo en la interfaz |
+| **P3** | `Object`/`Thread`/`Mutex`/`StringBuilder` declarados en `Core.bp`; fuera los `makeMethod` y las tablas paralelas | idem + `builtinBaseMethodNames` desaparece |
+| **P4** | los tipos primitivos como declaraciones de la raíz (o se deja como `switch` si no compensa: se decide con P3 hecho) | — |
+| **P5** | la cascada: stdlib, blobs, imágenes; manual (§Core como raíz) | check + placas cuando Eduardo diga |
+
+Después, encima del módulo raíz: sobrecarga de intrínsecas (`sign`/`signF`), destructor `~Clase()`, `Map`, `#396`
+`Time`, `#19`, `#460`, los huecos.
+
+### 4. Lo que hay que decidir antes de P1 (Eduardo)
+
+- **La forma de atar** una intrínseca de módulo a la de la raíz: `public intrinsic function sin(x: float): float :=
+  Core.__sin` (propuesta), o dejar que case por el nombre pelado cuando coincida.
+- **Los nombres internos** (`__guiShot`, `__threadStart`…): ¿se quedan con `__` en `Core.bp` (sólo la raíz puede
+  declararlos: `M4` prohíbe el prefijo al usuario), o se les da nombre?
