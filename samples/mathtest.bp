@@ -9,10 +9,10 @@ module MathTest
     print "sign(0)   =", Math.sign(0)         // 0
     print "sign(42)  =", Math.sign(42)        // 1
 
-    // signF sobre float
-    print "signF(-1.5) =", Math.signF(-1.5)   // -1
-    print "signF(0.0)  =", Math.signF(0.0)    // 0
-    print "signF(3.14) =", Math.signF(3.14)   // 1
+    // sign sobre float (sobrecarga, H1 P2c)
+    print "sign(-1.5)  =", Math.sign(-1.5)   // -1
+    print "sign(0.0)   =", Math.sign(0.0)    // 0
+    print "sign(3.14)  =", Math.sign(3.14)   // 1
 
     // Trig inversas
     print "asin(1.0)   =", Math.asin(1.0)     // pi/2 ≈ 1.5708

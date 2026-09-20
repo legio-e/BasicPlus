@@ -740,10 +740,10 @@ module Core
   public function move(src: any, dst: any, srcStart: integer, dstStart: integer, count: integer)
     inline CALL_BUILTIN 55
   end move
-  function __sign_i(x: integer): integer   // Math.sign
+  function __sign_i(x: integer): integer   // Math.sign(integer)
     inline CALL_BUILTIN 56
   end __sign_i
-  function __sign_f(x: float): integer   // Math.signF
+  function __sign_f(x: float): integer   // Math.sign(float)
     inline CALL_BUILTIN 57
   end __sign_f
   function __asin(x: float): float   // Math.asin

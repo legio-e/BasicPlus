@@ -672,8 +672,8 @@ m.unlock()              <span class="comment">// releases and hands off to the f
       <td>Base-10 logarithm.</td></tr>
   <tr><td><code>sign(x: integer): integer</code></td>
       <td>−1, 0 or +1 depending on the sign of <code>x</code>.</td></tr>
-  <tr><td><code>signF(x: float): integer</code></td>
-      <td>Float version. <code>NaN</code> → 0.</td></tr>
+  <tr><td><code>sign(x: float): integer</code></td>
+      <td>Float overload (was <code>signF</code> until V7). <code>NaN</code> → 0.</td></tr>
   <tr><td><code>factorial(n: integer): integer</code></td>
       <td><code>n!</code> with <code>0 ≤ n ≤ 12</code> (the largest that fits in i32).
           Out of range raises <code>RuntimeError</code>.</td></tr>

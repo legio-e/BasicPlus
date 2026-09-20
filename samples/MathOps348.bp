@@ -64,9 +64,9 @@ module MathOps348
     n("sign(-7)     ", Math.sign(-7))
     n("sign(0)      ", Math.sign(0))
     n("sign(7)      ", Math.sign(7))
-    n("signF(-0.5)  ", Math.signF(-0.5))
-    n("signF(0.0)   ", Math.signF(0.0))
-    n("signF(0.5)   ", Math.signF(0.5))
+    n("sign(-0.5)   ", Math.sign(-0.5))
+    n("sign(0.0)    ", Math.sign(0.0))
+    n("sign(0.5)    ", Math.sign(0.5))
 
     print "== factorial (y sus dos errores) =="
     n("factorial(0) ", Math.factorial(0))

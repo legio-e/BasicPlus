@@ -45,15 +45,16 @@ module Math
   end log10
 
   // -------- Signo --------
-  // Devuelve -1, 0, +1 según el signo del argumento.
+  // Devuelve -1, 0, +1 según el signo del argumento. Sobrecargada (H1 P2c, 20-sep):
+  // una intrínseca es una función normal, y se sobrecarga como cualquier otra.
   public function sign(x: integer): integer
     inline CALL_BUILTIN 56
   end sign
 
-  // Versión para float. Devuelve un integer (-1/0/+1). NaN → 0.
-  public function signF(x: float): integer
+  // Para float. Devuelve un integer (-1/0/+1). NaN → 0. (Era `signF` hasta V7.)
+  public function sign(x: float): integer
     inline CALL_BUILTIN 57
-  end signF
+  end sign
 
   // -------- Trigonometría inversa --------
   public function asin(x: float): float

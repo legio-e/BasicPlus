@@ -673,8 +673,8 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
       <td>Logaritmo base 10.</td></tr>
   <tr><td><code>sign(x: integer): integer</code></td>
       <td>−1, 0 o +1 según el signo de <code>x</code>.</td></tr>
-  <tr><td><code>signF(x: float): integer</code></td>
-      <td>Versión float. <code>NaN</code> → 0.</td></tr>
+  <tr><td><code>sign(x: float): integer</code></td>
+      <td>Sobrecarga para float (era <code>signF</code> hasta V7). <code>NaN</code> → 0.</td></tr>
   <tr><td><code>factorial(n: integer): integer</code></td>
       <td><code>n!</code> con <code>0 ≤ n ≤ 12</code> (máximo que cabe en i32).
           Fuera de rango lanza <code>RuntimeError</code>.</td></tr>
