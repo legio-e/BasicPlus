@@ -110,6 +110,7 @@ class AotSimboloEnModTest {
         b.sourceDir  = src.toString();
         b.outDir     = out.toString();
         b.main       = "AotSim";
+        b.dependencies.add(StdlibDeTest.paraFormato(tmp).getAbsolutePath());   // H1 P3: Object vive en Core
         assertTrue(Main.buildProject(b, "mivm", false), "el módulo de la prueba debe compilar");
 
         Set<String> enElMod = ModSimbolos.conjunto(out.resolve("AotSim.mod"));

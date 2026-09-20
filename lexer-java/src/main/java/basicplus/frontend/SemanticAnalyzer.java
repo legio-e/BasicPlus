@@ -202,11 +202,9 @@ public final class SemanticAnalyzer {
                  * aliasa igual que Exception. Los envoltorios van con ella: quien
                  * usa `Object` de comodin escribe `Integer(o)`, no
                  * `Core.Integer(o)`. */
-                for (String n : new String[]{"List", "Integer", "Long", "Double",
-                                             "Float", "Boolean", "Comparable"}) {
-                    Symbol c = ns.classes.get(n);
-                    if (c != null) module.members.tryDefine(c);
-                }
+                // H1 P3 (20-sep) — TODAS las clases públicas de Core, sin lista a mano: Object,
+                // Thread, Mutex, StringBuilder, List, los envoltorios… (la raíz entera).
+                for (Symbol c : ns.classes.values()) module.members.tryDefine(c);
             } else if ("Collections".equals(ns.moduleName)) {
                 /* #450 — idem para las dos que se quedaron en Collections. */
                 for (String n : new String[]{"SyncList", "OwnerList"}) {
@@ -250,148 +248,12 @@ public final class SemanticAnalyzer {
         addBuiltin(s, "int16", PrimitiveType.INT16,  new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
 
 
-        // ---- Clase RAÍZ del lenguaje: Object ----
-        // La clase existía ya, pero sólo en el EMISOR: `MivmEmitter`
-        // .synthesizeObjectClass la fabrica en cada módulo con su vtable fija
-        // (toString slot 0, compareTo slot 1) y cuelga de ella toda clase de
-        // usuario. Lo que no existía era su SÍMBOLO: el analizador no la tenía
-        // en esta lista, así que el nombre `Object` no resolvía a nada — y por
-        // eso `case "Object"` de resolveType tenía que devolver `any`.
-        //
-        // Aquí sólo se da de alta. Que el NOMBRE pase a significar esta clase
-        // (en vez de `any`) es el paso siguiente, y ése sí cambia semántica.
-        //
-        // isBuiltin = true como sus vecinas, y por un motivo concreto: el
-        // cross-check de slots #174b (MivmEmitter) pide el layout a las clases
-        // NO builtin, y `computeClassLayout` no sabe calcularlo sin AST —
-        // abortaba el compilador con una traza Java. Es lo que ya ocurrió con
-        // SyncList. El layout de Object no se calcula: está tabulado por nombre
-        // (`ModuleInterface.objectBaseLayout`, línea 722).
-        //
-        // Sin constructor a propósito: el emisor tampoco lo sintetiza. Si algún
-        // día se quiere `Object()` en fuente, hay que ponerlo en los DOS sitios.
-        ClassSymbol objectCls = new ClassSymbol("Object", true, null, null, 0, 0);
-        objectCls.isBuiltin = true;   // vtable la pone el emisor; layout tabulado
-        {
-            objectCls.instanceMembers.tryDefine(makeMethod("toString",  objectCls,
-                    PrimitiveType.STRING,  new String[]{}, new BpType[]{}));
-            objectCls.instanceMembers.tryDefine(makeMethod("compareTo", objectCls,
-                    PrimitiveType.INTEGER, new String[]{"other"},
-                    new BpType[]{new BpType.ClassType(objectCls)}));
-        }
-        s.tryDefine(objectCls);
-
-        // H1 P2 — `newObjArray`/`growObjArray` también viven en Core.bp (alias de __newRefArray/__growRefArray).
-
-        /* #450 — `List` ya NO se registra aqui: vive en BP y llega por
-         * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
-         * builtin para que no tape al de verdad. */
-
-
-
-        // ---- Clase stdlib: Thread (multitarea cooperativa) ----
-        // Subclasea para tu worker, sobreescribe run(), llama start()/join().
-        // El stackSize del constructor se reserva al hacer start(); 0 = default.
-        ClassSymbol threadCls = new ClassSymbol("Thread", true, null, null, 0, 0);
-        threadCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
-        {
-            FunctionSymbol ctor = makeMethod("Thread", threadCls, null,
-                    new String[]{"stackSize"}, new BpType[]{PrimitiveType.INTEGER});
-            ctor.isConstructor = true;
-            threadCls.constructor = ctor;
-            threadCls.instanceMembers.tryDefine(ctor);
-            // El método run() es VIRTUAL: la subclase del usuario lo
-            // sobreescribe con su lógica. Tiene que ser el PRIMER método de
-            // la vtable (slot 0) por convención con __threadStart en la VM.
-            threadCls.instanceMembers.tryDefine(makeMethod("run",   threadCls, VoidType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-            threadCls.instanceMembers.tryDefine(makeMethod("start", threadCls, VoidType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-            threadCls.instanceMembers.tryDefine(makeMethod("join",  threadCls, VoidType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-            // #526 — Thread no desciende de Object: sin esto, `print w` despachaba la ranura 0 (run).
-            threadCls.instanceMembers.tryDefine(makeMethod("toString", threadCls, PrimitiveType.STRING,
-                    new String[]{}, new BpType[]{}));
-        }
-        s.tryDefine(threadCls);
-
-        // ---- Clase stdlib: Mutex (sincronización entre threads BP) ----
-        // Construye uno con `Mutex()`. Llama lock() para tomarlo (se bloquea
-        // si está tomado por otro thread); unlock() lo libera y despierta al
-        // siguiente waiter. NO es reentrante: lock() dos veces desde el mismo
-        // thread es error.
-        ClassSymbol mutexCls = new ClassSymbol("Mutex", true, null, null, 0, 0);
-        mutexCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
-        {
-            FunctionSymbol ctor = makeMethod("Mutex", mutexCls, null, true);
-            ctor.isConstructor = true;
-            mutexCls.constructor = ctor;
-            mutexCls.instanceMembers.tryDefine(ctor);
-            mutexCls.instanceMembers.tryDefine(makeMethod("lock",   mutexCls, VoidType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-            mutexCls.instanceMembers.tryDefine(makeMethod("unlock", mutexCls, VoidType.INSTANCE,
-                    new String[]{}, new BpType[]{}));
-        }
-        s.tryDefine(mutexCls);
-
-        /* #450 — `SyncList` ya NO se registra aqui: vive en BP y llega por
-         * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
-         * builtin para que no tape al de verdad. */
-
-
-
-        /* #450 — `OwnerList` ya NO se registra aqui: vive en BP y llega por
-         * su modulo (ver injectImplicitStdlibImports). Se quita el ClassSymbol
-         * builtin para que no tape al de verdad. */
-
-
-
-        // ---- Clase stdlib: StringBuilder (construcción eficiente de strings) ----
-        ClassSymbol sbCls = new ClassSymbol("StringBuilder", true, null, null, 0, 0);
-        sbCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
-        {
-            FunctionSymbol ctor = makeMethod("StringBuilder", sbCls, null, true);
-            ctor.isConstructor = true;
-            sbCls.constructor = ctor;
-            sbCls.instanceMembers.tryDefine(ctor);
-            sbCls.instanceMembers.tryDefine(makeMethod("appendStr",  sbCls, VoidType.INSTANCE,
-                    new String[]{"s"}, new BpType[]{PrimitiveType.STRING}));
-            sbCls.instanceMembers.tryDefine(makeMethod("appendChar", sbCls, VoidType.INSTANCE,
-                    new String[]{"c"}, new BpType[]{PrimitiveType.INTEGER}));
-            sbCls.instanceMembers.tryDefine(makeMethod("appendInt",  sbCls, VoidType.INSTANCE,
-                    new String[]{"n"}, new BpType[]{PrimitiveType.INTEGER}));
-            sbCls.instanceMembers.tryDefine(makeMethod("toString",   sbCls, PrimitiveType.STRING,
-                    new String[]{}, new BpType[]{}));
-            sbCls.instanceMembers.tryDefine(makeMethod("length",     sbCls, PrimitiveType.INTEGER,
-                    new String[]{}, new BpType[]{}));
-        }
-        s.tryDefine(sbCls);
+        // H1 P3 (20-sep) — Object, Thread, Mutex y StringBuilder ya NO se declaran aquí (eran 20
+        // makeMethod sin AST): viven en `bpstdlib/Core.bp` como clases BP y llegan por el
+        // `import Core` que el parser pone en todo módulo. Este scope se queda con los 4 casts.
 
         BUILTIN_SCOPE_CACHE = s;
         return s;
-    }
-
-    /**
-     * Helper para crear un FunctionSymbol "fake" (sin AST) que represente un
-     * método de una clase stdlib sintetizada.
-     */
-    private static FunctionSymbol makeMethod(String name, ClassSymbol owner, BpType returnType,
-                                             String[] paramNames, BpType[] paramTypes) {
-        FunctionSymbol fn = new FunctionSymbol(name, true, false, false, owner, null);
-        fn.returnType = returnType;
-        for (int i = 0; i < paramNames.length; i++) {
-            ParamSymbol p = new ParamSymbol(paramNames[i], 0, 0);
-            p.type = paramTypes[i];
-            fn.params.add(p);
-        }
-        return fn;
-    }
-
-    /** Helper para el constructor: misma firma que makeMethod pero retorno = null. */
-    private static FunctionSymbol makeMethod(String name, ClassSymbol owner, BpType returnType, boolean ctor) {
-        FunctionSymbol fn = new FunctionSymbol(name, true, false, false, owner, null);
-        fn.returnType = returnType;
-        return fn;
     }
 
     /**
@@ -589,34 +451,28 @@ public final class SemanticAnalyzer {
      * se quedaba sin resolver y `dao.list(w).length()` decía «el tipo 'List' no
      * tiene miembros», aunque `var l: List := dao.list(w)` sí funcionara.
      */
-    static ClassSymbol claseBuiltin(String name) {
-        Symbol sym = builtinScope().tryLookup(name);
-        return (sym instanceof ClassSymbol && ((ClassSymbol) sym).isBuiltin)
-                ? (ClassSymbol) sym : null;
-    }
-
     /** H1 P2 — ¿se está compilando el módulo raíz? Es `Core`, por nombre (el módulo del sistema). */
     private boolean esRaiz() { return module != null && "Core".equals(module.name); }
-    /** H1 P2 (20-sep) — una función PÚBLICA del módulo raíz (`Core.bp`, con cuerpo `inline`) entra
-     *  en el scope global: visible sin cualificar en todo programa, como la unidad `System` de
-     *  Turbo Pascal. Idempotente (el scope es una caché por JVM). Lo llama Main.cargarRaiz.
-     *  P2c: si el nombre ya está, es una SOBRECARGA (`len(s: string)` / `len(a: any[])`): se
-     *  encadena como hace el importador con cualquier módulo, y resolveOverloadCall elige. */
-    static void registrarGlobalDeRaiz(FunctionSymbol fs) {
-        Symbol previo = builtinScope().tryLookup(fs.name);
-        if (!(previo instanceof FunctionSymbol)) { builtinScope().tryDefine(fs); return; }
-        FunctionSymbol cabeza = (FunctionSymbol) previo, cola = cabeza;
-        while (cola.nextOverload != null) {
-            if (cola.overloadMangle().equals(fs.overloadMangle())) return;   // ya estaba (idempotente)
-            cola = cola.nextOverload;
-        }
-        if (cola.overloadMangle().equals(fs.overloadMangle())) return;
-        cola.nextOverload = fs;
-        cabeza.overloaded = true; fs.overloaded = true;
-        fs.slotKey = fs.overloadMangle();
+    /** H1 P3 (20-sep) — ¿es `cls` LA clase Object del lenguaje (la de Core: el stub importado, o la
+     *  local si se compila Core)? No una clase de usuario que se llame igual. */
+    boolean esObject(ClassSymbol cls) {
+        return cls != null && "Object".equals(cls.name)
+                && (cls.isExternal ? CORE_MODULE.equals(cls.externalModule) : esRaiz());
     }
-    /** ¿Ya se registró la raíz en esta JVM? (para no volver a leer Core.mod por cada módulo) */
-    static boolean raizRegistrada() { return builtinScope().tryLookup("strlen") != null; }   // strlen: la primera de Core.bp
+    /** H1 P2/P3 — LA RAÍZ, SIN CUALIFICAR. Toda función pública de Core (el `import Core` que el
+     *  parser pone siempre) entra en el scope `raiz` de ESTE analizador, entre el builtin y el
+     *  módulo: `strlen`, `abs`, `len`… se escriben peladas en todo programa, como en la unidad
+     *  `System` de Turbo Pascal. Por analizador, no por JVM: sus firmas nombran clases de Core
+     *  (`Object[]`) y ésas son los stubs de ESTE módulo. Las sobrecargas ya vienen encadenadas en
+     *  el namespace del import (P2c). Una función local del usuario con el mismo nombre gana
+     *  (el scope del módulo está por encima). */
+    private void registrarRaiz(Scope raiz) {
+        for (Symbol.ImportedNamespaceSymbol ns : preloadedImports) {
+            if (!CORE_MODULE.equals(ns.moduleName)) continue;
+            for (FunctionSymbol f : ns.functions.values())
+                if (f.isPublic) raiz.tryDefine(f);
+        }
+    }
 
     /** ¿Es 's' un símbolo built-in (no del usuario)? */
     public static boolean isBuiltin(Symbol sym) {
@@ -630,7 +486,9 @@ public final class SemanticAnalyzer {
     // PASE 1 — Declaraciones
     // ============================================================
     private void declarePass(ModuleNode mod) {
-        module = new ModuleSymbol(mod.name, builtinScope(), mod.line, mod.column);
+        Scope raiz = new Scope("raiz", builtinScope());   // H1 P3: las globales de Core, por analizador
+        module = new ModuleSymbol(mod.name, raiz, mod.line, mod.column);
+        registrarRaiz(raiz);
         module.decl = mod;
         info.module = module;
         info.declSymbols.put(mod, module);
@@ -1048,6 +906,22 @@ public final class SemanticAnalyzer {
         for (Symbol s : module.members.getSymbols()) {
             if (s instanceof ClassSymbol) {
                 ClassSymbol cls = (ClassSymbol) s;
+                if (cls.isRoot && !esRaiz()) {
+                    err(cls.line, cls.column, "'root class' sólo puede escribirse en el módulo raíz (Core): toda clase desciende de Object");
+                    cls.isRoot = false;
+                }
+                if (cls.isRoot && cls.baseClassName != null) {
+                    err(cls.line, cls.column, "una 'root class' no puede llevar 'extends'");
+                    cls.isRoot = false;
+                }
+                if (cls.baseClassName == null && !cls.isRoot && !cls.isExternal) {
+                    // H1 P3 (20-sep) — sin `extends`: la base es Object, la clase del lenguaje que
+                    // vive en Core (el stub del import implícito; la local, si se compila Core).
+                    Symbol obj = module.members.resolve("Object");
+                    if (obj instanceof ClassSymbol && esObject((ClassSymbol) obj)) cls.baseClass = (ClassSymbol) obj;
+                    else if (obj instanceof ClassSymbol && ((ClassSymbol) obj).isExternal) cls.baseClass = (ClassSymbol) obj;   // Core de otra biblioteca
+                    else err(cls.line, cls.column, "no encuentro la clase Object del lenguaje (¿falta Core.mod?): '" + cls.name + "' no tiene base");
+                }
                 if (cls.baseClassName != null) {
                     ClassSymbol base = resolveBaseClassName(cls.baseClassName);
                     if (base != null) {
@@ -1128,26 +1002,7 @@ public final class SemanticAnalyzer {
         // resolver baseClass (el grupo de un método abarca la herencia).
         assignSlotKeys();
 
-        // H5.1.c — toda clase de usuario hereda toString()/compareTo() de Object.
-        // Inyectamos los FunctionSymbol (sin nodo AST) si la clase no los declara,
-        // para que sean invocables desde fuente. NO se exportan al .bpi
-        // (extractClass recorre astNode.members, no instanceMembers), así que el
-        // cálculo de slots cross-module no se ve afectado. El emisor los despacha
-        // por slot 0/1 de la vtable (INVOKE_VIRTUAL polimórfico).
-        for (Symbol s : module.members.getSymbols()) {
-            if (!(s instanceof ClassSymbol)) continue;
-            ClassSymbol cls = (ClassSymbol) s;
-            if (cls.isExternal) continue;
-            if (cls.instanceMembers.tryLookup("toString") == null) {
-                cls.instanceMembers.tryDefine(makeMethod(
-                        "toString", cls, PrimitiveType.STRING, new String[]{}, new BpType[]{}));
-            }
-            if (cls.instanceMembers.tryLookup("compareTo") == null) {
-                cls.instanceMembers.tryDefine(makeMethod(
-                        "compareTo", cls, PrimitiveType.INTEGER,
-                        new String[]{"other"}, new BpType[]{AnyType.INSTANCE}));
-            }
-        }
+        // H1 P3 (20-sep) — toString()/compareTo() ya no se inyectan: los hereda de Core.Object.
 
         // #529 (19-sep) — el TOPE de una clase CERRADA (toda su cadena en este módulo): la
         // ranura de método de INVOKE_VIRTUAL y la de campo de GET/SET_FIELD son de 8 bits,
@@ -1159,7 +1014,7 @@ public final class SemanticAnalyzer {
         for (Symbol s : module.members.getSymbols()) {
             if (!(s instanceof ClassSymbol)) continue;
             ClassSymbol cls = (ClassSymbol) s;
-            if (cls.isExternal || cls.astNode == null || !cadenaLocal(cls)) continue;
+            if (cls.isExternal || cls.astNode == null) continue;   // H1 P3: el tope, para toda clase (en MOD9 todas son abiertas)
             ModuleInterface.LayoutAndNames l;
             try { l = ModuleInterface.computeClassLayout(cls, layouts); } catch (RuntimeException e) { continue; }   // lo dirá el emisor
             if (l.numMethods > 256)
@@ -1167,13 +1022,6 @@ public final class SemanticAnalyzer {
             if (l.numFields > 256)
                 err(cls.line, cls.column, "la clase '" + cls.name + "' ocupa " + l.numFields + " ranuras de campos (con las heredadas; una referencia, un long o un double ocupan 2) y una clase cerrada admite 256 como máximo (la ranura de campo es de 8 bits)");
         }
-    }
-
-    /** #529 — ¿toda la cadena de bases de `cls` vive en este módulo (clase CERRADA)? */
-    private static boolean cadenaLocal(ClassSymbol cls) {
-        for (ClassSymbol c = cls.baseClass; c != null; c = c.baseClass)
-            if (c.isExternal && !c.isBuiltin) return false;
-        return true;
     }
 
     /**
@@ -3674,10 +3522,8 @@ public final class SemanticAnalyzer {
      */
     /** #389 — ¿es el tipo la clase RAÍZ `Object`? (la built-in, no una clase de
      *  usuario que se llame igual). */
-    private static boolean esObjetoRaiz(BpType t) {
-        return t instanceof BpType.ClassType
-                && ((BpType.ClassType) t).cls.isBuiltin
-                && "Object".equals(((BpType.ClassType) t).cls.name);
+    private boolean esObjetoRaiz(BpType t) {
+        return t instanceof BpType.ClassType && esObject(((BpType.ClassType) t).cls);
     }
 
     /** H1.3b (V2) — destino de un cast numérico general integer()/long()/

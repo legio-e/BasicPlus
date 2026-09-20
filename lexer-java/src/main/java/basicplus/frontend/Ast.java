@@ -144,6 +144,10 @@ public final class Ast {
          *  forma porque `from` ya significa "de dónde sale este módulo" y el ':'
          *  estaba ocupado por `import Iface:Impl`. */
         public final String packName;
+        /** H1 P3 (20-sep) — `import Core` lo pone el PARSER en todo módulo que no lo escriba
+         *  (salvo en el propio Core): la raíz se importa siempre. Marcado para que quien liste
+         *  los imports del fuente (IDE, mensajes) sepa que no está escrito. */
+        public boolean implicito = false;
         public ImportNode(List<String> path, String fromPath, int line, int column) {
             this(path, fromPath, null, null, line, column);
         }
@@ -494,6 +498,10 @@ public final class Ast {
         public final boolean isPublic;
         public final String name;
         public final String baseClass;        // null si no hay 'extends'
+        /** H1 P3 (20-sep) — `public root class Object`: una clase que NO desciende de nada (Eduardo:
+         *  «'root' o algo similar para indicar que no desciende de nada»). Sólo la raíz (Core) puede
+         *  escribirlo: `Object` y `Thread`. Sin `root` y sin `extends`, la base es Object. */
+        public boolean isRoot = false;
         public final List<ITopLevelDecl> members;
         public ClassDef(boolean isPublic, String name, String baseClass, List<ITopLevelDecl> members,
                         int line, int column) {

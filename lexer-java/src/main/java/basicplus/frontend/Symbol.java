@@ -87,16 +87,22 @@ public abstract class Symbol {
         /** H5.a-E3 — marca de la pasada `assignSlotKeys` (base antes que subclase). */
         public boolean keysAssigned;
 
-        /** Clase BUILT-IN del lenguaje (List, Thread, Mutex, SyncList, OwnerList,
-         *  StringBuilder): la declara el semántico a mano y la implementa la VM
-         *  NATIVAMENTE, así que no tiene AST ni vtable nuestra. Hay que distinguirla
-         *  de "clase sin AST porque algo se rompió" — ver computeClassLayout. */
-        public boolean isBuiltin;
 
+        /** H1 P3 (20-sep) — `root class`: no desciende de nada (Object, Thread); sólo en la raíz. */
+        public boolean isRoot = false;
+        /** H1 P3 — ¿es una de las CUATRO clases del lenguaje (Object, Thread, Mutex, StringBuilder),
+         *  las que Core.bp declara y el compilador conoce por nombre? En las claves canónicas van
+         *  SIMPLES (`LObject;`, sin `Core/`): son del lenguaje, y así la ABI de las claves no cambió
+         *  al pasarlas de Java a BP. Vale para el stub importado de Core y para la local al compilar Core. */
+        public boolean esDelLenguaje() {
+            if (isExternal && !"Core".equals(externalModule)) return false;
+            return "Object".equals(name) || "Thread".equals(name) || "Mutex".equals(name) || "StringBuilder".equals(name);
+        }
         public ClassSymbol(String name, boolean isPublic, String baseClassName,
                            Ast.ClassDef ast, int line, int column) {
             super(name, line, column);
             this.isPublic = isPublic;
+            this.isRoot = ast != null && ast.isRoot;
             this.baseClassName = baseClassName;
             this.astNode = ast;
             this.decl = ast;
@@ -384,7 +390,7 @@ public abstract class Symbol {
             String dueno = (fs != null) ? fs.moduloDueno() : "";
             if (t instanceof BpType.ClassType) {
                 ClassSymbol cls = ((BpType.ClassType) t).cls;
-                String suyo = cls.isBuiltin ? "" : modulo(cls.externalLibrary, cls.externalModule);
+                String suyo = cls.esDelLenguaje() ? "" : modulo(cls.externalLibrary, cls.externalModule);
                 return "L" + (suyo.isEmpty() || suyo.equals(dueno) ? "" : suyo.replace('.', '/') + "/") + simpleClassName(cls.name) + ";";
             }
             if (t instanceof BpType.UnresolvedClassRef) {
@@ -672,8 +678,8 @@ public abstract class Symbol {
      * con library si la hay, y con '/' como en los descriptores de la JVM porque los dos
      * cargadores partan los nombres de import por sus puntos), así dos clases homónimas de
      * módulos distintos no se confunden; (2) una clase del LENGUAJE (las que sintetiza el semántico: Object,
-     * Thread, Mutex, StringBuilder — {@code isBuiltin}) va SIMPLE, porque no es de
-     * ningún módulo; (3) un enum va {@code E<Mod.Enum>;}, cualificado igual. Y la
+     * Thread, Mutex, StringBuilder — {@code esDelLenguaje()}; H1 P3: viven en Core.bp y la
+     * clave siguió simple) va SIMPLE; (3) un enum va {@code E<Mod.Enum>;}, cualificado igual. Y la
      * cuarta: un tipo SIN RESOLVER es un error de compilación, nunca un {@code ?}: el
      * {@code L} contra {@code E} de un stub mangleado antes de resolver tipos fue lo
      * que hizo imposible reconstruir claves en el importador (#514, medido el 15-sep).
@@ -704,7 +710,11 @@ public abstract class Symbol {
             if (t instanceof BpType.AnyType)   return "a";
             // Dentro de un código el cualificador va con '/' (como los descriptores de la JVM): los dos
             // cargadores partan un nombre de import por sus PUNTOS (`Mod.f(LLib/Base;)s` → módulo `Mod`).
-            if (t instanceof BpType.ClassType) return "L" + clase(((BpType.ClassType) t).cls, moduloLocal).replace('.', '/') + ";";
+            if (t instanceof BpType.ClassType) {
+                ClassSymbol cls = ((BpType.ClassType) t).cls;
+                if (cls.esDelLenguaje()) return "L" + cls.name + ";";   // H1 P3: del lenguaje, SIMPLE (la clave no cambió al vivir en Core)
+                return "L" + clase(cls, moduloLocal).replace('.', '/') + ";";
+            }
             if (t instanceof BpType.EnumType) {
                 EnumSymbol en = ((BpType.EnumType) t).en;
                 StringBuilder sb = new StringBuilder("E");
@@ -735,7 +745,6 @@ public abstract class Symbol {
 
         /** El nombre cualificado de una clase tal como va dentro de {@code L…;}. */
         public static String clase(ClassSymbol cls, String moduloLocal) {
-            if (cls.isBuiltin) return cls.name;                       // del lenguaje: sin módulo
             StringBuilder sb = new StringBuilder();
             if (cls.isExternal) {
                 if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty()) sb.append(cls.externalLibrary).append('.');

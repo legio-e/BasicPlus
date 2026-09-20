@@ -14,6 +14,118 @@
 // #213: throw de clases de usuario desde native).
 module Core
 
+  // ------------------------------------------------------------------------------
+  // LAS CLASES DEL LENGUAJE (H1 P3, 20-sep) — Object, Thread, Mutex y StringBuilder,
+  // escritas en BP y compiladas UNA vez aquí. Hasta V7 el compilador las sintetizaba
+  // en Java y las COPIABA en cada .mod (≈1,3 KB por módulo, con hilos o sin ellos).
+  // `root class` = no desciende de nada (sólo la raíz puede escribirlo). El ORDEN de
+  // campos y métodos es un contrato con las dos VMs: __threadStart lee el tid en el
+  // campo 0 y el stackSize en el 1, y arranca run() por la RANURA 0 de la vtable (por
+  // eso Thread es root: si descendiera de Object, la 0 sería toString); __mutexLock
+  // lee __mid en el campo 0. No mover nada de sitio.
+  // ------------------------------------------------------------------------------
+
+  // La raíz de toda clase que no diga otra cosa. toString ranura 0, compareTo ranura 1.
+  public root class Object
+    public function toString(): string
+      return "object@" + __refToString(this)
+    end toString
+
+    // Por defecto lanza: comparar objetos sin sobrescribirlo es un error de programación
+    // que debe salir a la luz, no «iguales».
+    public function compareTo(other: Object): integer
+      __throwRte("compareTo() no implementado: la clase no sobrescribe Object.compareTo")
+      return 0
+    end compareTo
+  end Object
+
+  // Un hilo preemptivo de la VM. Se subclasea, se sobrescribe run(), y start()/join().
+  public root class Thread
+    var __tid: integer         // campo 0 — id del hilo (0 = sin arrancar); lo escribe la VM
+    var __stackSize: integer   // campo 1 — lo lee __threadStart (0 = por defecto)
+
+    public function Thread(stackSize: integer)
+      this.__tid := 0
+      this.__stackSize := stackSize
+    end Thread
+
+    public function run()      // ranura 0: la que arranca la VM
+    end run
+
+    public function start()
+      __threadStart(this)
+    end start
+
+    public function join()
+      __threadJoin(this)
+    end join
+
+    public function toString(): string   // #526: Thread no es Object, así que lo lleva ella
+      return "thread@" + __refToString(this)
+    end toString
+  end Thread
+
+  // Exclusión mutua entre hilos. NO es reentrante: lock() dos veces desde el mismo hilo
+  // es error. unlock() despierta al primer hilo que esperaba.
+  public class Mutex
+    var __mid: integer         // campo 0 — índice del mutex en la VM
+
+    public function Mutex()
+      this.__mid := __mutexCreate()
+    end Mutex
+
+    public function lock()
+      __mutexLock(this)
+    end lock
+
+    public function unlock()
+      __mutexUnlock(this)
+    end unlock
+  end Mutex
+
+  // Construcción eficiente de strings: acumula code points y los vuelca en toString().
+  public class StringBuilder
+    var chars: integer[]
+    var size: integer
+    var cap: integer
+
+    public function StringBuilder()
+      this.chars := newIntArray(64)
+      this.size := 0
+      this.cap := 64
+    end StringBuilder
+
+    public function appendChar(c: integer)
+      if this.size >= this.cap then
+        this.cap := this.cap * 2
+        this.chars := __growIntArray(this.chars, this.cap)
+      endif
+      this.chars[this.size] := c
+      this.size := this.size + 1
+    end appendChar
+
+    public function appendStr(s: string)
+      var n: integer := strlen(s)
+      var i: integer := 0
+      while i < n do
+        this.appendChar(charCodeAt(s, i))
+        i := i + 1
+      endwh
+    end appendStr
+
+    public function appendInt(n: integer)
+      this.appendStr(intToString(n))
+    end appendInt
+
+    public function toString(): string
+      return __charsToString(this.chars, this.size)
+    end toString
+
+    public function length(): integer
+      return this.size
+    end length
+  end StringBuilder
+
   // Base de TODAS las excepciones. `msg` como property pública: el backing
   // field queda en slot 0 y los accesores viajan en la .bpi (los fields raw
   // no se exportan cross-module — decisión #143).
@@ -956,12 +1068,15 @@ module Core
   public function writeFileBytes(path: string, data: byte[])
     inline CALL_BUILTIN 127
   end writeFileBytes
-  function __throwRte(msg: string)   // sólo el compilador
+  public function __throwRte(msg: string)   // sólo el compilador (y Object.compareTo)
     inline CALL_BUILTIN 128
   end __throwRte
   function __longToString(v: long): string   // sólo el compilador
     inline CALL_BUILTIN 129
   end __longToString
+  public function __refToString(o: any): string   // alias de __longToString: un handle (8 bytes) como número, para Object.toString
+    inline CALL_BUILTIN 129
+  end __refToString
   function __doubleToString(v: double): string   // sólo el compilador
     inline CALL_BUILTIN 130
   end __doubleToString

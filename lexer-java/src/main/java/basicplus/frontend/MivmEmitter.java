@@ -188,7 +188,7 @@ public final class MivmEmitter {
     private void asumirSubtipo(BpType s, BpType t) {
         if (!mod9() || !(s instanceof ClassType) || !(t instanceof ClassType)) return;
         ClassSymbol S = ((ClassType) s).cls, T = ((ClassType) t).cls;
-        if (S == null || T == null || S == T || !T.isExternal || T.isBuiltin || S.isBuiltin) return;
+        if (S == null || T == null || S == T || !T.isExternal || T.esDelLenguaje() || S.esDelLenguaje()) return;   // H1 P3: Object es el techo de todo (y Thread el de sus hijas): nada que verificar
         if (!porRef(S)) return;   // una cerrada local no desciende de una externa: si llega aquí es ErrorType/any
         w.requireRef(ModWriter.REF_SUBTIPO, depRef(S), claseRef(S), Symbol.ClaveCanonica.clase(T, moduloLocal()));
     }
@@ -242,20 +242,60 @@ public final class MivmEmitter {
     private ClassSymbol claseActual() {
         return (scopeStack.isEmpty() || scopeStack.peek().fs == null) ? null : scopeStack.peek().fs.ownerClass;
     }
-    /** V7/H2 (#523) — metadatos MOD9 de un método de una clase del LENGUAJE que este módulo
-     *  sintetiza (Object, Thread, Mutex, StringBuilder): la clave sale de su símbolo, que el
-     *  semántico declaró con tipos. Van en 4.5 como las demás (el cargador verifica R5 con ellas). */
-    private void metaBuiltin(String cls, String metodo, boolean override) {
-        if (!mod9()) return;
-        Symbol cs = info.module.members.resolve(cls)   /* las del lenguaje viven en el scope builtin, el padre */;
-        if (!(cs instanceof ClassSymbol)) { errors.add("clase del lenguaje '" + cls + "' sin simbolo para MOD9"); return; }
-        Symbol m = ((ClassSymbol) cs).instanceMembers.tryLookup(metodo);
-        if (!(m instanceof FunctionSymbol)) { errors.add("metodo '" + cls + "." + metodo + "' sin simbolo para MOD9"); return; }
-        w.setMethodMeta(metodo, claveDe((FunctionSymbol) m), override, false);
+    /** H1 P3 (20-sep) — una clase del LENGUAJE (Object, Thread, Mutex, StringBuilder): vive en
+     *  Core.bp; aquí es el stub del `import Core` implícito (o la clase local, compilando Core). */
+    private ClassSymbol claseDelLenguaje(String nombre) {
+        Symbol cs = info.module.members.resolve(nombre);
+        if (cs instanceof ClassSymbol) return (ClassSymbol) cs;
+        throw new RuntimeException("la clase del lenguaje '" + nombre + "' no está (¿falta Core.mod?): bug del emisor");
     }
-    /** Ídem para un campo interno de una clase del lenguaje: privado, con la clave que se le da. */
-    private void metaCampoBuiltin(String campo, String clave) {
-        if (mod9()) w.setFieldMeta(campo, clave, true);
+    private FunctionSymbol metodoDe(ClassSymbol cls, String nombre) {
+        Symbol m = cls.lookupInstance(nombre);
+        if (m instanceof FunctionSymbol) return (FunctionSymbol) m;
+        throw new RuntimeException("la clase del lenguaje '" + cls.name + "' no tiene '" + nombre + "': bug del emisor");
+    }
+    /** `Clase()` de una clase del lenguaje sin argumentos: deja la referencia nueva en la pila. */
+    private void construirDelLenguaje(String nombre) throws IOException {
+        emitConstruction(claseDelLenguaje(nombre), new ArrayList<IExpr>());
+    }
+    /** `ref.metodo()` sobre una clase del lenguaje (el receptor ya está en la pila). */
+    private void invocarDelLenguaje(String clase, String metodo, int nArgs) throws IOException {
+        ClassSymbol cls = claseDelLenguaje(clase);
+        emitInvokeVirtualSmart(cls, cls, metodo, claveDe(metodoDe(cls, metodo)), nArgs);
+    }
+    /** H1 P3 — abre una clase SINTETIZADA (`parallel`, `Thread(obj::m())`) cuyo padre es una
+     *  clase del lenguaje: en MOD9, abierta contra `Core.Thread` (el cargador la construye); en
+     *  MOD8, con el layout que la interfaz de Core publica; compilando Core, el padre es local. */
+    private void abrirClaseSintetizada(String name, ClassSymbol base) throws IOException {
+        if (!base.isExternal) { w.addClass(name, base.name); return; }
+        if (mod9()) { w.addClassAbierta(name, false, Symbol.ClaveCanonica.clase(base, moduloLocal()), depIdxDe(base)); return; }
+        edu.bpgenvm.generador.ModWriter.ExternalParentLayout lay = layoutPadreExterno(base, name);
+        if (lay == null) return;
+        w.addClass(name, nombreCualificado(base), lay);
+    }
+    private String nombreCualificado(ClassSymbol c) {
+        StringBuilder qname = new StringBuilder();
+        if (c.externalLibrary != null && !c.externalLibrary.isEmpty()) qname.append(c.externalLibrary).append('.');
+        return qname.append(c.externalModule).append('.').append(c.name).toString();
+    }
+    /** MOD8: el layout binario del padre externo (bpi 8), con los nombres de sus métodos por ranura
+     *  para que un override reutilice la ranura heredada. null (y error) si la interfaz no lo trae. */
+    private edu.bpgenvm.generador.ModWriter.ExternalParentLayout layoutPadreExterno(ClassSymbol base, String hija) {
+        SemanticInfo.ClassBinaryLayout layout = base.binaryLayout;
+        if (layout == null) {
+            errors.add("L2 v3: parent cross-module '" + base.name + "' de '" + hija
+                    + "' sin layout binario en .bpi (bpi 9, enlace tardio) — compila con --formato=9, o recompila el dueño en MOD8");
+            return null;
+        }
+        String[] mNames = new String[layout.numMethods];
+        if (base.externalMethodSlots != null) {
+            for (java.util.Map.Entry<String, Integer> me : base.externalMethodSlots.entrySet()) {
+                int sl = me.getValue();
+                if (sl >= 0 && sl < mNames.length) mNames[sl] = me.getKey();
+            }
+        }
+        return new edu.bpgenvm.generador.ModWriter.ExternalParentLayout(
+                layout.numFields, layout.numMethods, layout.fieldBitmap, layout.ownerBitmap, mNames);
     }
 
     /** El nombre cualificado con el que se pide una función de OTRO módulo: `[lib.]Mod.f(i)i` en MOD9,
@@ -490,41 +530,9 @@ public final class MivmEmitter {
         //      inicializador propio ni imports).
         w.addConstantInt("__initialized", 0);
 
-        // 3a) Clases stdlib built-in: RuntimeError, List, StringBuilder, Mutex.
-        //     Se sintetizan ANTES de __init y __startup porque __init puede
-        //     necesitar Mutex (por sync properties a nivel módulo).
-        //     Emitidas siempre. Pequeñas; los .mods ganan ~200 bytes pero a
-        //     cambio cualquier programa puede usarlas sin import explícito.
-        // H5.1.a — Object es la PRIMERA: raíz de la jerarquía de clases, el
-        //     resto la copia como parent local (vtable slots 0/1).
-        synthesizeObjectClass();
-        // #248: RuntimeError ya NO se sintetiza per-módulo — vive en Core (stdlib)
-        // y llega via import implícito + maquinaria cross-module L2 v3.
-        // NOTA: synthesizeObjectCompareErrorHelper() se emite MÁS ABAJO, tras la
-        // fase 4b (clases del usuario), no aquí. Construye un RuntimeError y
-        // emitNewObject exige el descriptor ya registrado; si el usuario define
-        // su PROPIA clase RuntimeError, el builtin no se sintetiza y la del
-        // usuario sólo queda registrada tras la fase 4b. Ver allí.
-        /* #450 — List, OwnerList y SyncList YA NO SE SINTETIZAN: viven en BP,
-         * `List` en Core y las otras dos en Collections (decision de Eduardo:
-         * «SyncList y OwnerList deberian estar en collections; hacerlas
-         * sintetizadas me parece raro, no veo la razon»).
-         *
-         * La razon que hubo esta escrita arriba —«a cambio cualquier programa
-         * puede usarlas sin import explicito»— y hoy la da el import implicito.
-         * El precio que se pagaba: CADA modulo llevaba su propia copia.
-         *
-         * Los cuerpos sintetizados se dejan en el fichero (synthesizeListClass
-         * y compania) sin llamarlos: son la referencia de lo que la version BP
-         * tiene que hacer, y borrarlos es facil cuando esto lleve un tiempo.
-         *
-         *   synthesizeListClass();
-         *   synthesizeOwnerListClass();
-         *   synthesizeSyncListClass();
-         */
-        synthesizeStringBuilderClass();
-        synthesizeThreadClass();
-        synthesizeMutexClass();
+        // 3a) H1 P3 (20-sep) — Object, Thread, Mutex y StringBuilder YA NO SE SINTETIZAN aquí:
+        //     viven en BP en `Core.bp` (como List desde #450) y todo módulo las referencia por
+        //     enlace tardío (#523). Hasta hoy cada .mod llevaba su copia (≈1,3 KB).
 
         // 3a-bis) Clases de tupla `__Tuple_<sig>` para cada forma de retorno
         //         múltiple usada en el módulo. Antes de las funciones (phase 5)
@@ -557,15 +565,6 @@ public final class MivmEmitter {
         for (ITopLevelDecl d : moduleAst.defs) {
             if (d instanceof ClassDef) emitClassDef((ClassDef) d);
         }
-
-        // 4c) H5.1.c — helper del compareTo por defecto de Object (construye y
-        //     lanza un RuntimeError). DEBE ir tras la fase 4b: emitNewObject
-        //     ("RuntimeError") exige el descriptor ya registrado, y cuando el
-        //     usuario define su propia clase RuntimeError ésta sólo queda
-        //     registrada al emitir las clases de usuario (el builtin se omite).
-        //     Es función libre (Object.compareTo la llama por forward-ref,
-        //     resuelto en link), así que su posición no afecta a sus llamadores.
-        synthesizeObjectCompareErrorHelper();
 
         // 4c-bis) #325 — los cuerpos de los `Thread(obj::metodo(args))`. Aquí y
         //         no en 4a-ter por el mismo motivo que el helper de arriba: la
@@ -788,12 +787,7 @@ public final class MivmEmitter {
                 String discard = "__modmtx_discard_" + id;
                 declareLocalRef(newref);   // H1.8: el Mutex es una ref (era declareLocalLong = un 8 a mano)
                 w.declareLocal(discard);
-                w.emitNewObject("Mutex");
-                w.emitSetLocal(newref);
-                w.emitGetLocal(newref);
-                w.emitCall("Mutex.__init");
-                w.emitSetLocal(discard);
-                w.emitGetLocal(newref);
+                construirDelLenguaje("Mutex");   // H1 P3: Core.Mutex (deja la ref en la pila)
                 w.emitSetGlobal(MODULE_SYNC_MUTEX_GLOBAL);
             }
 
@@ -1273,7 +1267,7 @@ public final class MivmEmitter {
         String discard = "__modSyncLock_" + id;
         declareLocal(discard);
         w.emitGetGlobal(MODULE_SYNC_MUTEX_GLOBAL);
-        w.emitInvokeVirtual("Mutex", "lock", 0);
+        invocarDelLenguaje("Mutex", "lock", 0);
         w.emitSetLocal(discard);
     }
     private void emitModuleSyncUnlock() throws IOException {
@@ -1281,7 +1275,7 @@ public final class MivmEmitter {
         String discard = "__modSyncUnlock_" + id;
         declareLocal(discard);
         w.emitGetGlobal(MODULE_SYNC_MUTEX_GLOBAL);
-        w.emitInvokeVirtual("Mutex", "unlock", 0);
+        invocarDelLenguaje("Mutex", "unlock", 0);
         w.emitSetLocal(discard);
     }
 
@@ -1459,42 +1453,15 @@ public final class MivmEmitter {
             boolean abierta9 = mod9() && esAbierta(cls);   // V7/H2 (#523): sin placeholders del padre; su layout no hace falta (bpi 9 no lo trae)
             if (cls.baseClass != null && !abierta9) {
                 if (cls.baseClass.isExternal) {
-                    SemanticInfo.ClassBinaryLayout layout = (cls.baseClass.binaryLayout != null)
-                            ? cls.baseClass.binaryLayout : null;
-                    if (layout == null) {
-                        errors.add("L2 v3: parent cross-module '" + cls.baseClass.name
-                                + "' sin layout binario en .bpi (bpi 9, enlace tardio) — compila con --formato=9, o recompila el dueño en MOD8");
-                        return;
-                    }
-                    StringBuilder qname = new StringBuilder();
-                    if (cls.baseClass.externalLibrary != null && !cls.baseClass.externalLibrary.isEmpty())
-                        qname.append(cls.baseClass.externalLibrary).append('.');
-                    qname.append(cls.baseClass.externalModule).append('.').append(cls.baseClass.name);
-                    parentForModWriter = qname.toString();
-                    // Fix override cross-module: pasamos los nombres de método
-                    // heredados (slot→nombre, del externalMethodSlots del stub) para
-                    // que el override reutilice el slot heredado en vez de apilar.
-                    String[] mNames = new String[layout.numMethods];
-                    if (cls.baseClass.externalMethodSlots != null) {
-                        for (java.util.Map.Entry<String, Integer> me
-                                : cls.baseClass.externalMethodSlots.entrySet()) {
-                            int sl = me.getValue();
-                            if (sl >= 0 && sl < mNames.length) mNames[sl] = me.getKey();
-                        }
-                    }
-                    externalParent = new edu.bpgenvm.generador.ModWriter.ExternalParentLayout(
-                            layout.numFields, layout.numMethods,
-                            layout.fieldBitmap, layout.ownerBitmap, mNames);
+                    parentForModWriter = nombreCualificado(cls.baseClass);
+                    externalParent = layoutPadreExterno(cls.baseClass, cls.name);
+                    if (externalParent == null) return;
                 } else {
                     parentForModWriter = cls.baseClass.name;
                 }
             }
-            // H5.1.a — sin base explícita ⇒ raíz Object (vtable slots 0/1 =
-            // toString/compareTo). Las clases que extienden Thread van por la
-            // rama de arriba (base = Thread) y heredan la excepción Object.
-            if (parentForModWriter == null && externalParent == null && !abierta9) {
-                parentForModWriter = "Object";
-            }
+            // H1 P3 (20-sep) — sin base = `root class` (Object, Thread; sólo en Core): el semántico
+            // ya puso Core.Object a toda clase sin `extends`, así que aquí null es «no hereda nada».
             if (abierta9) {
                 // V7/H2 (#523) — ABIERTA: sin placeholders del padre y sin descriptor; el
                 // cargador la construye contra el padre real. Su padre es o externo (dep)
@@ -1899,13 +1866,8 @@ public final class MivmEmitter {
         String discard = "__syncmtx_discard_" + id;
         declareLocalLong(newref);
         declareLocal(discard);
-        w.emitNewObject("Mutex");
-        w.emitSetLocal(newref);
-        w.emitGetLocal(newref);
-        w.emitCall("Mutex.__init");
-        w.emitSetLocal(discard);
         w.emitGetParam("this");
-        w.emitGetLocal(newref);
+        construirDelLenguaje("Mutex");   // H1 P3: Core.Mutex
         w.emitSetField(className, "__syncMutex");
     }
 
@@ -2001,7 +1963,7 @@ public final class MivmEmitter {
         declareLocal(discard);
         w.emitGetParam("this");
         w.emitGetField(className, "__syncMutex");
-        w.emitInvokeVirtual("Mutex", "lock", 0);
+        invocarDelLenguaje("Mutex", "lock", 0);
         w.emitSetLocal(discard);
     }
     private void emitSyncUnlock(String className) throws IOException {
@@ -2010,7 +1972,7 @@ public final class MivmEmitter {
         declareLocal(discard);
         w.emitGetParam("this");
         w.emitGetField(className, "__syncMutex");
-        w.emitInvokeVirtual("Mutex", "unlock", 0);
+        invocarDelLenguaje("Mutex", "unlock", 0);
         w.emitSetLocal(discard);
     }
 
@@ -3515,7 +3477,7 @@ public final class MivmEmitter {
             String discard = "__par_start_discard_" + id;
             declareLocal(discard);
             w.emitGetLocal(br.varName);
-            w.emitInvokeVirtual("Thread", "start", 0);
+            invocarDelLenguaje("Thread", "start", 0);
             w.emitSetLocal(discard);   // INVOKE_VIRTUAL deja un dummy en stack
         }
         // 3) Cuerpo del default (si existe): corre en el thread llamador.
@@ -3528,7 +3490,7 @@ public final class MivmEmitter {
             String discard = "__par_join_discard_" + id;
             declareLocal(discard);
             w.emitGetLocal(br.varName);
-            w.emitInvokeVirtual("Thread", "join", 0);
+            invocarDelLenguaje("Thread", "join", 0);
             w.emitSetLocal(discard);
         }
     }
@@ -3616,10 +3578,11 @@ public final class MivmEmitter {
             errors.add("parallel branch sin synthesizedClassName en línea " + br.line);
             return;
         }
-        w.addClass(name, "Thread");
+        ClassSymbol thread = claseDelLenguaje("Thread");
+        abrirClaseSintetizada(name, thread);
 
-        // --- run() (override del slot 0 de Thread)
         w.addMethod("run");
+        if (mod9()) w.setMethodMeta("run", claveDe(metodoDe(thread, "run")), true, false);   // override de Core.Thread.run
         beginFunctionScope(makeSynthFs("run", null), null);
         try {
             for (IStmt s : br.body) emitStmt(s);
@@ -3637,7 +3600,7 @@ public final class MivmEmitter {
             // super(stackSize) → Thread.__init(this, stackSize)
             w.emitGetParam("this");
             w.emitGetParam("stackSize");
-            w.emitCall("Thread.__init");
+            emitCallInitOf(thread.findConstructor());   // super(stackSize) → Core.Thread
             declareLocal("__discardSuper");
             w.emitSetLocal("__discardSuper");
             emitFunctionEnd();
@@ -3678,14 +3641,17 @@ public final class MivmEmitter {
             return;
         }
         String name = bc.synthesizedClassName;
-        w.addClass(name, "Thread");
+        ClassSymbol thread = claseDelLenguaje("Thread");
+        abrirClaseSintetizada(name, thread);
 
         // Campos: el receptor (ref ⇒ el GC lo traza, que es lo que mantiene vivo
         // al objeto mientras el thread no ha corrido) y un campo por argumento.
         w.declareField("__recv", true, false, true);   // handle 8B
+        if (mod9()) w.setFieldMeta("__recv", "__recv:LObject;", true);
         for (int i = 0; i < bc.args.size(); i++) {
             BpType at = argTypeOf(fn, bc, i);
             w.declareField("__a" + i, isGcRef(at), false, occupies8Bytes(at));
+            if (mod9()) w.setFieldMeta("__a" + i, claveCampo("__a" + i, at), true);
         }
 
         // run() — override del slot 0 de Thread, que es el punto de entrada.
@@ -3698,6 +3664,7 @@ public final class MivmEmitter {
         // libre se resuelve por fixup en el link, así que no le importa el
         // orden — el mismo truco que synthesizeObjectCompareErrorHelper.
         w.addMethod("run");
+        if (mod9()) w.setMethodMeta("run", claveDe(metodoDe(thread, "run")), true, false);   // override de Core.Thread.run
         beginFunctionScope(makeSynthFs("run", null), null);
         try {
             w.emitGetParam("this");
@@ -3726,7 +3693,7 @@ public final class MivmEmitter {
         try {
             w.emitGetParam("this");
             w.emitGetParam("stackSize");
-            w.emitCall("Thread.__init");          // super(stackSize)
+            emitCallInitOf(thread.findConstructor());   // super(stackSize) → Core.Thread
             declareLocal("__discardSuper");
             w.emitSetLocal("__discardSuper");
 
@@ -3997,8 +3964,8 @@ public final class MivmEmitter {
         w.emit(OpCode.LNEQ);                  // bool: handle != null
         w.emitJumpIfFalse(nullL);             // == null → "null"
         w.emitGetLocal(tmp);                  // this = ref (8 bytes)
-        if (cls == null || cls.isBuiltin) {
-            w.emitInvokeVirtualBySlot(cls != null ? Math.max(0, cls.slotOf("toString")) : 0, 0);   // Object/StringBuilder: 0; Thread: 3
+        if (cls == null) {
+            w.emitInvokeVirtualBySlot(0, 0);   // any/Object sin clase estática: toString es la ranura 0 por contrato (Core.bp)
         } else {
             Symbol ts = cls.lookupInstance("toString");
             ClassSymbol declarante = (ts instanceof FunctionSymbol && ((FunctionSymbol) ts).ownerClass != null) ? ((FunctionSymbol) ts).ownerClass : cls;
@@ -4514,17 +4481,6 @@ public final class MivmEmitter {
                     return;
                 }
                 // ¿Built-in del analyzer? → CALL_BUILTIN id, salvo casts L10.
-                if (fs.isIntrinsic && fs.inlineOps != null && SemanticAnalyzer.isBuiltin(fs)) {
-                    // H1 P2 (20-sep) — una global del módulo raíz: su bytecode, con los args coercidos
-                    // a los tipos de la firma (como cualquier intrínseca). Va antes de la rama de
-                    // builtins «por nombre», que se queda para lo que el semántico aún declara a mano.
-                    for (int i = 0; i < c.args.size(); i++) {
-                        emitExpr(c.args.get(i));
-                        if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
-                    }
-                    emitInline(fs.inlineOps);
-                    return;
-                }
                 if (SemanticAnalyzer.isBuiltin(fs)) {
                     // L10 — casts a tipos estrechos: NO son CALL_BUILTIN, son un
                     // opcode único I32_TO_{U8,I8,U16,I16} tras evaluar el arg.
@@ -4752,15 +4708,9 @@ public final class MivmEmitter {
             // Si divergen → error ruidoso AQUÍ (nunca rotura silenciosa de paridad
             // en el AOT). Es la red de seguridad de la decisión B.
             //
-            // Las clases BUILT-IN quedan fuera: las implementa la VM y no tienen
-            // "vtable nuestra" que comparar (lo dice el propio sitio donde se
-            // declaran, SemanticAnalyzer). Preguntarles el slot es la pregunta
-            // equivocada, y para SyncList —la única built-in cuya base es otra
-            // built-in (List)— no era inofensivo: computeClassLayout no sabe
-            // calcular el layout de una base sin AST y ABORTABA el compilador con
-            // una traza Java. La emisión de debajo va por NOMBRE y siempre estuvo
-            // bien; se caía el chequeo, no el código.
-            if (!cls.isBuiltin) {
+            // (H1 P3, 20-sep: ya no hay clases «built-in» que saltarse — las del lenguaje
+            // viven en Core.bp y tienen AST como cualquier otra.)
+            {
                 int feSlot = cls.slotOf(methodName);
                 int mwSlot = w.methodSlotOrMinus1(cls.name, methodName);
                 if (feSlot >= 0 && mwSlot >= 0 && feSlot != mwSlot) {
@@ -4927,7 +4877,7 @@ public final class MivmEmitter {
      */
     /**
      * H5.1.a — Clase raíz Object. Toda clase (de usuario o stdlib, EXCEPTO
-     * Thread y sus subclases — ver synthesizeThreadClass) desciende implícita-
+     * Thread y sus subclases — `root class Thread` en Core.bp) desciende implícita-
      * mente de Object, cuya vtable fija dos slots:
      *   slot 0 = toString(): string
      *   slot 1 = compareTo(other): integer
@@ -4943,56 +4893,6 @@ public final class MivmEmitter {
      *   compareTo → placeholder (return 0) de momento; H5.1.c lo hace throw
      *               (requiere ser invocable desde fuente para poder probarlo).
      */
-    private void synthesizeObjectClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "Object".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("Object", null);
-
-            // -------------------------- toString(): string --------------------------
-            // PRIMER método → slot 0 (fijo en toda la jerarquía).
-            // __result := "object@" + intToString(this)   (this = ref = dirección heap)
-            w.addMethod("toString");
-            metaBuiltin("Object", "toString", false);
-            beginFunctionScope(makeSynthFs("toString", PrimitiveType.STRING), null);
-            try {
-                String prefix = internString("object@");
-                w.emitLeaGlobal(prefix);                  // "object@"
-                w.emitGetParam("this");                   // this = ref = handle de 8 BYTES
-                // #292e (4→8B): this es una ref de 8B, no un int. INT_TO_STRING sólo
-                // saca 4 bytes → dejaba 4 bytes del handle huérfanos en la pila → el
-                // concat siguiente leía una ref de string DESALINEADA (basura) → longitud
-                // gigante → "No space in heap". LONG_TO_STRING saca los 8 bytes.
-                emitBuiltinCall(Builtin.LONG_TO_STRING);  // "<handle>"
-                emitStringConcatCall();                   // "object@<handle>"
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- compareTo(other): integer --------------------------
-            // SEGUNDO método → slot 1.
-            w.addMethod("compareTo");
-            metaBuiltin("Object", "compareTo", false);
-            declareParamByType("other", BpType.AnyType.INSTANCE);   // `other` es un Object = REFERENCIA.
-                                           // El cuerpo default solo lanza, pero la firma debe declararse
-                                           // como ref para coincidir con lo que empuja el caller.
-            beginFunctionScope(makeSynthFs("compareTo", PrimitiveType.INTEGER), null);
-            try {
-                // Por defecto lanza: comparar objetos sin override es un error de
-                // programación que debe salir a la luz (no devolver "iguales").
-                w.emitCall("__objCompareError");       // forward-ref; construye RuntimeError + THROW
-                w.emitSetLocal("__result");            // cola inalcanzable (el throw no retorna)
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            w.endClass();
-        } catch (IOException e) {
-            errors.add("emit Object builtin: " + e.getMessage());
-        }
-    }
-
-
     /** Helper: emite CALL_BUILTIN <id>. */
     private void emitBuiltinCall(Builtin b) {
         try {
@@ -5003,474 +4903,6 @@ public final class MivmEmitter {
         }
     }
 
-    /**
-     * H5.1.c — Helper del {@code compareTo} por defecto de Object: lanza el
-     * RuntimeError NATIVO de la VM (builtin THROW_RTE, #248) con mensaje claro.
-     * Es una función LIBRE (sin slot de vtable); Object.compareTo la invoca por
-     * forward-ref ({@code emitCall} se resuelve en link, como __strconcat).
-     *
-     * #248: antes construía un RuntimeError LOCAL (NEW_OBJECT + __init + THROW),
-     * lo que obligaba a que TODO módulo llevara el descriptor de RuntimeError.
-     * Con el throw nativo, el módulo no depende de ninguna clase de excepción
-     * (la VM resuelve Core.RuntimeError global, con fallback a copias legado).
-     */
-    private void synthesizeObjectCompareErrorHelper() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "Object".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addFunction("__objCompareError", false);
-            beginFunctionScope(makeSynthFs("__objCompareError", PrimitiveType.INTEGER), null);
-            try {
-                w.emitLeaGlobal(internString(
-                        "compareTo() no implementado: la clase no sobrescribe Object.compareTo"));
-                emitBuiltinCall(Builtin.THROW_RTE);    // no retorna
-                // Cola inalcanzable pero válida (la función declara retorno integer).
-                emitInt(0);
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit __objCompareError: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Sintetiza la clase stdlib List: lista dinámica de refs a objetos.
-     * Layout:
-     *   class List { var items: integer[];  var size: integer;  var cap: integer; }
-     * Métodos: add(item), get(idx): any, set(idx,item), length(): integer, remove(idx).
-     */
-    private void synthesizeListClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "List".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("List", "Object");   // H5.1.a — raíz Object
-            w.declareField("items", true, false, true);   // H1.2a (V4): ref array = 8 bytes (GET/SET_FIELD_LONG)
-            w.declareField("size",  false);
-            w.declareField("cap",   false);
-
-            // -------------------------- add(item) --------------------------
-            w.addMethod("add");
-            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
-            beginFunctionScope(makeSynthFs("add", null), null);
-            try {
-                int afterGrow = w.newLabel();
-                // if size >= cap → grow
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                w.emitGetParam("this"); w.emitGetField("List", "cap");
-                w.emit(OpCode.GE);                          // 1 = grow, 0 = skip
-                w.emitJumpIfFalse(afterGrow);
-
-                // cap := cap * 2
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("List", "cap");
-                emitInt(2); w.emit(OpCode.MUL);
-                w.emitSetField("List", "cap");
-
-                // items := __growRefArray(items, cap)
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "cap");
-                emitBuiltinCall(Builtin.GROW_REF_ARRAY);
-                w.emitSetField("List", "items");
-
-                w.declareLabel(afterGrow);
-
-                // items[size] := item
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                w.emitGetParam("item");
-                w.emit(OpCode.ASTORE_I64);
-
-                // size := size + 1
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.ADD);
-                w.emitSetField("List", "size");
-
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- get(idx): any --------------------------
-            w.addMethod("get");
-            w.declareParam("idx");
-            beginFunctionScope(makeSynthFs("get", BpType.AnyType.INSTANCE), null);
-            try {
-                // __result := items[idx]
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("idx");
-                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- set(idx, item) --------------------------
-            w.addMethod("set");
-            w.declareParam("idx");
-            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
-            beginFunctionScope(makeSynthFs("set", null), null);
-            try {
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("idx");
-                w.emitGetParam("item");
-                w.emit(OpCode.ASTORE_I64);
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- length(): integer --------------------------
-            w.addMethod("length");
-            beginFunctionScope(makeSynthFs("length", PrimitiveType.INTEGER), null);
-            try {
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- remove(idx) --------------------------
-            // for (i := idx; i < size-1; i++) items[i] := items[i+1]
-            // size := size - 1
-            // items[size] := 0   (limpia el slot final para que el GC libere)
-            w.addMethod("remove");
-            w.declareParam("idx");
-            beginFunctionScope(makeSynthFs("remove", null), null);
-            try {
-                declareLocal("i");
-                // i := idx
-                w.emitGetParam("idx"); w.emitSetLocal("i");
-
-                int loopTop = w.newLabel();
-                int loopEnd = w.newLabel();
-                w.declareLabel(loopTop);
-
-                // while i < size-1
-                w.emitGetLocal("i");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emit(OpCode.LT);
-                w.emitJumpIfFalse(loopEnd);
-
-                // items[i] := items[i+1]
-                w.emitGetParam("this"); w.emitGetField("List", "items");  // arr (target)
-                w.emitGetLocal("i");                                       // idx
-                w.emitGetParam("this"); w.emitGetField("List", "items");  // arr (source)
-                w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);       // i+1
-                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)                                       // val = items[i+1]
-                w.emit(OpCode.ASTORE_I64);                                      // items[i] := val
-
-                // i := i + 1
-                w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);
-                w.emitSetLocal("i");
-
-                w.emitJump(loopTop);
-                w.declareLabel(loopEnd);
-
-                // size := size - 1
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emitSetField("List", "size");
-
-                // items[size] := 0   (deja libre la última ref para GC)
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
-                w.emit(OpCode.ASTORE_I64);
-
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- endClass + Constructor --------------------------
-            w.endClass();
-
-            w.addFunction("List.__init", false);
-            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-            beginFunctionScope(makeSynthFs("__init", null), null);
-            try {
-                w.emitGetParam("this");
-                emitInt(8); emitBuiltinCall(Builtin.NEW_REF_ARRAY);
-                w.emitSetField("List", "items");
-                w.emitGetParam("this"); emitInt(0); w.emitSetField("List", "size");
-                w.emitGetParam("this"); emitInt(8); w.emitSetField("List", "cap");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit List builtin: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Sintetiza OwnerList: List propietaria de sus elementos.
-     * - Hereda de List todos los fields (items, size, cap) y vtable
-     *   (add, get, set, length, remove).
-     * - Promueve el field `items` a OWNER en su propio class descriptor.
-     *   En tiempo de FREE_REF, el VM verá items marcado como owner y, como
-     *   el array es de tipo TYPE_ARRAY_REF, cascadeará liberando primero
-     *   cada slot (los objetos contenidos) y después el array mismo.
-     * - El constructor `OwnerList()` simplemente delega en `List.__init`
-     *   (mismos defaults: cap=8, array vacío).
-     */
-    private void synthesizeOwnerListClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "OwnerList".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("OwnerList", "List");   // hereda fields + métodos
-            w.setFieldOwner("items", true);     // ← clave de la cascada
-
-            // -------------------------- removeAndFree(idx) --------------------------
-            // 1. FREE_REF(items[idx])   ← libera el objeto (cascadea si tiene owners)
-            // 2. items[idx] := 0        ← evita doble-free durante el shift
-            // 3. shift items[i] := items[i+1] para i = idx .. size-2
-            // 4. size := size - 1
-            // 5. items[size] := 0
-            w.addMethod("removeAndFree");
-            w.declareParam("idx");
-            beginFunctionScope(makeSynthFs("removeAndFree", null), null);
-            try {
-                declareLocal("i");
-
-                // 1. liberar items[idx]
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
-                w.emitGetParam("idx");
-                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)          // push items[idx]
-                w.emitFreeRef();                // pop & free (cascade si owner)
-
-                // 2. items[idx] := 0
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
-                w.emitGetParam("idx");
-                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
-                w.emit(OpCode.ASTORE_I64);
-
-                // 3. for (i := idx; i < size-1; i++): items[i] := items[i+1]
-                w.emitGetParam("idx");
-                w.emitSetLocal("i");
-
-                int top = w.newLabel();
-                int end = w.newLabel();
-                w.declareLabel(top);
-                w.emitGetLocal("i");
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emit(OpCode.LT);
-                w.emitJumpIfFalse(end);
-
-                // items[i] := items[i+1]
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
-                w.emitGetLocal("i");
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
-                w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);
-                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
-                w.emit(OpCode.ASTORE_I64);
-
-                // i := i + 1
-                w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);
-                w.emitSetLocal("i");
-                w.emitJump(top);
-                w.declareLabel(end);
-
-                // 4. size := size - 1
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emitSetField("OwnerList", "size");
-
-                // 5. items[size] := 0
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
-                w.emitGetParam("this"); w.emitGetField("OwnerList", "size");
-                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
-                w.emit(OpCode.ASTORE_I64);
-
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            w.endClass();
-
-            w.addFunction("OwnerList.__init", false);
-            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-            beginFunctionScope(makeSynthFs("__init", null), null);
-            try {
-                // Delegamos en List.__init (same module → CALL intra-módulo).
-                w.emitGetParam("this");
-                w.emitCall("List.__init");
-                declareLocal("__discardSuper");
-                w.emitSetLocal("__discardSuper");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit OwnerList builtin: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Sintetiza StringBuilder. Layout:
-     *   class StringBuilder { var chars: integer[];  var size: integer;  var cap: integer; }
-     * Métodos: appendStr(s), appendChar(c), appendInt(n), toString(): string, length(): integer.
-     */
-    private void synthesizeStringBuilderClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "StringBuilder".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("StringBuilder", "Object");   // H5.1.a — raíz Object
-            // chars NO es ref a objetos (es array i32 de codepoints); GC no
-            // necesita escanear su contenido como refs. Pero el SLOT chars sí
-            // es ref al array → declareField(., true) para que el GC siga el
-            // array como root.
-            w.declareField("chars", true);
-            w.declareField("size",  false);
-            w.declareField("cap",   false);
-            metaCampoBuiltin("chars", "chars:[i"); metaCampoBuiltin("size", "size:i"); metaCampoBuiltin("cap", "cap:i");
-
-            // -------------------------- appendChar(c) --------------------------
-            // if size >= cap: cap := cap * 2; chars := __growIntArray(chars, cap)
-            // chars[size] := c; size := size + 1
-            w.addMethod("appendChar");
-            metaBuiltin("StringBuilder", "appendChar", false);
-            w.declareParam("c");
-            beginFunctionScope(makeSynthFs("appendChar", null), null);
-            try {
-                int afterGrow = w.newLabel();
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "size");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "cap");
-                w.emit(OpCode.GE);
-                w.emitJumpIfFalse(afterGrow);
-
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "cap");
-                emitInt(2); w.emit(OpCode.MUL);
-                w.emitSetField("StringBuilder", "cap");
-
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "chars");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "cap");
-                emitBuiltinCall(Builtin.GROW_INT_ARRAY);
-                w.emitSetField("StringBuilder", "chars");
-
-                w.declareLabel(afterGrow);
-
-                // chars[size] := c
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "chars");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "size");
-                w.emitGetParam("c");
-                w.emit(OpCode.ASTORE);
-
-                // size := size + 1
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "size");
-                emitInt(1); w.emit(OpCode.ADD);
-                w.emitSetField("StringBuilder", "size");
-
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- appendStr(s) --------------------------
-            // for i := 0; i < strlen(s); i++:  this.appendChar(charCodeAt(s, i))
-            w.addMethod("appendStr");
-            metaBuiltin("StringBuilder", "appendStr", false);
-            declareParamByType("s", PrimitiveType.STRING);   // `s` es un STRING = REFERENCIA → el carril
-                                       // de 8B sale del TIPO. Antes se declaraba como no-ref (4B) →
-                                       // emitGetParam salía GET_LOCAL(4B); al empujarse bajo el receptor
-                                       // `this`, charCodeAt se comía parte de `this` → INVOKE_VIRTUAL con
-                                       // receptor corrupto → use-after-free (repro host dual-VM vía
-                                       // Str.padRight). RAÍZ del cyan de GuiColorDemo.
-            beginFunctionScope(makeSynthFs("appendStr", null), null);
-            try {
-                declareLocal("i");
-                declareLocal("n");
-                // n := strlen(s)
-                w.emitGetParam("s");
-                emitBuiltinCall(Builtin.STRLEN);
-                w.emitSetLocal("n");
-                // i := 0
-                emitInt(0); w.emitSetLocal("i");
-
-                int top = w.newLabel();
-                int end = w.newLabel();
-                w.declareLabel(top);
-                w.emitGetLocal("i"); w.emitGetLocal("n"); w.emit(OpCode.LT);
-                w.emitJumpIfFalse(end);
-
-                // this.appendChar(charCodeAt(s, i))
-                w.emitGetParam("this");                  // receiver para INVOKE_VIRTUAL
-                w.emitGetParam("s"); w.emitGetLocal("i");
-                emitBuiltinCall(Builtin.CHAR_CODE_AT);   // → c en stack
-                w.emitInvokeVirtual("StringBuilder", "appendChar", 1);
-                // INVOKE_VIRTUAL retorna algo en stack (return value). Lo descartamos:
-                declareLocal("__discardSB");
-                w.emitSetLocal("__discardSB");
-
-                w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal("i");
-                w.emitJump(top);
-                w.declareLabel(end);
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- appendInt(n) --------------------------
-            // this.appendStr(intToString(n))
-            w.addMethod("appendInt");
-            metaBuiltin("StringBuilder", "appendInt", false);
-            w.declareParam("n");
-            beginFunctionScope(makeSynthFs("appendInt", null), null);
-            try {
-                w.emitGetParam("this");
-                w.emitGetParam("n");
-                emitBuiltinCall(Builtin.INT_TO_STRING);
-                // #292c: el operando de INVOKE_VIRTUAL es nº de SLOTS de 4B, no de args
-                // (la VM calcula la posición del receptor con num*4). El arg de appendStr
-                // es un STRING = ref de 8B = 2 SLOTS. Con `1` el receptor salía 4B
-                // desplazado → "slot no resoluble" / crash 0x70000004. appendChar(int)=1 slot
-                // está bien; el path de usuario ya usa argSlotCount(). Sólo esta llamada
-                // sintetizada pasaba un arg de 8B con count en vez de slots.
-                w.emitInvokeVirtual("StringBuilder", "appendStr", 2);
-                declareLocal("__discardSBI");
-                w.emitSetLocal("__discardSBI");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- toString(): string --------------------------
-            // __result := __charsToString(chars, size)
-            w.addMethod("toString");
-            metaBuiltin("StringBuilder", "toString", true);
-            beginFunctionScope(makeSynthFs("toString", PrimitiveType.STRING), null);
-            try {
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "chars");
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "size");
-                emitBuiltinCall(Builtin.CHARS_TO_STRING);
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- length(): integer --------------------------
-            w.addMethod("length");
-            metaBuiltin("StringBuilder", "length", false);
-            beginFunctionScope(makeSynthFs("length", PrimitiveType.INTEGER), null);
-            try {
-                w.emitGetParam("this"); w.emitGetField("StringBuilder", "size");
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- endClass + Constructor --------------------------
-            w.endClass();
-
-            w.addFunction("StringBuilder.__init", false);
-            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-            beginFunctionScope(makeSynthFs("__init", null), null);
-            try {
-                w.emitGetParam("this");
-                emitInt(64); w.emit(OpCode.NEWARRAY);
-                w.emitSetField("StringBuilder", "chars");
-                w.emitGetParam("this"); emitInt(0);  w.emitSetField("StringBuilder", "size");
-                w.emitGetParam("this"); emitInt(64); w.emitSetField("StringBuilder", "cap");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit StringBuilder builtin: " + e.getMessage());
-        }
-    }
-
     /** FunctionSymbol "fake" para los métodos sintetizados de stdlib. */
     private FunctionSymbol makeSynthFs(String name, BpType returnType) {
         FunctionSymbol fs = new FunctionSymbol(name, true, false, false, null, null);
@@ -5478,437 +4910,9 @@ public final class MivmEmitter {
         return fs;
     }
 
-    /**
-     * Sintetiza la clase stdlib Thread. Layout obligado por el VM:
-     *   class Thread {
-     *     var __tid: integer        // slot 0 — id del ThreadContext (0 = unstarted)
-     *     var __stackSize: integer  // slot 1 — leído por __threadStart
-     *   }
-     * Vtable: slot 0 = run() (que la subclase del usuario sobreescribe).
-     *
-     *   function Thread(stackSize: integer)   // ctor: guarda stackSize, tid = 0
-     *   function run()                         // VIRTUAL, body vacío
-     *   function start()                       // calls __threadStart(this)
-     *   function join()                        // calls __threadJoin(this)
-     */
-    private void synthesizeThreadClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "Thread".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("Thread", null);
-            w.declareField("__tid",       false);   // slot 0
-            w.declareField("__stackSize", false);   // slot 1
-            metaCampoBuiltin("__tid", "__tid:i"); metaCampoBuiltin("__stackSize", "__stackSize:i");
 
-            // -------------------------- run() (virtual, body vacío) --------------------------
-            // PRIMER método declarado → slot 0 de la vtable (asumido por __threadStart).
-            w.addMethod("run");
-            metaBuiltin("Thread", "run", false);
-            beginFunctionScope(makeSynthFs("run", null), null);
-            try {
-                emitFunctionEnd();   // void; flujo cae hasta el ret final
-            } finally { scopeStack.pop(); }
 
-            // -------------------------- start() --------------------------
-            w.addMethod("start");
-            metaBuiltin("Thread", "start", false);
-            beginFunctionScope(makeSynthFs("start", null), null);
-            try {
-                w.emitGetParam("this");
-                emitBuiltinCall(Builtin.THREAD_START);
-                declareLocal("__discardStart");
-                w.emitSetLocal("__discardStart");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
 
-            // -------------------------- join() --------------------------
-            w.addMethod("join");
-            metaBuiltin("Thread", "join", false);
-            beginFunctionScope(makeSynthFs("join", null), null);
-            try {
-                w.emitGetParam("this");
-                emitBuiltinCall(Builtin.THREAD_JOIN);
-                declareLocal("__discardJoin");
-                w.emitSetLocal("__discardJoin");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- toString(): string (#526, slot 3) --------------------------
-            // Thread NO desciende de Object, y `print w` / `"" + w` despachaban toString por la
-            // ranura 0 de TODA clase — que en la raíz Thread es run(): el hilo corría en el
-            // principal. Ahora Thread tiene su toString (al FINAL: run sigue en la 0, que es lo
-            // que asume __threadStart) y el emisor despacha por nombre/clave sobre la clase
-            // estática. Mismo cuerpo que Object.toString, con su propio prefijo.
-            w.addMethod("toString");
-            metaBuiltin("Thread", "toString", false);
-            beginFunctionScope(makeSynthFs("toString", PrimitiveType.STRING), null);
-            try {
-                String prefix = internString("thread@");
-                w.emitLeaGlobal(prefix);                  // "thread@"
-                w.emitGetParam("this");                   // this = ref = handle de 8 BYTES
-                emitBuiltinCall(Builtin.LONG_TO_STRING);  // "<handle>"
-                emitStringConcatCall();                   // "thread@<handle>"
-                w.emitSetLocal("__result");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            w.endClass();
-
-            // -------------------------- Constructor Thread(stackSize) --------------------------
-            w.addFunction("Thread.__init", false);
-            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-            w.declareParam("stackSize");
-            beginFunctionScope(makeSynthFs("__init", null), null);
-            try {
-                // this.__tid := 0
-                w.emitGetParam("this");
-                emitInt(0);
-                w.emitSetField("Thread", "__tid");
-                // this.__stackSize := stackSize
-                w.emitGetParam("this");
-                w.emitGetParam("stackSize");
-                w.emitSetField("Thread", "__stackSize");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit Thread builtin: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Sintetiza la clase {@code Mutex} en el módulo del usuario si no existe.
-     * Tiene un único field {@code __mid} (slot 0) que guarda el índice del
-     * mutex en la lista interna de la VM. Tres métodos:
-     *   - constructor: pide un id nuevo a la VM (__mutexCreate)
-     *   - lock(): __mutexLock(this) — bloquea si está tomado por otro
-     *   - unlock(): __mutexUnlock(this) — libera y hand-off al primer waiter
-     */
-    /**
-     * Sintetiza SyncList: lista thread-safe.
-     *
-     *   class SyncList extends List
-     *     var __mutex: Mutex     // mutex propio por instancia
-     *
-     *     // Cada método envuelve la lógica de List con lock/unlock.
-     *     // Los overrides invocan al método del padre via CALL List.<m>
-     *     // (despacho directo, no virtual: evita una indirección y un
-     *     // re-locking accidental si algún día algo más extendiese SyncList).
-     *
-     *     public add(item: any)        // append at�mico
-     *     public remove(idx: integer)  // borra por �ndice at�micamente
-     *     public get(idx: integer): any
-     *     public set(idx: integer, item: any)
-     *     public length(): integer
-     *     public pop(): any            // borra y retorna el �ltimo (queue-like)
-     *
-     * El constructor SyncList():
-     *   super()            ← inicializa items[8], size=0, cap=8
-     *   this.__mutex := Mutex()
-     *
-     * Disponible siempre, sin import. El usuario puede declarar su propia
-     * clase SyncList y entonces este builtin se omite.
-     */
-    private void synthesizeSyncListClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "SyncList".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("SyncList", "List");
-            // ref-type, no owner. Compartir un Mutex entre dos SyncList sería
-            // raro pero no es nuestro caso; un Mutex pequeño por instancia.
-            w.declareField("__mutex", true, false);
-
-            // ---- add(item) ----
-            w.addMethod("add");
-            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
-            beginFunctionScope(makeSynthFs("add", null), null);
-            try {
-                emitSyncListLock();
-                // super.add(item)
-                w.emitGetParam("this");
-                w.emitGetParam("item");
-                w.emitCall("List.add");
-                declareLocal("__discardSuper");
-                w.emitSetLocal("__discardSuper");
-                emitSyncListUnlock();
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // ---- remove(idx) ----
-            w.addMethod("remove");
-            w.declareParam("idx");
-            beginFunctionScope(makeSynthFs("remove", null), null);
-            try {
-                emitSyncListLock();
-                w.emitGetParam("this");
-                w.emitGetParam("idx");
-                w.emitCall("List.remove");
-                declareLocal("__discardSuper");
-                w.emitSetLocal("__discardSuper");
-                emitSyncListUnlock();
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // ---- get(idx): any ----
-            w.addMethod("get");
-            w.declareParam("idx");
-            beginFunctionScope(makeSynthFs("get", BpType.AnyType.INSTANCE), null);
-            try {
-                emitSyncListLock();
-                w.emitGetParam("this");
-                w.emitGetParam("idx");
-                w.emitCall("List.get");
-                w.emitSetLocal("__result");   // List.get retorna any
-                emitSyncListUnlock();
-                emitFunctionEnd();            // emitirá GET_LOCAL __result + RET
-            } finally { scopeStack.pop(); }
-
-            // ---- set(idx, item) ----
-            w.addMethod("set");
-            w.declareParam("idx");
-            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
-            beginFunctionScope(makeSynthFs("set", null), null);
-            try {
-                emitSyncListLock();
-                w.emitGetParam("this");
-                w.emitGetParam("idx");
-                w.emitGetParam("item");
-                w.emitCall("List.set");
-                declareLocal("__discardSuper");
-                w.emitSetLocal("__discardSuper");
-                emitSyncListUnlock();
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // ---- length(): integer ----
-            w.addMethod("length");
-            beginFunctionScope(makeSynthFs("length", PrimitiveType.INTEGER), null);
-            try {
-                emitSyncListLock();
-                w.emitGetParam("this");
-                w.emitCall("List.length");
-                w.emitSetLocal("__result");
-                emitSyncListUnlock();
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // ---- pop(): any ----
-            // Primitiva producer/consumer:
-            //   if size == 0 → __result := 0 (lo dejamos como sentinel)
-            //   else        → __result := items[size-1]; size := size-1; items[size] := 0
-            w.addMethod("pop");
-            beginFunctionScope(makeSynthFs("pop", BpType.AnyType.INSTANCE), null);
-            try {
-                emitSyncListLock();
-                int emptyLabel = w.newLabel();
-                int endLabel   = w.newLabel();
-
-                // if size == 0 → empty branch
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(0);
-                w.emit(OpCode.EQ);
-                int notEmpty = w.newLabel();
-                w.emitJumpIfFalse(notEmpty);
-                emitInt(0);                      // sentinel "lista vacía"
-                w.emitSetLocal("__result");
-                w.emitJump(endLabel);
-
-                w.declareLabel(notEmpty);
-                // last := items[size-1]
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
-                w.emitSetLocal("__result");
-                // size := size - 1
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emitSetField("List", "size");
-                // items[size] := 0   (limpia slot, ayuda al GC con refs)
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
-                w.emit(OpCode.ASTORE_I64);
-
-                w.declareLabel(endLabel);
-                // (emptyLabel queda no usado — lo dejamos para no romper la estructura;
-                //  alternativa: declararlo donde sale del if. Mantenemos el código
-                //  simple: el JUMP a endLabel ya nos saca del else.)
-                w.declareLabel(emptyLabel);
-                emitSyncListUnlock();
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // ---- popBlocking(): any ----
-            // Variante de pop que ESPERA hasta haber un item. Implementación
-            // v1: spin con yield cooperativo entre intentos. Cada iteración
-            // toma el mutex, comprueba size; si > 0, extrae y devuelve; si
-            // no, suelta el mutex y cede la CPU. No requiere primitivas
-            // nuevas en la VM (yield builtin existe). Trade-off: el thread
-            // bloqueado consume slot del scheduler entre yields (vs. un
-            // wait/notify auténtico que lo parquea hasta notify). Acepta-
-            // ble para programas BP típicos; si se vuelve relevante, se
-            // sustituye por condvar real.
-            w.addMethod("popBlocking");
-            beginFunctionScope(makeSynthFs("popBlocking", BpType.AnyType.INSTANCE), null);
-            try {
-                int loopTop = w.newLabel();
-                int doneOk  = w.newLabel();
-                w.declareLabel(loopTop);
-
-                emitSyncListLock();
-                // if size > 0: tomar item y salir.
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(0);
-                w.emit(OpCode.GT);
-                int retry = w.newLabel();
-                w.emitJumpIfFalse(retry);
-
-                // last := items[size-1]; size -= 1; items[size] := 0
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
-                w.emitSetLocal("__result");
-                w.emitGetParam("this");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(1); w.emit(OpCode.SUB);
-                w.emitSetField("List", "size");
-                w.emitGetParam("this"); w.emitGetField("List", "items");
-                w.emitGetParam("this"); w.emitGetField("List", "size");
-                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
-                w.emit(OpCode.ASTORE_I64);
-                emitSyncListUnlock();
-                w.emitJump(doneOk);
-
-                // Empty: soltar mutex, dormir un poco, reintentar.
-                // sleep(1) en vez de yield() porque yield no parquea el
-                // thread (sólo lo re-encola), provocando que un consumer
-                // sin items keep burning CPU y monopolizando el scheduler
-                // — los workers se quedan ocupados ejecutando popBlocking
-                // y el producer no llega a ser dispatched. Un sleep mínimo
-                // garantiza que el thread BLOCKED_SLEEP no consume slot
-                // hasta que pase un quantum.
-                w.declareLabel(retry);
-                emitSyncListUnlock();
-                emitInt(1);                                          // ms
-                emitBuiltinCall(edu.bpgenvm.bytecode.Builtin.SLEEP);
-                declareLocal("__discardYield");
-                w.emitSetLocal("__discardYield");
-                w.emitJump(loopTop);
-
-                w.declareLabel(doneOk);
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            w.endClass();
-
-            // ---- Constructor SyncList() ----
-            w.addFunction("SyncList.__init", false);
-            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-            beginFunctionScope(makeSynthFs("__init", null), null);
-            try {
-                // super() = List.__init(this): inicializa items[8], size=0, cap=8.
-                w.emitGetParam("this");
-                w.emitCall("List.__init");
-                declareLocal("__discardSuper");
-                w.emitSetLocal("__discardSuper");
-
-                // this.__mutex := Mutex()
-                int id = tempCounter++;
-                String newref  = "__newmtx_"  + id;
-                String discard = "__discardMtx_" + id;
-                declareLocalLong(newref);
-                declareLocal(discard);
-                w.emitNewObject("Mutex");
-                w.emitSetLocal(newref);
-                w.emitGetLocal(newref);
-                w.emitCall("Mutex.__init");
-                w.emitSetLocal(discard);
-                w.emitGetParam("this");
-                w.emitGetLocal(newref);
-                w.emitSetField("SyncList", "__mutex");
-
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit SyncList builtin: " + e.getMessage());
-        }
-    }
-
-    /** Helper: emite `this.__mutex.lock()` con discard del retorno. */
-    private void emitSyncListLock() throws IOException {
-        int id = tempCounter++;
-        String discard = "__slLock_" + id;
-        declareLocal(discard);
-        w.emitGetParam("this");
-        w.emitGetField("SyncList", "__mutex");
-        w.emitInvokeVirtual("Mutex", "lock", 0);
-        w.emitSetLocal(discard);
-    }
-    /** Helper: emite `this.__mutex.unlock()` con discard del retorno. */
-    private void emitSyncListUnlock() throws IOException {
-        int id = tempCounter++;
-        String discard = "__slUnlock_" + id;
-        declareLocal(discard);
-        w.emitGetParam("this");
-        w.emitGetField("SyncList", "__mutex");
-        w.emitInvokeVirtual("Mutex", "unlock", 0);
-        w.emitSetLocal(discard);
-    }
-
-    private void synthesizeMutexClass() {
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "Mutex".equals(((ClassDef) d).name)) return;
-        }
-        try {
-            w.addClass("Mutex", "Object");   // H5.1.a — raíz Object
-            w.declareField("__mid", false);   // slot 0
-            metaCampoBuiltin("__mid", "__mid:i");
-
-            // -------------------------- lock() --------------------------
-            w.addMethod("lock");
-            metaBuiltin("Mutex", "lock", false);
-            beginFunctionScope(makeSynthFs("lock", null), null);
-            try {
-                w.emitGetParam("this");
-                emitBuiltinCall(Builtin.MUTEX_LOCK);
-                declareLocal("__discardLock");
-                w.emitSetLocal("__discardLock");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            // -------------------------- unlock() --------------------------
-            w.addMethod("unlock");
-            metaBuiltin("Mutex", "unlock", false);
-            beginFunctionScope(makeSynthFs("unlock", null), null);
-            try {
-                w.emitGetParam("this");
-                emitBuiltinCall(Builtin.MUTEX_UNLOCK);
-                declareLocal("__discardUnlock");
-                w.emitSetLocal("__discardUnlock");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-
-            w.endClass();
-
-            // -------------------------- Constructor Mutex() --------------------------
-            w.addFunction("Mutex.__init", false);
-            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
-            beginFunctionScope(makeSynthFs("__init", null), null);
-            try {
-                // this.__mid := __mutexCreate()
-                w.emitGetParam("this");
-                emitBuiltinCall(Builtin.MUTEX_CREATE);
-                w.emitSetField("Mutex", "__mid");
-                emitFunctionEnd();
-            } finally { scopeStack.pop(); }
-        } catch (IOException e) {
-            errors.add("emit Mutex builtin: " + e.getMessage());
-        }
-    }
 
     private void emitInstanceOf(InstanceOfExpr ie) throws IOException {
         emitExpr(ie.target);
@@ -6285,7 +5289,7 @@ public final class MivmEmitter {
         for (java.util.Map.Entry<String, BpType.TupleType> e : tupleShapes.entrySet()) {
             String cls = e.getKey();
             BpType.TupleType tt = e.getValue();
-            w.addClass(cls, "Object");   // H5.1.a — raíz Object
+            w.addClass(cls, null);   // H1 P3: root — una tupla no tiene métodos ni padre (Object ya no es local)
             for (int i = 0; i < tt.elements.size(); i++) {
                 BpType el = tt.elements.get(i);
                 w.declareField("_" + i, isGcRef(el), false, occupies8Bytes(el));   // #14: elem any → GC lo traza

@@ -223,7 +223,7 @@ public abstract class BpType {
             // no tienen nada que despachar. Queda ANOTADO, no resuelto:
             // detectarlo es trabajo de las dos VMs (el tag del handle y el tipo
             // del bloque sí distinguen array de objeto).
-            if (cls.isBuiltin && "Object".equals(cls.name)
+            if ("Object".equals(cls.name) && cls.esDelLenguaje()
                     && source instanceof PrimitiveType
                     && ((PrimitiveType) source).tag == PrimitiveType.Kind.STRING)
                 return true;
@@ -245,14 +245,14 @@ public abstract class BpType {
             // descienden de Object (`synthesizeThreadClass`), así que un Thread
             // no es asignable a Object. Sin esto, el semántico aceptaría algo que
             // en ejecución no lleva la vtable de Object.
-            if (cls.isBuiltin && "Object".equals(cls.name)) {
-                for (Symbol.ClassSymbol c = cur; c != null; c = c.baseClass)
-                    if ("Thread".equals(c.name)) return false;
-                return true;
-            }
-            // Subclase asignable a base
+            // H1 P3 (20-sep) — la arista YA está en `baseClass`: el semántico cuelga de Core.Object
+            // toda clase sin `extends` (y Thread es `root class`: su cadena no llega a Object, y por
+            // eso un Thread NO es un Object). Subir la cadena basta. Con un matiz: el stub de Object
+            // de ESTE módulo y el de otro son símbolos distintos con el mismo nombre (uno por
+            // import), así que la clase del lenguaje se compara por nombre.
             while (cur != null) {
                 if (cur == cls) return true;
+                if (cls.esDelLenguaje() && cur.esDelLenguaje() && cls.name.equals(cur.name)) return true;
                 cur = cur.baseClass;
             }
             return false;

@@ -135,6 +135,7 @@ class SlotsVtableCrossModuleTest {
         b.sourceDir  = src.toString();
         b.outDir     = out.toString();
         b.main       = "SlotUso";
+        b.dependencies.add(StdlibDeTest.paraFormato(tmp).getAbsolutePath());   // H1 P3: Object vive en Core
         org.junit.jupiter.api.Assertions.assertTrue(
                 Main.buildProject(b, "mivm", false),
                 "el proyecto de la prueba debe compilar sin errores");

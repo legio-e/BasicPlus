@@ -71,6 +71,51 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 🧬 H1 (20-sep, tarde) — P2c y P3: las intrínsecas se sobrecargan, y las CUATRO clases del lenguaje viven en BP
+
+**P2c** (`4dee6cf4`, `231fa322`): `Math.sign(x: integer)` / `sign(x: float)` (fuera `signF`); `len(s: string)` /
+`len(a: any[])` en `Core.bp` con `any[]` = «cualquier array» (una línea en `ArrayType.isAssignableFrom`, sólo la raíz
+escribe `any`), y el caso especial «dirigido por tipo» fuera del semántico y del emisor. Bug cazado: la segunda `len`
+se perdía en silencio (`tryDefine`); ahora las globales de la raíz encadenan sobrecargas como el importador. Se
+pierde `len(obj)` sobre una clase con `length()`/`size()` (azúcar que se saltaba la visibilidad): es `obj.length()`.
+
+**P3** (este commit): `Object`, `Thread`, `Mutex` y `StringBuilder` escritas en BasicPlus al principio de `Core.bp`,
+compiladas UNA vez. Las dos decisiones de Eduardo: *«'root' o algo similar para indicar que no desciende de nada»*
+→ `public root class Object` / `public root class Thread` (palabra contextual, sólo en Core; sin `root` y sin
+`extends`, la base es `Core.Object`); *«import Core se añade al árbol AST si no está incluido ya en el módulo, así
+que se puede indicar o omitir, pero en el AST se incluye siempre salvo en Core»* → lo pone el PARSER (al final de los
+imports), y con eso todo lo público de Core se ve sin cualificar y `cargarRaiz`/`tipoDeRaiz` (P2) desaparecen: las
+globales entran por analizador desde el namespace del import (`registrarRaiz`), con los stubs de ESTE módulo.
+Fuera: los 20 `makeMethod`, las cuatro síntesis del emisor (+ las de List/OwnerList/SyncList que estaban muertas:
+~1000 líneas de Java escribiendo bytecode a mano), `objectBaseLayout`/`threadBaseLayout`/`builtinBaseMethodNames`,
+`sembrarRaizBuiltin`, `claseBuiltin`/`resolverComoBuiltin`, la inyección de toString/compareTo en cada clase y
+`ClassSymbol.isBuiltin`. Las claves canónicas de las cuatro siguen SIMPLES (`LObject;`, `esDelLenguaje()`), así que
+la ABI de claves no cambió; el nombre de la clase como REF sí va cualificado (`Core.Object`), que es lo que el
+cargador necesita (el primer intento las dejó simples en los dos sitios: «'Object' (no cargado)»). Las subclases
+sintetizadas de `parallel` y `Thread(obj::m())` se abren contra `Core.Thread` (`abrirClaseSintetizada`); el `Mutex`
+de `sync` y su `lock/unlock`, por la clase del lenguaje (`construirDelLenguaje`/`invocarDelLenguaje`); las tuplas
+son root (no tienen métodos). **Consecuencias medidas**: toda clase sin `extends` es ABIERTA en MOD9 (el cargador
+la construye contra `Core.Object`); todo módulo depende de Core al cargar (`Core.__init`, como la unidad System); la
+stdlib adelgaza **25,5 KB** (Str.mod 5715→4641; Gui 46,3→45,0 KB); un módulo MOD8 con clases necesita un Core MOD8
+(los tests —`StdlibDeTest`— y `mezcla.py` —`core_para`— se lo fabrican; en mezcla, «app MOD9 contra Lib MOD8 g8»
+predice ahora «otra interfaz»: la Lib vieja arrastra su Core viejo y la app nueva lo rechaza con nombre). Un bug
+del importador salió con esto: copiaba las ranuras de una base LOCAL todavía diferida (la interfaz no va en orden
+de declaración; desde que toda cadena acaba en Object el caso se da) → tabla vacía → «no exporta
+'Core.Integer#value#0'» en MOD8; ahora se difiere también. El tope #529 (256 ranuras) se aplica a lo que el
+compilador sabe (lo propio): `TopeClase` pasa a 257 métodos propios. Manual §9.4 (la raíz, `root class`) y §10.0
+(`import Core` implícito, las cuatro en BP); gramática. Tests del frontend que compilan clases: dependen de
+`../bpstdlib` como cualquier proyecto (`StdlibDeTest.paraFormato`). Verde todo: check 83/59/9/13/83, mezcla
+194/194, frontend 220/220, errores 22/22, miVM 52/52, tests C.
+
+**Riesgo que acecha**: las placas llevan el firmware del 17-sep con la stdlib vieja; los `.mod` de hoy (interfaz de
+Core cambiada, clases abiertas contra `Core.Object`) NO enlazan allí hasta la cascada (P5). Y el coste de carga en
+la Pico de «todas las clases abiertas» no está medido: se mide en P5 con una app grande (Gui).
+
+**Orden para retomar**: P4 (¿los primitivos como declaraciones de la raíz? decidir con P3 hecho: hoy es un `switch`
+en `resolveType` y no parece que compense), P5 (la cascada: stdlib ya rehecha; blobs con `regen_all_mods.sh`, las
+seis imágenes, packs; placas cuando Eduardo diga), y los extras de la fila H1 (destructor `~Clase()`, `Map`, `#396`
+`Time`, `#19`, `#460`, huecos). P2b es de H4.
+
 ## 🧬 H1 (20-sep, domingo por la mañana) — el cuerpo `inline`: la stdlib entera declara sus intrínsecas en BP
 
 La decisión de Eduardo a las 8: *«una función intrínseca se declara como una función normal; la diferencia es el

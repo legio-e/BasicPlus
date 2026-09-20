@@ -1,8 +1,9 @@
-// TopeClase.bp — #529 (19-sep): el TOPE de una clase CERRADA (toda su cadena en el modulo): las
+// TopeClase.bp — #529 (19-sep): el TOPE de una clase: las
 // ranuras de metodo (INVOKE_VIRTUAL) y de campo (GET/SET_FIELD) son de 8 bits, 256 entradas.
 // Es un limite del lenguaje y se dice con la linea de la clase; antes reventaba el writer sin
-// linea («Method slot u8 desbordado: 256»). Una clase ABIERTA (extiende a una de otro modulo)
-// va por referencia en MOD9 (indice de 16 bits) y no lo tiene.
+// linea («Method slot u8 desbordado: 256»). H1 P3 (20-sep): desde que Object vive en Core toda
+// clase es abierta en MOD9 y el compilador cuenta lo que SABE (lo propio; las ranuras de Object
+// las pone el cargador): el tope se aplica a toda clase, sobre lo declarado en ella.
 module TopeClase
   import Core
   // 1. 129 campos string = 258 ranuras (una referencia ocupa 2)
@@ -139,7 +140,7 @@ module TopeClase
     public function Ancha()
     end Ancha
   end Ancha
-  // 2. 255 metodos propios + toString + compareTo = 257 > 256
+  // 2. 257 metodos propios > 256 (los dos de Object ya no cuentan aqui: los pone el cargador)
   public class Larga
     public function Larga()
     end Larga
@@ -908,6 +909,12 @@ module TopeClase
     public function m254(): integer
       return 254
     end m254
+    public function m255(): integer
+      return 254
+    end m255
+    public function m256(): integer
+      return 254
+    end m256
   end Larga
   function main()
     print "no compila"

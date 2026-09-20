@@ -1195,6 +1195,16 @@ end Base</code></pre>
   <code>Exception</code>/<code>RuntimeError</code>, no — para las excepciones está
   el <code>catch</code> tipado).
 </p>
+<p>
+  <strong>La raíz.</strong> Una clase sin <code>extends</code> desciende de <code>Object</code>
+  (<code>toString()</code>, <code>compareTo(other)</code>), que es una clase escrita en BasicPlus en
+  <code>Core.bp</code> como <code>Thread</code>, <code>Mutex</code> y <code>StringBuilder</code>
+  (<a href="#raiz">§10.0</a>). <code>Object</code> y <code>Thread</code> se declaran allí
+  <code>public root class</code>: una <em>root class</em> no desciende de nada — por eso un
+  <code>Thread</code> no es un <code>Object</code>: su <code>run()</code> tiene que ser el primer
+  método de su tabla, que es lo que la VM arranca. <code>root</code> sólo puede escribirse en
+  <code>Core</code>; en cualquier otro módulo es error.
+</p>
 
 <h3 id="props">9.5 Properties</h3>
 <pre><code><span class="kw">public class</span> Punto
@@ -1410,6 +1420,17 @@ Counter.bump()</code></pre>
   dos máquinas virtuales: <code>Builtin.java</code> y <code>builtin_ids.h</code> se generan de él.
   Sus <em>tipos</em> (<code>Exception</code>, <code>Integer</code>…) sí se importan: «si se usa un
   tipo de Core, se importa Core».
+</p>
+<p>
+  <strong><code>import Core</code> es implícito.</strong> El compilador lo añade al árbol de todo
+  módulo que no lo escriba (salvo en el propio <code>Core</code>): se puede indicar o omitir, y el
+  resultado es el mismo. Sus clases (<code>List</code>, <code>Exception</code>, <code>Integer</code>…) se
+  escriben sin cualificar, y las cuatro del lenguaje —<code>Object</code>, <code>Thread</code>,
+  <code>Mutex</code>, <code>StringBuilder</code>— son clases BasicPlus de <code>Core.bp</code>: hasta V7
+  el compilador las escribía en Java y copiaba las cuatro en cada <code>.mod</code> (≈1,3 KB por
+  módulo, usara hilos o no); ahora se compilan una vez y cada módulo las referencia. El orden de sus
+  campos y métodos es un contrato con las dos VMs (<code>Thread.run()</code> en la ranura 0, el tid
+  en el campo 0…) y está anotado en el propio fichero.
 </p>
 <p>
   Una intrínseca es una función normal, y <strong>se sobrecarga</strong> como cualquier otra:

@@ -42,7 +42,7 @@ class ClaveCanonicaTest {
     private static ClassSymbol externa(String lib, String mod, String nombre) {
         ClassSymbol c = clase(nombre); c.isExternal = true; c.externalLibrary = lib; c.externalModule = mod; return c;
     }
-    private static ClassSymbol delLenguaje(String nombre) { ClassSymbol c = clase(nombre); c.isBuiltin = true; return c; }
+    private static ClassSymbol delLenguaje(String nombre) { return externa("", "Core", nombre); }   // H1 P3: las del lenguaje son de Core (esDelLenguaje las reconoce por nombre)
 
     @Test @DisplayName("Los ejemplos del diseño, tal cual: retorno siempre, V para void, ctor sin retorno")
     void ejemplosDelDiseno() {

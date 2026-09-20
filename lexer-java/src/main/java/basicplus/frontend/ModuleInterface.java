@@ -825,39 +825,14 @@ public final class ModuleInterface {
      *  una clase ajena que las extiende. Había tres tablas a mano (emisor, esta, importador) y
      *  al añadir `Thread.toString` se desincronizaron el mismo día — lo cazó el oráculo
      *  `CtorHijo` («no exporta 'CtorBase.Tarea#cuenta#3'», el dueño la emite en la 4). */
-    static List<String> builtinBaseMethodNames(String base) {
-        if ("Object".equals(base)) return objectBaseLayout().methodNames;
-        if ("Thread".equals(base)) return threadBaseLayout().methodNames;
-        return java.util.Collections.emptyList();
-    }
-
-    /** #515 — "public" / "protected" / "private" de un constructor. */
     static String visDeCtor(FunctionSymbol c) {
         return c.isPrivate ? "private" : (c.isPublic ? "public" : "protected");
     }
 
-    private static LayoutAndNames objectBaseLayout() {
-        List<String> names = new ArrayList<>();
-        names.add("toString");
-        names.add("compareTo");
-        return new LayoutAndNames(0, 2, new int[0], new int[0], names);
-    }
-
-    private static LayoutAndNames threadBaseLayout() {
-        List<String> names = new ArrayList<>();
-        names.add("run");
-        names.add("start");
-        names.add("join");
-        names.add("toString");   // #526 — al FINAL (run sigue en la 0); mismo orden que MivmEmitter
-        // __tid + __stackSize = 2 slots, ninguno ref/owner.
-        return new LayoutAndNames(2, 4, new int[]{0}, new int[]{0}, names);
-    }
-
-    /** Resuelve el layout de la BASE de {@code cls} (null = sin base ⇒ Object). */
     private static LayoutAndNames baseLayoutOf(Symbol.ClassSymbol cls,
                                                Map<String, LayoutAndNames> localLayouts) {
         Symbol.ClassSymbol b = cls.baseClass;
-        if (b == null) return objectBaseLayout();
+        if (b == null) return new LayoutAndNames(0, 0, new int[0], new int[0], new ArrayList<>());   // H1 P3: root class (Object, Thread): nada heredado
         if (b.isExternal) {
             // V7/H2 (#523, bpi 9) — en MOD9 la clase es ABIERTA (R1): lo heredado lo coloca el
             // CARGADOR contra el padre real, y lo propio se numera RELATIVO desde 0, igual que
@@ -873,8 +848,6 @@ public final class ModuleInterface {
             }
             return pub;
         }
-        if ("Object".equals(b.name)) return objectBaseLayout();
-        if ("Thread".equals(b.name)) return threadBaseLayout();
         LayoutAndNames done = localLayouts.get(b.name);
         if (done != null) return done;
         if (b.astNode != null) {
@@ -951,7 +924,6 @@ public final class ModuleInterface {
             // StringBuilder aborta — se llevó por delante 5 módulos de la stdlib.
             // Las built-in que SÍ pueden ser base de una clase de usuario (Object,
             // Thread) tienen tabla propia en baseLayoutOf.
-            if (cls.isBuiltin) return baseLayoutOf(cls, localLayouts);
             throw new RuntimeException("clase '" + cls.name
                     + "': sin AST y sin layout publicado — no se puede calcular (¿clase sintetizada sin tabla?)");
         }

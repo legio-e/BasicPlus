@@ -75,9 +75,7 @@ class Mod9EmisorTest {
         BpBuild b = new BpBuild();
         b.projectDir = tmp.toString(); b.sourceDir = src.toString(); b.outDir = out.toString(); b.main = main;
         b.version = 7;
-        File std = new File("../bpstdlib");
-        Assumptions.assumeTrue(new File(std, "Core.mod").isFile(), "hace falta ../bpstdlib/Core.mod");
-        b.dependencies.add(std.getAbsolutePath());
+        b.dependencies.add(StdlibDeTest.paraFormato(tmp).getAbsolutePath());   // H1 P3: en MOD8, un Core MOD8
         assertTrue(Main.buildProject(b, "mivm", false), "el proyecto tiene que compilar");
         return out;
     }
@@ -107,16 +105,21 @@ class Mod9EmisorTest {
         assertEquals(ModFormat.MAGIC_NUMBER_V9, ByteBuffer.wrap(lib).getInt());
         List<TablasMod9.Clase> clases = TablasMod9.leerClases(secciones(lib)[2]);
         TablasMod9.Clase base = clase(clases, "Base");
-        assertFalse(base.abierta); assertEquals(TablasMod9.DEP_LOCAL, base.parentDepIdx); assertEquals("Object", base.parentName);
+        // H1 P3 (20-sep): Object vive en Core, así que TODA clase sin `extends` es ABIERTA contra
+        // `Core.Object` (una dep) y el cargador la construye; sus ranuras propias numeran desde 0.
+        assertTrue(base.abierta, "Base desciende de Core.Object: abierta");
+        assertNotEquals(TablasMod9.DEP_LOCAL, base.parentDepIdx); assertEquals("Core.Object", base.parentName);
         assertEquals(java.util.Arrays.asList("getP()i", "setP(i)V", "k()s", "m(i)i", "m(s)s", "suma(LLib/Base;)i"), claves(base.metodos),
                 "solo lo PROPIO, en orden de ranura, con la firma completa tambien en la cabeza m(i)i");
-        assertEquals(2, base.metodos.get(0).slot, "los accesores van detras de toString/compareTo");
+        assertEquals(0, base.metodos.get(0).slot, "abierta: las ranuras propias numeran desde 0 (las de Object las pone el cargador)");
         assertEquals("n:i", base.campos.get(0).clave); assertFalse(base.campos.get(0).privado);
         assertEquals("s:s", base.campos.get(1).clave); assertTrue(base.campos.get(1).privado);
         assertEquals("p:i", base.campos.get(2).clave); assertTrue(base.campos.get(2).privado, "el backing de la property es de la clase");
         String bytes = new String(lib, StandardCharsets.ISO_8859_1);
         assertFalse(bytes.matches("(?s).*Base#[A-Za-z_$]+#[0-9]+.*"), "sin marcadores Cls#clave#slot");
-        assertTrue(TablasMod9.leerRefs(secciones(lib)[1]).isEmpty(), "Lib no pide nada por ref: sus clases son cerradas");
+        for (TablasMod9.Ref r : TablasMod9.leerRefs(secciones(lib)[1]))
+            assertTrue(r.toString().contains("Core.Object") || r.toString().contains("Lib.") || r.toString().contains("[local]"),
+                    "Lib solo pide por ref lo suyo (abierta) y Core.Object: " + r);
     }
 
     @Test @DisplayName("el consumidor: cada llamada a la clase ajena es una ref (clase estatica, clave con retorno); los accesores de property tambien")

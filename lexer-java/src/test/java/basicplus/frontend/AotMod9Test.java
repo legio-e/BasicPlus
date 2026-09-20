@@ -91,9 +91,7 @@ class AotMod9Test {
         BpBuild b = new BpBuild();
         b.projectDir = tmp.toString(); b.sourceDir = src.toString(); b.outDir = out.toString(); b.main = main;
         b.version = 7;
-        File std = new File("../bpstdlib");
-        Assumptions.assumeTrue(new File(std, "Core.mod").isFile(), "hace falta ../bpstdlib/Core.mod");
-        b.dependencies.add(std.getAbsolutePath());
+        b.dependencies.add(StdlibDeTest.paraFormato(tmp).getAbsolutePath());   // H1 P3: en MOD8, un Core MOD8
         PrintStream out0 = System.out, err0 = System.err;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(buf, true, "UTF-8");

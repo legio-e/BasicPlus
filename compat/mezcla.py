@@ -456,12 +456,29 @@ def lib(work, variante, gen, extra=(), etiqueta=''):
     io.open(os.path.join(d, 'src', 'Lib.bp'), 'w', encoding='utf-8', newline='\n').write(VARIANTES[variante][1](LIB_V1))
     io.open(os.path.join(d, 'p.bpbuild'), 'w', encoding='utf-8', newline='\n').write(
         '{ "sourceDir": "src", "outDir": ".", "main": "Lib", "version": %d, "dependencies": [] }\n' % gen)
-    shutil.copy(CORE, d)
+    shutil.copy(core_para(work, FORMATO), d)
     rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=%d' % FORMATO] + list(extra), d)
     if rc != 0 or not os.path.isfile(os.path.join(d, 'Lib.mod')):
         raise SystemExit('la variante %s%s (gen %d) no compila:\n%s%s' % (variante, etiqueta, gen, out, err))
     io.open(os.path.join(d, 'build.log'), 'w', encoding='utf-8').write(out + err)
     return d
+
+def core_para(work, formato):
+    """H1 P3 (20-sep): el Core.mod que ve una Lib. Desde que Object vive en Core.bp toda clase
+    desciende de Core.Object, y en MOD8 el padre externo necesita el LAYOUT que solo publica la
+    interfaz bpi 8: el Core versionado (MOD9) no vale para compilar MOD8. Se compila Core.bp como
+    MOD8 una vez por trabajo (gen 7, la de la stdlib)."""
+    if formato != 8: return CORE
+    d = os.path.join(work, 'core8')
+    if os.path.isfile(os.path.join(d, 'Core.mod')): return os.path.join(d, 'Core.mod')
+    os.makedirs(os.path.join(d, 'src'), exist_ok=True)
+    shutil.copy(os.path.join(ROOT, 'bpstdlib', 'Core.bp'), os.path.join(d, 'src', 'Core.bp'))
+    io.open(os.path.join(d, 'p.bpbuild'), 'w', encoding='utf-8', newline='\n').write(
+        '{ "sourceDir": "src", "outDir": ".", "main": "Core", "version": 7, "dependencies": [] }\n')
+    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=8'], d)
+    if rc != 0 or not os.path.isfile(os.path.join(d, 'Core.mod')):
+        raise SystemExit('Core.bp no compila como MOD8:\n%s%s' % (out, err))
+    return os.path.join(d, 'Core.mod')
 
 def app(work, nombre, src, libdir, etiqueta):
     """Compila `nombre` contra los .mod de libdir; devuelve el dir con el .mod y los avisos."""
@@ -680,7 +697,11 @@ def main():
         lib9 = lib(work, 'igual', 8)
         usa9c8 = app(work, 'Usa', USA, v1m8, 'v1_m8_app9'); ext9c8 = app(work, 'Ext', EXT, v1m8, 'v1_m8_app9')   # MOD9 sellada contra la MOD8
         casos_m = (('app MOD9 (sellada MOD9) contra Lib MOD8 g7', v1m8, (usa1, ext1), {'Usa': 'otra interfaz', 'Ext': 'otra interfaz'}),
-                   ('app MOD9 (sellada MOD9) contra Lib MOD8 g8', lib8, (usa1, ext1), {'Usa': 'no enlaza', 'Ext': 'mas reciente+extiende'}),
+                   # H1 P3 (20-sep): una Lib MOD8 vive con un Core MOD8 (toda clase desciende de Core.Object y el
+                   # padre externo pide el layout de bpi 8), y la app MOD9 esta sellada contra el Core MOD9: la
+                   # primera dep que no casa es Core («otra interfaz»), antes de que E9 hable de Lib. Es lo real:
+                   # una libreria vieja arrastra su Core viejo, y la app nueva lo rechaza con nombre.
+                   ('app MOD9 (sellada MOD9) contra Lib MOD8 g8', lib8, (usa1, ext1), {'Usa': 'otra interfaz', 'Ext': 'otra interfaz'}),
                    ('app MOD9 sellada contra ESA Lib MOD8 g7', v1m8, (usa9c8, ext9c8), {'Usa': 'no enlaza', 'Ext': 'no enlaza'}),
                    ('app MOD8 contra Lib MOD9 g8', lib9, (usa8, ext8), {'Usa': 'no enlaza', 'Ext': 'no enlaza'}))
         for etq, libdir, mods, pred in casos_m:

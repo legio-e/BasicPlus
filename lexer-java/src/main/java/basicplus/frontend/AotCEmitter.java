@@ -2036,7 +2036,7 @@ public final class AotCEmitter {
      *  (`aot_<Mod>_ranura` → `slot_por_clave`, el E3 del enlace si no está). En MOD8 nada
      *  cambia: se hornea como siempre. */
     private boolean porRef9(Symbol.ClassSymbol cls) {
-        return Main.FORMATO == 9 && cls != null && !cls.isBuiltin
+        return Main.FORMATO == 9 && cls != null
             && (cls.isExternal || MivmEmitter.esAbierta(cls));
     }
     /** La clase ESTÁTICA del receptor (la misma que usa el emisor mivm para la ref, R2);

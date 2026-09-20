@@ -157,6 +157,21 @@ public final class Parser {
         }
 
         this.inInterface = prevInIface;
+        // H1 P3 (20-sep) — LA RAÍZ SE IMPORTA SIEMPRE. Decisión de Eduardo: «import Core se añade
+        // al árbol AST si no está incluido ya en el módulo, así que se puede indicar o omitir, pero
+        // en el AST se incluye siempre salvo en Core». Aquí, en el parser, para que TODAS las
+        // pasadas (interfaz y completa) vean el mismo árbol — que era la causa técnica de #458.
+        if (!"Core".equals(name)) {
+            boolean tieneCore = false;
+            for (ImportNode imp : imports)
+                if (imp.path != null && !imp.path.isEmpty() && "Core".equals(imp.path.get(imp.path.size() - 1))) { tieneCore = true; break; }
+            if (!tieneCore) {
+                List<String> p = new ArrayList<>(); p.add("Core");
+                ImportNode imp = new ImportNode(p, null, startTok.line, startTok.column);
+                imp.implicito = true;
+                imports.add(imp);   // al FINAL: los escritos primero (y en los diagnósticos del cargador, sus deps antes que Core)
+            }
+        }
         ModuleNode mn = new ModuleNode(library, name, isInterface, implementsName,
                               imports, defs, startTok.line, startTok.column);
         /* V5/H4 — el pack nativo del que salen las `native` externas viaja en el
@@ -377,6 +392,14 @@ public final class Parser {
             isNative = true;
             advance();
         }
+        // H1 P3 (20-sep) — `root class X`: palabra CONTEXTUAL (no reservada: `root` sigue
+        // valiendo como identificador en cualquier otro sitio). Sólo delante de `class`.
+        boolean isRoot = false;
+        if (check(TokenType.IDENTIFIER) && "root".equals(current().lexeme)
+                && pos + 1 < tokens.size() && tokens.get(pos + 1).type == TokenType.CLASS) {
+            isRoot = true;
+            advance();
+        }
 
         Token tok = current();
         if (isSync && tok.type != TokenType.PROPERTY) {
@@ -431,7 +454,7 @@ public final class Parser {
                 return pd;
             }
             case EVENT:    return parseEventDef(isPublic);
-            case CLASS:    return parseClassDef(isPublic);
+            case CLASS:    { ClassDef cd = parseClassDef(isPublic); if (cd != null) cd.isRoot = isRoot; return cd; }
             case ENUM:     return parseEnumDef(isPublic);
             default:
                 {

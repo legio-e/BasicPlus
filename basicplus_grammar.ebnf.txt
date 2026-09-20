@@ -168,9 +168,14 @@ args        ::= expr { ',' expr } ;
 
 (* ========================= CLASES ========================= *)
 
-class_def ::= 'class' name [ 'extends' name ] NEWLINE
+class_def ::= [ 'root' ] 'class' name [ 'extends' name ] NEWLINE
               { member }
               'end' [ name ] NEWLINE ;
+
+(* 'root' (H1 P3, V7): la clase no desciende de nada. Palabra CONTEXTUAL (solo delante de
+   'class'; 'root' sigue siendo un identificador valido en cualquier otro sitio) y solo
+   admitida en el modulo raiz (Core): Object y Thread. Sin 'root' y sin 'extends', la base
+   es Object. Y 'import Core' lo pone el parser en todo modulo que no lo escriba. *)
 
 member    ::= [ 'public' ] ( const_decl | var_decl | property_def | func_def ) ;
 

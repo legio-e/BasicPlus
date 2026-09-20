@@ -118,6 +118,7 @@ class SobrecargaCrossModuleTest {
         b.sourceDir  = src.toString();
         b.outDir     = out.toString();
         b.main       = "OvUso";
+        b.dependencies.add(StdlibDeTest.paraFormato(tmp).getAbsolutePath());   // H1 P3: Object vive en Core
         // Éste es EL assert del bug: antes devolvía false con dos «llamada
         // ambigua». Va aquí, y no en un test aparte, porque sin compilar no hay
         // .mod que mirar y los dos casos de abajo no podrían ni ejecutarse.

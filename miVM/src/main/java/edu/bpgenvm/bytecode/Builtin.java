@@ -261,6 +261,7 @@ public enum Builtin {
         for (Builtin b : values()) BY_NAME.put(b.bpName, b);
         BY_NAME.put("newObjArray", NEW_REF_ARRAY);   // alias en Core.bp
         BY_NAME.put("growObjArray", GROW_REF_ARRAY);   // alias en Core.bp
+        BY_NAME.put("__refToString", LONG_TO_STRING);   // alias en Core.bp
         BY_NAME.put("len", STRLEN);   // alias en Core.bp
     }
 

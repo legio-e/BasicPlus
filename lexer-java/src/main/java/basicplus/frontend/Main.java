@@ -1992,13 +1992,6 @@ public final class Main {
         return out;
     }
 
-    /** #526 — siembra en el stub las ranuras de una raíz builtin (`Object`: toString 0,
-     *  compareTo 1; `Thread`: run 0, start 1, join 2, toString 3) desde la fuente única. */
-    private static void sembrarRaizBuiltin(Symbol.ClassSymbol stub, String base) {
-        java.util.List<String> nombres = ModuleInterface.builtinBaseMethodNames(base);
-        for (int i = 0; i < nombres.size(); i++) stub.externalMethodSlots.put(nombres.get(i), i);
-    }
-
     /**
      * #392 — reparte los slots de vtable de una clase IMPORTADA. UNA sola
      * función, porque hay dos momentos en que se puede sembrar (al leer la
@@ -2129,7 +2122,6 @@ public final class Main {
     // analizador (no compila deps; deben existir ya).
     static void loadImportsForAnalyzer(Ast.ModuleNode module, Path importerSrc, Ctx ctx,
                                                SemanticAnalyzer analyzer, int depth) throws IOException {
-        cargarRaiz(module, importerSrc, ctx, depth);   // H1 P2: antes que nada, y aunque no haya imports
         if (module.imports == null || module.imports.isEmpty()) return;
         Path importerDir = importerSrc.toAbsolutePath().getParent();
         // L2 v3.e — recolectamos todos los namespaces que se cargan para
@@ -2367,51 +2359,24 @@ public final class Main {
                     boolean deferSlots = false;   // base en OTRO módulo → post-pass
                     Symbol.ClassSymbol baseStub = (cs.baseClassName != null)
                             ? ns.classes.get(cs.baseClassName) : null;
-                    if (baseStub != null) {
+                    boolean basePendiente = false;
+                    if (baseStub != null) for (Object[] pe : pendingCrossBase) if (pe[1] == baseStub) { basePendiente = true; break; }
+                    if (baseStub != null && basePendiente) {
+                        // H1 P3 (20-sep) — la base es de ESTE módulo pero está DIFERIDA (su propia base
+                        // aún no ha pasado por aquí: la interfaz no va en orden de declaración, y desde
+                        // que toda cadena acaba en Core.Object el caso se da): copiar ahora sus ranuras
+                        // sería copiar una tabla vacía y numerar las propias desde 0 («no exporta
+                        // 'Core.Integer#value#0'», MOD8). Se difiere también; el post-pass las encadena.
+                        deferSlots = true;
+                    } else if (baseStub != null) {
                         // #248 — enlazar la base también para el LOOKUP de
                         // miembros heredados (e.msg sobre el stub hijo).
                         stub.baseClass = baseStub;
                         stub.externalMethodSlots.putAll(baseStub.externalMethodSlots);
                     } else if (cs.baseClassName == null) {
-                        // H5.1.a — raíz implícita Object: TODA clase de usuario
-                        // desciende de Object, cuyos 2 métodos virtuales ocupan
-                        // los slots 0 (toString) y 1 (compareTo). El emisor copia
-                        // Object como parent local, así que sus métodos propios
-                        // numeran desde 2. Sembramos esos 2 slots aquí para que
-                        // INVOKE_VIRTUAL cross-module despache a la ranura
-                        // correcta (mismo riesgo BUG-5 si se omite).
-                        sembrarRaizBuiltin(stub, "Object");
-                    } else if ("Object".equals(cs.baseClassName)) {
-                        // #291 — base builtin EXPLÍCITA `extends Object`: misma
-                        // siembra que la raíz implícita. Antes caía al defer de
-                        // abajo buscando un módulo "Object" que no existe → los
-                        // métodos propios numeraban desde 0 (slot de toString).
-                        sembrarRaizBuiltin(stub, "Object");
-                    } else if ("Thread".equals(cs.baseClassName)) {
-                        // #291 — base builtin Thread (SIN Object: run=0 lo asume
-                        // __threadStart en las VMs). Antes este caso caía al
-                        // defer → el stub no tenía ni los slots NI los miembros
-                        // heredados → `w.start()` sobre una subclase de Thread
-                        // importada era "no tiene miembro 'start'": las
-                        // subclases de Thread no se podían usar cross-module.
-                        // Mismos números que computeClassLayout: SE LEEN de ahí (#526: la tercera
-                        // copia a mano de la tabla de Thread se desincronizó al añadir toString).
-                        sembrarRaizBuiltin(stub, "Thread");
-                        // 14-sep — sólo los que la interfaz NO trae: si la clase sobreescribe
-                        // `run` (lo normal), su `method run` llega abajo y, con el stub ya
-                        // definido, se ENCADENABA como sobrecarga (`run$`) en vez de
-                        // reconocerse como override → ranura nueva, y todo lo declarado
-                        // detrás corrido («Símbolo no resuelto: Tarea#cuenta#4», el dueño
-                        // exporta #3). Preexistente; lo cazó el oráculo CtorHijo.
-                        java.util.Set<String> traidos = new java.util.HashSet<>();
-                        for (ModuleInterface.FuncSig m : cs.methods) traidos.add(m.name);
-                        for (String mn : ModuleInterface.builtinBaseMethodNames("Thread")) {
-                            if (traidos.contains(mn)) continue;
-                            Symbol.FunctionSymbol thf = new Symbol.FunctionSymbol(
-                                    mn, true, false, false, stub, null);
-                            thf.returnType = "toString".equals(mn) ? BpType.PrimitiveType.STRING : null;   // void (misma convención que FuncSig)
-                            stub.instanceMembers.tryDefine(thf);
-                        }
+                        // H1 P3 (20-sep) — sin base en la interfaz = `root class` (Object, Thread,
+                        // en Core): no hereda nada. Las demás traen SIEMPRE su base, cualificada
+                        // si es de otro módulo (`Core.Object`), y van por el defer de abajo.
                     } else {
                         // #248 (cerraba el gap anotado de #44): base en OTRO
                         // módulo (`extends Core.Exception`). Aquí su ns puede no
@@ -2770,62 +2735,10 @@ public final class Main {
      *  resuelven a las clases ÚNICAS de Core (stubs del .bpi, aliasadas sin
      *  cualificar por injectImports) y los módulos sin excepciones no ganan
      *  ninguna dependencia. */
-    /** H1 P2 (20-sep) — EL MÓDULO RAÍZ. `Core.bp` declara las intrínsecas globales (`strlen`,
-     *  `abs`, `parseInt`, las `__` del compilador…) como funciones con cuerpo `inline`, y sus
-     *  públicas se ven sin cualificar en TODO programa, importe Core o no (la unidad `System` de
-     *  Turbo Pascal). Aquí se localiza `Core.mod` como para un import cualquiera, se lee su
-     *  interfaz (`func … inline …`) y se registran en el scope global del semántico. Una vez por
-     *  JVM (el scope es una caché). Si no aparece Core.mod, se dice — y las globales no están:
-     *  el error que sigue («'strlen' no resuelto») ya no engaña. Al compilar el propio Core, sus
-     *  funciones son locales y no hace falta nada. */
-    static void cargarRaiz(Ast.ModuleNode module, Path importerSrc, Ctx ctx, int depth) throws IOException {
-        if (module == null || "Core".equals(module.name) || SemanticAnalyzer.raizRegistrada()) return;
-        Path importerDir = importerSrc.toAbsolutePath().getParent();
-        java.util.List<String> p = new java.util.ArrayList<>(); p.add("Core");
-        Ast.ImportNode imp = new Ast.ImportNode(p, null, module.line, module.column);
-        ModuleInterface iface = ctx.interfaceCache.get("Core");
-        if (iface == null) {
-            Path mod = locateImportBpi(imp, "Core.bpi", "", "Core", importerDir, ctx);
-            if (mod == null) mod = locateImportMod(imp, "Core.mod", importerDir, ctx);
-            if (mod == null) {
-                indent(depth); System.out.println("-- aviso: no encuentro el módulo raíz (Core.mod): las intrínsecas globales (strlen, abs, parseInt…) no estarán --");
-                return;
-            }
-            iface = readInterfaceCached(mod, ctx);
-            if (iface == null) return;
-        }
-        int n = 0;
-        for (ModuleInterface.FuncSig fs : iface.functions) {
-            if (!fs.isPublic || fs.inlineText == null) continue;
-            Symbol.FunctionSymbol f = new Symbol.FunctionSymbol(fs.name, true, false, true, null, null);
-            f.returnType = tipoDeRaiz(fs.returnType);
-            f.isExternal = true;
-            f.isIntrinsic = true;
-            f.inlineOps = Ast.InlineStmt.deTexto(fs.inlineText);
-            f.externalModule = "Core";
-            for (ModuleInterface.ParamSig ps : fs.params) {
-                Symbol.ParamSymbol psym = new Symbol.ParamSymbol(ps.name, 0, 0);
-                psym.type = tipoDeRaiz(ps.type);
-                if (ps.defaultValue != null) psym.defaultExpr = SemanticAnalyzer.literalExprFromValue(ps.defaultValue, ps.type, 0, 0);
-                f.params.add(psym);
-            }
-            SemanticAnalyzer.registrarGlobalDeRaiz(f);
-            n++;
-        }
-        indent(depth); System.out.printf("-- módulo raíz: %d intrínsecas globales de Core --%n", n);
-    }
-
-    /** H1 P2 — en la firma de una global de la raíz, `Object` (y `Thread`, `Mutex`…) es LA clase
-     *  del lenguaje que el semántico ya tiene, no un stub nuevo: si no, `Object[]` de la firma y
-     *  `Object[]` del programa eran dos tipos («'Object[]' no asignable a 'Object[]'»). */
-    private static BpType tipoDeRaiz(BpType t) {
-        if (t instanceof BpType.UnresolvedClassRef) {
-            Symbol.ClassSymbol b = SemanticAnalyzer.claseBuiltin(((BpType.UnresolvedClassRef) t).name);
-            return (b != null) ? new BpType.ClassType(b) : t;
-        }
-        if (t instanceof BpType.ArrayType) return new BpType.ArrayType(tipoDeRaiz(((BpType.ArrayType) t).element));
-        return t;
-    }
+    /* H1 P2/P3 — `cargarRaiz` y `tipoDeRaiz` ya no existen: el parser pone `import Core` en todo
+     * módulo y el semántico registra las funciones públicas de ese namespace sin cualificar
+     * (SemanticAnalyzer.registrarRaiz), con los stubs de ESTE módulo — así `Object[]` de la
+     * firma y `Object[]` del programa son el mismo tipo sin resolver nada aparte. */
 
     static void injectImplicitCoreImport(Ast.ModuleNode module) {
         if (module == null || "Core".equals(module.name)) return;
@@ -3077,7 +2990,7 @@ public final class Main {
         // Sin punto: la interfaz publica sin cualificar SOLO las clases de su propio módulo (ya
         // resueltas en la 1ª pasada contra su ns) y las del lenguaje. Buscarlo «en cualquier ns»
         // cogía un HOMÓNIMO de otro módulo según el orden de los imports (V10, 16-sep, H7).
-        return resolverComoBuiltin(t, name);   // #388 — List/Map/… no son de nadie
+        return t;   // H1 P3: ya no hay clases «de nadie»; las del lenguaje son de Core y vienen cualificadas
     }
 
     private static Path locateImportBpi(Ast.ImportNode imp, String bpiName, String library, String alias,
@@ -3155,7 +3068,7 @@ public final class Main {
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
         Symbol.ClassSymbol cls = ns.classes.get(name);
         if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
-        return resolverComoBuiltin(t, name);
+        return t;
     }
 
     /** #516 — un enum que sigue sin resolver tras las dos pasadas (o dentro de un array/tupla):
@@ -3177,24 +3090,6 @@ public final class Main {
         String mod = punto > 0 ? en.substring(0, punto) : ns.moduleName;
         analyzer.errorDeImport("la firma de '" + ns.moduleName + "." + donde + "' usa el enum '" + en
             + "' y este módulo no importa '" + mod + "' (un enum no puede cruzar sin resolver): añade `import " + mod + "`");
-    }
-
-    /**
-     * #388 — último recurso al resolver un tipo de una interfaz importada: las
-     * clases BUILT-IN (List, Map, StringBuilder…) no son de ningún módulo, así
-     * que no aparecen en `ns.classes` por mucho que se busque bien.
-     *
-     * <p>Sin esto, `public function list(w: Where): List` cruzaba el import con
-     * el retorno SIN RESOLVER, y entonces `dao.list(w).length()` decía «el tipo
-     * 'List' no tiene miembros» — mientras que `var l: List := dao.list(w)`
-     * seguía yendo, porque ahí los miembros salen del tipo DECLARADO de la
-     * variable y no del de la expresión. Esa asimetría era justo lo que hacía
-     * imposible encadenar.
-     */
-    private static basicplus.frontend.BpType resolverComoBuiltin(
-            basicplus.frontend.BpType t, String name) {
-        Symbol.ClassSymbol bi = SemanticAnalyzer.claseBuiltin(name);
-        return (bi != null) ? new basicplus.frontend.BpType.ClassType(bi) : t;
     }
 
     private static Path findExistingBpi(String bpiName, Path importerDir, Path outDir) {
