@@ -24,15 +24,15 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class EmisorConErroresTest {
 
-    /** Un error que sólo da el EMISOR, no el semántico. Hasta el 20-sep era una `intrinsic` sin
-     *  registro; con H1 (`inline`) eso ya no existe, y el que queda a mano es asignar a un
-     *  MÉTODO (`c.m := 5`: «asignación a member-access no es campo ni property»). Si algún
-     *  día el semántico lo rechaza con línea —que debería—, cambiar aquí el caso. */
+    /** Un fuente VÁLIDO: el error del emisor se fuerza con `MivmEmitter.PRUEBA_ERROR_DE_EMISOR`.
+     *  Hasta el 20-sep (mañana) el caso era una `intrinsic` sin registro; hasta el 20-sep (tarde),
+     *  asignar a un MÉTODO (`c.m := 5`), que ahora rechaza el semántico con línea (ver abajo). No
+     *  queda ningún error que sólo dé el emisor desde un fuente válido — que es lo deseable. */
     private static final String REFL = String.join("\n",
         "module Refl", "import Core",
         "public class C", "  public function C()", "  end C",
         "  public function m(): integer", "    return 1", "  end m", "end C",
-        "public function main()", "  var c: C := C()", "  c.m := 5", "end main",
+        "public function main()", "  var c: C := C()", "  print c.m()", "end main",
         "end Refl", "");
 
     private static Object[] compila(Path tmp, String main, String[]... fuentes) throws IOException {
@@ -59,14 +59,26 @@ class EmisorConErroresTest {
         Path out = Files.createDirectories(tmp.resolve("out"));
         Files.write(out.resolve("Refl.mod"), new byte[]{ 1, 2, 3 });   // el gemelo rancio
         Files.write(out.resolve("Refl.dbg"), new byte[]{ 4 });
-        Object[] r = compila(tmp, "Refl", new String[]{"Refl", REFL});
+        Object[] r;
+        MivmEmitter.PRUEBA_ERROR_DE_EMISOR = true;
+        try { r = compila(tmp, "Refl", new String[]{"Refl", REFL}); }
+        finally { MivmEmitter.PRUEBA_ERROR_DE_EMISOR = false; }
         String t = (String) r[1];
         assertFalse((Boolean) r[0], "el build tiene que fallar:\n" + t);
-        assertTrue(t.contains("no es campo ni property"), t);
+        assertTrue(t.contains("[prueba] error del emisor forzado"), t);
         assertTrue(t.contains("NO compilado:"), t);
         for (String linea : t.split("\n"))
             assertFalse(linea.trim().startsWith("compilado:"), "no puede decir «compilado:»: " + linea);
         assertFalse(Files.exists(out.resolve("Refl.mod")), "el .mod rancio sigue ahi");
         assertFalse(Files.exists(out.resolve("Refl.dbg")), "el .dbg rancio sigue ahi");
+    }
+    @Test @DisplayName("asignar a un método (c.m := 5) lo rechaza el SEMÁNTICO, con línea")
+    void asignarAUnMetodo(@TempDir Path tmp) throws IOException {
+        String src = REFL.replace("  print c.m()", "  c.m := 5");
+        Object[] r = compila(tmp, "Refl", new String[]{"Refl", src});
+        String t = (String) r[1];
+        assertFalse((Boolean) r[0], "el build tiene que fallar:\n" + t);
+        assertTrue(t.contains("'m' es un método, no un campo"), t);
+        assertTrue(t.contains("[12:"), "con la línea: " + t);
     }
 }

@@ -119,6 +119,10 @@ de la stdlib no se versiona (`bpstdlib/out/Stdlib.pack` sale del build; `montar-
 verificar en placa cuando Eduardo diga (Pico con `placas_v9.py --embebida`; medir la carga de una app con clases,
 que ahora son todas abiertas).
 
+**Hueco cerrado (16:30)**: asignar a un método (`c.m := 5`) lo rechaza el semántico con línea («'m' es un método,
+no un campo»); ya no queda ningún error que sólo dé el emisor desde un fuente válido, así que `#521`
+(EmisorConErroresTest) lo fuerza con `MivmEmitter.PRUEBA_ERROR_DE_EMISOR` (andamio, sólo tests). Frontend 221/221.
+
 **Orden para retomar**: P4 (¿los primitivos como declaraciones de la raíz? decidir con P3 hecho: hoy es un `switch`
 en `resolveType` y no parece que compense), P5 (la cascada: stdlib ya rehecha; blobs con `regen_all_mods.sh`, las
 seis imágenes, packs; placas cuando Eduardo diga), y los extras de la fila H1 (destructor `~Clase()`, `Map`, `#396`

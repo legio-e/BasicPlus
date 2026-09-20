@@ -438,7 +438,14 @@ public final class MivmEmitter {
     // ENTRADA
     // ============================================================
 
+    /** Andamio de PRUEBA (20-sep) — `#521` afirma que un error del EMISOR deja el build en rojo
+     *  sin `.mod`; desde que el semántico rechaza también `c.m := 5`, no queda ningún error que
+     *  sólo dé el emisor desde un fuente válido, así que EmisorConErroresTest lo fuerza aquí.
+     *  Nunca se pone a true fuera de un test. */
+    static boolean PRUEBA_ERROR_DE_EMISOR = false;
+
     public void emitTo(Path outputDir) throws IOException {
+        if (PRUEBA_ERROR_DE_EMISOR) errors.add("[prueba] error del emisor forzado (EmisorConErroresTest)");
         w.setFormato(formato);   // V7/H2 (#523): 8 o 9
         formatoActual = formato; moduloLocalActual = moduloLocal();
         w.addModulo(moduleAst.name);

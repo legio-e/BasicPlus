@@ -2229,6 +2229,10 @@ public final class SemanticAnalyzer {
             Symbol ts = info.exprSymbols.get(a.target);
             if (ts instanceof ConstSymbol)
                 err(a.line, a.column, "'" + ts.name + "' es una const: no se puede asignar");
+            // 20-sep — asignar a un MÉTODO (`c.m := 5`) lo rechazaba sólo el emisor, sin línea
+            // («asignación a member-access no es campo ni property»); aquí, con la línea.
+            if (ts instanceof FunctionSymbol)
+                err(a.line, a.column, "'" + ts.name + "' es un método, no un campo: no se puede asignar");
         }
 
         if (a.op == AssignOpKind.PLUS_ASSIGN || a.op == AssignOpKind.MINUS_ASSIGN) {
