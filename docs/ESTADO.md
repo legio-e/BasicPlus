@@ -97,9 +97,12 @@ hermanos del stub → `TextFile.write(string)` sobre `File.write(byte[])` salía
 (la regla de `assignKeysInChain`), test rojo→verde en `SobrecargaCrossModuleTest`. En MOD9 no se veía. Y dos tests C
 que no enlazaban (`test-fspos`, `test-listdir`: `fs_facade.c` usa `bpvm_log` desde U3), ahora con `LIBOBJ`.
 
-Verde: check 89/59/9/13 + MOD8; mezcla 194; h13 38; frontend 223; miVM 52; tests C; Pico compila (FatFs y littlefs
-tocados). **Sin cascada todavía** (blobs/imágenes/placas): va con la de H1 pendiente. Quedan de la fila H3:
-`SD_INFO`/`SD_MOUNT` al REPL común y la SD del STM32.
+Verde: check 89/59/9/13 + MOD8; mezcla 194; h13 38; frontend 223; miVM 52; tests C. **La cascada** (P5): blobs,
+las siete imágenes construidas (Pico, S3, C3, C6, P4, Nucleo, DK2), IDE fat-jar; **Pico y P4 grabadas y verificadas**
+(`placas_v9` verde; `FileCursor` y `PathLargo` == host en las dos; y en el P4 un `TextFile` sobre `/sd` —FAT por SDMMC,
+el `FIL` en el heap—: 200 líneas escritas, leídas, un byte parcheado con `r+`). Queda grabar S3/C3/C6/Nucleo/DK2
+(las mismas cinco de H1). Quedan de la fila H3: `SD_INFO`/`SD_MOUNT` al REPL común y la SD del STM32 — las dos de
+placa con tarjeta (Metro, DK2).
 
 ## 🧬 H1 (21-sep, tarde) — `#19` cerrada como la redefinió Eduardo; la fila H1, hecha salvo grabar cinco placas
 
