@@ -680,6 +680,13 @@ public final class SemanticAnalyzer {
             return;
         }
         checkNombreReservado(cd.name, cd.line, cd.column);
+        // N9 (21-sep, con H1 P3) — las CUATRO clases del lenguaje son de Core y todo programa las ve:
+        // una copia local (`class Thread` con sólo `run`) ganaba en silencio a la de verdad y dejaba
+        // a `parallel`, a `sync` y al padre implícito de toda clase apuntando a la del usuario.
+        if (!esRaiz() && ("Object".equals(cd.name) || "Thread".equals(cd.name) || "Mutex".equals(cd.name) || "StringBuilder".equals(cd.name))) {
+            err(cd.line, cd.column, "'" + cd.name + "' es una clase del lenguaje (Core): no se puede redeclarar");
+            return;
+        }
         ClassSymbol cls = new ClassSymbol(cd.name, cd.isPublic, cd.baseClass, cd, cd.line, cd.column);
         if (!module.members.tryDefine(cls))
             err(cd.line, cd.column, "nombre duplicado: '" + cd.name + "'");

@@ -204,9 +204,6 @@
 - **N2 — convención de acceso a `mem[]` / `JavaMutex`.** Cualquier acceso a
   `JavaMutex.{ownerTid, waiters}` debe ir bajo `vmLock` (o acquire/release
   explícito). Hoy se cumple; conviene documentar la regla.
-- **N9 — clase sintetizada declarada parcialmente por el usuario.** Si el usuario
-  declara `class SyncList` con solo `add`, la suya gana e incompleta; diagnosticar
-  la incompatibilidad de firma sería útil.
 
 
 ### `input()` y `listDir()` sólo funcionan en el PC, no en el micro (decidido el 26-ago)

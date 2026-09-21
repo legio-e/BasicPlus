@@ -1,0 +1,22 @@
+// ClaseDelLenguaje.bp — N9 (21-sep, con H1 P3): las CUATRO clases del lenguaje (Object, Thread,
+// Mutex, StringBuilder) viven en Core.bp y todo programa las ve. Hasta hoy una copia local a
+// medias (`class Thread` con solo `run`) ganaba en silencio a la de verdad. Ahora es error, con
+// la linea. (`root class` fuera de Core tambien es error: solo la raiz declara raices.)
+module ClaseDelLenguaje
+  public class Thread
+    public function run()
+    end run
+  end Thread
+
+  public class StringBuilder
+    var n: integer := 0
+  end StringBuilder
+
+  public root class Raiz
+    var x: integer := 0
+  end Raiz
+
+  public function main()
+    print "no llega"
+  end main
+end ClaseDelLenguaje
