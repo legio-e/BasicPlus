@@ -65,6 +65,15 @@ module Destructor
     print "  owner a null: nada que destruir"
   end nulo
 
+  // La excepción salta ANTES de que el owner exista: el manejador no debe tocar basura
+  // (ENTER no pone los locales a cero; el emisor los pone a null a la entrada).
+  function antesDeDeclarar(x: integer)
+    var cero: integer := 0
+    print "  antes:", x / cero
+    var owner tarde: Recurso := Recurso("tarde")
+    print "  no llega"
+  end antesDeDeclarar
+
   // La capa 1 del diseño: `try var` — el recurso se suelta al salir del bloque (no al salir
   // de la función), salgas por donde salgas; después del bloque se sigue trabajando.
   function bloque()
@@ -98,6 +107,12 @@ module Destructor
     nulo()
     print "== try var =="
     bloque()
+    print "== excepcion antes del owner =="
+    try
+      antesDeDeclarar(7)
+    catch ex: RuntimeError
+      print "  atrapada: " + ex.msg
+    endtry
     print "abiertos al final =", abiertos
   end main
 end Destructor

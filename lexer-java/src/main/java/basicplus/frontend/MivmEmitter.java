@@ -3938,7 +3938,7 @@ public final class MivmEmitter {
             if (s instanceof IfStmt) { IfStmt i = (IfStmt) s; if (tieneOwnerLocales(i.then_.body) || tieneOwnerLocales(i.else_)) return true; for (IfClause c : i.elseIfs) if (tieneOwnerLocales(c.body)) return true; }
             if (s instanceof WhileStmt && tieneOwnerLocales(((WhileStmt) s).body)) return true;
             if (s instanceof ForStmt && tieneOwnerLocales(((ForStmt) s).body)) return true;
-            if (s instanceof TryStmt) { TryStmt t = (TryStmt) s; if (tieneOwnerLocales(t.body) || tieneOwnerLocales(t.finallyBody)) return true; for (CatchClause c : t.catches) if (tieneOwnerLocales(c.body)) return true; }
+            if (s instanceof TryStmt) { TryStmt t = (TryStmt) s; if (t.recurso != null || tieneOwnerLocales(t.body) || tieneOwnerLocales(t.finallyBody)) return true; for (CatchClause c : t.catches) if (tieneOwnerLocales(c.body)) return true; }
         }
         return false;
     }
@@ -3947,10 +3947,37 @@ public final class MivmEmitter {
     private void abrirGuardaDeOwners(List<IStmt> body) throws IOException {
         if (!tieneOwnerLocales(body)) return;
         FuncScope scope = scopeStack.peek();
+        // ENTER no pone a cero los locales: un owner declarado en mitad del cuerpo tendría
+        // BASURA si la excepción salta antes de su declaración, y el manejador la destruiría.
+        // Así que los owners se declaran y se ponen a null AQUÍ, a la entrada (volver a
+        // declararlos en su sitio es un no-op: scope.locals ya los tiene).
+        List<VarDecl> owners = new ArrayList<>();
+        recogerOwnerLocales(body, owners);
+        for (VarDecl vd : owners) {
+            Symbol ds = info.declSymbols.get(vd);
+            BpType t = (ds instanceof VarSymbol) ? ((VarSymbol) ds).type : null;
+            for (DeclName dn : vd.names) {
+                declareLocalByType(dn.name, t, varDbgTypeTag(t));
+                w.emit(OpCode.LPUSH); w.emitLong(0L);
+                w.emitSetLocal(dn.name);
+                scope.ownerLocals.add(dn.name);
+                tiposDeOwners.put(dn.name, t);
+            }
+        }
         scope.guardaOwners = true;
         scope.ownersHandler = w.newLabel();
         w.emitTryBegin(scope.ownersHandler, null);
         tryStack.push(new TryFrame(null, 1));
+    }
+    private static void recogerOwnerLocales(List<IStmt> body, List<VarDecl> out) {
+        if (body == null) return;
+        for (IStmt s : body) {
+            if (s instanceof VarDecl && ((VarDecl) s).isOwner) out.add((VarDecl) s);
+            if (s instanceof IfStmt) { IfStmt i = (IfStmt) s; recogerOwnerLocales(i.then_.body, out); recogerOwnerLocales(i.else_, out); for (IfClause c : i.elseIfs) recogerOwnerLocales(c.body, out); }
+            if (s instanceof WhileStmt) recogerOwnerLocales(((WhileStmt) s).body, out);
+            if (s instanceof ForStmt) recogerOwnerLocales(((ForStmt) s).body, out);
+            if (s instanceof TryStmt) { TryStmt t = (TryStmt) s; if (t.recurso != null) out.add(t.recurso); recogerOwnerLocales(t.body, out); recogerOwnerLocales(t.finallyBody, out); for (CatchClause c : t.catches) recogerOwnerLocales(c.body, out); }
+        }
     }
 
     /**
