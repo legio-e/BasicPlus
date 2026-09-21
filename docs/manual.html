@@ -568,10 +568,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   los captadores tipados de <code>List</code>, en la referencia.
 </p>
 <p>
-  El cast <code>Clase(x)</code> sólo acepta como origen un <code>Object</code>. Para bajar
-  entre dos clases de la misma jerarquía (<code>Perro(a)</code> con <code>a: Animal</code>)
-  el compilador lo toma por una llamada al constructor y lo rechaza: pasa antes por una
-  variable <code>Object</code> (<a href="#pendientes">§17</a>).
+  El cast <code>Clase(x)</code> baja desde un <code>Object</code> o desde cualquier antepasado
+  de la clase (<code>Perro(a)</code> con <code>a: Animal</code>); si el valor no es de esa clase,
+  lanza en ejecución. Si la clase tiene un constructor que acepta ese argumento, gana el
+  constructor.
 </p>
 
 <!-- =========================================================== -->
@@ -1976,8 +1976,6 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       <code>x instanceof Foo</code> sólo admite una clase declarada en el propio
       módulo (<a href="#herencia">§9.4</a>). (Campos protegidos, estáticos y
       sobrecargas del constructor cruzan desde V7.)</li>
-  <li>El downcast <code>Clase(x)</code> sólo acepta un origen <code>Object</code>
-      (<a href="#any">§4.5</a>).</li>
   <li><code>listDir()</code> e <code>input()</code> sólo existen en la VM Java del
       PC; en la VM-C (PC y placas) lanzan <code>RuntimeError</code> («builtin N no
       soportado») — el mismo <code>.mod</code> no da la misma salida en las dos VMs.</li>

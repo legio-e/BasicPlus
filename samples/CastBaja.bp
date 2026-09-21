@@ -1,0 +1,45 @@
+// CastBaja.bp — L19 (21-sep): el cast `Clase(x)` baja desde cualquier ANTEPASADO, no sólo desde
+// Object. `Perro(a)` con `a: Animal` era «se esperaban 0 argumentos, se pasaron 1» (se tomaba por
+// constructor) y había que pasar por Object. Un cast que no vale sigue lanzando en ejecución.
+module CastBaja
+  public class Animal
+    public function Animal()
+    end Animal
+    public function nombre(): string
+      return "animal"
+    end nombre
+  end Animal
+
+  public class Perro extends Animal
+    public function Perro()
+    end Perro
+    public function nombre(): string
+      return "perro"
+    end nombre
+    public function ladra(): string
+      return "guau"
+    end ladra
+  end Perro
+
+  public class Gato extends Animal
+    public function Gato()
+    end Gato
+  end Gato
+
+  public function main()
+    var a: Animal := Perro()
+    var p: Perro := Perro(a)          // baja directo, sin pasar por Object
+    print p.nombre(), p.ladra()
+    var o: Object := a
+    var q: Perro := Perro(o)          // desde Object, como siempre
+    print q.nombre()
+    var g: Animal := Gato()
+    try
+      var r: Perro := Perro(g)        // un Gato no es un Perro: lanza
+      print r.nombre()
+    catch e: Exception
+      print "no vale: " + e.msg
+    endtry
+    print "fin"
+  end main
+end CastBaja

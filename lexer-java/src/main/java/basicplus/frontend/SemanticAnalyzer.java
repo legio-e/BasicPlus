@@ -3204,7 +3204,11 @@ public final class SemanticAnalyzer {
             // saber si esto es una llamada.
             if (ce.args.size() == 1) {
                 BpType at0 = analyzeExpr(ce.args.get(0), scope, null);
-                if (esObjetoRaiz(at0)) {
+                // L19 (21-sep) — el cast baja también desde cualquier ANTEPASADO, no sólo desde
+                // Object: `Perro(a)` con `a: Animal`. Antes se tomaba por constructor («se
+                // esperaban 0, se pasaron 1») y había que pasar por Object. El emisor ya hacía
+                // CHECKCAST contra cualquier clase; sólo faltaba que el semántico lo aceptara.
+                if (esObjetoRaiz(at0) || esAntepasadoDe(at0, cls)) {
                     FunctionSymbol c1 = cls.findConstructor();
                     boolean ctorLoAcepta = c1 != null && c1.params.size() == 1
                             && c1.params.get(0).type != null
@@ -3554,6 +3558,14 @@ public final class SemanticAnalyzer {
      *  usuario que se llame igual). */
     private boolean esObjetoRaiz(BpType t) {
         return t instanceof BpType.ClassType && esObject(((BpType.ClassType) t).cls);
+    }
+    /** L19 — ¿es `t` una clase de la que `cls` desciende (estrictamente)? Para el cast hacia abajo. */
+    private static boolean esAntepasadoDe(BpType t, ClassSymbol cls) {
+        if (!(t instanceof BpType.ClassType)) return false;
+        ClassSymbol a = ((BpType.ClassType) t).cls;
+        for (ClassSymbol c = cls.baseClass; c != null; c = c.baseClass)
+            if (c == a || (a.esDelLenguaje() && c.esDelLenguaje() && a.name.equals(c.name))) return true;
+        return false;
     }
 
     /** H1.3b (V2) — destino de un cast numérico general integer()/long()/

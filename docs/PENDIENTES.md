@@ -182,20 +182,6 @@
     encontrado` (o `el tipo 'Base.Animal' no tiene miembros`). Es la misma regla de
     L16 con `Core`.
 
-- **L19 — el cast `Clase(x)` sólo acepta un `Object` como origen.** Entre dos clases
-  de la misma jerarquía no baja directo: con `a: Animal`, `Perro(a)` no compila (el
-  compilador lo toma por una llamada al constructor: `número de argumentos incorrecto:
-  se esperaban 0, se pasaron 1`). Se pasa por `Object`, y vale en las dos VMs:
-
-  ```basicplus
-  var a: Animal := Perro()
-  var o: Object := a
-  var p: Perro := Perro(o)     // imprime "perro" con p.nombre()
-  ```
-
-  Es del lenguaje, no de los módulos: pasa también dentro de un mismo fichero. Sin
-  ficha todavía; si molesta, se abre para V7.
-
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
   (los módulos no la tienen). Reabrible si surge caso de uso.
