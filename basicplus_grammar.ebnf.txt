@@ -168,6 +168,9 @@ args        ::= expr { ',' expr } ;
 
 (* ========================= CLASES ========================= *)
 
+(* V7/H1: el destructor, `function ~Nombre()` (Nombre = el de la clase; sin parametros ni
+   retorno; `end ~Nombre`); y `try var x: T := expr` declara un recurso owner que el bloque
+   suelta al salir (azucar sobre `var owner` + finally). *)
 class_def ::= [ 'root' ] 'class' name [ 'extends' name ] NEWLINE
               { member }
               'end' [ name ] NEWLINE ;

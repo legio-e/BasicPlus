@@ -1359,6 +1359,14 @@ public final class Parser {
     private TryStmt parseTryStmt() {
         Token tok = current();
         match(TokenType.TRY);
+        VarDecl recurso = null;
+        if (check(TokenType.VAR)) {   // V7/H1: `try var q: T := expr` — el recurso del bloque
+            advance();
+            VarDecl g = parseVarGroup(false);
+            if (g.names.size() != 1) error("'try var' declara UN recurso");
+            if (g.init == null) error("'try var' necesita un valor: `try var q: T := expr`");
+            recurso = new VarDecl(false, true, g.names, g.type, g.init, g.line, g.column);   // owner, siempre
+        }
         consumeStmtTerminator("se esperaba salto de línea tras 'try'");
         List<IStmt> body = parseBody(TokenType.CATCH, TokenType.FINALLY, TokenType.ENDTRY);
 
@@ -1406,7 +1414,13 @@ public final class Parser {
         }
         consume(TokenType.ENDTRY, "se esperaba 'endtry'");
         consumeStmtTerminator("se esperaba salto de línea tras 'endtry'");
-        return new TryStmt(body, catches, fin, tok.line, tok.column);
+        if (recurso != null) {   // el finally suelta el recurso (tras el finally del usuario, si lo hay)
+            if (fin == null) fin = new ArrayList<>();
+            fin.add(new ReleaseOwnerStmt(recurso.names.get(0).name, recurso.line, recurso.column));
+        }
+        TryStmt ts = new TryStmt(body, catches, fin, tok.line, tok.column);
+        ts.recurso = recurso;
+        return ts;
     }
 
     // ---------- RETURN / THROW ----------

@@ -58,6 +58,11 @@ PrefijoSistema|'__dentro' empieza por
 PrefijoSistema|'__privada' empieza por
 PrefijoSistema|'__a' empieza por
 PrefijoSistema|'__tmp' empieza por
+DestructorMal|se llama como su clase: '~Caja'
+DestructorMal|el destructor no lleva par
+DestructorMal|no puede escapar: se destruye
+DestructorMal|no puede escapar a un campo
+DestructorMal|el destructor lo llama el lenguaje
 "
 
 ok=0; mal=0

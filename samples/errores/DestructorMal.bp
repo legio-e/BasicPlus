@@ -1,0 +1,39 @@
+// DestructorMal.bp — V7/H1 (21-sep): lo que el destructor y `var owner` NO admiten. (1) el
+// destructor se llama como su clase; (2) no lleva parametros; (3) un owner local no se devuelve
+// (se destruye al salir de la funcion); (4) ni se guarda en un campo; (5) el destructor no se
+// llama desde el codigo: lo llama el lenguaje.
+module DestructorMal
+  public class Caja
+    public property dentro: Caja
+    public function Caja()
+    end Caja
+    public function ~Otra()
+    end ~Otra
+  end Caja
+
+  public class Rara
+    public function Rara()
+    end Rara
+    public function ~Rara(n: integer)
+    end ~Rara
+  end Rara
+
+  function escapa(): Caja
+    var owner c: Caja := Caja()
+    return c
+  end escapa
+
+  function guarda(destino: Caja)
+    var owner c: Caja := Caja()
+    destino.dentro := c
+  end guarda
+
+  function aMano()
+    var c: Caja := Caja()
+    c.__dtor()
+  end aMano
+
+  public function main()
+    print "no llega"
+  end main
+end DestructorMal

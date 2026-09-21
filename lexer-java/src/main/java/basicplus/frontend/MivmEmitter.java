@@ -2428,7 +2428,8 @@ public final class MivmEmitter {
         else if (s instanceof BreakStmt)    emitBreak();
         else if (s instanceof ContinueStmt) emitContinue();
         else if (s instanceof ThrowStmt)    emitThrowStmt((ThrowStmt) s);
-        else if (s instanceof TryStmt)      emitTryStmt((TryStmt) s);
+        else if (s instanceof TryStmt)      { if (((TryStmt) s).recurso != null) emitLocalVarDecl(((TryStmt) s).recurso); emitTryStmt((TryStmt) s); }
+        else if (s instanceof Ast.ReleaseOwnerStmt) emitReleaseOwner(((Ast.ReleaseOwnerStmt) s).name);
         else {
             errors.add("sentencia no soportada: " + s.getClass().getSimpleName());
         }
@@ -3863,6 +3864,15 @@ public final class MivmEmitter {
             w.emitGetLocal(name);
             w.emitFreeRef();
         }
+    }
+    /** V7/H1 — al salir de un `try var`: destruye, libera y pone a null el recurso (así la
+     *  limpieza de la función, que también lo tiene por owner, no hace nada con él). */
+    private void emitReleaseOwner(String name) throws IOException {
+        emitDestruirLocal(name);
+        w.emitGetLocal(name);
+        w.emitFreeRef();
+        w.emit(OpCode.LPUSH); w.emitLong(0L);
+        w.emitSetLocal(name);
     }
     /** `if (x != null) x.~()`: el destructor, por la clase ESTÁTICA del local (despacho virtual). */
     private void emitDestruirLocal(String name) throws IOException {

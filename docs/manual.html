@@ -200,6 +200,7 @@
     <li class="sub"><a href="#metodos">9.2 Métodos</a></li>
     <li class="sub"><a href="#ctor">9.3 Constructor</a></li>
     <li class="sub"><a href="#herencia">9.4 Herencia</a></li>
+    <li class="sub"><a href="#destructor">9.4b El destructor ~Clase()</a></li>
     <li class="sub"><a href="#props">9.5 Properties</a></li>
     <li class="sub"><a href="#static">9.6 Miembros estáticos / final</a></li>
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
@@ -613,9 +614,24 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h3 id="var-owner">5.3 <code>var owner</code></h3>
 <pre><code><span class="kw">var owner</span> r: Recurso := Recurso(<span class="str">"db"</span>)
-<span class="comment">// al salir de scope o reasignarse, el objeto al que apunta se libera
-// determinísticamente vía FREE_REF (incluida cascada de owners).</span></code></pre>
-<p>Detalle completo en <a href="#owner">§12 Owner semantics</a>.</p>
+<span class="comment">// al salir de la función —fin normal, return o excepción— se llama a su
+// destructor (~Recurso, §9.4b) y el objeto se libera (FREE_REF, con la
+// cascada de owners). Varios owners mueren en orden INVERSO al de declaración.</span></code></pre>
+<p>
+  Un <code>var owner</code> local <strong>no puede escapar</strong>: ni devolverse con
+  <code>return</code> ni guardarse en un campo o en un array (error de compilación), porque
+  al salir de la función el objeto ya no existe. Pasarlo como argumento sí vale (un préstamo).
+  Y para soltar un recurso al salir de un <em>bloque</em>, no de la función:
+</p>
+<pre><code><span class="kw">try var</span> q: Consulta := db.query(<span class="str">"SELECT …"</span>)
+  <span class="kw">while</span> q.next() <span class="kw">do</span> … <span class="kw">endwh</span>
+<span class="kw">endtry</span>                <span class="comment">// q se destruye y se libera aquí, salgas por donde salgas</span></code></pre>
+<p>
+  <code>try var</code> es azúcar: el recurso es un <code>var owner</code> del ámbito de fuera y el
+  <code>finally</code> lo suelta; admite <code>catch</code> y <code>finally</code> como cualquier
+  <code>try</code> (el recurso se suelta después de ellos). Detalle en
+  <a href="#owner">§12 Owner semantics</a>.
+</p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -625,7 +641,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Aritmética</td><td><code>+ - * / mod</code> (con coerción int↔float)</td></tr>
   <tr><td>Potencia</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> exacto (entero);
       <code>float^int</code> por cuadrados; <code>float^float</code> por exp·ln (float)</td></tr>
-  <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> y unario <code>~</code></td></tr>
+  <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> (no hay NOT de bits: <code>x xor -1</code>; el <code>~</code> es del destructor, <a href="#destructor">§9.4b</a>)</td></tr>
   <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
   <tr><td>Asignación</td><td><code>:= += -=</code></td></tr>
@@ -1204,6 +1220,28 @@ end Base</code></pre>
   <code>Thread</code> no es un <code>Object</code>: su <code>run()</code> tiene que ser el primer
   método de su tabla, que es lo que la VM arranca. <code>root</code> sólo puede escribirse en
   <code>Core</code>; en cualquier otro módulo es error.
+</p>
+
+<h3 id="destructor">9.4b El destructor: <code>~Clase()</code></h3>
+<pre><code><span class="kw">public class</span> Fichero
+  <span class="kw">var</span> fd: <span class="type">integer</span>
+  <span class="kw">public function</span> Fichero(ruta: <span class="type">string</span>)
+    <span class="kw">this</span>.fd := IO.open(ruta)
+  <span class="kw">end</span> Fichero
+  <span class="kw">public function</span> ~Fichero()          <span class="comment">// el contrario del constructor</span>
+    IO.close(<span class="kw">this</span>.fd)
+  <span class="kw">end</span> ~Fichero
+<span class="kw">end</span> Fichero</code></pre>
+<p>
+  «Qué significa destruir esto» se escribe <strong>una vez</strong>, en la clase, y no en cada
+  sitio donde se usa. El destructor se llama como su clase, no lleva parámetros ni devuelve nada, y
+  <strong>lo llama el lenguaje</strong>, nunca el código: al morir un <code>var owner</code> local
+  (<a href="#var-owner">§5.3</a>) o al salir de un <code>try var</code>. Es virtual: corre el de la
+  clase real del objeto, y al acabar el de una hija corre el de su padre. Toda clase tiene uno
+  (<code>Object</code> lo declara vacío en <code>Core.bp</code>): sólo se sobrescribe cuando hay un
+  recurso externo que soltar — un descriptor, una consulta, un mutex. Un objeto que muere sin
+  <code>owner</code>, recogido por el GC, <em>no</em> pasa por su destructor: el GC corre por presión
+  de memoria y un descriptor es otro recurso; por eso los recursos se declaran <code>owner</code>.
 </p>
 
 <h3 id="props">9.5 Properties</h3>

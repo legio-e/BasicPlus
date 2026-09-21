@@ -65,6 +65,22 @@ module Destructor
     print "  owner a null: nada que destruir"
   end nulo
 
+  // La capa 1 del diseño: `try var` — el recurso se suelta al salir del bloque (no al salir
+  // de la función), salgas por donde salgas; después del bloque se sigue trabajando.
+  function bloque()
+    try var t: Recurso := Recurso("t")
+      print "  dentro del bloque con " + t.nombre
+    endtry
+    print "  fuera del bloque (t ya cerrado, abiertos=" + abiertos + ")"
+    try var u: Recurso := Recurso("u")
+      var cero: integer := 0
+      print 1 / cero
+    catch ex: RuntimeError
+      print "  atrapada dentro: " + ex.msg
+    endtry
+    print "  tras el catch (abiertos=" + abiertos + ")"
+  end bloque
+
   public function main()
     print "== normal (inverso: b, a) =="
     normal()
@@ -80,6 +96,8 @@ module Destructor
     hija()
     print "== null =="
     nulo()
+    print "== try var =="
+    bloque()
     print "abiertos al final =", abiertos
   end main
 end Destructor

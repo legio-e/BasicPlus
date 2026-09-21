@@ -1830,6 +1830,7 @@ public final class SemanticAnalyzer {
         else if (s instanceof DoLoopStmt)   analyzeDoLoop((DoLoopStmt) s, scope);
         else if (s instanceof ForStmt)      analyzeFor((ForStmt) s, scope);
         else if (s instanceof TryStmt)      analyzeTry((TryStmt) s, scope);
+        else if (s instanceof Ast.ReleaseOwnerStmt) { }   // V7/H1: lo pone el parser en un `try var`; sólo el emisor lo mira
         else if (s instanceof ReturnStmt)   analyzeReturn((ReturnStmt) s, scope);
         else if (s instanceof Ast.DestructAssignStmt) analyzeDestructAssign((Ast.DestructAssignStmt) s, scope);
         else if (s instanceof ThrowStmt) {
@@ -2231,6 +2232,9 @@ public final class SemanticAnalyzer {
     }
 
     private void analyzeAssign(AssignStmt a, Scope scope) {
+        // V7/H1 (21-sep) — un owner local no se guarda en un campo ni en un array: escaparía.
+        if ((a.target instanceof MemberAccessExpr || a.target instanceof IndexExpr) && esOwnerLocal(a.value, scope))
+            err(a.line, a.column, "un `var owner` local no puede escapar a un campo o a un array: se destruye al salir de la función");
         // H5.c — SUSCRIPCIÓN: `algo.onClick := obj::metodo` (o `:= null` para
         // desuscribir). Se resuelve ANTES del camino normal porque ni el evento
         // ni la referencia a método tienen tipo: no hay nada que unificar, hay
@@ -2511,6 +2515,7 @@ public final class SemanticAnalyzer {
     }
 
     private void analyzeTry(TryStmt tr, Scope scope) {
+        if (tr.recurso != null) analyzeLocalVarDecl(tr.recurso, scope);   // V7/H1: el recurso, un owner local del ámbito de fuera
         analyzeBody(tr.body, new Scope("try", scope));
         boolean seenCatchAll = false;
         for (CatchClause cl : tr.catches) {
@@ -2580,8 +2585,18 @@ public final class SemanticAnalyzer {
         return (sym instanceof ClassSymbol) ? (ClassSymbol) sym : null;
     }
 
+    /** V7/H1 (21-sep) — ¿es `e` un `var owner` LOCAL? (V5_IDEAS: «owner NO puede escapar»: al
+     *  salir del ámbito se destruye y se libera, así que devolverlo o guardarlo en un campo
+     *  dejaría una referencia a un objeto muerto.) */
+    private boolean esOwnerLocal(IExpr e, Scope scope) {
+        if (!(e instanceof IdentifierExpr)) return false;
+        Symbol s = scope.resolve(((IdentifierExpr) e).name);
+        return s instanceof VarSymbol && ((VarSymbol) s).isOwner && ((VarSymbol) s).isLocal;
+    }
     private void analyzeReturn(ReturnStmt r, Scope scope) {
         if (currentFunction == null) { err(r.line, r.column, "'return' fuera de función"); return; }
+        if (r.value != null && esOwnerLocal(r.value, scope))
+            err(r.line, r.column, "un `var owner` local no puede escapar: se destruye al salir de la función (devuelve una copia, o no lo declares owner)");
         if (currentFunction.isConstructor && r.value != null)
             err(r.line, r.column, "el constructor no puede retornar un valor");
         if (r.value == null) {
@@ -3015,6 +3030,8 @@ public final class SemanticAnalyzer {
                 return ErrorType.INSTANCE;
             }
             checkVisibility(ma.line, ma.column, sub, ct.cls);
+            if (Symbol.FunctionSymbol.DTOR.equals(ma.member))   // V7/H1: ni `x.__dtor()` ni `super.__dtor()`
+                err(ma.line, ma.column, "el destructor lo llama el lenguaje (al morir un `var owner`), no se llama desde el código");
             info.exprSymbols.put(ma, sub);
             // H5.a-E3 — la sobrecarga de métodos se resuelve sobre la clase del
             // RECEPTOR (ve las suyas y las heredadas); lookupInstance devuelve una

@@ -719,6 +719,11 @@ public final class Ast {
         public final List<IStmt> body;
         public final List<CatchClause> catches;
         public final List<IStmt> finallyBody;   // null si no hay 'finally'
+        /** V7/H1 (21-sep) — `try var q: T := expr` (idea de Eduardo, 9-ago: el try-with-resources
+         *  de Java sin gastar palabras): el recurso es un `var owner` local declarado ANTES del
+         *  try, y el finally (creado por el parser) lo destruye, lo libera y lo pone a null al
+         *  salir — salgas por donde salgas. Azúcar del parser: cero cambios en las VMs. */
+        public VarDecl recurso = null;
         public TryStmt(List<IStmt> body, List<CatchClause> catches, List<IStmt> finallyBody,
                        int line, int column) {
             super(line, column);
@@ -805,6 +810,13 @@ public final class Ast {
             for (InlineStmt s : ops) { if (sb.length() > 0) sb.append("; "); sb.append(s.texto()); }
             return sb.toString();
         }
+    }
+
+    /** V7/H1 — «destruye, libera y pon a null este owner local»: lo pone el parser en el finally de
+     *  un `try var` y lo emite el emisor (el semántico no tiene nada que decir). */
+    public static final class ReleaseOwnerStmt extends Node implements IStmt {
+        public final String name;
+        public ReleaseOwnerStmt(String name, int line, int column) { super(line, column); this.name = name; }
     }
 
     public static final class ExprStmt extends Node implements IStmt {
