@@ -1407,3 +1407,115 @@ redundante y no error. Consecuencia medida: un módulo sin clases también depen
 como la unidad System. En MOD8 una clase con base externa necesita el layout de bpi 8: compilar MOD8 exige un Core
 MOD8 (los tests y `mezcla.py` se lo fabrican).
 
+
+## H3 — ficheros: el cursor y la clase `File` (21-sep, día de análisis)
+
+Lo que hay que saber antes de tocar nada, medido hoy, y el diseño que sale de las decisiones que ya
+estaban tomadas (`V6_IDEAS.md` 17-ago, `#491` 10-sep) más la de Eduardo de hoy: *«una clase `File`, y
+que dentro estuvieran los buffers y el handle; a partir de ahí todo debería ser bastante sencillo»*.
+
+### 1. Lo que hay hoy, medido
+
+| | dónde | qué |
+|---|---|---|
+| **Superficie BP** | `Core.bp` (38-42, 1075-1080) + `IO.bp` | fichero ENTERO: `readFile`/`writeFile`/`appendFile`/`fileExists`/`readFileBytes`/`writeFileBytes`; rutas y directorio en `IO`. **Ningún descriptor**: no hay dónde colgar una posición |
+| **La fachada C** (`bpvm_fs.h`) | 17 ops **por ruta**; `read_at`/`write_at`/`truncate` en las tres cinturas (littlefs, FAT, host), rodadas por SQLite; `read_stream` y `crc32` sólo donde se cronometró (por llamador, no por causa: la enfermedad de `#398`/`#453`/`#473`) |
+| **littlefs** (`fs_lfs.c:86`) | *«CERO malloc en las ops»*: **dos** buffers estáticos de 256 B → hoy caben **dos** ficheros abiertos, y sólo dentro de una op (cada op abre y cierra) |
+| **FatFs** | `FF_FS_LOCK 0` (sin control de aperturas duplicadas), `FF_FS_TINY 0` |
+| **Coste de un fichero abierto en el micro** (ARM, medido con `-mcpu=cortex-m33`) | littlefs `lfs_file_t` **84 B + caché 256 B = 340 B**; FatFs `FIL` **552 B** (lleva dentro el sector de 512); host `FILE*` 4-8 B |
+| **miVM** | `Files.readAllBytes(sandboxPath(...))`, y `packResource(path)` antes del FS (`#310`/`#520`): el cursor sobre un recurso de pack es un `byte[]` en memoria |
+| **El GC** (`heap.c:661`) | `gc_mark_phase` → `bpvm_handles_gc_sweep` (recorre la tabla: slot vivo sin marca → muerto) → `gc_sweep_phase`. **Entre la marca y el barrido** el bloque muerto sigue intacto: es el sitio del gancho. miVM tiene el espejo (`gcLocked`, «barrido de tabla, paso 6») |
+| **El destructor** | ya existe (H1, 21-sep): `~Clase()` corre al morir un `var owner` / `try var`. Lo que `#491` llamaba «quinta capa» (que el GC avise) sigue sin existir |
+| **Los restos de la fila** | `listDir` sigue sin estar en la VM-C (sólo el id 42 en `builtin_ids.h`); `SD_INFO`/`SD_MOUNT` siguen sólo en `pico/repl_v1.c`; `/sd` sin tarjeta cae a la flash; `BPVM_FS_PATH_MAX` sólo en C |
+
+**El precedente que Eduardo nombra existe y hace justo esto**: MicroPython (`vfs_lfs`) y el `File` de
+Arduino-LittleFS guardan `lfs_file_t` + `lfs_file_config` + **el buffer de caché dentro del objeto
+fichero** y abren con `lfs_file_opencfg`. Sin tabla de descriptores, sin límite inventado: el límite es
+la memoria. Es la forma de la propuesta del 10-sep, ya en producción en otros sitios.
+
+### 2. El diseño
+
+**Un fichero abierto es un objeto BP y TODO su estado vive en él** (`#491`: *«si una parte se queda en
+un `FIL` estático del driver, para esa parte la objeción original sigue viva»*):
+
+```
+public class File                                   // BYTES, y nada más
+  private var st: byte[]                            // el estado del driver: [cabecera de la fachada][lfs_file_t + caché | FIL | FILE*]
+  private var ruta: string
+  public function File(path: string, mode: string)  // "r" | "w" | "a" | "r+"  (abre; si no puede, RuntimeError con el porqué)
+  public function isOpen(): boolean
+  public function close()                           // idempotente
+  public function ~File()                           // = close()  (H1: corre al morir un owner / try var)
+  public function size(): integer
+  public function tell(): integer
+  public function seek(pos: integer)                // absoluto, 0..size(); fuera → RuntimeError
+  public function skip(delta: integer)              // relativo (negativo vale); fuera → RuntimeError
+  public function eof(): boolean                    // tell() >= size()
+  public function readByte(): integer               // -1 al final
+  public function read(buf: byte[]): integer        // rellena buf; devuelve leídos (0 = fin). SIN reservar memoria por llamada
+  public function readBytes(n: integer): byte[]     // los que haya (más corto al final)
+  public function write(b: byte[])                  // crudo, siempre
+  public function writeByte(n: integer)
+  public function flush()
+end File
+
+public class TextFile extends File                  // UTF-8 encima; AÑADE sobrecargas, no redefine (regla del 17-ago)
+  public function readLine(): string                // sin terminador; tolera "\r\n"; "" al final (lo dice eof())
+  public function readStr(n: integer): string       // n CARACTERES, no bytes
+  public function write(s: string)                  // sobrecarga NUEVA (la base no tiene write(string))
+  public function writeLine(s: string)              // s + "\n" (uno solo, igual en las dos VMs)
+end TextFile
+```
+
+- `st` lo reserva el constructor con `newByteArray(__fstateSize())`: **0 bytes en miVM** (el estado es
+  un `RandomAccessFile` de Java, en un mapa por handle), 340/552 B en el micro. El coste es honesto y
+  visible: sale en el guardián de fin de RUN (`#339`) como cualquier otro bloque.
+- **El heap no compacta** (`heap.c:119`): el driver puede guardar el puntero al bloque entre llamadas.
+  Y la memoria por handles (V4) hace que un `st` rancio **grite** en vez de corromper.
+- **Las primitivas** (ids nuevos en `Core.bp`, 8): `__fstateSize()`, `__fopen(st, path, modo)`,
+  `__fclose(st)`, `__fread(st, dst, off, n)`, `__fwrite(st, src, off, n)`, `__fseek(st, pos)`,
+  `__fsize(st)`, `__fflush(st)`. `tell`/`eof` se calculan en BP sobre la cabecera. Cada una toma el
+  lock grueso del FS, como toda op de hoy.
+- **Abajo**: la fachada gana `open/close/read/write/seek/size/flush` sobre un bloque de estado, con el
+  tamaño del bloque como constante de cada cintura; el **overlay de packs** (`#310`) se sirve con la
+  cabecera sola (posición + `ov_read` a offsets: es memoria XIP, no hay descriptor que abrir). Y con
+  el descriptor debajo, `bpvm_fs_read_stream` pasa a ser genérico → **FAT gana el streaming** y caen
+  el punto 4 de `#473` y `#475` sin tocar el wire.
+
+**El registro de ficheros abiertos — enhebrado por los propios bloques, sin tabla ni tope**: la
+cabecera de `st` lleva `next` (la ref del siguiente abierto) y la VM guarda la cabeza. Tres clientes:
+
+1. **El GC** (entre la marca y el barrido, en las dos VMs): un `st` sin marca es un fichero cuyo objeto
+   murió sin `close()` → se cierra en nativo (no asigna, no llama a BP, idempotente: las tres
+   condiciones de `#491`) y se desengancha. La quinta capa, en ~30 líneas por VM.
+2. **El fin de RUN**: cierra lo que quede y **lo dice** por el canal del guardián (`⚠ 2 ficheros
+   quedaron abiertos: /sd/log.txt (w) …`), en vez de callar.
+3. **Aperturas duplicadas**: al abrir se recorre la lista; la misma ruta ya abierta y alguna de las
+   dos con escritura → RuntimeError *«ya está abierto»*. N lectores, sí. Igual en las dos VMs (FatFs
+   con `FF_FS_LOCK 0` no lo vería; littlefs asserta: mejor que lo diga la fachada con texto).
+
+**Paridad**: todo lo observable (`stdout`, el contenido del fichero) va por `close()`/`~File()`/`flush()`;
+el camino del GC es sólo la red para lo anormal, y cerrar sin escrituras pendientes es invisible.
+
+### 3. Las preguntas del 17-ago, contestadas (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | dónde viven las clases | **`IO.File` / `IO.TextFile`** en `IO.bp` (donde ya están rutas y directorios): Core es el lenguaje, un fichero es biblioteca. La alternativa es Core (sin `import`, como `readFile`) |
+| 2 | modo de apertura | cuatro strings, los de C que todo el mundo conoce: `"r"` (existe, sólo lectura) · `"w"` (crea/trunca, lectura y escritura) · `"a"` (crea, cursor al final) · `"r+"` (existe, lectura y escritura). Otro texto → RuntimeError en BP, mismo mensaje en las dos VMs |
+| 3 | `seek`: origen y fuera de rango | `seek(pos)` absoluto + `skip(delta)` relativo; **fuera de `[0, size]` es error**. Extender sólo escribiendo al final → no hay «hueco» que rellenar (FatFs y littlefs rellenan distinto: así ni se pregunta) |
+| 4 | `readLine` al final | devuelve `""` y `eof()` es quien lo dice: `while not f.eof() do … f.readLine()`. Un fichero sin `\n` final da su última línea igual |
+| 5 | endianness / ancho de `write(n)` | en `File` sólo hay **bytes** (`readByte`/`writeByte`/`byte[]`). Si hace falta multibyte: `readInt`/`writeInt` (4 B) **little-endian** —la endianness de todos los micros del sobre— escritos en BP sobre `readBytes`, sin primitivas. Propongo dejarlos fuera de V7 salvo que los quieras |
+| 6 | `TextFile.print(n)` | **cae**: `print` es sentencia del lenguaje, no puede ser método. Lo formateado se concatena (`f.writeLine("t=" + t)`), que es lo que ya hace todo BP |
+| 7 | ¿qué pasa si no se cierra? | tres redes, en este orden: `close()`/`~File()` (H1) → el GC cierra lo inalcanzable → el fin de RUN cierra y **cuenta** |
+| 8 | ¿cuántos a la vez? | **sin tope**: el límite es el heap (340/552 B cada uno) y se ve. En el PC, el del SO |
+
+### 4. El plan, por pasos que cierran algo
+
+| paso | qué | cierra |
+|---|---|---|
+| **P1** | la fachada C con descriptor sobre bloque de estado: littlefs, FAT, host, overlay; `read_stream` genérico; test C (`test-fs-cursor`) | el punto 4 de `#473`, `#475` |
+| **P2** | las 8 primitivas en las dos VMs; el registro enhebrado; GC y fin de RUN; sample mínimo de paridad | la quinta capa |
+| **P3** | `File`/`TextFile` en `IO.bp` con `~File()`; samples (`FileCursor`, `TextFileDemo`, `errores/FileMal`); manual, referencia es/en, `TARJETA_SD.md` | `#491` |
+| **P4** | los restos de la fila: `/sd` reservado (sin tarjeta, error); `listDir` en la VM-C; `#456` (tope de path también en miVM + sample); `SD_INFO`/`SD_MOUNT` al REPL común; la SD del STM32 (la DK2 tiene ranura, el Nucleo no) — último, y sólo con placa | la fila H3 |
+| **P5** | la cascada: blobs, siete imágenes, placas | — |
