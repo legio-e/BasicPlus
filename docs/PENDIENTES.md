@@ -326,8 +326,6 @@ el 17-ago: tienen trabajo pendiente, así que su sitio es el registro.)*
 
 - **M2 — auto-unbox `any → primitive` con check en runtime** (variante "segura"
   de L1; coste: tag de tipo en cada `any`; discutible si compensa).
-- **M4 — namespace separado para identificadores sintéticos** (`__prop_get_X`,
-  `__strconcat`…; el prefijo `__` ya está reservado — sería un check explícito).
 - **M5 — debugger: inspección de properties heredadas** (verificar que se recorre
   la cadena de herencia al inspeccionar; relacionado con N11).
 

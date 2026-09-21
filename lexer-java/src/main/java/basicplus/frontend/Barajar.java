@@ -24,7 +24,7 @@ import java.util.Random;
  * determinista por (semilla, nombre de la clase).
  *
  * <p>El relleno son properties PRIVADAS autoimplementadas ({@code private property
- * __relleno0Cls: integer}): cada una ocupa un campo (el backing) y dos ranuras de
+ * relleno__0Cls: integer}): cada una ocupa un campo (el backing) y dos ranuras de
  * vtable (getter y setter) — un método privado no ocupa vtable (ver `addPrivateMethod`),
  * así que no serviría. El nombre lleva la clase para que nunca coincida con uno del
  * padre (un homónimo sería un override que no desplaza).
@@ -52,7 +52,7 @@ final class Barajar {
     private static long semilla(String clase) { return Main.BARAJAR * 1000003L + clase.hashCode(); }
 
     private static Ast.PropertyDef relleno(Ast.ClassDef cd, int i) {
-        String nombre = "__relleno" + i + cd.name;
+        String nombre = "relleno__" + i + cd.name;   // M4 (21-sep): el prefijo `__` es del sistema y el semántico lo rechaza; el relleno es «de usuario» para el layout
         Ast.PropertyDef p = new Ast.PropertyDef(false, false, false, false,
                 new Ast.DeclName(null, nombre, cd.line, 0), new Ast.SimpleTypeRef("integer", cd.line, 0),
                 null, null, null, true, cd.line, 0);

@@ -53,6 +53,11 @@ CtorMal|'Base()' es private
 ClaseDelLenguaje|'Thread' es una clase del lenguaje
 ClaseDelLenguaje|'StringBuilder' es una clase del lenguaje
 ClaseDelLenguaje|'root class' s
+PrefijoSistema|'__contador' empieza por
+PrefijoSistema|'__dentro' empieza por
+PrefijoSistema|'__privada' empieza por
+PrefijoSistema|'__a' empieza por
+PrefijoSistema|'__tmp' empieza por
 "
 
 ok=0; mal=0

@@ -153,8 +153,8 @@ class BarajarTest {
         TablasMod9.Clase con = clase(Files.readAllBytes(tmp.resolve("lib_0_3/out/Lib.mod")), "Base");
         assertEquals(sin.campos.size() + 3, con.campos.size(), "tres backings");
         assertEquals(sin.metodos.size() + 6, con.metodos.size(), "tres getters y tres setters");
-        assertTrue(claves(con).contains("get__relleno0Base()i") && claves(con).contains("set__relleno2Base(i)V"), claves(con).toString());
-        for (TablasMod9.Campo c : con.campos) if (c.clave.startsWith("__relleno")) assertTrue(c.privado, "el relleno es privado: " + c.clave);
+        assertTrue(claves(con).contains("getRelleno__0Base()i") && claves(con).contains("setRelleno__2Base(i)V"), claves(con).toString());
+        for (TablasMod9.Campo c : con.campos) if (c.clave.startsWith("relleno__")) assertTrue(c.privado, "el relleno es privado: " + c.clave);
         assertTrue(slots(con).get(slots(con).size() - 1) > slots(sin).get(slots(sin).size() - 1), "las ranuras de lo de siempre se han corrido");
         byte[][] u0 = secciones(Files.readAllBytes(tmp.resolve("usa_0_0/out/Usa.mod")));
         byte[][] u3 = secciones(Files.readAllBytes(tmp.resolve("usa_0_3/out/Usa.mod")));

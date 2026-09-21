@@ -1,0 +1,24 @@
+// PrefijoSistema.bp — M4 (21-sep): el prefijo `__` es del sistema (las primitivas de la VM en
+// Core.bp y en las intrinsecas de cada modulo, los nombres que sintetiza el compilador como
+// __init/__prop_get_X/__syncMutex, y el puente que la VM llama por nombre). Fuera de Core, un
+// identificador de usuario con `__` es error con linea, salvo una intrinseca (cuerpo inline) o
+// una funcion publica. Antes el lexer lo aceptaba y el choque salia como error de enlace, lejos.
+module PrefijoSistema
+  var __contador: integer := 0
+
+  public class Caja
+    var __dentro: integer := 0
+    function __privada(): integer
+      return 1
+    end __privada
+  end Caja
+
+  function suma(__a: integer, b: integer): integer
+    var __tmp: integer := __a + b
+    return __tmp
+  end suma
+
+  public function main()
+    print suma(1, 2)
+  end main
+end PrefijoSistema

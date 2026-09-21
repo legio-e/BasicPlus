@@ -614,9 +614,22 @@ public final class SemanticAnalyzer {
      *  `__cls_s_Base_cuantos` producía DOS exports con el mismo nombre y distinto
      *  offset, y cada VM se quedaba con uno (7 en miVM, 999 en la VM-C: paridad
      *  rota). Se corta aquí, con línea. */
-    private void checkNombreReservado(String nombre, int line, int col) {
-        if (nombre != null && (nombre.startsWith("__cls_") || nombre.startsWith("__prop_")))
+    private void checkNombreReservado(String nombre, int line, int col) { checkNombreReservado(nombre, line, col, false); }
+    /** M4 (21-sep) — el prefijo `__` es DEL SISTEMA: lo llevan las primitivas de la VM (Core.bp y las
+     *  intrínsecas de cada módulo), los nombres que sintetiza el compilador (`__init`, `__prop_get_X`,
+     *  `__syncMutex`, `__cls_new_X`…) y el puente que la VM llama por nombre (`Gui.__guiDispatch`).
+     *  Fuera de Core, un identificador de usuario con `__` sólo puede ser una intrínseca (cuerpo
+     *  `inline`) o una función pública (el puente); todo lo demás —variables, campos, parámetros,
+     *  clases, consts, enums, properties, funciones privadas— es error con línea. Antes el lexer lo
+     *  aceptaba y compartía espacio con los sintéticos: el choque salía como error de enlace, lejos. */
+    private void checkNombreReservado(String nombre, int line, int col, boolean puenteOIntrinseca) {
+        if (nombre == null || !nombre.startsWith("__")) return;
+        if (nombre.startsWith("__cls_") || nombre.startsWith("__prop_")) {
             err(line, col, "'" + nombre + "' es un nombre reservado del compilador (los que empiezan por `__cls_` o `__prop_`)");
+            return;
+        }
+        if (esRaiz() || puenteOIntrinseca) return;
+        err(line, col, "'" + nombre + "' empieza por `__`, que es del sistema (primitivas de la VM y nombres del compilador): elige otro nombre");
     }
 
     /** #527 — mismo criterio que el emisor (hasOwnSyncProperty / ancestorHasSyncProperty):
@@ -724,6 +737,7 @@ public final class SemanticAnalyzer {
     }
 
     private void declareEnum(EnumDef ed) {
+        checkNombreReservado(ed.name, ed.line, ed.column);
         EnumSymbol en = new EnumSymbol(ed.name, ed.isPublic, ed.line, ed.column);
         en.decl = ed;
         if (!module.members.tryDefine(en))
@@ -744,6 +758,7 @@ public final class SemanticAnalyzer {
     private void declareConst(ConstDecl c, ClassSymbol owner, Scope scope) {
         boolean isStatic = c.name.isStatic();
         validateStaticPrefix(c.name, owner);
+        checkNombreReservado(c.name.name, c.line, c.column);
         // L11.b — una const «a secas» (sin cualificar) dentro de una clase no tiene
         // sentido: una const es un valor de compilación común a todas las instancias,
         // así que es de CLASE, no de objeto. Antes se aceptaba muda y nacía como
@@ -770,6 +785,7 @@ public final class SemanticAnalyzer {
         for (DeclName n : v.names) {
             boolean isStatic = n.isStatic();
             validateStaticPrefix(n, owner);
+            checkNombreReservado(n.name, v.line, v.column);
             if (v.isOwner && isStatic) {
                 err(n.line, n.column, "'var owner' no compatible con miembro estático: '" + n.name + "'");
             }
@@ -799,7 +815,7 @@ public final class SemanticAnalyzer {
     private void declareFunc(FuncDef f, ClassSymbol owner, Scope scope) {
         boolean isStatic = f.name.isStatic();
         validateStaticPrefix(f.name, owner);
-        checkNombreReservado(f.name.name, f.line, f.column);
+        checkNombreReservado(f.name.name, f.line, f.column, f.isIntrinsic || f.isPublic);
         if (f.isFinal && owner == null)
             err(f.line, f.column, "'final' solo es válido en métodos de clase");
         if (f.isIntrinsic && owner != null)
@@ -823,6 +839,7 @@ public final class SemanticAnalyzer {
             sym.inlineOps = ops;
         }
         for (Param p : f.params) {
+            checkNombreReservado(p.name, p.line, p.column);   // M4
             ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
             psym.defaultExpr = p.defaultValue;   // H8.1: crudo aquí; se valida/normaliza al resolver tipos
             sym.params.add(psym);
@@ -853,6 +870,7 @@ public final class SemanticAnalyzer {
     private void declareProperty(PropertyDef p, ClassSymbol owner, Scope scope) {
         boolean isStatic = p.name.isStatic();
         validateStaticPrefix(p.name, owner);
+        checkNombreReservado(p.name.name, p.line, p.column);
         if (p.isFinal && owner == null)
             err(p.line, p.column, "'final' solo es válido en propiedades de clase");
         if (p.isOwner && isStatic)
@@ -1843,6 +1861,7 @@ public final class SemanticAnalyzer {
     }
 
     private void analyzeLocalVarDecl(VarDecl v, Scope scope) {
+        for (DeclName n : v.names) checkNombreReservado(n.name, v.line, v.column);   // M4
         BpType t = resolveType(v.type);
         // L8 v3 — local `tipo[N]` (N literal entero > 0): array HEAP de N
         // elementos a cero (el alloc zero-inicializa en ambas VMs), con
