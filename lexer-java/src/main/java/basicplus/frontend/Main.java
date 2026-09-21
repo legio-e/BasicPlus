@@ -2018,9 +2018,54 @@ public final class Main {
      * la primera firma de cada grupo sólo lo sabe el bucle que construye los
      * símbolos, y esa cuenta no se puede rehacer aquí sin repetirla.
      */
+    /** V7/H3 (21-sep) — la clave de ranura de cada método PROPIO de una clase importada se decide
+     *  contra su BASE, que aquí ya está a mano (los dos llamantes acaban de enlazarla): la misma
+     *  regla que el dueño aplica al compilar (`SemanticAnalyzer.assignKeysInChain`): misma firma
+     *  heredada → override (su misma clave, su misma ranura); mismo nombre con OTRA firma →
+     *  sobrecarga (clave mangleada, ranura NUEVA). Hasta hoy se decidía sólo contra los hermanos
+     *  del stub, así que `TextFile.write(string)` sobre `File.write(byte[])` salía como override
+     *  y todo lo declarado detrás quedaba corrido: el dueño exportaba `writeLine#21` y el
+     *  consumidor pedía `#20` (MOD8, el corpus en el arnés; en MOD9 el cargador lo resuelve por
+     *  nombre y no se veía). Reescribe `clavesPropias` con las claves definitivas. */
+    private static void reclavarContraLaBase(Symbol.ClassSymbol stub, java.util.List<String> clavesPropias) {
+        if (stub.baseClass == null) return;
+        java.util.Map<String, String> cambio = new java.util.HashMap<>();
+        for (Symbol s : new java.util.ArrayList<>(stub.instanceMembers.getSymbols())) {
+            if (!(s instanceof Symbol.FunctionSymbol)) continue;
+            Symbol.FunctionSymbol head = (Symbol.FunctionSymbol) s;
+            java.util.Set<String> taken = new java.util.HashSet<>();
+            java.util.Map<String, String> inheritedBySig = new java.util.LinkedHashMap<>();
+            for (Symbol.ClassSymbol a = stub.baseClass; a != null; a = a.baseClass) {
+                Symbol as = a.instanceMembers.tryLookup(head.name);
+                if (!(as instanceof Symbol.FunctionSymbol)) continue;
+                for (Symbol.FunctionSymbol o = (Symbol.FunctionSymbol) as; o != null; o = o.nextOverload) {
+                    taken.add(o.slotKey());
+                    inheritedBySig.putIfAbsent(o.signatureKey(), o.slotKey());
+                }
+            }
+            if (taken.isEmpty()) continue;   // nada heredado con ese nombre: la regla local ya era la buena
+            for (Symbol.FunctionSymbol f = head; f != null; f = f.nextOverload) {
+                if (f.isStatic || f.isConstructor) continue;
+                String vieja = f.slotKey();
+                String inherited = inheritedBySig.get(f.signatureKey());
+                if (inherited != null) f.slotKey = inherited;
+                else if (!taken.contains(f.name)) f.slotKey = f.name;
+                else f.slotKey = f.overloadMangle();
+                taken.add(f.slotKey);
+                if (!vieja.equals(f.slotKey())) cambio.put(vieja, f.slotKey());
+            }
+        }
+        if (cambio.isEmpty()) return;
+        for (int i = 0; i < clavesPropias.size(); i++) {
+            String nueva = cambio.get(clavesPropias.get(i));
+            if (nueva != null) clavesPropias.set(i, nueva);
+        }
+    }
+
     private static int sembrarSlotsDeVtable(Symbol.ClassSymbol stub,
                                             java.util.List<String> clavesPropias,
                                             String etiqueta) {
+        reclavarContraLaBase(stub, clavesPropias);   // V7/H3
         int next = stub.externalMethodSlots.size();
         for (String clave : clavesPropias) {
             if (!stub.externalMethodSlots.containsKey(clave)) {

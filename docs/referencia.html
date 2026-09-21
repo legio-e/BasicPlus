@@ -272,7 +272,7 @@
   <tr><td>Fichero</td>
       <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
           <code>appendFile(path, content)</code> <code>fileExists(path)</code>
-          <code>listDir(path)</code> <em>&mdash; ojo: <strong>s&oacute;lo en la VM Java</strong>; en la VM-C —host y placas— lanza <code>RuntimeError</code> atrapable «builtin 42 no soportado en esta VM (subconjunto C)» (ver <a href="#stdlib-sd">&sect;14.17</a>)</em></td></tr>
+          <code>listDir(path)</code> <em>&mdash; nombres ordenados por bytes; <code>RuntimeError</code> si no se puede abrir (ver <a href="#listar">&sect;14.17.6</a>)</em></td></tr>
   <tr><td>Internos (stdlib)</td>
       <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
           <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
@@ -775,6 +775,87 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
           es un JSON con la descripción. Bloquea el thread BP hasta
           respuesta. Sin IDE conectado, <code>RuntimeError</code>.</td></tr>
 </table>
+<h3 id="stdlib-io-file">13.11b <code>IO.File</code> y <code>IO.TextFile</code> — el fichero abierto (V7)</h3>
+<p>
+  Las funciones de arriba trabajan con el fichero <strong>entero</strong>. Para leer o escribir
+  por partes —un log de megas en la SD, un CSV línea a línea, un formato binario con cabecera—
+  hay un <strong>fichero abierto</strong>: un objeto con cursor. <code>File</code> trabaja en
+  <strong>bytes</strong> y nada más; <code>TextFile</code> hereda de él y <strong>añade</strong>
+  las sobrecargas de texto UTF-8 (<code>toBytes</code>/<code>fromBytes</code> son su codificador
+  y descodificador). Nunca redefine lo heredado: <code>write</code> significa crudo en toda la
+  jerarquía, y lo formateado se concatena (<code>f.writeLine("t=" + t)</code>).
+</p>
+<p>
+  <strong>Todo el estado vive en el objeto</strong> (en placa, el descriptor del motor de
+  ficheros y su caché: ~340 B con littlefs, ~552 B con la SD; en el PC, nada). Por eso no hay
+  tope de ficheros abiertos: el límite es la memoria, y se ve. Si el objeto muere sin
+  <code>close()</code>, el recolector lo cierra; el fin de la ejecución cierra lo que quede y
+  <strong>lo dice</strong> en la consola. Lo que quieras que sea observable —escrituras que
+  otro vaya a leer— pasa por <code>close()</code>, <code>flush()</code> o un
+  <code>~File()</code> con <code>var owner</code> / <code>try var</code>
+  (<a href="manual.html#owner">manual §5.3</a>): el camino del recolector es sólo la red.
+</p>
+<pre><code><span class="kw">import</span> IO
+
+<span class="kw">function</span> <span class="fn">main</span>()
+  <span class="kw">try var</span> log: IO.TextFile := IO.TextFile(<span class="str">"/sd/log.txt"</span>, <span class="str">"a"</span>)   <span class="comment">// se cierra solo al salir del try</span>
+    log.writeLine(<span class="str">"arranque"</span>)
+  <span class="kw">endtry</span>
+
+  <span class="kw">var</span> f: IO.TextFile := IO.TextFile(<span class="str">"/sd/log.txt"</span>, <span class="str">"r"</span>)
+  <span class="kw">while not</span> f.eof() <span class="kw">do</span>
+    <span class="kw">print</span> f.readLine()
+  <span class="kw">endwh</span>
+  f.seek(<span class="num">0</span>)
+  <span class="kw">print</span> f.readStr(<span class="num">3</span>), f.tell()        <span class="comment">// tres CARACTERES (no bytes), y dónde queda el cursor</span>
+  f.close()
+
+  <span class="kw">var</span> b: IO.File := IO.File(<span class="str">"datos.bin"</span>, <span class="str">"r+"</span>)
+  b.seek(<span class="num">4</span>)
+  b.writeByte(<span class="num">255</span>)                     <span class="comment">// pisa el byte 4, el resto queda como estaba</span>
+  b.close()
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th><code>IO.File</code></th><th>Descripción</th></tr>
+  <tr><td><code>File(path, mode)</code></td>
+      <td>Abre. Modos: <code>"r"</code> (existe; sólo lectura), <code>"w"</code> (crea o trunca;
+          lectura y escritura), <code>"a"</code> (crea si falta; el cursor al <em>final</em> al
+          abrir — después manda la posición), <code>"r+"</code> (existe; lectura y escritura).
+          Si no puede, <code>RuntimeError</code> con la ruta y el modo. La misma ruta ya abierta
+          y alguno de los dos escribiendo → <code>RuntimeError</code> «ya está abierto»
+          (varios lectores, sí). Un recurso de pack se abre sólo en <code>"r"</code>.</td></tr>
+  <tr><td><code>close()</code></td><td>Cierra. Idempotente. <code>~File()</code> lo llama.</td></tr>
+  <tr><td><code>isOpen(): boolean</code> · <code>path(): string</code></td><td>Estado y ruta con la que se abrió.</td></tr>
+  <tr><td><code>size(): integer</code> · <code>tell(): integer</code> · <code>eof(): boolean</code></td>
+      <td>Tamaño actual, posición del cursor, y <code>tell() &gt;= size()</code>.</td></tr>
+  <tr><td><code>seek(pos)</code> · <code>skip(delta)</code></td>
+      <td>Absoluto y relativo (<code>delta</code> negativo vale). <strong>Fuera de
+          <code>[0, size()]</code> es <code>RuntimeError</code></strong>: no hay huecos; extender
+          es escribir al final.</td></tr>
+  <tr><td><code>readByte(): integer</code></td><td>Un byte (0..255), o <code>-1</code> al final.</td></tr>
+  <tr><td><code>read(buf: byte[]): integer</code></td>
+      <td>Rellena <code>buf</code> desde el cursor y devuelve los bytes leídos (0 = fin). No
+          reserva memoria: el bucle de copia por trozos.</td></tr>
+  <tr><td><code>readBytes(n): byte[]</code></td><td>Hasta <code>n</code> bytes en un array nuevo (más corto al final).</td></tr>
+  <tr><td><code>write(data: byte[])</code> · <code>writeByte(v)</code></td><td>Crudo, en el cursor; avanza y extiende si llega al final.</td></tr>
+  <tr><td><code>flush()</code></td><td>Lo escrito llega al medio (vuelca la caché del motor).</td></tr>
+  <tr><th><code>IO.TextFile extends File</code></th><th></th></tr>
+  <tr><td><code>readLine(): string</code></td>
+      <td>La siguiente línea sin su terminador; tolera <code>"\r\n"</code>. Al final devuelve
+          <code>""</code> — quien lo dice es <code>eof()</code>. Un fichero sin salto final
+          entrega su última línea igual.</td></tr>
+  <tr><td><code>readStr(n): string</code></td><td><code>n</code> <strong>caracteres</strong> (no bytes), o los que queden.</td></tr>
+  <tr><td><code>write(s: string)</code> · <code>writeLine(s)</code></td>
+      <td>Los bytes UTF-8 del texto; <code>writeLine</code> añade <code>"\n"</code> (uno solo,
+          igual en el PC y en la placa).</td></tr>
+</table>
+<p>
+  <code>seek</code> posiciona en <strong>bytes</strong> también en <code>TextFile</code>: quien
+  salte a mitad de un carácter multibyte leerá basura hasta el siguiente. Los enteros multibyte
+  no tienen ayuda propia en V7: se montan con <code>readBytes</code>/<code>write</code> (y si
+  hace falta un criterio, little-endian, el de todos los micros del sobre).
+</p>
+
 
 <!-- =========================================================== -->
 
@@ -1970,7 +2051,7 @@ ficheros funciona bajo <code>/sd</code>.</p>
   <tr><td><code>writeFile(ruta, texto)</code></td><td>lo escribe; si existía, <strong>trunca</strong></td></tr>
   <tr><td><code>appendFile(ruta, texto)</code></td><td>añade al final</td></tr>
   <tr><td><code>fileExists(ruta)</code></td><td><code>true</code> / <code>false</code></td></tr>
-  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio — <strong>sólo en la VM Java</strong>, ver <a href="#listar">§14.17.6</a></td></tr>
+  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio, ordenado — ver <a href="#listar">§14.17.6</a></td></tr>
   <tr><td><code>readFileBytes(ruta)</code></td><td>el contenido como bytes</td></tr>
   <tr><td><code>writeFileBytes(ruta, datos)</code></td><td>escribe bytes</td></tr>
 </table>
@@ -2020,7 +2101,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   Probadas en placa: una SanDisk de 128 GB en Metro y P4, y una de 32 GB en la Metro.
 </p>
 
-<h4 id="listar">14.17.6 Recorrer un directorio — hoy sólo en la VM Java</h4>
+<h4 id="listar">14.17.6 Recorrer un directorio</h4>
 
 <pre><code><span class="kw">var</span> nombres: <span class="type">string</span>[] := <span class="fn">listDir</span>(<span class="str">"/sd/registros"</span>)
 <span class="kw">for</span> f <span class="kw">in</span> nombres <span class="kw">do</span>
@@ -2034,23 +2115,20 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <code>StringBuilder</code>—, no de los arrays.
 </p>
 
-<p class="warn">
-  <strong><code>listDir</code> no está en la VM-C</strong> — ni en la que corre en las
-  placas ni en la de host. Funciona cuando pruebas con la VM Java (la del IDE), y en la
-  VM-C lanza un <code>RuntimeError</code> atrapable, <em>«builtin 42 no soportado en esta
-  VM (subconjunto C)»</em>; si no lo atrapas, el programa termina con código 1. Es el
-  <strong>único</strong> verbo de fichero que falta: <code>readFile</code>,
-  <code>writeFile</code>, <code>appendFile</code>, <code>fileExists</code>,
-  <code>readFileBytes</code> y <code>writeFileBytes</code> sí están en las dos.<br><br>
-  No lo confundas con el árbol de ficheros del IDE, que sí lista la tarjeta: eso lo hace
-  el firmware por el protocolo de depuración, no tu programa.<br><br>
-  <strong>Mientras tanto</strong>, si tu programa necesita saber qué ficheros hay, llévate
-  tú la cuenta: un índice en un fichero de texto, o nombres predecibles por fecha
-  (<code>2026-08.csv</code>) que puedas construir en vez de descubrir.
+<p>
+  <strong>En las dos VMs desde V7</strong> (H3, 21-sep): antes sólo en la VM Java. Devuelve
+  los nombres <strong>ordenados por bytes</strong> —el orden de un listado es del sistema de
+  ficheros, y así el mismo programa imprime lo mismo en el PC y en la placa— y lanza
+  <code>RuntimeError</code> atrapable, <em>«listDir('…'): no se pudo abrir»</em>, si el
+  directorio no existe (antes la VM Java devolvía una lista vacía en silencio). Sin
+  <code>.</code> ni <code>..</code>. En placa los nombres pasan por la zona de rascar de la VM
+  (8-16 KB): un directorio cuyos nombres no quepan lanza <em>«demasiadas entradas»</em>.<br><br>
+  No lo confundas con el árbol de ficheros del IDE, que también lista la tarjeta: eso lo hace
+  el firmware por el protocolo de depuración, no tu programa.
 </p>
 
 <p>
-  Y una nota de coste para cuando esté: en un micro, listar un directorio con muchos
+  Y una nota de coste: en un micro, listar un directorio con muchos
   ficheros <strong>cuesta tiempo real</strong>, sobre todo si la tarjeta es lenta. No es
   una operación gratis que se pueda meter dentro de un bucle.
 </p>

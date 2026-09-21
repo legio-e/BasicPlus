@@ -1,0 +1,163 @@
+// FileCursor.bp — V7/H3 (#491, 21-sep): el cursor. Un fichero ABIERTO es un objeto (IO.File en
+// bytes, IO.TextFile en UTF-8) y todo su estado vive en él. Se prueba lo que distingue un cursor de
+// un fichero entero: la posición tras cada operación, escribir EN MEDIO sin tocar lo de alrededor,
+// el modo "a" (cursor al final al abrir), seek/skip fuera de rango como error, readLine con "\r\n"
+// y sin "\n" final, readStr en CARACTERES, las aperturas duplicadas, `var owner`/`try var` con
+// ~File(), y la red del GC (un File que muere sin close()).
+module FileCursor
+  import IO
+
+  var R: string := "cursor_test.bin"
+  var T: string := "cursor_test.txt"
+
+  function bytes()
+    var f: IO.File := IO.File(R, "w")
+    print "w: size", f.size(), "tell", f.tell(), "eof", f.eof()
+    f.write(toBytes("ABCDEFGH"))
+    print "tras 8: size", f.size(), "tell", f.tell()
+    f.seek(3)
+    f.write(toBytes("xyz"))                           // en medio
+    print "en medio: size", f.size(), "tell", f.tell()
+    f.seek(0)
+    var buf: byte[] := newByteArray(16)
+    var n: integer := f.read(buf)
+    print "leidos", n, ":", buf[0], buf[3], buf[5], buf[7], "eof", f.eof()
+    f.seek(8)
+    f.writeByte(73)
+    f.writeByte(74)
+    print "extendido: size", f.size()
+    f.skip(-2)
+    print "skip -2: tell", f.tell(), "byte", f.readByte(), f.readByte(), f.readByte()
+    try
+      f.seek(11)
+    catch e: RuntimeError
+      print "seek: " + e.msg
+    endtry
+    try
+      f.skip(-99)
+    catch e: RuntimeError
+      print "skip: " + e.msg
+    endtry
+    f.close()
+    print "cerrado:", f.isOpen()
+    f.close()                                         // idempotente
+    try
+      f.readByte()
+    catch e: RuntimeError
+      print "leer cerrado: " + e.msg
+    endtry
+
+    var a: IO.File := IO.File(R, "a")
+    print "a: tell", a.tell(), "size", a.size()
+    a.write(toBytes("KL"))
+    a.seek(0)
+    a.write(toBytes("ab"))                                 // pisa, no añade
+    a.close()
+    var r: IO.File := IO.File(R, "r")
+    print "r: size", r.size(), "->", fromBytes(r.readBytes(64))
+    try
+      r.write(toBytes("1"))
+    catch e: RuntimeError
+      print "escribir en r: " + e.msg
+    endtry
+    r.close()
+    var rw: IO.File := IO.File(R, "r+")
+    print "r+: tell", rw.tell(), "size", rw.size()
+    rw.seek(rw.size())
+    rw.writeByte(77)
+    rw.close()
+    print "r+ extendido:", len(readFileBytes(R))
+    var w2: IO.File := IO.File(R, "w")
+    print "w trunca: size", w2.size()
+    w2.close()
+  end bytes
+
+  function texto()
+    var t: IO.TextFile := IO.TextFile(T, "w")
+    t.writeLine("primera línea")
+    t.write("segunda\r\n")
+    t.writeLine("año 2026, señal ñ")
+    t.write("última sin salto")
+    t.close()
+    var l: IO.TextFile := IO.TextFile(T, "r")
+    print "size", l.size()
+    var k: integer := 0
+    while not l.eof() do
+      var linea: string := l.readLine()
+      k := k + 1
+      print k, "[" + linea + "] tell", l.tell()
+    endwh
+    print "al final: [" + l.readLine() + "]", l.eof()
+    l.seek(0)
+    print "readStr(7): [" + l.readStr(7) + "] tell", l.tell()
+    l.skip(1)
+    print "readStr(3): [" + l.readStr(3) + "]"
+    l.seek(0)
+    var b: byte[] := newByteArray(8)
+    print "read bytes:", l.read(b), b[0], b[7]
+    l.close()
+  end texto
+
+  function errores()
+    try
+      var x: IO.File := IO.File("/no/existe.bin", "r")
+    catch e: RuntimeError
+      print "no existe: " + e.msg
+    endtry
+    try
+      var y: IO.File := IO.File(R, "x")
+    catch e: RuntimeError
+      print "modo: " + e.msg
+    endtry
+    var uno: IO.File := IO.File(R, "w")
+    try
+      var dos: IO.File := IO.File(R, "r")
+    catch e: RuntimeError
+      print "duplicado: " + e.msg
+    endtry
+    uno.close()
+    var l1: IO.File := IO.File(R, "r")
+    var l2: IO.File := IO.File(R, "r")                // dos lectores sí
+    print "dos lectores:", l1.isOpen(), l2.isOpen()
+    l1.close()
+    l2.close()
+  end errores
+
+  function conOwner()
+    var owner f: IO.TextFile := IO.TextFile(T, "a")
+    f.writeLine("añadida por owner")
+    print "owner abierto:", f.isOpen()
+  end conOwner
+
+  function conTryVar()
+    try var f: IO.TextFile := IO.TextFile(T, "r")
+      var n: integer := 0
+      while not f.eof() do
+        f.readLine()
+        n := n + 1
+      endwh
+      print "líneas:", n
+    endtry
+  end conTryVar
+
+  function sinCerrar()
+    var f: IO.File := IO.File(R, "w")                 // muere sin close(): la red del GC
+    f.write(toBytes("123"))
+  end sinCerrar
+
+  public function main()
+    bytes()
+    texto()
+    errores()
+    conOwner()
+    conTryVar()
+    sinCerrar()
+    gc()                                              // el GC lo cierra (registro de abiertos)
+    var otra: IO.File := IO.File(R, "w")              // si no lo hubiera cerrado: «ya está abierto»
+    print "tras el GC:", otra.isOpen()
+    otra.close()
+    IO.removeFile(R)
+    IO.removeFile(T)
+    print "fin"
+  end main
+end FileCursor

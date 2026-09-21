@@ -249,7 +249,16 @@ public enum Builtin {
     GUI_GET_ALIGN_DY("__guiGetAlignDy"),   // [236] __guiGetAlignDy(handle: integer): integer
     GUI_GET_AUTH_WIDTH("__guiGetAuthWidth"),   // [237] __guiGetAuthWidth(handle: integer): integer
     GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight"),   // [238] __guiGetAuthHeight(handle: integer): integer
-    GUI_SHOT("__guiShot");   // [239] __guiShot(path: string): integer
+    GUI_SHOT("__guiShot"),   // [239] __guiShot(path: string): integer
+    FSTATE_SIZE("__fstateSize"),   // [240] __fstateSize(path: string): integer
+    FOPEN("__fopen"),   // [241] __fopen(st: byte[], path: string, mode: integer)
+    FCLOSE("__fclose"),   // [242] __fclose(st: byte[])
+    FREAD("__fread"),   // [243] __fread(st: byte[], dst: byte[], off: integer, n: integer): integer
+    FWRITE("__fwrite"),   // [244] __fwrite(st: byte[], src: byte[], off: integer, n: integer)
+    FSEEK("__fseek"),   // [245] __fseek(st: byte[], pos: integer)
+    FTELL("__ftell"),   // [246] __ftell(st: byte[]): integer
+    FSIZE("__fsize"),   // [247] __fsize(st: byte[]): integer
+    FFLUSH("__fflush");   // [248] __fflush(st: byte[])
 
     public final String bpName;
     public final int id;

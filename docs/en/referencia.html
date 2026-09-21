@@ -272,7 +272,7 @@
   <tr><td>File</td>
       <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
           <code>appendFile(path, content)</code> <code>fileExists(path)</code>
-          <code>listDir(path)</code> <em>&mdash; careful: <strong>only in the Java VM</strong>; the C VM —host and boards— throws a catchable <code>RuntimeError</code> «builtin 42 no soportado en esta VM (subconjunto C)» (see <a href="#stdlib-sd">&sect;14.17</a>)</em></td></tr>
+          <code>listDir(path)</code> <em>&mdash; names sorted by bytes; <code>RuntimeError</code> if it cannot be opened (see <a href="#stdlib-sd-list">&sect;14.17</a>)</em></td></tr>
   <tr><td>Internal (stdlib)</td>
       <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
           <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
@@ -774,6 +774,88 @@ m.unlock()              <span class="comment">// releases and hands off to the f
           is a JSON with the description. Blocks the BP thread until it
           answers. With no IDE connected, <code>RuntimeError</code>.</td></tr>
 </table>
+<h3 id="stdlib-io-file">13.11b <code>IO.File</code> and <code>IO.TextFile</code> — the open file (V7)</h3>
+<p>
+  The functions above work on the <strong>whole</strong> file. To read or write in parts — a
+  multi-megabyte log on the SD card, a CSV line by line, a binary format with a header — there
+  is an <strong>open file</strong>: an object with a cursor. <code>File</code> works in
+  <strong>bytes</strong> and nothing else; <code>TextFile</code> inherits from it and
+  <strong>adds</strong> the UTF-8 text overloads (<code>toBytes</code>/<code>fromBytes</code>
+  are its encoder and decoder). It never redefines what it inherits: <code>write</code> means raw
+  across the whole hierarchy, and formatted output is concatenated
+  (<code>f.writeLine("t=" + t)</code>).
+</p>
+<p>
+  <strong>All the state lives in the object</strong> (on the board, the file-system engine's
+  descriptor and its cache: ~340 B with littlefs, ~552 B with the SD card; on the PC, nothing).
+  That is why there is no cap on open files: the limit is memory, and it is visible. If the object
+  dies without <code>close()</code>, the collector closes it; the end of the run closes whatever
+  is left and <strong>says so</strong> on the console. Anything you want to be observable —
+  writes someone else will read — goes through <code>close()</code>, <code>flush()</code> or a
+  <code>~File()</code> with <code>var owner</code> / <code>try var</code>
+  (<a href="manual.html#owner">manual §5.3</a>): the collector's path is only the safety net.
+</p>
+<pre><code><span class="kw">import</span> IO
+
+<span class="kw">function</span> <span class="fn">main</span>()
+  <span class="kw">try var</span> log: IO.TextFile := IO.TextFile(<span class="str">"/sd/log.txt"</span>, <span class="str">"a"</span>)   <span class="comment">// closes itself when the try ends</span>
+    log.writeLine(<span class="str">"boot"</span>)
+  <span class="kw">endtry</span>
+
+  <span class="kw">var</span> f: IO.TextFile := IO.TextFile(<span class="str">"/sd/log.txt"</span>, <span class="str">"r"</span>)
+  <span class="kw">while not</span> f.eof() <span class="kw">do</span>
+    <span class="kw">print</span> f.readLine()
+  <span class="kw">endwh</span>
+  f.seek(<span class="num">0</span>)
+  <span class="kw">print</span> f.readStr(<span class="num">3</span>), f.tell()        <span class="comment">// three CHARACTERS (not bytes), and where the cursor is</span>
+  f.close()
+
+  <span class="kw">var</span> b: IO.File := IO.File(<span class="str">"data.bin"</span>, <span class="str">"r+"</span>)
+  b.seek(<span class="num">4</span>)
+  b.writeByte(<span class="num">255</span>)                     <span class="comment">// overwrites byte 4, the rest stays as it was</span>
+  b.close()
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th><code>IO.File</code></th><th>Description</th></tr>
+  <tr><td><code>File(path, mode)</code></td>
+      <td>Opens. Modes: <code>"r"</code> (must exist; read only), <code>"w"</code> (create or
+          truncate; read and write), <code>"a"</code> (create if missing; cursor at the
+          <em>end</em> on open — afterwards the position rules), <code>"r+"</code> (must exist;
+          read and write). On failure, <code>RuntimeError</code> with the path and mode. The same
+          path already open with either side writing → <code>RuntimeError</code> "already open"
+          (several readers are fine). A pack resource opens only in <code>"r"</code>.</td></tr>
+  <tr><td><code>close()</code></td><td>Closes. Idempotent. <code>~File()</code> calls it.</td></tr>
+  <tr><td><code>isOpen(): boolean</code> · <code>path(): string</code></td><td>State, and the path it was opened with.</td></tr>
+  <tr><td><code>size(): integer</code> · <code>tell(): integer</code> · <code>eof(): boolean</code></td>
+      <td>Current size, cursor position, and <code>tell() &gt;= size()</code>.</td></tr>
+  <tr><td><code>seek(pos)</code> · <code>skip(delta)</code></td>
+      <td>Absolute and relative (negative <code>delta</code> is fine). <strong>Outside
+          <code>[0, size()]</code> is a <code>RuntimeError</code></strong>: there are no holes;
+          extending means writing at the end.</td></tr>
+  <tr><td><code>readByte(): integer</code></td><td>One byte (0..255), or <code>-1</code> at the end.</td></tr>
+  <tr><td><code>read(buf: byte[]): integer</code></td>
+      <td>Fills <code>buf</code> from the cursor and returns the bytes read (0 = end). Allocates
+          nothing: the chunked copy loop.</td></tr>
+  <tr><td><code>readBytes(n): byte[]</code></td><td>Up to <code>n</code> bytes in a new array (shorter at the end).</td></tr>
+  <tr><td><code>write(data: byte[])</code> · <code>writeByte(v)</code></td><td>Raw, at the cursor; advances and extends when it reaches the end.</td></tr>
+  <tr><td><code>flush()</code></td><td>What was written reaches the medium (the engine's cache is flushed).</td></tr>
+  <tr><th><code>IO.TextFile extends File</code></th><th></th></tr>
+  <tr><td><code>readLine(): string</code></td>
+      <td>The next line without its terminator; tolerates <code>"\r\n"</code>. At the end it
+          returns <code>""</code> — <code>eof()</code> is what tells. A file without a final
+          newline still yields its last line.</td></tr>
+  <tr><td><code>readStr(n): string</code></td><td><code>n</code> <strong>characters</strong> (not bytes), or whatever is left.</td></tr>
+  <tr><td><code>write(s: string)</code> · <code>writeLine(s)</code></td>
+      <td>The UTF-8 bytes of the text; <code>writeLine</code> appends <code>"\n"</code> (one
+          only, the same on the PC and on the board).</td></tr>
+</table>
+<p>
+  <code>seek</code> positions in <strong>bytes</strong> also in <code>TextFile</code>: jumping
+  into the middle of a multi-byte character reads garbage until the next one. Multi-byte integers
+  have no helper of their own in V7: build them with <code>readBytes</code>/<code>write</code>
+  (and if a convention is needed, little-endian, the one of every micro in the envelope).
+</p>
+
 
 <!-- =========================================================== -->
 
@@ -1949,7 +2031,7 @@ sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
   <tr><td><code>writeFile(path, text)</code></td><td>writes it; if it existed, <strong>truncates</strong></td></tr>
   <tr><td><code>appendFile(path, text)</code></td><td>appends at the end</td></tr>
   <tr><td><code>fileExists(path)</code></td><td><code>true</code> / <code>false</code></td></tr>
-  <tr><td><code>listDir(path)</code></td><td>what a directory holds — <strong>Java VM only</strong>, see <a href="#stdlib-sd-list">below</a></td></tr>
+  <tr><td><code>listDir(path)</code></td><td>what a directory holds, sorted — see <a href="#stdlib-sd-list">below</a></td></tr>
   <tr><td><code>readFileBytes(path)</code></td><td>the content as bytes</td></tr>
   <tr><td><code>writeFileBytes(path, data)</code></td><td>writes bytes</td></tr>
 </table>
@@ -1983,7 +2065,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
   not text: pushing a binary through the text version corrupts it.
 </p>
 
-<h4 id="stdlib-sd-list">Listing a directory — today only in the Java VM</h4>
+<h4 id="stdlib-sd-list">Listing a directory</h4>
 
 <pre><code><span class="kw">var</span> names: <span class="type">string</span>[] := <span class="fn">listDir</span>(<span class="str">"/sd/logs"</span>)
 <span class="kw">for</span> f <span class="kw">in</span> names <span class="kw">do</span>
@@ -1996,19 +2078,16 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
   —a <code>List</code>, a <code>StringBuilder</code>—, not to arrays).
 </p>
 
-<p class="warn">
-  <strong><code>listDir</code> is not in the C VM</strong> — neither the one running on the
-  boards nor the host one. It works when you test with the Java VM (the one behind the IDE),
-  and on the C VM it throws a catchable <code>RuntimeError</code>, <em>«builtin 42 no
-  soportado en esta VM (subconjunto C)»</em>; uncaught, the program ends with exit code 1.
-  It is the <strong>only</strong> file verb missing: <code>readFile</code>,
-  <code>writeFile</code>, <code>appendFile</code>, <code>fileExists</code>,
-  <code>readFileBytes</code> and <code>writeFileBytes</code> are in both.<br><br>
-  Do not confuse it with the IDE's file tree, which does list the card: that is the firmware
-  over the debug protocol, not your program.<br><br>
-  <strong>Meanwhile</strong>, if your program needs to know which files exist, keep the
-  count yourself: an index in a text file, or predictable names by date
-  (<code>2026-08.csv</code>) you can build instead of discover.
+<p>
+  <strong>In both VMs since V7</strong> (H3, 21-sep): before, only in the Java VM. It returns
+  the names <strong>sorted by bytes</strong> — the order of a listing belongs to the file
+  system, and this way the same program prints the same on the PC and on the board — and
+  throws a catchable <code>RuntimeError</code>, <em>«listDir('…'): no se pudo abrir»</em>, if
+  the directory does not exist (the Java VM used to return an empty list silently). No
+  <code>.</code> or <code>..</code>. On the board the names go through the VM's scratch area
+  (8-16 KB): a directory whose names do not fit throws <em>«demasiadas entradas»</em>.<br><br>
+  Do not confuse it with the IDE's file tree, which also lists the card: that is the firmware
+  over the debug protocol, not your program.
 </p>
 
 <h4 id="stdlib-sd-fs">Two filesystems, side by side</h4>

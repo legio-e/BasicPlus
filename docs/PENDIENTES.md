@@ -189,24 +189,26 @@
   re-entrada, usar otro patrón (flag + condvar).
 
 
-### `input()` y `listDir()` sólo funcionan en el PC, no en el micro (decidido el 26-ago)
+### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago; `listDir` YA está en las dos desde V7/H3)
 
 `input()` / `IO.prompt()` abre su ventana en el IDE cuando el programa corre en la **VM
-Java**; `listDir(path)` lista un directorio, también sólo ahí. Los dos son builtins del
-compilador (se llaman sin `import`) y **compilan igual para todo el mundo**, pero en la
-**VM-C —o sea en cualquier placa y en el micro simulado— lanzan un `RuntimeError`
-atrapable**:
+Java**. Es un builtin del compilador (se llama sin `import`) y **compila igual para todo
+el mundo**, pero en la **VM-C —o sea en cualquier placa y en el micro simulado— lanza un
+`RuntimeError` atrapable**:
 
 ```
 builtin 37 no soportado en esta VM (subconjunto C)      // input()
-builtin 42 no soportado en esta VM (subconjunto C)      // listDir()
 ```
 
 Si no lo atrapas, el programa **termina con código de salida 1** (`RuntimeError BP no
 atrapado`), igual que cualquier otra excepción sin `catch`. `IO.prompt()` en la VM-C lanza
-`prompt: no hay IDE conectado`. Son los únicos builtins del lenguaje que no están en la
-VM-C (además de `heapFrag`/`heapMap`, que son diagnóstico de la VM Java): el resto —
-ficheros, rutas, matemáticas, cadenas— corre igual en las dos.
+`prompt: no hay IDE conectado`. Es el único builtin del lenguaje que no está en la VM-C
+(además de `heapFrag`/`heapMap`, que son diagnóstico de la VM Java): el resto — ficheros,
+rutas, matemáticas, cadenas — corre igual en las dos. `listDir(path)` **también** desde
+V7/H3 (21-sep): en las dos VMs devuelve los nombres **ordenados por bytes** (el orden de un
+listado es del FS, y el mismo programa tiene que imprimir lo mismo en el PC y en la placa)
+y lanza `RuntimeError` si el directorio no se puede abrir (antes miVM devolvía una lista
+vacía en silencio).
 
 **Se queda así a propósito.** El razonamiento de Eduardo: `print` e `input` no son entrada
 y salida de verdad en un micro —son **herramientas de depuración**, anteriores al
@@ -214,10 +216,9 @@ debugger—, y un `input()` era el «breakpoint del pobre» para parar un progra
 debugger de verdad funcionando, eso ya está mejor resuelto.
 
 ⚠️ **Lo que hay que saber al escribir un programa**: si va a correr en placa, no uses
-`input()` para pedir datos ni `listDir()` para recorrer el FS. Para interactuar con el
-usuario en un micro está la GUI (formularios), y para pausar y mirar, el debugger. Un
-programa que quiera correr en los dos sitios puede envolver la llamada en
-`try … catch e: RuntimeError`.
+`input()` para pedir datos. Para interactuar con el usuario en un micro está la GUI
+(formularios), y para pausar y mirar, el debugger. Un programa que quiera correr en los dos
+sitios puede envolver la llamada en `try … catch e: RuntimeError`.
 
 📌 El coste de igualarlo no era pequeño: `input()` bloquea el hilo BP (estado
 `BLOCKED_PROMPT` y salida de la cola de ejecución hasta que llega la respuesta), así que en
@@ -274,11 +275,6 @@ su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
   girando (y en el STM32 la tarea ociosa ni siquiera llega a correr). No existe un
   `sleep` de placa ni fuentes de despertar en BP: un programa a batería no puede
   ahorrar hoy.
-- **Los ficheros no son objetos: no hay `open`/`seek`/`close`** (`#491`). `readFile`
-  trae el fichero **entero** al heap y `writeFile` lo escribe entero; un fichero mayor
-  que la RAM libre no se puede leer, y no se puede leer ni escribir «a partir del byte
-  N». Para lo grande: escribir por trozos con `appendFile`, y repartir lo que haya que
-  leer en varios ficheros pequeños.
 - **`GET` y `LS` contestan `BUSY` mientras corre un programa** (`#495`). El
   explorador de ficheros del IDE no lista ni baja nada durante un RUN; `HELLO`, `KILL` y
   `RESET` sí llegan. Los ficheros que escribe el programa (un `.shot`, un log) se bajan

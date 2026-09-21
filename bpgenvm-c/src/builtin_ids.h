@@ -245,7 +245,16 @@ enum {
     BUILTIN_GUI_GET_AUTH_WIDTH           = 237,   /* __guiGetAuthWidth(handle: integer): integer */
     BUILTIN_GUI_GET_AUTH_HEIGHT          = 238,   /* __guiGetAuthHeight(handle: integer): integer */
     BUILTIN_GUI_SHOT                     = 239,   /* __guiShot(path: string): integer */
-    BUILTIN__CUANTOS = 240
+    BUILTIN_FSTATE_SIZE                  = 240,   /* __fstateSize(path: string): integer */
+    BUILTIN_FOPEN                        = 241,   /* __fopen(st: byte[], path: string, mode: integer) */
+    BUILTIN_FCLOSE                       = 242,   /* __fclose(st: byte[]) */
+    BUILTIN_FREAD                        = 243,   /* __fread(st: byte[], dst: byte[], off: integer, n: integer): integer */
+    BUILTIN_FWRITE                       = 244,   /* __fwrite(st: byte[], src: byte[], off: integer, n: integer) */
+    BUILTIN_FSEEK                        = 245,   /* __fseek(st: byte[], pos: integer) */
+    BUILTIN_FTELL                        = 246,   /* __ftell(st: byte[]): integer */
+    BUILTIN_FSIZE                        = 247,   /* __fsize(st: byte[]): integer */
+    BUILTIN_FFLUSH                       = 248,   /* __fflush(st: byte[]) */
+    BUILTIN__CUANTOS = 249
 };
 
 #endif

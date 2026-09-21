@@ -1417,6 +1417,36 @@ module Core
   function __guiShot(path: string): integer   // Gui.__guiShot
     inline CALL_BUILTIN 239
   end __guiShot
+  // ── V7/H3 (#491) — EL CURSOR: un fichero abierto sobre un bloque de estado (byte[]) que
+  // pone el objeto IO.File. La VM enhebra por esos bloques su registro de abiertos: el GC
+  // cierra lo inalcanzable y el fin de RUN cierra lo que quede y lo cuenta.
+  function __fstateSize(path: string): integer   // IO.File: bytes del bloque para esa ruta (0 en miVM)
+    inline CALL_BUILTIN 240
+  end __fstateSize
+  function __fopen(st: byte[], path: string, mode: integer)   // IO.File: 0 r · 1 w · 2 a · 3 r+; RuntimeError si no puede
+    inline CALL_BUILTIN 241
+  end __fopen
+  function __fclose(st: byte[])   // IO.File: idempotente
+    inline CALL_BUILTIN 242
+  end __fclose
+  function __fread(st: byte[], dst: byte[], off: integer, n: integer): integer   // IO.File: leídos (0 = fin)
+    inline CALL_BUILTIN 243
+  end __fread
+  function __fwrite(st: byte[], src: byte[], off: integer, n: integer)   // IO.File
+    inline CALL_BUILTIN 244
+  end __fwrite
+  function __fseek(st: byte[], pos: integer)   // IO.File: 0..size; fuera → RuntimeError
+    inline CALL_BUILTIN 245
+  end __fseek
+  function __ftell(st: byte[]): integer   // IO.File
+    inline CALL_BUILTIN 246
+  end __ftell
+  function __fsize(st: byte[]): integer   // IO.File
+    inline CALL_BUILTIN 247
+  end __fsize
+  function __fflush(st: byte[])   // IO.File
+    inline CALL_BUILTIN 248
+  end __fflush
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

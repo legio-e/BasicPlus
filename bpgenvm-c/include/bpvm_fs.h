@@ -38,6 +38,10 @@ extern "C" {
  * número que ya usaba el basedir del proyecto (`fs_facade.c`). */
 #define BPVM_FS_PATH_MAX  256
 
+/* V7/H3 — el prefijo de la tarjeta es RESERVADO: sin un montaje en él, una ruta
+ * `/sd/...` falla limpio en vez de resolver al backend raíz (la flash interna). */
+#define BPVM_FS_PREFIJO_SD "/sd"
+
 /* V6 (#453) — trozo de fichero entregado por `read_stream`. Devolver != 0
  * aborta la lectura (p.ej. el wire se corto y ya no hay a quien mandarlo). */
 typedef int (*bpvm_fs_chunk_cb)(const uint8_t* data, uint32_t len, void* user);

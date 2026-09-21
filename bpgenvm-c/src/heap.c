@@ -665,6 +665,7 @@ static void bpvm_gc(bpvm_t* vm) {
      * handles tageados → no marca nada → libera TODO lo vivo (ownerreassign). */
     if (vm->gc_suspended) return;
     gc_mark_phase(vm);
+    bpvm_files_gc(vm);         /* V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo */
     bpvm_handles_gc_sweep(vm); /* paso 6: recicla slots de tabla de lo inalcanzable (bpvm_handles.c) */
     gc_sweep_phase(vm);
 }

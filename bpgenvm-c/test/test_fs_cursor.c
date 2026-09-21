@@ -162,6 +162,23 @@ int main(void) {
         bpvm_fs_remove("build/cursor_lib/x.txt");
     }
 
+    /* V7/H3 — `/sd` es un prefijo RESERVADO: sin montaje, todo falla limpio (antes
+     * caia al backend raiz, la flash interna, y el fichero "de la tarjeta" se
+     * quedaba en littlefs sin que nadie lo encontrara). Con montaje, funciona. */
+    {
+        uint32_t sz = 0; uint32_t cap = 0;
+        ok(bpvm_fs_write("/sd/reservado.txt", (const uint8_t*) "no", 2, 0) == -1, "/sd sin tarjeta: write falla");
+        ok(bpvm_fs_stat("/sd/reservado.txt", &sz) == -1, "/sd sin tarjeta: stat falla");
+        ok(bpvm_fs_stat("/sdx", &sz) == -1 && bpvm_fs_exists("/sdx") == 0, "/sdx no es /sd (y no existe)");
+        void* b = bloque("/sd/reservado.txt", &cap);
+        ok(bpvm_fs_fopen(b, cap, "/sd/reservado.txt", BPVM_FS_O_WRITE) == -1, "/sd sin tarjeta: el cursor tampoco");
+        bpvm_fs_mkdir("build/cursor_sd");
+        ok(bpvm_fs_register_host_dir("/sd", "build/cursor_sd") == 0, "monta /sd (host, solo lectura)");
+        bpvm_fs_write("build/cursor_sd/r.txt", (const uint8_t*) "hola", 4, 0);
+        ok(bpvm_fs_stat("/sd/r.txt", &sz) == 0 && sz == 4, "/sd con montaje: stat ve el fichero");
+        bpvm_fs_remove("build/cursor_sd/r.txt");
+    }
+
     /* LITTLEFS: el motor de la placa, sobre una imagen */
     const char* IMG = "build/fs_cursor_test.img";
     remove(IMG);

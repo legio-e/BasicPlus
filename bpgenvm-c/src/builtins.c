@@ -27,6 +27,106 @@
 #include "bpvm_neopixel.h"
 #include "bpvm_rtc.h"
 #include "bpvm_pack.h"   /* #414 — recorrer los packs grabados desde BP */
+#include "bpvm_fs.h"     /* V7/H3 (#491) — el cursor */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V7/H3 (#491) — EL CURSOR desde BP: las nueve primitivas de IO.File y el
+ * registro de ficheros abiertos, enhebrado por los propios bloques de estado.
+ *
+ * El bloque es el byte[] del objeto File; la fachada (bpvm_fs.h) lo rellena y
+ * el motor guarda dentro su estado. La VM sólo pone dos cosas: el registro
+ * (`vm->files_head` → cabecera.next → …) y los mensajes, que tienen que ser los
+ * MISMOS que en miVM: son stdout cuando el programa los imprime.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+/* V7/H3 — listDir: los nombres, NUL-separados, en la zona de rascar. */
+typedef struct { uint8_t* buf; size_t cap; size_t len; uint32_t n; int desbordado; } listdir_acc_t;
+static void listdir_cb(const char* name, int is_dir, uint32_t size, void* user) {
+    (void) is_dir; (void) size;
+    listdir_acc_t* a = (listdir_acc_t*) user;
+    size_t l = strlen(name);
+    if (a->desbordado || a->len + l + 1 > a->cap) { a->desbordado = 1; return; }
+    memcpy(a->buf + a->len, name, l + 1);
+    a->len += l + 1;
+    a->n++;
+}
+
+static const char* fmodo_txt(int mode) {
+    return (mode == BPVM_FS_O_READ) ? "r" : (mode == BPVM_FS_O_WRITE) ? "w"
+         : (mode == BPVM_FS_O_APPEND) ? "a" : "r+";
+}
+/* El bloque (dirección física de sus bytes) de una ref de byte[], o NULL. */
+static uint8_t* fblk_de(bpvm_t* vm, uint32_t ref, uint32_t* cap) {
+    uint32_t a = (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));
+    if (a == 0) return NULL;
+    if (cap) *cap = bpvm_read_u32_be(vm->memory + a);
+    return vm->memory + a + 4;
+}
+static bpvm_fs_file_t* fhdr_de_ref(bpvm_t* vm, uint32_t ref) {
+    uint8_t* b = fblk_de(vm, ref, NULL);
+    return b ? (bpvm_fs_file_t*) b : NULL;
+}
+/* ¿Hay ya un fichero abierto con esa ruta y alguno de los dos escribe? */
+static int fichero_ya_abierto(bpvm_t* vm, const char* path, int mode) {
+    for (uint32_t r = vm->files_head; r != 0; ) {
+        bpvm_fs_file_t* h = fhdr_de_ref(vm, r);
+        if (!h) break;
+        if (strcmp(bpvm_fs_fpath(h), path) == 0 && (mode != BPVM_FS_O_READ || h->mode != BPVM_FS_O_READ)) return 1;
+        r = h->next;
+    }
+    return 0;
+}
+static void fregistrar(bpvm_t* vm, uint32_t ref, bpvm_fs_file_t* h) {
+    h->next = vm->files_head;
+    vm->files_head = ref;
+}
+static void fdesregistrar(bpvm_t* vm, uint32_t ref) {
+    uint32_t* link = &vm->files_head;
+    while (*link) {
+        bpvm_fs_file_t* h = fhdr_de_ref(vm, *link);
+        if (!h) { *link = 0; break; }
+        if (*link == ref) { *link = h->next; h->next = 0; return; }
+        link = &h->next;
+    }
+}
+/* Entre la marca y el barrido: el bloque de un File inalcanzable sigue intacto y
+ * su handle vivo, así que cerrar en nativo es seguro (no asigna, no llama a BP,
+ * es idempotente: las tres condiciones de #491). Después el barrido lo libera. */
+void bpvm_files_gc(bpvm_t* vm) {
+    uint32_t* link = &vm->files_head;
+    while (*link) {
+        uint32_t a = (*link == 0) ? 0 : bpref_deref(vm, bpref_from_addr(*link));
+        if (a == 0) { *link = 0; break; }
+        bpvm_fs_file_t* h = (bpvm_fs_file_t*) (vm->memory + a + 4);
+        uint32_t tag = bpvm_read_u32_be(vm->memory + a - 4);
+        if ((tag & BPVM_TAG_MARK_BIT) == 0u) {
+            uint32_t next = h->next;
+            bpvm_fs_fclose(h);
+            *link = next;
+        } else {
+            link = &h->next;
+        }
+    }
+}
+/* El fin de RUN cierra lo que quede y LO DICE (errores sí, silenciosos no). */
+void bpvm_files_fin_de_run(bpvm_t* vm) {
+    int n = 0;
+    char lista[160]; lista[0] = 0;
+    for (uint32_t r = vm->files_head; r != 0; ) {
+        bpvm_fs_file_t* h = fhdr_de_ref(vm, r);
+        if (!h) break;
+        uint32_t next = h->next;
+        if (n < 3) {
+            size_t l = strlen(lista);
+            snprintf(lista + l, sizeof lista - l, "%s%s (%s)", n ? ", " : "", bpvm_fs_fpath(h), fmodo_txt(h->mode));
+        }
+        bpvm_fs_fclose(h);
+        n++;
+        r = next;
+    }
+    vm->files_head = 0;
+    if (n > 0) bpvm_diag("[bpvm] fin de ejecución con %d fichero(s) abierto(s) sin cerrar: %s%s", n, lista, (n > 3) ? ", …" : "");
+}
+
 #include "bpvm_adc.h"
 #include "bpvm_wdt.h"
 #include "bpvm_uart.h"
@@ -1329,6 +1429,170 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, em);
         }
         push_i32(vm, tc, 0);   /* void → dummy */
+        return BPVM_OK;
+    }
+    /* ── V7/H3 — listDir, que faltaba en la VM-C desde V4 («funciona en el PC y no en el
+     * micro», el peor modo de faltar). Los nombres van a la zona de rascar mientras el
+     * motor tiene su lock (allí no se puede alojar: el GC cerraría ficheros tomando ese
+     * mismo lock), y después se construye el string[] con la raíz temporal en la pila,
+     * como `split`. ORDENADOS por bytes: el orden de un listado es del FS, y miVM ordena
+     * igual para que el mismo programa imprima lo mismo en el PC y en la placa. */
+    case BUILTIN_LIST_DIR: {
+        uint32_t pref = pop_ref(vm, tc);
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw(vm, tc, "path demasiado largo");
+        /* Un directorio que existe tal cual (mkdir lo crea sin resolver) va tal cual:
+         * `bpvm_fs_resolve` pregunta con `stat`, y un directorio no es un fichero. */
+        char eff[BPVM_FS_PATH_MAX];
+        const char* rpath = bpvm_fs_isdir(path) ? path : bpvm_fs_resolve(path, eff, sizeof(eff));
+        /* La zona de rascar COMPARTIDA (#338), con su guardián: se pide y se devuelve. */
+        listdir_acc_t acc; acc.cap = bpvm_scratch_capacity(); acc.len = 0; acc.n = 0; acc.desbordado = 0;
+        acc.buf = (uint8_t*) bpvm_scratch_take(acc.cap, "LISTDIR");
+        if (!acc.buf) return builtin_throw(vm, tc, "listDir: la zona de rascar está ocupada");
+        char em[BPVM_FS_PATH_MAX + 80];
+        int rl = bpvm_fs_list(rpath, listdir_cb, &acc);
+        if (rl != 0 || acc.desbordado) {
+            bpvm_scratch_give("LISTDIR");
+            if (rl != 0) snprintf(em, sizeof(em), "listDir('%s'): no se pudo abrir", path);
+            else snprintf(em, sizeof(em), "listDir('%s'): demasiadas entradas (más de %u bytes de nombres)", path, (unsigned) acc.cap);
+            return builtin_throw(vm, tc, em);
+        }
+        uint32_t arr = bpvm_heap_alloc(vm, acc.n * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
+        if (arr == 0) { bpvm_scratch_give("LISTDIR"); return builtin_throw(vm, tc, "listDir: sin memoria"); }
+        bpvm_write_u32_be(vm->memory + arr, acc.n);
+        bpref_t arrh = bpvm_handle_register(vm, arr);
+        bpref_push(vm, tc, arrh);          /* raíz temporal: protege los nombres */
+        size_t off = 0;
+        for (uint32_t i = 0; i < acc.n; i++) {
+            size_t l = strlen((const char*) acc.buf + off);
+            uint32_t ps = bpvm_heap_alloc(vm, (uint32_t) l, BPVM_TYPE_ARRAY_I8);
+            if (ps == 0) { bpvm_scratch_give("LISTDIR"); tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "listDir: sin memoria"); }
+            bpvm_write_u32_be(vm->memory + ps, (uint32_t) l);
+            memcpy(vm->memory + ps + 4, acc.buf + off, l);
+            bpref_store(vm, bpref_deref(vm, arrh) + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE, bpvm_handle_register(vm, ps));
+            off += l + 1;
+        }
+        /* inserción: n pequeño, y sin memoria auxiliar */
+        for (uint32_t i = 1; i < acc.n; i++) {
+            for (uint32_t j = i; j > 0; j--) {
+                uint32_t base = bpref_deref(vm, arrh) + BPVM_ARR_DATA_OFF;
+                bpref_t a = bpref_load(vm, base + (j - 1) * BPVM_REF_SIZE);
+                bpref_t b = bpref_load(vm, base + j * BPVM_REF_SIZE);
+                uint32_t la = bpref_arr_len(vm, a), lb = bpref_arr_len(vm, b);
+                uint32_t m = (la < lb) ? la : lb;
+                int c = memcmp(bpref_arr_elem(vm, a, 0, 1), bpref_arr_elem(vm, b, 0, 1), m);
+                if (c < 0 || (c == 0 && la <= lb)) break;
+                bpref_store(vm, base + (j - 1) * BPVM_REF_SIZE, b);
+                bpref_store(vm, base + j * BPVM_REF_SIZE, a);
+            }
+        }
+        bpvm_scratch_give("LISTDIR");
+        tc->sp -= BPVM_REF_SIZE;           /* fuera la raíz temporal */
+        bpref_push(vm, tc, arrh);
+        return BPVM_OK;
+    }
+    /* ── V7/H3 (#491) — las nueve primitivas del cursor (IO.File) ── */
+    case BUILTIN_FSTATE_SIZE: {
+        uint32_t pref = pop_ref(vm, tc);
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw(vm, tc, "path demasiado largo");
+        /* La lectura RESUELVE la ruta (basedir → tal cual → /app → packs), como readFile; la
+         * escritura la toma tal cual, como writeFile. El bloque tiene que valer para las dos. */
+        char eff[BPVM_FS_PATH_MAX];
+        uint32_t a = bpvm_fs_file_block_size(bpvm_fs_resolve(path, eff, sizeof(eff)));
+        uint32_t b = bpvm_fs_file_block_size(path);
+        push_i32(vm, tc, (int32_t) ((a > b) ? a : b));
+        return BPVM_OK;
+    }
+    case BUILTIN_FOPEN: {
+        int32_t  mode = pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
+        uint32_t sref = pop_ref(vm, tc);
+        char path[BPVM_FS_PATH_MAX];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw(vm, tc, "path demasiado largo");
+        if (mode < BPVM_FS_O_READ || mode > BPVM_FS_O_RW) return builtin_throw(vm, tc, "File: modo no válido");
+        uint32_t cap = 0;
+        uint8_t* blk = fblk_de(vm, sref, &cap);
+        if (!blk) return builtin_throw(vm, tc, "File: sin bloque de estado");
+        if (bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File: el objeto ya tiene un fichero abierto");
+        char eff[BPVM_FS_PATH_MAX];
+        const char* rpath = (mode == BPVM_FS_O_READ) ? bpvm_fs_resolve(path, eff, sizeof(eff)) : path;   /* como readFile / writeFile */
+        char em[BPVM_FS_PATH_MAX + 64];
+        if (fichero_ya_abierto(vm, rpath, mode)) {
+            snprintf(em, sizeof(em), "File('%s', \"%s\"): ya está abierto", path, fmodo_txt(mode));
+            return builtin_throw(vm, tc, em);
+        }
+        if (bpvm_fs_fopen(blk, cap, rpath, mode) != 0) {
+            snprintf(em, sizeof(em), "File('%s', \"%s\"): no se pudo abrir", path, fmodo_txt(mode));
+            return builtin_throw(vm, tc, em);
+        }
+        fregistrar(vm, sref, (bpvm_fs_file_t*) blk);
+        push_i32(vm, tc, 0);   /* void → dummy */
+        return BPVM_OK;
+    }
+    case BUILTIN_FCLOSE: {
+        uint32_t sref = pop_ref(vm, tc);
+        uint8_t* blk = fblk_de(vm, sref, NULL);
+        if (blk && bpvm_fs_fisopen(blk)) {
+            fdesregistrar(vm, sref);
+            if (bpvm_fs_fclose(blk) != 0) return builtin_throw(vm, tc, "File.close(): error al cerrar");
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_FREAD:
+    case BUILTIN_FWRITE: {
+        int es_lectura = (id == BUILTIN_FREAD);
+        int32_t  n    = pop_i32(vm, tc);
+        int32_t  off  = pop_i32(vm, tc);
+        uint32_t dref = pop_ref(vm, tc);
+        uint32_t sref = pop_ref(vm, tc);
+        uint8_t* blk = fblk_de(vm, sref, NULL);
+        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, es_lectura ? "File.read(): fichero cerrado" : "File.write(): fichero cerrado");
+        uint32_t dcap = 0;
+        uint8_t* d = fblk_de(vm, dref, &dcap);
+        if (!d) return builtin_throw(vm, tc, es_lectura ? "File.read(): buffer nulo" : "File.write(): buffer nulo");
+        if (off < 0 || n < 0 || (uint32_t) off > dcap || (uint32_t) n > dcap - (uint32_t) off)
+            return builtin_throw(vm, tc, es_lectura ? "File.read(): fuera del buffer" : "File.write(): fuera del buffer");
+        if (es_lectura) {
+            long r = bpvm_fs_fread(blk, d + off, (uint32_t) n);
+            if (r < 0) return builtin_throw(vm, tc, "File.read(): error de lectura");
+            push_i32(vm, tc, (int32_t) r);
+        } else {
+            bpvm_fs_file_t* h = (bpvm_fs_file_t*) blk;
+            if (h->mode == BPVM_FS_O_READ) return builtin_throw(vm, tc, "File.write(): abierto sólo para lectura");
+            if (bpvm_fs_fwrite(blk, d + off, (uint32_t) n) < 0) return builtin_throw(vm, tc, "File.write(): error de escritura");
+            push_i32(vm, tc, 0);
+        }
+        return BPVM_OK;
+    }
+    case BUILTIN_FSEEK: {
+        int32_t  pos  = pop_i32(vm, tc);
+        uint32_t sref = pop_ref(vm, tc);
+        uint8_t* blk = fblk_de(vm, sref, NULL);
+        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File.seek(): fichero cerrado");
+        if (pos < 0 || bpvm_fs_fseek(blk, (uint32_t) pos) != 0) {
+            char em[96];
+            snprintf(em, sizeof(em), "File.seek(%ld): fuera del fichero (tamaño %ld)", (long) pos, bpvm_fs_fsize(blk));
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_FTELL:
+    case BUILTIN_FSIZE: {
+        uint32_t sref = pop_ref(vm, tc);
+        uint8_t* blk = fblk_de(vm, sref, NULL);
+        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, (id == BUILTIN_FTELL) ? "File.tell(): fichero cerrado" : "File.size(): fichero cerrado");
+        push_i32(vm, tc, (int32_t) ((id == BUILTIN_FTELL) ? bpvm_fs_ftell(blk) : bpvm_fs_fsize(blk)));
+        return BPVM_OK;
+    }
+    case BUILTIN_FFLUSH: {
+        uint32_t sref = pop_ref(vm, tc);
+        uint8_t* blk = fblk_de(vm, sref, NULL);
+        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File.flush(): fichero cerrado");
+        if (bpvm_fs_fflush(blk) != 0) return builtin_throw(vm, tc, "File.flush(): error de escritura");
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_FILE_EXISTS: {

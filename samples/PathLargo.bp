@@ -1,0 +1,57 @@
+// PathLargo.bp — #456 (V7/H3, 21-sep): el tope de un path es de la SPEC (256 bytes con el NUL),
+// no de la VM-C. Las dos VMs lo rechazan con el mismo texto, y listDir() —que faltaba en la
+// VM-C— lista igual en las dos: ordenado por bytes, y error si el directorio no existe.
+module PathLargo
+  import IO
+
+  public function main()
+    var largo: string := "x"
+    var i: integer := 0
+    while i < 8 do
+      largo := largo + largo                          // 256 caracteres
+      i := i + 1
+    endwh
+    print "len =", len(largo)
+    try
+      writeFile(largo, "no")
+    catch e: RuntimeError
+      print "writeFile: " + e.msg
+    endtry
+    try
+      var f: IO.File := IO.File(largo, "w")
+    catch e: RuntimeError
+      print "File: " + e.msg
+    endtry
+    var corto: string := "x"
+    i := 0
+    while i < 7 do
+      corto := corto + corto                          // 128: cabe
+      i := i + 1
+    endwh
+    writeFile(corto, "si")
+    print "corto:", fileExists(corto)
+    IO.removeFile(corto)
+
+    IO.mkdir("pl_dir")
+    writeFile("pl_dir/b.txt", "b")
+    writeFile("pl_dir/a.txt", "a")
+    writeFile("pl_dir/Z.txt", "z")
+    IO.mkdir("pl_dir/sub")
+    var nombres: string[] := listDir("pl_dir")
+    print "entradas:", len(nombres)
+    for n in nombres do
+      print "  " + n
+    next n
+    try
+      listDir("pl_no_existe")
+    catch e: RuntimeError
+      print "listDir: " + e.msg
+    endtry
+    IO.removeFile("pl_dir/a.txt")
+    IO.removeFile("pl_dir/b.txt")
+    IO.removeFile("pl_dir/Z.txt")
+    IO.rmdir("pl_dir/sub")
+    IO.rmdir("pl_dir")
+    print "fin"
+  end main
+end PathLargo

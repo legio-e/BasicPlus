@@ -66,6 +66,14 @@ static const bpvm_fs_backend_t* route(const char* path) {
             if (!have_best || n > best_len) { best = g_mounts[i].be; best_len = n; have_best = 1; }
         }
     }
+    /* V7/H3 — `/sd` es un prefijo RESERVADO (decisión del 23-ago, hecha hoy): sin
+     * tarjeta montada, una ruta bajo /sd FALLA en vez de caer en silencio a la
+     * flash interna. Antes, `writeFile("/sd/log.txt")` sin tarjeta escribía en
+     * littlefs un fichero que nadie encontraba luego en la SD. */
+    if (best_len == 0 && strncmp(path, BPVM_FS_PREFIJO_SD, sizeof(BPVM_FS_PREFIJO_SD) - 1) == 0) {
+        char c = path[sizeof(BPVM_FS_PREFIJO_SD) - 1];
+        if (c == '/' || c == '\0') return NULL;
+    }
     return have_best ? best : NULL;
 }
 

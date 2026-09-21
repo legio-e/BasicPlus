@@ -95,6 +95,25 @@ class SobrecargaCrossModuleTest {
       + "  public function find(m: Medida): boolean\n"
       + "    return true\n"
       + "  end find\n"
+      // V7/H3 (21-sep) — una HIJA que sobrecarga un método HEREDADO con otra firma (el patrón de
+      // IO.TextFile.write(string) sobre IO.File.write(byte[])): ranura NUEVA, no override.
+      + "  public class Canal\n"
+      + "    public function Canal()\n"
+      + "    end Canal\n"
+      + "    public function write(b: byte[]): integer\n"
+      + "      return len(b)\n"
+      + "    end write\n"
+      + "  end Canal\n"
+      + "  public class CanalTexto extends Canal\n"
+      + "    public function CanalTexto()\n"
+      + "    end CanalTexto\n"
+      + "    public function write(s: string): integer\n"
+      + "      return 100\n"
+      + "    end write\n"
+      + "    public function despues(): integer\n"
+      + "      return 7\n"
+      + "    end despues\n"
+      + "  end CanalTexto\n"
       + "end OvLib\n";
 
     private static final String USO =
@@ -105,6 +124,8 @@ class SobrecargaCrossModuleTest {
       + "    var a: OvLib.Medida := dao.load(9999)      // metodo\n"
       + "    var b: OvLib.Medida := OvLib.find(9999)    // funcion libre\n"
       + "    print a.v, b.v\n"
+      + "    var ct: OvLib.CanalTexto := OvLib.CanalTexto()\n"
+      + "    print ct.write(\"hola\"), ct.despues()\n"
       + "  end Main\n"
       + "end OvUso\n";
 
@@ -140,6 +161,25 @@ class SobrecargaCrossModuleTest {
                 + ModSimbolos.conPrefijo(pide, "OvLib.Dao#"));
         assertTrue(!pide.contains("OvLib.Dao#load$LMedida;#4"),
                 "el llamante pide la sobrecarga de Medida para un literal entero");
+    }
+
+    @Test
+    @DisplayName("V7/H3 — sobrecargar un método HEREDADO en una clase importada gasta ranura nueva (el dueño y el consumidor numeran igual)")
+    void sobrecargaDeHeredadoNumeraComoElDueno(@TempDir Path tmp) throws Exception {
+        Path out = compilar(tmp);
+        Set<String> pide = ModSimbolos.conjunto(out.resolve("OvUso.mod"));
+        Set<String> exporta = ModSimbolos.conjunto(out.resolve("OvLib.mod"));
+        // Canal: toString 0, compareTo 1, __dtor 2, write 3. CanalTexto: write$s 4, despues 5.
+        // Antes el importador tomaba write(string) por un override de write(byte[]) (misma
+        // ranura 3) y pedía despues#4: el enlace decía «no exporta CanalTexto#despues#4».
+        assertTrue(exporta.contains("CanalTexto#despues#5"),
+                "el dueño no numera despues en 5. Exporta: " + ModSimbolos.conPrefijo(exporta, "CanalTexto#"));
+        assertTrue(pide.contains("OvLib.CanalTexto#despues#5"),
+                "el consumidor no pide despues#5 (numera distinto que el dueño). Pide: "
+                + ModSimbolos.conPrefijo(pide, "OvLib.CanalTexto#"));
+        assertTrue(pide.contains("OvLib.CanalTexto#write$s#4"),
+                "el consumidor no pide write(string) en su ranura nueva (4). Pide: "
+                + ModSimbolos.conPrefijo(pide, "OvLib.CanalTexto#"));
     }
 
     @Test

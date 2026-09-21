@@ -689,9 +689,9 @@ test-sdio:
 # Pico, donde solo se podia ejercer con placa; al sacarlo a src/ se corre sobre
 # el backend de HOST y se comprueba lo que importa: que el JSON es el que el IDE
 # espera, que los nombres van escapados y que un truncado nunca sale en silencio.
-test-listdir:
+test-listdir: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_listdir.c src/bpvm_listdir.c src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_util.c src/bpvm_log.c -o build/test_listdir.exe
+	$(CC) $(CFLAGS) test/test_listdir.c src/bpvm_listdir.c $(LIBOBJ) -o build/test_listdir.exe $(LDFLAGS)
 	@echo "--- V5/H6 LIST_DIR comun (esperado: solo 'ok', [status=OK]) ---"
 	@cd build && ./test_listdir.exe
 

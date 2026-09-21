@@ -1519,3 +1519,11 @@ el camino del GC es sólo la red para lo anormal, y cerrar sin escrituras pendie
 | **P3** | `File`/`TextFile` en `IO.bp` con `~File()`; samples (`FileCursor`, `TextFileDemo`, `errores/FileMal`); manual, referencia es/en, `TARJETA_SD.md` | `#491` |
 | **P4** | los restos de la fila: `/sd` reservado (sin tarjeta, error); `listDir` en la VM-C; `#456` (tope de path también en miVM + sample); `SD_INFO`/`SD_MOUNT` al REPL común; la SD del STM32 (la DK2 tiene ranura, el Nucleo no) — último, y sólo con placa | la fila H3 |
 | **P5** | la cascada: blobs, siete imágenes, placas | — |
+
+### 5. Lo decidido (Eduardo, 21-sep)
+
+OK a las ocho propuestas de §3 y al plan de §4, con una precisión: *«`TextFile` extiende `File` y le añade un
+encoder/decoder de UTF-8 ↔ bytes»* — en BP son `toBytes`/`fromBytes` (Core 119/120) sobre la capa de bytes de `File`;
+`readLine`/`readStr` leen por trozos con `read(buf)` y devuelven al cursor lo que sobra con `skip`, así que `tell()`
+sigue diciendo la verdad. P1-P4 hechos el mismo día (ver `ESTADO`); P5 va con la cascada pendiente de H1.
+

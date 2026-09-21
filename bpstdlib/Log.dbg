@@ -2,68 +2,68 @@ dbg 3
 module Log
 source C:\lenguajes\pm\bpstdlib\Log.bp
 lines
-50 57
-62 65
-71 66
-77 67
-80 68
-95 73
-105 78
-115 83
-125 89
-135 94
-145 100
-164 104
-183 108
-202 112
-221 118
-231 119
-241 122
-270 123
-277 124
-314 127
-323 128
-330 129
-340 131
-347 132
-354 133
-369 134
-397 138
-400 139
-451 142
-466 149
-477 150
-494 151
+55 57
+67 65
+76 66
+82 67
+85 68
+100 73
+110 78
+120 83
+130 89
+140 94
+150 100
+169 104
+188 108
+207 112
+226 118
+236 119
+246 122
+275 123
+282 124
+319 127
+328 128
+335 129
+345 131
+352 132
+359 133
+374 134
+402 138
+405 139
+456 142
+471 149
+482 150
+499 151
 vars
-func setFile 59
+func setFile 64
 p -20 8 0 string
-func setLevel 92
+func setLevel 97
 n -16 4 0 integer
-func setConsole 102
+func setConsole 107
 b -16 4 0 boolean
-func setFileEnabled 112
+func setFileEnabled 117
 b -16 4 0 boolean
-func setTimestamp 122
+func setTimestamp 127
 b -16 4 0 boolean
-func setMaxSize 132
+func setMaxSize 137
 n -16 4 0 integer
-func debug 142
+func debug 147
 msg -20 8 0 string
-func info 161
+func info 166
 msg -20 8 0 string
-func warn 180
+func warn 185
 msg -20 8 0 string
-func error 199
+func error 204
 msg -20 8 0 string
-func escribe 218
+func escribe 223
 nivel -32 4 0 integer
 etiqueta -28 8 0 string
 msg -20 8 0 string
 linea 0 8 0 string
 e 12 8 0 ?
-func rotaSiHaceFalta 463
+func rotaSiHaceFalta 468
 entrante -16 4 0 integer
-func __strconcat 526
+func __strconcat 531
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -1598,6 +1598,7 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_out_set_vm(NULL);   /* #478 */
 
     if (!vm) return;
+    bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
     apagar_pack_en_ejecucion(vm);   /* V7/H2 (#493): el overlay no puede apuntar a un vm muerto */
     /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido
      * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */

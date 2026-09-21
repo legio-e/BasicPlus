@@ -71,6 +71,36 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 🧬 H3 (21-sep, tarde) — EL CURSOR: `IO.File`/`IO.TextFile` con todo el estado dentro del objeto; `#491` cerrada; `listDir` en la VM-C; `/sd` reservado; `#456`
+
+Día de análisis primero (`V7_IDEAS.md` §H3, `289672e8`): el mapa medido (sin descriptor abajo, dos buffers estáticos
+en littlefs, 340/552 B por fichero abierto en el micro, el hueco entre marca y barrido del GC) y las ocho preguntas
+del 17-ago contestadas. Eduardo: OK a todo, y *«`TextFile` extiende `File` y le añade un encoder/decoder de UTF-8 ↔
+bytes»* — que es `toBytes`/`fromBytes` sobre la capa de bytes.
+
+**P1** (`b0e15592`): la fachada C con descriptor sobre un BLOQUE que pone el llamador (cabecera + estado del motor
+alineado a 8 + ruta), siete ops nuevas por backend; littlefs con su caché dentro del bloque (cae el tope de dos),
+FatFs con el `FIL`, host con `FILE*`; packs y motores sin cursor por `read_at`; `fat_read_stream` de regalo (`#473`
+punto 4). `test-fscursor`: el mismo guion en host y littlefs, 153/153. **P2+P3**: nueve primitivas (240-248) en las dos
+VMs, el registro de abiertos enhebrado por los bloques (`bpvm_files_gc` entre marca y barrido; `ficherosGc()` en
+miVM; fin de RUN cierra y dice «fin de ejecución con N fichero(s) abierto(s) sin cerrar: ruta (modo)» — mismo texto),
+la apertura duplicada con escritura es error; `IO.File`/`IO.TextFile` en `IO.bp` con `~File()`; `samples/FileCursor.bp`
+en el corpus (bytes, texto con `\r\n` y sin salto final, `readStr` en caracteres, owner/try var, la red del GC);
+referencia es/en §13.11b; `PENDIENTES` sin la limitación. **P4**: `listDir` por fin en la VM-C (zona de rascar con
+guardián + raíz temporal como `split`; ORDENADO por bytes en las dos, y error si no se puede abrir — miVM devolvía
+lista vacía); `/sd` prefijo reservado (sin montaje falla limpio; `test-fscursor`); `#456` el tope de path también en
+miVM (`sandboxPath`, «path demasiado largo»); `samples/PathLargo.bp` en el corpus.
+
+🐛 **Lo que cazó el frente MOD8 del arnés**: el importador de interfaces decidía override/sobrecarga sólo contra los
+hermanos del stub → `TextFile.write(string)` sobre `File.write(byte[])` salía como override y corría las ranuras
+(«no exporta `IO.TextFile#writeLine#20`»: el dueño decía 21). `reclavarContraLaBase` en `sembrarSlotsDeVtable`
+(la regla de `assignKeysInChain`), test rojo→verde en `SobrecargaCrossModuleTest`. En MOD9 no se veía. Y dos tests C
+que no enlazaban (`test-fspos`, `test-listdir`: `fs_facade.c` usa `bpvm_log` desde U3), ahora con `LIBOBJ`.
+
+Verde: check 89/59/9/13 + MOD8; mezcla 194; h13 38; frontend 223; miVM 52; tests C; Pico compila (FatFs y littlefs
+tocados). **Sin cascada todavía** (blobs/imágenes/placas): va con la de H1 pendiente. Quedan de la fila H3:
+`SD_INFO`/`SD_MOUNT` al REPL común y la SD del STM32.
+
 ## 🧬 H1 (21-sep, tarde) — `#19` cerrada como la redefinió Eduardo; la fila H1, hecha salvo grabar cinco placas
 
 **`#19`** (`60325e4c`): *«mantenemos los array fijos pero los limitamos a declaraciones locales y dentro de una clase como

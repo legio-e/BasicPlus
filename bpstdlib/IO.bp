@@ -120,4 +120,272 @@ module IO
     inline CALL_BUILTIN 77
   end prompt
 
+
+  // ============================================================
+  // V7/H3 (#491) — EL CURSOR: un fichero ABIERTO es un objeto, y TODO su estado vive en él.
+  //
+  // `File` trabaja en BYTES y nada más; `TextFile` hereda y AÑADE lo de UTF-8 (nunca redefine
+  // lo heredado: `write` significa siempre crudo en toda la jerarquía). El bloque `st` es el
+  // estado del motor de ficheros (littlefs: lfs_file_t + su caché; FatFs: FIL; miVM: nada —
+  // el estado vive en Java) y lo pone este objeto: sin tabla de descriptores ni tope, el
+  // límite es la memoria. La VM enhebra por esos bloques su registro de abiertos: si el
+  // objeto muere sin close(), el GC lo cierra; el fin de RUN cierra lo que quede y lo cuenta.
+  // Lo observable va por close()/~File()/flush(): el camino del GC es sólo la red.
+  // ============================================================
+
+  // ---- Las primitivas: `public` porque una clase pública no puede llamar a lo privado del
+  // módulo (política de encapsulación), y con `__` porque son del sistema, no del usuario ----
+  public function __fstateSize(path: string): integer
+    inline CALL_BUILTIN 240
+  end __fstateSize
+  public function __fopen(st: byte[], path: string, mode: integer)
+    inline CALL_BUILTIN 241
+  end __fopen
+  public function __fclose(st: byte[])
+    inline CALL_BUILTIN 242
+  end __fclose
+  public function __fread(st: byte[], dst: byte[], off: integer, n: integer): integer
+    inline CALL_BUILTIN 243
+  end __fread
+  public function __fwrite(st: byte[], src: byte[], off: integer, n: integer)
+    inline CALL_BUILTIN 244
+  end __fwrite
+  public function __fseek(st: byte[], pos: integer)
+    inline CALL_BUILTIN 245
+  end __fseek
+  public function __ftell(st: byte[]): integer
+    inline CALL_BUILTIN 246
+  end __ftell
+  public function __fsize(st: byte[]): integer
+    inline CALL_BUILTIN 247
+  end __fsize
+  public function __fflush(st: byte[])
+    inline CALL_BUILTIN 248
+  end __fflush
+
+  // Un fichero abierto, en BYTES. Modos: "r" (existe; sólo lectura), "w" (crea o trunca),
+  // "a" (crea si falta; el cursor al FINAL al abrir), "r+" (existe; lectura y escritura).
+  // seek() sólo dentro de [0, size()]: extender es escribir al final. Si no puede abrir,
+  // RuntimeError con la ruta y el modo. Con `var owner` o `try var`, ~File() cierra solo.
+  public class File
+    private var st: byte[]
+    private var ruta: string
+    private var abierto: boolean
+
+    // Los primeros n bytes de src, en un array nuevo (para la clase y sus hijas).
+    function primerosBytes(src: byte[], n: integer): byte[]
+      var out: byte[] := newByteArray(n)
+      var i: integer := 0
+      while i < n do
+        out[i] := src[i]
+        i := i + 1
+      endwh
+      return out
+    end primerosBytes
+
+    public function File(path: string, mode: string)
+      var m: integer := -1
+      if mode == "r" then
+        m := 0
+      elseif mode == "w" then
+        m := 1
+      elseif mode == "a" then
+        m := 2
+      elseif mode == "r+" then
+        m := 3
+      endif
+      if m < 0 then
+        throw RuntimeError("File('" + path + "', \"" + mode + "\"): modo no válido (r, w, a, r+)")
+      endif
+      this.ruta := path
+      this.abierto := false
+      this.st := newByteArray(__fstateSize(path))
+      __fopen(this.st, path, m)
+      this.abierto := true
+    end File
+
+    public function ~File()
+      this.close()
+    end ~File
+
+    public function path(): string
+      return this.ruta
+    end path
+
+    public function isOpen(): boolean
+      return this.abierto
+    end isOpen
+
+    // Idempotente: cerrar lo cerrado no es error.
+    public function close()
+      if this.abierto then
+        this.abierto := false
+        __fclose(this.st)
+      endif
+    end close
+
+    public function size(): integer
+      return __fsize(this.st)
+    end size
+
+    public function tell(): integer
+      return __ftell(this.st)
+    end tell
+
+    public function eof(): boolean
+      return __ftell(this.st) >= __fsize(this.st)
+    end eof
+
+    // Absoluto. Fuera de [0, size()] es RuntimeError.
+    public function seek(pos: integer)
+      __fseek(this.st, pos)
+    end seek
+
+    // Relativo (delta negativo vale). Fuera de rango es RuntimeError.
+    public function skip(delta: integer)
+      __fseek(this.st, __ftell(this.st) + delta)
+    end skip
+
+    // Un byte (0..255), o -1 al final.
+    public function readByte(): integer
+      var b: byte[] := newByteArray(1)
+      if __fread(this.st, b, 0, 1) == 0 then
+        return -1
+      endif
+      return b[0]
+    end readByte
+
+    // Rellena buf desde el cursor. Devuelve los bytes leídos (0 = fin). No reserva memoria.
+    public function read(buf: byte[]): integer
+      return __fread(this.st, buf, 0, len(buf))
+    end read
+
+    // Hasta n bytes en un array nuevo (más corto al final del fichero).
+    public function readBytes(n: integer): byte[]
+      var b: byte[] := newByteArray(n)
+      var k: integer := __fread(this.st, b, 0, n)
+      if k == n then
+        return b
+      endif
+      return this.primerosBytes(b, k)
+    end readBytes
+
+    // Crudo, siempre.
+    public function write(data: byte[])
+      __fwrite(this.st, data, 0, len(data))
+    end write
+
+    public function writeByte(v: integer)
+      var b: byte[] := newByteArray(1)
+      b[0] := byte(v)
+      __fwrite(this.st, b, 0, 1)
+    end writeByte
+
+    // Lo escrito llega al medio (la caché del motor se vuelca).
+    public function flush()
+      __fflush(this.st)
+    end flush
+  end File
+
+  // Un fichero de TEXTO UTF-8: hereda el cursor y los bytes, y AÑADE las sobrecargas de
+  // string (toBytes/fromBytes son el codificador y el descodificador). seek() sigue siendo
+  // en bytes: quien salte a mitad de un carácter leerá basura hasta el siguiente. readLine()
+  // devuelve "" al final (lo dice eof()) y tolera "\r\n"; writeLine() escribe "\n" y punto.
+  public class TextFile extends File
+    public function TextFile(path: string, mode: string)
+      super(path, mode)
+    end TextFile
+
+    // La siguiente línea, sin su terminador. Lee por trozos y devuelve al cursor lo que
+    // sobra, así que tell() sigue diciendo la verdad.
+    public function readLine(): string
+      var acc: byte[] := newByteArray(64)
+      var n: integer := 0
+      var trozo: byte[] := newByteArray(32)
+      var fin: boolean := false
+      while not fin do
+        var k: integer := this.read(trozo)
+        if k == 0 then
+          fin := true
+        else
+          var i: integer := 0
+          while i < k and not fin do
+            if trozo[i] == 10 then
+              this.skip(0 - (k - i - 1))
+              fin := true
+            else
+              if n == len(acc) then
+                var mayor: byte[] := newByteArray(n * 2)
+                var j: integer := 0
+                while j < n do
+                  mayor[j] := acc[j]
+                  j := j + 1
+                endwh
+                acc := mayor
+              endif
+              acc[n] := trozo[i]
+              n := n + 1
+            endif
+            i := i + 1
+          endwh
+        endif
+      endwh
+      if n > 0 and acc[n - 1] == 13 then
+        n := n - 1
+      endif
+      return fromBytes(this.primerosBytes(acc, n))
+    end readLine
+
+    // n CARACTERES (no bytes), o los que queden.
+    public function readStr(n: integer): string
+      var acc: byte[] := newByteArray(64)
+      var cnt: integer := 0
+      var chars: integer := 0
+      var trozo: byte[] := newByteArray(32)
+      var fin: boolean := false
+      while not fin do
+        var k: integer := this.read(trozo)
+        if k == 0 then
+          fin := true
+        else
+          var i: integer := 0
+          while i < k and not fin do
+            var b: integer := trozo[i]
+            var empieza: boolean := (b & 0xC0) != 0x80
+            if empieza and chars == n then
+              this.skip(0 - (k - i))
+              fin := true
+            else
+              if empieza then
+                chars := chars + 1
+              endif
+              if cnt == len(acc) then
+                var mayor: byte[] := newByteArray(cnt * 2)
+                var j: integer := 0
+                while j < cnt do
+                  mayor[j] := acc[j]
+                  j := j + 1
+                endwh
+                acc := mayor
+              endif
+              acc[cnt] := byte(b)
+              cnt := cnt + 1
+              i := i + 1
+            endif
+          endwh
+        endif
+      endwh
+      return fromBytes(this.primerosBytes(acc, cnt))
+    end readStr
+
+    // Sobrecarga NUEVA (la base no tiene write(string)): los bytes UTF-8 del texto.
+    public function write(s: string)
+      this.write(toBytes(s))
+    end write
+
+    public function writeLine(s: string)
+      this.write(s + "\n")
+    end writeLine
+  end TextFile
+
 end IO

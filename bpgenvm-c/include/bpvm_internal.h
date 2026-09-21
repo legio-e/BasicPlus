@@ -673,7 +673,18 @@ struct bpvm {
      * Va AL FINAL, como run_arg: el prefijo congelado del .mdn no se toca. */
     uint32_t gui_disp_click;
     uint32_t gui_disp_change;
+    /* V7/H3 (#491) — EL REGISTRO DE FICHEROS ABIERTOS, enhebrado por los propios
+     * bloques de estado (la ref del byte[] del objeto File; `next` en la cabecera
+     * de la fachada). Sin tabla ni tope. Tres clientes: el GC (cierra lo
+     * inalcanzable entre la marca y el barrido), el fin de RUN (cierra y cuenta)
+     * y la apertura duplicada. Al final, como todo lo nuevo: el prefijo del .mdn
+     * no se toca. 0 = ninguno. */
+    uint32_t files_head;
 };
+
+/* V7/H3 (#491) — en builtins.c. */
+void bpvm_files_gc(bpvm_t* vm);          /* entre la marca y el barrido: cierra lo inalcanzable */
+void bpvm_files_fin_de_run(bpvm_t* vm);  /* al destruir la VM: cierra lo que quede y lo dice */
 
 
 /* El guardián del prefijo congelado. Si alguien mete un campo delante de

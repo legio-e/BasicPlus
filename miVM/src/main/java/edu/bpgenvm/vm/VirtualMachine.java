@@ -1093,7 +1093,58 @@ public class VirtualMachine {
     private volatile String runtimeError = "";
     public String getRuntimeError() { return runtimeError; }
 
+    // ── V7/H3 (#491) — EL CURSOR: un fichero abierto por objeto IO.File ────────────────────
+    // El bloque de estado es el byte[] del objeto (aquí de 0 bytes: el estado vive en Java),
+    // y su ref es la clave del registro. Los mensajes son los MISMOS que en la VM-C.
+    private static final class CursorBP {
+        String path; int mode; long pos, size;
+        java.io.RandomAccessFile raf;   // null si es un recurso de pack (sólo lectura, en memoria)
+        byte[] mem;
+    }
+    private final java.util.LinkedHashMap<Long, CursorBP> ficherosAbiertos = new java.util.LinkedHashMap<>();
+    private static String fmodoTxt(int mode) { return mode == 0 ? "r" : mode == 1 ? "w" : mode == 2 ? "a" : "r+"; }
+    private CursorBP cursorDe(ThreadContext tc, long sref, String op) {
+        CursorBP c = (sref == 0) ? null : ficherosAbiertos.get(sref);
+        if (c == null) throwBpRuntimeError(tc, op + ": fichero cerrado");
+        return c;
+    }
+    /** Entre la marca y el barrido del GC: un File inalcanzable se cierra aquí (espejo de bpvm_files_gc). */
+    private void ficherosGc() {
+        if (ficherosAbiertos.isEmpty()) return;
+        java.util.Iterator<java.util.Map.Entry<Long, CursorBP>> it = ficherosAbiertos.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<Long, CursorBP> e = it.next();
+            int a = refDeref(e.getKey());
+            if (a != 0 && (readInt32(a - 4) & TAG_MARK_BIT) != 0) continue;   // alcanzable
+            cerrarCursor(e.getValue());
+            it.remove();
+        }
+    }
+    private static void cerrarCursor(CursorBP c) {
+        if (c.raf != null) { try { c.raf.close(); } catch (java.io.IOException ignored) {} c.raf = null; }
+        c.mem = null;
+    }
+    /** El fin de RUN cierra lo que quede y LO DICE (espejo de bpvm_files_fin_de_run). */
+    private void ficherosFinDeRun() {
+        if (ficherosAbiertos.isEmpty()) return;
+        StringBuilder lista = new StringBuilder();
+        int n = 0;
+        for (CursorBP c : ficherosAbiertos.values()) {
+            if (n < 3) lista.append(n > 0 ? ", " : "").append(c.path).append(" (").append(fmodoTxt(c.mode)).append(")");
+            cerrarCursor(c);
+            n++;
+        }
+        ficherosAbiertos.clear();
+        System.err.println("[bpvm] fin de ejecución con " + n + " fichero(s) abierto(s) sin cerrar: " + lista + (n > 3 ? ", …" : ""));
+    }
+
+    /** #456 (V7/H3) — el tope de un path es de la SPEC, no de la VM-C: BPVM_FS_PATH_MAX = 256
+     *  (nombre + NUL), el mismo mensaje que `read_bp_path` en builtins.c. Antes miVM abría
+     *  cualquier longitud y un programa fallaba sólo al llegar a la placa. */
+    static final int PATH_MAX_BYTES = 256;
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
+        if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
+            throwBpRuntimeError(tc, "path demasiado largo");
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
             try {
@@ -1767,6 +1818,8 @@ public class VirtualMachine {
             }
         }
 
+        ficherosGc();   // V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo
+
         // Paso 6 — BARRIDO DE TABLA (handle-aware): un slot VIVO (addr!=0) cuyo bloque
         // quedó SIN marcar es inalcanzable → reciclar el slot (bump gen + addr=0 + free-list)
         // para que un handle rancio a él GRITE (contrato B también para lo que libera el GC).
@@ -2289,6 +2342,7 @@ public class VirtualMachine {
         // AWT no es demonio y mantiene viva la JVM mientras haya una ventana.
         // Es la paridad con la VM-C, donde la ventana SDL muere con el proceso.
         gui.shutdown();
+        ficherosFinDeRun();   // V7/H3 (#491)
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -4733,6 +4787,115 @@ public class VirtualMachine {
                 pushTc(tc, 0); // dummy
                 break;
             }
+            // ── V7/H3 (#491) — las nueve primitivas del cursor (IO.File) ──
+            case FSTATE_SIZE: {
+                readVmString(popTcRef(tc));
+                pushTc(tc, 0);   // el estado vive en Java: el bloque mide 0
+                break;
+            }
+            case FOPEN: {
+                int mode = popTc(tc);
+                String path = readVmString(popTcRef(tc));
+                long sref = popTcRef(tc);
+                if (mode < 0 || mode > 3) throwBpRuntimeError(tc, "File: modo no válido");
+                if (sref == 0) throwBpRuntimeError(tc, "File: sin bloque de estado");
+                if (ficherosAbiertos.containsKey(sref)) throwBpRuntimeError(tc, "File: el objeto ya tiene un fichero abierto");
+                CursorBP c = new CursorBP();
+                c.mode = mode;
+                byte[] pk = (mode == 0) ? packResource(path) : null;   // #310 — el pack en ejecución va primero (sólo lectura)
+                c.path = (pk != null || esPackAjeno(path)) ? path : sandboxPath(tc, path).toString();
+                for (CursorBP o : ficherosAbiertos.values())
+                    if (o.path.equals(c.path) && (mode != 0 || o.mode != 0))
+                        throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): ya está abierto");
+                try {
+                    if (pk != null) { c.mem = pk; c.size = pk.length; }
+                    else if (esPackAjeno(path)) throw new java.io.IOException(path);
+                    else {
+                        java.io.File f = new java.io.File(c.path);
+                        if ((mode == 0 || mode == 3) && !f.isFile()) throw new java.io.IOException(path);
+                        if (f.isDirectory()) throw new java.io.IOException(path);
+                        c.raf = new java.io.RandomAccessFile(f, mode == 0 ? "r" : "rw");
+                        if (mode == 1) c.raf.setLength(0);
+                        c.size = c.raf.length();
+                        if (mode == 2) c.pos = c.size;
+                    }
+                } catch (java.io.IOException e) {
+                    cerrarCursor(c);
+                    throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): no se pudo abrir");
+                }
+                ficherosAbiertos.put(sref, c);
+                pushTc(tc, 0);   // void → dummy
+                break;
+            }
+            case FCLOSE: {
+                long sref = popTcRef(tc);
+                CursorBP c = (sref == 0) ? null : ficherosAbiertos.remove(sref);
+                if (c != null) cerrarCursor(c);
+                pushTc(tc, 0);
+                break;
+            }
+            case FREAD:
+            case FWRITE: {
+                boolean lectura = (b == Builtin.FREAD);
+                int n = popTc(tc);
+                int off = popTc(tc);
+                long dref = popTcRef(tc);
+                long sref = popTcRef(tc);
+                String op = lectura ? "File.read()" : "File.write()";
+                CursorBP c = cursorDe(tc, sref, op);
+                int d = (dref == 0) ? 0 : refDeref(dref);
+                if (d == 0) throwBpRuntimeError(tc, op + ": buffer nulo");
+                int dcap = readInt32(d);
+                if (off < 0 || n < 0 || off > dcap || n > dcap - off) throwBpRuntimeError(tc, op + ": fuera del buffer");
+                try {
+                    if (lectura) {
+                        int r = 0;
+                        if (n > 0 && c.pos < c.size) {
+                            int q = (int) Math.min(n, c.size - c.pos);
+                            if (c.mem != null) { System.arraycopy(c.mem, (int) c.pos, memory, d + 4 + off, q); r = q; }
+                            else { c.raf.seek(c.pos); r = c.raf.read(memory, d + 4 + off, q); if (r < 0) r = 0; }
+                            c.pos += r;
+                        }
+                        pushTc(tc, r);
+                    } else {
+                        if (c.mode == 0 || c.raf == null) throwBpRuntimeError(tc, "File.write(): abierto sólo para lectura");
+                        if (n > 0) {
+                            c.raf.seek(c.pos);
+                            c.raf.write(memory, d + 4 + off, n);
+                            c.pos += n;
+                            if (c.pos > c.size) c.size = c.pos;
+                        }
+                        pushTc(tc, 0);
+                    }
+                } catch (java.io.IOException e) {
+                    throwBpRuntimeError(tc, op + (lectura ? ": error de lectura" : ": error de escritura"));
+                }
+                break;
+            }
+            case FSEEK: {
+                int pos = popTc(tc);
+                long sref = popTcRef(tc);
+                CursorBP c = cursorDe(tc, sref, "File.seek()");
+                if (pos < 0 || pos > c.size) throwBpRuntimeError(tc, "File.seek(" + pos + "): fuera del fichero (tamaño " + c.size + ")");
+                c.pos = pos;
+                pushTc(tc, 0);
+                break;
+            }
+            case FTELL:
+            case FSIZE: {
+                long sref = popTcRef(tc);
+                CursorBP c = cursorDe(tc, sref, (b == Builtin.FTELL) ? "File.tell()" : "File.size()");
+                pushTc(tc, (int) ((b == Builtin.FTELL) ? c.pos : c.size));
+                break;
+            }
+            case FFLUSH: {
+                long sref = popTcRef(tc);
+                CursorBP c = cursorDe(tc, sref, "File.flush()");
+                try { if (c.raf != null && c.mode != 0) c.raf.getFD().sync(); }
+                catch (java.io.IOException e) { throwBpRuntimeError(tc, "File.flush(): error de escritura"); }
+                pushTc(tc, 0);
+                break;
+            }
             case FILE_EXISTS: {
                 String path = readVmString(popTcRef(tc));
                 boolean hay = (packResource(path) != null)   // #310 — el pack en ejecución va primero
@@ -4795,7 +4958,16 @@ public class VirtualMachine {
                 String path = readVmString(popTcRef(tc));
                 java.io.File dir = sandboxPath(tc, path).toFile();
                 String[] names = dir.list();
-                if (names == null) names = new String[0];
+                // V7/H3 — como la VM-C (que ya lo tiene): un directorio que no se puede abrir es
+                // ERROR, no una lista vacía; y ORDENADO por bytes UTF-8, que el orden de un
+                // listado es del FS y el mismo programa tiene que imprimir lo mismo en la placa.
+                if (names == null) throwBpRuntimeError(tc, "listDir('" + path + "'): no se pudo abrir");
+                java.util.Arrays.sort(names, (x, y) -> {
+                    byte[] bx = x.getBytes(java.nio.charset.StandardCharsets.UTF_8), by = y.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    int m = Math.min(bx.length, by.length);
+                    for (int i = 0; i < m; i++) { int d = (bx[i] & 0xFF) - (by[i] & 0xFF); if (d != 0) return d; }
+                    return bx.length - by.length;
+                });
                 long[] refs = new long[names.length];
                 for (int i = 0; i < names.length; i++) refs[i] = allocVmString(names[i]);   // #6 (censo V4): handle 64b completo (era (int)→gen=0)
                 long arrRef = allocVmRefArray(names.length);   // ya es handle
