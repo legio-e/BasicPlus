@@ -862,8 +862,16 @@ edades.put(<span class="str">"ana"</span>, Integer(<span class="num">30</span>))
   <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
       <td>Factorías: Map con comparador de strings / numérico.</td></tr>
   <tr><td><code>Map.put/get/containsKey/remove</code></td>
-      <td>Operaciones básicas; <code>get(key): Object</code> devuelve <code>null</code> si no está
-          (y el cast al tipo del valor lo pones tú).</td></tr>
+      <td>Operaciones básicas. La clave es <code>Object</code>, y las dos normales van sin envolver:
+          <code>put(k: integer, v)</code>, <code>put(k: string, v)</code>, <code>get(k)</code>,
+          <code>containsKey(k)</code>, <code>remove(k)</code> aceptan las tres (una clave integer
+          pide <code>numericMap()</code>). <code>get(key): Object</code> devuelve <code>null</code>
+          si no está.</td></tr>
+  <tr><td><code>Map.getInteger/getLong/getFloat/getDouble/getBoolean/getString(k)</code></td>
+      <td>Los captadores tipados del valor, como los de <code>List</code>: el valor se guardó
+          envuelto (<code>Integer(3)</code>, <code>Double(2.5)</code>…) y aquí se desenvuelve; con la
+          clave en cualquiera de sus tres formas. Si el valor no es de ese tipo (o la clave no
+          está), lanza <code>RuntimeError</code>: nunca un cero en silencio.</td></tr>
   <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
       <td>Iteración por índice, en el ORDEN del comparador (mapa ordenado:
           búsqueda binaria por dentro). Thread-safe (Mutex interno).</td></tr>

@@ -1,0 +1,42 @@
+// MapTipado.bp — H1 (21-sep): Map con las claves normales (integer y string) sin envolver y los
+// captadores tipados del valor. Decisión de Eduardo: key: Object, value: Object; put sobrecargado
+// para integer/string/Object y «los gets con uno específico para cada cosa». Una clave integer
+// necesita el comparador numérico (numericMap()); la de string, el Map() de siempre.
+module MapTipado
+  import Collections
+
+  public function main()
+    // claves string, valores de todo tipo (envueltos al meter, desenvueltos al sacar)
+    var m: Collections.Map := Collections.Map()
+    m.put("edad", Integer(41))
+    m.put("altura", Double(1.78))
+    m.put("nombre", "Eduardo")
+    m.put("socio", Boolean(true))
+    m.put("id", Long(7000000000L))
+    print "edad =", m.getInteger("edad")
+    print "altura =", m.getDouble("altura")
+    print "nombre =", m.getString("nombre")
+    print "socio =", m.getBoolean("socio")
+    print "id =", m.getLong("id")
+    print "tiene nombre:", m.containsKey("nombre"), " tiene peso:", m.containsKey("peso")
+    m.remove("socio")
+    print "size =", m.size()
+
+    // claves integer: el mapa numérico
+    var n: Collections.Map := Collections.numericMap()
+    n.put(10, "diez")
+    n.put(2, "dos")
+    n.put(33, "treinta y tres")
+    print "2 ->", n.getString(2), " 10 ->", n.getString(10)
+    print "orden:", n.keyAt(0).toString(), n.keyAt(1).toString(), n.keyAt(2).toString()
+    print "tiene 33:", n.containsKey(33), " tiene 4:", n.containsKey(4)
+
+    // sacar un valor con el tipo que no es: lanza, no devuelve basura
+    try
+      print m.getInteger("nombre")
+    catch e: RuntimeError
+      print "no es un numero: ok"
+    endtry
+    print "fin"
+  end main
+end MapTipado

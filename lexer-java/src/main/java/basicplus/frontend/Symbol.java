@@ -96,7 +96,11 @@ public abstract class Symbol {
          *  al pasarlas de Java a BP. Vale para el stub importado de Core y para la local al compilar Core. */
         public boolean esDelLenguaje() {
             if (isExternal && !"Core".equals(externalModule)) return false;
-            return "Object".equals(name) || "Thread".equals(name) || "Mutex".equals(name) || "StringBuilder".equals(name);
+            return nombreDelLenguaje(name);
+        }
+        /** Los cuatro nombres, para quien sólo tiene el nombre (una referencia `Core.Object` sin resolver). */
+        public static boolean nombreDelLenguaje(String n) {
+            return "Object".equals(n) || "Thread".equals(n) || "Mutex".equals(n) || "StringBuilder".equals(n);
         }
         public ClassSymbol(String name, boolean isPublic, String baseClassName,
                            Ast.ClassDef ast, int line, int column) {
@@ -399,6 +403,10 @@ public abstract class Symbol {
                 int i = n.lastIndexOf('.');
                 if (i < 0) return "L" + n + ";";
                 String suyo = n.substring(0, i);
+                // H1 P3 (21-sep): `Core.Object` sin resolver (el ns de Core llega el ÚLTIMO: el import
+                // implícito va al final) va SIMPLE, como la clase resuelta — si no, el consumidor
+                // mangleaba `put$sLCore/Object;` y el dueño `put$sLObject;` (MOD8, MapTipado).
+                if ("Core".equals(suyo) && ClassSymbol.nombreDelLenguaje(n.substring(i + 1))) return "L" + n.substring(i + 1) + ";";
                 return "L" + (suyo.equals(dueno) ? "" : suyo.replace('.', '/') + "/") + n.substring(i + 1) + ";";
             }
             if (t instanceof BpType.EnumType) {
@@ -733,6 +741,8 @@ public abstract class Symbol {
                 return sb.append(';').toString();
             }
             if (t instanceof BpType.UnresolvedClassRef) {
+                String un = ((BpType.UnresolvedClassRef) t).name;   // H1 P3: `Core.Object` sin resolver, simple
+                if (un.startsWith("Core.") && ClassSymbol.nombreDelLenguaje(un.substring(5))) return "L" + un.substring(5) + ";";
                 // V10 (16-sep, H1): una clase de una dependencia TRANSITIVA que este módulo no importa
                 // (`Lib.Base` en la interfaz de `Mid`) no tiene ClassSymbol, pero su nombre ya viene
                 // cualificado: la clave sólo necesita eso. Sin punto no hay de dónde sacar el módulo.

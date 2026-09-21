@@ -860,8 +860,15 @@ ages.put(<span class="str">"ana"</span>, Integer(<span class="num">30</span>))
   <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
       <td>Factories: a Map with a string / numeric comparator.</td></tr>
   <tr><td><code>Map.put/get/containsKey/remove</code></td>
-      <td>Basic operations; <code>get(key): Object</code> returns <code>null</code> if absent
-          (and the cast to the value's type is yours).</td></tr>
+      <td>Basic operations. The key is an <code>Object</code>, and the two usual ones go unwrapped:
+          <code>put(k: integer, v)</code>, <code>put(k: string, v)</code>, <code>get(k)</code>,
+          <code>containsKey(k)</code>, <code>remove(k)</code> accept all three (an integer key needs
+          <code>numericMap()</code>). <code>get(key): Object</code> returns <code>null</code> if absent.</td></tr>
+  <tr><td><code>Map.getInteger/getLong/getFloat/getDouble/getBoolean/getString(k)</code></td>
+      <td>Typed value getters, like <code>List</code>'s: the value was stored wrapped
+          (<code>Integer(3)</code>, <code>Double(2.5)</code>…) and is unwrapped here; the key in any of
+          its three forms. If the value is not of that type (or the key is absent) it throws
+          <code>RuntimeError</code>: never a silent zero.</td></tr>
   <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
       <td>Iteration by index, in the comparator's ORDER (ordered map:
           binary search inside). Thread-safe (internal Mutex).</td></tr>

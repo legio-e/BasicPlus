@@ -328,6 +328,125 @@ module Collections
       return existed
     end remove
 
+    // -------- Las sobrecargas (H1, decisión de Eduardo 21-sep) --------
+    // «Map es con key: Object y value: Object. Los keys normales son integer y string, value en
+    // cambio puede ser cualquier objeto. Así que put se sobrecarga con put(k: integer, v: Object),
+    // put(k: string, v: Object) y put(k: Object, v: Object). Los gets con uno específico para cada
+    // cosa.» Todo delega en la versión Object: nada de casos especiales en el compilador. Una clave
+    // integer se envuelve (Integer) y necesita un comparador numérico: numericMap(), no Map().
+    // Un string YA es un Object (#389): el paso por `var o: Object` evita que la sobrecarga se
+    // llame a sí misma.
+    public function put(k: integer, v: Object)
+      this.put(Integer(k), v)
+    end put
+    public function put(k: string, v: Object)
+      var o: Object := k
+      this.put(o, v)
+    end put
+
+    public function get(k: integer): Object
+      return this.get(Integer(k))
+    end get
+    public function get(k: string): Object
+      var o: Object := k
+      return this.get(o)
+    end get
+
+    public function containsKey(k: integer): boolean
+      return this.containsKey(Integer(k))
+    end containsKey
+    public function containsKey(k: string): boolean
+      var o: Object := k
+      return this.containsKey(o)
+    end containsKey
+
+    public function remove(k: integer): boolean
+      return this.remove(Integer(k))
+    end remove
+    public function remove(k: string): boolean
+      var o: Object := k
+      return this.remove(o)
+    end remove
+
+    // Los captadores tipados del valor, como los de List: el valor se guardó envuelto
+    // (Integer(3), Double(2.5)…) y aquí se desenvuelve; una clave que no está es un
+    // valor null y el desenvolver lanza (RuntimeError), no devuelve un cero en silencio.
+    public function getString(k: Object): string
+      var o: Object := this.get(k)
+      try
+        return string(o)
+      catch e: Exception
+      endtry
+      return o.toString()
+    end getString
+    public function getString(k: integer): string
+      return this.getString(Integer(k))
+    end getString
+    public function getString(k: string): string
+      var o: Object := k
+      return this.getString(o)
+    end getString
+
+    public function getInteger(k: Object): integer
+      var c: Comparable := Comparable(this.get(k))
+      return c.toInteger()
+    end getInteger
+    public function getInteger(k: integer): integer
+      return this.getInteger(Integer(k))
+    end getInteger
+    public function getInteger(k: string): integer
+      var o: Object := k
+      return this.getInteger(o)
+    end getInteger
+
+    public function getLong(k: Object): long
+      var c: Comparable := Comparable(this.get(k))
+      return c.toLong()
+    end getLong
+    public function getLong(k: integer): long
+      return this.getLong(Integer(k))
+    end getLong
+    public function getLong(k: string): long
+      var o: Object := k
+      return this.getLong(o)
+    end getLong
+
+    public function getFloat(k: Object): float
+      var c: Comparable := Comparable(this.get(k))
+      return c.toFloat()
+    end getFloat
+    public function getFloat(k: integer): float
+      return this.getFloat(Integer(k))
+    end getFloat
+    public function getFloat(k: string): float
+      var o: Object := k
+      return this.getFloat(o)
+    end getFloat
+
+    public function getDouble(k: Object): double
+      var c: Comparable := Comparable(this.get(k))
+      return c.toDouble()
+    end getDouble
+    public function getDouble(k: integer): double
+      return this.getDouble(Integer(k))
+    end getDouble
+    public function getDouble(k: string): double
+      var o: Object := k
+      return this.getDouble(o)
+    end getDouble
+
+    public function getBoolean(k: Object): boolean
+      var c: Comparable := Comparable(this.get(k))
+      return c.toBoolean()
+    end getBoolean
+    public function getBoolean(k: integer): boolean
+      return this.getBoolean(Integer(k))
+    end getBoolean
+    public function getBoolean(k: string): boolean
+      var o: Object := k
+      return this.getBoolean(o)
+    end getBoolean
+
     // Acceso por índice (0..size-1) en orden de clave. Para iterar:
     //   var i := 0
     //   while i < m.size() do

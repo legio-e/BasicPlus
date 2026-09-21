@@ -110,19 +110,63 @@ lines
 1869 327
 1881 328
 1897 340
-1909 341
-1924 342
-1936 343
-1955 347
-1967 348
-1982 349
-1994 350
-2013 228
-2022 229
-2031 230
-2056 231
-2278 364
-2313 369
+1920 343
+1926 344
+1947 348
+1975 351
+1981 352
+2007 356
+2033 359
+2039 360
+2063 364
+2089 367
+2095 368
+2119 375
+2132 376
+2139 377
+2170 380
+2193 383
+2221 386
+2227 387
+2253 391
+2271 392
+2292 395
+2318 398
+2324 399
+2348 403
+2366 404
+2389 407
+2417 410
+2423 411
+2449 415
+2467 416
+2488 419
+2514 422
+2520 423
+2544 427
+2562 428
+2585 431
+2613 434
+2619 435
+2645 439
+2663 440
+2684 443
+2710 446
+2716 447
+2740 459
+2752 460
+2767 461
+2779 462
+2798 466
+2810 467
+2825 468
+2837 469
+2856 228
+2865 229
+2874 230
+2899 231
+3653 483
+3688 488
 vars
 func Comparator.compare 40
 this -36 8 0 ?
@@ -267,39 +311,216 @@ this -28 8 0 ?
 key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 1894
+func Map.put$iLObject; 1894
+this -32 8 0 ?
+k -24 4 0 integer
+v -20 8 0 ref
+func Map.put$sLObject; 1917
+this -36 8 0 ?
+k -28 8 0 string
+v -20 8 0 ref
+o 0 8 0 ?
+func Map.get$i 1944
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.get$s 1972
+this -28 8 0 ?
+k -20 8 0 string
+o 8 8 0 ?
+func Map.containsKey$i 2004
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.containsKey$s 2030
+this -28 8 0 ?
+k -20 8 0 string
+o 4 8 0 ?
+func Map.remove$i 2060
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.remove$s 2086
+this -28 8 0 ?
+k -20 8 0 string
+o 4 8 0 ?
+func Map.getString 2116
+this -28 8 0 ?
+k -20 8 0 ref
+o 8 8 0 ?
+e 16 8 0 ?
+func Map.getString$i 2190
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.getString$s 2218
+this -28 8 0 ?
+k -20 8 0 string
+o 8 8 0 ?
+func Map.getInteger 2250
+this -28 8 0 ?
+k -20 8 0 ref
+c 4 8 0 ?
+func Map.getInteger$i 2289
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.getInteger$s 2315
+this -28 8 0 ?
+k -20 8 0 string
+o 4 8 0 ?
+func Map.getLong 2345
+this -28 8 0 ?
+k -20 8 0 ref
+c 8 8 0 ?
+func Map.getLong$i 2386
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.getLong$s 2414
+this -28 8 0 ?
+k -20 8 0 string
+o 8 8 0 ?
+func Map.getFloat 2446
+this -28 8 0 ?
+k -20 8 0 ref
+c 4 8 0 ?
+func Map.getFloat$i 2485
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.getFloat$s 2511
+this -28 8 0 ?
+k -20 8 0 string
+o 4 8 0 ?
+func Map.getDouble 2541
+this -28 8 0 ?
+k -20 8 0 ref
+c 8 8 0 ?
+func Map.getDouble$i 2582
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.getDouble$s 2610
+this -28 8 0 ?
+k -20 8 0 string
+o 8 8 0 ?
+func Map.getBoolean 2642
+this -28 8 0 ?
+k -20 8 0 ref
+c 4 8 0 ?
+func Map.getBoolean$i 2681
+this -24 8 0 ?
+k -16 4 0 integer
+func Map.getBoolean$s 2707
+this -28 8 0 ?
+k -20 8 0 string
+o 4 8 0 ?
+func Map.keyAt 2737
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 1952
+func Map.valueAt 2795
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 2010
+func Map.__init 2853
 this -20 8 0 ?
-func __cls_init_Map() 2098
+func __cls_init_Map() 2941
 this -20 8 0 ?
-func __cls_m_Map#keyAt(i)LObject; 2112
+func __cls_m_Map#keyAt(i)LObject; 2955
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Map#containsKey(LObject;)z 2133
+func __cls_m_Map#containsKey(LObject;)z 2976
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#valueAt(i)LObject; 2153
+func __cls_m_Map#containsKey(i)z 2996
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#containsKey(s)z 3015
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#getDouble(LObject;)d 3035
+this -28 8 0 ?
+k -20 8 0 ref
+func __cls_m_Map#getDouble(i)d 3057
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#getDouble(s)d 3078
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#getInteger(LObject;)i 3100
+this -28 8 0 ?
+k -20 8 0 ref
+func __cls_m_Map#getInteger(i)i 3120
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#getInteger(s)i 3139
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#valueAt(i)LObject; 3159
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Map#withComparator(LCollections/Comparator;)LCollections/Map; 2174
+func __cls_m_Map#withComparator(LCollections/Comparator;)LCollections/Map; 3180
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Map#put(LObject;LObject;)V 2196
+func __cls_m_Map#getString(LObject;)s 3202
+this -28 8 0 ?
+k -20 8 0 ref
+func __cls_m_Map#getString(i)s 3224
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#getString(s)s 3245
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#getFloat(LObject;)f 3267
+this -28 8 0 ?
+k -20 8 0 ref
+func __cls_m_Map#getFloat(i)f 3287
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#getFloat(s)f 3306
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#put(LObject;LObject;)V 3326
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
-func __cls_m_Map#remove(LObject;)z 2216
+func __cls_m_Map#put(iLObject;)V 3346
+this -32 8 0 ?
+k -24 4 0 integer
+v -20 8 0 ref
+func __cls_m_Map#put(sLObject;)V 3365
+this -36 8 0 ?
+k -28 8 0 string
+v -20 8 0 ref
+func __cls_m_Map#remove(LObject;)z 3385
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#size()i 2236
+func __cls_m_Map#remove(i)z 3405
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#remove(s)z 3424
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#getLong(LObject;)j 3444
+this -28 8 0 ?
+k -20 8 0 ref
+func __cls_m_Map#getLong(i)j 3466
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#getLong(s)j 3487
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#size()i 3509
 this -20 8 0 ?
-func __cls_m_Map#get(LObject;)LObject; 2253
+func __cls_m_Map#get(LObject;)LObject; 3526
 this -28 8 0 ?
 key -20 8 0 ref
+func __cls_m_Map#get(i)LObject; 3548
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#get(s)LObject; 3569
+this -28 8 0 ?
+k -20 8 0 string
+func __cls_m_Map#getBoolean(LObject;)z 3591
+this -28 8 0 ?
+k -20 8 0 ref
+func __cls_m_Map#getBoolean(i)z 3611
+this -24 8 0 ?
+k -16 4 0 integer
+func __cls_m_Map#getBoolean(s)z 3630
+this -28 8 0 ?
+k -20 8 0 string
