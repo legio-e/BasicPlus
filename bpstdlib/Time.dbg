@@ -1,0 +1,251 @@
+dbg 3
+module Time
+source C:\lenguajes\pm\bpstdlib\Time.bp
+lines
+278 158
+324 162
+380 167
+411 171
+422 172
+442 173
+456 175
+476 176
+489 178
+504 183
+546 187
+627 191
+771 126
+783 127
+803 128
+823 129
+826 130
+829 131
+832 132
+876 133
+887 134
+898 135
+909 136
+932 137
+965 138
+988 139
+1014 140
+1032 141
+1053 143
+1446 29
+1456 30
+1516 31
+1537 33
+1556 38
+1572 39
+1592 40
+1612 41
+1670 42
+1690 43
+1738 44
+1774 45
+1824 46
+1840 47
+1858 48
+1879 50
+1897 51
+1918 53
+1970 58
+1976 59
+1985 60
+2006 62
+2026 63
+2046 64
+2058 65
+2067 66
+2080 68
+2130 69
+2178 70
+2221 74
+2284 78
+2293 79
+2305 80
+2322 82
+2339 84
+2408 85
+2425 87
+2444 92
+2473 93
+2494 95
+2527 96
+2549 98
+2650 99
+2706 101
+2775 105
+2788 106
+2814 108
+2842 198
+2849 199
+vars
+func Date.getEpoch 40
+this -20 8 0 ?
+func Date.setEpoch 57
+this -28 8 0 ?
+func Date.getYear 72
+this -20 8 0 ?
+func Date.setYear 87
+this -24 8 0 ?
+func Date.getMonth 101
+this -20 8 0 ?
+func Date.setMonth 116
+this -24 8 0 ?
+func Date.getDay 130
+this -20 8 0 ?
+func Date.setDay 145
+this -24 8 0 ?
+func Date.getHour 159
+this -20 8 0 ?
+func Date.setHour 174
+this -24 8 0 ?
+func Date.getMinute 188
+this -20 8 0 ?
+func Date.setMinute 203
+this -24 8 0 ?
+func Date.getSecond 217
+this -20 8 0 ?
+func Date.setSecond 232
+this -24 8 0 ?
+func Date.getWeekday 246
+this -20 8 0 ?
+func Date.setWeekday 261
+this -24 8 0 ?
+func Date.addSeconds 275
+this -28 8 0 ?
+n -20 8 0 long
+func Date.addDays 321
+this -24 8 0 ?
+n -16 4 0 integer
+func Date.secondsSince 377
+this -28 8 0 ?
+otro -20 8 0 ref
+func Date.compareTo 408
+this -28 8 0 ?
+other -20 8 0 ref
+o 4 8 0 ?
+func Date.toString 501
+this -20 8 0 ?
+func Date.toDateString 543
+this -20 8 0 ?
+func Date.toTimeString 624
+this -20 8 0 ?
+func Date.__init 700
+this -28 8 0 ?
+e -20 8 0 long
+dias 4 8 0 long
+resto 12 8 0 long
+y 20 4 0 integer
+mo 24 4 0 integer
+d 28 4 0 integer
+wd 52 8 0 long
+func Date.__init$iiiiii 1069
+this -44 8 0 ?
+y -36 4 0 integer
+mo -32 4 0 integer
+d -28 4 0 integer
+h -24 4 0 integer
+mi -20 4 0 integer
+s -16 4 0 integer
+func Date.__init$iii 1102
+this -32 8 0 ?
+y -24 4 0 integer
+mo -20 4 0 integer
+d -16 4 0 integer
+func __cls_new_Date(j) 1127
+e -20 8 0 long
+func __cls_new_Date(iiiiii) 1160
+y -36 4 0 integer
+mo -32 4 0 integer
+d -28 4 0 integer
+h -24 4 0 integer
+mi -20 4 0 integer
+s -16 4 0 integer
+func __cls_new_Date(iii) 1202
+y -24 4 0 integer
+mo -20 4 0 integer
+d -16 4 0 integer
+func __cls_init_Date(j) 1238
+this -28 8 0 ?
+e -20 8 0 long
+func __cls_init_Date(iiiiii) 1255
+this -44 8 0 ?
+y -36 4 0 integer
+mo -32 4 0 integer
+d -28 4 0 integer
+h -24 4 0 integer
+mi -20 4 0 integer
+s -16 4 0 integer
+func __cls_init_Date(iii) 1281
+this -32 8 0 ?
+y -24 4 0 integer
+mo -20 4 0 integer
+d -16 4 0 integer
+func __cls_m_Date#toDateString()s 1301
+this -20 8 0 ?
+func __cls_m_Date#compareTo(LObject;)i 1320
+this -28 8 0 ?
+other -20 8 0 ref
+func __cls_m_Date#secondsSince(LTime/Date;)j 1340
+this -28 8 0 ?
+otro -20 8 0 ref
+func __cls_m_Date#addSeconds(j)LTime/Date; 1362
+this -28 8 0 ?
+n -20 8 0 long
+func __cls_m_Date#addDays(i)LTime/Date; 1384
+this -24 8 0 ?
+n -16 4 0 integer
+func __cls_m_Date#toString()s 1405
+this -20 8 0 ?
+func __cls_m_Date#toTimeString()s 1424
+this -20 8 0 ?
+func divFloor 1443
+a -28 8 0 long
+b -20 8 0 long
+q 8 8 0 long
+func civilDesdeDias 1553
+z0 -20 8 0 long
+z 8 8 0 long
+era 16 8 0 long
+doe 24 8 0 long
+yoe 32 8 0 long
+y 40 8 0 long
+doy 48 8 0 long
+mp 56 8 0 long
+d 64 8 0 long
+m 72 8 0 long
+func diasDesdeCivil 1967
+y0 -24 4 0 integer
+m -20 4 0 integer
+d -16 4 0 integer
+y 8 8 0 long
+era 16 8 0 long
+yoe 24 8 0 long
+mp 32 8 0 long
+doy 40 8 0 long
+doe 48 8 0 long
+func esBisiesto 2218
+y -16 4 0 integer
+func diasDelMes 2281
+y -20 4 0 integer
+m -16 4 0 integer
+func epochDe 2441
+y -36 4 0 integer
+mo -32 4 0 integer
+d -28 4 0 integer
+h -24 4 0 integer
+mi -20 4 0 integer
+s -16 4 0 integer
+func dosCifras 2772
+n -16 4 0 integer
+func now 2839
+s 8 8 0 long
+func __strconcat 2884
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

@@ -1,0 +1,201 @@
+// ============================================================
+// Time.bp — fecha y hora civiles sobre un `long` de segundos de época (Unix, UTC).
+//
+// #396 (V7/H1, 21-sep): `Time.Date` NO es un tipo del lenguaje: es una clase BP corriente que
+// descompone y compone un epoch en año/mes/día/hora/minuto/segundo (calendario gregoriano
+// proléptico, sin zona horaria: un micro no tiene tz). El epoch es `long`, así que no hay
+// tope en 2038. El reloj lo da `Rtc` (segundos desde el arranque, o de pared si el IDE lo
+// calibró); aquí sólo hay aritmética de calendario, BP puro, igual en las dos VMs.
+//
+//   import Time
+//   var d: Time.Date := Time.Date(1716544800L)     // 2024-05-24 10:00:00
+//   print d.year, d.month, d.day, d.weekday         // 2024 5 24 5 (viernes; 0 = domingo)
+//   print d.toString()                              // 2024-05-24 10:00:00
+//   var e: Time.Date := Time.Date(2024, 12, 31, 23, 59, 59)
+//   print e.epoch                                   // 1735689599
+//   print Time.now().toString()                     // la hora del reloj de la VM
+//
+// El algoritmo de días↔fecha civil es el de Howard Hinnant (días desde 1970-03-01 con eras
+// de 400 años): exacto para cualquier `long` razonable, sin tablas ni bucles.
+// ============================================================
+module Time
+  import Rtc
+
+  public const SEG_DIA: long := 86400L
+
+  // ---- helpers de calendario (funciones del módulo; una clase no ve las privadas) ----
+  // División entera hacia -infinito (BP trunca hacia cero, como C).
+  public function divFloor(a: long, b: long): long
+    var q: long := a / b
+    if (a mod b != 0L) and ((a < 0L) != (b < 0L)) then
+      q := q - 1L
+    endif
+    return q
+  end divFloor
+
+  // Días desde 1970-01-01 → (año, mes, día). Hinnant, civil_from_days.
+  public function civilDesdeDias(z0: long): (integer, integer, integer)
+    var z: long := z0 + 719468L
+    var era: long := divFloor(z, 146097L)
+    var doe: long := z - era * 146097L                                  // [0, 146096]
+    var yoe: long := (doe - doe / 1460L + doe / 36524L - doe / 146096L) / 365L   // [0, 399]
+    var y: long := yoe + era * 400L
+    var doy: long := doe - (365L * yoe + yoe / 4L - yoe / 100L)          // [0, 365]
+    var mp: long := (5L * doy + 2L) / 153L                                // [0, 11]
+    var d: long := doy - (153L * mp + 2L) / 5L + 1L                       // [1, 31]
+    var m: long := mp + 3L
+    if m > 12L then
+      m := m - 12L
+    endif
+    if m <= 2L then
+      y := y + 1L
+    endif
+    return (integer(y), integer(m), integer(d))
+  end civilDesdeDias
+
+  // (año, mes, día) → días desde 1970-01-01. Hinnant, days_from_civil.
+  public function diasDesdeCivil(y0: integer, m: integer, d: integer): long
+    var y: long := y0
+    if m <= 2 then
+      y := y - 1L
+    endif
+    var era: long := divFloor(y, 400L)
+    var yoe: long := y - era * 400L                                      // [0, 399]
+    var mp: long := m + 9
+    if m > 2 then
+      mp := m - 3
+    endif
+    var doy: long := (153L * mp + 2L) / 5L + d - 1L                      // [0, 365]
+    var doe: long := yoe * 365L + yoe / 4L - yoe / 100L + doy           // [0, 146096]
+    return era * 146097L + doe - 719468L
+  end diasDesdeCivil
+
+  public function esBisiesto(y: integer): boolean
+    return (y mod 4 == 0 and y mod 100 != 0) or (y mod 400 == 0)
+  end esBisiesto
+
+  public function diasDelMes(y: integer, m: integer): integer
+    if m == 2 then
+      if esBisiesto(y) then
+        return 29
+      endif
+      return 28
+    endif
+    if m == 4 or m == 6 or m == 9 or m == 11 then
+      return 30
+    endif
+    return 31
+  end diasDelMes
+
+  // Los campos civiles → epoch, validando (mes 1..12, día del mes, hora 0..23, min/seg 0..59).
+  public function epochDe(y: integer, mo: integer, d: integer, h: integer, mi: integer, s: integer): long
+    if mo < 1 or mo > 12 then
+      throw RuntimeError("Time.Date: mes fuera de rango: " + mo)
+    endif
+    if d < 1 or d > diasDelMes(y, mo) then
+      throw RuntimeError("Time.Date: día fuera de rango: " + d)
+    endif
+    if h < 0 or h > 23 or mi < 0 or mi > 59 or s < 0 or s > 59 then
+      throw RuntimeError("Time.Date: hora fuera de rango: " + h + ":" + mi + ":" + s)
+    endif
+    return diasDesdeCivil(y, mo, d) * SEG_DIA + h * 3600L + mi * 60L + s
+  end epochDe
+
+  public function dosCifras(n: integer): string
+    if n < 10 then
+      return "0" + n
+    endif
+    return "" + n
+  end dosCifras
+
+  // ------------------------------------------------------------
+  // Date — un instante, como epoch y descompuesto. Inmutable: las operaciones devuelven otro.
+  // ------------------------------------------------------------
+  public class Date
+    public property epoch: long := 0L
+    public property year: integer := 1970
+    public property month: integer := 1       // 1..12
+    public property day: integer := 1         // 1..31
+    public property hour: integer := 0
+    public property minute: integer := 0
+    public property second: integer := 0
+    public property weekday: integer := 4     // 0 = domingo … 6 = sábado (1970-01-01 fue jueves)
+
+    // Desde un epoch (segundos UTC).
+    public function Date(e: long)
+      this.epoch := e
+      var dias: long := divFloor(e, SEG_DIA)
+      var resto: long := e - dias * SEG_DIA                  // [0, 86399]
+      var y: integer := 0
+      var mo: integer := 0
+      var d: integer := 0
+      { y, mo, d } := civilDesdeDias(dias)
+      this.year := y
+      this.month := mo
+      this.day := d
+      this.hour := integer(resto / 3600L)
+      this.minute := integer((resto mod 3600L) / 60L)
+      this.second := integer(resto mod 60L)
+      var wd: long := (dias + 4L) mod 7L                      // 1970-01-01 = jueves = 4
+      if wd < 0L then
+        wd := wd + 7L
+      endif
+      this.weekday := integer(wd)
+    end Date
+
+    // Desde los campos civiles. Valores fuera de rango lanzan RuntimeError (en epochDe). La
+    // delegación en Date(e) tiene que ser la PRIMERA línea del constructor (#511).
+    public function Date(y: integer, mo: integer, d: integer, h: integer, mi: integer, s: integer)
+      Date(epochDe(y, mo, d, h, mi, s))
+    end Date
+
+    // Sólo la fecha, a medianoche.
+    public function Date(y: integer, mo: integer, d: integer)
+      Date(y, mo, d, 0, 0, 0)
+    end Date
+
+    public function addSeconds(n: long): Date
+      return Date(this.epoch + n)
+    end addSeconds
+
+    public function addDays(n: integer): Date
+      return Date(this.epoch + n * SEG_DIA)
+    end addDays
+
+    // Diferencia en segundos: this - otro.
+    public function secondsSince(otro: Date): long
+      return this.epoch - otro.epoch
+    end secondsSince
+
+    public function compareTo(other: Object): integer
+      var o: Date := Date(other)
+      if this.epoch < o.epoch then
+        return -1
+      endif
+      if this.epoch > o.epoch then
+        return 1
+      endif
+      return 0
+    end compareTo
+
+    // "YYYY-MM-DD HH:MM:SS"
+    public function toString(): string
+      return this.toDateString() + " " + this.toTimeString()
+    end toString
+
+    public function toDateString(): string
+      return "" + this.year + "-" + dosCifras(this.month) + "-" + dosCifras(this.day)
+    end toDateString
+
+    public function toTimeString(): string
+      return dosCifras(this.hour) + ":" + dosCifras(this.minute) + ":" + dosCifras(this.second)
+    end toTimeString
+  end Date
+
+  // El instante actual, del reloj de la VM (Rtc: segundos desde el arranque, o de pared si
+  // el IDE lo calibró al conectar).
+  public function now(): Date
+    var s: long := Rtc.nowSec()
+    return Date(s)
+  end now
+end Time

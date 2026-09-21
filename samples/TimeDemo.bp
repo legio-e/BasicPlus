@@ -1,0 +1,34 @@
+// TimeDemo.bp — #396 (V7/H1, 21-sep): Time.Date sobre un long de segundos de época. Fechas
+// fijas para que la salida sea la misma en las dos VMs; Time.now() se enseña sin imprimirla.
+module TimeDemo
+  import Time
+
+  public function main()
+    var d: Time.Date := Time.Date(0L)
+    print d.toString(), "weekday=" + d.weekday                     // 1970-01-01 00:00:00, jueves (4)
+    var v: Time.Date := Time.Date(1716544800L)
+    print v.toString(), "weekday=" + v.weekday                     // 2024-05-24 10:00:00, viernes (5)
+    var b: Time.Date := Time.Date(951782400L)
+    print b.toDateString(), "bisiesto=" + Time.esBisiesto(b.year)  // 2000-02-29
+    var f: Time.Date := Time.Date(2024, 12, 31, 23, 59, 59)
+    print f.epoch, f.toString()                                    // 1735689599
+    print f.addSeconds(1L).toString()                              // 2025-01-01 00:00:00
+    print f.addDays(-366).toDateString()                           // 2023-12-31
+    var g: Time.Date := Time.Date(2038, 1, 19, 3, 14, 8)
+    print g.epoch, g.toString()                                    // 2147483648: pasa del int32 sin inmutarse
+    var h: Time.Date := Time.Date(2100, 3, 1)
+    print h.addDays(-1).toDateString(), Time.diasDelMes(2100, 2)   // 2100-02-28 28 (2100 no es bisiesto)
+    var antes: Time.Date := Time.Date(1969, 12, 31, 23, 59, 59)
+    print antes.epoch, antes.toString(), "weekday=" + antes.weekday   // -1, miércoles (3)
+    print "compara:", f.compareTo(g), g.compareTo(f), f.compareTo(Time.Date(f.epoch))
+    print "segundos entre:", g.secondsSince(f)
+    try
+      var mal: Time.Date := Time.Date(2023, 2, 29)
+      print mal.toString()
+    catch e: RuntimeError
+      print "rechazada: " + e.msg
+    endtry
+    var ahora: Time.Date := Time.now()
+    print "now tiene año >= 1970:", ahora.year >= 1970
+  end main
+end TimeDemo

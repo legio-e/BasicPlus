@@ -1671,6 +1671,34 @@ port.write(tx, <span class="num">4</span>)
 
 <!-- =========================================================== -->
 
+<h3 id="stdlib-time">14.11b <code>Time</code> (civil date and time)</h3>
+<p>
+  <code>Time.Date</code> is an ordinary BP class — not a language type — over a <code>long</code>
+  of epoch seconds (Unix, UTC; no time zone: a micro has none). The <code>long</code> removes the
+  2038 limit. Calendar arithmetic only (proleptic Gregorian), identical in both VMs; the clock
+  comes from <code>Rtc</code>.
+</p>
+<pre><code><span class="kw">import</span> Time
+<span class="kw">var</span> d: Time.Date := Time.Date(<span class="num">1716544800L</span>)      <span class="comment">// from an epoch</span>
+<span class="kw">print</span> d.year, d.month, d.day, d.hour, d.weekday   <span class="comment">// 2024 5 24 10 5 (0 = Sunday)</span>
+<span class="kw">print</span> d.toString()                                <span class="comment">// 2024-05-24 10:00:00</span>
+<span class="kw">var</span> f: Time.Date := Time.Date(<span class="num">2024</span>, <span class="num">12</span>, <span class="num">31</span>, <span class="num">23</span>, <span class="num">59</span>, <span class="num">59</span>)   <span class="comment">// from fields (validated)</span>
+<span class="kw">print</span> f.epoch, f.addSeconds(<span class="num">1L</span>).toDateString()    <span class="comment">// 1735689599 2025-01-01</span>
+<span class="kw">print</span> Time.now().toString()                       <span class="comment">// the VM clock (Rtc)</span></code></pre>
+<table>
+  <tr><th>API</th><th>Description</th></tr>
+  <tr><td><code>Date(epoch: long)</code> · <code>Date(y, m, d, h, mi, s)</code> · <code>Date(y, m, d)</code></td>
+      <td>Constructors; the civil ones throw <code>RuntimeError</code> when a field is out of range.</td></tr>
+  <tr><td><code>epoch, year, month, day, hour, minute, second, weekday</code></td>
+      <td>Read properties. <code>weekday</code>: 0 = Sunday … 6 = Saturday.</td></tr>
+  <tr><td><code>addSeconds(n: long)</code> · <code>addDays(n)</code> · <code>secondsSince(other)</code></td>
+      <td>Immutable: they return another <code>Date</code>; <code>secondsSince</code> is <code>this − other</code> in seconds.</td></tr>
+  <tr><td><code>compareTo(o)</code> · <code>toString()</code> · <code>toDateString()</code> · <code>toTimeString()</code></td>
+      <td>Natural order (works as a <code>Map</code> key with the natural comparator); "YYYY-MM-DD HH:MM:SS".</td></tr>
+  <tr><td><code>Time.now()</code> · <code>esBisiesto(y)</code> · <code>diasDelMes(y, m)</code> · <code>epochDe(…)</code></td>
+      <td>The VM clock's instant, and the standalone calendar functions.</td></tr>
+</table>
+
 <h3 id="stdlib-timer">14.12 <code>Timer</code> (periodic alarms)</h3>
 <p>
   <code>Timer.Alarm</code> is a pure-BP abstraction over

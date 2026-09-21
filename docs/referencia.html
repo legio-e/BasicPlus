@@ -1675,6 +1675,34 @@ port.write(tx, <span class="num">4</span>)
 
 <!-- =========================================================== -->
 
+<h3 id="stdlib-time">14.11b <code>Time</code> (fecha y hora civiles)</h3>
+<p>
+  <code>Time.Date</code> es una clase BP corriente —no un tipo del lenguaje— sobre un
+  <code>long</code> de segundos de época (Unix, UTC; sin zona horaria: un micro no tiene). El
+  <code>long</code> quita el tope de 2038. Sólo aritmética de calendario (gregoriano proléptico),
+  igual en las dos VMs; el reloj lo da <code>Rtc</code>.
+</p>
+<pre><code><span class="kw">import</span> Time
+<span class="kw">var</span> d: Time.Date := Time.Date(<span class="num">1716544800L</span>)      <span class="comment">// desde un epoch</span>
+<span class="kw">print</span> d.year, d.month, d.day, d.hour, d.weekday   <span class="comment">// 2024 5 24 10 5 (0 = domingo)</span>
+<span class="kw">print</span> d.toString()                                <span class="comment">// 2024-05-24 10:00:00</span>
+<span class="kw">var</span> f: Time.Date := Time.Date(<span class="num">2024</span>, <span class="num">12</span>, <span class="num">31</span>, <span class="num">23</span>, <span class="num">59</span>, <span class="num">59</span>)   <span class="comment">// desde los campos (valida)</span>
+<span class="kw">print</span> f.epoch, f.addSeconds(<span class="num">1L</span>).toDateString()    <span class="comment">// 1735689599 2025-01-01</span>
+<span class="kw">print</span> Time.now().toString()                       <span class="comment">// el reloj de la VM (Rtc)</span></code></pre>
+<table>
+  <tr><th>API</th><th>Descripción</th></tr>
+  <tr><td><code>Date(epoch: long)</code> · <code>Date(y, m, d, h, mi, s)</code> · <code>Date(y, m, d)</code></td>
+      <td>Constructores; los civiles lanzan <code>RuntimeError</code> si un campo se sale (29 de febrero de 2023…).</td></tr>
+  <tr><td><code>epoch, year, month, day, hour, minute, second, weekday</code></td>
+      <td>Propiedades de lectura. <code>weekday</code>: 0 = domingo … 6 = sábado.</td></tr>
+  <tr><td><code>addSeconds(n: long)</code> · <code>addDays(n)</code> · <code>secondsSince(otro)</code></td>
+      <td>Inmutable: devuelven otro <code>Date</code>; <code>secondsSince</code> es <code>this − otro</code> en segundos.</td></tr>
+  <tr><td><code>compareTo(o)</code> · <code>toString()</code> · <code>toDateString()</code> · <code>toTimeString()</code></td>
+      <td>Orden natural (vale como clave de <code>Map</code> con el comparador natural); «YYYY-MM-DD HH:MM:SS».</td></tr>
+  <tr><td><code>Time.now()</code> · <code>esBisiesto(y)</code> · <code>diasDelMes(y, m)</code> · <code>epochDe(…)</code></td>
+      <td>El instante del reloj de la VM, y las funciones de calendario sueltas.</td></tr>
+</table>
+
 <h3 id="stdlib-timer">14.12 <code>Timer</code> (alarmas periódicas)</h3>
 <p>
   <code>Timer.Alarm</code> es una abstracción puramente BP sobre

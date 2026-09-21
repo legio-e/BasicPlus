@@ -28,6 +28,7 @@ module Stdlib
   import Packs            // #414 — qué packs hay grabados y qué llevan dentro
   import Stats            // estadística
   import Str              // cadenas
+  import Time             // #396 — fecha y hora civiles sobre un long de época (Time.Date)
   import Timer            // temporizadores
 
   // --- interfaz gráfica ---
