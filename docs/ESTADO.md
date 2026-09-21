@@ -71,6 +71,17 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## ⏭️ Traspaso (21-sep, al cerrar) — lo siguiente: la 1.ª etapa de H11 (la C5 sin LVGL), y después H7 y H4
+
+Eduardo, al parar: *«cuando vuelva podemos probar la 1.ª etapa a ver qué tal. Y nos pararemos ahí. Después H7 y H4 o
+lo que toque, pero ya para mañana y siguientes días.»* Así que el orden es: **(1) la imagen de la C5 SIN LVGL**
+(H11, 1.ª etapa: clonar `esp32c6/` → `esp32c5/`, `chip_cfg.h`, board id, particiones, `sdkconfig.defaults`, el
+reparto de memoria con los 8 MB de PSRAM, serie, la TF; `tanda.py` con la C5 de columna; ver `V7_BACKLOG` §H11) —
+comprobado ya que el IDF instalado (`C:\esp\v6.0.1`) trae el target `esp32c5` (`idf.py --list-targets`, y
+`components/soc/esp32c5`); **(2) H7** (`#530` 🔴 y `#531` 🟡, paridad rota) y **(3) H4** (la HAL). Pendiente de
+grabar cuando se conecten: S3/C3/C6/Nucleo/DK2 (las imágenes de las 14:57-14:58 llevan H1 + H3 + el `readLine`
+nativo). Árbol limpio en `fa8b9874`; sin push (V7 en curso).
+
 ## 🧬 H3 (21-sep, tarde) — EL CURSOR: `IO.File`/`IO.TextFile` con todo el estado dentro del objeto; `#491` cerrada; `listDir` en la VM-C; `/sd` reservado; `#456`
 
 Día de análisis primero (`V7_IDEAS.md` §H3, `289672e8`): el mapa medido (sin descriptor abajo, dos buffers estáticos
