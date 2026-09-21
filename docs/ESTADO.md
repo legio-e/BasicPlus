@@ -71,6 +71,19 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 🧬 H1 (21-sep, mediodía) — Map, el DESTRUCTOR, Time; la cascada rehecha; Pico y P4 grabadas
+
+**Map** (`5fa31e28`): las sobrecargas que pidió Eduardo (clave integer/string/Object; captadores tipados del valor), en BP.
+**Destructor** (`29e737c1` + `e5d9425b`): `function ~Clase()`, virtual y encadenado al padre; `var owner` local lo llama al
+morir (orden inverso, también con excepción: la función con owners va dentro de un TRY que destruye y relanza); `try var`
+(capa 1); owner no escapa; sin cambios en las VMs. Consecuencia: Object gana la ranura 2 (`__dtor()V`) → en MOD8 los
+marcadores corren una y una app MOD8 contra el Core MOD7 de V6 ya no enlaza (la norma lo dice así). **Time** (`d3af4dde`,
+#396): `Time.Date` sobre un long, BP puro. Verde: check 87/59/9/13/87, mezcla 194, frontend 222, errores 35.
+**La cascada, rehecha entera** (Core cambió tres veces desde ayer): blobs con `Time` en las tres listas, las siete imágenes
+construidas, **Pico y P4 grabadas y verificadas** (placas_v9 verde; Destructor y TimeDemo dan lo mismo que el host en las
+dos; en el P4, Gui/Json/Collections/Str/Time de hoy subidos a /lib). Quedan S3/C3/C6/Nucleo/DK2 por grabar.
+**Queda en H1**: `#19` (array fijo local inline) — mi propuesta es cerrarla como NO (abajo, para Eduardo).
+
 ## 🧹 H1 (21-sep, mañana) — los huecos baratos de la fila: N9, N2, M4, L19
 
 Cuatro commits, cada uno cerrado y verde: **N9** (`760e6a2a`) redeclarar Object/Thread/Mutex/StringBuilder fuera de
