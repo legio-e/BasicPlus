@@ -93,7 +93,17 @@ mapea bien** (INST/DATA ok). La segunda mitad de la flash y la PSRAM quedan para
 columna (`SIN_PANTALLA`): MathRango, ThrowSinAtrapar, ThreadTrasMain IDÉNTICO, MachineId no-peta, las dos de GUI
 saltadas por no tener pantalla (lo correcto); `FileBench`: 400 líneas 11,5 s → 0,2 s. Con 64 KB de heap de VM el
 bench se queda sin heap en el caso 3 (32 KB × 2 copias): el reparto es el conservador del C3 (128 KB) hasta medir.
-**Y nos paramos ahí**, como se dijo: la 2.ª etapa (LVGL en un pack) es H6.
+
+**Y la PSRAM, a petición de Eduardo** (*«¿no probamos de activar la PSRAM? Sería como una S3 más o menos, 8M de
+PSRAM»*): `CONFIG_SPIRAM=y` en QUAD a 80 MHz (el C5 sólo tiene ese bus: su `Kconfig.spiram` no ofrece OCT ni HEX),
+`IGNORE_NOTFOUND` y `ALWAYSINTERNAL=2048` como el S3. Arrancó a la primera: **8 MB detectados, la VM en PSRAM con
+7677 KB** (heap 7,3 MB + pilas 512 KB, por la rama exclusiva de `main.c` de la familia: objetivo 0 = todo lo que deja
+el margen de 512 KB). `FileCursor` == host, la `tanda` 4/4 igual, y `FileBench` completa los cuatro casos (antes
+se quedaba sin heap): el coste de la PSRAM se ve —`readLine` 69 → 91 ms, `readFile`+`split` 16 → 19— y es el
+esperado (el intérprete entierra la latencia). Dos avisos del log que no son de esta placa: la línea «DRAM interna
+libre …» imprime los números de la PSRAM con la etiqueta de la SRAM, y «el asignador sólo dio 7677 KB de los 7677
+planificados» avisa de nada (redondeo a KB): cosméticos, del común, para H7. **Y nos paramos ahí**, como se dijo: la
+2.ª etapa (LVGL en un pack) es H6, y ya tiene la PSRAM que necesita.
 
 ## ⏭️ Traspaso (21-sep, al cerrar) — lo siguiente: la 1.ª etapa de H11 (la C5 sin LVGL), y después H7 y H4
 
