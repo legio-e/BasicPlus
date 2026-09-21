@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -480,10 +480,9 @@ test-smphandles: $(LIBOBJ)
 # V5/H2 — escritura POSICIONAL y recorte de la fachada. Sobre el backend de
 # host, pero el contrato es el mismo que deben cumplir FatFs y littlefs: un
 # rojo aquí es un rojo en las placas.
-test-fspos:
+test-fspos: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_fs_posicional.c src/fs_facade.c src/fs_host.c \
-	  src/crc32.c -o build/test_fspos.exe
+	$(CC) $(CFLAGS) test/test_fs_posicional.c $(LIBOBJ) -o build/test_fspos.exe $(LDFLAGS)
 	@echo "--- V5/H2 escritura posicional (esperado: 17/17, 0 fallos) ---"
 	@cd build && ./test_fspos.exe
 
@@ -1063,6 +1062,13 @@ test-iomt: $(BIN)
 # documentada (= espejo de fs_host.c) + persistencia entre attach + el
 # contrato mount-primero-no-reformatear.
 FSLFS_BIN = build/test_fs_lfs.exe
+FSCURSOR_BIN = build/test_fs_cursor.exe
+test-fscursor: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_fs_cursor.c $(LIBOBJ) -o $(FSCURSOR_BIN) $(LDFLAGS)
+	@echo "--- V7/H3 (#491) el cursor de la fachada: mismo guion en host y littlefs (esperado: 0 fallos) ---"
+	./$(FSCURSOR_BIN)
+
 test-fslfs: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_fs_lfs.c $(LIBOBJ) -o $(FSLFS_BIN) $(LDFLAGS)

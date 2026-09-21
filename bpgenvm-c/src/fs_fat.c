@@ -433,6 +433,74 @@ static int fat_list(const char* path,
     return (r == FR_OK) ? 0 : -1;
 }
 
+/* #473 (punto 4) — el streaming que FAT no tenía: la MISMA forma que `fat_crc32`
+ * (una apertura, lectura en secuencia). Sin esto el `GET` de `/sd` iba por
+ * `read_at` en trozos de 256 B: `f_open`+`f_lseek`+`f_read`+`f_close` por trozo,
+ * medido 6,4× más lento que littlefs en la Metro (10-sep). */
+static long fat_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
+    const char* p = sin_prefijo(path);
+    if (!p || !s_montado) return -1;
+    FIL f;
+    uint8_t buf[512];
+    long total = 0;
+    trabar();
+    FRESULT r = f_open(&f, p, FA_READ);
+    if (r == FR_OK) {
+        for (;;) {
+            UINT leidos = 0;
+            r = f_read(&f, buf, sizeof buf, &leidos);
+            if (r != FR_OK || leidos == 0) break;
+            total += (long) leidos;
+            if (cb(buf, (uint32_t) leidos, user) != 0) break;   /* el llamador aborta */
+        }
+        f_close(&f);
+    }
+    destrabar();
+    return (r == FR_OK) ? total : -1;
+}
+
+/* V7/H3 (#491) — EL CURSOR sobre FatFs: el `FIL` (552 B con su sector dentro)
+ * va en el bloque del llamador. Los modos, en flags de FatFs; el "a" NO usa
+ * FA_OPEN_APPEND: el cursor al final lo pone la fachada al abrir, y después la
+ * posición manda (mismo contrato en los tres motores). */
+static int fat_fopen(void* st, const char* path, int mode) {
+    const char* p = sin_prefijo(path);
+    if (!p || !s_montado) return -1;
+    BYTE fl = (mode == BPVM_FS_O_READ)   ? FA_READ
+            : (mode == BPVM_FS_O_WRITE)  ? (FA_READ | FA_WRITE | FA_CREATE_ALWAYS)
+            : (mode == BPVM_FS_O_APPEND) ? (FA_READ | FA_WRITE | FA_OPEN_ALWAYS)
+            :                              (FA_READ | FA_WRITE | FA_OPEN_EXISTING);
+    trabar(); FRESULT r = f_open((FIL*) st, p, fl); destrabar();
+    return (r == FR_OK) ? 0 : -1;
+}
+static int fat_fclose(void* st) {
+    trabar(); FRESULT r = f_close((FIL*) st); destrabar();
+    return (r == FR_OK) ? 0 : -1;
+}
+static long fat_fread(void* st, uint8_t* dst, uint32_t n) {
+    UINT leidos = 0;
+    trabar(); FRESULT r = f_read((FIL*) st, dst, n, &leidos); destrabar();
+    return (r == FR_OK) ? (long) leidos : -1;
+}
+static long fat_fwrite(void* st, const uint8_t* src, uint32_t n) {
+    UINT escritos = 0;
+    trabar(); FRESULT r = f_write((FIL*) st, src, n, &escritos); destrabar();
+    return (r == FR_OK) ? (long) escritos : -1;
+}
+static int fat_fseek(void* st, uint32_t pos) {
+    trabar(); FRESULT r = f_lseek((FIL*) st, pos); int ok = (r == FR_OK && f_tell((FIL*) st) == pos); destrabar();
+    return ok ? 0 : -1;
+}
+static long fat_fsize(void* st) {
+    if (!s_montado) return -1;
+    trabar(); long sz = (long) f_size((FIL*) st); destrabar();
+    return sz;
+}
+static int fat_fsync(void* st) {
+    trabar(); FRESULT r = f_sync((FIL*) st); destrabar();
+    return (r == FR_OK) ? 0 : -1;
+}
+
 static const bpvm_fs_backend_t s_backend = {
     .stat     = fat_stat,
     .read     = fat_read,
@@ -449,6 +517,10 @@ static const bpvm_fs_backend_t s_backend = {
     .write_at = fat_write_at,      /* V5/H2: sin esto no hay base de datos */
     .truncate = fat_truncate,
     .crc32    = fat_crc32,   /* #398 — sin esto, 5432 aperturas por 1,3 MB */
+    .read_stream = fat_read_stream,   /* #473 punto 4 — el GET de /sd con UNA apertura */
+    .file_state_size = (uint32_t) sizeof(FIL),   /* V7/H3 (#491) — el cursor */
+    .fopen = fat_fopen, .fclose = fat_fclose, .fread = fat_fread, .fwrite = fat_fwrite,
+    .fseek = fat_fseek, .fsize = fat_fsize, .fsync = fat_fsync,
 };
 
 /* ─────────────────────────────────────────────────────────────────────────

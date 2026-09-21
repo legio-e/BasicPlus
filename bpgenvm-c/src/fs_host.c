@@ -235,6 +235,45 @@ static int host_list(const char* path,
     return 0;
 }
 
+/* V7/H3 (#491) — EL CURSOR en el host: el estado es un `FILE*`, copiado con
+ * memcpy porque el bloque del llamador va alineado a 4 y un puntero mide 8. El
+ * "a" abre en "r+b" (o crea) y la fachada pone el cursor al final: el "ab" de
+ * la libc forzaría CADA escritura al final, que no es el contrato de las placas. */
+static FILE* host_fh(void* st) { FILE* f; memcpy(&f, st, sizeof f); return f; }
+static int host_fopen(void* st, const char* path, int mode) {
+    FILE* f = NULL;
+    switch (mode) {
+        case BPVM_FS_O_READ:   f = fopen(path, "rb"); break;
+        case BPVM_FS_O_WRITE:  f = fopen(path, "w+b"); break;
+        case BPVM_FS_O_APPEND: f = fopen(path, "r+b"); if (!f) f = fopen(path, "w+b"); break;
+        case BPVM_FS_O_RW:     f = fopen(path, "r+b"); break;
+        default: break;
+    }
+    if (!f) return -1;
+    memcpy(st, &f, sizeof f);
+    return 0;
+}
+static int host_fclose(void* st) { return (fclose(host_fh(st)) == 0) ? 0 : -1; }
+static long host_fread(void* st, uint8_t* dst, uint32_t n) {
+    FILE* f = host_fh(st);
+    size_t r = fread(dst, 1, (size_t) n, f);
+    return (r == 0 && ferror(f)) ? -1 : (long) r;
+}
+static long host_fwrite(void* st, const uint8_t* src, uint32_t n) {
+    size_t r = fwrite(src, 1, (size_t) n, host_fh(st));
+    return (r == (size_t) n) ? (long) r : -1;
+}
+static int host_fseek(void* st, uint32_t pos) { return (fseek(host_fh(st), (long) pos, SEEK_SET) == 0) ? 0 : -1; }
+static long host_fsize(void* st) {
+    FILE* f = host_fh(st);
+    long cur = ftell(f);
+    if (cur < 0 || fseek(f, 0, SEEK_END) != 0) return -1;
+    long sz = ftell(f);
+    if (fseek(f, cur, SEEK_SET) != 0) return -1;
+    return sz;
+}
+static int host_fsync(void* st) { return (fflush(host_fh(st)) == 0) ? 0 : -1; }
+
 static const bpvm_fs_backend_t s_host_fs = {
     .stat     = host_stat,
     .read     = host_read,
@@ -251,6 +290,9 @@ static const bpvm_fs_backend_t s_host_fs = {
     .write_at = host_write_at, /* V5/H2 — paridad con la placa */
     .truncate = host_truncate,
     .crc32    = host_crc32,   /* #398 — mismo camino que la placa: oraculo valido */
+    .file_state_size = (uint32_t) sizeof(FILE*),   /* V7/H3 (#491) — el cursor */
+    .fopen = host_fopen, .fclose = host_fclose, .fread = host_fread, .fwrite = host_fwrite,
+    .fseek = host_fseek, .fsize = host_fsize, .fsync = host_fsync,
 };
 
 void bpvm_fs_register_host(void) {

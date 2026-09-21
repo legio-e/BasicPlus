@@ -388,6 +388,59 @@ static int be_list(const char* path,
     fs_lock(); int r = be_list_impl(path, cb, user); fs_unlock(); return r;
 }
 
+/* V7/H3 (#491) — EL CURSOR sobre littlefs: el estado del fichero abierto, con SU
+ * caché, va en el bloque del llamador (`lfs_file_opencfg` con `cfg.buffer`
+ * apuntando dentro del propio bloque). Es la forma del File de MicroPython y de
+ * Arduino-LittleFS, y respeta la regla B2 de arriba —cero malloc aquí— sin el
+ * tope de dos ficheros que imponían los buffers estáticos. El bloque tiene que
+ * quedarse quieto y vivo mientras el fichero esté abierto: littlefs lo enhebra
+ * en su `mlist`. La VM lo garantiza (heap sin compactar + cierre desde el GC). */
+typedef struct {
+    lfs_file_t              f;
+    struct lfs_file_config  cfg;
+    uint8_t                 cache[BPVM_FS_LFS_CACHE];
+} lfs_abierto_t;
+
+static int be_fopen(void* st, const char* path, int mode) {
+    if (!s_mounted) return -1;
+    lfs_abierto_t* o = (lfs_abierto_t*) st;
+    memset(o, 0, sizeof *o);
+    o->cfg.buffer = o->cache;
+    int flags = (mode == BPVM_FS_O_READ)   ? LFS_O_RDONLY
+              : (mode == BPVM_FS_O_WRITE)  ? (LFS_O_RDWR | LFS_O_CREAT | LFS_O_TRUNC)
+              : (mode == BPVM_FS_O_APPEND) ? (LFS_O_RDWR | LFS_O_CREAT)
+              :                              LFS_O_RDWR;
+    fs_lock();
+    int r = lfs_file_opencfg(&s_lfs, &o->f, path, flags, &o->cfg);
+    if (r < 0) s_last_err = r;
+    fs_unlock();
+    return (r < 0) ? -1 : 0;
+}
+static int be_fclose(void* st) {
+    fs_lock(); int r = lfs_file_close(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) s_last_err = r; fs_unlock();
+    return (r < 0) ? -1 : 0;
+}
+static long be_fread(void* st, uint8_t* dst, uint32_t n) {
+    fs_lock(); lfs_ssize_t r = lfs_file_read(&s_lfs, &((lfs_abierto_t*) st)->f, dst, n); if (r < 0) s_last_err = (int) r; fs_unlock();
+    return (r < 0) ? -1 : (long) r;
+}
+static long be_fwrite(void* st, const uint8_t* src, uint32_t n) {
+    fs_lock(); lfs_ssize_t r = lfs_file_write(&s_lfs, &((lfs_abierto_t*) st)->f, src, n); if (r < 0) s_last_err = (int) r; fs_unlock();
+    return (r < 0) ? -1 : (long) r;
+}
+static int be_fseek(void* st, uint32_t pos) {
+    fs_lock(); lfs_soff_t r = lfs_file_seek(&s_lfs, &((lfs_abierto_t*) st)->f, (lfs_soff_t) pos, LFS_SEEK_SET); if (r < 0) s_last_err = (int) r; fs_unlock();
+    return (r < 0 || (uint32_t) r != pos) ? -1 : 0;
+}
+static long be_fsize(void* st) {
+    fs_lock(); lfs_soff_t r = lfs_file_size(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) s_last_err = (int) r; fs_unlock();
+    return (r < 0) ? -1 : (long) r;
+}
+static int be_fsync(void* st) {
+    fs_lock(); int r = lfs_file_sync(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) s_last_err = r; fs_unlock();
+    return (r < 0) ? -1 : 0;
+}
+
 static const bpvm_fs_backend_t s_lfs_backend = {
     .stat     = be_stat,
     .read     = be_read,
@@ -405,6 +458,9 @@ static const bpvm_fs_backend_t s_lfs_backend = {
     .truncate = be_truncate,
     .crc32    = be_crc32,   /* #398 — sin esto, 512 aperturas por 128 KB */
     .read_stream = be_read_stream, /* #453 — idem para el GET: 472 aperturas por 120 KB */
+    .file_state_size = (uint32_t) sizeof(lfs_abierto_t),   /* V7/H3 (#491) — el cursor */
+    .fopen = be_fopen, .fclose = be_fclose, .fread = be_fread, .fwrite = be_fwrite,
+    .fseek = be_fseek, .fsize = be_fsize, .fsync = be_fsync,
 };
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {

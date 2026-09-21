@@ -546,3 +546,142 @@ int bpvm_fs_crc32(const char* path, uint32_t* crc_out) {
     if (crc_out) *crc_out = bpvm_crc32_final(st);
     return 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V7/H3 (#491) — EL CURSOR. Ver el contrato en bpvm_fs.h.
+ *
+ * La fachada guarda en la cabecera lo que es suyo (posición, tamaño, modo, de
+ * dónde sale el fichero) y le deja al motor su estado, opaco, detrás. Para un
+ * pack (overlay o respaldo) o un motor sin cursor no hay estado: se lee con
+ * `read_at` a la posición que lleva la cabecera —un pack es XIP, y un motor sin
+ * `fopen` es el de siempre, sólo que ahora la posición la lleva el llamador.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static bpvm_fs_file_t* fh_de(void* blk) {
+    bpvm_fs_file_t* h = (bpvm_fs_file_t*) blk;
+    return (h && h->magic == BPVM_FS_FILE_MAGIC) ? h : NULL;
+}
+static void* fh_st(bpvm_fs_file_t* h)   { return (uint8_t*) h + h->st_off; }
+static const char* fh_path(bpvm_fs_file_t* h) { return (const char*) h + h->path_off; }
+
+/* El estado del motor se alinea a 8 CONTANDO desde la dirección real del
+ * bloque (un byte[] de la VM va alineado a 4): por eso hay 8 de holgura. */
+static uint32_t fh_st_off(const void* blk) {
+    uintptr_t base = (uintptr_t) blk + sizeof(bpvm_fs_file_t);
+    uintptr_t al = (base + 7u) & ~(uintptr_t) 7u;
+    return (uint32_t) (al - (uintptr_t) blk);
+}
+static uint32_t be_state_size(const char* path) {
+    const bpvm_fs_backend_t* be = route(path);
+    return (be && be->fopen) ? be->file_state_size : 0u;
+}
+
+uint32_t bpvm_fs_file_block_size(const char* path) {
+    if (!path) return 0;
+    return (uint32_t) sizeof(bpvm_fs_file_t) + 8u + be_state_size(path) + (uint32_t) strlen(path) + 1u;
+}
+
+int bpvm_fs_fopen(void* blk, uint32_t cap, const char* path, int mode) {
+    if (!blk || !path || mode < BPVM_FS_O_READ || mode > BPVM_FS_O_RW) return -1;
+    if (fh_de(blk)) return -1;                       /* ya tiene un fichero: ciérralo antes */
+    uint32_t need = bpvm_fs_file_block_size(path);
+    if (cap < need || need > 0xFFFFu) return -1;
+    bpvm_fs_file_t* h = (bpvm_fs_file_t*) blk;
+    memset(h, 0, sizeof *h);
+    h->st_off   = (uint16_t) fh_st_off(blk);
+    h->path_off = (uint16_t) (h->st_off + be_state_size(path));
+    memcpy((uint8_t*) blk + h->path_off, path, strlen(path) + 1u);
+    h->mode = (uint8_t) mode;
+
+    uint32_t osz = 0;
+    /* 1. El pack en ejecución va primero, como en `read` (#310); sólo lectura. */
+    if (mode == BPVM_FS_O_READ && overlay_claims(path, &osz) && g_ov_read) {
+        h->kind = 2; h->size = osz; h->magic = BPVM_FS_FILE_MAGIC; return 0;
+    }
+    /* 2. El motor, con su cursor de verdad. */
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->fopen && be->file_state_size) {
+        if (be->fopen(fh_st(h), path, mode) == 0) {
+            long sz = be->fsize ? be->fsize(fh_st(h)) : -1;
+            if (sz < 0) { be->fclose(fh_st(h)); return -1; }
+            h->be = be; h->kind = 1; h->size = (uint32_t) sz;
+            if (mode == BPVM_FS_O_APPEND) {
+                if (be->fseek(fh_st(h), h->size) != 0) { be->fclose(fh_st(h)); return -1; }
+                h->pos = h->size;
+            }
+            h->magic = BPVM_FS_FILE_MAGIC; return 0;
+        }
+        if (mode != BPVM_FS_O_READ) return -1;       /* escribir: sólo el motor sabe */
+    } else if (mode != BPVM_FS_O_READ) {
+        return -1;                                   /* sin motor con cursor no se escribe */
+    }
+    /* 3. Lectura sin cursor del motor: `read_at` a la posición de la cabecera. */
+    if (be && be->read_at && be->stat && be->stat(path, &osz) == 0) {
+        h->be = be; h->kind = 4; h->size = osz; h->magic = BPVM_FS_FILE_MAGIC; return 0;
+    }
+    /* 4. La zona de packs grabados, la última (#362, #493). */
+    if (fallback_claims(path, &osz) && g_fb_read) {
+        h->kind = 3; h->size = osz; h->magic = BPVM_FS_FILE_MAGIC; return 0;
+    }
+    return -1;
+}
+
+int bpvm_fs_fclose(void* blk) {
+    bpvm_fs_file_t* h = fh_de(blk);
+    if (!h) return 0;                                /* idempotente: cerrar lo cerrado no es error */
+    int r = 0;
+    if (h->kind == 1 && h->be && h->be->fclose) r = h->be->fclose(fh_st(h));
+    h->magic = 0; h->kind = 0; h->be = NULL;
+    return r;
+}
+
+/* La lectura "a offsets" de los que no tienen cursor propio (kind 2/3/4). */
+static long fh_read_at(bpvm_fs_file_t* h, uint8_t* dst, uint32_t n) {
+    if (h->pos >= h->size) return 0;
+    if (n > h->size - h->pos) n = h->size - h->pos;
+    switch (h->kind) {
+        case 2: return g_ov_read ? g_ov_read(g_ov_user, fh_path(h), h->pos, dst, n) : -1;
+        case 3: return g_fb_read ? g_fb_read(g_fb_user, fh_path(h), h->pos, dst, n) : -1;
+        case 4: return h->be->read_at(fh_path(h), h->pos, dst, n);
+        default: return -1;
+    }
+}
+
+long bpvm_fs_fread(void* blk, uint8_t* dst, uint32_t n) {
+    bpvm_fs_file_t* h = fh_de(blk);
+    if (!h || (!dst && n)) return -1;
+    if (n == 0) return 0;
+    long r = (h->kind == 1) ? h->be->fread(fh_st(h), dst, n) : fh_read_at(h, dst, n);
+    if (r > 0) h->pos += (uint32_t) r;
+    return r;
+}
+
+long bpvm_fs_fwrite(void* blk, const uint8_t* src, uint32_t n) {
+    bpvm_fs_file_t* h = fh_de(blk);
+    if (!h || h->kind != 1 || h->mode == BPVM_FS_O_READ || (!src && n)) return -1;
+    if (n == 0) return 0;
+    long r = h->be->fwrite(fh_st(h), src, n);
+    if (r < 0 || (uint32_t) r != n) return -1;
+    h->pos += n;
+    if (h->pos > h->size) h->size = h->pos;
+    return r;
+}
+
+int bpvm_fs_fseek(void* blk, uint32_t pos) {
+    bpvm_fs_file_t* h = fh_de(blk);
+    if (!h || pos > h->size) return -1;              /* fuera de [0, size] es error: no hay huecos */
+    if (h->kind == 1 && h->be->fseek(fh_st(h), pos) != 0) return -1;
+    h->pos = pos;
+    return 0;
+}
+
+long bpvm_fs_ftell(void* blk) { bpvm_fs_file_t* h = fh_de(blk); return h ? (long) h->pos : -1; }
+long bpvm_fs_fsize(void* blk) { bpvm_fs_file_t* h = fh_de(blk); return h ? (long) h->size : -1; }
+int  bpvm_fs_fisopen(void* blk) { return fh_de(blk) ? 1 : 0; }
+const char* bpvm_fs_fpath(void* blk) { bpvm_fs_file_t* h = fh_de(blk); return h ? fh_path(h) : ""; }
+
+int bpvm_fs_fflush(void* blk) {
+    bpvm_fs_file_t* h = fh_de(blk);
+    if (!h) return -1;
+    if (h->kind != 1 || h->mode == BPVM_FS_O_READ || !h->be->fsync) return 0;
+    return h->be->fsync(fh_st(h));
+}

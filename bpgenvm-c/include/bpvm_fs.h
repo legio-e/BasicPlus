@@ -153,6 +153,28 @@ typedef struct {
      * lo deja a NULL y la fachada cae al bucle de `read_at` de siempre.
      */
     long (*read_stream)(const char* path, bpvm_fs_chunk_cb cb, void* user);
+
+    /* ── V7/H3 (#491) — EL CURSOR: un fichero ABIERTO ───────────────────────
+     * Las ops de arriba reciben RUTA, y por eso la misma enfermedad volvió tres
+     * veces (#398, #453, #473): abrir y cerrar por cada trozo. Esto es el
+     * descriptor que faltaba, con la condición de la casa: NADIE reserva
+     * memoria aquí. El estado del motor por fichero abierto (lfs_file_t + su
+     * caché, FIL, FILE*) vive en un bloque que pone el LLAMADOR —en la VM, el
+     * byte[] del objeto File (V7_IDEAS §H3)— y que el motor recibe como `st`.
+     * Sin tabla, sin tope: el límite es la memoria de quien abre. Precedente:
+     * el File de MicroPython y el de Arduino-LittleFS guardan lfs_file_t y la
+     * caché dentro del objeto fichero. `file_state_size` dice cuántos bytes
+     * necesita el motor por fichero; a 0 (motor sin estas ops) la fachada sirve
+     * la LECTURA con `read_at` a offsets y no escribe. Todos AL FINAL y
+     * opcionales, como `crc32` y `read_stream`. */
+    uint32_t file_state_size;
+    int  (*fopen) (void* st, const char* path, int mode);       /* BPVM_FS_O_*; 0 / -1 */
+    int  (*fclose)(void* st);                                   /* 0 / -1 */
+    long (*fread) (void* st, uint8_t* dst, uint32_t n);         /* leídos; 0 = fin; -1 */
+    long (*fwrite)(void* st, const uint8_t* src, uint32_t n);   /* escritos; -1 */
+    int  (*fseek) (void* st, uint32_t pos);                     /* absoluto; 0 / -1 */
+    long (*fsize) (void* st);                                   /* tamaño ACTUAL; -1 */
+    int  (*fsync) (void* st);                                   /* 0 / -1 */
 } bpvm_fs_backend_t;
 
 /* Registra el backend RAÍZ (una vez al boot). Limpia cualquier montaje
@@ -338,6 +360,48 @@ int  bpvm_fs_register_lfs_filebd(const char* img_path,
                                  unsigned block_size, unsigned block_count,
                                  int format_if_needed);
 void bpvm_fs_lfs_filebd_close(void);
+
+/* ── V7/H3 (#491) — EL CURSOR, cara de arriba ──────────────────────────────
+ * Un fichero abierto es un BLOQUE de bytes que pone el llamador (la VM: el
+ * byte[] del objeto File). Dentro, por este orden: la cabecera de la fachada
+ * (bpvm_fs_file_t), el estado del motor (alineado a 8) y la ruta con su NUL.
+ * `bpvm_fs_file_block_size(path)` dice cuánto hace falta para ESA ruta (el
+ * motor al que rutea más la ruta). Los modos: */
+enum { BPVM_FS_O_READ   = 0,   /* "r"  : existe; sólo lectura */
+       BPVM_FS_O_WRITE  = 1,   /* "w"  : crea o trunca; lectura y escritura */
+       BPVM_FS_O_APPEND = 2,   /* "a"  : crea si falta; el cursor al FINAL al abrir (no
+                                *        fuerza cada escritura al final, como el "a" de C) */
+       BPVM_FS_O_RW     = 3 }; /* "r+" : existe; lectura y escritura */
+
+#define BPVM_FS_FILE_MAGIC 0x42504631u   /* 'BPF1': el bloque tiene un fichero abierto */
+typedef struct {
+    uint32_t magic;      /* BPVM_FS_FILE_MAGIC = abierto; cualquier otra cosa = cerrado */
+    uint32_t pos;        /* el cursor */
+    uint32_t size;       /* tamaño conocido (se actualiza al escribir) */
+    uint32_t next;       /* DE LA VM, la fachada no lo toca: su registro de abiertos se
+                          * enhebra por los propios bloques (la ref del siguiente) */
+    uint16_t st_off;     /* dónde empieza el estado del motor dentro del bloque */
+    uint16_t path_off;   /* dónde empieza la ruta */
+    uint8_t  mode;       /* BPVM_FS_O_* */
+    uint8_t  kind;       /* de dónde sale: 1 motor · 2 overlay (pack en ejecución) · 3 respaldo
+                          * (zona de packs) · 4 read_at (motor sin cursor). 2/3/4 = sólo lectura */
+    uint8_t  pad[2];
+    const bpvm_fs_backend_t* be;   /* kind 1 y 4 */
+} bpvm_fs_file_t;
+
+uint32_t bpvm_fs_file_block_size(const char* path);
+/* 0 / -1 (el porqué en bpvm_fs_last_fail: NOT_FOUND; TOO_BIG = el bloque no
+ * cabe; OTHER = nadie sabe escribir ahí, o el bloque ya tiene un fichero). */
+int  bpvm_fs_fopen (void* blk, uint32_t cap, const char* path, int mode);
+int  bpvm_fs_fclose(void* blk);                                   /* idempotente; 0 / -1 */
+long bpvm_fs_fread (void* blk, uint8_t* dst, uint32_t n);         /* leídos; 0 = fin; -1 */
+long bpvm_fs_fwrite(void* blk, const uint8_t* src, uint32_t n);   /* escritos (== n) o -1 */
+int  bpvm_fs_fseek (void* blk, uint32_t pos);                     /* 0..size; fuera → -1 */
+long bpvm_fs_ftell (void* blk);                                   /* -1 si cerrado */
+long bpvm_fs_fsize (void* blk);                                   /* -1 si cerrado */
+int  bpvm_fs_fflush(void* blk);                                   /* 0 / -1 */
+int  bpvm_fs_fisopen(void* blk);                                  /* 1 / 0 */
+const char* bpvm_fs_fpath(void* blk);                             /* "" si cerrado */
 
 #ifdef __cplusplus
 }
