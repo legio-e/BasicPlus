@@ -201,9 +201,6 @@
   (los módulos no la tienen). Reabrible si surge caso de uso.
 - **L9 — `Mutex` no reentrante.** Por diseño (documentado en el manual). Para
   re-entrada, usar otro patrón (flag + condvar).
-- **N2 — convención de acceso a `mem[]` / `JavaMutex`.** Cualquier acceso a
-  `JavaMutex.{ownerTid, waiters}` debe ir bajo `vmLock` (o acquire/release
-  explícito). Hoy se cumple; conviene documentar la regla.
 
 
 ### `input()` y `listDir()` sólo funcionan en el PC, no en el micro (decidido el 26-ago)

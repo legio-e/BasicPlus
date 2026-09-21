@@ -434,6 +434,13 @@ public class VirtualMachine {
      * field {@code __mid} (slot 0) el índice dentro de esta lista. Los
      * builtins __mutexLock/__mutexUnlock operan sobre la JavaMutex
      * correspondiente bajo vmLock.
+     *
+     * <p><b>INVARIANTE (N2, 21-sep):</b> {@code ownerTid} y {@code waiters} se leen y se
+     * escriben SÓLO con {@code vmLock} tomado (o entre acquire/release explícitos del mismo
+     * lock). Todos los sitios de hoy lo cumplen (los builtins de lock/unlock, el scheduler al
+     * despertar a un waiter y el volcado del debugger); un acceso fuera del lock sería una
+     * carrera con el timer preemptivo, y no la delataría ninguna prueba del PC (la VM-C no
+     * tiene este problema: su scheduler es cooperativo dentro de un solo hilo de SO).
      */
     private static final class JavaMutex {
         // ATENCIÓN: -1 = libre. NO podemos usar 0 como sentinela porque main
