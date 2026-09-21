@@ -71,6 +71,22 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 🧬 H1 (21-sep, tarde) — `#19` cerrada como la redefinió Eduardo; la fila H1, hecha salvo grabar cinco placas
+
+**`#19`** (`60325e4c`): *«mantenemos los array fijos pero los limitamos a declaraciones locales y dentro de una clase como
+private. No utilizamos referencias con ellos»*. Un `tipo[N]` no es una referencia: vive en el marco (`[len][N elems]`,
+`LEA_LOCAL`, que existía desde H1.2a sin emitirse) o dentro del objeto (`private var`; `LEA_FIELD`/`LEA_FIELD_REF`,
+0xBC/0xBD, nuevos en las dos VMs), y sólo se indexa, se recorre y se mide; lo demás es error con línea. A nivel de
+módulo, fuera (se horneaba en el data block: se pierde la tabla en flash — `ModInit` pasa a `tipo[]`). Un campo fijo
+ocupa `1 + ⌈N·ancho/4⌉` ranuras (hasta 255; el cargador C lo admite; `FieldInfo.slots`). Tres tropiezos por el camino:
+`bpref_field` devuelve un PUNTERO, no un offset (segfault en la VM-C); la cabecera del campo se escribía con un store
+de 8 bytes (el tipo del símbolo es ArrayType = ref); y el bitmap del layout marcaba el campo como ref. Verde: check
+88/59/9/13/88, mezcla 194, frontend 222, miVM 52, errores 38, tests C. **La cascada otra vez** (la VM-C cambió): blobs,
+siete imágenes, Pico y P4 grabadas y `ArrayFijo` == host en las dos; IDE fat-jar.
+
+**H1, estado**: todo lo de la fila hecho — el módulo raíz (P1-P3), P2c, Map, destructor, Time, #19, N9/N2/M4/L19;
+M5 a H8; #460 en ideas; P4 no. **Queda sólo grabar S3/C3/C6/Nucleo/DK2** (construidas). Y `#530`/`#531` son de H7.
+
 ## 🧬 H1 (21-sep, mediodía) — Map, el DESTRUCTOR, Time; la cascada rehecha; Pico y P4 grabadas
 
 **Map** (`5fa31e28`): las sobrecargas que pidió Eduardo (clave integer/string/Object; captadores tipados del valor), en BP.

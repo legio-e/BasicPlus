@@ -5,7 +5,7 @@
  * El bucle y la regla viven en src/bpvm_mods.c; lo que se ponga aquí a mano
  * muere en la siguiente regeneración (#422 → #446).
  *
- * Invocación (reproducible): scripts/regen_mods.sh pico /c/lenguajes/pm/bpgenvm-c/pico/scripts/.. Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Time Neopixel --extra /app/Hello.mod=/tmp/tmp.dMTayS373j/Hello.mod
+ * Invocación (reproducible): scripts/regen_mods.sh pico /c/lenguajes/pm/bpgenvm-c/pico/scripts/.. Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Time Neopixel --extra /app/Hello.mod=/tmp/tmp.MDLUotA4oJ/Hello.mod
  */
 #include "pico_mods.h"
 

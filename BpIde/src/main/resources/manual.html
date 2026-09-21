@@ -200,6 +200,7 @@
     <li class="sub"><a href="#metodos">9.2 Métodos</a></li>
     <li class="sub"><a href="#ctor">9.3 Constructor</a></li>
     <li class="sub"><a href="#herencia">9.4 Herencia</a></li>
+    <li class="sub"><a href="#destructor">9.4b El destructor ~Clase()</a></li>
     <li class="sub"><a href="#props">9.5 Properties</a></li>
     <li class="sub"><a href="#static">9.6 Miembros estáticos / final</a></li>
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
@@ -443,40 +444,37 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h4>4.2.1 Arrays de tamaño fijo &nbsp;<code>T[N]</code></h4>
 <p>
-  El tamaño es un <strong>literal entero &gt; 0</strong> conocido en
-  compilación, y los elementos son <strong>primitivos</strong> (enteros,
-  estrechos, <code>long</code>, <code>float</code>, <code>double</code>,
-  <code>boolean</code> — para <code>string</code> o clases usa
-  <code>T[]</code>). La variable <em>ES</em> el array: tiene
-  <strong>binding fija</strong> (no se puede reasignar; sus elementos sí
-  son escribibles). Dónde vive depende del ámbito:
+  Un array fijo <strong>no es una referencia</strong>: es almacenamiento en sitio. Vive en el
+  marco de la función (variable local) o dentro del objeto (campo <code>private var</code> de
+  una clase), y sólo se puede <strong>indexar</strong> (<code>buf[i]</code>, con comprobación de
+  rango en ejecución), <strong>recorrer</strong> (<code>for x in buf</code>) y <strong>medir</strong>
+  (<code>len(buf)</code>). Cualquier otro uso —asignarlo a otra variable, pasarlo a una función,
+  devolverlo, guardarlo en un campo— es error de compilación: no hay referencia que dar, y por eso
+  no puede escapar ni sobrevivir a su dueño. El tamaño es un <strong>literal entero &gt; 0</strong>
+  y los elementos son <strong>primitivos</strong> (enteros, estrechos, <code>long</code>,
+  <code>float</code>, <code>double</code>, <code>boolean</code>; para <code>string</code> o clases
+  usa <code>T[]</code>). Un inicializador literal puede ser más corto que N: el resto queda a cero.
 </p>
 <table>
   <tr><th>Ámbito</th><th>Dónde vive</th></tr>
-  <tr><td>Global de módulo</td><td>Horneado en el data block del <code>.mod</code> (incluido el init literal): cero heap y cero código de arranque.</td></tr>
-  <tr><td>Local de función</td><td>Array del heap de N elementos, alocado a cero al entrar la declaración. Gestionado por el GC como cualquier array.</td></tr>
-  <tr><td>Campo de clase</td><td><strong>No soportado</strong> (error de compilación): declara <code>T[]</code> e inicialízalo en el constructor con <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</td></tr>
+  <tr><td>Local de función</td><td>En el marco: <code>4 + N·ancho</code> bytes, a cero al declararlo. Ni heap ni GC.</td></tr>
+  <tr><td>Campo <code>private var</code> de clase</td><td>Dentro del objeto: <code>1 + ⌈N·ancho/4⌉</code> ranuras (hasta 255), a cero al construirlo. Sólo lo indexa la propia clase.</td></tr>
+  <tr><td>Global de módulo</td><td><strong>No</strong> (error de compilación): a nivel de módulo escribe <code>T[]</code>, con un literal <code>[…]</code> o <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
 </table>
-<pre><code><span class="comment">// Módulo: horneado en el data block; el init literal puede ser más corto</span>
-<span class="comment">// que N — el resto queda a cero. [1,2,250] entra en byte[4] (se valida</span>
-<span class="comment">// elemento a elemento, no por asignabilidad de arrays).</span>
-<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">4</span>] := [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>]   <span class="comment">// → 10,20,30,0</span>
-<span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]
+<pre><code><span class="kw">public class</span> Media
+  <span class="kw">private var</span> muestras: <span class="type">integer</span>[<span class="num">8</span>]      <span class="comment">// en el objeto</span>
+  <span class="kw">public function</span> add(v: <span class="type">integer</span>)
+    <span class="kw">this</span>.muestras[<span class="kw">this</span>.n <span class="kw">mod</span> len(<span class="kw">this</span>.muestras)] := v
+  <span class="kw">end</span> add
+<span class="kw">end</span> Media
 
 <span class="kw">function</span> Main()
-  <span class="comment">// Local: N elementos a cero en el heap; len() e iteración funcionan</span>
-  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// buffer típico de I2C/SPI</span>
+  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// en el marco, a cero</span>
+  <span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]   <span class="comment">// el 4.º queda a 0</span>
   buf[<span class="num">0</span>] := <span class="num">42</span>
   <span class="kw">print</span> len(buf)                       <span class="comment">// 64</span>
-  <span class="comment">// buf := otra    ← error: binding fija (escribe en sus elementos)</span>
+  <span class="comment">// suma(buf)   ← error: no es una referencia (cópialo a un T[] si hay que pasarlo)</span>
 <span class="kw">end</span> Main</code></pre>
-<p>
-  El array fijo local es un array normal del heap: se puede pasar a una
-  función que reciba <code>T[]</code> y desaparece vía GC cuando deja de
-  referenciarse. El de módulo vive en el data block y no se libera nunca.
-  No existen <em>const</em> arrays: una <code>const</code> de módulo solo
-  admite literales primitivos (ver <a href="#const">§5.2</a>).
-</p>
 
 <h4>4.2.2 Arrays de tamaño variable &nbsp;<code>T[]</code></h4>
 <p>
@@ -568,10 +566,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   los captadores tipados de <code>List</code>, en la referencia.
 </p>
 <p>
-  El cast <code>Clase(x)</code> sólo acepta como origen un <code>Object</code>. Para bajar
-  entre dos clases de la misma jerarquía (<code>Perro(a)</code> con <code>a: Animal</code>)
-  el compilador lo toma por una llamada al constructor y lo rechaza: pasa antes por una
-  variable <code>Object</code> (<a href="#pendientes">§17</a>).
+  El cast <code>Clase(x)</code> baja desde un <code>Object</code> o desde cualquier antepasado
+  de la clase (<code>Perro(a)</code> con <code>a: Animal</code>); si el valor no es de esa clase,
+  lanza en ejecución. Si la clase tiene un constructor que acepta ese argumento, gana el
+  constructor.
 </p>
 
 <!-- =========================================================== -->
@@ -613,9 +611,24 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h3 id="var-owner">5.3 <code>var owner</code></h3>
 <pre><code><span class="kw">var owner</span> r: Recurso := Recurso(<span class="str">"db"</span>)
-<span class="comment">// al salir de scope o reasignarse, el objeto al que apunta se libera
-// determinísticamente vía FREE_REF (incluida cascada de owners).</span></code></pre>
-<p>Detalle completo en <a href="#owner">§12 Owner semantics</a>.</p>
+<span class="comment">// al salir de la función —fin normal, return o excepción— se llama a su
+// destructor (~Recurso, §9.4b) y el objeto se libera (FREE_REF, con la
+// cascada de owners). Varios owners mueren en orden INVERSO al de declaración.</span></code></pre>
+<p>
+  Un <code>var owner</code> local <strong>no puede escapar</strong>: ni devolverse con
+  <code>return</code> ni guardarse en un campo o en un array (error de compilación), porque
+  al salir de la función el objeto ya no existe. Pasarlo como argumento sí vale (un préstamo).
+  Y para soltar un recurso al salir de un <em>bloque</em>, no de la función:
+</p>
+<pre><code><span class="kw">try var</span> q: Consulta := db.query(<span class="str">"SELECT …"</span>)
+  <span class="kw">while</span> q.next() <span class="kw">do</span> … <span class="kw">endwh</span>
+<span class="kw">endtry</span>                <span class="comment">// q se destruye y se libera aquí, salgas por donde salgas</span></code></pre>
+<p>
+  <code>try var</code> es azúcar: el recurso es un <code>var owner</code> del ámbito de fuera y el
+  <code>finally</code> lo suelta; admite <code>catch</code> y <code>finally</code> como cualquier
+  <code>try</code> (el recurso se suelta después de ellos). Detalle en
+  <a href="#owner">§12 Owner semantics</a>.
+</p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -625,7 +638,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Aritmética</td><td><code>+ - * / mod</code> (con coerción int↔float)</td></tr>
   <tr><td>Potencia</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> exacto (entero);
       <code>float^int</code> por cuadrados; <code>float^float</code> por exp·ln (float)</td></tr>
-  <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> y unario <code>~</code></td></tr>
+  <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> (no hay NOT de bits: <code>x xor -1</code>; el <code>~</code> es del destructor, <a href="#destructor">§9.4b</a>)</td></tr>
   <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
   <tr><td>Asignación</td><td><code>:= += -=</code></td></tr>
@@ -1047,8 +1060,9 @@ mismo caso.</p>
   interna.
 </p>
 <p>
-  Un campo NO admite array de tamaño fijo <code>tipo[N]</code> (error de
-  compilación): declara <code>tipo[]</code> e inicialízalo en el constructor
+  Un campo admite un array de tamaño fijo <code>tipo[N]</code> si es <code>private var</code>:
+  vive dentro del objeto y sólo lo indexa la propia clase (<a href="#arrays">§4.2.1</a>). Si
+  tiene que verse o pasarse, declara <code>tipo[]</code> e inicialízalo en el constructor
   con <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
   Un campo es <em>protegido</em> (o <code>private</code>): lo ven su clase y sus
   descendientes, también los de otro módulo — desde V7 la interfaz publica los
@@ -1204,6 +1218,28 @@ end Base</code></pre>
   <code>Thread</code> no es un <code>Object</code>: su <code>run()</code> tiene que ser el primer
   método de su tabla, que es lo que la VM arranca. <code>root</code> sólo puede escribirse en
   <code>Core</code>; en cualquier otro módulo es error.
+</p>
+
+<h3 id="destructor">9.4b El destructor: <code>~Clase()</code></h3>
+<pre><code><span class="kw">public class</span> Fichero
+  <span class="kw">var</span> fd: <span class="type">integer</span>
+  <span class="kw">public function</span> Fichero(ruta: <span class="type">string</span>)
+    <span class="kw">this</span>.fd := IO.open(ruta)
+  <span class="kw">end</span> Fichero
+  <span class="kw">public function</span> ~Fichero()          <span class="comment">// el contrario del constructor</span>
+    IO.close(<span class="kw">this</span>.fd)
+  <span class="kw">end</span> ~Fichero
+<span class="kw">end</span> Fichero</code></pre>
+<p>
+  «Qué significa destruir esto» se escribe <strong>una vez</strong>, en la clase, y no en cada
+  sitio donde se usa. El destructor se llama como su clase, no lleva parámetros ni devuelve nada, y
+  <strong>lo llama el lenguaje</strong>, nunca el código: al morir un <code>var owner</code> local
+  (<a href="#var-owner">§5.3</a>) o al salir de un <code>try var</code>. Es virtual: corre el de la
+  clase real del objeto, y al acabar el de una hija corre el de su padre. Toda clase tiene uno
+  (<code>Object</code> lo declara vacío en <code>Core.bp</code>): sólo se sobrescribe cuando hay un
+  recurso externo que soltar — un descriptor, una consulta, un mutex. Un objeto que muere sin
+  <code>owner</code>, recogido por el GC, <em>no</em> pasa por su destructor: el GC corre por presión
+  de memoria y un descriptor es otro recurso; por eso los recursos se declaran <code>owner</code>.
 </p>
 
 <h3 id="props">9.5 Properties</h3>
@@ -1960,7 +1996,7 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       no embebe setjmp; diferido con diseño anotado. Tampoco tuplas,
       <code>instanceof</code> ni eventos dentro de una native (error de
       compilación, <a href="#funciones-native">§8.3</a>).</li>
-  <li>Array de tamaño fijo <code>tipo[N]</code> como campo de clase y
+  <li>Array de tamaño fijo <code>tipo[N]</code> a nivel de módulo y
       dentro de una <code>native function</code> (error de compilación con
       alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
   <li><strong>AOT en el ESP32-S3 (Xtensa)</strong> — sus funciones <code>native</code>
@@ -1976,8 +2012,6 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       <code>x instanceof Foo</code> sólo admite una clase declarada en el propio
       módulo (<a href="#herencia">§9.4</a>). (Campos protegidos, estáticos y
       sobrecargas del constructor cruzan desde V7.)</li>
-  <li>El downcast <code>Clase(x)</code> sólo acepta un origen <code>Object</code>
-      (<a href="#any">§4.5</a>).</li>
   <li><code>listDir()</code> e <code>input()</code> sólo existen en la VM Java del
       PC; en la VM-C (PC y placas) lanzan <code>RuntimeError</code> («builtin N no
       soportado») — el mismo <code>.mod</code> no da la misma salida en las dos VMs.</li>
