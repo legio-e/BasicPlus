@@ -105,7 +105,7 @@ libre …» imprime los números de la PSRAM con la etiqueta de la SRAM, y «el 
 planificados» avisa de nada (redondeo a KB): cosméticos, del común, para H7. **Y nos paramos ahí**, como se dijo: la
 2.ª etapa (LVGL en un pack) es H6, y ya tiene la PSRAM que necesita.
 
-## ⏭️ Traspaso (21-sep, al cerrar) — lo siguiente: la 1.ª etapa de H11 (la C5 sin LVGL), y después H7 y H4
+## ⏭️ Traspaso (21-sep, al cerrar) — la 1.ª etapa de H11 HECHA esa misma noche (con PSRAM); lo siguiente: H7 y H4
 
 Eduardo, al parar: *«cuando vuelva podemos probar la 1.ª etapa a ver qué tal. Y nos pararemos ahí. Después H7 y H4 o
 lo que toque, pero ya para mañana y siguientes días.»* Así que el orden es: **(1) la imagen de la C5 SIN LVGL**
