@@ -71,6 +71,21 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 🧹 H1 (21-sep, mañana) — los huecos baratos de la fila: N9, N2, M4, L19
+
+Cuatro commits, cada uno cerrado y verde: **N9** (`760e6a2a`) redeclarar Object/Thread/Mutex/StringBuilder fuera de
+Core es error con línea (con P3 una copia local a medias ganaba en silencio; `samples/errores/ClaseDelLenguaje.bp`,
+también `root class` fuera de Core); **N2** (`5836c6ac`) el invariante de `JavaMutex` (ownerTid/waiters sólo bajo
+vmLock) escrito en el código tras comprobar los cuatro sitios; **M4** (`fa778c9c`) el prefijo `__` es del sistema:
+fuera de Core sólo lo lleva una intrínseca o una función pública (el puente `Gui.__guiDispatch` que la VM llama
+por nombre), lo demás es error con línea (`samples/errores/PrefijoSistema.bp`; el relleno de `--barajar` pasa a
+`relleno__N`); **L19** (`977f3ba2`) `Perro(a)` con `a: Animal` baja directo (`esAntepasadoDe`; el emisor ya hacía
+CHECKCAST contra cualquier clase; `samples/CastBaja.bp` en el corpus, 84). h13 30/30, check 84/59/9/13/84, mezcla
+194/194, frontend 221/221. **Quedan en la fila H1**: `M5` (comprobar que el debugger enseña las properties
+heredadas: es una prueba con el debug server, no código), `#460` (herencia entre módulos: decisión de Eduardo —
+con #523 el «control de versiones efectivo» que pedía ya existe), destructor `~Clase()`, `Map`, `#396` `Time`,
+`#19`; y grabar S3/C3/C6/Nucleo/DK2.
+
 ## 🧬 H1 (20-sep, tarde) — P2c y P3: las intrínsecas se sobrecargan, y las CUATRO clases del lenguaje viven en BP
 
 **P2c** (`4dee6cf4`, `231fa322`): `Math.sign(x: integer)` / `sign(x: float)` (fuera `signF`); `len(s: string)` /
