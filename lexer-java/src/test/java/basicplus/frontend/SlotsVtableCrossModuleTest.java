@@ -188,11 +188,11 @@ class SlotsVtableCrossModuleTest {
         //   CosaDao sigue en la 6: buscar 6, buscar$s 7, buscar$LCosa; 8, despues 9
         // `etiqueta` es override y conserva la 5 — no gasta ranura nueva.
         for (String esperado : new String[]{
-                "CosaDao#etiqueta#5",
-                "CosaDao#buscar#6",
-                "CosaDao#buscar$s#7",
-                "CosaDao#buscar$LCosa;#8",
-                "CosaDao#despues#9"}) {
+                "CosaDao#etiqueta#6",
+                "CosaDao#buscar#7",
+                "CosaDao#buscar$s#8",
+                "CosaDao#buscar$LCosa;#9",
+                "CosaDao#despues#10"}) {   // V7/H1 (21-sep): +1, Object lleva __dtor en la ranura 2
             org.junit.jupiter.api.Assertions.assertTrue(dao.contains(esperado),
                     "falta '" + esperado + "' entre los símbolos de SlotDao.mod."
                     + " Exporta: " + ordenados(dao, "CosaDao#"));

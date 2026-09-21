@@ -135,10 +135,10 @@ class SobrecargaCrossModuleTest {
         Set<String> pide = ModSimbolos.conjunto(out.resolve("OvUso.mod"));
         // El slot dice cuál eligió: load(long)=2 y load(Medida)=3 (detrás de
         // toString 0 y compareTo 1, que vienen de Object).
-        assertTrue(pide.contains("OvLib.Dao#load#2"),
+        assertTrue(pide.contains("OvLib.Dao#load#3"),
                 "el llamante no pide la sobrecarga de 'long'. Pide: "
                 + ModSimbolos.conPrefijo(pide, "OvLib.Dao#"));
-        assertTrue(!pide.contains("OvLib.Dao#load$LMedida;#3"),
+        assertTrue(!pide.contains("OvLib.Dao#load$LMedida;#4"),
                 "el llamante pide la sobrecarga de Medida para un literal entero");
     }
 

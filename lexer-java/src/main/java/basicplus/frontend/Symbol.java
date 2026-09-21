@@ -210,6 +210,11 @@ public abstract class Symbol {
         /** H5.c — `function event f()`: necesita slot de vtable aunque sea
          *  privada, porque el destino de un evento ES un slot. */
         public boolean isEventHandler = false;
+        /** V7/H1 (21-sep) — el DESTRUCTOR (`function ~Clase()`): nombre interno `__dtor`, público y
+         *  virtual (clave `__dtor()V` en toda la jerarquía: Core.Object lo declara vacío), sin
+         *  parámetros ni retorno. Lo llama el lenguaje, no el usuario. */
+        public boolean isDestructor = false;
+        public static final String DTOR = "__dtor";
         /** #390 — `private` EXPLÍCITO: sólo la ve su propia clase. Sin marcar,
          *  un método es *protected* (la clase y sus descendientes). */
         public boolean isPrivate = false;

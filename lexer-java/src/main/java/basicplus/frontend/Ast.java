@@ -441,6 +441,13 @@ public final class Ast {
          * constructores telescópicos; una cuarta bandera los multiplicaría.
          */
         public boolean isEventHandler = false;
+        /** V7/H1 (21-sep) — `function ~Clase()`: el DESTRUCTOR, el contrario del constructor (diseño
+         *  de V5_IDEAS, 9-ago). Su nombre interno es `__dtor`; el usuario escribe `~Clase` y
+         *  `end ~Clase`. Lo llama el lenguaje —al morir un `var owner` local, al salir de un
+         *  `try var`— nunca el usuario; al acabar su cuerpo, corre el del padre. */
+        public boolean isDestructor = false;
+        /** El nombre que el usuario escribió tras `~` (tiene que ser el de su clase); `name` es `__dtor`. */
+        public String dtorEscrito = null;
         public FuncDef(boolean isPublic, boolean isFinal, DeclName name, List<Param> params,
                        TypeRef returnType, List<IStmt> body, int line, int column) {
             this(isPublic, isFinal, false, false, name, params, returnType, body, line, column);

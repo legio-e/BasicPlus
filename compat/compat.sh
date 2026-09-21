@@ -82,7 +82,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -831,12 +831,17 @@ EOF
   if [ -f "$V6C/Core.mod" ] && [ "$(head -c 4 "$V6C/Core.mod")" = "MOD7" ]; then
     d="$N/c_mod7"; rm -rf "$d"; mkdir -p "$d"; cp "$V6C"/*.mod "$d/"; cp "$A/NormaUsa.mod" "$d/"
     norma_caso "dep MOD7 con app que exige gen 7: rechazo (mas antiguo)" "$d" NormaUsa "'Core' \(gen 0\) es mas antiguo que el que 'NormaUsa' necesita \(gen 7\)" || fails=$((fails+1))
-    # Y una app compilada SIN exigir gen (proyecto sin version): con Core MOD7 corre.
+    # Y una app compilada SIN exigir gen (proyecto sin version), en MOD8 (layouts cerrados, marcadores
+    # Cls#m#slot), contra el Core MOD7 de V6. Corria hasta el 21-sep porque los layouts COINCIDIAN;
+    # desde que Object lleva el destructor (V7/H1: `__dtor()V`, ranura 2) toda vtable corre una ranura y
+    # el enlace por marcador falla CON NOMBRE («no exporta 'Core.List#add#3'»): errores si, silenciosos
+    # no. Es la leccion de #324 («quitar un metodo de una base CORRE los slots») al reves, y es
+    # inherente a MOD8; en MOD9 las ranuras son del cargador y no pasa.
     norma_stdlib "$N/s0" 0 || return 1
     local A0="$N/app0"; rm -rf "$A0"; mkdir -p "$A0"; cp "$N/s0"/*.mod "$A0/"
     ( cd "$N" && java -jar "$V3_FE" NormaUsa.bp --compile app0 --backend=mivm --formato=8 ) >"$N/app0.log" 2>&1 || { echo "  ✗ NormaUsa no compila contra la stdlib 0"; return 1; }
     d="$N/c_mod7b"; rm -rf "$d"; mkdir -p "$d"; cp "$V6C"/*.mod "$d/"; cp "$A0/NormaUsa.mod" "$d/"
-    norma_caso "dep MOD7 con app sin gen: corre (sin datos, al log)" "$d" NormaUsa "" || fails=$((fails+1))
+    norma_caso "dep MOD7 con app MOD8 sin gen: no enlaza, con nombre (Object lleva el destructor)" "$d" NormaUsa "presente pero no exporta 'Core.List#" || fails=$((fails+1))
     echo "  norma: $((9-fails))/9 casos"
   else
     echo "  (sin capsula V6: los dos casos de dependencia MOD7 no se prueban — ejecuta gen-v6)"

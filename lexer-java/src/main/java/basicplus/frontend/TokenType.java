@@ -121,6 +121,7 @@ public enum TokenType {
     LBRACE,         // {   (tuplas: { a, b } := f())
     RBRACE,         // }
     AT,             // @   — V5/H5: abre una anotación, `@BD{ tabla = "medidas" }`
+    TILDE,          // ~   — V7/H1: el destructor, `function ~Clase()` (el contrario del constructor)
     EQUALS,         // =   — SÓLO dentro de anotaciones. Asignar es ':='; fuera
                     //       de una anotación, un '=' suelto es un error (y el
                     //       parser lo dice sugiriendo ':=').

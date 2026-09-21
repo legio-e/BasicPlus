@@ -660,7 +660,17 @@ public final class Parser {
                 + " — y si querías llamar 'event' a la función, no puede ser:"
                 + " es una palabra reservada");
         }
-        DeclName name = parseDeclName();
+        boolean isDestructor = false;
+        String dtorEscrito = null;
+        DeclName name;
+        if (match(TokenType.TILDE)) {   // V7/H1: `function ~Clase()` — el destructor
+            isDestructor = true;
+            Token nt = current();
+            dtorEscrito = consumeIdentifier("nombre de la clase tras '~' (el destructor se llama como su clase)");
+            name = new DeclName(null, "__dtor", nt.line, nt.column);   // su nombre interno: así sobrescribe al del padre por nombre
+        } else {
+            name = parseDeclName();
+        }
 
         consume(TokenType.LPAREN, "se esperaba '(' tras el nombre de la función");
         List<Param> paramList = new ArrayList<>();
@@ -755,7 +765,9 @@ public final class Parser {
         consume(TokenType.END, "se esperaba 'end' al final de la función");
         // L4 — `end get` y `end set` también deben aceptarse (get/set como
         // keywords contextuales se permiten como nombre de método).
-        if (check(TokenType.IDENTIFIER)
+        if (match(TokenType.TILDE)) {   // `end ~Clase`
+            if (check(TokenType.IDENTIFIER)) advance();
+        } else if (check(TokenType.IDENTIFIER)
                 || check(TokenType.GET)
                 || check(TokenType.SET)) {
             parseDeclName();
@@ -769,6 +781,8 @@ public final class Parser {
         if (todoInline && isNative) { error("una función 'native' no puede tener cuerpo 'inline' (es una intrínseca: no hay nada que compilar a C)"); todoInline = false; }
         FuncDef fd = new FuncDef(isPublic, isFinal, todoInline, isNative, name, paramList, retType, body, tok.line, tok.column);
         fd.isEventHandler = isEventHandler;   // H5.c
+        fd.isDestructor = isDestructor;       // V7/H1
+        fd.dtorEscrito = dtorEscrito;
         return fd;
     }
 

@@ -815,7 +815,20 @@ public final class SemanticAnalyzer {
     private void declareFunc(FuncDef f, ClassSymbol owner, Scope scope) {
         boolean isStatic = f.name.isStatic();
         validateStaticPrefix(f.name, owner);
-        checkNombreReservado(f.name.name, f.line, f.column, f.isIntrinsic || f.isPublic);
+        String nombre = f.name.name;
+        if (f.isDestructor) {
+            // V7/H1 (21-sep) — `function ~Clase()`: el contrario del constructor. Se llama como su
+            // clase, no lleva parámetros ni retorno, y por dentro es el método `__dtor` (así el de
+            // la hija SOBRESCRIBE al del padre por nombre, como cualquier método).
+            if (owner == null) { err(f.line, f.column, "un destructor ('~') sólo puede ir dentro de una clase"); return; }
+            if (!owner.name.equals(f.dtorEscrito)) err(f.line, f.column, "el destructor se llama como su clase: '~" + owner.name + "', no '~" + f.dtorEscrito + "'");
+            if (!f.params.isEmpty()) err(f.line, f.column, "el destructor no lleva parámetros");
+            if (f.returnType != null) err(f.line, f.column, "el destructor no devuelve nada");
+            if (isStatic) err(f.line, f.column, "el destructor es de instancia");
+            if (owner.instanceMembers.tryLookup(Symbol.FunctionSymbol.DTOR) != null) err(f.line, f.column, "la clase '" + owner.name + "' ya tiene destructor");
+        } else {
+            checkNombreReservado(nombre, f.line, f.column, f.isIntrinsic || f.isPublic);
+        }
         if (f.isFinal && owner == null)
             err(f.line, f.column, "'final' solo es válido en métodos de clase");
         if (f.isIntrinsic && owner != null)
@@ -829,8 +842,9 @@ public final class SemanticAnalyzer {
         if (f.isPrivate && owner == null)
             err(f.line, f.column, "'private' solo es válido en miembros de clase;"
                     + " a nivel de módulo, lo que no es 'public' ya es privado del módulo");
-        FunctionSymbol sym = new FunctionSymbol(f.name.name, f.isPublic, f.isFinal, isStatic, owner, f);
+        FunctionSymbol sym = new FunctionSymbol(nombre, f.isDestructor || f.isPublic, f.isFinal, isStatic, owner, f);
         sym.isEventHandler = f.isEventHandler;   // H5.c — `function event`
+        sym.isDestructor = f.isDestructor;       // V7/H1
         sym.isPrivate = f.isPrivate && owner != null;   // #390
         sym.isIntrinsic = f.isIntrinsic;
         if (f.isIntrinsic && f.body != null && !f.body.isEmpty()) {   // H1 (20-sep): cuerpo `inline`; AQUÍ (al declarar) y
@@ -852,7 +866,7 @@ public final class SemanticAnalyzer {
             // estáticos y —desde E3— métodos de INSTANCIA (cada sobrecarga se
             // lleva su propio slot de vtable, ver assignSlotKeys). Colisión con
             // var/const/property sigue siendo "nombre duplicado".
-            Symbol prev = scope.tryLookup(f.name.name);
+            Symbol prev = scope.tryLookup(nombre);
             if (prev instanceof FunctionSymbol) {
                 FunctionSymbol head = (FunctionSymbol) prev;
                 FunctionSymbol tail = head;
@@ -861,7 +875,7 @@ public final class SemanticAnalyzer {
                 head.overloaded = true;
                 sym.overloaded  = true;
             } else {
-                err(f.line, f.column, "nombre duplicado: '" + f.name.name + "' en " + scope.tag);
+                err(f.line, f.column, "nombre duplicado: '" + nombre + "' en " + scope.tag);
             }
         }
         info.declSymbols.put(f, sym);

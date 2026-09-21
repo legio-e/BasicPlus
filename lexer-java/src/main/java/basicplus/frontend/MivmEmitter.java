@@ -400,8 +400,15 @@ public final class MivmEmitter {
          *  reutilice mientras se libera otro que aún apunta a memoria viva.
          *  Iteración natural = orden de declaración. */
         final java.util.LinkedHashSet<String> ownerLocals = new java.util.LinkedHashSet<>();
+        /** V7/H1 (21-sep) — un destructor encadena al del padre en el PUNTO ÚNICO de salida
+         *  (tras el endLabel, antes del RET): así corre también tras un `return` del cuerpo. */
+        boolean encadenarDtorDelPadre = false;
+        /** V7/H1 — la función tiene `var owner` locales: su cuerpo va dentro de un TRY que, si
+         *  sale una excepción, destruye y libera los owners antes de relanzarla. */
+        boolean guardaOwners = false;
         /** True si la función tiene tipo de retorno (no void). */
         final boolean returnsValue;
+        int ownersHandler = -1;   // V7/H1: la etiqueta del manejador que guarda los owners
         /** Etiqueta del único punto de salida físico de la función. */
         final int endLabel;
         /** Si != null, esta función es el cuerpo de un getter/setter de una
@@ -1408,6 +1415,7 @@ public final class MivmEmitter {
             declareParamsWidthAware(fs);
 
             beginFunctionScope(fs, null);
+            abrirGuardaDeOwners(fn.body);   // V7/H1
             try {
                 for (IStmt s : fn.body) emitStmt(s);
                 emitFunctionEnd();
@@ -2008,6 +2016,8 @@ public final class MivmEmitter {
         }
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
+        scopeStack.peek().encadenarDtorDelPadre = fs.isDestructor;   // V7/H1: ~Hija() acaba llamando a ~Padre()
+        abrirGuardaDeOwners(fn.body);   // V7/H1
         try {
             for (IStmt s : fn.body) emitStmt(s);
             emitFunctionEnd();
@@ -2023,6 +2033,7 @@ public final class MivmEmitter {
         declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);   // constructor = void
+        abrirGuardaDeOwners(fn.body);   // V7/H1
         try {
             // Si esta clase introduce __syncMutex, hay que inicializarlo
             // ANTES de cualquier código de usuario para que cualquier acceso
@@ -2169,6 +2180,7 @@ public final class MivmEmitter {
             w.addExportAlias(crossModuleStaticName(cls, fs), cls.name + "." + emitName(fs));
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
+        abrirGuardaDeOwners(fn.body);   // V7/H1
         try {
             for (IStmt s : fn.body) emitStmt(s);
             emitFunctionEnd();
@@ -2481,6 +2493,7 @@ public final class MivmEmitter {
             declareLocalByType(dn.name, widthT, declTag);   // H1.2/H1.3/H1.2a: long/double/ref = 8 bytes
             if (vd.isOwner) {
                 scopeStack.peek().ownerLocals.add(dn.name);
+                tiposDeOwners.put(dn.name, widthT);   // V7/H1: para llamar a su destructor al morir
             }
             if (vd.init != null) {
                 emitExpr(vd.init);
@@ -3837,14 +3850,97 @@ public final class MivmEmitter {
         w.emitJump(scope.endLabel);
     }
 
-    /** Emite FREE_REF para cada owner local del scope actual (en orden de
-     *  declaración). El VM hace no-op si la ref es null. */
+    /** Destruye y libera cada owner local del scope actual, en orden INVERSO al de declaración
+     *  (V5_IDEAS, 9-ago: «un q sacado de un db tiene que morir ANTES que el db»): si no es null,
+     *  su destructor (virtual: el de la clase real del objeto) y después FREE_REF; el VM hace
+     *  no-op con una ref null, y el destructor no se llama sobre null. */
     private void emitFreeOwnerLocals() throws IOException {
         FuncScope scope = scopeStack.peek();
-        for (String name : scope.ownerLocals) {
+        java.util.List<String> names = new ArrayList<>(scope.ownerLocals);
+        java.util.Collections.reverse(names);
+        for (String name : names) {
+            emitDestruirLocal(name);
             w.emitGetLocal(name);
             w.emitFreeRef();
         }
+    }
+    /** `if (x != null) x.~()`: el destructor, por la clase ESTÁTICA del local (despacho virtual). */
+    private void emitDestruirLocal(String name) throws IOException {
+        ClassSymbol cls = claseDeLocal(name);
+        if (cls == null) return;   // no es una clase (el semántico ya lo dijo): sólo FREE_REF
+        FunctionSymbol dtor = dtorDe(cls);
+        if (dtor == null) return;
+        int skip = w.newLabel();
+        w.emitGetLocal(name);
+        w.emit(OpCode.LPUSH); w.emitLong(0L);
+        w.emit(OpCode.LNEQ);
+        w.emitJumpIfFalse(skip);
+        w.emitGetLocal(name);
+        emitInvokeVirtualSmart(cls, dtor.ownerClass != null ? dtor.ownerClass : cls, Symbol.FunctionSymbol.DTOR, claveDe(dtor), 0);
+        String discard = "__dtor_discard_" + (tempCounter++);
+        declareLocal(discard);
+        w.emitSetLocal(discard);
+        w.declareLabel(skip);
+    }
+    /** El destructor visible desde `cls` (el suyo o el heredado; Core.Object lo declara vacío). */
+    private static FunctionSymbol dtorDe(ClassSymbol cls) {
+        Symbol m = cls.lookupInstance(Symbol.FunctionSymbol.DTOR);
+        return (m instanceof FunctionSymbol) ? (FunctionSymbol) m : null;
+    }
+    /** La clase estática de un local owner, por su símbolo en el scope semántico de la función. */
+    private ClassSymbol claseDeLocal(String name) {
+        BpType t = tiposDeOwners.get(name);
+        return (t instanceof ClassType) ? ((ClassType) t).cls : null;
+    }
+    /** V7/H1 — el tipo estático de cada owner local de la función en curso (lo apunta emitVarDecl). */
+    private final java.util.Map<String, BpType> tiposDeOwners = new java.util.HashMap<>();
+    /** V7/H1 — al final de un destructor: `this.~Padre()` (llamada NO virtual al del padre, como
+     *  `super.m()`), para que toda la cadena libere lo suyo. Object y Thread son raíz: nada. */
+    private void emitDtorDelPadre() throws IOException {
+        ClassSymbol cls = claseActual();
+        if (cls == null || cls.baseClass == null) return;
+        ClassSymbol padre = cls.baseClass;
+        FunctionSymbol fs = dtorDe(padre);
+        if (fs == null) return;
+        w.emitGetParam("this");
+        if (mod9() && porRef(padre)) {
+            w.emitCallRef(w.requireRef(ModWriter.REF_SUPER, depRef(padre), claseRef(padre), claveDe(fs)));
+        } else {
+            ClassSymbol duena = fs.ownerClass;
+            if (duena != null && duena.isExternal) {
+                StringBuilder qn = new StringBuilder();
+                if (duena.externalLibrary != null && !duena.externalLibrary.isEmpty()) qn.append(duena.externalLibrary).append('.');
+                qn.append(duena.externalModule).append('.').append(crossModuleMethodName(duena, fs));
+                w.emitCallExt(qn.toString(), fromPathFor(qn.toString()));
+            } else {
+                w.emitCall(duena.name + "." + emitName(fs));
+            }
+        }
+        String discard = "__dtorsuper_discard_" + (tempCounter++);
+        declareLocal(discard);
+        w.emitSetLocal(discard);
+    }
+    /** ¿Declara `var owner` locales (en cualquier bloque anidado)? Para abrir el TRY que los guarda. */
+    private static boolean tieneOwnerLocales(List<IStmt> body) {
+        if (body == null) return false;
+        for (IStmt s : body) {
+            if (s instanceof VarDecl && ((VarDecl) s).isOwner) return true;
+            if (s instanceof IfStmt) { IfStmt i = (IfStmt) s; if (tieneOwnerLocales(i.then_.body) || tieneOwnerLocales(i.else_)) return true; for (IfClause c : i.elseIfs) if (tieneOwnerLocales(c.body)) return true; }
+            if (s instanceof WhileStmt && tieneOwnerLocales(((WhileStmt) s).body)) return true;
+            if (s instanceof ForStmt && tieneOwnerLocales(((ForStmt) s).body)) return true;
+            if (s instanceof TryStmt) { TryStmt t = (TryStmt) s; if (tieneOwnerLocales(t.body) || tieneOwnerLocales(t.finallyBody)) return true; for (CatchClause c : t.catches) if (tieneOwnerLocales(c.body)) return true; }
+        }
+        return false;
+    }
+    /** V7/H1 — abre el TRY que guarda los owners de la función (si los hay): se llama justo
+     *  después de beginFunctionScope y antes del primer statement del cuerpo. */
+    private void abrirGuardaDeOwners(List<IStmt> body) throws IOException {
+        if (!tieneOwnerLocales(body)) return;
+        FuncScope scope = scopeStack.peek();
+        scope.guardaOwners = true;
+        scope.ownersHandler = w.newLabel();
+        w.emitTryBegin(scope.ownersHandler, null);
+        tryStack.push(new TryFrame(null, 1));
     }
 
     /**
@@ -3877,9 +3973,28 @@ public final class MivmEmitter {
      */
     private void emitFunctionEnd() throws IOException {
         FuncScope scope = scopeStack.peek();
+        if (scope.guardaOwners) {   // V7/H1: cierra el TRY que guarda los owners (camino normal)
+            w.emitTryEnd();
+            if (!tryStack.isEmpty()) tryStack.pop();
+        }
         // Fall-through path: liberar owners locales antes del RET.
         emitFreeOwnerLocals();
+        if (scope.guardaOwners) {
+            // V7/H1 — el manejador: una excepción dentro del cuerpo destruye y libera los owners
+            // (en orden inverso) y se relanza. El camino normal y los `return` ya han pasado por
+            // emitFreeOwnerLocals y saltan por encima.
+            int fin = w.newLabel();
+            w.emitJump(fin);
+            w.declareLabel(scope.ownersHandler);
+            declareLocalLong("__pending_owner_exc");
+            w.emitSetLocal("__pending_owner_exc");
+            emitFreeOwnerLocals();
+            w.emitGetLocal("__pending_owner_exc");
+            w.emitThrow();
+            w.declareLabel(fin);
+        }
         w.declareLabel(scope.endLabel);
+        if (scope.encadenarDtorDelPadre) emitDtorDelPadre();   // V7/H1: ~Hija() → ~Padre()
         if (scope.returnsValue) {
             w.emitGetLocal("__result");
         } else {

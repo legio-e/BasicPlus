@@ -649,6 +649,7 @@ public final class Lexer {
             case '{': return make1(TokenType.LBRACE,    "{", startLine, startColumn);  // tuplas: { a, b } := f()
             case '}': return make1(TokenType.RBRACE,    "}", startLine, startColumn);
             case '@': return make1(TokenType.AT,        "@", startLine, startColumn);  // V5/H5: anotaciones
+            case '~': return make1(TokenType.TILDE,     "~", startLine, startColumn);  // V7/H1: destructor
             // '=' suelto. Llega aquí SÓLO si no era '==' (eso se resuelve antes,
             // en el bloque de dos caracteres). Su uso legítimo es dentro de una
             // anotación; en cualquier otro sitio el parser lo rechaza sugiriendo

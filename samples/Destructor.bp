@@ -1,0 +1,85 @@
+// Destructor.bp — V7/H1 (21-sep): `function ~Clase()`, el contrario del constructor (diseño de
+// V5_IDEAS, 9-ago). Lo llama el lenguaje al morir un `var owner` local: en orden INVERSO al de
+// declaración, salgas por donde salgas (fin normal, return, excepción); y el de una hija acaba
+// llamando al de su padre. Un recurso externo se libera sobrescribiéndolo — aquí el «recurso» es
+// un contador de abiertos, para verlo en las dos VMs.
+module Destructor
+  public property abiertos: integer := 0
+
+  public class Recurso
+    public property nombre: string
+    public function Recurso(n: string)
+      this.nombre := n
+      abiertos := abiertos + 1
+      print "abre " + n + " (abiertos=" + abiertos + ")"
+    end Recurso
+    public function ~Recurso()
+      abiertos := abiertos - 1
+      print "cierra " + this.nombre + " (abiertos=" + abiertos + ")"
+    end ~Recurso
+  end Recurso
+
+  // Una hija: su destructor corre primero, y después el del padre.
+  public class RecursoConCache extends Recurso
+    public function RecursoConCache(n: string)
+      super(n)
+    end RecursoConCache
+    public function ~RecursoConCache()
+      print "vacia la cache de " + this.nombre
+    end ~RecursoConCache
+  end RecursoConCache
+
+  // Una clase sin destructor propio: hereda el de Object (vacío) y no pasa nada.
+  public class Simple
+    var v: integer := 1
+  end Simple
+
+  function normal()
+    var owner a: Recurso := Recurso("a")
+    var owner b: Recurso := Recurso("b")
+    var owner s: Simple := Simple()
+    print "  trabajando con a y b"
+  end normal
+
+  function conReturn(x: integer): integer
+    var owner r: Recurso := Recurso("r")
+    if x > 0 then
+      return x * 2
+    endif
+    return 0
+  end conReturn
+
+  function conExcepcion()
+    var owner e: Recurso := Recurso("e")
+    var cero: integer := 0
+    print 10 / cero
+  end conExcepcion
+
+  function hija()
+    var owner h: Recurso := RecursoConCache("h")
+    print "  h es " + h.nombre
+  end hija
+
+  function nulo()
+    var owner n: Recurso := null
+    print "  owner a null: nada que destruir"
+  end nulo
+
+  public function main()
+    print "== normal (inverso: b, a) =="
+    normal()
+    print "== return =="
+    print "  devuelve", conReturn(21)
+    print "== excepcion =="
+    try
+      conExcepcion()
+    catch ex: RuntimeError
+      print "  atrapada: " + ex.msg
+    endtry
+    print "== hija =="
+    hija()
+    print "== null =="
+    nulo()
+    print "abiertos al final =", abiertos
+  end main
+end Destructor

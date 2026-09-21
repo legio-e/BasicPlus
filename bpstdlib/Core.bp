@@ -37,6 +37,13 @@ module Core
       __throwRte("compareTo() no implementado: la clase no sobrescribe Object.compareTo")
       return 0
     end compareTo
+
+    // El destructor (V7/H1, 21-sep): «qué significa destruir esto» se escribe UNA vez, en la
+    // clase; lo llama el lenguaje al morir un `var owner` local (y no el usuario). Aquí, nada:
+    // una clase que tenga un recurso externo lo sobrescribe y lo libera. Al acabar el de una
+    // hija corre el de su padre.
+    public function ~Object()
+    end ~Object
   end Object
 
   // Un hilo preemptivo de la VM. Se subclasea, se sobrescribe run(), y start()/join().
@@ -63,6 +70,9 @@ module Core
     public function toString(): string   // #526: Thread no es Object, así que lo lleva ella
       return "thread@" + __refToString(this)
     end toString
+
+    public function ~Thread()            // raíz: su destructor vacío, para que sus hijas encadenen
+    end ~Thread
   end Thread
 
   // Exclusión mutua entre hilos. NO es reentrante: lock() dos veces desde el mismo hilo
