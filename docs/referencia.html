@@ -843,7 +843,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <tr><td><code>readLine(): string</code></td>
       <td>La siguiente línea sin su terminador; tolera <code>"\r\n"</code>. Al final devuelve
           <code>""</code> — quien lo dice es <code>eof()</code>. Un fichero sin salto final
-          entrega su última línea igual.</td></tr>
+          entrega su última línea igual. Nativa: ~0,2 ms por línea en una Pico (medido).</td></tr>
   <tr><td><code>readStr(n): string</code></td><td><code>n</code> <strong>caracteres</strong> (no bytes), o los que queden.</td></tr>
   <tr><td><code>write(s: string)</code> · <code>writeLine(s)</code></td>
       <td>Los bytes UTF-8 del texto; <code>writeLine</code> añade <code>"\n"</code> (uno solo,

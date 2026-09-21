@@ -4888,6 +4888,38 @@ public class VirtualMachine {
                 pushTc(tc, (int) ((b == Builtin.FTELL) ? c.pos : c.size));
                 break;
             }
+            case FREAD_LINE: {   // TextFile.readLine en nativo (espejo de BUILTIN_FREAD_LINE)
+                long sref = popTcRef(tc);
+                CursorBP c = cursorDe(tc, sref, "File.readLine()");
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(64);
+                byte[] tmp = new byte[128];
+                boolean nl = false;
+                try {
+                    while (c.pos < c.size && !nl) {
+                        int q = (int) Math.min(tmp.length, c.size - c.pos);
+                        int r;
+                        if (c.mem != null) { System.arraycopy(c.mem, (int) c.pos, tmp, 0, q); r = q; }
+                        else { c.raf.seek(c.pos); r = c.raf.read(tmp, 0, q); if (r <= 0) break; }
+                        int k = 0;
+                        while (k < r && tmp[k] != '\n') k++;
+                        bo.write(tmp, 0, k);
+                        if (k < r) { nl = true; c.pos += k + 1; } else c.pos += r;
+                    }
+                } catch (java.io.IOException e) {
+                    throwBpRuntimeError(tc, "File.readLine(): error de lectura");
+                }
+                byte[] linea = bo.toByteArray();
+                int len = linea.length;
+                if (len > 0 && linea[len - 1] == '\r') len--;
+                int addr = heapAlloc(len, TYPE_ARRAY_I8);
+                writeInt32(addr, len);
+                System.arraycopy(linea, 0, memory, addr + 4, len);
+                long h = handleRegister(addr);
+                ThreadContext me = currentTcLocal.get();
+                if (me != null) me.allocAnchor = (int) h;
+                pushTcRef(tc, h);
+                break;
+            }
             case FFLUSH: {
                 long sref = popTcRef(tc);
                 CursorBP c = cursorDe(tc, sref, "File.flush()");

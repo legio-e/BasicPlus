@@ -258,7 +258,8 @@ public enum Builtin {
     FSEEK("__fseek"),   // [245] __fseek(st: byte[], pos: integer)
     FTELL("__ftell"),   // [246] __ftell(st: byte[]): integer
     FSIZE("__fsize"),   // [247] __fsize(st: byte[]): integer
-    FFLUSH("__fflush");   // [248] __fflush(st: byte[])
+    FFLUSH("__fflush"),   // [248] __fflush(st: byte[])
+    FREAD_LINE("__freadLine");   // [249] __freadLine(st: byte[]): string
 
     public final String bpName;
     public final int id;

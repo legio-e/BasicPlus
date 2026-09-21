@@ -1587,6 +1587,41 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, (int32_t) ((id == BUILTIN_FTELL) ? bpvm_fs_ftell(blk) : bpvm_fs_fsize(blk)));
         return BPVM_OK;
     }
+    case BUILTIN_FREAD_LINE: {
+        /* TextFile.readLine en nativo. Dos pasadas sobre el cursor del motor: (1) contar hasta el
+         * '\n' (o el fin) leyendo por trozos; (2) volver, leer la línea DIRECTAMENTE en el string
+         * y dejar el cursor tras el '\n'. Nada de BP por medio: en la Pico la versión BP costaba
+         * 0,9 ms por línea (FileBench). El "\r" final se quita, como hacía la de BP. */
+        uint32_t sref = pop_ref(vm, tc);
+        uint8_t* blk = fblk_de(vm, sref, NULL);
+        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File.readLine(): fichero cerrado");
+        long ini = bpvm_fs_ftell(blk);
+        uint8_t tmp[128];
+        uint32_t n = 0; int hay_nl = 0; uint8_t ult = 0;
+        for (;;) {
+            long r = bpvm_fs_fread(blk, tmp, sizeof tmp);
+            if (r < 0) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
+            if (r == 0) break;
+            long k = 0;
+            while (k < r && tmp[k] != '\n') k++;
+            if (k > 0) ult = tmp[k - 1];
+            n += (uint32_t) k;
+            if (k < r) { hay_nl = 1; break; }
+        }
+        uint32_t len = (n > 0 && ult == '\r') ? n - 1 : n;
+        uint32_t ref = bpvm_heap_alloc(vm, len, BPVM_TYPE_ARRAY_I8);
+        if (ref == 0) return builtin_throw(vm, tc, "File.readLine(): sin memoria");
+        bpvm_write_u32_be(vm->memory + ref, len);
+        blk = fblk_de(vm, sref, NULL);   /* el heap no compacta, pero el GC pudo pasar: releer la dirección es gratis */
+        if (bpvm_fs_fseek(blk, (uint32_t) ini) != 0) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
+        if (len > 0) {
+            long r = bpvm_fs_fread(blk, vm->memory + ref + 4, len);
+            if (r < 0 || (uint32_t) r != len) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
+        }
+        if (bpvm_fs_fseek(blk, (uint32_t) ini + n + (hay_nl ? 1u : 0u)) != 0) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
+        bpref_push(vm, tc, bpvm_handle_register(vm, ref));
+        return BPVM_OK;
+    }
     case BUILTIN_FFLUSH: {
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);

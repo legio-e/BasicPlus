@@ -1527,3 +1527,25 @@ encoder/decoder de UTF-8 ↔ bytes»* — en BP son `toBytes`/`fromBytes` (Core 
 `readLine`/`readStr` leen por trozos con `read(buf)` y devuelven al cursor lo que sobra con `skip`, así que `tell()`
 sigue diciendo la verdad. P1-P4 hechos el mismo día (ver `ESTADO`); P5 va con la cascada pendiente de H1.
 
+### 6. La medida: fichero entero contra cursor (21-sep, `samples/FileBench.bp`)
+
+Eduardo: *«¿has hecho una comparación de rendimiento entre el sistema anterior y el nuevo?»*. No la había; va
+aquí. 400 líneas de texto y 32 KB binarios, «como se hacía» (fichero entero: `appendFile` por línea,
+`readFile`+`split`, `readFileBytes`) contra «como se hace ahora» (`IO.TextFile`/`IO.File`), en ms:
+
+| caso | Pico (littlefs) | P4 (littlefs) | P4 (`/sd`, SDMMC) | host VM-C |
+|---|---|---|---|---|
+| 1. escribir 400 líneas: `appendFile` / `writeLine` | **19950 / 316** | **15316 / 180** | 901 / 100 | 36 / 2 |
+| 2. leer 400 líneas: `readFile`+`split` / `readLine` | 23 / 87 | 14 / 80 | 9 / 71 | 0 / 2 |
+| 3. leer 32 KB: `readFileBytes` / `File.read` ×512 | 5 / 11 | 13 / 21 | 7 / 20 | 11 / 1 |
+| 4. 100 bytes dispersos: entero / `seek`+`readByte` | 11 / 17 | 14 / 33 | 7 / 32 | 0 / 0 |
+
+Lo que dice: **escribir por líneas es 60-70× más rápido con el cursor en littlefs** (cada `appendFile` es
+abrir + commit + cerrar: ~50 ms en la Pico) y 9× en la SD. Leer es otra historia: el fichero entero gana
+en tiempo (3-8× en líneas, 2× por trozos), porque `readFile`+`split` es nativo de punta a punta y el cursor
+paga una primitiva por operación — **pero exige tener el fichero ENTERO en el heap**, y eso es lo que el
+cursor viene a quitar (con 64 KB × 3 copias la miVM se quedó sin heap en la primera versión del bench).
+`readLine` salió primero en BP (trozos de 32 + `skip`): **354 ms en la Pico, 15× peor que `split`**; pasó a
+nativo (`__freadLine`, dos pasadas sobre el cursor del motor) y quedó en 87 (0,2 ms por línea). Queda margen
+—una pasada con la zona de rascar ahorraría el seek de vuelta— si algún día hace falta.
+

@@ -1447,6 +1447,9 @@ module Core
   function __fflush(st: byte[])   // IO.File
     inline CALL_BUILTIN 248
   end __fflush
+  function __freadLine(st: byte[]): string   // IO.TextFile.readLine, en nativo: medido 15x más lento en BP (FileBench)
+    inline CALL_BUILTIN 249
+  end __freadLine
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

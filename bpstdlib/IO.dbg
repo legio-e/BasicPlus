@@ -2,215 +2,182 @@ dbg 3
 module IO
 source C:\lenguajes\pm\bpstdlib\IO.bp
 lines
-38 177
-44 178
-47 179
-57 180
-69 181
-77 183
-96 208
-119 212
-141 216
-161 221
-172 222
-179 223
-201 228
-224 232
-247 236
-280 241
-299 246
-328 251
-333 252
-354 253
-368 255
-387 260
-418 265
-424 266
-441 267
-451 268
-467 270
-495 275
-520 279
-525 280
-533 281
-555 286
-572 187
-576 188
-591 189
-614 191
-637 193
-660 195
-668 197
-677 198
-718 200
-727 201
-734 202
-747 203
-763 204
-1084 302
-1093 303
-1096 304
-1105 305
-1108 306
-1116 307
-1128 308
-1137 309
-1145 311
-1148 312
-1172 313
-1189 314
-1207 315
-1215 317
-1227 318
-1235 319
-1238 320
-1248 321
-1260 322
-1268 324
-1279 326
-1291 327
-1297 329
-1309 333
-1343 334
-1354 336
-1385 341
-1394 342
-1397 343
-1400 344
-1409 345
-1412 346
-1420 347
-1432 348
-1441 349
-1449 351
-1452 352
-1476 353
-1484 354
-1500 355
-1523 356
-1539 357
-1547 359
-1554 360
-1565 362
-1577 363
-1585 364
-1588 365
-1598 366
-1610 367
-1618 369
-1629 371
-1638 372
-1644 373
-1656 378
-1687 383
-1708 387
-1733 296
+38 181
+63 186
+69 187
+72 188
+82 189
+94 190
+102 192
+121 218
+144 222
+166 226
+186 231
+197 232
+204 233
+226 238
+249 242
+272 246
+305 251
+324 256
+353 261
+377 262
+391 264
+413 269
+444 274
+450 275
+467 276
+477 277
+493 279
+521 284
+546 288
+557 289
+582 294
+599 196
+603 197
+618 198
+641 200
+664 202
+687 204
+695 206
+704 207
+745 209
+754 210
+761 211
+769 212
+782 213
+798 214
+1119 311
+1142 316
+1151 317
+1154 318
+1157 319
+1166 320
+1169 321
+1177 322
+1189 323
+1198 324
+1206 326
+1209 327
+1233 328
+1241 329
+1257 330
+1280 331
+1296 332
+1304 334
+1311 335
+1322 337
+1334 338
+1342 339
+1345 340
+1355 341
+1367 342
+1375 344
+1386 346
+1395 347
+1401 348
+1413 353
+1444 358
+1465 362
+1490 304
 vars
-func File.primerosBytes 35
+func File.leerLinea 35
+this -20 8 0 ?
+func File.primerosBytes 60
 this -32 8 0 ?
 src -24 8 0 ref
 n -16 4 0 integer
 out 8 8 0 ?
 i 16 4 0 integer
-func File.__dtor 93
+func File.__dtor 118
 this -20 8 0 ?
-func File.path 116
+func File.path 141
 this -20 8 0 ?
-func File.isOpen 138
+func File.isOpen 163
 this -20 8 0 ?
-func File.close 158
+func File.close 183
 this -20 8 0 ?
-func File.size 198
+func File.size 223
 this -20 8 0 ?
-func File.tell 221
+func File.tell 246
 this -20 8 0 ?
-func File.eof 244
+func File.eof 269
 this -20 8 0 ?
-func File.seek 277
+func File.seek 302
 this -24 8 0 ?
 pos -16 4 0 integer
-func File.skip 296
+func File.skip 321
 this -24 8 0 ?
 delta -16 4 0 integer
-func File.readByte 325
+func File.readByte 350
 this -20 8 0 ?
-b 4 8 0 ?
-func File.read 384
+func File.read 410
 this -28 8 0 ?
 buf -20 8 0 ref
-func File.readBytes 415
+func File.readBytes 441
 this -24 8 0 ?
 n -16 4 0 integer
 b 8 8 0 ?
 k 16 4 0 integer
-func File.write 492
+func File.write 518
 this -28 8 0 ?
 data -20 8 0 ref
-func File.writeByte 517
+func File.writeByte 543
 this -24 8 0 ?
 v -16 4 0 integer
-b 0 8 0 ?
-func File.flush 552
+func File.flush 579
 this -20 8 0 ?
-func File.__init 569
+func File.__init 596
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
 m 0 4 0 integer
-func __cls_new_File(ss) 773
+func __cls_new_File(ss) 808
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_init_File(ss) 809
+func __cls_init_File(ss) 844
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_m_File#writeByte(i)V 829
+func __cls_m_File#writeByte(i)V 864
 this -24 8 0 ?
 v -16 4 0 integer
-func __cls_m_File#read([B)i 845
+func __cls_m_File#read([B)i 880
 this -28 8 0 ?
 buf -20 8 0 ref
-func __cls_m_File#tell()i 865
+func __cls_m_File#tell()i 900
 this -20 8 0 ?
-func __cls_m_File#skip(i)V 882
+func __cls_m_File#skip(i)V 917
 this -24 8 0 ?
 delta -16 4 0 integer
-func __cls_m_File#seek(i)V 898
+func __cls_m_File#seek(i)V 933
 this -24 8 0 ?
 pos -16 4 0 integer
-func __cls_m_File#path()s 914
+func __cls_m_File#path()s 949
 this -20 8 0 ?
-func __cls_m_File#isOpen()z 933
+func __cls_m_File#isOpen()z 968
 this -20 8 0 ?
-func __cls_m_File#size()i 950
+func __cls_m_File#size()i 985
 this -20 8 0 ?
-func __cls_m_File#flush()V 967
+func __cls_m_File#flush()V 1002
 this -20 8 0 ?
-func __cls_m_File#__dtor()V 981
+func __cls_m_File#__dtor()V 1016
 this -20 8 0 ?
-func __cls_m_File#readBytes(i)[B 995
+func __cls_m_File#readBytes(i)[B 1030
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_File#readByte()i 1016
+func __cls_m_File#readByte()i 1051
 this -20 8 0 ?
-func __cls_m_File#close()V 1033
+func __cls_m_File#close()V 1068
 this -20 8 0 ?
-func __cls_m_File#eof()z 1047
+func __cls_m_File#eof()z 1082
 this -20 8 0 ?
-func __cls_m_File#write([B)V 1064
+func __cls_m_File#write([B)V 1099
 this -28 8 0 ?
 data -20 8 0 ref
-func TextFile.readLine 1081
+func TextFile.readLine 1116
 this -20 8 0 ?
-acc 8 8 0 ?
-n 16 4 0 integer
-trozo 20 8 0 ?
-fin 28 4 0 boolean
-k 32 4 0 integer
-i 36 4 0 integer
-mayor 44 8 0 ?
-j 52 4 0 integer
-func TextFile.readStr 1382
+func TextFile.readStr 1139
 this -24 8 0 ?
 n -16 4 0 integer
 acc 8 8 0 ?
@@ -224,42 +191,42 @@ b 44 4 0 integer
 empieza 48 4 0 boolean
 mayor 56 8 0 ?
 j 64 4 0 integer
-func TextFile.write$s 1684
+func TextFile.write$s 1441
 this -28 8 0 ?
 s -20 8 0 string
-func TextFile.writeLine 1705
+func TextFile.writeLine 1462
 this -28 8 0 ?
 s -20 8 0 string
-func TextFile.__init 1730
+func TextFile.__init 1487
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_new_TextFile(ss) 1752
+func __cls_new_TextFile(ss) 1509
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_init_TextFile(ss) 1788
+func __cls_init_TextFile(ss) 1545
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_m_TextFile#writeLine(s)V 1808
+func __cls_m_TextFile#writeLine(s)V 1565
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_TextFile#readLine()s 1825
+func __cls_m_TextFile#readLine()s 1582
 this -20 8 0 ?
-func __cls_m_TextFile#write(s)V 1844
+func __cls_m_TextFile#write(s)V 1601
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_TextFile#readStr(i)s 1861
+func __cls_m_TextFile#readStr(i)s 1618
 this -24 8 0 ?
 n -16 4 0 integer
-func __strconcat 1882
+func __strconcat 1639
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 i 16 4 0 ?
-func __strequals 1980
+func __strequals 1737
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -162,6 +162,9 @@ module IO
   public function __fflush(st: byte[])
     inline CALL_BUILTIN 248
   end __fflush
+  public function __freadLine(st: byte[]): string
+    inline CALL_BUILTIN 249
+  end __freadLine
 
   // Un fichero abierto, en BYTES. Modos: "r" (existe; sólo lectura), "w" (crea o trunca),
   // "a" (crea si falta; el cursor al FINAL al abrir), "r+" (existe; lectura y escritura).
@@ -171,6 +174,12 @@ module IO
     private var st: byte[]
     private var ruta: string
     private var abierto: boolean
+    private var uno: byte[]          // el byte suelto de readByte/writeByte, sin reservar uno por llamada
+
+    // La siguiente línea, en nativo (para TextFile; ver allí el contrato).
+    function leerLinea(): string
+      return __freadLine(this.st)
+    end leerLinea
 
     // Los primeros n bytes de src, en un array nuevo (para la clase y sus hijas).
     function primerosBytes(src: byte[], n: integer): byte[]
@@ -199,6 +208,7 @@ module IO
       endif
       this.ruta := path
       this.abierto := false
+      this.uno := newByteArray(1)
       this.st := newByteArray(__fstateSize(path))
       __fopen(this.st, path, m)
       this.abierto := true
@@ -248,11 +258,10 @@ module IO
 
     // Un byte (0..255), o -1 al final.
     public function readByte(): integer
-      var b: byte[] := newByteArray(1)
-      if __fread(this.st, b, 0, 1) == 0 then
+      if __fread(this.st, this.uno, 0, 1) == 0 then
         return -1
       endif
-      return b[0]
+      return this.uno[0]
     end readByte
 
     // Rellena buf desde el cursor. Devuelve los bytes leídos (0 = fin). No reserva memoria.
@@ -276,9 +285,8 @@ module IO
     end write
 
     public function writeByte(v: integer)
-      var b: byte[] := newByteArray(1)
-      b[0] := byte(v)
-      __fwrite(this.st, b, 0, 1)
+      this.uno[0] := byte(v)
+      __fwrite(this.st, this.uno, 0, 1)
     end writeByte
 
     // Lo escrito llega al medio (la caché del motor se vuelca).
@@ -296,44 +304,11 @@ module IO
       super(path, mode)
     end TextFile
 
-    // La siguiente línea, sin su terminador. Lee por trozos y devuelve al cursor lo que
-    // sobra, así que tell() sigue diciendo la verdad.
+    // La siguiente línea, sin su terminador; tolera "\r\n"; "" al final (lo dice eof()). En
+    // NATIVO: la versión en BP (trozos de 32 + skip) salía 15x más lenta que readFile+split en la
+    // Pico (FileBench, 21-sep); ésta va a la par sin traer el fichero entero.
     public function readLine(): string
-      var acc: byte[] := newByteArray(64)
-      var n: integer := 0
-      var trozo: byte[] := newByteArray(32)
-      var fin: boolean := false
-      while not fin do
-        var k: integer := this.read(trozo)
-        if k == 0 then
-          fin := true
-        else
-          var i: integer := 0
-          while i < k and not fin do
-            if trozo[i] == 10 then
-              this.skip(0 - (k - i - 1))
-              fin := true
-            else
-              if n == len(acc) then
-                var mayor: byte[] := newByteArray(n * 2)
-                var j: integer := 0
-                while j < n do
-                  mayor[j] := acc[j]
-                  j := j + 1
-                endwh
-                acc := mayor
-              endif
-              acc[n] := trozo[i]
-              n := n + 1
-            endif
-            i := i + 1
-          endwh
-        endif
-      endwh
-      if n > 0 and acc[n - 1] == 13 then
-        n := n - 1
-      endif
-      return fromBytes(this.primerosBytes(acc, n))
+      return this.leerLinea()
     end readLine
 
     // n CARACTERES (no bytes), o los que queden.

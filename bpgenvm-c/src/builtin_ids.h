@@ -254,7 +254,8 @@ enum {
     BUILTIN_FTELL                        = 246,   /* __ftell(st: byte[]): integer */
     BUILTIN_FSIZE                        = 247,   /* __fsize(st: byte[]): integer */
     BUILTIN_FFLUSH                       = 248,   /* __fflush(st: byte[]) */
-    BUILTIN__CUANTOS = 249
+    BUILTIN_FREAD_LINE                   = 249,   /* __freadLine(st: byte[]): string */
+    BUILTIN__CUANTOS = 250
 };
 
 #endif

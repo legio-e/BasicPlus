@@ -104,6 +104,13 @@ el `FIL` en el heap—: 200 líneas escritas, leídas, un byte parcheado con `r+
 (las mismas cinco de H1). Quedan de la fila H3: `SD_INFO`/`SD_MOUNT` al REPL común y la SD del STM32 — las dos de
 placa con tarjeta (Metro, DK2).
 
+**La medida** (Eduardo: *«¿has hecho una comparación de rendimiento?»* — no; hecha, `samples/FileBench.bp`, tabla en
+`V7_IDEAS` §H3.6): escribir 400 líneas en littlefs pasa de **19,9 s** (`appendFile`, abrir+commit+cerrar cada una) a
+**0,3 s** con `writeLine` (Pico; 15,3 → 0,18 en el P4; 0,9 → 0,1 en la SD). Leer sigue ganándolo el fichero entero
+(nativo de punta a punta) pero a costa de tenerlo ENTERO en el heap. Y destapó que `readLine` en BP era 15× más
+lento que `readFile`+`split` (354 ms/400 líneas en la Pico): **`__freadLine` nativo** (id 249), 87 ms. Pico y P4
+regrabadas con ello; `FileCursor` == host en las dos.
+
 ## 🧬 H1 (21-sep, tarde) — `#19` cerrada como la redefinió Eduardo; la fila H1, hecha salvo grabar cinco placas
 
 **`#19`** (`60325e4c`): *«mantenemos los array fijos pero los limitamos a declaraciones locales y dentro de una clase como

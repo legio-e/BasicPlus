@@ -1,0 +1,137 @@
+// FileBench.bp — V7/H3 (21-sep): el cursor frente al fichero entero, con cronómetro. No es del corpus
+// de paridad (imprime tiempos): es la medida. Cuatro casos, cada uno «como se hacía» (fichero entero:
+// appendFile / readFile+split / readFileBytes) contra «como se hace ahora» (IO.File / IO.TextFile).
+module FileBench
+  import IO
+
+  var DIR: string := ""
+  var LINEAS: integer := 400
+  var KB: integer := 32
+
+  function caso1(p: string)
+    // escribir LINEAS líneas: appendFile por línea (abre+escribe+cierra cada vez) vs writeLine
+    var t0: integer := now()
+    var i: integer := 0
+    writeFile(p + "a.txt", "")
+    while i < LINEAS do
+      appendFile(p + "a.txt", "línea " + i + "\n")
+      i := i + 1
+    endwh
+    var ta: integer := now() - t0
+    t0 := now()
+    var f: IO.TextFile := IO.TextFile(p + "b.txt", "w")
+    i := 0
+    while i < LINEAS do
+      f.writeLine("línea " + i)
+      i := i + 1
+    endwh
+    f.close()
+    var tb: integer := now() - t0
+    print "1. escribir", LINEAS, "líneas: appendFile", ta, "ms · TextFile.writeLine", tb, "ms  (" + IO.fileSize(p + "a.txt") + " B)"
+  end caso1
+
+  function caso2(p: string)
+    // leer LINEAS líneas: readFile entero + split vs readLine
+    var t0: integer := now()
+    var todo: string := readFile(p + "a.txt")
+    var partes: string[] := split(todo, "\n")
+    var n: integer := 0
+    var suma: integer := 0
+    for s in partes do
+      if len(s) > 0 then
+        n := n + 1
+        suma := suma + len(s)
+      endif
+    next s
+    var ta: integer := now() - t0
+    t0 := now()
+    var f: IO.TextFile := IO.TextFile(p + "b.txt", "r")
+    var m: integer := 0
+    var suma2: integer := 0
+    while not f.eof() do
+      var s: string := f.readLine()
+      m := m + 1
+      suma2 := suma2 + len(s)
+    endwh
+    f.close()
+    var tb: integer := now() - t0
+    print "2. leer", n, "/", m, "líneas: readFile+split", ta, "ms · TextFile.readLine", tb, "ms  (suma " + suma + "/" + suma2 + ")"
+  end caso2
+
+  function caso3(p: string)
+    // KB kilobytes binarios: readFileBytes entero vs File.read por trozos de 512
+    var datos: byte[] := newByteArray(KB * 1024)
+    var i: integer := 0
+    while i < len(datos) do
+      datos[i] := byte(i mod 251)
+      i := i + 1
+    endwh
+    writeFileBytes(p + "c.bin", datos)
+    var t0: integer := now()
+    var todo: byte[] := readFileBytes(p + "c.bin")
+    var suma: integer := 0
+    i := 0
+    while i < len(todo) do
+      suma := suma + todo[i]
+      i := i + 512
+    endwh
+    var ta: integer := now() - t0
+    t0 := now()
+    var f: IO.File := IO.File(p + "c.bin", "r")
+    var buf: byte[] := newByteArray(512)
+    var suma2: integer := 0
+    var k: integer := f.read(buf)
+    while k > 0 do
+      suma2 := suma2 + buf[0]
+      if k > 512 - 1 then
+        k := f.read(buf)
+      else
+        k := 0
+      endif
+    endwh
+    f.close()
+    var tb: integer := now() - t0
+    print "3. leer", KB, "KB: readFileBytes entero", ta, "ms · File.read x512", tb, "ms  (suma " + suma + "/" + suma2 + ")"
+  end caso3
+
+  function caso4(p: string)
+    // 100 bytes en posiciones dispersas: sin cursor había que traer el fichero ENTERO; con seek, no
+    var t0: integer := now()
+    var todo: byte[] := readFileBytes(p + "c.bin")
+    var suma: integer := 0
+    var i: integer := 0
+    while i < 100 do
+      suma := suma + todo[(i * 6553) mod len(todo)]
+      i := i + 1
+    endwh
+    var ta: integer := now() - t0
+    t0 := now()
+    var f: IO.File := IO.File(p + "c.bin", "r")
+    var suma2: integer := 0
+    i := 0
+    while i < 100 do
+      f.seek((i * 6553) mod f.size())
+      suma2 := suma2 + f.readByte()
+      i := i + 1
+    endwh
+    f.close()
+    var tb: integer := now() - t0
+    print "4. 100 bytes dispersos: readFileBytes entero", ta, "ms · seek+readByte", tb, "ms  (suma " + suma + "/" + suma2 + ")"
+  end caso4
+
+  public function main()
+    var donde: string := DIR
+    if len(donde) == 0 then
+      donde := "FS por defecto"
+    endif
+    print "--- FileBench: fichero entero vs cursor (" + donde + ") ---"
+    caso1(DIR)
+    caso2(DIR)
+    caso3(DIR)
+    caso4(DIR)
+    IO.removeFile(DIR + "a.txt")
+    IO.removeFile(DIR + "b.txt")
+    IO.removeFile(DIR + "c.bin")
+    print "fin"
+  end main
+end FileBench
