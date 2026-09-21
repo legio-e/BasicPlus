@@ -262,6 +262,13 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 
 > Sustituye al P4X en el plan. Entra por el camino que V6 dejó hecho para el C3 y el C6 (`P1`/`P2`): la
 > familia ESP32 se **activa**, no se construye — y lo que costó en V6 fue la placa, no la familia.
+>
+> **La placa ya está en la mesa (Eduardo, 21-sep), y el plan es en DOS ETAPAS** — idea suya, no para ahora:
+> **1.ª la imagen SIN LVGL** (la C5 como una placa no gráfica más: familia activada, `boardName`, memoria con
+> sus 8 MB de PSRAM, serie, la TF; por `tanda.py` como el C3/C6); **2.ª, sobre esa imagen, montar LVGL en un
+> PACK e ir probando** — o sea que la C5 es el **primer cliente real de H6** (LVGL en un pack): la pantalla y el
+> táctil no entran en la imagen, llegan por el pack. Así H11 y H6 se prueban una contra otra, en la placa
+> pensada para ello (pantalla pequeña + PSRAM), sin tocar las imágenes que ya funcionan.
 
 **La placa, según su ficha** (Amazon, 13-sep; *«5-point capacitive touch, no batt»*): módulo **ESP32-C5-WROOM-1**,
 RISC-V a 240 MHz, **384 KB de SRAM, 320 KB de ROM, 8 MB de PSRAM, 32 MB de flash**; Wi-Fi **2,4 y 5 GHz**, BT 5 LE
