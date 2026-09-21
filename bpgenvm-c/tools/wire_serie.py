@@ -361,6 +361,33 @@ def cmd_packformat(w, _):
     print("packformat:", "zona vacia" if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
 
 
+def cmd_part(w, args):
+    """V7/H11 (21-sep) — las particiones de la zona de datos, para APROVISIONAR una placa
+    VIRGEN sin el IDE: `part` (PART_LS), `part defaults` (lo que la placa propone) y
+    `part apply [fs_bytes]` (PART_APPLY con el FS propuesto, o el que se diga; packs = el
+    resto). Hasta hoy solo lo hacia el BoardMgr del IDE, y una placa nueva arrancaba
+    «DEGRADADO: falta algun tamano» sin forma de contestarle desde aqui."""
+    if not args:
+        w.send("PART_LS")
+        r = w.esperar("PART_LS_REPLY", 10)
+        print(json.dumps(r, indent=2) if r else "sin PART_LS_REPLY %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+        return
+    w.send("PART_DEFAULTS")
+    d = w.esperar("PART_DEFAULTS_REPLY", 10)
+    if not d:
+        print("sin PART_DEFAULTS_REPLY", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+    parts = {e.get("name"): int(e.get("size") or 0) for e in d.get("parts") or []}
+    print("propone:", parts)
+    if args[0] == "defaults":
+        return
+    if args[0] != "apply":
+        print("uso: part | part defaults | part apply [fs_bytes]"); return
+    fs = int(args[1]) if len(args) > 1 else parts.get("fs", 0)
+    w.send("PART_APPLY", fs=fs)
+    r = w.esperar("PART_APPLY_REPLY", 30)
+    print("apply fs=%d:" % fs, "ok %s" % json.dumps(r) if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+
+
 def cmd_reset(w, _):
     """El verbo RESET del wire (reinicia la placa; el USB puede irse y volver)."""
     w.send("RESET")
@@ -378,7 +405,7 @@ def cmd_packfmt(w, _):
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
             "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get,
             "packs": cmd_packs, "pack": cmd_pack, "packfmt": cmd_packfmt,
-            "env": cmd_env, "reset": cmd_reset}
+            "env": cmd_env, "part": cmd_part, "reset": cmd_reset}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:

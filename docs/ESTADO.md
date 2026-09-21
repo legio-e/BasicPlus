@@ -71,6 +71,30 @@ haciendo, tardemos las sesiones que haga falta; en V7 cerramos todos los temas p
 la regla de V7, y yo la había saltado). **Orden para retomar**: H1, el módulo raíz propiamente: los tipos y las 226
 intrínsecas en un fichero legible y las tablas generadas a partir de él (lo de L1 del 5-sep), y después los extras de
 la fila del hito (sobrecarga de intrínsecas, destructor `~Clase()`, `Map`, `#396` `Time`, `#19`, `#460`, los huecos).
+## 📱 H11 (21-sep, noche) — LA C5 ARRANCA: la 1.ª etapa (la imagen SIN LVGL) hecha en una tarde
+
+Eduardo conectó la C5 y la 1.ª etapa salió por el camino de `P1`/`P2` de V6, tal como el backlog preveía: **la familia
+se activa, no se construye**. `esp32c5/` es un clon del C3 (sin pantalla) con la identidad del C5: `chip_cfg.h`
+(`esp32c5`, 240 MHz, los números de memoria del C3 hasta medir con U6.4), `c5_board_id.c` (29 GPIO, 6 LEDC, 6 ADC,
+384 KB), `partitions.csv` y `sdkconfig.defaults`. Compiló a la primera (`idf.py set-target esp32c5`; 517 KB, 51 %
+libre en la factory de 1 MB) y grabó por el USB nativo (VID 303A PID 1001: **USB-Serial-JTAG, COM6** — el camino del
+C3/C6: wire por el USB, consola a UART0). Lo que dijo la placa: `esptool` «ESP32-C5 (revision v1.2), flash 32MB»; el
+`INFO` `boardName=esp32c5`, `arch 243`, **`aotReceta RV32IMC_ILP32`** (sin FPU: el destino del AOT es el del C3/C6,
+`ilp32` — el resto de `#502`), 240 MHz, 32 MB de flash, 384 KB de SRAM, PSRAM 0 (aún no activada).
+
+Dos cosas que hicieron falta y no estaban: (1) **aprovisionar una placa VIRGEN sin el IDE** — arrancaba «estado 0
+DEGRADADO: falta algún tamaño»; `wire_serie.py` gana el verbo `part` (`PART_LS`/`PART_DEFAULTS`/`PART_APPLY`): propuso
+fs 1,5 MB + packs 1,5 MB, se aplicó, reset → estado 3, FS montado, zona de packs montada; (2) la tabla de 4 MB del C3
+hacía cantar al arranque «el bootloader usa menos flash de la que hay» → **flash de 32 MB declarada** y `bpdata` del
+tamaño del S3 (acaba en los 16 MB, mismos offsets: el env y el FS no se movieron); la zona de packs de **13,7 MB se
+mapea bien** (INST/DATA ok). La segunda mitad de la flash y la PSRAM quedan para la 2.ª etapa (LVGL en un pack).
+
+**Verificado**: `FileCursor` == host en la C5 (el cursor en una tercera placa, littlefs); `tanda.py` con la C5 como
+columna (`SIN_PANTALLA`): MathRango, ThrowSinAtrapar, ThreadTrasMain IDÉNTICO, MachineId no-peta, las dos de GUI
+saltadas por no tener pantalla (lo correcto); `FileBench`: 400 líneas 11,5 s → 0,2 s. Con 64 KB de heap de VM el
+bench se queda sin heap en el caso 3 (32 KB × 2 copias): el reparto es el conservador del C3 (128 KB) hasta medir.
+**Y nos paramos ahí**, como se dijo: la 2.ª etapa (LVGL en un pack) es H6.
+
 ## ⏭️ Traspaso (21-sep, al cerrar) — lo siguiente: la 1.ª etapa de H11 (la C5 sin LVGL), y después H7 y H4
 
 Eduardo, al parar: *«cuando vuelva podemos probar la 1.ª etapa a ver qué tal. Y nos pararemos ahí. Después H7 y H4 o

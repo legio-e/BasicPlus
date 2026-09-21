@@ -161,7 +161,7 @@ HELLO_SEGS = 3.0
 # mismo boardName. F1 (12-sep) lanzo las graficas en la Nucleo por fiarse de
 # ella: «builtin 135 no soportado». Se anota en el informe como "supuesto".
 CON_PANTALLA = ("esp32c6", "esp32p4", "stm32u5")
-SIN_PANTALLA = ("rp2350a", "rp2350b", "pico", "esp32s3", "esp32c3", "host")
+SIN_PANTALLA = ("rp2350a", "rp2350b", "pico", "esp32s3", "esp32c3", "esp32c5", "host")   # V7/H11: la C5, 1.ª etapa SIN pantalla (LVGL llegará en un pack)
 
 
 def log(msg):
