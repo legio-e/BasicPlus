@@ -444,40 +444,37 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h4>4.2.1 Arrays de tamaño fijo &nbsp;<code>T[N]</code></h4>
 <p>
-  El tamaño es un <strong>literal entero &gt; 0</strong> conocido en
-  compilación, y los elementos son <strong>primitivos</strong> (enteros,
-  estrechos, <code>long</code>, <code>float</code>, <code>double</code>,
-  <code>boolean</code> — para <code>string</code> o clases usa
-  <code>T[]</code>). La variable <em>ES</em> el array: tiene
-  <strong>binding fija</strong> (no se puede reasignar; sus elementos sí
-  son escribibles). Dónde vive depende del ámbito:
+  Un array fijo <strong>no es una referencia</strong>: es almacenamiento en sitio. Vive en el
+  marco de la función (variable local) o dentro del objeto (campo <code>private var</code> de
+  una clase), y sólo se puede <strong>indexar</strong> (<code>buf[i]</code>, con comprobación de
+  rango en ejecución), <strong>recorrer</strong> (<code>for x in buf</code>) y <strong>medir</strong>
+  (<code>len(buf)</code>). Cualquier otro uso —asignarlo a otra variable, pasarlo a una función,
+  devolverlo, guardarlo en un campo— es error de compilación: no hay referencia que dar, y por eso
+  no puede escapar ni sobrevivir a su dueño. El tamaño es un <strong>literal entero &gt; 0</strong>
+  y los elementos son <strong>primitivos</strong> (enteros, estrechos, <code>long</code>,
+  <code>float</code>, <code>double</code>, <code>boolean</code>; para <code>string</code> o clases
+  usa <code>T[]</code>). Un inicializador literal puede ser más corto que N: el resto queda a cero.
 </p>
 <table>
   <tr><th>Ámbito</th><th>Dónde vive</th></tr>
-  <tr><td>Global de módulo</td><td>Horneado en el data block del <code>.mod</code> (incluido el init literal): cero heap y cero código de arranque.</td></tr>
-  <tr><td>Local de función</td><td>Array del heap de N elementos, alocado a cero al entrar la declaración. Gestionado por el GC como cualquier array.</td></tr>
-  <tr><td>Campo de clase</td><td><strong>No soportado</strong> (error de compilación): declara <code>T[]</code> e inicialízalo en el constructor con <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</td></tr>
+  <tr><td>Local de función</td><td>En el marco: <code>4 + N·ancho</code> bytes, a cero al declararlo. Ni heap ni GC.</td></tr>
+  <tr><td>Campo <code>private var</code> de clase</td><td>Dentro del objeto: <code>1 + ⌈N·ancho/4⌉</code> ranuras (hasta 255), a cero al construirlo. Sólo lo indexa la propia clase.</td></tr>
+  <tr><td>Global de módulo</td><td><strong>No</strong> (error de compilación): a nivel de módulo escribe <code>T[]</code>, con un literal <code>[…]</code> o <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
 </table>
-<pre><code><span class="comment">// Módulo: horneado en el data block; el init literal puede ser más corto</span>
-<span class="comment">// que N — el resto queda a cero. [1,2,250] entra en byte[4] (se valida</span>
-<span class="comment">// elemento a elemento, no por asignabilidad de arrays).</span>
-<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">4</span>] := [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>]   <span class="comment">// → 10,20,30,0</span>
-<span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]
+<pre><code><span class="kw">public class</span> Media
+  <span class="kw">private var</span> muestras: <span class="type">integer</span>[<span class="num">8</span>]      <span class="comment">// en el objeto</span>
+  <span class="kw">public function</span> add(v: <span class="type">integer</span>)
+    <span class="kw">this</span>.muestras[<span class="kw">this</span>.n <span class="kw">mod</span> len(<span class="kw">this</span>.muestras)] := v
+  <span class="kw">end</span> add
+<span class="kw">end</span> Media
 
 <span class="kw">function</span> Main()
-  <span class="comment">// Local: N elementos a cero en el heap; len() e iteración funcionan</span>
-  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// buffer típico de I2C/SPI</span>
+  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// en el marco, a cero</span>
+  <span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]   <span class="comment">// el 4.º queda a 0</span>
   buf[<span class="num">0</span>] := <span class="num">42</span>
   <span class="kw">print</span> len(buf)                       <span class="comment">// 64</span>
-  <span class="comment">// buf := otra    ← error: binding fija (escribe en sus elementos)</span>
+  <span class="comment">// suma(buf)   ← error: no es una referencia (cópialo a un T[] si hay que pasarlo)</span>
 <span class="kw">end</span> Main</code></pre>
-<p>
-  El array fijo local es un array normal del heap: se puede pasar a una
-  función que reciba <code>T[]</code> y desaparece vía GC cuando deja de
-  referenciarse. El de módulo vive en el data block y no se libera nunca.
-  No existen <em>const</em> arrays: una <code>const</code> de módulo solo
-  admite literales primitivos (ver <a href="#const">§5.2</a>).
-</p>
 
 <h4>4.2.2 Arrays de tamaño variable &nbsp;<code>T[]</code></h4>
 <p>
@@ -1063,8 +1060,9 @@ mismo caso.</p>
   interna.
 </p>
 <p>
-  Un campo NO admite array de tamaño fijo <code>tipo[N]</code> (error de
-  compilación): declara <code>tipo[]</code> e inicialízalo en el constructor
+  Un campo admite un array de tamaño fijo <code>tipo[N]</code> si es <code>private var</code>:
+  vive dentro del objeto y sólo lo indexa la propia clase (<a href="#arrays">§4.2.1</a>). Si
+  tiene que verse o pasarse, declara <code>tipo[]</code> e inicialízalo en el constructor
   con <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
   Un campo es <em>protegido</em> (o <code>private</code>): lo ven su clase y sus
   descendientes, también los de otro módulo — desde V7 la interfaz publica los
@@ -1998,7 +1996,7 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       no embebe setjmp; diferido con diseño anotado. Tampoco tuplas,
       <code>instanceof</code> ni eventos dentro de una native (error de
       compilación, <a href="#funciones-native">§8.3</a>).</li>
-  <li>Array de tamaño fijo <code>tipo[N]</code> como campo de clase y
+  <li>Array de tamaño fijo <code>tipo[N]</code> a nivel de módulo y
       dentro de una <code>native function</code> (error de compilación con
       alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
   <li><strong>AOT en el ESP32-S3 (Xtensa)</strong> — sus funciones <code>native</code>

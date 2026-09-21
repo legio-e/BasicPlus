@@ -1704,6 +1704,15 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
         }
+        case OP_LEA_FIELD: case OP_LEA_FIELD_REF: {   /* V7/H1 #19: direccion del campo (array fijo en el objeto) = ref sin TAG */
+            uint32_t slot; if (op == OP_LEA_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            bpvm_write_i64_be(mem + sp, (int64_t) (uint32_t) (bpref_field(vm, obj, slot) - vm->memory));   /* offset en memory[], no puntero */
+            sp += BPVM_REF_SIZE;
+            break;
+        }
         case OP_SET_FIELD: case OP_SET_FIELD_REF: {
             uint32_t slot; if (op == OP_SET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);

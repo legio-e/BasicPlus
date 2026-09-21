@@ -63,6 +63,9 @@ DestructorMal|el destructor no lleva par
 DestructorMal|no puede escapar: se destruye
 DestructorMal|no puede escapar a un campo
 DestructorMal|el destructor lo llama el lenguaje
+ArrayFijoMal|puede ser una variable local o un campo
+ArrayFijoMal|de clase tiene que ser
+ArrayFijoMal|'buf' es un array fijo: no es una referencia
 "
 
 ok=0; mal=0

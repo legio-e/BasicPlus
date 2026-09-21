@@ -1,0 +1,30 @@
+// ArrayFijoMal.bp — #19 (V7/H1, 21-sep): lo que un array fijo `tipo[N]` NO admite. No es una
+// referencia: (1) a nivel de modulo no existe; (2) como campo de clase tiene que ser private;
+// (3) no se asigna a otra variable; (4) no se pasa como argumento; (5) no se devuelve;
+// (6) no se guarda en un campo. Solo se indexa y se mide con len().
+module ArrayFijoMal
+  var tabla: integer[4]
+
+  public class Caja
+    var abierto: integer[8]
+    public property ref: integer[]
+    public function Caja()
+    end Caja
+  end Caja
+
+  function suma(a: integer[]): integer
+    return len(a)
+  end suma
+
+  function usos(c: Caja): integer[]
+    var buf: integer[16]
+    var alias: integer[] := buf
+    print suma(buf)
+    c.ref := buf
+    return buf
+  end usos
+
+  public function main()
+    print "no llega"
+  end main
+end ArrayFijoMal

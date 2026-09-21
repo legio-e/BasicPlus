@@ -113,6 +113,7 @@ public class ModWriter {
         boolean isOwner;   // true ⇒ al liberar la instancia, liberar también este campo
         int slot;          // BUG-6: índice de slot (4 bytes/slot) dentro de la instancia
         boolean is8;       // BUG-6: campo de 8 bytes (long/double) → ocupa 2 slots
+        int slots = 1;     // V7/H1 #19: ranuras que ocupa (1, 2, o 1 + ⌈N·ancho/4⌉ en un array fijo)
         // V7/H2 (#523, MOD9) — lo que viaja en la subtabla CLASES (4.5)
         boolean heredado;  // copiado del padre local: NO es propio, no va en 4.5
         String clave;      // clave canónica `nombre:código` (null = no publicado: __inh, $recv…)
@@ -763,14 +764,17 @@ public class ModWriter {
         currentLocalsBytes += 8;
     }
 
-    public void declareLocalArray(String localName, int length) {
+    public void declareLocalArray(String localName, int length) { declareLocalArray(localName, length, 4); }
+    /** V7/H1 #19 — array fijo LOCAL en el marco: `[len:4][length × elemBytes]` (redondeado a 4);
+     *  escribe la cabecera al declararlo. Los elementos los pone a cero el emisor (ENTER no lo hace). */
+    public void declareLocalArray(String localName, int length, int elemBytes) {
         if (length < 0) throw new RuntimeException("Tamaño negativo en declareLocalArray(" + localName + "): " + length);
         if (findLocalSlot(localName) != null) throw new RuntimeException("Local ya declarado: " + localName);
 
         LocalSlot s = new LocalSlot();
         s.name = localName;
         s.offsetBytes = currentLocalsBytes;
-        s.sizeBytes = 4 + length * 4;
+        s.sizeBytes = 4 + ((length * elemBytes + 3) / 4) * 4;
         s.isArray = true;
         s.arrayLength = length;
         currentLocalSlots.add(s);
@@ -883,6 +887,7 @@ public class ModWriter {
                 f.isOwner = pf.isOwner;
                 f.slot = pf.slot;     // BUG-6: preservar slot/ancho heredados
                 f.is8 = pf.is8;
+                f.slots = pf.slots;   // V7/H1 #19: un array fijo heredado ocupa lo suyo
                 f.heredado = true;    // V7/H2 (#523): no es propio, no va en 4.5
                 c.fields.add(f);
             }
@@ -1010,6 +1015,12 @@ public class ModWriter {
         codeOut.writeByte(OpCode.INVOKE_VIRTUAL_REF.code); currentBytecodeSize += 1;
         emitRefOperand(refIdx);
         codeOut.writeByte(numArgs); currentBytecodeSize += 1;
+    }
+    /** V7/H1 #19 — ( obj -- addr ) por ref: LEA_FIELD_REF idx (la ranura la pone el cargador por clave). */
+    public void emitLeaFieldRef(int refIdx) throws IOException {
+        exigeFormato9("LEA_FIELD_REF");
+        codeOut.writeByte(OpCode.LEA_FIELD_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIdx);
     }
     public void emitGetFieldRef(int refIdx, boolean is8) throws IOException {
         exigeFormato9("GET_FIELD_REF");
@@ -1242,8 +1253,36 @@ public class ModWriter {
         // __syncMutex, SyncList.__mutex quedaban a 4B: handle truncado + el GC no
         // marcaba la hija). Los long/double no-ref siguen pasando is8=true explícito.
         f.is8 = is8 || isRef;
+        f.slots = f.is8 ? 2 : 1;
         f.slot = nextFieldSlot(currentClass);   // BUG-6: slot = suma de anchos previos
         currentClass.fields.add(f);
+    }
+    /** V7/H1 #19 — un array fijo `private var b: tipo[N]` dentro del objeto: `[len][N elems]` en
+     *  `slots` ranuras (1 + ⌈N·ancho/4⌉, hasta 255), sin ref (el GC no lo mira: elementos primitivos). */
+    public void declareFieldFixed(String fieldName, int slots) {
+        if (currentClass == null) throw new RuntimeException("declareFieldFixed fuera de una clase");
+        if (slots < 2 || slots > 255) throw new RuntimeException("array fijo de campo: " + slots + " ranuras (admite 2..255)");
+        for (FieldInfo f : currentClass.fields)
+            if (f.name.equals(fieldName) && !f.heredado) throw new RuntimeException("Campo ya declarado en " + currentClass.name + ": " + fieldName);
+        FieldInfo f = new FieldInfo();
+        f.name = fieldName; f.isRef = false; f.isOwner = false; f.is8 = false; f.slots = slots;
+        f.slot = nextFieldSlot(currentClass);
+        currentClass.fields.add(f);
+    }
+    /** ( obj -- addr ): la dirección de un campo (array fijo) dentro del objeto. Gemelo de emitGetField. */
+    public void emitLeaField(String className, String fieldName) throws IOException {
+        FieldInfo f = resolveFieldInfo(className, fieldName);
+        ClassInfo ab = abiertaLocal(className);
+        if (ab != null) {
+            exigeFormato9("LEA_FIELD_REF");
+            codeOut.writeByte(OpCode.LEA_FIELD_REF.code); currentBytecodeSize += 1;
+            codeOut.writeShort(refCampoLocal(ab, f)); currentBytecodeSize += 2;
+            return;
+        }
+        if (f.slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + f.slot + " en " + className);
+        codeOut.writeByte(OpCode.LEA_FIELD.code);
+        codeOut.writeByte((byte) f.slot);
+        currentBytecodeSize += 2;
     }
 
     /** Atajo: campo de 4 bytes con owner. */
@@ -1261,7 +1300,7 @@ public class ModWriter {
     private static int nextFieldSlot(ClassInfo c) {
         if (c.fields.isEmpty()) return 0;
         FieldInfo last = c.fields.get(c.fields.size() - 1);
-        return last.slot + (last.is8 ? 2 : 1);
+        return last.slot + (last.slots);
     }
 
     /**
@@ -2468,7 +2507,7 @@ public class ModWriter {
                 if (f.heredado) continue;
                 campos.add(f);
                 baseCampos = Math.min(baseCampos, f.slot);
-                topeCampos = Math.max(topeCampos, f.slot + (f.is8 ? 2 : 1));
+                topeCampos = Math.max(topeCampos, f.slot + (f.slots));
             }
             if (campos.isEmpty()) baseCampos = 0;
             int nFieldsOwn = topeCampos == 0 ? 0 : topeCampos - baseCampos;
@@ -2505,7 +2544,7 @@ public class ModWriter {
             for (FieldInfo f : conClave) {
                 out.writeUTF(f.clave);
                 out.writeShort(f.slot);          // absoluta en la cerrada; en la abierta ya empieza en 0
-                out.writeByte(f.is8 ? 2 : 1);
+                out.writeByte(f.slots);
                 out.writeByte((f.isRef ? 1 : 0) | (f.isOwner ? 2 : 0) | (f.privado ? 4 : 0));
             }
             out.writeShort(c.events.size());

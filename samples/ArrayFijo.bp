@@ -1,0 +1,83 @@
+// ArrayFijo.bp — #19 (V7/H1, 21-sep): los arrays fijos `tipo[N]`, redefinidos por Eduardo. NO son
+// referencias: viven en el marco (local) o dentro del objeto (`private var` de clase), sólo se
+// indexan (`buf[i]`, con comprobación de rango) y se miden (`len(buf)`). Nada de asignarlos,
+// pasarlos ni devolverlos: no pueden escapar. Elementos primitivos de todos los anchos.
+module ArrayFijo
+  public class Media
+    private var muestras: integer[8]      // en el objeto: [len][8 enteros]
+    private var pesos: byte[4]            // 1 byte por elemento
+    var n: integer := 0
+
+    public function Media()
+      this.pesos[0] := 1
+      this.pesos[1] := 2
+      this.pesos[2] := 250
+    end Media
+
+    public function add(v: integer)
+      this.muestras[this.n mod len(this.muestras)] := v
+      this.n := this.n + 1
+    end add
+
+    public function media(): integer
+      var s: integer := 0
+      var k: integer := 0
+      while k < len(this.muestras) do
+        s := s + this.muestras[k]
+        k := k + 1
+      endwh
+      return s / len(this.muestras)
+    end media
+
+    public function suma(): integer
+      return this.pesos[0] + this.pesos[1] + this.pesos[2] + this.pesos[3]
+    end suma
+  end Media
+
+  function locales()
+    var nums: integer[10]                 // en el marco, a cero
+    var i: integer := 0
+    while i < len(nums) do
+      nums[i] := i * i
+      i := i + 1
+    endwh
+    print "nums:", nums[0], nums[3], nums[9], "len =", len(nums)
+    var bytes: byte[4] := [1, 2, 250]     // el 4.º queda a 0
+    print "bytes:", bytes[0], bytes[2], bytes[3]
+    var words: word[3] := [1000, 65535]
+    print "words:", words[0], words[1], words[2]
+    var longs: long[3] := [5, 4000000000L]
+    print "longs:", longs[0], longs[1], longs[2]
+    var dobles: double[2] := [1.5d]
+    print "dobles:", dobles[0], dobles[1]
+    var flags: boolean[2]
+    flags[1] := true
+    print "flags:", flags[0], flags[1]
+    // dos fijos en la misma función: cada uno su sitio, sin pisarse
+    var a: integer[3] := [1, 2, 3]
+    var b: integer[3] := [7, 8, 9]
+    a[0] := 100
+    print "a y b:", a[0], a[1], b[0], b[2]
+  end locales
+
+  public function main()
+    locales()
+    var m: Media := Media()
+    var v: integer := 0
+    while v < 12 do
+      m.add(v * 10)
+      v := v + 1
+    endwh
+    print "media:", m.media(), " suma de pesos:", m.suma()
+    var otra: Media := Media()
+    print "otra media (a cero):", otra.media()
+    try
+      var fuera: integer[4]
+      var idx: integer := 4
+      fuera[idx] := 1
+    catch e: RuntimeError
+      print "rango: " + e.msg
+    endtry
+    print "fin"
+  end main
+end ArrayFijo

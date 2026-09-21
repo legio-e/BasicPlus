@@ -906,7 +906,8 @@ int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod) {
             if (!(q = ltv_utf(p, end, &motivo))) goto mal;
             p = q; LTV_NEED(2 + 1 + 1);
             uint16_t slot = lt_u16(p); uint8_t ancho = p[2]; p += 2 + 1 + 1;
-            if (ancho < 1 || ancho > 2 || ((flags & 1) ? slot + ancho > nf_own : slot + ancho > desc_nf)) { motivo = "ranura de campo fuera de la clase"; goto mal; }
+            /* V7/H1 #19: un array fijo `private var b: tipo[N]` ocupa 1 + N*ancho/4 ranuras (hasta 255) */
+            if (ancho < 1 || ((flags & 1) ? slot + ancho > nf_own : slot + ancho > desc_nf)) { motivo = "ranura de campo fuera de la clase"; goto mal; }
         }
         LTV_NEED(2); uint16_t n_ev = lt_u16(p); p += 2;
         for (uint16_t i = 0; i < n_ev; i++) {

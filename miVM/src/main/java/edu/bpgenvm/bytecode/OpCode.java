@@ -315,7 +315,12 @@ public enum OpCode {
     INSTANCEOF_REF       (0xB8, OperandKind.IDX_U16),
     CHECKCAST_REF        (0xB9, OperandKind.IDX_U16_NAME_I16),     // + name_off local del literal del mensaje
     TRY_BEGIN_REF        (0xBA, OperandKind.TRY_HANDLER_I32_IDX_U16),
-    PUSH_REF             (0xBB, OperandKind.IDX_U16);              // push i32 ext[idx] (ranura del handler para $dest)
+    PUSH_REF             (0xBB, OperandKind.IDX_U16),              // push i32 ext[idx] (ranura del handler para $dest)
+    // V7/H1 #19 (21-sep) — arrays fijos como campo `private` de clase: la dirección del campo
+    // dentro del objeto, como ref SIN TAG (identidad), para que ALOAD/ASTORE/ALEN trabajen sobre
+    // el `[len][elems]` que vive en el objeto. Gemelo de LEA_LOCAL para el marco.
+    LEA_FIELD            (0xBC, OperandKind.IMM_U8),               // ( obj -- addr ) slot u8 (clase cerrada)
+    LEA_FIELD_REF        (0xBD, OperandKind.IDX_U16);              // ( obj -- addr ) slot = ext[idx] (clase abierta, MOD9)
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;

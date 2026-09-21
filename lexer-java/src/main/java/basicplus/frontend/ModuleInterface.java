@@ -951,9 +951,11 @@ public final class ModuleInterface {
                     if (dn.isStatic()) continue;
                     Symbol vsym = cls.instanceMembers.tryLookup(dn.name);
                     BpType t = (vsym instanceof VarSymbol) ? ((VarSymbol) vsym).type : null;
-                    refMarks.add(new int[]{slot, MivmEmitter.isGcRef(t) ? 1 : 0, vd.isOwner ? 1 : 0});
+                    int fijo = (vsym instanceof VarSymbol) ? ((VarSymbol) vsym).fixedArraySize : -1;
+                    refMarks.add(new int[]{slot, (fijo < 0 && MivmEmitter.isGcRef(t)) ? 1 : 0, vd.isOwner ? 1 : 0});   // V7/H1 #19: un array fijo NO es ref (vive dentro del objeto)
                     ownFields.add(new FieldSig(dn.name, t, slot, vd.isPrivate, vd.isOwner));   // V7/H2
-                    slot += MivmEmitter.occupies8Bytes(t) ? 2 : 1;
+                    if (fijo >= 0) slot += MivmEmitter.ranurasDeArrayFijo(t, fijo);   // V7/H1 #19: [len][N elems] en el objeto
+                    else slot += MivmEmitter.occupies8Bytes(t) ? 2 : 1;
                 }
             }
         }

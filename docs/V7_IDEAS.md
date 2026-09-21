@@ -1379,6 +1379,25 @@ de Core: 31 ficheros a tocar y toda clase obligaría a `import Core` por `Object
 **Lo que NO cambia:** la sintaxis del usuario; el orden de slots (`run` 0, `tid` 0…); los `.mod` viejos (la cápsula
 V6 lleva sus copias y las VMs no distinguen); MOD8 (el padre externo va por placeholders, como `List` hoy).
 
+### 6. `#19` — los arrays fijos, redefinidos (Eduardo, 21-sep)
+
+*«Vamos a hacer una cosa, mantenemos los array fijos pero los limitamos a declaraciones locales y dentro de una clase
+como private. No utilizamos referencias con ellos.»* Lo que se sigue de ahí:
+
+- **Un array fijo `tipo[N]` NO es una referencia.** Es almacenamiento en sitio: en el marco de la función (local) o
+  dentro del objeto (campo `private`). Sólo se indexa (`buf[i]`, con comprobación de rango en la VM) y se mide
+  (`len(buf)`). Cualquier otro uso —asignarlo, pasarlo, devolverlo, imprimirlo— es error de compilación: no hay
+  referencia que dar, y así no puede escapar (el UAF que #19 arrastraba desde V4 muere por definición).
+- **Dónde**: locales y `private var` de clase. A nivel de módulo, fuera (hasta hoy se horneaba en el data block:
+  una tabla en flash; quien la quiera escribe `tipo[] := [...]` o `newIntArray`). Elementos primitivos.
+- **Cómo, sin tocar el modelo**: el marco lleva `[len][N elems]` y `LEA_LOCAL` (que existía desde H1.2a sin que el
+  frontend lo emitiera) empuja su dirección como ref sin TAG — que las dos VMs ya resuelven como identidad (`bpref_deref`:
+  «sin TAG = null o constante del data block»)— y `ALOAD/ASTORE_w` hacen el resto con su comprobación de rango. Para
+  el campo, UN opcode nuevo, `LEA_FIELD slot` (la dirección del campo dentro del objeto; el GC no mueve objetos y la
+  dirección sólo vive dentro de la expresión). `len(buf)` va por `len(any[])` de la raíz: `ALEN` lee la cabecera.
+- **Coste**: el marco crece `4 + N·ancho` bytes por local fijo; el objeto, `1 + ⌈N·ancho/4⌉` ranuras por campo.
+  El .mod no crece con N (los elementos se ponen a cero con un bucle, no con N stores).
+
 **Lo decidido (Eduardo, 20-sep, tarde):** *«'root' o algo similar para indicar que no desciende de nada. Import
 'core' se añade al árbol AST si no está incluido ya en módulo, así que se puede indicar o omitir, pero en el AST se
 incluye siempre salvo en 'Core'.»* → `public root class Object` / `public root class Thread` (palabra contextual,

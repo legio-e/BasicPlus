@@ -1512,8 +1512,8 @@ public final class MivmEmitter {
                             VarSymbol vs = (VarSymbol) cls.instanceMembers.tryLookup(dn.name);
                             if (vs != null) t = vs.type;
                             boolean isRef = isGcRef(t);   // #14: any/Object también → GC lo traza
-                            // BUG-6: long/double = campo de 8 bytes (2 slots).
-                            w.declareField(dn.name, isRef, vd.isOwner, occupies8Bytes(t));
+                            if (vs != null && vs.fixedArraySize >= 0) w.declareFieldFixed(dn.name, ranurasDeArrayFijo(t, vs.fixedArraySize));   // V7/H1 #19
+                            else w.declareField(dn.name, isRef, vd.isOwner, occupies8Bytes(t));
                             if (mod9()) w.setFieldMeta(dn.name, claveCampo(dn.name, t), vd.isPrivate);   // V7/H2 (#523)
                         }
                     }
@@ -1907,6 +1907,7 @@ public final class MivmEmitter {
             beginFunctionScope(c, null);
             try {
                 if (conMutex) emitSyncMutexInit(cls.name);
+                emitInitDeCamposFijos(cls);   // V7/H1 #19
                 if (c.implicitSuper && c.implicitSuperCtor != null) {
                     w.emitGetParam("this");
                     for (ParamSymbol p : c.params) w.emitGetParam(p.name);
@@ -1925,6 +1926,7 @@ public final class MivmEmitter {
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
             if (conMutex) emitSyncMutexInit(cls.name);
+            emitInitDeCamposFijos(cls);   // V7/H1 #19
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
 
@@ -2063,6 +2065,7 @@ public final class MivmEmitter {
             if (cd != null && hasOwnSyncProperty(cd) && !ancestorHasSyncProperty(cls)) {
                 emitSyncMutexInit(cls.name);
             }
+            emitInitDeCamposFijos(cls);   // V7/H1 #19
             // Auto-super (modelo Java): si el usuario no escribió super(), el
             // compilador inyecta aquí la llamada al constructor del padre SIN
             // argumentos (lo marcó el semántico). Va antes del cuerpo → el padre
@@ -2468,13 +2471,26 @@ public final class MivmEmitter {
                 // Lo delató `samples/LocalArrTest.bp` — el oráculo de L8 v3, que documenta
                 // la paridad esperada byte a byte y llevaba ROTO desde el 4→8B sin que
                 // nadie lo oyera (es un .bp suelto, no está en ninguna batería `make`).
-                declareLocalByType(dn.name, vt, declTag);
-                emitInt(fixedN);
-                w.emit(newarrayOpForElement(el));
-                w.emitSetLocal(dn.name);
+                // V7/H1 #19 (21-sep) — EN EL MARCO, no en el heap: `[len][N elems]`; el writer escribe
+                // la cabecera al declararlo, y los elementos se ponen a cero con un bucle (ENTER no
+                // lo hace; el .mod no crece con N). No es una referencia: sólo se indexa.
+                int ancho = SemanticAnalyzer.anchoDeElemento(el);
+                if (scopeStack.peek().locals.add(dn.name)) w.declareLocalArray(dn.name, fixedN, ancho);
+                String iv = "__fijo_i_" + (tempCounter++);
+                declareLocal(iv);
+                emitInt(0); w.emitSetLocal(iv);
+                int top = w.newLabel(), fin = w.newLabel();
+                w.declareLabel(top);
+                w.emitGetLocal(iv); emitInt(fixedN); w.emit(OpCode.LT); w.emitJumpIfFalse(fin);
+                w.emitLeaLocal(dn.name); w.emitGetLocal(iv);
+                if (ancho == 8) { w.emit(OpCode.LPUSH); w.emitLong(0L); } else emitInt(0);
+                w.emit(astoreParaElemento(el));
+                w.emitGetLocal(iv); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal(iv);
+                w.emitJump(top);
+                w.declareLabel(fin);
                 for (int i = 0; i < elems.size(); i++) {
                     IExpr e = elems.get(i);
-                    w.emitGetLocal(dn.name);
+                    w.emitLeaLocal(dn.name);
                     emitInt(i);
                     emitExpr(e);
                     coerceToTarget(e, el);                 // p.ej. 1 → 1L en long[N]
@@ -5283,7 +5299,8 @@ public final class MivmEmitter {
                 w.emitGetGlobal(v.ownerClass.name + "." + v.name);
             } else {                                          // campo de instancia
                 emitExpr(ma.target);
-                emitGetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2: por ranura si la clase es externa
+                if (v.fixedArraySize >= 0) emitLeaDeArrayFijo(v, receptorDe(ma.target, v.ownerClass));   // V7/H1 #19: su dirección, no un valor
+                else emitGetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2: por ranura si la clase es externa
             }
             return;
         }
@@ -5749,11 +5766,47 @@ public final class MivmEmitter {
         }
     }
 
+    /** V7/H1 #19 — ranuras (de 4 bytes) que ocupa un array fijo de N elementos dentro de un objeto: la
+     *  cabecera [len] y los elementos, redondeados a 4. */
+    static int ranurasDeArrayFijo(BpType elem, int n) {
+        int ancho = SemanticAnalyzer.anchoDeElemento(((elem instanceof ArrayType) ? ((ArrayType) elem).element : elem));
+        return 1 + (n * ancho + 3) / 4;
+    }
+    /** ( -- addr ): la dirección de un array fijo (local en el marco, o campo en el objeto). */
+    private void emitLeaDeArrayFijo(VarSymbol v, ClassSymbol receptor) throws IOException {
+        if (v.isLocal) { w.emitLeaLocal(v.name); return; }
+        ClassSymbol c = claseDeLaRef(receptor, v.ownerClass);
+        if (mod9() && c != null && porRef(c)) { w.emitLeaFieldRef(refCampo(c, claveCampo(v.name, v.type))); return; }
+        w.emitLeaField(v.ownerClass.name, v.name);
+    }
+    /** En todo constructor de la clase: la cabecera [len] de cada campo fijo (NEW_OBJECT deja los
+     *  elementos a cero; la longitud hay que escribirla). */
+    private void emitInitDeCamposFijos(ClassSymbol cls) throws IOException {
+        if (cls == null || cls.astNode == null) return;
+        for (ITopLevelDecl m : cls.astNode.members) {
+            if (!(m instanceof VarDecl)) continue;
+            for (DeclName dn : ((VarDecl) m).names) {
+                Symbol s = cls.instanceMembers.tryLookup(dn.name);
+                if (!(s instanceof VarSymbol) || ((VarSymbol) s).fixedArraySize < 0 || dn.isStatic()) continue;
+                VarSymbol v = (VarSymbol) s;
+                w.emitGetParam("this");
+                emitInt(v.fixedArraySize);
+                // la cabecera [len] es un i32 en la primera ranura del campo: store de 4 bytes
+                if (mod9() && porRef(cls)) w.emitSetFieldRef(refCampo(cls, claveCampo(v.name, v.type)), false);
+                else w.emitSetField(cls.name, v.name);
+            }
+        }
+    }
+    /** El ASTORE del ancho del elemento (el mismo criterio que un array del heap). */
+    private OpCode astoreParaElemento(BpType el) {
+        switch (SemanticAnalyzer.anchoDeElemento(el)) { case 1: return OpCode.ASTORE_I8; case 2: return OpCode.ASTORE_I16; case 8: return OpCode.ASTORE_I64; default: return OpCode.ASTORE; }
+    }
     private void loadFromSymbol(Symbol sym, String name) throws IOException {
         if (sym instanceof ParamSymbol) {
             w.emitGetParam(sym.name);
         } else if (sym instanceof VarSymbol) {
             VarSymbol v = (VarSymbol) sym;
+            if (v.fixedArraySize >= 0 && (v.isLocal || (v.ownerClass != null && !v.isStatic))) { emitLeaDeArrayFijo(v, claseActual()); return; }   // V7/H1 #19
             if (v.isLocal) w.emitGetLocal(v.name);
             else if (v.ownerClass == null) {
                 // L8 v2 — array de tamaño fijo: la var ES el array en el data

@@ -281,5 +281,10 @@
 #define OP_CHECKCAST_REF       0xB9   /* idx u16, name_off i16 (literal local del mensaje) */
 #define OP_TRY_BEGIN_REF       0xBA   /* handler i32, idx u16 */
 #define OP_PUSH_REF            0xBB   /* idx u16           : push i32 ext[idx] */
+/* 0xBC — V7/H1 #19 (21-sep): array fijo como campo private de clase. ( obj -- addr ): la
+ * direccion del campo `slot` dentro del objeto, como ref SIN TAG (identidad), para que
+ * ALOAD/ASTORE/ALEN trabajen sobre el [len][elems] que vive en el objeto. Gemelo de LEA_LOCAL. */
+#define OP_LEA_FIELD           0xBC   /* slot u8           : ( obj -- addr ) (clase cerrada) */
+#define OP_LEA_FIELD_REF       0xBD   /* idx u16           : ( obj -- addr ), slot = ext[idx] (clase abierta) */
 
 #endif /* BPVM_OPCODES_H */

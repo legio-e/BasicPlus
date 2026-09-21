@@ -424,6 +424,8 @@ Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` a
 | 0xB9 | `CHECKCAST_REF` | `u16` idx, `i16` nameOff | `( ref -- ref )` | `CHECKCAST` con `expected = ext[idx]`; `nameOff` es el literal local del mensaje. |
 | 0xBA | `TRY_BEGIN_REF` | `i32` handlerRel, `u16` idx | `( -- )` | `TRY_BEGIN` con `expectedClass = ext[idx]` (el `catch` de una excepción de otro módulo). |
 | 0xBB | `PUSH_REF` | `u16` idx | `( -- i32 )` | Empuja `ext[idx]` tal cual (la ranura del `$dest` de un handler: ref `EV_DEST`). |
+| 0xBD | `LEA_FIELD_REF` | `u16` idx | `( obj -- addr )` | Como `LEA_FIELD` con `slot = ext[idx]` (clase abierta, MOD9: la ranura la pone el cargador por clave, como `GET_FIELD_REF`). |
+| 0xBC | `LEA_FIELD` | `u8` slot | `( obj -- addr )` | V7/H1 `#19`: la dirección del campo `slot` dentro del objeto, como ref SIN TAG (identidad). Para un array fijo `private var b: tipo[N]`, que vive en el objeto como `[len][N elems]`: `ALOAD/ASTORE/ALEN` trabajan sobre esa dirección. Gemelo de `LEA_LOCAL` (0x23) para el marco. null → RuntimeError. |
 
 `super.m()` a un padre por ref **no** tiene opcode nuevo: es `CALL_EXT idx` con una ref
 `SUPER`, que el cargador resuelve a la dirección absoluta del método efectivo del padre.

@@ -3261,6 +3261,16 @@ public class VirtualMachine {
                     writeI32(mem, sp, readI32(mem, fieldAddr(obj, slot))); sp += 4;
                     break;
                 }
+                case 0xBC: case 0xBD: { // LEA_FIELD | LEA_FIELD_REF — V7/H1 #19: dirección del campo (array fijo en el objeto) = ref sin TAG
+                    int slot;
+                    if (rawOp == 0xBC) { slot = mem[pc] & 0xFF; pc++; }
+                    else { int idx = readI16(mem, pc) & 0xFFFF; pc += 2; slot = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4); }
+                    sp -= REF_SIZE; long obj = refLoad(mem, sp);
+                    requireReceptor(tc, sp, obj, "referencia nula: acceso a un campo de un objeto null");
+                    requireAlive(tc, sp, obj);
+                    writeI64(mem, sp, ((long) fieldAddr(obj, slot)) & 0xFFFFFFFFL); sp += REF_SIZE;
+                    break;
+                }
                 case 0x54: case 0xB3: { // SET_FIELD | SET_FIELD_REF
                     int slot;
                     if (rawOp == 0x54) { slot = mem[pc] & 0xFF; pc++; }

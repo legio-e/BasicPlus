@@ -37,8 +37,15 @@ module LocalArrTest
     next n
     print "suma integer[10] = " + intToString(suma)
 
-    // El array local es un array normal del heap: se pasa como tipo[].
-    print "suma via funcion = " + intToString(suma2(nums))
+    // V7/H1 #19 (21-sep): un array fijo NO es una referencia (vive en el marco): no se pasa;
+    // para dárselo a una función se copia a un array del heap.
+    var copia: integer[] := newIntArray(len(nums))
+    var k: integer := 0
+    while k < len(nums) do
+      copia[k] := nums[k]
+      k := k + 1
+    endwh
+    print "suma via funcion = " + intToString(suma2(copia))
 
     // Anchos estrechos con init parcial: el resto queda a cero.
     var bytes: byte[4] := [1, 2, 250]

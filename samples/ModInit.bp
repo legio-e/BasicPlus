@@ -34,11 +34,12 @@ module ModInit
   const KD := 1.5d
   const KB := false
 
-  // --- arrays de tamaño fijo ---
-  var tabla: integer[4] := [10, 20, 30]      // [3] queda a 0
-  var fbuf: float[2] := [0.5, 1.5]
-  var bytes: byte[4] := [1, 2, 250, 255]
-  var buf: integer[8]                        // todo a cero, se escribe abajo
+  // --- arrays de módulo (V7/H1 #19, 21-sep: un array FIJO `tipo[N]` ya sólo puede ser local o
+  // campo private de clase —no es una referencia—; a nivel de módulo son arrays normales, del heap) ---
+  var tabla: integer[] := [10, 20, 30, 0]
+  var fbuf: float[] := [0.5, 1.5]
+  var bytes: byte[] := newByteArray(4)
+  var buf: integer[] := newIntArray(8)       // todo a cero, se escribe abajo
 
   function suma(a: integer[]): integer
     var s: integer := 0
@@ -71,13 +72,17 @@ module ModInit
     print "len(tabla) = " + len(tabla)
     print fbuf[0]
     print fbuf[1]
+    bytes[0] := 1
+    bytes[1] := 2
+    bytes[2] := 250
+    bytes[3] := 255
     print "bytes = " + bytes[0] + "," + bytes[1] + "," + bytes[2] + "," + bytes[3]
 
     buf[0] := 100
     buf[7] := 700
     tabla[3] := 40                        // elementos escribibles
     print "buf = " + buf[0] + "," + buf[1] + "," + buf[7]
-    print "suma(tabla) = " + suma(tabla)  // array fijo pasa como integer[]
+    print "suma(tabla) = " + suma(tabla)
     print "suma(buf) = " + suma(buf)
     print "fin"
   end Main

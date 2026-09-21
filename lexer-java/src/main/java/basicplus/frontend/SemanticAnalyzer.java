@@ -1134,39 +1134,29 @@ public final class SemanticAnalyzer {
         } else if (def instanceof VarDecl) {
             VarDecl v = (VarDecl) def;
             BpType t = resolveType(v.type);
-            // L8 v2 — var de módulo `tipo[N]` (N literal entero > 0): array de
-            // TAMAÑO FIJO horneado en el data block del .mod ([len][elems],
-            // binding fija, elementos escribibles). Solo elementos primitivos:
-            // el GC no escanea el data block, así que un array de refs ahí
-            // sería invisible para mark (use-after-free). Locales y campos de
-            // clase con `[N]` siguen como hasta ahora (tamaño ignorado).
+            // V7/H1 #19 (21-sep, decisión de Eduardo): un array fijo `tipo[N]` NO es una referencia —
+            // es almacenamiento en sitio— y sólo puede ser LOCAL o `private var` de clase. A nivel de
+            // módulo, fuera (hasta hoy se horneaba en el data block).
             Integer fixedN = null;
-            if (owner == null && v.type instanceof ArrayTypeRef
-                    && ((ArrayTypeRef) v.type).size != null) {
+            if (v.type instanceof ArrayTypeRef && ((ArrayTypeRef) v.type).size != null) {
                 ArrayTypeRef at = (ArrayTypeRef) v.type;
                 Object n = constLiteralValue(at.size);
-                if (!(n instanceof Long) || (Long) n <= 0) {
-                    err(at.line, at.column,
-                        "el tamaño de un array de módulo debe ser un literal entero > 0");
+                if (owner == null) {
+                    err(at.line, at.column, "un array fijo `tipo[N]` sólo puede ser una variable local o un campo `private var` de clase;"
+                        + " a nivel de módulo escribe `tipo[]` (con newIntArray/newByteArray… o un literal `[…]`)");
+                } else if (!v.isPrivate) {
+                    err(at.line, at.column, "un array fijo `tipo[N]` de clase tiene que ser `private var` (no es una referencia: sólo se indexa desde la propia clase)");
+                } else if (!(n instanceof Long) || (Long) n <= 0) {
+                    err(at.line, at.column, "el tamaño de un array fijo debe ser un literal entero > 0");
                 } else if (!isBakeableArrayElement(t)) {
-                    err(at.line, at.column,
-                        "array de tamaño fijo a nivel módulo solo admite elementos primitivos "
-                        + "(integer/float/long/double/boolean/byte/word/int8/int16); "
-                        + "string o clases necesitan heap (el GC no ve el data block)");
+                    err(at.line, at.column, "array de tamaño fijo solo admite elementos primitivos "
+                        + "(integer/float/long/double/boolean/byte/word/int8/int16); para string o clases usa 'tipo[]'");
+                } else if (1 + ((Long) n * anchoDeElemento(t) + 3) / 4 > 255) {
+                    err(at.line, at.column, "un array fijo de clase admite hasta 255 ranuras (1 + N·ancho/4): " + n + " elementos de "
+                        + anchoDeElemento(t) + " bytes no caben; usa 'tipo[]'");
                 } else {
                     fixedN = (int) (long) (Long) n;
                 }
-            } else if (owner != null && v.type instanceof ArrayTypeRef
-                    && ((ArrayTypeRef) v.type).size != null) {
-                // L8 v3 — campo de clase `tipo[N]`: NO soportado todavía (el
-                // constructor tendría que inyectar la alocación). Antes se
-                // ignoraba el [N] en silencio y el campo quedaba como ref
-                // basura. Error honesto + alternativa.
-                ArrayTypeRef at = (ArrayTypeRef) v.type;
-                err(at.line, at.column,
-                    "array de tamaño fijo no soportado como campo de clase; "
-                    + "declara 'tipo[]' e inicialízalo en el constructor "
-                    + "(p. ej. newIntArray/newByteArray/newLongArray)");
             }
             for (DeclName n : v.names) {
                 Symbol sym;
@@ -1177,6 +1167,8 @@ public final class SemanticAnalyzer {
                     ((VarSymbol) sym).type = t;
                     if (fixedN != null && !n.isStatic())
                         ((VarSymbol) sym).fixedArraySize = fixedN;
+                    else if (fixedN != null)
+                        err(n.line, n.column, "un array fijo no puede ser estático");
                 }
             }
         } else if (def instanceof FuncDef) {
@@ -2497,6 +2489,7 @@ public final class SemanticAnalyzer {
             iterT = PrimitiveType.INTEGER;
         } else if (f.range instanceof ForInRange) {
             ForInRange inr = (ForInRange) f.range;
+            arrayFijoPermitido.add(inr.iterable);   // V7/H1 #19: recorrer un array fijo sí (es indexarlo)
             BpType collT = analyzeExpr(inr.iterable, scope, null);
             if (collT instanceof ArrayType) iterT = ((ArrayType) collT).element;
             else {
@@ -2846,6 +2839,26 @@ public final class SemanticAnalyzer {
         return new ArrayType(elemFinal);
     }
 
+    /** V7/H1 #19 — las expresiones en las que un array fijo PUEDE aparecer: el objetivo de un
+     *  `[i]` y el argumento de `len(…)`. En cualquier otra —asignarlo, pasarlo, devolverlo,
+     *  imprimirlo— es error: no es una referencia, es almacenamiento en sitio. */
+    private final java.util.Set<IExpr> arrayFijoPermitido = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<IExpr, Boolean>());
+    private void exigirUsoDeArrayFijo(IExpr e, VarSymbol vs, int line, int col) {
+        if (vs.fixedArraySize < 0 || arrayFijoPermitido.contains(e)) return;
+        err(line, col, "'" + vs.name + "' es un array fijo: no es una referencia, sólo se indexa ('" + vs.name + "[i]') o se mide ('len(" + vs.name + ")')");
+    }
+    /** El ancho en bytes de un elemento primitivo (para las ranuras de un array fijo de clase). */
+    static int anchoDeElemento(BpType t) {
+        if (t instanceof PrimitiveType) {
+            switch (((PrimitiveType) t).tag) {
+                case INT8: case UINT8: return 1;
+                case INT16: case UINT16: return 2;
+                case LONG: case DOUBLE: return 8;
+                default: return 4;
+            }
+        }
+        return 4;
+    }
     private BpType analyzeIdentifier(IdentifierExpr id, Scope scope) {
         Symbol sym = (scope != null) ? scope.resolve(id.name) : null;
 
@@ -2903,6 +2916,7 @@ public final class SemanticAnalyzer {
             return ErrorType.INSTANCE;
         }
         info.exprSymbols.put(id, sym);
+        if (sym instanceof VarSymbol) exigirUsoDeArrayFijo(id, (VarSymbol) sym, id.line, id.column);   // V7/H1 #19
         return typeOfSymbol(sym);
     }
 
@@ -3030,6 +3044,7 @@ public final class SemanticAnalyzer {
                 return ErrorType.INSTANCE;
             }
             checkVisibility(ma.line, ma.column, sub, ct.cls);
+            if (sub instanceof VarSymbol) exigirUsoDeArrayFijo(ma, (VarSymbol) sub, ma.line, ma.column);   // V7/H1 #19
             if (Symbol.FunctionSymbol.DTOR.equals(ma.member))   // V7/H1: ni `x.__dtor()` ni `super.__dtor()`
                 err(ma.line, ma.column, "el destructor lo llama el lenguaje (al morir un `var owner`), no se llama desde el código");
             info.exprSymbols.put(ma, sub);
@@ -3047,6 +3062,7 @@ public final class SemanticAnalyzer {
     }
 
     private BpType analyzeIndex(IndexExpr ix, Scope scope) {
+        arrayFijoPermitido.add(ix.target);   // V7/H1 #19: indexar un array fijo sí
         BpType t = analyzeExpr(ix.target, scope, null);
         BpType idxT = analyzeExpr(ix.index, scope, PrimitiveType.INTEGER);
         if (!PrimitiveType.INTEGER.isAssignableFrom(idxT))
@@ -3128,6 +3144,8 @@ public final class SemanticAnalyzer {
     private BpType analyzeCall(CallExpr ce, Scope scope) {
         Symbol target = null;
         boolean rejectedByModuleVisibility = false;
+        if (ce.callee instanceof IdentifierExpr && "len".equals(((IdentifierExpr) ce.callee).name) && ce.args.size() == 1)
+            arrayFijoPermitido.add(ce.args.get(0));   // V7/H1 #19: medir un array fijo sí
         if (ce.callee instanceof IdentifierExpr) {
             IdentifierExpr id = (IdentifierExpr) ce.callee;
             // H1.3b — casts numéricos generales: integer()/long()/float()/double().
