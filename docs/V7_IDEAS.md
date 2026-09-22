@@ -1975,3 +1975,83 @@ fuentes: el realojado ya se hizo con 618 KB en el P4, y el oráculo lo comprueba
 binaria: cada cambio de firma es una versión, y hay que quererlo así; (6) el `--no-screen` del simulador y el
 `INFO` antes del primer Run (pregunta 6); (7) el `Gui.mod` tapado por `/lib` (pregunta 7) no rompe, pero engaña a
 quien mida la RAM.
+
+### 5. Lo hecho el 22-sep (tarde y noche), y lo que MIDIÓ
+
+**P1 — el pack nativo llega a toda la familia ESP32.** `bios_p4.c`/`pack_p4.c` → `esp32/common/`
+(`bios_esp32.c`, `pack_esp32.c`, `pack_esp32.h`): S3, C3, C6, C5 y P4 con el mismo código, y
+`board_mgr_esp32.c` publica `pack_ram_base` sin `#if CONFIG_IDF_TARGET_ESP32P4`. El bloque de RAM lo
+reserva el arranque común (`pack_esp32_ram_init`, era `vm_sqlite_init_psram` del P4) con **dos claves
+para la misma zona**: `packRam=<KB>` (genérica, manda si está) y `SQLite=<MB>` (la de V5, con su regla
+medida). **La arena empieza detrás de lo que el pack se llevó de verdad** (`s_pack_ram_estaticos`), no
+de la constante de 16 KB: sin eso el pack de la GUI —392 KB de `.bss`— lo rechazaba el peldaño TAMAÑO.
+Destino **`riscv32-imc`** en `NpackReloc` (el resto de `#502`), y el IDE elige toolchain por
+`esRiscv()` en vez de por identidad con el destino del P4. Y **el mini, versionado esta vez**
+(`bpgenvm-c/tools/npack_mini/`): diez pasos que se cuentan por el log y devuelven su número si fallan;
+en el P4, «mini: TODO OK -> 0».
+
+**La BIOS v5.** Diez ranuras de HAL (`gpio_init/write/read`, `spi_init/write`, `i2c_init/write/read`,
+`now_ms`, `sleep_ms`) sobre las fachadas que la VM ya tiene: **cero código por familia**. La tabla
+**crece por el final** y el pack exige `version >= la suya` (antes `!=`, y cada ranura nueva obligaba a
+regrabar todos los packs); `publica()` gana **la reja** (§1.1) y el registro sube a **8 marcas** (§1.3).
+El pin que toma un código nativo queda **de pack**: el fin de RUN no lo libera y un programa que lo pida
+recibe «lo usa un código nativo».
+
+**P2 — la costura, GENERADA.** `bpvm_gui.h` es el contrato y `scripts/gen_gui_pack.py` saca de él la
+tabla, los **87 trampolines** (`src/gui_pack.c`), lo que el pack publica (`src/gui_pack_publics.c`) y un
+doble para probarlo en el PC (`test/gui_pack_stubs.c`). `make test-guipack`: 28 comprobaciones.
+`BPVM_GUI_RENDER` = «hay render» (LVGL dentro o por el pack) y es lo que miran el bombeo de `Gui.run` y
+el `screenW/H` del INFO — que ahora también dispara la carga «una vez» (pregunta 6).
+
+**P3 — el pack.** `bpstdlib/gui/`: LVGL 9.2.2 entera + **el mismo `gui.c`** bajo `BPVM_EN_PACK` + el
+pegamento sobre la BIOS + el panel. Números del artefacto:
+
+| | RV32IMC (C5, panel ST7789) | RISCV (P4, panel nulo) |
+|---|---|---|
+| flash | 715 308 B (text 275 320 · **fuentes y demás rodata 439 908** · eh_frame 80) | 703 188 B |
+| RAM (`.data`+`.bss`) | 392 KB (pool 256 + modelo 106 + búferes) | 372 KB |
+| `.npk` con su tabla | **759 996 B**, 2 774 relocalizaciones | 746 452 B, 2 685 |
+| `Gui.pack` (los dos `npk` + 6 `.mod` + el `.mdn`) | 1 622 016 B; **819 200 B grabados** tras podar | |
+
+**Y LA PRUEBA EN EL P4, que es la idea de Eduardo** (*«¿se podría probar en la P4 sin desactivar el
+LVGL actual? No sé, con un `Gui2.bp` que llame a la LVGL del pack»*). Dos piezas lo hacen posible:
+
+- **`panel_nulo.c`** — un display que no pinta, elegido **en el build** (`build_lvgl.sh p4 nulo`). Un
+  panel mudo porque su chip no contesta y uno que no pinta a propósito son cosas distintas, y
+  confundirlas sería el fallo silencioso de siempre.
+- **`bpstdlib/gui/Gui2.bp`** — la MISMA tabla publicada bajo `'LVGL'`, vista por el otro camino:
+  `native … from pack`, sin builtins de por medio. Es a la vez el **primer ensayo del camino B2** de
+  §2.2. El puente rechazó con nombre `integer[]` como caja de salida (*«ese tipo de array no cruza a un
+  pack: sólo `long[]` y `double[]`, y sólo como caja de salida de un valor de 8 bytes»*), así que el
+  tamaño del panel se pregunta por el modelo —`get_width(screen_active())`—, que además prueba que el
+  modelo recogió el tamaño nativo que dijo el panel.
+
+`samples/GuiPack.bp` habla con las dos a la vez, y esto es lo que contestó la placa:
+
+```
+== el pack ==                          == la imagen ==
+  pantalla del pack: 240 x 320           pantalla de la imagen: 480 x 800
+  screen handle: 1                       label de la imagen creado
+  label 2 dice: hola desde el pack
+  y mide 123 de ancho                  [log] pack: gui: pack vivo (LVGL 9.2.2, pool 256 KB)
+  boton 3 dice: boton                  [log] pack: gui: lv_init hecho (TLSF sobre el pool)
+  texto largo: 64 caracteres           [log] pack: gui: API publicada como 'LVGL'
+                                       [log] dep 'Gui2' -> PACK (XIP) · Gui2.mdn del pack (10 thunks)
+```
+
+Y `GuiShot` siguió pintando su captura en el MIPI-DSI con el pack cargado (480×800, PNG mirado). O sea:
+**dos instancias de LVGL en el mismo proceso** —la de la imagen en su `.bss`, la del pack en su bloque
+de PSRAM—, cada una con sus globales, y sólo se mueve la que se llama. Sin el pack, la sonda muere con
+nombre: «falta el modulo 'Gui2'».
+
+**Lo que esto deja probado sin la C5**: el realojado de 746 KB y el salto; LVGL arrancando dentro de un
+pack con su TLSF sobre el pool estático y su `.rodata` —las fuentes— realojada; `gui.c` con el
+pegamento sirviéndole memoria, log y ficheros desde la tabla BIOS; la tabla de 87 símbolos publicada y
+resuelta por nombre; el modelo moviéndose; y la convivencia con el LVGL de la imagen.
+**Lo que NO**: el panel, el táctil y el tiempo de flush. Eso es la C5 y no hay atajo.
+
+**Lo que queda de H6**: con la C5 en la mesa, grabar su imagen, el `mini.npk.RV32IMC` (el control antes
+del motor) y `Gui.pack`, encender el ST7789 y medir el flush; el reparto de RAM entre VARIOS `npk`
+(`ram_bytes` en la cabecera, §2.5) para que el pack de la GUI y el de SQLite convivan en una placa
+—hoy se cargan de uno en uno—; `'PANT'` como `npk` propio; que el Run del IDE no suba lo que la zona
+sirve (`MODULE_QUERY`); y `H6.b`, que va después de la ronda sellada.

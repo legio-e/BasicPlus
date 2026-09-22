@@ -163,6 +163,40 @@ B1 builtins contra B2 `native` —miVM no ejecuta `native` de pack—, un pack o
 `'ESPL'`, las fuentes, el `INFO` antes del primer Run, `Gui.mod` y el Run del IDE, la reja, `H6.b`) y un plan
 P1–P4 (P1 = el pack nativo a toda la familia ESP32 + `mini.npk` en la C5; P3 = `H6.a`). Nada de código hoy.
 
+## 🖥️ H6 (22-sep, tarde y noche) — LVGL EN UN PACK: P1, P2 y P3 hechos, y el pack PROBADO EN EL P4
+
+Tras el día de análisis (arriba), Eduardo dio luz verde ranura a ranura. Detalle y números en `V7_IDEAS` §H6.5.
+
+**P1 — el pack nativo, a toda la familia ESP32** (`b6b2ce59`): `bios_p4.c`/`pack_p4.c` suben a
+`esp32/common/` (S3, C3, C6, C5 y P4 con el mismo código; fuera el `#if CONFIG_IDF_TARGET_ESP32P4` del
+board manager). El bloque de RAM lo reserva el arranque común con `packRam=<KB>` o `SQLite=<MB>`, y **la
+arena empieza detrás de lo que el pack se llevó de verdad**, no de la constante de 16 KB — sin eso el
+pack de la GUI (392 KB de `.bss`) lo rechazaba el peldaño TAMAÑO. Destino `riscv32-imc` (el resto de
+`#502`) y **el mini versionado** (`tools/npack_mini`, diez pasos): en el P4, «mini: TODO OK -> 0»
+(`0267b92f`).
+
+**La BIOS v5** (`552f9f26`): diez ranuras de HAL sobre las fachadas que ya existen (cero código por
+familia), la tabla **crece por el final** (el pack exige `>=`, no `!=`), `publica()` con **reja** y ocho
+marcas. De paso se destapó que **`#19` había roto `SQLite.bp`** el 21-sep sin que ninguna red lo viera
+(los arrays de salida `long[1]` eran fijos y se pasaban como referencia); arreglado y los dos `.npk`
+regenerados. `SqlDemo` en el P4 == host (`99b6ea04`).
+
+**P2 — la costura, GENERADA** (`2f29542c`): `bpvm_gui.h` es el contrato y `scripts/gen_gui_pack.py` saca
+de él los 87 trampolines, la tabla, lo que el pack publica y un doble para el PC. `make test-guipack`:
+28 comprobaciones. Sin pack, `Gui.screen()` lanza «GUI: esta placa no tiene el pack 'LVGL' grabado».
+
+**P3 — el pack** (`38525ead`): `bpstdlib/gui/` con LVGL 9.2.2, **el mismo `gui.c`** bajo `BPVM_EN_PACK`,
+el pegamento sobre la BIOS y el panel de la C5 (ST7789 + **el CH32V003 que lleva el reset y el
+backlight por I2C** + el táctil CST3530, todo leído de su BSP). `lvgl.npk.RV32IMC` = 759 996 B.
+
+**Y LA PRUEBA EN EL P4** (`d28a31fb`), que es idea suya: *«¿se podría probar en la P4 sin desactivar el
+LVGL actual? No sé, con un `Gui2.bp` que llame a la LVGL del pack»*. Con un **panel nulo** elegido en el
+build y **`Gui2.bp`** (`native … from pack`, sin builtins de por medio), `samples/GuiPack.bp` habla con
+las dos: **el pack dice 240×320** (su modelo, su LVGL, su TLSF) **y la imagen 480×800** pintando en el
+MIPI-DSI — `GuiShot` sigue sacando su captura con el pack cargado. Dos instancias de LVGL en el mismo
+proceso, cada una con sus globales. **Lo que no prueba**: el panel, el táctil y el flush; eso es la C5.
+El P4 quedó restaurado con `SQLite.pack` y `SqlDemo` == host.
+
 ## ⏭️ Traspaso (22-sep, al cerrar) — H4 casi entera en una mañana; lo que queda pide placas (C6, Nucleo/DK2); lo siguiente: H7
 
 Hecho hoy: H4 P1 (la tabla de capacidades, `d66e31b9`), P2 (`#479`: el mapa de pines en uso, `ad6ceef1`), P3a (`#487`: el
@@ -171,7 +205,7 @@ breadcrumb en el común, `67f7b564`), la cascada (siete imágenes; Pico y P4 gra
 **Queda de H4**, todo con placa: NeoPixel (RMT, GPIO8) y el botón BOOT del C6; el ADC externo del STM32 (`#469` resto) con
 la Nucleo/DK2; la máscara de pines por paquete cuando haya dos placas del mismo die. **Pendiente de grabar**: S3/C3/C6/C5/
 Nucleo/DK2 (imágenes de las 09:3x, con H1 + H3 + H4). **Lo siguiente**: H7 (`#530` 🔴, `#531` 🟡) o lo que Eduardo diga.
-Árbol limpio, sin push. **(Tarde: el día de análisis de H6, arriba; sus nueve preguntas esperan a Eduardo.)**
+Árbol limpio, sin push. **(Y luego la tarde y la noche fueron H6 entera hasta donde llega sin la C5: ver arriba.)**
 
 ## ⏭️ Traspaso (21-sep, al cerrar) — la 1.ª etapa de H11 HECHA esa misma noche (con PSRAM); lo siguiente: H7 y H4
 
