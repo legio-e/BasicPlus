@@ -80,13 +80,13 @@ static struct tm* bios_localtime(const void* t) {
 static void* bios_arena(size_t* bytes) {
     if (bytes) *bytes = 0;
 
-    if (s_pack_ram_base == 0 || s_pack_ram_size <= PACK_RAM_BYTES) {
+    if (s_pack_ram_base == 0 || s_pack_ram_size <= s_pack_ram_estaticos) {
         log_printf("BIOS: el pack pidio la arena y NO HAY "
                    "(ni packRam ni SQLite en el ENV, o no cupo — mira la linea 'packs:' del arranque)");
         return 0;
     }
-    if (bytes) *bytes = (size_t) (s_pack_ram_size - PACK_RAM_BYTES);
-    return s_pack_ram_base + PACK_RAM_BYTES;
+    if (bytes) *bytes = (size_t) (s_pack_ram_size - s_pack_ram_estaticos);   /* V7/H6 P3: lo que el pack se llevó, no una constante */
+    return s_pack_ram_base + s_pack_ram_estaticos;
 }
 
 /* ── 3. La tabla, estática: su dirección no cambia y se le puede prestar al

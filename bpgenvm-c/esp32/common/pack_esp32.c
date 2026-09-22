@@ -44,6 +44,7 @@
 uint8_t* s_pack_ram_base = 0;
 uint32_t s_pack_ram_size = 0;
 int      s_pack_ram_res  = 0;   /* bpvm_sqlite_res_t */
+uint32_t s_pack_ram_estaticos = PACK_RAM_BYTES;   /* lo que el pack cargado se llevó (V7/H6 P3) */
 
 /* Los mapeos se hacen UNA vez y se quedan: soltarlos invalidaría el código que
  * el pack deja publicado (SQLite publica su tabla de funciones y la VM la usa
@@ -106,9 +107,11 @@ int32_t pack_esp32_cargar(void)
     }
 
     /* Barrer + subir la escalera. La MISMA de las tres familias. */
+    /* V7/H6 P3: se le ofrece el bloque ENTERO, no los 16 KB de antes — el pack
+     * de la GUI trae 392 KB de estáticos; lo que sobre es la arena (bios_arena). */
     bpvm_npack_hallazgo_t h = bpvm_npack_buscar(
             zbase, zbytes,
-            (uint32_t) (uintptr_t) s_pack_ram_base, PACK_RAM_BYTES, falta);
+            (uint32_t) (uintptr_t) s_pack_ram_base, s_pack_ram_size, falta);
 
     if (h.addr == 0) {
         /* `candidatos` separa dos cosas que se parecen y no lo son: "aqui no hay
@@ -216,6 +219,7 @@ int32_t pack_esp32_cargar(void)
     const uint8_t* data_img = (const uint8_t*) (uintptr_t) (aqui_flash + hdr->flash_bytes);
     if (hdr->data_bytes) memcpy(s_pack_ram_base, data_img, hdr->data_bytes);
     if (hdr->bss_bytes)  memset(s_pack_ram_base + hdr->data_bytes, 0, hdr->bss_bytes);
+    s_pack_ram_estaticos = (hdr->data_bytes + hdr->bss_bytes + 15u) & ~15u;   /* V7/H6 P3: la arena empieza detrás */
 
     uint32_t entry = bpvm_npack_entry_addr(hdr, aqui_flash);
     /* V7/H6: la vista MONTADA es la de lectura; se salta por la de ejecución.

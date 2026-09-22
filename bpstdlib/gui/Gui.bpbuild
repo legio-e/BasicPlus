@@ -1,0 +1,23 @@
+{
+  "_comentario": [
+    "El PACK DE LA GUI (V7/H6): LVGL + gui.c + el driver del panel, compilados aparte (el",
+    "nativo, nativo/lvgl.npk.<SUFIJO>) y Gui.mod (el mismo Gui.bp de la stdlib), en un .pack",
+    "que se graba en la zona de packs. La imagen no lleva ni gui.c ni LVGL: la pantalla la",
+    "decide el usuario (Eduardo, 13-sep). Como el de SQLite:",
+    "",
+    "   bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool]   (RV32IMC: C3/C6/C5)",
+    "   cp bpstdlib/gui/nativo/lvgl.npk.* bpstdlib/gui/out/",
+    "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/Gui.bpbuild --backend=mivm",
+    "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/out/Gui.pack riscv-imc",
+    "",
+    "El copiado NO es un descuido: el pack recoge del outDir los tipos mod/mdn/npk y el",
+    "compilador solo genera los dos primeros. El nativo es un INGREDIENTE, no una salida."
+  ],
+  "sourceDir":    "..",
+  "sources":      ["../Gui.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name": "Gui", "version": "9.2.2", "provides": "LVGL",
+                    "notas": "LVGL 9.2.2 + Gui.mod + el panel de la ESP32-C5-Touch-LCD-2.8 (ST7789 + CST3530 + CH32V003)" }
+}

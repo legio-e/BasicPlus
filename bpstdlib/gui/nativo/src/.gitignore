@@ -1,0 +1,3 @@
+obj_*/
+*.elf
+*.link

@@ -80,6 +80,14 @@ const struct bpvm_ancla* bios_esp32_ancla(void);
 extern uint8_t* s_pack_ram_base;
 extern uint32_t s_pack_ram_size;    /* bytes del bloque entero (estáticos + arena) */
 extern int      s_pack_ram_res;     /* bpvm_sqlite_res_t: por qué hay o no hay bloque */
+/* V7/H6 P3 — cuánto del bloque son los ESTÁTICOS del pack cargado (`.data` +
+ * `.bss`, redondeado a 16), y el resto es la arena. Antes era una constante
+ * (PACK_RAM_BYTES, 16 KB) y valía para SQLite (8 KB); el pack de la GUI trae
+ * 392 KB de `.bss` (el pool de LVGL, el modelo de gui.c, los búferes de dibujo)
+ * y con la constante lo rechazaba el peldaño TAMAÑO. Ahora el cargador ofrece el
+ * bloque ENTERO y anota aquí lo que el pack se llevó; `arena()` descuenta esto.
+ * Hasta que carga uno vale PACK_RAM_BYTES, por si alguien pregunta antes. */
+extern uint32_t s_pack_ram_estaticos;
 
 /* Reserva el bloque (o dice por qué no). ANTES del heap de la VM. */
 void    pack_esp32_ram_init(void);

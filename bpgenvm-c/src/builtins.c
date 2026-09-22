@@ -908,7 +908,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = pop_ref(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path));
                                        if (pack_uri_falta(path)) return builtin_throw(vm, tc, recurso_no_esta(path));
-                                       push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
+                                       { char alt[BPVM_FS_PATH_MAX]; const char* r = bpvm_fs_resolve(path, alt, sizeof alt);   /* V7/H6: resuelto en la VM, antes de cruzar al pack */
+                                         push_i32(vm, tc, bpvm_gui_load_font(r ? r : path)); return BPVM_OK; } }
     case BUILTIN_GUI_SET_ROTATION:   { int deg = pop_i32(vm, tc); bpvm_gui_set_rotation(deg); push_i32(vm, tc, 0); return BPVM_OK; }
 
     case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }
@@ -1320,7 +1321,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = pop_ref(vm, tc); int id = pop_i32(vm, tc);
         char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
         if (pack_uri_falta(buf)) return builtin_throw(vm, tc, recurso_no_esta(buf));
-        push_i32(vm, tc, bpvm_gui_image_load_file(id, buf)); return BPVM_OK;
+        /* V7/H6 — el camino se RESUELVE aquí, en la VM, antes de cruzar: en el
+         * pack gui.c no tiene la fachada (su bpvm_fs_resolve devuelve lo que le
+         * dan). Resolver dos veces en el host es la identidad. */
+        { char alt[BPVM_FS_PATH_MAX]; const char* r = bpvm_fs_resolve(buf, alt, sizeof alt);
+          push_i32(vm, tc, bpvm_gui_image_load_file(id, r ? r : buf)); return BPVM_OK; }
     }
     case BUILTIN_GUI_IMAGE_WIDTH:  { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_width(id));  return BPVM_OK; }
     case BUILTIN_GUI_IMAGE_HEIGHT: { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_height(id)); return BPVM_OK; }

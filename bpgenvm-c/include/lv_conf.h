@@ -30,7 +30,7 @@
 /* Board-aware (V3): los micros con panel RGB565 (STM32 DK2 via LTDC; ESP32-P4 via
  * MIPI-DSI) usan 16 bpp; el host (SDL) usa XRGB8888. USE_HAL_DRIVER lo define CubeMX
  * en todo proyecto STM32; BPVM_BOARD_P4 lo define el build del P4; el host ninguno. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6)
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6) || defined(BPVM_EN_PACK)
 #define LV_COLOR_DEPTH 16
 #else
 #define LV_COLOR_DEPTH 32
@@ -47,9 +47,23 @@
  * - LV_STDLIB_RTTHREAD:    RT-Thread implementation
  * - LV_STDLIB_CUSTOM:      Implement the functions externally
  */
+/* V7/H6 — EN EL PACK (BPVM_EN_PACK), LVGL trae su propia stdlib: el TLSF sobre un
+ * pool estático en su .bss, sus cadenas y su sprintf. Medido antes de decidirlo
+ * (22-sep): con la libc LVGL pedía 17 símbolos (malloc, cadenas, vsnprintf); con
+ * la interna se queda en libgcc + assert, que van dentro del pack. La tabla BIOS
+ * ni siquiera tiene que prestar malloc (que hoy es un chivato). El pool son
+ * LV_MEM_SIZE bytes de .bss: el pack los declara y el cargador se los da del
+ * bloque de RAM (`packRam=` del ENV). En la imagen (host, C6, P4, DK2) no cambia
+ * nada: sigue la libc. */
+#ifdef BPVM_EN_PACK
+#define LV_USE_STDLIB_MALLOC    LV_STDLIB_BUILTIN
+#define LV_USE_STDLIB_STRING    LV_STDLIB_BUILTIN
+#define LV_USE_STDLIB_SPRINTF   LV_STDLIB_BUILTIN
+#else
 #define LV_USE_STDLIB_MALLOC    LV_STDLIB_CLIB
 #define LV_USE_STDLIB_STRING    LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF   LV_STDLIB_CLIB
+#endif
 
 #define LV_STDINT_INCLUDE       <stdint.h>
 #define LV_STDDEF_INCLUDE       <stddef.h>
@@ -60,7 +74,11 @@
 
 #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
     /*Size of the memory available for `lv_malloc()` in bytes (>= 2kB)*/
+    #ifdef BPVM_EN_PACK
+    #define LV_MEM_SIZE (BPVM_PACK_LV_MEM_KB * 1024U)   /* V7/H6: la perilla del build del pack (build_lvgl.sh) */
+    #else
     #define LV_MEM_SIZE (64 * 1024U)          /*[bytes]*/
+    #endif
 
     /*Size of the memory expand for `lv_malloc()` in bytes*/
     #define LV_MEM_POOL_EXPAND_SIZE 0
@@ -338,8 +356,16 @@
 #define LV_USE_ASSERT_OBJ           0   /*Check the object's type and existence (e.g. not deleted). (Slow)*/
 
 /*Add a custom handler when assert happens e.g. to restart the MCU*/
+#ifdef BPVM_EN_PACK
+/* V7/H6 — en el pack un assert de LVGL no puede colgar la placa en silencio: se
+ * cuenta por el log de la BIOS (gui_pack_glue.c) y se sigue. */
+#define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
+#define LV_ASSERT_HANDLER bpvm_pack_lv_assert(__FILE__, __LINE__);
+void bpvm_pack_lv_assert(const char* fichero, int linea);
+#else
 #define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
 #define LV_ASSERT_HANDLER while(1);   /*Halt by default*/
+#endif
 
 /*-------------
  * Debug
@@ -983,7 +1009,7 @@
 /*Use SDL to open window on PC and handle mouse and keyboard*/
 /* Board-aware: los micros (STM32 via LTDC, ESP32-P4 via MIPI-DSI, ESP32-C6 via SPI)
  * pintan sin SDL. V6/P2: el C6 entra aquí igual que en LV_COLOR_DEPTH, arriba. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6)
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6) || defined(BPVM_EN_PACK)
 #define LV_USE_SDL              0
 #else
 #define LV_USE_SDL              1

@@ -1247,9 +1247,10 @@ int bpvm_gui_load_font(const char* path) {
         bpvm_free(buf);     /* el lv_font_t copia lo que necesita; el buffer ya no hace falta */
     }
     if (!g_loaded_fonts[id - 1]) {
-        printf("[gui] loadFont('%s'): no se pudo cargar (id %d queda sin fuente)\n",
-               path ? path : "", id);
-        fflush(stdout);
+        /* V7/H6: por bpvm_diag (stderr en el host, el log de la BIOS en el pack): un
+         * printf a stdout aquí rompía la paridad del OUTPUT y en el pack no hay stdout. */
+        bpvm_diag("[gui] loadFont('%s'): no se pudo cargar (id %d queda sin fuente)",
+                  path ? path : "", id);
     }
 #else
     (void) path;
