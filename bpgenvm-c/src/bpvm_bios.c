@@ -4,6 +4,7 @@
  * igual que bpvm_env/bpvm_part/bpvm_boot/bpvm_sqlmem.
  */
 #include "bpvm_bios.h"
+#include "bpvm_pack_api.h"   /* V7/H6: la reja de `publica` (static inline, sin .c) */
 
 /* La lista de ranuras vive en UN solo sitio: este array. Se recorre con offsets
  * en vez de escribir 17 `if (b->x == NULL)`, porque esa forma se desincroniza
@@ -38,6 +39,12 @@ static const ranura_t RANURAS[] = {
      * nada. "No sé guardar tablas de packs" y "hoy no hay ninguna" son cosas
      * distintas y sólo la primera es un hueco. */
     R(publica), R(busca),
+    /* V7/H6 — la HAL. Igual que las de ficheros: la FUNCIÓN tiene que estar
+     * siempre, aunque `gpio_init` conteste -1 porque el pin no exista. */
+    R(gpio_init), R(gpio_write), R(gpio_read),
+    R(spi_init), R(spi_write),
+    R(i2c_init), R(i2c_write), R(i2c_read),
+    R(now_ms), R(sleep_ms),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))
@@ -79,13 +86,28 @@ const char* bpvm_bios_verify(const bpvm_bios_t* b)
  * cada familia. Guardar un puntero bajo una marca no tiene nada de específico
  * de un micro, y tenerlo cinco veces sería cinco sitios donde divergir.
  */
-#define BPVM_PACK_MAX 4
+/* V7/H6: de cuatro a OCHO (`BPVM_BIOS_PACK_MAX`, en la cabecera para que el
+ * que publique sepa el tope). Hoy hay una marca ('SQLI') y mañana tres
+ * ('LVGL', 'PANT'); ocho es el doble de lo previsto y sigue cabiendo en un
+ * vistazo. Medido antes de subirlo, como pedía §1.3 de V7_IDEAS. */
+#define BPVM_PACK_MAX BPVM_BIOS_PACK_MAX
 
 static struct { uint32_t marca; const void* tabla; } s_packs[BPVM_PACK_MAX];
 
 int bpvm_bios_publica(uint32_t marca, const void* tabla)
 {
     if (marca == 0 || tabla == 0) return -1;
+
+    /* V7/H6 — LA REJA. Hasta aquí se guardaba cualquier puntero y la
+     * convención «la tabla empieza por su marca y su versión» no la comprobaba
+     * nadie: un pack que publicara otra cosa mandaba al que la recogiera a
+     * saltar a donde no debe. Ahora se lee: la marca tiene que ser ÉSTA, y
+     * cada símbolo tener nombre y función. La versión no se juzga aquí (el
+     * que consume la tabla es quien sabe cuál espera: `bpvm_pack_api_verify`). */
+    {
+        const bpvm_pack_api_t* a = (const bpvm_pack_api_t*) tabla;
+        if (bpvm_pack_api_verify(a, marca, a->version) != 0) return -4;
+    }
 
     for (int i = 0; i < BPVM_PACK_MAX; i++) {
         /* Ya publicada. NO se sobrescribe: eso sería el mismo pack cargado dos

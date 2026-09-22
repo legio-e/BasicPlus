@@ -9,6 +9,7 @@
  *   make test-bios
  */
 #include "bpvm_bios.h"
+#include "bpvm_pack_api.h"   /* V7/H6: las tablas de pack que la reja exige */
 #include <stdio.h>
 #include <string.h>
 
@@ -50,6 +51,17 @@ static void* f_arena(size_t* b) { if (b) *b = 0; return NULL; }
  * nada es una respuesta legítima; lo que se exige es que la ranura esté. */
 static int         f_publica(uint32_t m, const void* t) { (void)m;(void)t; return 0; }
 static const void* f_busca  (uint32_t m) { (void) m; return NULL; }
+/* V7/H6 — la HAL. Postizas también: se prueba que el verificador las exige. */
+static int      f_gpio_init(int p, int m) { (void)p;(void)m; return 0; }
+static void     f_gpio_write(int p, int v) { (void)p;(void)v; }
+static int      f_gpio_read(int p) { (void)p; return 0; }
+static int      f_spi_init(int b, int a, int c, int d, int e, int m) { (void)b;(void)a;(void)c;(void)d;(void)e;(void)m; return 0; }
+static int      f_spi_write(int b, const uint8_t* d, size_t n) { (void)b;(void)d; return (int) n; }
+static int      f_i2c_init(int b, int a, int c, int d) { (void)b;(void)a;(void)c;(void)d; return 0; }
+static int      f_i2c_write(int b, int a, const uint8_t* d, size_t n) { (void)b;(void)a;(void)d; return (int) n; }
+static int      f_i2c_read(int b, int a, uint8_t* d, size_t n) { (void)b;(void)a;(void)d; return (int) n; }
+static uint32_t f_now_ms(void) { return 0; }
+static void     f_sleep_ms(int ms) { (void) ms; }
 
 /* Devuelve una tabla COMPLETA y bien formada. Cada caso la estropea de una
  * manera — un solo cambio por caso, que es como se sabe qué causó qué. */
@@ -71,8 +83,23 @@ static bpvm_bios_t buena(void) {
     b.borrar = f_camino; b.existe = f_camino;
     b.arena = f_arena;
     b.publica = f_publica; b.busca = f_busca;
+    b.gpio_init = f_gpio_init; b.gpio_write = f_gpio_write; b.gpio_read = f_gpio_read;
+    b.spi_init = f_spi_init; b.spi_write = f_spi_write;
+    b.i2c_init = f_i2c_init; b.i2c_write = f_i2c_write; b.i2c_read = f_i2c_read;
+    b.now_ms = f_now_ms; b.sleep_ms = f_sleep_ms;
     return b;
 }
+
+/* V7/H6 — tablas de pack DE VERDAD para el registro: desde la reja, `publica`
+ * lee lo que le pasan, así que un `int` ya no vale como tabla. */
+static void sym_a(void) {}
+static const bpvm_pack_sym_t SYMS_A[] = { { "abrir", sym_a }, { "cerrar", sym_a } };
+static const bpvm_pack_api_t TABLA_A = { 0x53514C49u, 1u, 2u, SYMS_A };            /* 'SQLI' */
+static const bpvm_pack_api_t TABLA_B = { 0x4C56474Cu, 1u, 2u, SYMS_A };            /* 'LVGL' */
+static const bpvm_pack_api_t TABLA_OTRA_MARCA = { 0x50414E54u, 1u, 2u, SYMS_A };   /* dice 'PANT' */
+static const bpvm_pack_sym_t SYMS_ROTA[] = { { "abrir", sym_a }, { "cerrar", 0 } };
+static const bpvm_pack_api_t TABLA_ROTA = { 0x53514C49u, 1u, 2u, SYMS_ROTA };      /* un símbolo sin función */
+static const bpvm_pack_api_t TABLA_VACIA = { 0x53514C49u, 1u, 0u, SYMS_A };        /* no publica nada */
 
 int main(void) {
     printf("== tabla BIOS del pack nativo (V5/I) ==\n");
@@ -116,7 +143,6 @@ int main(void) {
      * prueba entero: guardar, recuperar, y NEGARSE en los casos que son un
      * problema disfrazado de éxito. */
     {
-        static const int TABLA_A = 1, TABLA_B = 2;
         bpvm_bios_packs_reset();
 
         CHECK(bpvm_bios_busca(0x53514C49u) == NULL,
@@ -138,13 +164,34 @@ int main(void) {
         CHECK(bpvm_bios_publica(0, &TABLA_B) < 0,        "marca 0 -> se niega");
         CHECK(bpvm_bios_publica(0x4C56474Cu, NULL) < 0,  "tabla NULL -> se niega");
 
+        /* V7/H6 — LA REJA: la tabla tiene que SER lo que dice. Hasta hoy
+         * `publica` guardaba cualquier puntero; el que la recogiera saltaba a
+         * donde no debe. Ahora se lee, y el desajuste tiene código (-4). */
+        CHECK(bpvm_bios_publica(0x4C56474Cu, &TABLA_OTRA_MARCA) == -4,
+              "REJA: publicar bajo 'LVGL' una tabla que dice 'PANT' -> -4");
+        CHECK(bpvm_bios_busca(0x4C56474Cu) == NULL,
+              "y no se guarda nada bajo esa marca");
+        CHECK(bpvm_bios_publica(0x50414E54u, &TABLA_ROTA) == -4,
+              "REJA: un simbolo sin funcion -> -4 (el hueco se ve AQUI, no al saltar)");
+        CHECK(bpvm_bios_publica(0x50414E54u, &TABLA_VACIA) == -4,
+              "REJA: una tabla que no publica nada -> -4");
+
         /* Llenar el registro y comprobar que el desbordamiento se DICE. Un
-         * cuarto pack ignorado en silencio seria un fallo imposible de leer. */
+         * pack ignorado en silencio seria un fallo imposible de leer. Ocho
+         * marcas desde V7/H6 (antes cuatro). */
         CHECK(bpvm_bios_publica(0x4C56474Cu, &TABLA_B) == 0, "cabe una segunda");
-        CHECK(bpvm_bios_publica(0x50414E54u, &TABLA_B) == 0, "cabe una tercera");
-        CHECK(bpvm_bios_publica(0x46554E54u, &TABLA_B) == 0, "cabe una cuarta");
-        CHECK(bpvm_bios_publica(0x58585858u, &TABLA_B) < 0,
-              "la QUINTA no cabe -> lo DICE (no la descarta callando)");
+        {
+            static bpvm_pack_api_t mas[6];
+            int ok = 1;
+            for (int k = 0; k < 6; k++) {
+                mas[k] = TABLA_B; mas[k].marca = 0x41414100u + (uint32_t) k;   /* 'AAA0'.. */
+                if (bpvm_bios_publica(mas[k].marca, &mas[k]) != 0) ok = 0;
+            }
+            CHECK(ok, "caben OCHO en total (BPVM_BIOS_PACK_MAX)");
+            static bpvm_pack_api_t novena; novena = TABLA_B; novena.marca = 0x58585858u;
+            CHECK(bpvm_bios_publica(novena.marca, &novena) == -2,
+                  "la NOVENA no cabe -> -2 (no la descarta callando)");
+        }
 
         bpvm_bios_packs_reset();
         CHECK(bpvm_bios_busca(0x53514C49u) == NULL, "reset -> el registro se vacia");
@@ -190,8 +237,16 @@ int main(void) {
     /* ── 7. El contador de ranuras cuadra con la struct ──
      * Si alguien añade un campo y olvida ponerlo en RANURAS, el hueco vuelve a
      * ser mudo. Esto no lo detecta del todo, pero deja el numero a la vista. */
-    CHECK(bpvm_bios_slot_count() == 29,
-          "29 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4)");
+    CHECK(bpvm_bios_slot_count() == 39,
+          "39 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4 + 10 de la HAL H6)");
+    {   /* V7/H6 — un hueco en la HAL se NOMBRA como cualquier otro, y la HAL
+         * va DETRAS de todo lo anterior (la tabla crece por el final). */
+        bpvm_bios_t b = buena(); b.now_ms = NULL;
+        const char* r = bpvm_bios_verify(&b);
+        CHECK(r && strcmp(r, "now_ms") == 0, "hueco en now_ms -> lo NOMBRA");
+        CHECK(offsetof(bpvm_bios_t, gpio_init) > offsetof(bpvm_bios_t, busca),
+              "la HAL va DETRAS de `busca`: un pack de la v4 sigue encontrando sus ranuras");
+    }
 
     /* ─────────────── EL ANCLA (idea de Eduardo, 7-ago) ───────────────
      *

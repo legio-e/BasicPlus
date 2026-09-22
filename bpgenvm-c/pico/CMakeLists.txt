@@ -93,6 +93,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_io.c  # V6/A1: el hilo `io` (segundo hilo de SO: wire + salida por lineas)
     ${BPVM_C_ROOT}/src/bpvm_bios.c           # V5/I: tabla BIOS prestada al pack nativo
     ${BPVM_C_ROOT}/src/bpvm_bios_fs.c        # V5/H2: sus ranuras de ficheros (portable)
+    ${BPVM_C_ROOT}/src/bpvm_bios_hal.c       # V7/H6: sus ranuras de HARDWARE (portable: las fachadas de la VM)
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
     ${BPVM_C_ROOT}/src/bpvm_mdn_scan.c       # V5/H4: buscar el .mdn (FS + pack) en UN sitio
     # V5/H1: dialogo con la tarjeta SD en modo SPI. Portable de nacimiento (va

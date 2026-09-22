@@ -64,6 +64,7 @@ idf_component_register(
         "../../src/bpvm_io.c"  # V6/A1: el hilo `io` (segundo hilo de SO: wire + salida por lineas)
         "../../src/bpvm_bios.c"               # V5/I: tabla BIOS prestada al pack nativo
         "../../src/bpvm_bios_fs.c"            # V5/H2: sus ranuras de ficheros (PORTABLE, las que usa el VFS de SQLite)
+        "../../src/bpvm_bios_hal.c"    # V7/H6: sus ranuras de HARDWARE (PORTABLE: las fachadas de la VM)
         "../../src/bpvm_npack.c"              # V5/I: escalera de validacion del pack nativo
         "bios_p4.c"                           # V5/H7: la tabla de ESTA placa (3 ranuras propias)
         "pack_p4.c"                           # V5/H7: cargador del pack nativo (paso 3: andamio)

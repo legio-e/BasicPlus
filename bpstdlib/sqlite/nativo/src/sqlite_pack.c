@@ -305,7 +305,10 @@ int bp_pack_init(const bpvm_bios_t* bios)
 
     if (bios == 0)                              return 1;
     if (bios->magic   != BPVM_BIOS_MAGIC)       return 2;
-    if (bios->version != BPVM_BIOS_VERSION)     return 3;
+    /* V7/H6: la tabla CRECE POR EL FINAL (bpvm_bios.h): una BIOS más nueva
+     * sigue teniendo estas ranuras donde este pack las espera. Sólo una más
+     * VIEJA que la que se compiló aquí es un desfase de verdad. */
+    if (bios->version <  BPVM_BIOS_VERSION)     return 3;
     if (bios->log     == 0)                     return 4;
     g_bios = bios;
 

@@ -18,15 +18,19 @@ static const bpvm_gpio_backend_t* g_backend = NULL;
 #include <stdio.h>
 #include <string.h>
 static uint8_t s_estado[BPVM_CAPS_PIN_MAX];
+static uint8_t s_de_pack[BPVM_CAPS_PIN_MAX];   /* V7/H6: 1 = lo tomó un código nativo; sobrevive al fin de RUN */
 
 int  bpvm_gpio_estado(int pin) { return (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) ? s_estado[pin] : 0; }
-void bpvm_gpio_liberar(int pin) { if (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) s_estado[pin] = 0; }
-void bpvm_gpio_estado_reset(void) { memset(s_estado, 0, sizeof s_estado); }
+void bpvm_gpio_liberar(int pin) { if (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) { s_estado[pin] = 0; s_de_pack[pin] = 0; } }
+void bpvm_gpio_estado_reset(void) {
+    for (int p = 0; p < BPVM_CAPS_PIN_MAX; p++) if (!s_de_pack[p]) s_estado[p] = 0;   /* los del pack se quedan */
+}
 
 int bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap) {
     const bpvm_caps_t* c = bpvm_caps();
     int m = bpvm_caps_pin_mask(pin);
     if (!m || pin >= BPVM_CAPS_PIN_MAX) { snprintf(err, cap, "el pin %d no existe en %s", pin, c->micro); return -1; }
+    if (s_de_pack[pin]) { snprintf(err, cap, "el pin %d lo usa un código nativo (un pack)", pin); return -1; }
     int e = s_estado[pin];
     if (uso == BPVM_USO_ANALOG) {
         if (!(m & BPVM_PIN_ANALOG)) { snprintf(err, cap, "el pin %d de %s no es analógico", pin, c->micro); return -1; }
@@ -47,6 +51,13 @@ int bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap) {
     }
     if (uso <= BPVM_USO_OD) s_estado[pin] = (uint8_t) (uso + 1);   /* PWM y PULSE no cambian el modo (hoy) */
     return 0;
+}
+
+int bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap) {
+    if (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) s_de_pack[pin] = 0;   /* el pack puede volver a pedir el suyo */
+    int r = bpvm_gpio_reclamar(pin, uso, err, cap);
+    if (r == 0) s_de_pack[pin] = 1;
+    return r;
 }
 
 int bpvm_gpio_instancia_ok(int kind, int id, char* err, size_t cap) {

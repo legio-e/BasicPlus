@@ -46,6 +46,10 @@ typedef struct {
 enum { BPVM_GPIO_LIBRE = 0, BPVM_GPIO_INPUT = 1, BPVM_GPIO_OUTPUT = 2, BPVM_GPIO_OD = 3, BPVM_GPIO_ANALOG = 4 };
 enum { BPVM_USO_INPUT = 0, BPVM_USO_OUTPUT = 1, BPVM_USO_OD = 2, BPVM_USO_ANALOG = 3, BPVM_USO_PWM = 4, BPVM_USO_PULSE = 5 };
 int  bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap);   /* 0 = OK (y fija el modo); -1 con `err` */
+/* V7/H6 — lo mismo, para un CÓDIGO NATIVO (la BIOS): el pin queda marcado DE
+ * PACK, el fin de RUN no lo libera y un programa BP que lo pida recibe «lo usa
+ * un código nativo». El pack vive mientras viva la placa; el programa, no. */
+int  bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap);
 int  bpvm_gpio_estado(int pin);                                     /* BPVM_GPIO_* */
 void bpvm_gpio_liberar(int pin);                                    /* release(): vuelve a LIBRE */
 void bpvm_gpio_estado_reset(void);                                  /* fin de RUN */

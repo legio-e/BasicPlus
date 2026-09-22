@@ -42,9 +42,21 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  4u   /* 4 = V5/H4: el PUNTO DE ENCUENTRO de packs  */
+#define BPVM_BIOS_VERSION  5u   /* 5 = V7/H6: la HAL (gpio/spi/i2c/reloj)     */
+                                /* 4 = V5/H4: el PUNTO DE ENCUENTRO de packs  */
                                 /* 3 = V5/H3: entra la ranura de la ARENA     */
                                 /* 2 = V5/H2: entran las ranuras de ficheros  */
+/*
+ * ─── LA TABLA CRECE POR EL FINAL (V7/H6) ───
+ *
+ * Cada versión hasta la 4 obligó a regenerar todos los packs grabados: el pack
+ * comparaba `version != la suya` y se negaba. Con dos motores (SQLite, LVGL) y
+ * siete imágenes, eso son demasiadas grabaciones por cada ranura nueva. La
+ * regla desde la v5: **añadir es sólo añadir AL FINAL** —las ranuras que un
+ * pack viejo conoce siguen en su sitio— y el pack exige `version >= la suya`.
+ * Quitar o reordenar sigue siendo cambio de época: entonces cambia el MAGIC.
+ * Es el mismo truco que el campo `bytes` del ancla: «crecer sin romper».
+ */
 
 struct tm;
 
@@ -180,6 +192,33 @@ typedef struct bpvm_bios {
      */
     int         (*publica)(uint32_t marca, const void* tabla);
     const void* (*busca)  (uint32_t marca);
+
+    /* ── V7/H6 — LA HAL ────────────────────────────────────────────────────
+     *
+     * Lo que un DRIVER DE PANTALLA en un pack necesita y la tabla no
+     * prestaba: un pin, un bus SPI, un bus I2C, un reloj. Son las fachadas
+     * de la VM (`bpvm_gpio`, `bpvm_spi`, `bpvm_i2c`, `bpvm_platform`), las
+     * mismas en las cinco familias — por eso van aquí y no `esp_lcd` ni
+     * DMA, que sólo existen en una. Medido antes de decidirlo: LVGL no pide
+     * NADA de hardware (17 símbolos, todos de libc); el que habla con el
+     * silicio es el driver del panel (28 símbolos en el C6, 65 en el P4).
+     *
+     * `gpio_init` RECLAMA el pin como de pack (H4: contra la tabla de
+     * capacidades y el estado de los pines) y devuelve -1 con el porqué en
+     * el log de la VM; el fin de RUN no lo libera. `spi_init`/`i2c_init`
+     * validan la instancia. Modos y numeración: los de `Gpio.Pin`/`Spi.Bus`.
+     * `now_ms` es el tick de LVGL (`lv_tick_set_cb`); `sleep_ms`, las esperas
+     * de la secuencia de reset de un panel. */
+    int      (*gpio_init) (int pin, int mode);                 /* 0 INPUT · 1 OUTPUT · 2 OD; -1 = denegado */
+    void     (*gpio_write)(int pin, int value);
+    int      (*gpio_read) (int pin);
+    int      (*spi_init)  (int bus, int sck, int mosi, int miso, int baudrate, int mode);
+    int      (*spi_write) (int bus, const uint8_t* data, size_t n);   /* bytes, o -1 */
+    int      (*i2c_init)  (int bus, int sda, int scl, int baudrate);
+    int      (*i2c_write) (int bus, int addr, const uint8_t* data, size_t n);
+    int      (*i2c_read)  (int bus, int addr, uint8_t* data, size_t n);
+    uint32_t (*now_ms)    (void);
+    void     (*sleep_ms)  (int ms);
 } bpvm_bios_t;
 
 /*
@@ -223,7 +262,12 @@ typedef struct bpvm_bios {
     bpvm_bios_fs_borrar, bpvm_bios_fs_existe,                           \
     (ARENA),                                                            \
     /* V5/H4 — el punto de encuentro. Portable: nada que decidir. */    \
-    bpvm_bios_publica, bpvm_bios_busca                                  \
+    bpvm_bios_publica, bpvm_bios_busca,                                 \
+    /* V7/H6 — la HAL: las fachadas de la VM (bpvm_bios_hal.c). */      \
+    bpvm_bios_hal_gpio_init, bpvm_bios_hal_gpio_write, bpvm_bios_hal_gpio_read, \
+    bpvm_bios_hal_spi_init, bpvm_bios_hal_spi_write,                    \
+    bpvm_bios_hal_i2c_init, bpvm_bios_hal_i2c_write, bpvm_bios_hal_i2c_read, \
+    bpvm_bios_hal_now_ms, bpvm_bios_hal_sleep_ms                        \
 }
 
 /*
@@ -264,6 +308,25 @@ void bpvm_bios_fs_reset  (void);
  */
 int         bpvm_bios_publica(uint32_t marca, const void* tabla);
 const void* bpvm_bios_busca  (uint32_t marca);
+/* V7/H6 — `publica` ya no acepta cualquier puntero: la tabla TIENE que ser una
+ * `bpvm_pack_api_t` bien formada que empiece por ESA marca (§1.1 de V7_IDEAS:
+ * la convención pasa a reja). Devuelve 0; -1 argumentos; -2 sin hueco; -3 la
+ * marca ya estaba; -4 la tabla no es lo que dice (marca distinta, sin
+ * publics, o un símbolo sin nombre o sin función). Ocho marcas caben. */
+#define BPVM_BIOS_PACK_MAX 8
+
+/* V7/H6 — las ranuras de la HAL, PORTABLES (bpvm_bios_hal.c): cada firmware
+ * las apunta desde `BPVM_BIOS_TABLA`, no las reescribe. */
+int      bpvm_bios_hal_gpio_init (int pin, int mode);
+void     bpvm_bios_hal_gpio_write(int pin, int value);
+int      bpvm_bios_hal_gpio_read (int pin);
+int      bpvm_bios_hal_spi_init  (int bus, int sck, int mosi, int miso, int baudrate, int mode);
+int      bpvm_bios_hal_spi_write (int bus, const uint8_t* data, size_t n);
+int      bpvm_bios_hal_i2c_init  (int bus, int sda, int scl, int baudrate);
+int      bpvm_bios_hal_i2c_write (int bus, int addr, const uint8_t* data, size_t n);
+int      bpvm_bios_hal_i2c_read  (int bus, int addr, uint8_t* data, size_t n);
+uint32_t bpvm_bios_hal_now_ms    (void);
+void     bpvm_bios_hal_sleep_ms  (int ms);
 /* Olvida todas las tablas. Para el arranque y para las pruebas. */
 void        bpvm_bios_packs_reset(void);
 
