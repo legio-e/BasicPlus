@@ -218,7 +218,29 @@ porque el destino está en PSRAM**. Main task 8 → 16 KB, con el volcado traduc
 **Medido**: pantalla entera **143 ms**, una etiqueta **1 ms**. Una interfaz responde; el peor caso
 cuesta, y la palanca es la fachada SPI (DMA), no el driver.
 
-## ⏭️ Traspaso (22-sep, al cerrar el día) — H4 y H6 el mismo día; **lo siguiente es LA C5**
+## ⏭️ Traspaso (22-sep, FIN DEL DÍA) — H4 y H6.a cerradas; **lo siguiente: `H6.c`, por `G1`**
+
+Un día largo y con tres tramos: **H4** por la mañana, **H6** (análisis, P1, la BIOS v5, P2, P3 y la
+prueba en el P4) por la tarde, y por la noche **la C5**: `H6.a` cerrada con la placa pintando y
+respondiendo al tacto con LVGL viniendo de un pack. Y de cierre, una charla de diseño que **corrigió el
+análisis** — la de «un driver genérico y N perfiles».
+
+**Lo siguiente es `H6.c`** (generalizar el pack a cualquier placa; `V7_IDEAS` §H6.7-7.10, con las seis
+preguntas ya contestadas por Eduardo), y empieza por **`G1`**: `env_get` en la BIOS y el reparto de RAM
+entre varios `npk` — hoy sólo se carga uno, y con el driver fuera del pack de LVGL hacen falta dos. El
+resto del plan: `G2` `'PANT'` · `G3` el driver genérico por perfil, **con la C6 de oráculo** (pinta hoy
+con LVGL dentro: si el pack genérico la pinta igual, el nivel 0 queda demostrado contra un artefacto) ·
+`G4` el bus con dueño y DMA en la fachada SPI · `G5` el P4 y la DK2 publicando `'PANT'`, que es `H6.b`.
+
+⚠️ **Tres cosas que muerden y están escritas donde toca**: el bus SPI **no tiene dueño** (en la C5 la TF
+comparte bus con el panel: un `Spi.Bus(2, …)` desde BP lo mataría en silencio); construir un `npk` hoy
+**sólo podemos hacerlo nosotros** (plantilla + script + docs son entregable de `H6.c`); y con la consola
+sólo en UART0 un reinicio de una ESP32 es **mudo** — la receta para verlo quedó en `esp32c5/sdkconfig.defaults`.
+
+**Estado de las placas**: la C5 con la imagen final y `Gui.pack` grabado; el P4 restaurado con
+`SQLite.pack` y `SqlDemo` == host. Árbol limpio, sin push.
+
+## ⏭️ Traspaso (22-sep, mediodía-noche) — H4 y H6 el mismo día; la C5 era lo siguiente
 
 Hoy entraron dos hitos: **H4** por la mañana (arriba) y **H6** por la tarde y la noche —análisis,
 P1, la BIOS v5, P2 y P3—, y el pack de la GUI quedó **probado en el P4 sin tocar su LVGL**, que era
