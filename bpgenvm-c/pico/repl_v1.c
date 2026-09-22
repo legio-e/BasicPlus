@@ -34,7 +34,7 @@
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
-#include "bpvm_pico.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
+#include "bpvm_machine.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
 #include "board_desc.h"      /* INFO: variante/gpio/flash/psram del board_desc */
 #include "board_mgr_pico.h"  /* H9: gestión de placa (entorno + particiones) */
 #include "bpvm_rtc.h"        /* TIME: set epoch */
@@ -622,13 +622,13 @@ typedef struct {
 static void pico_repl_info(bpvm_repl_info_t* out) {
     /* Estaticos porque el struct guarda punteros y el comun los lee DESPUES. */
     static char unique[20], board[16];
-    bpvm_pico_unique_id(unique, sizeof unique);
+    bpvm_machine_unique_id(unique, sizeof unique);
     /* V6 (9-sep) — el `board_name` del wire es el MICRO (el IDE lo rotula
      * «Micro»), asi que aqui va `micro_name` y no `board_name`. La PLACA —que en
      * el RP2350 SI se conoce, porque la Pico 2 y la Metro llevan la misma imagen
      * y la variante la da el ENV— sale por `Machine.getBoard()`. Antes esta linea
      * ponia la placa donde las otras dos familias ponen el micro. */
-    bpvm_pico_micro_name(board, sizeof board);
+    bpvm_machine_micro_name(board, sizeof board);
     const board_desc_t* bd = board_desc();
     size_t vstack = vm_stack_region_bytes();
 
@@ -637,12 +637,12 @@ static void pico_repl_info(bpvm_repl_info_t* out) {
     /* H11 — la ARQUITECTURA del nativo que esta imagen ejecuta. Sin esto el IDE
      * no sabe a que ISA compilar el .mdn de un `.bp` suelto. Lo dice la placa. */
     out->arch         = (unsigned) bpvm_mdn_host_arch();
-    out->cpu_hz       = (unsigned long) bpvm_pico_cpu_freq_hz();
-    out->uptime_ms    = (unsigned long) bpvm_pico_uptime_ms();
-    out->reset_reason = bpvm_pico_reset_cause();
+    out->cpu_hz       = (unsigned long) bpvm_machine_cpu_freq_hz();
+    out->uptime_ms    = (unsigned long) bpvm_machine_uptime_ms();
+    out->reset_reason = bpvm_machine_reset_cause();
     /* El wire v1 no lleva floats (el parser del cliente rechaza decimales), asi
      * que la temperatura viaja en milesimas: 20400 -> 20,4 grados en la UI. */
-    out->temp_milli_c = (long) (bpvm_pico_temp_c() * 1000.0f);
+    out->temp_milli_c = (long) (bpvm_machine_temp_c() * 1000.0f);
     out->gpio_count   = bd->gpio_count;
     out->pio_count    = bd->pio_count;
     /* PWM en SALIDAS, no slices: cada slice tiene 2 canales (A/B) -> 24 en
