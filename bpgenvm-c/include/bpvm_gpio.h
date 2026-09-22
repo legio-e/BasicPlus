@@ -19,6 +19,7 @@
 #ifndef BPVM_GPIO_H
 #define BPVM_GPIO_H
 
+#include <stddef.h>   /* size_t (V7/H4: bpvm_gpio_reclamar) */
 #include <stdint.h>
 
 #ifdef __cplusplus
