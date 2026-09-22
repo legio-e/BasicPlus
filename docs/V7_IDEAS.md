@@ -1689,3 +1689,277 @@ símbolo `const` fijo. El `INFO` publica `micro` y `paquete`; `Machine.package()
 | **P2** | la validación en el común con nombre; el estado del pin en el común; `Pin.ANALOG`/`OPEN_COLLECTOR`; `AnPin`; `Adc.Channel` sobre el mapa; el ADC del STM32 (canales externos, con la DK2/Nucleo a mano); el `Pulse` del C3 declara 0 | `#479`, `#469` resto, `#480` resto |
 | **P3** | breadcrumb en RP2350 y ESP32 (`#487`); NeoPixel en el C6; el botón BOOT del C6 | `#487`, NeoPixel, BOOT |
 | **P4** | samples (`Caps.bp` en el corpus con el host; `PinMap` de placa en la tanda), manual/referencia, cascada y tanda en las placas que haya | la fila H4 |
+
+---
+
+## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
+
+El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
+analizar.»* La forma del hito ya está decidida (`V7_BACKLOG` §H6): **`H6.a` = el pack en la C5** (sólo puede
+añadir; las tres imágenes con LVGL no se tocan) y **`H6.b` = quitar LVGL de C6/P4/DK2**, después y tras una ronda
+sellada como punto de restauración. Aquí va lo que hay medido, el diseño, las preguntas para Eduardo y el plan.
+La sección §1 de este mismo fichero («Código nativo empotrable») es la base: la reja de `publica()`, la
+resolución perezosa, las ranuras, la arena por código nativo. Esto es su primer cliente.
+
+### 1. Lo que hay hoy, medido
+
+**Lo que cuesta la GUI dentro de una imagen** (mapas del enlazador, C6 con GUI+LVGL contra C5 sin nada, 22-sep):
+
+| pieza | flash | RAM estática | de qué |
+|---|---|---|---|
+| **LVGL 9.2.2** (`liblvgl.a`) | **643 711** | 604 | fuentes Montserrat 12…48: **418 060** (65 %) · motor+widgets+draw ≈ 200 000 · lodepng 26 504 |
+| `src/gui.c` (modelo + render) | 10 844 | **105 936** | `g_nodes[512]` × ~207 B: el MODELO, en `.bss`, en toda imagen con `BPVM_GUI` |
+| driver del panel (`gui_display_st7789.c`) | 1 106 | 12 | el C6; el del P4 (DSI + GT911) son 729 líneas |
+| los 83 builtins `GUI_*` | ≈ 4 700 | 400 | `builtins.c.obj`: 26 220 con `BPVM_GUI` contra 21 546 sin él |
+| **imagen entera** | C6 **1 175 884** · C5 **511 526** | C6 161 185 · C5 54 440 | la GUI es **664 KB de flash y 107 KB de RAM**: más de la mitad de la imagen del C6 |
+
+Hoy la C5 (como C3, S3, Pico, Nucleo) compila **sin `BPVM_GUI`**: los 83 builtins no existen y un programa con
+`Gui` muere en el id del builtin. La C6, el P4 y la DK2 llevan `BPVM_GUI` + `BPVM_LVGL` con todo dentro.
+
+**La superficie que LVGL necesita de la plataforma, medida con `nm -u` sobre `liblvgl.a` del C6: 19 símbolos.**
+`__assert_func` · libgcc (`__ctzsi2 __divdi3 __extendsfdf2 __floatunsisf`) · `malloc free realloc` · `memcmp
+memcpy memmove memset strcat strcmp strcpy strlen strncat strncpy` · `vsnprintf`. **Nada de `math.h`, nada de
+ficheros, nada de tiempo** (el tick se lo da el driver con `lv_tick_set_cb`). Con `lv_conf.h` en
+`LV_STDLIB_BUILTIN` (TLSF + sus propias `lv_string`/`lv_sprintf`, que hoy están en `LV_STDLIB_CLIB`) la lista
+baja a libgcc + `assert`: LVGL es **más autocontenida que SQLite** (36 símbolos en la prueba A de V5).
+
+**El que habla con el SDK es el driver del panel**, no LVGL: el del C6 pide 28 símbolos (`esp_lcd_*`,
+`spi_bus_initialize`, `gpio_config`, `heap_caps_malloc` DMA, `esp_timer_get_time`, `esp_log`); el del P4, 65
+(DSI, `esp_lcd_touch_gt911`, LEDC, `i2c_new_master_bus`, LDO, FreeRTOS). Ésa es la frontera que un pack no puede
+cruzar por nombre.
+
+**Las dos direcciones del acoplamiento de `gui.c`** (contadas):
+- `gui.c` → VM: `bpvm_fs_*` (8 usos: PNG e imágenes, fuentes `.bin`, `.shot`), `bpvm_malloc/free/realloc` (33),
+  `bpvm_diag` (4). Nada más: *«gui.c sigue sin saber nada de la VM (objptr opaco)»*.
+- VM → `gui.c`: las **92 funciones de `bpvm_gui.h`**, desde `builtins.c` (83 casos), `heap.c` (`visit_roots`, las
+  raíces del GC), `bpvm.c` (`reset` al fin de RUN) y `bpvm_repl.c` (`disp_native_size` para el `INFO`). Los eventos
+  van por una cola que `GUI_RUN`/`GUI_RUN_ONCE` **drenan** (modelo *pull*): el pack nunca tendría que llamar a BP.
+
+**Lo que el código nativo empotrable tiene hoy** (V5/H3-H4, `bpvm_bios.h`, `bpvm_npack.h`, `bpvm_pack_api.h`):
+- La **tabla BIOS v4**: 29 ranuras —log, memoria/cadenas de libc, `malloc/free/realloc` (chivatos en el P4),
+  `localtime`, 9 de ficheros, `arena`, `publica/busca`—. **Sin ninguna ranura de hardware** (GPIO, SPI, I2C, tick).
+- `publica()` acepta un `const void*` sin mirar marca ni versión (la reja de §1.1 sigue pendiente); **4 ranuras**.
+- El ancla, la escalera de 8 peldaños, el sello (`linked_flash`/`linked_ram`) y el barrido: **sólo la Pico y el P4**
+  las tienen (`pico/bios_pico.c`+`pack_pico.c`, `esp32p4/main/bios_p4.c`+`pack_p4.c`, 145+188 y 141+248 líneas).
+  El mapeo de la zona sí subió al común de ESP32 el 8-sep; la tabla, el ancla y el cargador no. El S3, el C3, el
+  C6 y la C5 **no pueden cargar un pack nativo**, y `board_mgr_esp32.c:496` publica `pack_ram_base` bajo
+  `#if CONFIG_IDF_TARGET_ESP32P4` (justo lo que H4 §6 llamó «nombrar un silicio en vez de una capacidad»).
+- **Una sola RAM y un solo pack**: la RAM del pack es el principio del bloque de la BD (`SQLite=<MB>` en el ENV,
+  reservado ANTES que el heap de la VM para que el sello cuadre en cada arranque; `PACK_RAM_BYTES` 8/16 KB de
+  estáticos y el resto es la arena, que hoy se llama SQLite); `bpvm_npack_buscar` **barre la zona entera** de 4 en
+  4 y **salta al primer** candidato válido; `packs_cargar_una_vez` lo hace en el primer `Run` (decisión de Eduardo:
+  no en el arranque, para que un cuelgue no obligue a regrabar).
+- Los destinos del `.npk`: `arm-cortex-m33` (Metro/STM32) y `riscv32-esp-p4` (`ilp32f`). **La C5 no tiene destino**:
+  publica la receta `RV32IMC_ILP32` (la del C3/C6) y `NpackReloc.porReceta` devuelve null — es el resto de `#502`.
+- La C5 ya trae lo que la 1.ª etapa dejó: zona de packs de 13,7 MB mapeada, `SOC_MMU_DI_VADDR_SHARED=1` (como C6 y
+  P4: una sola dirección para ejecutar y para leer `.rodata`, que es lo que SQLite ya demostró en el P4), PSRAM de
+  8 MB **entera para la VM** (7677 KB): no hay bloque para un pack. ⚠️ El `.npk` tiene que llevar `-fno-jump-tables`
+  y `-mno-relax` como el del P4 (recetas de `bpvm_aot_recetas.h`).
+- La resolución de módulos (`bpvm.c:663`): `/app` → base → `/lib` → zona de packs (XIP), y **el FS eclipsa al pack**.
+  `Gui.mod` (45 038 B) no va embebido en ninguna imagen ESP32: lo sube el IDE a `/lib` en cada Run — lo que taparía
+  al `Gui.mod` del pack (el fleco del 23-jul: `MODULE_QUERY`).
+- La fachada SPI del ESP32 (`gpio_esp32.c:349`) va **sin DMA** (`SPI_DMA_DISABLED`, `max_transfer_sz = 0`: el FIFO,
+  64 B por transacción). Un frame de 240×320 son 2400 transacciones.
+
+**La placa** (docs.waveshare.com y el repo `waveshareteam/ESP32-C5-Touch-LCD-2.8`, leídos hoy):
+
+| | qué | pines |
+|---|---|---|
+| panel | **ST7789**, 240×320, SPI (el mismo controlador que el C6, con otra geometría y el bus compartido con la TF) | SCK GPIO6 · MOSI GPIO7 · DC GPIO9 · CS GPIO10 (TF: MISO GPIO8, CS GPIO23) |
+| táctil | **CST3530**, I2C 0x58, con interrupción | SDA GPIO0 · SCL GPIO1 · INT GPIO5 |
+| expansor | **CH32V003** en I2C 0x24, firmware de fábrica | **LCD_RST = EXIO1, TP_RST = EXIO0, backlight = PWM del CH32** |
+| resto en el mismo I2C | QMI8658, PCF85063A (RTC), SHTC3 | GPIO0/1 |
+
+⚠️ **Ni el reset del panel ni el backlight son un GPIO**: van por I2C al CH32 (su protocolo está en el ejemplo
+`01_ch32_test` del repo; su BSP de ESP-IDF usa LVGL v9). El driver del C6 no vale «con otra geometría» sin más: el
+arranque del panel pasa por el expansor. Y el táctil CST3530 no es un componente de Espressif: el mapa de registros
+sale de su ejemplo.
+
+### 2. El diseño
+
+#### 2.1 Qué va en el pack y qué se queda en la imagen
+
+**En el pack**, tres cosas, y la frontera es la que ya existe:
+
+1. **LVGL entero + `gui.c` entero (modelo y render) + lodepng + las fuentes**, compilados para el destino con la
+   `lv_conf.h` del pack (`LV_STDLIB_BUILTIN`, sin SDL, las fuentes como perilla del build). El modelo viaja con el
+   render porque son el mismo fichero y porque así los **106 KB del `g_nodes[]` salen de la imagen** y van a la RAM
+   del pack. La paridad del `dumpTree` no cambia: es el mismo `gui.c`.
+2. **El driver del panel** —para la C5: ST7789 + CH32 + CST3530— escrito **contra la HAL que le presta la BIOS**
+   (GPIO/SPI/I2C/tick), no contra el IDF. Es lo que hace portable el driver y lo que permite que el usuario ponga
+   el suyo sin toolchain de Espressif dentro del contrato.
+3. **`Gui.mod`** (`#468`), como un `.mod` más del `.pack`: XIP desde la zona por el mecanismo que ya hay.
+
+**En la imagen** se quedan: los **83 builtins** (4,7 KB: son NUESTRO catálogo, no una librería ajena) y un
+`src/gui_pack.c` con **~90 trampolines** (las funciones de `bpvm_gui.h` que la VM llama; las `disp_*` de host
+—headless, título, salir al cerrar— no cruzan) que implementan `bpvm_gui.h` llamando a una tabla que se resuelve
+en el primer uso con `busca('LVGL')`; sin pack, cada trampolín lanza `RuntimeError` **con nombre** («GUI: esta placa no
+tiene el pack 'LVGL' grabado») — nunca un 0 mudo. `heap.c`, `bpvm.c` y `bpvm_repl.c` no cambian: llaman a
+`bpvm_gui.h` como hoy. Y la BIOS crece (v5).
+
+**En el PC no cambia nada**: el host y el simulador siguen enlazando `gui.c` + LVGL + SDL (el mismo `gui.c`, con
+un `#ifdef BPVM_EN_PACK` que cambia `bpvm_fs`/`bpvm_malloc`/`bpvm_diag` por las ranuras de la BIOS); miVM no se
+toca; los 92 samples de paridad y `make test-gui*` siguen valiendo. Las tres imágenes con LVGL tampoco (`H6.b`).
+
+#### 2.2 El contrato VM → pack: `bpvm_gui.h`, publicado por nombre bajo `'LVGL'`
+
+La tabla que el pack publica es una `bpvm_pack_api_t` (marca `'LVGL'`, versión, 92 publics **por nombre**) — el
+modelo de `SQLI`, sin inventar nada. Los trampolines resuelven los 92 nombres una vez (`bpvm_pack_api_find`) y los
+guardan; un nombre que falte se dice. Consecuencia que hay que asumir: **`bpvm_gui.h` pasa a ser una frontera
+binaria** como la BIOS — añadir funciones es gratis (se resuelven por nombre), cambiar una firma sube la versión y
+un pack viejo se rechaza con nombre. Es la «cuánta reja más» de §1, contestada: marca + versión + nombre.
+
+**Los dos enlaces posibles de BP al pack, y por qué el primero ahora:**
+
+| | **B1 — builtins + trampolines** | **B2 — `native` como `SQLite.bp`** (`import v1 from pack "LVGL"`) |
+|---|---|---|
+| qué toca | `gui_pack.c` nuevo; `Gui.bp` intacto; miVM intacta | `Gui.bp` reescrito con 90 `native`; un `Gui.mdn` por destino (ARM, RISC-V P4, RISC-V C5; **Xtensa no tiene**); `GUI_RUN` deja de existir en C y el lazo se despacha en BP |
+| crecer el catálogo (un widget nuevo) | un builtin nuevo = rehacer las siete imágenes | sólo el pack y `Gui.bp` — el modelo que Eduardo pidió en V5 («si cada librería necesita opcodes se pierde lo que el pack compró») |
+| miVM | corre `Gui` como hoy (su `GuiBackend`) | **no corre `Gui`**: miVM no ejecuta `native` sin cuerpo (SQLite tampoco corre en miVM: va por el simulador `make sim SQLITE=1`). Habría que darle a miVM un proveedor de símbolos por nombre |
+| el GC | `visit_roots` por trampolín, como hoy | el pack tendría que publicar un visitante que la VM llame por convención: es un builtin con otro nombre |
+
+La tabla publicada es la MISMA en los dos casos: B2 no la cambia, cambia quién la consume. Por eso **B1 ahora**
+(cierra en la C5 sin tocar compilador ni miVM) **y B2 queda posible** como paso propio, si el catálogo tiene que
+crecer sin tocar imágenes — con la condición de resolver antes qué hace miVM con un `native` de pack.
+
+#### 2.3 El contrato pack → VM: la BIOS v5 (lo que le falta a la tabla)
+
+La BIOS presta hoy memoria, cadenas, ficheros y el punto de encuentro. Para que un driver de panel viva en un pack
+tiene que prestar **la HAL BP** —las fachadas que la VM ya tiene y que son las mismas en las cinco familias—:
+
+```c
+/* v5 — la HAL, para los drivers de panel y de táctil (y para lo que venga: un sensor, un DAC…) */
+void (*gpio_init)(int pin, int mode);  void (*gpio_write)(int pin, int v);  int (*gpio_read)(int pin);
+void (*spi_init)(int bus, int sck, int mosi, int miso, int hz, int mode);  int (*spi_write)(int bus, const uint8_t*, size_t);
+void (*i2c_init)(int bus, int sda, int scl, int hz);  int (*i2c_write)(int bus, int addr, const uint8_t*, size_t);
+int  (*i2c_read)(int bus, int addr, uint8_t*, size_t);
+uint32_t (*now_ms)(void);  void (*sleep_ms)(int ms);      /* el tick de LVGL y las esperas del arranque del panel */
+```
+
+Son `bpvm_gpio_*`, `bpvm_spi_*`, `bpvm_i2c_*`, `bpvm_platform_now_ms` y `bpvm_platform_thread_sleep_ms`: **cero
+código nuevo por familia**, sólo direcciones en `BPVM_BIOS_TABLA`. Lo que LVGL y `gui.c` necesitan ya está:
+`log` (el `bpvm_diag` del pack), `abrir/leer/tamano` (PNG, fuentes `.bin`), la `arena` (§2.5). Falta `__assert_func`
+y libgcc: van DENTRO del pack, como en SQLite. Y **`publica()` gana la reja** (§1.1): lee marca y versión de la
+tabla que le pasan y se niega si no cuadran — una tarde, con test.
+
+**Lo que NO se presta**: `esp_lcd`, `heap_caps_malloc(DMA)`, LEDC. Un driver que los quiera no es portable, y la
+tabla no puede tener ranuras que sólo existen en una familia. El atajo existe y se llama `'ESPL'`: que la imagen
+del ESP32 publique su `esp_lcd` bajo otra marca y un pack lo busque — sirve para un experimento, no para el
+contrato. Propuesta: no abrirlo.
+
+**El coste de ir por la HAL, con número**: la fachada SPI del ESP32 va sin DMA a 64 B por transacción. Un flush de
+24 líneas (11 520 B) son 180 transacciones; un frame entero, 2400. A 40 MHz el frame son 31 ms de bus más la
+sobrecarga por transacción (del orden de 10-20 µs cada una): **~50-70 ms por frame entero, ~15 fps**; una pantalla
+de widgets repinta zonas, no frames. Se **mide en la C5** antes de tocar nada; si molesta, la palanca es **la
+fachada** (DMA + `max_transfer_sz` en `gpio_esp32.c`, con un búfer de rebote interno para que el pack pueda tener
+sus búferes en PSRAM), que además se la lleva la SD por SPI. Nada de eso cambia el contrato del pack.
+
+#### 2.4 LVGL ↔ el panel: `'PANT'`, la marca que ya estaba prevista
+
+LVGL no sabe de paneles: quiere un `flush_cb`, un `read_cb` del táctil, el tamaño y la rotación. Ése es el contrato
+entre los dos códigos nativos, y es pequeño:
+
+```c
+typedef struct {            /* lo que publica un driver de panel bajo 'PANT' (versión 1) */
+    int  (*init)(void);                                   /* enciende el panel; 0 = bien */
+    int  (*size)(int* w, int* h);                         /* el tamaño físico — bpvm_gui_disp_native_size */
+    void (*flush)(int x1, int y1, int x2, int y2, const uint8_t* px565);   /* lv_display_flush_ready lo da el que llama */
+    int  (*touch)(int* x, int* y);                        /* 1 = pulsado; sin táctil: NULL */
+    void (*rotate)(int deg);                              /* MADCTL; sin soporte: no-op con aviso */
+    int  (*open)(void);                                   /* bpvm_gui_disp_is_open */
+} bpvm_pant_t;
+```
+
+LVGL lo pide con **`busca('PANT')` en su primer uso** (`lvgl_ensure_init`), no al cargar: el orden de carga deja
+de importar (§1.2), y si no hay panel el error tiene nombre. El mismo contrato tiene **dos proveedores posibles**:
+un pack (la C5, el C6, el panel del usuario) o **la propia imagen** — el P4 con su MIPI-DSI y la DK2 con su LTDC
+publican `'PANT'` desde `gui_display_dsi.c`/`gui_display_ltdc.c` y LVGL sale de la imagen igual. Eso es lo que
+hace viable `H6.b` sin pedirle a la BIOS que preste DSI.
+
+#### 2.5 La RAM: la arena por código nativo, y N packs en vez de uno
+
+Hoy hay UNA base de RAM (el bloque de la BD) para UN pack. LVGL necesita: sus estáticos (~1 KB), los 106 KB del
+modelo, los búferes de dibujo del panel (2 × 11,5 KB) y un heap para los objetos (TLSF de LVGL; para 240×320 con
+`Gui.Window` y sus widgets, del orden de 100-200 KB). Y en la C5 la PSRAM entera es hoy de la VM.
+
+- **La reserva sale del ENV con una clave genérica** —propuesta `packRam=<KB>`— reservada ANTES que el heap de la VM
+  (como el bloque de la BD en el P4, por el sello). `SQLite=<MB>` se queda como está (es un nombre público) y suma a
+  la misma zona, o se documenta como alias: **lo decide Eduardo** (pregunta 3).
+- **Cada `.npk` declara cuánta RAM quiere** —`ram_bytes` en la cabecera, formato 2, el campo `reserved[0]`— y el
+  cargador reparte la zona **en el orden de la cadena BPAK** (primero grabado, primera base), alineando a 16. El
+  reparto es una función pura de la cadena, así que el IDE lo calcula igual al grabar (ya calcula el sello) y el
+  sello sigue valiendo. Borrar un pack de en medio mueve los siguientes: la escalera lo dice («regrábalo») y la
+  compactación del PC lo arregla — el mismo caso NORMAL que cambiar `SQLite=<MB>`.
+- **La entrada crece a `bp_pack_init(bios, ctx)`** con `ctx = {ram_base, ram_bytes}`: el pack coloca ahí sus
+  estáticos y el resto es SU arena; `bios->arena()` deja de ser singular. LVGL la usa con su TLSF
+  (`LV_MEM_ADR` apuntando a `ctx`), SQLite con MEMSYS5: **el bloque es crudo, el motor lo gestiona** — la regla de
+  `bpvm_sqlmem.h`, aplicada al segundo motor.
+- **El cargador carga TODOS los `npk` de la cadena**, no el primero, y **recorre la cadena** (`bpvm_pack_find` por
+  tipo `npk`) en vez de barrer la zona de 4 en 4 (13,7 MB en la C5). Cada entrada publica lo suyo; `BPVM_PACK_MAX`
+  sube de 4 a 8 (una línea; medido: hoy hay 1 marca y mañana 3).
+
+El SQLite existente se **regenera** (BIOS v5 + entrada nueva): su `.npk` de ARM ya estaba rancio (LEEME del 19-ago)
+y el pack de MOD9 se rehízo el 15-sep — es una grabación más en la Metro y el P4, no un cambio de diseño.
+
+#### 2.6 La cadena de construcción: `bpstdlib/gui/` como `bpstdlib/sqlite/`
+
+```
+bpstdlib/gui/
+  Gui.bp  Gui.bpbuild              (out:pack; main no — es librería)
+  nativo/src/lv_conf.h             la del pack: BUILTIN stdlib, sin SDL, fuentes por perilla
+  nativo/src/lvgl_pack.c           bp_pack_init: verifica BIOS, arena→TLSF, lv_init, publica 'LVGL' (92 nombres)
+  nativo/src/gui_pack_glue.c       lo que gui.c pide a la VM, sobre la BIOS (fs, malloc, diag) + __assert_func
+  nativo/src/panel_c5.c            'PANT' de la C5: ST7789 + CH32 (reset/backlight) + CST3530, sobre la HAL v5
+  nativo/src/build_lvgl_c5.sh      como build_sqlite_rv.sh: -march=rv32imc_zicsr_zifencei -mabi=ilp32 …
+  nativo/lvgl.npk.RV32IMC          ≈ 650 KB (LVGL 620 + gui 11 + panel 5 + glue); la tabla de relocs la come el IDE
+  out/Gui.pack                     npk + Gui.mod (+ un día fuentes .bin como recursos, spec §5)
+```
+
+`src/gui.c` se compila DOS veces desde la misma fuente (host con `bpvm_*`, pack con la BIOS): un solo fichero, dos
+`#ifdef`. `NpackReloc` gana el destino **`riscv32-imc`** (`RV32IMC_ILP32`, ilp32 sin FPU: los mismos relocs que el
+P4, otra receta) — que es exactamente el resto de `#502` y sirve al C3 y al C6. `PackStep` ya recoge `npk` del
+`outDir`. El pack se graba con el botón de siempre; `PACK_BURN_BEGIN` ya da al IDE el sitio de RAM (`pack_ram_base`),
+que en la C5 hoy es 0.
+
+#### 2.7 Lo que se verifica, y en qué orden (el método de V5: el mini antes que el motor)
+
+1. **`mini.npk` en la C5** (el control de 20 líneas de V5: tabla BIOS válida, `log`, `.rodata`, `.data/.bss`, devuelve 0).
+   Sin esto un fallo de LVGL no se distingue de un fallo del cargador. Es la primera prueba de P1.
+2. **`test_bios`** con las ranuras v5 y la reja de `publica()`; **test de trampolines** en host con una tabla falsa
+   («sin pack → error con nombre», «con tabla → llama»); la escalera con dos `npk` en la cadena y el reparto de RAM.
+3. **El oráculo del `.npk`** (`NpackBuild` re-enlaza en la dirección destino y compara byte a byte) sobre el de LVGL.
+4. **En la C5**: `GuiDemo`, `GuiClickMeas` (la latencia de un clic, que `#434` ya mide) y `GuiShot` en la tanda, con
+   cronómetro: ms por flush de 24 líneas, ms por frame, RAM del pack en uso. Números, no impresiones.
+
+### 3. Las preguntas (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | el enlace BP → pack | **B1** ahora (builtins + trampolines; miVM y compilador intactos); B2 (`native`) como paso propio después, si se quiere crecer sin tocar imágenes — y antes decidir qué hace miVM con un `native` de pack |
+| 2 | ¿un pack o dos (LVGL y `'PANT'`)? | el contrato `'PANT'` desde el primer día y **un solo `.npk` para el primer encendido** de la C5; dos `npk` en cuanto el cargador cargue N (P4 del plan). Así el primer encendido no espera al cargador nuevo y no se pinta nada en un rincón |
+| 3 | la RAM | `packRam=<KB>` genérico en el ENV, reservado antes que la VM; `ram_bytes` en la cabecera del `npk`; `SQLite=<MB>` se documenta como alias de la misma zona. Defecto en placas con PSRAM: 0 (nada se reserva sin pedirlo, como hoy la BD); la C5 con pantalla pide ~512 KB |
+| 4 | el driver del panel | **contra la HAL v5 de la BIOS**, portable; la fachada SPI del ESP32 gana DMA sólo si la medida lo pide (y beneficia a la SD). El atajo `'ESPL'` (esp_lcd desde la imagen) no se abre |
+| 5 | las fuentes | perilla del build del pack; en la C5 las once (418 KB de 13,7 MB); un pack «pequeño» (12/14/16/20/24: ≈ 90 KB) para placas con menos zona. Fuentes `.bin` como recursos del pack, después |
+| 6 | el tamaño de pantalla ANTES del primer Run | hoy el pack se carga en el primer `Run` y el `INFO` publica `screenW/H` sólo con LVGL dentro: la tanda y el IDE preguntan antes. Propuesta: el `INFO` también dispara `packs_cargar_una_vez` (es «una vez» y ya es reintentable); la política de no cargar en el arranque no cambia |
+| 7 | `Gui.mod` y el Run del IDE | el Run **no sube a `/lib` lo que la zona ya sirve** (el verbo `MODULE_QUERY` del 23-jul: la VM contesta «¿tienes este módulo y por dónde?»). Va dentro de H6: sin él, cada Run tapa el `Gui.mod` del pack con una copia en `/lib` (funciona, pero la RAM que `#468` quería ahorrar no se ahorra) |
+| 8 | la reja de `publica()` y las ranuras | en P1: leer marca y versión de la tabla, `BPVM_PACK_MAX` 4 → 8, test |
+| 9 | `H6.b` | aparte y después (la ronda sellada): el C6 → su ST7789 al pack de la C5 (mismo driver, otra geometría, sin CH32); el P4 y la DK2 → `'PANT'` publicado desde la imagen (DSI/LTDC no se prestan); LVGL sale de las tres |
+
+### 4. El plan, por pasos que cierran algo
+
+| paso | qué | cierra |
+|---|---|---|
+| **P1** | el pack nativo llega a **toda la familia ESP32**: `bios_p4.c`/`pack_p4.c` → `esp32/common/` (BIOS, ancla, cargador; `pack_ram_base` sin `#if P4`); la reserva `packRam` en el arranque común (la C5, de su PSRAM); el destino `riscv32-imc` en `NpackReloc`; la reja de `publica()` y 8 ranuras; **`mini.npk` devuelve 0 en la C5** | `#502` resto, §1.1 (reja), §1.3 (ranuras); «packs nativos en C3/C6/C5» |
+| **P2** | **BIOS v5** (la HAL: gpio/spi/i2c/tick/sleep) con `test_bios`; `src/gui_pack.c` (92 trampolines, error con nombre) y los 83 builtins en la C5 bajo `BPVM_GUI_PACK`; el `INFO` con el tamaño del pack (pregunta 6); SQLite regenerado contra v5 y grabado en Metro/P4 | el contrato en los dos sentidos, probado en host |
+| **P3** | **el pack**: `bpstdlib/gui/` (lv_conf del pack, `gui.c` bajo `BPVM_EN_PACK`, `lvgl_pack.c`, `panel_c5.c` sobre la HAL —ST7789 + CH32 + CST3530—, el build), `Gui.pack` con `Gui.mod`; grabado en la C5; `GuiDemo`/`GuiClickMeas`/`GuiShot` con cronómetro; referencia es/en («la pantalla llega por el pack») | **`H6.a`** |
+| **P4** | la disciplina de §1: `ram_bytes` en la cabecera y `bp_pack_init(bios, ctx)`, el cargador de N `npk` por la cadena, `'PANT'` como `npk` propio con `busca` perezoso; el IDE no sube lo que la zona sirve (`MODULE_QUERY`); la tanda con la C5 con pantalla | la fila H6 salvo `H6.b`; `#468` (el `Gui.mod` en flash) |
+| **H6.b** | tras la ronda sellada de mitad de V7: C6 (pack), P4 y DK2 (`'PANT'` desde la imagen) sin LVGL dentro; medir lo que cada imagen adelgaza (el C6: −664 KB, −107 KB de RAM) | `H6.b` |
+
+**Los riesgos, dichos antes**: (1) la velocidad del flush por la fachada SPI sin DMA —se mide en P3; la palanca es
+la fachada—; (2) el protocolo del CH32 y los registros del CST3530 salen del ejemplo de Waveshare, no de un
+componente del IDF: son dos ficheros que leer antes de escribir `panel_c5.c`; (3) el `.npk` de ~650 KB con las
+fuentes: el realojado ya se hizo con 618 KB en el P4, y el oráculo lo comprueba byte a byte; (4) dos `lv_conf.h`
+(host y pack) son dos sitios que divergen — una sola con `#ifdef BPVM_EN_PACK`; (5) `bpvm_gui.h` como frontera
+binaria: cada cambio de firma es una versión, y hay que quererlo así; (6) el `--no-screen` del simulador y el
+`INFO` antes del primer Run (pregunta 6); (7) el `Gui.mod` tapado por `/lib` (pregunta 7) no rompe, pero engaña a
+quien mida la RAM.

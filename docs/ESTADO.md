@@ -143,6 +143,26 @@ TAMP, el RP2350 una zona `.uninitialized_data` (`__uninitialized_ram`), las ESP3
 desaparecen del backend de `Machine`. Verificado con el `RESET` del wire: Pico «arranque #4, rastro anterior 100 200 300»,
 P4 «#3, 100 200 300». Quedan de P3 NeoPixel y el botón BOOT del C6 (con la placa) y P4 (cascada y tanda).
 
+## 🖥️ H6 (22-sep, tarde) — LVGL en un pack: el día de análisis (`V7_IDEAS` §H6), sin tocar código
+
+Encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más analizar.»*
+Medido, no supuesto: **la GUI cuesta 664 KB de flash y 107 KB de RAM** en la imagen del C6 (LVGL 644 KB, de los que
+418 son las once Montserrat; `gui.c` 11 KB + **106 KB de `.bss`** por el `g_nodes[512]`; los 83 builtins 4,7 KB); **LVGL
+necesita 19 símbolos** de la plataforma (`nm -u`: libgcc, assert, malloc, cadenas, `vsnprintf`; nada de `math.h`, ni
+ficheros, ni tiempo) y con su stdlib interna quedaría en libgcc + assert; **el que habla con el SDK es el driver del
+panel** (28 símbolos en el C6, 65 en el P4). Lo que falta al pack nativo: la BIOS no presta HARDWARE; ancla y cargador
+sólo en Pico y P4 (`#if CONFIG_IDF_TARGET_ESP32P4` en el común); una RAM y un pack (el primero válido, barriendo la
+zona); sin destino `.npk` para `RV32IMC_ILP32` (`#502`); la fachada SPI del ESP32 sin DMA (64 B). **La placa, leída**:
+ST7789 240×320 por SPI (SCK6/MOSI7/DC9/CS10), táctil CST3530 en I2C 0x58, y **reset y backlight por un CH32V003 en
+I2C 0x24** (no son GPIO). **El diseño**: en el pack LVGL + `gui.c` entero (modelo y render: los 106 KB salen de la
+imagen) + el driver del panel contra la HAL que presta la BIOS v5 + `Gui.mod`; en la imagen los 83 builtins y ~90
+trampolines que resuelven `bpvm_gui.h` por nombre con `busca('LVGL')` (error con nombre sin pack); `'PANT'` como
+contrato LVGL↔panel con dos proveedores (pack, o la imagen para DSI/LTDC: así `H6.b` es viable); la RAM por código
+nativo con `packRam` y `ram_bytes` en la cabecera; N `npk` por la cadena. Nueve preguntas para Eduardo (el enlace
+B1 builtins contra B2 `native` —miVM no ejecuta `native` de pack—, un pack o dos, la RAM, la HAL frente al atajo
+`'ESPL'`, las fuentes, el `INFO` antes del primer Run, `Gui.mod` y el Run del IDE, la reja, `H6.b`) y un plan
+P1–P4 (P1 = el pack nativo a toda la familia ESP32 + `mini.npk` en la C5; P3 = `H6.a`). Nada de código hoy.
+
 ## ⏭️ Traspaso (22-sep, al cerrar) — H4 casi entera en una mañana; lo que queda pide placas (C6, Nucleo/DK2); lo siguiente: H7
 
 Hecho hoy: H4 P1 (la tabla de capacidades, `d66e31b9`), P2 (`#479`: el mapa de pines en uso, `ad6ceef1`), P3a (`#487`: el
@@ -151,7 +171,7 @@ breadcrumb en el común, `67f7b564`), la cascada (siete imágenes; Pico y P4 gra
 **Queda de H4**, todo con placa: NeoPixel (RMT, GPIO8) y el botón BOOT del C6; el ADC externo del STM32 (`#469` resto) con
 la Nucleo/DK2; la máscara de pines por paquete cuando haya dos placas del mismo die. **Pendiente de grabar**: S3/C3/C6/C5/
 Nucleo/DK2 (imágenes de las 09:3x, con H1 + H3 + H4). **Lo siguiente**: H7 (`#530` 🔴, `#531` 🟡) o lo que Eduardo diga.
-Árbol limpio, sin push.
+Árbol limpio, sin push. **(Tarde: el día de análisis de H6, arriba; sus nueve preguntas esperan a Eduardo.)**
 
 ## ⏭️ Traspaso (21-sep, al cerrar) — la 1.ª etapa de H11 HECHA esa misma noche (con PSRAM); lo siguiente: H7 y H4
 
