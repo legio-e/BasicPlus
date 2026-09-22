@@ -67,14 +67,6 @@ typedef struct {
     /* H10 — causa del último reset como string ("watchdog (IWDG)", "power-on",
      * "software", "pin (NRST)", ...). NULL → el accesor devuelve "unknown". */
     const char* (*resetCause)(void);
-    /* H10 — breadcrumb en RAM retenida (migas que sobreviven al reset):
-     * setMark deja una miga; markCount/markAt leen el trail de ANTES del reset
-     * (markAt(0) = 1ª marca pegajosa = causa original); bootCount = nº arranques.
-     * NULL → stubs (0 / 0 / 1) — sin RAM retenida no hay diagnóstico de reset. */
-    void (*setMark)(int code);
-    int  (*markCount)(void);
-    int  (*markAt)(int i);
-    int  (*bootCount)(void);
 } bpvm_machine_backend_t;
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -125,6 +117,21 @@ typedef struct {
     const int8_t*   pin_adc_ch;             /* por GPIO: canal en esa unidad, o -1 */
     uint8_t         breadcrumb;             /* 1 = hay migas de verdad (RAM retenida); 0 = no las hay (#487) */
 } bpvm_caps_t;
+
+/* ── V7/H4 (#487) — EL BREADCRUMB, en el COMÚN sobre un bloque RETENIDO ──────
+ * Migas que sobreviven al reset (setMark deja una; markCount/markAt leen el
+ * rastro de la vida ANTERIOR, markAt(0) = la primera, pegajosa; bootCount).
+ * Hasta hoy sólo el STM32 las tenía —en sus registros de backup, con el
+ * algoritmo dentro de su cintura— y las otras cuatro familias contestaban
+ * 0/0/1 MUDAS. Ahora el algoritmo vive aquí y cada familia sólo pone el
+ * BLOQUE que su silicio conserva entre resets: el STM32 los BKPxR del TAMP, el
+ * RP2350 una zona `.uninitialized_data` (el SDK no la borra al arrancar), las
+ * ESP32 una `.noinit`. Layout del bloque (n >= 8 palabras): [0] magic ·
+ * [1] arranques · [2] marcas de esta vida · [3] la primera (pegajosa) · [4..]
+ * el anillo de las últimas n-4. Con el magic se distingue el arranque en frío
+ * (basura) del reset caliente. Sin bloque (el PC): las migas no sobreviven a
+ * nada y `caps.breadcrumb` lo dice. */
+void bpvm_breadcrumb_attach(uint32_t* palabras, unsigned n);
 
 /* La cintura la fija en el arranque (antes de la VM). Sin cintura: el perfil
  * del host (RP2350A), el mismo que miVM: así el PC y la placa cuentan igual. */

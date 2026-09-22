@@ -747,13 +747,17 @@ static const int8_t s_rp_adc_c_b[48] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
                                          -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,1,2,3,4,5,6,7 };
 #undef RP_P
 #undef RP_A
+/* V7/H4 (#487) — el bloque de las migas: `.uninitialized_data` NO lo pone a cero
+ * el arranque del SDK, así que sobrevive a un reset (watchdog, RESET del IDE,
+ * BOOTSEL no: eso es power-on y el magic del común lo detecta). */
+static uint32_t __uninitialized_ram(s_rp_migas)[20];
 static const bpvm_caps_t s_rp_caps_a = {
     .micro = "rp2350a", .paquete = "QFN-60", .fabricante = "Raspberry Pi",
     .cpu_hz_max = 300000000u, .cpu_hz_min = 18000000u, .cpu_ajustable = 1,
     .uart = s_rp_bus, .n_uart = 2, .i2c = s_rp_bus, .n_i2c = 2, .spi = s_rp_bus, .n_spi = 2,
     .n_pwm = 12, .pwm_unidad = "slice", .n_adc = 1,
     .pin = s_rp_pin_a, .n_pin = 30, .pin_adc_unit = s_rp_adc_u_a, .pin_adc_ch = s_rp_adc_c_a,
-    .breadcrumb = 0,
+    .breadcrumb = 1,
 };
 static const bpvm_caps_t s_rp_caps_b = {
     .micro = "rp2350b", .paquete = "QFN-80", .fabricante = "Raspberry Pi",
@@ -761,7 +765,7 @@ static const bpvm_caps_t s_rp_caps_b = {
     .uart = s_rp_bus, .n_uart = 2, .i2c = s_rp_bus, .n_i2c = 2, .spi = s_rp_bus, .n_spi = 2,
     .n_pwm = 12, .pwm_unidad = "slice", .n_adc = 1,
     .pin = s_rp_pin_b, .n_pin = 48, .pin_adc_unit = s_rp_adc_u_b, .pin_adc_ch = s_rp_adc_c_b,
-    .breadcrumb = 0,
+    .breadcrumb = 1,
 };
 
 /* setCpuFreqMHz — cambia el clk_sys del RP2350.
@@ -1625,6 +1629,7 @@ int main(void) {
     bpvm_pulse_set_backend(&s_pico_pulse_backend);
     bpvm_pwm_set_backend(&s_pico_pwm_backend);
     bpvm_caps_set(board_desc()->variant == 'B' ? &s_rp_caps_b : &s_rp_caps_a);   /* V7/H4: la tabla de ESTA variante */
+    bpvm_breadcrumb_attach(s_rp_migas, 20u);   /* V7/H4 (#487): las migas, en RAM que sobrevive al reset */
     bpvm_machine_set_backend(&s_pico_pico_backend);
     bpvm_adc_set_backend(&s_pico_adc_backend);
     bpvm_wdt_set_backend(&s_pico_wdt_backend);

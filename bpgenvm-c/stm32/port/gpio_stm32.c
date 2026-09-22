@@ -262,75 +262,16 @@ static int stm32_set_cpu_freq_mhz_impl(int mhz) {
     return 0;   /* reloj fijo (160 MHz); cambiar en runtime no soportado */
 }
 
-/* ===================== Breadcrumb en RAM retenida — H10 ====================
- * Migas que sobreviven al reset, en los registros de backup del TAMP (no se
- * borran en un reset del sistema; con VBAT, tampoco en power-off). Layout:
- *   BKP0R=magic  BKP1R=boot_count  BKP2R=total(setMark de esta vida)
- *   BKP3R = 1ª marca PEGAJOSA (la causa original; no se sobrescribe nunca)
- *   BKP4R..BKP19R = anillo de las últimas 16 marcas
- * En el boot tomamos un SNAPSHOT del trail de la vida anterior en orden
- * cronológico (trail[0] = origen garantizado), reseteamos `total` para la vida
- * nueva e incrementamos boot_count. markCount/markAt leen el snapshot (estable,
- * inmune a las marcas nuevas). Board-agnóstico (todos los U5 tienen TAMP). */
-#define BC_MAGIC      0xB9CBA001u
-#define BC_RING_N     16u
-#define BC_BKP_MAGIC  0u
-#define BC_BKP_BOOT   1u
-#define BC_BKP_TOTAL  2u
-#define BC_BKP_FIRST  3u
-#define BC_BKP_RING   4u    /* BKP4R..BKP19R */
-
-static int      s_bc_trail[BC_RING_N + 1];   /* +1: la pegajosa puede prependerse */
-static int      s_bc_trail_count = 0;
-static uint32_t s_bc_boot_count  = 1;
-
-/* BKP0R..BKP31R son 32 registros contiguos de 32 bits (offset 0x100..0x17C). */
-static volatile uint32_t* bc_bkp(unsigned i) { return &(&TAMP->BKP0R)[i]; }
-
+/* ===================== Breadcrumb — H10, V7/H4 (#487) ====================
+ * El algoritmo vive ahora en el común (bpvm_machine.c); aquí sólo el BLOQUE
+ * que este silicio conserva entre resets: los registros de backup del TAMP
+ * (BKP0R..BKP31R, 32 palabras contiguas en 0x100..0x17C; no se borran en un
+ * reset del sistema y, con VBAT, tampoco en power-off). Se usan 20. */
 static void stm32_breadcrumb_init(void) {
     __HAL_RCC_RTCAPB_CLK_ENABLE();   /* acceso al TAMP (dominio RTC/backup) */
     HAL_PWR_EnableBkUpAccess();      /* DBP: permite escribir el dominio backup */
-
-    if (*bc_bkp(BC_BKP_MAGIC) == BC_MAGIC) {
-        /* Reset caliente: reconstruimos el trail de la vida anterior. */
-        s_bc_boot_count   = *bc_bkp(BC_BKP_BOOT) + 1u;
-        uint32_t total    = *bc_bkp(BC_BKP_TOTAL);
-        uint32_t first    = *bc_bkp(BC_BKP_FIRST);
-        s_bc_trail_count  = 0;
-        if (total > 0u && total <= BC_RING_N) {
-            for (uint32_t j = 0; j < total; j++)         /* anillo = orden de escritura */
-                s_bc_trail[s_bc_trail_count++] = (int) *bc_bkp(BC_BKP_RING + j);
-        } else if (total > BC_RING_N) {
-            s_bc_trail[s_bc_trail_count++] = (int) first;   /* [0] = origen pegajoso */
-            for (uint32_t j = 0; j < BC_RING_N; j++)        /* últimas 16, antigua→reciente */
-                s_bc_trail[s_bc_trail_count++] =
-                    (int) *bc_bkp(BC_BKP_RING + ((total + j) % BC_RING_N));
-        }
-    } else {
-        /* Arranque en frío: inicializa el dominio. */
-        *bc_bkp(BC_BKP_MAGIC) = BC_MAGIC;
-        s_bc_boot_count  = 1u;
-        s_bc_trail_count = 0;
-    }
-    *bc_bkp(BC_BKP_BOOT)  = s_bc_boot_count;
-    *bc_bkp(BC_BKP_TOTAL) = 0u;       /* vida nueva: cuenta marcas desde cero */
+    bpvm_breadcrumb_attach((uint32_t*) &TAMP->BKP0R, 20u);
 }
-
-static void stm32_set_mark_impl(int code) {
-    uint32_t total = *bc_bkp(BC_BKP_TOTAL);
-    if (total == 0u) *bc_bkp(BC_BKP_FIRST) = (uint32_t) code;   /* 1ª pegajosa */
-    *bc_bkp(BC_BKP_RING + (total % BC_RING_N)) = (uint32_t) code;
-    *bc_bkp(BC_BKP_TOTAL) = total + 1u;
-}
-
-static int stm32_mark_count_impl(void) { return s_bc_trail_count; }
-
-static int stm32_mark_at_impl(int i) {
-    if (i < 0 || i >= s_bc_trail_count) return 0;
-    return s_bc_trail[i];
-}
-
-static int stm32_boot_count_impl(void) { return (int) s_bc_boot_count; }
 
 /* Los DOS nombres (V6, 9-sep): el micro es la familia de silicio; la PLACA sale
  * de BOARD_NAME, que ya distingue la Nucleo de la DK2 (son dos proyectos). */
@@ -347,10 +288,6 @@ static const bpvm_machine_backend_t s_pico_backend = {
     .uptimeMs      = stm32_uptime_ms_impl,
     .setCpuFreqMHz = stm32_set_cpu_freq_mhz_impl,
     .resetCause    = stm32_reset_cause,        /* H10 — causa del último reset */
-    .setMark       = stm32_set_mark_impl,      /* H10 — breadcrumb */
-    .markCount     = stm32_mark_count_impl,
-    .markAt        = stm32_mark_at_impl,
-    .bootCount     = stm32_boot_count_impl,
 };
 
 /* ===================== SPI (H15.1) =====================================

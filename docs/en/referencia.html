@@ -1655,9 +1655,13 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>setMark(code)</code> · <code>markCount()</code> · <code>markAt(i)</code> · <code>bootCount()</code></td>
       <td>A trail of «breadcrumbs» in retained RAM that survives a reset: the app drops
           marks per phase and after an unexpected restart reads the path that led to the
-          failure (<code>markAt(0)</code> is always the first). <strong>Only works on
-          STM32</strong>; on RP2350, ESP32 and the PC <code>setMark</code> does nothing and
-          they return 0, 0 and 1.</td></tr>
+          failure (<code>markAt(0)</code> is always the first). Since V7 it works on the
+          <strong>three families</strong> — the algorithm lives in the common layer and each silicon
+          provides the RAM it keeps across resets: the STM32's backup registers, an uninitialised
+          area on RP2350, <code>.noinit</code> on ESP32 — and survives a software reset, a watchdog
+          reset or the IDE's <code>RESET</code> (a power-off, no). On the PC there is no reset to
+          survive: <code>markCount()</code> is 0, <code>bootCount()</code> 1, and
+          <code>Machine.hasBreadcrumb()</code> says so.</td></tr>
   <tr><td><code>setCpuFreqMHz(mhz): boolean</code></td>
       <td>Changes clk_sys. Clamped to <code>[MIN_CPU_MHZ, MAX_CPU_MHZ]</code>.
           Auto-scales Vdd_core (1.10/1.15/1.20/1.30 V depending on mhz).

@@ -1671,9 +1671,13 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>setMark(code)</code> · <code>markCount()</code> · <code>markAt(i)</code> · <code>bootCount()</code></td>
       <td>Rastro de «migas» en RAM retenida que sobrevive al reset: la app deja marcas por
           fases y tras un reinicio inesperado lee el camino que llevó al fallo
-          (<code>markAt(0)</code> es siempre la primera). <strong>Sólo funciona en
-          STM32</strong>; en RP2350, ESP32 y el PC <code>setMark</code> no hace nada y
-          devuelven 0, 0 y 1.</td></tr>
+          (<code>markAt(0)</code> es siempre la primera). Desde V7 funciona en las
+          <strong>tres familias</strong> —el algoritmo vive en el común y cada silicio pone la RAM que
+          conserva entre resets: los registros de backup del STM32, una zona sin inicializar en RP2350,
+          <code>.noinit</code> en ESP32— y sobrevive a un reset por software, por watchdog o al
+          <code>RESET</code> del IDE (a un apagado, no). En el PC no hay reset que sobrevivir:
+          <code>markCount()</code> es 0, <code>bootCount()</code> 1, y <code>Machine.hasBreadcrumb()</code>
+          lo dice.</td></tr>
   <tr><td><code>setCpuFreqMHz(mhz): boolean</code></td>
       <td>Cambia clk_sys. Clamp a <code>[MIN_CPU_MHZ, MAX_CPU_MHZ]</code>.
           Auto-escala Vdd_core (1.10/1.15/1.20/1.30 V según mhz).

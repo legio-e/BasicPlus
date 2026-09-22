@@ -1,0 +1,18 @@
+module Migas
+  import Machine
+  public function main()
+    print Machine.getMicro(), "migas:", Machine.hasBreadcrumb(), " arranque #" + Machine.bootCount(), " causa:", Machine.resetCause()
+    var n: integer := Machine.markCount()
+    var s: string := "rastro anterior [" + n + "]:"
+    var i: integer := 0
+    while i < n do
+      s := s + " " + Machine.markAt(i)
+      i := i + 1
+    endwh
+    print s
+    Machine.setMark(100)
+    Machine.setMark(200)
+    Machine.setMark(300)
+    print "dejadas 100, 200, 300; ahora RESET y volver a correr"
+  end main
+end Migas

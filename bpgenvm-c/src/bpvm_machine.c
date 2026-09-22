@@ -203,25 +203,59 @@ const char* bpvm_machine_reset_cause(void) {
     return "unknown";
 }
 
+/* ══════════ V7/H4 (#487) — el breadcrumb, en el común (ver bpvm_machine.h) ══════════
+ * El algoritmo que vivía en gpio_stm32.c (H10), sin cambiar su contrato: en el
+ * arranque se toma un SNAPSHOT del rastro de la vida anterior en orden
+ * cronológico ([0] = la primera marca, garantizada aunque el anillo haya dado
+ * la vuelta), se pone a cero la cuenta de la vida nueva y se incrementa el
+ * número de arranques. markCount/markAt leen el snapshot (estable, inmune a
+ * las marcas nuevas). El host no tiene bloque: setMark deja la marca en RAM
+ * corriente (no sobrevive a nada), y markCount/bootCount dicen 0 y 1. */
+#define BC_MAGIC 0xB9CBA001u
+#define BC_MAX   32
+static uint32_t* s_bc = NULL;
+static unsigned  s_bc_n = 0;
+static int       s_bc_trail[BC_MAX + 1];
+static int       s_bc_trail_count = 0;
+static uint32_t  s_bc_boot_count = 1;
+static uint32_t  s_host_bc[8];          /* el PC: RAM corriente, para que setMark no sea un no-op mudo */
+
+void bpvm_breadcrumb_attach(uint32_t* palabras, unsigned n) {
+    if (!palabras || n < 8) return;
+    if (n > BC_MAX + 4) n = BC_MAX + 4;
+    s_bc = palabras; s_bc_n = n;
+    unsigned ring = n - 4;
+    s_bc_trail_count = 0;
+    if (s_bc[0] == BC_MAGIC) {
+        /* Reset caliente: reconstruir el rastro de la vida anterior. */
+        s_bc_boot_count = s_bc[1] + 1u;
+        uint32_t total = s_bc[2], first = s_bc[3];
+        if (total > 0u && total <= ring) {
+            for (uint32_t j = 0; j < total; j++) s_bc_trail[s_bc_trail_count++] = (int) s_bc[4 + j];
+        } else if (total > ring) {
+            s_bc_trail[s_bc_trail_count++] = (int) first;                     /* [0] = origen pegajoso */
+            for (uint32_t j = 0; j < ring; j++)                                /* las últimas, antigua→reciente */
+                s_bc_trail[s_bc_trail_count++] = (int) s_bc[4 + ((total + j) % ring)];
+        }
+    } else {
+        s_bc[0] = BC_MAGIC;                                                     /* arranque en frío */
+        s_bc_boot_count = 1u;
+    }
+    s_bc[1] = s_bc_boot_count;
+    s_bc[2] = 0u;                                                               /* vida nueva */
+}
+
 void bpvm_machine_set_mark(int code) {
-    if (g_backend && g_backend->setMark) g_backend->setMark(code);
-    /* Host: no-op (sin RAM retenida). */
+    uint32_t* b = s_bc ? s_bc : s_host_bc;
+    unsigned  n = s_bc ? s_bc_n : 8u;
+    uint32_t total = b[2];
+    if (total == 0u) b[3] = (uint32_t) code;                                    /* la primera, pegajosa */
+    b[4 + (total % (n - 4))] = (uint32_t) code;
+    b[2] = total + 1u;
 }
-
-int bpvm_machine_mark_count(void) {
-    if (g_backend && g_backend->markCount) return g_backend->markCount();
-    return 0;   /* host: sin trail */
-}
-
-int bpvm_machine_mark_at(int i) {
-    if (g_backend && g_backend->markAt) return g_backend->markAt(i);
-    return 0;   /* host: sin trail */
-}
-
-int bpvm_machine_boot_count(void) {
-    if (g_backend && g_backend->bootCount) return g_backend->bootCount();
-    return 1;   /* host: el proceso = 1 "arranque" */
-}
+int bpvm_machine_mark_count(void) { return s_bc ? s_bc_trail_count : 0; }
+int bpvm_machine_mark_at(int i)   { return (s_bc && i >= 0 && i < s_bc_trail_count) ? s_bc_trail[i] : 0; }
+int bpvm_machine_boot_count(void) { return s_bc ? (int) s_bc_boot_count : 1; }
 
 int bpvm_machine_set_cpu_freq_mhz(int mhz) {
     if (g_backend && g_backend->setCpuFreqMHz) {

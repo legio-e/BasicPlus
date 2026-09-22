@@ -22,6 +22,7 @@
 #include "bpvm_pulse.h"
 #include "bpvm_wdt.h"
 
+#include "esp_attr.h"               /* V7/H4: __NOINIT_ATTR para las migas */
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/spi_master.h"
@@ -146,6 +147,9 @@ static uint8_t  s_caps_uart[SOC_UART_HP_NUM];
 static uint8_t  s_caps_i2c[SOC_HP_I2C_NUM];
 static uint8_t  s_caps_spi[SOC_SPI_PERIPH_NUM];
 static bpvm_caps_t s_caps;
+/* V7/H4 (#487) — el bloque de las migas: `.noinit` sobrevive a los resets por
+ * software y por watchdog (a un power-on, no: el magic del común lo detecta). */
+static __NOINIT_ATTR uint32_t s_esp_migas[20];
 
 static void esp32_caps_init(void) {
     for (int g = 0; g < SOC_GPIO_PIN_COUNT; g++) {
@@ -191,8 +195,9 @@ static void esp32_caps_init(void) {
     s_caps.n_adc = SOC_ADC_PERIPH_NUM;
     s_caps.pin = s_caps_pin; s_caps.n_pin = SOC_GPIO_PIN_COUNT;
     s_caps.pin_adc_unit = s_caps_adc_u; s_caps.pin_adc_ch = s_caps_adc_c;
-    s_caps.breadcrumb = 0;
+    s_caps.breadcrumb = 1;
     bpvm_caps_set(&s_caps);
+    bpvm_breadcrumb_attach(s_esp_migas, 20u);
 }
 
 /* paso 4 cierre — causa del último reset vía registro HW (esp_reset_reason, lo
