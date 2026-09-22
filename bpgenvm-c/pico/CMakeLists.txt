@@ -132,7 +132,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/uart.c
     ${BPVM_C_ROOT}/src/pulse.c
     ${BPVM_C_ROOT}/src/pwm.c
-    ${BPVM_C_ROOT}/src/pico.c
+    ${BPVM_C_ROOT}/src/bpvm_machine.c
     ${BPVM_C_ROOT}/src/bpvm_neopixel.c   # H7.4: fachada NeoPixel
     ${BPVM_C_ROOT}/src/rtc.c
     ${BPVM_C_ROOT}/src/adc.c

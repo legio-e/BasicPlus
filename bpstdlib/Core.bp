@@ -1006,30 +1006,30 @@ module Core
   function __pwmStop(sliceId: integer)   // Pwm.stopSlice
     inline CALL_BUILTIN 103
   end __pwmStop
-  function __picoUniqueId(): string   // Machine.uniqueId
+  function __machineUniqueId(): string   // Machine.uniqueId
     inline CALL_BUILTIN 104
-  end __picoUniqueId
-  function __picoBoardName(): string   // Machine.getBoard
+  end __machineUniqueId
+  function __machineBoardName(): string   // Machine.getBoard
     inline CALL_BUILTIN 105
-  end __picoBoardName
-  function __picoTempC(): float   // Machine.tempC
+  end __machineBoardName
+  function __machineTempC(): float   // Machine.tempC
     inline CALL_BUILTIN 106
-  end __picoTempC
-  function __picoCpuFreqHz(): integer   // Machine.cpuFreqHz
+  end __machineTempC
+  function __machineCpuFreqHz(): integer   // Machine.cpuFreqHz
     inline CALL_BUILTIN 107
-  end __picoCpuFreqHz
-  function __picoUptimeMs(): integer   // Machine.uptimeMs
+  end __machineCpuFreqHz
+  function __machineUptimeMs(): integer   // Machine.uptimeMs
     inline CALL_BUILTIN 108
-  end __picoUptimeMs
+  end __machineUptimeMs
   public function sleepSec(s: integer)
     inline CALL_BUILTIN 109
   end sleepSec
   public function sleepUs(us: integer)
     inline CALL_BUILTIN 110
   end sleepUs
-  function __picoSetCpuFreqMHz(mhz: integer): boolean   // Machine.setCpuFreqMHzRaw
+  function __machineSetCpuFreqMHz(mhz: integer): boolean   // Machine.setCpuFreqMHzRaw
     inline CALL_BUILTIN 111
-  end __picoSetCpuFreqMHz
+  end __machineSetCpuFreqMHz
   function __rtcNowSec(): integer   // Rtc.nowSec
     inline CALL_BUILTIN 112
   end __rtcNowSec
@@ -1063,9 +1063,9 @@ module Core
   public function heapMap(cols: integer): string
     inline CALL_BUILTIN 122
   end heapMap
-  function __picoGpioCount(): integer   // Machine.gpioCount
+  function __machineGpioCount(): integer   // Machine.gpioCount
     inline CALL_BUILTIN 123
-  end __picoGpioCount
+  end __machineGpioCount
   function __npInit(pin: integer)   // Neopixel.__npInit
     inline CALL_BUILTIN 124
   end __npInit
@@ -1300,33 +1300,33 @@ module Core
   public function eval(expr: string): float
     inline CALL_BUILTIN 200
   end eval
-  function __picoResetCause(): string   // Machine.resetCause
+  function __machineResetCause(): string   // Machine.resetCause
     inline CALL_BUILTIN 201
-  end __picoResetCause
-  function __picoSetMark(code: integer)   // Machine.setMark
+  end __machineResetCause
+  function __machineSetMark(code: integer)   // Machine.setMark
     inline CALL_BUILTIN 202
-  end __picoSetMark
-  function __picoMarkCount(): integer   // Machine.markCount
+  end __machineSetMark
+  function __machineMarkCount(): integer   // Machine.markCount
     inline CALL_BUILTIN 203
-  end __picoMarkCount
-  function __picoMarkAt(i: integer): integer   // Machine.markAt
+  end __machineMarkCount
+  function __machineMarkAt(i: integer): integer   // Machine.markAt
     inline CALL_BUILTIN 204
-  end __picoMarkAt
-  function __picoBootCount(): integer   // Machine.bootCount
+  end __machineMarkAt
+  function __machineBootCount(): integer   // Machine.bootCount
     inline CALL_BUILTIN 205
-  end __picoBootCount
+  end __machineBootCount
   function __guiInvokeByName(host: Object, name: string, sender: Object)   // Gui.__guiInvokeByName
     inline CALL_BUILTIN 206
   end __guiInvokeByName
   function __guiInvokeBySlot(win: Object, slot: integer, sender: Object)   // Gui.__guiInvokeBySlot
     inline CALL_BUILTIN 207
   end __guiInvokeBySlot
-  function __picoAdcChannels(): integer   // Machine.ADC_CHANNELS
+  function __machineAdcChannels(): integer   // Machine.ADC_CHANNELS
     inline CALL_BUILTIN 208
-  end __picoAdcChannels
-  function __picoPwmSlices(): integer   // Machine.PWM_SLICES
+  end __machineAdcChannels
+  function __machinePwmSlices(): integer   // Machine.PWM_SLICES
     inline CALL_BUILTIN 209
-  end __picoPwmSlices
+  end __machinePwmSlices
   function __guiLoadFont(path: string): integer   // Gui.__guiLoadFont
     inline CALL_BUILTIN 210
   end __guiLoadFont
@@ -1450,6 +1450,20 @@ module Core
   function __freadLine(st: byte[]): string   // IO.TextFile.readLine, en nativo: medido 15x más lento en BP (FileBench)
     inline CALL_BUILTIN 249
   end __freadLine
+  // ── V7/H4 — LA TABLA DE CAPACIDADES del micro (Machine.uarts(), pins(), analogPins()…): una
+  // fuente para el INFO, para BP y para la validación de las fachadas. Ver bpvm_machine.h.
+  function __capsArray(kind: integer): integer[]   // 0 uart · 1 i2c · 2 spi · 3 pines · 4 analógicos · 5 PWM · 6 pulsos · 7 colector abierto
+    inline CALL_BUILTIN 250
+  end __capsArray
+  function __capsInt(kind: integer): integer   // 0 max Hz · 1 min Hz · 2 ajustable · 3 salidas PWM · 4 unidades ADC · 5 migas · 6 tope del mapa
+    inline CALL_BUILTIN 251
+  end __capsInt
+  function __capsStr(kind: integer): string   // 0 micro · 1 paquete · 2 fabricante · 3 unidad del PWM
+    inline CALL_BUILTIN 252
+  end __capsStr
+  function __capsPin(pin: integer): integer   // la máscara del pin (0 = no existe): 1 digital · 2 analógico · 4 PWM · 8 pulsos · 16 colector abierto · 32 sólo entrada
+    inline CALL_BUILTIN 253
+  end __capsPin
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

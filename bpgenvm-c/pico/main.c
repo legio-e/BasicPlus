@@ -59,7 +59,7 @@ const bpvm_ancla_t* bios_pico_ancla(void);
 #include "bpvm_uart.h"
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
-#include "bpvm_pico.h"
+#include "bpvm_machine.h"
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
 #include "hardware/uart.h"
@@ -723,26 +723,46 @@ static int pico_pico_uptime_ms_impl(void) {
     return (int) to_ms_since_boot(get_absolute_time());
 }
 
-/* H7.3 — board-aware: nº de GPIO desde el descriptor de placa (variante
- * RP2350A=30 / RP2350B=48, u override de /sys/board.json). */
-static int pico_pico_gpio_count_impl(void) {
-    return board_desc()->gpio_count;
-}
-
-/* board-aware: nº de canales ADC (RP2350A=4 / RP2350B=8, u override de
- * /sys/board.json). Sin este cb, Pico.ADC_CHANNELS() caía al fallback 4 de
- * src/pico.c y la Metro reportaba 4 en vez de 8 (el firmware INFO, que lee
- * board_desc directo, ya daba 8 — de ahí la discrepancia). */
-static int pico_pico_adc_channels_impl(void) {
-    return board_desc()->adc_channels;
-}
-
-/* board-aware: nº de slices PWM (12 en ambas variantes RP2350; el descriptor
- * es la fuente por si un board.json lo cambiara). Antes caía al fallback 12,
- * correcto por coincidencia; ahora es explícito por simetría con el ADC. */
-static int pico_pico_pwm_slices_impl(void) {
-    return board_desc()->pwm_slices;
-}
+/* ══════════ V7/H4 — LA TABLA DE CAPACIDADES del RP2350, por VARIANTE ══════════
+ * Una imagen, dos tablas: la A (QFN-60, 30 GPIO, ADC en GP26..29) y la B (QFN-80,
+ * 48 GPIO, ADC en GP40..47). La elige `SYSINFO.PACKAGE_SEL` en el arranque (lo
+ * que board_desc ya sabía). Todo GPIO del RP2350 es digital, puede dar PWM (todo
+ * pin tiene slice) y contar por PIO; no hay colector abierto de verdad.
+ * UART/I2C/SPI: 0 y 1. 12 slices. El reloj sí se ajusta (18..300 MHz). */
+#define RP_P (BPVM_PIN_DIGITAL | BPVM_PIN_PWM | BPVM_PIN_PULSE)
+#define RP_A (RP_P | BPVM_PIN_ANALOG)
+static const uint8_t  s_rp_bus[] = { 0, 1 };
+static const uint16_t s_rp_pin_a[30] = {
+    RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P,
+    RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_A, RP_A, RP_A, RP_A };
+static const int8_t s_rp_adc_u_a[30] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,0,0,0 };
+static const int8_t s_rp_adc_c_a[30] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,1,2,3 };
+static const uint16_t s_rp_pin_b[48] = {
+    RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P,
+    RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P,
+    RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_P, RP_A, RP_A, RP_A, RP_A, RP_A, RP_A, RP_A, RP_A };
+static const int8_t s_rp_adc_u_b[48] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+                                         -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,0,0,0,0,0,0,0 };
+static const int8_t s_rp_adc_c_b[48] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+                                         -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,1,2,3,4,5,6,7 };
+#undef RP_P
+#undef RP_A
+static const bpvm_caps_t s_rp_caps_a = {
+    .micro = "rp2350a", .paquete = "QFN-60", .fabricante = "Raspberry Pi",
+    .cpu_hz_max = 300000000u, .cpu_hz_min = 18000000u, .cpu_ajustable = 1,
+    .uart = s_rp_bus, .n_uart = 2, .i2c = s_rp_bus, .n_i2c = 2, .spi = s_rp_bus, .n_spi = 2,
+    .n_pwm = 12, .pwm_unidad = "slice", .n_adc = 1,
+    .pin = s_rp_pin_a, .n_pin = 30, .pin_adc_unit = s_rp_adc_u_a, .pin_adc_ch = s_rp_adc_c_a,
+    .breadcrumb = 0,
+};
+static const bpvm_caps_t s_rp_caps_b = {
+    .micro = "rp2350b", .paquete = "QFN-80", .fabricante = "Raspberry Pi",
+    .cpu_hz_max = 300000000u, .cpu_hz_min = 18000000u, .cpu_ajustable = 1,
+    .uart = s_rp_bus, .n_uart = 2, .i2c = s_rp_bus, .n_i2c = 2, .spi = s_rp_bus, .n_spi = 2,
+    .n_pwm = 12, .pwm_unidad = "slice", .n_adc = 1,
+    .pin = s_rp_pin_b, .n_pin = 48, .pin_adc_unit = s_rp_adc_u_b, .pin_adc_ch = s_rp_adc_c_b,
+    .breadcrumb = 0,
+};
 
 /* setCpuFreqMHz — cambia el clk_sys del RP2350.
  *
@@ -831,7 +851,7 @@ static const char* pico_pico_reset_cause_impl(void) {
     return "power-on/run";
 }
 
-static const bpvm_pico_backend_t s_pico_pico_backend = {
+static const bpvm_machine_backend_t s_pico_pico_backend = {
     .uniqueId      = pico_pico_unique_id_impl,
     .microName     = pico_pico_micro_name_impl,
     .boardName     = pico_pico_board_name_impl,
@@ -839,9 +859,6 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
     .cpuFreqHz     = pico_pico_cpu_freq_hz_impl,
     .uptimeMs      = pico_pico_uptime_ms_impl,
     .setCpuFreqMHz = pico_pico_set_cpu_freq_mhz_impl,
-    .gpioCount     = pico_pico_gpio_count_impl,
-    .adcChannels   = pico_pico_adc_channels_impl,  /* board-aware: Metro=8 (era fallback 4) */
-    .pwmSlices     = pico_pico_pwm_slices_impl,    /* board-aware (12 ambas) */
     .resetCause    = pico_pico_reset_cause_impl,   /* paso 4 cierre */
 };
 
@@ -1607,7 +1624,8 @@ int main(void) {
     bpvm_uart_set_backend(&s_pico_uart_backend);
     bpvm_pulse_set_backend(&s_pico_pulse_backend);
     bpvm_pwm_set_backend(&s_pico_pwm_backend);
-    bpvm_pico_set_backend(&s_pico_pico_backend);
+    bpvm_caps_set(board_desc()->variant == 'B' ? &s_rp_caps_b : &s_rp_caps_a);   /* V7/H4: la tabla de ESTA variante */
+    bpvm_machine_set_backend(&s_pico_pico_backend);
     bpvm_adc_set_backend(&s_pico_adc_backend);
     bpvm_wdt_set_backend(&s_pico_wdt_backend);
     bpvm_neopixel_set_backend(&s_pico_neopixel_backend);   /* H7.4 */

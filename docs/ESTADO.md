@@ -105,6 +105,29 @@ libre …» imprime los números de la PSRAM con la etiqueta de la SRAM, y «el 
 planificados» avisa de nada (redondeo a KB): cosméticos, del común, para H7. **Y nos paramos ahí**, como se dijo: la
 2.ª etapa (LVGL en un pack) es H6, y ya tiene la PSRAM que necesita.
 
+## 🧭 H4 (22-sep, mañana) — LA TABLA DE CAPACIDADES: P1 hecho (`#378`, los arrays de `#470`, los restos de `#471`, el nombre `pico`)
+
+Día de análisis primero (`V7_IDEAS.md` §H4, `092db959` + §2b `b4c46854`): BP contra `INFO` en Pico, P4, C5 y host —dos
+fuentes que ya no coincidían: la Pico 12 PWM por BP y 24 por el wire; el P4 `variant()` «B» y `MAX_CPU_MHZ` 300 corriendo a
+360; el C3/C6/C5 por BP se creían un S3 (`gpio_esp32.c` devolvía 45/20/8 a pelo)—, el diseño (UNA tabla por micro y por
+VARIANTE elegida en el arranque) y el apunte de Eduardo: *«un micro puede tener diferente hardware… algún micro tiene más
+de un ADC»* → la tabla es por variante, RAM/flash se miden, (unidad, canal) por pin.
+
+**P1**: `bpvm_caps_t` en `bpvm_machine.h` (la capa C ya se llama `machine`: `src/pico.c` → `bpvm_machine.c`, `bpvm_pico_*`
+fuera de 18 ficheros, 14 ids sin cambiar de número). De la tabla beben el `INFO` (contadores + `micro`, `paquete`,
+`pwmUnidad`, `adcUnidades`, `uartIds/i2cIds/spiIds`) y `Machine` en BP (cuatro primitivas, 250-253: `uarts()/i2cs()/spis()`,
+`pins()/analogPins()/pwmPins()/pulsePins()/openDrainPins()`, `hasPin/isAnalog/isInputOnly`, `manufacturer/package/pwmUnit/
+adcUnits/hasBreadcrumb`, `MAX/MIN_CPU_MHZ` por micro, `variant()` honesto; los contadores de siempre, azúcar). Por familia:
+RP2350 dos tablas por variante (A/B por `PACKAGE_SEL`); **ESP32 CALCULADA del IDF** (`soc_caps.h` + `adc_oneshot_channel_to_io`:
+ni un número a mano, vale para S3/C3/C6/C5/P4); STM32 por die con los `#ifdef` del CMSIS (PWM sólo en los 4 pines que el
+backend mapea: los «28» del INFO eran ficción; ANALOG ninguno hasta P2). Host = perfil RP2350A en las dos VMs.
+
+**Verificado**: Pico BP == INFO (`rp2350a`, QFN-60, 12 slice, ADC 26..29); P4 BP == INFO (analógicos 16-23 y 49-54 de las
+DOS unidades, PWM 8 canal, `uarts [1,2]`, `spis [2,3]`, MAX 360, variant «»). `samples/Caps.bp` en el corpus (91) y
+`QuienSoy.bp` de sonda. Las siete imágenes compilan. Verde: check 91/59/9/13 + MOD8; mezcla 194; h13 38; frontend 223;
+miVM 52. Referencia es/en (§Machine, la tabla). Queda P2 (validación en el común, estado del pin, `AnPin`, `Adc.Channel`
+sobre el mapa, el ADC del STM32), P3 (breadcrumb RP2350/ESP32, NeoPixel C6, BOOT) y P4 (cascada y tanda).
+
 ## ⏭️ Traspaso (21-sep, al cerrar) — la 1.ª etapa de H11 HECHA esa misma noche (con PSRAM); lo siguiente: H7 y H4
 
 Eduardo, al parar: *«cuando vuelva podemos probar la 1.ª etapa a ver qué tal. Y nos pararemos ahí. Después H7 y H4 o

@@ -7,6 +7,7 @@
  * a propósito y anotadas en el header. Nada de mejoras de paso: primero
  * idéntico y en placa, después ya se verá.
  */
+#include "bpvm_machine.h"   /* V7/H4: la tabla de capacidades */
 #include "bpvm_repl.h"
 #include "bpvm_wire_v1.h"
 #include "bpvm_log.h"
@@ -566,10 +567,33 @@ static void repl_info(long id) {
     CAMPO_L("uptimeMs",     in.uptime_ms);
     CAMPO_S("resetReason",  in.reset_reason);
     CAMPO_L("tempMilliC",   in.temp_milli_c);
-    CAMPO_L("gpioCount",    in.gpio_count);
-    CAMPO_L("pioCount",     in.pio_count);
-    CAMPO_L("pwmSlices",    in.pwm_slices);
-    CAMPO_L("adcChannels",  in.adc_channels);
+    /* V7/H4 — los tres contadores salen de LA TABLA de capacidades, no de lo
+     * que la familia ponga en `in` (que ya no se mira: era la segunda fuente).
+     * Y lo nuevo: micro, paquete, la UNIDAD del PWM y las instancias válidas de
+     * cada bus como lista "0,1" — el IDE lee por nombre, un campo más no le
+     * estorba; el mapa de pines NO viaja (es para programas, no para el IDE). */
+    {
+        const bpvm_caps_t* c = bpvm_caps();
+        char lst[3][40];
+        for (int k = 0; k < 3; k++) {
+            const uint8_t* l = (k == 0) ? c->uart : (k == 1) ? c->i2c : c->spi;
+            int n = (k == 0) ? c->n_uart : (k == 1) ? c->n_i2c : c->n_spi;
+            size_t o = 0; lst[k][0] = 0;
+            for (int i = 0; i < n && o < sizeof lst[k] - 4; i++)
+                o += (size_t) snprintf(lst[k] + o, sizeof lst[k] - o, "%s%d", i ? "," : "", (int) l[i]);
+        }
+        CAMPO_S("micro",        c->micro ? c->micro : "");
+        CAMPO_S("paquete",      c->paquete ? c->paquete : "");
+        CAMPO_L("gpioCount",    bpvm_caps_gpio_count());
+        CAMPO_L("pioCount",     in.pio_count);
+        CAMPO_L("pwmSlices",    (long) c->n_pwm);
+        CAMPO_S("pwmUnidad",    c->pwm_unidad ? c->pwm_unidad : "");
+        CAMPO_L("adcChannels",  bpvm_caps_pins_con(BPVM_PIN_ANALOG));
+        CAMPO_L("adcUnidades",  (long) c->n_adc);
+        CAMPO_S("uartIds",      lst[0]);
+        CAMPO_S("i2cIds",       lst[1]);
+        CAMPO_S("spiIds",       lst[2]);
+    }
     CAMPO_L("flashBytes",   in.flash_bytes);
     CAMPO_L("sramBytes",    in.sram_bytes);
     CAMPO_L("psramBytes",   in.psram_bytes);

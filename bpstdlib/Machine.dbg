@@ -2,22 +2,54 @@ dbg 3
 module Machine
 source C:\lenguajes\pm\bpstdlib\Machine.bp
 lines
-38 126
-52 127
-67 129
-85 143
-104 149
-123 171
-127 172
-140 173
-152 175
-165 176
-177 178
-196 195
-211 199
-226 203
-241 210
+38 128
+44 129
+59 130
+74 132
+89 133
+104 135
+122 148
+146 154
+170 176
+174 177
+187 178
+199 180
+212 181
+224 183
+243 219
+263 222
+283 225
+303 229
+323 232
+343 235
+367 238
+391 241
+415 244
+436 247
+459 250
+486 254
+506 257
+526 261
+546 264
+564 267
+588 270
+608 273
+628 276
+648 283
 vars
-func setCpuFreqMHz 120
+func variant 35
+m 8 8 0 string
+func setCpuFreqMHz 167
 mhz -16 4 0 integer
 clamped 4 4 0 integer
+func hasPin 412
+pin -16 4 0 integer
+func isAnalog 433
+pin -16 4 0 integer
+func isInputOnly 456
+pin -16 4 0 integer
+func __strequals 662
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+i 4 4 0 ?

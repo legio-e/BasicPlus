@@ -94,7 +94,7 @@ idf_component_register(
         "../../src/uart.c"
         "../../src/pulse.c"
         "../../src/pwm.c"
-        "../../src/pico.c"
+        "../../src/bpvm_machine.c"
         "../../src/rtc.c"
         "../../src/adc.c"
         "../../src/wdt.c"

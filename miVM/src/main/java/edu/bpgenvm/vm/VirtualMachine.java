@@ -5918,11 +5918,11 @@ public class VirtualMachine {
              * En host devolvemos valores estables y razonables para
              * que código BP que use Pico.* corra en desarrollo sin
              * HW. Solo el firmware Pico devuelve datos reales. */
-            case PICO_UNIQUE_ID: {
+            case MACHINE_UNIQUE_ID: {
                 pushTcRef(tc, allocVmString("host-pc"));
                 break;
             }
-            case PICO_BOARD_NAME: {   // la PLACA. En host no hay ninguna.
+            case MACHINE_BOARD_NAME: {   // la PLACA. En host no hay ninguna.
                 pushTcRef(tc, allocVmString("host"));
                 break;
             }
@@ -5934,33 +5934,33 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString("host"));
                 break;
             }
-            case PICO_RESET_CAUSE: {   // H10 — en host no hay causa de reset de MCU
+            case MACHINE_RESET_CAUSE: {   // H10 — en host no hay causa de reset de MCU
                 pushTcRef(tc, allocVmString("unknown"));
                 break;
             }
-            case PICO_SET_MARK: {      // H10 — breadcrumb (host: sin RAM retenida)
+            case MACHINE_SET_MARK: {      // H10 — breadcrumb (host: sin RAM retenida)
                 popTc(tc);             // descarta el code
                 pushTc(tc, 0);
                 break;
             }
-            case PICO_MARK_COUNT: {
+            case MACHINE_MARK_COUNT: {
                 pushTc(tc, 0);         // host: sin trail
                 break;
             }
-            case PICO_MARK_AT: {
+            case MACHINE_MARK_AT: {
                 popTc(tc);             // descarta i
                 pushTc(tc, 0);
                 break;
             }
-            case PICO_BOOT_COUNT: {
+            case MACHINE_BOOT_COUNT: {
                 pushTc(tc, 1);         // host: el proceso = 1 arranque
                 break;
             }
-            case PICO_TEMP_C: {
+            case MACHINE_TEMP_C: {
                 pushTc(tc, Float.floatToRawIntBits(25.0f));
                 break;
             }
-            case PICO_CPU_FREQ_HZ: {
+            case MACHINE_CPU_FREQ_HZ: {
                 /* #471 — antes 0 («host: no aplica»), y la VM-C devolvia
                  * 150_000_000: stdout distinto para el mismo programa. Ahora las
                  * dos parten del perfil RP2350A —el mismo que ya usaban las dos
@@ -5969,14 +5969,72 @@ public class VirtualMachine {
                 pushTc(tc, hostCpuHz);
                 break;
             }
-            case PICO_GPIO_COUNT: {
+            // ── V7/H4 — la tabla de capacidades del HOST = el perfil RP2350A, el mismo que la VM-C
+            // sin cintura (bpvm_machine.c): 30 GPIO digitales/PWM/PIO, ADC en 26..29, sin colector
+            // abierto, UART/I2C/SPI 0 y 1, 12 slices. Los dos PCs cuentan igual: paridad.
+            case CAPS_ARRAY: {
+                int kind = popTc(tc);
+                int[] out;
+                switch (kind) {
+                    case 0: case 1: case 2: out = new int[] { 0, 1 }; break;
+                    case 3: case 5: case 6: out = new int[30]; for (int i = 0; i < 30; i++) out[i] = i; break;
+                    case 4: out = new int[] { 26, 27, 28, 29 }; break;
+                    case 7: out = new int[0]; break;
+                    default: throwBpRuntimeError(tc, "Machine: clase de capacidad desconocida"); out = new int[0];
+                }
+                int addr = heapAlloc(out.length * 4, TYPE_ARRAY_I32);
+                writeInt32(addr, out.length);
+                for (int i = 0; i < out.length; i++) writeInt32(addr + 4 + 4 * i, out[i]);
+                long h = handleRegister(addr);
+                ThreadContext me = currentTcLocal.get();
+                if (me != null) me.allocAnchor = (int) h;
+                pushTcRef(tc, h);
+                break;
+            }
+            case CAPS_INT: {
+                int kind = popTc(tc);
+                int v;
+                switch (kind) {
+                    case 0: v = 300000000; break;
+                    case 1: v = 18000000; break;
+                    case 2: v = 1; break;
+                    case 3: v = 12; break;
+                    case 4: v = 1; break;
+                    case 5: v = 0; break;
+                    case 6: v = 30; break;
+                    default: throwBpRuntimeError(tc, "Machine: clase de capacidad desconocida"); v = 0;
+                }
+                pushTc(tc, v);
+                break;
+            }
+            case CAPS_STR: {
+                int kind = popTc(tc);
+                String s;
+                switch (kind) {
+                    case 0: s = "host"; break;
+                    case 1: s = ""; break;
+                    case 2: s = ""; break;
+                    case 3: s = "slice"; break;
+                    default: throwBpRuntimeError(tc, "Machine: clase de capacidad desconocida"); s = "";
+                }
+                pushTcRef(tc, allocVmString(s));
+                break;
+            }
+            case CAPS_PIN: {
+                int pin = popTc(tc);
+                int mask = (pin >= 0 && pin < 30) ? (1 | 4 | 8) : 0;
+                if (pin >= 26 && pin <= 29) mask |= 2;
+                pushTc(tc, mask);
+                break;
+            }
+            case MACHINE_GPIO_COUNT: {
                 /* host: perfil RP2350A (30 GPIO). En el device el firmware
                  * lo resuelve desde board_desc (variante / board.json). */
                 pushTc(tc, 30);
                 break;
             }
-            case PICO_ADC_CHANNELS: { pushTc(tc, 4);  break; }   /* host: perfil RP2350 */
-            case PICO_PWM_SLICES:   { pushTc(tc, 12); break; }   /* host: perfil RP2350 */
+            case MACHINE_ADC_CHANNELS: { pushTc(tc, 4);  break; }   /* host: perfil RP2350 */
+            case MACHINE_PWM_SLICES:   { pushTc(tc, 12); break; }   /* host: perfil RP2350 */
             case NP_INIT: {
                 /* #469/HAL-BP — LANZA, no finge. Antes esto era un no-op que
                  * empujaba 0, o sea que el MISMO .mod terminaba tranquilamente
@@ -6005,12 +6063,12 @@ public class VirtualMachine {
                 pushTc(tc, 0);
                 break;
             }
-            case PICO_UPTIME_MS: {
+            case MACHINE_UPTIME_MS: {
                 /* Sirve algo útil en host: ms del proceso JVM. */
                 pushTc(tc, (int) System.currentTimeMillis());
                 break;
             }
-            case PICO_SET_CPU_FREQ_MHZ: {
+            case MACHINE_SET_CPU_FREQ_MHZ: {
                 /* #471 — EL HOST SIMULA EL CAMBIO Y LO RECUERDA.
                  *
                  * Antes esto devolvía true y no guardaba nada, y `cpuFreqHz()`

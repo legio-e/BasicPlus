@@ -13,7 +13,7 @@
  * Single-thread, sin FreeRTOS. La salida del programa BP se reenvía como
  * eventos OUTPUT (bytes verbatim, escapados a JSON → paridad de contenido).
  */
-#include "bpvm_pico.h"   /* HAL BP: los dos nombres de la identidad */
+#include "bpvm_machine.h"   /* HAL BP: los dos nombres de la identidad */
 #include "stm32_repl.h"
 #include "stm32_wire.h"
 #include "stm32_fs.h"
@@ -144,7 +144,7 @@ static void stm32_repl_info(bpvm_repl_info_t* o) {
      * `Machine.getBoard()`. Antes esto era una segunda fuente escrita a mano.
      * Ver el comentario gemelo en esp32/common/repl_esp32.c. */
     static char micro[24];
-    bpvm_pico_micro_name(micro, sizeof micro);
+    bpvm_machine_micro_name(micro, sizeof micro);
     o->board_name    = micro;
     o->reset_reason  = stm32_reset_cause();
     o->arch          = (unsigned) bpvm_mdn_host_arch();

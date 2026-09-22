@@ -20,7 +20,7 @@
  */
 #include "repl_esp32.h"
 #include "p4_board_id.h"
-#include "bpvm_pico.h"    /* H14: backend Pico.* (info real del P4 para los builtins BP) */
+#include "bpvm_machine.h"    /* H14: backend Pico.* (info real del P4 para los builtins BP) */
 #include "hw_esp32.h"     /* paso 4 cierre: esp32_reset_cause (compartido con el S3) */
 #include "esp_mac.h"      /* uniqueId desde efuse */
 #include "esp_timer.h"    /* uptime */
@@ -64,11 +64,8 @@ static float p4_pico_temp_c(void) {
 static int   p4_pico_cpu_freq_hz(void)     { return 360000000; }   /* 360 MHz por defecto */
 static int   p4_pico_uptime_ms(void)       { return (int) (esp_timer_get_time() / 1000); }
 static int   p4_pico_set_cpu_freq(int mhz) { (void) mhz; return 0; } /* runtime no soportado */
-static int   p4_pico_gpio_count(void)      { return 55; }          /* GPIO0..54 */
-static int   p4_pico_adc_channels(void)    { return 14; }          /* H14: 2x SAR 12-bit, hasta 14 pines */
-static int   p4_pico_pwm_slices(void)      { return 14; }          /* H14: 8 LEDC + 6 MCPWM */
 
-static const bpvm_pico_backend_t s_p4_pico_backend = {
+static const bpvm_machine_backend_t s_p4_pico_backend = {
     .uniqueId      = p4_pico_unique_id,
     .microName     = p4_pico_micro_name,
     .boardName     = p4_pico_board_name,
@@ -76,9 +73,6 @@ static const bpvm_pico_backend_t s_p4_pico_backend = {
     .cpuFreqHz     = p4_pico_cpu_freq_hz,
     .uptimeMs      = p4_pico_uptime_ms,
     .setCpuFreqMHz = p4_pico_set_cpu_freq,
-    .gpioCount     = p4_pico_gpio_count,
-    .adcChannels   = p4_pico_adc_channels,   /* H14 */
-    .pwmSlices     = p4_pico_pwm_slices,      /* H14 */
     .resetCause    = esp32_reset_cause,       /* paso 4 cierre — compartido con el S3 */
 };
 
@@ -94,5 +88,5 @@ void p4_install_board_id(void) {
         768L * 1024L,     /* sram_bytes   (HP L2MEM)              */
     };
     repl_set_board_id(&p4);
-    bpvm_pico_set_backend(&s_p4_pico_backend);   /* H14: Pico.* con info real del P4 */
+    bpvm_machine_set_backend(&s_p4_pico_backend);   /* H14: Pico.* con info real del P4 */
 }

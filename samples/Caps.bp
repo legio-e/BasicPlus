@@ -1,0 +1,31 @@
+// Caps.bp — V7/H4 (22-sep): la tabla de capacidades del micro, dicha por su imagen. En el PC las
+// dos VMs cuentan con el mismo perfil (el RP2350A: 30 GPIO, ADC en 26..29, UART/I2C/SPI 0 y 1,
+// 12 slices) y la identidad "host"; en una placa, lo que el silicio tenga. Los contadores de
+// siempre (UART_BUSES, GPIO_COUNT…) son azúcar de los arrays.
+module Caps
+  import Machine
+
+  function lista(nombre: string, xs: integer[])
+    var s: string := nombre + " [" + len(xs) + "]:"
+    for x in xs do
+      s := s + " " + x
+    next x
+    print s
+  end lista
+
+  public function main()
+    print "micro:", Machine.getMicro(), " fabricante: [" + Machine.manufacturer() + "] paquete: [" + Machine.package() + "]"
+    lista("uarts", Machine.uarts())
+    lista("i2cs", Machine.i2cs())
+    lista("spis", Machine.spis())
+    lista("pins", Machine.pins())
+    lista("analogPins", Machine.analogPins())
+    lista("pwmPins", Machine.pwmPins())
+    lista("pulsePins", Machine.pulsePins())
+    lista("openDrainPins", Machine.openDrainPins())
+    print "PWM:", Machine.PWM_SLICES(), Machine.pwmUnit(), " ADC:", Machine.ADC_CHANNELS(), "canales en", Machine.adcUnits(), "unidad(es)"
+    print "buses:", Machine.UART_BUSES(), Machine.I2C_BUSES(), Machine.SPI_BUSES(), " gpio:", Machine.GPIO_COUNT()
+    print "hasPin(0):", Machine.hasPin(0), " hasPin(99):", Machine.hasPin(99), " isAnalog(26):", Machine.isAnalog(26), " isAnalog(0):", Machine.isAnalog(0)
+    print "MHz max/min:", Machine.MAX_CPU_MHZ(), Machine.MIN_CPU_MHZ(), " variant: [" + Machine.variant() + "] migas:", Machine.hasBreadcrumb()
+  end main
+end Caps

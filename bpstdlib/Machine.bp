@@ -123,11 +123,16 @@ module Machine
   // — no necesita su propio intrínseco. RP2350A bondea 30 GPIO, RP2350B
   // 48; el umbral 40 los separa con holgura.
   public function variant(): string
-    if gpioCount() >= 40 then
-      return "B"
-    else
+    // V7/H4: ya no inventa («B si gpioCount >= 40» contestaba B en un ESP32-P4). La variante
+    // A/B es cosa del RP2350; en cualquier otro micro es "". Para el paquete real, package().
+    var m: string := getMicro()
+    if m == "rp2350a" then
       return "A"
     endif
+    if m == "rp2350b" then
+      return "B"
+    endif
+    return ""
   end variant
 
   // Frecuencia máxima soportada en MHz para setCpuFreqMHz().
@@ -140,13 +145,13 @@ module Machine
   // Si alguien quiere apurar a 400+ MHz, que use el backend C
   // directamente; nuestro BP juega seguro.
   public function MAX_CPU_MHZ(): integer
-    return 300
+    return __capsInt(0) / 1000000     // V7/H4: POR MICRO (antes los 300 del RP2350 para todos)
   end MAX_CPU_MHZ
 
   // Frecuencia mínima razonable. Por debajo la PLL del RP2350 no
   // sintetiza limpio.
   public function MIN_CPU_MHZ(): integer
-    return 18
+    return __capsInt(1) / 1000000
   end MIN_CPU_MHZ
 
   // Cambia el clk_sys del MCU a `mhz` MHz. Devuelve true si la PLL
@@ -191,16 +196,84 @@ module Machine
   // ---- Constantes de capacidades del MCU ----
   // Permiten que código BP defensivo valide rangos antes de usar
   // p.ej. Spi.init(bus=3, ...) cuando solo hay 2 buses.
+  // V7/H4 — LA TABLA DE CAPACIDADES: lo que este micro tiene, dicho por su imagen (una fuente
+  // para el INFO del wire, para esto y para la validación de las fachadas). Los arrays son de
+  // Eduardo: las instancias válidas de cada bus, tal como las toma Uart.Port(id, …) —«el número
+  // es la longitud del array»—; para lo que se construye por PIN (PWM, ADC, pulsos) lo útil es
+  // saber QUÉ pines pueden. Los contadores de siempre se quedan como azúcar de estos.
+  function __capsArray(kind: integer): integer[]
+    inline CALL_BUILTIN 250
+  end __capsArray
+  function __capsInt(kind: integer): integer
+    inline CALL_BUILTIN 251
+  end __capsInt
+  function __capsStr(kind: integer): string
+    inline CALL_BUILTIN 252
+  end __capsStr
+  function __capsPin(pin: integer): integer
+    inline CALL_BUILTIN 253
+  end __capsPin
+
+  // Las instancias válidas: Uart.Port(id, …) sólo acepta las de uarts(), etc.
+  public function uarts(): integer[]
+    return __capsArray(0)
+  end uarts
+  public function i2cs(): integer[]
+    return __capsArray(1)
+  end i2cs
+  public function spis(): integer[]
+    return __capsArray(2)
+  end spis
+  // Los pines: los que existen, y los que pueden cada cosa.
+  public function pins(): integer[]
+    return __capsArray(3)
+  end pins
+  public function analogPins(): integer[]
+    return __capsArray(4)
+  end analogPins
+  public function pwmPins(): integer[]
+    return __capsArray(5)
+  end pwmPins
+  public function pulsePins(): integer[]
+    return __capsArray(6)
+  end pulsePins
+  public function openDrainPins(): integer[]
+    return __capsArray(7)
+  end openDrainPins
+  public function hasPin(pin: integer): boolean
+    return __capsPin(pin) != 0
+  end hasPin
+  public function isAnalog(pin: integer): boolean
+    return (__capsPin(pin) & 2) != 0
+  end isAnalog
+  public function isInputOnly(pin: integer): boolean
+    return (__capsPin(pin) & 32) != 0
+  end isInputOnly
+  // La unidad en que cuenta PWM_SLICES(): "slice" (RP2350) o "canal" (LEDC, timer).
+  public function pwmUnit(): string
+    return __capsStr(3)
+  end pwmUnit
+  public function manufacturer(): string
+    return __capsStr(2)
+  end manufacturer
+  // La VARIANTE del micro elegida en el arranque: "QFN-60"/"QFN-80" en el RP2350, "LQFP144" en un STM32…
+  public function package(): string
+    return __capsStr(1)
+  end package
+  public function adcUnits(): integer
+    return __capsInt(4)
+  end adcUnits
+  public function hasBreadcrumb(): boolean
+    return __capsInt(5) != 0
+  end hasBreadcrumb
   public function I2C_BUSES(): integer
-    return 2
+    return len(i2cs())
   end I2C_BUSES
-
   public function SPI_BUSES(): integer
-    return 2
+    return len(spis())
   end SPI_BUSES
-
   public function UART_BUSES(): integer
-    return 2
+    return len(uarts())
   end UART_BUSES
 
   // Board-aware desde H7.3: delega en el intrínseco gpioCount() (lo

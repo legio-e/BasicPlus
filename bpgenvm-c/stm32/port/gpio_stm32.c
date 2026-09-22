@@ -3,7 +3,7 @@
  *
  * Implementa los hooks portables de la VM sobre la HAL de ST:
  *   - GPIO  (bpvm_gpio_backend_t):  init/pull/write/read sobre HAL_GPIO_*.
- *   - Pico  (bpvm_pico_backend_t):  info de placa (gpioCount, freq, uptime,
+ *   - Pico  (bpvm_machine_backend_t):  info de placa (gpioCount, freq, uptime,
  *                                   uniqueId, boardName) para que el módulo
  *                                   stdlib `Pico` y la clase `Gpio.Pin`
  *                                   (que valida contra Pico.gpioCount())
@@ -24,7 +24,7 @@
 #include "gpio_stm32.h"
 
 #include "bpvm_gpio.h"
-#include "bpvm_pico.h"
+#include "bpvm_machine.h"
 #include "bpvm_spi.h"
 #include "bpvm_uart.h"
 #include "bpvm_i2c.h"
@@ -136,21 +136,46 @@ static const bpvm_gpio_backend_t s_gpio_backend = {
 
 /* ---- Pico (info de MCU) backend ---- */
 
-static int stm32_gpio_count_impl(void) {
-    return STM32_PIN_COUNT;   /* 128: puertos A..H del U575 */
-}
+/* ══════════ V7/H4 — LA TABLA DE CAPACIDADES del STM32 ══════════
+ * Por ahora una por DIE, decidida por los #ifdef del CMSIS con los que se
+ * compila cada proyecto (U575 → Nucleo, U5G9 → DK2): los puertos A..H (128
+ * pines, modelo plano puerto<<4|bit) son digitales y con colector abierto de
+ * verdad; PWM sólo en los pines que el backend mapea a un timer (s_pwm_map);
+ * ANALOG ninguno todavía —el backend sólo lee canales internos (#469, P2)—;
+ * las instancias de UART/I2C/SPI, las mismas que aceptan los backends. El
+ * registro de PAQUETE (LQFP64/100/144…) y la máscara de pines bondeados por
+ * paquete son el siguiente paso (V7_IDEAS §H4.2b): hoy `paquete` dice el
+ * proyecto. */
+static uint16_t s_caps_pin[STM32_PIN_COUNT];
+static int8_t   s_caps_adc_u[STM32_PIN_COUNT];
+static int8_t   s_caps_adc_c[STM32_PIN_COUNT];
+static const uint8_t s_caps_uart[] = { 2, 3, 4,
+#ifdef UART5
+    5,
+#endif
+#ifdef USART6
+    6,
+#endif
+};
+static const uint8_t s_caps_i2c[] = { 1, 2,
+#ifdef I2C3
+    3,
+#endif
+#ifdef I2C4
+    4,
+#endif
+#ifdef I2C5
+    5,
+#endif
+};
+static const uint8_t s_caps_spi[] = { 1, 2, 3 };
+static bpvm_caps_t s_caps;
+static void stm32_caps_init(void);   /* def. tras s_pwm_map, que necesita */
 
 /* board-aware: canales ADC y slices PWM del STM32U575. Sin estos cb,
- * Pico.ADC_CHANNELS()/PWM_SLICES() caían al fallback host (4/12) de src/pico.c
+ * Pico.ADC_CHANNELS()/PWM_SLICES() caían al fallback host (4/12) de src/bpvm_machine.c
  * — el INFO ya daba 20/28 desde un string aparte (stm32_repl.c), de ahí el
  * mismatch. Valores casan con el INFO. */
-static int stm32_adc_channels_impl(void) {
-    return 20;   /* ADC1 14-bit, hasta 20 canales multiplexados */
-}
-
-static int stm32_pwm_slices_impl(void) {
-    return 28;   /* canales PWM/timer expuestos (coincide con el INFO) */
-}
 
 static int stm32_cpu_freq_hz_impl(void) {
     return (int) SystemCoreClock;
@@ -313,7 +338,7 @@ static void stm32_micro_name_impl(char* buf, size_t len) {
     if (buf && len > 0) { strncpy(buf, "stm32u5", len - 1); buf[len - 1] = '\0'; }
 }
 
-static const bpvm_pico_backend_t s_pico_backend = {
+static const bpvm_machine_backend_t s_pico_backend = {
     .uniqueId      = stm32_unique_id_impl,
     .microName     = stm32_micro_name_impl,
     .boardName     = stm32_board_name_impl,
@@ -321,9 +346,6 @@ static const bpvm_pico_backend_t s_pico_backend = {
     .cpuFreqHz     = stm32_cpu_freq_hz_impl,
     .uptimeMs      = stm32_uptime_ms_impl,
     .setCpuFreqMHz = stm32_set_cpu_freq_mhz_impl,
-    .gpioCount     = stm32_gpio_count_impl,
-    .adcChannels   = stm32_adc_channels_impl,  /* board-aware: 20 (era fallback 4) */
-    .pwmSlices     = stm32_pwm_slices_impl,     /* board-aware: 28 (era fallback 12) */
     .resetCause    = stm32_reset_cause,        /* H10 — causa del último reset */
     .setMark       = stm32_set_mark_impl,      /* H10 — breadcrumb */
     .markCount     = stm32_mark_count_impl,
@@ -879,6 +901,31 @@ static const pwm_map_t s_pwm_map[] = {
 #endif
 };
 #define PWM_SLICE_N    ((int)(sizeof(s_pwm_map) / sizeof(s_pwm_map[0])))
+
+static void stm32_caps_init(void) {
+    for (int p = 0; p < STM32_PIN_COUNT; p++) {
+        s_caps_pin[p] = BPVM_PIN_DIGITAL | BPVM_PIN_OPEN_DRAIN;
+        s_caps_adc_u[p] = -1; s_caps_adc_c[p] = -1;
+    }
+    for (int i = 0; i < PWM_SLICE_N; i++)
+        if (s_pwm_map[i].pin >= 0 && s_pwm_map[i].pin < STM32_PIN_COUNT) s_caps_pin[s_pwm_map[i].pin] |= BPVM_PIN_PWM;
+#if defined(STM32U5G9xx)
+    s_caps.micro = "stm32u5g9"; s_caps.paquete = "UFBGA169";   /* la DK2 */
+#else
+    s_caps.micro = "stm32u575"; s_caps.paquete = "LQFP144";    /* la Nucleo */
+#endif
+    s_caps.fabricante = "STMicroelectronics";
+    s_caps.cpu_hz_max = 160000000u; s_caps.cpu_hz_min = 160000000u; s_caps.cpu_ajustable = 0;
+    s_caps.uart = s_caps_uart; s_caps.n_uart = (uint8_t) (sizeof s_caps_uart / sizeof s_caps_uart[0]);
+    s_caps.i2c  = s_caps_i2c;  s_caps.n_i2c  = (uint8_t) (sizeof s_caps_i2c / sizeof s_caps_i2c[0]);
+    s_caps.spi  = s_caps_spi;  s_caps.n_spi  = 3;
+    s_caps.n_pwm = (uint8_t) PWM_SLICE_N; s_caps.pwm_unidad = "canal";
+    s_caps.n_adc = 2;                                       /* ADC1 y ADC4 en la U5 */
+    s_caps.pin = s_caps_pin; s_caps.n_pin = STM32_PIN_COUNT;
+    s_caps.pin_adc_unit = s_caps_adc_u; s_caps.pin_adc_ch = s_caps_adc_c;
+    s_caps.breadcrumb = 1;                                  /* el único que las tiene hoy (#487) */
+    bpvm_caps_set(&s_caps);
+}
 #define PWM_ARR        999u   /* 1000 pasos → resolución de duty 0.1% */
 
 static TIM_HandleTypeDef s_pwm_htim[PWM_SLICE_N];
@@ -1059,7 +1106,8 @@ static const bpvm_pulse_backend_t s_pulse_backend = {
 
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
-    bpvm_pico_set_backend(&s_pico_backend);
+    stm32_caps_init();                         /* V7/H4: la tabla de ESTE die */
+    bpvm_machine_set_backend(&s_pico_backend);
     bpvm_spi_set_backend(&s_spi_backend);     /* H15.1 */
     bpvm_uart_set_backend(&s_uart_backend);   /* H15.1 */
     bpvm_i2c_set_backend(&s_i2c_backend);     /* H15.2 */

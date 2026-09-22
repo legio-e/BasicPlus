@@ -1619,8 +1619,9 @@ port.write(tx, <span class="num">4</span>)
       <td>GPIOs available on the board, by variant: 30 on RP2350A, 48 on RP2350B;
           30 on the PC.</td></tr>
   <tr><td><code>variant(): string</code></td>
-      <td><code>"A"</code> or <code>"B"</code>, derived from <code>gpioCount()</code>
-          (RP2350A / RP2350B).</td></tr>
+      <td><code>"A"</code> or <code>"B"</code> when the micro is an RP2350; <code>""</code> on any
+          other (V7: it used to be derived from <code>gpioCount()</code> and answered "B" on an
+          ESP32-P4). For the real package, <code>package()</code>.</td></tr>
   <tr><td><code>resetCause(): string</code></td>
       <td>Why the micro restarted: <code>"watchdog"</code>, <code>"power-on/run"</code>,
           <code>"reinicio pedido"</code> (RESET from the IDE)… depending on the family.
@@ -1640,13 +1641,45 @@ port.write(tx, <span class="num">4</span>)
           The <code>sleep*</code> functions and <code>now()</code> are
           immune (independent 1 MHz HW timer).</td></tr>
 </table>
+<h4 id="stdlib-machine-caps">What this micro has — the capability table (V7)</h4>
 <p>
-  Constants (return literals, or whatever the board says):
-  <code>MAX_CPU_MHZ()</code> (300), <code>MIN_CPU_MHZ()</code> (18),
-  <code>I2C_BUSES()</code> (2), <code>SPI_BUSES()</code> (2),
-  <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (= <code>gpioCount()</code>),
-  <code>ADC_CHANNELS()</code> and <code>PWM_SLICES()</code> (from the board descriptor:
-  4 and 12 on RP2350A —Pico 2— and on the PC; 8 and 12 on RP2350B —Metro—).
+  Every image carries, compiled in, <strong>one capability table for its micro</strong> (and its
+  variant: the RP2350 picks A or B at boot; the ESP32s ask the IDF), and that single table feeds
+  the IDE's <code>INFO</code>, these functions and the facades' validation. There used to be two
+  sources and they disagreed (the Pico said 12 PWM in BP and 24 over the wire; a C5 believed it
+  was an S3). On the PC both VMs count with the RP2350A profile.
+</p>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>uarts()</code> · <code>i2cs()</code> · <code>spis()</code>: <code>integer[]</code></td>
+      <td>The <strong>valid instances</strong> of each bus, as <code>Uart.Port(id, …)</code>,
+          <code>I2c.Bus(id, …)</code>, <code>Spi.Bus(id, …)</code> take them ("the count is the
+          array's length"): <code>[0, 1]</code> on RP2350; on an ESP32-S3 <code>uarts() = [1, 2]</code>
+          (0 is the IDE's cable), <code>spis() = [2, 3]</code>.</td></tr>
+  <tr><td><code>pins()</code> · <code>analogPins()</code> · <code>pwmPins()</code> · <code>pulsePins()</code> · <code>openDrainPins()</code>: <code>integer[]</code></td>
+      <td>The <strong>pin map</strong>: the GPIOs that exist, and which of them can read analog
+          (<code>AnPin</code>), drive PWM, count pulses or drive open-drain. What BP builds by pin
+          is asked by pin.</td></tr>
+  <tr><td><code>hasPin(n)</code> · <code>isAnalog(n)</code> · <code>isInputOnly(n)</code>: <code>boolean</code></td>
+      <td>Questions about one pin (a GPIO that does not exist: <code>hasPin</code> false).</td></tr>
+  <tr><td><code>manufacturer()</code> · <code>package()</code> · <code>pwmUnit()</code>: <code>string</code></td>
+      <td>The manufacturer ("Raspberry Pi", "Espressif", "STMicroelectronics"); the package chosen at
+          boot ("QFN-60"/"QFN-80" on RP2350, "LQFP144" on the Nucleo; the ESP32s do not say); and
+          the <strong>unit</strong> <code>PWM_SLICES()</code> counts in: "slice" on RP2350, "canal"
+          (channel: LEDC, timer) on ESP32 and STM32 — the same thing used to be counted in two units
+          without saying which.</td></tr>
+  <tr><td><code>adcUnits(): integer</code> · <code>hasBreadcrumb(): boolean</code></td>
+      <td>How many ADC units the silicon has (the S3 and the P4, two), and whether the
+          <code>setMark</code> breadcrumbs really exist on this micro.</td></tr>
+</table>
+<p>
+  The usual counters are sugar over the table: <code>UART_BUSES()</code> = <code>len(uarts())</code>,
+  <code>I2C_BUSES()</code>, <code>SPI_BUSES()</code>, <code>GPIO_COUNT()</code> (= <code>len(pins())</code>),
+  <code>ADC_CHANNELS()</code> (= <code>len(analogPins())</code>), <code>PWM_SLICES()</code> (simultaneous
+  outputs, in the unit of <code>pwmUnit()</code>). And <code>MAX_CPU_MHZ()</code> /
+  <code>MIN_CPU_MHZ()</code> are now <strong>per micro</strong> (300/18 on RP2350; on an ESP32, which
+  does not change clock at run time, both say the running frequency) — they used to be the RP2350's
+  for all five families.
 </p>
 
 <!-- =========================================================== -->

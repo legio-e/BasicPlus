@@ -109,14 +109,14 @@ enum {
     BUILTIN_PWM_SET_DUTY                 = 101,   /* __pwmSetDuty(sliceId: integer, pin: integer, dutyPct: integer) */
     BUILTIN_PWM_START                    = 102,   /* __pwmStart(sliceId: integer) */
     BUILTIN_PWM_STOP                     = 103,   /* __pwmStop(sliceId: integer) */
-    BUILTIN_PICO_UNIQUE_ID               = 104,   /* __picoUniqueId(): string */
-    BUILTIN_PICO_BOARD_NAME              = 105,   /* __picoBoardName(): string */
-    BUILTIN_PICO_TEMP_C                  = 106,   /* __picoTempC(): float */
-    BUILTIN_PICO_CPU_FREQ_HZ             = 107,   /* __picoCpuFreqHz(): integer */
-    BUILTIN_PICO_UPTIME_MS               = 108,   /* __picoUptimeMs(): integer */
+    BUILTIN_MACHINE_UNIQUE_ID            = 104,   /* __machineUniqueId(): string */
+    BUILTIN_MACHINE_BOARD_NAME           = 105,   /* __machineBoardName(): string */
+    BUILTIN_MACHINE_TEMP_C               = 106,   /* __machineTempC(): float */
+    BUILTIN_MACHINE_CPU_FREQ_HZ          = 107,   /* __machineCpuFreqHz(): integer */
+    BUILTIN_MACHINE_UPTIME_MS            = 108,   /* __machineUptimeMs(): integer */
     BUILTIN_SLEEP_SEC                    = 109,   /* sleepSec(s: integer) */
     BUILTIN_SLEEP_US                     = 110,   /* sleepUs(us: integer) */
-    BUILTIN_PICO_SET_CPU_FREQ_MHZ        = 111,   /* __picoSetCpuFreqMHz(mhz: integer): boolean */
+    BUILTIN_MACHINE_SET_CPU_FREQ_MHZ     = 111,   /* __machineSetCpuFreqMHz(mhz: integer): boolean */
     BUILTIN_RTC_NOW_SEC                  = 112,   /* __rtcNowSec(): integer */
     BUILTIN_RTC_SET_NOW_SEC              = 113,   /* __rtcSetNowSec(sec: integer) */
     BUILTIN_ADC_INIT_CHANNEL             = 114,   /* __adcInitChannel(ch: integer): integer */
@@ -128,7 +128,7 @@ enum {
     BUILTIN_FROM_BYTES                   = 120,   /* fromBytes(b: byte[]): string */
     BUILTIN_HEAP_FRAG                    = 121,   /* heapFrag(): string */
     BUILTIN_HEAP_MAP                     = 122,   /* heapMap(cols: integer): string */
-    BUILTIN_PICO_GPIO_COUNT              = 123,   /* __picoGpioCount(): integer */
+    BUILTIN_MACHINE_GPIO_COUNT           = 123,   /* __machineGpioCount(): integer */
     BUILTIN_NP_INIT                      = 124,   /* __npInit(pin: integer) */
     BUILTIN_NP_SHOW                      = 125,   /* __npShow(pin: integer, grb: integer[], count: integer) */
     BUILTIN_READ_FILE_BYTES              = 126,   /* readFileBytes(path: string): byte[] */
@@ -206,15 +206,15 @@ enum {
     BUILTIN_GUI_TEXTAREA_SET_READONLY    = 198,   /* __guiTextareaSetReadonly(handle: integer, ro: integer) */
     BUILTIN_GUI_TEXTAREA_GET_READONLY    = 199,   /* __guiTextareaGetReadonly(handle: integer): integer */
     BUILTIN_EVAL                         = 200,   /* eval(expr: string): float */
-    BUILTIN_PICO_RESET_CAUSE             = 201,   /* __picoResetCause(): string */
-    BUILTIN_PICO_SET_MARK                = 202,   /* __picoSetMark(code: integer) */
-    BUILTIN_PICO_MARK_COUNT              = 203,   /* __picoMarkCount(): integer */
-    BUILTIN_PICO_MARK_AT                 = 204,   /* __picoMarkAt(i: integer): integer */
-    BUILTIN_PICO_BOOT_COUNT              = 205,   /* __picoBootCount(): integer */
+    BUILTIN_MACHINE_RESET_CAUSE          = 201,   /* __machineResetCause(): string */
+    BUILTIN_MACHINE_SET_MARK             = 202,   /* __machineSetMark(code: integer) */
+    BUILTIN_MACHINE_MARK_COUNT           = 203,   /* __machineMarkCount(): integer */
+    BUILTIN_MACHINE_MARK_AT              = 204,   /* __machineMarkAt(i: integer): integer */
+    BUILTIN_MACHINE_BOOT_COUNT           = 205,   /* __machineBootCount(): integer */
     BUILTIN_GUI_INVOKE_BY_NAME           = 206,   /* __guiInvokeByName(host: Object, name: string, sender: Object) */
     BUILTIN_GUI_INVOKE_BY_SLOT           = 207,   /* __guiInvokeBySlot(win: Object, slot: integer, sender: Object) */
-    BUILTIN_PICO_ADC_CHANNELS            = 208,   /* __picoAdcChannels(): integer */
-    BUILTIN_PICO_PWM_SLICES              = 209,   /* __picoPwmSlices(): integer */
+    BUILTIN_MACHINE_ADC_CHANNELS         = 208,   /* __machineAdcChannels(): integer */
+    BUILTIN_MACHINE_PWM_SLICES           = 209,   /* __machinePwmSlices(): integer */
     BUILTIN_GUI_LOAD_FONT                = 210,   /* __guiLoadFont(path: string): integer */
     BUILTIN_APP_MAIN_MODULE              = 211,   /* __appMainModule(): string */
     BUILTIN_APP_MAIN_MODULE_PATH         = 212,   /* __appMainModulePath(): string */
@@ -255,7 +255,11 @@ enum {
     BUILTIN_FSIZE                        = 247,   /* __fsize(st: byte[]): integer */
     BUILTIN_FFLUSH                       = 248,   /* __fflush(st: byte[]) */
     BUILTIN_FREAD_LINE                   = 249,   /* __freadLine(st: byte[]): string */
-    BUILTIN__CUANTOS = 250
+    BUILTIN_CAPS_ARRAY                   = 250,   /* __capsArray(kind: integer): integer[] */
+    BUILTIN_CAPS_INT                     = 251,   /* __capsInt(kind: integer): integer */
+    BUILTIN_CAPS_STR                     = 252,   /* __capsStr(kind: integer): string */
+    BUILTIN_CAPS_PIN                     = 253,   /* __capsPin(pin: integer): integer */
+    BUILTIN__CUANTOS = 254
 };
 
 #endif

@@ -114,14 +114,14 @@ public enum Builtin {
     PWM_SET_DUTY("__pwmSetDuty"),   // [101] __pwmSetDuty(sliceId: integer, pin: integer, dutyPct: integer)
     PWM_START("__pwmStart"),   // [102] __pwmStart(sliceId: integer)
     PWM_STOP("__pwmStop"),   // [103] __pwmStop(sliceId: integer)
-    PICO_UNIQUE_ID("__picoUniqueId"),   // [104] __picoUniqueId(): string
-    PICO_BOARD_NAME("__picoBoardName"),   // [105] __picoBoardName(): string
-    PICO_TEMP_C("__picoTempC"),   // [106] __picoTempC(): float
-    PICO_CPU_FREQ_HZ("__picoCpuFreqHz"),   // [107] __picoCpuFreqHz(): integer
-    PICO_UPTIME_MS("__picoUptimeMs"),   // [108] __picoUptimeMs(): integer
+    MACHINE_UNIQUE_ID("__machineUniqueId"),   // [104] __machineUniqueId(): string
+    MACHINE_BOARD_NAME("__machineBoardName"),   // [105] __machineBoardName(): string
+    MACHINE_TEMP_C("__machineTempC"),   // [106] __machineTempC(): float
+    MACHINE_CPU_FREQ_HZ("__machineCpuFreqHz"),   // [107] __machineCpuFreqHz(): integer
+    MACHINE_UPTIME_MS("__machineUptimeMs"),   // [108] __machineUptimeMs(): integer
     SLEEP_SEC("sleepSec"),   // [109] sleepSec(s: integer)
     SLEEP_US("sleepUs"),   // [110] sleepUs(us: integer)
-    PICO_SET_CPU_FREQ_MHZ("__picoSetCpuFreqMHz"),   // [111] __picoSetCpuFreqMHz(mhz: integer): boolean
+    MACHINE_SET_CPU_FREQ_MHZ("__machineSetCpuFreqMHz"),   // [111] __machineSetCpuFreqMHz(mhz: integer): boolean
     RTC_NOW_SEC("__rtcNowSec"),   // [112] __rtcNowSec(): integer
     RTC_SET_NOW_SEC("__rtcSetNowSec"),   // [113] __rtcSetNowSec(sec: integer)
     ADC_INIT_CHANNEL("__adcInitChannel"),   // [114] __adcInitChannel(ch: integer): integer
@@ -133,7 +133,7 @@ public enum Builtin {
     FROM_BYTES("fromBytes"),   // [120] fromBytes(b: byte[]): string
     HEAP_FRAG("heapFrag"),   // [121] heapFrag(): string
     HEAP_MAP("heapMap"),   // [122] heapMap(cols: integer): string
-    PICO_GPIO_COUNT("__picoGpioCount"),   // [123] __picoGpioCount(): integer
+    MACHINE_GPIO_COUNT("__machineGpioCount"),   // [123] __machineGpioCount(): integer
     NP_INIT("__npInit"),   // [124] __npInit(pin: integer)
     NP_SHOW("__npShow"),   // [125] __npShow(pin: integer, grb: integer[], count: integer)
     READ_FILE_BYTES("readFileBytes"),   // [126] readFileBytes(path: string): byte[]
@@ -211,15 +211,15 @@ public enum Builtin {
     GUI_TEXTAREA_SET_READONLY("__guiTextareaSetReadonly"),   // [198] __guiTextareaSetReadonly(handle: integer, ro: integer)
     GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"),   // [199] __guiTextareaGetReadonly(handle: integer): integer
     EVAL("eval"),   // [200] eval(expr: string): float
-    PICO_RESET_CAUSE("__picoResetCause"),   // [201] __picoResetCause(): string
-    PICO_SET_MARK("__picoSetMark"),   // [202] __picoSetMark(code: integer)
-    PICO_MARK_COUNT("__picoMarkCount"),   // [203] __picoMarkCount(): integer
-    PICO_MARK_AT("__picoMarkAt"),   // [204] __picoMarkAt(i: integer): integer
-    PICO_BOOT_COUNT("__picoBootCount"),   // [205] __picoBootCount(): integer
+    MACHINE_RESET_CAUSE("__machineResetCause"),   // [201] __machineResetCause(): string
+    MACHINE_SET_MARK("__machineSetMark"),   // [202] __machineSetMark(code: integer)
+    MACHINE_MARK_COUNT("__machineMarkCount"),   // [203] __machineMarkCount(): integer
+    MACHINE_MARK_AT("__machineMarkAt"),   // [204] __machineMarkAt(i: integer): integer
+    MACHINE_BOOT_COUNT("__machineBootCount"),   // [205] __machineBootCount(): integer
     GUI_INVOKE_BY_NAME("__guiInvokeByName"),   // [206] __guiInvokeByName(host: Object, name: string, sender: Object)
     GUI_INVOKE_BY_SLOT("__guiInvokeBySlot"),   // [207] __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
-    PICO_ADC_CHANNELS("__picoAdcChannels"),   // [208] __picoAdcChannels(): integer
-    PICO_PWM_SLICES("__picoPwmSlices"),   // [209] __picoPwmSlices(): integer
+    MACHINE_ADC_CHANNELS("__machineAdcChannels"),   // [208] __machineAdcChannels(): integer
+    MACHINE_PWM_SLICES("__machinePwmSlices"),   // [209] __machinePwmSlices(): integer
     GUI_LOAD_FONT("__guiLoadFont"),   // [210] __guiLoadFont(path: string): integer
     APP_MAIN_MODULE("__appMainModule"),   // [211] __appMainModule(): string
     APP_MAIN_MODULE_PATH("__appMainModulePath"),   // [212] __appMainModulePath(): string
@@ -259,7 +259,11 @@ public enum Builtin {
     FTELL("__ftell"),   // [246] __ftell(st: byte[]): integer
     FSIZE("__fsize"),   // [247] __fsize(st: byte[]): integer
     FFLUSH("__fflush"),   // [248] __fflush(st: byte[])
-    FREAD_LINE("__freadLine");   // [249] __freadLine(st: byte[]): string
+    FREAD_LINE("__freadLine"),   // [249] __freadLine(st: byte[]): string
+    CAPS_ARRAY("__capsArray"),   // [250] __capsArray(kind: integer): integer[]
+    CAPS_INT("__capsInt"),   // [251] __capsInt(kind: integer): integer
+    CAPS_STR("__capsStr"),   // [252] __capsStr(kind: integer): string
+    CAPS_PIN("__capsPin");   // [253] __capsPin(pin: integer): integer
 
     public final String bpName;
     public final int id;

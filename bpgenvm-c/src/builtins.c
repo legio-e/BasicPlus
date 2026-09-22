@@ -23,7 +23,7 @@
 #include "bpvm_spi.h"
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
-#include "bpvm_pico.h"
+#include "bpvm_machine.h"
 #include "bpvm_neopixel.h"
 #include "bpvm_rtc.h"
 #include "bpvm_pack.h"   /* #414 — recorrer los packs grabados desde BP */
@@ -257,7 +257,7 @@ void bpvm_files_fin_de_run(bpvm_t* vm) {
      * `__startup` pasandole el valor POR DEFECTO que diga el fuente; devuelve
      * el argumento de ejecucion si lo hay, y si no una COPIA del defecto —
      * alojada igual. Asi Main recibe siempre una referencia del heap. */
-    /* V6 (9-sep) — el MICRO. La PLACA la da BUILTIN_PICO_BOARD_NAME: son DOS
+    /* V6 (9-sep) — el MICRO. La PLACA la da BUILTIN_MACHINE_BOARD_NAME: son DOS
      * campos distintos desde el rediseno de `Machine` (getMicro/getBoard).
      * 233 = ordinal() de MACHINE_MICRO en el enum Builtin de miVM. */
     /* V6/G2-4 (11-sep) — la geometria AUTORADA del widget, para el toJson() de
@@ -3076,9 +3076,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
        uniqueId y boardName devuelven string (alocado en heap BP);
        tempC devuelve float (bit-cast a u32 para pushar al stack);
        cpuFreqHz y uptimeMs devuelven int. */
-    case BUILTIN_PICO_UNIQUE_ID: {
+    case BUILTIN_MACHINE_UNIQUE_ID: {
         char buf[32];
-        bpvm_pico_unique_id(buf, sizeof(buf));
+        bpvm_machine_unique_id(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
         if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
@@ -3087,48 +3087,48 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_MACHINE_MICRO: {
         /* El MICRO, por la fachada HAL BP — la MISMA funcion que lee el wire. */
         char mbuf[32];
-        bpvm_pico_micro_name(mbuf, sizeof(mbuf));
+        bpvm_machine_micro_name(mbuf, sizeof(mbuf));
         uint32_t mref = bpvm_heap_alloc_string(vm, mbuf, strlen(mbuf));
         if (mref == 0) return builtin_throw(vm, tc, "No space in heap");
         push_ref(vm, tc, mref);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_BOARD_NAME: {
+    case BUILTIN_MACHINE_BOARD_NAME: {
         char buf[32];
-        bpvm_pico_board_name(buf, sizeof(buf));
+        bpvm_machine_board_name(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
         if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_RESET_CAUSE: {   /* H10 — causa del último reset (string) */
-        const char* s = bpvm_pico_reset_cause();
+    case BUILTIN_MACHINE_RESET_CAUSE: {   /* H10 — causa del último reset (string) */
+        const char* s = bpvm_machine_reset_cause();
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_SET_MARK: {      /* H10 — breadcrumb: deja una miga */
+    case BUILTIN_MACHINE_SET_MARK: {      /* H10 — breadcrumb: deja una miga */
         int32_t code = pop_i32(vm, tc);
-        bpvm_pico_set_mark((int) code);
+        bpvm_machine_set_mark((int) code);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_MARK_COUNT: {    /* H10 — nº de migas del trail previo */
-        push_i32(vm, tc, (int32_t) bpvm_pico_mark_count());
+    case BUILTIN_MACHINE_MARK_COUNT: {    /* H10 — nº de migas del trail previo */
+        push_i32(vm, tc, (int32_t) bpvm_machine_mark_count());
         return BPVM_OK;
     }
-    case BUILTIN_PICO_MARK_AT: {       /* H10 — i-ésima miga (0 = origen) */
+    case BUILTIN_MACHINE_MARK_AT: {       /* H10 — i-ésima miga (0 = origen) */
         int32_t i = pop_i32(vm, tc);
-        push_i32(vm, tc, (int32_t) bpvm_pico_mark_at((int) i));
+        push_i32(vm, tc, (int32_t) bpvm_machine_mark_at((int) i));
         return BPVM_OK;
     }
-    case BUILTIN_PICO_BOOT_COUNT: {    /* H10 — arranques desde power-on */
-        push_i32(vm, tc, (int32_t) bpvm_pico_boot_count());
+    case BUILTIN_MACHINE_BOOT_COUNT: {    /* H10 — arranques desde power-on */
+        push_i32(vm, tc, (int32_t) bpvm_machine_boot_count());
         return BPVM_OK;
     }
-    case BUILTIN_PICO_TEMP_C: {
-        float v = bpvm_pico_temp_c();
+    case BUILTIN_MACHINE_TEMP_C: {
+        float v = bpvm_machine_temp_c();
         /* Float en pila es bit-cast a u32 — la VM hace el mismo
          * truco para LITERAL_F32. */
         uint32_t bits;
@@ -3136,20 +3136,86 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, (int32_t) bits);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_CPU_FREQ_HZ: {
-        push_i32(vm, tc, (int32_t) bpvm_pico_cpu_freq_hz());
+    case BUILTIN_MACHINE_CPU_FREQ_HZ: {
+        push_i32(vm, tc, (int32_t) bpvm_machine_cpu_freq_hz());
         return BPVM_OK;
     }
-    case BUILTIN_PICO_GPIO_COUNT: {
-        push_i32(vm, tc, (int32_t) bpvm_pico_gpio_count());
+    /* ── V7/H4 — la tabla de capacidades desde BP (Machine.uarts(), pins(), …) ── */
+    case BUILTIN_CAPS_ARRAY: {
+        int32_t kind = pop_i32(vm, tc);
+        const bpvm_caps_t* c = bpvm_caps();
+        /* 0 uart · 1 i2c · 2 spi (instancias); 3 pines que existen · 4 analógicos · 5 PWM · 6 pulsos · 7 colector abierto */
+        const uint8_t* lista = NULL; int n = 0; uint16_t bit = 0;
+        switch (kind) {
+            case 0: lista = c->uart; n = c->n_uart; break;
+            case 1: lista = c->i2c;  n = c->n_i2c;  break;
+            case 2: lista = c->spi;  n = c->n_spi;  break;
+            case 3: bit = 0xFFFFu; break;
+            case 4: bit = BPVM_PIN_ANALOG; break;
+            case 5: bit = BPVM_PIN_PWM; break;
+            case 6: bit = BPVM_PIN_PULSE; break;
+            case 7: bit = BPVM_PIN_OPEN_DRAIN; break;
+            default: return builtin_throw(vm, tc, "Machine: clase de capacidad desconocida");
+        }
+        if (bit) { n = 0; for (int i = 0; i < (int) c->n_pin; i++) if (c->pin && (c->pin[i] & bit)) n++; }
+        uint32_t arr = bpvm_heap_alloc(vm, (uint32_t) n * 4u, BPVM_TYPE_ARRAY_I32);
+        if (arr == 0) return builtin_throw(vm, tc, "Machine: sin memoria");
+        bpvm_write_u32_be(vm->memory + arr, (uint32_t) n);
+        int k = 0;
+        if (bit) { for (int i = 0; i < (int) c->n_pin; i++) if (c->pin && (c->pin[i] & bit)) bpvm_write_i32_be(vm->memory + arr + 4 + 4 * (k++), i); }
+        else     { for (int i = 0; i < n; i++) bpvm_write_i32_be(vm->memory + arr + 4 + 4 * (k++), lista[i]); }
+        bpref_push(vm, tc, bpvm_handle_register(vm, arr));
         return BPVM_OK;
     }
-    case BUILTIN_PICO_ADC_CHANNELS: {
-        push_i32(vm, tc, (int32_t) bpvm_pico_adc_channels());
+    case BUILTIN_CAPS_INT: {
+        int32_t kind = pop_i32(vm, tc);
+        const bpvm_caps_t* c = bpvm_caps();
+        int32_t v = 0;
+        switch (kind) {   /* 0 max Hz · 1 min Hz · 2 ajustable · 3 salidas PWM · 4 unidades ADC · 5 migas · 6 tope del mapa */
+            case 0: v = (int32_t) c->cpu_hz_max; break;
+            case 1: v = (int32_t) c->cpu_hz_min; break;
+            case 2: v = c->cpu_ajustable; break;
+            case 3: v = c->n_pwm; break;
+            case 4: v = c->n_adc; break;
+            case 5: v = c->breadcrumb; break;
+            case 6: v = c->n_pin; break;
+            default: return builtin_throw(vm, tc, "Machine: clase de capacidad desconocida");
+        }
+        push_i32(vm, tc, v);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_PWM_SLICES: {
-        push_i32(vm, tc, (int32_t) bpvm_pico_pwm_slices());
+    case BUILTIN_CAPS_STR: {
+        int32_t kind = pop_i32(vm, tc);
+        const bpvm_caps_t* c = bpvm_caps();
+        const char* s = "";
+        switch (kind) {   /* 0 micro · 1 paquete · 2 fabricante · 3 unidad del PWM */
+            case 0: s = c->micro; break;
+            case 1: s = c->paquete; break;
+            case 2: s = c->fabricante; break;
+            case 3: s = c->pwm_unidad; break;
+            default: return builtin_throw(vm, tc, "Machine: clase de capacidad desconocida");
+        }
+        if (!s) s = "";
+        uint32_t out = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (out == 0) return builtin_throw(vm, tc, "Machine: sin memoria");
+        push_ref(vm, tc, out);
+        return BPVM_OK;
+    }
+    case BUILTIN_CAPS_PIN: {
+        int32_t pin = pop_i32(vm, tc);
+        push_i32(vm, tc, (int32_t) bpvm_caps_pin_mask(pin));
+        return BPVM_OK;
+    }
+    case BUILTIN_MACHINE_GPIO_COUNT: {
+        push_i32(vm, tc, (int32_t) bpvm_machine_gpio_count());
+        return BPVM_OK;
+    }
+    case BUILTIN_MACHINE_ADC_CHANNELS: {
+        push_i32(vm, tc, (int32_t) bpvm_machine_adc_channels());
+        return BPVM_OK;
+    }
+    case BUILTIN_MACHINE_PWM_SLICES: {
+        push_i32(vm, tc, (int32_t) bpvm_machine_pwm_slices());
         return BPVM_OK;
     }
     case BUILTIN_NP_INIT: {
@@ -3212,17 +3278,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
-    case BUILTIN_PICO_UPTIME_MS: {
-        push_i32(vm, tc, (int32_t) bpvm_pico_uptime_ms());
+    case BUILTIN_MACHINE_UPTIME_MS: {
+        push_i32(vm, tc, (int32_t) bpvm_machine_uptime_ms());
         return BPVM_OK;
     }
-    case BUILTIN_PICO_SET_CPU_FREQ_MHZ: {
+    case BUILTIN_MACHINE_SET_CPU_FREQ_MHZ: {
         /* Cambia el clk_sys del RP2350. En host es un no-op (stub
          * loguea por stdout). El clamp al máximo soportado lo hace BP
          * en Pico.bp (usando la constante MAX_CPU_MHZ) — aquí solo
          * delegamos al backend. */
         int32_t mhz = pop_i32(vm, tc);
-        int ok = bpvm_pico_set_cpu_freq_mhz((int) mhz);
+        int ok = bpvm_machine_set_cpu_freq_mhz((int) mhz);
         push_i32(vm, tc, ok ? 1 : 0);
         return BPVM_OK;
     }

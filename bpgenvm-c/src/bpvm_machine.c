@@ -8,14 +8,14 @@
  */
 
 #include "bpvm_out.h"
-#include "bpvm_pico.h"
+#include "bpvm_machine.h"
 #include "bpvm_platform.h"   /* H13 h41: reloj monotono para el uptime sin backend */
 #include <stdio.h>
 #include <string.h>
 
-static const bpvm_pico_backend_t* g_backend = NULL;
+static const bpvm_machine_backend_t* g_backend = NULL;
 
-void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend) {
+void bpvm_machine_set_backend(const bpvm_machine_backend_t* backend) {
     g_backend = backend;
 }
 
@@ -37,7 +37,7 @@ void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend) {
  * perfil RP2350A, el mismo que ya usa gpioCount aqui y en miVM. */
 static int s_host_cpu_hz = 150000000;
 
-void bpvm_pico_unique_id(char* buf, size_t len) {
+void bpvm_machine_unique_id(char* buf, size_t len) {
     if (g_backend && g_backend->uniqueId) {
         g_backend->uniqueId(buf, len);
         return;
@@ -54,25 +54,11 @@ void bpvm_pico_unique_id(char* buf, size_t len) {
 }
 
 /* ── LOS DOS NOMBRES DE LA IDENTIDAD (V6, 9-sep) ───────────────────────────────
- * Ver el porque de que sean DOS en bpvm_pico.h. Aqui solo la mecanica: cada
+ * Ver el porque de que sean DOS en bpvm_machine.h. Aqui solo la mecanica: cada
  * imagen aporta su implementacion y estos accesores son el UNICO sitio del que
  * leen el builtin de BP y el wire. */
 
-void bpvm_pico_micro_name(char* buf, size_t len) {
-    if (g_backend && g_backend->microName) {
-        g_backend->microName(buf, len);
-        return;
-    }
-    /* Sin cintura estamos en el host: el micro es este PC. */
-    const char* stub = "host";
-    size_t n = strlen(stub);
-    if (len == 0) return;
-    if (n > len - 1) n = len - 1;
-    memcpy(buf, stub, n);
-    buf[n] = (char) 0;
-}
-
-void bpvm_pico_board_name(char* buf, size_t len) {
+void bpvm_machine_board_name(char* buf, size_t len) {
     if (g_backend && g_backend->boardName) {
         g_backend->boardName(buf, len);
         return;
@@ -85,7 +71,7 @@ void bpvm_pico_board_name(char* buf, size_t len) {
     buf[n] = '\0';
 }
 
-float bpvm_pico_temp_c(void) {
+float bpvm_machine_temp_c(void) {
     if (g_backend && g_backend->tempC) {
         return g_backend->tempC();
     }
@@ -95,7 +81,7 @@ float bpvm_pico_temp_c(void) {
     return 25.0f;
 }
 
-int bpvm_pico_cpu_freq_hz(void) {
+int bpvm_machine_cpu_freq_hz(void) {
     if (g_backend && g_backend->cpuFreqHz) {
         return g_backend->cpuFreqHz();
     }
@@ -103,7 +89,7 @@ int bpvm_pico_cpu_freq_hz(void) {
     return s_host_cpu_hz;   /* #471 - lo que se haya pedido; ver arriba */
 }
 
-int bpvm_pico_uptime_ms(void) {
+int bpvm_machine_uptime_ms(void) {
     if (g_backend && g_backend->uptimeMs) {
         return g_backend->uptimeMs();
     }
@@ -128,30 +114,88 @@ int bpvm_pico_uptime_ms(void) {
     return (int) (now - t0);
 }
 
-int bpvm_pico_gpio_count(void) {
-    if (g_backend && g_backend->gpioCount) {
-        return g_backend->gpioCount();
-    }
-    /* Stub host: perfil RP2350A (30 GPIO) — igual que el default antiguo
-     * de Pico.GPIO_COUNT(). El device lo resuelve desde board_desc. */
-    return 30;
+/* ══════════ V7/H4 — LA TABLA DE CAPACIDADES (ver bpvm_machine.h) ══════════ */
+
+/* El perfil del HOST = RP2350A, el mismo de miVM: 30 GPIO (todos digitales, PWM
+ * y PIO), ADC en GP26..29 (unidad 0, canales 0..3), sin colector abierto (el
+ * RP2350 no lo tiene), UART/I2C/SPI 0 y 1, 12 slices, migas no. */
+static const uint8_t  s_host_uart[] = { 0, 1 };
+static const uint8_t  s_host_i2c[]  = { 0, 1 };
+static const uint8_t  s_host_spi[]  = { 0, 1 };
+#define HP (BPVM_PIN_DIGITAL | BPVM_PIN_PWM | BPVM_PIN_PULSE)
+#define HA (HP | BPVM_PIN_ANALOG)
+static const uint16_t s_host_pin[30] = {
+    HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HP,
+    HP, HP, HP, HP, HP, HP, HP, HP, HP, HP, HA, HA, HA, HA };
+#undef HP
+#undef HA
+static const int8_t s_host_adc_unit[30] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, 0, 0 };
+static const int8_t s_host_adc_ch[30] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 1, 2, 3 };
+static const bpvm_caps_t s_host_caps = {
+    .micro = "host", .paquete = "", .fabricante = "",   /* el PC: los NÚMEROS son del RP2350A, la identidad no */
+    .cpu_hz_max = 300000000u, .cpu_hz_min = 18000000u, .cpu_ajustable = 1,
+    .uart = s_host_uart, .n_uart = 2, .i2c = s_host_i2c, .n_i2c = 2, .spi = s_host_spi, .n_spi = 2,
+    .n_pwm = 12, .pwm_unidad = "slice", .n_adc = 1,
+    .pin = s_host_pin, .n_pin = 30, .pin_adc_unit = s_host_adc_unit, .pin_adc_ch = s_host_adc_ch,
+    .breadcrumb = 0,
+};
+static const bpvm_caps_t* g_caps = &s_host_caps;
+
+void bpvm_caps_set(const bpvm_caps_t* caps) { g_caps = caps ? caps : &s_host_caps; }
+const bpvm_caps_t* bpvm_caps(void) { return g_caps; }
+
+int bpvm_caps_pin_mask(int pin) {
+    return (pin >= 0 && pin < (int) g_caps->n_pin && g_caps->pin) ? (int) g_caps->pin[pin] : 0;
+}
+int bpvm_caps_pins_con(uint16_t bit) {
+    int n = 0;
+    for (int i = 0; i < (int) g_caps->n_pin; i++) if (g_caps->pin && (g_caps->pin[i] & bit)) n++;
+    return n;
+}
+int bpvm_caps_gpio_count(void) {
+    int n = 0;
+    for (int i = 0; i < (int) g_caps->n_pin; i++) if (g_caps->pin && g_caps->pin[i]) n++;
+    return n;
+}
+int bpvm_caps_adc_de_pin(int pin, int* unit, int* ch) {
+    if (!(bpvm_caps_pin_mask(pin) & BPVM_PIN_ANALOG) || !g_caps->pin_adc_unit || !g_caps->pin_adc_ch) return -1;
+    if (unit) *unit = g_caps->pin_adc_unit[pin];
+    if (ch)   *ch   = g_caps->pin_adc_ch[pin];
+    return 0;
+}
+int bpvm_caps_pin_de_adc(int unit, int ch) {
+    for (int i = 0; i < (int) g_caps->n_pin; i++)
+        if ((g_caps->pin[i] & BPVM_PIN_ANALOG) && g_caps->pin_adc_unit[i] == unit && g_caps->pin_adc_ch[i] == ch) return i;
+    return -1;
+}
+int bpvm_caps_instancia_ok(const uint8_t* lista, int n, int id) {
+    for (int i = 0; i < n; i++) if (lista && lista[i] == id) return 1;
+    return 0;
 }
 
-int bpvm_pico_adc_channels(void) {
-    if (g_backend && g_backend->adcChannels) {
-        return g_backend->adcChannels();
-    }
-    return 4;   /* host: perfil RP2350 (4 ADC). Device: board_desc / board.json. */
+/* El nombre del micro también sale de la tabla: la cintura que la fija ya dijo
+ * quién es (y en el RP2350, qué variante). El callback microName queda de
+ * respaldo para una cintura que aún no fije tabla. */
+void bpvm_machine_micro_name(char* buf, size_t len) {
+    const char* s = (g_caps != &s_host_caps && g_caps->micro) ? g_caps->micro : NULL;
+    if (!s && g_backend && g_backend->microName) { g_backend->microName(buf, len); return; }
+    if (!s) s = "host";
+    size_t n = strlen(s);
+    if (len == 0) return;
+    if (n > len - 1) n = len - 1;
+    memcpy(buf, s, n);
+    buf[n] = (char) 0;
 }
 
-int bpvm_pico_pwm_slices(void) {
-    if (g_backend && g_backend->pwmSlices) {
-        return g_backend->pwmSlices();
-    }
-    return 12;  /* host: perfil RP2350 (12 PWM). Device: board_desc / board.json. */
-}
+/* Los tres contadores de siempre, ahora DERIVADOS de la tabla (una sola cuenta
+ * para el INFO y para BP; antes cada familia los rellenaba a mano dos veces). */
+int bpvm_machine_gpio_count(void)   { return bpvm_caps_gpio_count(); }
+int bpvm_machine_adc_channels(void) { return bpvm_caps_pins_con(BPVM_PIN_ANALOG); }
+int bpvm_machine_pwm_slices(void)   { return (int) g_caps->n_pwm; }
 
-const char* bpvm_pico_reset_cause(void) {
+const char* bpvm_machine_reset_cause(void) {
     if (g_backend && g_backend->resetCause) {
         return g_backend->resetCause();
     }
@@ -159,27 +203,27 @@ const char* bpvm_pico_reset_cause(void) {
     return "unknown";
 }
 
-void bpvm_pico_set_mark(int code) {
+void bpvm_machine_set_mark(int code) {
     if (g_backend && g_backend->setMark) g_backend->setMark(code);
     /* Host: no-op (sin RAM retenida). */
 }
 
-int bpvm_pico_mark_count(void) {
+int bpvm_machine_mark_count(void) {
     if (g_backend && g_backend->markCount) return g_backend->markCount();
     return 0;   /* host: sin trail */
 }
 
-int bpvm_pico_mark_at(int i) {
+int bpvm_machine_mark_at(int i) {
     if (g_backend && g_backend->markAt) return g_backend->markAt(i);
     return 0;   /* host: sin trail */
 }
 
-int bpvm_pico_boot_count(void) {
+int bpvm_machine_boot_count(void) {
     if (g_backend && g_backend->bootCount) return g_backend->bootCount();
     return 1;   /* host: el proceso = 1 "arranque" */
 }
 
-int bpvm_pico_set_cpu_freq_mhz(int mhz) {
+int bpvm_machine_set_cpu_freq_mhz(int mhz) {
     if (g_backend && g_backend->setCpuFreqMHz) {
         return g_backend->setCpuFreqMHz(mhz);
     }

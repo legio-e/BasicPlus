@@ -23,7 +23,7 @@
 #include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
 #include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H14 — TIME del wire → RTC (bpvm_rtc_set_now_ms) */
-#include "bpvm_pico.h"       /* paso 4 cierre — bpvm_pico_reset_cause (INFO) */
+#include "bpvm_machine.h"       /* paso 4 cierre — bpvm_machine_reset_cause (INFO) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 #include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
@@ -1002,9 +1002,9 @@ static void esp32_repl_info(bpvm_repl_info_t* o) {
      * fachada («esp32s3-devkitc» para S3, C3 y C6) y el wire leia esto. Una sola
      * funcion y dos lectores, que es lo que la Pico ya hacia (`repl_v1.c`). */
     static char micro[24];
-    bpvm_pico_micro_name(micro, sizeof micro);
+    bpvm_machine_micro_name(micro, sizeof micro);
     o->board_name    = micro;
-    o->reset_reason  = bpvm_pico_reset_cause();
+    o->reset_reason  = bpvm_machine_reset_cause();
     o->arch          = (unsigned) bpvm_mdn_host_arch();
     o->cpu_hz        = (unsigned long) bid->cpu_freq_hz;
     o->uptime_ms     = (unsigned long) (esp_timer_get_time() / 1000LL);

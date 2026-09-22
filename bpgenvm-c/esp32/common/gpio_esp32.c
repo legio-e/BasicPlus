@@ -13,7 +13,7 @@
 #include "chip_cfg.h"   /* CHIP_MICRO: el id canonico de ESTE chip */
 #include "hw_esp32.h"
 #include "bpvm_gpio.h"
-#include "bpvm_pico.h"
+#include "bpvm_machine.h"
 #include "bpvm_uart.h"
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
@@ -132,20 +132,67 @@ static int esp32_set_cpu_freq_mhz_impl(int mhz) {
     return 0;   /* cambiar el reloj en runtime no soportado */
 }
 
-static int esp32_gpio_count_impl(void) {
-    return 45;   /* GPIO utiles del ESP32-S3 (0-21, 26-48) */
-}
+/* ══════════ V7/H4 — LA TABLA DE CAPACIDADES de la familia ESP32, CALCULADA ══════════
+ * Aquí no hay un número escrito a mano: se le pregunta al IDF por el chip con
+ * el que se compila (`soc_caps.h`: GPIO válidos y de sólo entrada, PCNT, cuántas
+ * UART/I2C/SPI, canales LEDC, unidades de ADC) y al driver por el pin de cada
+ * canal de ADC (`adc_oneshot_channel_to_io`). Antes este fichero —común a
+ * S3/C3/C6/C5— devolvía 45 GPIO, 20 ADC y 8 PWM a pelo: los del S3 para todos,
+ * y un C5 por BP se creía un S3 mientras el INFO decía 29/6/6 (#470). */
+static uint16_t s_caps_pin[SOC_GPIO_PIN_COUNT];
+static int8_t   s_caps_adc_u[SOC_GPIO_PIN_COUNT];
+static int8_t   s_caps_adc_c[SOC_GPIO_PIN_COUNT];
+static uint8_t  s_caps_uart[SOC_UART_HP_NUM];
+static uint8_t  s_caps_i2c[SOC_HP_I2C_NUM];
+static uint8_t  s_caps_spi[SOC_SPI_PERIPH_NUM];
+static bpvm_caps_t s_caps;
 
-/* board-aware: canales ADC y slices PWM del ESP32-S3. Sin estos cb,
- * Pico.ADC_CHANNELS()/PWM_SLICES() caían al fallback host (4/12) de src/pico.c
- * — el INFO del wire ya daba 20/8 desde un struct aparte (repl_esp32.c), de ahí
- * el mismatch INFO=20/8 vs PicoInfo=4/12. Valores casan con el INFO. */
-static int esp32_adc_channels_impl(void) {
-    return 20;   /* ADC1+ADC2, 10 canales cada uno */
-}
-
-static int esp32_pwm_slices_impl(void) {
-    return 8;    /* canales LEDC del S3 (coincide con el INFO) */
+static void esp32_caps_init(void) {
+    for (int g = 0; g < SOC_GPIO_PIN_COUNT; g++) {
+        uint16_t m = 0;
+        s_caps_adc_u[g] = -1; s_caps_adc_c[g] = -1;
+        if (GPIO_IS_VALID_GPIO(g)) {
+            m = BPVM_PIN_DIGITAL;
+            if (GPIO_IS_VALID_OUTPUT_GPIO(g)) m |= BPVM_PIN_PWM | BPVM_PIN_OPEN_DRAIN;
+            else m |= BPVM_PIN_INPUT_ONLY;
+#if SOC_PCNT_SUPPORTED
+            m |= BPVM_PIN_PULSE;      /* el C3 es el único ESP sin PCNT: allí no hay contador (#480) */
+#endif
+        }
+        s_caps_pin[g] = m;
+    }
+    for (int u = 0; u < SOC_ADC_PERIPH_NUM; u++) {
+        for (int ch = 0; ch < SOC_ADC_CHANNEL_NUM(u); ch++) {
+            int io = -1;
+            if (adc_oneshot_channel_to_io((adc_unit_t) u, (adc_channel_t) ch, &io) == ESP_OK
+                && io >= 0 && io < SOC_GPIO_PIN_COUNT && s_caps_pin[io] && s_caps_adc_u[io] < 0) {
+                s_caps_pin[io] |= BPVM_PIN_ANALOG;
+                s_caps_adc_u[io] = (int8_t) u; s_caps_adc_c[io] = (int8_t) ch;
+            }
+        }
+    }
+    int nu = 0, ni = 0, ns = 0;
+    for (int b = 1; b < SOC_UART_HP_NUM && b <= 2; b++) s_caps_uart[nu++] = (uint8_t) b;   /* 0 = el wire; el backend mapea 1 y 2 */
+    for (int b = 0; b < (int) SOC_HP_I2C_NUM; b++) s_caps_i2c[ni++] = (uint8_t) b;
+    s_caps_spi[ns++] = 2;                                   /* SPI2_HOST; SPI0/1 son la flash */
+#if SOC_SPI_PERIPH_NUM >= 3
+    s_caps_spi[ns++] = 3;                                   /* SPI3_HOST donde lo hay (S3, P4) */
+#endif
+    s_caps.micro = CHIP_MICRO;
+    s_caps.paquete = "";                                    /* el IDF no dice el encapsulado; la flash y la PSRAM se miden */
+    s_caps.fabricante = "Espressif";
+    s_caps.cpu_hz_max = (uint32_t) CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000u;
+    s_caps.cpu_hz_min = s_caps.cpu_hz_max;                  /* no se ajusta en marcha: min = max = el que corre */
+    s_caps.cpu_ajustable = 0;
+    s_caps.uart = s_caps_uart; s_caps.n_uart = (uint8_t) nu;
+    s_caps.i2c = s_caps_i2c;   s_caps.n_i2c = (uint8_t) ni;
+    s_caps.spi = s_caps_spi;   s_caps.n_spi = (uint8_t) ns;
+    s_caps.n_pwm = SOC_LEDC_CHANNEL_NUM; s_caps.pwm_unidad = "canal";
+    s_caps.n_adc = SOC_ADC_PERIPH_NUM;
+    s_caps.pin = s_caps_pin; s_caps.n_pin = SOC_GPIO_PIN_COUNT;
+    s_caps.pin_adc_unit = s_caps_adc_u; s_caps.pin_adc_ch = s_caps_adc_c;
+    s_caps.breadcrumb = 0;
+    bpvm_caps_set(&s_caps);
 }
 
 /* paso 4 cierre — causa del último reset vía registro HW (esp_reset_reason, lo
@@ -167,7 +214,7 @@ const char* esp32_reset_cause(void) {
     }
 }
 
-static const bpvm_pico_backend_t s_esp32_pico_backend = {
+static const bpvm_machine_backend_t s_esp32_pico_backend = {
     .uniqueId      = esp32_unique_id_impl,
     .microName     = esp32_micro_name_impl,
     .boardName     = esp32_board_name_impl,
@@ -175,9 +222,6 @@ static const bpvm_pico_backend_t s_esp32_pico_backend = {
     .cpuFreqHz     = esp32_cpu_freq_hz_impl,
     .uptimeMs      = esp32_uptime_ms_impl,
     .setCpuFreqMHz = esp32_set_cpu_freq_mhz_impl,
-    .gpioCount     = esp32_gpio_count_impl,
-    .adcChannels   = esp32_adc_channels_impl,  /* board-aware: 20 (era fallback 4) */
-    .pwmSlices     = esp32_pwm_slices_impl,     /* board-aware: 8 (era fallback 12) */
     .resetCause    = esp32_reset_cause,        /* paso 4 cierre */
 };
 
@@ -662,8 +706,9 @@ static const bpvm_wdt_backend_t s_esp32_wdt_backend = {
 };
 
 void esp32_hw_register(void) {
+    esp32_caps_init();                                 /* V7/H4: la tabla, preguntada al IDF */
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
-    bpvm_pico_set_backend(&s_esp32_pico_backend);   /* info real (no stub host) */
+    bpvm_machine_set_backend(&s_esp32_pico_backend);   /* info real (no stub host) */
     bpvm_uart_set_backend(&s_esp32_uart_backend);   /* H16 */
     bpvm_spi_set_backend(&s_esp32_spi_backend);     /* H16 */
     bpvm_i2c_set_backend(&s_esp32_i2c_backend);     /* H16 */
