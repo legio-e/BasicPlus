@@ -1,0 +1,10 @@
+module QuienSoy
+  import Machine
+  public function main()
+    print "micro:", Machine.getMicro(), " board:", Machine.getBoard(), " variant:", Machine.variant()
+    print "gpio:", Machine.GPIO_COUNT(), " adc:", Machine.ADC_CHANNELS(), " pwm:", Machine.PWM_SLICES()
+    print "uart:", Machine.UART_BUSES(), " i2c:", Machine.I2C_BUSES(), " spi:", Machine.SPI_BUSES()
+    print "cpu MHz:", Machine.cpuFreqHz() / 1000000, " max/min:", Machine.MAX_CPU_MHZ(), Machine.MIN_CPU_MHZ()
+    print "reset:", Machine.resetCause(), " boots:", Machine.bootCount(), " migas:", Machine.markCount()
+  end main
+end QuienSoy

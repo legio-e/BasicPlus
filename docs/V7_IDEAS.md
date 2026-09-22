@@ -1549,3 +1549,113 @@ cursor viene a quitar (con 64 KB × 3 copias la miVM se quedó sin heap en la pr
 nativo (`__freadLine`, dos pasadas sobre el cursor del motor) y quedó en 87 (0,2 ms por línea). Queda margen
 —una pasada con la zona de rascar ahorraría el seek de vuelta— si algún día hace falta.
 
+
+## H4 — la caracterización de los periféricos de cada micro: la HAL BP de capacidades (22-sep, día de análisis)
+
+Tres fichas que son un solo diseño (`#378` la madre, `#470` los arrays, `#479` el mapa de pines y `AnPin`) y
+seis restos que caen con él. Lo que hay, medido hoy; el diseño; las preguntas para Eduardo; el plan.
+
+### 1. Lo que hay hoy, medido
+
+**Los mismos datos se contestan por DOS caminos y ya no coinciden.** `QuienSoy.bp` (BP) contra el `INFO` del wire,
+en tres placas y el host (22-sep):
+
+| | BP: `Machine.*` | wire: `INFO` | qué pasa |
+|---|---|---|---|
+| **Pico** | gpio 30 · adc 4 · **pwm 12** · uart/i2c/spi 2/2/2 · variant A · max 300 MHz | gpio 30 · adc 4 · **pwm 24** · pio 3 | 12 *slices* frente a 24 *canales*: la misma cosa con dos unidades, sin decir cuál |
+| **P4** | gpio 55 · adc 14 · pwm 14 · **variant «B»** · **max 300 MHz** (corre a 360) | gpio 55 · adc 14 · pwm 14 | `variant()` es «B si gpioCount ≥ 40» (del RP2350) y contesta B en un ESP32; `MAX_CPU_MHZ` es el del RP2350 para las cinco familias |
+| **C5** (ayer) | *(la familia)* **gpio 45 · adc 20 · pwm 8** | gpio 29 · adc 6 · pwm 6 | `gpio_esp32.c` es común a S3/C3/C6/C5 y devuelve los números del **S3** a pelo: un programa en el C3/C6/C5 se cree un S3 (`#470`) |
+| **host** | micro host · 30/4/12 · 150 MHz | — | el perfil del RP2350 como defecto de `src/pico.c` |
+
+- **Dos structs rellenadas a mano por familia**: `bpvm_pico_backend_t` (15 callbacks, lo que ve BP; `include/bpvm_pico.h`,
+  el nombre `pico` en 14 `BUILTIN_PICO_*`, 15 `__pico*` en Core.bp y 81 usos en C) y `repl_board_id_t`/`bpvm_repl_info_t`
+  (lo que ve el wire; `board_name, cpu_freq_hz, gpio_count, pio_count, pwm_slices, adc_channels, sram_bytes`). Nadie
+  garantiza que digan lo mismo; el IDE (`PicoExplorer.java:2237`) muestra los del wire.
+- **`UART_BUSES()`/`I2C_BUSES()`/`SPI_BUSES()` devuelven 2 en BP para todo el mundo** (`Machine.bp:194-204`: literales).
+- **Sólo hay CONTADORES, nunca CUÁLES**: `gpioCount()` dice 45 y no dice que el 22-25 del S3 no existen; `adcChannels()`
+  dice 20 y `Adc.Channel(ch)` deja usar `0..3` (`CH0..CH3`: los cuatro pines del RP2350 congelados como contrato);
+  `Pwm.Slice(pin)`/`Pulse.Counter(pin)` toman un PIN sin que nadie sepa si ese pin puede.
+- **El estado del pin no está en el común**: `src/gpio.c` reenvía y no guarda; sólo el STM32 lleva `s_mode[128]` en
+  privado. Sin estado, «analógico ⇒ no digital» no es comprobable.
+- **El descriptor de placa existe sólo en el RP2350** (`pico/board_desc.c`: variante por `SYSINFO.PACKAGE_SEL`, caps por
+  variante, pines de placa desde `board.json`, flash por JEDEC) y no es común.
+- Modos de GPIO: `init(pin, mode)` con 0/1 (INPUT/OUTPUT) y `pull`; sin ANALOG ni colector abierto.
+- El breadcrumb (`setMark`…): cuatro slots que sólo el STM32 rellena; la fachada contesta 0/0/1 mudo (`#487`).
+
+### 2. El diseño: UNA tabla de capacidades por micro, en la imagen, de la que beben todos
+
+**La regla:** cada micro trae **una `const` en su cintura** —`bpvm_caps_t`— y **ningún otro sitio declara un número**:
+el `INFO`, `Machine`, la validación de las fachadas y las clases de pines leen de ahí. El RP2350 la elige por
+variante en el arranque (A/B, como hoy `board_desc`); el ESP32 una por chip (S3, C3, C6, C5, P4: cada uno tiene ya
+su `chip_cfg.h`, que es donde va); el STM32 una por micro (U575, U5G9); el host, la del RP2350A.
+
+```c
+typedef struct {
+    const char* micro;                 /* "esp32c5" — hoy CHIP_MICRO */
+    const char* fabricante;            /* "Espressif" | "Raspberry Pi" | "STMicroelectronics" — #471: manufacturer() */
+    uint32_t    cpu_hz_max, cpu_hz_min;/* POR MICRO (hoy 300/18 del RP2350 para todos) y si se puede cambiar en marcha */
+    uint8_t     cpu_ajustable;
+    /* LOS ARRAYS de Eduardo (#470): las INSTANCIAS válidas; el número es la longitud */
+    const uint8_t* uart; uint8_t n_uart;
+    const uint8_t* i2c;  uint8_t n_i2c;
+    const uint8_t* spi;  uint8_t n_spi;
+    uint8_t        n_pwm;              /* salidas PWM simultáneas, con su UNIDAD dicha: */
+    const char*    pwm_unidad;         /* "slice" (RP2350) | "canal" (LEDC, timer) */
+    /* EL MAPA DE PINES (#479): por GPIO, qué puede; 0 = no existe / no bondeado */
+    const uint16_t* pin;  uint8_t n_pin;   /* bits: DIGITAL, ANALOG, PWM, PULSE, OPEN_DRAIN, INPUT_ONLY */
+    const int8_t*   pin_adc;               /* por GPIO: su canal de ADC, o -1 */
+    uint8_t         breadcrumb;            /* hay migas de verdad (RAM retenida) o no (#487) */
+} bpvm_caps_t;
+```
+
+**De ahí salen, sin declarar nada dos veces:**
+- **El `INFO`**: `gpioCount` = pines con bits ≠ 0; `adcChannels` = pines con ANALOG; `pwmSlices` = `n_pwm` **más
+  `pwmUnidad`**; y los arrays de buses (`"uart":[0,1]`…). El IDE lee por nombre: un campo nuevo no le estorba.
+- **`Machine` en BP** (tres primitivas nuevas, no quince: `__capsArray(kind): integer[]`, `__capsInt(kind)`,
+  `__capsStr(kind)`): `uarts()`, `i2cs()`, `spis()`, `pins()`, `analogPins()`, `pwmPins()`, `hasPin(n)`,
+  `isAnalog(n)`, `pwmUnit()`, `manufacturer()`, `MAX_CPU_MHZ()`/`MIN_CPU_MHZ()` por micro. Los contadores de
+  hoy (`UART_BUSES()`, `ADC_CHANNELS()`, `GPIO_COUNT()`…) se quedan como azúcar (`len(uarts())`): ningún programa se
+  rompe. `variant()` deja de inventar: «A»/«B» sólo si el micro es un RP2350, «» en los demás.
+- **La validación, en el COMÚN y con nombre**: `Uart.Port(3, …)` en un C5 → `RuntimeError: UART 3 no existe en
+  esp32c5 (válidos: 0, 1)`; `Pwm.Slice(22)` en un S3 → `el pin 22 no existe en esp32s3`; `AnPin(5)` en un pin sin
+  ANALOG → `el pin 5 de esp32c5 no es analógico (analógicos: 1..6)`. Hoy cada cintura valida lo que le parece.
+- **El estado del pin, en el común** (`src/gpio.c`: `uint8_t modo[n_pin]`): el invariante «analógico ⇒ no digital»
+  se escribe UNA vez: `Pin(n, OUTPUT)` sobre un pin en ANALOG es error, `AnPin(n)` sobre un pin digital es error, y
+  `on()`/`off()` sobre un `AnPin` es error. El STM32 tira su `s_mode` privado.
+- **El lenguaje** (decidido el 6-sep): `Pin` con `INPUT/OUTPUT/OPEN_COLLECTOR/ANALOG`; **`AnPin extends Pin`**
+  (`AnPin(num)` = `super(num, Pin.ANALOG)`, `read()`, `readVolts()`); `OPEN_COLLECTOR` sólo donde el silicio lo
+  tiene (ESP32, STM32: bit OPEN_DRAIN del mapa; RP2350 → error con nombre, no emulación).
+- **`Adc.Channel(ch)`** sigue existiendo como la vista «por canal» (ADC1), pero validada por el rango REAL del micro
+  (S3 0..9, C5 0..5, RP2350 0..3, U5 0..19) y con el mapa canal↔pin de la tabla; `AnPin` es la vista «por pin».
+  Las dos acaban en el mismo backend.
+- **Los restos**: `manufacturer()` y `MAX/MIN` por micro (`#471`) están en la tabla; el nombre `pico` de la capa C se
+  va con la refactorización (`bpvm_pico_backend_t` → `bpvm_machine_backend_t` con lo que NO es tabla: `uniqueId`,
+  `tempC`, `uptime`, `resetCause`, las migas, `setCpuFreq`; 14 ids sin cambiar de número); el breadcrumb declara si
+  está (`caps.breadcrumb`) y la fachada distingue slot NULL de «nada»; el tamaño de flash ya lo dice la placa en
+  ESP32 (`esp_flash_get_size`, el `INFO` del C5 dijo 32 MB y el arranque cantó el desajuste) y en STM32 es interna y
+  la dice el registro `FLASH_SIZE`: lo que faltaba era que el arranque lo COMPARARA, y ya lo hace.
+
+**Lo que NO cambia**: lo que es de PLACA (LED, NeoPixel, panel, tamaño de FS) sigue en el ENV/`board.json` — la tabla
+es verdad de silicio y viaja compilada, como decidió Eduardo el 6-sep.
+
+### 3. Las preguntas (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | los arrays en BP | `Machine.uarts()/i2cs()/spis()`: `integer[]` con las instancias válidas; los contadores de hoy se quedan como azúcar |
+| 2 | PWM, ADC y contadores de pulsos: ¿array de instancias o de pines? | **de PINES**: en BP se construyen por pin (`Pwm.Slice(pin)`, `Pulse.Counter(pin)`, `AnPin(pin)`), así que lo útil es `pwmPins()`/`analogPins()`/`pulsePins()` del mapa; el contador (`PWM_SLICES()`) sigue diciendo cuántas salidas simultáneas hay, con `pwmUnit()` al lado |
+| 3 | `Adc.Channel` | se queda (vista por canal, rango real) junto a `AnPin` (vista por pin). Quitarla rompería `AdcDemo` y los samples de placa sin ganar nada |
+| 4 | `OPEN_COLLECTOR` en RP2350 | **error con nombre** («este micro no tiene salida en colector abierto»), no emulación |
+| 5 | el `INFO` | crece con `micro`, `pwmUnidad` y los arrays de buses; el mapa de pines NO viaja (es para programas, no para el IDE) |
+| 6 | el nombre de la capa C | `Machine`/`bpvm_machine_*` (como ya se llama en BP); ids de builtin sin cambiar |
+| 7 | breadcrumb en RP2350 y ESP32 | **implementarlo**: RP2350 con los registros scratch del watchdog, ESP32 con RAM `RTC_NOINIT` — es barato y es la herramienta de «ya estoy en problemas» |
+| 8 | NeoPixel ESP32/STM32 | ESP32 con RMT (`led_strip`), en el C6 devkit (GPIO8) que es la placa que lo tiene; STM32 después, sólo si alguna placa trae uno |
+
+### 4. El plan, por pasos que cierran algo
+
+| paso | qué | cierra |
+|---|---|---|
+| **P1** | `bpvm_caps_t` + una tabla por micro (rp2350a/b, s3, c3, c6, c5, p4, u575, u5g9, host); el `INFO` y `Machine` beben de ella; las tres primitivas; `manufacturer()`, `MAX/MIN` por micro, `variant()` honesto; el renombrado `pico` → `machine` en C | `#378`, `#470`, `#471` restos, el nombre `pico`, la flash |
+| **P2** | la validación en el común con nombre; el estado del pin en el común; `Pin.ANALOG`/`OPEN_COLLECTOR`; `AnPin`; `Adc.Channel` sobre el mapa; el ADC del STM32 (canales externos, con la DK2/Nucleo a mano); el `Pulse` del C3 declara 0 | `#479`, `#469` resto, `#480` resto |
+| **P3** | breadcrumb en RP2350 y ESP32 (`#487`); NeoPixel en el C6; el botón BOOT del C6 | `#487`, NeoPixel, BOOT |
+| **P4** | samples (`Caps.bp` en el corpus con el host; `PinMap` de placa en la tanda), manual/referencia, cascada y tanda en las placas que haya | la fila H4 |
