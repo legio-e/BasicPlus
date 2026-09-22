@@ -2055,3 +2055,56 @@ del motor) y `Gui.pack`, encender el ST7789 y medir el flush; el reparto de RAM 
 (`ram_bytes` en la cabecera, §2.5) para que el pack de la GUI y el de SQLite convivan en una placa
 —hoy se cargan de uno en uno—; `'PANT'` como `npk` propio; que el Run del IDE no suba lo que la zona
 sirve (`MODULE_QUERY`); y `H6.b`, que va después de la ronda sellada.
+
+### 6. La C5, y `H6.a` cerrada (22-sep, noche)
+
+**La placa pinta y responde al tacto con LVGL viniendo de un pack**, en una imagen que no lleva ni
+`gui.c` ni LVGL: los 83 builtins y los ~87 trampolines, y nada más. `GuiShot` pintó su captura EN LA
+PANTALLA —confirmado por Eduardo mirando la placa— y `samples/C5Touch.bp` contó cinco pulsaciones
+reales llegando a su manejador BP. El pack: 827 392 B grabados, 88 símbolos resueltos por nombre, el
+ST7789 arrancado por SPI, el reset y el backlight por el CH32V003 en I2C y el táctil CST3530 leído
+dentro del bombeo.
+
+**Lo medido, que era lo que este análisis dejó pendiente:**
+
+| | C5 (pack, SPI sin DMA) |
+|---|---|
+| repintar la PANTALLA ENTERA (153 600 B) | **143 ms** (~7 fps) |
+| repintar UNA ETIQUETA (la zona sucia) | **1 ms** |
+
+O sea: una interfaz **responde**; lo que cuesta es el peor caso. La predicción de §2.3 (≈50-70 ms) se
+quedó corta — son 2 400 transacciones de 64 B y la sobrecarga por transacción pesa más de lo estimado.
+La palanca, como decía el análisis, es **la fachada** (DMA en `gpio_esp32.c`, que además se la lleva la
+SD por SPI), no el driver: el día que la fachada admita transferencias largas, `panel_c5.c` no cambia.
+
+**Los dos fallos del camino, porque enseñan más que el resultado:**
+
+1. **`Gui.mod` con generación 0.** Compilado como proyecto suelto, el sello sale de `BpVM.cfg` y no del
+   `.bp` de al lado: el programa murió con «'Gui' (gen 0) es mas antiguo que el que 'GuiShot' necesita
+   (gen 7)». El pack lleva ahora los `.mod` **canónicos** de `bpstdlib/`, que es lo que el de SQLite ya
+   hacía y estaba escrito en su LEEME.
+2. **La placa se reiniciaba MUDA** en el primer `Gui.screen()`. Con la consola sólo en UART0 el pánico
+   no se ve, y costó dos vueltas de suposiciones —incluida la mía y la de Eduardo, las dos hacia el
+   driver del panel— hasta activar la copia por USB y **leerlo**: `Stack protection fault` en la tarea
+   `main`, 44 bytes por debajo del límite. Traducido con `addr2line`, el culpable no era ni el panel ni
+   el pack:
+
+   ```
+   discover_deps (bpvm.c:684) → bpvm_pack_find / bpvm_fs_stat → lfs_stat_ → lfs_dir_find
+     → lfs_dir_fetchmatch → lfs_bd_read → esp_bd_read → esp_flash_read → cache_hal_suspend
+   ```
+
+   La **recursión de `discover_deps`** (dos buffers de 256 B de ruta por nivel) sobre littlefs y una
+   lectura de flash que **en esta placa no va directa porque el destino está en PSRAM** (el IDF pide
+   búfer de rebote y el camino se hace más hondo). Un programa con GUI arrastra el grafo de
+   dependencias más profundo que había visto la placa, y los 8 KB no daban. Main task a 16 KB, con el
+   volcado escrito al lado en `sdkconfig.defaults`. ⏭️ **Y queda una tarea para H7**: 512 B de buffers
+   de ruta por nivel de recursión es mucho para lo que hace, y la profundidad crece con el grafo.
+
+📌 **La receta de la consola queda escrita** en `esp32c5/sdkconfig.defaults`: cuando haya que ver un
+pánico, `CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y`, reconstruir, leer, y volver a apagarla.
+Sin eso un reinicio es mudo, y un instrumento mudo cuesta el doble.
+
+**Lo que queda de H6**: el reparto de RAM entre VARIOS `npk` (§2.5) —hoy la C5 con la GUI no puede
+llevar además SQLite—; `'PANT'` como `npk` propio; que el Run del IDE no suba lo que la zona sirve
+(`MODULE_QUERY`); la C5 en `tanda.py` como placa CON pantalla; y `H6.b`, que va tras la ronda sellada.

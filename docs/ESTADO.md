@@ -197,6 +197,27 @@ MIPI-DSI — `GuiShot` sigue sacando su captura con el pack cargado. Dos instanc
 proceso, cada una con sus globales. **Lo que no prueba**: el panel, el táctil y el flush; eso es la C5.
 El P4 quedó restaurado con `SQLite.pack` y `SqlDemo` == host.
 
+## 📱 H6.a (22-sep, noche) — LA C5 PINTA Y RESPONDE AL TACTO, con LVGL viniendo de un PACK
+
+Eduardo conectó la C5 y se cerró `H6.a` en una sesión. La imagen de esa placa **no lleva ni `gui.c` ni
+LVGL** —sólo los 83 builtins y los ~87 trampolines—, y aun así `GuiShot` pintó su captura EN LA
+PANTALLA (confirmado por él mirando la placa) y `C5Touch` contó cinco pulsaciones reales llegando a su
+manejador BP. Números y detalle en `V7_IDEAS` §H6.6; commit `92b5c7b8`.
+
+Camino: imagen grabada → **el mini primero** («mini: TODO OK -> 0», que es justo para lo que existe) →
+`Gui.pack` podado a `riscv-imc` (827 392 B) → el INFO ya publica 240×320 → a pintar.
+
+**Dos fallos, y el segundo enseña más que el resultado.** (1) `Gui.mod` compilado como proyecto suelto
+salía con **generación 0** («'Gui' (gen 0) es mas antiguo…»): el pack lleva ahora los `.mod` canónicos
+de `bpstdlib/`, como el de SQLite. (2) La placa se **reiniciaba muda** en el primer `Gui.screen()`, y
+con la consola sólo en UART0 no había pánico que leer: dos vueltas de suposiciones —Eduardo y yo, las
+dos hacia el driver del panel— hasta activar la copia por USB y **verlo**. No era el panel: era la
+recursión de `discover_deps` sobre littlefs y una lectura de flash que en esta placa **no va directa
+porque el destino está en PSRAM**. Main task 8 → 16 KB, con el volcado traducido escrito al lado.
+
+**Medido**: pantalla entera **143 ms**, una etiqueta **1 ms**. Una interfaz responde; el peor caso
+cuesta, y la palanca es la fachada SPI (DMA), no el driver.
+
 ## ⏭️ Traspaso (22-sep, al cerrar el día) — H4 y H6 el mismo día; **lo siguiente es LA C5**
 
 Hoy entraron dos hitos: **H4** por la mañana (arriba) y **H6** por la tarde y la noche —análisis,
@@ -205,8 +226,8 @@ la idea de Eduardo. Commits: `d66e31b9` `ad6ceef1` `67f7b564` `1bcf1ec8` (H4) ·
 (el análisis de H6) · `552f9f26` `99b6ea04` `b6b2ce59` `0267b92f` (P1 + BIOS v5) · `2f29542c` (P2) ·
 `38525ead` `0afccb85` (P3) · `d28a31fb` `c2e8c602` (la prueba en el P4 y los docs).
 
-**LO SIGUIENTE, y Eduardo lo dijo al pausar: la C5.** Es lo único que falta para cerrar `H6.a`, y todo
-lo demás está construido y esperando. La receta, para no redescubrirla:
+**LO SIGUIENTE, y Eduardo lo dijo al pausar: la C5.** ✅ **HECHO esa misma noche** (arriba): `H6.a`
+cerrada. La receta que se siguió, que sigue valiendo para la próxima placa:
 
 1. **Grabar la imagen** (`esp32c5/`, ya compilada con `-DBPVM_GUI -DBPVM_GUI_PACK`: lleva los 83
    builtins y los trampolines, sin `gui.c` ni LVGL). La C5 es USB-Serial-JTAG; el puerto fue **COM6**.
