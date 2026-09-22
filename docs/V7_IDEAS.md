@@ -2202,6 +2202,10 @@ typedef struct {                 /* lo que publica un panel bajo 'PANT' (versió
 
 #### 7.4 La escalera de generalización — tres niveles, UN contrato
 
+> ⚠️ **Corregido el mismo día por una pregunta de Eduardo — leer §7.9 antes que esto.** Lo de abajo
+> habla de «un catálogo de controladores», y eso está mal planteado: no son N drivers, es **UN driver
+> genérico y N PERFILES**, que son datos.
+
 Lo que contesta «¿cómo generalizamos el driver?» no es un mecanismo sino **tres**, y lo importante es
 que los tres publican `'PANT'`, así que LVGL no se entera de cuál se usó:
 
@@ -2262,7 +2266,7 @@ es lo que se compra— la pone él; el que quiere DSI usa una placa donde ya est
 | 1 | ¿dónde viven los números de la placa? | **el ENV**, que es donde ya vive la config de placa y lo que el P4 usa (`display=`). Con `env_get` en la BIOS, el driver los lee al arrancar. Un perfil en fichero (`/sys/panel.cfg`) es el plan B y no hace falta hoy |
 | 2 | ¿el táctil va en `'PANT'` o en su propia marca? | **en `'PANT'`, opcional** (NULL si no hay): es un `npk` menos que construir en el caso normal, y si algún día hace falta mezclar panel nuestro con táctil ajeno, separarlo es una marca más — caben ocho |
 | 3 | ¿el perfil sabe decir «este pin va por un expansor I2C»? | **sí, con una notación mínima** (`gpio:21` · `exio:0x24/1` · `pwm:0x24/0x05`): mete a la C5 entera en el nivel 0 y los expansores I2C son el pan de cada día en las placas con pantalla. Si crece más que eso, es nivel 2 |
-| 4 | ¿el `npk` genérico lleva varios controladores o uno por `npk`? | **varios en uno** (ST7789/ILI9341/GC9A01/ST7796): son unos pocos KB cada uno y así el usuario graba UNA cosa; el ENV elige |
+| 4 | ~~¿el `npk` genérico lleva varios controladores o uno por `npk`?~~ | **contestada en §7.9**: ni lo uno ni lo otro — UN driver genérico (MIPI-DCS sobre SPI) y N **perfiles**, que son datos. El catálogo deja de ser código |
 | 5 | el bus compartido (la TF y el panel de la C5) | el bus, **con dueño**, como los pines: quien lo tomó lo tiene, y el segundo recibe un error CON NOMBRE en vez de un panel muerto. Compartir de verdad (dos CS sobre un bus ya abierto) es un paso aparte |
 | 6 | ¿esto es H6 o es otro hito? | **`H6.c`**, después de `H6.b`: `H6.a` ya demostró que el mecanismo funciona; esto es convertirlo en algo que use alguien de fuera, y es justo lo que pide «la base es finita, lo demás en packs» |
 
@@ -2279,3 +2283,77 @@ es lo que se compra— la pone él; el que quiere DSI usa una placa donde ya est
 **El orden no es caprichoso**: G3 es el que de verdad contesta la pregunta de Eduardo —una placa nueva
 sin escribir C— y **la C6 es el banco perfecto** porque hoy funciona con LVGL dentro: si el pack genérico
 la pinta igual, el nivel 0 está demostrado contra un oráculo, no contra una opinión.
+
+#### 7.9 La corrección: NO son N drivers, es UN driver y N PERFILES (22-sep, noche)
+
+Eduardo, sobre §7.4: *«imagina que nosotros incluimos 8 drivers en el pack pero el usuario necesita otro
+que no está incluido»*. La pregunta destapa que «ocho drivers» es el planteamiento equivocado. Lo que de
+verdad separa a un ST7789 de un ILI9341 o un GC9A01:
+
+| | ST7789 | ILI9341 | GC9A01 |
+|---|---|---|---|
+| direccionar la ventana | `0x2A`/`0x2B`/`0x2C` | **iguales** | **iguales** |
+| rotar (MADCTL `0x36`) | mismos bits | **iguales** | **iguales** |
+| RGB565 (COLMOD `0x3A`) | `0x55` | **igual** | **igual** |
+| secuencia de arranque | ~15 comandos | otros ~20 | ~100 (es famoso) |
+| inversión, tamaño, gap, orden de color | datos | datos | datos |
+
+Todo eso es **MIPI-DCS**, un estándar. Lo único que cambia de verdad es **la secuencia de arranque y unos
+números**. Así que:
+
+> **UN driver genérico —«MIPI-DCS sobre SPI de 4 hilos»— y N perfiles, que son DATOS** (100-500 B cada
+> uno). Un driver + nueve perfiles ≈ 6 KB, contra ~18 KB de nueve drivers escritos a mano.
+
+**Y el noveno del usuario deja de ser un problema: es un fichero de texto.** El fabricante siempre da un
+ejemplo de Arduino o ESP-IDF con su secuencia, y pasarla a la tabla es mecánico. Sin toolchain, sin
+compilar, sin nosotros. El catálogo que enviamos deja de ser una lista cerrada y pasa a ser «los que
+damos probados».
+
+**Dónde vive cada cosa** — y no hace falta inventar formato, porque ya está elegido dos veces (el ENV de
+H9 y el manifest de los packs son los dos `clave=valor`):
+
+| | dónde | por qué |
+|---|---|---|
+| **la PLACA** — pines, bus, frecuencia, qué panel, cómo se resetea, cómo se enciende la luz | **el ENV**, pocas claves | es de *esta* placa y cambia por unidad; y la config de placa ya vive ahí |
+| **el CONTROLADOR** — la secuencia de arranque y sus flags | **un recurso** (`st7789.seq`) | es del IC, no de la placa: el mismo sirve para mil placas, y es largo (el GC9A01 son ~100 comandos). Una clave de ENV de 1000 caracteres no es sitio para eso |
+
+📌 **Y el apunte de Eduardo sobre el IDF** (*«recuerdo que trabajaba con ficheros de configuración,
+aunque creo que era para cuando compilaba la imagen»*): eso es **Kconfig** y su `sdkconfig` (las líneas
+`CONFIG_X=y`), y es de **tiempo de compilación** — justo lo contrario de nuestra decisión de fondo
+(*«una imagen única por familia; variante, pines y panel se deciden en runtime, no con macros»*). Lo que
+sí conviene copiarle es lo que lo hace usable: **Kconfig describe las opciones aparte de los valores**
+(tipo, defecto, rango, ayuda) y por eso `menuconfig` puede enseñar un menú y validar. Un `lcd.sck=6` a
+pelo no guía a nadie y una errata es muda. Nosotros tenemos para eso algo MEJOR que una lista escrita a
+mano: **la tabla de capacidades de H4**, que valida contra el silicio real («el pin 99 no existe en
+esp32c5», «el SPI 5 no existe: válidos 2, 3»). ⏭️ Y a medio plazo tiene sitio natural en el **panel de
+placa del IDE**: un formulario de pantalla que escriba esas claves sería nuestro `menuconfig`, pero en
+caliente y contra la placa enchufada.
+
+**Dónde está la frontera del driver genérico**: 4-wire SPI con MIPI-DCS. Fuera se quedan SPI de 9 bits
+(el D/C como noveno bit), QSPI, paralelo 8080, RGB y DSI — eso sí es un `npk` propio (nivel 2).
+
+**Considerado y descartado: el driver en BasicPlus.** Hay `Spi.Bus`, `Gpio.Pin` e `I2c.Bus`, así que el
+ARRANQUE cabría en BP. Pero el `flush` es el camino caliente —143 ms ya en C— y además obligaría al pack
+a llamar HACIA BP en mitad del render, reentrando por la puerta de atrás. La secuencia como datos
+resuelve lo mismo sin nada de eso.
+
+⚠️ **El agujero honesto que esto deja al descubierto**: el nivel 2 (un `npk` propio) hoy **sólo lo
+podemos hacer nosotros**. Hace falta la cadena AOT, saber del `.mdn`, de las versiones de ABI, del byte
+de arquitectura y del alineado, y la receta vive en notas y no en la documentación — es literalmente lo
+que ya avisaba la memoria `base-finita-lo-demas-en-packs`. Si `'PANT'` va a ser la válvula de escape del
+usuario, **un proyecto plantilla + un script + documentación son un ENTREGABLE de `H6.c`**, no un extra.
+
+#### 7.10 Lo temporal, mientras tanto (acordado con Eduardo el 22-sep)
+
+*«¿Podemos resolver la situación de forma temporal incluyendo todos los drivers de pantalla en el pack
+de LVGL?»* — **sí, y cuesta un +2 %**: cada driver son ~2 KB de código sobre 715 KB, y el `.bss` no se
+multiplica (los 23 KB son los búferes de dibujo y sólo corre uno). Con dos condiciones:
+
+1. **Detrás de la misma interfaz que tendrá `'PANT'`**, aunque de momento se elija con un `if` dentro
+   del pack. Así sacarlos mañana es *mover* un fichero, no reescribirlo.
+2. **Sin esperar a `env_get`**: la BIOS ya presta ficheros, así que el pack puede leer su perfil de
+   `/sys/panel.cfg` hoy. `env_get` sigue siendo lo correcto —la config de placa vive en el ENV— pero no
+   bloquea.
+
+Es un **puente** hacia §7.9, no un destino: mientras los drivers vivan dentro, añadir un panel es
+republicar 715 KB, y eso no escala a «decenas de placas STM32».
