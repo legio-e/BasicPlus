@@ -25,6 +25,8 @@
 #include "repl_esp32.h"
 #include "hw_esp32.h"
 #include "esp32_mods.h"
+#include "pack_esp32.h"        /* V7/H6: el pack nativo, común a la familia */
+#include "bpvm_bios.h"         /* bpvm_bios_slot_count */
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "esp_heap_caps.h"     /* H11: el heap de la VM se pide en runtime, no es .bss */
@@ -212,6 +214,9 @@ void app_main(void)
                : "log: arranque en frio (cargado de flash)");
 
 
+    /* V7/H6 — el bloque de RAM del código nativo, ANTES que el heap de la VM
+     * (la dirección tiene que ser la misma en cada arranque: el sello del pack). */
+    pack_esp32_ram_init();
     /* El heap de la VM, ANTES del climb: layer_app comprueba s_vm_buffer. */
     vm_buffer_init();
 
@@ -236,6 +241,13 @@ void app_main(void)
      *
      * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual. */
     (void) board_mgr_esp32_mapear_packs();
+    /* V7/H6 — el pack NATIVO, para los cinco micros: BUSCAR el ancla y SALTAR se
+     * hace en el primer `Run` (repl_esp32.c), no aquí; y la tabla BIOS se
+     * verifica SIEMPRE, haya pack o no, y DICE QUE SÍ: callar al ir bien no
+     * distingue «completa» de «esta línea no se ejecutó». */
+    if (board_boot_status()->state >= BPVM_BOOT_FS) repl_set_packs_loader(pack_esp32_cargar);
+    log_printf("bios: tabla %s (%d ranuras)",
+               bios_esp32_get() ? "COMPLETA" : "INCOMPLETA", bpvm_bios_slot_count());
     esp32_hw_register();   /* backends de HW (GPIO, pico/info) — siempre */
     /* V6/P1.C3.3 — la identidad de placa, si este silicio trae la suya.
      *

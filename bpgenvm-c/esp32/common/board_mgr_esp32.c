@@ -21,9 +21,7 @@
 #include "log.h"
 #include "esp32_mods.h"   /* V6/U4: la tabla GENERADA de la stdlib embebida (sólo datos) */
 #include "bpvm_mods.h"    /* V6/U4: el bucle y la regla, comunes a las tres familias */
-#if CONFIG_IDF_TARGET_ESP32P4
-#include "pack_p4.h"   /* V5/H8: s_pack_ram_base — la RAM del motor nativo */
-#endif          /* el resultado del climb, al log persistente */
+#include "pack_esp32.h"   /* V5/H8: s_pack_ram_base — la RAM del motor nativo (V7/H6: común, sin #if P4) */
 
 #include "esp_partition.h"
 #include "esp_flash.h"    /* #328 — el tamaño REAL del chip, no el que dice la tabla */
@@ -487,15 +485,13 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
         }
     }
 
-    /* V5/H8 — la RAM de trabajo de un motor nativo: el PRINCIPIO del bloque de
-     * la BD (`[estaticos | arena]`). El P4 ya lo calcula al arrancar y lo
-     * imprime; aquí sólo se expone para que `PACK_BURN_BEGIN` se lo diga al
-     * IDE. En el S3 no hay bloque: queda a 0 y el IDE lo dirá en vez de grabar
-     * un motor que no podría arrancar. */
-#if CONFIG_IDF_TARGET_ESP32P4
+    /* V5/H8 — la RAM de trabajo de un motor nativo: el PRINCIPIO del bloque
+     * (`[estaticos | arena]`). Lo reserva el arranque común (`pack_esp32_ram_init`)
+     * y aquí sólo se expone para que `PACK_BURN_BEGIN` se lo diga al IDE. Sin
+     * bloque queda a 0 y el IDE lo dirá en vez de grabar un motor que no podría
+     * arrancar. V7/H6: para los cinco micros, no bajo `#if P4`. */
     bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
-    bm.pack_ram_size = s_sqlite_size;
-#endif
+    bm.pack_ram_size = s_pack_ram_size;
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);

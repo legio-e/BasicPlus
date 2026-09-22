@@ -30,6 +30,8 @@ idf_component_register(
         "../../src/wire_v1_proto.c"                # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"                # V6/U3: los verbos comunes del REPL
         "../../esp32/common/board_mgr_esp32.c"  # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART) — compartido S3
+        "../../esp32/common/bios_esp32.c"    # V7/H6: la tabla BIOS y el ancla del pack nativo (era del P4)
+        "../../esp32/common/pack_esp32.c"    # V7/H6: el cargador del pack nativo y su bloque de RAM (era del P4)
         "../../esp32/common/platform_esp32.c"
         "../../esp32/common/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
         "../../esp32/common/fs_lfs_esp32.c"    # H2-B3: littlefs (reutilizado del S3) — reemplaza fs_ram.c
@@ -66,8 +68,6 @@ idf_component_register(
         "../../src/bpvm_bios_fs.c"            # V5/H2: sus ranuras de ficheros (PORTABLE, las que usa el VFS de SQLite)
         "../../src/bpvm_bios_hal.c"    # V7/H6: sus ranuras de HARDWARE (PORTABLE: las fachadas de la VM)
         "../../src/bpvm_npack.c"              # V5/I: escalera de validacion del pack nativo
-        "bios_p4.c"                           # V5/H7: la tabla de ESTA placa (3 ranuras propias)
-        "pack_p4.c"                           # V5/H7: cargador del pack nativo (paso 3: andamio)
         "../../src/bpvm_mdn_scan.c"           # V5/H4: buscar el .mdn (FS + pack) en UN sitio
         "../../src/bpvm_util.c"        # #338/#353: zona de rascar + canal de diagnostico
         "../../src/bpvm_bmgr.c"               # H9: board manager (compone env+part)
