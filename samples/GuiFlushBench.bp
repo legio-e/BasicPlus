@@ -1,0 +1,54 @@
+// GuiFlushBench.bp — cuánto cuesta PINTAR en la C5 con LVGL viniendo de un pack.
+//
+// El análisis de H6 (V7_IDEAS §H6 2.3) dejó un número por medir y una predicción:
+// la fachada SPI del ESP32 abre el bus SIN DMA, así que el tope de una transacción
+// es el FIFO (64 B) y el driver del panel trocea. Un repintado entero de 240×320
+// son 153 600 B ⇒ 2 400 transacciones. Esto lo MIDE en vez de estimarlo.
+//
+// Dos medidas, porque son dos cosas distintas y se confunden:
+//   · PANTALLA ENTERA — el peor caso (cambiar el fondo invalida todo).
+//   · UN WIDGET — lo que de verdad hace una interfaz: LVGL sólo repinta la zona
+//     sucia, y ahí es donde se ve si la pantalla «responde» o no.
+module GuiFlushBench
+  import Gui
+  import Machine
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "flush")
+    eti.align(Gui.Align.CENTER, 0, 0)
+
+    // Un primer pintado fuera de la medida: el primero arrastra la creación de
+    // los búferes y el arranque del panel, y mezclarlo falsearía el número.
+    Gui.__guiRunOnce()
+
+    var vueltas: integer := 10
+    var i: integer := 0
+
+    print "pantalla entera (240x320 = 153600 B por el SPI):"
+    var t0: integer := Machine.uptimeMs()
+    i := 0
+    while i < vueltas do
+      if i mod 2 == 0 then
+        scr.setBgColor(Gui.Color(0x102030))
+      else
+        scr.setBgColor(Gui.Color(0x203040))
+      endif
+      Gui.__guiRunOnce()
+      i := i + 1
+    endwh
+    var t1: integer := Machine.uptimeMs()
+    print "  ", (t1 - t0) / vueltas, "ms por pantalla  (", vueltas, "vueltas en", t1 - t0, "ms )"
+
+    print "solo una etiqueta (la zona sucia, que es lo que hace una interfaz):"
+    t0 := Machine.uptimeMs()
+    i := 0
+    while i < vueltas do
+      eti.setText("flush " + i)
+      Gui.__guiRunOnce()
+      i := i + 1
+    endwh
+    t1 := Machine.uptimeMs()
+    print "  ", (t1 - t0) / vueltas, "ms por cambio de etiqueta"
+  end Main
+end GuiFlushBench

@@ -25,9 +25,28 @@ CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 # o sea texto viajando POR EL MISMO CABLE que el wire binario. Se vio literalmente
 # inyectado entre las respuestas al probar el HELLO.
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+# ⚠️ Y CUANDO HAGA FALTA VER UN PANICO, la de arriba se cambia por
+#     CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
+# y se reconstruye: con la consola SOLO en UART0 un reinicio se ve MUDO —el
+# 22-sep costó dos vueltas de suposiciones hasta activarla— y con ella salen el
+# «Guru Meditation» y el volcado de pila, que es lo que dice dónde se cayó.
+# Se vuelve a dejar apagada después: el texto viaja por el MISMO cable que el wire.
 
 # La task de app_main ejecuta el REPL + la VM. Holgura de stack C.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# V7/H6 (22-sep) — 16 KB, y el numero NO es de tanteo: con 8192 el primer programa
+# con GUI reinicio la placa con «Stack protection fault» en la tarea `main`, 44 bytes
+# por debajo del limite. La pila traducida del volcado:
+#
+#   discover_deps -> bpvm_pack_find / bpvm_fs_stat -> lfs_stat_ -> lfs_dir_find
+#     -> lfs_dir_fetchmatch -> lfs_bd_read -> esp_bd_read -> esp_flash_read
+#       -> spiflash_start_core -> cache_hal_suspend -> ...
+#
+# O sea: la RECURSION de discover_deps (dos buffers de 256 B de ruta por nivel) sobre
+# littlefs y una lectura de flash. Un programa con GUI arrastra el grafo de dependencias
+# mas profundo (Gui -> Json, Collections, Str, Core), y ademas en esta placa el destino
+# de la lectura esta en PSRAM: el IDF entonces NO lee directo, pide un buffer de rebote
+# y el camino se hace mas hondo todavia. Las dos cosas juntas se comen los 8 KB.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # Optimizar a tamaño.
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y

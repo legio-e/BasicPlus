@@ -1,0 +1,48 @@
+// C5Hal.bp — ACOTAR: la misma secuencia que hace el panel del pack en la C5
+// (GPIO DC/CS, SPI2 en 6/7, I2C0 en 0/1 y un toque al CH32), pero con las clases
+// de la IMAGEN y un `print` entre paso y paso.
+//
+// Por qué: el 22-sep el primer `Gui.screen()` con el pack reinició la placa sin
+// dejar ni una línea suya en el log. Con esto se ve QUÉ paso la tumba sin culpar
+// al pack — y si sobrevive, el pack deja de ser sospechoso de esa parte.
+module C5Hal
+  import Gpio
+  import Str
+  import Spi
+  import I2c
+
+  function Main()
+    print "1. DC = GPIO9 salida"
+    var dc: Gpio.Pin := Gpio.Pin(9, Gpio.Pin.OUTPUT)
+    dc.off()
+    print "   ok"
+
+    print "2. CS = GPIO10 salida"
+    var cs: Gpio.Pin := Gpio.Pin(10, Gpio.Pin.OUTPUT)
+    cs.on()
+    print "   ok"
+
+    print "3. SPI bus 2: sck 6, mosi 7, 40 MHz, modo 0"
+    var bus: Spi.Bus := Spi.Bus(2, 6, 7, -1, 40000000, 0)
+    print "   ok"
+
+    print "4. un byte por el SPI"
+    bus.write([0x11], 1)
+    print "   ok"
+
+    print "5. I2C bus 0: sda 0, scl 1, 400 kHz"
+    var i2c: I2c.Bus := I2c.Bus(0, 0, 1, 400000)
+    print "   ok"
+
+    print "6. quien contesta en el I2C"
+    var devs: integer[] := i2c.scan()
+    var i: integer := 0
+    while i < len(devs) do
+      print "   dispositivo en 0x" + Str.toHex(devs[i])
+      i := i + 1
+    endwh
+    print "   ", len(devs), "dispositivo(s)"
+
+    print "sobrevivio"
+  end Main
+end C5Hal

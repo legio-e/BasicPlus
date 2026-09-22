@@ -78,9 +78,21 @@ static void lcd_cmd(uint8_t c) {
     g_bios->spi_write(LCD_SPI_BUS, &c, 1);
     g_bios->gpio_write(LCD_CS, 1);
 }
+/* ⚠️ TROCEADO A `SPI_MAX`, y no es una precaución: la fachada SPI del ESP32 abre
+ * el bus SIN DMA (`SPI_DMA_DISABLED`, `max_transfer_sz = 0`), así que el límite
+ * de una transacción es el FIFO del periférico —64 bytes—. Un flush de 24 líneas
+ * son 11 520 bytes: pasárselos de una vez no es «más lento», es una transacción
+ * inválida. Ése es el número que el análisis (V7_IDEAS §H6 2.3) dijo que había
+ * que medir, y la palanca, si molesta, es la FACHADA (DMA), no este fichero:
+ * el día que la fachada admita transferencias largas, esto sigue funcionando. */
+#define SPI_MAX 64
 static void lcd_dat(const uint8_t* d, size_t n) {
     g_bios->gpio_write(LCD_DC, 1); g_bios->gpio_write(LCD_CS, 0);
-    g_bios->spi_write(LCD_SPI_BUS, d, n);
+    while (n > 0) {
+        size_t t = (n > SPI_MAX) ? SPI_MAX : n;
+        g_bios->spi_write(LCD_SPI_BUS, d, t);
+        d += t; n -= t;
+    }
     g_bios->gpio_write(LCD_CS, 1);
 }
 static void lcd_cmd1(uint8_t c, uint8_t p) { lcd_cmd(c); lcd_dat(&p, 1); }
@@ -132,6 +144,11 @@ static uint32_t c5_tick(void) { return g_bios->now_ms(); }
 void bpvm_gui_disp_init(int w, int h) {
     (void) w; (void) h;   /* el tamaño físico lo fija el panel; gui.c pasa el lógico */
     if (!g_bios) return;
+    /* ⚠️ MIGAS DE PAN, y no son andamio: aquí dentro no hay depurador, y el
+     * 22-sep el primer `Gui.screen()` en la C5 reinició la placa sin dejar NI UNA
+     * línea del pack — con lo que no se podía distinguir «se cayó en el SPI» de
+     * «se cayó antes de empezar». Cada paso se cuenta ANTES de darlo. */
+    di("gui: panel C5 — entrando");
     lv_tick_set_cb(c5_tick);
 
     /* 1. Los pines, reclamados como DE PACK (H4: con nombre si no se puede). */
@@ -139,6 +156,7 @@ void bpvm_gui_disp_init(int w, int h) {
     g_bios->gpio_write(LCD_CS, 1);
     if (g_bios->spi_init(LCD_SPI_BUS, LCD_SCK, LCD_MOSI, -1, LCD_HZ, 0) != 0)   { di("gui: la C5 no da el SPI 2"); return; }
     if (g_bios->i2c_init(I2C_BUS, I2C_SDA, I2C_SCL, I2C_HZ) != 0)                { di("gui: la C5 no da el I2C 0"); return; }
+    di("gui: panel C5 — pines, SPI2 e I2C0 tomados");
 
     /* 2. El expansor: EXIO0/1/3 salidas; reset del panel 200 ms abajo, 200 arriba
      *    (la secuencia del BSP de Waveshare); el táctil, 10 y 10. */
@@ -148,6 +166,7 @@ void bpvm_gui_disp_init(int w, int h) {
     ch32_salida(CH32_LCD_RST);                g_bios->sleep_ms(10);    /* TP_RST abajo */
     ch32_salida(CH32_TP_RST | CH32_LCD_RST);  g_bios->sleep_ms(10);
     s_touch_ok = 1;
+    di("gui: panel C5 — CH32V003 ok, resets del panel y del tactil dados");
 
     /* 3. El panel: la secuencia del driver ST7789 del IDF (SLPOUT, MADCTL RGB,
      *    COLMOD 16 bpp, RAMCTRL big-endian, INVON, DISPON). */
@@ -157,11 +176,13 @@ void bpvm_gui_disp_init(int w, int h) {
     { uint8_t rc[2] = { 0x00, 0xF0 }; lcd_cmd(0xB0); lcd_dat(rc, 2); }   /* RAMCTRL */
     lcd_cmd(0x21);                            /* INVON: los IPS van invertidos */
     lcd_cmd(0x29);                            /* DISPON */
+    di("gui: panel C5 — ST7789 inicializado (SLPOUT/MADCTL/COLMOD/RAMCTRL/INVON/DISPON)");
 
     /* 4. LVGL: display + búferes + táctil. */
     s_disp = lv_display_create(LCD_W, LCD_H);
     lv_display_set_flush_cb(s_disp, c5_flush);
     lv_display_set_buffers(s_disp, s_buf1, s_buf2, DRAW_BYTES, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    di("gui: panel C5 — display de LVGL creado");
     s_touch = lv_indev_create();
     lv_indev_set_type(s_touch, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(s_touch, c5_touch_read);

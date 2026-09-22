@@ -1,0 +1,44 @@
+// C5Touch.bp — el TÁCTIL de la C5, con la GUI viniendo del pack.
+//
+// `GuiShot` dibuja y sale, así que allí un botón no puede reaccionar: LVGL sólo
+// lee el táctil dentro del bombeo, y el bombeo vive en `Gui.run()`. Esto sí se
+// queda en el lazo: cada pulsación real sube el contador, lo escribe en la
+// pantalla y lo dice por el puerto. Se para con el STOP del IDE (o un KILL).
+module C5Touch
+  import Gui
+
+  class Contador
+    public property veces: integer
+    public property marca: Gui.Label
+
+    function event onPulsa(quien: Gui.Component)
+      this.veces := this.veces + 1
+      this.marca.setText("pulsaciones: " + this.veces)
+      print "pulsacion", this.veces
+    end onPulsa
+  end Contador
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var titulo: Gui.Label := Gui.Label(scr, "toca el boton")
+    titulo.align(Gui.Align.TOP_MID, 0, 12)
+
+    var marca: Gui.Label := Gui.Label(scr, "pulsaciones: 0")
+    marca.align(Gui.Align.BOTTOM_MID, 0, -20)
+
+    var c: Contador := Contador()
+    c.veces := 0
+    c.marca := marca
+
+    var btn: Gui.Button := Gui.Button(scr, "PULSA")
+    btn.onClick := c::onPulsa
+    btn.width := 160
+    btn.height := 80
+    btn.align(Gui.Align.CENTER, 0, 0)
+
+    print "lazo de eventos en marcha: toca la pantalla"
+    Gui.run()
+    print "fin, pulsaciones:", c.veces
+  end Main
+end C5Touch
