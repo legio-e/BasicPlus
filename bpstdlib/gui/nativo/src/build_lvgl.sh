@@ -1,7 +1,14 @@
 #!/bin/sh
 # build_lvgl.sh — el PACK DE LA GUI (V7/H6 P3): LVGL + gui.c + el panel, para un destino.
 #
-#     bash bpstdlib/gui/nativo/src/build_lvgl.sh [imc|p4|arm] [KB del pool de LVGL, 256]
+#     bash bpstdlib/gui/nativo/src/build_lvgl.sh [imc|p4|arm] [c5|nulo] [KB del pool, 256]
+#
+# El PANEL se elige aquí y no en runtime: `c5` es el de la Waveshare (ST7789 +
+# CH32 + CST3530) y `nulo` es el que NO PINTA, para probar el pack en una placa
+# que no tiene esa pantalla (el P4, idea de Eduardo del 22-sep). Un panel mudo
+# porque su chip no contesta y un panel que no pinta a propósito son cosas
+# distintas: por eso se decide al construir. Hoy el destino `p4` lleva `nulo`
+# por defecto —el P4 no tiene ese panel— y `imc` (la C5) lleva el suyo.
 #
 # La misma cadena que el pack de SQLite (bpstdlib/sqlite/nativo/src/build_sqlite_rv.sh):
 # compilar con la RECETA de la familia, enlazar en BASE 0 con --emit-relocs, cero
@@ -19,7 +26,8 @@
 # lvgl_<sufijo>.link para el oráculo, como manda la casa.
 set -e
 QUE="${1:-imc}"
-POOL_KB="${2:-256}"
+PANEL="${2:-}"
+POOL_KB="${3:-256}"
 HERE="$(cd "$(dirname "$0")" && { pwd -W 2>/dev/null || pwd; })"
 ROOT="$(cd "$(dirname "$0")/../../../.." && { pwd -W 2>/dev/null || pwd; })"
 BPC="$ROOT/bpgenvm-c"
@@ -37,6 +45,17 @@ case "$QUE" in
        ISA="-mcpu=cortex-m33 -mthumb -mfloat-abi=softfp -mfpu=fpv5-sp-d16"; LDX=""; DEST=arm-cortex-m33; SUF=ARMV8 ;;
   *) echo "destino: imc | p4 | arm"; exit 1 ;;
 esac
+# El panel por defecto: el del destino que TIENE pantalla nuestra (la C5) lleva
+# el suyo; los demás, el nulo — un pack sin panel no arranca la GUI y ya está.
+if [ -z "$PANEL" ]; then
+    if [ "$QUE" = imc ]; then PANEL=c5; else PANEL=nulo; fi
+fi
+case "$PANEL" in
+  c5)   PANEL_SRC="$HERE/panel_c5.c" ;;
+  nulo) PANEL_SRC="$HERE/panel_nulo.c" ;;
+  *) echo "panel: c5 | nulo"; exit 1 ;;
+esac
+echo "== pack de la GUI: destino $DEST ($SUF), panel $PANEL, pool $POOL_KB KB =="
 
 OBJ="$HERE/obj_$SUF"
 rm -rf "$OBJ"; mkdir -p "$OBJ"
@@ -60,10 +79,10 @@ echo "[2/5] gui.c (el de la VM, bajo BPVM_EN_PACK) + lo publicado + la entrada +
 "$GCC" $CF -c "$BPC/src/gui_pack_publics.c"  -o "$OBJ/gui_pack_publics.o"
 "$GCC" $CF -c "$HERE/lvgl_pack.c"            -o "$OBJ/lvgl_pack.o"
 "$GCC" $CF -c "$HERE/gui_pack_glue.c"        -o "$OBJ/gui_pack_glue.o"
-"$GCC" $CF -c "$HERE/panel_c5.c"             -o "$OBJ/panel_c5.o"
+"$GCC" $CF -c "$PANEL_SRC"                   -o "$OBJ/panel.o"
 
 echo "[3/5] la lista de enlace, en UN sitio (la lee el oráculo)"
-{ echo "$OBJ/lvgl_pack.o"; echo "$OBJ/gui_pack_publics.o"; echo "$OBJ/gui.o"; echo "$OBJ/gui_pack_glue.o"; echo "$OBJ/panel_c5.o"
+{ echo "$OBJ/lvgl_pack.o"; echo "$OBJ/gui_pack_publics.o"; echo "$OBJ/gui.o"; echo "$OBJ/gui_pack_glue.o"; echo "$OBJ/panel.o"
   ls "$OBJ"/lv_*.o; echo "$LIBGCC"; } > "$HERE/lvgl_$SUF.link"
 
 echo "[4/5] enlazando en BASE 0 con --emit-relocs y --gc-sections"

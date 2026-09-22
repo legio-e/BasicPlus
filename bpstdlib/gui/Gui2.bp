@@ -1,0 +1,69 @@
+// ============================================================
+//  Gui2 — LA GUI DEL PACK, LLAMADA DESDE BP POR SU NOMBRE (V7/H6, sonda)
+//
+//  Idea de Eduardo (22-sep): *«¿se podría probar en la P4 sin desactivar el LVGL
+//  actual? No sé, con un Gui2.bp que llame a la LVGL del pack.»*
+//
+//  Y es lo que es: la MISMA tabla que publica el pack bajo 'LVGL' —la que la VM
+//  consume por los trampolines de `src/gui_pack.c` en una placa sin LVGL dentro—
+//  vista aquí por el OTRO camino, el de `native … from pack`. No hay builtins de
+//  por medio, así que **no toca la GUI de la imagen**: en un P4, `Gui` sigue
+//  pintando en su panel MIPI-DSI y esto habla con la LVGL que vive en el pack.
+//  Dos instancias, cada una con sus globales, y sólo se mueve la que se llama.
+//
+//  ─── QUÉ ES ESTO Y QUÉ NO ───
+//
+//  NO es la GUI de BasicPlus: eso es `Gui`, con sus clases, sus eventos y su
+//  documentación. Esto es una SONDA —un puñado de las ~87 funciones publicadas,
+//  las que bastan para ver el modelo moverse— y a la vez el primer ensayo del
+//  camino «B2» del diseño (`V7_IDEAS` §H6 2.2): si algún día el catálogo de
+//  widgets tiene que crecer sin rehacer las siete imágenes, se crece por aquí.
+//
+//  ⚠️ Los nombres son los que publica el pack (`scripts/gen_gui_pack.py` los
+//  saca de `bpvm_gui.h`: `bpvm_gui_create_label` → "create_label"), así que
+//  tienen que escribirse EXACTAMENTE igual. Si uno no está, el puente lo dice
+//  con su nombre en vez de saltar a ninguna parte.
+//
+//  ⚠️ Todo cruza en 4 bytes (el AOT v1): enteros y cadenas. Lo que devuelve un
+//  `const char*` del pack llega aquí como `string`. Lo que el pack saca por
+//  PUNTEROS DE SALIDA no cruza —el puente sólo admite `long[]`/`double[]` como
+//  caja de un valor de 8 bytes, y lo dice con nombre («ese tipo de array no
+//  cruza a un pack»)—, así que el tamaño del panel se pregunta por el modelo:
+//  `get_width(screen_active())`, que además prueba que el modelo recogió el
+//  tamaño nativo que dijo el panel.
+// ============================================================
+module Gui2
+  import Core
+  import v1 from pack "LVGL"
+
+  // -------- el modelo: crear y consultar --------
+  public native function screen_active(): integer
+  public native function create_label(parent: integer): integer
+  public native function create_button(parent: integer): integer
+  public native function set_text(handle: integer, s: string)
+  public native function get_text(handle: integer): string
+  public native function set_width(handle: integer, w: integer)
+  public native function get_width(handle: integer): integer
+  public native function get_height(handle: integer): integer
+  public native function align(handle: integer, a: integer, dx: integer, dy: integer)
+
+  // -------- los eventos NO están aquí, y es a propósito --------
+  //
+  // `bind_click`/`inject_click` cruzarían (dos enteros), pero para ver el
+  // resultado haría falta `next_event`, que saca el `kind` por un `int*` — y eso
+  // no cruza el puente. Una native que no se puede EJERCITAR no prueba nada: el
+  // camino de los eventos se verifica por los trampolines de la VM (que es como
+  // lo usará una placa de verdad) y en el host con `make test-guipack`.
+
+  // -------- el fin de RUN --------
+  public native function reset()
+
+  // El tamaño del panel del pack, por el modelo: el screen mide lo que mide el
+  // panel (decisión de Eduardo del 4-sep), así que esto lo dice y de paso prueba
+  // que el pack preguntó a su display al crear la pantalla.
+  public function screenSize(): integer[]
+    var s: integer := screen_active()
+    return [get_width(s), get_height(s)]
+  end screenSize
+
+end Gui2

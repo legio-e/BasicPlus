@@ -34,7 +34,16 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     if (bios->version <  BPVM_BIOS_VERSION) return 3;   /* la tabla crece por el final */
     if (bios->log     == 0)                 return 4;
     g_bios = bios;
-    di("gui: pack vivo (LVGL " LVGL_VERSION_INFO ")");
+    /* ⚠️ Con los NÚMEROS, no con `LVGL_VERSION_INFO`: ese macro es la cadena vacía
+     * en una versión publicada, y la primera prueba en el P4 dejó en el log un
+     * «pack vivo (LVGL )» que no decía nada — un instrumento mudo. */
+    {
+        char b[80];
+        lv_snprintf(b, sizeof b, "gui: pack vivo (LVGL %d.%d.%d, pool %d KB)",
+                    LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH,
+                    (int) (LV_MEM_SIZE / 1024u));
+        di(b);
+    }
 
     /* LVGL entero, sin display todavía: el display lo monta gui.c en el primer
      * Gui.screen() (lvgl_ensure_init -> bpvm_gui_disp_init, que es panel_c5.c).

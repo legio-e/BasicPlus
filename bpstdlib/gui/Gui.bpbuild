@@ -14,10 +14,11 @@
     "compilador solo genera los dos primeros. El nativo es un INGREDIENTE, no una salida."
   ],
   "sourceDir":    "..",
-  "sources":      ["../Gui.bp"],
+  "sources":      ["../Gui.bp", "./Gui2.bp"],
   "outDir":       "out",
   "dependencies": [],
   "out":          "pack",
   "pack":         { "name": "Gui", "version": "9.2.2", "provides": "LVGL",
-                    "notas": "LVGL 9.2.2 + Gui.mod + el panel de la ESP32-C5-Touch-LCD-2.8 (ST7789 + CST3530 + CH32V003)" }
+                    "notas": "LVGL 9.2.2 + Gui.mod + el panel de la ESP32-C5-Touch-LCD-2.8 (ST7789 + CST3530 + CH32V003)" },
+  "aot":          { "enabled": true, "targets": ["riscv"] }
 }

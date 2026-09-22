@@ -1,0 +1,60 @@
+// GuiPack.bp — LA SONDA DEL PACK DE LA GUI (V7/H6), y la contesta a la pregunta
+// de Eduardo del 22-sep: *«¿se podría probar en la P4 sin desactivar el LVGL
+// actual? No sé, con un Gui2.bp que llame a la LVGL del pack.»*
+//
+// Este programa habla con LAS DOS a la vez:
+//
+//   · `Gui2` — la LVGL que vive en el PACK, por las funciones que publica bajo
+//     la marca 'LVGL' y que el puente resuelve POR NOMBRE. En un P4 su panel es
+//     el NULO (esa placa no tiene el ST7789 de la C5), así que no pinta: lo que
+//     se prueba es el pack cargándose, LVGL arrancando dentro, `gui.c` con su
+//     pegamento sobre la tabla BIOS, y el MODELO moviéndose — que es sobre lo
+//     que se mide la paridad, no sobre los píxeles.
+//   · `Gui` — la de la IMAGEN, que en el P4 pinta en su MIPI-DSI como siempre.
+//
+// Si las dos contestan y cada una con SU tamaño de pantalla, la convivencia
+// está demostrada: son dos instancias independientes de LVGL en el mismo
+// proceso, cada una con sus globales, y sólo se mueve la que se llama.
+//
+// No va en el corpus de paridad: necesita una placa con el pack grabado.
+module GuiPack
+  import Gui
+  import Gui2
+
+  function Main()
+    print "== el pack =="
+    var tam: integer[] := Gui2.screenSize()
+    print "  pantalla del pack:", tam[0], "x", tam[1]
+
+    var scr: integer := Gui2.screen_active()
+    print "  screen handle:", scr
+
+    var eti: integer := Gui2.create_label(scr)
+    Gui2.set_text(eti, "hola desde el pack")
+    print "  label", eti, "dice:", Gui2.get_text(eti)
+
+    Gui2.set_width(eti, 123)
+    print "  y mide", Gui2.get_width(eti), "de ancho"
+
+    var bot: integer := Gui2.create_button(scr)
+    Gui2.set_text(bot, "boton")
+    Gui2.align(bot, 4, 0, 0)
+    print "  boton", bot, "dice:", Gui2.get_text(bot)
+
+    // Un texto largo, que obliga al pegamento a pedir memoria al TLSF del pack.
+    Gui2.set_text(eti, "0123456789012345678901234567890123456789012345678901234567890123")
+    print "  texto largo:", len(Gui2.get_text(eti)), "caracteres"
+
+    print ""
+    print "== la imagen =="
+    var s2: Gui.Screen := Gui.Screen()
+    print "  pantalla de la imagen:", s2.width, "x", s2.height
+    var e2: Gui.Label := Gui.Label(s2, "hola desde la imagen")
+    e2.align(Gui.Align.CENTER, 0, 0)
+    print "  label de la imagen creado, handle distinto del del pack"
+
+    print ""
+    print "las dos vivas, cada una con su LVGL"
+    Gui2.reset()
+  end Main
+end GuiPack
