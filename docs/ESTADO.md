@@ -197,7 +197,40 @@ MIPI-DSI — `GuiShot` sigue sacando su captura con el pack cargado. Dos instanc
 proceso, cada una con sus globales. **Lo que no prueba**: el panel, el táctil y el flush; eso es la C5.
 El P4 quedó restaurado con `SQLite.pack` y `SqlDemo` == host.
 
-## ⏭️ Traspaso (22-sep, al cerrar) — H4 casi entera en una mañana; lo que queda pide placas (C6, Nucleo/DK2); lo siguiente: H7
+## ⏭️ Traspaso (22-sep, al cerrar el día) — H4 y H6 el mismo día; **lo siguiente es LA C5**
+
+Hoy entraron dos hitos: **H4** por la mañana (arriba) y **H6** por la tarde y la noche —análisis,
+P1, la BIOS v5, P2 y P3—, y el pack de la GUI quedó **probado en el P4 sin tocar su LVGL**, que era
+la idea de Eduardo. Commits: `d66e31b9` `ad6ceef1` `67f7b564` `1bcf1ec8` (H4) · `376933b3` `15dbce59`
+(el análisis de H6) · `552f9f26` `99b6ea04` `b6b2ce59` `0267b92f` (P1 + BIOS v5) · `2f29542c` (P2) ·
+`38525ead` `0afccb85` (P3) · `d28a31fb` `c2e8c602` (la prueba en el P4 y los docs).
+
+**LO SIGUIENTE, y Eduardo lo dijo al pausar: la C5.** Es lo único que falta para cerrar `H6.a`, y todo
+lo demás está construido y esperando. La receta, para no redescubrirla:
+
+1. **Grabar la imagen** (`esp32c5/`, ya compilada con `-DBPVM_GUI -DBPVM_GUI_PACK`: lleva los 83
+   builtins y los trampolines, sin `gui.c` ni LVGL). La C5 es USB-Serial-JTAG; el puerto fue **COM6**.
+2. **El mini primero** — el control antes del motor: `bash bpgenvm-c/tools/npack_mini/build_mini.sh imc`
+   (ya hecho: `mini.npk.RV32IMC`), `Mini.bpbuild` → `Mini.pack`, y grabarlo con
+   `wire_serie.py COM6 pack ... riscv-imc`. Tiene que decir «mini: TODO OK -> 0». Si no, el fallo es
+   del cargador y no del pack de la GUI — que es justo para lo que existe el mini.
+3. **El pack de la GUI**: `bpstdlib/gui/out/Gui.pack` ya está construido con los dos `npk`;
+   `wire_serie.py COM6 pack bpstdlib/gui/out/Gui.pack riscv-imc` se queda con el `RV32IMC` (panel C5).
+4. **Encenderla**: un `Gui*Demo` de los de siempre —los builtins son los mismos, `Gui.bp` es el mismo—
+   y `samples/GuiPack.bp` si se quiere ver también el camino `Gui2`.
+5. **Medir** lo que el análisis dejó dicho: ms por flush de 24 líneas y por pantalla completa (la
+   fachada SPI del ESP32 va **sin DMA**, 64 B por transacción: es el número que decide si hay que
+   tocarla), la RAM del pack en uso, y la latencia de un clic con `GuiClickMeas`.
+
+⚠️ **Dos cosas que morderán en la C5 y están escritas en el código**: el **reset del panel y el
+backlight NO son GPIO** (van por I2C al CH32V003 en 0x24: si no contesta, pantalla negra con el SPI
+perfecto), y **hoy se carga UN pack nativo** (el primero válido de la zona) — la C5 con la GUI no
+podrá tener además SQLite hasta que esté el reparto de RAM entre varios `npk` (`V7_IDEAS` §H6 2.5).
+
+**Después de la C5**: `H6.b` (quitar LVGL de C6/P4/DK2) sólo tras la ronda sellada; y H7 (`#530` 🔴,
+`#531` 🟡), que era lo siguiente antes de que H6 se adelantara.
+
+## ⏭️ Traspaso (22-sep, mediodía) — H4 casi entera en una mañana; lo que queda pide placas (C6, Nucleo/DK2)
 
 Hecho hoy: H4 P1 (la tabla de capacidades, `d66e31b9`), P2 (`#479`: el mapa de pines en uso, `ad6ceef1`), P3a (`#487`: el
 breadcrumb en el común, `67f7b564`), la cascada (siete imágenes; Pico y P4 grabadas, tanda verde; `1bcf1ec8`). Cerradas
