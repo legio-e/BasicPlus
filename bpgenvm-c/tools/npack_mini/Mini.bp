@@ -1,0 +1,8 @@
+module Mini
+  // El modulo BP que acompana al mini.npk en su .pack (V7/H6 P1). No hace nada:
+  // el pack tiene que llevar al menos un .mod para construirse por el camino de
+  // siempre (PackStep), y este es el mas pequeno posible.
+  public function version(): integer
+    return 1
+  end version
+end Mini

@@ -46,7 +46,7 @@ public final class NpackBuild {
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
             System.err.println("Uso: NpackBuild <entrada.elf>"
-                    + " <arm-cortex-m33|riscv32-esp-p4> <salida.npk>"
+                    + " <arm-cortex-m33|riscv32-esp-p4|riscv32-imc> <salida.npk>"
                     + " [--entry <simbolo>] [--umbral-ram 0x20000000]");
             System.exit(2);
         }

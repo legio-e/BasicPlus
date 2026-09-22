@@ -183,7 +183,13 @@ public final class NpackReloc {
             this.ignorar   = new LinkedHashSet<>(Arrays.asList(ignorar));
             this.patch     = patch;
         }
+        /** [V7/H6] Un destino RISC-V es el que trae ELF de RISC-V, sea cual sea su
+         *  ABI de coma flotante: el IDE elige toolchain y `--no-relax` por ESTO, no
+         *  por identidad con el del P4 (que con dos destinos RISC-V dejaba fuera al
+         *  segundo en silencio). */
+        public boolean esRiscv() { return machine == Elf32Machine.RISCV; }
     }
+
 
     /** ARM Cortex-M33 (ARMv8-M Mainline, FPU simple): Metro RP2350 y STM32. */
     public static final Destino ARM_CORTEX_M33 = new Destino(
@@ -244,6 +250,26 @@ public final class NpackReloc {
             });
 
     /**
+     * [V7/H6, el resto de #502] RISC-V RV32IMC sin FPU, ABI `ilp32` — ESP32-C3,
+     * C6 y C5. Mismo ELF, mismas relocalizaciones y mismo parcheador que el P4;
+     * lo que cambia es la RECETA (`RV32IMC_ILP32`, la que esos firmwares exigen)
+     * y la ABI de coma flotante que va en la cabecera del `.npk` y compara el
+     * dispositivo: un pack del P4 (`ilp32f`) se rechaza en la C5 con nombre, y
+     * al revés. El sufijo es distinto (`RV32IMC`) porque la doble extensión es lo
+     * que poda el grabado: `sqlite.npk.RISCV` y `sqlite.npk.RV32IMC` conviven en
+     * el mismo pack y cada placa se lleva el suyo. En el `.bpbuild` se pide como
+     * `aot.targets: ["riscv-imc"]`; el INFO de la placa lo elige por su receta.
+     */
+    public static final Destino RISCV32_IMC = new Destino(
+            "riscv32-imc", "RV32IMC", "riscv-imc", "ilp32", "RV32IMC_ILP32",
+            Elf32Machine.RISCV, /*rela*/ true,
+            RISCV32_ESP_P4.flashSecs.toArray(new String[0]),
+            RISCV32_ESP_P4.dataSecs.toArray(new String[0]),
+            RISCV32_ESP_P4.bssSecs.toArray(new String[0]),
+            RISCV32_ESP_P4.ignorar.toArray(new Integer[0]),
+            RISCV32_ESP_P4.patch);
+
+    /**
      * EL CATÁLOGO DE FAMILIAS. Añadir una tercera se hace <b>aquí y sólo
      * aquí</b>: el proyecto (`aot.targets`), el nombre de la doble extensión,
      * la poda del grabado y el oráculo salen todos de esta lista.
@@ -254,7 +280,7 @@ public final class NpackReloc {
      * silencio y tarde.
      */
     public static final List<Destino> DESTINOS =
-            Collections.unmodifiableList(Arrays.asList(ARM_CORTEX_M33, RISCV32_ESP_P4));
+            Collections.unmodifiableList(Arrays.asList(ARM_CORTEX_M33, RISCV32_ESP_P4, RISCV32_IMC));
 
     /** Por su nombre largo (`riscv32-esp-p4`). null si no existe. */
     public static Destino porNombre(String n) {

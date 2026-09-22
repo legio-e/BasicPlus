@@ -165,7 +165,7 @@ public final class AotBuild {
         /** RISC-V necesita además `--no-relax` al enlazar: la relajación genera
          *  relocalizaciones que `MdnPack` no resuelve. */
         boolean enlazarRiscv() {
-            return destino == basicplus.frontend.NpackReloc.RISCV32_ESP_P4;
+            return destino.esRiscv();   /* V7/H6: los dos destinos RISC-V, no sólo el del P4 */
         }
     }
 
@@ -293,7 +293,7 @@ public final class AotBuild {
                 log.accept("[aot] " + w);
                 return res;
             }
-            boolean riscv = d == basicplus.frontend.NpackReloc.RISCV32_ESP_P4;
+            boolean riscv = d.esRiscv();   /* V7/H6: P4 (ilp32f) y C3/C6/C5 (ilp32) */
             /* #428 — ENLAZAN LAS DOS. RISC-V ya lo hacía (su `.text` no sale
              * autocontenido); ARM no, y por eso una `native` no podía llevar ni
              * un literal de cadena: el literal se queda en `.rodata`, fuera de
