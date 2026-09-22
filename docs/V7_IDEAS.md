@@ -1638,6 +1638,36 @@ typedef struct {
 **Lo que NO cambia**: lo que es de PLACA (LED, NeoPixel, panel, tamaño de FS) sigue en el ENV/`board.json` — la tabla
 es verdad de silicio y viaja compilada, como decidió Eduardo el 6-sep.
 
+### 2b. El apunte de Eduardo (22-sep): un micro NO es un hardware — la tabla es por VARIANTE y se elige en el arranque
+
+*«Un micro puede tener diferente hardware. La RP2350A y RP2350B; en las ESP32 varían sobre todo en configuración de
+RAM y flash; los STM32 son los más complejos: puede haber micros con 64, 80, 100, 144… pines. En muchos casos los
+cambios son el número de pines y algún periférico más o menos. Si se puede construir una imagen única como la RP2350,
+hay que tener presente esas diferencias. Algún micro tiene más de un ADC.»*
+
+Cambia tres cosas del diseño de §2, y las tres van en la misma dirección — **la imagen única por familia decide la
+tabla al arrancar**, no al compilar:
+
+1. **La tabla se ELIGE en el arranque por lo que el silicio dice de sí mismo**, con el mecanismo de cada casa:
+   - **RP2350**: `SYSINFO.PACKAGE_SEL` → A (QFN-60, 30 GPIO) / B (QFN-80, 48 GPIO). Ya existe (`board_desc.c`): es el
+     modelo. Una imagen, dos tablas.
+   - **STM32**: `DBGMCU_IDCODE` (qué die: U575/U585/U5G9…, y con él qué periféricos hay) + el **registro de paquete**
+     (`PACKAGE`, en la U5 en `0x0BFA0500`: LQFP64/100/144, UFBGA169…) → **el mapa de pines del die enmascarado por los
+     pines bondeados del paquete**. Una imagen por die con N paquetes dentro: la tabla del die lleva el mapa completo y
+     una máscara por paquete. Es lo que hace posible que la placa 30 del STM32 sea sólo pines y ENV.
+   - **ESP32**: los pines son fijos por chip (S3, C3, C6, C5, P4: cada uno su proyecto y su tabla); lo que varía por
+     módulo —flash, PSRAM— **ya se mide al arrancar** (`esp_flash_get_size`, `esp_psram_get_size`) y no va en la tabla.
+2. **La RAM y la flash NUNCA van en la tabla**: se miden (JEDEC en RP2350, `esp_flash_get_size` en ESP32, el registro
+   `FLASH_SIZE` en STM32) — es lo que ya hace el `INFO` y lo que ayer cantó el desajuste del C5.
+3. **Más de un ADC**: el mapa de pines guarda **(unidad, canal)** por pin, no sólo el canal. `AnPin(pin)` resuelve las
+   dos cosas desde el mapa —la vista por pin no tiene el problema—; `Adc.Channel(ch)` es la vista por canal de la
+   **unidad 1** (documentado), y si un día hace falta otra unidad por canal, es `Adc.Channel(unidad, ch)`: una
+   sobrecarga, no un cambio.
+
+Con eso la struct de §2 gana `paquete` (texto: "QFN-80", "LQFP144"), `n_adc` (unidades) y `pin_adc` pasa a dos arrays
+(`pin_adc_unit`, `pin_adc_ch`); y `bpvm_caps()` es una FUNCIÓN que devuelve la tabla elegida en el arranque, no un
+símbolo `const` fijo. El `INFO` publica `micro` y `paquete`; `Machine.package(): string` en BP.
+
 ### 3. Las preguntas (propuesta; Eduardo decide)
 
 | # | pregunta | propuesta |
