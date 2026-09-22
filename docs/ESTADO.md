@@ -143,6 +143,16 @@ TAMP, el RP2350 una zona `.uninitialized_data` (`__uninitialized_ram`), las ESP3
 desaparecen del backend de `Machine`. Verificado con el `RESET` del wire: Pico «arranque #4, rastro anterior 100 200 300»,
 P4 «#3, 100 200 300». Quedan de P3 NeoPixel y el botón BOOT del C6 (con la placa) y P4 (cascada y tanda).
 
+## ⏭️ Traspaso (22-sep, al cerrar) — H4 casi entera en una mañana; lo que queda pide placas (C6, Nucleo/DK2); lo siguiente: H7
+
+Hecho hoy: H4 P1 (la tabla de capacidades, `d66e31b9`), P2 (`#479`: el mapa de pines en uso, `ad6ceef1`), P3a (`#487`: el
+breadcrumb en el común, `67f7b564`), la cascada (siete imágenes; Pico y P4 grabadas, tanda verde; `1bcf1ec8`). Cerradas
+`#378`, `#470`, `#479`, `#487` y los restos de `#471`; el nombre `pico` fuera de la capa C; la flash la dice la placa.
+**Queda de H4**, todo con placa: NeoPixel (RMT, GPIO8) y el botón BOOT del C6; el ADC externo del STM32 (`#469` resto) con
+la Nucleo/DK2; la máscara de pines por paquete cuando haya dos placas del mismo die. **Pendiente de grabar**: S3/C3/C6/C5/
+Nucleo/DK2 (imágenes de las 09:3x, con H1 + H3 + H4). **Lo siguiente**: H7 (`#530` 🔴, `#531` 🟡) o lo que Eduardo diga.
+Árbol limpio, sin push.
+
 ## ⏭️ Traspaso (21-sep, al cerrar) — la 1.ª etapa de H11 HECHA esa misma noche (con PSRAM); lo siguiente: H7 y H4
 
 Eduardo, al parar: *«cuando vuelva podemos probar la 1.ª etapa a ver qué tal. Y nos pararemos ahí. Después H7 y H4 o
