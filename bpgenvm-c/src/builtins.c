@@ -873,7 +873,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * GUI deja UN valor en pila — void → 0 (el emisor lo guarda), valor → result.
      * Orden de pop: último arg en top (igual que el resto). Color/fuente son
      * render-only → no afectan al dump (no-op aquí; LVGL los honrará en H4.2). */
-    case BUILTIN_GUI_SCREEN_ACTIVE: { push_i32(vm, tc, bpvm_gui_screen_active()); return BPVM_OK; }
+    case BUILTIN_GUI_SCREEN_ACTIVE: {
+        /* V7/H6 — el primer paso de todo programa con GUI: si la GUI llega por el
+         * pack y no está (o no vale), aquí se dice CON NOMBRE, no en un 0 mudo. */
+        const char* motivo = 0;
+        if (!bpvm_gui_disponible(&motivo)) {
+            char m[192]; snprintf(m, sizeof m, "GUI: %s", motivo ? motivo : "no disponible");
+            return builtin_throw(vm, tc, m);
+        }
+        push_i32(vm, tc, bpvm_gui_screen_active()); return BPVM_OK;
+    }
     case BUILTIN_GUI_CREATE_OBJ: return gui_make_child(vm, tc, bpvm_gui_create_obj);
     case BUILTIN_GUI_CREATE_LABEL: return gui_make_child(vm, tc, bpvm_gui_create_label);
     case BUILTIN_GUI_CREATE_BUTTON: return gui_make_child(vm, tc, bpvm_gui_create_button);
@@ -914,7 +923,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * (modelo-only/arnés): drena los inyectados y vuelve. */
         uint32_t disp_click, disp_change;
         gui_dispatchers(vm, &disp_click, &disp_change);   /* #486 - una vez por RUN */
-#ifdef BPVM_LVGL
+#ifdef BPVM_GUI_RENDER   /* V7/H6: LVGL dentro, o por el pack */
         for (;;) {
             uint32_t objptr; int kind;
             while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
@@ -988,7 +997,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * turno al siguiente-. Antes se devolvia un booleano y la espera se la
          * comia el bombeo, a nivel de SO, congelando a todos los hilos BP. */
         if (vm->kill_requested) { push_i32(vm, tc, -1); return BPVM_OK; }
-#ifdef BPVM_LVGL
+#ifdef BPVM_GUI_RENDER   /* V7/H6: LVGL dentro, o por el pack */
         if (!bpvm_gui_lvgl_window_open()) {
             /* SIN VENTANA (--no-screen con LVGL, o la cerro el usuario): la salida
              * es la MISMA regla que el headless sin LVGL de abajo, no un -1 a

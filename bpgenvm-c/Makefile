@@ -438,6 +438,18 @@ RUNGUARD_BIN = build/test_runguard.exe
 # desbordamiento (600 eventos en 512 huecos, sin drenar) y comprueba que el primer
 # descarte se dice y el total al terminar. Ver test/test_guidrop.c.
 GUIDROP_BIN = build/test_guidrop.exe
+# V7/H6 P2 — la COSTURA VM <-> pack de la GUI: los trampolines GENERADOS (gui_pack.c,
+# de bpvm_gui.h por scripts/gen_gui_pack.py) contra un DOBLE del pack (generado
+# tambien). Sin la VM: la prueba es de la frontera. Primero comprueba que lo
+# generado esta al dia con la cabecera: un trampolin rancio es una ranura
+# equivocada sin error de compilacion.
+test-guipack:
+	@mkdir -p build
+	python ../scripts/gen_gui_pack.py --comprobar
+	$(CC) $(CFLAGS) -DBPVM_GUI_PACK -Isrc test/test_guipack.c test/gui_pack_stubs.c src/gui_pack.c src/bpvm_bios.c -o build/test_guipack.exe
+	@echo "--- V7/H6: la costura VM <-> pack de la GUI (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_guipack.exe
+
 test-guidrop: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_guidrop.c $(LIBOBJ) -o $(GUIDROP_BIN) $(LDFLAGS)

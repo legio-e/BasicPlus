@@ -39,6 +39,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
+        "../../src/gui_pack.c"                # V7/H6 P2: la GUI por el PACK (trampolines generados de bpvm_gui.h; sin gui.c ni LVGL)
         "../../src/fs_facade.c"        # #247: facade file I/O (backend ESP32 = fs_lfs_esp32.c)
         "../../src/fs_lfs.c"                       # H2-B3: backend littlefs de la fachada (portable)
         "../../third_party/littlefs/lfs.c"        # H2: motor littlefs v2.11.3 (in-tree)

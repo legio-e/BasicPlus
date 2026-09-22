@@ -17,6 +17,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* V7/H6 — HAY RENDER: o LVGL va dentro de la imagen (BPVM_LVGL: host, C6, P4,
+ * DK2) o llega por el PACK de la GUI (BPVM_GUI_PACK: la imagen no lleva ni
+ * gui.c ni LVGL, y src/gui_pack.c —generado de esta cabecera— sirve cada
+ * función de aquí desde la tabla que el pack publica bajo 'LVGL'). Los sitios
+ * de la VM que dependen de que haya render (el bombeo de Gui.run, el tamaño
+ * de pantalla del INFO) miran ESTO, no a LVGL. */
+#if defined(BPVM_LVGL) || defined(BPVM_GUI_PACK)
+#  define BPVM_GUI_RENDER 1
+#endif
+
 /* Creación / pantalla raíz. Devuelven el handle (>0), 0 si overflow. */
 int  bpvm_gui_parent_alive(int parent);   /* 1 si `parent` es un contenedor vivo (error "widget sin contenedor") */
 int  bpvm_gui_screen_active(void);
@@ -130,8 +140,21 @@ void bpvm_gui_visit_roots(void (*visit)(void* ctx, uint32_t objptr), void* ctx);
 /* Vuelca el árbol de widgets a un buffer recién malloc'd (el caller hace free).
  * Devuelve la longitud en bytes (sin el '\0'). Byte-idéntico a miVM. */
 size_t bpvm_gui_dump_tree(char** out);
+/* V7/H6 — libera lo que dump_tree reservó, CON EL MISMO alocador que lo reservó.
+ * En la imagen es bpvm_free; en el pack, su arena — y por eso el trampolín copia. */
+void   bpvm_gui_dump_free(char* p);
 
-#ifdef BPVM_LVGL
+/* V7/H6 — ¿hay GUI que valga? Con LVGL dentro, siempre 1. Con el pack: 1 si el
+ * pack 'LVGL' está grabado, habla esta API y trae todos los símbolos; si no, 0
+ * y `*motivo` lo dice («esta placa no tiene el pack 'LVGL' grabado», «al pack
+ * le falta 'create_chart'»…). Lo comprueba __guiScreenActive —el primer paso de
+ * todo programa con GUI— y lanza un RuntimeError CON ese texto. */
+int    bpvm_gui_disponible(const char** motivo);
+#ifdef BPVM_GUI_PACK
+void   bpvm_gui_pack_reset(void);   /* pruebas de host: olvidar la tabla resuelta */
+#endif
+
+#ifdef BPVM_GUI_RENDER
 /* H4.2 — render real (LVGL v9). pump = una iteración del lazo (lv_timer_handler
  * + delay); window_open = false cuando el usuario cierra. */
 uint32_t bpvm_gui_lvgl_pump(void);

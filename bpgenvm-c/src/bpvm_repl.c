@@ -13,8 +13,8 @@
 #include "bpvm_log.h"
 #include "bpvm_fs.h"
 #include "bpvm_entry.h"     /* #466: bpvm_entry_resolve — STAT por NOMBRE de módulo */
-#ifdef BPVM_LVGL
-#include "bpvm_gui.h"       /* V6/T1: screenW/H en INFO (tamano nativo del panel) */
+#if defined(BPVM_LVGL) || defined(BPVM_GUI_PACK)
+#include "bpvm_gui.h"       /* V6/T1: screenW/H en INFO (tamano nativo del panel); V7/H6: tambien por el pack */
 #endif
 #include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
 #include "bpvm_rtc.h"
@@ -607,7 +607,7 @@ static void repl_info(long id) {
      * POR EL WIRE, no por una tabla de nombres. Solo en builds con LVGL y solo
      * si el driver dice un tamano nativo (>0): el host SDL no lo tiene (dice 0)
      * y el sim lo publica por su propio info_extra, asi que no hay duplicados. */
-#ifdef BPVM_LVGL
+#ifdef BPVM_GUI_RENDER   /* V7/H6: LVGL dentro, o por el pack (si esta resuelto) */
     {
         int sw = 0, sh = 0;
         if (bpvm_gui_disp_native_size(&sw, &sh) && sw > 0 && sh > 0) {

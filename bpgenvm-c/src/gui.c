@@ -318,6 +318,10 @@ int  bpvm_gui_lvgl_window_open(void) { return g_lvgl_inited && bpvm_gui_disp_is_
 
 /* ===================== API del modelo (siempre) ======================= */
 
+/* V7/H6 — con gui.c dentro de la imagen (o del pack) la GUI siempre está. */
+int  bpvm_gui_disponible(const char** motivo) { if (motivo) *motivo = ""; return 1; }
+void bpvm_gui_dump_free(char* p) { bpvm_free(p); }
+
 int bpvm_gui_screen_active(void) {
     if (g_screen != 0) return g_screen;
     resolve_screen_size();               /* V6/P2.3: el screen mide lo que mide el panel */
