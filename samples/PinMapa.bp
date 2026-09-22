@@ -1,0 +1,88 @@
+// PinMapa.bp — V7/H4 (#479, 22-sep): el mapa de pines y el estado del pin en el común. Un pin es
+// analógico (AnPin) o digital (Pin), nunca las dos cosas: el común lo comprueba con la tabla de
+// capacidades del micro y lo dice con nombre — el mismo texto en las dos VMs. En el PC, el perfil
+// RP2350A: 30 pines, analógicos 26..29, sin colector abierto, buses 0 y 1.
+module PinMapa
+  import Gpio
+  import Adc
+  import Machine
+  import Uart
+
+  function prueba(nombre: string, f: string)
+    print nombre + ": " + f
+  end prueba
+
+  public function main()
+    // 1. un pin analógico ES un pin, pero no se escribe
+    var luz: Gpio.AnPin := Gpio.AnPin(26)
+    print "AnPin 26: canal", luz.channel(), " num", luz.num, " mode", luz.mode
+    var raw: integer := luz.read()
+    print "lee:", raw >= 0 and raw <= 4095
+    try
+      luz.on()
+    catch e: RuntimeError
+      print "on() en analógico: " + e.msg
+    endtry
+    try
+      var otro: Gpio.Pin := Gpio.Pin(26, Gpio.Pin.OUTPUT)
+    catch e: RuntimeError
+      print "Pin digital sobre AnPin: " + e.msg
+    endtry
+    luz.release()
+    var led: Gpio.Pin := Gpio.Pin(26, Gpio.Pin.OUTPUT)     // tras release(), sí
+    led.on()
+    try
+      var a2: Gpio.AnPin := Gpio.AnPin(26)
+    catch e: RuntimeError
+      print "AnPin sobre digital: " + e.msg
+    endtry
+    led.release()
+
+    // 2. lo que el micro no tiene, con nombre
+    try
+      var p: Gpio.Pin := Gpio.Pin(99, Gpio.Pin.INPUT)
+    catch e: RuntimeError
+      print "no existe: " + e.msg
+    endtry
+    try
+      var od: Gpio.Pin := Gpio.Pin(5, Gpio.Pin.OPEN_COLLECTOR)
+    catch e: RuntimeError
+      print "colector abierto: " + e.msg
+    endtry
+    try
+      var an: Gpio.AnPin := Gpio.AnPin(5)
+    catch e: RuntimeError
+      print "no analógico: " + e.msg
+    endtry
+    try
+      var c: Adc.Channel := Adc.Channel(7)
+    catch e: RuntimeError
+      print "canal: " + e.msg
+    endtry
+    try
+      var u: Uart.Port := Uart.Port(3, 0, 1, 115200, 8, 1, Uart.Port.PARITY_NONE)
+    catch e: RuntimeError
+      print "uart: " + e.msg
+    endtry
+
+    // 3. la vista por canal y la vista por pin acaban en el mismo sitio
+    var c1: Adc.Channel := Adc.Channel(1)
+    print "canal 1 -> pin", c1.pin_
+    try
+      var p27: Gpio.Pin := Gpio.Pin(27, Gpio.Pin.INPUT)
+    catch e: RuntimeError
+      print "el pin del canal 1: " + e.msg
+    endtry
+
+    // 4. owner: ~Pin() libera
+    conOwner()
+    var libre: Gpio.Pin := Gpio.Pin(28, Gpio.Pin.INPUT)
+    print "28 libre tras el owner:", libre.value() == 0
+    print "analógicos:", len(Machine.analogPins()), " fin"
+  end main
+
+  function conOwner()
+    var owner a: Gpio.AnPin := Gpio.AnPin(28)
+    print "owner AnPin 28:", a.channel()
+  end conOwner
+end PinMapa

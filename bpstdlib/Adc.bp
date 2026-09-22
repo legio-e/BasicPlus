@@ -35,6 +35,9 @@ module Adc
   public function initChannel(ch: integer): integer
     inline CALL_BUILTIN 114
   end initChannel
+  public function __gpioRelease(pin: integer)
+    inline CALL_BUILTIN 254
+  end __gpioRelease
   public function readChannel(ch: integer): integer
     inline CALL_BUILTIN 115
   end readChannel
@@ -58,14 +61,22 @@ module Adc
     public property ch_:  integer
     public property pin_: integer
 
+    // V7/H4 (#479): la vista POR CANAL de la unidad 1. El canal existe si el mapa de
+    // capacidades del micro tiene un pin con él (S3 0..9, C5 0..5, RP2350 0..3): lo valida
+    // el común con nombre, y ese pin pasa a analógico (Gpio.AnPin es la vista por pin).
     public function Channel(ch: integer)
       this.ch_ := ch
       this.pin_ := initChannel(ch)
-      if this.pin_ < 0 then
-        var msg: string := "Adc.Channel: canal " + intToString(ch) + " no válido (0..3)"
-        throw RuntimeError(msg)
-      endif
     end Channel
+
+    // El pin vuelve a libre en el común (otro objeto, o un Gpio.Pin, puede tomarlo).
+    public function release()
+      __gpioRelease(this.pin_)
+    end release
+
+    public function ~Channel()
+      __gpioRelease(this.pin_)
+    end ~Channel
 
     // #480 - UNA lectura, y si falla LANZA. El backend devuelve < 0 cuando la
     // conversion no se pudo hacer (o cuando esta placa no tiene ADC, ver #469).

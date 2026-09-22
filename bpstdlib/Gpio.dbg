@@ -2,29 +2,36 @@ dbg 3
 module Gpio
 source C:\lenguajes\pm\bpstdlib\Gpio.bp
 lines
-101 127
-120 132
-139 137
-151 138
-160 139
-178 141
-197 147
-221 152
-247 157
-273 165
-293 116
-320 117
-362 118
-374 120
-385 121
-396 122
-572 56
-587 59
-602 62
-617 65
-632 68
-647 71
-662 74
+101 138
+119 142
+145 147
+164 152
+183 157
+195 158
+204 159
+222 161
+241 167
+265 172
+291 177
+317 185
+337 131
+348 132
+359 133
+563 208
+583 213
+594 214
+603 215
+636 217
+652 221
+686 202
+699 203
+815 68
+830 71
+845 74
+860 77
+875 80
+890 83
+905 86
 vars
 func Pin.getNum 40
 this -20 8 0 ?
@@ -34,50 +41,78 @@ func Pin.getMode 69
 this -20 8 0 ?
 func Pin.setMode 84
 this -24 8 0 ?
-func Pin.on 98
+func Pin.release 98
 this -20 8 0 ?
-func Pin.off 117
+func Pin.__dtor 116
 this -20 8 0 ?
-func Pin.toggle 136
+func Pin.on 142
+this -20 8 0 ?
+func Pin.off 161
+this -20 8 0 ?
+func Pin.toggle 180
 this -20 8 0 ?
 v 0 4 0 integer
-func Pin.value 194
+func Pin.value 238
 this -20 8 0 ?
-func Pin.isHigh 218
+func Pin.isHigh 262
 this -20 8 0 ?
-func Pin.isLow 244
+func Pin.isLow 288
 this -20 8 0 ?
-func Pin.setPull 270
+func Pin.setPull 314
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func Pin.__init 290
+func Pin.__init 334
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-msg 0 8 0 string
-func __cls_new_Pin(ii) 408
+func __cls_new_Pin(ii) 371
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Pin(ii) 442
+func __cls_init_Pin(ii) 405
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Pin#isLow()z 460
+func __cls_m_Pin#__dtor()V 423
 this -20 8 0 ?
-func __cls_m_Pin#setPull(i)V 477
+func __cls_m_Pin#release()V 437
+this -20 8 0 ?
+func __cls_m_Pin#isLow()z 451
+this -20 8 0 ?
+func __cls_m_Pin#setPull(i)V 468
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func __cls_m_Pin#toggle()V 493
+func __cls_m_Pin#toggle()V 484
 this -20 8 0 ?
-func __cls_m_Pin#value()i 507
+func __cls_m_Pin#value()i 498
 this -20 8 0 ?
-func __cls_m_Pin#off()V 524
+func __cls_m_Pin#off()V 515
 this -20 8 0 ?
-func __cls_m_Pin#on()V 538
+func __cls_m_Pin#on()V 529
 this -20 8 0 ?
-func __cls_m_Pin#isHigh()z 552
+func __cls_m_Pin#isHigh()z 543
 this -20 8 0 ?
-func __strconcat 674
+func AnPin.channel 560
+this -20 8 0 ?
+func AnPin.read 580
+this -20 8 0 ?
+raw 4 4 0 integer
+func AnPin.readVolts 649
+this -20 8 0 ?
+func AnPin.__init 683
+this -24 8 0 ?
+num -16 4 0 integer
+func __cls_new_AnPin(i) 713
+num -16 4 0 integer
+func __cls_init_AnPin(i) 745
+this -24 8 0 ?
+num -16 4 0 integer
+func __cls_m_AnPin#read()i 761
+this -20 8 0 ?
+func __cls_m_AnPin#channel()i 778
+this -20 8 0 ?
+func __cls_m_AnPin#readVolts()f 795
+this -20 8 0 ?
+func __strconcat 917
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -1166,7 +1166,12 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <tr><th>Miembro</th><th>Descripción</th></tr>
   <tr><td><code>Pin(num, mode)</code></td>
       <td>Constructor. Configura el pin automáticamente.
-          <code>mode</code>: <code>Pin.INPUT</code> o <code>Pin.OUTPUT</code>.</td></tr>
+          <code>mode</code>: <code>Pin.INPUT</code>, <code>Pin.OUTPUT</code> o, desde V7,
+          <code>Pin.OPEN_COLLECTOR</code> (salida en colector abierto, sólo donde el silicio la tiene:
+          ESP32 y STM32; en RP2350 es <code>RuntimeError</code> «no puede salir en colector abierto»).
+          <strong>Lo valida el común contra la tabla de capacidades del micro</strong>
+          (<a href="#stdlib-machine-caps">§Machine</a>) y contra el estado de los pines, con nombre:
+          «el pin 99 no existe en esp32c5», «el pin 26 está en uso analógico: primero release()».</td></tr>
   <tr><td><code>on()</code></td>
       <td>Pone el pin a HIGH (sólo si es <code>OUTPUT</code>).</td></tr>
   <tr><td><code>off()</code></td>
@@ -1183,13 +1188,42 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
       <td>Configura la resistencia interna (sólo útil en <code>INPUT</code>).
           <code>mode</code>: <code>Pin.PULL_NONE</code> /
           <code>Pin.PULL_UP</code> / <code>Pin.PULL_DOWN</code>.</td></tr>
+  <tr><td><code>release()</code></td>
+      <td>V7: el pin vuelve a libre — otro <code>Pin</code> o un <code>AnPin</code> pueden tomarlo.
+          <code>~Pin()</code> lo llama: con <code>var owner</code> el pin se libera al salir del ámbito.</td></tr>
 </table>
 <p>
   Static consts accesibles sin instanciar:
-  <code>Pin.INPUT</code> (0), <code>Pin.OUTPUT</code> (1),
+  <code>Pin.INPUT</code> (0), <code>Pin.OUTPUT</code> (1), <code>Pin.OPEN_COLLECTOR</code> (2),
+  <code>Pin.ANALOG</code> (3, lo pone <code>AnPin</code>),
   <code>Pin.PULL_NONE</code> (0), <code>Pin.PULL_UP</code> (1),
   <code>Pin.PULL_DOWN</code> (2).
 </p>
+
+<h4 id="stdlib-anpin">14.2.1b <code>Gpio.AnPin</code> — el pin analógico (V7)</h4>
+<p>
+  <strong>Un pin es analógico o digital, nunca las dos cosas</strong> — y ahora eso lo comprueba el
+  común, en las cinco familias y en el PC. <code>AnPin</code> <strong>desciende de <code>Pin</code></strong>
+  (un pin físico puede ser cualquiera de las dos cosas): <code>AnPin(num)</code> lo toma en modo
+  <code>Pin.ANALOG</code> y conecta su ADC, que sale del <strong>mapa de pines del micro</strong>
+  (en un S3 el GPIO 4 es el canal 3 de la unidad 1; en la Pico el 26 es el canal 0). Sobre un
+  <code>AnPin</code>, <code>on()</code>/<code>off()</code>/<code>value()</code> son
+  <code>RuntimeError</code> («el pin 26 es analógico: no se puede escribir»); sobre un pin en uso
+  analógico, <code>Pin(num, OUTPUT)</code> también; sobre un pin sin ADC, <code>AnPin</code> dice
+  «el pin 5 de esp32c5 no es analógico». Hoy las imágenes atienden la <strong>unidad 1</strong> del
+  ADC; un pin de la 2 (el S3 y el P4 tienen dos) avisa con nombre.
+</p>
+<pre><code><span class="kw">var</span> luz: Gpio.AnPin := Gpio.AnPin(<span class="num">26</span>)
+<span class="kw">print</span> luz.read(), luz.readVolts(), luz.channel()   <span class="comment">// 0..4095, voltios, el canal del ADC</span>
+luz.release()                                          <span class="comment">// y ahora sí puede ser digital</span>
+<span class="kw">var</span> led: Gpio.Pin := Gpio.Pin(<span class="num">26</span>, Gpio.Pin.OUTPUT)</code></pre>
+<table>
+  <tr><th>Método</th><th>Descripción</th></tr>
+  <tr><td><code>AnPin(num)</code></td><td>Toma el pin como analógico y conecta su ADC (unidad y canal del mapa).</td></tr>
+  <tr><td><code>read(): integer</code> · <code>readVolts(): float</code></td><td>Una conversión (0..4095) o en voltios (Vref 3,3). Si el backend no puede, <code>RuntimeError</code>.</td></tr>
+  <tr><td><code>channel(): integer</code></td><td>El canal de ADC (unidad 1) al que está conectado este pin.</td></tr>
+  <tr><td><code>release()</code> · <code>~AnPin()</code></td><td>Heredados de <code>Pin</code>: el pin vuelve a libre.</td></tr>
+</table>
 
 <h4>13.11.2 API funcional de bajo nivel</h4>
 <p>
@@ -1503,8 +1537,13 @@ port.write(tx, <span class="num">4</span>)
 
 <h3 id="stdlib-adc">14.8 <code>Adc</code></h3>
 <p>
-  Convertidor analógico-digital del MCU. El RP2350 tiene 4 canales
-  accesibles vía GPIO:
+  Convertidor analógico-digital del MCU, <strong>visto por canal</strong> (la unidad 1). Desde V7 la
+  vista <strong>por pin</strong> es <a href="#stdlib-anpin"><code>Gpio.AnPin</code></a>, y las dos acaban
+  en el mismo sitio: <code>Adc.Channel(ch)</code> existe si el mapa de pines del micro tiene un pin con
+  ese canal (S3 0..9, C5 0..5, RP2350 0..3, U5 0..19), lo valida el común con nombre («ADC: el canal 7
+  no existe en rp2350a (unidad 1: 4 canales)») y ese pin pasa a analógico —un <code>Gpio.Pin</code>
+  sobre él es error hasta <code>release()</code> (<code>~Channel()</code> lo llama). El RP2350 tiene
+  4 canales accesibles vía GPIO:
 </p>
 <table>
   <tr><th>Canal</th><th>Pin</th></tr>

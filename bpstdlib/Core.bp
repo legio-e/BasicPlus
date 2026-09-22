@@ -1464,6 +1464,12 @@ module Core
   function __capsPin(pin: integer): integer   // la máscara del pin (0 = no existe): 1 digital · 2 analógico · 4 PWM · 8 pulsos · 16 colector abierto · 32 sólo entrada
     inline CALL_BUILTIN 253
   end __capsPin
+  function __gpioRelease(pin: integer)   // Gpio.Pin.release: el pin vuelve a libre en el común (#479)
+    inline CALL_BUILTIN 254
+  end __gpioRelease
+  function __adcInitPin(pin: integer): integer   // Gpio.AnPin: (unidad, canal) del mapa; devuelve el canal
+    inline CALL_BUILTIN 255
+  end __adcInitPin
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

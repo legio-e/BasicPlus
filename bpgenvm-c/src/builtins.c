@@ -2769,7 +2769,18 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GPIO_INIT: {
         int mode = pop_i32(vm, tc);
         int pin  = pop_i32(vm, tc);
-        bpvm_gpio_init(pin, mode);
+        /* V7/H4 (#479) — se valida contra la tabla y el estado ANTES de tocar el backend, con
+         * nombre; ANALOG (3) sólo fija el estado: el hardware lo pone el ADC (AnPin/Adc.Channel). */
+        char em[128];
+        if (mode < 0 || mode > 3) return builtin_throw(vm, tc, "Gpio.Pin: modo no válido (INPUT, OUTPUT, OPEN_COLLECTOR, ANALOG)");
+        if (bpvm_gpio_reclamar(pin, mode, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (mode != 3) bpvm_gpio_init(pin, mode);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GPIO_RELEASE: {
+        int pin = pop_i32(vm, tc);
+        bpvm_gpio_liberar(pin);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2783,12 +2794,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GPIO_WRITE: {
         int val = pop_i32(vm, tc);
         int pin = pop_i32(vm, tc);
+        if (bpvm_gpio_estado(pin) == BPVM_GPIO_ANALOG) {
+            char em[96]; snprintf(em, sizeof em, "el pin %d es analógico: no se puede escribir", pin);
+            return builtin_throw(vm, tc, em);
+        }
         bpvm_gpio_write(pin, val);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_GPIO_READ: {
         int pin = pop_i32(vm, tc);
+        if (bpvm_gpio_estado(pin) == BPVM_GPIO_ANALOG) {
+            char em[96]; snprintf(em, sizeof em, "el pin %d es analógico: usa read() del AnPin", pin);
+            return builtin_throw(vm, tc, em);
+        }
         push_i32(vm, tc, bpvm_gpio_read(pin));
         return BPVM_OK;
     }
@@ -2803,6 +2822,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int scl  = pop_i32(vm, tc);
         int sda  = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
+        { char em[128]; if (bpvm_gpio_instancia_ok(1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         bpvm_i2c_init(bus, sda, scl, baud);
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2891,6 +2911,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int mosi = pop_i32(vm, tc);
         int sck  = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
+        { char em[128]; if (bpvm_gpio_instancia_ok(2, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         bpvm_spi_init(bus, sck, mosi, miso, baud, mode);
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2959,6 +2980,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int rx        = pop_i32(vm, tc);
         int tx        = pop_i32(vm, tc);
         int bus       = pop_i32(vm, tc);
+        { char em[128]; if (bpvm_gpio_instancia_ok(0, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         bpvm_uart_init(bus, tx, rx, baud, data_bits, stop_bits, parity);
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -3007,6 +3029,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_PULSE_INIT: {
         int edgeKind = pop_i32(vm, tc);
         int pin      = pop_i32(vm, tc);
+        { char em[128]; if (bpvm_gpio_reclamar(pin, BPVM_USO_PULSE, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         push_i32(vm, tc, (int32_t) bpvm_pulse_init(pin, edgeKind));
         return BPVM_OK;
     }
@@ -3041,6 +3064,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_PWM_INIT: {
         int freqHz = pop_i32(vm, tc);
         int pin    = pop_i32(vm, tc);
+        { char em[128]; if (bpvm_gpio_reclamar(pin, BPVM_USO_PWM, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         push_i32(vm, tc, (int32_t) bpvm_pwm_init(pin, freqHz));
         return BPVM_OK;
     }
@@ -3307,8 +3331,36 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_ADC_INIT_CHANNEL: {
+        /* V7/H4 (#479) — la vista POR CANAL (unidad 1): el canal existe si el mapa tiene un pin
+         * con él; ese pin pasa a ANALOG en el común (error si está en uso digital). */
         int32_t ch = pop_i32(vm, tc);
-        push_i32(vm, tc, bpvm_adc_init_channel((int) ch));
+        char em[128];
+        int pin = bpvm_caps_pin_de_adc(0, (int) ch);
+        if (pin < 0) {
+            int n = 0; for (int i = 0; i < (int) bpvm_caps()->n_pin; i++) if (bpvm_caps()->pin_adc_unit && bpvm_caps()->pin_adc_unit[i] == 0) n++;
+            snprintf(em, sizeof em, "ADC: el canal %d no existe en %s (unidad 1: %d canales)", (int) ch, bpvm_caps()->micro, n);
+            return builtin_throw(vm, tc, em);
+        }
+        if (bpvm_gpio_reclamar(pin, BPVM_USO_ANALOG, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        int r = bpvm_adc_init_channel((int) ch);
+        if (r < 0) { snprintf(em, sizeof em, "ADC: el canal %d no se pudo iniciar en esta imagen", (int) ch); return builtin_throw(vm, tc, em); }
+        push_i32(vm, tc, pin);
+        return BPVM_OK;
+    }
+    case BUILTIN_ADC_INIT_PIN: {
+        /* La vista POR PIN (AnPin): (unidad, canal) del mapa; hoy los backends atienden la unidad 1. */
+        int32_t pin = pop_i32(vm, tc);
+        char em[128];
+        int unit = -1, ch = -1;
+        if (bpvm_caps_adc_de_pin((int) pin, &unit, &ch) != 0) {
+            if (!bpvm_caps_pin_mask((int) pin)) snprintf(em, sizeof em, "el pin %d no existe en %s", (int) pin, bpvm_caps()->micro);
+            else snprintf(em, sizeof em, "el pin %d de %s no es analógico", (int) pin, bpvm_caps()->micro);
+            return builtin_throw(vm, tc, em);
+        }
+        if (unit != 0) { snprintf(em, sizeof em, "el ADC del pin %d es la unidad %d y esta imagen sólo atiende la 1", (int) pin, unit + 1); return builtin_throw(vm, tc, em); }
+        if (bpvm_gpio_reclamar((int) pin, BPVM_USO_ANALOG, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (bpvm_adc_init_channel(ch) < 0) { snprintf(em, sizeof em, "ADC: el pin %d no se pudo iniciar en esta imagen", (int) pin); return builtin_throw(vm, tc, em); }
+        push_i32(vm, tc, ch);
         return BPVM_OK;
     }
     case BUILTIN_ADC_READ_CHANNEL: {

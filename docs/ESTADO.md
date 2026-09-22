@@ -125,8 +125,18 @@ backend mapea: los «28» del INFO eran ficción; ANALOG ninguno hasta P2). Host
 **Verificado**: Pico BP == INFO (`rp2350a`, QFN-60, 12 slice, ADC 26..29); P4 BP == INFO (analógicos 16-23 y 49-54 de las
 DOS unidades, PWM 8 canal, `uarts [1,2]`, `spis [2,3]`, MAX 360, variant «»). `samples/Caps.bp` en el corpus (91) y
 `QuienSoy.bp` de sonda. Las siete imágenes compilan. Verde: check 91/59/9/13 + MOD8; mezcla 194; h13 38; frontend 223;
-miVM 52. Referencia es/en (§Machine, la tabla). Queda P2 (validación en el común, estado del pin, `AnPin`, `Adc.Channel`
-sobre el mapa, el ADC del STM32), P3 (breadcrumb RP2350/ESP32, NeoPixel C6, BOOT) y P4 (cascada y tanda).
+miVM 52. Referencia es/en (§Machine, la tabla).
+
+**P2 (`#479`), la misma mañana**: **el estado del pin en el común** (`src/gpio.c`: libre/INPUT/OUTPUT/OPEN_COLLECTOR/ANALOG) y
+**la validación contra la tabla ANTES del backend, con nombre** —pin que no existe, sólo entrada, colector abierto donde no
+lo hay, PWM/pulsos donde no puede, instancias de UART/I2C/SPI, y el invariante «analógico ⇒ no digital» en los dos sentidos—
+con el mismo texto en miVM (`gpioReclamar`/`gpioInstanciaOk` sobre el perfil del host). `Pin` gana `OPEN_COLLECTOR`
+(ESP32/STM32 al backend; RP2350 lo rechaza con nombre), `ANALOG`, `release()` y `~Pin()`; **`AnPin extends Pin`** (el
+(unidad, canal) del mapa; hoy las imágenes atienden la unidad 1 y la 2 avisa); `Adc.Channel(ch)` validado por el rango real
+y con `release()`/`~Channel()`; el fin de RUN libera todos los pines. `samples/PinMapa.bp` en el corpus (92). **En placa**:
+Pico (GP26 → canal 0, raw real) y P4 (GPIO16 → canal 0 de la unidad 1, raw 3386), los errores con el nombre del micro.
+Referencia es/en (§Gpio: modos, `release`, `AnPin`; §Adc). Queda de P2 el ADC externo del STM32 (con la Nucleo/DK2 a mano);
+P3 (breadcrumb RP2350/ESP32, NeoPixel C6, BOOT) y P4 (cascada y tanda).
 
 ## ⏭️ Traspaso (21-sep, al cerrar) — la 1.ª etapa de H11 HECHA esa misma noche (con PSRAM); lo siguiente: H7 y H4
 

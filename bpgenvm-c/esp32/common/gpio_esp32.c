@@ -46,7 +46,7 @@
 static void esp32_gpio_init_impl(int pin, int mode) {
     gpio_num_t g = (gpio_num_t) pin;
     gpio_reset_pin(g);
-    gpio_set_direction(g, (mode == 1) ? GPIO_MODE_OUTPUT : GPIO_MODE_INPUT);
+    gpio_set_direction(g, (mode == 1) ? GPIO_MODE_OUTPUT : (mode == 2) ? GPIO_MODE_OUTPUT_OD : GPIO_MODE_INPUT);   /* V7/H4: 2 = colector abierto */
 }
 
 static void esp32_gpio_pull_impl(int pin, int pull_mode) {

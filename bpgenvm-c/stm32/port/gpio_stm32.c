@@ -89,7 +89,7 @@ static void reconfigure(int pin) {
 
     GPIO_InitTypeDef cfg = {0};
     cfg.Pin   = (uint32_t) (1u << bit);
-    cfg.Mode  = (s_mode[pin] == 1) ? GPIO_MODE_OUTPUT_PP : GPIO_MODE_INPUT;
+    cfg.Mode  = (s_mode[pin] == 1) ? GPIO_MODE_OUTPUT_PP : (s_mode[pin] == 2) ? GPIO_MODE_OUTPUT_OD : GPIO_MODE_INPUT;   /* V7/H4: 2 = colector abierto */
     cfg.Speed = GPIO_SPEED_FREQ_LOW;
     cfg.Pull  = (s_pull[pin] == 1) ? GPIO_PULLUP
               : (s_pull[pin] == 2) ? GPIO_PULLDOWN
@@ -101,7 +101,7 @@ static void reconfigure(int pin) {
 
 static void stm32_gpio_init_impl(int pin, int mode) {
     if (pin < 0 || pin >= STM32_PIN_COUNT) return;
-    s_mode[pin] = (mode == 1) ? 1 : 0;
+    s_mode[pin] = (mode == 1) ? 1 : (mode == 2) ? 2 : 0;
     s_pull[pin] = 0;   /* init resetea el pull */
     reconfigure(pin);
 }

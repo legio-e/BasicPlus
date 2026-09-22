@@ -34,6 +34,23 @@ typedef struct {
     int  (*read)(int pin);                     /* devuelve 0 o 1 */
 } bpvm_gpio_backend_t;
 
+/* ── V7/H4 (#479) — EL ESTADO DEL PIN, EN EL COMÚN ────────────────────────
+ * Hasta hoy la fachada reenviaba y no guardaba nada (sólo el STM32 llevaba
+ * cuenta, en privado), así que «analógico ⇒ no digital» no era comprobable.
+ * Ahora el común guarda el modo de cada pin y VALIDA contra la tabla de
+ * capacidades (bpvm_machine.h) ANTES de tocar el backend, con un mensaje con
+ * nombre — el mismo en miVM. Modos: 0 INPUT · 1 OUTPUT · 2 OPEN_COLLECTOR ·
+ * 3 ANALOG (lo pone AnPin / Adc.Channel; no llega al backend de GPIO). Usos que
+ * no cambian el modo pero se comprueban: 4 PWM · 5 PULSE. */
+enum { BPVM_GPIO_LIBRE = 0, BPVM_GPIO_INPUT = 1, BPVM_GPIO_OUTPUT = 2, BPVM_GPIO_OD = 3, BPVM_GPIO_ANALOG = 4 };
+enum { BPVM_USO_INPUT = 0, BPVM_USO_OUTPUT = 1, BPVM_USO_OD = 2, BPVM_USO_ANALOG = 3, BPVM_USO_PWM = 4, BPVM_USO_PULSE = 5 };
+int  bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap);   /* 0 = OK (y fija el modo); -1 con `err` */
+int  bpvm_gpio_estado(int pin);                                     /* BPVM_GPIO_* */
+void bpvm_gpio_liberar(int pin);                                    /* release(): vuelve a LIBRE */
+void bpvm_gpio_estado_reset(void);                                  /* fin de RUN */
+/* ¿id está entre las instancias válidas de ese bus? 0 = OK; -1 con `err`. kind: 0 uart · 1 i2c · 2 spi */
+int  bpvm_gpio_instancia_ok(int kind, int id, char* err, size_t cap);
+
 /* Cada plataforma (main de Pico, main de host) llama una vez al boot. */
 void bpvm_gpio_set_backend(const bpvm_gpio_backend_t* backend);
 

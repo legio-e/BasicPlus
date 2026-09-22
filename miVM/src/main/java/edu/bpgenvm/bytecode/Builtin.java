@@ -263,7 +263,9 @@ public enum Builtin {
     CAPS_ARRAY("__capsArray"),   // [250] __capsArray(kind: integer): integer[]
     CAPS_INT("__capsInt"),   // [251] __capsInt(kind: integer): integer
     CAPS_STR("__capsStr"),   // [252] __capsStr(kind: integer): string
-    CAPS_PIN("__capsPin");   // [253] __capsPin(pin: integer): integer
+    CAPS_PIN("__capsPin"),   // [253] __capsPin(pin: integer): integer
+    GPIO_RELEASE("__gpioRelease"),   // [254] __gpioRelease(pin: integer)
+    ADC_INIT_PIN("__adcInitPin");   // [255] __adcInitPin(pin: integer): integer
 
     public final String bpName;
     public final int id;

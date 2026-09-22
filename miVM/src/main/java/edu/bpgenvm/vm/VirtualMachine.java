@@ -1142,6 +1142,39 @@ public class VirtualMachine {
      *  (nombre + NUL), el mismo mensaje que `read_bp_path` en builtins.c. Antes miVM abría
      *  cualquier longitud y un programa fallaba sólo al llegar a la placa. */
     static final int PATH_MAX_BYTES = 256;
+    // ── V7/H4 (#479) — el estado de los pines y la validación contra la tabla del HOST (el perfil
+    // RP2350A: 30 pines, analógicos 26..29, sin colector abierto, PWM y pulsos en todos, buses 0 y 1).
+    // Espejo de bpvm_gpio_reclamar / bpvm_gpio_instancia_ok: los MISMOS textos.
+    private final int[] pinEstado = new int[160];   // 0 libre · 1 INPUT · 2 OUTPUT · 3 OD · 4 ANALOG
+    private static int hostPinMask(int pin) {
+        if (pin < 0 || pin >= 30) return 0;
+        int m = 1 | 4 | 8;
+        if (pin >= 26 && pin <= 29) m |= 2;
+        return m;
+    }
+    /** uso: 0 INPUT · 1 OUTPUT · 2 OD · 3 ANALOG · 4 PWM · 5 PULSE. Lanza el RuntimeError con el texto del común. */
+    private void gpioReclamar(ThreadContext tc, int pin, int uso) {
+        int m = hostPinMask(pin);
+        if (m == 0) throwBpRuntimeError(tc, "el pin " + pin + " no existe en host");
+        int e = pinEstado[pin];
+        if (uso == 3) {
+            if ((m & 2) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no es analógico");
+            if (e != 0 && e != 4) throwBpRuntimeError(tc, "el pin " + pin + " está en uso digital: primero release()");
+            pinEstado[pin] = 4;
+            return;
+        }
+        if (e == 4) throwBpRuntimeError(tc, "el pin " + pin + " está en uso analógico: primero release()");
+        if (uso == 2 && (m & 16) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no puede salir en colector abierto");
+        if (uso == 4 && (m & 4) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no puede dar PWM");
+        if (uso == 5 && (m & 8) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no puede contar pulsos");
+        if (uso <= 2) pinEstado[pin] = uso + 1;
+    }
+    private void gpioInstanciaOk(ThreadContext tc, int kind, int id) {
+        if (id == 0 || id == 1) return;
+        String nombre = kind == 0 ? "UART" : kind == 1 ? "I2C" : "SPI";
+        throwBpRuntimeError(tc, nombre + " " + id + " no existe en host (válidos: 0, 1)");
+    }
+
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
             throwBpRuntimeError(tc, "path demasiado largo");
@@ -2343,6 +2376,7 @@ public class VirtualMachine {
         // Es la paridad con la VM-C, donde la ventana SDL muere con el proceso.
         gui.shutdown();
         ficherosFinDeRun();   // V7/H3 (#491)
+        java.util.Arrays.fill(pinEstado, 0);   // V7/H4 (#479): los pines vuelven a libres
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -5595,9 +5629,17 @@ public class VirtualMachine {
             case GPIO_INIT: {
                 int mode = popTc(tc);
                 int pin  = popTc(tc);
-                System.out.println("[gpio] init pin=" + pin + " mode="
-                        + (mode == 0 ? "INPUT" : "OUTPUT"));
+                if (mode < 0 || mode > 3) throwBpRuntimeError(tc, "Gpio.Pin: modo no válido (INPUT, OUTPUT, OPEN_COLLECTOR, ANALOG)");
+                gpioReclamar(tc, pin, mode);   // V7/H4 (#479)
+                if (mode != 3) System.out.println("[gpio] init pin=" + pin + " mode="
+                        + (mode == 0 ? "INPUT" : mode == 1 ? "OUTPUT" : "OPEN_COLLECTOR"));
                 pushTc(tc, 0);  // dummy retorno (función void)
+                break;
+            }
+            case GPIO_RELEASE: {
+                int pin = popTc(tc);
+                if (pin >= 0 && pin < pinEstado.length) pinEstado[pin] = 0;
+                pushTc(tc, 0);
                 break;
             }
             case GPIO_PULL: {
@@ -5611,6 +5653,8 @@ public class VirtualMachine {
             case GPIO_WRITE: {
                 int val = popTc(tc);
                 int pin = popTc(tc);
+                if (pin >= 0 && pin < pinEstado.length && pinEstado[pin] == 4)
+                    throwBpRuntimeError(tc, "el pin " + pin + " es analógico: no se puede escribir");
                 System.out.println("[gpio] write pin=" + pin + " value="
                         + (val == 0 ? "LOW" : "HIGH"));
                 pushTc(tc, 0);
@@ -5618,6 +5662,8 @@ public class VirtualMachine {
             }
             case GPIO_READ: {
                 int pin = popTc(tc);
+                if (pin >= 0 && pin < pinEstado.length && pinEstado[pin] == 4)
+                    throwBpRuntimeError(tc, "el pin " + pin + " es analógico: usa read() del AnPin");
                 System.out.println("[gpio] read pin=" + pin
                         + " (sim → siempre 0 en PC)");
                 pushTc(tc, 0);   // siempre LOW en simulación
@@ -5630,6 +5676,7 @@ public class VirtualMachine {
                 int scl  = popTc(tc);
                 int sda  = popTc(tc);
                 int bus  = popTc(tc);
+                gpioInstanciaOk(tc, 1, bus);   // V7/H4
                 System.out.println("[i2c] init bus=" + bus
                         + " sda=" + sda + " scl=" + scl
                         + " baud=" + baud);
@@ -5702,6 +5749,7 @@ public class VirtualMachine {
                 int mosi = popTc(tc);
                 int sck  = popTc(tc);
                 int bus  = popTc(tc);
+                gpioInstanciaOk(tc, 2, bus);   // V7/H4
                 System.out.println("[spi] init bus=" + bus
                         + " sck=" + sck + " mosi=" + mosi + " miso=" + miso
                         + " baud=" + baud + " mode=" + mode);
@@ -5772,6 +5820,7 @@ public class VirtualMachine {
                 int rx        = popTc(tc);
                 int tx        = popTc(tc);
                 int bus       = popTc(tc);
+                gpioInstanciaOk(tc, 0, bus);   // V7/H4
                 char pchar = (parity == 1) ? 'O' : (parity == 2) ? 'E' : 'N';
                 System.out.println("[uart] init bus=" + bus
                         + " tx=" + tx + " rx=" + rx
@@ -5837,6 +5886,7 @@ public class VirtualMachine {
             case PULSE_INIT: {
                 int edgeKind = popTc(tc);
                 int pin      = popTc(tc);
+                gpioReclamar(tc, pin, 5);   // V7/H4
                 String e = edgeKind == 0 ? "RISING" : edgeKind == 1 ? "FALLING"
                          : edgeKind == 2 ? "BOTH" : "?";
                 System.out.println("[pulse] init pin=" + pin + " edge=" + e
@@ -5879,6 +5929,7 @@ public class VirtualMachine {
             case PWM_INIT: {
                 int freqHz = popTc(tc);
                 int pin    = popTc(tc);
+                gpioReclamar(tc, pin, 4);   // V7/H4
                 System.out.println("[pwm] init pin=" + pin + " freqHz=" + freqHz
                         + " (sim → sliceId=0)");
                 pushTc(tc, 0);
@@ -6113,13 +6164,19 @@ public class VirtualMachine {
             /* ---- Adc — stub host con rampa por canal ---- */
             case ADC_INIT_CHANNEL: {
                 int ch = popTc(tc);
-                if (ch < 0 || ch > 3) {
-                    System.out.println("[adc] initChannel(" + ch + ") fuera de rango");
-                    pushTc(tc, -1);
-                } else {
-                    System.out.println("[adc] initChannel(" + ch + ") → GP" + (26 + ch) + " (host)");
-                    pushTc(tc, 26 + ch);
-                }
+                if (ch < 0 || ch > 3) throwBpRuntimeError(tc, "ADC: el canal " + ch + " no existe en host (unidad 1: 4 canales)");
+                gpioReclamar(tc, 26 + ch, 3);   // V7/H4: el pin del canal pasa a analógico
+                System.out.println("[adc] initChannel(" + ch + ") → GP" + (26 + ch) + " (host)");
+                pushTc(tc, 26 + ch);
+                break;
+            }
+            case ADC_INIT_PIN: {
+                int pin = popTc(tc);
+                if (hostPinMask(pin) == 0) throwBpRuntimeError(tc, "el pin " + pin + " no existe en host");
+                if ((hostPinMask(pin) & 2) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no es analógico");
+                gpioReclamar(tc, pin, 3);
+                System.out.println("[adc] initChannel(" + (pin - 26) + ") → GP" + pin + " (host)");
+                pushTc(tc, pin - 26);
                 break;
             }
             case ADC_READ_CHANNEL: {

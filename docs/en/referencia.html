@@ -1164,7 +1164,12 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
   <tr><th>Member</th><th>Description</th></tr>
   <tr><td><code>Pin(num, mode)</code></td>
       <td>Constructor. Configures the pin automatically.
-          <code>mode</code>: <code>Pin.INPUT</code> or <code>Pin.OUTPUT</code>.</td></tr>
+          <code>mode</code>: <code>Pin.INPUT</code>, <code>Pin.OUTPUT</code> or, since V7,
+          <code>Pin.OPEN_COLLECTOR</code> (open-drain output, only where the silicon has it: ESP32 and
+          STM32; on RP2350 it is a <code>RuntimeError</code> "no puede salir en colector abierto").
+          <strong>The common layer validates it against the micro's capability table</strong>
+          (<a href="#stdlib-machine-caps">§Machine</a>) and the pin states, by name:
+          "el pin 99 no existe en esp32c5", "el pin 26 está en uso analógico: primero release()".</td></tr>
   <tr><td><code>on()</code></td>
       <td>Drives the pin HIGH (only if it is <code>OUTPUT</code>).</td></tr>
   <tr><td><code>off()</code></td>
@@ -1183,11 +1188,32 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
           <code>Pin.PULL_UP</code> / <code>Pin.PULL_DOWN</code>.</td></tr>
 </table>
 <p>
-  Static consts accessible without instantiating:
-  <code>Pin.INPUT</code> (0), <code>Pin.OUTPUT</code> (1),
-  <code>Pin.PULL_NONE</code> (0), <code>Pin.PULL_UP</code> (1),
-  <code>Pin.PULL_DOWN</code> (2).
+  Static consts, reachable without an instance:
+  <code>Pin.INPUT</code> (0), <code>Pin.OUTPUT</code> (1), <code>Pin.OPEN_COLLECTOR</code> (2),
+  <code>Pin.ANALOG</code> (3, set by <code>AnPin</code>),
+  <code>Pin.PULL_NONE</code> (0), <code>Pin.PULL_UP</code> (1), <code>Pin.PULL_DOWN</code> (2).
+  And <code>release()</code> (V7): the pin goes back to free — another <code>Pin</code> or an
+  <code>AnPin</code> may take it; <code>~Pin()</code> calls it.
 </p>
+
+<h4 id="stdlib-anpin">14.2.1b <code>Gpio.AnPin</code> — the analog pin (V7)</h4>
+<p>
+  <strong>A pin is analog or digital, never both</strong> — and the common layer now checks it, on the
+  five families and on the PC. <code>AnPin</code> <strong>descends from <code>Pin</code></strong> (a
+  physical pin may be either): <code>AnPin(num)</code> takes it in <code>Pin.ANALOG</code> mode and
+  connects its ADC, taken from the <strong>micro's pin map</strong> (on an S3, GPIO 4 is channel 3 of unit
+  1; on the Pico, 26 is channel 0). On an <code>AnPin</code>, <code>on()</code>/<code>off()</code>/
+  <code>value()</code> are a <code>RuntimeError</code>; on a pin in analog use, <code>Pin(num, OUTPUT)</code>
+  too; on a pin without ADC, <code>AnPin</code> says "el pin 5 de esp32c5 no es analógico". Today the
+  images serve ADC <strong>unit 1</strong>; a pin of unit 2 (the S3 and the P4 have two) says so by name.
+</p>
+<table>
+  <tr><th>Method</th><th>Description</th></tr>
+  <tr><td><code>AnPin(num)</code></td><td>Takes the pin as analog and connects its ADC (unit and channel from the map).</td></tr>
+  <tr><td><code>read(): integer</code> · <code>readVolts(): float</code></td><td>One conversion (0..4095) or in volts (Vref 3.3). If the backend cannot, <code>RuntimeError</code>.</td></tr>
+  <tr><td><code>channel(): integer</code></td><td>The ADC channel (unit 1) this pin is connected to.</td></tr>
+  <tr><td><code>release()</code> · <code>~AnPin()</code></td><td>Inherited from <code>Pin</code>: the pin goes back to free.</td></tr>
+</table>
 
 <h4>13.11.2 Low-level functional API</h4>
 <p>

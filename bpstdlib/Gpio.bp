@@ -46,6 +46,18 @@ module Gpio
   public function read(pin: integer): integer
     inline CALL_BUILTIN 80
   end read
+  // V7/H4 (#479) — el pin vuelve a libre en el común (el estado que hace comprobable
+  // «analógico ⇒ no digital»); lo llama Pin.release() y ~Pin().
+  public function release(pin: integer)
+    inline CALL_BUILTIN 254
+  end release
+  // V7/H4 — el ADC por PIN: (unidad, canal) del mapa de capacidades; devuelve el canal.
+  public function __adcInitPin(pin: integer): integer
+    inline CALL_BUILTIN 255
+  end __adcInitPin
+  public function __adcReadChannel(ch: integer): integer
+    inline CALL_BUILTIN 115
+  end __adcReadChannel
 
   // -------- Constantes públicas para los enums --------
   // (Definidas como funciones intrínsecas de 0 args para mantener la
@@ -102,6 +114,8 @@ module Gpio
     // Static consts accesibles como `Gpio.Pin.OUTPUT`, etc.
     public const Pin.INPUT:     integer := 0
     public const Pin.OUTPUT:    integer := 1
+    public const Pin.OPEN_COLLECTOR: integer := 2   // V7/H4: salida en colector abierto, donde el silicio la tiene (ESP32, STM32)
+    public const Pin.ANALOG:    integer := 3        // V7/H4: entrada de ADC; lo pone AnPin
     public const Pin.PULL_NONE: integer := 0
     public const Pin.PULL_UP:   integer := 1
     public const Pin.PULL_DOWN: integer := 2
@@ -109,18 +123,24 @@ module Gpio
     public property num:  integer    // número de pin físico (GP0..GP29)
     public property mode: integer    // INPUT (0) u OUTPUT (1)
 
-    // Constructor: configura el pin en el modo indicado.
-    // H7.3 — valida el rango contra la placa: Gpio.Pin(47) es válido en
-    // Metro (RP2350B, 48 GPIO) y error en Pico (RP2350A, 30 GPIO).
+    // Constructor: configura el pin en el modo indicado. V7/H4 (#479): la validación la hace
+    // el común contra la TABLA de capacidades del micro y el estado de los pines, con nombre
+    // («el pin 99 no existe en esp32c5», «el pin 26 es analógico (AnPin): primero release()»,
+    // «el pin 5 de rp2350a no puede salir en colector abierto») — el mismo texto en las dos VMs.
     public function Pin(num: integer, mode: integer)
-      if num < 0 or num >= Machine.gpioCount() then
-        var msg: string := "Gpio.Pin: pin " + intToString(num) + " fuera de rango (0.." + intToString(Machine.gpioCount() - 1) + ")"
-        throw RuntimeError(msg)
-      endif
       this.num  := num
       this.mode := mode
       init(num, mode)
     end Pin
+
+    // El pin vuelve a libre: otro objeto (o un AnPin) puede tomarlo. Lo llama el destructor.
+    public function release()
+      release(this.num)
+    end release
+
+    public function ~Pin()
+      release(this.num)
+    end ~Pin
 
     // Pone el pin a HIGH (sólo válido si es OUTPUT).
     public function on()
@@ -164,7 +184,41 @@ module Gpio
     public function setPull(pullMode: integer)
       pull(this.num, pullMode)
     end setPull
-
   end Pin
 
+  // ============================================================
+  // V7/H4 (#479) — AnPin: un pin ANALÓGICO, que ES un pin (decisión de Eduardo, 6-sep: «como un
+  // pin físico puede ser o analógico o digital, AnPin desciende de Pin»). Lo que su invariante
+  // prohíbe —on()/off()/value() de un pin analógico— lo para el común con un error con nombre.
+  // El (unidad, canal) sale del MAPA del micro: en un S3 el GPIO 4 es ADC1 canal 3, en la Pico
+  // el 26 es el canal 0. Hoy las imágenes atienden la unidad 1; la 2 avisa con nombre.
+  //   var luz: Gpio.AnPin := Gpio.AnPin(26)
+  //   print luz.read(), luz.readVolts()
+  // ============================================================
+  public class AnPin extends Pin
+    private var ch: integer
+
+    public function AnPin(num: integer)
+      super(num, Pin.ANALOG)            // el estado en el común: analógico ⇒ no digital
+      this.ch := __adcInitPin(num)      // y el hardware: (unidad, canal) del mapa
+    end AnPin
+
+    // El canal de ADC (de la unidad 1) al que está conectado este pin.
+    public function channel(): integer
+      return this.ch
+    end channel
+
+    // UNA lectura, 0..4095; si el backend no puede, RuntimeError (como Adc.Channel).
+    public function read(): integer
+      var raw: integer := __adcReadChannel(this.ch)
+      if raw < 0 then
+        throw RuntimeError("AnPin.read: el pin " + intToString(this.num) + " no se pudo leer")
+      endif
+      return raw
+    end read
+
+    public function readVolts(): float
+      return float(this.read()) * 3.3 / 4095.0
+    end readVolts
+  end AnPin
 end Gpio

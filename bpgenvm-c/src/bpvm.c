@@ -11,6 +11,7 @@
 #include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
+#include "bpvm_gpio.h"    /* V7/H4: el estado de los pines se limpia al fin de RUN */
 #include "bpvm_alloc.h"         /* #339: guardián de fin de RUN */
 #include "bpvm_entry.h"         /* #344: el RUN, escrito UNA vez */
 #ifdef BPVM_GUI
@@ -1599,6 +1600,7 @@ void bpvm_destroy(bpvm_t* vm) {
 
     if (!vm) return;
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
+    bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN */
     apagar_pack_en_ejecucion(vm);   /* V7/H2 (#493): el overlay no puede apuntar a un vm muerto */
     /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido
      * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */
