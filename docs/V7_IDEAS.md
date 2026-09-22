@@ -2108,3 +2108,174 @@ Sin eso un reinicio es mudo, y un instrumento mudo cuesta el doble.
 **Lo que queda de H6**: el reparto de RAM entre VARIOS `npk` (§2.5) —hoy la C5 con la GUI no puede
 llevar además SQLite—; `'PANT'` como `npk` propio; que el Run del IDE no suba lo que la zona sirve
 (`MODULE_QUERY`); la C5 en `tanda.py` como placa CON pantalla; y `H6.b`, que va tras la ronda sellada.
+
+### 7. Generalizar el pack a CUALQUIER placa (22-sep, noche — pregunta de Eduardo)
+
+> *«Para generalizar el pack a cualquier equipo, ¿qué necesitaríamos? Entiendo que los pines y el bus se
+> han de poder parametrizar. Y luego tenemos el driver de pantalla: ¿cómo podemos generalizar el driver?»*
+
+#### 7.1 Lo que hay hoy, medido
+
+**El driver es lo pequeño.** En el pack de la C5, `panel_c5.c` compila a **2 161 B de código** (más 23 KB de
+`.bss`, que son los dos búferes de dibujo) dentro de un pack de **715 KB**: el **0,3 %**. Todo lo demás
+—LVGL, sus fuentes, `gui.c`— es idéntico para cualquier placa de la misma ISA. Ese número es el que
+decide el diseño: **lo que varía por placa no debe viajar dentro de lo que no varía**.
+
+**Qué cambia de verdad entre los cuatro paneles que ya tenemos:**
+
+| | C6 | C5 | P4 | DK2 |
+|---|---|---|---|---|
+| transporte | SPI | SPI | MIPI-DSI | LTDC (paralelo) |
+| controlador | ST7789 | ST7789 | EK79007 / ST7701 | — |
+| tamaño | 240×240 | 240×320 | 1024×600 / 480×800 | 800×480 |
+| gap por rotación | 0/0/80/0 (!) | ninguno | — | — |
+| reset | GPIO 21 | **I2C → CH32V003 EXIO1** | GPIO 27 | — |
+| backlight | GPIO 22 on/off | **I2C → PWM del CH32** | LEDC, y una placa lo tiene INVERTIDO | — |
+| táctil | no tiene | CST3530 (I2C 0x58) | GT911 (I2C 0x14) + transformación | sí |
+| extra | — | el bus SPI lo **comparte con la TF** | un LDO para el DPHY | — |
+
+Dos ST7789 por SPI (C6 y C5) y **ya no comparten ni el reset ni el backlight**. Lo que varía no es «el
+driver»: son cuatro cosas distintas metidas en el mismo fichero.
+
+**Y ya hay un precedente nuestro, del P4** (`gui_display_dsi.c`, `#311`): un **catálogo** de paneles
+—resolución, tiempos, polaridad del backlight, transformación del táctil y la función que crea el IC—
+elegido por el ENV (`display=st7701`). Funciona desde V6. Lo que le falta es salir de la imagen: hoy
+añadir un panel es recompilar y regrabar el firmware. Su propio comentario lo dice: *«Params pin-a-pin
+data-driven = V4»*, o sea que ya se vio y se aplazó.
+
+**Tres cosas que hoy NO se pueden hacer, y son las que bloquean:**
+- **Un pack no puede leer el ENV.** La BIOS v5 presta log, memoria, cadenas, ficheros, la arena, el punto
+  de encuentro y la HAL — pero **ni una ranura de entorno** (comprobado: cero menciones en `bpvm_bios.h`).
+  Un driver en un pack no tiene de dónde sacar sus números salvo compilándolos dentro.
+- **Los recursos de un pack GRABADO no se leen.** El overlay de `pack:<Pack>/<fichero>` está atado a
+  `vm->run_pack_on` — el pack **en ejecución**—, así que un perfil de placa dentro del pack de la zona
+  no se puede abrir. Es el cabo que `V5_IDEAS` ya dejó escrito («la zona de packs debe servir recursos»).
+- **Sólo se carga UN `.npk` a la vez** (el primero válido de la zona). Con el driver fuera del pack de
+  LVGL harían falta dos: eso mueve el reparto de RAM entre varios `npk` (§2.5) de «pulido» a **camino
+  crítico**.
+
+⚠️ **Y un cuarto, que la C5 pone delante de las narices**: el panel toma el **bus** SPI2, y en esa placa
+**la tarjeta TF cuelga del mismo bus**. Hoy `Spi.Bus(2, …)` desde BP hace `spi_bus_free` + re-init
+(`gpio_esp32.c:340`) — o sea que un programa que abra la TF **mata el panel en silencio**. H4 puso el
+estado de los PINES en el común y el pin de un pack sobrevive al fin de RUN; el **bus** no tiene esa
+protección. Generalizar «los pines y el bus» incluye decidir **de quién es el bus**.
+
+#### 7.2 Las cuatro capas que «el driver de pantalla» confunde
+
+1. **Transporte** — cómo salen los bytes: SPI, I2C, paralelo 8080, RGB, MIPI-DSI. Hoy la HAL de la BIOS
+   presta SPI e I2C; los otros tres **no** y no deberían (son periféricos de una familia).
+2. **Controlador** — ST7789, ILI9341, GC9A01, ST7796…: una secuencia de arranque, cómo se direcciona la
+   ventana (`CASET`/`RASET`/`RAMWR`) y qué bits de `MADCTL` giran. Es lo MENOS variable: el mismo IC
+   aparece en decenas de placas.
+3. **Panel** — tamaño, `gap` por orientación (el C6 tiene 80 filas de desfase y la C5 ninguna, ¡con el
+   mismo IC!), si va invertido, orden RGB/BGR.
+4. **Placa** — pines, qué bus, a qué frecuencia, **cómo se hace el reset**, **cómo se enciende la luz**,
+   qué táctil hay y cómo se transforman sus coordenadas.
+
+La (2) es un catálogo corto. La (3) y la (4) son datos. La (4) es donde está toda la rareza.
+
+#### 7.3 La consecuencia inmediata: el driver SALE del pack de LVGL
+
+Es la marca `'PANT'` que §2.4 ya dejó dibujada, y ahora se ve para qué sirve de verdad:
+
+```
+  pack de LVGL   (por ISA: RV32IMC · ilp32f · ARM)    ~760 KB   ·  se compila 3 veces, nunca más
+  npk del panel  (por PLACA)                            ~5 KB   ·  lo escribe quien tiene la placa
+```
+
+LVGL pide `busca('PANT')` **en su primer uso** —no al cargar, así que el orden de los dos packs da
+igual— y si no hay panel, lo dice con nombre. El mismo contrato lo puede publicar **la imagen**: el P4
+por MIPI-DSI y la DK2 por LTDC siguen dentro, y así LVGL sale de esas imágenes sin pedirle a la BIOS
+que preste DSI. Eso es lo que hace posible `H6.b` sin inventar nada.
+
+```c
+typedef struct {                 /* lo que publica un panel bajo 'PANT' (versión 1) */
+    int  (*init)(void);                                  /* 0 = bien; enciende panel y luz  */
+    int  (*size)(int* w, int* h);                        /* el tamaño FÍSICO                */
+    void (*flush)(int x1, int y1, int x2, int y2, const uint8_t* px565);
+    void (*rotate)(int deg);                             /* MADCTL/gap; sin soporte: no-op  */
+    int  (*open)(void);
+    void (*backlight)(int por_ciento);                   /* 0..100; sin control: no-op      */
+    int  (*touch)(int* x, int* y);                       /* 1 = pulsado; sin táctil: NULL   */
+} bpvm_pant_t;
+```
+
+#### 7.4 La escalera de generalización — tres niveles, UN contrato
+
+Lo que contesta «¿cómo generalizamos el driver?» no es un mecanismo sino **tres**, y lo importante es
+que los tres publican `'PANT'`, así que LVGL no se entera de cuál se usó:
+
+**Nivel 0 — EL PERFIL: sólo números, sin compilar nada.**
+Un `.npk` GENÉRICO —«controladores conocidos por SPI»— que lee su configuración y se monta solo:
+
+```
+display   = st7789        # el controlador del catálogo
+lcd.bus   = 2 · lcd.sck = 6 · lcd.mosi = 7 · lcd.dc = 9 · lcd.cs = 10 · lcd.hz = 40000000
+lcd.w     = 240 · lcd.h = 320 · lcd.inv = 1 · lcd.bgr = 0
+lcd.gap   = 0,0,0,80      # por orientación (el caso del C6)
+lcd.rst   = gpio:21       # o "exio:0x24/1" — ver la pregunta 3
+lcd.bl    = gpio:22       # o "pwm:0x24/0x05"
+touch     = cst3530 · touch.addr = 0x58 · touch.i2c = 0 · touch.swap = 0,0,0
+```
+
+Con esto, **la C6 y la mayoría de placas caseras no necesitan que nadie escriba C**. Y el catálogo de
+controladores es corto: ST7789, ILI9341, GC9A01 y ST7796 cubren casi todo lo que se compra hoy.
+
+**Nivel 1 — LA SECUENCIA COMO DATOS**, para un controlador que no esté en el catálogo: una tabla
+`(cmd, n, bytes…, espera_ms)`. No es invento nuestro — es lo que hacen TFT_eSPI y LovyanGFX, y lo que el
+propio `esp_lcd` admite como `init_cmds` en su `vendor_config`. Cabe en un recurso del pack o en el ENV.
+Con eso, un panel nuevo entra **sin recompilar el pack**.
+
+**Nivel 2 — UN `.npk` DE PLACA**, para lo que no es declarativo: el CH32 de la C5, el LDO del P4, un
+táctil con su propio protocolo, una secuencia con condicionales. Son ~200 líneas de C contra la HAL de la
+BIOS, y el ejemplo ya está escrito y probado (`panel_c5.c`).
+
+📌 **Y la C5 dice dónde está la frontera**: su panel es Nivel 0 salvo por dos cosas —el reset y la luz
+van por I2C a un expansor—. O sea que la frontera entre el nivel 0 y el 2 se puede mover con MUY poco:
+si el perfil sabe expresar «este pin es el bit 1 del registro 0x03 del dispositivo I2C 0x24», la C5
+entera cae en el nivel 0. Es la pregunta 3.
+
+#### 7.5 Lo que hay que construir (y no es tanto)
+
+| | qué | por qué |
+|---|---|---|
+| **A** | **BIOS v6: `env_get(clave, buf, cap)`** — una ranura, de sólo lectura | sin ella un driver no puede parametrizarse; es LA pieza que convierte «un npk por placa» en «un npk para todas» |
+| **B** | **el reparto de RAM entre varios `npk`** (§2.5: `ram_bytes` en la cabecera, el cargador recorre la cadena) | con el driver fuera, hacen falta dos packs a la vez. Deja de ser opcional |
+| **C** | **`'PANT'`**: el contrato, `busca()` perezoso desde LVGL, y `panel_c5.c` movido a su propio `npk` | es el corte; y lo prueba que el P4 y la DK2 lo publiquen desde la imagen |
+| **D** | **el `npk` genérico**: ST7789 + ILI9341 + GC9A01 por SPI, leyendo el perfil | el nivel 0, que es el que le sirve a alguien de fuera |
+| **E** | **el bus, con dueño** — que tomarlo desde BP no mate al panel, como ya pasa con los pines | la TF de la C5 comparte bus con el panel: hoy es un fallo mudo esperando |
+| **F** | **la HAL: SPI con DMA / transferencias largas** | los **143 ms** de pantalla entera son 2 400 transacciones de 64 B; la palanca es la fachada, y se la lleva también la SD |
+| **G** | *(opcional)* **los recursos del pack grabado**, para que el perfil pueda viajar dentro del pack | hoy sólo se leen los del pack en ejecución; el cabo ya estaba escrito en `V5_IDEAS` |
+
+#### 7.6 Lo que NO se generaliza, y hay que decirlo
+
+**MIPI-DSI, LTDC y RGB paralelo no van a salir de la imagen**, y no es una limitación temporal: son
+periféricos de una familia, y una ranura de la BIOS que sólo existe en un micro rompe la propiedad que
+hace útil la tabla (26 de 29 ranuras eran idénticas en cualquier placa cuando se montó la segunda). Por
+eso `'PANT'` tiene **dos proveedores**: un pack o la propia imagen. El usuario con una pantalla SPI —que
+es lo que se compra— la pone él; el que quiere DSI usa una placa donde ya está.
+
+#### 7.7 Las preguntas (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | ¿dónde viven los números de la placa? | **el ENV**, que es donde ya vive la config de placa y lo que el P4 usa (`display=`). Con `env_get` en la BIOS, el driver los lee al arrancar. Un perfil en fichero (`/sys/panel.cfg`) es el plan B y no hace falta hoy |
+| 2 | ¿el táctil va en `'PANT'` o en su propia marca? | **en `'PANT'`, opcional** (NULL si no hay): es un `npk` menos que construir en el caso normal, y si algún día hace falta mezclar panel nuestro con táctil ajeno, separarlo es una marca más — caben ocho |
+| 3 | ¿el perfil sabe decir «este pin va por un expansor I2C»? | **sí, con una notación mínima** (`gpio:21` · `exio:0x24/1` · `pwm:0x24/0x05`): mete a la C5 entera en el nivel 0 y los expansores I2C son el pan de cada día en las placas con pantalla. Si crece más que eso, es nivel 2 |
+| 4 | ¿el `npk` genérico lleva varios controladores o uno por `npk`? | **varios en uno** (ST7789/ILI9341/GC9A01/ST7796): son unos pocos KB cada uno y así el usuario graba UNA cosa; el ENV elige |
+| 5 | el bus compartido (la TF y el panel de la C5) | el bus, **con dueño**, como los pines: quien lo tomó lo tiene, y el segundo recibe un error CON NOMBRE en vez de un panel muerto. Compartir de verdad (dos CS sobre un bus ya abierto) es un paso aparte |
+| 6 | ¿esto es H6 o es otro hito? | **`H6.c`**, después de `H6.b`: `H6.a` ya demostró que el mecanismo funciona; esto es convertirlo en algo que use alguien de fuera, y es justo lo que pide «la base es finita, lo demás en packs» |
+
+#### 7.8 El plan, por pasos que cierran algo
+
+| paso | qué | se prueba con |
+|---|---|---|
+| **G1** | `env_get` en la BIOS (v6) + el reparto de RAM entre varios `npk` | el mini leyendo una clave; el pack de LVGL y el de SQLite **a la vez** en el P4 |
+| **G2** | `'PANT'`: el contrato, `busca()` perezoso, y `panel_c5.c` a su propio `npk` | la C5 otra vez, con DOS packs, dando lo mismo que hoy |
+| **G3** | el `npk` genérico por perfil (ST7789 primero) | la **C6** con su ST7789 240×240 y su gap de 80 — sin escribir una línea de C, y esa placa ya funciona hoy con LVGL dentro, así que hay con qué comparar |
+| **G4** | el bus con dueño + la fachada SPI con DMA | los 143 ms bajando, y la TF de la C5 conviviendo con el panel |
+| **G5** | el P4 y la DK2 publicando `'PANT'` desde la imagen | `H6.b`: LVGL sale de esas dos imágenes |
+
+**El orden no es caprichoso**: G3 es el que de verdad contesta la pregunta de Eduardo —una placa nueva
+sin escribir C— y **la C6 es el banco perfecto** porque hoy funciona con LVGL dentro: si el pack genérico
+la pinta igual, el nivel 0 está demostrado contra un oráculo, no contra una opinión.
