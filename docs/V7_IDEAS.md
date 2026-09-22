@@ -1716,12 +1716,24 @@ resolución perezosa, las ranuras, la arena por código nativo. Esto es su prime
 Hoy la C5 (como C3, S3, Pico, Nucleo) compila **sin `BPVM_GUI`**: los 83 builtins no existen y un programa con
 `Gui` muere en el id del builtin. La C6, el P4 y la DK2 llevan `BPVM_GUI` + `BPVM_LVGL` con todo dentro.
 
-**La superficie que LVGL necesita de la plataforma, medida con `nm -u` sobre `liblvgl.a` del C6: 19 símbolos.**
-`__assert_func` · libgcc (`__ctzsi2 __divdi3 __extendsfdf2 __floatunsisf`) · `malloc free realloc` · `memcmp
-memcpy memmove memset strcat strcmp strcpy strlen strncat strncpy` · `vsnprintf`. **Nada de `math.h`, nada de
-ficheros, nada de tiempo** (el tick se lo da el driver con `lv_tick_set_cb`). Con `lv_conf.h` en
-`LV_STDLIB_BUILTIN` (TLSF + sus propias `lv_string`/`lv_sprintf`, que hoy están en `LV_STDLIB_CLIB`) la lista
-baja a libgcc + `assert`: LVGL es **más autocontenida que SQLite** (36 símbolos en la prueba A de V5).
+**La superficie que LVGL necesita de la plataforma, medida con `nm -u` sobre `liblvgl.a` del C6: 17 símbolos.**
+`__assert_func` · libgcc (`__ctzsi2 __divdi3`) · `malloc free realloc` · `memcmp memcpy memmove memset strcat
+strcmp strcpy strlen strncat strncpy` · `vsnprintf`. **Nada de `math.h`, nada de ficheros, nada de tiempo** (el
+tick se lo da el driver con `lv_tick_set_cb`). Con `lv_conf.h` en `LV_STDLIB_BUILTIN` (TLSF + sus propias
+`lv_string`/`lv_sprintf`, que hoy están en `LV_STDLIB_CLIB`) la lista baja a libgcc + `assert`: LVGL es **más
+autocontenida que SQLite** (36 símbolos en la prueba A de V5).
+
+**Y nada de coma flotante** (pregunta de Eduardo, 22-sep): con `LV_USE_FLOAT 0` y `LV_USE_MATRIX 0` (lo de hoy)
+LVGL calcula en enteros —punto fijo, `lv_trigo_sin`, `lv_value_precise_t` = `int32_t`—. En el archivo hay dos
+rutinas de float (`__extendsfdf2`, `__floatunsisf`) y las pide **un solo objeto, `lv_example_scale_7.c`: un ejemplo
+que no se enlaza**. Comprobado en el mapa del C6: las 22 rutinas soft-float de libgcc que lleva la imagen
+(`__muldf3`, `__addsf3`…) las piden **`interp.c` y `builtins.c`** —el `double`/`float` de BasicPlus—, ninguna LVGL.
+Y **la C5 no tiene FPU**: su ELF dice `rv32imac`, *soft-float ABI* (como C3 y C6; el P4 es el que lleva `f`,
+*single-float ABI*). Float y double funcionan, por software (libgcc) — hoy ya lo hace la VM ahí. Para el pack da
+igual por tres motivos: LVGL no lo usa; si un código nativo lo usara, sus rutinas van DENTRO del `.npk` (SQLite
+lleva sus 18 `__aeabi_*`); y por la frontera (BIOS, `bpvm_gui.h`, `'PANT'`) **no cruza ningún float**, todo son
+enteros y punteros — así que la ABI sólo importa como peldaño del `.npk` (`float_abi` «ilp32»: un pack del P4 se
+rechaza en la C5 con nombre).
 
 **El que habla con el SDK es el driver del panel**, no LVGL: el del C6 pide 28 símbolos (`esp_lcd_*`,
 `spi_bus_initialize`, `gpio_config`, `heap_caps_malloc` DMA, `esp_timer_get_time`, `esp_log`); el del P4, 65

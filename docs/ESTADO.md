@@ -148,8 +148,8 @@ P4 «#3, 100 200 300». Quedan de P3 NeoPixel y el botón BOOT del C6 (con la pl
 Encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más analizar.»*
 Medido, no supuesto: **la GUI cuesta 664 KB de flash y 107 KB de RAM** en la imagen del C6 (LVGL 644 KB, de los que
 418 son las once Montserrat; `gui.c` 11 KB + **106 KB de `.bss`** por el `g_nodes[512]`; los 83 builtins 4,7 KB); **LVGL
-necesita 19 símbolos** de la plataforma (`nm -u`: libgcc, assert, malloc, cadenas, `vsnprintf`; nada de `math.h`, ni
-ficheros, ni tiempo) y con su stdlib interna quedaría en libgcc + assert; **el que habla con el SDK es el driver del
+necesita 17 símbolos** de la plataforma (`nm -u`: libgcc, assert, malloc, cadenas, `vsnprintf`; nada de `math.h`, ni
+ficheros, ni tiempo, **ni coma flotante** —`LV_USE_FLOAT 0`; y la C5 no tiene FPU: soft-float, como C3/C6—) y con su stdlib interna quedaría en libgcc + assert; **el que habla con el SDK es el driver del
 panel** (28 símbolos en el C6, 65 en el P4). Lo que falta al pack nativo: la BIOS no presta HARDWARE; ancla y cargador
 sólo en Pico y P4 (`#if CONFIG_IDF_TARGET_ESP32P4` en el común); una RAM y un pack (el primero válido, barriendo la
 zona); sin destino `.npk` para `RV32IMC_ILP32` (`#502`); la fachada SPI del ESP32 sin DMA (64 B). **La placa, leída**:
