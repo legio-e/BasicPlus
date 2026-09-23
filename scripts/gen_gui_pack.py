@@ -127,7 +127,13 @@ def generar(fns):
     t.append(' * no hacen nada y devuelven 0/NULL (nunca saltan a ninguna parte).')
     t.append(' *')
     t.append(' * Se compila con -DBPVM_GUI_PACK en vez de gui.c; en el host y en las imágenes con')
-    t.append(' * LVGL dentro no existe: ahí bpvm_gui_* son las funciones de gui.c. */')
+    t.append(' * LVGL dentro no existe: ahí bpvm_gui_* son las funciones de gui.c.')
+    t.append(' *')
+    t.append(' * ⚠️ POR ESO TODO EL FICHERO VA BAJO BPVM_GUI_PACK. Vive en src/ con el resto, y')
+    t.append(' * los proyectos del STM32 compilan TODO src/ (los demás builds listan sus')
+    t.append(' * ficheros): sin la guarda, en la DK2 estos trampolines chocaban al enlazar con')
+    t.append(' * las funciones de verdad de gui.c (23-sep, V7/H6.c G1). */')
+    t.append('#ifdef BPVM_GUI_PACK')
     t.append('#include "bpvm_gui.h"')
     t.append('#include "gui_pack_api.h"')
     t.append('#include "bpvm_bios.h"')
@@ -206,6 +212,9 @@ def generar(fns):
     t.append('void bpvm_gui_disp_set_exit_on_close(int on) { (void) on; }')
     t.append('void bpvm_gui_disp_set_title(const char* title) { (void) title; }')
     t.append('#endif')
+    t.append('#else')
+    t.append('typedef int bpvm_gui_pack_fuera;   /* ISO C: una unidad de compilación no puede quedar vacía */')
+    t.append('#endif /* BPVM_GUI_PACK */')
     tramp = '\n'.join(t) + '\n'
 
     # ── lo que publica el pack ──
@@ -215,7 +224,12 @@ def generar(fns):
     p.append(' *')
     p.append(' * Se compila DENTRO del pack, junto a gui.c (que define las funciones de verdad).')
     p.append(' * La entrada del pack hace `bios->publica(BPVM_GUI_MARCA, &bpvm_gui_api)` y la VM,')
-    p.append(' * por los trampolines de gui_pack.c, resuelve cada nombre contra esta tabla. */')
+    p.append(' * por los trampolines de gui_pack.c, resuelve cada nombre contra esta tabla.')
+    p.append(' *')
+    p.append(' * ⚠️ TODO BAJO BPVM_EN_PACK (lo define build_lvgl.sh): vive en src/, y los')
+    p.append(' * proyectos del STM32 compilan TODO src/. Sin la guarda, el Nucleo —sin GUI— no')
+    p.append(' * compilaba: las bpvm_gui_disp_* no existen fuera de una imagen con pantalla (23-sep). */')
+    p.append('#ifdef BPVM_EN_PACK')
     p.append('#include "bpvm_gui.h"')
     p.append('#include "gui_pack_api.h"')
     p.append('#include "bpvm_pack_api.h"')
@@ -227,6 +241,9 @@ def generar(fns):
     p.append('};')
     p.append('')
     p.append('const bpvm_pack_api_t bpvm_gui_api = { BPVM_GUI_MARCA, BPVM_GUI_API_VER, BPVM_GUI_N_FUNCS, s_publics };')
+    p.append('#else')
+    p.append('typedef int bpvm_gui_publics_fuera;   /* ISO C: una unidad de compilación no puede quedar vacía */')
+    p.append('#endif /* BPVM_EN_PACK */')
     publ = '\n'.join(p) + '\n'
 
     # ── los DOBLES para la prueba de host: la misma firma, un contador y un valor marcado ──

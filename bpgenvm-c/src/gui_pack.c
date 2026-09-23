@@ -10,7 +10,13 @@
  * no hacen nada y devuelven 0/NULL (nunca saltan a ninguna parte).
  *
  * Se compila con -DBPVM_GUI_PACK en vez de gui.c; en el host y en las imágenes con
- * LVGL dentro no existe: ahí bpvm_gui_* son las funciones de gui.c. */
+ * LVGL dentro no existe: ahí bpvm_gui_* son las funciones de gui.c.
+ *
+ * ⚠️ POR ESO TODO EL FICHERO VA BAJO BPVM_GUI_PACK. Vive en src/ con el resto, y
+ * los proyectos del STM32 compilan TODO src/ (los demás builds listan sus
+ * ficheros): sin la guarda, en la DK2 estos trampolines chocaban al enlazar con
+ * las funciones de verdad de gui.c (23-sep, V7/H6.c G1). */
+#ifdef BPVM_GUI_PACK
 #include "bpvm_gui.h"
 #include "gui_pack_api.h"
 #include "bpvm_bios.h"
@@ -164,3 +170,6 @@ void bpvm_gui_disp_set_headless(int on) { (void) on; }
 void bpvm_gui_disp_set_exit_on_close(int on) { (void) on; }
 void bpvm_gui_disp_set_title(const char* title) { (void) title; }
 #endif
+#else
+typedef int bpvm_gui_pack_fuera;   /* ISO C: una unidad de compilación no puede quedar vacía */
+#endif /* BPVM_GUI_PACK */

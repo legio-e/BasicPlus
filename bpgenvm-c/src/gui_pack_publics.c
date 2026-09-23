@@ -3,7 +3,12 @@
  *
  * Se compila DENTRO del pack, junto a gui.c (que define las funciones de verdad).
  * La entrada del pack hace `bios->publica(BPVM_GUI_MARCA, &bpvm_gui_api)` y la VM,
- * por los trampolines de gui_pack.c, resuelve cada nombre contra esta tabla. */
+ * por los trampolines de gui_pack.c, resuelve cada nombre contra esta tabla.
+ *
+ * ⚠️ TODO BAJO BPVM_EN_PACK (lo define build_lvgl.sh): vive en src/, y los
+ * proyectos del STM32 compilan TODO src/. Sin la guarda, el Nucleo —sin GUI— no
+ * compilaba: las bpvm_gui_disp_* no existen fuera de una imagen con pantalla (23-sep). */
+#ifdef BPVM_EN_PACK
 #include "bpvm_gui.h"
 #include "gui_pack_api.h"
 #include "bpvm_pack_api.h"
@@ -100,3 +105,6 @@ static const bpvm_pack_sym_t s_publics[BPVM_GUI_N_FUNCS] = {
 };
 
 const bpvm_pack_api_t bpvm_gui_api = { BPVM_GUI_MARCA, BPVM_GUI_API_VER, BPVM_GUI_N_FUNCS, s_publics };
+#else
+typedef int bpvm_gui_publics_fuera;   /* ISO C: una unidad de compilación no puede quedar vacía */
+#endif /* BPVM_EN_PACK */
