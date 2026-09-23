@@ -26,14 +26,13 @@
  */
 #include "bpvm_bios.h"
 #include "bpvm_pack.h"   /* bpvm_pack_crc16: el control del ancla */
-#include "pack_pico.h"   /* PACK_RAM_BYTES: los estáticos que van DELANTE     */
+#include "pack_pico.h"   /* el bloque de RAM del código nativo */
+#include "bpvm_env.h"      /* V7/H6.c G1: env_get */
+#include "board_mgr_pico.h"   /* board_env: el ENV de ESTA placa */
 #include <stdint.h>
 
 int32_t pack_pico_cargar(void);   /* pico/pack_pico.c */
 
-/* El bloque de la BD, decidido en el arranque (pico/main.c). NULL = no hay. */
-extern uint8_t* s_sqlite_base;
-extern uint32_t s_sqlite_size;
 #include "log.h"
 
 #include <string.h>
@@ -65,41 +64,28 @@ static struct tm* bios_localtime(const void* t) {
     return 0;
 }
 
-/* ── V5/H3 — la arena de la BD ──
+/* ── V7/H6.c G1 — LA CONFIG DE PLACA: el ENV de esta familia ──
  *
- * El bloque reservado en el arranque MENOS los estáticos del pack, que viven en
- * su principio (`[estáticos | arena]`). El descuento se hace AQUÍ y no en el
- * llamante: quien pide la arena no tiene por qué saberse el reparto, y si lo
- * supiera habría dos sitios que mantener de acuerdo.
- *
- * Devolver NULL no es un fallo — es la respuesta correcta cuando no se pidió BD
- * o no cupo. Pero se dice en el log, porque desde el otro lado "no hay arena" y
- * "la ranura está rota" se parecen demasiado.
- */
-static void* bios_arena(size_t* bytes) {
-    if (bytes) *bytes = 0;
-
-    if (s_sqlite_base == 0 || s_sqlite_size <= PACK_RAM_BYTES) {
-        log_printf("BIOS: el pack pidio la arena y NO HAY "
-                   "(SQLite=0 en el ENV, o no cupo — mira la linea 'bd:' del arranque)");
-        return 0;
-    }
-    if (bytes) *bytes = (size_t) (s_sqlite_size - PACK_RAM_BYTES);
-    return s_sqlite_base + PACK_RAM_BYTES;
+ * La regla (entero o nada, los códigos) es común: `bpvm_env_get_exacto`. Aquí
+ * sólo se dice DÓNDE está el ENV de la Pico. (La arena, que vivía aquí, es
+ * ahora `bpvm_bios_arena`: con varios motores tiene dueño, y esa regla no
+ * puede tener una copia por familia.) */
+static int bios_env_get(const char* clave, char* buf, size_t cap) {
+    return bpvm_env_get_exacto(board_env(), clave, buf, cap);
 }
 
 /* ── 3. La tabla, estática: su dirección no cambia y se le puede prestar al
  *      pack sin que nadie tenga que mantenerla viva.
  *
  * El relleno lo hace `BPVM_BIOS_TABLA` (en `bpvm_bios.h`, pegado a la struct):
- * de las 29 ranuras sólo estas seis dependen de la placa. Antes estaban aquí las
+ * de las 40 ranuras (V7/H6.c) sólo estas seis dependen de la placa. Antes estaban aquí las
  * 29 escritas a mano, y al montar el P4 eso habría sido una SEGUNDA COPIA del
  * orden — el error de #299/#315 otra vez, pero cruzando una frontera binaria. */
 static const bpvm_bios_t s_bios = BPVM_BIOS_TABLA(
     bios_log,
     bios_malloc, bios_free, bios_realloc,
     bios_localtime,
-    bios_arena);
+    bios_env_get);
 
 /* ── 4. EL ANCLA, pegada a la tabla ──
  *

@@ -6,6 +6,7 @@
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_boot.h"
 #include "bpvm_pack.h"   /* H3 — PACK_LS sobre la zona de packs (bm->packs_base) */
+#include "bpvm_npack.h"  /* V7/H6.c G1 — el tope de RAM: dónde sellar el motor que llega */
 #include "bpvm.h"        /* #338 — la zona de rascar compartida */
 
 #include <string.h>
@@ -294,13 +295,30 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
          *
          * `flashAddr` es la direccion que ve la CPU, no el offset: en el P4 la
          * asigna la MMU al mapear y NO se puede calcular desde el PC.
-         * `ramBase` es el principio del bloque de la BD. Un 0 significa «esta
-         * placa no da RAM a packs nativos», y el IDE lo dira en vez de grabar
-         * un motor que no podria arrancar. */
+         * `ramBase` es dónde van los estáticos de ESTE motor. Un 0 significa
+         * «esta placa no da RAM a packs nativos», y el IDE lo dira en vez de
+         * grabar un motor que no podria arrancar.
+         *
+         * V7/H6.c G1 — y ya NO es la base del bloque: es el TOPE, lo primero
+         * libre por encima de los motores vivos de la zona. Con UN motor era lo
+         * mismo; con varios, dar la base a todos los ponía uno ENCIMA de otro.
+         * El reparto queda escrito en el sello de cada uno y el cargador sólo
+         * comprueba que no se pisan (bpvm_npack.h). `ramSize` es lo que queda
+         * desde ahí hasta el final del bloque: el IDE mira si el motor cabe
+         * ANTES de grabar, en vez de enterarse al cargar. Se calcula AQUÍ, al
+         * empezar, porque el que llega aún no está en la cadena. */
+        uint32_t ram_base = bm->pack_ram_base, ram_size = bm->pack_ram_size;
+        if (ram_base != 0) {
+            uint32_t tope = bpvm_npack_ram_tope(bm->packs_base, bm->packs_size,
+                                                bm->pack_ram_base, bm->pack_ram_size);
+            ram_size = (tope - bm->pack_ram_base <= bm->pack_ram_size)
+                     ? bm->pack_ram_size - (tope - bm->pack_ram_base) : 0;
+            ram_base = tope;
+        }
         sb_raw(&s, ",\"flashAddr\":");
         sb_long(&s, (long) ((uintptr_t) bm->packs_base + (uintptr_t) r));
-        sb_raw(&s, ",\"ramBase\":"); sb_long(&s, (long) bm->pack_ram_base);
-        sb_raw(&s, ",\"ramSize\":"); sb_long(&s, (long) bm->pack_ram_size);
+        sb_raw(&s, ",\"ramBase\":"); sb_long(&s, (long) ram_base);
+        sb_raw(&s, ",\"ramSize\":"); sb_long(&s, (long) ram_size);
         sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }

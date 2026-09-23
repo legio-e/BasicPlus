@@ -1005,8 +1005,10 @@ static void packs_cargar_una_vez(void) {
 
     int32_t r = pack_pico_cargar();
     if (r >= 0) {
+        /* V7/H6.c G1: `r` = a cuántos motores se saltó; lo que devolvió cada
+         * uno ya está en el log, con su nombre. */
         s_ok = 1;
-        log_printf("packs: cargado, la entrada devolvio %ld", (long) r);
+        log_printf("packs: %ld motor(es) cargado(s)", (long) r);
     } else {
         /* r<0 = no se saltó; el detalle (cuántos candidatos, por qué peldaño)
          * ya lo dejó `pack_pico_cargar` en el log. Aquí sólo se dice que se

@@ -297,7 +297,9 @@ public final class PacksPanel extends JPanel {
                         + " — relocalizando %d sitio(s)%n",
                         flashAddr, codigo, ramBase, ramSize / 1024, prep.relocalizaciones));
                     try {
-                        return basicplus.frontend.PackBurn.sellar(prep, codigo, (int) ramBase);
+                        /* V7/H6.c G1: con `ramSize`, un motor que no cabe se dice AQUÍ,
+                         * antes de mandar un byte — no al cargarlo. */
+                        return basicplus.frontend.PackBurn.sellar(prep, codigo, (int) ramBase, ramSize);
                     } catch (basicplus.frontend.PackBurn.BurnException be) {
                         throw new java.io.IOException(be.getMessage(), be);
                     }

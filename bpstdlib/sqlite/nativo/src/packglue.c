@@ -3,21 +3,22 @@
  * ============================================================================
  *
  * QUE ES ESTO. El pack de SQLite no llama a `malloc` ni a `fopen`: todo lo que
- * depende del hierro se lo presta el firmware en una tabla de 29 ranuras
- * (`bpvm_bios_t`) cuando lo carga. Eso es lo que permite que el MISMO binario
+ * depende del hierro se lo presta el firmware en una tabla de ranuras (40 desde
+ * la v6, `bpvm_bios_t`) cuando lo carga. Eso es lo que permite que el MISMO binario
  * corra en la Metro y en el P4 sin recompilar. En el PC no hay firmware, asi
  * que aqui esta la misma tabla implementada sobre la libreria estandar — y con
  * ella `make test-sqldemo` ejecuta en el PC exactamente el SQLite que
  * lleva la placa.
  *
- * ── DE LAS 29 RANURAS, SOLO SEIS SON NUESTRAS ──────────────────────────────
+ * ── DE LAS 40 RANURAS, SOLO SEIS SON NUESTRAS ──────────────────────────────
  *
- * Las otras 23 las rellena `BPVM_BIOS_TABLA` (en `bpvm_bios.h`, pegada a la
- * struct) con las portables: las de `string.h` y las ranuras de fichero de
- * `src/bpvm_bios_fs.c`. Escribir las 29 a mano seria una SEGUNDA COPIA del
- * orden de la tabla, y ese orden cruza una frontera binaria — el error de
- * #299/#315 otra vez. Aqui solo van la voz, las tres de memoria, el tiempo y
- * la arena, igual que en `bios_pico.c` y `bios_p4.c`.
+ * Las otras 34 las rellena `BPVM_BIOS_TABLA` (en `bpvm_bios.h`, pegada a la
+ * struct) con las portables: las de `string.h`, las de fichero de
+ * `src/bpvm_bios_fs.c`, la HAL y —desde V7/H6.c G1— la ARENA, que con varios
+ * motores tiene dueño y es común (`bpvm_bios_arena`). Escribirlas a mano seria
+ * una SEGUNDA COPIA del orden de la tabla, y ese orden cruza una frontera
+ * binaria — el error de #299/#315 otra vez. Aqui solo van la voz, las tres de
+ * memoria, el tiempo y el ENV, igual que en `bios_pico.c` y `bios_esp32.c`.
  *
  * ── ⚠️ ESTO ES UN DOBLE, Y UN DOBLE MAS AMABLE QUE EL ORIGINAL ES UNA TRAMPA ─
  *
@@ -30,12 +31,14 @@
  * en el micro. El doble sirve de oraculo solo mientras dice que NO a lo mismo
  * que el original.
  *
- * Lo que si funciona de verdad, porque en la placa tambien: el log, el reloj,
- * la arena y las ranuras de fichero (sobre `stdio`, via `bpvm_bios_fs.c`).
+ * Lo que si funciona de verdad, porque en la placa tambien: el log, el reloj y
+ * las ranuras de fichero (sobre `stdio`, via `bpvm_bios_fs.c`). La arena no
+ * pasa por aqui: `test_sqldemo.c` le da el heap a SQLite directamente.
  *
  * REESCRITO el 19-ago-2026 desde `bios_pico.c`. Ver `packglue.h`.
  */
 #include "packglue.h"
+#include "bpvm_env.h"     /* V7/H6.c G1: la regla de env_get */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,21 +84,16 @@ static struct tm* glue_localtime(const void* t) {
     return localtime((const time_t*) t);
 }
 
-/* ── 4. La arena de la BD ───────────────────────────────────────────────────
- * En la placa sale del ENV (`SQLite=<MB>`) y el firmware la reserva de la PSRAM
- * o del bloque que toque. Aqui es un bloque estatico, y del MISMO tamano que el
- * minimo que la placa acepta: si el programa cabe aqui pero no alla, el doble
- * no habria servido de nada.
+/* ── 4. El ENV (v6, V7/H6.c G1) ─────────────────────────────────────────────
+ * En el PC no hay ENV de placa: ninguna clave está. Con la MISMA regla que la
+ * placa (`bpvm_env_get_exacto`, que también juzga los argumentos): un doble que
+ * aceptara lo que la placa rechaza sería el doble amable de la cabecera.
  *
- * `bpvm_sqlmem.c` define ese minimo; se usa 4 MB, que es lo que declara el P4
- * en su arranque (`bd: bloque 4096 KB ... SQLite=4 MB`). */
-#define GLUE_ARENA_BYTES (4u * 1024u * 1024u)
-
-static unsigned char s_arena[GLUE_ARENA_BYTES];
-
-static void* glue_arena(size_t* bytes) {
-    if (bytes) *bytes = (size_t) GLUE_ARENA_BYTES;
-    return s_arena;
+ * (Aquí vivía una arena estática de 4 MB. Desde G1 la ranura `arena` la llena
+ * la común —`bpvm_bios_arena`, con dueño—, y este doble nunca la prestaba de
+ * verdad: `test_sqldemo.c` le da el heap a SQLite directamente.) */
+static int glue_env_get(const char* clave, char* buf, size_t cap) {
+    return bpvm_env_get_exacto(NULL, clave, buf, cap);
 }
 
 /* ── 5. La tabla ────────────────────────────────────────────────────────────
@@ -105,7 +103,7 @@ static const bpvm_bios_t s_bios = BPVM_BIOS_TABLA(
     glue_log,
     glue_malloc, glue_free, glue_realloc,
     glue_localtime,
-    glue_arena);
+    glue_env_get);
 
 const bpvm_bios_t* packglue_bios(void) { return &s_bios; }
 

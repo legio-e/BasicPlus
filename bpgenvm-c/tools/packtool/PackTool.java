@@ -5,7 +5,8 @@ import java.nio.file.Paths;
 
 /** Sella un pack para UNA placa, como el panel de Packs del IDE (PackBurn.podar + sellar).
  *  Uso: PackTool podar <pack> <arch|-> <salida>          -> escribe el pack podado (tamano FINAL)
- *       PackTool sellar <pack> <arch> <flashAddr> <ramBase> <salida>  -> podado + sellado */
+ *       PackTool sellar <pack> <arch> <flashAddr> <ramBase> <salida> [ramSize]  -> podado + sellado
+ *  (V7/H6.c G1: con `ramSize` —el de PACK_BURN_BEGIN— un motor que no cabe se dice antes de grabar.) */
 public class PackTool {
     public static void main(String[] a) throws Exception {
         String op = a[0];
@@ -26,7 +27,15 @@ public class PackTool {
             int codigo = PackBurn.baseDelCodigo(prep, (int) flash);
             System.out.println(String.format("pack en 0x%08X · motor en 0x%08X · RAM 0x%08X — %d sitio(s)",
                                              flash, codigo, ram, prep.relocalizaciones));
-            out = PackBurn.sellar(prep, codigo, (int) ram);
+            long ramSize = (a.length > 6) ? Long.decode(a[6]) : 0L;
+            try {
+                out = PackBurn.sellar(prep, codigo, (int) ram, ramSize);
+            } catch (PackBurn.BurnException e) {
+                /* Un «no cabe» es un mensaje para quien graba, no una traza de Java. */
+                System.err.println("NO SE GRABA: " + e.getMessage());
+                System.exit(1);
+                return;
+            }
         }
         Files.write(Paths.get(a[5]), out);
         System.out.println("sellado: " + out.length + " B");

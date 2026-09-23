@@ -28,31 +28,26 @@ const struct bpvm_bios*  bios_esp32_get(void);
 const struct bpvm_ancla* bios_esp32_ancla(void);
 
 /*
- * Lo que el firmware OFRECE al pack para sus estáticos, NO lo que el pack pide:
- * eso lo declara él en su cabecera (`data_bytes` + `bss_bytes`) y la escalera de
- * `bpvm_npack_check` los compara. Si un pack pidiera más, sale con su peldaño
- * TAMAÑO en vez de escribir fuera — o sea que quedarse corto NO corrompe nada,
- * sólo hace que el pack no cargue.
+ * ─── LO QUE OCUPA UN MOTOR, Y DE DÓNDE SALÍAN LOS 16 KB ───
  *
- * ─── POR QUÉ 16 KB Y NO LOS 8192 DE LA PICO ───
- *
- * Porque el pack de RISC-V MIDE MÁS, y está medido (12-ago, `sqlite_rv.npack`):
+ * Hasta V7/H6 P3 aquí había una constante, `PACK_RAM_BYTES` = 16 KB: lo que el
+ * firmware OFRECÍA para los estáticos del pack. Salía de medir el SQLite de
+ * RISC-V (12-ago, `sqlite_rv.npack`) —
  *
  *     .data 6.352 + .sdata   564 = 6.916 B de imagen inicial
  *     .sbss    68 + .bss   1.300 = 1.368 B a cero
  *                               ── 8.284 B
  *
- * Con los 8192 de la Pico el pack RISC-V sería RECHAZADO — por 92 bytes. Y el
- * mismo número ya se quedó corto antes: 7168 se pasó por OCHO al añadirle el
- * VFS. Dos veces justo es una advertencia, no una casualidad.
+ * — con ~2x de margen (criterio de Eduardo: *"16K está bien, con margen para
+ * crecer si es necesario"*). Y creció: el pack de la GUI trae 392 KB de `.bss`.
+ * Desde P3 se ofrecía el bloque entero, y desde G1 cada motor ocupa lo que dice
+ * su cabecera (`bpvm_npack_ram_bytes`), en el trozo que dice su sello. Ya no
+ * hay número que se quede corto.
  *
- * ⚠️ `.sdata`/`.sbss` son de RISC-V y NO EXISTEN en ARM (datos pequeños). Es
- * justo el tipo de sección que se olvida al portar y que aquí ya está contada.
- *
- * 16 KB da ~2x sobre lo medido. Criterio de Eduardo (12-ago): *"16K está bien,
- * con margen para crecer si es necesario"*.
+ * ⚠️ Lo que sigue valiendo de aquella medida: `.sdata`/`.sbss` son de RISC-V y
+ * NO EXISTEN en ARM (datos pequeños). Es justo el tipo de sección que se olvida
+ * al portar — y que el empaquetador ya suma dentro de `data_bytes`/`bss_bytes`.
  */
-#define PACK_RAM_BYTES   16384u
 
 /*
  * EL BLOQUE DE RAM DEL CÓDIGO NATIVO — `[estáticos | arena]`, decidido en el
@@ -73,21 +68,15 @@ const struct bpvm_ancla* bios_esp32_ancla(void);
  *     2 MB, ~40 % útil con MEMSYS5). Sin `packRam`, decide ésta.
  * Con PSRAM sale de la PSRAM (alineado a página, ver `pack_esp32_ram_init`);
  * sin PSRAM, de la SRAM interna dejando lo que la VM necesita como mínimo.
- * Hoy es UN bloque para UN pack (el primero válido de la zona); el reparto
- * entre varios códigos nativos —`ram_bytes` en la cabecera de cada `.npk`—
- * es el P4 del plan de H6 (V7_IDEAS §H6 2.5).
+ *
+ * V7/H6.c G1 — el bloque se REPARTE entre todos los motores de la zona: cada
+ * uno en el trozo que dice su sello (se lo dio la placa al grabarlo:
+ * `PACK_BURN_BEGIN` → el tope), y la arena es lo que queda por encima del
+ * último (`bpvm_bios_arena`, con dueño). Ver `bpvm_npack.h`.
  */
 extern uint8_t* s_pack_ram_base;
 extern uint32_t s_pack_ram_size;    /* bytes del bloque entero (estáticos + arena) */
 extern int      s_pack_ram_res;     /* bpvm_sqlite_res_t: por qué hay o no hay bloque */
-/* V7/H6 P3 — cuánto del bloque son los ESTÁTICOS del pack cargado (`.data` +
- * `.bss`, redondeado a 16), y el resto es la arena. Antes era una constante
- * (PACK_RAM_BYTES, 16 KB) y valía para SQLite (8 KB); el pack de la GUI trae
- * 392 KB de `.bss` (el pool de LVGL, el modelo de gui.c, los búferes de dibujo)
- * y con la constante lo rechazaba el peldaño TAMAÑO. Ahora el cargador ofrece el
- * bloque ENTERO y anota aquí lo que el pack se llevó; `arena()` descuenta esto.
- * Hasta que carga uno vale PACK_RAM_BYTES, por si alguien pregunta antes. */
-extern uint32_t s_pack_ram_estaticos;
 
 /* Reserva el bloque (o dice por qué no). ANTES del heap de la VM. */
 void    pack_esp32_ram_init(void);
@@ -100,12 +89,13 @@ void    pack_esp32_ram_init(void);
 int32_t pack_esp32_mapear(void);
 
 /*
- * Carga y ejecuta el pack nativo de la zona de packs. Se dispara en el primer
- * `Run` (ver repl_esp32.c): es el único paso que puede colgar, y un cuelgue en
- * el arranque se repite en cada arranque (decisión de Eduardo, V5).
+ * Carga y ejecuta los packs nativos de la zona (V7/H6.c G1: TODOS los motores
+ * cargables, en orden de cadena). Se dispara en el primer `Run` (ver
+ * repl_esp32.c): es el único paso que puede colgar, y un cuelgue en el
+ * arranque se repite en cada arranque (decisión de Eduardo, V5).
  *
- *   >= 0  se saltó, y es lo que devolvió el pack
- *   <  0  no se saltó; -valor es el peldaño (bpvm_npack_res_t)
+ *   >= 1  a cuántos motores se saltó (lo que devolvió cada uno, en el log)
+ *   <  0  no se saltó a ninguno; -valor es el peldaño (bpvm_npack_res_t)
  */
 int32_t pack_esp32_cargar(void);
 

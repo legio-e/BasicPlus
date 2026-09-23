@@ -277,15 +277,34 @@ public final class PackBurn {
      *   la del pack ni la de la entrada: el código empieza tras la cabecera del
      *   `.npk`. Confundirlos son 64 bytes de desfase y un salto a mitad de
      *   instrucción, así que lo calcula {@link #baseDelCodigo}.
-     * @param baseRam base del bloque de RAM que la placa le da.
+     * @param baseRam dónde van los estáticos de ESTE motor. Desde V7/H6.c (G1)
+     *   la placa no da la base del bloque sino el TOPE: lo primero libre por
+     *   encima de los motores que ya tiene grabados.
+     * @param ramSize lo que queda desde `baseRam` hasta el final del bloque
+     *   (`ramSize` de `PACK_BURN_BEGIN`); 0 = no se sabe, no se comprueba.
      */
-    public static byte[] sellar(Preparado prep, int baseFlash, int baseRam)
+    public static byte[] sellar(Preparado prep, int baseFlash, int baseRam, long ramSize)
             throws BurnException {
         if (!prep.necesitaDireccion) return prep.bytes;
         if (baseRam == 0)
             throw new BurnException("esta placa no da RAM a packs nativos"
                     + " (ramBase = 0), asi que el motor no podria arrancar."
                     + " No se graba a medias.");
+        /* V7/H6.c G1 — ¿CABEN sus estáticos? Con varios motores en la placa, el
+         * nuevo va encima de los que ya están; si no cabe, la placa lo diría al
+         * CARGAR (peldaño TAMAÑO), o sea después de grabar cientos de KB. Aquí se
+         * sabe antes, y el remedio más probable tiene nombre: actualizar un pack
+         * grabando el nuevo SIN borrar el viejo pide RAM para los dos. */
+        if (ramSize > 0) {
+            long pide = (long) prep.img.data.length + (long) prep.img.bssBytes;
+            if (pide > ramSize)
+                throw new BurnException(String.format(
+                    "no cabe: el motor '%s' pide %d KB de RAM para sus estaticos (.data + .bss)"
+                    + " y a esta placa le quedan %d KB por encima de los motores que ya tiene."
+                    + " Si es la version nueva de un pack que ya esta grabado, BORRA el viejo"
+                    + " antes (su RAM se reaprovecha); si no, sube packRam= en el ENV.",
+                    prep.entradas.get(prep.idxNpk).nombre, (pide + 1023) / 1024, ramSize / 1024));
+        }
         try {
             NpackReloc.Imagen puesta = NpackReloc.relocalizar(prep.img, baseFlash, baseRam);
             byte[] npk = NpackFile.escribirGrabable(puesta, prep.meta);
@@ -318,6 +337,14 @@ public final class PackBurn {
         } catch (PackException ex) {
             throw new BurnException("rearmando el pack sellado: " + ex.getMessage());
         }
+    }
+
+    /** La firma de antes de G1, sin `ramSize`: no comprueba si cabe. Se queda
+     *  porque `wire_serie.py` sólo recompila su `PackTool.class` si FALTA, y uno
+     *  viejo llamaría a esta — mejor sin comprobación que un NoSuchMethodError. */
+    public static byte[] sellar(Preparado prep, int baseFlash, int baseRam)
+            throws BurnException {
+        return sellar(prep, baseFlash, baseRam, 0L);
     }
 
     /**

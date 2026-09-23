@@ -1,5 +1,6 @@
 /*
- * test_npack.c — V5/I: la escalera de validación del pack nativo.
+ * test_npack.c — V5/I: la escalera de validación del pack nativo. Y desde
+ * V7/H6.c (G1), el PLAN: varios motores en la zona, cada uno con su trozo de RAM.
  *
  * Lo que se prueba NO es que un pack bueno pase — eso es lo fácil. Es que CADA
  * forma de estar mal se detecte ANTES de saltar y se distinga de las demás:
@@ -12,6 +13,7 @@
  *   make test-npack
  */
 #include "bpvm_npack.h"
+#include "bpvm_pack.h"
 #include "mdn_loader.h"
 #include <stdio.h>
 #include <string.h>
@@ -49,8 +51,109 @@ static bpvm_npack_hdr_t buena(void) {
 }
 
 static bpvm_npack_res_t chk(const bpvm_npack_hdr_t* h, const char* bios_falta) {
-    return bpvm_npack_check(h, AQUI_FLASH, AQUI_RAM, SITIO_FLASH, SITIO_RAM,
-                            bios_falta);
+    return bpvm_npack_escalera(h, AQUI_FLASH, SITIO_FLASH,
+                               AQUI_RAM, AQUI_RAM + SITIO_RAM, bios_falta);
+}
+
+/* ─────────── Una ZONA de verdad, con packs BPAK armados aquí ───────────
+ *
+ * El plan recorre la CADENA, así que no basta con dejar cabeceras de motor
+ * sueltas entre basura (como hacía el test del barrido): hacen falta packs con
+ * su cabecera, su CRC y sus entradas. Se arman con el formato de
+ * `pack/PackFormat.java` — y si algo de aquí no cuadrara con el lector de
+ * `bpvm_pack.c`, el recorrido no vería ningún pack y los casos de abajo
+ * saldrían en rojo: el armador se prueba solo. */
+#define BLOQUE    4096u
+#define N_BLOQUES 16u
+static union { uint8_t b[BLOQUE * N_BLOQUES]; uint32_t alinea; } g_zona;
+static uint32_t g_fin;              /* dónde irá el siguiente pack */
+
+static void be32(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t) (v >> 24); p[1] = (uint8_t) (v >> 16);
+    p[2] = (uint8_t) (v >> 8);  p[3] = (uint8_t) v;
+}
+static void be16(uint8_t* p, uint16_t v) { p[0] = (uint8_t) (v >> 8); p[1] = (uint8_t) v; }
+
+static void zona_vacia(void) { memset(g_zona.b, 0xFF, sizeof g_zona.b); g_fin = 0; }
+
+/* Dónde empezará el CÓDIGO del motor del siguiente pack que se arme: su
+ * `aqui_flash`, que es contra lo que hay que sellarlo. Cabecera del pack (128)
+ * + cabecera de la entrada (48) + cabecera del motor (64). */
+static uint32_t codigo_siguiente(void) {
+    return (uint32_t) (uintptr_t) (g_zona.b + g_fin + 128u + 48u) + BPVM_NPACK_HDR_BYTES;
+}
+
+/* Arma un pack con una entrada `npk` (la cabecera `h` y ceros detrás) y lo pone
+ * al final de la cadena, midiendo los bloques que haga falta. `recorta` != 0
+ * fuerza la longitud de la entrada (para el motor roto). Devuelve su offset. */
+static uint32_t arma_(const char* pack, int vivo, const char* npk,
+                      const bpvm_npack_hdr_t* h, uint32_t cuerpo, uint32_t recorta) {
+    uint32_t off = g_fin;
+    uint8_t* p = g_zona.b + off;
+    uint32_t len = recorta ? recorta : BPVM_NPACK_HDR_BYTES + cuerpo;
+    uint32_t fin_contenido = 128u + 48u + ((len + 3u) & ~3u);
+    /* + 4: el centinela de fin (tipo 0xFFFFFFFF) tiene que caber detrás. */
+    uint32_t total = ((fin_contenido + 4u + BLOQUE - 1u) / BLOQUE) * BLOQUE;
+    if (off + total > sizeof g_zona.b) {
+        printf("  FAIL: la zona de prueba no da para '%s'\n", pack);
+        g_fail++;
+        return off;
+    }
+    memset(p, 0xFF, total);
+    memset(p, 0, 128);
+    be32(p + 0, BPVM_PACK_MAGIC);
+    be16(p + 4, 1);
+    be16(p + 6, (uint16_t) (vivo ? 0xFFFF : 0xFFFE));
+    be32(p + 8, total);
+    strncpy((char*) p + 12, pack, 32);
+    be32(p + 44, 1700000000u);
+    strncpy((char*) p + 48, "1.0", 16);
+
+    uint8_t* e = p + 128;
+    memset(e, 0, 48);
+    strncpy((char*) e + 0, "npk", 4);
+    strncpy((char*) e + 4, npk, 32);
+    be32(e + 36, len);
+    memset(e + 48, 0, (len + 3u) & ~3u);
+    memcpy(e + 48, h, (len < sizeof *h) ? len : sizeof *h);
+
+    be16(p + 64, bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, p + 128, fin_contenido - 128u));
+    uint16_t crc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, p, 6);
+    crc = bpvm_pack_crc16(crc, p + 8, 126 - 8);
+    be16(p + 126, crc);
+
+    g_fin += total;
+    return off;
+}
+static uint32_t arma(const char* pack, int vivo, const char* npk,
+                     const bpvm_npack_hdr_t* h, uint32_t cuerpo) {
+    return arma_(pack, vivo, npk, h, cuerpo, 0);
+}
+
+/* Un motor listo para ir en el siguiente pack: sellado donde caerá su código y
+ * con la RAM que se le diga. `data`/`bss` son los de SQLite y LVGL medidos. */
+static bpvm_npack_hdr_t motor(uint32_t ram, uint32_t data, uint32_t bss) {
+    bpvm_npack_hdr_t h = buena();
+    h.flash_bytes  = 190;
+    h.data_bytes   = data;
+    h.bss_bytes    = bss;
+    h.linked_flash = codigo_siguiente();
+    h.linked_ram   = ram;
+    return h;
+}
+
+#define RAM_BASE   0x48000000u         /* un bloque de 512 KB, como el de la C5 */
+#define RAM_TAM    (512u * 1024u)
+#define SQL_DATA   6916u               /* sqlite_rv.npack, medido el 12-ago */
+#define SQL_BSS    1368u
+#define SQL_RAM    8288u               /* 8 284 redondeado a 16 */
+#define GUI_DATA   1024u               /* el de la GUI: pool + modelo + búferes */
+#define GUI_BSS    (392u * 1024u)
+#define GUI_RAM    ((GUI_DATA + GUI_BSS + 15u) & ~15u)
+
+static int plan(bpvm_npack_carga_t* c, bpvm_npack_plan_t* p) {
+    return bpvm_npack_planear(g_zona.b, sizeof g_zona.b, RAM_BASE, RAM_TAM, 0,
+                              c, BPVM_NPACK_MAX, p);
 }
 
 int main(void) {
@@ -91,11 +194,22 @@ int main(void) {
             "ABI parecida pero DISTINTA -> ABI (la comparacion es exacta)"); }
 
     /* ── Peldaño 4: EL SELLO ──
-     * El caso REAL: alguien cambia SQLite=<MB>, el bloque de RAM se mueve, y el
-     * pack sigue grabado con los punteros viejos. */
+     * El caso REAL: alguien cambia SQLite=<MB> o packRam=<KB>, el bloque de RAM
+     * se mueve o encoge, y el pack sigue grabado con los punteros viejos.
+     *
+     * V7/H6.c G1: en RAM el sello ya no tiene que ser la BASE del bloque sino
+     * caer DENTRO — el segundo motor va detrás del primero. Así que el caso de
+     * antes («1 MB más allá de la base») ahora es BUENO, y lo que falla es
+     * salirse del bloque por arriba o por abajo. */
     { bpvm_npack_hdr_t h = buena(); h.linked_ram = AQUI_RAM + 0x100000;
+      CHECK(chk(&h, 0) == BPVM_NPACK_OK,
+            "sello de RAM DENTRO del bloque pero no en su base -> OK (un segundo motor)"); }
+    { bpvm_npack_hdr_t h = buena(); h.linked_ram = AQUI_RAM + SITIO_RAM + 0x1000;
       CHECK(chk(&h, 0) == BPVM_NPACK_E_SELLO,
-            "la RAM se movio (cambio SQLite=<MB>) -> SELLO"); }
+            "sello de RAM por ENCIMA del bloque (encogio packRam=) -> SELLO"); }
+    { bpvm_npack_hdr_t h = buena(); h.linked_ram = AQUI_RAM - 0x1000;
+      CHECK(chk(&h, 0) == BPVM_NPACK_E_SELLO,
+            "sello de RAM por DEBAJO del bloque (se movio) -> SELLO"); }
     { bpvm_npack_hdr_t h = buena(); h.linked_flash = AQUI_FLASH - 0x1000;
       CHECK(chk(&h, 0) == BPVM_NPACK_E_SELLO, "grabado en otro offset -> SELLO"); }
 
@@ -127,12 +241,24 @@ int main(void) {
     /* ── Peldaño 6: tamaños ── */
     { bpvm_npack_hdr_t h = buena(); h.flash_bytes = SITIO_FLASH + 1;
       CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO, "mas grande que la zona -> TAMANO"); }
+    { bpvm_npack_hdr_t h = buena(); h.data_bytes = SITIO_FLASH - h.flash_bytes + 1;
+      CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO,
+            "el codigo cabe pero su imagen de .data se sale de la entrada -> TAMANO"); }
     { bpvm_npack_hdr_t h = buena(); h.bss_bytes = SITIO_RAM;
       CHECK(chk(&h, 0) == BPVM_NPACK_OK,
             ".data+.bss ocupan EXACTAMENTE la RAM -> cabe (el borde entra)"); }
     { bpvm_npack_hdr_t h = buena(); h.bss_bytes = SITIO_RAM + 1;
       CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO,
             "UN BYTE mas de RAM de la que hay -> TAMANO"); }
+    { bpvm_npack_hdr_t h = buena(); h.linked_ram = AQUI_RAM + SITIO_RAM - 8; h.bss_bytes = 8;
+      CHECK(chk(&h, 0) == BPVM_NPACK_OK,
+            "un motor que acaba JUSTO en el final del bloque -> cabe"); }
+    { bpvm_npack_hdr_t h = buena(); h.linked_ram = AQUI_RAM + SITIO_RAM - 8; h.bss_bytes = 16;
+      CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO,
+            "el mismo, con 8 bytes mas de .bss -> TAMANO (no escribe fuera)"); }
+    { bpvm_npack_hdr_t h = buena(); h.data_bytes = 0xFFFFFFF0u; h.bss_bytes = 0x20;
+      CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO,
+            "cabecera rota con tamanos que DESBORDAN la suma -> TAMANO (no pasa por pequena)"); }
     { bpvm_npack_hdr_t h = buena(); h.entry_off = h.flash_bytes;
       CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO, "entrada FUERA del codigo -> TAMANO"); }
     { bpvm_npack_hdr_t h = buena(); h.entry_off = 3;
@@ -160,17 +286,27 @@ int main(void) {
       CHECK(bpvm_npack_entry_addr(&h, AQUI_FLASH) == (AQUI_FLASH + 0x40),
             "entrada NO Thumb -> sin el bit (ARM puro / RISC-V)"); }
 
+    /* ── Lo que un motor ocupa de RAM ── */
+    { bpvm_npack_hdr_t h = buena(); h.data_bytes = SQL_DATA; h.bss_bytes = SQL_BSS;
+      CHECK(bpvm_npack_ram_bytes(&h) == SQL_RAM,
+            "SQLite: 6916 + 1368 = 8284 -> 8288 (redondeado a 16)"); }
+    { bpvm_npack_hdr_t h = buena(); h.data_bytes = 0; h.bss_bytes = 0;
+      CHECK(bpvm_npack_ram_bytes(&h) == 0, "un motor sin estaticos ocupa 0"); }
+    { bpvm_npack_hdr_t h = buena(); h.data_bytes = 0xFFFFFFF0u; h.bss_bytes = 0x20;
+      CHECK(bpvm_npack_ram_bytes(&h) == 0xFFFFFFF0u,
+            "tamanos que desbordan -> el maximo, no un numero pequeno"); }
+
     /* ── EL REPARTO DE LA CABECERA, campo a campo ──
      *
-     * Esta cabecera la ESCRIBE el empaquetador (Python, en el PC) y la LEE el
+     * Esta cabecera la ESCRIBE el empaquetador (Java, en el PC) y la LEE el
      * cargador (C, en la placa). Son dos lenguajes distintos leyendo los mismos
      * bytes: el reparto es un CONTRATO, y un contrato que no está escrito en
      * ningún sitio se rompe en silencio — el pack se leería con los campos
      * corridos y el primer sintoma seria un salto a ninguna parte.
      *
      * Se fija por los dos lados: aqui los offsets REALES que dice el compilador,
-     * y en pack.py un assert sobre el tamaño de su formato. Si alguien reordena
-     * un campo, este test dice CUÁL — igual que la tabla de la BIOS. */
+     * y en el lado PC un assert sobre el tamaño de su formato. Si alguien
+     * reordena un campo, este test dice CUÁL — igual que la tabla de la BIOS. */
     {
         static const struct { size_t off; const char* nombre; } CAMPOS[] = {
             {  0, "magic"        }, {  4, "format"      }, {  6, "arch"        },
@@ -216,62 +352,160 @@ int main(void) {
     }
 
 
-    /* ─────────── BUSCAR EL PACK (idea de Eduardo, 7-ago) ───────────
+    /* ─────────── V7/H6.c G1 — VARIOS MOTORES EN LA ZONA ───────────
      *
-     * Simetrico del ancla: aquello arregla "el firmware se mueve", esto arregla
-     * "el pack se mueve". Lo que se prueba no es que encuentre uno bueno, sino
-     * que el CHIVATO distinga los tres casos que mandan a sitios distintos:
-     * no hay pack / hay uno pero esta mal / aqui esta. */
-    {
-        /* Una "zona de flash" de mentira: basura, y un pack metido dentro. */
-        static union { unsigned char b[1024]; uint32_t alinea; } zona;
-        for (int i = 0; i < 1024; i++) zona.b[i] = (unsigned char) (i * 31 + 7);
+     * El plan recorre la cadena y decide, para cada motor, si se salta a él y
+     * qué trozo de RAM es suyo. Lo que se prueba son las formas en que DOS
+     * motores pueden estorbarse: pisarse la RAM, llamarse igual, quedar uno
+     * muerto debajo del otro. Y el TOPE, que es a la vez dónde irá el siguiente
+     * que se grabe y dónde empieza la arena: si se calculara mal, el IDE
+     * sellaría encima de otro motor o la arena empezaría dentro de él. */
+    printf("\n== el plan: varios motores en la zona (V7/H6.c G1) ==\n");
+    bpvm_npack_carga_t c[BPVM_NPACK_MAX];
+    bpvm_npack_plan_t  p;
 
-        const unsigned OFF = 256;    /* multiplo de 4 */
-        /* El pack tiene que estar sellado para donde REALMENTE cae: la escalera
-         * compara el sello con `aqui_flash`, y al barrer eso es "donde aparecio".
-         * Es justo lo que hace util al sello cuando ya no hace falta para
-         * encontrarlo: confirma que no se ha movido. */
-        uint32_t base_codigo = (uint32_t) (uintptr_t) (zona.b + OFF)
-                             + BPVM_NPACK_HDR_BYTES;
+    /* Zona VIRGEN: nada que cargar, y el siguiente irá a la base. */
+    zona_vacia();
+    CHECK(plan(c, &p) == 0 && p.cargables == 0, "zona borrada -> 0 motores");
+    CHECK(p.ram_tope == RAM_BASE, "y el tope es la BASE del bloque");
+    CHECK(bpvm_npack_ram_tope(g_zona.b, sizeof g_zona.b, 0, 0) == 0,
+          "sin bloque de RAM -> tope 0 (el IDE dira 'esta placa no da RAM')");
+    CHECK(bpvm_npack_planear(0, 0, RAM_BASE, RAM_TAM, 0, c, BPVM_NPACK_MAX, &p) == 0
+          && p.ram_tope == RAM_BASE, "zona NULL -> 0 motores, sin reventar");
 
-        bpvm_npack_hdr_t h = buena();
-        h.linked_flash = base_codigo;
-        h.linked_ram   = AQUI_RAM;
-        h.flash_bytes  = 190;
-        memcpy(zona.b + OFF, &h, sizeof h);
+    /* UNO: SQLite, sellado en la base (lo que daban las imagenes de antes de G1
+     * y lo que da ahora la primera vez). Es la placa de HOY: sigue valiendo. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    CHECK(plan(c, &p) == 1 && p.cargables == 1 && bpvm_npack_cargable(&c[0]),
+          "UN motor sellado en la base -> se carga (lo ya grabado sigue valiendo)");
+    CHECK(strcmp(c[0].pack, "SQLite") == 0 && strcmp(c[0].npk, "sqlite") == 0,
+          "y se sabe su pack y su entrada (para el log y para la arena)");
+    CHECK(c[0].ram == RAM_BASE && c[0].ram_bytes == SQL_RAM, "su trozo: [base, base+8288)");
+    CHECK(p.ram_tope == RAM_BASE + SQL_RAM,
+          "el tope sube a base+8288: el SIGUIENTE ira detras, y la arena empieza ahi");
+    CHECK(c[0].codigo == c[0].hdr->linked_flash,
+          "el codigo esta donde dice su sello (cabecera del pack + entrada + la suya)");
 
-        bpvm_npack_hallazgo_t r =
-            bpvm_npack_buscar(zona.b, sizeof zona.b, AQUI_RAM, SITIO_RAM, 0);
-        CHECK(r.addr == (uint32_t) (uintptr_t) (zona.b + OFF),
-              "el pack se encuentra entre la basura, y en su sitio exacto");
-        CHECK(r.candidatos == 1, "y se cuenta UN candidato");
-        CHECK(r.motivo == BPVM_NPACK_OK, "con motivo OK");
+    /* DOS: la GUI grabada DESPUÉS, con el sello que le dio la placa (el tope). */
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + SQL_RAM, GUI_DATA, GUI_BSS);
+      arma("Gui", 1, "lvgl", &h, 190 + GUI_DATA); }
+    CHECK(plan(c, &p) == 2 && p.cargables == 2,
+          "DOS motores, el segundo detras del primero -> se cargan LOS DOS");
+    CHECK(strcmp(c[0].npk, "sqlite") == 0 && strcmp(c[1].npk, "lvgl") == 0,
+          "en orden de cadena: el orden en que se grabaron");
+    CHECK(p.ram_tope == RAM_BASE + SQL_RAM + GUI_RAM, "y el tope, encima de los dos");
 
-        /* EL CASO QUE IMPORTA: hay un pack, pero se movio. Decir "no lo
-         * encuentro" mandaria a buscar por que no esta grabado, cuando lo que
-         * hay que hacer es REGRABARLO. Son sitios muy distintos. */
-        { bpvm_npack_hdr_t m = h; m.linked_flash = base_codigo + 0x1000;
-          memcpy(zona.b + OFF, &m, sizeof m);
-          bpvm_npack_hallazgo_t x =
-              bpvm_npack_buscar(zona.b, sizeof zona.b, AQUI_RAM, SITIO_RAM, 0);
-          CHECK(x.addr == 0, "pack movido -> no se da por bueno");
-          CHECK(x.candidatos == 1, "pero SE CUENTA: hay un pack ahi");
-          CHECK(x.motivo == BPVM_NPACK_E_SELLO,
-                "y el motivo es SELLO, no 'no lo encuentro'"); }
+    /* El de ANTES DE G1: la imagen vieja daba a todos la base, y dos sellos
+     * solapados cargados a la vez se machacarían la .bss uno al otro EN
+     * SILENCIO. El primero que se grabó se queda su trozo. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, GUI_DATA, GUI_BSS);
+      arma("Gui", 1, "lvgl", &h, 190 + GUI_DATA); }
+    CHECK(plan(c, &p) == 2 && p.cargables == 1, "dos sellos SOLAPADOS -> se carga UNO");
+    CHECK(bpvm_npack_cargable(&c[0]) && c[1].pisa_a == 0,
+          "el primero se queda su RAM; el segundo 'pisa a' el 0 (regrabalo)");
+    CHECK(c[1].motivo == BPVM_NPACK_OK,
+          "y su escalera esta bien: lo que falla es el reparto, no el pack");
 
-        /* Y la zona VACIA: cero candidatos. Esa es la otra respuesta. */
-        for (int i = 0; i < 1024; i++) zona.b[i] = 0xFF;   /* flash borrada */
-        { bpvm_npack_hallazgo_t x =
-              bpvm_npack_buscar(zona.b, sizeof zona.b, AQUI_RAM, SITIO_RAM, 0);
-          CHECK(x.addr == 0 && x.candidatos == 0,
-                "zona borrada -> 0 candidatos (no hay pack, que NO es lo mismo)"); }
+    /* Un pack BORRADO debajo de uno vivo: su RAM queda de hueco (no se mueve
+     * nada — con el reparto por orden de cadena habría que regrabar al de
+     * encima). */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      arma("SQLite", 0, "sqlite", &h, 190 + SQL_DATA); }                 /* tombstone */
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + SQL_RAM, GUI_DATA, GUI_BSS);
+      arma("Gui", 1, "lvgl", &h, 190 + GUI_DATA); }
+    CHECK(plan(c, &p) == 1 && p.cargables == 1 && strcmp(c[0].npk, "lvgl") == 0,
+          "borrado el de abajo -> el de arriba SIGUE valiendo (sin regrabar)");
+    CHECK(p.ram_tope == RAM_BASE + SQL_RAM + GUI_RAM,
+          "y el hueco de abajo NO se reaprovecha: el tope sigue arriba");
 
-        CHECK(bpvm_npack_buscar(0, 1024, AQUI_RAM, SITIO_RAM, 0).addr == 0,
-              "base NULL -> 0 (sin reventar)");
-        CHECK(bpvm_npack_buscar(zona.b, 8, AQUI_RAM, SITIO_RAM, 0).addr == 0,
-              "zona mas corta que la cabecera -> 0");
-    }
+    /* Y BORRADO el de ARRIBA: su trozo vuelve a estar libre — así «borrar y
+     * grabar» un pack actualizado reutiliza su sitio. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + SQL_RAM, GUI_DATA, GUI_BSS);
+      arma("Gui", 0, "lvgl", &h, 190 + GUI_DATA); }                     /* tombstone */
+    CHECK(plan(c, &p) == 1 && p.ram_tope == RAM_BASE + SQL_RAM,
+          "borrado el de ARRIBA -> el tope baja: su trozo se reaprovecha");
+
+    /* ACTUALIZAR sin borrar: el nuevo va detrás del viejo (la placa le dio el
+     * tope) y los dos se llaman igual. Gana el de MÁS ADELANTE, como los .mod
+     * y los .mdn — antes de G1 ganaba el primero y corría el motor VIEJO. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + SQL_RAM, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    CHECK(plan(c, &p) == 2 && p.cargables == 1, "dos motores con el MISMO nombre -> se carga uno");
+    CHECK(c[0].eclipsado_por == 1 && bpvm_npack_cargable(&c[1]),
+          "el de MAS ADELANTE (el nuevo), no el viejo");
+    CHECK(p.ram_tope == RAM_BASE + 2 * SQL_RAM,
+          "pero el viejo sigue reclamando su RAM mientras viva (borrarlo la libera)");
+
+    /* Un sello FUERA del bloque (packRam= encogió): no se carga, y tampoco
+     * cuenta para el tope — ese trozo no existe. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + RAM_TAM, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    CHECK(plan(c, &p) == 1 && c[0].motivo == BPVM_NPACK_E_SELLO,
+          "sello de RAM fuera del bloque -> SELLO (regrabalo)");
+    CHECK(p.ram_tope == RAM_BASE, "y no sube el tope: esa RAM no es del bloque");
+
+    /* Un motor que NO se carga por otra razón (sello de FLASH malo) SÍ reserva
+     * su RAM: el pack está vivo, y si la placa diera ese trozo a otro, el día
+     * que se arreglara el primero habría dos encima. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      h.linked_flash += 0x1000;
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    CHECK(plan(c, &p) == 1 && c[0].motivo == BPVM_NPACK_E_SELLO && p.cargables == 0,
+          "sello de FLASH malo -> SELLO, no se carga");
+    CHECK(p.ram_tope == RAM_BASE + SQL_RAM, "pero su RAM sigue reservada (esta vivo)");
+
+    /* Una entrada `npk` más corta que su propia cabecera no es un motor. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, 0, 8);
+      arma_("Roto", 1, "roto", &h, 0, 32); }      /* la entrada mide 32 B */
+    CHECK(plan(c, &p) == 1 && c[0].motivo == BPVM_NPACK_E_MAGIC && c[0].hdr == 0,
+          "entrada npk mas corta que su cabecera -> MAGIC, sin leer fuera");
+
+    /* Más motores que sitio en `out`: se cuentan TODOS y el tope los ve a todos
+     * — si no, la placa daría al siguiente la RAM de uno que no describió. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, SQL_DATA, SQL_BSS);
+      arma("SQLite", 1, "sqlite", &h, 190 + SQL_DATA); }
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + SQL_RAM, GUI_DATA, GUI_BSS);
+      arma("Gui", 1, "lvgl", &h, 190 + GUI_DATA); }
+    CHECK(bpvm_npack_planear(g_zona.b, sizeof g_zona.b, RAM_BASE, RAM_TAM, 0, c, 1, &p) == 2,
+          "con sitio para UNO se cuentan los DOS");
+    CHECK(p.ram_tope == RAM_BASE + SQL_RAM + GUI_RAM, "y el tope ve a los dos");
+    CHECK(bpvm_npack_ram_tope(g_zona.b, sizeof g_zona.b, RAM_BASE, RAM_TAM) == p.ram_tope,
+          "bpvm_npack_ram_tope (lo de PACK_BURN_BEGIN) == el tope del plan: UNA regla");
+
+    /* La BIOS con huecos: ninguno se carga, y el motivo lo dice. */
+    CHECK(bpvm_npack_planear(g_zona.b, sizeof g_zona.b, RAM_BASE, RAM_TAM, "memcpy",
+                             c, BPVM_NPACK_MAX, &p) == 2 && p.cargables == 0
+          && c[0].motivo == BPVM_NPACK_E_BIOS && c[1].motivo == BPVM_NPACK_E_BIOS,
+          "BIOS con huecos -> ningun motor, los dos con motivo BIOS");
+
+    /* El bloque LLENO: el segundo no cabe. El IDE lo verá antes de grabar
+     * (ramSize); si aun así llegara, la escalera no deja escribir fuera. */
+    zona_vacia();
+    { bpvm_npack_hdr_t h = motor(RAM_BASE, GUI_DATA, GUI_BSS);
+      arma("Gui", 1, "lvgl", &h, 190 + GUI_DATA); }
+    { bpvm_npack_hdr_t h = motor(RAM_BASE + GUI_RAM, GUI_DATA, GUI_BSS);
+      arma("Gui", 1, "lvgl2", &h, 190 + GUI_DATA); }
+    CHECK(plan(c, &p) == 2 && bpvm_npack_cargable(&c[0])
+          && c[1].motivo == BPVM_NPACK_E_TAMANO,
+          "dos de 392 KB en 512 KB -> el segundo NO CABE (TAMANO, no escribe fuera)");
+    CHECK(p.ram_tope == RAM_BASE + GUI_RAM,
+          "y el que no cabe no cuenta para el tope (no es un trozo del bloque)");
 
     printf("\n[status=%s]\n", g_fail == 0 ? "OK" : "FAIL");
     return g_fail != 0;

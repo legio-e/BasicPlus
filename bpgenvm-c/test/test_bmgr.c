@@ -11,8 +11,25 @@
 #include "bpvm_bmgr.h"
 #include "bpvm.h"             /* #338: la zona de rascar compartida (take/give) */
 #include "bpvm_bmgr_wire.h"   /* #338: la frontera env/packs y su guardián */
+#include "bpvm_pack.h"        /* V7/H6.c G1: una zona de packs con un motor dentro */
+#include "bpvm_npack.h"
+#include "bpvm_fs.h"          /* el tipo del doble de abajo */
+#include "mdn_loader.h"       /* ídem */
 #include <stdio.h>
 #include <string.h>
+
+/* DOBLES. `bpvm_pack.c` engancha la zona al FS como respaldo de lectura (#362)
+ * y `bpvm_npack.c` pregunta la arquitectura en su escalera: nada de eso se
+ * ejercita aquí, pero el enlazador los pide.
+ *
+ * ⚠️ Sin el primero, esta prueba NO ENLAZABA desde el 13-ago (#362, d5552ed6)
+ * y nadie lo vio en seis semanas: no está en ninguna de las redes que se pasan
+ * a diario. Se descubrió el 23-sep al añadirle el caso de G1. */
+void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd,
+                          bpvm_fs_ov_locate_fn locate, void* user)
+{ (void) st; (void) rd; (void) locate; (void) user; }
+uint16_t    bpvm_mdn_host_arch(void)      { return 0; }
+const char* bpvm_mdn_host_float_abi(void) { return ""; }
 
 static int g_fail = 0;
 #define CHECK(cond, msg) do { \
@@ -23,6 +40,30 @@ static int g_fail = 0;
 #define SECT 4096u
 #define BASE 0x100000u   /* 1 MB reservado (imagen + env) */
 #define U4M  0x400000u   /* 4 MB usable (placa tipo Pico) → 3 MB para particiones */
+
+/* V7/H6.c G1 — una zona de packs EN RAM para PACK_BURN_BEGIN: borrar y
+ * programar son memset/memcpy, y un pack con un motor se arma a mano con el
+ * formato de pack/PackFormat.java (si no cuadrara, el tope no lo vería y el
+ * caso saldría en rojo). */
+static int zf_erase(void* u, uint32_t off, uint32_t len) { memset((uint8_t*) u + off, 0xFF, len); return 0; }
+static int zf_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) { memcpy((uint8_t*) u + off, d, len); return 0; }
+static void be32w(uint8_t* p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t) v; }
+static void be16w(uint8_t* p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t) v; }
+static void pon_pack_con_motor(uint8_t* p, uint32_t total, uint32_t ram, uint32_t data, uint32_t bss) {
+    memset(p, 0xFF, total);
+    memset(p, 0, 128);
+    be32w(p, BPVM_PACK_MAGIC); be16w(p + 4, 1); be16w(p + 6, 0xFFFF); be32w(p + 8, total);
+    strcpy((char*) p + 12, "SQLite");
+    uint8_t* e = p + 128;
+    memset(e, 0, 48 + BPVM_NPACK_HDR_BYTES);
+    memcpy(e, "npk", 3); strcpy((char*) e + 4, "sqlite"); be32w(e + 36, BPVM_NPACK_HDR_BYTES);
+    bpvm_npack_hdr_t h; memset(&h, 0, sizeof h);
+    h.magic = BPVM_NPACK_MAGIC; h.linked_ram = ram; h.data_bytes = data; h.bss_bytes = bss;
+    memcpy(e + 48, &h, sizeof h);
+    be16w(p + 64, bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, p + 128, 48u + BPVM_NPACK_HDR_BYTES));
+    uint16_t crc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, p, 6);
+    be16w(p + 126, bpvm_pack_crc16(crc, p + 8, 126 - 8));
+}
 
 int main(void) {
     printf("=== test_bmgr (H9 protocolo de gestión de placa) ===\n");
@@ -238,6 +279,48 @@ int main(void) {
             CHECK(zp != NULL, "#338: ...y un PACK_ la coge despues sin encontrarla ocupada");
             bpvm_scratch_give("PACK_LS");
         }
+    }
+
+    /* --- 9. V7/H6.c G1: PACK_BURN_BEGIN dice el TOPE, no la base -------------
+     * La placa le dice al IDE contra qué RAM sellar el motor que va a grabar.
+     * Hasta G1 era siempre la base del bloque, y con dos motores eso ponía el
+     * segundo ENCIMA del primero. Ahora es lo primero libre por encima de los
+     * vivos, y `ramSize` lo que queda: el IDE mira si cabe ANTES de grabar. */
+    {
+        static union { uint8_t b[64u * 1024u]; uint32_t al; } zona;
+        memset(zona.b, 0xFF, sizeof zona.b);
+        bpvm_pack_flash_t fl = { zf_erase, zf_program, zona.b, 4096u };
+        bpvm_bmgr_t bmp;
+        memset(&bmp, 0, sizeof bmp);
+        bmp.packs_base = zona.b; bmp.packs_size = (uint32_t) sizeof zona.b; bmp.packs_flash = &fl;
+        bmp.pack_ram_base = 0x48000000u; bmp.pack_ram_size = 512u * 1024u;
+        bpvm_bmgr_req_t rq;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_BURN_BEGIN");
+        rq.id = 9; rq.size = 4096; rq.has_size = 1;
+        char rep[512];
+        int wr3 = -1;
+
+        int nn = bpvm_bmgr_wire_dispatch(&bmp, &rq, rep, sizeof rep, &wr3);
+        CHECK(nn > 0 && strstr(rep, "\"ramBase\":1207959552") != NULL
+                     && strstr(rep, "\"ramSize\":524288") != NULL,
+              "G1: zona vacia -> ramBase = la BASE del bloque, ramSize = el bloque entero");
+
+        /* SQLite ya grabado: 6916 + 1368 = 8284 B de estáticos -> 8288. */
+        pon_pack_con_motor(zona.b, 4096u, 0x48000000u, 6916u, 1368u);
+        nn = bpvm_bmgr_wire_dispatch(&bmp, &rq, rep, sizeof rep, &wr3);
+        CHECK(nn > 0 && strstr(rep, "\"offset\":4096") != NULL,
+              "G1: con un pack grabado, el siguiente va detras (offset 4096)");
+        CHECK(strstr(rep, "\"ramBase\":1207967840") != NULL,
+              "G1: ...y su RAM TAMBIEN detras: ramBase = base + 8288 (el tope)");
+        CHECK(strstr(rep, "\"ramSize\":516000") != NULL,
+              "G1: ...y ramSize = lo que queda (524288 - 8288)");
+
+        /* Sin bloque de RAM: 0 y 0, que el IDE traduce en «esta placa no da RAM». */
+        bmp.pack_ram_base = 0; bmp.pack_ram_size = 0;
+        nn = bpvm_bmgr_wire_dispatch(&bmp, &rq, rep, sizeof rep, &wr3);
+        CHECK(nn > 0 && strstr(rep, "\"ramBase\":0") != NULL && strstr(rep, "\"ramSize\":0") != NULL,
+              "G1: sin bloque de RAM -> ramBase 0 (el IDE avisa, no graba un motor muerto)");
     }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);

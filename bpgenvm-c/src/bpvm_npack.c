@@ -1,11 +1,13 @@
-/* bpvm_npack.c — la escalera de validación del pack nativo.
+/* bpvm_npack.c — la escalera de validación del pack nativo, y (V7/H6.c G1) el
+ * PLAN de carga cuando la zona lleva varios motores.
  *
  * Portable y sin dependencias: aquí NO se lee flash ni se salta a ningún sitio.
  * Sólo se decide, con datos, si se puede — y si no, cuál es el peldaño.
- * Encontrar el pack y saltar son de la placa; esto es la parte que se puede
+ * Encontrar la zona y saltar son de la placa; esto es la parte que se puede
  * probar entera en el PC, que es donde conviene tenerla.
  */
 #include "bpvm_npack.h"
+#include "bpvm_pack.h"       /* la cadena: iterar packs y entradas, SIN copiar */
 #include "mdn_loader.h"      /* bpvm_mdn_host_arch / _float_abi: LA MISMA fuente
                               * que usa el gate del .mdn. Si la arch se dijera
                               * aquí de otra forma, un día dirían cosas distintas. */
@@ -16,11 +18,16 @@ static int igual(const char* a, const char* b) {
     while (*a && *a == *b) { a++; b++; }
     return *a == *b;
 }
+static void copia(char* dst, const char* src, int cap) {
+    int i = 0;
+    while (i < cap - 1 && src[i]) { dst[i] = src[i]; i++; }
+    dst[i] = 0;
+}
 
-bpvm_npack_res_t bpvm_npack_check(const bpvm_npack_hdr_t* h,
-                                  uint32_t aqui_flash, uint32_t aqui_ram,
-                                  uint32_t sitio_flash, uint32_t sitio_ram,
-                                  const char* bios_falta)
+bpvm_npack_res_t bpvm_npack_escalera(const bpvm_npack_hdr_t* h,
+                                     uint32_t aqui_flash, uint32_t sitio_flash,
+                                     uint32_t ram_lo, uint32_t ram_hi,
+                                     const char* bios_falta)
 {
     /* 1 — ¿es un pack nativo? Lo más barato primero: si esto falla, todo lo
      *     demás sería interpretar basura. */
@@ -54,15 +61,29 @@ bpvm_npack_res_t bpvm_npack_check(const bpvm_npack_hdr_t* h,
     if (h->reloc_count != 0)                      return BPVM_NPACK_E_SIN_RELOC;
 
     /* 5 — EL SELLO. El pack lleva punteros absolutos dentro; si está en otro
-     *     sitio del que se realojó, apuntan a cualquier parte. Caso NORMAL:
-     *     alguien cambió SQLite=<MB> y el bloque de RAM se movió. */
-    if (h->linked_flash != aqui_flash || h->linked_ram != aqui_ram)
+     *     sitio del que se realojó, apuntan a cualquier parte. En flash tiene
+     *     que ser EXACTAMENTE aquí. En RAM, desde G1, DENTRO del bloque: el
+     *     trozo se lo dio la placa al grabarlo, y el segundo motor va detrás del
+     *     primero. Caso NORMAL de fallo: alguien cambió SQLite=<MB> o
+     *     packRam=<KB> y el bloque se movió. */
+    if (h->linked_flash != aqui_flash)            return BPVM_NPACK_E_SELLO;
+    /* Justo EN el final del bloque sólo cabe un motor sin estáticos; uno con
+     * `.data`/`.bss` sellado ahí es que el bloque ENCOGIÓ desde que se grabó, y
+     * eso es «regrábalo», no «no cabe» — mandan a sitios distintos. */
+    if (h->linked_ram < ram_lo || h->linked_ram > ram_hi ||
+        (h->linked_ram == ram_hi && (h->data_bytes | h->bss_bytes) != 0))
                                                   return BPVM_NPACK_E_SELLO;
 
     /* 6 — tamaños. Antes de copiar nada, que quepa; y que la entrada apunte
-     *     DENTRO del código, no más allá. */
+     *     DENTRO del código, no más allá. Las sumas se comprueban restando: una
+     *     cabecera corrupta con tamaños enormes desbordaría un uint32_t y
+     *     pasaría por pequeña. */
     if (h->flash_bytes > sitio_flash)             return BPVM_NPACK_E_TAMANO;
-    if (h->data_bytes + h->bss_bytes > sitio_ram) return BPVM_NPACK_E_TAMANO;
+    if (h->data_bytes > sitio_flash - h->flash_bytes)
+                                                  return BPVM_NPACK_E_TAMANO;
+    if (h->data_bytes > 0xFFFFFFFFu - h->bss_bytes) return BPVM_NPACK_E_TAMANO;
+    if (h->data_bytes + h->bss_bytes > ram_hi - h->linked_ram)
+                                                  return BPVM_NPACK_E_TAMANO;
     if (h->entry_off >= h->flash_bytes)           return BPVM_NPACK_E_TAMANO;
     /* Y la entrada alineada: en Thumb las instrucciones son de 2 bytes, una
      * entrada impar (ya sin el bit de modo) es un puntero corrupto. */
@@ -94,6 +115,15 @@ const char* bpvm_npack_res_str(bpvm_npack_res_t r)
     }
 }
 
+uint32_t bpvm_npack_ram_bytes(const bpvm_npack_hdr_t* h)
+{
+    if (h == 0) return 0;
+    /* Con el mismo cuidado que la escalera: una cabecera rota no puede
+     * desbordar la suma y parecer un motor de 8 bytes. */
+    if (h->data_bytes > 0xFFFFFFF0u - h->bss_bytes) return 0xFFFFFFF0u;
+    return (h->data_bytes + h->bss_bytes + 15u) & ~15u;
+}
+
 uint32_t bpvm_npack_entry_addr(const bpvm_npack_hdr_t* h, uint32_t aqui_flash)
 {
     if (h == 0) return 0;
@@ -106,48 +136,134 @@ uint32_t bpvm_npack_entry_addr(const bpvm_npack_hdr_t* h, uint32_t aqui_flash)
     return a;
 }
 
-/*
- * Busca un pack válido barriendo la zona. Ver la explicación en bpvm_npack.h.
- *
- * Mismo patrón que `bpvm_ancla_buscar`: avanzar de 4 en 4, descartar barato por
- * el magic, y sólo entonces gastar en la comprobación completa.
- */
-bpvm_npack_hallazgo_t bpvm_npack_buscar(const void* base, uint32_t bytes,
-                                        uint32_t aqui_ram, uint32_t sitio_ram,
-                                        const char* bios_falta)
+int bpvm_npack_cargable(const bpvm_npack_carga_t* c)
 {
-    bpvm_npack_hallazgo_t h;
-    h.addr = 0; h.candidatos = 0; h.motivo = BPVM_NPACK_E_MAGIC;
+    return c != 0 && c->motivo == BPVM_NPACK_OK
+        && c->eclipsado_por < 0 && c->pisa_a < 0;
+}
 
-    if (base == 0 || bytes < sizeof(bpvm_npack_hdr_t)) return h;
+/* ¿Se solapan [a, a+na) y [b, b+nb)? Un trozo vacío no pisa a nadie. */
+static int solapan(uint32_t a, uint32_t na, uint32_t b, uint32_t nb)
+{
+    if (na == 0 || nb == 0) return 0;
+    return a < b + nb && b < a + na;
+}
 
-    const unsigned char* p = (const unsigned char*) base;
-    uint32_t i = 0;
-    /* Alinear el arranque: la cabecera lleva enteros de 32 bits y el que la
-     * graba la deja a 4. Mirar las posiciones intermedias sería tiempo tirado. */
-    while ((((uintptr_t) p + i) & 3u) != 0u) i++;
+/*
+ * El plan. Ver bpvm_npack.h. Dos pasadas, y la razón de que sean dos: el
+ * «gana el de más adelante» necesita ver la cadena ENTERA antes de decidir
+ * sobre el primero, y el solape sólo tiene sentido entre los que de verdad se
+ * van a cargar — que no se sabe hasta resolver lo anterior.
+ */
+int bpvm_npack_planear(const uint8_t* zona, uint32_t zbytes,
+                       uint32_t ram_base, uint32_t ram_bytes,
+                       const char* bios_falta,
+                       bpvm_npack_carga_t* out, int max,
+                       bpvm_npack_plan_t* plan)
+{
+    int      vistos = 0, n = 0, cargables = 0;
+    uint32_t tope   = ram_base;
+    /* El fin del bloque. Un bloque que llegara al final del espacio de
+     * direcciones desbordaría la suma: se recorta en vez de dar la vuelta. */
+    uint32_t ram_fin = (ram_bytes > 0xFFFFFFFFu - ram_base) ? 0xFFFFFFFFu
+                                                            : ram_base + ram_bytes;
+    if (out == 0) max = 0;
 
-    for (; i + sizeof(bpvm_npack_hdr_t) <= bytes; i += 4) {
-        const bpvm_npack_hdr_t* c = (const bpvm_npack_hdr_t*) (const void*) (p + i);
-        if (c->magic != BPVM_NPACK_MAGIC) continue;   /* descarte barato */
-        h.candidatos++;
+    /* ── 1ª pasada: la cadena, en orden, y el tope con TODOS los vivos ── */
+    if (zona != 0 && zbytes != 0) {
+        bpvm_pack_src_t src;
+        bpvm_pack_src_mem(&src, zona, zbytes);
+        for (int32_t pc = bpvm_pack_iter(&src, 0); pc > 0; pc = bpvm_pack_iter(&src, pc)) {
+            bpvm_pack_info_t info;
+            if (bpvm_pack_iter_info(&src, pc, &info) != 0 || !info.alive) continue;
 
-        /* Dónde estaría el CÓDIGO si este candidato fuera bueno: la cabecera va
-         * delante, así que el código empieza HDR_BYTES más allá. Ojo, ese es el
-         * `aqui_flash` que espera la escalera — confundirlo con la base del pack
-         * son 64 bytes de desfase (dicho también en el parámetro). */
-        uint32_t aqui_flash = (uint32_t) (uintptr_t) (p + i) + BPVM_NPACK_HDR_BYTES;
-        uint32_t queda      = bytes - i - BPVM_NPACK_HDR_BYTES;
+            for (int32_t ec = bpvm_pack_iter_entry(&src, pc, 0); ec > 0;
+                 ec = bpvm_pack_iter_entry(&src, pc, ec)) {
+                bpvm_pack_entry_t e;
+                if (bpvm_pack_iter_entry_info(&src, pc, ec, &e) != 0) continue;
+                if (!igual(e.tipo, "npk")) continue;
+                vistos++;
 
-        h.motivo = bpvm_npack_check(c, aqui_flash, aqui_ram, queda, sitio_ram,
-                                    bios_falta);
-        if (h.motivo == BPVM_NPACK_OK) {
-            h.addr = (uint32_t) (uintptr_t) (p + i);
-            return h;
+                /* La cabecera, EN SITIO: la zona es memoria (XIP o mapeada), y
+                 * las entradas van alineadas a 4 — se lee como struct. */
+                const bpvm_npack_hdr_t* h = 0;
+                if (e.len >= BPVM_NPACK_HDR_BYTES)
+                    h = (const bpvm_npack_hdr_t*) (const void*) (zona + e.data_off);
+
+                /* El tope: todo sello vivo que cae entero dentro del bloque. Se
+                 * mira aunque el motor no se vaya a cargar (otra arquitectura,
+                 * eclipsado, pasado de `max`): mientras el pack viva, ese trozo
+                 * es suyo y el siguiente que se grabe tiene que ir por encima. */
+                if (h != 0 && h->magic == BPVM_NPACK_MAGIC && ram_base != 0) {
+                    uint32_t rb = bpvm_npack_ram_bytes(h);
+                    uint32_t exacto = rb;   /* lo que tiene que caber: sin redondear */
+                    if (h->data_bytes <= 0xFFFFFFFFu - h->bss_bytes)
+                        exacto = h->data_bytes + h->bss_bytes;
+                    if (h->linked_ram >= ram_base && h->linked_ram <= ram_fin &&
+                        exacto <= ram_fin - h->linked_ram) {
+                        uint32_t fin = (rb > ram_fin - h->linked_ram) ? ram_fin
+                                                                      : h->linked_ram + rb;
+                        if (fin > tope) tope = fin;
+                    }
+                }
+
+                if (n >= max) continue;              /* se cuenta, no se describe */
+                bpvm_npack_carga_t* c = &out[n++];
+                c->hdr           = h;
+                c->codigo        = (uint32_t) (uintptr_t) (zona + e.data_off) + BPVM_NPACK_HDR_BYTES;
+                c->pack_off      = info.off;
+                copia(c->pack, info.nombre, (int) sizeof c->pack);
+                copia(c->npk,  e.nombre,    (int) sizeof c->npk);
+                c->ram           = h ? h->linked_ram : 0;
+                c->ram_bytes     = h ? bpvm_npack_ram_bytes(h) : 0;
+                c->eclipsado_por = -1;
+                c->pisa_a        = -1;
+                /* Una entrada `npk` más corta que su cabecera no es un motor:
+                 * mismo peldaño que un magic malo. */
+                c->motivo = h ? bpvm_npack_escalera(h, c->codigo,
+                                                    e.len - BPVM_NPACK_HDR_BYTES,
+                                                    ram_base, ram_fin, bios_falta)
+                              : BPVM_NPACK_E_MAGIC;
+            }
         }
-        /* Si no pasa, se sigue barriendo: puede haber otro más adelante. Pero el
-         * motivo del último se conserva — un pack rechazado por el SELLO es una
-         * noticia muy distinta de "aquí no hay nada". */
     }
-    return h;
+
+    /* ── 2ª pasada: gana el de más adelante, y nadie pisa a nadie ── */
+    for (int i = 0; i < n; i++) {
+        for (int j = n - 1; j > i; j--)
+            if (igual(out[i].npk, out[j].npk)) { out[i].eclipsado_por = (int8_t) j; break; }
+    }
+    for (int i = 0; i < n; i++) {
+        if (out[i].motivo != BPVM_NPACK_OK || out[i].eclipsado_por >= 0) continue;
+        /* Contra los cargables ANTERIORES: en orden de cadena, el primero que
+         * se grabó se queda su trozo y el que llega después es el que sobra. */
+        for (int j = 0; j < i; j++) {
+            if (!bpvm_npack_cargable(&out[j])) continue;
+            if (solapan(out[i].ram, out[i].ram_bytes, out[j].ram, out[j].ram_bytes)) {
+                out[i].pisa_a = (int8_t) j;
+                break;
+            }
+        }
+        if (out[i].pisa_a < 0) cargables++;
+    }
+
+    /* El tope, alineado — sin salirse del bloque. */
+    tope = (tope > 0xFFFFFFF0u) ? tope : ((tope + 15u) & ~15u);
+    if (tope > ram_fin) tope = ram_fin;
+
+    if (plan) {
+        plan->vistos    = vistos;
+        plan->cargables = cargables;
+        plan->ram_tope  = tope;
+    }
+    return vistos;
+}
+
+uint32_t bpvm_npack_ram_tope(const uint8_t* zona, uint32_t zbytes,
+                             uint32_t ram_base, uint32_t ram_bytes)
+{
+    if (ram_base == 0) return 0;
+    bpvm_npack_plan_t p;
+    bpvm_npack_planear(zona, zbytes, ram_base, ram_bytes, 0, 0, 0, &p);
+    return p.ram_tope;
 }

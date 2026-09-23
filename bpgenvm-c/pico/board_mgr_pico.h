@@ -26,6 +26,9 @@ const bpvm_boot_status_t* board_boot_status(void);
 /* #355 — lee una clave booleana del ENV de la placa (el bloque A/B de flash).
  * Implementado en main.c, que es donde vive el env parseado. Hoy: `gc`. */
 int board_env_bool(const char* key, int def);
+/* V7/H6.c G1 — el ENV entero, de sólo lectura (la ranura `env_get` de la BIOS).
+ * `bpvm_env_t` llega por bpvm_part.h. */
+const bpvm_env_t* board_env(void);
 
 /* #327 — layout de particiones del arranque (NULL si el boot no llegó a la capa
  * 1). Lo usa el gestor de placa para localizar la zona de PACKS. */

@@ -24,15 +24,35 @@
  * sitios equivocados y saltar sería un desastre MUDO. Comparar dos enteros lo
  * convierte en un mensaje: "regrábalo desde el IDE".
  *
- * Esto pasa cuando el usuario cambia `SQLite=<MB>` en el entorno (mueve la RAM)
- * o cuando el pack se copia a otra placa con otro reparto de flash. Es un caso
- * NORMAL, no un error raro: por eso se detecta y se explica en vez de confiar.
+ * Esto pasa cuando el usuario cambia `SQLite=<MB>` o `packRam=<KB>` en el
+ * entorno (mueve o encoge la RAM) o cuando el pack se copia a otra placa con
+ * otro reparto de flash. Es un caso NORMAL, no un error raro: por eso se detecta
+ * y se explica en vez de confiar.
+ *
+ * ─── Y DESDE V7/H6.c (G1), EL SELLO DE RAM ES TAMBIÉN EL REPARTO ───
+ *
+ * Con UN motor en la zona, su sello de RAM era la base del bloque y la escalera
+ * lo comparaba con ella. Con VARIOS (el de LVGL, el de SQLite, un driver de
+ * pantalla…) cada uno necesita su trozo, y la pregunta era quién lo decide.
+ *
+ * Lo decide la PLACA, al grabarlo: `PACK_BURN_BEGIN` ya le decía al IDE contra
+ * qué RAM sellar, y ahora le dice «lo primero libre por encima de los motores
+ * vivos» (`bpvm_npack_ram_tope`). El reparto queda ESCRITO en cada sello, y el
+ * cargador no calcula direcciones: comprueba que cada sello cae DENTRO del
+ * bloque y que no pisa el de otro. Se consideró —y se descartó el 23-sep, con
+ * Eduardo— repartir por el orden de la cadena con un `ram_bytes` en la
+ * cabecera: habría pedido un campo nuevo y tocar el IDE, y borrar un pack de en
+ * medio habría movido (y roto) a todos los de detrás. Así, lo ya grabado sigue
+ * valiendo tal cual, y la RAM de un pack borrado se queda de hueco hasta
+ * formatear, igual que su flash.
  */
 #ifndef BPVM_NPACK_H
 #define BPVM_NPACK_H
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include "bpvm_pack.h"       /* BPVM_PACK_NAME_LEN: el nombre del pack y de su entrada */
 
 #ifdef __cplusplus
 extern "C" {
@@ -79,7 +99,7 @@ typedef struct {
     uint32_t data_bytes;     /* imagen inicial de .data (se copia a RAM)      */
     uint32_t bss_bytes;      /* a poner a CERO en RAM tras .data              */
     uint32_t linked_flash;   /* EL SELLO: para qué dirección se realojó       */
-    uint32_t linked_ram;     /* ídem, lado RAM                                */
+    uint32_t linked_ram;     /* ídem, lado RAM — y desde G1, SU trozo de RAM  */
     uint32_t reloc_count;    /* 0 = ya realojado (lo que se graba)            */
     uint32_t reserved[4];    /* 0 — hasta BPVM_NPACK_HDR_BYTES                */
 } bpvm_npack_hdr_t;
@@ -106,61 +126,111 @@ typedef enum {
  *                  cabecera va delante, y `entry_off` cuenta desde el código.
  *                  Confundirlos son 64 bytes de desfase y un salto a mitad de
  *                  instrucción — por eso está dicho aquí y no se deduce.
- *   aqui_ram     — base del bloque de RAM que se le va a dar
- *   sitio_flash  — bytes disponibles en la zona de packs
- *   sitio_ram    — bytes disponibles en el bloque de RAM
+ *   sitio_flash  — bytes que tiene el motor DETRÁS de su cabecera: ahí tienen
+ *                  que caber la imagen de código y la de `.data`
+ *   ram_lo/hi    — el bloque de RAM del código nativo, `[ram_lo, ram_hi)`. El
+ *                  sello de RAM tiene que caer DENTRO, con su `.data` + `.bss`.
  *   bios_falta   — NULL si la BIOS está entera; si no, el nombre que falta
  *                  (se pasa ya calculado: quien conoce la BIOS es la placa)
+ *
+ * V7/H6.c G1 — se llamaba `bpvm_npack_check` y comparaba el sello de RAM con la
+ * base del bloque (`==`). Cambia de nombre A PROPÓSITO además de cambiar de
+ * regla: tiene los mismos seis parámetros, todos enteros, y un llamante que no
+ * se enterase del cambio seguiría compilando con los argumentos en otro orden.
  */
-bpvm_npack_res_t bpvm_npack_check(const bpvm_npack_hdr_t* h,
-                                  uint32_t aqui_flash, uint32_t aqui_ram,
-                                  uint32_t sitio_flash, uint32_t sitio_ram,
-                                  const char* bios_falta);
+bpvm_npack_res_t bpvm_npack_escalera(const bpvm_npack_hdr_t* h,
+                                     uint32_t aqui_flash, uint32_t sitio_flash,
+                                     uint32_t ram_lo, uint32_t ram_hi,
+                                     const char* bios_falta);
 
 /* Texto del peldaño, para el log. Incluye QUÉ HACER cuando lo hay: un "no" que
  * no dice cómo salir de él obliga a leer el código. Nunca NULL. */
 const char* bpvm_npack_res_str(bpvm_npack_res_t r);
 
-/*
- * ─── BUSCAR EL PACK ─── idea de Eduardo (7-ago-2026)
- *
- * Simétrico del ANCLA de `bpvm_bios.h`: aquello arregla «el firmware se mueve»,
- * esto arregla «el pack se mueve». Misma medicina.
- *
- * Hasta ahora el cargador tenía que SABER dónde está el pack —al principio de la
- * partición— y esa clase de suposición nos costó, en una tarde, un cuelgue de la
- * placa y dos diagnósticos equivocados. Aquí no se supone: se BARRE la zona
- * buscando el magic y se sube la escalera sobre cada candidato.
- *
- * No hay validación nueva: los mismos siete peldaños de `bpvm_npack_check`. El
- * barrido sólo los alimenta, así que la regla sigue en UN sitio.
- *
- * ⚠️ Y EL SELLO NO SOBRA, CAMBIA DE PAPEL. Al encontrarlo barriendo,
- * `aqui_flash` es *dónde ha aparecido*, y el sello comprueba que se realojó
- * PARA AHÍ. Deja de servir para encontrarlo y pasa a servir para confirmar que
- * no se ha movido desde que se grabó — el caso de «alguien cambió SQLite=<MB>
- * y la RAM bailó».
- */
-typedef struct {
-    uint32_t          addr;        /* dirección de la CABECERA hallada; 0 = ninguna */
-    uint32_t          candidatos;  /* cuántas veces apareció el magic en la zona    */
-    bpvm_npack_res_t  motivo;      /* por qué se rechazó el ÚLTIMO candidato        */
-} bpvm_npack_hallazgo_t;
+/* Lo que un motor ocupa de RAM: su `.data` + su `.bss`, redondeado a 16, que es
+ * el paso con que se reparten los trozos (la `.data` pide alineación 8 por los
+ * `double`; 16 es la de la pila y no cuesta nada). */
+uint32_t bpvm_npack_ram_bytes(const bpvm_npack_hdr_t* h);
 
 /*
- * Barre [base, base+bytes) de 4 en 4 buscando un pack VÁLIDO. Devuelve el
- * primero que supera la escalera entera.
+ * ─── ENCONTRAR LOS MOTORES: la CADENA, no un barrido ─── (V7/H6.c G1)
  *
- * `candidatos` y `motivo` son el chivato, y no son adorno: "no lo encuentro" y
- * "encontré uno pero el sello no cuadra" mandan a sitios MUY distintos, y sin
- * separarlos habría que adivinar cuál de los dos es. Con candidatos==0 no hay
- * pack grabado; con candidatos>0 lo hay y `motivo` dice qué le pasa.
+ * Hasta G1 el cargador BARRÍA la zona de 4 en 4 buscando el magic —la idea del
+ * ancla de Eduardo (7-ago): «buscar, no acertar la dirección»— y se quedaba con
+ * el PRIMER pack válido. Aquello arregló «el pack se mueve», pero tenía dos
+ * cosas que con varios motores dejan de valer:
  *
- * No escribe, no aloca, no salta: sólo mira.
+ *   · barría a ciegas lo que la zona ya dice dónde está. Un `.npk` vive SIEMPRE
+ *     dentro de un pack, y la cadena de packs es un índice: cada cabecera dice
+ *     dónde empieza la siguiente y cada entrada dónde están sus bytes. Recorrerla
+ *     es seguir buscando —ninguna dirección se supone—, pero leyendo el índice
+ *     en vez de 13,7 MB (la zona de la C5) de 4 en 4;
+ *   · se quedaba con el PRIMERO, y los `.mod` y los `.mdn` se resuelven con el
+ *     ÚLTIMO (`bpvm_pack_find`: «el flujo de actualización es add nuevo +
+ *     tombstone viejo»). Grabar un pack nuevo sin borrar el viejo ejecutaba el
+ *     motor viejo con el `.mod` nuevo. Ahora la regla es la misma para los tres:
+ *     si dos motores vivos se llaman igual, gana el de más adelante.
  */
-bpvm_npack_hallazgo_t bpvm_npack_buscar(const void* base, uint32_t bytes,
-                                        uint32_t aqui_ram, uint32_t sitio_ram,
-                                        const char* bios_falta);
+#define BPVM_NPACK_MAX 8     /* motores que se describen de una zona: los mismos
+                              * que marcas caben en el punto de encuentro
+                              * (BPVM_BIOS_PACK_MAX) — más no podrían publicar */
+
+typedef struct {
+    const bpvm_npack_hdr_t* hdr;   /* su cabecera, por la vista de LECTURA      */
+    uint32_t codigo;               /* dónde empieza su código: el `aqui_flash`  */
+    uint32_t pack_off;             /* offset de SU pack en la zona              */
+    char     pack[BPVM_PACK_NAME_LEN + 1];   /* el pack: el nombre que ve el usuario */
+    char     npk [BPVM_PACK_NAME_LEN + 1];   /* la entrada `npk` (la del «gana el último») */
+    uint32_t ram;                  /* su sello de RAM (0 si no hay cabecera)    */
+    uint32_t ram_bytes;            /* bpvm_npack_ram_bytes (0 si no hay)        */
+    bpvm_npack_res_t motivo;       /* el peldaño; OK = la escalera entera       */
+    int8_t   eclipsado_por;        /* -1, o el índice del motor de MÁS ADELANTE
+                                    * que se llama igual (y es el que se carga) */
+    int8_t   pisa_a;               /* -1, o el índice del motor cargable cuya
+                                    * RAM pisaría (dos sellos solapados: uno de
+                                    * los dos se grabó con una imagen de antes
+                                    * de G1, que daba a todos la base)          */
+} bpvm_npack_carga_t;
+
+/* ¿Se salta a éste? La condición en UN sitio: la leen las dos familias. */
+int bpvm_npack_cargable(const bpvm_npack_carga_t* c);
+
+typedef struct {
+    int      vistos;     /* motores en packs VIVOS (puede pasar de `max`)      */
+    int      cargables;  /* de los descritos, cuántos se pueden saltar         */
+    uint32_t ram_tope;   /* la primera dirección libre por encima de todo sello
+                          * vivo que cae dentro del bloque (alineada a 16). Es a
+                          * la vez DÓNDE IRÁ el siguiente motor que se grabe y
+                          * DÓNDE EMPIEZA la arena. Sin motores, la base.       */
+} bpvm_npack_plan_t;
+
+/*
+ * Recorre la cadena de packs de `zona` y describe sus motores en `out` (hasta
+ * `max`), EN ORDEN DE CADENA —que es el orden en que se grabaron y en el que se
+ * saltará—, cada uno con su veredicto. Devuelve `vistos`.
+ *
+ *   · Sólo cuentan los packs VIVOS: un tombstone no se carga ni ocupa RAM (su
+ *     hueco se reaprovecha si era el de arriba; si no, hasta formatear).
+ *   · El tope se calcula con TODOS los motores vivos, también los que pasan de
+ *     `max` o no superan la escalera: la RAM que un sello reclama está
+ *     reclamada mientras el pack viva, se cargue o no.
+ *   · Un motor no cargable no reserva nada frente a los demás: sólo los
+ *     cargables se comparan entre sí por solapes.
+ *
+ * `plan` puede ser NULL; `out` puede ser NULL con `max` 0 (sólo el tope). No
+ * escribe en la zona, no aloca, no salta: sólo mira.
+ */
+int bpvm_npack_planear(const uint8_t* zona, uint32_t zbytes,
+                       uint32_t ram_base, uint32_t ram_bytes,
+                       const char* bios_falta,
+                       bpvm_npack_carga_t* out, int max,
+                       bpvm_npack_plan_t* plan);
+
+/* Sólo el tope. Es lo que `PACK_BURN_BEGIN` le dice al IDE como `ramBase` del
+ * motor que va a grabar: la misma regla que el cargador, porque es la misma
+ * función por dentro. Sin bloque (`ram_base` 0) devuelve 0. */
+uint32_t bpvm_npack_ram_tope(const uint8_t* zona, uint32_t zbytes,
+                             uint32_t ram_base, uint32_t ram_bytes);
 
 /* La dirección a la que hay que saltar: entrada + base + bit Thumb si toca.
  * En UN sitio porque olvidar el bit 0 es hard fault inmediato, y es justo el

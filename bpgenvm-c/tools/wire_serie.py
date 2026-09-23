@@ -312,8 +312,11 @@ def cmd_pack(w, args):
         if not flash:
             print("la placa no dice flashAddr en el BEGIN: no se puede sellar un motor nativo"); return
         sellado = os.path.join(tmpd, "sellado.pack")
+        # V7/H6.c G1: ramSize (lo que queda desde el tope) para que un motor que no
+        # cabe se diga ANTES de grabar, no al cargar.
         out = subprocess.run(["java", "-cp", cp + ";" + pt, "PackTool", "sellar", args[0], arch,
-                              str(flash), str(ram or 0), sellado], capture_output=True, text=True)
+                              str(flash), str(ram or 0), sellado, str(r.get("ramSize") or 0)],
+                             capture_output=True, text=True)
         print(out.stdout.strip())
         if out.returncode != 0: print(out.stderr[-400:]); return
         sell = open(sellado, "rb").read()

@@ -1057,6 +1057,11 @@ int board_env_bool(const char* key, int def) {
     return bpvm_env_get_bool(&s_env, key, def);
 }
 
+/* V7/H6.c G1 — el ENV ENTERO, de sólo lectura, para la ranura `env_get` de la
+ * BIOS (bios_pico.c): un driver en un pack lee ahí sus pines y su panel. La
+ * misma ventanilla que la de arriba, sin repartir copias del bloque. */
+const bpvm_env_t* board_env(void) { return &s_env; }
+
 /* #327 — el layout REAL del arranque, para quien necesite una partición que no
  * sea el FS (hoy: la zona de packs del gestor de placa). NULL mientras el boot
  * no haya pasado de la capa 1: sin layout válido no hay particiones que dar.
@@ -1300,6 +1305,7 @@ static void vm_task(void* arg) {
         if (plan.res != BPVM_MEM_OK) {
             s_vm_buffer = NULL; s_vm_buffer_size = 0;
             s_pack_ram_base = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            s_pack_ram_size = PACK_RAM_BYTES;
             log_flush();
         } else if (reg[plan.idx].exclusiva) {
             /* TOMAR de la PSRAM: la reserva delante, la VM detrás. */
@@ -1313,6 +1319,10 @@ static void vm_task(void* arg) {
              * SQLite=0" — donde hay arena no se le quita nada a la SRAM. */
             s_pack_ram_base = plan.reserva_bytes ? s_sqlite_base
                                                  : (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            /* V7/H6.c G1: el tamaño del bloque que EMPIEZA en esa base — el de
+             * la BD o la cola de 8 KB de la SRAM. Antes el wire contaba sólo
+             * `s_sqlite_size`, y sin BD decía 0 KB de un bloque que existía. */
+            s_pack_ram_size = plan.reserva_bytes ? s_sqlite_size : PACK_RAM_BYTES;
             log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
                        (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
                        (unsigned)(uintptr_t) s_vm_buffer);
@@ -1330,6 +1340,7 @@ static void vm_task(void* arg) {
              * PSRAM no hay arena de donde sacar la RAM del pack: va a la SRAM, y
              * la región ya se para justo debajo. */
             s_pack_ram_base  = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            s_pack_ram_size  = PACK_RAM_BYTES;
             s_vm_buffer      = reg[plan.idx].base + (reg[plan.idx].bytes - plan.bytes);
             s_vm_buffer_size = (uint32_t) plan.bytes;
             size_t stk = vm_stack_region_bytes();   /* la regla, no una copia */

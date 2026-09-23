@@ -77,6 +77,15 @@ int bpvm_env_pick(const uint8_t* blockA, size_t lenA,
  * (>=0), o -1 si la clave no está (tolerante). */
 int bpvm_env_get(const bpvm_env_t* env, const char* key, char* val_out, size_t val_cap);
 
+/* V7/H6.c G1 — la MISMA búsqueda, pero SIN TRUNCAR: lo que usa la ranura
+ * `env_get` de la BIOS. `bpvm_env_get` corta el valor a `val_cap` y devuelve la
+ * longitud entera (el que llama compara); a un pack eso le daría un pin a
+ * medias —un número plausible y equivocado—, así que aquí o entero o nada.
+ * Devuelve la longitud (>= 0), -1 si la clave no está (o el ENV no vale), -2 si
+ * no cabe (`val_out` queda ""), -3 si los argumentos no valen. Los mismos
+ * códigos que BPVM_BIOS_ENV_* (bpvm_bios.h). */
+int bpvm_env_get_exacto(const bpvm_env_t* env, const char* key, char* val_out, size_t val_cap);
+
 /* Conveniencias tipadas (delegan en bpvm_env_get → una sola fuente). `def` si la
  * clave falta o no parsea. bool acepta 1/0, y/n, true/false, yes/no, on/off. */
 int  bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def);

@@ -105,6 +105,15 @@ int bpvm_env_get(const bpvm_env_t* env, const char* key, char* val_out, size_t v
     return -1;                                         /* clave desconocida → tolerante */
 }
 
+int bpvm_env_get_exacto(const bpvm_env_t* env, const char* key, char* val_out, size_t val_cap) {
+    if (!key || !*key || !val_out || val_cap == 0) return -3;
+    val_out[0] = '\0';
+    int n = bpvm_env_get(env, key, val_out, val_cap);
+    if (n < 0) { val_out[0] = '\0'; return -1; }
+    if ((size_t) n >= val_cap) { val_out[0] = '\0'; return -2; }   /* truncado: nada */
+    return n;
+}
+
 int bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def) {
     char v[8];
     int n = bpvm_env_get(env, key, v, sizeof v);

@@ -215,8 +215,10 @@ static void packs_cargar_una_vez(void) {
     if (s_hecho || s_packs_loader == 0) return;
     int32_t r = s_packs_loader();
     if (r >= 0) {
+        /* V7/H6.c G1: `r` = a cuántos motores se saltó; lo que devolvió cada
+         * uno ya está en el log, con su nombre. */
         s_hecho = 1;
-        log_printf("packs: cargado, la entrada devolvio %ld", (long) r);
+        log_printf("packs: %ld motor(es) cargado(s)", (long) r);
     } else {
         /* El detalle -cuantos candidatos, que peldano fallo- ya lo dejo el
          * cargador en el log. Aqui solo se dice que se sigue sin pack, que no

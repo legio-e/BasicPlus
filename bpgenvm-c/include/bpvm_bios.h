@@ -42,7 +42,8 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  5u   /* 5 = V7/H6: la HAL (gpio/spi/i2c/reloj)     */
+#define BPVM_BIOS_VERSION  6u   /* 6 = V7/H6.c G1: env_get (la config de placa) */
+                                /* 5 = V7/H6: la HAL (gpio/spi/i2c/reloj)     */
                                 /* 4 = V5/H4: el PUNTO DE ENCUENTRO de packs  */
                                 /* 3 = V5/H3: entra la ranura de la ARENA     */
                                 /* 2 = V5/H2: entran las ranuras de ficheros  */
@@ -148,10 +149,21 @@ typedef struct bpvm_bios {
      * MIDIÓ el mínimo de 2 MB y la regla del ~40 %. Poner aquí un malloc nuestro
      * sería otro sistema de memoria y esas medidas dejarían de aplicar.
      *
-     * ⚠️ Y NO es todo el bloque de la BD: los ~7 KB del principio son la
-     * `.data`/`.bss` del propio pack (`[estáticos | arena]`). Esta ranura ya
-     * devuelve la arena con esos bytes descontados — quien la llama no tiene que
-     * saberse el reparto.
+     * ⚠️ Y NO es todo el bloque: por debajo están los estáticos (`.data`/`.bss`)
+     * de CADA motor cargado, cada uno en el trozo que dice su sello. Esta ranura
+     * devuelve lo que queda por ENCIMA del último (`ram_tope` del plan de
+     * `bpvm_npack.h`) — quien la llama no tiene que saberse el reparto.
+     *
+     * V7/H6.c G1 — CON VARIOS MOTORES, LA ARENA TIENE DUEÑO. Hoy sólo la pide
+     * SQLite (el pool de LVGL vive en su `.bss`), pero dos motores con la MISMA
+     * arena se machacarían el heap el uno al otro EN SILENCIO. Así que es del
+     * primero que la pide DESDE SU `bp_pack_init`; si la pide otro, NULL, y el
+     * cargador escribe de quién es (como con los pines: el segundo recibe un
+     * «no» con nombre). Fuera de una entrada también es NULL: sin saber quién
+     * pregunta no se puede saber de quién es. La lleva `bpvm_bios_arena`
+     * (portable, en bpvm_bios.c): cada familia sólo le dice dónde está el
+     * bloque. El día que dos motores necesiten arena, cada uno declarará la
+     * suya; hasta entonces sería forma sin uso.
      */
     void* (*arena)(size_t* bytes);
 
@@ -219,13 +231,39 @@ typedef struct bpvm_bios {
     int      (*i2c_read)  (int bus, int addr, uint8_t* data, size_t n);
     uint32_t (*now_ms)    (void);
     void     (*sleep_ms)  (int ms);
+
+    /* ── V7/H6.c G1 — LA CONFIG DE PLACA ─────────────────────────────────
+     *
+     * Un driver en un pack que no puede leer el ENV tiene sus pines, su bus y
+     * su panel escritos DENTRO: un pack por placa. Con esta ranura los lee al
+     * arrancar y el mismo pack sirve a todas las placas con el mismo panel —
+     * es LA pieza que convierte «un npk por placa» en «un npk para todas».
+     * Y la config de placa ya vive en el ENV (`display=` en el P4, H9): no
+     * hay formato nuevo que aprender.
+     *
+     * De SÓLO LECTURA a propósito: el ENV es de la placa y lo escriben el
+     * usuario y el IDE; un pack que lo cambiara cambiaría el arranque de la
+     * placa por la puerta de atrás.
+     *
+     * Devuelve la longitud del valor (NUL-terminado en `buf`), o:
+     *   -1  la clave no está          -2  no cabe en `cap` (`buf` queda "")
+     *   -3  argumentos malos
+     * «No cabe» NO trunca: un pin a medias es un número plausible y
+     * equivocado —mejor nada que a medias, como `bpvm_pack_manifest_get`—.
+     * Las claves no distinguen mayúsculas (decisión del 19-jul para el ENV). */
+    int      (*env_get)   (const char* clave, char* buf, size_t cap);
 } bpvm_bios_t;
+
+/* Los códigos de `env_get`, para que el pack no escriba números sueltos. */
+#define BPVM_BIOS_ENV_NO_ESTA  (-1)
+#define BPVM_BIOS_ENV_NO_CABE  (-2)
+#define BPVM_BIOS_ENV_ARGS     (-3)
 
 /*
  * ─── EL INICIALIZADOR, PEGADO A LA STRUCT ─────────────────────────────────────
  *
- * Rellena la tabla entera dejando SÓLO los seis huecos que de verdad dependen de
- * la placa. Nació al montar la segunda familia (V5/H7, el P4): de las 29
+ * Rellena la tabla entera dejando SÓLO los huecos que de verdad dependen de la
+ * placa. Nació al montar la segunda familia (V5/H7, el P4): de las 29
  * ranuras, **26 son idénticas** — 12 de libc que trae newlib (y el ESP32 usa
  * newlib igual que el RP2350), 9 de ficheros que ya son portables, 2 del punto
  * de encuentro, y 3 de memoria que hoy son chivatos.
@@ -244,9 +282,16 @@ typedef struct bpvm_bios {
  * le pueda prestar al pack sin que nadie tenga que mantenerla viva.
  *
  * Los seis parámetros son, en orden: la VOZ del pack, sus tres de memoria, el
- * tiempo, y la arena de la BD.
+ * tiempo, y (v6) dónde lee la placa su ENV.
+ *
+ * V7/H6.c G1 — la ARENA dejó de ser parámetro: con varios motores tiene dueño,
+ * y esa regla no puede tener una copia por familia (es `bpvm_bios_arena`, en
+ * bpvm_bios.c; la familia sólo le dice dónde está el bloque). Y `ENV_GET` entra
+ * como parámetro, no como función portable, porque el ENV de cada familia vive
+ * en un sitio distinto: así, una familia que no lo conecte NO COMPILA, en vez
+ * de dar «la clave no está» para todo en silencio.
  */
-#define BPVM_BIOS_TABLA(LOG, MALLOC, FREE, REALLOC, LOCALTIME, ARENA) { \
+#define BPVM_BIOS_TABLA(LOG, MALLOC, FREE, REALLOC, LOCALTIME, ENV_GET) { \
     BPVM_BIOS_MAGIC, BPVM_BIOS_VERSION,                                 \
     (LOG),                                                              \
     memcpy, memmove, memset, memcmp, memchr,                            \
@@ -260,14 +305,17 @@ typedef struct bpvm_bios {
     bpvm_bios_fs_leer,  bpvm_bios_fs_escribir,                          \
     bpvm_bios_fs_truncar, bpvm_bios_fs_tamano, bpvm_bios_fs_sincronizar,\
     bpvm_bios_fs_borrar, bpvm_bios_fs_existe,                           \
-    (ARENA),                                                            \
+    /* V5/H3 — la arena; V7/H6.c G1 — portable y con dueño. */          \
+    bpvm_bios_arena,                                                    \
     /* V5/H4 — el punto de encuentro. Portable: nada que decidir. */    \
     bpvm_bios_publica, bpvm_bios_busca,                                 \
     /* V7/H6 — la HAL: las fachadas de la VM (bpvm_bios_hal.c). */      \
     bpvm_bios_hal_gpio_init, bpvm_bios_hal_gpio_write, bpvm_bios_hal_gpio_read, \
     bpvm_bios_hal_spi_init, bpvm_bios_hal_spi_write,                    \
     bpvm_bios_hal_i2c_init, bpvm_bios_hal_i2c_write, bpvm_bios_hal_i2c_read, \
-    bpvm_bios_hal_now_ms, bpvm_bios_hal_sleep_ms                        \
+    bpvm_bios_hal_now_ms, bpvm_bios_hal_sleep_ms,                       \
+    /* V7/H6.c G1 — el ENV de la placa (bpvm_env_get_exacto detrás). */ \
+    (ENV_GET)                                                           \
 }
 
 /*
@@ -330,6 +378,29 @@ void     bpvm_bios_hal_sleep_ms  (int ms);
 /* Olvida todas las tablas. Para el arranque y para las pruebas. */
 void        bpvm_bios_packs_reset(void);
 
+/*
+ * V7/H6.c G1 — LA ARENA, portable y con dueño (ver la ranura `arena`).
+ *
+ * El cargador de cada familia la maneja así:
+ *   bpvm_bios_arena_fija(base, bytes)   tras planear: lo que queda por encima
+ *                                       del último motor (`ram_tope` → fin del
+ *                                       bloque). Olvida al dueño anterior.
+ *   bpvm_bios_arena_entra("SQLite")     justo antes de saltar a su entrada
+ *   bpvm_bios_arena_sale()              al volver
+ *   bpvm_bios_arena_negada()            tras volver: por qué se le dijo que no
+ *                                       (NULL si no se le negó) — para el log,
+ *                                       que este fichero no tiene voz propia
+ *
+ * El nombre que se pasa a `entra` se COPIA: el del plan es de la pila del
+ * cargador y no vive lo que vive el dueño.
+ */
+void*       bpvm_bios_arena        (size_t* bytes);   /* LA RANURA */
+void        bpvm_bios_arena_fija   (void* base, size_t bytes);
+void        bpvm_bios_arena_entra  (const char* pack);
+void        bpvm_bios_arena_sale   (void);
+const char* bpvm_bios_arena_negada (void);
+const char* bpvm_bios_arena_duena  (void);            /* "" = libre */
+
 /* Cuántas ranuras de función tiene la tabla. Para el log del arranque: decir
  * "BIOS lista (17 ranuras)" es más útil que "BIOS lista". */
 int bpvm_bios_slot_count(void);
@@ -367,13 +438,17 @@ typedef struct bpvm_ancla {
     const bpvm_bios_t* bios;                                /* la tabla        */
     uint16_t (*prueba)(uint16_t, const uint8_t*, uint32_t);  /* CRC-16          */
 
-    /* v2 — CARGAR UN PACK NATIVO: buscarlo en la zona XIP, subir la escalera y
-     * saltar. Vive en el firmware y no en el pack/`.mdn` porque un `.mdn` no
-     * puede llamar a nada por nombre y tendria que llevar SU COPIA de la
-     * escalera — la unica regla que no puede divergir. Se llama desde aqui.
+    /* v2 — CARGAR LOS PACKS NATIVOS: recorrer la cadena de la zona, subir la
+     * escalera de cada motor y saltar. Vive en el firmware y no en el
+     * pack/`.mdn` porque un `.mdn` no puede llamar a nada por nombre y tendria
+     * que llevar SU COPIA de la escalera — la unica regla que no puede
+     * divergir. Se llama desde aqui.
      *
-     *   >= 0  se salto, y es lo que devolvio el pack
-     *   <  0  no se salto; -valor es el peldano (bpvm_npack_res_t) */
+     *   >= 1  a cuántos motores se saltó (lo que devolvió cada uno, en el log)
+     *   <  0  no se saltó a ninguno; -valor es el peldaño del último que se
+     *         rechazó, o MAGIC si no había ninguno (bpvm_npack_res_t)
+     * (Hasta G1 cargaba UNO y devolvía lo que devolvió; con varios, lo que
+     * importa al que llama es si se saltó a alguno.) */
     int32_t  (*cargar_pack)(void);
 } bpvm_ancla_t;
 

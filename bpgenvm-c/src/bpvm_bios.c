@@ -45,6 +45,9 @@ static const ranura_t RANURAS[] = {
     R(spi_init), R(spi_write),
     R(i2c_init), R(i2c_write), R(i2c_read),
     R(now_ms), R(sleep_ms),
+    /* V7/H6.c G1 — la config de placa. La FUNCIÓN tiene que estar siempre,
+     * aunque conteste «no está» porque el ENV no tenga esa clave. */
+    R(env_get),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))
@@ -140,6 +143,84 @@ const void* bpvm_bios_busca(uint32_t marca)
 void bpvm_bios_packs_reset(void)
 {
     for (int i = 0; i < BPVM_PACK_MAX; i++) { s_packs[i].marca = 0; s_packs[i].tabla = 0; }
+}
+
+/* ── V7/H6.c G1 — LA ARENA, CON DUEÑO ─────────────────────────────────────────
+ *
+ * Portable por lo mismo que el registro: la regla «es del primero que la pide»
+ * no tiene nada de ningún micro, y con una copia por familia bastaría con que
+ * una se equivocara para que dos motores compartieran heap sin enterarse.
+ *
+ * Sin voz propia (este fichero no arrastra la VM): lo que se niega se APUNTA, y
+ * el cargador —que sí tiene log— lo escribe al volver del pack.
+ */
+#define ARENA_NOMBRE_MAX 33                 /* BPVM_PACK_NAME_LEN + NUL */
+
+static uint8_t*    s_arena_base;
+static size_t      s_arena_bytes;
+static char        s_arena_duena[ARENA_NOMBRE_MAX];   /* "" = libre      */
+static char        s_arena_quien[ARENA_NOMBRE_MAX];   /* el que está en su entrada */
+static int         s_arena_en_entrada;
+static const char* s_arena_no;                        /* el último «no»  */
+static char        s_arena_no_buf[96];
+
+static void copia_nombre(char* dst, const char* src) {
+    int i = 0;
+    if (src) while (i < ARENA_NOMBRE_MAX - 1 && src[i]) { dst[i] = src[i]; i++; }
+    dst[i] = 0;
+}
+static int mismo_nombre(const char* a, const char* b) {
+    while (*a && *a == *b) { a++; b++; }
+    return *a == *b;
+}
+
+void bpvm_bios_arena_fija(void* base, size_t bytes)
+{
+    s_arena_base  = (uint8_t*) base;
+    s_arena_bytes = base ? bytes : 0;
+    s_arena_duena[0] = 0;
+    s_arena_en_entrada = 0;
+    s_arena_no = 0;
+}
+
+void bpvm_bios_arena_entra(const char* pack)
+{
+    copia_nombre(s_arena_quien, pack ? pack : "?");
+    s_arena_en_entrada = 1;
+    s_arena_no = 0;                         /* lo que se apunta es de ESTE pack */
+}
+
+void bpvm_bios_arena_sale(void) { s_arena_en_entrada = 0; }
+
+const char* bpvm_bios_arena_negada(void) { return s_arena_no; }
+const char* bpvm_bios_arena_duena(void)  { return s_arena_duena; }
+
+void* bpvm_bios_arena(size_t* bytes)
+{
+    if (bytes) *bytes = 0;
+    if (!s_arena_en_entrada) {
+        s_arena_no = "la arena se pide desde bp_pack_init (fuera de una entrada no se sabe quien pregunta)";
+        return 0;
+    }
+    if (s_arena_base == 0 || s_arena_bytes == 0) {
+        s_arena_no = "no hay arena: ni packRam ni SQLite en el ENV, o los estaticos de los motores se comieron el bloque";
+        return 0;
+    }
+    if (s_arena_duena[0] != 0 && !mismo_nombre(s_arena_duena, s_arena_quien)) {
+        /* El texto se compone aquí y no con snprintf: este fichero no arrastra
+         * stdio (se enlaza tal cual en el test y en las cinco imágenes). */
+        static const char pre[] = "la arena ya es de '";
+        int k = 0;
+        for (int i = 0; pre[i] && k < (int) sizeof s_arena_no_buf - 2; i++) s_arena_no_buf[k++] = pre[i];
+        for (int i = 0; s_arena_duena[i] && k < (int) sizeof s_arena_no_buf - 2; i++) s_arena_no_buf[k++] = s_arena_duena[i];
+        s_arena_no_buf[k++] = '\'';
+        s_arena_no_buf[k] = 0;
+        s_arena_no = s_arena_no_buf;
+        return 0;
+    }
+    copia_nombre(s_arena_duena, s_arena_quien);   /* el primero que la pide */
+    if (bytes) *bytes = s_arena_bytes;
+    return s_arena_base;
 }
 
 /*

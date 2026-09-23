@@ -55,6 +55,25 @@ int main(void) {
     CHECK(bpvm_env_get_long(&e, "noExiste", 999) == 999L, "get_long ausente → default");
     CHECK(bpvm_env_get_bool(&e, "noExiste", 1) == 1, "get_bool ausente → default");
 
+    /* --- 3b. V7/H6.c G1: la que usa la BIOS — o entero o nada --- */
+    {
+        char w[13];                               /* "MetroRP2350B" = 12 + NUL: justo */
+        CHECK(bpvm_env_get_exacto(&e, "board", w, sizeof w) == 12 && !strcmp(w, "MetroRP2350B"),
+              "exacto: cabe JUSTO (12 + NUL en 13) -> el valor entero");
+        CHECK(bpvm_env_get_exacto(&e, "BOARD", w, sizeof w) == 12,
+              "exacto: la clave no distingue mayusculas (como el ENV)");
+        char c[12]; memset(c, 'x', sizeof c);
+        CHECK(bpvm_env_get_exacto(&e, "board", c, sizeof c) == -2 && c[0] == '\0',
+              "exacto: UN byte corto -> -2 y el bufer VACIO (no 'MetroRP2350', que parece bueno)");
+        CHECK(bpvm_env_get_exacto(&e, "noExiste", w, sizeof w) == -1 && w[0] == '\0',
+              "exacto: clave que no esta -> -1 y el bufer vacio");
+        CHECK(bpvm_env_get_exacto(&e, "", w, sizeof w) == -3, "exacto: clave vacia -> -3");
+        CHECK(bpvm_env_get_exacto(&e, "board", NULL, 8) == -3, "exacto: bufer NULL -> -3");
+        CHECK(bpvm_env_get_exacto(&e, "board", w, 0) == -3, "exacto: cap 0 -> -3");
+        CHECK(bpvm_env_get_exacto(NULL, "board", w, sizeof w) == -1,
+              "exacto: sin ENV -> -1 (ninguna clave esta), sin reventar");
+    }
+
     /* --- 4. bloque corrupto → parse rechaza --- */
     {
         static uint8_t C[SECT];

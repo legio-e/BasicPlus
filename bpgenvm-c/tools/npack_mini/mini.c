@@ -23,7 +23,13 @@
  *   7  la `.bss` no llegó a cero (s_veces no vale 1 tras el primer paso)
  *   8  el reloj de la HAL (v5) no avanza
  *   9  `publica('MINI')` no aceptó su propia tabla, o `busca` no la devuelve
- *  10  la arena: se pidió y `arena()` dio NULL (no es fallo si no se pidió)
+ *  10  `env_get` (v6, V7/H6.c G1) no cumple su contrato: una clave que no
+ *      existe no dice «no está», una clave vacía no dice «argumentos», o un
+ *      búfer sin sitio para el NUL da medio valor en vez de «no cabe»
+ *
+ * (Hasta G1 el paso 10 PEDÍA la arena. Ya no: desde G1 la arena tiene dueño
+ * —se la queda el primer motor que la pide— y un control que la tomara se la
+ * quitaría a SQLite si coincidieran en la misma placa.)
  *
  * Sólo depende de la tabla BIOS (`bpvm_bios.h`) y de `bpvm_pack_api.h`
  * (static inline): sin libc, sin libgcc — enlaza sin nada más. */
@@ -32,7 +38,7 @@
 #include <stdint.h>
 
 /* .rodata — un literal que sólo se lee bien si el realojado de .rodata va */
-static const char s_marca[] = "mini: pack vivo (V7/H6)";
+static const char s_marca[] = "mini: pack vivo (V7/H6.c, BIOS v6)";
 
 /* .text — dos funciones a las que apunta una tabla en .data (dos ABS32) */
 static int doble(int x)  { return x * 2; }
@@ -82,9 +88,31 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     if (bpvm_pack_api_find((const bpvm_pack_api_t*) bios->busca(0x4D494E49u), "adios") == 0) return 9;
     di(bios, "mini: paso 9 ok (publica/busca 'MINI', 2 simbolos)");
 
-    { size_t n = 0; void* p = bios->arena(&n);
-      if (p == 0 || n == 0) di(bios, "mini: sin arena (no se pidio, o no cupo) - no es fallo");
-      else                   di(bios, "mini: paso 10 ok (arena disponible)"); }
+    /* v6 — LA CONFIG DE PLACA (G1). El mini no sabe qué hay en el ENV de la
+     * placa, así que prueba el CONTRATO (no está / argumentos / no cabe) y
+     * enseña el valor de la clave que le dio RAM para cargar: `packRam` o
+     * `SQLite` (en la Pico sin BD no hay ninguna, y no es fallo). */
+    if (bios->env_get == 0) return 10;
+    {
+        char v[24];
+        if (bios->env_get("", v, sizeof v) != BPVM_BIOS_ENV_ARGS)                      return 10;
+        if (bios->env_get("miniNoExisteNunca", v, sizeof v) != BPVM_BIOS_ENV_NO_ESTA)  return 10;
+        const char* clave = "packRam";
+        int n = bios->env_get(clave, v, sizeof v);
+        if (n < 0) { clave = "SQLite"; n = bios->env_get(clave, v, sizeof v); }
+        if (n >= 0) {
+            di(bios, clave[0] == 'p' ? "mini: env_get('packRam') vale:" : "mini: env_get('SQLite') vale:");
+            di(bios, v);
+            if (n > 0) {   /* sin sitio para el NUL: «no cabe» y el búfer vacío, no medio número */
+                char w[24];
+                w[0] = 'x';
+                if (bios->env_get(clave, w, (size_t) n) != BPVM_BIOS_ENV_NO_CABE || w[0] != 0) return 10;
+            }
+        } else {
+            di(bios, "mini: ni packRam ni SQLite en el ENV (bloque en la cola de la SRAM) - no es fallo");
+        }
+    }
+    di(bios, "mini: paso 10 ok (env_get v6: no esta / argumentos / no cabe)");
 
     di(bios, "mini: TODO OK -> 0");
     return 0;

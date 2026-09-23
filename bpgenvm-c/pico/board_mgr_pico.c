@@ -211,7 +211,7 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
      * expone para que `PACK_BURN_BEGIN` pueda decírselo al IDE, que es quien
      * relocaliza. Si no hay bloque, queda a 0 y el IDE lo dirá. */
     bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
-    bm.pack_ram_size = s_sqlite_size;
+    bm.pack_ram_size = s_pack_ram_size;   /* V7/H6.c G1: el bloque que empieza ahí (antes, sólo el de la BD) */
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);

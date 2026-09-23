@@ -62,6 +62,8 @@ static int      f_i2c_write(int b, int a, const uint8_t* d, size_t n) { (void)b;
 static int      f_i2c_read(int b, int a, uint8_t* d, size_t n) { (void)b;(void)a;(void)d; return (int) n; }
 static uint32_t f_now_ms(void) { return 0; }
 static void     f_sleep_ms(int ms) { (void) ms; }
+/* V7/H6.c G1 — la config de placa. «No está» es una respuesta legítima. */
+static int      f_env_get(const char* k, char* b, size_t c) { (void)k; if (b && c) b[0] = 0; return -1; }
 
 /* Devuelve una tabla COMPLETA y bien formada. Cada caso la estropea de una
  * manera — un solo cambio por caso, que es como se sabe qué causó qué. */
@@ -87,6 +89,7 @@ static bpvm_bios_t buena(void) {
     b.spi_init = f_spi_init; b.spi_write = f_spi_write;
     b.i2c_init = f_i2c_init; b.i2c_write = f_i2c_write; b.i2c_read = f_i2c_read;
     b.now_ms = f_now_ms; b.sleep_ms = f_sleep_ms;
+    b.env_get = f_env_get;
     return b;
 }
 
@@ -128,9 +131,17 @@ int main(void) {
          * Cuando la tabla crece hay que MOVER este caso a la nueva última: si
          * se queda en la de antes deja de probar el borde y nadie se entera —
          * seguiría en verde comprobando una ranura del medio. */
+        /* (Hasta G1 este caso seguía mirando `busca`, y desde la v5 la última
+         * era `sleep_ms`: pasó justo lo que este comentario avisaba. Ahora es
+         * `env_get`, y `busca` se queda como caso del medio.) */
+        bpvm_bios_t b = buena(); b.env_get = NULL;
+        const char* r = bpvm_bios_verify(&b);
+        CHECK(r && strcmp(r, "env_get") == 0, "hueco en la ULTIMA ranura (env_get) -> tambien");
+    }
+    {
         bpvm_bios_t b = buena(); b.busca = NULL;
         const char* r = bpvm_bios_verify(&b);
-        CHECK(r && strcmp(r, "busca") == 0, "hueco en la ULTIMA ranura -> tambien");
+        CHECK(r && strcmp(r, "busca") == 0, "hueco en busca -> lo NOMBRA");
     }
     {
         bpvm_bios_t b = buena(); b.arena = NULL;
@@ -197,6 +208,54 @@ int main(void) {
         CHECK(bpvm_bios_busca(0x53514C49u) == NULL, "reset -> el registro se vacia");
     }
 
+    /* ── V7/H6.c G1: LA ARENA, CON DUEÑO ──
+     * Con varios motores en la zona, dos con la MISMA arena se machacarían el
+     * heap en silencio. Lo que se prueba es que el segundo recibe un NO CON
+     * NOMBRE, y que fuera de una entrada nadie se la lleva. */
+    {
+        static unsigned char bloque[4096];
+        size_t n = 123;
+
+        bpvm_bios_arena_fija(bloque, sizeof bloque);
+        CHECK(bpvm_bios_arena(&n) == NULL && n == 0,
+              "arena pedida FUERA de una entrada -> NULL (no se sabe quien pregunta)");
+        CHECK(bpvm_bios_arena_negada() != NULL, "y queda apuntado por que");
+
+        bpvm_bios_arena_entra("SQLite");
+        CHECK(bpvm_bios_arena(&n) == bloque && n == sizeof bloque,
+              "el primero que la pide desde su entrada -> se la lleva entera");
+        CHECK(bpvm_bios_arena(&n) == bloque, "pedirla otra vez el MISMO -> la misma (idempotente)");
+        CHECK(bpvm_bios_arena_negada() == NULL, "y a el no se le nego nada");
+        bpvm_bios_arena_sale();
+        CHECK(strcmp(bpvm_bios_arena_duena(), "SQLite") == 0, "la duena queda anotada: SQLite");
+
+        bpvm_bios_arena_entra("Otro");
+        CHECK(bpvm_bios_arena(&n) == NULL && n == 0, "un SEGUNDO motor la pide -> NULL");
+        CHECK(bpvm_bios_arena_negada() != NULL
+              && strstr(bpvm_bios_arena_negada(), "SQLite") != NULL,
+              "y el porque NOMBRA a la duena ('la arena ya es de SQLite')");
+        bpvm_bios_arena_sale();
+
+        bpvm_bios_arena_fija(NULL, 0);
+        bpvm_bios_arena_entra("SQLite");
+        CHECK(bpvm_bios_arena(&n) == NULL && bpvm_bios_arena_negada() != NULL,
+              "sin bloque -> NULL con motivo (no se pidio, o los estaticos se lo comieron)");
+        bpvm_bios_arena_sale();
+
+        bpvm_bios_arena_fija(bloque, sizeof bloque);
+        CHECK(bpvm_bios_arena_duena()[0] == 0, "fijar el bloque de nuevo olvida a la duena");
+        {   /* El nombre se COPIA: el del plan vive en la pila del cargador. */
+            char tmp[16]; strcpy(tmp, "Gui");
+            bpvm_bios_arena_entra(tmp);
+            (void) bpvm_bios_arena(&n);
+            bpvm_bios_arena_sale();
+            strcpy(tmp, "XXX");
+            CHECK(strcmp(bpvm_bios_arena_duena(), "Gui") == 0,
+                  "el nombre de la duena es una COPIA (el del que llama puede morir)");
+        }
+        bpvm_bios_arena_fija(NULL, 0);
+    }
+
     /* ── 3. `log` es la voz del pack: si falta, se dice ANTES que nada ──
      * Sin log el pack es mudo, así que ese hueco es cualitativamente peor: no
      * sólo rompe una función, deja ciego todo lo demás. */
@@ -237,8 +296,10 @@ int main(void) {
     /* ── 7. El contador de ranuras cuadra con la struct ──
      * Si alguien añade un campo y olvida ponerlo en RANURAS, el hueco vuelve a
      * ser mudo. Esto no lo detecta del todo, pero deja el numero a la vista. */
-    CHECK(bpvm_bios_slot_count() == 39,
-          "39 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4 + 10 de la HAL H6)");
+    CHECK(bpvm_bios_slot_count() == 40,
+          "40 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4 + 10 de la HAL H6 + env_get G1)");
+    CHECK(offsetof(bpvm_bios_t, env_get) > offsetof(bpvm_bios_t, sleep_ms),
+          "env_get va DETRAS de la HAL: un pack de la v5 sigue encontrando sus ranuras");
     {   /* V7/H6 — un hueco en la HAL se NOMBRA como cualquier otro, y la HAL
          * va DETRAS de todo lo anterior (la tabla crece por el final). */
         bpvm_bios_t b = buena(); b.now_ms = NULL;

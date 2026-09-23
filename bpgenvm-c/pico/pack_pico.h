@@ -38,7 +38,11 @@
  * reparto dejaría de ser cierto EN SILENCIO. */
 #define PACK_SRAM_TECHO  0x20080000u
 
-/* Esto es lo que el firmware OFRECE, no lo que el pack necesita — eso lo declara
+/* V7/H6.c G1 — desde G1 esto es SÓLO el tamaño del bloque en el caso SIN PSRAM
+ * (la cola de la SRAM principal). Con PSRAM el bloque es el de la BD entero y
+ * cada motor ocupa lo que dice su cabecera, en el trozo que dice su sello.
+ *
+ * Esto es lo que el firmware OFRECE, no lo que el pack necesita — eso lo declara
  * el pack en su cabecera (`data_bytes` + `bss_bytes`) y la escalera los compara:
  * si un pack pidiera más, sale con su peldaño TAMAÑO en vez de escribir fuera.
  *
@@ -63,14 +67,19 @@
  * que se le pasa a la escalera como `aqui_ram`, y contra la que el pack tiene
  * que estar sellado. */
 extern uint8_t* s_pack_ram_base;
+/* V7/H6.c G1 — el tamaño del bloque que EMPIEZA en `s_pack_ram_base`: el de la
+ * BD (`s_sqlite_size`) o la cola de la SRAM (`PACK_RAM_BYTES`). Es lo que se
+ * reparte entre los motores y lo que sale al wire como `ramSize`. */
+extern uint32_t s_pack_ram_size;
 /* V5/H8 — tamaño del bloque de la BD, del que `s_pack_ram_base` es el
  * principio. Sale al wire (`PACK_BURN_BEGIN`) como el sitio de RAM que
  * tiene el motor: el sello del `.npk` se comprueba contra él. */
 extern uint32_t s_sqlite_size;
 
-/* Carga y ejecuta el pack de la zona XIP. Ver pack_pico.c.
- *   >= 0  se saltó, y es lo que devolvió el pack
- *   <  0  no se saltó; -valor es el peldaño (bpvm_npack_res_t) */
+/* Carga y ejecuta los packs nativos de la zona XIP (V7/H6.c G1: TODOS los
+ * motores cargables, en orden de cadena). Ver pack_pico.c.
+ *   >= 1  a cuántos motores se saltó (lo que devolvió cada uno, en el log)
+ *   <  0  no se saltó a ninguno; -valor es el peldaño (bpvm_npack_res_t) */
 int32_t pack_pico_cargar(void);
 
 /* [V7/H2, #493] Monta la zona de packs (XIP) SIN buscar codigo nativo: para el

@@ -1,11 +1,12 @@
 /* bios_esp32.c — la tabla BIOS de la FAMILIA ESP32 (V5/H7 en el P4; V7/H6 P1
  * al común: S3, C3, C6, C5 y P4 con la MISMA tabla).
  *
- * Hermano de `pico/bios_pico.c`, y conviene ver lo PEQUEÑO que es: de las 39
- * ranuras de `bpvm_bios_t`, **36 son idénticas en cualquier placa** y las pone
+ * Hermano de `pico/bios_pico.c`, y conviene ver lo PEQUEÑO que es: de las 40
+ * ranuras de `bpvm_bios_t`, **37 son idénticas en cualquier placa** y las pone
  * `BPVM_BIOS_TABLA` (en `bpvm_bios.h`, pegado a la struct). Aquí sólo viven las
- * TRES que dependen del hierro — su voz, su reloj y su arena — más los chivatos
- * de memoria, que aún no salen de ningún sitio.
+ * TRES que dependen del hierro — su voz, su reloj y dónde guarda su ENV — más
+ * los chivatos de memoria, que aún no salen de ningún sitio. (La arena era la
+ * tercera hasta V7/H6.c G1: con varios motores tiene dueño y pasó a ser común.)
  *
  * ⚠️ Y ESE REPARTO NO ES COMODIDAD. El orden de los campos de esa tabla cruza
  * una frontera BINARIA: el pack se compila aparte, se graba, y llama POR
@@ -32,7 +33,9 @@
  */
 #include "bpvm_bios.h"
 #include "bpvm_pack.h"   /* bpvm_pack_crc16: el control del ancla */
-#include "pack_esp32.h"  /* PACK_RAM_BYTES + el bloque de RAM del código nativo */
+#include "pack_esp32.h"  /* el bloque de RAM del código nativo */
+#include "board_mgr_esp32.h"   /* board_mgr_env: el ENV de ESTA placa (G1) */
+#include "bpvm_env.h"
 #include "log.h"
 
 #include <stdint.h>
@@ -66,27 +69,16 @@ static struct tm* bios_localtime(const void* t) {
     return 0;
 }
 
-/* ── LA ARENA DE LA BD ──
+/* ── V7/H6.c G1 — LA CONFIG DE PLACA: el ENV de esta familia ──
  *
- * El bloque reservado en el arranque MENOS los estáticos del pack, que viven en
- * su principio (`[estáticos | arena]`). El descuento se hace AQUÍ y no en el
- * llamante: quien pide la arena no tiene por qué saberse el reparto, y si lo
- * supiera habría dos sitios que mantener de acuerdo.
- *
- * Devolver NULL no es un fallo — es la respuesta correcta cuando no se pidió BD
- * o no cupo. Pero se dice en el log, porque desde el otro lado "no hay arena" y
- * "la ranura está rota" se parecen demasiado.
- */
-static void* bios_arena(size_t* bytes) {
-    if (bytes) *bytes = 0;
-
-    if (s_pack_ram_base == 0 || s_pack_ram_size <= s_pack_ram_estaticos) {
-        log_printf("BIOS: el pack pidio la arena y NO HAY "
-                   "(ni packRam ni SQLite en el ENV, o no cupo — mira la linea 'packs:' del arranque)");
-        return 0;
-    }
-    if (bytes) *bytes = (size_t) (s_pack_ram_size - s_pack_ram_estaticos);   /* V7/H6 P3: lo que el pack se llevó, no una constante */
-    return s_pack_ram_base + s_pack_ram_estaticos;
+ * La regla (entero o nada, los códigos) es común: `bpvm_env_get_exacto`. Aquí
+ * sólo se dice DÓNDE está el ENV de un ESP32, que es lo único que cambia entre
+ * familias — y por eso es parámetro de `BPVM_BIOS_TABLA`: una familia que no
+ * lo conectara no compilaría. (La arena, que vivía aquí, es ahora
+ * `bpvm_bios_arena`: con varios motores tiene dueño, y esa regla no puede
+ * tener una copia por familia.) */
+static int bios_env_get(const char* clave, char* buf, size_t cap) {
+    return bpvm_env_get_exacto(board_mgr_env(), clave, buf, cap);
 }
 
 /* ── 3. La tabla, estática: su dirección no cambia y se le puede prestar al
@@ -95,7 +87,7 @@ static const bpvm_bios_t s_bios = BPVM_BIOS_TABLA(
     bios_log,
     bios_malloc, bios_free, bios_realloc,
     bios_localtime,
-    bios_arena);
+    bios_env_get);
 
 /* ── 4. EL ANCLA, pegada a la tabla ──
  *
