@@ -2685,12 +2685,24 @@ sd=spi:2,cs:23                      (la TF de la C5, el día que se use)
   el reloj a la pantalla en silencio.
 - **Quien pida OTRA configuración recibe un error con nombre** —«el SPI 2 es sck 6, mosi 7, miso 8 (ENV
   spi2); pides sck 12»—, y quien pida la MISMA, se engancha.
-- ⚠️ **Propuesta, pendiente de Eduardo: un bus que el ENV NO declara lo establece el primero que lo
-  abre**, con la misma regla desde ese momento. Por dos razones: los samples y los programas de protoboard
-  abren `Spi.Bus(0, 2, 3, 4, …)` con sus pines (un sensor en pines libres no es un dato de placa), y la
-  línea `sd=sck:34,mosi:35,miso:36,cs:39,cd:40` de la Metro lleva los pines dentro y así sigue valiendo
-  tal cual. Si lo estableció un programa, la configuración se va con su fin de RUN (como sus pines); si
-  lo estableció el ENV o un pack, se queda.
+- **Un bus que el ENV NO declara está LIBRE: lo establece el primero que aparece** (Eduardo: *«si no se
+  declara en el ENV, la asignación de pines está libre; queda disponible para el primero que aparezca»*),
+  y desde ese momento rige la misma regla. Así siguen valiendo los samples y los montajes de protoboard
+  (`Spi.Bus(0, 2, 3, 4, …)` con sus pines: un sensor en pines libres no es un dato de placa) y la línea
+  `sd=sck:34,mosi:35,miso:36,cs:39,cd:40` de la Metro, que lleva los pines dentro.
+- **Y se puede LIBERAR** (Eduardo: *«también debería poder liberarse; aunque no es habitual, podría darse
+  el caso»*): `bus.release()`, como el `Pin.release()` que ya existe. Suelta la configuración y los pines
+  para que otro establezca otra. Con tres reglas:
+  - sólo un bus que NO declara el ENV: el de la placa son las pistas del circuito, y se «libera» quitando
+    su línea (liberarlo desde un programa es un error con nombre, no un no-op);
+  - sólo si nadie más lo usa: con un pack o la TF enganchados, error con el nombre de quién;
+  - el fin de RUN libera lo que estableció el programa, igual que sus pines; lo que estableció un pack o el
+    firmware se queda.
+- **`-1` en un pin quiere decir «el que tenga el bus»**: un dispositivo (la pantalla, la TF, un programa)
+  usa un bus declarado sin repetir sus pines, y el MISO a -1 de la pantalla («no lo uso») casa con un bus
+  que sí lo tiene. Con el bus sin establecer hay que dar al menos SCK y MOSI (en I2C, SDA y SCL).
+- **En I2C la configuración incluye la velocidad** (es del bus: la aguantan todos o no vale); **en SPI no**
+  (es de cada dispositivo).
 - Cambia el formato de `G3` antes de publicarlo: `lcd=` pierde `sck`/`mosi`, y `exp=`/`touch=` pierden
   `sda`/`scl`/`khz`.
 
