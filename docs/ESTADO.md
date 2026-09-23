@@ -417,7 +417,8 @@ que es lo que permite la prueba de verdad del árbitro: la TF y la pantalla a la
 está puesta).
 
 ⚠️ Sin medir: la S3 y el P4 con el cierre nuevo del IDE. Las dos ramas fusionadas, borradas con sus worktrees
-(Eduardo); queda el worktree `vigilant-hopper-d8260a`, con trabajo sin commitear de otra sesión: no se toca.
+(Eduardo), y también el worktree `vigilant-hopper-d8260a` (la versión de `#534` con `bpvm_malloc` que Eduardo
+paró para comparar: sobraba con `#534` fusionada; su trabajo sin commitear, copiado antes fuera del repo).
 
 **Estado de las placas**: la C5 con la imagen de `G4.a2` (BIOS v7) y en su zona el `Gui` nuevo y el `DriverSpi` v7
 (en ese orden: el reparto de RAM es el sello, y un pack borrado de DEBAJO no deja su hueco al que se graba
