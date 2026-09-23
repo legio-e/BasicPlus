@@ -579,6 +579,48 @@ norma_caso() {  # $1=etiqueta $2=dir con app+stdlib $3=modulo $4=texto esperado 
     echo "  ok  $et: corre ($(printf '%s' "$oj" | tr '\n' ' ' | cut -c1-60))"
   fi
 }
+# ---------------------------------------------------------------- check-sim
+# V7 (#537, 23-sep) — EL MICRO SIMULADO, EN LA RED. Sus cuatro smokes vivian fuera
+# de toda red y se pudrieron sin que nadie lo viera: `sim-smoke` rojo desde H1 P3
+# (20-sep: el `import Core` implicito, con el sim arrancado sin libreria), el caso
+# GUI de `io-smoke` sin cargar desde el 11-sep y contado como «saltado», y el
+# control de `test-listtrunc` rojo desde U3.24 (31-ago). Y `packs/Stdlib.pack` —lo
+# que el IDE graba en el sim y lo que viaja en el ZIP— era la stdlib del 18-sep.
+# Aqui: la guarda del pack + los cuatro smokes, contra un sim construido AQUI y en
+# su propio binario (build/bpvm-sim-red.exe): el de siempre puede tenerlo abierto
+# el IDE, o ser LVGL/SQLite. Un sim que no compila o un smoke que no acaba en
+# [status=OK] es ROJO; «saltado» solo vale lo que el smoke declara por sabor (el
+# caso GUI de io-smoke, que sin LVGL no bloquea).
+SIM_RED=""   # lo fija check_sim al construirlo; check_sombra lo usa si esta
+check_sim() {
+  echo "-- el micro simulado (#537): la libreria del pack y los cuatro smokes del wire --"
+  local fails=0 sal rc t n sim="$ROOT/bpgenvm-c/build/bpvm-sim-red.exe"
+  bash "$HERE/stdlib_pack.sh" || fails=$((fails+1))
+  if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
+    echo "  ⚠ el host esta compilado CON LVGL: el sim de la red necesita 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
+    return 1
+  fi
+  if ! make -C "$ROOT/bpgenvm-c" sim SIM_OUT=build/bpvm-sim-red.exe >"$WORK/.sim.make.log" 2>&1; then
+    echo "  ✗ el simulador no compila (make sim):"
+    grep -iE "error" "$WORK/.sim.make.log" | head -4 | sed 's/^/       /'
+    return 1
+  fi
+  SIM_RED="$sim"
+  for t in sim_smoke boardsim_smoke io_smoke list_trunc_smoke; do
+    sal="$( cd "$ROOT/bpgenvm-c" && BPVM_SIM="$sim" timeout 300 python "tools/$t.py" 2>&1 )"; rc=$?
+    n="$(printf '%s\n' "$sal" | grep -c '^  ok')"
+    if [ "$rc" -eq 0 ] && printf '%s\n' "$sal" | grep -q '^\[status=OK\]'; then
+      echo "  ok  $t: $n comprobaciones$(printf '%s\n' "$sal" | grep -q 'SALTADA' && printf ' (y una SALTADA que el smoke declara: el sim de la red no lleva LVGL)')"
+    else
+      echo "  ✗ $t (salida $rc, $n ok):"
+      printf '%s\n' "$sal" | grep -E "FAIL|Traceback|Error" | head -6 | sed 's/^/       /'
+      fails=$((fails+1))
+    fi
+  done
+  echo "  sim: $((5 - fails))/5 (el pack y los cuatro smokes)"
+  [ "$fails" -eq 0 ]
+}
+
 # ---------------------------------------------------------------- check-sombra
 # V7/H2 (#493) — LA SOMBRA: el orden de resolucion de modulos, UNO en las dos VMs
 # (Eduardo, 15-sep: «/app -> /lib -> packs; si el principal esta en un pack,
@@ -726,7 +768,9 @@ EOF
     # 12) EL WIRE contra el micro simulado (la cintura de las placas): STAT name= del
     #     principal que solo vive en la zona, RUN por nombre y por pack:, y el overlay
     #     de un pack que no arranca. Ocho comprobaciones en compat/sim_sombra.py.
-    local SIMEXE="$ROOT/bpgenvm-c/build/bpvm-sim.exe"
+    # Dentro de `check`, el sim que acaba de construir check_sim (#537): en un
+    # worktree el de siempre no existe y este caso se saltaba; suelto, el de siempre.
+    local SIMEXE="${SIM_RED:-$ROOT/bpgenvm-c/build/bpvm-sim.exe}"
     if [ -x "$SIMEXE" ]; then
       local sal
       sal="$( python "$HERE/sim_sombra.py" "$SIMEXE" "$S/AppPk.pack" "$STDLIB/Core.mod" AppPk Sombra "VARIANTE:ff" --port=5461 2>&1 )"
@@ -891,9 +935,12 @@ EOF
   check_mod7 || fails=$((fails+1))
   check_fwd  || fails=$((fails+1))
   check_norma || fails=$((fails+1))
+  # #537 — el micro simulado ANTES que la sombra: construye el sim de la red, y el
+  # caso del wire de la sombra lo usa.
+  check_sim || fails=$((fails+1))
   check_sombra || fails=$((fails+1))
   check_mod8 sin-referencia || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sombra + MOD8 VERDE' || echo "$fails frente(s) en ROJO") =="
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + sombra + MOD8 VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -905,6 +952,7 @@ case "${1:-}" in
   check-fwd)  check_fwd ;;
   check-norma) check_norma ;;
   check-sombra) check_sombra ;;
+  check-sim)  check_sim ;;
   check-mod8) check_mod8 ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sombra|check-mod8}"; exit 2 ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-sombra|check-mod8}"; exit 2 ;;
 esac

@@ -6,6 +6,14 @@
 # "Run on Device" contra el sim, así que si esto pasa, el IDE funciona sin placa.
 # No necesita hardware ni el IDE. Sale 0 si todo pasa.
 #
+# EL SIM ARRANCA COMO LO ARRANCA EL IDE: con la librería de packs grabada
+# (`SimRunner`: un --pack= por cada pack de la librería; aquí, packs/Stdlib.pack).
+# Desde H1 P3 (656ec7d5, 20-sep) el parser pone `import Core` en TODO módulo, así
+# que hasta el Hello F1 —sin un solo import escrito— llama a Core.__init: con el FS
+# vacío y sin packs el RUN moría con «falta el modulo 'Core'», y así estuvo este
+# arnés del 20 al 23-sep sin que nadie lo corriera. Que el pack sea la stdlib de
+# HOY lo vigila compat/stdlib_pack.sh; aquí se comprueba por el wire con Core.
+#
 #   python tools/sim_smoke.py
 import json, socket, subprocess, sys, os, time, tempfile, shutil, zlib
 
@@ -18,7 +26,12 @@ ROOT = os.path.join(HERE, "..")
 SIM  = os.path.join(ROOT, "build", "bpvm-sim.exe")
 if not os.path.exists(SIM):
     SIM = SIM[:-4]  # sin .exe (Linux/mac)
+SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
 JAR  = os.path.join(ROOT, "..", "lexer-java", "target", "basicplus-frontend.jar")
+# La librería de packs del IDE (la que autodetecta IdePrefs.packsDirEffective en el
+# repo) y la stdlib canónica con la que se compara lo que el sim sirve.
+STDLIB_PACK = os.path.normpath(os.path.join(ROOT, "..", "packs", "Stdlib.pack"))
+STDLIB_DIR  = os.path.normpath(os.path.join(ROOT, "..", "bpstdlib"))
 
 fails = 0
 def check(cond, msg):
@@ -79,10 +92,14 @@ def build_hello(dest):
     return mod if rc.returncode == 0 and os.path.exists(mod) else None
 
 def main():
+    if not os.path.exists(STDLIB_PACK):
+        print("FAIL: no está la librería de packs (%s): el IDE la graba en el sim" % STDLIB_PACK)
+        return 1
     tmp   = tempfile.mkdtemp(prefix="sim_smoke_")
     flash = os.path.join(tmp, "sim.flash")
     proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash,
-                             "--mem=1M", "--psram=8M", "--flash=4M"],
+                             "--mem=1M", "--psram=8M", "--flash=4M",
+                             "--pack=" + STDLIB_PACK],
                             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     try:
         sock = None
@@ -272,10 +289,23 @@ def main():
         check(r.get("code") == "INVALID_PATH",
               "PUT_BEGIN por encima del tope que queda -> error con nombre, no truncado")
 
-        # 7. RUN: la VM de verdad ejecutando desde el FS del sim
+        # 7. La LIBRERÍA, como la ve el IDE: #466 pregunta a la placa por cada
+        #    dependencia con STAT por nombre, y el resolvedor del RUN contesta. Core
+        #    tiene que venir del pack grabado y ser el de bpstdlib/: un pack rancio
+        #    enlaza a medias («no exporta Core.__cls_new_StringBuilder()»).
+        with open(os.path.join(STDLIB_DIR, "Core.mod"), "rb") as f:
+            core_crc = zlib.crc32(f.read())
+        r = w.call("STAT", name="Core.mod", crc=True)
+        check(r.get("path") == "pack:Stdlib/Core.mod",
+              "STAT Core.mod por nombre → del pack grabado (dice %r)" % r.get("path"))
+        check(r.get("crc") == core_crc,
+              "…y es el Core de bpstdlib/ (crc %s; el de bpstdlib/ %s)" % (r.get("crc"), core_crc))
+
+        # 8. RUN: la VM de verdad ejecutando desde el FS del sim
         mod = build_hello(tmp)
         if mod is None:
-            print("  (skip RUN: no encuentro java o basicplus-frontend.jar)")
+            # Un smoke que no puede hacer su prueba principal no da verde.
+            check(False, "compilar Hello: no encuentro java o basicplus-frontend.jar — el RUN no se prueba")
         else:
             with open(mod, "rb") as f: data = f.read()
             r = w.call_bulk("PUT", data, path="/app/Hello.mod")
@@ -285,7 +315,8 @@ def main():
                   "RUN → RUN_REPLY con sesión")
             text, exited = w.drain_run()
             check(exited is not None and exited.get("status") == "OK",
-                  "EXITED → status OK")
+                  "EXITED → status OK" + ("" if exited is not None and exited.get("status") == "OK"
+                                           else " (dice %s)" % json.dumps(exited, ensure_ascii=False)[:200]))
             nums = [l for l in text.splitlines() if l.strip()]
             check(nums[:3] == ["0", "1", "1"] and nums[-1] == "999",
                   "OUTPUT → la serie de Fibonacci y el 999 final")
@@ -296,13 +327,13 @@ def main():
                   and text2 == text,
                   "2º RUN → misma salida (sin estado arrastrado)")
 
-        # 8. errores limpios
+        # 9. errores limpios
         r = w.call("RUN", path="/app/NoExiste.mod")
         check(r.get("code") == "NOT_FOUND", "RUN de un módulo que no está → NOT_FOUND")
         r = w.call("GET", path="/nope")
         check(r.get("code") == "NOT_FOUND", "GET inexistente → NOT_FOUND")
 
-        # 9. el FS PERSISTE entre conexiones (es una imagen en disco, como la flash)
+        # 10. el FS PERSISTE entre conexiones (es una imagen en disco, como la flash)
         sock.close()
         sock = socket.create_connection(("127.0.0.1", PORT), timeout=5.0)
         sock.settimeout(30.0)

@@ -15,6 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SIM  = os.path.join(HERE, "..", "build", "bpvm-sim.exe")
 if not os.path.exists(SIM):
     SIM = SIM[:-4]  # sin .exe (Linux/mac)
+SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
 
 fails = 0
 def check(cond, msg):

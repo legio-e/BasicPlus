@@ -17,3 +17,6 @@ echo "== ESP32 =="
 bash "$ROOT/esp32/scripts/regen_esp32_mods.sh"
 echo ""
 echo "OK: stdlib embebida regenerada en las 3 familias. Recuerda RECOMPILAR cada firmware."
+# #537 — la CUARTA copia de la stdlib no es un blob: es packs/Stdlib.pack (lo que el IDE
+# graba en el micro simulado y lo que viaja en el ZIP). La cascada de H1 P3 la olvidó.
+echo "Y el pack de la librería:  bash compat/stdlib_pack.sh --regenerar   (la red lo comprueba)"

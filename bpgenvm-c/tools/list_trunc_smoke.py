@@ -7,16 +7,22 @@
 # salia una lista corta y el arbol del IDE la pintaba como si fuera todo. Un
 # listado corto que no se declara corto es una mentira, y de las que se creen.
 #
-# Esta prueba lo fuerza contra el MICRO SIMULADO (tools/bpvm_sim.c), que tiene
-# el mismo agujero y los mismos topes en pequeño (64 dirs / 512 ficheros). No
-# hace falta placa: el camino que recorre es el MISMO que el del IDE.
+# Esta prueba lo fuerza contra el MICRO SIMULADO (tools/bpvm_sim.c). No hace
+# falta placa: desde U3.24 (31-ago) el LIST del sim lo sirve el REPL COMUN
+# (src/bpvm_repl.c), el MISMO codigo que el de las placas, con su tope de
+# directorios pendientes (REPL_LIST_MAX_DIRS, contando la raiz).
 #
-# Trae su CONTROL, que es lo que la hace valer: primero por DEBAJO del tope
-# —donde omitted TIENE que ser 0— y luego por encima. Sin el control, un
-# `omitted` que siempre dijera "faltan cosas" pasaria por bueno.
+# Trae su CONTROL, que es lo que la hace valer: primero JUSTO en el tope
+# —donde omitted TIENE que ser 0—, luego una carpeta mas —la primera que no
+# cabe, y se DECLARA— y luego muy por encima. Sin el control, un `omitted` que
+# siempre dijera "faltan cosas" pasaria por bueno.
+#
+# El tope se LEE del fuente, no se copia: hasta el 23-sep aqui ponia 64 (el del
+# recorredor PROPIO que el sim tenia antes de U3.24) y el control estuvo en rojo
+# tres semanas midiendo contra un tope que ya no era el del listado.
 #
 #   python tools/list_trunc_smoke.py
-import json, socket, subprocess, sys, os, time, tempfile, shutil
+import json, re, socket, subprocess, sys, os, time, tempfile, shutil
 
 try: sys.stdout.reconfigure(encoding="utf-8")   # consola Windows cp1252 -> UTF-8
 except Exception: pass
@@ -27,8 +33,17 @@ ROOT = os.path.join(HERE, "..")
 SIM  = os.path.join(ROOT, "build", "bpvm-sim.exe")
 if not os.path.exists(SIM):
     SIM = SIM[:-4]   # sin .exe (Linux/mac)
+SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
 
-WALK_MAX_DIRS = 64   # tiene que coincidir con tools/bpvm_sim.c
+def tope_del_listado():
+    """REPL_LIST_MAX_DIRS de src/bpvm_repl.c: directorios en la cola del LIST,
+    CONTANDO la raiz "/" (que ocupa el primer hueco). None si no se encuentra."""
+    try:
+        src = open(os.path.join(ROOT, "src", "bpvm_repl.c"), encoding="utf-8").read()
+    except OSError:
+        return None
+    m = re.search(r"#define\s+REPL_LIST_MAX_DIRS\s+(\d+)", src)
+    return int(m.group(1)) if m else None
 
 fails = 0
 def check(cond, msg):
@@ -67,6 +82,11 @@ def listado(w):
     return len(r.get("entries") or []), r.get("omitted")
 
 def main():
+    tope = tope_del_listado()
+    if tope is None or tope < 3:
+        print("FAIL: no encuentro REPL_LIST_MAX_DIRS en src/bpvm_repl.c (el instrumento no sabe contra que medir)")
+        return 1
+    caben = tope - 1   # la raiz ocupa un hueco de la cola
     tmp   = tempfile.mkdtemp(prefix="list_trunc_")
     flash = os.path.join(tmp, "sim.flash")
     proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash,
@@ -84,21 +104,28 @@ def main():
         sock.settimeout(60.0)
         w = Wire(sock)
 
-        # --- CONTROL: por DEBAJO del tope, el listado esta entero ---
-        n1 = WALK_MAX_DIRS // 4
+        print("=== #425 el listado declara lo omitido (tope del LIST comun: %d dirs con la raiz) ===" % tope)
+        # --- CONTROL: JUSTO en el tope, el listado esta entero ---
+        n1 = caben
         carpetas(w, 0, n1)
         ents, om = listado(w)
         check(om is not None,
               "el LIST_REPLY trae el campo 'omitted' (si falta, el listado puede mentir)")
-        check(ents == n1, "control: %d carpetas -> %d entradas" % (n1, ents))
+        check(ents == n1, "control: %d carpetas (justo el tope) -> %d entradas" % (n1, ents))
         check(om == 0, "control: nada fuera de los topes -> omitted=0 (dice %r)" % om)
 
-        # --- EL CASO: por ENCIMA del tope, lo tiene que DECIR ---
-        n2 = WALK_MAX_DIRS + 16
-        carpetas(w, n1, n2)
+        # --- LA FRONTERA: una mas, y la primera que no cabe se DECLARA ---
+        carpetas(w, n1, n1 + 1)
+        ents, om = listado(w)
+        check(ents == n1 and om == 1,
+              "una carpeta mas -> %d listadas y omitted=1 (dice %d y %r)" % (n1, ents, om))
+
+        # --- EL CASO: muy por ENCIMA del tope, lo tiene que DECIR ---
+        n2 = tope + 16
+        carpetas(w, n1 + 1, n2)
         ents, om = listado(w)
         check(om and om > 0,
-              "pasado el tope de %d dirs, lo DECLARA (omitted=%r)" % (WALK_MAX_DIRS, om))
+              "pasado el tope de %d dirs, lo DECLARA (omitted=%r)" % (tope, om))
         check(ents + (om or 0) == n2,
               "la cuenta CUADRA: %d listadas + %s omitidas = %d creadas"
               % (ents, om, n2))
