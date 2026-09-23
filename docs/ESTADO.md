@@ -250,6 +250,44 @@ lo cargue — un log de un solo arranque de tres minutos me hizo creer que no ca
 ESP32, la Pico, las dos STM32, el host y el simulador. La Metro no estaba: su cargador se compiló pero
 los varios motores se probaron en la familia ESP32.
 
+## 🖥️ H6.c `G2` (23-sep, tarde) — EL DRIVER DE PANTALLA EN SU PROPIO PACK (falta mirarlo)
+
+Eduardo dio el visto bueno con dos aportaciones antes de programar: el nombre (*«¿cuando hablas de
+paneles es a lo que yo llamaba drivers?»* — sí, y todo pasó a llamarse **driver**: `bpstdlib/gui/drivers/`)
+y el orden RGB y los bits de menos, que dieron el símbolo opcional **`formato`** de `'PANT'` (RGB565,
+RGB565 girado, RGB888; el orden RGB/BGR es un bit de MADCTL y no toca el contrato). Commit `84acbe0c`;
+detalle en `V7_IDEAS` §H6.9.
+
+**En placa**: la C5 con `Gui.pack` (sin driver) + `DriverC5.pack` → `GuiFlushBench` **144/1 ms**, igual
+que antes, y el log del driver arrancando paso a paso; sin el driver, `Gui.Screen()` dice «GUI: no hay
+driver de pantalla ('PANT'): graba el pack del driver de esta placa». El P4 con SQLite + LVGL +
+`DriverNulo` a la vez: `GuiPack` «las dos vivas», `SqlDemo` == host. ⚠️ **Falta VERLO**: Eduardo estaba
+fuera y la pantalla y el táctil de la C5 no se han mirado.
+
+**El fallo del día, y enseña**: la C5 se reiniciaba en el `init` del driver. Con la consola por USB
+(la receta de ayer): «Load access fault» en `di()` leyendo `g_bios`. El driver no tiene NINGUNA variable
+inicializada, así que no hay `.data`, `-Tdata` no colocó nada y su `.sbss` quedó en la flash —y
+`NpackReloc` lo realojó como flash, EN SILENCIO—. Arreglado por los dos lados (`npk.ld` + la
+comprobación que lo rechaza con nombre). El mini no lo había cazado porque sí tiene datos.
+
+**Redes**: `test-guipack` (con y sin `'PANT'`), `compat check` VERDE, IDE reconstruido; las cinco ESP32
+siguen como en `G1` (sólo cambió la C5).
+
+## ⏭️ Traspaso (23-sep, tarde) — `G2` hecho, **falta mirarlo en la C5**; lo siguiente: `G3`
+
+**Lo primero al volver Eduardo**: mirar la C5 —`GuiShot` ya dejó pintada su pantalla (una etiqueta, el
+botón «Pulsa», la casilla «Activo» marcada y el deslizador al 70 %)— y correr `C5Touch` pulsando el
+botón. Si sale bien, `G2` se marca ✅ en `FICHAS`; si los colores salen cambiados, el sitio es el giro
+de bytes, que pasó del driver a `pant_lvgl.c` (`formato` RGB565_BE).
+
+**Lo siguiente es `G3`**: el driver genérico MIPI-DCS por perfil, con la C6 de oráculo (también pide
+mirar una pantalla). ⚠️ **Lo que muerde**: un motor nuevo sin variables inicializadas se enlaza con
+`npk.ld` (los drivers ya lo hacen; si otro pack se queda sin `.data`, `NpackReloc` lo dirá).
+
+**Estado de las placas**: la C5 con la imagen de hoy (consola otra vez sólo en UART0) y, en su zona,
+`Gui` + `DriverC5` vivos (los viejos `Gui` y `Mini` borrados; ENV `packRam=512`, `log=1`); el P4 con
+`SQLite` + `Gui` + `DriverNulo` vivos (el `Gui` viejo borrado). Sin push.
+
 ## ⏭️ Traspaso (23-sep, mediodía) — `G1` de `H6.c` cerrado; **lo siguiente: `G2` (`'PANT'`)**
 
 `G1` cerrado con el criterio de §7.8 cumplido en las dos placas. **Lo siguiente es `G2`**: el contrato

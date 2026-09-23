@@ -2464,3 +2464,74 @@ los dos; el IDE lo dice ANTES de grabar («no cabe: el motor 'lvgl' pide 383 KB 
 
 **Lo siguiente es `G2`**: `'PANT'` —el contrato, `busca()` perezoso desde LVGL— y `panel_c5.c` a su propio
 `npk`. Ya se puede: dos motores conviven, cada uno con su RAM.
+
+### 9. `G2` hecho (23-sep): el driver de pantalla SALE del pack de LVGL
+
+**La C5 funciona con DOS packs** —`Gui.pack` (LVGL, sin driver) y `DriverC5.pack`— y da lo mismo que
+antes: `GuiFlushBench` **144 ms** la pantalla entera y **1 ms** una etiqueta (commit `84acbe0c`). El
+P4 carga a la vez SQLite, LVGL y el driver nulo (`GuiPack` «las dos vivas», `SqlDemo` == host).
+⚠️ **Falta VERLO**: la
+pantalla y el táctil de la C5 no se han mirado (Eduardo estaba fuera). El camino del píxel es el mismo
+que el 22-sep —girar los bytes y luego `CASET`/`RASET`/`RAMWR` y los datos, en ese orden—, sólo que
+repartido entre dos packs; pero no se ha visto, y no se da por visto.
+
+#### 9.1 Dos aportaciones de Eduardo antes de programar
+
+1. **«Cuando hablas de paneles, ¿es a lo que yo llamaba drivers?»** Sí — y su palabra era la buena:
+   en §7.2 «panel» es UNA de las cuatro capas (tamaño, inversión, desfase), y llamar así al pack entero
+   chocaba con ella. Todo pasó a llamarse **driver de pantalla**: `bpstdlib/gui/drivers/<placa>/`,
+   `DriverC5.pack`, `DriverNulo.pack`. La marca `'PANT'` (de *pantalla*) se queda.
+2. **«En algunas placas el orden RGB va cambiado, y en otras algunos colores usan menos bits por falta
+   de pines: ¿lo soportamos?»** Hoy no: los cuatro drivers fijan RGB y 16 bits, porque nuestras cuatro
+   pantallas son así. Pero cada caso tiene su sitio:
+
+   | caso | quién lo resuelve | toca `'PANT'` |
+   |---|---|---|
+   | orden RGB/BGR | el driver: un bit de MADCTL en los controladores por SPI (lo hace el chip, gratis); en `G3`, un campo del perfil | no |
+   | bus paralelo con menos pines (RGB/DPI/LTDC) | el periférico y el cableado; el driver de la imagen (`G5`) | no |
+   | controlador que no admite 16 bits por su interfaz (el ILI9488 por SPI: sólo 18) | **LVGL pinta en 24 bits** y el chip se queda con los 6 altos de cada byte — como el driver MIPI genérico del propio LVGL | **sí** |
+
+   De ahí el símbolo opcional **`formato`**: `RGB565` (sin publicar, lo de un LTDC o un DSI),
+   `RGB565_BE` (bytes girados, lo de cualquier controlador por SPI) o `RGB888`. Nuestro LVGL ya trae
+   compilado el pintado en 24 bits (`LV_DRAW_SW_SUPPORT_RGB888`). Y de paso **el giro de bytes pasó
+   del driver al lado de LVGL**, con su rutina: el driver ya no sabe de LVGL y sólo manda bytes.
+
+#### 9.2 Lo que hay ahora
+
+- **El contrato** (`bpgenvm-c/include/bpvm_pant.h`), publicado POR NOMBRE como `'LVGL'` y `'SQLI'`:
+  `init`, `size` (tiene que contestar ANTES de `init`: `gui.c` pregunta el tamaño antes del screen) y
+  `flush` obligatorias; `rotate` (0 = girado, -1 = no sabe, y la resolución no se toca), `touch` y
+  `formato` opcionales. La versión es una puerta EXACTA, y por eso sólo sube si cambia la firma de algo
+  que existe: añadir una opcional no la toca. Se quitaron `open` y `backlight` del diseño de §7.3:
+  nadie los llamaba, y añadirlos luego no rompe nada.
+- **El pack de LVGL no lleva driver** (`pant_lvgl.c`): busca `'PANT'` en el PRIMER USO —el orden de los
+  packs da igual—, y allí viven el display, los búferes (11 520 B, las 24 líneas de siempre a 240 px en
+  RGB565), el formato, el táctil como `lv_indev` y el reloj. **Es el mismo pack para todas las placas
+  de una ISA**: se compila tres veces y ya.
+- **Los drivers, cada uno en su pack**: `DriverC5` (2 364 B de código, 8 B de estáticos; los pines
+  siguen escritos dentro — sacarlos a un perfil es `G3`) y `DriverNulo` (468 B: la PLANTILLA mínima,
+  sólo las tres obligatorias). **Se construyen con UNA orden**: `build_driver.sh <driver> <destino>`
+  deja el `.npk` y el `.pack` — el primer trozo del entregable «plantilla + script + docs» de §7.9.
+- **Sin driver, error CON NOMBRE**: `Gui.Screen()` lanza «GUI: no hay driver de pantalla ('PANT'):
+  graba el pack del driver de esta placa» en vez de una pantalla negra. Corto a propósito: el detalle
+  del EXITED que ve quien ejecuta recorta a 90 caracteres con la clase delante, y la primera versión
+  llegaba como «…graba el pack del dri».
+- **`wire_serie.py packdel <pack>`** (borrar uno suelto, que en el P4 hace falta para conservar SQLite)
+  y `packs` marca los BORRADOS.
+
+#### 9.3 El fallo del camino: un motor sin `.data` se enlazaba MAL, y en silencio
+
+La C5 se reinició en el `init` del driver. Con la copia USB de la consola (la receta de ayer) salió
+**«Load access fault»**, y `addr2line` sobre el ELF del driver lo puso en `di()`, leyendo `g_bios`:
+el driver no tiene NINGUNA variable inicializada, así que no hay `.data`, `-Tdata=0x20000000` no tiene
+a quién colocar, y su `.sbss` se quedó en `0x193c`, pegada al código. `NpackReloc` clasifica por
+dirección, así que `g_bios` se realojó **como si fuera flash**: lo que el driver guardaba no llegaba a
+ninguna parte (en `bp_pack_init` no se notó porque el compilador reutilizó el valor en un registro).
+Arreglado por los dos lados: los drivers se enlazan con **`bpgenvm-c/tools/npk.ld`**, que pone la RAM
+en `0x20000000` aunque no haya `.data`, y **`NpackReloc` rechaza con nombre** una sección de RAM por
+debajo del umbral o una de flash por encima — probado: el driver mal enlazado ya no construye. El mini,
+SQLite y LVGL no lo tenían (todos tienen `.data`), y el mini sale idéntico. Es «un control descarta lo
+que ejercita»: el mini no lo cazó porque sí tiene datos inicializados.
+
+**Lo siguiente es `G3`**: el driver genérico MIPI-DCS por perfil, con la C6 de oráculo (y ahí también
+hará falta mirar la pantalla).
