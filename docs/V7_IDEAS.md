@@ -2887,7 +2887,11 @@ configuración— y la velocidad sólo se cambia si es otra que la actual).
 - **El segundo programa de GUI hereda el FONDO del anterior**: el `reset` de `gui.c` limpia los widgets de
   la pantalla pero no su estilo, y `GuiFlushBench` la deja azul oscuro (las etiquetas del siguiente cuestan
   de leer). No es del árbitro —el segundo programa vuelca igual, 149 ms— y hasta hoy no se veía: cada `run`
-  reiniciaba la C5. En miVM cada ejecución empieza con el modelo limpio. Se arregla aparte.
+  reiniciaba la C5. En miVM cada ejecución empieza con el modelo limpio. **Arreglado el mismo día**: al
+  terminar un programa, `bpvm_gui_reset` estrena una pantalla NUEVA (el tema, las banderas de fábrica, sin
+  callbacks: un `onClick` en la pantalla también sobrevivía) y borra la del programa con todo lo suyo. Va en
+  `gui.c`, dentro del pack de LVGL (los dos `.npk` regenerados) y de las imágenes con GUI. En la C5,
+  `GuiFlushBench` y después `C5Touch` en el mismo arranque: fondo blanco y el botón responde (Eduardo).
 - `sim-smoke` sigue rojo en `main`: su arreglo (`#537`, `21fbfb28`) está en una rama sin fusionar.
 
 **Lo que queda, a sabiendas:**

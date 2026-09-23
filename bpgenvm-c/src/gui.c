@@ -1392,8 +1392,22 @@ void bpvm_gui_reset(void) {
 #ifdef BPVM_LVGL
     /* La pantalla se queda LIMPIA: los widgets eran del programa que acaba de
      * terminar. Dejarlos pintados es lo que hacía que el siguiente RUN dibujara
-     * encima de los anteriores. */
-    if (bpvm_gui_lvgl_window_open()) lv_obj_clean(lv_screen_active());
+     * encima de los anteriores.
+     *
+     * Y ENTERA (V7/H6.c, 23-sep): limpiar sólo los HIJOS dejaba lo que el programa
+     * le había puesto a la pantalla MISMA —la del panel, la misma para todos—: el
+     * fondo de GuiFlushBench dejaba las etiquetas del siguiente programa casi sin
+     * leer (visto en la C5 al correr dos programas en el mismo arranque: hasta ese
+     * día cada `run` reiniciaba la placa), y un onClick en la pantalla le habría
+     * mandado al siguiente clics de un objeto que ya no existe; igual una bandera
+     * (oculta, sin scroll). miVM empieza cada ejecución con el modelo limpio: aquí,
+     * una pantalla NUEVA —el tema, las banderas de fábrica, sin callbacks— y la del
+     * programa, fuera con todo lo suyo. */
+    if (bpvm_gui_lvgl_window_open()) {
+        lv_obj_t* vieja = lv_screen_active();
+        lv_screen_load(lv_obj_create(NULL));
+        lv_obj_delete(vieja);
+    }
 #endif
 }
 
