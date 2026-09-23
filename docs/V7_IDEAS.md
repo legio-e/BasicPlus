@@ -2628,7 +2628,7 @@ los tres. El `.seq` que usa es el de verdad, el que va en el pack.
   fachada SPI con DMA (§7.11)— y **`G5`** —el P4 y la DK2 publicando `'PANT'` desde la imagen—; y, para
   cerrar, el entregable de §7.9: plantilla + script + **la documentación de usuario** de estas líneas.
 
-### 11. `G4` rediseñado (23-sep, noche): el bus es COMPARTIDO; lo exclusivo es el dispositivo
+### 11. `G4` rediseñado (23-sep, mañana): el bus es COMPARTIDO; lo exclusivo es el dispositivo
 
 > Eduardo, sobre la pregunta 5 de §7.7 (yo proponía «el bus, con dueño, como los pines»): *«Los buses
 > SPI e I2C son buses que muchas veces comunican con varios periféricos. En el SPI el que sí es de uso
@@ -2751,3 +2751,48 @@ la prueba de verdad es la C5 con la TF y la pantalla A LA VEZ: un programa escri
 | **G4.a2** | los dispositivos y el árbitro; la BIOS v7; `DriverSpi` con el formato nuevo | la cinta con dos hilos (y su control); la C5 con la TF y la pantalla a la vez |
 | **G4.a3** | `Spi.Device` en BP (y el `writeRead` de I2C), con paridad | samples en las dos VM |
 | **G4.b** | el DMA en la cintura del ESP32 (§7.11) | los 144 ms bajando |
+
+#### 11.7 `G4.a1` hecho (23-sep, mediodía): el bus, UNA configuración — en las cinco familias
+
+**En la C5**: el ENV declara `spi2=sck:6,mosi:7,miso:8` e `i2c0=sda:0,scl:1,khz:400` y el arranque lo dice
+(«bus: SPI 2 de la placa (ENV spi2): sck 6, mosi 7, miso 8»); la pantalla —`DriverSpi` con las líneas sin
+pines de bus— se engancha y da lo mismo (145/1 ms). Y `samples/C5Bus.bp` lo prueba con la pantalla VIVA:
+un programa se engancha al SPI 2 (con -1) y la etiqueta sigue a 1 ms antes y después —hasta hoy esa
+apertura le reabría el bus a la pantalla—; pedir otros pines, un `Gpio.Pin(6)` o soltar el bus de la placa
+dan su error con nombre; y el programa lee el CH32 por el mismo I2C 0 que usan el expansor y el táctil.
+Commit `05615664`.
+
+**Lo que hay:**
+- **`bpvm_bus.c`, en la HAL BP**: la tabla de buses con la regla de §11.2 —la configuración la establece el
+  ENV o el primero; otra es un error con nombre; -1 en un pin = el del bus; `release()`; el fin de RUN
+  suelta lo del programa— y los pines de cada bus reservados en la tabla de H4 («el pin 6 es del SPI 2»).
+- **Las fachadas `spi.c`/`i2c.c` son la puerta de los TRES usuarios** —los builtins (el programa), la BIOS
+  (los packs) y la TF (`bpvm_sd.c`, el firmware)—, y **la cintura se partió en abrir / ajustar / cerrar**:
+  abre el bus UNA vez. En las tres cinturas (la ESP32 —S3, C3, C5, C6, P4—, la Pico y el STM32), y cada
+  familia lee `spiN=`/`i2cN=` al arrancar (el STM32 ganó un lector de texto del ENV); también el simulador
+  del IDE. De paso la Pico dejó de pasarle un `-1` al configurar los pines (el MISO de una pantalla).
+- **BP**: `Spi.Bus.release()`, `I2c.Bus.release()` y `Spi.release(bus)`/`I2c.release(bus)` (builtins 256 y
+  257), sin destructor A PROPÓSITO: dos `Bus` del mismo id son el MISMO bus, y que el recolector se llevara
+  uno cerraría el del otro. **miVM lleva la misma regla y los mismos textos**: `samples/BusCompartido.bp`,
+  en el corpus de paridad (93/93).
+- **La TF**: `sd=bus:2,cs:23` (la forma corta: los pines, los del bus); la larga de la Metro sigue valiendo.
+  Un bus sin MISO o con otra configuración es un peldaño nuevo de su escalera (`E_BUS`), con el porqué.
+- **`DriverSpi`**: las líneas de dispositivo pierden los pines del bus —un `sck` en `lcd=` es «es del bus: va
+  en su linea spiN=»—, pide -1 a la BIOS, y `estado` avisa si falta la línea del bus.
+- **Se prueba**: `make test-bus` (la regla entera contra una cintura que CUENTA aperturas y cierres —el fallo
+  de antes—), `test-driverspi` con el formato nuevo, la paridad, y las ocho imágenes compiladas.
+
+**Por el camino**, y se cuenta porque es el patrón del mes: `test-sd` y `test-blk` no enlazaban desde #478 y
+H4 —fuera de las redes, nadie lo vio; ya enlazan y pasan—, y `sim-smoke` falla también SIN estos cambios (el
+simulador arranca con el FS vacío y no encuentra `Core`): comprobado en `HEAD` y apuntado aparte. Y un
+agujero pequeño de H4: `Gpio.release(9)` —o el destructor de un `Pin(9)` que había fallado— le quitaba a un
+pack su pin DC; ahora `release()` sólo suelta lo del programa.
+
+**Lo que queda, a sabiendas:**
+- **UN ajuste por bus hasta `G4.a2`**: si la pantalla (40 MHz) y la TF (20 MHz) comparten el SPI, manda el
+  último que abrió. Que cada dispositivo lleve su velocidad y su modo en cada transacción es el árbitro.
+- **Tres drivers de imagen no pasan por la HAL BP**: el táctil del P4 (I2C 0), la pantalla del C6 (SPI 2,
+  con DMA) y el táctil de la Discovery (I2C 2). Con ellos, un programa que abra ese bus recibe ahora «no se
+  pudo abrir» (antes, un -1 mudo); si lo abre ANTES que la GUI, el `ESP_ERROR_CHECK` de la imagen reinicia
+  la placa, como antes. Se arregla cuando esos drivers salgan de la imagen o se registren (`H6.b`, `G5`).
+- En el STM32 el I2C sigue fijo a 100 kHz (deuda anterior): un `i2cN=…,khz:400` hoy va a 100.

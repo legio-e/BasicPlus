@@ -250,7 +250,7 @@ lo cargue — un log de un solo arranque de tres minutos me hizo creer que no ca
 ESP32, la Pico, las dos STM32, el host y el simulador. La Metro no estaba: su cargador se compiló pero
 los varios motores se probaron en la familia ESP32.
 
-## 🖥️ H6.c `G2` (23-sep, tarde) — EL DRIVER DE PANTALLA EN SU PROPIO PACK (falta mirarlo)
+## 🖥️ H6.c `G2` (23-sep, mañana) — EL DRIVER DE PANTALLA EN SU PROPIO PACK (falta mirarlo)
 
 Eduardo dio el visto bueno con dos aportaciones antes de programar: el nombre (*«¿cuando hablas de
 paneles es a lo que yo llamaba drivers?»* — sí, y todo pasó a llamarse **driver**: `bpstdlib/gui/drivers/`)
@@ -273,7 +273,7 @@ comprobación que lo rechaza con nombre). El mini no lo había cazado porque sí
 **Redes**: `test-guipack` (con y sin `'PANT'`), `compat check` VERDE, IDE reconstruido; las cinco ESP32
 siguen como en `G1` (sólo cambió la C5).
 
-## 🖥️ H6.c `G3` (23-sep, noche) — EL DRIVER GENÉRICO: la C5 funciona sin una línea de C (falta mirarlo)
+## 🖥️ H6.c `G3` (23-sep, media mañana) — EL DRIVER GENÉRICO: la C5 funciona sin una línea de C (falta mirarlo)
 
 Eduardo aprobó el diseño con un cambio de cliente (*«OK, la C5 primero»*): el C6 no puede cargar todavía el
 pack de LVGL, y la C5 tenía su `DriverC5` para comparar. Commit `f78cb29b`; detalle en `V7_IDEAS` §H6.10.
@@ -299,7 +299,40 @@ comandos (RAMCTRL cambia de sitio: ahora es del `.seq`); más los desfases del C
 grabada (es la única que compila esa costura: el P4 no lleva `BPVM_GUI_PACK`), `driver_c5.npk` idéntico
 tras tocar sólo su comentario.
 
-## ⏭️ Traspaso (23-sep, noche) — `G3` hecho, **falta mirar la C5** (y con eso `G2`); lo siguiente: `G4`
+## 🚌 H6.c `G4.a1` (23-sep, mediodía) — EL BUS, UNA CONFIGURACIÓN: compartido, en las cinco familias
+
+El diseño salió de tres aportaciones de Eduardo (`V7_IDEAS` §H6.11): el bus se COMPARTE y lo exclusivo es el
+dispositivo; el árbitro va en la HAL BP; los pines del bus van en el ENV, y quien pida otros recibe un error
+(y si el ENV no lo declara, el primero que aparece; y se puede liberar). Commit `05615664`; detalle en §H6.11.7.
+
+**Lo que hay**: `bpvm_bus.c` (la regla y los pines reservados), las fachadas SPI/I2C como puerta de los tres
+usuarios, la cintura partida en abrir/ajustar/cerrar en las tres familias, `spiN=`/`i2cN=` leídos al
+arrancar (y en el simulador), `release()` en BP con la misma regla en miVM, la forma corta de `sd=`, y
+`DriverSpi` con las líneas sin pines de bus.
+
+**En placa (la C5)**: el arranque declara sus dos buses; 145/1 ms con el driver nuevo; `C5Bus.bp`: con la
+pantalla viva, un programa se engancha al SPI 2 y la etiqueta sigue a 1 ms; los errores con nombre; y el
+programa lee el CH32 por el I2C 0 compartido. **Redes**: `test-bus` nueva, `test-driverspi`, `test-guipack`,
+`test-sd`/`test-blk`/`test-sdsc` (las dos primeras no enlazaban desde #478/H4), paridad 93/93 con
+`BusCompartido.bp`, y las ocho imágenes compiladas (S3, C3, C5, C6, P4, Pico, Nucleo, Discovery).
+⚠️ `sim-smoke` falla, pero ya fallaba en `HEAD` (el simulador no encuentra `Core`): apuntado aparte.
+
+## ⏭️ Traspaso (23-sep, mediodía) — `G4.a1` hecho; lo siguiente: `G4.a2` (el árbitro)
+
+**Lo primero al volver Eduardo**, lo de antes: la C5 con `C5Touch` en marcha para mirar colores y pulsar
+(cierra `G2` y `G3`). Su ENV ya está en el formato de `G4.a1` (`spi2=`, `i2c0=` y las líneas sin pines de
+bus); el pack `DriverSpi` grabado es el nuevo.
+
+**Lo siguiente es `G4.a2`**: el árbitro —un mutex por bus en la HAL BP, un dispositivo por CS con su
+velocidad y su modo aplicados en cada transacción (hoy hay UN ajuste por bus: manda el último que abrió), la
+BIOS v7 con «tomar / transferir / soltar»— y su prueba de dos hilos contra la cinta, con control. Después
+`G4.a3` (`Spi.Device`) y `G4.b` (el DMA). ⚠️ Quedan tres drivers de IMAGEN fuera de la HAL BP (táctil del P4,
+pantalla del C6, táctil de la Discovery): si un programa abre su bus antes que la GUI, la placa se reinicia
+como antes (§H6.11.7).
+
+**Estado de las placas**: la C5 con la imagen de `G4.a1`; el resto sin grabar (sólo compiladas). Sin push.
+
+## ⏭️ Traspaso (23-sep, mañana) — `G3` hecho, **falta mirar la C5** (y con eso `G2`); lo siguiente: `G4`
 
 **Lo primero al volver Eduardo**: la C5 quedó con `C5Touch` en marcha —«toca el boton», el botón «PULSA»
 y «pulsaciones: 0»—. Mirar los colores (el azul del botón; si sale verdoso o rojizo, el giro de bytes, que
@@ -321,7 +354,7 @@ cabecera de `driver_spi.c`).
 `DriverSpi` vivos (`DriverC5` y los viejos, borrados); en su ENV, `packRam=512`, `log=1` y las tres líneas
 de la pantalla. El P4 sin cambios desde `G2`. Sin push.
 
-## ⏭️ Traspaso (23-sep, tarde) — `G2` hecho, **falta mirarlo en la C5**; lo siguiente: `G3`
+## ⏭️ Traspaso (23-sep, mañana) — `G2` hecho, **falta mirarlo en la C5**; lo siguiente: `G3`
 
 **Lo primero al volver Eduardo**: mirar la C5 —`GuiShot` ya dejó pintada su pantalla (una etiqueta, el
 botón «Pulsa», la casilla «Activo» marcada y el deslizador al 70 %)— y correr `C5Touch` pulsando el
@@ -336,7 +369,7 @@ mirar una pantalla). ⚠️ **Lo que muerde**: un motor nuevo sin variables inic
 `Gui` + `DriverC5` vivos (los viejos `Gui` y `Mini` borrados; ENV `packRam=512`, `log=1`); el P4 con
 `SQLite` + `Gui` + `DriverNulo` vivos (el `Gui` viejo borrado). Sin push.
 
-## ⏭️ Traspaso (23-sep, mediodía) — `G1` de `H6.c` cerrado; **lo siguiente: `G2` (`'PANT'`)**
+## ⏭️ Traspaso (23-sep, primera hora) — `G1` de `H6.c` cerrado; **lo siguiente: `G2` (`'PANT'`)**
 
 `G1` cerrado con el criterio de §7.8 cumplido en las dos placas. **Lo siguiente es `G2`**: el contrato
 `'PANT'`, el `busca()` perezoso desde LVGL y `panel_c5.c` a su propio `npk` —ya se puede: dos motores
