@@ -273,6 +273,50 @@ comprobación que lo rechaza con nombre). El mini no lo había cazado porque sí
 **Redes**: `test-guipack` (con y sin `'PANT'`), `compat check` VERDE, IDE reconstruido; las cinco ESP32
 siguen como en `G1` (sólo cambió la C5).
 
+## 🖥️ H6.c `G3` (23-sep, noche) — EL DRIVER GENÉRICO: la C5 funciona sin una línea de C (falta mirarlo)
+
+Eduardo aprobó el diseño con un cambio de cliente (*«OK, la C5 primero»*): el C6 no puede cargar todavía el
+pack de LVGL, y la C5 tenía su `DriverC5` para comparar. Commit `f78cb29b`; detalle en `V7_IDEAS` §H6.10.
+
+**Lo que hay**: `DriverSpi` (`bpstdlib/gui/drivers/spi/`), un driver para cualquier MIPI-DCS por SPI. La
+placa va en el ENV, una línea por dispositivo (`lcd=`, `exp=`, `touch=`, con el formato de `sd=`), y el
+controlador en un `.seq` de texto dentro del pack (`st7789.seq`: SLPOUT y RAMCTRL; lo de la placa lo pone el
+driver). El desfase por giro sale de `ram` y `off`. `'PANT'` gana `estado` (opcional): la VM lo pregunta en
+el primer `Gui.Screen()`, y una errata del ENV llega al programa con nombre.
+
+**En placa (la C5, con la imagen de hoy)**: `DriverC5` borrado, `DriverSpi` grabado y las tres líneas en
+el ENV → `GuiFlushBench` **144/1 ms** (con `DriverC5`, 145/1); el log lo enseña leyendo el ENV y su `.seq`
+desde su propio pack; quitando `dc`, `Core.RuntimeError: GUI: pantalla: ENV lcd: falta 'dc'`; y el táctil
+contesta (10 s sin aviso con 0x58, y el control con 0x59 da «el tactil no contesta» a los 178 ms).
+⚠️ **Falta VERLO**: la pantalla y pulsar — Eduardo estaba fuera.
+
+**Cómo se sabe que manda lo mismo que `DriverC5`**: `make test-driverspi` ejecuta los dos drivers contra
+una BIOS que graba los cables. Volcado, giros y táctil byte a byte iguales; el arranque con los mismos seis
+comandos (RAMCTRL cambia de sitio: ahora es del `.seq`); más los desfases del C6 y de las 135×240, el
+`.seq` de un usuario y 17 erratas con nombre. Con CONTROL: tres sabotajes, los tres cazados.
+
+**Redes**: `test-driverspi` nueva, `test-guipack` con el caso de `estado`, la imagen de la C5 compilada y
+grabada (es la única que compila esa costura: el P4 no lleva `BPVM_GUI_PACK`), `driver_c5.npk` idéntico
+tras tocar sólo su comentario.
+
+## ⏭️ Traspaso (23-sep, noche) — `G3` hecho, **falta mirar la C5** (y con eso `G2`); lo siguiente: `G4`
+
+**Lo primero al volver Eduardo**: la C5 quedó con `C5Touch` en marcha —«toca el boton», el botón «PULSA»
+y «pulsaciones: 0»—. Mirar los colores (el azul del botón; si sale verdoso o rojizo, el giro de bytes, que
+está en `pant_lvgl.c`) y pulsar: el contador de la pantalla tiene que subir. Sirve sin el PC; abrir el
+puerto REINICIA la C5 y se lleva el programa. Si todo va, `G2` y `G3` se marcan ✅ en `FICHAS`. Para volver
+a `DriverC5`: `packdel DriverSpi` y grabar `bpstdlib/gui/drivers/c5/out/DriverC5.pack` (con las líneas del
+ENV puestas no molesta: `DriverC5` no las lee).
+
+**Lo siguiente es `G4`**: el bus con dueño (la TF de la C5 cuelga del mismo SPI que la pantalla) y la
+fachada SPI con DMA (`V7_IDEAS` §7.11: la palanca de los 144 ms). Queda también `G5` y, para cerrar
+`H6.c`, la documentación de usuario de las líneas `lcd=`/`exp=`/`touch=` (hoy la referencia está en la
+cabecera de `driver_spi.c`).
+
+**Estado de las placas**: la C5 con la imagen de hoy (la que pregunta `estado`) y, en su zona, `Gui` +
+`DriverSpi` vivos (`DriverC5` y los viejos, borrados); en su ENV, `packRam=512`, `log=1` y las tres líneas
+de la pantalla. El P4 sin cambios desde `G2`. Sin push.
+
 ## ⏭️ Traspaso (23-sep, tarde) — `G2` hecho, **falta mirarlo en la C5**; lo siguiente: `G3`
 
 **Lo primero al volver Eduardo**: mirar la C5 —`GuiShot` ya dejó pintada su pantalla (una etiqueta, el

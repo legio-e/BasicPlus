@@ -2535,3 +2535,95 @@ que ejercita»: el mini no lo cazó porque sí tiene datos inicializados.
 
 **Lo siguiente es `G3`**: el driver genérico MIPI-DCS por perfil, con la C6 de oráculo (y ahí también
 hará falta mirar la pantalla).
+
+### 10. `G3` hecho (23-sep): el driver GENÉRICO — la C5 funciona sin una línea de C
+
+**La C5 pinta con `DriverSpi` y tres líneas de ENV**, sin su driver de placa: `DriverC5` borrado de la
+zona, `DriverSpi.pack` grabado, y
+
+    lcd=st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv
+    exp=ch32,i2c:0,sda:0,scl:1,addr:0x24
+    touch=cst3530,addr:0x58,rst:x0
+
+`GuiFlushBench` da **144 ms** la pantalla entera y **1 ms** una etiqueta (con `DriverC5` y la misma imagen,
+145/1), y el log enseña al driver leyendo el ENV y su `st7789.seq` desde su propio pack (`#362`). Commit
+`f78cb29b`. ⚠️ **Falta VERLO**: Eduardo estaba fuera; la C5 quedó con `C5Touch` en marcha —el botón
+«PULSA» y su contador en la pantalla—, que sirve para mirar los colores y pulsar sin el PC.
+
+**Un cambio respecto al plan de §7.8**: el primer cliente es la C5 y no el C6. El C6 no puede cargar hoy el
+pack de LVGL (sus 256 KB de pool van en la `.bss` del pack y el C6 no tiene PSRAM: es `H6.b`), y la C5
+tenía delante su `DriverC5` para comparar en la misma placa. Eso obligó a meter el expansor (`ch32`) y el
+táctil (`cst3530`), y con ellos se cumple lo que decía §7.4: la frontera entre «perfil» y «driver de placa»
+se movía con muy poco.
+
+#### 10.1 El formato: la placa en el ENV, el controlador en un `.seq`
+
+- **Una línea por dispositivo**, con el formato de `sd=` (`clave:valor` separados por comas, y el tipo
+  delante). `lcd=` es la pantalla: el bus y sus pines, el tamaño y, opcionales, `rst`, `bl`, `mhz` (20 si no
+  se dice), `ram`, `off`, `inv`, `bgr`, `seq` y `traza`. Un pin es un GPIO (`21`), una salida del expansor
+  (`x1`) o su PWM (`xpwm`). `exp=` declara el expansor una vez y `touch=` el táctil (sin bus propio, usa el
+  del expansor). La referencia entera está en la cabecera de `driver_spi.c`.
+- **El controlador es texto**: `st7789.seq`, un comando por línea en hexadecimal (valen `0x` y comas, que
+  es como vienen en los ejemplos de los fabricantes), `espera N` y comentarios con `#`. Va en `resources/`
+  del pack y el driver lo lee por la BIOS de `pack:DriverSpi/st7789.seq`. **Sólo lo del chip**: el del
+  ST7789 son dos comandos (SLPOUT y RAMCTRL); MADCTL, COLMOD, la inversión y DISPON los pone el driver
+  después, a partir del ENV. Un controlador que no traemos es un `.seq` del usuario en su FS y
+  `seq:/sys/mio.seq` en la línea `lcd=` — sin C y sin herramientas (probado con uno de mentira en la prueba
+  de host, escrito como lo copiaría alguien de un ejemplo: `0x`, comas y CRLF).
+- **El desfase por orientación sale de dos datos físicos**: `ram` (la memoria del controlador) y `off`
+  (dónde cae el cristal dentro, a 0°). MX espeja las columnas de esa memoria y MY sus filas, con MV o sin
+  él; así salen la tabla del C6 que se confirmó en placa (0/0, 0/0, 0/80, 80/0) y la de las pantallas de
+  135×240 (52/40, 40/53, 53/40, 40/52) sin escribir ninguna tabla.
+
+#### 10.2 Una errata no puede ser una pantalla negra
+
+§7.9 lo dejó dicho: *«un `lcd.sck=6` a pelo no guía a nadie y una errata es muda»*. Tres cosas:
+
+1. **El parser es ESTRICTO**: una clave que no conoce es un error con su nombre. La línea `sd=` ignora las
+   desconocidas porque una misma línea sirve a dos placas; ésta no tiene esa excusa, y un `rts` por `rst`
+   —o una clave de un driver más nuevo que éste no sabe hacer— sería una pantalla negra sin una palabra.
+2. **`'PANT'` gana `estado`** (opcional, así que la versión no sube y los drivers ya grabados siguen
+   valiendo): NULL = listo; si no, el porqué. La VM lo pregunta en el primer `Gui.Screen()` y el programa
+   recibe `Core.RuntimeError: GUI: pantalla: ENV lcd: falta 'dc'` — medido así en la C5, y cabe en los 90
+   caracteres del EXITED. Mientras no vale, el driver relee el ENV en cada llamada: arreglada la línea, el
+   siguiente intento pasa sin recargar nada.
+3. **Un táctil que no contesta se dice, una vez**: una lectura fallida sigue siendo «sin dedo» (se sondea
+   decenas de veces por segundo y un NACK suelto no debe parar la GUI), pero la primera va al log.
+   `DriverC5` callaba. Y sirvió enseguida: en la C5, 10 s de sondeo sin aviso con `addr:0x58`, y el
+   CONTROL con `addr:0x59` dio «el tactil no contesta en I2C 0x59» a los 178 ms — o sea que el CST3530
+   contesta de verdad, y lo que falta es sólo pulsar.
+
+#### 10.3 Cómo se sabe que manda lo mismo: una BIOS que graba los cables
+
+`make test-driverspi` compila **los dos drivers tal cual** para el host (renombrando su entrada y su
+`g_bios` para que convivan) y los ejecuta contra una BIOS falsa que graba cada byte de SPI con el nivel de
+DC y de CS, cada escritura y lectura de I2C y cada espera. Con el perfil de la C5:
+
+- el **volcado**, los **cuatro giros** y el **táctil** son byte a byte iguales;
+- el **arranque** manda los mismos seis comandos con los mismos parámetros; sólo RAMCTRL cambia de sitio
+  (`11|36 00|3A 55|B0 00 F0|21|29` frente a `11|B0 00 F0|36 00|3A 55|21|29`), porque ahora va en el
+  `.seq`, antes de lo de la placa;
+- el mismo bus SPI, el mismo I2C, y el expansor igual al final (los ocho EXIO de salida, los dos resets
+  sueltos, la luz a 255).
+
+Y contra sus oráculos, lo que `DriverC5` no sabe hacer: los desfases del C6 y de las 135×240, el reset por
+GPIO, el SWRESET y el INVOFF, el `.seq` del usuario, y 17 erratas, cada una con su nombre. **Con control**:
+tres sabotajes (troceado a 32, los ejes del desfase cambiados, RAMCTRL con otro valor), y la prueba caza
+los tres. El `.seq` que usa es el de verdad, el que va en el pack.
+
+#### 10.4 Lo que cuesta, y lo que no se ha hecho a propósito
+
+- **12,6 KB de flash y 980 B de RAM**, frente a los 2,4 KB de `DriverC5`: el parser y los mensajes. Es el
+  1,7 % del pack de LVGL, y es lo que sustituye a un driver por placa.
+- **Sólo lo que se ha podido probar**: el `.seq` del ST7789, el expansor `ch32` y el táctil `cst3530`. Las
+  secuencias del ILI9341, el ST7735 y el ST7796 están en los drivers de nuestra propia copia de LVGL
+  (`third_party/lvgl/src/drivers/display/`), que es la fuente para quien las necesite; entran en el pack
+  cuando haya una pantalla con la que probarlas.
+- **Fuera todavía**: los 18 bits (el ILI9488 por SPI: el `formato` RGB888 ya existe en `'PANT'`, falta la
+  clave), el táctil girado con la pantalla (pendiente desde `H6.a`, igual que en `DriverC5`), el modo SPI
+  (fijo en 0), un panel sin CS y una luz activa en bajo. Cada uno es una clave más cuando aparezca la placa.
+- **`DriverC5` se queda**: es el ejemplo de driver de placa en C (el nivel 2, para lo que no se describe con
+  datos) y la referencia contra la que se compara el genérico.
+- Lo que queda de `H6.c`: **`G4`** —el bus con dueño (la TF de la C5 comparte bus con la pantalla) y la
+  fachada SPI con DMA (§7.11)— y **`G5`** —el P4 y la DK2 publicando `'PANT'` desde la imagen—; y, para
+  cerrar, el entregable de §7.9: plantilla + script + **la documentación de usuario** de estas líneas.
