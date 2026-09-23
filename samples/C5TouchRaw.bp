@@ -1,5 +1,10 @@
 // C5TouchRaw.bp — el táctil CST3530 de la C5 leído A MANO, sin LVGL (diagnóstico, 23-sep).
 //
+// ⚠️ CORRECCIÓN (23-sep, tarde): el «táctil que se cuelga tras horas» NO existía — era
+// wire_serie.py, que reiniciaba la C5 al CERRAR el puerto y se llevaba el programa (la
+// pantalla seguía pintada). Ver V7_IDEAS §H6.12. Este sample se queda como lector a mano
+// del CST3530; lo que su cabecera cuenta del cuelgue es la hipótesis de entonces.
+//
 // El botón de C5Touch no reacciona tras horas sin tocarlo, y el I2C contesta. Leído a mano
 // —los MISMOS bytes que el driver: D0 07 00 00, 9 bytes, D0 00 02 AB—, el chip se queda con
 // su última trama y no genera ninguna nueva aunque se le toque; con el driver dentro de LVGL,

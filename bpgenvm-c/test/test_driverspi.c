@@ -11,7 +11,7 @@
  *   · el volcado, BYTE A BYTE (ventana, datos y troceado a 64);
  *   · el giro de 0/90/180/270, byte a byte;
  *   · el táctil, con su tráfico I2C y sus coordenadas (y, sólo el genérico, el MODO
- *     NORMAL del fabricante al arrancar y el VIGILANTE de su latido ESD, 23-sep);
+ *     NORMAL del fabricante al arrancar y su latido ESD en la traza, 23-sep);
  *   · el arranque, con LOS MISMOS comandos y parámetros (el orden cambia en uno:
  *     RAMCTRL va en el .seq, antes de lo de la placa), y el expansor igual al final.
  *
@@ -71,7 +71,7 @@ static int g_dc = 1, g_cs = 1;
 static int g_exp_dir = -1, g_exp_out = -1, g_exp_pwm = -1;
 /* El táctil CST3530 (I2C 0x58): la trama que devuelve, y su LATIDO ESD (4 bytes, al
  * revés, cuando lo último escrito fue D0 04 04 00): avanza en cada lectura si
- * `g_esd_vivo`, y se queda quieto si no — el chip colgado. */
+ * `g_esd_vivo`, y se queda quieto si no. */
 static uint8_t  g_trama[9];
 static uint8_t  g_ult58[4];
 static uint32_t g_esd = 0x00100000u;
@@ -446,17 +446,17 @@ int main(int argc, char** argv) {
         CHECK(strstr(strstr(g_log, "pulsado 120,160") + 1, "pulsado 120,160") == 0, "  y dos lecturas pulsadas seguidas son UN cambio, no dos lineas");
     }
 
-    /* ── 2b. EL CST3530 COMO LO DESPIERTA SU FABRICANTE, Y EL VIGILANTE (23-sep) ──
-     * El táctil de la C5 se quedaba a veces con su última trama (contestaba, pero no
-     * generaba tramas nuevas). El driver Hynitron hace dos cosas que no hacíamos: el
-     * MODO NORMAL al despertarlo, y una comprobación de su LATIDO ESD. */
+    /* ── 2b. EL CST3530 COMO LO DESPIERTA SU FABRICANTE, Y SU LATIDO EN LA TRAZA (23-sep) ──
+     * El driver Hynitron pone el chip en MODO NORMAL al despertarlo, y nosotros no lo
+     * hacíamos. Y el chip tiene un LATIDO ESD: la traza lo lee cada 5 min (sólo ella:
+     * el vigilante que lo leía cada 2 s para reiniciar el chip se quitó el mismo día). */
     {
         const char *s, *r;
-        int x = -1, y = -1, k, rr;
+        int x = -1, y = -1, k;
         g_env_lcd = "st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv,traza";
         g_env_exp = EXP_C5; g_env_touch = TOUCH_C5;
         g_ahora = 1000; g_esd = 0x00100000u; g_esd_vivo = 1;
-        CHECK(cargar(spi_pack_init, &ps) == 0, "el MODO NORMAL y el VIGILANTE del CST3530 (DriverSpi, la C5, con traza)");
+        CHECK(cargar(spi_pack_init, &ps) == 0, "el MODO NORMAL y el LATIDO del CST3530 (DriverSpi, la C5, con traza)");
         grabar_desde_cero();
         CHECK(ps.init() == 0, "  arranca");
         s = strstr(g_cinta, "i2cw 0 58: D0 00 04 00\nespera 10\ni2cw 0 58: D0 00 04 00\n"
@@ -468,58 +468,15 @@ int main(int argc, char** argv) {
 
         memset(g_trama, 0, sizeof g_trama);
         grabar_desde_cero();
-        ps.touch(&x, &y);                                    /* la 1.ª: el vigilante sólo toma la hora */
-        g_ahora += 1500; ps.touch(&x, &y);                   /* a 1,5 s: aún no le toca */
-        CHECK(strstr(g_cinta, "D0 04 04 00") == 0, "  el vigilante: ni en la primera lectura ni antes de 2 s lee el latido");
-        g_ahora += 600; grabar_desde_cero(); ps.touch(&x, &y);
-        CHECK(strstr(g_cinta, "i2cw 0 58: D0 04 04 00\ni2cr 0 58 4\n") != 0, "  a los 2 s, el latido: D0 04 04 00 y 4 bytes");
-        for (k = 0; k < 5; k++) { g_ahora += 2000; ps.touch(&x, &y); }
-        CHECK(strstr(g_log, "no late") == 0, "  un chip que LATE: diez segundos y ni un reinicio");
-        g_ahora += 300000; ps.touch(&x, &y);                 /* cinco minutos: el latido de la traza */
-        CHECK(strstr(g_log, "fall · esd 00") != 0 && strstr(g_log, " · 0 reinicios |") != 0,
-              "  la traza de cada 5 min lleva el latido ESD y los reinicios (0)");
-
-        g_esd_vivo = 0;                                      /* SE CUELGA */
-        g_ahora += 2000; ps.touch(&x, &y);                   /* ésta aún ve el avance de antes */
-        g_ahora += 2000; ps.touch(&x, &y);                   /* igual: 1 */
-        CHECK(strstr(g_log, "no late") == 0, "  el latido se PARA: una lectura igual no basta");
-        g_ahora += 2000; grabar_desde_cero(); rr = ps.touch(&x, &y);   /* igual: 2 */
-        CHECK(strstr(g_log, "driver SPI: el tactil no late (ESD quieto o mudo): reiniciado, van 1\n") != 0,
-              "  dos iguales seguidas: REINICIADO, y dicho en el log");
-        CHECK(strstr(g_cinta, "i2cw 0 24: 03 02\nespera 10\ni2cw 0 24: 03 03\nespera 50\n") != 0,
-              "  con su reset (EXIO0 abajo 10 ms, y 50 para arrancar), sin tocar el de la pantalla (EXIO1)");
-        CHECK(strstr(g_cinta, "i2cw 0 58: D0 00 0C 00") != 0, "  y el modo normal otra vez");
-        CHECK(rr == 0 && strstr(g_cinta, "i2cr 0 58 9") == 0, "  esa vuelta no lee la trama (el chip esta arrancando): sin dedo");
-
-        g_esd_vivo = 1;                                      /* VUELVE */
-        for (k = 0; k < 5; k++) { g_ahora += 2000; ps.touch(&x, &y); }
-        CHECK(strstr(g_log, "van 2") == 0, "  si vuelve a latir, no hay mas reinicios");
-        g_ahora += 300000; ps.touch(&x, &y);
-        CHECK(strstr(g_log, " · 1 reinicios |") != 0, "  y la traza lo cuenta: 1 reinicios");
-
-        g_esd_vivo = 0;                                      /* SE CUELGA para siempre, contestando */
-        for (k = 0; k < 9; k++) { g_ahora += 2000; ps.touch(&x, &y); }
-        CHECK(strstr(g_log, "van 2\n") != 0 && strstr(g_log, "van 3\n") != 0,
-              "  un chip que CONTESTA pero no late: tras reiniciarlo, la primera lectura es la base, no «ha vuelto»");
-        CHECK(strstr(g_log, "reiniciado, van 4 -- y tres seguidos sin volver: dejo de insistir") != 0,
-              "  y al tercero SEGUIDO deja de insistir, dicho (los seguidos, no los de toda la vida: van 4)");
-        grabar_desde_cero();
-        for (k = 0; k < 5; k++) { g_ahora += 2000; ps.touch(&x, &y); }
+        for (k = 0; k < 10; k++) { ps.touch(&x, &y); g_ahora += 2000; }
         CHECK(strstr(g_cinta, "D0 04 04 00") == 0 && strstr(g_cinta, "i2cr 0 58 9") != 0,
-              "  y despues ya no lee el latido; el tactil se sigue leyendo");
-        CHECK(strstr(g_log, "van 5") == 0, "  ni vuelve a reiniciarlo");
-        g_esd_vivo = 1;
-    }
-    {   /* un táctil que no contesta: tres reinicios y basta, no un log lleno */
-        int x = -1, y = -1, k;
-        g_env_lcd = LCD_C5; g_env_exp = EXP_C5; g_env_touch = TOUCH_C5;
-        g_ahora = 1000;
-        CHECK(cargar(spi_pack_init, &ps) == 0 && ps.init() == 0, "un tactil MUDO (no contesta en I2C)");
-        g_tactil_mudo = 1;
-        for (k = 0; k < 12; k++) { ps.touch(&x, &y); g_ahora += 2000; }
-        g_tactil_mudo = 0;
-        CHECK(strstr(g_log, "van 3 -- y tres seguidos sin volver: dejo de insistir") != 0 && strstr(g_log, "van 4") == 0,
-              "  tres reinicios, dicho cada uno, y deja de insistir");
+              "  veinte segundos de sondeo: se lee la trama, y el latido NO (nadie lo vigila)");
+        g_esd = 0x00123456u; g_ahora += 300000; ps.touch(&x, &y);
+        CHECK(strstr(g_log, " fall · esd 00123456 | ") != 0,
+              "  la traza de cada 5 min lee el latido ESD del chip (D0 04 04 00) y lo dice");
+        g_tactil_mudo = 1; g_ahora += 300000; ps.touch(&x, &y); g_tactil_mudo = 0;
+        CHECK(strstr(g_log, " fall · esd -- | ") != 0, "  y si el chip no contesta: esd --");
+        CHECK(strstr(g_log, "reinici") == 0, "  y nadie reinicia el chip");
         g_ahora = 0;
     }
 

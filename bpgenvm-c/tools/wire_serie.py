@@ -15,17 +15,26 @@ diagnosticar (HELLO, PING, LIST, INFO, RUN, KILL, LOG_DUMP).
 ⚠️ Desde Git Bash, un argumento que empieza por "/" lo convierte MSYS en una ruta
 de Windows y la placa contesta NOT_FOUND. Usa `MSYS_NO_PATHCONV=1` o cmd.
 
-⚠️ ABRIR EL PUERTO REINICIA LAS ESP (12-sep): el puente USB-UART del P4 (y el de la
-S3) lleva DTR/RTS al EN del chip, como espera esptool, y pyserial los mueve al
-abrir y cerrar. Cada invocacion de esta herramienta es un arranque nuevo: el
-`uptimeMs` del INFO sale de 2-3 s, el log muestra un boot por comando y lo que un
-RUN dejo en RAM (el pack cargado) no sobrevive al siguiente comando. `tanda.py`
-no lo sufre porque mantiene UNA conexion. Para encadenar verbos sin reinicio,
-hacerlo en un solo proceso.
+⚠️ EL PUERTO YA NO REINICIA LA PLACA (23-sep). Hasta hoy, cada invocacion era un
+arranque nuevo: el puente USB-UART del P4 y de la S3 lleva DTR/RTS al EN del chip
+(como espera esptool), y el USB-Serial-JTAG de la C5 tiene la misma logica por
+dentro; pyserial abre con DTR y RTS ACTIVOS y Windows los suelta al cerrar. En la
+C5 el reinicio llegaba AL CERRAR (medido: dos `info` separados 10 s dan 142 s y
+luego 9,5 s de uptime) —o sea que un `run` dejaba el programa en marcha mientras
+escuchaba y lo MATABA al terminar, con la pantalla aun pintada—; eso costo una
+tarde persiguiendo un «tactil que se cuelga tras horas» que no existia.
+Ahora el puerto se abre con DTR y RTS APAGADOS (se fijan ANTES de abrir: no se
+mueven ni al abrir ni al cerrar), y la placa solo se reinicia cuando se pide:
+`reset` (el verbo del wire) o `resetcable` (RTS 200 ms, como esptool: vale aunque
+corra un programa —durante un RUN el wire no atiende— o la placa no conteste).
+Consecuencia: lo que se hace «una vez por arranque» —cargar los packs, leer el
+ENV— necesita un reset explicito tras `pack`/`packdel`/`env` (como ya pasaba con
+el P4 por COM15).
 
 Verbos de packs y env (F1, 12-sep): `packs` (PACK_LS), `pack <f.pack> [arm|riscv]`
 (graba; con arch PODA y SELLA como el panel del IDE, via tools/packtool/PackTool),
-`packfmt` (PACK_FORMAT: pide OK a Eduardo), `env [clave valor | clave -]`, `reset`.
+`packfmt` (PACK_FORMAT: pide OK a Eduardo), `env [clave valor | clave -]`, `reset`,
+`resetcable`.
 """
 import json, sys, time
 
@@ -37,7 +46,13 @@ except ImportError:
 
 class Wire:
     def __init__(self, port, baud=115200):
-        self.s = serial.Serial(port, baud, timeout=0.2)
+        # DTR y RTS apagados ANTES de abrir: ni el EN del puente ni la logica del
+        # USB-Serial-JTAG ven un flanco, al abrir ni al cerrar (ver la cabecera).
+        self.s = serial.Serial()
+        self.s.port, self.s.baudrate, self.s.timeout = port, baud, 0.2
+        self.s.dtr = False
+        self.s.rts = False
+        self.s.open()
         self.buf = b""
         self.id = 0
         self.otros = []
@@ -92,7 +107,10 @@ class Wire:
         return self.esperar("HELLO_REPLY", 3)
 
     def close(self):
-        self.s.close()
+        try:
+            self.s.close()
+        except Exception:        # tras un resetcable el USB-Serial-JTAG se va y vuelve
+            pass
 
 
 def cmd_info(w, _):
@@ -423,6 +441,21 @@ def cmd_reset(w, _):
     print("reset:", "aceptado" if r else "sin RESET_REPLY (la placa puede haber reiniciado antes de contestar)")
 
 
+def cmd_resetcable(w, _):
+    """Reinicio POR EL CABLE, como esptool: RTS 200 ms con DTR apagado (el EN del puente
+    USB-UART, o la logica del USB-Serial-JTAG). Vale aunque corra un programa o la placa
+    no conteste; `reset` es el verbo del wire y necesita que el wire atienda."""
+    def rts(v):
+        w.s.rts = v
+        w.s.dtr = w.s.dtr    # usbser.sys (Windows) no manda el RTS nuevo sin tocar DTR (esptool)
+    w.s.dtr = False
+    rts(True)
+    time.sleep(0.2)          # 200 ms, como esptool con el USB-Serial-JTAG
+    rts(False)
+    time.sleep(0.2)
+    print("resetcable: RTS 200 ms (la placa arranca de nuevo; el USB puede irse y volver)")
+
+
 def cmd_packfmt(w, _):
     """PACK_FORMAT: deja la zona de packs VACIA (borra todos). Pide OK a Eduardo antes."""
     w.send("PACK_FORMAT", confirm="YES")
@@ -433,7 +466,7 @@ def cmd_packfmt(w, _):
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
             "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get,
             "packs": cmd_packs, "pack": cmd_pack, "packfmt": cmd_packfmt, "packdel": cmd_packdel,
-            "env": cmd_env, "part": cmd_part, "reset": cmd_reset}
+            "env": cmd_env, "part": cmd_part, "reset": cmd_reset, "resetcable": cmd_resetcable}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:

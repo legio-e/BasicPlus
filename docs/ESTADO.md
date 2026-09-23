@@ -317,41 +317,41 @@ programa lee el CH32 por el I2C 0 compartido. **Redes**: `test-bus` nueva, `test
 `BusCompartido.bp`, y las ocho imágenes compiladas (S3, C3, C5, C6, P4, Pico, Nucleo, Discovery).
 ⚠️ `sim-smoke` falla, pero ya fallaba en `HEAD` (el simulador no encuentra `Core`): apuntado aparte.
 
-## 👆 H6.c (23-sep, tarde) — `G2` y `G3` MIRADOS, y el táctil que se quedaba MUDO
+## 👆 H6.c (23-sep, tarde) — `G2` y `G3` MIRADOS, y el táctil que «se colgaba»: era la HERRAMIENTA
 
-**Mirados por Eduardo en la C5**: los colores bien y el botón de `C5Touch` responde (cinco `pulsacion`). Pero
-al volver tras HORAS sin tocarla, el botón no reaccionaba —el I2C sin un fallo— y al recargar el programa volvió.
+**Mirados por Eduardo en la C5**: los colores bien y el botón de `C5Touch` responde. Pero al volver tras
+horas, el botón no reaccionaba, y al recargar el programa volvió.
 
-**La caza** (`V7_IDEAS` §H6.12): con una traza del táctil nueva y leyendo el chip a mano
-(`samples/C5TouchRaw.bp`), el CST3530 contestaba pero se quedaba con su última trama; no era el ritmo. El
-código del fabricante (Hynitron, `cst66xx`) hace dos cosas que no hacíamos: el MODO NORMAL al despertarlo y
-un LATIDO ESD; `samples/C5TouchCst.bp` las midió en la C5 (el latido avanza unos 33 000/s; tras el modo
-normal, todos los toques).
+**Primero, un diagnóstico equivocado** (`431e2838`): leyendo el chip a mano creí verlo colgado, y `DriverSpi`
+ganó lo que hace su fabricante y no hacíamos —el MODO NORMAL al despertarlo— y un vigilante de su latido ESD
+que lo reiniciaba. La «prueba larga» que dejé falló a los tres minutos, y el log no tenía ni una línea tras
+la primera lectura.
 
-**El arreglo, en `DriverSpi`**: el modo normal al arrancar, y un vigilante —cada 2 s el latido; parado dos
-veces, reset, modo normal y una línea en el log; tres seguidos, deja de insistir y lo dice—; la traza de 5 min
-lleva el latido y los reinicios. `test-driverspi` lo prueba contra la cinta con el reloj y el latido en manos
-del test, y con sabotaje de control (y cazó un fallo mío: la primera lectura tras un reinicio contaba como
-«ha vuelto»). **En placa**: cinco pulsaciones con su traza, ni un reinicio.
+**Lo que era** (`V7_IDEAS` §H6.12): **`wire_serie.py` reiniciaba la C5 al CERRAR el puerto** —medido: 142 s
+de uptime y, tras el cierre, 9,5 s—. Cada `run` dejaba el programa en marcha mientras escuchaba y lo mataba al
+terminar, con la pantalla aún pintada. Arreglado en la herramienta: DTR/RTS apagados al abrir (97 → 108 →
+119 s), `resetcable` para reiniciar por el cable, y un reset explícito tras `pack`/`env`. Con el puerto
+cerrado: cinco pulsaciones con su traza. El vigilante, quitado (Eduardo); se quedan el modo normal y la
+traza, que ahora lee el latido.
 
 **Y la pregunta de Eduardo que abre otra puerta**: *«¿se despierta tocando la pantalla?»* Depende del modo en
 que se le deje dormir (bajo consumo y gesto, sí; sueño profundo, no), y el `INT` del táctil va al GPIO5 de la
-C5: anotado en `#490`, con el choque con el vigilante (un chip dormido no late).
+C5: anotado en `#490`.
 
-## ⏭️ Traspaso (23-sep, tarde) — el táctil arreglado, **falta la prueba LARGA**; lo siguiente: `G4.a2`
+## ⏭️ Traspaso (23-sep, tarde) — el «cuelgue» era la herramienta; **prueba larga en marcha**; lo siguiente: `G4.a2`
 
-**Lo primero al volver Eduardo**: la C5 quedó con `C5Touch` en marcha y la traza puesta (`traza` en `lcd=`),
-sin tocarla desde las 16:20. **Primero pulsar** el botón y mirar si sube el contador de la pantalla;
-**después** leer el log (`python bpgenvm-c/tools/wire_serie.py COM6 log`). ⚠️ Abrir el puerto REINICIA la C5 y
-se lleva el programa —me pasó hoy: la creí en marcha tras leer el log—; lo de antes queda en la RAM
-superviviente (4 KB, un anillo: las últimas ~3 h de latidos, y cada latido lleva la cuenta de reinicios).
-Si responde y no hay ningún «reiniciado», el cuelgue era el bajo consumo del I2C: la fila H6 de `FICHAS` se
-cierra con eso. Si hay reinicios, el vigilante lo rescató (y el chip se cuelga igual: mirar cuándo). Si no
-responde, el latido de 5 min dice si el chip latía.
+**Lo primero al volver Eduardo**: la C5 corre `C5Touch` con la traza desde las 16:34:29, sin puerto.
+**Primero pulsar** el botón (¿sube el contador?); **después** `wire_serie.py COM6 resetcable` y `log` —durante
+un RUN el wire no atiende, así que para leer hay que pararlo—; lo de antes del reinicio queda en la RAM
+superviviente (4 KB: los últimos latidos de 5 min, con el ESD). Si responde, la fila H6 de `FICHAS` se cierra
+con eso; si no, el latido dice si el chip escaneaba.
+
+⚠️ **Sin medir**: el IDE abre con DTR=1 y RTS=1 (la Pico necesita DTR) y al desconectar Windows los suelta:
+una C5 con un programa lanzado desde el IDE se reiniciaría al cerrarlo. Mirarlo con el `uptime`.
 
 **Después, `G4.a2`** (el árbitro), como estaba en el traspaso de mediodía.
 
-**Estado de las placas**: la C5 con la imagen de `G4.a1` y el `DriverSpi` del vigilante en su zona; el resto
+**Estado de las placas**: la C5 con la imagen de `G4.a1` y el `DriverSpi` sin vigilante en su zona; el resto
 sin grabar. Sin push.
 
 ## ⏭️ Traspaso (23-sep, mediodía) — `G4.a1` hecho; lo siguiente: `G4.a2` (el árbitro)

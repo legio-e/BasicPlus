@@ -714,9 +714,10 @@ static int sp_init(void) {
     }
     if (L.rst.tipo == PIN_NO) { lcd_cmd(0x01); g_bios->sleep_ms(120); }   /* SWRESET */
     /* 3b. El táctil en MODO NORMAL (23-sep): lo que hace al despertarlo el driver Hynitron
-     *     original (cst66xx_set_workmode) y que no hacíamos —ni el ejemplo de Waveshare—.
-     *     Sin esto el chip se quedaba A VECES con su última trama: contestaba por I2C pero
-     *     no generaba tramas nuevas (C5TouchRaw, y C5Touch tras horas sin tocarla). */
+     *     original (cst66xx_set_workmode) y que no hacíamos —ni el ejemplo de Waveshare—:
+     *     fuera el bajo consumo del I2C, modo e informe normales. No arregla ningún fallo
+     *     DEMOSTRADO: el «táctil que se cuelga tras horas» era la herramienta, que reiniciaba
+     *     la C5 al cerrar el puerto (V7_IDEAS §H6.12). Es el arranque que pide el fabricante. */
     if (T.hay && cst_modo_normal() != 0) di("driver SPI: el tactil no acepta el modo normal (se sigue)");
     di("driver SPI — resets dados");
 
@@ -793,7 +794,10 @@ static int cst_modo_normal(void) {
     return r;
 }
 /* El LATIDO ESD (cst66xx_check_esd): 4 bytes de D0 04 04 00, un contador que avanza sin
- * parar mientras el chip escanea —unos 33 000 por segundo, medido en la C5—. */
+ * parar mientras el chip escanea —unos 33 000 por segundo, medido en la C5—. Sólo lo lee
+ * la TRAZA, cada 5 min: si no avanza entre dos latidos, el chip no escanea. (Un vigilante
+ * que lo usaba para reiniciar el chip vivió unas horas del 23-sep: se quitó al saberse que
+ * el cuelgue no existía — §H6.12.) */
 static int cst_latido(uint32_t* v) {
     uint8_t a[4], b[4];
     a[0] = 0xD0; a[1] = 0x04; a[2] = 0x04; a[3] = 0x00;
@@ -803,40 +807,6 @@ static int cst_latido(uint32_t* v) {
     return 0;
 }
 
-/* ── EL VIGILANTE (23-sep): cada 2 s se lee el latido; si no avanza (o no contesta) dos
- * veces seguidas, el chip se ha colgado —el caso para el que el fabricante tiene su
- * comprobación ESD—: reset, modo normal, y DICHO en el log. La primera lectura tras
- * arrancar o tras un reinicio es sólo la BASE: «vuelve a latir» es que AVANCE entre dos
- * lecturas, no que conteste una vez (si no, un chip que contesta con el latido parado se
- * reiniciaría cada 6 s para siempre). Con tres reinicios seguidos sin que vuelva a latir,
- * se deja de insistir (también dicho): un táctil que no está no debe llenar el log. La
- * primera llamada sólo toma la hora: no mete tráfico en la primera lectura del táctil.
- * ⚠️ Vale para el MODO NORMAL: un chip dormido no late (bajo consumo, #490) — el
- * fabricante apaga su comprobación al salir del modo normal, y éste tendrá que saberlo.
- * Devuelve 1 si acaba de reiniciar el chip: esa vuelta no se lee (está arrancando). */
-#define VIGIA_MS 2000u
-static uint32_t s_v_desde = 0, s_v_ultimo = 0, s_v_reinicios = 0;
-static int      s_v_arrancado = 0, s_v_hay = 0, s_v_quieto = 0, s_v_seguidos = 0;
-static int vigia(void) {
-    uint32_t ahora = g_bios->now_ms(), v = 0;
-    int lee;
-    txt_t t;
-    if (!s_v_arrancado) { s_v_arrancado = 1; s_v_desde = ahora; return 0; }
-    if ((uint32_t) (ahora - s_v_desde) < VIGIA_MS || s_v_seguidos >= 3) return 0;
-    s_v_desde = ahora;
-    lee = cst_latido(&v);
-    if (lee == 0 && !s_v_hay)         { s_v_ultimo = v; s_v_hay = 1; return 0; }        /* la base */
-    if (lee == 0 && v != s_v_ultimo)  { s_v_ultimo = v; s_v_quieto = 0; s_v_seguidos = 0; return 0; }
-    if (++s_v_quieto < 2) return 0;
-    s_v_quieto = 0; s_v_hay = 0; s_v_reinicios++; s_v_seguidos++;
-    if (T.rst.tipo != PIN_NO) { pin_pon(T.rst, 0); g_bios->sleep_ms(10); pin_pon(T.rst, 1); g_bios->sleep_ms(50); }
-    (void) cst_modo_normal();
-    t_ini(&t, s_log, sizeof s_log);
-    t_s(&t, "driver SPI: el tactil no late (ESD quieto o mudo): reiniciado, van "); t_d(&t, (long) s_v_reinicios);
-    if (s_v_seguidos >= 3) t_s(&t, " -- y tres seguidos sin volver: dejo de insistir");
-    di(s_log);
-    return 1;
-}
 /* Una lectura que falla es «sin dedo» —el táctil se sondea cada 30 ms y un NACK
  * suelto no es para parar la GUI—, pero NO en silencio: la primera se dice. Sin
  * esto, un táctil mal cableado o en otra dirección es una pantalla que «no
@@ -844,15 +814,16 @@ static int vigia(void) {
 static int s_touch_fallos = 0;
 
 /* ── la TRAZA del táctil (con `traza` en lcd=), 23-sep ────────────────────────
- * Para cazar el táctil que deja de responder tras HORAS sin tocarlo (volvía al
- * recargar el programa). Dos cosas, pensadas para el log que sobrevive al reinicio
- * (4 KB en la C5, ~50 líneas: unas cuatro horas):
+ * Nació para cazar un «táctil que deja de responder tras horas» que resultó ser la
+ * herramienta (reiniciaba la placa al cerrar el puerto, V7_IDEAS §H6.12); se queda
+ * porque es lo que hay que mirar la próxima vez que un táctil no responda. Dos cosas,
+ * pensadas para el log que sobrevive al reinicio (4 KB en la C5: unas tres horas):
  *   · cada CAMBIO pulsado/suelto, con la trama del chip (y «fuera» si el punto cae
  *     fuera de la pantalla);
- *   · un LATIDO cada 5 minutos: lecturas, pulsadas y fallidas desde el anterior, y
- *     la última trama.
- * Si el latido sigue y la trama no cambia al pulsar, es el chip; si el latido se
- * para, nadie lo está leyendo (LVGL no bombea). */
+ *   · un LATIDO cada 5 minutos: lecturas, pulsadas y fallidas desde el anterior, el
+ *     latido ESD del chip (`--` si no contesta) y la última trama.
+ * Si el latido sigue y la trama no cambia al pulsar, es el chip —y su ESD dice si
+ * escanea—; si el latido se para, nadie lo está leyendo (LVGL no bombea). */
 #define LATIDO_MS  (5u * 60u * 1000u)
 static uint32_t s_t_lect = 0, s_t_puls = 0, s_t_fall = 0, s_t_desde = 0;
 static int      s_t_estado = -1;               /* -1 = aún no se ha leído */
@@ -870,8 +841,12 @@ static void traza_latido(void) {
     t_ini(&t, s_log, sizeof s_log);
     t_s(&t, "tactil: latido "); t_d(&t, (long) s_t_lect); t_s(&t, " lect "); t_d(&t, (long) s_t_puls);
     t_s(&t, " puls "); t_d(&t, (long) s_t_fall); t_s(&t, " fall · esd ");
-    { int k; for (k = 3; k >= 0; k--) t_x2(&t, (unsigned) ((s_v_ultimo >> (8 * k)) & 0xFFu)); }
-    t_s(&t, " · "); t_d(&t, (long) s_v_reinicios); t_s(&t, " reinicios"); t_trama(&t, s_t_trama);
+    {   uint32_t e;
+        int k;
+        if (cst_latido(&e) == 0) for (k = 3; k >= 0; k--) t_x2(&t, (unsigned) ((e >> (8 * k)) & 0xFFu));
+        else                     t_s(&t, "--");
+    }
+    t_trama(&t, s_t_trama);
     di(s_log);
     s_t_lect = s_t_puls = s_t_fall = 0;
     s_t_desde = ahora;
@@ -893,7 +868,6 @@ static int sp_touch(int* x, int* y) {
     uint8_t b[9];
     int pulsado, tx, ty, i, fuera;
     if (!s_touch_ok) return 0;
-    if (vigia()) return 0;
     s_t_lect++;
     if (cst_lee(0xD0070000u, b, 9) != 0) {
         s_t_fall++;
@@ -952,7 +926,6 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     g_bios = bios;
     s_ok = 0; s_touch_ok = 0; s_touch_fallos = 0; s_gap_x = s_gap_y = 0;
     s_t_lect = s_t_puls = s_t_fall = s_t_desde = 0; s_t_estado = -1;
-    s_v_desde = s_v_ultimo = s_v_reinicios = 0; s_v_arrancado = s_v_hay = s_v_quieto = s_v_seguidos = 0;
     tactil = bios->env_get("touch", t, sizeof t) != BPVM_BIOS_ENV_NO_ESTA;
     r = bios->publica(BPVM_PANT_MARCA, tactil ? &s_api_tactil : &s_api_sin);
     if (r != 0) {

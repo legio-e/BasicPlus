@@ -1,5 +1,10 @@
 // C5TouchCst.bp — el CST3530 de la C5 con la secuencia del FABRICANTE (diagnóstico, 23-sep).
 //
+// ⚠️ CORRECCIÓN (23-sep, tarde): el «táctil que se cuelga tras horas» NO existía — era
+// wire_serie.py, que reiniciaba la C5 al CERRAR el puerto y se llevaba el programa (la
+// pantalla seguía pintada). Ver V7_IDEAS §H6.12. Este sample se queda como lector a mano
+// del CST3530; lo que su cabecera cuenta del cuelgue es la hipótesis de entonces.
+//
 // El táctil se queda a veces con su última trama: contesta por I2C pero no genera tramas
 // nuevas (visto a mano con C5TouchRaw, y en C5Touch tras horas sin tocarlo). El driver
 // Hynitron original (cst66xx_set_workmode, NOMAL_MODE) hace al despertar el chip algo que
