@@ -21,6 +21,7 @@
 #include "gui_pack_api.h"
 #include "bpvm_bios.h"
 #include "bpvm_pack_api.h"
+#include "bpvm_pant.h"        /* V7/H6.c G2: sólo la MARCA del driver de pantalla */
 #include "bpvm_alloc.h"
 #include "bpvm.h"
 #include <string.h>
@@ -58,6 +59,19 @@ static int resolver(void) {
 
 int bpvm_gui_disponible(const char** motivo) {
     int ok = resolver();
+    /* V7/H6.c G2 — el pack de LVGL ya no trae driver de pantalla: sin uno que
+     * haya publicado 'PANT', la GUI no pinta en ninguna parte. Se dice AQUÍ,
+     * antes de que el programa cree su screen, en vez de dejarle la pantalla
+     * negra. La VM no sabe nada de ese contrato: sólo mira que la marca esté.
+     * ⚠️ CORTO a propósito: el detalle del EXITED que ve quien ejecuta recorta el
+     * mensaje a 90 caracteres con la clase delante (exceptions.c), y la primera
+     * versión se quedaba en «graba el pack del dri» (medido en la C5, 23-sep). */
+    if (ok && bpvm_bios_busca(BPVM_PANT_MARCA) == 0) {
+        snprintf(s_motivo, sizeof s_motivo, "no hay driver de pantalla ('PANT'): graba el pack del driver de esta placa");
+        bpvm_diag("GUI: %s", s_motivo);
+        if (motivo) *motivo = s_motivo;
+        return 0;
+    }
     if (motivo) *motivo = ok ? "" : s_motivo;
     return ok;
 }

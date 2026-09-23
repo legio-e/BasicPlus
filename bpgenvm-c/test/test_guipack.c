@@ -44,6 +44,25 @@ extern const bpvm_pack_api_t bpvm_gui_api_stubs;
 extern const bpvm_pack_sym_t bpvm_gui_stub_syms[];
 extern int g_stub_llamadas, g_stub_dump_free;
 
+/* V7/H6.c G2 — un DRIVER DE PANTALLA de mentira. La VM sólo mira que 'PANT' esté
+ * publicada (el driver lo usa el pack de LVGL, no la VM); y con él se prueba
+ * también el resolvedor del contrato (bpvm_pant.h), que es de la cabecera. */
+#include "bpvm_pant.h"
+static int  pd_init(void) { return 0; }
+static int  pd_size(int* w, int* h) { *w = 240; *h = 320; return 1; }
+static void pd_flush(int a, int b, int c, int d, const uint8_t* p) { (void) a; (void) b; (void) c; (void) d; (void) p; }
+static int  pd_formato(void) { return BPVM_PANT_RGB565_BE; }
+static const bpvm_pack_sym_t PANT_SYMS[] = {
+    { "init", (bpvm_pack_fn_t) pd_init }, { "size", (bpvm_pack_fn_t) pd_size }, { "flush", (bpvm_pack_fn_t) pd_flush } };
+static const bpvm_pack_api_t PANT_DOBLE = { BPVM_PANT_MARCA, BPVM_PANT_API_VER, 3u, PANT_SYMS };
+static const bpvm_pack_sym_t PANT_SYMS_FMT[] = {
+    { "init", (bpvm_pack_fn_t) pd_init }, { "size", (bpvm_pack_fn_t) pd_size },
+    { "flush", (bpvm_pack_fn_t) pd_flush }, { "formato", (bpvm_pack_fn_t) pd_formato } };
+static const bpvm_pack_api_t PANT_CON_FORMATO = { BPVM_PANT_MARCA, BPVM_PANT_API_VER, 4u, PANT_SYMS_FMT };
+static const bpvm_pack_sym_t PANT_SYMS_SIN_FLUSH[] = {
+    { "init", (bpvm_pack_fn_t) pd_init }, { "size", (bpvm_pack_fn_t) pd_size } };
+static const bpvm_pack_api_t PANT_SIN_FLUSH = { BPVM_PANT_MARCA, BPVM_PANT_API_VER, 2u, PANT_SYMS_SIN_FLUSH };
+
 static int  g_visitas = 0; static uint32_t g_visto = 0;
 static void visitante(void* ctx, uint32_t objptr) { (void) ctx; g_visitas++; g_visto = objptr; }
 
@@ -65,12 +84,26 @@ int main(void) {
         CHECK(g_stub_llamadas == 0, "y el doble no recibio NADA");
     }
 
+    /* ── 1b. V7/H6.c G2: el pack de LVGL SIN driver de pantalla ('PANT') ──
+     * El pack de LVGL ya no trae driver: si nadie ha publicado 'PANT', la GUI
+     * no pinta en ninguna parte, y eso tiene que ser un error CON NOMBRE antes
+     * del primer screen, no una pantalla negra. */
+    {
+        bpvm_bios_packs_reset(); bpvm_gui_pack_reset();
+        CHECK(bpvm_bios_publica(BPVM_GUI_MARCA, &bpvm_gui_api_stubs) == 0, "el pack 'LVGL' publicado, SIN driver de pantalla");
+        const char* m = 0;
+        CHECK(bpvm_gui_disponible(&m) == 0, "LVGL sin 'PANT' -> disponible() = 0");
+        CHECK(m && strstr(m, "driver de pantalla") != 0 && strstr(m, "'PANT'") != 0,
+              "y el motivo lo dice: ningun driver de pantalla ('PANT')");
+        CHECK(bpvm_bios_publica(BPVM_PANT_MARCA, &PANT_DOBLE) == 0, "se graba el driver: 'PANT' publicado");
+        CHECK(bpvm_gui_disponible(&m) == 1, "y con el driver, disponible() = 1 (sin reiniciar nada)");
+    }
+
     /* ── 2. CON PACK: cada trampolin llega a SU funcion, por nombre ── */
     {
         bpvm_gui_pack_reset();
-        CHECK(bpvm_bios_publica(BPVM_GUI_MARCA, &bpvm_gui_api_stubs) == 0, "publicar el doble bajo 'LVGL' -> 0 (la reja lo acepta)");
         const char* m = 0;
-        CHECK(bpvm_gui_disponible(&m) == 1, "con pack -> disponible() = 1");
+        CHECK(bpvm_gui_disponible(&m) == 1, "con pack (y su driver) -> disponible() = 1");
         CHECK(bpvm_gui_create_label(3) == 7, "create_label -> el 7 del doble");
         CHECK(bpvm_gui_screen_active() == 7, "screen_active -> 7");
         CHECK(strcmp(bpvm_gui_get_text(1), "stub") == 0, "get_text -> \"stub\" (const char* cruza)");
@@ -118,6 +151,22 @@ int main(void) {
     }
 
     /* ── 6. La tabla y los nombres van A LA PAR (el generador los saca del mismo sitio) ── */
+    /* ── V7/H6.c G2: el resolvedor del contrato 'PANT' ── */
+    {
+        bpvm_pant_t p;
+        CHECK(bpvm_pant_resolver(&PANT_DOBLE, &p) == 0, "'PANT' con init/size/flush -> vale");
+        CHECK(p.rotate == 0 && p.touch == 0 && p.formato == 0,
+              "y las opcionales que no publica quedan a NULL (sin rotar, sin tactil, RGB565)");
+        CHECK(bpvm_pant_resolver(&PANT_CON_FORMATO, &p) == 0 && p.formato && p.formato() == BPVM_PANT_RGB565_BE,
+              "un driver que publica 'formato' -> se resuelve y dice RGB565 girado");
+        const char* mal = bpvm_pant_resolver(&PANT_SIN_FLUSH, &p);
+        CHECK(mal && strstr(mal, "'flush'") != 0, "sin 'flush' -> no vale, y el motivo NOMBRA lo que falta");
+        CHECK(bpvm_pant_resolver(&bpvm_gui_api_stubs, &p) != 0,
+              "una tabla de OTRA marca (la de 'LVGL') -> no vale como driver");
+        CHECK(bpvm_pant_bytes_por_pixel(BPVM_PANT_RGB888) == 3 && bpvm_pant_bytes_por_pixel(BPVM_PANT_RGB565_BE) == 2,
+              "bytes por pixel: RGB888 = 3, RGB565 (girado o no) = 2");
+    }
+
     CHECK(sizeof(bpvm_gui_tabla_t) == BPVM_GUI_N_FUNCS * sizeof(void (*)(void)),
           "la struct tiene exactamente BPVM_GUI_N_FUNCS punteros (sin huecos ni relleno)");
     CHECK(strcmp(BPVM_GUI_NOMBRES[BPVM_GUI_N_FUNCS - 1], "dump_free") == 0, "el ultimo nombre es dump_free");

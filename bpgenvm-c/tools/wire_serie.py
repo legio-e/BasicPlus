@@ -266,7 +266,10 @@ def cmd_packs(w, _):
     print("zona %s B, libres %s, cadena %s, %s pack(s)" % (r.get("regionSize"), r.get("free"),
           "ok" if r.get("chainOk") else "ROTA", r.get("count")))
     for pk in r.get("packs") or []:
-        print("  %-12s v%-8s %8s B  %s ficheros" % (pk.get("name"), pk.get("version"), pk.get("size"), pk.get("files")))
+        # V7/H6.c G2: un pack borrado sigue en la cadena (ocupa flash, y su RAM es
+        # hueco) hasta formatear; decirlo es contar la verdad de la zona.
+        print("  %-12s v%-8s %8s B  %s ficheros%s" % (pk.get("name"), pk.get("version"), pk.get("size"),
+              pk.get("files"), "" if pk.get("active", True) else "   (BORRADO)"))
 
 
 def cmd_pack(w, args):
@@ -356,6 +359,28 @@ def cmd_env(w, args):
     print("%s %s: %s" % (typ[:-6], args[0], "ok" if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2]))
 
 
+def cmd_packdel(w, args):
+    """V7/H6.c G2 — BORRA (tombstone) los packs VIVOS con ese nombre: PACK_LS para
+    saber su offset y PACK_DEL. No libera flash —eso es formatear o compactar—,
+    pero el pack deja de cargarse y, si era el de arriba, su RAM se reaprovecha
+    (el tope de G1). Es lo que se hace antes de grabar la version nueva de un
+    pack que ya esta, cuando no caben los dos."""
+    if not args:
+        print("uso: packdel <nombre del pack>"); return
+    w.send("PACK_LS")
+    r = w.esperar("PACK_LS_REPLY", 10)
+    if r is None:
+        print("PACK_LS:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
+    vivos = [pk for pk in (r.get("packs") or []) if pk.get("name") == args[0] and pk.get("active", True)]
+    if not vivos:
+        print("packdel: no hay ningun pack VIVO llamado '%s'" % args[0]); return
+    for pk in vivos:
+        w.send("PACK_DEL", offset=int(pk.get("offset")))
+        d = w.esperar("PACK_DEL_REPLY", 30)
+        print("packdel %s @%s: %s" % (args[0], pk.get("offset"),
+              "borrado" if d else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2]))
+
+
 def cmd_packformat(w, _):
     """PACK_FORMAT: deja la zona de packs VACIA (borra todo lo grabado). Pide
     confirm=YES en el wire; aqui la confirmacion es haberlo tecleado."""
@@ -407,7 +432,7 @@ def cmd_packfmt(w, _):
 
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
             "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get,
-            "packs": cmd_packs, "pack": cmd_pack, "packfmt": cmd_packfmt,
+            "packs": cmd_packs, "pack": cmd_pack, "packfmt": cmd_packfmt, "packdel": cmd_packdel,
             "env": cmd_env, "part": cmd_part, "reset": cmd_reset}
 
 if __name__ == "__main__":

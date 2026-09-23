@@ -1,6 +1,7 @@
-/* lvgl_pack.c — LA ENTRADA del pack de la GUI (V7/H6 P3): LVGL + gui.c + el
- * driver del panel, compilados aparte, grabados en la zona de packs y ejecutados
- * XIP. La VM no sabe nada de esto: sólo `publica()`/`busca()` y la tabla que
+/* lvgl_pack.c — LA ENTRADA del pack de la GUI (V7/H6 P3): LVGL + gui.c,
+ * compilados aparte, grabados en la zona de packs y ejecutados XIP. Desde
+ * V7/H6.c G2 SIN driver de pantalla: ése es otro pack, que publica 'PANT', y
+ * pant_lvgl.c lo busca en el primer uso. La VM no sabe nada de esto: sólo `publica()`/`busca()` y la tabla que
  * gui_pack_publics.c construye de bpvm_gui.h (generada). Es el modelo de
  * `sqlite_pack.c`, con dos diferencias que están medidas (V7_IDEAS §H6):
  *
@@ -19,7 +20,8 @@
 #include <stdint.h>
 
 /* La tabla que presta el firmware: la única ventana del pack al mundo. La ven
- * el pegamento (gui_pack_glue.c: ficheros, log) y el driver (panel_c5.c: la HAL). */
+ * el pegamento (gui_pack_glue.c: ficheros, log) y pant_lvgl.c (el reloj, y
+ * `busca('PANT')` para encontrar el driver de pantalla). */
 const bpvm_bios_t* g_bios = 0;
 
 /* La tabla que ESTE pack publica (gui_pack_publics.c, GENERADA de bpvm_gui.h). */
@@ -46,8 +48,9 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     }
 
     /* LVGL entero, sin display todavía: el display lo monta gui.c en el primer
-     * Gui.screen() (lvgl_ensure_init -> bpvm_gui_disp_init, que es panel_c5.c).
-     * lv_init es idempotente en v9, así que esa segunda llamada no molesta. */
+     * Gui.screen() (lvgl_ensure_init -> bpvm_gui_disp_init, que es pant_lvgl.c
+     * sobre el driver que haya publicado 'PANT'). lv_init es idempotente en v9,
+     * así que esa segunda llamada no molesta. */
     lv_init();
     di("gui: lv_init hecho (TLSF sobre el pool estatico del pack)");
 

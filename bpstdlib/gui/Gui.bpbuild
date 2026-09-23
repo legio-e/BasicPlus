@@ -1,9 +1,10 @@
 {
   "_comentario": [
-    "El PACK DE LA GUI (V7/H6): LVGL + gui.c + el driver del panel, compilados aparte (el",
-    "nativo, nativo/lvgl.npk.<SUFIJO>) y Gui.mod (el mismo Gui.bp de la stdlib), en un .pack",
-    "que se graba en la zona de packs. La imagen no lleva ni gui.c ni LVGL: la pantalla la",
-    "decide el usuario (Eduardo, 13-sep). Como el de SQLite:",
+    "El PACK DE LA GUI (V7/H6): LVGL + gui.c, compilados aparte (el nativo,",
+    "nativo/lvgl.npk.<SUFIJO>) y Gui.mod (el mismo Gui.bp de la stdlib), en un .pack que se",
+    "graba en la zona de packs. La imagen no lleva ni gui.c ni LVGL: la pantalla la decide el",
+    "usuario (Eduardo, 13-sep). Desde V7/H6.c G2 SIN driver de pantalla: ese es OTRO pack",
+    "(bpstdlib/gui/drivers/, publica 'PANT'), y hay que grabar los dos. Como el de SQLite:",
     "",
     "   bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool]   (RV32IMC: C3/C6/C5)",
     "   cp bpstdlib/gui/nativo/lvgl.npk.* bpstdlib/gui/nativo/Gui2.mdn.* bpstdlib/gui/out/",
@@ -24,6 +25,6 @@
   "dependencies": [],
   "out":          "pack",
   "pack":         { "name": "Gui", "version": "9.2.2", "provides": "LVGL",
-                    "notas": "LVGL 9.2.2 + Gui.mod + el panel de la ESP32-C5-Touch-LCD-2.8 (ST7789 + CST3530 + CH32V003)" },
+                    "notas": "LVGL 9.2.2 + Gui.mod; la pantalla la pone el pack de su driver ('PANT')" },
   "aot":          { "enabled": true, "targets": ["riscv"] }
 }

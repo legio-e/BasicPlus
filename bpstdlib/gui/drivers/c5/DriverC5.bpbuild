@@ -1,0 +1,17 @@
+{
+  "_comentario": [
+    "El pack del DRIVER DE PANTALLA de la Waveshare ESP32-C5-Touch-LCD-2.8 (V7/H6.c G2):",
+    "ST7789 240x320 por SPI, tactil CST3530 y el reset y la luz por el expansor CH32V003,",
+    "todo sobre la HAL de la BIOS. Publica 'PANT' y el pack de LVGL (Gui.pack) lo usa. Se",
+    "construye y se graba con:",
+    "   bash bpstdlib/gui/drivers/build_driver.sh c5 imc",
+    "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/drivers/c5/out/DriverC5.pack riscv-imc"
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./DriverC5.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name": "DriverC5", "version": "1", "provides": "PANT",
+                    "notas": "el driver de pantalla de la ESP32-C5-Touch-LCD-2.8 (ST7789 240x320 + CST3530 + CH32V003), sobre la HAL de la BIOS" }
+}

@@ -1,0 +1,8 @@
+module DriverNulo
+  // El modulo BP que acompana al DRIVER DE PANTALLA que no pinta (V7/H6.c G2): el que se
+  // graba para probar el pack de LVGL en una placa sin su pantalla (el P4), y la PLANTILLA
+  // mas pequena de un driver de pantalla. Solo lo identifica.
+  public function nombre(): string
+    return "driver nulo: 240x320, no pinta"
+  end nombre
+end DriverNulo

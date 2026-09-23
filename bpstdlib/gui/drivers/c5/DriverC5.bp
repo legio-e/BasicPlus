@@ -1,0 +1,9 @@
+module DriverC5
+  // El modulo BP que acompana al DRIVER DE PANTALLA de la Waveshare ESP32-C5-Touch-LCD-2.8
+  // en su .pack (V7/H6.c G2). El driver de verdad es el .npk (C, sobre la HAL de la BIOS):
+  // publica 'PANT' y el pack de LVGL lo usa sin que el programa se entere. Este modulo solo
+  // lo identifica, para quien quiera preguntar desde BP que pantalla tiene la placa.
+  public function nombre(): string
+    return "ESP32-C5-Touch-LCD-2.8: ST7789 240x320 por SPI, tactil CST3530, reset y luz por CH32V003"
+  end nombre
+end DriverC5

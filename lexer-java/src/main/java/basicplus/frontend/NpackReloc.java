@@ -388,6 +388,21 @@ public final class NpackReloc {
             throw new RelocException("el ELF es de la arquitectura " + e.machine()
                     + " y el destino '" + d.nombre + "' espera " + d.machine);
         }
+        /* V7/H6.c G2 (23-sep) — ¿CADA SECCIÓN ESTÁ EN SU LADO DEL UMBRAL?
+         *
+         * La clasificación de abajo es por DIRECCIÓN, y eso sólo vale si el
+         * enlazado dejó las secciones de RAM por encima del umbral y las de flash
+         * por debajo. No siempre: un motor SIN NINGUNA variable inicializada no
+         * tiene `.data`, `-Tdata=0x20000000` no tiene a quién colocar, y su
+         * `.sbss` se quedó pegada a `.rodata`, en 0x193c. Sus relocalizaciones se
+         * tomaron por de FLASH: `g_bios` apuntaba a la flash, lo que el driver
+         * guardaba ahí no llegaba a ninguna parte, y la C5 se reinició con un
+         * «Load access fault» al leerlo — el primer driver de pantalla (G2).
+         * Aquí se dice CON NOMBRE al construir, en vez de en una placa. */
+        for (String n : d.dataSecs) fueraDeSuLado(e, n, umbralRam, true);
+        for (String n : d.bssSecs)  fueraDeSuLado(e, n, umbralRam, true);
+        for (String n : d.flashSecs) fueraDeSuLado(e, n, umbralRam, false);
+
         byte[] flash = concatenar(e, d.flashSecs, "flash");
         byte[] data  = concatenar(e, d.dataSecs,  "datos");
         int baseFlash = baseDe(e, d.flashSecs, 0);
@@ -413,6 +428,26 @@ public final class NpackReloc {
             }
         }
         return new Imagen(d, flash, data, bss, baseFlash, umbralRam, sitios);
+    }
+
+    /** Una sección de RAM por debajo del umbral, o una de flash por encima: el
+     *  enlazado no dejó el motor como la clasificación por dirección supone. */
+    private static void fueraDeSuLado(Elf32 e, String nombre, int umbralRam, boolean deRam)
+            throws RelocException {
+        Elf32.Section s = seccion(e, nombre);
+        if (s == null || s.size == 0) return;
+        boolean arriba = Integer.compareUnsigned(s.addr, umbralRam) >= 0;
+        if (deRam && !arriba)
+            throw new RelocException(String.format("la seccion %s (%d B) esta en 0x%08x, POR DEBAJO"
+                + " de la RAM (0x%08x): el enlazado la dejo en la flash y sus variables se"
+                + " realojarian como si fueran de flash. Pasa cuando el motor no tiene ninguna"
+                + " variable inicializada (sin .data, -Tdata no coloca nada): enlaza con"
+                + " bpgenvm-c/tools/npk.ld, que fija la RAM aunque no haya .data.",
+                nombre, s.size, s.addr, umbralRam));
+        if (!deRam && arriba)
+            throw new RelocException(String.format("la seccion %s esta en 0x%08x, POR ENCIMA del"
+                + " umbral de RAM (0x%08x): se tomaria por RAM siendo flash.",
+                nombre, s.addr, umbralRam));
     }
 
     private static Elf32.Section seccion(Elf32 e, String nombre) {

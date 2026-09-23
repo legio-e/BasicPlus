@@ -1,33 +1,38 @@
 #!/bin/sh
-# build_lvgl.sh — el PACK DE LA GUI (V7/H6 P3): LVGL + gui.c + el panel, para un destino.
+# build_lvgl.sh — el PACK DE LA GUI (V7/H6 P3): LVGL + gui.c, para un destino.
 #
-#     bash bpstdlib/gui/nativo/src/build_lvgl.sh [imc|p4|arm] [c5|nulo] [KB del pool, 256]
+#     bash bpstdlib/gui/nativo/src/build_lvgl.sh [imc|p4|arm] [KB del pool, 256]
 #
-# El PANEL se elige aquí y no en runtime: `c5` es el de la Waveshare (ST7789 +
-# CH32 + CST3530) y `nulo` es el que NO PINTA, para probar el pack en una placa
-# que no tiene esa pantalla (el P4, idea de Eduardo del 22-sep). Un panel mudo
-# porque su chip no contesta y un panel que no pinta a propósito son cosas
-# distintas: por eso se decide al construir. Hoy el destino `p4` lleva `nulo`
-# por defecto —el P4 no tiene ese panel— y `imc` (la C5) lleva el suyo.
+# ⚠️ DESDE V7/H6.c G2 ESTE PACK NO LLEVA DRIVER DE PANTALLA. Hasta entonces el
+# segundo parámetro elegía cuál compilar dentro (`c5` o `nulo`): un pack por
+# placa, y los 2 KB que cambian viajando dentro de los 715 que no. Ahora el
+# driver es un pack aparte que publica 'PANT' (bpgenvm-c/include/bpvm_pant.h) y
+# se construye con bpstdlib/gui/drivers/build_driver.sh; aquí entra
+# `pant_lvgl.c`, que es LVGL buscando ese driver en su primer uso. Este pack es
+# el MISMO para todas las placas de una ISA: se compila tres veces y ya.
 #
 # La misma cadena que el pack de SQLite (bpstdlib/sqlite/nativo/src/build_sqlite_rv.sh):
 # compilar con la RECETA de la familia, enlazar en BASE 0 con --emit-relocs, cero
 # símbolos abiertos, y `NpackBuild` (el realojado lo hace el IDE al grabar). Lo que
 # cambia respecto a SQLite:
 #   · LVGL son ~450 ficheros (third_party/lvgl/src, con lodepng dentro); se compilan
-#     todos y `--gc-sections` se queda con lo que gui.c y el panel alcanzan (las fuentes
-#     Montserrat que font_for_px nombra entran enteras: 418 KB, medido en el C6).
+#     todos y `--gc-sections` se queda con lo que gui.c y pant_lvgl.c alcanzan (las
+#     fuentes Montserrat que font_for_px nombra entran enteras: 418 KB, medido en el C6).
 #   · gui.c es EL MISMO fichero del host y de las imágenes con LVGL dentro, compilado
 #     con -DBPVM_EN_PACK: lo que pedía a la VM lo sirve gui_pack_glue.c desde la BIOS.
 #   · gui_pack_publics.c (GENERADO de bpvm_gui.h) es lo que el pack publica bajo 'LVGL'.
 #   · el pool de LVGL (TLSF) es .bss del pack: la perilla es el segundo parámetro.
 #
-# Salida, VERSIONADA al lado (nativo/lvgl.npk.<SUFIJO>), y la lista de enlace en
-# lvgl_<sufijo>.link para el oráculo, como manda la casa.
+# Salida al lado (nativo/lvgl.npk.<SUFIJO>, NO versionada: son ~750 KB), y la
+# lista de enlace en lvgl_<sufijo>.link para el oráculo, como manda la casa.
 set -e
 QUE="${1:-imc}"
-PANEL="${2:-}"
-POOL_KB="${3:-256}"
+POOL_KB="${2:-256}"
+case "$POOL_KB" in
+  c5|nulo) echo "el driver de pantalla ya no va en este pack (V7/H6.c G2):"
+           echo "   bash bpstdlib/gui/drivers/build_driver.sh $POOL_KB <imc|p4|arm>"
+           exit 1 ;;
+esac
 HERE="$(cd "$(dirname "$0")" && { pwd -W 2>/dev/null || pwd; })"
 ROOT="$(cd "$(dirname "$0")/../../../.." && { pwd -W 2>/dev/null || pwd; })"
 BPC="$ROOT/bpgenvm-c"
@@ -45,17 +50,7 @@ case "$QUE" in
        ISA="-mcpu=cortex-m33 -mthumb -mfloat-abi=softfp -mfpu=fpv5-sp-d16"; LDX=""; DEST=arm-cortex-m33; SUF=ARMV8 ;;
   *) echo "destino: imc | p4 | arm"; exit 1 ;;
 esac
-# El panel por defecto: el del destino que TIENE pantalla nuestra (la C5) lleva
-# el suyo; los demás, el nulo — un pack sin panel no arranca la GUI y ya está.
-if [ -z "$PANEL" ]; then
-    if [ "$QUE" = imc ]; then PANEL=c5; else PANEL=nulo; fi
-fi
-case "$PANEL" in
-  c5)   PANEL_SRC="$HERE/panel_c5.c" ;;
-  nulo) PANEL_SRC="$HERE/panel_nulo.c" ;;
-  *) echo "panel: c5 | nulo"; exit 1 ;;
-esac
-echo "== pack de la GUI: destino $DEST ($SUF), panel $PANEL, pool $POOL_KB KB =="
+echo "== pack de la GUI: destino $DEST ($SUF), pool $POOL_KB KB, SIN driver de pantalla (lo pone 'PANT') =="
 
 OBJ="$HERE/obj_$SUF"
 rm -rf "$OBJ"; mkdir -p "$OBJ"
@@ -74,15 +69,15 @@ for f in $(find "$LVGL/src" -name "*.c" | sort); do
 done
 echo "      $n objetos"
 
-echo "[2/5] gui.c (el de la VM, bajo BPVM_EN_PACK) + lo publicado + la entrada + el pegamento + el panel"
+echo "[2/5] gui.c (el de la VM, bajo BPVM_EN_PACK) + lo publicado + la entrada + el pegamento + LVGL sobre 'PANT'"
 "$GCC" $CF -c "$BPC/src/gui.c"               -o "$OBJ/gui.o"
 "$GCC" $CF -c "$BPC/src/gui_pack_publics.c"  -o "$OBJ/gui_pack_publics.o"
 "$GCC" $CF -c "$HERE/lvgl_pack.c"            -o "$OBJ/lvgl_pack.o"
 "$GCC" $CF -c "$HERE/gui_pack_glue.c"        -o "$OBJ/gui_pack_glue.o"
-"$GCC" $CF -c "$PANEL_SRC"                   -o "$OBJ/panel.o"
+"$GCC" $CF -c "$HERE/pant_lvgl.c"            -o "$OBJ/pant_lvgl.o"
 
 echo "[3/5] la lista de enlace, en UN sitio (la lee el oráculo)"
-{ echo "$OBJ/lvgl_pack.o"; echo "$OBJ/gui_pack_publics.o"; echo "$OBJ/gui.o"; echo "$OBJ/gui_pack_glue.o"; echo "$OBJ/panel.o"
+{ echo "$OBJ/lvgl_pack.o"; echo "$OBJ/gui_pack_publics.o"; echo "$OBJ/gui.o"; echo "$OBJ/gui_pack_glue.o"; echo "$OBJ/pant_lvgl.o"
   ls "$OBJ"/lv_*.o; echo "$LIBGCC"; } > "$HERE/lvgl_$SUF.link"
 
 echo "[4/5] enlazando en BASE 0 con --emit-relocs y --gc-sections"

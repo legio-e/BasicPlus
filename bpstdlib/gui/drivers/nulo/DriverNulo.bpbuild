@@ -1,0 +1,17 @@
+{
+  "_comentario": [
+    "El pack del DRIVER DE PANTALLA que NO PINTA (V7/H6.c G2): publica 'PANT' con un flush",
+    "que no manda nada. Para probar el pack de LVGL en una placa que no tiene su pantalla",
+    "(el P4, idea de Eduardo del 22-sep) y como PLANTILLA minima de un driver. Se construye",
+    "y se graba con:",
+    "   bash bpstdlib/gui/drivers/build_driver.sh nulo p4",
+    "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/drivers/nulo/out/DriverNulo.pack riscv"
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./DriverNulo.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name": "DriverNulo", "version": "1", "provides": "PANT",
+                    "notas": "driver de pantalla nulo (240x320, no pinta): prueba del pack de LVGL y plantilla" }
+}

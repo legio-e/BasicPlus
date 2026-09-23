@@ -1,0 +1,3 @@
+out/
+nativo/obj_*/
+nativo/*.elf
