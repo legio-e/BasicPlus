@@ -706,24 +706,30 @@ static int32_t bus_por_tramos(bpvm_t* vm, bus_verbo_t v, int bus, uint32_t tx_ad
                               uint8_t* tx, uint8_t* rx) {
     int escribe = (v == BUS_SPI_WRITE || v == BUS_SPI_TRANSFER || v == BUS_UART_WRITE);
     int lee     = (v == BUS_SPI_READ  || v == BUS_SPI_TRANSFER || v == BUS_UART_READ);
+    /* V7/H6.c G4.a2 — el SPI se COMPARTE (en la C5, con la pantalla y la TF): la llamada
+     * ENTERA es un turno del árbitro, con todos sus tramos dentro. Un turno por tramo dejaría
+     * colarse a otro dispositivo entre dos tramos con el CS del programa abajo. */
+    int spi = (v == BUS_SPI_WRITE || v == BUS_SPI_READ || v == BUS_SPI_TRANSFER);
     int32_t hecho = 0;
+    if (spi && bpvm_spi_tomar_como(BPVM_BUS_PROGRAMA, bus) != 0) return -1;
     do {
         int n = (count - hecho > BUS_TRAMO) ? BUS_TRAMO : (int) (count - hecho);
         if (escribe) bus_a_bytes(vm, tx_addr, hecho, n, tx);   /* ANTES de leer: tx y rx pueden ser el mismo array */
         int r = -1;
         switch (v) {
-            case BUS_SPI_WRITE:    r = bpvm_spi_write(bus, tx, (size_t) n); break;
-            case BUS_SPI_READ:     r = bpvm_spi_read(bus, rx, (size_t) n); break;
-            case BUS_SPI_TRANSFER: r = bpvm_spi_transfer(bus, tx, rx, (size_t) n); break;
+            case BUS_SPI_WRITE:    r = bpvm_spi_xfer(bus, tx, NULL, (size_t) n); break;
+            case BUS_SPI_READ:     r = bpvm_spi_xfer(bus, NULL, rx, (size_t) n); break;
+            case BUS_SPI_TRANSFER: r = bpvm_spi_xfer(bus, tx, rx, (size_t) n); break;
             case BUS_UART_WRITE:   r = bpvm_uart_write(bus, tx, (size_t) n); break;
             case BUS_UART_READ:    r = bpvm_uart_read(bus, rx, (size_t) n, timeout); break;
         }
-        if (r < 0) return r;
+        if (r < 0) { hecho = r; break; }   /* el error del driver, tras soltar el turno */
         if (r > n) r = n;   /* un driver no puede dar más de lo pedido: nunca se escribe fuera */
         if (lee) bus_de_bytes(vm, rx_addr, hecho, r, rx);
         hecho += r;
         if (r < n) break;
     } while (hecho < count);
+    if (spi) bpvm_spi_dejar(bus);
     return hecho;
 }
 

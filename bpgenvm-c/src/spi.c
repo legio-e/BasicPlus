@@ -166,14 +166,25 @@ void bpvm_spi_dejar(int bus) {
  * Sin CS: el de `Spi.Bus` lo lleva el programa con `Gpio`, y el de una ranura
  * v6 el pack (V7_IDEAS §H6.11.6b: el límite, a sabiendas). */
 enum { OP_WRITE, OP_READ, OP_TRANSFER };
-static int legado(int quien, int bus, const uint8_t* tx, uint8_t* rx, size_t n, int op) {
+
+/* El turno de las ranuras de siempre, con la velocidad del `abrir` de `quien`. Suelto
+ * para la llamada de BP que la fachada ve en varios TRAMOS (#534: sin tope, en tramos de
+ * 256): la llamada ENTERA tiene que ser UN turno —si no, otro dispositivo se colaría entre
+ * dos tramos con el CS del programa abajo—. -1 con el porqué en el log. */
+int bpvm_spi_tomar_como(int quien, int bus) {
     char err[128];
-    int q = idx_quien(quien), r;
+    int q = idx_quien(quien);
     if (!bus_ok(bus)) return -1;
     if (bpvm_spi_tomar(bus, -1, s_leg_hz[bus][q], s_leg_modo[bus][q], quien, err, sizeof err) != 0) {
         bpvm_diag("SPI %d: %s", bus, err);
         return -1;
     }
+    return 0;
+}
+
+static int legado(int quien, int bus, const uint8_t* tx, uint8_t* rx, size_t n, int op) {
+    int r;
+    if (bpvm_spi_tomar_como(quien, bus) != 0) return -1;
     r = (op == OP_WRITE) ? crudo_write(bus, tx, n)
       : (op == OP_READ)  ? crudo_read(bus, rx, n)
       :                    crudo_transfer(bus, tx, rx, n);

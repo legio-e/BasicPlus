@@ -274,6 +274,8 @@ escalón): en la Pico, un loopback como `SpiLoop` pero en el bus 0 y con más de
 para el bus 2 del ESP32, cuyo SPI rechaza hoy más de 64 B) —MOSI↔MISO puenteados: tienen que volver iguales a través
 del corte de tramo— y `UartBuf` con N = 300 (dos tramos de escritura y dos de lectura sobre el anillo de 512).
 
+**Y con `G4.a2` (fusionada el 23-sep, noche)**: la llamada ENTERA de `Spi.write`/`read`/`transfer` es UN turno del árbitro, con todos sus tramos dentro (`bpvm_spi_tomar_como`); con un turno por tramo, en un bus compartido otro dispositivo se colaría entre dos tramos con el CS del programa abajo.
+
 **Fuera, a propósito**: la fachada SPI del ESP32 (`esp32_spi_xfer`, sin DMA) rechaza toda transacción de más de 64 B
 —con tramos de 256 sigue devolviendo -1, igual que antes— y se trata aparte, con el refresco del panel de la C5; el
 STM32 castea `n` a `uint16_t` (con tramos de 256 ya no se llega); el SPI del ESP32 devuelve -1 con `n == 0` donde la

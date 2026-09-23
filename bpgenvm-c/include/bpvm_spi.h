@@ -74,6 +74,9 @@ int  bpvm_spi_write(int bus, const uint8_t* data, size_t n);
 int  bpvm_spi_read(int bus, uint8_t* data, size_t n);
 int  bpvm_spi_transfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n);
 int  bpvm_spi_write_como(int quien, int bus, const uint8_t* data, size_t n);
+/* El turno de esas mismas ranuras, suelto: para la llamada de BP que la fachada ve en
+ * varios tramos (#534) y tiene que ser UN turno entero (tomar_como, xfer ×N, dejar). */
+int  bpvm_spi_tomar_como(int quien, int bus);
 
 #ifdef __cplusplus
 }

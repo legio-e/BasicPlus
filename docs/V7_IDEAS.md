@@ -2891,8 +2891,17 @@ configuración— y la velocidad sólo se cambia si es otra que la actual).
   terminar un programa, `bpvm_gui_reset` estrena una pantalla NUEVA (el tema, las banderas de fábrica, sin
   callbacks: un `onClick` en la pantalla también sobrevivía) y borra la del programa con todo lo suyo. Va en
   `gui.c`, dentro del pack de LVGL (los dos `.npk` regenerados) y de las imágenes con GUI. En la C5,
-  `GuiFlushBench` y después `C5Touch` en el mismo arranque: fondo blanco y el botón responde (Eduardo).
-- `sim-smoke` sigue rojo en `main`: su arreglo (`#537`, `21fbfb28`) está en una rama sin fusionar.
+  `GuiFlushBench` y después `C5Touch` en el mismo arranque: fondo blanco y el botón responde (Eduardo)
+  (`b2bcd5cb`).
+- **Y la ROTACIÓN también se heredaba** —es del display, no de la pantalla—: `samples/C5GiraYSale.bp` gira a
+  90° y termina, y `C5Touch` salía girado. `bpvm_gui_reset` vuelve a 0° antes de estrenar la pantalla (sólo
+  si alguien giró); repetida la prueba, sale derecho (Eduardo) (`4f11b7fb`).
+- `sim-smoke` estaba rojo en `main` porque su arreglo (`#537`) vivía en una rama sin fusionar; fusionada esa
+  noche con la de `#534` (`622390b6`, `f037e050`): paridad 94/94 con `BusCount` y el frente `sim` en verde.
+- **La fusión con `#534` trajo una interacción**: `#534` manda un SPI largo en tramos de 256, una llamada a
+  la fachada por tramo, y con el árbitro cada llamada es un turno — otro dispositivo se colaría ENTRE dos
+  tramos con el CS del programa abajo. Ahora la llamada entera de BP es UN turno (`bpvm_spi_tomar_como` y
+  los tramos dentro), como dice §11.3.
 
 **Lo que queda, a sabiendas:**
 - **`G4.a3`**: `Spi.Device` en BP (el CS dentro del turno, la velocidad la pasa el objeto y se va la

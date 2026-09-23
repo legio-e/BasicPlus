@@ -408,17 +408,16 @@ y el botón responde (Eduardo).
 
 ## ⏭️ Traspaso (23-sep, noche) — `G4.a2` hecho; lo siguiente: el fondo de la GUI entre programas
 
-**Hecho después**: la pantalla se estrena NUEVA al terminar un programa (`bpvm_gui_reset`), como en miVM. **Lo
-siguiente, a mirar**: la ROTACIÓN (estado del display, no de la pantalla): si un programa gira y termina, el
-siguiente empezaría girado (en miVM no). Luego, a elegir con Eduardo: **`G4.a3`** (`Spi.Device` y el repeated
-start) o **H3 «SD al común»**,
+**Hecho después, esa misma noche**: la pantalla se estrena NUEVA al terminar un programa (`b2bcd5cb`) y la
+ROTACIÓN vuelve a 0° (`4f11b7fb`): los dos, vistos en la C5 por Eduardo. **Fusionadas** las ramas de `#537` y
+`#534` (`622390b6`, `f037e050`), con check entero verde (paridad 94/94, el frente `sim`); y la interacción que
+trajo `#534` (un turno por tramo) arreglada: la llamada entera de SPI es un turno. **Lo siguiente**, a elegir
+con Eduardo: **`G4.a3`** (`Spi.Device` y el repeated start) o **H3 «SD al común»**,
 que es lo que permite la prueba de verdad del árbitro: la TF y la pantalla a la vez en la C5 (la microSD ya
 está puesta).
 
-⚠️ **Dos ramas de otras sesiones sin fusionar**: `claude/angry-feistel-060057` (`#534`, el `count` de los
-builtins de bus igual en las dos VMs) y `claude/laughing-cohen-6f546e` (`#537`, el simulador en la red: con ella
-`sim-smoke` vuelve a verde). No tocan el código de `G4.a2`; chocarán en `FICHAS`/`ESTADO`/`compat.sh`. Fusionarlas
-es decisión de Eduardo. ⚠️ Sin medir: la S3 y el P4 con el cierre nuevo del IDE.
+⚠️ Sin medir: la S3 y el P4 con el cierre nuevo del IDE. Y las ramas fusionadas siguen existiendo (con sus
+worktrees): borrarlas es de Eduardo.
 
 **Estado de las placas**: la C5 con la imagen de `G4.a2` (BIOS v7) y en su zona el `Gui` nuevo y el `DriverSpi` v7
 (en ese orden: el reparto de RAM es el sello, y un pack borrado de DEBAJO no deja su hueco al que se graba
