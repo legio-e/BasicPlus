@@ -218,6 +218,34 @@ porque el destino está en PSRAM**. Main task 8 → 16 KB, con el volcado traduc
 **Medido**: pantalla entera **143 ms**, una etiqueta **1 ms**. Una interfaz responde; el peor caso
 cuesta, y la palanca es la fachada SPI (DMA), no el driver.
 
+## 🔌 `#534` (23-sep) — el `count` de los builtins de bus, igual en las dos VMs
+
+Visto de pasada analizando el SPI de la C5, y hecho con el método: **medir el «antes» con un sample, proponer la
+semántica, y la cascada Java → C → firmware**. El aviso decía «la VM-C recorta a 256»; medido con `BusCount.bp` y los
+binarios de HEAD salieron **cuatro** cosas: I2C recortaba a **64** (no 256), `count` < 0 hacía **segfault** en la VM-C,
+el array `null` sólo lo miraba miVM, y la dirección I2C del stub se escribía distinto en cada VM (`0x3c`/`0x3C`).
+Eduardo eligió entre tres (ficha `#534`): tramos de 256 en SPI y UART en las DOS VMs —así el bucle se prueba con diff
+en el PC—, el plazo de `Uart.read` por tramo, e I2C sin partir con tope de 256.
+
+**Lo que enseñó**: (1) la primera versión metía los buffers en el helper y **se midió** con `-fstack-usage` en ARM:
++568 B de pila en cada llamada SPI/UART sobre los 2072 de `bpvm_call_builtin`; con los buffers en el `case`, como
+antes, +8 y 64. Leyendo el diff no se veía. (2) Al censar por la primitiva salieron dos hermanos, en fichas aparte por
+decisión de Eduardo: `move` en la VM-C no valida nada (`#535`) y `__npShow` recorta a 256 LEDs (`#536`, donde los
+tramos NO valen: el WS2812 hace *latch* entre ráfagas).
+
+**Tres trampas de trabajar en un worktree**, para la próxima: `dist/*.zip` está ignorado y `check-fwd` sale rojo sin
+él (se copia del checkout principal verificando su sha256 contra el `.sha256` versionado); el firmware de la Pico
+configurado en el scratchpad no compila porque la ruta pasa de 260 caracteres (se configura en
+`bpgenvm-c/pico/build` del worktree, con `-Dpicotool_DIR` apuntando al del principal); y `mvn install` escribe en el
+`~/.m2` de todos: se instaló la miVM de HEAD antes de tocarla y después sólo `package`.
+
+## ⏭️ Traspaso (23-sep) — `#534` hecha; lo siguiente sigue siendo `H6.c`, por `G1`
+
+`#534` cerrada (`60741fa6`: paridad 93/93 con `BusCount`, `check` entero en verde) y **el firmware de la Pico compila**;
+queda el tercer escalón con placa, escrito en la ficha: un loopback SPI de más de 256 bytes y `UartBuf` con N = 300.
+Abiertas de pasada: `#535` (`move`) y `#536` (`__npShow`). El fat-jar del IDE lleva su copia de la miVM: el arreglo
+entra en él al hacer `install` de la miVM y rehacer `BpIde` (lo normal al publicar). Nada grabado en placas; sin push.
+
 ## ⏭️ Traspaso (22-sep, FIN DEL DÍA) — H4 y H6.a cerradas; **lo siguiente: `H6.c`, por `G1`**
 
 Un día largo y con tres tramos: **H4** por la mañana, **H6** (análisis, P1, la BIOS v5, P2, P3 y la
