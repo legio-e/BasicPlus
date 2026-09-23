@@ -1,0 +1,18 @@
+// C5GiraYSale.bp — gira la pantalla 90° y TERMINA (V7/H6, 23-sep).
+//
+// Para ver si el SIGUIENTE programa, en el mismo arranque, hereda la rotación: en miVM
+// cada ejecución empieza con el modelo limpio (0°). La pantalla ya no se hereda (el reset
+// estrena una nueva); la rotación es del DISPLAY, y ésa es la pregunta. Correr esto y
+// después C5Touch sin reiniciar la placa.
+module C5GiraYSale
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "girada 90")
+    eti.align(Gui.Align.CENTER, 0, 0)
+    Gui.setRotation(90)
+    Gui.__guiRunOnce()
+    print "girada a 90 grados, y termino"
+  end Main
+end C5GiraYSale

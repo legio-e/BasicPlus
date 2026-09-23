@@ -1389,6 +1389,14 @@ void bpvm_gui_reset(void) {
     }
     g_image_count = 0;
 
+    /* La ROTACIÓN (V7/H6, 23-sep) es del DISPLAY, no de la pantalla, y también
+     * sobrevivía: tras un programa que gira a 90° y termina, el siguiente salía
+     * girado (visto en la C5 con C5GiraYSale y C5Touch; en miVM cada ejecución
+     * empieza a 0°). Se vuelve a 0° ANTES de estrenar la pantalla de abajo, que así
+     * nace con el tamaño de 0°. Sólo si alguien giró: girar arranca LVGL y el
+     * display, y el fin de un programa sin GUI no tiene por qué. */
+    if (g_rotation != 0) bpvm_gui_set_rotation(0);
+
 #ifdef BPVM_LVGL
     /* La pantalla se queda LIMPIA: los widgets eran del programa que acaba de
      * terminar. Dejarlos pintados es lo que hacía que el siguiente RUN dibujara
