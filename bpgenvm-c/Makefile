@@ -923,10 +923,15 @@ SIM_SQL_SRC = build/sql/aot_SQLite.c $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c 
               $(SQLSRC)/packglue.c build/sql/sqlite3.o
 SIM_SQL_FLAGS = -DBPVM_SQLITE -Ibuild/sql -I$(SQLSRC) $(SQLDEF)
 
+# SIM_OUT: donde se deja el binario. `compat.sh check-sim` construye el SUYO
+# (build/bpvm-sim-red.exe) y no pisa el de siempre: el IDE puede tenerlo abierto
+# (en Windows, un .exe en marcha no se sobrescribe) y puede ser LVGL=1/SQLITE=1.
+SIM_OUT ?= build/bpvm-sim.exe
+
 sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,) $(if $(filter 1,$(SQLITE)),build/sql/sqlite3.o build/sql/aot_SQLite.c,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
-	@echo "sim listo: build/bpvm-sim.exe [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
+	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) -o $(SIM_OUT) $(LDFLAGS)
+	@echo "sim listo: $(SIM_OUT) [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
 
 # Los ingredientes de SQLITE=1, si no estan ya (los comparte con test-sqldemo).
 build/sql/sqlite3.o:
@@ -949,6 +954,9 @@ boardsim-smoke: sim
 	python tools/boardsim_smoke.py
 
 # H10 — smoke del wire de FICHEROS + EJECUCIÓN contra el sim (PUT/LIST/GET/RUN…).
+# El sim arranca como lo arranca el IDE: con ../packs/Stdlib.pack grabado (desde
+# H1 P3 todo módulo importa Core). Estos cuatro smokes están en la red de cada
+# día: `compat/compat.sh check` (frente check-sim), con la guarda del pack.
 sim-smoke: sim
 	@echo "--- H10 sim smoke (FILES + TERMINAL) ---"
 	python tools/sim_smoke.py

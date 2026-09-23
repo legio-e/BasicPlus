@@ -338,6 +338,14 @@ if [ -n "$MALOS" ]; then
     echo "  Un .mod que la VM rechaza no se publica. Regenéralo o quítalo."
     rm -rf "$OUT"; exit 1
 fi
+# Y que Stdlib.pack SEA la stdlib que viaja en el paquete (#537, 23-sep): la guarda
+# de arriba sólo ve un magic viejo, y el pack del 18-sep era MOD9 — al día de
+# formato pero de OTRA stdlib (sin las clases del lenguaje en Core: LINK_ERROR en el
+# micro simulado con un StringBuilder). Byte a byte contra los bpstdlib/*.mod.
+if ! bash "$RAIZ/compat/stdlib_pack.sh" "$OUT/packs/Stdlib.pack"; then
+    echo "  El Stdlib.pack del paquete no es la stdlib que lleva: no se publica."
+    rm -rf "$OUT"; exit 1
+fi
 
 # --- red: ningún enlace de la ayuda puede quedar roto DENTRO del paquete -----
 # Se comprueba sobre el árbol YA MONTADO, que es lo que va a ver el usuario: el

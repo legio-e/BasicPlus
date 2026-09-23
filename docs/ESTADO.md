@@ -315,7 +315,37 @@ pantalla viva, un programa se engancha al SPI 2 y la etiqueta sigue a 1 ms; los 
 programa lee el CH32 por el I2C 0 compartido. **Redes**: `test-bus` nueva, `test-driverspi`, `test-guipack`,
 `test-sd`/`test-blk`/`test-sdsc` (las dos primeras no enlazaban desde #478/H4), paridad 93/93 con
 `BusCompartido.bp`, y las ocho imágenes compiladas (S3, C3, C5, C6, P4, Pico, Nucleo, Discovery).
-⚠️ `sim-smoke` falla, pero ya fallaba en `HEAD` (el simulador no encuentra `Core`): apuntado aparte.
+⚠️ `sim-smoke` falla, pero ya fallaba en `HEAD` (el simulador no encuentra `Core`): apuntado aparte (→ `#537`, cerrada esa tarde).
+
+## 🧪 H9 `#537` (23-sep, tarde) — EL MICRO SIMULADO, EN LA RED: cuatro smokes podridos y un `Stdlib.pack` rancio
+
+El `sim-smoke` que `G4.a1` vio rojo en `HEAD` llevaba así desde el 20-sep: **`656ec7d5` (H1 P3) hace que el parser
+ponga `import Core` en todo módulo**, y el smoke arrancaba el simulador sin librería. Acotado construyendo el
+frontend a los dos lados del commit con un repo Maven privado (`656ec7d5^`: el Hello F1 sin importaciones;
+`656ec7d5`: con `Core`); el simulador estaba bien. Al mirar los hermanos salió más, todo de la misma forma
+(pruebas fuera de las redes): el caso GUI de `io-smoke` no cargaba desde el 11-sep (`Gui` → `Collections`, y el
+arnés subía las dependencias con una lista a mano) y su guarda lo contaba como «saltado» con el total en OK; el
+control de `test-listtrunc` medía contra el tope del recorredor que el sim tenía antes de U3.24; y, lo gordo,
+**`packs/Stdlib.pack` era el del 18-sep**: el micro simulado del IDE daba `LINK_ERROR` con cualquier
+`StringBuilder`, y `montar-zip.sh` lo habría metido en el ZIP de V7.
+
+**Decidido con Eduardo**: los smokes arrancan el sim como el IDE (`--pack=packs/Stdlib.pack`); una guarda del
+contenido del pack (`compat/stdlib_pack.sh`, con `--regenerar`) en la red y en `montar-zip.sh`; y los cuatro
+smokes en `compat.sh check` (frente `check-sim`, con su propio binario del sim). Lo del IDE, a `#538`.
+
+**Red**: `check-sim` 5/5 con un control por arreglo (pack rancio, smoke viejo, pack sin `Collections`, sabor LVGL);
+`compat.sh check` entero en verde (93/93, cápsula 59/59, norma 9/9, sim 5/5, sombra 13/13, MOD8 93/93). Commit
+`21fbfb28`; detalle en la ficha.
+
+## ⏭️ Traspaso (23-sep, tarde) — `#537` cerrada; lo siguiente sigue siendo `G4.a2` (el árbitro)
+
+**Lo nuevo que hay que saber**: `compat.sh check` tiene un frente más, `check-sim` (~11 s): construye
+`bpgenvm-c/build/bpvm-sim-red.exe` (no toca `bpvm-sim.exe`) y exige el sabor `gui1-lvgl0`, como la paridad. **Al
+tocar la stdlib, `bash compat/stdlib_pack.sh --regenerar`** además de `regen_all_mods.sh`: si no, la red se pone
+roja con la lista de módulos que no cuadran. `#538` (el IDE y el `Core` implícito) queda abierta en H8.
+
+**Lo de antes sigue igual**: la C5 con `C5Touch` para mirar colores y pulsar (cierra `G2` y `G3`), y después
+`G4.a2`. Sin push.
 
 ## 👆 H6.c (23-sep, tarde) — `G2` y `G3` MIRADOS, y el táctil que «se colgaba»: era la HERRAMIENTA
 
@@ -695,7 +725,9 @@ la Pico de «todas las clases abiertas» no está medido: se mide en P5 con una 
 el firmware de la Pico compilado (`bpvm_pico.uf2`, 657 KB; sin grabar). **Tramo 2** (`471f7865`): `bpdevices/*.mod`
 recompilados y los `.dbg` de la stdlib al día. **Tramo 3** (16:10): las siete imágenes construidas con los blobs
 nuevos — S3 (0x732e0), P4 (0x142cd0), C3, C6, Nucleo (.elf 4,0 MB) y DK2 (.elf 10,2 MB) — **ninguna grabada**. El pack
-de la stdlib no se versiona (`bpstdlib/out/Stdlib.pack` sale del build; `montar-zip.sh` lo recoge). Queda: grabar y
+de la stdlib no se versiona (`bpstdlib/out/Stdlib.pack` sale del build; `montar-zip.sh` lo recoge). ⚠️ **Falso**
+(corregido el 23-sep, `#537`): `packs/Stdlib.pack` SÍ está versionado —es lo que el IDE graba en el micro simulado y
+lo que `montar-zip.sh` copia al ZIP—, se quedó en el del 18-sep y ahora lo vigila la red. Queda: grabar y
 verificar en placa cuando Eduardo diga (Pico con `placas_v9.py --embebida`; medir la carga de una app con clases,
 que ahora son todas abiertas).
 

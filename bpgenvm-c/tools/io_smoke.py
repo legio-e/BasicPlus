@@ -21,7 +21,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(ROOT)
 SIM  = os.path.join(ROOT, "build", "bpvm-sim.exe")
 if not os.path.exists(SIM): SIM = os.path.join(ROOT, "build", "bpvm-sim")
+SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
 JAR  = os.path.join(REPO, "lexer-java", "target", "basicplus-frontend.jar")
+# La librería de packs, grabada como la graba el IDE (SimRunner). Ver sim_smoke.py.
+STDLIB_PACK = os.path.join(REPO, "packs", "Stdlib.pack")
 PORT = 5117
 fails = 0
 
@@ -149,6 +152,9 @@ def kill_durante(w, mod_remoto, etiqueta, espera_previa):
 def main():
     if not os.path.exists(SIM):
         print("no esta el simulador: make sim"); return 1
+    if not os.path.exists(STDLIB_PACK):
+        print("FAIL: no esta la libreria de packs (" + STDLIB_PACK + "): el IDE la graba en el sim")
+        return 1
     tmp = tempfile.mkdtemp(prefix="iosmoke")
     mods = {}
     for nombre, fuente in (("IoCalc", FUENTE_CALC), ("IoChorro", FUENTE_CHORRO),
@@ -158,12 +164,17 @@ def main():
         open(bp, "w", encoding="utf-8").write(fuente)
         m = compila(bp, tmp)
         if m is None:
-            print("no se pudo compilar " + nombre + " (java/frontend): me salto la prueba")
-            return 0
+            # Antes salia 0 («me salto la prueba»): una prueba que no puede hacer su
+            # trabajo no da verde, lo dice en rojo.
+            print("FAIL: no se pudo compilar " + nombre + " (java/frontend): la prueba no se hace")
+            print("[status=FAIL(compilacion)]")
+            shutil.rmtree(tmp, ignore_errors=True)
+            return 1
         mods[nombre] = m
     flash = os.path.join(tmp, "flash.bin")
     proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash,
-                             "--mem=1M", "--psram=8M", "--flash=4M"],
+                             "--mem=1M", "--psram=8M", "--flash=4M",
+                             "--pack=" + STDLIB_PACK],
                             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     try:
         sock = None
@@ -180,13 +191,12 @@ def main():
             r = w.call_bulk("PUT", datos, path="/app/" + nombre + ".mod")
             if r.get("type") != "PUT_REPLY":
                 check(False, "PUT de " + nombre + ": " + json.dumps(r)[:90]); return 1
-        # El caso del GUI importa Gui, que a su vez importa Json y Core: el simulador
-        # arranca con el FS vacio, asi que hay que subirlas. Sin esto el RUN falla con
-        # «falta el modulo Gui» y la prueba se saltaba creyendo que faltaba LVGL.
-        for dep in ("Core", "Json", "Gui"):
-            origen = os.path.join(REPO, "bpstdlib", dep + ".mod")
-            if os.path.exists(origen):
-                w.call_bulk("PUT", open(origen, "rb").read(), path="/lib/" + dep + ".mod")
+        # La libreria NO se sube a /lib: viene del pack grabado al arrancar, como en el
+        # IDE. Aqui se subian Core, Json y Gui a mano, y el 11-sep Gui empezo a importar
+        # Collections (V6/G2-2, la OwnerList de Container): desde entonces IoGui no
+        # cargaba («falta el modulo Collections») y el caso 3 salia «saltada» con el
+        # total en OK. Una lista de dependencias a mano se pudre sin avisar; el pack
+        # es la libreria entera (y compat/stdlib_pack.sh vigila que sea la de hoy).
 
         print("-- 1. KILL con el programa CALCULANDO (sin imprimir) --")
         kill_durante(w, "/app/IoCalc.mod", "calculo", 0.5)
@@ -205,10 +215,19 @@ def main():
         vio_gui = False
         t0 = time.time()
         salio_solo = None
+        murio_antes = None
         while arranco and time.time() - t0 < 5:
             m = w._line(timeout=5)
             if m.get("type") == "OUTPUT" and "gui lista" in m.get("data", ""): vio_gui = True; break
-            if m.get("type") == "EXITED": break
+            if m.get("type") == "EXITED": murio_antes = m; break
+        # Si el programa MUERE antes de levantar la GUI (no carga, no enlaza, lanza),
+        # eso no es «no hay LVGL»: es un fallo, y se dice en rojo con su porque. Hasta
+        # el 23-sep esta rama imprimia «saltada» y el total salia OK con IoGui sin
+        # cargar desde el 11-sep.
+        check(arranco, "GUI: el RUN arranco (" + json.dumps(r)[:90] + ")")
+        if murio_antes is not None:
+            check(False, "GUI: el programa murio ANTES de levantar la GUI: "
+                  + json.dumps(murio_antes, ensure_ascii=False)[:200])
         # #485 - LA GUARDA MIRABA LO QUE NO ERA. Buscaba "gui lista" para decidir
         # si el sim trae LVGL, y el sim HEADLESS tambien la imprime: la guarda no
         # saltaba nunca, el caso corria igual y fallaba SIEMPRE con `make
@@ -228,7 +247,14 @@ def main():
                     break          # con LVGL no llega nada, que es lo esperado
                 if m.get("type") == "EXITED": salio_solo = m; break
         if not vio_gui:
-            print("        (saltada: el RUN no llego a levantar la GUI)")
+            if arranco and murio_antes is None:
+                # Ni «gui lista» ni EXITED en 5 s: colgado ANTES de la GUI. Tambien es
+                # rojo, y se para para que el caso 4 encuentre la VM libre.
+                check(False, "GUI: en 5 s ni 'gui lista' ni EXITED (colgado antes de la GUI)")
+                w.send("KILL")
+                t1 = time.time()
+                while time.time() - t1 < 15:
+                    if w._line(timeout=15).get("type") == "EXITED": break
         elif salio_solo is not None:
             print("        (SALTADA: el sim no trae LVGL, `Gui.run()` no bloquea y el")
             print("         programa termina solo. Para medir esto: make sim LVGL=1)")

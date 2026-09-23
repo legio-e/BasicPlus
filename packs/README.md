@@ -6,7 +6,7 @@ placa (o en el micro simulado) desde el panel de Packs.
 
 | Pack | Qué trae | Se construye con |
 |---|---|---|
-| `Stdlib.pack` | La librería estándar completa (28 módulos en V6: Core, Str, Collections, Json, IO, Math, Gui, Net, App, Packs, Machine y los de hardware) — los MISMOS `.mod` que lleva el firmware en `/lib`, byte a byte; se reconstruye con cada versión (el del 20-ago era MOD6 y tapaba al `/lib` fresco del P4, `#493`) | `bpstdlib/Stdlib.bpbuild` |
+| `Stdlib.pack` | La librería estándar completa (29 módulos el 23-sep: Core, Str, Collections, Json, IO, Math, Time, Gui, Net, App, Packs, Machine y los de hardware) — los MISMOS `.mod` que `bpstdlib/`, byte a byte, y eso lo **comprueba la red** (`compat/stdlib_pack.sh`, `#537`); se reconstruye con **cada cambio de la stdlib**, no sólo con cada versión (el del 20-ago era MOD6 y tapaba al `/lib` fresco del P4, `#493`; el del 18-sep no tenía las clases del lenguaje en Core y daba `LINK_ERROR` en el micro simulado, `#537`) | `bpstdlib/Stdlib.bpbuild` |
 | `SQLite.pack` | El motor SQLite y su ORM: los módulos `SQLite` y `Orm`, más el código nativo precompilado (`.npk` + `.mdn`) para **ARM y RISC-V** | `bpstdlib/sqlite/SQLite.bpbuild` |
 
 ## Cómo se reconstruye
@@ -21,12 +21,28 @@ cp bpstdlib/out/Stdlib.pack packs/
 ```
 
 (o **Project → Build Project** abriendo `bpstdlib/Stdlib.bpbuild` en el IDE).
+Esas dos órdenes, y la comprobación de después, en una:
+
+```bash
+bash compat/stdlib_pack.sh --regenerar
+```
 
 El truco está en `bpstdlib/Stdlib.bp`: un módulo sin código cuyo único cometido
 es **importar** toda la librería. Como el compilador arrastra los imports
-transitivamente, compilar ese main compila los 26 módulos, y `"out": "pack"`
+transitivamente, compilar ese main compila toda la librería, y `"out": "pack"`
 los empaqueta. **Al añadir un módulo nuevo a la librería hay que añadir su
-import en `Stdlib.bp`** — si no, no entra en el pack.
+import en `Stdlib.bp`** — si no, no entra en el pack (y la guarda lo dice:
+«falta X.mod»).
+
+## La guarda (`#537`)
+
+`bash compat/stdlib_pack.sh` comprueba, con el lector canónico (`PackCli`), que
+cada `.mod` del pack es el de `bpstdlib/` byte a byte y que no falta ni sobra
+ninguno. La corren `compat/compat.sh check` (frente `check-sim`, junto a los
+smokes del micro simulado, que arrancan el sim con este pack como el IDE) y
+`scripts/montar-zip.sh` (un ZIP no se monta con un pack que no sea la stdlib que
+lleva). Hacía falta: este pack se quedó rancio tres veces sin que nada lo viera,
+porque es un solo fichero y las guardas miraban `.mod` sueltos.
 
 ## Dónde lo busca el IDE
 
