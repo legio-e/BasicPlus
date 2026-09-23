@@ -7,6 +7,8 @@
 #     <Nombre>.bpbuild        el proyecto del pack (out: pack, provides: PANT)
 #     <Nombre>.bp             el módulo BP que lo acompaña (un pack lleva al menos uno)
 #     nativo/src/*.c          el driver: publica 'PANT' (ver bpgenvm-c/include/bpvm_pant.h)
+#     resources/              (opcional) ficheros que viajan en el pack; el driver los lee
+#                             por la BIOS de `pack:<Nombre>/<fichero>` (DriverSpi: st7789.seq)
 #
 # y deja:
 #     nativo/driver_<driver>.npk.<SUFIJO>   el motor de cada destino (VERSIONADO)

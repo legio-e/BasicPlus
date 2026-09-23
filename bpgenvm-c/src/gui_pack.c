@@ -21,7 +21,7 @@
 #include "gui_pack_api.h"
 #include "bpvm_bios.h"
 #include "bpvm_pack_api.h"
-#include "bpvm_pant.h"        /* V7/H6.c G2: sólo la MARCA del driver de pantalla */
+#include "bpvm_pant.h"        /* V7/H6.c G2-G3: la MARCA del driver de pantalla y su `estado` */
 #include "bpvm_alloc.h"
 #include "bpvm.h"
 #include <string.h>
@@ -71,6 +71,29 @@ int bpvm_gui_disponible(const char** motivo) {
         bpvm_diag("GUI: %s", s_motivo);
         if (motivo) *motivo = s_motivo;
         return 0;
+    }
+    /* V7/H6.c G3 — un driver que se CONFIGURA (el genérico lee la placa del ENV)
+     * dice aquí si su config vale, con `estado` (opcional en 'PANT'): una errata
+     * en la línea `lcd=` sale como error del programa y no como pantalla negra.
+     * Se pregunta en cada llamada y no se guarda: si el usuario arregla el ENV,
+     * el siguiente RUN lo ve sin reiniciar la placa. */
+    if (ok) {
+        const bpvm_pack_api_t* pant = (const bpvm_pack_api_t*) bpvm_bios_busca(BPVM_PANT_MARCA);
+        bpvm_pant_t p;
+        const char* mal = bpvm_pant_resolver(pant, &p);
+        const char* e = mal ? 0 : (p.estado ? p.estado() : 0);
+        if (mal) {
+            snprintf(s_motivo, sizeof s_motivo, "el driver de pantalla ('PANT') no vale: %s", mal);
+            bpvm_diag("GUI: %s", s_motivo);
+            if (motivo) *motivo = s_motivo;
+            return 0;
+        }
+        if (e && *e) {
+            snprintf(s_motivo, sizeof s_motivo, "pantalla: %s", e);
+            bpvm_diag("GUI: %s", s_motivo);
+            if (motivo) *motivo = s_motivo;
+            return 0;
+        }
     }
     if (motivo) *motivo = ok ? "" : s_motivo;
     return ok;

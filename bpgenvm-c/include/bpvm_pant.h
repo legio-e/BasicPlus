@@ -55,6 +55,12 @@
  *                Cómo quiere los píxeles (BPVM_PANT_RGB565*): LVGL pinta en ESE
  *                formato y el driver sólo manda bytes. Sin publicar = RGB565 tal
  *                cual (lo que quieren un LTDC o un MIPI-DSI).
+ *     "estado"   const char* estado(void)
+ *                NULL = listo para `init`; si no, POR QUÉ no, corto y con nombre:
+ *                lo ve el programa, como «GUI: pantalla: <esto>». Es para el driver
+ *                que se CONFIGURA —el genérico lee la placa del ENV (G3)— y en el que
+ *                una errata no debe ser una pantalla negra. La VM lo pregunta en el
+ *                primer `Gui.Screen()`, antes del screen. Sin publicar = listo.
  *
  * El orden RGB/BGR NO está aquí, a propósito: en los controladores por SPI es un
  * bit de MADCTL (lo hace el chip, gratis) y en un bus paralelo lo hace el
@@ -104,6 +110,7 @@ typedef struct {
     int  (*rotate) (int deg);
     int  (*touch)  (int* x, int* y);
     int  (*formato)(void);
+    const char* (*estado)(void);
 } bpvm_pant_t;
 
 /* Resuelve una tabla publicada bajo 'PANT' en `p`. Devuelve NULL si vale; si no,
@@ -123,6 +130,7 @@ static inline const char* bpvm_pant_resolver(const bpvm_pack_api_t* api, bpvm_pa
     p->rotate  = (int  (*)(int))                                   bpvm_pack_api_find(api, "rotate");
     p->touch   = (int  (*)(int*, int*))                            bpvm_pack_api_find(api, "touch");
     p->formato = (int  (*)(void))                                  bpvm_pack_api_find(api, "formato");
+    p->estado  = (const char* (*)(void))                           bpvm_pack_api_find(api, "estado");
     if (p->init  == 0) return "al driver de pantalla le falta 'init'";
     if (p->size  == 0) return "al driver de pantalla le falta 'size'";
     if (p->flush == 0) return "al driver de pantalla le falta 'flush'";

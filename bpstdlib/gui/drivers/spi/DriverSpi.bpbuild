@@ -1,0 +1,22 @@
+{
+  "_comentario": [
+    "El pack del DRIVER DE PANTALLA GENERICO (V7/H6.c G3): cualquier controlador MIPI-DCS",
+    "por SPI de 4 hilos, descrito por DATOS. La placa va en el ENV, una linea por",
+    "dispositivo (la ESP32-C5-Touch-LCD-2.8):",
+    "   lcd=st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv",
+    "   exp=ch32,i2c:0,sda:0,scl:1,addr:0x24",
+    "   touch=cst3530,addr:0x58,rst:x0",
+    "y la secuencia de arranque del controlador en resources/<controlador>.seq (o en el",
+    "FS del usuario, con seq:/sys/mio.seq). Referencia completa en nativo/src/driver_spi.c.",
+    "Se construye y se graba con:",
+    "   bash bpstdlib/gui/drivers/build_driver.sh spi imc",
+    "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/drivers/spi/out/DriverSpi.pack riscv-imc"
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./DriverSpi.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name": "DriverSpi", "version": "1", "provides": "PANT",
+                    "notas": "driver de pantalla generico MIPI-DCS por SPI: la placa en el ENV (lcd=, exp=, touch=), el controlador en <ctrl>.seq" }
+}

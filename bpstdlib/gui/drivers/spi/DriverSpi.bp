@@ -1,0 +1,11 @@
+module DriverSpi
+  // El modulo BP que acompana al DRIVER DE PANTALLA GENERICO en su .pack (V7/H6.c G3).
+  // El driver de verdad es el .npk (C, sobre la HAL de la BIOS): cualquier controlador
+  // MIPI-DCS por SPI (ST7789, ILI9341, GC9A01...), descrito por DATOS. La placa va en el
+  // ENV (lineas lcd=, exp= y touch=) y la secuencia de arranque del controlador en un
+  // fichero de texto (<controlador>.seq, dentro de este pack o en el FS). Publica 'PANT'
+  // y el pack de LVGL lo usa sin que el programa se entere. Este modulo solo lo identifica.
+  public function nombre(): string
+    return "driver generico MIPI-DCS por SPI: la placa en el ENV (lcd=, exp=, touch=)"
+  end nombre
+end DriverSpi

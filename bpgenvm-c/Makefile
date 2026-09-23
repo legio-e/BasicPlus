@@ -450,6 +450,21 @@ test-guipack:
 	@echo "--- V7/H6: la costura VM <-> pack de la GUI (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_guipack.exe
 
+# V7/H6.c G3 — el driver de pantalla GENÉRICO (MIPI-DCS por SPI, la placa en el ENV)
+# contra el de la C5, en el PC: los dos contra una BIOS que GRABA los cables. Con el
+# perfil de la C5 tienen que mandar lo mismo; los desfases del C6 y de las 135x240
+# salen de ram/off; y cada errata del ENV o del .seq se dice con nombre. Los drivers
+# se compilan tal cual, renombrando su entrada y su g_bios para que convivan. El
+# .seq es el de verdad (el que va en el pack). Ver test/test_driverspi.c.
+DRIVERS = ../bpstdlib/gui/drivers
+test-driverspi:
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Dg_bios=c5_g_bios -Dbp_pack_init=c5_pack_init -c $(DRIVERS)/c5/nativo/src/driver_c5.c -o build/drv_c5.o
+	$(CC) $(CFLAGS) -Dg_bios=spi_g_bios -Dbp_pack_init=spi_pack_init -c $(DRIVERS)/spi/nativo/src/driver_spi.c -o build/drv_spi.o
+	$(CC) $(CFLAGS) test/test_driverspi.c build/drv_c5.o build/drv_spi.o -o build/test_driverspi.exe
+	@echo "--- V7/H6.c G3: el driver generico contra el de la C5 (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_driverspi.exe $(DRIVERS)/spi/resources/st7789.seq
+
 test-guidrop: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_guidrop.c $(LIBOBJ) -o $(GUIDROP_BIN) $(LDFLAGS)

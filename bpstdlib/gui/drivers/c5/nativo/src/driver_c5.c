@@ -14,8 +14,11 @@
  * de código: es lo que varía por placa, y ya no viaja dentro de lo que no varía.
  *
  * Es un driver DE PLACA (el «nivel 2» de V7_IDEAS §H6.7.4): los pines están
- * escritos aquí. Sacarlos a un perfil —y que la C6, con el mismo ST7789, use el
- * mismo driver— es G3.
+ * escritos aquí. Desde G3 (23-sep) la C5 funciona también SIN escribir C, con el
+ * driver genérico (`../spi/`, `DriverSpi`) y su perfil en el ENV —y manda a la
+ * pantalla lo mismo que éste, byte a byte: `make test-driverspi`—. Éste se queda
+ * como EJEMPLO de driver de placa en C, para lo que no se pueda describir con
+ * datos, y como la referencia contra la que se compara el genérico.
  *
  * Lo que está leído del esquema y del BSP de Waveshare (22-sep):
  *

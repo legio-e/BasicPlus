@@ -62,6 +62,13 @@ static const bpvm_pack_api_t PANT_CON_FORMATO = { BPVM_PANT_MARCA, BPVM_PANT_API
 static const bpvm_pack_sym_t PANT_SYMS_SIN_FLUSH[] = {
     { "init", (bpvm_pack_fn_t) pd_init }, { "size", (bpvm_pack_fn_t) pd_size } };
 static const bpvm_pack_api_t PANT_SIN_FLUSH = { BPVM_PANT_MARCA, BPVM_PANT_API_VER, 2u, PANT_SYMS_SIN_FLUSH };
+/* V7/H6.c G3 — un driver que se CONFIGURA y dice si su config vale (`estado`). */
+static const char* g_pd_estado = 0;
+static const char* pd_estado(void) { return g_pd_estado; }
+static const bpvm_pack_sym_t PANT_SYMS_EST[] = {
+    { "init", (bpvm_pack_fn_t) pd_init }, { "size", (bpvm_pack_fn_t) pd_size },
+    { "flush", (bpvm_pack_fn_t) pd_flush }, { "estado", (bpvm_pack_fn_t) pd_estado } };
+static const bpvm_pack_api_t PANT_CON_ESTADO = { BPVM_PANT_MARCA, BPVM_PANT_API_VER, 4u, PANT_SYMS_EST };
 
 static int  g_visitas = 0; static uint32_t g_visto = 0;
 static void visitante(void* ctx, uint32_t objptr) { (void) ctx; g_visitas++; g_visto = objptr; }
@@ -97,6 +104,27 @@ int main(void) {
               "y el motivo lo dice: ningun driver de pantalla ('PANT')");
         CHECK(bpvm_bios_publica(BPVM_PANT_MARCA, &PANT_DOBLE) == 0, "se graba el driver: 'PANT' publicado");
         CHECK(bpvm_gui_disponible(&m) == 1, "y con el driver, disponible() = 1 (sin reiniciar nada)");
+    }
+
+    /* ── 1c. V7/H6.c G3: un driver que se CONFIGURA dice si su config vale ──
+     * El genérico lee la placa del ENV: una errata en `lcd=` tiene que llegar al
+     * programa con nombre, no como pantalla negra. Y sin guardarlo: arreglado el
+     * ENV, el siguiente intento ya pasa. */
+    {
+        bpvm_bios_packs_reset(); bpvm_gui_pack_reset();
+        CHECK(bpvm_bios_publica(BPVM_GUI_MARCA, &bpvm_gui_api_stubs) == 0 &&
+              bpvm_bios_publica(BPVM_PANT_MARCA, &PANT_CON_ESTADO) == 0, "LVGL + un driver con 'estado'");
+        const char* m = 0;
+        g_pd_estado = "ENV lcd: falta 'dc'";
+        CHECK(bpvm_gui_disponible(&m) == 0, "su config no vale -> disponible() = 0");
+        CHECK(m && strcmp(m, "pantalla: ENV lcd: falta 'dc'") == 0, "y el motivo es el del DRIVER: «pantalla: ENV lcd: falta 'dc'»");
+        g_pd_estado = 0;
+        CHECK(bpvm_gui_disponible(&m) == 1, "arreglado el ENV (estado = NULL) -> disponible() = 1, sin reiniciar");
+        g_pd_estado = "";
+        CHECK(bpvm_gui_disponible(&m) == 1, "y un estado vacio cuenta como listo");
+        bpvm_pant_t p;
+        CHECK(bpvm_pant_resolver(&PANT_CON_ESTADO, &p) == 0 && p.estado == pd_estado, "el resolvedor recoge 'estado'");
+        CHECK(bpvm_pant_resolver(&PANT_DOBLE, &p) == 0 && p.estado == 0, "y sin publicarlo queda a NULL (= siempre listo)");
     }
 
     /* ── 2. CON PACK: cada trampolin llega a SU funcion, por nombre ── */

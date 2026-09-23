@@ -1,0 +1,18 @@
+# st7789.seq - lo PROPIO del controlador ST7789, para DriverSpi (V7/H6.c G3).
+#
+# Un comando por linea: el byte del comando y detras sus parametros, en hexadecimal
+# (con 0x o sin el, separados por espacios o comas). "espera N" son N milisegundos.
+# Lo que va detras de # es comentario.
+#
+# SOLO lo del chip. Lo que depende de la PLACA lo manda el driver DESPUES, a partir
+# de la linea lcd= del ENV: el giro y el orden RGB/BGR (MADCTL 36), los bits por
+# pixel (COLMOD 3A), la inversion (21/20) y el encendido (DISPON 29). Si este
+# fichero tambien los manda, ganan los del driver, que van detras. El reset tambien
+# es del driver: por el pin de la placa, o SWRESET (01) si no lo tiene.
+#
+# Fuente: el driver ST7789 del ESP-IDF (esp_lcd_panel_st7789.c), el mismo con el que
+# arrancaba la C5 (DriverC5) y con el que arranca el C6 desde su imagen.
+
+11              # SLPOUT: sale del reposo en que lo deja el reset...
+espera 100      # ...y el chip pide 5 ms antes del siguiente comando; el IDF espera 100
+B0 00 F0        # RAMCTRL: el byte ALTO de cada pixel primero (el valor de fabrica)
