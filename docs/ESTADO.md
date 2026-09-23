@@ -308,8 +308,13 @@ puerto REINICIA la C5 y se lleva el programa. Si todo va, `G2` y `G3` se marcan 
 a `DriverC5`: `packdel DriverSpi` y grabar `bpstdlib/gui/drivers/c5/out/DriverC5.pack` (con las líneas del
 ENV puestas no molesta: `DriverC5` no las lee).
 
-**Lo siguiente es `G4`**: el bus con dueño (la TF de la C5 cuelga del mismo SPI que la pantalla) y la
-fachada SPI con DMA (`V7_IDEAS` §7.11: la palanca de los 144 ms). Queda también `G5` y, para cerrar
+**Lo siguiente es `G4`, REDISEÑADO con Eduardo esa misma noche** (`V7_IDEAS` §H6.11): el bus es
+COMPARTIDO y lo exclusivo es el dispositivo (su CS); los pines de SPI e I2C van en el ENV (`spi2=`,
+`i2c0=`) y quien pida otra configuración recibe un error con nombre; un árbitro —un mutex por bus— en la
+HAL BP; desde BP, una transacción nunca abarca dos llamadas. Se empieza por `G4.a1` (los buses en el ENV,
+en las cinco familias); el DMA es `G4.b`. **Pendiente de Eduardo**: si un bus que el ENV no declara lo
+establece el primero que lo abre (propuesta, por los samples y por la `sd=` de la Metro, que lleva los
+pines dentro). Queda también `G5` y, para cerrar
 `H6.c`, la documentación de usuario de las líneas `lcd=`/`exp=`/`touch=` (hoy la referencia está en la
 cabecera de `driver_spi.c`).
 

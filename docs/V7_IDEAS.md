@@ -2251,7 +2251,7 @@ entera cae en el nivel 0. Es la pregunta 3.
 | **B** | **el reparto de RAM entre varios `npk`** (§2.5: `ram_bytes` en la cabecera, el cargador recorre la cadena) | con el driver fuera, hacen falta dos packs a la vez. Deja de ser opcional |
 | **C** | **`'PANT'`**: el contrato, `busca()` perezoso desde LVGL, y `panel_c5.c` movido a su propio `npk` | es el corte; y lo prueba que el P4 y la DK2 lo publiquen desde la imagen |
 | **D** | **el `npk` genérico**: ST7789 + ILI9341 + GC9A01 por SPI, leyendo el perfil | el nivel 0, que es el que le sirve a alguien de fuera |
-| **E** | **el bus, con dueño** — que tomarlo desde BP no mate al panel, como ya pasa con los pines | la TF de la C5 comparte bus con el panel: hoy es un fallo mudo esperando |
+| **E** | **el bus, con dueño** — que tomarlo desde BP no mate al panel, como ya pasa con los pines. ⚠️ **Corregido por Eduardo el 23-sep (§11)**: el bus es COMPARTIDO; lo exclusivo es el dispositivo | la TF de la C5 comparte bus con el panel: hoy es un fallo mudo esperando |
 | **F** | **la HAL: SPI con DMA / transferencias largas** | los **143 ms** de pantalla entera son 2 400 transacciones de 64 B; la palanca es la fachada, y se la lleva también la SD |
 | **G** | *(opcional)* **los recursos del pack grabado**, para que el perfil pueda viajar dentro del pack | hoy sólo se leen los del pack en ejecución; el cabo ya estaba escrito en `V5_IDEAS` |
 
@@ -2271,7 +2271,7 @@ es lo que se compra— la pone él; el que quiere DSI usa una placa donde ya est
 | 2 | ¿el táctil va en `'PANT'` o en su propia marca? | **en `'PANT'`, opcional** (NULL si no hay): es un `npk` menos que construir en el caso normal, y si algún día hace falta mezclar panel nuestro con táctil ajeno, separarlo es una marca más — caben ocho |
 | 3 | ¿el perfil sabe decir «este pin va por un expansor I2C»? | **sí, con una notación mínima** (`gpio:21` · `exio:0x24/1` · `pwm:0x24/0x05`): mete a la C5 entera en el nivel 0 y los expansores I2C son el pan de cada día en las placas con pantalla. Si crece más que eso, es nivel 2 |
 | 4 | ~~¿el `npk` genérico lleva varios controladores o uno por `npk`?~~ | **contestada en §7.9**: ni lo uno ni lo otro — UN driver genérico (MIPI-DCS sobre SPI) y N **perfiles**, que son datos. El catálogo deja de ser código |
-| 5 | el bus compartido (la TF y el panel de la C5) | el bus, **con dueño**, como los pines: quien lo tomó lo tiene, y el segundo recibe un error CON NOMBRE en vez de un panel muerto. Compartir de verdad (dos CS sobre un bus ya abierto) es un paso aparte |
+| 5 | el bus compartido (la TF y el panel de la C5) | ~~el bus, **con dueño**, como los pines: quien lo tomó lo tiene, y el segundo recibe un error CON NOMBRE en vez de un panel muerto. Compartir de verdad (dos CS sobre un bus ya abierto) es un paso aparte~~ — ⚠️ **mal planteado, lo corrigió Eduardo el 23-sep (§11)**: el bus se COMPARTE, lo exclusivo es el CS de cada periférico, y el que ordena el uso es un árbitro en la HAL BP |
 | 6 | ¿esto es H6 o es otro hito? | **`H6.c`**, después de `H6.b`: `H6.a` ya demostró que el mecanismo funciona; esto es convertirlo en algo que use alguien de fuera, y es justo lo que pide «la base es finita, lo demás en packs» |
 
 #### 7.8 El plan, por pasos que cierran algo
@@ -2281,7 +2281,7 @@ es lo que se compra— la pone él; el que quiere DSI usa una placa donde ya est
 | **G1** | `env_get` en la BIOS (v6) + el reparto de RAM entre varios `npk` | el mini leyendo una clave; el pack de LVGL y el de SQLite **a la vez** en el P4 |
 | **G2** | `'PANT'`: el contrato, `busca()` perezoso, y `panel_c5.c` a su propio `npk` | la C5 otra vez, con DOS packs, dando lo mismo que hoy |
 | **G3** | el `npk` genérico por perfil (ST7789 primero) | la **C6** con su ST7789 240×240 y su gap de 80 — sin escribir una línea de C, y esa placa ya funciona hoy con LVGL dentro, así que hay con qué comparar |
-| **G4** | el bus con dueño + la fachada SPI con DMA | los 143 ms bajando, y la TF de la C5 conviviendo con el panel |
+| **G4** | el bus con dueño + la fachada SPI con DMA — ⚠️ **rediseñado el 23-sep (§11)**: bus compartido con árbitro (`G4.a`) + DMA (`G4.b`) | los 143 ms bajando, y la TF de la C5 conviviendo con el panel |
 | **G5** | el P4 y la DK2 publicando `'PANT'` desde la imagen | `H6.b`: LVGL sale de esas dos imágenes |
 
 **El orden no es caprichoso**: G3 es el que de verdad contesta la pregunta de Eduardo —una placa nueva
@@ -2627,3 +2627,115 @@ los tres. El `.seq` que usa es el de verdad, el que va en el pack.
 - Lo que queda de `H6.c`: **`G4`** —el bus con dueño (la TF de la C5 comparte bus con la pantalla) y la
   fachada SPI con DMA (§7.11)— y **`G5`** —el P4 y la DK2 publicando `'PANT'` desde la imagen—; y, para
   cerrar, el entregable de §7.9: plantilla + script + **la documentación de usuario** de estas líneas.
+
+### 11. `G4` rediseñado (23-sep, noche): el bus es COMPARTIDO; lo exclusivo es el dispositivo
+
+> Eduardo, sobre la pregunta 5 de §7.7 (yo proponía «el bus, con dueño, como los pines»): *«Los buses
+> SPI e I2C son buses que muchas veces comunican con varios periféricos. En el SPI el que sí es de uso
+> exclusivo es el CS, uno por periférico. He visto que en algunas placas el SPI se utiliza para la
+> pantalla y la tarjeta micro SD. Así que esa exclusividad no parece buena idea.»*
+
+Tiene razón, y es la topología de nuestras propias placas: en la C5 la TF y la pantalla van en el SPI2
+(SCK 6, MOSI 7, MISO 8; CS 10 la pantalla, CS 23 la TF), y en el I2C 0 el expansor (0x24) y el táctil
+(0x58). Hasta el comentario de `Spi.bp` lo decía («un mismo bus suele compartirse entre varios slaves con
+CS distintos»). **Lo que muerde hoy no es compartir, es REINICIAR**: cada `spi_init` suelta el bus y lo
+vuelve a crear (`gpio_esp32.c`: `spi_bus_free` + `spi_bus_initialize`), `i2c_init` igual
+(`i2c_del_master_bus`), y la velocidad y el modo van con el bus. El segundo que «abre» un bus se lo quita
+al primero, sin una palabra — la pantalla a 40 MHz y la TF a 400 kHz son dos reinicios del mismo SPI2.
+
+#### 11.1 Dónde vive: en la HAL BP (Eduardo)
+
+> *«La operación de los buses sería algo propio de la BIOS. En nuestro caso tenemos HAL de fabricante y
+> HAL BP; creo que necesitamos a los dos para hacer que todo sea genérico, sin depender de hardware ni
+> HAL.»* Y: *«Necesitamos arbitrar, quizás con un mutex, que asegure que no se mezclan tramas ni usos. El
+> árbitro, quizás implementado a nivel de HAL BP.»*
+
+```
+Hardware
+ └─ HAL del fabricante (ESP-IDF, pico-sdk, STM32 HAL)            la CINTURA: abre el bus y transfiere
+     └─ HAL BP (spi.c, i2c.c, gpio.c + capacidades + pines)      COMÚN: buses, dispositivos, ÁRBITRO
+         ├─ la VM: los builtins Spi/I2c → programas BP
+         ├─ el firmware: bpvm_sd.c (la TF por SPI)
+         └─ la BIOS → los packs (los drivers de pantalla)
+```
+
+El árbitro va en la HAL BP porque es **la única capa por la que pasan los TRES usuarios de un bus**. En la
+BIOS —que en nuestro vocabulario es la ventanilla de los packs: presta la HAL BP, no la sustituye— se lo
+saltarían los programas BP y la TF, que no pasan por ella. Y es la doctrina de siempre (la HAL BP común):
+el motor único en el común y la cintura por familia, que aquí ADELGAZA — abrir una vez y transferir.
+
+#### 11.2 La configuración del bus va en el ENV, y quien llegue después no la cambia (Eduardo)
+
+> *«Los pines se configuran en el ENV, tanto para el SPI como para el I2C. Los que vengan detrás tienen
+> esa configuración ya establecida, así que si intentan cambiarla debería saltar un error.»*
+
+```
+spi2=sck:6,mosi:7,miso:8            el BUS: sus pines, una vez
+i2c0=sda:0,scl:1,khz:400            (en I2C la velocidad es del bus: la tienen que aguantar todos)
+lcd=st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv
+exp=ch32,i2c:0,addr:0x24
+touch=cst3530,i2c:0,addr:0x58,rst:x0
+sd=spi:2,cs:23                      (la TF de la C5, el día que se use)
+```
+
+- **Cada dispositivo dice su bus por número y SÓLO lo suyo**: el CS (y el DC), su velocidad y su modo. En
+  SPI la velocidad es del DISPOSITIVO: la pantalla a 40 MHz y la TF a 20 en el mismo bus.
+- **Los pines de un bus declarado quedan reservados** en la tabla de H4 desde el arranque:
+  `Pin(6, OUTPUT)` → «el pin 6 es del SPI 2 (ENV spi2)». Hoy nadie los marca, y un programa podía quitarle
+  el reloj a la pantalla en silencio.
+- **Quien pida OTRA configuración recibe un error con nombre** —«el SPI 2 es sck 6, mosi 7, miso 8 (ENV
+  spi2); pides sck 12»—, y quien pida la MISMA, se engancha.
+- ⚠️ **Propuesta, pendiente de Eduardo: un bus que el ENV NO declara lo establece el primero que lo
+  abre**, con la misma regla desde ese momento. Por dos razones: los samples y los programas de protoboard
+  abren `Spi.Bus(0, 2, 3, 4, …)` con sus pines (un sensor en pines libres no es un dato de placa), y la
+  línea `sd=sck:34,mosi:35,miso:36,cs:39,cd:40` de la Metro lleva los pines dentro y así sigue valiendo
+  tal cual. Si lo estableció un programa, la configuración se va con su fin de RUN (como sus pines); si
+  lo estableció el ENV o un pack, se queda.
+- Cambia el formato de `G3` antes de publicarlo: `lcd=` pierde `sck`/`mosi`, y `exp=`/`touch=` pierden
+  `sda`/`scl`/`khz`.
+
+#### 11.3 El árbitro
+
+- **Qué arbitra: la TRANSACCIÓN** —del CS abajo al CS arriba en SPI, de START a STOP en I2C—, que es lo que
+  no se puede mezclar («tramas»). Al empezarla aplica la velocidad y el modo de ESE dispositivo («usos»).
+- **Con qué: un mutex por bus**, de la plataforma (`bpvm_platform_mutex`: FreeRTOS en todas las familias,
+  pthread en el PC). Cubre `vm` contra `io` —el que atiende el wire puede leer la TF mientras `vm` pinta—
+  y las dos VM de mañana.
+- **La trampa son los hilos BP.** Si un programa tuviera el bus tomado ENTRE dos llamadas, el siguiente
+  que lo pidiera desde el mismo hilo del SO —`Gui.run()` pintando— bloquearía ese hilo entero: un bloqueo
+  mutuo (y con un mutex recursivo, justo la mezcla que se quiere evitar). La regla que lo quita de raíz:
+  - **desde BP, una transacción nunca abarca dos llamadas**: cada `write`/`read`/`transfer` de un
+    dispositivo es una transacción entera, con su CS; y `writeRead` para «comando y respuesta» en la misma
+    ventana;
+  - **el código nativo** (la TF, un driver de un pack) sí puede tomar el bus, hacer varias cosas y
+    soltarlo —leer un bloque de la SD, un volcado de la pantalla—, porque entre medias no cambia de hilo BP.
+- **Nada espera para siempre**: el árbitro sabe QUIÉN tiene el bus y desde cuándo, y el que espera más de
+  un plazo recibe «SPI 2 ocupado por la pantalla (CS 10) desde hace 1000 ms», no un cuelgue mudo.
+- **I2C igual**, con «escribir y leer» en una transacción (repeated start) en la fachada: el registro del
+  CST3530 hoy son dos transferencias sueltas.
+
+#### 11.4 Lo que cambia en cada capa
+
+| capa | hoy | con `G4` |
+|---|---|---|
+| cintura (`gpio_esp32.c`, Pico, STM32) | `init` suelta y reabre el bus en cada llamada; velocidad y modo por bus | abre el bus UNA vez y transfiere; un dispositivo por CS con su velocidad y su modo (el IDF ya funciona así; la Pico y el STM32 cambian el formato al cambiar de dispositivo) |
+| HAL BP (`spi.c`, `i2c.c`) | pasa las llamadas tal cual | la tabla de buses (del ENV o del primero), los dispositivos (su CS reclamado en la tabla de H4), el árbitro y los errores con nombre |
+| BIOS (los packs) | `spi_init`/`spi_write`, `i2c_*` | ranuras nuevas AL FINAL (v7): dar de alta un dispositivo, y «tomar / transferir / soltar» |
+| BP | `Spi.Bus(id, sck, mosi, miso, hz, modo)` y el CS a mano con `Gpio` | `Spi.Device(bus, cs, hz, modo)`, cada llamada una transacción; `Spi.Bus` sigue valiendo para quien está solo en el bus; los mismos errores en miVM |
+
+#### 11.5 Cómo se prueba
+
+En el PC, antes que en ninguna placa: dos hilos del SO machacando dos dispositivos del mismo bus contra un
+backend que graba la cinta (el de `test-driverspi`): ninguna trama puede salir mezclada, y **con el mutex
+quitado la prueba TIENE que fallar** (el control). Y los errores de configuración, uno por uno. En placa,
+la prueba de verdad es la C5 con la TF y la pantalla A LA VEZ: un programa escribiendo en `/sd` mientras
+`Gui.run()` anima.
+
+#### 11.6 El plan
+
+| paso | qué | se prueba con |
+|---|---|---|
+| **G4.a1** | los buses en el ENV (`spiN=`, `i2cN=`), sus pines reservados, «se establece una vez y otra configuración es un error»; la cintura deja de reabrir — en las cinco familias | los errores en el PC (y en miVM, los mismos); la C5 con las líneas nuevas dando lo mismo que hoy |
+| **G4.a2** | los dispositivos y el árbitro; la BIOS v7; `DriverSpi` con el formato nuevo | la cinta con dos hilos (y su control); la C5 con la TF y la pantalla a la vez |
+| **G4.a3** | `Spi.Device` en BP (y el `writeRead` de I2C), con paridad | samples en las dos VM |
+| **G4.b** | el DMA en la cintura del ESP32 (§7.11) | los 144 ms bajando |
