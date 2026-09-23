@@ -338,6 +338,26 @@ traza, que ahora lee el latido.
 que se le deje dormir (bajo consumo y gesto, sí; sueño profundo, no), y el `INT` del táctil va al GPIO5 de la
 C5: anotado en `#490`.
 
+## ✅ H6.c (23-sep, 19 h) — LA PRUEBA LARGA: 2 h 13 min sin tocarla, y el táctil responde
+
+`C5Touch` con la traza, lanzado a las 16:34 con la herramienta ya arreglada y el driver sin vigilante. Eduardo
+la dejó 2 h 13 min sin tocar y al volver el botón respondió: sus tres pulsaciones están en la traza. Leído
+después con `resetcable` + `log` (la RAM superviviente): un latido cada 5 min, 7 500 lecturas en cada uno
+—unas 225 000 en total— sin un solo fallo, y el latido ESD del chip avanzando todo el tiempo (unos 32 000/s).
+Con eso se cierra el asunto del táctil de la C5 (la fila H6 de `FICHAS`).
+
+## ⏭️ Traspaso (23-sep, 19 h) — el táctil de la C5, cerrado; lo siguiente: `G4.a2` (el árbitro)
+
+**Lo siguiente es `G4.a2`**, como estaba en el traspaso de mediodía: un mutex por bus en la HAL BP, un
+dispositivo por CS con su velocidad y su modo en cada transacción, la BIOS v7 con «tomar / transferir /
+soltar», y su prueba de dos hilos contra la cinta, con control.
+
+⚠️ **Sin medir**: el IDE abre con DTR=1 y RTS=1 (la Pico necesita DTR) y al desconectar Windows los suelta:
+una C5 con un programa lanzado desde el IDE se reiniciaría al cerrarlo. Mirarlo con el `uptime`.
+
+**Estado de las placas**: la C5 con la imagen de `G4.a1` y el `DriverSpi` sin vigilante en su zona, en el REPL
+(el `resetcable` paró `C5Touch`); el resto sin grabar. Sin push.
+
 ## ⏭️ Traspaso (23-sep, tarde) — el «cuelgue» era la herramienta; **prueba larga en marcha**; lo siguiente: `G4.a2`
 
 **Lo primero al volver Eduardo**: la C5 corre `C5Touch` con la traza desde las 16:34:29, sin puerto.

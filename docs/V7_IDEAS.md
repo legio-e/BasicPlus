@@ -2834,7 +2834,9 @@ el bajo consumo (un chip dormido no late, `#490`). Si la prueba larga —ahora s
 verdad, la traza lo dirá con el latido; el diseño del vigilante está en `431e2838`.
 
 **Lo que queda, a sabiendas:**
-- **La prueba larga**, en marcha desde el 23-sep a las 16:34 con el driver sin vigilante.
+- ~~La prueba larga~~ ✅ **hecha** (23-sep, 16:34 → 19:04, con el driver sin vigilante): 2 h 13 min sin tocarla
+  y el botón respondió; en la traza, 7 500 lecturas cada 5 min —unas 225 000— sin un fallo, y el latido ESD
+  avanzando todo el tiempo (unos 32 000/s).
 - **Una observación sin explicar**: en la 1.ª pasada de `C5TouchRaw`, a 100 ms, no salieron tramas nuevas (en
   la 2.ª, a 100 ms, sí). Puede que fuera el momento en que se tocó.
 - **El IDE, probablemente igual, y SIN MEDIR**: `BpvmClient` abre con DTR=1 y RTS=1 —la Pico necesita DTR para
