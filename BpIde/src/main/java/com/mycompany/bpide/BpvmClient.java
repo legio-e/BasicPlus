@@ -291,7 +291,7 @@ public final class BpvmClient implements AutoCloseable {
                 }
             }
         } catch (IOException ioe) {
-            try { port.close(); } catch (Throwable ignored) {}
+            cerrarPuerto(port);
             this.serialPort = null;
             throw new IOException("drain inicial falló: " + ioe.getMessage(), ioe);
         }
@@ -421,6 +421,24 @@ public final class BpvmClient implements AutoCloseable {
         }
     }
 
+    /** Cierra el puerto serie bajando antes RTS y DESPUÉS DTR (23-sep).
+     *
+     *  Medido en la ESP32-C5 (USB-Serial-JTAG), con un arnés que abre como
+     *  connectSerial: cerrar sin más —Windows suelta las dos líneas— o bajar
+     *  DTR primero la deja en MODO DESCARGA (el cargador de la ROM): el
+     *  firmware ni arranca hasta un reset a mano, y la pantalla sigue con la
+     *  última imagen, así que parece viva. Con RTS primero sigue como estaba,
+     *  y el programa lanzado, corriendo. Es la lógica de reinicio de esptool:
+     *  DTR abajo con RTS arriba pide reinicio con la patilla de arranque
+     *  marcada. En la Pico (USB-CDC) es lo mismo que cerrar: DTR abajo = no hay
+     *  host. En los puentes USB-UART (S3, P4: RTS→EN, DTR→GPIO0), RTS primero
+     *  tampoco toca el EN — razonado, sin medir. */
+    private static void cerrarPuerto(SerialPort p) {
+        try { p.setRTS(false); Thread.sleep(50); } catch (Throwable ignored) {}
+        try { p.setDTR(false); Thread.sleep(50); } catch (Throwable ignored) {}
+        try { p.close(); } catch (Throwable ignored) {}
+    }
+
     /** Cierra el socket o el puerto serie, mata el subproceso (si lo hay),
      *  junta los threads. Idempotente. */
     @Override public void close() {
@@ -430,7 +448,7 @@ public final class BpvmClient implements AutoCloseable {
         // El SerialPort.close() interrumpe el reader thread que está dentro
         // de delegate.read() — purejavacomm lanza IOException que nuestro
         // SerialBlockingInputStream traduce a -1 (porque closed=true ya).
-        try { if (serialPort != null) serialPort.close(); } catch (Throwable ignored) {}
+        if (serialPort != null) cerrarPuerto(serialPort);
         serialPort = null;
         terminateProcess();
         try { if (readerThread != null) readerThread.join(2000); } catch (InterruptedException ignored) {}

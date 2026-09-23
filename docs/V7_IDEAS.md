@@ -2839,9 +2839,15 @@ verdad, la traza lo dirá con el latido; el diseño del vigilante está en `431e
   avanzando todo el tiempo (unos 32 000/s).
 - **Una observación sin explicar**: en la 1.ª pasada de `C5TouchRaw`, a 100 ms, no salieron tramas nuevas (en
   la 2.ª, a 100 ms, sí). Puede que fuera el momento en que se tocó.
-- **El IDE, probablemente igual, y SIN MEDIR**: `BpvmClient` abre con DTR=1 y RTS=1 —la Pico necesita DTR para
-  mandar su salida— y al desconectar Windows los suelta: una C5 con un programa lanzado desde el IDE se
-  reiniciaría al cerrarlo. Se mira con el `uptime`, como aquí.
+- ~~El IDE, sin medir~~ ✅ **medido y arreglado (19 h)** — y era PEOR: al desconectarse dejaba la C5 en **MODO
+  DESCARGA** (esptool contesta sin reiniciarla: el cargador de la ROM). El firmware ni arranca hasta un reset a
+  mano, y la pantalla sigue con la última imagen, así que la placa parece viva. `BpvmClient` abre con DTR=1 y
+  RTS=1 —la Pico necesita DTR para mandar su salida— y cierra sin más. Un arnés que abre igual (purejavacomm)
+  y cierra de tres maneras, dos veces cada una: **cerrar sin más → descarga; DTR abajo y luego RTS → descarga;
+  RTS abajo y luego DTR → sigue como estaba**. Es la lógica de esptool: DTR abajo con RTS arriba pide reinicio
+  con la patilla de arranque marcada. `BpvmClient.cerrarPuerto` baja RTS, luego DTR, y cierra; medido con el
+  `BpvmClient` real (2 de 2) y con el IDE de Eduardo: el uptime sigue contando. En la Pico es lo mismo que
+  cerrar; en los puentes USB-UART (S3, P4) RTS primero tampoco toca el EN —razonado, sin medir—.
 
 **La lección** —estaba en la memoria y no bastó—: **antes de culpar al dispositivo, mirar si el instrumento le
 cambia el estado**; aquí bastaba el `uptime`. Media tarde se fue en un modo normal y un vigilante contra un

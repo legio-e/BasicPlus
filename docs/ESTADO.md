@@ -346,17 +346,26 @@ después con `resetcable` + `log` (la RAM superviviente): un latido cada 5 min, 
 —unas 225 000 en total— sin un solo fallo, y el latido ESD del chip avanzando todo el tiempo (unos 32 000/s).
 Con eso se cierra el asunto del táctil de la C5 (la fila H6 de `FICHAS`).
 
+## 🔌 IDE (23-sep, 19 h) — al desconectarse dejaba la C5 en MODO DESCARGA: arreglado
+
+Medido con Eduardo: conectar el IDE a la C5 y desconectarlo la dejaba en el cargador de la ROM (el wire no
+contesta; esptool sí, sin reiniciarla) — peor que el reinicio de `wire_serie.py`: el firmware ni arranca y la
+pantalla sigue pintada. Un arnés que abre como `BpvmClient` (purejavacomm, DTR=1 y RTS=1) y cierra de tres
+maneras, dos veces cada una: cerrar sin más → descarga; DTR y luego RTS → descarga; **RTS y luego DTR → sigue**.
+`BpvmClient.cerrarPuerto` lo hace así en sus dos cierres; medido con el `BpvmClient` real (2 de 2) y con el IDE
+de Eduardo (el uptime siguió contando). Detalle en `V7_IDEAS` §H6.12.
+
 ## ⏭️ Traspaso (23-sep, 19 h) — el táctil de la C5, cerrado; lo siguiente: `G4.a2` (el árbitro)
 
 **Lo siguiente es `G4.a2`**, como estaba en el traspaso de mediodía: un mutex por bus en la HAL BP, un
 dispositivo por CS con su velocidad y su modo en cada transacción, la BIOS v7 con «tomar / transferir /
 soltar», y su prueba de dos hilos contra la cinta, con control.
 
-⚠️ **Sin medir**: el IDE abre con DTR=1 y RTS=1 (la Pico necesita DTR) y al desconectar Windows los suelta:
-una C5 con un programa lanzado desde el IDE se reiniciaría al cerrarlo. Mirarlo con el `uptime`.
+El IDE ya no reinicia la C5 al desconectarse (ver la entrada de arriba). ⚠️ Sin medir: la S3 y el P4 con el
+cierre nuevo (razonado: RTS primero no toca el EN de sus puentes).
 
-**Estado de las placas**: la C5 con la imagen de `G4.a1` y el `DriverSpi` sin vigilante en su zona, en el REPL
-(el `resetcable` paró `C5Touch`); el resto sin grabar. Sin push.
+**Estado de las placas**: la C5 con la imagen de `G4.a1` y el `DriverSpi` sin vigilante en su zona, en el REPL;
+el resto sin grabar. El IDE, reconstruido (`BpIde-6.0.jar` de las 19:16). Sin push.
 
 ## ⏭️ Traspaso (23-sep, tarde) — el «cuelgue» era la herramienta; **prueba larga en marcha**; lo siguiente: `G4.a2`
 
