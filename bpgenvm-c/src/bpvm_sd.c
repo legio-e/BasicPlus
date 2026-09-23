@@ -6,6 +6,7 @@
  */
 #include "bpvm_sd.h"
 #include "bpvm_spi.h"
+#include "bpvm_bus.h"        /* V7/H6.c G4.a1: la TF es uno de los usuarios del bus */
 #include "bpvm_gpio.h"
 #include "bpvm_platform.h"
 
@@ -24,6 +25,10 @@
 
 #define R1_IDLE            0x01
 #define TOKEN_DATO         0xFE   /* precede a un bloque de datos */
+
+/* V7/H6.c G4.a1 — el porqué del peldaño E_BUS, con nombre (lo devuelve
+ * bpvm_sd_res_str: estático, como los literales de los demás peldaños). */
+static char s_motivo_bus[112];
 
 /* Plazos. El de ACMD41 es el del estándar (1 s); el resto son generosos a
  * propósito: si se agotan es que algo está roto, no que iba justo. */
@@ -245,13 +250,10 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
         s = v;
     }
 
-    /* Y el chivato que justifica las etiquetas: decir CUÁL falta. */
-    const char* falta = 0;
-    if      (p->sck  < 0) falta = "sck";
-    else if (p->mosi < 0) falta = "mosi";
-    else if (p->miso < 0) falta = "miso";
-    else if (p->cs   < 0) falta = "cs";
-    if (falta) { di(motivo, motivo_cap, "a la entrada 'sd' le falta ", falta); return -1; }
+    /* Y el chivato que justifica las etiquetas: decir CUÁL falta. Sólo el CS es
+     * de la tarjeta; sck/mosi/miso son del bus (V7/H6.c G4.a1) y, si no vienen,
+     * son los del bus declarado — lo que falte ahí lo dice el arranque. */
+    if (p->cs < 0) { di(motivo, motivo_cap, "a la entrada 'sd' le falta ", "cs"); return -1; }
     return 0;
 }
 
@@ -291,7 +293,7 @@ int bpvm_sd_hay_tarjeta(const bpvm_sd_pines_t* p)
 bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
                            bpvm_sd_info_t* info)
 {
-    if (!p || !info || p->cs < 0 || p->sck < 0 || p->mosi < 0 || p->miso < 0)
+    if (!p || !info || p->cs < 0)
         return BPVM_SD_E_PINES;
     memset(info, 0, sizeof *info);
 
@@ -304,7 +306,18 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
      * un pin bien puesto, y desde los otros dos llamantes no. */
     if (!bpvm_sd_hay_tarjeta(p)) return BPVM_SD_E_SIN_TARJETA;
 
-    bpvm_spi_init(p->bus, p->sck, p->mosi, p->miso, BAUD_LENTO, 0);
+    /* V7/H6.c G4.a1 — el bus es COMPARTIDO (la TF de la C5 va con la pantalla):
+     * se engancha a la configuración que haya, sin reabrirlo, y con -1 en un pin
+     * toma el del bus. Otra configuración, un bus sin declarar o sin MISO: el
+     * porqué con nombre, en el peldaño E_BUS. */
+    int bp[3];
+    if (bpvm_spi_abrir(p->bus, p->sck, p->mosi, p->miso, BAUD_LENTO, 0, BPVM_BUS_FIRMWARE,
+                       bp, s_motivo_bus, sizeof s_motivo_bus) != 0)
+        return BPVM_SD_E_BUS;
+    if (bp[2] < 0) {
+        di(s_motivo_bus, sizeof s_motivo_bus, "el bus SPI de la SD no tiene MISO: la tarjeta no podria contestar", 0);
+        return BPVM_SD_E_BUS;
+    }
 
     /* ⚠️ PULL-UP EN MISO, y va DESPUÉS de `spi_init` a propósito.
      *
@@ -317,7 +330,7 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
      *
      * Poner el pull NO desmonta la función SPI del pin: `gpio_pull_up` sólo
      * toca los bits de pull del pad, no el funcsel. */
-    bpvm_gpio_pull(p->miso, 1);
+    bpvm_gpio_pull(bp[2], 1);
 
     /* 1 — Los 74 pulsos con CS ALTO. La tarjeta los necesita para despertar;
      *     saltárselos es el error clásico que deja el bus mudo. */
@@ -385,7 +398,8 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
 
     /* 7 — Y AHORA sí, a velocidad de trabajo. Ni un byte antes. */
     if (baud_rapido > BAUD_LENTO)
-        bpvm_spi_init(p->bus, p->sck, p->mosi, p->miso, baud_rapido, 0);
+        (void) bpvm_spi_abrir(p->bus, bp[0], bp[1], bp[2], baud_rapido, 0, BPVM_BUS_FIRMWARE,
+                              NULL, s_motivo_bus, sizeof s_motivo_bus);
     return BPVM_SD_OK;
 }
 
@@ -461,6 +475,7 @@ const char* bpvm_sd_res_str(bpvm_sd_res_t r)
     case BPVM_SD_E_LECTURA:      return "arranco pero no entrega datos (CMD17)";
     case BPVM_SD_E_ESCRITURA:    return "no acepta los datos al escribir (CMD24)";
     case BPVM_SD_E_OCUPADA:      return "acepto los datos pero no termina de grabar";
+    case BPVM_SD_E_BUS:          return s_motivo_bus[0] ? s_motivo_bus : "el bus SPI no se pudo usar";
     }
     return "desconocido";
 }

@@ -2,30 +2,32 @@ dbg 3
 module Spi
 source C:\lenguajes\pm\bpstdlib\Spi.bp
 lines
-212 164
-241 169
-270 174
-302 153
-313 154
-324 155
-335 156
-346 157
-357 158
-368 159
-528 62
-551 66
-575 70
-599 74
-626 79
-641 82
-656 85
-671 88
-686 91
-701 94
-716 98
-735 101
-754 104
-773 107
+212 181
+241 186
+270 191
+302 198
+320 170
+331 171
+342 172
+353 173
+364 174
+375 175
+386 176
+560 75
+583 79
+607 83
+631 87
+658 91
+671 96
+686 99
+701 102
+716 105
+731 108
+746 111
+761 115
+780 118
+799 121
+818 124
 vars
 func Bus.getId 35
 this -20 8 0 ?
@@ -64,7 +66,9 @@ this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func Bus.__init 299
+func Bus.release 299
+this -20 8 0 ?
+func Bus.__init 317
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -72,14 +76,14 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Bus(iiiiii) 388
+func __cls_new_Bus(iiiiii) 406
 id -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Bus(iiiiii) 430
+func __cls_init_Bus(iiiiii) 448
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -87,36 +91,40 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Bus#read([ii)i 456
+func __cls_m_Bus#read([ii)i 474
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#transfer([i[ii)i 478
+func __cls_m_Bus#transfer([i[ii)i 496
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#write([ii)i 503
+func __cls_m_Bus#release()V 521
+this -20 8 0 ?
+func __cls_m_Bus#write([ii)i 535
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func init 525
+func init 557
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 548
+func write 580
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 572
+func read 604
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 596
+func transfer 628
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
+func release 655
+bus -16 4 0 integer

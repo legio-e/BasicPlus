@@ -2,14 +2,18 @@
  * MIPI-DCS por SPI de 4 hilos (ST7789, ILI9341, GC9A01, ST7796…), descrito por
  * DATOS y no por código. Una placa nueva no necesita que nadie escriba C:
  *
- *   · la PLACA va en el ENV —una línea por dispositivo, con el formato de `sd=`—:
+ *   · la PLACA va en el ENV —una línea por BUS y una por dispositivo, con el formato de
+ *     `sd=`—. Los pines del bus son del BUS (V7/H6.c G4, V7_IDEAS §H6.11: la TF y la
+ *     pantalla de la C5 COMPARTEN el SPI2), y cada dispositivo sólo dice cuál y lo suyo:
  *
- *       lcd=st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv
- *       exp=ch32,i2c:0,sda:0,scl:1,addr:0x24
- *       touch=cst3530,addr:0x58,rst:x0
+ *       spi2=sck:6,mosi:7,miso:8
+ *       i2c0=sda:0,scl:1,khz:400
+ *       lcd=st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv
+ *       exp=ch32,i2c:0,addr:0x24
+ *       touch=cst3530,i2c:0,addr:0x58,rst:x0
  *
- *     (ésa es la Waveshare ESP32-C5-Touch-LCD-2.8; el C6 sería
- *      `lcd=st7789,spi:2,sck:7,mosi:6,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv`)
+ *     (ésa es la Waveshare ESP32-C5-Touch-LCD-2.8; el C6 sería `spi2=sck:7,mosi:6` y
+ *      `lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv`)
  *
  *   · el CONTROLADOR va en un fichero de texto, `<controlador>.seq`: su secuencia de
  *     arranque, un comando por línea. Los que damos probados viajan DENTRO de este
@@ -25,8 +29,9 @@
  * ─── LA LÍNEA `lcd=` ────────────────────────────────────────────────────────
  *
  *   <controlador>  el primer campo: el nombre del .seq (st7789 → st7789.seq)
- *   spi:N          el bus, en la numeración de Spi.Bus (2 = GPSPI2 en las ESP32)
- *   sck:N mosi:N   los pines del bus          dc:N cs:N   datos/comando y selección
+ *   spi:N          el bus, en la numeración de Spi.Bus (2 = GPSPI2 en las ESP32): sus
+ *                  pines están en SU línea (`spi2=`), no aquí
+ *   dc:N cs:N      datos/comando y selección: lo exclusivo de este dispositivo
  *   w:N h:N        el tamaño del cristal, a 0°
  *   opcionales:
  *   rst:P          el reset (sin él: SWRESET por el bus)
@@ -43,9 +48,9 @@
  *   sólo para la luz).
  *
  * `exp=` (si algún pin es `xN`): el tipo (`ch32`, el CH32V003 de Waveshare con su
- * firmware de fábrica), `i2c`, `sda`, `scl`, `addr` y `khz` (400 si no se dice).
- * `touch=` (sin ella, la pantalla no tiene táctil): el tipo (`cst3530`), `addr`,
- * `rst` y, si no comparte el bus del expansor, `i2c`/`sda`/`scl`/`khz`.
+ * firmware de fábrica), `i2c` (el bus: sus pines y su velocidad, en `i2cN=`) y `addr`.
+ * `touch=` (sin ella, la pantalla no tiene táctil): el tipo (`cst3530`), `addr`, `rst`
+ * e `i2c` (si no lo dice, el del expansor).
  *
  * ⚠️ ESTRICTO A PROPÓSITO: una clave que no conozco es un ERROR con su nombre, no se
  * salta. La línea `sd=` las ignora porque una misma línea sirve a dos placas; ésta
@@ -194,14 +199,14 @@ static void t_pin(txt_t* t, pin_t p) {
 
 static struct {
     char ctrl[16];                   /* el controlador: da el nombre del .seq */
-    int  spi, sck, mosi, dc, cs, mhz;
+    int  spi, dc, cs, mhz;
     pin_t rst, bl;
     int  w, h, ram_w, ram_h, off_x, off_y;
     int  inv, bgr, traza;
     char seq[64];                    /* "" = el de fábrica, dentro del pack */
 } L;
-static struct { int hay; int i2c, sda, scl, khz, addr; } X;          /* exp=   */
-static struct { int hay; int i2c, sda, scl, khz, addr; pin_t rst; } T; /* touch= */
+static struct { int hay; int i2c, addr; } X;             /* exp=   */
+static struct { int hay; int i2c, addr; pin_t rst; } T;    /* touch= */
 
 static char s_env[160];              /* el valor de una línea del ENV */
 
@@ -233,7 +238,7 @@ static int tipo_de(const char** p, const char* clave, char* dst, unsigned cap) {
 
 static int parse_lcd(void) {
     const char* p = s_env; const char *a, *z;
-    L.spi = L.sck = L.mosi = L.dc = L.cs = -1;
+    L.spi = L.dc = L.cs = -1;
     L.mhz = 20;
     L.rst.tipo = L.bl.tipo = PIN_NO; L.rst.n = L.bl.n = 0;
     L.w = L.h = 0; L.ram_w = L.ram_h = 0; L.off_x = L.off_y = 0;
@@ -275,8 +280,8 @@ static int parse_lcd(void) {
             continue;
         }
         if      (es(a, k, "spi"))  { dst = &L.spi;  max = 9;    }
-        else if (es(a, k, "sck"))  { dst = &L.sck;  max = 127;  }
-        else if (es(a, k, "mosi")) { dst = &L.mosi; max = 127;  }
+        else if (es(a, k, "sck") || es(a, k, "mosi") || es(a, k, "miso"))
+            return falla("ENV lcd: '", a, k, "' es del bus: va en su linea spiN=");
         else if (es(a, k, "dc"))   { dst = &L.dc;   max = 127;  }
         else if (es(a, k, "cs"))   { dst = &L.cs;   max = 127;  }
         else if (es(a, k, "mhz"))  { dst = &L.mhz;  max = 80;   }
@@ -288,8 +293,6 @@ static int parse_lcd(void) {
     }
     /* El chivato que justifica las etiquetas: decir CUÁL falta. */
     if (L.spi  < 0) return falla("ENV lcd: falta 'spi'", 0, 0, "");
-    if (L.sck  < 0) return falla("ENV lcd: falta 'sck'", 0, 0, "");
-    if (L.mosi < 0) return falla("ENV lcd: falta 'mosi'", 0, 0, "");
     if (L.dc   < 0) return falla("ENV lcd: falta 'dc'", 0, 0, "");
     if (L.cs   < 0) return falla("ENV lcd: falta 'cs'", 0, 0, "");
     if (L.w <= 0 || L.h <= 0) return falla("ENV lcd: falta el tamano ('w' y 'h')", 0, 0, "");
@@ -300,21 +303,24 @@ static int parse_lcd(void) {
     return 0;
 }
 
-/* `exp=` y `touch=` comparten las claves del bus: cada una pasa sus campos. */
+/* `exp=` y `touch=` dicen su bus y su dirección; los pines y la velocidad son del
+ * BUS y van en su línea `i2cN=` (V7/H6.c G4). */
 static int parse_i2c(const char* clave, const char* a, const char* k, const char* v, const char* z,
-                     int* i2c, int* sda, int* scl, int* khz, int* addr) {
+                     int* i2c, int* addr) {
     long n; int* dst; long max;
     if      (es(a, k, "i2c"))  { dst = i2c;  max = 9;    }
-    else if (es(a, k, "sda"))  { dst = sda;  max = 127;  }
-    else if (es(a, k, "scl"))  { dst = scl;  max = 127;  }
-    else if (es(a, k, "khz"))  { dst = khz;  max = 1000; }
     else if (es(a, k, "addr")) { dst = addr; max = 127;  }
+    else if (es(a, k, "sda") || es(a, k, "scl") || es(a, k, "khz")) {
+        txt_t t; t_ini(&t, s_motivo, sizeof s_motivo);
+        t_s(&t, "ENV "); t_s(&t, clave); t_s(&t, ": '"); t_r(&t, a, k); t_s(&t, "' es del bus: va en su linea i2cN=");
+        return -1;
+    }
     else {
         txt_t t; t_ini(&t, s_motivo, sizeof s_motivo);
         t_s(&t, "ENV "); t_s(&t, clave); t_s(&t, ": no conozco '"); t_r(&t, a, k); t_s(&t, "'");
         return -1;
     }
-    if (numero(v, z, &n) != 0 || n > max || (n == 0 && (dst == khz || dst == addr))) {
+    if (numero(v, z, &n) != 0 || n > max || (n == 0 && dst == addr)) {
         txt_t t; t_ini(&t, s_motivo, sizeof s_motivo);
         t_s(&t, "ENV "); t_s(&t, clave); t_s(&t, ": '"); t_r(&t, a, k); t_s(&t, "' no es un numero valido");
         return -1;
@@ -325,7 +331,7 @@ static int parse_i2c(const char* clave, const char* a, const char* k, const char
 
 static int parse_exp(void) {
     const char* p = s_env; const char *a, *z; char tipo[12];
-    X.i2c = X.sda = X.scl = X.addr = -1; X.khz = 400;
+    X.i2c = X.addr = -1;
     if (tipo_de(&p, "exp", tipo, sizeof tipo) != 0) return -1;
     if (!es(tipo, tipo + g_bios->strlen(tipo), "ch32"))
         return falla("ENV exp: no conozco el expansor '", tipo, tipo + g_bios->strlen(tipo), "' (hay: ch32)");
@@ -333,18 +339,16 @@ static int parse_exp(void) {
         const char* v = a;
         while (v < z && *v != ':') v++;
         if (v == z) return falla("ENV exp: no conozco '", a, z, "'");
-        if (parse_i2c("exp", a, v, v + 1, z, &X.i2c, &X.sda, &X.scl, &X.khz, &X.addr) != 0) return -1;
+        if (parse_i2c("exp", a, v, v + 1, z, &X.i2c, &X.addr) != 0) return -1;
     }
     if (X.i2c < 0)  return falla("ENV exp: falta 'i2c'", 0, 0, "");
-    if (X.sda < 0)  return falla("ENV exp: falta 'sda'", 0, 0, "");
-    if (X.scl < 0)  return falla("ENV exp: falta 'scl'", 0, 0, "");
     if (X.addr < 0) return falla("ENV exp: falta 'addr'", 0, 0, "");
     return 0;
 }
 
 static int parse_touch(void) {
     const char* p = s_env; const char *a, *z; char tipo[12];
-    T.i2c = T.sda = T.scl = T.addr = -1; T.khz = -1;
+    T.i2c = T.addr = -1;
     T.rst.tipo = PIN_NO; T.rst.n = 0;
     if (tipo_de(&p, "touch", tipo, sizeof tipo) != 0) return -1;
     if (!es(tipo, tipo + g_bios->strlen(tipo), "cst3530"))
@@ -357,18 +361,13 @@ static int parse_touch(void) {
             if (pin_de(v + 1, z, &T.rst) != 0 || T.rst.tipo == PIN_EXPWM) return falla("ENV touch: 'rst' no es un pin: '", v + 1, z, "'");
             continue;
         }
-        if (parse_i2c("touch", a, v, v + 1, z, &T.i2c, &T.sda, &T.scl, &T.khz, &T.addr) != 0) return -1;
+        if (parse_i2c("touch", a, v, v + 1, z, &T.i2c, &T.addr) != 0) return -1;
     }
     if (T.addr < 0) return falla("ENV touch: falta 'addr'", 0, 0, "");
-    if (T.i2c < 0 && T.sda < 0 && T.scl < 0) {         /* el bus del expansor */
+    if (T.i2c < 0) {                                  /* el bus del expansor */
         if (!X.hay) return falla("ENV touch: falta 'i2c' (o una linea 'exp' con su bus)", 0, 0, "");
-        T.i2c = X.i2c; T.sda = X.sda; T.scl = X.scl;
-        if (T.khz < 0) T.khz = X.khz;
+        T.i2c = X.i2c;
     }
-    if (T.i2c < 0 || T.sda < 0 || T.scl < 0) return falla("ENV touch: el bus es 'i2c', 'sda' y 'scl', los tres", 0, 0, "");
-    if (T.khz < 0) T.khz = 400;
-    if (X.hay && T.i2c == X.i2c && (T.sda != X.sda || T.scl != X.scl || T.khz != X.khz))
-        return falla("ENV touch y exp: el mismo i2c con otros pines", 0, 0, "");
     return 0;
 }
 
@@ -561,6 +560,19 @@ static int seq(int enviar) {
  * Hasta que vale se vuelve a leer en cada llamada: si el programa falla con
  * «falta 'dc'» y el usuario arregla el ENV, el siguiente RUN ya lo ve (los
  * pines no se han tomado: eso es de `init`). Una vez vale, se queda. */
+/* ¿Tiene el ENV la línea del bus `<tipo><id>=`? (Sólo que esté: la lee la HAL BP.) */
+static int hay_bus(const char* tipo, int id) {
+    char clave[8], v[4];
+    txt_t t; t_ini(&t, clave, sizeof clave);
+    t_s(&t, tipo); t_d(&t, id);
+    return g_bios->env_get(clave, v, sizeof v) != BPVM_BIOS_ENV_NO_ESTA;   /* NO_CABE también es «está» */
+}
+static int falla_bus(const char* tipo, int id, const char* de) {
+    txt_t t; t_ini(&t, s_motivo, sizeof s_motivo);
+    t_s(&t, "ENV: falta la linea '"); t_s(&t, tipo); t_d(&t, id); t_s(&t, "' (el bus "); t_s(&t, de); t_c(&t, ')');
+    return -1;
+}
+
 static int s_ok = 0;
 static int config(void) {
     int r;
@@ -580,13 +592,19 @@ static int config(void) {
     if (r == 1) { if (parse_touch() != 0) return -1; T.hay = 1; }
     if (!X.hay && (L.rst.tipo >= PIN_EXIO || L.bl.tipo >= PIN_EXIO || (T.hay && T.rst.tipo >= PIN_EXIO)))
         return falla("ENV lcd: un pin 'x' pide la linea 'exp' (el expansor)", 0, 0, "");
+    /* V7/H6.c G4 — los pines de cada bus están en SU línea del ENV (`spi2=`,
+     * `i2c0=`): sin ella la HAL BP no tiene con qué abrirlo. Se dice aquí, con
+     * nombre, y no como «la placa no da el SPI 2» al encender. */
+    if (!hay_bus("spi", L.spi)) return falla_bus("spi", L.spi, "de la pantalla");
+    if (X.hay && !hay_bus("i2c", X.i2c)) return falla_bus("i2c", X.i2c, "del expansor");
+    if (T.hay && !hay_bus("i2c", T.i2c)) return falla_bus("i2c", T.i2c, "del tactil");
     if (seq(0) != 0) return -1;
     s_ok = 1;
     {
         txt_t t; t_ini(&t, s_log, sizeof s_log);
         t_s(&t, "driver SPI: "); t_s(&t, L.ctrl); t_c(&t, ' '); t_d(&t, L.w); t_c(&t, 'x'); t_d(&t, L.h);
-        t_s(&t, " por SPI"); t_d(&t, L.spi); t_s(&t, " a "); t_d(&t, L.mhz); t_s(&t, " MHz (sck "); t_d(&t, L.sck);
-        t_s(&t, ", mosi "); t_d(&t, L.mosi); t_s(&t, ", dc "); t_d(&t, L.dc); t_s(&t, ", cs "); t_d(&t, L.cs);
+        t_s(&t, " por SPI"); t_d(&t, L.spi); t_s(&t, " a "); t_d(&t, L.mhz); t_s(&t, " MHz (dc "); t_d(&t, L.dc);
+        t_s(&t, ", cs "); t_d(&t, L.cs);
         t_s(&t, "), reset "); t_pin(&t, L.rst); t_s(&t, ", luz "); t_pin(&t, L.bl);
         di(s_log);
         t_ini(&t, s_log, sizeof s_log);
@@ -662,12 +680,15 @@ static int sp_init(void) {
     }
     if (L.rst.tipo == PIN_GPIO) g_bios->gpio_write(L.rst.n, 1);
     if (L.bl.tipo  == PIN_GPIO) g_bios->gpio_write(L.bl.n, 0);      /* apagada hasta que haya imagen */
-    if (g_bios->spi_init(L.spi, L.sck, L.mosi, -1, L.mhz * 1000000, 0) != 0) {
+    /* V7/H6.c G4 — el bus es COMPARTIDO: los pines a -1 son «los de su línea del ENV»
+     * y la HAL BP no lo reabre si ya lo usa otro (la TF). El porqué de un «no», con
+     * nombre, va al log de la VM justo antes de esta línea. */
+    if (g_bios->spi_init(L.spi, -1, -1, -1, L.mhz * 1000000, 0) != 0) {
         t_ini(&t, s_log, sizeof s_log); t_s(&t, "driver SPI: la placa no da el SPI "); t_d(&t, L.spi);
         di(s_log); return -2;
     }
-    if ((X.hay && g_bios->i2c_init(X.i2c, X.sda, X.scl, X.khz * 1000) != 0) ||
-        (T.hay && !(X.hay && T.i2c == X.i2c) && g_bios->i2c_init(T.i2c, T.sda, T.scl, T.khz * 1000) != 0)) {
+    if ((X.hay && g_bios->i2c_init(X.i2c, -1, -1, 0) != 0) ||
+        (T.hay && !(X.hay && T.i2c == X.i2c) && g_bios->i2c_init(T.i2c, -1, -1, 0) != 0)) {
         di("driver SPI: la placa no da el I2C del expansor o del tactil"); return -3;
     }
     di("driver SPI — pines y buses tomados");

@@ -12,6 +12,9 @@
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
 #include "bpvm_gpio.h"    /* V7/H4: el estado de los pines se limpia al fin de RUN */
+#include "bpvm_bus.h"     /* V7/H6.c G4.a1: y los buses del programa se sueltan */
+#include "bpvm_spi.h"
+#include "bpvm_i2c.h"
 #include "bpvm_alloc.h"         /* #339: guardián de fin de RUN */
 #include "bpvm_entry.h"         /* #344: el RUN, escrito UNA vez */
 #ifdef BPVM_GUI
@@ -1595,12 +1598,19 @@ void bpvm_set_run_arg(bpvm_t* vm, const char* arg) {
     snprintf(vm->run_arg, sizeof vm->run_arg, "%s", arg);
 }
 
+/* V7/H6.c G4.a1 — lo que el fin de RUN cierra en la cintura: los buses que sólo
+ * usaba el programa (los de un pack, la TF o el ENV se quedan). */
+static void cerrar_bus(int tipo, int id) {
+    if (tipo == BPVM_BUS_SPI) bpvm_spi_cerrar(id); else bpvm_i2c_cerrar(id);
+}
+
 void bpvm_destroy(bpvm_t* vm) {
     bpvm_out_set_vm(NULL);   /* #478 */
 
     if (!vm) return;
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
     bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN */
+    bpvm_bus_fin_de_run(cerrar_bus);   /* V7/H6.c G4.a1: y los buses que sólo usaba el programa, se cierran */
     apagar_pack_en_ejecucion(vm);   /* V7/H2 (#493): el overlay no puede apuntar a un vm muerto */
     /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido
      * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */

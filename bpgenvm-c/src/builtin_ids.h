@@ -261,7 +261,9 @@ enum {
     BUILTIN_CAPS_PIN                     = 253,   /* __capsPin(pin: integer): integer */
     BUILTIN_GPIO_RELEASE                 = 254,   /* __gpioRelease(pin: integer) */
     BUILTIN_ADC_INIT_PIN                 = 255,   /* __adcInitPin(pin: integer): integer */
-    BUILTIN__CUANTOS = 256
+    BUILTIN_SPI_RELEASE                  = 256,   /* __spiRelease(bus: integer) */
+    BUILTIN_I2C_RELEASE                  = 257,   /* __i2cRelease(bus: integer) */
+    BUILTIN__CUANTOS = 258
 };
 
 #endif

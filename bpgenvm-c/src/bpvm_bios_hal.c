@@ -27,6 +27,7 @@
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
 #include "bpvm_platform.h"
+#include "bpvm_bus.h"
 #include "bpvm.h"          /* bpvm_diag: el porqué de un -1 va al log de la VM */
 
 int bpvm_bios_hal_gpio_init(int pin, int mode) {
@@ -46,23 +47,32 @@ void bpvm_bios_hal_gpio_write(int pin, int value) { bpvm_gpio_write(pin, value);
 int  bpvm_bios_hal_gpio_read (int pin)            { return bpvm_gpio_read(pin); }
 
 int bpvm_bios_hal_spi_init(int bus, int sck, int mosi, int miso, int baudrate, int mode) {
-    char err[96];
+    char err[160];
     if (bpvm_gpio_instancia_ok(2, bus, err, sizeof err) != 0) {   /* 2 = SPI (bpvm_gpio.h) */
         bpvm_diag("BIOS: spi_init(%d) denegado: %s", bus, err);
         return -1;
     }
-    bpvm_spi_init(bus, sck, mosi, miso, baudrate, mode);
+    /* V7/H6.c G4.a1 — el pack es uno más de los usuarios del bus: se engancha a la
+     * configuración que haya (con -1 en los pines, la del ENV) y la cintura no se
+     * reabre. Otra configuración: -1 con el porqué en el log. */
+    if (bpvm_spi_abrir(bus, sck, mosi, miso, baudrate, mode, BPVM_BUS_PACK, NULL, err, sizeof err) != 0) {
+        bpvm_diag("BIOS: spi_init(%d) denegado: %s", bus, err);
+        return -1;
+    }
     return 0;
 }
 int bpvm_bios_hal_spi_write(int bus, const uint8_t* data, size_t n) { return bpvm_spi_write(bus, data, n); }
 
 int bpvm_bios_hal_i2c_init(int bus, int sda, int scl, int baudrate) {
-    char err[96];
+    char err[160];
     if (bpvm_gpio_instancia_ok(1, bus, err, sizeof err) != 0) {   /* 1 = I2C */
         bpvm_diag("BIOS: i2c_init(%d) denegado: %s", bus, err);
         return -1;
     }
-    bpvm_i2c_init(bus, sda, scl, baudrate);
+    if (bpvm_i2c_abrir(bus, sda, scl, baudrate, BPVM_BUS_PACK, err, sizeof err) != 0) {   /* V7/H6.c G4.a1 */
+        bpvm_diag("BIOS: i2c_init(%d) denegado: %s", bus, err);
+        return -1;
+    }
     return 0;
 }
 int bpvm_bios_hal_i2c_write(int bus, int addr, const uint8_t* data, size_t n) { return bpvm_i2c_write(bus, addr, data, n); }

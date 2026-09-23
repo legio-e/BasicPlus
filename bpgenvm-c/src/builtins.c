@@ -21,6 +21,7 @@
 #include "bpvm_net.h"    /* H11 (#241) — cliente TCP */
 #include "bpvm_i2c.h"
 #include "bpvm_spi.h"
+#include "bpvm_bus.h"     /* V7/H6.c G4.a1: BPVM_BUS_PROGRAMA */
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
 #include "bpvm_machine.h"
@@ -2798,6 +2799,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
+    /* V7/H6.c G4.a1 — el programa SUELTA un bus (Spi.Bus.release / I2c.Bus.release):
+     * si nadie más lo usa y no es de la placa (ENV), se cierra y sus pines vuelven a
+     * libres, y otro puede establecerlo distinto. Soltar el de la placa, o uno que usa
+     * también un pack o la TF, es un error con nombre, no un no-op (V7_IDEAS §H6.11.2). */
+    case BUILTIN_SPI_RELEASE:
+    case BUILTIN_I2C_RELEASE: {
+        int bus = pop_i32(vm, tc);
+        int es_spi = (id == BUILTIN_SPI_RELEASE);
+        char em[160];
+        if (bpvm_gpio_instancia_ok(es_spi ? 2 : 1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if ((es_spi ? bpvm_spi_soltar(bus, BPVM_BUS_PROGRAMA, em, sizeof em)
+                    : bpvm_i2c_soltar(bus, BPVM_BUS_PROGRAMA, em, sizeof em)) != 0) return builtin_throw(vm, tc, em);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
     case BUILTIN_GPIO_PULL: {
         int pull = pop_i32(vm, tc);
         int pin  = pop_i32(vm, tc);
@@ -2837,7 +2853,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int sda  = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
         { char em[128]; if (bpvm_gpio_instancia_ok(1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
-        bpvm_i2c_init(bus, sda, scl, baud);
+        /* V7/H6.c G4.a1 — el bus es COMPARTIDO: la configuración se establece una
+         * vez (el ENV o el primero) y otra es un error con nombre; -1 = la que tenga. */
+        { char em[160]; if (bpvm_i2c_abrir(bus, sda, scl, baud, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2926,7 +2944,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int sck  = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
         { char em[128]; if (bpvm_gpio_instancia_ok(2, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
-        bpvm_spi_init(bus, sck, mosi, miso, baud, mode);
+        /* V7/H6.c G4.a1 — como el I2C: se establece una vez; -1 = el pin que tenga el bus. */
+        { char em[160]; if (bpvm_spi_abrir(bus, sck, mosi, miso, baud, mode, BPVM_BUS_PROGRAMA, NULL, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

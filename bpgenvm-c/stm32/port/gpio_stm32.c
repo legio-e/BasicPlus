@@ -400,11 +400,43 @@ static int stm32_spi_transfer_impl(int bus, const uint8_t* tx, uint8_t* rx, size
            ? (int) n : -1;
 }
 
+/* V7/H6.c G4.a1 — abrir UNA vez, ajustar aparte, cerrar. La regla de quién usa
+ * el bus y con qué pines es de la HAL BP (bpvm_bus.c); aquí sólo el hardware:
+ *   abrir   — el init de siempre, SÓLO si el bus no está abierto;
+ *   ajustar — reconfigurar el periférico (prescaler, CPOL/CPHA) con los pines a
+ *             -1, que `cfg_af_pin` ignora: HAL_SPI_Init sobre un handle ya READY
+ *             no vuelve a pasar por el MspInit, sólo reescribe los registros;
+ *   cerrar  — HAL_SPI_DeInit. */
+static int s_spi_abierto[3], s_spi_hz[3], s_spi_modo[3];
+static int stm32_spi_abrir(int bus, int sck, int mosi, int miso) {
+    if (!spi_handle(bus)) return -1;
+    if (s_spi_abierto[bus - 1]) return 0;                /* ya abierto: NO se reabre */
+    stm32_spi_init_impl(bus, sck, mosi, miso, 1000000, 0);
+    s_spi_abierto[bus - 1] = 1;
+    s_spi_hz[bus - 1] = 1000000; s_spi_modo[bus - 1] = 0;
+    return 0;
+}
+static void stm32_spi_ajustar(int bus, int baudrate, int mode) {
+    if (!spi_handle(bus) || !s_spi_abierto[bus - 1]) return;
+    if (s_spi_hz[bus - 1] == baudrate && s_spi_modo[bus - 1] == mode) return;
+    stm32_spi_init_impl(bus, -1, -1, -1, baudrate, mode);
+    s_spi_hz[bus - 1] = baudrate; s_spi_modo[bus - 1] = mode;
+}
+static void stm32_spi_cerrar(int bus) {
+    SPI_HandleTypeDef* h = spi_handle(bus);
+    if (!h || !s_spi_abierto[bus - 1]) return;
+    HAL_SPI_DeInit(h);
+    s_spi_abierto[bus - 1] = 0;
+}
+
 static const bpvm_spi_backend_t s_spi_backend = {
     .init     = stm32_spi_init_impl,
     .write    = stm32_spi_write_impl,
     .read     = stm32_spi_read_impl,
     .transfer = stm32_spi_transfer_impl,
+    .abrir    = stm32_spi_abrir,       /* V7/H6.c G4.a1 */
+    .ajustar  = stm32_spi_ajustar,
+    .cerrar   = stm32_spi_cerrar,
 };
 
 /* ===================== UART (H15.1) ====================================
@@ -697,10 +729,30 @@ static int stm32_i2c_read_impl(int bus, int addr, uint8_t* data, size_t n) {
     return (st == HAL_OK) ? (int) n : -1;
 }
 
+/* V7/H6.c G4.a1 — abrir UNA vez y cerrar (ver el SPI). ⚠️ La velocidad sigue fija
+ * en 100 kHz (el TIMINGR de init_impl): un `i2cN=…,khz:400` en esta familia hoy
+ * va a 100. Es la deuda de antes, no de esto. */
+static int s_i2c_abierto[7];
+static int stm32_i2c_abrir(int bus, int sda, int scl, int baudrate) {
+    if (!i2c_handle(bus)) return -1;
+    if (s_i2c_abierto[bus]) return 0;                    /* ya abierto: NO se reabre */
+    stm32_i2c_init_impl(bus, sda, scl, baudrate);
+    s_i2c_abierto[bus] = 1;
+    return 0;
+}
+static void stm32_i2c_cerrar(int bus) {
+    I2C_HandleTypeDef* h = i2c_handle(bus);
+    if (!h || !s_i2c_abierto[bus]) return;
+    HAL_I2C_DeInit(h);
+    s_i2c_abierto[bus] = 0;
+}
+
 static const bpvm_i2c_backend_t s_i2c_backend = {
-    .init  = stm32_i2c_init_impl,
-    .write = stm32_i2c_write_impl,
-    .read  = stm32_i2c_read_impl,
+    .init   = stm32_i2c_init_impl,
+    .write  = stm32_i2c_write_impl,
+    .read   = stm32_i2c_read_impl,
+    .abrir  = stm32_i2c_abrir,         /* V7/H6.c G4.a1 */
+    .cerrar = stm32_i2c_cerrar,
 };
 
 /* ===================== WDT — NO LO HAY EN ESTA FAMILIA (#480) ==============

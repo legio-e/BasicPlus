@@ -63,7 +63,11 @@ typedef enum {
     BPVM_SD_E_CSD_VER,      /* el CSD dice una versión que no sabemos decodificar*/
     BPVM_SD_E_LECTURA,      /* CMD17: la tarjeta arrancó pero no entrega datos   */
     BPVM_SD_E_ESCRITURA,    /* CMD24: no acepta los datos                        */
-    BPVM_SD_E_OCUPADA       /* aceptó, pero no termina de grabar (plazo agotado) */
+    BPVM_SD_E_OCUPADA,      /* aceptó, pero no termina de grabar (plazo agotado) */
+    /* V7/H6.c G4.a1 — al FINAL, para no mover los de arriba: el bus SPI no se
+     * pudo usar (otra configuración que la establecida, no declarado, sin MISO).
+     * Su texto es el porqué con nombre, no un genérico. */
+    BPVM_SD_E_BUS
 } bpvm_sd_res_t;
 
 /* Texto del peldaño. Literal estático; nunca hay que liberarlo. */
@@ -90,8 +94,14 @@ typedef struct {
  *
  * Con etiquetas y no por posición porque así el orden da igual y, sobre todo,
  * porque cuando falte algo el mensaje puede DECIR QUÉ falta en vez de dejar un
- * pin a cero en silencio. `bus` (0) y `cd` (ninguno) tienen valor por defecto;
- * los cuatro de SPI son obligatorios.
+ * pin a cero en silencio. `bus` (0) y `cd` (ninguno) tienen valor por defecto.
+ *
+ * V7/H6.c G4.a1 — los pines del BUS (sck, mosi, miso) son del bus, no de la
+ * tarjeta: si la placa lo declara en el ENV (`spi2=sck:6,mosi:7,miso:8`), la
+ * línea de la SD sólo dice cuál y su CS —`sd=bus:2,cs:23`—, y la TF lo COMPARTE
+ * con la pantalla (V7_IDEAS §H6.11). La forma larga sigue valiendo: si el bus no
+ * está declarado, sus pines lo establecen; si lo está, tienen que coincidir. Sólo
+ * `cs` es obligatorio aquí; lo que falte del bus lo dice el arranque, con nombre.
  *
  * ⚠️ Las claves que no conoce se IGNORAN a propósito: así una versión vieja del
  * firmware no rechaza una línea escrita para una nueva. El precio es que una

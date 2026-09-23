@@ -1287,7 +1287,21 @@ luz.release()                                          <span class="comment">// 
       <td>Escanea direcciones <code>0x08..0x77</code> y devuelve un
           array con las que respondieron al ACK. Implementado en BP
           sobre <code>read</code> — no requiere opcode dedicado.</td></tr>
+  <tr><td><code>release(bus)</code></td>
+      <td>Suelta el bus: si nadie más lo usa y no es de la placa, se cierra y sus pines
+          vuelven a libres (también <code>bus.release()</code> en la clase).</td></tr>
 </table>
+<p>
+  <b>El bus se comparte</b> (V7). Un bus lo usan a la vez varios periféricos —en la C5, la
+  pantalla y la tarjeta TF van en el mismo SPI 2—; lo exclusivo es lo de cada uno: el CS en
+  SPI, la dirección en I²C. La configuración del bus (sus pines; en I²C también la velocidad)
+  se establece <b>una vez</b>: la declara la placa en su ENV (<code>i2c0=sda:0,scl:1,khz:400</code>) o, si no, el
+  primero que lo abre. Abrirlo después con los mismos pines —o con <code>-1</code>, «los que
+  tenga»— se engancha; con otros es un error con nombre
+  (<code>el I2C 0 es sda 0, scl 1 a 400 kHz (ENV i2c0): pides 100 kHz</code>). Sus pines quedan reservados: un <code>Gpio.Pin</code> sobre ellos dice
+  <code>el pin N es del I2C 0</code>. <code>release()</code> lo suelta —salvo el de la placa, o si
+  lo usa otro— y al acabar el programa se suelta solo.
+</p>
 <p>
   Constantes:
   <code>BUS0()</code>, <code>BUS1()</code>,
@@ -1341,7 +1355,21 @@ bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span 
   <tr><td><code>transfer(bus, tx, rx, count): integer</code></td>
       <td>Intercambio full-duplex: escribe <code>tx[i]</code> y lee
           simultáneamente <code>rx[i]</code>. Devuelve bytes intercambiados.</td></tr>
+  <tr><td><code>release(bus)</code></td>
+      <td>Suelta el bus: si nadie más lo usa y no es de la placa, se cierra y sus pines
+          vuelven a libres (también <code>bus.release()</code> en la clase).</td></tr>
 </table>
+<p>
+  <b>El bus se comparte</b> (V7). Un bus lo usan a la vez varios periféricos —en la C5, la
+  pantalla y la tarjeta TF van en el mismo SPI 2—; lo exclusivo es lo de cada uno: el CS en
+  SPI, la dirección en I²C. La configuración del bus (sus pines; en I²C también la velocidad)
+  se establece <b>una vez</b>: la declara la placa en su ENV (<code>spi2=sck:6,mosi:7,miso:8</code>) o, si no, el
+  primero que lo abre. Abrirlo después con los mismos pines —o con <code>-1</code>, «los que
+  tenga»— se engancha; con otros es un error con nombre
+  (<code>el SPI 2 es sck 6, mosi 7, miso 8 (ENV spi2): pides sck 12</code>). Sus pines quedan reservados: un <code>Gpio.Pin</code> sobre ellos dice
+  <code>el pin N es del SPI 2</code>. <code>release()</code> lo suelta —salvo el de la placa, o si
+  lo usa otro— y al acabar el programa se suelta solo.
+</p>
 <p>
   Constantes:
   <code>BUS0()</code>, <code>BUS1()</code>,

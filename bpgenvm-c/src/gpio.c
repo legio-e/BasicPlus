@@ -15,13 +15,26 @@ static const bpvm_gpio_backend_t* g_backend = NULL;
 
 /* ══════════ V7/H4 (#479) — el estado del pin y la validación (ver bpvm_gpio.h) ══════════ */
 #include "bpvm_machine.h"
+#include "bpvm_bus.h"
 #include <stdio.h>
 #include <string.h>
 static uint8_t s_estado[BPVM_CAPS_PIN_MAX];
 static uint8_t s_de_pack[BPVM_CAPS_PIN_MAX];   /* V7/H6: 1 = lo tomó un código nativo; sobrevive al fin de RUN */
+/* V7/H6.c G4.a1: el pin es de un BUS (0 = no; si no, 1 + tipo*BPVM_BUS_ID_MAX + id). Lo
+ * pone y lo quita bpvm_bus.c al establecer y cerrar el bus: ni el fin de RUN ni un
+ * release() del programa lo tocan. */
+static uint8_t s_de_bus[BPVM_CAPS_PIN_MAX];
 
 int  bpvm_gpio_estado(int pin) { return (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) ? s_estado[pin] : 0; }
-void bpvm_gpio_liberar(int pin) { if (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) { s_estado[pin] = 0; s_de_pack[pin] = 0; } }
+/* release() de un PROGRAMA: suelta lo suyo y nada más. Hasta G4.a1 también borraba
+ * la marca de pack, así que un `Gpio.release(9)` —o el destructor de un Pin(9) cuya
+ * construcción había fallado con «lo usa un código nativo»— le quitaba el pin DC a
+ * la pantalla en silencio, y el siguiente Pin(9) se lo quedaba. Lo de un pack y lo
+ * de un bus no es del programa: no se toca. */
+void bpvm_gpio_liberar(int pin) {
+    if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || s_de_pack[pin] || s_de_bus[pin]) return;
+    s_estado[pin] = 0;
+}
 void bpvm_gpio_estado_reset(void) {
     for (int p = 0; p < BPVM_CAPS_PIN_MAX; p++) if (!s_de_pack[p]) s_estado[p] = 0;   /* los del pack se quedan */
 }
@@ -30,6 +43,10 @@ int bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap) {
     const bpvm_caps_t* c = bpvm_caps();
     int m = bpvm_caps_pin_mask(pin);
     if (!m || pin >= BPVM_CAPS_PIN_MAX) { snprintf(err, cap, "el pin %d no existe en %s", pin, c->micro); return -1; }
+    if (s_de_bus[pin]) {
+        int t = (s_de_bus[pin] - 1) / BPVM_BUS_ID_MAX, id = (s_de_bus[pin] - 1) % BPVM_BUS_ID_MAX;
+        snprintf(err, cap, "el pin %d es del %s %d", pin, t == BPVM_BUS_I2C ? "I2C" : "SPI", id); return -1;
+    }
     if (s_de_pack[pin]) { snprintf(err, cap, "el pin %d lo usa un código nativo (un pack)", pin); return -1; }
     int e = s_estado[pin];
     if (uso == BPVM_USO_ANALOG) {
@@ -59,6 +76,23 @@ int bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap) {
     if (r == 0) s_de_pack[pin] = 1;
     return r;
 }
+
+/* V7/H6.c G4.a1 — el pin pasa a ser de un bus (lo pide bpvm_bus.c al establecerlo).
+ * Tiene que existir y estar LIBRE: un bus no le quita el pin a nadie. */
+int bpvm_gpio_reservar_bus(int pin, int tipo, int id, char* err, size_t cap) {
+    const bpvm_caps_t* c = bpvm_caps();
+    if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || !bpvm_caps_pin_mask(pin)) { snprintf(err, cap, "el pin %d no existe en %s", pin, c->micro); return -1; }
+    if (s_de_bus[pin]) {
+        int t = (s_de_bus[pin] - 1) / BPVM_BUS_ID_MAX, i = (s_de_bus[pin] - 1) % BPVM_BUS_ID_MAX;
+        snprintf(err, cap, "el pin %d es del %s %d", pin, t == BPVM_BUS_I2C ? "I2C" : "SPI", i); return -1;
+    }
+    if (s_de_pack[pin]) { snprintf(err, cap, "el pin %d lo usa un código nativo (un pack)", pin); return -1; }
+    if (s_estado[pin] == BPVM_GPIO_ANALOG) { snprintf(err, cap, "el pin %d está en uso analógico: primero release()", pin); return -1; }
+    if (s_estado[pin] != BPVM_GPIO_LIBRE)  { snprintf(err, cap, "el pin %d está en uso digital: primero release()", pin); return -1; }
+    s_de_bus[pin] = (uint8_t) (1 + tipo * BPVM_BUS_ID_MAX + id);
+    return 0;
+}
+void bpvm_gpio_soltar_bus(int pin) { if (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) s_de_bus[pin] = 0; }
 
 int bpvm_gpio_instancia_ok(int kind, int id, char* err, size_t cap) {
     const bpvm_caps_t* c = bpvm_caps();

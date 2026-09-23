@@ -34,6 +34,7 @@
 #include "board_mgr_pico.h"   /* H9: board_boot_status (estado real del boot) */
 #include "flash_layout.h"     /* H9: BP_ENV_*, BP_PART_BASE (layout 3 zonas) */
 #include "bpvm_env.h"         /* H9: env de la zona 2 (bloque A/B) */
+#include "bpvm_bus.h"         /* V7/H6.c G4.a1: los buses del ENV */
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
 #include "bpvm_sqlmem.h"
@@ -271,10 +272,35 @@ static int pico_i2c_read_impl(int bus, int addr, uint8_t* data, size_t n) {
                                 (uint) (2000u + 1000u * n));
     return (r < 0) ? -1 : r;
 }
+/* V7/H6.c G4.a1 — abrir UNA vez y cerrar. `i2c_init` del SDK RESETEA el
+ * periférico: llamado en cada init (arriba), el segundo usuario de un bus se lo
+ * quitaba al primero. La regla de quién lo usa es de la HAL BP (bpvm_bus.c). */
+static int s_i2c_pin[2][2] = { { -1, -1 }, { -1, -1 } };
+static int pico_i2c_abrir(int bus, int sda, int scl, int baud) {
+    int b = (bus == 1) ? 1 : 0;
+    if (s_i2c_pin[b][0] >= 0) return 0;                  /* ya abierto: NO se resetea */
+    i2c_init(i2c_inst_for(bus), (uint) (baud > 0 ? baud : 100000));
+    gpio_set_function((uint) sda, GPIO_FUNC_I2C);
+    gpio_set_function((uint) scl, GPIO_FUNC_I2C);
+    gpio_pull_up((uint) sda);
+    gpio_pull_up((uint) scl);
+    s_i2c_pin[b][0] = sda; s_i2c_pin[b][1] = scl;
+    return 0;
+}
+static void pico_i2c_cerrar(int bus) {
+    int b = (bus == 1) ? 1 : 0;
+    if (s_i2c_pin[b][0] < 0) return;
+    i2c_deinit(i2c_inst_for(bus));
+    gpio_set_function((uint) s_i2c_pin[b][0], GPIO_FUNC_NULL);
+    gpio_set_function((uint) s_i2c_pin[b][1], GPIO_FUNC_NULL);
+    s_i2c_pin[b][0] = s_i2c_pin[b][1] = -1;
+}
 static const bpvm_i2c_backend_t s_pico_i2c_backend = {
-    .init  = pico_i2c_init_impl,
-    .write = pico_i2c_write_impl,
-    .read  = pico_i2c_read_impl,
+    .init   = pico_i2c_init_impl,
+    .write  = pico_i2c_write_impl,
+    .read   = pico_i2c_read_impl,
+    .abrir  = pico_i2c_abrir,          /* V7/H6.c G4.a1 */
+    .cerrar = pico_i2c_cerrar,
 };
 
 /* --- Backend SPI del Pico SDK ----------------------------------- */
@@ -307,11 +333,45 @@ static int pico_spi_transfer_impl(int bus, const uint8_t* tx, uint8_t* rx, size_
     int r = spi_write_read_blocking(inst, tx, rx, n);
     return (r < 0) ? -1 : r;
 }
+/* V7/H6.c G4.a1 — abrir UNA vez, ajustar aparte, cerrar. `spi_init` del SDK
+ * RESETEA el periférico (y `init_impl`, arriba, lo llamaba en cada apertura); la
+ * velocidad y el formato se cambian SIN reset con `spi_set_baudrate` y
+ * `spi_set_format`. Y un pin a -1 (el MISO de una pantalla, que no lee) no se
+ * toca: `gpio_set_function(-1)` era un pin 0xFFFFFFFF. */
+static int s_spi_pin[2][3] = { { -1, -1, -1 }, { -1, -1, -1 } };
+static int s_spi_abierto[2];
+static int pico_spi_abrir(int bus, int sck, int mosi, int miso) {
+    int b = (bus == 1) ? 1 : 0;
+    if (s_spi_abierto[b]) return 0;                      /* ya abierto: NO se resetea */
+    spi_init(spi_inst_for(bus), 1000000u);               /* la velocidad la pone ajustar */
+    if (sck  >= 0) gpio_set_function((uint) sck,  GPIO_FUNC_SPI);
+    if (mosi >= 0) gpio_set_function((uint) mosi, GPIO_FUNC_SPI);
+    if (miso >= 0) gpio_set_function((uint) miso, GPIO_FUNC_SPI);
+    s_spi_pin[b][0] = sck; s_spi_pin[b][1] = mosi; s_spi_pin[b][2] = miso;
+    s_spi_abierto[b] = 1;
+    return 0;
+}
+static void pico_spi_ajustar(int bus, int baud, int mode) {
+    spi_inst_t* inst = spi_inst_for(bus);
+    spi_set_baudrate(inst, (uint) baud);
+    spi_set_format(inst, 8, (mode & 2) ? SPI_CPOL_1 : SPI_CPOL_0,
+                   (mode & 1) ? SPI_CPHA_1 : SPI_CPHA_0, SPI_MSB_FIRST);
+}
+static void pico_spi_cerrar(int bus) {
+    int b = (bus == 1) ? 1 : 0, i;
+    if (!s_spi_abierto[b]) return;
+    spi_deinit(spi_inst_for(bus));
+    for (i = 0; i < 3; i++) if (s_spi_pin[b][i] >= 0) gpio_set_function((uint) s_spi_pin[b][i], GPIO_FUNC_NULL);
+    s_spi_abierto[b] = 0;
+}
 static const bpvm_spi_backend_t s_pico_spi_backend = {
     .init     = pico_spi_init_impl,
     .write    = pico_spi_write_impl,
     .read     = pico_spi_read_impl,
     .transfer = pico_spi_transfer_impl,
+    .abrir    = pico_spi_abrir,        /* V7/H6.c G4.a1 */
+    .ajustar  = pico_spi_ajustar,
+    .cerrar   = pico_spi_cerrar,
 };
 
 /* --- Backend UART del Pico SDK ----------------------------------- */
@@ -1113,6 +1173,11 @@ static bpvm_boot_step_t layer_app(void* u) {
  * desde el INFO (lo responde la task de comms, no esta). Ver bpvm_stack_probe. */
 TaskHandle_t g_vm_task = NULL;
 
+/* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
+static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
+    return bpvm_env_get_exacto(&s_env, clave, buf, cap);
+}
+
 static void vm_task(void* arg) {
     (void) arg;
 
@@ -1245,6 +1310,12 @@ static void vm_task(void* arg) {
         }
         log_printf("sd: %s", s_sd_hay_config ? "pines configurados" : s_sd_motivo);
     }
+    /* V7/H6.c G4.a1 — los buses que la placa DECLARA en su ENV (`spi2=sck:6,mosi:7,miso:8`,
+     * `i2c0=sda:0,scl:1,khz:400`): sus pines quedan reservados desde el arranque, y los que
+     * vengan detrás (un programa, un pack, la TF) se enganchan a esa configuración o reciben
+     * un error con nombre (V7_IDEAS §H6.11). Después de registrar el hardware: la tabla de
+     * capacidades dice qué buses existen. */
+    bpvm_bus_desde_env(env_de_la_placa);
 
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
     /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */

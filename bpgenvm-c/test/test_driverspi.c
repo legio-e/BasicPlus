@@ -123,6 +123,9 @@ static void f_sleep_ms(int ms) { cinta("espera %d\n", ms); }
 
 /* El ENV: tres líneas, las que se prueben. */
 static const char *g_env_lcd = 0, *g_env_exp = 0, *g_env_touch = 0;
+/* V7/H6.c G4 — las líneas de los BUSES: el driver sólo mira que estén (sus pines los
+ * pone la HAL BP), así que aquí basta con que existan. */
+static const char *g_env_spi2 = "sck:6,mosi:7,miso:8", *g_env_i2c0 = "sda:0,scl:1,khz:400";
 static int igual_ci(const char* a, const char* b) {
     for (; *a && *b; a++, b++) {
         char x = *a, y = *b;
@@ -135,7 +138,8 @@ static int igual_ci(const char* a, const char* b) {
 static int f_env_get(const char* k, char* buf, size_t cap) {
     const char* v; size_t n;
     if (!k || !*k || !buf || !cap) return BPVM_BIOS_ENV_ARGS;
-    v = igual_ci(k, "lcd") ? g_env_lcd : igual_ci(k, "exp") ? g_env_exp : igual_ci(k, "touch") ? g_env_touch : 0;
+    v = igual_ci(k, "lcd") ? g_env_lcd : igual_ci(k, "exp") ? g_env_exp : igual_ci(k, "touch") ? g_env_touch
+      : igual_ci(k, "spi2") ? g_env_spi2 : igual_ci(k, "i2c0") ? g_env_i2c0 : 0;
     if (!v) return BPVM_BIOS_ENV_NO_ESTA;
     n = strlen(v);
     if (n + 1 > cap) { buf[0] = 0; return BPVM_BIOS_ENV_NO_CABE; }
@@ -309,9 +313,9 @@ static int desfase(int deg, int* gx, int* gy) {
     return 0;
 }
 
-static const char* LCD_C5   = "st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv";
-static const char* EXP_C5   = "ch32,i2c:0,sda:0,scl:1,addr:0x24";
-static const char* TOUCH_C5 = "cst3530,addr:0x58,rst:x0";
+static const char* LCD_C5   = "st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv";
+static const char* EXP_C5   = "ch32,i2c:0,addr:0x24";
+static const char* TOUCH_C5 = "cst3530,i2c:0,addr:0x58,rst:x0";
 
 /* Un caso de ERROR: el ENV (o el .seq) mal, y lo que tiene que decir `estado`. */
 static void caso_mal(const char* lcd, const char* exp, const char* touch, const char* espera, const char* titulo) {
@@ -372,10 +376,15 @@ int main(int argc, char** argv) {
           "  el ultimo, en los dos: DISPON (29)");
     CHECK(strstr(g_spi.init_cinta, "(¡CS ALTO!)") == 0 && strstr(g_c5.init_cinta, "(¡CS ALTO!)") == 0,
           "  ni un byte de SPI con CS alto");
-    CHECK(strcmp(linea_que_empieza(g_c5.init_cinta, "spi_init", a, sizeof a), linea_que_empieza(g_spi.init_cinta, "spi_init", b, sizeof b)) == 0 && a[0],
-          "  el mismo bus SPI (2, sck 6, mosi 7, 40 MHz, modo 0)");
-    CHECK(strcmp(linea_que_empieza(g_c5.init_cinta, "i2c_init", a, sizeof a), linea_que_empieza(g_spi.init_cinta, "i2c_init", b, sizeof b)) == 0 && a[0],
-          "  el mismo bus I2C (0, sda 0, scl 1, 400 kHz)");
+    /* V7/H6.c G4: DriverC5 lleva los pines escritos; DriverSpi pide el bus DE LA
+     * PLACA (-1 = los de su línea spi2=/i2c0=, los pone la HAL BP) a la misma
+     * velocidad y en el mismo modo. */
+    CHECK(strcmp(linea_que_empieza(g_c5.init_cinta, "spi_init", a, sizeof a), "spi_init 2 sck 6 mosi 7 miso -1 40000000 Hz modo 0") == 0 &&
+          strcmp(linea_que_empieza(g_spi.init_cinta, "spi_init", b, sizeof b), "spi_init 2 sck -1 mosi -1 miso -1 40000000 Hz modo 0") == 0,
+          "  el SPI 2: DriverC5 con sus pines (6, 7), DriverSpi el de la placa (-1), los dos a 40 MHz y modo 0");
+    CHECK(strcmp(linea_que_empieza(g_c5.init_cinta, "i2c_init", a, sizeof a), "i2c_init 0 sda 0 scl 1 400000 Hz") == 0 &&
+          strcmp(linea_que_empieza(g_spi.init_cinta, "i2c_init", b, sizeof b), "i2c_init 0 sda -1 scl -1 0 Hz") == 0,
+          "  el I2C 0: DriverC5 con sus pines y 400 kHz, DriverSpi el de la placa (pines y velocidad de i2c0=)");
     CHECK(g_c5.exp_dir == 0xFF && g_spi.exp_dir == 0xFF, "  el expansor: los ocho EXIO como salida, en los dos");
     CHECK(g_c5.exp_out == 0x03 && g_spi.exp_out == 0x03, "  y al acabar, los dos resets SUELTOS (salidas 0x03), en los dos");
     CHECK(g_c5.exp_pwm == 255 && g_spi.exp_pwm == 255, "  y la luz a tope (PWM 255), en los dos");
@@ -403,13 +412,13 @@ int main(int argc, char** argv) {
     }
 
     /* ── 2. LA TRAZA: lo que ve quien escribe su .seq ── */
-    g_env_lcd = "st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv,traza";
+    g_env_lcd = "st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv,traza";
     CHECK(cargar(spi_pack_init, &ps) == 0 && ps.init() == 0, "con 'traza' arranca igual");
     CHECK(strstr(g_log, "seq 11") && strstr(g_log, "seq espera 100") && strstr(g_log, "seq B0 00 F0") && strstr(g_log, "placa 36 00"),
           "  y el log dice cada comando: seq 11, espera 100, B0 00 F0, y lo de la placa (36 00...)");
 
     /* ── 3. EL C6: reset y luz por GPIO, sin expansor ni tactil, y su DESFASE ── */
-    g_env_lcd = "st7789,spi:2,sck:7,mosi:6,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv";
+    g_env_lcd = "st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv";
     g_env_exp = 0; g_env_touch = 0;
     g_pin_dc = 15; g_pin_cs = 14;
     CHECK(cargar(spi_pack_init, &ps) == 0 && ps.touch == 0, "el C6: publica SIN touch (no hay linea touch=)");
@@ -432,7 +441,7 @@ int main(int argc, char** argv) {
     }
 
     /* ── 4. LAS 135x240 (TTGO T-Display y hermanas): cristal descentrado, y SIN pin de reset ── */
-    g_env_lcd = "st7789,spi:2,sck:18,mosi:19,dc:16,cs:5,w:135,h:240,ram:240x320,off:52x40";
+    g_env_lcd = "st7789,spi:2,dc:16,cs:5,w:135,h:240,ram:240x320,off:52x40";
     g_pin_dc = 16; g_pin_cs = 5;
     CHECK(cargar(spi_pack_init, &ps) == 0, "una 135x240 (off:52x40)");
     grabar_desde_cero();
@@ -440,7 +449,7 @@ int main(int argc, char** argv) {
     CHECK(strncmp(g_cmds, "01\n11", 5) == 0 && strstr(g_cinta, "C: 01\n") && strstr(strstr(g_cinta, "C: 01\n"), "espera 120"),
           "  sin pin de reset: SWRESET (01) y 120 ms, ANTES del .seq");
     CHECK(strstr(g_cmds, "\n20") != 0 && strstr(g_cmds, "\n21") == 0, "  sin 'inv': INVOFF (20), no INVON");
-    CHECK(strstr(g_cinta, "spi_init 2 sck 18 mosi 19 miso -1 20000000 Hz") != 0, "  sin 'mhz': 20 MHz");
+    CHECK(strstr(g_cinta, "spi_init 2 sck -1 mosi -1 miso -1 20000000 Hz") != 0, "  sin 'mhz': 20 MHz");
     {
         static const int G[4][2] = { { 52, 40 }, { 40, 53 }, { 53, 40 }, { 40, 52 } };
         for (i = 0; i < 4; i++) {
@@ -450,7 +459,7 @@ int main(int argc, char** argv) {
             CHECK(r == 0 && gx == G[i][0] && gy == G[i][1], m);
         }
     }
-    g_env_lcd = "st7789,spi:2,sck:18,mosi:19,dc:16,cs:5,w:135,h:240,ram:240x320,off:52x40,bgr";
+    g_env_lcd = "st7789,spi:2,dc:16,cs:5,w:135,h:240,ram:240x320,off:52x40,bgr";
     {
         uint8_t m0 = 0;
         CHECK(cargar(spi_pack_init, &ps) == 0 && ps.init() == 0, "con 'bgr'");
@@ -459,7 +468,7 @@ int main(int argc, char** argv) {
     }
 
     /* ── 5. UN .seq DEL USUARIO, con lo que trae un ejemplo de fabricante (0x, comas, CRLF) ── */
-    g_env_lcd = "gc9a01,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:1,w:240,h:240,seq:/sys/gc.seq";
+    g_env_lcd = "gc9a01,spi:2,dc:9,cs:10,rst:1,w:240,h:240,seq:/sys/gc.seq";
     g_pin_dc = 9; g_pin_cs = 10;
     CHECK(cargar(spi_pack_init, &ps) == 0 && ps.estado() == 0, "un controlador que no traemos, con seq:/sys/gc.seq -> listo");
     grabar_desde_cero();
@@ -468,27 +477,32 @@ int main(int argc, char** argv) {
 
     /* ── 6. LAS ERRATAS: cada una CON NOMBRE en estado, y nada sigue adelante ── */
     caso_mal(0, 0, 0, "falta la linea 'lcd'", "sin linea lcd=");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,cs:10,w:240,h:320", 0, 0, "falta 'dc'", "sin 'dc'");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rts:21,w:240,h:320", 0, 0, "no conozco 'rts'", "una errata en una clave (rts)");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320,invertido", 0, 0, "no conozco 'invertido'", "una bandera que no existe");
-    caso_mal("st7789,spi:2,sck:6a,mosi:7,dc:9,cs:10,w:240,h:320", 0, 0, "'sck' no es un numero", "un numero mal (sck:6a)");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,rst:x1,w:240,h:320", 0, 0, "pide la linea 'exp'", "un pin x1 sin expansor");
-    caso_mal("ili9341,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320", 0, 0, "no conozco 'ili9341'", "un controlador sin .seq en el pack");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320,seq:/sys/nada.seq", 0, 0, "no encuentro /sys/nada.seq", "un seq: que no existe");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320,seq:/sys/mal.seq", 0, 0, "mal.seq linea 2: '0G' no es un byte", "un .seq con un byte malo");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320,seq:/sys/lenta.seq", 0, 0, "lenta.seq linea 2: 'espera'", "un .seq con una espera de 5 s");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320,seq:/sys/vacia.seq", 0, 0, "no tiene ningun comando", "un .seq sin comandos");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:240,ram:240x320,off:0x81", 0, 0, "no cabe en 'ram'", "un cristal que no cabe (off:0x81)");
-    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320", 0, "cst3530,addr:0x58", "falta 'i2c'", "un tactil sin bus y sin expansor");
-    caso_mal(LCD_C5, "pcf8574,i2c:0,sda:0,scl:1,addr:0x20", TOUCH_C5, "no conozco el expansor 'pcf8574'", "un expansor que no conocemos");
-    caso_mal(LCD_C5, "ch32,i2c:0,sda:0,scl:1", TOUCH_C5, "ENV exp: falta 'addr'", "un expansor sin addr");
-    caso_mal(LCD_C5, EXP_C5, "cst3530,addr:0x58,i2c:0,sda:2,scl:3", "el mismo i2c con otros pines", "tactil y expansor: mismo bus, otros pines");
-    caso_mal("spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320", 0, 0, "el primer campo es el tipo", "sin el controlador delante");
+    caso_mal("st7789,spi:2,cs:10,w:240,h:320", 0, 0, "falta 'dc'", "sin 'dc'");
+    caso_mal("st7789,spi:2,dc:9,cs:10,rts:21,w:240,h:320", 0, 0, "no conozco 'rts'", "una errata en una clave (rts)");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320,invertido", 0, 0, "no conozco 'invertido'", "una bandera que no existe");
+    caso_mal("st7789,spi:2,dc:9a,cs:10,w:240,h:320", 0, 0, "'dc' no es un numero", "un numero mal (dc:9a)");
+    caso_mal("st7789,spi:2,dc:9,cs:10,rst:x1,w:240,h:320", 0, 0, "pide la linea 'exp'", "un pin x1 sin expansor");
+    caso_mal("ili9341,spi:2,dc:9,cs:10,w:240,h:320", 0, 0, "no conozco 'ili9341'", "un controlador sin .seq en el pack");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320,seq:/sys/nada.seq", 0, 0, "no encuentro /sys/nada.seq", "un seq: que no existe");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320,seq:/sys/mal.seq", 0, 0, "mal.seq linea 2: '0G' no es un byte", "un .seq con un byte malo");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320,seq:/sys/lenta.seq", 0, 0, "lenta.seq linea 2: 'espera'", "un .seq con una espera de 5 s");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320,seq:/sys/vacia.seq", 0, 0, "no tiene ningun comando", "un .seq sin comandos");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:240,ram:240x320,off:0x81", 0, 0, "no cabe en 'ram'", "un cristal que no cabe (off:0x81)");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320", 0, "cst3530,addr:0x58", "falta 'i2c'", "un tactil sin bus y sin expansor");
+    caso_mal(LCD_C5, "pcf8574,i2c:0,addr:0x20", TOUCH_C5, "no conozco el expansor 'pcf8574'", "un expansor que no conocemos");
+    caso_mal(LCD_C5, "ch32,i2c:0", TOUCH_C5, "ENV exp: falta 'addr'", "un expansor sin addr");
+    caso_mal("spi:2,dc:9,cs:10,w:240,h:320", 0, 0, "el primer campo es el tipo", "sin el controlador delante");
+    /* V7/H6.c G4 — los pines del BUS van en SU línea, no en la del dispositivo */
+    caso_mal("st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320", 0, 0, "'sck' es del bus: va en su linea spiN=", "sck en la linea lcd= (es del bus)");
+    caso_mal(LCD_C5, "ch32,i2c:0,sda:0,scl:1,addr:0x24", TOUCH_C5, "'sda' es del bus: va en su linea i2cN=", "sda en la linea exp= (es del bus)");
+    caso_mal(LCD_C5, EXP_C5, "cst3530,i2c:0,addr:0x58,khz:400", "'khz' es del bus: va en su linea i2cN=", "khz en la linea touch= (es del bus)");
+    caso_mal("st7789,spi:3,dc:9,cs:10,w:240,h:320", 0, 0, "falta la linea 'spi3' (el bus de la pantalla)", "la pantalla en un SPI sin su linea spi3=");
+    caso_mal(LCD_C5, "ch32,i2c:1,addr:0x24", "cst3530,i2c:0,addr:0x58,rst:x0", "falta la linea 'i2c1' (el bus del expansor)", "el expansor en un I2C sin su linea i2c1=");
 
     /* ── 7. Y ARREGLADO EL ENV, pasa SIN recargar el driver ── */
-    g_env_lcd = "st7789,spi:2,sck:6,mosi:7,cs:10,w:240,h:320"; g_env_exp = 0; g_env_touch = 0;
+    g_env_lcd = "st7789,spi:2,cs:10,w:240,h:320"; g_env_exp = 0; g_env_touch = 0;
     CHECK(cargar(spi_pack_init, &ps) == 0 && ps.estado() != 0, "sin 'dc': no esta listo");
-    g_env_lcd = "st7789,spi:2,sck:6,mosi:7,dc:9,cs:10,w:240,h:320";
+    g_env_lcd = "st7789,spi:2,dc:9,cs:10,w:240,h:320";
     CHECK(ps.estado() == 0, "  y anadido 'dc' al ENV, el MISMO driver cargado ya esta listo (se relee hasta que vale)");
 
     printf("\n[status=%s]\n", g_fail ? "FAIL" : "OK");

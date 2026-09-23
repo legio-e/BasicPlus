@@ -36,7 +36,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/bpvm_log.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c src/bpvm_io.c \
-          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_bus.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c src/bpvm_mdn_scan.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
@@ -450,6 +450,17 @@ test-guipack:
 	@echo "--- V7/H6: la costura VM <-> pack de la GUI (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_guipack.exe
 
+# V7/H6.c G4.a1 — los buses SPI e I2C como recurso COMPARTIDO de la HAL BP: la
+# configuración se establece una vez (el ENV o el primero), otra es un error con
+# nombre, se puede soltar (salvo la del ENV o si la usa otro) y el fin de RUN suelta
+# lo del programa; contra una cintura que CUENTA aperturas y cierres (el fallo de
+# antes: cada init reabría el bus). Ver test/test_bus.c y V7_IDEAS §H6.11.
+test-bus: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_bus.c $(LIBOBJ) -o build/test_bus.exe $(LDFLAGS)
+	@echo "--- V7/H6.c G4.a1: el bus compartido (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_bus.exe
+
 # V7/H6.c G3 — el driver de pantalla GENÉRICO (MIPI-DCS por SPI, la placa en el ENV)
 # contra el de la C5, en el PC: los dos contra una BIOS que GRABA los cables. Con el
 # perfil de la C5 tienen que mandar lo mismo; los desfases del C6 y de las 135x240
@@ -676,10 +687,13 @@ test-mdnreceta: $(LIBOBJ)
 # funcion pura, son DOS formulas distintas (v1 y v2) con campos partidos entre
 # bytes, y equivocarse ahi no revienta: devuelve un numero. Una tarjeta de 32 GB
 # que dice tener 4 no se nota hasta que el FS escribe fuera.
+# V7/H6.c G4.a1: la HAL suelta necesita ya el bus, la tabla de capacidades y dos
+# dobles de la VM (test/hal_stubs.c). Con la lista de antes no enlazaba desde #478
+# (bpvm_out) y H4 (la tabla): fuera de las redes, mudo. No se enlaza la VM entera
+# a propósito: el test tapa el reloj A CERO (ver test/test_sd.c).
 test-sd:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_sd.c src/bpvm_sd.c src/spi.c src/gpio.c \
-	      -o build/test_sd.exe
+	$(CC) $(CFLAGS) test/test_sd.c src/bpvm_sd.c src/spi.c src/gpio.c src/bpvm_bus.c src/bpvm_machine.c test/hal_stubs.c -o build/test_sd.exe
 	@echo "--- V5/H1 CSD/CID de la SD (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_sd.exe
 
@@ -697,8 +711,7 @@ test-sdsc:
 
 test-blk:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_blk.c src/bpvm_blk.c src/bpvm_sd_blk.c \
-	      src/bpvm_sd.c src/spi.c src/gpio.c -o build/test_blk.exe
+	$(CC) $(CFLAGS) test/test_blk.c src/bpvm_blk.c src/bpvm_sd_blk.c src/bpvm_sd.c src/spi.c src/gpio.c src/bpvm_bus.c src/bpvm_machine.c test/hal_stubs.c -o build/test_blk.exe
 	@echo "--- V5/H6 contrato de bloque (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_blk.exe
 

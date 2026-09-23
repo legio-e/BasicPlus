@@ -1156,6 +1156,7 @@ public class VirtualMachine {
     private void gpioReclamar(ThreadContext tc, int pin, int uso) {
         int m = hostPinMask(pin);
         if (m == 0) throwBpRuntimeError(tc, "el pin " + pin + " no existe en host");
+        if (pinDeBus[pin] != 0) throwBpRuntimeError(tc, busDeQuien(pin));   // V7/H6.c G4.a1
         int e = pinEstado[pin];
         if (uso == 3) {
             if ((m & 2) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no es analógico");
@@ -1169,6 +1170,87 @@ public class VirtualMachine {
         if (uso == 5 && (m & 8) == 0) throwBpRuntimeError(tc, "el pin " + pin + " de host no puede contar pulsos");
         if (uso <= 2) pinEstado[pin] = uso + 1;
     }
+    // ── V7/H6.c G4.a1 — los buses SPI e I2C, COMPARTIDOS: espejo de bpvm_bus.c, con los MISMOS
+    // textos (V7_IDEAS §H6.11). La configuración de un bus —sus pines; en I2C también la
+    // velocidad— se establece UNA vez y otra es un error con nombre; -1 en un pin = el que tenga;
+    // sus pines quedan reservados («el pin 6 es del SPI 2»); release() lo suelta y el fin de RUN
+    // también. En el PC sólo hay un usuario, el programa: ni ENV, ni packs, ni TF.
+    private final int[][][] busPin = new int[2][2][3];     // [0 SPI · 1 I2C][bus 0..1][sck,mosi,miso · sda,scl,-]
+    private final int[][] busHz = new int[2][2];
+    private final boolean[][] busAbierto = new boolean[2][2];
+    private final int[] pinDeBus = new int[160];            // 0 = no; si no, 1 + tipo*8 + bus (como el común)
+    private static final String[] BUS_NOMBRE = { "SPI", "I2C" };
+    private static final String[][] BUS_PIN = { { "sck", "mosi", "miso" }, { "sda", "scl", "-" } };
+
+    private String busPinta(int t, int id) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < (t == 0 ? 3 : 2); i++) {
+            int p = busPin[t][id][i];
+            if (p < 0) continue;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(BUS_PIN[t][i]).append(' ').append(p);
+        }
+        if (t == 1 && busHz[t][id] > 0) sb.append(" a ").append(busHz[t][id] / 1000).append(" kHz");
+        return sb.toString();
+    }
+    private String busDeQuien(int pin) {
+        int v = pinDeBus[pin] - 1;
+        return "el pin " + pin + " es del " + BUS_NOMBRE[v / 8] + " " + (v % 8);
+    }
+    /** bpvm_gpio_reservar_bus: el pin tiene que existir y estar LIBRE. null = reservado. */
+    private String busReservaPin(int pin, int t, int id) {
+        if (hostPinMask(pin) == 0) return "el pin " + pin + " no existe en host";
+        if (pinDeBus[pin] != 0) return busDeQuien(pin);
+        if (pinEstado[pin] == 4) return "el pin " + pin + " está en uso analógico: primero release()";
+        if (pinEstado[pin] != 0) return "el pin " + pin + " está en uso digital: primero release()";
+        pinDeBus[pin] = 1 + t * 8 + id;
+        return null;
+    }
+    /** bpvm_bus_abrir para el programa. Devuelve {p0, p1, p2, hz} EFECTIVOS. */
+    private int[] busAbrir(ThreadContext tc, int t, int id, int p0, int p1, int p2, int hz) {
+        int[] pide = { p0, p1, t == 0 ? p2 : -1 };
+        int n = (t == 0) ? 3 : 2;
+        String nombre = BUS_NOMBRE[t] + " " + id;
+        if (!busAbierto[t][id]) {
+            if (pide[0] < 0 || pide[1] < 0)
+                throwBpRuntimeError(tc, "el " + nombre + " no está declarado: da " + BUS_PIN[t][0] + " y " + BUS_PIN[t][1]
+                        + ", o pon " + (t == 0 ? "spi" : "i2c") + id + "= en el ENV");
+            for (int i = 0; i < n; i++) {              // o todos o ninguno
+                if (pide[i] < 0) continue;
+                String e = busReservaPin(pide[i], t, id);
+                if (e != null) {
+                    for (int j = 0; j < i; j++) if (pide[j] >= 0) pinDeBus[pide[j]] = 0;
+                    throwBpRuntimeError(tc, e);
+                }
+            }
+            for (int i = 0; i < 3; i++) busPin[t][id][i] = (i < n && pide[i] >= 0) ? pide[i] : -1;
+            busHz[t][id] = (t == 1) ? (hz > 0 ? hz : 100000) : 0;
+            busAbierto[t][id] = true;
+        } else {
+            for (int i = 0; i < n; i++) {
+                if (pide[i] < 0 || pide[i] == busPin[t][id][i]) continue;
+                String ya = busPinta(t, id);
+                if (busPin[t][id][i] < 0)
+                    throwBpRuntimeError(tc, "el " + nombre + " es " + ya + " (lo abrió el programa): no tiene " + BUS_PIN[t][i]);
+                throwBpRuntimeError(tc, "el " + nombre + " es " + ya + " (lo abrió el programa): pides " + BUS_PIN[t][i] + " " + pide[i]);
+            }
+            if (t == 1 && hz > 0 && hz != busHz[t][id])
+                throwBpRuntimeError(tc, "el " + nombre + " es " + busPinta(t, id) + " (lo abrió el programa): pides " + (hz / 1000) + " kHz");
+        }
+        return new int[] { busPin[t][id][0], busPin[t][id][1], busPin[t][id][2], busHz[t][id] };
+    }
+    /** bpvm_bus_soltar para el programa: se cierra y sus pines vuelven a libres. */
+    private void busSoltar(ThreadContext tc, int t, int id) {
+        if (!busAbierto[t][id]) throwBpRuntimeError(tc, "el " + BUS_NOMBRE[t] + " " + id + " no lo tienes abierto");
+        for (int i = 0; i < 3; i++) { int p = busPin[t][id][i]; if (p >= 0) pinDeBus[p] = 0; busPin[t][id][i] = -1; }
+        busHz[t][id] = 0;
+        busAbierto[t][id] = false;
+    }
+    private void busFinDeRun() {
+        for (int t = 0; t < 2; t++) for (int id = 0; id < 2; id++) { busAbierto[t][id] = false; busHz[t][id] = 0; java.util.Arrays.fill(busPin[t][id], -1); }
+        java.util.Arrays.fill(pinDeBus, 0);
+    }
+
     private void gpioInstanciaOk(ThreadContext tc, int kind, int id) {
         if (id == 0 || id == 1) return;
         String nombre = kind == 0 ? "UART" : kind == 1 ? "I2C" : "SPI";
@@ -2377,6 +2459,7 @@ public class VirtualMachine {
         gui.shutdown();
         ficherosFinDeRun();   // V7/H3 (#491)
         java.util.Arrays.fill(pinEstado, 0);   // V7/H4 (#479): los pines vuelven a libres
+        busFinDeRun();                          // V7/H6.c G4.a1: y los buses del programa se sueltan
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -5638,7 +5721,8 @@ public class VirtualMachine {
             }
             case GPIO_RELEASE: {
                 int pin = popTc(tc);
-                if (pin >= 0 && pin < pinEstado.length) pinEstado[pin] = 0;
+                // V7/H6.c G4.a1: release() suelta lo del programa; un pin de BUS no es suyo.
+                if (pin >= 0 && pin < pinEstado.length && pinDeBus[pin] == 0) pinEstado[pin] = 0;
                 pushTc(tc, 0);
                 break;
             }
@@ -5677,9 +5761,10 @@ public class VirtualMachine {
                 int sda  = popTc(tc);
                 int bus  = popTc(tc);
                 gpioInstanciaOk(tc, 1, bus);   // V7/H4
+                int[] ef = busAbrir(tc, 1, bus, sda, scl, -1, baud);   // V7/H6.c G4.a1: lo EFECTIVO
                 System.out.println("[i2c] init bus=" + bus
-                        + " sda=" + sda + " scl=" + scl
-                        + " baud=" + baud);
+                        + " sda=" + ef[0] + " scl=" + ef[1]
+                        + " baud=" + ef[3]);
                 pushTc(tc, 0);
                 break;
             }
@@ -5750,9 +5835,20 @@ public class VirtualMachine {
                 int sck  = popTc(tc);
                 int bus  = popTc(tc);
                 gpioInstanciaOk(tc, 2, bus);   // V7/H4
+                int[] ef = busAbrir(tc, 0, bus, sck, mosi, miso, 0);   // V7/H6.c G4.a1: lo EFECTIVO
                 System.out.println("[spi] init bus=" + bus
-                        + " sck=" + sck + " mosi=" + mosi + " miso=" + miso
+                        + " sck=" + ef[0] + " mosi=" + ef[1] + " miso=" + ef[2]
                         + " baud=" + baud + " mode=" + mode);
+                pushTc(tc, 0);
+                break;
+            }
+            // V7/H6.c G4.a1 — el programa SUELTA el bus (Spi.Bus.release / I2c.Bus.release).
+            case SPI_RELEASE:
+            case I2C_RELEASE: {
+                int bus = popTc(tc);
+                int t = (b == Builtin.SPI_RELEASE) ? 0 : 1;
+                gpioInstanciaOk(tc, t == 0 ? 2 : 1, bus);
+                busSoltar(tc, t, bus);
                 pushTc(tc, 0);
                 break;
             }

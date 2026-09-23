@@ -82,6 +82,15 @@ void bpvm_gpio_init (int pin, int modo)   { (void) pin; (void) modo; }
 void bpvm_gpio_pull (int pin, int modo)   { (void) pin; (void) modo; }
 int  bpvm_gpio_read (int pin)             { (void) pin; return 1; }
 void bpvm_spi_init  (int bus, uint32_t hz){ (void) bus; (void) hz; }
+/* V7/H6.c G4.a1 — la TF abre el bus por la regla común (bpvm_bus.h); aquí no hay
+ * bus que compartir: devuelve los pines que le piden. */
+int  bpvm_spi_abrir (int bus, int sck, int mosi, int miso, int hz, int modo, int quien,
+                     int pins[3], char* err, size_t cap)
+{
+    (void) bus; (void) hz; (void) modo; (void) quien; (void) err; (void) cap;
+    if (pins) { pins[0] = sck; pins[1] = mosi; pins[2] = miso; }
+    return 0;
+}
 
 void bpvm_spi_transfer(int b, const uint8_t* tx, uint8_t* rx, int n)
 {

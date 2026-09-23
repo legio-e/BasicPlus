@@ -18,6 +18,7 @@
 #include "stm32_wire.h"
 #include "stm32_fs.h"
 #include "board_mgr_stm32.h"  /* H9 — arranque escalonado + STATE/ENV/PART */
+#include "bpvm_bus.h"         /* V7/H6.c G4.a1: los buses del ENV */
 #include "flash_layout_stm32.h" /* BP_ENV_SECTOR: s_put_buf hace de scratch del env */
 #include "bpvm_pack.h"        /* H3 — BPVM_PACK_BURN_CHUNK (bulk del PACK_BURN_DATA) */
 #include "log.h"              /* log persistente de diagnóstico (espejo del Pico) */
@@ -831,6 +832,7 @@ void stm32_repl_run(void) {
      * fuera del gate del FS: sólo necesita las particiones. */
     board_mgr_stm32_montar_packs();
     stm32_hw_register();            /* backends de HW (GPIO, info de MCU) — siempre */
+    bpvm_bus_desde_env(board_mgr_stm32_env_get);   /* V7/H6.c G4.a1: los buses del ENV (ver el main del S3) */
     log_flush();                    /* persiste la historia del boot (post-mortem tras corte) */
 
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON

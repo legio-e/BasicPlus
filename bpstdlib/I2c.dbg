@@ -2,46 +2,48 @@ dbg 3
 module I2c
 source C:\lenguajes\pm\bpstdlib\I2c.bp
 lines
-154 150
-185 156
-216 164
-233 165
-244 166
-247 167
-254 168
-267 169
-285 170
-294 171
-302 172
-313 174
-321 176
-329 177
-344 178
-363 140
-374 141
-385 142
-396 143
-407 144
-553 57
-572 61
-598 65
-624 73
-641 74
-652 75
-655 76
-662 77
-675 78
-688 79
-697 80
-705 81
-716 83
-724 86
-732 87
-747 88
-766 93
-781 96
-796 99
-815 102
+154 168
+185 174
+216 180
+234 188
+251 189
+262 190
+265 191
+272 192
+285 193
+303 194
+312 195
+320 196
+331 198
+339 200
+347 201
+362 202
+381 158
+392 159
+403 160
+414 161
+425 162
+585 71
+604 75
+630 79
+656 83
+669 91
+686 92
+697 93
+700 94
+707 95
+720 96
+733 97
+742 98
+750 99
+761 101
+769 104
+777 105
+792 106
+811 111
+826 114
+841 117
+860 120
 vars
 func Bus.getId 35
 this -20 8 0 ?
@@ -69,7 +71,9 @@ this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.scan 213
+func Bus.release 213
+this -20 8 0 ?
+func Bus.scan 231
 this -20 8 0 ?
 rxbuf 8 8 0 ?
 max 24 8 0 ?
@@ -77,51 +81,55 @@ found 32 4 0 integer
 addr 36 4 0 integer
 rc 40 4 0 integer
 result 44 8 0 ?
-func Bus.__init 360
+func Bus.__init 378
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_new_Bus(iiii) 423
+func __cls_new_Bus(iiii) 441
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_init_Bus(iiii) 461
+func __cls_init_Bus(iiii) 479
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_m_Bus#read(i[ii)i 483
+func __cls_m_Bus#read(i[ii)i 501
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#scan()[i 507
+func __cls_m_Bus#release()V 525
 this -20 8 0 ?
-func __cls_m_Bus#write(i[ii)i 526
+func __cls_m_Bus#scan()[i 539
+this -20 8 0 ?
+func __cls_m_Bus#write(i[ii)i 558
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func init 550
+func init 582
 bus -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func write 569
+func write 601
 bus -32 4 0 integer
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 595
+func read 627
 bus -32 4 0 integer
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func scan 621
+func release 653
+bus -16 4 0 integer
+func scan 666
 bus -16 4 0 integer
 rxbuf 8 8 0 ?
 max 24 8 0 ?

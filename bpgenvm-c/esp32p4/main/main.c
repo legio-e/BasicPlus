@@ -31,6 +31,12 @@
 #include "bpvm.h"              /* #353: bpvm_diag_set_sink — el rastro de la VM al log */
 #include "bpvm_sqlmem.h"       /* V5/H7: la REGLA del bloque de la BD (un solo sitio) */
 #include "bpvm_env.h"          /* V5/H7: SQLite=<MB> del entorno */
+#include "bpvm_bus.h"          /* V7/H6.c G4.a1: los buses del ENV */
+
+/* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
+static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
+    return bpvm_env_get_exacto(board_mgr_env(), clave, buf, cap);
+}
 #include "bpvm_bios.h"         /* V5/H7: la tabla que se le presta al pack */
 #include "pack_esp32.h"        /* V5/H7 → V7/H6: el pack nativo, común a la familia */
 #include "esp_log.h"
@@ -317,6 +323,7 @@ static void wire_task(void *arg)
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3, ESP-IDF) */
+    bpvm_bus_desde_env(env_de_la_placa);   /* V7/H6.c G4.a1: los buses del ENV (ver main.c del S3) */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* backend del P4 (pisa el del S3) */
     wire_v1_tcp_server_init(WIRE_PORT);
     net_logf("[p4] VM.3: esperando al IDE en *:%d (backend 'VM (TCP v1)' -> 192.168.2.2:%d)",
@@ -365,6 +372,7 @@ static void wire_task_uart(void *arg)
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3) */
+    bpvm_bus_desde_env(env_de_la_placa);   /* V7/H6.c G4.a1: los buses del ENV */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* del P4 */
     wire_v1_transport_init();
     net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");

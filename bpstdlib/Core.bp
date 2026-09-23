@@ -1470,6 +1470,12 @@ module Core
   function __adcInitPin(pin: integer): integer   // Gpio.AnPin: (unidad, canal) del mapa; devuelve el canal
     inline CALL_BUILTIN 255
   end __adcInitPin
+  function __spiRelease(bus: integer)   // Spi.Bus.release: el programa suelta el bus (V7/H6.c G4.a1)
+    inline CALL_BUILTIN 256
+  end __spiRelease
+  function __i2cRelease(bus: integer)   // I2c.Bus.release: el programa suelta el bus (V7/H6.c G4.a1)
+    inline CALL_BUILTIN 257
+  end __i2cRelease
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

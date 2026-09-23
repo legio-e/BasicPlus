@@ -28,6 +28,8 @@
 #include "pack_esp32.h"        /* V7/H6: el pack nativo, común a la familia */
 #include "bpvm_bios.h"         /* bpvm_bios_slot_count */
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
+#include "bpvm_bus.h"          /* V7/H6.c G4.a1: los buses del ENV */
+#include "bpvm_env.h"
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "esp_heap_caps.h"     /* H11: el heap de la VM se pide en runtime, no es .bss */
 
@@ -191,6 +193,11 @@ static void vm_buffer_init(void) {
  * porque el log SOBREVIVE al reset y la consola no. */
 static void diag_al_log(const char* linea) { log_printf("%s", linea); }
 
+/* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
+static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
+    return bpvm_env_get_exacto(board_mgr_env(), clave, buf, cap);
+}
+
 void app_main(void)
 {
     /* Estos printf van a la CONSOLA = USB-Serial-JTAG (puerto nativo),
@@ -249,6 +256,12 @@ void app_main(void)
     log_printf("bios: tabla %s (%d ranuras)",
                bios_esp32_get() ? "COMPLETA" : "INCOMPLETA", bpvm_bios_slot_count());
     esp32_hw_register();   /* backends de HW (GPIO, pico/info) — siempre */
+    /* V7/H6.c G4.a1 — los buses que la placa DECLARA en su ENV (`spi2=sck:6,mosi:7,miso:8`,
+     * `i2c0=sda:0,scl:1,khz:400`): sus pines quedan reservados desde el arranque, y los que
+     * vengan detrás (un programa, un pack, la TF) se enganchan a esa configuración o reciben
+     * un error con nombre (V7_IDEAS §H6.11). Después de registrar el hardware: la tabla de
+     * capacidades dice qué buses existen. */
+    bpvm_bus_desde_env(env_de_la_placa);
     /* V6/P1.C3.3 — la identidad de placa, si este silicio trae la suya.
      *
      * Por defecto el REPL reporta la del S3 (`s_default_board` en

@@ -360,6 +360,63 @@ static void esp32_spi_init_impl(int bus, int sck, int mosi, int miso,
     spi_bus_add_device((spi_host_device_t) host, &devcfg, &s_spi_dev[bus]);
 }
 
+/* ── V7/H6.c G4.a1 — ABRIR una vez, AJUSTAR aparte, CERRAR ─────────────────
+ * `esp32_spi_init_impl` (arriba) suelta el bus y lo vuelve a crear en cada
+ * llamada: el segundo usuario de un bus se lo quitaba al primero (la TF a la
+ * pantalla de la C5) sin decir nada. La regla de quién lo usa y con qué pines es
+ * de la HAL BP (`bpvm_bus.c`); aquí sólo queda el hardware:
+ *
+ *   abrir   — `spi_bus_initialize` SÓLO si no está abierto;
+ *   ajustar — la velocidad y el modo son del DISPOSITIVO del IDF: se cambia el
+ *             dispositivo (quitar + añadir), NUNCA el bus; si ya es ése, nada;
+ *   cerrar  — quitar el dispositivo y `spi_bus_free`.
+ *
+ * ⚠️ Hasta G4.a2 hay UN dispositivo por bus: dos usuarios con velocidades
+ * distintas se quedan con la del último que abrió. Un dispositivo por CS, con la
+ * suya aplicada en cada transacción, es el árbitro (V7_IDEAS §H6.11.3). */
+static int s_spi_hz[4], s_spi_modo[4];
+
+static int esp32_spi_abrir(int bus, int sck, int mosi, int miso) {
+    int host = esp32_spi_host(bus);
+    if (host < 0 || bus < 0 || bus >= 4) return -1;
+    if (s_spi_bus_ready[bus]) return 0;                   /* ya abierto: NO se reabre */
+    spi_bus_config_t buscfg = {
+        .mosi_io_num     = mosi,
+        .miso_io_num     = miso,
+        .sclk_io_num     = sck,
+        .quadwp_io_num   = -1,
+        .quadhd_io_num   = -1,
+        .max_transfer_sz = 0,   /* sin DMA: limite = FIFO interno (~64 B); el DMA es G4.b */
+    };
+    if (spi_bus_initialize((spi_host_device_t) host, &buscfg, SPI_DMA_DISABLED) != ESP_OK) return -1;
+    s_spi_bus_ready[bus] = 1;
+    s_spi_hz[bus] = s_spi_modo[bus] = -1;
+    return 0;
+}
+
+static void esp32_spi_ajustar(int bus, int baudrate, int mode) {
+    int host = esp32_spi_host(bus);
+    if (host < 0 || bus < 0 || bus >= 4 || !s_spi_bus_ready[bus]) return;
+    if (s_spi_dev[bus] && s_spi_hz[bus] == baudrate && s_spi_modo[bus] == mode) return;
+    if (s_spi_dev[bus]) { spi_bus_remove_device(s_spi_dev[bus]); s_spi_dev[bus] = NULL; }
+    spi_device_interface_config_t devcfg = {
+        .clock_speed_hz = baudrate,
+        .mode           = mode,    /* 0..3 = CPOL/CPHA, igual que la fachada */
+        .spics_io_num   = -1,      /* CS lo lleva el usuario por GPIO */
+        .queue_size     = 1,
+    };
+    if (spi_bus_add_device((spi_host_device_t) host, &devcfg, &s_spi_dev[bus]) == ESP_OK) {
+        s_spi_hz[bus] = baudrate; s_spi_modo[bus] = mode;
+    }
+}
+
+static void esp32_spi_cerrar(int bus) {
+    int host = esp32_spi_host(bus);
+    if (host < 0 || bus < 0 || bus >= 4) return;
+    if (s_spi_dev[bus]) { spi_bus_remove_device(s_spi_dev[bus]); s_spi_dev[bus] = NULL; }
+    if (s_spi_bus_ready[bus]) { spi_bus_free((spi_host_device_t) host); s_spi_bus_ready[bus] = 0; }
+}
+
 /* tx NULL -> manda ceros; rx NULL -> descarta lo recibido. Full-duplex. */
 static int esp32_spi_xfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
     if (bus < 0 || bus >= 4 || !s_spi_dev[bus] || n == 0) return -1;
@@ -386,6 +443,9 @@ static const bpvm_spi_backend_t s_esp32_spi_backend = {
     .write    = esp32_spi_write_impl,
     .read     = esp32_spi_read_impl,
     .transfer = esp32_spi_transfer_impl,
+    .abrir    = esp32_spi_abrir,       /* V7/H6.c G4.a1 */
+    .ajustar  = esp32_spi_ajustar,
+    .cerrar   = esp32_spi_cerrar,
 };
 
 /* ===================== I2C (H16) =====================================
@@ -423,6 +483,31 @@ static void esp32_i2c_init_impl(int bus, int sda, int scl, int baudrate) {
     }
 }
 
+/* V7/H6.c G4.a1 — abrir UNA vez y cerrar (ver el SPI, arriba): `init_impl`
+ * borraba el bus y lo volvía a crear, y el táctil de la C5 perdía el suyo cuando
+ * un programa abría el I2C 0. La velocidad es del bus (la de la configuración). */
+static int esp32_i2c_abrir(int bus, int sda, int scl, int baudrate) {
+    if (bus < 0 || bus > 1) return -1;
+    if (s_i2c_ready[bus]) return 0;                       /* ya abierto: NO se reabre */
+    i2c_master_bus_config_t cfg = {
+        .i2c_port          = bus,
+        .sda_io_num        = sda,
+        .scl_io_num        = scl,
+        .clk_source        = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    if (i2c_new_master_bus(&cfg, &s_i2c_bus[bus]) != ESP_OK) return -1;
+    s_i2c_ready[bus] = 1;
+    s_i2c_baud[bus]  = (baudrate > 0) ? (uint32_t) baudrate : 100000u;
+    return 0;
+}
+static void esp32_i2c_cerrar(int bus) {
+    if (bus < 0 || bus > 1 || !s_i2c_ready[bus]) return;
+    i2c_del_master_bus(s_i2c_bus[bus]);
+    s_i2c_ready[bus] = 0;
+}
+
 /* add_device(addr) on-demand -> tx/rx -> rm_device. solo tx => write;
  * solo rx => read; ambos => write-then-read (repeated start). */
 static int esp32_i2c_xfer(int bus, int addr, const uint8_t* tx, size_t txn,
@@ -451,9 +536,11 @@ static int esp32_i2c_read_impl(int bus, int addr, uint8_t* data, size_t n) {
 }
 
 static const bpvm_i2c_backend_t s_esp32_i2c_backend = {
-    .init  = esp32_i2c_init_impl,
-    .write = esp32_i2c_write_impl,
-    .read  = esp32_i2c_read_impl,
+    .init   = esp32_i2c_init_impl,
+    .write  = esp32_i2c_write_impl,
+    .read   = esp32_i2c_read_impl,
+    .abrir  = esp32_i2c_abrir,         /* V7/H6.c G4.a1 */
+    .cerrar = esp32_i2c_cerrar,
 };
 
 /* ===================== PWM (H14) =====================================

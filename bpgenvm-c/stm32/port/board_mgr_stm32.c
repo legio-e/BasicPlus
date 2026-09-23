@@ -99,6 +99,14 @@ long board_mgr_stm32_env_long(const char* key, long def) {
     return bpvm_env_get_long(&env, key, def);
 }
 
+/* V7/H6.c G4.a1 — y una clave de TEXTO, entera o nada (`bpvm_env_get_exacto`): la
+ * primera que hace falta aquí son las líneas de los buses (`spi1=`, `i2c2=`). */
+int board_mgr_stm32_env_get(const char* key, char* buf, size_t cap) {
+    bpvm_env_t env;
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
+    return bpvm_env_get_exacto(&env, key, buf, cap);
+}
+
 static bpvm_boot_step_t layer_partitions(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';

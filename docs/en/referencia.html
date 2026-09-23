@@ -1277,7 +1277,21 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
       <td>Scans addresses <code>0x08..0x77</code> and returns an
           array of those that ACKed. Implemented in BP
           on top of <code>read</code> — needs no dedicated opcode.</td></tr>
+  <tr><td><code>release(bus)</code></td>
+      <td>Lets the bus go: if nobody else uses it and it is not the board's, it is closed
+          and its pins become free (also <code>bus.release()</code> on the class).</td></tr>
 </table>
+<p>
+  <b>The bus is shared</b> (V7). Several peripherals use one bus at the same time — on the C5,
+  the display and the microSD card share SPI 2 —; what is exclusive is each device's own: the
+  CS on SPI, the address on I²C. The bus configuration (its pins; on I²C also its speed) is set
+  <b>once</b>: the board declares it in its ENV (<code>i2c0=sda:0,scl:1,khz:400</code>) or, if not, whoever opens it
+  first. Opening it later with the same pins — or with <code>-1</code>, "whatever it has" —
+  attaches to it; with other pins it is a named error (<code>el I2C 0 es sda 0, scl 1 a 400 kHz (ENV i2c0): pides 100 kHz</code>). Its pins are
+  reserved: a <code>Gpio.Pin</code> on them says <code>el pin N es del I2C 0</code>.
+  <code>release()</code> lets it go — except the board's own, or one that someone else is
+  using — and it is released automatically when the program ends.
+</p>
 <p>
   Constants:
   <code>BUS0()</code>, <code>BUS1()</code>,
@@ -1331,7 +1345,21 @@ bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span 
   <tr><td><code>transfer(bus, tx, rx, count): integer</code></td>
       <td>Full-duplex exchange: writes <code>tx[i]</code> and reads
           <code>rx[i]</code> simultaneously. Returns bytes exchanged.</td></tr>
+  <tr><td><code>release(bus)</code></td>
+      <td>Lets the bus go: if nobody else uses it and it is not the board's, it is closed
+          and its pins become free (also <code>bus.release()</code> on the class).</td></tr>
 </table>
+<p>
+  <b>The bus is shared</b> (V7). Several peripherals use one bus at the same time — on the C5,
+  the display and the microSD card share SPI 2 —; what is exclusive is each device's own: the
+  CS on SPI, the address on I²C. The bus configuration (its pins; on I²C also its speed) is set
+  <b>once</b>: the board declares it in its ENV (<code>spi2=sck:6,mosi:7,miso:8</code>) or, if not, whoever opens it
+  first. Opening it later with the same pins — or with <code>-1</code>, "whatever it has" —
+  attaches to it; with other pins it is a named error (<code>el SPI 2 es sck 6, mosi 7, miso 8 (ENV spi2): pides sck 12</code>). Its pins are
+  reserved: a <code>Gpio.Pin</code> on them says <code>el pin N es del SPI 2</code>.
+  <code>release()</code> lets it go — except the board's own, or one that someone else is
+  using — and it is released automatically when the program ends.
+</p>
 <p>
   Constants:
   <code>BUS0()</code>, <code>BUS1()</code>,

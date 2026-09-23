@@ -140,6 +140,14 @@ int main(void)
         CHECK(r == -1,                    "env: sin 'cs' se rechaza");
         CHECK(strstr(m, "cs") != NULL,    "env: y el mensaje NOMBRA el que falta");
     }
+    {   /* V7/H6.c G4.a1 — la forma CORTA: los pines son del BUS (su línea spiN=
+         * del ENV) y la SD sólo dice cuál y su CS. Lo que falte del bus lo dice
+         * el arranque, con nombre (V7_IDEAS §H6.11). */
+        bpvm_sd_pines_t p; char m[64];
+        int r = bpvm_sd_pines_parse("bus:2,cs:23", &p, m, sizeof m);
+        CHECK(r == 0 && p.bus == 2 && p.cs == 23, "env: la forma corta (bus:2,cs:23) se acepta");
+        CHECK(p.sck < 0 && p.mosi < 0 && p.miso < 0, "env: y los pines del bus quedan a -1 (los del bus)");
+    }
     {   /* `cd` es opcional: sin el, la placa no tiene detector y se dice. */
         bpvm_sd_pines_t p;
         int r = bpvm_sd_pines_parse("sck:34,mosi:35,miso:36,cs:39", &p, 0, 0);

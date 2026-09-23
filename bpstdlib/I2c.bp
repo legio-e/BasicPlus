@@ -10,6 +10,16 @@
 // los serializa correctamente en .bpi cross-module gracias a
 // L-arr-export.
 //
+// EL BUS SE COMPARTE (V7/H6.c G4.a1): la configuración de un bus —sus pines y su
+// velocidad, que la tienen que aguantar todos— se establece UNA vez: la declara la
+// placa en el ENV (`i2c0=sda:0,scl:1,khz:400`)
+// o, si no, el primero que lo abre. Después, abrirlo con los MISMOS pines (o con
+// -1: «los que tenga») se engancha, y con OTROS es un error con nombre:
+//   «el I2C 0 es sda 0, scl 1 a 400 kHz (ENV i2c0): pides 100 kHz».
+// Sus pines quedan reservados: un Gpio.Pin sobre ellos dice «el pin N es del I2C 0».
+// release() lo suelta —salvo el de la placa o si lo usa otro—, y el fin del programa
+// también.
+//
 // Hay DOS formas de usar este módulo:
 //
 //   A) Funciones top-level (forma original, compatible con
@@ -45,6 +55,10 @@ module I2c
   public function readBus(bus: integer, addr: integer, data: integer[], count: integer): integer
     inline CALL_BUILTIN 84
   end readBus
+  // V7/H6.c G4.a1 — el programa suelta el bus (ver la cabecera).
+  public function releaseBus(bus: integer)
+    inline CALL_BUILTIN 257
+  end releaseBus
 
   // ---- Funciones top-level de compatibilidad ----
   //
@@ -64,6 +78,10 @@ module I2c
   public function read(bus: integer, addr: integer, data: integer[], count: integer): integer
     return readBus(bus, addr, data, count)
   end read
+
+  public function release(bus: integer)
+    releaseBus(bus)
+  end release
 
   // Escanea el bus completo (direcciones I2C válidas 0x08..0x77) y
   // devuelve un array con las direcciones de los dispositivos que
@@ -155,6 +173,12 @@ module I2c
     public function read(addr: integer, data: integer[], count: integer): integer
       return readBus(this.id, addr, data, count)
     end read
+
+    // Suelta el bus (V7/H6.c G4.a1): si nadie más lo usa y no es de la placa, se cierra y
+    // sus pines vuelven a libres. Sin destructor A PROPÓSITO (ver Spi.Bus.release).
+    public function release()
+      releaseBus(this.id)
+    end release
 
     // Escanea el bus completo (0x08..0x77) y devuelve un array con
     // las direcciones que respondieron. Inlined manualmente porque

@@ -55,6 +55,7 @@
 #include "json_min.h"
 #include "bpvm_repl.h"      /* U3.24: el REPL comun */
 #include "bpvm_env.h"       /* U6.1: `stack=N` del ENV, como las placas */
+#include "bpvm_bus.h"       /* V7/H6.c G4.a1 */
 #include "bpvm_wire_v1.h"
 #ifdef BPVM_GUI
 #include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */
@@ -135,6 +136,8 @@ static void sim_sqlite_arranca(void) {
 
 static uint8_t g_a[SECTOR], g_b[SECTOR], g_scratch[SECTOR];
 static bpvm_bmgr_t g_bm;
+/* V7/H6.c G4.a1 — el ENV simulado, con la regla de siempre (entero o nada). */
+static int sim_env_get(const char* clave, char* buf, size_t cap) { return bpvm_bmgr_env_get(&g_bm, clave, buf, cap); }
 static const char* g_flash_path = "boardsim.flash";
 
 /* H3 — zona de packs simulada (región RAM que hace de flash; 0xFF = borrada).
@@ -1130,6 +1133,7 @@ int main(int argc, char** argv) {
         if (bpvm_bmgr_env(&g_bm, &env))   /* devuelve 1 si HAY env, no 0 */
             bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&env, "stack", 0));
     }
+    bpvm_bus_desde_env(sim_env_get);   /* V7/H6.c G4.a1: los buses del ENV, en el boot como en la placa */
 
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
 

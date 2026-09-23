@@ -1,0 +1,69 @@
+module BusCompartido
+  // V7/H6.c G4.a1 — el bus es COMPARTIDO (V7_IDEAS §H6.11): su configuración se establece
+  // UNA vez (en el PC, el primero que lo abre: aquí no hay ENV) y otra es un error con
+  // nombre; -1 en un pin = «el que tenga»; sus pines quedan reservados; release() lo suelta
+  // y otro puede abrirlo distinto. En I2C la velocidad es del bus. Paridad: el mismo stdout
+  // en las dos VMs, errores incluidos.
+  import Gpio
+  import Spi
+  import I2c
+
+  function Main()
+    // 1. el primero ESTABLECE el SPI 0
+    var a: Spi.Bus := Spi.Bus(0, 2, 3, 4, 1000000, 0)
+    // 2. otro con -1 se ENGANCHA: el stub dice los pines efectivos
+    var b: Spi.Bus := Spi.Bus(0, -1, -1, -1, 4000000, 3)
+    // 3. MISO a -1 («no lo uso») casa con un bus que sí lo tiene
+    var c: Spi.Bus := Spi.Bus(0, 2, 3, -1, 1000000, 0)
+    // 4. otros pines: error con nombre, y el bus sigue como estaba
+    try
+      var d: Spi.Bus := Spi.Bus(0, 5, 3, 4, 1000000, 0)
+      print "no deberia llegar"
+    catch e: Core.Exception
+      print e.msg
+    endtry
+    // 5. sus pines están reservados
+    try
+      var p: Gpio.Pin := Gpio.Pin(2, 1)
+      print "no deberia llegar"
+    catch e2: Core.Exception
+      print e2.msg
+    endtry
+    // 6. soltarlo: sus pines vuelven a libres y otro lo establece distinto (sin MISO)
+    a.release()
+    var q: Gpio.Pin := Gpio.Pin(2, 1)
+    q.release()
+    var f: Spi.Bus := Spi.Bus(0, 6, 7, -1, 2000000, 0)
+    try
+      var g: Spi.Bus := Spi.Bus(0, 6, 7, 8, 2000000, 0)
+      print "no deberia llegar"
+    catch e3: Core.Exception
+      print e3.msg
+    endtry
+    // 7. un bus sin establecer, y sin pines
+    try
+      var h: Spi.Bus := Spi.Bus(1, -1, -1, -1, 1000000, 0)
+      print "no deberia llegar"
+    catch e4: Core.Exception
+      print e4.msg
+    endtry
+    // 8. soltar lo que no se tiene
+    try
+      Spi.release(1)
+      print "no deberia llegar"
+    catch e5: Core.Exception
+      print e5.msg
+    endtry
+    // 9. I2C: la velocidad es parte de la configuración
+    var i: I2c.Bus := I2c.Bus(1, 10, 11, 100000)
+    var j: I2c.Bus := I2c.Bus(1, -1, -1, 0)
+    try
+      var k: I2c.Bus := I2c.Bus(1, 10, 11, 400000)
+      print "no deberia llegar"
+    catch e6: Core.Exception
+      print e6.msg
+    endtry
+    i.release()
+    print "fin"
+  end Main
+end BusCompartido

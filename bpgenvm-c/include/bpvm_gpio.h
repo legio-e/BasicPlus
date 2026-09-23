@@ -51,7 +51,11 @@ int  bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap);   /* 0 = OK (y
  * un código nativo». El pack vive mientras viva la placa; el programa, no. */
 int  bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap);
 int  bpvm_gpio_estado(int pin);                                     /* BPVM_GPIO_* */
-void bpvm_gpio_liberar(int pin);                                    /* release(): vuelve a LIBRE */
+void bpvm_gpio_liberar(int pin);                                    /* release() de un programa: sólo lo suyo */
+/* V7/H6.c G4.a1 — los pines de un BUS (los pide y los suelta bpvm_bus.c): un programa
+ * que los pida recibe «el pin 6 es del SPI 2»; ni el fin de RUN ni release() los sueltan. */
+int  bpvm_gpio_reservar_bus(int pin, int tipo, int id, char* err, size_t cap);
+void bpvm_gpio_soltar_bus(int pin);
 void bpvm_gpio_estado_reset(void);                                  /* fin de RUN */
 /* ¿id está entre las instancias válidas de ese bus? 0 = OK; -1 con `err`. kind: 0 uart · 1 i2c · 2 spi */
 int  bpvm_gpio_instancia_ok(int kind, int id, char* err, size_t cap);

@@ -1,0 +1,68 @@
+// C5Bus.bp — el bus COMPARTIDO en la C5 (V7/H6.c G4.a1, V7_IDEAS §H6.11).
+//
+// La placa declara sus buses en el ENV (spi2=sck:6,mosi:7,miso:8 · i2c0=sda:0,scl:1,khz:400)
+// y la pantalla (el pack DriverSpi) los usa. Hasta G4.a1, un programa que abría el SPI 2 le
+// REABRÍA el bus a la pantalla y la dejaba muerta sin una palabra. Ahora:
+//   · con los pines de la placa (o -1) se ENGANCHA, y la pantalla sigue pintando;
+//   · con otros, error con nombre; y los pines del bus no se los lleva un Gpio.Pin;
+//   · el bus de la placa no se suelta desde un programa;
+//   · el I2C 0 es el del expansor y el táctil: el programa lee el CH32 por el mismo bus.
+// Mide el cambio de una etiqueta antes y después de engancharse (tiene que seguir en ~1 ms).
+module C5Bus
+  import Gui
+  import Gpio
+  import Spi
+  import I2c
+  import Machine
+
+  function mide(eti: Gui.Label, rotulo: string): integer
+    var t0: integer := Machine.uptimeMs()
+    var i: integer := 0
+    while i < 10 do
+      eti.setText(rotulo + " " + i)
+      Gui.__guiRunOnce()
+      i := i + 1
+    endwh
+    return (Machine.uptimeMs() - t0) / 10
+  end mide
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "bus")
+    eti.align(Gui.Align.CENTER, 0, 0)
+    Gui.__guiRunOnce()
+    print "antes:   ", mide(eti, "antes"), "ms por etiqueta"
+
+    // 1. el programa se ENGANCHA al SPI 2 de la placa (-1 = sus pines), a la velocidad de la pantalla
+    var bus: Spi.Bus := Spi.Bus(2, -1, -1, -1, 40000000, 0)
+    print "SPI 2 enganchado"
+    // 2. otros pines: error con nombre
+    try
+      var otro: Spi.Bus := Spi.Bus(2, 12, 13, -1, 1000000, 0)
+      print "no deberia llegar"
+    catch e: Core.Exception
+      print e.msg
+    endtry
+    // 3. el reloj de la pantalla no se lo lleva un Pin
+    try
+      var p: Gpio.Pin := Gpio.Pin(6, 1)
+      print "no deberia llegar"
+    catch e2: Core.Exception
+      print e2.msg
+    endtry
+    // 4. el bus de la placa no se suelta desde un programa
+    try
+      bus.release()
+      print "no deberia llegar"
+    catch e3: Core.Exception
+      print e3.msg
+    endtry
+    // 5. el I2C 0 (el del expansor y el táctil): el programa lee el CH32 por el mismo bus
+    var i2c: I2c.Bus := I2c.Bus(0, -1, -1, 0)
+    var rx: integer[] := [0]
+    print "I2C 0: leer 1 byte del CH32 (0x24) ->", i2c.read(0x24, rx, 1)
+    // 6. y la pantalla sigue pintando
+    print "despues: ", mide(eti, "despues"), "ms por etiqueta"
+    print "fin"
+  end Main
+end C5Bus

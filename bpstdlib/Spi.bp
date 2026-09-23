@@ -25,6 +25,15 @@
 //   bus.write(payload, n)
 //   Gpio.write(CS_PIN, Gpio.HIGH())
 //
+// EL BUS SE COMPARTE (V7/H6.c G4.a1): la configuración de un bus —sus pines—
+// se establece UNA vez: la declara la placa en el ENV (`spi2=sck:6,mosi:7,miso:8`)
+// o, si no, el primero que lo abre. Después, abrirlo con los MISMOS pines (o con
+// -1: «los que tenga») se engancha, y con OTROS es un error con nombre:
+//   «el SPI 2 es sck 6, mosi 7, miso 8 (ENV spi2): pides sck 12».
+// Sus pines quedan reservados: un Gpio.Pin sobre ellos dice «el pin N es del SPI 2».
+// release() lo suelta —salvo el de la placa o si lo usa otro—, y el fin del programa
+// también.
+//
 // Hay DOS formas de usar este módulo:
 //
 //   A) Funciones top-level (forma original, compatible):
@@ -56,6 +65,10 @@ module Spi
   public function transferBus(bus: integer, tx: integer[], rx: integer[], count: integer): integer
     inline CALL_BUILTIN 89
   end transferBus
+  // V7/H6.c G4.a1 — el programa suelta el bus (ver la cabecera).
+  public function releaseBus(bus: integer)
+    inline CALL_BUILTIN 256
+  end releaseBus
 
   // ---- Funciones top-level de compatibilidad ----
   public function init(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
@@ -73,6 +86,10 @@ module Spi
   public function transfer(bus: integer, tx: integer[], rx: integer[], count: integer): integer
     return transferBus(bus, tx, rx, count)
   end transfer
+
+  public function release(bus: integer)
+    releaseBus(bus)
+  end release
 
   // -------- Constantes de conveniencia --------
   public function BUS0(): integer
@@ -173,6 +190,13 @@ module Spi
     public function transfer(tx: integer[], rx: integer[], count: integer): integer
       return transferBus(this.id, tx, rx, count)
     end transfer
+
+    // Suelta el bus (V7/H6.c G4.a1): si nadie más lo usa y no es de la placa, se cierra y
+    // sus pines vuelven a libres. Sin destructor A PROPÓSITO: dos Bus con el mismo id son
+    // el MISMO bus, y que el recolector se llevara uno cerraría el del otro.
+    public function release()
+      releaseBus(this.id)
+    end release
 
   end Bus
 
