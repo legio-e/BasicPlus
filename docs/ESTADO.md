@@ -355,6 +355,41 @@ maneras, dos veces cada una: cerrar sin más → descarga; DTR y luego RTS → d
 `BpvmClient.cerrarPuerto` lo hace así en sus dos cierres; medido con el `BpvmClient` real (2 de 2) y con el IDE
 de Eduardo (el uptime siguió contando). Detalle en `V7_IDEAS` §H6.12.
 
+## 🚦 H6.c `G4.a2` (23-sep, noche) — EL ÁRBITRO DE LOS BUSES: el turno en la HAL BP
+
+Con dos correcciones de Eduardo al diseño (`V7_IDEAS` §H6.11.6b): sin tabla de dispositivos —«todas son
+operaciones petición-fin»: cada petición trae su bus, su CS, su velocidad y su modo— y «la velocidad se guarda
+la actual; si la nueva es la misma no se cambia». Commit `c5b701a8`; detalle en §H6.11.8.
+
+**Lo que hay**: el turno (`bpvm_bus.c`) con un mutex y una condvar para toda la tabla, plazo de 1 s y el error
+con nombre; la fachada SPI con `tomar`/`cs`/`xfer`/`dejar` y la velocidad actual del bus; cada llamada de I2C un
+turno y `escribir_leer`; la BIOS v7 (45 ranuras); `DriverSpi` y la TF por turnos.
+
+**La inanición**, que es lo que más enseña: la destapó la propia prueba de dos hilos, una vez y por casualidad.
+Arreglada con CORTESÍA (quien llega con otros esperando se pone a la cola), quitarla y correr la prueba seis
+veces dio seis verdes: la prueba no la protegía. Ahora tiene su medida (un glotón y la TF, cinco intentos, el
+tope en turnos): 8/8 verdes con la cortesía y 8/8 rojos sin ella.
+
+**En placa (la C5)**: la BIOS v7, 148 ms por pantalla (145 antes) y `C5Touch` pinta y responde. Y por el camino:
+**el segundo programa de GUI hereda el fondo del anterior** (el `reset` limpia los widgets, no el estilo de la
+pantalla); hasta hoy no se veía porque cada `run` reiniciaba la placa. Se arregla aparte.
+
+## ⏭️ Traspaso (23-sep, noche) — `G4.a2` hecho; lo siguiente: el fondo de la GUI entre programas
+
+**Lo primero**: que la pantalla vuelva a su estilo de tema al terminar un programa (`bpvm_gui_reset`, en
+`gui.c`: va dentro del pack de LVGL y de las imágenes con GUI), como en miVM, donde cada ejecución empieza
+limpia. Luego, a elegir con Eduardo: **`G4.a3`** (`Spi.Device` y el repeated start) o **H3 «SD al común»**,
+que es lo que permite la prueba de verdad del árbitro: la TF y la pantalla a la vez en la C5 (la microSD ya
+está puesta).
+
+⚠️ **Dos ramas de otras sesiones sin fusionar**: `claude/angry-feistel-060057` (`#534`, el `count` de los
+builtins de bus igual en las dos VMs) y `claude/laughing-cohen-6f546e` (`#537`, el simulador en la red: con ella
+`sim-smoke` vuelve a verde). No tocan el código de `G4.a2`; chocarán en `FICHAS`/`ESTADO`/`compat.sh`. Fusionarlas
+es decisión de Eduardo. ⚠️ Sin medir: la S3 y el P4 con el cierre nuevo del IDE.
+
+**Estado de las placas**: la C5 con la imagen de `G4.a2` (BIOS v7) y el `DriverSpi` v7 en su zona; el resto,
+compiladas y sin grabar. Sin push.
+
 ## ⏭️ Traspaso (23-sep, 19 h) — el táctil de la C5, cerrado; lo siguiente: `G4.a2` (el árbitro)
 
 **Lo siguiente es `G4.a2`**, como estaba en el traspaso de mediodía: un mutex por bus en la HAL BP, un

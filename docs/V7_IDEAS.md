@@ -2846,6 +2846,59 @@ pack su pin DC; ahora `release()` sólo suelta lo del programa.
   la placa, como antes. Se arregla cuando esos drivers salgan de la imagen o se registren (`H6.b`, `G5`).
 - En el STM32 el I2C sigue fijo a 100 kHz (deuda anterior): un `i2cN=…,khz:400` hoy va a 100.
 
+#### 11.8 `G4.a2` hecho (23-sep, noche): EL ÁRBITRO — el turno en la HAL BP
+
+Commit `c5b701a8`. El diseño, en §11.6b (Eduardo: sin tabla de dispositivos —cada petición lleva su
+configuración— y la velocidad sólo se cambia si es otra que la actual).
+
+**Lo que hay:**
+- **El turno** (`bpvm_bus.c`): `tomar`/`dejar`, con UN mutex y UNA condvar para toda la tabla; del bus sólo
+  se sabe de quién es el turno y desde cuándo. Plazo de 1 s y el error con nombre. **Cortesía**: quien llega
+  con otros esperando se pone a la cola (ver abajo, la inanición).
+- **La fachada SPI** (`spi.c`): `tomar(bus, cs, hz, modo)` / `cs` / `xfer` / `dejar`; guarda la velocidad y
+  el modo ACTUALES del bus y ajusta sólo si cambian —en las cinco familias por igual: la cintura de la Pico
+  no lo comprobaba—; el `abrir` ya no ajusta (se cambiaría en mitad del turno de otro). Las ranuras de
+  siempre, cada llamada un turno con la velocidad de su `abrir` (la excepción temporal, hasta `G4.a3`).
+- **I2C** (`i2c.c`): cada llamada un turno (la dirección hace de CS) y `escribir_leer` en uno.
+- **La BIOS v7**, cinco ranuras al final (45). **`DriverSpi`** la exige: cada comando y cada bloque, un turno
+  —el DC se pone antes de pedirlo, así la cinta queda como la de DriverC5— y el táctil lee registro y trama
+  en uno. **La TF** (`bpvm_sd.c`), por turnos de firmware con su velocidad en `info->hz`, subiendo el CS
+  dentro del turno donde el protocolo lo pide.
+
+**Cómo se sabe:**
+- `make test-arbitro`: dos hilos del SO, la pantalla (CS 10, 40 MHz) y la TF (CS 23, 20 MHz) machacando el
+  SPI 2 contra una cintura que graba cada trozo con los dos CS y la velocidad del instante: los 150 trozos
+  limpios. **Su control** (`make test-arbitro-control`: el árbitro apagado con `-DBPVM_SIN_ARBITRO`): 54
+  trozos con el CS mal, 50 a otra velocidad, 90 cortes — la pantalla transfiriendo con los DOS CS abajo.
+- **La inanición**: la destapó la propia prueba, una vez y por casualidad (ese día el `Sleep(1)` de Windows
+  duraba ~15 ms): quien suelta el bus y lo vuelve a pedir enseguida gana siempre —ya está corriendo; el que
+  espera tiene que despertar— y el otro agotaba su plazo. Arreglada con la cortesía, **quitarla y correr la
+  prueba 6 veces dio 6 verdes**: no la protegía. Tiene su medida propia: un glotón encadenando turnos y la
+  TF pidiendo uno, cinco intentos por ejecución, el tope en TURNOS del glotón (no en ms). Con la cortesía
+  8/8 verdes (el peor: 33 ms, 1 turno); sin ella, 8/8 rojos.
+- `test-bus` (la regla de la velocidad, el CS del turno, los plazos, el I2C), `test-bios` (45 ranuras),
+  `test-driverspi` (49 turnos, ninguno fuera de sitio ni anidado, con sabotaje) y `test-sd`/`blk`/`sdsc`
+  (con dobles de un hilo: la espera «vence» en el acto, y el árbitro no se cuelga con un reloj parado);
+  paridad 93/93 + cápsula + norma + sombra + MOD8; y las ocho imágenes compilan.
+- **En la C5**: «bios: tabla COMPLETA (45 ranuras)»; `GuiFlushBench` 148 ms por pantalla (145 antes: los
+  turnos cuestan un 2 %) y 1 ms por etiqueta; `C5Touch` pinta y responde (Eduardo).
+
+**Lo que salió por el camino:**
+- **El segundo programa de GUI hereda el FONDO del anterior**: el `reset` de `gui.c` limpia los widgets de
+  la pantalla pero no su estilo, y `GuiFlushBench` la deja azul oscuro (las etiquetas del siguiente cuestan
+  de leer). No es del árbitro —el segundo programa vuelca igual, 149 ms— y hasta hoy no se veía: cada `run`
+  reiniciaba la C5. En miVM cada ejecución empieza con el modelo limpio. Se arregla aparte.
+- `sim-smoke` sigue rojo en `main`: su arreglo (`#537`, `21fbfb28`) está en una rama sin fusionar.
+
+**Lo que queda, a sabiendas:**
+- **`G4.a3`**: `Spi.Device` en BP (el CS dentro del turno, la velocidad la pasa el objeto y se va la
+  excepción temporal) y el repeated start de I2C.
+- **La prueba de verdad, la TF y la pantalla a la vez en la C5**, cuando el ESP32 monte la TF (el punto de
+  H3 «SD al común»).
+- **La TF retiene el bus mientras la tarjeta graba** (hasta 2 s en el peor caso) y la pantalla espera hasta
+  1 s: el protocolo deja soltarlo en esa espera, y se hará si la C5 lo pide.
+- Los tres drivers de imagen fuera de la HAL BP (táctil del P4, pantalla del C6, táctil de la Discovery).
+
 ### 12. El táctil que «se colgaba» era la HERRAMIENTA (23-sep, tarde): `wire_serie.py` reiniciaba la C5 al cerrar el puerto
 
 **El síntoma** (Eduardo, al volver a la C5 tras horas con `C5Touch` en marcha): la pantalla bien, el botón no
