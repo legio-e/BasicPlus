@@ -418,9 +418,11 @@ está puesta).
 
 ⚠️ Sin medir: la S3 y el P4 con el cierre nuevo del IDE. Las dos ramas fusionadas, borradas con sus worktrees
 (Eduardo), y también el worktree `vigilant-hopper-d8260a` (la versión de `#534` con `bpvm_malloc` que Eduardo
-paró para comparar: sobraba con `#534` fusionada; su trabajo sin commitear, copiado antes fuera del repo).
+paró para comparar: sobraba con `#534` fusionada; su trabajo sin commitear, copiado antes fuera del repo). Y las
+dos viejas ya fusionadas (`claude/jolly-blackburn-9ec483`, `v5/object-raiz`): hoy sólo queda `main`.
 
-**Estado de las placas**: la C5 con la imagen de `G4.a2` (BIOS v7) y en su zona el `Gui` nuevo y el `DriverSpi` v7
+**Estado de las placas**: la C5 con la imagen de `G4.a2` (`c5b701a8`, BIOS v7: SIN `#534` ni `e9824463`; grabar la
+de `main` antes de probar buses en ella) y en su zona el `Gui` nuevo (pantalla y rotación limpias) y el `DriverSpi` v7
 (en ese orden: el reparto de RAM es el sello, y un pack borrado de DEBAJO no deja su hueco al que se graba
 después); el resto, compiladas y sin grabar. Sin push.
 
