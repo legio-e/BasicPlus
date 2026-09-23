@@ -1268,10 +1268,11 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
       <td>Configures the bus. <code>bus</code>: 0 or 1. <code>baudrate</code> in Hz
           (typically 100&nbsp;000 = standard, 400&nbsp;000 = fast).</td></tr>
   <tr><td><code>write(bus, addr, data, count): integer</code></td>
-      <td>Sends <code>count</code> bytes to the slave <code>addr</code>.
+      <td>Sends <code>count</code> bytes to the slave <code>addr</code> in <strong>one</strong>
+          transaction (START…STOP), at most 256.
           Returns bytes written, or <code>-1</code> on NAK/timeout.</td></tr>
   <tr><td><code>read(bus, addr, data, count): integer</code></td>
-      <td>Reads <code>count</code> bytes from the slave <code>addr</code>.
+      <td>Reads <code>count</code> bytes (at most 256) from the slave <code>addr</code>.
           Returns bytes read, or <code>-1</code> on error.</td></tr>
   <tr><td><code>scan(bus): integer[]</code></td>
       <td>Scans addresses <code>0x08..0x77</code> and returns an
@@ -1291,6 +1292,13 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
   reserved: a <code>Gpio.Pin</code> on them says <code>el pin N es del I2C 0</code>.
   <code>release()</code> lets it go — except the board's own, or one that someone else is
   using — and it is released automatically when the program ends.
+  <strong>The <code>count</code>.</strong> It has to fit in the array: a negative
+  <code>count</code>, one larger than the array's length, or a <code>null</code> array
+  throw <code>RuntimeError</code> (catchable), with the same text on the PC and on the
+  board. An I²C transaction is never split —the device would take the second piece for a
+  new write—, so more than 256 bytes in one call is also <code>RuntimeError</code>
+  («<code>i2c.write: count (300) supera el máximo de 256 bytes por transacción</code>»).
+  <code>count</code> 0 is valid: an empty transaction, which probes an address.
 </p>
 <p>
   Constants:
@@ -1359,6 +1367,12 @@ bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span 
   reserved: a <code>Gpio.Pin</code> on them says <code>el pin N es del SPI 2</code>.
   <code>release()</code> lets it go — except the board's own, or one that someone else is
   using — and it is released automatically when the program ends.
+  <strong>No limit on <code>count</code>.</strong> The VM sends the data in 256-byte
+  chunks, one driver call per chunk; since you drive the CS, it does not show on the wire.
+  On the PC there is one simulation line per chunk. If a chunk fails in the driver, the
+  call returns its error (<code>-1</code>). A negative <code>count</code>, one larger than
+  the array (in <code>transfer</code>, than either of the two), or a <code>null</code>
+  array throw <code>RuntimeError</code>.
 </p>
 <p>
   Constants:
@@ -1438,6 +1452,14 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
       <td>How many bytes are in the receive buffer, ready to be read without
           blocking (the real count, on all five families).</td></tr>
 </table>
+<p>
+  <strong>No limit on <code>count</code>.</strong> As in <code>Spi</code>, the VM works in
+  256-byte chunks (on the PC, one simulation line per chunk). In a <code>read</code> of
+  more than 256, <strong>the deadline counts per chunk</strong>: each chunk waits at most
+  <code>timeoutMs</code>, and one that comes back short ends the read. A negative
+  <code>count</code>, one larger than the array, or a <code>null</code> array throw
+  <code>RuntimeError</code>.
+</p>
 <p>
   Constants:
   <code>BUS0()</code>, <code>BUS1()</code>,

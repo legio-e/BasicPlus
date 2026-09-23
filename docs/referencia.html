@@ -1278,10 +1278,11 @@ luz.release()                                          <span class="comment">// 
       <td>Configura el bus. <code>bus</code>: 0 ó 1. <code>baudrate</code> en Hz
           (típico 100&nbsp;000 = standard, 400&nbsp;000 = fast).</td></tr>
   <tr><td><code>write(bus, addr, data, count): integer</code></td>
-      <td>Envía <code>count</code> bytes al slave <code>addr</code>.
+      <td>Envía <code>count</code> bytes al slave <code>addr</code> en <strong>una</strong>
+          transacción (START…STOP), como máximo 256.
           Devuelve bytes escritos, o <code>-1</code> si NAK/timeout.</td></tr>
   <tr><td><code>read(bus, addr, data, count): integer</code></td>
-      <td>Lee <code>count</code> bytes del slave <code>addr</code>.
+      <td>Lee <code>count</code> bytes (como máximo 256) del slave <code>addr</code>.
           Devuelve bytes leídos, o <code>-1</code> en error.</td></tr>
   <tr><td><code>scan(bus): integer[]</code></td>
       <td>Escanea direcciones <code>0x08..0x77</code> y devuelve un
@@ -1301,6 +1302,13 @@ luz.release()                                          <span class="comment">// 
   (<code>el I2C 0 es sda 0, scl 1 a 400 kHz (ENV i2c0): pides 100 kHz</code>). Sus pines quedan reservados: un <code>Gpio.Pin</code> sobre ellos dice
   <code>el pin N es del I2C 0</code>. <code>release()</code> lo suelta —salvo el de la placa, o si
   lo usa otro— y al acabar el programa se suelta solo.
+  <strong>El <code>count</code>.</strong> Tiene que caber en el array: un <code>count</code>
+  negativo o mayor que la longitud del array, o el array <code>null</code>, lanzan
+  <code>RuntimeError</code> (atrapable), con el mismo texto en el PC y en la placa. Una
+  transacción I²C no se parte —el dispositivo tomaría el segundo trozo por una escritura
+  nueva—, así que más de 256 bytes en una llamada también es <code>RuntimeError</code>
+  («<code>i2c.write: count (300) supera el máximo de 256 bytes por transacción</code>»).
+  <code>count</code> 0 es válido: una transacción vacía, que sirve para sondear una dirección.
 </p>
 <p>
   Constantes:
@@ -1369,6 +1377,12 @@ bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span 
   (<code>el SPI 2 es sck 6, mosi 7, miso 8 (ENV spi2): pides sck 12</code>). Sus pines quedan reservados: un <code>Gpio.Pin</code> sobre ellos dice
   <code>el pin N es del SPI 2</code>. <code>release()</code> lo suelta —salvo el de la placa, o si
   lo usa otro— y al acabar el programa se suelta solo.
+  <strong>Sin tope de <code>count</code>.</strong> La VM manda los datos en tramos de 256
+  bytes, una llamada al driver por tramo; como el CS lo llevas tú, en el cable no se nota.
+  En el PC sale una línea de simulación por tramo. Si un tramo falla en el driver, la
+  llamada devuelve su error (<code>-1</code>). Un <code>count</code> negativo o mayor que
+  el array (en <code>transfer</code>, que cualquiera de los dos), o un array
+  <code>null</code>, lanzan <code>RuntimeError</code>.
 </p>
 <p>
   Constantes:
@@ -1448,6 +1462,13 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
       <td>Cuántos bytes hay en el buffer de recepción, listos para leer sin
           bloquear (la cuenta real, en las cinco familias).</td></tr>
 </table>
+<p>
+  <strong>Sin tope de <code>count</code>.</strong> Como en <code>Spi</code>, la VM trabaja en
+  tramos de 256 bytes (en el PC, una línea de simulación por tramo). En <code>read</code>
+  con más de 256, <strong>el plazo cuenta por tramo</strong>: cada tramo espera como mucho
+  <code>timeoutMs</code>, y uno que llega corto termina la lectura. Un <code>count</code>
+  negativo o mayor que el array, o un array <code>null</code>, lanzan <code>RuntimeError</code>.
+</p>
 <p>
   Constantes:
   <code>BUS0()</code>, <code>BUS1()</code>,

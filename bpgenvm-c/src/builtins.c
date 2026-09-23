@@ -635,6 +635,112 @@ static double bpvm_eval_calc(const char* s, int len) {
     return c.err ? NAN : v;
 }
 
+/* ── #534 (V7, 23-sep) — el `count` de los builtins de bus, IGUAL en las dos VMs. Espejo de
+ * busArray y de los bucles de tramos de miVM: los MISMOS textos y los MISMOS tramos.
+ *
+ * Antes cada builtin copiaba a un buffer de pila con `n = count > sizeof(buf) ? sizeof(buf) :
+ * count`: RECORTABA en silencio (a 64 en I2C, a 256 en SPI y UART, donde miVM hacía `count`
+ * entero: el stdout de las dos VMs era distinto); con un count mayor que el array leía y escribía
+ * FUERA de él; con count < 0 el `(size_t) n` se salía del buffer de pila (segfault en el host); y
+ * con el array null mandaba basura de vm->memory[4..], o la ESCRIBÍA ahí, donde miVM lanzaba.
+ *
+ * Decisión de Eduardo (23-sep):
+ *  - array null, count < 0 o count > longitud → RuntimeError atrapable;
+ *  - SPI y UART sin tope, en TRAMOS de BUS_TRAMO bytes, una llamada a la fachada por tramo (en el
+ *    cable no se nota: el CS lo lleva el programa y la UART es un flujo). El buffer sigue siendo
+ *    fijo y de pila: ni reserva que pueda fallar (#338) ni tope;
+ *  - I2C es UNA transacción (START…STOP): partirla haría que el dispositivo tomara el segundo
+ *    trozo por una escritura nueva. No se parte; tope de BUS_TRAMO por llamada, con error.
+ *
+ * Los buffers los declara cada `case`, como antes, y los helpers los reciben: así viven en el
+ * marco de bpvm_call_builtin, que ya los tenía, y la pila no crece. Medido en ARM con los flags del
+ * firmware y -fstack-usage: con los buffers DENTRO de bus_por_tramos, 568 B más en cada llamada
+ * SPI/UART, encima de los 2072 de bpvm_call_builtin; y bus_i2c sólo cabía gratis porque gcc lo
+ * inlinaba, que a -O0 no pasa. */
+enum { BUS_TRAMO = 256 };   /* CONTRATO DE PARIDAD con VirtualMachine.BUS_TRAMO (miVM) */
+
+/* Valida el array de un builtin de bus: 0 y su dirección física en *addr, o -1 y el texto del
+ * RuntimeError en em. `cual`: "el array", "el array tx" o "el array rx"; `tope`: 0 = sin tope
+ * (SPI/UART), BUS_TRAMO en I2C. El orden de las comprobaciones es parte del contrato. */
+static int bus_array(bpvm_t* vm, uint32_t ref, int32_t count, const char* op, const char* cual,
+                     int32_t tope, uint32_t* addr, char* em, size_t emsz) {
+    if (ref == 0) { snprintf(em, emsz, "%s: %s es null", op, cual); return -1; }
+    if (count < 0) { snprintf(em, emsz, "%s: count negativo (%" PRId32 ")", op, count); return -1; }
+    uint32_t a = ref_addr(vm, ref);
+    uint32_t len = bpvm_read_u32_be(vm->memory + a);
+    if ((uint32_t) count > len) {
+        snprintf(em, emsz, "%s: count (%" PRId32 ") mayor que %s (%" PRIu32 ")", op, count, cual, len);
+        return -1;
+    }
+    if (tope > 0 && count > tope) {
+        snprintf(em, emsz, "%s: count (%" PRId32 ") supera el máximo de %" PRId32
+                 " bytes por transacción", op, count, tope);
+        return -1;
+    }
+    *addr = a;
+    return 0;
+}
+
+/* Layout del array (TYPE_ARRAY_I32): [0..3] longitud, [4..] un i32 BE por elemento, y cada
+ * elemento transporta un byte en el byte bajo. Estos dos pasan `n` elementos desde `desde`. */
+static void bus_a_bytes(bpvm_t* vm, uint32_t addr, int32_t desde, int n, uint8_t* buf) {
+    const uint8_t* p = vm->memory + addr + 4u + (uint32_t) desde * 4u;
+    for (int i = 0; i < n; i++) buf[i] = (uint8_t) (bpvm_read_i32_be(p + (uint32_t) i * 4u) & 0xFF);
+}
+static void bus_de_bytes(bpvm_t* vm, uint32_t addr, int32_t desde, int n, const uint8_t* buf) {
+    uint8_t* p = vm->memory + addr + 4u + (uint32_t) desde * 4u;
+    for (int i = 0; i < n; i++) bpvm_write_i32_be(p + (uint32_t) i * 4u, (int32_t) buf[i]);
+}
+
+typedef enum { BUS_SPI_WRITE, BUS_SPI_READ, BUS_SPI_TRANSFER, BUS_UART_WRITE, BUS_UART_READ } bus_verbo_t;
+
+/* SPI y UART: `count` bytes (ya validados) en tramos de BUS_TRAMO, una llamada a la fachada por
+ * tramo. Devuelve el total, o el error del driver (< 0) si un tramo falla. Un tramo CORTO (el
+ * driver dio menos de lo pedido: en Uart.read, venció el plazo) termina: se devuelve lo hecho.
+ * En Uart.read el plazo es POR TRAMO: cada tramo recibe el timeout del programa y no «lo que
+ * queda», que dependería del reloj y rompería la paridad del host. El do-while conserva
+ * count 0 = una llamada vacía, como antes. `tx`/`rx`: BUS_TRAMO bytes del `case` (el que el
+ * verbo no usa puede ser NULL). */
+static int32_t bus_por_tramos(bpvm_t* vm, bus_verbo_t v, int bus, uint32_t tx_addr,
+                              uint32_t rx_addr, int32_t count, int timeout,
+                              uint8_t* tx, uint8_t* rx) {
+    int escribe = (v == BUS_SPI_WRITE || v == BUS_SPI_TRANSFER || v == BUS_UART_WRITE);
+    int lee     = (v == BUS_SPI_READ  || v == BUS_SPI_TRANSFER || v == BUS_UART_READ);
+    int32_t hecho = 0;
+    do {
+        int n = (count - hecho > BUS_TRAMO) ? BUS_TRAMO : (int) (count - hecho);
+        if (escribe) bus_a_bytes(vm, tx_addr, hecho, n, tx);   /* ANTES de leer: tx y rx pueden ser el mismo array */
+        int r = -1;
+        switch (v) {
+            case BUS_SPI_WRITE:    r = bpvm_spi_write(bus, tx, (size_t) n); break;
+            case BUS_SPI_READ:     r = bpvm_spi_read(bus, rx, (size_t) n); break;
+            case BUS_SPI_TRANSFER: r = bpvm_spi_transfer(bus, tx, rx, (size_t) n); break;
+            case BUS_UART_WRITE:   r = bpvm_uart_write(bus, tx, (size_t) n); break;
+            case BUS_UART_READ:    r = bpvm_uart_read(bus, rx, (size_t) n, timeout); break;
+        }
+        if (r < 0) return r;
+        if (r > n) r = n;   /* un driver no puede dar más de lo pedido: nunca se escribe fuera */
+        if (lee) bus_de_bytes(vm, rx_addr, hecho, r, rx);
+        hecho += r;
+        if (r < n) break;
+    } while (hecho < count);
+    return hecho;
+}
+
+/* I2C: la transacción entera en UNA llamada (count ya validado contra el tope BUS_TRAMO).
+ * `buf`: BUS_TRAMO bytes del `case`. */
+static int32_t bus_i2c(bpvm_t* vm, int escribe, int bus, int addr, uint32_t data_addr, int32_t count,
+                       uint8_t* buf) {
+    if (escribe) {
+        bus_a_bytes(vm, data_addr, 0, (int) count, buf);
+        return bpvm_i2c_write(bus, addr, buf, (size_t) count);
+    }
+    int got = bpvm_i2c_read(bus, addr, buf, (size_t) count);
+    if (got > count) got = (int) count;
+    if (got > 0) bus_de_bytes(vm, data_addr, 0, got, buf);
+    return got;
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
@@ -2863,36 +2969,27 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* write(bus, addr, data: integer[], count): integer */
         int count = pop_i32(vm, tc);
         uint32_t dataRef = pop_ref(vm, tc);
-        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int addr = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
-        uint8_t buf[64];
-        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
-        for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + dataAddr + 4 + i * 4);
-            buf[i] = (uint8_t)(v & 0xFF);
-        }
-        int wrote = bpvm_i2c_write(bus, addr, buf, (size_t) n);
-        push_i32(vm, tc, (int32_t) wrote);
+        /* #534 — una transacción: no se parte, y tiene tope (BUS_TRAMO); antes, 64 en silencio. */
+        char em[128]; uint32_t dataAddr = 0;
+        if (bus_array(vm, dataRef, count, "i2c.write", "el array", BUS_TRAMO, &dataAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t buf[BUS_TRAMO];
+        push_i32(vm, tc, bus_i2c(vm, 1, bus, addr, dataAddr, count, buf));
         return BPVM_OK;
     }
     case BUILTIN_I2C_READ: {
         /* read(bus, addr, data: integer[], count): integer */
         int count = pop_i32(vm, tc);
         uint32_t dataRef = pop_ref(vm, tc);
-        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int addr = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
-        uint8_t buf[64];
-        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
-        int got = bpvm_i2c_read(bus, addr, buf, (size_t) n);
-        if (got > 0) {
-            for (int i = 0; i < got; i++) {
-                bpvm_write_i32_be(vm->memory + dataAddr + 4 + i * 4,
-                                  (int32_t) buf[i]);
-            }
-        }
-        push_i32(vm, tc, (int32_t) got);
+        char em[128]; uint32_t dataAddr = 0;   /* #534 */
+        if (bus_array(vm, dataRef, count, "i2c.read", "el array", BUS_TRAMO, &dataAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t buf[BUS_TRAMO];
+        push_i32(vm, tc, bus_i2c(vm, 0, bus, addr, dataAddr, count, buf));
         return BPVM_OK;
     }
 
@@ -2949,57 +3046,41 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
+    /* #534 — SPI sin tope, en tramos de BUS_TRAMO (bus_por_tramos); antes, 256 en silencio. */
     case BUILTIN_SPI_WRITE: {
         int count = pop_i32(vm, tc);
         uint32_t dataRef = pop_ref(vm, tc);
-        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
-        uint8_t buf[256];
-        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
-        for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + dataAddr + 4 + i * 4);
-            buf[i] = (uint8_t)(v & 0xFF);
-        }
-        int wrote = bpvm_spi_write(bus, buf, (size_t) n);
-        push_i32(vm, tc, (int32_t) wrote);
+        char em[128]; uint32_t dataAddr = 0;
+        if (bus_array(vm, dataRef, count, "spi.write", "el array", 0, &dataAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t tx[BUS_TRAMO];
+        push_i32(vm, tc, bus_por_tramos(vm, BUS_SPI_WRITE, bus, dataAddr, 0, count, 0, tx, NULL));
         return BPVM_OK;
     }
     case BUILTIN_SPI_READ: {
         int count = pop_i32(vm, tc);
         uint32_t dataRef = pop_ref(vm, tc);
-        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
-        uint8_t buf[256];
-        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
-        int got = bpvm_spi_read(bus, buf, (size_t) n);
-        if (got > 0) {
-            for (int i = 0; i < got; i++) {
-                bpvm_write_i32_be(vm->memory + dataAddr + 4 + i * 4, (int32_t) buf[i]);
-            }
-        }
-        push_i32(vm, tc, (int32_t) got);
+        char em[128]; uint32_t dataAddr = 0;
+        if (bus_array(vm, dataRef, count, "spi.read", "el array", 0, &dataAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t rx[BUS_TRAMO];
+        push_i32(vm, tc, bus_por_tramos(vm, BUS_SPI_READ, bus, 0, dataAddr, count, 0, NULL, rx));
         return BPVM_OK;
     }
     case BUILTIN_SPI_TRANSFER: {
         int count = pop_i32(vm, tc);
         uint32_t rxRef = pop_ref(vm, tc);
-        uint32_t rxAddr = ref_addr(vm, rxRef);   /* V4: handle→addr */
         uint32_t txRef = pop_ref(vm, tc);
-        uint32_t txAddr = ref_addr(vm, txRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
-        uint8_t txBuf[256], rxBuf[256];
-        int n = count > (int) sizeof(txBuf) ? (int) sizeof(txBuf) : count;
-        for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + txAddr + 4 + i * 4);
-            txBuf[i] = (uint8_t)(v & 0xFF);
-        }
-        int xchg = bpvm_spi_transfer(bus, txBuf, rxBuf, (size_t) n);
-        if (xchg > 0) {
-            for (int i = 0; i < xchg; i++) {
-                bpvm_write_i32_be(vm->memory + rxAddr + 4 + i * 4, (int32_t) rxBuf[i]);
-            }
-        }
-        push_i32(vm, tc, (int32_t) xchg);
+        /* rx y luego tx (el orden de los null de miVM, #478), cada uno entero */
+        char em[128]; uint32_t rxAddr = 0, txAddr = 0;
+        if (bus_array(vm, rxRef, count, "spi.transfer", "el array rx", 0, &rxAddr, em, sizeof em) != 0
+            || bus_array(vm, txRef, count, "spi.transfer", "el array tx", 0, &txAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t tx[BUS_TRAMO], rx[BUS_TRAMO];
+        push_i32(vm, tc, bus_por_tramos(vm, BUS_SPI_TRANSFER, bus, txAddr, rxAddr, count, 0, tx, rx));
         return BPVM_OK;
     }
 
@@ -3018,36 +3099,28 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
+    /* #534 — UART sin tope, en tramos de BUS_TRAMO; en read el plazo cuenta POR TRAMO. */
     case BUILTIN_UART_WRITE: {
         int count = pop_i32(vm, tc);
         uint32_t dataRef = pop_ref(vm, tc);
-        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
-        uint8_t buf[256];
-        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
-        for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + dataAddr + 4 + i * 4);
-            buf[i] = (uint8_t)(v & 0xFF);
-        }
-        int wrote = bpvm_uart_write(bus, buf, (size_t) n);
-        push_i32(vm, tc, (int32_t) wrote);
+        char em[128]; uint32_t dataAddr = 0;
+        if (bus_array(vm, dataRef, count, "uart.write", "el array", 0, &dataAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t tx[BUS_TRAMO];
+        push_i32(vm, tc, bus_por_tramos(vm, BUS_UART_WRITE, bus, dataAddr, 0, count, 0, tx, NULL));
         return BPVM_OK;
     }
     case BUILTIN_UART_READ: {
         int timeout = pop_i32(vm, tc);
         int count   = pop_i32(vm, tc);
         uint32_t dataRef = pop_ref(vm, tc);
-        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
-        uint8_t buf[256];
-        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
-        int got = bpvm_uart_read(bus, buf, (size_t) n, timeout);
-        if (got > 0) {
-            for (int i = 0; i < got; i++) {
-                bpvm_write_i32_be(vm->memory + dataAddr + 4 + i * 4, (int32_t) buf[i]);
-            }
-        }
-        push_i32(vm, tc, (int32_t) got);
+        char em[128]; uint32_t dataAddr = 0;
+        if (bus_array(vm, dataRef, count, "uart.read", "el array", 0, &dataAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        uint8_t rx[BUS_TRAMO];
+        push_i32(vm, tc, bus_por_tramos(vm, BUS_UART_READ, bus, 0, dataAddr, count, timeout, NULL, rx));
         return BPVM_OK;
     }
     case BUILTIN_UART_AVAILABLE: {
