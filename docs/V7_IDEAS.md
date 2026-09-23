@@ -1890,6 +1890,10 @@ hace viable `H6.b` sin pedirle a la BIOS que preste DSI.
 
 #### 2.5 La RAM: la arena por código nativo, y N packs en vez de uno
 
+> ⚠️ **Corregido al hacerlo (`G1`, 23-sep) — leer §8 antes que esto.** Ni `ram_bytes` en la cabecera
+> ni `bp_pack_init(bios, ctx)`: **el reparto es el SELLO** de cada motor, que la placa asigna al grabar
+> (el tope), y la arena es común y con dueño. Lo de abajo es el diseño tal como se escribió.
+
 Hoy hay UNA base de RAM (el bloque de la BD) para UN pack. LVGL necesita: sus estáticos (~1 KB), los 106 KB del
 modelo, los búferes de dibujo del panel (2 × 11,5 KB) y un heap para los objetos (TLSF de LVGL; para 240×320 con
 `Gui.Window` y sus widgets, del orden de 100-200 KB). Y en la C5 la PSRAM entera es hoy de la VM.
@@ -2357,3 +2361,106 @@ multiplica (los 23 KB son los búferes de dibujo y sólo corre uno). Con dos con
 
 Es un **puente** hacia §7.9, no un destino: mientras los drivers vivan dentro, añadir un panel es
 republicar 715 KB, y eso no escala a «decenas de placas STM32».
+
+#### 7.11 El búfer de 64 B y la fachada SPI (23-sep, mañana — pregunta de Eduardo)
+
+*«Ayer durante las pruebas reduciste el tamaño del buffer para el refresco a 64 bytes. Al final el
+problema era el stack, pero el buffer sigue en 64. ¿Se puede hacer más grande y mejorar el refresco?»*
+
+**Tocando ese 64, no — y no es un resto de la depuración.** La fachada SPI del ESP32
+(`gpio_esp32.c`, `esp32_spi_init_impl`) abre el bus SIN DMA, y sin DMA el periférico mueve en una
+transacción lo que cabe en su búfer: **64 bytes** (`SOC_SPI_MAXIMUM_BUFFER_SIZE` en el IDF del C5); si
+se le pide más, el IDF rechaza la transacción ENTERA («txdata transfer > host maximum»). Antes del
+troceo el driver pasaba 11 520 B de golpe y cada flush se rechazaba: se arregló en plena caza del
+reinicio, y por eso parecía parte de la depuración, pero era otro fallo, independiente del stack.
+
+**Adónde se van los 143 ms** (estimación, sin medir; con los números del propio IDF):
+
+| | ms |
+|---|---|
+| el cable: 153 600 B a 40 MHz | ~31 |
+| el peaje: 2 400 transacciones × ~40 µs | ~100 |
+| pintar + girar los bytes | ~10 |
+
+El IDF documenta **22 µs** por transacción en el C5 en el modo que usamos (interrupción, sin DMA; 12 en
+polling, 24/15 con DMA); con nuestra cadena (pack → BIOS → fachada → IDF, desde flash) las cuentas
+cuadran con ~40. Más de dos tercios es peaje, no datos.
+
+**La palanca es la fachada, y es `G4`:**
+1. **Que trocee la FACHADA, no quien llama**: `spi_write(n)` escribe n bytes sea cual sea n, como ya
+   hacen la Pico y el STM32. Cierra además un agujero de portabilidad: hoy un `Spi.write` de 100 bytes
+   desde BP funciona en la Pico y devuelve -1 en cualquier ESP32.
+2. **DMA para lo grande, polling para lo pequeño**: una franja de 24 líneas pasa de 180 transacciones
+   a una. Estimación: **~143 → ~45 ms** (7 → ~22 imágenes/s); una etiqueta ya va en 1 ms.
+3. Después: el doble búfer asíncrono (una ranura nueva en la BIOS) y 80 MHz (por encima de la hoja
+   del ST7789, 62,5 MHz: a probar en placa) → hacia 15-20 ms.
+
+**Dos cuidados**: el pack y la imagen se versionan aparte —un pack que ya no trocea sobre una imagen
+vieja dejaría la pantalla negra sin avisar—, así que el driver mira la versión de la BIOS (trocea a 64
+con una BIOS que no lo prometa); y con DMA lo que muerde es lo PEQUEÑO: en el C3, el C6 y el S3 una
+lectura de 1 byte a una dirección sin alinear hace que el IDF reserve un búfer de rebote POR BYTE —la
+SD, que lee byte a byte, iría más lenta—, así que ≤ 4 bytes van por los búferes de la propia
+transacción, y en la C5 se mide la SD (comparte bus con el panel) además de la pantalla.
+
+Eduardo eligió seguir con `G1` y dejar esto para `G4`. De paso salió un fallo aparte —la VM-C recorta
+en silencio a 256 bytes los builtins de I2C/SPI/UART y la Java no, lo que rompe la paridad por encima
+de 256— que va en su propia sesión.
+
+### 8. `G1` hecho (23-sep): varios motores a la vez, y `env_get`
+
+**El criterio de §7.8 se cumple en las dos placas**: el P4 carga LVGL y SQLite en el MISMO arranque
+(«2 motores, 2 cargables»; `SqlDemo` == host y `GuiPack` «las dos vivas, cada una con su LVGL»), y en
+la C5 el mini lee una clave del ENV junto al pack de la GUI (`env_get('packRam') = 512`, «TODO OK»,
+`GuiFlushBench` 144/1 ms como ayer). Commit `65756e91`.
+
+#### 8.1 La corrección al diseño de §2.5 — y por qué
+
+Al leer el código salió algo más sencillo que lo escrito, y Eduardo lo aprobó antes de programar:
+
+| §2.5 decía | se hizo | por qué |
+|---|---|---|
+| `ram_bytes` en la cabecera (formato 2) | **el reparto es el SELLO** de cada motor | ya estaba escrito: `linked_ram` |
+| el cargador reparte por orden de cadena | **la placa asigna al grabar**: `PACK_BURN_BEGIN` da el **tope** (lo primero libre por encima de los vivos) | el cargador sólo comprueba «dentro del bloque y sin pisar a otro» |
+| `bp_pack_init(bios, ctx)` | la entrada no cambia; **la arena es común y con dueño** | el pool de LVGL acabó en su `.bss`: hoy sólo SQLite pide arena |
+
+Lo que se gana: **sin campo nuevo ni cambio de formato**, lo ya grabado sigue valiendo (el SQLite del P4
+y la GUI de la C5 cargaron sin regrabar); y **borrar un pack de en medio no rompe a los de detrás** —su
+RAM se queda de hueco hasta formatear, como su flash—, que con el reparto por orden de cadena obligaba
+a regrabarlos todos. El precio: actualizar un pack grabando el nuevo SIN borrar el viejo pide RAM para
+los dos; el IDE lo dice ANTES de grabar («no cabe: el motor 'lvgl' pide 383 KB … le quedan 129 KB»).
+
+#### 8.2 Lo que hay ahora
+
+- **La cadena, no un barrido** (`bpvm_npack_planear`): se recorren los packs y sus entradas —la zona ya
+  es un índice— en vez de 13,7 MB de 4 en 4. Si dos motores vivos se llaman igual **gana el de más
+  adelante**, como los `.mod` y los `.mdn`; antes ganaba el PRIMERO, o sea que grabar una versión nueva
+  sin borrar la vieja ejecutaba el motor viejo con el `.mod` nuevo.
+- **La escalera juzga la RAM por rango** y cambió de nombre (`bpvm_npack_escalera`): mismos seis
+  enteros, otra regla — un llamante que no se enterase no compila.
+- **BIOS v6**: `env_get(clave, buf, cap)` al final (40 ranuras), sólo lectura, **entero o nada**
+  (`bpvm_env_get_exacto`: un pin a medias es un número plausible y equivocado). Cada familia la
+  conecta en `BPVM_BIOS_TABLA`, que la pide como parámetro: olvidarla no compila (y así lo cazó el doble
+  de host de SQLite, que seguía pasando su arena en esa posición).
+- **La arena con dueño** (`bpvm_bios_arena`, común): lo que queda por encima del último motor, del
+  primero que la pide desde su `bp_pack_init`; al segundo, NULL y el cargador escribe de quién es. El
+  mini ya no la pide: se la quitaría a SQLite si coincidieran.
+- **El IDE mira si cabe** (`PackBurn.sellar` con `ramSize`, en el panel de Packs y en
+  `PackTool`/`wire_serie.py`).
+
+#### 8.3 Lo que salió por el camino
+
+1. **`test-bmgr` no enlazaba desde el 13-ago** (#362 metió `bpvm_fs_set_fallback` en `bpvm_pack.c`) y
+   nadie lo vio en seis semanas: no está en ninguna de las redes de cada día. Se destapó al añadirle el
+   caso del tope. Es [[arnes-tiraba-stderr-guardian-mudo]] otra vez: un guardián que no corre no guarda.
+2. **El STM32 no compilaba desde H6 P2** (22-sep): `gui_pack.c` y `gui_pack_publics.c` viven en `src/`,
+   y los proyectos de CubeIDE compilan TODO `src/` —las ESP32 y la Pico listan sus ficheros—. En la DK2
+   los trampolines chocaban con `gui.c` al enlazar (91 errores) y en el Nucleo la tabla no compilaba.
+   Guardas puestas en el generador (`0386c5ce`). Es el reverso de «un `.c` nuevo del core: alta en los
+   cinco builds»: en el STM32 el alta es AUTOMÁTICA, y un fichero que no es de todas las imágenes
+   necesita su guarda.
+3. **El P4 no se reinicia al abrir su puerto** (va por el CH343, no por el USB-JTAG): tras grabar un pack
+   hace falta `wire_serie.py COM15 reset` para que lo cargue. Costó una lectura del log confusa —las
+   líneas eran de un único arranque de tres minutos—.
+
+**Lo siguiente es `G2`**: `'PANT'` —el contrato, `busca()` perezoso desde LVGL— y `panel_c5.c` a su propio
+`npk`. Ya se puede: dos motores conviven, cada uno con su RAM.

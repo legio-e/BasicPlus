@@ -218,6 +218,55 @@ porque el destino está en PSRAM**. Main task 8 → 16 KB, con el volcado traduc
 **Medido**: pantalla entera **143 ms**, una etiqueta **1 ms**. Una interfaz responde; el peor caso
 cuesta, y la palanca es la fachada SPI (DMA), no el driver.
 
+## 🧩 H6.c `G1` (23-sep, mañana) — VARIOS MOTORES NATIVOS A LA VEZ, y `env_get` en la BIOS v6
+
+**Primero, una pregunta de Eduardo** sobre el búfer de 64 B del panel de la C5 (*«¿se puede hacer más
+grande y mejorar el refresco?»*). Tocando ese 64, no: la fachada SPI del ESP32 va SIN DMA y 64 B es el
+búfer del periférico; lo de ayer no era un resto de la depuración sino otro fallo, arreglado en plena
+caza del reinicio. La palanca es la fachada (que trocee ella, y DMA para lo grande): ~143 → ~45 ms
+estimados, y es `G4`. Análisis en `V7_IDEAS` §H6.7.11. Eduardo eligió seguir con `G1`. De paso salió que
+la VM-C recorta en silencio a 256 B los builtins de I2C/SPI/UART y la Java no —rompe la paridad—, y va
+en su propia sesión.
+
+**`G1`, con el diseño corregido antes de programar** (lo aprobó Eduardo: *«me parece perfecto»*): en vez
+de `ram_bytes` en la cabecera y un reparto por orden de cadena, **el reparto es el SELLO** —la placa da
+el tope al grabar, el cargador sólo comprueba que no se pisan—. La cadena en vez del barrido, gana el
+último, la arena común y con dueño, `env_get` entero o nada, y el IDE dice «no cabe» antes de grabar.
+Commit `65756e91`; detalle en `V7_IDEAS` §H6.8.
+
+**En placa**: la C5 con Gui + mini («2 motores, 2 cargables», `env_get('packRam') = 512`, `GuiFlushBench`
+144/1 ms como ayer; un segundo `Gui.pack` sin borrar el primero → «no cabe: 383 KB, quedan 129» y la
+zona intacta), y el P4 con SQLite + Gui («2 motores», la arena de SQLite 3 723 KB encima de los dos,
+`SqlDemo` == host, `GuiPack` «las dos vivas»). Lo ya grabado ayer cargó sin regrabar en las dos.
+
+**Tres cosas que salieron por el camino**: (1) `test-bmgr` **no enlazaba desde el 13-ago** (#362) y nadie
+lo vio porque no está en ninguna red; (2) **el STM32 no compilaba desde H6 P2**: CubeIDE compila todo
+`src/`, y `gui_pack.c`/`gui_pack_publics.c` no son de sus imágenes (guardas en el generador, `0386c5ce`);
+(3) **el P4 no se reinicia al abrir su puerto** (CH343): tras grabar un pack hace falta `reset` para que
+lo cargue — un log de un solo arranque de tres minutos me hizo creer que no cargaba.
+
+**Redes**: `test-npack`, `test-bios`, `test-env`, `test-bmgr`, `test-guipack`, `test-guidrop`,
+`test-sqldemo`, `boardsim-smoke` y `compat check` VERDE (92 PASS + MOD8 + sombra). Compilan las cinco
+ESP32, la Pico, las dos STM32, el host y el simulador. La Metro no estaba: su cargador se compiló pero
+los varios motores se probaron en la familia ESP32.
+
+## ⏭️ Traspaso (23-sep, mediodía) — `G1` de `H6.c` cerrado; **lo siguiente: `G2` (`'PANT'`)**
+
+`G1` cerrado con el criterio de §7.8 cumplido en las dos placas. **Lo siguiente es `G2`**: el contrato
+`'PANT'`, el `busca()` perezoso desde LVGL y `panel_c5.c` a su propio `npk` —ya se puede: dos motores
+conviven, cada uno con su RAM—. Luego `G3` (el driver genérico por perfil, la C6 de oráculo) y `G4` (el
+bus con dueño + la fachada SPI con DMA: el análisis del búfer de 64 B está hecho, §7.11).
+
+⚠️ **Lo que muerde**: (1) actualizar un pack grabando el nuevo SIN borrar el viejo pide RAM para los dos
+—en la C5 no cabe; el IDE lo dice antes de grabar—; (2) en el P4 un pack recién grabado no se carga
+hasta un `reset` (su puerto no reinicia la placa); (3) la BIOS es v6: un pack reconstruido contra ella
+(como el mini de hoy) no carga en una imagen de ayer.
+
+**Estado de las placas**: la C5 con la imagen de hoy, `Gui.pack` + `Mini.pack` grabados (ENV `packRam=512`,
+`log=1`); el P4 con la imagen de hoy, `SQLite.pack` + `Gui.pack` (el del panel nulo), `SqlDemo` == host.
+Sin push. En otra sesión corre la tarea del tope de 256 B de los builtins de bus (su worktree está en
+`miVM/.claude/worktrees/`; no entra en estos commits).
+
 ## ⏭️ Traspaso (22-sep, FIN DEL DÍA) — H4 y H6.a cerradas; **lo siguiente: `H6.c`, por `G1`**
 
 Un día largo y con tres tramos: **H4** por la mañana, **H6** (análisis, P1, la BIOS v5, P2, P3 y la
