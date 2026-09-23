@@ -42,7 +42,8 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  6u   /* 6 = V7/H6.c G1: env_get (la config de placa) */
+#define BPVM_BIOS_VERSION  7u   /* 7 = V7/H6.c G4.a2: el TURNO de los buses     */
+                                /* 6 = V7/H6.c G1: env_get (la config de placa) */
                                 /* 5 = V7/H6: la HAL (gpio/spi/i2c/reloj)     */
                                 /* 4 = V5/H4: el PUNTO DE ENCUENTRO de packs  */
                                 /* 3 = V5/H3: entra la ranura de la ARENA     */
@@ -252,6 +253,32 @@ typedef struct bpvm_bios {
      * equivocado —mejor nada que a medias, como `bpvm_pack_manifest_get`—.
      * Las claves no distinguen mayúsculas (decisión del 19-jul para el ENV). */
     int      (*env_get)   (const char* clave, char* buf, size_t cap);
+
+    /* ── V7/H6.c G4.a2 — EL TURNO DE LOS BUSES (v7) ───────────────────────
+     *
+     * El bus se COMPARTE —en la C5 la TF y la pantalla van en el mismo SPI 2,
+     * el expansor y el táctil en el mismo I2C 0—; lo que no se mezcla es la
+     * TRANSACCIÓN. Un pack pide el turno con SU configuración —bus, CS,
+     * velocidad y modo: nada se guarda entre turnos (Eduardo: «operaciones
+     * petición-fin»)—, transfiere lo que quiera, puede subir el CS sin soltar
+     * el turno, y lo suelta al acabar. La velocidad sólo se cambia si es otra
+     * que la actual del bus.
+     *
+     * Nada espera para siempre: si el bus no queda libre a tiempo, -1 con el
+     * porqué en el log de la VM («SPI 2 ocupado (CS 23, el firmware) desde
+     * hace 1000 ms»). `cs` = -1: la BIOS no toca ningún CS (lo lleva el pack,
+     * p. ej. en un expansor). El CS lo reserva el pack con `gpio_init`, como
+     * siempre; la BIOS sólo lo mueve durante el turno.
+     *
+     * En I2C cada `i2c_write`/`i2c_read` ya es un turno; `i2c_escribir_leer`
+     * hace las dos en uno —nadie habla en medio— y devuelve los bytes leídos.
+     * Las ranuras v5 (`spi_write`) siguen valiendo: cada llamada, un turno. */
+    int      (*spi_tomar)     (int bus, int cs, int hz, int modo);            /* 0, o -1 */
+    int      (*spi_cs)        (int bus, int nivel);                           /* dentro del turno */
+    int      (*spi_transferir)(int bus, const uint8_t* tx, uint8_t* rx, size_t n);   /* bytes, o -1 */
+    void     (*spi_soltar)    (int bus);
+    int      (*i2c_escribir_leer)(int bus, int addr, const uint8_t* tx, size_t ntx,
+                                  uint8_t* rx, size_t nrx);                   /* leídos, o -1 */
 } bpvm_bios_t;
 
 /* Los códigos de `env_get`, para que el pack no escriba números sueltos. */
@@ -315,7 +342,11 @@ typedef struct bpvm_bios {
     bpvm_bios_hal_i2c_init, bpvm_bios_hal_i2c_write, bpvm_bios_hal_i2c_read, \
     bpvm_bios_hal_now_ms, bpvm_bios_hal_sleep_ms,                       \
     /* V7/H6.c G1 — el ENV de la placa (bpvm_env_get_exacto detrás). */ \
-    (ENV_GET)                                                           \
+    (ENV_GET),                                                          \
+    /* V7/H6.c G4.a2 — el turno de los buses (el árbitro, bpvm_bus.c). */ \
+    bpvm_bios_hal_spi_tomar, bpvm_bios_hal_spi_cs,                      \
+    bpvm_bios_hal_spi_transferir, bpvm_bios_hal_spi_soltar,             \
+    bpvm_bios_hal_i2c_escribir_leer                                     \
 }
 
 /*
@@ -373,6 +404,13 @@ int      bpvm_bios_hal_spi_write (int bus, const uint8_t* data, size_t n);
 int      bpvm_bios_hal_i2c_init  (int bus, int sda, int scl, int baudrate);
 int      bpvm_bios_hal_i2c_write (int bus, int addr, const uint8_t* data, size_t n);
 int      bpvm_bios_hal_i2c_read  (int bus, int addr, uint8_t* data, size_t n);
+/* V7/H6.c G4.a2 — el turno (v7). */
+int      bpvm_bios_hal_spi_tomar (int bus, int cs, int hz, int modo);
+int      bpvm_bios_hal_spi_cs    (int bus, int nivel);
+int      bpvm_bios_hal_spi_transferir(int bus, const uint8_t* tx, uint8_t* rx, size_t n);
+void     bpvm_bios_hal_spi_soltar(int bus);
+int      bpvm_bios_hal_i2c_escribir_leer(int bus, int addr, const uint8_t* tx, size_t ntx,
+                                         uint8_t* rx, size_t nrx);
 uint32_t bpvm_bios_hal_now_ms    (void);
 void     bpvm_bios_hal_sleep_ms  (int ms);
 /* Olvida todas las tablas. Para el arranque y para las pruebas. */

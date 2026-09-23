@@ -120,6 +120,8 @@ typedef struct {
     uint8_t  cid[16];
     uint8_t  csd[16];
     uint32_t bloques;    /* capacidad en bloques de 512 B                      */
+    int      hz;         /* V7/H6.c G4.a2: la velocidad de trabajo, la que lleva
+                          * CADA turno del bus (la de negociar hasta que arranca) */
     /* Sacados del CID, ya legibles (el CID es empaquetado y poco amable). */
     uint8_t  fabricante;      /* MID */
     char     oem[3];          /* OID, con NUL */

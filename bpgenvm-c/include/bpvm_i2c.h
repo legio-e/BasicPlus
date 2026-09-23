@@ -35,10 +35,18 @@ int  bpvm_i2c_abrir(int bus, int sda, int scl, int baudrate, int quien, char* er
 int  bpvm_i2c_soltar(int bus, int quien, char* err, size_t cap);
 void bpvm_i2c_cerrar(int bus);
 
-/* Funciones efectivas. Si backend NULL → stub con logging. */
+/* Funciones efectivas. Si backend NULL → stub con logging. V7/H6.c G4.a2: cada
+ * llamada es un TURNO del árbitro (bpvm_bus.h); las de BP son del programa y las
+ * `_como` dicen quién (las ranuras de la BIOS: un pack). */
 void bpvm_i2c_init(int bus, int sda, int scl, int baudrate);
 int  bpvm_i2c_write(int bus, int addr, const uint8_t* data, size_t n);
 int  bpvm_i2c_read(int bus, int addr, uint8_t* data, size_t n);
+int  bpvm_i2c_write_como(int quien, int bus, int addr, const uint8_t* data, size_t n);
+int  bpvm_i2c_read_como(int quien, int bus, int addr, uint8_t* data, size_t n);
+/* Escribir y leer en UN turno: nadie habla en medio. Con STOP entre las dos por
+ * ahora (el repeated start, G4.a3). Bytes leídos, o -1. */
+int  bpvm_i2c_escribir_leer(int quien, int bus, int addr, const uint8_t* tx, size_t ntx,
+                            uint8_t* rx, size_t nrx);
 
 #ifdef __cplusplus
 }

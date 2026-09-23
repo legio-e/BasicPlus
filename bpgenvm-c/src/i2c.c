@@ -5,6 +5,7 @@
 #include "bpvm_out.h"
 #include "bpvm_i2c.h"
 #include "bpvm_bus.h"
+#include "bpvm.h"          /* bpvm_diag: un turno que no se da se dice en el log */
 #include <stdio.h>
 
 static const bpvm_i2c_backend_t* g_backend = NULL;
@@ -49,7 +50,9 @@ void bpvm_i2c_init(int bus, int sda, int scl, int baudrate) {
     bpvm_out("[i2c] init bus=%d sda=%d scl=%d baud=%d\n", bus, sda, scl, baudrate);
 }
 
-int bpvm_i2c_write(int bus, int addr, const uint8_t* data, size_t n) {
+/* ── lo que va al cable: la cintura, o el stub del PC (su texto es contrato de
+ * paridad con miVM, #478) ── */
+static int crudo_write(int bus, int addr, const uint8_t* data, size_t n) {
     if (g_backend && g_backend->write) {
         return g_backend->write(bus, addr, data, n);
     }
@@ -59,7 +62,7 @@ int bpvm_i2c_write(int bus, int addr, const uint8_t* data, size_t n) {
     return (int) n;
 }
 
-int bpvm_i2c_read(int bus, int addr, uint8_t* data, size_t n) {
+static int crudo_read(int bus, int addr, uint8_t* data, size_t n) {
     if (g_backend && g_backend->read) {
         return g_backend->read(bus, addr, data, n);
     }
@@ -69,3 +72,46 @@ int bpvm_i2c_read(int bus, int addr, uint8_t* data, size_t n) {
     bpvm_out("[i2c] read bus=%d addr=0x%02X count=%zu (sim → ceros)\n", bus, addr, n);
     return (int) n;
 }
+
+/* ── V7/H6.c G4.a2 — cada llamada, un TURNO (V7_IDEAS §H6.11.6b) ──────────────
+ * La dirección hace de CS: sólo para decir de quién es el turno si alguien espera
+ * demasiado («I2C 0 ocupado (0x58, un pack) desde hace 1000 ms»). */
+static int turno(int quien, int bus, int addr, char* err, size_t cap) {
+    return bpvm_bus_tomar(BPVM_BUS_I2C, bus, quien, addr, 0, err, cap);
+}
+
+int bpvm_i2c_write_como(int quien, int bus, int addr, const uint8_t* data, size_t n) {
+    char err[128];
+    int r;
+    if (turno(quien, bus, addr, err, sizeof err) != 0) { bpvm_diag("I2C %d: %s", bus, err); return -1; }
+    r = crudo_write(bus, addr, data, n);
+    bpvm_bus_dejar(BPVM_BUS_I2C, bus);
+    return r;
+}
+
+int bpvm_i2c_read_como(int quien, int bus, int addr, uint8_t* data, size_t n) {
+    char err[128];
+    int r;
+    if (turno(quien, bus, addr, err, sizeof err) != 0) { bpvm_diag("I2C %d: %s", bus, err); return -1; }
+    r = crudo_read(bus, addr, data, n);
+    bpvm_bus_dejar(BPVM_BUS_I2C, bus);
+    return r;
+}
+
+/* Escribir y leer en UN turno: nadie habla en medio (el registro de un táctil y su
+ * trama). Con STOP entre las dos por ahora; el repeated start de verdad, G4.a3.
+ * Devuelve los bytes leídos, o -1 si falla cualquiera de las dos. */
+int bpvm_i2c_escribir_leer(int quien, int bus, int addr, const uint8_t* tx, size_t ntx,
+                           uint8_t* rx, size_t nrx) {
+    char err[128];
+    int r;
+    if (turno(quien, bus, addr, err, sizeof err) != 0) { bpvm_diag("I2C %d: %s", bus, err); return -1; }
+    r = crudo_write(bus, addr, tx, ntx);
+    if (r == (int) ntx) r = crudo_read(bus, addr, rx, nrx);
+    else                r = -1;
+    bpvm_bus_dejar(BPVM_BUS_I2C, bus);
+    return r;
+}
+
+int bpvm_i2c_write(int bus, int addr, const uint8_t* data, size_t n) { return bpvm_i2c_write_como(BPVM_BUS_PROGRAMA, bus, addr, data, n); }
+int bpvm_i2c_read(int bus, int addr, uint8_t* data, size_t n)        { return bpvm_i2c_read_como(BPVM_BUS_PROGRAMA, bus, addr, data, n); }

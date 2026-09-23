@@ -458,8 +458,30 @@ test-guipack:
 test-bus: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_bus.c $(LIBOBJ) -o build/test_bus.exe $(LDFLAGS)
-	@echo "--- V7/H6.c G4.a1: el bus compartido (esperado: solo 'ok', [status=OK]) ---"
+	@echo "--- V7/H6.c G4.a1-G4.a2: el bus compartido y su turno (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_bus.exe
+
+# V7/H6.c G4.a2 — EL ÁRBITRO de los buses, con DOS HILOS de verdad: la pantalla (CS 10,
+# 40 MHz) y la TF (CS 23, 20 MHz) machacando el mismo SPI 2 contra una cintura que graba
+# cada trozo con los dos CS y la velocidad del instante. Ninguno puede salir mezclado.
+test-arbitro: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_arbitro.c $(LIBOBJ) -o build/test_arbitro.exe $(LDFLAGS)
+	@echo "--- V7/H6.c G4.a2: el arbitro con dos hilos (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_arbitro.exe
+
+# ...y su CONTROL: el mismo test con el árbitro APAGADO (-DBPVM_SIN_ARBITRO, sólo en
+# un bpvm_bus.o aparte) TIENE que fallar. Si pasara, la prueba no probaría nada.
+test-arbitro-control: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -DBPVM_SIN_ARBITRO -c src/bpvm_bus.c -o build/bpvm_bus_sin_arbitro.o
+	$(CC) $(CFLAGS) -Isrc test/test_arbitro.c $(filter-out build/src/bpvm_bus.o,$(LIBOBJ)) build/bpvm_bus_sin_arbitro.o -o build/test_arbitro_control.exe $(LDFLAGS)
+	@echo "--- CONTROL: el arbitro APAGADO (esperado: que la prueba FALLE) ---"
+	@./build/test_arbitro_control.exe > build/test_arbitro_control.txt 2>&1; \
+	 if grep -q "status=FAIL" build/test_arbitro_control.txt; then \
+	   grep -E "FAIL|primer trozo" build/test_arbitro_control.txt; \
+	   echo "  ok  : sin arbitro la cinta sale MEZCLADA: el control falla, como debe [status=OK]"; \
+	 else cat build/test_arbitro_control.txt; echo "  FAIL: sin arbitro la prueba PASA: no prueba nada [status=FAIL]"; exit 1; fi
 
 # V7/H6.c G3 — el driver de pantalla GENÉRICO (MIPI-DCS por SPI, la placa en el ENV)
 # contra el de la C5, en el PC: los dos contra una BIOS que GRABA los cables. Con el

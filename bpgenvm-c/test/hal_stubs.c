@@ -11,3 +11,20 @@
 
 void bpvm_out(const char* fmt, ...)  { va_list ap; va_start(ap, fmt); vprintf(fmt, ap); va_end(ap); }
 void bpvm_diag(const char* fmt, ...) { va_list ap; va_start(ap, fmt); printf("[diag] "); vprintf(fmt, ap); printf("\n"); va_end(ap); }
+
+/* V7/H6.c G4.a2 — el árbitro de los buses usa el mutex y la condvar de la
+ * plataforma. Estos tests son de UN hilo y tapan el reloj a cero (ver test_sd.c),
+ * así que no enlazan la plataforma de verdad: los dobles no bloquean nada y la
+ * espera «vence» en el acto — con un solo hilo, un bus tomado no lo va a soltar
+ * nadie, y el árbitro tiene que decirlo con nombre, no colgarse. */
+#include "bpvm_platform.h"
+int  bpvm_platform_mutex_init(bpvm_platform_mutex_handle_t* m)    { *m = (void*) 1; return 0; }
+void bpvm_platform_mutex_destroy(bpvm_platform_mutex_handle_t* m) { (void) m; }
+void bpvm_platform_mutex_lock(bpvm_platform_mutex_handle_t* m)    { (void) m; }
+void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m)  { (void) m; }
+int  bpvm_platform_cond_init(bpvm_platform_cond_handle_t* c)      { *c = (void*) 1; return 0; }
+void bpvm_platform_cond_destroy(bpvm_platform_cond_handle_t* c)   { (void) c; }
+int  bpvm_platform_cond_timed_wait(bpvm_platform_cond_handle_t* c, bpvm_platform_mutex_handle_t* m, int ms) {
+    (void) c; (void) m; (void) ms; return 1;
+}
+void bpvm_platform_cond_broadcast(bpvm_platform_cond_handle_t* c) { (void) c; }

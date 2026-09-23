@@ -47,13 +47,33 @@ int  bpvm_spi_soltar(int bus, int quien, char* err, size_t cap);
 /* Cierra el bus en la cintura (lo usa el fin de RUN, vía bpvm_bus_fin_de_run). */
 void bpvm_spi_cerrar(int bus);
 
-/* Funciones efectivas. Stubs con logging si backend NULL. `init` es el camino de
- * SIEMPRE (abre y ajusta de una vez): lo usa bpvm_spi_abrir con una cintura sin
- * `abrir`, y el stub del PC imprime con él la línea que es contrato de paridad. */
+/* V7/H6.c G4.a2 — EL TURNO (V7_IDEAS §H6.11.6b). Cada petición trae SU
+ * configuración; la fachada sólo recuerda la velocidad y el modo ACTUALES del bus
+ * y los cambia si los del turno son distintos.
+ *   tomar   espera el turno (árbitro de bpvm_bus.h, con plazo y error con nombre),
+ *           ajusta si hace falta y baja `cs` (-1 = el CS no lo toca la fachada);
+ *   cs      sube o baja el CS del turno sin soltarlo (la TF: sus relojes con el
+ *           CS arriba);
+ *   xfer    transfiere dentro del turno: tx y rx, sólo tx o sólo rx;
+ *   dejar   sube el CS y suelta el turno.
+ * El código nativo hace varias transferencias en un turno; desde BP, cada llamada
+ * es un turno entero. 0 / bytes, o -1 (el porqué en `err` o en el log). */
+int  bpvm_spi_tomar(int bus, int cs, int hz, int modo, int quien, char* err, size_t cap);
+int  bpvm_spi_cs(int bus, int nivel);
+int  bpvm_spi_xfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n);
+void bpvm_spi_dejar(int bus);
+
+/* Las ranuras de SIEMPRE, cada llamada un TURNO entero (G4.a2) con la velocidad
+ * del `abrir` de quien llama —hasta G4.a3, que la pasa el objeto BP—. Stubs con
+ * logging si backend NULL. `init` es el camino de SIEMPRE (abre y ajusta de una
+ * vez): lo usa bpvm_spi_abrir con una cintura sin `abrir`, y el stub del PC imprime
+ * con él la línea que es contrato de paridad. Las tres de BP son del programa;
+ * `write_como` dice quién (la ranura v6 de la BIOS: un pack). */
 void bpvm_spi_init(int bus, int sck, int mosi, int miso, int baudrate, int mode);
 int  bpvm_spi_write(int bus, const uint8_t* data, size_t n);
 int  bpvm_spi_read(int bus, uint8_t* data, size_t n);
 int  bpvm_spi_transfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n);
+int  bpvm_spi_write_como(int quien, int bus, const uint8_t* data, size_t n);
 
 #ifdef __cplusplus
 }

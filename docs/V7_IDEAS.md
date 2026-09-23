@@ -2752,6 +2752,55 @@ la prueba de verdad es la C5 con la TF y la pantalla A LA VEZ: un programa escri
 | **G4.a3** | `Spi.Device` en BP (y el `writeRead` de I2C), con paridad | samples en las dos VM |
 | **G4.b** | el DMA en la cintura del ESP32 (§7.11) | los 144 ms bajando |
 
+#### 11.6b `G4.a2`, el diseño concreto (23-sep, 19 h): SIN tabla de dispositivos — cada petición lleva su configuración (Eduardo)
+
+> Yo proponía dar de alta cada dispositivo en la HAL BP (su CS, su velocidad, su modo, su nombre). Eduardo:
+> *«Si tenemos varios usuarios trabajando con su propia configuración se necesita algún tipo de estructura
+> donde se guarde esa configuración. No sé si haría falta; si no, cada vez que se vaya a utilizar el bus
+> tendría que utilizar la configuración a utilizar. Todas son operaciones petición-fin, no veo que haya que
+> guardar nada intermedio.»*
+
+Tiene razón: cada usuario YA tiene su configuración —la pantalla en su `lcd=`, la TF en su `sd=`, el programa
+en su objeto— y la trae en cada petición. Guardarla también en la HAL BP sería una segunda copia que
+desincronizar.
+
+- **El TURNO**: `tomar(bus, cs, hz, modo)` espera a que el bus esté libre, aplica la velocidad y el modo (la
+  cintura se lo salta si no cambian) y baja el CS; `transferir` las veces que haga falta; `soltar` sube el CS
+  y despierta al siguiente. `cs = -1`: la HAL BP no toca ningún CS (lo lleva quien toma).
+- **El único estado es el del bus, y dura lo que el turno**: de quién es (el programa, el firmware o un pack,
+  y su CS o su dirección) y desde cuándo — para esperar y para el error: «SPI 2 ocupado (CS 10, un pack) desde
+  hace 1000 ms». Se borra al soltar.
+- **Un mutex y una condvar para toda la tabla**, no uno por bus: el mutex sólo guarda el «quién» y se suelta
+  enseguida; la transferencia va fuera. Se crean al arrancar, con los buses del ENV.
+- **Nada espera para siempre**: 1 s de plazo, y el error con nombre. También el hilo que pide un bus que ya
+  tiene: era un cuelgue, y pasa a ser ese mismo error.
+- **El CS lo reserva quien lo usa**, como hoy (el pack con `gpio_init`, la TF al montar, el programa con su
+  objeto); la HAL BP sólo lo mueve durante el turno.
+- **Nativo y BP**: el código nativo (la TF, un driver) hace varias transferencias en su turno y puede subir el
+  CS dentro —la TF lo necesita: sus 80 relojes con el CS arriba y el byte tras cada bloque—. Desde BP, cada
+  llamada es un turno entero.
+- **I2C igual**: cada llamada es un turno (la dirección hace de CS), y `escribir_leer` escribe y lee en UN
+  turno: nadie habla en medio. Con STOP entre las dos, por ahora; el repeated start de verdad, con `G4.a3`.
+- **Lo que ya existe pasa por el árbitro**: los builtins de `Spi.Bus`/`I2c.Bus` (cada llamada, un turno), las
+  ranuras v6 de la BIOS y la TF. Y el `abrir` deja de ajustar la velocidad en el acto: se ajusta al tomar, que
+  es cuando nadie más transfiere.
+- ⚠️ **La excepción, temporal**: los builtins de `Spi.Bus` no llevan la velocidad en cada llamada, así que hasta
+  `G4.a3` el bus recuerda la de cada usuario de las ranuras de siempre (la de su `abrir`) y la aplica en sus
+  turnos. En `G4.a3` la pasa el objeto BP, como todos.
+- ⚠️ **El límite, a sabiendas**: un programa que baja su CS a mano con `Gpio` y hace dos llamadas de `Spi.Bus`
+  puede quedar intercalado con la pantalla entre ellas. `Spi.Device` (`G4.a3`) lo quita: el CS va dentro del
+  turno.
+- **BIOS v7**, cinco ranuras al final: `spi_tomar(bus, cs, hz, modo)`, `spi_cs(bus, nivel)`,
+  `spi_transferir(bus, tx, rx, n)`, `spi_soltar(bus)` e `i2c_escribir_leer(bus, addr, tx, ntx, rx, nrx)`.
+  `DriverSpi` las usa y exige la v7; las ranuras v6 siguen, por el árbitro.
+
+**Se prueba** (§11.5): en el PC, dos hilos del SO machacando dos dispositivos del mismo bus contra una cintura
+que graba la cinta —ningún turno mezclado, cada byte con su CS y su velocidad—, y **con el árbitro quitado la
+prueba TIENE que fallar** (el control, repetible en el Makefile); los errores uno a uno; `test-driverspi`
+contra DriverC5 y `test-sd` con la TF por el árbitro. En placa: la C5 con la pantalla y el táctil por la v7, y
+un programa usando el SPI 2 mientras la GUI anima. Después, con la TF montada también en el ESP32 (el punto de
+H3 «SD al común»; la microSD ya está en la C5), la prueba de verdad: la TF y la pantalla a la vez.
+
 #### 11.7 `G4.a1` hecho (23-sep, mediodía): el bus, UNA configuración — en las cinco familias
 
 **En la C5**: el ENV declara `spi2=sck:6,mosi:7,miso:8` e `i2c0=sda:0,scl:1,khz:400` y el arranque lo dice

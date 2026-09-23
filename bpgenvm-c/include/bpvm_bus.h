@@ -26,7 +26,10 @@
  * familia ADELGAZA: abre el bus una vez, lo ajusta y transfiere — ya no lo
  * reabre en cada `init`, que era lo que le quitaba el bus al anterior en silencio.
  *
- * El árbitro de las transacciones (un mutex por bus) es el paso siguiente, `G4.a2`.
+ * ─── EL ÁRBITRO (G4.a2, más abajo) ──────────────────────────────────────────
+ *
+ * Compartir el bus no es mezclar sus TRANSACCIONES. Quien va a transferir pide un
+ * TURNO, y mientras lo tiene nadie más transfiere por ese bus.
  */
 #ifndef BPVM_BUS_H
 #define BPVM_BUS_H
@@ -87,6 +90,30 @@ int  bpvm_bus_describe(int tipo, int id, char* out, size_t cap);
 
 /* Para las pruebas de host y el simulador: todo a libre. */
 void bpvm_bus_reset(void);
+
+/* ── V7/H6.c G4.a2 — EL ÁRBITRO: el TURNO ────────────────────────────────────
+ *
+ * Lo que no se puede mezclar es la TRANSACCIÓN: del CS abajo al CS arriba en SPI,
+ * de START a STOP en I2C. Quien va a transferir pide un turno y lo suelta al
+ * acabar; mientras, nadie más transfiere por ese bus. Cada petición trae SU
+ * configuración —Eduardo, 23-sep: «todas son operaciones petición-fin, no veo que
+ * haya que guardar nada intermedio»—, así que aquí sólo vive de quién es el turno
+ * en curso y desde cuándo: para esperar, y para decirlo. Se borra al soltar.
+ *
+ * UN mutex y UNA condvar para toda la tabla (bpvm_platform: FreeRTOS en las placas,
+ * pthread en el PC): el mutex sólo guarda el «quién» y se suelta enseguida; la
+ * transferencia va fuera. Se crean al arrancar (bpvm_bus_desde_env, un solo hilo),
+ * o en el primer turno si nadie los creó (el PC, las pruebas).
+ *
+ * NADA ESPERA PARA SIEMPRE: pasado el plazo, -1 con el porqué —«SPI 2 ocupado (CS
+ * 10, un pack) desde hace 1000 ms»—. También el hilo que pide un bus que ya tiene:
+ * era un cuelgue, y es ese mismo error. `cs`: el CS (SPI) o la dirección (I2C) del
+ * que pide, sólo para decirlo; -1 = ninguno. `plazo_ms` <= 0 = BPVM_BUS_PLAZO_MS. */
+#define BPVM_BUS_PLAZO_MS 1000
+int  bpvm_bus_tomar(int tipo, int id, int quien, int cs, int plazo_ms, char* err, size_t cap);
+void bpvm_bus_dejar(int tipo, int id);
+int  bpvm_bus_tomado(int tipo, int id);            /* 1 = hay un turno en curso */
+void bpvm_bus_arbitro_init(void);
 
 #ifdef __cplusplus
 }

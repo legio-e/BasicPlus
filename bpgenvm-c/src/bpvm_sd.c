@@ -47,14 +47,27 @@ static char s_motivo_bus[112];
  * Bajo nivel
  * ───────────────────────────────────────────────────────────────────────── */
 
-static void cs_bajo(const bpvm_sd_pines_t* p)  { bpvm_gpio_write(p->cs, 0); }
-static void cs_alto(const bpvm_sd_pines_t* p)  { bpvm_gpio_write(p->cs, 1); }
+/* ── V7/H6.c G4.a2 — EL TURNO. La TF comparte el bus (en la C5, con la pantalla):
+ * cada operación pide un TURNO con SU configuración —su CS y su velocidad, que viaja
+ * en `info->hz`: nada se guarda en el bus— y dentro hace lo que el protocolo pide,
+ * incluido subir el CS sin soltar el turno (los 80 relojes, el byte tras cada
+ * bloque). Si el bus no queda libre a tiempo, el porqué va al peldaño E_BUS.
+ * ⚠️ A sabiendas: mientras la tarjeta graba (hasta PLAZO_OCUPADA_MS) el turno sigue
+ * siendo suyo; la pantalla espera hasta el plazo del árbitro. El protocolo deja
+ * soltar el bus en esa espera: se hará si la C5 lo pide. */
+static int turno(const bpvm_sd_pines_t* p, int hz) {
+    if (bpvm_spi_tomar(p->bus, p->cs, hz, 0, BPVM_BUS_FIRMWARE, s_motivo_bus, sizeof s_motivo_bus) != 0) return -1;
+    return 0;
+}
+static void suelta(const bpvm_sd_pines_t* p)   { bpvm_spi_dejar(p->bus); }
+static void cs_bajo(const bpvm_sd_pines_t* p)  { bpvm_spi_cs(p->bus, 0); }
+static void cs_alto(const bpvm_sd_pines_t* p)  { bpvm_spi_cs(p->bus, 1); }
 
 /* Un byte de ida y vuelta. En SPI no hay "sólo leer": para recibir hay que
  * mandar algo, y ese algo es 0xFF (línea en reposo). */
 static uint8_t intercambia(int bus, uint8_t tx) {
     uint8_t rx = 0xFF;
-    bpvm_spi_transfer(bus, &tx, &rx, 1);
+    bpvm_spi_xfer(bus, &tx, &rx, 1);
     return rx;
 }
 
@@ -300,7 +313,7 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
     /* CS y card-detect son GPIO normales, no del periférico (ver la cabecera:
      * el SS_N del SPI se levantaría entre tramas y aquí hace falta abajo). */
     bpvm_gpio_init(p->cs, 1);
-    cs_alto(p);
+    bpvm_gpio_write(p->cs, 1);          /* en reposo, ARRIBA: aún no hay turno (G4.a2) */
     /* El pin `cd` lo configura `bpvm_sd_hay_tarjeta` — UN solo sitio. Tenerlo
      * también aquí es lo que hacía que pareciera correcto: desde init se leía
      * un pin bien puesto, y desde los otros dos llamantes no. */
@@ -332,6 +345,10 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
      * toca los bits de pull del pad, no el funcsel. */
     bpvm_gpio_pull(bp[2], 1);
 
+    /* El turno de toda la negociación, a BAUD_LENTO (G4.a2). Tomarlo baja el CS;
+     * los relojes de despertar van con el CS arriba, así que se sube en el acto. */
+    if (turno(p, BAUD_LENTO) != 0) return BPVM_SD_E_BUS;
+
     /* 1 — Los 74 pulsos con CS ALTO. La tarjeta los necesita para despertar;
      *     saltárselos es el error clásico que deja el bus mudo. */
     cs_alto(p);
@@ -340,19 +357,19 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
     /* 2 — CMD0: a estado IDLE. Aquí es donde se ve si el cableado va. */
     cs_bajo(p);
     uint8_t r1 = manda_cmd(p->bus, CMD0_GO_IDLE, 0, 0x95, info);
-    if (r1 == 0xFF) { cs_alto(p); return BPVM_SD_E_MUDA; }
-    if (r1 != R1_IDLE) { cs_alto(p); return BPVM_SD_E_NO_IDLE; }
+    if (r1 == 0xFF) { suelta(p); return BPVM_SD_E_MUDA; }
+    if (r1 != R1_IDLE) { suelta(p); return BPVM_SD_E_NO_IDLE; }
 
     /* 3 — CMD8: ¿es v2 y aguanta 2,7-3,6 V? Se manda 0x1AA y la tarjeta tiene
      *     que devolver el MISMO patrón: es un eco, o sea un control del bus,
      *     no sólo una pregunta. */
     r1 = manda_cmd(p->bus, CMD8_SEND_IF_COND, 0x000001AAu, 0x87, info);
-    if (r1 == 0xFF) { cs_alto(p); return BPVM_SD_E_MUDA; }
+    if (r1 == 0xFF) { suelta(p); return BPVM_SD_E_MUDA; }
     int v2 = 0;
     if ((r1 & 0x04) == 0) {              /* comando aceptado => tarjeta v2 */
         uint8_t eco[4];
         for (int i = 0; i < 4; i++) eco[i] = intercambia(p->bus, 0xFF);
-        if (eco[2] != 0x01 || eco[3] != 0xAA) { cs_alto(p); return BPVM_SD_E_VOLTAJE; }
+        if (eco[2] != 0x01 || eco[3] != 0xAA) { suelta(p); return BPVM_SD_E_VOLTAJE; }
         v2 = 1;
     }
     /* Si contestó "comando ilegal" es una v1: no es un fallo, es su respuesta. */
@@ -363,7 +380,7 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
         r1 = manda_acmd(p->bus, ACMD41_SEND_OP_COND, v2 ? 0x40000000u : 0, info);
         if (r1 == 0) break;
         if (bpvm_platform_now_ms() - t0 > PLAZO_ARRANQUE_MS) {
-            cs_alto(p); return BPVM_SD_E_NO_ARRANCA;
+            suelta(p); return BPVM_SD_E_NO_ARRANCA;
         }
     }
 
@@ -373,7 +390,7 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
     info->alta_cap = 0;
     if (v2) {
         r1 = manda_cmd(p->bus, CMD58_READ_OCR, 0, 0xFD, info);
-        if (r1 != 0) { cs_alto(p); return BPVM_SD_E_OCR; }
+        if (r1 != 0) { suelta(p); return BPVM_SD_E_OCR; }
         uint8_t ocr[4];
         for (int i = 0; i < 4; i++) ocr[i] = intercambia(p->bus, 0xFF);
         info->alta_cap = (ocr[0] & 0x40) ? 1 : 0;
@@ -382,24 +399,24 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
     /* 6 — Quién es (CID) y cuánto mide (CSD). */
     r1 = manda_cmd(p->bus, CMD10_SEND_CID, 0, 0xFD, info);
     if (r1 != 0 || lee_bloque(p->bus, info->cid, 16) != 0) {
-        cs_alto(p); return BPVM_SD_E_CID;
+        suelta(p); return BPVM_SD_E_CID;
     }
     r1 = manda_cmd(p->bus, CMD9_SEND_CSD, 0, 0xFD, info);
     if (r1 != 0 || lee_bloque(p->bus, info->csd, 16) != 0) {
-        cs_alto(p); return BPVM_SD_E_CSD;
+        suelta(p); return BPVM_SD_E_CSD;
     }
     cs_alto(p);
     (void) intercambia(p->bus, 0xFF);    /* que suelte la línea */
+    suelta(p);
 
     bpvm_sd_cid_desglosar(info->cid, info);
     bpvm_sd_res_t r = bpvm_sd_csd_capacidad(info->csd, &info->bloques,
                                             &info->version);
     if (r != BPVM_SD_OK) return r;
 
-    /* 7 — Y AHORA sí, a velocidad de trabajo. Ni un byte antes. */
-    if (baud_rapido > BAUD_LENTO)
-        (void) bpvm_spi_abrir(p->bus, bp[0], bp[1], bp[2], baud_rapido, 0, BPVM_BUS_FIRMWARE,
-                              NULL, s_motivo_bus, sizeof s_motivo_bus);
+    /* 7 — Y AHORA sí, a velocidad de trabajo. Ni un byte antes. G4.a2: no se toca
+     * el bus —la pantalla puede ir a otra—: la velocidad la lleva cada turno. */
+    info->hz = (baud_rapido > BAUD_LENTO) ? baud_rapido : BAUD_LENTO;
     return BPVM_SD_OK;
 }
 
@@ -413,12 +430,13 @@ bpvm_sd_res_t bpvm_sd_leer_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* info
      * suposición sobre el tamaño de la tarjeta. */
     uint32_t arg = info->alta_cap ? lba : (lba * 512u);
 
-    cs_bajo(p);
+    if (turno(p, info->hz > 0 ? info->hz : BAUD_LENTO) != 0) return BPVM_SD_E_BUS;   /* CS abajo */
     uint8_t r1 = manda_cmd(p->bus, CMD17_READ_SINGLE, arg, 0xFF, info);
-    if (r1 != 0) { cs_alto(p); return BPVM_SD_E_LECTURA; }
-    if (lee_bloque(p->bus, dst, 512) != 0) { cs_alto(p); return BPVM_SD_E_LECTURA; }
+    if (r1 != 0) { suelta(p); return BPVM_SD_E_LECTURA; }
+    if (lee_bloque(p->bus, dst, 512) != 0) { suelta(p); return BPVM_SD_E_LECTURA; }
     cs_alto(p);
     (void) intercambia(p->bus, 0xFF);       /* que suelte la línea */
+    suelta(p);
     return BPVM_SD_OK;
 }
 
@@ -428,9 +446,9 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
     if (!p || !info || !src) return BPVM_SD_E_PINES;
     uint32_t arg = info->alta_cap ? lba : (lba * 512u);
 
-    cs_bajo(p);
+    if (turno(p, info->hz > 0 ? info->hz : BAUD_LENTO) != 0) return BPVM_SD_E_BUS;   /* CS abajo */
     uint8_t r1 = manda_cmd(p->bus, CMD24_WRITE_SINGLE, arg, 0xFF, info);
-    if (r1 != 0) { cs_alto(p); return BPVM_SD_E_ESCRITURA; }
+    if (r1 != 0) { suelta(p); return BPVM_SD_E_ESCRITURA; }
 
     (void) intercambia(p->bus, 0xFF);            /* un hueco antes del token   */
     (void) intercambia(p->bus, TOKEN_DATO);
@@ -440,7 +458,7 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
 
     /* La tarjeta contesta si ACEPTA los datos, y el veredicto está en 5 bits. */
     uint8_t resp = intercambia(p->bus, 0xFF);
-    if ((resp & 0x1F) != 0x05) { cs_alto(p); return BPVM_SD_E_ESCRITURA; }
+    if ((resp & 0x1F) != 0x05) { suelta(p); return BPVM_SD_E_ESCRITURA; }
 
     /* Y AHORA se queda ocupada grabando: tira de MISO a 0 y no lo suelta hasta
      * terminar. Puede ser mucho —si le toca borrar un bloque interno, cientos
@@ -450,11 +468,12 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
     int64_t t0 = bpvm_platform_now_ms();
     while (intercambia(p->bus, 0xFF) == 0x00) {
         if (bpvm_platform_now_ms() - t0 > PLAZO_OCUPADA_MS) {
-            cs_alto(p); return BPVM_SD_E_OCUPADA;
+            suelta(p); return BPVM_SD_E_OCUPADA;
         }
     }
     cs_alto(p);
     (void) intercambia(p->bus, 0xFF);
+    suelta(p);
     return BPVM_SD_OK;
 }
 

@@ -61,7 +61,8 @@ int bpvm_bios_hal_spi_init(int bus, int sck, int mosi, int miso, int baudrate, i
     }
     return 0;
 }
-int bpvm_bios_hal_spi_write(int bus, const uint8_t* data, size_t n) { return bpvm_spi_write(bus, data, n); }
+/* V7/H6.c G4.a2 — cada llamada es un turno, y del PACK (el árbitro lo dice así). */
+int bpvm_bios_hal_spi_write(int bus, const uint8_t* data, size_t n) { return bpvm_spi_write_como(BPVM_BUS_PACK, bus, data, n); }
 
 int bpvm_bios_hal_i2c_init(int bus, int sda, int scl, int baudrate) {
     char err[160];
@@ -75,8 +76,25 @@ int bpvm_bios_hal_i2c_init(int bus, int sda, int scl, int baudrate) {
     }
     return 0;
 }
-int bpvm_bios_hal_i2c_write(int bus, int addr, const uint8_t* data, size_t n) { return bpvm_i2c_write(bus, addr, data, n); }
-int bpvm_bios_hal_i2c_read (int bus, int addr, uint8_t* data, size_t n)       { return bpvm_i2c_read(bus, addr, data, n); }
+int bpvm_bios_hal_i2c_write(int bus, int addr, const uint8_t* data, size_t n) { return bpvm_i2c_write_como(BPVM_BUS_PACK, bus, addr, data, n); }
+int bpvm_bios_hal_i2c_read (int bus, int addr, uint8_t* data, size_t n)       { return bpvm_i2c_read_como(BPVM_BUS_PACK, bus, addr, data, n); }
+
+/* ── V7/H6.c G4.a2 — el TURNO (v7). El árbitro es el de la HAL BP (bpvm_bus.c):
+ * el mismo para el programa, la TF y los packs. Un -1 lleva su porqué al log. */
+int bpvm_bios_hal_spi_tomar(int bus, int cs, int hz, int modo) {
+    char err[160];
+    if (bpvm_spi_tomar(bus, cs, hz, modo, BPVM_BUS_PACK, err, sizeof err) != 0) {
+        bpvm_diag("BIOS: spi_tomar(%d): %s", bus, err);
+        return -1;
+    }
+    return 0;
+}
+int  bpvm_bios_hal_spi_cs(int bus, int nivel) { return bpvm_spi_cs(bus, nivel); }
+int  bpvm_bios_hal_spi_transferir(int bus, const uint8_t* tx, uint8_t* rx, size_t n) { return bpvm_spi_xfer(bus, tx, rx, n); }
+void bpvm_bios_hal_spi_soltar(int bus) { bpvm_spi_dejar(bus); }
+int  bpvm_bios_hal_i2c_escribir_leer(int bus, int addr, const uint8_t* tx, size_t ntx, uint8_t* rx, size_t nrx) {
+    return bpvm_i2c_escribir_leer(BPVM_BUS_PACK, bus, addr, tx, ntx, rx, nrx);
+}
 
 uint32_t bpvm_bios_hal_now_ms(void)   { return (uint32_t) bpvm_platform_now_ms(); }
 void     bpvm_bios_hal_sleep_ms(int ms) { bpvm_platform_thread_sleep_ms(ms); }

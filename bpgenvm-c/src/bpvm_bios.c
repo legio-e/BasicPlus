@@ -48,6 +48,10 @@ static const ranura_t RANURAS[] = {
     /* V7/H6.c G1 — la config de placa. La FUNCIÓN tiene que estar siempre,
      * aunque conteste «no está» porque el ENV no tenga esa clave. */
     R(env_get),
+    /* V7/H6.c G4.a2 — el turno (v7). Las FUNCIONES siempre, aunque `spi_tomar`
+     * conteste -1 porque el bus esté ocupado más del plazo. */
+    R(spi_tomar), R(spi_cs), R(spi_transferir), R(spi_soltar),
+    R(i2c_escribir_leer),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))

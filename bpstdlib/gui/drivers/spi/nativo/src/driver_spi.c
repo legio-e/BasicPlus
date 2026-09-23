@@ -371,24 +371,34 @@ static int parse_touch(void) {
     return 0;
 }
 
-/* ── el bus: comandos con DC en bajo, datos con DC en alto (lo de DriverC5) ── */
+/* ── el bus: comandos con DC en bajo, datos con DC en alto (lo de DriverC5) ──
+ * V7/H6.c G4.a2: el SPI se COMPARTE (en la C5, con la TF), así que cada comando y
+ * cada bloque de datos es un TURNO de la BIOS v7: la pantalla lo pide con SU
+ * configuración —su CS, sus MHz, modo 0— y la HAL BP baja y sube el CS. El DC se
+ * pone ANTES de pedir el turno: es sólo de la pantalla, que lo ignora con su CS
+ * arriba, y así la cinta queda como la de DriverC5 (DC, CS abajo, bytes, CS
+ * arriba). Si el turno no llega a tiempo, el porqué ya está en el log (lo dice la
+ * BIOS) y esto no se manda. */
+static int turno(void) { return g_bios->spi_tomar(L.spi, L.cs, L.mhz * 1000000, 0); }
 static void lcd_cmd(uint8_t c) {
-    g_bios->gpio_write(L.dc, 0); g_bios->gpio_write(L.cs, 0);
-    g_bios->spi_write(L.spi, &c, 1);
-    g_bios->gpio_write(L.cs, 1);
+    g_bios->gpio_write(L.dc, 0);
+    if (turno() != 0) return;
+    g_bios->spi_transferir(L.spi, &c, 0, 1);
+    g_bios->spi_soltar(L.spi);
 }
 /* ⚠️ TROCEADO A `SPI_MAX`, y no es una precaución: la fachada SPI del ESP32 abre
  * el bus SIN DMA, así que una transacción no pasa del búfer del periférico —64
  * bytes—. La palanca, si molesta, es la FACHADA (G4), no este fichero. */
 #define SPI_MAX 64
 static void lcd_dat(const uint8_t* d, size_t n) {
-    g_bios->gpio_write(L.dc, 1); g_bios->gpio_write(L.cs, 0);
+    g_bios->gpio_write(L.dc, 1);
+    if (turno() != 0) return;
     while (n > 0) {
         size_t t = (n > SPI_MAX) ? SPI_MAX : n;
-        g_bios->spi_write(L.spi, d, t);
+        g_bios->spi_transferir(L.spi, d, 0, t);
         d += t; n -= t;
     }
-    g_bios->gpio_write(L.cs, 1);
+    g_bios->spi_soltar(L.spi);
 }
 static void lcd_cmd1(uint8_t c, uint8_t p) { lcd_cmd(c); lcd_dat(&p, 1); }
 
@@ -762,11 +772,12 @@ static int sp_rotate(int deg) {
 /* ── el táctil CST3530 ─────────────────────────────────────────────────────────
  * Registro de 32 bits big-endian: DATA 0xD0070000 (9 bytes), END 0xD00002AB. Las
  * coordenadas son las de 0°: girarlas con la pantalla sigue pendiente (H6.a). */
+/* El registro y su lectura en UN turno (BIOS v7): en el I2C 0 de la C5 también
+ * habla el expansor, y nadie se mete entre las dos. */
 static int cst_lee(uint32_t reg, uint8_t* d, size_t n) {
     uint8_t a[4];
     a[0] = (uint8_t) (reg >> 24); a[1] = (uint8_t) (reg >> 16); a[2] = (uint8_t) (reg >> 8); a[3] = (uint8_t) reg;
-    if (g_bios->i2c_write(T.i2c, T.addr, a, 4) != 4) return -1;
-    return g_bios->i2c_read(T.i2c, T.addr, d, n) == (int) n ? 0 : -1;
+    return g_bios->i2c_escribir_leer(T.i2c, T.addr, a, 4, d, n) == (int) n ? 0 : -1;
 }
 static void cst_fin(void) {
     uint8_t a[4];
@@ -801,8 +812,7 @@ static int cst_modo_normal(void) {
 static int cst_latido(uint32_t* v) {
     uint8_t a[4], b[4];
     a[0] = 0xD0; a[1] = 0x04; a[2] = 0x04; a[3] = 0x00;
-    if (g_bios->i2c_write(T.i2c, T.addr, a, 4) != 4) return -1;
-    if (g_bios->i2c_read(T.i2c, T.addr, b, 4) != 4) return -1;
+    if (g_bios->i2c_escribir_leer(T.i2c, T.addr, a, 4, b, 4) != 4) return -1;
     *v = ((uint32_t) b[3] << 24) | ((uint32_t) b[2] << 16) | ((uint32_t) b[1] << 8) | b[0];
     return 0;
 }
@@ -919,8 +929,8 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     if (bios == 0)                          return 1;
     if (bios->magic   != BPVM_BIOS_MAGIC)   return 2;
     if (bios->log     == 0)                 return 4;
-    if (bios->version <  6u) {              /* env_get es de la v6; la tabla crece por el final */
-        bios->log("driver SPI: esta BIOS no presta env_get (hace falta la v6): no tengo de donde leer la placa");
+    if (bios->version <  7u) {              /* el turno es de la v7 (env_get, de la v6); la tabla crece por el final */
+        bios->log("driver SPI: esta BIOS no presta el turno de los buses (hace falta la v7): graba una imagen al dia");
         return 3;
     }
     g_bios = bios;

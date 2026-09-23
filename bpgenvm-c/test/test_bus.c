@@ -62,6 +62,14 @@ static int  fi_w(int bus, int a, const uint8_t* d, size_t n) { (void) bus; (void
 static int  fi_r(int bus, int a, uint8_t* d, size_t n) { (void) bus; (void) a; (void) d; return (int) n; }
 static const bpvm_i2c_backend_t I2C_NUEVA = { fi_init, fi_w, fi_r, fi_abrir, fi_cerrar };
 
+/* G4.a2: los pines de mentira, para ver el CS que mueve el turno (-1 = nunca escrito). */
+static int g_nivel[40];
+static void fg_init(int pin, int mode) { (void) pin; (void) mode; }
+static void fg_pull(int pin, int m) { (void) pin; (void) m; }
+static void fg_write(int pin, int v) { if (pin >= 0 && pin < 40) g_nivel[pin] = v ? 1 : 0; }
+static int  fg_read(int pin) { return (pin >= 0 && pin < 40) ? g_nivel[pin] : 0; }
+static const bpvm_gpio_backend_t GPIO_FALSO = { fg_init, fg_pull, fg_write, fg_read };
+
 /* ── el ENV de mentira ── */
 static const char* g_spi2 = 0; static const char* g_i2c0 = 0; static const char* g_i2c1 = 0;
 static int f_env(const char* k, char* buf, size_t cap) {
@@ -88,6 +96,8 @@ int main(void) {
     bpvm_caps_set(&s_caps);
     bpvm_spi_set_backend(&SPI_NUEVA);
     bpvm_i2c_set_backend(&I2C_NUEVA);
+    bpvm_gpio_set_backend(&GPIO_FALSO);
+    for (i = 0; i < 40; i++) g_nivel[i] = -1;
 
     printf("== V7/H6.c G4.a1: el bus es COMPARTIDO; la configuración, una vez ==\n");
 
@@ -101,21 +111,63 @@ int main(void) {
     /* ── 2. LOS TRES USUARIOS SE ENGANCHAN: la cintura se abre UNA vez ── */
     caso("un PACK (la pantalla) abre el SPI 2 con -1: los pines del ENV",
          bpvm_spi_abrir(2, -1, -1, -1, 40000000, 0, BPVM_BUS_PACK, p, E, sizeof E) == 0 && p[0] == 6 && p[1] == 7 && p[2] == 8);
-    CHECK(n_abrir[2] == 1 && ult_p[2][0] == 6 && ult_p[2][2] == 8 && ult_hz[2] == 40000000, "  la cintura se abre (sck 6, miso 8) y se ajusta a 40 MHz");
+    CHECK(n_abrir[2] == 1 && ult_p[2][0] == 6 && ult_p[2][2] == 8 && n_ajustar[2] == 0,
+          "  la cintura se abre (sck 6, miso 8) — y NO se ajusta: la velocidad va con cada turno (G4.a2)");
     caso("el FIRMWARE (la TF) abre el SPI 2 con SUS pines (los mismos)",
          bpvm_spi_abrir(2, 6, 7, 8, 400000, 0, BPVM_BUS_FIRMWARE, p, E, sizeof E) == 0);
-    CHECK(n_abrir[2] == 1 && n_ajustar[2] == 2 && ult_hz[2] == 400000, "  la cintura NO se reabre (1 apertura) y sólo se ajusta (400 kHz)");
+    CHECK(n_abrir[2] == 1 && n_ajustar[2] == 0, "  la cintura NO se reabre (1 apertura), y tampoco se ajusta");
     caso("un PROGRAMA con -1: se engancha", bpvm_spi_abrir(2, -1, -1, -1, 1000000, 3, BPVM_BUS_PROGRAMA, p, E, sizeof E) == 0);
     CHECK(n_abrir[2] == 1 && n_cerrar[2] == 0, "  y sigue habiendo UNA apertura y ningún cierre");
 
     /* ── 3. OTRA CONFIGURACIÓN: error con nombre, y el bus como estaba ── */
     caso("un programa pide sck 12 -> «el SPI 2 es sck 6, mosi 7, miso 8 (ENV spi2): pides sck 12»",
          bpvm_spi_abrir(2, 12, 7, 8, 1000000, 0, BPVM_BUS_PROGRAMA, p, E, sizeof E) != 0 && err_es("el SPI 2 es sck 6, mosi 7, miso 8 (ENV spi2): pides sck 12"));
-    CHECK(n_abrir[2] == 1 && n_cerrar[2] == 0 && ult_hz[2] == 1000000, "  y la cintura ni se reabre ni se ajusta");
+    CHECK(n_abrir[2] == 1 && n_cerrar[2] == 0 && n_ajustar[2] == 0, "  y la cintura ni se reabre ni se ajusta");
     caso("un programa pide I2C 0 a 100 kHz -> «pides 100 kHz» (la velocidad es del bus)",
          bpvm_i2c_abrir(0, -1, -1, 100000, BPVM_BUS_PROGRAMA, E, sizeof E) != 0 && err_es("el I2C 0 es sda 0, scl 1 a 400 kHz (ENV i2c0): pides 100 kHz"));
     caso("y con 0 (la que tenga) se engancha", bpvm_i2c_abrir(0, 0, 1, 0, BPVM_BUS_PROGRAMA, E, sizeof E) == 0 && i2c_abrir[0] == 1 && i2c_hz[0] == 400000);
     caso("el pack del táctil también (sin pines)", bpvm_i2c_abrir(0, -1, -1, -1, BPVM_BUS_PACK, E, sizeof E) == 0 && i2c_abrir[0] == 1);
+
+    /* ── 3b. G4.a2 — EL TURNO: la velocidad va en CADA petición, y la del bus sólo se
+     * cambia si la nueva es otra (Eduardo: «se guarda la actual; si la nueva es la misma
+     * no se cambia»). Y el CS del turno lo mueve la HAL BP. ── */
+    {
+        uint8_t tx[4] = { 0xD0, 0x07, 0x00, 0x00 }, rx[9];
+        caso("un turno de la pantalla (CS 10, 40 MHz): la cintura se ajusta a 40 MHz y el CS 10 baja",
+             bpvm_spi_tomar(2, 10, 40000000, 0, BPVM_BUS_PACK, E, sizeof E) == 0 && n_ajustar[2] == 1 && ult_hz[2] == 40000000
+             && g_nivel[10] == 0 && bpvm_bus_tomado(BPVM_BUS_SPI, 2));
+        CHECK(bpvm_spi_xfer(2, tx, NULL, 4) == 4, "  dentro del turno se transfiere");
+        CHECK(bpvm_spi_cs(2, 1) == 0 && g_nivel[10] == 1 && bpvm_spi_cs(2, 0) == 0 && g_nivel[10] == 0,
+              "  y el CS sube y baja SIN soltar el turno (lo que necesita la TF)");
+        bpvm_spi_dejar(2);
+        CHECK(g_nivel[10] == 1 && !bpvm_bus_tomado(BPVM_BUS_SPI, 2), "  al soltar, el CS 10 sube y el bus queda libre");
+        caso("otro turno a 40 MHz: NO se ajusta (se guarda la actual)",
+             bpvm_spi_tomar(2, 10, 40000000, 0, BPVM_BUS_PACK, E, sizeof E) == 0 && n_ajustar[2] == 1);
+        bpvm_spi_dejar(2);
+        caso("un turno de la TF (CS 23, 400 kHz): SÍ, porque es otra",
+             bpvm_spi_tomar(2, 23, 400000, 0, BPVM_BUS_FIRMWARE, E, sizeof E) == 0 && n_ajustar[2] == 2 && ult_hz[2] == 400000);
+        bpvm_spi_dejar(2);
+        caso("la misma velocidad con otro MODO también es otra",
+             bpvm_spi_tomar(2, 23, 400000, 3, BPVM_BUS_FIRMWARE, E, sizeof E) == 0 && n_ajustar[2] == 3 && ult_modo[2] == 3);
+        bpvm_spi_dejar(2);
+        CHECK(bpvm_spi_write(2, tx, 4) == 4 && n_ajustar[2] == 4 && ult_hz[2] == 1000000 && ult_modo[2] == 3 && !bpvm_bus_tomado(BPVM_BUS_SPI, 2),
+              "una llamada de Spi.Bus es un turno entero, con la velocidad del abrir del programa (1 MHz, modo 3)");
+        CHECK(bpvm_spi_xfer(2, tx, NULL, 4) == -1, "transferir SIN turno: -1 (y dicho en el log)");
+        caso("un turno que nadie suelta: el que llega espera el plazo y recibe «SPI 2 ocupado (CS 10, un pack) desde hace…»",
+             bpvm_spi_tomar(2, 10, 40000000, 0, BPVM_BUS_PACK, E, sizeof E) == 0
+             && bpvm_spi_tomar(2, 23, 400000, 0, BPVM_BUS_FIRMWARE, E, sizeof E) != 0 && err_es("SPI 2 ocupado (CS 10, un pack) desde hace"));
+        CHECK(g_nivel[23] == 1, "  y el CS de la TF ni se tocó: sigue arriba");
+        bpvm_spi_dejar(2);
+        caso("en I2C, escribir y leer van en UN turno (el registro del táctil y su trama)",
+             bpvm_i2c_escribir_leer(BPVM_BUS_PACK, 0, 0x58, tx, 4, rx, 9) == 9 && !bpvm_bus_tomado(BPVM_BUS_I2C, 0));
+        caso("y un turno de I2C que nadie suelta se dice con la dirección: «I2C 0 ocupado (0x24, el firmware)…»",
+             bpvm_bus_tomar(BPVM_BUS_I2C, 0, BPVM_BUS_FIRMWARE, 0x24, 50, E, sizeof E) == 0
+             && bpvm_i2c_write(0, 0x58, tx, 4) == -1);
+        bpvm_bus_dejar(BPVM_BUS_I2C, 0);
+        caso("  (el porqué, con su plazo corto)", bpvm_bus_tomar(BPVM_BUS_I2C, 0, BPVM_BUS_PACK, 0x58, 50, E, sizeof E) == 0
+             && bpvm_bus_tomar(BPVM_BUS_I2C, 0, BPVM_BUS_PROGRAMA, 0x24, 50, E, sizeof E) != 0 && err_es("I2C 0 ocupado (0x58, un pack) desde hace"));
+        bpvm_bus_dejar(BPVM_BUS_I2C, 0);
+    }
 
     /* ── 4. SOLTAR: el del ENV no, desde un programa ── */
     caso("un programa suelta el SPI 2 -> «es de la placa (ENV spi2)»",

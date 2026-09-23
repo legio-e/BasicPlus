@@ -98,8 +98,10 @@ static int  f_gpio_read(int pin) { (void) pin; return 0; }
 static int  f_spi_init(int bus, int sck, int mosi, int miso, int hz, int mode) {
     cinta("spi_init %d sck %d mosi %d miso %d %d Hz modo %d\n", bus, sck, mosi, miso, hz, mode); return 0;
 }
+static int g_turno_cs, g_turno_mal, g_exigir_turno;   /* el turno (G4.a2), más abajo */
 static int  f_spi_write(int bus, const uint8_t* d, size_t n) {
     char b[8]; size_t i;
+    if (g_exigir_turno && g_turno_cs == -2) g_turno_mal++;   /* un byte FUERA de turno */
     cinta("spi %d %s%s:", bus, g_dc ? "D" : "C", g_cs ? " (¡CS ALTO!)" : ""); cinta_hex(d, n); cinta("\n");
     for (i = 0; i < n; i++) {
         if (i == 0 && !g_dc) snprintf(b, sizeof b, "%s%02X", g_mn ? "\n" : "", d[i]);
@@ -133,6 +135,40 @@ static int  f_i2c_read(int bus, int addr, uint8_t* d, size_t n) {
     return (int) n;
 }
 static uint32_t f_now_ms(void) { return g_ahora; }
+
+/* V7/H6.c G4.a2 — EL TURNO (BIOS v7), como lo hace la HAL BP: baja el CS del turno
+ * por el pin (la misma línea «g 10=0» de la cinta que el CS a mano de DriverC5),
+ * transfiere como `spi_write` y sube el CS al soltar. Así la cinta de los dos drivers
+ * se sigue comparando byte a byte. Y vigila lo que la HAL BP no perdonaría: un turno
+ * dentro de otro, y transferir sin turno. */
+static int g_turno_cs = -2;            /* -2 = no hay turno */
+static int g_turnos = 0, g_turno_hz_mal = 0, g_turno_mal = 0, g_hz_turno = 0;
+static int g_exigir_turno = 0;         /* 1 = el driver en prueba es de la v7: TODO su SPI va en turnos */
+static int  f_spi_tomar(int bus, int cs, int hz, int modo) {
+    (void) bus; (void) modo;
+    if (g_turno_cs != -2) g_turno_mal++;            /* un turno dentro de otro */
+    g_turno_cs = cs; g_turnos++;
+    if (g_hz_turno && hz != g_hz_turno) g_turno_hz_mal++;
+    if (cs >= 0) f_gpio_write(cs, 0);
+    return 0;
+}
+static int  f_spi_cs(int bus, int nivel) { (void) bus; if (g_turno_cs < 0) return -1; f_gpio_write(g_turno_cs, nivel); return 0; }
+static int  f_spi_transferir(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
+    size_t i;
+    if (g_turno_cs == -2) g_turno_mal++;            /* transferir sin turno */
+    if (rx) for (i = 0; i < n; i++) rx[i] = 0xFF;
+    return tx ? f_spi_write(bus, tx, n) : (int) n;
+}
+static void f_spi_soltar(int bus) {
+    (void) bus;
+    if (g_turno_cs == -2) { g_turno_mal++; return; }
+    if (g_turno_cs >= 0) f_gpio_write(g_turno_cs, 1);
+    g_turno_cs = -2;
+}
+static int  f_i2c_escribir_leer(int bus, int addr, const uint8_t* tx, size_t ntx, uint8_t* rx, size_t nrx) {
+    if (f_i2c_write(bus, addr, tx, ntx) != (int) ntx) return -1;
+    return f_i2c_read(bus, addr, rx, nrx);
+}
 static void f_sleep_ms(int ms) { cinta("espera %d\n", ms); }
 
 /* El ENV: tres líneas, las que se prueben. */
@@ -209,6 +245,8 @@ static void bios_monta(void) {
     B.i2c_init = f_i2c_init; B.i2c_write = f_i2c_write; B.i2c_read = f_i2c_read;
     B.now_ms = f_now_ms; B.sleep_ms = f_sleep_ms;
     B.env_get = f_env_get;
+    B.spi_tomar = f_spi_tomar; B.spi_cs = f_spi_cs; B.spi_transferir = f_spi_transferir;
+    B.spi_soltar = f_spi_soltar; B.i2c_escribir_leer = f_i2c_escribir_leer;
 }
 
 /* Carga un driver como lo hace la placa: su entrada, y 'PANT' resuelta. */
@@ -375,7 +413,16 @@ int main(int argc, char** argv) {
     CHECK(cargar(spi_pack_init, &ps) == 0, "DriverSpi carga y publica 'PANT', con el perfil de la C5 en el ENV");
     CHECK(ps.touch != 0 && ps.estado != 0 && ps.rotate != 0, "  y publica touch (hay linea touch=), estado y rotate");
     CHECK(ps.estado() == 0, "  y su estado es LISTO (NULL)");
+    g_exigir_turno = 1; g_hz_turno = 40000000; g_turnos = g_turno_mal = g_turno_hz_mal = 0;
     pasada(&ps, &g_spi);
+    g_exigir_turno = 0; g_hz_turno = 0;
+    {   char m[160];
+        snprintf(m, sizeof m, "V7/H6.c G4.a2: TODO el SPI de DriverSpi va en TURNOS de la BIOS v7 (%d turnos; %d fuera de turno o anidados)",
+                 g_turnos, g_turno_mal);
+        CHECK(g_turnos > 0 && g_turno_mal == 0 && g_turno_cs == -2, m);
+        snprintf(m, sizeof m, "  cada turno con SU configuracion: 40 MHz (%d a otra velocidad)", g_turno_hz_mal);
+        CHECK(g_turno_hz_mal == 0, m);
+    }
     if (g_verbose) printf("\n--- arranque DriverC5 ---\n%s\n--- arranque DriverSpi ---\n%s\n", g_c5.init_cinta, g_spi.init_cinta);
 
     CHECK(g_c5.init_r == 0 && g_spi.init_r == 0, "los dos arrancan (init = 0)");

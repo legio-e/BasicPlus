@@ -10,6 +10,7 @@
 #include "bpvm_bus.h"
 #include "bpvm_gpio.h"
 #include "bpvm_machine.h"
+#include "bpvm_platform.h" /* G4.a2: el mutex, la condvar y el reloj del árbitro */
 #include "bpvm.h"          /* bpvm_diag: lo del ENV va al log de la VM */
 
 #include <stdio.h>
@@ -139,6 +140,7 @@ int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap
 int bpvm_bus_desde_env(bpvm_bus_env_get_fn env_get) {
     const bpvm_caps_t* c = bpvm_caps();
     int tipo, i, n = 0;
+    bpvm_bus_arbitro_init();   /* G4.a2: al arrancar, con un solo hilo vivo */
     if (!env_get) return 0;
     for (tipo = 0; tipo < 2; tipo++) {
         const unsigned char* l = tipo == BPVM_BUS_SPI ? c->spi : c->i2c;
@@ -280,10 +282,112 @@ int bpvm_bus_describe(int tipo, int id, char* out, size_t cap) {
     return 0;
 }
 
+/* ── G4.a2: el ÁRBITRO ─────────────────────────────────────────────────────── */
+
+/* El turno en curso de cada bus: quién (0 = libre), su CS o su dirección, desde
+ * cuándo. Aparte de `s_bus` a propósito: cerrar o soltar un bus hace memset de su
+ * contabilidad, y eso no puede borrar el turno de quien está transfiriendo. */
+typedef struct { unsigned char quien, esperan; short cs; int64_t desde; } turno_t;
+static turno_t s_turno[2][BPVM_BUS_ID_MAX];
+
+static bpvm_platform_mutex_handle_t s_arb_m;
+static bpvm_platform_cond_handle_t  s_arb_c;
+static int s_arb_listo = 0;
+
+void bpvm_bus_arbitro_init(void) {
+    if (s_arb_listo) return;
+    if (bpvm_platform_mutex_init(&s_arb_m) != 0) return;
+    if (bpvm_platform_cond_init(&s_arb_c) != 0) { bpvm_platform_mutex_destroy(&s_arb_m); return; }
+    s_arb_listo = 1;
+}
+
+/* «CS 10, un pack» / «0x58, el programa» / «el firmware». */
+static void pinta_turno(int tipo, const turno_t* t, char* out, size_t cap) {
+    if (t->cs < 0)                  snprintf(out, cap, "%s", de_quien(t->quien));
+    else if (tipo == BPVM_BUS_I2C)  snprintf(out, cap, "0x%02X, %s", (unsigned) t->cs, de_quien(t->quien));
+    else                            snprintf(out, cap, "CS %d, %s", t->cs, de_quien(t->quien));
+}
+
+int bpvm_bus_tomar(int tipo, int id, int quien, int cs, int plazo_ms, char* err, size_t cap) {
+    turno_t* t;
+    int64_t t0, ahora;
+    if (!bus_de(tipo, id)) { snprintf(err, cap, "%s %d: no hay ese bus", tipo == BPVM_BUS_I2C ? "I2C" : "SPI", id); return -1; }
+    bpvm_bus_arbitro_init();
+    if (!s_arb_listo) { snprintf(err, cap, "el árbitro de los buses no pudo arrancar (sin mutex)"); return -1; }
+    if (plazo_ms <= 0) plazo_ms = BPVM_BUS_PLAZO_MS;
+    t = &s_turno[tipo][id];
+    t0 = bpvm_platform_now_ms();
+    bpvm_platform_mutex_lock(&s_arb_m);
+#ifndef BPVM_SIN_ARBITRO
+    {
+        /* CORTESÍA: quien llega con el bus libre pero con otros ESPERANDO, no se cuela:
+         * se pone a esperar también. Sin esto hay INANICIÓN —medido en test-arbitro:
+         * quien suelta y vuelve a pedir enseguida gana siempre (ya está corriendo; el
+         * que espera tiene que despertar), y el otro agotaba su plazo con cada turno
+         * ajeno de 33 ms—. Es lo que pasaría en la C5 con los muchos turnos cortos de
+         * un volcado de la pantalla frente a la TF.
+         *
+         * El plazo es del RELOJ. La guarda de `quietos` es sólo para un reloj que no
+         * se mueve (las pruebas de un hilo lo tapan a cero y sus dobles «vencen» en el
+         * acto): tres esperas vencidas seguidas sin que el reloj avance un ms no
+         * pueden darse en una placa, y sin la guarda aquello no acabaría nunca. */
+        int yo_espero = 0, quietos = 0;
+        while (t->quien != 0 || (!yo_espero && t->esperan > 0)) {
+            int vencio;
+            if (!yo_espero) { yo_espero = 1; t->esperan++; }
+            ahora = bpvm_platform_now_ms();
+            if (ahora - t0 >= plazo_ms || quietos >= 3) {
+                char suyo[40];
+                t->esperan--;
+                bpvm_platform_cond_broadcast(&s_arb_c);   /* el que venía detrás, que no espere a nadie */
+                if (t->quien != 0) {
+                    pinta_turno(tipo, t, suyo, sizeof suyo);
+                    snprintf(err, cap, "%s %d ocupado (%s) desde hace %ld ms", NOMBRE[tipo], id, suyo, (long) (ahora - t->desde));
+                } else {
+                    snprintf(err, cap, "%s %d: no llegó el turno en %d ms (otros esperaban)", NOMBRE[tipo], id, plazo_ms);
+                }
+                bpvm_platform_mutex_unlock(&s_arb_m);
+                return -1;
+            }
+            vencio = bpvm_platform_cond_timed_wait(&s_arb_c, &s_arb_m, (int) (plazo_ms - (ahora - t0))) == 1;
+            quietos = (vencio && bpvm_platform_now_ms() == ahora) ? quietos + 1 : 0;
+        }
+        if (yo_espero) t->esperan--;
+    }
+#else
+    /* SÓLO para el CONTROL de `make test-arbitro-control`: el árbitro no arbitra (da el
+     * turno aunque esté ocupado). Con esto la prueba de los dos hilos TIENE que fallar;
+     * si pasara, no probaría nada. Ninguna imagen se compila con esto. */
+    (void) ahora;
+#endif
+    t->quien = (unsigned char) (quien ? quien : BPVM_BUS_PROGRAMA);
+    t->cs = (short) cs;
+    t->desde = bpvm_platform_now_ms();
+    bpvm_platform_mutex_unlock(&s_arb_m);
+    return 0;
+}
+
+void bpvm_bus_dejar(int tipo, int id) {
+    if (!bus_de(tipo, id) || !s_arb_listo) return;
+    bpvm_platform_mutex_lock(&s_arb_m);
+    s_turno[tipo][id].quien = 0;
+    bpvm_platform_cond_broadcast(&s_arb_c);
+    bpvm_platform_mutex_unlock(&s_arb_m);
+}
+
+/* SIN cerrojo, a propósito: se pregunta en CADA transferencia (la TF va byte a
+ * byte) y sólo vale para comprobar que HAY un turno en curso, no para decidir de
+ * quién es ni para tomarlo. */
+int bpvm_bus_tomado(int tipo, int id) {
+    if (!bus_de(tipo, id)) return 0;
+    return ((volatile turno_t*) &s_turno[tipo][id])->quien != 0;
+}
+
 void bpvm_bus_reset(void) {
     int tipo, id;
     for (tipo = 0; tipo < 2; tipo++)
         for (id = 0; id < BPVM_BUS_ID_MAX; id++)
             if (s_bus[tipo][id].origen != ORIGEN_LIBRE) suelta_pines(tipo, s_bus[tipo][id].p);
     memset(s_bus, 0, sizeof s_bus);
+    memset(s_turno, 0, sizeof s_turno);   /* G4.a2: ningún turno en curso */
 }

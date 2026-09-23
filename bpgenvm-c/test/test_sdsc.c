@@ -91,6 +91,22 @@ int  bpvm_spi_abrir (int bus, int sck, int mosi, int miso, int hz, int modo, int
     if (pins) { pins[0] = sck; pins[1] = mosi; pins[2] = miso; }
     return 0;
 }
+/* V7/H6.c G4.a2 — la TF transfiere en TURNOS del árbitro: aquí no hay con quién
+ * compartir el bus, así que el turno siempre llega y cada byte va al emulador de
+ * la tarjeta de más abajo (el mismo de siempre). */
+void bpvm_spi_transfer(int b, const uint8_t* tx, uint8_t* rx, int n);
+int  bpvm_spi_tomar(int bus, int cs, int hz, int modo, int quien, char* err, size_t cap)
+{
+    (void) bus; (void) cs; (void) hz; (void) modo; (void) quien; (void) err; (void) cap;
+    return 0;
+}
+int  bpvm_spi_cs   (int bus, int nivel) { (void) bus; (void) nivel; return 0; }
+void bpvm_spi_dejar(int bus)            { (void) bus; }
+int  bpvm_spi_xfer (int bus, const uint8_t* tx, uint8_t* rx, size_t n)
+{
+    bpvm_spi_transfer(bus, tx, rx, (int) n);
+    return (int) n;
+}
 
 void bpvm_spi_transfer(int b, const uint8_t* tx, uint8_t* rx, int n)
 {
