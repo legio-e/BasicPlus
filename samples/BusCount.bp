@@ -1,0 +1,190 @@
+// BusCount.bp — #534 (V7, 23-sep): el `count` de los builtins de bus (I2C, SPI, UART),
+// igual en las dos VMs. Oraculo de paridad: esta en el corpus de compat/compat.sh.
+//
+// POR QUE EXISTE. La VM-C copiaba los datos a un buffer de pila y RECORTABA `count` en
+// silencio: a 64 bytes en I2C y a 256 en SPI y UART. miVM procesaba `count` entero, asi
+// que con mas bytes el stdout de las dos VMs era distinto, y el valor devuelto tambien.
+// Ninguna de las dos comparaba `count` con el array: con uno mayor se leia (o se
+// escribia) fuera de el. Con `count` negativo la VM-C se salia de su buffer de pila, y
+// con el array null mandaba basura (o la escribia al principio de su memoria) donde
+// miVM lanzaba. Nada de eso estaba en el corpus.
+//
+// LO QUE SE DECIDIO (Eduardo, 23-sep):
+//   - array null, count < 0 o count > longitud del array: RuntimeError atrapable, con
+//     el mismo texto en las dos VMs (en transfer se mira rx y luego tx);
+//   - SPI y UART no tienen tope: las dos VMs los procesan en TRAMOS de 256 bytes, una
+//     llamada al driver por tramo (en el cable no se nota: el CS lo lleva el programa y
+//     la UART es un flujo); en el PC se ve una linea de simulacion por tramo;
+//   - Uart.read: el plazo cuenta por tramo, y un tramo corto termina la lectura;
+//   - I2C no se parte (una llamada es una transaccion START...STOP): tope de 256 bytes
+//     por transaccion, con error si se pasa;
+//   - count 0 sigue llamando al driver una vez (en I2C es el sondeo de una direccion).
+module BusCount
+  import Core
+  import I2c
+  import Spi
+  import Uart
+
+  // Un array de n bytes con un patron reconocible: i mod 256.
+  function patron(n: integer): integer[]
+    var a: integer[] := newIntArray(n)
+    var i: integer := 0
+    while i < n do
+      a[i] := i mod 256
+      i := i + 1
+    endwh
+    return a
+  end patron
+
+  function llenar(a: integer[], v: integer)
+    var i: integer := 0
+    while i < len(a) do
+      a[i] := v
+      i := i + 1
+    endwh
+  end llenar
+
+  function cuantos(a: integer[], v: integer): integer
+    var n: integer := 0
+    var i: integer := 0
+    while i < len(a) do
+      if a[i] == v then
+        n := n + 1
+      endif
+      i := i + 1
+    endwh
+    return n
+  end cuantos
+
+  // ---- un envoltorio por verbo: el resultado, o el texto del error ----
+  function spiWrite(et: string, b: Spi.Bus, a: integer[], n: integer)
+    try
+      print "spi.write " + et + " -> " + b.write(a, n)
+    catch e: RuntimeError
+      print "spi.write " + et + " -> ERROR " + e.msg
+    endtry
+  end spiWrite
+
+  function spiRead(et: string, b: Spi.Bus, a: integer[], n: integer)
+    try
+      print "spi.read " + et + " -> " + b.read(a, n)
+    catch e: RuntimeError
+      print "spi.read " + et + " -> ERROR " + e.msg
+    endtry
+  end spiRead
+
+  function spiTransfer(et: string, b: Spi.Bus, tx: integer[], rx: integer[], n: integer)
+    try
+      print "spi.transfer " + et + " -> " + b.transfer(tx, rx, n)
+    catch e: RuntimeError
+      print "spi.transfer " + et + " -> ERROR " + e.msg
+    endtry
+  end spiTransfer
+
+  function uartWrite(et: string, p: Uart.Port, a: integer[], n: integer)
+    try
+      print "uart.write " + et + " -> " + p.write(a, n)
+    catch e: RuntimeError
+      print "uart.write " + et + " -> ERROR " + e.msg
+    endtry
+  end uartWrite
+
+  function uartRead(et: string, p: Uart.Port, a: integer[], n: integer, t: integer)
+    try
+      print "uart.read " + et + " -> " + p.read(a, n, t)
+    catch e: RuntimeError
+      print "uart.read " + et + " -> ERROR " + e.msg
+    endtry
+  end uartRead
+
+  function i2cWrite(et: string, b: I2c.Bus, addr: integer, a: integer[], n: integer)
+    try
+      print "i2c.write " + et + " -> " + b.write(addr, a, n)
+    catch e: RuntimeError
+      print "i2c.write " + et + " -> ERROR " + e.msg
+    endtry
+  end i2cWrite
+
+  function i2cRead(et: string, b: I2c.Bus, addr: integer, a: integer[], n: integer)
+    try
+      print "i2c.read " + et + " -> " + b.read(addr, a, n)
+    catch e: RuntimeError
+      print "i2c.read " + et + " -> ERROR " + e.msg
+    endtry
+  end i2cRead
+
+  function Main()
+    var spi: Spi.Bus := Spi.Bus(0, 18, 19, 16, 1000000, 0)
+    var uart: Uart.Port := Uart.Port(0, 0, 1, 115200, 8, 1, 0)
+    var i2c: I2c.Bus := I2c.Bus(0, 20, 21, 100000)
+    var big: integer[] := patron(600)
+    var rx: integer[] := newIntArray(600)
+    var corto: integer[] := [1, 2, 3, 4]
+    var nada: integer[] := null
+
+    print "== SPI: sin tope, en tramos de 256 =="
+    spiWrite("0", spi, big, 0)
+    spiWrite("256", spi, big, 256)
+    spiWrite("300", spi, big, 300)
+    spiWrite("513", spi, big, 513)
+    llenar(rx, 7)
+    spiRead("300", spi, rx, 300)
+    print "  rx a cero: " + cuantos(rx, 0) + "  rx[299]=" + rx[299] + "  rx[300]=" + rx[300]
+    llenar(rx, 7)
+    spiTransfer("300", spi, big, rx, 300)
+    print "  rx a cero: " + cuantos(rx, 0) + "  rx[300]=" + rx[300]
+
+    print "== UART: sin tope, en tramos de 256; el plazo, por tramo =="
+    uartWrite("300", uart, big, 300)
+    llenar(rx, 7)
+    uartRead("300", uart, rx, 300, 50)
+    print "  rx a cero: " + cuantos(rx, 0) + "  rx[300]=" + rx[300]
+    uartRead("0", uart, rx, 0, 0)
+
+    print "== I2C: una transaccion, tope de 256 =="
+    i2cWrite("0 (sondeo)", i2c, 0x50, big, 0)
+    i2cWrite("256", i2c, 0x50, big, 256)
+    i2cWrite("257", i2c, 0x50, big, 257)
+    llenar(rx, 7)
+    i2cRead("100", i2c, 0x50, rx, 100)
+    print "  rx a cero: " + cuantos(rx, 0) + "  rx[99]=" + rx[99] + "  rx[100]=" + rx[100]
+    i2cRead("257", i2c, 0x50, rx, 257)
+    i2cWrite("addr 0x3C", i2c, 0x3C, big, 2)
+    i2cRead("addr 0x08", i2c, 0x08, rx, 1)
+
+    print "== count mayor que el array =="
+    spiWrite("5 de 4", spi, corto, 5)
+    spiRead("5 de 4", spi, corto, 5)
+    spiTransfer("rx corto", spi, big, corto, 5)
+    spiTransfer("tx corto", spi, corto, big, 5)
+    uartWrite("5 de 4", uart, corto, 5)
+    uartRead("5 de 4", uart, corto, 5, 10)
+    i2cWrite("5 de 4", i2c, 0x50, corto, 5)
+    i2cRead("5 de 4", i2c, 0x50, corto, 5)
+    i2cWrite("300 de 4", i2c, 0x50, corto, 300)
+    print "  corto intacto: " + corto[0] + " " + corto[1] + " " + corto[2] + " " + corto[3]
+
+    print "== count negativo =="
+    spiWrite("-1", spi, big, -1)
+    spiRead("-1", spi, rx, -1)
+    spiTransfer("-1", spi, big, rx, -1)
+    uartWrite("-1", uart, big, -1)
+    uartRead("-1", uart, rx, -1, 10)
+    i2cWrite("-1", i2c, 0x50, big, -1)
+    i2cRead("-1", i2c, 0x50, rx, -1)
+
+    print "== array null =="
+    spiWrite("null", spi, nada, 1)
+    spiRead("null", spi, nada, 1)
+    spiTransfer("tx null", spi, nada, rx, 1)
+    spiTransfer("rx null", spi, big, nada, 1)
+    spiTransfer("los dos null", spi, nada, nada, 1)
+    spiWrite("null y -1", spi, nada, -1)
+    uartWrite("null", uart, nada, 1)
+    uartRead("null", uart, nada, 1, 10)
+    i2cWrite("null", i2c, 0x50, nada, 1)
+    i2cRead("null", i2c, 0x50, nada, 1)
+
+    print "fin"
+  end Main
+end BusCount

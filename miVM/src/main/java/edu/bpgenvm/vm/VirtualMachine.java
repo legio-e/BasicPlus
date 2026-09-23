@@ -1175,6 +1175,48 @@ public class VirtualMachine {
         throwBpRuntimeError(tc, nombre + " " + id + " no existe en host (válidos: 0, 1)");
     }
 
+    // ── #534 (V7, 23-sep) — el `count` de los builtins de bus, IGUAL en las dos VMs. Espejo de
+    // bus_array / bus_por_tramos en builtins.c: los MISMOS textos y los MISMOS tramos.
+    //  - array null, count < 0 o count > longitud → RuntimeError. Antes las dos leían y escribían
+    //    FUERA del array, y la VM-C con count < 0 se salía de su buffer de pila.
+    //  - SPI y UART sin tope, en TRAMOS de BUS_TRAMO bytes: la VM-C hace una llamada al driver por
+    //    tramo y aquí sale una línea de simulación por tramo (la VM-C recortaba a 256 en silencio).
+    //  - I2C es UNA transacción (START…STOP) y no se parte: tope de BUS_TRAMO bytes por llamada, con
+    //    error (la VM-C recortaba a 64 en silencio).
+    /** Tamaño del tramo de SPI/UART y tope de I2C. CONTRATO DE PARIDAD con BUS_TRAMO de builtins.c. */
+    static final int BUS_TRAMO = 256;
+
+    /** Valida el array de un builtin de bus y devuelve su dirección (la de la longitud; los datos,
+     *  a +4). {@code cual}: "el array", "el array tx" o "el array rx". {@code tope}: 0 = sin tope
+     *  (SPI/UART), BUS_TRAMO en I2C. El orden de las comprobaciones es parte del contrato. */
+    private int busArray(ThreadContext tc, long refH, int count, String op, String cual, int tope) {
+        if (refH == 0) throwBpRuntimeError(tc, op + ": " + cual + " es null");
+        if (count < 0) throwBpRuntimeError(tc, op + ": count negativo (" + count + ")");
+        int addr = refDeref(refH);
+        int len = readInt32(addr);
+        if (count > len)
+            throwBpRuntimeError(tc, op + ": count (" + count + ") mayor que " + cual + " (" + len + ")");
+        if (tope > 0 && count > tope)
+            throwBpRuntimeError(tc, op + ": count (" + count + ") supera el máximo de " + tope
+                    + " bytes por transacción");
+        return addr;
+    }
+
+    /** "00 01 …" de {@code n} elementos del array desde {@code desde}: el byte bajo de cada slot. */
+    private String busHex(int addr, int desde, int n) {
+        StringBuilder sb = new StringBuilder(n * 3);
+        for (int i = 0; i < n; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(String.format("%02X", readI32(memory, addr + 4 + (desde + i) * 4) & 0xFF));
+        }
+        return sb.toString();
+    }
+
+    /** Pone a 0 {@code n} elementos del array desde {@code desde} (la lectura simulada). */
+    private void busCeros(int addr, int desde, int n) {
+        for (int i = 0; i < n; i++) writeI32(memory, addr + 4 + (desde + i) * 4, 0);
+    }
+
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
             throwBpRuntimeError(tc, "path demasiado largo");
@@ -5690,37 +5732,27 @@ public class VirtualMachine {
                  * la pila. Mismo arreglo que `case MOVE` (#6 del censo V4), que
                  * llevaba anos hecho aqui al lado. */
                 long dataRefH = popTcRef(tc);
-                if (dataRefH == 0) throwBpRuntimeError(tc, "i2c.write: el array es null");
-                int dataRef = refDeref(dataRefH);
                 int addr = popTc(tc);
                 int bus  = popTc(tc);
-                StringBuilder sb = new StringBuilder();
-                sb.append("[i2c] write bus=").append(bus)
-                  .append(" addr=0x").append(Integer.toHexString(addr))
-                  .append(" bytes=[");
-                for (int i = 0; i < count; i++) {
-                    int b1 = readI32(memory, dataRef + 4 + i * 4) & 0xFF;
-                    if (i > 0) sb.append(' ');
-                    sb.append(String.format("%02X", b1));
-                }
-                sb.append("]");
-                System.out.println(sb);
+                // #534 — una transacción: no se parte, y tiene tope (BUS_TRAMO).
+                int dataRef = busArray(tc, dataRefH, count, "i2c.write", "el array", BUS_TRAMO);
+                // #534 — la dirección como la VM-C (0x%02X, como los bytes): toHexString daba
+                // «0x3c» y «0x8» donde la VM-C escribe «0x3C» y «0x08».
+                System.out.println("[i2c] write bus=" + bus + " addr=0x" + String.format("%02X", addr)
+                        + " bytes=[" + busHex(dataRef, 0, count) + "]");
                 pushTc(tc, count);  // devuelve bytes "escritos" en sim
                 break;
             }
             case I2C_READ: {
                 int count = popTc(tc);
                 long dataRefH = popTcRef(tc);          /* #478 */
-                if (dataRefH == 0) throwBpRuntimeError(tc, "i2c.read: el array es null");
-                int dataRef = refDeref(dataRefH);
                 int addr = popTc(tc);
                 int bus  = popTc(tc);
+                int dataRef = busArray(tc, dataRefH, count, "i2c.read", "el array", BUS_TRAMO);   // #534
                 // En PC simulamos: llenamos con 0x00.
-                for (int i = 0; i < count; i++) {
-                    writeI32(memory, dataRef + 4 + i * 4, 0);
-                }
+                busCeros(dataRef, 0, count);
                 System.out.println("[i2c] read bus=" + bus
-                        + " addr=0x" + Integer.toHexString(addr)
+                        + " addr=0x" + String.format("%02X", addr)
                         + " count=" + count + " (sim → ceros)");
                 pushTc(tc, count);
                 break;
@@ -5756,35 +5788,35 @@ public class VirtualMachine {
                 pushTc(tc, 0);
                 break;
             }
+            // #534 — SPI sin tope, en TRAMOS de BUS_TRAMO: una línea por tramo, como las llamadas
+            // al driver de la VM-C. El do-while conserva count 0 = una llamada vacía.
             case SPI_WRITE: {
                 int count = popTc(tc);
                 long dataRefH = popTcRef(tc);          /* #478 */
-                if (dataRefH == 0) throwBpRuntimeError(tc, "spi.write: el array es null");
-                int dataRef = refDeref(dataRefH);
                 int bus  = popTc(tc);
-                StringBuilder sb = new StringBuilder();
-                sb.append("[spi] write bus=").append(bus).append(" bytes=[");
-                for (int i = 0; i < count; i++) {
-                    int b1 = readI32(memory, dataRef + 4 + i * 4) & 0xFF;
-                    if (i > 0) sb.append(' ');
-                    sb.append(String.format("%02X", b1));
-                }
-                sb.append("]");
-                System.out.println(sb);
+                int dataRef = busArray(tc, dataRefH, count, "spi.write", "el array", 0);   // #534
+                int hecho = 0;
+                do {
+                    int n = Math.min(count - hecho, BUS_TRAMO);
+                    System.out.println("[spi] write bus=" + bus + " bytes=[" + busHex(dataRef, hecho, n) + "]");
+                    hecho += n;
+                } while (hecho < count);
                 pushTc(tc, count);
                 break;
             }
             case SPI_READ: {
                 int count = popTc(tc);
                 long dataRefH = popTcRef(tc);          /* #478 */
-                if (dataRefH == 0) throwBpRuntimeError(tc, "spi.read: el array es null");
-                int dataRef = refDeref(dataRefH);
                 int bus  = popTc(tc);
-                for (int i = 0; i < count; i++) {
-                    writeI32(memory, dataRef + 4 + i * 4, 0);
-                }
-                System.out.println("[spi] read bus=" + bus
-                        + " count=" + count + " (sim → ceros)");
+                int dataRef = busArray(tc, dataRefH, count, "spi.read", "el array", 0);   // #534
+                int hecho = 0;
+                do {
+                    int n = Math.min(count - hecho, BUS_TRAMO);
+                    busCeros(dataRef, hecho, n);
+                    System.out.println("[spi] read bus=" + bus
+                            + " count=" + n + " (sim → ceros)");
+                    hecho += n;
+                } while (hecho < count);
                 pushTc(tc, count);
                 break;
             }
@@ -5792,21 +5824,19 @@ public class VirtualMachine {
                 int count = popTc(tc);
                 long rxRefH = popTcRef(tc);            /* #478 — DOS arrays */
                 long txRefH = popTcRef(tc);
-                if (rxRefH == 0) throwBpRuntimeError(tc, "spi.transfer: el array rx es null");
-                if (txRefH == 0) throwBpRuntimeError(tc, "spi.transfer: el array tx es null");
-                int rxRef = refDeref(rxRefH);
-                int txRef = refDeref(txRefH);
                 int bus  = popTc(tc);
-                StringBuilder sb = new StringBuilder();
-                sb.append("[spi] transfer bus=").append(bus).append(" tx=[");
-                for (int i = 0; i < count; i++) {
-                    int b1 = readI32(memory, txRef + 4 + i * 4) & 0xFF;
-                    if (i > 0) sb.append(' ');
-                    sb.append(String.format("%02X", b1));
-                    writeI32(memory, rxRef + 4 + i * 4, 0);
-                }
-                sb.append("] (rx sim → ceros)");
-                System.out.println(sb);
+                // #534 — rx y luego tx (el orden de los null de #478), cada uno entero.
+                int rxRef = busArray(tc, rxRefH, count, "spi.transfer", "el array rx", 0);
+                int txRef = busArray(tc, txRefH, count, "spi.transfer", "el array tx", 0);
+                int hecho = 0;
+                do {
+                    int n = Math.min(count - hecho, BUS_TRAMO);
+                    // el tx del tramo se lee ANTES de poner rx a cero: pueden ser el mismo array
+                    String tx = busHex(txRef, hecho, n);
+                    busCeros(rxRef, hecho, n);
+                    System.out.println("[spi] transfer bus=" + bus + " tx=[" + tx + "] (rx sim → ceros)");
+                    hecho += n;
+                } while (hecho < count);
                 pushTc(tc, count);
                 break;
             }
@@ -5829,23 +5859,26 @@ public class VirtualMachine {
                 pushTc(tc, 0);
                 break;
             }
+            // #534 — UART sin tope, en TRAMOS de BUS_TRAMO, como SPI. En read el plazo cuenta POR
+            // TRAMO (decisión de Eduardo, 23-sep): así la línea de cada tramo lleva el timeout del
+            // programa, y no «lo que queda», que dependería del reloj y rompería la paridad.
             case UART_WRITE: {
                 int count = popTc(tc);
                 long dataRefH = popTcRef(tc);          /* #478 */
-                if (dataRefH == 0) throwBpRuntimeError(tc, "uart.write: el array es null");
-                int dataRef = refDeref(dataRefH);
                 int bus = popTc(tc);
-                StringBuilder sb = new StringBuilder();
-                StringBuilder ascii = new StringBuilder();
-                sb.append("[uart] write bus=").append(bus).append(" bytes=[");
-                for (int i = 0; i < count; i++) {
-                    int b1 = readI32(memory, dataRef + 4 + i * 4) & 0xFF;
-                    if (i > 0) sb.append(' ');
-                    sb.append(String.format("%02X", b1));
-                    ascii.append((b1 >= 32 && b1 < 127) ? (char) b1 : '.');
-                }
-                sb.append("] (\"").append(ascii).append("\")");
-                System.out.println(sb);
+                int dataRef = busArray(tc, dataRefH, count, "uart.write", "el array", 0);   // #534
+                int hecho = 0;
+                do {
+                    int n = Math.min(count - hecho, BUS_TRAMO);
+                    StringBuilder ascii = new StringBuilder(n);
+                    for (int i = 0; i < n; i++) {
+                        int b1 = readI32(memory, dataRef + 4 + (hecho + i) * 4) & 0xFF;
+                        ascii.append((b1 >= 32 && b1 < 127) ? (char) b1 : '.');
+                    }
+                    System.out.println("[uart] write bus=" + bus + " bytes=[" + busHex(dataRef, hecho, n)
+                            + "] (\"" + ascii + "\")");
+                    hecho += n;
+                } while (hecho < count);
                 pushTc(tc, count);
                 break;
             }
@@ -5853,15 +5886,18 @@ public class VirtualMachine {
                 int timeout = popTc(tc);
                 int count   = popTc(tc);
                 long dataRefH = popTcRef(tc);          /* #478 */
-                if (dataRefH == 0) throwBpRuntimeError(tc, "uart.read: el array es null");
-                int dataRef = refDeref(dataRefH);
                 int bus     = popTc(tc);
-                for (int i = 0; i < count; i++) {
-                    writeI32(memory, dataRef + 4 + i * 4, 0);
-                }
-                System.out.println("[uart] read bus=" + bus
-                        + " count=" + count + " timeout=" + timeout
-                        + " (sim → ceros)");
+                int dataRef = busArray(tc, dataRefH, count, "uart.read", "el array", 0);   // #534
+                // La simulación siempre llena el tramo entero, así que nunca hay tramo corto.
+                int hecho = 0;
+                do {
+                    int n = Math.min(count - hecho, BUS_TRAMO);
+                    busCeros(dataRef, hecho, n);
+                    System.out.println("[uart] read bus=" + bus
+                            + " count=" + n + " timeout=" + timeout
+                            + " (sim → ceros)");
+                    hecho += n;
+                } while (hecho < count);
                 pushTc(tc, count);
                 break;
             }
