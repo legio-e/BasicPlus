@@ -2796,3 +2796,49 @@ pack su pin DC; ahora `release()` sólo suelta lo del programa.
   pudo abrir» (antes, un -1 mudo); si lo abre ANTES que la GUI, el `ESP_ERROR_CHECK` de la imagen reinicia
   la placa, como antes. Se arregla cuando esos drivers salgan de la imagen o se registren (`H6.b`, `G5`).
 - En el STM32 el I2C sigue fijo a 100 kHz (deuda anterior): un `i2cN=…,khz:400` hoy va a 100.
+
+### 12. El táctil de la C5 que se quedaba MUDO (23-sep, tarde): lo que hace su fabricante y no hacíamos
+
+**El síntoma** (Eduardo, al volver a la C5 tras horas con `C5Touch` en marcha): la pantalla bien, el botón no
+reacciona —y el I2C sin un solo fallo—; al recargar el programa, sí. Leído a mano (`samples/C5TouchRaw.bp`,
+los mismos bytes que el driver), el CST3530 **contesta por I2C pero se queda con su última trama** y no
+genera ninguna nueva aunque se le toque. No es el ritmo: cuatro fases de 8 s, a 30, 10, 30 y 100 ms,
+respondieron todas.
+
+**Lo que no hacíamos** —ni el ejemplo de Waveshare—, según el driver de Hynitron (`cst66xx`) y el mapa de
+registros del componente de Espressif:
+- **el MODO NORMAL al despertarlo**: `D0 00 04 00` dos veces («desactivar el bajo consumo del I2C»: la primera
+  puede irse en despertarlo), y luego `D0 00 00 00` (modo normal, no de fábrica), `D0 00 0C 00` (informe
+  normal, no de gestos) y `D0 00 01 00`;
+- **un LATIDO**, su comprobación ESD: 4 bytes de `D0 04 04 00`, un contador que avanza mientras el chip
+  escanea. Medido en la C5 (`samples/C5TouchCst.bp`): unos 33 000 por segundo sin tocarla; y tras el modo
+  normal la trama vieja se borra y el chip responde a todos los toques.
+
+**El arreglo, en `DriverSpi`** (y en ningún otro sitio: es del chip):
+1. **al arrancar**, tras soltar los resets, el modo normal —con 10 ms entre los dos primeros y no el 1 del
+   original: una espera menor que un tick no espera—; si no lo acepta, se dice y se sigue;
+2. **el VIGILANTE**: cada 2 s lee el latido; si no avanza (o no contesta) dos veces seguidas, el chip se ha
+   colgado → reset (EXIO0 abajo 10 ms y 50 para arrancar), modo normal y una línea en el log, y esa vuelta no
+   se lee la trama. La primera lectura tras arrancar o tras un reinicio es sólo la **base**: «vuelve a
+   latir» es que AVANCE entre dos. Con tres reinicios SEGUIDOS sin volver deja de insistir, y lo dice: un
+   táctil que no está no llena el log;
+3. **la traza** de cada 5 min lleva el latido y los reinicios (la cuenta de toda la vida: sobrevive aunque el
+   log, que es un anillo de 4 KB, pierda las líneas de los reinicios).
+
+**Se prueba** contra la BIOS que graba los cables (`make test-driverspi`): el latido es un contador que el
+test para y arranca, y el reloj lo mueve el test —hasta hoy `now_ms` era siempre 0—. Con **sabotaje de
+control**: devolver la base a «ha vuelto» o quitar el modo normal del arranque hace fallar sus pruebas. Y un
+fallo mío que cazó escribir la prueba: la primera versión contaba la primera lectura tras un reinicio como
+«vuelve a latir», y un chip que contesta con el latido parado se habría reiniciado cada 6 s, para siempre.
+
+**En la placa (la C5)**: el modo normal, aceptado; el vigilante, leyendo cada 2 s sin un reinicio; y las
+cinco pulsaciones de Eduardo en la traza, cada una con su «suelto».
+
+**Lo que queda:**
+- **la prueba LARGA** —horas sin tocarla, con la traza—, en marcha desde el 23-sep a las 16:20. Si el
+  cuelgue era el bajo consumo del I2C, no vuelve; si vuelve, el vigilante lo dice y lo arregla; y si el botón
+  no responde, el latido de cada 5 min dice si el chip latía.
+- ⚠️ **El vigilante vale para el MODO NORMAL.** Cuando llegue el bajo consumo (`#490`), un táctil dormido no
+  late y lo daría por colgado; el fabricante apaga su comprobación al salir del modo normal. Anotado en
+  `#490`, con la otra mitad de la pregunta de Eduardo (*«¿se despierta tocando la pantalla?»*): depende del
+  modo en que se le deje dormir, y el `INT` del táctil va al GPIO5 de la C5, que hoy el driver no usa.

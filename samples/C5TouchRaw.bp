@@ -1,0 +1,76 @@
+// C5TouchRaw.bp — el táctil CST3530 de la C5 leído A MANO, sin LVGL (diagnóstico, 23-sep).
+//
+// El botón de C5Touch no reacciona tras horas sin tocarlo, y el I2C contesta. Leído a mano
+// —los MISMOS bytes que el driver: D0 07 00 00, 9 bytes, D0 00 02 AB—, el chip se queda con
+// su última trama y no genera ninguna nueva aunque se le toque; con el driver dentro de LVGL,
+// sí. Lo que cambia es el RITMO. Cuatro fases de 8 s, tocando la pantalla en todas:
+//   A: cada 30 ms   B: cada 10 ms   C: otra vez cada 30 ms   D: cada 100 ms
+// (la 1.ª pasada, con 100 / 10 / 30-SIN-fin: a 10 ms el chip SÍ da tramas nuevas, y sin el
+// «fin de lectura» no avanza; ésta separa «es la cadencia» de «es el arranque»)
+// Imprime cada trama distinta de la anterior. Lee por el I2C 0 que COMPARTE con el driver
+// (G4.a1: se engancha con -1). El Gui.Screen() del principio es para que el driver arranque
+// y dé los resets; después NO se bombea LVGL, así que nadie más lee el chip a la vez.
+module C5TouchRaw
+  import Gui
+  import I2c
+  import Str
+  import Machine
+
+  function dos(v: integer): string
+    var s: string := Str.toHex(v)
+    if len(s) < 2 then
+      s := "0" + s
+    endif
+    return s
+  end dos
+
+  function fase(bus: I2c.Bus, nombre: string, espera: integer, conFin: integer): integer
+    var reg: integer[] := [0xD0, 0x07, 0x00, 0x00]
+    var fin: integer[] := [0xD0, 0x00, 0x02, 0xAB]
+    var b: integer[] := newIntArray(9)
+    var antes: string := ""
+    var cambios: integer := 0
+    var lecturas: integer := 0
+    var modo: string := "SIN fin"
+    if conFin == 1 then
+      modo := "con fin"
+    endif
+    print "fase", nombre, ": cada", espera, "ms", modo, "- toca la pantalla"
+    var t0: integer := Machine.uptimeMs()
+    while Machine.uptimeMs() - t0 < 8000 do
+      var w: integer := bus.write(0x58, reg, 4)
+      var r: integer := bus.read(0x58, b, 9)
+      if conFin == 1 then
+        bus.write(0x58, fin, 4)
+      endif
+      lecturas := lecturas + 1
+      var s: string := "w=" + w + " r=" + r + " :"
+      var i: integer := 0
+      while i < 9 do
+        s := s + " " + dos(b[i])
+        i := i + 1
+      endwh
+      if s != antes then
+        print "  ", Machine.uptimeMs() - t0, "ms ", s
+        antes := s
+        cambios := cambios + 1
+      endif
+      sleep(espera)
+    endwh
+    print "  fase", nombre, ":", lecturas, "lecturas,", cambios, "tramas distintas"
+    return cambios
+  end fase
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "toca la pantalla (32 s)")
+    eti.align(Gui.Align.CENTER, 0, 0)
+    Gui.__guiRunOnce()
+    var bus: I2c.Bus := I2c.Bus(0, -1, -1, 0)
+    fase(bus, "A", 30, 1)
+    fase(bus, "B", 10, 1)
+    fase(bus, "C", 30, 1)
+    fase(bus, "D", 100, 1)
+    print "fin"
+  end Main
+end C5TouchRaw

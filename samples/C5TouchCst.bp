@@ -1,0 +1,95 @@
+// C5TouchCst.bp — el CST3530 de la C5 con la secuencia del FABRICANTE (diagnóstico, 23-sep).
+//
+// El táctil se queda a veces con su última trama: contesta por I2C pero no genera tramas
+// nuevas (visto a mano con C5TouchRaw, y en C5Touch tras horas sin tocarlo). El driver
+// Hynitron original (cst66xx_set_workmode, NOMAL_MODE) hace al despertar el chip algo que
+// nosotros nunca hacemos:
+//     D0 00 04 00  dos veces, 1 ms entre medias   «desactiva el bajo consumo del I2C»
+//     D0 00 00 00 · D0 00 0C 00 · D0 00 01 00     el modo NORMAL
+// y tiene una comprobación ESD: leer 4 bytes de D0 04 04 00. Esto:
+//   1. lee el valor ESD antes y después del modo normal, y lo vuelve a leer cada segundo
+//      (¿es un latido que avanza mientras el chip trabaja?);
+//   2. sondea el táctil cada 30 ms (el ritmo que antes se quedaba congelado) 30 s, e imprime
+//      cada trama distinta. Hay que tocar la pantalla.
+module C5TouchCst
+  import Gui
+  import I2c
+  import Str
+  import Machine
+
+  function dos(v: integer): string
+    var s: string := Str.toHex(v)
+    if len(s) < 2 then
+      s := "0" + s
+    endif
+    return s
+  end dos
+
+  function esd(bus: I2c.Bus): string
+    var cmd: integer[] := [0xD0, 0x04, 0x04, 0x00]
+    var v: integer[] := newIntArray(4)
+    var w: integer := bus.write(0x58, cmd, 4)
+    var r: integer := bus.read(0x58, v, 4)
+    return "esd w=" + w + " r=" + r + " : " + dos(v[3]) + dos(v[2]) + dos(v[1]) + dos(v[0])
+  end esd
+
+  function orden(bus: I2c.Bus, a: integer, b: integer, c: integer, d: integer): integer
+    var cmd: integer[] := [a, b, c, d]
+    return bus.write(0x58, cmd, 4)
+  end orden
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "toca la pantalla (30 s)")
+    eti.align(Gui.Align.CENTER, 0, 0)
+    Gui.__guiRunOnce()
+    var bus: I2c.Bus := I2c.Bus(0, -1, -1, 0)
+
+    print "antes del modo normal:", esd(bus)
+    var r1: integer := orden(bus, 0xD0, 0x00, 0x04, 0x00)
+    sleep(10)
+    var r2: integer := orden(bus, 0xD0, 0x00, 0x04, 0x00)
+    var n1: integer := orden(bus, 0xD0, 0x00, 0x00, 0x00)
+    var n2: integer := orden(bus, 0xD0, 0x00, 0x0C, 0x00)
+    var n3: integer := orden(bus, 0xD0, 0x00, 0x01, 0x00)
+    print "bajo consumo del I2C fuera:", r1, r2, "- modo normal:", n1, n2, n3
+    sleep(50)
+    print "despues del modo normal:", esd(bus)
+
+    var reg: integer[] := [0xD0, 0x07, 0x00, 0x00]
+    var fin: integer[] := [0xD0, 0x00, 0x02, 0xAB]
+    var b: integer[] := newIntArray(9)
+    var antes: string := ""
+    var antesEsd: string := ""
+    var cambios: integer := 0
+    var t0: integer := Machine.uptimeMs()
+    var tEsd: integer := t0
+    print "sondeo cada 30 ms, 30 s: toca la pantalla"
+    while Machine.uptimeMs() - t0 < 30000 do
+      var w: integer := bus.write(0x58, reg, 4)
+      var r: integer := bus.read(0x58, b, 9)
+      bus.write(0x58, fin, 4)
+      var s: string := "w=" + w + " r=" + r + " :"
+      var i: integer := 0
+      while i < 9 do
+        s := s + " " + dos(b[i])
+        i := i + 1
+      endwh
+      if s != antes then
+        print "  ", Machine.uptimeMs() - t0, "ms ", s
+        antes := s
+        cambios := cambios + 1
+      endif
+      if Machine.uptimeMs() - tEsd >= 1000 then
+        var e: string := esd(bus)
+        if e != antesEsd then
+          print "  ", Machine.uptimeMs() - t0, "ms ", e
+          antesEsd := e
+        endif
+        tEsd := Machine.uptimeMs()
+      endif
+      sleep(30)
+    endwh
+    print "fin:", cambios, "tramas distintas"
+  end Main
+end C5TouchCst

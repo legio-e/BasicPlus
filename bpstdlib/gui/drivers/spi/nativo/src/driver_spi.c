@@ -657,6 +657,7 @@ static int orienta(int deg, uint8_t* madctl) {
 }
 
 static int s_touch_ok = 0;
+static int cst_modo_normal(void);
 
 static int sp_init(void) {
     uint8_t m = 0;
@@ -712,6 +713,11 @@ static int sp_init(void) {
         g_bios->sleep_ms(120);
     }
     if (L.rst.tipo == PIN_NO) { lcd_cmd(0x01); g_bios->sleep_ms(120); }   /* SWRESET */
+    /* 3b. El táctil en MODO NORMAL (23-sep): lo que hace al despertarlo el driver Hynitron
+     *     original (cst66xx_set_workmode) y que no hacíamos —ni el ejemplo de Waveshare—.
+     *     Sin esto el chip se quedaba A VECES con su última trama: contestaba por I2C pero
+     *     no generaba tramas nuevas (C5TouchRaw, y C5Touch tras horas sin tocarla). */
+    if (T.hay && cst_modo_normal() != 0) di("driver SPI: el tactil no acepta el modo normal (se sigue)");
     di("driver SPI — resets dados");
 
     /* 4. El controlador: su .seq. */
@@ -766,30 +772,149 @@ static void cst_fin(void) {
     a[0] = 0xD0; a[1] = 0x00; a[2] = 0x02; a[3] = 0xAB;   /* END READ */
     g_bios->i2c_write(T.i2c, T.addr, a, 4);
 }
+static int cst_orden(uint32_t cmd) {
+    uint8_t a[4];
+    a[0] = (uint8_t) (cmd >> 24); a[1] = (uint8_t) (cmd >> 16); a[2] = (uint8_t) (cmd >> 8); a[3] = (uint8_t) cmd;
+    return g_bios->i2c_write(T.i2c, T.addr, a, 4) == 4 ? 0 : -1;
+}
+/* El MODO NORMAL, como el driver Hynitron (cst66xx_set_workmode, NOMAL_MODE): dos veces
+ * D0 00 04 00 —«desactivar el bajo consumo del I2C»: la primera puede irse en despertarlo—
+ * y luego D0 00 00 00 · D0 00 0C 00 · D0 00 01 00. Entre las dos primeras, 10 ms y no el
+ * 1 del original: una espera menor que un tick NO espera. Medido en la C5 (C5TouchCst):
+ * tras esto la trama vieja se borra y el chip responde a todos los toques. */
+static int cst_modo_normal(void) {
+    int r;
+    (void) cst_orden(0xD0000400u);
+    g_bios->sleep_ms(10);
+    r  = cst_orden(0xD0000400u);
+    r |= cst_orden(0xD0000000u);
+    r |= cst_orden(0xD0000C00u);
+    r |= cst_orden(0xD0000100u);
+    return r;
+}
+/* El LATIDO ESD (cst66xx_check_esd): 4 bytes de D0 04 04 00, un contador que avanza sin
+ * parar mientras el chip escanea —unos 33 000 por segundo, medido en la C5—. */
+static int cst_latido(uint32_t* v) {
+    uint8_t a[4], b[4];
+    a[0] = 0xD0; a[1] = 0x04; a[2] = 0x04; a[3] = 0x00;
+    if (g_bios->i2c_write(T.i2c, T.addr, a, 4) != 4) return -1;
+    if (g_bios->i2c_read(T.i2c, T.addr, b, 4) != 4) return -1;
+    *v = ((uint32_t) b[3] << 24) | ((uint32_t) b[2] << 16) | ((uint32_t) b[1] << 8) | b[0];
+    return 0;
+}
+
+/* ── EL VIGILANTE (23-sep): cada 2 s se lee el latido; si no avanza (o no contesta) dos
+ * veces seguidas, el chip se ha colgado —el caso para el que el fabricante tiene su
+ * comprobación ESD—: reset, modo normal, y DICHO en el log. La primera lectura tras
+ * arrancar o tras un reinicio es sólo la BASE: «vuelve a latir» es que AVANCE entre dos
+ * lecturas, no que conteste una vez (si no, un chip que contesta con el latido parado se
+ * reiniciaría cada 6 s para siempre). Con tres reinicios seguidos sin que vuelva a latir,
+ * se deja de insistir (también dicho): un táctil que no está no debe llenar el log. La
+ * primera llamada sólo toma la hora: no mete tráfico en la primera lectura del táctil.
+ * ⚠️ Vale para el MODO NORMAL: un chip dormido no late (bajo consumo, #490) — el
+ * fabricante apaga su comprobación al salir del modo normal, y éste tendrá que saberlo.
+ * Devuelve 1 si acaba de reiniciar el chip: esa vuelta no se lee (está arrancando). */
+#define VIGIA_MS 2000u
+static uint32_t s_v_desde = 0, s_v_ultimo = 0, s_v_reinicios = 0;
+static int      s_v_arrancado = 0, s_v_hay = 0, s_v_quieto = 0, s_v_seguidos = 0;
+static int vigia(void) {
+    uint32_t ahora = g_bios->now_ms(), v = 0;
+    int lee;
+    txt_t t;
+    if (!s_v_arrancado) { s_v_arrancado = 1; s_v_desde = ahora; return 0; }
+    if ((uint32_t) (ahora - s_v_desde) < VIGIA_MS || s_v_seguidos >= 3) return 0;
+    s_v_desde = ahora;
+    lee = cst_latido(&v);
+    if (lee == 0 && !s_v_hay)         { s_v_ultimo = v; s_v_hay = 1; return 0; }        /* la base */
+    if (lee == 0 && v != s_v_ultimo)  { s_v_ultimo = v; s_v_quieto = 0; s_v_seguidos = 0; return 0; }
+    if (++s_v_quieto < 2) return 0;
+    s_v_quieto = 0; s_v_hay = 0; s_v_reinicios++; s_v_seguidos++;
+    if (T.rst.tipo != PIN_NO) { pin_pon(T.rst, 0); g_bios->sleep_ms(10); pin_pon(T.rst, 1); g_bios->sleep_ms(50); }
+    (void) cst_modo_normal();
+    t_ini(&t, s_log, sizeof s_log);
+    t_s(&t, "driver SPI: el tactil no late (ESD quieto o mudo): reiniciado, van "); t_d(&t, (long) s_v_reinicios);
+    if (s_v_seguidos >= 3) t_s(&t, " -- y tres seguidos sin volver: dejo de insistir");
+    di(s_log);
+    return 1;
+}
 /* Una lectura que falla es «sin dedo» —el táctil se sondea cada 30 ms y un NACK
  * suelto no es para parar la GUI—, pero NO en silencio: la primera se dice. Sin
  * esto, un táctil mal cableado o en otra dirección es una pantalla que «no
  * responde» sin una palabra (DriverC5 era así). */
 static int s_touch_fallos = 0;
+
+/* ── la TRAZA del táctil (con `traza` en lcd=), 23-sep ────────────────────────
+ * Para cazar el táctil que deja de responder tras HORAS sin tocarlo (volvía al
+ * recargar el programa). Dos cosas, pensadas para el log que sobrevive al reinicio
+ * (4 KB en la C5, ~50 líneas: unas cuatro horas):
+ *   · cada CAMBIO pulsado/suelto, con la trama del chip (y «fuera» si el punto cae
+ *     fuera de la pantalla);
+ *   · un LATIDO cada 5 minutos: lecturas, pulsadas y fallidas desde el anterior, y
+ *     la última trama.
+ * Si el latido sigue y la trama no cambia al pulsar, es el chip; si el latido se
+ * para, nadie lo está leyendo (LVGL no bombea). */
+#define LATIDO_MS  (5u * 60u * 1000u)
+static uint32_t s_t_lect = 0, s_t_puls = 0, s_t_fall = 0, s_t_desde = 0;
+static int      s_t_estado = -1;               /* -1 = aún no se ha leído */
+static uint8_t  s_t_trama[9];
+static void t_trama(txt_t* t, const uint8_t* b) {
+    int i;
+    t_s(t, " |");
+    for (i = 0; i < 9; i++) { t_c(t, ' '); t_x2(t, b[i]); }
+}
+static void traza_latido(void) {
+    uint32_t ahora = g_bios->now_ms();
+    txt_t t;
+    if (s_t_desde == 0) { s_t_desde = ahora; return; }
+    if (ahora - s_t_desde < LATIDO_MS) return;
+    t_ini(&t, s_log, sizeof s_log);
+    t_s(&t, "tactil: latido "); t_d(&t, (long) s_t_lect); t_s(&t, " lect "); t_d(&t, (long) s_t_puls);
+    t_s(&t, " puls "); t_d(&t, (long) s_t_fall); t_s(&t, " fall · esd ");
+    { int k; for (k = 3; k >= 0; k--) t_x2(&t, (unsigned) ((s_v_ultimo >> (8 * k)) & 0xFFu)); }
+    t_s(&t, " · "); t_d(&t, (long) s_v_reinicios); t_s(&t, " reinicios"); t_trama(&t, s_t_trama);
+    di(s_log);
+    s_t_lect = s_t_puls = s_t_fall = 0;
+    s_t_desde = ahora;
+}
+/* estado: 0 suelto · 1 pulsado · 2 pulsado FUERA de la pantalla */
+static void traza_cambio(int estado, int tx, int ty) {
+    txt_t t;
+    if (estado == s_t_estado) return;
+    t_ini(&t, s_log, sizeof s_log);
+    t_s(&t, s_t_estado < 0 ? "tactil: primera lectura, " : "tactil: ");
+    if (estado == 0) t_s(&t, "suelto");
+    else { t_s(&t, estado == 2 ? "pulsado FUERA " : "pulsado "); t_d(&t, tx); t_c(&t, ','); t_d(&t, ty); }
+    t_trama(&t, s_t_trama);
+    di(s_log);
+    s_t_estado = estado;
+}
+
 static int sp_touch(int* x, int* y) {
     uint8_t b[9];
-    int pulsado, tx, ty;
+    int pulsado, tx, ty, i, fuera;
     if (!s_touch_ok) return 0;
+    if (vigia()) return 0;
+    s_t_lect++;
     if (cst_lee(0xD0070000u, b, 9) != 0) {
+        s_t_fall++;
         if (s_touch_fallos++ == 0) {
             txt_t t; t_ini(&t, s_log, sizeof s_log);
             t_s(&t, "driver SPI: el tactil no contesta en I2C 0x"); t_x2(&t, (unsigned) T.addr);
             t_s(&t, " (primer fallo; se sigue como sin dedo)");
             di(s_log);
         }
+        if (L.traza) traza_latido();
         return 0;
     }
+    for (i = 0; i < 9; i++) s_t_trama[i] = b[i];
     pulsado = ((b[3] & 0x0F) != 0) && ((b[8] & 0xF0) != 0);
     cst_fin();
-    if (!pulsado) return 0;
     tx = ((b[7] & 0x0F) << 8) | b[4];
     ty = ((b[7] & 0xF0) << 4) | b[5];
-    if (tx < 0 || tx >= L.w || ty < 0 || ty >= L.h) return 0;
+    fuera = pulsado && (tx < 0 || tx >= L.w || ty < 0 || ty >= L.h);
+    if (pulsado) s_t_puls++;
+    if (L.traza) { traza_cambio(pulsado ? (fuera ? 2 : 1) : 0, tx, ty); traza_latido(); }
+    if (!pulsado || fuera) return 0;
     *x = tx; *y = ty;
     return 1;
 }
@@ -826,6 +951,8 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     }
     g_bios = bios;
     s_ok = 0; s_touch_ok = 0; s_touch_fallos = 0; s_gap_x = s_gap_y = 0;
+    s_t_lect = s_t_puls = s_t_fall = s_t_desde = 0; s_t_estado = -1;
+    s_v_desde = s_v_ultimo = s_v_reinicios = 0; s_v_arrancado = s_v_hay = s_v_quieto = s_v_seguidos = 0;
     tactil = bios->env_get("touch", t, sizeof t) != BPVM_BIOS_ENV_NO_ESTA;
     r = bios->publica(BPVM_PANT_MARCA, tactil ? &s_api_tactil : &s_api_sin);
     if (r != 0) {
