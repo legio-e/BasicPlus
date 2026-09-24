@@ -24,6 +24,7 @@ fallan por diseño.
 | `CtorMal.bp` | un constructor no delega en sí mismo ni en ciclo, ni delega y además llama a `super(...)`; y la visibilidad de un constructor es la de cualquier miembro: `private` sólo su clase, sin marcar = protegido (su clase y sus subclases), `public` cualquiera (#511/#515) | `no puede delegar en sí mismo` · `se delegan en ciclo` · `no puede llamar además a 'super(...)'` · `'Cerrada()' es private` · `'Familiar()' es protegido` · `'Base()' es private` |
 | `StepCero.bp` | el `step` de un `for` numérico es integer y no puede ser 0 escrito (#506) | `el 'step' del 'for' no puede ser 0` · `debe ser integer, no 'float'` |
 | `TopeClase.bp` | el tope de una clase cerrada: 256 ranuras de método y 256 de campo (8 bits); una clase abierta (extiende a una de otro módulo) no lo tiene (#529) | `la clase 'Ancha' ocupa 258 ranuras de campos…` · `la clase 'Larga' tiene 257 métodos…` |
+| `NativeCampo.bp` | un método `native` que el AOT no puede traducir es un **error**, igual que una función native de módulo: `native` promete velocidad, y si no se puede cumplir se dice al compilar (#519). Una native lee el estado de un objeto por una property (su getter), no un campo | `en el metodo native 'Caja.doble' (linea 15): AOT: lee el campo 'n'…` |
 | `paralleltest_scope_violate.bp` | dentro de un `parallel`, un `case` no puede tocar una variable global | `no puede acceder a la variable global 'globalVar'; usa una const, una función o un objeto compartido` |
 
 Fíjate en que los mensajes **dicen qué hacer**, no sólo qué está mal: el de `parallel`

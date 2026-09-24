@@ -893,9 +893,8 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       message and the line. Local fixed arrays
       <code>type[N]</code> are not supported either (compile error):
       use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
-      Note: a <code>native</code> <em>class method</em> using any of those compiles
-      today and runs interpreted; it only warns when the module also has a
-      module-level native (<code>#519</code>).
+      The same goes for a <code>native</code> <em>class method</em>: it is the same
+      error, naming the method and the line (<code>#519</code>, V7).
       The live detail is in <code>docs/AOT_LIMITES.md</code>.</li>
   <li><strong>Calling normal BP functions from a native</strong> is possible
       (the bridge exists), but it crosses back into the interpreter: the speed

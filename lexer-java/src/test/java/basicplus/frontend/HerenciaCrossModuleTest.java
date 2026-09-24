@@ -147,8 +147,8 @@ class HerenciaCrossModuleTest {
             new Caso("firma_array",     "var a: integer[] := [1, 2]\n      return this.arr(a)", "",   "super()", true,  true,  ""),
             new Caso("devuelve_base",   "var b: {MOD}Base := this.crea()\n      return b.pub()", "",  "super()", true,  true,  ""),
             new Caso("final_override",  "return this.fin()",                             FIN_OVERRIDE, "super()", false, false, "control negativo; cross: B desde bpi 8 (`final` viaja)"),
-            new Caso("nat_campo_propio", "return this.nat()",                            NAT_PROPIO,   "super()", true,  true,  ""),
-            new Caso("nat_campo_heredado", "return this.nat()",                          NAT_HEREDADO, "super()", true,  true,  "B: cruza desde bpi 8 (el semántico; el AOT sigue sin leer campos: por getter)"),
+            new Caso("nat_campo_propio", "return this.nat()",                            NAT_PROPIO,   "super()", false, false, "#519 (24-sep): un método native que lee un campo es un error del AOT, como una función de módulo (antes corría interpretado); no es la frontera"),
+            new Caso("nat_campo_heredado", "return this.nat()",                          NAT_HEREDADO, "super()", false, false, "#519: igual con el heredado — el semántico lo deja cruzar desde bpi 8 (campo_prot), pero el AOT no lee campos: por getter (nat_prop_heredada)"),
             new Caso("nat_prop_heredada", "return this.nat()",                           NAT_PROP,     "super()", true,  true,  ""),
             new Caso("enum_modulo",     "var c: {MOD}Color := {MOD}Color.VERDE\n      return 0", "",  "super()", true,  true,  "")
         );

@@ -129,14 +129,15 @@ alguna vez deja de ser verdad. Se fabrican con `intToString` y demás.
 `for … in` sobre colecciones (el `for` numérico sí) · concatenación de string
 sólo con `string`/`integer` · llamadas cross-module a intrínsecos · acceso a
 método privado / `super` desde nativo · **campos** (leer o escribir `this.x`, propio
-o heredado: «expression no soportada: MemberAccessExpr») · **métodos y properties
-estáticos** («privado/super/estático pendientes», «property de modulo o
-estatica») · `instanceof` · eventos (`EventDef`, `RaiseStmt`) · `ParallelStmt` ·
-referencias a método. Cada una tiene su mensaje propio con la línea — **en una
-native de nivel módulo**. Un método `native` de CLASE que use algo de esto hoy
-compila sin diagnóstico y corre interpretado si el módulo no tiene ninguna native
-de módulo (`hasNative` sólo mira `module.defs`); si la tiene, sale como aviso
-«no se ha podido traducir a C: corre interpretado». Ficha `#519` (V7).
+o heredado: «lee el campo 'x'…», «escribe en 'x'…»; una property se LEE, por su
+getter) · **métodos y properties estáticos** («privado/super/estático pendientes»,
+«property de modulo o estatica») · `instanceof` · eventos (`EventDef`, `RaiseStmt`) ·
+`ParallelStmt` · referencias a método. Cada una tiene su mensaje propio con la línea,
+y es **el mismo error en una native de módulo que en un método `native` de una
+clase** («en el metodo native 'Caja.lee' (linea 7): …»). Ficha `#519` (V7, 24-sep,
+decidido por Eduardo: «error, como en módulo»): hasta entonces un método se
+degradaba a un aviso «corre interpretado» (V6/N1.1), y si el módulo no tenía además
+una native de módulo, ni eso —el validador sólo miraba `module.defs`—.
 
 Lo que SÍ cabe desde el 14-sep-2026: construir una clase con **constructor
 sobrecargado** — la factoría lleva el sufijo de la sobrecarga elegida

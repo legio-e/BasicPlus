@@ -974,16 +974,28 @@ public final class Main {
      * pipeline falle aguas abajo (build_mdn.sh, AotMain) — el usuario lo
      * descubre tarde, sin contexto. Validar aquí da el error en la fase
      * que el usuario asocia con "el compilador" y con la línea concreta.
+     *
+     * De paquete, no privada: la llama {@code AotNativeEnMetodoTest} (#519).
      */
-    private static String validateNativeFunctionsAreAotable(Ast.ModuleNode module, SemanticInfo info) {
-        // Ningún native → no hay nada que validar.
+    static String validateNativeFunctionsAreAotable(Ast.ModuleNode module, SemanticInfo info) {
+        // Ningún native → no hay nada que validar. #519 (V7): también los MÉTODOS native de
+        // una clase, que el emisor aplana a funciones (V6/N1.1). Sin mirarlos, un módulo cuyas
+        // únicas native eran métodos no se validaba, y un método que no se podía traducir
+        // compilaba sin decir nada y corría interpretado.
         boolean hasNative = false;
         if (module.defs != null) {
             for (Ast.ITopLevelDecl d : module.defs) {
                 if (d instanceof Ast.FuncDef) {
                     Ast.FuncDef f = (Ast.FuncDef) d;
-                    if (f.isNative && !f.isIntrinsic) { hasNative = true; break; }
+                    if (f.isNative && !f.isIntrinsic) hasNative = true;
+                } else if (d instanceof Ast.ClassDef) {
+                    for (Ast.ITopLevelDecl m : ((Ast.ClassDef) d).members) {
+                        if (!(m instanceof Ast.FuncDef)) continue;
+                        Ast.FuncDef f = (Ast.FuncDef) m;
+                        if (f.isNative && !f.isIntrinsic) { hasNative = true; break; }
+                    }
                 }
+                if (hasNative) break;
             }
         }
         if (!hasNative) return null;

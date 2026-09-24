@@ -1,0 +1,23 @@
+// NativeCampo.bp — NO COMPILA, a propósito (#519, V7): un método `native` que el AOT no
+// puede traducir es un ERROR, igual que una función native de módulo. `native` es una
+// promesa de velocidad: si no se puede cumplir, se dice al compilar, con el método y la
+// línea. Una native lee el estado de un objeto por una property (su getter), no un campo.
+//
+// Antes de #519 esto compilaba sin decir nada y el método corría interpretado: el
+// validador sólo miraba las native de módulo, y aquí no hay ninguna.
+module NativeCampo
+  public class Caja
+    var n: integer
+    public function Caja(x: integer)
+      this.n := x
+    end Caja
+    // error: lee el campo 'n' — la salida: `public property n: integer`, o quitar `native`
+    public native function doble(): integer
+      return this.n * 2
+    end doble
+  end Caja
+
+  function Main()
+    print Caja(21).doble()
+  end Main
+end NativeCampo

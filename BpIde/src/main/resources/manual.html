@@ -924,9 +924,8 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       compilador con su mensaje y la línea. Los arrays
       fijos locales <code>tipo[N]</code> tampoco (error de compilación): usa
       <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
-      Ojo: un método <code>native</code> <em>de clase</em> que use algo de eso hoy
-      compila y corre interpretado; sólo avisa si el módulo tiene además alguna
-      native de nivel módulo (<code>#519</code>).
+      Igual en un método <code>native</code> <em>de clase</em>: es el mismo error, con
+      el método y la línea (<code>#519</code>, V7).
       El detalle vivo está en <code>docs/AOT_LIMITES.md</code>.</li>
   <li><strong>Llamar funciones BP normales desde una native</strong> es
       posible (el puente existe), pero cruza de vuelta al intérprete: lo

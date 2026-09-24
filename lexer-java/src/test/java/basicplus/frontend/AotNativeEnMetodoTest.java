@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -39,9 +42,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       property— y es como ya lo emite el bytecode. Además es la única ruta que
  *       el runtime soporta: entre los helpers del AOT está {@code call_method_i32}
  *       y no hay ninguno para leer campos.</li>
- *   <li><b>Un método que no se puede traducir se cae SOLO.</b> Si tumbara el
- *       módulo entero sería una regresión pura: antes esos módulos emitían sus
- *       funciones native sin problema porque los métodos ni se miraban.</li>
+ *   <li><b>Un método que no se puede traducir es un ERROR</b>, el mismo que una
+ *       función native de módulo (#519, V7; Eduardo, 24-sep: «error, como en
+ *       módulo»). Hasta entonces (V6/N1.1) se caía solo, con un aviso «corre
+ *       interpretado» —para no tumbar los módulos que ya existían—, y el aviso sólo
+ *       salía si el módulo tenía además una native de módulo: sin ella, el
+ *       validador de {@code Main} ni miraba los métodos, y compilaba en silencio.</li>
  * </ol>
  *
  * <p>Que un {@code native} <b>no</b> pueda leer un campo directamente es una
@@ -112,19 +118,60 @@ class AotNativeEnMetodoTest {
                 "no se avisa de que la lectura cruza al intérprete. Avisos: " + avisos[0]);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    @DisplayName("un campo NO accesible degrada ese método, sin tumbar el módulo")
-    void campoDegradaSoloEseMetodo() {
-        // `var` privado: no hay getter, y es la limitación aceptada.
-        List<String>[] avisos = new List[1];
-        String c = emitir(modulo("NatCampo", "var n: integer", "this.n * 2"), avisos);
-        assertTrue(avisos[0].stream().anyMatch(a -> a.contains("Caja.doble")),
-                "tiene que decir QUÉ método no se pudo traducir. Avisos: " + avisos[0]);
-        // Lo que NO puede pasar es que se lleve el módulo por delante: antes de
-        // esto, un módulo así emitía sus native de nivel módulo tan tranquilo.
-        assertTrue(c.isEmpty() || c.contains("aot_NatCampo"),
-                "el módulo no debe quedar en un estado raro por un método que no se pudo traducir");
+    @DisplayName("#519: un campo NO accesible es un ERROR, como en una función de módulo")
+    void campoEsError() {
+        // `var` privado: no hay getter, y es la limitación aceptada — ahora, dicha como error.
+        AotCEmitter.UnsupportedAotException ex = assertThrows(AotCEmitter.UnsupportedAotException.class,
+                () -> emitir(modulo("NatCampo", "var n: integer", "this.n * 2"), null),
+                "un método native que no se puede traducir tiene que ser un error, no un aviso");
+        assertTrue(ex.getMessage().contains("metodo native 'Caja.doble'"),
+                "tiene que decir QUÉ método no se pudo traducir: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("campo 'n'"),
+                "y el motivo con su nombre, no «MemberAccessExpr»: " + ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("#519: un módulo cuyas ÚNICAS native son métodos también se valida")
+    void soloMetodosTambienSeValida() {
+        // El caso de la ficha: sin una native de módulo, el validador de Main ni miraba los
+        // métodos y el módulo compilaba sin decir nada. `modulo(...)` no lleva ninguna de módulo.
+        Parser p = new Parser(new Lexer(modulo("NatSolo", "var n: integer", "this.n * 2")).tokenize());
+        Ast.ModuleNode module = p.parseModule();
+        assertTrue(p.getErrors().isEmpty(), "el fuente del test no compila: " + p.getErrors());
+        SemanticInfo info = new SemanticAnalyzer().analyze(module);
+        String err = Main.validateNativeFunctionsAreAotable(module, info);
+        assertNotNull(err, "un método native que no se puede traducir tiene que abortar la compilación");
+        assertTrue(err.contains("Caja.doble") && err.contains("campo 'n'"), err);
+        // Y el que sí se traduce sigue pasando: la validación no se vuelve un muro.
+        Parser p2 = new Parser(new Lexer(modulo("NatSoloBien", "public property n: integer", "(3 * 31) + 1")).tokenize());
+        Ast.ModuleNode m2 = p2.parseModule();
+        assertNull(Main.validateNativeFunctionsAreAotable(m2, new SemanticAnalyzer().analyze(m2)));
+    }
+
+    @Test
+    @DisplayName("#519: escribir en el objeto desde un método native es un error con nombre")
+    void escribirEsError() {
+        String src =
+              "module NatEscribe\n"
+            + "  public class Caja\n"
+            + "    public property n: integer\n"
+            + "    public function Caja(v: integer)\n"
+            + "      this.n := v\n"
+            + "    end Caja\n"
+            + "    public native function pon(v: integer): integer\n"
+            + "      this.n := v\n"
+            + "      return v\n"
+            + "    end pon\n"
+            + "  end Caja\n"
+            + "  function Main()\n"
+            + "    print Caja(1).pon(2)\n"
+            + "  end Main\n"
+            + "end NatEscribe\n";
+        AotCEmitter.UnsupportedAotException ex = assertThrows(AotCEmitter.UnsupportedAotException.class,
+                () -> emitir(src, null));
+        assertTrue(ex.getMessage().contains("metodo native 'Caja.pon'")
+                && ex.getMessage().contains("escribe en 'n'"), ex.getMessage());
     }
 
     @SuppressWarnings("unchecked")

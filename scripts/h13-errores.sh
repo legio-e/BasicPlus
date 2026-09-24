@@ -66,6 +66,8 @@ DestructorMal|el destructor lo llama el lenguaje
 ArrayFijoMal|puede ser una variable local o un campo
 ArrayFijoMal|de clase tiene que ser
 ArrayFijoMal|'buf' es un array fijo: no es una referencia
+NativeCampo|en el metodo native 'Caja.doble'
+NativeCampo|lee el campo 'n'
 "
 
 ok=0; mal=0

@@ -541,21 +541,18 @@ public final class AotCEmitter {
                 emitThunk(f);
                 emitidas.add(f);
             } catch (UnsupportedAotException ex) {
-                /* [V6/N1.1] Un METODO aplanado que no se puede traducir se cae
-                 * SOLO. Si tumbara el modulo entero seria una regresion pura:
-                 * hoy esos modulos emiten sus funciones native sin problema
-                 * porque los metodos ni se miraban. Se degrada a aviso — que es
-                 * mas de lo que habia — y el metodo sigue corriendo interpretado,
-                 * exactamente como antes. */
-                if (metodosAplanados.contains(f.name.name)) {
-                    warnings.add("el metodo native '" + f.name.name + "' (linea " + f.line
-                        + ") no se ha podido traducir a C: corre interpretado. Motivo: "
-                        + ex.getMessage());
-                    continue;
-                }
+                /* #519 (V7; decidido por Eduardo el 24-sep) — un METODO native que no se
+                 * puede traducir es el MISMO error que una funcion native de modulo:
+                 * `native` es una promesa, y si no se puede cumplir se dice al compilar, con
+                 * el nombre y la linea, y no hay .mod (docs/AOT_LIMITES.md: «todo recorte es
+                 * un error de COMPILACION»). Desde V6/N1.1 se degradaba a un aviso «corre
+                 * interpretado» para no tumbar los modulos que ya existian —y el aviso solo
+                 * salia si el modulo tenia ademas una native de modulo: sin ella, silencio—.
+                 * En el arbol no quedaba ninguno sin traducir (NatV7, el unico, se traduce). */
+                String que = metodosAplanados.contains(f.name.name)
+                        ? "en el metodo native '" : "en la funcion native '";
                 throw new UnsupportedAotException(
-                    "en la funcion native '" + f.name.name + "' (linea " + f.line + "): "
-                    + ex.getMessage());
+                    que + f.name.name + "' (linea " + f.line + "): " + ex.getMessage());
             }
         }
 
@@ -1133,6 +1130,15 @@ public final class AotCEmitter {
                     w.println("));");
                 }
                 return;
+            }
+            if (a.target instanceof Ast.MemberAccessExpr) {
+                /* #519 (V7) — escribir en un objeto (campo o property) no esta en el AOT v1:
+                 * una native solo LEE properties, por su getter. Dicho con el nombre (con #519
+                 * un metodo native que lo haga es un error, y el motivo tiene que servir). */
+                throw new UnsupportedAotException(
+                    "AOT: escribe en '" + ((Ast.MemberAccessExpr) a.target).member + "' (line "
+                    + a.line + "), y una native no cambia el estado de un objeto (solo lee sus "
+                    + "properties, por el getter): quita 'native' para que corra interpretada.");
             }
             throw new UnsupportedAotException(
                 "AOT: assign target no soportado: "
@@ -1952,6 +1958,15 @@ public final class AotCEmitter {
                 emitExpr(ma.target);
                 w.print(", " + slotExpr + ", (const int32_t*) 0, 0, 0u, " + (retIsRef ? 1 : 0) + ")");
                 return;
+            }
+            /* #519 (V7) — un CAMPO (var de clase): la limitacion aceptada de arriba, dicha
+             * con su nombre. Con #519 un metodo native que lo haga es un error, y el motivo
+             * «expression no soportada: MemberAccessExpr» no le decia nada al programador. */
+            if (mSym instanceof Symbol.VarSymbol && ((Symbol.VarSymbol) mSym).ownerClass != null) {
+                throw new UnsupportedAotException(
+                    "AOT: lee el campo '" + ma.member + "' (line " + ma.line + "), y una native "
+                    + "solo lee el estado de un objeto por una property (su getter): declara '"
+                    + ma.member + "' como property, o quita 'native' para que corra interpretada.");
             }
         }
 
