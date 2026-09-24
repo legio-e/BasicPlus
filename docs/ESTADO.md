@@ -472,6 +472,10 @@ BMP280 por I2C con `bus.writeRead(0x76, [0xD0], 1, id, 1)` (0x58) y una `I2c.Tra
 **Después**, a elegir con Eduardo: H3 «SD al común» (la TF soltando el bus en sus esperas) o `G4.b` (el DMA del
 ESP32).
 
+**El rumbo (Eduardo, 24-sep)**: *«La V8 la dedicaremos a la WiFi y el Bluetooth principalmente. El modo de bajo
+consumo también lo movemos a V8, todo lo demás de V7 se mantiene.»* `#490` sale de V7 (H10) y pasa entera al
+bloque de V8 de `FICHAS`; nada más cambia de sitio.
+
 **Tareas aparte, lanzadas y sin empezar**: `#539` (`PACK_LS` esconde los packs vivos) y los dos tests de C rotos
 fuera de la red (`test-aotnew`, `test-debug-mt`).
 

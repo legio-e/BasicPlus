@@ -83,7 +83,8 @@ el PC sin placa, como en el host.
 > **Desde el 13-sep-2026 TODO lo de esta sección es de V7.** V6 se publicó el 12-sep; **lo que
 > quedó pendiente pasa a V7 y deja de ser de V6** — la misma decisión de Eduardo del 23-ago, aplicada
 > igual. Hay tres bloques: las fichas que se abran en V7 (arriba), las que vienen de V6 (movidas
-> enteras, con su texto intacto) y la cola que venía de V5 y V6 no llegó a abrir.
+> enteras, con su texto intacto) y la cola que venía de V5 y V6 no llegó a abrir. **Y desde el 24-sep, un
+> cuarto al final: V8** —la WiFi, el Bluetooth y el bajo consumo, por decisión de Eduardo—, que NO es de V7.
 >
 > ### 📊 EL CENSO DE V7, al 13-sep-2026 — hecho al abrir la versión, ficha a ficha
 >
@@ -97,11 +98,11 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **45** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): ~~`#506`~~ ~~`#507`~~ ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ ~~`#511`~~ ~~`#512`~~ ~~`#513`~~ ~~`#514`~~ ~~`#515`~~ ~~`#516`~~ ~~`#517`~~ ~~`#518`~~ ~~`#519`~~ · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` ~~`#491`~~ `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ ~~`#522`~~ · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: ~~`#524`~~ · de la revisión V10 (16-sep, tarde): `#525` `#526` ~~`#527`~~ ~~`#528`~~ ~~`#529`~~ `#530` `#531` ~~`#532`~~ · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
+> | **fichas de V7 con número** | **45** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): ~~`#506`~~ ~~`#507`~~ ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ ~~`#511`~~ ~~`#512`~~ ~~`#513`~~ ~~`#514`~~ ~~`#515`~~ ~~`#516`~~ ~~`#517`~~ ~~`#518`~~ ~~`#519`~~ · las once que vienen de V6: `#452` `#468` `#470` `#479` `#487` `#490` (→ V8, 24-sep) ~~`#491`~~ `#492` ~~`#493`~~ `#495` `#500` · la abierta el 15-sep por la revisión de `#493`: `#520` · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ ~~`#522`~~ · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: ~~`#524`~~ · de la revisión V10 (16-sep, tarde): `#525` `#526` ~~`#527`~~ ~~`#528`~~ ~~`#529`~~ `#530` `#531` ~~`#532`~~ · y las siete de la cola heredada de V5 que V6 no abrió: `#19` `#356` `#378` `#396` `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
-> | **fuera del plan de versiones** (decidido) | **6** | `#488` (AOT Xtensa), la red en placa (V8), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción, y el P4X (sin fecha). `A4` sale de aquí: es `H12` |
+> | **fuera del plan de versiones** (decidido) | **6** | `#488` (AOT Xtensa), la red en placa (V8; desde el 24-sep, V8 = WiFi y Bluetooth, y el bajo consumo), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción, y el P4X (sin fecha). `A4` sale de aquí: es `H12` |
 >
 > ### 🏁 LOS HITOS DE V7 — decisión de Eduardo (13-sep): *«cada grupo corresponde a un hito propio; prefiero que empiecen por H y numerados, así es más fácil hacer el seguimiento»*
 >
@@ -116,7 +117,7 @@ el PC sin placa, como en el host.
 > | **H7** | **memoria, arranque y arquitectura** | **de V10 (16-sep): `#525` `#526` ~~`#530`~~ `#531`** · ~~`#535`~~ (24-sep, las dos) · los restos de `U6`, `U6.F1`, `U1.4`; Boot 1/Boot 2 y las capas del SO; unificar el montaje de packs; los 32 MB del P4; `CALL_REL`; el muro heap/pilas; diagnóstico del heap desde BP; `#356` `#494`; la Pico a `platform_freertos.c`; el SMP de host |
 > | **H8** | **IDE y wire** | `#495` `#452` `#538` (23-sep: el IDE no sube el `import Core` implícito); `#539` (24-sep: `PACK_LS` esconde los packs vivos pasados 16 de la cadena); `M5` (el debugger enseña las properties heredadas — de H1, 21-sep); los restos de `E1`; el `INFO` de ESP32/STM32; el guardián del fat-jar; `Run on Device` con `/lib` vacío |
 > | **H9** | **pruebas y medida** | ~~`#537`~~ (23-sep: los cuatro smokes del micro simulado en la red —`check-sim`— y la guarda de `packs/Stdlib.pack`); los restos de `T1` y lo que `V7_IDEAS` pedía del arnés; `compat.sh` y el código de salida; las medidas en placa pendientes; ~~`test-listtrunc`~~ (con `#537`); la batería de rendimiento (= eje 4 del censo); resistencia larga; el simulador con disfraces; inyección de eventos; limpieza |
-> | **H10** | **placas y drivers** | `#490` (estudio); `Rtc`; `#466`; el STM32 (`Debug`, el FS que baila); el C3 (`sdkconfig`, log del bootloader); el ENV de la Pico 2; la S31 cuando haya placa; la GUI (`#477`, `G2`, `Command`); los diez «rompe-el-modelo» de `#473` y los lotes D/E; DMA de `Uart` |
+> | **H10** | **placas y drivers** | ~~`#490`~~ (→ V8, 24-sep); `Rtc`; `#466`; el STM32 (`Debug`, el FS que baila); el C3 (`sdkconfig`, log del bootloader); el ENV de la Pico 2; la S31 cuando haya placa; la GUI (`#477`, `G2`, `Command`); los diez «rompe-el-modelo» de `#473` y los lotes D/E; DMA de `Uart` |
 > | **H11** | **la ESP32-C5**: Waveshare **ESP32-C5-Touch-LCD-2.8** (2,8", 240×320, táctil) — ESP32-C5-WROOM-1, 384 KB SRAM + **8 MB PSRAM**, 32 MB flash, táctil de 5 puntos por I2C, ranura TF, RTC, IMU, audio; comprada el 5-sep | **la placa ya está (21-sep)**; **en dos etapas** (Eduardo, 21-sep): ~~1.ª la imagen SIN LVGL~~ ✅ **21-sep, noche** (`esp32c5/` clon del C3; USB-Serial-JTAG en COM6; `boardName=esp32c5`, `RV32IMC_ILP32` sin FPU, 32 MB de flash declarados, zona de packs de 13,7 MB mapeada; `wire_serie.py part` para aprovisionar una placa virgen; `FileCursor` == host; `tanda.py` con la C5 de columna, 4/4 sin pantalla. **PSRAM activada** la misma noche (8 MB en QUAD@80: la VM en PSRAM con 7677 KB, `FileBench` completo, tanda igual); queda medir el bloque sin PSRAM con U6.4 —hoy los números del C3— y la otra mitad de la flash); 2.ª sobre ella LVGL en un PACK e ir probando — la C5 es el primer cliente real de H6. El AOT decide su destino por la float-ABI (`#502`); su TF, su RTC y sus modos de bajo consumo alimentan H3, `#490` y H7 |
 > | **H12** | **la prueba de los DOS NÚCLEOS** — al FINAL de V7, y reversible (era `A4`, 🧊 fuera del plan desde el 9-sep; Eduardo, 13-sep: *«Al final de V7 podemos hacer una prueba a ver si se puede trabajar con 2 núcleos reales: si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*) | lo que `A4` dejó medido: el inventario del estado compartido hecho, `UNICORE=y` en S3/P4, las tres carreras del SMP de host cerradas (`#474`); antes de activar: `kill_requested` atómico, el `printf` de la Pico y el wire en el mismo USB. Con ella, las dos VM sobre una cola de threads BP y borrar `comm_pico.c`/`comm_host.c` (`A1.4`). **Criterio de salida escrito de antemano**: se queda si funciona; si da problemas sin solución, se revierte — y revertir es un resultado válido |
 >
@@ -125,6 +126,10 @@ el PC sin placa, como en el host.
 > prefijado** entre hitos — *«como hay muchas cosas pendientes hay que ir cerrando algunos pendientes»*.
 > Y la regla que hace distinta a V7: **«intentaremos no dejar pendientes para V8»** — lo que se abra se
 > cierra o se cancela dentro de la versión; aplazar deja de ser una salida.
+>
+> 📡 **Y V8, decidida (Eduardo, 24-sep):** *«La V8 la dedicaremos a la WiFi y el Bluetooth principalmente. El modo de bajo consumo también lo movemos a V8, todo lo demás de V7 se mantiene.»* Sale de V7 el bajo
+> consumo (`#490`, de H10), que pasa entero al bloque de V8, al final de esta sección; la red en placa ya
+> era de V8. Nada más cambia de sitio.
 >
 > 🤝 **Lo que añadí yo el mismo día, con su permiso** (*«somos socios»*), en `V7_BACKLOG.md` §🤝 — y **contestado por
 > Eduardo esa tarde**: *«de acuerdo en todo salvo en el punto 1»*. Queda así: **un cierre PEQUEÑO por hito** (la ronda
@@ -1742,292 +1747,6 @@ de heap. Eso no lo arregla ningún `read_stream` más — lo arregla el cursor.
 La estrecha —`read_stream` en FAT, gemelo exacto de `fat_crc32`— sigue siendo válida para V6 **si la
 medida la justifica**, y no estorba al cursor: el día que exista, desaparece con las otras dos.
 
-#### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V7** (abierta 10-sep, decidida a V7 el mismo día)
-
-**La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
-nada que hacer, en un micro con alimentación da igual lo que haga, pero si fuese un micro que
-funciona con baterías lo ideal es que se durmiese. ¿Cómo está ahora?»*
-
-Y acto seguido, la frase que decide el diseño entero: 🔑 ***«casi todos los micros tienen un modo de
-bajo consumo; lo difícil no es entrar en él, lo difícil es programar qué es lo que lo hace salir»***.
-
-**Por qué eso lo cambia todo.** Entrar es una instrucción (`WFI`, `esp_light_sleep_start`, el Stop
-del U5). Salir es un **contrato**: hay que declarar *de antemano* qué evento despierta, y ese
-contrato es lo que no existe hoy en BP. Un `Machine.sleep()` a secas sería un cuelgue con otro
-nombre. Las preguntas reales son de lenguaje, no de silicio:
-- ¿Quién declara las fuentes de despertar — el programa, o la placa?
-- ¿Qué pasa con los hilos BP dormidos: el `sleep(200)` de un hilo, ¿es una fuente de despertar?
-- ¿Y el wire? Si el IDE está conectado, la placa **no puede** dormirse sin perder la conexión; si no
-  lo está, sí. Eso hace que el modo dependa de si hay alguien mirando.
-- ¿Y la GUI? Un panel encendido consume más que el core; dormir el micro con la pantalla viva no
-  ahorra gran cosa.
-
-📌 **Es la misma forma que `#479` (el mapa de pines) y que los arrays de buses de `#470`**: qué pines
-y qué periféricos pueden despertar, y qué se conserva en cada modo, es **verdad de silicio** — va en
-la cintura de cada micro y viaja compilada en su imagen, no en el ENV. Conviene resolverlas juntas.
-
-**Lo que se sabe ya, y es poco**: no hay ni una línea escrita sobre consumo en todo `docs/`. Y hay un
-dato duro, medido el 10-sep por otro motivo (`#473`/R16): **en el STM32 la tarea ociosa no corre
-nunca** —su lazo del wire gira con `continue` sin ceder y la tarea `vm` va a `tskIDLE_PRIORITY+2`—,
-así que esa familia ni siquiera llega al escalón previo de poder dormir. Y es la familia de bajo
-consumo de ST, o sea el peor sitio donde tener eso.
-
-⚠️ **Los tres escalones que se confunden**, y hay que mantenerlos separados en todo el estudio:
-(a) el hilo cede la CPU · (b) la tarea ociosa corre · (c) el **micro** entra en bajo consumo.
-Sólo (c) se nota en el amperímetro. Hoy la Pico y el ESP32 llegan a (a) con seguridad; (b) y (c)
-están por censar.
-
-🎯 **POR DÓNDE EMPEZAR — decidido por Eduardo el 10-sep:** *«No creo que haya una solución común
-para todos los casos, pero podemos empezar por algo sencillo e ir creciendo. Empezar por el timer o
-el RTC y programar un sleep que despierte cada cierto tiempo, y si no hay nada se vuelva a dormir.»*
-
-**Por qué es el punto de partida correcto, y no un atajo.** Convierte el problema difícil —*declarar
-qué despierta*— en uno fácil: *mirar cada cierto tiempo*. Con una sola fuente de despertar (el
-temporizador) no hay contrato que diseñar, no hay mapa de pines que resolver antes, y no hay que
-tocar el lenguaje. La parte difícil no se resuelve: **se aplaza a propósito**, y eso permite que
-haya algo funcionando antes de decidir lo demás.
-
-⚠️ **El precio, y choca de frente con `#462`.** Despertar cada N ms significa que un evento puede
-llegar hasta N ms tarde. Esta misma sesión bajamos el suelo de descubrimiento de un evento de 48 ms
-a **7 ms**, medido en la C6; un periodo de dormir de 100 ms lo devolvería a ~100 ms. Así que **el
-periodo no es una constante: es una política**, y quién la elige (el programa, la placa, o el modo
-en que esté) es ya una pregunta de lenguaje. La forma sana de decirlo: *dormir es cambiar latencia
-por consumo*, y el que sabe cuánta latencia se puede permitir es el programa.
-
-📌 **«Si no hay nada» hay que definirlo, y la lista es reveladora.** Al despertar hay que mirar:
-¿hay bytes en el wire? ¿hay algún hilo BP listo para correr? ¿ha vencido algún `sleep` de hilo?
-¿hay un evento en la cola? **Es exactamente la misma lista que las fuentes de despertar**, sólo que
-sondeada en vez de por interrupción — que es justo por lo que este camino es más barato de empezar,
-y también por lo que crece de forma natural: cada elemento de esa lista que se convierta en
-interrupción real es un paso más, sin rehacer lo anterior.
-
-📌 **Timer y RTC NO son intercambiables**, y ésta es de las primeras cosas que el estudio tiene que
-poner en tabla: qué reloj sobrevive a qué modo de bajo consumo es **verdad de silicio y distinta por
-micro**. Un temporizador general suele morir en los modos profundos; el RTC suele sobrevivir, con
-menos resolución. Elegir uno u otro fija de rebote **hasta dónde se puede dormir**.
-
-📌 **Y hay que mirar lo que FreeRTOS ya trae hecho**: `configUSE_TICKLESS_IDLE` es literalmente este
-patrón —«ninguna tarea estará lista en N ticks → paro el tick, bajo consumo, programo el despertar»—
-implementado por el RTOS. La primera pregunta del estudio no es *cómo lo hacemos*, sino **si eso
-está encendido y por qué hoy no sirve**. La sospecha, con lo medido el 10-sep: no llega a ejecutarse,
-porque la capa de encima (el lazo del wire, y el scheduler de la VM) no cede el turno a la ociosa.
-
-🪜 **LA ESCALERA — Eduardo, 10-sep:** *«Lo de dormir se puede hacer progresivo: primero pausas
-cortas y, según se va avanzando sin actividad, pausas más largas.»*
-
-**Esto deshace la tensión con la latencia, y la deshace en el sitio correcto.** El problema del
-periodo fijo era elegir N: corto gasta, largo tarda. Con la escalera **no hay N que elegir** — el
-sistema se calibra solo, y el coste cae donde menos se paga: justo después de actividad (que es
-cuando es más probable que venga más) la pausa es corta y la latencia sigue siendo la de hoy; tras
-un rato largo de silencio (cuando es menos probable que venga nada) la pausa crece. Se paga latencia
-sólo en el caso en que casi nunca hay nadie esperándola.
-
-⚠️ **El caso malo, dicho sin adornos: el PRIMER evento tras un silencio largo** — que es exactamente
-la persona que deja el aparato quieto y vuelve a tocar un botón. La escalera empeora justo ése. De
-ahí que **el tope de la escalera sea una decisión de producto, no técnica**: un cacharro con pantalla
-no debería pasar de unas decenas de ms porque un toque se notaría lento; un registrador de datos
-puede irse a segundos. Y el escape es limpio: **una fuente que sea interrupción de verdad se salta el
-tope entero** (un táctil con línea de IRQ despierta al instante, esté la escalera donde esté). O sea
-que subir el tope y convertir fuentes en interrupciones son la misma mejora vista desde dos lados.
-
-📱 **El primer despertador con nombre: el TÁCTIL de la C5 (23-sep, al arreglar su cuelgue en H6.c).**
-Pregunta de Eduardo: *«¿se despierta tocando la pantalla?»*. Según el fabricante (el `cst66xx` de
-Hynitron y el mapa de registros del componente de Espressif), **depende de cómo se le deje dormir**:
-- **bajo consumo** (`D0 00 04 AB`): sigue escaneando, más despacio → el toque se detecta y levanta su `INT`;
-- **gesto** (`D0 00 0C 01`, *gesture report*): escanea buscando un gesto —el «toca dos veces» de los
-  móviles— → `INT`; si el firmware de este CST3530 lo trae, **está por probar**;
-- **sueño profundo** (`D0 00 22 AB`): deja de escanear → **tocar NO lo despierta**; sólo el micro, con
-  un reset (su *resume*: reset, 50 ms, modo normal).
-
-Para despertar al **micro** hace falta además la línea: en la C5 el `INT` va **directo al GPIO5** (el
-reset, por el CH32), y hoy el driver no la usa —sondea—. En sueño ligero cualquier GPIO del ESP
-despierta; en profundo sólo los del dominio LP: **mirar si el 5 lo es**. ⚠️ **Y su latido ESD** (el
-contador que dice que escanea, y que la traza de `DriverSpi` lee cada 5 min) **se para cuando duerme**:
-cualquier vigilancia del chip tendrá que saberlo —el fabricante apaga la suya al salir del modo normal
-(`if (mode != NOMAL_MODE) hyn_esdcheck_switch(DISABLE)`)—.
-
-🔑 **Y lo importante: media escalera YA ESTÁ CONSTRUIDA, y no la habíamos visto así.** Al cerrar
-`#462` el bombeo de la GUI dejó de dormir por su cuenta y pasó a **devolver cuánto tiempo dice LVGL
-que puede estar ocioso** (`lv_timer_handler()`), topado a `BPVM_GUI_OCIO_MAX_MS` = 10 ms
-(`src/gui_display_sdl.c:340,382`), y es el lazo BP quien duerme eso (`bpstdlib/Gui.bp:850-853`). Eso
-no es una pausa fija: es **preguntarle al que sabe**.
-
-Con eso a la vista, las dos formas de decidir cuánto dormir se ven claras, y **se componen**:
-- **Preguntar** — el que sabe, contesta. LVGL ya lo hace. `configUSE_TICKLESS_IDLE` de FreeRTOS hace
-  lo mismo con las tareas: sabe cuándo vence el próximo `vTaskDelay`.
-- **La escalera** — el respaldo para lo que **nadie puede contestar**: cuándo llegará el próximo byte
-  del wire, o el próximo toque. Ahí no hay a quién preguntar, y la progresión es la respuesta.
-
-⏭️ Así que la pausa de cada vuelta sale de un `min()`: lo que digan todos los que saben, contra el
-peldaño actual de la escalera. La escalera no sustituye a nada de lo que ya hay — **rellena el hueco
-que queda**.
-
-🧭 **LOS DOS CASOS — Eduardo, 10-sep:** *«Tal como yo lo veo hay 2 casos: 1 — el usuario indica
-expresamente que no va a hacer nada; 2 — el usuario no está prestando atención y la tarea se ha
-terminado.»*
-
-**Y no son dos formas de detectar lo mismo: son dos regímenes distintos, porque cambia QUIÉN ACEPTA
-LAS CONSECUENCIAS.** Ahí está la utilidad de partirlo así:
-
-| | **caso 1 — declarado** | **caso 2 — inferido** |
-|---|---|---|
-| quién decide | el programa, con un verbo | el sistema, solo |
-| quién acepta el coste | **el programador** | **nadie** |
-| qué se puede apagar | mucho: periféricos, relojes, incluso perder el wire — porque alguien lo pidió | sólo lo que se pueda recuperar **como si no hubiera pasado nada** |
-| profundidad | hasta donde diga el verbo | topada por la transparencia |
-| latencia al volver | asumida | no se puede notar |
-
-🔑 **La consecuencia práctica, y es la que más ordena el diseño: el caso 2 tiene que ser
-TRANSPARENTE.** Si nadie ha pedido dormir, nadie ha aceptado perder nada — así que el caso 2 **no
-puede tirar la conexión del wire** (el IDE podría estar enganchado), ni perder un evento, ni
-retrasar un `sleep` de un hilo BP. Es una optimización invisible o no es. El caso 1 sí puede tirar el
-wire, **porque el programa lo ha pedido**.
-
-📌 **No son alternativas, se componen**: el caso 2 es el **suelo** —siempre puesto, automático,
-invisible, y es exactamente donde encaja la escalera— y el caso 1 es la **salida explícita** para
-cuando el programa sabe más de lo que el sistema puede inferir («voy a estar 10 minutos sin hacer
-nada, despiértame con el botón»).
-
-⚠️ **La trampa del caso 2, dicha entera: «el usuario no está prestando atención» NO es observable
-por el micro.** Lo que el micro puede observar es *no hay nada pendiente ni nada que venza pronto*.
-No es lo mismo: un registrador de datos sin ningún usuario delante está *siempre* desatendido y no
-debe dormirse a través de su siguiente muestreo. Así que el disparador del caso 2 no es «nadie mira»
-sino **«nada pendiente Y nada que venza antes de que yo despierte»** — que es, otra vez, la misma
-lista de antes (wire, hilos BP listos, `sleep` que vence, eventos en cola), ahora usada para decidir
-*cuánto* dormir y no sólo *si* dormir.
-
-📊 **EL CENSO, HECHO (10-sep) → `docs/BAJO_CONSUMO_CENSO.md`.** Seis lecturas + refutación
-adversarial (**57 de 73 hallazgos vivos**, 16 tumbados) + crítico de completitud. **Sin amperímetro:
-ni un mA en él, a propósito.** El titular:
-
-> 🔴 **Ninguna de las siete placas llega a dormir. Ni una. No hay una sola línea en el árbol que meta
-> a un micro en un modo de bajo consumo.**
-
-Con los cuatro escalones separados, que es como hay que leerlo:
-
-| familia | el hilo cede | la ociosa corre | el **núcleo** se para (`WFI`) | el **micro** baja consumo |
-|---|---|---|---|---|
-| **RP2350** (Pico 2 / Metro) | sí | sí | **no** | **no** |
-| **ESP32** (S3, C3, C6, P4) | sí | sí | **sí** (`waiti`/`wfi`) | **no** |
-| **STM32U5** (DK2 y Nucleo) | **no** | **no** | **no** | **no** |
-
-Verificado **contra el artefacto**, no leyendo: `wfi` = 0 en el desensamblado de la Pico
-(82 898 líneas) y en los `.list` de la DK2 y la Nucleo. En los ESP el núcleo sí se para porque el
-kernel de IDF llama **siempre** a su idle hook.
-
-🔑 **Y el hallazgo que va contra el punto de partida elegido: el RTC de hardware SÓLO tiene backend
-en el STM32** (`stm32/port/gpio_stm32.c:790`, `:1009`). El ESP usa a propósito el stub portable
-(`esp32/common/gpio_esp32.c:595`) y la Pico no registra ninguno. **El reloj que se propone como
-despertador existe justo en la familia que hoy no llega ni a ejecutar su tarea ociosa, y no existe en
-las otras cuatro.** Empezar por el RTC significa construirlo en tres familias antes de poder probar
-nada; empezar por el timer, no.
-
-🔑 **Y el que cambia el encuadre entero: miVM YA HACE LO CORRECTO.** Calcula
-`earliestSleepWakeMs()` y espera **el delta completo** en `vmLock.wait(delta)`, sin tope, porque
-quien llega lo despierta con un `notify` (`VirtualMachine.java:543`, `:2305-2317`). O sea que el
-patrón *«duerme hasta el próximo vencimiento y que un evento te despierte»* **ya está escrito en la
-implementación de referencia**, y el tope de 50 ms de `src/scheduler.c:144` es una limitación de la
-VM-C, no del diseño. ⚠️ Y eso significa que tocarlo **roza el invariante dual-VM**.
-
-**Lo demás que salió y que conviene tener a mano** (el detalle, en el documento):
-- ⏰ **El techo del sueño lo pone el reloj de sondeo más rápido**, y hoy con un programa cargado son
-  el hilo `io` a 5 ms y el tope de 50 ms del planificador — que además **ya no lo usa nadie** durante
-  un RUN con `io`. Aunque todo lo demás estuviera encendido, **ningún micro podría dormir más de un
-  tick seguido**.
-- ⏰ **Los ESP tienen un límite duro que nadie había censado como tal**: el Interrupt WDT por
-  hardware a **300 ms** en las cuatro imágenes. La Pico sí para su watchdog de verdad; el STM32 hoy
-  no registra backend a propósito.
-- 🔋 **El caso real de una placa a pilas —autorun sin IDE— no estaba censado.** Existe en las tres
-  familias, y es el modo en que vive un aparato con batería: arranca solo y **no hay nadie al otro
-  lado del cable**. Los 200 sondeos/s del hilo `io` se pagan íntegros para atender un `KILL` que no
-  puede llegar.
-- 🔌 **Cargas estáticas que no dependen de la CPU y que no apaga nadie**: en la DK2 se inicializan
-  **19 periféricos incondicionalmente** en el arranque (cinco UART, tres SPI, el PHY del USB HS…) y
-  16 en la Nucleo; el **LTDC escanea el panel desde el arranque** corra o no una GUI; el NeoPixel de
-  la Metro se enciende verde tenue en el arranque *(un `test H7.4.a` que se quedó)* y no lo apaga
-  nadie. Contraste que prueba que no es inevitable: en la Pico el ADC es perezoso.
-- 🐛 **`sleepUs()` es espera activa pura** y su nombre no lo delata: `sleepUs(500000)` son 0,5 s de
-  micro a plena carga sin ceder ni el hilo BP ni la CPU.
-- 🐛 **`Machine.MIN_CPU_MHZ()` declara 18 MHz para las cinco familias y sólo la Pico lo implementa**
-  (y bien: escala Vdd_core por tabla). El STM32 y el ESP devuelven 0. Es la palanca que Eduardo
-  recordaba de las pruebas de overclocking, y está declarada donde no existe.
-- ⚠️ **Un consumo invisible en el parque**: `Gui.mod` no viaja en el blob embebido y el IDE no
-  reinstala la stdlib en cada Run, así que **cualquier placa cuya stdlib no se haya reinstalado tras
-  `a5a00daa` tiene el lazo de GUI viejo, que no tiene pausa ninguna y gira a tope**. El síntoma no es
-  un fallo: es consumo.
-
-🔧 **EL DATO DE HARDWARE QUE CORRIGE EL VOCABULARIO (Eduardo, 10-sep).** *«El RP2350 no tiene un
-RTC dedicado en su hardware, a diferencia del RP2040. Lo que incluye es un temporizador AON
-(Always-On): un contador de 64 bits en el dominio de energía siempre encendido que mide
-milisegundos, y sirve para programar eventos de encendido. Si una placa RP2350 comercial trae RTC,
-es por un chip externo añadido en la placa (tipo PCF85063), no por una función nativa del micro.»*
-
-**Esto explica el hallazgo del censo en vez de contradecirlo**: que la Pico no registre backend de
-RTC no es un olvido — **es que no hay nada nativo que registrar**.
-
-🔑 **Y cambia cómo hay que llamar a la pieza.** Lo que hace falta no es un *reloj de calendario*: es
-**un contador en el dominio siempre encendido capaz de generar un evento de despertar**. Eso lo
-tienen todas las familias, con nombres distintos:
-
-| familia | la pieza | ¿la alcanzamos hoy? |
-|---|---|---|
-| **RP2350** | **AON Timer**, 64 bits en ms, dentro de POWMAN | **no**: no enlazamos `hardware_powman` ni `pico_sleep` (`pico/CMakeLists.txt:195-213`, 12 librerías y ninguna es ésa) |
-| **STM32U5** | RTC de hardware con dominio de respaldo (y además LPTIM) | **sí**, es el único con backend (`gpio_stm32.c:790`, `:1009`) |
-| **ESP32-S3 / C3 / C6** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
-| **ESP32-P4** | **igual, pero con más silicio**: controlador RTC con lógica de wake-up para deep-sleep **y dominio VBAT** con respaldo por batería y cristal externo de 32,768 kHz | **no**, y con matiz — ver abajo |
-
-🔬 **EL P4 NO ES «UN ESP32» MÁS EN ESTO (dato de Eduardo, 10-sep, comprobado en nuestras imágenes).**
-El P4 integra controlador RTC con lógica de activación para deep-sleep **y un dominio VBAT** con
-entrada para cristal de 32,768 kHz y conmutación de energía, de modo que la hora sobrevive a un corte
-de la alimentación principal. *(Su aviso, y hay que mantenerlo escrito: el soporte de ESP-IDF para el
-mantenimiento avanzado con VBAT sigue en pruebas.)*
-
-Lo que dicen **nuestros** `sdkconfig`, que es la pregunta útil:
-
-| | S3 | C3 | C6 | **P4** |
-|---|---|---|---|---|
-| `CONFIG_SOC_VBAT_SUPPORTED` | — | — | — | **`y`** |
-| `CONFIG_ESP_VBAT_INIT_AUTO` | — | — | — | **not set** |
-| fuente del reloj RTC | `INT_RC` | `INT_RC` | `INT_RC` | **`INT_RC`** |
-
-O sea: **el silicio del P4 lo soporta, IDF lo sabe (`SOC_VBAT_SUPPORTED=y`) y nuestra imagen no lo
-usa** — y las cuatro, el P4 incluido, corren el RTC sobre el **oscilador RC interno**, no sobre un
-cristal.
-
-🔑 **Y eso separa limpiamente los dos usos, que hasta ahora iban juntos:**
-- **Como DESPERTADOR** («despiértame dentro de N ms»): el RC interno **basta**. Que derive un 5 % con
-  la temperatura da igual cuando lo que se pide es volver a mirar dentro de un rato. Para el caso 2
-  —la escalera— no hace falta cristal ni VBAT.
-- **Como CALENDARIO** («qué hora es tras un corte»): ahí **sí** hacen falta cristal y VBAT, y eso es
-  del P4 y del STM32, no de los otros tres.
-
-Así que el punto de partida no se mueve: **empezar por el despertador, que se puede en todas**, y
-dejar el calendario como una capacidad que unas placas tienen y otras no —y que, como todo lo de
-`#479`, hay que poder **preguntar** en vez de suponer.
-
-❓ **No determinado, y es de placa, no de micro**: si la Waveshare P4 que usamos tiene realmente
-cableados el cristal de 32,768 kHz y la entrada VBAT. Eso no sale del código: sale del esquemático o
-del multímetro.
-
-⚠️ **Un RTC externo NO es un despertador.** Un PCF85063 por I2C es un **driver de placa**, no silicio:
-da la hora, pero **sólo despierta al micro si su línea INT está cableada a un pin capaz de
-despertar**. Tenerlo no da la fuente de despertar; es una pregunta de la placa concreta, no del
-micro. Es exactamente la distinción de `#479`: hay verdades de silicio y verdades de placa, y viven
-en sitios distintos.
-
-📌 **Y una consecuencia que no es de consumo pero está aquí al lado**: en la Pico y el ESP, `Rtc` es
-hoy **un offset por software sobre el reloj monotónico** (`src/rtc.c:28`). Muere en cada reset, y el
-programa **no tiene forma de saber si la hora es real o inventada** — la misma forma que `#469`.
-Anotado en la cabecera de `src/rtc.c`, que además decía que el backend lo registraba la Pico: era
-falso, lo registra el STM32.
-
-⏭️ **V7, y es un ESTUDIO, no una implementación.** Lo que falta: **sin amperímetro no hay números** —
-decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y hay una medida que
-**no** necesita amperímetro y tampoco se tiene: **cuánto cuesta hoy una vuelta en reposo**. El único
-número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `lv_timer_handler`, y su
-propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
-contra qué compararse.
-
 #### ✅ `#487` — el BREADCRUMB está mudo en 4 de 5 familias (abierta 9-sep, de `#480` · **→ V7** el mismo día · **CERRADA el 22-sep**, H4 P3: el algoritmo del STM32 sube al común (`bpvm_breadcrumb_attach`) y cada familia pone sólo el bloque que su silicio conserva entre resets —TAMP en STM32, `.uninitialized_data` en RP2350, `.noinit` en ESP32—; los cuatro callbacks desaparecen del backend; `caps.breadcrumb` dice si hay; verificado con RESET en Pico (arranque #4, rastro 100 200 300) y P4 (#3, rastro 100 200 300). El PC: setMark deja la marca en RAM corriente, markCount 0, bootCount 1, `hasBreadcrumb()` false)
 
 El cuarteto `setMark`/`markCount`/`markAt`/`bootCount` sólo lo rellena el STM32
@@ -2936,6 +2655,306 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
   se hizo: es una FEATURE que falta, no un bug, y estamos en freeze** — decision de
   Eduardo. Documentado como limitacion en `TARJETA_SD.md` §6, con el rodeo mientras
   tanto (llevarse la cuenta uno mismo, o nombres predecibles por fecha).
+
+### ═══ V8 — LA WIFI, EL BLUETOOTH Y EL BAJO CONSUMO (decidido el 24-sep-2026) ═══
+
+> **Decisión de Eduardo (24-sep):** *«La V8 la dedicaremos a la WiFi y el Bluetooth principalmente. El modo de bajo consumo también lo movemos a V8, todo lo demás de V7 se mantiene.»*
+>
+> Lo que ya es de V8:
+> - **la red en placa**: el backend WiFi de `Net`, que hoy sólo tiene el del PC. Ya era de V8 desde el rumbo
+>   del 10-ago, que entonces decía WiFi y una web pequeña servida por el dispositivo para configurarlo y
+>   diagnosticarlo;
+> - **el Bluetooth**, nuevo en el plan;
+> - **el bajo consumo**: `#490`, el estudio, movido aquí entero desde V7 (era de H10), con su texto intacto.
+>
+> No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
+> Es el tema de la versión siguiente, y lo decide Eduardo.
+
+#### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V8** (abierta 10-sep, decidida a V7 el mismo día; **a V8 el 24-sep**, con la WiFi y el Bluetooth — Eduardo)
+
+**La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
+nada que hacer, en un micro con alimentación da igual lo que haga, pero si fuese un micro que
+funciona con baterías lo ideal es que se durmiese. ¿Cómo está ahora?»*
+
+Y acto seguido, la frase que decide el diseño entero: 🔑 ***«casi todos los micros tienen un modo de
+bajo consumo; lo difícil no es entrar en él, lo difícil es programar qué es lo que lo hace salir»***.
+
+**Por qué eso lo cambia todo.** Entrar es una instrucción (`WFI`, `esp_light_sleep_start`, el Stop
+del U5). Salir es un **contrato**: hay que declarar *de antemano* qué evento despierta, y ese
+contrato es lo que no existe hoy en BP. Un `Machine.sleep()` a secas sería un cuelgue con otro
+nombre. Las preguntas reales son de lenguaje, no de silicio:
+- ¿Quién declara las fuentes de despertar — el programa, o la placa?
+- ¿Qué pasa con los hilos BP dormidos: el `sleep(200)` de un hilo, ¿es una fuente de despertar?
+- ¿Y el wire? Si el IDE está conectado, la placa **no puede** dormirse sin perder la conexión; si no
+  lo está, sí. Eso hace que el modo dependa de si hay alguien mirando.
+- ¿Y la GUI? Un panel encendido consume más que el core; dormir el micro con la pantalla viva no
+  ahorra gran cosa.
+
+📌 **Es la misma forma que `#479` (el mapa de pines) y que los arrays de buses de `#470`**: qué pines
+y qué periféricos pueden despertar, y qué se conserva en cada modo, es **verdad de silicio** — va en
+la cintura de cada micro y viaja compilada en su imagen, no en el ENV. Conviene resolverlas juntas.
+
+**Lo que se sabe ya, y es poco**: no hay ni una línea escrita sobre consumo en todo `docs/`. Y hay un
+dato duro, medido el 10-sep por otro motivo (`#473`/R16): **en el STM32 la tarea ociosa no corre
+nunca** —su lazo del wire gira con `continue` sin ceder y la tarea `vm` va a `tskIDLE_PRIORITY+2`—,
+así que esa familia ni siquiera llega al escalón previo de poder dormir. Y es la familia de bajo
+consumo de ST, o sea el peor sitio donde tener eso.
+
+⚠️ **Los tres escalones que se confunden**, y hay que mantenerlos separados en todo el estudio:
+(a) el hilo cede la CPU · (b) la tarea ociosa corre · (c) el **micro** entra en bajo consumo.
+Sólo (c) se nota en el amperímetro. Hoy la Pico y el ESP32 llegan a (a) con seguridad; (b) y (c)
+están por censar.
+
+🎯 **POR DÓNDE EMPEZAR — decidido por Eduardo el 10-sep:** *«No creo que haya una solución común
+para todos los casos, pero podemos empezar por algo sencillo e ir creciendo. Empezar por el timer o
+el RTC y programar un sleep que despierte cada cierto tiempo, y si no hay nada se vuelva a dormir.»*
+
+**Por qué es el punto de partida correcto, y no un atajo.** Convierte el problema difícil —*declarar
+qué despierta*— en uno fácil: *mirar cada cierto tiempo*. Con una sola fuente de despertar (el
+temporizador) no hay contrato que diseñar, no hay mapa de pines que resolver antes, y no hay que
+tocar el lenguaje. La parte difícil no se resuelve: **se aplaza a propósito**, y eso permite que
+haya algo funcionando antes de decidir lo demás.
+
+⚠️ **El precio, y choca de frente con `#462`.** Despertar cada N ms significa que un evento puede
+llegar hasta N ms tarde. Esta misma sesión bajamos el suelo de descubrimiento de un evento de 48 ms
+a **7 ms**, medido en la C6; un periodo de dormir de 100 ms lo devolvería a ~100 ms. Así que **el
+periodo no es una constante: es una política**, y quién la elige (el programa, la placa, o el modo
+en que esté) es ya una pregunta de lenguaje. La forma sana de decirlo: *dormir es cambiar latencia
+por consumo*, y el que sabe cuánta latencia se puede permitir es el programa.
+
+📌 **«Si no hay nada» hay que definirlo, y la lista es reveladora.** Al despertar hay que mirar:
+¿hay bytes en el wire? ¿hay algún hilo BP listo para correr? ¿ha vencido algún `sleep` de hilo?
+¿hay un evento en la cola? **Es exactamente la misma lista que las fuentes de despertar**, sólo que
+sondeada en vez de por interrupción — que es justo por lo que este camino es más barato de empezar,
+y también por lo que crece de forma natural: cada elemento de esa lista que se convierta en
+interrupción real es un paso más, sin rehacer lo anterior.
+
+📌 **Timer y RTC NO son intercambiables**, y ésta es de las primeras cosas que el estudio tiene que
+poner en tabla: qué reloj sobrevive a qué modo de bajo consumo es **verdad de silicio y distinta por
+micro**. Un temporizador general suele morir en los modos profundos; el RTC suele sobrevivir, con
+menos resolución. Elegir uno u otro fija de rebote **hasta dónde se puede dormir**.
+
+📌 **Y hay que mirar lo que FreeRTOS ya trae hecho**: `configUSE_TICKLESS_IDLE` es literalmente este
+patrón —«ninguna tarea estará lista en N ticks → paro el tick, bajo consumo, programo el despertar»—
+implementado por el RTOS. La primera pregunta del estudio no es *cómo lo hacemos*, sino **si eso
+está encendido y por qué hoy no sirve**. La sospecha, con lo medido el 10-sep: no llega a ejecutarse,
+porque la capa de encima (el lazo del wire, y el scheduler de la VM) no cede el turno a la ociosa.
+
+🪜 **LA ESCALERA — Eduardo, 10-sep:** *«Lo de dormir se puede hacer progresivo: primero pausas
+cortas y, según se va avanzando sin actividad, pausas más largas.»*
+
+**Esto deshace la tensión con la latencia, y la deshace en el sitio correcto.** El problema del
+periodo fijo era elegir N: corto gasta, largo tarda. Con la escalera **no hay N que elegir** — el
+sistema se calibra solo, y el coste cae donde menos se paga: justo después de actividad (que es
+cuando es más probable que venga más) la pausa es corta y la latencia sigue siendo la de hoy; tras
+un rato largo de silencio (cuando es menos probable que venga nada) la pausa crece. Se paga latencia
+sólo en el caso en que casi nunca hay nadie esperándola.
+
+⚠️ **El caso malo, dicho sin adornos: el PRIMER evento tras un silencio largo** — que es exactamente
+la persona que deja el aparato quieto y vuelve a tocar un botón. La escalera empeora justo ése. De
+ahí que **el tope de la escalera sea una decisión de producto, no técnica**: un cacharro con pantalla
+no debería pasar de unas decenas de ms porque un toque se notaría lento; un registrador de datos
+puede irse a segundos. Y el escape es limpio: **una fuente que sea interrupción de verdad se salta el
+tope entero** (un táctil con línea de IRQ despierta al instante, esté la escalera donde esté). O sea
+que subir el tope y convertir fuentes en interrupciones son la misma mejora vista desde dos lados.
+
+📱 **El primer despertador con nombre: el TÁCTIL de la C5 (23-sep, al arreglar su cuelgue en H6.c).**
+Pregunta de Eduardo: *«¿se despierta tocando la pantalla?»*. Según el fabricante (el `cst66xx` de
+Hynitron y el mapa de registros del componente de Espressif), **depende de cómo se le deje dormir**:
+- **bajo consumo** (`D0 00 04 AB`): sigue escaneando, más despacio → el toque se detecta y levanta su `INT`;
+- **gesto** (`D0 00 0C 01`, *gesture report*): escanea buscando un gesto —el «toca dos veces» de los
+  móviles— → `INT`; si el firmware de este CST3530 lo trae, **está por probar**;
+- **sueño profundo** (`D0 00 22 AB`): deja de escanear → **tocar NO lo despierta**; sólo el micro, con
+  un reset (su *resume*: reset, 50 ms, modo normal).
+
+Para despertar al **micro** hace falta además la línea: en la C5 el `INT` va **directo al GPIO5** (el
+reset, por el CH32), y hoy el driver no la usa —sondea—. En sueño ligero cualquier GPIO del ESP
+despierta; en profundo sólo los del dominio LP: **mirar si el 5 lo es**. ⚠️ **Y su latido ESD** (el
+contador que dice que escanea, y que la traza de `DriverSpi` lee cada 5 min) **se para cuando duerme**:
+cualquier vigilancia del chip tendrá que saberlo —el fabricante apaga la suya al salir del modo normal
+(`if (mode != NOMAL_MODE) hyn_esdcheck_switch(DISABLE)`)—.
+
+🔑 **Y lo importante: media escalera YA ESTÁ CONSTRUIDA, y no la habíamos visto así.** Al cerrar
+`#462` el bombeo de la GUI dejó de dormir por su cuenta y pasó a **devolver cuánto tiempo dice LVGL
+que puede estar ocioso** (`lv_timer_handler()`), topado a `BPVM_GUI_OCIO_MAX_MS` = 10 ms
+(`src/gui_display_sdl.c:340,382`), y es el lazo BP quien duerme eso (`bpstdlib/Gui.bp:850-853`). Eso
+no es una pausa fija: es **preguntarle al que sabe**.
+
+Con eso a la vista, las dos formas de decidir cuánto dormir se ven claras, y **se componen**:
+- **Preguntar** — el que sabe, contesta. LVGL ya lo hace. `configUSE_TICKLESS_IDLE` de FreeRTOS hace
+  lo mismo con las tareas: sabe cuándo vence el próximo `vTaskDelay`.
+- **La escalera** — el respaldo para lo que **nadie puede contestar**: cuándo llegará el próximo byte
+  del wire, o el próximo toque. Ahí no hay a quién preguntar, y la progresión es la respuesta.
+
+⏭️ Así que la pausa de cada vuelta sale de un `min()`: lo que digan todos los que saben, contra el
+peldaño actual de la escalera. La escalera no sustituye a nada de lo que ya hay — **rellena el hueco
+que queda**.
+
+🧭 **LOS DOS CASOS — Eduardo, 10-sep:** *«Tal como yo lo veo hay 2 casos: 1 — el usuario indica
+expresamente que no va a hacer nada; 2 — el usuario no está prestando atención y la tarea se ha
+terminado.»*
+
+**Y no son dos formas de detectar lo mismo: son dos regímenes distintos, porque cambia QUIÉN ACEPTA
+LAS CONSECUENCIAS.** Ahí está la utilidad de partirlo así:
+
+| | **caso 1 — declarado** | **caso 2 — inferido** |
+|---|---|---|
+| quién decide | el programa, con un verbo | el sistema, solo |
+| quién acepta el coste | **el programador** | **nadie** |
+| qué se puede apagar | mucho: periféricos, relojes, incluso perder el wire — porque alguien lo pidió | sólo lo que se pueda recuperar **como si no hubiera pasado nada** |
+| profundidad | hasta donde diga el verbo | topada por la transparencia |
+| latencia al volver | asumida | no se puede notar |
+
+🔑 **La consecuencia práctica, y es la que más ordena el diseño: el caso 2 tiene que ser
+TRANSPARENTE.** Si nadie ha pedido dormir, nadie ha aceptado perder nada — así que el caso 2 **no
+puede tirar la conexión del wire** (el IDE podría estar enganchado), ni perder un evento, ni
+retrasar un `sleep` de un hilo BP. Es una optimización invisible o no es. El caso 1 sí puede tirar el
+wire, **porque el programa lo ha pedido**.
+
+📌 **No son alternativas, se componen**: el caso 2 es el **suelo** —siempre puesto, automático,
+invisible, y es exactamente donde encaja la escalera— y el caso 1 es la **salida explícita** para
+cuando el programa sabe más de lo que el sistema puede inferir («voy a estar 10 minutos sin hacer
+nada, despiértame con el botón»).
+
+⚠️ **La trampa del caso 2, dicha entera: «el usuario no está prestando atención» NO es observable
+por el micro.** Lo que el micro puede observar es *no hay nada pendiente ni nada que venza pronto*.
+No es lo mismo: un registrador de datos sin ningún usuario delante está *siempre* desatendido y no
+debe dormirse a través de su siguiente muestreo. Así que el disparador del caso 2 no es «nadie mira»
+sino **«nada pendiente Y nada que venza antes de que yo despierte»** — que es, otra vez, la misma
+lista de antes (wire, hilos BP listos, `sleep` que vence, eventos en cola), ahora usada para decidir
+*cuánto* dormir y no sólo *si* dormir.
+
+📊 **EL CENSO, HECHO (10-sep) → `docs/BAJO_CONSUMO_CENSO.md`.** Seis lecturas + refutación
+adversarial (**57 de 73 hallazgos vivos**, 16 tumbados) + crítico de completitud. **Sin amperímetro:
+ni un mA en él, a propósito.** El titular:
+
+> 🔴 **Ninguna de las siete placas llega a dormir. Ni una. No hay una sola línea en el árbol que meta
+> a un micro en un modo de bajo consumo.**
+
+Con los cuatro escalones separados, que es como hay que leerlo:
+
+| familia | el hilo cede | la ociosa corre | el **núcleo** se para (`WFI`) | el **micro** baja consumo |
+|---|---|---|---|---|
+| **RP2350** (Pico 2 / Metro) | sí | sí | **no** | **no** |
+| **ESP32** (S3, C3, C6, P4) | sí | sí | **sí** (`waiti`/`wfi`) | **no** |
+| **STM32U5** (DK2 y Nucleo) | **no** | **no** | **no** | **no** |
+
+Verificado **contra el artefacto**, no leyendo: `wfi` = 0 en el desensamblado de la Pico
+(82 898 líneas) y en los `.list` de la DK2 y la Nucleo. En los ESP el núcleo sí se para porque el
+kernel de IDF llama **siempre** a su idle hook.
+
+🔑 **Y el hallazgo que va contra el punto de partida elegido: el RTC de hardware SÓLO tiene backend
+en el STM32** (`stm32/port/gpio_stm32.c:790`, `:1009`). El ESP usa a propósito el stub portable
+(`esp32/common/gpio_esp32.c:595`) y la Pico no registra ninguno. **El reloj que se propone como
+despertador existe justo en la familia que hoy no llega ni a ejecutar su tarea ociosa, y no existe en
+las otras cuatro.** Empezar por el RTC significa construirlo en tres familias antes de poder probar
+nada; empezar por el timer, no.
+
+🔑 **Y el que cambia el encuadre entero: miVM YA HACE LO CORRECTO.** Calcula
+`earliestSleepWakeMs()` y espera **el delta completo** en `vmLock.wait(delta)`, sin tope, porque
+quien llega lo despierta con un `notify` (`VirtualMachine.java:543`, `:2305-2317`). O sea que el
+patrón *«duerme hasta el próximo vencimiento y que un evento te despierte»* **ya está escrito en la
+implementación de referencia**, y el tope de 50 ms de `src/scheduler.c:144` es una limitación de la
+VM-C, no del diseño. ⚠️ Y eso significa que tocarlo **roza el invariante dual-VM**.
+
+**Lo demás que salió y que conviene tener a mano** (el detalle, en el documento):
+- ⏰ **El techo del sueño lo pone el reloj de sondeo más rápido**, y hoy con un programa cargado son
+  el hilo `io` a 5 ms y el tope de 50 ms del planificador — que además **ya no lo usa nadie** durante
+  un RUN con `io`. Aunque todo lo demás estuviera encendido, **ningún micro podría dormir más de un
+  tick seguido**.
+- ⏰ **Los ESP tienen un límite duro que nadie había censado como tal**: el Interrupt WDT por
+  hardware a **300 ms** en las cuatro imágenes. La Pico sí para su watchdog de verdad; el STM32 hoy
+  no registra backend a propósito.
+- 🔋 **El caso real de una placa a pilas —autorun sin IDE— no estaba censado.** Existe en las tres
+  familias, y es el modo en que vive un aparato con batería: arranca solo y **no hay nadie al otro
+  lado del cable**. Los 200 sondeos/s del hilo `io` se pagan íntegros para atender un `KILL` que no
+  puede llegar.
+- 🔌 **Cargas estáticas que no dependen de la CPU y que no apaga nadie**: en la DK2 se inicializan
+  **19 periféricos incondicionalmente** en el arranque (cinco UART, tres SPI, el PHY del USB HS…) y
+  16 en la Nucleo; el **LTDC escanea el panel desde el arranque** corra o no una GUI; el NeoPixel de
+  la Metro se enciende verde tenue en el arranque *(un `test H7.4.a` que se quedó)* y no lo apaga
+  nadie. Contraste que prueba que no es inevitable: en la Pico el ADC es perezoso.
+- 🐛 **`sleepUs()` es espera activa pura** y su nombre no lo delata: `sleepUs(500000)` son 0,5 s de
+  micro a plena carga sin ceder ni el hilo BP ni la CPU.
+- 🐛 **`Machine.MIN_CPU_MHZ()` declara 18 MHz para las cinco familias y sólo la Pico lo implementa**
+  (y bien: escala Vdd_core por tabla). El STM32 y el ESP devuelven 0. Es la palanca que Eduardo
+  recordaba de las pruebas de overclocking, y está declarada donde no existe.
+- ⚠️ **Un consumo invisible en el parque**: `Gui.mod` no viaja en el blob embebido y el IDE no
+  reinstala la stdlib en cada Run, así que **cualquier placa cuya stdlib no se haya reinstalado tras
+  `a5a00daa` tiene el lazo de GUI viejo, que no tiene pausa ninguna y gira a tope**. El síntoma no es
+  un fallo: es consumo.
+
+🔧 **EL DATO DE HARDWARE QUE CORRIGE EL VOCABULARIO (Eduardo, 10-sep).** *«El RP2350 no tiene un
+RTC dedicado en su hardware, a diferencia del RP2040. Lo que incluye es un temporizador AON
+(Always-On): un contador de 64 bits en el dominio de energía siempre encendido que mide
+milisegundos, y sirve para programar eventos de encendido. Si una placa RP2350 comercial trae RTC,
+es por un chip externo añadido en la placa (tipo PCF85063), no por una función nativa del micro.»*
+
+**Esto explica el hallazgo del censo en vez de contradecirlo**: que la Pico no registre backend de
+RTC no es un olvido — **es que no hay nada nativo que registrar**.
+
+🔑 **Y cambia cómo hay que llamar a la pieza.** Lo que hace falta no es un *reloj de calendario*: es
+**un contador en el dominio siempre encendido capaz de generar un evento de despertar**. Eso lo
+tienen todas las familias, con nombres distintos:
+
+| familia | la pieza | ¿la alcanzamos hoy? |
+|---|---|---|
+| **RP2350** | **AON Timer**, 64 bits en ms, dentro de POWMAN | **no**: no enlazamos `hardware_powman` ni `pico_sleep` (`pico/CMakeLists.txt:195-213`, 12 librerías y ninguna es ésa) |
+| **STM32U5** | RTC de hardware con dominio de respaldo (y además LPTIM) | **sí**, es el único con backend (`gpio_stm32.c:790`, `:1009`) |
+| **ESP32-S3 / C3 / C6** | el temporizador del dominio RTC (`esp_sleep_enable_timer_wakeup`) | **no**: usa el stub portable a propósito (`gpio_esp32.c:595`), y PM está apagado |
+| **ESP32-P4** | **igual, pero con más silicio**: controlador RTC con lógica de wake-up para deep-sleep **y dominio VBAT** con respaldo por batería y cristal externo de 32,768 kHz | **no**, y con matiz — ver abajo |
+
+🔬 **EL P4 NO ES «UN ESP32» MÁS EN ESTO (dato de Eduardo, 10-sep, comprobado en nuestras imágenes).**
+El P4 integra controlador RTC con lógica de activación para deep-sleep **y un dominio VBAT** con
+entrada para cristal de 32,768 kHz y conmutación de energía, de modo que la hora sobrevive a un corte
+de la alimentación principal. *(Su aviso, y hay que mantenerlo escrito: el soporte de ESP-IDF para el
+mantenimiento avanzado con VBAT sigue en pruebas.)*
+
+Lo que dicen **nuestros** `sdkconfig`, que es la pregunta útil:
+
+| | S3 | C3 | C6 | **P4** |
+|---|---|---|---|---|
+| `CONFIG_SOC_VBAT_SUPPORTED` | — | — | — | **`y`** |
+| `CONFIG_ESP_VBAT_INIT_AUTO` | — | — | — | **not set** |
+| fuente del reloj RTC | `INT_RC` | `INT_RC` | `INT_RC` | **`INT_RC`** |
+
+O sea: **el silicio del P4 lo soporta, IDF lo sabe (`SOC_VBAT_SUPPORTED=y`) y nuestra imagen no lo
+usa** — y las cuatro, el P4 incluido, corren el RTC sobre el **oscilador RC interno**, no sobre un
+cristal.
+
+🔑 **Y eso separa limpiamente los dos usos, que hasta ahora iban juntos:**
+- **Como DESPERTADOR** («despiértame dentro de N ms»): el RC interno **basta**. Que derive un 5 % con
+  la temperatura da igual cuando lo que se pide es volver a mirar dentro de un rato. Para el caso 2
+  —la escalera— no hace falta cristal ni VBAT.
+- **Como CALENDARIO** («qué hora es tras un corte»): ahí **sí** hacen falta cristal y VBAT, y eso es
+  del P4 y del STM32, no de los otros tres.
+
+Así que el punto de partida no se mueve: **empezar por el despertador, que se puede en todas**, y
+dejar el calendario como una capacidad que unas placas tienen y otras no —y que, como todo lo de
+`#479`, hay que poder **preguntar** en vez de suponer.
+
+❓ **No determinado, y es de placa, no de micro**: si la Waveshare P4 que usamos tiene realmente
+cableados el cristal de 32,768 kHz y la entrada VBAT. Eso no sale del código: sale del esquemático o
+del multímetro.
+
+⚠️ **Un RTC externo NO es un despertador.** Un PCF85063 por I2C es un **driver de placa**, no silicio:
+da la hora, pero **sólo despierta al micro si su línea INT está cableada a un pin capaz de
+despertar**. Tenerlo no da la fuente de despertar; es una pregunta de la placa concreta, no del
+micro. Es exactamente la distinción de `#479`: hay verdades de silicio y verdades de placa, y viven
+en sitios distintos.
+
+📌 **Y una consecuencia que no es de consumo pero está aquí al lado**: en la Pico y el ESP, `Rtc` es
+hoy **un offset por software sobre el reloj monotónico** (`src/rtc.c:28`). Muere en cada reset, y el
+programa **no tiene forma de saber si la hora es real o inventada** — la misma forma que `#469`.
+Anotado en la cabecera de `src/rtc.c`, que además decía que el backend lo registraba la Pico: era
+falso, lo registra el STM32.
+
+⏭️ **V7, y es un ESTUDIO, no una implementación.** Lo que falta: **sin amperímetro no hay números** —
+decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y hay una medida que
+**no** necesita amperímetro y tampoco se tiene: **cuánto cuesta hoy una vuelta en reposo**. El único
+número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `lv_timer_handler`, y su
+propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
+contra qué compararse.
 
 ## 📦 CERRADAS EN V6 (con su commit, para no volver a darlas por abiertas) — V6 publicada el 12-sep-2026
 

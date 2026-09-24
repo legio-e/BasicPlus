@@ -274,7 +274,7 @@ su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
 - **No hay bajo consumo** (`#490`). El micro nunca duerme: sin nada que hacer sigue
   girando (y en el STM32 la tarea ociosa ni siquiera llega a correr). No existe un
   `sleep` de placa ni fuentes de despertar en BP: un programa a batería no puede
-  ahorrar hoy.
+  ahorrar hoy. Es de **V8**, con la WiFi y el Bluetooth.
 - **`GET` y `LS` contestan `BUSY` mientras corre un programa** (`#495`). El
   explorador de ficheros del IDE no lista ni baja nada durante un RUN; `HELLO`, `KILL` y
   `RESET` sí llegan. Los ficheros que escribe el programa (un `.shot`, un log) se bajan
