@@ -2205,6 +2205,11 @@ tira.show()</code></pre>
 <p><strong>En RP2350</strong> (SPI) — así están cableados los de la Metro:</p>
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40</code></pre>
 
+<p><strong>En la ESP32-C5</strong> (SPI, en el mismo bus que la pantalla) — la forma corta: los pines son
+  del bus, que la placa declara en su propia línea (<code>spi2=sck:6,mosi:7,miso:8</code>), y la SD sólo
+  dice cuál, su CS y su velocidad:</p>
+<pre><code>sd=bus:2,cs:23,khz:10000</code></pre>
+
 <p><strong>En ESP32-P4</strong> (SDIO) — así está el P4:</p>
 <pre><code>sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0</code></pre>
 
@@ -2214,6 +2219,14 @@ tira.show()</code></pre>
   (el pin que alimenta el raíl y con qué nivel se enciende), <code>slot</code>,
   <code>khz</code> (velocidad, por defecto 20000) y <code>ldo</code> (el regulador
   interno de las E/S).
+</p>
+
+<p>
+  La variante SPI acepta <code>sck</code>, <code>mosi</code>, <code>miso</code>, <code>cs</code>
+  (el único obligatorio), <code>bus</code>, <code>cd</code> y <code>cdalto</code>, y
+  <code>khz</code>: la velocidad de trabajo, por defecto 25000 —el tope del modo SPI de la SD—.
+  Es de la <em>placa</em>, no de la tarjeta: en la C5 el MISO pasa por la matriz de GPIO del
+  ESP32, que lo retrasa, y a 25 MHz se tuercen bits; a 10000, limpio.
 </p>
 
 <p>
@@ -2231,7 +2244,7 @@ tira.show()</code></pre>
 </p>
 
 <pre><code>sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz
-sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
+sd: montada en /sd por SDMMC (particion en el bloque 2048)</code></pre>
 
 <p>
   <strong>Las dos líneas dicen cosas distintas y las dos hacen falta.</strong> La primera

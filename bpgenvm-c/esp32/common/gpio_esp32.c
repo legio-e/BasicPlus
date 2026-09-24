@@ -21,6 +21,7 @@
 #include "bpvm_adc.h"
 #include "bpvm_pulse.h"
 #include "bpvm_wdt.h"
+#include "bpvm_log.h"               /* V7/H3 (#552): un dispositivo SPI que el IDF rechaza, al log */
 
 #include "esp_attr.h"               /* V7/H4: __NOINIT_ATTR para las migas */
 #include "driver/gpio.h"
@@ -405,8 +406,13 @@ static void esp32_spi_ajustar(int bus, int baudrate, int mode) {
         .spics_io_num   = -1,      /* CS lo lleva el usuario por GPIO */
         .queue_size     = 1,
     };
-    if (spi_bus_add_device((spi_host_device_t) host, &devcfg, &s_spi_dev[bus]) == ESP_OK) {
+    esp_err_t e = spi_bus_add_device((spi_host_device_t) host, &devcfg, &s_spi_dev[bus]);
+    if (e == ESP_OK) {
         s_spi_hz[bus] = baudrate; s_spi_modo[bus] = mode;
+    } else {
+        /* V7/H3 (#552): sin dispositivo, cada transferencia falla después LEJOS de aquí; que se diga dónde. */
+        s_spi_dev[bus] = NULL;
+        log_printf("spi: bus %d: el IDF no acepta %d Hz en modo %d (%s)", bus, baudrate, mode, esp_err_to_name(e));
     }
 }
 

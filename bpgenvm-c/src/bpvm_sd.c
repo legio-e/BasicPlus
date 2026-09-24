@@ -231,6 +231,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
     p->sck = p->mosi = p->miso = p->cs = -1;
     p->cd = -1;
     p->cd_activo_bajo = 1;
+    p->khz = 0;                        /* #552: 0 = la de siempre */
 
     if (!valor || !*valor) { di(motivo, motivo_cap, "la entrada 'sd' esta vacia", 0); return -1; }
 
@@ -240,7 +241,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
         if (!*s) break;
         static const struct { const char* clave; int campo; } tabla[] = {
             { "sck", 0 }, { "mosi", 1 }, { "miso", 2 }, { "cs", 3 },
-            { "cd",  4 }, { "bus",  5 }, { "cdalto", 6 }
+            { "cd",  4 }, { "bus",  5 }, { "cdalto", 6 }, { "khz", 7 }
         };
         const char* v = 0;
         int campo = -1;
@@ -266,6 +267,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
         case 4: p->cd   = n; break;
         case 5: p->bus  = n; break;
         case 6: p->cd_activo_bajo = n ? 0 : 1; break;
+        case 7: p->khz  = n; break;
         default: break;
         }
         s = v;

@@ -83,6 +83,8 @@ typedef struct {
     int cs;     /* GPIO normal, salida */
     int cd;     /* GPIO normal, entrada; <0 = no hay */
     int cd_activo_bajo;  /* casi siempre 1: tarjeta dentro => pin a 0 */
+    int khz;    /* V7/H3 (#552): la velocidad de trabajo; 0 = la de siempre (25 MHz). Va AL FINAL: los
+                 * inicializadores por posición de las pruebas la dejan a 0 */
 } bpvm_sd_pines_t;
 
 /*
@@ -95,6 +97,11 @@ typedef struct {
  * Con etiquetas y no por posición porque así el orden da igual y, sobre todo,
  * porque cuando falte algo el mensaje puede DECIR QUÉ falta en vez de dejar un
  * pin a cero en silencio. `bus` (0) y `cd` (ninguno) tienen valor por defecto.
+ *
+ * V7/H3 (#552, 24-sep) — `khz`, la velocidad de trabajo (la de la variante SDIO, con la misma clave):
+ * sin ella, 25 MHz, el tope del modo SPI de la SD. Es de la PLACA, no de la tarjeta: en la C5 MISO llega
+ * por la matriz de GPIO del ESP32, que la retrasa, y a 25 MHz se tuercen bits —medido: un CMD24 que no
+ * acepta los datos y un CMD17 que devuelve basura—; a 10 MHz, limpio. `sd=bus:2,cs:23,khz:10000`.
  *
  * V7/H6.c G4.a1 — los pines del BUS (sck, mosi, miso) son del bus, no de la
  * tarjeta: si la placa lo declara en el ENV (`spi2=sck:6,mosi:7,miso:8`), la

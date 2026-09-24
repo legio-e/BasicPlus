@@ -170,6 +170,13 @@ int main(void)
         CHECK(bpvm_sd_pines_parse(0, &p, m, sizeof m) == -1,
                                           "env: NULL -> rechazo, sin reventar");
     }
+    {   /* #552 — la velocidad, de la placa: `khz`; sin ella, 0 (= la de siempre, 25 MHz). */
+        bpvm_sd_pines_t p;
+        int r = bpvm_sd_pines_parse("bus:2,cs:23,khz:10000", &p, 0, 0);
+        CHECK(r == 0 && p.bus == 2 && p.cs == 23 && p.khz == 10000, "env: 'khz' se lee (la C5: 10000)");
+        r = bpvm_sd_pines_parse("sck:34,mosi:35,miso:36,cs:39,cd:40", &p, 0, 0);
+        CHECK(r == 0 && p.khz == 0,       "env: sin 'khz', 0 (la de siempre)");
+    }
     {   /* Y que `cd` no se coma a `cdalto`, que empieza igual. */
         bpvm_sd_pines_t p;
         int r = bpvm_sd_pines_parse("sck:34,mosi:35,miso:36,cs:39,cdalto:1", &p, 0, 0);

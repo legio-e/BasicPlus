@@ -30,7 +30,8 @@ static bpvm_sd_res_t   s_ultimo      = BPVM_SD_OK;
 
 static int sd_init(void) {
     if (!s_configurado) { s_ultimo = BPVM_SD_E_PINES; return -1; }
-    s_ultimo = bpvm_sd_init(&s_pines, SD_BAUD_RAPIDO, &s_info);
+    /* #552: la de la línea `sd` del ENV (`khz:`) si la dice —es de la placa: la C5 no aguanta 25—. */
+    s_ultimo = bpvm_sd_init(&s_pines, s_pines.khz > 0 ? s_pines.khz * 1000 : SD_BAUD_RAPIDO, &s_info);
     s_arrancada = (s_ultimo == BPVM_SD_OK);
     return s_arrancada ? 0 : -1;
 }

@@ -2180,12 +2180,16 @@ strip.show()</code></pre>
 </p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40         <span class="comment">// RP2350, over SPI</span>
+sd=bus:2,cs:23,khz:10000                      <span class="comment">// ESP32-C5, SPI shared with the display</span>
 sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0      <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
 
 <p>
   The SDIO variant also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,
   <code>khz</code> (default 20000) and <code>ldo</code>. On SPI, <code>cd</code> (card detect)
-  is optional.
+  is optional, <code>bus</code> alone takes the pins of a bus the board declares in its own line
+  (<code>spi2=sck:6,mosi:7,miso:8</code>), and <code>khz</code> sets the working speed (default
+  25000, the top of the card's SPI mode). The speed belongs to the <em>board</em>: on the C5, MISO
+  goes through the ESP32's GPIO matrix, which delays it, and bits get garbled at 25 MHz; 10000 is clean.
 </p>
 
 <h4 id="stdlib-sd-mount">Checking that it mounted</h4>
@@ -2197,7 +2201,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0      <span class="comment">// ESP32-P4, 
 </p>
 
 <pre><code>sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz
-sd: montada en /sd (4 bits, particion en el bloque 2048)</code></pre>
+sd: montada en /sd por SDMMC (particion en el bloque 2048)</code></pre>
 
 <p>
   <strong>The two lines say different things and you need both.</strong> The first is the

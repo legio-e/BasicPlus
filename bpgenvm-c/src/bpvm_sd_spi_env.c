@@ -25,6 +25,9 @@ int bpvm_sd_blk_registrar_desde_env(const bpvm_env_t* env) {
         return 0;
     }
     bpvm_sd_placa_registrar(bpvm_sd_blk(&pines), &bpvm_fs_fat_ops, "SPI");   /* los pines se copian */
-    log_printf("sd: pines configurados (SPI, bus %d, cs %d)", pines.bus, pines.cs);
+    /* El reloj EFECTIVO y de dónde sale, como el SDIO del P4: un chivato de configuración que dijera «0 kHz»
+     * sería peor que ninguno (#552). */
+    log_printf("sd: pines configurados (SPI, bus %d, cs %d, %d kHz %s)", pines.bus, pines.cs,
+               pines.khz > 0 ? pines.khz : 25000, pines.khz > 0 ? "del env" : "por defecto");
     return 1;
 }
