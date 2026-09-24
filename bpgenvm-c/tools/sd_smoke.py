@@ -93,9 +93,12 @@ def main():
         r = w.call("SD_INFO")
         check(r.get("type") == "SD_INFO_REPLY" and r.get("ok") is True and r.get("medio") == "fichero",
               "SD_INFO con tarjeta → ok, por el medio «fichero» (dice %r, %r)" % (r.get("ok"), r.get("motivo")))
-        check(r.get("producto") == "BPSIM" and r.get("oem") == "BP" and r.get("serie") == 20260924
+        check(r.get("producto") == "BPSIM" and r.get("oem") == "BP"
               and r.get("anno") == 2026 and r.get("mes") == 9 and r.get("version") == 2,
               "SD_INFO → la identidad de la tarjeta, campo a campo")
+        # #550 — el PSN es de 32 bits SIN signo; el de la tarjeta del sim pasa de 2^31, como el de una de verdad
+        # (la SanDisk de la Metro: 0xFDB1…). Con `long` de 32 bits (las placas, MinGW) salía NEGATIVO.
+        check(r.get("serie") == 0xFDB1A2C3, "SD_INFO → la serie, sin signo: %r (esperado %d)" % (r.get("serie"), 0xFDB1A2C3))
         check(r.get("bloques") == 8 * 1024 * 1024 // 512, "SD_INFO → la capacidad: %r bloques" % r.get("bloques"))
         check(r.get("traza") == "", "SD_INFO → sin traza: el medio no la tiene (un «00 00…» diría «línea flotante»)")
         check(r.get("leeSector0") is True and r.get("firma") == "55 AA" and r.get("clase") == "MBR",

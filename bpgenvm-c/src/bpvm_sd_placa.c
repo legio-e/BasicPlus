@@ -97,6 +97,10 @@ static void envia(long id, int off, const char* tipo) {
 #define CAMPO_B(k, v) do { if (off >= 0) off = wire_v1_field_bool  (s_buf, sizeof s_buf, (size_t) off, (k), (v)); } while (0)
 #define CAMPO_S(k, v) do { if (off >= 0) off = wire_v1_field_string(s_buf, sizeof s_buf, (size_t) off, (k), (v)); } while (0)
 #define CAMPO_L(k, v) do { if (off >= 0) off = wire_v1_field_long  (s_buf, sizeof s_buf, (size_t) off, (k), (long) (v)); } while (0)
+/* #550 — lo que es un uint32 (la serie, los bloques, las LBA, los KB) va SIN signo: `long` es de 32 bits en las
+ * placas y en MinGW, y (long) de un PSN ≥ 2^31 salía NEGATIVO (la SanDisk de la Metro: -38726973). Lo mismo
+ * que el CRC de #466. */
+#define CAMPO_U(k, v) do { if (off >= 0) off = wire_v1_field_ulong (s_buf, sizeof s_buf, (size_t) off, (k), (unsigned long) (v)); } while (0)
 
 static void hexa(const uint8_t* b, int n, char* out) {
     static const char* D = "0123456789ABCDEF";
@@ -160,11 +164,11 @@ void bpvm_sd_placa_sd_info(long id) {
     if (r == 0) {
         CAMPO_L("version", idn.version);
         CAMPO_B("altaCap", idn.alta_cap);
-        CAMPO_L("bloques", hay_idn && idn.bloques ? idn.bloques : (s_dev->bloques ? s_dev->bloques() : 0u));
+        CAMPO_U("bloques", hay_idn && idn.bloques ? idn.bloques : (s_dev->bloques ? s_dev->bloques() : 0u));
         CAMPO_S("producto", idn.producto);
         CAMPO_S("oem", idn.oem);
         CAMPO_L("fabricante", idn.fabricante);
-        CAMPO_L("serie", idn.serie);
+        CAMPO_U("serie", idn.serie);
         CAMPO_L("anno", idn.anno);
         CAMPO_L("mes", idn.mes);
 
@@ -196,8 +200,8 @@ void bpvm_sd_placa_sd_info(long id) {
                 }
                 CAMPO_L("particiones", cuantas);
                 CAMPO_L("parteTipo", tipo1);
-                CAMPO_L("parteLba", lba1);
-                CAMPO_L("parteSectores", secs1);
+                CAMPO_U("parteLba", lba1);
+                CAMPO_U("parteSectores", secs1);
                 /* Y el sector de arranque de esa partición: ahí están el formateador y su propio 55 AA. */
                 if (cuantas > 0 && s_dev->leer(lba1, 1, sec0) == 0) {
                     (void) nombre_formateador(sec0, oemfs);
@@ -233,14 +237,14 @@ void bpvm_sd_placa_sd_mount(long id) {
     CAMPO_S("medio", s_medio);
     /* El LBA SIEMPRE, también al fallar: un montaje que se cae con LBA 0 en una tarjeta que trae MBR es un
      * fallo al leer la tabla, no en el FAT — dos sitios distintos. */
-    CAMPO_L("lba", s_fs->lba_particion ? s_fs->lba_particion() : 0u);
+    CAMPO_U("lba", s_fs->lba_particion ? s_fs->lba_particion() : 0u);
     if (r == 0) {
         bpvm_fs_fat_resumen_t res;
         if (s_fs->resumen && s_fs->resumen(&res) == 0) {
             log_printf("sd: raiz %d entradas, 1a='%s'", res.entradas_raiz, res.primera);
             CAMPO_S("etiqueta", res.etiqueta);
-            CAMPO_L("kbTotal", res.kb_total);
-            CAMPO_L("kbLibres", res.kb_libres);
+            CAMPO_U("kbTotal", res.kb_total);
+            CAMPO_U("kbLibres", res.kb_libres);
             CAMPO_L("entradasRaiz", res.entradas_raiz);
             CAMPO_S("primera", res.primera);
         } else {

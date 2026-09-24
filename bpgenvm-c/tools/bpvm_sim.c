@@ -207,7 +207,7 @@ static int simsd_identidad(bpvm_blk_identidad_t* out) {
     out->fabricante = 0x42;               /* 'B' */
     memcpy(out->oem, "BP", 3);
     memcpy(out->producto, "BPSIM", 6);
-    out->serie      = 20260924u;
+    out->serie      = 0xFDB1A2C3u;   /* #550: >= 2^31, como el PSN de una tarjeta de verdad (32 bits SIN signo) */
     out->anno       = 2026;
     out->mes        = 9;
     return 0;
