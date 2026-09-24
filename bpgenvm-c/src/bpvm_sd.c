@@ -75,6 +75,24 @@ static void reloj_en_vacio(int bus, int bytes) {
     for (int i = 0; i < bytes; i++) (void) intercambia(bus, 0xFF);
 }
 
+/* V7/H3 (#553, 24-sep) — LOS DATOS DE UN BLOQUE, DE UNA VEZ. Se mandaban byte a byte, y en el ESP32 cada
+ * byte es una transacción del IDF (≈18 µs): 512 por bloque, 10 ms, y SdCard tardaba en la C5 30 s donde la
+ * Metro tarda 5. Ahora los datos van en tramos de 64 —lo que la cintura del ESP32 acepta sin DMA— con UNA
+ * llamada cada uno. Al recibir, MOSI ARRIBA: la tarjeta espera 0xFF mientras habla (la cintura del ESP32
+ * manda ceros si no se le da qué mandar). */
+#define FF8 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+static const uint8_t s_ff[64] = { FF8, FF8, FF8, FF8, FF8, FF8, FF8, FF8 };
+#undef FF8
+
+static void recibe(int bus, uint8_t* dst, int n) {
+    while (n > 0) {
+        int t = n > (int) sizeof s_ff ? (int) sizeof s_ff : n;
+        (void) bpvm_spi_xfer(bus, s_ff, dst, (size_t) t);
+        dst += t;
+        n   -= t;
+    }
+}
+
 /*
  * Manda un comando y devuelve su R1. 0xFF = no contestó.
  *
@@ -126,9 +144,9 @@ static int lee_bloque(int bus, uint8_t* dst, int n, bpvm_sd_info_t* diag) {
         if (t != 0xFF) return -1;                    /* token de error */
         if (bpvm_platform_now_ms() - t0 > PLAZO_TOKEN_MS) return -1;
     }
-    for (int i = 0; i < n; i++) dst[i] = intercambia(bus, 0xFF);
-    (void) intercambia(bus, 0xFF);                   /* CRC16, que ignoramos */
-    (void) intercambia(bus, 0xFF);
+    recibe(bus, dst, n);                             /* #553: de una vez */
+    uint8_t crc[2];
+    recibe(bus, crc, 2);                             /* CRC16, que ignoramos */
     return 0;
 }
 
@@ -485,7 +503,7 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
 
     (void) intercambia(p->bus, 0xFF);            /* un hueco antes del token   */
     (void) intercambia(p->bus, TOKEN_DATO);
-    for (int i = 0; i < 512; i++) (void) intercambia(p->bus, src[i]);
+    (void) bpvm_spi_xfer(p->bus, src, NULL, 512);   /* #553: el bloque de una vez (la cintura lo trocea) */
     (void) intercambia(p->bus, 0xFF);            /* CRC16 apagado, pero va     */
     (void) intercambia(p->bus, 0xFF);
 
