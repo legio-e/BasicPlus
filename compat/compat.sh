@@ -643,13 +643,13 @@ check_sim() {
 # cada ejecucion. Verde = salida 0 Y su linea de OK: un «skip», o una salida 0 sin
 # la señal buena, es ROJO.
 check_testc() {
-  echo "-- pruebas de C (#541): el AOT ejecutado, el switch en una native (#546) y el nucleo del depurador --"
+  echo "-- pruebas de C (#541): el AOT ejecutado, el switch en una native (#546), la TF soltando el bus (H3 SD.2) y el nucleo del depurador --"
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
     echo "  ⚠ el host esta compilado CON LVGL: estas pruebas necesitan 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
     return 1
   fi
   local fails=0 t sal rc ok n
-  local lista="test-aotgc test-aotnew test-aotswitch test-debug test-debug-mt test-listen"
+  local lista="test-aotgc test-aotnew test-aotswitch test-sd-turnos test-debug test-debug-mt test-listen"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?

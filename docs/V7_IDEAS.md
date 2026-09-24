@@ -1639,6 +1639,15 @@ fábrica (MBR y FAT16 en el bloque 2048, con etiqueta y un fichero; el firmware 
 siga tras volver a montar), sin tarjeta (el motivo) y con una rota (su motivo, y el wire vivo). La Metro conserva sus
 dos handlers hasta SD.3: su cadena los atiende antes que el común.
 
+**SD.2, hecho (24-sep, noche).** `bpvm_sd.c`: el arranque suelta el bus tras CMD8 y cada intento de ACMD41 es un turno
+corto —el que saca a la tarjeta de IDLE sigue, para el OCR, el CID y el CSD—; al escribir, la tarjeta graba sola tras
+aceptar los datos y la espera de «ocupada» son turnos de un byte. `make test-sd-turnos` (en `check-testc`): una tarjeta
+de mentira detrás de la cintura SPI (IDLE 250 ms, graba 200 ms) y una pantalla en otro hilo del SO: la pantalla consigue
+turnos MIENTRAS la TF arranca (16) y MIENTRAS la tarjeta graba (13), y lo más que espera por uno es 1 ms. Su control
+(`make test-sd-turnos-control`, la TF de antes con `-DBPVM_SD_TURNO_UNICO`) la deja fuera 249 y 184 ms: rojo, como
+debe. La lectura no cambia: con el CS arriba mientras se espera el token, la tarjeta abortaría la lectura, y esa espera
+es corta.
+
 ## H4 — la caracterización de los periféricos de cada micro: la HAL BP de capacidades (22-sep, día de análisis)
 
 Tres fichas que son un solo diseño (`#378` la madre, `#470` los arrays, `#479` el mapa de pines y `AnPin`) y

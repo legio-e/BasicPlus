@@ -52,9 +52,9 @@ static char s_motivo_bus[112];
  * en `info->hz`: nada se guarda en el bus— y dentro hace lo que el protocolo pide,
  * incluido subir el CS sin soltar el turno (los 80 relojes, el byte tras cada
  * bloque). Si el bus no queda libre a tiempo, el porqué va al peldaño E_BUS.
- * ⚠️ A sabiendas: mientras la tarjeta graba (hasta PLAZO_OCUPADA_MS) el turno sigue
- * siendo suyo; la pantalla espera hasta el plazo del árbitro. El protocolo deja
- * soltar el bus en esa espera: se hará si la C5 lo pide. */
+ * V7/H3 SD.2 (24-sep): en sus dos esperas largas —ACMD41 al arrancar (hasta 1 s) y la
+ * tarjeta grabando (hasta PLAZO_OCUPADA_MS)— la TF SUELTA el bus: cada intento, un turno
+ * corto (ver `bpvm_sd_init` y `bpvm_sd_escribir_bloque`). */
 static int turno(const bpvm_sd_pines_t* p, int hz) {
     if (bpvm_spi_tomar(p->bus, p->cs, hz, 0, BPVM_BUS_FIRMWARE, s_motivo_bus, sizeof s_motivo_bus) != 0) return -1;
     return 0;
@@ -376,6 +376,28 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
 
     /* 4 — ACMD41 hasta que salga de IDLE. HCS sólo tiene sentido en v2. */
     int64_t t0 = bpvm_platform_now_ms();
+#ifndef BPVM_SD_TURNO_UNICO
+    /* V7/H3 SD.2 (24-sep) — LA TF SUELTA EL BUS MIENTRAS ARRANCA. Sacar a la tarjeta de IDLE puede
+     * llevar hasta un segundo, y con el turno cogido la pantalla (la C5: el mismo SPI 2) se quedaba
+     * ese segundo sin bus. La especificación deja subir el CS entre comandos —la tarjeta sigue
+     * arrancando por su cuenta—, así que cada intento es su propio turno corto y entre dos el bus es
+     * de quien lo pida (el árbitro le da la vez a quien espera). Aprobado con G4 (Eduardo, 24-sep,
+     * «2 también OK»); `make test-sd-turnos` lo mide con una pantalla en otro hilo. */
+    cs_alto(p);
+    (void) intercambia(p->bus, 0xFF);    /* que suelte la línea */
+    suelta(p);
+    for (;;) {
+        if (turno(p, BAUD_LENTO) != 0) return BPVM_SD_E_BUS;     /* CS abajo */
+        r1 = manda_acmd(p->bus, ACMD41_SEND_OP_COND, v2 ? 0x40000000u : 0, info);
+        cs_alto(p);
+        (void) intercambia(p->bus, 0xFF);
+        if (r1 == 0) break;              /* lista: el turno SIGUE, para el OCR, el CID y el CSD */
+        suelta(p);
+        if (bpvm_platform_now_ms() - t0 > PLAZO_ARRANQUE_MS) return BPVM_SD_E_NO_ARRANCA;
+    }
+    cs_bajo(p);
+#else
+    /* El CONTROL de test-sd-turnos: la TF de antes, que retenía el bus todo el arranque. */
     for (;;) {
         r1 = manda_acmd(p->bus, ACMD41_SEND_OP_COND, v2 ? 0x40000000u : 0, info);
         if (r1 == 0) break;
@@ -383,6 +405,7 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
             suelta(p); return BPVM_SD_E_NO_ARRANCA;
         }
     }
+#endif
 
     /* 5 — CMD58 (OCR): el bit CCS dice si direcciona por BLOQUE (alta
      *     capacidad) o por BYTE. Equivocarse aquí lee el sitio equivocado
@@ -466,6 +489,25 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
      * no que iba justo. Volver antes de tiempo deja el comando siguiente
      * hablando con una tarjeta sorda, y eso se manifiesta LEJOS de aquí. */
     int64_t t0 = bpvm_platform_now_ms();
+#ifndef BPVM_SD_TURNO_UNICO
+    /* V7/H3 SD.2 (24-sep) — Y MIENTRAS GRABA, EL BUS ES DE LOS DEMÁS. La especificación deja subir el
+     * CS con la tarjeta ocupada: sigue grabando sola, y al volver a bajarlo contesta 0x00 si aún no ha
+     * terminado. Así la espera es una ristra de turnos de UN byte, y entre dos el bus es de quien lo
+     * pida; antes eran hasta PLAZO_OCUPADA_MS de turno retenido. */
+    cs_alto(p);
+    (void) intercambia(p->bus, 0xFF);
+    suelta(p);
+    for (;;) {
+        if (turno(p, info->hz > 0 ? info->hz : BAUD_LENTO) != 0) return BPVM_SD_E_BUS;   /* CS abajo */
+        uint8_t b = intercambia(p->bus, 0xFF);
+        cs_alto(p);
+        (void) intercambia(p->bus, 0xFF);
+        suelta(p);
+        if (b != 0x00) return BPVM_SD_OK;
+        if (bpvm_platform_now_ms() - t0 > PLAZO_OCUPADA_MS) return BPVM_SD_E_OCUPADA;
+    }
+#else
+    /* El CONTROL de test-sd-turnos: la TF de antes, que retenía el bus mientras la tarjeta grababa. */
     while (intercambia(p->bus, 0xFF) == 0x00) {
         if (bpvm_platform_now_ms() - t0 > PLAZO_OCUPADA_MS) {
             suelta(p); return BPVM_SD_E_OCUPADA;
@@ -475,6 +517,7 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
     (void) intercambia(p->bus, 0xFF);
     suelta(p);
     return BPVM_SD_OK;
+#endif
 }
 
 const char* bpvm_sd_res_str(bpvm_sd_res_t r)

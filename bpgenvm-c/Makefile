@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-aotswitch test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-aotswitch test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -496,6 +496,26 @@ test-arbitro-control: $(LIBOBJ)
 	   grep -E "FAIL|primer trozo" build/test_arbitro_control.txt; \
 	   echo "  ok  : sin arbitro la cinta sale MEZCLADA: el control falla, como debe [status=OK]"; \
 	 else cat build/test_arbitro_control.txt; echo "  FAIL: sin arbitro la prueba PASA: no prueba nada [status=FAIL]"; exit 1; fi
+
+# V7/H3 SD.2 (24-sep) — LA TF SUELTA EL BUS EN SUS ESPERAS (ACMD41 al arrancar, la tarjeta grabando):
+# una tarjeta de mentira detras de la cintura SPI y una pantalla en otro hilo del SO pidiendo turnos;
+# se mide cuantos consigue la pantalla MIENTRAS la TF arranca y MIENTRAS la tarjeta graba.
+test-sd-turnos: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_sd_turnos.c src/bpvm_sd.c $(LIBOBJ) -o build/test_sd_turnos.exe $(LDFLAGS)
+	@echo "--- V7/H3 SD.2: la TF suelta el bus en sus esperas (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_sd_turnos.exe
+
+# ...y su CONTROL: la TF de antes (-DBPVM_SD_TURNO_UNICO), que retenia el bus. TIENE que fallar.
+test-sd-turnos-control: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -DBPVM_SD_TURNO_UNICO -Isrc test/test_sd_turnos.c src/bpvm_sd.c $(LIBOBJ) -o build/test_sd_turnos_control.exe $(LDFLAGS)
+	@echo "--- CONTROL: la TF de antes, que retenia el bus (esperado: que la prueba FALLE) ---"
+	@./build/test_sd_turnos_control.exe > build/test_sd_turnos_control.txt 2>&1; \
+	 if grep -q "status=FAIL" build/test_sd_turnos_control.txt; then \
+	   grep -E "FAIL" build/test_sd_turnos_control.txt; \
+	   echo "  ok  : con la TF de antes la pantalla se queda sin bus: el control falla, como debe [status=OK]"; \
+	 else cat build/test_sd_turnos_control.txt; echo "  ROJO: el control PASA: la prueba no mide nada"; exit 1; fi
 
 # V7/H6.c G3 — el driver de pantalla GENÉRICO (MIPI-DCS por SPI, la placa en el ENV)
 # contra el de la C5, en el PC: los dos contra una BIOS que GRABA los cables. Con el
