@@ -22,7 +22,11 @@ CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
 # La task de app_main ejecuta el REPL + la VM. Holgura de stack C.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# 16 KB desde el 24-sep (tarde de placas de V7): con 8 KB la C6 REINICIABA al empezar el RUN
+# de TimeDemo y de los Gui* —«Stack protection fault» en la task main: discover_deps (recursiva
+# por el arbol de dependencias, mas hondo en V7) -> bpvm_fs_stat -> littlefs -> la lectura SPI—.
+# La C5 ya estaba en 16 KB desde el 21-sep; toda la familia ESP32, igual.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # Optimizar a tamaño.
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
