@@ -511,13 +511,24 @@ restauración (`dist/firmware-v7-24sep`, `22f30005`): la precondición de `H6.b`
 - La SD «superfloppy», **cancelada** en placa (Eduardo): no se puede preparar la tarjeta en Windows sin riesgo, y el
   caso está probado en el PC.
 
+## ✅ H1 (24-sep, tarde) — H1 CERRADO: P4 cancelado, P2b a H5, y `#540` (la asignación definida)
+
+Eduardo pidió repasar H1 y aprobó las tres propuestas («OK, los 3»): **P4** (declarar los primitivos en BP),
+cancelado —son palabras reservadas y no ganarían nada—; **P2b** (el AOT y las intrínsecas) a H5, que es su hito; y
+**`#540` como error de compilación** (`5b4d7edc`). Antes de encenderlo, el censo: de 582 ficheros sólo 3 leían
+una local sin valor, los tres dando por hecho que valía null o 0; arreglados. El caso fino fue `StrNulo`: su «string
+sin inicializar es null» sigue siendo cierto para un CAMPO —los objetos nacen a cero— y el sample lo comprueba así
+(un `string` no admite `:= null`). Dos restos del backlog de H1 resultaron ya resueltos: la `intrinsic` sin registro
+(la palabra ya no existe desde P1) y sacar `Exception` de `Core` (ya no ahorra nada desde P3). **Con esto H1 queda
+cerrado.**
+
 ## ⏭️ Traspaso (24-sep, tarde) — la ronda de V7, sellada; lo que dejó abierto la tarde
 
 **Sellado**: `dist/firmware-v7-24sep` (8 imágenes, 9 placas, SHA256) y `compat/informes/tanda_v7.md`. `H6.b` puede
 empezar cuando Eduardo quiera: hay a dónde volver.
 
-**Lo que dejó abierto la tarde**: `#544` (el BOOT de la C6: la prueba cruzada, un pin de la cabecera a masa); `#468`,
-con su medida (la C6 sin memoria para `GuiWinJson`); `#540` (¿error o aviso?); el NeoPixel de la familia ESP32 (el
+**H1, cerrado** (ver arriba). **Lo que dejó abierto la tarde**: `#544` (el BOOT de la C6: la prueba cruzada, un pin de la cabecera a masa); `#468`,
+con su medida (la C6 sin memoria para `GuiWinJson`); el NeoPixel de la familia ESP32 (el
 backend RMT).
 
 **Las otras dos sesiones**: `#539` (`PACK_LS`) y `#541`/`#542` (las pruebas de C en la red) están hechas en sus ramas
