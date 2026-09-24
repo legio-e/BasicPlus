@@ -17,6 +17,7 @@
 #include "bpvm_gui.h"       /* V6/T1: screenW/H en INFO (tamano nativo del panel); V7/H6: tambien por el pack */
 #endif
 #include "bpvm_listdir.h"   /* V6/U3.22: el núcleo de LIST_DIR ya era común */
+#include "bpvm_sd_placa.h"  /* V7/H3: SD_INFO y SD_MOUNT, con la SD que registró la familia */
 #include "bpvm_rtc.h"
 #include "mdn_loader.h"     /* V7/H2 (#441): aotReceta/aotFlagsCrc en INFO */
 #include "bpvm_pack.h"      /* V7/H2 (#493): BPVM_PACK_URI */
@@ -1035,6 +1036,10 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
         return 1;
     }
     if (strcmp(type, "LIST_DIR") == 0) { repl_list_dir(id, obj); return 1; }  /* U3.22 */
+    /* V7/H3 (24-sep) — la SD: el dispositivo lo registra la familia (`bpvm_sd_placa`); sin él, la
+     * respuesta dice que esta placa no tiene SD, no «type no implementado». */
+    if (strcmp(type, "SD_INFO")  == 0) { bpvm_sd_placa_sd_info(id);  return 1; }
+    if (strcmp(type, "SD_MOUNT") == 0) { bpvm_sd_placa_sd_mount(id); return 1; }
     if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
     /* ── grupo 4: los de la cintura ── */
     if (strcmp(type, "HELLO")  == 0) { if (!sin_ops(id, "HELLO"))  repl_hello(id);       return 1; }

@@ -1612,8 +1612,8 @@ la TF montada por el firmware**, que es la prueba en placa de la concurrencia co
    con el CS arriba entre medias (lo que la especificación permite): ninguna espera pasa del tope del bus.
 5. **Las familias**: la Metro y el P4 registran lo que ya montan (y `pico/repl_v1.c` pierde sus dos handlers); la C5
    activa lo genérico (`sd=bus:2,cs:23` en su ENV y el mismo registro); la Pico 2, la S3, la C3, la Nucleo y la DK2 no
-   registran nada → el error con nombre. **La C6** tiene ranura y sería lo mismo que la C5 (su línea `sd=` con los pines
-   del esquemático): **decide Eduardo**.
+   registran nada → el error con nombre. **La C6** tiene ranura y es lo mismo que la C5 (su línea `sd=` con los pines
+   del esquemático): **entra** (Eduardo, 24-sep: «OK, C6 también»).
 
 **Cómo se prueba:** en el PC, una prueba de C del común (`test-sdcomun`) con un dispositivo de bloque de RAM que lleva una
 imagen FAT —`SD_INFO`/`SD_MOUNT` por el wire, y sin SD el error con nombre— y la TF contra la cinta del árbitro: ninguna
@@ -1625,8 +1625,19 @@ mientras `Gui.run()` anima—, y el explorador del IDE (`sd`, `sd mount`) contra
 |---|---|---|
 | **SD.1** | el registro, los dos verbos al común y la identidad opcional | `test-sdcomun`, en el PC |
 | **SD.2** | la TF suelta el bus en sus esperas | la cinta del árbitro, con su control |
-| **SD.3** | las familias: la Metro y el P4 al registro (fuera los handlers de `repl_v1.c`); la C5 (y la C6, si se decide) | compilan las cinco familias; el micro simulado |
-| **SD.4** | en placa, con tarjeta: la Metro, el P4 y la C5 (con la pantalla a la vez) | la tanda y el explorador del IDE |
+| **SD.3** | las familias: la Metro y el P4 al registro (fuera los handlers de `repl_v1.c`); la C5 y la C6 | compilan las cinco familias; el micro simulado |
+| **SD.4** | en placa, con tarjeta: la Metro, el P4, la C5 (con la pantalla a la vez) y la C6 | la tanda y el explorador del IDE |
+
+**SD.1, hecho (24-sep, noche).** Dos cosas quedaron más sencillas que en el papel: **la traza viaja en la misma
+identidad** (`bpvm_blk_identidad_t`, con `con_traza`: el SPI la da y un medio sin traza la manda VACÍA —un «00 00…»
+diría «la línea flota»—), así que no hace falta el gancho `info_extra`; y **FAT llega por punteros**
+(`bpvm_fs_fat_ops`, definido en `fs_fat.c`): el registro (`src/bpvm_sd_placa.c`) no enlaza FatFs, que hoy sólo llevan
+la Pico y el P4 —ni las ESP32 chicas ni el host—, y una imagen sin ranura no paga FAT. El micro simulado tiene ranura:
+`--sd=IMAGEN`, un fichero que cumple el contrato de bloque, y `tools/fat_imagen.py` hace la tarjeta como vienen las de
+fábrica (MBR y FAT16 en el bloque 2048, con etiqueta y un fichero; el firmware no formatea). `tools/sd_smoke.py`, en
+`check-sim`: con tarjeta (la identidad, el sector 0 y el MBR, el montaje del ARRANQUE, leer, escribir y que lo escrito
+siga tras volver a montar), sin tarjeta (el motivo) y con una rota (su motivo, y el wire vivo). La Metro conserva sus
+dos handlers hasta SD.3: su cadena los atiende antes que el común.
 
 ## H4 — la caracterización de los periféricos de cada micro: la HAL BP de capacidades (22-sep, día de análisis)
 

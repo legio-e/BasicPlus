@@ -170,6 +170,7 @@ add_executable(bpvm_pico
     ${BPVM_C_ROOT}/src/json_min.c            # V6/U1.1: parser JSON, COMUN a las 4 imagenes
     ${BPVM_C_ROOT}/src/wire_v1_proto.c       # V6/U2.1: los builders JSON del wire, COMUNES
     ${BPVM_C_ROOT}/src/bpvm_repl.c           # V6/U3: los verbos comunes del REPL
+    ${BPVM_C_ROOT}/src/bpvm_sd_placa.c       # V7/H3: la SD de la placa (SD_INFO/SD_MOUNT), en el comun
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     flash_lock.c    # H2 #153: ventana XIP-safe (single + dual-core)

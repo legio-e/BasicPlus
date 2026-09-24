@@ -602,8 +602,10 @@ norma_caso() {  # $1=etiqueta $2=dir con app+stdlib $3=modulo $4=texto esperado 
 # caso GUI de io-smoke, que sin LVGL no bloquea).
 SIM_RED=""   # lo fija check_sim al construirlo; check_sombra lo usa si esta
 check_sim() {
-  echo "-- el micro simulado (#537): la libreria del pack y los cuatro smokes del wire --"
+  echo "-- el micro simulado (#537): la libreria del pack y los smokes del wire (y la SD, V7/H3) --"
   local fails=0 sal rc t n sim="$ROOT/bpgenvm-c/build/bpvm-sim-red.exe"
+  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke" total
+  total=$(( $(echo $smokes | wc -w) + 1 ))
   bash "$HERE/stdlib_pack.sh" || fails=$((fails+1))
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
     echo "  ⚠ el host esta compilado CON LVGL: el sim de la red necesita 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
@@ -615,7 +617,7 @@ check_sim() {
     return 1
   fi
   SIM_RED="$sim"
-  for t in sim_smoke boardsim_smoke io_smoke list_trunc_smoke; do
+  for t in $smokes; do
     sal="$( cd "$ROOT/bpgenvm-c" && BPVM_SIM="$sim" timeout 300 python "tools/$t.py" 2>&1 )"; rc=$?
     n="$(printf '%s\n' "$sal" | grep -c '^  ok')"
     if [ "$rc" -eq 0 ] && printf '%s\n' "$sal" | grep -q '^\[status=OK\]'; then
@@ -626,7 +628,7 @@ check_sim() {
       fails=$((fails+1))
     fi
   done
-  echo "  sim: $((5 - fails))/5 (el pack y los cuatro smokes)"
+  echo "  sim: $((total - fails))/$total (el pack y los smokes)"
   [ "$fails" -eq 0 ]
 }
 

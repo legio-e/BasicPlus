@@ -56,6 +56,28 @@ extern "C" {
  * otro tamaño, sera un cambio consciente en los dos sitios y no una sorpresa. */
 #define BPVM_BLK_TAM 512u
 
+/* V7/H3 (24-sep) — LA IDENTIDAD de la tarjeta, para el diagnóstico (`SD_INFO`): lo que el medio sabe de
+ * sí mismo, ya desglosado. Es NEUTRA a propósito: el SPI la rellena desde su `bpvm_sd_info_t` y el SDMMC
+ * desde el `sdmmc_card_t` del IDF, y así ninguno arrastra la cabecera del otro (la mezcla que V5/H6 vino a
+ * deshacer). Lo que un medio no sepa, a cero: la traza sólo la tiene el SPI. */
+typedef struct {
+    int      peldano;       /* el resultado del último `init`: 0 = bien; si no, el código del medio */
+    uint8_t  version;       /* 1 = SDSC (CSD v1), 2 = SDHC/SDXC (CSD v2); 0 = no se sabe */
+    uint8_t  alta_cap;      /* 1 = direcciona por bloque */
+    uint32_t bloques;       /* capacidad en bloques de 512 B */
+    int      hz;            /* la velocidad de trabajo */
+    uint8_t  fabricante;    /* MID del CID */
+    char     oem[3];        /* OID, con NUL */
+    char     producto[6];   /* PNM, con NUL */
+    uint32_t serie;         /* PSN */
+    uint16_t anno;          /* ya sumado a 2000 */
+    uint8_t  mes;
+    uint8_t  con_traza;     /* 1 si el medio da la traza de abajo (el SPI); con 0 no se manda: un CMD0 de
+                             * ceros diría «la línea flota» de un medio que no la tiene */
+    uint8_t  ultimo_cmd;    /* SPI: el último comando del arranque */
+    uint8_t  traza[8];      /* SPI: los bytes que contestó la tarjeta; 0xAA = no se llegó a leer */
+} bpvm_blk_identidad_t;
+
 typedef struct {
     /* Arranca el medio y deja `bloques()` contestando. 0 = bien, -1 = no.
      * Lo llama el montaje; volver a llamarlo con el medio ya listo tiene que
@@ -87,6 +109,12 @@ typedef struct {
     /* El PELDAÑO del ultimo fallo, en texto. Literal estatico, nunca se
      * libera. Nunca NULL: si no ha fallado nada, devuelve algo inocuo. */
     const char* (*motivo)(void);
+
+    /* V7/H3 (24-sep) — OPCIONAL (NULL = el medio no la da): la identidad de la tarjeta tal como la dejó
+     * el último `init`, TAMBIÉN si falló —la traza de un arranque fallido es justo lo que dice por qué—.
+     * 0 = rellenada; -1 = no hay nada que decir (el medio nunca se arrancó). Va la última del struct: los
+     * dispositivos se definen con inicializadores designados y los que no la ponen quedan a NULL. */
+    int (*identidad)(bpvm_blk_identidad_t* out);
 } bpvm_blk_backend_t;
 
 /*

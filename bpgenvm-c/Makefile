@@ -968,10 +968,14 @@ SIM_SQL_FLAGS = -DBPVM_SQLITE -Ibuild/sql -I$(SQLSRC) $(SQLDEF)
 # (en Windows, un .exe en marcha no se sobrescribe) y puede ser LVGL=1/SQLITE=1.
 SIM_OUT ?= build/bpvm-sim.exe
 
+# V7/H3 (24-sep) — el micro simulado con SD (`--sd=IMAGEN`: un fichero hace de tarjeta): el registro
+# comun de la SD, el contrato de bloque y FAT, los mismos que el firmware de una placa con ranura.
+SIM_SD_SRC = src/bpvm_sd_placa.c src/bpvm_blk.c src/fs_fat.c third_party/fatfs/ff.c third_party/fatfs/ffunicode.c
+
 sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,) $(if $(filter 1,$(SQLITE)),build/sql/sqlite3.o build/sql/aot_SQLite.c,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) -o $(SIM_OUT) $(LDFLAGS)
-	@echo "sim listo: $(SIM_OUT) [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
+	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc -Ithird_party/fatfs tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_listdir.c $(SIM_SD_SRC) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) -o $(SIM_OUT) $(LDFLAGS)
+	@echo "sim listo: $(SIM_OUT) [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG] [--sd=IMG]"
 
 # Los ingredientes de SQLITE=1, si no estan ya (los comparte con test-sqldemo).
 build/sql/sqlite3.o:

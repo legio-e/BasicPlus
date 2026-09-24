@@ -30,6 +30,7 @@ idf_component_register(
         "../../src/json_min.c"               # V6/U1.1: parser JSON comun (era una copia local)
         "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"               # V6/U3: los verbos comunes del REPL
+        "../../src/bpvm_sd_placa.c"           # V7/H3: la SD de la placa (SD_INFO/SD_MOUNT), en el comun
         "../../esp32/common/board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         "../../esp32/common/bios_esp32.c"    # V7/H6: la tabla BIOS y el ancla del pack nativo (era del P4)
         "../../esp32/common/pack_esp32.c"    # V7/H6: el cargador del pack nativo y su bloque de RAM (era del P4)

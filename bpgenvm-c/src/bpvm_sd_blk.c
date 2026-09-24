@@ -68,6 +68,28 @@ static const char* sd_motivo(void) {
     return bpvm_sd_res_str(s_ultimo);
 }
 
+/* V7/H3 (24-sep) — la identidad para `SD_INFO`, sacada del `s_info` que dejó el último `init` —también si
+ * falló: la traza de un arranque fallido es el diagnóstico— y del peldaño en que se paró. */
+static int sd_identidad(bpvm_blk_identidad_t* out) {
+    if (!out || !s_configurado) return -1;
+    memset(out, 0, sizeof *out);
+    out->peldano    = (int) s_ultimo;
+    out->version    = s_info.version;
+    out->alta_cap   = s_info.alta_cap;
+    out->bloques    = s_info.bloques;
+    out->hz         = s_info.hz;
+    out->fabricante = s_info.fabricante;
+    memcpy(out->oem, s_info.oem, sizeof out->oem);
+    memcpy(out->producto, s_info.producto, sizeof out->producto);
+    out->serie      = s_info.serie;
+    out->anno       = s_info.anno;
+    out->mes        = s_info.mes;
+    out->con_traza  = 1;
+    out->ultimo_cmd = s_info.ultimo_cmd;
+    memcpy(out->traza, s_info.traza, sizeof out->traza);
+    return 0;
+}
+
 /* `sincronizar` va a NULL EXPRESAMENTE, y no es un hueco por rellenar:
  * `bpvm_sd_escribir_bloque` no vuelve hasta que la tarjeta suelta la línea de
  * ocupada, o sea que cuando una escritura termina ya está grabada. Poner aquí
@@ -80,6 +102,7 @@ static const bpvm_blk_backend_t s_backend = {
     .bloques     = sd_bloques,
     .sincronizar = NULL,
     .motivo      = sd_motivo,
+    .identidad   = sd_identidad,
 };
 
 const bpvm_blk_backend_t* bpvm_sd_blk(const bpvm_sd_pines_t* pines) {

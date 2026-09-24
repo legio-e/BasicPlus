@@ -54,6 +54,7 @@
 #include "aot_registry.h"
 #include "json_min.h"
 #include "bpvm_repl.h"      /* U3.24: el REPL comun */
+#include "bpvm_sd_placa.h"  /* V7/H3: la SD de la placa (aqui, un fichero: --sd=IMAGEN) */
 #include "bpvm_env.h"       /* U6.1: `stack=N` del ENV, como las placas */
 #include "bpvm_bus.h"       /* V7/H6.c G4.a1 */
 #include "bpvm_wire_v1.h"
@@ -154,6 +155,73 @@ static uint32_t g_psram_size = 0;              /* PSRAM declarada (--psram) */
 static uint32_t g_flash_size = DEF_FLASH;      /* flash total (--flash) */
 static uint8_t* g_vm_mem     = NULL;           /* buffer de la VM (RAM del micro) */
 static const char* g_board   = NULL;           /* --board: identidad por defecto */
+
+/* V7/H3 (24-sep) — LA RANURA DEL MICRO SIMULADO: un fichero hace de tarjeta (`--sd=IMAGEN`). Cumple el contrato
+ * de bloque como el SPI de la Metro o el SDMMC del P4, así que todo lo de encima —el registro común, FAT,
+ * `SD_INFO`/`SD_MOUNT`— es el MISMO código que en una placa con ranura. Sin `--sd`, el micro simulado no tiene
+ * SD, y lo dice como una placa sin ranura. */
+static const char* g_sd_path    = NULL;
+static FILE*       g_sd_f       = NULL;
+static uint32_t    g_sd_bloques = 0;
+static const char* g_sd_motivo  = "OK";
+
+static int simsd_init(void) {
+    if (!g_sd_path) { g_sd_motivo = "sin imagen de tarjeta"; return -1; }
+    if (!g_sd_f && !(g_sd_f = fopen(g_sd_path, "r+b"))) {
+        g_sd_motivo = "no se pudo abrir la imagen de la tarjeta";
+        return -1;
+    }
+    if (fseek(g_sd_f, 0, SEEK_END) != 0) { g_sd_motivo = "la imagen de la tarjeta no se deja medir"; return -1; }
+    long n = ftell(g_sd_f);
+    g_sd_bloques = n > 0 ? (uint32_t) ((unsigned long) n / BPVM_BLK_TAM) : 0u;
+    if (g_sd_bloques == 0) { g_sd_motivo = "la imagen de la tarjeta esta vacia"; return -1; }
+    g_sd_motivo = "OK";
+    return 0;
+}
+static int simsd_mueve(uint32_t lba, uint32_t n) {
+    if (!g_sd_f || (uint64_t) lba + n > g_sd_bloques) { g_sd_motivo = "fuera de la tarjeta"; return -1; }
+    if (fseek(g_sd_f, (long) ((uint64_t) lba * BPVM_BLK_TAM), SEEK_SET) != 0) { g_sd_motivo = "fseek"; return -1; }
+    return 0;
+}
+static int simsd_leer(uint32_t lba, uint32_t n, uint8_t* dst) {
+    if (simsd_mueve(lba, n) != 0) return -1;
+    if (fread(dst, BPVM_BLK_TAM, n, g_sd_f) != n) { g_sd_motivo = "lectura corta"; return -1; }
+    return 0;
+}
+static int simsd_escribir(uint32_t lba, uint32_t n, const uint8_t* src) {
+    if (simsd_mueve(lba, n) != 0) return -1;
+    if (fwrite(src, BPVM_BLK_TAM, n, g_sd_f) != n) { g_sd_motivo = "escritura corta"; return -1; }
+    return 0;
+}
+static int         simsd_hay_medio(void)   { return g_sd_path != NULL; }   /* la tarjeta del sim no se saca */
+static uint32_t    simsd_bloques(void)     { return g_sd_bloques; }
+static int         simsd_sincronizar(void) { return g_sd_f ? fflush(g_sd_f) : 0; }
+static const char* simsd_motivo(void)      { return g_sd_motivo; }
+/* Una tarjeta de mentira con identidad fija: lo que SD_INFO enseña se puede comprobar byte a byte. */
+static int simsd_identidad(bpvm_blk_identidad_t* out) {
+    memset(out, 0, sizeof *out);
+    out->peldano    = g_sd_bloques ? 0 : -1;
+    out->version    = 2;
+    out->alta_cap   = 1;
+    out->bloques    = g_sd_bloques;
+    out->fabricante = 0x42;               /* 'B' */
+    memcpy(out->oem, "BP", 3);
+    memcpy(out->producto, "BPSIM", 6);
+    out->serie      = 20260924u;
+    out->anno       = 2026;
+    out->mes        = 9;
+    return 0;
+}
+static const bpvm_blk_backend_t SIM_SD = {
+    .init        = simsd_init,
+    .leer        = simsd_leer,
+    .escribir    = simsd_escribir,
+    .hay_medio   = simsd_hay_medio,
+    .bloques     = simsd_bloques,
+    .sincronizar = simsd_sincronizar,
+    .motivo      = simsd_motivo,
+    .identidad   = simsd_identidad,
+};
 static int      g_screen_w   = 0;              /* --screen=WxH (0 = el default de gui.c) */
 static int      g_screen_h   = 0;
 static int      g_no_screen  = 0;              /* --no-screen: placa sin panel */
@@ -1045,6 +1113,7 @@ int main(int argc, char** argv) {
         else if (!strncmp(a, "--fs=", 5))         fs_img_arg = a + 5;
         else if (!strncmp(a, "--fs-size=", 10))   fs_size_arg = parse_size(a + 10);
         else if (!strncmp(a, "--board=", 8))      g_board = a + 8;
+        else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */
         else if (!strncmp(a, "--screen=", 9)) {
@@ -1121,6 +1190,13 @@ int main(int argc, char** argv) {
         return 1;
     }
     bpvm_repl_set_ops(&SIM_REPL_OPS);   /* U3.24: la cintura, antes del primer mensaje */
+    /* V7/H3 — la SD, como una placa con ranura: registrar y montar en el arranque, ENCIMA del FS. */
+    if (g_sd_path) {
+        bpvm_sd_placa_registrar(&SIM_SD, &bpvm_fs_fat_ops, "fichero");
+        bpvm_sd_placa_montar_arranque();
+    } else {
+        bpvm_sd_placa_sin_sd("el micro simulado no tiene SD: arrancalo con --sd=IMAGEN (un fichero hace de tarjeta)");
+    }
     /* V6/U6.1 — `stack=N` del ENV, como las tres placas (`bpvm_set_stack_kb`).
      *
      * El simulador tenia gestor de placa y ENV —de hecho responde a `ENV_SET`—

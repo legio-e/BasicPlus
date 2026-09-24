@@ -48,6 +48,7 @@
  * `f_*` fuera de este fichero, y aquí sólo por dentro del lock.**
  */
 #include "bpvm_fs_fat.h"   /* el propio: así el compilador CONTRASTA los dos */
+#include "bpvm_sd_placa.h" /* V7/H3: las operaciones de abajo, para el registro de la SD */
 #include "bpvm_fs.h"
 #include "bpvm_blk.h"
 #include "bpvm_rtc.h"
@@ -700,3 +701,12 @@ int bpvm_fs_fat_resumen(bpvm_fs_fat_resumen_t* r) {
 
     return (rc == FR_OK && rd == FR_OK) ? 0 : -1;
 }
+
+/* V7/H3 (24-sep) — las operaciones de este FS para el registro de la SD (`bpvm_sd_placa.h`). Viven AQUÍ y
+ * no en el común para que sólo las enlace la imagen que ya enlaza FAT: la de una placa con ranura. */
+const bpvm_sd_placa_fs_t bpvm_fs_fat_ops = {
+    .montar        = bpvm_fs_fat_montar,
+    .vigilar       = bpvm_fs_fat_vigilar,
+    .lba_particion = bpvm_fs_fat_lba_particion,
+    .resumen       = bpvm_fs_fat_resumen,
+};
