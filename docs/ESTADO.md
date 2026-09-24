@@ -614,6 +614,47 @@ nuevos se comprueban solos. Y al probar un `continue` dentro de un switch en un 
 gordo: **`continue` en un `for` no avanzaba la variable** —bucle infinito, en el intérprete y en el AOT—; nadie lo pisaba
 (2 `continue` en el árbol, ninguno en un `for`): `#548`, `132f956f`. **Con esto H2 queda cerrado.**
 
+## 💾 H3 (24-sep, noche) — SD.3 hecho, y SD.4 destapa cinco fichas en fila (`#549`–`#553`)
+
+Eduardo: *«C6 la a. Nos concentramos en ir cerrando H3, H4, H5 y H6; antes de empezar nuevos hitos. Ahora continuamos
+con H3, el lector de SD común.»* **SD.3** (`e1843e99`): la Metro registra su SD desde el ENV con el ayudante común
+(`bpvm_sd_spi_env.c`) y `pico/repl_v1.c` pierde sus dos verbos y el vigía (−270 líneas); el P4 da la identidad de su
+SDMMC y registra `SDMMC`; la familia del `main` común registra por `CHIP_SD_REGISTRAR()` en `chip_cfg.h` —la C5 su TF,
+la S3 y la C3 «no tiene ranura», la C6 el porqué de esperar a `H6.b`—. Compilaron las ocho y `compat` verde.
+
+**SD.4, en la Metro y la C5.** El control antes de grabar —la Metro con la imagen de antes, `wire_serie.py sd`— dijo
+«el pin 34 no existe en rp2350a», y de ahí salieron cinco, cada una destapada por la anterior:
+`#549` (la Metro con la tabla de la A desde H4 P1: `main()` la elegía antes de leer la variante), `#550` (la serie,
+negativa), `#551` (SD.2 daba por terminada la escritura con la tarjeta aún grabando: la tarjeta de mentira de
+`test-sd-turnos` era más amable que la de verdad), `#552` (la C5 a 25 MHz tuerce bits: `khz:` en la línea `sd`) y
+`#553` (los datos de un bloque, de una vez: `SdCard` de 29,7 a 3,8 s en la C5). El camino de `#551` es el que conviene
+recordar: la capa de disco callaba el porqué; primero se hizo hablar (el motivo del dispositivo y su traza al log), y
+luego la traza de la fase de datos dijo `00 … 00` —la tarjeta seguía grabando—; el control con la TF de antes cerró la
+duda. Resultado: `SdCard` «SD OK — los seis» en las dos placas, y la TF y la pantalla de la C5 a la vez
+(`C5SdGui`, `607663a3`): 30 ficheros escritos y releídos sin un byte distinto mientras la etiqueta seguía cambiando (63 ms
+de peor hueco; sola, 30). Y `#554`, abierta: concatenar en placa es unas 250 veces más lento que en el PC.
+
+## ⏭️ Traspaso (24-sep, medianoche) — H3: SD.3 hecho; SD.4 hecho en la Metro y la C5; faltan el P4 y la tarjeta en caliente
+
+**Commits** (sin push): `e1843e99` (SD.3) · `73464cde` (`#549`) · `f82f246b` (`#550`) · `1d484f3c` (`#551`) · `004f7b04`
+(`#552`) · `28caacde` (`#553`) · `607663a3` (`C5SdGui`, `sd`/`sdmount`) · y los docs. Sobre el código final, compilan
+las ocho imágenes y `compat.sh check` sale verde (paridad 100/100 en MOD9 y en MOD8, cápsula 59/59, norma 9/9, sim 6/6
+con `sd_smoke` en 20, pruebas de C 7/7, sombra 13/13).
+
+**Placas**: la **Metro** (COM4) lleva la imagen de hoy entera (su ENV, el de siempre: `sd=sck:34,…,cd:40`); la **Pico 2**
+(COM22), la de `#549` (sin `#550`–`#553`, que no le tocan: no tiene SD); la **C5** (COM6), la de hoy, con
+**`sd=bus:2,cs:23,khz:10000`** nuevo en su ENV —sus packs `Gui` y `DriverSpi` siguieron cargando sin regrabar, como
+predijo `nm`: mismas páginas de 64 KB—. El **P4** y las demás, la sellada.
+
+**Queda de H3** (`FICHAS`, fila H3): **el P4** —conectarlo, grabarlo y pasarle `sd`, `sdmount` y `SdCard`: su
+`p4_identidad` no ha corrido nunca; y de paso, que con el FS caído su `SD_INFO` diga eso y no el motivo por defecto
+(«su ENV no lleva línea `sd`»): el P4 sólo registra con el FS arriba— y **la tarjeta en caliente en la Metro** (sacarla y meterla con la placa en marcha:
+el vigía es ya el del común). Con eso, SD.4 y la fila de la SD se cierran; el explorador del IDE (`sd`, `sd mount`) lee
+los mismos campos que antes más `medio`, y conviene mirarlo una vez con Eduardo.
+
+**Lo siguiente**, dentro de H3–H6 (Eduardo, 24-sep): lo que quede de H3, y luego H4 (`#469` resto, NeoPixel C6, `#536`,
+`#544`), H5 (`P2b`, `#542`) o H6 (`G4.b`, `H6.b`).
+
 ## ⏭️ Traspaso (24-sep, noche) — todo en `main`: H1 y H2 cerrados, y las dos ramas de la tarde, fusionadas
 
 **`main` lo lleva todo** (sin push): H1 y H2 cerrados (`#540`; `#523` y `#546`–`#548`); `#539`/`#545` (`cd8831e2`) y

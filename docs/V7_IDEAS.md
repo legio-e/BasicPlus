@@ -1670,6 +1670,28 @@ no la tienen:
 Compilan las ocho imágenes (Pico, P4, C5, S3, C3, C6, Nucleo y DK2). Los tests de C de la SD y `compat` salen en verde.
 Queda SD.4, en placa.
 
+**SD.4, en marcha (24-sep, noche): la Metro y la C5 con tarjeta.** Antes de grabar nada, el CONTROL: la Metro con la
+imagen de antes (`wire_serie.py sd`, verbo nuevo) → «el pin 34 no existe en rp2350a». Y de ahí, cinco fichas en fila,
+cada una destapada por la anterior:
+- **`#549`** (H4): la Metro tenía la tabla de capacidades de la A —`main()` la elegía antes de leer la variante— y su
+  SD estaba muerta desde H4 P1. Con la tabla del silicio, monta al arrancar por el común; `SD_INFO`/`SD_MOUNT` dan su
+  SanDisk de 32 GB (MBR, FAT32 en el bloque 2048).
+- **`#550`**: la serie salía negativa (`long` de 32 bits); ahora sin signo, y el micro simulado lo caza.
+- **`#551`**: ni `mkdir` ni `writeFile` en `/sd`. Acotado paso a paso —primero el porqué del dispositivo en el log (la
+  capa de disco callaba), luego la traza de la fase de datos: `CMD17 -> 00 … 00`, la tarjeta aún grabando—, con el
+  control de la TF de antes (escribía bien): la «ocupada» de SD.2 volvía antes de tiempo porque la tarjeta real, al
+  volver a elegirla, tarda en tirar de la línea. La tarjeta de mentira de `test-sd-turnos` era más amable que la de
+  verdad; ya no.
+- **`#552`**: en la C5 la TF a 25 MHz tuerce bits (su MISO pasa por la matriz de GPIO); la línea `sd` gana `khz:` y la
+  C5 lleva `sd=bus:2,cs:23,khz:10000`.
+- **`#553`**: los datos de un bloque, de una vez: `SdCard` en la C5 de 29,7 s a 3,8; en la Metro, de 4,7 a 2,8.
+
+Con eso, `SdCard` «SD OK — los seis» en las dos, y **la TF y la pantalla de la C5 a la vez** (`samples/C5SdGui.bp`): la
+pantalla sola, 188 cambios de una etiqueta en 5 s y 30 ms de peor hueco; con un hilo escribiendo y releyendo ficheros
+de 2,3 KB en `/sd`, 176 y 63 ms, y 30 ficheros, 0 distintos. De paso, `#554` (abierta, H7): concatenar en placa es unas
+250 veces más lento que en el PC —el primer `C5SdGui` medía eso y no la TF—. Quedan el P4 (no estaba conectado; su
+`SD_INFO` es nuevo) y la tarjeta en caliente en la Metro (sacarla y meterla).
+
 ## H4 — la caracterización de los periféricos de cada micro: la HAL BP de capacidades (22-sep, día de análisis)
 
 Tres fichas que son un solo diseño (`#378` la madre, `#470` los arrays, `#479` el mapa de pines y `AnPin`) y
