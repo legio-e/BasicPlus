@@ -1716,9 +1716,10 @@ int main(void) {
     log_printf("=== boot " __DATE__ " " __TIME__ " ===");
     /* La causa del reset ya la sabía el firmware (era un builtin de BP), pero no
      * la contaba al arrancar: distinguir "watchdog" de "power-on" es gratis y
-     * ahorra media investigación. */
-    log_printf("boot: causa del reset = %s",
-               watchdog_caused_reboot() ? "WATCHDOG" : "power-on/run");
+     * ahorra media investigación. #466 (resto, V7): con la MISMA función que
+     * resetCause — aquí se leía watchdog_caused_reboot() a secas, y un RESET
+     * pedido por el wire (watchdog_reboot) salía en el log como "WATCHDOG". */
+    log_printf("boot: causa del reset = %s", pico_pico_reset_cause_impl());
 
     /* Conecta los backends de HW reales (Pico SDK) a los builtins de
      * la VM. Sin esto los handlers caen al stub con logging. */
