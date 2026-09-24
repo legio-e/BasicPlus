@@ -12,6 +12,19 @@
 #include "bpvm_internal.h"
 #include "bpvm_aot_helpers.h"   /* H3 #158 — helpers indirect */
 
+/* V7/H2 (#523) — busca un símbolo BP por nombre; si no está, lo DICE (no un 0 mudo). */
+static inline uint32_t aot_NatNew_busca(struct bpvm* vm, const char* nombre, const char* aviso) {
+    uint32_t f = vm->aot_helpers->find_function(vm, nombre);
+    if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
+    return f;
+}
+/* V7/H2 (#533) — la ranura de un método de clase externa/abierta, por clave y en ejecución; si no está, lo DICE. */
+static inline int32_t aot_NatNew_ranura(struct bpvm* vm, const char* clase, const char* clave, const char* aviso) {
+    int32_t s = vm->aot_helpers->slot_por_clave(vm, clase, clave, "NatNew");
+    if (s < 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
+    return s;
+}
+
 /* Forward decls de las funciones AOT de este módulo. */
 static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t a, int32_t b);
 static double aot_NatNew_mediaDobles(struct bpvm* vm);
@@ -176,8 +189,8 @@ static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t a, int32_t b) {
                   *  globals/arrays/builtins. */
     (void) a;
     (void) b;
-    int32_t p = vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "NatNew.__cls_new_Punto"), (int32_t[]){ a, b }, 2, 0u, 1);
-    return (vm->aot_helpers->call_method_i32(vm, p, 2, (const int32_t*) 0, 0, 0u, 0) * vm->aot_helpers->call_method_i32(vm, p, 4, (const int32_t*) 0, 0, 0u, 0));
+    int32_t p = vm->aot_helpers->call_bp_i32(vm, aot_NatNew_busca(vm, "NatNew.__cls_new_Punto(ii)", "AOT: la native 'areaDe' pide 'NatNew.__cls_new_Punto(ii)' y no est\303\241 en los m\303\263dulos cargados (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (int32_t[]){ a, b }, 2, 0u, 1);
+    return (vm->aot_helpers->call_method_i32(vm, p, aot_NatNew_ranura(vm, "NatNew.Punto", "getX()i", "AOT: la native 'areaDe' pide 'NatNew.Punto.getX()i' y la clase cargada no lo tiene (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (const int32_t*) 0, 0, 0u, 0) * vm->aot_helpers->call_method_i32(vm, p, aot_NatNew_ranura(vm, "NatNew.Punto", "getY()i", "AOT: la native 'areaDe' pide 'NatNew.Punto.getY()i' y la clase cargada no lo tiene (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (const int32_t*) 0, 0, 0u, 0));
 }
 
 static void thunk_NatNew_areaDe(struct bpvm* vm,

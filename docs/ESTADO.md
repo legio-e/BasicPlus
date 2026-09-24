@@ -488,6 +488,39 @@ definida, como Java) y la pregunta: error o aviso.
 **De paso**, la higiene de `FICHAS`: doce fichas cerradas que el censo no tachaba, `#525`/`#526` (cerradas el 18-sep)
 en la fila de H7, y tres entradas de la cola de V5 que se cerraron el 9-sep con número (`#482`–`#484`) sin marca.
 
+## 🧪 H9 `#541` (24-sep, tarde) — CINCO PRUEBAS DE C, EN LA RED: el AOT ejecutado y el núcleo del depurador
+
+La tarea aparte del mediodía (en un worktree, mientras Eduardo estaba con las placas): `test-aotnew` y `test-debug-mt`,
+rotos y fuera de toda red. **Al mirar sus hermanos salieron tres más**, y en un checkout limpio ninguna daba rojo por lo
+que prueba: `test-debug`, `test-debug-mt` y `test-listen` (el mismo `DBGMOD`) **se saltaban con salida 0**, porque
+`samples/Arith.mod` salió de git el 6-ago y nadie lo regenera (en el checkout principal es el MOD5 del 22-may, y la VM lo
+rechaza); a `test-listen` le faltaba además el registro del FS de `#344`, y desde el `import Core` implícito no
+encontraba `Core`; `test-aotnew` no compilaba `NatNew.bp` desde `#19`; y su gemelo `test-aotgc` estaba rojo porque
+`AotMain` no veía `Core` (en el checkout principal lo tapaba un `samples/Core.mod` suelto).
+
+**Lo gordo salió de ahí**: sin la interfaz de `Core` el AOT no da error, genera ranuras fijas para los métodos de una
+clase y `areaDe(6,7)` sale **0 con `status=OK`**. Las pruebas ya le dan la stdlib; el AOT queda abierto como `#542` (H5),
+con la propuesta de que sin `Core` falle con nombre. **Y un sabotaje enseñó que el caso 3 de `NatNew` nunca vigiló lo
+que dice**: con los helpers de 4 bytes sobre el `word[]` (el fallo de `05a68055`), la native se lee bien a sí misma y
+`tocaPalabras()` da 6000 igual. Ahora `Main` relee `w` con el intérprete (`1000 0 2000` con el sabotaje).
+
+**Hecho**: `NatNew.bp` con un `word[]` dinámico (`[word(0), word(0), word(0)]`: `word[]` no tiene constructor y el
+literal de enteros no se estrecha solo) y la relectura; las tres del depurador compilan su `.mod` en cada ejecución
+(`DBGBP`, de `samples/arith.bp` a `build/dbgmod/<prueba>/`; pasar `DBGMOD` es ya un error con nombre); el AOT de las
+pruebas con la stdlib en su `outDir` (macro `aotmain`: lo que dice va a `aot.log` y no a `/dev/null`, y «sin interfaz» es
+rojo); `debug_listen.c` con su registro del FS; `dbg_client.py` enseña el stderr del servidor al fallar (lo tiraba: el
+fallo de `test-listen` era un timeout sin motivo); y un frente `check-testc` en `compat.sh check` con las cinco (verde =
+salida 0 y su línea de OK; ~10 s).
+
+**Red**: las cinco en verde en un worktree limpio, con un control por arreglo (los helpers de 16 bits con paso 4, `AotMain`
+sin `Core`, el servidor sin el registro, un `DBGBP` que no compila: los cuatro en rojo y con nombre). `compat.sh check`
+entero en verde (paridad 97/97, cápsula 59/59, norma 9/9, sim 5/5, pruebas de C 5/5, sombra 13/13, MOD8 97/97; 5 min
+42 s). Commit `4987771e`; detalle en la ficha.
+
+**Lo nuevo que hay que saber**: `compat.sh check` tiene un frente más, `check-testc`; las pruebas del depurador se lanzan
+con `DBGBP=ruta/X.bp`; y `test-aotnew` reescribe `test/aot_NatNew.c` en cada pasada (el versionado es ya el de MOD9). Del
+Makefile, 63 de los 69 objetivos `test-*` siguen sin red. Sin push.
+
 ## 🔌 H9 (24-sep, tarde) — LA TARDE DE PLACAS: las nueve grabadas, probadas y SELLADAS
 
 Eduardo conectó las nueve, una detrás de otra; yo grabé la imagen de hoy y pasé la tanda de V7

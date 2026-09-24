@@ -630,6 +630,38 @@ check_sim() {
   [ "$fails" -eq 0 ]
 }
 
+# ---------------------------------------------------------------- check-testc
+# V7/H9 (#541, 24-sep) — PRUEBAS DE C que no estaban en ninguna red y se pudrieron
+# sin que nadie lo viera: el AOT EJECUTADO (test-aotgc, test-aotnew: el .c del
+# emisor compilado con el gcc del host y corrido con el GC en cada alocacion) y el
+# nucleo del depurador (test-debug, test-debug-mt, test-listen). NatNew.bp no
+# compilaba desde #19; las del depurador cargaban un Arith.mod MOD5 de mayo —y en
+# un checkout limpio se SALTABAN con salida 0—; y el AOT de las dos primeras no
+# veia Core fuera del checkout principal. Cada una compila ya su .mod (y su .c) en
+# cada ejecucion. Verde = salida 0 Y su linea de OK: un «skip», o una salida 0 sin
+# la señal buena, es ROJO.
+check_testc() {
+  echo "-- pruebas de C (#541): el AOT ejecutado y el nucleo del depurador --"
+  if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
+    echo "  ⚠ el host esta compilado CON LVGL: estas pruebas necesitan 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
+    return 1
+  fi
+  local fails=0 t sal rc ok
+  for t in test-aotgc test-aotnew test-debug test-debug-mt test-listen; do
+    sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?
+    ok="$(printf '%s\n' "$sal" | grep -E '^\[status=OK\]|^OK: ' | head -1)"
+    if [ "$rc" -eq 0 ] && [ -n "$ok" ]; then
+      echo "  ok  $t: $(printf '%s' "$ok" | cut -c1-90)"
+    else
+      echo "  ✗ $t (salida $rc):"
+      printf '%s\n' "$sal" | grep -E "ROJO|FAIL|FALLOS|[Ee]rror|skip|✗|^  - |^  \| " | grep -v "warning" | head -8 | sed 's/^/       /'
+      fails=$((fails+1))
+    fi
+  done
+  echo "  pruebas de C: $((5 - fails))/5"
+  [ "$fails" -eq 0 ]
+}
+
 # ---------------------------------------------------------------- check-sombra
 # V7/H2 (#493) — LA SOMBRA: el orden de resolucion de modulos, UNO en las dos VMs
 # (Eduardo, 15-sep: «/app -> /lib -> packs; si el principal esta en un pack,
@@ -947,9 +979,12 @@ EOF
   # #537 — el micro simulado ANTES que la sombra: construye el sim de la red, y el
   # caso del wire de la sombra lo usa.
   check_sim || fails=$((fails+1))
+  # #541 — las pruebas de C del AOT y del depurador (despues del sim, que deja
+  # construidos los objetos de la biblioteca).
+  check_testc || fails=$((fails+1))
   check_sombra || fails=$((fails+1))
   check_mod8 sin-referencia || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + sombra + MOD8 VERDE' || echo "$fails frente(s) en ROJO") =="
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -962,6 +997,7 @@ case "${1:-}" in
   check-norma) check_norma ;;
   check-sombra) check_sombra ;;
   check-sim)  check_sim ;;
+  check-testc) check_testc ;;
   check-mod8) check_mod8 ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-sombra|check-mod8}"; exit 2 ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8}"; exit 2 ;;
 esac

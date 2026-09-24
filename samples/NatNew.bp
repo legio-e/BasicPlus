@@ -16,7 +16,7 @@
 //
 // ─── QUÉ MIRAR ───
 //
-//  1. Los tres valores esperados. Son exactos: si el camino compilado y el
+//  1. Los valores esperados. Son exactos: si el camino compilado y el
 //     interpretado difirieran, saldría aquí.
 //  2. La salida tiene que ser IDÉNTICA en miVM y en la VM-C (el invariante).
 //  3. En placa, `[mdn] 1 bloque(s) nativo(s) desde el propio .mod` en el log.
@@ -59,6 +59,11 @@ module NatNew
   // `word[]` se leía de cuatro en cuatro y un `long[]` de cuatro en ocho.
   // No fallaba: devolvía otro número. Aquí se escribe y se relee dentro de
   // la native, que es el camino que estaba mudo.
+  // (#541, 24-sep) Pero releerlo SÓLO dentro de la native no lo ve: con el
+  // ancho equivocado en los dos helpers la native se lee bien a sí misma (6000
+  // igual), así que `Main` lo relee después con el INTÉRPRETE (con el fallo,
+  // `0 1000 0`). El array le llega como `word[]` dinámico: desde #19 un
+  // `word[3]` es fijo y no se pasa.
   native function tocaPalabras(v: word[]): integer
     v[0] := 1000
     v[1] := 2000
@@ -109,8 +114,9 @@ module NatNew
     print "== NatNew =="
     print "  sumaArray(5)  =", sumaArray(5), " (esperado 105)"
     print "  sumaLargos()  =", sumaLargos(), " (esperado 7000000000)"
-    var w: word[3]
+    var w: word[] := [word(0), word(0), word(0)]
     print "  tocaPalabras()=", tocaPalabras(w), " (esperado 6000)"
+    print "  w[0], w[1], w[2] =", w[0], w[1], w[2], " (esperado 1000 2000 3000)"
     print "  mediaDobles() =", mediaDobles(), " (esperado 4)"
     print "  largoDeDos()  =", largoDeDos(1234, 56), " (esperado 8)"
     print "  sumaFloats()  =", sumaFloats(), " (esperado 4)"

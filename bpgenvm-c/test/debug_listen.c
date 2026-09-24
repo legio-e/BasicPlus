@@ -23,6 +23,7 @@
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* H6.b.2.c: bpvm_mem_read_i32/u32 + tc->stack_base
                               * (host trusted, igual que hará el repl del Pico) */
+#include "bpvm_fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -173,6 +174,11 @@ static void* worker_main(void* arg) {
 }
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend.
+     * (#541: aqui faltaba, y desde el import Core implicito de H1 P3 no
+     * encontraba Core ni teniendolo al lado.) */
+    bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
     if (argc < 3) { fprintf(stderr, "uso: bpvm_dbgserver <port> <fichero.mod>\n"); return 2; }
     int port = atoi(argv[1]);

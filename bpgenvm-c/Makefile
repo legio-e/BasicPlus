@@ -163,6 +163,20 @@ define stdlibdep
 done
 endef
 
+# $(call aotmain,Mod,outDir) — el AOT de samples/Mod.bp para una prueba de host,
+# con la stdlib FRESCA en su outDir (#541). AotMain sólo busca la stdlib en el
+# BpVM.cfg del cwd, y sin la interfaz de Core —el import implícito de H1 P3— no
+# da error: emite ranuras fijas para los métodos de una clase (areaDe salía 0
+# con status=OK) o rechaza lo que usa sus primitivas (#542). En el checkout
+# principal lo tapaba un samples/Core.mod suelto que encontraba junto al fuente.
+# Lo que AotMain dice queda en outDir/aot.log (iba a /dev/null) y un aviso de
+# «sin interfaz» es rojo.
+define aotmain
+@rm -rf $(2) && mkdir -p $(2) && cp ../bpstdlib/*.mod $(2)/
+@java -cp "../lexer-java/target/classes;../pack/target/classes" basicplus.frontend.AotMain samples/$(1).bp $(2) >$(2)/aot.log 2>&1 || { cat $(2)/aot.log; exit 1; }
+@if grep -q "sin interfaz" $(2)/aot.log; then echo "  ROJO: el AOT de $(1) no ve la interfaz de un import (#542):"; grep "sin interfaz" $(2)/aot.log; exit 1; fi
+endef
+
 all: $(BIN)
 
 $(BIN): $(OBJ)
@@ -561,10 +575,11 @@ test-fspos: $(LIBOBJ)
 # certeza. Si esto vuelve a rojo, un handle retenido solo en un local/registro
 # de C se esta reciclando en mitad de una expresion: corrupcion MUDA (NULs con
 # status=OK). El detalle del arreglo: heap.c paso 2d + aot_call_guarded.
-test-aotgc:
+test-aotgc: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,RoTest)
-	@java -cp "../lexer-java/target/classes;../pack/target/classes" 	  basicplus.frontend.AotMain samples/RoTest.bp build/aotro >/dev/null
+	$(call stdlibdep,Core)
+	$(call aotmain,RoTest,build/aotro)
 	@cp build/aotro/aot_RoTest.c test/aot_RoTest.c
 	$(CC) $(CFLAGS) -Isrc test/test_aotgc.c test/aot_RoTest.c $(LIBOBJ) 	  -o build/test_aotgc.exe $(LDFLAGS)
 	@echo "--- #302p3 native compilado + GC por alocacion (VERDE = arreglado) ---"
@@ -573,14 +588,18 @@ test-aotgc:
 # [V6/N1.5] El gemelo de test-aotgc para lo que una native FABRICA. Regenera el
 # .c desde el .bp (nunca un artefacto rancio checkeado a mano) y lo EJECUTA con
 # el GC colectando en cada alocacion.
-test-aotnew:
+# (#541, 24-sep) Y el word[] que escribe la native lo relee el INTERPRETE: con los
+# helpers de 4 bytes (el fallo que cazo esta prueba) la native se leia bien a si
+# misma y tocaPalabras daba 6000 igual; el interprete lee `0 1000 0`.
+test-aotnew: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,NatNew)
-	@java -cp "../lexer-java/target/classes;../pack/target/classes" 	  basicplus.frontend.AotMain samples/NatNew.bp build/aotnew >/dev/null
+	$(call stdlibdep,Core)
+	$(call aotmain,NatNew,build/aotnew)
 	@cp build/aotnew/aot_NatNew.c test/aot_NatNew.c
 	$(CC) $(CFLAGS) -Isrc test/test_aotnew.c test/aot_NatNew.c $(LIBOBJ) 	  -o build/test_aotnew.exe $(LDFLAGS)
 	@echo "--- N1.5: la native CREA array y objeto, con GC en cada alocacion ---"
-	@./build/test_aotnew.exe samples/NatNew.mod 2>/dev/null > build/aotnew.out; 	 ok=1; 	 grep -q "sumaArray(5)  = 105" build/aotnew.out || { echo "  ROJO: sumaArray"; ok=0; }; 	 grep -q "sumaLargos()  = 7000000000" build/aotnew.out || { echo "  ROJO: sumaLargos"; ok=0; }; 	 grep -q "tocaPalabras()= 6000" build/aotnew.out || { echo "  ROJO: tocaPalabras (word[], 2 bytes/casilla)"; ok=0; }; grep -q "mediaDobles() = 4" build/aotnew.out || { echo "  ROJO: mediaDobles (double[], f64)"; ok=0; }; grep -q "largoDeDos()  = 8" build/aotnew.out || { echo "  ROJO: largoDeDos (string[], refs con generacion + literal)"; ok=0; }; grep -q "sumaFloats()  = 4" build/aotnew.out || { echo "  ROJO: sumaFloats (float[])"; ok=0; }; grep -q "areaDe(6,7)   = 42" build/aotnew.out || { echo "  ROJO: areaDe"; ok=0; }; 	 if [ $$ok = 1 ]; then echo "[status=OK] arrays i32/i64/i16/f64/f32/ref y objeto sobreviven al GC"; 	 else cat build/aotnew.out; exit 1; fi
+	@./build/test_aotnew.exe samples/NatNew.mod 2>/dev/null > build/aotnew.out; 	 ok=1; 	 grep -q "sumaArray(5)  = 105" build/aotnew.out || { echo "  ROJO: sumaArray"; ok=0; }; 	 grep -q "sumaLargos()  = 7000000000" build/aotnew.out || { echo "  ROJO: sumaLargos"; ok=0; }; 	 grep -q "tocaPalabras()= 6000" build/aotnew.out || { echo "  ROJO: tocaPalabras (word[], 2 bytes/casilla)"; ok=0; }; grep -qF "w[0], w[1], w[2] = 1000 2000 3000" build/aotnew.out || { echo "  ROJO: el word[] que escribe tocaPalabras, releido por el interprete (otro ancho de casilla)"; ok=0; }; grep -q "mediaDobles() = 4" build/aotnew.out || { echo "  ROJO: mediaDobles (double[], f64)"; ok=0; }; grep -q "largoDeDos()  = 8" build/aotnew.out || { echo "  ROJO: largoDeDos (string[], refs con generacion + literal)"; ok=0; }; grep -q "sumaFloats()  = 4" build/aotnew.out || { echo "  ROJO: sumaFloats (float[])"; ok=0; }; grep -q "areaDe(6,7)   = 42" build/aotnew.out || { echo "  ROJO: areaDe"; ok=0; }; 	 if [ $$ok = 1 ]; then echo "[status=OK] arrays i32/i64/i16/f64/f32/ref y objeto sobreviven al GC"; 	 else cat build/aotnew.out; exit 1; fi
 
 test-aotgc-control: test-aotgc
 	@true
@@ -1223,18 +1242,34 @@ test-method: $(LIBOBJ)
 
 # H6.b.1 — núcleo portable del debugger (breakpoints por pc + pausa/step/stop).
 # Inyecta un pause_cb (sin wire ni hardware) y verifica step/breakpoint/stop +
-# list/clear. DBGMOD = cualquier .mod sin deps externas (default Arith.mod).
+# list/clear. DBGBP = el programa: cualquier .bp que sólo dependa de la stdlib
+# (default arith.bp, el módulo Arith).
+# (#541, 24-sep) Las tres pruebas del depurador COMPILAN su .mod en cada
+# ejecución, con el frontend de hoy, a build/dbgmod/<prueba>/ y con la stdlib al
+# lado (el import Core implícito de H1 P3 la pide). Antes cargaban
+# samples/Arith.mod, fuera de git desde el 6-ago: en el checkout principal el
+# MOD5 del 22-may —la VM lo rechaza, con razón— y en uno limpio ninguno, con las
+# tres SALTADAS con salida 0. En build/ y no en samples/, donde se pisaría el
+# Arith.dbg versionado. DBGMOD (un .mod ya hecho) no se usa: si llega, es error.
 DEBUG_BIN = build/test_debug.exe
-DBGMOD   ?= samples/Arith.mod
+DBGBP    ?= samples/arith.bp
+DBGDIR    = build/dbgmod/$@
+ifneq ($(DBGMOD),)
+$(error DBGMOD ya no existe (#541): las pruebas del depurador compilan su .mod en cada ejecucion; pasa el fuente con DBGBP=ruta/X.bp)
+endif
+define dbgmod
+@rm -rf $(DBGDIR) && mkdir -p $(DBGDIR) && cp ../bpstdlib/*.mod $(DBGDIR)/
+@java -jar ../lexer-java/target/basicplus-frontend.jar $(DBGBP) --compile $(DBGDIR) --backend=mivm --stdlibDir=$(DBGDIR) >$(DBGDIR)/compila.log 2>&1 || { echo "  ✗ $(DBGBP) no compila:"; grep -iE "error|abortada" $(DBGDIR)/compila.log | head -5; exit 1; }
+@m=$$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' $(DBGBP) | head -1); \
+ if [ -z "$$m" ] || [ ! -f $(DBGDIR)/$$m.mod ]; then echo "  ✗ $(DBGBP) no ha dejado su .mod en $(DBGDIR) (módulo '$$m')"; exit 1; fi; \
+ echo $$m.mod > $(DBGDIR)/.mod
+endef
 test-debug: $(LIBOBJ)
 	@mkdir -p build
-	@if [ ! -f "$(DBGMOD)" ]; then \
-	  echo "(skip test-debug: falta $(DBGMOD))"; \
-	else \
-	  $(CC) $(CFLAGS) -Isrc test/test_debug.c $(LIBOBJ) -o $(DEBUG_BIN) $(LDFLAGS); \
-	  echo "--- núcleo debugger VM-C (esperado: OK al final) ---"; \
-	  (cd samples && ../$(DEBUG_BIN) $(notdir $(DBGMOD))); \
-	fi
+	$(call dbgmod)
+	@$(CC) $(CFLAGS) -Isrc test/test_debug.c $(LIBOBJ) -o $(DEBUG_BIN) $(LDFLAGS)
+	@echo "--- núcleo debugger VM-C (esperado: OK al final) ---"
+	@cd $(DBGDIR) && $(abspath $(DEBUG_BIN)) $$(cat .mod)
 
 # H6.b.2.a — pausa/resume del debugger cruzando threads (corazón del server
 # host, sin sockets). El intérprete corre en un thread y bloquea en el pause_cb;
@@ -1242,13 +1277,10 @@ test-debug: $(LIBOBJ)
 DEBUGMT_BIN = build/test_debug_mt.exe
 test-debug-mt: $(LIBOBJ)
 	@mkdir -p build
-	@if [ ! -f "$(DBGMOD)" ]; then \
-	  echo "(skip test-debug-mt: falta $(DBGMOD))"; \
-	else \
-	  $(CC) $(CFLAGS) -Isrc test/test_debug_mt.c $(LIBOBJ) -o $(DEBUGMT_BIN) $(LDFLAGS); \
-	  echo "--- pausa/resume cruzando threads (esperado: OK al final) ---"; \
-	  (cd samples && ../$(DEBUGMT_BIN) $(notdir $(DBGMOD))); \
-	fi
+	$(call dbgmod)
+	@$(CC) $(CFLAGS) -Isrc test/test_debug_mt.c $(LIBOBJ) -o $(DEBUGMT_BIN) $(LDFLAGS)
+	@echo "--- pausa/resume cruzando threads (esperado: OK al final) ---"
+	@cd $(DBGDIR) && $(abspath $(DEBUGMT_BIN)) $$(cat .mod)
 
 # H6.b.2.b — servidor wire del debugger en host (stand-in de la Pico, sin HW).
 # Compila bpvm_dbgserver (TCP + wire-v1 device-role) y lo conduce con un cliente
@@ -1261,13 +1293,10 @@ endif
 PYTHON ?= python
 test-listen: $(LIBOBJ)
 	@mkdir -p build
-	@if [ ! -f "$(DBGMOD)" ]; then \
-	  echo "(skip test-listen: falta $(DBGMOD))"; \
-	else \
-	  $(CC) $(CFLAGS) -Isrc test/debug_listen.c $(LIBOBJ) -o $(LISTEN_BIN) $(DBG_LDFLAGS); \
-	  echo "--- wire debugger host (cliente Python) ---"; \
-	  $(PYTHON) test/dbg_client.py "$(abspath $(LISTEN_BIN))" "$(notdir $(DBGMOD))" samples; \
-	fi
+	$(call dbgmod)
+	@$(CC) $(CFLAGS) -Isrc test/debug_listen.c $(LIBOBJ) -o $(LISTEN_BIN) $(DBG_LDFLAGS)
+	@echo "--- wire debugger host (cliente Python) ---"
+	@$(PYTHON) test/dbg_client.py "$(abspath $(LISTEN_BIN))" "$$(cat $(DBGDIR)/.mod)" $(DBGDIR)
 
 # H4.2 — smoke de toolchain LVGL v9 + SDL2 (vendorizados en third_party/, gitignored).
 # Compila las 311 fuentes de LVGL (flags relajados, sin -Wpedantic) + el driver SDL
