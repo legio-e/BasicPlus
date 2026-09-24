@@ -138,7 +138,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | **`/sd` como prefijo RESERVADO**: sin tarjeta, error en vez de caer en silencio a la flash interna (decidido 23-ago «entra en V6»; no se hizo). ⚠️ Cambio de comportamiento: a las notas de versión | `FICHAS` L10417 |
 | **`SD_INFO`/`SD_MOUNT` al REPL común** — siguen sólo en `pico/repl_v1.c` (resto de V5/H6) | `FICHAS` L11903 |
 | **La SD del STM32**: el motor es común; falta la cintura SDMMC de la U5 y montar `/sd` | `FICHAS` L6310 |
-| SD «superfloppy» sin MBR: probar con una tarjeta real reformateada (resto de H2-P5; en PC ya está) | `FICHAS` L1547 |
+| ~~SD «superfloppy» sin MBR: probar con una tarjeta real reformateada~~ — **cancelada en placa** (Eduardo, 24-sep: el firmware no formatea y Windows no la prepara sin escribir el disco en crudo; en PC ya está) | `FICHAS`, `H2-P5` |
 | **`listDir` en la VM-C** — a medio nacer: id y código en miVM, sin declaración BP y sin C (resto de `#484`; `input()` se queda fuera por decisión del 26-ago, y `PENDIENTES` mete a `listDir` en esa misma decisión: corregirlo) | `FICHAS` L4236 |
 | `#456` resto — **el tope de un path es de la VM-C, no del lenguaje**: `BPVM_FS_PATH_MAX` = 256 sólo en C; miVM abre lo que sea. Que el tope sea de la spec, lo compruebe miVM igual, y un sample de paridad lo fuerce | `FICHAS` L9476 |
 

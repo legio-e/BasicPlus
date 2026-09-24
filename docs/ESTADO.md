@@ -488,6 +488,46 @@ definida, como Java) y la pregunta: error o aviso.
 **De paso**, la higiene de `FICHAS`: doce fichas cerradas que el censo no tachaba, `#525`/`#526` (cerradas el 18-sep)
 en la fila de H7, y tres entradas de la cola de V5 que se cerraron el 9-sep con número (`#482`–`#484`) sin marca.
 
+## 🔌 H9 (24-sep, tarde) — LA TARDE DE PLACAS: las nueve grabadas, probadas y SELLADAS
+
+Eduardo conectó las nueve, una detrás de otra; yo grabé la imagen de hoy y pasé la tanda de V7
+(`tools/tanda_v7.json`, 11 pruebas). **Verde en las nueve salvo una prueba en la C6**, y selladas como punto de
+restauración (`dist/firmware-v7-24sep`, `22f30005`): la precondición de `H6.b`. Por el camino:
+- **La Nucleo**: el repeated start del STM32 contra el sensor de Eduardo, que resultó ser un BME280 (el sample sólo
+  aceptaba el chip_id del BMP280): cinco pruebas, cada una igual a su control por STOP. Con el botón de `C5Touch`
+  (5 pulsaciones, 5 por el puerto), `G4.a3` queda cerrado del todo. El FS que «bailaba» no bailó (tres arranques en
+  la Nucleo y tres en la DK2); el botón NRST da «pin (NRST)» y el log de antes vivo (`L15`).
+- **La C6 reventaba** (`#543`): `TimeDemo` y las dos de GUI la reiniciaban. La consola por USB dio el «Stack
+  protection fault» en `main`, y `addr2line` la cadena: la carga recursiva de dependencias, con littlefs debajo, ya
+  no cabe en 8 KB. 16 KB en las cuatro ESP que quedaban, y la C6 pasa, salvo `GuiWinJson`, que en V7 no cabe en su
+  heap («No space in heap», anotado en `#468`). Y su botón BOOT no se ve (`#544`).
+- **La Metro y SQLite**: su pack llevaba el `.mdn` de la ABI 6, rechazado con nombre; y el `.pack` del repo llevaba el
+  motor ARM del 19-ago, que exige la BIOS exacta (`bp_pack_init` → 3). Reconstruido: `SqlDemo` == host.
+- **Las herramientas**: la tanda reiniciaba la S3 y el P4 al abrir su CH343 (el DTR/RTS por defecto de pyserial) y no
+  les daba tiempo a contestar; `wire_serie` no llegaba a la Pico (sin DTR su CDC no transmite). Arregladas las dos
+  (`71e8b11d`).
+- `#466` en la Pico: «reinicio pedido» tras un RESET por el wire; `U1.2`: el log de antes sobrevive. `P1.C3`:
+  `trytest` y `JsonDemo` idénticos en la C3.
+- La SD «superfloppy», **cancelada** en placa (Eduardo): no se puede preparar la tarjeta en Windows sin riesgo, y el
+  caso está probado en el PC.
+
+## ⏭️ Traspaso (24-sep, tarde) — la ronda de V7, sellada; lo que dejó abierto la tarde
+
+**Sellado**: `dist/firmware-v7-24sep` (8 imágenes, 9 placas, SHA256) y `compat/informes/tanda_v7.md`. `H6.b` puede
+empezar cuando Eduardo quiera: hay a dónde volver.
+
+**Lo que dejó abierto la tarde**: `#544` (el BOOT de la C6: la prueba cruzada, un pin de la cabecera a masa); `#468`,
+con su medida (la C6 sin memoria para `GuiWinJson`); `#540` (¿error o aviso?); el NeoPixel de la familia ESP32 (el
+backend RMT).
+
+**Las otras dos sesiones**: `#539` (`PACK_LS`) y `#541`/`#542` (las pruebas de C en la red) están hechas en sus ramas
+(`claude/friendly-dirac-ac6dfc`, `claude/quirky-khayyam-64df44`) y sin fusionar. Al fusionar, `FICHAS` chocará —los
+tres tocamos el registro— y hay que hacerlo a mano. `#539` falta verla en la C5.
+
+**Lo siguiente**, a elegir con Eduardo: H3 «SD al común», `G4.b` (el DMA del ESP32) o `H6.b`.
+
+**Estado de las placas**: las nueve con las imágenes selladas. Sin push.
+
 ## ⏭️ Traspaso (24-sep, mediodía) — la TARDE DE PLACAS: cerrar todo lo que se pueda con ellas
 
 **El esqueleto: la ronda de V7 en las nueve placas.** Una placa cada vez —Eduardo conecta, yo grabo, «probada /
