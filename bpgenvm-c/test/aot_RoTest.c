@@ -12,6 +12,19 @@
 #include "bpvm_internal.h"
 #include "bpvm_aot_helpers.h"   /* H3 #158 — helpers indirect */
 
+/* V7/H2 (#523) — busca un símbolo BP por nombre; si no está, lo DICE (no un 0 mudo). */
+static inline uint32_t aot_RoTest_busca(struct bpvm* vm, const char* nombre, const char* aviso) {
+    uint32_t f = vm->aot_helpers->find_function(vm, nombre);
+    if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
+    return f;
+}
+/* V7/H2 (#533) — la ranura de un método de clase externa/abierta, por clave y en ejecución; si no está, lo DICE. */
+static inline int32_t aot_RoTest_ranura(struct bpvm* vm, const char* clase, const char* clave, const char* aviso) {
+    int32_t s = vm->aot_helpers->slot_por_clave(vm, clase, clave, "RoTest");
+    if (s < 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
+    return s;
+}
+
 /* Forward decls de las funciones AOT de este módulo. */
 static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t n);
 
