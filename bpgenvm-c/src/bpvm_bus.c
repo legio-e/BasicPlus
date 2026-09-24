@@ -22,6 +22,7 @@ typedef struct {
     unsigned char origen;       /* ORIGEN_*                                       */
     unsigned char usuarios;     /* máscara BPVM_BUS_PROGRAMA | FIRMWARE | PACK     */
     unsigned char quien;        /* quién lo estableció (ORIGEN_USUARIO), para decirlo */
+    unsigned char tope_ms;      /* G4.a3: el `ms:` de su línea del ENV; 0 = BPVM_BUS_TOPE_MS */
     short         p[3];         /* SPI sck/mosi/miso · I2C sda/scl/-1; -1 = no tiene */
     int           hz;           /* I2C: la del bus · SPI: 0                        */
 } bus_t;
@@ -90,7 +91,7 @@ static const char* tras_clave(const char* s, const char* k) {
 int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap) {
     bus_t* b = bus_de(tipo, id);
     short p[3] = { -1, -1, -1 };
-    int hz = 0;
+    int hz = 0, ms = -1;
     const char* s = valor;
     char clave[8];
     snprintf(clave, sizeof clave, "%s%d", tipo == BPVM_BUS_SPI ? "spi" : "i2c", id);
@@ -104,6 +105,7 @@ int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap
         if (!*s) break;
         for (i = 0; i < n_pines(tipo) && !v; i++) { v = tras_clave(s, nombre_pin(tipo, i)); if (v) campo = i; }
         if (!v && tipo == BPVM_BUS_I2C) { v = tras_clave(s, "khz"); if (v) campo = 9; }
+        if (!v) { v = tras_clave(s, "ms"); if (v) campo = 10; }   /* G4.a3: el tope de un turno */
         if (!v) {
             /* ESTRICTA, como las líneas de los dispositivos: una clave que no
              * conozco es una errata con nombre, no algo que se salta. */
@@ -113,11 +115,18 @@ int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap
         }
         while (*v >= '0' && *v <= '9') { n = n * 10 + (*v - '0'); v++; digitos++; if (n > 100000) break; }
         if (!digitos || (*v && *v != ',' && *v != ' ')) {
-            snprintf(err, cap, "ENV %s: '%s' no es un número", clave, campo == 9 ? "khz" : nombre_pin(tipo, campo));
+            snprintf(err, cap, "ENV %s: '%s' no es un número", clave,
+                     campo == 9 ? "khz" : campo == 10 ? "ms" : nombre_pin(tipo, campo));
             return -1;
         }
-        if (campo == 9) hz = n * 1000; else p[campo] = (short) n;
+        if (campo == 9) hz = n * 1000; else if (campo == 10) ms = n; else p[campo] = (short) n;
         s = v;
+    }
+    /* G4.a3 — configurable, pero SIEMPRE limitado (Eduardo): un tope mayor que el
+     * máximo es una errata con nombre, no un «sin tope». */
+    if (ms == 0 || ms > BPVM_BUS_TOPE_MAX_MS) {
+        snprintf(err, cap, "ENV %s: ms:%d no vale: el tope de un turno va de 1 a %d ms", clave, ms, BPVM_BUS_TOPE_MAX_MS);
+        return -1;
     }
     if (p[0] < 0 || p[1] < 0) {
         snprintf(err, cap, "ENV %s: falta '%s'", clave, p[0] < 0 ? nombre_pin(tipo, 0) : nombre_pin(tipo, 1));
@@ -132,6 +141,7 @@ int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap
     }
     memcpy(b->p, p, sizeof p);
     b->hz = hz;
+    b->tope_ms = (unsigned char) (ms > 0 ? ms : 0);
     b->origen = ORIGEN_ENV;
     b->usuarios = 0;
     return 0;
@@ -155,7 +165,8 @@ int bpvm_bus_desde_env(bpvm_bus_env_get_fn env_get) {
                 continue;
             }
             bpvm_bus_describe(tipo, id, desc, sizeof desc);
-            bpvm_diag("bus: %s %d de la placa (ENV %s): %s", NOMBRE[tipo], id, clave, desc);
+            bpvm_diag("bus: %s %d de la placa (ENV %s): %s; tope de un turno %d ms", NOMBRE[tipo], id, clave, desc,
+                      bpvm_bus_tope_ms(tipo, id));
             n++;
         }
     }
@@ -282,12 +293,53 @@ int bpvm_bus_describe(int tipo, int id, char* out, size_t cap) {
     return 0;
 }
 
+/* ── G4.a3: el TOPE de un turno ────────────────────────────────────────────── */
+
+int bpvm_bus_tope_ms(int tipo, int id) {
+    bus_t* b = bus_de(tipo, id);
+    return (b && b->tope_ms) ? b->tope_ms : BPVM_BUS_TOPE_MS;
+}
+
+int bpvm_bus_establecido(int tipo, int id) {
+    bus_t* b = bus_de(tipo, id);
+    return (b && b->origen != ORIGEN_LIBRE) ? 1 : 0;
+}
+
+int bpvm_bus_hz(int tipo, int id) {
+    bus_t* b = bus_de(tipo, id);
+    return (b && b->origen != ORIGEN_LIBRE) ? b->hz : 0;
+}
+
+/* «40 MHz» / «400 kHz» / «1500 kHz» / «115200 Hz». CONTRATO DE PARIDAD con miVM. */
+static void velocidad_txt(int hz, char* out, size_t cap) {
+    if (hz % 1000000 == 0)   snprintf(out, cap, "%d MHz", hz / 1000000);
+    else if (hz % 1000 == 0) snprintf(out, cap, "%d kHz", hz / 1000);
+    else                     snprintf(out, cap, "%d Hz", hz);
+}
+
+/* La cuenta, ENTERA a propósito (la misma en miVM): los microsegundos que ocupa el bus,
+ * truncados; pasa si no superan el tope, y lo que se dice son los ms redondeados hacia
+ * arriba —20,001 ms es «21 ms»—. */
+int bpvm_bus_cabe(int tipo, int id, unsigned long long relojes, int hz, char* err, size_t cap) {
+    int tope = bpvm_bus_tope_ms(tipo, id);
+    unsigned long long us;
+    char vel[24];
+    if (!bus_de(tipo, id)) { snprintf(err, cap, "%s %d: no hay ese bus", tipo == BPVM_BUS_I2C ? "I2C" : "SPI", id); return -1; }
+    if (hz <= 0) { snprintf(err, cap, "%s %d: velocidad no válida (%d)", NOMBRE[tipo], id, hz); return -1; }
+    us = relojes * 1000000ULL / (unsigned long long) hz;
+    if (us <= (unsigned long long) tope * 1000ULL) return 0;
+    velocidad_txt(hz, vel, sizeof vel);
+    snprintf(err, cap, "%s %d: la transacción ocuparía el bus %lu ms a %s (máximo %d ms)",
+             NOMBRE[tipo], id, (unsigned long) ((us + 999ULL) / 1000ULL), vel, tope);
+    return -1;
+}
+
 /* ── G4.a2: el ÁRBITRO ─────────────────────────────────────────────────────── */
 
 /* El turno en curso de cada bus: quién (0 = libre), su CS o su dirección, desde
  * cuándo. Aparte de `s_bus` a propósito: cerrar o soltar un bus hace memset de su
  * contabilidad, y eso no puede borrar el turno de quien está transfiriendo. */
-typedef struct { unsigned char quien, esperan; short cs; int64_t desde; } turno_t;
+typedef struct { unsigned char quien, esperan, medir; short cs; int64_t desde; } turno_t;
 static turno_t s_turno[2][BPVM_BUS_ID_MAX];
 
 static bpvm_platform_mutex_handle_t s_arb_m;
@@ -362,17 +414,39 @@ int bpvm_bus_tomar(int tipo, int id, int quien, int cs, int plazo_ms, char* err,
 #endif
     t->quien = (unsigned char) (quien ? quien : BPVM_BUS_PROGRAMA);
     t->cs = (short) cs;
+    t->medir = 0;
     t->desde = bpvm_platform_now_ms();
     bpvm_platform_mutex_unlock(&s_arb_m);
     return 0;
 }
 
+/* G4.a3 — sin cerrojo: sólo lo escribe quien TIENE el turno, justo tras tomarlo, y
+ * sólo lo lee `dejar`, del mismo hilo y ya con el cerrojo. */
+void bpvm_bus_medir(int tipo, int id) {
+    if (bus_de(tipo, id)) s_turno[tipo][id].medir = 1;
+}
+
 void bpvm_bus_dejar(int tipo, int id) {
+    turno_t* t;
+    long largo = -1;
+    int tope = 0;
+    char suyo[40];
     if (!bus_de(tipo, id) || !s_arb_listo) return;
     bpvm_platform_mutex_lock(&s_arb_m);
-    s_turno[tipo][id].quien = 0;
+    t = &s_turno[tipo][id];
+    /* G4.a3 — el turno A MANO se mide: si pasó del tope del bus, se dice (fuera del
+     * cerrojo) con el nombre de quién. No se corta: dejaría un dispositivo a medias. */
+    if (t->medir && t->quien != 0) {
+        int64_t d = bpvm_platform_now_ms() - t->desde;
+        tope = bpvm_bus_tope_ms(tipo, id);
+        if (d > tope) { largo = (long) d; pinta_turno(tipo, t, suyo, sizeof suyo); }
+    }
+    t->medir = 0;
+    t->quien = 0;
     bpvm_platform_cond_broadcast(&s_arb_c);
     bpvm_platform_mutex_unlock(&s_arb_m);
+    if (largo >= 0)
+        bpvm_diag("%s %d: %s tuvo el bus %ld ms, y el tope de un turno es %d ms", NOMBRE[tipo], id, suyo, largo, tope);
 }
 
 /* SIN cerrojo, a propósito: se pregunta en CADA transferencia (la TF va byte a

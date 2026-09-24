@@ -2912,6 +2912,128 @@ configuración— y la velocidad sólo se cambia si es otra que la actual).
   1 s: el protocolo deja soltarlo en esa espera, y se hará si la C5 lo pide.
 - Los tres drivers de imagen fuera de la HAL BP (táctil del P4, pantalla del C6, táctil de la Discovery).
 
+#### 11.9 `G4.a3`, el diseño (24-sep): el dispositivo, la TRANSACCIÓN y el tope del bus (Eduardo)
+
+> Eduardo, sobre el bus: *«El bus se identifica por número en todas las placas. El número lo asigna el
+> fabricante, no hay que inventar nada.»* Sobre agrupar: *«Las operaciones de SPI e I2C se deberían poder
+> agrupar varias de forma similar a las transacciones en SQL, pero cuidado de no monopolizar el bus, el total
+> en tiempo tiene que ser corto.»* Y después: *«Las transacciones también deberían poder llamarse desde C, por
+> si un código nativo las necesita (de hecho tiene más sentido que se llamen desde ahí). El tiempo máximo
+> configurable, pero en cualquier caso algo limitado para que otros dispositivos sobre el mismo bus puedan
+> funcionar simultáneamente. Lo que hay que evitar es que si trabajo con un conversor analógico-digital con bus
+> SPI y hago una conversión que me lleva 200 ms, mientras esté trabajando, nadie más pueda utilizar el bus.»*
+> Sobre la velocidad: *«Lo normal no es ir cambiando la velocidad, solamente en algunos casos se cambia de unos
+> dispositivos a otros. Así que sí, la velocidad inicial se puede utilizar por defecto.»*
+
+- **La transacción se PREPARA y se ejecuta de UNA vez** (como `spi_message` e `i2c_transfer` en Linux), no un
+  BEGIN…COMMIT con código en medio. Los hilos de BP van en un solo hilo del SO: un programa que se quedara el
+  bus entre dos llamadas bloquearía ese hilo en cuanto otro hilo BP —la GUI pintando— pidiera el mismo bus (el
+  bloqueo mutuo de §11.3), y el código de en medio puede tardar lo que quiera. Dentro de una transacción sólo
+  hay transferencias —ni esperas, ni código de quien llama—: corta por construcción. Y entre dos transacciones
+  seguidas, la cortesía del árbitro ya deja pasar al que espera.
+- **El tope es del BUS**: lo dice su línea del ENV (`spi2=sck:6,mosi:7,miso:8,ms:20`, `i2c0=…,ms:20`); 20 ms si
+  no lo dice, y nunca más de 100 (un `ms:` mayor es un error con nombre). Antes de empezar se calcula lo que
+  ocupará el bus —en SPI 8 relojes por byte a la velocidad del dispositivo; en I2C 9 por byte, la dirección de
+  cada mensaje incluida, a la del bus— y si no cabe, error con nombre y no se transfiere nada: «SPI 2: la
+  transacción ocuparía el bus 32 ms a 1 MHz (máximo 20 ms)». La cuenta es entera: la misma en las dos VM.
+- **El conversor de 200 ms** es el caso para el que está hecho: una transacción que arranca la conversión, el
+  bus libre mientras convierte (un `sleep`, o su pin de listo) y otra que lee. No hay forma de esperar dentro.
+- **Primero en C, en la HAL BP**: `bpvm_spi_transaccion(bus, cs, hz, modo, ops, n)` —el CS abajo de principio a
+  fin— y `bpvm_i2c_transaccion(bus, addr, msgs, n)` —cada operación un mensaje, repeated start entre ellos y
+  STOP al final: la semántica de Linux—. Los packs las tienen en la BIOS v8 (dos ranuras al final). BP va
+  encima:
+  - `Spi.Device(bus, cs, baudrate, mode)`: el bus por su número, ya establecido (el ENV o un `Spi.Bus`); reserva
+    su CS (salida, en reposo alto). `write`, `read`, `transfer` y `writeRead` son una transacción cada una;
+    `execute(t)` ejecuta una `Spi.Transaction` (sus `write`/`read`/`transfer`, que se van añadiendo). Una
+    transacción se reutiliza: cada ejecución lee lo que tienen en ese momento los arrays de escritura y rellena
+    los de lectura. `release()` suelta el CS.
+  - `I2c.Bus`: `writeRead(addr, tx, ntx, rx, nrx)` y `execute(addr, t)` con una `I2c.Transaction`; hasta 256
+    bytes por transacción (el tope de siempre de una transacción I2C, #534).
+  - En el PC imprimen lo que hoy imprime el patrón a mano —el CS abajo, las tramas, el CS arriba—; la de I2C,
+    en UNA línea: es una sola transacción.
+- **Lo de siempre se queda como está**: `Spi.Bus`, las funciones sueltas e `I2c.Bus.write/read` —la velocidad
+  del init, sin CS dentro, sin tope— son para quien está solo en el bus. La velocidad del init deja de ser la
+  «excepción temporal» de §11.6b: es el contrato de lo de siempre (un `.mod` ya compilado que llame a
+  `Spi.writeBus` lleva el builtin dentro).
+- **El turno a mano** (`spi_tomar`…`spi_soltar`) no se puede calcular antes, y cortarlo a medias dejaría un
+  dispositivo a mitad de algo (la pantalla a media escritura de su memoria). Queda para lo que ya lo usa —la TF y
+  los packs de la v7—, MEDIDO: si pasa del tope, el log lo dice con el nombre de quién. `DriverSpi` pasa a
+  transacciones (Eduardo: «1 OK»): cada comando y cada bloque ya tenían esa forma, y el bloque de LVGL son
+  11 520 bytes, 2,3 ms a 40 MHz.
+- **Nuestra TF hace hoy lo del conversor**: al arrancar retiene el bus mientras repite ACMD41 (hasta 1 s) y al
+  escribir mientras la tarjeta graba (hasta 2 s). La especificación de la SD deja soltar el CS en las dos
+  esperas: se arregla en H3 «SD al común», donde se prueba de verdad con la pantalla (Eduardo: «2 también OK»).
+  Hasta entonces, la medida lo dice.
+- **Un fallo que salió al mirar**: sin DMA el IDF no acepta más de 64 bytes por transferencia
+  (`SOC_SPI_MAXIMUM_BUFFER_SIZE`; `spi_device_transmit` devuelve `ESP_ERR_INVALID_ARG`) y la cintura del ESP32 se
+  lo pasaba todo de una vez: desde BP, un `Spi.write` de más de 64 bytes fallaba en el ESP32. La cintura trocea
+  a 64; con el CS por GPIO, en el cable sólo quedan huecos.
+- **El repeated start, por familia**: ESP32, `i2c_master_execute_defined_operations` (IDF v6); Pico, `nostop`;
+  STM32 (U5), a nivel de registro —la HAL sólo lo trae para registros de 1 o 2 bytes—, probado en la Nucleo.
+
+**Se prueba**: en el PC, `test-bus` contra la cinta (el CS dentro, la velocidad de cada dispositivo, el tope que
+rechaza sin tocar el bus, el `ms:` del ENV, el I2C por mensajes, el turno a mano medido) y `samples/SpiDevice.bp`
+en la paridad. En la C5, un programa habla con la microSD (CS 23, 400 kHz) por `Spi.Device` —CMD0 → 0x01—
+mientras la GUI anima a 40 MHz en el mismo bus: dos dispositivos, dos velocidades, por primera vez en el
+hardware; y el latido del táctil con `writeRead` mientras `DriverSpi` también lo lee.
+
+#### 11.10 `G4.a3` hecho (24-sep): el dispositivo y la transacción, en C y en BP — y en la C5, la microSD con la pantalla
+
+El diseño, en §11.9. **Lo que hay:**
+- **La HAL BP**: `bpvm_spi_transaccion(bus, cs, hz, modo, ops, n)` y `bpvm_i2c_transaccion(bus, addr, msgs, n)`
+  —calcular, tomar, transferir, soltar; y si no cabe, -1 con el porqué antes de tocar nada—; el tope del bus
+  (`bpvm_bus_tope_ms`, el `ms:` del ENV: 1..100, 20 si no lo dice) con la cuenta entera de `bpvm_bus_cabe`; el
+  turno a mano MEDIDO al dejarlo («SPI 2: CS 10, un pack tuvo el bus 16 ms, y el tope de un turno es 5 ms», en el
+  log). En I2C, la cintura gana `transaccion` (repeated start entre mensajes) y `escribir_leer` es una de dos
+  mensajes; un dispositivo que no contesta es -2 y no va al log (el táctil se sondea cada pocos ms).
+- **La BIOS v8** (47 ranuras): `spi_transaccion` e `i2c_transaccion`. **`DriverSpi` la exige**: cada comando y
+  cada bloque es una transacción; ya no trocea él (lo hace la cintura).
+- **BP**: `Spi.Device(bus, cs, baudrate, mode)` con `write`/`read`/`transfer`/`writeRead`/`execute`/`release`,
+  `Spi.Transaction`, `I2c.Bus.writeRead`/`execute`, `I2c.writeRead` e `I2c.Transaction` (builtins 258-262, en
+  las dos VM con los mismos textos). La validación de los arrays que se guardan en una transacción la hace BP
+  (el mismo texto sale solo en las dos VM); la de lo que llega al builtin, las dos VM.
+- **Las cinturas**: el ESP32 trocea el SPI a 64 bytes (el fallo de §11.9: desde BP, más de 64 fallaba) y hace la
+  transacción I2C con `i2c_master_execute_defined_operations`; la Pico con `nostop`; el STM32 a nivel de registro
+  (TXIS/RXNE, TC entre mensajes, AUTOEND en el último, RELOAD para más de 255) —y su SPI trocea a 65 535, que la
+  HAL truncaba en silencio—.
+
+**Lo que salió por el camino:**
+- **El ESP32 manda en lo que cabe en una transacción I2C.** El IDF la hace en una lista de órdenes del bus (START,
+  datos, STOP) de como mucho 8 (`I2C_LL_CMD_REG_NUM`), y no deja encadenar dos listas sin un STOP en medio (se
+  mira en `i2c_master.c`: sin STOP, la espera del final no llega). Una lectura de más de un byte son dos órdenes
+  (el último byte va con NACK). La regla, IGUAL en todas las familias y en las dos VM —manda el piso—: hasta 3
+  mensajes de al menos un byte y 8 órdenes (cada mensaje 2, una lectura larga 3, y el STOP). El error dice la
+  cuenta: «la transacción necesita 9 órdenes del bus y caben 8».
+- **El formato MOD8 no admite una clase usada antes de declararse** (`Device.execute(t: Transaction)` con
+  `Transaction` debajo), y había un ciclo `Transaction`↔`Device`. `Transaction` va antes y su `executeOn` recibe
+  los datos del dispositivo como enteros. Lo cazó el frente MOD8 de la red.
+- **`PACK_LS` sólo lista los 16 primeros packs de la cadena**: la C5 tiene 19 (17 borrados), así que el listado
+  —y el panel del IDE— enseñaba 16 borrados y ESCONDÍA los dos vivos. No es de `G4.a3`: tarea aparte.
+- Al grabar la imagen nueva, el pack de LVGL no cargó: «realojado para OTRA dirección» —la imagen creció 64 KB y
+  se movió su sitio—. Se regraban `Gui` y `DriverSpi`, en ese orden (el reparto de RAM es el sello, §H6.8).
+
+**Cómo se sabe:**
+- `test-bus` (el `ms:` del ENV, la cuenta, la transacción con el CS abajo de principio a fin y la velocidad del
+  dispositivo, el tope que rechaza sin tocar el cable, el turno a mano medido —y una transacción NO medida ni con
+  una cintura que tarda 12 ms—, el I2C por mensajes en UNA llamada a la cintura, el NAK, las órdenes, el mensaje
+  vacío, la cintura sin repeated start), `test-bios` (47), `test-driverspi` (la cinta igual a la de DriverC5 byte a
+  byte: 49 turnos, los 49 transacciones), `test-arbitro`, `test-sd`/`blk`/`sdsc`, `test-guipack`, `test-bmgr`;
+  `samples/SpiDevice.bp` en la paridad (95/95) y la red entera; las ocho imágenes compiladas.
+- **En la C5**: «bios: tabla COMPLETA (47 ranuras)» y «tope de un turno 20 ms» en el arranque; `GuiFlushBench`
+  147 ms por pantalla (148 antes) y 1 ms por etiqueta con `DriverSpi` por transacciones. Y **`samples/C5Sd.bp`**:
+  un programa habla con la microSD (CS 23, 400 kHz) por `Spi.Device` en el SPI 2 de la pantalla (CS 10, 40 MHz):
+  CMD0 → 0x01, CMD8 → el eco 0x1AA, ACMD41 lista con el bus libre entre intentos, CMD58 → OCR 0xC0 (alta
+  capacidad), el bloque 0 en UNA transacción de 997 bytes con su firma 55 AA, y **30 de 30** comandos intercalados
+  con la pantalla (3 ms por vuelta). El tope, igual que en el PC (1001 bytes a 400 kHz: 21 ms, rechazado; 1000:
+  20 ms, pasa). Y el latido del táctil con `writeRead` (repeated start) avanza igual que con escribir y leer:
+  unos 32 000 por segundo — el CST3530 acepta el repeated start.
+
+**Lo que queda, a sabiendas:**
+- **El repeated start del STM32, sin probar en placa**: compila; la Nucleo, a la tarde (Eduardo).
+- La TF (`bpvm_sd.c`) sigue reteniendo el bus en sus esperas: H3 «SD al común» (Eduardo, «2 también OK»).
+- La C5 no prueba la CONCURRENCIA en placa (la pantalla y el programa van en el mismo hilo del SO): la prueba con
+  dos hilos de verdad es `test-arbitro` en el PC; en placa llegará con la TF montada por el firmware (H3).
+
 ### 12. El táctil que «se colgaba» era la HERRAMIENTA (23-sep, tarde): `wire_serie.py` reiniciaba la C5 al cerrar el puerto
 
 **El síntoma** (Eduardo, al volver a la C5 tras horas con `C5Touch` en marcha): la pantalla bien, el botón no

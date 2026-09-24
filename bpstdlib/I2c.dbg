@@ -2,78 +2,226 @@ dbg 3
 module I2c
 source C:\lenguajes\pm\bpstdlib\I2c.bp
 lines
-154 168
-185 174
-216 180
-234 188
-251 189
-262 190
-265 191
-272 192
-285 193
-303 194
-312 195
-320 196
-331 198
-339 200
-347 201
-362 202
-381 158
-392 159
-403 160
-414 161
-425 162
-585 71
-604 75
-630 79
-656 83
-669 91
-686 92
-697 93
-700 94
-707 95
-720 96
-733 97
-742 98
-750 99
-761 101
-769 104
-777 105
-792 106
-811 111
-826 114
-841 117
-860 120
+160 167
+171 168
+182 169
+200 197
+216 198
+256 203
+272 204
+312 209
+332 214
+340 215
+348 216
+361 223
+364 224
+367 225
+376 226
+387 227
+401 228
+418 230
+430 232
+442 234
+456 235
+487 237
+503 239
+517 240
+548 242
+564 244
+578 245
+593 248
+596 249
+605 250
+616 251
+630 252
+658 253
+675 255
+687 257
+720 259
+729 260
+732 261
+741 262
+752 263
+766 264
+794 265
+811 267
+828 270
+844 274
+858 275
+872 277
+887 279
+896 281
+910 282
+952 284
+967 285
+991 286
+1005 288
+1027 289
+1051 290
+1071 295
+1082 296
+1101 298
+1110 299
+1146 301
+1158 302
+1220 191
+1483 353
+1514 359
+1545 365
+1563 372
+1599 378
+1629 386
+1646 387
+1657 388
+1660 389
+1667 390
+1680 391
+1698 392
+1707 393
+1715 394
+1726 396
+1734 398
+1742 399
+1757 400
+1776 343
+1787 344
+1798 345
+1809 346
+1820 347
+2031 102
+2050 106
+2076 110
+2102 114
+2115 120
+2146 128
+2163 129
+2174 130
+2177 131
+2184 132
+2197 133
+2210 134
+2219 135
+2227 136
+2238 138
+2246 141
+2254 142
+2269 143
+2288 148
+2303 151
+2318 154
+2337 157
 vars
-func Bus.getId 35
+func Op.getKind 35
 this -20 8 0 ?
-func Bus.setId 50
+func Op.setKind 50
 this -24 8 0 ?
-func Bus.getSda 64
+func Op.getCount 64
 this -20 8 0 ?
-func Bus.setSda 79
+func Op.setCount 79
 this -24 8 0 ?
-func Bus.getScl 93
+func Op.getData 93
 this -20 8 0 ?
-func Bus.setScl 108
-this -24 8 0 ?
-func Bus.getBaudrate 122
+func Op.setData 110
+this -28 8 0 ?
+func Op.getNextOp 125
 this -20 8 0 ?
-func Bus.setBaudrate 137
+func Op.setNextOp 142
+this -28 8 0 ?
+func Op.__init 157
+this -36 8 0 ?
+kind -28 4 0 integer
+count -24 4 0 integer
+data -20 8 0 ref
+func Transaction.write 197
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Transaction.read 253
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Transaction.size 309
+this -20 8 0 ?
+func Transaction.clear 329
+this -20 8 0 ?
+func Transaction.executeOn 358
+this -28 8 0 ?
+bus -20 4 0 integer
+addr -16 4 0 integer
+sale 4 4 0 integer
+entra 8 4 0 integer
+o 12 8 0 ?
+p 20 4 0 integer
+r 28 4 0 integer
+func Transaction.add 841
+this -28 8 0 ?
+o -20 8 0 ref
+mas 4 8 0 ?
+func Transaction.checkArray 1068
+this -40 8 0 ?
+data -32 8 0 ref
+count -24 4 0 integer
+op -20 8 0 string
+func Transaction.__init 1217
+this -20 8 0 ?
+func __cls_init_Transaction() 1260
+this -20 8 0 ?
+func __cls_m_Transaction#read([ii)V 1274
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func __cls_m_Transaction#clear()V 1293
+this -20 8 0 ?
+func __cls_m_Transaction#executeOn(ii)i 1307
+this -28 8 0 ?
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __cls_m_Transaction#size()i 1328
+this -20 8 0 ?
+func __cls_m_Transaction#write([ii)V 1345
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Bus.getId 1364
+this -20 8 0 ?
+func Bus.setId 1379
 this -24 8 0 ?
-func Bus.write 151
+func Bus.getSda 1393
+this -20 8 0 ?
+func Bus.setSda 1408
+this -24 8 0 ?
+func Bus.getScl 1422
+this -20 8 0 ?
+func Bus.setScl 1437
+this -24 8 0 ?
+func Bus.getBaudrate 1451
+this -20 8 0 ?
+func Bus.setBaudrate 1466
+this -24 8 0 ?
+func Bus.write 1480
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.read 182
+func Bus.read 1511
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.release 213
+func Bus.release 1542
 this -20 8 0 ?
-func Bus.scan 231
+func Bus.writeRead 1560
+this -48 8 0 ?
+addr -40 4 0 integer
+tx -36 8 0 ref
+ntx -28 4 0 integer
+rx -24 8 0 ref
+nrx -16 4 0 integer
+func Bus.execute 1596
+this -32 8 0 ?
+addr -24 4 0 integer
+t -20 8 0 ref
+func Bus.scan 1626
 this -20 8 0 ?
 rxbuf 8 8 0 ?
 max 24 8 0 ?
@@ -81,55 +229,73 @@ found 32 4 0 integer
 addr 36 4 0 integer
 rc 40 4 0 integer
 result 44 8 0 ?
-func Bus.__init 378
+func Bus.__init 1773
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_new_Bus(iiii) 441
+func __cls_new_Bus(iiii) 1836
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_init_Bus(iiii) 479
+func __cls_init_Bus(iiii) 1874
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_m_Bus#read(i[ii)i 501
+func __cls_m_Bus#read(i[ii)i 1896
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#release()V 525
+func __cls_m_Bus#release()V 1920
 this -20 8 0 ?
-func __cls_m_Bus#scan()[i 539
+func __cls_m_Bus#scan()[i 1934
 this -20 8 0 ?
-func __cls_m_Bus#write(i[ii)i 558
+func __cls_m_Bus#writeRead(i[ii[ii)i 1953
+this -48 8 0 ?
+addr -40 4 0 integer
+tx -36 8 0 ref
+ntx -28 4 0 integer
+rx -24 8 0 ref
+nrx -16 4 0 integer
+func __cls_m_Bus#write(i[ii)i 1982
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func init 582
+func __cls_m_Bus#execute(iLI2c/Transaction;)i 2006
+this -32 8 0 ?
+addr -24 4 0 integer
+t -20 8 0 ref
+func init 2028
 bus -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func write 601
+func write 2047
 bus -32 4 0 integer
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 627
+func read 2073
 bus -32 4 0 integer
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func release 653
+func release 2099
 bus -16 4 0 integer
-func scan 666
+func writeRead 2112
+bus -44 4 0 integer
+addr -40 4 0 integer
+tx -36 8 0 ref
+ntx -28 4 0 integer
+rx -24 8 0 ref
+nrx -16 4 0 integer
+func scan 2143
 bus -16 4 0 integer
 rxbuf 8 8 0 ?
 max 24 8 0 ?
@@ -137,3 +303,10 @@ found 32 4 0 integer
 addr 36 4 0 integer
 rc 40 4 0 integer
 result 44 8 0 ?
+func __strconcat 2353
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

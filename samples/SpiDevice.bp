@@ -1,0 +1,168 @@
+module SpiDevice
+  // V7/H6.c G4.a3 — el DISPOSITIVO y la TRANSACCIÓN (V7_IDEAS §H6.11.9). Un Spi.Device trae su
+  // bus por número, su CS, su velocidad y su modo; cada llamada es UNA transacción —el CS abajo
+  // de principio a fin— y una Spi.Transaction junta varias operaciones en un turno. En I2C,
+  // writeRead y una I2c.Transaction: repeated start entre mensajes. Antes de empezar se calcula
+  // lo que ocupará el bus y si pasa del tope (20 ms) es un error con nombre y no se transfiere
+  // nada. Paridad: el mismo stdout en las dos VMs, errores incluidos.
+  import Spi
+  import I2c
+
+  function Main()
+    // 1. el bus lo establece un Spi.Bus (en el PC no hay ENV); el dispositivo se engancha
+    var bus: Spi.Bus := Spi.Bus(0, 2, 3, 4, 1000000, 0)
+    var dev: Spi.Device := Spi.Device(0, 5, 4000000, 0)
+    print "write     -> " + dev.write([0x9F], 1)
+    var id: integer[] := newIntArray(3)
+    print "read      -> " + dev.read(id, 3)
+    var a: integer[] := [0xD0, 0x00]
+    var b: integer[] := newIntArray(2)
+    print "transfer  -> " + dev.transfer(a, b, 2)
+    var r: integer[] := newIntArray(8)
+    print "writeRead -> " + dev.writeRead([0x03, 0x00, 0x10, 0x00], 4, r, 8)
+    // 2. una llamada larga es UN turno: sus tramos de 256, todos con el CS abajo
+    var largo: integer[] := newIntArray(600)
+    var i: integer := 0
+    while i < 600 do
+      largo[i] := i & 0xFF
+      i := i + 1
+    endwh
+    print "600 bytes -> " + dev.write(largo, 600)
+    // 3. una transacción: varias operaciones, un CS; y reutilizada con otros datos
+    var cab: integer[] := [0x02, 0x00, 0x10, 0x00]
+    var pag: integer[] := [0x11, 0x22, 0x33, 0x44]
+    var est: integer[] := newIntArray(1)
+    var t: Spi.Transaction := Spi.Transaction()
+    t.write(cab, 4)
+    t.write(pag, 4)
+    t.read(est, 1)
+    t.transfer(a, b, 2)
+    print "operaciones: " + t.size()
+    print "execute   -> " + dev.execute(t)
+    pag[0] := 0x55
+    print "otra vez  -> " + dev.execute(t)
+    t.clear()
+    t.write([0xAB], 1)
+    print "vaciada   -> " + dev.execute(t)
+    // 4. los errores del dispositivo, uno a uno
+    try
+      var d1: Spi.Device := Spi.Device(1, 6, 1000000, 0)
+      print "no deberia llegar"
+    catch e1: Core.Exception
+      print e1.msg
+    endtry
+    try
+      var d2: Spi.Device := Spi.Device(0, 2, 1000000, 0)
+      print "no deberia llegar"
+    catch e2: Core.Exception
+      print e2.msg
+    endtry
+    try
+      var d3: Spi.Device := Spi.Device(0, 6, 0, 0)
+      print "no deberia llegar"
+    catch e3: Core.Exception
+      print e3.msg
+    endtry
+    try
+      var d4: Spi.Device := Spi.Device(0, 6, 1000000, 4)
+      print "no deberia llegar"
+    catch e4: Core.Exception
+      print e4.msg
+    endtry
+    try
+      var d5: Spi.Device := Spi.Device(7, 6, 1000000, 0)
+      print "no deberia llegar"
+    catch e5: Core.Exception
+      print e5.msg
+    endtry
+    try
+      print dev.read(id, 10)
+    catch e6: Core.Exception
+      print e6.msg
+    endtry
+    try
+      t.write(id, 5)
+    catch e7: Core.Exception
+      print e7.msg
+    endtry
+    // 5. el TOPE: a 100 kHz, 300 bytes son 24 ms, y no se transfiere nada
+    var lento: Spi.Device := Spi.Device(0, 7, 100000, 0)
+    var trescientos: integer[] := newIntArray(300)
+    try
+      print lento.write(trescientos, 300)
+    catch e8: Core.Exception
+      print e8.msg
+    endtry
+    var t2: Spi.Transaction := Spi.Transaction()
+    t2.write(trescientos, 200)
+    t2.read(trescientos, 100)
+    try
+      print lento.execute(t2)
+    catch e9: Core.Exception
+      print e9.msg
+    endtry
+    print "250 bytes -> " + lento.write(trescientos, 250)
+    // 6. suelto: su CS vuelve a libre y ya no transfiere
+    dev.release()
+    try
+      print dev.write([0x01], 1)
+    catch e10: Core.Exception
+      print e10.msg
+    endtry
+    // 7. I2C: escribir y leer en UNA transacción (repeated start), y varios mensajes
+    var i2c: I2c.Bus := I2c.Bus(1, 10, 11, 100000)
+    var chip: integer[] := newIntArray(1)
+    print "writeRead -> " + i2c.writeRead(0x76, [0xD0], 1, chip, 1)
+    var seis: integer[] := newIntArray(6)
+    var t3: I2c.Transaction := I2c.Transaction()
+    t3.write([0xF4, 0x27], 2)
+    t3.write([0xF5, 0xA0], 2)
+    t3.read(seis, 6)
+    print "execute   -> " + i2c.execute(0x76, t3)
+    print "suelta    -> " + I2c.writeRead(1, 0x77, [0xF7], 1, seis, 6)
+    // 8. los errores de I2C
+    var mucho: integer[] := newIntArray(200)
+    try
+      print i2c.writeRead(0x76, mucho, 200, mucho, 100)
+    catch e11: Core.Exception
+      print e11.msg
+    endtry
+    try
+      print i2c.writeRead(0x76, mucho, 100, mucho, 150)
+    catch e12: Core.Exception
+      print e12.msg
+    endtry
+    try
+      print i2c.writeRead(0x80, chip, 1, chip, 1)
+    catch e13: Core.Exception
+      print e13.msg
+    endtry
+    var t4: I2c.Transaction := I2c.Transaction()
+    i := 0
+    while i < 4 do
+      t4.write(chip, 1)
+      i := i + 1
+    endwh
+    try
+      print i2c.execute(0x76, t4)
+    catch e14: Core.Exception
+      print e14.msg
+    endtry
+    // lo que cabe en el ESP32 manda en todos: escribir y DOS lecturas de 6 son 9 órdenes del bus
+    var t5: I2c.Transaction := I2c.Transaction()
+    t5.write(chip, 1)
+    t5.read(seis, 6)
+    t5.read(seis, 6)
+    try
+      print i2c.execute(0x76, t5)
+    catch e16: Core.Exception
+      print e16.msg
+    endtry
+    try
+      print I2c.writeRead(0, 0x76, chip, 1, chip, 1)
+    catch e15: Core.Exception
+      print e15.msg
+    endtry
+    print "fin"
+  end Main
+end SpiDevice

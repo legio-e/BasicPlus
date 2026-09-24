@@ -169,6 +169,37 @@ static int  f_i2c_escribir_leer(int bus, int addr, const uint8_t* tx, size_t ntx
     if (f_i2c_write(bus, addr, tx, ntx) != (int) ntx) return -1;
     return f_i2c_read(bus, addr, rx, nrx);
 }
+
+/* V7/H6.c G4.a3 — LA TRANSACCIÓN (BIOS v8), como la hace la HAL BP: UN turno —el CS
+ * abajo—, cada operación, y el CS arriba. La cintura del ESP32 trocea a 64 bytes (su
+ * FIFO sin DMA): aquí igual, así que la cinta sigue siendo la de DriverC5 byte a byte
+ * —el mismo DC, el mismo CS, los mismos trozos—. Y cuenta como un turno. */
+static int  g_transacciones = 0;
+static int  f_spi_transaccion(int bus, int cs, int hz, int modo, const bpvm_spi_op_t* ops, int nops) {
+    int i, total = 0;
+    g_transacciones++;
+    if (f_spi_tomar(bus, cs, hz, modo) != 0) return -1;
+    for (i = 0; i < nops; i++) {
+        uint32_t hecho = 0;
+        while (hecho < ops[i].n) {
+            size_t t = (ops[i].n - hecho > 64u) ? 64u : (size_t) (ops[i].n - hecho);
+            f_spi_transferir(bus, ops[i].tx ? ops[i].tx + hecho : 0, ops[i].rx ? ops[i].rx + hecho : 0, t);
+            hecho += (uint32_t) t;
+        }
+        total += (int) ops[i].n;
+    }
+    f_spi_soltar(bus);
+    return total;
+}
+static int  f_i2c_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
+    int i, total = 0;
+    for (i = 0; i < nm; i++) {
+        int r = m[i].lee ? f_i2c_read(bus, addr, m[i].buf, m[i].n) : f_i2c_write(bus, addr, m[i].buf, m[i].n);
+        if (r != (int) m[i].n) return -2;
+        total += r;
+    }
+    return total;
+}
 static void f_sleep_ms(int ms) { cinta("espera %d\n", ms); }
 
 /* El ENV: tres líneas, las que se prueben. */
@@ -247,6 +278,7 @@ static void bios_monta(void) {
     B.env_get = f_env_get;
     B.spi_tomar = f_spi_tomar; B.spi_cs = f_spi_cs; B.spi_transferir = f_spi_transferir;
     B.spi_soltar = f_spi_soltar; B.i2c_escribir_leer = f_i2c_escribir_leer;
+    B.spi_transaccion = f_spi_transaccion; B.i2c_transaccion = f_i2c_transaccion;
 }
 
 /* Carga un driver como lo hace la placa: su entrada, y 'PANT' resuelta. */
@@ -413,13 +445,16 @@ int main(int argc, char** argv) {
     CHECK(cargar(spi_pack_init, &ps) == 0, "DriverSpi carga y publica 'PANT', con el perfil de la C5 en el ENV");
     CHECK(ps.touch != 0 && ps.estado != 0 && ps.rotate != 0, "  y publica touch (hay linea touch=), estado y rotate");
     CHECK(ps.estado() == 0, "  y su estado es LISTO (NULL)");
-    g_exigir_turno = 1; g_hz_turno = 40000000; g_turnos = g_turno_mal = g_turno_hz_mal = 0;
+    g_exigir_turno = 1; g_hz_turno = 40000000; g_turnos = g_turno_mal = g_turno_hz_mal = 0; g_transacciones = 0;
     pasada(&ps, &g_spi);
     g_exigir_turno = 0; g_hz_turno = 0;
     {   char m[160];
         snprintf(m, sizeof m, "V7/H6.c G4.a2: TODO el SPI de DriverSpi va en TURNOS de la BIOS v7 (%d turnos; %d fuera de turno o anidados)",
                  g_turnos, g_turno_mal);
         CHECK(g_turnos > 0 && g_turno_mal == 0 && g_turno_cs == -2, m);
+        snprintf(m, sizeof m, "V7/H6.c G4.a3: y cada turno es una TRANSACCION de la v8 (%d de %d; ninguno a mano)",
+                 g_transacciones, g_turnos);
+        CHECK(g_transacciones == g_turnos, m);
         snprintf(m, sizeof m, "  cada turno con SU configuracion: 40 MHz (%d a otra velocidad)", g_turno_hz_mal);
         CHECK(g_turno_hz_mal == 0, m);
     }

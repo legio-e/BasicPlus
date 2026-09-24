@@ -295,12 +295,30 @@ static void pico_i2c_cerrar(int bus) {
     gpio_set_function((uint) s_i2c_pin[b][1], GPIO_FUNC_NULL);
     s_i2c_pin[b][0] = s_i2c_pin[b][1] = -1;
 }
+/* V7/H6.c G4.a3 — LA TRANSACCIÓN: el SDK la hace con `nostop`. Cada mensaje salvo el
+ * último termina SIN STOP, y el siguiente empieza con un repeated start (lo apunta el SDK
+ * en `restart_on_next`); el último, con su STOP. Un NAK o un plazo aborta, y el
+ * periférico pone su STOP: entonces se olvida el repeated start pendiente, para que la
+ * siguiente transacción empiece con un START normal. 0, o -1. */
+static int pico_i2c_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
+    i2c_inst_t* inst = i2c_inst_for(bus);
+    int i;
+    for (i = 0; i < nm; i++) {
+        bool nostop = (i < nm - 1);
+        uint plazo = (uint) (2000u + 1000u * m[i].n);
+        int r = m[i].lee ? i2c_read_timeout_us(inst, (uint8_t) addr, m[i].buf, m[i].n, nostop, plazo)
+                         : i2c_write_timeout_us(inst, (uint8_t) addr, m[i].buf, m[i].n, nostop, plazo);
+        if (r != (int) m[i].n) { inst->restart_on_next = false; return -1; }
+    }
+    return 0;
+}
 static const bpvm_i2c_backend_t s_pico_i2c_backend = {
     .init   = pico_i2c_init_impl,
     .write  = pico_i2c_write_impl,
     .read   = pico_i2c_read_impl,
     .abrir  = pico_i2c_abrir,          /* V7/H6.c G4.a1 */
     .cerrar = pico_i2c_cerrar,
+    .transaccion = pico_i2c_transaccion,   /* V7/H6.c G4.a3: repeated start */
 };
 
 /* --- Backend SPI del Pico SDK ----------------------------------- */

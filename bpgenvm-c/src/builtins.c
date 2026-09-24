@@ -747,6 +747,52 @@ static int32_t bus_i2c(bpvm_t* vm, int escribe, int bus, int addr, uint32_t data
     return got;
 }
 
+/* ── V7/H6.c G4.a3 — el DISPOSITIVO SPI y las TRANSACCIONES desde BP (V7_IDEAS §H6.11.9).
+ * Espejo de miVM: los MISMOS textos, el MISMO orden de comprobaciones y los MISMOS tramos.
+ *
+ * Cada llamada es UNA transacción: se valida, se calcula contra el tope del bus (fuera de él,
+ * RuntimeError y nada al cable), se toma UN turno con el CS del dispositivo y su velocidad, y
+ * dentro sólo hay transferencias —en tramos de BUS_TRAMO, porque el array de BP lleva un byte
+ * por slot—. Lo que no deja empezar es un RuntimeError; una cintura que falla, -1. */
+enum { DEV_WRITE = 1, DEV_READ = 2, DEV_TRANSFER = 3, DEV_WRITE_READ = 4 };
+static const char* dev_nombre(int op) {
+    return op == DEV_WRITE ? "spi.write" : op == DEV_READ ? "spi.read"
+         : op == DEV_TRANSFER ? "spi.transfer" : "spi.writeRead";
+}
+
+/* El dispositivo puede transferir: su bus existe y está abierto, y su CS sigue siendo una
+ * salida del programa (tras release(), no). */
+static int dev_listo(int bus, int cs, const char* op, char* em, size_t cap) {
+    if (bpvm_gpio_instancia_ok(2, bus, em, cap) != 0) return -1;
+    if (cs < 0 || bpvm_gpio_estado(cs) != BPVM_GPIO_OUTPUT) {
+        snprintf(em, cap, "%s: el CS %d no está reservado como salida (¿release()?)", op, cs);
+        return -1;
+    }
+    if (!bpvm_bus_abierto(BPVM_BUS_SPI, bus)) { snprintf(em, cap, "%s: el SPI %d no está abierto", op, bus); return -1; }
+    return 0;
+}
+
+/* `n` bytes de una operación, en tramos, DENTRO del turno ya tomado: escribe desde
+ * tx_addr[tx_desde..] y/o lee a rx_addr[rx_desde..]. Una operación de 0 bytes no manda nada.
+ * 0, o -1 si la cintura falla. `tx`/`rx`: BUS_TRAMO bytes del `case`. */
+static int dev_tramos(bpvm_t* vm, int bus, int escribe, int lee, uint32_t tx_addr, int32_t tx_desde,
+                      uint32_t rx_addr, int32_t rx_desde, int32_t n, uint8_t* tx, uint8_t* rx) {
+    int32_t hecho = 0;
+    while (hecho < n) {
+        int t = (n - hecho > BUS_TRAMO) ? BUS_TRAMO : (int) (n - hecho);
+        if (escribe) bus_a_bytes(vm, tx_addr, tx_desde + hecho, t, tx);   /* ANTES de leer: pueden ser el mismo array */
+        if (bpvm_spi_xfer(bus, escribe ? tx : NULL, lee ? rx : NULL, (size_t) t) < 0) return -1;
+        if (lee) bus_de_bytes(vm, rx_addr, rx_desde + hecho, t, rx);
+        hecho += t;
+    }
+    return 0;
+}
+
+/* El elemento i de un array de enteros de BP. */
+static int32_t arr_i32(bpvm_t* vm, uint32_t addr, int32_t i) {
+    return bpvm_read_i32_be(vm->memory + addr + 4u + (uint32_t) i * 4u);
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
@@ -2998,6 +3044,91 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, bus_i2c(vm, 0, bus, addr, dataAddr, count, buf));
         return BPVM_OK;
     }
+    /* ---- V7/H6.c G4.a3 — la TRANSACCIÓN I2C: repeated start entre mensajes (V7_IDEAS §H6.11.9) ----
+     * Lo que no deja empezar (el tope, el bus, el turno) es un RuntimeError; un dispositivo que no
+     * contesta, -1: es su respuesta, como en read/write. Hasta BUS_TRAMO bytes por transacción. */
+    case BUILTIN_I2C_WRITE_READ: {
+        int32_t nrx = pop_i32(vm, tc);
+        uint32_t rxRef = pop_ref(vm, tc);
+        int32_t ntx = pop_i32(vm, tc);
+        uint32_t txRef = pop_ref(vm, tc);
+        int addr = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        const char* nom = "i2c.writeRead";
+        char em[160];
+        uint32_t txA = 0, rxA = 0;
+        uint8_t buf[BUS_TRAMO];
+        bpvm_i2c_msg_t m[2];
+        int r;
+        if (bpvm_gpio_instancia_ok(1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (bus_array(vm, txRef, ntx, nom, "el array tx", BUS_TRAMO, &txA, em, sizeof em) != 0
+            || bus_array(vm, rxRef, nrx, nom, "el array rx", BUS_TRAMO, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (ntx + nrx > BUS_TRAMO) {
+            snprintf(em, sizeof em, "%s: %" PRId32 " bytes supera el máximo de %d bytes por transacción", nom, ntx + nrx, (int) BUS_TRAMO);
+            return builtin_throw(vm, tc, em);
+        }
+        bus_a_bytes(vm, txA, 0, (int) ntx, buf);
+        m[0].buf = buf;       m[0].n = (uint32_t) ntx; m[0].lee = 0;
+        m[1].buf = buf + ntx; m[1].n = (uint32_t) nrx; m[1].lee = 1;
+        r = bpvm_i2c_transaccion(bus, addr, BPVM_BUS_PROGRAMA, m, 2, em, sizeof em);
+        if (r == -1) return builtin_throw(vm, tc, em);
+        if (r >= 0) bus_de_bytes(vm, rxA, 0, (int) nrx, buf + ntx);
+        push_i32(vm, tc, r < 0 ? -1 : nrx);
+        return BPVM_OK;
+    }
+    case BUILTIN_I2C_EXEC: {
+        /* I2c.Bus.execute(addr, t): la I2c.Transaction ya reunida por I2c.bp —`ops` = pares
+         * (1 escribir · 2 leer, bytes); `tx` y `rx`, seguidos—. */
+        uint32_t rxRef  = pop_ref(vm, tc);
+        uint32_t txRef  = pop_ref(vm, tc);
+        int32_t  nops   = pop_i32(vm, tc);
+        uint32_t opsRef = pop_ref(vm, tc);
+        int addr = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        const char* nom = "i2c.execute";
+        char em[160];
+        uint32_t opsA = 0, txA = 0, rxA = 0;
+        int32_t i, sale = 0, entra = 0, pt = 0, pr = 0, pos = 0;
+        int64_t total = 0;
+        uint8_t buf[BUS_TRAMO];
+        bpvm_i2c_msg_t m[BPVM_I2C_MENSAJES_MAX];
+        int r;
+        if (bpvm_gpio_instancia_ok(1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (nops < 1 || nops > BPVM_I2C_MENSAJES_MAX) {
+            snprintf(em, sizeof em, "%s: una transacción lleva de 1 a %d mensajes (tiene %" PRId32 ")", nom, BPVM_I2C_MENSAJES_MAX, nops);
+            return builtin_throw(vm, tc, em);
+        }
+        if (bus_array(vm, opsRef, nops * 2, nom, "el array ops", 0, &opsA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        for (i = 0; i < nops; i++) {
+            int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
+            if (k != 1 && k != 2) { snprintf(em, sizeof em, "%s: la operación %" PRId32 " no es válida (%" PRId32 ")", nom, i + 1, k); return builtin_throw(vm, tc, em); }
+            if (n < 0) { snprintf(em, sizeof em, "%s: count negativo (%" PRId32 ")", nom, n); return builtin_throw(vm, tc, em); }
+            total += n;
+        }
+        if (total > BUS_TRAMO) {
+            snprintf(em, sizeof em, "%s: %" PRId64 " bytes supera el máximo de %d bytes por transacción", nom, total, (int) BUS_TRAMO);
+            return builtin_throw(vm, tc, em);
+        }
+        for (i = 0; i < nops; i++) {   /* ya caben: sumar ahora no se desborda */
+            if (arr_i32(vm, opsA, 2 * i) == 1) sale += arr_i32(vm, opsA, 2 * i + 1);
+            else                               entra += arr_i32(vm, opsA, 2 * i + 1);
+        }
+        if (bus_array(vm, txRef, sale, nom, "el array tx", 0, &txA, em, sizeof em) != 0
+            || bus_array(vm, rxRef, entra, nom, "el array rx", 0, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        for (i = 0; i < nops; i++) {   /* cada mensaje, su trozo del búfer; los de escribir, ya llenos */
+            int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
+            m[i].buf = buf + pos; m[i].n = (uint32_t) n; m[i].lee = (k == 2);
+            if (k == 1) { bus_a_bytes(vm, txA, pt, (int) n, buf + pos); pt += n; }
+            pos += n;
+        }
+        r = bpvm_i2c_transaccion(bus, addr, BPVM_BUS_PROGRAMA, m, (int) nops, em, sizeof em);
+        if (r == -1) return builtin_throw(vm, tc, em);
+        if (r >= 0)
+            for (i = 0; i < nops; i++)
+                if (m[i].lee) { bus_de_bytes(vm, rxA, pr, (int) m[i].n, m[i].buf); pr += (int32_t) m[i].n; }
+        push_i32(vm, tc, r < 0 ? -1 : (int32_t) total);
+        return BPVM_OK;
+    }
 
     case BUILTIN_MOVE: {
         /* move(src, dst, srcStart, dstStart, count): void
@@ -3087,6 +3218,119 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, em);
         uint8_t tx[BUS_TRAMO], rx[BUS_TRAMO];
         push_i32(vm, tc, bus_por_tramos(vm, BUS_SPI_TRANSFER, bus, txAddr, rxAddr, count, 0, tx, rx));
+        return BPVM_OK;
+    }
+
+    /* ---- V7/H6.c G4.a3 — Spi.Device (ver dev_listo y V7_IDEAS §H6.11.9) ---- */
+    case BUILTIN_SPI_DEV_OPEN: {
+        /* Spi.Device(bus, cs, baudrate, mode): se engancha al bus YA establecido y reserva
+         * su CS —salida, en reposo alto—. */
+        int mode = pop_i32(vm, tc);
+        int hz   = pop_i32(vm, tc);
+        int cs   = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        char em[160];
+        if (bpvm_gpio_instancia_ok(2, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (hz <= 0) { snprintf(em, sizeof em, "Spi.Device: velocidad no válida (%d)", hz); return builtin_throw(vm, tc, em); }
+        if (mode < 0 || mode > 3) { snprintf(em, sizeof em, "Spi.Device: modo no válido (%d): 0..3", mode); return builtin_throw(vm, tc, em); }
+        if (bpvm_spi_enganchar(bus, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (bpvm_gpio_reclamar(cs, BPVM_USO_OUTPUT, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        bpvm_gpio_init(cs, 1);
+        bpvm_gpio_write(cs, 1);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_SPI_DEV_XFER: {
+        /* write/read/transfer/writeRead de un Spi.Device: UNA transacción. */
+        int32_t nrx = pop_i32(vm, tc);
+        uint32_t rxRef = pop_ref(vm, tc);
+        int32_t ntx = pop_i32(vm, tc);
+        uint32_t txRef = pop_ref(vm, tc);
+        int op   = pop_i32(vm, tc);
+        int mode = pop_i32(vm, tc);
+        int hz   = pop_i32(vm, tc);
+        int cs   = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        char em[160];
+        const char* nom;
+        uint32_t txA = 0, rxA = 0;
+        int32_t bytes, res;
+        uint8_t tx[BUS_TRAMO], rx[BUS_TRAMO];
+        int r;
+        if (op < DEV_WRITE || op > DEV_WRITE_READ) return builtin_throw(vm, tc, "Spi.Device: operación no válida");
+        nom = dev_nombre(op);
+        if (dev_listo(bus, cs, nom, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        switch (op) {
+        case DEV_WRITE:
+            if (bus_array(vm, txRef, ntx, nom, "el array", 0, &txA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+            bytes = ntx; res = ntx; break;
+        case DEV_READ:
+            if (bus_array(vm, rxRef, nrx, nom, "el array", 0, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+            bytes = nrx; res = nrx; break;
+        case DEV_TRANSFER:   /* rx y luego tx: el orden de siempre (#478) */
+            if (bus_array(vm, rxRef, ntx, nom, "el array rx", 0, &rxA, em, sizeof em) != 0
+                || bus_array(vm, txRef, ntx, nom, "el array tx", 0, &txA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+            bytes = ntx; res = ntx; break;
+        default:
+            if (bus_array(vm, txRef, ntx, nom, "el array tx", 0, &txA, em, sizeof em) != 0
+                || bus_array(vm, rxRef, nrx, nom, "el array rx", 0, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+            bytes = ntx + nrx; res = nrx; break;
+        }
+        if (bpvm_bus_cabe(BPVM_BUS_SPI, bus, (unsigned long long) bytes * 8ULL, hz, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (bpvm_spi_tomar_transaccion(bus, cs, hz, mode, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (op == DEV_READ)          r = dev_tramos(vm, bus, 0, 1, 0, 0, rxA, 0, nrx, tx, rx);
+        else if (op == DEV_TRANSFER) r = dev_tramos(vm, bus, 1, 1, txA, 0, rxA, 0, ntx, tx, rx);
+        else {
+            r = dev_tramos(vm, bus, 1, 0, txA, 0, 0, 0, ntx, tx, rx);
+            if (r == 0 && op == DEV_WRITE_READ) r = dev_tramos(vm, bus, 0, 1, 0, 0, rxA, 0, nrx, tx, rx);
+        }
+        bpvm_spi_dejar(bus);
+        push_i32(vm, tc, r < 0 ? -1 : res);
+        return BPVM_OK;
+    }
+    case BUILTIN_SPI_DEV_EXEC: {
+        /* Spi.Device.execute(t): la Spi.Transaction ya reunida por Spi.bp —`ops` = pares
+         * (tipo, bytes); `tx` = lo que se escribe, seguido; `rx` = lo que se lee, seguido—. */
+        uint32_t rxRef  = pop_ref(vm, tc);
+        uint32_t txRef  = pop_ref(vm, tc);
+        int32_t  nops   = pop_i32(vm, tc);
+        uint32_t opsRef = pop_ref(vm, tc);
+        int mode = pop_i32(vm, tc);
+        int hz   = pop_i32(vm, tc);
+        int cs   = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        const char* nom = "spi.execute";
+        char em[160];
+        uint32_t opsA = 0, txA = 0, rxA = 0;
+        int32_t i, pt = 0, pr = 0;
+        int64_t sale = 0, entra = 0;
+        unsigned long long bytes = 0;
+        uint8_t tx[BUS_TRAMO], rx[BUS_TRAMO];
+        int r = 0;
+        if (dev_listo(bus, cs, nom, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (nops < 0 || nops > 0x10000) { snprintf(em, sizeof em, "%s: número de operaciones no válido (%" PRId32 ")", nom, nops); return builtin_throw(vm, tc, em); }
+        if (bus_array(vm, opsRef, nops * 2, nom, "el array ops", 0, &opsA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        for (i = 0; i < nops; i++) {
+            int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
+            if (k < DEV_WRITE || k > DEV_TRANSFER) { snprintf(em, sizeof em, "%s: la operación %" PRId32 " no es válida (%" PRId32 ")", nom, i + 1, k); return builtin_throw(vm, tc, em); }
+            if (n < 0) { snprintf(em, sizeof em, "%s: count negativo (%" PRId32 ")", nom, n); return builtin_throw(vm, tc, em); }
+            if (k != DEV_READ)  sale += n;
+            if (k != DEV_WRITE) entra += n;
+            bytes += (unsigned long long) n;
+        }
+        /* el tope ANTES que los arrays: acota los totales (a 100 ms, mucho menos que 2^31 bytes) */
+        if (bpvm_bus_cabe(BPVM_BUS_SPI, bus, bytes * 8ULL, hz, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (bus_array(vm, txRef, (int32_t) sale, nom, "el array tx", 0, &txA, em, sizeof em) != 0
+            || bus_array(vm, rxRef, (int32_t) entra, nom, "el array rx", 0, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        if (bpvm_spi_tomar_transaccion(bus, cs, hz, mode, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        for (i = 0; i < nops && r == 0; i++) {
+            int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
+            r = dev_tramos(vm, bus, k != DEV_READ, k != DEV_WRITE, txA, pt, rxA, pr, n, tx, rx);
+            if (k != DEV_READ)  pt += n;
+            if (k != DEV_WRITE) pr += n;
+        }
+        bpvm_spi_dejar(bus);
+        push_i32(vm, tc, r < 0 ? -1 : (int32_t) bytes);
         return BPVM_OK;
     }
 

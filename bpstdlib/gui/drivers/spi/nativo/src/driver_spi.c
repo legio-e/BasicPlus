@@ -79,8 +79,8 @@
  *      inversión y DISPON. Si el .seq también lo manda, gana esto, que va detrás.
  *   6. la luz
  *
- * El volcado es el de DriverC5 (el que se vio pintar el 22-sep): ventana y los datos
- * troceados a `SPI_MAX`. `make test-driverspi` compara los dos drivers byte a byte
+ * El volcado es el de DriverC5 (el que se vio pintar el 22-sep): ventana y los datos,
+ * una transacción por bloque (G4.a3). `make test-driverspi` compara los dos drivers byte a byte
  * contra una BIOS que graba los cables. */
 #include "bpvm_bios.h"
 #include "bpvm_pack_api.h"
@@ -372,33 +372,26 @@ static int parse_touch(void) {
 }
 
 /* ── el bus: comandos con DC en bajo, datos con DC en alto (lo de DriverC5) ──
- * V7/H6.c G4.a2: el SPI se COMPARTE (en la C5, con la TF), así que cada comando y
- * cada bloque de datos es un TURNO de la BIOS v7: la pantalla lo pide con SU
- * configuración —su CS, sus MHz, modo 0— y la HAL BP baja y sube el CS. El DC se
- * pone ANTES de pedir el turno: es sólo de la pantalla, que lo ignora con su CS
- * arriba, y así la cinta queda como la de DriverC5 (DC, CS abajo, bytes, CS
- * arriba). Si el turno no llega a tiempo, el porqué ya está en el log (lo dice la
- * BIOS) y esto no se manda. */
-static int turno(void) { return g_bios->spi_tomar(L.spi, L.cs, L.mhz * 1000000, 0); }
+ * V7/H6.c G4.a3: el SPI se COMPARTE (en la C5, con la TF), así que cada comando y
+ * cada bloque de datos es una TRANSACCIÓN de la BIOS v8: la pantalla la pide con SU
+ * configuración —su CS, sus MHz, modo 0—, la HAL BP la calcula antes contra el tope
+ * del bus (un bloque de LVGL son 11 520 bytes: 2,3 ms a 40 MHz) y baja y sube el CS.
+ * El DC se pone ANTES: es sólo de la pantalla, que lo ignora con su CS arriba, y así
+ * la cinta queda como la de DriverC5 (DC, CS abajo, bytes, CS arriba). Si no se puede
+ * —el tope, el bus ocupado más de 1 s—, el porqué ya está en el log (lo dice la BIOS)
+ * y esto no se manda. Ya no se trocea aquí: lo hace la cintura del ESP32 (G4.a3). */
+static void lcd_tx(const uint8_t* d, size_t n) {
+    bpvm_spi_op_t op;
+    op.tx = d; op.rx = 0; op.n = (uint32_t) n;
+    (void) g_bios->spi_transaccion(L.spi, L.cs, L.mhz * 1000000, 0, &op, 1);
+}
 static void lcd_cmd(uint8_t c) {
     g_bios->gpio_write(L.dc, 0);
-    if (turno() != 0) return;
-    g_bios->spi_transferir(L.spi, &c, 0, 1);
-    g_bios->spi_soltar(L.spi);
+    lcd_tx(&c, 1);
 }
-/* ⚠️ TROCEADO A `SPI_MAX`, y no es una precaución: la fachada SPI del ESP32 abre
- * el bus SIN DMA, así que una transacción no pasa del búfer del periférico —64
- * bytes—. La palanca, si molesta, es la FACHADA (G4), no este fichero. */
-#define SPI_MAX 64
 static void lcd_dat(const uint8_t* d, size_t n) {
     g_bios->gpio_write(L.dc, 1);
-    if (turno() != 0) return;
-    while (n > 0) {
-        size_t t = (n > SPI_MAX) ? SPI_MAX : n;
-        g_bios->spi_transferir(L.spi, d, 0, t);
-        d += t; n -= t;
-    }
-    g_bios->spi_soltar(L.spi);
+    lcd_tx(d, n);
 }
 static void lcd_cmd1(uint8_t c, uint8_t p) { lcd_cmd(c); lcd_dat(&p, 1); }
 
@@ -929,8 +922,8 @@ int32_t bp_pack_init(const bpvm_bios_t* bios)
     if (bios == 0)                          return 1;
     if (bios->magic   != BPVM_BIOS_MAGIC)   return 2;
     if (bios->log     == 0)                 return 4;
-    if (bios->version <  7u) {              /* el turno es de la v7 (env_get, de la v6); la tabla crece por el final */
-        bios->log("driver SPI: esta BIOS no presta el turno de los buses (hace falta la v7): graba una imagen al dia");
+    if (bios->version <  8u) {              /* la transacción es de la v8 (el turno, de la v7); la tabla crece por el final */
+        bios->log("driver SPI: esta BIOS no presta la transaccion de los buses (hace falta la v8): graba una imagen al dia");
         return 3;
     }
     g_bios = bios;

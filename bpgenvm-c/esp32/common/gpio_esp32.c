@@ -417,15 +417,31 @@ static void esp32_spi_cerrar(int bus) {
     if (s_spi_bus_ready[bus]) { spi_bus_free((spi_host_device_t) host); s_spi_bus_ready[bus] = 0; }
 }
 
-/* tx NULL -> manda ceros; rx NULL -> descarta lo recibido. Full-duplex. */
+/* tx NULL -> manda ceros; rx NULL -> descarta lo recibido. Full-duplex.
+ *
+ * V7/H6.c G4.a3 — TROCEADO a SOC_SPI_MAXIMUM_BUFFER_SIZE (64). Sin DMA el IDF no acepta
+ * más por transferencia: `spi_device_transmit` devuelve ESP_ERR_INVALID_ARG («txdata
+ * transfer > host maximum»), así que desde BP un Spi.write de más de 64 bytes fallaba
+ * ENTERO en el ESP32 (el tramo de los builtins es de 256). El CS es un GPIO que lleva la
+ * HAL BP durante todo el turno: en el cable sólo quedan huecos entre trozos, con el CS
+ * abajo. (Hasta hoy `DriverSpi` troceaba él mismo; la palanca era ésta.) */
+#ifndef SOC_SPI_MAXIMUM_BUFFER_SIZE
+#define SOC_SPI_MAXIMUM_BUFFER_SIZE 64
+#endif
 static int esp32_spi_xfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
+    size_t hecho = 0;
     if (bus < 0 || bus >= 4 || !s_spi_dev[bus] || n == 0) return -1;
-    spi_transaction_t t;
-    memset(&t, 0, sizeof(t));
-    t.length    = n * 8;          /* en BITS */
-    t.tx_buffer = tx;
-    t.rx_buffer = rx;
-    return (spi_device_transmit(s_spi_dev[bus], &t) == ESP_OK) ? (int) n : -1;
+    while (hecho < n) {
+        size_t trozo = (n - hecho > SOC_SPI_MAXIMUM_BUFFER_SIZE) ? SOC_SPI_MAXIMUM_BUFFER_SIZE : (n - hecho);
+        spi_transaction_t t;
+        memset(&t, 0, sizeof(t));
+        t.length    = trozo * 8;      /* en BITS */
+        t.tx_buffer = tx ? tx + hecho : NULL;
+        t.rx_buffer = rx ? rx + hecho : NULL;
+        if (spi_device_transmit(s_spi_dev[bus], &t) != ESP_OK) return -1;
+        hecho += trozo;
+    }
+    return (int) n;
 }
 
 static int esp32_spi_write_impl(int bus, const uint8_t* data, size_t n) {
@@ -535,12 +551,64 @@ static int esp32_i2c_read_impl(int bus, int addr, uint8_t* data, size_t n) {
     return esp32_i2c_xfer(bus, addr, NULL, 0, data, n);
 }
 
+/* V7/H6.c G4.a3 — LA TRANSACCIÓN: START, cada mensaje con un repeated start entre dos, y
+ * STOP al final, en UNA lista de órdenes del IDF (`i2c_master_execute_defined_operations`).
+ * La dirección la pone el IDF tras cada START (según lo que venga: escribir o leer). El
+ * último byte de cada lectura va con NACK —el esclavo suelta la línea antes del START o del
+ * STOP siguiente—, así que una lectura de más de un byte son dos órdenes. Caben 8
+ * (I2C_LL_CMD_REG_NUM) y no hay forma de encadenar dos listas sin un STOP en medio: la
+ * fachada ya lo ha comprobado (BPVM_I2C_ORDENES_MAX), igual en todas las familias.
+ * 0, o -1 (NAK o plazo; el IDF deja el bus con su STOP). */
+static int esp32_i2c_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
+    i2c_operation_job_t op[BPVM_I2C_ORDENES_MAX];
+    int k = 0, i;
+    esp_err_t e;
+    if (bus < 0 || bus > 1 || !s_i2c_ready[bus]) return -1;
+    memset(op, 0, sizeof op);
+    for (i = 0; i < nm; i++) {
+        if (k + ((m[i].lee && m[i].n > 1) ? 3 : 2) + 1 > BPVM_I2C_ORDENES_MAX) return -1;   /* la fachada no lo deja pasar */
+        op[k++].command = I2C_MASTER_CMD_START;
+        if (!m[i].lee) {
+            op[k].command = I2C_MASTER_CMD_WRITE;
+            op[k].write.ack_check = true;
+            op[k].write.data = m[i].buf;
+            op[k].write.total_bytes = m[i].n;
+            k++;
+        } else {
+            if (m[i].n > 1) {
+                op[k].command = I2C_MASTER_CMD_READ;
+                op[k].read.ack_value = I2C_ACK_VAL;
+                op[k].read.data = m[i].buf;
+                op[k].read.total_bytes = m[i].n - 1;
+                k++;
+            }
+            op[k].command = I2C_MASTER_CMD_READ;
+            op[k].read.ack_value = I2C_NACK_VAL;
+            op[k].read.data = m[i].buf + m[i].n - 1;
+            op[k].read.total_bytes = 1;
+            k++;
+        }
+    }
+    op[k++].command = I2C_MASTER_CMD_STOP;
+    i2c_device_config_t dcfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address  = (uint16_t) addr,
+        .scl_speed_hz    = s_i2c_baud[bus],
+    };
+    i2c_master_dev_handle_t dev;
+    if (i2c_master_bus_add_device(s_i2c_bus[bus], &dcfg, &dev) != ESP_OK) return -1;
+    e = i2c_master_execute_defined_operations(dev, op, (size_t) k, ESP32_I2C_TIMEOUT_MS);
+    i2c_master_bus_rm_device(dev);
+    return (e == ESP_OK) ? 0 : -1;
+}
+
 static const bpvm_i2c_backend_t s_esp32_i2c_backend = {
     .init   = esp32_i2c_init_impl,
     .write  = esp32_i2c_write_impl,
     .read   = esp32_i2c_read_impl,
     .abrir  = esp32_i2c_abrir,         /* V7/H6.c G4.a1 */
     .cerrar = esp32_i2c_cerrar,
+    .transaccion = esp32_i2c_transaccion,   /* V7/H6.c G4.a3: repeated start */
 };
 
 /* ===================== PWM (H14) =====================================

@@ -22,6 +22,8 @@
 #include "bpvm_i2c.h"
 #include "bpvm_gpio.h"
 #include "bpvm_machine.h"
+#include "bpvm_platform.h"   /* G4.a3: un turno que dura */
+#include "bpvm.h"            /* G4.a3: bpvm_diag_set_sink */
 
 #include <stdio.h>
 #include <string.h>
@@ -85,6 +87,176 @@ static void cerrar_cb(int tipo, int id) { if (tipo == BPVM_BUS_SPI) bpvm_spi_cer
 static char E[160];
 static int  err_es(const char* que) { return strstr(E, que) != 0; }
 static void caso(const char* titulo, int ok) { char m[256]; snprintf(m, sizeof m, "%s%s%s", titulo, E[0] ? "  -> " : "", E); CHECK(ok, m); E[0] = 0; }
+
+/* ── G4.a3: una cintura que GRABA cada transferencia —cuántos bytes, el primero, cómo
+ * estaba el CS del dispositivo y a qué velocidad iba el bus en ese instante— ── */
+typedef struct { int n, primero, cs5, cs10, hz; } trozo_t;
+static trozo_t g_cinta[32];
+static int g_ntrozos = 0;
+static void graba(size_t n, const uint8_t* tx, int bus) {
+    if (g_ntrozos < 32) {
+        trozo_t* t = &g_cinta[g_ntrozos++];
+        t->n = (int) n; t->primero = tx ? tx[0] : -1; t->cs5 = g_nivel[5]; t->cs10 = g_nivel[10]; t->hz = ult_hz[bus];
+    }
+}
+static int g_lento_ms = 0;   /* una cintura LENTA: cada escritura tarda esto */
+static int  c_w(int bus, const uint8_t* d, size_t n) { graba(n, d, bus); if (g_lento_ms) bpvm_platform_thread_sleep_ms(g_lento_ms); return (int) n; }
+static int  c_r(int bus, uint8_t* d, size_t n) { size_t i; graba(n, 0, bus); for (i = 0; i < n; i++) d[i] = (uint8_t) (0xA0 + i); return (int) n; }
+static int  c_t(int bus, const uint8_t* t, uint8_t* r, size_t n) { size_t i; graba(n, t, bus); for (i = 0; i < n; i++) r[i] = (uint8_t) ~t[i]; return (int) n; }
+static const bpvm_spi_backend_t SPI_CINTA = { f_init, c_w, c_r, c_t, f_abrir, f_ajustar, f_cerrar };
+
+/* Y una de I2C que SÍ sabe hacer la transacción (repeated start): la llama una vez y
+ * guarda sus mensajes. `g_nak` = el dispositivo no contesta. */
+static int g_tr_llamadas = 0, g_tr_nm = 0, g_tr_addr = -1, g_tr_lee[8], g_tr_n[8], g_nak = 0;
+static int g_iw = 0, g_ir = 0;
+static int  ti_w(int bus, int a, const uint8_t* d, size_t n) { (void) bus; (void) a; (void) d; g_iw++; return (int) n; }
+static int  ti_r(int bus, int a, uint8_t* d, size_t n) { (void) bus; (void) a; (void) d; g_ir++; return (int) n; }
+static int  ti_trans(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
+    int i;
+    (void) bus;
+    g_tr_llamadas++; g_tr_nm = nm; g_tr_addr = addr;
+    for (i = 0; i < nm && i < 8; i++) {
+        g_tr_lee[i] = (int) m[i].lee; g_tr_n[i] = (int) m[i].n;
+        if (m[i].lee) { uint32_t j; for (j = 0; j < m[i].n; j++) m[i].buf[j] = (uint8_t) (0x50 + j); }
+    }
+    return g_nak ? -1 : 0;
+}
+static const bpvm_i2c_backend_t I2C_TRANS = { fi_init, ti_w, ti_r, fi_abrir, fi_cerrar, ti_trans };
+static const bpvm_i2c_backend_t I2C_SIN   = { fi_init, ti_w, ti_r, fi_abrir, fi_cerrar, 0 };
+
+/* El log: la última línea de bpvm_diag. */
+static char g_diag[200];
+static void diag_a_mano(const char* linea) { snprintf(g_diag, sizeof g_diag, "%s", linea); }
+
+/* ── V7/H6.c G4.a3: la TRANSACCIÓN y el TOPE (V7_IDEAS §H6.11.9) ── */
+static void g4a3(void) {
+    int r;
+    uint8_t cab[4] = { 0x02, 0x00, 0x10, 0x00 }, pag[8] = { 1, 2, 3, 4, 5, 6, 7, 8 }, st[2];
+    static uint8_t mucho[4000];
+    printf("\n== V7/H6.c G4.a3: la TRANSACCIÓN, corta; el tope del BUS ==\n");
+    bpvm_bus_reset();
+    bpvm_spi_set_backend(&SPI_CINTA);
+    bpvm_i2c_set_backend(&I2C_TRANS);
+    bpvm_diag_set_sink(diag_a_mano);
+    memset(n_ajustar, 0, sizeof n_ajustar);
+    g_nivel[5] = g_nivel[10] = -1;
+
+    /* ── el `ms:` del ENV ── */
+    caso("spi2 con ms:5 -> el tope de ESE bus es 5 ms",
+         bpvm_bus_declarar(BPVM_BUS_SPI, 2, "sck:6,mosi:7,miso:8,ms:5", E, sizeof E) == 0 && bpvm_bus_tope_ms(BPVM_BUS_SPI, 2) == 5);
+    CHECK(bpvm_bus_tope_ms(BPVM_BUS_SPI, 3) == BPVM_BUS_TOPE_MS, "  un bus sin ms: -> 20 ms (BPVM_BUS_TOPE_MS)");
+    caso("i2c1 con ms:150 -> «ms:150 no vale: el tope de un turno va de 1 a 100 ms» (configurable, pero limitado)",
+         bpvm_bus_declarar(BPVM_BUS_I2C, 1, "sda:20,scl:21,ms:150", E, sizeof E) != 0 && err_es("ENV i2c1: ms:150 no vale: el tope de un turno va de 1 a 100 ms"));
+    caso("i2c1 con ms:0 -> tampoco", bpvm_bus_declarar(BPVM_BUS_I2C, 1, "sda:20,scl:21,ms:0", E, sizeof E) != 0 && err_es("ms:0 no vale"));
+    caso("i2c1 con ms:x -> «'ms' no es un número»", bpvm_bus_declarar(BPVM_BUS_I2C, 1, "sda:20,scl:21,ms:x", E, sizeof E) != 0 && err_es("ENV i2c1: 'ms' no es un número"));
+    caso("i2c1 con ms:100 -> vale (el máximo)", bpvm_bus_declarar(BPVM_BUS_I2C, 1, "sda:20,scl:21,khz:100,ms:100", E, sizeof E) == 0 && bpvm_bus_tope_ms(BPVM_BUS_I2C, 1) == 100);
+
+    /* ── la cuenta: entera, y lo que dice ── */
+    caso("SPI 3 (20 ms): 2500 bytes a 1 MHz son 20 ms justos -> caben", bpvm_bus_cabe(BPVM_BUS_SPI, 3, 2500ULL * 8, 1000000, E, sizeof E) == 0);
+    caso("  2501 bytes -> «SPI 3: la transacción ocuparía el bus 21 ms a 1 MHz (máximo 20 ms)»",
+         bpvm_bus_cabe(BPVM_BUS_SPI, 3, 2501ULL * 8, 1000000, E, sizeof E) != 0 && err_es("SPI 3: la transacción ocuparía el bus 21 ms a 1 MHz (máximo 20 ms)"));
+    caso("  la velocidad se dice como es: «a 400 kHz»", bpvm_bus_cabe(BPVM_BUS_SPI, 3, 9000ULL * 8, 400000, E, sizeof E) != 0 && err_es("a 400 kHz"));
+    caso("  «a 115200 Hz»", bpvm_bus_cabe(BPVM_BUS_SPI, 3, 9000ULL * 8, 115200, E, sizeof E) != 0 && err_es("a 115200 Hz"));
+    caso("  sin velocidad -> «SPI 3: velocidad no válida (0)»", bpvm_bus_cabe(BPVM_BUS_SPI, 3, 8, 0, E, sizeof E) != 0 && err_es("SPI 3: velocidad no válida (0)"));
+
+    /* ── la transacción SPI: el CS abajo de principio a fin, y la velocidad del dispositivo ── */
+    caso("el programa se engancha al SPI 2 del ENV", bpvm_spi_enganchar(2, BPVM_BUS_PROGRAMA, E, sizeof E) == 0 && n_abrir[2] >= 1);
+    {
+        bpvm_spi_op_t ops[3];
+        ops[0].tx = cab; ops[0].rx = 0;   ops[0].n = 4;
+        ops[1].tx = pag; ops[1].rx = 0;   ops[1].n = 8;
+        ops[2].tx = 0;   ops[2].rx = st;  ops[2].n = 2;
+        g_ntrozos = 0;
+        r = bpvm_spi_transaccion(2, 5, 4000000, 0, BPVM_BUS_PROGRAMA, ops, 3, E, sizeof E);
+        caso("una transacción de 3 operaciones (CS 5, 4 MHz): 14 bytes", r == 14 && g_ntrozos == 3);
+        CHECK(g_cinta[0].cs5 == 0 && g_cinta[1].cs5 == 0 && g_cinta[2].cs5 == 0, "  las tres con el CS 5 ABAJO (un solo CS de principio a fin)");
+        CHECK(g_cinta[0].primero == 0x02 && g_cinta[1].primero == 1 && g_cinta[2].primero == -1 && st[0] == 0xA0,
+              "  en su orden: la cabecera, la página y la lectura (que llega a su sitio)");
+        CHECK(g_cinta[0].hz == 4000000 && g_cinta[2].hz == 4000000, "  a la velocidad del DISPOSITIVO (4 MHz)");
+        CHECK(g_nivel[5] == 1 && !bpvm_bus_tomado(BPVM_BUS_SPI, 2), "  y al acabar, el CS arriba y el bus libre");
+    }
+    {
+        bpvm_spi_op_t op[1];
+        op[0].tx = mucho; op[0].rx = 0; op[0].n = 4000;
+        g_ntrozos = 0; g_nivel[5] = 1;
+        caso("4000 bytes a 4 MHz son 8 ms, y el SPI 2 tiene ms:5 -> «ocuparía el bus 8 ms a 4 MHz (máximo 5 ms)»",
+             bpvm_spi_transaccion(2, 5, 4000000, 0, BPVM_BUS_PROGRAMA, op, 1, E, sizeof E) == -1 && err_es("SPI 2: la transacción ocuparía el bus 8 ms a 4 MHz (máximo 5 ms)"));
+        CHECK(g_ntrozos == 0 && g_nivel[5] == 1 && !bpvm_bus_tomado(BPVM_BUS_SPI, 2), "  y NADA llegó al cable: ni un byte, ni el CS abajo, ni el turno");
+        op[0].tx = 0;
+        caso("una operación sin tx ni rx -> «la operación 1 no tiene ni tx ni rx»",
+             bpvm_spi_transaccion(2, 5, 4000000, 0, BPVM_BUS_PROGRAMA, op, 1, E, sizeof E) == -1 && err_es("la operación 1 no tiene ni tx ni rx"));
+        caso("un modo 5 -> «modo no válido (5)»", bpvm_spi_transaccion(2, 5, 4000000, 5, BPVM_BUS_PROGRAMA, op, 0, E, sizeof E) == -1 && err_es("modo no válido (5)"));
+        caso("un bus sin abrir -> «el SPI 3 no está abierto»", bpvm_spi_transaccion(3, 5, 4000000, 0, BPVM_BUS_PROGRAMA, op, 0, E, sizeof E) == -1 && err_es("el SPI 3 no está abierto"));
+        caso("engancharse a un bus sin establecer -> «ponlo en el ENV (spi3=) o ábrelo antes con Spi.Bus»",
+             bpvm_spi_enganchar(3, BPVM_BUS_PROGRAMA, E, sizeof E) != 0 && err_es("el SPI 3 no está establecido: ponlo en el ENV (spi3=) o ábrelo antes con Spi.Bus"));
+    }
+
+    /* ── el turno A MANO se mide: pasado el tope, el log lo dice con nombre ── */
+    g_diag[0] = 0;
+    caso("un turno a mano de un pack (CS 10) que dura 12 ms en un bus de 5",
+         bpvm_spi_tomar(2, 10, 40000000, 0, BPVM_BUS_PACK, E, sizeof E) == 0);
+    bpvm_platform_thread_sleep_ms(12);
+    bpvm_spi_dejar(2);
+    {
+        char m[260]; snprintf(m, sizeof m, "  -> el log: «%s»", g_diag);
+        CHECK(strstr(g_diag, "SPI 2: CS 10, un pack tuvo el bus") != 0 && strstr(g_diag, "el tope de un turno es 5 ms") != 0, m);
+    }
+    g_diag[0] = 0;
+    caso("uno de 0 ms: nada en el log", bpvm_spi_tomar(2, 10, 40000000, 0, BPVM_BUS_PACK, E, sizeof E) == 0);
+    bpvm_spi_dejar(2);
+    CHECK(g_diag[0] == 0, "  (el log, vacío)");
+    {
+        bpvm_spi_op_t op[1];
+        op[0].tx = mucho; op[0].rx = 0; op[0].n = 16;
+        g_diag[0] = 0; g_lento_ms = 12;
+        r = bpvm_spi_transaccion(2, 5, 4000000, 0, BPVM_BUS_PROGRAMA, op, 1, E, sizeof E);
+        g_lento_ms = 0;
+        CHECK(r == 16 && g_diag[0] == 0, "una TRANSACCIÓN no se mide —ya se calculó antes—: ni con una cintura que tarda 12 ms");
+    }
+
+    /* ── I2C: la transacción, con repeated start (UNA llamada a la cintura) ── */
+    caso("el programa abre el I2C 1 del ENV (100 kHz, ms:100)", bpvm_i2c_abrir(1, -1, -1, 0, BPVM_BUS_PROGRAMA, E, sizeof E) == 0);
+    {
+        bpvm_i2c_msg_t m[3];
+        uint8_t reg[1] = { 0xF7 }, dat[6];
+        m[0].buf = reg; m[0].n = 1; m[0].lee = 0;
+        m[1].buf = dat; m[1].n = 6; m[1].lee = 1;
+        g_tr_llamadas = 0; g_iw = g_ir = 0;
+        r = bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 2, E, sizeof E);
+        caso("escribir el registro y leer 6: UNA llamada a la cintura, con sus dos mensajes",
+             r == 7 && g_tr_llamadas == 1 && g_tr_nm == 2 && g_tr_addr == 0x76 && g_tr_lee[0] == 0 && g_tr_lee[1] == 1 && g_tr_n[1] == 6);
+        CHECK(g_iw == 0 && g_ir == 0 && dat[0] == 0x50, "  sin pasar por write/read sueltos (que llevarían STOP), y lo leído llega");
+        CHECK(bpvm_i2c_escribir_leer(BPVM_BUS_PACK, 1, 0x58, reg, 1, dat, 4) == 4 && g_tr_llamadas == 2,
+              "la ranura escribir_leer de la BIOS es esa misma transacción (repeated start)");
+        g_nak = 1;
+        r = bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 2, E, sizeof E);
+        caso("un dispositivo que no contesta -> -2, «I2C 1: 0x76 no contestó»", r == -2 && err_es("I2C 1: 0x76 no contestó"));
+        g_diag[0] = 0;
+        CHECK(bpvm_i2c_escribir_leer(BPVM_BUS_PACK, 1, 0x58, reg, 1, dat, 4) == -1 && g_diag[0] == 0,
+              "  y en escribir_leer, -1 SIN log: un táctil que se sondea cada pocos ms lo llenaría");
+        g_nak = 0;
+        caso("una dirección de 8 bits -> «dirección no válida (0x80)»", bpvm_i2c_transaccion(1, 0x80, BPVM_BUS_PROGRAMA, m, 2, E, sizeof E) == -1 && err_es("I2C 1: dirección no válida (0x80)"));
+        caso("4 mensajes -> «de 1 a 3 mensajes (tiene 4)» (lo que cabe en el ESP32, en todas)", bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 4, E, sizeof E) == -1 && err_es("una transacción lleva de 1 a 3 mensajes (tiene 4)"));
+        m[2].buf = dat; m[2].n = 6; m[2].lee = 1;
+        caso("escribir y DOS lecturas de 6 -> «necesita 9 órdenes del bus y caben 8»",
+             bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 3, E, sizeof E) == -1 && err_es("I2C 1: la transacción necesita 9 órdenes del bus y caben 8"));
+        m[2].n = 0;
+        caso("un mensaje vacío -> «el mensaje 3 está vacío»", bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 3, E, sizeof E) == -1 && err_es("I2C 1: el mensaje 3 está vacío"));
+        m[2].buf = mucho; m[2].n = 1200; m[2].lee = 0;
+        g_tr_llamadas = 0;
+        caso("1200 bytes a 100 kHz son 108 ms y el I2C 1 tiene ms:100 -> «ocuparía el bus 109 ms a 100 kHz (máximo 100 ms)»",
+             bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 3, E, sizeof E) == -1 && err_es("I2C 1: la transacción ocuparía el bus 109 ms a 100 kHz (máximo 100 ms)"));
+        CHECK(g_tr_llamadas == 0, "  y la cintura ni se enteró");
+        caso("el I2C 0, sin abrir -> «el I2C 0 no está abierto»", bpvm_i2c_transaccion(0, 0x76, BPVM_BUS_PROGRAMA, m, 2, E, sizeof E) == -1 && err_es("el I2C 0 no está abierto"));
+        /* una cintura SIN transacción: los mensajes uno a uno, en el mismo turno */
+        bpvm_i2c_set_backend(&I2C_SIN);
+        g_iw = g_ir = 0;
+        r = bpvm_i2c_transaccion(1, 0x76, BPVM_BUS_PROGRAMA, m, 2, E, sizeof E);
+        caso("una cintura sin repeated start: escribir y leer uno tras otro, en UN turno", r == 7 && g_iw == 1 && g_ir == 1 && !bpvm_bus_tomado(BPVM_BUS_I2C, 1));
+        bpvm_i2c_set_backend(&I2C_TRANS);
+    }
+    bpvm_diag_set_sink(0);
+}
 
 int main(void) {
     int i, p[3];
@@ -243,6 +415,8 @@ int main(void) {
     caso("una cintura sin `abrir`: el programa abre el SPI 2", bpvm_spi_abrir(2, 1, 2, 3, 1000000, 0, BPVM_BUS_PROGRAMA, p, E, sizeof E) == 0 && n_init[2] == 1);
     caso("y la regla vale igual (otro sck es error, y init no se llama)",
          bpvm_spi_abrir(2, 4, 2, 3, 1000000, 0, BPVM_BUS_PROGRAMA, p, E, sizeof E) != 0 && n_init[2] == 1);
+
+    g4a3();
 
     printf("\n[status=%s]\n", g_fail ? "FAIL" : "OK");
     return g_fail ? 1 : 0;

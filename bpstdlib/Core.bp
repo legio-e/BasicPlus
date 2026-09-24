@@ -1476,6 +1476,23 @@ module Core
   function __i2cRelease(bus: integer)   // I2c.Bus.release: el programa suelta el bus (V7/H6.c G4.a1)
     inline CALL_BUILTIN 257
   end __i2cRelease
+  // V7/H6.c G4.a3 — el DISPOSITIVO y las TRANSACCIONES (V7_IDEAS §H6.11.9): cada llamada, una transacción en UN
+  // turno del árbitro —el CS dentro, su velocidad— y calculada antes contra el tope del bus.
+  function __spiDevOpen(bus: integer, cs: integer, baudrate: integer, mode: integer)   // Spi.Device: se engancha al bus y reserva su CS
+    inline CALL_BUILTIN 258
+  end __spiDevOpen
+  function __spiDevXfer(bus: integer, cs: integer, baudrate: integer, mode: integer, op: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer   // Spi.Device: write/read/transfer/writeRead
+    inline CALL_BUILTIN 259
+  end __spiDevXfer
+  function __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer   // Spi.Device.execute(Spi.Transaction)
+    inline CALL_BUILTIN 260
+  end __spiDevExec
+  function __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer   // I2c.Bus.writeRead, con repeated start
+    inline CALL_BUILTIN 261
+  end __i2cWriteRead
+  function __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer   // I2c.Bus.execute(I2c.Transaction)
+    inline CALL_BUILTIN 262
+  end __i2cExec
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

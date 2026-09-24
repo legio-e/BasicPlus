@@ -38,6 +38,30 @@
 // Las dos formas comparten el mismo backend nativo. Las top-level
 // existen para no romper código existente; la clase es la API
 // canónica para código nuevo.
+//
+// ESCRIBIR Y LEER EN UNA TRANSACCIÓN (V7/H6.c G4.a3). Leer un registro son dos
+// mensajes —su número y la lectura— con un REPEATED START entre ellos: nadie más
+// habla en medio (en la C5, el táctil comparte el I2C 0 con el expansor, y la
+// pantalla también lo lee):
+//
+//        var r: integer[] := newIntArray(6)
+//        bus.writeRead(0x76, [0xF7], 1, r, 6)
+//
+// Varios mensajes seguidos, en una I2c.Transaction —se PREPARA y se ejecuta de UNA
+// vez; repeated start entre mensajes y STOP al final—:
+//
+//        var t: I2c.Transaction := I2c.Transaction()
+//        t.write([0xF4, 0x27], 2)
+//        t.write([0xF5, 0xA0], 2)
+//        bus.execute(0x76, t)
+//
+// Lo que cabe en una transacción, igual en todos los micros (lo que puede el ESP32: 8
+// órdenes del bus): hasta 3 mensajes de al menos un byte —cada mensaje son 2 órdenes,
+// una lectura de más de un byte 3, y el STOP 1— y 256 bytes. El bus no se monopoliza: antes de
+// empezar se calcula cuánto lo ocupará (9 relojes por byte, la dirección de cada
+// mensaje incluida) y si pasa del tope del bus —20 ms, o el `ms:` de su línea del
+// ENV— es un error con nombre y no se transfiere nada. Un dispositivo que no
+// contesta devuelve -1, como en read/write.
 // ============================================================
 module I2c
 
@@ -59,6 +83,13 @@ module I2c
   public function releaseBus(bus: integer)
     inline CALL_BUILTIN 257
   end releaseBus
+  // V7/H6.c G4.a3 — escribir y leer, y una transacción (ver la cabecera).
+  public function writeReadBus(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+    inline CALL_BUILTIN 261
+  end writeReadBus
+  public function executeBus(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
+    inline CALL_BUILTIN 262
+  end executeBus
 
   // ---- Funciones top-level de compatibilidad ----
   //
@@ -82,6 +113,12 @@ module I2c
   public function release(bus: integer)
     releaseBus(bus)
   end release
+
+  // Escribe `ntx` bytes y lee `nrx` en UNA transacción, con repeated start entre las
+  // dos (V7/H6.c G4.a3). Devuelve los bytes leídos, o -1 si el dispositivo no contesta.
+  public function writeRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+    return writeReadBus(bus, addr, tx, ntx, rx, nrx)
+  end writeRead
 
   // Escanea el bus completo (direcciones I2C válidas 0x08..0x77) y
   // devuelve un array con las direcciones de los dispositivos que
@@ -119,6 +156,154 @@ module I2c
   public function FAST(): integer
     return 400000
   end FAST
+
+  // Un mensaje de una transacción (interno).
+  class Op
+    public property kind:   integer     // 1 escribir · 2 leer
+    public property count:  integer
+    public property data:   integer[]
+    public property nextOp: Op
+    public function Op(kind: integer, count: integer, data: integer[])
+      this.kind  := kind
+      this.count := count
+      this.data  := data
+    end Op
+  end Op
+
+  // ============================================================
+  // Clase Transaction — V7/H6.c G4.a3: varios mensajes seguidos, sin nadie en medio.
+  //
+  // Se PREPARA —write/read se van añadiendo, y aquí no se toca el bus— y se ejecuta de
+  // una vez con bus.execute(addr, t): START, cada mensaje con un repeated start entre
+  // dos, STOP al final. Se puede reutilizar: cada ejecución manda lo que tengan EN ESE
+  // MOMENTO los arrays de escritura y rellena los de lectura. clear() la vacía.
+  // ============================================================
+  public class Transaction
+
+    var first: Op
+    var last:  Op
+    var n:     integer
+    var ops:   integer[]     // (tipo, bytes) por mensaje: lo que recibe el builtin
+    var txAll: integer[]     // lo que se escribe, seguido
+    var rxAll: integer[]     // lo que se lee, seguido
+
+    public function Transaction()
+      this.n := 0
+    end Transaction
+
+
+    // Añade un mensaje: escribir `count` bytes de `data`.
+    public function write(data: integer[], count: integer)
+      this.checkArray(data, count, "I2c.Transaction.write")
+      this.add(Op(1, count, data))
+    end write
+
+    // Añade un mensaje: leer `count` bytes en `data`.
+    public function read(data: integer[], count: integer)
+      this.checkArray(data, count, "I2c.Transaction.read")
+      this.add(Op(2, count, data))
+    end read
+
+    // Cuántos mensajes lleva.
+    public function size(): integer
+      return this.n
+    end size
+
+    // La vacía, para prepararla otra vez.
+    public function clear()
+      this.first := null
+      this.last  := null
+      this.n     := 0
+    end clear
+
+    // Ejecuta la transacción con el dispositivo `addr` del bus `bus`: lo que hace
+    // bus.execute(addr, t) (I2c.Bus va DESPUÉS: el formato MOD8 no admite una clase
+    // usada antes de declararse).
+    public function executeOn(bus: integer, addr: integer): integer
+      var sale:  integer := 0
+      var entra: integer := 0
+      var o: Op := this.first
+      while o != null do
+        if o.kind == 1 then
+          sale := sale + o.count
+        else
+          entra := entra + o.count
+        endif
+        o := o.nextOp
+      endwh
+      if this.txAll == null then
+        this.txAll := newIntArray(sale)
+      elseif len(this.txAll) < sale then
+        this.txAll := newIntArray(sale)
+      endif
+      if this.rxAll == null then
+        this.rxAll := newIntArray(entra)
+      elseif len(this.rxAll) < entra then
+        this.rxAll := newIntArray(entra)
+      endif
+      if this.ops == null then
+        this.ops := newIntArray(0)
+      endif
+      // Lo que se escribe, seguido: lo que tienen los arrays AHORA.
+      var p: integer := 0
+      o := this.first
+      while o != null do
+        if o.kind == 1 then
+          move(o.data, this.txAll, 0, p, o.count)
+          p := p + o.count
+        endif
+        o := o.nextOp
+      endwh
+      var r: integer := executeBus(bus, addr, this.ops, this.n, this.txAll, this.rxAll)
+      // Y lo leído, a su sitio.
+      if r >= 0 then
+        p := 0
+        o := this.first
+        while o != null do
+          if o.kind == 2 then
+            move(this.rxAll, o.data, p, 0, o.count)
+            p := p + o.count
+          endif
+          o := o.nextOp
+        endwh
+      endif
+      return r
+    end executeOn
+
+    function add(o: Op)
+      if this.first == null then
+        this.first := o
+      else
+        this.last.nextOp := o
+      endif
+      this.last := o
+      // (tipo, bytes) al array de mensajes, que crece de dos en dos
+      if this.ops == null then
+        this.ops := newIntArray(8)
+      elseif len(this.ops) < 2 * this.n + 2 then
+        var mas: integer[] := newIntArray(2 * len(this.ops))
+        move(this.ops, mas, 0, 0, 2 * this.n)
+        this.ops := mas
+      endif
+      this.ops[2 * this.n] := o.kind
+      this.ops[2 * this.n + 1] := o.count
+      this.n := this.n + 1
+    end add
+
+    // Los mismos textos que los de un I2c.Bus (#534), antes de guardarlo.
+    function checkArray(data: integer[], count: integer, op: string)
+      if data == null then
+        throw RuntimeError(op + ": el array es null")
+      endif
+      if count < 0 then
+        throw RuntimeError(op + ": count negativo (" + intToString(count) + ")")
+      endif
+      if count > len(data) then
+        throw RuntimeError(op + ": count (" + intToString(count) + ") mayor que el array (" + intToString(len(data)) + ")")
+      endif
+    end checkArray
+
+  end Transaction
 
   // ============================================================
   // Clase Bus — wrapper OO sobre los intrínsecos de I2C.
@@ -179,6 +364,19 @@ module I2c
     public function release()
       releaseBus(this.id)
     end release
+
+    // Escribe `ntx` bytes y lee `nrx` en UNA transacción, con repeated start entre las
+    // dos: el registro de un sensor sin nadie en medio (V7/H6.c G4.a3). Devuelve los
+    // bytes leídos, o -1 si el dispositivo no contesta.
+    public function writeRead(addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+      return writeReadBus(this.id, addr, tx, ntx, rx, nrx)
+    end writeRead
+
+    // Ejecuta una I2c.Transaction con el dispositivo `addr`: todos sus mensajes en UNA
+    // transacción. Devuelve los bytes movidos, o -1 si el dispositivo no contesta.
+    public function execute(addr: integer, t: Transaction): integer
+      return t.executeOn(this.id, addr)
+    end execute
 
     // Escanea el bus completo (0x08..0x77) y devuelve un array con
     // las direcciones que respondieron. Inlined manualmente porque

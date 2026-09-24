@@ -52,6 +52,7 @@ static const ranura_t RANURAS[] = {
      * conteste -1 porque el bus esté ocupado más del plazo. */
     R(spi_tomar), R(spi_cs), R(spi_transferir), R(spi_soltar),
     R(i2c_escribir_leer),
+    R(spi_transaccion), R(i2c_transaccion),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))

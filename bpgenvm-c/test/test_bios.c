@@ -70,6 +70,9 @@ static int      f_spi_cs(int b, int v) { (void)b;(void)v; return 0; }
 static int      f_spi_transferir(int b, const uint8_t* t, uint8_t* r, size_t n) { (void)b;(void)t;(void)r; return (int) n; }
 static void     f_spi_soltar(int b) { (void)b; }
 static int      f_i2c_escribir_leer(int b, int a, const uint8_t* t, size_t nt, uint8_t* r, size_t nr) { (void)b;(void)a;(void)t;(void)nt;(void)r; return (int) nr; }
+/* V7/H6.c G4.a3 — la transacción (v8). */
+static int      f_spi_transaccion(int b, int cs, int hz, int m, const bpvm_spi_op_t* o, int n) { (void)b;(void)cs;(void)hz;(void)m;(void)o; return n; }
+static int      f_i2c_transaccion(int b, int a, const bpvm_i2c_msg_t* m, int n) { (void)b;(void)a;(void)m; return n; }
 
 /* Devuelve una tabla COMPLETA y bien formada. Cada caso la estropea de una
  * manera — un solo cambio por caso, que es como se sabe qué causó qué. */
@@ -98,6 +101,7 @@ static bpvm_bios_t buena(void) {
     b.env_get = f_env_get;
     b.spi_tomar = f_spi_tomar; b.spi_cs = f_spi_cs; b.spi_transferir = f_spi_transferir;
     b.spi_soltar = f_spi_soltar; b.i2c_escribir_leer = f_i2c_escribir_leer;
+    b.spi_transaccion = f_spi_transaccion; b.i2c_transaccion = f_i2c_transaccion;
     return b;
 }
 
@@ -141,11 +145,17 @@ int main(void) {
          * seguiría en verde comprobando una ranura del medio. */
         /* (Hasta G1 este caso seguía mirando `busca`, y desde la v5 la última
          * era `sleep_ms`: pasó justo lo que este comentario avisaba. En G1 pasó a
-         * `env_get`, y desde la v7 (G4.a2) la última es `i2c_escribir_leer`;
-         * `env_get` y `busca` se quedan como casos del medio.) */
+         * `env_get`, en la v7 (G4.a2) a `i2c_escribir_leer`, y desde la v8
+         * (G4.a3) la última es `i2c_transaccion`; las de antes se quedan como
+         * casos del medio.) */
+        bpvm_bios_t b = buena(); b.i2c_transaccion = NULL;
+        const char* r = bpvm_bios_verify(&b);
+        CHECK(r && strcmp(r, "i2c_transaccion") == 0, "hueco en la ULTIMA ranura (i2c_transaccion) -> tambien");
+    }
+    {
         bpvm_bios_t b = buena(); b.i2c_escribir_leer = NULL;
         const char* r = bpvm_bios_verify(&b);
-        CHECK(r && strcmp(r, "i2c_escribir_leer") == 0, "hueco en la ULTIMA ranura (i2c_escribir_leer) -> tambien");
+        CHECK(r && strcmp(r, "i2c_escribir_leer") == 0, "hueco en i2c_escribir_leer (la ultima de la v7) -> tambien");
     }
     {
         bpvm_bios_t b = buena(); b.env_get = NULL;
@@ -310,12 +320,14 @@ int main(void) {
     /* ── 7. El contador de ranuras cuadra con la struct ──
      * Si alguien añade un campo y olvida ponerlo en RANURAS, el hueco vuelve a
      * ser mudo. Esto no lo detecta del todo, pero deja el numero a la vista. */
-    CHECK(bpvm_bios_slot_count() == 45,
-          "45 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4 + 10 de la HAL H6 + env_get G1 + 5 del turno G4.a2)");
+    CHECK(bpvm_bios_slot_count() == 47,
+          "47 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4 + 10 de la HAL H6 + env_get G1 + 5 del turno G4.a2 + 2 de la transaccion G4.a3)");
     CHECK(offsetof(bpvm_bios_t, env_get) > offsetof(bpvm_bios_t, sleep_ms),
           "env_get va DETRAS de la HAL: un pack de la v5 sigue encontrando sus ranuras");
     CHECK(offsetof(bpvm_bios_t, spi_tomar) > offsetof(bpvm_bios_t, env_get),
           "el turno (v7) va DETRAS de env_get: un pack de la v6 sigue encontrando sus ranuras");
+    CHECK(offsetof(bpvm_bios_t, spi_transaccion) > offsetof(bpvm_bios_t, i2c_escribir_leer),
+          "la transaccion (v8) va DETRAS del turno: un pack de la v7 sigue encontrando sus ranuras");
     {   /* V7/H6 — un hueco en la HAL se NOMBRA como cualquier otro, y la HAL
          * va DETRAS de todo lo anterior (la tabla crece por el final). */
         bpvm_bios_t b = buena(); b.now_ms = NULL;

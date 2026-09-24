@@ -62,6 +62,36 @@ int  bpvm_spi_tomar(int bus, int cs, int hz, int modo, int quien, char* err, siz
 int  bpvm_spi_cs(int bus, int nivel);
 int  bpvm_spi_xfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n);
 void bpvm_spi_dejar(int bus);
+/* G4.a3: el turno A MANO (tomar … dejar) no se puede calcular antes: se MIDE, y si
+ * pasa del tope del bus el log lo dice (bpvm_bus.h). Es el de la TF y los packs v7;
+ * lo nuevo va por transacciones. */
+
+/* ── V7/H6.c G4.a3 — LA TRANSACCIÓN (V7_IDEAS §H6.11.9) ──────────────────────
+ *
+ * Varias operaciones en UN turno, con el CS abajo de principio a fin. Se describe
+ * antes y se ejecuta de una vez: dentro sólo hay transferencias —ni esperas ni código
+ * de quien llama—, así que es corta por construcción. Y ANTES de empezar se calcula
+ * lo que ocupará el bus (8 relojes por byte a `hz`): si pasa del tope del bus, -1 con
+ * el porqué y no se transfiere nada. Eduardo: «tiene más sentido que se llamen desde
+ * C» — los packs la tienen en la BIOS v8; BP va encima.
+ *
+ * Una operación: `tx` y `rx` a la vez es full-duplex; sólo `tx`, escribir; sólo `rx`,
+ * leer (la cintura manda su relleno). Devuelve los bytes movidos, o -1 con `err`. */
+typedef struct {
+    const uint8_t* tx;
+    uint8_t*       rx;
+    uint32_t       n;
+} bpvm_spi_op_t;
+int  bpvm_spi_transaccion(int bus, int cs, int hz, int modo, int quien,
+                          const bpvm_spi_op_t* ops, int nops, char* err, size_t cap);
+/* El turno de una transacción YA calculada que quien llama ejecuta por tramos (los
+ * builtins de BP, que convierten el array de BP a bytes de 256 en 256): como
+ * bpvm_spi_tomar, pero no se mide —ya pasó el tope—. */
+int  bpvm_spi_tomar_transaccion(int bus, int cs, int hz, int modo, int quien, char* err, size_t cap);
+/* Engancharse a un bus YA establecido (el ENV o quien lo abrió), sin pines ni
+ * velocidad: lo que hace un `Spi.Device`. No toca la velocidad de las ranuras de
+ * siempre. 0, o -1 con `err`. */
+int  bpvm_spi_enganchar(int bus, int quien, char* err, size_t cap);
 
 /* Las ranuras de SIEMPRE, cada llamada un TURNO entero (G4.a2) con la velocidad
  * del `abrir` de quien llama —hasta G4.a3, que la pasa el objeto BP—. Stubs con

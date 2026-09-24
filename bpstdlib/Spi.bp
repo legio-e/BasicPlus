@@ -5,8 +5,8 @@
 //   SCK   — clock (master → slave)
 //   MOSI  — Master Out, Slave In (datos master → slave)
 //   MISO  — Master In, Slave Out (datos slave → master)
-//   CS    — chip select (uno por slave; lo gestiona el USER vía Gpio,
-//                        no este módulo)
+//   CS    — chip select (uno por slave; con Spi.Device lo lleva este
+//                        módulo; con Spi.Bus, el usuario vía Gpio)
 //
 // Útil para displays (SSD1306, ILI9341), SD cards, sensores rápidos
 // (BMP280 SPI), expanders rápidos, flash externa, etc.
@@ -19,7 +19,7 @@
 //       spi1:  SCK=GP10/14/26, MOSI=GP11/15/27, MISO=GP8/12/28
 //   - PC (Java/host C): logging por stdout — desarrollo sin HW.
 //
-// El CS de cada slave se gestiona aparte:
+// Con Spi.Bus, el CS de cada slave se gestiona aparte:
 //
 //   Gpio.write(CS_PIN, Gpio.LOW())
 //   bus.write(payload, n)
@@ -47,8 +47,35 @@
 //        import Spi
 //        var bus: Spi.Bus := Spi.Bus(0, 2, 3, 4, Spi.MHZ_1(), Spi.Bus.MODE0)
 //        bus.write([0x55], 1)
+//
+// EL DISPOSITIVO Y LA TRANSACCIÓN (V7/H6.c G4.a3). En un bus COMPARTIDO (en la C5, la
+// pantalla y la microSD van en el SPI 2) cada dispositivo usa Spi.Device: el bus por su
+// número —el del fabricante—, su CS, su velocidad y su modo. Cada llamada es UNA
+// transacción: el CS abajo de principio a fin y nadie más en el bus mientras tanto.
+//
+//        var sd: Spi.Device := Spi.Device(2, 23, 400000, 0)   // bus, CS, velocidad, modo
+//        sd.writeRead(cmd, 6, r1, 8)                           // comando y respuesta, un CS
+//
+// Varias operaciones seguidas, sin nadie en medio: una Spi.Transaction, que se PREPARA y
+// se ejecuta de UNA vez —dentro no hay esperas ni código del programa: es corta—:
+//
+//        var t: Spi.Transaction := Spi.Transaction()
+//        t.write(cabecera, 4)
+//        t.write(pagina, 256)
+//        sd.execute(t)
+//
+// El bus no se monopoliza: antes de empezar se calcula cuánto lo ocupará (8 relojes por
+// byte a la velocidad del dispositivo) y si pasa del tope del bus —20 ms, o el `ms:` de
+// su línea del ENV, nunca más de 100— es un error con nombre y no se transfiere nada. Un
+// conversor que tarda 200 ms en convertir: una transacción para arrancarlo, el bus libre
+// mientras convierte, y otra para leerlo.
+//
+// Spi.Bus y las funciones sueltas siguen como siempre (la velocidad de su init, el CS a
+// mano, sin tope): son para quien está solo en el bus.
 // ============================================================
 module Spi
+
+  import Gpio      // V7/H6.c G4.a3: el CS de un Spi.Device es un pin: Gpio.release lo suelta
 
   // ---- Intrínsecos de bajo nivel ----
   //
@@ -69,6 +96,19 @@ module Spi
   public function releaseBus(bus: integer)
     inline CALL_BUILTIN 256
   end releaseBus
+
+  // V7/H6.c G4.a3 — el dispositivo y la transacción (ver la cabecera): lo que usan
+  // Spi.Device y Spi.Transaction (públicas porque una clase sólo alcanza lo público del
+  // módulo; desde un programa, las clases).
+  public function deviceOpen(bus: integer, cs: integer, baudrate: integer, mode: integer)
+    inline CALL_BUILTIN 258
+  end deviceOpen
+  public function deviceXfer(bus: integer, cs: integer, baudrate: integer, mode: integer, op: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+    inline CALL_BUILTIN 259
+  end deviceXfer
+  public function deviceExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
+    inline CALL_BUILTIN 260
+  end deviceExec
 
   // ---- Funciones top-level de compatibilidad ----
   public function init(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
@@ -131,9 +171,10 @@ module Spi
   // pines SCK/MOSI/MISO, baudrate y modo (CPOL/CPHA).
   //
   // El chip-select (CS) NO lo gestiona esta clase — es un pin
-  // GPIO normal que el usuario controla aparte. Razón: un mismo
-  // bus suele compartirse entre varios slaves con CS distintos,
-  // y meter el CS en la instancia del Bus rompería esa flexibilidad.
+  // GPIO normal que el usuario controla aparte. Es para quien está
+  // SOLO en el bus: en un bus compartido, dos llamadas con el CS a
+  // mano pueden quedar con otro dispositivo en medio. Ahí, Spi.Device
+  // (V7/H6.c G4.a3): el CS dentro de cada transacción.
   //
   // Uso típico:
   //
@@ -199,5 +240,231 @@ module Spi
     end release
 
   end Bus
+
+  // Una operación de una transacción (interna).
+  class Op
+    public property kind:  integer     // 1 escribir · 2 leer · 3 full-duplex
+    public property count: integer
+    public property tx:    integer[]
+    public property rx:    integer[]
+    public property nextOp: Op
+    public function Op(kind: integer, count: integer, tx: integer[], rx: integer[])
+      this.kind  := kind
+      this.count := count
+      this.tx    := tx
+      this.rx    := rx
+    end Op
+  end Op
+
+  // ============================================================
+  // Clase Transaction — V7/H6.c G4.a3: varias operaciones seguidas, sin nadie en medio.
+  //
+  // Se PREPARA —write/read/transfer se van añadiendo, y aquí no se toca el bus— y se
+  // ejecuta de una vez con dev.execute(t): UN turno, el CS abajo de principio a fin, y
+  // dentro sólo transferencias. Se puede reutilizar: cada ejecución manda lo que tengan
+  // EN ESE MOMENTO los arrays de escritura y rellena los de lectura. clear() la vacía.
+  // ============================================================
+  public class Transaction
+
+    var first: Op
+    var last:  Op
+    var n:     integer
+    var ops:   integer[]     // (tipo, bytes) por operación: lo que recibe el builtin
+    var txAll: integer[]     // lo que se escribe, seguido
+    var rxAll: integer[]     // lo que se lee, seguido
+
+    public function Transaction()
+      this.n := 0
+    end Transaction
+
+
+    // Añade: escribir `count` bytes de `data`.
+    public function write(data: integer[], count: integer)
+      this.checkArray(data, count, "Spi.Transaction.write", "el array")
+      this.add(Op(1, count, data, data))
+    end write
+
+    // Añade: leer `count` bytes en `data`.
+    public function read(data: integer[], count: integer)
+      this.checkArray(data, count, "Spi.Transaction.read", "el array")
+      this.add(Op(2, count, data, data))
+    end read
+
+    // Añade: full-duplex de `count` bytes.
+    public function transfer(tx: integer[], rx: integer[], count: integer)
+      this.checkArray(rx, count, "Spi.Transaction.transfer", "el array rx")
+      this.checkArray(tx, count, "Spi.Transaction.transfer", "el array tx")
+      this.add(Op(3, count, tx, rx))
+    end transfer
+
+    // Cuántas operaciones lleva.
+    public function size(): integer
+      return this.n
+    end size
+
+    // La vacía, para prepararla otra vez.
+    public function clear()
+      this.first := null
+      this.last  := null
+      this.n     := 0
+    end clear
+
+    // Ejecuta la transacción con el dispositivo de ese bus, CS, velocidad y modo: lo que
+    // hace dev.execute(t) (Spi.Device va DESPUÉS: el formato MOD8 no admite una clase
+    // usada antes de declararse, y así no hay ciclo).
+    public function executeOn(bus: integer, cs: integer, baudrate: integer, mode: integer): integer
+      var sale:  integer := 0
+      var entra: integer := 0
+      var o: Op := this.first
+      while o != null do
+        if o.kind != 2 then
+          sale := sale + o.count
+        endif
+        if o.kind != 1 then
+          entra := entra + o.count
+        endif
+        o := o.nextOp
+      endwh
+      if this.txAll == null then
+        this.txAll := newIntArray(sale)
+      elseif len(this.txAll) < sale then
+        this.txAll := newIntArray(sale)
+      endif
+      if this.rxAll == null then
+        this.rxAll := newIntArray(entra)
+      elseif len(this.rxAll) < entra then
+        this.rxAll := newIntArray(entra)
+      endif
+      if this.ops == null then
+        this.ops := newIntArray(0)
+      endif
+      // Lo que se escribe, seguido: lo que tienen los arrays AHORA.
+      var p: integer := 0
+      o := this.first
+      while o != null do
+        if o.kind != 2 then
+          move(o.tx, this.txAll, 0, p, o.count)
+          p := p + o.count
+        endif
+        o := o.nextOp
+      endwh
+      var r: integer := deviceExec(bus, cs, baudrate, mode, this.ops, this.n, this.txAll, this.rxAll)
+      // Y lo leído, a su sitio.
+      if r >= 0 then
+        p := 0
+        o := this.first
+        while o != null do
+          if o.kind != 1 then
+            move(this.rxAll, o.rx, p, 0, o.count)
+            p := p + o.count
+          endif
+          o := o.nextOp
+        endwh
+      endif
+      return r
+    end executeOn
+
+    function add(o: Op)
+      if this.first == null then
+        this.first := o
+      else
+        this.last.nextOp := o
+      endif
+      this.last := o
+      // (tipo, bytes) al array de operaciones, que crece de dos en dos
+      if this.ops == null then
+        this.ops := newIntArray(8)
+      elseif len(this.ops) < 2 * this.n + 2 then
+        var mas: integer[] := newIntArray(2 * len(this.ops))
+        move(this.ops, mas, 0, 0, 2 * this.n)
+        this.ops := mas
+      endif
+      this.ops[2 * this.n] := o.kind
+      this.ops[2 * this.n + 1] := o.count
+      this.n := this.n + 1
+    end add
+
+    // Los mismos textos que los de un Spi.Bus (#534): un array null, un count negativo o
+    // mayor que el array, antes de guardarlo.
+    function checkArray(data: integer[], count: integer, op: string, cual: string)
+      if data == null then
+        throw RuntimeError(op + ": " + cual + " es null")
+      endif
+      if count < 0 then
+        throw RuntimeError(op + ": count negativo (" + intToString(count) + ")")
+      endif
+      if count > len(data) then
+        throw RuntimeError(op + ": count (" + intToString(count) + ") mayor que " + cual + " (" + intToString(len(data)) + ")")
+      endif
+    end checkArray
+
+  end Transaction
+
+  // ============================================================
+  // Clase Device — V7/H6.c G4.a3: UN dispositivo de un bus compartido.
+  //
+  // El bus por su número y ya establecido (su línea del ENV, o un Spi.Bus antes); el
+  // dispositivo sólo trae lo suyo: su CS, su velocidad y su modo. El constructor reserva
+  // el CS (salida, en reposo alto). Cada llamada es UNA transacción: toma el bus, baja el
+  // CS, transfiere, sube el CS y lo suelta; y antes se calcula contra el tope del bus.
+  // Devuelven los bytes (escritos, leídos o intercambiados; writeRead, los leídos), o -1
+  // si el hardware falla. Lo que no deja empezar —el tope, un array corto, el bus
+  // ocupado más de 1 s— es un RuntimeError con nombre.
+  //
+  //   var flash: Spi.Device := Spi.Device(0, 5, Spi.MHZ_4(), 0)
+  //   var id: integer[] := newIntArray(3)
+  //   flash.writeRead([0x9F], 1, id, 3)       // JEDEC ID: comando y respuesta, un CS
+  // ============================================================
+  public class Device
+
+    public property bus:      integer
+    public property cs:       integer
+    public property baudrate: integer
+    public property mode:     integer    // 0..3
+
+    public function Device(bus: integer, cs: integer, baudrate: integer, mode: integer)
+      this.bus      := bus
+      this.cs       := cs
+      this.baudrate := baudrate
+      this.mode     := mode
+      deviceOpen(bus, cs, baudrate, mode)
+    end Device
+
+    // Escribe `count` bytes.
+    public function write(data: integer[], count: integer): integer
+      return deviceXfer(this.bus, this.cs, this.baudrate, this.mode, 1, data, count, data, 0)
+    end write
+
+    // Lee `count` bytes.
+    public function read(data: integer[], count: integer): integer
+      return deviceXfer(this.bus, this.cs, this.baudrate, this.mode, 2, data, 0, data, count)
+    end read
+
+    // Full-duplex: escribe tx[i] y lee rx[i] a la vez.
+    public function transfer(tx: integer[], rx: integer[], count: integer): integer
+      return deviceXfer(this.bus, this.cs, this.baudrate, this.mode, 3, tx, count, rx, count)
+    end transfer
+
+    // Comando y respuesta con el CS abajo todo el rato: escribe `ntx` y lee `nrx`.
+    public function writeRead(tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+      return deviceXfer(this.bus, this.cs, this.baudrate, this.mode, 4, tx, ntx, rx, nrx)
+    end writeRead
+
+    // Ejecuta una Spi.Transaction: todas sus operaciones con el CS abajo, en UN turno.
+    public function execute(t: Transaction): integer
+      return t.executeOn(this.bus, this.cs, this.baudrate, this.mode)
+    end execute
+
+    // Suelta el CS: el pin vuelve a libre y el dispositivo ya no transfiere. Lo llama el
+    // destructor.
+    public function release()
+      Gpio.release(this.cs)
+    end release
+
+    public function ~Device()
+      Gpio.release(this.cs)
+    end ~Device
+
+  end Device
 
 end Spi

@@ -30,6 +30,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "bpvm_spi.h"   /* v8: bpvm_spi_op_t, la operación de una transacción SPI */
+#include "bpvm_i2c.h"   /* v8: bpvm_i2c_msg_t, el mensaje de una transacción I2C  */
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,7 +44,8 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  7u   /* 7 = V7/H6.c G4.a2: el TURNO de los buses     */
+#define BPVM_BIOS_VERSION  8u   /* 8 = V7/H6.c G4.a3: la TRANSACCIÓN, con tope  */
+                                /* 7 = V7/H6.c G4.a2: el TURNO de los buses     */
                                 /* 6 = V7/H6.c G1: env_get (la config de placa) */
                                 /* 5 = V7/H6: la HAL (gpio/spi/i2c/reloj)     */
                                 /* 4 = V5/H4: el PUNTO DE ENCUENTRO de packs  */
@@ -279,6 +282,29 @@ typedef struct bpvm_bios {
     void     (*spi_soltar)    (int bus);
     int      (*i2c_escribir_leer)(int bus, int addr, const uint8_t* tx, size_t ntx,
                                   uint8_t* rx, size_t nrx);                   /* leídos, o -1 */
+
+    /* ── V7/H6.c G4.a3 — LA TRANSACCIÓN (v8; V7_IDEAS §H6.11.9) ───────────
+     *
+     * Eduardo: «las transacciones también deberían poder llamarse desde C; de
+     * hecho tiene más sentido que se llamen desde ahí». Varias operaciones en UN
+     * turno, preparadas antes y ejecutadas de una vez: dentro sólo hay
+     * transferencias, así que es corta por construcción. Y ANTES de empezar se
+     * calcula lo que ocupará el bus: si pasa del tope del bus (el `ms:` de su
+     * línea del ENV; 20 ms si no lo dice, nunca más de 100) no empieza — -1, con
+     * el porqué en el log de la VM.
+     *
+     *   spi_transaccion: el CS abajo de principio a fin; `ops[i]` con tx y rx es
+     *                    full-duplex, sólo tx escribe, sólo rx lee. Bytes, o -1.
+     *   i2c_transaccion: cada mensaje con repeated start entre dos y STOP al
+     *                    final (hasta BPVM_I2C_MENSAJES_MAX y BPVM_I2C_ORDENES_MAX: lo que cabe en el ESP32). Bytes; -1 si no
+     *                    empezó (log), -2 si el dispositivo no contestó.
+     *
+     * Un conversor que tarda 200 ms: una transacción que lo arranca, el bus libre
+     * mientras convierte (`sleep_ms`) y otra que lee. El turno a mano de la v7
+     * (spi_tomar … spi_soltar) sigue, MEDIDO: si pasa del tope, el log lo dice. */
+    int      (*spi_transaccion)(int bus, int cs, int hz, int modo,
+                                const bpvm_spi_op_t* ops, int nops);          /* bytes, o -1 */
+    int      (*i2c_transaccion)(int bus, int addr, const bpvm_i2c_msg_t* m, int nm);   /* bytes, -1 o -2 */
 } bpvm_bios_t;
 
 /* Los códigos de `env_get`, para que el pack no escriba números sueltos. */
@@ -346,7 +372,9 @@ typedef struct bpvm_bios {
     /* V7/H6.c G4.a2 — el turno de los buses (el árbitro, bpvm_bus.c). */ \
     bpvm_bios_hal_spi_tomar, bpvm_bios_hal_spi_cs,                      \
     bpvm_bios_hal_spi_transferir, bpvm_bios_hal_spi_soltar,             \
-    bpvm_bios_hal_i2c_escribir_leer                                     \
+    bpvm_bios_hal_i2c_escribir_leer,                                    \
+    /* V7/H6.c G4.a3 — la transacción, con tope (v8). */                \
+    bpvm_bios_hal_spi_transaccion, bpvm_bios_hal_i2c_transaccion        \
 }
 
 /*
@@ -411,6 +439,9 @@ int      bpvm_bios_hal_spi_transferir(int bus, const uint8_t* tx, uint8_t* rx, s
 void     bpvm_bios_hal_spi_soltar(int bus);
 int      bpvm_bios_hal_i2c_escribir_leer(int bus, int addr, const uint8_t* tx, size_t ntx,
                                          uint8_t* rx, size_t nrx);
+/* V7/H6.c G4.a3 — la transacción (v8). */
+int      bpvm_bios_hal_spi_transaccion(int bus, int cs, int hz, int modo, const bpvm_spi_op_t* ops, int nops);
+int      bpvm_bios_hal_i2c_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm);
 uint32_t bpvm_bios_hal_now_ms    (void);
 void     bpvm_bios_hal_sleep_ms  (int ms);
 /* Olvida todas las tablas. Para el arranque y para las pruebas. */

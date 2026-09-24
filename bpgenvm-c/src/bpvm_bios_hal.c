@@ -96,5 +96,21 @@ int  bpvm_bios_hal_i2c_escribir_leer(int bus, int addr, const uint8_t* tx, size_
     return bpvm_i2c_escribir_leer(BPVM_BUS_PACK, bus, addr, tx, ntx, rx, nrx);
 }
 
+/* V7/H6.c G4.a3 — la TRANSACCIÓN (v8): la de la HAL BP, con el pack de quien. Lo que
+ * no la deja empezar va al log con nombre; un dispositivo I2C que no contesta, no
+ * (es su respuesta, y un sondeo llenaría el log): -2. */
+int bpvm_bios_hal_spi_transaccion(int bus, int cs, int hz, int modo, const bpvm_spi_op_t* ops, int nops) {
+    char err[160];
+    int r = bpvm_spi_transaccion(bus, cs, hz, modo, BPVM_BUS_PACK, ops, nops, err, sizeof err);
+    if (r < 0) bpvm_diag("BIOS: spi_transaccion(%d): %s", bus, err);
+    return r;
+}
+int bpvm_bios_hal_i2c_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
+    char err[160];
+    int r = bpvm_i2c_transaccion(bus, addr, BPVM_BUS_PACK, m, nm, err, sizeof err);
+    if (r == -1) bpvm_diag("BIOS: i2c_transaccion(%d): %s", bus, err);
+    return r;
+}
+
 uint32_t bpvm_bios_hal_now_ms(void)   { return (uint32_t) bpvm_platform_now_ms(); }
 void     bpvm_bios_hal_sleep_ms(int ms) { bpvm_platform_thread_sleep_ms(ms); }

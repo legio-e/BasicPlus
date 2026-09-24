@@ -115,6 +115,32 @@ void bpvm_bus_dejar(int tipo, int id);
 int  bpvm_bus_tomado(int tipo, int id);            /* 1 = hay un turno en curso */
 void bpvm_bus_arbitro_init(void);
 
+/* ── V7/H6.c G4.a3 — EL TOPE: un turno es CORTO (V7_IDEAS §H6.11.9) ──────────
+ *
+ * Eduardo, 24-sep: «Lo que hay que evitar es que si trabajo con un conversor con
+ * bus SPI y hago una conversión que me lleva 200 ms, mientras esté trabajando, nadie
+ * más pueda utilizar el bus.» El tope es del BUS: lo dice su línea del ENV (`ms:20`),
+ * BPVM_BUS_TOPE_MS si no lo dice, y nunca más de BPVM_BUS_TOPE_MAX_MS.
+ *
+ *   · Una TRANSACCIÓN (bpvm_spi_transaccion, bpvm_i2c_transaccion) se calcula ANTES
+ *     de empezar —los relojes que ocupará el bus a su velocidad— y si no cabe, no
+ *     empieza: -1 con el porqué. La cuenta es entera, la misma en miVM.
+ *   · El turno A MANO (tomar … dejar) no se puede calcular antes, y cortarlo a medias
+ *     dejaría un dispositivo a mitad de algo: se MIDE, y si pasó del tope el log lo
+ *     dice con el nombre de quién. */
+#define BPVM_BUS_TOPE_MS      20
+#define BPVM_BUS_TOPE_MAX_MS 100
+int  bpvm_bus_tope_ms(int tipo, int id);
+/* 1 = el bus tiene configuración (la del ENV o la del primero que lo abrió). */
+int  bpvm_bus_establecido(int tipo, int id);
+/* I2C: la velocidad del bus (la de su configuración); 0 si no está establecido. */
+int  bpvm_bus_hz(int tipo, int id);
+/* ¿Cabe en el tope una transacción de `relojes` ciclos de reloj a `hz`? 0, o -1 con
+ * el porqué: «SPI 2: la transacción ocuparía el bus 32 ms a 1 MHz (máximo 20 ms)». */
+int  bpvm_bus_cabe(int tipo, int id, unsigned long long relojes, int hz, char* err, size_t cap);
+/* El turno en curso se MIDE al dejarlo. Lo pide quien lo tiene, justo tras tomarlo. */
+void bpvm_bus_medir(int tipo, int id);
+
 #ifdef __cplusplus
 }
 #endif

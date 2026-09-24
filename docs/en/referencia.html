@@ -1274,6 +1274,11 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
   <tr><td><code>read(bus, addr, data, count): integer</code></td>
       <td>Reads <code>count</code> bytes (at most 256) from the slave <code>addr</code>.
           Returns bytes read, or <code>-1</code> on error.</td></tr>
+  <tr><td><code>writeRead(bus, addr, tx, ntx, rx, nrx): integer</code></td>
+      <td>Writes <code>ntx</code> bytes and reads <code>nrx</code> in <strong>one</strong>
+          transaction, with a <em>repeated start</em> between them: a register's number and its
+          value, with nobody talking in between (V7). Returns the bytes read, or <code>-1</code>
+          if the device does not answer. Also <code>bus.writeRead(addr, …)</code>.</td></tr>
   <tr><td><code>scan(bus): integer[]</code></td>
       <td>Scans addresses <code>0x08..0x77</code> and returns an
           array of those that ACKed. Implemented in BP
@@ -1313,15 +1318,39 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
 <pre><code><span class="kw">var</span> bus: I2c.Bus := I2c.Bus(<span class="num">0</span>, <span class="num">4</span>, <span class="num">5</span>, I2c.Bus.STANDARD)
 <span class="kw">var</span> devs: <span class="type">integer</span>[] := bus.scan()
 bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span class="num">1</span>)</code></pre>
+<p>
+  <b>The transaction</b> (V7). Several messages in a row, with nobody in between: an
+  <code>I2c.Transaction</code> is <em>prepared</em> — <code>write(data, count)</code> and
+  <code>read(data, count)</code> are added, without touching the bus — and executed
+  <strong>at once</strong> with <code>bus.execute(addr, t)</code>: START, each message with a
+  <em>repeated start</em> between two, and STOP at the end. It can be reused: each execution
+  sends what the write arrays hold at that moment and fills the read arrays
+  (<code>clear()</code> empties it). Returns the bytes moved, or <code>-1</code> if the device
+  does not answer.
+</p>
+<pre><code><span class="kw">var</span> t: I2c.Transaction := I2c.Transaction()
+t.write([<span class="num">0xF4</span>, <span class="num">0x27</span>], <span class="num">2</span>)
+t.write([<span class="num">0xF5</span>, <span class="num">0xA0</span>], <span class="num">2</span>)
+bus.execute(<span class="num">0x76</span>, t)            <span class="comment">// two registers in one go</span></code></pre>
+<p>
+  What fits in one transaction is the same on every microcontroller —what the smallest can do:
+  the ESP32 runs it as one list of 8 bus <em>commands</em>—: up to 3 messages of at least one
+  byte (each message is 2 commands, a read of more than one byte 3, and the STOP 1) and 256
+  bytes. And it <strong>does not hog the bus</strong>: before starting, the time it will take on
+  the bus is computed (9 clocks per byte, each message's address included, at the bus speed);
+  above the bus <em>limit</em> —20&nbsp;ms, or the <code>ms:</code> of its ENV line
+  (<code>i2c0=…,ms:30</code>), never more than 100— it is a <code>RuntimeError</code> and
+  nothing is transferred: «<code>I2C 1: la transacción ocuparía el bus 23 ms a 100 kHz (máximo 20 ms)</code>».
+</p>
 
 <!-- =========================================================== -->
 
 <h3 id="stdlib-spi">14.4 <code>Spi</code></h3>
 <p>
   Full-duplex SPI master bus over 4 wires (SCK + MOSI + MISO + CS).
-  Each slave's CS is managed by the user with
-  <code>Gpio.write(...)</code>; this module handles the shared
-  bus. On the Pico 2 there are 2 HW buses (<code>spi0</code>,
+  With the free functions and with <code>Spi.Bus</code>, each slave's CS is managed by the
+  user with <code>Gpio.write(...)</code>; with <code>Spi.Device</code> (below) the module
+  handles it, inside each transaction. On the Pico 2 there are 2 HW buses (<code>spi0</code>,
   <code>spi1</code>), each with several supported pin maps.
 </p>
 <pre><code><span class="kw">import</span> Spi
@@ -1385,6 +1414,58 @@ bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span 
 </p>
 <pre><code><span class="kw">var</span> bus: Spi.Bus := Spi.Bus(<span class="num">0</span>, <span class="num">6</span>, <span class="num">7</span>, <span class="num">16</span>, Spi.Bus.MHZ_4, Spi.Bus.MODE0)
 bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
+<p>
+  <code>Spi.Bus</code> and the free functions use the speed of their <code>init</code> and a
+  hand-driven CS: they are for whoever is <strong>alone</strong> on the bus. On a shared bus,
+  two calls with a hand-driven CS may get another device in between.
+</p>
+<h4><code>Spi.Device</code> and <code>Spi.Transaction</code> (V7)</h4>
+<p>
+  A <code>Spi.Device(bus, cs, baudrate, mode)</code> is one device of a <strong>shared</strong>
+  bus: the bus by its number —the manufacturer's— and already established (its ENV line, or a
+  <code>Spi.Bus</code> before), and only its own: its CS, its speed and its mode. The
+  constructor reserves the CS (output, idle high). Each call is <strong>one transaction</strong>:
+  it takes the bus, lowers the CS, transfers, raises the CS and lets it go; meanwhile nobody else
+  uses the bus, and each device runs at its own speed (the display at 40&nbsp;MHz and the
+  microSD at 400&nbsp;kHz on the same bus). They return the bytes (written, read or exchanged;
+  <code>writeRead</code>, the read ones), or <code>-1</code> if the hardware fails.
+</p>
+<table>
+  <tr><th>Method</th><th>Description</th></tr>
+  <tr><td><code>write(data, count)</code> · <code>read(data, count)</code> · <code>transfer(tx, rx, count)</code></td>
+      <td>Like those of <code>Spi.Bus</code>, each one a transaction with the CS inside.</td></tr>
+  <tr><td><code>writeRead(tx, ntx, rx, nrx)</code></td>
+      <td>Command and response with the CS low all along: writes <code>ntx</code> and reads
+          <code>nrx</code>.</td></tr>
+  <tr><td><code>execute(t: Spi.Transaction)</code></td>
+      <td>All the operations of <code>t</code> in one transaction.</td></tr>
+  <tr><td><code>release()</code> · <code>~Device()</code></td>
+      <td>Lets the CS go; the device no longer transfers (named: <code>el CS 5 no está
+          reservado como salida (¿release()?)</code>).</td></tr>
+</table>
+<p>
+  A <code>Spi.Transaction</code> is <em>prepared</em> — <code>write</code>, <code>read</code> and
+  <code>transfer</code> are added, without touching the bus — and executed <strong>at once</strong>:
+  inside there are only transfers, neither waits nor program code. It can be reused (each
+  execution sends what the arrays hold at that moment) and <code>clear()</code> empties it.
+</p>
+<pre><code><span class="kw">var</span> flash: Spi.Device := Spi.Device(<span class="num">0</span>, <span class="num">5</span>, Spi.MHZ_10(), <span class="num">0</span>)
+<span class="kw">var</span> id: <span class="type">integer</span>[] := newIntArray(<span class="num">3</span>)
+flash.writeRead([<span class="num">0x9F</span>], <span class="num">1</span>, id, <span class="num">3</span>)          <span class="comment">// JEDEC ID: command and response, one CS</span>
+<span class="kw">var</span> t: Spi.Transaction := Spi.Transaction()
+t.write([<span class="num">0x02</span>, <span class="num">0x00</span>, <span class="num">0x10</span>, <span class="num">0x00</span>], <span class="num">4</span>)      <span class="comment">// program a page: header…</span>
+t.write(page, <span class="num">256</span>)                            <span class="comment">// …and data, with the CS low</span>
+flash.execute(t)</code></pre>
+<p>
+  <strong>The bus is not hogged.</strong> Before starting, the time on the bus is computed (8
+  clocks per byte at the device's speed); above the bus <em>limit</em> —20&nbsp;ms, or the
+  <code>ms:</code> of its ENV line (<code>spi2=sck:6,mosi:7,miso:8,ms:30</code>), never more than
+  100— it is a <code>RuntimeError</code> and nothing is transferred:
+  «<code>SPI 2: la transacción ocuparía el bus 21 ms a 400 kHz (máximo 20 ms)</code>». An ADC
+  that takes 200&nbsp;ms to convert is used with two transactions —one that starts it and one
+  that reads it—, with the bus free for the others in between (a <code>sleep</code>, or its
+  ready pin). The same transactions exist in C for native code (the packs' BIOS v8).
+</p>
 
 <!-- =========================================================== -->
 

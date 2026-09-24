@@ -1,0 +1,178 @@
+// C5Sd.bp — V7/H6.c G4.a3 en la C5: un programa habla con la microSD por Spi.Device en el
+// MISMO bus que la pantalla (V7_IDEAS §H6.11.9).
+//
+// La TF (CS 23) y la pantalla (CS 10) van en el SPI 2. El firmware del ESP32 todavía no monta
+// la TF (H3 «SD al común»), así que su CS está libre y un programa puede hablarle con un
+// Spi.Device a 400 kHz —la velocidad de negociación de una SD— mientras la pantalla va a 40 MHz:
+// dos dispositivos, dos velocidades, el mismo bus, cada transacción con la suya.
+//
+//   1. los 80 relojes con el CS arriba (un Spi.Bus: sin CS) y CMD0 -> 0x01 (en reposo)
+//   2. CMD8 (el eco 0x1AA), ACMD41 hasta que arranca —con el bus LIBRE entre intento e
+//      intento: el conversor de 200 ms de Eduardo—, CMD58 (el OCR)
+//   3. el bloque 0 en UNA transacción de 997 bytes (más de 64: lo que fallaba en el ESP32;
+//      19,9 ms a 400 kHz: dentro del tope) y su firma 55 AA. La tarjeta tarda en dar el token
+//      —la primera vez, unos 330 bytes—; cortar el bloque a medias la deja transmitiendo
+//   4. la pantalla y la SD INTERCALADAS: una etiqueta a 40 MHz y un CMD58 a 400 kHz, 30 veces
+//   5. el tope: 1001 bytes a 400 kHz son 21 ms, y no se transfiere nada
+//   6. el I2C: el latido del táctil con writeRead (repeated start) mientras DriverSpi lo lee
+module C5Sd
+  import Gui
+  import Spi
+  import I2c
+  import Str
+  import Machine
+
+  function hex(x: integer): string
+    return "0x" + Str.toHex(x)
+  end hex
+
+  // Un comando de la SD en UNA transacción full-duplex: 0xFF (un hueco), los 6 bytes del
+  // comando y `extra` bytes de 0xFF para su respuesta (en SPI, para leer hay que mandar, y
+  // la SD quiere 0xFF). Deja en `resp` desde el R1 —el primer byte con el bit 7 a 0— y lo
+  // devuelve; 0xFF si no contestó.
+  function comando(sd: Spi.Device, c: integer, arg: integer, crc: integer, extra: integer, resp: integer[]): integer
+    var n: integer := 7 + extra
+    var tx: integer[] := newIntArray(n)
+    var rx: integer[] := newIntArray(n)
+    var i: integer := 0
+    while i < n do
+      tx[i] := 0xFF
+      i := i + 1
+    endwh
+    tx[1] := 0x40 | c
+    tx[2] := (arg shr 24) & 0xFF
+    tx[3] := (arg shr 16) & 0xFF
+    tx[4] := (arg shr 8) & 0xFF
+    tx[5] := arg & 0xFF
+    tx[6] := crc
+    sd.transfer(tx, rx, n)
+    i := 7
+    while i < n do
+      if (rx[i] & 0x80) == 0 then
+        var quedan: integer := n - i
+        if quedan > len(resp) then
+          quedan := len(resp)
+        endif
+        move(rx, resp, i, 0, quedan)
+        return rx[i]
+      endif
+      i := i + 1
+    endwh
+    return 0xFF
+  end comando
+
+  function mide(eti: Gui.Label, rotulo: string): integer
+    var t0: integer := Machine.uptimeMs()
+    var i: integer := 0
+    while i < 10 do
+      eti.setText(rotulo + " " + i)
+      Gui.__guiRunOnce()
+      i := i + 1
+    endwh
+    return (Machine.uptimeMs() - t0) / 10
+  end mide
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "SD")
+    eti.align(Gui.Align.CENTER, 0, 0)
+    Gui.__guiRunOnce()
+    print "pantalla sola:      ", mide(eti, "sola"), "ms por etiqueta"
+
+    // 1. los relojes de despertar van con el CS ARRIBA: un Spi.Bus, que no toca ningún CS
+    var bus: Spi.Bus := Spi.Bus(2, -1, -1, -1, 400000, 0)
+    var sd: Spi.Device := Spi.Device(2, 23, 400000, 0)
+    print "Spi.Device(2, 23, 400 kHz): reservado el CS 23"
+    var ffs: integer[] := newIntArray(10)
+    var i: integer := 0
+    while i < 10 do
+      ffs[i] := 0xFF
+      i := i + 1
+    endwh
+    bus.write(ffs, 10)
+    var r: integer[] := newIntArray(1000)
+    var r1: integer := comando(sd, 0, 0, 0x95, 8, r)
+    print "CMD0  -> R1", hex(r1), "(0x1 = en reposo)"
+
+    // 2. CMD8, ACMD41 con el bus libre entre intentos, CMD58
+    r1 := comando(sd, 8, 0x1AA, 0x87, 12, r)
+    print "CMD8  -> R1", hex(r1), " eco", hex(r[3]), hex(r[4]), "(0x1 0xAA = v2)"
+    var intentos: integer := 0
+    var t0: integer := Machine.uptimeMs()
+    r1 := 0xFF
+    while intentos < 200 and r1 != 0 do
+      comando(sd, 55, 0, 0x65, 8, r)
+      r1 := comando(sd, 41, 0x40000000, 0x77, 8, r)
+      intentos := intentos + 1
+      if r1 != 0 then
+        sleep(10)                       // la tarjeta arranca sola: el bus, LIBRE mientras tanto
+      endif
+    endwh
+    print "ACMD41-> R1", hex(r1), "tras", intentos, "intentos,", Machine.uptimeMs() - t0, "ms"
+    r1 := comando(sd, 58, 0, 0xFD, 12, r)
+    print "CMD58 -> R1", hex(r1), " OCR", hex(r[1]), "(bit 0x40 = alta capacidad)"
+    var ocr: integer := r[1]
+
+    // 3. el bloque 0 en UNA transacción de 997 bytes: R1, el token 0xFE, 512 datos y el CRC
+    r1 := comando(sd, 17, 0, 0xFF, 990, r)
+    var tok: integer := 1
+    while tok < 990 and r[tok] != 0xFE do
+      tok := tok + 1
+    endwh
+    if r1 == 0 and tok + 512 < 990 then
+      print "CMD17 -> R1", hex(r1), " token en", tok, " firma", hex(r[tok + 511]), hex(r[tok + 512]), "(0x55 0xAA)"
+    else
+      print "CMD17 -> R1", hex(r1), " sin el bloque entero (token en", tok, ")"
+    endif
+
+    // 4. la pantalla y la SD intercaladas: 40 MHz y 400 kHz en el mismo bus, 30 veces
+    var bien: integer := 0
+    t0 := Machine.uptimeMs()
+    i := 0
+    while i < 30 do
+      eti.setText("SD " + i)
+      Gui.__guiRunOnce()
+      r1 := comando(sd, 58, 0, 0xFD, 12, r)
+      if r1 == 0 and r[1] == ocr then
+        bien := bien + 1
+      elseif bien == i then
+        print "  vuelta", i, ": R1", hex(r1), "OCR", hex(r[1])   // la primera que falla, con lo que dijo
+      endif
+      i := i + 1
+    endwh
+    print "intercaladas:", bien, "de 30 respuestas bien,", (Machine.uptimeMs() - t0) / 30, "ms por vuelta"
+    print "pantalla despues:   ", mide(eti, "despues"), "ms por etiqueta"
+
+    // 5. el TOPE: 1001 bytes a 400 kHz son 21 ms -> error con nombre, y nada al cable
+    var mucho: integer[] := newIntArray(1001)
+    i := 0
+    while i < 1001 do
+      mucho[i] := 0xFF                  // la SD, en reposo: nada de ceros con su CS abajo
+      i := i + 1
+    endwh
+    try
+      print sd.write(mucho, 1001)
+    catch e: Core.Exception
+      print e.msg
+    endtry
+    print "1000 bytes          ->", sd.write(mucho, 1000), "(20 ms justos: caben)"
+
+    // 6. el I2C 0: el latido ESD del táctil (D0 04 04 00), tres veces cada 300 ms: con
+    //    writeRead (repeated start) y con escribir + leer (STOP en medio), para compararlos
+    var i2c: I2c.Bus := I2c.Bus(0, -1, -1, 0)
+    var reg: integer[] := [0xD0, 0x04, 0x04, 0x00]
+    var hb: integer[] := newIntArray(4)
+    i := 0
+    while i < 3 do
+      var n1: integer := i2c.writeRead(0x58, reg, 4, hb, 4)
+      var a: integer := hb[0] | (hb[1] shl 8) | (hb[2] shl 16)
+      i2c.write(0x58, reg, 4)
+      var n2: integer := i2c.read(0x58, hb, 4)
+      var b: integer := hb[0] | (hb[1] shl 8) | (hb[2] shl 16)
+      print "latido: writeRead", n1, "->", a, "   escribir+leer", n2, "->", b
+      sleep(300)
+      i := i + 1
+    endwh
+    print "fin"
+  end Main
+end C5Sd

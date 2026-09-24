@@ -263,7 +263,12 @@ enum {
     BUILTIN_ADC_INIT_PIN                 = 255,   /* __adcInitPin(pin: integer): integer */
     BUILTIN_SPI_RELEASE                  = 256,   /* __spiRelease(bus: integer) */
     BUILTIN_I2C_RELEASE                  = 257,   /* __i2cRelease(bus: integer) */
-    BUILTIN__CUANTOS = 258
+    BUILTIN_SPI_DEV_OPEN                 = 258,   /* __spiDevOpen(bus: integer, cs: integer, baudrate: integer, mode: integer) */
+    BUILTIN_SPI_DEV_XFER                 = 259,   /* __spiDevXfer(bus: integer, cs: integer, baudrate: integer, mode: integer, op: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer */
+    BUILTIN_SPI_DEV_EXEC                 = 260,   /* __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer */
+    BUILTIN_I2C_WRITE_READ               = 261,   /* __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer */
+    BUILTIN_I2C_EXEC                     = 262,   /* __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer */
+    BUILTIN__CUANTOS = 263
 };
 
 #endif

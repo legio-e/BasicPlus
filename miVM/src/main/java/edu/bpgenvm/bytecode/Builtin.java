@@ -267,7 +267,12 @@ public enum Builtin {
     GPIO_RELEASE("__gpioRelease"),   // [254] __gpioRelease(pin: integer)
     ADC_INIT_PIN("__adcInitPin"),   // [255] __adcInitPin(pin: integer): integer
     SPI_RELEASE("__spiRelease"),   // [256] __spiRelease(bus: integer)
-    I2C_RELEASE("__i2cRelease");   // [257] __i2cRelease(bus: integer)
+    I2C_RELEASE("__i2cRelease"),   // [257] __i2cRelease(bus: integer)
+    SPI_DEV_OPEN("__spiDevOpen"),   // [258] __spiDevOpen(bus: integer, cs: integer, baudrate: integer, mode: integer)
+    SPI_DEV_XFER("__spiDevXfer"),   // [259] __spiDevXfer(bus: integer, cs: integer, baudrate: integer, mode: integer, op: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+    SPI_DEV_EXEC("__spiDevExec"),   // [260] __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
+    I2C_WRITE_READ("__i2cWriteRead"),   // [261] __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
+    I2C_EXEC("__i2cExec");   // [262] __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
 
     public final String bpName;
     public final int id;

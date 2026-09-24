@@ -379,25 +379,44 @@ static void stm32_spi_init_impl(int bus, int sck, int mosi, int miso,
     cfg_af_pin(miso, af);
 }
 
+/* V7/H6.c G4.a3 — la HAL cuenta en `uint16_t`: más de 65 535 bytes se TRUNCABAN en
+ * silencio (y una operación de una transacción nativa puede llevarlos: el tope es de
+ * tiempo, no de bytes). Troceado; el CS es un GPIO que lleva la HAL BP todo el turno. */
+#define STM32_SPI_TROZO 65535u
 static int stm32_spi_write_impl(int bus, const uint8_t* data, size_t n) {
     SPI_HandleTypeDef* h = spi_handle(bus);
+    size_t hecho = 0;
     if (!h) return -1;
-    return (HAL_SPI_Transmit(h, (uint8_t*) data, (uint16_t) n, 1000) == HAL_OK)
-           ? (int) n : -1;
+    while (hecho < n) {
+        uint16_t t = (uint16_t) ((n - hecho > STM32_SPI_TROZO) ? STM32_SPI_TROZO : (n - hecho));
+        if (HAL_SPI_Transmit(h, (uint8_t*) data + hecho, t, 1000) != HAL_OK) return -1;
+        hecho += t;
+    }
+    return (int) n;
 }
 
 static int stm32_spi_read_impl(int bus, uint8_t* data, size_t n) {
     SPI_HandleTypeDef* h = spi_handle(bus);
+    size_t hecho = 0;
     if (!h) return -1;
-    return (HAL_SPI_Receive(h, data, (uint16_t) n, 1000) == HAL_OK)
-           ? (int) n : -1;
+    while (hecho < n) {
+        uint16_t t = (uint16_t) ((n - hecho > STM32_SPI_TROZO) ? STM32_SPI_TROZO : (n - hecho));
+        if (HAL_SPI_Receive(h, data + hecho, t, 1000) != HAL_OK) return -1;
+        hecho += t;
+    }
+    return (int) n;
 }
 
 static int stm32_spi_transfer_impl(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
     SPI_HandleTypeDef* h = spi_handle(bus);
+    size_t hecho = 0;
     if (!h) return -1;
-    return (HAL_SPI_TransmitReceive(h, (uint8_t*) tx, rx, (uint16_t) n, 1000) == HAL_OK)
-           ? (int) n : -1;
+    while (hecho < n) {
+        uint16_t t = (uint16_t) ((n - hecho > STM32_SPI_TROZO) ? STM32_SPI_TROZO : (n - hecho));
+        if (HAL_SPI_TransmitReceive(h, (uint8_t*) tx + hecho, rx + hecho, t, 1000) != HAL_OK) return -1;
+        hecho += t;
+    }
+    return (int) n;
 }
 
 /* V7/H6.c G4.a1 — abrir UNA vez, ajustar aparte, cerrar. La regla de quién usa
@@ -747,12 +766,81 @@ static void stm32_i2c_cerrar(int bus) {
     s_i2c_abierto[bus] = 0;
 }
 
+/* V7/H6.c G4.a3 — LA TRANSACCIÓN, con repeated start, a nivel de REGISTRO: la HAL del U5
+ * sólo la trae para registros de 1 o 2 bytes (HAL_I2C_Mem_Read) o con interrupciones
+ * (HAL_I2C_Master_Seq_*_IT). El periférico I2C v2 la hace así —como la HAL por dentro—:
+ * cada mensaje programa CR2 (dirección, sentido, NBYTES y START) y va byte a byte con
+ * TXIS/RXNE; entre dos mensajes espera TC (sin AUTOEND el bus sigue siendo nuestro) y el
+ * START del siguiente es un repeated start; el último lleva AUTOEND y el STOP lo pone el
+ * periférico. Más de 255 bytes en un mensaje: RELOAD (TCR), como la HAL.
+ * Un NAK: el periférico pone el STOP él solo (lo que espera la HAL tras NACKF); si no
+ * llega a tiempo y el bus sigue ocupado, se pide a mano. Luego, flags y CR2 a limpio.
+ * No toca el estado de la HAL: el turno del árbitro garantiza que nadie más usa este bus.
+ * 0, o -1. */
+#define STM32_I2C_PLAZO_MS 100u
+static int i2c_espera(I2C_TypeDef* I, uint32_t flag, uint32_t t0) {
+    while (!(I->ISR & flag)) {
+        if (I->ISR & I2C_ISR_NACKF) return -1;
+        if (HAL_GetTick() - t0 > STM32_I2C_PLAZO_MS) return -2;
+    }
+    return 0;
+}
+static int stm32_i2c_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
+    I2C_HandleTypeDef* h = i2c_handle(bus);
+    I2C_TypeDef* I;
+    uint32_t t0 = HAL_GetTick();
+    int i, r = 0;
+    if (!h || !s_i2c_abierto[bus]) return -1;
+    I = h->Instance;
+    while (I->ISR & I2C_ISR_BUSY)
+        if (HAL_GetTick() - t0 > STM32_I2C_PLAZO_MS) return -1;
+    for (i = 0; i < nm && r == 0; i++) {
+        uint32_t queda = m[i].n, hecho = 0, trozo = (queda > 255u) ? 255u : queda;
+        int ultimo = (i == nm - 1);
+        I->CR2 = (((uint32_t) addr << 1) & I2C_CR2_SADD) | (m[i].lee ? I2C_CR2_RD_WRN : 0u)
+               | (trozo << I2C_CR2_NBYTES_Pos) | I2C_CR2_START
+               | ((queda > 255u) ? I2C_CR2_RELOAD : (ultimo ? I2C_CR2_AUTOEND : 0u));
+        while (queda > 0 && r == 0) {
+            if (m[i].lee) { r = i2c_espera(I, I2C_ISR_RXNE, t0); if (r == 0) m[i].buf[hecho] = (uint8_t) I->RXDR; }
+            else          { r = i2c_espera(I, I2C_ISR_TXIS, t0); if (r == 0) I->TXDR = m[i].buf[hecho]; }
+            if (r != 0) break;
+            hecho++; queda--; trozo--;
+            if (trozo == 0 && queda > 0) {                        /* RELOAD: el trozo siguiente */
+                r = i2c_espera(I, I2C_ISR_TCR, t0);
+                if (r != 0) break;
+                trozo = (queda > 255u) ? 255u : queda;
+                I->CR2 = (I->CR2 & ~(I2C_CR2_NBYTES | I2C_CR2_RELOAD | I2C_CR2_AUTOEND | I2C_CR2_START))
+                       | (trozo << I2C_CR2_NBYTES_Pos)
+                       | ((queda > 255u) ? I2C_CR2_RELOAD : (ultimo ? I2C_CR2_AUTOEND : 0u));
+            }
+        }
+        if (r == 0 && !ultimo) r = i2c_espera(I, I2C_ISR_TC, t0);   /* el bus, aún nuestro */
+    }
+    if (r == 0) {
+        r = i2c_espera(I, I2C_ISR_STOPF, t0);                          /* el STOP del AUTOEND */
+    } else {
+        uint32_t t1 = HAL_GetTick();
+        while (!(I->ISR & I2C_ISR_STOPF) && HAL_GetTick() - t1 <= STM32_I2C_PLAZO_MS) { }
+        if (!(I->ISR & I2C_ISR_STOPF) && (I->ISR & I2C_ISR_BUSY)) {
+            I->CR2 |= I2C_CR2_STOP;
+            t1 = HAL_GetTick();
+            while (!(I->ISR & I2C_ISR_STOPF) && HAL_GetTick() - t1 <= STM32_I2C_PLAZO_MS) { }
+        }
+    }
+    I->ICR = I2C_ICR_STOPCF | I2C_ICR_NACKCF;
+    if (I->ISR & I2C_ISR_TXIS) I->TXDR = 0u;                            /* vaciar TXDR, como la HAL */
+    if (!(I->ISR & I2C_ISR_TXE)) I->ISR |= I2C_ISR_TXE;
+    I->CR2 &= ~(I2C_CR2_SADD | I2C_CR2_HEAD10R | I2C_CR2_NBYTES | I2C_CR2_RELOAD | I2C_CR2_RD_WRN);
+    return (r == 0) ? 0 : -1;
+}
+
 static const bpvm_i2c_backend_t s_i2c_backend = {
     .init   = stm32_i2c_init_impl,
     .write  = stm32_i2c_write_impl,
     .read   = stm32_i2c_read_impl,
     .abrir  = stm32_i2c_abrir,         /* V7/H6.c G4.a1 */
     .cerrar = stm32_i2c_cerrar,
+    .transaccion = stm32_i2c_transaccion,   /* V7/H6.c G4.a3: repeated start (a probar en la Nucleo) */
 };
 
 /* ===================== WDT — NO LO HAY EN ESTA FAMILIA (#480) ==============

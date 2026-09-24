@@ -2,73 +2,153 @@ dbg 3
 module Spi
 source C:\lenguajes\pm\bpstdlib\Spi.bp
 lines
-212 181
-241 186
-270 191
-302 198
-320 170
-331 171
-342 172
-353 173
-364 174
-375 175
-386 176
-560 75
-583 79
-607 83
-631 87
-658 91
-671 96
-686 99
-701 102
-716 105
-731 108
-746 111
-761 115
-780 118
-799 121
-818 124
+217 222
+246 227
+275 232
+307 239
+325 211
+336 212
+347 213
+358 214
+369 215
+380 216
+391 217
+719 252
+730 253
+741 254
+753 255
+771 283
+789 284
+832 289
+850 290
+893 295
+911 296
+929 297
+972 302
+992 307
+1000 308
+1008 309
+1021 316
+1024 317
+1027 318
+1036 319
+1047 320
+1061 321
+1078 323
+1092 324
+1109 326
+1121 328
+1135 329
+1166 331
+1182 333
+1196 334
+1227 336
+1243 338
+1257 339
+1272 342
+1275 343
+1284 344
+1295 345
+1309 346
+1337 347
+1354 349
+1366 351
+1403 353
+1412 354
+1415 355
+1424 356
+1435 357
+1449 358
+1477 359
+1494 361
+1511 364
+1527 368
+1541 369
+1555 371
+1570 373
+1579 375
+1593 376
+1635 378
+1650 379
+1674 380
+1688 382
+1710 383
+1734 384
+1754 390
+1765 391
+1801 393
+1810 394
+1848 396
+1860 397
+1940 277
+2229 435
+2284 440
+2339 445
+2395 450
+2451 455
+2500 461
+2518 465
+2544 426
+2555 427
+2566 428
+2577 429
+2588 430
+2811 115
+2834 119
+2858 123
+2882 127
+2909 131
+2922 136
+2937 139
+2952 142
+2967 145
+2982 148
+2997 151
+3012 155
+3031 158
+3050 161
+3069 164
 vars
-func Bus.getId 35
+func Bus.getId 40
 this -20 8 0 ?
-func Bus.setId 50
+func Bus.setId 55
 this -24 8 0 ?
-func Bus.getSck 64
+func Bus.getSck 69
 this -20 8 0 ?
-func Bus.setSck 79
+func Bus.setSck 84
 this -24 8 0 ?
-func Bus.getMosi 93
+func Bus.getMosi 98
 this -20 8 0 ?
-func Bus.setMosi 108
+func Bus.setMosi 113
 this -24 8 0 ?
-func Bus.getMiso 122
+func Bus.getMiso 127
 this -20 8 0 ?
-func Bus.setMiso 137
+func Bus.setMiso 142
 this -24 8 0 ?
-func Bus.getBaudrate 151
+func Bus.getBaudrate 156
 this -20 8 0 ?
-func Bus.setBaudrate 166
+func Bus.setBaudrate 171
 this -24 8 0 ?
-func Bus.getMode 180
+func Bus.getMode 185
 this -20 8 0 ?
-func Bus.setMode 195
+func Bus.setMode 200
 this -24 8 0 ?
-func Bus.write 209
+func Bus.write 214
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.read 238
+func Bus.read 243
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.transfer 267
+func Bus.transfer 272
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func Bus.release 299
+func Bus.release 304
 this -20 8 0 ?
-func Bus.__init 317
+func Bus.__init 322
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -76,14 +156,14 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Bus(iiiiii) 406
+func __cls_new_Bus(iiiiii) 411
 id -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Bus(iiiiii) 448
+func __cls_init_Bus(iiiiii) 453
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -91,40 +171,223 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Bus#read([ii)i 474
+func __cls_m_Bus#read([ii)i 479
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#transfer([i[ii)i 496
+func __cls_m_Bus#transfer([i[ii)i 501
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Bus#release()V 521
+func __cls_m_Bus#release()V 526
 this -20 8 0 ?
-func __cls_m_Bus#write([ii)i 535
+func __cls_m_Bus#write([ii)i 540
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func init 557
+func Op.getKind 562
+this -20 8 0 ?
+func Op.setKind 577
+this -24 8 0 ?
+func Op.getCount 591
+this -20 8 0 ?
+func Op.setCount 606
+this -24 8 0 ?
+func Op.getTx 620
+this -20 8 0 ?
+func Op.setTx 637
+this -28 8 0 ?
+func Op.getRx 652
+this -20 8 0 ?
+func Op.setRx 669
+this -28 8 0 ?
+func Op.getNextOp 684
+this -20 8 0 ?
+func Op.setNextOp 701
+this -28 8 0 ?
+func Op.__init 716
+this -44 8 0 ?
+kind -36 4 0 integer
+count -32 4 0 integer
+tx -28 8 0 ref
+rx -20 8 0 ref
+func Transaction.write 768
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Transaction.read 829
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Transaction.transfer 890
+this -40 8 0 ?
+tx -32 8 0 ref
+rx -24 8 0 ref
+count -16 4 0 integer
+func Transaction.size 969
+this -20 8 0 ?
+func Transaction.clear 989
+this -20 8 0 ?
+func Transaction.executeOn 1018
+this -36 8 0 ?
+bus -28 4 0 integer
+cs -24 4 0 integer
+baudrate -20 4 0 integer
+mode -16 4 0 integer
+sale 4 4 0 integer
+entra 8 4 0 integer
+o 12 8 0 ?
+p 20 4 0 integer
+r 28 4 0 integer
+func Transaction.add 1524
+this -28 8 0 ?
+o -20 8 0 ref
+mas 4 8 0 ?
+func Transaction.checkArray 1751
+this -48 8 0 ?
+data -40 8 0 ref
+count -32 4 0 integer
+op -28 8 0 string
+cual -20 8 0 string
+func Transaction.__init 1937
+this -20 8 0 ?
+func __cls_init_Transaction() 1980
+this -20 8 0 ?
+func __cls_m_Transaction#read([ii)V 1994
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func __cls_m_Transaction#clear()V 2013
+this -20 8 0 ?
+func __cls_m_Transaction#executeOn(iiii)i 2027
+this -36 8 0 ?
+bus -28 4 0 integer
+cs -24 4 0 integer
+baudrate -20 4 0 integer
+mode -16 4 0 integer
+func __cls_m_Transaction#transfer([i[ii)V 2052
+this -40 8 0 ?
+tx -32 8 0 ref
+rx -24 8 0 ref
+count -16 4 0 integer
+func __cls_m_Transaction#size()i 2074
+this -20 8 0 ?
+func __cls_m_Transaction#write([ii)V 2091
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Device.getBus 2110
+this -20 8 0 ?
+func Device.setBus 2125
+this -24 8 0 ?
+func Device.getCs 2139
+this -20 8 0 ?
+func Device.setCs 2154
+this -24 8 0 ?
+func Device.getBaudrate 2168
+this -20 8 0 ?
+func Device.setBaudrate 2183
+this -24 8 0 ?
+func Device.getMode 2197
+this -20 8 0 ?
+func Device.setMode 2212
+this -24 8 0 ?
+func Device.write 2226
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Device.read 2281
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func Device.transfer 2336
+this -40 8 0 ?
+tx -32 8 0 ref
+rx -24 8 0 ref
+count -16 4 0 integer
+func Device.writeRead 2392
+this -44 8 0 ?
+tx -36 8 0 ref
+ntx -28 4 0 integer
+rx -24 8 0 ref
+nrx -16 4 0 integer
+func Device.execute 2448
+this -28 8 0 ?
+t -20 8 0 ref
+func Device.release 2497
+this -20 8 0 ?
+func Device.__dtor 2515
+this -20 8 0 ?
+func Device.__init 2541
+this -36 8 0 ?
+bus -28 4 0 integer
+cs -24 4 0 integer
+baudrate -20 4 0 integer
+mode -16 4 0 integer
+func __cls_new_Device(iiii) 2604
+bus -28 4 0 integer
+cs -24 4 0 integer
+baudrate -20 4 0 integer
+mode -16 4 0 integer
+func __cls_init_Device(iiii) 2642
+this -36 8 0 ?
+bus -28 4 0 integer
+cs -24 4 0 integer
+baudrate -20 4 0 integer
+mode -16 4 0 integer
+func __cls_m_Device#read([ii)i 2664
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func __cls_m_Device#transfer([i[ii)i 2686
+this -40 8 0 ?
+tx -32 8 0 ref
+rx -24 8 0 ref
+count -16 4 0 integer
+func __cls_m_Device#__dtor()V 2711
+this -20 8 0 ?
+func __cls_m_Device#release()V 2725
+this -20 8 0 ?
+func __cls_m_Device#writeRead([ii[ii)i 2739
+this -44 8 0 ?
+tx -36 8 0 ref
+ntx -28 4 0 integer
+rx -24 8 0 ref
+nrx -16 4 0 integer
+func __cls_m_Device#write([ii)i 2766
+this -32 8 0 ?
+data -24 8 0 ref
+count -16 4 0 integer
+func __cls_m_Device#execute(LSpi/Transaction;)i 2788
+this -28 8 0 ?
+t -20 8 0 ref
+func init 2808
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 580
+func write 2831
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 604
+func read 2855
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 628
+func transfer 2879
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func release 655
+func release 2906
 bus -16 4 0 integer
+func __strconcat 3085
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

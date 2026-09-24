@@ -1299,6 +1299,96 @@ public class VirtualMachine {
         for (int i = 0; i < n; i++) writeI32(memory, addr + 4 + (desde + i) * 4, 0);
     }
 
+    // ── V7/H6.c G4.a3 — el DISPOSITIVO SPI y las TRANSACCIONES (V7_IDEAS §H6.11.9). Espejo de
+    // builtins.c, bpvm_bus_cabe y bpvm_i2c_transaccion: los MISMOS textos, el MISMO orden de
+    // comprobaciones y las MISMAS líneas de simulación (el CS abajo, los tramos, el CS arriba; la
+    // de I2C, UNA línea). En el PC no hay ENV: el tope es siempre el de por defecto.
+    /** CONTRATO DE PARIDAD con BPVM_BUS_TOPE_MS de bpvm_bus.h. */
+    static final int BUS_TOPE_MS = 20;
+    /** CONTRATO DE PARIDAD con BPVM_I2C_MENSAJES_MAX y BPVM_I2C_ORDENES_MAX de bpvm_i2c.h: lo
+     *  que cabe en UNA transacción I2C en todas las familias (el ESP32: 8 órdenes del bus). */
+    static final int I2C_MENSAJES_MAX = 3;
+    static final int I2C_ORDENES_MAX = 8;
+
+    /** «40 MHz» / «400 kHz» / «115200 Hz»: velocidad_txt de bpvm_bus.c. */
+    private static String velocidadTxt(int hz) {
+        if (hz % 1000000 == 0) return (hz / 1000000) + " MHz";
+        if (hz % 1000 == 0) return (hz / 1000) + " kHz";
+        return hz + " Hz";
+    }
+
+    /** bpvm_bus_cabe: ¿cabe en el tope una transacción de {@code relojes} ciclos a {@code hz}? */
+    private void busCabe(ThreadContext tc, int t, int id, long relojes, int hz) {
+        if (hz <= 0) throwBpRuntimeError(tc, BUS_NOMBRE[t] + " " + id + ": velocidad no válida (" + hz + ")");
+        long us = relojes * 1000000L / hz;
+        if (us <= BUS_TOPE_MS * 1000L) return;
+        throwBpRuntimeError(tc, BUS_NOMBRE[t] + " " + id + ": la transacción ocuparía el bus " + ((us + 999) / 1000)
+                + " ms a " + velocidadTxt(hz) + " (máximo " + BUS_TOPE_MS + " ms)");
+    }
+
+    private static String devNombre(int op) {
+        return op == 1 ? "spi.write" : op == 2 ? "spi.read" : op == 3 ? "spi.transfer" : "spi.writeRead";
+    }
+
+    /** dev_listo: su bus existe y está abierto, y su CS sigue siendo una salida del programa. */
+    private void devListo(ThreadContext tc, int bus, int cs, String op) {
+        gpioInstanciaOk(tc, 2, bus);
+        if (cs < 0 || cs >= pinEstado.length || pinEstado[cs] != 2)
+            throwBpRuntimeError(tc, op + ": el CS " + cs + " no está reservado como salida (¿release()?)");
+        if (!busAbierto[0][bus]) throwBpRuntimeError(tc, op + ": el SPI " + bus + " no está abierto");
+    }
+
+    /** dev_tramos: {@code n} bytes de una operación, en tramos de BUS_TRAMO, cada uno con la línea
+     *  del stub de la VM-C. Una operación de 0 bytes no manda nada. */
+    private void devTramos(int bus, boolean escribe, boolean lee, int txA, int txDesde, int rxA, int rxDesde, int n) {
+        int hecho = 0;
+        while (hecho < n) {
+            int t = Math.min(n - hecho, BUS_TRAMO);
+            if (escribe && lee) {
+                String tx = busHex(txA, txDesde + hecho, t);   // ANTES de poner rx a cero: pueden ser el mismo array
+                busCeros(rxA, rxDesde + hecho, t);
+                System.out.println("[spi] transfer bus=" + bus + " tx=[" + tx + "] (rx sim → ceros)");
+            } else if (escribe) {
+                System.out.println("[spi] write bus=" + bus + " bytes=[" + busHex(txA, txDesde + hecho, t) + "]");
+            } else {
+                busCeros(rxA, rxDesde + hecho, t);
+                System.out.println("[spi] read bus=" + bus + " count=" + t + " (sim → ceros)");
+            }
+            hecho += t;
+        }
+    }
+
+    /** bpvm_i2c_transaccion para el programa: lo que comprueba la fachada, el tope y la línea
+     *  del stub. {@code lee}/{@code n}/{@code desde} por mensaje; {@code desde} en tx o en rx. */
+    private void i2cTransaccion(ThreadContext tc, int bus, int addr, boolean[] lee, int[] n, int[] desde,
+                                int nm, int txA, int rxA) {
+        if (!busAbierto[1][bus]) throwBpRuntimeError(tc, "el I2C " + bus + " no está abierto");
+        if (addr < 0 || addr > 0x7F) throwBpRuntimeError(tc, "I2C " + bus + ": dirección no válida (0x" + String.format("%X", addr) + ")");
+        long relojes = 0;
+        int ordenes = 1;   // el STOP
+        for (int i = 0; i < nm; i++) {
+            if (n[i] == 0) throwBpRuntimeError(tc, "I2C " + bus + ": el mensaje " + (i + 1) + " está vacío");
+            ordenes += (lee[i] && n[i] > 1) ? 3 : 2;
+            relojes += 9L * (1L + n[i]);
+        }
+        if (ordenes > I2C_ORDENES_MAX)
+            throwBpRuntimeError(tc, "I2C " + bus + ": la transacción necesita " + ordenes + " órdenes del bus y caben "
+                    + I2C_ORDENES_MAX + " (cada mensaje 2, una lectura de más de un byte 3, y el STOP)");
+        busCabe(tc, 1, bus, relojes, busHz[1][bus]);
+        StringBuilder sb = new StringBuilder("[i2c] transaction bus=" + bus + " addr=0x" + String.format("%02X", addr));
+        boolean hayLectura = false;
+        for (int i = 0; i < nm; i++) {
+            if (lee[i]) {
+                busCeros(rxA, desde[i], n[i]);
+                sb.append(" read=").append(n[i]);
+                hayLectura = true;
+            } else {
+                sb.append(" write=[").append(busHex(txA, desde[i], n[i])).append(']');
+            }
+        }
+        System.out.println(sb + (hayLectura ? " (sim → ceros)" : ""));
+    }
+
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
             throwBpRuntimeError(tc, "path demasiado largo");
@@ -5842,6 +5932,60 @@ public class VirtualMachine {
                 pushTc(tc, count);
                 break;
             }
+            // ---- V7/H6.c G4.a3 — la TRANSACCIÓN I2C (espejo de builtins.c; ver i2cTransaccion) ----
+            case I2C_WRITE_READ: {
+                int nrx = popTc(tc);
+                long rxRefH = popTcRef(tc);
+                int ntx = popTc(tc);
+                long txRefH = popTcRef(tc);
+                int addr = popTc(tc);
+                int bus  = popTc(tc);
+                String nom = "i2c.writeRead";
+                gpioInstanciaOk(tc, 1, bus);
+                int txA = busArray(tc, txRefH, ntx, nom, "el array tx", BUS_TRAMO);
+                int rxA = busArray(tc, rxRefH, nrx, nom, "el array rx", BUS_TRAMO);
+                if (ntx + nrx > BUS_TRAMO)
+                    throwBpRuntimeError(tc, nom + ": " + (ntx + nrx) + " bytes supera el máximo de " + BUS_TRAMO + " bytes por transacción");
+                i2cTransaccion(tc, bus, addr, new boolean[] { false, true }, new int[] { ntx, nrx }, new int[] { 0, 0 }, 2, txA, rxA);
+                pushTc(tc, nrx);
+                break;
+            }
+            case I2C_EXEC: {
+                long rxRefH  = popTcRef(tc);
+                long txRefH  = popTcRef(tc);
+                int nops     = popTc(tc);
+                long opsRefH = popTcRef(tc);
+                int addr = popTc(tc);
+                int bus  = popTc(tc);
+                String nom = "i2c.execute";
+                gpioInstanciaOk(tc, 1, bus);
+                if (nops < 1 || nops > I2C_MENSAJES_MAX)
+                    throwBpRuntimeError(tc, nom + ": una transacción lleva de 1 a " + I2C_MENSAJES_MAX + " mensajes (tiene " + nops + ")");
+                int opsA = busArray(tc, opsRefH, nops * 2, nom, "el array ops", 0);
+                long total = 0;
+                for (int i = 0; i < nops; i++) {
+                    int k = readI32(memory, opsA + 4 + (2 * i) * 4), n = readI32(memory, opsA + 4 + (2 * i + 1) * 4);
+                    if (k != 1 && k != 2) throwBpRuntimeError(tc, nom + ": la operación " + (i + 1) + " no es válida (" + k + ")");
+                    if (n < 0) throwBpRuntimeError(tc, nom + ": count negativo (" + n + ")");
+                    total += n;
+                }
+                if (total > BUS_TRAMO)
+                    throwBpRuntimeError(tc, nom + ": " + total + " bytes supera el máximo de " + BUS_TRAMO + " bytes por transacción");
+                boolean[] lee = new boolean[nops];
+                int[] n = new int[nops], desde = new int[nops];
+                int sale = 0, entra = 0;
+                for (int i = 0; i < nops; i++) {
+                    lee[i] = readI32(memory, opsA + 4 + (2 * i) * 4) == 2;
+                    n[i] = readI32(memory, opsA + 4 + (2 * i + 1) * 4);
+                    desde[i] = lee[i] ? entra : sale;
+                    if (lee[i]) entra += n[i]; else sale += n[i];
+                }
+                int txA = busArray(tc, txRefH, sale, nom, "el array tx", 0);
+                int rxA = busArray(tc, rxRefH, entra, nom, "el array rx", 0);
+                i2cTransaccion(tc, bus, addr, lee, n, desde, nops, txA, rxA);
+                pushTc(tc, (int) total);
+                break;
+            }
 
             case NEW_INT_ARRAY: {
                 int size = popTc(tc);
@@ -5934,6 +6078,104 @@ public class VirtualMachine {
                     hecho += n;
                 } while (hecho < count);
                 pushTc(tc, count);
+                break;
+            }
+
+            // ---- V7/H6.c G4.a3 — Spi.Device (espejo de builtins.c; ver devListo) ----
+            case SPI_DEV_OPEN: {
+                int mode = popTc(tc);
+                int hz   = popTc(tc);
+                int cs   = popTc(tc);
+                int bus  = popTc(tc);
+                gpioInstanciaOk(tc, 2, bus);
+                if (hz <= 0) throwBpRuntimeError(tc, "Spi.Device: velocidad no válida (" + hz + ")");
+                if (mode < 0 || mode > 3) throwBpRuntimeError(tc, "Spi.Device: modo no válido (" + mode + "): 0..3");
+                if (!busAbierto[0][bus])
+                    throwBpRuntimeError(tc, "el SPI " + bus + " no está establecido: ponlo en el ENV (spi" + bus
+                            + "=) o ábrelo antes con Spi.Bus");
+                gpioReclamar(tc, cs, 1);
+                System.out.println("[gpio] init pin=" + cs + " mode=OUTPUT");
+                System.out.println("[gpio] write pin=" + cs + " value=HIGH");
+                pushTc(tc, 0);
+                break;
+            }
+            case SPI_DEV_XFER: {
+                int nrx = popTc(tc);
+                long rxRefH = popTcRef(tc);
+                int ntx = popTc(tc);
+                long txRefH = popTcRef(tc);
+                int op   = popTc(tc);
+                int mode = popTc(tc);
+                int hz   = popTc(tc);
+                int cs   = popTc(tc);
+                int bus  = popTc(tc);
+                if (op < 1 || op > 4) throwBpRuntimeError(tc, "Spi.Device: operación no válida");
+                String nom = devNombre(op);
+                devListo(tc, bus, cs, nom);
+                int txA = 0, rxA = 0, bytes, res;
+                if (op == 1) {
+                    txA = busArray(tc, txRefH, ntx, nom, "el array", 0);
+                    bytes = ntx; res = ntx;
+                } else if (op == 2) {
+                    rxA = busArray(tc, rxRefH, nrx, nom, "el array", 0);
+                    bytes = nrx; res = nrx;
+                } else if (op == 3) {   // rx y luego tx: el orden de siempre (#478)
+                    rxA = busArray(tc, rxRefH, ntx, nom, "el array rx", 0);
+                    txA = busArray(tc, txRefH, ntx, nom, "el array tx", 0);
+                    bytes = ntx; res = ntx;
+                } else {
+                    txA = busArray(tc, txRefH, ntx, nom, "el array tx", 0);
+                    rxA = busArray(tc, rxRefH, nrx, nom, "el array rx", 0);
+                    bytes = ntx + nrx; res = nrx;
+                }
+                busCabe(tc, 0, bus, (long) bytes * 8L, hz);
+                System.out.println("[gpio] write pin=" + cs + " value=LOW");
+                if (op == 2)      devTramos(bus, false, true, 0, 0, rxA, 0, nrx);
+                else if (op == 3) devTramos(bus, true, true, txA, 0, rxA, 0, ntx);
+                else {
+                    devTramos(bus, true, false, txA, 0, 0, 0, ntx);
+                    if (op == 4) devTramos(bus, false, true, 0, 0, rxA, 0, nrx);
+                }
+                System.out.println("[gpio] write pin=" + cs + " value=HIGH");
+                pushTc(tc, res);
+                break;
+            }
+            case SPI_DEV_EXEC: {
+                long rxRefH  = popTcRef(tc);
+                long txRefH  = popTcRef(tc);
+                int nops     = popTc(tc);
+                long opsRefH = popTcRef(tc);
+                int mode = popTc(tc);
+                int hz   = popTc(tc);
+                int cs   = popTc(tc);
+                int bus  = popTc(tc);
+                String nom = "spi.execute";
+                devListo(tc, bus, cs, nom);
+                if (nops < 0 || nops > 0x10000) throwBpRuntimeError(tc, nom + ": número de operaciones no válido (" + nops + ")");
+                int opsA = busArray(tc, opsRefH, nops * 2, nom, "el array ops", 0);
+                long sale = 0, entra = 0, bytes = 0;
+                for (int i = 0; i < nops; i++) {
+                    int k = readI32(memory, opsA + 4 + (2 * i) * 4), n = readI32(memory, opsA + 4 + (2 * i + 1) * 4);
+                    if (k < 1 || k > 3) throwBpRuntimeError(tc, nom + ": la operación " + (i + 1) + " no es válida (" + k + ")");
+                    if (n < 0) throwBpRuntimeError(tc, nom + ": count negativo (" + n + ")");
+                    if (k != 2) sale += n;
+                    if (k != 1) entra += n;
+                    bytes += n;
+                }
+                // el tope ANTES que los arrays, como la VM-C: acota los totales
+                busCabe(tc, 0, bus, bytes * 8L, hz);
+                int txA = busArray(tc, txRefH, (int) sale, nom, "el array tx", 0);
+                int rxA = busArray(tc, rxRefH, (int) entra, nom, "el array rx", 0);
+                System.out.println("[gpio] write pin=" + cs + " value=LOW");
+                int pt = 0, pr = 0;
+                for (int i = 0; i < nops; i++) {
+                    int k = readI32(memory, opsA + 4 + (2 * i) * 4), n = readI32(memory, opsA + 4 + (2 * i + 1) * 4);
+                    devTramos(bus, k != 2, k != 1, txA, pt, rxA, pr, n);
+                    if (k != 2) pt += n;
+                    if (k != 1) pr += n;
+                }
+                System.out.println("[gpio] write pin=" + cs + " value=HIGH");
+                pushTc(tc, (int) bytes);
                 break;
             }
 
