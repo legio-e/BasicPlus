@@ -579,6 +579,23 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   assign it in the module's initializer function (the function with the same
   name as the module).
 </p>
+<p>
+  <strong>A local variable is initialized before it is read.</strong> A module <code>var</code> with no
+  initializer is 0 (or <code>null</code>): it lives in the data block of the <code>.mod</code>. A
+  <em>local</em> with no initializer has an <strong>indeterminate</strong> value —whatever was on the
+  stack—, so reading it before giving it a value is a <strong>compile error</strong>, with its line. The
+  compiler checks that along <em>every</em> path that reaches a read —the branches of an <code>if</code>,
+  the <code>case</code>s of a <code>switch</code>, a <code>while</code> that may not run, a
+  <code>catch</code>…— the variable already has a value. Declaring it without a value and assigning it
+  later is fine (<code>#540</code>, V7).
+</p>
+<pre><code><span class="kw">var</span> total: <span class="type">integer</span>          <span class="comment">// no value yet</span>
+<span class="kw">if</span> n &gt; <span class="num">0</span> <span class="kw">then</span>
+  total := n
+<span class="kw">else</span>
+  total := <span class="num">0</span>
+<span class="kw">endif</span>
+<span class="kw">print</span> total                 <span class="comment">// fine: it has a value along both paths</span></code></pre>
 
 <h3 id="const">5.2 <code>const</code></h3>
 <pre><code><span class="kw">public const</span> PI: <span class="type">float</span> := <span class="num">3.14159</span>

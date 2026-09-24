@@ -1408,6 +1408,31 @@ como la unidad System. En MOD8 una clase con base externa necesita el layout de 
 MOD8 (los tests y `mezcla.py` se lo fabrican).
 
 
+### 7. `#540` — la asignación definida de las locales (24-sep, decidido por Eduardo)
+
+**La regla** (Eduardo): *«Las variables globales siempre se inicializan ya que van en el bloque de constantes del
+módulo. Las variables locales si no se inicializan su valor es indeterminado. En teoría utilizar una variable local
+sin inicializar es un error.»* Y a la pregunta de error o aviso: **error de compilación**, como Java. Lo que se
+detecta: leer una local declarada SIN inicializador (`var x: T`) en un punto al que se puede llegar sin haberle
+asignado valor por algún camino. No cuentan los arrays fijos (`var b: byte[64]`: se ponen a cero al declararlos),
+los parámetros, el iterador de un `for`, la variable de un `catch` ni la de una rama de `parallel`.
+
+**Cómo** — una pasada aparte, `AsignacionDefinida`, al final del análisis de cada cuerpo (`analyzeFunction`, y los
+`get`/`set` de `analyzeProperty`), sobre el AST ya anotado: el uso se casa con su declaración por el `VarSymbol` de
+`exprSymbols` (su nombre, línea y columna son los del `DeclName`: `declSymbols` sólo guarda el primero de `var x, y`).
+El estado es el conjunto de vigiladas CON valor en ese punto, más «este punto no se alcanza» (tras `return`,
+`throw`, `break`, `continue`), que vale como «todas» al cruzar caminos. En BP asignar es una SENTENCIA, nunca una
+expresión: las expresiones sólo leen, y eso ahorra la mitad de las reglas de Java (§16 de la JLS). Los caminos:
+- `if`/`elseif`/`else`: la intersección de las ramas; sin `else`, la rama vacía cuenta.
+- `switch`: la de los `case`, el `default` (o, sin él, el camino que no entra) y los `break` de dentro — en BP un
+  `case` no cae al siguiente y `break` sale del `switch`.
+- `while`/`for`: después, lo de antes (el cuerpo puede no ejecutarse); `while true`, sólo por sus `break`.
+- `do … loop`: el cuerpo corre al menos una vez: después, el final del cuerpo con sus `continue`, y los `break`.
+- `try`: el cuerpo, y cada `catch` desde el estado de ANTES (la excepción puede saltar en cualquier punto); con
+  `finally`, además lo que el `finally` asigna.
+- `parallel`: cada rama es un cuerpo aparte (no ve las locales de quien la lanza); el `default`, un bloque normal.
+El error se dice una vez por variable, en el primer uso: «la variable local 'x' se usa sin tener valor…».
+
 ## H3 — ficheros: el cursor y la clase `File` (21-sep, día de análisis)
 
 Lo que hay que saber antes de tocar nada, medido hoy, y el diseño que sale de las decisiones que ya

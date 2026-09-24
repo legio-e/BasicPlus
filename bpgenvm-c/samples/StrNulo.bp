@@ -1,6 +1,9 @@
 // StrNulo.bp — #512 (V7, 14-sep): un string o array SIN inicializar es una referencia
 // nula, y las dos VMs tienen que tratarla IGUAL: longitud 0, concatena como "", se
 // imprime como "", y un acceso por índice lanza (fuera de rango) — atrapable.
+// #540 (24-sep): un LOCAL sin inicializar ya no vale null: es un error de compilación (su valor es
+// indeterminado, Eduardo) y un string no admite `:= null`. El string nulo sale de un CAMPO sin
+// inicializar —los objetos nacen a cero—, que es lo que este sample sigue comprobando.
 // miVM moría aquí con «No space in heap» (leía memory[0] como longitud) y la VM-C
 // imprimía vacío: paridad rota desde siempre, cazada por el oráculo de #492.
 module StrNulo
@@ -14,6 +17,9 @@ module StrNulo
     public function describe(): string
       return "[" + this.etiqueta + "]"
     end describe
+    public function nula(): string
+      return this.etiqueta
+    end nula
     public function datosLen(): integer
       return len(this.datos)
     end datosLen
@@ -24,7 +30,7 @@ module StrNulo
 
   public function main()
     var c: Caja := Caja()
-    var s: string
+    var s: string := c.nula()
     print c.describe()
     print "s=" + s + "|len=" + len(s)
     print "concat de dos nulos=" + (s + s) + "|"

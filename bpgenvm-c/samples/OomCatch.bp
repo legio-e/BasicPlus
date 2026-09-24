@@ -15,7 +15,7 @@ module OomCatch
   end Node
 
   function Main()
-    var head: Node
+    var head: Node := null   // #540: un local se inicializa (la lista empieza vacía)
     var count: integer := 0
     var caught: integer := 0
     try

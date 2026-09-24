@@ -68,6 +68,8 @@ ArrayFijoMal|de clase tiene que ser
 ArrayFijoMal|'buf' es un array fijo: no es una referencia
 NativeCampo|en el metodo native 'Caja.doble'
 NativeCampo|lee el campo 'n'
+LocalSinValor|'total' se usa sin tener valor
+LocalSinValor|'nombre' se usa sin tener valor
 "
 
 ok=0; mal=0

@@ -1621,6 +1621,8 @@ public final class SemanticAnalyzer {
         seenSuperCallInCtor = false;
 
         analyzeBody(f.body, localScope);
+        // #540 (V7/H1) — la asignación definida de las locales, sobre el cuerpo ya anotado.
+        new AsignacionDefinida(info, this::err).revisa(f.body);
 
         // #511 (19-sep) — DELEGACIÓN: `MiClase(args)` como PRIMERA sentencia de un constructor
         // inicializa ESTE objeto por esa otra sobrecarga (Eduardo: «la primera línea del
@@ -1761,6 +1763,7 @@ public final class SemanticAnalyzer {
             try {
                 Scope localScope = new Scope("getter", null);
                 analyzeBody(p.getter.body, localScope);
+                new AsignacionDefinida(info, this::err).revisa(p.getter.body);   // #540
             } finally {
                 currentFunction = save;
                 insideGetter = false;
@@ -1782,6 +1785,7 @@ public final class SemanticAnalyzer {
                 pv.type = ps.type;
                 localScope.tryDefine(pv);
                 analyzeBody(p.setter.body, localScope);
+                new AsignacionDefinida(info, this::err).revisa(p.setter.body);   // #540
             } finally {
                 currentFunction = save;
                 insideSetter = false;

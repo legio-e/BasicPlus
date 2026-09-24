@@ -1,0 +1,27 @@
+// LocalSinValor.bp — NO COMPILA, a propósito (#540, V7): usar una variable LOCAL antes de darle
+// valor es un error. Las globales siempre se inicializan (van al bloque del módulo); una local sin
+// inicializador tiene un valor INDETERMINADO (Eduardo, 24-sep: «en teoría utilizar una variable
+// local sin inicializar es un error»). Y es peor de lo que parece: en el PC la pila de un programa
+// recién arrancado está a cero y el programa «funciona»; en la placa sale basura.
+//
+// La salida: darle valor al declararla (`var total: integer := 0`), o asignarla antes de leerla
+// en TODOS los caminos.
+module LocalSinValor
+  function Main()
+    // error: 'total' se usa sin tener valor (la primera vuelta suma lo que hubiera en la pila)
+    var total: integer
+    var i: integer := 0
+    while i < 3 do
+      total := total + i
+      i := i + 1
+    endwh
+    print total
+
+    // error: 'nombre' sólo tiene valor si se entró en el if
+    var nombre: string
+    if i > 2 then
+      nombre := "tres"
+    endif
+    print nombre
+  end Main
+end LocalSinValor
