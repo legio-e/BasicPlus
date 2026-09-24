@@ -84,6 +84,17 @@ cada casilla (número, no «OK»):
 | ZIP montado y verificado por dentro | 12-sep: `BasicPlus-6.0-win.zip`, 25 MB; el empaquetador cazó 5 drivers MOD6 y un `Stdlib.pack` MOD6; cuatro verificadores independientes (samples 345/345, docs, firmware, sim) → 4 medios corregidos |
 | Desplegado en carpeta limpia y probado allí | 12-sep: `C:\tmp\bp6`: sellos 7/7, `ChartDemo`/`FontLoadDemo` capturados, `Bench`, `SqlDemo` == host, `GuiEvSpike --no-screen` (`#505`); **IDE probado por Eduardo: OK** |
 
+## ⏭️ Al publicar V7 — lo que quedó escrito para ese día
+
+- [ ] **Decidir `--formato=8`** (Eduardo). El compilador emite MOD9 sin flag desde el 17-sep (`#523` V11) y
+      `--formato=8` se quedó como salida de emergencia «hasta cerrar V7». Lo usan el frente `check-mod8` de
+      `compat.sh` (la foto «antes»: el corpus en MOD8 da el stdout de MOD9), las filas MOD8 del bloque V de
+      `compat/mezcla.py` y los dos tests de marcadores del frontend. Si se va, se van con él; si se queda, se dice en
+      las notas. (Del cierre de H2, 24-sep.)
+- ℹ️ `montar-zip.sh` ya habla MOD9 (`MOD_ACTUAL`, y los formatos viejos que se buscan dentro de los packs en
+  `MOD_VIEJOS`): lo arregló el cierre de H2 (24-sep) — decía MOD7 y habría parado el paquete. Al subir de formato,
+  las dos líneas.
+
 ## 1 · Pre-flight — que lo que se publica sea lo que se probó
 
 Estos pasos **ya se hicieron el 6-ago-2026** (H13) y el 22-ago (V5). Se dejan

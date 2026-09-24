@@ -522,18 +522,36 @@ sin inicializar es null» sigue siendo cierto para un CAMPO —los objetos nacen
 (la palabra ya no existe desde P1) y sacar `Exception` de `Core` (ya no ahorra nada desde P3). **Con esto H1 queda
 cerrado.**
 
+## ✅ H2 (24-sep, tarde) — H2 CERRADO: `#523` cerrada, y sus dos colaterales, `#546` y `#547`, eran bugs de verdad
+
+Eduardo preguntó cómo estaba H2. Quedaba `#523` sola, y sus seis criterios se cumplían (la mezcla, hoy 194/194 en las
+dos VMs, como el 17-sep); su «Queda» estaba desfasado salvo tres cosas, y las tres eran reales. `montar-zip.sh` decía
+`MOD_ACTUAL="MOD7"`: habría parado el paquete de V7 (`1e1ba380`). Y los dos «colaterales sin ficha» del 17-sep,
+probados con una sonda, resultaron bugs silenciosos e idénticos en las dos VMs: **un `switch` con sujeto de 8 B no casaba
+NUNCA** (string, long: siempre al default) y **`field := 7` en una property long no la cambiaba y descuadraba la pila**.
+Con Eduardo («OK, las 4»): `switch` admite entero, boolean, enum y string (por contenido); un real o un objeto, error con
+nombre. Al arreglarlo salieron dos más en la misma función: un `break` dentro de un case salía del BUCLE (el manual dice
+«del switch», y así lo hacían el AOT y `#540`), y sin bucle el emisor fallaba sin línea. Todo en `f39f81d7`, con
+el AOT de un switch en una native (sujeto string sobre `string_eq`), el censo con el compilador de antes y el de ahora
+(562 de 590 `.mod` idénticos; sólo cambian los tres samples nuevos) y **una red que no lo veía**: la paridad compara las
+dos VMs entre sí, y fallaban igual. Desde hoy una línea `FALLO` es rojo en `check_parity` aunque coincidan, y los samples
+nuevos se comprueban solos. Y al probar un `continue` dentro de un switch en un `for`, un cuarto, preexistente y más
+gordo: **`continue` en un `for` no avanzaba la variable** —bucle infinito, en el intérprete y en el AOT—; nadie lo pisaba
+(2 `continue` en el árbol, ninguno en un `for`): `#548`, `132f956f`. **Con esto H2 queda cerrado.**
+
 ## ⏭️ Traspaso (24-sep, tarde) — la ronda de V7, sellada; lo que dejó abierto la tarde
 
 **Sellado**: `dist/firmware-v7-24sep` (8 imágenes, 9 placas, SHA256) y `compat/informes/tanda_v7.md`. `H6.b` puede
 empezar cuando Eduardo quiera: hay a dónde volver.
 
-**H1, cerrado** (ver arriba). **Lo que dejó abierto la tarde**: `#544` (el BOOT de la C6: la prueba cruzada, un pin de la cabecera a masa); `#468`,
+**H1 y H2, cerrados** (ver arriba). **Lo que dejó abierto la tarde**: `#544` (el BOOT de la C6: la prueba cruzada, un pin de la cabecera a masa); `#468`,
 con su medida (la C6 sin memoria para `GuiWinJson`); el NeoPixel de la familia ESP32 (el
 backend RMT).
 
 **Las otras dos sesiones**: `#539` (`PACK_LS`) y `#541`/`#542` (las pruebas de C en la red) están hechas en sus ramas
 (`claude/friendly-dirac-ac6dfc`, `claude/quirky-khayyam-64df44`) y sin fusionar. Al fusionar, `FICHAS` chocará —los
-tres tocamos el registro— y hay que hacerlo a mano. `#539` falta verla en la C5.
+tres tocamos el registro— y hay que hacerlo a mano. `#539` falta verla en la C5. Al fusionar `#541`, `make test-aotswitch` (`#546`)
+entra en la lista de su `check-testc`.
 
 **Lo siguiente**, a elegir con Eduardo: H3 «SD al común», `G4.b` (el DMA del ESP32) o `H6.b`.
 

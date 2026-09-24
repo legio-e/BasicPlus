@@ -98,7 +98,7 @@ el PC sin placa, como en el host.
 >
 > | dónde | cuántas | cuáles |
 > |---|---|---|
-> | **fichas de V7 con número** | **45** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): ~~`#506`~~ ~~`#507`~~ ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ ~~`#511`~~ ~~`#512`~~ ~~`#513`~~ ~~`#514`~~ ~~`#515`~~ ~~`#516`~~ ~~`#517`~~ ~~`#518`~~ ~~`#519`~~ · las once que vienen de V6: `#452` `#468` ~~`#470`~~ ~~`#479`~~ ~~`#487`~~ `#490` (→ V8, 24-sep) ~~`#491`~~ ~~`#492`~~ ~~`#493`~~ `#495` ~~`#500`~~ · la abierta el 15-sep por la revisión de `#493`: ~~`#520`~~ · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ ~~`#522`~~ · la decisión de Eduardo del 15-sep (noche): `#523` · del 16-sep: ~~`#524`~~ · de la revisión V10 (16-sep, tarde): ~~`#525`~~ ~~`#526`~~ ~~`#527`~~ ~~`#528`~~ ~~`#529`~~ ~~`#530`~~ `#531` ~~`#532`~~ · y las siete de la cola heredada de V5 que V6 no abrió: ~~`#19`~~ `#356` ~~`#378`~~ ~~`#396`~~ `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) (tachadas el 24-sep las que ya estaban cerradas; `#540`, abierta el 24-sep, está en H1) |
+> | **fichas de V7 con número** | **45** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): ~~`#506`~~ ~~`#507`~~ ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ ~~`#511`~~ ~~`#512`~~ ~~`#513`~~ ~~`#514`~~ ~~`#515`~~ ~~`#516`~~ ~~`#517`~~ ~~`#518`~~ ~~`#519`~~ · las once que vienen de V6: `#452` `#468` ~~`#470`~~ ~~`#479`~~ ~~`#487`~~ `#490` (→ V8, 24-sep) ~~`#491`~~ ~~`#492`~~ ~~`#493`~~ `#495` ~~`#500`~~ · la abierta el 15-sep por la revisión de `#493`: ~~`#520`~~ · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ ~~`#522`~~ · la decisión de Eduardo del 15-sep (noche): ~~`#523`~~ · del 16-sep: ~~`#524`~~ · de la revisión V10 (16-sep, tarde): ~~`#525`~~ ~~`#526`~~ ~~`#527`~~ ~~`#528`~~ ~~`#529`~~ ~~`#530`~~ `#531` ~~`#532`~~ · y las siete de la cola heredada de V5 que V6 no abrió: ~~`#19`~~ `#356` ~~`#378`~~ ~~`#396`~~ `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) (tachadas el 24-sep las que ya estaban cerradas; `#540`, abierta el 24-sep, está en H1) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
@@ -109,7 +109,7 @@ el PC sin placa, como en el host.
 > | hito | qué | lo que lleva dentro (`V7_BACKLOG.md`) |
 > |---|---|---|
 > | **H1** | **el módulo raíz** — lenguaje y compilador *(era `L1`)* | ✅ **H1 CERRADO el 24-sep** —lo último: P4 cancelado, P2b a H5 y `#540` hecho— · las diez del compilador, cerradas el 19-sep: ~~`#522`~~ ~~`#527`~~ ~~`#528`~~ ~~`#529`~~ ~~`#532`~~ ~~`#517`~~ ~~`#507`~~ ~~`#506`~~ ~~`#511`~~ ~~`#515`~~ (`L20` con `#506`) · **el módulo raíz, en marcha** (plan en `V7_IDEAS.md` §H1): **P1 ✅ 20-sep** (el cuerpo `inline`: una intrínseca es una función normal cuyo cuerpo es bytecode, la stdlib entera migrada, `Intrinsics.java` fuera) · **P2 ✅ 20-sep** (`Core.bp` es la raíz: las 240 primitivas de la VM declaradas en él, las 64 globales visibles sin cualificar en todo programa, y `Builtin.java` + `builtin_ids.h` GENERADOS de él con `scripts/gen_builtins.py`; `check_builtins.py`, el andamio de `#476`, tirado) · **P2c ✅ 20-sep** (`sign` ×2 en Math, fuera `signF`; `len(string)`/`len(any[])` en Core, fuera el caso especial; `any[]` = cualquier array, sólo en la raíz) · **P3 ✅ 20-sep** (`Object`/`Thread`/`Mutex`/`StringBuilder` escritas en BP en Core.bp, `root class`, `import Core` implícito por el parser; fuera las síntesis y las tablas) · **P5** (blobs e imágenes rehechos por tercera vez el 21-sep; **Pico y P4 grabadas y verificadas** con Destructor, TimeDemo y ArrayFijo == host; medido el coste de las clases abiertas: 43 clases, 6,2 KB, 24 ms en el P4 con Gui; ~~quedan S3/C3/C6/Nucleo/DK2 por grabar~~ — ✅ **24-sep: las nueve grabadas y == host** en la ronda de V7, `22f30005`) · ⛔ **P4 CANCELADO** (Eduardo, 24-sep, sobre la propuesta del 20-sep): los primitivos son palabras reservadas del lexer; declararlos en BP pediría una sintaxis nueva (`type integer`) que no aporta nada —no tienen métodos ni layout— y el `switch` de `resolveType` ya es la tabla · quedan ~~P2b~~ (→ **H5**, Eduardo 24-sep: es del AOT), ~~P4~~ (cancelado), ~~P5~~ (24-sep); encima: ~~sobrecarga de intrínsecas~~ (P2c), ~~destructor `~Clase()`~~ (21-sep: `function ~Clase()`, virtual y encadenado al padre; lo llama `var owner` al morir —orden inverso, también con excepción— y `try var`; owner no escapa; `samples/Destructor.bp` en el corpus, `errores/DestructorMal.bp`), ~~`Map`~~ (21-sep: `put`/`get`/`containsKey`/`remove` con clave integer/string/Object y los captadores tipados del valor, decisión de Eduardo; `samples/MapTipado.bp` en el corpus, 85), ~~`#396` `Time`~~ (21-sep: `bpstdlib/Time.bp`, `Time.Date` sobre un long de época, BP puro; `samples/TimeDemo.bp` en el corpus, 87), ~~`#19`~~ (21-sep, redefinida por Eduardo: los arrays fijos NO son referencias —en el marco o dentro del objeto como `private var`—, sólo se indexan y se miden; `LEA_LOCAL` por fin emitido, `LEA_FIELD`/`LEA_FIELD_REF` nuevos; a nivel de módulo, fuera; `samples/ArrayFijo.bp` en el corpus, 88; `errores/ArrayFijoMal.bp`); `#460`; los huecos ~~`L19`~~ (21-sep: `Perro(a)` con `a: Animal` baja directo; `samples/CastBaja.bp` en el corpus, 84)/~~`M4`~~ (21-sep: `__` es del sistema — fuera de Core sólo una intrínseca o una función pública; `samples/errores/PrefijoSistema.bp`)/~~`N9`~~ (21-sep: redeclarar Object/Thread/Mutex/StringBuilder es error con línea; `samples/errores/ClaseDelLenguaje.bp`)/`M5` → **a H8** (Eduardo, 21-sep: «el debugger, si lo haces con el IDE, hay que sacarlo de H1»)/~~`N2`~~ (21-sep: el invariante de JavaMutex escrito en el código) · ~~`#540`~~ (24-sep: la asignación definida, error de compilación) · `#460` (herencia entre módulos) **se queda en ideas** (Eduardo, 21-sep: «de momento lo podemos dejar como ideas»: ni V7 ni cerrada) |
-> | **H2** | **lo que un `.mod` exporta y las dependencias** | **`#523` (enlace tardío — la cadena en MOD9 desde el 17-sep)** · `#546` `#547` (24-sep: los dos colaterales de `#523` que se quedaron sin ficha, confirmados: el `switch` de 8 B y `field :=`) · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ ~~`#516`~~ ~~`#520`~~ ~~`#521`~~ ~~`#533`~~ (y ~~`#522`~~, de H1) |
+> | **H2** | **lo que un `.mod` exporta y las dependencias** | ✅ **H2 CERRADO el 24-sep** · ~~`#523`~~ (enlace tardío — la cadena en MOD9 desde el 17-sep) · ~~`#546`~~ ~~`#547`~~ (24-sep: los dos colaterales de `#523` que se quedaron sin ficha: el `switch` de 8 B y `field :=`) · ~~`#548`~~ (24-sep: `continue` en un `for`, al probar `#546`) · ~~`#492`~~ ~~`#500`~~ ~~`#493`~~ ~~`#441`~~ · ~~`#514`~~ ~~`#516`~~ ~~`#520`~~ ~~`#521`~~ ~~`#533`~~ (y ~~`#522`~~, de H1) |
 > | **H3** | **ficheros: el cursor y la clase `File`** | ~~`#491`~~ (21-sep: `IO.File`/`IO.TextFile`, todo el estado en el objeto); ~~`/sd` reservado~~ (21-sep); `SD_INFO`/`SD_MOUNT` al común (resto de V5/H6); la SD del STM32; ~~`listDir`~~ (21-sep: en la VM-C, ordenado en las dos); ~~el tope de path (`#456`)~~ (21-sep: miVM también, `PathLargo.bp`) |
 > | **H4** | **los periféricos de cada micro — la HAL BP** | **la tabla de capacidades, P1 ✅ 22-sep** (`V7_IDEAS` §H4): ~~`#378`~~ (INFO y BP de la misma tabla, con la unidad dicha, `hasPin`); ~~`#470`~~ (los arrays por micro: `uarts()/i2cs()/spis()`, y el mapa de pines para lo que va por pin; el `Pulse` del C3 declara 0 por `SOC_PCNT_SUPPORTED`); ~~restos de `#471`~~ (`manufacturer()`, `MAX/MIN` por micro, `variant()` honesto); ~~el nombre `pico` en la capa C~~ (`bpvm_machine.*`); ~~el tamaño de flash~~ (se mide y el arranque lo compara, C5 21-sep) · **P2 ✅ 22-sep**: ~~`#479`~~ (el estado del pin en el común, la validación contra la tabla con nombre, `Pin.ANALOG`/`OPEN_COLLECTOR`/`release()`/`~Pin()`, `AnPin extends Pin` con el (unidad, canal) del mapa, `Adc.Channel` sobre el mapa; `samples/PinMapa.bp`; en Pico y P4) · queda `#469` resto (el ADC externo del STM32, con placa) · **P3**: ~~`#487`~~ (22-sep: el breadcrumb en el común, RP2350 y ESP32 verificados con RESET) · queda NeoPixel C6 (falta el backend RMT de la familia ESP32: código); ~~el botón BOOT~~ → `#544` (24-sep: no se detecta) · ~~**P4**: cascada y tanda~~ (24-sep: la ronda de V7 en las nueve) · **vistas de pasada el 23-sep**: ~~`#534`~~ (el `count` de los builtins de bus, `60741fa6`) y `#536` (`__npShow` recorta a 256 LEDs) |
 > | **H5** | **AOT y código nativo** | **P2b** (de H1, 24-sep: el AOT traduce los builtins con una lista a mano y rechaza `Math.sin` en una `native`; una llamada genérica al despachador de builtins, que sube la ABI del `.mdn` —y hay que regenerarlos, el de SQLite incluido—; `V7_IDEAS` §H1) · `#502` ~~`#441`~~(hecha con H2, 15-sep) `#426` `#468`; los restos de `N1` y `#379`; los cabos del AOT (línea, parar, debugger — la marca de Eduardo); la cola de la fusión `.mod`/`.mdn`; el `INFO` sin ABI de helpers |
@@ -305,7 +305,7 @@ crudo cada 250 ms con BOOT pulsado 5 s: 80 de 80 a 1. El camino es directo —`b
 esquemático de la Waveshare ESP32-C6-LCD-1.3 dice BOOT = GPIO9. ⏭️ La prueba cruzada: un pin de la cabecera (GP1)
 a masa con un cable; si ese baja, lo raro es el 9 (o el botón).
 
-#### 🔴 `#546` — un `switch` con sujeto de 8 B (`string`, `long`, `double`, objeto) no casa NUNCA: va siempre al `default`, en silencio y en las dos VMs (abierta 24-sep, al repasar H2: colateral de `#523` del 17-sep que se quedó sin ficha; preexistente; H2)
+#### ✅ `#546` — un `switch` con sujeto de 8 B (`string`, `long`, `double`, objeto) no casa NUNCA: va siempre al `default`, en silencio y en las dos VMs (abierta 24-sep, al repasar H2: colateral de `#523` del 17-sep que se quedó sin ficha; preexistente; H2 · **CERRADA el 24-sep**, `f39f81d7`)
 
 **Medido** (24-sep, una sonda en el scratchpad con HEAD `19ce9f97`): un `string` construido en ejecución contra
 `case "hola"`, un `long` de 5.000.000.000, un `double` 2,5 y una referencia a objeto contra ESA referencia → los cuatro
@@ -317,7 +317,28 @@ stdlib, drivers) son sobre enum o `integer`, y el manual (§7.4) sólo enseña u
 ⏭️ Decide Eduardo qué sujetos admite. Propuesta: `string` (por contenido) y `long`, que funcionen; `float`/`double` y
 objetos, error de compilación con nombre.
 
-#### 🔴 `#547` — `field := expr` en un accesor de property no comprueba el tipo ni convierte: `field := 7` en una property `long` no la cambia y la llamada siguiente muere con «referencia nula»; `field := "hola"` en una `integer` compila (abierta 24-sep, al repasar H2: colateral de `#523` del 17-sep sin ficha; preexistente; H2)
+**Hecho** (24-sep, `f39f81d7`), con la propuesta aprobada por Eduardo («OK, las 4»): el sujeto es un entero
+(`integer`, `long` y los estrechos), un `boolean`, un enum o un `string`; un real o una referencia es **error de
+compilación con nombre** (`SemanticAnalyzer.sujetoDeSwitchNoValido`), y también un `case` real contra un sujeto entero.
+`emitSwitch` compara como el `==`: el `string` por contenido (`__strequals`), el `long` con `LEQ` —si el sujeto o algún
+case es long, los dos lados suben a 64 bits— y el local del sujeto se declara por su tipo. **Y dos defectos más en la
+misma función**, medidos con una sonda antes de tocar: un `break` dentro de un case salía del BUCLE que lo contuviera (el
+manual §7.5, el AOT —un `switch` de C— y la asignación definida de `#540` dicen «del switch»; con `while i < 3`, 1 vuelta
+en vez de 3), y un `break` en un switch sin bucle lo admitía el semántico y el emisor lo tiraba sin línea. Ahora el switch
+se apila en `loopStack` (el `continue` sigue siendo del bucle de fuera). **En el AOT** (una native con switch): un sujeto
+`string` se conmuta sobre el número del primer case que casa (`string_eq`, por contenido y en orden), cada case va entre
+llaves (un `var` al empezar un case no compilaba en C) y, con un case long y sujeto integer, `switch ((int64_t) …)`; el
+`.mdn` ARM empaqueta (580 B) y `-fno-jump-tables` está en todas las recetas. **El censo**, con el compilador de antes y el
+de ahora: 590 ficheros → 562 `.mod` byte a byte iguales (los 19 `switch` del árbol, todos enum o integer, y los 10
+`field`), 25 que no compilan con ninguno de los dos, y sólo cambian los tres samples nuevos: ni la stdlib ni los blobs se
+regeneran. **La red no lo veía** porque la paridad compara las dos VMs entre sí, y fallaban igual: `check_parity` pone
+ahora en rojo una línea `FALLO …` aunque coincidan, y los samples nuevos se comprueban solos. `samples/SwitchTipos.bp` (15
+casos; con el compilador de antes, 6 `FALLO` idénticos en las dos VMs, y sin el switch sin bucle ni compilaba) y
+`samples/PropField.bp` en el corpus; `make test-aotswitch` (`bpgenvm-c/samples/NatSwitch.bp`: 10/10, AOT == interpretado,
+GC en cada alocación); `SwitchSujetoTest` (4); `samples/errores/SwitchMal.bp` (tres errores) en `h13-errores.sh`; el
+manual §7.4 y §7.5 (es/en y el del IDE).
+
+#### ✅ `#547` — `field := expr` en un accesor de property no comprueba el tipo ni convierte: `field := 7` en una property `long` no la cambia y la llamada siguiente muere con «referencia nula»; `field := "hola"` en una `integer` compila (abierta 24-sep, al repasar H2: colateral de `#523` del 17-sep sin ficha; preexistente; H2 · **CERRADA el 24-sep**, `f39f81d7`)
 
 **Medido** (24-sep, sonda en el scratchpad, las dos VMs iguales): con `set(v) field := 7` en `property l: long`,
 `c.l := 1L` deja **0**, y el setter siguiente (`field := 3` en una `double`) lanza «referencia nula: acceso a un campo
@@ -326,6 +347,30 @@ compila sin diagnóstico e imprime 0. **La causa**: `SemanticAnalyzer.analyzeFie
 el anti-cascada (`#232`) admite cualquier asignación → ni chequeo ni el `coerceToTarget` del emisor (su `tType` es
 `ErrorType`). ⏭️ El arreglo: que `field` tenga el tipo de su property (de clase y de módulo); antes, el censo de los
 `field :=` del árbol, y su sample en `samples/errores/`.
+
+**Hecho** (24-sep, `f39f81d7`): `analyzeField` devuelve el tipo de su property (`currentPropType`, que
+`analyzeProperty` pone para el `get` y el `set`, de clase y de módulo) → el chequeo de la asignación y el `coerceToTarget`
+del emisor ya tienen tipo: `field := 7` en una long convierte, `field += 1` suma en 64 bits y `return field * 2` lee en
+64. El censo (el mismo de `#546`): los 10 `field` del árbol dan `.mod` idénticos. `samples/PropField.bp` en el corpus
+(cinco casos, de clase y de módulo, que se comprueban solos: con el compilador de antes, `FALLO` y «referencia nula»);
+`FieldTipoTest` (3); `samples/errores/PropFieldTipo.bp` en `h13-errores.sh` (46/46); el manual §9.5 explica `field`, que
+no salía más que en la tabla de palabras reservadas.
+
+#### ✅ `#548` — `continue` dentro de un `for` no avanzaba la variable: el bucle no acababa nunca (el numérico y el `for … in`; en el intérprete y en el AOT) (abierta y cerrada el 24-sep, al probar `#546`; preexistente; H2 · **CERRADA el 24-sep**, `132f956f`)
+
+**Medido** (24-sep, sondas en el scratchpad, las dos VMs iguales): `for i := 1 to 5 … if i == 4 then continue` → la
+variable se queda en 4 y el bucle no termina (con un tope de vueltas, «NO AVANZA»); igual con paso 2, paso -1, paso en
+una variable y `for x in xs`. `while` y `do … loop` estaban bien. **La causa**: `emitFor` apilaba `LoopLabels(top, end)`
+y el `i += step` (o el `__idx += 1` del `for … in`) va DESPUÉS del cuerpo: el `continue` saltaba a la condición sin
+avanzar. El AOT lo traducía a `while (…) { cuerpo; it += step; }`, con el mismo efecto en C. Nadie lo pisaba: en el
+árbol había 2 `continue`, ninguno en un `for`. Salió al probar un `continue` dentro de un switch en un `for` (`#546`).
+
+**Hecho** (`132f956f`): el `continue` de un `for` salta a una etiqueta nueva, justo antes del paso (los dos
+`for` del intérprete), y el AOT emite un `for` de C (`for (; cond; it += step)`), cuyo `continue` va al paso. El censo
+contra el compilador de `f39f81d7`: 590 ficheros, 565 `.mod` idénticos y ninguno distinto (una etiqueta no emite
+bytes). `samples/ContinueFor.bp` en el corpus (7 casos con tope de vueltas: con el compilador de antes, 6 `FALLO`
+«NO AVANZA» idénticos en las dos VMs, en vez de un cuelgue) y `sumaFor` en `NatSwitch` (`make test-aotswitch`, 11/11;
+con el C del AOT de antes, `FALLO sumaFor(9): sale -1`).
 
 #### ✅ `#534` — los builtins de bus (I2C, SPI, UART) RECORTABAN `count` en silencio en la VM-C —a 64 en I2C, a 256 en SPI y UART— donde miVM lo procesaba entero: con más bytes el stdout de las dos VMs difería; ninguna comparaba `count` con el array (se leía y escribía fuera de él), `count` < 0 reventaba la pila de la VM-C y el array null sólo lo miraba miVM (abierta 23-sep, vista de pasada al analizar el SPI de la C5; preexistente; H4 · **CERRADA el 23-sep**, `60741fa6`)
 
@@ -829,7 +874,7 @@ ni `.slots`), con test en la suite del frontend; (2) `step` con literal negativo
 > se aplica igual: *lo que quedó pendiente pasa a la versión siguiente y deja de ser de la anterior*.
 > El resto que dejan fichas CERRADAS de V6 no se mueve: está en `V7_BACKLOG.md`, con su puntero.
 
-#### 🧬 `#523` — ENLACE TARDÍO: la clase se adapta al cargar a la clase que tiene delante — compatibilidad hacia atrás como Java (abierta 15-sep, noche; decisión de Eduardo; H2)
+#### ✅ `#523` — ENLACE TARDÍO: la clase se adapta al cargar a la clase que tiene delante — compatibilidad hacia atrás como Java (abierta 15-sep, noche; decisión de Eduardo; H2 · **CERRADA el 24-sep**)
 
 **La decisión, de Eduardo (15-sep)**, tras el mapa de `#514`/`#516` (§H2.6) y la medida de la mezcla (`#500`, arriba):
 *«Llevamos como 5 versiones dando vueltas a los slots, los métodos y las dependencias. Me gustaría cerrar el tema de
@@ -1192,6 +1237,17 @@ con SQLite: su pack llevaba el `.mdn` de la ABI 6 («MDN: RECHAZADO — ABI 6, e
 `packs/SQLite.pack`, el motor ARM no arrancaba (`bp_pack_init` → 3: ese `.pack`, del 18-sep, llevaba todavía el `npk`
 del 19-ago, que exigía la versión EXACTA de la BIOS; el regenerado del 22-sep —`99b6ea04`— nunca se metió en el
 `.pack`). Reconstruido con la receta de `bpstdlib/sqlite/LEEME.md` y grabado: **`SqlDemo` == host** (21 líneas).
+
+**✅ CERRADA el 24-sep, al repasar H2** (Eduardo: «OK, las 4»). Los seis criterios de «validado al 100 %», uno a uno:
+(1) `mezcla.py` con el criterio de Java — hoy **194/194** en las dos VMs, lo mismo que el 17-sep: aguanta todo H1; (2) las
+redes, verdes (paridad, cápsula V6, norma, sim, sombra, MOD8; frontend 246/246); (3) la medida, V9 del 17-sep (host, Pico
+y DK2: +1 ms en un programa pequeño, −10 % en uno con GUI); (4) en placa, la tanda de V7 en las nueve (24-sep), el pack
+en XIP (`SqlDemo` en la Metro) y el `Core` de `/lib` más nuevo que el de la imagen en `test_mods` (contra littlefs de
+verdad; el código es común); (5) la revisión adversarial, V10 del 16-sep; (6) la cadena en MOD9, V11 del 17-sep. El
+«⏭️ Queda» estaba desfasado salvo tres cosas, hechas hoy: `montar-zip.sh` decía `MOD_ACTUAL="MOD7"` —habría parado el
+paquete de V7— (`1e1ba380`: MOD9, y los magics viejos que se buscan dentro de los packs, que eran sólo `MOD6`, en
+`MOD_VIEJOS`); y los dos colaterales del mapa del mediodía, que resultaron bugs de verdad y silenciosos → `#546` y
+`#547`. Para el día de publicar, en `PUBLICAR.md`: decidir si `--formato=8` se va.
 
 #### ✅ `#524` — una función `intrinsic` declarada en un módulo que NO es de la stdlib se emite como el builtin 3 (`intToString`) en silencio (abierta 16-sep, al probar la reflexión de MOD9; preexistente; H1 · **CERRADA el 16-sep con `#521`**)
 
