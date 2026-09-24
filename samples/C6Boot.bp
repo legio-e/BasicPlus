@@ -1,0 +1,34 @@
+// C6Boot.bp — V7/H4 P3: el botón BOOT de la ESP32-C6-DevKitC-1 como ENTRADA (GPIO9, a masa al
+// pulsarlo; la placa ya lleva su resistencia a 3V3, y el pull-up interno por si acaso).
+// Durante 20 segundos mira el pin cada 20 ms y dice cada cambio: púlsalo varias veces y
+// suéltalo. Al final, cuántas pulsaciones contó. Sin pulsar, el pin tiene que leer 1.
+// En el PC no hay botón: el stub lee siempre lo mismo y cuenta 0.
+module C6Boot
+  import Gpio
+
+  function main()
+    var boton: Gpio.Pin := Gpio.Pin(9, Gpio.Pin.INPUT)
+    boton.setPull(Gpio.Pin.PULL_UP)
+    var antes: integer := boton.value()
+    print "BOOT (GPIO9): en reposo lee", antes, "(se espera 1)"
+    print "pulsa BOOT varias veces en los próximos 20 s..."
+    var pulsaciones: integer := 0
+    var t: integer := 0
+    while t < 1000 do
+      var ahora: integer := boton.value()
+      if ahora != antes then
+        if ahora == 0 then
+          pulsaciones := pulsaciones + 1
+          print "  pulsado (", pulsaciones, ")"
+        else
+          print "  soltado"
+        endif
+        antes := ahora
+      endif
+      sleep(20)
+      t := t + 1
+    endwh
+    print "RESULT:", pulsaciones, "pulsaciones"
+    boton.release()
+  end main
+end C6Boot

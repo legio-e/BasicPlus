@@ -1,0 +1,18 @@
+{
+  "_comentario": "La ronda de V7 (24-sep): las seis de la prueba de fuego (tanda_prueba.json) y lo de V7 que hay que ver en placa. H1 P5 pide Destructor, TimeDemo y ArrayFijo == host en S3/C3/C6/Nucleo/DK2 (Pico y P4 ya, 21-sep); MoveRango (#535: el move de la VM-C, que en placa es el mismo código) e HiloUsa (#530: run() heredado de otro módulo; HiloLib va a /app con el programa). Rutas relativas a la raiz del repo. criterio: identico (defecto) | no-peta.",
+  "pruebas": [
+    { "nombre": "MathRango",       "fuente": "samples/MathRango.bp" },
+    { "nombre": "ThrowSinAtrapar", "fuente": "samples/ThrowSinAtrapar.bp" },
+    { "nombre": "ThreadTrasMain",  "fuente": "samples/ThreadTrasMain.bp" },
+    { "nombre": "MachineId",       "fuente": "samples/MachineId.bp", "criterio": "no-peta" },
+    { "nombre": "Destructor",      "fuente": "samples/Destructor.bp" },
+    { "nombre": "TimeDemo",        "fuente": "samples/TimeDemo.bp" },
+    { "nombre": "ArrayFijo",       "fuente": "samples/ArrayFijo.bp" },
+    { "nombre": "MoveRango",       "fuente": "samples/MoveRango.bp" },
+    { "nombre": "HiloUsa",         "fuente": "bpgenvm-c/samples/HiloUsa.bp" },
+    { "nombre": "GuiWinJson",      "fuente": "samples/GuiWinJson.bp", "necesita": ["pantalla"],
+      "recursos": ["samples/formdemo/resources/main.win"], "timeout_s": 60 },
+    { "nombre": "GuiShot",         "fuente": "samples/GuiShot.bp", "necesita": ["pantalla"],
+      "artefactos": ["GuiShot.shot"], "timeout_s": 60, "criterio": "no-peta"}
+  ]
+}

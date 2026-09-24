@@ -1,0 +1,100 @@
+// Bmp280RepStart_Nucleo.bp — V7/H6.c G4.a3: el REPEATED START del STM32 (hecho a nivel de
+// registro en gpio_stm32.c: TC entre mensajes, AUTOEND en el último) contra un BMP280 de verdad.
+// Mismo cableado que Bmp280Id_Nucleo.bp:
+//   I2C2: BMP280 SDA -> PF0 (80), SCL -> PF1 (81), VIN -> 3V3, GND -> GND
+//   SDO -> GND (addr 0x76) o 3V3 (0x77); pull-ups de 4k7 a 3V3 si el módulo no las trae.
+//
+// Cada lectura se compara con su CONTROL por el camino de siempre (write + read, con STOP):
+//   1. el chip_id con writeRead (repeated start)  -> 88 (0x58), igual que con write + read;
+//   2. los 24 bytes de calibración (0x88..0x9F) con writeRead, iguales a los de write + read;
+//   3. una I2c.Transaction de dos mensajes (escribir el registro y leer): el mismo chip_id;
+//   4. una dirección en la que no hay nadie (0x50): writeRead devuelve -1 y no lanza;
+//   5. cuatro mensajes: el mismo error con nombre que en el PC (hasta 3 mensajes, 8 órdenes).
+// En el PC los stubs leen ceros: esto es para la placa.
+module Bmp280RepStartNucleo
+  import I2c
+
+  function main()
+    print "--- G4.a3: repeated start en el STM32 (BMP280 por I2C2) ---"
+    var bus: I2c.Bus := I2c.Bus(2, 80, 81, I2c.Bus.STANDARD)
+    var fallos: integer := 0
+
+    // 1. chip_id: repeated start frente a STOP
+    var addr: integer := 0x76
+    var id: integer[] := newIntArray(1)
+    var n: integer := bus.writeRead(addr, [0xD0], 1, id, 1)
+    if n < 1 then
+      addr := 0x77
+      n := bus.writeRead(addr, [0xD0], 1, id, 1)
+    endif
+    var idStop: integer[] := newIntArray(1)
+    bus.write(addr, [0xD0], 1)
+    bus.read(addr, idStop, 1)
+    print "[1] addr", addr, " writeRead: n =", n, " id =", id[0], "  write+read: id =", idStop[0]
+    if (n != 1) or (id[0] != 0x58) or (idStop[0] != id[0]) then
+      fallos := fallos + 1
+      print "    FALLO: se esperaba 88 (0x58) por los dos caminos"
+    endif
+
+    // 2. los 24 bytes de calibración
+    var cal: integer[] := newIntArray(24)
+    var calStop: integer[] := newIntArray(24)
+    n := bus.writeRead(addr, [0x88], 1, cal, 24)
+    bus.write(addr, [0x88], 1)
+    bus.read(addr, calStop, 24)
+    var distintos: integer := 0
+    var i: integer := 0
+    while i < 24 do
+      if cal[i] != calStop[i] then
+        distintos := distintos + 1
+      endif
+      i := i + 1
+    endwh
+    print "[2] calibración: n =", n, " dig_T1 =", cal[0] + cal[1] * 256, " distintos del control:", distintos
+    if (n != 24) or (distintos != 0) or (cal[0] + cal[1] * 256 == 0) then
+      fallos := fallos + 1
+      print "    FALLO: 24 bytes, iguales a los del control y no todo ceros"
+    endif
+
+    // 3. una transacción de dos mensajes
+    var t: I2c.Transaction := I2c.Transaction()
+    var idT: integer[] := newIntArray(1)
+    t.write([0xD0], 1)
+    t.read(idT, 1)
+    n := bus.execute(addr, t)
+    print "[3] I2c.Transaction (escribir 0xD0, leer 1): n =", n, " id =", idT[0]
+    if idT[0] != 0x58 then
+      fallos := fallos + 1
+      print "    FALLO: se esperaba 88"
+    endif
+
+    // 4. nadie en 0x50
+    var nada: integer[] := newIntArray(1)
+    n := bus.writeRead(0x50, [0x00], 1, nada, 1)
+    print "[4] writeRead a 0x50 (nadie): n =", n, "(se espera -1)"
+    if n != -1 then
+      fallos := fallos + 1
+    endif
+
+    // 5. la regla común: cuatro mensajes no caben
+    var t4: I2c.Transaction := I2c.Transaction()
+    t4.write([0xD0], 1)
+    t4.read(nada, 1)
+    t4.write([0xD0], 1)
+    t4.read(nada, 1)
+    try
+      bus.execute(addr, t4)
+      print "[5] FALLO: cuatro mensajes no deberían caber"
+      fallos := fallos + 1
+    catch e: Core.Exception
+      print "[5]", e.msg
+    endtry
+
+    if fallos == 0 then
+      print "RESULT: OK -- el repeated start del STM32 habla con el BMP280"
+    else
+      print "RESULT: FAIL --", fallos, "fallos"
+    endif
+    print "--- fin ---"
+  end main
+end Bmp280RepStartNucleo

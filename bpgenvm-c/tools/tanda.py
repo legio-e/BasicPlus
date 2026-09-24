@@ -586,18 +586,31 @@ def imports_de(bp):
 def dependencias(bp):
     """Los imports del .bp, cerrados transitivamente sobre la stdlib (Gui importa
     Json y Collections, y el import NO es transitivo en el lenguaje pero el
-    cargador si necesita los .mod). Core siempre."""
+    cargador si necesita los .mod). Core siempre.
+    V7 (24-sep, #530): y los modulos de la APP —hermanos del .bp, como HiloLib de
+    HiloUsa—, recorridos igual; su .mod lo deja el oraculo en su carpeta (el
+    frontend compila los hermanos) y va a /app con el programa (modulos_de_app)."""
     vistos = []
     cola = ["Core"] + imports_de(bp)
+    dir_app = os.path.dirname(bp)
     while cola:
         x = cola.pop(0)
         if x in vistos:
             continue
         vistos.append(x)
-        src = os.path.join(STDLIB, x + ".bp")
-        if os.path.exists(src):
-            cola.extend(imports_de(src))
+        for src in (os.path.join(STDLIB, x + ".bp"), os.path.join(dir_app, x + ".bp")):
+            if os.path.exists(src):
+                cola.extend(imports_de(src))
+                break
     return vistos
+
+
+def modulos_de_app(deps, work):
+    """Las dependencias que NO son de la stdlib y cuyo .mod compilo el oraculo en
+    `work`: los modulos de la app, que van a /app junto al programa."""
+    return [d for d in deps
+            if not os.path.exists(os.path.join(STDLIB, d + ".mod"))
+            and os.path.exists(os.path.join(work, d + ".mod"))]
 
 
 # ── normalizacion (compat.sh filt()) ─────────────────────────────────────────
@@ -890,7 +903,7 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
         fich = d + ".mod"
         local = os.path.join(STDLIB, fich)
         if not os.path.exists(local):
-            anotar(notas, "dependencia %s: no hay %s en bpstdlib (¿modulo de la app?)" % (d, fich))
+            anotar(notas, "dependencia %s: no es de bpstdlib: modulo de la app, va a /app con el programa" % d)
             continue
         crc_local = crc_de(local)
         path, crc_placa = stat_por_nombre(w, fich)
@@ -1062,9 +1075,12 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         return r
     w.vaciar_basura()          # hallazgo 6: la basura del wire, POR prueba
     try:
-        asegurar_deps(w, dependencias(p["bp"]), inv, subidos, notas, verificadas)
+        deps = dependencias(p["bp"])
+        asegurar_deps(w, deps, inv, subidos, notas, verificadas)
         for rec in p["recursos"]:
             subir_fichero(w, os.path.join(RAIZ, rec), "/app/" + os.path.basename(rec), subidos)
+        for d in modulos_de_app(deps, o["work"]):   # V7 (#530): HiloLib de HiloUsa
+            subir_fichero(w, os.path.join(o["work"], d + ".mod"), "/app/" + d + ".mod", subidos)
         subir_fichero(w, o["mod"], "/app/" + p["modulo"] + ".mod", subidos)
         r["artefactos_previos"] = borrar_artefactos(w, p["artefactos"])
     except PlacaColgada as e:

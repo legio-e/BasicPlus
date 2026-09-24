@@ -84,7 +84,7 @@ module MoveRango
     print "string[]       " + sd[0] + " " + sd[1] + " [" + sd[2] + "]"
 
     // 5. los errores, uno a uno
-    var nulo: integer[]
+    var nulo: integer[] := null   // explícito: un local sin inicializar tiene un valor indeterminado (#540)
     try
       move(nulo, dst, 0, 0, 1)
       print "no deberia llegar"
