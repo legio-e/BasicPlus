@@ -83,6 +83,10 @@ static void apply_variant_caps(board_desc_t* d, char variant) {
 
 /* H9 — identidad en el SUELO (sin FS, sin env: hardware puro). Se llama la
  * PRIMERA del boot, antes de particiones/FS/heap. */
+int board_desc_package_sel_hw(void) {
+    return (int) (sysinfo_hw->package_sel & 1u);
+}
+
 void board_desc_early_init(void) {
     board_desc_t* d = &s_board;
     memset(d, 0, sizeof *d);
@@ -99,7 +103,7 @@ void board_desc_early_init(void) {
      * que repetirlo aqui era la redundancia que hacia ambiguo el campo. Lo pisa
      * el ENV cuando la placa se identifica (Pico 2, Metro...). */
     strncpy(d->name, "generic", sizeof d->name - 1);
-    d->package_sel = (int) (sysinfo_hw->package_sel & 1u);
+    d->package_sel = board_desc_package_sel_hw();
     apply_variant_caps(d, d->package_sel ? 'A' : 'B');
     d->led_pin       = -1;   /* lo declara la placa (board.json, estado >= 2) */
     d->neopixel_pin  = -1;   /* peculiar de cada placa */

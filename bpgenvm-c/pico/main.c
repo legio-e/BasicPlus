@@ -1682,7 +1682,13 @@ int main(void) {
     bpvm_uart_set_backend(&s_pico_uart_backend);
     bpvm_pulse_set_backend(&s_pico_pulse_backend);
     bpvm_pwm_set_backend(&s_pico_pwm_backend);
-    bpvm_caps_set(board_desc()->variant == 'B' ? &s_rp_caps_b : &s_rp_caps_a);   /* V7/H4: la tabla de ESTA variante */
+    /* V7/H4 — la tabla de ESTE micro, leída del SILICIO (#549, 24-sep). Estaba escrita con
+     * `board_desc()->variant`, pero aquí, en `main()`, el descriptor aún no existe: lo llena
+     * `board_desc_early_init()` en la primera línea de `vm_task`, que corre DESPUÉS. `variant` valía 0,
+     * y las DOS placas se quedaban con la tabla de la A: la Metro decía «rp2350a, QFN-60, 30 GPIO» en el
+     * INFO y en `Machine`, y rechazaba todo pin ≥ 30 —su SD (34–40): «el pin 34 no existe en rp2350a»—
+     * desde H4 P1 (22-sep), que se verificó sólo en la Pico 2. */
+    bpvm_caps_set(board_desc_package_sel_hw() ? &s_rp_caps_a : &s_rp_caps_b);
     bpvm_breadcrumb_attach(s_rp_migas, 20u);   /* V7/H4 (#487): las migas, en RAM que sobrevive al reset */
     bpvm_machine_set_backend(&s_pico_pico_backend);
     bpvm_adc_set_backend(&s_pico_adc_backend);

@@ -63,4 +63,10 @@ const board_desc_t* board_desc(void);
  * descriptor de particiones, que se lee antes de montar nada). */
 unsigned board_desc_probe_flash_bytes(void);
 
+/* V7/H4 (#549, 24-sep) — SYSINFO.PACKAGE_SEL leído del SILICIO, ahora: 1 = QFN-60 (RP2350A, Pico 2),
+ * 0 = QFN-80 (RP2350B, Metro). Vale ANTES de `board_desc_early_init` —lo usa `main()` para elegir la tabla
+ * de capacidades, y `main()` corre antes que la tarea que inicializa el descriptor—. Es el micro, no la
+ * placa: `board.json` puede forzar la variante de una placa atípica, pero no cambia el encapsulado. */
+int board_desc_package_sel_hw(void);
+
 #endif /* BOARD_DESC_H */
