@@ -1,0 +1,138 @@
+// C5SdGui.bp — V7/H3 SD.4: la TF y la pantalla de la C5, en el MISMO bus y a la vez.
+//
+// La C5 lleva la TF en el SPI 2 de la pantalla (`sd=bus:2,cs:23,khz:10000` en su ENV). Desde SD.3 el
+// firmware la monta en /sd al arrancar, por el árbitro de la HAL BP (G4.a2): cada petición llega con su
+// configuración —la TF a 10 MHz (#552: a 25 su MISO, por la matriz de GPIO, tuerce bits) y su CS, la
+// pantalla a 40 y el suyo— y el bus se reconfigura en cada turno. Aquí un hilo BP escribe y relee ficheros en /sd mientras el lazo del GUI (su propio hilo BP,
+// `Gui.start`) repinta una etiqueta que el hilo principal cambia sin parar. Se comprueba:
+//   · que cada fichero se relee IGUAL que se escribió (ni un byte de la pantalla se cuela en la TF);
+//   · que la pantalla sigue viva: el peor hueco entre dos cambios de la etiqueta;
+//   · y su CONTROL: la misma medida sin nadie escribiendo en la tarjeta.
+// Lo que BP no puede medir —que lo pintado sea lo que toca— se MIRA en el cristal: la etiqueta cuenta
+// sin manchas. Al final, RESULT: OK o RESULT: FALLO.
+//
+// Medido el 24-sep (SD.4): la pantalla sola, 188 cambios en 5 s y 30 ms de peor hueco; con la TF, 176 y
+// 63 ms —un writeFile de 2,3 KB ocupa la tarea de la VM unas decenas de ms—, y 30 ficheros escritos y
+// releídos (73.600 B), 0 distintos.
+module C5SdGui
+  import Core
+  import Gui
+  import IO
+  import Machine
+
+  class Escritor extends Thread
+    var parar: boolean
+    var ficheros: integer
+    var malos: integer
+    var bytes: integer
+
+    public function Escritor()
+      super(4096)
+      this.parar    := false
+      this.ficheros := 0
+      this.malos    := 0
+      this.bytes    := 0
+    end Escritor
+
+    public function pedirParada()
+      this.parar := true
+    end pedirParada
+
+    public function cuantos(): integer
+      return this.ficheros
+    end cuantos
+
+    public function cuantosMalos(): integer
+      return this.malos
+    end cuantosMalos
+
+    public function cuantosBytes(): integer
+      return this.bytes
+    end cuantosBytes
+
+    // ~2,3 KB que dependen de la vuelta: un fichero mal leído no casa con el de otra vuelta. Se DOBLA la
+    // cadena en vez de ir sumando trozos: seis concatenaciones y no doscientas (en placa, concatenar es
+    // caro —#554— y aquí se mide la TF, no eso).
+    function contenido(n: integer): string
+      var s: string := "[vuelta " + n + "] ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 abcdefghijklmnopqrstuvwxyz."
+      var i: integer := 0
+      while i < 5 do
+        s := s + s
+        i := i + 1
+      endwh
+      return s
+    end contenido
+
+    public function run()
+      var n: integer := 0
+      while not this.parar do
+        var nombre: string := "/sd/c5gui" + (n mod 4) + ".txt"
+        var texto: string := this.contenido(n)
+        writeFile(nombre, texto)
+        var leido: string := readFile(nombre)
+        if leido != texto then
+          this.malos := this.malos + 1
+          print "  FALLO: ", nombre, " no se relee igual (", strlen(leido), " B de ", strlen(texto), ")"
+        endif
+        this.ficheros := this.ficheros + 1
+        this.bytes    := this.bytes + strlen(texto)
+        n := n + 1
+      endwh
+    end run
+  end Escritor
+
+  // Cambia la etiqueta durante `ms` y devuelve el peor hueco entre dos cambios (lo que tarda la
+  // pantalla en dejar sitio al siguiente con el lazo del GUI y, si lo hay, el escritor al lado).
+  function peorHueco(eti: Gui.Label, rotulo: string, ms: integer): integer
+    var t0: integer := Machine.uptimeMs()
+    var anterior: integer := t0
+    var peor: integer := 0
+    var i: integer := 0
+    while Machine.uptimeMs() - t0 < ms do
+      eti.setText(rotulo + " " + i)
+      sleep(20)
+      var ahora: integer := Machine.uptimeMs()
+      if ahora - anterior > peor then
+        peor := ahora - anterior
+      endif
+      anterior := ahora
+      i := i + 1
+    endwh
+    print "  ", rotulo, ": ", i, " cambios de la etiqueta"
+    return peor
+  end peorHueco
+
+  function Main()
+    if not IO.isDirectory("/sd") then
+      print "no hay /sd: ¿tiene la C5 `sd=bus:2,cs:23,khz:10000` en su ENV y una tarjeta metida?"
+      print "RESULT: FALLO"
+      return
+    endif
+    var scr: Gui.Screen := Gui.Screen()
+    var eti: Gui.Label := Gui.Label(scr, "SD + pantalla")
+    eti.align(Gui.Align.CENTER, 0, 0)
+    Gui.start()
+    sleep(1000)                  // el primer repintado —la pantalla entera— fuera de la medida
+
+    // CONTROL: la pantalla sola.
+    var solo: integer := peorHueco(eti, "sola", 5000)
+
+    // La pantalla con el escritor en la TF, por el mismo bus.
+    var esc: Escritor := Escritor()
+    esc.start()
+    var junto: integer := peorHueco(eti, "con la TF", 5000)
+    esc.pedirParada()
+    esc.join()
+    Gui.stop()
+    Gui.join()
+
+    print "pantalla sola:     peor hueco ", solo, " ms"
+    print "pantalla con TF:   peor hueco ", junto, " ms"
+    print "TF: ", esc.cuantos(), " ficheros escritos y releidos (", esc.cuantosBytes(), " B), ", esc.cuantosMalos(), " distintos"
+    if esc.cuantos() > 0 and esc.cuantosMalos() == 0 then
+      print "RESULT: OK"
+    else
+      print "RESULT: FALLO"
+    endif
+  end Main
+end C5SdGui

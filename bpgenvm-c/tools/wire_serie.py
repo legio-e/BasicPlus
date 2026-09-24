@@ -6,7 +6,7 @@ habia forma de preguntarle a la placa sin el IDE por medio. Con esto, un cuelgue
 se parte en dos en diez segundos: si la placa contesta, lo colgado es el IDE.
 
 No pretende ser un cliente completo: son los verbos que hacen falta para
-diagnosticar (HELLO, PING, LIST, INFO, RUN, KILL, LOG_DUMP).
+diagnosticar (HELLO, PING, LIST, INFO, RUN, KILL, LOG_DUMP; y la SD: `sd` y `sdmount`, V7/H3).
 
     python tools/wire_serie.py COM3 info
     python tools/wire_serie.py COM3 log
@@ -497,6 +497,23 @@ def cmd_resetcable(w, _):
     print("resetcable: RTS 200 ms (la placa arranca de nuevo; el USB puede irse y volver)")
 
 
+def cmd_sd(w, _):
+    """V7/H3 — SD_INFO: la tarjeta de la placa, el DIAGNOSTICO (no monta nada). Lo que enseña el
+    explorador del IDE con `sd`, en crudo: `ok`, `motivo`, `medio`, la identidad y el sector 0."""
+    w.send("SD_INFO")
+    r = w.esperar("SD_INFO_REPLY", 20)
+    print(json.dumps(r, indent=2, ensure_ascii=False) if r
+          else "sin respuesta %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+
+
+def cmd_sdmount(w, _):
+    """V7/H3 — SD_MOUNT: monta la tarjeta en /sd a mano (el arranque ya monta si la hay)."""
+    w.send("SD_MOUNT")
+    r = w.esperar("SD_MOUNT_REPLY", 30)
+    print(json.dumps(r, indent=2, ensure_ascii=False) if r
+          else "sin respuesta %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+
+
 def cmd_packfmt(w, _):
     """PACK_FORMAT: deja la zona de packs VACIA (borra todos). Pide OK a Eduardo antes."""
     w.send("PACK_FORMAT", confirm="YES")
@@ -507,7 +524,8 @@ def cmd_packfmt(w, _):
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,
             "put": cmd_put, "puts": cmd_puts, "run": cmd_run, "get": cmd_get,
             "packs": cmd_packs, "pack": cmd_pack, "packfmt": cmd_packfmt, "packdel": cmd_packdel,
-            "env": cmd_env, "part": cmd_part, "reset": cmd_reset, "resetcable": cmd_resetcable}
+            "env": cmd_env, "part": cmd_part, "reset": cmd_reset, "resetcable": cmd_resetcable,
+            "sd": cmd_sd, "sdmount": cmd_sdmount}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:
