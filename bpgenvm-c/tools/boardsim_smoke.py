@@ -209,6 +209,35 @@ def main():
         check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
               "DEL donde no hay pack → NOT_FOUND")
 
+        # 12. #539 — PACK_LS NO esconde los vivos. La C5 (24-sep) tenía 19 packs con
+        #     17 borrados DELANTE (la cadena es append-only y un borrado sigue en ella
+        #     hasta formatear) y el listado sacaba los 16 PRIMEROS: todos borrados, y
+        #     sin decir que faltaba nada. Aquí por el wire del sim —el mismo dispatch
+        #     que el firmware—: 18 packs, 16 borrados y los 2 vivos al final.
+        offs = [0]                                  # el borrado del paso 11
+        for _ in range(17):
+            r = w.call("PACK_BURN_BEGIN", size=len(img))
+            off = r.get("offset")
+            for o in range(0, len(img), 1024):
+                w.call_bulk("PACK_BURN_DATA", img[o:o+1024])
+            r = w.call("PACK_BURN_END")
+            if r.get("type") == "PACK_BURN_END_REPLY":
+                offs.append(off)
+        borrados = sum(1 for off in offs[1:16]
+                       if w.call("PACK_DEL", offset=off).get("type") == "PACK_DEL_REPLY")
+        check(len(offs) == 18 and borrados == 15,
+              "#539 cadena de 18 packs por el wire: 16 borrados y 2 vivos al final")
+        r = w.call("PACK_LS")
+        filas = r.get("packs") or []
+        vivos = [p.get("offset") for p in filas if p.get("active")]
+        check(r.get("count") == 18 and vivos == offs[16:],
+              "#539 PACK_LS lista los DOS vivos del final (dice %r)" % vivos)
+        check([p.get("offset") for p in filas] == offs[2:],
+              "#539 16 filas en orden de cadena; fuera, los 2 borrados mas antiguos")
+        check(r.get("omitted") == 2 and r.get("activeOmitted") == 0,
+              "#539 ...y lo DICE: omitted=2, activeOmitted=0 (dice %r, %r)"
+              % (r.get("omitted"), r.get("activeOmitted")))
+
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1
     finally:

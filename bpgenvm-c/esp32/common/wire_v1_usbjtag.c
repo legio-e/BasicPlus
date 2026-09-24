@@ -34,6 +34,7 @@
  */
 #include "wire_v1.h"
 #include "bpvm_platform.h"   /* V6/#473: bpvm_platform_now_ms */
+#include "log.h"             /* #545: un corte se dice en el log (sólo va al anillo de RAM) */
 
 #include "driver/usb_serial_jtag.h"
 #include "esp_err.h"
@@ -127,16 +128,41 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
 
 /* ===================== Escritura ===================== */
 
-/* El driver puede escribir menos de lo pedido si su buffer se llena, así que se
- * insiste hasta vaciar o hasta que el tope diga que no hay nadie al otro lado.
- * `wire_v1.c` no lo necesita porque su UART va con tx_buffer=0 (síncrono). */
+/* #545 — EL DRIVER ES TODO O NADA. Aquí se creía que «puede escribir menos de lo
+ * pedido si su buffer se llena», y no: `usb_serial_jtag_write_bytes` mete el trozo
+ * ENTERO en su anillo (un `xRingbufferSend` del trozo completo, IDF v6.0.1) o, al
+ * vencer el plazo, devuelve 0. Con un anillo de WIRE_TX_BUF, un trozo mayor NO
+ * CABE NUNCA: a los WIRE_TX_MS devolvía 0, la línea se perdía entera, salía sólo
+ * el `\n` y la placa seguía como si nada. Lo destapó `PACK_LS` en la C5 (#539):
+ * su respuesta pasó de ~2.025 B a ~2.055 y dejó de llegar. Callaban igual cualquier
+ * otra respuesta de más de 2 KB de las placas de un solo USB (C3, C6, C5): un
+ * `PACK_ENTRIES` largo, un `ENV_LS` con muchas claves, las del depurador.
+ *
+ * Así que se manda en TRAMOS que caben siempre, y cada uno espera su sitio.
+ * `wire_v1.c` no lo necesita: su UART va con tx_buffer=0 (síncrono). */
+#define WIRE_TX_TRAMO (WIRE_TX_BUF / 2)
+
+/* Un aviso por corte, no uno por tramo: si el host se va a media descarga, un GET
+ * de 120 KB son 472 tramos, y el log de arranque (el que sobrevive al reset) no
+ * se puede llenar de lo mismo. Se rearma en cuanto una escritura sale entera. */
+static int s_tx_cortado = 0;
+
 static void wire_write(const char* data, size_t n) {
     size_t off = 0;
     while (off < n) {
-        int w = usb_serial_jtag_write_bytes(data + off, n - off, pdMS_TO_TICKS(WIRE_TX_MS));
-        if (w <= 0) return;          /* nadie lee: se pierde esta respuesta, no la placa */
+        size_t tramo = n - off;
+        if (tramo > WIRE_TX_TRAMO) tramo = WIRE_TX_TRAMO;
+        int w = usb_serial_jtag_write_bytes(data + off, tramo, pdMS_TO_TICKS(WIRE_TX_MS));
+        if (w <= 0) {                /* nadie lee: se pierde esta respuesta, no la placa */
+            if (!s_tx_cortado)
+                log_printf("wire: el host no lee en %d ms: respuesta cortada a %u de %u B",
+                           WIRE_TX_MS, (unsigned) off, (unsigned) n);
+            s_tx_cortado = 1;
+            return;
+        }
         off += (size_t) w;
     }
+    s_tx_cortado = 0;
 }
 
 /* V6/#473 — LA LINEA ES ATOMICA, y lo exige el contrato desde siempre

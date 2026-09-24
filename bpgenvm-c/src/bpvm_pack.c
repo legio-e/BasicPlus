@@ -369,9 +369,37 @@ static int check_content(const bpvm_pack_src_t* src, uint32_t off, bpvm_pack_inf
     return 1;
 }
 
-int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
+/* #539 — mete `p` en el listado out[0..*n), que va en el orden de la cadena y
+ * tiene sitio para `max`. `p` es siempre el pack MÁS RECIENTE de los vistos: la
+ * cadena se recorre en el orden en que se grabó. Con sitio, entra al final.
+ * Lleno, sale el que menos importa —el BORRADO más antiguo— y `p` entra al
+ * final; si no queda ningún borrado (todos vivos), un borrado nuevo no entra y
+ * un vivo nuevo echa al vivo más antiguo. Así un listado lleno lleva siempre
+ * los vivos (los más recientes, si ni ellos caben) y, detrás, los borrados más
+ * recientes. */
+static void listado_mete(bpvm_pack_info_t* out, int max, int* n,
+                         const bpvm_pack_info_t* p) {
+    if (!out || max <= 0) return;
+    if (*n < max) { out[(*n)++] = *p; return; }
+    int sale = -1;
+    for (int i = 0; i < *n && sale < 0; i++)
+        if (!out[i].alive) sale = i;                        /* el borrado más antiguo */
+    if (sale < 0) {                                         /* todos vivos */
+        if (!p->alive) return;                              /* un borrado no echa a un vivo */
+        sale = 0;                                           /* el vivo más antiguo */
+    }
+    memmove(&out[sale], &out[sale + 1], (size_t) (*n - 1 - sale) * sizeof *out);
+    out[*n - 1] = *p;
+}
+
+/* El ÚNICO recorrido de la cadena para listar (#310: un lector, no dos). Con
+ * `lst` a NULL rellena los `max` PRIMEROS en orden (el contrato de siempre de
+ * bpvm_pack_scan); con `lst`, cada pack pasa por listado_mete (#539) y se
+ * cuentan los vivos. Devuelve el total de packs de la cadena. */
+static int scan_cadena(const bpvm_pack_src_t* src,
                        bpvm_pack_info_t* out, int max,
-                       int verify_content, uint32_t* end_off) {
+                       int verify_content, uint32_t* end_off,
+                       bpvm_pack_listado_t* lst, int* listados) {
     int count = 0;
     uint32_t off = 0;
     uint32_t end = BPVM_PACK_NO_SPACE;
@@ -382,18 +410,27 @@ int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
         uint32_t magic = get_u32(mg);
         if (magic == 0xFFFFFFFFuL) { end = off; break; }    /* flash virgen = fin */
         bpvm_pack_info_t tmp;
-        bpvm_pack_info_t* slot = (out && count < max) ? &out[count] : &tmp;
+        bpvm_pack_info_t* slot = (!lst && out && count < max) ? &out[count] : &tmp;
         if (magic != BPVM_PACK_MAGIC) break;                /* basura: cadena corrupta */
-        if (parse_header(src, off, slot) != 0) {
-            count++;                                        /* cabecera mala: reportar y cortar */
-            break;
-        }
-        slot->crc_ok = (uint8_t) check_content(src, off, slot, verify_content);
+        int cab_ok = (parse_header(src, off, slot) == 0);
+        if (cab_ok)
+            slot->crc_ok = (uint8_t) check_content(src, off, slot, verify_content);
         count++;
+        if (lst) {
+            if (slot->alive) lst->vivos++;
+            listado_mete(out, max, listados, slot);
+        }
+        if (!cab_ok) break;                                 /* cabecera mala: reportar y cortar */
         off += slot->size_total;                            /* salto fiable (crc_cab OK) */
     }
     if (end_off) *end_off = end;
     return count;
+}
+
+int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
+                       bpvm_pack_info_t* out, int max,
+                       int verify_content, uint32_t* end_off) {
+    return scan_cadena(src, out, max, verify_content, end_off, NULL, NULL);
 }
 
 int bpvm_pack_scan(const uint8_t* base, uint32_t region_size,
@@ -402,6 +439,26 @@ int bpvm_pack_scan(const uint8_t* base, uint32_t region_size,
     bpvm_pack_src_t src;
     bpvm_pack_src_mem(&src, base, region_size);
     return bpvm_pack_scan_src(&src, out, max, verify_content, end_off);
+}
+
+int bpvm_pack_listar(const uint8_t* base, uint32_t region_size,
+                     bpvm_pack_info_t* out, int max,
+                     int verify_content, uint32_t* end_off,
+                     bpvm_pack_listado_t* r) {
+    bpvm_pack_src_t src;
+    bpvm_pack_src_mem(&src, base, region_size);
+    bpvm_pack_listado_t c;
+    memset(&c, 0, sizeof c);
+    int n = 0;
+    if (!out) max = 0;
+    c.total = scan_cadena(&src, out, max, verify_content, end_off, &c, &n);
+    int vivos_dentro = 0;
+    for (int i = 0; i < n; i++)
+        if (out[i].alive) vivos_dentro++;
+    c.fuera       = c.total - n;
+    c.vivos_fuera = c.vivos - vivos_dentro;
+    if (r) *r = c;
+    return n;
 }
 
 int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,

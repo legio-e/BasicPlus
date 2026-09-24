@@ -205,23 +205,37 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
         /* #338 — ~1,2 KB que no queremos ni en el stack de la comm task ni
          * permanentes en .bss: salen de la zona compartida y vuelven al acabar
-         * de escribir la respuesta (los datos se leen DENTRO de este bloque). */
+         * de escribir la respuesta (los datos se leen DENTRO de este bloque).
+         * El tope lo pone también la respuesta: 16 filas del peor caso caben en
+         * los 4 KB del búfer más pequeño (el del micro simulado); test-pack 14.j
+         * lo mide. */
         enum { PACK_LS_MAX = 16 };
         bpvm_pack_info_t* inf = (bpvm_pack_info_t*) bpvm_scratch_take(
                                     PACK_LS_MAX * sizeof(bpvm_pack_info_t), "PACK_LS");
         if (!inf)
             return reply_error(out, cap, id, "INTERNAL_ERROR", "zona de scratch no disponible");
         uint32_t end = 0;
-        int n = bpvm_pack_scan(bm->packs_base, bm->packs_size, inf, PACK_LS_MAX,
-                               /*verify_content=*/1, &end);
+        /* #539 — los VIVOS primero y, en el hueco, los borrados más recientes. Con
+         * bpvm_pack_scan salían los 16 PRIMEROS de la cadena, que en una placa con
+         * historia son borrados (la cadena es append-only): la C5 listaba 16
+         * borrados, decía «19 packs» y escondía sus dos vivos. */
+        bpvm_pack_listado_t lst;
+        int n = bpvm_pack_listar(bm->packs_base, bm->packs_size, inf, PACK_LS_MAX,
+                                 /*verify_content=*/1, &end, &lst);
         int chain_ok = (end != BPVM_PACK_NO_SPACE);
         sb_raw(&s, "{\"type\":\"PACK_LS_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"regionSize\":"); sb_long(&s, (long) bm->packs_size);
         sb_raw(&s, ",\"free\":"); sb_long(&s, chain_ok ? (long) (bm->packs_size - end) : 0L);
         sb_raw(&s, chain_ok ? ",\"chainOk\":true" : ",\"chainOk\":false");
-        sb_raw(&s, ",\"count\":"); sb_long(&s, n);
+        sb_raw(&s, ",\"count\":"); sb_long(&s, lst.total);
+        /* Lo que no se lista se DICE, como el `omitted` del LIST (#425): cuántos
+         * de `count` no están en `packs` —los borrados más antiguos— y cuántos
+         * de ésos están VIVOS, que sólo pasa con más de PACK_LS_MAX vivos y es
+         * justo lo que no puede quedar callado. */
+        sb_raw(&s, ",\"omitted\":"); sb_long(&s, lst.fuera);
+        sb_raw(&s, ",\"activeOmitted\":"); sb_long(&s, lst.vivos_fuera);
         sb_raw(&s, ",\"packs\":[");
-        for (int i = 0; i < n && i < PACK_LS_MAX; i++) {
+        for (int i = 0; i < n; i++) {
             if (i) sb_raw(&s, ",");
             sb_raw(&s, "{\"name\":\""); sb_esc(&s, inf[i].nombre);
             sb_raw(&s, "\",\"version\":\""); sb_esc(&s, inf[i].vercont);

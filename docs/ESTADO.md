@@ -522,6 +522,48 @@ sin inicializar es null» sigue siendo cierto para un CAMPO —los objetos nacen
 (la palabra ya no existe desde P1) y sacar `Exception` de `Core` (ya no ahorra nada desde P3). **Con esto H1 queda
 cerrado.**
 
+## 📋 H8 `#539` y `#545` (24-sep, tarde) — `PACK_LS` ya no esconde los packs vivos; y en la C5, el wire perdía las líneas de más de 2 KB
+
+La tarea aparte de la mañana, en el worktree `friendly-dirac-ac6dfc`. **Reproducido en el PC antes de tocar**: la
+cadena de la C5 (17 borrados y 2 vivos al final) por el verbo de verdad listaba `P00`…`P15`, todos borrados, con
+`count` 19 y nada más. Y dos consumidores más leían los vivos de esa lista y fallaban igual: `wire_serie.py packdel`
+y el aviso de `requires-pack=` del IDE al grabar. El arreglo (`2c2d416e`): `bpvm_pack_listar` (los vivos primero; en
+el hueco, los borrados más recientes; el MISMO recorrido que `bpvm_pack_scan`, que no cambia de contrato) y
+`PACK_LS` con `omitted`/`activeOmitted`, como el `omitted` del `LIST` (`#425`); `wire_serie.py` y el panel del IDE
+lo dicen.
+
+**En la C5, tras la ronda de placas**: el control con la imagen sellada (16 de 19, todos borrados) y, con la de
+`#539`, `PACK_LS` MUDO: 60 s sin respuesta, una línea vacía, la placa viva. Era el transporte, `#545` (`1d1e25bd`):
+`usb_serial_jtag_write_bytes` es todo o nada y su anillo mide 2048 B; la respuesta nueva, 2.062. Con la línea en
+tramos, 0,64 s y los TRES vivos (la ronda grabó un `DriverSpi` nuevo sin borrar el viejo). `Gui` y `DriverSpi`, sin
+regrabar; y la tanda de V7 en la C5, 11/11, la misma matriz que la sellada (el `GuiShot.shot`, byte a byte igual).
+Detalle en las dos fichas.
+
+**Lo que enseñó:**
+- **Un transporte que se rinde en silencio**: la pista fue la línea VACÍA en la basura del cliente —el salto de línea
+  sin su cuerpo—. Y el comentario del código decía lo contrario de lo que hace el driver («puede escribir menos de
+  lo pedido»): se leyó el fuente del IDF antes de tocar nada.
+- **Una respuesta que crece 30 B es una prueba de tamaño gratis**: `#539` no rompió el wire, destapó un tope que
+  estaba desde el 31-ago y que nada de lo que se probaba alcanzaba (la salida de programas va en trozos de ≤ 512 B y
+  el `GET` en 256).
+- **Antes de dar una imagen ESP nueva se sabe, sin placa, si habrá que regrabar los packs sellados**: `nm` de los
+  dos `.elf` — `_heap_start` y el fin del texto y del rodata en páginas de 64 KB de la MMU. **Confirmado en la C5**:
+  mismas direcciones de zona, de bloque de RAM y de los dos motores. (Y la carga de los motores es perezosa: la
+  dispara el primer `INFO` o el primer `RUN`, no el arranque.)
+- **En un worktree**, las ESP32 se construyen con `idf.py set-target <chip>` y `idf.py build` (el `sdkconfig` no
+  viaja; el de la C5 salió idéntico al de `main`); la Pico, con su `build/` dentro del worktree; del STM32, sólo los
+  `.c` tocados con su toolchain y sus flags (sus `.project` son locales y apuntan al `src/` del principal). La C6
+  lleva LVGL dentro y `third_party/lvgl` está ignorado: no viaja. Se compiló con un enlace (junction) al del
+  principal, QUITADO al acabar, porque un borrado recursivo del worktree lo seguiría y vaciaría el original. Y un
+  `set-target` que falla deja un `sdkconfig` con el target POR DEFECTO (`esp32`): el siguiente build sale para
+  Xtensa y no enlaza (`usb_serial_jtag_*` no existe allí). Hay que borrar `build/` y `sdkconfig` y repetir.
+- **`FICHAS.md` se guarda en CRLF desde el 24-sep por la mañana** (hasta el 23-sep, LF como todo el repo): un CR
+  suelto (una línea en blanco escrita CR CR LF) hace que git lo tome por binario y no lo normalice, y así
+  `bf72ad9a` lo pasó ENTERO a CRLF; la tarde metió tres más. Quitados todos al fusionar (`git ls-files --eol`:
+  `crlf`, ya no `-text`) y añadido sin conversión (`git -c core.autocrlf=false add`). Volver a LF (`git add
+  --renormalize`) es un commit aparte, cuando no haya ramas abiertas que toquen `FICHAS`. Y el `sed -i` de Git Bash
+  pasa a LF el fichero entero: `FICHAS` se edita sin `sed`.
+
 ## ✅ H2 (24-sep, tarde) — H2 CERRADO: `#523` cerrada, y sus dos colaterales, `#546` y `#547`, eran bugs de verdad
 
 Eduardo preguntó cómo estaba H2. Quedaba `#523` sola, y sus seis criterios se cumplían (la mezcla, hoy 194/194 en las
@@ -538,6 +580,18 @@ dos VMs entre sí, y fallaban igual. Desde hoy una línea `FALLO` es rojo en `ch
 nuevos se comprueban solos. Y al probar un `continue` dentro de un switch en un `for`, un cuarto, preexistente y más
 gordo: **`continue` en un `for` no avanzaba la variable** —bucle infinito, en el intérprete y en el AOT—; nadie lo pisaba
 (2 `continue` en el árbol, ninguno en un `for`): `#548`, `132f956f`. **Con esto H2 queda cerrado.**
+
+## ⏭️ Traspaso (24-sep, al final de la tarde) — `#539` y `#545` hechos y vistos en la C5; la rama, al día con `main`
+
+**Estado de las placas**: la **C5 lleva la imagen de esta rama** (`#539` + `#545`), NO la sellada; las otras ocho,
+las selladas. Para volver al punto de restauración, `dist/firmware-v7-24sep`.
+
+**Lo que queda de `#545`**: la C3 y la C6 llevan el transporte viejo —compilan con el arreglo, sin grabar—: una
+respuesta de más de 2 KB se les seguirá perdiendo hasta que se graben.
+
+**La rama** `claude/friendly-dirac-ac6dfc`: al día con `main` (fusionada la tarde de placas), sin push. La de
+`#541`/`#542` (`claude/quirky-khayyam-64df44`) sigue aparte: al fusionarla, `FICHAS` chocará en la tabla de hitos
+(la fila de H9) y hay que hacerlo a mano.
 
 ## ⏭️ Traspaso (24-sep, tarde) — la ronda de V7, sellada; lo que dejó abierto la tarde
 
