@@ -152,7 +152,9 @@ BUILD_TANDA = os.path.join(BPGENVM, "build", "tanda")
 SHOT2PNG = os.path.join(AQUI, "shot2png.py")
 
 TROZO_PUT = 4096          # por encima de esto, PUT por trozos (#294)
-HELLO_SEGS = 3.0
+HELLO_SEGS = 8.0          # 24-sep: con 3 s el P4 no llegaba — abrir su CH343 lo reinicia (DTR/RTS) y
+                          # tarda más en contestar (el resto de T1: «> 3 s tras un reset en P4/DK2»).
+                          # Sólo cuesta tiempo en un puerto que no contesta.
 
 # Placas que se SABE que llevan panel, SOLO para un firmware tan viejo que no
 # conteste al INFO. Desde T1 todo build con LVGL publica screenW/screenH en el
@@ -171,11 +173,29 @@ def log(msg):
 
 # ── transporte: serie o TCP, misma cara ──────────────────────────────────────
 
+def pide_dtr(puerto):
+    """¿El dispositivo de este puerto necesita DTR para transmitir? El CDC de TinyUSB (Pico 2,
+    Metro: VID 2E8A de Raspberry Pi) no manda nada si el ordenador no lo activa."""
+    for p in serial.tools.list_ports.comports():
+        if p.device == puerto:
+            return p.vid == 0x2E8A
+    return False
+
+
 class TransSerie:
     def __init__(self, puerto, baud=115200):
         self.nombre = "serie"
         self.puerto = puerto
-        self.s = serial.Serial(puerto, baud, timeout=0.2)
+        # 24-sep: DTR y RTS apagados ANTES de abrir, como wire_serie desde el 23-sep: abrir el puerto
+        # ya no reinicia las ESP (el EN del puente CH343 de S3/P4, la lógica del USB-Serial-JTAG), que
+        # luego tardaban más que HELLO_SEGS en contestar. Y la Pico/Metro, con DTR: sin él no transmite.
+        self.s = serial.Serial()
+        self.s.port, self.s.baudrate, self.s.timeout = puerto, baud, 0.2
+        self.s.dtr = False
+        self.s.rts = False
+        self.s.open()
+        if pide_dtr(puerto):
+            self.s.dtr = True
         time.sleep(0.3)
         self.s.reset_input_buffer()
 

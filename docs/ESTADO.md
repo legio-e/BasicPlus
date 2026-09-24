@@ -488,38 +488,99 @@ definida, como Java) y la pregunta: error o aviso.
 **De paso**, la higiene de `FICHAS`: doce fichas cerradas que el censo no tachaba, `#525`/`#526` (cerradas el 18-sep)
 en la fila de H7, y tres entradas de la cola de V5 que se cerraron el 9-sep con número (`#482`–`#484`) sin marca.
 
-## 📋 H8 `#539` (24-sep, tarde) — `PACK_LS` ya no esconde los packs vivos, y lo que no cabe lo DICE
+## 🔌 H9 (24-sep, tarde) — LA TARDE DE PLACAS: las nueve grabadas, probadas y SELLADAS
+
+Eduardo conectó las nueve, una detrás de otra; yo grabé la imagen de hoy y pasé la tanda de V7
+(`tools/tanda_v7.json`, 11 pruebas). **Verde en las nueve salvo una prueba en la C6**, y selladas como punto de
+restauración (`dist/firmware-v7-24sep`, `22f30005`): la precondición de `H6.b`. Por el camino:
+- **La Nucleo**: el repeated start del STM32 contra el sensor de Eduardo, que resultó ser un BME280 (el sample sólo
+  aceptaba el chip_id del BMP280): cinco pruebas, cada una igual a su control por STOP. Con el botón de `C5Touch`
+  (5 pulsaciones, 5 por el puerto), `G4.a3` queda cerrado del todo. El FS que «bailaba» no bailó (tres arranques en
+  la Nucleo y tres en la DK2); el botón NRST da «pin (NRST)» y el log de antes vivo (`L15`).
+- **La C6 reventaba** (`#543`): `TimeDemo` y las dos de GUI la reiniciaban. La consola por USB dio el «Stack
+  protection fault» en `main`, y `addr2line` la cadena: la carga recursiva de dependencias, con littlefs debajo, ya
+  no cabe en 8 KB. 16 KB en las cuatro ESP que quedaban, y la C6 pasa, salvo `GuiWinJson`, que en V7 no cabe en su
+  heap («No space in heap», anotado en `#468`). Y su botón BOOT no se ve (`#544`).
+- **La Metro y SQLite**: su pack llevaba el `.mdn` de la ABI 6, rechazado con nombre; y el `.pack` del repo llevaba el
+  motor ARM del 19-ago, que exige la BIOS exacta (`bp_pack_init` → 3). Reconstruido: `SqlDemo` == host.
+- **Las herramientas**: la tanda reiniciaba la S3 y el P4 al abrir su CH343 (el DTR/RTS por defecto de pyserial) y no
+  les daba tiempo a contestar; `wire_serie` no llegaba a la Pico (sin DTR su CDC no transmite). Arregladas las dos
+  (`71e8b11d`).
+- `#466` en la Pico: «reinicio pedido» tras un RESET por el wire; `U1.2`: el log de antes sobrevive. `P1.C3`:
+  `trytest` y `JsonDemo` idénticos en la C3.
+- La SD «superfloppy», **cancelada** en placa (Eduardo): no se puede preparar la tarjeta en Windows sin riesgo, y el
+  caso está probado en el PC.
+
+## 📋 H8 `#539` y `#545` (24-sep, tarde) — `PACK_LS` ya no esconde los packs vivos; y en la C5, el wire perdía las líneas de más de 2 KB
 
 La tarea aparte de la mañana, en el worktree `friendly-dirac-ac6dfc`. **Reproducido en el PC antes de tocar**: la
 cadena de la C5 (17 borrados y 2 vivos al final) por el verbo de verdad listaba `P00`…`P15`, todos borrados, con
 `count` 19 y nada más. Y dos consumidores más leían los vivos de esa lista y fallaban igual: `wire_serie.py packdel`
-y el aviso de `requires-pack=` del IDE al grabar. El arreglo: `bpvm_pack_listar` (los vivos primero; en el hueco,
-los borrados más recientes; el MISMO recorrido que `bpvm_pack_scan`, que no cambia de contrato) y `PACK_LS` con
-`omitted`/`activeOmitted`, como el `omitted` del `LIST` (`#425`); `wire_serie.py` y el panel del IDE lo dicen.
-Pruebas, sabotajes y la imagen de la C5, en la ficha.
+y el aviso de `requires-pack=` del IDE al grabar. El arreglo (`2c2d416e`): `bpvm_pack_listar` (los vivos primero; en
+el hueco, los borrados más recientes; el MISMO recorrido que `bpvm_pack_scan`, que no cambia de contrato) y
+`PACK_LS` con `omitted`/`activeOmitted`, como el `omitted` del `LIST` (`#425`); `wire_serie.py` y el panel del IDE
+lo dicen.
+
+**En la C5, tras la ronda de placas**: el control con la imagen sellada (16 de 19, todos borrados) y, con la de
+`#539`, `PACK_LS` MUDO: 60 s sin respuesta, una línea vacía, la placa viva. Era el transporte, `#545` (`1d1e25bd`):
+`usb_serial_jtag_write_bytes` es todo o nada y su anillo mide 2048 B; la respuesta nueva, 2.062. Con la línea en
+tramos, 0,64 s y los TRES vivos (la ronda grabó un `DriverSpi` nuevo sin borrar el viejo). `Gui` y `DriverSpi`, sin
+regrabar; y la tanda de V7 en la C5, 11/11, la misma matriz que la sellada (el `GuiShot.shot`, byte a byte igual).
+Detalle en las dos fichas.
 
 **Lo que enseñó:**
-- **Antes de dar una imagen ESP nueva se puede saber, sin placa, si habrá que regrabar los packs sellados**: `nm`
-  de los dos `.elf` (el de HEAD y el nuevo). Si `_heap_start` no se mueve y `_text_end` y `_rodata_reserved_end`
-  no cruzan una página de 64 KB de la MMU, la zona de packs y el bloque de RAM quedan donde estaban. Aquí: heap,
-  `.data`, `.bss` e IRAM idénticos; +376 B de texto y +528 B de rodata dentro de sus páginas.
-- **En un worktree**, la C5 se construye con `idf.py set-target esp32c5` y `idf.py build` (1,6 min desde cero; el
-  `sdkconfig` que sale es idéntico al de `main`), y la Pico con su `build/` dentro del worktree. El STM32 no: sus
-  `.project` son locales y apuntan al `src/` del checkout principal; se compilan los `.c` tocados con su toolchain
-  y sus flags (`Debug/src/subdir.mk` del principal).
-- **`FICHAS.md` se guarda en CRLF desde esta mañana** (hasta el 23-sep, LF como todo el repo). Al insertar `#539`
-  (`bf72ad9a`) quedó un CR suelto (`\r\r\n`); con él git toma el fichero por binario, no lo normaliza, y ese commit
-  lo pasó ENTERO a CRLF; `#540` metió otro. Quitados los dos (`git ls-files --eol`: de `-text` a `crlf`) y añadido
-  sin conversión (`git -c core.autocrlf=false add`), para no cambiar sus 15.500 líneas con otras sesiones tocándolo.
-  Volver a LF (`git add --renormalize`) es un commit aparte, cuando no haya ramas abiertas que toquen `FICHAS`. Y
-  cuidado: el `sed -i` de Git Bash pasa a LF el fichero entero (se comió los CRLF de `FICHAS`): editar sin `sed`.
+- **Un transporte que se rinde en silencio**: la pista fue la línea VACÍA en la basura del cliente —el salto de línea
+  sin su cuerpo—. Y el comentario del código decía lo contrario de lo que hace el driver («puede escribir menos de
+  lo pedido»): se leyó el fuente del IDF antes de tocar nada.
+- **Una respuesta que crece 30 B es una prueba de tamaño gratis**: `#539` no rompió el wire, destapó un tope que
+  estaba desde el 31-ago y que nada de lo que se probaba alcanzaba (la salida de programas va en trozos de ≤ 512 B y
+  el `GET` en 256).
+- **Antes de dar una imagen ESP nueva se sabe, sin placa, si habrá que regrabar los packs sellados**: `nm` de los
+  dos `.elf` — `_heap_start` y el fin del texto y del rodata en páginas de 64 KB de la MMU. **Confirmado en la C5**:
+  mismas direcciones de zona, de bloque de RAM y de los dos motores. (Y la carga de los motores es perezosa: la
+  dispara el primer `INFO` o el primer `RUN`, no el arranque.)
+- **En un worktree**, las ESP32 se construyen con `idf.py set-target <chip>` y `idf.py build` (el `sdkconfig` no
+  viaja; el de la C5 salió idéntico al de `main`); la Pico, con su `build/` dentro del worktree; del STM32, sólo los
+  `.c` tocados con su toolchain y sus flags (sus `.project` son locales y apuntan al `src/` del principal). La C6
+  lleva LVGL dentro y `third_party/lvgl` está ignorado: no viaja. Se compiló con un enlace (junction) al del
+  principal, QUITADO al acabar, porque un borrado recursivo del worktree lo seguiría y vaciaría el original. Y un
+  `set-target` que falla deja un `sdkconfig` con el target POR DEFECTO (`esp32`): el siguiente build sale para
+  Xtensa y no enlaza (`usb_serial_jtag_*` no existe allí). Hay que borrar `build/` y `sdkconfig` y repetir.
+- **`FICHAS.md` se guarda en CRLF desde el 24-sep por la mañana** (hasta el 23-sep, LF como todo el repo): un CR
+  suelto (una línea en blanco escrita CR CR LF) hace que git lo tome por binario y no lo normalice, y así
+  `bf72ad9a` lo pasó ENTERO a CRLF; la tarde metió tres más. Quitados todos al fusionar (`git ls-files --eol`:
+  `crlf`, ya no `-text`) y añadido sin conversión (`git -c core.autocrlf=false add`). Volver a LF (`git add
+  --renormalize`) es un commit aparte, cuando no haya ramas abiertas que toquen `FICHAS`. Y el `sed -i` de Git Bash
+  pasa a LF el fichero entero: `FICHAS` se edita sin `sed`.
 
-## ⏭️ Traspaso (24-sep, tarde) — `#539` hecho; falta verlo en la C5
+## ⏭️ Traspaso (24-sep, al final de la tarde) — `#539` y `#545` hechos y vistos en la C5; la rama, al día con `main`
 
-**Para Eduardo**: la imagen de la C5 con `#539` está en `bpgenvm-c/esp32c5/build/` del worktree
-`friendly-dirac-ac6dfc`, **sin grabar** (se grabará cuando lo diga). Al grabarla, `wire_serie.py COM6 packs` tiene
-que enseñar `Gui` y `DriverSpi` vivos y «(y 3 borrado(s) mas antiguos sin listar)»; los dos packs no deberían
-necesitar regrabarse. La rama `claude/friendly-dirac-ac6dfc`, con sus commits, sin fusionar. Sin push.
+**Estado de las placas**: la **C5 lleva la imagen de esta rama** (`#539` + `#545`), NO la sellada; las otras ocho,
+las selladas. Para volver al punto de restauración, `dist/firmware-v7-24sep`.
+
+**Lo que queda de `#545`**: la C3 y la C6 llevan el transporte viejo —compilan con el arreglo, sin grabar—: una
+respuesta de más de 2 KB se les seguirá perdiendo hasta que se graben.
+
+**La rama** `claude/friendly-dirac-ac6dfc`: al día con `main` (fusionada la tarde de placas), sin push. La de
+`#541`/`#542` (`claude/quirky-khayyam-64df44`) sigue aparte: al fusionarla, `FICHAS` chocará en la tabla de hitos
+(la fila de H9) y hay que hacerlo a mano.
+
+## ⏭️ Traspaso (24-sep, tarde) — la ronda de V7, sellada; lo que dejó abierto la tarde
+
+**Sellado**: `dist/firmware-v7-24sep` (8 imágenes, 9 placas, SHA256) y `compat/informes/tanda_v7.md`. `H6.b` puede
+empezar cuando Eduardo quiera: hay a dónde volver.
+
+**Lo que dejó abierto la tarde**: `#544` (el BOOT de la C6: la prueba cruzada, un pin de la cabecera a masa); `#468`,
+con su medida (la C6 sin memoria para `GuiWinJson`); `#540` (¿error o aviso?); el NeoPixel de la familia ESP32 (el
+backend RMT).
+
+**Las otras dos sesiones**: `#539` (`PACK_LS`) y `#541`/`#542` (las pruebas de C en la red) están hechas en sus ramas
+(`claude/friendly-dirac-ac6dfc`, `claude/quirky-khayyam-64df44`) y sin fusionar. Al fusionar, `FICHAS` chocará —los
+tres tocamos el registro— y hay que hacerlo a mano. `#539` falta verla en la C5.
+
+**Lo siguiente**, a elegir con Eduardo: H3 «SD al común», `G4.b` (el DMA del ESP32) o `H6.b`.
+
+**Estado de las placas**: las nueve con las imágenes selladas. Sin push.
 
 ## ⏭️ Traspaso (24-sep, mediodía) — la TARDE DE PLACAS: cerrar todo lo que se pueda con ellas
 

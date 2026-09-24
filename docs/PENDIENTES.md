@@ -77,7 +77,7 @@
   |---|---|---|
   | **ESP32-S3 / P4** | reset por software (el `reset` del IDE), panic/excepción, watchdog | **el botón RST de la placa** y desenchufar |
   | **RP2350 (Pico 2 / Metro)** | el pin de RUN — o sea el botón de reset de la Metro | desenchufar |
-  | **STM32** | sin comprobar | desenchufar |
+  | **STM32** | el botón NRST (medido en la Nucleo el 24-sep: «pin (NRST)» y las líneas de antes) | desenchufar |
 
   Lo que sorprende es el ESP32: su botón RST tira del pin EN y corta el dominio
   digital entero, así que cuenta como arranque en frío. **Si persigues un cuelgue en

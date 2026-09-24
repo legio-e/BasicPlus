@@ -8,7 +8,11 @@ CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
 CONFIG_ESP32P4_REV_MIN_0=y
 
 # Holgura de stack para app_main.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# 16 KB desde el 24-sep (tarde de placas de V7): con 8 KB la C6 REINICIABA al empezar el RUN
+# de TimeDemo y de los Gui* —«Stack protection fault» en la task main: discover_deps (recursiva
+# por el arbol de dependencias, mas hondo en V7) -> bpvm_fs_stat -> littlefs -> la lectura SPI—.
+# La C5 ya estaba en 16 KB desde el 21-sep; toda la familia ESP32, igual.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # G2 — PSRAM 32 MB (HEX, 200 MHz) para el framebuffer del display. Misma config que
 # el ejemplo oficial mipi_dsi del P4. PSRAM@200M y el RMII de Ethernet COEXISTEN en

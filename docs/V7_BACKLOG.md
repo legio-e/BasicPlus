@@ -104,8 +104,8 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | **`Map`**: captadores tipados para claves **y** valores + `put` sobrecargado para clave entera y cadena (decidido 23-ago; `Collections.bp` sigue con `Object`) | `FICHAS` L10435 |
 | **`#396` — módulo `Time`** con `Time.Date` sobre un `long` de segundos (no un tipo del lenguaje) | `FICHAS` L11869 |
 | **`#19` — array fijo LOCAL inline de verdad** (tarea `#288`; el UAF se cerró en V4): `LEA_LOCAL` existe y el frontend nunca lo emite | `FICHAS` L11887; `V4_REF_AUDIT.md` §307 |
-| Mudar **`Exception`** fuera de `Core`, como `Object` (ahorraría el `import Core` a 21 de los 56 ficheros que lo ganaron) — idea, sin ficha | `ESTADO` 30-ago |
-| **`intrinsic` declarada sin registro no da error** en el compilador: compila y en runtime devuelve basura (miVM `OutOfMemoryError`, VM-C segfault) — hueco, sin ficha | `FICHAS` L4403 |
+| ~~Mudar **`Exception`** fuera de `Core`~~ — **ya no ahorra nada** (24-sep): desde H1 P3 el `import Core` lo pone el compilador en todo módulo | `ESTADO` 30-ago |
+| ~~**`intrinsic` declarada sin registro no da error**~~ — **resuelto por H1 P1** (24-sep, comprobado): la palabra `intrinsic` ya no existe —el cuerpo es `inline`— y escribirla es un error de sintaxis | `FICHAS` L4403 |
 | `#460` — cabo suelto: **quitar del compilador** `module interface`/`implements` (paso aparte, con su verificación); la **herencia entre módulos** aparcada hasta tener *«un control de versiones efectivo»* — el caso con el que medirla es `Core` | `FICHAS` `#460` (L8414) |
 | 🐛 **`L20` — el compilador ESCRIBE el `.mod` aunque dé error**: `for … step -1` falla (exit 2) y aun así deja un `.mod` que ejecuta sin el bucle. Silencioso: va delante. Y la decisión de lenguaje que `D1` dejó sin zanjar: `step` negativo o variable (hoy sólo literal entero positivo) | `PENDIENTES` L20 |
 | `L19` — el cast `Clase(x)` sólo baja desde `Object`: `Perro(a)` con `a: Animal` se toma por constructor | `PENDIENTES` L19 |
@@ -138,7 +138,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | **`/sd` como prefijo RESERVADO**: sin tarjeta, error en vez de caer en silencio a la flash interna (decidido 23-ago «entra en V6»; no se hizo). ⚠️ Cambio de comportamiento: a las notas de versión | `FICHAS` L10417 |
 | **`SD_INFO`/`SD_MOUNT` al REPL común** — siguen sólo en `pico/repl_v1.c` (resto de V5/H6) | `FICHAS` L11903 |
 | **La SD del STM32**: el motor es común; falta la cintura SDMMC de la U5 y montar `/sd` | `FICHAS` L6310 |
-| SD «superfloppy» sin MBR: probar con una tarjeta real reformateada (resto de H2-P5; en PC ya está) | `FICHAS` L1547 |
+| ~~SD «superfloppy» sin MBR: probar con una tarjeta real reformateada~~ — **cancelada en placa** (Eduardo, 24-sep: el firmware no formatea y Windows no la prepara sin escribir el disco en crudo; en PC ya está) | `FICHAS`, `H2-P5` |
 | **`listDir` en la VM-C** — a medio nacer: id y código en miVM, sin declaración BP y sin C (resto de `#484`; `input()` se queda fuera por decisión del 26-ago, y `PENDIENTES` mete a `listDir` en esa misma decisión: corregirlo) | `FICHAS` L4236 |
 | `#456` resto — **el tope de un path es de la VM-C, no del lenguaje**: `BPVM_FS_PATH_MAX` = 256 sólo en C; miVM abre lo que sea. Que el tope sea de la spec, lo compruebe miVM igual, y un sample de paridad lo fuerce | `FICHAS` L9476 |
 
