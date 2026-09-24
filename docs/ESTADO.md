@@ -436,6 +436,48 @@ dirección» no cargó: se regrabaron `Gui` y `DriverSpi`, en ese orden.
 997 bytes (55 AA) y **30 de 30** comandos intercalados con la pantalla; el tope igual que en el PC; el latido del
 táctil con repeated start, igual que con STOP; y el botón de `C5Touch` —el táctil de `DriverSpi` con repeated start— **falta pulsarlo** (la lectura del táctil sí va: el latido avanza y la primera trama llega).
 
+## 🔴 H7 y H4 (24-sep, mañana) — LAS TRES ROJAS: `#535`, `#530` y `#519`
+
+Con la Nucleo para la tarde, Eduardo eligió las tres fichas rojas que quedaban abiertas. Las tres eran del mismo
+tipo: algo que fallaba **sin decirlo**.
+
+- **`#535`** (`cebe358d`): el `move` de la VM-C no comprobaba nada y copiaba 4 B por elemento. Se escribió
+  como espejo del de miVM —y la referencia tenía su propia omisión: rechazaba `long[]` y `double[]`—.
+  `MoveRango.bp` lo prueba con siete tipos de array y catorce errores; con el `move` viejo, el `byte[]` escribía
+  FUERA del array (8 B desde el byte 8 de uno de 6).
+- **`#530`** (`3476867a`): **reproducido, era peor que la ficha**, que decía que miVM lo ejecutaba: saltaba a
+  `cs - 1` y ejecutaba un byte cualquiera. Las dos VMs arrancaban el hilo leyendo la ranura 0 sin la regla de la
+  herencia que `INVOKE_VIRTUAL` sí seguía: una copia de la regla que se quedó atrás. Ahora la regla está escrita
+  una vez por VM (en C había tres copias) y el arranque la usa. La otra mitad de la ficha ya estaba resuelta
+  desde H1 P3 (hay un solo `Thread`, el de `Core`). Por el camino me equivoqué un momento: «`Sumador` no
+  asignable a `Object`» parecía un bug y es la regla del manual (un `Thread` no es un `Object`).
+- **`#519`** (`2b08cc74`): la ficha dejaba dos salidas y la pregunta fue para Eduardo: **error, como en
+  módulo**. Un método `native` que no se puede traducir ya no «corre interpretado» con un aviso —que sin una
+  native de módulo al lado ni salía—: es el mismo error que una función, con el método, la línea y el motivo con
+  nombre («lee el campo 'n'…»). Antes de proponerlo conté los métodos `native` del árbol, y **el censo dio 0
+  cuando había uno** (`NatV7`): mi script cortaba la clase en el `end Caja` del constructor, la misma trampa
+  que el reordenado de `Spi.bp` en `G4.a3` (memoria nueva: casar el `end` por la sangría). El de `NatV7` se traduce:
+  el error no rompe nada.
+
+**De paso**, al pasar los tests de C de `#530`: `test-aotnew` no compila `NatNew.bp` desde el cambio de los arrays
+fijos (`60325e4c`) y `test-debug-mt` carga un `Arith.mod` MOD5 de mayo. Los dos están rotos desde antes y fuera de
+toda red; van a una tarea aparte.
+
+## ⏭️ Traspaso (24-sep, mediodía) — las tres rojas, cerradas; a la tarde, la Nucleo
+
+**A la tarde (Eduardo)**, sin cambios: la **Nucleo** con el repeated start del STM32 (compilado, sin probar) —un
+BMP280 por I2C con `bus.writeRead(0x76, [0xD0], 1, id, 1)` (0x58) y una `I2c.Transaction`—. Y **el botón de
+`C5Touch`**, que sigue sin pulsar.
+
+**Después**, a elegir con Eduardo: H3 «SD al común» (la TF soltando el bus en sus esperas) o `G4.b` (el DMA del
+ESP32).
+
+**Tareas aparte, lanzadas y sin empezar**: `#539` (`PACK_LS` esconde los packs vivos) y los dos tests de C rotos
+fuera de la red (`test-aotnew`, `test-debug-mt`).
+
+**Estado de las placas**: como en el traspaso de la mañana; las ocho imágenes, recompiladas con estos cambios y sin
+grabar. Sin push.
+
 ## ⏭️ Traspaso (24-sep, mañana) — `G4.a3` hecho; a la tarde, la Nucleo
 
 **A la tarde (Eduardo)**: la **Nucleo** con el repeated start del STM32 —compilado, sin probar—: un BMP280 por

@@ -151,7 +151,7 @@ Convención general:
 
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
-| 49 | `__threadStart` | `(t: Thread)` | `void` | Crea un nuevo `ThreadContext` con stackBase nuevo, inicializa frame para llamar a `t.run()`, lo encola en `runQueue`. |
+| 49 | `__threadStart` | `(t: Thread)` | `void` | Crea un nuevo `ThreadContext` con stackBase nuevo, inicializa frame para llamar a `t.run()`, lo encola en `runQueue`. `run()` es la ranura 0 y se resuelve como cualquier llamada virtual, subiendo por la cadena de herencia (`#530`, V7: heredado de un padre de otro módulo, la VM-C no arrancaba el hilo y miVM saltaba a `cs - 1`). |
 | 50 | `__threadJoin` | `(t: Thread)` | `void` | Bloquea el caller (`tc.status=BLOCKED_JOIN`, `blockedOnJoin = t.tid`) hasta que el thread target termine. Yield al scheduler. |
 | 51 | `yield` | `()` | `void` | `tc.yieldRequested = true`. El scheduler re-encola en runQueue y elige otro tc. |
 
