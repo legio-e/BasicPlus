@@ -53,6 +53,7 @@
 #include "bpvm_blk.h"
 #include "bpvm_rtc.h"
 #include "bpvm_platform.h"
+#include "bpvm_log.h"   /* V7/H3 SD.4: el porqué del dispositivo cuando un bloque falla */
 #include "crc32.h"     /* #398 — CRC del fichero entero con UNA apertura */
 #include "ff.h"
 #include "diskio.h"
@@ -103,18 +104,37 @@ DSTATUS disk_initialize(BYTE pdrv) {
  * implementación hace el bucle por dentro—, pero en SDMMC la lectura múltiple
  * (CMD18/CMD25) es donde está la ganancia, y trocear aquí la habría hecho
  * imposible sin volver a tocar este fichero. */
+/* V7/H3 SD.4 (24-sep) — UN BLOQUE QUE FALLA SE DICE, con el porqué del DISPOSITIVO. FatFs sólo sabe
+ * «RES_ERROR», y el programa recibe «error de escritura» sin el peldaño: la diferencia entre «no acepta los
+ * datos» y «no termina de grabar» se perdía aquí. Lo destapó la Metro, que no escribía en su tarjeta y el
+ * log callaba. */
+static void disco_fallo(const char* que, uint32_t lba, uint32_t n) {
+    log_printf("sd: %s %u bloque(s) desde el %u: %s", que, (unsigned) n, (unsigned) lba,
+               (s_blk && s_blk->motivo) ? s_blk->motivo() : "el dispositivo no dice por que");
+    /* Y si el medio la tiene (el SPI), LA TRAZA: lo que la tarjeta contestó de verdad al último comando. */
+    bpvm_blk_identidad_t idn;
+    if (s_blk && s_blk->identidad && s_blk->identidad(&idn) == 0 && idn.con_traza)
+        log_printf("sd:   CMD%u -> %02X %02X %02X %02X %02X %02X %02X %02X", (unsigned) idn.ultimo_cmd,
+                   idn.traza[0], idn.traza[1], idn.traza[2], idn.traza[3],
+                   idn.traza[4], idn.traza[5], idn.traza[6], idn.traza[7]);
+}
+
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count) {
     if (pdrv != 0 || !s_montado || !s_blk) return RES_NOTRDY;
     /* AQUÍ se suma el desplazamiento de la partición (ver cabecera). */
-    if (s_blk->leer(s_lba0 + (uint32_t) sector, (uint32_t) count, buff) != 0)
+    if (s_blk->leer(s_lba0 + (uint32_t) sector, (uint32_t) count, buff) != 0) {
+        disco_fallo("leer", s_lba0 + (uint32_t) sector, (uint32_t) count);
         return RES_ERROR;
+    }
     return RES_OK;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count) {
     if (pdrv != 0 || !s_montado || !s_blk) return RES_NOTRDY;
-    if (s_blk->escribir(s_lba0 + (uint32_t) sector, (uint32_t) count, buff) != 0)
+    if (s_blk->escribir(s_lba0 + (uint32_t) sector, (uint32_t) count, buff) != 0) {
+        disco_fallo("escribir", s_lba0 + (uint32_t) sector, (uint32_t) count);
         return RES_ERROR;
+    }
     return RES_OK;
 }
 

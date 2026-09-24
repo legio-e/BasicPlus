@@ -109,11 +109,19 @@ static uint8_t manda_acmd(int bus, uint8_t cmd, uint32_t arg, bpvm_sd_info_t* di
     return manda_cmd(bus, cmd, arg, 0x77, diag);
 }
 
-/* Espera el token de dato y recoge `n` bytes + los 2 de CRC. */
-static int lee_bloque(int bus, uint8_t* dst, int n) {
+/* Espera el token de dato y recoge `n` bytes + los 2 de CRC.
+ * V7/H3 SD.4 (24-sep) — con `diag`, LA TRAZA SIGUE en la fase de datos: tras el R1 (traza[0], que deja
+ * `manda_cmd`), los ÚLTIMOS bytes leídos esperando el token (traza[1..7], el más reciente al final). Un token
+ * de error (0x01 error, 0x02 CC, 0x04 ECC, 0x08 fuera de rango) dice por qué no entrega el bloque; antes se
+ * perdía y sólo quedaba «no entrega datos». */
+static int lee_bloque(int bus, uint8_t* dst, int n, bpvm_sd_info_t* diag) {
     int64_t t0 = bpvm_platform_now_ms();
     for (;;) {
         uint8_t t = intercambia(bus, 0xFF);
+        if (diag) {
+            for (int i = 1; i < 7; i++) diag->traza[i] = diag->traza[i + 1];
+            diag->traza[7] = t;
+        }
         if (t == TOKEN_DATO) break;
         if (t != 0xFF) return -1;                    /* token de error */
         if (bpvm_platform_now_ms() - t0 > PLAZO_TOKEN_MS) return -1;
@@ -421,11 +429,11 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
 
     /* 6 — Quién es (CID) y cuánto mide (CSD). */
     r1 = manda_cmd(p->bus, CMD10_SEND_CID, 0, 0xFD, info);
-    if (r1 != 0 || lee_bloque(p->bus, info->cid, 16) != 0) {
+    if (r1 != 0 || lee_bloque(p->bus, info->cid, 16, NULL) != 0) {
         suelta(p); return BPVM_SD_E_CID;
     }
     r1 = manda_cmd(p->bus, CMD9_SEND_CSD, 0, 0xFD, info);
-    if (r1 != 0 || lee_bloque(p->bus, info->csd, 16) != 0) {
+    if (r1 != 0 || lee_bloque(p->bus, info->csd, 16, NULL) != 0) {
         suelta(p); return BPVM_SD_E_CSD;
     }
     cs_alto(p);
@@ -456,7 +464,7 @@ bpvm_sd_res_t bpvm_sd_leer_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* info
     if (turno(p, info->hz > 0 ? info->hz : BAUD_LENTO) != 0) return BPVM_SD_E_BUS;   /* CS abajo */
     uint8_t r1 = manda_cmd(p->bus, CMD17_READ_SINGLE, arg, 0xFF, info);
     if (r1 != 0) { suelta(p); return BPVM_SD_E_LECTURA; }
-    if (lee_bloque(p->bus, dst, 512) != 0) { suelta(p); return BPVM_SD_E_LECTURA; }
+    if (lee_bloque(p->bus, dst, 512, info) != 0) { suelta(p); return BPVM_SD_E_LECTURA; }
     cs_alto(p);
     (void) intercambia(p->bus, 0xFF);       /* que suelte la línea */
     suelta(p);
@@ -499,11 +507,17 @@ bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* 
     suelta(p);
     for (;;) {
         if (turno(p, info->hz > 0 ? info->hz : BAUD_LENTO) != 0) return BPVM_SD_E_BUS;   /* CS abajo */
+        /* SD.4 (24-sep) — AL VOLVER A ELEGIRLA, LA TARJETA TARDA EN TIRAR OTRA VEZ DE LA LÍNEA: el primer
+         * byte sale del pull-up (FF) aunque siga grabando. Con un byte por turno y «terminó = no es 00», la
+         * escritura volvía antes de tiempo y el comando siguiente chocaba con la tarjeta ocupada (medido en
+         * la Metro: `CMD17 -> 00 00…`, y ni mkdir ni writeFile en /sd). Un byte de gracia, el que cuenta es el
+         * segundo, y «terminó» es FF: un byte a medias (acaba de soltar) sólo cuesta otra vuelta. */
+        (void) intercambia(p->bus, 0xFF);
         uint8_t b = intercambia(p->bus, 0xFF);
         cs_alto(p);
         (void) intercambia(p->bus, 0xFF);
         suelta(p);
-        if (b != 0x00) return BPVM_SD_OK;
+        if (b == 0xFF) return BPVM_SD_OK;
         if (bpvm_platform_now_ms() - t0 > PLAZO_OCUPADA_MS) return BPVM_SD_E_OCUPADA;
     }
 #else

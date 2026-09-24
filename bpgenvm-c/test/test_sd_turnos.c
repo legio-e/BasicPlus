@@ -47,7 +47,17 @@ static int g_fail = 0;
 static volatile int g_nivel[40];
 static void fg_init(int pin, int mode) { (void) pin; (void) mode; }
 static void fg_pull(int pin, int m) { (void) pin; (void) m; }
-static void fg_write(int pin, int v) { if (pin >= 0 && pin < 40) g_nivel[pin] = v ? 1 : 0; }
+/* SD.4 (24-sep) — la tarjeta REAL, al volver a elegirla mientras graba, TARDA en tirar otra vez de la línea:
+ * el primer byte sale del pull-up (FF) aunque siga ocupada. La de mentira contestaba 00 desde el primer
+ * byte —más amable que la de verdad—, y así la TF de SD.2 pasaba aquí y en la Metro volvía antes de tiempo
+ * (el comando siguiente chocaba con la tarjeta grabando: CMD17 -> 00 00…). Ahora se porta como la real. */
+static volatile int g_recien = 0;            /* 1 = el CS de la TF acaba de bajar */
+static void fg_write(int pin, int v) {
+    if (pin >= 0 && pin < 40) {
+        if (pin == CS_TF && g_nivel[pin] && !v) g_recien = 1;
+        g_nivel[pin] = v ? 1 : 0;
+    }
+}
 static int  fg_read(int pin) { return (pin >= 0 && pin < 40) ? g_nivel[pin] : 0; }
 static const bpvm_gpio_backend_t GPIO_FALSO = { fg_init, fg_pull, fg_write, fg_read };
 
@@ -98,6 +108,10 @@ static void orden(void) {
 
 static uint8_t tarjeta(uint8_t tx) {
     if (g_nivel[CS_TF]) return 0xFF;                      /* CS arriba: suelta la línea */
+    if (g_recien) {                                       /* recién elegida: */
+        g_recien = 0;
+        if (g_estado == T_OCUPADA) return 0xFF;           /* aún no tira de la línea (el pull-up) */
+    }
     switch (g_estado) {
     case T_TOKEN:
         if (g_psal < g_nsal) return g_sal[g_psal++];      /* el R1 del CMD24 */
