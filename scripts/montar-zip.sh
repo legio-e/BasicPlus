@@ -276,10 +276,13 @@ fi
 # La regla es una y no hay lista que mantener: si un .mod del paquete no es del
 # formato ACTUAL, el paquete no sale. Vale igual para un intruso que para una
 # stdlib que se quede atrás en la próxima subida de formato. El formato actual es
-# MOD7 (V6/N1.4: la sección `native` dentro del .mod; docs/MOD_FORMAT.md) — la VM
-# aún carga MOD6, pero un MOD6 en el paquete es un .mod que nadie recompiló, y eso
-# es justo lo que esta guarda caza (el 12-sep cazó… a sí misma: decía MOD6).
-MOD_ACTUAL="MOD7"
+# MOD9 (V7/H2 `#523`: el enlace tardío, la cadena entera en MOD9 desde el 17-sep;
+# docs/MOD_FORMAT.md §13) — la VM aún carga MOD7 y MOD8, pero uno de ésos en el
+# paquete es un .mod que nadie recompiló, y eso es justo lo que esta guarda caza
+# (el 12-sep cazó… a sí misma: decía MOD6; y el 24-sep, al cerrar H2, seguía en MOD7
+# — habría parado el paquete de V7). Al subir de formato se tocan LAS DOS líneas.
+MOD_ACTUAL="MOD9"
+MOD_VIEJOS='MOD[5-8]'   # los que se buscan DENTRO de los packs (abajo)
 # Y el invariante de bpstdlib/, que es donde vivían los intrusos: un módulo de la
 # librería estándar TIENE su fuente al lado. Un .mod suelto ahí no es stdlib —
 # y no es inocuo: `resolveDeviceDeps` da prioridad de stdlib a cualquier módulo
@@ -325,12 +328,14 @@ done < <(find "$OUT" -name '*.mod')
 # 20-ago —la stdlib de V5— y viajó en el ZIP montado esa tarde sin que esta guarda
 # lo viera, porque un pack es un solo fichero. Un pack se graba en la zona de packs
 # y en el P4 ESA zona gana a /lib (#493): un Stdlib.pack rancio tapa la stdlib del
-# firmware a todos los programas. Se busca el magic antiguo dentro de cada .pack.
+# firmware a todos los programas. Se buscan los magics antiguos dentro de cada .pack
+# (24-sep: era sólo MOD6, escrito a mano; con MOD9 se escapaban un MOD7 y un MOD8).
 for pk in "$OUT"/packs/*.pack; do
     [ -f "$pk" ] || continue
-    if grep -c -a "MOD6" "$pk" >/dev/null 2>&1 && [ "$(grep -a -o "MOD6" "$pk" | wc -l)" -gt 0 ]; then
+    viejos="$(grep -a -o -E "$MOD_VIEJOS" "$pk" | wc -l)"
+    if [ "$viejos" -gt 0 ]; then
         MALOS="$MALOS
-  $(printf '%-6s %s  (lleva %s modulos MOD6 dentro)' "PACK" "${pk#$OUT/}" "$(grep -a -o 'MOD6' "$pk" | wc -l)")"
+  $(printf '%-6s %s  (lleva %s modulos de un formato anterior dentro: %s)' "PACK" "${pk#$OUT/}" "$viejos" "$(grep -a -o -E "$MOD_VIEJOS" "$pk" | sort -u | tr '\n' ' ')")"
     fi
 done
 if [ -n "$MALOS" ]; then
