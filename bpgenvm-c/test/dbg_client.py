@@ -44,8 +44,12 @@ def main():
     cwd = sys.argv[3] if len(sys.argv) > 3 else "."
     port = free_port()
 
-    proc = subprocess.Popen([exe, str(port), mod], cwd=cwd,
-                            stderr=subprocess.DEVNULL)
+    # #541 — el stderr del servidor va a un fichero y se ENSENA si algo falla:
+    # tirado (DEVNULL), un «falta el modulo 'Core'» salia aqui como un timeout
+    # sin motivo.
+    errpath = os.path.join(cwd, "dbgserver.err")
+    errf = open(errpath, "w")
+    proc = subprocess.Popen([exe, str(port), mod], cwd=cwd, stderr=errf)
     fails = []
     try:
         # conectar con reintento (el server tarda en abrir el socket)
@@ -56,7 +60,7 @@ def main():
             except OSError:
                 time.sleep(0.05)
         if sock is None:
-            print("FAIL: no se pudo conectar al servidor"); return 1
+            raise OSError("no se pudo conectar al servidor")
         w = Wire(sock)
 
         # 1) HELLO
@@ -131,12 +135,19 @@ def main():
         print("EXITED status=%s (OUTPUT msgs=%d)" % (ex.get("status"), nout))
 
         sock.close()
+    except (OSError, EOFError, ValueError) as e:   # timeout, conexion cerrada, JSON roto
+        fails.append("el guion se corto: %r" % (e,))
     finally:
         try: proc.wait(timeout=3)
         except Exception: proc.kill()
+        errf.close()
 
     if fails:
-        print("FALLOS:"); [print("  -", f) for f in fails]; return 1
+        print("FALLOS:"); [print("  -", f) for f in fails]
+        with open(errpath, errors="replace") as f:
+            cola = f.read().splitlines()[-12:]
+        print("stderr del servidor (lo ultimo):"); [print("  |", l) for l in cola]
+        return 1
     print("OK: H6.b.2.b wire del debugger host (HELLO/PING/PAUSE/RUN/BP_HIT/SET_BP/STEP/CONTINUE/EXITED)")
     return 0
 
