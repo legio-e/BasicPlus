@@ -1235,15 +1235,32 @@ public final class BpvmClient implements AutoCloseable {
     /** H3 — la zona de packs completa: cadena (activos Y tombstones) + espacio.
      *  `chainOk`=false → hay una cabecera corrupta que corta la cadena (lo repara
      *  una compactación desde el PC); `count` puede superar packs.size() si el
-     *  device truncó el listado. */
+     *  device truncó el listado.
+     *
+     *  <p>#539 — y lo que truncó lo CUENTA: el device lista como mucho 16 (los
+     *  activos primero y, en el hueco, los borrados más recientes) y manda
+     *  `omitted` (cuántos de `count` no están en `packs`) y `activeOmitted`
+     *  (cuántos de ésos están ACTIVOS: sólo con más activos que filas). Una imagen
+     *  anterior no los manda (aquí, -1) y listaba los 16 PRIMEROS de la cadena, que
+     *  en una placa con historia son borrados: la C5 enseñaba 16 borrados y
+     *  escondía sus dos activos. */
     public static final class PackTable {
         public final long regionSize, free;
         public final boolean chainOk;
         public final int count;
+        public final int omitted, activeOmitted;   // #539: -1 = el device no lo dice
         public final List<PackInfo> packs;
-        public PackTable(long regionSize, long free, boolean chainOk, int count, List<PackInfo> packs) {
+        public PackTable(long regionSize, long free, boolean chainOk, int count,
+                         int omitted, int activeOmitted, List<PackInfo> packs) {
             this.regionSize = regionSize; this.free = free; this.chainOk = chainOk;
-            this.count = count; this.packs = packs;
+            this.count = count; this.omitted = omitted; this.activeOmitted = activeOmitted;
+            this.packs = packs;
+        }
+
+        /** #539 — ¿están TODOS los activos en {@link #packs}? Con la cuenta del
+         *  device se sabe; sin ella (imagen anterior), sólo si no truncó nada. */
+        public boolean activosCompletos() {
+            return activeOmitted >= 0 ? activeOmitted == 0 : count <= packs.size();
         }
     }
 
@@ -1349,7 +1366,9 @@ public final class BpvmClient implements AutoCloseable {
             }
         }
         return new PackTable(Json.getLong(r, "regionSize", 0), Json.getLong(r, "free", 0),
-                Json.getBool(r, "chainOk", false), (int) Json.getLong(r, "count", 0), packs);
+                Json.getBool(r, "chainOk", false), (int) Json.getLong(r, "count", 0),
+                (int) Json.getLong(r, "omitted", -1), (int) Json.getLong(r, "activeOmitted", -1),
+                packs);
     }
 
     /** H3 — un fichero dentro de un pack (una fila del PACK_ENTRIES). */

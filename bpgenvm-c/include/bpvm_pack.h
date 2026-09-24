@@ -177,6 +177,36 @@ int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
                        bpvm_pack_info_t* out, int max,
                        int verify_content, uint32_t* end_off);
 
+/* #539 — el LIST para ENSEÑAR la cadena (PACK_LS: el panel de Packs del IDE y
+ * `wire_serie.py packs`). Recorre la cadena ENTERA por el mismo camino que
+ * bpvm_pack_scan —mismas verificaciones, mismo end_off—, pero cuando no cabe en
+ * `max` no se queda con los PRIMEROS: se queda con los VIVOS y, en el hueco que
+ * quede, con los borrados MÁS RECIENTES. Salen en el orden de la cadena.
+ *
+ * Por qué: un pack borrado (tombstone) sigue en la cadena hasta un formateo, y
+ * la cadena es append-only, así que en una placa con historia los vivos van al
+ * FINAL. «Los primeros max» eran todos borrados: la C5 (24-sep) tenía 19, el
+ * listado sacaba 16 —los 16 borrados— y los dos vivos no salían.
+ *
+ * Si ni los vivos caben (más vivos que `max`), se ven los vivos más recientes.
+ * Lo que no sale se CUENTA en `r`, para que el que lista lo diga: un listado
+ * corto que no se declara corto es una mentira de las que se creen (#425).
+ *
+ * Devuelve cuántos descriptores quedaron en `out` (<= max) — NO el total de la
+ * cadena, como bpvm_pack_scan: el bucle del que lista es `i < devuelto` y no
+ * hay tope que olvidar. El total va en r->total. */
+typedef struct {
+    int total;          /* packs en la cadena (lo que devolvería bpvm_pack_scan) */
+    int vivos;          /* de ellos, vivos */
+    int fuera;          /* los que NO quedaron en `out` */
+    int vivos_fuera;    /* de ésos, vivos: sólo con más vivos que `max` */
+} bpvm_pack_listado_t;
+
+int bpvm_pack_listar(const uint8_t* base, uint32_t region_size,
+                     bpvm_pack_info_t* out, int max,
+                     int verify_content, uint32_t* end_off,
+                     bpvm_pack_listado_t* r);
+
 /* Entradas del pack que empieza en pack_off (previamente localizado con scan).
  * Devuelve el nº de entradas (puede ser > max) o -1 si la cabecera no valida. */
 int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_off,

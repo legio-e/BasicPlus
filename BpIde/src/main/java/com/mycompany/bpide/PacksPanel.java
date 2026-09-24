@@ -176,8 +176,13 @@ public final class PacksPanel extends JPanel {
         int pct = t.regionSize > 0 ? (int) Math.round(used * 100.0 / t.regionSize) : 0;
         usageBar.setValue(t.chainOk ? pct : 100);
         usageBar.setString(t.chainOk ? ("ocupado " + pct + "%") : "CADENA CORRUPTA");
+        // #539 — los activos que no caben en la lista también cuentan; y con una
+        // imagen anterior que truncó sólo se sabe de los listados, y se dice.
+        int activos = alive + Math.max(0, t.activeOmitted);
+        boolean sinCuenta = t.omitted < 0 && t.count > t.packs.size();
         StringBuilder s = new StringBuilder();
-        s.append(t.count).append(" packs (").append(alive).append(" activos) · ocupado ")
+        s.append(t.count).append(" packs (").append(activos)
+         .append(sinCuenta ? " activos listados) · ocupado " : " activos) · ocupado ")
          .append(kb(used)).append(" · libre ").append(kb(t.free))
          .append(" de ").append(kb(t.regionSize));
         // cadena corrupta con 0 packs = zona SIN ESTRENAR (restos del uso anterior
@@ -185,8 +190,24 @@ public final class PacksPanel extends JPanel {
         if (!t.chainOk) s.append(t.count == 0
                 ? "  ⚠ zona sin formatear (restos previos) → «Formatear zona…»"
                 : "  ⚠ cadena corrupta → compactar desde el PC o «Formatear zona…»");
-        if (t.count > t.packs.size()) s.append("  (listados ").append(t.packs.size()).append(")");
+        if (t.count > t.packs.size()) s.append(avisoListado(t));
         summaryLabel.setText(s.toString());
+    }
+
+    /** #539 — lo que el PACK_LS no lista, dicho. El device lista como mucho 16:
+     *  los activos primero y, en el hueco, los borrados más recientes; el resto lo
+     *  cuenta. Una imagen anterior no lo cuenta y listaba los 16 PRIMEROS de la
+     *  cadena, que en una placa con historia son borrados: la C5 enseñaba «19
+     *  packs (0 activos)» con dos activos grabados. */
+    private static String avisoListado(BpvmClient.PackTable t) {
+        int n = t.packs.size();
+        if (t.omitted < 0)
+            return "  ⚠ listados " + n + " de " + t.count + ": esta imagen no dice cuáles faltan"
+                 + " y pueden ser ACTIVOS (#539) → regrabar la imagen";
+        if (t.activeOmitted > 0)
+            return "  ⚠ " + t.omitted + " sin listar, " + t.activeOmitted + " de ellos ACTIVOS"
+                 + " (hay más activos de los que caben en la lista)";
+        return "  (listados " + n + ": faltan los " + t.omitted + " borrados más antiguos)";
     }
 
     /** Selección en la tabla de packs → PACK_ENTRIES del offset de esa fila. */
@@ -245,9 +266,15 @@ public final class PacksPanel extends JPanel {
             java.util.Set<String> grabados = new java.util.HashSet<>();
             for (BpvmClient.PackInfo pi : t.packs) if (pi.active) grabados.add(pi.name);
             for (String r : requiere) {
-                if (!grabados.contains(r))
-                    log.accept("[Packs] AVISO: '" + p.nombre + "' declara requires-pack=" + r
-                        + " y la placa no tiene ese pack grabado: grabalo tambien, o el RUN dira que falta un modulo\n");
+                if (grabados.contains(r)) continue;
+                /* #539 — «no está en la lista» sólo es «no está grabado» si la lista
+                 * trae TODOS los activos; si no, decirlo sería afirmar lo que no se
+                 * sabe (con la imagen vieja, la C5 lo habría dicho de Gui). */
+                log.accept("[Packs] AVISO: '" + p.nombre + "' declara requires-pack=" + r
+                    + (t.activosCompletos()
+                       ? " y la placa no tiene ese pack grabado: grabalo tambien, o el RUN dira que falta un modulo\n"
+                       : " y no esta entre los activos que lista la placa, pero la lista no los trae todos"
+                         + " (#539): puede estar grabado; si el RUN dice que falta un modulo, grabalo\n"));
             }
         } catch (Exception e) {
             /* Un pack que no se deja leer lo dirá el grabado, no este aviso. */

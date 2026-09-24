@@ -275,19 +275,48 @@ def cmd_ciclo(w, args):
     print("--- %d ciclos, %d con fallo ---" % (n, malos))
 
 
+def listado_incompleto(r):
+    """#539 — lo que el PACK_LS NO lista, dicho en una linea (None si lo lista todo).
+    La placa lista como mucho 16: los vivos primero y, en el hueco, los borrados mas
+    recientes; lo que no cabe lo cuenta en `omitted` y, de eso, lo vivo en
+    `activeOmitted`. Una imagen anterior a #539 no manda esos campos y listaba los
+    16 PRIMEROS de la cadena, que en una placa con historia son borrados."""
+    filas, total = r.get("packs") or [], r.get("count") or 0
+    if "omitted" not in r:
+        if total > len(filas):
+            return ("AVISO: se listan %d de %d y esta imagen no dice cuales faltan: pueden ser"
+                    " packs VIVOS (#539: la imagen es anterior; regrabala)" % (len(filas), total))
+        return None
+    if r.get("activeOmitted"):
+        return ("AVISO: %d pack(s) sin listar, %d de ellos VIVOS: hay mas vivos de los que caben"
+                " en la respuesta (16)" % (r.get("omitted"), r.get("activeOmitted")))
+    if r.get("omitted"):
+        return "(y %d borrado(s) mas antiguos sin listar)" % r.get("omitted")
+    return None
+
+
 def cmd_packs(w, _):
     """Que packs hay grabados (PACK_LS)."""
     w.send("PACK_LS")
     r = w.esperar("PACK_LS_REPLY", 10)
     if r is None:
         print("PACK_LS:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
-    print("zona %s B, libres %s, cadena %s, %s pack(s)" % (r.get("regionSize"), r.get("free"),
-          "ok" if r.get("chainOk") else "ROTA", r.get("count")))
-    for pk in r.get("packs") or []:
+    filas = r.get("packs") or []
+    vivos = sum(1 for pk in filas if pk.get("active", True))
+    if "omitted" in r:      # #539: con la cuenta de la placa, los vivos son TODOS
+        vivos = "%d vivo(s)" % (vivos + (r.get("activeOmitted") or 0))
+    else:                   # imagen anterior: sólo se sabe de los listados
+        vivos = "%d vivo(s) listado(s)" % vivos
+    print("zona %s B, libres %s, cadena %s, %s pack(s), %s" % (r.get("regionSize"), r.get("free"),
+          "ok" if r.get("chainOk") else "ROTA", r.get("count"), vivos))
+    for pk in filas:
         # V7/H6.c G2: un pack borrado sigue en la cadena (ocupa flash, y su RAM es
         # hueco) hasta formatear; decirlo es contar la verdad de la zona.
         print("  %-12s v%-8s %8s B  %s ficheros%s" % (pk.get("name"), pk.get("version"), pk.get("size"),
               pk.get("files"), "" if pk.get("active", True) else "   (BORRADO)"))
+    falta = listado_incompleto(r)
+    if falta:
+        print("  " + falta)
 
 
 def cmd_pack(w, args):
@@ -390,8 +419,15 @@ def cmd_packdel(w, args):
     if r is None:
         print("PACK_LS:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
     vivos = [pk for pk in (r.get("packs") or []) if pk.get("name") == args[0] and pk.get("active", True)]
+    # #539 — si el listado deja VIVOS fuera (o la imagen no lo cuenta), un vivo con
+    # ese nombre puede no estar en `vivos`: se dice, no se da por hecho que no hay.
+    falta = listado_incompleto(r)
+    dudoso = bool(falta) and ("omitted" not in r or bool(r.get("activeOmitted")))
+    if dudoso:
+        print("packdel: " + falta)
     if not vivos:
-        print("packdel: no hay ningun pack VIVO llamado '%s'" % args[0]); return
+        print("packdel: no hay ningun pack VIVO llamado '%s'%s" % (args[0],
+              " entre los listados" if dudoso else "")); return
     for pk in vivos:
         w.send("PACK_DEL", offset=int(pk.get("offset")))
         d = w.esperar("PACK_DEL_REPLY", 30)

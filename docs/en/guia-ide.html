@@ -835,8 +835,11 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <li><strong>Delete</strong> — marks it as retired. It stops being used
       <em>immediately</em>, but <strong>still takes up space</strong> until
       compaction: on NOR flash you can cross something out without erasing, and
-      crossing out is safe. That is why the table shows the whole chain, retired
-      ones included — it is the truth about the space.</li>
+      crossing out is safe. That is why the table also shows the retired ones —
+      it is the truth about the space. The board lists up to 16: the active ones
+      always, and in the room left the most recently retired; if the chain is
+      longer, the summary says how many older retired ones are not listed (the
+      usage bar counts them all).</li>
   <li><strong>Format area…</strong> — leaves it blank. It is also the way out
       when the area carries leftovers from a previous use of that flash.</li>
 </ul>

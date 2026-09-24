@@ -852,8 +852,11 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <li><strong>Borrar</strong> — lo marca como retirado. Deja de usarse
       <em>inmediatamente</em>, pero <strong>sigue ocupando sitio</strong> hasta
       compactar: en una flash NOR se puede tachar sin borrar, y tachar es
-      seguro. Por eso la tabla enseña la cadena entera, retirados incluidos —
-      es la verdad del espacio.</li>
+      seguro. Por eso la tabla enseña también los retirados — es la verdad del
+      espacio. La placa lista hasta 16: los activos siempre, y en el hueco los
+      retirados más recientes; si la cadena es más larga, el resumen dice
+      cuántos retirados antiguos no se listan (la barra de ocupación los cuenta
+      todos).</li>
   <li><strong>Formatear zona…</strong> — la deja en blanco. Es también la
       salida cuando la zona trae restos de un uso anterior de esa flash.</li>
 </ul>

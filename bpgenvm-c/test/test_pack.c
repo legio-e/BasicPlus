@@ -76,6 +76,61 @@ static long stingy_read_fix(void* user, uint32_t off, uint8_t* dst, uint32_t n) 
     return (long) n;
 }
 
+/* #539 — una copia de PackFixA con OTRO nombre y versión: el mismo contenido y
+ * la cabecera vuelta a sellar (crc_cab cubre [0,6) + [8,126) y va big-endian en
+ * 126, espejo de PackFormat.java). Para montar cadenas largas cuyos packs se
+ * distinguen por el nombre. */
+static void pack_renombrado(uint8_t* img, const uint8_t* fix,
+                            const char* nombre, const char* ver) {
+    memcpy(img, fix, FIX_SIZE);
+    memset(img + 12, 0, BPVM_PACK_NAME_LEN);
+    memcpy(img + 12, nombre, strlen(nombre));
+    memset(img + 48, 0, BPVM_PACK_VERCONT_LEN);
+    memcpy(img + 48, ver, strlen(ver));
+    uint16_t crc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, img, 6);
+    crc = bpvm_pack_crc16(crc, img + 8, 126 - 8);
+    img[126] = (uint8_t) (crc >> 8);
+    img[127] = (uint8_t) crc;
+}
+
+/* #539 — una cadena escrita como patrón: un carácter por pack, en el orden de
+ * grabación, 'V' vivo y 'B' borrado; el pack i se llama «P<i>» con dos cifras.
+ * Devuelve cuántos packs grabó (== strlen(patron) si todo fue bien). */
+static int monta_cadena(uint8_t* reg, uint32_t size, const uint8_t* fix,
+                        const char* patron) {
+    static uint8_t img[FIX_SIZE];
+    memset(reg, 0xFF, size);
+    int i = 0;
+    for (; patron[i]; i++) {
+        char nm[16];
+        snprintf(nm, sizeof nm, "P%02d", i);
+        pack_renombrado(img, fix, nm, "1.0");
+        int32_t off = bpvm_pack_add(reg, size, img, FIX_SIZE);
+        if (off < 0) break;
+        if (patron[i] == 'B' && bpvm_pack_remove_at(reg, size, (uint32_t) off) != 0) break;
+    }
+    return i;
+}
+
+/* Los nombres de out[0..n) en una línea («P03 P04 …»): se compara de una vez y,
+ * si falla, se imprime lo que salió. */
+static const char* nombres(const bpvm_pack_info_t* out, int n) {
+    static char buf[64 * 4];
+    buf[0] = '\0';
+    for (int i = 0; i < n && strlen(buf) + 5 < sizeof buf; i++) {
+        if (i) strcat(buf, " ");
+        strcat(buf, out[i].nombre);
+    }
+    return buf;
+}
+
+/* Cuántas veces aparece `aguja` en `pajar`. */
+static int cuenta(const char* pajar, const char* aguja) {
+    int k = 0;
+    for (const char* p = strstr(pajar, aguja); p; p = strstr(p + 1, aguja)) k++;
+    return k;
+}
+
 static int fl_erase(void* u, uint32_t off, uint32_t len) {
     (void) u;
     if ((off % 4096u) != 0 || (len % 4096u) != 0 || off + len > FLREG) return -1;
@@ -567,6 +622,155 @@ int main(void) {
         void* p4 = bpvm_scratch_take(bpvm_scratch_capacity(), "PRUEBA_D");
         CHECK(p4 != NULL, "#338 pedir el tamano exacto SI cabe");
         bpvm_scratch_give("PRUEBA_D");
+    }
+
+    /* --- 14. #539 — el LISTADO no esconde los VIVOS ----------------------------
+     *
+     * La C5 (24-sep): 19 packs en la cadena, 17 borrados y los dos vivos (Gui y
+     * DriverSpi, recién grabados) AL FINAL, porque la cadena es append-only y un
+     * borrado sigue en ella hasta un formateo. PACK_LS rellenaba los 16 PRIMEROS:
+     * listaba 16 borrados, decía «19 packs» y no avisaba de que faltaba nada.
+     * Aquí la misma forma de cadena, con los packs llamados P00…P18. */
+    {
+        enum { MAXL = 16 };
+        static uint8_t larga[32u * FIX_SIZE];
+        const uint32_t LSZ = (uint32_t) sizeof larga;
+        static bpvm_pack_info_t li[MAXL];
+        bpvm_pack_listado_t r;
+        uint32_t e1 = 0, e2 = 0;
+
+        /* 14.a CONTROL: esta cadena reproduce la C5 con el scan de siempre — los
+         * 16 primeros son todos borrados. Si esto no fuera así, lo de abajo no
+         * probaría nada. */
+        const char* C5 = "BBBBBBBBBBBBBBBBBVV";
+        CHECK(monta_cadena(larga, LSZ, fixA, C5) == 19, "#539 cadena de la C5: 17 borrados y 2 vivos al final");
+        n = bpvm_pack_scan(larga, LSZ, li, MAXL, 1, &e1);
+        int vivos_scan = 0;
+        for (int i = 0; i < MAXL; i++) if (li[i].alive) vivos_scan++;
+        CHECK(n == 19 && vivos_scan == 0,
+              "#539 CONTROL: bpvm_pack_scan llena los 16 con borrados (el sintoma de la C5)");
+
+        /* 14.b los vivos primero; el hueco, para los borrados MÁS RECIENTES; y en
+         * el orden de la cadena. */
+        n = bpvm_pack_listar(larga, LSZ, li, MAXL, 1, &e2, &r);
+        int bien = (n == MAXL && strcmp(nombres(li, n),
+              "P03 P04 P05 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18") == 0);
+        CHECK(bien, "#539 listar: los 2 vivos y los 14 borrados mas recientes, en orden de cadena");
+        if (!bien) printf("        salio: %s\n", nombres(li, n));
+        CHECK(li[14].alive && li[15].alive && li[14].crc_ok && li[15].crc_ok,
+              "#539 los dos vivos salen vivos y con su CRC verificado");
+        CHECK(r.total == 19 && r.vivos == 2 && r.fuera == 3 && r.vivos_fuera == 0,
+              "#539 cuentas: 19 en la cadena, 2 vivos, 3 fuera (borrados), 0 vivos fuera");
+        CHECK(e2 == e1 && e2 == 19u * FIX_SIZE, "#539 end_off: el mismo que el del scan");
+
+        /* 14.c vivos repartidos por la cadena: salen todos, cada uno en su sitio. */
+        CHECK(monta_cadena(larga, LSZ, fixA, "VBBBBBBVBBBBBBBBBBBV") == 20, "#539 cadena con vivos en 0, 7 y 19");
+        n = bpvm_pack_listar(larga, LSZ, li, MAXL, 0, NULL, &r);
+        CHECK(n == MAXL && strcmp(nombres(li, n),
+              "P00 P05 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19") == 0
+              && r.fuera == 4 && r.vivos == 3 && r.vivos_fuera == 0,
+              "#539 vivos repartidos: los 3 y los 13 borrados mas recientes (fuera P01-P04)");
+
+        /* 14.d más vivos que sitio: los vivos MÁS RECIENTES, y los que no caben
+         * se cuentan — es lo único que puede quedar fuera, y no callado. */
+        CHECK(monta_cadena(larga, LSZ, fixA, "VVVVVVVVVVVVVVVVVV") == 18, "#539 cadena de 18 vivos");
+        n = bpvm_pack_listar(larga, LSZ, li, MAXL, 0, NULL, &r);
+        CHECK(n == MAXL && strcmp(nombres(li, n),
+              "P02 P03 P04 P05 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17") == 0
+              && r.fuera == 2 && r.vivos == 18 && r.vivos_fuera == 2,
+              "#539 18 vivos: los 16 mas recientes, y vivos_fuera = 2");
+        /* ...y un borrado reciente no echa a un vivo. */
+        CHECK(monta_cadena(larga, LSZ, fixA, "BVVVVVVVVVVVVVVVVVVB") == 20, "#539 cadena B + 18 vivos + B");
+        n = bpvm_pack_listar(larga, LSZ, li, MAXL, 0, NULL, &r);
+        CHECK(n == MAXL && strcmp(nombres(li, n),
+              "P03 P04 P05 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18") == 0
+              && r.fuera == 4 && r.vivos_fuera == 2,
+              "#539 el borrado mas reciente (P19) no echa a un vivo");
+
+        /* 14.e si cabe entera, lo MISMO que el scan de siempre, campo a campo. */
+        CHECK(monta_cadena(larga, LSZ, fixA, "VBV") == 3, "#539 cadena corta VBV");
+        static bpvm_pack_info_t ls[MAXL];
+        int ns = bpvm_pack_scan(larga, LSZ, ls, MAXL, 1, &e1);
+        n = bpvm_pack_listar(larga, LSZ, li, MAXL, 1, &e2, &r);
+        int igual = (n == ns && e1 == e2 && r.fuera == 0 && r.vivos_fuera == 0);
+        for (int i = 0; igual && i < n; i++)
+            igual = li[i].off == ls[i].off && li[i].size_total == ls[i].size_total
+                 && li[i].alive == ls[i].alive && li[i].crc_ok == ls[i].crc_ok
+                 && li[i].n_entries == ls[i].n_entries && li[i].content_end == ls[i].content_end
+                 && strcmp(li[i].nombre, ls[i].nombre) == 0;
+        CHECK(igual, "#539 cadena que cabe: listar == scan (mismo orden, mismos campos)");
+
+        /* 14.f sin sitio (out NULL): sólo las cuentas. */
+        monta_cadena(larga, LSZ, fixA, C5);
+        n = bpvm_pack_listar(larga, LSZ, NULL, MAXL, 0, NULL, &r);
+        CHECK(n == 0 && r.total == 19 && r.vivos == 2 && r.fuera == 19 && r.vivos_fuera == 2,
+              "#539 sin array: 0 listados y las cuentas enteras");
+
+        /* 14.g la cabecera que CORTA la cadena es la más reciente de lo que se ve:
+         * sale, con su CRC malo, que es lo que dice dónde está el problema. */
+        monta_cadena(larga, LSZ, fixA, C5);
+        larga[18u * FIX_SIZE + 100] ^= 0xFF;          /* P18: byte cubierto por crc_cab */
+        n = bpvm_pack_listar(larga, LSZ, li, MAXL, 1, &e2, &r);
+        CHECK(n == MAXL && strcmp(li[MAXL - 1].nombre, "P18") == 0 && !li[MAXL - 1].crc_ok
+              && strcmp(li[MAXL - 2].nombre, "P17") == 0 && li[MAXL - 2].alive
+              && e2 == BPVM_PACK_NO_SPACE && r.total == 19,
+              "#539 cabecera mala al final: sale (crc MAL), el vivo de antes tambien, cadena rota");
+
+        /* 14.h EL VERBO: PACK_LS sobre la cadena de la C5. Lo que se ve y lo que
+         * se DICE que no se ve: `omitted` (#425, como el LIST) y `activeOmitted`. */
+        monta_cadena(larga, LSZ, fixA, C5);
+        bpvm_bmgr_t bm;
+        memset(&bm, 0, sizeof bm);
+        bm.packs_base = larga; bm.packs_size = LSZ;
+        bpvm_bmgr_req_t rq;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_LS"); rq.id = 539;
+        static char rep[4096];
+        int slot = -9;
+        int nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "PACK_LS_REPLY") != NULL, "#539 PACK_LS responde");
+        CHECK(strstr(rep, "\"name\":\"P17\"") && strstr(rep, "\"name\":\"P18\"")
+              && cuenta(rep, "\"active\":true") == 2,
+              "#539 PACK_LS lista los DOS vivos del final");
+        CHECK(cuenta(rep, "{\"name\":") == MAXL && strstr(rep, "\"name\":\"P00\"") == NULL
+              && strstr(rep, "\"name\":\"P03\"") != NULL,
+              "#539 PACK_LS: 16 filas, sin los 3 borrados mas antiguos");
+        CHECK(strstr(rep, "\"count\":19,") && strstr(rep, "\"omitted\":3,")
+              && strstr(rep, "\"activeOmitted\":0,"),
+              "#539 PACK_LS DICE lo que no lista: count 19, omitted 3, activeOmitted 0");
+        if (!strstr(rep, "\"omitted\":3,")) printf("        respuesta: %s\n", rep);
+
+        /* 14.i y cuando ni los vivos caben, lo dice. */
+        monta_cadena(larga, LSZ, fixA, "VVVVVVVVVVVVVVVVVV");
+        nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "\"count\":18,") && strstr(rep, "\"omitted\":2,")
+              && strstr(rep, "\"activeOmitted\":2,") && cuenta(rep, "\"active\":true") == MAXL,
+              "#539 PACK_LS con 18 vivos: lista 16 y activeOmitted 2");
+
+        /* 14.j EL PEOR CASO CABE: 16 filas con el nombre (32) y la versión (16)
+         * más largos en los 4 KB del búfer de respuesta más pequeño (el del micro
+         * simulado; «la respuesta se queda en 4 KB», repl_esp32.c). Con margen
+         * para las cifras que aquí son pocas y en una placa no: por fila, 4 más
+         * de tamaño y 3 de offset (8 cifras: zonas de 13 MB) y 2 de ficheros; y 8
+         * en la cabecera (regionSize, free). Si alguien sube PACK_LS_MAX sin
+         * mirar, salta aquí y no en el sim. */
+        {
+            static uint8_t img[FIX_SIZE];
+            memset(larga, 0xFF, LSZ);
+            for (int i = 0; i < 19; i++) {
+                char nm[BPVM_PACK_NAME_LEN + 1];
+                snprintf(nm, sizeof nm, "%02d_NombreDeTreintaYDosLetras_abc", i);
+                pack_renombrado(img, fixA, nm, "1234567890.12345");
+                int32_t off = bpvm_pack_add(larga, LSZ, img, FIX_SIZE);
+                if (off >= 0 && i < 17) bpvm_pack_remove_at(larga, LSZ, (uint32_t) off);
+            }
+            nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+            CHECK(nr > 0 && cuenta(rep, "{\"name\":") == MAXL
+                  && strstr(rep, "_NombreDeTreintaYDosLetras_abc\",\"version\":\"1234567890.12345\"")
+                  && nr + MAXL * (4 + 3 + 2) + 8 < 4096,
+                  "#539 el peor caso (16 filas de nombre 32 y version 16) cabe en 4 KB con margen");
+            printf("        (peor caso: %d B de 4096)\n", nr);
+        }
     }
 
 done:
