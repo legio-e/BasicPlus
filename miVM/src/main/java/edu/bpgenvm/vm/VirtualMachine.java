@@ -5495,8 +5495,11 @@ public class VirtualMachine {
             // Copia `count` elementos de src[srcStart..] a dst[dstStart..].
             // Soporta overlapping cuando src y dst son el mismo array (System.arraycopy lo
             // maneja sobre el byte[] subyacente). Valida en runtime: ambos refs deben
-            // apuntar a un array vivo del MISMO tipo (i8/i16/i32/ref). Tipos distintos →
-            // RuntimeError, no se reinterpreta silenciosamente.
+            // apuntar a un array vivo del MISMO tipo (i8/i16/i32/i64/ref). Tipos distintos →
+            // RuntimeError, no se reinterpreta silenciosamente. #535 (V7): los arrays de 8 B
+            // por elemento (long[] y double[], de H1.2) faltaban en la lista y un move entre
+            // dos long[] decía «no es un array (type=5)». La VM-C hace lo mismo, en el mismo
+            // orden y con los mismos textos (antes no comprobaba nada).
             case MOVE: {
                 int count    = popTc(tc);
                 int dstStart = popTc(tc);
@@ -5523,11 +5526,11 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "move: dst apunta a bloque libre");
                 int srcType = (srcTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
                 int dstType = (dstTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
-                if (srcType != TYPE_ARRAY_I8 && srcType != TYPE_ARRAY_I16
-                        && srcType != TYPE_ARRAY_I32 && srcType != TYPE_ARRAY_REF)
+                if (srcType != TYPE_ARRAY_I8 && srcType != TYPE_ARRAY_I16 && srcType != TYPE_ARRAY_I32
+                        && srcType != TYPE_ARRAY_I64 && srcType != TYPE_ARRAY_REF)
                     throwBpRuntimeError(tc, "move: src no es un array (type=" + srcType + ")");
-                if (dstType != TYPE_ARRAY_I8 && dstType != TYPE_ARRAY_I16
-                        && dstType != TYPE_ARRAY_I32 && dstType != TYPE_ARRAY_REF)
+                if (dstType != TYPE_ARRAY_I8 && dstType != TYPE_ARRAY_I16 && dstType != TYPE_ARRAY_I32
+                        && dstType != TYPE_ARRAY_I64 && dstType != TYPE_ARRAY_REF)
                     throwBpRuntimeError(tc, "move: dst no es un array (type=" + dstType + ")");
                 if (srcType != dstType)
                     throwBpRuntimeError(tc, "move: tipos de array distintos (src=" + srcType

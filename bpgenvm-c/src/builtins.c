@@ -793,6 +793,19 @@ static int32_t arr_i32(bpvm_t* vm, uint32_t addr, int32_t i) {
     return bpvm_read_i32_be(vm->memory + addr + 4u + (uint32_t) i * 4u);
 }
 
+/* #535 — bytes por elemento de un bloque de array del heap, o 0 si el tipo no es de array.
+ * Los mismos tamaños que `block_total_size` (heap.c) y que `elemSize` de miVM. */
+static uint32_t move_elem(int tipo) {
+    switch (tipo) {
+    case BPVM_TYPE_ARRAY_I8:  return 1u;
+    case BPVM_TYPE_ARRAY_I16: return 2u;
+    case BPVM_TYPE_ARRAY_I32: return 4u;
+    case BPVM_TYPE_ARRAY_I64: return 8u;   /* long[] y double[] (H1.2) */
+    case BPVM_TYPE_ARRAY_REF: return 8u;   /* V4: la ref plana mide 8 B */
+    default:                  return 0u;
+    }
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
@@ -3131,29 +3144,69 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_MOVE: {
-        /* move(src, dst, srcStart, dstStart, count): void
-         * Copia `count` slots de src[srcStart..] a dst[dstStart..].
-         * Para integer[]/string (TYPE_ARRAY_I32) cada slot = 4 bytes.
-         * Soporta overlapping (usa memmove). */
+        /* move(src, dst, srcStart, dstStart, count): void — copia `count` elementos de
+         * src[srcStart..] a dst[dstStart..]; pueden solaparse (memmove).
+         * #535 (V7): ESPEJO de `case MOVE` de miVM, en el mismo orden y con los mismos textos
+         * (contrato de paridad). Antes, con un null o count <= 0 volvía en silencio, no miraba
+         * ni offsets ni longitudes —un move fuera de rango escribía fuera del array— y copiaba
+         * 4 B por elemento aunque el array fuera de bytes o de 8 B (long[], double[], refs). */
         int32_t count    = pop_i32(vm, tc);
         int32_t dstStart = pop_i32(vm, tc);
         int32_t srcStart = pop_i32(vm, tc);
         uint32_t dstRef  = pop_ref(vm, tc);
         uint32_t srcRef  = pop_ref(vm, tc);
-        if (count <= 0 || srcRef == 0 || dstRef == 0) {
-            push_i32(vm, tc, 0);
-            return BPVM_OK;
+        char em[96];
+        if (srcRef == 0) return builtin_throw(vm, tc, "move: src es null");
+        if (dstRef == 0) return builtin_throw(vm, tc, "move: dst es null");
+        uint32_t sd = ref_addr(vm, srcRef);   /* V4: handle → dirección física del dato */
+        uint32_t dd = ref_addr(vm, dstRef);
+        uint32_t sh = sd - 4u, dh = dd - 4u;  /* la cabecera del bloque (un handle muerto da 0 - 4) */
+        if (sh < vm->heap_start || sh >= vm->heap_next) return builtin_throw(vm, tc, "move: src no es ref a heap");
+        if (dh < vm->heap_start || dh >= vm->heap_next) return builtin_throw(vm, tc, "move: dst no es ref a heap");
+        uint32_t stag = bpvm_read_u32_be(vm->memory + sh);
+        uint32_t dtag = bpvm_read_u32_be(vm->memory + dh);
+        if (stag & BPVM_TAG_FREE_BIT) return builtin_throw(vm, tc, "move: src apunta a bloque libre");
+        if (dtag & BPVM_TAG_FREE_BIT) return builtin_throw(vm, tc, "move: dst apunta a bloque libre");
+        int st = (int) ((stag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+        int dt = (int) ((dtag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+        uint32_t esz = move_elem(st);
+        if (esz == 0u) {
+            snprintf(em, sizeof em, "move: src no es un array (type=%d)", st);
+            return builtin_throw(vm, tc, em);
         }
-        /* Tamaño de slot por tipo. Para v1 asumimos I32 (caso común
-         * con integer[] y string). Para int8/int16 habría que mirar
-         * el tag — F3 lo añade. */
-        uint32_t slot = 4;
-        uint32_t dd = bpref_deref(vm, bpref_from_addr(dstRef));   /* V4: handle→addr */
-        uint32_t sd = bpref_deref(vm, bpref_from_addr(srcRef));
-        memmove(vm->memory + dd + 4 + (uint32_t) dstStart * slot,
-                vm->memory + sd + 4 + (uint32_t) srcStart * slot,
-                (size_t) count * slot);
-        push_i32(vm, tc, 0);
+        if (move_elem(dt) == 0u) {
+            snprintf(em, sizeof em, "move: dst no es un array (type=%d)", dt);
+            return builtin_throw(vm, tc, em);
+        }
+        if (st != dt) {
+            snprintf(em, sizeof em, "move: tipos de array distintos (src=%d dst=%d)", st, dt);
+            return builtin_throw(vm, tc, em);
+        }
+        int32_t srcLen = bpvm_read_i32_be(vm->memory + sd);
+        int32_t dstLen = bpvm_read_i32_be(vm->memory + dd);
+        if (count < 0) {
+            snprintf(em, sizeof em, "move: count negativo (%" PRId32 ")", count);
+            return builtin_throw(vm, tc, em);
+        }
+        if (srcStart < 0 || dstStart < 0) {
+            snprintf(em, sizeof em, "move: offset negativo (srcStart=%" PRId32 " dstStart=%" PRId32 ")",
+                     srcStart, dstStart);
+            return builtin_throw(vm, tc, em);
+        }
+        if ((int64_t) srcStart + count > (int64_t) srcLen) {
+            snprintf(em, sizeof em, "move: rango fuera de src (srcStart=%" PRId32 " count=%" PRId32
+                     " srcLen=%" PRId32 ")", srcStart, count, srcLen);
+            return builtin_throw(vm, tc, em);
+        }
+        if ((int64_t) dstStart + count > (int64_t) dstLen) {
+            snprintf(em, sizeof em, "move: rango fuera de dst (dstStart=%" PRId32 " count=%" PRId32
+                     " dstLen=%" PRId32 ")", dstStart, count, dstLen);
+            return builtin_throw(vm, tc, em);
+        }
+        memmove(vm->memory + dd + 4u + (uint32_t) dstStart * esz,
+                vm->memory + sd + 4u + (uint32_t) srcStart * esz,
+                (size_t) count * esz);
+        push_i32(vm, tc, 0);   /* void: el valor de relleno, como miVM */
         return BPVM_OK;
     }
 

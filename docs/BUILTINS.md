@@ -167,7 +167,7 @@ Convención general:
 
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
-| 55 | `move` | `(src, dst, srcStart, dstStart, count)` | `void` | Copia `count` elementos. Soporta overlapping en el mismo array (`System.arraycopy` sobre el byte[] subyacente). RTErr si: src/dst null o no son arrays; tipos distintos (i8/i16/i32/ref); count negativo; rangos fuera de length. |
+| 55 | `move` | `(src, dst, srcStart, dstStart, count)` | `void` | Copia `count` elementos (1, 2, 4 u 8 B cada uno según el array: `byte[]`, `integer[]`, `long[]`/`double[]`, referencias). Soporta overlapping en el mismo array. RTErr si: src/dst null o no son arrays; tipos distintos (i8/i16/i32/i64/ref); count negativo; offset negativo; rangos fuera de length — en ese orden y con los mismos textos en las dos VMs (`#535`, V7: la VM-C no comprobaba nada y copiaba 4 B por elemento; miVM rechazaba `long[]`/`double[]`). Paridad: `samples/MoveRango.bp`. |
 
 ## 56..63 — Math intrínsecos (vía `import Math`)
 
