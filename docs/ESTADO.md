@@ -620,8 +620,13 @@ gordo: **`continue` en un `for` no avanzaba la variable** —bucle infinito, en 
 `#541` (`11996888`) fusionados a mano —sólo chocaban los docs, y ninguna línea de ninguno de los dos lados se perdió— y
 verificados juntos: `compat.sh check` verde (paridad 100/100 en MOD9 y en MOD8, cápsula V6 59/59, norma, sim 5/5, pruebas
 de C 6/6, sombra 13/13), frontend 246/246, `h13` 46/46, el IDE reconstruido. `test-aotswitch` usa ya el AOT de `#541`
-(`aotmain`) y está en `check-testc` (`fd9e179e`). Sin ramas abiertas: si se quiere, `FICHAS.md` puede volver a LF como el
-resto del repo (`git add --renormalize`, un commit de sólo finales de línea); hoy está en CRLF y sin CR sueltos.
+(`aotmain`) y está en `check-testc` (`fd9e179e`). **Las dos ramas y sus worktrees, borrados** (Eduardo, 24-sep: `git
+branch -d`, fusionadas); quedan sus dos carpetas VACÍAS en `miVM/.claude/worktrees/`, que Windows no deja quitar mientras
+las sesiones que las tienen de directorio sigan abiertas — se borran al cerrarlas. Sin ramas abiertas: si se quiere,
+`FICHAS.md` puede volver a LF como el resto del repo (`git add --renormalize`, un commit de sólo finales de línea); hoy
+está en CRLF y sin CR sueltos. **FICHAS, limpia** (Eduardo: «si necesitas reordenar o limpiar fichas, hazlo»): en la tabla
+de hitos, las cerradas que seguían sin tachar, tachadas (`#494`, `#477`) y los restos de las cerradas llamados «restos»
+(`#502`, `#426`, `#473`); y arriba de ABIERTAS, lo abierto de verdad en una línea.
 
 **Placas**: la C5 lleva la imagen con `#539`/`#545` (el código de hoy); las otras ocho, la sellada
 (`dist/firmware-v7-24sep`): sin `#539`, y la C3 y la C6 sin el transporte de `#545` (una respuesta de más de 2 KB se les
@@ -631,9 +636,16 @@ sigue perdiendo hasta regrabarlas). Lo del compilador de la tarde (`#546`–`#54
 —`--stdlibDir` y fallar con nombre—, decide Eduardo), `#544` (el BOOT de la C6: la prueba cruzada), `#468` (la C6 sin
 memoria para `GuiWinJson`) y el NeoPixel de la familia ESP32 (el backend RMT).
 
-**Lo siguiente**, a elegir con Eduardo: H3 —le quedan `SD_INFO`/`SD_MOUNT` al REPL común (hoy sólo la Metro; el P4 monta
-`/sd` por SDMMC pero no los tiene) y la SD del STM32 (falta la cintura SDMMC de la U5)—, `G4.b` (el DMA del ESP32) o
-`H6.b`.
+**H3, la SD al común** (`V7_IDEAS` §H3.7): **SD.1** hecho (`b254d586`: el registro y `SD_INFO`/`SD_MOUNT` en el común, la
+identidad de la tarjeta en el contrato de bloque, FAT por punteros, el micro simulado con ranura y `sd_smoke` en
+`check-sim`) y **SD.2** hecho (`2d6dd838`: la TF suelta el bus en sus esperas; `test-sd-turnos` en `check-testc`, con su
+control). La SD del STM32 no aplica (la DK2 no tiene ranura). **Quedan SD.3** —la Metro (fuera sus dos handlers de
+`repl_v1.c`), el P4 (su `identidad` desde el `sdmmc_card_t`) y la C5 (FAT y el motor SPI en su build, `sd=bus:2,cs:23`)
+registran su SD— **y SD.4**, en placa con tarjeta. **La C6, pendiente de Eduardo**: su pantalla va por `esp_lcd` a pelo
+—inicializa el SPI2 con DMA y `ESP_ERROR_CHECK`, y el árbitro no la ve—; (a) tras `H6.b`, que la pasa al pack de la C5, o
+(b) ya, con el cerrojo del bus del IDF en la cintura del ESP32.
+
+**Lo siguiente**, a elegir con Eduardo: SD.3/SD.4, `G4.b` (el DMA del ESP32) o `H6.b`.
 
 ## ⏭️ Traspaso (24-sep, al final de la tarde) — `#539` y `#545` hechos y vistos en la C5; la rama, al día con `main`
 
