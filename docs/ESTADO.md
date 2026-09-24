@@ -614,6 +614,27 @@ nuevos se comprueban solos. Y al probar un `continue` dentro de un switch en un 
 gordo: **`continue` en un `for` no avanzaba la variable** —bucle infinito, en el intérprete y en el AOT—; nadie lo pisaba
 (2 `continue` en el árbol, ninguno en un `for`): `#548`, `132f956f`. **Con esto H2 queda cerrado.**
 
+## ⏭️ Traspaso (24-sep, noche) — todo en `main`: H1 y H2 cerrados, y las dos ramas de la tarde, fusionadas
+
+**`main` lo lleva todo** (sin push): H1 y H2 cerrados (`#540`; `#523` y `#546`–`#548`); `#539`/`#545` (`cd8831e2`) y
+`#541` (`11996888`) fusionados a mano —sólo chocaban los docs, y ninguna línea de ninguno de los dos lados se perdió— y
+verificados juntos: `compat.sh check` verde (paridad 100/100 en MOD9 y en MOD8, cápsula V6 59/59, norma, sim 5/5, pruebas
+de C 6/6, sombra 13/13), frontend 246/246, `h13` 46/46, el IDE reconstruido. `test-aotswitch` usa ya el AOT de `#541`
+(`aotmain`) y está en `check-testc` (`fd9e179e`). Sin ramas abiertas: si se quiere, `FICHAS.md` puede volver a LF como el
+resto del repo (`git add --renormalize`, un commit de sólo finales de línea); hoy está en CRLF y sin CR sueltos.
+
+**Placas**: la C5 lleva la imagen con `#539`/`#545` (el código de hoy); las otras ocho, la sellada
+(`dist/firmware-v7-24sep`): sin `#539`, y la C3 y la C6 sin el transporte de `#545` (una respuesta de más de 2 KB se les
+sigue perdiendo hasta regrabarlas). Lo del compilador de la tarde (`#546`–`#548`) no toca el firmware.
+
+**Abierto de hoy**: `#542` (el AOT sin la interfaz de `Core` genera código equivocado sin error; la propuesta de la ficha
+—`--stdlibDir` y fallar con nombre—, decide Eduardo), `#544` (el BOOT de la C6: la prueba cruzada), `#468` (la C6 sin
+memoria para `GuiWinJson`) y el NeoPixel de la familia ESP32 (el backend RMT).
+
+**Lo siguiente**, a elegir con Eduardo: H3 —le quedan `SD_INFO`/`SD_MOUNT` al REPL común (hoy sólo la Metro; el P4 monta
+`/sd` por SDMMC pero no los tiene) y la SD del STM32 (falta la cintura SDMMC de la U5)—, `G4.b` (el DMA del ESP32) o
+`H6.b`.
+
 ## ⏭️ Traspaso (24-sep, al final de la tarde) — `#539` y `#545` hechos y vistos en la C5; la rama, al día con `main`
 
 **Estado de las placas**: la **C5 lleva la imagen de esta rama** (`#539` + `#545`), NO la sellada; las otras ocho,
