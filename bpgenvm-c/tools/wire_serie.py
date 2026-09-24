@@ -53,6 +53,11 @@ class Wire:
         self.s.dtr = False
         self.s.rts = False
         self.s.open()
+        # 24-sep: la Pico/Metro (CDC de TinyUSB, VID 2E8A) no transmite sin DTR: con él apagado,
+        # info/log/reset no le llegaban. A ella se le enciende ya abierta (no la reinicia).
+        from serial.tools import list_ports   # sin ligar `serial` como local de __init__
+        if any(p.device == port and p.vid == 0x2E8A for p in list_ports.comports()):
+            self.s.dtr = True
         self.buf = b""
         self.id = 0
         self.otros = []

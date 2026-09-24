@@ -5,7 +5,8 @@
 //   SDO -> GND (addr 0x76) o 3V3 (0x77); pull-ups de 4k7 a 3V3 si el módulo no las trae.
 //
 // Cada lectura se compara con su CONTROL por el camino de siempre (write + read, con STOP):
-//   1. el chip_id con writeRead (repeated start)  -> 88 (0x58), igual que con write + read;
+//   1. el chip_id con writeRead (repeated start)  -> 88 (0x58, BMP280) o 96 (0x60, BME280), igual
+//      que con write + read;
 //   2. los 24 bytes de calibración (0x88..0x9F) con writeRead, iguales a los de write + read;
 //   3. una I2c.Transaction de dos mensajes (escribir el registro y leer): el mismo chip_id;
 //   4. una dirección en la que no hay nadie (0x50): writeRead devuelve -1 y no lanza;
@@ -31,9 +32,9 @@ module Bmp280RepStartNucleo
     bus.write(addr, [0xD0], 1)
     bus.read(addr, idStop, 1)
     print "[1] addr", addr, " writeRead: n =", n, " id =", id[0], "  write+read: id =", idStop[0]
-    if (n != 1) or (id[0] != 0x58) or (idStop[0] != id[0]) then
+    if (n != 1) or ((id[0] != 0x58) and (id[0] != 0x60)) or (idStop[0] != id[0]) then
       fallos := fallos + 1
-      print "    FALLO: se esperaba 88 (0x58) por los dos caminos"
+      print "    FALLO: se esperaba 88 (BMP280) o 96 (BME280), el mismo por los dos caminos"
     endif
 
     // 2. los 24 bytes de calibración
@@ -63,9 +64,9 @@ module Bmp280RepStartNucleo
     t.read(idT, 1)
     n := bus.execute(addr, t)
     print "[3] I2c.Transaction (escribir 0xD0, leer 1): n =", n, " id =", idT[0]
-    if idT[0] != 0x58 then
+    if idT[0] != id[0] then
       fallos := fallos + 1
-      print "    FALLO: se esperaba 88"
+      print "    FALLO: se esperaba el mismo chip_id que en [1]"
     endif
 
     // 4. nadie en 0x50
@@ -91,7 +92,7 @@ module Bmp280RepStartNucleo
     endtry
 
     if fallos == 0 then
-      print "RESULT: OK -- el repeated start del STM32 habla con el BMP280"
+      print "RESULT: OK -- el repeated start del STM32 habla con el BMP280/BME280"
     else
       print "RESULT: FAIL --", fallos, "fallos"
     endif
