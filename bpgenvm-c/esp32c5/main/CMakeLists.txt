@@ -31,6 +31,14 @@ idf_component_register(
         "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"               # V6/U3: los verbos comunes del REPL
         "../../src/bpvm_sd_placa.c"           # V7/H3: la SD de la placa (SD_INFO/SD_MOUNT), en el comun
+        # --- V7/H3 SD.3: la TF por SPI (en el SPI 2 de la pantalla) y FAT, lo mismo que la Metro ---
+        "../../src/bpvm_sd.c"                 # V5/H1: el protocolo SD por SPI (HAL BP + arbitro del bus)
+        "../../src/bpvm_sd_blk.c"             # V5/H6: esa SD como dispositivo de bloque
+        "../../src/bpvm_sd_spi_env.c"         # V7/H3 SD.3: la linea `sd` del ENV al registro comun
+        "../../src/bpvm_blk.c"                # V5/H6: contrato de bloque + tabla de particiones
+        "../../src/fs_fat.c"                  # V5/H2: backend FAT de la fachada (el MISMO que la Metro y el P4)
+        "../../third_party/fatfs/ff.c"        # motor FatFs R0.16 — el NUESTRO, no el del IDF
+        "../../third_party/fatfs/ffunicode.c" # tabla de la CP850 (nombres largos)
         "../../esp32/common/board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         "../../esp32/common/bios_esp32.c"    # V7/H6: la tabla BIOS y el ancla del pack nativo (era del P4)
         "../../esp32/common/pack_esp32.c"    # V7/H6: el cargador del pack nativo y su bloque de RAM (era del P4)
@@ -103,6 +111,7 @@ idf_component_register(
         "../../include"
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h
+        "../../third_party/fatfs"      # V7/H3 SD.3: ff.h (nuestro ffconf.h sale de ../../include)
     REQUIRES
         esp_timer
         esp_driver_uart

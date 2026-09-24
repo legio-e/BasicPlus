@@ -55,7 +55,7 @@ static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
 #include "hw_esp32.h"         /* H14: backends HW (GPIO/UART/SPI/I2C) reusados del S3 */
 #include "bpvm_blk_sdmmc.h"   /* V5/H6: la SD por SDIO como dispositivo de bloque */
 #include "blk_sdmmc_p4.h"     /* SDIO_KHZ_POR_DEFECTO: para ANUNCIAR el reloj de verdad */
-#include "bpvm_fs_fat.h"      /* V5/H6: montar esa tarjeta como FAT bajo /sd      */
+#include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD al registro común, que la monta como FAT bajo /sd */
 
 static const char *TAG = "bpvm_p4";
 
@@ -230,10 +230,11 @@ static void tcp_log_task(void *arg)
  * es lo que evita el clasico "lo arregle en uno y me olvide del otro".
  *
  * (!) A diferencia de la Metro, el zocalo del P4 NO tiene deteccion de tarjeta
- * (~CD solo lleva su pull-up, leido del esquema), asi que NO se usa
- * `bpvm_fs_fat_vigilar`: esa funcion se rearma en la rama "no hay medio", que
- * aqui no se ejecutaria nunca, y quedaria dando UN intento por arranque sin
- * decir por que. En esta placa el montaje es explicito.
+ * (~CD solo lleva su pull-up, leido del esquema), asi que NO se llama al vigia
+ * de la tarjeta en caliente (`bpvm_sd_placa_vigilar` desde V7/H3; antes
+ * `bpvm_fs_fat_vigilar`): se rearma en la rama "no hay medio", que aqui no se
+ * ejecutaria nunca, y quedaria dando UN intento por arranque sin decir por que.
+ * En esta placa el montaje es explicito: al arrancar, o con SD_MOUNT.
  *
  * (!) Que falle NO degrada el arranque. Una tarjeta ilegible, ausente o en exFAT
  * es un accesorio que no va, no una placa rota: se anota el motivo y se sigue.
@@ -250,12 +251,18 @@ static void p4_montar_sd(void)
 {
     char linea[160];
     int n = bpvm_env_get(board_mgr_env(), "sd", linea, sizeof linea);
-    if (n <= 0) { log_printf("sd: sin configurar en el env - no se monta"); return; }
+    if (n <= 0) {
+        /* V7/H3 SD.3 — el porqué, al registro común: es lo que contestan SD_INFO y SD_MOUNT. */
+        bpvm_sd_placa_sin_sd("esta placa no declara lector de SD (no hay entrada 'sd' en el env)");
+        bpvm_sd_placa_montar_arranque();      /* lo anota en el log con el texto de las demás placas */
+        return;
+    }
 
     bpvm_sdio_pines_t pines;
     char motivo[120];
     if (bpvm_sdio_pines_parse(linea, &pines, motivo, sizeof motivo) != 0) {
-        log_printf("sd: %s", motivo);         /* el parser ya dice QUE falta */
+        bpvm_sd_placa_sin_sd(motivo);         /* el parser ya dice QUE falta */
+        log_printf("sd: %s", motivo);
         return;
     }
     /* La CONFIGURACION que de verdad ha llegado al driver, ANTES de intentar
@@ -283,12 +290,12 @@ static void p4_montar_sd(void)
                pines.khz > 0 ? pines.khz : SDIO_KHZ_POR_DEFECTO,
                pines.khz > 0 ? "del env" : "por defecto");
 
-    if (bpvm_fs_fat_montar(bpvm_blk_sdmmc(&pines), "/sd", motivo, sizeof motivo) == 0) {
-        log_printf("sd: montada en /sd (%d bits, particion en el bloque %u)",
-                   pines.ancho, (unsigned) bpvm_fs_fat_lba_particion());
-    } else {
-        log_printf("sd: NO montada - %s", motivo);
-    }
+    /* V7/H3 SD.3 — el dispositivo, al registro común, que monta con las reglas de todas las placas y atiende
+     * SD_INFO/SD_MOUNT (antes, en el P4, «type no implementado»). La tarjeta en caliente NO: sin detector,
+     * `bpvm_sd_placa_vigilar` daría un intento de más y nada más (ver arriba); aquí se monta al arrancar o
+     * con SD_MOUNT. */
+    bpvm_sd_placa_registrar(bpvm_blk_sdmmc(&pines), &bpvm_fs_fat_ops, "SDMMC");
+    bpvm_sd_placa_montar_arranque();
 }
 
 #ifdef BPVM_P4_WIRE_TCP

@@ -40,9 +40,8 @@
 #include "bpvm_sqlmem.h"
 #include "bpvm_mem.h"
 #include "bpvm_mods.h"      /* #466: la regla del /lib de la imagen, común */        /* V6/U6: el planificador comun de memoria */      /* V5/H: regla del bloque de memoria de la BD */
-#include "bpvm_sd.h"          /* V5/H1: lector de SD por SPI (pines del env)  */
-#include "bpvm_sd_blk.h"      /* V5/H6: esa SD, vista como dispositivo de bloque */
-#include "bpvm_fs_fat.h"      /* V5/H2: montarla al arranque si hay tarjeta   */
+#include "bpvm_sd_blk.h"      /* V5/H6 → V7/H3 SD.3: la línea `sd` del ENV (SPI), al registro */
+#include "bpvm_sd_placa.h"    /* V7/H3 SD.3: el registro común de la SD, que la monta */
 #include "bpvm_bios.h"        /* V5/I: tabla prestada al pack nativo */
 /* pico/bios_pico.c — la tabla de ESTA placa, ya verificada (NULL si tiene
  * huecos; el motivo lo deja él mismo en el log). */
@@ -166,14 +165,6 @@ uint32_t s_vm_buffer_size = 0;
 uint8_t* s_sqlite_base    = NULL;
 uint32_t s_sqlite_size     = 0;
 
-/* V5/H1 — el lector de SD. El arranque SÓLO lee los pines del env y anota si
- * la línea era usable; no habla con la tarjeta (eso lo hace SD_INFO cuando el
- * usuario lo pide). `s_sd_motivo` guarda POR QUÉ no hay configuración, que es
- * la diferencia entre "esta placa no tiene lector" y "la línea está mal
- * escrita" — dos sitios distintos donde mirar. */
-bpvm_sd_pines_t s_sd_pines;
-int             s_sd_hay_config = 0;
-char            s_sd_motivo[96] = "sin leer";
 /* Decision de V5/H: el AVISO vive en el INFO (criterio de Eduardo, 7-ago:
  * "es algo que el usuario puede consultar facilmente, y arreglar con
  * facilidad"). El INFO es de CONSULTA y refleja el estado ACTUAL — un aviso al
@@ -1303,31 +1294,15 @@ static void vm_task(void* arg) {
     bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&s_env, "stack", 0));
     bpvm_set_quantum_ops(bpvm_env_get_long(&s_env, "quantum", 0));   /* #462 */
 
-    /* V5/H1 — los pines del lector de SD, en UNA entrada con etiquetas (decisión
-     * de Eduardo: una sola línea es más simple para el usuario que cinco):
+    /* V5/H1 → V7/H3 SD.3 — los pines del lector de SD, en UNA entrada con etiquetas (decisión de Eduardo:
+     * una sola línea es más simple para el usuario que cinco):
      *
      *     sd=sck:34,mosi:35,miso:36,cs:39,cd:40      (los de la Metro)
      *
-     * Aquí SOLO se leen y se anotan: no se toca la tarjeta. El arranque no es
-     * sitio para hablar con hardware que puede no estar — eso lo dispara el
-     * verbo SD_INFO cuando el usuario quiere, por la misma razón que el pack
-     * nativo (un cuelgue en el arranque se repite en cada arranque). */
-    {
-        char linea[96];
-        int n = bpvm_env_get(&s_env, "sd", linea, sizeof linea);
-        if (n < 0) {
-            s_sd_hay_config = 0;
-            snprintf(s_sd_motivo, sizeof s_sd_motivo,
-                     "esta placa no declara lector de SD (no hay entrada 'sd' en el env)");
-        } else if (bpvm_sd_pines_parse(linea, &s_sd_pines,
-                                       s_sd_motivo, sizeof s_sd_motivo) != 0) {
-            s_sd_hay_config = 0;        /* el motivo ya lo escribió el parser */
-        } else {
-            s_sd_hay_config = 1;
-            s_sd_motivo[0] = '\0';
-        }
-        log_printf("sd: %s", s_sd_hay_config ? "pines configurados" : s_sd_motivo);
-    }
+     * van al REGISTRO COMÚN de la SD (`bpvm_sd_placa`), que atiende SD_INFO/SD_MOUNT en todas las placas y
+     * monta en el arranque. Aquí SOLO se leen y se registran —o se anota el porqué no, que es la diferencia
+     * entre «esta placa no tiene lector» y «la línea está mal escrita»—: no se toca la tarjeta. */
+    (void) bpvm_sd_blk_registrar_desde_env(&s_env);
     /* V7/H6.c G4.a1 — los buses que la placa DECLARA en su ENV (`spi2=sck:6,mosi:7,miso:8`,
      * `i2c0=sda:0,scl:1,khz:400`): sus pines quedan reservados desde el arranque, y los que
      * vengan detrás (un programa, un pack, la TF) se enganchan a esa configuración o reciben
@@ -1532,32 +1507,10 @@ static void vm_task(void* arg) {
      * la fachada, y sin el FS de la placa no hay dónde colgarlo. Y antes del
      * autoarranque, para que una app encuentre la tarjeta ya montada.
      *
-     * EL PIN DE DETECCIÓN MANDA (criterio de Eduardo, 8-ago): sin tarjeta
-     * metida no tiene sentido montar, y así el arranque no toca ni el SPI. Es
-     * lo que permite que esto pase a ser automático — hasta ahora se hacía a
-     * mano justamente para no hablarle al vacío en cada encendido.
-     *
-     * ⚠️ Que falle NO degrada el arranque. Una tarjeta ilegible o en exFAT es
-     * un accesorio que no va, no una placa rota: se anota el motivo y se sigue.
-     * Degradar el boot por esto dejaría al usuario sin IDE para averiguar qué
-     * pasa, que es exactamente cuando más falta hace. */
-    if (!s_sd_hay_config) {
-        log_printf("sd: sin configurar en el env — no se monta");
-    } else if (!bpvm_sd_hay_tarjeta(&s_sd_pines)) {
-        log_printf("sd: zocalo VACIO (pin de deteccion) — no se monta");
-    } else {
-        char motivo[80];
-        /* V5/H6 — el montaje ya no recibe pines: recibe un DISPOSITIVO DE
-         * BLOQUE. Aquí se elige cuál (la SD por SPI); en el P4 será el de
-         * SDMMC y esta línea es la única que cambia. */
-        if (bpvm_fs_fat_montar(bpvm_sd_blk(&s_sd_pines), "/sd",
-                               motivo, sizeof motivo) == 0) {
-            log_printf("sd: montada en /sd (particion en el bloque %u)",
-                       (unsigned) bpvm_fs_fat_lba_particion());
-        } else {
-            log_printf("sd: NO montada — %s", motivo);
-        }
-    }
+     * Las reglas —el pin de detección manda (sin tarjeta no se toca ni el bus)
+     * y un fallo NO degrada el arranque— viven desde V7/H3 en el común
+     * (`bpvm_sd_placa_montar_arranque`), las mismas para todas las placas. */
+    bpvm_sd_placa_montar_arranque();     /* V7/H3 SD.3: las mismas reglas, ahora en el común */
     }  /* fin estado >= FS (H9): sin particiones/FS no hay board.json/stdlib */
 
     /* H13 hallazgo 12 — AQUÍ CORRÍA UN fib(28) EN C EN CADA ARRANQUE. Era el

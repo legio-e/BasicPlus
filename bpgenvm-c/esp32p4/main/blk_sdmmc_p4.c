@@ -47,6 +47,7 @@
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"   /* el LDO que alimenta las E/S */
 #include "driver/gpio.h"
 #include "sdmmc_cmd.h"
+#include "sd_protocol_defs.h"             /* SD_OCR_SDHC_CAP: para la identidad */
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -222,6 +223,30 @@ static const char* p4_motivo(void) {
     return esp_err_to_name(s_ultimo);
 }
 
+/* V7/H3 SD.3 (24-sep) — la IDENTIDAD para `SD_INFO` (el contrato de `bpvm_blk.h`), del `sdmmc_card_t` que
+ * rellenó el IDF en el último `init`: los mismos campos que da el SPI de la Metro, sacados de los registros
+ * ya decodificados. SIN traza: aquí la negociación la hace el SDK y no deja los bytes crudos, y un CMD0 de
+ * ceros diría «la línea flota» de un medio que no la tiene. Si el `init` falló, sólo el peldaño —el
+ * `esp_err_t`, cuyo nombre ya va en `motivo`—: el `s_card` de un arranque a medias no dice nada fiable. */
+static int p4_identidad(bpvm_blk_identidad_t* out) {
+    if (!out || !s_configurado) return -1;
+    memset(out, 0, sizeof *out);
+    out->peldano = s_arrancada ? 0 : (int) s_ultimo;
+    if (!s_arrancada) return 0;
+    out->version    = (uint8_t) (s_card.csd.csd_ver + 1);   /* CSD_STRUCTURE 0 = v1 (SDSC), 1 = v2 (SDHC/SDXC) */
+    out->alta_cap   = (s_card.ocr & SD_OCR_SDHC_CAP) ? 1 : 0;   /* OCR.CCS: direcciona por bloque */
+    out->bloques    = p4_bloques();
+    out->hz         = s_card.real_freq_khz * 1000;
+    out->fabricante = (uint8_t) s_card.cid.mfg_id;
+    out->oem[0]     = (char) ((s_card.cid.oem_id >> 8) & 0xFF);   /* OID: dos ASCII, el alto primero */
+    out->oem[1]     = (char) (s_card.cid.oem_id & 0xFF);
+    memcpy(out->producto, s_card.cid.name, 5);               /* PNM: cinco ASCII; el NUL lo pone el memset */
+    out->serie      = (uint32_t) s_card.cid.serial;
+    out->anno       = (uint16_t) (2000 + ((s_card.cid.date >> 4) & 0xFF));   /* MDT: año desde 2000 | mes */
+    out->mes        = (uint8_t) (s_card.cid.date & 0x0F);
+    return 0;
+}
+
 /* `sincronizar` a NULL con el mismo criterio que en SPI: `sdmmc_write_sectors`
  * no vuelve hasta que la tarjeta suelta el ocupado. Si alguna vez apareciera
  * corrupción tras un corte de corriente, éste es el primer sitio donde mirar —
@@ -234,6 +259,7 @@ static const bpvm_blk_backend_t s_backend = {
     .bloques     = p4_bloques,
     .sincronizar = NULL,
     .motivo      = p4_motivo,
+    .identidad   = p4_identidad,
 };
 
 const bpvm_blk_backend_t* bpvm_blk_sdmmc(const bpvm_sdio_pines_t* pines) {

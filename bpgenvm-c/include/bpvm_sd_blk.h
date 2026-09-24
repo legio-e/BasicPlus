@@ -17,6 +17,7 @@
 
 #include "bpvm_blk.h"
 #include "bpvm_sd.h"
+#include "bpvm_env.h"   /* V7/H3 SD.3: la línea `sd` del ENV */
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +43,16 @@ const bpvm_blk_backend_t* bpvm_sd_blk(const bpvm_sd_pines_t* pines);
  * Devuelve NULL si todavía no ha arrancado ninguna.
  */
 const bpvm_sd_info_t* bpvm_sd_blk_info(void);
+
+/*
+ * V7/H3 SD.3 (24-sep) — la línea `sd` del ENV, variante SPI (`sd=sck:34,mosi:35,miso:36,cs:39,cd:40` en la
+ * Metro; la corta `sd=bus:2,cs:23` en la C5, con los pines del bus), al REGISTRO COMÚN de la SD
+ * (`bpvm_sd_placa.h`), con las operaciones de FAT. La usan las placas cuyo lector va por SPI; el SDMMC del P4
+ * tiene la suya. NO habla con la tarjeta: sólo lee y registra —o anota el porqué no—; el montaje lo hace
+ * después `bpvm_sd_placa_montar_arranque`. Devuelve 1 si queda registrada. Vive en `bpvm_sd_spi_env.c`, no en
+ * `bpvm_sd_blk.c`: aquél es el dispositivo PURO (lo enlaza `test-blk` sin FS ni registro); esto arrastra FAT.
+ */
+int bpvm_sd_blk_registrar_desde_env(const bpvm_env_t* env);
 
 #ifdef __cplusplus
 }

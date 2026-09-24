@@ -110,6 +110,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_blk.c            # V5/H6: contrato de bloque + tabla de particiones
     ${BPVM_C_ROOT}/src/bpvm_listdir.c        # V5/H6: LIST_DIR comun (salio de repl_v1.c)
     ${BPVM_C_ROOT}/src/bpvm_sd_blk.c         # V5/H6: la SD por SPI cumpliendo ese contrato
+    ${BPVM_C_ROOT}/src/bpvm_sd_spi_env.c     # V7/H3 SD.3: la linea `sd` del ENV (SPI) al registro comun
     # V5/H2: la SD como sistema de ficheros. Mismo criterio de alta que bpvm_sd.c
     # — una sola placa hasta que la cadena este probada de punta a punta.
     ${BPVM_C_ROOT}/src/fs_fat.c              # backend FAT de la fachada + cintura de disco

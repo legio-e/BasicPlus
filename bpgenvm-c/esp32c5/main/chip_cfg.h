@@ -32,4 +32,12 @@
 #include "c5_board_id.h"
 #define CHIP_INSTALAR_BOARD_ID()  c5_install_board_id()
 
+/* V7/H3 SD.3 (24-sep) — la TF de la placa, por SPI: va en el SPI 2 de la pantalla (`sd=bus:2,cs:23` en el ENV,
+ * con los pines del bus en su línea `spi2=`), y la línea `sd` decide si se usa. El registro común la monta al
+ * arrancar y atiende SD_INFO/SD_MOUNT; en sus esperas suelta el bus (SD.2), así que convive con la pantalla del
+ * pack. Sin pin de detección: no hay vigía en caliente —se monta al arrancar o con SD_MOUNT—. */
+#include "bpvm_sd_blk.h"
+#include "board_mgr_esp32.h"   /* board_mgr_env() */
+#define CHIP_SD_REGISTRAR()  ((void) bpvm_sd_blk_registrar_desde_env(board_mgr_env()))
+
 #endif /* BPVM_CHIP_CFG_H */

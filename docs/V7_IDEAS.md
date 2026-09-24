@@ -1613,7 +1613,9 @@ la TF montada por el firmware**, que es la prueba en placa de la concurrencia co
 5. **Las familias**: la Metro y el P4 registran lo que ya montan (y `pico/repl_v1.c` pierde sus dos handlers); la C5
    activa lo genérico (`sd=bus:2,cs:23` en su ENV y el mismo registro); la Pico 2, la S3, la C3, la Nucleo y la DK2 no
    registran nada → el error con nombre. **La C6** tiene ranura y es lo mismo que la C5 (su línea `sd=` con los pines
-   del esquemático): **entra** (Eduardo, 24-sep: «OK, C6 también»).
+   del esquemático): **entra** (Eduardo, 24-sep: «OK, C6 también»)… **pero tras `H6.b`** (Eduardo, esa misma noche: «C6
+   la a»): su pantalla habla con el SPI por `esp_lcd` directamente —`spi_bus_initialize` con DMA—, sin pasar por el
+   árbitro, y la TF a la vez la pisaría. Primero su pantalla por el pack y la HAL, como la C5; luego su TF.
 
 **Cómo se prueba:** en el PC, una prueba de C del común (`test-sdcomun`) con un dispositivo de bloque de RAM que lleva una
 imagen FAT —`SD_INFO`/`SD_MOUNT` por el wire, y sin SD el error con nombre— y la TF contra la cinta del árbitro: ninguna
@@ -1625,8 +1627,8 @@ mientras `Gui.run()` anima—, y el explorador del IDE (`sd`, `sd mount`) contra
 |---|---|---|
 | **SD.1** | el registro, los dos verbos al común y la identidad opcional | `test-sdcomun`, en el PC |
 | **SD.2** | la TF suelta el bus en sus esperas | la cinta del árbitro, con su control |
-| **SD.3** | las familias: la Metro y el P4 al registro (fuera los handlers de `repl_v1.c`); la C5 y la C6 | compilan las cinco familias; el micro simulado |
-| **SD.4** | en placa, con tarjeta: la Metro, el P4, la C5 (con la pantalla a la vez) y la C6 | la tanda y el explorador del IDE |
+| **SD.3** | las familias: la Metro y el P4 al registro (fuera los handlers de `repl_v1.c`); la C5 (la C6, tras `H6.b`) | compilan las cinco familias; el micro simulado |
+| **SD.4** | en placa, con tarjeta: la Metro, el P4 y la C5 (con la pantalla a la vez) | la tanda y el explorador del IDE |
 
 **SD.1, hecho (24-sep, noche).** Dos cosas quedaron más sencillas que en el papel: **la traza viaja en la misma
 identidad** (`bpvm_blk_identidad_t`, con `con_traza`: el SPI la da y un medio sin traza la manda VACÍA —un «00 00…»
@@ -1647,6 +1649,26 @@ turnos MIENTRAS la TF arranca (16) y MIENTRAS la tarjeta graba (13), y lo más q
 (`make test-sd-turnos-control`, la TF de antes con `-DBPVM_SD_TURNO_UNICO`) la deja fuera 249 y 184 ms: rojo, como
 debe. La lectura no cambia: con el CS arriba mientras se espera el token, la tarjeta abortaría la lectura, y esa espera
 es corta.
+
+**SD.3, hecho (24-sep, noche).** Las tres placas que tienen ranura y la usan registran su SD, y las demás dicen por qué
+no la tienen:
+- **La Metro.** La línea `sd` del ENV (variante SPI) va al registro con `bpvm_sd_blk_registrar_desde_env`
+  (`src/bpvm_sd_spi_env.c`). Vive aparte de `bpvm_sd_blk.c` porque aquél es el dispositivo PURO, el que `test-blk`
+  enlaza sin FS ni registro. El montaje del arranque es el común, y `pico/repl_v1.c` pierde `SD_INFO`, `SD_MOUNT` y el
+  vigía en caliente (−270 líneas): los atiende `bpvm_repl_dispatch`, con los campos de antes.
+- **El P4.** Su SDMMC da la identidad: `p4_identidad`, del `sdmmc_card_t` que decodifica el IDF (el CID y el CSD, sin
+  traza). Se registra como `SDMMC`, y `SD_INFO`/`SD_MOUNT` le llegan por primera vez (antes, «type no implementado»).
+- **La familia del `main` común** (S3, C3, C5 y C6). Cada una lleva `CHIP_SD_REGISTRAR()` en su `chip_cfg.h`, que es el
+  mecanismo que ya decide lo que cambia por silicio. Se registra DESPUÉS de los buses del ENV, porque la línea corta de
+  la C5 (`sd=bus:2,cs:23`) se engancha al SPI 2, y el común monta si el FS está arriba. Sólo la C5 lleva el motor SPI y
+  FAT: medido en su `.map`, 19,5 KB de flash y 1,8 KB de RAM. La S3 y la C3 contestan «esta placa no tiene ranura de
+  SD». La C6 contesta el porqué de esperar a `H6.b`, y no «su ENV no lleva línea `sd`», que sería mentira.
+- **El vigía en caliente sólo lo llama la Metro**, que es la única con pin de detección. Sin detector, el dispositivo
+  contesta siempre «hay medio», y el vigía daría un intento de más y nada más. En el P4 y en la C5 se monta al arrancar
+  o con `SD_MOUNT`.
+
+Compilan las ocho imágenes (Pico, P4, C5, S3, C3, C6, Nucleo y DK2). Los tests de C de la SD y `compat` salen en verde.
+Queda SD.4, en placa.
 
 ## H4 — la caracterización de los periféricos de cada micro: la HAL BP de capacidades (22-sep, día de análisis)
 

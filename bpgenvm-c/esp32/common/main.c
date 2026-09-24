@@ -50,6 +50,7 @@
  * fija — y en el del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
 #include "chip_cfg.h"
 #include "bpvm_mem.h"          /* V6/U6: el planificador comun de memoria */
+#include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD de la placa, en el comun */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
 
@@ -262,6 +263,12 @@ void app_main(void)
      * un error con nombre (V7_IDEAS §H6.11). Después de registrar el hardware: la tabla de
      * capacidades dice qué buses existen. */
     bpvm_bus_desde_env(env_de_la_placa);
+    /* V7/H3 SD.3 — la SD de la placa: la registra el chip (`chip_cfg.h`: la C5, su TF por SPI; el S3, el C3 y la
+     * C6, el porqué no) y el común la monta con las reglas de todas las placas. DESPUÉS de los buses, porque la
+     * línea corta (`sd=bus:2,cs:23`) se engancha a uno de ellos; y con el FS de la placa, que es donde se cuelga
+     * `/sd`. Un fallo no degrada el arranque. */
+    CHIP_SD_REGISTRAR();
+    if (board_boot_status()->state >= BPVM_BOOT_FS) bpvm_sd_placa_montar_arranque();
     /* V6/P1.C3.3 — la identidad de placa, si este silicio trae la suya.
      *
      * Por defecto el REPL reporta la del S3 (`s_default_board` en

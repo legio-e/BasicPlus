@@ -63,4 +63,12 @@
 #include "c6_board_id.h"
 #define CHIP_INSTALAR_BOARD_ID()  c6_install_board_id()
 
+/* V7/H3 SD.3 (24-sep) — la SD de la placa. La C6 SÍ tiene ranura, pero en el SPI de la pantalla, y su pantalla
+ * habla con el bus por `esp_lcd` directamente —`spi_bus_initialize` con DMA—, sin pasar por el árbitro: la TF
+ * a la vez la pisaría. Entra cuando la pantalla vaya por el pack (`H6.b`; Eduardo, 24-sep: «C6 la a»). Hasta
+ * entonces SD_INFO/SD_MOUNT dicen esto, y no «su ENV no lleva línea `sd`», que sería mentira. */
+#include "bpvm_sd_placa.h"
+#define CHIP_SD_REGISTRAR()  \
+    bpvm_sd_placa_sin_sd("la TF de esta placa aun no se usa: comparte el SPI con la pantalla, que no pasa por el arbitro")
+
 #endif /* BPVM_CHIP_CFG_H */

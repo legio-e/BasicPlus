@@ -65,4 +65,9 @@
 #include "c3_board_id.h"
 #define CHIP_INSTALAR_BOARD_ID()  c3_install_board_id()
 
+/* V7/H3 SD.3 (24-sep) — la SD de la placa. La SuperMini no tiene ranura: esta imagen no lleva el lector ni FAT
+ * (una imagen sin ranura no paga FatFs), y SD_INFO/SD_MOUNT contestan este motivo. */
+#include "bpvm_sd_placa.h"
+#define CHIP_SD_REGISTRAR()  bpvm_sd_placa_sin_sd("esta placa no tiene ranura de SD")
+
 #endif /* BPVM_CHIP_CFG_H */
