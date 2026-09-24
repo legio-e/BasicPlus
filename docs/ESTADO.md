@@ -463,14 +463,65 @@ tipo: algo que fallaba **sin decirlo**.
 fijos (`60325e4c`) y `test-debug-mt` carga un `Arith.mod` MOD5 de mayo. Los dos están rotos desde antes y fuera de
 toda red; van a una tarea aparte.
 
-## ⏭️ Traspaso (24-sep, mediodía) — las tres rojas, cerradas; a la tarde, la Nucleo
+## 🧰 H9 (24-sep, mediodía) — PREPARADA LA TARDE DE PLACAS; y la tanda contra el simulado destapa `#540`
 
-**A la tarde (Eduardo)**, sin cambios: la **Nucleo** con el repeated start del STM32 (compilado, sin probar) —un
-BMP280 por I2C con `bus.writeRead(0x76, [0xD0], 1, id, 1)` (0x58) y una `I2c.Transaction`—. Y **el botón de
-`C5Touch`**, que sigue sin pulsar.
+Eduardo, de vuelta a V7: *«Tenemos muchas cosas abiertas. Cuando vuelva esta tarde aprovechamos que puedo conectar y
+probar placas y cerramos todo lo que podamos.»* El inventario de lo abierto que pide placa salió de leer §ABIERTAS de
+`FICHAS` entera (tres lectores en paralelo, una sección cada uno, y lo que dijeron contrastado con las fichas).
+Preparado para la tarde:
+- `tools/tanda_v7.json`: las seis de siempre + `Destructor`, `TimeDemo` y `ArrayFijo` (lo que H1 P5 pide ver en
+  S3/C3/C6/Nucleo/DK2) + `MoveRango` (`#535`) + `HiloUsa` (`#530`). Y `tanda.py` sube ya los **módulos de la app** a
+  `/app` (`HiloLib` con `HiloUsa`; antes sólo sabía de la stdlib). Contra el micro simulado: todo IDÉNTICO salvo
+  `GuiShot`, sin artefacto porque el simulado de la red no lleva LVGL.
+- `samples/Bmp280RepStart_Nucleo.bp` (el repeated start del STM32: cinco pruebas, cada una con su control por STOP)
+  y `samples/C6Boot.bp` (el botón BOOT de la C6).
+- **`#466` (resto)**: el log de arranque de la Pico decía «WATCHDOG» tras un RESET pedido por el wire; ahora usa la
+  misma función que `resetCause` («reinicio pedido»). Una línea, la imagen rehecha; se ve en la placa.
 
-**Después**, a elegir con Eduardo: H3 «SD al común» (la TF soltando el bus en sus esperas) o `G4.b` (el DMA del
-ESP32).
+**La tanda contra el simulado destapó `#540`.** `MoveRango` daba por null un local sin inicializar: en el PC la pila
+es nueva y vale 0 en las dos VMs; en el simulado, con programas corridos antes, era basura («move: src no es ref a
+heap»). Eduardo: *«Las variables locales si no se inicializan su valor es indeterminado. En teoría utilizar una
+variable local sin inicializar es un error.»* El sample estaba mal (lleva ya `:= null`); lo que falta es que el
+compilador lo detecte: **el PC lo tapa y la placa no**. Ficha abierta en H1, con la propuesta (la asignación
+definida, como Java) y la pregunta: error o aviso.
+
+**De paso**, la higiene de `FICHAS`: doce fichas cerradas que el censo no tachaba, `#525`/`#526` (cerradas el 18-sep)
+en la fila de H7, y tres entradas de la cola de V5 que se cerraron el 9-sep con número (`#482`–`#484`) sin marca.
+
+## ⏭️ Traspaso (24-sep, mediodía) — la TARDE DE PLACAS: cerrar todo lo que se pueda con ellas
+
+**El esqueleto: la ronda de V7 en las nueve placas.** Una placa cada vez —Eduardo conecta, yo grabo, «probada /
+conecta»—: grabar la imagen de hoy, `python bpgenvm-c/tools/tanda.py --lista bpgenvm-c/tools/tanda_v7.json --puertos
+auto --informe compat/informes/tanda_v7.md`, y lo propio de esa placa. Al acabar, **sellarla** como punto de
+restauración (commit + informe + los binarios en `dist/firmware/`): es lo que `H6.b` exige antes de tocar nada, y el
+cierre casi completo de mitad de V7. Cierra de paso **H1 P5** (grabar S3/C3/C6/Nucleo/DK2 y verlas == host), **H4 P4**
+(cascada y tanda), la tanda por familia de **`#523`** y **la C5 en la tanda** como placa con pantalla (resto de H6.a).
+
+**Lo propio de cada placa**, en el orden propuesto:
+1. **Nucleo** — con el **BMP280** en el I2C2 (SDA PF0, SCL PF1, 3V3, GND; SDO a GND): `Bmp280RepStart_Nucleo.bp`
+   cierra `G4.a3`. Y el **TOTAL del FS que «baila»** entre arranques (H10: tres arranques, mirando `INFO`) y la causa
+   del reset con el **botón NRST** (`L15`).
+2. **DK2** — la tanda con pantalla (800×480) y el FS que baila.
+3. **C5** — grabar y **regrabar `Gui` y `DriverSpi`**, en ese orden (si la imagen cambió de tamaño, el sello los
+   rechaza); la tanda con pantalla (240×320); **el botón de `C5Touch`**; y si da tiempo, el bloque de la VM sin PSRAM
+   (U6.4, resto de H11).
+4. **C6** — la tanda (240×240) y el **botón BOOT** con `C6Boot.bp` (H4 P3). El NeoPixel de la C6 todavía no: falta
+   el backend RMT de la familia ESP32, que es código.
+5. **C3** — la tanda, y `trytest.bp` y `JsonDemo` (`P1.C3`).
+6. **S3** — la tanda.
+7. **P4** — la tanda con pantalla (`SqlDemo` ya dio == host el 23-sep, con `G1`).
+8. **Pico 2** — la tanda; **`#466`**: un `RESET` por el wire y el log tiene que decir «reinicio pedido»; y `U1.2`, que
+   el post-mortem sobrevive al reinicio.
+9. **Metro** — la tanda; **regrabar el pack de SQLite** (el `.mdn` pasó a ABI 7 con `#533`) y `SqlDemo` == host; la
+   causa del reset con el **botón RUN** (`L15`); y si hay una tarjeta que se pueda borrar, la SD **«superfloppy»**
+   (FAT32 sin MBR, resto de H2-P5).
+
+**Lo que hace falta a mano**: el BMP280 y cuatro cables; una tarjeta SD que se pueda reformatear; y los dedos para
+`C5Touch`, BOOT, NRST y RUN.
+
+**Lo que NO es de esta tarde** (pide código o una decisión antes): `#540` (¿error o aviso?), `#536` (el tope de
+NeoPixel), el NeoPixel de la familia ESP32, el ADC externo del STM32 (`#469`: hay que ver qué falta), `#495`, `#452`,
+`#468`, `#531`, `G4.b`, H3 «SD al común» y `H6.b` (después de la ronda sellada).
 
 **El rumbo (Eduardo, 24-sep)**: *«La V8 la dedicaremos a la WiFi y el Bluetooth principalmente. El modo de bajo
 consumo también lo movemos a V8, todo lo demás de V7 se mantiene.»* `#490` sale de V7 (H10) y pasa entera al
@@ -479,8 +530,9 @@ bloque de V8 de `FICHAS`; nada más cambia de sitio.
 **Tareas aparte, lanzadas y sin empezar**: `#539` (`PACK_LS` esconde los packs vivos) y los dos tests de C rotos
 fuera de la red (`test-aotnew`, `test-debug-mt`).
 
-**Estado de las placas**: como en el traspaso de la mañana; las ocho imágenes, recompiladas con estos cambios y sin
-grabar. Sin push.
+**Estado de las placas**: la C5 con la imagen de `G4.a3`; las demás, con imágenes anteriores. Las de hoy (ocho builds:
+la Pico y la Metro comparten imagen) están compiladas y sin grabar; la de la Pico, rehecha a las 12:27 con `#466`.
+Sin push.
 
 ## ⏭️ Traspaso (24-sep, mañana) — `G4.a3` hecho; a la tarde, la Nucleo
 
