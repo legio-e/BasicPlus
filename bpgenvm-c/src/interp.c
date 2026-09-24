@@ -370,30 +370,14 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
     /* #302 paso 2 — this_ref es un HANDLE EMPAQUETADO (idx|TAG): derefiar a su
      * offset crudo antes de leer el class_ptr. En v1 se asumía offset directo. */
     uint32_t this_addr = bpref_deref(vm, bpref_regen(vm, this_ref));
-    /* Paseo vtable con fallback al padre — idéntico a OP_INVOKE_VIRTUAL. */
+    /* Paseo vtable con fallback al padre: la misma regla que OP_INVOKE_VIRTUAL. */
     uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + this_addr);
     int32_t  method_off = -1;
     uint32_t target_cs  = 0;
-    for (;;) {
-        uint16_t bw    = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_BITMAP_WORDS);
-        uint16_t nmeth = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_NUM_METHODS);
-        uint32_t vt_base = desc + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
-        if (slot >= 0 && (uint32_t) slot < nmeth) {
-            int32_t off = bpvm_read_i32_be(mem + vt_base + (uint32_t) slot * 4);
-            if (off != -1) {
-                method_off = off;
-                target_cs  = bpvm_get_cs_for_data_addr(vm, desc);
-                break;
-            }
-        }
-        int32_t parent_off = bpvm_read_i32_be(mem + desc + BPVM_CLS_OFF_PARENT_OFF);
-        if (parent_off == 0) {
-            vm->aot_helpers->throw_runtime(vm,
-                "call_method: slot no resoluble en la jerarquía de clases");
-            return 0;
-        }
-        uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
-        desc = (uint32_t)((int32_t) cur_cs + parent_off);
+    if (slot < 0 || bpvm_vt_resolver(vm, desc, (uint32_t) slot, &method_off, &target_cs) != 0) {
+        vm->aot_helpers->throw_runtime(vm,
+            "call_method: slot no resoluble en la jerarquía de clases");
+        return 0;
     }
     uint32_t target_abs = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) method_off;   /* H3.c: vtable → cb */
 
@@ -1758,38 +1742,16 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
             if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
 
-            /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods.
-             * El bucle termina al encontrar un methodOff válido o llegar
-             * a la raíz (parent_offset == 0). */
-            uint32_t desc = class_ptr;
+            /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods
+             * (bpvm_vt_resolver, la regla de las dos VMs). */
             int32_t method_off = -1;
             uint32_t target_cs = 0;
-            for (;;) {
-                uint16_t bw       = bpvm_read_u16_be(mem + desc
-                                                      + BPVM_CLS_OFF_BITMAP_WORDS);
-                uint16_t nmeth    = bpvm_read_u16_be(mem + desc
-                                                      + BPVM_CLS_OFF_NUM_METHODS);
-                uint32_t vt_base  = desc + BPVM_CLS_OFF_FIELD_BITMAP
-                                         + 2u * (uint32_t) bw * 4u;
-                if (vt_slot < nmeth) {
-                    int32_t off = bpvm_read_i32_be(mem + vt_base + (uint32_t) vt_slot * 4);
-                    if (off != -1) {
-                        method_off = off;
-                        target_cs  = bpvm_get_cs_for_data_addr(vm, desc);
-                        break;
-                    }
-                }
-                int32_t parent_off = bpvm_read_i32_be(mem + desc
-                                                       + BPVM_CLS_OFF_PARENT_OFF);
-                if (parent_off == 0) {
-                    bpvm_diag_urgente(
-                            "[bpvm-c] INVOKE_VIRTUAL slot %u no resoluble en cadena de herencia",
-                            (unsigned) vt_slot);
-                    exit_status = BPVM_ERR_RUNTIME;
-                    goto done;
-                }
-                uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
-                desc = (uint32_t)((int32_t) cur_cs + parent_off);
+            if (bpvm_vt_resolver(vm, class_ptr, vt_slot, &method_off, &target_cs) != 0) {
+                bpvm_diag_urgente(
+                        "[bpvm-c] INVOKE_VIRTUAL slot %u no resoluble en cadena de herencia",
+                        (unsigned) vt_slot);
+                exit_status = BPVM_ERR_RUNTIME;
+                goto done;
             }
 
             /* H3.c — method_off (vtable) es CS-relativo; la dirección real va

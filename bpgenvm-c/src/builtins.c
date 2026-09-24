@@ -2860,6 +2860,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_THREAD_START: {
         bpref_t thread_ref = bpref_pop(vm, tc);   /* handle COMPLETO: el gen viaja hasta el `this` de run() */
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
+        if (new_tid == -2)   /* #530: el mismo texto que miVM (no pasa con un Thread: Core.Thread tiene run()) */
+            return builtin_throw(vm, tc, "Thread.start: run() no resoluble en la cadena de herencia");
         if (new_tid < 0) {
             bpvm_diag_urgente("[bpvm-c] Thread.start falló");
             push_i32(vm, tc, 0);

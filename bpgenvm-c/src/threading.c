@@ -180,10 +180,22 @@ int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
  * — depende de la subclass del usuario — tenemos que hacerlo via
  * INVOKE_VIRTUAL: empujamos `this` y llamamos `run` (slot 0).
  *
- * Devuelve el tid del thread nuevo, o -1 si error.
+ * Devuelve el tid del thread nuevo; -1 si error (null, sin hueco en la tabla de
+ * hilos o sin pila), y -2 si run() no se resuelve en la cadena de herencia.
  */
 int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
     if (bpref_is_null(thread_ref)) return -1;
+
+    /* run() es la ranura 0 de la vtable (Core.Thread la declara la primera) y se resuelve como
+     * cualquier llamada virtual, SUBIENDO por la cadena. #530 (V7): una clase que hereda run() de
+     * un padre de OTRO módulo lleva -1 en su ranura («heredada»); antes eso era «no soportado F4
+     * v1» y el hilo no arrancaba (y miVM saltaba a cs - 1). Se resuelve ANTES de reservar nada:
+     * si no se puede, no hay nada que deshacer. El descriptor vive en los datos del módulo, no en
+     * el heap: su dirección no cambia. -2 = run() no resoluble (el builtin lo lanza con nombre). */
+    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, thread_ref));
+    int32_t  off = -1;
+    uint32_t target_cs = 0;
+    if (bpvm_vt_resolver(vm, class_ptr, 0u, &off, &target_cs) != 0) return -2;
 
     /* H2 — Thread spawn muta `thread_count`, `next_thread_stack` y
      * `threads[tid]` — todo estado compartido. Bajo `vm_lock` en SMP;
@@ -244,21 +256,6 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
      * ancla del GC y el `this` de run()). */
     uint32_t ta = bpref_deref(vm, thread_ref);
     bpvm_write_i32_be(vm->memory + ta + 4 + 0 * 4, (int32_t) tid);
-
-    /* Resolver dirección de Thread.run() (slot 0 de la vtable). */
-    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + ta);
-    uint16_t bw       = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_BITMAP_WORDS);
-    uint32_t vt_base  = class_ptr + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
-    int32_t  off      = bpvm_read_i32_be(vm->memory + vt_base);
-    if (off == -1) {
-        /* run() heredada — buscar en parent. F4 v1 no lo soporta. */
-        bpvm_diag_urgente("[bpvm-c] Thread.run() en slot 0 = -1 (heredada; no soportado F4 v1)");
-        vm->thread_count--;
-        vm->next_thread_stack = stack_base;
-        bpvm_smp_unlock(vm);
-        return -1;
-    }
-    uint32_t target_cs = bpvm_get_cs_for_data_addr(vm, class_ptr);
 
     /* Frame inicial. Tiene que ser IGUAL al que monta OP_INVOKE_VIRTUAL, porque
      * run() es un método corriente y su código lo da por hecho: el emisor le

@@ -1641,6 +1641,31 @@ public class VirtualMachine {
     // GC: mark-and-sweep conservativo
     // ====================================================================
 
+    /**
+     * L2 v3 — LA regla del despacho virtual: la ranura {@code vtSlot} de la clase {@code desc},
+     * subiendo por la cadena de herencia —cada padre con el CS de SU módulo, que puede ser otro—
+     * hasta la primera entrada que no sea -1 (-1 = «heredada»). Devuelve {@code (cs << 32) |
+     * methodOff} (el método, CS-relativo, y el CS de su módulo), o {@code -1L} si ninguna clase de
+     * la cadena la tiene. Espejo de {@code bpvm_vt_resolver} (VM-C). #530 (V7): THREAD_START leía
+     * la ranura 0 (run()) SIN subir, y con run() heredado de un padre de otro módulo saltaba a
+     * {@code cs - 1} (la VM-C lo rechazaba). La usan INVOKE_VIRTUAL y THREAD_START.
+     */
+    private long resolverVirtual(byte[] mem, int desc, int vtSlot) {
+        while (true) {
+            int bitmapW  = readI16(mem, desc + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
+            int nMethods = readI16(mem, desc + CLS_OFF_NUM_METHODS)  & 0xFFFF;
+            int vtBase   = desc + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
+            if (vtSlot < nMethods) {
+                int off = readI32(mem, vtBase + vtSlot * 4);
+                if (off != -1)
+                    return (((long) moduleManager.getCSForDataAddr(desc)) << 32) | (off & 0xFFFFFFFFL);
+            }
+            int parentOff = readI32(mem, desc + CLS_OFF_PARENT_OFF);
+            if (parentOff == 0) return -1L;
+            desc = moduleManager.getCSForDataAddr(desc) + parentOff;
+        }
+    }
+
     private int elemSize(int type) {
         switch (type) {
             case TYPE_ARRAY_I8:  return 1;
@@ -4234,38 +4259,17 @@ public class VirtualMachine {
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
 
                     // L2 v3 — herencia cross-module: si vt[slot] == -1 o el slot
-                    // está fuera del rango de num_methods del descriptor actual,
-                    // sube al parent y reintenta. Cada iteración recalcula CS
-                    // según el módulo dueño del descriptor (puede ser distinto al
-                    // del child cuando el parent vive cross-module). Termina al
-                    // encontrar un methodOff válido o al llegar a la raíz.
-                    int desc = classPtr;
-                    int methodOff = -1;
-                    int targetCS = -1;
-                    while (true) {
-                        int bitmapW   = readI16(mem, desc + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
-                        int nMethods  = readI16(mem, desc + CLS_OFF_NUM_METHODS)  & 0xFFFF;
-                        int vtBase    = desc + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
-                        if (vtSlot < nMethods) {
-                            int off = readI32(mem, vtBase + vtSlot * 4);
-                            if (off != -1) {
-                                methodOff = off;
-                                targetCS  = moduleManager.getCSForDataAddr(desc);
-                                break;
-                            }
-                        }
-                        int parentOff = readI32(mem, desc + CLS_OFF_PARENT_OFF);
-                        if (parentOff == 0) {
-                            // No hay padre: el slot no es resoluble por la cadena.
-                            throwBpRuntimeError(tc, "INVOKE_VIRTUAL: slot "
-                                    + vtSlot + " no resoluble en la cadena de herencia");
-                            break;
-                        }
-                        int curCS = moduleManager.getCSForDataAddr(desc);
-                        desc = curCS + parentOff;
+                    // está fuera del rango de num_methods, sube al parent
+                    // (resolverVirtual: la regla de las dos VMs).
+                    long resuelto = resolverVirtual(mem, classPtr, vtSlot);
+                    if (resuelto == -1L) {
+                        // No hay padre: el slot no es resoluble por la cadena.
+                        throwBpRuntimeError(tc, "INVOKE_VIRTUAL: slot "
+                                + vtSlot + " no resoluble en la cadena de herencia");
+                        break;
                     }
-                    if (methodOff == -1) break;   // throwBpRuntimeError ya hizo break
-                    int targetPC = targetCS + methodOff;
+                    int targetCS = (int) (resuelto >>> 32);
+                    int targetPC = targetCS + (int) resuelto;
 
                     writeI32(mem, sp, pc); sp += 4;
                     writeI32(mem, sp, bp); sp += 4;
@@ -5359,17 +5363,23 @@ public class VirtualMachine {
                 int ta        = refDeref(threadRef);
                 int classPtr  = readInt32(ta);
                 int stackSize = readInt32(ta + 4 + 1 * 4);   // field 1
+                // #530 (V7) — run() es la ranura 0 y se resuelve como cualquier llamada
+                // virtual, SUBIENDO por la cadena: con run() heredado de un padre de OTRO
+                // módulo la ranura de la clase vale -1 («heredada»), y leerla a secas hacía
+                // saltar a cs - 1 (la VM-C lo rechazaba). ANTES de crear el hilo: si no se
+                // resuelve —con un Thread no pasa: Core.Thread tiene run()— no hay nada que
+                // deshacer. El mismo texto que la VM-C.
+                long runResuelto = resolverVirtual(memory, classPtr, 0);
+                if (runResuelto == -1L)
+                    throwBpRuntimeError(tc, "Thread.start: run() no resoluble en la cadena de herencia");
                 synchronized (vmLock) {
                     // 1) Crear el nuevo ThreadContext con su región de stack.
                     int newTid = spawnThread(stackSize);
                     writeInt32(ta + 4 + 0 * 4, newTid);          // guardar tid en field 0
                     ThreadContext nt = threads.get(newTid);
-                    // 2) Resolver dirección absoluta del run() en la vtable.
-                    int targetCS   = moduleManager.getCSForDataAddr(classPtr);
-                    int bitmapW    = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
-                    int vtableBase = classPtr + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
-                    int methodOff  = readInt32(vtableBase + 0 * 4);     // slot 0 = run()
-                    int runPc      = targetCS + methodOff;
+                    // 2) La dirección absoluta del run() resuelto arriba.
+                    int targetCS   = (int) (runResuelto >>> 32);
+                    int runPc      = targetCS + (int) runResuelto;
                     // 3) Preparar el frame inicial en el stack del nuevo thread.
                     //    Tiene que ser IGUAL al que monta INVOKE_VIRTUAL, porque
                     //    run() es un método corriente y su código lo da por hecho:

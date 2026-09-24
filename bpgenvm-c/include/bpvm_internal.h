@@ -1013,6 +1013,34 @@ int           bpvm_link_slot_por_clave(const bpvm_t* vm, uint32_t class_ptr, con
 /* #532 — el nombre cualificado (`Mod.Cls`) de la clase cuyo descriptor es class_ptr, por la 4.5
  * de su modulo (el sello +6). 1 si lo encontro; 0 (y out vacio) si no hay 4.5 (MOD7/8) o no casa. */
 int           bpvm_link_nombre_de_clase(const bpvm_t* vm, uint32_t class_ptr, char* out, size_t cap);
+
+/* L2 v3 — LA regla del despacho virtual: la ranura `slot` de la clase `desc`, subiendo por la
+ * cadena de herencia —cada padre con el cs de SU módulo, que puede ser otro— hasta la primera
+ * entrada que no sea -1 (-1 = «heredada»). 0, con el método (cs-relativo) en *off y el cs de su
+ * módulo en *tcs; -1 si ninguna clase de la cadena la tiene. Espejo de `resolverVirtual` de miVM.
+ * #530 (V7): el arranque de un hilo leía la ranura 0 (run()) SIN subir, y una clase cuyo run()
+ * venía de un padre de otro módulo no arrancaba. La usan OP_INVOKE_VIRTUAL, bpvm_thread_spawn y
+ * el puente AOT (call_method): una regla, un sitio. */
+static inline int bpvm_vt_resolver(const bpvm_t* vm, uint32_t desc, uint32_t slot,
+                                   int32_t* off, uint32_t* tcs) {
+    const uint8_t* mem = vm->memory;
+    for (;;) {
+        uint16_t bw    = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_BITMAP_WORDS);
+        uint16_t nmeth = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_NUM_METHODS);
+        uint32_t vt_base = desc + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
+        if (slot < nmeth) {
+            int32_t o = bpvm_read_i32_be(mem + vt_base + slot * 4u);
+            if (o != -1) {
+                *off = o;
+                *tcs = bpvm_get_cs_for_data_addr(vm, desc);
+                return 0;
+            }
+        }
+        int32_t parent_off = bpvm_read_i32_be(mem + desc + BPVM_CLS_OFF_PARENT_OFF);
+        if (parent_off == 0) return -1;
+        desc = (uint32_t) ((int32_t) bpvm_get_cs_for_data_addr(vm, desc) + parent_off);
+    }
+}
 /* V10 (16-sep, R2/R3/R6/R9) — la subtabla CLASES (4.5) recien retenida: filas dentro de la seccion, csOff dentro del
  * modulo, parentDepIdx en rango, ranuras coherentes. 0 si vale; si no, deja el motivo en vm->load_error y devuelve
  * BPVM_ERR_BAD_HEADER (un .mod corrupto se RECHAZA, no se lee basura). */
@@ -1048,7 +1076,7 @@ void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
 
 /* Thread BP helpers (F4). */
-int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* devuelve tid o -1 */
+int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* tid; -1 error; -2 run() no resoluble (#530) */
 
 /* F5 — Exception handling helpers. */
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
