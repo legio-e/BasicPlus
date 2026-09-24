@@ -406,6 +406,49 @@ hasta hoy no se veía porque cada `run` reiniciaba la placa. **Arreglado** en un
 programa, una pantalla NUEVA (tema, banderas de fábrica, sin callbacks) y la vieja fuera; en la C5, fondo blanco
 y el botón responde (Eduardo).
 
+## 🔀 H6.c `G4.a3` (24-sep, mañana) — EL DISPOSITIVO Y LA TRANSACCIÓN, y la microSD hablando con la pantalla en el mismo bus
+
+`92e3e532`. El diseño salió de la conversación de la mañana (`V7_IDEAS` §H6.11.9), en tres correcciones de Eduardo:
+el bus **por su número** («lo asigna el fabricante»); **agrupar operaciones como transacciones SQL**, sin
+monopolizar el bus; y, una vuelta más, **primero en C** (*«tiene más sentido que se llamen desde ahí»*) y un
+**tope de tiempo configurable pero siempre limitado** —su ejemplo: un conversor que tarda 200 ms no puede dejar a
+nadie sin bus—. Como los hilos de BP van en un hilo del SO, la transacción se PREPARA y se ejecuta de una vez (un
+BEGIN…COMMIT con código en medio bloquearía a la GUI); el tope lo pone el ENV de cada bus (`ms:`), 20 ms si no lo
+dice, nunca más de 100, y se calcula antes de empezar. Eduardo aprobó además pasar `DriverSpi` a transacciones
+y dejar el turno a mano sólo MEDIDO, y arreglar la TF (que hace justo lo del conversor) en H3.
+
+**Hecho**: la transacción en la HAL BP (SPI e I2C, con repeated start), la BIOS v8, `DriverSpi` por
+transacciones, y en BP `Spi.Device`, `Spi.Transaction`, `writeRead`, `execute` e `I2c.Transaction` en las dos VM
+(`SpiDevice.bp` en la paridad, 95/95). Las cinturas: repeated start en ESP32 (lista de órdenes del IDF), Pico
+(`nostop`) y STM32 (a nivel de registro, sin probar en placa).
+
+**Lo que enseñó** (§H6.11.10): el IDF del ESP32 hace una transacción I2C en como mucho 8 órdenes y no deja
+encadenar dos listas sin STOP, así que lo que cabe en una transacción lo marca el ESP32 **en todas las familias**
+(hasta 3 mensajes, 8 órdenes); **el ESP32 no aceptaba más de 64 bytes por transferencia SPI sin DMA** —desde BP,
+un `Spi.write` de más de 64 fallaba entero— y la HAL del STM32 truncaba a 65 535 en silencio: las dos cinturas
+trocean; el formato MOD8 no admite una clase usada antes de declararse (lo cazó la red); y `PACK_LS` sólo lista 16
+packs (`#539`, tarea aparte). Al grabar la C5, la imagen creció 64 KB y el pack de LVGL «realojado para OTRA
+dirección» no cargó: se regrabaron `Gui` y `DriverSpi`, en ese orden.
+
+**En placa (la C5)**: 47 ranuras y «tope de un turno 20 ms» al arrancar; `GuiFlushBench` 147 ms por pantalla
+(148); **`C5Sd.bp`**: un programa habla con la microSD por `Spi.Device` (CS 23, 400 kHz) en el SPI 2 de la pantalla
+(40 MHz): CMD0, CMD8, ACMD41 (con el bus libre entre intentos), CMD58, el bloque 0 entero en una transacción de
+997 bytes (55 AA) y **30 de 30** comandos intercalados con la pantalla; el tope igual que en el PC; el latido del
+táctil con repeated start, igual que con STOP; y el botón de `C5Touch` —el táctil de `DriverSpi` con repeated start— **falta pulsarlo** (la lectura del táctil sí va: el latido avanza y la primera trama llega).
+
+## ⏭️ Traspaso (24-sep, mañana) — `G4.a3` hecho; a la tarde, la Nucleo
+
+**A la tarde (Eduardo)**: la **Nucleo** con el repeated start del STM32 —compilado, sin probar—: un BMP280 por
+I2C con `bus.writeRead(0x76, [0xD0], 1, id, 1)` (0x58) y una `I2c.Transaction`. Grabarla con
+`STM32_Programmer_CLI` (sn de la Nucleo en la memoria `build-stm32-headless`).
+
+**Después**, a elegir con Eduardo: H3 «SD al común» (la TF montada por el firmware del ESP32, y soltando el bus en
+sus esperas: la prueba de la concurrencia en placa, con dos hilos del SO) o `G4.b` (el DMA del ESP32).
+
+**Estado de las placas**: la C5 con la imagen de `G4.a3` (BIOS v8) y en su zona `Gui` + `DriverSpi` v8 regrabados
+(ojo: `wire_serie packs` enseña sólo los 16 primeros de 19 —`#539`—; los vivos están); `C5Touch` quedó en marcha.
+Las otras siete imágenes, compiladas y sin grabar. Sin push.
+
 ## ⏭️ Traspaso (23-sep, noche) — `G4.a2` hecho; lo siguiente: el fondo de la GUI entre programas
 
 **Hecho después, esa misma noche**: la pantalla se estrena NUEVA al terminar un programa (`b2bcd5cb`) y la
