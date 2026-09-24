@@ -1495,13 +1495,15 @@ public final class AotCEmitter {
          * por si surge ruido futuro. */
         localNames.add(it);
 
-        // while ((step > 0) ? (it <= end) : (it >= end)) { body; it += step; }
+        // for (; (step > 0) ? (it <= end) : (it >= end); it += step) { body }
+        // #548 (24-sep) — un `for` de C y no `while (…) { body; it += step; }`: el `continue` de C
+        // va al `it += step`, como el de BP; con el `while` saltaba a la condición y el bucle no
+        // acababa nunca.
         indent();
-        w.println("while ((" + step + " > 0) ? (" + it + " <= " + end + ") : ("
-                  + it + " >= " + end + ")) {");
+        w.println("for (; (" + step + " > 0) ? (" + it + " <= " + end + ") : ("
+                  + it + " >= " + end + "); " + it + " += " + step + ") {");
         indentLevel++;
         for (Ast.IStmt st : fs.body) emitStmt(st);
-        indent(); w.println(it + " += " + step + ";");
         indentLevel--;
         indent(); w.println("}");
 

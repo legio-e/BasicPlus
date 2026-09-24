@@ -587,8 +587,9 @@ test-aotgc-control: test-aotgc
 
 # V7/#546 — el switch DENTRO de una native, traducido a C: sujeto string (C no conmuta cadenas:
 # el numero del primer case que casa, por string_eq), un case long con sujeto integer (en 64 bits),
-# break/continue y un var al empezar un case. El MISMO .mod con el AOT y, con --interp, sin el
-# (GC en cada alocacion en los dos): la misma salida, 10/10 y ningun FALLO.
+# break/continue y un var al empezar un case; y (#548) continue en un for. El MISMO .mod con el
+# AOT y, con --interp, sin el
+# (GC en cada alocacion en los dos): la misma salida, 11/11 y ningun FALLO.
 test-aotswitch: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,NatSwitch)
@@ -596,14 +597,14 @@ test-aotswitch: $(LIBOBJ)
 	  basicplus.frontend.AotMain samples/NatSwitch.bp build/aotswitch >/dev/null
 	$(CC) $(CFLAGS) -Isrc test/test_aotswitch.c build/aotswitch/aot_NatSwitch.c $(LIBOBJ) \
 	  -o build/test_aotswitch.exe $(LDFLAGS)
-	@echo "--- #546 el switch en una native (esperado: AOT == interpretado, 10/10, sin FALLO) ---"
+	@echo "--- #546/#548 el switch y el continue en una native (esperado: AOT == interpretado, 11/11, sin FALLO) ---"
 	@./build/test_aotswitch.exe samples/NatSwitch.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotswitch.aot; \
 	 ./build/test_aotswitch.exe samples/NatSwitch.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotswitch.int; \
 	 n=$$(grep -c '^ok ' build/aotswitch.aot); \
 	 if grep -q '^FALLO' build/aotswitch.aot build/aotswitch.int; then grep -h '^FALLO' build/aotswitch.aot build/aotswitch.int; echo "  ROJO: FALLO"; exit 1; fi; \
 	 if ! cmp -s build/aotswitch.int build/aotswitch.aot; then diff build/aotswitch.int build/aotswitch.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
-	 if [ "$$n" -ne 10 ]; then cat build/aotswitch.aot; echo "  ROJO: $$n de 10 comprobaciones"; exit 1; fi; \
-	 echo "[status=OK] 10/10 con el AOT, igual que interpretado"
+	 if [ "$$n" -ne 11 ]; then cat build/aotswitch.aot; echo "  ROJO: $$n de 11 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 11/11 con el AOT, igual que interpretado"
 
 test-loaderr: $(LIBOBJ)
 	@mkdir -p build

@@ -1,0 +1,160 @@
+// ContinueFor.bp — `continue` dentro de un `for` salta al PASO siguiente (#548, V7): el numérico (paso 1,
+// paso 2, paso negativo, paso en una variable) y el `for … in`; y `break`/`continue` dentro de un switch
+// que está en un `for` o en un `do … loop` (#546). Hasta #548 el `continue` de un `for` saltaba a la
+// condición SIN avanzar la variable, y el bucle no acababa nunca —en el intérprete y en el AOT, que lo
+// traducía a un `while`—; nadie lo pisaba: en el árbol había 2 `continue`, ninguno en un `for`.
+// Cada bucle lleva un tope de vueltas: si el `continue` vuelve a no avanzar, sale un FALLO y no un cuelgue.
+// Se comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh.
+module ContinueFor
+
+  var fallos: integer
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok    " + que + " = " + obtenido
+    else
+      print "FALLO " + que + ": sale '" + obtenido + "', se esperaba '" + esperado + "'"
+      fallos := fallos + 1
+    endif
+  end mira
+
+  function pasoUno(): string
+    var t: string := ""
+    var vueltas: integer := 0
+    for i := 1 to 5 do
+      vueltas := vueltas + 1
+      if vueltas > 20 then
+        return "NO AVANZA"
+      endif
+      if i == 3 then
+        continue
+      endif
+      t := t + i
+    next i
+    return t
+  end pasoUno
+
+  function pasoDos(): string
+    var t: string := ""
+    var vueltas: integer := 0
+    for i := 0 to 10 step 2 do
+      vueltas := vueltas + 1
+      if vueltas > 20 then
+        return "NO AVANZA"
+      endif
+      if i == 4 then
+        continue
+      endif
+      t := t + i + ","
+    next i
+    return t
+  end pasoDos
+
+  function hacia_abajo(): string
+    var t: string := ""
+    var vueltas: integer := 0
+    for i := 5 to 1 step -1 do
+      vueltas := vueltas + 1
+      if vueltas > 20 then
+        return "NO AVANZA"
+      endif
+      if i == 2 then
+        continue
+      endif
+      t := t + i
+    next i
+    return t
+  end hacia_abajo
+
+  function pasoVariable(p: integer): string
+    var t: string := ""
+    var vueltas: integer := 0
+    for i := 1 to 9 step p do
+      vueltas := vueltas + 1
+      if vueltas > 20 then
+        return "NO AVANZA"
+      endif
+      if i == 4 then
+        continue
+      endif
+      t := t + i
+    next i
+    return t
+  end pasoVariable
+
+  function forIn(): string
+    var t: string := ""
+    var vueltas: integer := 0
+    var xs: integer[] := [10, 20, 30, 40]
+    for x in xs do
+      vueltas := vueltas + 1
+      if vueltas > 20 then
+        return "NO AVANZA"
+      endif
+      if x == 20 then
+        continue
+      endif
+      t := t + x + ","
+    next x
+    return t
+  end forIn
+
+  // un switch dentro de un for: `break` sale del switch, `continue` pasa a la vuelta siguiente
+  function switchEnFor(): string
+    var t: string := ""
+    var vueltas: integer := 0
+    for i := 1 to 5 do
+      vueltas := vueltas + 1
+      if vueltas > 20 then
+        return "NO AVANZA"
+      endif
+      switch i
+        case 2
+          t := t + "b"
+          break
+        case 4
+          t := t + "c"
+          continue
+        default
+          t := t + "d"
+      endsw
+      t := t + i
+    next i
+    return t
+  end switchEnFor
+
+  // lo mismo en un do … loop
+  function switchEnDo(): string
+    var t: string := ""
+    var k: integer := 0
+    do
+      k := k + 1
+      if k > 20 then
+        return "NO AVANZA"
+      endif
+      switch k
+        case 2
+          t := t + "b"
+          break
+        case 4
+          t := t + "c"
+          continue
+        default
+          t := t + "d"
+      endsw
+      t := t + k
+    loop k < 5
+    return t
+  end switchEnDo
+
+  function Main()
+    mira("for, paso 1", pasoUno(), "1245")
+    mira("for, paso 2", pasoDos(), "0,2,6,8,10,")
+    mira("for, paso -1", hacia_abajo(), "5431")
+    mira("for, paso en variable", pasoVariable(3), "17")
+    mira("for ... in", forIn(), "10,30,40,")
+    mira("switch en un for", switchEnFor(), "d1b2d3cd5")
+    mira("switch en un do", switchEnDo(), "d1b2d3cd5")
+    print "ContinueFor: " + fallos + " fallos"
+  end Main
+end ContinueFor

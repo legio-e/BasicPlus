@@ -4,7 +4,9 @@
 //   - un case long con un sujeto integer: la conmutación va en 64 bits (C convertiría la etiqueta al
 //     tipo del sujeto, y 5000000000 casaría con 705032704);
 //   - `break` sale del switch y `continue` sigue siendo del bucle; un `var` nada más empezar un case
-//     (en C, cada case va entre llaves).
+//     (en C, cada case va entre llaves);
+//   - #548: `continue` en un `for` avanza (el AOT lo traducía a un `while` con el paso al final, y el
+//     `continue` de C saltaba a la condición sin avanzar: bucle infinito).
 // Las native llevan su bytecode: interpretado corre igual. `make test-aotswitch` lo corre de las dos
 // maneras (con el AOT, con GC en cada alocación) y exige la MISMA salida, sin ningún FALLO.
 module NatSwitch
@@ -85,6 +87,23 @@ module NatSwitch
     return cuenta
   end conString
 
+  // #548: `continue` en un `for` (con tope: si no avanza, -1 y no un cuelgue)
+  native function sumaFor(n: integer): integer
+    var total: integer := 0
+    var vueltas: integer := 0
+    for i := 1 to n do
+      vueltas := vueltas + 1
+      if vueltas > 100 then
+        return -1
+      endif
+      if i mod 2 == 0 then
+        continue
+      endif
+      total := total + i
+    next i
+    return total
+  end sumaFor
+
   function mira(que: string, obtenido: integer, esperado: integer)
     if obtenido == esperado then
       print "ok    " + que + " = " + obtenido
@@ -104,5 +123,6 @@ module NatSwitch
     mira("porInteger(2)", porInteger(2), 1)
     mira("vueltas(6)", vueltas(6), 422)
     mira("conString(5)", conString(5), 12)
+    mira("sumaFor(9)", sumaFor(9), 25)
   end Main
 end NatSwitch

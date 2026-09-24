@@ -3346,11 +3346,16 @@ public final class MivmEmitter {
                 w.emitJumpIfFalse(end);
                 w.declareLabel(cuerpo);
             }
-            loopStack.push(new LoopLabels(top, end));
+            // #548 (24-sep) — `continue` salta al PASO (i += step), no a `top`: con `top` la variable
+            // no avanzaba y el bucle no acababa nunca. Nadie lo pisaba (2 `continue` en el árbol,
+            // ninguno en un `for`); salió al probar el `continue` dentro de un switch (#546).
+            int sigue = w.newLabel();
+            loopStack.push(new LoopLabels(sigue, end));
             try {
                 for (IStmt st : s.body) emitStmt(st);
             } finally { loopStack.pop(); }
             // i += step
+            w.declareLabel(sigue);
             w.emitGetLocal(s.iteratorName);
             if (stepK != null) emitInt(stepK.intValue()); else w.emitGetLocal(stepLocal);
             w.emit(OpCode.ADD);
@@ -3418,11 +3423,13 @@ public final class MivmEmitter {
             w.emit(aloadOpFor(r.iterable));
             w.emitSetLocal(s.iteratorName);
 
-            loopStack.push(new LoopLabels(top, end));
+            int sigue = w.newLabel();   // #548 — `continue` salta al __idx += 1, no a `top`
+            loopStack.push(new LoopLabels(sigue, end));
             try {
                 for (IStmt st : s.body) emitStmt(st);
             } finally { loopStack.pop(); }
 
+            w.declareLabel(sigue);
             w.emitGetLocal(idxLocal);
             emitInt(1);
             w.emit(OpCode.ADD);
