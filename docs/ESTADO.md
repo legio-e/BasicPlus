@@ -488,6 +488,39 @@ definida, como Java) y la pregunta: error o aviso.
 **De paso**, la higiene de `FICHAS`: doce fichas cerradas que el censo no tachaba, `#525`/`#526` (cerradas el 18-sep)
 en la fila de H7, y tres entradas de la cola de V5 que se cerraron el 9-sep con número (`#482`–`#484`) sin marca.
 
+## 📋 H8 `#539` (24-sep, tarde) — `PACK_LS` ya no esconde los packs vivos, y lo que no cabe lo DICE
+
+La tarea aparte de la mañana, en el worktree `friendly-dirac-ac6dfc`. **Reproducido en el PC antes de tocar**: la
+cadena de la C5 (17 borrados y 2 vivos al final) por el verbo de verdad listaba `P00`…`P15`, todos borrados, con
+`count` 19 y nada más. Y dos consumidores más leían los vivos de esa lista y fallaban igual: `wire_serie.py packdel`
+y el aviso de `requires-pack=` del IDE al grabar. El arreglo: `bpvm_pack_listar` (los vivos primero; en el hueco,
+los borrados más recientes; el MISMO recorrido que `bpvm_pack_scan`, que no cambia de contrato) y `PACK_LS` con
+`omitted`/`activeOmitted`, como el `omitted` del `LIST` (`#425`); `wire_serie.py` y el panel del IDE lo dicen.
+Pruebas, sabotajes y la imagen de la C5, en la ficha.
+
+**Lo que enseñó:**
+- **Antes de dar una imagen ESP nueva se puede saber, sin placa, si habrá que regrabar los packs sellados**: `nm`
+  de los dos `.elf` (el de HEAD y el nuevo). Si `_heap_start` no se mueve y `_text_end` y `_rodata_reserved_end`
+  no cruzan una página de 64 KB de la MMU, la zona de packs y el bloque de RAM quedan donde estaban. Aquí: heap,
+  `.data`, `.bss` e IRAM idénticos; +376 B de texto y +528 B de rodata dentro de sus páginas.
+- **En un worktree**, la C5 se construye con `idf.py set-target esp32c5` y `idf.py build` (1,6 min desde cero; el
+  `sdkconfig` que sale es idéntico al de `main`), y la Pico con su `build/` dentro del worktree. El STM32 no: sus
+  `.project` son locales y apuntan al `src/` del checkout principal; se compilan los `.c` tocados con su toolchain
+  y sus flags (`Debug/src/subdir.mk` del principal).
+- **`FICHAS.md` se guarda en CRLF desde esta mañana** (hasta el 23-sep, LF como todo el repo). Al insertar `#539`
+  (`bf72ad9a`) quedó un CR suelto (`\r\r\n`); con él git toma el fichero por binario, no lo normaliza, y ese commit
+  lo pasó ENTERO a CRLF; `#540` metió otro. Quitados los dos (`git ls-files --eol`: de `-text` a `crlf`) y añadido
+  sin conversión (`git -c core.autocrlf=false add`), para no cambiar sus 15.500 líneas con otras sesiones tocándolo.
+  Volver a LF (`git add --renormalize`) es un commit aparte, cuando no haya ramas abiertas que toquen `FICHAS`. Y
+  cuidado: el `sed -i` de Git Bash pasa a LF el fichero entero (se comió los CRLF de `FICHAS`): editar sin `sed`.
+
+## ⏭️ Traspaso (24-sep, tarde) — `#539` hecho; falta verlo en la C5
+
+**Para Eduardo**: la imagen de la C5 con `#539` está en `bpgenvm-c/esp32c5/build/` del worktree
+`friendly-dirac-ac6dfc`, **sin grabar** (se grabará cuando lo diga). Al grabarla, `wire_serie.py COM6 packs` tiene
+que enseñar `Gui` y `DriverSpi` vivos y «(y 3 borrado(s) mas antiguos sin listar)»; los dos packs no deberían
+necesitar regrabarse. La rama `claude/friendly-dirac-ac6dfc`, con sus commits, sin fusionar. Sin push.
+
 ## ⏭️ Traspaso (24-sep, mediodía) — la TARDE DE PLACAS: cerrar todo lo que se pueda con ellas
 
 **El esqueleto: la ronda de V7 en las nueve placas.** Una placa cada vez —Eduardo conecta, yo grabo, «probada /
