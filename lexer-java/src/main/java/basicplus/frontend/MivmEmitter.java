@@ -3436,36 +3436,67 @@ public final class MivmEmitter {
 
     private void emitSwitch(SwitchStmt s) throws IOException {
         // Estrategia naïf: guardar subject en local, cadena de comparaciones.
+        // #546 (24-sep) — la comparación es la del `==` de emitBinary: un string, por CONTENIDO
+        // (__strequals); un long, con LEQ —si el sujeto o algún case es long, los dos lados suben
+        // a long, como en la torre de promoción—; lo demás (entero de 4 B, boolean, enum), EQ.
+        // Antes: el sujeto en un local de 4 B y un EQ a secas, y con un sujeto de 8 B no casaba
+        // nunca ningún case. (Un real o una referencia no llegan aquí: el semántico los rechaza.)
+        BpType st = info.exprTypes.get(s.subject);
+        boolean esString = st instanceof PrimitiveType && ((PrimitiveType) st).tag == PrimitiveType.Kind.STRING;
+        boolean esLong = !esString && isLong(st);
+        if (!esString)
+            for (CaseClause cc : s.cases)
+                for (IExpr v : cc.values)
+                    if (isLong(info.exprTypes.get(v))) esLong = true;
         String subj = "__switch_" + System.identityHashCode(s);
-        declareLocal(subj);
+        declareLocalByType(subj, esLong ? PrimitiveType.LONG : st, null);   // el ancho, del tipo (H1.8)
         emitExpr(s.subject);
+        if (esLong) promoteNumeric(st, false, false, true);
         w.emitSetLocal(subj);
 
         int end = w.newLabel();
-        for (CaseClause cc : s.cases) {
-            int bodyLabel = w.newLabel();
-            int nextCase = w.newLabel();
-            for (int i = 0; i < cc.values.size(); i++) {
-                // push subj, push value, EQ → 1 si iguales, 0 si no.
-                //   JUMP_IF_FALSE skip   → si distintos, mira el siguiente valor.
-                //   JUMP bodyLabel       → si iguales, salta al cuerpo del case.
-                w.emitGetLocal(subj);
-                emitExpr(cc.values.get(i));
-                w.emit(OpCode.EQ);
-                int skip = w.newLabel();
-                w.emitJumpIfFalse(skip);
-                w.emitJump(bodyLabel);
-                w.declareLabel(skip);
+        // #546 — un `break` dentro de un case sale del SWITCH (manual §7.5; así lo traduce el AOT,
+        // a un switch de C, y así lo cuenta la asignación definida, #540); `continue` sigue siendo
+        // del bucle de fuera. Antes el switch no se apilaba: el `break` salía del bucle que lo
+        // contuviera y, sin bucle, el emisor fallaba sin línea.
+        LoopLabels fuera = loopStack.peek();
+        loopStack.push(new LoopLabels(fuera != null ? fuera.continueLabel : end, end));
+        try {
+            for (CaseClause cc : s.cases) {
+                int bodyLabel = w.newLabel();
+                int nextCase = w.newLabel();
+                for (int i = 0; i < cc.values.size(); i++) {
+                    // push subj, push value, EQ → 1 si iguales, 0 si no.
+                    //   JUMP_IF_FALSE skip   → si distintos, mira el siguiente valor.
+                    //   JUMP bodyLabel       → si iguales, salta al cuerpo del case.
+                    IExpr v = cc.values.get(i);
+                    BpType tv = info.exprTypes.get(v);
+                    w.emitGetLocal(subj);
+                    emitExpr(v);
+                    if (esString) {
+                        coerceToString(tv);
+                        emitStringEqualsCall();
+                    } else if (esLong) {
+                        promoteNumeric(tv, false, false, true);
+                        w.emit(OpCode.LEQ);
+                    } else {
+                        w.emit(OpCode.EQ);
+                    }
+                    int skip = w.newLabel();
+                    w.emitJumpIfFalse(skip);
+                    w.emitJump(bodyLabel);
+                    w.declareLabel(skip);
+                }
+                w.emitJump(nextCase);
+                w.declareLabel(bodyLabel);
+                for (IStmt stmt : cc.body) emitStmt(stmt);
+                w.emitJump(end);
+                w.declareLabel(nextCase);
             }
-            w.emitJump(nextCase);
-            w.declareLabel(bodyLabel);
-            for (IStmt st : cc.body) emitStmt(st);
-            w.emitJump(end);
-            w.declareLabel(nextCase);
-        }
-        if (s.defaultBody != null) {
-            for (IStmt st : s.defaultBody) emitStmt(st);
-        }
+            if (s.defaultBody != null) {
+                for (IStmt stmt : s.defaultBody) emitStmt(stmt);
+            }
+        } finally { loopStack.pop(); }
         w.declareLabel(end);
     }
 

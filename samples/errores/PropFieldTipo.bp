@@ -1,0 +1,23 @@
+// PropFieldTipo.bp — NO COMPILA, a propósito (#547, V7): dentro de un get/set, `field` es el campo
+// de respaldo de la property y tiene SU tipo; asignarle otro es un error, como a cualquier variable.
+// Hasta #547 `field` no tenía tipo y esto compilaba: la property se quedaba en 0, y con un `long`
+// la cosa era peor (`field := 7` apilaba 4 B para un store de 8 y la llamada siguiente moría con
+// «referencia nula»). Lo que funciona, con las conversiones, en samples/PropField.bp.
+module PropFieldTipo
+
+  class Caja
+    public property n: integer := 0
+      set(v)
+        field := "hola"          // error: un string a una property integer
+      endset
+    endprop
+    public function Caja()
+    end Caja
+  end Caja
+
+  function Main()
+    var c: Caja := Caja()
+    c.n := 5
+    print c.n
+  end Main
+end PropFieldTipo

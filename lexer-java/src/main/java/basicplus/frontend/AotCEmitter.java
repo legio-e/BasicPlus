@@ -87,6 +87,8 @@ public final class AotCEmitter {
     /** Contador para nombres únicos en for-loops (avoid colisión de
      *  __end/__step entre fors anidados). */
     private int forCounter = 0;
+    /** #546 — ídem para el sujeto de un switch sobre string ({@code __swN}). */
+    private int switchCounter = 0;
 
     /** #172 — nombres definidos en el ámbito de la función actual
      *  (parámetros + VarDecl + induction de for). Cualquier
@@ -1239,36 +1241,7 @@ public final class AotCEmitter {
             return;
         }
         if (s instanceof Ast.SwitchStmt) {
-            /* BP switch → C switch. BP no tiene fall-through implícito
-             * (cada case acaba al final del bloque), así que añadimos
-             * `break;` automático tras cada case. */
-            Ast.SwitchStmt sw = (Ast.SwitchStmt) s;
-            indent();
-            w.print("switch (");
-            emitExpr(sw.subject);
-            w.println(") {");
-            indentLevel++;
-            for (Ast.CaseClause cc : sw.cases) {
-                for (Ast.IExpr v : cc.values) {
-                    indent();
-                    w.print("case ");
-                    emitExpr(v);
-                    w.println(":");
-                }
-                indentLevel++;
-                for (Ast.IStmt st : cc.body) emitStmt(st);
-                indent(); w.println("break;");
-                indentLevel--;
-            }
-            if (sw.defaultBody != null) {
-                indent(); w.println("default:");
-                indentLevel++;
-                for (Ast.IStmt st : sw.defaultBody) emitStmt(st);
-                indent(); w.println("break;");
-                indentLevel--;
-            }
-            indentLevel--;
-            indent(); w.println("}");
+            emitSwitchStmt((Ast.SwitchStmt) s);
             return;
         }
         if (s instanceof Ast.ThrowStmt) {
@@ -1535,6 +1508,95 @@ public final class AotCEmitter {
         indentLevel--;
         indent();
         w.println("}");
+    }
+
+    /** BP switch → C switch. BP no tiene fall-through implícito (cada case acaba al final del
+     *  bloque), así que añadimos `break;` automático tras cada case.
+     *
+     *  #546 (24-sep): (1) cada case va entre llaves: en BP un case es su propio bloque, y en C una
+     *  declaración no puede ir justo tras una etiqueta (`case 1: int32_t x = …;` no compila);
+     *  (2) si algún case es long y el sujeto no, se conmuta en 64 bits — C convertiría la etiqueta
+     *  al tipo del sujeto y `case 5000000000L` casaría con 705032704, que el intérprete no casa;
+     *  (3) C no conmuta sobre cadenas: con un sujeto string se conmuta sobre el NÚMERO del primer
+     *  case que casa, comparando por CONTENIDO con string_eq y en orden, como el intérprete. Así
+     *  `break` sigue saliendo del switch y `continue` sigue siendo del bucle de fuera. El sujeto se
+     *  evalúa una vez, a un local de C, que el escaneo de la pila de C del native ve como a
+     *  cualquier otro (heap.c §2d). */
+    private void emitSwitchStmt(Ast.SwitchStmt sw) {
+        boolean esString = isStringExpr(sw.subject);
+        String suj = null;
+        if (esString) {
+            suj = "__sw" + (switchCounter++);
+            indent(); w.println("{");
+            indentLevel++;
+            indent(); w.print("int32_t " + suj + " = ");
+            emitExpr(sw.subject);
+            w.println(";");
+        }
+        indent();
+        if (esString) {
+            w.print("switch (");
+            int k = 0;
+            for (Ast.CaseClause cc : sw.cases) {
+                k++;
+                w.print("(");
+                for (int i = 0; i < cc.values.size(); i++) {
+                    if (i > 0) w.print(" || ");
+                    w.print("vm->aot_helpers->string_eq(vm, " + suj + ", ");
+                    emitExpr(cc.values.get(i));
+                    w.print(")");
+                }
+                w.print(") ? " + k + " : ");
+            }
+            w.println("0) {");
+        } else {
+            boolean alLong = !isLongExpr(sw.subject) && algunCaseLong(sw);
+            w.print(alLong ? "switch ((int64_t) (" : "switch (");
+            emitExpr(sw.subject);
+            w.println(alLong ? ")) {" : ") {");
+        }
+        indentLevel++;
+        int k = 0;
+        for (Ast.CaseClause cc : sw.cases) {
+            k++;
+            if (esString) {
+                indent(); w.println("case " + k + ": {");
+            } else {
+                for (int i = 0; i < cc.values.size(); i++) {
+                    indent();
+                    w.print("case ");
+                    emitExpr(cc.values.get(i));
+                    w.println(i == cc.values.size() - 1 ? ": {" : ":");
+                }
+            }
+            indentLevel++;
+            for (Ast.IStmt st : cc.body) emitStmt(st);
+            indent(); w.println("break;");
+            indentLevel--;
+            indent(); w.println("}");
+        }
+        if (sw.defaultBody != null) {
+            indent(); w.println("default: {");
+            indentLevel++;
+            for (Ast.IStmt st : sw.defaultBody) emitStmt(st);
+            indent(); w.println("break;");
+            indentLevel--;
+            indent(); w.println("}");
+        }
+        indentLevel--;
+        indent(); w.println("}");
+        if (esString) {
+            indentLevel--;
+            indent(); w.println("}");
+        }
+    }
+
+    /** #546 — ¿algún valor de case es long? */
+    private boolean algunCaseLong(Ast.SwitchStmt sw) {
+        for (Ast.CaseClause cc : sw.cases)
+            for (Ast.IExpr v : cc.values)
+                if (isLongExpr(v)) return true;
+        return false;
     }
 
     private void emitIfStmt(Ast.IfStmt iff) {

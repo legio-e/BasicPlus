@@ -1,0 +1,108 @@
+// NatSwitch.bp — #546 (V7): el switch DENTRO de una native, traducido a C por el AOT.
+//   - sujeto string: C no conmuta sobre cadenas; el emisor conmuta sobre el NÚMERO del primer case
+//     que casa, comparando por CONTENIDO (string_eq) y en orden, como el intérprete;
+//   - un case long con un sujeto integer: la conmutación va en 64 bits (C convertiría la etiqueta al
+//     tipo del sujeto, y 5000000000 casaría con 705032704);
+//   - `break` sale del switch y `continue` sigue siendo del bucle; un `var` nada más empezar un case
+//     (en C, cada case va entre llaves).
+// Las native llevan su bytecode: interpretado corre igual. `make test-aotswitch` lo corre de las dos
+// maneras (con el AOT, con GC en cada alocación) y exige la MISMA salida, sin ningún FALLO.
+module NatSwitch
+
+  native function porString(s: string): integer
+    var r: integer := 0
+    switch s
+      case "hola"
+        r := 1
+      case "ho", "ha"
+        var extra: integer := 20
+        r := extra + 3
+      default
+        r := 9
+    endsw
+    return r
+  end porString
+
+  native function porLong(x: long): integer
+    var r: integer := 0
+    switch x
+      case 5000000000L
+        r := 5
+      case 7
+        r := 7
+      default
+        r := -1
+    endsw
+    return r
+  end porLong
+
+  native function porInteger(i: integer): integer
+    var r: integer := 0
+    switch i
+      case 5000000000L
+        r := 666
+      case 1, 2, 3
+        r := 1
+      default
+        r := 0
+    endsw
+    return r
+  end porInteger
+
+  native function vueltas(n: integer): integer
+    var total: integer := 0
+    var i: integer := 0
+    while i < n do
+      i := i + 1
+      switch i mod 3
+        case 0
+          continue
+        case 1
+          total := total + 10
+          break
+        default
+          total := total + 1
+      endsw
+      total := total + 100
+    endwh
+    return total
+  end vueltas
+
+  // strings hechos DENTRO de la native, comparados en un bucle (con GC en cada alocación, en el test)
+  native function conString(n: integer): integer
+    var cuenta: integer := 0
+    var i: integer := 0
+    while i < n do
+      var s: string := "a" + i
+      switch s
+        case "a1", "a3"
+          cuenta := cuenta + 1
+        case "a2"
+          cuenta := cuenta + 10
+      endsw
+      i := i + 1
+    endwh
+    return cuenta
+  end conString
+
+  function mira(que: string, obtenido: integer, esperado: integer)
+    if obtenido == esperado then
+      print "ok    " + que + " = " + obtenido
+    else
+      print "FALLO " + que + ": sale " + obtenido + ", se esperaba " + esperado
+    endif
+  end mira
+
+  function Main()
+    mira("porString(hola)", porString("hola"), 1)
+    mira("porString(ha)", porString("h" + "a"), 23)
+    mira("porString(x)", porString("x"), 9)
+    mira("porLong(5e9)", porLong(5000000000L), 5)
+    mira("porLong(7)", porLong(7L), 7)
+    mira("porLong(8)", porLong(8L), -1)
+    mira("porInteger(705032704)", porInteger(705032704), 0)
+    mira("porInteger(2)", porInteger(2), 1)
+    mira("vueltas(6)", vueltas(6), 422)
+    mira("conString(5)", conString(5), 12)
+  end Main
+end NatSwitch

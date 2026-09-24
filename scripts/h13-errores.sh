@@ -70,6 +70,10 @@ NativeCampo|en el metodo native 'Caja.doble'
 NativeCampo|lee el campo 'n'
 LocalSinValor|'total' se usa sin tener valor
 LocalSinValor|'nombre' se usa sin tener valor
+SwitchMal|switch sobre 'double': un real no se compara
+SwitchMal|valor de 'case' de tipo 'float'
+SwitchMal|para comparar referencias, usa if
+PropFieldTipo|no se puede asignar 'string' a 'integer'
 "
 
 ok=0; mal=0

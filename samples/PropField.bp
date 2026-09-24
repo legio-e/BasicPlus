@@ -1,0 +1,73 @@
+// PropField.bp — `field`, dentro de un get/set, tiene el tipo de su property (#547, V7): se convierte
+// al asignar (`field := 7` en una long, `field := 3` en una double), el compuesto va en su ancho
+// (`field += 1` en una long) y la lectura también (`return field * 2` en una long); en una property
+// de clase y en una de módulo (ahí `field` es el global de respaldo).
+//
+// Hasta #547 `field` no tenía tipo: `field := 7` en una long no la cambiaba y la llamada siguiente
+// moría con «referencia nula» (se apilaban 4 B para un store de 8), y `field := "hola"` en una
+// integer compilaba (samples/errores/PropFieldTipo.bp). Las dos VMs igual: la paridad no lo veía.
+// Por eso el sample se comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh.
+module PropField
+
+  var fallos: integer
+
+  // de módulo: `field` es el global de respaldo
+  public property nivel: long
+    set(v)
+      field := 3                       // un integer a una long
+    endset
+  endprop
+
+  class Caja
+    public property l: long := 0L
+      set(v)
+        field := 7                     // integer → long
+      endset
+    endprop
+    public property d: double := 0.0d
+      set(v)
+        field := 3                     // integer → double
+      endset
+    endprop
+    public property g: long := 0L
+      get
+        return field * 2               // la lectura, en 64 bits
+      endget
+      set(v)
+        field := v
+        field += 1                     // el compuesto, en 64 bits
+      endset
+    endprop
+    public property n: integer := 0
+      set(v)
+        field := v + 1
+      endset
+    endprop
+    public function Caja()
+    end Caja
+  end Caja
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok    " + que + " = " + obtenido
+    else
+      print "FALLO " + que + ": sale '" + obtenido + "', se esperaba '" + esperado + "'"
+      fallos := fallos + 1
+    endif
+  end mira
+
+  function Main()
+    var c: Caja := Caja()
+    c.l := 1L
+    mira("long, field := 7", "" + c.l, "7")
+    c.d := 1.0d
+    mira("double, field := 3", "" + long(c.d * 100.0d), "300")
+    c.g := 5000000000L
+    mira("long, += 1 y * 2", "" + c.g, "10000000002")
+    c.n := 41
+    mira("integer", "" + c.n, "42")
+    nivel := 99L
+    mira("de modulo", "" + nivel, "3")
+    print "PropField: " + fallos + " fallos"
+  end Main
+end PropField

@@ -105,6 +105,8 @@ public final class SemanticAnalyzer {
     private boolean currentFunctionIsNative = false;
     private boolean insideGetter;
     private boolean insideSetter;
+    /** #547 — el tipo de la property cuyo get/set se analiza: el de {@code field}. */
+    private BpType currentPropType;
     /**
      * Profundidad de anidamiento de cuerpos de {@code case} dentro de un
      * {@code parallel}. Cuando > 0, la resolución de identificadores rechaza
@@ -1752,6 +1754,7 @@ public final class SemanticAnalyzer {
         }
         if (p.getter != null) {
             insideGetter = true;
+            currentPropType = ps.type;   // #547
             // Tratamos el cuerpo del getter como una función con return type
             // = tipo de la property; esto habilita `return value` dentro y
             // permite el typecheck del return correctamente.
@@ -1767,10 +1770,12 @@ public final class SemanticAnalyzer {
             } finally {
                 currentFunction = save;
                 insideGetter = false;
+                currentPropType = null;
             }
         }
         if (p.setter != null) {
             insideSetter = true;
+            currentPropType = ps.type;   // #547
             setterParamName = p.setter.paramName;
             // Setter es void; un `return` sin valor permitido para early-exit.
             FunctionSymbol save = currentFunction;
@@ -1789,6 +1794,7 @@ public final class SemanticAnalyzer {
             } finally {
                 currentFunction = save;
                 insideSetter = false;
+                currentPropType = null;
                 setterParamName = null;
             }
         }
@@ -2406,13 +2412,22 @@ public final class SemanticAnalyzer {
 
     private void analyzeSwitch(SwitchStmt sw, Scope scope) {
         BpType subjT = analyzeExpr(sw.subject, scope, null);
+        String noValido = sujetoDeSwitchNoValido(subjT);   // #546
+        if (noValido != null) {
+            Node ns = (Node) sw.subject;
+            err(ns.line, ns.column, noValido);
+        }
         switchDepth++;
         try {
             Set<String> seen = new HashSet<>();
             for (CaseClause cc : sw.cases) {
                 for (IExpr v : cc.values) {
                     BpType t = analyzeExpr(v, scope, subjT);
-                    if (!subjT.isAssignableFrom(t) && !t.isAssignableFrom(subjT)) {
+                    if (noValido == null && esReal(t)) {   // #546: `case 2.5` con un sujeto entero
+                        Node nn = (Node) v;
+                        err(nn.line, nn.column, "valor de 'case' de tipo '" + t.display()
+                                + "': un real no se compara por igualdad exacta; usa if");
+                    } else if (!subjT.isAssignableFrom(t) && !t.isAssignableFrom(subjT)) {
                         Node nn = (Node) v;
                         err(nn.line, nn.column, "valor de 'case' tipo '" + t.display() + "' incompatible con switch tipo '" + subjT.display() + "'");
                     }
@@ -2438,6 +2453,28 @@ public final class SemanticAnalyzer {
                          "switch sobre enum '" + et.en.name + "' no exhaustivo, faltan: " + String.join(", ", missing));
             }
         } finally { switchDepth--; }
+    }
+
+    /** #546 (24-sep, decisión de Eduardo) — el sujeto de un switch: un entero (integer, long y los
+     *  estrechos), un boolean, un enum o un string. Un real NO —la igualdad exacta de reales es una
+     *  trampa— y una referencia tampoco (para comparar objetos está `if`). Devuelve el error, o null si
+     *  vale. Antes se admitía todo, y con un sujeto de 8 B no casaba nunca ningún case. */
+    private static String sujetoDeSwitchNoValido(BpType t) {
+        if (t == null || t instanceof ErrorType || t.isEnum()) return null;
+        if (t instanceof PrimitiveType) {
+            if (esReal(t))
+                return "switch sobre '" + t.display() + "': un real no se compara por igualdad exacta "
+                     + "(0.1 + 0.2 no es 0.3); usa if, con un margen si hace falta";
+            return null;
+        }
+        return "switch sobre '" + t.display() + "': el sujeto de un switch es un entero, un boolean, "
+             + "un enum o un string; para comparar referencias, usa if";
+    }
+
+    /** #546 — float o double. */
+    private static boolean esReal(BpType t) {
+        return t instanceof PrimitiveType && (((PrimitiveType) t).tag == PrimitiveType.Kind.FLOAT
+                                           || ((PrimitiveType) t).tag == PrimitiveType.Kind.DOUBLE);
     }
 
     private String exprKey(IExpr e) {
@@ -2819,7 +2856,11 @@ public final class SemanticAnalyzer {
             err(fe.line, fe.column, "'field' solo es válido dentro de get/set");
             return ErrorType.INSTANCE;
         }
-        return ErrorType.INSTANCE;
+        // #547 (24-sep) — `field` es el backing field: tiene el tipo de su property. Era ErrorType,
+        // que por el anti-cascada (#232) lo admite TODO: `field := "hola"` en una integer compilaba,
+        // y el emisor, que convierte al tipo del destino, no convertía nada — `field := 7` en una
+        // property long apilaba 4 B para un store de 8 (la pila, descuadrada).
+        return currentPropType != null ? currentPropType : ErrorType.INSTANCE;
     }
 
     private BpType analyzeArrayLit(ArrayLitExpr al, Scope scope, BpType expected) {

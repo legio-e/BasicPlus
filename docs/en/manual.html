@@ -713,11 +713,29 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <span class="kw">default</span>
     <span class="kw">print</span> <span class="str">"weekday"</span>
 <span class="kw">endsw</span></code></pre>
+<p>
+  The subject is an <strong>integer</strong> (<code>integer</code>, <code>long</code>, <code>byte</code>…),
+  a <code>boolean</code>, an <strong>enum</strong> or a <strong>string</strong>, which is compared by its
+  <em>content</em>. A <code>case</code> may list several values, and each one is its own block: there is
+  no fall-through. A real (<code>float</code>/<code>double</code>) or an object as the subject is a compile
+  error —exact equality of reals is a trap, and comparing references is a job for <code>if</code>—
+  (<code>#546</code>, V7).
+</p>
+<pre><code><span class="kw">switch</span> command
+  <span class="kw">case</span> <span class="str">"ls"</span>, <span class="str">"dir"</span>
+    list()
+  <span class="kw">case</span> <span class="str">"cd"</span>
+    change()
+  <span class="kw">default</span>
+    <span class="kw">print</span> <span class="str">"unknown: "</span> + command
+<span class="kw">endsw</span></code></pre>
 
 <h3 id="breakcont">7.5 <code>break</code> / <code>continue</code></h3>
 <p>
-  Breaks out of (or jumps to the next iteration of) the nearest enclosing loop
-  (<code>while</code>, <code>do</code>, <code>for</code>, <code>switch</code>).
+  <code>break</code> leaves the nearest enclosing <code>while</code>, <code>do</code>, <code>for</code> or
+  <code>switch</code>; <code>continue</code> jumps to the next iteration of the nearest loop (a
+  <code>switch</code> is not a loop: a <code>continue</code> inside a <code>case</code> goes on with the
+  loop around it).
 </p>
 
 <h3 id="parallel">7.6 <code>parallel</code> / <code>endpar</code></h3>
@@ -1168,6 +1186,16 @@ end Base</code></pre>
   <code>getX</code>/<code>setX</code>. From code it is accessed like a field
   (<code>p.x</code>, <code>p.x := 5</code>).
 </p>
+<p>
+  Inside its <code>get</code>/<code>set</code>, <code>field</code> is that backing field, with the
+  property's type: whatever is assigned to it is converted as in any assignment (<code>field := 7</code>
+  in a <code>long</code> property), and assigning another type is a compile error (<code>#547</code>, V7).
+</p>
+<pre><code><span class="kw">public property</span> nivel: <span class="type">long</span>
+  <span class="kw">set</span>(v)
+    <span class="kw">field</span> := v * <span class="num">2</span>             <span class="comment">// stores twice the value</span>
+  <span class="kw">endset</span>
+<span class="kw">endprop</span></code></pre>
 
 <h4>sync properties (thread-safe)</h4>
 <pre><code><span class="kw">public class</span> Account

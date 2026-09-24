@@ -82,7 +82,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -350,6 +350,15 @@ check_parity() {
       fail=$((fail+1)); continue
     fi
     if [ "$oj" = "$oc" ]; then
+      # V7 (#546/#547, 24-sep) — la paridad no ve lo que las dos VMs hacen MAL por igual: un
+      # switch sobre un string no casaba nunca y `field := 7` no convertía, en las dos, idéntico.
+      # Un sample puede comprobarse a sí mismo e imprimir una línea `FALLO …` cuando un valor no
+      # es el esperado: eso es rojo aunque las VMs coincidan.
+      if printf '%s\n' "$oj" | grep -q '^FALLO'; then
+        echo "  FAIL $s — paridad OK, pero el sample dice que algo sale mal:"; fail=$((fail+1))
+        printf '%s\n' "$oj" | grep '^FALLO' | head -4 | sed 's/^/       /'
+        continue
+      fi
       # V7/H2 (#523 V5) — paridad no basta: en MOD9 el stdout tiene que ser EL DE
       # MOD8. Un sample que en MOD9 imprimiera otra cosa con las dos VMs de
       # acuerdo seria un falso-PAR de otro piso: el enlace tardio cambiando la

@@ -1,0 +1,176 @@
+// SwitchTipos.bp — el switch con cada sujeto que admite (#546, V7): string (por CONTENIDO), long,
+// integer, enum y boolean; varios valores en un case; un case long con un sujeto integer (se compara
+// en 64 bits); `break` dentro de un case sale del SWITCH y no del bucle (manual §7.5), y `continue`
+// es del bucle; un switch sin bucle alrededor, con `break`; un switch dentro de otro.
+//
+// Hasta #546 un sujeto de 8 B (string, long) no casaba NUNCA —siempre al default— y un `break`
+// salía del bucle entero: las dos VMs igual de mal, así que la paridad no lo veía. Por eso este
+// sample se comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh.
+// (Un switch sobre un real o sobre un objeto no compila: samples/errores/SwitchMal.bp.)
+module SwitchTipos
+
+  public enum Color
+    ROJO
+    VERDE
+    AZUL
+  end Color
+
+  var fallos: integer
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok    " + que + " = " + obtenido
+    else
+      print "FALLO " + que + ": sale '" + obtenido + "', se esperaba '" + esperado + "'"
+      fallos := fallos + 1
+    endif
+  end mira
+
+  // un string hecho en ejecución, no el literal: el switch compara el CONTENIDO
+  function nombre(n: integer): string
+    var s: string := "ho"
+    if n > 1 then
+      s := s + "la"
+    endif
+    return s
+  end nombre
+
+  function porString(s: string): string
+    var r: string := "?"
+    switch s
+      case "hola"
+        r := "saludo"
+      case "ho", "ha"
+        r := "corto"
+      default
+        r := "otro"
+    endsw
+    return r
+  end porString
+
+  function porLong(x: long): string
+    var r: string := "?"
+    switch x
+      case 5000000000L
+        r := "cinco mil millones"
+      case 705032704L            // lo que queda de 5.000.000.000 en 32 bits
+        r := "TRUNCADO"
+      case 7                     // un integer contra un sujeto long: sube a long
+        r := "siete"
+      default
+        r := "otro"
+    endsw
+    return r
+  end porLong
+
+  // un sujeto integer con un case long: la comparación va en 64 bits
+  function porInteger(i: integer): string
+    var r: string := "?"
+    switch i
+      case 5000000000L
+        r := "TRUNCADO"
+      case 1, 2, 3
+        r := "chico"
+      default
+        r := "otro"
+    endsw
+    return r
+  end porInteger
+
+  function porColor(c: Color): string
+    var r: string := "?"
+    switch c
+      case Color.ROJO, Color.AZUL
+        r := "extremo"
+      case Color.VERDE
+        r := "medio"
+    endsw
+    return r
+  end porColor
+
+  function porBool(b: boolean): string
+    var r: string := "?"
+    switch b
+      case true
+        r := "si"
+      case false
+        r := "no"
+    endsw
+    return r
+  end porBool
+
+  // `break` sale del SWITCH (el bucle da sus cinco vueltas); `continue` pasa a la vuelta siguiente
+  function vueltas(): string
+    var traza: string := ""
+    var i: integer := 0
+    while i < 5 do
+      i := i + 1
+      switch i
+        case 2
+          traza := traza + "b"
+          break
+        case 4
+          traza := traza + "c"
+          continue
+        default
+          traza := traza + "d"
+      endsw
+      traza := traza + i
+    endwh
+    return traza
+  end vueltas
+
+  // un switch sin bucle alrededor, con `break` (antes, el emisor fallaba sin línea)
+  function sinBucle(k: integer): string
+    var r: string := "inicio"
+    switch k
+      case 1
+        r := "uno"
+        if k > 0 then
+          break
+        endif
+        r := "NO SE VE"
+    endsw
+    return r
+  end sinBucle
+
+  // un switch dentro de otro, dentro de un bucle: cada `break` sale del SUYO
+  function anidado(): string
+    var traza: string := ""
+    var i: integer := 0
+    while i < 2 do
+      i := i + 1
+      switch i
+        case 1
+          switch nombre(2)
+            case "hola"
+              traza := traza + "h"
+              break
+          endsw
+          traza := traza + "x"
+        default
+          traza := traza + "y"
+      endsw
+    endwh
+    return traza
+  end anidado
+
+  function Main()
+    mira("string hola", porString(nombre(2)), "saludo")
+    mira("string ho", porString(nombre(1)), "corto")
+    mira("string ha", porString("h" + "a"), "corto")
+    mira("string otro", porString("adios"), "otro")
+    mira("long 5e9", porLong(5000000000L), "cinco mil millones")
+    mira("long 7", porLong(7L), "siete")
+    mira("long otro", porLong(8L), "otro")
+    mira("integer, case long", porInteger(705032704), "otro")
+    mira("integer 2", porInteger(2), "chico")
+    mira("enum", porColor(Color.AZUL), "extremo")
+    mira("enum medio", porColor(Color.VERDE), "medio")
+    mira("boolean", porBool(false), "no")
+    mira("break y continue", vueltas(), "d1b2d3cd5")
+    mira("switch sin bucle", sinBucle(1), "uno")
+    mira("anidado", anidado(), "hxy")
+    print "SwitchTipos: " + fallos + " fallos"
+  end Main
+end SwitchTipos

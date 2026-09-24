@@ -1,0 +1,40 @@
+// SwitchMal.bp — NO COMPILA, a propósito (#546, V7): el sujeto de un switch es un entero (integer,
+// long y los estrechos), un boolean, un enum o un string (éste, comparado por su CONTENIDO).
+//   - Un REAL no: la igualdad exacta de reales es una trampa (0.1 + 0.2 no es 0.3). Tampoco un
+//     `case` real contra un sujeto entero.
+//   - Un OBJETO tampoco: comparar referencias es cosa de `if`.
+// Hasta #546 el compilador lo admitía todo, y con un sujeto de 8 B (string, long, double, objeto)
+// no casaba NUNCA ningún case: iba siempre al default, en silencio. Lo que funciona, en
+// samples/SwitchTipos.bp.
+module SwitchMal
+
+  class Nodo
+    var v: integer := 0
+    public function Nodo(x: integer)
+      v := x
+    end Nodo
+  end Nodo
+
+  function Main()
+    // error: un real como sujeto
+    var d: double := 2.5d
+    switch d
+      case 2.5d
+        print "2,5"
+    endsw
+
+    // error: un case real contra un sujeto entero
+    var i: integer := 2
+    switch i
+      case 2.5
+        print "casi dos"
+    endsw
+
+    // error: un objeto como sujeto (para eso, if a == b)
+    var a: Nodo := Nodo(1)
+    switch a
+      case a
+        print "el mismo"
+    endsw
+  end Main
+end SwitchMal
