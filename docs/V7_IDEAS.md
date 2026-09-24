@@ -1575,6 +1575,59 @@ nativo (`__freadLine`, dos pasadas sobre el cursor del motor) y quedó en 87 (0,
 —una pasada con la zona de rascar ahorraría el seek de vuelta— si algún día hace falta.
 
 
+### 7. La SD al común (24-sep, noche) — lo que quedaba de la fila, y lo que le dejó `G4`
+
+**Lo que hay, medido** (24-sep):
+
+| placa | ranura | el medio | `/sd` al arrancar | `SD_INFO`/`SD_MOUNT` |
+|---|---|---|---|---|
+| Metro (RP2350) | sí | SPI: `bpvm_sd.c` sobre la HAL (`bpvm_spi_*`) y el árbitro del bus | sí | sí, en `pico/repl_v1.c` |
+| P4 | sí | SDMMC: `esp32p4/main/blk_sdmmc_p4.c` | sí | **no** |
+| C5 | sí, en el SPI 2 de la pantalla (`sd=bus:2,cs:23`, de `G4.a1`) | — (`G4.a3` le habló desde BP: `C5Sd.bp`) | no | no |
+| C6 | sí (Waveshare LCD-1.3; los pines, en el esquemático de `P2.0`) | — | no | no |
+| Pico 2, S3 DevKitC, C3, Nucleo, DK2 | no (la DK2: Eduardo, 24-sep) | | | |
+
+Lo de debajo ya es común: el contrato de bloque (`bpvm_blk_backend_t`), FAT (`fs_fat.c`, `bpvm_fs_fat_montar`) y el
+protocolo SPI (`bpvm_sd.c`, sin SDK: la HAL BP y el árbitro de `G4`). Las dos placas que montan hacen lo mismo —la línea
+`sd` del ENV (variante SPI o SDIO), su dispositivo de bloque, `bpvm_fs_fat_montar(dev, "/sd")`—; sólo cambia el
+dispositivo. Lo que no es común son los dos verbos, escritos para el SPI de la Metro. Y `G4` dejó aquí dos cosas
+aprobadas (Eduardo, 24-sep, «2 también OK», §H6.11.9): **la TF retiene el bus en sus esperas** —hasta 1 s repitiendo
+ACMD41 al arrancar y hasta 2 s mientras la tarjeta graba; la especificación deja soltar el CS en las dos— y **la C5 con
+la TF montada por el firmware**, que es la prueba en placa de la concurrencia con la pantalla.
+
+**El diseño:**
+1. **El registro de la SD, en el común** (`src/bpvm_sd_placa.c`): al arrancar, la familia registra su dispositivo de
+   bloque —o el motivo de no tenerlo: sin línea `sd` en el ENV, zócalo vacío—, y el montaje de arranque pasa también al
+   común, con sus dos reglas de siempre: el pin de detección manda (Eduardo, 8-ago) y un fallo no degrada el arranque.
+2. **Los dos verbos, en `bpvm_repl_dispatch`**, con los mismos mensajes y campos que lee el explorador del IDE
+   (`SD_INFO_REPLY`: `ok`, `motivo`, `bloques`, `producto`, `oem`, `fabricante`, `version`, `altaCap`, `anno`, `mes`,
+   `serie`, `leeSector0`…; `SD_MOUNT_REPLY`: `ok`, `motivo`, `prefijo`, `lba`, `etiqueta`, `kbLibres`, `kbTotal`,
+   `entradasRaiz`, `primera`, `resumenFalla`). Sin SD registrada, **error con nombre** («esta placa no tiene SD: su ENV
+   no lleva línea `sd`»), no «type no implementado» (el veredicto de `U3.0b`).
+3. **La identidad de la tarjeta** (CID/CSD) entra en el contrato de bloque como método OPCIONAL (NULL si el medio no la
+   da): el SPI ya la tiene (`bpvm_sd_blk_info`), el SDMMC del P4 la saca del `sdmmc_card_t`. Lo propio de un transporte
+   —la traza del SPI: `peldano`, `ultimoCmd`, `traza`— entra por un gancho opcional del dispositivo, como `info_extra`
+   en el `INFO`.
+4. **La TF suelta el bus en sus esperas**: cada sondeo de ACMD41 y cada espera de «ocupada» es su propio turno corto,
+   con el CS arriba entre medias (lo que la especificación permite): ninguna espera pasa del tope del bus.
+5. **Las familias**: la Metro y el P4 registran lo que ya montan (y `pico/repl_v1.c` pierde sus dos handlers); la C5
+   activa lo genérico (`sd=bus:2,cs:23` en su ENV y el mismo registro); la Pico 2, la S3, la C3, la Nucleo y la DK2 no
+   registran nada → el error con nombre. **La C6** tiene ranura y sería lo mismo que la C5 (su línea `sd=` con los pines
+   del esquemático): **decide Eduardo**.
+
+**Cómo se prueba:** en el PC, una prueba de C del común (`test-sdcomun`) con un dispositivo de bloque de RAM que lleva una
+imagen FAT —`SD_INFO`/`SD_MOUNT` por el wire, y sin SD el error con nombre— y la TF contra la cinta del árbitro: ninguna
+espera retiene el bus más que el tope, y su control (el comportamiento de antes) sale rojo; las dos, a `check-testc`. En
+placa: la Metro (el control: lo de antes, igual), el P4 y la C5 con tarjeta —la C5, además, escribiendo en `/sd`
+mientras `Gui.run()` anima—, y el explorador del IDE (`sd`, `sd mount`) contra cada una.
+
+| paso | qué | se prueba con |
+|---|---|---|
+| **SD.1** | el registro, los dos verbos al común y la identidad opcional | `test-sdcomun`, en el PC |
+| **SD.2** | la TF suelta el bus en sus esperas | la cinta del árbitro, con su control |
+| **SD.3** | las familias: la Metro y el P4 al registro (fuera los handlers de `repl_v1.c`); la C5 (y la C6, si se decide) | compilan las cinco familias; el micro simulado |
+| **SD.4** | en placa, con tarjeta: la Metro, el P4 y la C5 (con la pantalla a la vez) | la tanda y el explorador del IDE |
+
 ## H4 — la caracterización de los periféricos de cada micro: la HAL BP de capacidades (22-sep, día de análisis)
 
 Tres fichas que son un solo diseño (`#378` la madre, `#470` los arrays, `#479` el mapa de pines y `AnPin`) y
