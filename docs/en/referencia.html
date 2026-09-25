@@ -2058,7 +2058,8 @@ strip.show()</code></pre>
   <tr><td><code>setPixel(i, r, g, b)</code></td><td>Color of one LED (0..255 per channel).</td></tr>
   <tr><td><code>setColor(r, g, b)</code></td><td>Same color for the whole strip.</td></tr>
   <tr><td><code>clear()</code></td><td>All to 0 (does not show).</td></tr>
-  <tr><td><code>show()</code></td><td>Flushes the framebuffer to the strip.</td></tr>
+  <tr><td><code>show()</code></td><td>Flushes the framebuffer to the strip in one go (the WS2812 cannot take it in
+    pieces): at most 2048 LEDs (4096 on STM32); more raises <code>RuntimeError</code> with the reason.</td></tr>
   <tr><td><code>count(): integer</code></td><td>Number of LEDs.</td></tr>
 </table>
 

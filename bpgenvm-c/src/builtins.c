@@ -3678,10 +3678,25 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_NP_SHOW: {
         /* __npShow(pin, grb: integer[], count): void — empuja count palabras
          * GRB del array (mismo layout que I2C/SPI: ref+4 = primer i32 BE). */
-        int count = pop_i32(vm, tc);
+        int32_t count = pop_i32(vm, tc);
         uint32_t grbRef = pop_ref(vm, tc);
-        uint32_t grbAddr = ref_addr(vm, grbRef);   /* V4: handle→addr */
         int pin = pop_i32(vm, tc);
+        /* #536 (V7, 25-sep) — el array se valida como los de bus (#534): null, count negativo o mayor
+         * que el array → RuntimeError con nombre, con los MISMOS textos en miVM. Antes leía `count`
+         * elementos sin mirar la longitud, y recortaba a 256 LEDs en silencio. El tope es ahora la
+         * zona de rascar ENTERA (Eduardo, 25-sep): 2048 LEDs en RP2350, ESP32 y el PC, 4096 en STM32;
+         * por encima, error con nombre. Una tira NO se parte en tramos como las de bus: el WS2812 hace
+         * latch tras ~50 µs de silencio y una segunda ráfaga volvería a empezar por el píxel 0. */
+        char em[128];
+        uint32_t grbAddr = 0;
+        if (bus_array(vm, grbRef, count, "neopixel.show", "el array", 0, &grbAddr, em, sizeof em) != 0)
+            return builtin_throw(vm, tc, em);
+        int32_t np_max = (int32_t) (bpvm_scratch_capacity() / sizeof(uint32_t));
+        if (count > np_max) {
+            snprintf(em, sizeof em, "neopixel.show: una tira de %" PRId32 " LEDs no cabe: como mucho %" PRId32 " por trama",
+                     count, np_max);
+            return builtin_throw(vm, tc, em);
+        }
         /* #338 — el buffer de transcodificación (BE del heap BP → nativo para
          * el driver) sale de la zona compartida: 1 KB que sólo hace falta
          * mientras se empuja una trama, no toda la vida del firmware.
@@ -3697,14 +3712,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * "single-worker: estático OK". Bajo SMP dos workers llamando a la vez
          * se pisaban EN SILENCIO; ahora el segundo se encuentra la zona cogida
          * y el guardián lo dice con nombres. */
-        enum { NP_MAX = 256 };
-        uint32_t* npbuf = (uint32_t*) bpvm_scratch_take(NP_MAX * sizeof(uint32_t),
+        uint32_t* npbuf = (uint32_t*) bpvm_scratch_take((size_t) (count > 0 ? count : 1) * sizeof(uint32_t),
                                                         "__npShow");
         if (!npbuf) {          /* el guardián ya ha dicho por qué */
             push_i32(vm, tc, 0);
             return BPVM_OK;
         }
-        int n = count < 0 ? 0 : (count > NP_MAX ? NP_MAX : count);
+        int n = (int) count;
         for (int i = 0; i < n; i++) {
             npbuf[i] = (uint32_t) bpvm_read_i32_be(vm->memory + grbAddr + 4 + i * 4);
         }

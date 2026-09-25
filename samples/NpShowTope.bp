@@ -1,0 +1,51 @@
+// NpShowTope.bp — #536 (V7, 25-sep): `Neopixel.__npShow` valida el array y su tope se dice,
+// igual en las dos VMs. Oraculo de paridad: esta en el corpus de compat/compat.sh.
+//
+// POR QUE EXISTE. La VM-C leia `count` elementos del array sin mirar su longitud y recortaba
+// la tira a 256 LEDs EN SILENCIO (el buffer era 1 KB de la zona de rascar): una tira de 300
+// encendia 256 sin decir nada. miVM no miraba nada. Por la clase no se llega (Strip.show()
+// pasa siempre la longitud de su array), pero `__npShow` es publica.
+//
+// LO QUE SE DECIDIO (Eduardo, 25-sep):
+//   - array null, count < 0 o count > longitud del array: RuntimeError atrapable, con el
+//     mismo texto que los builtins de bus (#534) y en las dos VMs;
+//   - el tope es la zona de rascar ENTERA: 2048 LEDs en el PC, en RP2350 y en ESP32 (4096 en
+//     STM32); por encima, error con nombre. Una tira no se parte en tramos: el WS2812 hace
+//     latch tras ~50 us de silencio, y una segunda rafaga volveria a empezar por el pixel 0.
+//
+// En el PC no hay tira (Strip lanza en su init), asi que se llama a __npShow a pelo.
+module NpShowTope
+  import Core
+  import Neopixel
+
+  function prueba(arr: integer[], n: integer): string
+    try
+      Neopixel.__npShow(5, arr, n)
+      return "sin error"
+    catch e: Core.Exception
+      return e.msg
+    endtry
+  end prueba
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok    ", que
+    else
+      print "FALLO " + que + ": '" + obtenido + "' (se esperaba '" + esperado + "')"
+    endif
+  end mira
+
+  function Main()
+    var a: integer[] := newIntArray(300)
+    mira("una tira de 300, entera", prueba(a, 300), "sin error")
+    mira("count 0", prueba(a, 0), "sin error")
+    mira("count mayor que el array", prueba(a, 301), "neopixel.show: count (301) mayor que el array (300)")
+    mira("count negativo", prueba(a, -1), "neopixel.show: count negativo (-1)")
+    var nulo: integer[] := null
+    mira("array null", prueba(nulo, 1), "neopixel.show: el array es null")
+    var b: integer[] := newIntArray(2049)
+    mira("2048, el tope, pasa", prueba(b, 2048), "sin error")
+    mira("2049, uno mas, con nombre", prueba(b, 2049),
+         "neopixel.show: una tira de 2049 LEDs no cabe: como mucho 2048 por trama")
+  end Main
+end NpShowTope

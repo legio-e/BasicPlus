@@ -2074,7 +2074,8 @@ tira.show()</code></pre>
   <tr><td><code>setPixel(i, r, g, b)</code></td><td>Color de un LED (0..255 por canal).</td></tr>
   <tr><td><code>setColor(r, g, b)</code></td><td>Mismo color para toda la tira.</td></tr>
   <tr><td><code>clear()</code></td><td>Todo a 0 (no hace show).</td></tr>
-  <tr><td><code>show()</code></td><td>Vuelca el framebuffer a la tira.</td></tr>
+  <tr><td><code>show()</code></td><td>Vuelca el framebuffer a la tira, de una vez (el WS2812 no admite tramos): como
+    mucho 2048 LEDs (4096 en STM32); con más, <code>RuntimeError</code> con el motivo.</td></tr>
   <tr><td><code>count(): integer</code></td><td>Nº de LEDs.</td></tr>
 </table>
 

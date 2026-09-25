@@ -1267,6 +1267,9 @@ public class VirtualMachine {
     //    error (la VM-C recortaba a 64 en silencio).
     /** Tamaño del tramo de SPI/UART y tope de I2C. CONTRATO DE PARIDAD con BUS_TRAMO de builtins.c. */
     static final int BUS_TRAMO = 256;
+    /** #536 — el tope de una tira de NeoPixel: la zona de rascar del host entera (BPVM_SCRATCH_BYTES = 8192)
+     *  en palabras de 4 B. CONTRATO DE PARIDAD con `bpvm_scratch_capacity()/4` de la VM-C en el PC. */
+    static final int NP_MAX_HOST = 8192 / 4;
 
     /** Valida el array de un builtin de bus y devuelve su dirección (la de la longitud; los datos,
      *  a +4). {@code cual}: "el array", "el array tx" o "el array rx". {@code tope}: 0 = sin tope
@@ -6495,9 +6498,16 @@ public class VirtualMachine {
                 break;
             }
             case NP_SHOW: {
-                popTc(tc);            /* count */
-                popTcRef(tc);         /* grbRef — #478: 8B, aunque no se use */
-                popTc(tc);            /* pin */
+                /* #536 (V7, 25-sep) — las MISMAS comprobaciones y textos que la VM-C: el array como los
+                 * de bus (#534) y el tope de la zona de rascar del host (NP_MAX_HOST). Luego, no-op:
+                 * en host no hay tira. */
+                int npCount = popTc(tc);
+                long npRefH = popTcRef(tc);   /* #478: 8B */
+                popTc(tc);                    /* pin */
+                busArray(tc, npRefH, npCount, "neopixel.show", "el array", 0);
+                if (npCount > NP_MAX_HOST)
+                    throwBpRuntimeError(tc, "neopixel.show: una tira de " + npCount
+                            + " LEDs no cabe: como mucho " + NP_MAX_HOST + " por trama");
                 pushTc(tc, 0);
                 break;
             }
