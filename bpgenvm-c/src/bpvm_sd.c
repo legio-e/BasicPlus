@@ -81,7 +81,9 @@ static void reloj_en_vacio(int bus, int bytes) {
  * llamada cada uno. Al recibir, MOSI ARRIBA: la tarjeta espera 0xFF mientras habla (la cintura del ESP32
  * manda ceros si no se le da qué mandar). */
 #define FF8 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-static const uint8_t s_ff[64] = { FF8, FF8, FF8, FF8, FF8, FF8, FF8, FF8 };
+/* V7/H6.c G4.b (25-sep) — NO `const`, y alineado: con el bus del ESP32 con DMA, un búfer en la flash (.rodata) no lo
+ * puede leer el DMA y el IDF lo copiaría a uno de rebote en CADA tramo. 64 B de RAM. */
+static uint8_t s_ff[64] __attribute__((aligned(4))) = { FF8, FF8, FF8, FF8, FF8, FF8, FF8, FF8 };
 #undef FF8
 
 static void recibe(int bus, uint8_t* dst, int n) {

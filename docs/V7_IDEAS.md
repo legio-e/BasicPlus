@@ -3176,6 +3176,54 @@ El diseño, en §11.9. **Lo que hay:**
 - La C5 no prueba la CONCURRENCIA en placa (la pantalla y el programa van en el mismo hilo del SO): la prueba con
   dos hilos de verdad es `test-arbitro` en el PC; en placa llegará con la TF montada por el firmware (H3).
 
+#### 11.11 `G4.b`, el diseño concreto (25-sep, sesión remota): el DMA en la cintura SPI del ESP32
+
+El plan es el de §7.11 (Eduardo lo dejó para `G4`). Lo que ha cambiado desde entonces es que el primer punto ya está
+hecho: desde `G4.a3` trocea la CINTURA, no quien llama, y `DriverSpi` manda cada franja de LVGL (11 520 B en la C5) en
+UNA transacción de la BIOS v8. **El pack no se toca**, y la cautela de §7.11 sobre versiones sobra: el driver ya exige
+la v8. Queda la cintura (`esp32/common/gpio_esp32.c`), que hoy parte esa franja en 180 transacciones de 64 B sin DMA.
+
+**Medido antes, en la C5** (25-sep): `GuiFlushBench` 147 ms por pantalla y 1 ms por etiqueta; `SdCard` 4,2 s;
+`C5SdGui`, la pantalla sola con 30 ms de peor hueco y con la TF 63 ms (0 ficheros distintos); `C5Bus` bien.
+
+**Las decisiones:**
+1. **El bus se abre CON DMA** (`SPI_DMA_CH_AUTO`) y `max_transfer_sz` de 16 KB: una franja en UNA transacción (también
+   la de un panel de 320×480, 15 360 B); por encima, la cintura trocea a 16 KB. Lo mismo en el `init` de siempre.
+2. **Lo pequeño, sin DMA ni búfer de rebote**: hasta 4 bytes van en los búferes de la propia transacción
+   (`SPI_TRANS_USE_TXDATA/RXDATA`). Es el byte a byte de la TF: comandos, espera del token y de «ocupada».
+3. **Polling para lo pequeño, interrupción para lo grande**: hasta 64 B, `spi_device_polling_transmit`
+   (unos 12 µs frente a 22-24 con interrupción, según el IDF); por encima, `spi_device_transmit`, y la CPU queda libre
+   mientras el DMA manda los 2,3 ms de una franja. La C5 tiene un solo núcleo, y es el hilo `io` el que se aprovecha.
+4. **Un búfer en PSRAM o sin alinear** (el de LVGL vive en el bloque del pack, en PSRAM) lo copia el IDF a un búfer
+   interno apto para DMA, de hasta 16 KB. Si no hubiera memoria, la cintura lo dice UNA vez en el log y devuelve -1:
+   nada en silencio.
+5. **`tx` NULL mantiene su contrato, «manda ceros»**: sólo lo usa `Spi.read` de BP. Va por un búfer estático de 64
+   ceros, en tramos de 64.
+
+**Cómo se prueba**: en la C5, `GuiFlushBench` (la estimación de §7.11: 147 → ~45 ms), la etiqueta (sigue en 1 ms),
+`SdCard`, `C5SdGui` y `C5Bus`, contra las medidas de arriba; y compilan las cinco imágenes ESP32. **Falta VERLO en el
+cristal**: la sesión es remota, y lo que BP no mide (que los píxeles sean los que tocan) lo mira Eduardo.
+
+**`G4.b` hecho (25-sep), medido en la C5:**
+
+| | antes | con DMA |
+|---|---|---|
+| `GuiFlushBench`, pantalla entera | 147 ms | **70 ms** |
+| `GuiFlushBench`, una etiqueta | 1 ms | 1 ms |
+| `SdCard` (500 añadidos y la relectura) | 4,2 s | 3,8 s |
+| `C5SdGui`, la pantalla sola | 188 cambios, 30 ms de peor hueco | 188, 30 ms |
+| `C5SdGui`, con la TF escribiendo | 176, 63 ms, 30 ficheros | 190, 53 ms, 32 ficheros, 0 distintos |
+| `C5Bus` (el bus compartido y sus errores) | bien | bien |
+
+Ni un error de SPI ni de SD en el log, y los packs `Gui` y `DriverSpi` cargan sin regrabar: `nm` da las mismas páginas.
+Pero al rodata de la C5 le quedan unos 4 KB antes de cruzar a la página siguiente, y la próxima imagen que crezca
+obligará a regrabar los dos. **La pantalla, 2,1 veces más rápida, y no 3,2 como estimaba §7.11 (~45 ms)**: el cable a
+40 MHz son ~31 ms, y el resto no es peaje de transacciones. Lo más probable es pintar en PSRAM y copiar cada franja a
+un búfer de rebote interno (el de LVGL vive en el bloque del pack, en PSRAM), pero sin medir no se reparte. Lo siguiente
+de §7.11 —el doble búfer asíncrono y 80 MHz— sale de aquí. Dos detalles de paso: el búfer de ceros de la cintura y el
+`0xFF` de la TF (`#553`) viven en RAM y no en `.rodata`, porque el DMA no lee de la flash y el IDF los copiaría a un
+búfer de rebote en cada tramo.
+
 ### 12. El táctil que «se colgaba» era la HERRAMIENTA (23-sep, tarde): `wire_serie.py` reiniciaba la C5 al cerrar el puerto
 
 **El síntoma** (Eduardo, al volver a la C5 tras horas con `C5Touch` en marcha): la pantalla bien, el botón no

@@ -333,6 +333,16 @@ static int esp32_spi_host(int bus) {
 static spi_device_handle_t s_spi_dev[4];   /* por bus; 2 y 3 usados */
 static int s_spi_bus_ready[4];
 
+/* V7/H6.c G4.b (25-sep) — EL BUS VA CON DMA (V7_IDEAS §H6.11.11). Sin DMA el periférico mueve 64 bytes por
+ * transacción y una franja de LVGL (11 520 B en la C5) eran 180, con unos 22 µs de peaje cada una: dos tercios
+ * de los 147 ms de una pantalla. Con DMA la franja es UNA. Hasta 16 KB de una vez (también la franja de un panel
+ * de 320×480); por encima, la cintura trocea. */
+#define SPI_DMA_MAX   16384
+/* Hasta aquí, POLLING (≈12 µs por transacción frente a 22-24 con interrupción, según el IDF): lo pequeño —los
+ * comandos de la pantalla, el byte a byte de la TF— no espera a una interrupción. Por encima, interrupción: la CPU
+ * queda libre mientras el DMA manda (2,3 ms una franja a 40 MHz), y en la C5, de un núcleo, la aprovecha el hilo io. */
+#define SPI_POLL_MAX  64
+
 static void esp32_spi_init_impl(int bus, int sck, int mosi, int miso,
                                 int baudrate, int mode) {
     int host = esp32_spi_host(bus);
@@ -347,9 +357,9 @@ static void esp32_spi_init_impl(int bus, int sck, int mosi, int miso,
         .sclk_io_num     = sck,
         .quadwp_io_num   = -1,
         .quadhd_io_num   = -1,
-        .max_transfer_sz = 0,   /* sin DMA: limite = FIFO interno (~64 B) */
+        .max_transfer_sz = SPI_DMA_MAX,   /* G4.b: con DMA (antes, sin él: el FIFO de 64 B) */
     };
-    if (spi_bus_initialize((spi_host_device_t) host, &buscfg, SPI_DMA_DISABLED) != ESP_OK) return;
+    if (spi_bus_initialize((spi_host_device_t) host, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) return;
     s_spi_bus_ready[bus] = 1;
 
     spi_device_interface_config_t devcfg = {
@@ -387,9 +397,9 @@ static int esp32_spi_abrir(int bus, int sck, int mosi, int miso) {
         .sclk_io_num     = sck,
         .quadwp_io_num   = -1,
         .quadhd_io_num   = -1,
-        .max_transfer_sz = 0,   /* sin DMA: limite = FIFO interno (~64 B); el DMA es G4.b */
+        .max_transfer_sz = SPI_DMA_MAX,   /* G4.b: con DMA (antes, sin él: el FIFO de 64 B) */
     };
-    if (spi_bus_initialize((spi_host_device_t) host, &buscfg, SPI_DMA_DISABLED) != ESP_OK) return -1;
+    if (spi_bus_initialize((spi_host_device_t) host, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) return -1;
     s_spi_bus_ready[bus] = 1;
     s_spi_hz[bus] = s_spi_modo[bus] = -1;
     return 0;
@@ -425,26 +435,56 @@ static void esp32_spi_cerrar(int bus) {
 
 /* tx NULL -> manda ceros; rx NULL -> descarta lo recibido. Full-duplex.
  *
- * V7/H6.c G4.a3 — TROCEADO a SOC_SPI_MAXIMUM_BUFFER_SIZE (64). Sin DMA el IDF no acepta
- * más por transferencia: `spi_device_transmit` devuelve ESP_ERR_INVALID_ARG («txdata
- * transfer > host maximum»), así que desde BP un Spi.write de más de 64 bytes fallaba
- * ENTERO en el ESP32 (el tramo de los builtins es de 256). El CS es un GPIO que lleva la
- * HAL BP durante todo el turno: en el cable sólo quedan huecos entre trozos, con el CS
- * abajo. (Hasta hoy `DriverSpi` troceaba él mismo; la palanca era ésta.) */
-#ifndef SOC_SPI_MAXIMUM_BUFFER_SIZE
-#define SOC_SPI_MAXIMUM_BUFFER_SIZE 64
-#endif
+ * V7/H6.c G4.a3 — la CINTURA trocea, no quien llama: desde BP un Spi.write de más de 64
+ * bytes fallaba ENTERO en el ESP32 (el tramo de los builtins es de 256). El CS es un GPIO
+ * que lleva la HAL BP durante todo el turno: en el cable sólo quedan huecos entre trozos,
+ * con el CS abajo.
+ *
+ * V7/H6.c G4.b (25-sep) — con DMA (arriba): la franja de LVGL va en UNA transacción. Tres
+ * caminos, por tamaño (V7_IDEAS §H6.11.11):
+ *   · hasta 4 bytes, en los búferes de la propia transacción: ni DMA ni búfer de rebote (en
+ *     el C3, el C6 y el S3 un byte sin alinear hacía reservar uno POR BYTE);
+ *   · hasta SPI_POLL_MAX, polling; por encima, interrupción, en tramos de SPI_DMA_MAX;
+ *   · un búfer en PSRAM o sin alinear (el de LVGL vive en el bloque del pack) lo copia el IDF
+ *     a uno interno apto para DMA. Si no hay memoria para eso, se dice UNA vez y -1. */
+/* «tx NULL manda ceros», también con DMA. En RAM interna y alineado, NO `const`: el DMA no lee de la flash, y un
+ * búfer en .rodata obligaría al IDF a copiarlo a uno de rebote en cada transacción. */
+static uint8_t s_ceros[SPI_POLL_MAX] __attribute__((aligned(4)));
+static int s_spi_dicho = 0;
+
+static esp_err_t esp32_spi_una(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
+    spi_transaction_t t;
+    memset(&t, 0, sizeof(t));
+    t.length = n * 8;                 /* en BITS */
+    if (n <= 4) {
+        t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
+        if (tx) memcpy(t.tx_data, tx, n);   /* sin tx, los ceros del memset */
+        esp_err_t e = spi_device_polling_transmit(s_spi_dev[bus], &t);
+        if (e == ESP_OK && rx) memcpy(rx, t.rx_data, n);
+        return e;
+    }
+    t.tx_buffer = tx;
+    t.rx_buffer = rx;
+    return (n <= SPI_POLL_MAX) ? spi_device_polling_transmit(s_spi_dev[bus], &t)
+                               : spi_device_transmit(s_spi_dev[bus], &t);
+}
+
 static int esp32_spi_xfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
     size_t hecho = 0;
     if (bus < 0 || bus >= 4 || !s_spi_dev[bus] || n == 0) return -1;
+    /* Sin tx, los ceros salen de s_ceros: tramos de su tamaño (sólo lo usa Spi.read de BP). */
+    size_t tope = tx ? (size_t) SPI_DMA_MAX : sizeof s_ceros;
     while (hecho < n) {
-        size_t trozo = (n - hecho > SOC_SPI_MAXIMUM_BUFFER_SIZE) ? SOC_SPI_MAXIMUM_BUFFER_SIZE : (n - hecho);
-        spi_transaction_t t;
-        memset(&t, 0, sizeof(t));
-        t.length    = trozo * 8;      /* en BITS */
-        t.tx_buffer = tx ? tx + hecho : NULL;
-        t.rx_buffer = rx ? rx + hecho : NULL;
-        if (spi_device_transmit(s_spi_dev[bus], &t) != ESP_OK) return -1;
+        size_t trozo = (n - hecho > tope) ? tope : (n - hecho);
+        esp_err_t e = esp32_spi_una(bus, tx ? tx + hecho : s_ceros, rx ? rx + hecho : NULL, trozo);
+        if (e != ESP_OK) {
+            if (!s_spi_dicho) {
+                s_spi_dicho = 1;
+                log_printf("spi: bus %d: la transferencia de %u B falla (%s)%s", bus, (unsigned) trozo,
+                           esp_err_to_name(e), e == ESP_ERR_NO_MEM ? ": no hay memoria interna para el DMA" : "");
+            }
+            return -1;
+        }
         hecho += trozo;
     }
     return (int) n;
