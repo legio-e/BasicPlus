@@ -752,7 +752,8 @@ con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona re
 
 **Pendiente**:
 - De Eduardo: ~~el doble búfer asíncrono~~ (decidido esa misma tarde: no urgente, como opción del usuario si hay
-  memoria; `V7_IDEAS` §H6.14.8) y los 80 MHz (sin decidir); `#542`; y **una pregunta nueva de `#468`**: las copias de la stdlib en `/lib` que NO pone la imagen (las
+  memoria; `V7_IDEAS` §H6.14.8) y los 80 MHz (sin decidir); ~~`#542`~~ (decidida esa tarde: un import sin interfaz en el AOT es un error de carga,
+  como en el compilador; queda hacerlo); y **una pregunta nueva de `#468`**: las copias de la stdlib en `/lib` que NO pone la imagen (las
   subieron la tanda o el IDE) tapan al pack, y el instalador, por diseño, no las toca; en la C6 hubo que borrarlas a
   mano. ¿Las quita también el instalador cuando un pack las sirve con los mismos bytes —y, borrado el pack, se vuelven a
   subir cuando hagan falta—, o se quedan y se dice?
