@@ -704,6 +704,62 @@ fuente) y se probó en la Metro: `packdel SQLite` → `Core` de vuelta a `/lib` 
 en el build de packs: el pack de la GUI llevaba un `Core.mod` de generación 0 (**`#563`**: la receta no copiaba el
 canónico; ahora el build lo rechaza con nombre) y el cierre transitivo de los packs no leía MOD9 (**`#564`**).
 
+## 🔌 H3/H5/H6 (25-sep, tarde de placas) — LAS NUEVE CON LA ABI 8: la ronda rehecha, y la C3 y el P4 destapan `#565` y `#566`
+
+Eduardo, con las placas delante: *«Dime qué necesitas»*. El plan —grabar las seis que no estaban conectadas con la
+imagen de la ABI 8, pasar la tanda de V7 entera en las nueve como punto de restauración nuevo, y lo que pide manos— salió
+así, por tandas según se iban conectando:
+
+- **Pico 2, S3 y DK2**, grabadas (BOOTSEL por el wire, `app-flash`, ST-Link) y la tanda: 12/12, 9/9 (la S3 es Xtensa: sin
+  AOT) y 14/14.
+- **C3 y Nucleo**: la Nucleo, 12/12; la C3, las tres de AOT colgadas y la placa reiniciándose (`panic/exception`) →
+  **`#565`**: su SRAM tiene dos direcciones y el cargador saltaba por la de datos. Con la traducción del IDF en la
+  cintura, 12/12, con 7/7, 4/4 y 23/23 thunks nativos: era lo que faltaba para dar por probado el destino `ilp32`.
+- **C6, C5 y P4**: la C6, grabada, 13/14 (el AOT a la primera; `GuiWinJson`, «No space in heap», la excepción conocida);
+  la C5, 14/14; el P4, 14/14. Y con el OK de Eduardo, el `PACK_FORMAT` del P4 y SQLite, Gui (el de `#563`) y DriverNulo
+  regrabados: 1,4 MB libres (antes, 8 KB) y `Core` XIP del pack de la GUI (antes, «el FS eclipsa al del pack»); 14/14.
+- **La C6 y `#468`**: el `Stdlib.pack` grabado sacó de `/lib` lo de la imagen, pero `Gui`, `Json`, `Collections` y `Str`
+  los había subido la tanda y seguían tapando al pack. Borrados (OK de Eduardo), `GuiWinJson` IDÉNTICO y la tanda 14/14:
+  el objetivo de `#468`, en la placa que la motivó.
+- **La C5, en el cristal** (`G4.b`): `C5Touch` —el contador sube en pantalla al pulsar, 5 de 5 también por el puerto— y
+  `GuiFlushBench`, 70 ms por pantalla y 1 ms la etiqueta.
+- **SD.4 en el P4**: la tarjeta metida con la placa en marcha no montaba (`NOT_FOUND`) → **`#566`**: un intento fallido no
+  soltaba el host. Arreglado y probado con las manos de Eduardo: sin tarjeta, el reintento da `TIMEOUT`; metida, monta
+  sin reiniciar; `SdCard` «los seis»; la tanda, 14/14.
+- **La Metro**: 12/12, y la tarjeta en caliente: RETIRADA y METIDA por el vigía del común, `SdCard` «los seis». Eduardo
+  la sacó una segunda vez, a media escritura: error con nombre (`CMD24 -> FF…`), desmontaje limpio y montaje al volver.
+- **La Nucleo**: su zona de packs da «cadena ROTA, 0 libres». Sus primeros bytes (`0x08182000`) son un `Core.mod` MOD7:
+  restos de otra época de la flash —el FS de hoy no puede salirse de su partición (`block_count` sale de su tamaño)—. No
+  admite packs hasta un `PACK_FORMAT`.
+
+Las ocho imágenes probadas, bit a bit, en `dist/firmware-v7-25sep` (README + SHA256), y el informe en
+`compat/informes/tanda_v7_25sep.md`. Las capturas de `GuiShot` (C5, C6, P4, DK2), miradas: bien; en las pantallas de 240
+de ancho el deslizador del ejemplo tapa la casilla, porque su ancho es fijo.
+
+## ⏭️ Traspaso (25-sep, tarde de placas) — la ronda de las nueve con la ABI 8, `#565` y `#566`
+
+**Commits** (sin push): `1f98d61a` (`#565`) · `7798cb61` (`#566`) · y los docs, con el informe de la tanda y el README de
+`dist/firmware-v7-25sep`. `compat.sh check` verde tras `#565` (paridad 102/102 en MOD9 y en MOD8, cápsula 59/59, norma
+9/9, sim 6/6, pruebas de C 10/10, sombra 13/13); compilan las ocho imágenes.
+
+**Corrección del traspaso de anoche**: decía que `H6.b` iba «tras la ronda sellada de las nueve placas», como si faltara.
+Esa ronda se hizo el 24-sep (`22f30005`), y hoy se ha rehecho con la ABI 8: **`H6.b` ya tiene su punto de restauración**,
+`dist/firmware-v7-25sep`.
+
+**Las placas quedan**: las nueve con las imágenes de `dist/firmware-v7-25sep` (la C3 con `#565`, el P4 con `#566`); la C6
+con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona recién formateada (SQLite, Gui y DriverNulo;
+1,4 MB libres) y una SanDisk de 32 GB; la Nucleo con su zona rota, sin formatear.
+
+**Pendiente**:
+- De Eduardo: el OK para el `PACK_FORMAT` de la Nucleo; el doble búfer asíncrono y los 80 MHz (¿entran en H6 o se
+  cancelan?); `#542`; y **una pregunta nueva de `#468`**: las copias de la stdlib en `/lib` que NO pone la imagen (las
+  subieron la tanda o el IDE) tapan al pack, y el instalador, por diseño, no las toca; en la C6 hubo que borrarlas a
+  mano. ¿Las quita también el instalador cuando un pack las sirve con los mismos bytes —y, borrado el pack, se vuelven a
+  subir cuando hagan falta—, o se quedan y se dice?
+- Con manos: el explorador del IDE con `sd` y `sd mount` (H3).
+- `H6.b` (quitar LVGL de C6, P4 y DK2), ya con el punto de restauración.
+- Sin probar: el `.mdn` suelto del FS en la C3 (`#565` explica por qué debería ir).
+
 ## ⏭️ Traspaso (25-sep, noche, sesión remota) — H6: `#468` cerrada, y `#563` y `#564` de paso
 
 **Commits** (sin push): `7398d6e5` (`#468`) · `534c294b` (`#564`) · `e28bedd2` (`#563`) · y los docs. Frontend 249/249; `compat.sh
