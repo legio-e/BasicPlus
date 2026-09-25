@@ -8,7 +8,7 @@
     "",
     "   bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool]   (RV32IMC: C3/C6/C5)",
     "   cp bpstdlib/gui/nativo/lvgl.npk.* bpstdlib/gui/nativo/Gui2.mdn.* bpstdlib/gui/out/",
-    "   cp bpstdlib/{Gui,Json,Collections,Str}.mod bpstdlib/gui/out/     <- LOS CANONICOS",
+    "   cp bpstdlib/{Gui,Json,Collections,Str,Core}.mod bpstdlib/gui/out/     <- LOS CANONICOS",
     "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/Gui.bpbuild --backend=mivm",
     "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/out/Gui.pack riscv-imc",
     "",
@@ -17,7 +17,10 @@
     "",
     "Y Gui.mod NO SE COMPILA AQUI, se COPIA de bpstdlib/: compilado como proyecto suelto sale",
     "con generacion 0 y un programa que pide la 7 muere con «'Gui' (gen 0) es mas antiguo»",
-    "(pasado el 22-sep en la C5). El sello sale de BpVM.cfg, no del .bp de al lado."
+    "(pasado el 22-sep en la C5). El sello sale de BpVM.cfg, no del .bp de al lado.",
+    "Y Core TAMBIEN (V7/H6, #563, 25-sep): faltaba en la lista y el pack llevo un Core.mod de",
+    "generacion 0 desde el principio; el /lib de la imagen lo tapaba. Desde #563 el build del",
+    "pack lo RECHAZA con nombre si se olvida (un modulo de la stdlib sin sellar no entra)."
   ],
   "sourceDir":    "..",
   "sources":      ["./Gui2.bp"],

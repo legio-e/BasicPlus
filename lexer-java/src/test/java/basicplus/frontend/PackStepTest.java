@@ -71,6 +71,28 @@ class PackStepTest {
                    "el cierre trae Lib (import directo) y Base (de segunda mano): " + got);
     }
 
+    /** [#563] Un módulo de la stdlib SIN SELLAR (gen 0: compilado como fuente del
+     *  proyecto) no entra en un pack si la stdlib lo tiene sellado; el sellado, sí. */
+    @Test void stdlibSinSellarNoEntraEnUnPack(@TempDir Path tmp) throws Exception {
+        Path outDir = Files.createDirectories(tmp.resolve("out"));
+        Path stdlib = Files.createDirectories(tmp.resolve("stdlib"));
+        Files.write(stdlib.resolve("Core.mod"), modSintetico(9, 7));
+        Files.write(outDir.resolve("App.mod"), modSintetico(9, 0, "Core.print"));   /* el de la app: gen 0 y no es de la stdlib */
+        Files.write(outDir.resolve("Core.mod"), modSintetico(9, 0));                /* el de la GUI del 25-sep */
+        BpBuild b = new BpBuild();
+        b.projectDir = tmp.toString(); b.outDir = outDir.toString(); b.main = "App"; b.out = "pack"; b.packName = "App";
+        PackStep.Cierre c = new PackStep.Cierre(java.util.Collections.emptyMap(), java.util.Collections.emptySet(),
+                true, "", java.util.Collections.singletonList(stdlib));
+        IOException ex = assertThrows(IOException.class, () -> PackStep.buildPack(b, c));
+        assertTrue(ex.getMessage().contains("'Core.mod'") && ex.getMessage().contains("generación 7"), ex.getMessage());
+        /* el control: con el sellado en el outDir (lo que hace la receta), entra */
+        Files.write(outDir.resolve("Core.mod"), modSintetico(9, 7));
+        PackReader.Pack p = PackReader.read(Files.readAllBytes(PackStep.buildPack(b, c)));
+        boolean conCore = false;
+        for (PackEntry e : p.entries) if ("mod".equals(e.tipo) && "Core".equals(e.nombre)) conCore = PackStep.genDe(e.data) == 7;
+        assertTrue(conCore, "con el Core sellado, el pack se construye y lo lleva");
+    }
+
     @Test void empaquetaOutDirMasResourcesMasManifest(@TempDir Path tmp) throws Exception {
         Path outDir = Files.createDirectories(tmp.resolve("out"));
         Files.write(outDir.resolve("App.mod"),    "app-bytecode".getBytes(StandardCharsets.UTF_8));

@@ -197,6 +197,32 @@ public final class PackStep {
             System.out.println("pack: " + cerrados + " modulo(s) mas para cerrar las dependencias "
                 + "(un pack es autocontenido: lo que importa va dentro)");
 
+        /* 1d) [V7/H6, #563] UN MÓDULO DE LA STDLIB SIN SELLAR NO ENTRA EN UN PACK.
+         *
+         * El pack de la GUI llevaba un `Core.mod` de GENERACIÓN 0: su proyecto tiene por
+         * sourceDir `bpstdlib/`, así que el build compilaba `Core.bp` como fuente suya —sin
+         * el sello que la stdlib saca de BpVM.cfg— y el paso 1 lo metía en el pack. La receta
+         * copiaba los canónicos de Gui, Json, Collections y Str y se olvidó de Core. En la
+         * placa no mordía porque el `/lib/Core.mod` de la imagen lo tapaba; pero borrado ése,
+         * todo lo compilado contra la stdlib dejaba de enlazar («'Core' (gen 0) es más
+         * antiguo…»), y con #468 una copia distinta de la de la imagen ya no se puede quitar
+         * de /lib. La regla es exacta: un `.mod` con versión y gen 0 cuyo nombre la stdlib
+         * (los mismos sitios que el cierre) tiene SELLADO no entra; se dice con los dos datos
+         * y qué hacer. Un módulo que la stdlib no tiene no se mira. */
+        for (PackEntry e : modulos) {
+            if (!"mod".equals(e.tipo) || genDe(e.data) != 0 || !conVersion(e.data)) continue;
+            Path canon = localizarModulo(e.nombre + ".mod", cierre.dondeBuscar, null);
+            if (canon == null) continue;
+            int gCanon = genDe(Files.readAllBytes(canon));
+            if (gCanon > 0) {
+                throw new IOException("pack: '" + e.nombre + ".mod' va SIN SELLAR (generación 0: se compiló "
+                    + "como fuente de este proyecto) y la stdlib lo tiene sellado (generación " + gCanon
+                    + ", " + canon + "). En la placa, lo compilado contra la stdlib no enlazaría con él. "
+                    + "Copia el de la stdlib al outDir antes de construir el pack (como hace la receta de "
+                    + "bpstdlib/gui/Gui.bpbuild con Gui, Json, Collections, Str y Core) — #563.");
+            }
+        }
+
         // 2) resources del proyecto (cualquier extensión), si hay carpeta
         Path resDir = Paths.get(proj.projectDir, "resources");
         if (Files.isDirectory(resDir)) collectDir(resDir, entries, null);
@@ -440,6 +466,21 @@ public final class PackStep {
             }
         } catch (IOException | RuntimeException ignore) { /* no legible o corrupto: nada */ }
         return out;
+    }
+
+    /** [V7/H6, #563] ¿Lleva el `.mod` la cabecera con versión (MOD8 en adelante)? */
+    static boolean conVersion(byte[] mod) {
+        if (mod == null || mod.length < 4) return false;
+        int magic = ((mod[0] & 0xFF) << 24) | ((mod[1] & 0xFF) << 16) | ((mod[2] & 0xFF) << 8) | (mod[3] & 0xFF);
+        return edu.bpgenvm.bytecode.ModFormat.tieneVersion(magic);
+    }
+
+    /** [V7/H6, #563] La GENERACIÓN del `.mod` (be32 en el offset 36 de la cabecera con
+     *  versión); 0 si no la lleva o no cabe — que es también lo que escribe un build que
+     *  compila un módulo de la stdlib como fuente propia. */
+    static int genDe(byte[] mod) {
+        if (!conVersion(mod) || mod.length < 40) return 0;
+        return ((mod[36] & 0xFF) << 24) | ((mod[37] & 0xFF) << 16) | ((mod[38] & 0xFF) << 8) | (mod[39] & 0xFF);
     }
 
     /** Dónde busca el compilador: los `dondeBuscar` del cierre (stdlibDir,
