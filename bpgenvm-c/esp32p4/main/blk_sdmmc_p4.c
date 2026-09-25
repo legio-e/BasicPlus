@@ -160,11 +160,18 @@ static int p4_init(void) {
     slot.width = s_p.ancho;          /* EXPLÍCITO: 0 significaria "el maximo" */
     slot.flags = 0;                  /* pull-ups EXTERNOS, ver cabecera       */
 
+    /* #566 — ⚠️ desde el IDF v6, `sdmmc_host_init()` CREA un controlador en cada
+     *       llamada (`sd_host_create_sdmmc_controller`), y el P4 tiene uno. Si un
+     *       intento falla y no se suelta, el siguiente no encuentra ninguno libre y
+     *       contesta ESP_ERR_NOT_FOUND para siempre: una placa que arrancó sin
+     *       tarjeta no montaba la que se le metía después (medido el 25-sep). Por
+     *       eso toda salida de error a partir de aquí pasa por `sdmmc_host_deinit()`
+     *       —con `(void)`: el motivo que se cuenta es el del paso que falló—. */
     s_ultimo = sdmmc_host_init();
     if (s_ultimo != ESP_OK) { alimentar(0); return -1; }
 
     s_ultimo = sdmmc_host_init_slot(s_p.slot, &slot);
-    if (s_ultimo != ESP_OK) { alimentar(0); return -1; }
+    if (s_ultimo != ESP_OK) { (void) sdmmc_host_deinit(); alimentar(0); return -1; }
 
     /* 4 — la tarjeta. Aquí el protocolo lo habla el SDK: CMD0, CMD8, ACMD41,
      *     el ancho por ACMD6... nada de eso es nuestro, y ése es justo el
@@ -175,7 +182,8 @@ static int p4_init(void) {
         /* Cortar el raíl al fallar no es limpieza por gusto: deja la tarjeta en
          * un estado conocido para el siguiente intento. Una SD que se quedó a
          * medias de la negociación puede no volver en frío, y apagarla es la
-         * ÚNICA forma fiable de reiniciarla. */
+         * ÚNICA forma fiable de reiniciarla. Y el host, fuera (#566, arriba). */
+        (void) sdmmc_host_deinit();
         alimentar(0);
         return -1;
     }
@@ -265,6 +273,10 @@ static const bpvm_blk_backend_t s_backend = {
 const bpvm_blk_backend_t* bpvm_blk_sdmmc(const bpvm_sdio_pines_t* pines) {
     if (pines) {
         if (!s_configurado || memcmp(&s_p, pines, sizeof s_p) != 0) {
+            /* #566 — con la tarjeta arrancada, soltar el host (y apagarla) CON LOS
+             * PINES VIEJOS antes de cambiarlos: si no, el próximo `init` no
+             * encontraría controlador libre. */
+            if (s_arrancada) { (void) sdmmc_host_deinit(); alimentar(0); }
             s_p = *pines;
             s_arrancada = 0;
             memset(&s_card, 0, sizeof s_card);
