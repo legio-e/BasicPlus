@@ -146,6 +146,22 @@ class ModV7SeccionNativaTest {
         return cola;
     }
 
+    /** La cabecera fundida contra la original, CAMPO A CAMPO (`b` ya pasó el magic): los siete tamaños de
+     *  antes de `nativeSize` iguales, `nativeSize` = lo que había + el blob + 0..3 de relleno, y `gen` e
+     *  `ifaceCrc` iguales. (#555: la versión de antes leía un campo corrido y comparaba gen con ifaceCrc;
+     *  pasaba porque en el módulo de prueba todo eso valía 0.) */
+    private static void compruebaCabecera(byte[] original, ByteBuffer b, int blob) {
+        ByteBuffer o = ByteBuffer.wrap(original);
+        o.getInt();                                                  // magic
+        String[] campo = {"dataSize", "mainOffset", "importsSize", "exportsSize", "codeSize", "librarySize", "interfaceSize"};
+        for (String c : campo) assertEquals(o.getInt(), b.getInt(), c + " se conserva al fundir");
+        int natAntes = o.getInt(), nat = b.getInt();
+        assertTrue(nat >= natAntes + blob && nat <= natAntes + blob + 3,
+                "nativeSize=" + nat + " para " + natAntes + " + un blob de " + blob + " (más 0..3 de relleno)");
+        assertEquals(o.getInt(), b.getInt(), "gen se conserva al fundir");
+        assertEquals(o.getInt(), b.getInt(), "ifaceCrc se conserva al fundir");
+    }
+
     @Test
     @DisplayName("fundir un blob: el módulo conserva su versión (v8) y data/code no se mueven")
     void fundirUnBlob(@TempDir Path dir) throws IOException {
@@ -158,13 +174,39 @@ class ModV7SeccionNativaTest {
 
         ByteBuffer b = ByteBuffer.wrap(fundido);
         assertEquals(ModFormat.MAGIC_NUMBER_V8, b.getInt(), "un MOD8 fundido sigue siendo MOD8 (conserva gen e ifaceCrc)");
-        ByteBuffer o = ByteBuffer.wrap(original);
-        for (int i = 0; i < 9; i++) { o.getInt(); if (i < 8) b.getInt(); }
-        b.getInt();   // nativeSize (cambia)
-        assertEquals(o.getInt(), b.getInt(), "gen se conserva al fundir");
-        assertEquals(o.getInt(), b.getInt(), "ifaceCrc se conserva al fundir");
+        compruebaCabecera(original, b, blob.length);
         // data y code son lo que EJECUTA la VM: si se mueven o se cortan, el
         // módulo queda roto de una forma que no se ve hasta ejecutarlo.
+        org.junit.jupiter.api.Assertions.assertArrayEquals(colaAntes, colaDe(fundido),
+                "data+code cambiaron al fundir el bloque nativo");
+    }
+
+    @Test
+    @DisplayName("fundir un blob en un MOD9: sigue siendo MOD9, con su gen, su ifaceCrc y data/code intactos (#555)")
+    void fundirUnBlobMod9(@TempDir Path dir) throws IOException {
+        /* #555 (V7, 25-sep) — `conBloqueNativo` sólo conocía hasta MOD8: con un MOD9 no leía nativeSize, gen
+         * ni ifaceCrc y escribía una cabecera MOD7 delante del contenido MOD9. El cargador lo leía corrido
+         * («L2 v3 fixup: símbolo no resuelto ''»): el AOT fundido de los programas, roto en todas las placas
+         * desde que la cadena pasó a MOD9 (17-sep). */
+        ModWriter w = new ModWriter();
+        w.setFormato(9);
+        w.addModulo("Fundir9");
+        w.setGeneracion(7);                  // DESPUÉS de addModulo (la pone a 0); distinta de 0: conservarla significa algo
+        w.addFunction("main", true);
+        Path f = dir.resolve("Fundir9.mod");
+        w.writeToFile(f.toString());
+        byte[] original = Files.readAllBytes(f);
+        assertEquals(ModFormat.MAGIC_NUMBER_V9, ByteBuffer.wrap(original).getInt(), "el módulo de partida es MOD9");
+        byte[] colaAntes = colaDe(original);
+
+        byte[] blob = new byte[7];
+        for (int i = 0; i < 7; i++) blob[i] = (byte) (0x60 + i);
+        byte[] fundido = edu.bpgenvm.bytecode.ModFormat.conBloqueNativo(original, blob);
+
+        ByteBuffer b = ByteBuffer.wrap(fundido);
+        assertEquals(ModFormat.MAGIC_NUMBER_V9, b.getInt(), "un MOD9 fundido sigue siendo MOD9");
+        compruebaCabecera(original, b, blob.length);
+        assertEquals(7, ByteBuffer.wrap(fundido, 36, 4).getInt(), "la generación (7) sigue en su sitio");
         org.junit.jupiter.api.Assertions.assertArrayEquals(colaAntes, colaDe(fundido),
                 "data+code cambiaron al fundir el bloque nativo");
     }

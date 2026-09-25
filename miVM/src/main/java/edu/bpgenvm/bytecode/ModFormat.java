@@ -222,7 +222,11 @@ public final class ModFormat {
         if (!isAbiSupported(magic)) {
             throw new IllegalArgumentException(abiRejectReason(magic));
         }
-        boolean v8 = (magic == MAGIC_NUMBER_V8);
+        /* #555 (V7, 25-sep) — MOD9 lleva la MISMA cabecera que MOD8 (gen + ifaceCrc tras nativeSize).
+         * Aquí sólo se miraba MOD8: con un MOD9 no se leían nativeSize, gen ni ifaceCrc y salía una
+         * cabecera MOD7 delante del contenido MOD9 — el cargador lo leía corrido («L2 v3 fixup:
+         * símbolo no resuelto ''»), y el AOT fundido quedó roto en todas las placas desde el 17-sep. */
+        boolean v8 = tieneVersion(magic);
         boolean v7 = (magic == MAGIC_NUMBER_V7) || v8;
         int dataSize   = b.getInt();
         int mainOffset = b.getInt();
@@ -240,11 +244,11 @@ public final class ModFormat {
         int iniNat = iniLib + libSize + impSize + expSize + ifaceSize;
         int iniData = iniNat + natSize;
 
-        /* V7/H2 — se CONSERVA la versión de entrada (un MOD7 sale MOD7; un MOD8, MOD8):
-         * fundir un blob no cambia la interfaz ni la generación, y un MOD7 no tiene
-         * de dónde sacar un gen. Un v6 sube a v7 como siempre (gana la sección native).
+        /* V7/H2 — se CONSERVA la versión de entrada (un MOD7 sale MOD7; un MOD8, MOD8; y un
+         * MOD9, MOD9 —#555—): fundir un blob no cambia la interfaz ni la generación, y un MOD7
+         * no tiene de dónde sacar un gen. Un v6 sube a v7 como siempre (gana la sección native).
          * El relleno se calcula sobre dónde caerá el blob en el fichero NUEVO. */
-        int magicSalida = v8 ? MAGIC_NUMBER_V8 : MAGIC_NUMBER_V7;
+        int magicSalida = v8 ? magic : MAGIC_NUMBER_V7;
         int hdrSalida   = headerSizeDe(magicSalida);
         int finNatNuevo = hdrSalida + libSize + impSize + expSize + ifaceSize + natSize;
         int pad = (4 - (finNatNuevo & 3)) & 3;
