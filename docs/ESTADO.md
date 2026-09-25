@@ -634,6 +634,21 @@ duda. Resultado: `SdCard` «SD OK — los seis» en las dos placas, y la TF y la
 (`C5SdGui`, `607663a3`): 30 ficheros escritos y releídos sin un byte distinto mientras la etiqueta seguía cambiando (63 ms
 de peor hueco; sola, 30). Y `#554`, abierta: concatenar en placa es unas 250 veces más lento que en el PC.
 
+## ⏭️ Traspaso (25-sep, mañana, sesión remota) — el P4 sin tarjeta, hecho; sus packs, resellados
+
+Eduardo, desde fuera: *«¿por dónde podemos continuar?»*. Conectadas: la Metro (COM4), la C5 (COM6) y **el P4 (COM15)**
+—la Pico 2 ya no—. El P4 entra en SD.4 **sin tarjeta** (su arranque viejo decía `ESP_ERR_TIMEOUT` y su ranura no tiene
+detector): grabado con la imagen de hoy y `5a3ed071` (registra siempre, monta con el FS), el arranque pasa por el común y
+`SD_INFO`/`SD_MOUNT` contestan por primera vez (`medio SDMMC`, el `esp_err_t` como peldaño, sin traza). Al arrancar dio
+`TIMEOUT` y en los reintentos `NOT_FOUND`: las dos son «no hay tarjeta», pero el reintento pasa por el host ya
+inicializado —eso es justo lo que se probará al meter una y pedir `SD_MOUNT`—.
+
+**Los packs del P4**: la imagen creció 5,6 KB y su rodata cruzó a la página de la zona (`nm`: acaba en `0x4014f69c`), así
+que la zona se corrió de `0x40144000` a `0x40154000` y los tres se rechazaron con nombre, como estaba previsto. Sin sitio
+para resellarlos (614 KB libres, 1,4 MB hacían falta), con el OK de Eduardo: `PACK_FORMAT` y SQLite, Gui y DriverNulo
+regrabados desde los mismos ficheros (podados en seco: los mismos tamaños), todos `rc=0`; `SqlDemo` y `GuiPack` («las dos
+vivas») bien.
+
 ## ⏭️ Traspaso (24-sep, medianoche) — H3: SD.3 hecho; SD.4 hecho en la Metro y la C5; faltan el P4 y la tarjeta en caliente
 
 **Commits** (sin push): `e1843e99` (SD.3) · `73464cde` (`#549`) · `f82f246b` (`#550`) · `1d484f3c` (`#551`) · `004f7b04`
