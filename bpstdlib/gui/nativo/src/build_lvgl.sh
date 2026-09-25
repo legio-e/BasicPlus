@@ -2,14 +2,15 @@
 # build_lvgl.sh — el PACK DE LA GUI (V7/H6 P3): LVGL + gui.c, para un destino.
 #
 #     bash bpstdlib/gui/nativo/src/build_lvgl.sh [imc|p4|arm] [KB del pool, 256]
-#     VARIANTE=mini bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool, 96]
+#     VARIANTE=mini bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool, 64]
 #
 # V7/H6.b — LA VARIANTE `mini`: el pack para PANTALLAS PEQUEÑAS y placas sin PSRAM (la C6: 240×240 y 512 KB
 # de SRAM). Decidido con Eduardo el 25-sep (V7_IDEAS §H6.14): el pack de siempre pide 382 KB de RAM y la C6
 # tendría ≈ 389 libres. Cambia CUATRO perillas y nada de código: 256 nodos del modelo (GUI_MAX_NODES), las
 # fuentes hasta 24 px (BPVM_FUENTE_MAX_PX), un búfer de dibujo (BPVM_PANT_BUFS: con el flush síncrono el
 # segundo no adelanta nada) y la captura de GuiShot con tope de 40 KB (BPVM_SHOT_MAX, como en la imagen de la
-# C6); más el pool de LVGL, que es el segundo parámetro (96 por defecto en la mini). Cada una se puede pisar
+# C6); más el pool de LVGL, que es el segundo parámetro (64 por defecto en la mini: medido, el pico es 13 KB en
+# la tanda y 54 con 256 widgets; con 96 la VM de la C6 bajaba a 100 KB). Cada una se puede pisar
 # con su variable (NODOS, FUENTE_MAX, BUFS, SHOT_KB). Sale en nativo/mini/ con el MISMO nombre de fichero,
 # y la empaqueta bpstdlib/gui/mini/GuiMini.bpbuild. Sin VARIANTE, el pack de siempre, compilado igual que antes.
 #
@@ -40,7 +41,7 @@ QUE="${1:-imc}"
 VARIANTE="${VARIANTE:-}"
 case "$VARIANTE" in
   "")   POOL_KB="${2:-256}"; TAG=""; PERILLAS="" ;;
-  mini) POOL_KB="${2:-96}";  TAG="_mini"
+  mini) POOL_KB="${2:-64}";  TAG="_mini"
         NODOS="${NODOS:-256}"; FUENTE_MAX="${FUENTE_MAX:-24}"; BUFS="${BUFS:-1}"; SHOT_KB="${SHOT_KB:-40}"
         PERILLAS="-DGUI_MAX_NODES=$NODOS -DBPVM_FUENTE_MAX_PX=$FUENTE_MAX -DBPVM_PANT_BUFS=$BUFS -DBPVM_SHOT_MAX=$((SHOT_KB * 1024))" ;;
   *)    echo "VARIANTE: vacia (el pack de siempre) o mini (pantallas pequenas)"; exit 1 ;;

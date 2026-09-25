@@ -55,6 +55,19 @@
  * sistema, ~68 KB de holgura sobre el peor pico medido — sin radios todavía. Con 160
  * quedaban 35 KB, y el criterio es el de Eduardo: no vaciar el heap del RTOS para
  * devolvérselo después. Aquí es la pantalla quien lo cobra. */
+/* ─── Y SIN LA PANTALLA EN LA IMAGEN (V7/H6.b, 25-sep) ─────────────────────────────────
+ *
+ * LVGL ya no va sobre el heap de C: su pool, el modelo y la franja de dibujo son la RAM del pack
+ * (el bloque `packRam=` del ENV, que se reserva ANTES que la VM). Y MEDIDO con esta imagen, el
+ * margen SE QUEDA: con `packRam=136` (GuiMini + DriverSpi) y la VM en su objetivo de 128 KB,
+ *
+ *   heap: libre 386812 al arrancar -> 247544 tras packRam -> 116468 tras la VM
+ *   mem: MINIMO HISTORICO 22360 B   (la tanda de V7 entera, SdCard, GuiLleno, GuiFlushBench, C5SdGui)
+ *
+ * o sea ~94 KB de pico del sistema SIN LVGL en el heap: la cifra de 103 824 de arriba no era de
+ * LVGL, como decía el comentario, sino del resto (el PUT, las tareas que el IDF crea en marcha…).
+ * Con `packRam=176` (GuiMini con 96 KB de pool) la VM se quedaba en 100 KB y SdCard no cabía: por
+ * eso el pack de pantallas pequeñas lleva 64 KB de pool. */
 #define CHIP_VM_OBJETIVO      (128u * 1024u)
 #define CHIP_MARGEN_SISTEMA   103824u
 #define CHIP_VM_MIN           (64u * 1024u)    /* el suelo de las cinco placas */
@@ -63,12 +76,14 @@
 #include "c6_board_id.h"
 #define CHIP_INSTALAR_BOARD_ID()  c6_install_board_id()
 
-/* V7/H3 SD.3 (24-sep) — la SD de la placa. La C6 SÍ tiene ranura, pero en el SPI de la pantalla, y su pantalla
- * habla con el bus por `esp_lcd` directamente —`spi_bus_initialize` con DMA—, sin pasar por el árbitro: la TF
- * a la vez la pisaría. Entra cuando la pantalla vaya por el pack (`H6.b`; Eduardo, 24-sep: «C6 la a»). Hasta
- * entonces SD_INFO/SD_MOUNT dicen esto, y no «su ENV no lleva línea `sd`», que sería mentira. */
-#include "bpvm_sd_placa.h"
-#define CHIP_SD_REGISTRAR()  \
-    bpvm_sd_placa_sin_sd("la TF de esta placa aun no se usa: comparte el SPI con la pantalla, que no pasa por el arbitro")
+/* V7/H3 SD.3 (24-sep) y V7/H6.b (25-sep) — la TF de la placa, por SPI: va en el SPI 2 de la pantalla (MISO 5,
+ * CS 4; `sd=bus:2,cs:4` en el ENV, con los pines del bus en su línea `spi2=`), y la línea `sd` decide si se usa.
+ * Hasta H6.b la pantalla hablaba con el bus por `esp_lcd` directamente, sin pasar por el árbitro, y la TF a la
+ * vez la habría pisado: por eso SD_INFO/SD_MOUNT decían «aún no se usa». Ahora la pantalla va por el pack y la
+ * HAL BP, como en la C5, y la TF se registra igual que allí. Sin pin de detección: se monta al arrancar o con
+ * SD_MOUNT. */
+#include "bpvm_sd_blk.h"
+#include "board_mgr_esp32.h"   /* board_mgr_env() */
+#define CHIP_SD_REGISTRAR()  ((void) bpvm_sd_blk_registrar_desde_env(board_mgr_env()))
 
 #endif /* BPVM_CHIP_CFG_H */

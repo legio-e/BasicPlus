@@ -22,8 +22,8 @@ idf_component_register(
         # El S3 y el P4 tienen dos puertos y NO se tocan.
         "../../esp32/common/wire_v1_usbjtag.c"
         "c6_board_id.c"                       # V6/P1.C6: identidad de placa (pisa el default del S3)
-        "gui_display_st7789.c"                # V6/P2: la pantalla ST7789 240x240 por SPI (esp_lcd + LVGL)
-        "../../src/gui.c"                     # V6/P2: modelo GUI + widgets LVGL (Gui.* de BasicPlus), como el P4
+        # V7/H6.b (25-sep): la pantalla SALE de la imagen — LVGL y gui.c van en el pack (GuiMini) y el driver
+        # en el suyo (DriverSpi, con la placa en el ENV), como en la C5. Aquí quedan los trampolines (gui_pack.c).
         "../../esp32/common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
         "../../esp32/common/repl_esp32.c"
         "../../esp32/common/gpio_esp32.c"
@@ -32,6 +32,14 @@ idf_component_register(
         "../../src/wire_v1_proto.c"               # V6/U2.1: los builders JSON del wire, ya en el comun
         "../../src/bpvm_repl.c"               # V6/U3: los verbos comunes del REPL
         "../../src/bpvm_sd_placa.c"           # V7/H3: la SD de la placa (SD_INFO/SD_MOUNT), en el comun
+        # --- V7/H6.b: la TF por SPI (en el SPI 2 de la pantalla, MISO 5 y CS 4) y FAT, lo mismo que la C5 ---
+        "../../src/bpvm_sd.c"                 # V5/H1: el protocolo SD por SPI (HAL BP + arbitro del bus)
+        "../../src/bpvm_sd_blk.c"             # V5/H6: esa SD como dispositivo de bloque
+        "../../src/bpvm_sd_spi_env.c"         # V7/H3 SD.3: la linea `sd` del ENV al registro comun
+        "../../src/bpvm_blk.c"                # V5/H6: contrato de bloque + tabla de particiones
+        "../../src/fs_fat.c"                  # V5/H2: backend FAT de la fachada (el MISMO que la Metro y el P4)
+        "../../third_party/fatfs/ff.c"        # motor FatFs R0.16 — el NUESTRO, no el del IDF
+        "../../third_party/fatfs/ffunicode.c" # tabla de la CP850 (nombres largos)
         "../../esp32/common/board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         "../../esp32/common/bios_esp32.c"    # V7/H6: la tabla BIOS y el ancla del pack nativo (era del P4)
         "../../esp32/common/pack_esp32.c"    # V7/H6: el cargador del pack nativo y su bloque de RAM (era del P4)
@@ -41,6 +49,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
+        "../../src/gui_pack.c"                # V7/H6.b: la GUI por el PACK (trampolines generados de bpvm_gui.h; sin gui.c ni LVGL)
         "../../src/fs_facade.c"        # #247: facade file I/O (backend ESP32 = fs_lfs_esp32.c)
         "../../src/fs_lfs.c"                       # H2-B3: backend littlefs de la fachada (portable)
         "../../third_party/littlefs/lfs.c"        # H2: motor littlefs v2.11.3 (in-tree)
@@ -103,6 +112,7 @@ idf_component_register(
         "../../include"
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h
+        "../../third_party/fatfs"      # V7/H6.b: ff.h (nuestro ffconf.h sale de ../../include)
     REQUIRES
         esp_timer
         esp_driver_uart
@@ -116,9 +126,7 @@ idf_component_register(
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support
-        esp_mm            # V6: esp_cache.h — el gate del .mdn AOT (el C6 es RISC-V, como el C3)
-        esp_lcd           # V6/P2: panel ST7789 por SPI (esp_lcd_new_panel_st7789 + panel_io_spi)
-        lvgl              # V6/P2: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)   # INFO: esp_mac.h (uniqueId desde efuse)
+        esp_mm            # V6: esp_cache.h — el gate del .mdn AOT (el C6 es RISC-V, como el C3)   # INFO: esp_mac.h (uniqueId desde efuse)
 )
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas
