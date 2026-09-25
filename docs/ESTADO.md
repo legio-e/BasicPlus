@@ -756,7 +756,8 @@ con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona re
   subieron la tanda o el IDE) tapan al pack, y el instalador, por diseño, no las toca; en la C6 hubo que borrarlas a
   mano. ¿Las quita también el instalador cuando un pack las sirve con los mismos bytes —y, borrado el pack, se vuelven a
   subir cuando hagan falta—, o se quedan y se dice?
-- Con manos: el explorador del IDE con `sd` y `sd mount` (H3).
+- ~~Con manos: el explorador del IDE con `sd` y `sd mount` (H3)~~: hecho por Eduardo esa misma tarde, en la Metro
+  (sacar la tarjeta y refrescar, meterla y refrescar: bien). De H3 sólo queda la TF de la C6, detrás de `H6.b`.
 - `H6.b` (quitar LVGL de C6, P4 y DK2), ya con el punto de restauración.
 - Sin probar: el `.mdn` suelto del FS en la C3 (`#565` explica por qué debería ir).
 
