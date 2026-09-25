@@ -3512,3 +3512,31 @@ el pack pequeño va con **un búfer**. Y el doble búfer que pide Eduardo tiene 
 
 Las dos, cuando se hagan, las elige el usuario en su línea `lcd=` (p. ej. `buf:1|2`), y la placa dice con nombre si no
 le cabe. Con un búfer, el pack pequeño pide ≈ 131-163 KB (pool 64-96 + 48 de nodos + 11,5 de franja + 7).
+
+#### 14.9 Hecho (25-sep): `H6.b` en la C6, y con él `H3`
+
+**La línea base** (`f0412363`): 29 ms por pantalla entera y 2,8 por etiqueta con `esp_lcd` asíncrono, y el giro bien en
+el cristal. `GuiFlushBench` no medía (el refresco de LVGL, 33 ms, y diez `__guiRunOnce` seguidos); arreglado.
+
+**El pack pequeño** (`b719359a`): `GuiMini`, cuatro perillas del mismo LVGL + `gui.c` —256 nodos, fuentes hasta 24 px,
+un búfer, la captura a 40 KB— y el pool. **El pool, medido** con el log que ahora escribe el pack al acabar cada
+programa: pico de 6 KB (`GuiFlushBench`), 7 (`GuiWinJson`) y 13 (`GuiShot`, con la captura) en la C5, y 54 KB con 255
+etiquetas. Por el camino, `#568` (la tabla de widgets llena, muda). Probado primero en la C5 (con `packRam` de 512 a
+1024, OK de Eduardo): la tanda de GUI igual, 62 ms por pantalla, y «tras 255 etiquetas: … sitio para 256».
+
+**La C6** (`7dbbc2a7`): la imagen como la de la C5 —1 243 920 → 603 104 B; 282 604 → 386 812 B de heap al arrancar—, las
+cuatro líneas de §14.3 y los packs `Stdlib`, `DriverSpi` y `GuiMini`. **Lo que no salió como se esperaba, y por qué**:
+
+- **La RAM**: con el pool de 96 KB (`packRam=176`) la VM bajaba a 100 KB (36 KB de heap) y `SdCard` moría con «readFile:
+  sin memoria». El margen del sistema de la C6 (103 824 B) se había medido con LVGL en la imagen y el comentario se lo
+  atribuía a LVGL; medido otra vez SIN ella, el sistema sigue pidiendo ≈ 94 KB de pico (mínimo histórico 22 360 B con
+  la VM en 128): no era de LVGL. El margen se queda y el pool baja a **64 KB** (54 de pico con la tabla llena):
+  `packRam=136`, la VM en su objetivo de 128 KB (64 de heap), como antes de `H6.b`.
+- **La velocidad**: 35 ms por pantalla, no los ≈ 52 que se extrapolaban de la C5. En la C5 la RAM del pack —la franja
+  de dibujo incluida— está en PSRAM; en la C6, en la SRAM interna. El pack síncrono es un 20 % más lento que el
+  `esp_lcd` asíncrono de antes, no 1,8 veces.
+
+**Medido en la C6**: la tanda de V7 entera 14/14 (`compat/informes/tanda_h6b_c6.md`); `GuiRotCycle` en el cristal, cada
+marca en su esquina y sin franjas (Eduardo); **la TF por fin en uso** —`SdCard` «los seis»; `C5SdGui` RESULT OK: 27
+ficheros escritos y releídos con la pantalla a la vez, 0 distintos, peor hueco 30 ms sola y 62 con la TF, lo mismo que
+la C5—, con lo que **`H3` queda cerrado**; y `GuiLleno`, «sitio para 256». Quedan de `H6.b` el P4 y la DK2 (`G5`).

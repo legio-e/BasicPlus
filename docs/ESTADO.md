@@ -736,6 +736,46 @@ Las ocho imágenes probadas, bit a bit, en `dist/firmware-v7-25sep` (README + SH
 `compat/informes/tanda_v7_25sep.md`. Las capturas de `GuiShot` (C5, C6, P4, DK2), miradas: bien; en las pantallas de 240
 de ancho el deslizador del ejemplo tapa la casilla, porque su ancho es fijo.
 
+## 🖥️ H6.b en la C6 (25-sep, noche) — LA C6 SIN LVGL EN LA IMAGEN: `GuiMini`, `#568` y, con la TF, `H3` cerrado
+
+Eduardo: *«continuamos»*, con el orden del traspaso. Los tres pasos de `V7_IDEAS` §H6.14.6, cada uno cambiando una cosa:
+
+1. **La línea base** (`f0412363`): `GuiFlushBench` no medía —LVGL sólo repinta al vencer su refresco (33 ms) y el ejemplo
+   metía diez `__guiRunOnce` seguidos; en la C5 salía bien por casualidad—. Arreglado: la C6 de antes, 29 ms por pantalla
+   y 2,8 por etiqueta, y `GuiRotCycle` bien en el cristal (Eduardo).
+2. **El pack pequeño, `GuiMini`** (`b719359a`): cuatro perillas del mismo LVGL + `gui.c` y el pool; el pack escribe
+   ahora el pico de su pool al acabar cada programa (13 KB en la tanda, 54 con 255 etiquetas). Por el camino, **`#568`**:
+   la tabla de widgets llena no decía nada; ahora «Gui: no caben mas widgets: esta GUI tiene sitio para N», con
+   `test-guilleno` en `check-testc` y el sabotaje cazado. Probado primero en la C5 (`packRam` de 512 a 1024 con el OK de
+   Eduardo: el `packdel` deja la RAM de hueco hasta formatear), y la C5 vuelve a su `Gui` grande.
+3. **La C6** (`7dbbc2a7`): la imagen como la de la C5 (−626 KB; 104 KB más de heap al arrancar), las cuatro líneas del
+   ENV y los packs `Stdlib`, `DriverSpi` y `GuiMini` (su zona formateada, OK de Eduardo). Dos cosas no salieron como se
+   esperaba: **la RAM** —con 96 KB de pool la VM bajaba a 100 KB y `SdCard` no cabía; el margen de 103 824 B de la C6
+   se atribuía a LVGL y, medido sin ella, el sistema sigue pidiendo ≈ 94 KB: el pool baja a 64 y la VM vuelve a 128—
+   y **la velocidad**, mejor de lo previsto: 35 ms por pantalla, no 52 (la franja del pack va en SRAM interna, en la C5
+   en PSRAM). La tanda 14/14, `GuiRotCycle` bien en el cristal (Eduardo), y **la TF de la C6 por fin en uso**: `SdCard`
+   «los seis» y `C5SdGui` RESULT OK (27 ficheros con la pantalla a la vez, 0 distintos) → **`H3` cerrado**.
+
+## ⏭️ Traspaso (25-sep, noche) — `H6.b` en la C6 hecho y `H3` cerrado
+
+**Commits** (sin push): `f0412363` (la línea base y `GuiFlushBench`) · `b719359a` (`GuiMini` y `#568`) · `7dbbc2a7` (la C6
+sin LVGL) · y los docs. `compat.sh check` verde (paridad 102/102 en MOD9 y en MOD8, pruebas de C 11/11 con
+`test-guilleno`); compilan la C5, la C6 (ya sin LVGL), el P4 y la DK2.
+
+**Las placas**: la **C6** con la imagen nueva —no está en `dist/`: `dist/firmware-v7-25sep` sigue siendo el punto de antes
+de `H6.b`—, su ENV (`spi2`, `lcd`, `sd`, `packRam=136`) y los packs `Stdlib`, `DriverSpi` y `GuiMini`, con una tarjeta
+dentro; la **C5** con su imagen nueva (`#568`), `packRam=1024` y su `Gui` grande activo (el viejo y `GuiMini`, borrados: su
+RAM queda de hueco hasta un `PACK_FORMAT`).
+
+**Queda**:
+- `H6`: `H6.b` en el P4 y la DK2 (con `G5`: `'PANT'` desde la imagen, DSI y LTDC) y `#567` (el tope de `mhz`, en el `.seq`).
+- `H5`: hacer `#542`, `P2b`, cronometrar nativo contra interpretado y el manual.
+- `H4`: el NeoPixel de la C6 (RMT) y el ADC externo del STM32.
+- Medir qué son los ≈ 94 KB de pico del sistema en la C6 (el PUT de 48 KB, las tareas que el IDF crea en marcha…): si
+  baja, la VM o el pool pueden crecer.
+- La documentación de usuario de `GuiMini` (qué pack grabar según la placa y cuánto `packRam` pide), con el entregable
+  de §7.9 (plantilla + script + documentación).
+
 ## ⏭️ Traspaso (25-sep, tarde de placas) — la ronda de las nueve con la ABI 8, `#565` y `#566`
 
 **Commits** (sin push): `1f98d61a` (`#565`) · `7798cb61` (`#566`) · y los docs, con el informe de la tanda y el README de
