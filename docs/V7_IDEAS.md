@@ -3481,3 +3481,27 @@ dos caminos.
 | 3 | las fuentes del pack pequeño | **todas** mientras quepan en la zona de la C6; el juego 12-24 cuando haga falta sitio |
 | 4 | si el pack sale más lento que la C6 de hoy | medirlo primero; si la diferencia se nota, el doble búfer asíncrono entra en `H6.b` |
 | 5 | el P4 y la DK2 | después, con `G5` (`'PANT'` desde la imagen), como estaba previsto |
+
+#### 14.8 Lo que decidió Eduardo (25-sep, tarde de placas)
+
+- **Un segundo pack de LVGL para pantallas pequeñas** (pregunta 1: la (A)), **con las fuentes pequeñas** (pregunta 3):
+  *«si la pantalla es muy pequeña como la de la C6 no tiene sentido las fuentes grandes»*. La pregunta 2 (los nodos)
+  no tuvo respuesta: va la propuesta, 256, que encaja con «pantallas pequeñas».
+- **El doble búfer** (pregunta 4, y la decisión pendiente de §7.11): *«creo recordar que LVGL era opcional, podía
+  funcionar con los dos. No es nada urgente pero estaría bien soportarlo»*, con dos condiciones: **que lo elija el
+  usuario** y **que haya memoria** (porque la pantalla tiene poca resolución o porque la placa tiene mucha). O sea, no
+  entra en `H6.b`: si el pack pequeño pinta más lento que la C6 de hoy, se acepta por ahora.
+- **Los 80 MHz**: sin decidir. **El P4 y la DK2** (pregunta 5): como estaba previsto, con `G5`.
+
+**Lo que se vio en el código al contestarle** (no una suposición): el pack de hoy YA declara dos búferes de 11,5 KB
+(`pant_lvgl.c`: `lv_display_set_buffers(…, s_buf1, s_buf2, …, PARTIAL)`), pero su flush es síncrono
+(`lv_display_flush_ready` al volver del driver), así que el segundo no aporta nada: 11,5 KB pagados sin uso. Así que
+el pack pequeño va con **un búfer**. Y el doble búfer que pide Eduardo tiene dos formas que no hay que confundir:
+
+| | qué es | memoria | qué falta |
+|---|---|---|---|
+| **dos franjas, flush asíncrono** | el DMA manda una franja mientras LVGL dibuja la otra (lo que hace hoy `esp_lcd` en la C6) | la de hoy: dos franjas | una ranura de la BIOS: un envío SPI que avisa al acabar |
+| **dos pantallas enteras** | el modo FULL/DIRECT de LVGL, sin parpadeo | 240×240 en RGB565 son 112,5 KB cada una | sólo memoria: es la de «pantalla pequeña o mucha RAM» |
+
+Las dos, cuando se hagan, las elige el usuario en su línea `lcd=` (p. ej. `buf:1|2`), y la placa dice con nombre si no
+le cabe. Con un búfer, el pack pequeño pide ≈ 131-163 KB (pool 64-96 + 48 de nodos + 11,5 de franja + 7).
