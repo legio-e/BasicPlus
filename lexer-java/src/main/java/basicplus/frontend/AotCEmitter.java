@@ -121,10 +121,10 @@ public final class AotCEmitter {
             new java.util.LinkedHashMap<>();
 
     /** #172 — true si alguna función emitida hasta ahora consume globals.
-     *  Cuando es true, el header del .c incluye:
-     *    - static uint32_t s_module_cs = 0;
+     *  Cuando es true, el header del .c incluye
      *    - static inline uint32_t aot_<Mod>_cs(struct bpvm* vm) { ... }
-     *  Y cada función AOT empieza con: `uint32_t cs = aot_<Mod>_cs(vm);`. */
+     *  y cada función AOT empieza con: `uint32_t cs = aot_<Mod>_cs(vm);`.
+     *  (V7/H5 #562: ya SIN la caché `static` que tuvo — ver emitModule.) */
     private boolean usesModuleGlobals = false;
 
     /** H3 #158 — si es true, NO emite aot_<Mod>_register (esa función
@@ -808,32 +808,30 @@ public final class AotCEmitter {
         }
         w.println();
 
-        /* #172 — Si el módulo declara vars/consts a nivel-módulo, emitimos
-         * el cache de CS por-módulo. CS es runtime (depende de en qué
-         * orden cargue el loader los módulos), así que usamos lazy init.
-         * Las accesos a globales se compilan como:
+        /* #172 — Si el módulo declara vars/consts a nivel-módulo, cada función
+         * AOT resuelve el CS del módulo al empezar (una vez por llamada, no por
+         * acceso). CS es runtime (depende de en qué orden cargue el loader los
+         * módulos). Las accesos a globales se compilan como:
          *     read_i32_be(mem + cs + OFFSET_LITERAL)
-         * donde `cs` = aot_<Mod>_cs(vm) cacheado en la static. */
+         *
+         * [V7/H5 #562, 25-sep] SIN CACHÉ `static`. La tuvo (`s_aot_<Mod>_cs`), y un
+         * `.mdn` sólo se lleva `.text`: esa variable caía en `.sbss`/`.bss`, MdnPack
+         * lo rechazaba —bien— y NINGÚN módulo con globales ha tenido nunca código
+         * nativo en placa: «AOT omitido», interpretado. Sólo lo ejecutaban las
+         * pruebas del PC, que enlazan el C en su binario. Y la caché, de haber
+         * podido existir, habría guardado el CS del programa ANTERIOR en el
+         * siguiente RUN. `find_module_cs` recorre los módulos cargados (unos
+         * pocos) con un strcmp: se paga una vez por llamada a la native. */
         if (!moduleVarOffsets.isEmpty()) {
-            w.println("/* #172 — cache de CS del módulo. Lazy init en la primera");
-            w.println(" * invocación de cualquier thunk AOT de este .c. No hace");
-            w.println(" * falta sincronización: en runtime single-thread la");
-            w.println(" * primera escritura es idempotente; en multi-thread");
-            w.println(" * cualquier carrera escribiría el mismo valor (data race");
-            w.println(" * benigno tipo \"singly assigned\"). */");
-            w.println("static uint32_t s_aot_" + moduleName + "_cs = 0;");
-            w.println();
+            w.println("/* #172 — el CS del módulo, resuelto al entrar en cada función (V7/H5 #562:");
+            w.println(" * sin caché `static`, que en un .mdn no puede existir: sólo lleva .text). */");
             w.println("static inline uint32_t aot_" + moduleName + "_cs(struct bpvm* vm) {");
-            w.println("    uint32_t cs = s_aot_" + moduleName + "_cs;");
-            w.println("    if (!cs) {");
-            w.println("        cs = vm->aot_helpers->find_module_cs(vm, \""
+            w.println("    uint32_t cs = vm->aot_helpers->find_module_cs(vm, \""
                     + moduleName + "\");");
-            w.println("        if (!cs) {");
-            w.println("            vm->aot_helpers->throw_runtime(vm,");
-            w.println("                \"AOT: módulo '" + moduleName + "' no encontrado\");");
-            w.println("            return 0;");
-            w.println("        }");
-            w.println("        s_aot_" + moduleName + "_cs = cs;");
+            w.println("    if (!cs) {");
+            w.println("        vm->aot_helpers->throw_runtime(vm,");
+            w.println("            \"AOT: módulo '" + moduleName + "' no encontrado\");");
+            w.println("        return 0;");
             w.println("    }");
             w.println("    return cs;");
             w.println("}");
