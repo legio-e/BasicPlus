@@ -768,6 +768,8 @@ con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona re
   la C6 sin LVGL, sus cuatro líneas de ENV (§14.3) y los packs; la tanda, `GuiRotCycle` en el cristal y la TF. El P4 y
   la DK2, después, con `G5`.
 - Sin probar: el `.mdn` suelto del FS en la C3 (`#565` explica por qué debería ir).
+- **`#567`, abierta y decidida**: el driver genérico rechaza un `mhz` por encima de la hoja del controlador
+  (`mhz_max` en su `.seq`; 62 en el ST7789), con error con nombre y su caso en `test-driverspi`.
 - **`#544`, cerrada** esa misma tarde: repetida con la imagen de hoy, `C6Boot` cuenta 5 pulsaciones de 5; lo del 24-sep
   no se reproduce y, por decisión de Eduardo, se cierra sin el control con la imagen de entonces.
 
