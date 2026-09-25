@@ -86,3 +86,11 @@ CONFIG_SPIRAM_MODE_QUAD=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_IGNORE_NOTFOUND=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=2048
+
+# V7/H5 (#556, 25-sep) — el AOT: el `.mdn` que viene dentro del `.mod` se ejecuta desde la arena de la VM, que en esta
+# placa está en PSRAM. Con MEMPROT (W^X por PMP) el heap —interno y PSRAM— es NO ejecutable: medido, `NatV7` con su
+# nativo `riscv-imc` registraba los 4 thunks y la placa se reiniciaba al primero («panic/exception»). Lo mismo que el
+# P4 desde V4/H4 (ver su sdkconfig.defaults): se desactiva para permitir código cargable —el trade-off estándar de un
+# JIT—, y el `.mdn` es código de confianza, de nuestro propio toolchain y con su receta sellada (#441).
+# OJO: sdkconfig es GENERADO — hay que borrarlo o reconfigurar para que recoja esto (mismo gotcha que el P4).
+CONFIG_ESP_SYSTEM_MEMPROT=n

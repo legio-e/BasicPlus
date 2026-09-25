@@ -58,3 +58,11 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # recoja esto (mismo gotcha que el MEMPROT del P4).
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# V7/H5 (#556, 25-sep) — el AOT sin FPU (`riscv-imc`, la receta RV32IMC_ILP32 que esta placa exige): el `.mdn` que viene
+# dentro del `.mod` se ejecuta desde la arena de la VM, y con MEMPROT (W^X por PMP/PMS) el heap es NO ejecutable. Medido
+# en la C5, su gemela: `NatV7` registraba sus 4 thunks y la placa se reiniciaba al primero; sin MEMPROT, 124 ms
+# interpretado → 1 ms nativo. Lo mismo que el P4 desde V4/H4: código cargable, el trade-off de un JIT; el `.mdn` es
+# código de confianza, de nuestro toolchain y con su receta sellada (#441). En la C6, compilado; SIN probar en placa.
+# OJO: sdkconfig es GENERADO — hay que borrarlo o reconfigurar para que recoja esto (mismo gotcha que el P4).
+CONFIG_ESP_SYSTEM_MEMPROT=n
