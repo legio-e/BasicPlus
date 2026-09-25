@@ -759,7 +759,13 @@ con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona re
 - ~~Con manos: el explorador del IDE con `sd` y `sd mount` (H3)~~: hecho por Eduardo esa misma tarde, en la Metro
   (sacar la tarjeta y refrescar, meterla y refrescar: bien; en el log de la placa, el `ls` del IDE da 5 entradas en
   `/sd`, 0 tras «RETIRADA» y 5 otra vez tras «METIDA»). De H3 sólo queda la TF de la C6, detrás de `H6.b`.
-- `H6.b` (quitar LVGL de C6, P4 y DK2), ya con el punto de restauración.
+- `H6.b` (quitar LVGL de C6, P4 y DK2), ya con el punto de restauración. **En la C6, analizado y decidido esa misma
+  tarde** (`V7_IDEAS` §H6.14 y §H6.14.8: un segundo pack de LVGL para pantallas pequeñas —fuentes pequeñas, pool de
+  64-96 KB, 256 nodos, un búfer—). **Lo siguiente, en este orden**: (1) la línea base —`GuiFlushBench` no mide la
+  pantalla entera en la C6 de hoy («0 ms»): arreglarlo para que mida igual en los dos caminos, y medir—; (2) el pack
+  pequeño, probado PRIMERO en la C5, que ya pinta por el pack (si falla, es el pack y no la imagen); (3) la imagen de
+  la C6 sin LVGL, sus cuatro líneas de ENV (§14.3) y los packs; la tanda, `GuiRotCycle` en el cristal y la TF. El P4 y
+  la DK2, después, con `G5`.
 - Sin probar: el `.mdn` suelto del FS en la C3 (`#565` explica por qué debería ir).
 - **`#544`, cerrada** esa misma tarde: repetida con la imagen de hoy, `C6Boot` cuenta 5 pulsaciones de 5; lo del 24-sep
   no se reproduce y, por decisión de Eduardo, se cierra sin el control con la imagen de entonces.
