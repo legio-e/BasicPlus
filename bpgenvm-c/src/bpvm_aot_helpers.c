@@ -310,10 +310,16 @@ static void h_print_i32(bpvm_t* vm, int32_t v, int nl) {
     int n = snprintf(buf, sizeof(buf), nl ? "%d\n" : "%d", (int) v);
     if (n > 0) bpvm_emit(vm, buf, (size_t) n);
 }
+/* V7/H5 (#561, 25-sep) — el float, con EL FORMATEADOR del intérprete (`bpvm_format_double`,
+ * el canónico de GAP-4 que comparten las dos VMs), igual que `emit_float` en interp.c. Era
+ * `%g`: el mismo `print x` daba `1.23457e+06` desde una native y `1234567` interpretado, o
+ * `1e-06` frente a `1E-6`. Lo cazó `make test-aotfloat`, que compara la salida entera. */
 static BPVM_AOT_FP_ABI void h_print_f32(bpvm_t* vm, float v, int nl) {
-    char buf[40];
-    int n = snprintf(buf, sizeof(buf), nl ? "%g\n" : "%g", (double) v);
-    if (n > 0) bpvm_emit(vm, buf, (size_t) n);
+    char buf[52];
+    int n = bpvm_format_double(buf, (double) v);
+    if (n <= 0) return;
+    if (nl && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
+    bpvm_emit(vm, buf, (size_t) n);
 }
 static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
     /* H2 (V2): string = byte[] UTF-8 → emite los bytes directamente, sin
