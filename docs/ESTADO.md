@@ -761,6 +761,8 @@ con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona re
   `/sd`, 0 tras «RETIRADA» y 5 otra vez tras «METIDA»). De H3 sólo queda la TF de la C6, detrás de `H6.b`.
 - `H6.b` (quitar LVGL de C6, P4 y DK2), ya con el punto de restauración.
 - Sin probar: el `.mdn` suelto del FS en la C3 (`#565` explica por qué debería ir).
+- **`#544`, cerrada** esa misma tarde: repetida con la imagen de hoy, `C6Boot` cuenta 5 pulsaciones de 5; lo del 24-sep
+  no se reproduce y, por decisión de Eduardo, se cierra sin el control con la imagen de entonces.
 
 ## ⏭️ Traspaso (25-sep, noche, sesión remota) — H6: `#468` cerrada, y `#563` y `#564` de paso
 
