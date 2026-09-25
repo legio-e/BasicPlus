@@ -1,0 +1,25 @@
+{
+  "_comentario": [
+    "El PACK DE LA GUI PARA PANTALLAS PEQUENAS (V7/H6.b, 25-sep; decidido con Eduardo, V7_IDEAS",
+    "§H6.14): el mismo LVGL + gui.c que el de bpstdlib/gui/, compilado con cuatro perillas para placas",
+    "sin PSRAM (la C6, 240x240): 256 nodos, fuentes hasta 24 px, un bufer de dibujo, la captura de",
+    "GuiShot hasta 40 KB y un pool de 96 KB. Publica 'LVGL' como el pack Gui: se graba EN VEZ de el (si",
+    "estan los dos, gana el ultimo grabado), con el driver de su pantalla al lado (DriverSpi):",
+    "",
+    "   VARIANTE=mini bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool, 96]",
+    "   cp bpstdlib/gui/nativo/mini/lvgl.npk.* bpstdlib/gui/mini/out/",
+    "   cp bpstdlib/{Gui,Json,Collections,Str,Core}.mod bpstdlib/gui/mini/out/     <- LOS CANONICOS",
+    "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/mini/GuiMini.bpbuild --backend=mivm",
+    "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/mini/out/GuiMini.pack riscv",
+    "",
+    "El nativo y los .mod canonicos se COPIAN, como en ../Gui.bpbuild (alli esta el porque: el pack",
+    "recoge del outDir los tipos mod/mdn/npk, y un modulo de la stdlib sin sellar no entra, #563)."
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./GuiMini.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name": "GuiMini", "version": "9.2.2", "provides": "LVGL",
+                    "notas": "LVGL 9.2.2 + Gui.mod para pantallas pequenas: 256 widgets, fuentes hasta 24 px, 1 bufer; la pantalla la pone el pack de su driver ('PANT')" }
+}

@@ -539,12 +539,26 @@ static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* ms
  * contenedor vivo (si no, lanza RuntimeError "widget sin contenedor") y empuja el
  * handle del nuevo nodo. `mk` = la bpvm_gui_create_* del modelo. La regla y el
  * mensaje se replican en miVM (GuiBackend) -> paridad de comportamiento. */
+/* #568 — la tabla de widgets del modelo, LLENA. Hasta el 25-sep el 0 que devolvía el modelo se metía en la
+ * pila como un handle más y el widget simplemente no aparecía, sin una palabra. Ahora el modelo (gui.c, en
+ * la imagen o en el pack) da su capacidad EN NEGATIVO; un pack anterior da 0, y se dice sin el número. miVM
+ * no tiene tope: es un límite de la VM-C —256 en el pack para pantallas pequeñas, 512 en el resto—, como
+ * su heap. */
+static bpvm_status_t gui_sin_sitio(bpvm_t* vm, bpvm_thread_t* tc, int h) {
+    char m[96];
+    if (h < 0) snprintf(m, sizeof m, "Gui: no caben mas widgets: esta GUI tiene sitio para %d", -h);
+    else       snprintf(m, sizeof m, "Gui: no caben mas widgets en esta GUI");
+    return builtin_throw(vm, tc, m);
+}
+
 static bpvm_status_t gui_make_child(bpvm_t* vm, bpvm_thread_t* tc, int (*mk)(int)) {
     int parent = pop_i32(vm, tc);
     if (!bpvm_gui_parent_alive(parent))
         return builtin_throw(vm, tc,
             "Gui: no se puede crear un widget sin un contenedor valido; crea Gui.Screen() o Gui.Window() primero");
-    push_i32(vm, tc, mk(parent));
+    int h = mk(parent);
+    if (h <= 0) return gui_sin_sitio(vm, tc, h);
+    push_i32(vm, tc, h);
     return BPVM_OK;
 }
 #endif /* BPVM_GUI */
@@ -1446,7 +1460,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_TABVIEW_ADD_TAB: {
         uint32_t ref = pop_ref(vm, tc); int h = pop_i32(vm, tc);
         char buf[128]; read_bp_string(vm, ref, buf, sizeof(buf));
-        push_i32(vm, tc, bpvm_gui_tabview_add_tab(h, buf)); return BPVM_OK;
+        int t = bpvm_gui_tabview_add_tab(h, buf);
+        if (t <= 0) return gui_sin_sitio(vm, tc, t);      /* #568: la pestaña es un nodo más */
+        push_i32(vm, tc, t); return BPVM_OK;
     }
     /* H7 — Chart */
     case BUILTIN_GUI_CREATE_CHART: return gui_make_child(vm, tc, bpvm_gui_create_chart);

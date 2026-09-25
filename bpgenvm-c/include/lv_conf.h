@@ -515,7 +515,15 @@ void bpvm_pack_lv_assert(const char* fichero, int linea);
 /*Montserrat fonts with ASCII range and some symbols using bpp = 4
  *https://fonts.google.com/specimen/Montserrat*/
 /* V3/H6 — catálogo de fuentes: tamaños activos para Gui.Component.fontSize.
- * (font_for_px en gui.c mapea px→este set; mantenerlos sincronizados.) */
+ * (font_for_px en gui.c mapea px→este set; mantenerlos sincronizados.)
+ *
+ * V7/H6.b — la MAYOR que entra es una perilla del build: en una pantalla pequeña (la C6, 240×240) las
+ * grandes no tienen sentido (Eduardo, 25-sep) y las once son 418 KB de flash. El pack `GuiMini` compila con
+ * -DBPVM_FUENTE_MAX_PX=24. gui.c lee la MISMA macro para su catálogo: una perilla, y los dos sitios que
+ * decían «mantenerlos sincronizados» ya no pueden divergir. Del 12 al 24, siempre. */
+#ifndef BPVM_FUENTE_MAX_PX
+#define BPVM_FUENTE_MAX_PX 48
+#endif
 #define LV_FONT_MONTSERRAT_8  0
 #define LV_FONT_MONTSERRAT_10 0
 #define LV_FONT_MONTSERRAT_12 1
@@ -526,17 +534,17 @@ void bpvm_pack_lv_assert(const char* fichero, int linea);
 #define LV_FONT_MONTSERRAT_22 0
 #define LV_FONT_MONTSERRAT_24 1
 #define LV_FONT_MONTSERRAT_26 0
-#define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_MONTSERRAT_28 (BPVM_FUENTE_MAX_PX >= 28)
 #define LV_FONT_MONTSERRAT_30 0
-#define LV_FONT_MONTSERRAT_32 1
+#define LV_FONT_MONTSERRAT_32 (BPVM_FUENTE_MAX_PX >= 32)
 #define LV_FONT_MONTSERRAT_34 0
-#define LV_FONT_MONTSERRAT_36 1
+#define LV_FONT_MONTSERRAT_36 (BPVM_FUENTE_MAX_PX >= 36)
 #define LV_FONT_MONTSERRAT_38 0
-#define LV_FONT_MONTSERRAT_40 1
+#define LV_FONT_MONTSERRAT_40 (BPVM_FUENTE_MAX_PX >= 40)
 #define LV_FONT_MONTSERRAT_42 0
 #define LV_FONT_MONTSERRAT_44 0
 #define LV_FONT_MONTSERRAT_46 0
-#define LV_FONT_MONTSERRAT_48 1
+#define LV_FONT_MONTSERRAT_48 (BPVM_FUENTE_MAX_PX >= 48)
 
 /*Demonstrate special features*/
 #define LV_FONT_MONTSERRAT_28_COMPRESSED 0  /*bpp = 3*/

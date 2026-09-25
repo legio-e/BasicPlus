@@ -538,6 +538,21 @@ test-guidrop: $(LIBOBJ)
 	@echo "--- #489: descartes de la cola del GUI (esperado: PASS + 2 avisos) ---"
 	./$(GUIDROP_BIN)
 
+# V7/H6.b #568 — la tabla de widgets LLENA ya no es un widget que no aparece: el builtin lanza
+# «Gui: no caben mas widgets: esta GUI tiene sitio para N». Punta a punta —el modelo (gui.c) da la
+# capacidad en negativo y el builtin la convierte en el error—, con samples/GuiLleno.bp, que crea
+# etiquetas hasta pasarse y atrapa el error. SOLO VM-C: miVM no tiene tope, asi que no va al corpus de
+# paridad. Con 512 nodos y la pantalla, caben 511. En check-testc.
+test-guilleno: $(LIBOBJ) $(BIN)
+	@mkdir -p build
+	$(call fixture,GuiLleno)
+	$(call stdlibdep,Core Gui Json Collections Str)
+	@echo "--- #568: la tabla de widgets llena (esperado: el error con nombre tras 511 etiquetas) ---"
+	@./$(BIN) samples/GuiLleno.mod > build/guilleno.out 2>/dev/null; \
+	 if grep -qF "tras 511 etiquetas: Gui: no caben mas widgets: esta GUI tiene sitio para 512" build/guilleno.out; \
+	 then echo "[status=OK] la tabla llena se dice con nombre (511 etiquetas + la pantalla = 512)"; \
+	 else echo "  ROJO: la tabla de widgets llena no lanza el error esperado"; cat build/guilleno.out; exit 1; fi
+
 test-runguard: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,MethodCall)

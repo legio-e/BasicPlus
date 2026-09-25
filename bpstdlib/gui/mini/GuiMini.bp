@@ -1,0 +1,11 @@
+module GuiMini
+  // El modulo BP que acompana al pack de LVGL para PANTALLAS PEQUENAS (V7/H6.b, 25-sep).
+  // El motor es el MISMO que el del pack Gui (LVGL 9.2.2 + gui.c, el .npk), compilado con
+  // cuatro perillas para placas sin PSRAM como la C6 (240x240, 512 KB de SRAM): 256 widgets,
+  // fuentes hasta 24 px, un bufer de dibujo, la captura de GuiShot hasta 40 KB y un pool de
+  // LVGL de 96 KB. Publica 'LVGL' igual que Gui: se graba EN VEZ de el, y la pantalla la pone
+  // el pack de su driver ('PANT'). Este modulo solo lo identifica.
+  public function nombre(): string
+    return "LVGL 9.2.2 para pantallas pequenas: 256 widgets, fuentes hasta 24 px, 1 bufer de dibujo"
+  end nombre
+end GuiMini

@@ -27,7 +27,12 @@
  * Aquí no se toca SDL: el render de widgets es portable. */
 #endif
 
+/* V7/H6.b — los nodos del modelo son una PERILLA del build: 512 (≈ 96 KB) donde sobra la RAM, 256 en el pack
+ * de LVGL para pantallas pequeñas (`GuiMini`, la C6: Eduardo, 25-sep, «256 parece un número razonable para una
+ * pantalla tan pequeña»). Llena, la tabla lo DICE (#568): ver create_node. */
+#ifndef GUI_MAX_NODES
 #define GUI_MAX_NODES 512
+#endif
 #define GUI_SCREEN_W  480
 #define GUI_SCREEN_H  320
 
@@ -187,7 +192,11 @@ static int create_node(const char* type, int parent) {
     for (int i = 0; i < g_node_count; i++)
         if (!g_nodes[i].used) { n = &g_nodes[i]; break; }
     if (!n) {
-        if (g_node_count >= GUI_MAX_NODES) return 0;
+        /* #568 — LLENA: hasta el 25-sep devolvía 0, el builtin lo metía en la pila como un handle más y el
+         * widget simplemente no aparecía, sin una palabra. Ahora devuelve la capacidad EN NEGATIVO (ningún
+         * handle lo es: node_for rechaza <= 0) y el builtin lanza «Gui: no caben mas widgets: esta GUI tiene
+         * sitio para N». Así el número viaja sin una función nueva en la frontera con el pack (bpvm_gui.h). */
+        if (g_node_count >= GUI_MAX_NODES) return -GUI_MAX_NODES;
         n = &g_nodes[g_node_count++];
     }
     /* A cero ENTERO: una ranura reutilizada trae rancios los campos que las lineas
@@ -293,7 +302,28 @@ static lv_obj_t* parent_lv(int parent) {
 }
 
 /* Mapea px → fuente Montserrat disponible (catálogo de lv_conf.h). Sin match
- * exacto → la default (14). Mantener sincronizado con LV_FONT_MONTSERRAT_* del conf. */
+ * exacto → la default (14). El catálogo lo decide BPVM_FUENTE_MAX_PX (lv_conf.h),
+ * la misma perilla que enciende las fuentes allí.
+ *
+ * V7/H6.b — y una fuente MAYOR que la mayor del pack (pedir 48 en `GuiMini`, que llega
+ * a 24) no cae a la de 14 en silencio: se usa la mayor que hay y se dice una vez por
+ * programa (bpvm_gui_reset rearma el aviso). */
+#if   BPVM_FUENTE_MAX_PX >= 48
+# define FUENTE_MAYOR_PX 48
+#elif BPVM_FUENTE_MAX_PX >= 40
+# define FUENTE_MAYOR_PX 40
+#elif BPVM_FUENTE_MAX_PX >= 36
+# define FUENTE_MAYOR_PX 36
+#elif BPVM_FUENTE_MAX_PX >= 32
+# define FUENTE_MAYOR_PX 32
+#elif BPVM_FUENTE_MAX_PX >= 28
+# define FUENTE_MAYOR_PX 28
+#else
+# define FUENTE_MAYOR_PX 24
+#endif
+#define FUENTE_DE_(px)  lv_font_montserrat_##px
+#define FUENTE_DE(px)   FUENTE_DE_(px)
+static int s_fuente_avisada = 0;
 static const lv_font_t* font_for_px(int px) {
     switch (px) {
         case 12: return &lv_font_montserrat_12;
@@ -302,13 +332,32 @@ static const lv_font_t* font_for_px(int px) {
         case 18: return &lv_font_montserrat_18;
         case 20: return &lv_font_montserrat_20;
         case 24: return &lv_font_montserrat_24;
+#if FUENTE_MAYOR_PX >= 28
         case 28: return &lv_font_montserrat_28;
+#endif
+#if FUENTE_MAYOR_PX >= 32
         case 32: return &lv_font_montserrat_32;
+#endif
+#if FUENTE_MAYOR_PX >= 36
         case 36: return &lv_font_montserrat_36;
+#endif
+#if FUENTE_MAYOR_PX >= 40
         case 40: return &lv_font_montserrat_40;
+#endif
+#if FUENTE_MAYOR_PX >= 48
         case 48: return &lv_font_montserrat_48;
-        default: return &lv_font_montserrat_14;
+#endif
+        default: break;
     }
+    if (px > FUENTE_MAYOR_PX) {
+        if (!s_fuente_avisada) {
+            s_fuente_avisada = 1;
+            bpvm_diag("[gui] la fuente de %d px no esta en esta GUI (llega hasta %d): se usa la de %d",
+                      px, FUENTE_MAYOR_PX, FUENTE_MAYOR_PX);
+        }
+        return &FUENTE_DE(FUENTE_MAYOR_PX);
+    }
+    return &lv_font_montserrat_14;
 }
 
 uint32_t bpvm_gui_lvgl_pump(void)    { return bpvm_gui_disp_pump(); }
@@ -326,6 +375,7 @@ int bpvm_gui_screen_active(void) {
     if (g_screen != 0) return g_screen;
     resolve_screen_size();               /* V6/P2.3: el screen mide lo que mide el panel */
     int h = create_node("screen", 0);
+    if (h < 0) return h;                 /* #568: sin sitio (no pasa: la pantalla es el primer nodo) */
     gui_node* n = node_for(h);
     if (n) { n->w = g_screen_w0; n->h = g_screen_h0; }
     g_screen = h;
@@ -1361,6 +1411,8 @@ void bpvm_gui_delete(int handle) {
  * Lo llama bpvm_destroy, que es UNA función portable: las 5 familias lo heredan.
  */
 void bpvm_gui_reset(void) {
+    const int la_uso = g_node_count > 0;     /* V7/H6.b: ¿este programa tocó la GUI? (el pico del pool, abajo) */
+    (void) la_uso;
     for (int i = 0; i < g_node_count; i++) {
 #ifdef BPVM_LVGL
         /* Los lv_obj se van con la pantalla (abajo): borrarlos uno a uno además
@@ -1416,6 +1468,21 @@ void bpvm_gui_reset(void) {
         lv_screen_load(lv_obj_create(NULL));
         lv_obj_delete(vieja);
     }
+    s_fuente_avisada = 0;                    /* V7/H6.b: el aviso de la fuente, una vez por programa */
+#if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
+    /* V7/H6.b — el POOL de LVGL (el TLSF del pack: LV_MEM_SIZE de su .bss) se dimensiona con NÚMEROS, no a
+     * ojo: al acabar cada programa que usó la GUI, su pico desde el arranque y lo que queda en uso. Es lo que
+     * dice cuánto pool necesita el pack para pantallas pequeñas (GuiMini). Sólo existe donde LVGL trae su
+     * propio malloc —el pack—: en el host y en las imágenes con LVGL dentro va la libc y no hay pool. */
+    if (la_uso && g_lvgl_inited) {
+        lv_mem_monitor_t mon;
+        lv_mem_monitor(&mon);
+        bpvm_diag("[gui] pool de LVGL: pico %u de %u KB; al acabar, %u KB en uso y el mayor hueco %u KB",
+                  (unsigned) (mon.max_used / 1024u), (unsigned) (mon.total_size / 1024u),
+                  (unsigned) ((mon.total_size - mon.free_size) / 1024u),
+                  (unsigned) (mon.free_biggest_size / 1024u));
+    }
+#endif
 #endif
 }
 

@@ -1,0 +1,23 @@
+module GuiLleno
+  // #568 (V7/H6.b, 25-sep) — la tabla de widgets del modelo, LLENA. Hasta hoy el widget que ya no
+  // cabia simplemente no aparecia, sin una palabra; ahora el builtin lanza «Gui: no caben mas
+  // widgets: esta GUI tiene sitio para N» (512 en el host; 256 en el pack GuiMini). La prueba es SOLO
+  // de la VM-C (make test-guilleno, en check-testc): miVM no tiene tope, asi que no va al corpus de
+  // paridad. Crea etiquetas hasta pasarse, atrapa el error y dice cuantas cupieron (la pantalla es
+  // un nodo mas: caben N - 1).
+  import Gui
+
+  function main()
+    var scr: Gui.Screen := Gui.Screen()
+    var n: integer := 0
+    try
+      while n < 600 do
+        var l: Gui.Label := Gui.Label(scr, "x")
+        n := n + 1
+      endwh
+      print "SIN ERROR tras", n, "etiquetas"
+    catch e: RuntimeError
+      print "tras", n, "etiquetas:", e.msg
+    endtry
+  end main
+end GuiLleno

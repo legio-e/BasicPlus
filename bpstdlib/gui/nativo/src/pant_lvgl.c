@@ -43,8 +43,21 @@ static void di(const char* m) { if (g_bios && g_bios->log) g_bios->log(m); }
 #ifndef BPVM_PANT_DRAW_BYTES
 #define BPVM_PANT_DRAW_BYTES 11520
 #endif
+/* V7/H6.b — ¿UNO o DOS? El flush de este pack es SÍNCRONO (al volver del driver la franja ya salió), así
+ * que el segundo búfer no adelanta nada: LVGL no dibuja en él mientras el primero se envía. Son 11,5 KB
+ * pagados sin uso, y en el pack para pantallas pequeñas (GuiMini) va uno (-DBPVM_PANT_BUFS=1). El doble
+ * búfer con sentido —el envío asíncrono— queda para cuando lo elija el usuario y haya memoria (Eduardo,
+ * 25-sep; V7_IDEAS §H6.14.8). El pack de siempre sigue con dos: no se cambia lo que no hace falta. */
+#ifndef BPVM_PANT_BUFS
+#define BPVM_PANT_BUFS 2
+#endif
 static uint8_t s_buf1[BPVM_PANT_DRAW_BYTES] __attribute__((aligned(16)));
+#if BPVM_PANT_BUFS >= 2
 static uint8_t s_buf2[BPVM_PANT_DRAW_BYTES] __attribute__((aligned(16)));
+#define PANT_BUF2 s_buf2
+#else
+#define PANT_BUF2 0
+#endif
 
 static bpvm_pant_t   s_p;
 static int           s_estado  = 0;    /* 0 sin buscar · 1 resuelto · -1 no hay / no vale */
@@ -147,7 +160,7 @@ void bpvm_gui_disp_init(int w, int h) {
     lv_display_set_color_format(s_disp, s_formato == BPVM_PANT_RGB888 ? LV_COLOR_FORMAT_RGB888
                                                                       : LV_COLOR_FORMAT_RGB565);
     lv_display_set_flush_cb(s_disp, pant_flush);
-    lv_display_set_buffers(s_disp, s_buf1, s_buf2, BPVM_PANT_DRAW_BYTES, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(s_disp, s_buf1, PANT_BUF2, BPVM_PANT_DRAW_BYTES, LV_DISPLAY_RENDER_MODE_PARTIAL);
     if (s_p.touch) {
         s_touch = lv_indev_create();
         lv_indev_set_type(s_touch, LV_INDEV_TYPE_POINTER);
