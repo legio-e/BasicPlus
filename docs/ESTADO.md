@@ -645,6 +645,15 @@ el resto será pintar en PSRAM y el rebote), `SdCard` 4,2 → 3,8 s, `C5SdGui` y
 en el cristal.** ⚠️ Al rodata de la C5 le quedan ~4 KB: la próxima imagen que crezca correrá su zona de packs y habrá que
 regrabar `Gui` y `DriverSpi` (como hoy el P4).
 
+## 🧩 H4 `#536` (25-sep, sesión remota) — `__npShow`: el array validado y el tope, la zona de rascar entera
+
+La tercera de la lista de la mañana, de las pequeñas que se prueban en el PC. Eduardo decidió el tope («la zona
+entera»: 2048 LEDs en el PC, RP2350 y ESP32; 4096 en STM32) y lo demás salió de `#534`: el array se valida con el
+mismo `bus_array`/`busArray`, así que los textos son los de los builtins de bus en las dos VMs. `samples/NpShowTope.bp`
+en el corpus (paridad 101/101) y su control: con el código de antes, las dos VMs daban los MISMOS cuatro `FALLO` —la
+paridad sola no lo habría visto—. Tras tocar miVM, la cadena de siempre (miVM → `lexer-java` clean install → BpIde):
+el IDE lleva la miVM de hoy (`b96c06ca`).
+
 ## ⏭️ Traspaso (25-sep, mañana, sesión remota) — el P4 sin tarjeta, hecho; sus packs, resellados
 
 Eduardo, desde fuera: *«¿por dónde podemos continuar?»*. Conectadas: la Metro (COM4), la C5 (COM6) y **el P4 (COM15)**
