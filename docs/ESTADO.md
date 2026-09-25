@@ -654,6 +654,20 @@ en el corpus (paridad 101/101) y su control: con el código de antes, las dos VM
 paridad sola no lo habría visto—. Tras tocar miVM, la cadena de siempre (miVM → `lexer-java` clean install → BpIde):
 el IDE lleva la miVM de hoy (`b96c06ca`).
 
+## ⚙️ H5 (25-sep, sesión remota) — el AOT sin FPU, en la C5: dos fallos por delante (`#555`, `#556`) y `sumaHasta` de 124 a 1 ms
+
+Lo acordado con Eduardo: el resto de `#502`, el destino `ilp32` de la C3, la C6 y la C5. Leyendo antes de tocar, el
+destino YA estaba (`RISCV32_IMC`, de H6, y el IDE lo elige por la receta del INFO); lo que nunca se había hecho era
+EJECUTAR un `.mdn` de un programa en una placa sin FPU. `AotSingle` (la herramienta de línea de comandos del Run del
+IDE) compiló `NatV7` para `riscv-imc` a la primera, y la C5 dijo «memoria del buffer insuficiente». Acotado en el PC:
+el `.mod` sin AOT enlaza y el fundido no («símbolo no resuelto ''»), para `arm` igual → **`#555`**: `conBloqueNativo`
+no conocía MOD9 y escribía una cabecera MOD7; el AOT fundido, roto en todas las placas desde el 17-sep sin que ninguna
+red lo viera (`fb652b6a`, con su prueba y la de MOD8 arreglada: comparaba campos corridos). Con eso, la C5 registró
+sus 4 thunks… y se reinició al primero → **`#556`**: MEMPROT deja el heap sin ejecución; el P4 lo había resuelto en
+V4 y el ajuste no viajó a sus hermanas RISC-V (`810d0a77`: fuera en C5, C3 y C6, regenerados y comparados). Resultado:
+`NatV7` nativo en la C5 (124 → 1 ms), en el P4 y en la Metro, con los cuatro valores exactos. La C3 y la C6,
+compiladas y sin probar.
+
 ## ⏭️ Traspaso (25-sep, mañana, sesión remota) — el P4 sin tarjeta, hecho; sus packs, resellados
 
 Eduardo, desde fuera: *«¿por dónde podemos continuar?»*. Conectadas: la Metro (COM4), la C5 (COM6) y **el P4 (COM15)**
