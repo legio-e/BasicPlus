@@ -65,6 +65,19 @@ const char* bpvm_mdn_host_float_abi(void);
 const char* bpvm_mdn_host_receta_nombre(void);
 uint32_t    bpvm_mdn_host_receta_crc(void);
 
+/* [V7/H5 #565] LA VISTA EJECUTABLE DE LA RAM. Un `.mdn` fundido en el `.mod`
+ * —como lo suben el IDE y la tanda— vive en el heap de la VM, y el cargador
+ * saltaba a él por la misma dirección por la que lo había leído (el que viene
+ * suelto del FS ya lo copia la cintura a RAM ejecutable). En casi todos nuestros micros eso vale; en
+ * la C3 no: su SRAM se ve por DOS direcciones —0x3FC8_0000 por el bus de datos,
+ * 0x4038_0000 por el de instrucciones— y saltar por la de datos es una excepción
+ * al primer thunk (medido el 25-sep: NatNew, NatV7 y FloatNat reiniciaban la
+ * placa). La cintura cuyo silicio separe las dos vistas registra aquí la
+ * traducción; sin registrar, la identidad. La de la ZONA de packs es otra
+ * (`bpvm_pack_exec_ptr`) y se aplica antes: esta sólo ve lo que no es zona. */
+typedef const uint8_t* (*bpvm_mdn_vista_ejec_t)(const uint8_t* p);
+void bpvm_mdn_set_vista_ejecutable(bpvm_mdn_vista_ejec_t fn);
+
 /* Legacy del approach con copy/pool. Hoy son no-ops — el registry
  * se limpia vía bpvm_aot_clear() (del aot_registry) y no hay pool
  * de RAM extra que resetear. Mantenidos por compat con callers. */

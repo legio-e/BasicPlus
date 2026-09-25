@@ -32,6 +32,8 @@
 #include "bpvm_env.h"
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "esp_heap_caps.h"     /* H11: el heap de la VM se pide en runtime, no es .bss */
+#include "esp_memory_utils.h"  /* #565: la vista de instrucciones de la SRAM */
+#include "mdn_loader.h"        /* #565: bpvm_mdn_set_vista_ejecutable */
 
 /* Buffer caller-provided de la VM. repl_esp32.c lo referencia como extern
  * (PUNTERO, igual convención que repl_v1.c en la Pico/Metro y que el P4).
@@ -194,6 +196,18 @@ static void vm_buffer_init(void) {
  * porque el log SOBREVIVE al reset y la consola no. */
 static void diag_al_log(const char* linea) { log_printf("%s", linea); }
 
+/* #565 — la vista EJECUTABLE de la RAM. La C3 ve su SRAM por dos direcciones
+ * (`SOC_DIRAM_DRAM_LOW` 0x3FC8_0000 para datos, `SOC_DIRAM_IRAM_LOW` 0x4038_0000
+ * para instrucciones); saltar por la de datos es una excepción. Es la misma
+ * traducción que hace el heap del IDF con MALLOC_CAP_EXEC. Donde las dos vistas
+ * coinciden (C5, C6) o el puntero no es SRAM de datos (la PSRAM, la zona), la
+ * identidad. */
+static const uint8_t* vista_ejecutable_ram(const uint8_t* p) {
+    if (!esp_dram_match_iram() && esp_ptr_in_diram_dram(p))
+        return (const uint8_t*) esp_ptr_diram_dram_to_iram(p);
+    return p;
+}
+
 /* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
 static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
     return bpvm_env_get_exacto(board_mgr_env(), clave, buf, cap);
@@ -227,6 +241,12 @@ void app_main(void)
     pack_esp32_ram_init();
     /* El heap de la VM, ANTES del climb: layer_app comprueba s_vm_buffer. */
     vm_buffer_init();
+    /* #565 — el código nativo fundido en el `.mod` se ejecuta desde ese heap, y en
+     * la C3 la SRAM tiene dos direcciones: se salta por la del bus de
+     * instrucciones. En la C5 y la C6 son la misma y esto es la identidad. (El
+     * `.mdn` suelto del FS no pasa por aquí: repl_esp32.c lo copia con
+     * MALLOC_CAP_EXEC, que ya da esa vista.) */
+    bpvm_mdn_set_vista_ejecutable(vista_ejecutable_ram);
 
     /* H9 — arranque escalonado: identidad → particiones del env → FS → VM. Sin
      * particiones/FS el climb se queda abajo y el host conduce (nada se
@@ -244,8 +264,10 @@ void app_main(void)
      * Hasta hoy esto no existia fuera del P4, y el C6 se quedaba sin packs sin
      * ninguna razon de silicio: comparte `SOC_MMU_DI_VADDR_SHARED` con el P4 y el
      * codigo del mapeo vivia en el directorio de al lado. El S3 y el C3 no lo
-     * comparten, y por eso el mapeo devuelve dos direcciones y la zona se monta
-     * con vista de lectura y vista de ejecucion separadas.
+     * comparten, y el montaje admite dos vistas por si el mapeo devolviera dos
+     * direcciones — pero medido (9-sep en los dos, 25-sep en el C3: `INST ok
+     * @0x4208c000 | DATA ok @0x4208c000`) devuelve la MISMA. Lo que sí tiene dos
+     * direcciones en el C3 es la SRAM, y eso es `#565` (arriba).
      *
      * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual. */
     (void) board_mgr_esp32_mapear_packs();

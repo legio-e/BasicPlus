@@ -153,6 +153,10 @@ uint32_t bpvm_mdn_host_receta_crc(void) {
 void   bpvm_mdn_reset(void)        { /* no-op en zero-copy */ }
 size_t bpvm_mdn_used_bytes(void)   { return 0; }
 
+/* [#565] La vista ejecutable de la RAM: la registra la cintura (ver mdn_loader.h). */
+static bpvm_mdn_vista_ejec_t s_vista_ram = NULL;
+void bpvm_mdn_set_vista_ejecutable(bpvm_mdn_vista_ejec_t fn) { s_vista_ram = fn; }
+
 int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     /* La cabecera mínima es la v1 (20 B); la v2 (24 B) se comprueba en cuanto
      * se sabe la versión. `sizeof(mdn_header_t)` es la actual y NO vale aquí:
@@ -271,8 +275,18 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * SOC_MMU_DI_VADDR_SHARED)» y era FALSO — ver bpvm_pack.h. Asi que esta
      * llamada es hoy la identidad en las cinco familias; se queda por si algun
      * dia aparece un micro Harvard de verdad. Un `.mdn` del FS o embebido en un
-     * `.mod` no esta en la zona y pasa de largo igualmente. */
-    const uint8_t*      code_base = bpvm_pack_exec_ptr(data + hdr_total);
+     * `.mod` no esta en la zona y pasa de largo igualmente.
+     *
+     * [#565] Y ese es el que SI lo necesita: en la C3 la RAM tiene dos vistas (la
+     * zona no), asi que lo que no es zona pasa por la de la cintura. */
+    const uint8_t*      code_leido = data + hdr_total;
+    const uint8_t*      code_base  = bpvm_pack_exec_ptr(code_leido);
+    if (code_base == code_leido && s_vista_ram) {
+        code_base = s_vista_ram(code_leido);
+        if (code_base != code_leido)
+            log_printf("MDN: el codigo se lee en %p y se ejecuta en %p (#565)",
+                       (const void*) code_leido, (const void*) code_base);
+    }
     const mdn_symbol_t* syms      = (const mdn_symbol_t*)
                                       (data + hsz);
     int registered = 0;
