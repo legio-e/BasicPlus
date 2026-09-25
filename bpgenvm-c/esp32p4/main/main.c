@@ -224,7 +224,9 @@ static void tcp_log_task(void *arg)
  *
  * AQUI y no antes: /sd se monta ENCIMA de la fachada, y sin el FS de la placa no
  * hay donde colgarlo. Y antes del autoarranque, para que una app encuentre la
- * tarjeta ya montada.
+ * tarjeta ya montada. V7/H3 (25-sep): el REGISTRO va siempre —con el FS caido,
+ * SD_INFO sigue diciendo que pasa con la tarjeta, como en la Metro y en la familia
+ * del main comun—; lo que espera al FS es el montaje (`con_fs`).
  *
  * Lo llaman los DOS caminos de arranque (TCP y UART) desde una sola funcion, que
  * es lo que evita el clasico "lo arregle en uno y me olvide del otro".
@@ -247,14 +249,14 @@ static void tcp_log_task(void *arg)
  * enseña el IDE- es el de `log_printf`, y es donde estan las demas lineas del
  * arranque. Un chivato en el canal equivocado es un chivato mudo.
  * ------------------------------------------------------------------------- */
-static void p4_montar_sd(void)
+static void p4_sd_arranque(int con_fs)
 {
     char linea[160];
     int n = bpvm_env_get(board_mgr_env(), "sd", linea, sizeof linea);
     if (n <= 0) {
         /* V7/H3 SD.3 — el porqué, al registro común: es lo que contestan SD_INFO y SD_MOUNT. */
         bpvm_sd_placa_sin_sd("esta placa no declara lector de SD (no hay entrada 'sd' en el env)");
-        bpvm_sd_placa_montar_arranque();      /* lo anota en el log con el texto de las demás placas */
+        if (con_fs) bpvm_sd_placa_montar_arranque();   /* lo anota en el log con el texto de las demás placas */
         return;
     }
 
@@ -295,7 +297,8 @@ static void p4_montar_sd(void)
      * `bpvm_sd_placa_vigilar` daría un intento de más y nada más (ver arriba); aquí se monta al arrancar o
      * con SD_MOUNT. */
     bpvm_sd_placa_registrar(bpvm_blk_sdmmc(&pines), &bpvm_fs_fat_ops, "SDMMC");
-    bpvm_sd_placa_montar_arranque();
+    if (con_fs) bpvm_sd_placa_montar_arranque();
+    else        log_printf("sd: el FS de la placa no esta montado - /sd no se monta (SD_INFO si contesta)");
 }
 
 #ifdef BPVM_P4_WIRE_TCP
@@ -312,7 +315,7 @@ static void wire_task(void *arg)
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
-    if (bs->state >= BPVM_BOOT_FS) p4_montar_sd();   /* V5/H6 */
+    p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
     /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
      * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
      * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
@@ -361,7 +364,7 @@ static void wire_task_uart(void *arg)
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
-    if (bs->state >= BPVM_BOOT_FS) p4_montar_sd();   /* V5/H6 */
+    p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
     /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
      * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
      * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
