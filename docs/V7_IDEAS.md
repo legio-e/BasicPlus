@@ -3371,3 +3371,113 @@ cinco familias (la ESP32 común, las dos variantes del P4, la Pico y el STM32).
 módulo de la stdlib sin sellar), y el cierre transitivo de los packs no leía MOD9 (**`#564`**: `duenosDeImports` se
 quedó en MOD8, como `#555`). Queda regrabar la GUI del P4 con el pack bueno en su próximo `PACK_FORMAT` (le quedan
 8 KB de zona); hasta entonces su `Core` sale de `/lib`, que es lo seguro.
+
+### 14. `H6.b` en la C6 — el análisis (25-sep, tarde de placas; «OK» de Eduardo a empezar por la C6)
+
+Con la tarjeta metida en la C6, `SD_INFO` contesta lo previsto por SD.3: *«la TF de esta placa aún no se usa: comparte
+el SPI con la pantalla, que no pasa por el árbitro»*. Para usarla, la pantalla de la C6 tiene que ir como la de la C5
+—por el pack y el driver genérico, sobre el bus arbitrado—, y eso es `H6.b` en la C6. Va primero la C6 porque su
+camino ya existe entero: la imagen sin LVGL de la C5, `Gui.pack`, `DriverSpi` y el ENV. El P4 y la DK2 son otro
+paso: necesitan `G5`, `'PANT'` publicado desde la imagen (DSI y LTDC no se prestan). El punto de restauración ya
+está hecho: `dist/firmware-v7-25sep`.
+
+#### 14.1 Lo que hay, medido hoy
+
+- **La imagen**: LVGL 9.2.2 + `gui.c` + `gui_display_st7789.c` (`esp_lcd`, SPI2 a 40 MHz, DMA, dos búferes de 24
+  líneas y `flush_ready` al acabar el DMA: el flush es **asíncrono**), con `BPVM_GUI` + `BPVM_LVGL` + `BPVM_BOARD_C6`.
+  La GUI es 664 KB de flash y 107 KB de RAM estática de la imagen (§1, 22-sep).
+- **La RAM al arrancar**: 282 604 B libres de DRAM antes de la VM; la VM se lleva un bloque de 128 KB (64 KB de
+  heap); quedan 151 528 B, de los que la LVGL de la imagen pide en marcha lo suyo (libc).
+- **El pack de la C5** (`lvgl.npk.RV32IMC`, el mismo para toda la ISA): **382 KB de `.bss`** —el pool de LVGL,
+  256 KB (la perilla de `build_lvgl.sh`); el modelo `g_nodes[512]`, 96 KB; los dos búferes de dibujo, 23 KB; eventos
+  e imágenes, 7 KB— y 717 KB de flash (`.text` 277 + `.rodata` 441, las fuentes 418 de ellos). `DriverSpi`: 12,6 KB
+  de flash y 980 B de RAM. **Y todo lo que `gui.c` pide en el pack sale del pool de LVGL** (`gui_pack_glue.c`):
+  imágenes, fuentes `.bin` y la captura de `GuiShot`, cuyo tope es 256 KB en el pack y **40 KB en la imagen de la C6**
+  (`BPVM_SHOT_MAX`, el único `#ifdef BPVM_BOARD_C6` de `gui.c`).
+- **La zona de la C6**: 1 261 568 B; con el `Stdlib.pack` grabado, 1 073 152 libres.
+- **El perfil de la pantalla ya está probado en el host**: `make test-driverspi`, caso 3, con
+  `lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv` —reset y luz por GPIO, sin SWRESET,
+  la luz encendida después de DISPON, y la tabla de desfases de la imagen (0/0, 0/0, 0/80, 80/0) byte a byte—.
+- **La TF** (esquemático, `P2.0`): MISO GPIO5, CS GPIO4, sobre el mismo SCLK/MOSI (7/6) que la pantalla.
+- ⚠️ **La línea base de velocidad está por hacer**: `GuiFlushBench` en la C6 de hoy da «0 ms por pantalla (10 vueltas
+  en 2 ms)» —el cambio de fondo de la pantalla no provoca ahí un repintado que se mida— y 3-4 ms la etiqueta. Para
+  comparar antes y después hace falta una prueba que mida lo mismo en los dos caminos.
+
+#### 14.2 Lo que cambia en la imagen: lo mismo que la C5
+
+| fuera | dentro |
+|---|---|
+| `gui_display_st7789.c`, `src/gui.c`, los componentes `lvgl` y `esp_lcd`, `EXTRA_COMPONENT_DIRS` | `src/gui_pack.c` (los trampolines), con `BPVM_GUI` + `BPVM_GUI_PACK` |
+| `BPVM_LVGL`, `BPVM_BOARD_C6`, `LV_CONF_PATH` | el motor de la SD por SPI: `bpvm_sd.c`, `bpvm_sd_blk.c`, `bpvm_sd_spi_env.c`, `bpvm_blk.c`, `fs_fat.c` y FatFs (los mismos ficheros que la C5) |
+| `CHIP_SD_REGISTRAR()` → «sin SD» | `CHIP_SD_REGISTRAR()` → la línea `sd` del ENV, como la C5 |
+
+Se espera −664 KB de flash y −107 KB de RAM estática: se mide con el `.map`, no se da por hecho.
+
+#### 14.3 El ENV de la C6 (es de la unidad, no de la imagen)
+
+```
+spi2=sck:7,mosi:6,miso:5
+lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv
+sd=bus:2,cs:4                 (+ khz: — la C5 necesitó 10 000: su MISO va por la matriz; aquí también, a medir)
+packRam=<KB>                  (§14.4)
+```
+
+#### 14.4 La RAM: la decisión de fondo
+
+Sin la GUI en la imagen, la C6 tendría unos **389 KB** libres al arrancar (282 + 107; a medir). El pack de la C5
+pide 382 KB: **no cabe**, y no puede caber con la VM al lado. Hace falta un pack para placas sin PSRAM. Sus piezas:
+
+| pieza | hoy (C5) | para la C6 | cómo |
+|---|---|---|---|
+| pool de LVGL | 256 KB | 64-96 KB | la perilla que ya existe (`build_lvgl.sh imc <KB>`) |
+| modelo `g_nodes` | 512 nodos, 96 KB | 256 nodos, 48 KB | `GUI_MAX_NODES` pasa a perilla del build (hoy es un `#define` fijo: una línea con `#ifndef`) |
+| captura de `GuiShot` | tope 256 KB | tope 40 KB | `BPVM_SHOT_MAX`, que ya es perilla (`#ifndef`), como en la imagen de hoy |
+| búferes de dibujo | 23 KB | 23 KB | — |
+| fuentes | 418 KB de flash | todas caben (≈ 900 KB con los módulos, de 1 073 libres), o un juego 12-24 (≈ 90 KB) | perilla de fuentes |
+
+Con un pool de 96 KB y 256 nodos, el pack pide **≈ 175 KB**: 389 − 175 − 128 (la VM) = **≈ 86 KB** para el sistema.
+Hoy, después de la VM quedan 151 KB, pero la LVGL de la imagen se come una parte en marcha. O sea, a primera vista
+es **neutro en RAM** para un programa con GUI, y con `packRam=0` —sin GUI— la RAM entera vuelve a la placa: *«la
+pantalla la decide el usuario»*. El pool se dimensiona midiendo, en la C5, lo que `GuiWinJson` y `GuiShot` usan de
+verdad (`lv_mem_monitor`), no a ojo.
+
+**Las dos formas de tener un pack pequeño**:
+- **(A) una segunda compilación del pack `imc`** con las perillas de arriba (p. ej. `GuiMini.pack`): sin tocar
+  código de la VM ni de LVGL, y la C5 no cambia; el precio, dos packs `imc` que construir y distribuir, y que el
+  usuario (o el IDE, por la RAM que publica el INFO) elija cuál graba.
+- **(B) un solo pack con el pool sacado de la arena en marcha** (`lv_mem_add_pool` sobre el bloque de `packRam`): un
+  pack por ISA para todas las placas; pero la arena tiene UN dueño (§8.2) y SQLite ya la pide, así que en el P4 —que
+  lleva los dos— haría falta repartirla: es un cambio de diseño, no una perilla.
+
+Propuesta: **(A) ahora**; (B) sólo si aparece un tercer tamaño de RAM.
+
+#### 14.5 La velocidad: el riesgo
+
+Hoy la C6 pinta con el `esp_lcd` del IDF, con el flush asíncrono: LVGL dibuja la franja siguiente mientras el DMA
+manda la anterior. El pack va por `DriverSpi` y la fachada, con DMA desde `G4.b` pero **esperando a cada franja**: en
+la C5, 70 ms por pantalla de 240×320 a 40 MHz, así que en la C6 (240×240) cabe esperar ≈ 52 ms. Si la C6 de hoy es
+claramente más rápida, **`H6.b` la haría más lenta**, y eso adelanta la decisión pendiente del doble búfer asíncrono
+(una ranura nueva en la BIOS, §7.11 y `G4.b`). Por eso la línea base va PRIMERO, con una prueba que mida igual en los
+dos caminos.
+
+#### 14.6 Cómo se prueba, en orden
+
+0. **La línea base**, con la imagen de hoy (la del punto de restauración): la prueba de velocidad arreglada para que
+   mida en los dos caminos, `GuiRotCycle` en el cristal (las cuatro esquinas, Eduardo) y la tanda.
+1. **El pack pequeño** (A): el pool medido en la C5, `size` del `.npk`, el oráculo del `.npk` byte a byte.
+2. **La imagen de la C6 sin LVGL**: el `.map` (lo que adelgaza), la RAM libre al arrancar y el tamaño de la VM.
+3. **El ENV y los packs**: las cuatro líneas de §14.3; `DriverSpi` y el pack pequeño grabados (el IDE dice «cabe» o
+   «no cabe» antes de grabar), y un `reset`.
+4. **En la placa**: la tanda (`GuiShot`, `GuiWinJson`: 14/14 como hoy), `GuiRotCycle` en el cristal, la velocidad
+   contra la línea base, y la TF: `SD_INFO`, `SdCard` y un `C6SdGui` (la TF y la pantalla a la vez, como `C5SdGui`).
+5. Si se rompe y no se arregla: la imagen de `dist/firmware-v7-25sep` y el ENV de hoy, y se cancela sin perder nada.
+
+#### 14.7 Las preguntas (Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | el pack para placas sin PSRAM | **(A)**: una segunda compilación del pack `imc` con las perillas; (B) sólo si hace falta |
+| 2 | los nodos del modelo en el pack pequeño | **256** (48 KB menos); 512 si algún programa real los necesita |
+| 3 | las fuentes del pack pequeño | **todas** mientras quepan en la zona de la C6; el juego 12-24 cuando haga falta sitio |
+| 4 | si el pack sale más lento que la C6 de hoy | medirlo primero; si la diferencia se nota, el doble búfer asíncrono entra en `H6.b` |
+| 5 | el P4 y la DK2 | después, con `G5` (`'PANT'` desde la imagen), como estaba previsto |
