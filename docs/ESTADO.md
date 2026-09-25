@@ -634,6 +634,17 @@ duda. Resultado: `SdCard` «SD OK — los seis» en las dos placas, y la TF y la
 (`C5SdGui`, `607663a3`): 30 ficheros escritos y releídos sin un byte distinto mientras la etiqueta seguía cambiando (63 ms
 de peor hueco; sola, 30). Y `#554`, abierta: concatenar en placa es unas 250 veces más lento que en el PC.
 
+## 🖥️ H6 `G4.b` (25-sep, mañana, sesión remota) — el DMA en la cintura SPI del ESP32: la pantalla de la C5, de 147 a 70 ms
+
+Con el P4 hecho, lo siguiente acordado con Eduardo: `G4.b`, que se prueba entero en la C5 —se regraba por USB aunque su
+firmware no arrancara; con la Metro, a distancia, mejor no arriesgar—. El diseño, en `V7_IDEAS` §H6.11.11 antes de
+programar: `DriverSpi` ya mandaba la franja entera desde `G4.a3`, así que el pack no se toca y todo va en la cintura
+(`gpio_esp32.c`): el bus con DMA, lo de hasta 4 bytes en los búferes de la transacción, polling hasta 64 e interrupción
+por encima. Medido antes y después en la C5: `GuiFlushBench` 147 → 70 ms (la estimación de §7.11 eran ~45: sin medir,
+el resto será pintar en PSRAM y el rebote), `SdCard` 4,2 → 3,8 s, `C5SdGui` y `C5Bus` bien (`c6e0f87a`). **Falta verlo
+en el cristal.** ⚠️ Al rodata de la C5 le quedan ~4 KB: la próxima imagen que crezca correrá su zona de packs y habrá que
+regrabar `Gui` y `DriverSpi` (como hoy el P4).
+
 ## ⏭️ Traspaso (25-sep, mañana, sesión remota) — el P4 sin tarjeta, hecho; sus packs, resellados
 
 Eduardo, desde fuera: *«¿por dónde podemos continuar?»*. Conectadas: la Metro (COM4), la C5 (COM6) y **el P4 (COM15)**
