@@ -277,6 +277,9 @@ static void emit_exited_msg(long session, const char* status, int code,
     if (off < 0) return;
     off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "elapsedMs", (long) ms);
     if (off < 0) return;
+    /* V7/H5 (25-sep) — los thunks nativos que registró ESTE RUN: la tanda comprueba con él que el AOT se usó (los números salen iguales interpretados). */
+    off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "nativos", (long) bpvm_aot_count());
+    if (off < 0) return;
     if (errmsg && errmsg[0]) {
         off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "errorMessage", errmsg);
         if (off < 0) return;

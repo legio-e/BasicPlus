@@ -1086,6 +1086,9 @@ static void run_module_path(const char* path, long id, const char* arg) {
                                              (size_t) off, "exitCode", exit_code);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "elapsedMs", (long) dt);
+    /* V7/H5 (25-sep) — los thunks nativos que registró ESTE RUN: la tanda comprueba con él que el AOT se usó (los números salen iguales interpretados). */
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "nativos", (long) bpvm_aot_count());
     if (rs != BPVM_OK) {
         /* Detalle > genérico: link_error, luego el detalle del RuntimeError
          * (p.ej. "referencia a objeto eliminado"), y como último recurso el

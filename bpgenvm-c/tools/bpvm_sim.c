@@ -667,6 +667,7 @@ static void emit_exited(sock_t c, long session, const char* status, int code,
     sb_raw(&s, ",\"status\":\""); sb_raw(&s, status);
     sb_raw(&s, "\",\"exitCode\":"); sb_long(&s, code);
     sb_raw(&s, ",\"elapsedMs\":"); sb_ulong(&s, ms);
+    sb_raw(&s, ",\"nativos\":"); sb_long(&s, bpvm_aot_count());   /* V7/H5: los thunks de ESTE RUN (sin receta, 0; con SQLITE=1, el puente) */
     if (err_msg && err_msg[0]) { sb_raw(&s, ",\"errorMessage\":\""); sb_esc(&s, err_msg); sb_raw(&s, "\""); }
     sb_raw(&s, "}");
     if (s.ok) send_line(c, s.buf);

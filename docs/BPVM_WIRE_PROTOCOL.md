@@ -496,6 +496,13 @@ Event:
 Si `status=RUNTIME_ERROR`, también `errorMessage` y opcionalmente
 `stackTrace`.
 
+**`nativos`** (V7/H5, 25-sep): los thunks de código nativo (AOT, `.mdn`) que se
+registraron en ESTE RUN —0 si corrió todo interpretado—. Existe porque un
+programa con funciones `native` da los MISMOS números interpretado que nativo:
+la tanda de placas (`tools/tanda.py`, pruebas `"aot"`) comprueba con él que se
+usó el código compilado. Sin receta AOT (el micro simulado, la S3) sale 0. Una
+imagen de antes no lo manda; un cliente que no lo conozca lo ignora.
+
 **`LINK_ERROR`** (el programa no llegó a arrancar: falló el enlace de sus
 módulos): `errorMessage` lleva el texto del cargador, **byte-idéntico en las dos
 VMs** y el mismo que el CLI imprime entre `=== ERROR DE LINK: … ===`. Los textos:

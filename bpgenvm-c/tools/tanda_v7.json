@@ -1,5 +1,5 @@
 {
-  "_comentario": "La ronda de V7 (24-sep): las seis de la prueba de fuego (tanda_prueba.json) y lo de V7 que hay que ver en placa. H1 P5 pide Destructor, TimeDemo y ArrayFijo == host en S3/C3/C6/Nucleo/DK2 (Pico y P4 ya, 21-sep); MoveRango (#535: el move de la VM-C, que en placa es el mismo código) e HiloUsa (#530: run() heredado de otro módulo; HiloLib va a /app con el programa). Rutas relativas a la raiz del repo. criterio: identico (defecto) | no-peta.",
+  "_comentario": "La ronda de V7 (24-sep): las seis de la prueba de fuego (tanda_prueba.json) y lo de V7 que hay que ver en placa. H1 P5 pide Destructor, TimeDemo y ArrayFijo == host en S3/C3/C6/Nucleo/DK2 (Pico y P4 ya, 21-sep); MoveRango (#535: el move de la VM-C, que en placa es el mismo código) e HiloUsa (#530: run() heredado de otro módulo; HiloLib va a /app con el programa). Rutas relativas a la raiz del repo. criterio: identico (defecto) | no-peta. V7/H5 (25-sep): NatNew y NatV7 con «aot»: true —se suben con su nativo DENTRO, fundido para la receta de cada placa, y el EXITED tiene que decir que se usaron sus thunks (`nativos`); en el sim, SALTADAS—; «ignorar» quita la linea de tiempo de NatV7 de las dos salidas.",
   "pruebas": [
     { "nombre": "MathRango",       "fuente": "samples/MathRango.bp" },
     { "nombre": "ThrowSinAtrapar", "fuente": "samples/ThrowSinAtrapar.bp" },
@@ -13,6 +13,8 @@
     { "nombre": "GuiWinJson",      "fuente": "samples/GuiWinJson.bp", "necesita": ["pantalla"],
       "recursos": ["samples/formdemo/resources/main.win"], "timeout_s": 60 },
     { "nombre": "GuiShot",         "fuente": "samples/GuiShot.bp", "necesita": ["pantalla"],
-      "artefactos": ["GuiShot.shot"], "timeout_s": 60, "criterio": "no-peta"}
+      "artefactos": ["GuiShot.shot"], "timeout_s": 60, "criterio": "no-peta"},
+    { "nombre": "NatNew", "fuente": "samples/NatNew.bp", "aot": true },
+    { "nombre": "NatV7",  "fuente": "samples/NatV7.bp",  "aot": true, "ignorar": ["^  tiempo: "] }
   ]
 }

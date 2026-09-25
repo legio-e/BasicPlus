@@ -44,7 +44,19 @@ VEREDICTOS
     sombreada, fallo de CARGA/ENLACE en la placa) - SIN ORACULO - SALTADA -
     SIN ARTEFACTO (verde pero sin la evidencia) - DUDOSO (verde pero el
     artefacto podia ser de otra tanda) - REINICIO (la placa se reinicio
-    durante la prueba: uptimeMs decrecio).
+    durante la prueba: uptimeMs decrecio) - SIN NATIVO (una prueba "aot" que
+    corrio interpretada: los numeros salen IGUALES, asi que la salida no basta;
+    lo dice el campo `nativos` del EXITED) - SIN COMPROBAR (una prueba "aot" en
+    una imagen de antes de V7/H5, sin `nativos` en el EXITED).
+
+EL AOT (V7/H5, 25-sep; V7_IDEAS §H5)
+    Una prueba con "aot": true se sube con su codigo nativo DENTRO: por cada
+    receta (la `aotReceta` del INFO de la placa) el .mod del oraculo se funde
+    UNA vez con AotSingle —el mismo camino que el Run del IDE—, y la placa tiene
+    que decir en su EXITED que registro tantos thunks como compilo el
+    compilador. Sin receta (el micro simulado, la S3): SALTADA con el motivo.
+    "ignorar": [regex...] quita esas lineas de las dos salidas antes de comparar
+    (el tiempo que imprime NatV7).
     Dos fallos solo son IDENTICO si fallan IGUAL: mismo exitCode que el rc
     del host (misma tabla, bpvm_exit_code). Un LINK_ERROR o un «load:» /
     «falta el modulo» de la placa es fallo del ARNES, nunca paridad.
@@ -569,6 +581,8 @@ def leer_manifiesto(ruta):
             "necesita": list(e.get("necesita", [])),
             "recursos": list(e.get("recursos", [])),
             "artefactos": list(e.get("artefactos", [])),
+            "aot": bool(e.get("aot", False)),                # V7/H5: subir con su nativo DENTRO
+            "ignorar": list(e.get("ignorar", [])),           # V7/H5: lineas fuera de la comparacion
         }
         if p["criterio"] not in ("identico", "no-peta"):
             sys.exit("manifiesto: criterio desconocido '%s' en %s" % (p["criterio"], p["nombre"]))
@@ -578,6 +592,10 @@ def leer_manifiesto(ruta):
         for r in p["recursos"]:
             if not os.path.exists(os.path.join(RAIZ, r)):
                 sys.exit("manifiesto: no existe el recurso %s (prueba %s)" % (r, p["nombre"]))
+        try:
+            p["ignorar_re"] = [re.compile(x) for x in p["ignorar"]]
+        except re.error as ex:
+            sys.exit("manifiesto: 'ignorar' con una regex mala en %s: %s" % (p["nombre"], ex))
         p["bp"] = bp
         p["modulo"] = nombre_modulo(bp)
         if not p["modulo"]:
@@ -638,10 +656,11 @@ def modulos_de_app(deps, work):
 RE_RUIDO = re.compile(r"INICIANDO|FIN DE|heapStart")
 
 
-def normalizar(texto):
+def normalizar(texto, ignorar=()):
     texto = texto.replace("\r\n", "\n").replace("\r", "\n")
     lineas = [l for l in texto.split("\n")
-              if not RE_RUIDO.search(l) and not l.startswith("config:")]
+              if not RE_RUIDO.search(l) and not l.startswith("config:")
+              and not any(rx.search(l) for rx in ignorar)]      # V7/H5: el "ignorar" de la prueba
     while lineas and not lineas[0].strip():
         lineas.pop(0)
     while lineas and not lineas[-1].strip():
@@ -727,16 +746,96 @@ def oraculo(p, sin_oraculo, extra_args=()):
                            cwd=work, timeout=p["timeout_s"])
         o["args"] = list(extra_args)
         o["rc"] = r.returncode
-        o["salida"] = normalizar(r.stdout.decode("utf-8", "replace"))
+        o["salida"] = normalizar(r.stdout.decode("utf-8", "replace"), p.get("ignorar_re", ()))
         o["salida_cruda"] = r.stdout.decode("utf-8", "replace")
         o["stderr_cola"] = r.stderr.decode("utf-8", "replace")[-600:]
     except subprocess.TimeoutExpired as e:
         o["rc"] = None
-        o["salida"] = normalizar((e.stdout or b"").decode("utf-8", "replace"))
+        o["salida"] = normalizar((e.stdout or b"").decode("utf-8", "replace"), p.get("ignorar_re", ()))
         o["error"] = "el host no termino en %d s" % p["timeout_s"]
     o["ms"] = int((time.time() - t0) * 1000)
     o["ejecutado"] = True
     return o
+
+
+# ── el AOT (V7/H5) ───────────────────────────────────────────────────────────
+
+PACKTOOL_DIR = os.path.join(BPGENVM, "build", "packtool")
+RE_THUNKS = re.compile(r"(\d+) thunk\(s\)")
+
+
+def jar_del_ide():
+    """El fat-jar del IDE (trae AotBuild y el frontend): el mas reciente de BpIde/target."""
+    import glob
+    c = [j for j in glob.glob(os.path.join(RAIZ, "BpIde", "target", "BpIde-*.jar"))
+         if "original" not in os.path.basename(j)]
+    return max(c, key=os.path.getmtime) if c else None
+
+
+def fundir_aot(p, o, receta):
+    """El .mod del oraculo con su nativo DENTRO, para ESA receta: UNA vez por receta (varias placas
+    con la misma comparten el fundido). Por el mismo camino que el Run del IDE: AotSingle ->
+    AotBuild.buildSingle, con `receta:<NOMBRE>` para que el catalogo siga en Java. Devuelve
+    {"mod", "thunks", "crc", "size"} o {"error"}."""
+    cache = o.setdefault("aot", {})
+    if receta in cache:
+        return cache[receta]
+    fa = {"receta": receta}
+    cache[receta] = fa
+    jar = jar_del_ide()
+    if not jar:
+        fa["error"] = "no encuentro el jar del IDE (BpIde/target/BpIde-*.jar): hace falta para compilar el nativo"
+        return fa
+    if not os.path.isfile(os.path.join(PACKTOOL_DIR, "AotSingle.class")) or \
+            os.path.getmtime(os.path.join(PACKTOOL_DIR, "AotSingle.class")) < \
+            os.path.getmtime(os.path.join(BPGENVM, "tools", "packtool", "AotSingle.java")):
+        os.makedirs(PACKTOOL_DIR, exist_ok=True)
+        jc = subprocess.run(["javac", "-cp", jar, "-d", PACKTOOL_DIR,
+                             os.path.join(BPGENVM, "tools", "packtool", "AotSingle.java")],
+                            capture_output=True)
+        if jc.returncode != 0:
+            fa["error"] = "javac AotSingle: " + jc.stderr.decode("utf-8", "replace")[-300:]
+            return fa
+    d = os.path.join(o["work"], "aot-" + receta)
+    os.makedirs(d, exist_ok=True)
+    fundido = os.path.join(d, p["modulo"] + ".mod")
+    shutil.copyfile(o["mod"], fundido)            # AotSingle funde en el .mod que encuentra en su carpeta
+    r = subprocess.run(["java", "-cp", jar + os.pathsep + PACKTOOL_DIR, "AotSingle", p["bp"], d,
+                        "receta:" + receta], capture_output=True)
+    salida = r.stdout.decode("utf-8", "replace")
+    fa["log"] = salida[-1500:]
+    thunks = sum(int(m.group(1)) for m in RE_THUNKS.finditer(salida))
+    if r.returncode != 0 or "lleva dentro el nativo" not in salida or thunks == 0:
+        fa["error"] = "el nativo no compila para %s (rc %s): %s" % (
+            receta, r.returncode, (salida + r.stderr.decode("utf-8", "replace"))[-600:])
+        return fa
+    fa["mod"] = fundido
+    fa["thunks"] = thunks
+    fa["crc"] = crc_de(fundido)
+    fa["size"] = os.path.getsize(fundido)
+    return fa
+
+
+def juzgar_nativo(r, fa, exited):
+    """V7/H5: la salida sale IGUAL interpretada (H13-40: el «fib(28) AOT» daba lo mismo que el
+    interpretado), asi que una prueba "aot" sólo es verde si la placa dice en su EXITED que registró
+    los thunks que compilo el compilador. No se mira el log: con log=0 (lo de fabrica) esa linea
+    no se escribe, y un aviso que no distingue «no paso» de «no se apunto» no sirve."""
+    nat = (exited or {}).get("nativos")
+    r["aot"] = {"receta": fa["receta"], "thunks": fa["thunks"], "nativos": nat,
+                "crc": fa["crc"], "size": fa["size"]}
+    if r["veredicto"] not in VERDES:
+        return
+    if nat is None:
+        r["veredicto"] = "SIN COMPROBAR"
+        r["detalle"] += ("; la imagen no dice 'nativos' en su EXITED (es de antes de V7/H5): no se sabe si "
+                         "corrio el nativo o el interprete, que da los mismos numeros")
+    elif nat != fa["thunks"]:
+        r["veredicto"] = "SIN NATIVO"
+        r["detalle"] += ("; el nativo NO se uso entero: la placa registro %s de %d thunks (%s) y lo demas corrio "
+                         "interpretado, que da los mismos numeros" % (nat, fa["thunks"], fa["receta"]))
+    else:
+        r["detalle"] += "; nativo %s/%d thunks (%s)" % (nat, fa["thunks"], fa["receta"])
 
 
 # ── placas ───────────────────────────────────────────────────────────────────
@@ -805,6 +904,7 @@ def sello_de(w, arranque=None):
         "fsUsedBytes": info.get("fsUsedBytes"),
         "fsTotalBytes": info.get("fsTotalBytes"),
         "vmHeapBytes": info.get("vmHeapBytes"),
+        "aotReceta": info.get("aotReceta") or "",      # V7/H5: con ella se funde el nativo de las pruebas "aot"
         "uptime_ultimo": info.get("uptimeMs") if isinstance(info.get("uptimeMs"), int) else None,
         "arranque": arranque,          # (corria, detalle) del KILL de conexion
         "transporte": w.t.nombre,
@@ -1043,7 +1143,7 @@ def veredicto_de(p, o, res, sin_oraculo):
         return "PETA", estado
     if sin_oraculo or not o.get("ejecutado"):
         return "SIN ORACULO", estado
-    salida_placa = normalizar(res["salida"])
+    salida_placa = normalizar(res["salida"], p.get("ignorar_re", ()))
     igual_texto = (salida_placa == o["salida"])
     ok_host = (o["rc"] == 0)
     ok_placa = (st == "OK" and code == 0)
@@ -1093,6 +1193,22 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         r["veredicto"] = "ERROR"
         r["detalle"] = "no hay .mod: " + (o.get("error") or "?")
         return r
+    fa = None
+    mod_a_subir = o["mod"]
+    if p["aot"]:
+        receta = sello.get("aotReceta") or ""
+        if not receta:
+            r["veredicto"] = "SALTADA"
+            r["detalle"] = ("prueba de AOT y esta placa no tiene receta (aotReceta vacia en su INFO: x86 o Xtensa): "
+                            "aqui el codigo nativo no se puede probar")
+            return r
+        log("    AOT: fundiendo el nativo para %s" % receta)
+        fa = fundir_aot(p, o, receta)
+        if fa.get("error"):
+            r["veredicto"] = "ERROR"
+            r["detalle"] = fa["error"]
+            return r
+        mod_a_subir = fa["mod"]
     w.vaciar_basura()          # hallazgo 6: la basura del wire, POR prueba
     try:
         deps = dependencias(p["bp"])
@@ -1101,7 +1217,7 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
             subir_fichero(w, os.path.join(RAIZ, rec), "/app/" + os.path.basename(rec), subidos)
         for d in modulos_de_app(deps, o["work"]):   # V7 (#530): HiloLib de HiloUsa
             subir_fichero(w, os.path.join(o["work"], d + ".mod"), "/app/" + d + ".mod", subidos)
-        subir_fichero(w, o["mod"], "/app/" + p["modulo"] + ".mod", subidos)
+        subir_fichero(w, mod_a_subir, "/app/" + p["modulo"] + ".mod", subidos)   # V7/H5: el fundido, si es "aot"
         r["artefactos_previos"] = borrar_artefactos(w, p["artefactos"])
     except PlacaColgada as e:
         r["veredicto"] = "ERROR"
@@ -1144,12 +1260,14 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
     if res["exited"]:
         r["ms_placa"] = res["exited"].get("elapsedMs")
     r["veredicto"], r["detalle"] = veredicto_de(p, o, res, sin_oraculo)
+    if fa is not None and res["exited"] is not None:
+        juzgar_nativo(r, fa, res["exited"])
     if res["transporte_roto"]:
         r["abortar_placa"] = "transporte roto durante %s: %s" % (p["nombre"], res["error"])
         r["basura"] = w.basura_texto()
         return r
     if r["veredicto"] == "DIFIERE" and p["criterio"] == "identico" and o.get("salida") is not None:
-        r["diff"] = diff_corto(o["salida"], normalizar(res["salida"]))
+        r["diff"] = diff_corto(o["salida"], normalizar(res["salida"], p.get("ignorar_re", ())))
     if r["veredicto"] in ("DIFIERE", "ERROR", "PETA") and o.get("stderr_cola"):
         r["stderr_host"] = o["stderr_cola"]
     # Hallazgo 8: INFO tras cada prueba. Si uptimeMs decrece, la placa SE REINICIO
@@ -1577,7 +1695,8 @@ def main():
             log("  %-10s %-16s %s" % (pl["sello"]["boardName"], r["prueba"], r["veredicto"]))
     log("informe: %s (+ %s)" % (a.informe, rj))
     malos = sum(1 for pl in tanda["placas"] for r in pl["resultados"]
-                if r["veredicto"] in ("DIFIERE", "PETA", "COLGADA", "ERROR", "SIN ARTEFACTO", "DUDOSO", "REINICIO"))
+                if r["veredicto"] in ("DIFIERE", "PETA", "COLGADA", "ERROR", "SIN ARTEFACTO", "DUDOSO", "REINICIO",
+                                      "SIN NATIVO", "SIN COMPROBAR"))
     return 1 if malos else 0
 
 

@@ -1834,6 +1834,36 @@ símbolo `const` fijo. El `INFO` publica `micro` y `paquete`; `Machine.package()
 
 ---
 
+## H5 — el AOT en la tanda de placas (25-sep, sesión remota; Eduardo: «meter AOT en la tanda de placas»)
+
+**Por qué.** El 25-sep, al ejecutar por primera vez un `.mdn` en una placa sin FPU, salieron dos fallos que ninguna red
+había visto: `#555` (fundir el nativo en un `.mod` MOD9 lo rompía: el AOT de los programas, roto en todas las placas
+desde el 17-sep) y `#556` (MEMPROT: la C5 se reiniciaba al primer thunk). La tanda corre los `.mod` SIN AOT, y las
+pruebas de C del AOT compilan el C emitido en el PC: nadie hacía el camino entero —compilar para la receta de la placa,
+fundir, subir, ejecutar el nativo—.
+
+**Qué:**
+1. **El manifiesto**: `"aot": true` en una prueba. Y una opción general, `"ignorar": [regex…]`: las líneas que casan se
+   quitan de las dos salidas antes de comparar (la línea de tiempo de `NatV7`).
+2. **Por placa, la receta sale de su INFO** (`aotReceta`). Sin receta —el micro simulado, que es x86; la S3, Xtensa—
+   la prueba es SALTADA, con ese motivo. Con receta, el `.mod` fundido se construye UNA vez por receta a partir del del
+   oráculo, por el MISMO camino que el Run del IDE (`AotBuild`, vía `AotSingle`). `AotSingle` acepta `receta:<NOMBRE>`
+   como destino: el catálogo de recetas y destinos sigue en un solo sitio (`NpackReloc`), no copiado en Python.
+3. **Lo que se sube es el fundido** (su CRC, en el informe), y la salida se juzga como siempre (idéntico / no-peta).
+4. **Y además, que el nativo SE USÓ.** Los números salen iguales interpretados (la trampa de H13-40: «fib(28) AOT»
+   daba lo mismo que el interpretado), así que la salida no basta. La placa lo dice: el `EXITED` gana un campo,
+   `nativos` —`bpvm_aot_count()`, los thunks registrados en ese RUN—, en las tres familias y en el micro simulado. Tiene
+   que coincidir con los thunks que dijo el compilador. Veredictos nuevos: **SIN NATIVO** (rojo: `nativos` 0, corrió
+   interpretado) y **SIN COMPROBAR** (no verde: una imagen de antes, sin el campo). No se usa el log: con `log=0`, que es
+   lo de fábrica, la línea «MDN: n/n thunks» no se escribe, y un aviso que no distingue «no pasó» de «no se apuntó» no
+   sirve (memoria: *aviso que no distingue*). `#555` ya sale como ERROR (fallo de carga) y `#556` como REINICIO.
+5. **Las pruebas**: `NatNew` (siete valores, idéntico) y `NatV7` (método `native`, `double`, `print` desde nativo;
+   idéntico salvo su línea de tiempo).
+
+**Cómo se prueba**: el micro simulado (las dos AOT, SALTADAS con su motivo; las demás, como siempre); luego la Metro
+(ARM), el P4 (RISC-V con FPU) y la C5 (sin FPU), con la imagen que manda `nativos`: las tres recetas. Y el control: el
+`.mod` SIN fundir, subido como si fuera AOT, tiene que salir SIN NATIVO.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
