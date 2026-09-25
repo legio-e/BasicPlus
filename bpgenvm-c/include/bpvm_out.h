@@ -47,6 +47,12 @@ void bpvm_out(const char* fmt, ...);
 /** La fija `bpvm_init` y la borra `bpvm_destroy`. No la llames desde otro sitio. */
 void bpvm_out_set_vm(struct bpvm* vm);
 
+/** V7/H5 (#558, 25-sep) — `len` bytes a la salida del programa por EL camino del `print` del intérprete: la
+ *  cola del hilo `io` si está en marcha, la de SMP, o el callback. Lo usa quien escribe en nombre del programa
+ *  desde C —los helpers del AOT (`print` desde una `native`)—: por el callback directo ADELANTABAN a lo que ya
+ *  esperaba en la cola, y en placa el orden de la salida no era el del programa. */
+void bpvm_emit(struct bpvm* vm, const char* s, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

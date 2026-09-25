@@ -60,6 +60,11 @@ static void emit_text(bpvm_t* vm, const char* s, size_t len) {
     }
 }
 
+/* V7/H5 (#558) — el mismo camino, para quien escribe en nombre del programa desde C (los helpers del AOT). */
+void bpvm_emit(bpvm_t* vm, const char* s, size_t len) {
+    if (vm && s && len) emit_text(vm, s, len);
+}
+
 /* V6/#478 — LA TRAZA DE LAS FACHADAS, POR EL MISMO CAMINO QUE EL `print`.
  *
  * Antes escribian con printf directo a stdout: otro buffer, otro orden, y en

@@ -11,6 +11,7 @@
 #include "bpvm_aot_helpers.h"
 #include "bpvm_internal.h"
 #include "bpvm_bios.h"      /* V5/H4: el registro de packs, para `pack_sym` */
+#include "bpvm_out.h"       /* V7/H5 (#558): bpvm_emit, el camino del `print` del intérprete */
 
 #include <stdio.h>
 #include <string.h>
@@ -299,24 +300,20 @@ static int32_t h_new_object(bpvm_t* vm, uint32_t class_addr) {
 }
 
 /* ---------- Output sink ----------
- * Replican los OP_PRINT_* del intérprete pero invocables como C. */
+ * Replican los OP_PRINT_* del intérprete pero invocables como C.
+ * V7/H5 (#558, 25-sep) — Y POR SU MISMO CAMINO (`bpvm_emit`: la cola del hilo `io`, la de SMP o el callback).
+ * Escribían por el callback directo, y en placa, con el hilo `io` en marcha, el `print` de una `native` ADELANTABA
+ * a lo que el programa había impreso antes y aún esperaba en la cola: `NatV7` sacaba su «7» arriba del todo en la
+ * C5 y dos líneas antes en la Metro. Lo cazó la tanda con el AOT. */
 static void h_print_i32(bpvm_t* vm, int32_t v, int nl) {
     char buf[24];
     int n = snprintf(buf, sizeof(buf), nl ? "%d\n" : "%d", (int) v);
-    if (n > 0 && vm->output_cb) {
-        vm->output_cb(buf, (size_t) n, vm->output_user);
-    } else if (n > 0) {
-        fwrite(buf, 1, (size_t) n, stdout);
-    }
+    if (n > 0) bpvm_emit(vm, buf, (size_t) n);
 }
 static BPVM_AOT_FP_ABI void h_print_f32(bpvm_t* vm, float v, int nl) {
     char buf[40];
     int n = snprintf(buf, sizeof(buf), nl ? "%g\n" : "%g", (double) v);
-    if (n > 0 && vm->output_cb) {
-        vm->output_cb(buf, (size_t) n, vm->output_user);
-    } else if (n > 0) {
-        fwrite(buf, 1, (size_t) n, stdout);
-    }
+    if (n > 0) bpvm_emit(vm, buf, (size_t) n);
 }
 static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
     /* H2 (V2): string = byte[] UTF-8 → emite los bytes directamente, sin
@@ -325,24 +322,16 @@ static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
     if (addr != 0) {
         uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
         const char* p = (const char*)(vm->memory + addr + 4);
-        if (nbytes > 0) {
-            if (vm->output_cb) vm->output_cb(p, (size_t) nbytes, vm->output_user);
-            else fwrite(p, 1, (size_t) nbytes, stdout);
-        }
+        if (nbytes > 0) bpvm_emit(vm, p, (size_t) nbytes);
     }
-    if (nl) {
-        if (vm->output_cb) vm->output_cb("\n", 1, vm->output_user);
-        else fputc('\n', stdout);
-    }
+    if (nl) bpvm_emit(vm, "\n", 1);
 }
 static void h_print_char(bpvm_t* vm, int32_t ch) {
     char c = (char) ch;
-    if (vm->output_cb) vm->output_cb(&c, 1, vm->output_user);
-    else fputc(ch, stdout);
+    bpvm_emit(vm, &c, 1);
 }
 static void h_print_nl(bpvm_t* vm) {
-    if (vm->output_cb) vm->output_cb("\n", 1, vm->output_user);
-    else fputc('\n', stdout);
+    bpvm_emit(vm, "\n", 1);
 }
 
 /* ---------- I/O float (H3 #166) ----------
