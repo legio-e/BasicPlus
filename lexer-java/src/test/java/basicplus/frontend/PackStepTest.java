@@ -20,6 +20,57 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class PackStepTest {
 
+    /** [V7/H6, #563/#564] Un `.mod` mínimo pero con la cabecera REAL de su versión (la que
+     *  lee duenosDeImports: 44 B en MOD8/MOD9) y una sección de imports de verdad. */
+    static byte[] modSintetico(int version, int gen, String... imports) throws IOException {
+        java.io.ByteArrayOutputStream ib = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream di = new java.io.DataOutputStream(ib);
+        di.writeInt(imports.length);
+        for (String s : imports) { di.writeUTF(s); di.writeUTF(""); }
+        byte[] imp = ib.toByteArray();
+        java.io.ByteArrayOutputStream ob = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream d = new java.io.DataOutputStream(ob);
+        d.writeInt(0x4D4F4430 + version);          /* "MOD<v>" */
+        d.writeInt(0); d.writeInt(0);               /* dataSize, mainOffset */
+        d.writeInt(imp.length);                     /* importSize */
+        d.writeInt(0); d.writeInt(0);               /* exportSize, codeSize */
+        d.writeInt(0);                              /* librarySize */
+        if (version >= 6) d.writeInt(0);            /* interfaceSize */
+        if (version >= 7) d.writeInt(0);            /* nativeSize */
+        if (version >= 8) { d.writeInt(gen); d.writeInt(0); }   /* gen, ifaceCrc */
+        d.write(imp);
+        return ob.toByteArray();
+    }
+
+    /** [#564] El cierre lee los imports en TODOS los formatos con cabecera conocida — MOD9
+     *  incluido, que es el que escribe el compilador desde V7/H2 y el que se le escapaba. */
+    @Test void duenosDeImportsEnCadaFormato() throws Exception {
+        for (int v : new int[] { 6, 7, 8, 9 }) {
+            java.util.List<String> d = PackStep.duenosDeImports(modSintetico(v, 7, "Core.print", "acme.Lib.__init", "Core.List#add#3"));
+            assertEquals(java.util.Arrays.asList("Core", "acme.Lib"), d, "MOD" + v);
+        }
+        assertTrue(PackStep.duenosDeImports("no es un mod".getBytes(StandardCharsets.UTF_8)).isEmpty());
+    }
+
+    /** [#564] El cierre TRANSITIVO de un pack con módulos MOD9: App importa Lib y Lib
+     *  importa Base; ni Lib ni Base están en el outDir. Tienen que entrar los dos. */
+    @Test void cierreTransitivoConModulosMod9(@TempDir Path tmp) throws Exception {
+        Path outDir = Files.createDirectories(tmp.resolve("out"));
+        Path stdlib = Files.createDirectories(tmp.resolve("stdlib"));
+        Files.write(outDir.resolve("App.mod"), modSintetico(9, 7, "Lib.f"));
+        Files.write(stdlib.resolve("Lib.mod"), modSintetico(9, 7, "Base.g"));
+        Files.write(stdlib.resolve("Base.mod"), modSintetico(9, 7));
+        BpBuild b = new BpBuild();
+        b.projectDir = tmp.toString(); b.outDir = outDir.toString(); b.main = "App"; b.out = "pack"; b.packName = "App";
+        PackStep.Cierre c = new PackStep.Cierre(java.util.Collections.emptyMap(), java.util.Collections.emptySet(),
+                true, "", java.util.Collections.singletonList(stdlib));
+        PackReader.Pack p = PackReader.read(Files.readAllBytes(PackStep.buildPack(b, c)));
+        Set<String> got = new HashSet<>();
+        for (PackEntry e : p.entries) got.add(e.tipo + ":" + e.nombre);
+        assertTrue(got.contains("mod:Lib") && got.contains("mod:Base"),
+                   "el cierre trae Lib (import directo) y Base (de segunda mano): " + got);
+    }
+
     @Test void empaquetaOutDirMasResourcesMasManifest(@TempDir Path tmp) throws Exception {
         Path outDir = Files.createDirectories(tmp.resolve("out"));
         Files.write(outDir.resolve("App.mod"),    "app-bytecode".getBytes(StandardCharsets.UTF_8));

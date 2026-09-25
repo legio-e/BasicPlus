@@ -407,9 +407,17 @@ public final class PackStep {
         try {
             java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(mod));
             int magic = in.readInt();
-            boolean v6 = magic != 0x4D4F4435, v8 = magic == 0x4D4F4438;
-            boolean v7 = magic == 0x4D4F4437 || v8;
-            if (magic != 0x4D4F4436 && !v7) return out;      /* MOD6, MOD7 o MOD8 */
+            /* [V7/H6, #564] Y MOD9. Este lector se quedó en MOD8 (tenía los magics escritos a
+             * mano) y en cuanto MOD9 fue el formato por defecto el cierre dejó de ver UN SOLO
+             * import: un pack no traía nada de lo que sus módulos importan de segunda mano. No
+             * se notaba porque las recetas copian módulos a mano y el /lib de la placa pone el
+             * resto — el mismo agujero que #555 en conBloqueNativo. Ahora pregunta a ModFormat,
+             * que es quien sabe qué formatos llevan la cabecera con versión (la de MOD8 y MOD9
+             * es la misma, 44 B): el día de MOD10 se entera sin tocar esto. */
+            boolean v8 = edu.bpgenvm.bytecode.ModFormat.tieneVersion(magic);
+            boolean v7 = magic == edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V7 || v8;
+            boolean v6 = magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER;   /* todos menos MOD5 */
+            if (magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6 && !v7) return out;   /* MOD6 en adelante */
             in.readInt(); in.readInt();                      /* dataSize, mainOffset */
             int importSize = in.readInt();
             in.readInt(); in.readInt();                      /* exportSize, codeSize */
