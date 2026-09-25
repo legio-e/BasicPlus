@@ -9,6 +9,18 @@ placa (o en el micro simulado) desde el panel de Packs.
 | `Stdlib.pack` | La librería estándar completa (29 módulos el 23-sep: Core, Str, Collections, Json, IO, Math, Time, Gui, Net, App, Packs, Machine y los de hardware) — los MISMOS `.mod` que `bpstdlib/`, byte a byte, y eso lo **comprueba la red** (`compat/stdlib_pack.sh`, `#537`); se reconstruye con **cada cambio de la stdlib**, no sólo con cada versión (el del 20-ago era MOD6 y tapaba al `/lib` fresco del P4, `#493`; el del 18-sep no tenía las clases del lenguaje en Core y daba `LINK_ERROR` en el micro simulado, `#537`) | `bpstdlib/Stdlib.bpbuild` |
 | `SQLite.pack` | El motor SQLite y su ORM: los módulos `SQLite` y `Orm`, más el código nativo precompilado (`.npk` + `.mdn`) para **ARM y RISC-V** | `bpstdlib/sqlite/SQLite.bpbuild` |
 
+## Para qué sirve el `Stdlib.pack` en una placa (V7/H6, `#468`)
+
+**Para ahorrar RAM en las placas sin PSRAM** (la C6, la C3, la Pico 2, la Nucleo). La stdlib de fábrica viene
+dentro de la imagen y el sistema la copia a `/lib`; de ahí se carga EN RAM. Con el `Stdlib.pack` grabado, cada módulo
+que el pack sirve con los mismos bytes que la imagen se carga **en sitio** desde la flash (XIP): a la RAM sólo va su
+parte de datos, no el código. El instalador de la imagen lo sabe: al arrancar mira la zona de packs y quita de `/lib`
+su copia de lo que el pack ya sirve igual (una más nueva que alguien haya puesto en `/lib` se queda, y tapa al pack).
+
+**Borrar el pack no deja la placa sin librería**: la imagen sigue siendo la fuente. Al borrarlo (o al formatear la
+zona), `/lib` se repone desde la imagen en el acto, sin esperar a reiniciar; y lo mismo al revés: al grabarlo, las
+copias que sobran salen de `/lib` en ese momento.
+
 ## Cómo se reconstruye
 
 La librería **no** se empaqueta con un script aparte: es un proyecto BP normal,

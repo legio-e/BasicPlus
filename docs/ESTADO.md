@@ -690,6 +690,36 @@ la caché `static` del CS del módulo —ningún módulo con globales había ten
 instrucción, y el caso `fma` da 0), `NatNew` 7/7 en la C5, la tanda de V7 entera verde (42 resultados) y `SqlDemo` en la
 Metro y el P4 con el pack regrabado (`SQLite.mdn cargado del pack (3184 B, 16 thunks)`).
 
+## 📦 H6 `#468` (25-sep, tarde, sesión remota) — la stdlib EN FLASH: el instalador cede a la zona de packs
+
+Eduardo: *«¿De H6 queda algo pendiente?»* → H6.b (tras la ronda sellada), la pantalla de la C5 tras `G4.b`, el doble
+búfer (a decidir) y `#468`, que es lo que eligió. Leyendo antes de tocar, el `MODULE_QUERY` del plan ya estaba (el
+`STAT` por nombre de `#466` y la zona en el resolvedor y en el IDE desde `#493`); lo medido en la C5 decía el resto:
+`Gui`, `Json`, `Collections` y `Str` salían del pack XIP y `Core` de `/lib` («el FS eclipsa al del pack»), porque el
+INSTALADOR de fábrica repone sus copias en cada arranque y `/lib` va delante. Diseño en `V7_IDEAS` §H6.13; Eduardo
+aprobó las tres partes (la zona antes que la stdlib; el instalador no instala lo que la zona sirve igual y quita su
+copia; `/lib` al día al tocar un pack) y **canceló** la vía de cargar la stdlib desde la imagen. Y avisó, a mitad del
+trabajo: *«si el usuario borra el pack se queda sin la librería»* — se contestó con el diseño (la imagen sigue siendo la
+fuente) y se probó en la Metro: `packdel SQLite` → `Core` de vuelta a `/lib` en el acto. Verificarlo destapó dos más,
+en el build de packs: el pack de la GUI llevaba un `Core.mod` de generación 0 (**`#563`**: la receta no copiaba el
+canónico; ahora el build lo rechaza con nombre) y el cierre transitivo de los packs no leía MOD9 (**`#564`**).
+
+## ⏭️ Traspaso (25-sep, noche, sesión remota) — H6: `#468` cerrada, y `#563` y `#564` de paso
+
+**Commits** (sin push): `7398d6e5` (`#468`) · `534c294b` (`#564`) · `e28bedd2` (`#563`) · y los docs. Frontend 249/249; `compat.sh
+check` verde con `test-mods` ya en `check-testc` (pruebas de C 10/10); compilan las siete imágenes y el simulador.
+
+**Placas**: las tres conectadas llevan la imagen con `#468` y la tanda (MathRango,
+GuiWinJson, GuiShot, NatNew, FloatNat) sale igual. La **Metro**: su `SQLite.pack` regrabado (el mismo), `Core` del pack.
+La **C5**: `Core` del pack `DriverSpi`. El **P4**: sin cambios en `/lib` —su imagen no embebe `Gui`, `Json`,
+`Collections` ni `Str` (esas copias de `/lib` no son de la imagen: las subieron el IDE o la tanda, y el instalador no
+las toca) y el `Core` de su pack de la GUI es el de generación 0 (`#563`)—. **Pendiente del P4**: en su próximo `PACK_FORMAT` (le quedan 8 KB de zona), regrabar la
+GUI con el pack de hoy (`bpstdlib/gui/out/Gui.pack`, ya con el `Core` bueno).
+
+**Lo que queda de H6** (`FICHAS`, fila H6): `H6.b` —quitar LVGL de C6, P4 y DK2— tras la ronda sellada de las nueve
+placas (necesita todas en la mesa); mirar el cristal de la C5 tras `G4.b`; y decidir si el doble búfer asíncrono y los
+80 MHz entran en H6 o se cancelan.
+
 ## ⏭️ Traspaso (25-sep, tarde, sesión remota) — H5: la tanda con el AOT y seis fichas cerradas; las tres placas conectadas, al día
 
 **Commits** (sin push): `42ae4bbf` (la tanda con el AOT) · `7a897d7b` (`#558`) · `8dfaea68` (`#561`) · `b78f449f`

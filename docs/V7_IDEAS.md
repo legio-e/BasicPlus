@@ -3309,3 +3309,65 @@ verdad, la traza lo dirá con el latido; el diseño del vigilante está en `431e
 **La lección** —estaba en la memoria y no bastó—: **antes de culpar al dispositivo, mirar si el instrumento le
 cambia el estado**; aquí bastaba el `uptime`. Media tarde se fue en un modo normal y un vigilante contra un
 fallo que ponía la herramienta.
+
+### 13. `#468` (25-sep, sesión remota): el `Gui.mod` en flash — lo que queda es que `/lib` no tape a la zona
+
+**Lo que ya estaba, aunque el plan (§3, pregunta 7; §4, `P4`) lo diera por pendiente.** El `MODULE_QUERY` del 23-jul
+es el `STAT` por nombre de `#466` —el IDE pregunta por cada dependencia y contesta el resolvedor del RUN, sin un
+gemelo del orden de búsqueda—, y desde `#493` ese resolvedor prueba la zona la última (`pack:<P>/X.mod`) y el Run del
+IDE no sube lo que un pack ya sirve idéntico («ya en la placa, en un pack (XIP), idéntico»). Medido hoy en la C5 con
+`GuiWinJson`: `Gui`, `Json`, `Collections` y `Str` salen del pack de la GUI, XIP («cargado XIP desde pack (codigo en
+sitio)»).
+
+**Lo que falta: `Core`.** En el mismo arranque: «dep 'Core' -> /lib/Core.mod · aviso: 'Core' del FS eclipsa al del
+pack». Lo pone el INSTALADOR de fábrica (`#466`, `src/bpvm_mods.c`): en cada arranque repone en `/lib` la stdlib que
+la imagen lleva embebida, y `/lib` va delante de la zona. En la C5 es un módulo; en una placa sin PSRAM (C6, C3, Pico 2,
+Nucleo) con el `Stdlib.pack` grabado es TODO: la salida que dio Eduardo el 8-sep —*«si alguien quiere ahorrar memoria
+puede montar su propio pack y subirlo»*— hoy no ahorra un byte, porque cada módulo del pack tiene en `/lib` un gemelo
+idéntico que lo tapa. En el P4 pasa con los seis del pack de la GUI (su imagen los embebe todos).
+
+**La propuesta** — la que la ficha dejó escrita el 4-sep («el instalador no repone en `/lib` lo que la zona ya sirve con
+el mismo MAGIC+CRC»), con lo que ha pasado desde:
+1. **La zona se monta ANTES que el instalador**, en las cinco familias. Hoy va detrás en todas: `#493` la puso
+   «después de /lib» porque sólo necesitaba tenerla antes del primer RUN; montarla pide las particiones, no el FS.
+2. **El instalador cede a la zona**: si la zona sirve X con los MISMOS bytes que el blob embebido (CRC), la copia de
+   `/lib` sobra: no se instala si falta, y si está la de la imagen (idéntica al blob), se quita. Si `/lib` tiene una
+   MÁS NUEVA (versión o generación), se queda, como hoy: el FS eclipsa, que es la regla de desarrollo de `#310`. Si
+   la zona sirve OTRA versión que la imagen, nada cambia: la imagen repone su `/lib` como siempre.
+3. **Borrar o formatear un pack re-sincroniza `/lib` en el acto** (`PACK_DEL`, `PACK_FORMAT`): lo que la zona deja de
+   servir vuelve a `/lib` desde la imagen, sin esperar al siguiente arranque ni dejar un hueco en medio.
+
+Se mide en placa: la C5 con `Core` del pack (sin el aviso) y la Metro con el `Stdlib.pack`, el libre del heap antes y
+después (la ficha estimó ~22 KB con `Core`+`Json`+`Gui` en la C6).
+
+**Lo que queda aparte, y es de Eduardo desde el 8-sep**: cargar la stdlib de fábrica EN SITIO desde la propia imagen —sus
+blobs ya están en flash, mapeados, y el cargador acepta XIP con un puntero—, sin pack y sin `/lib`: el ahorro en TODAS
+las placas sin grabar nada. Cambia el modelo de `#466` (la imagen dejaría de reponer `/lib`) y el `STAT` por nombre
+tendría un origen más.
+
+**Decidido (Eduardo, 25-sep, sesión remota):** las tres, como se proponen —la zona antes del instalador; el instalador
+no instala lo que la zona sirve con los mismos bytes y quita la copia de la imagen si ya está (una más nueva en `/lib`
+se queda); y `/lib` se re-sincroniza al borrar o formatear un pack—. **Y la vía de la imagen se CANCELA**: `#468` se
+cierra con el pack; quien necesite la RAM graba el `Stdlib.pack`, que con esto ahorra de verdad.
+
+**Hecho (25-sep, sesión remota), y MEDIDO en placa.** El resolvedor expone su búsqueda en la zona
+(`bpvm_entry_zona`: el último pack de la cadena que lleve el módulo) y el instalador la usa: `memcmp` contra el blob
+embebido, sin calcular CRC. Resultados nuevos `EN_ZONA` (falta y la zona lo sirve: en silencio) y `QUITADO` (cuenta
+como escritura: la ESP32 guarda la partición por eso). La familia registra su instalación (`bpvm_mods_set_resync`) y
+el wire común de packs la vuelve a correr tras `PACK_BURN_END`, `PACK_DEL` y `PACK_FORMAT` —al grabar también: sin
+eso, un `Stdlib.pack` recién grabado no ahorraría nada hasta reiniciar—. La zona se monta antes que la stdlib en las
+cinco familias (la ESP32 común, las dos variantes del P4, la Pico y el STM32).
+- **La Metro** (su `SQLite.pack` lleva `Core` y `Str` canónicos): al arrancar, «`/lib/Core.mod` fuera: lo sirve el pack
+  'SQLite' con los mismos bytes que la imagen (en sitio, XIP)»; `dep 'Core' -> PACK (XIP)`. **La objeción de Eduardo,
+  en placa**: `packdel SQLite` → «preinstall: /lib/Core.mod» en el acto, sin reiniciar, y los programas siguen igual;
+  regrabado el pack, fuera otra vez. `MathRango` y `FloatNat` idénticos en los tres estados.
+- **La C5**: `Core` sale ya del pack `DriverSpi` (el último de la cadena con un `Core` canónico) y se acabó el aviso
+  «el FS eclipsa»; los cinco módulos de la GUI, XIP. Con `GuiWinJson`, libre del heap 6529 → 6536 KB.
+- **El P4**: nada que quitar. Su imagen no embebe `Gui`, `Json`, `Collections` ni `Str` —esas copias de `/lib` las
+  subió alguien y no son del instalador— y el `Core` de su pack de la GUI no era el canónico.
+
+**Lo que destapó**: el pack de la GUI llevaba un `Core.mod` de **generación 0** (**`#563`**: su proyecto compila
+`bpstdlib/` como fuente y la receta no copiaba el canónico de `Core`; ahora el build del pack rechaza con nombre un
+módulo de la stdlib sin sellar), y el cierre transitivo de los packs no leía MOD9 (**`#564`**: `duenosDeImports` se
+quedó en MOD8, como `#555`). Queda regrabar la GUI del P4 con el pack bueno en su próximo `PACK_FORMAT` (le quedan
+8 KB de zona); hasta entonces su `Core` sale de `/lib`, que es lo seguro.
