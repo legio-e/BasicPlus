@@ -900,24 +900,27 @@ static void run_module_path(const char* path, long id, const char* arg) {
     memset(&entry, 0, sizeof entry);
     bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
     if (ls != BPVM_OK) {
-        fputs("{\"type\":\"EXITED\",\"session\":", stdout);
-        if (entry.missing[0]) {
-            fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
-                            "\"errorMessage\":\"falta el modulo '%s'\"}\n",
-                    session, (int) ls, entry.missing);
-        } else if (entry.fallo[0]) {
-            /* #421 — el PORQUÉ, con la ruta. Antes aquí salía «load: IO error»
-             * y el IDE mostraba `exit 1 (IO error)`: el firmware sabía lo que
-             * había pasado y no lo contaba. */
-            fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
-                            "\"errorMessage\":\"load: %s\"}\n",
-                    session, (int) ls, entry.fallo);
-        } else {
-            fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
-                            "\"errorMessage\":\"load: %s\"}\n",
-                    session, (int) ls, bpvm_status_str(ls));
-        }
-        fflush(stdout);
+        /* #421 — el PORQUÉ, con la ruta. Antes aquí salía «load: IO error»
+         * y el IDE mostraba `exit 1 (IO error)`: el firmware sabía lo que
+         * había pasado y no lo contaba.
+         * #557 — y por los constructores comunes, como el EXITED del final del RUN:
+         * con `fprintf` el nombre del módulo y el motivo iban SIN ESCAPAR (una comilla
+         * rompía el framing del wire: lo que #473 R20 arregló en el STM32). */
+        char emsg[sizeof entry.fallo + 16];
+        if (entry.missing[0])     snprintf(emsg, sizeof emsg, "falta el modulo '%s'", entry.missing);
+        else if (entry.fallo[0])  snprintf(emsg, sizeof emsg, "load: %s", entry.fallo);
+        else                      snprintf(emsg, sizeof emsg, "load: %s", bpvm_status_str(ls));
+        int off = wire_v1_msg_begin_event(s_reply_buf, sizeof(s_reply_buf), 0, "EXITED");
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "session", session);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                   (size_t) off, "status", "RUNTIME_ERROR");
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "exitCode", (long) ls);
+        if (off >= 0) off = wire_v1_field_string_recortado(s_reply_buf, sizeof(s_reply_buf),
+                                                   (size_t) off, "errorMessage", emsg, 1);
+        if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+        if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
         bpvm_destroy(vm);
         s_active_session = 0;
         return;
@@ -1096,8 +1099,10 @@ static void run_module_path(const char* path, long id, const char* arg) {
         const char* emsg = link_err[0] ? link_err
                          : (rt_err[0]   ? rt_err
                                         : bpvm_status_str(rs));
-        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "errorMessage", emsg);
+        /* #557 — recortado si no cabe: un error de enlace llega a 1.536 B y este
+         * buffer tiene 1.024; antes el EXITED entero se quedaba sin salir. */
+        if (off >= 0) off = wire_v1_field_string_recortado(s_reply_buf, sizeof(s_reply_buf),
+                                                   (size_t) off, "errorMessage", emsg, 1);
     }
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
                                           (size_t) off);

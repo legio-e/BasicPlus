@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-aotswitch test-aotfloat test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-aotswitch test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -674,6 +674,15 @@ test-aotfloat: $(LIBOBJ)
 	   if [ "$$n" -ne $(AOTFLOAT_OK) ]; then cat build/aotfloat/$$c.out; echo "  ROJO: $$c: $$n de $(AOTFLOAT_OK) comprobaciones"; exit 1; fi; \
 	 done; \
 	 echo "[status=OK] $(AOTFLOAT_OK)/$(AOTFLOAT_OK) con la FPU y con los helpers, igual que interpretado"
+
+# V7 (#557, 25-sep) — el campo de texto del wire que se RECORTA (wire_v1_field_string_recortado):
+# el EXITED tiene que salir SIEMPRE, y recortado tiene que seguir siendo JSON sano (ni medio
+# caracter UTF-8 ni medio escape). Solo el constructor comun: el cable es de cada familia.
+test-wirerecorte:
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_wirerecorte.c src/wire_v1_proto.c -o build/test_wirerecorte.exe $(LDFLAGS)
+	@echo "--- #557 el errorMessage del EXITED, recortado si no cabe (esperado: solo 'ok', [status=OK]) ---"
+	@./build/test_wirerecorte.exe
 
 test-loaderr: $(LIBOBJ)
 	@mkdir -p build

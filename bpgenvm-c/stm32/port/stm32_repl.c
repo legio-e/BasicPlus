@@ -266,7 +266,9 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
 
 static void emit_exited_msg(long session, const char* status, int code,
                             uint32_t ms, const char* errmsg) {
-    char buf[320];
+    /* #557 — 1.024 B y ESTÁTICO (como `s_reply_buf` de la Pico; sólo lo usa la tarea del
+     * REPL): eran 320 en la pila, y un error de enlace llega a 1.536. */
+    static char buf[1024];
     int off = wire_v1_msg_begin_event(buf, sizeof buf, 0, "EXITED");
     if (off < 0) return;
     off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "session", session);
@@ -281,7 +283,8 @@ static void emit_exited_msg(long session, const char* status, int code,
     off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "nativos", (long) bpvm_aot_count());
     if (off < 0) return;
     if (errmsg && errmsg[0]) {
-        off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "errorMessage", errmsg);
+        /* #557 — recortado si no cabe, en vez de callarse el EXITED entero. */
+        off = wire_v1_field_string_recortado(buf, sizeof buf, (size_t) off, "errorMessage", errmsg, 1);
         if (off < 0) return;
     }
     off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);

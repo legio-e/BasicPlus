@@ -141,6 +141,63 @@ int wire_v1_field_string(char* buf, size_t buf_max, size_t off,
     return (int) off;
 }
 
+/* ─── V7 (#557, 25-sep) — UN CAMPO DE TEXTO QUE SE RECORTA EN VEZ DE HUNDIR EL MENSAJE ───
+ *
+ * `wire_v1_field_string` devuelve -1 si el texto no cabe, y quien construye el mensaje lo
+ * abandona entero. Para casi todo es lo correcto —un campo a medias sería un dato falso—,
+ * pero no para el `errorMessage` del EXITED: el error de enlace llega a 1.536 B
+ * (`link_error`, por paridad con miVM) y el EXITED de la Pico tiene 1.024 B, el del STM32
+ * 320. Con un error largo el EXITED NO SALÍA, y el IDE (o la tanda) se quedaba esperando el
+ * final de un programa que ya había terminado — justo cuando más falta hacía saber por qué.
+ *
+ * Aquí el texto va entero si cabe; si no, se corta en un límite de CARÁCTER —ni a media
+ * secuencia UTF-8 ni a medio escape— y se marca con «...». `reserva` son los bytes que
+ * quien llama necesita DESPUÉS del campo (el `}` del final, como poco). Devuelve -1 sólo
+ * si no cabe ni la clave. */
+static const char MARCA_RECORTE[] = "...";
+
+/* Bytes de ENTRADA del carácter que empieza en `p`: 1 si es ASCII o si la secuencia UTF-8
+ * está rota (se copia byte a byte, como hace put_escaped). Nunca lee más allá del '\0'. */
+static size_t bytes_de_caracter(const unsigned char* p) {
+    unsigned char c = *p;
+    size_t n = (c < 0x80) ? 1 : ((c & 0xE0) == 0xC0) ? 2 : ((c & 0xF0) == 0xE0) ? 3
+             : ((c & 0xF8) == 0xF0) ? 4 : 1;
+    for (size_t k = 1; k < n; k++)
+        if ((p[k] & 0xC0) != 0x80) return 1;
+    return n;
+}
+
+int wire_v1_field_string_recortado(char* buf, size_t buf_max, size_t off,
+                                   const char* key, const char* value, size_t reserva) {
+    if (reserva >= buf_max) return -1;
+    if (!value) value = "";
+    size_t lim = buf_max - reserva;
+    int r = wire_v1_field_string(buf, lim, off, key, value);
+    if (r >= 0) return r;                                           /* cabe entero */
+    r = put_cstr(buf, lim, off, ",\"");   if (r < 0) return -1; off = (size_t) r;
+    r = put_cstr(buf, lim, off, key);      if (r < 0) return -1; off = (size_t) r;
+    r = put_cstr(buf, lim, off, "\":\"");  if (r < 0) return -1; off = (size_t) r;
+    size_t cola = (sizeof MARCA_RECORTE - 1) + 1;                   /* «...» y la comilla */
+    if (off + cola > lim) return -1;
+    size_t tope = lim - cola;
+    const unsigned char* p = (const unsigned char*) value;
+    while (*p) {
+        size_t n = bytes_de_caracter(p);
+        if (n == 1) {
+            char uno[2] = { (char) *p, '\0' };
+            r = put_escaped(buf, tope, off, uno);                  /* 1, 2 o 6 bytes */
+        } else {
+            r = put_raw(buf, tope, off, (const char*) p, n);        /* el carácter entero */
+        }
+        if (r < 0) break;                                           /* aquí se corta */
+        off = (size_t) r;
+        p += n;
+    }
+    r = put_cstr(buf, lim, off, MARCA_RECORTE); if (r < 0) return -1; off = (size_t) r;
+    r = put_cstr(buf, lim, off, "\"");          if (r < 0) return -1; off = (size_t) r;
+    return (int) off;
+}
+
 int wire_v1_field_bulk(char* buf, size_t buf_max, size_t off, size_t n) {
     int r = put_cstr(buf, buf_max, off, ",\"bulk\":"); if (r < 0) return -1; off = (size_t) r;
     r = put_long(buf, buf_max, off, (long) n);          if (r < 0) return -1; off = (size_t) r;

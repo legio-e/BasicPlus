@@ -494,7 +494,8 @@ static void send_exited(long session, const char* status, int exit_code,
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "elapsedMs", elapsed_ms);
     /* V7/H5 (25-sep) — los thunks nativos que registró ESTE RUN: la tanda comprueba con él que el AOT se usó (los números salen iguales interpretados). */
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "nativos", (long) bpvm_aot_count());
-    if (errmsg && off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "errorMessage", errmsg);
+    /* #557 — recortado si no cabe (aquí caben 2.048 B, pero el EXITED sale SIEMPRE). */
+    if (errmsg && off >= 0) off = wire_v1_field_string_recortado(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "errorMessage", errmsg, 1);
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
     if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
 }

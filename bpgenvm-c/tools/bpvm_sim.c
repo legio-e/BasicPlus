@@ -662,7 +662,13 @@ static void sim_output_sink(const char* s, size_t len, void* user) {
 
 static void emit_exited(sock_t c, long session, const char* status, int code,
                         unsigned long ms, const char* err_msg) {
-    char buf[640]; sb_t s; sb_init(&s, buf, sizeof buf);
+    /* #557 — el buffer, a la medida del mensaje (el escape puede crecer x6), como
+     * sim_output_sink: eran 640 B fijos y un error de enlace llega a 1.536 — con uno
+     * largo `s.ok` caía y el EXITED no salía. */
+    size_t cap = 256 + (err_msg ? strlen(err_msg) * 6 : 0);
+    char* buf = (char*) malloc(cap);
+    if (!buf) return;
+    sb_t s; sb_init(&s, buf, cap);
     sb_raw(&s, "{\"type\":\"EXITED\",\"session\":"); sb_long(&s, session);
     sb_raw(&s, ",\"status\":\""); sb_raw(&s, status);
     sb_raw(&s, "\",\"exitCode\":"); sb_long(&s, code);
@@ -671,6 +677,7 @@ static void emit_exited(sock_t c, long session, const char* status, int code,
     if (err_msg && err_msg[0]) { sb_raw(&s, ",\"errorMessage\":\""); sb_esc(&s, err_msg); sb_raw(&s, "\""); }
     sb_raw(&s, "}");
     if (s.ok) send_line(c, s.buf);
+    free(buf);
 }
 
 /* Poll del wire entre quanta (#257): KILL para el programa (ack diferido, tras

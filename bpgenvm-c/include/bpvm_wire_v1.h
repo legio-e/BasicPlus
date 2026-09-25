@@ -109,6 +109,11 @@ int  wire_v1_field_bool(char* buf, size_t buf_max, size_t off,
                         const char* key, int value);
 int  wire_v1_field_string(char* buf, size_t buf_max, size_t off,
                           const char* key, const char* value);
+/* V7 (#557) — como field_string, pero si el texto no cabe (dejando `reserva` bytes libres
+ * detrás) se corta en un límite de carácter y se marca con «...», en vez de fallar. Para
+ * el `errorMessage` del EXITED, que tiene que salir SIEMPRE. -1 sólo si no cabe ni la clave. */
+int  wire_v1_field_string_recortado(char* buf, size_t buf_max, size_t off,
+                                    const char* key, const char* value, size_t reserva);
 int  wire_v1_field_bulk(char* buf, size_t buf_max, size_t off, size_t n);
 int  wire_v1_msg_end(char* buf, size_t buf_max, size_t off);
 
