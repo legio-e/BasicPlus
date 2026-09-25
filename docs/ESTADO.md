@@ -730,7 +730,7 @@ así, por tandas según se iban conectando:
   la sacó una segunda vez, a media escritura: error con nombre (`CMD24 -> FF…`), desmontaje limpio y montaje al volver.
 - **La Nucleo**: su zona de packs da «cadena ROTA, 0 libres». Sus primeros bytes (`0x08182000`) son un `Core.mod` MOD7:
   restos de otra época de la flash —el FS de hoy no puede salirse de su partición (`block_count` sale de su tamaño)—. No
-  admite packs hasta un `PACK_FORMAT`.
+  admitía packs hasta un `PACK_FORMAT`: lo hizo Eduardo esa misma tarde, y la zona quedó vacía y sana (504 KB libres).
 
 Las ocho imágenes probadas, bit a bit, en `dist/firmware-v7-25sep` (README + SHA256), y el informe en
 `compat/informes/tanda_v7_25sep.md`. Las capturas de `GuiShot` (C5, C6, P4, DK2), miradas: bien; en las pantallas de 240
@@ -748,10 +748,10 @@ Esa ronda se hizo el 24-sep (`22f30005`), y hoy se ha rehecho con la ABI 8: **`H
 
 **Las placas quedan**: las nueve con las imágenes de `dist/firmware-v7-25sep` (la C3 con `#565`, el P4 con `#566`); la C6
 con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona recién formateada (SQLite, Gui y DriverNulo;
-1,4 MB libres) y una SanDisk de 32 GB; la Nucleo con su zona rota, sin formatear.
+1,4 MB libres) y una SanDisk de 32 GB; la Nucleo con su zona formateada (vacía).
 
 **Pendiente**:
-- De Eduardo: el OK para el `PACK_FORMAT` de la Nucleo; el doble búfer asíncrono y los 80 MHz (¿entran en H6 o se
+- De Eduardo: el doble búfer asíncrono y los 80 MHz (¿entran en H6 o se
   cancelan?); `#542`; y **una pregunta nueva de `#468`**: las copias de la stdlib en `/lib` que NO pone la imagen (las
   subieron la tanda o el IDE) tapan al pack, y el instalador, por diseño, no las toca; en la C6 hubo que borrarlas a
   mano. ¿Las quita también el instalador cuando un pack las sirve con los mismos bytes —y, borrado el pack, se vuelven a

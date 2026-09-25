@@ -40,8 +40,8 @@ y con `#566`—; vale la última de cada una.
   página y obliga a regrabarlos.
 - **C5**: sus packs, sin tocar hoy (tres vivos; `Gui` y `DriverSpi` entre ellos).
 - **Metro**: su `SQLite.pack`.
-- **Nucleo**: su zona tiene restos de un `Core.mod` MOD7 de otra época de la flash («cadena
-  ROTA»): no admite packs hasta un `PACK_FORMAT`, que no se ha hecho.
+- **Nucleo**: su zona tenía restos de un `Core.mod` MOD7 de otra época de la flash («cadena
+  ROTA»); Eduardo la formateó el 25-sep y quedó vacía.
 
 ## Grabarlas
 
