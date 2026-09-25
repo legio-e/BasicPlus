@@ -4,6 +4,9 @@
 compat/**/*.out text eol=lf
 compat/**/*.mod binary
 compat/**/*.win text eol=lf
+# 25-sep — y las sumas de los puntos de restauracion de dist/: `sha256sum -c` con CRLF toma el ``
+# como parte del nombre y da FALLO en todas, justo cuando se va a restaurar.
+dist/**/SHA256SUMS.txt text eol=lf
 
 # Los artefactos binarios de BasicPlus, digan lo que digan las heuristicas: sin conversion de finales de linea nunca.
 *.mod binary
