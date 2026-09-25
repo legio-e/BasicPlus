@@ -3491,7 +3491,8 @@ dos caminos.
   funcionar con los dos. No es nada urgente pero estaría bien soportarlo»*, con dos condiciones: **que lo elija el
   usuario** y **que haya memoria** (porque la pantalla tiene poca resolución o porque la placa tiene mucha). O sea, no
   entra en `H6.b`: si el pack pequeño pinta más lento que la C6 de hoy, se acepta por ahora.
-- **Los 80 MHz**: sin decidir. **El P4 y la DK2** (pregunta 5): como estaba previsto, con `G5`.
+- **Los 80 MHz: CANCELADOS** —*«si el límite oficial es 60 MHz nos ceñimos a ese límite, no tiene sentido probar fuera
+  de límites, podría ser que a nosotros nos funcionase y a otro usuario no»*; la hoja del ST7789 da 62,5 MHz—. **El P4 y la DK2** (pregunta 5): como estaba previsto, con `G5`.
 
 **Lo que se vio en el código al contestarle** (no una suposición): el pack de hoy YA declara dos búferes de 11,5 KB
 (`pant_lvgl.c`: `lv_display_set_buffers(…, s_buf1, s_buf2, …, PARTIAL)`), pero su flush es síncrono
