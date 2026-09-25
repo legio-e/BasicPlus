@@ -496,6 +496,13 @@ Event:
 Si `status=RUNTIME_ERROR`, también `errorMessage` y opcionalmente
 `stackTrace`.
 
+**El EXITED sale SIEMPRE** (V7, `#557`, 25-sep): si el `errorMessage` no cabe en el
+buffer de la placa (1.024 B en la Pico y el STM32, 2.048 en la ESP32; el error de
+enlace llega a 1.536), va **recortado** en un límite de carácter y terminado en
+`...`. Antes, un mensaje que no cabía se llevaba el EXITED entero por delante, y el
+IDE se quedaba esperando el final de un programa que ya había terminado. El micro
+simulado lo manda siempre entero.
+
 **`nativos`** (V7/H5, 25-sep): los thunks de código nativo (AOT, `.mdn`) que se
 registraron en ESTE RUN —0 si corrió todo interpretado—. Existe porque un
 programa con funciones `native` da los MISMOS números interpretado que nativo:

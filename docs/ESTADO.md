@@ -668,6 +668,54 @@ V4 y el ajuste no viajó a sus hermanas RISC-V (`810d0a77`: fuera en C5, C3 y C6
 `NatV7` nativo en la C5 (124 → 1 ms), en el P4 y en la Metro, con los cuatro valores exactos. La C3 y la C6,
 compiladas y sin probar.
 
+## 🧪 H5 (25-sep, tarde, sesión remota) — EL AOT EN LA TANDA, y lo que destapó: el `float` sin FPU (`#559`), la FMA (`#560`), el `print` (`#558`, `#561`), las globales (`#562`) y el EXITED que no salía (`#557`)
+
+Eduardo, a distancia: *«meter AOT en la tanda de placas»* (conectadas la Metro, la C5 y el P4). `42ae4bbf`: una prueba
+con «aot» sube su `.mod` con el nativo fundido para la receta de cada placa (`AotSingle`, el camino del Run del IDE), y
+el EXITED dice cuántos thunks se usaron (`nativos`) — sin eso, una native que no corre nativa da los mismos números y la
+prueba pasaría igual. La primera vuelta cazó dos cosas: el `print` de una native adelantaba al del programa (`#558`,
+`7a897d7b`) y **`NatNew` reiniciaba la C5**. Sin el mensaje del pánico (va a la UART0), el rastro se escribió en BP:
+`NatPaso`, un paso por native con un `sleep` detrás, se paraba en el sexto, `sumaFloats`. El `.o` pedía `__addsf3` y el
+enlace lo ponía en la dirección 0. El censo de catorce natives dio el alcance real —7, 7 y 16 símbolos sin resolver en
+ARM, P4 y C5: el `double` mezclado y `long`↔`float`, rotos en TODAS las placas— y el diseño salió del criterio de
+Eduardo de `#426` («si el micro lo soporta por hardware, por hardware; si no, por software»): helpers del firmware y
+macros que deciden por la receta. Meter libgcc en el `.mdn` se descartó midiendo: la de los toolchains es `medlow`
+(`__clz_tab` en absoluto, el cuelgue de `#440`). Diseñándolo apareció `#560` (gcc fundía `a*b+c` en una FMA con FPU;
+el intérprete redondea dos veces) y la prueba nueva del PC (`make test-aotfloat`: el C del AOT con la FPU y forzando
+los helpers) cazó `#561` (el `print` de un float con `%g`). En placa, `FloatNat` no llegaba a tener nativo: **`#562`**,
+la caché `static` del CS del módulo —ningún módulo con globales había tenido nunca código nativo en una placa—. Y
+`#557`, de la revisión de la mañana: un `errorMessage` largo se llevaba el EXITED entero por delante.
+
+**Resultado en las tres placas**: `FloatNat` IDÉNTICO con 23/23 thunks (la C5 por los helpers; el P4 y la Metro por la
+instrucción, y el caso `fma` da 0), `NatNew` 7/7 en la C5, la tanda de V7 entera verde (42 resultados) y `SqlDemo` en la
+Metro y el P4 con el pack regrabado (`SQLite.mdn cargado del pack (3184 B, 16 thunks)`).
+
+## ⏭️ Traspaso (25-sep, tarde, sesión remota) — H5: la tanda con el AOT y seis fichas cerradas; las tres placas conectadas, al día
+
+**Commits** (sin push): `42ae4bbf` (la tanda con el AOT) · `7a897d7b` (`#558`) · `8dfaea68` (`#561`) · `b78f449f`
+(`#559` y `#560`: van juntos porque los `.mdn` regenerados llevan la ABI 8 y la receta nueva a la vez) · `6ac28e97`
+(`#557`) · `b2c85ab2` (`#562`) · y los docs. Frontend 246/246; `compat.sh check` verde (paridad 102/102 en MOD9 y en
+MOD8 con `FloatNat` en el corpus, cápsula 59/59, norma 9/9, sim 6/6, pruebas de C 9/9 con `test-aotfloat` y
+`test-wirerecorte`, sombra 13/13); compilan las siete imágenes.
+
+**Placas** — ⚠️ **con la ABI 8, una placa sin grabar RECHAZA todo `.mdn` nuevo** (con nombre: la native corre
+interpretada), y el puente de SQLite de un pack viejo no carga: grabar imagen Y regrabar su `SQLite.pack` van juntos.
+- **Metro** (COM4): la imagen de hoy (10:51) y su `SQLite.pack` regrabado; en su zona quedan cinco copias viejas BORRADAS
+  (1,6 MB libres).
+- **C5** (COM6): la imagen de hoy (10:51); `Gui` y `DriverSpi` sin tocar y cargando (misma página de 64 KB, como dijo
+  `nm`: rodata en `0x4208f03c`, ~4 KB de margen). Su `Gui.pack` lleva el `Gui2.mdn` viejo, que en la C5 no se usaba
+  (receta del P4).
+- **P4** (COM15): la imagen de hoy (10:52), zona en `0x40154000` (rodata en `0x4014f80c`, ~2 KB de margen); `SQLite` y
+  `Gui` regrabados. **Le quedan 8 KB libres** (las copias viejas, BORRADAS, ocupan hasta formatear): el próximo pack
+  pide `PACK_FORMAT` y regrabar los tres.
+- **Pico 2, C3, C6, S3, Nucleo y DK2**: sin grabar (desconectadas). La C3 y la C6 son las que faltan de ver con AOT
+  (MEMPROT fuera, `#556`, y el `float` por los helpers, `#559`): con ellas, el destino `ilp32` queda probado entero.
+
+**Queda de H5** (`FICHAS`, fila H5): `P2b` (el despachador genérico de builtins, que vuelve a subir la ABI: conviene
+juntarlo con la próxima regeneración), `#542` (decisión de Eduardo), `#468`, cronometrar native frente a interpretado y
+el manual. Y lo que pide manos, de H3/H6: la tarjeta en el P4 (SD.4), la tarjeta en caliente en la Metro, el explorador
+del IDE con `sd`, y mirar el cristal de la C5 tras `G4.b`.
+
 ## ⏭️ Traspaso (25-sep, mañana, sesión remota) — el P4 sin tarjeta, hecho; sus packs, resellados
 
 Eduardo, desde fuera: *«¿por dónde podemos continuar?»*. Conectadas: la Metro (COM4), la C5 (COM6) y **el P4 (COM15)**

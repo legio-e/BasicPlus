@@ -896,12 +896,12 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
               (≈45× measured on an LZSS kernel on-board).</td></tr>
       <tr><td>ESP32-P4 (RISC-V with FPU)</td>
           <td>AOT-accelerated (target <code>riscv32-esp-p4</code>, since V4).</td></tr>
-      <tr><td>ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
-          <td>Interpreted. The IDE's only RISC-V target is the P4's (<code>ilp32f</code>
-              ABI, with FPU); the C3/C6 firmware (<code>ilp32</code>) loads no native block,
-              so a P4 blob is ignored and the function runs interpreted. An
-              <code>ilp32</code> target still has to be added (ticket <code>#502</code>,
-              V7).</td></tr>
+      <tr><td>ESP32-C5 / ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
+          <td>AOT-accelerated (target <code>riscv-imc</code>, <code>ilp32</code> ABI, since
+              V7; verified on the C5; the C3 and the C6, built but not yet tried on the board). Without an FPU, every
+              <code>float</code> operation is done by the firmware —the same routine the
+              interpreter uses—: the result is exactly the same, but it speeds up less
+              than integer code.</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
           <td>Interpreted — same semantics, no speedup. The AOT emits ARM and
               RISC-V, not Xtensa; no date, outside the plan.</td></tr>
@@ -921,8 +921,8 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       <code>throw RuntimeError("…")</code> inside the native propagates to the
       BP <code>try/catch</code> that wraps the call. What still does NOT fit —
       <code>try/catch</code> inside the native, tuples, <code>instanceof</code>,
-      events, <code>parallel</code>, <code>for … in</code>, the
-      <code>double(x)</code> conversion, <strong>reading or writing fields</strong>
+      events, <code>parallel</code>, <code>for … in</code>,
+      <strong>reading or writing fields</strong>
       (own or inherited: use a getter), <strong>calling static methods or
       properties</strong> and <code>super</code> — is rejected by the compiler with its
       message and the line. Local fixed arrays
@@ -1894,9 +1894,9 @@ B1 (<a href="#conc-gc">§14.4</a>).</p>
       DevKit: <code>fib(28)</code> takes the same time either way.</em> No date,
       outside the version plan.
       <br><strong>The ESP32-P4 DOES accelerate</strong> (RISC-V, since V4), like the
-      RP2350 and the STM32. <strong>ESP32-C3 and C6</strong> (RISC-V without FPU)
-      interpret today: the <code>ilp32</code> target is missing in the IDE
-      (<a href="#funciones-native">§8.3</a>).</li>
+      RP2350 and the STM32; and since V7 so do <strong>the C5, the C3 and the C6</strong>
+      (RISC-V without FPU, <code>ilp32</code> target:
+      <a href="#funciones-native">§8.3</a>).</li>
   <li><strong>Across modules</strong> (<a href="#imports">§10.3</a>):
       <code>x instanceof Foo</code> only accepts a class declared in the current
       module (<a href="#herencia">§9.4</a>). (Protected fields, statics and constructor

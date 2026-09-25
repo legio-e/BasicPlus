@@ -927,12 +927,12 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
               (≈45× medido en un kernel LZSS en placa).</td></tr>
       <tr><td>ESP32-P4 (RISC-V con FPU)</td>
           <td>Acelerada por AOT (destino <code>riscv32-esp-p4</code>, desde V4).</td></tr>
-      <tr><td>ESP32-C3 / ESP32-C6 (RISC-V sin FPU)</td>
-          <td>Interpretada. El único destino RISC-V del IDE es el del P4 (ABI
-              <code>ilp32f</code>, con FPU); el firmware del C3/C6 (<code>ilp32</code>) no
-              carga ningún bloque nativo, así que un blob del P4 se ignora y la función corre
-              interpretada. Falta dar de alta un destino <code>ilp32</code> (ficha
-              <code>#502</code>, V7).</td></tr>
+      <tr><td>ESP32-C5 / ESP32-C3 / ESP32-C6 (RISC-V sin FPU)</td>
+          <td>Acelerada por AOT (destino <code>riscv-imc</code>, ABI <code>ilp32</code>,
+              desde V7; verificado en la C5; la C3 y la C6, compiladas y sin probar en placa). Sin FPU, cada
+              operación de <code>float</code> la hace el firmware —la misma rutina que usa
+              el intérprete—: da exactamente lo mismo, pero acelera menos que el código
+              entero.</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
           <td>Interpretada — misma semántica, sin speedup. El AOT emite ARM y
               RISC-V, no Xtensa; sin fecha, fuera del plan.</td></tr>
@@ -953,7 +953,7 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       al <code>try/catch</code> BP que envuelva la llamada. Lo que aún NO
       cabe — <code>try/catch</code> dentro de la native, tuplas,
       <code>instanceof</code>, eventos, <code>parallel</code>,
-      <code>for … in</code>, la conversión <code>double(x)</code>, <strong>leer o
+      <code>for … in</code>, <strong>leer o
       escribir campos</strong> (propios o heredados: usa un getter), <strong>llamar a
       métodos o properties estáticos</strong> y <code>super</code> — lo rechaza el
       compilador con su mensaje y la línea. Los arrays
@@ -2051,8 +2051,8 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       DevKit S3: <code>fib(28)</code> tarda lo mismo por los dos caminos.</em> Sin fecha,
       fuera del plan de versiones.
       <br><strong>El ESP32-P4 SÍ acelera</strong> (RISC-V, desde V4), igual que el RP2350
-      y el STM32. <strong>ESP32-C3 y C6</strong> (RISC-V sin FPU) interpretan hoy:
-      falta el destino <code>ilp32</code> en el IDE (<a href="#funciones-native">§8.3</a>).</li>
+      y el STM32; y desde V7 también <strong>la C5, la C3 y la C6</strong> (RISC-V sin
+      FPU, destino <code>ilp32</code>: <a href="#funciones-native">§8.3</a>).</li>
   <li><strong>Entre módulos</strong> (<a href="#imports">§10.3</a>):
       <code>x instanceof Foo</code> sólo admite una clase declarada en el propio
       módulo (<a href="#herencia">§9.4</a>). (Campos protegidos, estáticos y

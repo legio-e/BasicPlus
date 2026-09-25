@@ -48,8 +48,20 @@ límite del emisor como si fuera del hardware.
   simple en las tres familias, así que la emulación la hace el runtime — pero por
   la tabla de helpers, no por libgcc, que en un `.mdn` no existe.
 
-**Lo que queda fuera es sólo la conversión `double(x)` escrita dentro de una
-native.** El mensaje lo dice con su ficha.
+~~**Lo que queda fuera es sólo la conversión `double(x)` escrita dentro de una
+native.**~~ **Tampoco eso desde el 25-sep (`#559`)**: la conversión va por su helper,
+como las demás. Aquel día se vio además que mezclar `double` con otro tipo
+(`x: double := i`, `d * f`) y pasar entre `long` y `float` dejaban una llamada a
+libgcc sin resolver en TODAS las placas —el enlace la ponía en la dirección 0—: el
+emisor ya calca las conversiones del intérprete, y la guarda de `AotBuild` rechaza,
+con el nombre de la native, cualquier símbolo que el `.o` no defina.
+
+📌 **`float` sin FPU (la C5, la C3, la C6, desde el 25-sep, `#559`)**: cada operación y
+cada conversión de `float` va por un helper del firmware —la misma rutina que usa el
+intérprete—, así que da lo mismo que interpretado y acelera menos que el código
+entero. Con FPU (Cortex-M33, P4) sigue siendo la instrucción. Y en las dos, sin
+fundir `a * b + c` en una FMA (`-ffp-contract=off` en las recetas, `#560`): el
+intérprete redondea dos veces, y el nativo también.
 
 📌 El apunte de Eduardo que sigue valiendo, y que no era sobre el emisor: **si
 buscas velocidad en el micro, usa `float`**. El Cortex-M33 lleva FPv5-**SP** y el
