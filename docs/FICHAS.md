@@ -2508,8 +2508,11 @@ módulos de la imagen salieron de `/lib` en el acto; `Gui`, `Json`, `Collections
 los subió la tanda el 24-sep, y el instalador, por diseño, sólo gestiona lo suyo—, así que seguían tapando al pack y
 `GuiWinJson` terminaba igual, «No space in heap» (la VM tiene 64 KB mientras LVGL siga en la imagen). Borradas esas
 cuatro copias, con el OK de Eduardo, las cinco dependencias corren XIP y `GuiWinJson` sale IDÉNTICO; la tanda de V7
-en la C6, 14/14. Queda a decidir qué hacer con las copias de `/lib` que no son de la imagen (`ESTADO`, traspaso del
-25-sep, tarde de placas).
+en la C6, 14/14. **Y qué hacer con las copias de `/lib` que no son de la imagen, decidido por Eduardo el mismo día:
+NADA de momento** — *«`/lib` actualmente o viene del sistema o lo copia el IDE. Desde el IDE se puede borrar
+fácilmente si hace falta… Ya veremos si en la operación normal aparecen problemas y entonces decidimos»*. Y que un
+módulo de `/lib` tape al de un pack sólo pasa cuando el programa principal no está en ese pack (si lo está, el pack en
+ejecución va primero), y entonces es lo correcto.
 
 ⏩ **APLAZADA A V7 el 8-sep. Decisión de Eduardo, con su criterio de siempre:** *«para V6 no
 inventamos cosas nuevas. Se puede plantear para V7, pero en V6 seguimos como hasta ahora.»*

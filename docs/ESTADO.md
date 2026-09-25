@@ -753,10 +753,10 @@ con el `Stdlib.pack` y su `/lib` sólo con lo de la imagen; el P4 con su zona re
 **Pendiente**:
 - De Eduardo: ~~el doble búfer asíncrono~~ (decidido esa misma tarde: no urgente, como opción del usuario si hay
   memoria; `V7_IDEAS` §H6.14.8) y ~~los 80 MHz~~ (cancelados esa tarde: nos ceñimos a la hoja del controlador, 62,5 MHz en el ST7789); ~~`#542`~~ (decidida esa tarde: un import sin interfaz en el AOT es un error de carga,
-  como en el compilador; queda hacerlo); y **una pregunta nueva de `#468`**: las copias de la stdlib en `/lib` que NO pone la imagen (las
-  subieron la tanda o el IDE) tapan al pack, y el instalador, por diseño, no las toca; en la C6 hubo que borrarlas a
-  mano. ¿Las quita también el instalador cuando un pack las sirve con los mismos bytes —y, borrado el pack, se vuelven a
-  subir cuando hagan falta—, o se quedan y se dice?
+  como en el compilador; queda hacerlo); y ~~una pregunta nueva de `#468`~~ (las copias de la stdlib en `/lib` que no pone la imagen tapan al
+  pack): **decidido, nada de momento** —«desde el IDE se puede borrar fácilmente si hace falta… ya veremos si en la
+  operación normal aparecen problemas»—; y tapar al pack sólo pasa cuando el principal no está en ese pack, y entonces
+  es lo correcto.
 - ~~Con manos: el explorador del IDE con `sd` y `sd mount` (H3)~~: hecho por Eduardo esa misma tarde, en la Metro
   (sacar la tarjeta y refrescar, meterla y refrescar: bien; en el log de la placa, el `ls` del IDE da 5 entradas en
   `/sd`, 0 tras «RETIRADA» y 5 otra vez tras «METIDA»). De H3 sólo queda la TF de la C6, detrás de `H6.b`.
