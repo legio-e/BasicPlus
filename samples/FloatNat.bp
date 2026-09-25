@@ -1,0 +1,344 @@
+// FloatNat — [V7/H5 #559] la coma flotante DENTRO de una `native`, en todas sus formas.
+//
+// ─── QUÉ DEMUESTRA ───
+//
+// Que una `native` hace con `float` y `double` EXACTAMENTE lo que el intérprete, en
+// cualquier placa. Hasta el 25-sep no era así, y de tres maneras según la placa:
+//
+//   · la C5, la C3 y la C6 no tienen FPU: gcc convierte `a + b` de dos float en una
+//     llamada a `__addsf3`, de libgcc, que un `.mdn` no se lleva — y el enlace la
+//     dejaba en la dirección 0. NatNew reiniciaba la C5 al sumar dos float;
+//   · en TODAS las placas, mezclar `double` con otro tipo (`d * f`, `x: double := i`)
+//     y pasar entre `long` y `float` eran otras tantas llamadas a libgcc: el P4
+//     enlazaba y saltaba a 0; ARM fallaba al enlazar con un error críptico;
+//   · una global `float` se leía con el helper de i32: 1.5 llegaba como 1069547520.
+//
+// Ahora cada operación que el micro no hace en hardware va por un helper del
+// firmware (la misma expresión de C que su opcode), y lo que sí hace, por la
+// instrucción — la decisión la toma la receta de cada placa, no el programa.
+//
+// ─── CÓMO SE MIRA ───
+//
+// Cada caso es una `native` (nX) y su GEMELA sin `native` (iX): mismo código, uno
+// compilado y otro interpretado. Si dan lo mismo, `ok`; si no, `FALLO` con los dos
+// valores. En el PC las dos corren interpretadas (todo `ok` por construcción); la
+// prueba de verdad es en placa, o `make test-aotfloat` en el PC —que ejecuta el C
+// que genera el AOT, con la FPU del PC y forzando los helpers de las placas sin ella—.
+//
+// 📌 Los casos evitan `a * b + c` a propósito, salvo el suyo (nFma, #560): con FPU,
+// gcc lo fundía en UNA instrucción (redondea una vez; el intérprete, dos).
+module FloatNat
+
+  var gF: float := 1.5
+  const K: float := 2.5
+
+  // ── 1. Las cuatro operaciones ────────────────────────────────────────────────
+  native function nOps(a: float, b: float): float
+    return a + b - a * b / b
+  end nOps
+  function iOps(a: float, b: float): float
+    return a + b - a * b / b
+  end iOps
+
+  // ── 2. Las seis comparaciones — con NaN no son negaciones unas de otras ────────
+  native function nCmp(a: float, b: float): integer
+    var r: integer := 0
+    if a == b then r += 1
+    if a != b then r += 2
+    if a < b then r += 4
+    if a <= b then r += 8
+    if a > b then r += 16
+    if a >= b then r += 32
+    return r
+  end nCmp
+  function iCmp(a: float, b: float): integer
+    var r: integer := 0
+    if a == b then r += 1
+    if a != b then r += 2
+    if a < b then r += 4
+    if a <= b then r += 8
+    if a > b then r += 16
+    if a >= b then r += 32
+    return r
+  end iCmp
+
+  // ── 3. mod (fmodf) y el menos unario ─────────────────────────────────────────
+  native function nMod(a: float, b: float): float
+    return a mod b
+  end nMod
+  function iMod(a: float, b: float): float
+    return a mod b
+  end iMod
+  native function nNeg(a: float): float
+    return -a
+  end nNeg
+  function iNeg(a: float): float
+    return -a
+  end iNeg
+
+  // ── 4. integer → float sin escribirlo: operando, asignación, +=, retorno ──────
+  native function nMixI(a: float, i: integer): float
+    return (a - i) / (i + a)
+  end nMixI
+  function iMixI(a: float, i: integer): float
+    return (a - i) / (i + a)
+  end iMixI
+  native function nAsigI(i: integer): float
+    var x: float := i
+    x += i
+    x -= 1
+    return x
+  end nAsigI
+  function iAsigI(i: integer): float
+    var x: float := i
+    x += i
+    x -= 1
+    return x
+  end iAsigI
+  native function nRetI(i: integer): float
+    return i
+  end nRetI
+  function iRetI(i: integer): float
+    return i
+  end iRetI
+
+  // ── 5. Un float[]: guardar un integer, y += sobre una casilla ─────────────────
+  native function nArrI(i: integer): float
+    var v: float[] := [0.5, 1.5]
+    v[0] := i
+    v[1] += i
+    return v[0] / v[1]
+  end nArrI
+  function iArrI(i: integer): float
+    var v: float[] := [0.5, 1.5]
+    v[0] := i
+    v[1] += i
+    return v[0] / v[1]
+  end iArrI
+
+  // ── 6. Comparar un float con un integer ───────────────────────────────────────
+  native function nCmpI(a: float, i: integer): integer
+    var r: integer := 0
+    if a < i then r += 1
+    if a >= i then r += 2
+    if i == a then r += 4
+    return r
+  end nCmpI
+  function iCmpI(a: float, i: integer): integer
+    var r: integer := 0
+    if a < i then r += 1
+    if a >= i then r += 2
+    if i == a then r += 4
+    return r
+  end iCmpI
+
+  // ── 7. Las conversiones escritas: integer(), long(), float() ──────────────────
+  native function nCasts(a: float, i: integer, l: long): long
+    var x: float := float(i)
+    var y: float := float(l)
+    var j: integer := integer(a)
+    var k: long := long(a)
+    return long(x) + long(y) + j + k
+  end nCasts
+  function iCasts(a: float, i: integer, l: long): long
+    var x: float := float(i)
+    var y: float := float(l)
+    var j: integer := integer(a)
+    var k: long := long(a)
+    return long(x) + long(y) + j + k
+  end iCasts
+
+  // long → float en UN redondeo. Pasando por double serían dos, y con este número
+  // dan otro resultado: 2^60 + 2^36 + 1 → 2^60 + 2^37 (bien) o 2^60 (dos redondeos).
+  native function nL2F(l: long): long
+    return long(float(l))
+  end nL2F
+  function iL2F(l: long): long
+    return long(float(l))
+  end iL2F
+
+  // ── 8. double mezclado con los demás tipos ────────────────────────────────────
+  native function nDMix(d: double, f: float, i: integer, l: long): double
+    return d * f + i - l
+  end nDMix
+  function iDMix(d: double, f: float, i: integer, l: long): double
+    return d * f + i - l
+  end iDMix
+  native function nDAsig(i: integer, f: float, l: long): double
+    var x: double := i
+    var y: double := f
+    var z: double := l
+    x += i
+    y -= f
+    return x + y + z
+  end nDAsig
+  function iDAsig(i: integer, f: float, l: long): double
+    var x: double := i
+    var y: double := f
+    var z: double := l
+    x += i
+    y -= f
+    return x + y + z
+  end iDAsig
+  native function nDCasts(d: double): long
+    return integer(d) + long(d) + long(float(d))
+  end nDCasts
+  function iDCasts(d: double): long
+    return integer(d) + long(d) + long(float(d))
+  end iDCasts
+  // double(x) escrito: hasta hoy se rechazaba dentro de una native (#426)
+  native function nDouble(i: integer, l: long, f: float): double
+    return double(i) + double(l) + double(f)
+  end nDouble
+  function iDouble(i: integer, l: long, f: float): double
+    return double(i) + double(l) + double(f)
+  end iDouble
+
+  // ── 9. La potencia: con resultado float, double y de vuelta a float ──────────
+  native function nPowF(a: float, b: float): float
+    return a ^ b
+  end nPowF
+  function iPowF(a: float, b: float): float
+    return a ^ b
+  end iPowF
+  native function nPowFI(a: float): float
+    return a ^ 3
+  end nPowFI
+  function iPowFI(a: float): float
+    return a ^ 3
+  end iPowFI
+  native function nPowD(d: double): double
+    return d ^ 0.5d
+  end nPowD
+  function iPowD(d: double): double
+    return d ^ 0.5d
+  end iPowD
+
+  // ── 10. Una global float y una constante float del módulo ────────────────────
+  native function nGlob(x: float): float
+    gF += x
+    gF := gF * K
+    return gF - x
+  end nGlob
+  function iGlob(x: float): float
+    gF += x
+    gF := gF * K
+    return gF - x
+  end iGlob
+
+  // ── 11. Una native que llama a otra con un integer donde va un float ──────────
+  native function nMitad(x: float): float
+    return x / 2
+  end nMitad
+  native function nLlama(i: integer): float
+    return nMitad(i) + nMitad(3)
+  end nLlama
+  function iMitad(x: float): float
+    return x / 2
+  end iMitad
+  function iLlama(i: integer): float
+    return iMitad(i) + iMitad(3)
+  end iLlama
+
+  // ── 12. #560 — a * b + c, que con FPU gcc fundía en una instrucción ───────────
+  // Con estos tres, redondeando dos veces (el intérprete) da 0; con la instrucción
+  // fundida (un solo redondeo) daba 2^-24 = 5.96046e-08.
+  native function nFma(a: float, b: float, c: float): float
+    return a * b + c
+  end nFma
+  function iFma(a: float, b: float, c: float): float
+    return a * b + c
+  end iFma
+
+  // ── 13. print de un float DESDE la native: el mismo formato que el intérprete ─
+  native function nImprime(x: float): integer
+    print x
+    return 0
+  end nImprime
+  function iImprime(x: float): integer
+    print x
+    return 0
+  end iImprime
+
+  // ── las comprobaciones ─────────────────────────────────────────────────────
+  function cF(nombre: string, n: float, i: float)
+    if n == i then
+      print "ok ", nombre, " = ", n
+    else
+      print "FALLO ", nombre, ": nativo ", n, " interpretado ", i
+    endif
+  end cF
+  function cD(nombre: string, n: double, i: double)
+    if n == i then
+      print "ok ", nombre, " = ", n
+    else
+      print "FALLO ", nombre, ": nativo ", n, " interpretado ", i
+    endif
+  end cD
+  function cI(nombre: string, n: integer, i: integer)
+    if n == i then
+      print "ok ", nombre, " = ", n
+    else
+      print "FALLO ", nombre, ": nativo ", n, " interpretado ", i
+    endif
+  end cI
+  function cL(nombre: string, n: long, i: long)
+    if n == i then
+      print "ok ", nombre, " = ", n
+    else
+      print "FALLO ", nombre, ": nativo ", n, " interpretado ", i
+    endif
+  end cL
+
+  function Main()
+    print "== FloatNat =="
+    var z: float := 0.0
+    var nan: float := z / z
+
+    cF("ops(1.5, 0.1)", nOps(1.5, 0.1), iOps(1.5, 0.1))
+    cF("ops(-3.25, 7)", nOps(-3.25, 7.0), iOps(-3.25, 7.0))
+    cI("cmp(1.5, 2.5)", nCmp(1.5, 2.5), iCmp(1.5, 2.5))
+    cI("cmp(2.5, 2.5)", nCmp(2.5, 2.5), iCmp(2.5, 2.5))
+    cI("cmp(NaN, 1)", nCmp(nan, 1.0), iCmp(nan, 1.0))
+    cI("cmp(1, NaN)", nCmp(1.0, nan), iCmp(1.0, nan))
+    cF("mod(7.5, 2)", nMod(7.5, 2.0), iMod(7.5, 2.0))
+    cF("mod(-7.5, 2)", nMod(-7.5, 2.0), iMod(-7.5, 2.0))
+    cF("mod(1, 0.3)", nMod(1.0, 0.3), iMod(1.0, 0.3))
+    cF("neg(2.5)", nNeg(2.5), iNeg(2.5))
+    cF("neg(0)", nNeg(0.0), iNeg(0.0))
+    cF("mixI(2.5, 3)", nMixI(2.5, 3), iMixI(2.5, 3))
+    cF("asigI(7)", nAsigI(7), iAsigI(7))
+    cF("retI(16777217)", nRetI(16777217), iRetI(16777217))
+    cF("retI(-7)", nRetI(-7), iRetI(-7))
+    cF("arrI(5)", nArrI(5), iArrI(5))
+    cI("cmpI(2.5, 2)", nCmpI(2.5, 2), iCmpI(2.5, 2))
+    cI("cmpI(2, 2)", nCmpI(2.0, 2), iCmpI(2.0, 2))
+    cL("casts", nCasts(-2.75, 16777217, 123456789012L), iCasts(-2.75, 16777217, 123456789012L))
+    cL("l2f(2^60+2^36+1)", nL2F(1152921573326323713L), iL2F(1152921573326323713L))
+    cD("dMix", nDMix(1.5d, 0.1, 3, 5000000000L), iDMix(1.5d, 0.1, 3, 5000000000L))
+    cD("dAsig", nDAsig(7, 0.1, 9007199254740993L), iDAsig(7, 0.1, 9007199254740993L))
+    cL("dCasts", nDCasts(-12345.678d), iDCasts(-12345.678d))
+    cD("double()", nDouble(3, 5000000000L, 0.1), iDouble(3, 5000000000L, 0.1))
+    cF("powF(2, 0.5)", nPowF(2.0, 0.5), iPowF(2.0, 0.5))
+    cF("powFI(1.1)", nPowFI(1.1), iPowFI(1.1))
+    cD("powD(2)", nPowD(2.0d), iPowD(2.0d))
+    gF := 1.5
+    var gn: float := nGlob(0.25)
+    var g1: float := gF
+    gF := 1.5
+    var gi: float := iGlob(0.25)
+    var g2: float := gF
+    cF("glob", gn, gi)
+    cF("glob tras", g1, g2)
+    cF("llama(5)", nLlama(5), iLlama(5))
+    cF("fma", nFma(1.000244140625, 1.000244140625, -1.00048828125), iFma(1.000244140625, 1.000244140625, -1.00048828125))
+    print "imprime (nativo, luego interpretado):"
+    nImprime(0.1)
+    iImprime(0.1)
+    nImprime(1234567.0)
+    iImprime(1234567.0)
+    nImprime(0.000001)
+    iImprime(0.000001)
+    print "== FIN =="
+  end Main
+end FloatNat

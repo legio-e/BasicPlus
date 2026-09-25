@@ -55,13 +55,15 @@ public final class MdnPack {
      * receta (24 B en vez de 20). La autoridad es mdn_format.h; esto lo copia. */
     private static final int MDN_VERSION = 2;
     private static final int MDN_HEADER_SIZE = 24;
-    /* [V7/H2 #533] 18-sep: 7 — slot `slot_por_clave` nuevo al final (la ranura de un
-     * método de clase externa/abierta, por clave y en ejecución: el AOT en MOD9, fase 2).
-     * Histórico: 6 = [V6/N1.5] 24-ago, slot `newarray_i64` nuevo y tres newarray_* que
+    /* [V7/H5 #559] 25-sep: 8 — quince slots nuevos al final: el `float` por helper para
+     * los núcleos SIN FPU (C5, C3, C6), donde gcc lo delegaba en libgcc.
+     * Histórico: 7 = [V7/H2 #533] 18-sep, slot `slot_por_clave` nuevo al final (la ranura de un
+     * método de clase externa/abierta, por clave y en ejecución: el AOT en MOD9, fase 2);
+     * 6 = [V6/N1.5] 24-ago, slot `newarray_i64` nuevo y tres newarray_* que
      * dejaron de ser stubs; 5 = 11-ago, el .mdn depende también del OFFSET de `memory` y
      * `aot_helpers` dentro de `struct bpvm`, no sólo de la tabla. La autoridad del número
      * es mdn_format.h; esto lo copia. */
-    static final int MDN_ABI_VERSION = 7;
+    static final int MDN_ABI_VERSION = 8;
     private static final int MDN_NAME_MAX = 32;
 
     /** Sufijos que gcc le pega a un simbolo cuando lo clona o especializa. Son
@@ -220,8 +222,10 @@ public final class MdnPack {
                   .append("    Que hacer HOY: sacar esa operacion de la funcion 'native' (el\n")
                   .append("    resto del modulo sigue yendo a nativo), o quitarle el 'native'\n")
                   .append("    a esa funcion para que corra interpretada.\n")
-                  .append("    Que lo arreglaria de raiz: enlazar libgcc dentro del .mdn.\n")
-                  .append("    Esta analizado en docs/AOT_ABI8_IDEAS.md (#381 F3).");
+                  .append("    Y es un fallo del EMISOR: desde #381/#426/#559 lo que el micro no\n")
+                  .append("    hace en hardware va por un helper de la tabla (libgcc NO se enlaza\n")
+                  .append("    en el .mdn: la de los toolchains es medlow, #440). AotBuild lo\n")
+                  .append("    para antes, en el .o, con el nombre de la native.");
             }
             throw new PackException(sb.toString());
         }

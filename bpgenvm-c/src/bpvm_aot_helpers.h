@@ -465,7 +465,96 @@ struct aot_helpers_v2 {
      * módulo no cuenta, como en el enlace). -1 = no está (el generado lo convierte en el
      * E3 del enlace, con nombre). Sube MDN_ABI_VERSION a 7: la tabla crece. */
     int32_t (*slot_por_clave)(struct bpvm* vm, const char* clase, const char* clave, const char* modulo_llamante);
+
+    /* [V7/H5 #559, 25-sep] LA COMA FLOTANTE SIMPLE, POR HELPER — UNO POR OPCODE del
+     * intérprete (OP_FADD … OP_FGE, OP_I2F/F2I/L2F/F2L), y con su misma expresión de C.
+     *
+     * Faltaban porque el `float` se daba por hecho en hardware: la FPU del Cortex-M33 y
+     * la del P4 son de precisión simple, así que `a + b` se compilaba en una instrucción.
+     * La C5 (y la C3 y la C6) NO tienen FPU: ahí gcc delega `a + b` en `__addsf3`, de
+     * libgcc, que un `.mdn` no se lleva — y el enlace lo dejaba en la dirección 0, que es
+     * la primera función del propio `.mdn`. `NatNew` reiniciaba la C5 al sumar dos
+     * `float`, sin un solo error (lo cazó la tanda con el AOT). Es el mismo agujero que
+     * tapó #426 para el `double`, que no tiene hardware en ninguna placa.
+     *
+     * Las once operaciones y las dos conversiones de 32 bits se usan SÓLO donde no hay
+     * FPU (BPVM_AOT_FLOAT_SOFT, abajo): donde la hay, la instrucción es la misma que
+     * ejecuta el intérprete. `fmod`, `l2f` y `f2l` van SIEMPRE por aquí: ninguna FPU de
+     * estas placas los hace (fmodf es de libm; las conversiones de 64 bits, de libgcc). */
+    float   (BPVM_AOT_FP_ABI *fadd)(float a, float b);
+    float   (BPVM_AOT_FP_ABI *fsub)(float a, float b);
+    float   (BPVM_AOT_FP_ABI *fmul)(float a, float b);
+    float   (BPVM_AOT_FP_ABI *fdiv)(float a, float b);
+    float   (BPVM_AOT_FP_ABI *fmod)(float a, float b);
+    int32_t (BPVM_AOT_FP_ABI *feq) (float a, float b);
+    int32_t (BPVM_AOT_FP_ABI *fneq)(float a, float b);
+    int32_t (BPVM_AOT_FP_ABI *flt) (float a, float b);
+    int32_t (BPVM_AOT_FP_ABI *fle) (float a, float b);
+    int32_t (BPVM_AOT_FP_ABI *fgt) (float a, float b);
+    int32_t (BPVM_AOT_FP_ABI *fge) (float a, float b);
+    float   (BPVM_AOT_FP_ABI *i2f) (int32_t v);
+    int32_t (BPVM_AOT_FP_ABI *f2i) (float f);
+    float   (BPVM_AOT_FP_ABI *l2f) (int64_t v);
+    int64_t (BPVM_AOT_FP_ABI *f2l) (float f);
 };
+
+/* ─── [V7/H5 #559, 25-sep] ¿HACE ESTE DESTINO LOS `float` EN HARDWARE? ──────────
+ *
+ * Lo decide la RECETA con que se compila el `.mdn` (bpvm_aot_recetas.h), y la
+ * pregunta se contesta con las macros que el propio compilador define para esa
+ * receta — no con una lista de placas:
+ *
+ *   RISC-V   la extensión F (`__riscv_flen`)   → P4 sí · C5, C3 y C6 no
+ *   ARM      la FPU (`__ARM_FP`)               → Cortex-M33 (Pico 2, Metro, STM32U5) sí
+ *   host     x86 siempre la tiene               → sí
+ *
+ * Es el criterio de Eduardo para la coma flotante (16-ago, `#426`): *«si el micro lo
+ * soporta por hardware, por hardware; si no, por software»* — y el software es el del
+ * firmware, que sí se enlaza con libgcc. El emisor escribe SIEMPRE las macros de
+ * abajo; es esta cabecera la que las convierte en la instrucción o en el helper, así
+ * que el `.c` generado es uno para todos los destinos, como hasta hoy.
+ *
+ * Se puede forzar desde fuera (`-DBPVM_AOT_FLOAT_SOFT=1`): es como `make
+ * test-aotfloat` ejecuta el camino de los helpers en el PC, que sí tiene FPU. */
+#ifndef BPVM_AOT_FLOAT_SOFT
+#  if (defined(__riscv) && !defined(__riscv_flen)) || (defined(__arm__) && !defined(__ARM_FP))
+#    define BPVM_AOT_FLOAT_SOFT 1
+#  else
+#    define BPVM_AOT_FLOAT_SOFT 0
+#  endif
+#endif
+
+#if BPVM_AOT_FLOAT_SOFT
+#  define BPVM_AOT_FADD(vm, a, b)  ((vm)->aot_helpers->fadd((a), (b)))
+#  define BPVM_AOT_FSUB(vm, a, b)  ((vm)->aot_helpers->fsub((a), (b)))
+#  define BPVM_AOT_FMUL(vm, a, b)  ((vm)->aot_helpers->fmul((a), (b)))
+#  define BPVM_AOT_FDIV(vm, a, b)  ((vm)->aot_helpers->fdiv((a), (b)))
+#  define BPVM_AOT_FEQ(vm, a, b)   ((vm)->aot_helpers->feq((a), (b)))
+#  define BPVM_AOT_FNEQ(vm, a, b)  ((vm)->aot_helpers->fneq((a), (b)))
+#  define BPVM_AOT_FLT(vm, a, b)   ((vm)->aot_helpers->flt((a), (b)))
+#  define BPVM_AOT_FLE(vm, a, b)   ((vm)->aot_helpers->fle((a), (b)))
+#  define BPVM_AOT_FGT(vm, a, b)   ((vm)->aot_helpers->fgt((a), (b)))
+#  define BPVM_AOT_FGE(vm, a, b)   ((vm)->aot_helpers->fge((a), (b)))
+#  define BPVM_AOT_I2F(vm, v)      ((vm)->aot_helpers->i2f((v)))
+#  define BPVM_AOT_F2I(vm, f)      ((vm)->aot_helpers->f2i((f)))
+#else
+/* Con FPU: la expresión de C del opcode, tal cual. Sin casts de ayuda a propósito:
+ * el emisor ya convierte cada operando al tipo de la operación, y un cast aquí
+ * taparía el día que no lo hiciera (en el camino SOFT ese olvido sería una llamada
+ * a libgcc, que la guarda de AotBuild rechaza con nombre). */
+#  define BPVM_AOT_FADD(vm, a, b)  ((a) + (b))
+#  define BPVM_AOT_FSUB(vm, a, b)  ((a) - (b))
+#  define BPVM_AOT_FMUL(vm, a, b)  ((a) * (b))
+#  define BPVM_AOT_FDIV(vm, a, b)  ((a) / (b))
+#  define BPVM_AOT_FEQ(vm, a, b)   ((int32_t) ((a) == (b)))
+#  define BPVM_AOT_FNEQ(vm, a, b)  ((int32_t) ((a) != (b)))
+#  define BPVM_AOT_FLT(vm, a, b)   ((int32_t) ((a) <  (b)))
+#  define BPVM_AOT_FLE(vm, a, b)   ((int32_t) ((a) <= (b)))
+#  define BPVM_AOT_FGT(vm, a, b)   ((int32_t) ((a) >  (b)))
+#  define BPVM_AOT_FGE(vm, a, b)   ((int32_t) ((a) >= (b)))
+#  define BPVM_AOT_I2F(vm, v)      ((float) (v))
+#  define BPVM_AOT_F2I(vm, f)      ((int32_t) (f))
+#endif
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.
  *

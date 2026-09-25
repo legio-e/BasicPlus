@@ -118,7 +118,7 @@ static double aot_NatNew_mediaDobles(struct bpvm* vm) {
     int32_t d = vm->aot_helpers->newarray_i64(vm, 2);
     vm->aot_helpers->array_store_f64(vm, d, 0, 3.0);
     vm->aot_helpers->array_store_f64(vm, d, 1, 5.0);
-    return vm->aot_helpers->ddiv((double)((vm->aot_helpers->dadd((double)(vm->aot_helpers->array_load_f64(vm, d, 0)), (double)(vm->aot_helpers->array_load_f64(vm, d, 1))))), (double)(2.0));
+    return vm->aot_helpers->ddiv((vm->aot_helpers->dadd(vm->aot_helpers->array_load_f64(vm, d, 0), vm->aot_helpers->array_load_f64(vm, d, 1))), 2.0);
 }
 
 static void thunk_NatNew_mediaDobles(struct bpvm* vm,
@@ -166,7 +166,7 @@ static float aot_NatNew_sumaFloats(struct bpvm* vm) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
     int32_t f = ({ int32_t __arr = vm->aot_helpers->newarray_i32(vm, 2); vm->aot_helpers->array_store_f32(vm, (uint32_t) __arr, 0, 1.5f); vm->aot_helpers->array_store_f32(vm, (uint32_t) __arr, 1, 2.5f); __arr; });
-    return (vm->aot_helpers->array_load_f32(vm, f, 0) + vm->aot_helpers->array_load_f32(vm, f, 1));
+    return BPVM_AOT_FADD(vm, vm->aot_helpers->array_load_f32(vm, f, 0), vm->aot_helpers->array_load_f32(vm, f, 1));
 }
 
 static void thunk_NatNew_sumaFloats(struct bpvm* vm,

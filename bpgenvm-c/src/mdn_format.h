@@ -37,7 +37,15 @@
                                 * sin datos de versión. El escritor emite v2. */
 #define MDN_HEADER_SIZE_V1 20
 #define MDN_HEADER_SIZE_V2 24
-#define MDN_ABI_VERSION    7   /* [V7/H2 #533] 18-sep — un slot nuevo al final
+#define MDN_ABI_VERSION    8   /* [V7/H5 #559] 25-sep — quince slots al final: la
+                                * coma flotante simple por helper (`fadd` … `fge`,
+                                * `i2f`/`f2i`/`l2f`/`f2l`), para los núcleos SIN
+                                * FPU (C5, C3, C6), donde gcc la delegaba en
+                                * libgcc y el enlace dejaba la llamada en la
+                                * dirección 0. Todo .mdn anterior se rechaza con
+                                * nombre y se regenera, como con el 7.
+                                *
+                                * Histórico: 7 = [V7/H2 #533] 18-sep — un slot nuevo al final
                                 * (`slot_por_clave`: la ranura de un método de
                                 * clase externa/abierta, por clave y en
                                 * ejecución). Todo .mdn anterior se rechaza con

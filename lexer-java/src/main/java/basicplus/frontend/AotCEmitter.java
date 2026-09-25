@@ -80,6 +80,9 @@ public final class AotCEmitter {
     /** #211 — nombre de la función AOT que se está emitiendo (para mensajes
      *  de aviso). Fijado al inicio de cada emitFunction. */
     private String currentFuncName = "?";
+    /** [V7/H5 #559] El tipo que devuelve la función que se está emitiendo: el `return`
+     *  convierte a él (OP_I2F y compañía), como el intérprete. */
+    private BpType retActual = null;
     /** V7/H2 (#533) — el nombre canónico del módulo que se emite (`Mod` o `lib.Mod`), para las
      *  claves R4 y los nombres de clase que el `.mdn` pide al cargador en ejecución. */
     private String moduloLocal = null;
@@ -111,6 +114,9 @@ public final class AotCEmitter {
      *  Si AotCEmitter ve un IdentifierExpr no-local que NO aparece aquí,
      *  asume que es un símbolo importado / cross-module y lanza
      *  UnsupportedAotException (cross-module sigue diferido — #169 / v2). */
+    /** [V7/H5 #559] Las globales de `moduleVarOffsets` que son `float`: se leen y se
+     *  escriben con read/write_f32_be (el patrón de bits), no con los de i32. */
+    private final Set<String> moduleVarFloat = new HashSet<>();
     private final java.util.Map<String, Integer> moduleVarOffsets =
             new java.util.LinkedHashMap<>();
 
@@ -171,6 +177,177 @@ public final class AotCEmitter {
         BpType t = semInfo.exprTypes.get(e);
         return (t instanceof PrimitiveType)
             && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
+    /* ─── [V7/H5 #559, 25-sep] LAS CONVERSIONES NUMÉRICAS, CALCADAS DEL INTÉRPRETE ───
+     *
+     * Hasta hoy el emisor dejaba que C convirtiera por su cuenta: `float x = i;`,
+     * `a + i` con `a` float, `(double)(f)` delante de un helper de double. En C eso es
+     * correcto, pero gcc lo resuelve con una rutina de libgcc cuando el micro no tiene la
+     * instrucción — y un `.mdn` no se lleva libgcc: la llamada quedaba en la dirección 0.
+     * Medido con una sonda de catorce `native` (`Censo559`), lo que quedaba sin resolver:
+     *
+     *    ARM (Cortex-M33)  i2d f2d d2f d2iz d2lz f2lz l2f      (el enlace fallaba, críptico)
+     *    P4 (ilp32f)       las mismas siete, con nombre de RISC-V (enlazaba y saltaba a 0)
+     *    C5 (ilp32)        esas siete + TODA la aritmética y las comparaciones de float
+     *
+     * O sea: `double` mezclado con otro tipo y `long`↔`float` rotos EN TODAS LAS PLACAS, y
+     * `float` entero roto en las que no tienen FPU. La regla ahora es la del compilador de
+     * bytecode —`coerceToTarget`, `emitNumericConversion` y `promoteNumeric` de
+     * MivmEmitter, la torre double > float > long > int— y cada conversión que el micro no
+     * hace en hardware va por su helper, que es la misma expresión que el opcode. */
+
+    /** El tipo que el análisis resolvió para `e`, o null. */
+    private BpType tipoDe(Ast.IExpr e) {
+        return (semInfo != null) ? semInfo.exprTypes.get(e) : null;
+    }
+    private static boolean esKind(BpType t, PrimitiveType.Kind k) {
+        return t instanceof PrimitiveType && ((PrimitiveType) t).tag == k;
+    }
+    private static boolean esFloatT(BpType t)  { return esKind(t, PrimitiveType.Kind.FLOAT); }
+    private static boolean esDoubleT(BpType t) { return esKind(t, PrimitiveType.Kind.DOUBLE); }
+    private static boolean esLongT(BpType t)   { return esKind(t, PrimitiveType.Kind.LONG); }
+    private static boolean esEnteroT(BpType t) {
+        return t instanceof PrimitiveType && ((PrimitiveType) t).isIntegerLike();
+    }
+
+    /** El tipo numérico de una declaración (`var x: float`, un parámetro, el retorno),
+     *  o null si no es uno de los que convierten. Case-sensitive, como MivmEmitter
+     *  (BUG-6: una clase `Float` no es el primitivo). */
+    private static BpType tipoDeclarado(Ast.TypeRef t) {
+        if (!(t instanceof Ast.SimpleTypeRef)) return null;
+        switch (((Ast.SimpleTypeRef) t).name) {
+            case "float":   return PrimitiveType.FLOAT;
+            case "double":  return PrimitiveType.DOUBLE;
+            case "long":    return PrimitiveType.LONG;
+            case "integer": return PrimitiveType.INTEGER;
+            default:        return null;
+        }
+    }
+
+    /** Emite `e` como valor de tipo `destino`: la conversión IMPLÍCITA del intérprete
+     *  (MivmEmitter.coerceToTarget — asignación, parámetro, retorno, elemento de array).
+     *  Sin tipo conocido, tal cual: si C tuviera que convertir con libgcc, la guarda de
+     *  AotBuild lo rechaza con el nombre de la native. */
+    private void emitComo(Ast.IExpr e, BpType destino) {
+        String[] conv = conversionImplicita(tipoDe(e), destino);
+        if (conv == null) { emitExpr(e); return; }
+        w.print(conv[0]);
+        emitExpr(e);
+        w.print(conv[1]);
+    }
+
+    /** Lo que envuelve a un valor de tipo `src` para usarlo como `dst`, o null si no
+     *  hace falta nada (mismo tipo, o `integer`→`long`, que C hace sin libgcc).
+     *  Los `double` y las de 64 bits van SIEMPRE por helper: ninguna placa las tiene en
+     *  hardware. `integer`→`float`, por la macro: instrucción con FPU, helper sin ella. */
+    private static String[] conversionImplicita(BpType src, BpType dst) {
+        if (src == null || dst == null) return null;
+        if (esFloatT(dst)) {
+            if (esEnteroT(src)) return new String[] { "BPVM_AOT_I2F(vm, ", ")" };
+            if (esLongT(src))   return new String[] { "vm->aot_helpers->l2f(", ")" };
+            return null;
+        }
+        if (esDoubleT(dst)) {
+            if (esEnteroT(src)) return new String[] { "vm->aot_helpers->i2d(", ")" };
+            if (esLongT(src))   return new String[] { "vm->aot_helpers->l2d(", ")" };
+            if (esFloatT(src))  return new String[] { "vm->aot_helpers->f2d(", ")" };
+            return null;
+        }
+        return null;
+    }
+
+    /** `integer(x)`, `long(x)`, `float(x)` y `double(x)`: la conversión EXPLÍCITA del
+     *  intérprete (MivmEmitter.emitNumericConversion), opcode por opcode. */
+    private void emitConversionExplicita(String destino, Ast.IExpr x) {
+        BpType src = tipoDe(x);
+        String pre, post = ")";
+        switch (destino) {
+            case "integer":
+                if (esFloatT(src))       pre = "BPVM_AOT_F2I(vm, ";            /* OP_F2I */
+                else if (esDoubleT(src)) pre = "vm->aot_helpers->d2i(";        /* OP_D2I */
+                else { pre = "((int32_t) ("; post = "))"; }                    /* OP_I64_TO_I32, o nada */
+                break;
+            case "long":
+                if (esFloatT(src))       pre = "vm->aot_helpers->f2l(";        /* OP_F2L */
+                else if (esDoubleT(src)) pre = "vm->aot_helpers->d2l(";        /* OP_D2L */
+                else { pre = "((int64_t) ("; post = "))"; }                    /* OP_I32_TO_I64, o nada */
+                break;
+            case "float":
+                if (esEnteroT(src))      pre = "BPVM_AOT_I2F(vm, ";            /* OP_I2F */
+                else if (esLongT(src))   pre = "vm->aot_helpers->l2f(";        /* OP_L2F */
+                else if (esDoubleT(src)) pre = "vm->aot_helpers->d2f(";        /* OP_D2F */
+                else { pre = "((float) ("; post = "))"; }
+                break;
+            case "double":
+                if (esEnteroT(src))      pre = "vm->aot_helpers->i2d(";        /* OP_I2D */
+                else if (esLongT(src))   pre = "vm->aot_helpers->l2d(";        /* OP_L2D */
+                else if (esFloatT(src))  pre = "vm->aot_helpers->f2d(";        /* OP_F2D */
+                else { pre = "((double) ("; post = "))"; }
+                break;
+            default:
+                throw new IllegalStateException("conversion a " + destino);
+        }
+        w.print(pre);
+        emitExpr(x);
+        w.print(post);
+    }
+
+    /** La macro de la operación de `float` (bpvm_aot_helpers.h): la instrucción donde
+     *  hay FPU, el helper donde no. `mod` no está: va siempre por `fmod` (libm). */
+    private static String floatMacro(String op) {
+        if (op == null) return null;
+        switch (op) {
+            case "+":   return "BPVM_AOT_FADD";
+            case "-":   return "BPVM_AOT_FSUB";
+            case "*":   return "BPVM_AOT_FMUL";
+            case "/":   return "BPVM_AOT_FDIV";
+            case "==":  return "BPVM_AOT_FEQ";
+            case "<>": case "!=": return "BPVM_AOT_FNEQ";
+            case "<":   return "BPVM_AOT_FLT";
+            case "<=":  return "BPVM_AOT_FLE";
+            case ">":   return "BPVM_AOT_FGT";
+            case ">=":  return "BPVM_AOT_FGE";
+            default:    return null;
+        }
+    }
+
+    /** `l op r` hecha en el tipo `tipo` (FLOAT o DOUBLE), con los operandos ya pasados
+     *  a ese tipo. Devuelve false si el operador no es aritmético ni de comparación
+     *  (y entonces quien llama sigue por el camino de C). */
+    private boolean emitOpFlotante(String op, BpType tipo, Ast.IExpr l, Ast.IExpr r) {
+        String pre;
+        if (esDoubleT(tipo)) {
+            String dh = dobleHelper(op);
+            if (dh == null || "dpow".equals(dh)) return false;
+            pre = "vm->aot_helpers->" + dh + "(";
+        } else {
+            if ("mod".equals(op) || "%".equals(op)) pre = "vm->aot_helpers->fmod(";   /* OP_FMOD: fmodf */
+            else {
+                String m = floatMacro(op);
+                if (m == null) return false;
+                pre = m + "(vm, ";
+            }
+        }
+        w.print(pre);
+        emitComo(l, tipo);
+        w.print(", ");
+        emitComo(r, tipo);
+        w.print(")");
+        return true;
+    }
+
+    /** `destino op= valor` (`+=`, `-=`) sobre un `float` o un `double`: la operación
+     *  del intérprete (MivmEmitter.emitCompoundOp) con el valor convertido al tipo del
+     *  destino. `leer` emite el valor actual del destino. */
+    private void emitCompuestoFlotante(Ast.AssignOpKind op, BpType tipo, Runnable leer, Ast.IExpr valor) {
+        boolean mas = (op == Ast.AssignOpKind.PLUS_ASSIGN);
+        if (esDoubleT(tipo)) w.print("vm->aot_helpers->" + (mas ? "dadd" : "dsub") + "(");
+        else                 w.print((mas ? "BPVM_AOT_FADD" : "BPVM_AOT_FSUB") + "(vm, ");
+        leer.run();
+        w.print(", ");
+        emitComo(valor, tipo);
+        w.print(")");
     }
 
     /** #426 (V6/N1.2) — ¿el tipo resuelto de `e` es double? Decide que sus
@@ -371,7 +548,7 @@ public final class AotCEmitter {
         w.print("({ int32_t __arr = vm->aot_helpers->newarray_" + nuevo + "(vm, " + n + "); ");
         for (int i = 0; i < n; i++) {
             w.print("vm->aot_helpers->array_store_" + store + "(vm, (uint32_t) __arr, " + i + ", ");
-            emitExpr(a.elements.get(i));
+            emitComo(a.elements.get(i), el);   /* #559 — `[i, j]` en un float[] */
             w.print("); ");
         }
         w.print("__arr; })");
@@ -674,6 +851,7 @@ public final class AotCEmitter {
 
     private void emitFunction(Ast.FuncDef f) {
         currentFuncName = f.name.name;   /* #211 — para mensajes de aviso */
+        retActual = tipoDeclarado(f.returnType);
         String fname = "aot_" + moduleName + "_" + cId(f.name.name);
         String cRet  = cType(f.returnType);
         w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
@@ -1032,7 +1210,7 @@ public final class AotCEmitter {
             indent();
             if (r.value != null) {
                 w.print("return ");
-                emitExpr(r.value);
+                emitComo(r.value, retActual);   /* #559 — `return i` en una native float */
                 w.println(";");
             } else {
                 w.println("return;");
@@ -1051,7 +1229,7 @@ public final class AotCEmitter {
                 w.print(cVarType + " " + dn.name);
                 if (v.init != null) {
                     w.print(" = ");
-                    emitExpr(v.init);
+                    emitComo(v.init, tipoDeclarado(v.type));   /* #559 — `var x: float := i` */
                 }
                 w.println(";");
                 localNames.add(dn.name);   /* #172 — registrar local */
@@ -1065,7 +1243,15 @@ public final class AotCEmitter {
             if (a.target instanceof Ast.IdentifierExpr) {
                 String tname = ((Ast.IdentifierExpr) a.target).name;
                 indent();
-                if (localNames.contains(tname)) {
+                BpType tLocal = tipoDe(a.target);
+                if (localNames.contains(tname)
+                        && a.op != Ast.AssignOpKind.ASSIGN && (esFloatT(tLocal) || esDoubleT(tLocal))) {
+                    /* #559 — `x += v` con x float/double: la operación del intérprete, no
+                     * el `+=` de C (que sería libgcc sin FPU, y en double en toda placa). */
+                    w.print(tname + " = ");
+                    emitCompuestoFlotante(a.op, tLocal, () -> w.print(tname), a.value);
+                    w.println(";");
+                } else if (localNames.contains(tname)) {
                     /* Local — emisión directa estilo C. */
                     w.print(tname);
                     switch (a.op) {
@@ -1073,7 +1259,7 @@ public final class AotCEmitter {
                         case PLUS_ASSIGN:  w.print(" += "); break;
                         case MINUS_ASSIGN: w.print(" -= "); break;
                     }
-                    emitExpr(a.value);
+                    emitComo(a.value, tLocal);   /* #559 — `x := i` con x float */
                     w.println(";");
                 } else {
                     /* #172 — Global de módulo: acceso directo mem+cs+OFFSET.
@@ -1088,7 +1274,17 @@ public final class AotCEmitter {
                     }
                     usesModuleGlobals = true;
                     String addr = "mem + (uint32_t)((int32_t)cs + (" + off + "))";
-                    if (a.op == Ast.AssignOpKind.ASSIGN) {
+                    if (moduleVarFloat.contains(tname)) {
+                        /* #559 — una global `float` guarda el PATRÓN DE BITS: se lee y se
+                         * escribe con los helpers de f32, como un parámetro del thunk. Con
+                         * los de i32, C convertía el número (1.5 → 1) al escribir y el
+                         * patrón (0x3FC00000 → 1069547520.0) al leer. */
+                        w.print("vm->aot_helpers->write_f32_be(" + addr + ", ");
+                        if (a.op == Ast.AssignOpKind.ASSIGN) emitComo(a.value, PrimitiveType.FLOAT);
+                        else emitCompuestoFlotante(a.op, PrimitiveType.FLOAT,
+                                () -> w.print("vm->aot_helpers->read_f32_be(" + addr + ")"), a.value);
+                        w.println(");");
+                    } else if (a.op == Ast.AssignOpKind.ASSIGN) {
                         w.print("vm->aot_helpers->write_i32_be(" + addr + ", ");
                         emitExpr(a.value);
                         w.println(");");
@@ -1107,6 +1303,8 @@ public final class AotCEmitter {
              * Para += / -= cargamos primero, operamos, escribimos. */
             if (a.target instanceof Ast.IndexExpr) {
                 Ast.IndexExpr ix = (Ast.IndexExpr) a.target;
+                BpType tArr = tipoDe(ix.target);
+                BpType tElem = (tArr instanceof ArrayType) ? ((ArrayType) tArr).element : null;
                 indent();
                 if (a.op == Ast.AssignOpKind.ASSIGN) {
                     w.print("vm->aot_helpers->" + arrStoreFn(ix.target) + "(vm, ");
@@ -1114,7 +1312,23 @@ public final class AotCEmitter {
                     w.print(", ");
                     emitExpr(ix.index);
                     w.print(", ");
-                    emitExpr(a.value);
+                    emitComo(a.value, tElem);   /* #559 — `v[0] := i` con v float[] */
+                    w.println(");");
+                } else if (esFloatT(tElem) || esDoubleT(tElem)) {
+                    /* #559 — `v[i] += x` en un float[]/double[]: load, la operación del
+                     * intérprete, store. */
+                    w.print("vm->aot_helpers->" + arrStoreFn(ix.target) + "(vm, ");
+                    emitExpr(ix.target);
+                    w.print(", ");
+                    emitExpr(ix.index);
+                    w.print(", ");
+                    emitCompuestoFlotante(a.op, tElem, () -> {
+                        w.print("vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");
+                        emitExpr(ix.target);
+                        w.print(", ");
+                        emitExpr(ix.index);
+                        w.print(")");
+                    }, a.value);
                     w.println(");");
                 } else {
                     /* a[i] += v  →  store(a, i, load(a, i) + v) */
@@ -1705,8 +1919,10 @@ public final class AotCEmitter {
                     + ((Ast.Node) e).line);
             }
             usesModuleGlobals = true;
-            w.print("vm->aot_helpers->read_i32_be(mem + (uint32_t)((int32_t)cs + ("
-                    + off + ")))");
+            /* #559 — una global `float` se lee como float (el patrón de bits), no como
+             * int32 que luego C convertiría a número. */
+            w.print("vm->aot_helpers->" + (moduleVarFloat.contains(name) ? "read_f32_be" : "read_i32_be")
+                    + "(mem + (uint32_t)((int32_t)cs + (" + off + ")))");
             return;
         }
         if (e instanceof Ast.ParenExpr) {
@@ -1785,14 +2001,32 @@ public final class AotCEmitter {
              *
              * Basta con que UN operando sea double: en C la promocion haria el
              * resto en double igualmente, que es lo que hace el interprete. */
+            /* [V7/H5 #559] ... Y LA DE FLOAT, con la torre del intérprete calcada
+             * (MivmEmitter.emitBinary: double > float > long > int, mirando los dos
+             * operandos Y el tipo del resultado). Los operandos se pasan al tipo de la
+             * operación con su helper: el `(double)(x)` de antes era, con x entero o
+             * float, OTRA llamada a libgcc (`__aeabi_i2d`, `__extendsfdf2`) en todas las
+             * placas. Y el float va por las macros de bpvm_aot_helpers.h: la
+             * instrucción donde hay FPU, el helper donde no (la C5, la C3, la C6). */
             {
-                String dh = dobleHelper(b.op);
-                if (dh != null && (isDoubleExpr(b.left) || isDoubleExpr(b.right))) {
-                    w.print("vm->aot_helpers->" + dh + "((double)(");
-                    emitExpr(b.left);
-                    w.print("), (double)(");
-                    emitExpr(b.right);
-                    w.print("))");
+                BpType tl = tipoDe(b.left), tr = tipoDe(b.right), tb = tipoDe(b);
+                /* `^` con resultado de coma flotante: OP_DPOW sobre double, y OP_D2F si
+                 * el resultado es float (MivmEmitter.emitPow). El de enteros sigue sin
+                 * traducir (cBinaryOp lo rechaza con su motivo). */
+                if ("^".equals(b.op) && (esDoubleT(tb) || esFloatT(tb))) {
+                    if (esFloatT(tb)) w.print("vm->aot_helpers->d2f(");
+                    w.print("vm->aot_helpers->dpow(");
+                    emitComo(b.left, PrimitiveType.DOUBLE);
+                    w.print(", ");
+                    emitComo(b.right, PrimitiveType.DOUBLE);
+                    w.print(")");
+                    if (esFloatT(tb)) w.print(")");
+                    return;
+                }
+                boolean useDouble = esDoubleT(tl) || esDoubleT(tr) || esDoubleT(tb);
+                boolean useFloat  = !useDouble && (esFloatT(tl) || esFloatT(tr) || esFloatT(tb));
+                if ((useDouble || useFloat) && emitOpFlotante(b.op,
+                        useDouble ? PrimitiveType.DOUBLE : PrimitiveType.FLOAT, b.left, b.right)) {
                     return;
                 }
             }
@@ -1914,16 +2148,12 @@ public final class AotCEmitter {
              * función suya llamada `integer`, la conversión debe seguir siendo la
              * conversión — es sintaxis del lenguaje, no una llamada cualquiera. */
             if (c.args.size() == 1 && esCastNumerico(name)) {
-                if ("double".equals(name)) {
-                    throw new UnsupportedAotException(
-                        "AOT: la conversión 'double(x)' no cruza a una función native "
-                        + "(ficha #426; 'integer', 'long' y 'float' sí). La aritmética "
-                        + "de 'double' la emula el software y esas rutinas no caben en "
-                        + "el código nativo del módulo.");
-                }
-                w.print("((" + cType(new Ast.SimpleTypeRef(name, c.line, c.column)) + ") (");
-                emitExpr(c.args.get(0));
-                w.print("))");
+                /* [V7/H5 #559] ... salvo las que el micro no hace en hardware, que van
+                 * por su helper (la misma expresión de C que el opcode, compilada en el
+                 * firmware). Con eso `double(x)` deja de rechazarse: era el resto de
+                 * #426, y su motivo —«esas rutinas no caben en el código nativo»— es
+                 * justo lo que resuelven los helpers. */
+                emitConversionExplicita(name, c.args.get(0));
                 return;
             }
 
@@ -1957,9 +2187,13 @@ public final class AotCEmitter {
              * BL PC-relative dentro del mismo blob — gcc lo resuelve
              * sin relocations porque ambas son static en el mismo .o. */
             w.print("aot_" + moduleName + "_" + name + "(vm");
-            for (Ast.IExpr arg : c.args) {
+            Ast.FuncDef llamada = allFuncDefs.get(name);
+            for (int k = 0; k < c.args.size(); k++) {
                 w.print(", ");
-                emitExpr(arg);
+                /* #559 — el argumento, al tipo del parámetro (OP_I2F y compañía). */
+                BpType tp = (llamada != null && k < llamada.params.size())
+                        ? tipoDeclarado(llamada.params.get(k).type) : null;
+                emitComo(c.args.get(k), tp);
             }
             w.print(")");
             return;
@@ -2641,8 +2875,10 @@ public final class AotCEmitter {
             if (d instanceof Ast.VarDecl) {
                 Ast.VarDecl vd = (Ast.VarDecl) d;
                 if (!isPrimitiveTypeName(vd.type)) continue;
+                boolean esFloat = "float".equals(((Ast.SimpleTypeRef) vd.type).name);
                 for (Ast.DeclName dn : vd.names) {
                     moduleVarOffsets.put(dn.name, nextOffset);
+                    if (esFloat) moduleVarFloat.add(dn.name);
                     nextOffset -= 4;
                 }
             } else if (d instanceof Ast.ConstDecl) {
@@ -2654,6 +2890,7 @@ public final class AotCEmitter {
                 if (cd.value instanceof Ast.IntLitExpr
                         || cd.value instanceof Ast.FloatLitExpr) {
                     moduleVarOffsets.put(cd.name.name, nextOffset);
+                    if (cd.value instanceof Ast.FloatLitExpr) moduleVarFloat.add(cd.name.name);
                     nextOffset -= 4;
                 }
             }

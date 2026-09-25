@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-aotswitch test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-aotswitch test-aotfloat test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -644,6 +644,36 @@ test-aotswitch: $(LIBOBJ)
 	 if ! cmp -s build/aotswitch.int build/aotswitch.aot; then diff build/aotswitch.int build/aotswitch.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 11 ]; then cat build/aotswitch.aot; echo "  ROJO: $$n de 11 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 11/11 con el AOT, igual que interpretado"
+
+# V7/H5 (#559, 25-sep) — LA COMA FLOTANTE DENTRO DE UNA NATIVE, ejecutada en el PC por sus DOS
+# caminos. El .c que el AOT genera se compila tal cual (la FPU del PC hace los float, como el P4 y
+# los Cortex-M33) y con -DBPVM_AOT_FLOAT_SOFT=1 (cada operacion y conversion de float por su
+# helper, como en la C5, la C3 y la C6: el camino que hasta hoy solo existia en esas placas). Los
+# dos binarios corren el MISMO .mod que el interprete (--interp) y la salida ENTERA tiene que ser
+# la suya —asi cuenta tambien el print de un float hecho desde la native— sin ningun FALLO.
+# La fuente es la de la tanda (../samples/FloatNat.bp): una sola copia.
+AOTFLOAT_OK = 31
+test-aotfloat: $(LIBOBJ)
+	@rm -rf build/aotfloat && mkdir -p build/aotfloat && cp ../bpstdlib/*.mod build/aotfloat/
+	@java -jar ../lexer-java/target/basicplus-frontend.jar ../samples/FloatNat.bp --compile build/aotfloat --backend=mivm >build/aotfloat/compile.log 2>&1 || { cat build/aotfloat/compile.log; exit 1; }
+	@test -f build/aotfloat/FloatNat.mod || { cat build/aotfloat/compile.log; echo "  ROJO: FloatNat.bp no compila"; exit 1; }
+	@java -cp "../lexer-java/target/classes;../pack/target/classes" basicplus.frontend.AotMain ../samples/FloatNat.bp build/aotfloat >build/aotfloat/aot.log 2>&1 || { cat build/aotfloat/aot.log; exit 1; }
+	@if grep -q "sin interfaz" build/aotfloat/aot.log; then echo "  ROJO: el AOT de FloatNat no ve la interfaz de un import (#542):"; grep "sin interfaz" build/aotfloat/aot.log; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotfloat.c build/aotfloat/aot_FloatNat.c $(LIBOBJ) \
+	  -o build/test_aotfloat.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) -Isrc -DBPVM_AOT_FLOAT_SOFT=1 test/test_aotfloat.c build/aotfloat/aot_FloatNat.c $(LIBOBJ) \
+	  -o build/test_aotfloat_soft.exe $(LDFLAGS)
+	@echo "--- #559 float y double en una native: FPU del PC y helpers de las placas sin FPU (esperado: los dos == interpretado, $(AOTFLOAT_OK) ok, sin FALLO) ---"
+	@./build/test_aotfloat.exe build/aotfloat/FloatNat.mod --interp 2>/dev/null > build/aotfloat/int.out; \
+	 ./build/test_aotfloat.exe build/aotfloat/FloatNat.mod 2>/dev/null > build/aotfloat/fpu.out; \
+	 ./build/test_aotfloat_soft.exe build/aotfloat/FloatNat.mod 2>/dev/null > build/aotfloat/soft.out; \
+	 if grep -h '^FALLO' build/aotfloat/fpu.out build/aotfloat/soft.out build/aotfloat/int.out; then echo "  ROJO: FALLO"; exit 1; fi; \
+	 for c in fpu soft; do \
+	   if ! cmp -s build/aotfloat/int.out build/aotfloat/$$c.out; then diff build/aotfloat/int.out build/aotfloat/$$c.out; echo "  ROJO: el AOT ($$c) no da lo que el interprete"; exit 1; fi; \
+	   n=$$(grep -c '^ok ' build/aotfloat/$$c.out); \
+	   if [ "$$n" -ne $(AOTFLOAT_OK) ]; then cat build/aotfloat/$$c.out; echo "  ROJO: $$c: $$n de $(AOTFLOAT_OK) comprobaciones"; exit 1; fi; \
+	 done; \
+	 echo "[status=OK] $(AOTFLOAT_OK)/$(AOTFLOAT_OK) con la FPU y con los helpers, igual que interpretado"
 
 test-loaderr: $(LIBOBJ)
 	@mkdir -p build

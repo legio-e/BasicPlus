@@ -38,24 +38,32 @@
 #ifndef BPVM_AOT_RECETAS_H
 #define BPVM_AOT_RECETAS_H
 
+/* [V7/H5 #560, 25-sep] `-ffp-contract=off` EN LAS TRES. Sin él, gcc funde `a * b + c` en UNA
+ * instrucción (`vfma.f32` en el Cortex-M33, `fmadd.s` en el P4) que redondea una sola vez; el
+ * intérprete hace OP_FMUL y luego OP_FADD, y redondea dos. El mismo programa daba otro número
+ * con `.mdn` que sin él: con a = b = 1 + 2^-12 y c = -(1 + 2^-11), 0 interpretado y 5.96e-08
+ * nativo (`samples/FloatNat.bp`, caso `fma`). Con el flag, ARM usa `vmla.f32` —encadenada: dos
+ * redondeos, como el intérprete— y el P4, `fmul.s` y `fadd.s`. En la receta sin FPU no cambia
+ * el código (no hay instrucción que fundir), pero va igual: la receta dice cómo se redondea. */
+
 /* ARMv8-M Mainline con FPU simple, coma flotante softfp (args en registros
  * enteros): Cortex-M33 — RP2350 (Pico 2 / Metro) y STM32U5. Un solo `.mdn` para
  * las dos: la frontera con los helpers va fijada a aapcs por las dos puntas
  * (`BPVM_AOT_FP_ABI`, bpvm_aot_helpers.h), así que el STM32 (firmware `hard`)
  * ejecuta el mismo blob que la Pico (`softfp`). */
-#define BPVM_AOT_RECETA_ARMV8M_MAIN_SOFTFP "-mcpu=cortex-m33 -mthumb -mfloat-abi=softfp -mfpu=fpv5-sp-d16 -fpic -fno-jump-tables -Os"
+#define BPVM_AOT_RECETA_ARMV8M_MAIN_SOFTFP "-mcpu=cortex-m33 -mthumb -mfloat-abi=softfp -mfpu=fpv5-sp-d16 -fpic -fno-jump-tables -ffp-contract=off -Os"
 
 /* RV32IMAFC, ABI ilp32f (float en registros de la FPU, double por software):
  * ESP32-P4. `-mcmodel=medany` + `-mno-relax` son los que hacen el `.mdn`
  * cargable en cualquier dirección (#440); `-fno-pic` porque el enlace a
  * `-Ttext=0` resuelve lo interno y deja todo PC-relativo. */
-#define BPVM_AOT_RECETA_RV32IMAFC_ILP32F "-march=rv32imafc_zicsr_zifencei -mabi=ilp32f -fno-pic -mcmodel=medany -mno-relax -fno-jump-tables -Os"
+#define BPVM_AOT_RECETA_RV32IMAFC_ILP32F "-march=rv32imafc_zicsr_zifencei -mabi=ilp32f -fno-pic -mcmodel=medany -mno-relax -fno-jump-tables -ffp-contract=off -Os"
 
-/* RV32IMC, ABI ilp32 (sin FPU): ESP32-C3 / C6 (el C6 es IMAC, superconjunto).
- * Es la receta que ese firmware EXIGE; el IDE todavía no tiene destino para
- * ella (#502: hoy ese firmware rechaza cualquier `.mdn` RISC-V y sigue
- * interpretado). Cuando exista el destino, la receta ya está. */
-#define BPVM_AOT_RECETA_RV32IMC_ILP32 "-march=rv32imc_zicsr_zifencei -mabi=ilp32 -fno-pic -mcmodel=medany -mno-relax -fno-jump-tables -Os"
+/* RV32IMC, ABI ilp32 (sin FPU): ESP32-C3 / C6 / C5 (el C6 y el C5 son IMAC,
+ * superconjunto). El IDE la elige por el destino `riscv-imc` (V7/H6), y desde
+ * el 25-sep corre en placa (la C5). Sin FPU, sus `float` van por los helpers de
+ * la tabla (`BPVM_AOT_FLOAT_SOFT`, bpvm_aot_helpers.h, #559). */
+#define BPVM_AOT_RECETA_RV32IMC_ILP32 "-march=rv32imc_zicsr_zifencei -mabi=ilp32 -fno-pic -mcmodel=medany -mno-relax -fno-jump-tables -ffp-contract=off -Os"
 
 /* ── LA RECETA DE ESTE FIRMWARE, por la ISA con que se compila ESTE fichero ──
  *

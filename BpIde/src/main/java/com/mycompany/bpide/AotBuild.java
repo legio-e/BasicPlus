@@ -127,18 +127,23 @@ public final class AotBuild {
 
     /** Paso EXTRA de RISC-V (bifurcación A, decidida con Eduardo): enlazar el .o a
      *  -Ttext=0 resolviendo las relocalizaciones internas PC-relativas → el .text
-     *  queda autocontenido y position-independent (todo relativo al PC). El código
-     *  muerto del .mdn (aot_<Mod>_register) referencia el registry del firmware, un
-     *  símbolo externo → --unresolved-symbols=ignore-all lo deja en 0 (nunca se
-     *  ejecuta: el loader registra los thunks por la tabla del .mdn). MdnPack lee
+     *  queda autocontenido y position-independent (todo relativo al PC). MdnPack lee
      *  el .elf enlazado igual que un .o; con -Ttext=0, valor de símbolo == offset. */
     /** #428 — lo que el enlace del `.mdn` necesita en CUALQUIER familia. La
      *  dirección la fija el guión (`bpgenvm-c/aot/mdn.ld`), que además mete los
      *  literales dentro de `.text` — sin eso, una `native` con una cadena
-     *  produce un `.rodata` que el `.mdn` no puede llevarse. */
+     *  produce un `.rodata` que el `.mdn` no puede llevarse.
+     *
+     *  [V7/H5 #559, 25-sep] Ya SIN `--unresolved-symbols=ignore-all`. Estaba por el
+     *  `aot_<Mod>_register` del `.c`, que llama al registro del firmware — pero en
+     *  modo `.mdn` esa función ya no se emite, y lo único que dejaba pasar el flag era
+     *  lo que NO debía: una llamada de gcc a libgcc (`__addsf3`) quedaba en la
+     *  dirección 0, que es la primera función del propio `.mdn`, y la C5 se reiniciaba
+     *  al sumar dos `float`. Ahora eso lo para antes `exigirSinSimbolosExternos`, con
+     *  nombre; y si algo se le escapara, el enlace falla en vez de callar. */
     private static final String[] LINK_FLAGS_COMUNES = {
         "-nostdlib", "-nostartfiles",
-        "-Wl,--unresolved-symbols=ignore-all", "-Wl,-e,0",
+        "-Wl,-e,0",
     };
 
     /**
@@ -422,6 +427,11 @@ public final class AotBuild {
              * un puntero salvaje en la placa — y no revienta: se CUELGA. */
             exigirDireccionamientoRelativo(oFile, f, mod);
 
+            /* [V7/H5 #559] — y que no llame a NADA que el `.mdn` no se lleve. Se mira
+             * también aquí, en el `.o`: enlazado, una llamada a un símbolo que falta es
+             * un salto como otro cualquiera. */
+            exigirSinSimbolosExternos(oFile, f, mod);
+
             // 2b) RISC-V: paso EXTRA de enlace. El .text RISC-V (a diferencia de ARM)
             // NO sale autocontenido — lleva relocalizaciones internas PC-relativas (la
             // recursión, etc.) que MdnPack no resuelve. Enlazamos a -Ttext=0 para
@@ -533,6 +543,78 @@ public final class AotBuild {
                 + " cualquier dirección, así que en la placa saldría un puntero salvaje"
                 + " y un cuelgue mudo. Falta '-mcmodel=medany' en la receta RISC-V de bpvm_aot_recetas.h (#440).");
         }
+    }
+
+    /** [V7/H5 #559, 25-sep] El `.o` no puede usar NINGÚN símbolo que no defina él.
+     *
+     *  Un `.mdn` se carga sin enlazador: todo lo que el código nativo necesita del
+     *  firmware lo alcanza por la tabla `vm->aot_helpers`, nunca por nombre. Así que un
+     *  símbolo sin definir en el `.o` es siempre un fallo — casi siempre una rutina de
+     *  libgcc que gcc llama por su cuenta cuando el micro no tiene la instrucción
+     *  (`__addsf3` sin FPU, `__aeabi_i2d` en cualquier Cortex-M, `memset` para poner a
+     *  cero un bloque). El guardián de `MdnPack` lo sabía decir, pero miraba el `.elf`
+     *  ENLAZADO, donde las relocalizaciones ya se han consumido: nunca saltaba, y el
+     *  enlace (con `--unresolved-symbols=ignore-all`) dejaba la llamada en la dirección
+     *  0. La C5 se reiniciaba al sumar dos `float`, sin un mensaje (lo cazó la tanda).
+     *
+     *  El error dice qué `native` lo pide, que es lo que el usuario puede tocar. */
+    private static void exigirSinSimbolosExternos(Path oFile, Familia f, String mod)
+            throws IOException {
+        java.util.Map<String, java.util.Set<String>> fuera = simbolosSinResolver(oFile, mod);
+        if (fuera.isEmpty()) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("AOT ").append(mod).append(" (").append(f.target())
+          .append("): el código nativo llama a ").append(fuera.size())
+          .append(" rutina(s) que un .mdn no se lleva:\n");
+        for (java.util.Map.Entry<String, java.util.Set<String>> e : fuera.entrySet()) {
+            sb.append("    - ").append(e.getKey());
+            if (!e.getValue().isEmpty()) sb.append("   (la usa: ").append(String.join(", ", e.getValue())).append(")");
+            sb.append("\n");
+        }
+        sb.append("  En la placa, cada llamada saltaría a la dirección 0: un cuelgue o un reinicio, sin mensaje (#559).\n")
+          .append("  Es un fallo del EMISOR del AOT, no del programa: lo que el micro no hace en hardware\n")
+          .append("  (la coma flotante sin FPU, el double, dividir un long...) tiene que ir por un helper\n")
+          .append("  de la tabla, y esto se le ha escapado. Mientras se arregla, quítale 'native' a esa\n")
+          .append("  función: corre interpretada y el resto del módulo sigue igual.");
+        throw new IOException(sb.toString());
+    }
+
+    /** Los símbolos que el `.o` usa sin definirlos, cada uno con las `native` que lo
+     *  piden (la función que contiene la relocalización: el `thunk_`/`aot_` de mayor
+     *  dirección que no pasa de ella). Separado de la guarda para poder medirlo. */
+    static java.util.Map<String, java.util.Set<String>> simbolosSinResolver(Path oFile, String mod)
+            throws IOException {
+        basicplus.frontend.Elf32 elf =
+                basicplus.frontend.Elf32.parse(Files.readAllBytes(oFile));
+        int text = elf.findSectionIndex(".text");
+        /* Las funciones del `.text`, por dirección (en Thumb el bit 0 es el modo, no
+         * la dirección). Las `aot_` se suelen quedar dentro de su thunk (static e
+         * inline): el nombre que sale es entonces el del thunk, que es la misma native. */
+        java.util.TreeMap<Integer, String> funciones = new java.util.TreeMap<>();
+        String pa = "aot_" + mod + "_", pt = "thunk_" + mod + "_";
+        for (basicplus.frontend.Elf32.Symbol sym : elf.symbols()) {
+            if (sym.shndx != text) continue;
+            String n = sym.name;
+            int k = n.indexOf('.');                        /* clones de gcc: `.constprop.0`... */
+            String base = (k > 0) ? n.substring(0, k) : n;
+            if (base.startsWith(pt)) funciones.put(sym.value & ~1, base.substring(pt.length()));
+            else if (base.startsWith(pa)) funciones.put(sym.value & ~1, base.substring(pa.length()));
+        }
+        java.util.Map<String, java.util.Set<String>> fuera = new java.util.TreeMap<>();
+        for (basicplus.frontend.Elf32.Reloc r : elf.relocs(".text")) {
+            basicplus.frontend.Elf32.Symbol sym = elf.symbol(r.symIdx);
+            if (sym == null || sym.shndx != 0 || sym.name.isEmpty()) continue;   /* SHN_UNDEF, con nombre */
+            java.util.Map.Entry<Integer, String> fn = funciones.floorEntry(r.offset);
+            fuera.computeIfAbsent(sym.name, x -> new java.util.TreeSet<>());
+            if (fn != null) fuera.get(sym.name).add(fn.getValue());
+        }
+        /* Y los que no toca ninguna reloc del `.text` (otra sección con código, o una
+         * referencia que el ensamblador resolvió a medias): también son un fallo. */
+        for (basicplus.frontend.Elf32.Symbol sym : elf.symbols()) {
+            if (sym.shndx == 0 && !sym.name.isEmpty())
+                fuera.computeIfAbsent(sym.name, x -> new java.util.TreeSet<>());
+        }
+        return fuera;
     }
 
     /** Cuántas relocalizaciones de direccionamiento ABSOLUTO hay en el `.text`

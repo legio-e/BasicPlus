@@ -170,6 +170,27 @@ static BPVM_AOT_FP_ABI int64_t h_d2l(double  d) { return (int64_t) d; }
 static BPVM_AOT_FP_ABI double  h_f2d(float   f) { return (double)  f; }
 static BPVM_AOT_FP_ABI float   h_d2f(double  d) { return (float)   d; }
 
+/* V7/H5 (#559, 25-sep) — `float` por helper, para los núcleos SIN FPU (la C5, la C3, la
+ * C6): allí gcc convierte `a + b` en una llamada a `__addsf3`, y un `.mdn` no se lleva
+ * libgcc. Cada uno es LA MISMA expresión de C que su opcode en interp.c (OP_FADD …
+ * OP_FGE, OP_I2F/F2I/L2F/F2L): compilada aquí, en el firmware, es la misma rutina de
+ * libgcc que ejecuta el intérprete, así que nativo e interpretado no pueden separarse. */
+static BPVM_AOT_FP_ABI float   h_fadd(float a, float b) { return a + b; }
+static BPVM_AOT_FP_ABI float   h_fsub(float a, float b) { return a - b; }
+static BPVM_AOT_FP_ABI float   h_fmul(float a, float b) { return a * b; }
+static BPVM_AOT_FP_ABI float   h_fdiv(float a, float b) { return a / b; }
+static BPVM_AOT_FP_ABI float   h_fmod(float a, float b) { return fmodf(a, b); }
+static BPVM_AOT_FP_ABI int32_t h_feq (float a, float b) { return a == b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_fneq(float a, float b) { return a != b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_flt (float a, float b) { return a <  b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_fle (float a, float b) { return a <= b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_fgt (float a, float b) { return a >  b ? 1 : 0; }
+static BPVM_AOT_FP_ABI int32_t h_fge (float a, float b) { return a >= b ? 1 : 0; }
+static BPVM_AOT_FP_ABI float   h_i2f (int32_t v) { return (float)   v; }
+static BPVM_AOT_FP_ABI int32_t h_f2i (float   f) { return (int32_t) f; }
+static BPVM_AOT_FP_ABI float   h_l2f (int64_t v) { return (float)   v; }
+static BPVM_AOT_FP_ABI int64_t h_f2l (float   f) { return (int64_t) f; }
+
 static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
     if (b == 0) {
         bpvm_aot_helpers_v2.throw_runtime(vm, "Módulo por cero");     /* no retorna */
@@ -932,6 +953,22 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .array_store_f32     = h_array_store_f32,
     /* [V7/H2 #533] la ranura por clave (ABI 7). */
     .slot_por_clave      = h_slot_por_clave,
+    /* [V7/H5 #559] `float` por helper, para los núcleos sin FPU (ABI 8). */
+    .fadd                = h_fadd,
+    .fsub                = h_fsub,
+    .fmul                = h_fmul,
+    .fdiv                = h_fdiv,
+    .fmod                = h_fmod,
+    .feq                 = h_feq,
+    .fneq                = h_fneq,
+    .flt                 = h_flt,
+    .fle                 = h_fle,
+    .fgt                 = h_fgt,
+    .fge                 = h_fge,
+    .i2f                 = h_i2f,
+    .f2i                 = h_f2i,
+    .l2f                 = h_l2f,
+    .f2l                 = h_f2l,
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la
