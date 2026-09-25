@@ -1,14 +1,24 @@
-// GuiFlushBench.bp — cuánto cuesta PINTAR en la C5 con LVGL viniendo de un pack.
+// GuiFlushBench.bp — cuánto cuesta PINTAR una pantalla con LVGL, en cualquier placa:
+// la C5 (LVGL viniendo de un pack, `DriverSpi`), la C6 (LVGL dentro de la imagen, `esp_lcd`)
+// o lo que venga.
 //
 // El análisis de H6 (V7_IDEAS §H6 2.3) dejó un número por medir y una predicción:
 // la fachada SPI del ESP32 abre el bus SIN DMA, así que el tope de una transacción
-// es el FIFO (64 B) y el driver del panel trocea. Un repintado entero de 240×320
-// son 153 600 B ⇒ 2 400 transacciones. Esto lo MIDE en vez de estimarlo.
+// es el FIFO (64 B) y el driver del panel trocea. Esto lo MIDE en vez de estimarlo.
 //
 // Dos medidas, porque son dos cosas distintas y se confunden:
 //   · PANTALLA ENTERA — el peor caso (cambiar el fondo invalida todo).
 //   · UN WIDGET — lo que de verdad hace una interfaz: LVGL sólo repinta la zona
 //     sucia, y ahí es donde se ve si la pantalla «responde» o no.
+//
+// ⚠️ LA TRAMPA QUE TENÍA (V7/H6.b, 25-sep): LVGL sólo repinta cuando vence su
+// temporizador de refresco (LV_DEF_REFR_PERIOD, 33 ms), y la versión de antes metía
+// diez `__guiRunOnce` seguidos sin esperar. En la C5 salía bien POR CASUALIDAD —su
+// envío es síncrono y cada repintado tarda 70 ms, más que el período—; en la C6, cuyo
+// envío es asíncrono, las diez vueltas cabían dentro del período y daba «0 ms por
+// pantalla» sin haber pintado nada. Ahora cada vuelta ESPERA a que venza el refresco y
+// se cronometra SÓLO la llamada que pinta. Un matiz: con un envío asíncrono la llamada
+// vuelve con la última franja aún saliendo por el DMA (unos 2 ms a 40 MHz).
 module GuiFlushBench
   import Gui
   import Machine
@@ -24,31 +34,37 @@ module GuiFlushBench
 
     var vueltas: integer := 10
     var i: integer := 0
+    var t0: integer := 0
+    var total: integer := 0
 
-    print "pantalla entera (240x320 = 153600 B por el SPI):"
-    var t0: integer := Machine.uptimeMs()
+    // Fondos CLAROS: el texto del tema es oscuro, y sobre un fondo oscuro no se ve.
+    print "pantalla entera (cambiar el fondo la invalida toda):"
     i := 0
     while i < vueltas do
       if i mod 2 == 0 then
-        scr.setBgColor(Gui.Color(0x102030))
+        scr.setBgColor(Gui.Color(0xB0C4DE))
       else
-        scr.setBgColor(Gui.Color(0x203040))
+        scr.setBgColor(Gui.Color(0xD8E4F0))
       endif
+      sleep(40)                        // > 33 ms: el refresco ya ha vencido
+      t0 := Machine.uptimeMs()
       Gui.__guiRunOnce()
+      total := total + (Machine.uptimeMs() - t0)
       i := i + 1
     endwh
-    var t1: integer := Machine.uptimeMs()
-    print "  ", (t1 - t0) / vueltas, "ms por pantalla  (", vueltas, "vueltas en", t1 - t0, "ms )"
+    print "  ", total / vueltas, "ms por pantalla  (", vueltas, "vueltas,", total, "ms pintando )"
 
     print "solo una etiqueta (la zona sucia, que es lo que hace una interfaz):"
-    t0 := Machine.uptimeMs()
+    total := 0
     i := 0
     while i < vueltas do
       eti.setText("flush " + i)
+      sleep(40)
+      t0 := Machine.uptimeMs()
       Gui.__guiRunOnce()
+      total := total + (Machine.uptimeMs() - t0)
       i := i + 1
     endwh
-    t1 := Machine.uptimeMs()
-    print "  ", (t1 - t0) / vueltas, "ms por cambio de etiqueta"
+    print "  ", total / vueltas, "ms por cambio de etiqueta  (", vueltas, "vueltas,", total, "ms pintando )"
   end Main
 end GuiFlushBench

@@ -3399,9 +3399,15 @@ está hecho: `dist/firmware-v7-25sep`.
   `lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv` —reset y luz por GPIO, sin SWRESET,
   la luz encendida después de DISPON, y la tabla de desfases de la imagen (0/0, 0/0, 0/80, 80/0) byte a byte—.
 - **La TF** (esquemático, `P2.0`): MISO GPIO5, CS GPIO4, sobre el mismo SCLK/MOSI (7/6) que la pantalla.
-- ⚠️ **La línea base de velocidad está por hacer**: `GuiFlushBench` en la C6 de hoy da «0 ms por pantalla (10 vueltas
-  en 2 ms)» —el cambio de fondo de la pantalla no provoca ahí un repintado que se mida— y 3-4 ms la etiqueta. Para
-  comparar antes y después hace falta una prueba que mida lo mismo en los dos caminos.
+- ✅ **La línea base, medida** (25-sep, paso 1 de §14.6): **29 ms por pantalla entera y 2,8 ms por etiqueta**, tres
+  pasadas idénticas; y `GuiRotCycle` en el cristal, bien en las cuatro orientaciones —cada marca en su esquina, sin
+  franja ni desplazamiento— (Eduardo). El cable solo ya son ≈ 23 ms (115 200 B a 40 MHz): la C6 de hoy va casi al
+  límite del bus porque dibuja mientras envía. Con el pack síncrono cabe esperar ≈ 52 ms (los 70 de la C5 en 240×320),
+  ≈ 1,8 veces más lenta en pantalla entera; una etiqueta, pocos ms en los dos.
+  **Antes, `GuiFlushBench` no medía**: en la C6 daba «0 ms por pantalla (10 vueltas en 2 ms)». LVGL sólo repinta
+  cuando vence su refresco (`LV_DEF_REFR_PERIOD`, 33 ms) y el ejemplo metía diez `__guiRunOnce` seguidos: en la C5
+  salía bien por casualidad —su envío síncrono tarda 70 ms, más que el período— y en la C6 las diez cabían dentro.
+  Ahora cada vuelta espera 40 ms y se cronometra sólo la llamada que pinta.
 
 #### 14.2 Lo que cambia en la imagen: lo mismo que la C5
 
