@@ -129,6 +129,12 @@ static int  pico_mods_put(const char* p, const uint8_t* d, uint32_t n) {
     return fs_put(p, d, n) == FS_OK ? 0 : -1;
 }
 static void pico_mods_log(const char* l) { log_printf("%s", l); }
+/* V7/H6 (#468) — la instalación entera, registrada para volver a correrla cuando
+ * cambia la zona de packs (el wire común: grabar, borrar o formatear un pack). */
+static void pico_mods_install(void) {
+    bpvm_mods_set_resync(pico_mods_install);
+    (void) bpvm_mods_instalar_tabla(pico_mods, pico_mods_n, pico_mods_put, pico_mods_log);
+}
 
 static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
     int n = 0;
@@ -1494,10 +1500,11 @@ static void vm_task(void* arg) {
      * repone; más nuevo → deja; /app → sólo si falta) viven en src/bpvm_mods.c.
      * Aquí ya no hay tabla a mano: la de antes guardaba la longitud por dirección
      * porque los `_len` eran `extern` de 16 ficheros; ahora es `sizeof` en uno. */
-    (void) bpvm_mods_instalar_tabla(pico_mods, pico_mods_n, pico_mods_put, pico_mods_log);
-    /* V7/H2 (#493) — la zona de packs, DESPUES de /lib y en el arranque (como
-     * ESP32 y STM32): el STAT por nombre del IDE la necesita antes del primer RUN. */
+    /* V7/H2 (#493) — la zona de packs en el arranque: el STAT por nombre del IDE la
+     * necesita antes del primer RUN. V7/H6 (#468) — y ANTES que la stdlib: el
+     * instalador pregunta a la zona qué sirve ya con los mismos bytes que la imagen. */
     pack_pico_montar();
+    pico_mods_install();
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),

@@ -37,6 +37,8 @@ typedef enum {
     BPVM_MODS_INSTALADO = 1,   /* faltaba: escrito */
     BPVM_MODS_REPUESTO  = 2,   /* estaba viejo o distinto: reescrito */
     BPVM_MODS_SE_DEJA   = 3,   /* estaba y no se toca: más nuevo, o fuera de /lib */
+    BPVM_MODS_EN_ZONA   = 4,   /* #468: faltaba, y la zona de packs lo sirve con los mismos bytes: no se instala */
+    BPVM_MODS_QUITADO   = 5,   /* #468: estaba la copia de la imagen, y la zona lo sirve igual: fuera de /lib */
     BPVM_MODS_FALLO     = -1   /* no se pudo escribir */
 } bpvm_mods_res_t;
 
@@ -69,9 +71,18 @@ typedef void (*bpvm_mods_log_fn)(const char* linea);
 
 /* Recorre la tabla aplicando la regla a cada entrada; cada línea que la regla
  * devuelve va a `log` (si no es NULL). Devuelve cuántos ESCRIBIÓ (instalados +
- * repuestos): el ESP32 lo usa para guardar la partición una sola vez. */
+ * repuestos + quitados): el ESP32 lo usa para guardar la partición una sola vez. */
 unsigned bpvm_mods_instalar_tabla(const bpvm_mod_embebido_t* t, unsigned n,
                                   bpvm_mods_put_fn put, bpvm_mods_log_fn log);
+
+/* V7/H6 (#468) — CUANDO CAMBIA LA ZONA, /lib SE PONE AL DÍA EN EL ACTO. La familia
+ * registra su instalación de la stdlib (la suya: la ESP32 agrupa las escrituras) y
+ * el wire común de packs la vuelve a correr tras grabar, borrar o formatear un
+ * pack: lo que la zona deja de servir vuelve a /lib desde la imagen sin esperar al
+ * siguiente arranque, y lo que pasa a servir deja de tener copia. Sin registro (el
+ * micro simulado, el host), no hace nada. */
+void bpvm_mods_set_resync(void (*instalar)(void));
+void bpvm_mods_resync(void);
 
 #ifdef __cplusplus
 }

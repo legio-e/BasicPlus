@@ -773,6 +773,12 @@ static void diag_al_log(const char* linea) { log_printf("%s", linea); }
 /* V6/U4 — lo propio de esta familia para el instalador común: el put y el log. */
 static int  stm32_mods_put(const char* p, const uint8_t* d, uint32_t n) { return fs_put(p, d, n) == 0 ? 0 : -1; }
 static void stm32_mods_log(const char* l) { log_printf("%s", l); }
+/* V7/H6 (#468) — la instalación entera, registrada para volver a correrla cuando
+ * cambia la zona de packs (el wire común: grabar, borrar o formatear un pack). */
+static void stm32_mods_install(void) {
+    bpvm_mods_set_resync(stm32_mods_install);
+    (void) bpvm_mods_instalar_tabla(stm32_mods, stm32_mods_n, stm32_mods_put, stm32_mods_log);
+}
 
 static int stm32_mem_regiones(bpvm_mem_region_t* out, int max) {
     if (max < 1) return 0;
@@ -824,19 +830,20 @@ void stm32_repl_run(void) {
     const bpvm_boot_status_t* bs = board_boot_status();
     log_printf("boot: estado %d (%s)%s%s", (int) bs->state, bpvm_boot_state_name(bs->state),
                bs->degraded ? " DEGRADED: " : "", bs->degraded ? bs->reason : "");
+    /* V7/H2 (#493) — la zona de packs, fuera del gate del FS: sólo necesita las
+     * particiones. V7/H6 (#468) — y ANTES que la stdlib: el instalador pregunta a la
+     * zona qué sirve ya con los mismos bytes que la imagen. */
+    board_mgr_stm32_montar_packs();
     /* stdlib core embebida en /lib SOLO con el FS montado (si el climb no llegó al
      * FS, no hay dónde instalarla; el host configura particiones primero). */
     if (bs->state >= BPVM_BOOT_FS) {
         /* V6/U4 — la stdlib embebida a /lib: tabla GENERADA (stm32_mods.c, sólo
          * datos); bucle y regla (#466) en src/bpvm_mods.c; aquí sólo el put. */
-        (void) bpvm_mods_instalar_tabla(stm32_mods, stm32_mods_n, stm32_mods_put, stm32_mods_log);
+        stm32_mods_install();
         stm32_fs_register_bpvm();   /* #247 — readFile/writeFile/... sobre el FS */
         log_printf("fs: %u/%u bytes usados", (unsigned) fs_used_bytes(),
                    (unsigned) fs_total_bytes());
     }
-    /* V7/H2 (#493) — la zona de packs, DESPUÉS de /lib (como ESP32, P4 y Pico) y
-     * fuera del gate del FS: sólo necesita las particiones. */
-    board_mgr_stm32_montar_packs();
     stm32_hw_register();            /* backends de HW (GPIO, info de MCU) — siempre */
     bpvm_bus_desde_env(board_mgr_stm32_env_get);   /* V7/H6.c G4.a1: los buses del ENV (ver el main del S3) */
     log_flush();                    /* persiste la historia del boot (post-mortem tras corte) */

@@ -232,14 +232,14 @@ void app_main(void)
      * particiones/FS el climb se queda abajo y el host conduce (nada se
      * auto-inicializa); stdlib solo con el FS montado. */
     board_mgr_esp32_boot();
-    if (board_boot_status()->state >= BPVM_BOOT_FS) {
-        fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
-        esp32_mods_install();  /* stdlib core embebida -> /lib (if-absent) */
-    }
 
     /* V6 (8-sep) — MAPEAR LA ZONA DE PACKS. Va aqui, despues de que el arranque
      * sepa sus particiones, y sirve a S3, C3 y C6 (el P4 lo hace desde su propio
      * main, que tiene mas cosas que ordenar).
+     *
+     * V7/H6 (#468) — y ANTES que la stdlib: el instalador pregunta a la zona qué
+     * sirve ya con los mismos bytes que la imagen, para no poner en /lib una copia
+     * que la taparía. Montarla sólo pide las particiones, no el FS.
      *
      * Hasta hoy esto no existia fuera del P4, y el C6 se quedaba sin packs sin
      * ninguna razon de silicio: comparte `SOC_MMU_DI_VADDR_SHARED` con el P4 y el
@@ -249,6 +249,10 @@ void app_main(void)
      *
      * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual. */
     (void) board_mgr_esp32_mapear_packs();
+    if (board_boot_status()->state >= BPVM_BOOT_FS) {
+        fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
+        esp32_mods_install();  /* stdlib core embebida -> /lib, salvo lo que ya sirva la zona (#468) */
+    }
     /* V7/H6 — el pack NATIVO, para los cinco micros: BUSCAR el ancla y SALTAR se
      * hace en el primer `Run` (repl_esp32.c), no aquí; y la tabla BIOS se
      * verifica SIEMPRE, haya pack o no, y DICE QUE SÍ: callar al ir bien no

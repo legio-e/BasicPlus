@@ -314,6 +314,9 @@ static void wire_task(void *arg)
      * se queda abajo y el host conduce; stdlib solo con el FS montado. */
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
+    /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta qué sirve ya
+     * con los mismos bytes que la imagen (ver el mapeo, más abajo). */
+    if (bs->state >= BPVM_BOOT_FS) (void) pack_esp32_mapear();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
     p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
     /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
@@ -325,7 +328,7 @@ static void wire_task(void *arg)
      * Pico. Antes aquí se hacía todo: 338 ms de cada arranque, y el único paso
      * que puede colgar puesto justo donde un cuelgue obliga a regrabar. */
     if (bs->state >= BPVM_BOOT_FS) {
-        (void) pack_esp32_mapear();
+        /* el mapeo va arriba, antes de la stdlib (#468) */
         repl_set_packs_loader(pack_esp32_cargar);
     }
     net_logf("[p4] boot estado %d (%s)%s, %d ficheros",
@@ -363,6 +366,9 @@ static void wire_task_uart(void *arg)
 
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
+    /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta qué sirve ya
+     * con los mismos bytes que la imagen (ver el mapeo, más abajo). */
+    if (bs->state >= BPVM_BOOT_FS) (void) pack_esp32_mapear();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
     p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
     /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
@@ -374,7 +380,7 @@ static void wire_task_uart(void *arg)
      * Pico. Antes aquí se hacía todo: 338 ms de cada arranque, y el único paso
      * que puede colgar puesto justo donde un cuelgue obliga a regrabar. */
     if (bs->state >= BPVM_BOOT_FS) {
-        (void) pack_esp32_mapear();
+        /* el mapeo va arriba, antes de la stdlib (#468) */
         repl_set_packs_loader(pack_esp32_cargar);
     }
     net_logf("[p4] boot estado %d (%s)%s (UART), %d ficheros",

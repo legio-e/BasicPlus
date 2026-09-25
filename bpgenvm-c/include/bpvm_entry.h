@@ -102,6 +102,12 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e);
 int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
                        uint32_t* size_out);
 
+/* V7/H6 (#468) — el `.mod` que la ZONA DE PACKS daría a la resolución para ese nombre
+ * pelado ("Core.mod"): el del último pack de la cadena que lo lleve. Rellena el
+ * puntero a sus bytes en la zona mapeada, su tamaño y el nombre del pack
+ * (BPVM_PACK_NAME_LEN + 1). 0 si lo hay; -1 si no (o no hay zona montada). */
+int bpvm_entry_zona(const char* name, const uint8_t** data, uint32_t* len, char* pack_out);
+
 /* Carga UN .mod ya resuelto, por trozos desde la fachada del FS (nada de
  * traerse el fichero entero a RAM). Es lo que usan por dentro bpvm_load_entry y
  * la resolución de dependencias; se expone porque algún llamante ya tiene la

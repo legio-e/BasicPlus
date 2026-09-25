@@ -549,6 +549,9 @@ static int  mods_put(const char* p, const uint8_t* d, uint32_t n) {
 static void mods_log(const char* l) { log_printf("%s", l); }
 
 void esp32_mods_install(void) {
+    /* V7/H6 (#468) — y se deja registrada: el wire de packs la vuelve a correr cuando
+     * cambia la zona (grabar, borrar o formatear), con el mismo lote. */
+    bpvm_mods_set_resync(esp32_mods_install);
     fs_autosave_suspend();
     unsigned escritos = bpvm_mods_instalar_tabla(esp32_mods, esp32_mods_n, mods_put, mods_log);
     fs_autosave_resume(escritos > 0);

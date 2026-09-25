@@ -761,11 +761,17 @@ test-mem:
 
 # V6/#466 — la regla del /lib de la imagen (falta/anterior/CRC → repone; más nuevo
 # o /app → deja), contra un littlefs REAL en fichero. Enlaza la lib entera.
+# V7/H6 (#468) — y la ZONA: un pack con los mismos bytes que la imagen hace sobrar la copia
+# de /lib; los packs, del escritor de verdad (PackCli), como en test-packres.
 test-mods: $(LIBOBJ)
-	@mkdir -p build
+	@mkdir -p build/mods468/igual build/mods468/otro
+	@printf 'MOD7--la Json de la imagen, 468---' > build/mods468/igual/Json.mod
+	@printf 'MOD7--otra Json, de otro build-----' > build/mods468/otro/Json.mod
+	@java -cp "$(PACKJAR)" basicplus.pack.PackCli build --out build/mods468/stdlib.pack --name Stdlib --version 1 --date 0 build/mods468/igual/Json.mod
+	@java -cp "$(PACKJAR)" basicplus.pack.PackCli build --out build/mods468/otro.pack  --name Otro   --version 1 --date 0 build/mods468/otro/Json.mod
 	$(CC) $(CFLAGS) -Isrc test/test_mods.c $(LIBOBJ) -o build/test_mods.exe $(LDFLAGS)
-	@echo "--- V6/#466 el instalador de la stdlib (esperado: solo 'ok', [status=OK]) ---"
-	./build/test_mods.exe
+	@echo "--- V6/#466 y V7/#468 el instalador de la stdlib, con y sin zona (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_mods.exe build/mods468/igual/Json.mod build/mods468/stdlib.pack build/mods468/otro.pack
 
 # V5/I — la tabla BIOS que se le presta al pack nativo. Host-only, dependencia
 # CERO. Lo que se prueba es el CHIVATO: que un hueco se detecte ANTES de ejecutar

@@ -4,11 +4,21 @@
  * Metro, 2-sep), un módulo recompilado con la misma versión (CRC distinto), uno
  * más nuevo que la imagen (se deja), basura, y el /app del usuario (no se toca).
  *
+ * V7/H6 (#468) — Y LA ZONA DE PACKS: si un pack grabado sirve un módulo con los mismos
+ * bytes que la imagen, la copia de /lib sobra (lo tapaba: /lib va delante). Los packs
+ * los construye el escritor de verdad (PackCli, desde el Makefile), como en
+ * test_packres: un pack fabricado aquí a mano probaría un formato que quizá ya no existe.
+ * Y la objeción de Eduardo (25-sep) va como caso propio: *«si el usuario borra el pack
+ * se queda sin la librería»* — no: la imagen sigue siendo la fuente y lo repone.
+ *
  *   make test-mods
  */
 #include "bpvm_mods.h"
 #include "bpvm_fs.h"
+#include "bpvm_pack.h"
+#include "bpvm_entry.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int fallos = 0;
@@ -25,7 +35,24 @@ static int mismo_contenido(const char* path, const uint8_t* data, uint32_t len) 
     return n == (long) len && memcmp(buf, data, len) == 0;
 }
 
-int main(void) {
+static uint8_t* leer(const char* path, uint32_t* len) {
+    FILE* f = fopen(path, "rb");
+    if (!f) { fprintf(stderr, "no puedo abrir %s\n", path); exit(2); }
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    uint8_t* b = (uint8_t*) malloc((size_t) n);
+    if (fread(b, 1, (size_t) n, f) != (size_t) n) { fclose(f); exit(2); }
+    fclose(f); *len = (uint32_t) n; return b;
+}
+static int existe(const char* path) { uint32_t sz = 0; return bpvm_fs_stat(path, &sz) == 0; }
+/* De dónde lo cargaría el RUN (el resolvedor de verdad). */
+static const char* resuelve(const char* name) {
+    static char out[128]; uint32_t sz = 0;
+    return bpvm_entry_resolve(name, out, sizeof out, &sz) == 0 ? out : "(no está)";
+}
+static int g_resync = 0;
+static void cuenta_resync(void) { g_resync++; }
+
+int main(int argc, char** argv) {
     const char* IMG = "build/fs_mods_test.img";
     remove(IMG);
     if (bpvm_fs_register_lfs_filebd(IMG, 4096, 64, 1) != 0) { printf("FAIL: attach\n"); return 1; }
@@ -122,6 +149,101 @@ int main(void) {
         g_lineas = 0;
         esc = bpvm_mods_instalar_tabla(T, 2, put_fs, cuenta_linea);
         CHECK(esc == 0 && g_lineas == 0, "tabla otra vez: nada que escribir, nada que decir");
+    }
+
+    /* ── V7/H6 (#468) — LA ZONA ─────────────────────────────────────────────────
+     * argv: el Json.mod «de la imagen», un pack Stdlib con esos MISMOS bytes y un pack
+     * Otro con un Json.mod distinto (los tres, del Makefile). */
+    if (argc < 4) {
+        printf("  FAIL: faltan el Json.mod y los dos packs (los construye `make test-mods`)\n");
+        fallos++;
+    } else {
+        #define ZONA_BYTES (64u * 1024u)
+        uint32_t lz = 0, l1 = 0, l2 = 0;
+        uint8_t* emb = leer(argv[1], &lz);
+        uint8_t* p1  = leer(argv[2], &l1);
+        uint8_t* p2  = leer(argv[3], &l2);
+        uint8_t* zona = (uint8_t*) malloc(ZONA_BYTES);
+        memset(zona, 0xFF, ZONA_BYTES);          /* flash virgen, como en la placa */
+        bpvm_fs_remove("/lib/Json.mod");
+
+        /* El CONTROL: sin zona, la regla de siempre. */
+        bpvm_pack_mount(NULL, NULL, 0);
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_INSTALADO, "sin zona: falta → INSTALADO, como siempre");
+
+        /* Un pack que lo sirve con los mismos bytes: la copia de la imagen SOBRA. */
+        CHECK(bpvm_pack_add(zona, ZONA_BYTES, p1, l1) >= 0, "se graba el pack 'Stdlib' (Json.mod idéntico al de la imagen)");
+        bpvm_pack_mount(zona, zona, ZONA_BYTES);
+        CHECK(strcmp(resuelve("Json.mod"), "/lib/Json.mod") == 0, "con la copia en /lib, el RUN carga la de /lib (la que tapa al pack)");
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_QUITADO && strstr(linea, "'Stdlib'") && strstr(linea, "XIP"),
+              "la zona lo sirve igual → QUITADO de /lib: %s", linea);
+        CHECK(!existe("/lib/Json.mod"), "y /lib ya no lo tiene");
+        CHECK(strcmp(resuelve("Json.mod"), "pack:Stdlib/Json.mod") == 0,
+              "y el RUN lo carga del pack, en sitio: %s", resuelve("Json.mod"));
+
+        /* El siguiente arranque: ni se instala ni se dice (es el caso normal). */
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_EN_ZONA && linea[0] == 0 && !existe("/lib/Json.mod"),
+              "otro arranque → EN_ZONA, en silencio, y /lib sigue sin copia");
+
+        /* Una MÁS NUEVA en /lib se queda (la regla de desarrollo de #310), y se dice. */
+        static const uint8_t M8[] = "MOD8--una Json mas nueva que la imagen--";
+        bpvm_fs_write("/lib/Json.mod", M8, (uint32_t) sizeof M8, 0);
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_SE_DEJA && strstr(linea, "tapa al del pack"),
+              "MOD8 en /lib con el pack sirviendo la de la imagen → SE DEJA, y dice que tapa: %s", linea);
+        CHECK(mismo_contenido("/lib/Json.mod", M8, (uint32_t) sizeof M8), "y el FS conserva la más nueva");
+
+        /* Una ANTERIOR: antes se REPONÍA (escribiendo); con el pack, se QUITA. */
+        static const uint8_t M6[] = "MOD6--una Json de V5--";
+        bpvm_fs_write("/lib/Json.mod", M6, (uint32_t) sizeof M6, 0);
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_QUITADO && !existe("/lib/Json.mod"),
+              "MOD6 en /lib y el pack con la de la imagen → QUITADO (no repuesto): %s", linea);
+
+        /* LA OBJECIÓN DE EDUARDO, 1: borrar el MÓDULO con el pack puesto — no se pierde nada. */
+        CHECK(strcmp(resuelve("Json.mod"), "pack:Stdlib/Json.mod") == 0,
+              "sin Json.mod en /lib, el RUN lo sigue teniendo: el del pack");
+
+        /* LA OBJECIÓN DE EDUARDO, 2: se BORRA EL PACK → la imagen lo repone, en el acto. */
+        CHECK(bpvm_pack_remove(zona, ZONA_BYTES, "Stdlib") >= 0, "se borra el pack 'Stdlib'");
+        CHECK(strcmp(resuelve("Json.mod"), "(no está)") == 0, "en ese momento, nadie sirve Json.mod");
+        g_resync = 0;
+        bpvm_mods_resync();                      /* sin registro: no hace nada, ni revienta */
+        CHECK(g_resync == 0, "resync sin familia registrada: nada");
+        bpvm_mods_set_resync(cuenta_resync);
+        bpvm_mods_resync();
+        CHECK(g_resync == 1, "resync con la familia registrada: la corre (el wire la llama al borrar un pack)");
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_INSTALADO && mismo_contenido("/lib/Json.mod", emb, lz),
+              "y la regla lo REPONE desde la imagen: %s", linea);
+        CHECK(strcmp(resuelve("Json.mod"), "/lib/Json.mod") == 0, "el RUN vuelve a tenerlo, en /lib");
+
+        /* Un pack con OTRO Json: la zona no sirve lo de la imagen → la regla de siempre. */
+        CHECK(bpvm_pack_add(zona, ZONA_BYTES, p2, l2) >= 0, "se graba el pack 'Otro' (Json.mod distinto)");
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_IGUAL && mismo_contenido("/lib/Json.mod", emb, lz),
+              "el pack lleva OTRO Json → la copia de la imagen se queda en /lib, delante");
+
+        /* Dos packs con Json: manda el ÚLTIMO de la cadena, como en la resolución. */
+        CHECK(bpvm_pack_add(zona, ZONA_BYTES, p1, l1) >= 0, "se vuelve a grabar 'Stdlib', ahora el último");
+        r = bpvm_mods_sincronizar("/lib/Json.mod", emb, lz, put_fs, linea, sizeof linea);
+        CHECK(r == BPVM_MODS_QUITADO, "con 'Otro' y luego 'Stdlib', manda el último (el idéntico) → QUITADO");
+
+        /* La tabla cuenta el QUITADO como escritura: la ESP32 guarda la partición por eso. */
+        bpvm_fs_write("/lib/Json.mod", emb, lz, 0);
+        {
+            const bpvm_mod_embebido_t T2[] = { { "/lib/Json.mod", emb, lz } };
+            g_lineas = 0;
+            unsigned esc = bpvm_mods_instalar_tabla(T2, 1, put_fs, cuenta_linea);
+            CHECK(esc == 1 && g_lineas == 1 && !existe("/lib/Json.mod"),
+                  "tabla: el QUITADO cuenta como 1 escrito y 1 línea (%u/%d)", esc, g_lineas);
+        }
+        bpvm_pack_mount(NULL, NULL, 0);
+        bpvm_mods_set_resync(NULL);
+        free(emb); free(p1); free(p2); free(zona);
     }
 
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");

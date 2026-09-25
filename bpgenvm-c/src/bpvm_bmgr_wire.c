@@ -7,6 +7,7 @@
 #include "bpvm_boot.h"
 #include "bpvm_pack.h"   /* H3 — PACK_LS sobre la zona de packs (bm->packs_base) */
 #include "bpvm_npack.h"  /* V7/H6.c G1 — el tope de RAM: dónde sellar el motor que llega */
+#include "bpvm_mods.h"   /* V7/H6 (#468) — /lib al día cuando cambia la zona */
 #include "bpvm.h"        /* #338 — la zona de rascar compartida */
 
 #include <string.h>
@@ -353,6 +354,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
         int32_t r = bpvm_pack_burn_end(bm->packs_base, bm->packs_size, &s_burn, bm->packs_flash);
         if (r < 0) return reply_pack_err(out, cap, id, r);
+        bpvm_mods_resync();   /* V7/H6 (#468): lo que el pack nuevo sirve igual, fuera de /lib */
         sb_raw(&s, "{\"type\":\"PACK_BURN_END_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"offset\":"); sb_long(&s, r); sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
@@ -384,6 +386,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         if (r == BPVM_PACK_ERR_STATE)
             return reply_error(out, cap, id, "INVALID_STATE", "ese pack ya esta borrado");
         if (r < 0) return reply_pack_err(out, cap, id, r);
+        bpvm_mods_resync();   /* V7/H6 (#468): lo que el pack borrado servía vuelve a /lib desde la imagen, ya */
         sb_raw(&s, "{\"type\":\"PACK_DEL_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"offset\":"); sb_long(&s, req->off); sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
@@ -400,6 +403,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         s_burn.active = 0;                       /* una sesión de burn a medias muere aquí */
         if (bpvm_pack_format(bm->packs_flash, bm->packs_size) != 0)
             return reply_pack_err(out, cap, id, BPVM_PACK_ERR_IO);
+        bpvm_mods_resync();   /* V7/H6 (#468): la zona vacía — /lib, entero desde la imagen, ya */
         sb_raw(&s, "{\"type\":\"PACK_FORMAT_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"regionSize\":"); sb_long(&s, (long) bm->packs_size); sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;

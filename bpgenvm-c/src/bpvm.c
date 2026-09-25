@@ -949,10 +949,13 @@ bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
  * exactamente el mismo código.
  * ========================================================================== */
 
-/* [V7/H2, #493] ¿Algún pack grabado lleva este `.mod`? → `pack:<P>/X.mod` (el
- * último de la cadena que lo tenga, la regla de siempre). Sólo nombres pelados
- * de módulo: con directorio o esquema no es cosa de la zona. */
-static int zona_resolve(const char* name, char* out, size_t cap, uint32_t* size) {
+/* [V7/H2, #493] ¿Algún pack grabado lleva este `.mod`? El último de la cadena que
+ * lo tenga, la regla de siempre. Sólo nombres pelados de módulo: con directorio o
+ * esquema no es cosa de la zona.
+ * V7/H6 (#468) — expuesta: el instalador de la stdlib pregunta con ESTA MISMA
+ * búsqueda si la zona ya sirve un módulo (y con qué bytes), en vez de llevar una
+ * copia del orden de la cadena. */
+int bpvm_entry_zona(const char* name, const uint8_t** data, uint32_t* len, char* pack_out) {
     uint32_t zsz = 0;
     const uint8_t* zona = bpvm_pack_mounted(&zsz);
     if (!zona || !zsz || !name) return -1;
@@ -964,9 +967,21 @@ static int zona_resolve(const char* name, char* out, size_t cap, uint32_t* size)
     bpvm_pack_src_t src; bpvm_pack_entry_t e; char pk[BPVM_PACK_NAME_LEN + 1];
     bpvm_pack_src_mem(&src, zona, zsz);
     if (!bpvm_pack_find_src_pack(&src, "mod", base, &e, pk)) return -1;
+    if (e.data_off > zsz || e.len > zsz - e.data_off) return -1;   /* una entrada que se sale de la zona no sirve */
+    if (data) *data = zona + e.data_off;
+    if (len) *len = e.len;
+    if (pack_out) memcpy(pack_out, pk, sizeof pk);
+    return 0;
+}
+
+/* → `pack:<P>/X.mod`, el nombre que contesta el respaldo de la fachada. */
+static int zona_resolve(const char* name, char* out, size_t cap, uint32_t* size) {
+    char pk[BPVM_PACK_NAME_LEN + 1];
+    uint32_t len = 0;
+    if (bpvm_entry_zona(name, NULL, &len, pk) != 0) return -1;
     int w = snprintf(out, cap, "%s%s/%s", BPVM_PACK_URI, pk, name);
     if (w <= 0 || (size_t) w >= cap) return -1;
-    if (size) *size = e.len;
+    if (size) *size = len;
     return 0;
 }
 
