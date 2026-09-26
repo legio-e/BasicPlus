@@ -198,8 +198,9 @@ public final class AotBuild {
      * @param log        sumidero de progreso (consola del IDE), sin newline final
      */
     public static Result buildProject(Path sourceDir, Path outDir, Path projectDir,
+                                      List<String> dependencias,
                                       String target, IdePrefs prefs, Consumer<String> log) {
-        return build(sourceDir, (List<Path>) null, outDir, projectDir,
+        return build(sourceDir, (List<Path>) null, outDir, projectDir, dependencias,
                      java.util.Collections.singletonList(target), false, prefs, log);
     }
 
@@ -234,7 +235,18 @@ public final class AotBuild {
                                           Path outDir, Path projectDir,
                                           List<String> targets, IdePrefs prefs,
                                           Consumer<String> log) {
-        return build(sourceDir, soloEstos, outDir, projectDir, targets, true, prefs, log);
+        return buildPackTargets(sourceDir, soloEstos, outDir, projectDir,
+                java.util.Collections.<String>emptyList(), targets, prefs, log);
+    }
+
+    /** #542 — con las {@code dependencies} del proyecto: el AOT resuelve los imports con ellas, como
+     *  el compilador (el paso AOT del pack, {@code FrmMain.pasoAotDelPack}). */
+    public static Result buildPackTargets(Path sourceDir, List<Path> soloEstos,
+                                          Path outDir, Path projectDir,
+                                          List<String> dependencias,
+                                          List<String> targets, IdePrefs prefs,
+                                          Consumer<String> log) {
+        return build(sourceDir, soloEstos, outDir, projectDir, dependencias, targets, true, prefs, log);
     }
 
     /**
@@ -247,20 +259,23 @@ public final class AotBuild {
     public static Result buildSingle(Path bpFile, Path outDir, Path workRoot,
                                      String target, IdePrefs prefs, Consumer<String> log) {
         return build(bpFile.getParent(), java.util.Collections.singletonList(bpFile),
-                     outDir, workRoot,
+                     outDir, workRoot, java.util.Collections.<String>emptyList(),
                      java.util.Collections.singletonList(target), false, prefs, log);
     }
 
     /**
      * Núcleo común: si `only` != null se compila SOLO ese fichero.
      *
+     * @param dependencias las {@code dependencies} del proyecto (#542): con ellas y con outDir,
+     *                 el AOT busca los imports donde los buscó el compilador.
      * @param targets  las familias para las que compilar (una o varias).
      * @param sufijar  true = el `.mdn` sale con su doble extensión (pack);
      *                 false = nombre pelado `<Mod>.mdn`, que es lo que busca el
      *                 dispositivo en su FS al subirlo en un Run.
      */
     private static Result build(Path sourceDir, List<Path> soloEstos, Path outDir,
-                                Path projectDir, List<String> targets, boolean sufijar,
+                                Path projectDir, List<String> dependencias,
+                                List<String> targets, boolean sufijar,
                                 IdePrefs prefs, Consumer<String> log) {
         Result res = new Result();
 
@@ -342,7 +357,7 @@ public final class AotBuild {
         for (Path bp : bps) {
             try {
                 res.mdnFiles.addAll(
-                        buildOne(bp, outDir, work, familias, sufijar, bpgenvm, res, log));
+                        buildOne(bp, outDir, work, dependencias, familias, sufijar, bpgenvm, res, log));
             } catch (ToolchainMissing tm) {
                 // gcc no se pudo ni lanzar — no tiene sentido reintentar el resto.
                 res.toolchainMissing = true;
@@ -376,13 +391,16 @@ public final class AotBuild {
      * hermanos que no lo son.
      */
     private static List<Path> buildOne(Path bp, Path outDir, Path work,
+                                       List<String> dependencias,
                                        List<Familia> familias, boolean sufijar,
                                        String bpgenvm, Result res, Consumer<String> log)
             throws Exception {
         // 1) UNA VEZ: emitir aot_<Mod>.c (modo --mdn). cFile==null → sin native.
         AotMain.AotResult ar;
         try {
-            ar = AotMain.emitAotC(bp, work, /*mdnMode=*/true);
+            /* #542 — el C a `work`, pero los imports se buscan en outDir (donde el build dejó los
+             * .mod de la app) y en las dependencies: si no, `import Y` de la propia app «falta». */
+            ar = AotMain.emitAotC(bp, work, /*mdnMode=*/true, outDir, dependencias);
         } catch (AotCEmitter.UnsupportedAotException ux) {
             String w = bp.getFileName() + ": native no AOT-able — " + ux.getMessage()
                 + " (se ejecutará interpretado)";

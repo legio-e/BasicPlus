@@ -1092,6 +1092,7 @@ public class FrmMain extends javax.swing.JFrame
                     java.nio.file.Paths.get(proj.sourceDir), soloEstos,
                     java.nio.file.Paths.get(proj.outDir),
                     java.nio.file.Paths.get(proj.projectDir),
+                    proj.dependencies,                     // #542: el AOT, con las deps del compilador
                     familias, IdePrefs.load(), msg -> log.accept(msg + "\n"));
             if (!r.mdnFiles.isEmpty())
                 log.accept("== AOT: " + r.mdnFiles.size() + " .mdn al pack ==\n");
@@ -2672,6 +2673,7 @@ public class FrmMain extends javax.swing.JFrame
         AotBuild.Result r = haveProject
                 ? AotBuild.buildProject(java.nio.file.Paths.get(currentProject.sourceDir),
                         outDir, java.nio.file.Paths.get(currentProject.projectDir),
+                        currentProject.dependencies,       // #542: el AOT, con las deps del compilador
                         target, IdePrefs.load(), msg -> log.accept(msg + "\n"))
                 : AotBuild.buildSingle(bpFile, outDir, outDir,
                         target, IdePrefs.load(), msg -> log.accept(msg + "\n"));

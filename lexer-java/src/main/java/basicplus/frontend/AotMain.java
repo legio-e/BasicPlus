@@ -2,7 +2,7 @@
 // AotMain.java
 // CLI standalone para emisor AOT (H3 #157 fase 1).
 //
-//   java basicplus.frontend.AotMain <file.bp> [<outDir>] [--mdn]
+//   java basicplus.frontend.AotMain <file.bp> [<outDir>] [--mdn] [--formato=9|8] [--stdlibDir=DIR]
 //
 // Toma un .bp, lo lexa + parsea, busca funciones `function native`,
 // y emite aot_<Module>.c en outDir (defecto: cwd).
@@ -14,9 +14,19 @@
 //           a .mdn). El loader del firmware registra a partir del
 //           symtab del .mdn — H3 #158.
 //
-// Sin semantic analysis para mantenerlo simple — el emisor solo
-// asume integer i32 por ahora. Errores de tipo o constructos no
-// soportados se reportan via UnsupportedAotException.
+//   --stdlibDir=DIR  La stdlib contra la que se traduce (como el compilador). Sin
+//           ella, la del BpVM.cfg que se encuentre subiendo desde el .bp.
+//
+// #542 (V7/H5, 25-sep) — LOS IMPORTS, COMO EL COMPILADOR. Hasta hoy el AOT sólo
+// miraba el BpVM.cfg del cwd y, si no encontraba la interfaz de un import, avisaba
+// por stdout y SEGUÍA: sin la de `Core`, `NatNew` salía con `getX`/`getY` por
+// ranuras fijas y `areaDe(6,7)` daba 0 con status=OK. Eduardo: «hoy en día Core se
+// importa en todos los módulos; si no está, es un error de carga de módulo». Ahora
+// busca la stdlib igual que Main (autodiscoverFromSource desde el fuente, y
+// --stdlibDir) y un import sin interfaz es ImportsFaltanException, con su nombre.
+//
+// Errores de tipo o constructos no soportados se reportan via
+// UnsupportedAotException.
 // ============================================================
 package basicplus.frontend;
 
@@ -31,7 +41,7 @@ public final class AotMain {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn] [--formato=9|8]  (9 por defecto)");
+            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn] [--formato=9|8] [--stdlibDir=DIR]  (9 por defecto)");
             System.exit(2);
         }
         // Separar flags y posicionales.
@@ -44,6 +54,12 @@ public final class AotMain {
                 // V7/H2 (#523) — el `.mdn` se construye con el MISMO formato que el
                 // `.mod` al que acompaña: en MOD9 el AOT no hornea ranuras ajenas.
                 Main.FORMATO = Integer.parseInt(a.substring("--formato=".length()));
+            } else if (a.startsWith("--stdlibDir=")) {   // #542: la stdlib dicha a mano, como en Main
+                Main.STDLIB_DIR = a.substring("--stdlibDir=".length());
+                if (!Files.isDirectory(Paths.get(Main.STDLIB_DIR))) {
+                    System.err.println("--stdlibDir: no es un directorio: " + Main.STDLIB_DIR);
+                    System.exit(2);
+                }
             } else {
                 positional.add(a);
             }
@@ -64,6 +80,9 @@ public final class AotMain {
         } catch (AotCEmitter.UnsupportedAotException ex) {
             System.err.println("AOT no soportado: " + ex.getMessage());
             System.exit(3);
+        } catch (ImportsFaltanException ex) {             // #542
+            System.err.println("AOT: " + ex.getMessage());
+            System.exit(4);
         } catch (ParseFailedException ex) {
             System.err.println(ex.getMessage());
             System.exit(1);
@@ -89,6 +108,12 @@ public final class AotMain {
         ParseFailedException(String m) { super(m); }
     }
 
+    /** #542 — un import del `.bp` no se pudo cargar (su interfaz no está, o no se lee): el AOT
+     *  no traduce a ciegas. El mensaje lleva el nombre de cada módulo y dónde se buscó. */
+    public static final class ImportsFaltanException extends Exception {
+        ImportsFaltanException(String m) { super(m); }
+    }
+
     /**
      * Lexa + parsea + analiza un `.bp` y emite `aot_&lt;Module&gt;.c` en outDir.
      * REUTILIZABLE desde el CLI (main) y desde el IDE (compilación AOT automática,
@@ -97,10 +122,28 @@ public final class AotMain {
      * @return AotResult con cFile=null si el módulo no tiene funciones `native`.
      * @throws AotCEmitter.UnsupportedAotException si alguna native no es AOT-able.
      * @throws ParseFailedException               si el `.bp` no parsea.
+     * @throws ImportsFaltanException             si un import no carga (#542).
      * @throws IOException                        error de lectura/escritura.
      */
     public static AotResult emitAotC(Path src, Path outDir, boolean mdnMode)
-            throws IOException, AotCEmitter.UnsupportedAotException, ParseFailedException {
+            throws IOException, AotCEmitter.UnsupportedAotException, ParseFailedException, ImportsFaltanException {
+        return emitAotC(src, outDir, mdnMode, outDir, java.util.Collections.<String>emptyList());
+    }
+
+    /**
+     * #542 — lo mismo, diciendo DÓNDE dejó el build los módulos, para buscar las interfaces de los
+     * imports donde las busca el compilador. En la línea de órdenes es el mismo {@code outDir}; el IDE
+     * escribe el C en {@code <proyecto>/target} y los {@code .mod} están en el {@code outDir} del
+     * proyecto: sin decírselo, un {@code import Y} de la propia app «faltaba» y el AOT del módulo se
+     * rechazaba (antes de #542 sólo avisaba y seguía).
+     *
+     * @param modsDir      donde están los {@code .mod} del build: se mira ANTES que junto al fuente,
+     *                     como en {@code Main.buildProject} (su {@code ctx.outDir}).
+     * @param dependencias las {@code dependencies} del proyecto (ya absolutas, {@link BpBuild}): el
+     *                     compilador las mira, y el AOT también (un pack de librería: {@code sqlite/out}).
+     */
+    public static AotResult emitAotC(Path src, Path outDir, boolean mdnMode, Path modsDir, List<String> dependencias)
+            throws IOException, AotCEmitter.UnsupportedAotException, ParseFailedException, ImportsFaltanException {
         String source = new String(Files.readAllBytes(src), StandardCharsets.UTF_8);
 
         // 1. Lex + 2. Parse.
@@ -116,15 +159,29 @@ public final class AotMain {
 
         // 2.5 Semántico + resolución de imports (igual que Main.compileFull): sin
         //     esto una llamada `Mod.func()` desde native no resuelve a símbolo
-        //     external y AotCEmitter la rechazaría. Las .bpi de las deps deben
-        //     existir (ya compiladas); las que falten se avisan y se omiten (#212).
+        //     external y AotCEmitter la rechazaría. Las interfaces de las deps deben
+        //     existir (ya compiladas).
+        //     #542 — y se buscan COMO EL COMPILADOR: el BpVM.cfg subiendo desde el
+        //     fuente (no sólo el del cwd) y --stdlibDir; los mismos imports implícitos;
+        //     y uno que no carga es un ERROR con su nombre, no un aviso que se ignora.
         SemanticAnalyzer analyzer = new SemanticAnalyzer();
+        Main.Ctx ctx = new Main.Ctx();
+        ctx.outDir = modsDir;                        // donde están los .mod (el C va a outDir, abajo)
+        ctx.faltaImportEsError = true;
+        ctx.autodiscoverFromSource(src.toAbsolutePath());
+        for (String d : dependencias) ctx.dependencyPaths.add(Paths.get(d));   // como buildProject
+        Main.injectImplicitCoreImport(module);
+        Main.injectImplicitCollectionsImport(module);
         try {
-            Main.Ctx ctx = new Main.Ctx();
-            ctx.outDir = outDir;
             Main.loadImportsForAnalyzer(module, src, ctx, analyzer, 0);
         } catch (Exception impEx) {
-            System.err.println("aviso: imports no resueltos del todo: " + impEx.getMessage());
+            throw new ImportsFaltanException("los imports de " + src.getFileName() + " no cargan: " + impEx.getMessage());
+        }
+        if (ctx.totalErrors > 0) {
+            String cuales = ctx.importsQueFaltan.isEmpty()
+                    ? "un import incompatible (ver el error de arriba)"
+                    : String.join("; ", ctx.importsQueFaltan);
+            throw new ImportsFaltanException("no se traduce " + src.getFileName() + ": " + cuales);
         }
         SemanticInfo info = analyzer.analyze(module);
 

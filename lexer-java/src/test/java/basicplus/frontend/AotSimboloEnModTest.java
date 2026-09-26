@@ -115,6 +115,9 @@ class AotSimboloEnModTest {
 
         Set<String> enElMod = ModSimbolos.conjunto(out.resolve("AotSim.mod"));
 
+        // #542 — el AOT, con LA MISMA stdlib que la compilación (hasta el 25-sep traducía sin Core).
+        Main.STDLIB_DIR = StdlibDeTest.paraFormato(tmp).getAbsolutePath();
+        try {
         for (boolean modoMdn : new boolean[]{true, false}) {
             Path d = Files.createDirectories(tmp.resolve("c" + modoMdn));
             List<String> pedidos = nombresQueElAotRegistra(emitirC(d, modoMdn), "AotSim");
@@ -135,6 +138,9 @@ class AotSimboloEnModTest {
                         + "\n  candidatos en el .mod: "
                         + ModSimbolos.conPrefijo(enElMod, "Caja"));
             }
+        }
+        } finally {
+            Main.STDLIB_DIR = null;
         }
     }
 }

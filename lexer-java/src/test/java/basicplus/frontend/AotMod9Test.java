@@ -81,7 +81,7 @@ class AotMod9Test {
 
     private int formatoAntes;
     @BeforeEach void guarda() { formatoAntes = Main.FORMATO; }
-    @AfterEach  void restaura() { Main.FORMATO = formatoAntes; }
+    @AfterEach  void restaura() { Main.FORMATO = formatoAntes; Main.STDLIB_DIR = null; }
 
     /** Compila el proyecto capturando stdout+stderr; devuelve {ok, texto}. */
     private static Object[] compila(Path tmp, String main, String[]... fuentes) throws IOException {
@@ -134,6 +134,9 @@ class AotMod9Test {
         for (int i = 0; i < fuentes.length; i++) fuentes[i] = new String[]{ fuentesPlanas[2 * i], fuentesPlanas[2 * i + 1] };
         Object[] r = compila(tmp, "Usa", fuentes);
         assertTrue((Boolean) r[0], (String) r[1]);
+        // #542 — el AOT, con LA MISMA stdlib que la compilación. Hasta el 25-sep este test traducía SIN la
+        // interfaz de Core (el AOT sólo miraba el BpVM.cfg del cwd, y avisaba y seguía): justo el fallo mudo.
+        Main.STDLIB_DIR = StdlibDeTest.paraFormato(tmp).getAbsolutePath();
         AotMain.AotResult ar = AotMain.emitAotC(tmp.resolve("src").resolve("Usa.bp"), tmp.resolve("out"), true);
         assertNotNull(ar.cFile, "Usa tiene native: debe emitir C");
         return new String(Files.readAllBytes(ar.cFile), StandardCharsets.UTF_8);

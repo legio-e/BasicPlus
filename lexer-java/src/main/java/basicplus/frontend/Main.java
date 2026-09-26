@@ -63,6 +63,13 @@ public final class Main {
     public static int BARAJAR = 0, RELLENO = 0;
 
     static final class Ctx {
+        /** #542 (V7/H5) — un import cuya interfaz no aparece, ¿aviso o error? El compilador avisa
+         *  y sigue (el fallo sale luego como nombres que no resuelven, y el modo interfaz es
+         *  tolerante a propósito); el AOT lo pone a true: sin la interfaz de `Core` generaba código
+         *  EQUIVOCADO sin un error (Eduardo, 25-sep: «si no está es un error de carga de módulo»). */
+        boolean faltaImportEsError = false;
+        /** #542 — los imports que faltaron con {@link #faltaImportEsError}, con su nombre. */
+        final List<String> importsQueFaltan = new ArrayList<>();
         Path outDir;                                // donde se emiten .mod y .bpi
         String backend = "mivm";                    // sólo afecta al modo FULL
         boolean showTokens = false;
@@ -2177,6 +2184,13 @@ public final class Main {
     // Package-private (#212): AotMain lo reutiliza para resolver imports antes de
     // emitir AOT, igual que compileFull aquí. Carga las .bpi disponibles en el
     // analizador (no compila deps; deben existir ya).
+    /** #542 — un import que falta, contado como ERROR (sólo con {@link Ctx#faltaImportEsError}). */
+    private static void faltaImport(Ctx ctx, int depth, String msg) {
+        ctx.totalErrors++;
+        ctx.importsQueFaltan.add(msg);
+        indent(depth); System.err.println("error: " + msg);
+    }
+
     static void loadImportsForAnalyzer(Ast.ModuleNode module, Path importerSrc, Ctx ctx,
                                                SemanticAnalyzer analyzer, int depth) throws IOException {
         if (module.imports == null || module.imports.isEmpty()) return;
@@ -2211,6 +2225,13 @@ public final class Main {
                     bpi = locateImportMod(imp, modName, importerDir, ctx);
                 }
                 if (bpi == null) {
+                    if (ctx.faltaImportEsError) {   // #542: en el AOT, error de carga con su nombre
+                        faltaImport(ctx, depth, String.format(
+                                "falta el modulo '%s': ni '%s' ni su .mod en la stdlib (%s) ni junto al fuente (%s)"
+                                + " — ¿BpVM.cfg o --stdlibDir?, ¿compilado antes?",
+                                alias, bpiName, ctx.stdlibDir, importerDir));
+                        continue;
+                    }
                     indent(depth); System.out.printf("-- aviso: sin interfaz para import '%s' (ni '%s' ni su .mod) --%n",
                             alias, bpiName);
                     continue;
@@ -2222,6 +2243,11 @@ public final class Main {
                         ? readInterfaceCached(bpi, ctx)          // disco (.mod/.bpi), cachea
                         : ctx.interfaceCache.get(cacheKey);      // ya en memoria
                 if (ifaceBpi == null) {
+                    if (ctx.faltaImportEsError) {   // #542: en el AOT, error de carga con su nombre
+                        faltaImport(ctx, depth, String.format(
+                                "el modulo '%s' no expone una interfaz legible ('%s')", alias, bpi));
+                        continue;
+                    }
                     // Un .mod sin interfaz legible: avisa, no revientes (antes: NPE).
                     indent(depth); System.out.printf("-- aviso: '%s' no expone interfaz legible para import '%s' --%n",
                             bpi, alias);

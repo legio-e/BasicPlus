@@ -309,11 +309,16 @@ el CS del módulo destino a partir de la dirección absoluta. Probado:
 módulo); paridad byte-idéntica Java/C (`make test-xmodule`).
 
 **Pendiente de #169** (sigue `[v2]`):
-- **AotMain/build_mdn no resuelve imports** → la herramienta standalone que
-  genera el `.c`/`.mdn` aún no puede emitir thunks cross-module (sí lo valida
-  el `--compile` del frontend, que resuelve imports). El `loadImportsForAnalyzer`
-  de `Main` está acoplado a su `ctx`/recursión; falta refactor para reusarlo en
-  AotMain. (Tarea de follow-up.)
+- ~~**AotMain/build_mdn no resuelve imports**~~ — **HECHO**: `AotMain` llama a
+  `Main.loadImportsForAnalyzer` desde #212, y desde **#542 (V7/H5, 25-sep)** los
+  busca COMO EL COMPILADOR: el `BpVM.cfg` subiendo desde el fuente (antes, sólo el
+  del cwd), `--stdlibDir=DIR`, los mismos imports implícitos, los `.mod` donde los
+  dejó el build y las `dependencies` del proyecto (`emitAotC(…, modsDir,
+  dependencias)`, que `AotBuild` rellena en el IDE), y un import cuya interfaz no
+  aparece es un ERROR con su nombre (`AotMain.ImportsFaltanException`; exit 4 en la
+  línea de órdenes; en el IDE, «AOT omitido … (se ejecutará interpretado)») — antes
+  avisaba y seguía, y sin la interfaz de `Core` traducía con ranuras fijas
+  equivocadas (`areaDe(6,7)` = 0, status=OK).
 - **native→native cross-module fast-path** (§5): hoy el puente interpreta el
   target aunque sea AOT; detectar el thunk del target y llamarlo directo es una
   optimización pendiente.
