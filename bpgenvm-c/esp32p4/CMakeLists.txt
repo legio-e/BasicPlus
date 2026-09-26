@@ -2,10 +2,9 @@
 # G4: LVGL 9.2.2 vendorizada (third_party/lvgl, gitignored) como componente IDF.
 cmake_minimum_required(VERSION 3.16)
 
-# LVGL se registra sola por su esp.cmake (rama if(ESP_PLATFORM)). third_party/ es el
-# contenedor: IDF escanea sus subdirectorios y solo lvgl/ tiene CMakeLists (SDL2/ se
-# ignora). Debe fijarse ANTES de project().
-set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../third_party")
+# V7/H6 G5.a (26-sep): LVGL YA NO VA EN LA IMAGEN — viene del pack (lvgl.npk.RISCV), como en la C5 y la
+# C6, y la pantalla la publica la imagen como 'PANT' (gui_display_dsi.c). Por eso ya no se escanea
+# third_party/ (sólo estaba por LVGL, que se registraba sola por su esp.cmake).
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # El binario se llama como la PLACA, no como una fase del desarrollo: se publica
@@ -28,16 +27,9 @@ idf_build_set_property(COMPILE_OPTIONS "-I${CMAKE_CURRENT_LIST_DIR}/../include" 
 # render LVGL. gui.c entra en SRCS del main; la costura bpvm_gui_disp_* la implementa
 # gui_display_dsi.c (reutiliza el panel de G3 + el táctil de G5).
 idf_build_set_property(COMPILE_OPTIONS "-DBPVM_GUI" APPEND)
-idf_build_set_property(COMPILE_OPTIONS "-DBPVM_LVGL" APPEND)
-
-# G6 — forzar NUESTRA include/lv_conf.h (la misma que host/STM32) sobre la config
-# Kconfig de LVGL. El componente LVGL de IDF trae CONFIG_LV_CONF_SKIP=y por defecto:
-# IGNORA lv_conf.h y usa Kconfig (solo montserrat_14, sin lodepng) -> gui.c no enlaza
-# (fuentes 12-48 + lv_lodepng_init). En lv_conf_internal.h, LV_CONF_PATH se evalúa
-# ANTES que el SKIP -> gana nuestra config (fuentes, lodepng, RGB565 via BPVM_BOARD_P4).
-# Ruta absoluta normalizada (sin '..') para el #include de LVGL.
-get_filename_component(BPVM_LV_CONF "${CMAKE_CURRENT_LIST_DIR}/../include/lv_conf.h" ABSOLUTE)
-idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_PATH=${BPVM_LV_CONF}" APPEND)
+# V7/H6 G5.a — la GUI por el PACK: los trampolines de gui_pack.c en vez de gui.c + LVGL (hasta aquí,
+# -DBPVM_LVGL y el lv_conf.h propio, que ya no hacen falta: el lv_conf va dentro del pack).
+idf_build_set_property(COMPILE_OPTIONS "-DBPVM_GUI_PACK" APPEND)
 
 # G6 (RETIRADO en #338) — este override subía el buffer de PUT porque Gui.mod
 # (~24 KB) no cabía entero en el buffer del wire. Eso era ANTES del streaming: desde

@@ -50,7 +50,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
-        "../../src/gui.c"                     # G6: modelo GUI + widgets LVGL (Gui.* de BasicPlus)
+        "../../src/gui_pack.c"                # V7/H6 G5.a: la GUI por el PACK (trampolines; sin gui.c ni LVGL), como la C5 y la C6
         "../../src/fs_facade.c"
         "../../src/fs_lfs.c"                  # H2-B3: backend littlefs de la fachada (portable)
         "../../third_party/littlefs/lfs.c"    # H2: motor littlefs v2.11.3 (in-tree)
@@ -122,7 +122,6 @@ idf_component_register(
         esp_mm           # H4 AOT RISC-V: esp_cache_msync (sync I/D-cache del .mdn en RAM exec)
         esp_lcd          # G3: MIPI-DSI (esp_lcd_new_dsi_bus + panel ops)
         esp_driver_ledc  # G3: PWM del backlight (GPIO26)
-        lvgl             # G4: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)
         esp_driver_i2c   # G5: bus I2C del táctil GT911 (i2c_new_master_bus) + backend I2C BP (H14)
         esp_driver_gpio  # H14: backend GPIO del P4 (driver/gpio.h)
         esp_driver_uart  # H14: backend UART del P4 (driver/uart.h)

@@ -9,6 +9,11 @@
  * G3 (este paso): solo panel + backlight + relleno ROJO (sin LVGL), para validar
  * el display en NUESTRO firmware. La costura LVGL bpvm_gui_disp_* (bajo BPVM_LVGL)
  * llega en G4 reutilizando p4_dsi_panel_init().
+ *
+ * V7/H6 G5.a (26-sep) — DOS MODOS, según el build: con BPVM_LVGL (la imagen de antes),
+ * LVGL va dentro y este fichero le da su display y su táctil; con BPVM_GUI_PACK (desde
+ * G5.a), LVGL viene del PACK y este fichero PUBLICA la pantalla como 'PANT' desde la
+ * imagen (al final del fichero). El panel, la luz y el táctil son de los dos.
  */
 #include "gui_display_dsi.h"
 
@@ -21,7 +26,13 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"          /* G4: tick de LVGL (ms) */
+#if defined(BPVM_LVGL)
 #include "lvgl.h"               /* G4: LVGL 9.2.2 vendorizada (componente IDF) */
+#endif
+#if defined(BPVM_GUI_PACK)
+#include "bpvm_pant.h"          /* V7/H6 G5.a: el contrato del driver de pantalla ('PANT') */
+#include "bpvm_bios.h"          /* V7/H6 G5.a: bpvm_bios_publica, el mismo registro que usan los packs */
+#endif
 #include "freertos/FreeRTOS.h"  /* G4: vTaskDelay en el bombeo */
 #include "freertos/task.h"
 #include "driver/i2c_master.h"   /* G5: bus I2C del táctil (driver nuevo) */
@@ -332,6 +343,7 @@ void p4_gfx_smoke_test(void)
     /* fb se queda vivo a propósito (el draw del DPI puede ser asíncrono). */
 }
 
+#if defined(BPVM_LVGL)
 /* ============================ G4 — LVGL 9.2.2 ============================
  * Prueba de LVGL en NUESTRO firmware: panel (reutilizado de G3) + lv_display con
  * flush vía esp_lcd_panel_draw_bitmap + un botón con label. Sin táctil todavía
@@ -422,6 +434,7 @@ static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_m
     s_flush_us += (uint32_t)(esp_timer_get_time() - t0_flush); s_flush_n++;   /* #424 */
     lv_display_flush_ready(disp);
 }
+#endif /* BPVM_LVGL */
 
 /* -------------------- G5: táctil GT911 @0x14 (I2C SDA=GPIO7/SCL=GPIO8) -------------------- */
 #define TOUCH_I2C_SDA   7
@@ -429,7 +442,6 @@ static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_m
 #define TOUCH_I2C_PORT  0
 
 static esp_lcd_touch_handle_t s_tp = NULL;
-static int32_t s_tp_x = 0, s_tp_y = 0;   /* último punto (LVGL lo quiere también en RELEASED) */
 
 /* Intenta abrir el GT911 en una dirección concreta. Devuelve el handle o NULL (sin
  * abortar). flags mirror_x/y = 1 como el BSP, para que el toque cuadre con el panel. */
@@ -491,6 +503,9 @@ static esp_lcd_touch_handle_t p4_touch_init(void)
     if (!tp) ESP_LOGE(TAG, "GT911 no responde en 0x14 ni 0x5D (revisar FPC/cableado del táctil)");
     return tp;
 }
+
+#if defined(BPVM_LVGL)
+static int32_t s_tp_x = 0, s_tp_y = 0;   /* último punto (LVGL lo quiere también en RELEASED) */
 
 /* read_cb del lv_indev: sondea el GT911 y entrega el punto a LVGL (igual camino que
  * el táctil del STM32). LVGL lo llama dentro de lv_timer_handler. */
@@ -727,3 +742,144 @@ void p4_gfx_lvgl_test(void)
         vTaskDelay(ticks);
     }
 }
+#endif /* BPVM_LVGL */
+
+#if defined(BPVM_GUI_PACK)
+/* ═════════ V7/H6 G5.a (26-sep) — LA PANTALLA DEL P4, PUBLICADA COMO 'PANT' DESDE LA IMAGEN ═════════
+ * LVGL ya no va en la imagen: viene del pack (lvgl.npk.RISCV) y busca su driver de pantalla por la marca 'PANT',
+ * como en la C5 y la C6. El panel del P4 —MIPI-DSI y DPI— no se puede prestar por la BIOS (es un periférico de la
+ * familia), así que su driver se queda aquí y publica lo mismo que DriverSpi (bpvm_pant.h): init, size, flush,
+ * rotate y touch. El formato no se publica: RGB565 tal cual, lo que escanea el DPI.
+ *
+ * EL GIRO. Un panel DPI no gira por hardware: el LVGL de la imagen giraba cada franja por software en su flush
+ * (lv_draw_sw_rotate + lv_display_rotate_area) y el punto del táctil en su indev. El LVGL del pack pinta con el ancho
+ * y el alto cambiados y no sabe de giros, así que las tres cosas se hacen aquí, con las MISMAS cuentas que LVGL 9.2.2
+ * (lv_display.c, lv_draw_sw.c, lv_indev.c): Gui.setRotation deja la pantalla exactamente como antes. W×H es el panel
+ * a 0° (la resolución física del catálogo). */
+static int       s_pant_rot = 0;            /* 0, 90, 180 o 270 */
+static int       s_pant_listo = 0;          /* el panel, la luz y el táctil, UNA vez (el bus del táctil no se abre dos) */
+static uint16_t *s_pant_giro = NULL;        /* la franja girada (PSRAM, sólo crece) */
+static size_t    s_pant_giro_px = 0;
+
+static int pant_init(void)
+{
+    if (!s_pant_listo) {
+        p4_dsi_panel_init();
+        p4_backlight_on();
+        s_tp = p4_touch_init();
+        if (s_tp == NULL) ESP_LOGW(TAG, "sin tactil: la GUI se vera pero no reaccionara");
+        s_pant_listo = 1;
+    }
+    return s_panel ? 0 : -1;
+}
+
+static int pant_size(int *w, int *h)
+{
+    p4_panel_select();           /* idempotente: sólo lee el ENV (`display=`) */
+    *w = s_cfg->hres;
+    *h = s_cfg->vres;
+    return 1;
+}
+
+static int pant_rotate(int deg)
+{
+    if (deg != 0 && deg != 90 && deg != 180 && deg != 270) return -1;
+    s_pant_rot = deg;
+    return 0;                    /* girado: el pack de LVGL cambia su resolución y repinta */
+}
+
+static void pant_flush(int x1, int y1, int x2, int y2, const uint8_t *px)
+{
+    if (s_panel == NULL) return;
+    if (s_pant_rot == 0) {
+        esp_lcd_panel_draw_bitmap(s_panel, x1, y1, x2 + 1, y2 + 1, px);
+        return;
+    }
+    const int32_t w = x2 - x1 + 1, h = y2 - y1 + 1;
+    const size_t n = (size_t) w * (size_t) h;
+    if (n > s_pant_giro_px) {
+        uint16_t *nb = (uint16_t *) heap_caps_realloc(s_pant_giro, n * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+        if (nb == NULL) {
+            ESP_LOGE(TAG, "sin PSRAM para girar la franja (%u px) — franja saltada", (unsigned) n);
+            return;
+        }
+        s_pant_giro = nb;
+        s_pant_giro_px = n;
+    }
+    const uint16_t *src = (const uint16_t *) px;
+    uint16_t *dst = s_pant_giro;
+    /* Los píxeles: rotate90/180/270_rgb565 de lv_draw_sw.c, con los pasos en píxeles (el origen, w; el destino, h a
+     * 90 y 270, w a 180). */
+    if (s_pant_rot == 90) {
+        for (int32_t x = 0; x < w; ++x) {
+            int32_t di = w - x - 1, si = x;
+            for (int32_t y = 0; y < h; ++y) { dst[di * h + y] = src[si]; si += w; }
+        }
+    } else if (s_pant_rot == 180) {
+        for (int32_t y = 0; y < h; ++y) {
+            int32_t di = (h - y - 1) * w, si = y * w;
+            for (int32_t x = 0; x < w; ++x) dst[di + w - x - 1] = src[si + x];
+        }
+    } else {
+        for (int32_t x = 0; x < w; ++x) {
+            int32_t di = x * h, si = x;
+            for (int32_t y = 0; y < h; ++y) { dst[di + (h - y - 1)] = src[si]; si += w; }
+        }
+    }
+    /* La zona: lv_display_rotate_area, con W×H = el panel a 0°. (a1,b1)-(a2,b2) es la zona FÍSICA. */
+    const int32_t W = s_cfg->hres, H = s_cfg->vres;
+    int32_t a1, b1, a2, b2;
+    if (s_pant_rot == 90) {
+        b2 = H - x1 - 1; a1 = y1; a2 = a1 + h - 1; b1 = b2 - w + 1;
+    } else if (s_pant_rot == 180) {
+        b2 = H - y1 - 1; b1 = b2 - h + 1; a2 = W - x1 - 1; a1 = a2 - w + 1;
+    } else {
+        a1 = W - y2 - 1; b2 = x2; a2 = a1 + h - 1; b1 = b2 - w + 1;
+    }
+    esp_lcd_panel_draw_bitmap(s_panel, a1, b1, a2 + 1, b2 + 1, dst);
+}
+
+static int pant_touch(int *x, int *y)
+{
+    if (s_tp == NULL) return 0;
+    uint16_t tx = 0, ty = 0;
+    uint8_t  cnt = 0;
+    esp_lcd_touch_read_data(s_tp);
+    bool pulsado = esp_lcd_touch_get_coordinates(s_tp, &tx, &ty, NULL, &cnt, 1);
+    if (!pulsado || cnt == 0) return 0;
+    /* El punto: indev_pointer_proc de lv_indev.c —del panel a 0° a la orientación actual—. */
+    int32_t px = tx, py = ty;
+    const int32_t W = s_cfg->hres, H = s_cfg->vres;
+    if (s_pant_rot == 180 || s_pant_rot == 270) { px = W - px - 1; py = H - py - 1; }
+    if (s_pant_rot == 90  || s_pant_rot == 270) { int32_t t = py; py = px; px = H - t - 1; }
+    *x = (int) px;
+    *y = (int) py;
+    return 1;
+}
+
+static const bpvm_pack_sym_t s_pant_syms[] = {
+    { "init",   (bpvm_pack_fn_t) pant_init   },
+    { "size",   (bpvm_pack_fn_t) pant_size   },
+    { "flush",  (bpvm_pack_fn_t) pant_flush  },
+    { "rotate", (bpvm_pack_fn_t) pant_rotate },
+    { "touch",  (bpvm_pack_fn_t) pant_touch  },
+};
+static const bpvm_pack_api_t s_pant_api = {
+    BPVM_PANT_MARCA, BPVM_PANT_API_VER,
+    (uint32_t) (sizeof s_pant_syms / sizeof s_pant_syms[0]), s_pant_syms
+};
+
+void p4_pant_publicar(void)
+{
+    /* Al arrancar, antes que ningún pack: el de LVGL la busca en su PRIMER USO (el primer Gui.Screen), así que el
+     * orden da igual; y si algún pack de driver quisiera publicar otra 'PANT', el registro se lo niega con nombre
+     * (-3) en vez de pisar la de la imagen. */
+    int r = bpvm_bios_publica(BPVM_PANT_MARCA, &s_pant_api);
+    if (r != 0) {
+        ESP_LOGE(TAG, "publica('PANT') = %d: la GUI del pack no tendra pantalla", r);
+        log_printf("pantalla: el P4 NO pudo publicar 'PANT' (publica = %d)", r);
+    } else {
+        log_printf("pantalla: el P4 publica 'PANT' desde la imagen (MIPI-DSI, el panel del ENV, tactil GT911)");
+    }
+}
+#endif /* BPVM_GUI_PACK */

@@ -336,6 +336,9 @@ static void wire_task(void *arg)
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3, ESP-IDF) */
+#if defined(BPVM_GUI_PACK)
+    p4_pant_publicar();          /* V7/H6 G5.a: la pantalla, como 'PANT', para el LVGL del pack */
+#endif
     bpvm_bus_desde_env(env_de_la_placa);   /* V7/H6.c G4.a1: los buses del ENV (ver main.c del S3) */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* backend del P4 (pisa el del S3) */
     wire_v1_tcp_server_init(WIRE_PORT);
@@ -388,6 +391,9 @@ static void wire_task_uart(void *arg)
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3) */
+#if defined(BPVM_GUI_PACK)
+    p4_pant_publicar();          /* V7/H6 G5.a: la pantalla, como 'PANT', para el LVGL del pack */
+#endif
     bpvm_bus_desde_env(env_de_la_placa);   /* V7/H6.c G4.a1: los buses del ENV */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* del P4 */
     wire_v1_transport_init();

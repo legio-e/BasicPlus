@@ -10,8 +10,16 @@
  * Si se ve roja: DSI + EK79007 + backlight + PSRAM OK en nuestro firmware. */
 void p4_gfx_smoke_test(void);
 
+#if defined(BPVM_LVGL)
 /* G4/G5 — LVGL: panel (de G3) + lv_display + botón con label + táctil GT911 como
  * lv_indev (el botón reacciona al dedo). Bucle infinito de bombeo (NO retorna). */
 void p4_gfx_lvgl_test(void);
+#endif
+
+#if defined(BPVM_GUI_PACK)
+/* V7/H6 G5.a — publica la pantalla del P4 como 'PANT' (bpvm_pant.h) para el LVGL del pack.
+ * Una vez, al arrancar, tras esp32_hw_register (el panel se enciende en el primer Gui.Screen). */
+void p4_pant_publicar(void);
+#endif
 
 #endif /* GUI_DISPLAY_DSI_H */
