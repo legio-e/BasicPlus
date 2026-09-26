@@ -4039,3 +4039,25 @@ C5 en RISC-V—; **la convención con que viaja un `float` NO la decide el chip*
 por su SDK y el STM32 `hard` por CubeIDE): es del proyecto, y en ARM es `softfp`, la misma que `soft`, así que todos
 los ARM hablan igual tengan FPU o no. Un motor por juego de instrucciones, nunca dos por la coma flotante. (Un matiz
 para cuando llegue una placa M4: lo compilado para el M4 corre en nuestros M33, pero no al revés.)
+
+**Paso 1 ✅** (`ab87ece6`): las dos `.cproject` a `softfp`. En el artefacto, las `.elf` sin `Tag_ABI_VFP_args` (antes
+«VFP registers») y con la FPU (`FPv5`, `SP only`). En la DK2, `floatbench` (π por Leibniz, tres veces): con `hard`,
+2,523–2,524 s interpretado y 0,04 s nativo; con `softfp`, 2,521–2,522 s y 0,04–0,041 s — nada que perder. La tanda de
+V7 14/14 (`compat/informes/tanda_g5b0_dk2.md`), `FloatNat` 23/23 thunks nativos.
+
+**Paso 2, el código** (`ec0a48b2`): `bios_stm32.c` y `pack_stm32.c` (calcados de la RP2350: XIP en dirección fija, la misma
+vista para leer y saltar); `s_vm_mem` en la sección `.bss.bp_vm`, que los dos `.ld` ponen LO PRIMERO de la RAM
+(`.bp_vm (NOLOAD)`, y el arranque lo comprueba contra `__bp_vm_start`/`__bp_ram_start`: si no, no hay bloque); la
+reserva `packRam=` (o `SQLite=`) delante de la VM con el planificador común, con el ENV leído antes
+(`board_mgr_stm32_env_temprano`); el disparo en el primer Run; la RAM en `PACK_BURN_BEGIN`; la BIOS y el ancla
+comprobadas en cada arranque; y `stm32_flash_erase` partido por banco. Medido en el `.elf`: `s_vm_mem` =
+`__bp_vm_start` = `0x20000000` en las dos (`.bp_vm` de 1536 KB en la DK2 y 512 en la Nucleo, `.data` detrás), y la
+marca del ancla UNA vez en cada imagen. **En la DK2**, el arranque: «vm: 1536 KB», «packs: sin bloque de RAM (ni
+packRam= ni SQLite= en el ENV)», «bios: lista (47 ranuras, v8)» y «ancla: en 0x080DEDD4 (la busqueda la encuentra, y es
+LA misma)», en 15 ms.
+
+**Y por el camino, `#575`** (`848ded39`): al preparar SQLite salió que sus `.mdn` (y el de Gui2) seguían en la ABI 8 desde que
+la VM subió a la 9 esta mañana —SQLite y Gui2 sin natives en toda placa con imagen nueva— y que el AOT no podía
+regenerarlos (`#542` contaba `import v1 from pack "SQLI"` como un módulo que falta). Arreglado, regenerados (un byte
+distinto: la ABI), los packs reconstruidos y una red nueva en `compat.sh check` (`compat/packs_abi.py`). Los números
+de `SQLite.pack` podado para ARM: 456 KB, y el `mini` 24 KB: caben juntos en los 528 KB de la zona de la DK2.

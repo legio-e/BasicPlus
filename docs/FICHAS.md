@@ -88,7 +88,7 @@ el PC sin placa, como en el host.
 >
 > 🔎 **LO ABIERTO DE VERDAD, al 24-sep por la noche** (la tabla de hitos, limpia ese día a petición de Eduardo: las
 > cerradas que seguían sin tachar, tachadas, y los restos de las cerradas, llamados «restos»): **H1 y H2, cerrados.**
-> Fichas con número abiertas: `#452` (H8), ~~`#468`~~ (cerrada el 25-sep, `7398d6e5`), `#495` (H8), `#531` (H7), `#538` (H8), ~~`#542`~~ (H5; cerrada el 26-sep, `99136adb`), ~~`#567`~~ (H6; cerrada el 26-sep, `b9315223`), ~~`#571`~~ (H5; abierta y cerrada el 26-sep, `99b02ddb`), `#572` (H5, 26-sep: identificadores de BP que chocan en el C del AOT), ~~`#573`~~ (H5; abierta y cerrada el 26-sep, `de04b689`), ~~`#574`~~ (H4; abierta y cerrada el 26-sep, `6a53f91f`), ~~`#544`~~
+> Fichas con número abiertas: `#452` (H8), ~~`#468`~~ (cerrada el 25-sep, `7398d6e5`), `#495` (H8), `#531` (H7), `#538` (H8), ~~`#542`~~ (H5; cerrada el 26-sep, `99136adb`), ~~`#567`~~ (H6; cerrada el 26-sep, `b9315223`), ~~`#571`~~ (H5; abierta y cerrada el 26-sep, `99b02ddb`), `#572` (H5, 26-sep: identificadores de BP que chocan en el C del AOT), ~~`#573`~~ (H5; abierta y cerrada el 26-sep, `de04b689`), ~~`#574`~~ (H4; abierta y cerrada el 26-sep, `6a53f91f`), ~~`#575`~~ (H5; abierta y cerrada el 26-sep, `848ded39`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y `#554` (H7: concatenar en placa) —y `#490`, en V8—. Decisiones de Eduardo pendientes: ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga) y,
 > al publicar, `--formato=8` (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
 >
@@ -754,6 +754,19 @@ pack— y el builtin lanza «Gui: no caben mas widgets: esta GUI tiene sitio par
 el mensaje sin el número. También la pestaña de un `TabView`. miVM no tiene tope: es un límite de la VM-C, como su
 heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el error con 512; saboteado el builtin,
 «SIN ERROR tras 600 etiquetas». **En placa**: la C5 con `GuiMini`, «tras 255 etiquetas: … sitio para 256».
+
+#### ✅ `#575` — los `.mdn` de los packs se quedaron en la ABI 8 al subir la VM a la 9 (P2b.1.d, `21bacb85`): SQLite y Gui2 sin sus natives en toda placa con imagen nueva; y el AOT ya no podía regenerarlos —`#542` contaba `import v1 from pack "SQLI"` como un módulo que falta— (abierta y cerrada el 26-sep, al preparar la prueba de SQLite de `G5.b0`; H5 · **CERRADA el 26-sep**, `848ded39`)
+
+**Cómo salió.** Al podar `SQLite.pack` para la DK2, su `.mdn` ARM decía ABI 8 en la cabecera; la VM exige la 9 EXACTA desde esta mañana (`mdn_loader.c`: `h->abi_version != MDN_ABI_VERSION`), lo rechaza, y las `native` externas de `SQLite.bp` y de `Gui2.bp` no tienen otro cuerpo que uno que lanza «falta el codigo nativo del pack». O sea: en cualquier placa con una imagen de hoy —el P4 de `G5.a` incluido—, `SqlDemo` y Gui2 caen. La tanda no los usa, y por eso no saltó. El censo: los tres ingredientes (`SQLite.mdn.ARMV8`, `.RISCV`, `Gui2.mdn.RISCV`) y los tres packs construidos con ellos, en la 8. La fila de H5 lo tenía escrito («sube la ABI del `.mdn` —y hay que regenerarlos, el de SQLite incluido—»), y el LEEME de SQLite también: pasó el 20-ago (`#504`) y ha vuelto a pasar porque nada lo mira.
+
+**Y regenerarlos no se podía**: `PackAot` fallaba con «falta el modulo 'v1'». `#542` (`99136adb`, esta mañana) hizo que un import que no carga sea un error en el AOT, y el de la API de un pack nativo (`import v1 from pack "SQLI"`) no es un módulo —es la versión de la tabla que publica la placa, y sus funciones son las `native` del propio módulo—, pero llegaba al analizador como uno. Antes sólo avisaba.
+
+**Hecho** (`848ded39`):
+- el parser marca ESE import (`ImportNode.packNativoMarca`) y la carga de interfaces lo salta por la marca, no por el nombre. `AotImportsTest` 6/6, con el control de un `import v1` normal, que sigue faltando con su nombre; saboteado el salto, cae con el mismo mensaje que SQLite. Frontend 255/255;
+- los tres `.mdn` regenerados con `PackAot`: **un solo byte distinto en cada uno, el de la ABI** (8 → 9); el código y la huella de la receta, idénticos. `SQLite.pack` y `Gui.pack` reconstruidos: las mismas entradas y los mismos bytes salvo esos y la cabecera (la fecha y los CRC);
+- **la red**: `compat/packs_abi.py`, en `compat.sh check` (`check-packs-abi`). Las dos puntas dicen la misma ABI (`mdn_format.h` y `MdnPack.java`), y cada `.mdn` versionado y cada entrada `mdn` de los `.pack` que se pueden grabar (`packs/`, los `out/` de los proyectos de pack) está en ella; el pack se lee por su índice. Saboteada con el `SQLite.pack` viejo: «su SQLite.ARMV8.mdn va en la ABI 8 y la VM habla la 9 — reconstruye el pack» (y la primera vez dio rojo por la razón equivocada: el «✗» reventaba el print en la consola cp1252; ahora escribe en UTF-8).
+
+**En placa**: SQLite en la DK2 con `G5.b0`. Los packs de SQLite y la Gui ya grabados en otras placas (el P4) son los viejos: se regraban en la sesión de placas de P2b.3.
 
 #### ✅ `#574` — la tabla de capacidades de la ESP32 ofrece pines que usa el SISTEMA: en la C6, `Gpio.Pin(25, OUTPUT)` se acepta y el GPIO25 es el MISO de la flash (abierta y cerrada el 26-sep, al analizar el NeoPixel de H4; preexistente desde `#470`; H4 · **CERRADA el 26-sep**, `6a53f91f`)
 
