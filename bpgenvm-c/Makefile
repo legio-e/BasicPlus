@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotcede test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -688,6 +688,24 @@ test-ctx: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_ctx.c $(LIBOBJ) -o build/test_ctx.exe $(LDFLAGS)
 	@echo "--- P2b.1.a el cambio de contexto (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_ctx.exe
+
+# V7/H5 (P2b.1.c, 26-sep) — una native que llama a una función BP que se BLOQUEA mientras otro hilo avanza
+# y reserva (GC en cada reserva): la native se suspende en su pila prestada y lo que guarda en C sobrevive.
+test-aotcede: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatCede)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatCede,build/aotcede)
+	$(CC) $(CFLAGS) -Isrc test/test_aotcede.c build/aotcede/aot_NatCede.c $(LIBOBJ) \
+	  -o build/test_aotcede.exe $(LDFLAGS)
+	@echo "--- P2b.1.c suspender una native (esperado: AOT == interpretado, 7/7, sin FALLO) ---"
+	@./build/test_aotcede.exe samples/NatCede.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcede.aot; \
+	 ./build/test_aotcede.exe samples/NatCede.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcede.int; \
+	 n=$$(grep -c '^ok ' build/aotcede.aot); \
+	 if grep -q '^FALLO' build/aotcede.aot build/aotcede.int; then grep -h '^FALLO' build/aotcede.aot build/aotcede.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotcede.int build/aotcede.aot; then diff build/aotcede.int build/aotcede.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 7 ]; then cat build/aotcede.aot; echo "  ROJO: $$n de 7 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 7/7 con el AOT, igual que interpretado"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

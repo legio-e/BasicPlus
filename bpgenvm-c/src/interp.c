@@ -272,10 +272,21 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
     tc->pc = target_abs;
     tc->cs = target_cs;
 
+    /* V7/H5 P2b.1.c — si el hilo corre en su pila prestada, la función BP puede BLOQUEARSE y agotar su
+     * quantum como cualquier otra: la native se suspende entera y el worker atiende a los demás hilos.
+     * Antes, un bloqueo aquí era «cedió/falló (no soportado por el puente v1)» y el quantum no se acababa
+     * nunca (1 << 24 operaciones). Sin pila prestada, todo sigue como antes. */
+    int puede_ceder = tc->nativa != NULL && tc->nativa->estado == BPVM_NATIVA_CORRIENDO;
+    int quantum = puede_ceder ? (vm->quantum_ops > 0 ? vm->quantum_ops : 1024) : (1 << 24);
     for (;;) {
         int y = 0;
-        bpvm_status_t st = bpvm_interp_run_quantum(vm, tc, 1 << 24, &y);
+        bpvm_status_t st = bpvm_interp_run_quantum(vm, tc, quantum, &y);
         if (st == BPVM_NATIVE_RETURN) break;
+        if (st == BPVM_OK && puede_ceder
+            && (tc->status == BPVM_THREAD_RUNNABLE || tc->status == BPVM_THREAD_BLOCKED_SLEEP
+                || tc->status == BPVM_THREAD_BLOCKED_MUTEX || tc->status == BPVM_THREAD_BLOCKED_JOIN)) {
+            if (bpvm_nativa_ceder(vm, tc)) continue;   /* suspendida… y reanudada: sigue interpretando */
+        }
         if (st == BPVM_OK && tc->status == BPVM_THREAD_RUNNABLE) {
             continue;   /* quantum agotado: seguir interpretando */
         }
@@ -638,6 +649,29 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
     tc->status = BPVM_THREAD_RUNNING;
     bpvm_status_t exit_status = BPVM_OK;
     int ops = 0;
+
+    /* V7/H5 P2b.1.c — un hilo suspendido DENTRO de una native no se interpreta: se REANUDA su native (y con
+     * ella lo que haya en su pila prestada: el intérprete anidado del puente, otras natives). Si vuelve a
+     * suspenderse, se acaba el quantum sin tocar tc; si termina, el intérprete de fuera sigue tras su CALL. */
+    if (bpvm_nativa_suspendida(tc)) {
+        int r = bpvm_nativa_reanudar(vm, tc);
+        if (r == BPVM_NATIVA_SUSPENDIDA_R) {
+            if (yielded) *yielded = 1;
+            return BPVM_OK;
+        }
+        pc = tc->nativa->pc_vuelta;
+        cs = tc->nativa->cs_vuelta;
+        sp = tc->nativa->sp;
+        bp = tc->nativa->bp;
+        if (r != 0) {   /* lanzó: eh_unwind dejó tc en el handler (r == 1) o el hilo muerto (r == 2) */
+            pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+            if (r == 2) {
+                exit_status = BPVM_ERR_RUNTIME;
+                if (yielded) *yielded = 1;
+                goto done;
+            }
+        }
+    }
 
     for (;;) {
         if (ops >= max_ops) {
@@ -1050,7 +1084,14 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 /* #186 — boundary de fault. Si el native lanza, el wrapper
                  * propaga al try/catch BP que envuelva la llamada. */
                 tc->cs = cs;
-                int r = bpvm_nativa_llamar(vm, tc, aot, &sp, &bp);   /* P2b.1: en su pila prestada */
+                int r = bpvm_nativa_llamar(vm, tc, aot, &sp, &bp, pc, cs);   /* P2b.1: en su pila prestada */
+                if (r == BPVM_NATIVA_SUSPENDIDA_R) {
+                    /* P2b.1.c — el hilo se queda DENTRO de la native, suspendido: su estado (el del
+                     * intérprete anidado, si lo hay) ya está en tc. No se pasa por `done`, que lo pisaría
+                     * con los registros de aquí; al reanudarse, sigue en pc (tras este CALL). */
+                    if (yielded) *yielded = 1;
+                    return BPVM_OK;
+                }
                 if (r != 0) {
                     /* Fault: recargamos regs desde tc (eh_unwind los fijó
                      * al handler en r==1; en r==2 el thread está muerto). */
@@ -1962,7 +2003,14 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 if (aot_ext) {
                     /* #186 — mismo boundary de fault que OP_CALL. */
                     tc->cs = cs;
-                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, &sp, &bp);   /* P2b.1 */
+                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, &sp, &bp, pc, cs);   /* P2b.1 */
+                    if (r == BPVM_NATIVA_SUSPENDIDA_R) {
+                        /* P2b.1.c — el hilo se queda DENTRO de la native, suspendido: su estado (el del
+                         * intérprete anidado, si lo hay) ya está en tc. No se pasa por `done`, que lo pisaría
+                         * con los registros de aquí; al reanudarse, sigue en pc (tras este CALL). */
+                        if (yielded) *yielded = 1;
+                        return BPVM_OK;
+                    }
                     if (r != 0) {
                         pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                         if (r == 2) {

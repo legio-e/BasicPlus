@@ -33,8 +33,23 @@ static bpvm_nativa_t* nativa_de(bpvm_thread_t* tc) {
     return n;
 }
 
-int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
+/* Salta a la native —nueva o suspendida— y vuelve cuando termina o se suspende. Alrededor, la vista de la
+ * TLS del worker: se guarda al entrar y se repone al volver (la native pone la suya al reanudarse). */
+static int entrar(bpvm_nativa_t* n) {
+    n->f_worker = *bpvm_aot_fault_slot();
+    n->cc_worker = *bpvm_aot_callctx();
+    bpvm_ctx_saltar(&n->ctx_worker, n->ctx_nativa, n);
+    *bpvm_aot_fault_slot() = n->f_worker;
+    *bpvm_aot_callctx() = n->cc_worker;
+    if (n->estado == BPVM_NATIVA_SUSPENDIDA) return BPVM_NATIVA_SUSPENDIDA_R;
+    n->estado = BPVM_NATIVA_LIBRE;   /* TERMINADA: la pila queda libre para la siguiente */
+    return n->resultado;
+}
+
+int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp,
+                       uint32_t pc_vuelta, uint32_t cs_vuelta) {
     bpvm_nativa_t* n = tc->nativa;
+    int r;
     /* Anidada: el hilo ya corre en su pila prestada (native → BP → native). Una llamada de C más. */
     if (n != NULL && n->estado != BPVM_NATIVA_LIBRE)
         return bpvm_aot_call_guarded(vm, tc, aot, sp, bp);
@@ -54,20 +69,55 @@ int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint
     n->thunk = aot;
     n->sp = *sp;
     n->bp = *bp;
+    n->pc_vuelta = pc_vuelta;
+    n->cs_vuelta = cs_vuelta;
     n->estado = BPVM_NATIVA_CORRIENDO;
     n->ctx_nativa = bpvm_ctx_crear(n->pila, n->tam, trampolin);
-    bpvm_ctx_saltar(&n->ctx_worker, n->ctx_nativa, n);
-    /* Aquí se vuelve cuando la native termina. */
-    *sp = n->sp;
-    *bp = n->bp;
-    n->estado = BPVM_NATIVA_LIBRE;
-    return n->resultado;
+    r = entrar(n);
+    if (r != BPVM_NATIVA_SUSPENDIDA_R) {   /* terminó sin suspenderse: el intérprete sigue aquí mismo */
+        *sp = n->sp;
+        *bp = n->bp;
+    }
+    return r;
+}
+
+int bpvm_nativa_reanudar(bpvm_t* vm, bpvm_thread_t* tc) {
+    bpvm_nativa_t* n = tc->nativa;
+    (void) vm;
+    n->estado = BPVM_NATIVA_CORRIENDO;
+    return entrar(n);
+}
+
+int bpvm_nativa_ceder(bpvm_t* vm, bpvm_thread_t* tc) {
+    bpvm_nativa_t* n = tc->nativa;
+    (void) vm;
+    if (n == NULL || n->estado != BPVM_NATIVA_CORRIENDO) return 0;
+    n->f_nativa = *bpvm_aot_fault_slot();
+    n->cc_nativa = *bpvm_aot_callctx();
+    n->estado = BPVM_NATIVA_SUSPENDIDA;
+    bpvm_ctx_saltar(&n->ctx_nativa, n->ctx_worker, n);
+    /* Reanudada —quizá por otro worker, con su propia TLS—: la vista de la native, otra vez. */
+    *bpvm_aot_fault_slot() = n->f_nativa;
+    *bpvm_aot_callctx() = n->cc_nativa;
+    return 1;
 }
 
 #else  /* sin cambio de contexto para esta arquitectura todavía: la llamada de siempre */
 
-int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
+int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp,
+                       uint32_t pc_vuelta, uint32_t cs_vuelta) {
+    (void) pc_vuelta; (void) cs_vuelta;
     return bpvm_aot_call_guarded(vm, tc, aot, sp, bp);
+}
+
+int bpvm_nativa_reanudar(bpvm_t* vm, bpvm_thread_t* tc) {
+    (void) vm; (void) tc;
+    return 0;   /* nunca se suspende nada sin cambio de contexto */
+}
+
+int bpvm_nativa_ceder(bpvm_t* vm, bpvm_thread_t* tc) {
+    (void) vm; (void) tc;
+    return 0;
 }
 
 #endif

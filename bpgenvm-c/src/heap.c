@@ -374,6 +374,27 @@ static void gc_mark_phase(bpvm_t* vm) {
      *     programas sin AOT no pagan nada. Y en SMP el callctx es TLS por
      *     worker, y el STW garantiza que los demás workers están aparcados en
      *     frontera de quantum — nunca a mitad de un native. */
+    /* 2e. V7/H5 P2b.1.c — LAS NATIVES SUSPENDIDAS. Su estado de C —sus variables, y los registros que el
+     *     cambio de contexto guardó al suspenderlas— está en su pila prestada, desde el contexto guardado
+     *     hasta el tope. Nadie más lo ve: la native no corre, así que el escaneo de abajo (el del native
+     *     en curso) no la cubre. Palabra a palabra y conservador, como ese. */
+    for (int t = 0; t < vm->thread_count; t++) {
+        const struct bpvm_nativa* nv = vm->threads[t].nativa;
+        if (nv == NULL || nv->estado != BPVM_NATIVA_SUSPENDIDA) continue;
+        {
+            uintptr_t lo = ((uintptr_t) nv->ctx_nativa + 3u) & ~(uintptr_t) 3u;
+            uintptr_t hi = (uintptr_t) nv->pila + nv->tam;
+            uint32_t palabras = 0;
+            for (uintptr_t a = lo; a + 4u <= hi; a += 4u) {
+                uint32_t v;
+                memcpy(&v, (const void*) a, 4);
+                palabras++;
+                mark_recursive(vm, v);
+            }
+            bpvm_diag("[gc] pila C de la native SUSPENDIDA del hilo %d: [%p..%p) = %u palabras",
+                      t, (void*) lo, (void*) hi, (unsigned) palabras);
+        }
+    }
     {
         bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
         if (cc->tc != NULL && cc->cstack_hi != 0) {
