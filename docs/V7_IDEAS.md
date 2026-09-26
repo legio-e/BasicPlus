@@ -2027,6 +2027,37 @@ supuesto a cero por estar en la zona reservada, y en la Pico NO lo está: la ram
 (26 veces más lento, que no era el coste de la línea sino el de 10 millones de llamadas). Se vio porque el número era
 absurdo. El indicador de la medida buena es un `static const volatile` del propio `.mdn`, que vale 0 seguro.
 
+#### P2b.1 — el plan concreto, leído el código (26-sep)
+
+Tres cosas que el diseño de arriba no sabía y el código sí:
+
+- **El límite de fallos (`#186`) y el contexto de la llamada son UNO POR WORKER**, a propósito: meterlos en cada hilo
+  infló la memoria en `#185`. Con la suspensión, un worker tiene varias natives vivas (una corriendo, otras
+  suspendidas). Van DENTRO del bloque de la pila prestada, que sólo existe para los hilos que entran en una native:
+  `bpvm_thread_t` gana un puntero, no un `jmp_buf` por hilo.
+- **Anidar ya estaba roto — `#571`**: `aot_call_guarded` guarda `prev_armed` pero no el `jmp_buf`, así que una native
+  que llama a BP que llama a otra native pierde su límite cuando la interior vuelve; si después lanza, el `longjmp`
+  salta a un marco muerto. **Reproducido en el PC**: interpretado, «atrapada: charAt: idx fuera de rango 11»; con el
+  AOT, el proceso muere en silencio tras la primera línea. Cada invocación tendrá su propio límite, y el programa de la
+  reproducción será la prueba.
+- **En el PC (MinGW, ABI de Windows x64), el TIB guarda los límites de la pila** y el `longjmp` de MinGW deshace
+  marcos comprobándolos: el cambio de contexto los pone a los de la pila prestada, como hacen las fibras de Windows.
+  Los registros que conserva son los que la ABI obliga (en Windows x64, también `xmm6`–`xmm15` y el MXCSR).
+
+**Los pasos de P2b.1**, cada uno con sus pruebas en el PC:
+
+- **a.** El cambio de contexto x86-64 (Windows) y su prueba: ida y vuelta miles de veces con muchos valores vivos
+  (enteros y `double`), un `setjmp`/`longjmp` y un marco grande (la sonda de pila) DENTRO de la pila prestada.
+- **b.** El bloque de la native (la pila prestada, su límite de fallos, su contexto de llamada) y el trampolín: toda
+  native corre en su pila prestada, sin suspender todavía. Las pruebas del AOT de hoy, todas verdes; el GC escanea las
+  pilas prestadas; y `#571` cerrada con su prueba.
+- **c.** Suspender y reanudar: el planificador reanuda un hilo que está dentro de una native; el puente nativo→BP deja
+  que la función BP bloquee. Prueba: una native llama a una función BP que duerme mientras otro hilo avanza; la misma
+  salida con el AOT que interpretada.
+- **d.** La línea del bucle en el emisor (el contador, y un helper de control cada 1024 vueltas que mira el `kill` y
+  el quantum: no hace falta un indicador que alguien levante) y la ABI 9. Pruebas: una native en un bucle sin fin que
+  sólo termina si otro hilo corre (sin expropiar, se cuelga), y el `kill` de una native.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
