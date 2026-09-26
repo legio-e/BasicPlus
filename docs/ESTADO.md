@@ -790,6 +790,57 @@ Eduardo: *«continuamos»*, con el orden del traspaso. Los tres pasos de `V7_IDE
 `compat.sh check` verde en cada paso (al final: paridad 103/103 en MOD9 y MOD8, pruebas de C 17/17); compilan la C6, la
 Pico y la Nucleo.
 
+## ⚙️ H5 (26-sep, media mañana) — P2b.2, la lista a mano con UNA implementación (la opción 3 de Eduardo) y `#573`
+
+- **P2b.2** (`5f0cc4f1`): el AOT llama a cualquier intrínseca `CALL_BUILTIN n` por el despachador del intérprete
+  (`call_builtin`, ABI 9) —`Math.sin`, `sqrt`, `startsWith`, `sleep`…—. La prueba del `sleep` no cazaba el sabotaje
+  «sin suspender»: el hilo se dormía después, en el primer builtin ya interpretado, y la salida salía igual; ahora la
+  native lee tras el `sleep` una global que sólo pone el otro hilo. Destapó `#572` (identificadores de BP que chocan en
+  el C del AOT).
+- **La lista a mano, medida** (5 millones de `charCodeAt` en un bucle nativo, en el PC): 44 ms por el helper tipado, 96
+  por el despachador, 257 interpretado. Eduardo: *«la 3»* —se quedan los helpers tipados, pero cada uno llama a la MISMA
+  función que su builtin—. Hecho en `4bfdb1a8`: `bpvm_prims.h`, seis primitivas y sus entradas. Un fallo DENTRO de una
+  primitiva ya no lo ve `test-aotstr` (el AOT y el intérprete se mueven juntos): lo caza la paridad contra miVM, y
+  `test-aotstr` vigila las entradas. Los dos lados, saboteados; uno salió verde cuando debía ser rojo —el builtin
+  `SUBSTRING` con `start + 1`— porque `NatStr` no tenía ningún `substring` con inicio positivo: comprobación nueva.
+- **La pila, MEDIDA** con la orden del firmware de la Pico y `-fstack-usage` (la nota del switch de builtins, aplicada):
+  el primer intento dejaba en cada `case` de `NEWARRAY` un búfer vivo a la vez que el de `BPVM_RT_THROW`, y el marco de
+  TODO el intérprete pasó de 248 a 336 B. Con `BPVM_RT_THROW_TEXTO` (`fdfb2398`), 256. El diff y las pruebas no lo veían.
+- **`#573`**, abierta y cerrada (`de04b689`): al mirar lo que quedaba fuera de la lista, los helpers de los OPERADORES de
+  arrays lanzaban su propio texto («array_load_i32: index out of bounds» donde el intérprete y miVM dicen «ALOAD: índice
+  fuera de rango 7 (length=3)») y el concat sin memoria devolvía un `null` callado. La misma receta
+  (`bpvm_prim_texto_indice`), `test-aotarr` (`NatArr`, 21: 20 distintas antes, iguales después) y `NatArr` en la
+  paridad. Otra vez la pila: con el búfer en `elem_de`, cada `a[i]` de una native bajaba 112 B más y hacía una llamada
+  más (a `-Os` gcc no la inlineaba) → el error en una función fría y `elem_de` siempre en línea: el marco de antes.
+- Visto de paso, sin tocar: el AOT no traduce las conversiones a tipos estrechos (`byte(x)`, `word(x)`, `int8(x)`,
+  `int16(x)`) dentro de una native —error duro de compilación, que es lo que se quiere de una `native`, pero con un texto
+  que dice «función desconocida» y lista cinco builtins, desfasado desde P2b.2—.
+
+`compat.sh check` verde en cada paso (al final: paridad 104/104 en MOD9 y MOD8, pruebas de C 19/19); compilan la Pico,
+la C6, la P4 y la Nucleo.
+
+## ⏭️ Traspaso (26-sep, media mañana) — P2b.2 hecho, la lista a mano con una implementación, `#573` cerrada
+
+**Commits** (sin push): `5f0cc4f1` (P2b.2) · `4bfdb1a8` `fdfb2398` (la opción 3 y la pila) · `de04b689` (`#573`) · y los
+docs.
+
+**Las placas**: sin cambios desde la mañana (en la Pico siguen `/app/NatLazo.mod` y `/app/NatLazo.mdn`, la medida de
+P2b.0; se pueden borrar, con el sí de Eduardo).
+
+**⚠️ El riesgo que acecha**: el mismo — desde la ABI 9, las placas (con la 8) rechazan todo `.mdn` nuevo y la función
+corre interpretada, hasta la cascada de P2b.3.
+
+**Queda**, en este orden:
+- **P2b.3**: el cambio de contexto de ARMv8-M con FPU, RV32 y RV32 con F; el tamaño de la pila prestada en cada placa
+  (ojo a los helpers que reservan: ahora son dos marcos, `string_concat` 144 B) y el GC en la pila del intérprete; la
+  cascada de la ABI 9 y la sesión de placas —con lo que ya espera placa: regrabar el `DriverSpi` en la C5 y la C6
+  (`#567`), `H6.b` en el P4 y la DK2, y las imágenes con `#569`, `#570`, `#571`, la opción 3 y `#573`—.
+- **`#572`**: que el emisor dé nombre propio en C a los identificadores de BP.
+- Las conversiones a tipos estrechos en una native (y el texto desfasado de ese error): pequeño, en el emisor.
+- Apuntado: una native recursiva sin bucles no pasa por la línea.
+- Sin placas: la documentación de usuario de la pantalla por packs (el entregable de §7.9) y la guía de instalación
+  desfasada (la C6 ya no trae LVGL en la imagen; la C5 no tiene sección).
+
 ## ⏭️ Traspaso (26-sep, mañana) — P2b.1 hecho en el PC: una native se suspende, se expropia y se para con un `kill`
 
 **Commits** (sin push): `99136adb` `b9315223` (`#542`, `#567`) · `41adacb8` (`#569`, `#570`) · `99b02ddb` (`#571`) ·

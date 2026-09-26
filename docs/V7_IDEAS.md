@@ -2037,8 +2037,11 @@ parámetros. `bpvm_call_builtin`, igual (2096). Los helpers del AOT crecen entre
 (ahora son dos marcos, el suyo y el de la primitiva) —en la pila de la native, que `P2b.3` tiene que dimensionar—.
 
 **Lo que queda fuera** (no es la lista a mano, son OPERADORES): los helpers de `a[i]`, `a[i] := v` y el `+` de cadenas
-también son copias —de opcodes—, y éstas SÍ se han ido: `#573` (un índice fuera de rango en una native lanza otro texto
-que interpretado; `a + b` sin memoria, un `null` callado).
+también son copias —de opcodes—, y éstas SÍ se habían ido: `#573` (un índice fuera de rango en una native lanzaba otro
+texto que interpretado; `a + b` sin memoria, un `null` callado). **Cerrada el mismo día** (`de04b689`) con la misma receta:
+`bpvm_prim_texto_indice`, el texto de cada opcode de acceso en UN sitio, que usan el opcode y el helper; el concat
+reserva con `bpvm_prim_nuevo_array`. `test-aotarr` 21/21 y `NatArr` en la paridad. La igualdad de cadenas no hacía falta:
+`string_eq` y `__strequals` ya coincidían (`null` sólo es igual a `null`).
 - **P2b.3** — el cambio de contexto de ARM y de los dos RISC-V, la cascada de la ABI 9 (los `.mdn`, los packs, las
   imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4 y la DK2).
 
