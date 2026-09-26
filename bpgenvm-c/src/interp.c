@@ -21,6 +21,7 @@
 #include "aot_registry.h"        /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
 #include "bpvm_aot_helpers.h"    /* P-aot-call-bp: struct aot_helpers_v1 completa */
 #include "bpvm_nativa.h"         /* V7/H5 P2b.1: la pila prestada de una native */
+#include "bpvm_prims.h"          /* V7/H5 P2b: las primitivas compartidas con el AOT */
 
 #include "bpvm_comm.h"
 #include "bpvm_io.h"   /* V6/A1 — la salida va al hilo io */
@@ -1414,16 +1415,16 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_NEWARRAY_I64: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) BPVM_RT_THROW("NEWARRAY_I64: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT GC */
-            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 8, BPVM_TYPE_ARRAY_I64);
-            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
-            bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        { bpref_t h430 = bpvm_handle_register(vm, ref);
-                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
-                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
-            mem = vm->memory;
-            break;
+            {   /* P2b: la primitiva compartida (con los builtins y el helper del AOT) */
+                bpref_t h; char em[80];
+                if (bpvm_prim_nuevo_array(vm, size, 8u, BPVM_TYPE_ARRAY_I64, "NEWARRAY_I64: tamaño negativo (", ")",
+                                          &h, em, sizeof em) != 0)
+                    BPVM_RT_THROW("%s", em);
+                bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
+                mem = vm->memory;
+                break;
+            }
         }
         case OP_ALOAD_I64: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
@@ -1529,40 +1530,42 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- F2: arrays ---- */
         case OP_NEWARRAY: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) BPVM_RT_THROW("NEWARRAY: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT GC */
-            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 4, BPVM_TYPE_ARRAY_I32);
-            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
-            bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        { bpref_t h430 = bpvm_handle_register(vm, ref);
-                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
-                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
-            mem = vm->memory;  /* heap_alloc no realoca pero defensivo */
-            break;
+            {   /* P2b: la primitiva compartida (con los builtins y el helper del AOT) */
+                bpref_t h; char em[80];
+                if (bpvm_prim_nuevo_array(vm, size, 4u, BPVM_TYPE_ARRAY_I32, "NEWARRAY: tamaño negativo (", ")",
+                                          &h, em, sizeof em) != 0)
+                    BPVM_RT_THROW("%s", em);
+                bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
+                mem = vm->memory;
+                break;
+            }
         }
         case OP_NEWARRAY_I8: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) BPVM_RT_THROW("NEWARRAY_I8: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
-            tc->sp = sp;   /* SAFEPOINT: el GC de heap_alloc marca [stack_base, tc->sp) */
-            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size, BPVM_TYPE_ARRAY_I8);
-            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
-            bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        { bpref_t h430 = bpvm_handle_register(vm, ref);
-                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
-                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
-            break;
+            tc->sp = sp;   /* SAFEPOINT GC */
+            {   /* P2b: la primitiva compartida (con los builtins y el helper del AOT) */
+                bpref_t h; char em[80];
+                if (bpvm_prim_nuevo_array(vm, size, 1u, BPVM_TYPE_ARRAY_I8, "NEWARRAY_I8: tamaño negativo (", ")",
+                                          &h, em, sizeof em) != 0)
+                    BPVM_RT_THROW("%s", em);
+                bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
+                mem = vm->memory;
+                break;
+            }
         }
         case OP_NEWARRAY_I16: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) BPVM_RT_THROW("NEWARRAY_I16: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT GC */
-            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 2, BPVM_TYPE_ARRAY_I16);
-            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
-            bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        { bpref_t h430 = bpvm_handle_register(vm, ref);
-                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
-                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
-            break;
+            {   /* P2b: la primitiva compartida (con los builtins y el helper del AOT) */
+                bpref_t h; char em[80];
+                if (bpvm_prim_nuevo_array(vm, size, 2u, BPVM_TYPE_ARRAY_I16, "NEWARRAY_I16: tamaño negativo (", ")",
+                                          &h, em, sizeof em) != 0)
+                    BPVM_RT_THROW("%s", em);
+                bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
+                mem = vm->memory;
+                break;
+            }
         }
         case OP_ALOAD: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);

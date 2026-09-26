@@ -1,9 +1,11 @@
 // NatStr.bp — #569/#570 (V7, 26-sep): la lista A MANO del AOT (charAt, charCodeAt, substring,
-// intToString y los newXArray) contra el camino interpretado. El AOT no llama al builtin: llama a una
-// COPIA en C (bpvm_aot_helpers.c), y la copia se había quedado atrás — `charAt("abc", 7)` daba "" con
-// el AOT y un RuntimeError interpretado; `substring` de un null daba null y no ""; y un tamaño
-// negativo lanzaba otro texto. `make test-aotstr` corre el MISMO .mod con el AOT y sin él, con GC en
-// cada alocación, y exige la misma salida, 15 comprobaciones y ningún FALLO.
+// intToString, len y los newXArray) contra el camino interpretado. El AOT no llamaba al builtin: llamaba
+// a una COPIA en C (bpvm_aot_helpers.c), y la copia se había quedado atrás — `charAt("abc", 7)` daba ""
+// con el AOT y un RuntimeError interpretado; `substring` de un null daba null y no ""; y un tamaño
+// negativo lanzaba otro texto. Desde P2b (la opción 3 de Eduardo) el helper y el builtin llaman a LA
+// MISMA función (bpvm_prims.h); lo que esta prueba vigila ahora son las ENTRADAS: que cada helper le
+// pase a la primitiva lo mismo que su builtin y lance igual. `make test-aotstr` corre el MISMO .mod con
+// el AOT y sin él, con GC en cada alocación, y exige la misma salida, 17 comprobaciones y ningún FALLO.
 module NatStr
   import Core
 
@@ -23,6 +25,10 @@ module NatStr
   native function codigo(s: string, i: integer): integer
     return charCodeAt(s, i)
   end codigo
+
+  native function largo(s: string): integer
+    return len(s)
+  end largo
 
   native function trozo(s: string, a: integer, b: integer): string
     return substring(s, a, b)
@@ -89,6 +95,16 @@ module NatStr
       print "ok charCodeAt null: " + intToString(codigo(nada, 0))
     catch e: RuntimeError
       print "ok charCodeAt null: atrapada: " + e.msg
+    endtry
+    try
+      print "ok len: " + intToString(largo("añb")) + " " + intToString(largo(nada))
+    catch e: RuntimeError
+      print "ok len: atrapada: " + e.msg
+    endtry
+    try
+      print "ok substring dentro: [" + trozo("añbcd", 1, 3) + "]"
+    catch e: RuntimeError
+      print "ok substring dentro: atrapada: " + e.msg
     endtry
     try
       print "ok substring recorte: [" + trozo("abcdef", menos, 99) + "]"

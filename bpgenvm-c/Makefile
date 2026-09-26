@@ -667,8 +667,10 @@ test-aotswitch: $(LIBOBJ)
 	 echo "[status=OK] 11/11 con el AOT, igual que interpretado"
 
 # V7/H5 (#569/#570, 26-sep) — LA LISTA A MANO DEL AOT contra el camino interpretado: charAt,
-# charCodeAt, substring, intToString y los newXArray van a COPIAS en C de sus builtins, y una copia se
-# quedaba atrás sin que nada lo dijera (charAt fuera de rango: "" con el AOT, un error interpretado).
+# charCodeAt, substring, intToString, len y los newXArray iban a COPIAS en C de sus builtins, y una copia
+# se quedaba atrás sin que nada lo dijera (charAt fuera de rango: "" con el AOT, un error interpretado).
+# Desde P2b (la opción 3) helper y builtin llaman a la MISMA función (bpvm_prims.h): la prueba vigila las
+# entradas, y lo que falle DENTRO de la primitiva lo caza la paridad contra miVM, no ésta.
 test-aotstr: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,NatStr)
@@ -676,14 +678,14 @@ test-aotstr: $(LIBOBJ)
 	$(call aotmain,NatStr,build/aotstr)
 	$(CC) $(CFLAGS) -Isrc test/test_aotstr.c build/aotstr/aot_NatStr.c $(LIBOBJ) \
 	  -o build/test_aotstr.exe $(LDFLAGS)
-	@echo "--- #569/#570 la lista a mano del AOT (esperado: AOT == interpretado, 15/15, sin FALLO) ---"
+	@echo "--- #569/#570 la lista a mano del AOT (esperado: AOT == interpretado, 17/17, sin FALLO) ---"
 	@./build/test_aotstr.exe samples/NatStr.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotstr.aot; \
 	 ./build/test_aotstr.exe samples/NatStr.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotstr.int; \
 	 n=$$(grep -c '^ok ' build/aotstr.aot); \
 	 if grep -q '^FALLO' build/aotstr.aot build/aotstr.int; then grep -h '^FALLO' build/aotstr.aot build/aotstr.int; echo "  ROJO: FALLO"; exit 1; fi; \
 	 if ! cmp -s build/aotstr.int build/aotstr.aot; then diff build/aotstr.int build/aotstr.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
-	 if [ "$$n" -ne 15 ]; then cat build/aotstr.aot; echo "  ROJO: $$n de 15 comprobaciones"; exit 1; fi; \
-	 echo "[status=OK] 15/15 con el AOT, igual que interpretado"
+	 if [ "$$n" -ne 17 ]; then cat build/aotstr.aot; echo "  ROJO: $$n de 17 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 17/17 con el AOT, igual que interpretado"
 
 # V7/H5 (P2b.1.a, 26-sep) — EL CAMBIO DE CONTEXTO (bpvm_ctx), la pieza en ensamblador de la suspensión de
 # natives: 100 000 saltos con estado vivo en los registros no volátiles, setjmp/longjmp y un marco grande

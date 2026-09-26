@@ -141,6 +141,7 @@ void bpvm_files_fin_de_run(bpvm_t* vm) {
  * del mismo fichero. Lo que sigue son las NOTAS que acompañaban a los números (se conservan; el
  * número de cada una está en la cabecera, con su firma BP). */
 #include "builtin_ids.h"
+#include "bpvm_prims.h"   /* V7/H5 P2b: las primitivas compartidas con el AOT */
 
 #if 0   /* notas de los ids (histórico; el enum vive en builtin_ids.h) */
     /* #348 — cadenas de cómputo puro. Estaban SÓLO en miVM: un programa que
@@ -827,6 +828,98 @@ static uint32_t move_elem(int tipo) {
     }
 }
 
+/* ═══ V7/H5 P2b (26-sep, la opción 3 de Eduardo) — LAS PRIMITIVAS COMPARTIDAS ═══════════════════════════
+ *
+ * Las usan los builtins de abajo, los opcodes NEWARRAY de interp.c y los helpers tipados del AOT
+ * (bpvm_aot_helpers.c): UNA implementación, varias entradas. Ver bpvm_prims.h. */
+
+int32_t bpvm_prim_str_len(bpvm_t* vm, uint32_t s) {
+    if (s == 0u) return 0;
+    return (int32_t) utf8_cp_count(vm->memory + s + BPVM_ARR_DATA_OFF, bpvm_read_u32_be(vm->memory + s));
+}
+
+int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i) {
+    uint32_t nbytes, ncp, off, adv;
+    const uint8_t* p;
+    if (s == 0u) return 0;
+    nbytes = bpvm_read_u32_be(vm->memory + s);
+    p = vm->memory + s + BPVM_ARR_DATA_OFF;
+    ncp = utf8_cp_count(p, nbytes);
+    if (i < 0 || (uint32_t) i >= ncp) return 0;
+    off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+    return (int32_t) utf8_decode(p + off, nbytes - off, &adv);   /* H2: codepoint en índice de codepoint */
+}
+
+int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err, size_t n) {
+    uint8_t enc[4];
+    uint32_t enc_len = 0, o, k;
+    if (s != 0u) {
+        uint32_t nbytes = bpvm_read_u32_be(vm->memory + s);
+        const uint8_t* p = vm->memory + s + BPVM_ARR_DATA_OFF;
+        uint32_t ncp = utf8_cp_count(p, nbytes);
+        uint32_t off, adv;
+        if (i < 0 || (uint32_t) i >= ncp) {
+            /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
+            snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
+            return -1;
+        }
+        off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+        enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
+    }
+    o = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
+    if (o == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355 */
+    bpvm_write_u32_be(vm->memory + o, enc_len);
+    for (k = 0; k < enc_len; k++) vm->memory[o + BPVM_ARR_DATA_OFF + k] = enc[k];
+    *out = bpvm_handle_register(vm, o);
+    if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #430 */
+    return 0;
+}
+
+int bpvm_prim_substring(bpvm_t* vm, bpref_t s, int32_t desde, int32_t hasta, bpref_t* out, char* err, size_t n) {
+    uint32_t a = bpref_deref(vm, s);
+    uint32_t nbytes = a ? bpvm_read_u32_be(vm->memory + a) : 0u;
+    const uint8_t* p = vm->memory + a + BPVM_ARR_DATA_OFF;
+    uint32_t ncp = a ? utf8_cp_count(p, nbytes) : 0u;   /* H2: índices en codepoints */
+    uint32_t boff, eoff, len, o, k;
+    if (desde < 0) desde = 0;
+    if (hasta < 0) hasta = 0;
+    if ((uint32_t) hasta > ncp) hasta = (int32_t) ncp;
+    if (desde > hasta) desde = hasta;
+    boff = utf8_byte_offset(p, nbytes, (uint32_t) desde);
+    eoff = utf8_byte_offset(p, nbytes, (uint32_t) hasta);
+    len = eoff - boff;
+    o = bpvm_heap_alloc(vm, len, BPVM_TYPE_ARRAY_I8);
+    if (o == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355 */
+    a = bpref_deref(vm, s);   /* otra vez, tras la reserva: el origen lo mantiene vivo quien llama (#350) */
+    bpvm_write_u32_be(vm->memory + o, len);
+    for (k = 0; k < len; k++)
+        vm->memory[o + BPVM_ARR_DATA_OFF + k] = vm->memory[a + BPVM_ARR_DATA_OFF + boff + k];
+    *out = bpvm_handle_register(vm, o);
+    if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #430 */
+    return 0;
+}
+
+int bpvm_prim_int_to_string(bpvm_t* vm, int32_t v, bpref_t* out, char* err, size_t n) {
+    char buf[16];
+    int k = snprintf(buf, sizeof buf, "%" PRId32, v);
+    uint32_t r = bpvm_heap_alloc_string(vm, buf, (size_t) (k > 0 ? k : 0));
+    if (r == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355 */
+    *out = bpref_regen(vm, r);
+    return 0;
+}
+
+int bpvm_prim_nuevo_array(bpvm_t* vm, int32_t size, uint32_t ancho, int tipo, const char* pre, const char* post,
+                          bpref_t* out, char* err, size_t n) {
+    uint32_t o;
+    if (size < 0) { snprintf(err, n, "%s%d%s", pre, (int) size, post); return -1; }   /* #570 */
+    o = bpvm_heap_alloc(vm, (uint32_t) size * ancho, tipo);
+    if (o == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* H1: OOM atrapable */
+    bpvm_write_u32_be(vm->memory + o, (uint32_t) size);   /* el payload ya viene a cero */
+    *out = bpvm_handle_register(vm, o);
+    if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #430 */
+    return 0;
+}
+
 int bpvm_builtin_cede(int id) {
     switch (id) {
     case BUILTIN_SLEEP: case BUILTIN_SLEEP_SEC: case BUILTIN_YIELD:
@@ -842,9 +935,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_STRLEN: {
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
-        uint32_t nbytes = bpref_arr_len(vm, s);
-        uint32_t ncp = bpref_is_null(s) ? 0 : utf8_cp_count(bpref_arr_elem(vm, s, 0, 1), nbytes);
-        push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
+        push_i32(vm, tc, bpvm_prim_str_len(vm, bpref_deref(vm, s)));   /* P2b: la primitiva compartida */
         return BPVM_OK;
     }
 
@@ -915,11 +1006,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_INT_TO_STRING: {
         int32_t v = pop_i32(vm, tc);
-        char buf[32];
-        int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
-        uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
-        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
-        push_ref(vm, tc, ref);
+        bpref_t h; char em[32];
+        if (bpvm_prim_int_to_string(vm, v, &h, em, sizeof em) != 0) return builtin_throw(vm, tc, em);   /* P2b */
+        bpref_push(vm, tc, h);
         return BPVM_OK;
     }
 
@@ -2005,14 +2094,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_CHAR_CODE_AT: {
         int32_t i   = pop_i32(vm, tc);
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
-        if (bpref_is_null(s)) { push_i32(vm, tc, 0); return BPVM_OK; }
-        uint32_t nbytes = bpref_arr_len(vm, s);
-        const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
-        uint32_t ncp = utf8_cp_count(p, nbytes);
-        if (i < 0 || (uint32_t) i >= ncp) { push_i32(vm, tc, 0); return BPVM_OK; }
-        uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-        uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
-        push_i32(vm, tc, (int32_t) cp);    /* H2: codepoint en índice de codepoint */
+        push_i32(vm, tc, bpvm_prim_char_code_at(vm, bpref_deref(vm, s), i));   /* P2b: la primitiva compartida */
         return BPVM_OK;
     }
 
@@ -2023,36 +2105,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * AOT hasta #569). */
         int32_t i    = pop_i32(vm, tc);
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
-        uint8_t enc[4]; uint32_t enc_len = 0;
-        if (!bpref_is_null(s)) {
-            uint32_t nbytes = bpref_arr_len(vm, s);
-            const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
-            uint32_t ncp = utf8_cp_count(p, nbytes);
-            if (i < 0 || (uint32_t) i >= ncp) {
-                /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
-                char em[96];
-                snprintf(em, sizeof em, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
-                return builtin_throw(vm, tc, em);
-            }
-            uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-            uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
-            enc_len = utf8_encode(cp, enc);   /* re-codifica a UTF-8 (antes de alocar) */
+        {   /* P2b: la primitiva compartida (con el helper string_char_at del AOT) */
+            bpref_t h; char em[96];
+            if (bpvm_prim_char_at(vm, bpref_deref(vm, s), i, &h, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+            bpref_push(vm, tc, h);
+            return BPVM_OK;
         }
-        /* Alocamos un string UTF-8 de 1 codepoint (enc_len bytes). */
-        uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
-        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
-             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
-             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
-             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
-             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
-            return builtin_throw(vm, tc, "No space in heap");
-        {   /* la reserva ya esta comprobada arriba */
-            bpvm_write_u32_be(vm->memory + out, enc_len);
-            for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
-            out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
-        }
-        push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
-        return BPVM_OK;
     }
 
     case BUILTIN_SUBSTRING: {
@@ -2068,32 +2126,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * el GC se la lleva EN VIVO. Medido: 3.000 vueltas con el heap estrecho
          * daban entre 3 y 6 resultados malos, y subían al encoger el heap. */
         bpref_t s = peek_ref(vm, tc, 0);
-        uint32_t nbytes = bpref_arr_len(vm, s);
-        const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
-        uint32_t ncp = bpref_is_null(s) ? 0 : utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
-        if (start < 0) start = 0;
-        if (end   < 0) end = 0;
-        if ((uint32_t) end > ncp) end = (int32_t) ncp;
-        if (start > end) start = end;
-        uint32_t boff = utf8_byte_offset(p, nbytes, (uint32_t) start);
-        uint32_t eoff = utf8_byte_offset(p, nbytes, (uint32_t) end);
-        uint32_t n = eoff - boff;                                   /* nº de bytes del rango */
-        uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
-             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
-             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
-             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
-             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
-            return builtin_throw(vm, tc, "No space in heap");
-        {   /* la reserva ya esta comprobada arriba */
-            bpvm_write_u32_be(vm->memory + out, n);   /* out: alloc fresca (dirección física) */
-            for (uint32_t i = 0; i < n; i++)
-                vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, boff + i, 1);
-            out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
+        {   /* P2b: la primitiva compartida (con el helper string_substring del AOT); el origen sigue en la pila
+             * mientras reserva (#350) y sólo se saca después */
+            bpref_t h; char em[64];
+            int r = bpvm_prim_substring(vm, s, start, end, &h, em, sizeof em);
+            tc->sp -= BPVM_REF_SIZE;
+            if (r != 0) return builtin_throw(vm, tc, em);
+            bpref_push(vm, tc, h);
+            return BPVM_OK;
         }
-        tc->sp -= BPVM_REF_SIZE;   /* #350: AHORA se saca el origen, ya copiado */
-        push_ref(vm, tc, out);   /* string ref result (push_ref ya es genérico) */
-        return BPVM_OK;
     }
 
     /* ================================================================
@@ -2679,18 +2720,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_NEW_REF_ARRAY: {
+        /* P2b: la primitiva compartida (con el helper newarray_ref del AOT). #570: `newObjArray(n)` es su alias
+         * público. V4: una ref plana = 8 bytes por elemento; el payload a cero deja los slots nulos. */
         int32_t cap = pop_i32(vm, tc);
-        if (cap < 0) {    /* #570: `newObjArray(n)` es su alias público */
-            char em[64]; snprintf(em, sizeof em, "__newRefArray: capacidad negativa: %" PRId32, cap);
+        bpref_t h; char em[80];
+        if (bpvm_prim_nuevo_array(vm, cap, BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF, "__newRefArray: capacidad negativa: ",
+                                  "", &h, em, sizeof em) != 0)
             return builtin_throw(vm, tc, em);
-        }
-        /* V4: ref plana = 8 bytes/elem (era *4 → array a media asignación →
-         * corrupción al almacenar el elemento cap/2 en adelante). heap_alloc
-         * zero-inicializa el payload, así que los slots quedan nulos. */
-        uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
-        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
-        bpvm_write_u32_be(vm->memory + ref, (uint32_t) cap);
-                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
+        bpref_push(vm, tc, h);
         return BPVM_OK;
     }
 
@@ -3262,17 +3299,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_NEW_INT_ARRAY: {
+        /* P2b: la primitiva compartida (con el opcode NEWARRAY y el helper newarray_i32 del AOT). #570: un
+         * tamaño negativo, atrapable y con el texto de miVM. */
         int32_t size = pop_i32(vm, tc);
-        if (size < 0) {   /* #570: atrapable y con el texto de miVM (antes el programa moría sin una palabra) */
-            char em[64]; snprintf(em, sizeof em, "newIntArray: tamaño negativo: %" PRId32, size);
+        bpref_t h; char em[80];
+        if (bpvm_prim_nuevo_array(vm, size, 4u, BPVM_TYPE_ARRAY_I32, "newIntArray: tamaño negativo: ", "",
+                                  &h, em, sizeof em) != 0)
             return builtin_throw(vm, tc, em);
-        }
-        uint32_t bytes = (uint32_t) size * 4u;
-        uint32_t ref = bpvm_heap_alloc(vm, bytes, BPVM_TYPE_ARRAY_I32);
-        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
-        bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
-        /* bpvm_heap_alloc ya zero-init (memset en heap.c). */
-                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
+        bpref_push(vm, tc, h);
         return BPVM_OK;
     }
 

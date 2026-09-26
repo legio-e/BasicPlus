@@ -10,6 +10,7 @@
 
 #include "bpvm_aot_helpers.h"
 #include "bpvm_nativa.h"   /* V7/H5 P2b.1.d: punto_control */
+#include "bpvm_prims.h"    /* V7/H5 P2b: las primitivas compartidas con el intérprete */
 #include "bpvm_internal.h"
 #include "bpvm_bios.h"      /* V5/H4: el registro de packs, para `pack_sym` */
 #include "bpvm_out.h"       /* V7/H5 (#558): bpvm_emit, el camino del `print` del intérprete */
@@ -378,15 +379,11 @@ static int64_t h_call_builtin(bpvm_t* vm, int32_t id, const char* tipos, const i
  * interpretada ni siquiera lanzaba (moría). `pre` + el número + `post`. */
 static int32_t h_newarray_tipo(bpvm_t* vm, int32_t size, uint32_t bytes_por_elem,
                                int tipo, const char* pre, const char* post) {
-    if (size < 0) {
-        char em[80]; snprintf(em, sizeof em, "%s%d%s", pre, (int) size, post);
+    /* P2b: la primitiva compartida (con los builtins newIntArray/__newRefArray y los opcodes NEWARRAY). */
+    bpref_t h; char em[80];
+    if (bpvm_prim_nuevo_array(vm, size, bytes_por_elem, tipo, pre, post, &h, em, sizeof em) != 0) {
         h_throw_runtime(vm, em); return 0;
     }
-    uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * bytes_por_elem, tipo);
-    if (ref == 0) { h_throw_runtime(vm, "No space in heap"); return 0; }
-    bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
-    bpref_t h = bpvm_handle_register(vm, ref);
-    if (h.v == 0u) { h_throw_runtime(vm, "No space in heap"); return 0; }   /* #430 */
     return (int32_t) h.v;
 }
 static int32_t h_newarray_i32(bpvm_t* vm, int32_t size) {
@@ -562,8 +559,9 @@ static BPVM_AOT_FP_ABI void h_array_store_f64(bpvm_t* vm, uint32_t ref, int32_t 
 }
 
 static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
-    if (ref == 0) return 0;   /* null array → length 0 (BP semantics) */
-    return (int32_t) bpvm_read_u32_be(vm->memory + A(vm, ref));
+    /* P2b: la misma función que OP_ALEN (null → 0). Lo que el opcode añade —el «objeto eliminado» del contrato B—
+     * no se puede mirar aquí: la ref de una native cruza sin su generación. */
+    return (int32_t) bpref_arr_len(vm, bpref_regen(vm, ref));
 }
 
 /* #193 — arrays narrow de 1 byte (BP byte[]). Layout: [length:u32 BE][b0][b1]...
@@ -798,21 +796,14 @@ static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
  * y devuelven el handle EMPAQUETADO (bpvm_handle_register). La alocación es un
  * safepoint: re-derefiamos los inputs DESPUÉS de alocar (regla de la dirección
  * transitoria; en F2 no compacta, pero mantiene la disciplina del modelo). */
+/* V7/H5 P2b (26-sep, la opción 3 de Eduardo) — los helpers tipados de la lista a mano ya no son COPIAS de sus
+ * builtins: llaman a LA MISMA función (bpvm_prims.h). Conservan su velocidad (44 ms frente a 96 por el
+ * despachador genérico, 5 millones de charCodeAt en el PC) y la paridad sale por construcción. */
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
-    if (ref == 0) return 0;
-    uint32_t addr = A(vm, ref);
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
-    return (int32_t) utf8_cp_count(vm->memory + addr + 4, nbytes);
+    return bpvm_prim_str_len(vm, ref ? A(vm, ref) : 0u);
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) return 0;
-    uint32_t addr = A(vm, ref);
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
-    const uint8_t* p = vm->memory + addr + 4;
-    uint32_t ncp = utf8_cp_count(p, nbytes);
-    if (idx < 0 || (uint32_t) idx >= ncp) return 0;
-    uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
-    uint32_t adv; return (int32_t) utf8_decode(p + off, nbytes - off, &adv);
+    return bpvm_prim_char_code_at(vm, ref ? A(vm, ref) : 0u, idx);
 }
 /* #569 (V7/H5, 26-sep) — lo MISMO que BUILTIN_CHAR_AT, que es lo que corre la native interpretada: un
  * índice fuera de rango es un RuntimeError atrapable (BUG-7b, paridad con miVM) y no una cadena vacía, y
@@ -820,28 +811,11 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
  * `charAt("abc", 7)` daba "" con el AOT y el error interpretado. Lo cazó el análisis de P2b, que quiere
  * justo eso: que el AOT llame al MISMO código que el intérprete en vez de a una copia. */
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    uint8_t enc[4]; uint32_t enc_len = 0;
-    if (ref != 0) {
-        uint32_t addr = A(vm, ref);
-        uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
-        const uint8_t* p = vm->memory + addr + 4;
-        uint32_t ncp = utf8_cp_count(p, nbytes);
-        if (idx < 0 || (uint32_t) idx >= ncp) {
-            char em[96];
-            snprintf(em, sizeof em, "charAt: idx fuera de rango %d (len=%d)", (int) idx, (int) ncp);
-            h_throw_runtime(vm, em); return 0;
-        }
-        {
-            uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
-            uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
-            enc_len = utf8_encode(cp, enc);
-        }
+    {   /* P2b: la primitiva compartida */
+        bpref_t h; char em[96];
+        if (bpvm_prim_char_at(vm, ref ? A(vm, ref) : 0u, idx, &h, em, sizeof em) != 0) { h_throw_runtime(vm, em); return 0; }
+        return (uint32_t) h.v;
     }
-    uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
-    if (!out) { h_throw_runtime(vm, "No space in heap"); return 0; }
-    bpvm_write_u32_be(vm->memory + out, enc_len);
-    for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
-    return (uint32_t) bpvm_handle_register(vm, out).v;
 }
 static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     uint32_t aa = a ? A(vm, a) : 0, ba = b ? A(vm, b) : 0;
@@ -857,26 +831,13 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     return (uint32_t) bpvm_handle_register(vm, out).v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
-    /* #569 — con null, BUILTIN_SUBSTRING da "" (sus índices se recortan a una cadena de 0): aquí igual,
-     * no un null que el programa interpretado nunca ve. */
-    uint32_t addr = ref ? A(vm, ref) : 0;
-    uint32_t nbytes = ref ? bpvm_read_u32_be(vm->memory + addr) : 0;
-    const uint8_t* p = vm->memory + addr + 4;
-    uint32_t ncp = ref ? utf8_cp_count(p, nbytes) : 0;   /* índices en codepoints */
-    if (from < 0) from = 0;
-    if (to < 0)   to = 0;
-    if ((uint32_t) to > ncp) to = (int32_t) ncp;
-    if (from > to) from = to;
-    uint32_t boff = utf8_byte_offset(p, nbytes, (uint32_t) from);
-    uint32_t eoff = utf8_byte_offset(p, nbytes, (uint32_t) to);
-    uint32_t n = eoff - boff;
-    uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-    if (!out) { h_throw_runtime(vm, "No space in heap"); return 0; }   /* #569: como el builtin (#355) */
-    addr = ref ? A(vm, ref) : 0;   /* re-deref tras el safepoint */
-    uint8_t* mem = vm->memory;
-    bpvm_write_u32_be(mem + out, n);
-    for (uint32_t i = 0; i < n; i++) mem[out + 4 + i] = mem[addr + 4 + boff + i];
-    return (uint32_t) bpvm_handle_register(vm, out).v;
+    {   /* P2b: la primitiva compartida (el origen lo tiene vivo la native, en sus variables de C) */
+        bpref_t h; char em[64];
+        if (bpvm_prim_substring(vm, ref ? bpref_regen(vm, ref) : bpref_null(), from, to, &h, em, sizeof em) != 0) {
+            h_throw_runtime(vm, em); return 0;
+        }
+        return (uint32_t) h.v;
+    }
 }
 static int32_t h_string_eq(bpvm_t* vm, uint32_t a, uint32_t b) {
     if (a == b) return 1;              /* mismo handle (incl. ambos null) */
@@ -953,11 +914,9 @@ static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
     return bpvm_heap_alloc_string(vm, s, (size_t) len);
 }
 static uint32_t h_int_to_string(bpvm_t* vm, int32_t v) {
-    char buf[16];
-    int n = snprintf(buf, sizeof(buf), "%d", (int) v);
-    uint32_t r = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
-    if (r == 0) h_throw_runtime(vm, "No space in heap");   /* #569: como BUILTIN_INT_TO_STRING (#355), no un null */
-    return r;
+    bpref_t h; char em[32];
+    if (bpvm_prim_int_to_string(vm, v, &h, em, sizeof em) != 0) { h_throw_runtime(vm, em); return 0; }   /* P2b */
+    return (uint32_t) h.v;
 }
 
 /* `dpow` NO reimplementa nada: el algoritmo sigue siendo bpvm_dpow, LA MISMA
