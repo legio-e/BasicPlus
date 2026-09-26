@@ -30,8 +30,16 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
  * framebuffer 800×480×2 son 768 000 B, g_nodes 96 KB, s_drawbuf 75 KB…), así que
  * con 1536 KB de VM quedan ~460 KB para malloc y pila — la Nucleo vive con 158.
  * El techo real sería ~1,75 MB; 1,5 MB es redondo y holgado. Si no cabe, el
- * enlazador lo dice (._user_heap_stack). */
-#define BOARD_VM_BYTES          (1536UL * 1024UL)
+ * enlazador lo dice (._user_heap_stack).
+ *
+ * V7/H6 G5.b (26-sep) — 1792 KB, con LVGL fuera de la imagen (viene del pack): la
+ * .bss bajó de 1036 a 857 KB (se van g_nodes y s_drawbuf; el framebuffer se queda,
+ * es del LTDC) y LVGL ya no pide a malloc. Medido en el .elf: con 1792 quedan
+ * ~333 KB para malloc y pila. Del principio de este bloque sale el de los packs
+ * nativos (`packRam=` del ENV, pack_stm32.h): con packRam=768 la VM sigue en 1 MB
+ * y el bloque lleva LVGL (383 KB de estáticos), SQLite y ~377 KB de arena
+ * (decidido con Eduardo, V7_IDEAS §H6.15.7). */
+#define BOARD_VM_BYTES          (1792UL * 1024UL)
 /* H11 — AQUÍ ESTABAN BOARD_FS_FLASH_ADDR/_REGION_SIZE (0x08380000, 512 KB). Eran
  * de V2/V3, cuando la región del FS era FIJA por placa. Desde H9 la fija el env
  * (bpvm_part, sobre BP_PART_BASE/BP_USABLE_FLASH de flash_layout_stm32.h) y sólo

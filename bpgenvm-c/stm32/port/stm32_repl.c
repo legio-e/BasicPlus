@@ -41,6 +41,7 @@
 #include "bpvm_bios.h"       /* V7/H6 G5.b0: la BIOS de los packs nativos, comprobada al arrancar */
 #include "bpvm_sqlmem.h"     /* V7/H6 G5.b0: la regla de `SQLite=` para el bloque de los motores */
 #include "pack_stm32.h"      /* V7/H6 G5.b0: el cargador de motores y su bloque de RAM */
+#include "gui_display_ltdc.h" /* V7/H6 G5.b: la pantalla de la DK2, publicada como 'PANT' */
 
 #include "main.h"
 #include "board.h"              /* placa: BOARD_WIRE_UART, BOARD_NAME, BOARD_SRAM_BYTES, BOARD_LED_* */
@@ -959,6 +960,9 @@ void stm32_repl_run(void) {
                    (unsigned) fs_total_bytes());
     }
     stm32_hw_register();            /* backends de HW (GPIO, info de MCU) — siempre */
+#if defined(BPVM_GUI_PACK)
+    stm32_pant_publicar();          /* V7/H6 G5.b: la pantalla, como 'PANT', para el LVGL del pack (como el P4) */
+#endif
     bpvm_bus_desde_env(board_mgr_stm32_env_get);   /* V7/H6.c G4.a1: los buses del ENV (ver el main del S3) */
     log_flush();                    /* persiste la historia del boot (post-mortem tras corte) */
 

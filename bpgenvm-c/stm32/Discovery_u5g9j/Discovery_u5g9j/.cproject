@@ -43,8 +43,7 @@
 									<listOptionValue builtIn="false" value="STM32U5G9xx"/>
 									<listOptionValue builtIn="false" value="BPVM_BOARD_DK2"/>
 									<listOptionValue builtIn="false" value="BPVM_GUI"/>
-									<listOptionValue builtIn="false" value="BPVM_LVGL"/>
-									<listOptionValue builtIn="false" value="LV_CONF_INCLUDE_SIMPLE"/>
+									<listOptionValue builtIn="false" value="BPVM_GUI_PACK"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths.1378825497" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="../Core/Inc"/>
@@ -57,7 +56,6 @@
 									<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\bpgenvm-c\stm32\port&quot;"/>
 							<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\FreeRTOS-LTS\FreeRTOS\FreeRTOS-Kernel\include&quot;"/>
 							<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\FreeRTOS-LTS\FreeRTOS\FreeRTOS-Kernel\portable\GCC\ARM_CM33_NTZ\non_secure&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\bpgenvm-c\third_party\lvgl&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\lenguajes\pm\bpgenvm-c\third_party\littlefs&quot;"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.1633738776" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
@@ -90,7 +88,6 @@
 						<entry excluding="mpu_wrappers_v2_asm.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos_port"/>
 						<entry excluding="heap_1.c|heap_2.c|heap_3.c|heap_5.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="freertos_heap"/>
 						<entry excluding="CMSIS/Core/Template" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry excluding="draw/sw/blend/neon|draw/sw/blend/helium" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="lvgl"/>
 						<entry excluding="stm32_fs.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="port"/>
 						<entry excluding="bd" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="littlefs"/>
 						<entry excluding="fs_lfs_host.c|fs_host.c|platform_pthread.c|gui_display_sdl.c|fs_fat.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>

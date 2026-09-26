@@ -10,7 +10,13 @@
  * (render real con LVGL v9 + ventana SDL en host). El modelo sigue siendo la
  * fuente de verdad del dump_tree → la paridad NO depende de LVGL. Sin BPVM_LVGL
  * (build modelo-only / headless / arnés), todo lo de LVGL desaparece.
+ *
+ * V7/H6 G5.b (26-sep) — Y CON BPVM_GUI_PACK NO EXISTE: la GUI la pone entonces el pack (gui_pack.c son sus
+ * trampolines, y este mismo fichero va DENTRO del pack, compilado con BPVM_EN_PACK). Es el espejo de la guarda
+ * de gui_pack.c: los proyectos del STM32 compilan TODO src/, y sin las dos, con el pack las funciones bpvm_gui_*
+ * estarían dos veces (chocó el 23-sep al revés; los demás builds listan sus ficheros).
  */
+#if !defined(BPVM_GUI_PACK)
 #include "bpvm_gui.h"
 #include "bpvm_fs.h"     /* lectura de PNG portable (host libc + device RAM-FS) */
 #include <stdlib.h>
@@ -1608,3 +1614,5 @@ size_t bpvm_gui_dump_tree(char** out) {
     *out = buf;
     return len;
 }
+
+#endif /* !BPVM_GUI_PACK */
