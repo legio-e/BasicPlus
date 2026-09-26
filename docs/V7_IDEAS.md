@@ -4027,3 +4027,15 @@ el mismo código. Grabar las imágenes y tocar el ENV (`packRam=`), con el OK de
 | 2 | el bloque de RAM | `s_vm_mem` al principio de la RAM por el `.ld`, y `packRam=` como reserva delante |
 | 3 | el borrado de flash que cruza bancos | partirlo por banco ahora, en el paso 2 |
 | 4 | la placa de la prueba | la DK2 (conectada); la Nucleo después |
+
+**Decidido** (Eduardo, 26-sep): 1, **A** —y antes la pregunta de si no se podía «que funcionen por soft pero que, si
+hay hardware, lo aproveche», que es justo lo que es `softfp`: la convención de `soft` hacia fuera y la FPU por dentro—;
+2, «decide tú»: la propuesta (`s_vm_mem` lo primero de la RAM y `packRam=` como reserva delante); 3, sí; 4, la DK2
+(«en las pruebas finales se prueban todas»).
+
+La regla que queda, en sus términos: **el juego de instrucciones decide qué hardware hay** (el M0, sin FPU; el M4 y el
+M33, de 32 bits; el M7 y los M55/M85, de 32 o de 64 según el chip), y por eso hay un motor por juego —como el P4 y la
+C5 en RISC-V—; **la convención con que viaja un `float` NO la decide el chip** (con el mismo M33, la Pico era `softfp`
+por su SDK y el STM32 `hard` por CubeIDE): es del proyecto, y en ARM es `softfp`, la misma que `soft`, así que todos
+los ARM hablan igual tengan FPU o no. Un motor por juego de instrucciones, nunca dos por la coma flotante. (Un matiz
+para cuando llegue una placa M4: lo compilado para el M4 corre en nuestros M33, pero no al revés.)
