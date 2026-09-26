@@ -843,13 +843,13 @@ la C6, la P4 y la Nucleo.
 
 `compat.sh check` verde (paridad 104/104 en MOD9 y MOD8); compilan las cinco ESP, la Pico, la Nucleo y la DK2.
 
-## ⏭️ Traspaso (26-sep, tarde) — H4 hecho en el código; la sesión de placas de P2b.3 recoge lo que falta
+## ⏭️ Traspaso (26-sep, tarde) — H4 CERRADO (Eduardo); la sesión de placas de P2b.3 recoge lo que falta probar
 
 **Commits** (sin push): `6a53f91f` (NeoPixel ESP32 y `#574`) · `422a55dc` (el ADC del STM32) · y los docs (`1041bf8b`,
 `10d4e5f9`, `08fce286`…).
 
 **Las placas**: la **S3** con la imagen nueva (NeoPixel, `#574`) y, en `/app`, `NeoEsp.mod` y `NeoColor.mod` (éste, una
-prueba de color de usar y tirar: se puede borrar con el sí de Eduardo); la **Nucleo** con la imagen nueva (el ADC) y
+prueba de color; se quedan: Eduardo, «no hace falta borrar nada»); la **Nucleo** con la imagen nueva (el ADC) y
 `/app/AdcNucleo.mod`, con el divisor de Eduardo en A0. La Pico 2 sin `NatLazo`. El resto, como estaban.
 
 **⚠️ El riesgo que acecha**: el mismo de la ABI 9 (las placas con la 8 rechazan todo `.mdn` nuevo hasta P2b.3). Y la
