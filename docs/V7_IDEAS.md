@@ -2046,17 +2046,38 @@ Tres cosas que el diseño de arriba no sabía y el código sí:
 
 **Los pasos de P2b.1**, cada uno con sus pruebas en el PC:
 
-- **a.** El cambio de contexto x86-64 (Windows) y su prueba: ida y vuelta miles de veces con muchos valores vivos
-  (enteros y `double`), un `setjmp`/`longjmp` y un marco grande (la sonda de pila) DENTRO de la pila prestada.
-- **b.** El bloque de la native (la pila prestada, su límite de fallos, su contexto de llamada) y el trampolín: toda
-  native corre en su pila prestada, sin suspender todavía. Las pruebas del AOT de hoy, todas verdes; el GC escanea las
-  pilas prestadas; y `#571` cerrada con su prueba.
-- **c.** Suspender y reanudar: el planificador reanuda un hilo que está dentro de una native; el puente nativo→BP deja
-  que la función BP bloquee. Prueba: una native llama a una función BP que duerme mientras otro hilo avanza; la misma
-  salida con el AOT que interpretada.
-- **d.** La línea del bucle en el emisor (el contador, y un helper de control cada 1024 vueltas que mira el `kill` y
-  el quantum: no hace falta un indicador que alguien levante) y la ABI 9. Pruebas: una native en un bucle sin fin que
-  sólo termina si otro hilo corre (sin expropiar, se cuelga), y el `kill` de una native.
+- **a.** ✅ (`1507d734`) El cambio de contexto x86-64 (Windows) y su prueba (`make test-ctx`): 100 000 saltos con 8
+  enteros y 6 `double` vivos a cada lado, un `setjmp`/`longjmp` y un marco de 40 KB DENTRO de la pila prestada. Tres
+  sabotajes cazados; el del TIB, con el mismo `STATUS_BAD_STACK` que se esperaba.
+- **b.** ✅ (`4b1414cc`) El bloque de la native y el trampolín: toda native corre en su pila prestada (256 KB en el
+  PC, memoria del programa: la guarda de fin de RUN la ve volver). El GC dice en su diagnóstico QUÉ pila escanea
+  («prestada» o «del worker»): así se comprobó en el artefacto. `#571` se cerró antes y aparte (`99b02ddb`), porque
+  valía ya para todas las placas.
+- **c.** ✅ (`be011deb`) Suspender y reanudar (`make test-aotcede`, 7/7 con el AOT igual que interpretado): una native
+  guarda una cadena en C y llama a una función BP que espera a otro hilo, que reserva sin parar con GC en cada
+  reserva; y otra se suspende y AL VOLVER lanza. El GC escaneó 246 veces la pila de una native suspendida. Sabotajes:
+  sin escanear las suspendidas, la cadena se recicla y su hueco lo reusa la basura del otro hilo (`x0123…/7` en vez
+  de `100000/7`, con status=OK); sin suspender, el error de antes; sin recuperar la TLS, se rompe al reanudarse.
+- **d.** ✅ La línea del bucle en el emisor (al PRINCIPIO del cuerpo de `while`, `do … loop` y `for`: cuenta también
+  las vueltas que acaban en un `continue`) y el helper `punto_control` (ABI 9): cede si hay un `kill` o si la native
+  lleva corriendo su rebanada (`BPVM_NATIVA_REBANADA_MS`, 5 ms: el intérprete mide su quantum en operaciones, una
+  native no tiene operaciones que contar). `make test-aotexpropia` (una native en un bucle que sólo termina si otro
+  hilo corre: 4/4) y `make test-aotkill` (el `kill` de una native en un bucle sin fin: 99 ms); saboteado el helper,
+  las dos se cuelgan y las corta el tope.
+
+**Lo que quedó por el camino:**
+
+- **Donde no hay cambio de contexto** (las placas, hasta P2b.3) la línea del bucle no puede ceder, pero un `kill` sí
+  para la native: el helper LANZA por el límite de fallos de `#186`. En las placas el `kill` lo levanta el hilo `io`
+  por su cuenta, así que con la imagen de la ABI 9 el `kill` de una native en bucle funcionará antes incluso del
+  ensamblador de P2b.3.
+- **La recursión sin bucles**: una native recursiva que no tenga ningún bucle no pasa nunca por la línea (p. ej. un
+  `fib` recursivo). Si hiciera falta, la marca iría también a la entrada de la función; hoy no se ha hecho.
+- **La ABI 9, abierta**: desde ya, todo `.mdn` que se genere —el IDE, la tanda con `aot`— es de la 9, y las placas,
+  con la 8, lo RECHAZAN con nombre y la función corre interpretada, hasta que se regraben con P2b.3. P2b.2 añadirá
+  `call_builtin` a la misma 9, sin subirla otra vez: ningún `.mdn` de la 9 habrá salido todavía.
+- **El arnés de las pruebas del AOT** (`fixture`) dejaba correr una prueba con el `.mod` RANCIO cuando el `.bp` no
+  compilaba (`3f71c5b6`): se vio al escribir la de P2b.1.c.
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
