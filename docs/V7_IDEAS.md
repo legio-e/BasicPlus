@@ -1976,7 +1976,7 @@ misma marca que propuso Eduardo el 24-ago.
 
 - ~~**(a) Dónde se apunta que un builtin cede el hilo**~~: ya no hace falta; con la suspensión, el helper lo ve en el
   estado del hilo (Eduardo, 26-sep).
-- **(b) La lista a mano** (abierta): tirarla —todo por el despachador; paridad por construcción, a cambio de pasar
+- **(b) La lista a mano** (~~abierta~~ **decidida y hecha**, abajo: la opción 3, `4bfdb1a8`): tirarla —todo por el despachador; paridad por construcción, a cambio de pasar
   cada llamada por la pila BP y el `switch`— o dejar los helpers tipados de las más calientes, ahora que `test-aotstr`
   los vigila. Propuesta: **medir primero** (`charAt` en un bucle nativo por las dos rutas; es también el «cronometrar
   nativo contra interpretado» que H5 tiene pendiente) y tirarla salvo donde el coste se vea. Los huecos de la tabla se
@@ -1986,7 +1986,7 @@ misma marca que propuso Eduardo el 24-ago.
 flotantes vivos (salida igual a la interpretada); un `sleep` dentro de una native mientras otro hilo avanza; una
 función BP que bloquea llamada desde una native; el `kill` de una native en un bucle; una excepción de un builtin
 dentro de un nativo, atrapada en BP; `make test-xmodnat` y un ejemplo con `Math.sin` en una `native`; `test-aotstr`
-(la lista entera, ya por el despachador, AOT == interpretado). En las placas, la misma prueba de estrés y la tanda con
+(la lista entera, AOT == interpretado; desde la opción 3, por las primitivas compartidas). En las placas, la misma prueba de estrés y la tanda con
 `aot`.
 
 **Por pasos que cierran algo:**
@@ -2011,6 +2011,34 @@ Tres salidas: (1) tirar la lista (paridad por construcción, la mitad de rápido
 vigilada por `test-aotstr`; (3) **dejarla, pero que cada helper tipado llame a LA MISMA función que su builtin** —una
 implementación y dos entradas—: la velocidad del tipado y la paridad por construcción. Propuesta: la (3). Decide
 Eduardo.
+
+**Decidido: la (3)** (Eduardo, 26-sep: «la 3»). **Hecho** (`4bfdb1a8`, `fdfb2398`): `src/bpvm_prims.h` y, en `builtins.c`,
+seis primitivas —`str_len`, `char_code_at`, `char_at`, `substring`, `int_to_string`, `nuevo_array`— a las que llaman los
+builtins (`STRLEN`, `CHAR_CODE_AT`, `CHAR_AT`, `SUBSTRING`, `INT_TO_STRING`, `NEW_INT_ARRAY`, `NEW_REF_ARRAY`), los
+opcodes `NEWARRAY*` y los helpers tipados; `array_length` llama a `bpref_arr_len`, la de `OP_ALEN`. Cada entrada sólo
+pone lo suyo: de dónde saca los argumentos (la pila BP o los de C) y cómo lanza (`builtin_throw`, `BPVM_RT_THROW_TEXTO`,
+el límite de fallos). `substring` recibe el HANDLE del origen y lo vuelve a resolver tras reservar: quien llama lo
+mantiene vivo (el builtin en la pila, #350; la native en sus variables). De paso, lo que hacía la mejor copia lo hacen
+todas: tras registrar se comprueba la tabla de handles (#430) —cuatro builtins y dos helpers empujaban un `null`
+callado—.
+
+**Lo que cambia en la red.** Un fallo DENTRO de una primitiva ya no lo ve `test-aotstr` —el AOT y el intérprete se
+mueven juntos— y lo caza la paridad contra miVM; `test-aotstr` vigila las ENTRADAS. Las dos cosas, saboteadas: las seis
+primitivas a la vez, cada una por un camino que la prueba ejercita → cambian diez líneas de la salida interpretada y el
+AOT da lo mismo (verde), y la paridad de `CharAt` y `ArrayNegativo`, en rojo; un helper y un builtin con otro argumento
+→ rojo. El builtin salió verde la primera vez: `NatStr` no tenía ningún `substring` con inicio positivo. Ahora sí, y
+`len` de una cadena: 17 comprobaciones.
+
+**La pila, medida** (la orden del firmware de la Pico con `-fstack-usage`, antes y después). El primer intento dejaba
+el `case` de cada `NEWARRAY` con su búfer del texto y lanzaba con `BPVM_RT_THROW("%s", em)`: los dos búferes vivos a la
+vez, y como el marco del intérprete lo fija el `case` más gordo, **`bpvm_interp_run_quantum` pasó de 248 a 336 B**.
+Con `BPVM_RT_THROW_TEXTO` (lanza el texto ya hecho), 256: los 8 que quedan son los argumentos de la llamada de nueve
+parámetros. `bpvm_call_builtin`, igual (2096). Los helpers del AOT crecen entre 48 y 136 B mientras se les llama
+(ahora son dos marcos, el suyo y el de la primitiva) —en la pila de la native, que `P2b.3` tiene que dimensionar—.
+
+**Lo que queda fuera** (no es la lista a mano, son OPERADORES): los helpers de `a[i]`, `a[i] := v` y el `+` de cadenas
+también son copias —de opcodes—, y éstas SÍ se han ido: `#573` (un índice fuera de rango en una native lanza otro texto
+que interpretado; `a + b` sin memoria, un `null` callado).
 - **P2b.3** — el cambio de contexto de ARM y de los dos RISC-V, la cascada de la ABI 9 (los `.mdn`, los packs, las
   imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4 y la DK2).
 
