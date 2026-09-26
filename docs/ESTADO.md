@@ -891,6 +891,33 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## ⏭️ Traspaso (26-sep, fin del día) — H4 y H6 CERRADOS (Eduardo); mañana, H5: «Mañana intentamos terminar H5»
+
+**Hoy**: H4 cerrado (el NeoPixel de la ESP32, `#574`, el ADC del STM32); H6 cerrado (`G5.a` el P4, `G5.b0` los packs
+nativos en el STM32 con las STM32 a `softfp`, `G5.b` la DK2 con giro); y de paso `#573` y `#575` (los `.mdn` de los
+packs en la ABI 8, con red nueva: `packs-abi`). Todo en `main`, sin push; el árbol, limpio.
+
+**H5, lo que queda** (FICHAS, fila de H5), en este orden:
+1. **`P2b.3`**: el cambio de contexto de una native en ARM (Cortex-M33) y en RISC-V (el P4, `ilp32f`; la C3, la C5 y la
+   C6, `ilp32`) —en el PC está hecho (`P2b.1`, x86-64)— y la cascada: host → placas. Hasta entonces, en placa, un `kill`
+   a una native LANZA por el límite de fallos en vez de suspenderla.
+2. **La sesión de placas de `P2b.3`**, que recoge lo que se ha ido dejando: grabar las imágenes con la ABI 9 en las que
+   siguen en la 8 (la Metro, la S3, la C3, la C5, la C6 y la Nucleo —esta, además, con `softfp` y el adaptador de
+   `G5.b0`: `packRam=` en su ENV si se quieren motores—), la C6 con `#574` (`samples/PinesSistema.bp`), el ADC de la DK2,
+   el NeoPixel de la Metro con el `__npInit` nuevo, DriverSpi regrabado en la C5 y la C6, y **regrabar SQLite y la Gui
+   en el P4** (siguen los de la ABI 8: SQLite y Gui2 no funcionan ahí hasta entonces).
+3. **`#572`**: identificadores de BP que chocan en el C del AOT.
+4. **Las conversiones estrechas** en una native (`byte(9)`…), y su texto de error rancio.
+
+**Las placas hoy**: la **DK2** con la imagen de `G5.b` (`softfp`, sin LVGL, `'PANT'` desde la imagen), `packRam=768`
+y en su zona el `mini`, SQLite y la Gui; el **P4** con la imagen de `G5.a` y los packs viejos; las demás, como las dejó
+la tarde de placas del 25-sep (ABI 8).
+
+**Riesgos**: (1) toda placa con imagen de hoy en adelante necesita los packs reconstruidos tras `#575` —la red
+`packs-abi` vigila los del PC, no los ya grabados—; (2) la Nucleo no se ha grabado con `softfp` ni con el adaptador:
+compila, pero no se ha visto arrancar; (3) el disparo de la carga de packs desde el INFO (`bba97e0b`) es nuevo en el
+STM32: un pack que colgara lo haría al primer INFO del IDE, no en el arranque (como en la ESP32).
+
 ## ⏭️ Traspaso (26-sep, tarde, 4) — H6: `G5` hecho (el P4 y la DK2 sin LVGL en la imagen)
 
 **Commits** (sin push): `568e976a` (`G5.b`), `bba97e0b` (el INFO carga los packs), y los docs (`68fddb9c` y el de
