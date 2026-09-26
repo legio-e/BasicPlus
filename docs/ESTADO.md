@@ -824,8 +824,8 @@ la C6, la P4 y la Nucleo.
 **Commits** (sin push): `5f0cc4f1` (P2b.2) · `4bfdb1a8` `fdfb2398` (la opción 3 y la pila) · `de04b689` (`#573`) · y los
 docs.
 
-**Las placas**: sin cambios desde la mañana (en la Pico siguen `/app/NatLazo.mod` y `/app/NatLazo.mdn`, la medida de
-P2b.0; se pueden borrar, con el sí de Eduardo).
+**Las placas**: sin cambios desde la mañana, salvo que en la Pico ya no están `/app/NatLazo.mod` y `/app/NatLazo.mdn`
+(la medida de P2b.0): borrados con el sí de Eduardo por `DEL` del wire, y comprobado con un `LIST`.
 
 **⚠️ El riesgo que acecha**: el mismo — desde la ABI 9, las placas (con la 8) rechazan todo `.mdn` nuevo y la función
 corre interpretada, hasta la cascada de P2b.3.
