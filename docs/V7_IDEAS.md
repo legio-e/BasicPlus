@@ -1995,8 +1995,22 @@ dentro de un nativo, atrapada en BP; `make test-xmodnat` y un ejemplo con `Math.
   sólo mira el indicador cada 1024 vueltas**.
 - **P2b.1** — la suspensión en el PC: la pila prestada, el cambio de contexto x86-64, el trampolín con `#186`, el GC,
   reanudar y el `kill`; la línea del bucle en el emisor; las pruebas de arriba.
-- **P2b.2** — el despachador: el helper `call_builtin`, la marca de `builtin_throw` y el camino genérico del emisor
-  para toda intrínseca `CALL_BUILTIN n`, local y de otro módulo; lo que diga la medida de la lista a mano.
+- **P2b.2** ✅ (`5f0cc4f1`) — el despachador: el helper `call_builtin` (los argumentos por sus bits en palabras de
+  64 bits; lo que el builtin deja, comparado con su tipo), la marca de `builtin_throw` (la excepción se deja en el
+  hilo y sale por el límite de fallos; el puente la apaga mientras corre BP anidado), la suspensión cuando el builtin
+  bloquea, el respaldo donde no se puede suspender (los cinco que ceden, rechazados con nombre ANTES de ejecutarlos) y
+  el camino genérico del emisor para toda intrínseca `CALL_BUILTIN n`, global y de otro módulo. `make test-aotbuiltin`
+  8/8. La prueba del `sleep` tuvo que cambiar: sin suspender, el hilo se dormía después, en el primer builtin ya
+  interpretado, y la salida salía igual; ahora la native lee tras el `sleep` una global que sólo pone el otro hilo.
+  Destapó `#572` (los identificadores de BP chocan en el C del AOT).
+
+**La lista a mano, medida en el PC** (5 millones de `charCodeAt` en un bucle nativo; dos pasadas, estables): por el
+helper tipado, **44 ms**; por el despachador, **96 ms**; interpretado, **257 ms**. Para un builtin diminuto en un bucle
+apretado, el camino genérico cuesta el DOBLE que el tipado, y sigue siendo 2,7 veces más rápido que interpretado.
+Tres salidas: (1) tirar la lista (paridad por construcción, la mitad de rápido en esos casos); (2) dejarla como está,
+vigilada por `test-aotstr`; (3) **dejarla, pero que cada helper tipado llame a LA MISMA función que su builtin** —una
+implementación y dos entradas—: la velocidad del tipado y la paridad por construcción. Propuesta: la (3). Decide
+Eduardo.
 - **P2b.3** — el cambio de contexto de ARM y de los dos RISC-V, la cascada de la ABI 9 (los `.mdn`, los packs, las
   imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4 y la DK2).
 
