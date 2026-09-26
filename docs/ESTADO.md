@@ -819,6 +819,49 @@ Pico y la Nucleo.
 `compat.sh check` verde en cada paso (al final: paridad 104/104 en MOD9 y MOD8, pruebas de C 19/19); compilan la Pico,
 la C6, la P4 y la Nucleo.
 
+## 🔌 H4 (26-sep, tarde) — el NeoPixel de la familia ESP32, `#574` y el ADC del STM32: H4 hecho en el código
+
+- **El análisis antes** (`V7_IDEAS` §H4.5, `1041bf8b`) y las decisiones de Eduardo: el RMT del núcleo del IDF (no
+  `led_strip`, que se descarga del registro); validar el pin del NeoPixel en el común y separar «no implementado» de «no
+  se pudo iniciar»; los pines del wire, también del sistema. Su idea de un SPI por software, como MicroPython: mirado en
+  su documentación, su `neopixel` va por `machine.bitstream`, que en la ESP32 usa el RMT; un SPI por software no da los
+  ±150 ns del WS2812, y uno por HARDWARE sí —la forma de dar NeoPixel al STM32—: apuntada.
+- **La placa del NeoPixel**: Eduardo, mirando: en la C3 y la C6 no hay LED RGB a la vista (el esquemático de la C6 lo
+  pone en el GPIO8); la S3 sí. Hecho en `6a53f91f` y probado en la S3 (grabada con su OK): el primer `RUN` dijo «falta
+  el módulo 'Neopixel'» —la stdlib embebida de la familia no lo llevaba, se añadió por el generador—; después, rojo,
+  verde y azul, y otra vez tras un `Gpio.Pin`; y con una prueba de color, sólo el 48: la S3 es una DevKitC-1 v1.0.
+- **`#574`**, visto al analizar: la tabla de la ESP32 daba por buenos los pines de la flash —en la C6 el GPIO25 es su
+  MISO—. Ahora quedan fuera los que el IDF reserva al arrancar y los del cable del IDE, que dice cada transporte; en la S3,
+  `gpioCount` de 45 a 36. La C6 no se grabó: lleva `DriverSpi` y `GuiMini` sellados y no sabíamos qué commit tiene.
+- **El ADC del STM32** (`422a55dc`): el mapa, sacado con `pypdf` de las hojas de datos que bajó Eduardo; el backend del
+  ADC1 a 12 bits; y en la Nucleo, con el divisor al 50 % que montó en A0: **1,646 V** (esperaba 1,65). A0 = PA3 no salió
+  de un manual: salió de leer los 17 canales. De paso, `#574` en el STM32 (PA9/PA10) y la DK2 bien en la tabla (LQFP144,
+  3 ADC).
+- La pila, medida otra vez con los flags de la Pico: sin cambio. Y dos trampas de siempre que volvieron a morder:
+  `sed -i` quitó los CRLF de `interp.c` (sin daño: git normaliza) y un heredoc se comió las continuaciones de una receta
+  del Makefile (rehecha con un script escrito con Write).
+
+`compat.sh check` verde (paridad 104/104 en MOD9 y MOD8); compilan las cinco ESP, la Pico, la Nucleo y la DK2.
+
+## ⏭️ Traspaso (26-sep, tarde) — H4 hecho en el código; la sesión de placas de P2b.3 recoge lo que falta
+
+**Commits** (sin push): `6a53f91f` (NeoPixel ESP32 y `#574`) · `422a55dc` (el ADC del STM32) · y los docs (`1041bf8b`,
+`10d4e5f9`, `08fce286`…).
+
+**Las placas**: la **S3** con la imagen nueva (NeoPixel, `#574`) y, en `/app`, `NeoEsp.mod` y `NeoColor.mod` (éste, una
+prueba de color de usar y tirar: se puede borrar con el sí de Eduardo); la **Nucleo** con la imagen nueva (el ADC) y
+`/app/AdcNucleo.mod`, con el divisor de Eduardo en A0. La Pico 2 sin `NatLazo`. El resto, como estaban.
+
+**⚠️ El riesgo que acecha**: el mismo de la ABI 9 (las placas con la 8 rechazan todo `.mdn` nuevo hasta P2b.3). Y la
+S3 y la Nucleo llevan ya imágenes de la ABI 9.
+
+**Queda**, en este orden:
+- **P2b.3** y su sesión de placas, que recoge además lo que H4 no pudo probar: la C6 con `#574`
+  (`samples/PinesSistema.bp`), el ADC de la DK2 y el NeoPixel de la Metro con el `__npInit` nuevo; y lo de antes
+  (regrabar `DriverSpi` en la C5 y la C6, `H6.b` en el P4 y la DK2, las imágenes con `#569`–`#573`).
+- **`#572`** y las conversiones a tipos estrechos en una native (y su texto de error desfasado).
+- Sin placas: la documentación de usuario de la pantalla por packs y la guía de instalación desfasada.
+
 ## ⏭️ Traspaso (26-sep, media mañana) — P2b.2 hecho, la lista a mano con una implementación, `#573` cerrada
 
 **Commits** (sin push): `5f0cc4f1` (P2b.2) · `4bfdb1a8` `fdfb2398` (la opción 3 y la pila) · `de04b689` (`#573`) · y los
