@@ -2,6 +2,8 @@
 #
 # Un comando por linea: el byte del comando y detras sus parametros, en hexadecimal
 # (con 0x o sin el, separados por espacios o comas). "espera N" son N milisegundos.
+# "mhz_max N" no es un comando: es el reloj MAXIMO de escritura que da la hoja del
+# controlador, y el driver rechaza con nombre un mhz: mayor en la linea lcd= (#567).
 # Lo que va detras de # es comentario.
 #
 # SOLO lo del chip. Lo que depende de la PLACA lo manda el driver DESPUES, a partir
@@ -12,6 +14,8 @@
 #
 # Fuente: el driver ST7789 del ESP-IDF (esp_lcd_panel_st7789.c), el mismo con el que
 # arrancaba la C5 (DriverC5) y con el que arranca el C6 desde su imagen.
+
+mhz_max 62      # la hoja del ST7789: ciclo de escritura de 16 ns = 62,5 MHz (no se pasa: #567)
 
 11              # SLPOUT: sale del reposo en que lo deja el reset...
 espera 100      # ...y el chip pide 5 ms antes del siguiente comando; el IDF espera 100

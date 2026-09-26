@@ -432,6 +432,7 @@ int main(int argc, char** argv) {
     fs_pon("/sys/lenta.seq", "11\nespera 5000\n");
     fs_pon("/sys/vacia.seq", "# nada\n\n");
     fs_pon("/sys/gc.seq", "0xEF\r\n0xEB, 0x14   # con 0x, comas y CRLF\r\nespera 5\r\n11\r\nespera 120");
+    fs_pon("/sys/tope.seq", "mhz_max 100   # mas que el tope general\n11\n");
     for (i = 0; i < (int) sizeof g_px; i++) g_px[i] = (uint8_t) i;
     bios_monta();
 
@@ -643,12 +644,25 @@ int main(int argc, char** argv) {
     caso_mal(LCD_C5, EXP_C5, "cst3530,i2c:0,addr:0x58,khz:400", "'khz' es del bus: va en su linea i2cN=", "khz en la linea touch= (es del bus)");
     caso_mal("st7789,spi:3,dc:9,cs:10,w:240,h:320", 0, 0, "falta la linea 'spi3' (el bus de la pantalla)", "la pantalla en un SPI sin su linea spi3=");
     caso_mal(LCD_C5, "ch32,i2c:1,addr:0x24", "cst3530,i2c:0,addr:0x58,rst:x0", "falta la linea 'i2c1' (el bus del expansor)", "el expansor en un I2C sin su linea i2c1=");
+    /* #567 — el reloj no pasa de la HOJA del controlador (su .seq dice `mhz_max 62`): con nombre, no píxeles corruptos */
+    /*        el mensaje ENTERO, hasta el ')': s_motivo es de 80 y uno más largo saldría cortado sin avisar */
+    caso_mal("st7789,spi:2,dc:9,cs:10,mhz:80,w:240,h:320", 0, 0, "ENV lcd: 'mhz' 80 supera los 62 que admite el st7789 (mhz_max en st7789.seq)",
+             "un reloj por encima de la hoja (mhz:80; el ST7789 da 62)");
+    caso_mal("st7789,spi:2,dc:9,cs:10,w:240,h:320,seq:/sys/tope.seq", 0, 0, "tope.seq linea 1: 'mhz_max' quiere los MHz de la hoja (1..80)",
+             "un .seq con un mhz_max fuera de 1..80");
 
     /* ── 7. Y ARREGLADO EL ENV, pasa SIN recargar el driver ── */
     g_env_lcd = "st7789,spi:2,cs:10,w:240,h:320"; g_env_exp = 0; g_env_touch = 0;
     CHECK(cargar(spi_pack_init, &ps) == 0 && ps.estado() != 0, "sin 'dc': no esta listo");
     g_env_lcd = "st7789,spi:2,dc:9,cs:10,w:240,h:320";
     CHECK(ps.estado() == 0, "  y anadido 'dc' al ENV, el MISMO driver cargado ya esta listo (se relee hasta que vale)");
+
+    /* #567 — y el tope es EL de la hoja, no uno menos: mhz:62 vale */
+    g_env_lcd = "st7789,spi:2,dc:9,cs:10,mhz:62,w:240,h:320"; g_env_exp = 0; g_env_touch = 0;
+    CHECK(cargar(spi_pack_init, &ps) == 0 && ps.estado() == 0, "#567: mhz:62, el tope de la hoja del ST7789, vale");
+    /* #567 — un .seq que NO dice su tope deja el general (80): el tope es del chip, no un 62 para todos */
+    g_env_lcd = "gc9a01,spi:2,dc:9,cs:10,rst:1,mhz:80,w:240,h:240,seq:/sys/gc.seq";
+    CHECK(cargar(spi_pack_init, &ps) == 0 && ps.estado() == 0, "#567: un .seq sin mhz_max no pone tope (mhz:80 con gc.seq)");
 
     printf("\n[status=%s]\n", g_fail ? "FAIL" : "OK");
     return g_fail ? 1 : 0;

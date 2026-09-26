@@ -36,7 +36,8 @@
  *   opcionales:
  *   rst:P          el reset (sin él: SWRESET por el bus)
  *   bl:P           la luz (sin él: la enciende el hardware)
- *   mhz:N          el reloj del SPI (20 si no se dice)
+ *   mhz:N          el reloj del SPI (20 si no se dice); como mucho, el `mhz_max` del .seq del
+ *                  controlador —la hoja de datos: 62 en el ST7789— (#567)
  *   ram:WxH        la memoria del controlador, si es mayor que el cristal (el ST7789: 240x320)
  *   off:XxY        dónde cae el cristal dentro de esa memoria, a 0° (0x0 si no se dice)
  *   inv            colores invertidos (INVON): los IPS
@@ -452,6 +453,9 @@ static uint8_t s_trozo[64];
 static uint8_t s_par[SEQ_PARAMS];
 static char    s_camino[96];
 static int     s_seq_cmds = 0;
+/* #567 (V7/H6, 25-sep) — el tope del RELOJ que da la hoja del CONTROLADOR (`mhz_max N` en su .seq);
+ * 0 = el .seq no lo dice, y vale el tope general de la línea lcd=. */
+static long    s_seq_mhz_max = 0;
 
 static const char* base_de(const char* c) {
     const char* b = c;
@@ -488,6 +492,15 @@ static int seq_linea(int enviar, int linea) {
                 if (L.traza) { txt_t t; t_ini(&t, s_log, sizeof s_log); t_s(&t, "driver SPI: seq espera "); t_d(&t, ms); di(s_log); }
                 g_bios->sleep_ms((int) ms);
             }
+            return 0;
+        }
+        if (es(s, e, "mhz_max")) {                  /* #567: no es un comando, es un DATO del chip */
+            const char* a = e; const char* z; long mhz;
+            while (*a == ' ' || *a == '\t') a++;
+            z = a; while (*z && *z != ' ' && *z != '\t') z++;
+            if (numero(a, z, &mhz) != 0 || mhz <= 0 || mhz > 80)
+                return falla_seq(linea, "'mhz_max' quiere los MHz de la hoja (1..80)", 0, 0, "");
+            s_seq_mhz_max = mhz;
             return 0;
         }
     }
@@ -530,6 +543,7 @@ static int seq(int enviar) {
     if (L.seq[0]) t_s(&t, L.seq);
     else { t_s(&t, "pack:" PACK_NOMBRE "/"); t_s(&t, L.ctrl); t_s(&t, ".seq"); }
     s_seq_cmds = 0;
+    s_seq_mhz_max = 0;
     fd = g_bios->abrir(s_camino, 0);
     if (fd < 0) {
         if (L.seq[0]) return falla("no encuentro ", s_camino, s_camino + t.n, "");
@@ -602,6 +616,18 @@ static int config(void) {
     if (X.hay && !hay_bus("i2c", X.i2c)) return falla_bus("i2c", X.i2c, "del expansor");
     if (T.hay && !hay_bus("i2c", T.i2c)) return falla_bus("i2c", T.i2c, "del tactil");
     if (seq(0) != 0) return -1;
+    /* #567 (V7/H6, 25-sep) — el reloj no pasa de la HOJA del controlador. Eduardo, al cancelar los 80 MHz:
+     * «nos ceñimos a ese límite… podría ser que a nosotros nos funcionase y a otro usuario no». Un panel
+     * que no aguanta el reloj da píxeles corruptos, no un error: por eso se para aquí, con nombre. El tope
+     * es del CHIP y va en su .seq (`mhz_max N`); un .seq que no lo dice deja el tope general (80).
+     * El mensaje dice de dónde sale el tope (la directiva y el fichero) y cabe en s_motivo: 76 de 79. */
+    if (s_seq_mhz_max > 0 && L.mhz > s_seq_mhz_max) {
+        txt_t t; t_ini(&t, s_motivo, sizeof s_motivo);
+        t_s(&t, "ENV lcd: 'mhz' "); t_d(&t, L.mhz); t_s(&t, " supera los "); t_d(&t, s_seq_mhz_max);
+        t_s(&t, " que admite el "); t_s(&t, L.ctrl); t_s(&t, " (mhz_max en "); t_s(&t, base_de(s_camino));
+        t_c(&t, ')');
+        return -1;
+    }
     s_ok = 1;
     {
         txt_t t; t_ini(&t, s_log, sizeof s_log);
