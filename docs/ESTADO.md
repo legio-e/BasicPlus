@@ -902,7 +902,7 @@ el `mini`, SQLite y la Gui (quedan 312 KB libres); en `/app`, las de la tanda y 
 (ABI 8): regrabarlos. La **Nucleo**, sin tocar: su imagen (`softfp`, el adaptador) va a las pruebas finales.
 
 **Queda**:
-- De H6, lo que diga Eduardo: `G5` era lo último de `H6.b`; el doble búfer asíncrono lo dejó como opción futura (25-sep).
+- **H6 CERRADO** (Eduardo, 26-sep), como H4 esta tarde: de sus tres objetivos (H4, H5 y H6) queda H5.
 - Lo de antes: P2b.3 y su sesión de placas (la C6 con `#574`, el ADC de la DK2, el NeoPixel de la Metro, DriverSpi
   en la C5/C6, las imágenes con `#569`–`#573` y los packs de SQLite y la Gui en el P4), `#572`, las conversiones
   estrechas y la documentación de las pantallas; y **H5**, que Eduardo dejó para el final.

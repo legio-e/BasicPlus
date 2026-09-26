@@ -4162,3 +4162,5 @@ de Eduardo).
 
 **`G5` hecho**: las cuatro placas con pantalla —la C5, la C6, el P4 y la DK2— pintan con el LVGL de un pack, y la
 imagen de cada una ya no lleva LVGL.
+
+**✅ H6 CERRADO** (Eduardo, 26-sep).
