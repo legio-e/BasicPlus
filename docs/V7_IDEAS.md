@@ -1991,14 +1991,41 @@ dentro de un nativo, atrapada en BP; `make test-xmodnat` y un ejemplo con `Math.
 
 **Por pasos que cierran algo:**
 
-- **P2b.0** — medir la línea del bucle en `sumaHasta` de `NatV7` (1 ms en la Pico), con un contador en registro que
-  sólo mire el indicador cada N vueltas. El número decide la densidad.
+- **P2b.0** ✅ (26-sep, en la Pico 2) — medir la línea del bucle. Resultado abajo: **un contador en registro, que
+  sólo mira el indicador cada 1024 vueltas**.
 - **P2b.1** — la suspensión en el PC: la pila prestada, el cambio de contexto x86-64, el trampolín con `#186`, el GC,
   reanudar y el `kill`; la línea del bucle en el emisor; las pruebas de arriba.
 - **P2b.2** — el despachador: el helper `call_builtin`, la marca de `builtin_throw` y el camino genérico del emisor
   para toda intrínseca `CALL_BUILTIN n`, local y de otro módulo; lo que diga la medida de la lista a mano.
 - **P2b.3** — el cambio de contexto de ARM y de los dos RISC-V, la cascada de la ABI 9 (los `.mdn`, los packs, las
   imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4 y la DK2).
+
+#### P2b.0 — lo que cuesta la línea del bucle, MEDIDO (26-sep, Pico 2, RP2350 a 150 MHz)
+
+Un módulo con dos bucles apretados, llamados 200 veces con 50 000 vueltas —10 millones por bucle, sin desbordar un
+`integer`—: `sumaHasta` (el de `NatV7`: `t += i`) y `hashHasta` (`h := (h * 31 + i) mod 1048576`, que gcc no puede
+convertir en una fórmula; `-Os` tampoco convirtió la suma). El C que emite el AOT, retocado a mano en tres variantes,
+compilado con la receta de la placa (`ARMV8M_MAIN_SOFTFP`) y subido como `.mdn` suelto. La rama «cedo», que no se toma,
+LLAMA de verdad a un helper de la tabla, para que gcc reparta los registros como lo hará con la línea real.
+
+| | `sumaHasta` | ciclos/vuelta | `hashHasta` | ciclos/vuelta |
+|---|---|---|---|---|
+| interpretado | 72 279 ms | ≈1084 | 96 406 ms | ≈1446 |
+| nativo, como hoy | 404 ms | 6,1 | 874 ms | 13,1 |
+| + mirar el indicador en CADA vuelta | 873 ms (+116 %) | 13,1 | 1276 ms (+46 %) | 19,1 |
+| + **contador en registro; el indicador, cada 1024 vueltas** | **539 ms (+33 %)** | **8,1** | **1008 ms (+15 %)** | **15,1** |
+
+Dos ejecuciones por variante, iguales al milisegundo. Leer el indicador cuesta **unos 7 ciclos por vuelta** (una
+`ldrb` y su comparación: en el bucle más apretado, más que el propio bucle); el contador, **2** (un `subs` que ya
+pone los flags, y el salto). **Decisión técnica**: el contador; la latencia de respuesta, 1024 vueltas (≈ 55 µs en
+`sumaHasta`), muy por debajo de un quantum. Y el orden de magnitud que no se pierde: con la línea, el nativo sigue
+**134 y 96 veces** más rápido que el intérprete en estos dos bucles (179 y 110 sin ella) — es también el primer dato
+del «cronometrar nativo contra interpretado» que H5 tiene pendiente.
+
+⚠️ **Un tropiezo del instrumento, para no repetirlo**: la primera tanda leía el indicador de `vm->memory + 0x40`,
+supuesto a cero por estar en la zona reservada, y en la Pico NO lo está: la rama «cedo» se tomaba en cada vuelta
+(26 veces más lento, que no era el coste de la línea sino el de 10 millones de llamadas). Se vio porque el número era
+absurdo. El indicador de la medida buena es un `static const volatile` del propio `.mdn`, que vale 0 seguro.
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
