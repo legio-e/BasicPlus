@@ -4061,3 +4061,15 @@ la VM subió a la 9 esta mañana —SQLite y Gui2 sin natives en toda placa con 
 regenerarlos (`#542` contaba `import v1 from pack "SQLI"` como un módulo que falta). Arreglado, regenerados (un byte
 distinto: la ABI), los packs reconstruidos y una red nueva en `compat.sh check` (`compat/packs_abi.py`). Los números
 de `SQLite.pack` podado para ARM: 456 KB, y el `mini` 24 KB: caben juntos en los 528 KB de la zona de la DK2.
+
+**Pasos 2 y 3, en la DK2 ✅** (26-sep, con el OK de Eduardo al lote). La zona de datos, repartida de nuevo —FS 1008 KB,
+packs 1536 KB, el banco 2 entero (`0x08280000`): los 528 KB de antes se quedaban cortos para la Gui de `G5.b`—, con el
+FS reformateado y `PACK_FORMAT` de la zona nueva; `packRam=512` en el ENV: «vm: 1024 KB … | packs 512 KB delante» y
+«packs: bloque de RAM 512 KB @0x20000000 … en su sitio fijo». El `mini`, podado a 24 KB y sellado para `0x08280000` y
+la RAM `0x20000000`: el Run que dispara el cargador vuelve en 37 ms, pero su informe no se ve —el log de ejecución está
+apagado por defecto (`#423`) y hace falta `log=1`—. SQLite: 456 KB en `0x08286000`, su RAM en `0x20000010` —el tope
+por encima de los 16 B del `mini`: el reparto de G1, en el STM32— y **`SqlDemo` entero**: «AOT: SQLite.mdn cargado del
+pack (3184 B, 16 thunks)», la base en la flash, los `double` (20.5…) y los `long` (las marcas de tiempo) bien, la media
+21, en 3650 ms; la salida cuadra con lo que inserta el programa (no había una de referencia guardada). La tanda de V7,
+otra vez 14/14, con la VM en 1 MB detrás del bloque. Queda el paso 4: LVGL como pack ARM (`build_lvgl.sh arm`) y el
+`.mdn` ARM de la Gui; se prueba en `G5.b`.

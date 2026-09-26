@@ -127,3 +127,130 @@ notas de dependencias:
 
 NECESITA OJOS: GuiShot en stm32u5g9@COM12: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.png  
 
+
+## Tanda 2026-09-26 17:34:56
+
+- manifiesto: `bpgenvm-c\tools\tanda_v7.json` (14 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-09-26 17:18:43) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-09-26 15:25:04) - sabor `gui1-lvgl0`
+- placas conectadas: 1 (stm32u5g9@COM12)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | 8d65a50d | 1616 | ok | 0 | 8 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | f8e13c24 | 292 | ok | 1 | 10 | 1 |
+| ThreadTrasMain | ThreadTrasMain | e1f986a3 | 530 | ok | 0 | 337 | 3 |
+| MachineId | MachineId | 65fa93f7 | 484 | ok | 0 | 9 | 3 |
+| Destructor | Destructor | 4c50b965 | 4542 | ok | 0 | 9 | 33 |
+| TimeDemo | TimeDemo | 09b25f3e | 1552 | ok | 0 | 13 | 13 |
+| ArrayFijo | ArrayFijo | b9a1e239 | 2395 | ok | 0 | 10 | 11 |
+| MoveRango | MoveRango | 79dc5aca | 3214 | ok | 0 | 9 | 26 |
+| HiloUsa | HiloUsa | 026f0359 | 2212 | ok | 0 | 27 | 8 |
+| GuiWinJson | GuiWinJson | 093521a9 | 2116 | ok | 0 | 58 | 17 |
+| GuiShot | GuiShot | a455f18e | 1391 | ok | 0 | 371 | 8 |
+| NatNew | NatNew | 7e353e77 | 2059 | ok | 0 | 9 | 10 |
+| NatV7 | NatV7 | cf910565 | 1558 | ok | 0 | 10 | 11 |
+| FloatNat | FloatNat | 74b15e1e | 4870 | ok | 0 | 8 | 40 |
+
+### Placa stm32u5g9 - 20353850553250040015002D
+
+- sello: boardName=`stm32u5g9` uniqueId=`20353850553250040015002D` serverName=`bpvm-stm32` serverBuild=`Sep 26 2026 17:25:36` capacidades=["META", "FILES", "TERMINAL", "PACKS"]
+- imagen: arch=40 variant=None cpuFreqHz=160000000 resetReason=software uptimeMs=38596 fs=212992/1032192 B vmHeapBytes=786432
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM12
+- pantalla: si (INFO screenW x screenH = 800x480)
+- inventario /lib+/app: 17 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 258 | 8 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 61 | 10 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 384 | 337 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 161 | 9 | EXITED OK exit=0 |
+| Destructor | **IDENTICO** | 405 | 9 | EXITED OK exit=0; host rc=0 |
+| TimeDemo | **IDENTICO** | 714 | 13 | EXITED OK exit=0; host rc=0 |
+| ArrayFijo | **IDENTICO** | 217 | 10 | EXITED OK exit=0; host rc=0 |
+| MoveRango | **IDENTICO** | 326 | 9 | EXITED OK exit=0; host rc=0 |
+| HiloUsa | **IDENTICO** | 391 | 27 | EXITED OK exit=0; host rc=0 |
+| GuiWinJson | **IDENTICO** | 4020 | 58 | EXITED OK exit=0; host rc=0 |
+| GuiShot | **NO-PETA** | 4060 | 374 | EXITED OK exit=0 |
+| NatNew | **IDENTICO** | 198 | 9 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatV7 | **IDENTICO** | 282 | 10 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (ARMV8M_MAIN_SOFTFP) |
+| FloatNat | **IDENTICO** | 356 | 8 | EXITED OK exit=0; host rc=0; nativo 23/23 thunks (ARMV8M_MAIN_SOFTFP) |
+
+- tras MathRango: uptimeMs=40616 fsUsed=221184 vmHeapBytes=786432
+- tras ThrowSinAtrapar: uptimeMs=41651 fsUsed=229376 vmHeapBytes=786432
+- tras ThreadTrasMain: uptimeMs=42750 fsUsed=237568 vmHeapBytes=786432
+- tras MachineId: uptimeMs=44035 fsUsed=245760 vmHeapBytes=786432
+- tras Destructor: uptimeMs=46254 fsUsed=253952 vmHeapBytes=786432
+- tras TimeDemo: uptimeMs=48272 fsUsed=262144 vmHeapBytes=786432
+- tras ArrayFijo: uptimeMs=49490 fsUsed=270336 vmHeapBytes=786432
+- tras MoveRango: uptimeMs=50794 fsUsed=278528 vmHeapBytes=786432
+- tras HiloUsa: uptimeMs=52510 fsUsed=294912 vmHeapBytes=786432
+- tras GuiWinJson: uptimeMs=74035 fsUsed=401408 vmHeapBytes=786432
+- tras GuiShot: uptimeMs=80958 fsUsed=417792 vmHeapBytes=786432
+- artefacto GuiShot.shot de GuiShot: bajado a `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.shot` (7292 B, crc bd19c7be) -> PNG `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.png`; antes del RUN: no existia
+- tras NatNew: uptimeMs=84159 fsUsed=425984 vmHeapBytes=786432
+- tras NatV7: uptimeMs=85758 fsUsed=434176 vmHeapBytes=786432
+- tras FloatNat: uptimeMs=88760 fsUsed=450560 vmHeapBytes=786432
+- ejecutadas (con EXITED) 14 de 14 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 1616 | 8d65a50d | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 292 | f8e13c24 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 530 | e1f986a3 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 484 | 65fa93f7 | ok |
+| /app/Destructor.mod | bpgenvm-c\build\tanda\Destructor\Destructor.mod | 4542 | 4c50b965 | ok (por trozos) |
+| /app/TimeDemo.mod | bpgenvm-c\build\tanda\TimeDemo\TimeDemo.mod | 1552 | 09b25f3e | ok |
+| /app/ArrayFijo.mod | bpgenvm-c\build\tanda\ArrayFijo\ArrayFijo.mod | 2395 | b9a1e239 | ok |
+| /app/MoveRango.mod | bpgenvm-c\build\tanda\MoveRango\MoveRango.mod | 3214 | 79dc5aca | ok |
+| /app/HiloLib.mod | bpgenvm-c\build\tanda\HiloUsa\HiloLib.mod | 1114 | 88bd91bd | ok |
+| /app/HiloUsa.mod | bpgenvm-c\build\tanda\HiloUsa\HiloUsa.mod | 2212 | 026f0359 | ok |
+| /lib/Gui.mod | bpstdlib\Gui.mod | 45038 | ae0d2a7e | ok (por trozos) |
+| /lib/Json.mod | bpstdlib\Json.mod | 22616 | 578601f2 | ok (por trozos) |
+| /lib/Collections.mod | bpstdlib\Collections.mod | 12295 | feacb85e | ok (por trozos) |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 2116 | 093521a9 | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 1391 | a455f18e | ok |
+| /app/NatNew.mod | bpgenvm-c\build\tanda\NatNew\aot-ARMV8M_MAIN_SOFTFP\NatNew.mod | 4123 | 4b8b9250 | ok (por trozos) |
+| /app/NatV7.mod | bpgenvm-c\build\tanda\NatV7\aot-ARMV8M_MAIN_SOFTFP\NatV7.mod | 2296 | 17d5c3d9 | ok |
+| /app/FloatNat.mod | bpgenvm-c\build\tanda\FloatNat\aot-ARMV8M_MAIN_SOFTFP\FloatNat.mod | 8449 | 6709344d | ok (por trozos) |
+
+notas de dependencias:
+
+- dependencia Core: en la zona de packs (pack:SQLite/Core.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Gui: el RUN no la resuelve (NOT_FOUND: no existe): se sube a /lib
+- dependencia Json: el RUN no la resuelve (NOT_FOUND: no existe): se sube a /lib
+- dependencia Collections: el RUN no la resuelve (NOT_FOUND: no existe): se sube a /lib
+- dependencia Str: en la zona de packs (pack:SQLite/Str.mod, crc igual): se ejecuta XIP, no se sube
+
+### Matriz pruebas x placas
+
+| prueba | stm32u5g9@COM12 |
+|---|---|
+| MathRango | IDENTICO |
+| ThrowSinAtrapar | IDENTICO |
+| ThreadTrasMain | IDENTICO |
+| MachineId | NO-PETA |
+| Destructor | IDENTICO |
+| TimeDemo | IDENTICO |
+| ArrayFijo | IDENTICO |
+| MoveRango | IDENTICO |
+| HiloUsa | IDENTICO |
+| GuiWinJson | IDENTICO |
+| GuiShot | NO-PETA |
+| NatNew | IDENTICO |
+| NatV7 | IDENTICO |
+| FloatNat | IDENTICO |
+
+NECESITA OJOS: GuiShot en stm32u5g9@COM12: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.png  
+
