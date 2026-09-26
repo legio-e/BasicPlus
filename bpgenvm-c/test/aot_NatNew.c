@@ -37,11 +37,14 @@ static int32_t aot_NatNew_sumaArray(struct bpvm* vm, int32_t n);
 static int32_t aot_NatNew_sumaArray(struct bpvm* vm, int32_t n) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     (void) n;
     int32_t v = ({ int32_t __arr = vm->aot_helpers->newarray_i32(vm, 4); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 0, 10); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 1, 20); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 2, 30); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 3, 40); __arr; });
     int32_t t = 0;
     int32_t i = 0;
     while ((i < 4)) {
+        if (__builtin_expect(--__bpvm_cuenta == 0, 0)) { __bpvm_cuenta = 1024; vm->aot_helpers->punto_control(vm); }   /* P2b.1.d */
         t += vm->aot_helpers->array_load_i32(vm, v, i);
         i += 1;
     }
@@ -67,6 +70,8 @@ static void thunk_NatNew_sumaArray(struct bpvm* vm,
 static int64_t aot_NatNew_sumaLargos(struct bpvm* vm) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     int32_t v = ({ int32_t __arr = vm->aot_helpers->newarray_i64(vm, 2); vm->aot_helpers->array_store_i64(vm, (uint32_t) __arr, 0, 3000000000LL); vm->aot_helpers->array_store_i64(vm, (uint32_t) __arr, 1, 4000000000LL); __arr; });
     return (vm->aot_helpers->array_load_i64(vm, v, 0) + vm->aot_helpers->array_load_i64(vm, v, 1));
 }
@@ -89,6 +94,8 @@ static void thunk_NatNew_sumaLargos(struct bpvm* vm,
 static int32_t aot_NatNew_tocaPalabras(struct bpvm* vm, int32_t v) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     (void) v;
     vm->aot_helpers->array_store_i16(vm, v, 0, 1000);
     vm->aot_helpers->array_store_i16(vm, v, 1, 2000);
@@ -115,6 +122,8 @@ static void thunk_NatNew_tocaPalabras(struct bpvm* vm,
 static double aot_NatNew_mediaDobles(struct bpvm* vm) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     int32_t d = vm->aot_helpers->newarray_i64(vm, 2);
     vm->aot_helpers->array_store_f64(vm, d, 0, 3.0);
     vm->aot_helpers->array_store_f64(vm, d, 1, 5.0);
@@ -139,6 +148,8 @@ static void thunk_NatNew_mediaDobles(struct bpvm* vm,
 static int32_t aot_NatNew_largoDeDos(struct bpvm* vm, int32_t a, int32_t b) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     (void) a;
     (void) b;
     int32_t v = ({ int32_t __arr = vm->aot_helpers->newarray_ref(vm, 3); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 0, vm->aot_helpers->int_to_string(vm, a)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 1, vm->aot_helpers->int_to_string(vm, b)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 2, vm->aot_helpers->string_from_cstr(vm, "xy", 2)); __arr; });
@@ -165,6 +176,8 @@ static void thunk_NatNew_largoDeDos(struct bpvm* vm,
 static float aot_NatNew_sumaFloats(struct bpvm* vm) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     int32_t f = ({ int32_t __arr = vm->aot_helpers->newarray_i32(vm, 2); vm->aot_helpers->array_store_f32(vm, (uint32_t) __arr, 0, 1.5f); vm->aot_helpers->array_store_f32(vm, (uint32_t) __arr, 1, 2.5f); __arr; });
     return BPVM_AOT_FADD(vm, vm->aot_helpers->array_load_f32(vm, f, 0), vm->aot_helpers->array_load_f32(vm, f, 1));
 }
@@ -187,6 +200,8 @@ static void thunk_NatNew_sumaFloats(struct bpvm* vm,
 static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t a, int32_t b) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     (void) a;
     (void) b;
     int32_t p = vm->aot_helpers->call_bp_i32(vm, aot_NatNew_busca(vm, "NatNew.__cls_new_Punto(ii)", "AOT: la native 'areaDe' pide 'NatNew.__cls_new_Punto(ii)' y no est\303\241 en los m\303\263dulos cargados (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (int32_t[]){ a, b }, 2, 0u, 1);

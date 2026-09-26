@@ -31,6 +31,8 @@ static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t n);
 static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t n) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
+    int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
+    (void) __bpvm_cuenta;
     (void) n;
     if ((n < 0)) {
         return vm->aot_helpers->string_from_cstr(vm, "negativo", 8);
