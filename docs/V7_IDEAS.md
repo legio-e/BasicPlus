@@ -3943,3 +3943,87 @@ La imagen: de 1 410 496 a 750 592 B (−644 KB) y la `.bss` de 889 a 521 KB (−
 la tanda con GUI, el táctil, el giro y la velocidad. Punto de restauración: `dist/firmware-v7-25sep`.
 
 **`G5.a`, en la placa ✅** (26-sep, con el OK de Eduardo a cada paso). Grabada la imagen, la zona de packs se corrió (de `0x40154000` a `0x400b4000`: la app es 644 KB más pequeña) y los tres packs dijeron «realojado para OTRA dirección», como se esperaba; `PACK_FORMAT` y SQLite y la Gui regrabados —la poda eligió el motor `RISCV`—, sin `DriverNulo` (la pantalla la publica ahora la imagen). En el log: «el P4 publica 'PANT' desde la imagen», los dos motores vivos y «pack 'LVGL' resuelto (88 funciones)». La tanda de V7 **14/14** (`GuiWinJson` idéntica; y los nativos AOT otra vez en el P4, que ya es de la ABI 9: NatNew 7/7, NatV7 4/4, FloatNat 23/23). `GuiFlushBench`: **25 ms** por pantalla entera (480×800) y **2 ms** por etiqueta —más rápido que la C5 (70) y la C6 (35) por SPI—; la comparación con el LVGL de la imagen NO se midió antes de grabar (un descuido: la imagen de `dist` permite medirla si hace falta). `GuiRotCycle`, en el cristal (Eduardo): los giros bien y los textos en su sitio, dos vueltas. `C5Touch`: 5 toques, 5 pulsaciones. `GuiRotDemo`: el botón «Girar +90» respondió en las cuatro orientaciones —el punto del táctil, bien girado—. Sigue sin pasar por la HAL BP el bus del táctil (el I2C 0, abierto por la imagen), como antes: es la nota de `G4.a1`.
+
+#### 15.4 `G5.b0` — los packs nativos en el STM32 (26-sep, análisis)
+
+Mirado hoy en el código, **lo común ya está en la imagen del STM32** —compila todo `src/`: la escalera y el plan
+(`bpvm_npack.c`), la tabla BIOS (`bpvm_bios*.c`), el punto de encuentro (`publica`/`busca`)— y **la zona de packs ya se
+graba**: los packs de datos de H3 van por `PACK_BURN_*` con la cintura de flash del U5, que invalida el ICACHE tras cada
+borrado y cada escritura (`stm32_flash.c`), así que un motor recién grabado se lee y se ejecuta sin restos de la caché.
+Falta lo de la familia, calcado de la RP2350 (la zona es XIP en una dirección fija, la misma vista para leer y ejecutar):
+
+- `stm32/port/bios_stm32.c` (~130 líneas, como `bios_esp32.c`): `BPVM_BIOS_TABLA` con la voz (el log persistente), los
+  chivatos y el ENV del STM32 (`board_mgr_stm32_env_get`, que ya existe), y el ancla. La BIOS se verifica en cada
+  arranque, como en la Pico.
+- `stm32/port/pack_stm32.c` (~200, como `pack_pico.c`): montar, planear, explicar y saltar; y el disparo en el primer
+  RUN (`packs_cargar_una_vez`), no en el arranque.
+- `PACK_BURN_BEGIN` con la RAM: hoy `board_mgr_stm32_handle` deja `pack_ram_base`/`pack_ram_size` a 0, y el IDE diría
+  «esta placa no da RAM a packs nativos».
+- Sin linked folders nuevos: los dos ficheros van en `port/`, que ya lo es.
+
+Y tres cosas que deciden el diseño:
+
+**(a) La coma flotante.** Las dos imágenes STM32 compilan con `-mfloat-abi=hard` (su `.cproject`); los motores ARM
+—`sqlite.npk.ARMV8`, el `mini` y el de LVGL cuando se construya— son `softfp`, los de la Metro. La escalera los
+rechazaría en su peldaño 4 («otra convención de coma flotante — daría números mal»). Es el choque del 25-ago con el
+`.mdn` (en el STM32, `(3.0+5.0)/2.0` daba NaN sin un solo error), que se resolvió fijando a `aapcs` la frontera de los
+helpers (`BPVM_AOT_FP_ABI`), con gcc comprobando que el tipo y la definición coinciden. Para los motores hay tres salidas:
+
+| | qué | lo bueno | lo que cuesta |
+|---|---|---|---|
+| **A** | las dos imágenes STM32 a `softfp` (una línea de cada `.cproject`) | la familia ARMv8-M con UNA ABI: un `.mdn` y un `.npk` para la Pico y las STM32, la escalera tal cual, y el IDE ya elige bien (`arch` 40 → `arm` → `ARMV8`) | recompilar las dos y pasar la tanda en las dos |
+| B | seguir en `hard` y aceptar el motor `softfp` porque su frontera no lleva coma flotante | nada que recompilar | la escalera tendría que separar la ABI de la imagen de la de la frontera. Hoy es verdad —la BIOS, `'PANT'`, la API de LVGL y la de SQLite no pasan ningún `float` ni `double` por valor (SQLite los saca por arrays)—, pero la API de un pack se llama por un puntero CONVERTIDO (se busca por nombre): un `float` futuro daría números mal sólo en el STM32, y gcc no lo vería |
+| C | un motor más por pack (`ARMV8` en `hard`) | nada que recompilar en las imágenes | cada motor se compila dos veces para ARM, los packs crecen (SQLite, 464 KB; LVGL, del orden de los 747 del de RISC-V) y el IDE y `PackTool` tendrían que elegir también por la ABI |
+
+Comprobado para A: el toolchain de CubeIDE (GNU Tools for STM32 14.3) trae la multilib `thumb/v8-m.main+fp/softfp`; no
+hay ninguna `.a` precompilada en los dos proyectos; y nada del código depende de `hard` (sólo `BPVM_AOT_FP_ABI`, que
+sigue valiendo y pasa a ser cinturón y tirantes). La FPU se usa igual —`softfp` calcula con ella; sólo cambia por dónde
+viajan los `float` en una llamada—. Y si un día alguien volviera a compilar el STM32 en `hard`, la escalera lo diría con
+su nombre.
+
+**(b) La RAM de los motores, en una dirección FIJA.** El sello de un motor lleva la dirección de sus estáticos, así que
+el bloque tiene que estar siempre en el mismo sitio. En el STM32 la VM es un array estático (`s_vm_mem`: 512 KB la
+Nucleo, 1536 la DK2) que se mueve con cada enlace. Propuesta, con lo que ya hay:
+- los dos `.ld` ponen `s_vm_mem` lo PRIMERO de la RAM, en una sección propia sin carga: `0x20000000` siempre (no hace
+  falta ponerla a cero en el arranque: `bpvm_init` no lo supone, y cada RUN ya reutiliza el mismo búfer);
+- el bloque es una **reserva con nombre DELANTE** de ese array —la del planificador común (`bpvm_mem`), la misma con la
+  que la Metro aparta la BD— del tamaño que diga el ENV: `packRam=<KB>` (la clave genérica de la ESP32) o, si no está,
+  `SQLite=<MB>` con su regla (en la Nucleo dirá «no cabe»: su mínimo son 2 MB). La VM se queda con el resto;
+- así el bloque empieza en `0x20000000` cambie la imagen o no, y cambiar `packRam` sólo mueve su final (un motor que ya
+  no quepa lo dice la escalera: «regrábalo»);
+- un detalle de orden: hoy la memoria de la VM se planifica ANTES de leer el ENV (`stm32_mem_planificar` va antes que
+  las particiones): hay que leerlo antes, como la ESP32 (`env_temprano`).
+
+Cuánto: `packRam=512` deja la VM de la DK2 en 1 MB (de 1,5), y a SQLite le sobra (8 KB de estáticos y el resto de
+arena: su MEMSYS5 no pide mínimo; los 2 MB son la regla de la clave `SQLite=`). En la Nucleo, `packRam=256` la dejaría
+en 256 KB. LVGL (`G5.b`) pide ~382 KB de estáticos.
+
+**(c) La zona de packs y los dos bancos de la flash.**
+- La DK2, leída hoy (`part`): el FS, 2016 KB, y los packs, **528 KB** en `0x0837C000`. SQLite ARM (464 KB) cabe; LVGL
+  no: `G5.b` tendrá que repartir de nuevo (un FS más pequeño), y eso borra el FS — con el OK de Eduardo, en `G5.b`.
+- `stm32_flash_erase` saca el banco de la PRIMERA página y borra N seguidas. Si un borrado cruzara del banco 1 al 2 (en
+  la DK2 la frontera es `0x08200000`; la zona empezaría en el banco 1 con un FS de menos de 496 KB), hoy funcionaría
+  **de chiripa**: la página 256 desborda el campo `PNB` (8 bits) justo sobre el bit `BKER`, que es el que elige el
+  banco (visto hoy en `FLASH_PageErase`, del HAL). Propuesta: partir el borrado por banco (unas líneas), para que valga
+  por contrato. Hoy no muerde: la zona de la DK2 está entera en el banco 2, y la de la Nucleo empieza en el suyo.
+
+**El plan de `G5.b0`:**
+
+| paso | qué | se prueba con |
+|---|---|---|
+| 1 | (con A) las dos STM32 a `softfp` | compilarlas; la tanda de V7 en la DK2, y en la Nucleo cuando esté conectada |
+| 2 | `bios_stm32.c` y `pack_stm32.c`; el bloque (los `.ld`, `packRam=`, la reserva); la RAM en `PACK_BURN_BEGIN`; el borrado por banco | el `mini` (1,6 KB): la cadena entera sin nada más que pueda fallar |
+| 3 | SQLite | el `SqlDemo` de la Metro en la DK2, con `packRam=512` |
+| 4 | LVGL como pack ARM (`build_lvgl.sh arm` y el `.mdn` ARM de la Gui) | construirlo; se prueba en `G5.b` |
+
+La prueba, en la **DK2** (conectada, COM12; la Nucleo hoy no está) en vez de la Nucleo de §15.2; la Nucleo después, con
+el mismo código. Grabar las imágenes y tocar el ENV (`packRam=`), con el OK de Eduardo en su momento.
+
+#### 15.5 Las preguntas de `G5.b0` (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | la coma flotante: A, B o C | **A**: las STM32 a `softfp`, una ABI para toda la familia ARMv8-M |
+| 2 | el bloque de RAM | `s_vm_mem` al principio de la RAM por el `.ld`, y `packRam=` como reserva delante |
+| 3 | el borrado de flash que cruza bancos | partirlo por banco ahora, en el paso 2 |
+| 4 | la placa de la prueba | la DK2 (conectada); la Nucleo después |
