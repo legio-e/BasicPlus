@@ -843,6 +843,36 @@ la C6, la P4 y la Nucleo.
 
 `compat.sh check` verde (paridad 104/104 en MOD9 y MOD8); compilan las cinco ESP, la Pico, la Nucleo y la DK2.
 
+## 🖥️ H6 (26-sep, tarde) — `G5.a`: el P4 sin LVGL en la imagen, probado en la placa
+
+- Eduardo: *«Yo continuaría por H6 y dejamos H5 para el final»*. De H6 quedaba `G5` (el P4 y la DK2). **El análisis**
+  (`V7_IDEAS` §H6.15, `5fcea785`): el P4 lo tiene todo —packs nativos, el pack de LVGL de su ISA, un driver que ya hace
+  lo de `'PANT'`—; la DK2 no: el STM32 no tiene packs nativos (ni BIOS ni cargador de `npk`) ni LVGL como pack ARM.
+  Decidido: el P4 primero; **packs nativos para la Discovery**; el `PACK_FORMAT` del P4 al acabar.
+- **`G5.a`** (`1a48870a`): `gui_display_dsi.c` con dos modos por el build; con `BPVM_GUI_PACK`, la tabla `'PANT'`
+  publicada desde la imagen con `bpvm_bios_publica`. El giro —un panel DPI no gira por hardware— con las cuentas de
+  LVGL 9.2.2 portadas tal cual (la zona, los píxeles, el punto del táctil). La imagen, −644 KB y −368 KB de `.bss`.
+- **En la placa**, con el OK de Eduardo a cada paso: la zona de packs se corrió (la app es más pequeña) y los tres
+  packs dijeron «realojado para OTRA dirección», como se esperaba; `PACK_FORMAT`, SQLite y la Gui regrabados. La tanda
+  de V7 **14/14**, `GuiFlushBench` **25 ms** por pantalla y 2 ms por etiqueta, el giro bien en el cristal (Eduardo) y el
+  táctil 5 de 5 y en las cuatro orientaciones (`GuiRotDemo`). Un descuido: no medí la velocidad del LVGL de la imagen
+  ANTES de grabar; la imagen de `dist` permite medirla si hace falta.
+
+## ⏭️ Traspaso (26-sep, tarde, 2) — H6: `G5.a` hecho; queda `G5.b` (la DK2) con `G5.b0` delante
+
+**Commits** (sin push): `1a48870a` (`G5.a`) · y los docs (`5fcea785`, `ef290544`, `d439c7fa`…).
+
+**Las placas**: el **P4** con la imagen de `G5.a` (sin LVGL), SQLite y la Gui (`lvgl.npk.RISCV`) regrabados, sin
+`DriverNulo`; en `/app` las pruebas de pantalla (`GuiFlushBench`, `GuiRotCycle`, `C5Touch`, `GuiRotDemo`). La **DK2**
+conectada (COM12) con su imagen de antes. La S3 y la Nucleo, como las dejó el traspaso anterior.
+
+**Queda**, en este orden:
+- **`G5.b0`**: los packs nativos en el STM32 —la BIOS y el cargador de la familia, como los de la RP2350 (`bios_pico.c`,
+  `pack_pico.c`), y el sellado en `PACK_BURN_BEGIN`— y LVGL como pack ARM (`build_lvgl.sh`). Se prueba con SQLite en
+  una STM32 (el `SqlDemo` de la Metro; el motor `ARMV8` ya está en `packs/SQLite.pack`).
+- **`G5.b`**: la DK2 —`'PANT'` por LTDC y su táctil, y la imagen sin LVGL—.
+- Lo de antes: P2b.3 y su sesión de placas, `#572`, las conversiones estrechas y la documentación de las pantallas.
+
 ## ⏭️ Traspaso (26-sep, tarde) — H4 CERRADO (Eduardo); la sesión de placas de P2b.3 recoge lo que falta probar
 
 **Commits** (sin push): `6a53f91f` (NeoPixel ESP32 y `#574`) · `422a55dc` (el ADC del STM32) · y los docs (`1041bf8b`,
