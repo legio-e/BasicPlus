@@ -4090,3 +4090,49 @@ pack universal de la Gui, 2,3 MB; **podado para ARM, 744 KB**: cabe en los 1056 
 **`G5.b0` CERRADO.** Lo que deja dicho para `G5.b`: los estáticos de LVGL (383 KB) y los de SQLite, con `packRam=512`,
 dejarían a SQLite unos 122 KB de arena; el reparto de la RAM de la DK2 se decide ahí, cuando LVGL salga de su imagen y
 libere la suya.
+
+#### 15.6 `G5.b` — la DK2: su pantalla publicada como `'PANT'` desde la imagen, y LVGL fuera (26-sep, análisis)
+
+Lo mismo que `G5.a` en el P4. Mirado hoy:
+
+- **El driver** (`stm32/port/gui_display_ltdc.c`, 170 líneas, entero bajo `BPVM_LVGL`): un framebuffer RGB565 de
+  800×480 en la SRAM (750 KB) que el LTDC escanea (capa 0), la luz por PWM (TIM3_CH4), un búfer de dibujo de 48 líneas
+  (75 KB) y el GT911 por el I2C 2 (`hi2c2`, el de CubeMX), leído por sondeo. **No gira**: `setRotation` avisa «no
+  soportado en este display (LTDC) todavia» y no hace nada.
+- **Lo que sale de la imagen con LVGL**: sus fuentes y su código (buena parte de los 996 KB de `.text` + `.rodata`), la
+  tabla de nodos del modelo (`g_nodes`, 96 KB), el búfer de dibujo (75 KB) y lo que LVGL pide a `malloc`. **Lo que se
+  queda**: el framebuffer, que es del LTDC. Medido en el `.elf` de hoy: `.bss` 1036 KB, de los que 750 son el
+  framebuffer.
+- **El build**: la DK2 compila LVGL como una entrada `lvgl` de `sourceEntries` en su `.cproject` (versionado); la
+  carpeta enlazada vive en el `.project`, que es local y puede quedarse. Y `gui.c` no está guardado contra
+  `BPVM_GUI_PACK`: como el STM32 compila todo `src/`, con `gui_pack.c` las funciones `bpvm_gui_*` estarían dos veces (el
+  comentario de `gui_pack.c` cuenta que ya chocó el 23-sep, al revés).
+- **El pack de la Gui** dibuja en dos búferes de 11 520 B (`BPVM_PANT_DRAW_BYTES`): a 800 px son ~7 líneas por franja,
+  frente a las 48 de hoy. **Medido ANTES de tocar nada** (la lección de `G5.a`): `GuiFlushBench` en la DK2, con LVGL en
+  la imagen, **37 ms por pantalla entera y 2 ms por etiqueta**, igual en tres pasadas.
+
+**El plan** (como el P4):
+
+1. `gui_display_ltdc.c` con dos modos por el build. Con `BPVM_GUI_PACK`, la tabla `'PANT'`: `init` (la luz y la capa
+   del LTDC, una vez), `size` (800×480), `flush` (a 0°, fila a fila al framebuffer; girado, cada píxel a su sitio con
+   las cuentas de LVGL 9.2.2 que ya se portaron para el P4 —aquí sin búfer intermedio: el destino ES el framebuffer—),
+   `rotate` y `touch` (el GT911 como hoy, con el punto girado); publicada desde el arranque (`stm32_pant_publicar`).
+   **La DK2 gana el giro**, que hoy no tiene.
+2. `gui.c` bajo `#if !defined(BPVM_GUI_PACK)`, el espejo de la guarda de `gui_pack.c`: uno u otro, por el build.
+3. El `.cproject` de la DK2: fuera `BPVM_LVGL`, `LV_CONF_INCLUDE_SIMPLE` y la entrada `lvgl`; dentro `BPVM_GUI_PACK`.
+4. La memoria de la DK2: se mide la `.bss` sin LVGL y se fija `BOARD_VM_BYTES`. Cuenta de partida: sin los 171 KB de
+   la imagen, `BOARD_VM_BYTES` de 1536 a **1792 KB** con **`packRam=768`** deja la VM en 1 MB, como hoy, y el bloque de
+   los motores con LVGL (383 KB), SQLite (8 KB) y ~377 KB de arena para SQLite (con `packRam=512`, ~122).
+
+**Se prueba con**: la tanda de V7 (con `GuiWinJson` y `GuiShot`), `GuiFlushBench` contra 37 / 2 ms, `GuiRotCycle` (el
+giro, nuevo en la DK2; en el cristal, Eduardo) y el táctil (`C5Touch` y `GuiRotDemo` en las cuatro orientaciones). En
+la placa: la imagen, el pack de la Gui para ARM (744 KB; caben en los 1056 KB libres de la zona) y `packRam=` —con el
+OK de Eduardo en su momento—.
+
+#### 15.7 Las preguntas de `G5.b` (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | el giro en la DK2, que hoy no tiene | hacerlo ya en `'PANT'`: son las cuentas del P4, y es para lo que `'PANT'` tiene `rotate` |
+| 2 | la memoria de la DK2 | medir la `.bss` sin LVGL y, si cuadra, `BOARD_VM_BYTES` 1792 KB con `packRam=768` |
+| 3 | las franjas de 7 líneas del pack (hoy 48) | medir primero; si la pantalla entera sale mucho peor que 37 ms, el tamaño del búfer como perilla (el pack ARM es el mismo para la Metro y las STM32) |
