@@ -4136,3 +4136,29 @@ OK de Eduardo en su momento—.
 | 1 | el giro en la DK2, que hoy no tiene | hacerlo ya en `'PANT'`: son las cuentas del P4, y es para lo que `'PANT'` tiene `rotate` |
 | 2 | la memoria de la DK2 | medir la `.bss` sin LVGL y, si cuadra, `BOARD_VM_BYTES` 1792 KB con `packRam=768` |
 | 3 | las franjas de 7 líneas del pack (hoy 48) | medir primero; si la pantalla entera sale mucho peor que 37 ms, el tamaño del búfer como perilla (el pack ARM es el mismo para la Metro y las STM32) |
+
+**Decidido** (Eduardo, 26-sep): 1, 2 y 3, como la propuesta.
+
+#### 15.8 `G5.b`, en la placa ✅ (26-sep)
+
+El código (`568e976a`): `gui_display_ltdc.c` con dos modos por el build —lo común (el framebuffer, la luz y la capa,
+el GT911) y la tabla `'PANT'` con `BPVM_GUI_PACK`—, el giro con las cuentas del P4 compuestas en una y escrito DIRECTO
+al framebuffer (el píxel lógico (X,Y) va a (Y, H-1-X) a 90°, (W-1-X, H-1-Y) a 180° y (W-1-Y, X) a 270°), `gui.c` bajo
+`#if !defined(BPVM_GUI_PACK)`, el `.cproject` sin LVGL (el build de 27 a 10 s) y `BOARD_VM_BYTES` a 1792 KB. En el
+`.elf`: cero símbolos `lv_`, `.text` + `.rodata` de 996 a 369 KB, `.bss` de 1036 a 857 KB, y ~350 KB libres hasta la
+pila con la VM en 1792.
+
+En la DK2 (con el OK de Eduardo): la imagen, `packRam=768` («vm: 1024 KB … | packs 768 KB delante») y el pack de la
+Gui para ARM, con su RAM en `0x20001E40`, justo encima de la de SQLite —el reparto de G1, con tres motores—. La
+primera tanda SALTÓ las dos pruebas de GUI: el INFO no decía el tamaño de la pantalla, porque con la GUI por el pack
+eso exige el pack cargado y el STM32 sólo lo cargaba en el primer Run. Arreglado como en la ESP32 (`bba97e0b`: el INFO
+dispara la carga «una vez»). Entonces: la tanda de V7 **14/14** (`GuiWinJson` idéntica, `GuiShot` bien, pintada ya por
+el pack); `GuiFlushBench` **48 ms** por pantalla entera y **1 ms** por etiqueta, contra 37 y 2 con LVGL en la imagen
+—la pantalla entera, un 30 % más lenta por las franjas de 7 líneas; la zona sucia, que es lo que hace una interfaz,
+más rápida: se deja así, y el tamaño de la franja sería una perilla del build del pack si hiciera falta—;
+`GuiRotCycle` bien en el cristal (Eduardo: las esquinas y los textos en su sitio), **el giro que la DK2 no tenía**;
+`C5Touch` 5 de 5; `GuiRotDemo` respondiendo en las cuatro orientaciones (once giros por toque; los seguidos, pulsaciones
+de Eduardo).
+
+**`G5` hecho**: las cuatro placas con pantalla —la C5, la C6, el P4 y la DK2— pintan con el LVGL de un pack, y la
+imagen de cada una ya no lleva LVGL.

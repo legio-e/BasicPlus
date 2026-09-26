@@ -879,6 +879,34 @@ la C6, la P4 y la Nucleo.
 - **Paso 4** (`17dbf2d2`): LVGL como pack ARM, 660 KB, el oráculo del realojado idéntico a `ld`; el pack de la Gui,
   744 KB podado para ARM.
 
+## 🖥️ H6 (26-sep, tarde, 4) — `G5.b`: la DK2 sin LVGL en la imagen, y con giro; `G5` hecho
+
+- El análisis (`V7_IDEAS` §H6.15.6, `68fddb9c`), con la velocidad de hoy medida ANTES de tocar nada (la lección de
+  `G5.a`): 37 ms por pantalla entera y 2 por etiqueta. Eduardo: el giro ya, la memoria medida y las franjas a medir.
+- El código (`568e976a`): la DK2 publica su LTDC y el GT911 como `'PANT'` desde la imagen, con el GIRO que no tenía;
+  `gui.c` guardado contra `BPVM_GUI_PACK`; LVGL fuera del `.cproject`; −627 KB de flash, −179 KB de `.bss`, la VM a
+  1792 KB.
+- En la placa, con el OK de Eduardo: la imagen, `packRam=768` y el pack de la Gui para ARM (su RAM, justo encima de
+  la de SQLite). La primera tanda saltó las pruebas de GUI —el INFO no decía la pantalla sin el pack cargado—, y se
+  arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
+  el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
+
+## ⏭️ Traspaso (26-sep, tarde, 4) — H6: `G5` hecho (el P4 y la DK2 sin LVGL en la imagen)
+
+**Commits** (sin push): `568e976a` (`G5.b`), `bba97e0b` (el INFO carga los packs), y los docs (`68fddb9c` y el de
+este traspaso).
+
+**Las placas**: la **DK2** con la imagen de `G5.b` (sin LVGL, `'PANT'` desde la imagen), `packRam=768` y en su zona
+el `mini`, SQLite y la Gui (quedan 312 KB libres); en `/app`, las de la tanda y `GuiRotCycle`, `C5Touch`,
+`GuiRotDemo`, `SqlDemo` y `MiniRun`. El **P4**, como en `G5.a`, con los packs de SQLite y la Gui de antes de `#575`
+(ABI 8): regrabarlos. La **Nucleo**, sin tocar: su imagen (`softfp`, el adaptador) va a las pruebas finales.
+
+**Queda**:
+- De H6, lo que diga Eduardo: `G5` era lo último de `H6.b`; el doble búfer asíncrono lo dejó como opción futura (25-sep).
+- Lo de antes: P2b.3 y su sesión de placas (la C6 con `#574`, el ADC de la DK2, el NeoPixel de la Metro, DriverSpi
+  en la C5/C6, las imágenes con `#569`–`#573` y los packs de SQLite y la Gui en el P4), `#572`, las conversiones
+  estrechas y la documentación de las pantallas; y **H5**, que Eduardo dejó para el final.
+
 ## ⏭️ Traspaso (26-sep, tarde, 3) — H6: `G5.b0` hecho; queda `G5.b` (la DK2 sin LVGL en la imagen)
 
 **Commits** (sin push): `ab87ece6` (softfp), `ec0a48b2` (paso 2), `848ded39` (`#575`), `17dbf2d2` (paso 4), y los docs
