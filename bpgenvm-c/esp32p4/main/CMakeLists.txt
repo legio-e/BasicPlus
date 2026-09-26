@@ -130,6 +130,7 @@ idf_component_register(
         esp_adc          # H14: backend ADC del P4 (esp_adc oneshot)
         esp_driver_tsens # H14: sensor de temperatura interno (Pico.tempC)
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
+        esp_driver_rmt   # V7/H4: backend NeoPixel (WS2812) por RMT, en gpio_esp32.c
         esp_driver_sdmmc # V5/H6: sdmmc_host + sdmmc_cmd (la tarjeta por SDIO)
 )
 

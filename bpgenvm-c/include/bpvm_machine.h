@@ -99,6 +99,12 @@ typedef struct {
 #define BPVM_PIN_INPUT_ONLY  0x20u   /* sólo entrada (no hay driver de salida) */
 #define BPVM_CAPS_PIN_MAX    160     /* tope del mapa: 8 puertos × 16 + holgura (STM32 con I) */
 
+/* #574 (V7/H4, 26-sep) — por qué un pin que EXISTE en el silicio no está para el programa. Su máscara es 0 —para BP
+ * y para la validación, no está—; esto sólo le pone nombre en el error. En la familia ESP32, la tabla daba por buenos
+ * los de la flash (en la C6, el GPIO25 es su MISO) y los del cable del IDE (decidido por Eduardo: también esos). */
+#define BPVM_PIN_SIS_MEMORIA 1u      /* la flash o la PSRAM: el sistema los reserva al arrancar */
+#define BPVM_PIN_SIS_WIRE    2u      /* el cable del IDE (el wire): quitárselo corta la conexión */
+
 typedef struct {
     const char*     micro;          /* "esp32c5" — el ID canónico (Machine.getMicro, INFO.boardName) */
     const char*     paquete;        /* "QFN-60", "LQFP144"… — la VARIANTE elegida en el arranque */
@@ -116,6 +122,7 @@ typedef struct {
     const int8_t*   pin_adc_unit;           /* por GPIO: unidad de ADC (0 = la primera) o -1 */
     const int8_t*   pin_adc_ch;             /* por GPIO: canal en esa unidad, o -1 */
     uint8_t         breadcrumb;             /* 1 = hay migas de verdad (RAM retenida); 0 = no las hay (#487) */
+    const uint8_t*  pin_sistema;            /* #574: por GPIO, BPVM_PIN_SIS_* si es del sistema (máscara 0); NULL = ninguno */
 } bpvm_caps_t;
 
 /* ── V7/H4 (#487) — EL BREADCRUMB, en el COMÚN sobre un bloque RETENIDO ──────
@@ -141,6 +148,9 @@ const bpvm_caps_t* bpvm_caps(void);                     /* nunca NULL */
 int bpvm_caps_gpio_count(void);                          /* pines con máscara != 0 */
 int bpvm_caps_pins_con(uint16_t bit);                    /* cuántos pines tienen ese bit */
 int bpvm_caps_pin_mask(int pin);                         /* la máscara del pin, 0 si no existe */
+/* #574 — el texto de por qué `pin` no está: «el pin 7 no existe en rp2350a», «el pin 25 de esp32c6 es de la flash o
+ * la PSRAM», «el pin 12 de esp32c6 es del cable del IDE (el wire)». Para los errores de las fachadas. */
+void bpvm_caps_pin_ausente(int pin, char* err, size_t cap);
 int bpvm_caps_adc_de_pin(int pin, int* unit, int* ch);   /* 0 y rellena, o -1 si no es analógico */
 int bpvm_caps_pin_de_adc(int unit, int ch);              /* el GPIO de ese canal, o -1 */
 int bpvm_caps_instancia_ok(const uint8_t* lista, int n, int id);   /* ¿id está en la lista? */

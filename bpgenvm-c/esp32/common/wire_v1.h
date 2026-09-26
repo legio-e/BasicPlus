@@ -23,6 +23,7 @@
 #define BPVM_ESP32_WIRE_V1_H
 
 #include "bpvm_wire_v1.h"   /* el contrato: cable + protocolo */
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,6 +52,11 @@ void wire_v1_transport_init(void);
  * puede equivocarse no informa: cuesta el primer minuto de cualquier
  * diagnostico, y a mi me lo costo. Lo dice quien lo sabe. */
 const char* wire_v1_transport_name(void);
+
+/* #574 (V7/H4, 26-sep) — los pines de ESTE cable, como máscara (bit g = GPIO g). La tabla de capacidades los da por
+ * del SISTEMA: un programa que los tomara cortaría la conexión con el IDE (Eduardo: «los pines del wire también»).
+ * Lo dice quien lo sabe, como el nombre de arriba: UART0 o el USB-Serial-JTAG, según el CMakeLists de cada imagen. */
+uint64_t wire_v1_transport_pines(void);
 
 #ifdef __cplusplus
 }

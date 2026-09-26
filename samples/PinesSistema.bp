@@ -1,0 +1,46 @@
+// PinesSistema.bp — #574 (V7/H4, 26-sep): los pines que usa el sistema ya no se le dan al programa. En la C6 la flash
+// va por los GPIO 24–30 (el 25 es su MISO) y el cable del IDE por el USB nativo (el 12 y el 13): la tabla los daba por
+// buenos y un Gpio.Pin(25, OUTPUT) le quitaba la flash al micro. Ahora cada uno da su error con nombre, y un pin libre
+// sigue libre. ⚠️ Sólo con una imagen que lleve #574: con una anterior, pedir el 25 cuelga la C6.
+module PinesSistema
+  import Core
+  import Gpio
+  import Machine
+  import Neopixel
+
+  function prueba(pin: integer)
+    try
+      var p: Gpio.Pin := Gpio.Pin(pin, Gpio.Pin.OUTPUT)
+      print "ok GPIO" + intToString(pin) + ": libre"
+      Gpio.release(pin)
+    catch e: RuntimeError
+      print "ok GPIO" + intToString(pin) + ": " + e.msg
+    endtry
+  end prueba
+
+  function tira(pin: integer)
+    try
+      var px: Neopixel.Strip := Neopixel.Strip(pin, 1)
+      print "ok NeoPixel en el GPIO" + intToString(pin) + ": iniciado"
+    catch e: RuntimeError
+      print "ok NeoPixel en el GPIO" + intToString(pin) + ": atrapada: " + e.msg
+    endtry
+  end tira
+
+  function Main()
+    print "micro: " + Machine.getMicro() + ", GPIO para el programa: " + intToString(Machine.gpioCount())
+    var g: integer := 24
+    while g <= 30 do
+      prueba(g)
+      g += 1
+    endwh
+    prueba(12)
+    prueba(13)
+    prueba(2)
+    // El RMT de la C6 tiene 2 canales de transmisión: la tercera tira no cabe.
+    tira(2)
+    tira(3)
+    tira(1)
+    print "fin"
+  end Main
+end PinesSistema

@@ -3773,11 +3773,23 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * que aqui NO ESTA IMPLEMENTADO — y se habla de la plataforma, no del
          * chip, porque manana puede haber driver en otra familia. */
         int pin = pop_i32(vm, tc);
-        if (!bpvm_neopixel_init(pin)) {
-            char em[128];
+        char em[160];
+        if (!bpvm_neopixel_disponible()) {
             snprintf(em, sizeof(em),
                      "Neopixel(%d): no implementado en esta plataforma", pin);
             return builtin_throw(vm, tc, em);
+        }
+        /* V7/H4 (26-sep, Eduardo) — con driver, el pin se valida contra la tabla como el del PWM y el del
+         * Pulse (#479): «el pin 25 no existe en esp32s3», «es del SPI 2», «es de la flash o la PSRAM» (#574)…
+         * Sin driver no se mira nada: el PC y NeoCatch siguen diciendo lo mismo en las dos VMs. */
+        if (bpvm_gpio_reclamar(pin, BPVM_USO_OUTPUT, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        /* Y si el driver dice que no —sin canal libre—, se dice ESO: hasta hoy también era «no implementado». */
+        {
+            int k = snprintf(em, sizeof em, "Neopixel(%d): no se pudo iniciar: ", pin);
+            if (!bpvm_neopixel_init(pin, em + k, sizeof em - (size_t) k)) {
+                if (!em[k]) snprintf(em + k, sizeof em - (size_t) k, "el driver no lo aceptó");
+                return builtin_throw(vm, tc, em);
+            }
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -3885,7 +3897,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char em[128];
         int unit = -1, ch = -1;
         if (bpvm_caps_adc_de_pin((int) pin, &unit, &ch) != 0) {
-            if (!bpvm_caps_pin_mask((int) pin)) snprintf(em, sizeof em, "el pin %d no existe en %s", (int) pin, bpvm_caps()->micro);
+            if (!bpvm_caps_pin_mask((int) pin)) bpvm_caps_pin_ausente((int) pin, em, sizeof em);   /* #574 */
             else snprintf(em, sizeof em, "el pin %d de %s no es analógico", (int) pin, bpvm_caps()->micro);
             return builtin_throw(vm, tc, em);
         }

@@ -112,6 +112,10 @@ static int wire_read_byte(int allow_accept)
     net_logf("[p4] wire: recv err %d", errno); wire_close_client(); return WIRE_DISCONNECTED;
 }
 
+/* #574 — el cable por TCP no ocupa pines que el programa pudiera pedir (los de la Ethernet los toma su driver).
+ * Existe para que gpio_esp32.c enlace con cualquiera de los transportes. */
+uint64_t wire_v1_transport_pines(void) { return 0; }
+
 int wire_v1_try_getchar(void)
 {
     if (s_client_fd < 0) return -1;

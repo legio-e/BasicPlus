@@ -2057,10 +2057,14 @@ port.write(tx, <span class="num">4</span>)
 
 <h3 id="stdlib-neopixel">14.13 <code>Neopixel</code></h3>
 <p>
-  Tira de LEDs WS2812 ("NeoPixel") conducida por la PIO del RP2350
-  (Pico 2 / Metro; en otras familias el constructor lanza
-  <code>RuntimeError</code>). Patrón framebuffer: los <code>set*</code>
-  escriben en memoria y <code>show()</code> vuelca la tira entera.
+  Tira de LEDs WS2812 ("NeoPixel"). La conduce la PIO en el RP2350 (Pico 2 / Metro) y el RMT en la
+  familia ESP32 (S3, C3, C5, C6, P4; probado con el LED de la S3, en el GPIO48); en el STM32 el
+  constructor lanza <code>RuntimeError</code> («no implementado en esta plataforma»). El pin se valida
+  contra la tabla del micro: uno que no existe, que es de un bus, de la flash o del cable del IDE da
+  un <code>RuntimeError</code> con el motivo. A la vez caben tantas tiras como canales tiene el micro
+  (4 en el RP2350, la S3 y el P4; 2 en la C3, la C5 y la C6); con una más, <code>RuntimeError</code>
+  («no se pudo iniciar: …»). Patrón framebuffer: los <code>set*</code> escriben en memoria y
+  <code>show()</code> vuelca la tira entera.
 </p>
 <pre><code><span class="kw">import</span> Neopixel
 

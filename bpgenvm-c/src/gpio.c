@@ -42,7 +42,7 @@ void bpvm_gpio_estado_reset(void) {
 int bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap) {
     const bpvm_caps_t* c = bpvm_caps();
     int m = bpvm_caps_pin_mask(pin);
-    if (!m || pin >= BPVM_CAPS_PIN_MAX) { snprintf(err, cap, "el pin %d no existe en %s", pin, c->micro); return -1; }
+    if (!m || pin >= BPVM_CAPS_PIN_MAX) { bpvm_caps_pin_ausente(pin, err, cap); return -1; }   /* #574 */
     if (s_de_bus[pin]) {
         int t = (s_de_bus[pin] - 1) / BPVM_BUS_ID_MAX, id = (s_de_bus[pin] - 1) % BPVM_BUS_ID_MAX;
         snprintf(err, cap, "el pin %d es del %s %d", pin, t == BPVM_BUS_I2C ? "I2C" : "SPI", id); return -1;
@@ -80,8 +80,7 @@ int bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap) {
 /* V7/H6.c G4.a1 — el pin pasa a ser de un bus (lo pide bpvm_bus.c al establecerlo).
  * Tiene que existir y estar LIBRE: un bus no le quita el pin a nadie. */
 int bpvm_gpio_reservar_bus(int pin, int tipo, int id, char* err, size_t cap) {
-    const bpvm_caps_t* c = bpvm_caps();
-    if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || !bpvm_caps_pin_mask(pin)) { snprintf(err, cap, "el pin %d no existe en %s", pin, c->micro); return -1; }
+    if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || !bpvm_caps_pin_mask(pin)) { bpvm_caps_pin_ausente(pin, err, cap); return -1; }   /* #574 */
     if (s_de_bus[pin]) {
         int t = (s_de_bus[pin] - 1) / BPVM_BUS_ID_MAX, i = (s_de_bus[pin] - 1) % BPVM_BUS_ID_MAX;
         snprintf(err, cap, "el pin %d es del %s %d", pin, t == BPVM_BUS_I2C ? "I2C" : "SPI", i); return -1;

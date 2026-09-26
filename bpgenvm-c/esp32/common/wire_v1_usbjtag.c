@@ -37,6 +37,7 @@
 #include "log.h"             /* #545: un corte se dice en el log (sólo va al anillo de RAM) */
 
 #include "driver/usb_serial_jtag.h"
+#include "soc/io_mux_reg.h"   /* #574: USB_INT_PHY0_DM/DP_GPIO_NUM, los pines del USB nativo */
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -70,6 +71,12 @@ void wire_v1_transport_init(void) {
 }
 
 const char* wire_v1_transport_name(void) { return s_nombre; }
+
+/* #574 — los pines que este cable le quita al programa: el D- y el D+ del USB nativo del chip (C3 18/19, C5 13/14,
+ * C6 12/13; los dice el IDF para cada uno). */
+uint64_t wire_v1_transport_pines(void) {
+    return (1ULL << USB_INT_PHY0_DM_GPIO_NUM) | (1ULL << USB_INT_PHY0_DP_GPIO_NUM);
+}
 
 /* ===================== Lectura ===================== */
 

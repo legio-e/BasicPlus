@@ -35,6 +35,13 @@
 #if SOC_PCNT_SUPPORTED
 #include "driver/pulse_cnt.h"       /* H14: backend contador (PCNT) */
 #endif
+#if SOC_RMT_SUPPORTED
+#include "driver/rmt_tx.h"          /* V7/H4: backend NeoPixel (WS2812) por RMT */
+#include "driver/rmt_encoder.h"
+#include "bpvm_neopixel.h"
+#endif
+#include "esp_private/esp_gpio_reserve.h"   /* #574: los pines que el IDF ya reservó (la flash, la PSRAM) */
+#include "wire_v1.h"                        /* #574: los pines del cable del IDE */
 #include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
 #include "esp_task_wdt.h"           /* cierre V3 — backend Wdt (Task Watchdog Timer) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
@@ -144,6 +151,7 @@ static int esp32_set_cpu_freq_mhz_impl(int mhz) {
 static uint16_t s_caps_pin[SOC_GPIO_PIN_COUNT];
 static int8_t   s_caps_adc_u[SOC_GPIO_PIN_COUNT];
 static int8_t   s_caps_adc_c[SOC_GPIO_PIN_COUNT];
+static uint8_t  s_caps_sis[SOC_GPIO_PIN_COUNT];   /* #574: BPVM_PIN_SIS_* de los pines del sistema */
 static uint8_t  s_caps_uart[SOC_UART_HP_NUM];
 static uint8_t  s_caps_i2c[SOC_HP_I2C_NUM];
 static uint8_t  s_caps_spi[SOC_SPI_PERIPH_NUM];
@@ -153,10 +161,21 @@ static bpvm_caps_t s_caps;
 static __NOINIT_ATTR uint32_t s_esp_migas[20];
 
 static void esp32_caps_init(void) {
+    /* #574 (V7/H4, 26-sep) — los pines del SISTEMA no son del programa. `GPIO_IS_VALID_GPIO` daba por buenos los de
+     * la flash y la PSRAM (en la C6 el GPIO25 es el MISO de la flash: un `Gpio.Pin(25, OUTPUT)` se la quitaba al
+     * micro). El IDF ya los reservó al arrancar y, a estas alturas, nada más: esta tabla se calcula antes de
+     * cualquier driver de pines (main.c). Y los del cable del IDE, que el IDF no reserva: los dice su transporte
+     * (decidido por Eduardo: «los pines del wire también»). Máscara 0 —para BP no están— y el motivo aparte. */
+    const uint64_t del_wire = wire_v1_transport_pines();
     for (int g = 0; g < SOC_GPIO_PIN_COUNT; g++) {
         uint16_t m = 0;
         s_caps_adc_u[g] = -1; s_caps_adc_c[g] = -1;
-        if (GPIO_IS_VALID_GPIO(g)) {
+        s_caps_sis[g] = 0;
+        if (GPIO_IS_VALID_GPIO(g) && esp_gpio_is_reserved(1ULL << g)) {
+            s_caps_sis[g] = BPVM_PIN_SIS_MEMORIA;
+        } else if (GPIO_IS_VALID_GPIO(g) && (del_wire & (1ULL << g))) {
+            s_caps_sis[g] = BPVM_PIN_SIS_WIRE;
+        } else if (GPIO_IS_VALID_GPIO(g)) {
             m = BPVM_PIN_DIGITAL;
             if (GPIO_IS_VALID_OUTPUT_GPIO(g)) m |= BPVM_PIN_PWM | BPVM_PIN_OPEN_DRAIN;
             else m |= BPVM_PIN_INPUT_ONLY;
@@ -196,6 +215,7 @@ static void esp32_caps_init(void) {
     s_caps.n_adc = SOC_ADC_PERIPH_NUM;
     s_caps.pin = s_caps_pin; s_caps.n_pin = SOC_GPIO_PIN_COUNT;
     s_caps.pin_adc_unit = s_caps_adc_u; s_caps.pin_adc_ch = s_caps_adc_c;
+    s_caps.pin_sistema = s_caps_sis;                        /* #574 */
     s_caps.breadcrumb = 1;
     bpvm_caps_set(&s_caps);
     bpvm_breadcrumb_attach(s_esp_migas, 20u);
@@ -911,6 +931,102 @@ static const bpvm_wdt_backend_t s_esp32_wdt_backend = {
     .disable = esp32_wdt_disable_impl,
 };
 
+/* ══════════ V7/H4 (26-sep) — EL NEOPIXEL (WS2812) POR EL RMT, en toda la familia ══════════
+ * El contrato es el de la Pico (bpvm_neopixel.h): init(pin) y show(pin, grb, n) BLOQUEANTE, palabras GRB de 24 bits
+ * que salen desde el más alto. Aquí, con el driver RMT del NÚCLEO del IDF —decidido por Eduardo: no el componente
+ * `led_strip`, que se descarga del registro— y un *simple encoder* que traduce las palabras a símbolos AL VUELO: sin
+ * copia ni búfer. A 20 MHz (0,05 µs por tic) salen tal cual los tiempos de la hoja del WS2812B: el 0, 0,40 alto y
+ * 0,85 bajo; el 1, 0,80 y 0,45 (±0,15). Al final de la trama, el RESET como un símbolo bajo de 300 µs (el WS2812B de
+ * hoy pide ≥ 280), así que al volver de `rmt_tx_wait_all_done` la tira ya ha latcheado.
+ * Canales de transmisión (leídos en el IDF): S3 y P4 4, C3, C5 y C6 2 → tantas tiras a la vez. Un LED (24 símbolos
+ * y el reset) cabe en la memoria del canal (48): sin recargas. Una tira larga se recarga por interrupción, y una
+ * escritura en la flash (que para la caché) podría retrasarla y deformar la trama (V7_IDEAS §H4.5.1). */
+#if SOC_RMT_SUPPORTED
+#define NP_RES_HZ     20000000u        /* 0,05 µs por tic */
+#define NP_MAX_TIRAS  4                /* el mayor nº de canales de transmisión de la familia (S3, P4) */
+
+static const rmt_symbol_word_t NP_CERO  = { .level0 = 1, .duration0 = 8,    .level1 = 0, .duration1 = 17 };   /* 0,40 / 0,85 µs */
+static const rmt_symbol_word_t NP_UNO   = { .level0 = 1, .duration0 = 16,   .level1 = 0, .duration1 = 9 };    /* 0,80 / 0,45 µs */
+static const rmt_symbol_word_t NP_RESET = { .level0 = 0, .duration0 = 3000, .level1 = 0, .duration1 = 3000 }; /* 300 µs bajo */
+
+static struct { int pin; rmt_channel_handle_t ch; rmt_encoder_handle_t enc; } s_np[NP_MAX_TIRAS];
+static int s_np_n = 0;
+
+/* El traductor: de LED en LED —con min_chunk_size = 24 el encoder garantiza sitio para uno— y el reset al final.
+ * `escritos` es la posición en la trama, en símbolos: múltiplo de 24 hasta que entra el reset. */
+static size_t np_traduce(const void* data, size_t data_size, size_t escritos, size_t libres,
+                         rmt_symbol_word_t* sym, bool* hecho, void* arg) {
+    const uint32_t* grb = (const uint32_t*) data;
+    size_t leds = data_size / sizeof(uint32_t), led = escritos / 24u, n = 0;
+    (void) arg;
+    while (led < leds && libres - n >= 24u) {
+        uint32_t c = grb[led++];
+        for (int b = 23; b >= 0; b--) sym[n++] = ((c >> b) & 1u) ? NP_UNO : NP_CERO;
+    }
+    if (led == leds && libres - n >= 1u) { sym[n++] = NP_RESET; *hecho = true; }
+    return n;
+}
+
+static int np_busca(int pin) {
+    for (int i = 0; i < s_np_n; i++) if (s_np[i].pin == pin) return i;
+    return -1;
+}
+
+static int esp32_np_init_impl(int pin, char* err, size_t n) {
+    int i = np_busca(pin);
+    if (i >= 0) {
+        /* Ya iniciado: se REHACE. Un `Gpio.Pin` sobre este pin entre medias reconfigura el pad, y el RMT dejaría de
+         * llegar al cable sin un error. */
+        rmt_disable(s_np[i].ch);
+        rmt_del_channel(s_np[i].ch);
+        rmt_del_encoder(s_np[i].enc);
+        s_np[i] = s_np[--s_np_n];
+    }
+    if (s_np_n >= NP_MAX_TIRAS) { snprintf(err, n, "como mucho %d tiras a la vez", NP_MAX_TIRAS); return 0; }
+    rmt_tx_channel_config_t cc = {
+        .gpio_num = pin,
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = NP_RES_HZ,
+        .mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL,
+        .trans_queue_depth = 1,
+    };
+    rmt_channel_handle_t ch = NULL;
+    esp_err_t e = rmt_new_tx_channel(&cc, &ch);
+    if (e != ESP_OK) {
+        if (e == ESP_ERR_NOT_FOUND) snprintf(err, n, "no quedan canales RMT libres");
+        else snprintf(err, n, "el RMT no lo aceptó (%s)", esp_err_to_name(e));
+        return 0;
+    }
+    rmt_simple_encoder_config_t ec = { .callback = np_traduce, .arg = NULL, .min_chunk_size = 24 };
+    rmt_encoder_handle_t enc = NULL;
+    e = rmt_new_simple_encoder(&ec, &enc);
+    if (e == ESP_OK) e = rmt_enable(ch);
+    if (e != ESP_OK) {
+        if (enc) rmt_del_encoder(enc);
+        rmt_del_channel(ch);
+        snprintf(err, n, "el RMT no arrancó (%s)", esp_err_to_name(e));
+        return 0;
+    }
+    s_np[s_np_n].pin = pin; s_np[s_np_n].ch = ch; s_np[s_np_n].enc = enc; s_np_n++;
+    return 1;
+}
+
+static void esp32_np_show_impl(int pin, const uint32_t* grb, int count) {
+    int i = np_busca(pin);
+    if (i < 0 || grb == NULL || count <= 0) return;
+    rmt_transmit_config_t tc = { .loop_count = 0 };
+    esp_err_t e = rmt_transmit(s_np[i].ch, s_np[i].enc, grb, (size_t) count * sizeof(uint32_t), &tc);
+    /* BLOQUEANTE, como la Pico: el builtin suelta la zona de rascar al volver. 30 µs por LED y el reset: de sobra. */
+    if (e == ESP_OK) e = rmt_tx_wait_all_done(s_np[i].ch, 100 + count / 20);
+    if (e != ESP_OK) log_printf("neopixel: la trama del GPIO%d no salió (%s)", pin, esp_err_to_name(e));
+}
+
+static const bpvm_neopixel_backend_t s_esp32_np_backend = {
+    .init = esp32_np_init_impl,
+    .show = esp32_np_show_impl,
+};
+#endif /* SOC_RMT_SUPPORTED */
+
 void esp32_hw_register(void) {
     esp32_caps_init();                                 /* V7/H4: la tabla, preguntada al IDF */
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
@@ -928,5 +1044,8 @@ void esp32_hw_register(void) {
      * un verbo que dice que no puede que un enlace que no cierra. */
 #endif
     bpvm_wdt_set_backend(&s_esp32_wdt_backend);     /* cierre V3 — Task WDT (reset) */
+#if SOC_RMT_SUPPORTED
+    bpvm_neopixel_set_backend(&s_esp32_np_backend); /* V7/H4 (26-sep) — WS2812 por RMT; lo prueba la S3 */
+#endif
     /* RTC: sin backend a propósito → stub portable (modelo offset). Ver arriba. */
 }

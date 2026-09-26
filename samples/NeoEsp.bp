@@ -1,0 +1,67 @@
+// NeoEsp.bp — V7/H4 (26-sep): el NeoPixel de la familia ESP32 por el RMT, probado en la S3. Su LED RGB va al
+// GPIO48 en la DevKitC-1 v1.0 y al 38 en la v1.1; la nuestra es una v1.0 (visto el 26-sep: sólo el 48 enciende),
+// pero se prueban los dos para que valga con cualquiera. MIRAR el LED:
+// rojo, verde y azul en el pin que lo tenga (en el otro no se ve nada), y otra vez después de pedir esos pines como
+// Gpio.Pin —el init rehace el canal RMT, que un Gpio.Pin desconecta del pad—. Y los errores con nombre: el pin se
+// valida contra la tabla (#479, #574) y «sin canal libre» ya no dice «no implementado».
+module NeoEsp
+  import Core
+  import Gpio
+  import Machine
+  import Neopixel
+
+  function ciclo(pin: integer)
+    var px: Neopixel.Strip := Neopixel.Strip(pin, 1)
+    print "GPIO" + intToString(pin) + ": rojo, verde, azul (mira el LED)"
+    var n: integer := 0
+    while n < 2 do
+      px.setColor(40, 0, 0)
+      px.show()
+      sleep(500)
+      px.setColor(0, 40, 0)
+      px.show()
+      sleep(500)
+      px.setColor(0, 0, 40)
+      px.show()
+      sleep(500)
+      n += 1
+    endwh
+    px.clear()
+    px.show()
+  end ciclo
+
+  function intenta(etiqueta: string, pin: integer)
+    try
+      var px: Neopixel.Strip := Neopixel.Strip(pin, 1)
+      print "ok " + etiqueta + ": iniciado"
+    catch e: RuntimeError
+      print "ok " + etiqueta + ": atrapada: " + e.msg
+    endtry
+  end intenta
+
+  function Main()
+    print "micro: " + Machine.getMicro()
+    ciclo(48)
+    sleep(1000)
+    ciclo(38)
+    sleep(1000)
+    // Los dos pines pedidos como Gpio.Pin: reconfiguran el pad y desconectan el RMT.
+    var a: Gpio.Pin := Gpio.Pin(48, Gpio.Pin.OUTPUT)
+    var b: Gpio.Pin := Gpio.Pin(38, Gpio.Pin.OUTPUT)
+    a.off()
+    b.off()
+    print "tras Gpio.Pin(48) y Gpio.Pin(38): el LED tiene que volver a encenderse"
+    ciclo(48)
+    sleep(1000)
+    ciclo(38)
+    // El pin, contra la tabla.
+    intenta("pin que no existe", 25)
+    intenta("pin del cable del IDE", 43)
+    intenta("pin de la flash", 30)
+    // Más tiras que canales: la S3 tiene 4 y ya hay dos (48 y 38).
+    intenta("tercera tira", 1)
+    intenta("cuarta tira", 2)
+    intenta("quinta tira", 4)
+    print "fin"
+  end Main
+end NeoEsp

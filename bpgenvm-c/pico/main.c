@@ -230,7 +230,13 @@ static const bpvm_gpio_backend_t s_pico_gpio_backend = {
 };
 
 /* --- Backend NeoPixel (WS2812 vía PIO, H7.4) -------------------- */
-static int  pico_np_init_impl(int pin) { return neopixel_init(pin) ? 1 : 0; }
+static int  pico_np_init_impl(int pin, char* err, size_t n) {
+    if (neopixel_init(pin)) return 1;
+    /* V7/H4 — el pin ya lo validó el común contra la tabla: aquí sólo falla si no queda máquina de estados en la
+     * pio0 (una por tira; nadie más usa la PIO en esta imagen). */
+    snprintf(err, n, "la PIO no tiene sitio para otra tira (como mucho 4 a la vez)");
+    return 0;
+}
 static void pico_np_show_impl(int pin, const uint32_t* grb, int count) {
     neopixel_show(pin, grb, count);
 }

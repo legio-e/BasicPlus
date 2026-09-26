@@ -149,6 +149,15 @@ const bpvm_caps_t* bpvm_caps(void) { return g_caps; }
 int bpvm_caps_pin_mask(int pin) {
     return (pin >= 0 && pin < (int) g_caps->n_pin && g_caps->pin) ? (int) g_caps->pin[pin] : 0;
 }
+void bpvm_caps_pin_ausente(int pin, char* err, size_t cap) {
+    int sis = (g_caps->pin_sistema && pin >= 0 && pin < (int) g_caps->n_pin) ? g_caps->pin_sistema[pin] : 0;
+    if (sis == BPVM_PIN_SIS_MEMORIA)
+        snprintf(err, cap, "el pin %d de %s es de la flash o la PSRAM: no se puede usar", pin, g_caps->micro);
+    else if (sis == BPVM_PIN_SIS_WIRE)
+        snprintf(err, cap, "el pin %d de %s es del cable del IDE (el wire): no se puede usar", pin, g_caps->micro);
+    else
+        snprintf(err, cap, "el pin %d no existe en %s", pin, g_caps->micro);
+}
 int bpvm_caps_pins_con(uint16_t bit) {
     int n = 0;
     for (int i = 0; i < (int) g_caps->n_pin; i++) if (g_caps->pin && (g_caps->pin[i] & bit)) n++;

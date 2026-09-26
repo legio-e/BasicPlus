@@ -16,6 +16,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "driver/uart.h"
+#include "soc/uart_pins.h"   /* #574: U0TXD_GPIO_NUM / U0RXD_GPIO_NUM, los de UART0 del SoC */
 
 #include <stdio.h>
 #include <string.h>
@@ -81,6 +82,14 @@ void wire_v1_transport_init(void) {
 }
 
 const char* wire_v1_transport_name(void) { return "UART0 @115200"; }
+
+/* #574 — los pines que este cable le quita al programa: los que se le dan a uart_set_pin arriba o, si no se tocan
+ * (UART_PIN_NO_CHANGE), los de UART0 del SoC. */
+uint64_t wire_v1_transport_pines(void) {
+    int tx = (WIRE_UART_TX_PIN == UART_PIN_NO_CHANGE) ? U0TXD_GPIO_NUM : WIRE_UART_TX_PIN;
+    int rx = (WIRE_UART_RX_PIN == UART_PIN_NO_CHANGE) ? U0RXD_GPIO_NUM : WIRE_UART_RX_PIN;
+    return (1ULL << tx) | (1ULL << rx);
+}
 
 /* ===================== Lectura ===================== */
 
