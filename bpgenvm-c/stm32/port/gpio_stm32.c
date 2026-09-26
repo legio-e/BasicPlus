@@ -25,6 +25,7 @@
 
 #include "bpvm_gpio.h"
 #include "bpvm_machine.h"
+#include "bpvm_adc.h"   /* V7/H4 (el resto de #469): el backend del ADC externo */
 #include "bpvm_spi.h"
 #include "bpvm_uart.h"
 #include "bpvm_i2c.h"
@@ -141,7 +142,8 @@ static const bpvm_gpio_backend_t s_gpio_backend = {
  * compila cada proyecto (U575 → Nucleo, U5G9 → DK2): los puertos A..H (128
  * pines, modelo plano puerto<<4|bit) son digitales y con colector abierto de
  * verdad; PWM sólo en los pines que el backend mapea a un timer (s_pwm_map);
- * ANALOG ninguno todavía —el backend sólo lee canales internos (#469, P2)—;
+ * ANALOG los 24 del mapa del ADC (s_adc_mapa, leído de las hojas de datos el 26-sep: el resto de #469) y, sin
+ * máscara, los del cable del IDE (#574);
  * las instancias de UART/I2C/SPI, las mismas que aceptan los backends. El
  * registro de PAQUETE (LQFP64/100/144…) y la máscara de pines bondeados por
  * paquete son el siguiente paso (V7_IDEAS §H4.2b): hoy `paquete` dice el
@@ -215,8 +217,9 @@ extern ADC_HandleTypeDef hadc1;
 
 static int s_adc_calibrated = 0;
 
-/* Single-shot de un canal interno (TEMPSENSOR / VREFINT). Devuelve raw o -1. */
-static int stm32_adc_read_internal(uint32_t channel) {
+/* Single-shot de un canal del ADC1: los internos (TEMPSENSOR / VREFINT, con `arranque_ms` = 1 para que arranquen el
+ * sensor y el buffer) y, desde V7/H4, los externos (0). Devuelve raw (14 bits) o -1. */
+static int stm32_adc_read_canal(uint32_t channel, int arranque_ms) {
     ADC_ChannelConfTypeDef c = {0};
     c.Channel      = channel;
     c.Rank         = ADC_REGULAR_RANK_1;
@@ -225,7 +228,7 @@ static int stm32_adc_read_internal(uint32_t channel) {
     c.OffsetNumber = ADC_OFFSET_NONE;
     c.Offset       = 0;
     if (HAL_ADC_ConfigChannel(&hadc1, &c) != HAL_OK) return -1;
-    HAL_Delay(1);                               /* arranque del sensor/buffer (TSEN/VREFEN) */
+    if (arranque_ms > 0) HAL_Delay((uint32_t) arranque_ms);   /* arranque del sensor/buffer (TSEN/VREFEN) */
     if (HAL_ADC_Start(&hadc1) != HAL_OK) return -1;
     int raw = -1;
     if (HAL_ADC_PollForConversion(&hadc1, 50) == HAL_OK)
@@ -243,14 +246,48 @@ static float stm32_temp_c_impl(void) {
     }
     /* VDDA real vía VREFINT; si falla, 3.3 V nominales. */
     uint32_t vdda_mv = 3300u;
-    int vref = stm32_adc_read_internal(ADC_CHANNEL_VREFINT);
+    int vref = stm32_adc_read_canal(ADC_CHANNEL_VREFINT, 1);
     if (vref > 0)
         vdda_mv = __LL_ADC_CALC_VREFANALOG_VOLTAGE(ADC1, (uint32_t) vref, LL_ADC_RESOLUTION_14B);
-    int ts = stm32_adc_read_internal(ADC_CHANNEL_TEMPSENSOR);
+    int ts = stm32_adc_read_canal(ADC_CHANNEL_TEMPSENSOR, 1);
     if (ts < 0) return 0.0f;
     int32_t t = __LL_ADC_CALC_TEMPERATURE(ADC1, vdda_mv, (uint32_t) ts, LL_ADC_RESOLUTION_14B);
     return (float) t;
 }
+
+/* ── V7/H4 (el resto de #469, 26-sep) — EL ADC EXTERNO: el ADC1, la unidad 1 de la tabla ────────────────────
+ * Qué pin es qué canal lo dice la tabla (s_adc_mapa, de las hojas de datos); aquí sólo lo que toca el silicio: el pin
+ * en modo analógico y una conversión por sondeo con el mismo hadc1 que la temperatura (14 bits). El contrato de BP es
+ * de 12 (0..4095; `readVolts` = raw · 3,3 / 4095): se quitan los 2 bits bajos. Muestreo largo (814,5 ciclos), el de
+ * los canales internos: un divisor de decenas de kΩ necesita tiempo para cargar el condensador de muestreo, y aquí la
+ * velocidad no manda. */
+static int stm32_adc_init_channel_impl(int ch) {
+    int pin = bpvm_caps_pin_de_adc(0, ch);
+    GPIO_TypeDef* port = (pin >= 0) ? port_of(pin >> 4) : NULL;
+    if (!port) return -1;
+    enable_port_clk(pin >> 4);
+    GPIO_InitTypeDef cfg = {0};
+    cfg.Pin  = (uint32_t) (1u << (pin & 0x0F));
+    cfg.Mode = GPIO_MODE_ANALOG;
+    cfg.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(port, &cfg);
+    return pin;
+}
+
+static int stm32_adc_read_channel_impl(int ch) {
+    if (bpvm_caps_pin_de_adc(0, ch) < 0) return -1;
+    if (!s_adc_calibrated) {
+        if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK) return -1;
+        s_adc_calibrated = 1;
+    }
+    int raw = stm32_adc_read_canal(__LL_ADC_DECIMAL_NB_TO_CHANNEL((uint32_t) ch), 0);
+    return (raw < 0) ? -1 : (raw >> 2);   /* 14 → 12 bits */
+}
+
+static const bpvm_adc_backend_t s_stm32_adc_backend = {
+    .initChannel = stm32_adc_init_channel_impl,
+    .readChannel = stm32_adc_read_channel_impl,
+};
 #else
 static float stm32_temp_c_impl(void) {
     return 0.0f;   /* placa sin BOARD_HAS_ADC_TEMP: sensor no disponible */
@@ -979,15 +1016,40 @@ static const pwm_map_t s_pwm_map[] = {
 };
 #define PWM_SLICE_N    ((int)(sizeof(s_pwm_map) / sizeof(s_pwm_map[0])))
 
+/* V7/H4 (el resto de #469, 26-sep) — EL MAPA DEL ADC, leído de las hojas de datos (DS13737 del U575 y la del
+ * U5G7/U5G9, tabla «pin definitions»; las dos dan el mismo): los 17 canales del ADC1 —la unidad 1 de la tabla, la que
+ * atiende el backend— y los 7 pines que sólo tiene el ADC4 (unidad 2: error con nombre). Pines en el modelo plano
+ * puerto<<4|bit. El U5G9 tiene además un ADC2, en los mismos pines que el ADC1: no añade ninguno. */
+static const struct { uint8_t pin; int8_t unidad; int8_t canal; } s_adc_mapa[] = {
+    { 0x20, 0, 1 },  { 0x21, 0, 2 },  { 0x22, 0, 3 },  { 0x23, 0, 4 },    /* PC0..PC3  ADC1_IN1..4   */
+    { 0x00, 0, 5 },  { 0x01, 0, 6 },  { 0x02, 0, 7 },  { 0x03, 0, 8 },    /* PA0..PA3  ADC1_IN5..8   */
+    { 0x04, 0, 9 },  { 0x05, 0, 10 }, { 0x06, 0, 11 }, { 0x07, 0, 12 },   /* PA4..PA7  ADC1_IN9..12  */
+    { 0x24, 0, 13 }, { 0x25, 0, 14 },                                     /* PC4, PC5  ADC1_IN13, 14 */
+    { 0x10, 0, 15 }, { 0x11, 0, 16 }, { 0x12, 0, 17 },                    /* PB0..PB2  ADC1_IN15..17 */
+    { 0x5E, 1, 5 },  { 0x5F, 1, 6 },  { 0x60, 1, 7 },  { 0x61, 1, 8 },    /* PF14, PF15, PG0, PG1: sólo ADC4 */
+    { 0x3B, 1, 15 }, { 0x3C, 1, 16 }, { 0x3D, 1, 17 },                    /* PD11..PD13: sólo ADC4 */
+};
+static uint8_t s_caps_sis[STM32_PIN_COUNT];   /* #574: los pines del cable del IDE */
+
 static void stm32_caps_init(void) {
     for (int p = 0; p < STM32_PIN_COUNT; p++) {
         s_caps_pin[p] = BPVM_PIN_DIGITAL | BPVM_PIN_OPEN_DRAIN;
         s_caps_adc_u[p] = -1; s_caps_adc_c[p] = -1;
+        s_caps_sis[p] = 0;
     }
     for (int i = 0; i < PWM_SLICE_N; i++)
         if (s_pwm_map[i].pin >= 0 && s_pwm_map[i].pin < STM32_PIN_COUNT) s_caps_pin[s_pwm_map[i].pin] |= BPVM_PIN_PWM;
+    for (unsigned i = 0; i < sizeof s_adc_mapa / sizeof s_adc_mapa[0]; i++) {
+        s_caps_pin[s_adc_mapa[i].pin] |= BPVM_PIN_ANALOG;
+        s_caps_adc_u[s_adc_mapa[i].pin] = s_adc_mapa[i].unidad;
+        s_caps_adc_c[s_adc_mapa[i].pin] = s_adc_mapa[i].canal;
+    }
+    /* #574 (Eduardo, 26-sep: «los pines del wire también») — el cable del IDE es el USART1 del VCP en las dos placas,
+     * PA9 (TX) y PA10 (RX): para el programa no están. La flash es interna: no ocupa pines. */
+    s_caps_pin[0x09] = 0; s_caps_sis[0x09] = BPVM_PIN_SIS_WIRE;
+    s_caps_pin[0x0A] = 0; s_caps_sis[0x0A] = BPVM_PIN_SIS_WIRE;
 #if defined(STM32U5G9xx)
-    s_caps.micro = "stm32u5g9"; s_caps.paquete = "UFBGA169";   /* la DK2 */
+    s_caps.micro = "stm32u5g9"; s_caps.paquete = "LQFP144";    /* la DK2: STM32U5G9ZJTxQ (su proyecto de CubeMX) */
 #else
     s_caps.micro = "stm32u575"; s_caps.paquete = "LQFP144";    /* la Nucleo */
 #endif
@@ -997,9 +1059,14 @@ static void stm32_caps_init(void) {
     s_caps.i2c  = s_caps_i2c;  s_caps.n_i2c  = (uint8_t) (sizeof s_caps_i2c / sizeof s_caps_i2c[0]);
     s_caps.spi  = s_caps_spi;  s_caps.n_spi  = 3;
     s_caps.n_pwm = (uint8_t) PWM_SLICE_N; s_caps.pwm_unidad = "canal";
-    s_caps.n_adc = 2;                                       /* ADC1 y ADC4 en la U5 */
+#if defined(STM32U5G9xx)
+    s_caps.n_adc = 3;                                       /* ADC1, ADC2 y ADC4 en el U5G9 (su hoja de datos) */
+#else
+    s_caps.n_adc = 2;                                       /* ADC1 y ADC4 en el U575 */
+#endif
     s_caps.pin = s_caps_pin; s_caps.n_pin = STM32_PIN_COUNT;
     s_caps.pin_adc_unit = s_caps_adc_u; s_caps.pin_adc_ch = s_caps_adc_c;
+    s_caps.pin_sistema = s_caps_sis;                        /* #574 */
     s_caps.breadcrumb = 1;                                  /* el único que las tiene hoy (#487) */
     bpvm_caps_set(&s_caps);
 }
@@ -1197,4 +1264,7 @@ void stm32_hw_register(void) {
 #endif
     bpvm_pwm_set_backend(&s_pwm_backend);     /* H10 — PWM por timer (LEDs verde/azul) */
     bpvm_pulse_set_backend(&s_pulse_backend); /* H10 — contador de pulsos (TIM8/TI1 en PC6) */
+#if defined(BOARD_HAS_ADC_TEMP)
+    bpvm_adc_set_backend(&s_stm32_adc_backend); /* V7/H4 (el resto de #469) — el ADC1 en los pines de la tabla */
+#endif
 }

@@ -1692,8 +1692,9 @@ port.write(tx, <span class="num">4</span>)
 </p>
 <p>
   Desde V6 una conversión que falla <strong>lanza</strong> <code>RuntimeError</code>
-  (antes devolvía -1 y voltios negativos). El ADC del STM32 no tiene backend
-  todavía: allí el constructor lanza.
+  (antes devolvía -1 y voltios negativos). En el STM32 (desde V7) atiende el ADC1: sus 17 canales, en PC0–PC5,
+  PA0–PA7 y PB0–PB2 (en la Nucleo-U575, A0 es PA3, el canal 8); los pines que sólo tienen el ADC4 dan un
+  <code>RuntimeError</code> con el motivo.
 </p>
 <pre><code><span class="kw">import</span> Adc
 

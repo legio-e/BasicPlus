@@ -1,0 +1,56 @@
+// AdcNucleo.bp — V7/H4 (el resto de #469, 26-sep): el ADC externo del STM32, en la Nucleo-U575. Eduardo puso un
+// divisor al 50 % entre 3V3 y GND en A0 (el conector CN9): ese pin tiene que leer ≈ 1,65 V (≈ 2048 de 4095). Se leen
+// los 17 canales del ADC1 del mapa (sacado de las hojas de datos) para ver cuál es A0 —en la Nucleo-144 del U575
+// debería ser PA3, ADC1_IN8—, y los errores con nombre: un pin sólo del ADC4, uno que no es analógico y los del cable
+// del IDE (#574: el USART1 del VCP, PA9 y PA10).
+module AdcNucleo
+  import Core
+  import Gpio
+  import Adc
+  import Machine
+
+  function nombre(pin: integer): string
+    return "P" + charAt("ABCDEFGH", pin shr 4) + intToString(pin mod 16)
+  end nombre
+
+  function prueba(etiqueta: string, pin: integer)
+    try
+      var p: Gpio.AnPin := Gpio.AnPin(pin)
+      print "ok " + etiqueta + ": canal " + intToString(p.channel())
+    catch e: RuntimeError
+      print "ok " + etiqueta + ": " + e.msg
+    endtry
+  end prueba
+
+  function Main()
+    print "micro: " + Machine.getMicro()
+    var ch: integer := 1
+    while ch <= 17 do
+      try
+        var c: Adc.Channel := Adc.Channel(ch)
+        var raw: integer := c.readAvg(16)
+        print "ADC1_IN" + intToString(ch) + " = " + nombre(c.pin_) + ":", raw, "=", float(raw) * 3.3 / 4095.0, "V"
+        c.release()
+      catch e: RuntimeError
+        print "ADC1_IN" + intToString(ch) + ": " + e.msg
+      endtry
+      ch += 1
+    endwh
+    try
+      var a0: Gpio.AnPin := Gpio.AnPin(3)
+      print "A0 = PA3 por AnPin:", a0.readVolts(), "V (canal", a0.channel(), ")"
+    catch e: RuntimeError
+      print "A0 = PA3 por AnPin: " + e.msg
+    endtry
+    prueba("PF14 (sólo ADC4)", 94)
+    prueba("PA8 (no analógico)", 8)
+    prueba("PA9 (cable del IDE)", 9)
+    try
+      var tx: Gpio.Pin := Gpio.Pin(10, Gpio.Pin.OUTPUT)
+      print "ok PA10 como salida: sin error"
+    catch e: RuntimeError
+      print "ok PA10 como salida: " + e.msg
+    endtry
+    print "fin"
+  end Main
+end AdcNucleo
