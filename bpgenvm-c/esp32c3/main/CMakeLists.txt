@@ -58,6 +58,7 @@ idf_component_register(
         "../../src/bpvm_bus.c"         # V7/H6.c G4.a1: los buses SPI/I2C, compartidos (la HAL BP)
         "../../src/bpvm_npack.c"       # V5/I: escalera de validacion del pack nativo
         "../../src/bpvm_mdn_scan.c"    # V5/H4: buscar el .mdn (FS + pack) en UN sitio
+        "../../src/bpvm_nativa.c"      # V7/H5 P2b.1: la pila prestada de una native
         "../../src/bpvm_util.c"        # #338/#353: zona de rascar + canal de diagnostico
         "../../src/bpvm_bmgr.c"        # H9: board manager (compone env+part)
         "../../src/bpvm_bmgr_wire.c"   # H9: nucleo del protocolo STATE/ENV/PART

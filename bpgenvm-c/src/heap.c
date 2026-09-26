@@ -19,6 +19,7 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_nativa.h"   /* V7/H5 P2b.1: la pila prestada, para decir cuál se escanea */
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include <string.h>
 #include <stdlib.h>
@@ -394,8 +395,14 @@ static void gc_mark_phase(bpvm_t* vm) {
                 }
                 mark_recursive(vm, v);
             }
-            bpvm_diag("[gc] pila C del native: [%p..%p) = %u palabras, %u refs",
-                      (void*) lo, (void*) hi, (unsigned) palabras, (unsigned) refs);
+            {   /* V7/H5 P2b.1 — ¿es la pila PRESTADA del hilo o la del worker? Que lo diga: es la
+                 * forma de saber, en el artefacto, por qué pila corre una native. */
+                const struct bpvm_nativa* nv = cc->tc->nativa;
+                int prestada = nv != NULL && lo >= (uintptr_t) nv->pila && hi <= (uintptr_t) nv->pila + nv->tam;
+                bpvm_diag("[gc] pila C del native (%s): [%p..%p) = %u palabras, %u refs",
+                          prestada ? "prestada" : "del worker",
+                          (void*) lo, (void*) hi, (unsigned) palabras, (unsigned) refs);
+            }
         }
     }
     /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en

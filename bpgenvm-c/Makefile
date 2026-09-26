@@ -37,7 +37,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/bpvm_log.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c src/bpvm_io.c \
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_bus.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
-          src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_ctx.c \
+          src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_ctx.c src/bpvm_nativa.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \

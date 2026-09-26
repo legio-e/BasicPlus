@@ -362,6 +362,10 @@ struct bpvm_thread {
      * vm_lock (write-races aceptados como triviales para status, pero
      * no para "está siendo ejecutado actualmente"). */
     int  sched_owner;
+    /* V7/H5 P2b.1 — la pila que el intérprete le PRESTA cuando entra en una native (bpvm_nativa.h). NULL
+     * mientras no haya entrado en ninguna: sólo pagan los hilos que lo hacen. Un puntero y no la cabecera
+     * dentro del hilo, por lo mismo que el límite de fallos es por worker (#185: inflar el hilo ×N). */
+    struct bpvm_nativa* nativa;
 };
 
 /* F5 — entry del handlerStack. */

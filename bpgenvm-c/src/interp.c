@@ -20,6 +20,7 @@
 #include "bpvm_opcodes.h"
 #include "aot_registry.h"        /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
 #include "bpvm_aot_helpers.h"    /* P-aot-call-bp: struct aot_helpers_v1 completa */
+#include "bpvm_nativa.h"         /* V7/H5 P2b.1: la pila prestada de una native */
 
 #include "bpvm_comm.h"
 #include "bpvm_io.h"   /* V6/A1 — la salida va al hilo io */
@@ -169,8 +170,8 @@ static int ref_es_cadena(bpvm_t* vm, bpref_t ref) {
     return (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT) == BPVM_TYPE_ARRAY_I8;
 }
 
-static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
-                            bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
+int bpvm_aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
+                          bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
     int prev_armed = f->armed;   /* leaf natives: siempre 0; defensivo si anidaran */
     /* #571 — SU límite, en SU marco: una native interior (native → BP → native) arma el suyo y, al
@@ -1049,7 +1050,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 /* #186 — boundary de fault. Si el native lanza, el wrapper
                  * propaga al try/catch BP que envuelva la llamada. */
                 tc->cs = cs;
-                int r = aot_call_guarded(vm, tc, aot, &sp, &bp);
+                int r = bpvm_nativa_llamar(vm, tc, aot, &sp, &bp);   /* P2b.1: en su pila prestada */
                 if (r != 0) {
                     /* Fault: recargamos regs desde tc (eh_unwind los fijó
                      * al handler en r==1; en r==2 el thread está muerto). */
@@ -1961,7 +1962,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 if (aot_ext) {
                     /* #186 — mismo boundary de fault que OP_CALL. */
                     tc->cs = cs;
-                    int r = aot_call_guarded(vm, tc, aot_ext, &sp, &bp);
+                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, &sp, &bp);   /* P2b.1 */
                     if (r != 0) {
                         pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                         if (r == 2) {
