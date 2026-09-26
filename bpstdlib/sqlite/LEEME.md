@@ -88,6 +88,11 @@ mismo paso que da el IDE:
 (`bpgenvm-c/tools/packtool/PackAot.java`, compilado a `bpgenvm-c/build/packtool/`).
 Comprueba la cabecera: bytes 4-8 del `.mdn` son versión y **ABI** (`struct '<HH'`).
 
+**Desde `#575` (26-sep) hay red**: pasó otra vez —la VM subió a la ABI 9 y estos `.mdn` se
+quedaron en la 8, con SQLite sin natives en toda placa con imagen nueva— y ahora `compat.sh
+check` (el frente `packs-abi`, `compat/packs_abi.py`) se pone en ROJO si un `.mdn` versionado o
+una entrada `mdn` de un pack grabable (`packs/`, los `out/`) va en otra ABI que la de la VM.
+
 ## Cómo se comprueba que un cambio no rompió nada
 
 Reconstruir y comparar el pack con el anterior. Si sale de otro tamaño, falta

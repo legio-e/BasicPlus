@@ -207,6 +207,7 @@ public final class Parser {
         }
         String fromPath = null;
         String packName = null;
+        String marcaNativa = null;   // V7/H6 G5.b0: la de ESTE import, si es `from pack "XXXX"`
         if (match(TokenType.FROM)) {
             // H5.b — `from pack <NombrePack>`: el módulo vive DENTRO de un pack.
             // `pack` es keyword CONTEXTUAL (solo se reconoce aquí) para no romper
@@ -233,6 +234,7 @@ public final class Parser {
                         error("la marca de un pack nativo son 4 caracteres, p.ej. \"SQLI\"");
                     } else {
                         packNativoMarca = (String) marcaVal;
+                        marcaNativa     = (String) marcaVal;
                     }
                     // El "path" de este import no es un módulo: es la VERSIÓN.
                     if (path.size() != 1 || !path.get(0).matches("v[0-9]+")) {
@@ -255,7 +257,9 @@ public final class Parser {
             }
         }
         consumeStmtTerminator("se esperaba salto de línea tras 'import'");
-        return new ImportNode(path, fromPath, boundImpl, packName, tok.line, tok.column);
+        ImportNode imp = new ImportNode(path, fromPath, boundImpl, packName, tok.line, tok.column);
+        imp.packNativoMarca = marcaNativa;   // V7/H6 G5.b0: quien recorre los imports lo salta (no es un módulo)
+        return imp;
     }
 
     // ============================================================

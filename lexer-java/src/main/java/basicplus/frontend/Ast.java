@@ -148,6 +148,13 @@ public final class Ast {
          *  (salvo en el propio Core): la raíz se importa siempre. Marcado para que quien liste
          *  los imports del fuente (IDE, mensajes) sepa que no está escrito. */
         public boolean implicito = false;
+        /** V7/H6 G5.b0 (26-sep, el resto de #542) — `import v1 from pack "SQLI"`: la marca, si ESTE
+         *  import es el de la API de un pack NATIVO. No es un módulo BP —no tiene interfaz que cargar—:
+         *  es la versión de la tabla que la placa publica con esa marca, y sus funciones son las
+         *  `native` externas del propio módulo. null = un import de verdad. Va en el import y no sólo
+         *  en el módulo ({@link ModuleNode#packNativoMarca}) porque quien recorre los imports tiene
+         *  que poder saltarlo SIN adivinar por el nombre (un módulo puede llamarse `v1`). */
+        public String packNativoMarca = null;
         public ImportNode(List<String> path, String fromPath, int line, int column) {
             this(path, fromPath, null, null, line, column);
         }

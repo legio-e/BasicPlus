@@ -2205,6 +2205,12 @@ public final class Main {
         // post-pass, cuando todos los namespaces están cargados.
         java.util.List<Object[]> pendingCrossBase = new java.util.ArrayList<>();
         for (Ast.ImportNode imp : module.imports) {
+            // V7/H6 G5.b0 (26-sep, el resto de #542) — `import v1 from pack "SQLI"` NO es un módulo:
+            // es la versión de la API que la placa publica con esa marca, y sus funciones son las
+            // `native` externas de ESTE módulo (el AOT les emite el puente). No hay interfaz que
+            // buscar. Hasta #542 se buscaba igual y sólo avisaba («sin interfaz para import 'v1'»);
+            // desde #542, en el AOT, era un error — y SQLite.bp y Gui2.bp se quedaban sin .mdn.
+            if (imp.packNativoMarca != null) continue;
             String alias = imp.path.get(imp.path.size() - 1);
             String library = libraryFromImportPath(imp);
             String bpiName = library.isEmpty() ? alias + ".bpi" : library + "." + alias + ".bpi";

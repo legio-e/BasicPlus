@@ -119,4 +119,32 @@ class AotImportsTest {
                 java.util.Collections.singletonList(dep.toString()));
         assertNotNull(r.cFile, "con la dependencia dicha, X debe emitir C");
     }
+
+    /** V7/H6 G5.b0 (26-sep) — {@code import v1 from pack "SQLI"} NO es un módulo: es la versión de la API
+     *  que la placa publica con esa marca, y sus funciones son las {@code native} externas del propio
+     *  módulo. Desde #542 el AOT lo contaba como un import que falta y {@code SQLite.bp} y {@code Gui2.bp}
+     *  se quedaban sin su {@code .mdn} («falta el modulo 'v1'»): el pack salía sin el puente y en la placa
+     *  cada llamada lanzaba «falta el codigo nativo del pack». Se salta POR LA MARCA, no por el nombre:
+     *  el control es un {@code import v1} normal, que sigue faltando con su nombre. */
+    @Test @DisplayName("G5.b0: la API de un pack nativo (import v1 from pack \"MARC\") no es un import que falte")
+    void importDeLaApiNativa(@TempDir Path tmp) throws Exception {
+        Main.STDLIB_DIR = StdlibDeTest.paraFormato(tmp).getAbsolutePath();
+        Path bp = escribe(tmp, "X", String.join("\n",
+            "module X",
+            "  import Core",
+            "  import v1 from pack \"MARC\"",
+            "  public native function suma(a: integer, b: integer): integer",
+            "end X", ""));
+        AotMain.AotResult r = AotMain.emitAotC(bp, tmp.resolve("out"), true);
+        assertNotNull(r.cFile, "X tiene una native externa: debe emitir C (el puente al pack)");
+        assertTrue(Files.exists(r.cFile));
+
+        // El control: un módulo que se llama `v1` y NO viene de un pack nativo sigue faltando.
+        Path otro = Files.createDirectories(tmp.resolve("otro"));
+        Path bp2 = escribe(otro, "Z", NATIVA.replace("module X", "module Z").replace("end X", "end Z")
+                .replace("  import Core", "  import Core\n  import v1"));
+        AotMain.ImportsFaltanException ex = assertThrows(AotMain.ImportsFaltanException.class,
+                () -> AotMain.emitAotC(bp2, otro.resolve("out"), true));
+        assertTrue(ex.getMessage().contains("'v1'"), ex.getMessage());
+    }
 }

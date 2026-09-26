@@ -939,6 +939,16 @@ EOF
   [ "$fails" -eq 0 ]
 }
 
+# V7/H6 G5.b0 (#575, 26-sep) — los `.mdn` de los packs en la ABI que habla la VM. Subir
+# MDN_ABI_VERSION sin regenerarlos deja SQLite y Gui2 sin sus natives en TODAS las placas con
+# imagen nueva (sus `native` externas no tienen otro cuerpo que uno que lanza): paso el 20-ago
+# (#504) y otra vez el 26-sep con la 9, aunque el LEEME de SQLite lo decia. Mira las dos puntas
+# (mdn_format.h y MdnPack), los ingredientes versionados y cada .pack grabable. Ver packs_abi.py.
+check_packs_abi() {
+  echo "-- los .mdn de los packs en la ABI de la VM (#575) --"
+  python "$HERE/packs_abi.py"
+}
+
 # check_behaviour / check_opcodes / check_emit se conservan intactas arriba: son
 # el registro de lo que se verificaba contra V2 y siguen siendo reutilizables si
 # algun dia hay algo que comparar. Desde V4 NO se llaman (ver el aviso de abajo).
@@ -988,7 +998,8 @@ EOF
   check_testc || fails=$((fails+1))
   check_sombra || fails=$((fails+1))
   check_mod8 sin-referencia || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 VERDE' || echo "$fails frente(s) en ROJO") =="
+  check_packs_abi || fails=$((fails+1))
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -1003,5 +1014,6 @@ case "${1:-}" in
   check-sim)  check_sim ;;
   check-testc) check_testc ;;
   check-mod8) check_mod8 ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8}"; exit 2 ;;
+  check-packs-abi) check_packs_abi ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-packs-abi}"; exit 2 ;;
 esac
