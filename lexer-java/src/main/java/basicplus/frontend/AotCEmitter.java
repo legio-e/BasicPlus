@@ -1689,6 +1689,81 @@ public final class AotCEmitter {
      * de memoria (una global que otro hilo cambia se vuelve a leer tras ceder). Cuesta +2 ciclos por vuelta
      * en el bucle más apretado (P2b.0, medido en la Pico). La recursión sin bucles queda fuera: una native
      * recursiva sin ningún bucle no pasa por aquí (apuntado en V7_IDEAS §H5.P2b). */
+    /* V7/H5 P2b.2 (26-sep) — UNA INTRÍNSECA CUALQUIERA desde una native: si su cuerpo es `inline CALL_BUILTIN
+     * n`, el AOT llama al MISMO despachador de builtins que el intérprete (el helper `call_builtin`). La native
+     * ejecuta el código del intérprete y no una copia: la paridad sale por construcción (#569 fue una copia que
+     * se quedó atrás). Cada argumento, convertido al tipo del parámetro como lo haría el intérprete (emitComo) y
+     * pasado por sus BITS en una palabra de 64 bits; el resultado vuelve igual. Si el builtin lanza, sale por
+     * el límite de fallos; si bloquea el hilo (sleep, Mutex.lock), la native se suspende (P2b.1). */
+    private int tempBuiltin = 0;
+
+    /** El id del builtin si el cuerpo de la intrínseca es exactamente `CALL_BUILTIN n`; si no, null. */
+    private static Integer idDeBuiltin(Symbol.FunctionSymbol fs) {
+        if (fs == null || !fs.isIntrinsic || fs.inlineOps == null || fs.inlineOps.size() != 1) return null;
+        Ast.InlineStmt op = fs.inlineOps.get(0);
+        if (!"CALL_BUILTIN".equals(op.mnemonic) || op.operands == null || op.operands.size() != 1) return null;
+        return op.operands.get(0).intValue();
+    }
+
+    /** Cómo cruza un valor hacia call_builtin: 'i' (integer, boolean, byte, short, enum: 4 bytes), 'l' long,
+     *  'f' float, 'd' double, 'r' referencia; 0 si no se sabe. */
+    private static char claseBuiltin(BpType t) {
+        if (t == null) return 0;
+        if (esFloatT(t))  return 'f';
+        if (esDoubleT(t)) return 'd';
+        if (esLongT(t))   return 'l';
+        if (isRefBp(t))   return 'r';
+        if (MivmEmitter.occupies8Bytes(t)) return 0;
+        return 'i';
+    }
+
+    private boolean emitLlamadaABuiltin(Symbol.FunctionSymbol fs, Ast.CallExpr c) {
+        Integer id = idDeBuiltin(fs);
+        if (id == null || fs.params == null || fs.params.size() != c.args.size()) return false;
+        StringBuilder tipos = new StringBuilder();
+        for (Symbol.ParamSymbol p : fs.params) {
+            char k = claseBuiltin(p.type);
+            if (k == 0) {
+                throw new UnsupportedAotException("AOT: el builtin '" + fs.name + "' (line " + c.line
+                    + ") tiene un parámetro que no sé pasarle desde una native (" + p.type + ").");
+            }
+            tipos.append(k);
+        }
+        char ret = (fs.returnType == null) ? 'v' : claseBuiltin(fs.returnType);
+        if (ret == 0) {
+            throw new UnsupportedAotException("AOT: el builtin '" + fs.name + "' (line " + c.line
+                + ") devuelve un tipo que no sé traer a una native (" + fs.returnType + ").");
+        }
+        int t = ++tempBuiltin;
+        String a = "__bpvm_a" + t, r = "__bpvm_r" + t;
+        w.print("({ int64_t " + a + "[" + Math.max(1, c.args.size()) + "]; ");
+        for (int i = 0; i < c.args.size(); i++) {
+            Ast.IExpr x = c.args.get(i);
+            BpType pt = fs.params.get(i).type;
+            w.print(a + "[" + i + "] = ");
+            switch (tipos.charAt(i)) {
+                case 'f': w.print("bpvm_aot_f32_bits("); emitComo(x, pt); w.print(")"); break;
+                case 'd': w.print("bpvm_aot_f64_bits("); emitComo(x, pt); w.print(")"); break;
+                case 'l': w.print("(int64_t) ("); emitComo(x, pt); w.print(")"); break;
+                case 'r': w.print("(int64_t) (uint32_t) ("); emitExpr(x); w.print(")"); break;
+                default:  w.print("(int64_t) (int32_t) ("); emitComo(x, pt); w.print(")"); break;
+            }
+            w.print("; ");
+        }
+        w.print("int64_t " + r + " = vm->aot_helpers->call_builtin(vm, " + id + ", \"" + tipos + "\", "
+                + a + ", '" + ret + "'); ");
+        switch (ret) {
+            case 'v': w.print("(void) " + r + "; "); break;
+            case 'f': w.print("bpvm_aot_bits_f32(" + r + "); "); break;
+            case 'd': w.print("bpvm_aot_bits_f64(" + r + "); "); break;
+            case 'l': w.print("(int64_t) " + r + "; "); break;
+            case 'r': w.print("(uint32_t) " + r + "; "); break;
+            default:  w.print("(int32_t) " + r + "; "); break;
+        }
+        w.print("})");
+        return true;
+    }
+
     private static final String CUENTA = "__bpvm_cuenta";
     private static final int CUENTA_VUELTAS = 1024;
 
@@ -2121,9 +2196,12 @@ public final class AotCEmitter {
                         return;
                     }
                     if (fs.isExternal && fs.isIntrinsic) {
+                        /* V7/H5 P2b.2 — `Math.sin(x)`: por el despachador de la VM. */
+                        if (emitLlamadaABuiltin(fs, c)) return;
                         throw new UnsupportedAotException(
                             "AOT: intrínseco cross-module '" + fs.externalQualifiedName()
-                            + "' (line " + c.line + ") no soportado en native todavía.");
+                            + "' (line " + c.line + ") no soportado en native: su cuerpo `inline` no es"
+                            + " una llamada a un builtin (CALL_BUILTIN n).");
                     }
                     /* #174b — método PÚBLICO de instancia (virtual) sobre un
                      * receptor: despacho por vtable vía call_method_i32 con el
@@ -2186,6 +2264,14 @@ public final class AotCEmitter {
             /* Builtins (H3 #168) — antes que native funcs por si hubiera
              * colisión de nombres. Lista hardcoded por ahora; expansible. */
             if (emitBuiltinCall(name, c.args)) return;
+
+            /* V7/H5 P2b.2 — cualquier otra intrínseca (`inline CALL_BUILTIN n`), local o de `Core`: por el
+             * despachador de la VM. La lista a mano de arriba va antes mientras se mide si compensa. */
+            {
+                Symbol simG = (semInfo != null) ? semInfo.exprSymbols.get(c.callee) : null;
+                if (simG instanceof Symbol.FunctionSymbol && ((Symbol.FunctionSymbol) simG).isIntrinsic
+                        && emitLlamadaABuiltin((Symbol.FunctionSymbol) simG, c)) return;
+            }
 
             if (!nativeFuncNames.contains(name)) {
                 /* #211 — ¿es una función BP del mismo módulo? Entonces NO

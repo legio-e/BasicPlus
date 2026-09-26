@@ -254,6 +254,102 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
     bpvm_diag_urgente("[aot] throw_ref sin boundary (ref=%" PRIu32 ")", exc_ref);
 }
 
+/* V7/H5 P2b.2 — CUALQUIER builtin desde una native. Ver la tabla (bpvm_aot_helpers.h). Como el puente
+ * nativo→BP: los argumentos van a la pila BP del hilo, encima de su sp vivo (el estable de la native: el GC
+ * los ve, están bajo tc->sp), se llama al despachador y se saca lo que el builtin dejó. */
+static int64_t h_call_builtin(bpvm_t* vm, int32_t id, const char* tipos, const int64_t* args, int32_t tipo_ret) {
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    bpvm_thread_t* tc = cc->tc;
+    uint8_t* mem;
+    uint32_t base, sp, dejado;
+    int64_t r = 0;
+    bpvm_status_t st;
+    int i;
+    if (tc == NULL || cc->sp_p == NULL) {
+        h_throw_runtime(vm, "call_builtin: fuera de una native");
+        return 0;
+    }
+    mem = vm->memory;
+    base = *cc->sp_p;
+    sp = base;
+    for (i = 0; tipos != NULL && tipos[i] != '\0'; i++) {
+        if (sp + 16u > tc->stack_top) { h_throw_runtime(vm, "call_builtin: pila del hilo llena"); return 0; }
+        switch (tipos[i]) {
+        case 'i': case 'f': bpvm_write_i32_be(mem + sp, (int32_t) args[i]); sp += 4; break;
+        case 'l': case 'd': bpvm_write_i64_be(mem + sp, args[i]); sp += 8; break;
+        case 'r': bpvm_write_i64_be(mem + sp, (int64_t) bpref_regen(vm, (uint32_t) args[i]).v); sp += 8; break;
+        default:  h_throw_runtime(vm, "call_builtin: tipo de argumento desconocido"); return 0;
+        }
+    }
+    /* El respaldo: donde la native no puede suspenderse (sin pila prestada), un builtin que cede el hilo no se
+     * ejecuta — se dice con nombre y sin efectos a medias. */
+    if (bpvm_builtin_cede(id)
+        && !(tc->nativa != NULL && tc->nativa->estado == BPVM_NATIVA_CORRIENDO)) {
+        char em[128];
+        snprintf(em, sizeof em, "el builtin %d cede el hilo y aqui una native no puede suspenderse todavia",
+                 (int) id);
+        h_throw_runtime(vm, em);
+        return 0;
+    }
+    tc->sp = sp;
+    tc->builtin_de_nativa = 1;
+    tc->excepcion_pendiente = 0;
+    st = bpvm_call_builtin(vm, tc, (int) id);
+    tc->builtin_de_nativa = 0;
+    mem = vm->memory;
+    if (st != BPVM_OK) {
+        uint32_t pend = tc->excepcion_pendiente;
+        tc->excepcion_pendiente = 0;
+        tc->sp = base;
+        if (pend != 0) { h_throw_ref(vm, pend); return 0; }      /* lanzó: su excepción, tal cual */
+        {
+            char em[96];
+            snprintf(em, sizeof em, "el builtin %d fallo dentro de una native (estado %d)", (int) id, (int) st);
+            h_throw_runtime(vm, em);
+            return 0;
+        }
+    }
+    if (tc->status != BPVM_THREAD_RUNNING) {
+        /* Bloqueó o cedió el hilo (sleep, Mutex.lock, yield…): la native se suspende y sigue al despertar,
+         * con lo que el builtin dejó en la pila (está bajo tc->sp: el GC lo ve y nadie lo pisa). */
+        if (!bpvm_nativa_ceder(vm, tc)) {
+            tc->status = BPVM_THREAD_RUNNING;
+            tc->sp = base;
+            h_throw_runtime(vm, "un builtin cedio el hilo dentro de una native que no puede suspenderse");
+            return 0;
+        }
+    }
+    dejado = tc->sp - base;
+    switch (tipo_ret) {
+    case 'v':
+        break;
+    case 'i': case 'f':
+        if (dejado != 4u) break;
+        r = (int64_t) bpvm_read_i32_be(mem + base);
+        break;
+    case 'l': case 'd':
+        if (dejado != 8u) break;
+        r = bpvm_read_i64_be(mem + base);
+        break;
+    case 'r':
+        if (dejado != 8u) break;
+        r = (int64_t) h_read_ref(mem + base);
+        break;
+    default:
+        dejado = 0xFFFFFFFFu;
+        break;
+    }
+    tc->sp = base;
+    if (tipo_ret != 'v' && dejado != ((tipo_ret == 'i' || tipo_ret == 'f') ? 4u : 8u)) {
+        char em[128];
+        snprintf(em, sizeof em, "call_builtin: el builtin %d dejo %u bytes y su tipo pide otra cosa ('%c')",
+                 (int) id, (unsigned) dejado, (char) tipo_ret);
+        h_throw_runtime(vm, em);
+        return 0;
+    }
+    return r;
+}
+
 /* ---------- Heap / GC ----------
  * [V6/N1.5] Dejaron de ser stubs. Eran cuatro `return 0` — o sea que un native
  * que creara un array recibia el ref NULO y seguia como si nada; el fallo salia
@@ -991,6 +1087,7 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .l2f                 = h_l2f,
     .f2l                 = h_f2l,
     .punto_control       = bpvm_nativa_punto_control,   /* V7/H5 P2b.1.d: la línea del bucle */
+    .call_builtin        = h_call_builtin,              /* V7/H5 P2b.2: cualquier builtin */
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

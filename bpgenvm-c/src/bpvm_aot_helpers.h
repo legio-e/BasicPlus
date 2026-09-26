@@ -504,7 +504,25 @@ struct aot_helpers_v2 {
      * planificador atiende a los demás hilos y al cable; donde no se puede suspender todavía, un `kill`
      * LANZA por el límite de fallos. Sube MDN_ABI_VERSION a 9: la tabla crece. */
     void    (*punto_control)(struct bpvm* vm);
+
+    /* V7/H5 P2b.2 (26-sep) — CUALQUIER BUILTIN desde una native, por el MISMO despachador que el intérprete
+     * (bpvm_call_builtin): la native ejecuta el código del intérprete, no una copia, y la paridad sale por
+     * construcción (#569 fue una copia que se quedó atrás). `tipos`, uno por argumento: 'i' integer (y
+     * boolean, byte, enum…), 'l' long, 'f' float, 'd' double, 'r' referencia (handle empaquetado); cada
+     * argumento viaja en una palabra de 64 bits con sus BITS, así que un float o un double no cruzan por
+     * valor y no les afecta el -mfloat-abi. `tipo_ret`: 'v' (nada) o uno de los anteriores; se devuelven sus
+     * bits. Si el builtin lanza, la excepción sale por el límite de fallos de #186; si bloquea el hilo
+     * (sleep, Mutex.lock…), la native se SUSPENDE y sigue al despertar. Misma ABI 9: la tabla sigue creciendo
+     * al final y ningún .mdn de la 9 ha salido todavía. */
+    int64_t (*call_builtin)(struct bpvm* vm, int32_t id, const char* tipos, const int64_t* args, int32_t tipo_ret);
 };
+
+/* V7/H5 P2b.2 — los bits de un float/double, para cruzar hacia call_builtin por una palabra de 64 bits. Son
+ * movimientos de enteros (sin FPU, tampoco llaman a libgcc). */
+static inline int64_t bpvm_aot_f32_bits(float f)   { union { float f; int32_t i; } u; u.f = f; return (int64_t) u.i; }
+static inline float   bpvm_aot_bits_f32(int64_t b) { union { float f; int32_t i; } u; u.i = (int32_t) b; return u.f; }
+static inline int64_t bpvm_aot_f64_bits(double d)  { union { double d; int64_t i; } u; u.d = d; return u.i; }
+static inline double  bpvm_aot_bits_f64(int64_t b) { union { double d; int64_t i; } u; u.i = b; return u.d; }
 
 /* ─── [V7/H5 #559, 25-sep] ¿HACE ESTE DESTINO LOS `float` EN HARDWARE? ──────────
  *

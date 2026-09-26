@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -740,6 +740,24 @@ test-aotkill: $(LIBOBJ)
 	  -o build/test_aotkill.exe $(LDFLAGS)
 	@echo "--- P2b.1.d el kill de una native en un bucle sin fin (esperado: los dos KILLED, [status=OK]) ---"
 	@timeout 60 ./build/test_aotkill.exe samples/NatKill.mod 2>/dev/null || { echo "  ROJO: el kill no llegó (¿colgado? lo cortó el tope)"; exit 1; }
+
+# V7/H5 (P2b.2, 26-sep) — CUALQUIER INTRÍNSECA desde una native, por el despachador de la VM (call_builtin):
+# de Core y de otro módulo, una que lanza y un sleep que suspende la native mientras otro hilo avanza.
+test-aotbuiltin: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatBuiltin)
+	$(call stdlibdep,Core Math)
+	$(call aotmain,NatBuiltin,build/aotbuiltin)
+	$(CC) $(CFLAGS) -Isrc test/test_aotbuiltin.c build/aotbuiltin/aot_NatBuiltin.c $(LIBOBJ) \
+	  -o build/test_aotbuiltin.exe $(LDFLAGS)
+	@echo "--- P2b.2 cualquier intrínseca desde una native (esperado: AOT == interpretado, 8/8, sin FALLO) ---"
+	@timeout 60 ./build/test_aotbuiltin.exe samples/NatBuiltin.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotbuiltin.aot; \
+	 timeout 60 ./build/test_aotbuiltin.exe samples/NatBuiltin.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotbuiltin.int; \
+	 n=$$(grep -c '^ok ' build/aotbuiltin.aot); \
+	 if grep -q '^FALLO' build/aotbuiltin.aot build/aotbuiltin.int; then grep -h '^FALLO' build/aotbuiltin.aot build/aotbuiltin.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotbuiltin.int build/aotbuiltin.aot; then diff build/aotbuiltin.int build/aotbuiltin.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 8 ]; then cat build/aotbuiltin.aot; echo "  ROJO: $$n de 8 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 8/8 con el AOT, igual que interpretado"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

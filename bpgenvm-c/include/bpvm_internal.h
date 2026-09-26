@@ -366,6 +366,11 @@ struct bpvm_thread {
      * mientras no haya entrado en ninguna: sólo pagan los hilos que lo hacen. Un puntero y no la cabecera
      * dentro del hilo, por lo mismo que el límite de fallos es por worker (#185: inflar el hilo ×N). */
     struct bpvm_nativa* nativa;
+    /* V7/H5 P2b.2 — un builtin que se ejecuta llamado DESDE UNA NATIVE (call_builtin): si lanza, no deshace
+     * marcos él mismo —los de C de la native siguen vivos— sino que deja la excepción aquí y la propaga el
+     * límite de fallos de #186. El puente nativo→BP la apaga mientras corre código BP anidado. */
+    int      builtin_de_nativa;
+    uint32_t excepcion_pendiente;   /* handle empaquetado (idx|TAG) de esa excepción, o 0 */
 };
 
 /* F5 — entry del handlerStack. */
@@ -1000,6 +1005,12 @@ int bpvm_format_i64(char* out, int64_t v);
 
 /* builtins.c (F2) */
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
+
+/* V7/H5 P2b.2 — ¿este builtin cede o bloquea el hilo? (sleep, sleepSec, yield, Thread.join, Mutex.lock: los que
+ * cambian tc->status). Sólo lo usa call_builtin como RESPALDO, donde la native no puede suspenderse: allí los
+ * rechaza con nombre ANTES de ejecutarlos, sin efectos a medias. Con la pila prestada se ejecutan y la native
+ * se suspende. */
+int bpvm_builtin_cede(int id);
 
 /* link.c (F3) */
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,

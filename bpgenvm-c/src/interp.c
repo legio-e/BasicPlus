@@ -277,6 +277,10 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
      * Antes, un bloqueo aquí era «cedió/falló (no soportado por el puente v1)» y el quantum no se acababa
      * nunca (1 << 24 operaciones). Sin pila prestada, todo sigue como antes. */
     int puede_ceder = tc->nativa != NULL && tc->nativa->estado == BPVM_NATIVA_CORRIENDO;
+    /* V7/H5 P2b.2 — el código BP anidado deshace sus propias excepciones: la marca de «builtin llamado desde
+     * una native» (un builtin de la GUI que llama de vuelta a BP) no vale aquí dentro. */
+    int prev_bdn = tc->builtin_de_nativa;
+    tc->builtin_de_nativa = 0;
     int quantum = puede_ceder ? (vm->quantum_ops > 0 ? vm->quantum_ops : 1024) : (1 << 24);
     for (;;) {
         int y = 0;
@@ -301,6 +305,7 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
      * si no, 4 (i32). En ambos casos el VALOR útil son los 4 bytes bajos (rsp-4,
      * big-endian = idx|TAG para una ref = handle empaquetado que el cuerpo AOT
      * consume). Solo cambia cuánto POPeamos del stack del intérprete exterior. */
+    tc->builtin_de_nativa = prev_bdn;   /* P2b.2 */
     uint32_t rsp = tc->sp;
     uint32_t retw = ret_is_ref ? 8u : 4u;
     int32_t result = bpvm_read_i32_be(vm->memory + rsp - 4);

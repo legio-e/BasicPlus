@@ -526,6 +526,13 @@ static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* ms
                               "clase RuntimeError exportada) -> el programa NO se entera");
         return BPVM_ERR_RUNTIME;
     }
+    /* V7/H5 P2b.2 — llamado DESDE UNA NATIVE (call_builtin): los marcos de C de la native siguen vivos, así
+     * que aquí no se deshace nada. La excepción se deja en el hilo y call_builtin la lanza por el límite de
+     * fallos de #186, que la propaga desde el lado BP como cualquier throw de una native. */
+    if (tc->builtin_de_nativa) {
+        tc->excepcion_pendiente = (uint32_t) ref.v;
+        return BPVM_ERR_RUNTIME;
+    }
     if (bpvm_eh_unwind(vm, tc, ref)) {
         if (hablar) bpvm_diag("[bpvm] throw: ATRAPADA por un catch del programa");
         return BPVM_OK;
@@ -817,6 +824,16 @@ static uint32_t move_elem(int tipo) {
     case BPVM_TYPE_ARRAY_I64: return 8u;   /* long[] y double[] (H1.2) */
     case BPVM_TYPE_ARRAY_REF: return 8u;   /* V4: la ref plana mide 8 B */
     default:                  return 0u;
+    }
+}
+
+int bpvm_builtin_cede(int id) {
+    switch (id) {
+    case BUILTIN_SLEEP: case BUILTIN_SLEEP_SEC: case BUILTIN_YIELD:
+    case BUILTIN_THREAD_JOIN: case BUILTIN_MUTEX_LOCK:
+        return 1;
+    default:
+        return 0;
     }
 }
 
