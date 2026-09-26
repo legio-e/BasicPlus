@@ -687,9 +687,16 @@ test-aotanida: $(LIBOBJ)
 	$(call fixture,NatAnida)
 	$(call stdlibdep,Core)
 	$(call aotmain,NatAnida,build/aotanida)
-	$(CC) $(CFLAGS) -Isrc test/test_aotanida.c build/aotanida/aot_NatAnida.c $(LIBOBJ) 	  -o build/test_aotanida.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) -Isrc test/test_aotanida.c build/aotanida/aot_NatAnida.c $(LIBOBJ) \
+	  -o build/test_aotanida.exe $(LDFLAGS)
 	@echo "--- #571 anidar natives (esperado: AOT == interpretado, 3/3, sin FALLO) ---"
-	@./build/test_aotanida.exe samples/NatAnida.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotanida.aot; 	 ./build/test_aotanida.exe samples/NatAnida.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotanida.int; 	 n=$$(grep -c '^ok ' build/aotanida.aot); 	 if grep -q '^FALLO' build/aotanida.aot build/aotanida.int; then grep -h '^FALLO' build/aotanida.aot build/aotanida.int; echo "  ROJO: FALLO"; exit 1; fi; 	 if ! cmp -s build/aotanida.int build/aotanida.aot; then diff build/aotanida.int build/aotanida.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; 	 if [ "$$n" -ne 3 ]; then cat build/aotanida.aot; echo "  ROJO: $$n de 3 comprobaciones"; exit 1; fi; 	 echo "[status=OK] 3/3 con el AOT, igual que interpretado"
+	@./build/test_aotanida.exe samples/NatAnida.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotanida.aot; \
+	 ./build/test_aotanida.exe samples/NatAnida.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotanida.int; \
+	 n=$$(grep -c '^ok ' build/aotanida.aot); \
+	 if grep -q '^FALLO' build/aotanida.aot build/aotanida.int; then grep -h '^FALLO' build/aotanida.aot build/aotanida.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotanida.int build/aotanida.aot; then diff build/aotanida.int build/aotanida.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 3 ]; then cat build/aotanida.aot; echo "  ROJO: $$n de 3 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 3/3 con el AOT, igual que interpretado"
 
 # V7/H5 (#559, 25-sep) — LA COMA FLOTANTE DENTRO DE UNA NATIVE, ejecutada en el PC por sus DOS
 # caminos. El .c que el AOT genera se compila tal cual (la FPU del PC hace los float, como el P4 y
