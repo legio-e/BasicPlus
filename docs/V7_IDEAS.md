@@ -257,6 +257,10 @@ coste antes de medirlo sería repetir el error que este documento lleva anotado 
 
 *(Sin fecha, decisión de Eduardo: «todo eso para el futuro».)*
 
+➡️ **26-sep**: el cambio de hilo y el `kill` dentro de una native, **decididos** en §H5.P2b —la native se suspende como
+una interrupción, en una pila que le presta el intérprete; idea de Eduardo—. La línea del error y el breakpoint quedan
+con la base puesta: es la misma marca.
+
 ---
 
 ## El lazo de LVGL, y por qué es la MISMA enfermedad que el AOT (Eduardo, 21-ago)
@@ -1864,7 +1868,7 @@ fundir, subir, ejecutar el nativo—.
 (ARM), el P4 (RISC-V con FPU) y la C5 (sin FPU), con la imagen que manda `nativos`: las tres recetas. Y el control: el
 `.mod` SIN fundir, subido como si fuera AOT, tiene que salir SIN NATIVO.
 
-### H5.P2b — el AOT llama a CUALQUIER builtin por el despachador de la VM (26-sep, análisis)
+### H5.P2b — el AOT llama a CUALQUIER builtin por el despachador de la VM (26-sep, análisis y decisión)
 
 > De la tabla de H1 (§3, P2b): *hoy traduce los builtins globales POR NOMBRE con una lista a mano y rechaza
 > `Math.sin(x)` desde una `native`*. Eduardo, 24-sep: es del AOT, H5.
@@ -1888,8 +1892,9 @@ paridad sale por construcción.
 - Un helper nuevo AL FINAL de la tabla: `int64_t call_builtin(vm, id, tipos, args, tipo_ret)`. Los argumentos viajan
   como palabras de 64 bits con sus BITS (`tipos`: `i` i32, `l` i64, `f` float, `d` double, `r` referencia): así un
   `double` no cruza la frontera por valor y no le afecta el `-mfloat-abi` (el `BPVM_AOT_FP_ABI` de la tabla).
-- El helper hace lo que `bridge_run_bp_frame` para `call_bp`: empuja los argumentos en la pila BP del hilo sobre el
-  `sp` vivo del intérprete de fuera (`cc->sp_p`; las referencias, ensanchadas a 8 B con `bpref_regen`), llama al
+- El helper hace lo que `bridge_run_bp_frame` para `call_bp`: empuja los argumentos en la pila BP del hilo sobre su
+  `sp` vivo (hoy `cc->sp_p`, que con la suspensión pasa a colgar del hilo: abajo; las referencias, ensanchadas a 8 B
+  con `bpref_regen`), llama al
   despachador, saca el retorno según `tipo_ret` y deja `tc->sp/pc/cs` como estaban. El GC ve los argumentos (están bajo
   `tc->sp`) y las referencias de C del nativo (el escaneo conservador de `#302`).
 - `MDN_ABI_VERSION` 8 → 9 (la tabla crece): se regeneran todos los `.mdn` —los de los packs, SQLite incluido— y las
@@ -1901,41 +1906,99 @@ paridad sale por construcción.
    marcos BP con los marcos de C del nativo todavía vivos. Solución: una marca en el hilo («dentro de una native»)
    con la que `builtin_throw` NO deshace: deja la excepción pendiente —como `throw_ref` (`#213`)— y el helper hace
    `longjmp` al límite de `#186`, que la propaga desde el lado BP como hoy. Es UN sitio: en `builtins.c` es el único
-   `bpvm_eh_unwind` (los ~200 `builtin_throw` pasan por él). Los `return BPVM_ERR_*` que quedan tras `#570` son errores internos
-   (aridad de un evento, un mutex corrupto, no caben más hilos): desde el nativo, `throw_runtime` con su nombre.
-2. **Un builtin que cede o bloquea el hilo.** Un nativo no se puede suspender. Por la primitiva (`tc->status =` y el
-   mutex): `sleep`, `sleepSec`, `yield`, `__threadJoin` (`Thread.join`) y `__mutexLock` (`Mutex.lock`). Se rechazan AL COMPILAR —la función corre interpretada,
-   con su aviso, como cualquier otra cosa no soportada— y, de respaldo, en el helper ANTES de despachar (una tabla en
-   C: sin efectos a medias).
+   `bpvm_eh_unwind` (los ~200 `builtin_throw` pasan por él). Los `return BPVM_ERR_*` que quedan tras `#570` son errores
+   internos (aridad de un evento, un mutex corrupto, no caben más hilos): desde el nativo, `throw_runtime` con su nombre.
+2. **Un builtin que cede o bloquea el hilo** —por la primitiva (`tc->status =` y el mutex): `sleep`, `sleepSec`,
+   `yield`, `__threadJoin` (`Thread.join`) y `__mutexLock` (`Mutex.lock`)—. La primera propuesta era rechazarlos al
+   compilar. **Decidido de otra manera** (Eduardo, 26-sep): no se rechazan; la `native` se SUSPENDE (abajo).
 3. **Un builtin que llama de vuelta a BP**: el lazo de la GUI (`__guiRun`, `__guiRunOnce`, `__guiInvokeByName/BySlot`).
-   El anidamiento funcionaría como en `call_bp`, pero `__guiRun` no vuelve nunca, y un nativo que no vuelve no se puede
-   parar (§«Los cabos sueltos del AOT»). En la v1, rechazados como los del punto 2.
+   Con la suspensión deja de ser un caso aparte: corre como interpretado (un `__guiRun` no vuelve nunca, tampoco
+   interpretado; los demás hilos siguen).
+
+#### La decisión (Eduardo, 26-sep): la `native` se suspende COMO UNA INTERRUPCIÓN, en una pila que le presta el intérprete
+
+> *«Lo que hacemos es que la función native llame a una función opCode y ahí se suspende. Comentaste de pasada en los
+> bucles añadir una línea para permitir que el intérprete pudiese tomar el control y así permitir los cambios de
+> Thread BPs entre otras cosas.»* — y a continuación: *«¿Y si el código nativo funcionase como una interrupción? Sin un
+> stack propio, usa el stack que le ceda el intérprete.»*
+
+**El problema de fondo era REANUDAR.** Salir de un nativo ya se sabe hacer (el `longjmp` de `#186`). Suspenderlo y
+volver a él pide que su estado de C sobreviva mientras corren los demás hilos BP, y hoy corre en la pila de C del
+worker, que en todas las placas es UNO (`bpvm_run`; el multi-worker, `bpvm_run_smp`, es opcional y sólo en la Pico).
+Por eso el puente nativo→BP da error si la función BP cede («no soportado por el puente v1»). Tres salidas:
+
+| | cómo | por qué no / por qué sí |
+|---|---|---|
+| anidar el planificador | los demás hilos corren ENCIMA de la native, en la misma pila | los hilos sólo vuelven en orden inverso: dos que se esperan dentro de natives se bloquean para siempre, y el mismo programa interpretado no; la native dejaría de ser una aceleración transparente |
+| la native reentrable | el emisor la convierte en máquina de estados: guarda sus locales en el marco BP y vuelve a entrar con un `switch` | C puro y probado entero en el PC, pero la complejidad queda en el emisor para siempre: expresiones partidas, y cada llamada a otra native o a BP convertida en continuación |
+| ✅ **una pila por hilo, PRESTADA** | la de Eduardo: como una interrupción, el contexto se guarda en la pila de la native, y cambiar de hilo es cambiar el puntero de pila | **la native no cambia**, y se puede suspender en cualquier sitio |
+
+**Cómo funciona:**
+
+- Al entrar en una native, el intérprete le **presta un trozo de su memoria** como pila de C y la llama sobre ella
+  desde un **trampolín** que queda en el fondo; cuando la native vuelve, recupera el trozo. Sólo pagan los hilos que
+  están DENTRO de una native. No puede ser la pila BP del propio hilo: los hilos lanzados tienen 2 KB
+  (`BPVM_THREAD_STACK_BYTES`; el principal, 16 KB).
+- **Suspender** es guardar en esa pila los registros que el C obliga a conservar, volver a la pila del intérprete y
+  dejarle el hilo como a cualquier otro que cede. **Reanudar** es restaurarlos: la native sigue sin enterarse, como
+  tras una interrupción. Puede reanudarse en otro worker: la pila es del hilo, no del worker.
+- **Los puntos de suspensión**:
+  - la **línea del bucle**, en el salto hacia atrás: «si el intérprete quiere el control —el quantum se acabó, un
+    `kill`, mañana un breakpoint—, cedo»;
+  - un **builtin que deja el hilo bloqueado**: el helper lo ve en `tc->status` y suspende. **No hace falta una lista de
+    los que ceden** —la decisión (a) de más abajo desaparece—;
+  - una **función BP llamada desde la native**: el intérprete anidado corre en la pila prestada, así que la función BP
+    puede bloquear como cualquiera. Se acaba la restricción v1 del puente;
+  - y una native que llama a otra: es una llamada de C normal dentro de la misma pila.
+- El **límite de fallos** de `#186` y el **contexto de la llamada** (`cc->sp_p`/`bp_p`, que hoy apuntan a variables
+  del marco del worker, que ya no existirán al reanudar) pasan a colgar del HILO, en el trampolín.
+- El **GC** corre en la pila del intérprete y no en la prestada —su marcado es recursivo: una lista larga es una
+  recursión igual de honda—, y mira además las pilas prestadas de las natives suspendidas y sus registros guardados,
+  con el mismo escaneo conservador de `#302`. Hoy da por hecho que ninguna native está a medias («nunca a mitad de un
+  native», `heap.c`): eso deja de ser cierto y pasa a estar cubierto.
+- Un **canario** en el fondo de la pila prestada, mirado en cada cambio de contexto: si se desborda, un error con
+  nombre, no memoria pisada en silencio. El tamaño, a medir: `gcc -fstack-usage` lo da por función.
+
+**Lo que cuesta, y se acepta**: el cambio de contexto es **ensamblador**, unas 20 líneas por ABI —ARMv8-M con FPU
+(Pico 2, Metro, STM32U5), RV32 sin coma flotante (C3, C6, C5), RV32 con ella (P4) y x86-64 (el PC)—, porque desde C no
+se puede mover el puntero de pila (la interrupción lo hace con el hardware y el RTOS). Es lo único de todo esto que
+sólo se prueba en su placa: en la tanda, con una prueba de estrés (dos hilos, flotantes vivos a través de cada
+suspensión). Todo lo demás es C común, probado en el PC con la variante x86-64.
+
+**Lo que resuelve además**: dos de los cabos sueltos del AOT (§«Los cabos sueltos del AOT»): parar una native (`kill`)
+y el cambio de hilo dentro de ella. Y deja puesta la base de los otros dos —la línea del error y el breakpoint—: es la
+misma marca que propuso Eduardo el 24-ago.
 
 **Lo que NO cambia**: las intrínsecas cuyo cuerpo no es `CALL_BUILTIN n` sino un opcode (`newByteArray` →
 `NEWARRAY_I8`…) siguen con su traducción propia; `print` (`#558`) y `len` (por el tipo), igual.
 
-**Dos decisiones de Eduardo:**
+**Decisiones:**
 
-- **(a) Dónde se apunta que un builtin cede el hilo**: una lista en el emisor más la tabla de C, con una prueba que las
-  compare (como `check-builtins`); o una marca en `Core.bp`, donde se declara el builtin (una sola fuente, pero pide
-  una sintaxis); o sólo la tabla de C (y el error sale al EJECUTAR, cuando interpretado habría funcionado). Propongo lo
-  primero.
-- **(b) La lista a mano**: tirarla —todo por el despachador; paridad por construcción, a cambio de pasar cada llamada
-  por la pila BP y el `switch`— o dejar los helpers tipados de las más calientes, ahora que `test-aotstr` los vigila.
-  Propongo **medir primero** (`charAt` en un bucle nativo por las dos rutas; es también el «cronometrar nativo contra
-  interpretado» que H5 tiene pendiente) y tirarla salvo donde el coste se vea. Los huecos de la tabla se quedan: la
-  ABI no quita, sólo añade.
+- ~~**(a) Dónde se apunta que un builtin cede el hilo**~~: ya no hace falta; con la suspensión, el helper lo ve en el
+  estado del hilo (Eduardo, 26-sep).
+- **(b) La lista a mano** (abierta): tirarla —todo por el despachador; paridad por construcción, a cambio de pasar
+  cada llamada por la pila BP y el `switch`— o dejar los helpers tipados de las más calientes, ahora que `test-aotstr`
+  los vigila. Propuesta: **medir primero** (`charAt` en un bucle nativo por las dos rutas; es también el «cronometrar
+  nativo contra interpretado» que H5 tiene pendiente) y tirarla salvo donde el coste se vea. Los huecos de la tabla se
+  quedan: la ABI no quita, sólo añade.
 
-**Cómo se prueba**: `make test-xmodnat` y un ejemplo con `Math.sin` en una `native` (en el PC y en placa); `test-aotstr`
-(la lista entera, ahora por el despachador, AOT == interpretado); una excepción de un builtin dentro de un nativo,
-atrapada en BP; un `sleep` en un nativo (no se traduce, y la función corre interpretada); y la tanda con `aot` en las
-placas.
+**Cómo se prueba**: en el PC, una prueba que fuerza la suspensión en CADA salto hacia atrás, con dos hilos y
+flotantes vivos (salida igual a la interpretada); un `sleep` dentro de una native mientras otro hilo avanza; una
+función BP que bloquea llamada desde una native; el `kill` de una native en un bucle; una excepción de un builtin
+dentro de un nativo, atrapada en BP; `make test-xmodnat` y un ejemplo con `Math.sin` en una `native`; `test-aotstr`
+(la lista entera, ya por el despachador, AOT == interpretado). En las placas, la misma prueba de estrés y la tanda con
+`aot`.
 
-**Por pasos que cierran algo**: **P2b.1** el helper, la marca de `builtin_throw` y la tabla de los que ceden, con sus
-pruebas de C; **P2b.2** el emisor (el camino genérico para toda intrínseca `CALL_BUILTIN n`, local y de otro módulo;
-la lista de los que ceden; lo que se decida de la lista a mano); **P2b.3** la cascada de la ABI 9 (los `.mdn`, los
-packs, las imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4
-y la DK2).
+**Por pasos que cierran algo:**
+
+- **P2b.0** — medir la línea del bucle en `sumaHasta` de `NatV7` (1 ms en la Pico), con un contador en registro que
+  sólo mire el indicador cada N vueltas. El número decide la densidad.
+- **P2b.1** — la suspensión en el PC: la pila prestada, el cambio de contexto x86-64, el trampolín con `#186`, el GC,
+  reanudar y el `kill`; la línea del bucle en el emisor; las pruebas de arriba.
+- **P2b.2** — el despachador: el helper `call_builtin`, la marca de `builtin_throw` y el camino genérico del emisor
+  para toda intrínseca `CALL_BUILTIN n`, local y de otro módulo; lo que diga la medida de la lista a mano.
+- **P2b.3** — el cambio de contexto de ARM y de los dos RISC-V, la cascada de la ABI 9 (los `.mdn`, los packs, las
+  imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4 y la DK2).
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
