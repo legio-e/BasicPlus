@@ -858,6 +858,47 @@ la C6, la P4 y la Nucleo.
   táctil 5 de 5 y en las cuatro orientaciones (`GuiRotDemo`). Un descuido: no medí la velocidad del LVGL de la imagen
   ANTES de grabar; la imagen de `dist` permite medirla si hace falta.
 
+## 🔩 H6 (26-sep, tarde, 3) — `G5.b0`: los packs nativos en el STM32, hechos y probados en la DK2 (y `#575` por el camino)
+
+- El análisis (`V7_IDEAS` §H6.15.4, `3914352c`) y las decisiones de Eduardo (`4f15beca`): **la A** —las STM32 a
+  `softfp`; su pregunta, «¿que funcionen por soft pero si hay hardware lo aproveche?», es justo `softfp`: la convención
+  de `soft` y la FPU por dentro—, el bloque de RAM «decide tú», el borrado por banco sí, y la DK2 («en las pruebas
+  finales se prueban todas»).
+- **Paso 1** (`ab87ece6`): las dos `.cproject` a `softfp`; `floatbench` igual (2,523 → 2,522 s interpretado, 0,04 s
+  nativo) y la tanda 14/14 en la DK2.
+- **Paso 2** (`ec0a48b2`): la BIOS y el cargador del STM32 (calcados de la Pico), la VM LO PRIMERO de la RAM (la
+  sección `.bp_vm` en los dos `.ld`) con el bloque `packRam=` delante —dirección fija, `0x20000000`—, la RAM en
+  `PACK_BURN_BEGIN`, la BIOS y el ancla comprobadas en cada arranque y `stm32_flash_erase` partido por banco.
+- **`#575`** (`848ded39`), al preparar SQLite: sus `.mdn` y el de Gui2 seguían en la ABI 8 con la VM en la 9 desde
+  P2b.1.d (sin natives en toda placa con imagen nueva), y el AOT no podía regenerarlos —`#542` contaba `import v1 from
+  pack "SQLI"` como un módulo que falta—. Arreglado, regenerados (cambia un byte, la ABI), los packs reconstruidos y una
+  red nueva, `packs-abi`, en `compat.sh check` (verde entera).
+- **En la DK2**, con el OK de Eduardo a cada lote: la zona de datos repartida de nuevo (FS 1008 KB, packs 1536 KB: la de
+  antes, 528, no llegaba para la Gui), `PACK_FORMAT`, `packRam=512`, el `mini` —sus pasos, todos OK, vistos con
+  `log=1`, quitado después— y SQLite con **`SqlDemo` entero**; la tanda 14/14 otra vez.
+- **Paso 4** (`17dbf2d2`): LVGL como pack ARM, 660 KB, el oráculo del realojado idéntico a `ld`; el pack de la Gui,
+  744 KB podado para ARM.
+
+## ⏭️ Traspaso (26-sep, tarde, 3) — H6: `G5.b0` hecho; queda `G5.b` (la DK2 sin LVGL en la imagen)
+
+**Commits** (sin push): `ab87ece6` (softfp), `ec0a48b2` (paso 2), `848ded39` (`#575`), `17dbf2d2` (paso 4), y los docs
+(`3914352c`, `4f15beca`, `898216d7`, `aa174255` y el de este traspaso).
+
+**Las placas**: la **DK2** con la imagen de `G5.b0` (`softfp`, el adaptador; LVGL todavía en la imagen), la zona de
+datos repartida (FS 1008 KB, packs 1536 KB), `packRam=512` en el ENV y en la zona el `mini` y SQLite; en `/app`,
+`MiniRun`, `SqlDemo` y las de la tanda. El **P4** sigue con los packs de SQLite y la Gui de antes de `#575` (ABI 8):
+regrabarlos en la sesión de placas de P2b.3. La **Nucleo**, sin tocar: su imagen (`softfp` y el adaptador) va a las
+pruebas finales.
+
+**Queda**, en este orden:
+- **`G5.b`**, analizar primero (como `G5.a`): la DK2 —`'PANT'` por LTDC (`stm32/port/gui_display_ltdc.c`) y su táctil
+  (el I2C 2), publicados desde la imagen, y la imagen sin LVGL (`BPVM_GUI_PACK` y `gui_pack.c`, como el P4)—. El pack de
+  la Gui para ARM ya existe y cabe en la zona; sus 383 KB de estáticos con `packRam=512` dejarían ~122 KB de arena a
+  SQLite: el reparto de la RAM se decide ahí.
+- Lo de antes: P2b.3 y su sesión de placas (la C6 con `#574`, el ADC de la DK2, el NeoPixel de la Metro, DriverSpi en
+  la C5/C6, las imágenes con `#569`–`#573` y ahora los packs de SQLite y la Gui en el P4), `#572`, las conversiones
+  estrechas y la documentación de las pantallas.
+
 ## ⏭️ Traspaso (26-sep, tarde, 2) — H6: `G5.a` hecho; queda `G5.b` (la DK2) con `G5.b0` delante
 
 **Commits** (sin push): `1a48870a` (`G5.a`) · y los docs (`5fcea785`, `ef290544`, `d439c7fa`…).

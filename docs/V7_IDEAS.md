@@ -4073,3 +4073,20 @@ pack (3184 B, 16 thunks)», la base en la flash, los `double` (20.5…) y los `l
 21, en 3650 ms; la salida cuadra con lo que inserta el programa (no había una de referencia guardada). La tanda de V7,
 otra vez 14/14, con la VM en 1 MB detrás del bloque. Queda el paso 4: LVGL como pack ARM (`build_lvgl.sh arm`) y el
 `.mdn` ARM de la Gui; se prueba en `G5.b`.
+
+**El informe del `mini`** (con `log=1` en el ENV de la DK2 —OK de Eduardo— y quitado después): «2 motor(es), 2
+cargable(s) | bloque 512 KB @0x20000000: estaticos 7744 B, arena 504 KB»; el `mini` en `0x082800B0`, «paso 4 ok (tabla,
+magic, version, log)» … «paso 10 ok (env_get v6)» —`packRam` le devuelve `512`— y «TODO OK -> 0»; SQLite con `.data`
+6360 + `.bss` 1368 en `0x20000010`, «arena 504 KB en 20001E40», «initialize OK — motor arrancado y vfs 'bp'
+registrado», «API publicada como 'SQLI' — 17 simbolos, v1»; «packs: 2 motor(es) cargado(s)». Y de propina, `#468` en
+el STM32: «'Core' cargado XIP desde pack (codigo en sitio)».
+
+**Paso 4 ✅** (`17dbf2d2`): `build_lvgl.sh arm` —la receta de la Metro y las STM32, ahora que las dos son `softfp`—:
+`lvgl.npk.ARMV8` de 660 KB (código 206 KB y datos de sólo lectura 429 KB, las fuentes; `.bss` 383 KB), cero símbolos
+sin resolver, y **el oráculo del realojado IDÉNTICO a `ld`** (1618 relocalizaciones, enlazando la misma lista en flash
+`0x08300140` y RAM `0x20002000`). El `.mdn` ARM de Gui2 (10 thunks) y `Gui.bpbuild` con `aot.targets` ARM y RISC-V. El
+pack universal de la Gui, 2,3 MB; **podado para ARM, 744 KB**: cabe en los 1056 KB que quedan en la zona de la DK2.
+
+**`G5.b0` CERRADO.** Lo que deja dicho para `G5.b`: los estáticos de LVGL (383 KB) y los de SQLite, con `packRam=512`,
+dejarían a SQLite unos 122 KB de arena; el reparto de la RAM de la DK2 se decide ahí, cuando LVGL salga de su imagen y
+libere la suya.
