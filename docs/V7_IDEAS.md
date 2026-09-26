@@ -3887,3 +3887,46 @@ cuatro líneas de §14.3 y los packs `Stdlib`, `DriverSpi` y `GuiMini`. **Lo que
 marca en su esquina y sin franjas (Eduardo); **la TF por fin en uso** —`SdCard` «los seis»; `C5SdGui` RESULT OK: 27
 ficheros escritos y releídos con la pantalla a la vez, 0 distintos, peor hueco 30 ms sola y 62 con la TF, lo mismo que
 la C5—, con lo que **`H3` queda cerrado**; y `GuiLleno`, «sitio para 256». Quedan de `H6.b` el P4 y la DK2 (`G5`).
+
+### 15. `G5` — el P4 y la DK2: su pantalla publicada como `'PANT'` desde la imagen, y LVGL fuera (26-sep, análisis)
+
+Eduardo, 26-sep: *«Yo continuaría por H6 y dejamos H5 para el final»*. De H6 queda `H6.b` en el P4 y la DK2, que es
+`G5` (§7.8): el panel de esas dos placas no se puede sacar a un pack —MIPI-DSI y LTDC son periféricos de la familia, no
+se prestan por la BIOS—, así que su driver se queda en la imagen y PUBLICA lo mismo que `DriverSpi`; LVGL sale de la
+imagen y viene del pack, como en la C5 y la C6.
+
+#### 15.1 Lo que hay, mirado hoy en el código
+
+- **La frontera ya lo prevé**: `bpvm_pant.h` dice que `'PANT'` lo publica «hoy un pack propio por placa, mañana también
+  la imagen (el P4 por MIPI-DSI y la DK2 por LTDC, `G5`)». No hay nada que diseñar en el contrato.
+- **El P4 tiene todo lo demás.** Carga packs nativos (la BIOS y el cargador de la familia ESP32; el pack de LVGL se
+  probó allí el 22-sep, con un panel nulo y al lado de su LVGL). El pack de su ISA existe y está al día
+  (`lvgl.npk.RISCV`, 747 KB, construido el 25-sep junto al de la C5 y la C6). Y su driver
+  (`esp32p4/main/gui_display_dsi.c`, 729 líneas) ya hace lo de un `'PANT'` —vuelca una zona con
+  `esp_lcd_panel_draw_bitmap`, con el giro por software, y lee el GT911—, sólo que se lo da a un LVGL de la imagen
+  (`lv_display_create`, `lv_indev`). Lo que cambia: el driver publica `init`, `size`, `flush`, `rotate` y `touch`, y
+  LVGL y `gui.c` salen de la imagen. La imagen única sigue eligiendo el panel por el ENV (`display=`).
+- **La zona de packs del P4**: el 24-sep le quedaban 8 KB (SQLite, la GUI vieja y `DriverNulo`); el pack de LVGL no
+  cabe sin un `PACK_FORMAT` y regrabar, como se hizo en la C6.
+- **La DK2 NO tiene lo demás.** El STM32 tiene packs de DATOS (los `.mod` en XIP, de H3), pero **no packs nativos**: ni
+  BIOS ni cargador de `npk`. Los tienen la ESP32 y la RP2350: `bios_*.c` y `pack_*.c`, unas 130 + 250–370 líneas por
+  familia sobre lo común de `src/`. Tampoco hay LVGL compilado como pack ARM (la receta ARM sí existe: el motor de
+  SQLite de la Metro). Su driver es `stm32/port/gui_display_ltdc.c` (170 líneas) y el táctil va por el I2C 2. O sea,
+  `G5` en la DK2 es: **los packs nativos en el STM32** (el adaptador de la familia, una vez; y abre de paso SQLite y lo
+  demás), **LVGL como pack ARM** y su `'PANT'` por LTDC.
+
+#### 15.2 El plan, por pasos que cierran algo
+
+| paso | qué | se prueba con |
+|---|---|---|
+| **G5.a** | el P4: `'PANT'` desde la imagen (el DSI y el GT911) y la imagen sin LVGL; la GUI por el pack de LVGL | la tanda con GUI en el P4 (`GuiShot`, `GuiWinJson`…), el táctil y la velocidad contra la de hoy |
+| **G5.b0** | los packs nativos en el STM32 —la BIOS y el cargador de la familia— y LVGL como pack ARM | SQLite en la Nucleo, con el `SqlDemo` de la Metro |
+| **G5.b** | la DK2: `'PANT'` por LTDC y su táctil, y la imagen sin LVGL | la tanda con GUI en la DK2 |
+
+#### 15.3 Las preguntas (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | ¿el orden? | el P4 primero (lo tiene todo) y la DK2 después |
+| 2 | la DK2 pide antes los packs nativos en el STM32: ¿se hacen, o la DK2 se queda con LVGL en la imagen? | hacerlos: «la base es finita, lo demás en packs» vale también para el STM32, y el adaptador de la familia se hace una vez |
+| 3 | el `PACK_FORMAT` del P4 y regrabar SQLite y la GUI | cuando `G5.a` esté listo, con su OK en ese momento |
