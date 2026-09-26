@@ -1864,6 +1864,79 @@ fundir, subir, ejecutar el nativo—.
 (ARM), el P4 (RISC-V con FPU) y la C5 (sin FPU), con la imagen que manda `nativos`: las tres recetas. Y el control: el
 `.mod` SIN fundir, subido como si fuera AOT, tiene que salir SIN NATIVO.
 
+### H5.P2b — el AOT llama a CUALQUIER builtin por el despachador de la VM (26-sep, análisis)
+
+> De la tabla de H1 (§3, P2b): *hoy traduce los builtins globales POR NOMBRE con una lista a mano y rechaza
+> `Math.sin(x)` desde una `native`*. Eduardo, 24-sep: es del AOT, H5.
+
+**Lo que hay hoy, medido.** `AotCEmitter.emitBuiltinCall` conoce diez nombres (`now`, `charAt`, `charCodeAt`,
+`substring`, `intToString`, `len`, `newInt/Byte/Long/DoubleArray`) y los traduce a helpers TIPADOS de la tabla del
+`.mdn` (`string_char_at`…). Cualquier otra intrínseca —`Math.sin`, `sqrt`, `Str.*`…— es `UnsupportedAotException`: la
+función entera corre interpretada. Y cada helper tipado es una **COPIA** de su builtin, y las copias se van: al
+compararlas una a una para este análisis salieron `#569` (`charAt` fuera de rango daba `""` con el AOT y un
+`RuntimeError` interpretado; `substring(null…)`, `null` y no `""`; sin memoria, un `null` callado) y, de paso, `#570`
+(un tamaño negativo MATABA el programa en la VM-C interpretada, donde miVM lanza un error atrapable). Ninguna red
+comparaba la lista a mano con el intérprete: desde el 26-sep, `make test-aotstr`.
+
+**La idea**: el compilador ya sabe el id —el cuerpo de una intrínseca es `inline CALL_BUILTIN n`, y viaja en la
+interfaz del `.mod`—, así que el AOT puede emitir para cualquiera una llamada al MISMO despachador que usa el
+intérprete (`bpvm_call_builtin(vm, tc, n)`). El nativo ejecuta entonces el código del intérprete, no una copia: la
+paridad sale por construcción.
+
+**El mecanismo** (leído en el código el 26-sep):
+
+- Un helper nuevo AL FINAL de la tabla: `int64_t call_builtin(vm, id, tipos, args, tipo_ret)`. Los argumentos viajan
+  como palabras de 64 bits con sus BITS (`tipos`: `i` i32, `l` i64, `f` float, `d` double, `r` referencia): así un
+  `double` no cruza la frontera por valor y no le afecta el `-mfloat-abi` (el `BPVM_AOT_FP_ABI` de la tabla).
+- El helper hace lo que `bridge_run_bp_frame` para `call_bp`: empuja los argumentos en la pila BP del hilo sobre el
+  `sp` vivo del intérprete de fuera (`cc->sp_p`; las referencias, ensanchadas a 8 B con `bpref_regen`), llama al
+  despachador, saca el retorno según `tipo_ret` y deja `tc->sp/pc/cs` como estaban. El GC ve los argumentos (están bajo
+  `tc->sp`) y las referencias de C del nativo (el escaneo conservador de `#302`).
+- `MDN_ABI_VERSION` 8 → 9 (la tabla crece): se regeneran todos los `.mdn` —los de los packs, SQLite incluido— y las
+  imágenes, y se regraban las nueve placas.
+
+**Los tres problemas de verdad:**
+
+1. **Una excepción dentro del builtin.** `builtin_throw` hace él mismo `bpvm_eh_unwind`: desde un nativo deshacería
+   marcos BP con los marcos de C del nativo todavía vivos. Solución: una marca en el hilo («dentro de una native»)
+   con la que `builtin_throw` NO deshace: deja la excepción pendiente —como `throw_ref` (`#213`)— y el helper hace
+   `longjmp` al límite de `#186`, que la propaga desde el lado BP como hoy. Es UN sitio: en `builtins.c` es el único
+   `bpvm_eh_unwind` (los ~200 `builtin_throw` pasan por él). Los `return BPVM_ERR_*` que quedan tras `#570` son errores internos
+   (aridad de un evento, un mutex corrupto, no caben más hilos): desde el nativo, `throw_runtime` con su nombre.
+2. **Un builtin que cede o bloquea el hilo.** Un nativo no se puede suspender. Por la primitiva (`tc->status =` y el
+   mutex): `sleep`, `sleepSec`, `yield`, `__threadJoin` (`Thread.join`) y `__mutexLock` (`Mutex.lock`). Se rechazan AL COMPILAR —la función corre interpretada,
+   con su aviso, como cualquier otra cosa no soportada— y, de respaldo, en el helper ANTES de despachar (una tabla en
+   C: sin efectos a medias).
+3. **Un builtin que llama de vuelta a BP**: el lazo de la GUI (`__guiRun`, `__guiRunOnce`, `__guiInvokeByName/BySlot`).
+   El anidamiento funcionaría como en `call_bp`, pero `__guiRun` no vuelve nunca, y un nativo que no vuelve no se puede
+   parar (§«Los cabos sueltos del AOT»). En la v1, rechazados como los del punto 2.
+
+**Lo que NO cambia**: las intrínsecas cuyo cuerpo no es `CALL_BUILTIN n` sino un opcode (`newByteArray` →
+`NEWARRAY_I8`…) siguen con su traducción propia; `print` (`#558`) y `len` (por el tipo), igual.
+
+**Dos decisiones de Eduardo:**
+
+- **(a) Dónde se apunta que un builtin cede el hilo**: una lista en el emisor más la tabla de C, con una prueba que las
+  compare (como `check-builtins`); o una marca en `Core.bp`, donde se declara el builtin (una sola fuente, pero pide
+  una sintaxis); o sólo la tabla de C (y el error sale al EJECUTAR, cuando interpretado habría funcionado). Propongo lo
+  primero.
+- **(b) La lista a mano**: tirarla —todo por el despachador; paridad por construcción, a cambio de pasar cada llamada
+  por la pila BP y el `switch`— o dejar los helpers tipados de las más calientes, ahora que `test-aotstr` los vigila.
+  Propongo **medir primero** (`charAt` en un bucle nativo por las dos rutas; es también el «cronometrar nativo contra
+  interpretado» que H5 tiene pendiente) y tirarla salvo donde el coste se vea. Los huecos de la tabla se quedan: la
+  ABI no quita, sólo añade.
+
+**Cómo se prueba**: `make test-xmodnat` y un ejemplo con `Math.sin` en una `native` (en el PC y en placa); `test-aotstr`
+(la lista entera, ahora por el despachador, AOT == interpretado); una excepción de un builtin dentro de un nativo,
+atrapada en BP; un `sleep` en un nativo (no se traduce, y la función corre interpretada); y la tanda con `aot` en las
+placas.
+
+**Por pasos que cierran algo**: **P2b.1** el helper, la marca de `builtin_throw` y la tabla de los que ceden, con sus
+pruebas de C; **P2b.2** el emisor (el camino genérico para toda intrínseca `CALL_BUILTIN n`, local y de otro módulo;
+la lista de los que ceden; lo que se decida de la lista a mano); **P2b.3** la cascada de la ABI 9 (los `.mdn`, los
+packs, las imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4
+y la DK2).
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
