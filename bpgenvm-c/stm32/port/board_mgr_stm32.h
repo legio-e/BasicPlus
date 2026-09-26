@@ -12,6 +12,8 @@
 
 #include "json_min.h"
 #include "bpvm_boot.h"
+#include "bpvm_part.h"   /* V7/H6 G5.b0: bpvm_part_t (la partición de packs) */
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +36,17 @@ const bpvm_boot_status_t* board_boot_status(void);
 int  board_mgr_stm32_env_bool(const char* key, int def);
 long board_mgr_stm32_env_long(const char* key, long def);
 int  board_mgr_stm32_env_get(const char* key, char* buf, size_t cap);   /* V7/H6.c G4.a1 */
+
+/* V7/H6 G5.b0 — el ENV leído YA, antes que el climb: el reparto de la memoria de
+ * la VM (el bloque de los packs nativos, `packRam=` / `SQLite=`) se decide al abrir
+ * el arranque, antes que las particiones — como la ESP32 (board_mgr_esp32_env_
+ * temprano). Idempotente: el climb lo vuelve a leer. */
+void board_mgr_stm32_env_temprano(void);
+
+/* V7/H6 G5.b0 — la partición de packs del layout del BOOT (offset relativo a
+ * FLASH_BASE), o NULL si el layout no validó o no hay zona. La recorre el cargador
+ * de los motores nativos (pack_stm32.c): una sola verdad con el FS y el wire. */
+const bpvm_part_t* board_mgr_stm32_packs(void);
 
 /* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x/PACK_x). `scratch`
  * (>= 3 sectores + 512 = 24.5 KB; s_put_buf del repl vale) lo presta el llamador →

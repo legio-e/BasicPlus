@@ -21,7 +21,9 @@ extern "C" {
  * último quadword con 0xFF si `len` no es múltiplo exacto. 0 OK, -1 error. */
 int stm32_flash_write(uint32_t addr, const uint8_t* data, uint32_t len);
 
-/* Borra `npages` páginas de 8 KB desde `addr` (alineado a página). 0 OK, -1 error. */
+/* Borra `npages` páginas de 8 KB desde `addr` (alineado a página). Un trozo que
+ * cruce del banco 1 al 2 se parte y cada tramo va a su banco (V7/H6 G5.b0). Fuera
+ * de la flash, -1 sin borrar ese tramo. 0 OK, -1 error. */
 int stm32_flash_erase(uint32_t addr, uint32_t npages);
 
 #ifdef __cplusplus

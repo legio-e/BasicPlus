@@ -38,6 +38,9 @@
 #include "bpvm_repl.h"       /* V6/U3: los verbos COMUNES del REPL (grupo 1: meta) */
 #include "bpvm_mem.h"        /* V6/U6.11: el planificador de memoria COMÚN (una regla, cinco placas) */
 #include "bpvm_mods.h"       /* V6/U4: el bucle y la regla de la stdlib embebida, comunes */    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
+#include "bpvm_bios.h"       /* V7/H6 G5.b0: la BIOS de los packs nativos, comprobada al arrancar */
+#include "bpvm_sqlmem.h"     /* V7/H6 G5.b0: la regla de `SQLite=` para el bloque de los motores */
+#include "pack_stm32.h"      /* V7/H6 G5.b0: el cargador de motores y su bloque de RAM */
 
 #include "main.h"
 #include "board.h"              /* placa: BOARD_WIRE_UART, BOARD_NAME, BOARD_SRAM_BYTES, BOARD_LED_* */
@@ -87,7 +90,16 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
 /* V6/U6.12 — el tamaño lo pone CADA PLACA en board.h (BOARD_VM_BYTES): la Nucleo
  * sigue en 512 KB y la Discovery, con 3008 KB de RAM, pasa a 1536. «Quedarnos con
  * lo bueno y no unificar a lo peor» (Eduardo). */
-static uint8_t s_vm_mem[BOARD_VM_BYTES];      /* RAM que gestiona la VM */
+/* V7/H6 G5.b0 (26-sep) — EN SU SITIO FIJO: la sección `.bss.bp_vm` la pone el `.ld`
+ * de cada placa LO PRIMERO de la RAM (0x20000000). Del principio sale el bloque de
+ * los packs nativos (packRam= del ENV), y los motores grabados llevan esa dirección
+ * en su SELLO: en la `.bss` se movía con cada enlace. El arranque lo comprueba
+ * contra los símbolos del `.ld` (ver stm32_mem_planificar). */
+static uint8_t s_vm_mem[BOARD_VM_BYTES] __attribute__((section(".bss.bp_vm"), aligned(8)));
+/* Donde empieza la VM de verdad: detrás del bloque de los motores, si lo hay. */
+static uint8_t* s_vm_base = s_vm_mem;
+extern char __bp_vm_start[];   /* el .ld: la sección de la VM */
+extern char __bp_ram_start[];  /* el .ld: ORIGIN(RAM) */
 /* V6/U6.11 — lo que el planificador COMÚN (bpvm_mem) decidió sobre ese array.
  * Aquí no hay nada que medir en marcha: la región es el array entero, EXCLUSIVA
  * de la VM y SIN margen, porque el margen de esta familia lo pone el ENLAZADOR
@@ -406,10 +418,31 @@ static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_
  * para PROBAR el programa con distintas opciones; una vez probado se fija el
  * valor por defecto en el fuente, y la mision del autorun es solo que arranque
  * al encender el micro. O sea que el defecto ES la configuracion de despliegue. */
+/* V7/H6 G5.b0 — LOS MOTORES NATIVOS SE CARGAN AQUÍ, EN EL PRIMER Run (como la Pico:
+ * pico/repl_v1.c). Un motor publica su API al arrancar (`bp_pack_init` -> `publica`)
+ * y el programa la busca por su marca, así que tiene que estar cargado ANTES. En el
+ * Run y no en el arranque (Eduardo, 7-ago): el salto es lo único que puede colgar,
+ * y un cuelgue en un Run se arregla desenchufando una vez. Una vez, y sólo si salió
+ * bien: volver a saltar publicaría la misma marca dos veces; si no había motor, el
+ * siguiente Run lo reintenta — justo lo que se quiere tras grabarlo. */
+static void packs_cargar_una_vez(void) {
+    static int s_ok = 0;
+    if (s_ok) return;
+    int32_t r = pack_stm32_cargar();
+    if (r >= 0) {
+        s_ok = 1;
+        log_printf("packs: %ld motor(es) cargado(s)", (long) r);
+    } else {
+        log_printf("packs: sin motor utilizable (peldano %ld) — se sigue sin el", (long) -r);
+    }
+}
+
 static void run_module_path(const char* path, long id, const char* arg) {
     /* H19-F1 — fija el base-dir/main-module del proyecto si el módulo vive en
      * /app/<proj>/ (el IDE manda la ruta cualificada). Plano → sin base-dir. */
     bpvm_fs_set_basedir_from_module(path);
+    /* V7/H6 G5.b0 — antes de nada, los motores nativos (ver packs_cargar_una_vez). */
+    packs_cargar_una_vez();
     char main_path[80]; uint32_t size;
     if (stm32_fs_resolve(path, main_path, sizeof(main_path), &size) != 0) {
         if (id >= 0) wire_v1_send_error(id, "NOT_FOUND", "no existe");
@@ -436,7 +469,7 @@ static void run_module_path(const char* path, long id, const char* arg) {
         BOARD_LED_ERR_ON(); emit_exited(session, "INTERNAL_ERROR", -1, 0); return;
     }
     size_t stack_region = bpvm_stack_region_bytes(s_vm_bytes);
-    bpvm_t* vm = bpvm_init(s_vm_mem, s_vm_bytes, s_vm_bytes - stack_region);
+    bpvm_t* vm = bpvm_init(s_vm_base, s_vm_bytes, s_vm_bytes - stack_region);
     /* V6/#412 — el argumento de ejecucion, antes de arrancar: lo recoge el
      * builtin __runArg que `__startup` llama justo antes de entrar en Main. */
     if (vm) bpvm_set_run_arg(vm, arg);
@@ -791,20 +824,76 @@ static int stm32_mem_regiones(bpvm_mem_region_t* out, int max) {
     return 1;
 }
 
+/* V7/H6 G5.b0 — Y EL BLOQUE DE LOS MOTORES NATIVOS, DELANTE. Es la reserva con
+ * nombre del planificador común (la misma con la que la Metro aparta la BD), del
+ * tamaño que diga el ENV: `packRam=<KB>` (la clave genérica, la de la ESP32) o, si
+ * no está, `SQLite=<MB>` con su regla (bpvm_sqlmem: 2 MB de mínimo). Si no deja a
+ * la VM su suelo, el plan no la aparta y aquí se dice: la VM arranca igual (mejor
+ * sin motores que sin VM). Como el array está LO PRIMERO de la RAM, el bloque
+ * empieza siempre en 0x20000000; y si el `.ld` no lo hubiera puesto ahí, no hay
+ * bloque: un motor sellado contra una dirección que se mueve con cada imagen
+ * dejaría de valer en silencio al grabar la siguiente. */
 static void stm32_mem_planificar(void) {
     bpvm_mem_region_t reg[1];
     int nreg = stm32_mem_regiones(reg, 1);
+
+    long pack_kb = board_mgr_stm32_env_long("packRam", 0);
+    long sql_mb  = board_mgr_stm32_env_long("SQLite", 0);
+    bpvm_sqlite_res_t sqlres = BPVM_SQLITE_OFF;
+    size_t pide = 0;
+    const char* nombre = NULL;
+    if (pack_kb > 0) {
+        /* En páginas de 4 KB. Un número que no cabe en la región no se multiplica —desbordaría el
+         * size_t de 32 bits y pediría un bloque de tamaño basura—: se pide la región entera y el plan
+         * dice que no cabe. */
+        pide   = (pack_kb >= (long) (reg[0].bytes / 1024u)) ? reg[0].bytes
+               : (((size_t) pack_kb * 1024u + 4095u) & ~(size_t) 4095u);
+        nombre = "packs";
+    } else {
+        sqlres = bpvm_sqlite_region(sql_mb, reg[0].bytes, &pide);
+        if (sqlres == BPVM_SQLITE_OK) nombre = "SQLite"; else pide = 0;
+    }
+    const int en_su_sitio = ((uintptr_t) s_vm_mem == (uintptr_t) __bp_vm_start)
+                         && ((uintptr_t) __bp_vm_start == (uintptr_t) __bp_ram_start);
+    if (pide && !en_su_sitio) {
+        log_printf("packs: SIN bloque de RAM — la VM no esta lo primero de la RAM (s_vm_mem 0x%08lX, "
+                   ".bp_vm 0x%08lX, RAM 0x%08lX): el .ld no la pone en su sitio y el sello de un motor "
+                   "dejaria de valer con la siguiente imagen",
+                   (unsigned long) (uintptr_t) s_vm_mem, (unsigned long) (uintptr_t) __bp_vm_start,
+                   (unsigned long) (uintptr_t) __bp_ram_start);
+        pide = 0; nombre = NULL;
+    }
+
     bpvm_mem_cfg_t cfg;
     cfg.objetivo       = 0;                  /* todo lo que el plan deje: el array entero */
     cfg.vm_min         = VM_MEM_MIN;
-    cfg.reserva_bytes  = 0;                  /* sin SQLite en SRAM: no hay reserva con nombre */
-    cfg.reserva_nombre = NULL;
+    cfg.reserva_bytes  = pide;
+    cfg.reserva_nombre = nombre;
     bpvm_mem_plan_t plan;
     bpvm_mem_plan(reg, nreg, &cfg, &plan);
     char linea[160];
     bpvm_mem_plan_str(&plan, reg, &cfg, linea, sizeof linea);
     log_printf("%s", linea);
     s_vm_bytes = (plan.res == BPVM_MEM_OK) ? plan.bytes : 0;
+
+    /* TOMAR: el bloque delante, la VM detrás. */
+    size_t res = (plan.res == BPVM_MEM_OK) ? plan.reserva_bytes : 0;
+    s_vm_base       = s_vm_mem + res;
+    s_pack_ram_base = res ? s_vm_mem : 0;
+    s_pack_ram_size = (uint32_t) res;
+    if (res)
+        log_printf("packs: bloque de RAM %u KB @0x%08lX (packRam=%ld KB, SQLite=%ld MB), delante de "
+                   "la VM y en su sitio fijo — los estaticos de cada motor y la arena se reparten al cargar",
+                   (unsigned) (res / 1024u), (unsigned long) (uintptr_t) s_pack_ram_base, pack_kb, sql_mb);
+    else if (pide)
+        log_printf("packs: SIN bloque de RAM — %s=%ld %s no cabe dejando a la VM su suelo (%u KB de %u)",
+                   pack_kb > 0 ? "packRam" : "SQLite", pack_kb > 0 ? pack_kb : sql_mb,
+                   pack_kb > 0 ? "KB" : "MB", (unsigned) (VM_MEM_MIN / 1024u),
+                   (unsigned) (reg[0].bytes / 1024u));
+    else if (sqlres != BPVM_SQLITE_OFF)
+        log_printf("packs: SIN bloque de RAM — %s (SQLite=%ld)", bpvm_sqlite_res_str(sqlres), sql_mb);
+    else if (en_su_sitio)
+        log_printf("packs: sin bloque de RAM (ni packRam= ni SQLite= en el ENV): un pack nativo no podria cargar");
 }
 
 void stm32_repl_run(void) {
@@ -819,7 +908,32 @@ void stm32_repl_run(void) {
     log_printf(bpvm_log_origen_ram()
                ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
                : "log: arranque en frio (cargado de flash)");
+    board_mgr_stm32_env_temprano(); /* V7/H6 G5.b0 — el ENV antes que el plan: packRam= / SQLite= */
     stm32_mem_planificar();         /* V6/U6.11 — la línea `vm:` de las cinco placas, al abrir el boot */
+    /* V7/H6 G5.b0 — la BIOS de los packs nativos, VERIFICADA en cada arranque aunque
+     * no haya ninguno grabado (un hueco que sólo se descubre el día que alguien graba
+     * un motor cuesta el doble), y su ANCLA: la búsqueda tiene que dar EXACTAMENTE la
+     * que este firmware conoce; si da otra, la marca está dos veces y un motor leería
+     * punteros de basura. Como la Pico (pico/main.c). */
+    {
+        const bpvm_bios_t* bios = bios_stm32_get();   /* él ya loguea qué falta */
+        if (bios) log_printf("bios: lista (%d ranuras, v%u)",
+                             bpvm_bios_slot_count(), (unsigned) bios->version);
+        const bpvm_ancla_t* real    = bios_stm32_ancla();
+        uint32_t            barrido = (uint32_t) ((uintptr_t) __bp_flash_end - FLASH_BASE);
+        const bpvm_ancla_t* hallada = bpvm_ancla_buscar((const void*) FLASH_BASE, barrido);
+        if (hallada == real)
+            log_printf("ancla: en 0x%08lX (la busqueda la encuentra, y es LA misma)",
+                       (unsigned long) (uintptr_t) real);
+        else if (hallada == 0)
+            log_printf("ancla: NO SE ENCUENTRA barriendo %u KB desde 0x%08lX (esta en 0x%08lX) "
+                       "-> ningun pack podra hallar la BIOS", (unsigned) (barrido / 1024u),
+                       (unsigned long) FLASH_BASE, (unsigned long) (uintptr_t) real);
+        else
+            log_printf("ancla: DUPLICADA — la busqueda da 0x%08lX y la buena es 0x%08lX "
+                       "-> un pack leeria punteros de basura",
+                       (unsigned long) (uintptr_t) hallada, (unsigned long) (uintptr_t) real);
+    }
     /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
      * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
      * `_write` retargeteado, el stderr del núcleo se PERDÍA. Esto devuelve al

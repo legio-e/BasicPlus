@@ -20,6 +20,7 @@
 #include "stm32_fs.h"            /* fs_init_at */
 #include "stm32_flash.h"         /* stm32_flash_write / erase (compartidas con el FS) */
 #include "flash_layout_stm32.h"  /* BP_ENV_A/B_OFFSET, BP_PART_BASE, BP_USABLE_FLASH, símbolos .ld */
+#include "pack_stm32.h"          /* V7/H6 G5.b0: el bloque de RAM de los motores (PACK_BURN_BEGIN) */
 
 #include "main.h"                /* FLASH_BASE */
 #include <stdint.h>
@@ -107,6 +108,11 @@ int board_mgr_stm32_env_get(const char* key, char* buf, size_t cap) {
     return bpvm_env_get_exacto(&env, key, buf, cap);
 }
 
+/* V7/H6 G5.b0 — ver el .h: el ENV antes que el climb, para repartir la memoria. */
+void board_mgr_stm32_env_temprano(void) {
+    env_read_slots(s_env_a, s_env_b);
+}
+
 static bpvm_boot_step_t layer_partitions(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';
@@ -168,6 +174,13 @@ void board_mgr_stm32_boot(void) {
  * CRC y lo REPONÍA cada arranque con «no se pudo leer»; con un pack de MAGIC
  * mayor, /lib no se instalaba nunca. Las otras tres familias sincronizan antes
  * de montar; ahora ésta también. */
+/* V7/H6 G5.b0 — la partición de packs del layout del boot, para el cargador. */
+const bpvm_part_t* board_mgr_stm32_packs(void) {
+    if (!s_layout_ok) return NULL;
+    const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
+    return (pp && pp->size > 0) ? pp : NULL;
+}
+
 void board_mgr_stm32_montar_packs(void) {
     if (s_layout_ok) {
         const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
@@ -254,6 +267,13 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
             bm.packs_flash = &s_packs_fl;
         }
     }
+    /* V7/H6 G5.b0 — la RAM de trabajo de un motor nativo: el bloque que el arranque
+     * apartó delante de la VM (pack_stm32.h). Sale a PACK_BURN_BEGIN, que le dice al
+     * IDE contra qué RAM sellar el motor que va a grabar (el tope por encima de los
+     * vivos, bpvm_npack_ram_tope). Sin bloque, 0: el IDE lo dice en vez de grabar un
+     * motor que no podría arrancar. */
+    bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
+    bm.pack_ram_size = s_pack_ram_size;
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);

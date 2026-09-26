@@ -63,6 +63,7 @@ MEMORY
 __bp_flash_end  = ORIGIN(FLASH) + LENGTH(FLASH);   /* 0x0817E000 (fin del codigo; el log ocupa la pagina siguiente) */
 __bp_log_start  = ORIGIN(BP_LOG);                  /* 0x0817E000 (sector del log persistente) */
 __bp_part_start = ORIGIN(BP_DATA);                 /* 0x08184000 */
+__bp_ram_start  = ORIGIN(RAM);                     /* 0x20000000 — V7/H6 G5.b0: donde tiene que empezar la VM (.bp_vm) */
 
 /* Sections */
 SECTIONS
@@ -146,6 +147,34 @@ SECTIONS
     PROVIDE_HIDDEN (__fini_array_end = .);
     . = ALIGN(4);
   } >FLASH
+
+  /* V7/H6 G5.b0 (26-sep) — LA MEMORIA DE LA VM, LO PRIMERO DE LA RAM.
+   *
+   * `s_vm_mem` (stm32_repl.c, seccion `.bss.bp_vm`) va aqui y no en la `.bss` para
+   * que su direccion sea SIEMPRE ORIGIN(RAM), cambie lo que cambie el resto de la
+   * imagen: del principio de ese array sale el bloque de RAM de los packs nativos
+   * (`packRam=` del ENV), y los motores grabados llevan esa direccion en su SELLO.
+   * En la `.bss` se movia con cada enlace, y cada imagen nueva habria obligado a
+   * regrabar los packs.
+   *
+   * NOLOAD y fuera de _sbss.._ebss: el arranque no la pone a cero, y no hace falta
+   * (bpvm_init no lo supone, y cada RUN ya reutiliza el mismo bufer). Tiene que ir
+   * ANTES que `.data`: el enlazador reparte la region en el orden del guion, y un
+   * `*(.bss.bp_vm)` aqui se queda la seccion antes que el `*(.bss*)` de la `.bss`.
+   * El arranque comprueba `__bp_vm_start == __bp_ram_start` y, si no, no hay
+   * bloque para los motores (y lo dice).
+   *
+   * ATENCION: este .ld lo genera CubeIDE (ver la nota de `.noinit`): si se regenera,
+   * hay que volver a poner esto — y no se callaria: sin `__bp_vm_start` no enlaza.
+   */
+  .bp_vm (NOLOAD) :
+  {
+    . = ALIGN(8);
+    __bp_vm_start = .;
+    *(.bss.bp_vm)
+    . = ALIGN(8);
+    __bp_vm_end = .;
+  } >RAM
 
   /* Used by the startup to initialize data */
   _sidata = LOADADDR(.data);

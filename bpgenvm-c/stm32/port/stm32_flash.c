@@ -37,9 +37,16 @@ int stm32_flash_write(uint32_t addr, const uint8_t* data, uint32_t len) {
     return (st == HAL_OK) ? 0 : -1;
 }
 
-int stm32_flash_erase(uint32_t addr, uint32_t npages) {
-    uint32_t bank, page;
-    addr_to_bank_page(addr, &bank, &page);
+/* Borra `npages` páginas seguidas desde `addr`, PARTIENDO POR BANCO.
+ *
+ * V7/H6 G5.b0 (26-sep) — hasta hoy se sacaba el banco de la PRIMERA página y se
+ * pedían N seguidas en ese banco. Si el trozo cruzaba del banco 1 al 2 (en la DK2
+ * la frontera es 0x08200000, y la zona de datos empieza en el banco 1), funcionaba
+ * DE CHIRIPA: `FLASH_PageErase` del HAL escribe `Page << PNB_Pos` sin recortarlo,
+ * y la página 256 desborda el campo PNB (8 bits) justo sobre el bit BKER, que es el
+ * que elige el banco. Ahora cada tramo va a su banco con su número de página, por
+ * contrato y no por la posición de un bit. */
+static int erase_en_banco(uint32_t bank, uint32_t page, uint32_t npages) {
     FLASH_EraseInitTypeDef er = {0};
     er.TypeErase = FLASH_TYPEERASE_PAGES;
     er.Banks     = bank;
@@ -53,4 +60,23 @@ int stm32_flash_erase(uint32_t addr, uint32_t npages) {
     HAL_ICACHE_Invalidate();
     HAL_ICACHE_Enable();
     return (st == HAL_OK) ? 0 : -1;
+}
+
+int stm32_flash_erase(uint32_t addr, uint32_t npages) {
+    /* Páginas de un banco: en doble banco, las de la mitad de la flash; en banco
+     * único (lo que `addr_to_bank_page` trata como banco 1), las de toda. */
+    const uint32_t por_banco = (FLASH->OPTR & FLASH_OPTR_DUALBANK)
+                             ? (uint32_t) FLASH_PAGE_NB
+                             : (uint32_t) (FLASH_SIZE / FLASH_PAGE_SIZE);
+    while (npages > 0) {
+        uint32_t bank, page;
+        addr_to_bank_page(addr, &bank, &page);
+        if (page >= por_banco) return -1;          /* fuera de la flash: no se borra nada */
+        uint32_t n = por_banco - page;             /* lo que queda en ESTE banco */
+        if (n > npages) n = npages;
+        if (erase_en_banco(bank, page, n) != 0) return -1;
+        addr   += n * FLASH_PAGE_SIZE;
+        npages -= n;
+    }
+    return 0;
 }
