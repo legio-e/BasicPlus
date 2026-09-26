@@ -469,6 +469,12 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
     { char _em[128]; snprintf(_em, sizeof _em, __VA_ARGS__); \
       if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, _em)) break; \
       exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done; }
+/* V7/H5 P2b — lo mismo con un texto YA HECHO (el de una primitiva compartida, bpvm_prims.h). No
+ * BPVM_RT_THROW("%s", em): su _em[128] y el búfer del case estarían vivos a la vez, y el marco de TODO el
+ * intérprete lo fija el case más gordo — +88 B en la Pico, medido con -fstack-usage (248 → 336). */
+#define BPVM_RT_THROW_TEXTO(texto) \
+    { if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, (texto))) break; \
+      exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done; }
 
 /* GAP-4 — formateo canónico de double/float para print. Punto fijo estilo
  * Str.doubleToString (entero-based: escala por 1e6 a un int64, redondea, separa
@@ -1420,7 +1426,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 bpref_t h; char em[80];
                 if (bpvm_prim_nuevo_array(vm, size, 8u, BPVM_TYPE_ARRAY_I64, "NEWARRAY_I64: tamaño negativo (", ")",
                                           &h, em, sizeof em) != 0)
-                    BPVM_RT_THROW("%s", em);
+                    BPVM_RT_THROW_TEXTO(em);
                 bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
                 mem = vm->memory;
                 break;
@@ -1535,7 +1541,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 bpref_t h; char em[80];
                 if (bpvm_prim_nuevo_array(vm, size, 4u, BPVM_TYPE_ARRAY_I32, "NEWARRAY: tamaño negativo (", ")",
                                           &h, em, sizeof em) != 0)
-                    BPVM_RT_THROW("%s", em);
+                    BPVM_RT_THROW_TEXTO(em);
                 bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
                 mem = vm->memory;
                 break;
@@ -1548,7 +1554,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 bpref_t h; char em[80];
                 if (bpvm_prim_nuevo_array(vm, size, 1u, BPVM_TYPE_ARRAY_I8, "NEWARRAY_I8: tamaño negativo (", ")",
                                           &h, em, sizeof em) != 0)
-                    BPVM_RT_THROW("%s", em);
+                    BPVM_RT_THROW_TEXTO(em);
                 bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
                 mem = vm->memory;
                 break;
@@ -1561,7 +1567,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 bpref_t h; char em[80];
                 if (bpvm_prim_nuevo_array(vm, size, 2u, BPVM_TYPE_ARRAY_I16, "NEWARRAY_I16: tamaño negativo (", ")",
                                           &h, em, sizeof em) != 0)
-                    BPVM_RT_THROW("%s", em);
+                    BPVM_RT_THROW_TEXTO(em);
                 bpref_store(vm, sp, h); sp += BPVM_REF_SIZE;
                 mem = vm->memory;
                 break;
