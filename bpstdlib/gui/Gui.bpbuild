@@ -7,6 +7,8 @@
     "(bpstdlib/gui/drivers/, publica 'PANT'), y hay que grabar los dos. Como el de SQLite:",
     "",
     "   bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool]   (RV32IMC: C3/C6/C5)",
+    "   bash bpstdlib/gui/nativo/src/build_lvgl.sh p4                  (RISCV: el P4)",
+    "   bash bpstdlib/gui/nativo/src/build_lvgl.sh arm                 (ARMV8: la Metro y las STM32; V7/H6 G5.b0)",
     "   cp bpstdlib/gui/nativo/lvgl.npk.* bpstdlib/gui/nativo/Gui2.mdn.* bpstdlib/gui/out/",
     "   cp bpstdlib/{Gui,Json,Collections,Str,Core}.mod bpstdlib/gui/out/     <- LOS CANONICOS",
     "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/Gui.bpbuild --backend=mivm",
@@ -29,5 +31,5 @@
   "out":          "pack",
   "pack":         { "name": "Gui", "version": "9.2.2", "provides": "LVGL",
                     "notas": "LVGL 9.2.2 + Gui.mod; la pantalla la pone el pack de su driver ('PANT')" },
-  "aot":          { "enabled": true, "targets": ["riscv"] }
+  "aot":          { "enabled": true, "targets": ["arm", "riscv"] }
 }

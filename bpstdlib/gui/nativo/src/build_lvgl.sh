@@ -34,7 +34,8 @@
 #   · gui_pack_publics.c (GENERADO de bpvm_gui.h) es lo que el pack publica bajo 'LVGL'.
 #   · el pool de LVGL (TLSF) es .bss del pack: la perilla es el segundo parámetro.
 #
-# Salida al lado (nativo/lvgl.npk.<SUFIJO>, NO versionada: son ~750 KB), y la
+# Salida al lado (nativo/lvgl.npk.<SUFIJO>; VERSIONADA desde V7/H6.a, como los de SQLite: hacen falta
+# para montar el pack y no todo el mundo tiene los toolchains cruzados — aquí decía «NO versionada»), y la
 # lista de enlace en lvgl_<sufijo>.link para el oráculo, como manda la casa.
 set -e
 QUE="${1:-imc}"
