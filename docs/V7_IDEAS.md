@@ -1836,6 +1836,87 @@ símbolo `const` fijo. El `INFO` publica `micro` y `paquete`; `Machine.package()
 | **P3** | breadcrumb en RP2350 y ESP32 (`#487`); NeoPixel en el C6; el botón BOOT del C6 | `#487`, NeoPixel, BOOT |
 | **P4** | samples (`Caps.bp` en el corpus con el host; `PinMap` de placa en la tanda), manual/referencia, cascada y tanda en las placas que haya | la fila H4 |
 
+### 5. Lo que queda de H4 (26-sep, análisis): el NeoPixel de la familia ESP32, los pines del sistema y el ADC del STM32
+
+De la fila de H4 quedan dos backends que sólo existen en una o dos familias —el NeoPixel sólo lo registra la Pico
+(`pico/main.c`, PIO) y el ADC, la Pico y la familia ESP32— y, al mirarlos, salió un tercero que no estaba en la lista.
+
+#### 5.1 El NeoPixel de la familia ESP32
+
+- **La placa donde se prueba: la S3.** La pregunta 8 lo ponía en la C6 (el esquemático pone un WS2812B en el GPIO8),
+  pero Eduardo, mirando las placas el 26-sep: en la C3 y en la C6 no se ve ningún LED RGB; la S3 lleva uno. En la
+  DevKitC-1 va al GPIO48 (revisión 1.0) o al 38 (1.1), y la tabla calculada de `#470` acepta los dos.
+- **El contrato, el de la Pico sin tocar** (`bpvm_neopixel.h`): `init(pin)` → 1/0; `show(pin, grb, n)` BLOQUEANTE;
+  palabras GRB, 24 bits desde el más alto; hasta 2048 LEDs por trama (la zona de rascar, `#536`).
+- **Cómo**: el driver RMT del NÚCLEO del IDF (`esp_driver_rmt`) y no el componente `led_strip` que decía la pregunta 8:
+  ése es un componente gestionado que se DESCARGA del registro, o sea una dependencia de red para compilar la imagen.
+  Con un *simple encoder* (`rmt_new_simple_encoder`, en el IDF v6) que traduce las palabras GRB a símbolos RMT al
+  vuelo: sin copia y sin búfer. 10 MHz de resolución, los tiempos de la hoja del WS2812B (T0H 0,4 µs y T0L 0,85; T1H
+  0,8 y T1L 0,45; ±150 ns) y, al final de la trama, el *reset* como un símbolo bajo de 300 µs (el WS2812B de hoy pide
+  ≥ 280; la Pico espera 60, que vale para el suyo). `rmt_tx_wait_all_done`: bloqueante, como la Pico. Va en
+  `esp32/common/gpio_esp32.c`, registrado en `esp32_hw_register` junto al PWM (LEDC) y el Pulse (PCNT): las cinco
+  imágenes ESP ya compilan ese fichero, así que no hay fuente nueva que dar de alta.
+- **Los límites, leídos en el IDF**: canales RMT de transmisión — S3 4, P4 4, C3 2, C5 2, C6 2 —, o sea tantas tiras a
+  la vez. Un LED (24 símbolos + el reset) cabe en la memoria del canal (48): sin recargas. Una tira larga se recarga
+  por interrupción, y una escritura en la flash (que para la caché) puede retrasarla y deformar la trama: sólo con
+  tiras largas y coincidiendo con el FS. Se apunta, no se arregla (la S3 y el P4 tienen DMA para el RMT).
+- **Robustez**: el `init` de un pin ya iniciado REHACE su canal. Un `Gpio.Pin` sobre ese pin entre medias reconfigura el
+  pad y el RMT dejaría de llegar al cable sin un error. (En la Pico pasa lo mismo con la PIO: se apunta.)
+- **En el común (las tres familias)**: `__npInit` valida el pin contra la tabla como ya hacen el PWM y el Pulse
+  (`bpvm_gpio_reclamar(pin, OUTPUT)`: «el pin 25 no existe en esp32s3», «es del SPI 2», «lo usa un código nativo»…),
+  SÓLO si hay driver —así el PC y `NeoCatch` siguen diciendo lo mismo en las dos VMs—; y distingue «no implementado en
+  esta plataforma» (no hay driver) de «no se pudo iniciar» (el driver dijo que no: sin canal libre). Hoy las dos cosas
+  dicen lo primero.
+- **La alternativa del SPI (Eduardo, 26-sep: *«En MicroPython tienen un SPI por software. Si tuviésemos uno nosotros lo
+  podríamos utilizar para programar los leds Neopixel»*)**. Mirado en su documentación: su `neopixel` no va por
+  `SoftSPI` sino por `machine.bitstream` (un pin conmutado con los tiempos del WS2812, `(400, 850, 800, 450)` ns), y en
+  la ESP32 ese `bitstream` *«uses an RMT channel by default»* — lo mismo que se propone aquí. En las demás es un bucle
+  contado por ciclos: *«On Cortex M0 at 48MHz, it is at best +/- 120ns»*, con la tolerancia del WS2812 en ±150. Un SPI
+  por SOFTWARE no llega con las interrupciones puestas (una interrupción, o en la ESP32 un fallo de caché, deforma el
+  bit) y, con ellas quitadas, para el micro 30 µs por LED —61 ms una tira de 2048: el wire y los hilos, parados—. Donde
+  la idea SÍ vale es con un SPI por HARDWARE: el MOSI a 2,4 MHz y tres bits de SPI por bit del LED (`100` y `110`), con
+  DMA, da los tiempos exactos sin CPU. Es la forma clásica de dar NeoPixel a una familia sin RMT ni PIO —el STM32—, con
+  una condición: el LED no tiene CS, así que lee TODO lo que pasa por el MOSI y necesita un SPI para él solo.
+- **La prueba**: `NeoDemo` con el pin de la S3 (Eduardo mira el LED); un segundo `Strip` sobre el mismo pin después de
+  un `Gpio.Pin` (sigue pintando); pedir más tiras que canales (error con nombre); `NpShowTope`. Y compilan las cinco
+  imágenes ESP.
+
+#### 5.2 Un hallazgo: la tabla de la ESP32 ofrece pines que usa el sistema (ficha nueva)
+
+`esp32_caps_init` da por buenos los que dice `GPIO_IS_VALID_GPIO`, y eso incluye los de la flash y la PSRAM. En la C6
+la flash va por los GPIO 24–30 (el MISO es el 25: `esp_hal_gpspi/esp32c6/.../spi_pins.h`), así que un
+`Gpio.Pin(25, OUTPUT)` se acepta y le quitaría la flash al micro. El IDF ya los reserva al arrancar
+(`esp_mspi_pin_reserve`, y la PSRAM los suyos) y los que va tomando cada driver (UART, SPI, I2C, LEDC, RMT…), y se
+preguntan con `esp_gpio_is_reserved`. **Arreglo**: marcarlos en la tabla como del sistema, con un error con nombre
+(«el pin 25 de esp32c6 lo usa el sistema»). **Y la pregunta**: los del wire —el USB-Serial-JTAG de la C3, la C5 y la
+C6; el UART0 de la S3 y el P4— el IDF no los reserva, y usarlos corta la conexión con el IDE.
+
+#### 5.3 El ADC externo del STM32 (el resto de `#469`)
+
+Hoy no hay backend y la tabla no marca ningún pin analógico, así que `Adc.Channel(n)` y `AnPin` fallan con nombre («el
+canal 0 no existe en stm32u575 (unidad 1: 0 canales)»): es honesto, pero no hay ADC. Falta:
+1. **El mapa** pin → (ADC1, canal) del U575 (la Nucleo) y del U5G9 (la DK2), de sus hojas de datos. No están en el
+   equipo, y el CubeIDE 2.x ya no trae la base de datos de CubeMX de la que se podría sacar.
+2. **El backend**: el ADC1 a 12 bits (el contrato de BP es 0..4095; el del U5 es de 14 y se configura a 12), el pin en
+   modo analógico y una conversión por sondeo, como ya hace la temperatura del chip (`stm32_adc_read_internal`).
+3. **La prueba en la Nucleo**: un puente de un pin analógico del conector Arduino a 3V3 y a GND (≈ 4095 y ≈ 0).
+
+Y de paso, en la misma tabla: la DK2 dice «UFBGA169» y su proyecto de CubeMX dice STM32U5G9ZJTxQ en LQFP144.
+
+#### 5.4 Las preguntas (propuesta; Eduardo decide)
+
+| # | pregunta | propuesta |
+|---|---|---|
+| 1 | el NeoPixel de la ESP32: ¿el RMT del núcleo del IDF o el componente `led_strip`? | el del núcleo, con el *simple encoder*: sin dependencias que descargar y sin copia |
+| 2 | ¿validar el pin del NeoPixel en el común y separar «no implementado» de «no se pudo iniciar»? | sí (cambia también la Pico, a mejor) |
+| 3 | los pines del sistema en la tabla: ¿sólo los que reserva el IDF (flash, PSRAM) o también los del wire? | también los del wire |
+| 4 | las hojas de datos del U575 y del U5G9, y el manual de la Nucleo-144 (el conector) | que las ponga Eduardo en `C:\lenguajes\ref\`, o descargarlas con su permiso |
+| 5 | la S3, para mirar el LED | conectada cuando toque; con su revisión (GPIO48 o 38), o se prueban los dos |
+| 6 | el NeoPixel del STM32 (hoy «no implementado»; ninguna del parque lo trae) | cuando haga falta, por SPI HARDWARE (2,4 MHz, tres bits por bit, DMA) en un SPI para él solo; y un SPI por SOFTWARE, si se quiere, como fachada propia para dispositivos lentos en cualquier pin, no para el NeoPixel |
+
+**El orden**: primero 5.1 y 5.2 (no necesitan papeles; la S3 para mirar), después 5.3 (con las hojas y la Nucleo con
+puentes).
+
 ---
 
 ## H5 — el AOT en la tanda de placas (25-sep, sesión remota; Eduardo: «meter AOT en la tanda de placas»)
