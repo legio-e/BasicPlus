@@ -275,9 +275,16 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
  * stub, y es justo lo que no queremos. */
 /* El cuerpo comun: aloca `bytes`, escribe la longitud EN ELEMENTOS en la
  * cabecera y registra el handle. Devuelve el handle empaquetado. */
+/* #570 (V7/H5, 26-sep) — un tamaño negativo lanza lo MISMO que la misma llamada interpretada: el
+ * texto de miVM, que es el del builtin (`newIntArray`, `__newRefArray`) o el del opcode (`NEWARRAY_I8`…)
+ * según cómo lo compile el emisor. Antes, «tamaño de array negativo»: un tercer texto, y la VM-C
+ * interpretada ni siquiera lanzaba (moría). `pre` + el número + `post`. */
 static int32_t h_newarray_tipo(bpvm_t* vm, int32_t size, uint32_t bytes_por_elem,
-                               int tipo) {
-    if (size < 0) { h_throw_runtime(vm, "tamaño de array negativo"); return 0; }
+                               int tipo, const char* pre, const char* post) {
+    if (size < 0) {
+        char em[80]; snprintf(em, sizeof em, "%s%d%s", pre, (int) size, post);
+        h_throw_runtime(vm, em); return 0;
+    }
     uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * bytes_por_elem, tipo);
     if (ref == 0) { h_throw_runtime(vm, "No space in heap"); return 0; }
     bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
@@ -286,20 +293,20 @@ static int32_t h_newarray_tipo(bpvm_t* vm, int32_t size, uint32_t bytes_por_elem
     return (int32_t) h.v;
 }
 static int32_t h_newarray_i32(bpvm_t* vm, int32_t size) {
-    return h_newarray_tipo(vm, size, 4, BPVM_TYPE_ARRAY_I32);
+    return h_newarray_tipo(vm, size, 4, BPVM_TYPE_ARRAY_I32, "newIntArray: tamaño negativo: ", "");
 }
 static int32_t h_newarray_i8(bpvm_t* vm, int32_t size) {
-    return h_newarray_tipo(vm, size, 1, BPVM_TYPE_ARRAY_I8);
+    return h_newarray_tipo(vm, size, 1, BPVM_TYPE_ARRAY_I8, "NEWARRAY_I8: tamaño negativo (", ")");
 }
 static int32_t h_newarray_i16(bpvm_t* vm, int32_t size) {
-    return h_newarray_tipo(vm, size, 2, BPVM_TYPE_ARRAY_I16);
+    return h_newarray_tipo(vm, size, 2, BPVM_TYPE_ARRAY_I16, "NEWARRAY_I16: tamaño negativo (", ")");
 }
 /* [V6/N1.5] `long[]` y `double[]`: 8 bytes OPACOS por casilla (el GC no los
  * traza, que es justo lo que se quiere para numeros). Mismo tipo que usa
  * OP_NEWARRAY_I64 — un `double[]` es un I64 con otro contenido, como en el
  * intérprete. */
 static int32_t h_newarray_i64(bpvm_t* vm, int32_t size) {
-    return h_newarray_tipo(vm, size, 8, BPVM_TYPE_ARRAY_I64);
+    return h_newarray_tipo(vm, size, 8, BPVM_TYPE_ARRAY_I64, "NEWARRAY_I64: tamaño negativo (", ")");
 }
 
 /* [V6/N1.5] Este SIGUE sin implementarse, y ahora lo DICE en vez de devolver 0.
@@ -568,7 +575,7 @@ static void h_array_store_i16(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) 
  * hace el interprete son ALOAD_I64/ASTORE_I64 sobre un array creado por
  * BUILTIN_NEW_REF_ARRAY; esto es exactamente eso. */
 static int32_t h_newarray_ref(bpvm_t* vm, int32_t size) {
-    return h_newarray_tipo(vm, size, BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
+    return h_newarray_tipo(vm, size, BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF, "__newRefArray: capacidad negativa: ", "");
 }
 static int32_t h_array_load_ref(bpvm_t* vm, uint32_t ref, int32_t idx) {
     if (ref == 0) {
@@ -710,6 +717,11 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
     uint32_t adv; return (int32_t) utf8_decode(p + off, nbytes - off, &adv);
 }
+/* #569 (V7/H5, 26-sep) — lo MISMO que BUILTIN_CHAR_AT, que es lo que corre la native interpretada: un
+ * índice fuera de rango es un RuntimeError atrapable (BUG-7b, paridad con miVM) y no una cadena vacía, y
+ * sin memoria, «No space in heap» y no un null callado (#355). La copia a mano se había quedado atrás:
+ * `charAt("abc", 7)` daba "" con el AOT y el error interpretado. Lo cazó el análisis de P2b, que quiere
+ * justo eso: que el AOT llame al MISMO código que el intérprete en vez de a una copia. */
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     uint8_t enc[4]; uint32_t enc_len = 0;
     if (ref != 0) {
@@ -717,14 +729,19 @@ static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
         uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
         const uint8_t* p = vm->memory + addr + 4;
         uint32_t ncp = utf8_cp_count(p, nbytes);
-        if (idx >= 0 && (uint32_t) idx < ncp) {
+        if (idx < 0 || (uint32_t) idx >= ncp) {
+            char em[96];
+            snprintf(em, sizeof em, "charAt: idx fuera de rango %d (len=%d)", (int) idx, (int) ncp);
+            h_throw_runtime(vm, em); return 0;
+        }
+        {
             uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
             uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
             enc_len = utf8_encode(cp, enc);
         }
     }
     uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
-    if (!out) return 0;
+    if (!out) { h_throw_runtime(vm, "No space in heap"); return 0; }
     bpvm_write_u32_be(vm->memory + out, enc_len);
     for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
     return (uint32_t) bpvm_handle_register(vm, out).v;
@@ -743,11 +760,12 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     return (uint32_t) bpvm_handle_register(vm, out).v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
-    if (ref == 0) return 0;
-    uint32_t addr = A(vm, ref);
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
+    /* #569 — con null, BUILTIN_SUBSTRING da "" (sus índices se recortan a una cadena de 0): aquí igual,
+     * no un null que el programa interpretado nunca ve. */
+    uint32_t addr = ref ? A(vm, ref) : 0;
+    uint32_t nbytes = ref ? bpvm_read_u32_be(vm->memory + addr) : 0;
     const uint8_t* p = vm->memory + addr + 4;
-    uint32_t ncp = utf8_cp_count(p, nbytes);   /* índices en codepoints */
+    uint32_t ncp = ref ? utf8_cp_count(p, nbytes) : 0;   /* índices en codepoints */
     if (from < 0) from = 0;
     if (to < 0)   to = 0;
     if ((uint32_t) to > ncp) to = (int32_t) ncp;
@@ -756,8 +774,8 @@ static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32
     uint32_t eoff = utf8_byte_offset(p, nbytes, (uint32_t) to);
     uint32_t n = eoff - boff;
     uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-    if (!out) return 0;
-    addr = A(vm, ref);   /* re-deref tras el safepoint */
+    if (!out) { h_throw_runtime(vm, "No space in heap"); return 0; }   /* #569: como el builtin (#355) */
+    addr = ref ? A(vm, ref) : 0;   /* re-deref tras el safepoint */
     uint8_t* mem = vm->memory;
     bpvm_write_u32_be(mem + out, n);
     for (uint32_t i = 0; i < n; i++) mem[out + 4 + i] = mem[addr + 4 + boff + i];
@@ -840,7 +858,9 @@ static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
 static uint32_t h_int_to_string(bpvm_t* vm, int32_t v) {
     char buf[16];
     int n = snprintf(buf, sizeof(buf), "%d", (int) v);
-    return bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+    uint32_t r = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+    if (r == 0) h_throw_runtime(vm, "No space in heap");   /* #569: como BUILTIN_INT_TO_STRING (#355), no un null */
+    return r;
 }
 
 /* `dpow` NO reimplementa nada: el algoritmo sigue siendo bpvm_dpow, LA MISMA

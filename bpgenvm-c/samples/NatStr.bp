@@ -1,0 +1,134 @@
+// NatStr.bp — #569/#570 (V7, 26-sep): la lista A MANO del AOT (charAt, charCodeAt, substring,
+// intToString y los newXArray) contra el camino interpretado. El AOT no llama al builtin: llama a una
+// COPIA en C (bpvm_aot_helpers.c), y la copia se había quedado atrás — `charAt("abc", 7)` daba "" con
+// el AOT y un RuntimeError interpretado; `substring` de un null daba null y no ""; y un tamaño
+// negativo lanzaba otro texto. `make test-aotstr` corre el MISMO .mod con el AOT y sin él, con GC en
+// cada alocación, y exige la misma salida, 15 comprobaciones y ningún FALLO.
+module NatStr
+  import Core
+
+  public class Caja
+    var etiqueta: string
+    public function Caja()
+    end Caja
+    public function nula(): string
+      return this.etiqueta
+    end nula
+  end Caja
+
+  native function letra(s: string, i: integer): string
+    return charAt(s, i)
+  end letra
+
+  native function codigo(s: string, i: integer): integer
+    return charCodeAt(s, i)
+  end codigo
+
+  native function trozo(s: string, a: integer, b: integer): string
+    return substring(s, a, b)
+  end trozo
+
+  native function texto(n: integer): string
+    return intToString(n)
+  end texto
+
+  native function enteros(n: integer): integer
+    var a: integer[] := newIntArray(n)
+    return len(a)
+  end enteros
+
+  native function octetos(n: integer): integer
+    var a: byte[] := newByteArray(n)
+    return len(a)
+  end octetos
+
+  native function largos(n: integer): integer
+    var a: long[] := newLongArray(n)
+    return len(a)
+  end largos
+
+  native function dobles(n: integer): integer
+    var a: double[] := newDoubleArray(n)
+    return len(a)
+  end dobles
+
+  function Main()
+    var nada: string := Caja().nula()
+    var menos: integer := 0 - 3
+    try
+      print "ok charAt dentro: [" + letra("abc", 1) + "]"
+    catch e: RuntimeError
+      print "ok charAt dentro: atrapada: " + e.msg
+    endtry
+    try
+      print "ok charAt utf8: [" + letra("añb", 1) + "]"
+    catch e: RuntimeError
+      print "ok charAt utf8: atrapada: " + e.msg
+    endtry
+    try
+      print "ok charAt fuera: [" + letra("abc", 7) + "]"
+    catch e: RuntimeError
+      print "ok charAt fuera: atrapada: " + e.msg
+    endtry
+    try
+      print "ok charAt negativo: [" + letra("abc", menos) + "]"
+    catch e: RuntimeError
+      print "ok charAt negativo: atrapada: " + e.msg
+    endtry
+    try
+      print "ok charAt null: [" + letra(nada, 0) + "]"
+    catch e: RuntimeError
+      print "ok charAt null: atrapada: " + e.msg
+    endtry
+    try
+      print "ok charCodeAt fuera: " + intToString(codigo("abc", 9))
+    catch e: RuntimeError
+      print "ok charCodeAt fuera: atrapada: " + e.msg
+    endtry
+    try
+      print "ok charCodeAt null: " + intToString(codigo(nada, 0))
+    catch e: RuntimeError
+      print "ok charCodeAt null: atrapada: " + e.msg
+    endtry
+    try
+      print "ok substring recorte: [" + trozo("abcdef", menos, 99) + "]"
+    catch e: RuntimeError
+      print "ok substring recorte: atrapada: " + e.msg
+    endtry
+    try
+      print "ok substring null: [" + trozo(nada, 0, 2) + "]"
+    catch e: RuntimeError
+      print "ok substring null: atrapada: " + e.msg
+    endtry
+    try
+      print "ok intToString: [" + texto(0 - 42) + "]"
+    catch e: RuntimeError
+      print "ok intToString: atrapada: " + e.msg
+    endtry
+    try
+      print "ok newIntArray: " + intToString(enteros(menos))
+    catch e: RuntimeError
+      print "ok newIntArray: atrapada: " + e.msg
+    endtry
+    try
+      print "ok newByteArray: " + intToString(octetos(menos))
+    catch e: RuntimeError
+      print "ok newByteArray: atrapada: " + e.msg
+    endtry
+    try
+      print "ok newLongArray: " + intToString(largos(menos))
+    catch e: RuntimeError
+      print "ok newLongArray: atrapada: " + e.msg
+    endtry
+    try
+      print "ok newDoubleArray: " + intToString(dobles(menos))
+    catch e: RuntimeError
+      print "ok newDoubleArray: atrapada: " + e.msg
+    endtry
+    try
+      print "ok control: " + intToString(enteros(4)) + " " + intToString(octetos(3))
+    catch e: RuntimeError
+      print "ok control: atrapada: " + e.msg
+    endtry
+  end Main
+end NatStr

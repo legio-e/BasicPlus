@@ -2001,8 +2001,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_CHAR_AT: {
         /* charAt(str, idx): string  — devuelve un string de 1 char con
-         * el codepoint en esa posición. Si idx fuera de rango, devuelve
-         * string vacía. */
+         * el codepoint en esa posición. Si idx fuera de rango, RuntimeError
+         * (BUG-7b; antes decía «string vacía», y así se quedó la copia del
+         * AOT hasta #569). */
         int32_t i    = pop_i32(vm, tc);
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
         uint8_t enc[4]; uint32_t enc_len = 0;
@@ -2662,7 +2663,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_NEW_REF_ARRAY: {
         int32_t cap = pop_i32(vm, tc);
-        if (cap < 0) return BPVM_ERR_RUNTIME;
+        if (cap < 0) {    /* #570: `newObjArray(n)` es su alias público */
+            char em[64]; snprintf(em, sizeof em, "__newRefArray: capacidad negativa: %" PRId32, cap);
+            return builtin_throw(vm, tc, em);
+        }
         /* V4: ref plana = 8 bytes/elem (era *4 → array a media asignación →
          * corrupción al almacenar el elemento cap/2 en adelante). heap_alloc
          * zero-inicializa el payload, así que los slots quedan nulos. */
@@ -2688,7 +2692,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * llamante, no el builtin; el día que alguien llame a esto desde otro
          * sitio, lo único que queda de pie es el contrato. */
         bpref_t oldr = peek_ref(vm, tc, 0);   /* array ref = 8 bytes (como miVM popTcRef) */
-        if (new_cap < 0) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
+        if (new_cap < 0) {   /* #570 */
+            char em[64]; snprintf(em, sizeof em, "__growRefArray: capacidad negativa: %" PRId32, new_cap);
+            tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, em);
+        }
         uint32_t od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
@@ -2712,7 +2719,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t new_cap = pop_i32(vm, tc);
         /* #350 — PEEK por higiene; ver el porqué completo en GROW_REF_ARRAY. */
         bpref_t oldr = peek_ref(vm, tc, 0);   /* V4: array ref = 8 bytes (era pop_i32 4B → drift vs miVM popTcRef) */
-        if (new_cap < 0) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
+        if (new_cap < 0) {   /* #570 */
+            char em[64]; snprintf(em, sizeof em, "__growIntArray: capacidad negativa: %" PRId32, new_cap);
+            tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, em);
+        }
         uint32_t od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * 4, BPVM_TYPE_ARRAY_I32);
@@ -2739,9 +2749,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * violación de contrato. Las salidas de error sacan la fuente a mano
          * para no dejar la pila descuadrada. */
         bpref_t ca = peek_ref(vm, tc, 0);                  /* array i32 de codepoints (entrada) */
-        if (len < 0) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
+        if (len < 0) {   /* #570: los dos, atrapables y con el texto de miVM */
+            char em[64]; snprintf(em, sizeof em, "__charsToString: longitud negativa: %" PRId32, len);
+            tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, em);
+        }
         uint32_t avail = bpref_arr_len(vm, ca);
-        if ((uint32_t) len > avail) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
+        if ((uint32_t) len > avail) {
+            char em[80]; snprintf(em, sizeof em, "__charsToString: longitud %" PRId32 " > capacidad %d", len, (int) avail);
+            tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, em);
+        }
         /* H2: input = array i32 de codepoints; output = string byte[] UTF-8. */
         uint32_t total = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
@@ -3230,7 +3246,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_NEW_INT_ARRAY: {
         int32_t size = pop_i32(vm, tc);
-        if (size < 0) return BPVM_ERR_RUNTIME;
+        if (size < 0) {   /* #570: atrapable y con el texto de miVM (antes el programa moría sin una palabra) */
+            char em[64]; snprintf(em, sizeof em, "newIntArray: tamaño negativo: %" PRId32, size);
+            return builtin_throw(vm, tc, em);
+        }
         uint32_t bytes = (uint32_t) size * 4u;
         uint32_t ref = bpvm_heap_alloc(vm, bytes, BPVM_TYPE_ARRAY_I32);
         if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */

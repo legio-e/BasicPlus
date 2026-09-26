@@ -1,0 +1,67 @@
+// ArrayNegativo.bp — #570 (V7, 26-sep): un tamaño negativo es un RuntimeError ATRAPABLE, con el
+// MISMO texto en las dos VMs. La VM-C lo convertía en un fallo que MATABA el programa sin una palabra
+// y sin dejar llegar al catch: en cuanto un programa lo atrapaba, el stdout de las dos VMs difería.
+// Uno por camino: los builtins (newIntArray, newObjArray, __growIntArray, __growRefArray,
+// __charsToString) y los opcodes (newByteArray, newLongArray, newDoubleArray). Los textos son los de
+// miVM, la VM de referencia — incluidos los que nombran el opcode.
+module ArrayNegativo
+
+  function Main()
+    var n: integer := 0 - 3
+    try
+      var a: integer[] := newIntArray(n)
+      print "newIntArray: " + intToString(len(a))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      var o: Object[] := newObjArray(n)
+      print "newObjArray: " + intToString(len(o))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      var b: byte[] := newByteArray(n)
+      print "newByteArray: " + intToString(len(b))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      var l: long[] := newLongArray(n)
+      print "newLongArray: " + intToString(len(l))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      var d: double[] := newDoubleArray(n)
+      print "newDoubleArray: " + intToString(len(d))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      var g: integer[] := __growIntArray(newIntArray(2), n)
+      print "__growIntArray: " + intToString(len(g))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      var r: integer[] := __growRefArray(newIntArray(2), n)
+      print "__growRefArray: " + intToString(len(r))
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      print "__charsToString: [" + __charsToString(newIntArray(2), n) + "]"
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    try
+      print "__charsToString: [" + __charsToString(newIntArray(2), 5) + "]"
+    catch e: RuntimeError
+      print "atrapada: " + e.msg
+    endtry
+    // Y el control: con tamaños buenos, los mismos caminos crean su array.
+    print "control: " + intToString(len(newIntArray(4))) + " " + intToString(len(newByteArray(3)))
+    print "fin"
+  end Main
+end ArrayNegativo

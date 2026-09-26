@@ -1360,7 +1360,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_NEWARRAY_I64: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (size < 0) BPVM_RT_THROW("NEWARRAY_I64: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT GC */
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 8, BPVM_TYPE_ARRAY_I64);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
@@ -1475,7 +1475,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- F2: arrays ---- */
         case OP_NEWARRAY: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (size < 0) BPVM_RT_THROW("NEWARRAY: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT GC */
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 4, BPVM_TYPE_ARRAY_I32);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
@@ -1488,7 +1488,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_NEWARRAY_I8: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (size < 0) BPVM_RT_THROW("NEWARRAY_I8: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT: el GC de heap_alloc marca [stack_base, tc->sp) */
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size, BPVM_TYPE_ARRAY_I8);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
@@ -1500,7 +1500,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_NEWARRAY_I16: {
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
-            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (size < 0) BPVM_RT_THROW("NEWARRAY_I16: tamaño negativo (%d)", (int) size);   /* #570: atrapable, el texto de miVM */
             tc->sp = sp;   /* SAFEPOINT GC */
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 2, BPVM_TYPE_ARRAY_I16);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */

@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-aotswitch test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-aotswitch test-aotstr test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -174,7 +174,8 @@ endef
 define aotmain
 @rm -rf $(2) && mkdir -p $(2) && cp ../bpstdlib/*.mod $(2)/
 @java -cp "../lexer-java/target/classes;../pack/target/classes" basicplus.frontend.AotMain samples/$(1).bp $(2) >$(2)/aot.log 2>&1 || { cat $(2)/aot.log; exit 1; }
-@if grep -q "sin interfaz" $(2)/aot.log; then echo "  ROJO: el AOT de $(1) no ve la interfaz de un import (#542):"; grep "sin interfaz" $(2)/aot.log; exit 1; fi
+@# #542 (26-sep): un import sin interfaz ya no es un aviso que haya que buscar en el log: AotMain sale
+@# con 4 y «falta el modulo 'X'», y lo para el `||` de arriba.
 endef
 
 all: $(BIN)
@@ -659,6 +660,25 @@ test-aotswitch: $(LIBOBJ)
 	 if ! cmp -s build/aotswitch.int build/aotswitch.aot; then diff build/aotswitch.int build/aotswitch.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 11 ]; then cat build/aotswitch.aot; echo "  ROJO: $$n de 11 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 11/11 con el AOT, igual que interpretado"
+
+# V7/H5 (#569/#570, 26-sep) — LA LISTA A MANO DEL AOT contra el camino interpretado: charAt,
+# charCodeAt, substring, intToString y los newXArray van a COPIAS en C de sus builtins, y una copia se
+# quedaba atrás sin que nada lo dijera (charAt fuera de rango: "" con el AOT, un error interpretado).
+test-aotstr: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatStr)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatStr,build/aotstr)
+	$(CC) $(CFLAGS) -Isrc test/test_aotstr.c build/aotstr/aot_NatStr.c $(LIBOBJ) \
+	  -o build/test_aotstr.exe $(LDFLAGS)
+	@echo "--- #569/#570 la lista a mano del AOT (esperado: AOT == interpretado, 15/15, sin FALLO) ---"
+	@./build/test_aotstr.exe samples/NatStr.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotstr.aot; \
+	 ./build/test_aotstr.exe samples/NatStr.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotstr.int; \
+	 n=$$(grep -c '^ok ' build/aotstr.aot); \
+	 if grep -q '^FALLO' build/aotstr.aot build/aotstr.int; then grep -h '^FALLO' build/aotstr.aot build/aotstr.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotstr.int build/aotstr.aot; then diff build/aotstr.int build/aotstr.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 15 ]; then cat build/aotstr.aot; echo "  ROJO: $$n de 15 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 15/15 con el AOT, igual que interpretado"
 
 # V7/H5 (#559, 25-sep) — LA COMA FLOTANTE DENTRO DE UNA NATIVE, ejecutada en el PC por sus DOS
 # caminos. El .c que el AOT genera se compila tal cual (la FPU del PC hace los float, como el P4 y
