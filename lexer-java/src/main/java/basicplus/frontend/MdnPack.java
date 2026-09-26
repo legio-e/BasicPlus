@@ -63,7 +63,7 @@ public final class MdnPack {
      * dejaron de ser stubs; 5 = 11-ago, el .mdn depende también del OFFSET de `memory` y
      * `aot_helpers` dentro de `struct bpvm`, no sólo de la tabla. La autoridad del número
      * es mdn_format.h; esto lo copia. */
-    static final int MDN_ABI_VERSION = 8;
+    static final int MDN_ABI_VERSION = 9;   // V7/H5 P2b.1.d (26-sep): `punto_control`, la línea del bucle
     private static final int MDN_NAME_MAX = 32;
 
     /** Sufijos que gcc le pega a un simbolo cuando lo clona o especializa. Son

@@ -37,7 +37,15 @@
                                 * sin datos de versión. El escritor emite v2. */
 #define MDN_HEADER_SIZE_V1 20
 #define MDN_HEADER_SIZE_V2 24
-#define MDN_ABI_VERSION    8   /* [V7/H5 #559] 25-sep — quince slots al final: la
+#define MDN_ABI_VERSION    9   /* [V7/H5 P2b.1.d] 26-sep — un slot al final:
+                                * `punto_control`, la línea del bucle (la native
+                                * cede el hilo, o se para con un `kill`). Un .mdn
+                                * de antes se rechaza con nombre y se regenera.
+                                * Queda ABIERTA hasta la cascada de P2b.3: P2b.2
+                                * añadirá `call_builtin` sin subirla otra vez,
+                                * porque ningún .mdn de la 9 habrá salido aún.
+                                *
+                                * Histórico: 8 = [V7/H5 #559] 25-sep — quince slots al final: la
                                 * coma flotante simple por helper (`fadd` … `fge`,
                                 * `i2f`/`f2i`/`l2f`/`f2l`), para los núcleos SIN
                                 * FPU (C5, C3, C6), donde gcc la delegaba en

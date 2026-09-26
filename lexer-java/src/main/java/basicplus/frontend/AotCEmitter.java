@@ -859,6 +859,11 @@ public final class AotCEmitter {
         w.println(") {");
         w.println("    (void) vm;   /* puede no usarse si la función no toca");
         w.println("                  *  globals/arrays/builtins. */");
+        /* V7/H5 P2b.1.d — el contador de la LÍNEA DEL BUCLE (emitLineaDelBucle), uno por función: cuenta las
+         * vueltas de cualquiera de sus bucles. En un registro: P2b.0 midió +2 ciclos por vuelta en la Pico,
+         * frente a +7 de mirar un indicador en memoria en cada una. */
+        w.println("    int32_t " + CUENTA + " = " + CUENTA_VUELTAS + ";   /* P2b.1.d: la línea del bucle */");
+        w.println("    (void) " + CUENTA + ";");
 
         /* #172 — Si el módulo tiene globals declarados, exponemos `mem`
          * y `cs` al cuerpo de la función. `cs` se resuelve UNA VEZ por
@@ -1365,6 +1370,7 @@ public final class AotCEmitter {
             emitExpr(wl.condition);
             w.println(") {");
             indentLevel++;
+            emitLineaDelBucle();
             for (Ast.IStmt st : wl.body) emitStmt(st);
             indentLevel--;
             indent();
@@ -1419,6 +1425,7 @@ public final class AotCEmitter {
             indent();
             w.println("do {");
             indentLevel++;
+            emitLineaDelBucle();
             for (Ast.IStmt st : dl.body) emitStmt(st);
             indentLevel--;
             indent();
@@ -1671,6 +1678,26 @@ public final class AotCEmitter {
      *  inclusiva. Cuando step es literal positivo emitimos un C `for`
      *  optimizable; en otro caso una variante `while` con check dinámico
      *  de dirección. */
+    /* V7/H5 P2b.1.d (26-sep) — LA LÍNEA DEL BUCLE. Al PRINCIPIO del cuerpo de cada bucle —no al final: así
+     * cuenta también las vueltas que acaban en un `continue`—, un contador que cada CUENTA_VUELTAS vueltas
+     * llama al helper `punto_control`, y éste decide si la native cede el hilo (su rebanada de tiempo, un
+     * `kill`). Es la marca de Eduardo del 24-ago («dar paso al intérprete para que pueda hacer cambios de
+     * thread»), y lo que hace que una native no sea atómica frente al planificador: se suspende en su pila
+     * prestada y sigue después como si nada (la idea del 26-sep: «como una interrupción»).
+     *
+     * La llamada, aunque casi nunca se haga, es opaca para gcc: por eso tampoco saca del bucle las lecturas
+     * de memoria (una global que otro hilo cambia se vuelve a leer tras ceder). Cuesta +2 ciclos por vuelta
+     * en el bucle más apretado (P2b.0, medido en la Pico). La recursión sin bucles queda fuera: una native
+     * recursiva sin ningún bucle no pasa por aquí (apuntado en V7_IDEAS §H5.P2b). */
+    private static final String CUENTA = "__bpvm_cuenta";
+    private static final int CUENTA_VUELTAS = 1024;
+
+    private void emitLineaDelBucle() {
+        indent();
+        w.println("if (__builtin_expect(--" + CUENTA + " == 0, 0)) { " + CUENTA + " = " + CUENTA_VUELTAS
+                  + "; vm->aot_helpers->punto_control(vm); }   /* P2b.1.d */");
+    }
+
     private void emitForStmt(Ast.ForStmt fs) {
         if (!(fs.range instanceof Ast.ForNumericRange)) {
             throw new UnsupportedAotException(
@@ -1715,6 +1742,7 @@ public final class AotCEmitter {
         w.println("for (; (" + step + " > 0) ? (" + it + " <= " + end + ") : ("
                   + it + " >= " + end + "); " + it + " += " + step + ") {");
         indentLevel++;
+        emitLineaDelBucle();
         for (Ast.IStmt st : fs.body) emitStmt(st);
         indentLevel--;
         indent(); w.println("}");

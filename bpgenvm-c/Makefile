@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotcede test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -711,6 +711,35 @@ test-aotcede: $(LIBOBJ)
 	 if ! cmp -s build/aotcede.int build/aotcede.aot; then diff build/aotcede.int build/aotcede.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 7 ]; then cat build/aotcede.aot; echo "  ROJO: $$n de 7 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 7/7 con el AOT, igual que interpretado"
+
+# V7/H5 (P2b.1.d, 26-sep) — LA LÍNEA DEL BUCLE: una native en un bucle que sólo termina si otro hilo corre.
+# Sin la línea, la pasada con el AOT se cuelga: cada pasada lleva un tope de tiempo.
+test-aotexpropia: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatExpropia)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatExpropia,build/aotexpropia)
+	$(CC) $(CFLAGS) -Isrc test/test_aotexpropia.c build/aotexpropia/aot_NatExpropia.c $(LIBOBJ) \
+	  -o build/test_aotexpropia.exe $(LDFLAGS)
+	@echo "--- P2b.1.d la línea del bucle: expropiar una native (esperado: AOT == interpretado, 4/4) ---"
+	@timeout 30 ./build/test_aotexpropia.exe samples/NatExpropia.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotexpropia.aot; \
+	 timeout 30 ./build/test_aotexpropia.exe samples/NatExpropia.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotexpropia.int; \
+	 n=$$(grep -c '^ok ' build/aotexpropia.aot); \
+	 if grep -q '^FALLO' build/aotexpropia.aot build/aotexpropia.int; then grep -h '^FALLO' build/aotexpropia.aot build/aotexpropia.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotexpropia.int build/aotexpropia.aot; then diff build/aotexpropia.int build/aotexpropia.aot; echo "  ROJO: el AOT no da lo que el interprete (¿se colgó y lo cortó el tope?)"; exit 1; fi; \
+	 if [ "$$n" -ne 4 ]; then cat build/aotexpropia.aot; echo "  ROJO: $$n de 4 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 4/4 con el AOT, igual que interpretado"
+
+# V7/H5 (P2b.1.d, 26-sep) — el KILL de una native en un bucle sin fin (con tope de tiempo).
+test-aotkill: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatKill)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatKill,build/aotkill)
+	$(CC) $(CFLAGS) -Isrc test/test_aotkill.c build/aotkill/aot_NatKill.c $(LIBOBJ) \
+	  -o build/test_aotkill.exe $(LDFLAGS)
+	@echo "--- P2b.1.d el kill de una native en un bucle sin fin (esperado: los dos KILLED, [status=OK]) ---"
+	@timeout 60 ./build/test_aotkill.exe samples/NatKill.mod 2>/dev/null || { echo "  ROJO: el kill no llegó (¿colgado? lo cortó el tope)"; exit 1; }
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

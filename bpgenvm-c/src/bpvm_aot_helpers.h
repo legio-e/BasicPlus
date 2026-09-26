@@ -496,6 +496,14 @@ struct aot_helpers_v2 {
     int32_t (BPVM_AOT_FP_ABI *f2i) (float f);
     float   (BPVM_AOT_FP_ABI *l2f) (int64_t v);
     int64_t (BPVM_AOT_FP_ABI *f2l) (float f);
+
+    /* V7/H5 P2b.1.d (26-sep) — LA LÍNEA DEL BUCLE. El emisor pone al principio del cuerpo de cada bucle
+     * un contador en registro que, cada 1024 vueltas, llama aquí (P2b.0: +2 ciclos por vuelta en la Pico;
+     * mirar un indicador en cada vuelta costaba +7). Aquí se decide si la native cede el hilo: si hay un
+     * `kill` o si lleva corriendo su rebanada de tiempo, se SUSPENDE (en su pila prestada) y el
+     * planificador atiende a los demás hilos y al cable; donde no se puede suspender todavía, un `kill`
+     * LANZA por el límite de fallos. Sube MDN_ABI_VERSION a 9: la tabla crece. */
+    void    (*punto_control)(struct bpvm* vm);
 };
 
 /* ─── [V7/H5 #559, 25-sep] ¿HACE ESTE DESTINO LOS `float` EN HARDWARE? ──────────

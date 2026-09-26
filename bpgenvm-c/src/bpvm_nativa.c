@@ -3,6 +3,8 @@
  */
 #include "bpvm_nativa.h"
 #include "bpvm_alloc.h"
+#include "bpvm_platform.h"   /* P2b.1.d: bpvm_platform_now_ms, la rebanada */
+#include "bpvm_aot_helpers.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -38,6 +40,7 @@ static bpvm_nativa_t* nativa_de(bpvm_thread_t* tc) {
 static int entrar(bpvm_nativa_t* n) {
     n->f_worker = *bpvm_aot_fault_slot();
     n->cc_worker = *bpvm_aot_callctx();
+    n->t_corriendo = bpvm_platform_now_ms();   /* P2b.1.d: su rebanada empieza ahora */
     bpvm_ctx_saltar(&n->ctx_worker, n->ctx_nativa, n);
     *bpvm_aot_fault_slot() = n->f_worker;
     *bpvm_aot_callctx() = n->cc_worker;
@@ -121,6 +124,27 @@ int bpvm_nativa_ceder(bpvm_t* vm, bpvm_thread_t* tc) {
 }
 
 #endif
+
+void bpvm_nativa_punto_control(struct bpvm* vm) {
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    bpvm_thread_t* tc = cc->tc;
+    bpvm_nativa_t* n = tc ? tc->nativa : NULL;
+    if (tc == NULL) return;
+    if (n != NULL && n->estado == BPVM_NATIVA_CORRIENDO) {
+        /* En su pila prestada: cede si hay un `kill` (el planificador lo verá y parará el programa) o si ya
+         * ha corrido su rebanada (los demás hilos, y el cable: el planificador atiende al IDE entre
+         * quantums). Al reanudarse, sigue en su bucle como si nada. */
+        if (vm->kill_requested || bpvm_platform_now_ms() - n->t_corriendo >= BPVM_NATIVA_REBANADA_MS) {
+            tc->status = BPVM_THREAD_RUNNABLE;
+            bpvm_nativa_ceder(vm, tc);
+        }
+        return;
+    }
+    /* Sin pila prestada no puede suspenderse; pero un `kill` sí la para: lanza por el límite de fallos de
+     * #186 (si un try/catch de BP lo atrapara, el planificador para el programa en el siguiente quantum). */
+    if (vm->kill_requested)
+        vm->aot_helpers->throw_runtime(vm, "el programa se ha detenido (kill) dentro de una native");
+}
 
 void bpvm_nativa_liberar(bpvm_thread_t* tc) {
     if (tc && tc->nativa) {

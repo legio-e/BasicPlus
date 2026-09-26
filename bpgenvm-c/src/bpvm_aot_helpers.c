@@ -9,6 +9,7 @@
  */
 
 #include "bpvm_aot_helpers.h"
+#include "bpvm_nativa.h"   /* V7/H5 P2b.1.d: punto_control */
 #include "bpvm_internal.h"
 #include "bpvm_bios.h"      /* V5/H4: el registro de packs, para `pack_sym` */
 #include "bpvm_out.h"       /* V7/H5 (#558): bpvm_emit, el camino del `print` del intérprete */
@@ -989,6 +990,7 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .f2i                 = h_f2i,
     .l2f                 = h_l2f,
     .f2l                 = h_f2l,
+    .punto_control       = bpvm_nativa_punto_control,   /* V7/H5 P2b.1.d: la línea del bucle */
 };
 
 /* La potencia: UNA implementacion, usada por OP_DPOW y por el helper. Ver la

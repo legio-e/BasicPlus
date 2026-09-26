@@ -52,6 +52,8 @@ typedef struct bpvm_nativa {
      * natives vivas por worker (una corriendo, otras suspendidas), cada cambio de contexto pone la suya. */
     bpvm_aot_fault_t    f_nativa, f_worker;
     bpvm_aot_callctx_t  cc_nativa, cc_worker;
+    /* P2b.1.d — cuándo empezó a correr (al entrar o al reanudarse), en ms: la rebanada se mide desde aquí. */
+    int64_t          t_corriendo;
     volatile int     estado;       /* bpvm_nativa_estado_t */
     bpvm_ctx_t       ctx_nativa;   /* el contexto de la native (el que se reanuda) */
     bpvm_ctx_t       ctx_worker;   /* adónde se vuelve: el worker que la entró */
@@ -87,6 +89,17 @@ int bpvm_nativa_reanudar(bpvm_t* vm, bpvm_thread_t* tc);
  * prestada: la native, el intérprete anidado, otras natives anidadas— y VUELVE cuando se reanuda: 1. Si el
  * hilo no corre en una pila prestada (sin cambio de contexto, o sin memoria), no puede: 0. */
 int bpvm_nativa_ceder(bpvm_t* vm, bpvm_thread_t* tc);
+
+/* P2b.1.d — cuánto corre una native antes de ceder el hilo, si nadie lo pide antes. El intérprete mide su
+ * quantum en operaciones (1024); una native no tiene operaciones que contar, así que se mide en tiempo. */
+#ifndef BPVM_NATIVA_REBANADA_MS
+#  define BPVM_NATIVA_REBANADA_MS 5
+#endif
+
+/* P2b.1.d — el helper `punto_control` de la tabla: lo llama la línea del bucle cada 1024 vueltas. Cede el hilo
+ * si hay un `kill` o si la native ya ha corrido su rebanada; si no puede ceder (sin pila prestada), un `kill`
+ * LANZA por el límite de fallos de #186 y la native se acaba. */
+void bpvm_nativa_punto_control(struct bpvm* vm);
 
 /* La devuelve a la memoria del programa (bpvm_destroy). */
 void bpvm_nativa_liberar(bpvm_thread_t* tc);
