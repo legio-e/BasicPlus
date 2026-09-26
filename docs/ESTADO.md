@@ -756,6 +756,63 @@ Eduardo: *«continuamos»*, con el orden del traspaso. Los tres pasos de `V7_IDE
    en PSRAM). La tanda 14/14, `GuiRotCycle` bien en el cristal (Eduardo), y **la TF de la C6 por fin en uso**: `SdCard`
    «los seis» y `C5SdGui` RESULT OK (27 ficheros con la pantalla a la vez, 0 distintos) → **`H3` cerrado**.
 
+## ⚙️ H5 (26-sep, mañana) — `#542`, `#567`, tres fichas de paso y P2b: la native se suspende COMO UNA INTERRUPCIÓN (idea de Eduardo), hecho en el PC
+
+- **`#542`** (`99136adb`): el AOT resuelve los imports como el compilador y uno que falta es un error con su nombre.
+  Destapó que 6 pruebas del AOT traducían sin `Core`. **Y casi rompe el IDE**: la primera versión dejaba sin AOT el Run
+  de un proyecto en cuanto una native importaba otro módulo de la app (el C va a `target/` y el AOT buscaba ahí), con
+  `compat` verde: `AotBuild` no está en ninguna red. Salió al comprobar una frase de la ficha («en el IDE, un fallo del
+  build»: era falsa) y se probó a mano con un proyecto de dos módulos. Memoria nueva: *endurecer un contrato: cuenta
+  los llamadores*.
+- **`#567`** (`b9315223`): `mhz_max 62` en `st7789.seq` y el rechazo con nombre; el primer mensaje no cabía en
+  `s_motivo` (86 de 79) y salía cortado — la prueba mira ahora hasta el final.
+- **El análisis de `P2b`** comparó, uno a uno, los helpers tipados del AOT con sus builtins y destapó **`#569`**
+  (`charAt` fuera de rango: `""` con el AOT, `RuntimeError` interpretado) y **`#570`** (un tamaño de array negativo
+  MATABA el programa en la VM-C, donde miVM lanza: nueve caminos, censados por la primitiva), en `41adacb8`, con
+  `test-aotstr` y `ArrayNegativo` en el corpus.
+- **Eduardo decidió cómo se suspende una native**: primero, *«la función native llame a una función opCode y ahí se
+  suspende»* y la línea en los bucles; y luego, *«¿y si el código nativo funcionase como una interrupción? Sin un stack
+  propio, usa el stack que le ceda el intérprete»*. Descartadas anidar el planificador (los hilos sólo vuelven en orden
+  inverso) y la máquina de estados en el emisor. Memoria nueva.
+- **P2b.0**, medido en la Pico: la línea del bucle con un contador en registro, +2 ciclos por vuelta; mirar un
+  indicador en cada vuelta, +7. El nativo sigue 134 y 96 veces más rápido que interpretado. El primer intento midió
+  mal (un byte de la zona reservada que en la Pico no vale 0) y se vio porque el número era absurdo.
+- **`#571`**, visto al leer el código para P2b.1: anidar natives (native → BP → native) perdía el límite de fallos; si
+  la exterior lanzaba después, el proceso moría en silencio. Reproducido y arreglado aparte (`99b02ddb`,
+  `test-aotanida`), porque vale ya en todas las placas.
+- **P2b.1, a-d, en el PC** (`1507d734`, `4b1414cc`, `be011deb`, `21bacb85`): el cambio de contexto x86-64 —con los
+  límites de pila del TIB: sin ellos, el `longjmp` de MinGW muere con `STATUS_BAD_STACK`—, la pila prestada, suspender
+  y reanudar, y la línea del bucle con el helper `punto_control` (**ABI 9**). Cada paso con su prueba en `check-testc` y
+  sus sabotajes; el más elocuente, el del GC: sin escanear las natives suspendidas, la cadena de la native se reciclaba
+  y su hueco lo reusaba la basura de otro hilo, con `status=OK`.
+- De paso, el arnés `fixture` dejaba correr una prueba con el `.mod` RANCIO si el `.bp` no compilaba (`3f71c5b6`).
+
+`compat.sh check` verde en cada paso (al final: paridad 103/103 en MOD9 y MOD8, pruebas de C 17/17); compilan la C6, la
+Pico y la Nucleo.
+
+## ⏭️ Traspaso (26-sep, mañana) — P2b.1 hecho en el PC: una native se suspende, se expropia y se para con un `kill`
+
+**Commits** (sin push): `99136adb` `b9315223` (`#542`, `#567`) · `41adacb8` (`#569`, `#570`) · `99b02ddb` (`#571`) ·
+`1507d734` `4b1414cc` `be011deb` `21bacb85` `c6937b50` (P2b.1) · `3f71c5b6` (el arnés) · y los docs.
+
+**Las placas**: sin cambios, salvo dos ficheros de prueba en la Pico (`/app/NatLazo.mod` y `/app/NatLazo.mdn`, la
+medida de P2b.0; se pueden borrar). Todas siguen con las imágenes de la ABI 8.
+
+**⚠️ El riesgo que acecha**: desde `21bacb85`, todo `.mdn` que se genere —el IDE, la tanda con `aot`— es de la **ABI 9**,
+y las placas, con la 8, lo **rechazan con nombre** y la función corre interpretada. La tanda con `aot` (`NatNew`,
+`NatV7`, `FloatNat`) saldrá SIN NATIVO hasta que se regraben. No es un fallo: es la cascada de P2b.3.
+
+**Queda**, en este orden:
+- **P2b.2**: el helper `call_builtin` (el despachador de la VM), la marca de `builtin_throw` y el camino genérico del
+  emisor para toda intrínseca `CALL_BUILTIN n`; y la decisión de la lista a mano (medir primero).
+- **P2b.3**: el cambio de contexto de ARMv8-M con FPU, RV32 y RV32 con F; el tamaño de la pila prestada en cada placa y
+  el GC en la pila del intérprete; la cascada de la ABI 9 (los `.mdn`, los packs SQLite y Gui, las imágenes) y la
+  sesión de placas — con lo que ya espera placa: regrabar el `DriverSpi` en la C5 y la C6 (`#567`), `H6.b` en el P4 y
+  la DK2, y las imágenes con `#569`, `#570` y `#571`.
+- Apuntado: una native recursiva sin bucles no pasa por la línea.
+- Sin placas, también: la documentación de usuario de la pantalla por packs (el entregable de §7.9), con la guía de
+  instalación desfasada (la C6 ya no trae LVGL en la imagen; la C5 no tiene sección).
+
 ## ⏭️ Traspaso (25-sep, noche) — `H6.b` en la C6 hecho y `H3` cerrado
 
 **Commits** (sin push): `f0412363` (la línea base y `GuiFlushBench`) · `b719359a` (`GuiMini` y `#568`) · `7dbbc2a7` (la C6
