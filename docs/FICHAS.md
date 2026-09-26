@@ -88,7 +88,7 @@ el PC sin placa, como en el host.
 >
 > 🔎 **LO ABIERTO DE VERDAD, al 24-sep por la noche** (la tabla de hitos, limpia ese día a petición de Eduardo: las
 > cerradas que seguían sin tachar, tachadas, y los restos de las cerradas, llamados «restos»): **H1 y H2, cerrados.**
-> Fichas con número abiertas: `#452` (H8), ~~`#468`~~ (cerrada el 25-sep, `7398d6e5`), `#495` (H8), `#531` (H7), `#538` (H8), ~~`#542`~~ (H5; cerrada el 26-sep, `99136adb`), ~~`#567`~~ (H6; cerrada el 26-sep, `b9315223`), `#571` (H5, 26-sep: anidar natives pierde el límite de fallos; con `P2b.1`), ~~`#544`~~
+> Fichas con número abiertas: `#452` (H8), ~~`#468`~~ (cerrada el 25-sep, `7398d6e5`), `#495` (H8), `#531` (H7), `#538` (H8), ~~`#542`~~ (H5; cerrada el 26-sep, `99136adb`), ~~`#567`~~ (H6; cerrada el 26-sep, `b9315223`), ~~`#571`~~ (H5; abierta y cerrada el 26-sep, `99b02ddb`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y `#554` (H7: concatenar en placa) —y `#490`, en V8—. Decisiones de Eduardo pendientes: ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga) y,
 > al publicar, `--formato=8` (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
 >
@@ -755,15 +755,19 @@ el mensaje sin el número. También la pestaña de un `TabView`. miVM no tiene t
 heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el error con 512; saboteado el builtin,
 «SIN ERROR tras 600 etiquetas». **En placa**: la C5 con `GuiMini`, «tras 255 etiquetas: … sitio para 256».
 
-#### 🟡 `#571` — una native que llama a BP que llama a OTRA native pierde su límite de fallos: si después lanza, el `longjmp` salta a un marco muerto — el proceso muere en silencio (en placa, un cuelgue o un reinicio) (abierta 26-sep, al leer el código para `P2b.1`; preexistente desde `#186`/`#211`; H5)
+#### ✅ `#571` — una native que llama a BP que llama a OTRA native pierde su límite de fallos: si después lanza, el `longjmp` salta a un marco muerto — el proceso muere en silencio (en placa, un cuelgue o un reinicio) (abierta 26-sep, al leer el código para `P2b.1`; preexistente desde `#186`/`#211`; H5 · **CERRADA el 26-sep**, `99b02ddb`)
 
 `aot_call_guarded` (`interp.c`) arma el límite de `#186` en un `jmp_buf` que es UNO por worker y, al anidar, guarda
 `prev_armed` pero no el `jmp_buf`: la native interior lo pisa con el suyo, y cuando vuelve queda armado… apuntando a su
 marco, que ya no existe. **Reproducido en el PC**: `exterior` (native) llama a `puente` (BP), que llama a `interior`
 (native); después `exterior` hace un `charAt` fuera de rango. Interpretado: «atrapada: charAt: idx fuera de rango 11
-(len=3)» y «fin». Con el AOT: la primera línea y el proceso muere sin una palabra (exit 127). **Se arregla con
-`P2b.1.b`**: con la suspensión el límite pasa al bloque de la native y cada invocación tiene el suyo; el programa de la
-reproducción será su prueba.
+(len=3)» y «fin». Con el AOT: la primera línea y el proceso muere sin una palabra (exit 127). Iba a arreglarse
+con `P2b.1.b`, pero es independiente y vale ya para todas las placas: ✅ **HECHO el 26-sep** (`99b02ddb`) — el slot
+guarda un PUNTERO al `jmp_buf` del límite más interno, que vive en el marco de su `aot_call_guarded`, y cada invocación
+restaura el de fuera al salir, vuelva normal o por un fallo (ningún `.mdn` toca el slot: la ABI no cambia). `make
+test-aotanida` (en `check-testc`): `samples/NatAnida.bp`, 3/3 idénticas con el AOT y sin él; saboteada la
+restauración, la pasada con el AOT pierde las dos últimas líneas y sale ROJO. Las demás pruebas del AOT, verdes;
+compila la C6. Llega a las placas con las imágenes siguientes.
 
 #### ✅ `#569` — el AOT: `charAt` fuera de rango devolvía `""` donde la MISMA función interpretada lanza un `RuntimeError`; y `substring(null…)`, `null` y no `""`; y sin memoria, un `null` callado (abierta y cerrada el 26-sep, en el análisis de `P2b`; desde que BUG-7b hizo lanzar al builtin; H5 · **CERRADA el 26-sep**, `41adacb8`)
 
