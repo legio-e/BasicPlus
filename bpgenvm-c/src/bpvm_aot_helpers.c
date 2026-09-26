@@ -215,7 +215,7 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
         if (n > sizeof(f->msg) - 1) n = sizeof(f->msg) - 1;
         if (msg && n) memcpy(f->msg, msg, n);
         f->msg[n] = '\0';
-        longjmp(f->buf, 1);   /* no retorna */
+        longjmp(*f->buf, 1);  /* no retorna (#571: el límite más interno) */
     }
     /* Sin boundary armado: no debería ocurrir (los native sólo corren
      * vía el hijack AOT del intérprete). Reportamos al menos. */
@@ -248,7 +248,7 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
     if (f->armed) {
         f->pending_ref = exc_ref;
         f->msg[0] = 0;
-        longjmp(f->buf, 1);   /* no retorna */
+        longjmp(*f->buf, 1);  /* no retorna (#571: el límite más interno) */
     }
     bpvm_diag_urgente("[aot] throw_ref sin boundary (ref=%" PRIu32 ")", exc_ref);
 }

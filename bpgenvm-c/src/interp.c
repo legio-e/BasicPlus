@@ -173,6 +173,10 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
                             bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
     int prev_armed = f->armed;   /* leaf natives: siempre 0; defensivo si anidaran */
+    /* #571 — SU límite, en SU marco: una native interior (native → BP → native) arma el suyo y, al
+     * volver, deja armado otra vez el de fuera. Fijados antes del setjmp y sin mutar después. */
+    jmp_buf mi_buf;
+    jmp_buf* prev_buf = f->buf;
     /* P-aot-call-bp: publica el contexto del puente native→BP por si el thunk
      * llama a vm->aot_helpers->call_bp_i32 (necesita tc + los registros sp/bp
      * vivos del intérprete). Save/restore para soportar anidamiento
@@ -192,15 +196,18 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
      * del intérprete lo hacen siempre. Aquí `*sp` aún es el valor PRE-pop, así
      * que los slots de los argumentos quedan dentro del rango escaneado. */
     tc->sp = *sp;
-    if (setjmp(f->buf) == 0) {
+    f->buf = &mi_buf;
+    if (setjmp(mi_buf) == 0) {
         f->armed = 1;
         f->pending_ref = 0;   /* #213: estado fresco por invocación */
         aot(vm, sp, bp);
         f->armed = prev_armed;
+        f->buf = prev_buf;    /* #571 */
         *cc = prev_cc;
         return 0;
     }
     f->armed = prev_armed;
+    f->buf = prev_buf;        /* #571: el de fuera, otra vez */
     *cc = prev_cc;
     /* #213 — si el native dejó una excepción YA construida (throw_ref de una
      * clase de usuario via factory), propagarla tal cual; si no, construir el

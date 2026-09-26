@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-aotswitch test-aotstr test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-aotswitch test-aotstr test-aotanida test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -679,6 +679,17 @@ test-aotstr: $(LIBOBJ)
 	 if ! cmp -s build/aotstr.int build/aotstr.aot; then diff build/aotstr.int build/aotstr.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 15 ]; then cat build/aotstr.aot; echo "  ROJO: $$n de 15 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 15/15 con el AOT, igual que interpretado"
+
+# V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
+# de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.
+test-aotanida: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatAnida)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatAnida,build/aotanida)
+	$(CC) $(CFLAGS) -Isrc test/test_aotanida.c build/aotanida/aot_NatAnida.c $(LIBOBJ) 	  -o build/test_aotanida.exe $(LDFLAGS)
+	@echo "--- #571 anidar natives (esperado: AOT == interpretado, 3/3, sin FALLO) ---"
+	@./build/test_aotanida.exe samples/NatAnida.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotanida.aot; 	 ./build/test_aotanida.exe samples/NatAnida.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotanida.int; 	 n=$$(grep -c '^ok ' build/aotanida.aot); 	 if grep -q '^FALLO' build/aotanida.aot build/aotanida.int; then grep -h '^FALLO' build/aotanida.aot build/aotanida.int; echo "  ROJO: FALLO"; exit 1; fi; 	 if ! cmp -s build/aotanida.int build/aotanida.aot; then diff build/aotanida.int build/aotanida.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; 	 if [ "$$n" -ne 3 ]; then cat build/aotanida.aot; echo "  ROJO: $$n de 3 comprobaciones"; exit 1; fi; 	 echo "[status=OK] 3/3 con el AOT, igual que interpretado"
 
 # V7/H5 (#559, 25-sep) — LA COMA FLOTANTE DENTRO DE UNA NATIVE, ejecutada en el PC por sus DOS
 # caminos. El .c que el AOT genera se compila tal cual (la FPU del PC hace los float, como el P4 y

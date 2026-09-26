@@ -1113,7 +1113,12 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref);   /* V4: ref de 
  * pthreads → TLS (__thread); en Pico single-worker basta un global.
  * Multi-worker Pico (v2, con #153 dual-core) requerirá task-local. */
 typedef struct {
-    jmp_buf      buf;        /* destino del longjmp = boundary del interp */
+    /* #571 (V7/H5, 26-sep) — un PUNTERO al `jmp_buf` del límite MÁS INTERNO, que vive en el marco de su
+     * `aot_call_guarded`. Era el `jmp_buf` mismo, uno por worker: al anidar native → BP → native, la
+     * interior lo pisaba con el suyo y, al volver, lo dejaba armado apuntando a su marco muerto; si la
+     * exterior lanzaba después, el `longjmp` saltaba ahí (el PC moría en silencio). Ahora cada invocación
+     * tiene el suyo y restaura el de fuera al salir. */
+    jmp_buf*     buf;        /* destino del longjmp = boundary del interp (el más interno) */
     char         msg[128];   /* mensaje del fault, copiado por throw_runtime */
     volatile int armed;      /* 1 entre setjmp y fin del thunk */
     /* #213 — ref de una excepción YA construida (throw_ref desde native, p.ej.
