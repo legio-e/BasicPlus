@@ -123,6 +123,10 @@ endif
 # vuelve a mirar el magic: si el compilador falló, el .mod viejo seguía ahí y el
 # `|| true` lo tapaba (así se coló un XMethodNat MOD8 «regenerado» a MOD9 — la
 # native no traduce en MOD9 y el .mod no se escribe). Ahora lo canta y para.
+# (26-sep) Antes de recompilar se BORRA el .mod: si el compilador falla, el viejo —con el formato bueno—
+# pasaba la comprobación de abajo y la prueba corría con él, callada. Lo destapó test-aotcede: un .bp
+# que no compilaba, un .mod de antes y un C del AOT nuevo — y el fallo salió como una diferencia de
+# salida, no como «el compilador ha fallado».
 define fixture
 @for s in ../bpstdlib/*.mod; do b=$$(basename $$s); if [ -f samples/$$b ] && ! cmp -s $$s samples/$$b; then echo "  (samples/$$b era otra version de la stdlib: se copia la de bpstdlib)"; cp $$s samples/$$b; fi; done
 @fmt=$(if $(2),$(2),9); want=$$(sed -n "s/.*BPVM_MAGIC_V$$fmt[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p" include/bpvm_internal.h | head -1 | tr a-z A-Z); \
@@ -136,6 +140,7 @@ for m in $(1); do \
   fi; \
   if [ -n "$$why" ]; then \
     echo "  (regenerando samples/$$m.mod — $$why)"; \
+    rm -f samples/$$m.mod; \
     java -jar ../lexer-java/target/basicplus-frontend.jar \
          samples/$$m.bp --compile samples --backend=mivm --formato=$$fmt >/dev/null 2>&1 || true; \
     got=$$(od -An -tx1 -N4 samples/$$m.mod 2>/dev/null | tr -d ' \n' | tr a-z A-Z); \
