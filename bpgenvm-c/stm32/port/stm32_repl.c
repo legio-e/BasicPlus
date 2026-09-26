@@ -130,7 +130,16 @@ static void reply_empty(const char* type, long id) {
  * El REPL común pide los datos; aquí se dicen. Ver bpvm_repl.h para la forma
  * y la medida que la decidió (18 campos comunes, 11 sólo del RP2350). */
 
+static void packs_cargar_una_vez(void);   /* V7/H6 G5.b0: más abajo, junto al RUN */
+
 static void stm32_repl_info(bpvm_repl_info_t* o) {
+    /* V7/H6 G5.b (26-sep) — como la ESP32 (pregunta 6 de V7_IDEAS §H6): el INFO publica screenW/H sólo si hay
+     * render, y con la GUI por el pack eso exige el pack CARGADO; la tanda y el IDE preguntan el tamaño de
+     * pantalla ANTES del primer Run. Así que el INFO también dispara la carga «una vez» (reintentable: si no
+     * hay pack no marca nada). La política de no cargar en el ARRANQUE no cambia: esto ya es el host hablando,
+     * y un cuelgue aquí no se repite en cada reset. Sin esto, la DK2 sin LVGL en la imagen decía «sin
+     * pantalla» y la tanda SALTABA las pruebas de GUI. */
+    packs_cargar_una_vez();
     /* N-stm32-info — DE DONDE SALE CADA VALOR de esta placa. El mensaje ya no
      * se arma aquí (lo hace src/bpvm_repl.c con los 18 campos comunes); esto
      * sólo los RELLENA, que es lo que de verdad es propio del STM32.
