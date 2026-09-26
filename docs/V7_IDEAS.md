@@ -3930,3 +3930,14 @@ imagen y viene del pack, como en la C5 y la C6.
 | 1 | ¿el orden? | el P4 primero (lo tiene todo) y la DK2 después |
 | 2 | la DK2 pide antes los packs nativos en el STM32: ¿se hacen, o la DK2 se queda con LVGL en la imagen? | hacerlos: «la base es finita, lo demás en packs» vale también para el STM32, y el adaptador de la familia se hace una vez |
 | 3 | el `PACK_FORMAT` del P4 y regrabar SQLite y la GUI | cuando `G5.a` esté listo, con su OK en ese momento |
+
+**Decidido** (Eduardo, 26-sep): 1, el P4 primero; 2, **packs nativos para la Discovery** (el adaptador del STM32);
+3, el `PACK_FORMAT` del P4 cuando `G5.a` esté listo.
+
+**`G5.a`, el código** (`1a48870a`; compila, falta la placa). `gui_display_dsi.c` con dos modos por el build: con
+`BPVM_LVGL`, lo de antes; con `BPVM_GUI_PACK`, la tabla `'PANT'` (`init`, `size`, `flush`, `rotate`, `touch`),
+publicada con `bpvm_bios_publica` desde `main.c`. El giro —un panel DPI no gira por hardware— con las cuentas de
+LVGL 9.2.2 portadas tal cual (la zona, los píxeles y el punto del táctil), para que `Gui.setRotation` quede como antes.
+La imagen: de 1 410 496 a 750 592 B (−644 KB) y la `.bss` de 889 a 521 KB (−368 KB). En placa falta: la imagen, el
+`PACK_FORMAT` y regrabar SQLite y la GUI (la poda tiene que elegir el motor `RISCV`, no el `RV32IMC` de la C5/C6), y
+la tanda con GUI, el táctil, el giro y la velocidad. Punto de restauración: `dist/firmware-v7-25sep`.
