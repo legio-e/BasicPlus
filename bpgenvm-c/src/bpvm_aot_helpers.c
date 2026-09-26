@@ -11,6 +11,7 @@
 #include "bpvm_aot_helpers.h"
 #include "bpvm_nativa.h"   /* V7/H5 P2b.1.d: punto_control */
 #include "bpvm_prims.h"    /* V7/H5 P2b: las primitivas compartidas con el intérprete */
+#include "bpvm_opcodes.h"  /* #573: cada helper de array dice qué opcode es */
 #include "bpvm_internal.h"
 #include "bpvm_bios.h"      /* V5/H4: el registro de packs, para `pack_sym` */
 #include "bpvm_out.h"       /* V7/H5 (#558): bpvm_emit, el camino del `print` del intérprete */
@@ -498,63 +499,51 @@ static BPVM_AOT_FP_ABI void h_write_f64_be(uint8_t* p, double v) {
  * Bounds check + null check; en fallo invocamos throw_runtime (que hoy
  * solo reporta a stderr — la integración con try/catch BP vendrá con
  * #175). */
+/* #573 (V7/H5, 26-sep) — el elemento `idx` (de `ancho` bytes) del array `ref`, o el error del opcode `op` —el que
+ * ejecuta el intérprete para ese mismo acceso— con el MISMO texto (bpvm_prim_texto_indice). Un array null tiene
+ * longitud 0, como allí. Antes cada helper lanzaba el suyo («array_load_i32: index out of bounds», «long[]: indice
+ * fuera de rango o array nulo»…) y una native no daba el error de la misma función interpretada. */
+static void __attribute__((noinline, cold)) indice_fuera(bpvm_t* vm, int op, int32_t idx, uint32_t length) {
+    /* El búfer del texto, AQUÍ y no en elem_de: es el camino más caliente de una native (cada `a[i]`), y un búfer
+     * suyo bajaba 112 B de pila en CADA acceso y le impedía inlinearse (medido con -fstack-usage, la Pico). Y elem_de,
+     * always_inline: a -Os gcc la dejaba fuera de línea —quince usos— y cada acceso hacía una llamada más que antes. */
+    char em[80];
+    bpvm_prim_texto_indice(em, sizeof em, op, idx, length);
+    h_throw_runtime(vm, em);   /* no retorna */
+}
+static inline __attribute__((always_inline)) uint8_t* elem_de(bpvm_t* vm, uint32_t ref, int32_t idx, uint32_t ancho, int op) {
+    uint32_t addr = ref ? A(vm, ref) : 0u;
+    uint32_t length = addr ? bpvm_read_u32_be(vm->memory + addr) : 0u;
+    if (idx < 0 || (uint32_t) idx >= length) { indice_fuera(vm, op, idx, length); return NULL; }
+    return vm->memory + addr + BPVM_ARR_DATA_OFF + (uint32_t) idx * ancho;
+}
 static int32_t h_array_load_i32(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i32: null array");
-        return 0;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);                 /* v2: handle → offset */
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i32: index out of bounds");
-        return 0;
-    }
-    return bpvm_read_i32_be(mem + addr + 4 + (uint32_t) idx * 4);
+    uint8_t* p = elem_de(vm, ref, idx, 4u, OP_ALOAD);
+    return p ? bpvm_read_i32_be(p) : 0;
 }
 static void h_array_store_i32(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i32: null array");
-        return;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i32: index out of bounds");
-        return;
-    }
-    bpvm_write_i32_be(mem + addr + 4 + (uint32_t) idx * 4, v);
+    uint8_t* p = elem_de(vm, ref, idx, 4u, OP_ASTORE);
+    if (p) bpvm_write_i32_be(p, v);
 }
 /* V5/H4 — elementos de 8 bytes. Calcados de los de i32 salvo el paso (8 en vez
  * de 4). `double` viaja por el mismo camino que `long`: mismos bits, misma
  * anchura — sólo cambia cómo se leen. */
-static uint8_t* elem8(bpvm_t* vm, uint32_t ref, int32_t idx, const char* quien) {
-    uint32_t addr, length;
-    if (ref == 0) { bpvm_aot_helpers_v2.throw_runtime(vm, quien); return 0; }
-    addr   = A(vm, ref);
-    length = bpvm_read_u32_be(vm->memory + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, quien);   /* no retorna */
-        return 0;
-    }
-    return vm->memory + addr + 4 + (uint32_t) idx * 8u;
-}
+
 static int64_t h_array_load_i64(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    uint8_t* p = elem8(vm, ref, idx, "long[]: indice fuera de rango o array nulo");
+    uint8_t* p = elem_de(vm, ref, idx, 8u, OP_ALOAD_I64);
     return p ? bpvm_read_i64_be(p) : 0;
 }
 static void h_array_store_i64(bpvm_t* vm, uint32_t ref, int32_t idx, int64_t v) {
-    uint8_t* p = elem8(vm, ref, idx, "long[]: indice fuera de rango o array nulo");
+    uint8_t* p = elem_de(vm, ref, idx, 8u, OP_ASTORE_I64);
     if (p) bpvm_write_i64_be(p, v);
 }
 static BPVM_AOT_FP_ABI double h_array_load_f64(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    uint8_t* p = elem8(vm, ref, idx, "double[]: indice fuera de rango o array nulo");
+    uint8_t* p = elem_de(vm, ref, idx, 8u, OP_ALOAD_I64);   /* `double[]` = 8 bytes opacos, como `long[]` */
     if (!p) return 0.0;
     { int64_t bits = bpvm_read_i64_be(p); double d; memcpy(&d, &bits, 8); return d; }
 }
 static BPVM_AOT_FP_ABI void h_array_store_f64(bpvm_t* vm, uint32_t ref, int32_t idx, double v) {
-    uint8_t* p = elem8(vm, ref, idx, "double[]: indice fuera de rango o array nulo");
+    uint8_t* p = elem_de(vm, ref, idx, 8u, OP_ASTORE_I64);
     if (p) { int64_t bits; memcpy(&bits, &v, 8); bpvm_write_i64_be(p, bits); }
 }
 
@@ -568,32 +557,12 @@ static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
  * Mismo bounds/extensión que OP_ALOAD_I8/OP_ALOAD_U8/OP_ASTORE_I8 del intérprete
  * (interp.c): load_i8 extiende con signo, load_u8 con cero, store_i8 trunca. */
 static int32_t h_array_load_i8(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i8: null array");
-        return 0;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);                 /* v2: handle → offset */
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i8: index out of bounds");
-        return 0;
-    }
-    return (int32_t)(int8_t) mem[addr + 4 + (uint32_t) idx];   /* sign-extend */
+    uint8_t* p = elem_de(vm, ref, idx, 1u, OP_ALOAD_I8);
+    return p ? (int32_t)(int8_t) *p : 0;    /* sign-extend */
 }
 static int32_t h_array_load_u8(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u8: null array");
-        return 0;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u8: index out of bounds");
-        return 0;
-    }
-    return (int32_t)(uint8_t) mem[addr + 4 + (uint32_t) idx];  /* zero-extend */
+    uint8_t* p = elem_de(vm, ref, idx, 1u, OP_ALOAD_U8);
+    return p ? (int32_t)(uint8_t) *p : 0;   /* zero-extend */
 }
 /* [V6/N1.5] Los de 16 bits, que FALTABAN — y su ausencia no daba error: el
  * emisor caia al helper de i32 y leia CUATRO bytes donde hay dos. Ver la nota
@@ -605,47 +574,17 @@ static int32_t h_array_load_u8(bpvm_t* vm, uint32_t ref, int32_t idx) {
  * distingue `short` de `word`, la truncacion del store no. Los `u16`/`i16` van
  * en BIG-ENDIAN dentro del array, como los escribe el interprete. */
 static int32_t h_array_load_i16(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i16: null array");
-        return 0;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i16: index out of bounds");
-        return 0;
-    }
-    return (int32_t) bpvm_read_i16_be(mem + addr + 4 + (uint32_t) idx * 2u);
+    uint8_t* p = elem_de(vm, ref, idx, 2u, OP_ALOAD_I16);
+    return p ? (int32_t) bpvm_read_i16_be(p) : 0;
 }
 static int32_t h_array_load_u16(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u16: null array");
-        return 0;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u16: index out of bounds");
-        return 0;
-    }
-    return (int32_t)(uint16_t) bpvm_read_i16_be(mem + addr + 4 + (uint32_t) idx * 2u);
+    uint8_t* p = elem_de(vm, ref, idx, 2u, OP_ALOAD_U16);
+    return p ? (int32_t)(uint16_t) bpvm_read_i16_be(p) : 0;
 }
 static void h_array_store_i16(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i16: null array");
-        return;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i16: index out of bounds");
-        return;
-    }
+    uint8_t* e = elem_de(vm, ref, idx, 2u, OP_ASTORE_I16);
+    if (!e) return;
     /* Big-endian byte a byte, igual que OP_ASTORE_I16: no hay write_u16_be. */
-    uint8_t* e = mem + addr + 4 + (uint32_t) idx * 2u;
     e[0] = (uint8_t)((v >> 8) & 0xFF);
     e[1] = (uint8_t)(v & 0xFF);
 }
@@ -673,38 +612,18 @@ static int32_t h_newarray_ref(bpvm_t* vm, int32_t size) {
     return h_newarray_tipo(vm, size, BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF, "__newRefArray: capacidad negativa: ", "");
 }
 static int32_t h_array_load_ref(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_ref: null array");
-        return 0;
-    }
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(vm->memory + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_ref: index out of bounds");
-        return 0;
-    }
+    uint8_t* p = elem_de(vm, ref, idx, BPVM_REF_SIZE, OP_ALOAD_I64);
     /* El elemento guarda el handle de 64b; al codigo native le va la palabra
      * baja (idx|TAG), que es lo que dice el convenio de esta ABI. */
-    return (int32_t) bpvm_read_i64_be(vm->memory + addr + BPVM_ARR_DATA_OFF
-                                      + (uint32_t) idx * BPVM_REF_SIZE);
+    return p ? (int32_t) bpvm_read_i64_be(p) : 0;
 }
 static void h_array_store_ref(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_ref: null array");
-        return;
-    }
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(vm->memory + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_ref: index out of bounds");
-        return;
-    }
+    uint8_t* p = elem_de(vm, ref, idx, BPVM_REF_SIZE, OP_ASTORE_I64);
+    if (!p) return;
     /* La gen VIVA se reconstruye aqui: es la frontera. Guardar la palabra baja
      * a secas dejaria un handle con gen 0 — y un gen 0 no casa con nada, asi que
      * el objeto se leeria como muerto (use-after-free) en el primer acceso. */
-    bpvm_write_i64_be(vm->memory + addr + BPVM_ARR_DATA_OFF
-                      + (uint32_t) idx * BPVM_REF_SIZE,
-                      (int64_t) bpref_regen(vm, (uint32_t) v).v);
+    bpvm_write_i64_be(p, (int64_t) bpref_regen(vm, (uint32_t) v).v);
 }
 
 /* ---------- [V6/N1.5b] `float[]` ----------
@@ -719,18 +638,8 @@ static BPVM_AOT_FP_ABI void h_array_store_f32(bpvm_t* vm, uint32_t ref, int32_t 
 }
 
 static void h_array_store_i8(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
-    if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i8: null array");
-        return;
-    }
-    uint8_t* mem = vm->memory;
-    uint32_t addr = A(vm, ref);
-    uint32_t length = bpvm_read_u32_be(mem + addr);
-    if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i8: index out of bounds");
-        return;
-    }
-    mem[addr + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);      /* truncate */
+    uint8_t* p = elem_de(vm, ref, idx, 1u, OP_ASTORE_I8);
+    if (p) *p = (uint8_t)(v & 0xFF);        /* truncate */
 }
 
 /* ---------- Builtins (H3 #168) ----------
@@ -821,14 +730,19 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     uint32_t aa = a ? A(vm, a) : 0, ba = b ? A(vm, b) : 0;
     uint32_t la = aa ? bpvm_read_u32_be(vm->memory + aa) : 0;   /* bytes */
     uint32_t lb = ba ? bpvm_read_u32_be(vm->memory + ba) : 0;
-    uint32_t out = bpvm_heap_alloc(vm, la + lb, BPVM_TYPE_ARRAY_I8);
-    if (!out) return 0;
+    /* #573 — la reserva, con la MISMA función que el NEWARRAY_I8 del `__strconcat` interpretado: sin memoria,
+     * «No space in heap» atrapable —antes, un null callado— y la tabla de handles comprobada (#430). */
+    bpref_t h; char em[80];
+    if (bpvm_prim_nuevo_array(vm, (int32_t) (la + lb), 1u, BPVM_TYPE_ARRAY_I8, "NEWARRAY_I8: tamaño negativo (", ")",
+                              &h, em, sizeof em) != 0) {
+        h_throw_runtime(vm, em); return 0;
+    }
+    uint32_t out = bpref_deref(vm, h);
     aa = a ? A(vm, a) : 0; ba = b ? A(vm, b) : 0;   /* re-deref tras el safepoint */
     uint8_t* mem = vm->memory;
-    bpvm_write_u32_be(mem + out, la + lb);
     for (uint32_t i = 0; i < la; i++) mem[out + 4 + i] = mem[aa + 4 + i];
     for (uint32_t i = 0; i < lb; i++) mem[out + 4 + la + i] = mem[ba + 4 + i];
-    return (uint32_t) bpvm_handle_register(vm, out).v;
+    return (uint32_t) h.v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
     {   /* P2b: la primitiva compartida (el origen lo tiene vivo la native, en sus variables de C) */

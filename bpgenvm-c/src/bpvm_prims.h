@@ -43,4 +43,10 @@ int bpvm_prim_int_to_string(bpvm_t* vm, int32_t v, bpref_t* out, char* err, size
 int bpvm_prim_nuevo_array(bpvm_t* vm, int32_t size, uint32_t ancho, int tipo, const char* pre, const char* post,
                           bpref_t* out, char* err, size_t n);
 
+/* #573 — el texto de un índice fuera de rango al leer o escribir un elemento de array: el de miVM para el opcode
+ * `op` que el intérprete ejecuta en ese acceso (OP_ALOAD, OP_ALOAD_I64, OP_ASTORE_I8…; bpvm_opcodes.h). Un array null
+ * tiene longitud 0. Lo usan los diez opcodes (interp.c) y los quince helpers array_load_* / array_store_* del AOT,
+ * cada uno con SU opcode: el que el compilador emitiría para ese tipo de elemento. */
+void bpvm_prim_texto_indice(char* err, size_t n, int op, int32_t idx, uint32_t len);
+
 #endif /* BPVM_PRIMS_H */

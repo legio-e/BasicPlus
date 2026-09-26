@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -686,6 +686,28 @@ test-aotstr: $(LIBOBJ)
 	 if ! cmp -s build/aotstr.int build/aotstr.aot; then diff build/aotstr.int build/aotstr.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 17 ]; then cat build/aotstr.aot; echo "  ROJO: $$n de 17 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 17/17 con el AOT, igual que interpretado"
+
+# V7/H5 (#573, 26-sep) — LOS OPERADORES de arrays y cadenas desde una native contra el camino interpretado: `a[i]`,
+# `a[i] := v` y el `+` de cadenas iban a helpers de C con su PROPIO texto de error («array_load_i32: index out of
+# bounds» donde el intérprete y miVM dicen «ALOAD: índice fuera de rango 7 (length=3)») y el concat sin memoria daba un
+# null callado. Ahora el texto sale de UNA función (bpvm_prim_texto_indice) que usan el opcode y el helper, cada helper
+# con SU opcode; un tipo de elemento por helper, al leer y al escribir, null y negativo. Que la salida interpretada sea
+# la de miVM lo mira la paridad: NatArr está en el corpus de compat.sh.
+test-aotarr: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatArr)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatArr,build/aotarr)
+	$(CC) $(CFLAGS) -Isrc test/test_aotarr.c build/aotarr/aot_NatArr.c $(LIBOBJ) \
+	  -o build/test_aotarr.exe $(LDFLAGS)
+	@echo "--- #573 los operadores de arrays del AOT (esperado: AOT == interpretado, 21/21, sin FALLO) ---"
+	@./build/test_aotarr.exe samples/NatArr.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotarr.aot; \
+	 ./build/test_aotarr.exe samples/NatArr.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotarr.int; \
+	 n=$$(grep -c '^ok ' build/aotarr.aot); \
+	 if grep -q '^FALLO' build/aotarr.aot build/aotarr.int; then grep -h '^FALLO' build/aotarr.aot build/aotarr.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotarr.int build/aotarr.aot; then diff build/aotarr.int build/aotarr.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 21 ]; then cat build/aotarr.aot; echo "  ROJO: $$n de 21 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 21/21 con el AOT, igual que interpretado"
 
 # V7/H5 (P2b.1.a, 26-sep) — EL CAMBIO DE CONTEXTO (bpvm_ctx), la pieza en ensamblador de la suspensión de
 # natives: 100 000 saltos con estado vivo en los registros no volátiles, setjmp/longjmp y un marco grande

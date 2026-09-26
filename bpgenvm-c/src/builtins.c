@@ -142,6 +142,7 @@ void bpvm_files_fin_de_run(bpvm_t* vm) {
  * número de cada una está en la cabecera, con su firma BP). */
 #include "builtin_ids.h"
 #include "bpvm_prims.h"   /* V7/H5 P2b: las primitivas compartidas con el AOT */
+#include "bpvm_opcodes.h" /* #573: bpvm_prim_texto_indice nombra el opcode */
 
 #if 0   /* notas de los ids (histórico; el enum vive en builtin_ids.h) */
     /* #348 — cadenas de cómputo puro. Estaban SÓLO en miVM: un programa que
@@ -918,6 +919,26 @@ int bpvm_prim_nuevo_array(bpvm_t* vm, int32_t size, uint32_t ancho, int tipo, co
     *out = bpvm_handle_register(vm, o);
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #430 */
     return 0;
+}
+
+void bpvm_prim_texto_indice(char* err, size_t n, int op, int32_t idx, uint32_t len) {
+    const char* nombre;
+    int estrecho = 1;   /* los de 1 y 2 bytes dicen «idx … (len=…)»; los de 4 y 8, «índice … (length=…)» (miVM) */
+    switch (op) {
+    case OP_ALOAD:      nombre = "ALOAD";      estrecho = 0; break;
+    case OP_ASTORE:     nombre = "ASTORE";     estrecho = 0; break;
+    case OP_ALOAD_I64:  nombre = "ALOAD_I64";  estrecho = 0; break;
+    case OP_ASTORE_I64: nombre = "ASTORE_I64"; estrecho = 0; break;
+    case OP_ALOAD_I8:   nombre = "ALOAD_I8";   break;
+    case OP_ALOAD_U8:   nombre = "ALOAD_U8";   break;
+    case OP_ALOAD_I16:  nombre = "ALOAD_I16";  break;
+    case OP_ALOAD_U16:  nombre = "ALOAD_U16";  break;
+    case OP_ASTORE_I8:  nombre = "ASTORE_I8";  break;
+    case OP_ASTORE_I16: nombre = "ASTORE_I16"; break;
+    default:            nombre = "?";          estrecho = 0; break;
+    }
+    if (estrecho) snprintf(err, n, "%s: idx fuera de rango %" PRId32 " (len=%d)", nombre, idx, (int) len);
+    else          snprintf(err, n, "%s: índice fuera de rango %" PRId32 " (length=%d)", nombre, idx, (int) len);
 }
 
 int bpvm_builtin_cede(int id) {
