@@ -2129,8 +2129,9 @@ texto que interpretado; `a + b` sin memoria, un `null` callado). **Cerrada el mi
 `bpvm_prim_texto_indice`, el texto de cada opcode de acceso en UN sitio, que usan el opcode y el helper; el concat
 reserva con `bpvm_prim_nuevo_array`. `test-aotarr` 21/21 y `NatArr` en la paridad. La igualdad de cadenas no hacía falta:
 `string_eq` y `__strequals` ya coincidían (`null` sólo es igual a `null`).
-- **P2b.3** — el cambio de contexto de ARM y de los dos RISC-V, la cascada de la ABI 9 (los `.mdn`, los packs, las
-  imágenes) y la sesión de placas, junto con lo que ya espera placa (regrabar el `DriverSpi`, `H6.b` en el P4 y la DK2).
+- **P2b.3** — ~~el cambio de contexto de ARM y de los dos RISC-V~~ (**rediseñado el 27-sep**: la native corre en un
+  hilo de la plataforma, ver §P2b.3 abajo), la cascada de la ABI 9 (los `.mdn`, los packs, las imágenes) y la sesión
+  de placas, junto con lo que ya espera placa.
 
 #### P2b.0 — lo que cuesta la línea del bucle, MEDIDO (26-sep, Pico 2, RP2350 a 150 MHz)
 
@@ -2210,6 +2211,91 @@ Tres cosas que el diseño de arriba no sabía y el código sí:
   `call_builtin` a la misma 9, sin subirla otra vez: ningún `.mdn` de la 9 habrá salido todavía.
 - **El arnés de las pruebas del AOT** (`fixture`) dejaba correr una prueba con el `.mod` RANCIO cuando el `.bp` no
   compilaba (`3f71c5b6`): se vio al escribir la de P2b.1.c.
+
+#### P2b.3 — REDISEÑADO (27-sep): la native corre en un hilo de la plataforma, y se pasan el testigo
+
+> Eduardo, al ver lo que complicaba el ensamblador en las placas: *«FreeRtos hace un cambio de contexto cuando cambia
+> de Thread, puedes mirar como lo hace»*, y luego: *«si es muy complicado podemos pensar en otras alternativas. Por
+> ejemplo, pensar en la ejecución de código nativo como un Thread BP, con su propio stack. Y de vez en cuando devuelve
+> el hilo de ejecución a otros Thread BP. Ese es un mecanismo que ya existe.»* Decidido el mismo día: *«creo que
+> simplifica el diseño ya que la estructura ya existe y me parece mucho más robusto»*.
+
+**Lo que complicaba el camino del ensamblador** (mirado el 27-sep en los tres puertos de FreeRTOS que usamos). El
+ensamblador era lo de menos —las mismas ~20 líneas que el `PendSV` de FreeRTOS: r4–r11 y s16–s31 en ARM—. Lo difícil
+era que el cambio lo hacíamos NOSOTROS, dentro de UNA tarea, y cada sistema vigila que la tarea use su propia pila:
+
+- **ARM** (Pico 2, Metro, DK2, Nucleo): el `PSPLIM`, el límite de pila por hardware del Cortex-M33, era fácil —FreeRTOS
+  lo guarda en el marco de cada tarea: bastaba con ponerlo—; pero la comprobación de desborde de FreeRTOS
+  (`configCHECK_FOR_STACK_OVERFLOW 2`, en las dos familias) mira además que el puntero de pila guardado no quede por
+  debajo de la pila de la tarea, y que saltara o no dependía de dónde cayera la pila prestada en la RAM.
+- **ESP32 RISC-V** (C3, C5, C6, P4): el vigilante de pila por hardware del IDF (`CONFIG_ESP_SYSTEM_HW_STACK_GUARD`, el
+  que cazó `#543` dos veces) toma sus límites del TCB (`pxStack`/`pxEndOfStack`) al salir de CADA interrupción: con
+  la pila prestada fuera, salta en la primera. Las salidas eran apagarlo o reescribir esos campos del TCB.
+- **El P4**, además: el IDF guarda la FPU de cada tarea al fondo de su pila y, al reservar ese hueco, comprueba el
+  puntero de pila guardado (`pxPortGetCoprocArea`: «Stack overflow while saving coprocessor context») —justo los
+  campos que habría que reescribir—; y con PSRAM, `malloc` pone los bloques de más de 2 KB en ella, donde el IDF
+  prohíbe tener la pila mientras se escribe la flash (`assert(esp_task_stack_is_sane_cache_disabled())`).
+
+Todo tenía arreglo, pero eran parches por plataforma, en tripas del IDF, que sólo se prueban en la placa.
+
+**El diseño nuevo.** La native corre en un **ejecutor**: un hilo de la plataforma —una tarea de FreeRTOS con su propia
+pila; en el PC, un pthread—. El intérprete y el ejecutor **se pasan el testigo**: sólo corre uno de los dos, así que
+la VM sigue sin concurrencia. El intérprete reparte los hilos BP como siempre, y la native le devuelve el control en
+los mismos puntos de P2b.1: la línea del bucle, un builtin que bloquea, una función BP que espera. El cambio de
+contexto lo hace el sistema, con todas sus vigilancias en regla, igual en todas las placas; y el PC ejecuta el mismo
+código, así que la cascada se mantiene.
+
+- **El testigo**: dos semáforos binarios por ejecutor; pasarlo es dar el del otro y esperar el propio.
+- **Los ejecutores, en un depósito de la VM**: se crean al entrar en una native y se reutilizan. Un hilo BP tiene uno
+  sólo mientras está DENTRO de una native —corriendo o suspendida—: `tc->nativa` es ese ejecutor, y al acabar la
+  native vuelve al depósito. Hay tantos como natives a medias a la vez: casi siempre, uno.
+- **De P2b.1 cambia poco**: donde se saltaba de pila (`bpvm_ctx_saltar`) se pasa el testigo. El límite de fallos
+  (`#186`) y el contexto de la llamada ya colgaban de la native, y sus vistas por worker se siguen cambiando en cada
+  paso (en las placas son globales).
+- **El GC corre en el worker**: si una reserva lo dispara DENTRO del ejecutor, éste le pasa el testigo con el encargo,
+  y el marcado —recursivo— se hace en la pila del intérprete, como pedía el diseño de P2b. La pila del ejecutor se
+  escanea como la de una native suspendida: desde su puntero de pila, con los registros volcados por `setjmp`, hasta
+  su techo.
+- **Al acabar el programa**, un ejecutor parado a mitad de una native se despierta con la orden de terminar y salta a
+  su fondo (`longjmp`), abandonando esos marcos, como P2b.1 abandonaba la pila prestada.
+- **Sin memoria para un ejecutor**, la native corre directa en el worker, como hoy en las placas (no puede cederse; un
+  `kill` la para lanzando), y se dice una vez.
+- **La plataforma gana dos piezas**: el semáforo binario, y un hilo con su tamaño de pila, a la prioridad de quien lo
+  crea (como `io`), con su marca de agua. Tres implementaciones: pthread (PC); FreeRTOS (Pico y STM32:
+  `xTaskCreateStatic` con memoria de `malloc`, porque el heap de FreeRTOS es de 24–32 KB —la STM32 necesita
+  `configSUPPORT_STATIC_ALLOCATION`—); y ESP32 (el IDF pone las pilas de las tareas en la RAM interna).
+- **Se retira el ensamblador x86 de P2b.1** (`bpvm_ctx`) y su prueba: ya cumplió —probar el diseño en el PC—, y si se
+  quedara, el PC no probaría lo mismo que las placas.
+
+**Lo que cuesta**: cada llamada a una native son dos cambios de tarea —estimado: 5–10 µs en las placas, frente a menos
+de 1 µs con ensamblador; se mide—. Una native con un bucle no lo nota; una diminuta llamada miles de veces desde
+código interpretado, sí. Si la medida lo pidiera, una native sin puntos de cesión (sin bucles, sin builtins, sin
+llamadas a BP: el compilador lo sabe) podría seguir corriendo directa, pero eso después de medir.
+
+**La pila del ejecutor puede ser PEQUEÑA** (Eduardo: *«en freertos el tamaño del stack de los Threads puede ser más
+pequeño, no tiene que ser de 8K»*). Dentro corren la native, sus helpers y lo que llame —el GC no: va al worker—, así
+que el tamaño se MIDE con la marca de agua de la tarea, que el sistema da gratis, y se fija por familia con lo
+medido. Lo que ya se sabe que la infla: `bpvm_call_builtin`, con un marco de **2 KB** (2096 B en la DK2), porque su
+`switch` reserva para cualquier builtin los búferes del `case` más gordo; cualquier builtin llamado desde una native
+por el despachador los paga. Si la marca de agua lo pide, adelgazar ese `switch` —sacar a funciones aparte TODOS los
+`case` de búfer grande, midiendo con `-fstack-usage` antes y después: sacar uno solo SUMA pila— beneficia además a la
+pila del worker, que hoy paga esos 2 KB en cada builtin.
+
+**Por mirar**: el depurador parando en código BP llamado desde una native, que ahora corre en el ejecutor (la Pico lee
+el USB del depurador desde la tarea del REPL); si molesta, con el depurador las natives corren directas.
+
+**Por pasos:**
+- **P2b.3.a** — las dos piezas de la plataforma y `make test-ejecutor` (ida y vuelta con estado vivo, un `longjmp`
+  dentro, un marco grande, terminar uno parado), con **lo que cuesta pasar el testigo en el PC**: la primera medida.
+- **P2b.3.b** — las natives en ejecutores y el GC en el worker; fuera `bpvm_ctx`; en verde `test-aotcede`,
+  `test-aotexpropia`, `test-aotkill`, `test-aotbuiltin`, `test-aotanida` y `compat.sh check`; y lo que cuesta una
+  llamada a una native, antes y después.
+- **P2b.3.c** — los firmwares (todas las familias compilan; el tamaño de la pila del ejecutor, por familia) y el
+  HardFault de la STM32, que hoy se cuelga MUDO: un desborde de la pila de un ejecutor ahí sería un cuelgue sin nada en
+  el log (la Pico habla desde `#447`).
+- **P2b.3.d** — la sesión de placas, con el OK de Eduardo: las imágenes, las pruebas `Nat*` en la tanda con `aot`, la
+  marca de agua y lo que cuesta una llamada en cada familia, y lo que esperaba placa (la C6 con `#574`, el ADC de la
+  DK2, el NeoPixel de la Metro, `DriverSpi` en la C5 y la C6, SQLite y la Gui en el P4).
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
