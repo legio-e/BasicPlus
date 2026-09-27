@@ -2564,6 +2564,63 @@ primera concatenación—.
 - Menores: la base de cada módulo (CS) no va alineada a 4 aunque `MOD_FORMAT` §7 lo dice; `OPCODES.md` cuenta 186
   opcodes y hay 188.
 
+## H7 — `#531`: el cuanto de miVM por INSTRUCCIONES (27-sep, análisis: Eduardo, *«analízalo más antes»*)
+
+**Lo que hay.** Las dos VMs drenan los eventos igual —uno por cuanto, al darle la CPU al hilo destinatario
+(`drainOneEvent` / `bpvm_event_drain_one`)— y reparten igual —round-robin entre los RUNNABLE—. Lo que difiere es
+DÓNDE acaba un cuanto: la VM-C cuenta opcodes (`bpvm_interp_run_quantum`: `if (ops >= max_ops)` arriba del lazo y
+`ops++` después, exactamente 1024 por cuanto); miVM lo corta con un TEMPORIZADOR de 10 ms (`startPreemptTimer` marca
+`yieldRequested` en todo hilo RUNNING). Es el único sitio del planificador donde «el mismo algoritmo» no lo es, y
+por eso miVM ni siquiera repite su propio orden (`EvDos`: «onB» tras `v250` una vez y tras `fin` dos).
+
+**Medido con un prototipo** (desechable, no subido: un contador en el lazo de `runOnContext` con el criterio exacto
+de la VM-C, y el temporizador apagado):
+- `EvDos`: miVM 3 de 3 IDÉNTICA a la VM-C («onB» tras `v50`).
+- El coste (`Bucle`, 3 M vueltas, la JVM de 32 bits de este equipo): un hilo 2566 → 2730 ms (**+6 %**), dos hilos
+  2958 → 3080 ms (**+4 %**). La frontera de cuanto de miVM es cara —salir del lazo guardando los registros, el
+  `vmLock`, reencolar, elegir, drenar, volver a cargarlos— y con 1024 opcodes pasa unas 170 veces más que con 10 ms
+  (en este PC miVM hace unos 17,5 M opcodes por segundo: 1024 son unos 60 µs; la VM-C, unos 400 M: 2,6 µs).
+- La red entera con el prototipo: VERDE —paridad 109/109 en MOD9 y MOD8, pruebas de C 25/25—: ningún sample del corpus cambia de salida con el cuanto por instrucciones.
+
+**Qué cambiaría para un programa.**
+1. De un hilo y sin eventos: nada visible (la frontera vuelve a elegir al mismo hilo).
+2. Los eventos se entregan en la MISMA instrucción en las dos VMs (el caso de `#531`).
+3. Varios hilos que calculan sin esperar: el reparto pasa a ser determinista y el mismo en las dos VMs. Con `sleep`
+   de por medio, el despertar sigue dependiendo del reloj en las dos, como hoy.
+4. El GUI de miVM (Swing en su hilo; `GUI_RUN` bombea con esperas) no depende del temporizador.
+5. `--workers=N` (el SMP experimental de miVM): cada worker corta cada 1024 por su cuenta; con varios workers el
+   intercalado sigue sin ser determinista, como en el SMP de la VM-C.
+6. Una native (el AOT, sólo en la VM-C) no cuenta opcodes igual —cede en sus bucles—: con natives y varios hilos
+   el reparto puede seguir difiriendo, y eso ya está fuera del contrato de paridad del stdout.
+7. miVM pierde un hilo (el del temporizador).
+
+**Si el coste molestara**: un camino rápido en la frontera —si no hay otro hilo RUNNABLE, ni un evento para éste,
+ni un dormido que ya deba despertar, seguir sin salir del lazo—. En la VM-C eso es lo que pasa en efecto (vuelve a
+elegir al mismo hilo), así que el orden observable no cambia; pide leer ese estado sin el `vmLock` (contadores
+volátiles).
+
+**Propuesta**: hacerlo —el contador, sin el temporizador—, con `EvDos` en la paridad, y el camino rápido sólo si el
++6 % molesta.
+
+## H7 — `#494`: el heap descarrilado, UNA EXCEPCIÓN (27-sep, decisión de Eduardo; el cómo, para mirarlo)
+
+**Lo que hay.** El guardián (`buildValidObjectsSet` en miVM, `build_gc_valid_map` en la VM-C) ve que el recorrido
+de cabeceras no acaba en `heapNext`, lo dice (stderr / `bpvm_diag_urgente`) y el GC SIGUE: marca con un mapa
+truncado y el barrido se lleva objetos vivos; el programa muere después, en otro sitio, con un use-after-free. La
+VM-C decidió no abortar a propósito (`heap.c`); Eduardo, 27-sep: ni avisar y seguir ni parar la VM — una excepción.
+
+**El diseño propuesto.**
+1. Si el recorrido descarrila, el GC NO barre (con el mapa truncado, barrer es destruir) y queda marcado.
+2. La reserva que pidió ese GC falla con una excepción BP en ESE hilo, atrapable como «No space in heap», con el
+   mismo texto en las dos VMs: `RuntimeError` «heap descarrilado (fallo interno de la VM)». Los números (dónde
+   acabó el recorrido, la cabecera leída) siguen saliendo por el diagnóstico, como hoy.
+3. Lanzarla no puede reservar —el heap está roto—: una PREFABRICADA, como la de sin memoria (`#430`: `oomExc` en
+   miVM y la de `exceptions.c` en la VM-C), creada al arrancar con ese mensaje fijo.
+4. Cada GC posterior vuelve a descarrilar y a lanzarla: quien la atrape puede cerrar sus ficheros y salir; si nadie
+   la atrapa, el programa acaba con salida 1 y el mensaje.
+5. La prueba: en C y en miVM, estropear a propósito la cabecera de un bloque (un largo falso), pedir un GC y esperar
+   la excepción con su texto; y con el guardián saboteado, roja.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
