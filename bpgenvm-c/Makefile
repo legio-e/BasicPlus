@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-ctx test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-ctx test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -718,6 +718,14 @@ test-ctx: $(LIBOBJ)
 	@echo "--- P2b.1.a el cambio de contexto (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_ctx.exe
 
+# V7/H5 (P2b.3.a, 27-sep) — EL EJECUTOR de una native y EL TESTIGO, las dos piezas de la plataforma, solas:
+# idas y vueltas con estado vivo (y lo que cuesta un paso), terminar uno parado a mitad, un marco grande.
+test-ejecutor: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_ejecutor.c $(LIBOBJ) -o build/test_ejecutor.exe $(LDFLAGS)
+	@echo "--- P2b.3.a el ejecutor y el testigo (esperado: solo 'ok', [status=OK]) ---"
+	@timeout 60 ./build/test_ejecutor.exe || { echo "  ROJO: el ejecutor o el testigo (¿colgado? lo cortó el tope)"; exit 1; }
+
 # V7/H5 (P2b.1.c, 26-sep) — una native que llama a una función BP que se BLOQUEA mientras otro hilo avanza
 # y reserva (GC en cada reserva): la native se suspende en su pila prestada y lo que guarda en C sobrevive.
 test-aotcede: $(LIBOBJ)
@@ -782,6 +790,19 @@ test-aotbuiltin: $(LIBOBJ)
 	 if ! cmp -s build/aotbuiltin.int build/aotbuiltin.aot; then diff build/aotbuiltin.int build/aotbuiltin.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 8 ]; then cat build/aotbuiltin.aot; echo "  ROJO: $$n de 8 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 8/8 con el AOT, igual que interpretado"
+
+# V7/H5 (P2b.3, 27-sep) — LO QUE CUESTA LLAMAR a una native desde código interpretado: 200 000 llamadas a una
+# native diminuta, con el AOT y sin él. No es una prueba (no entra en check-testc): es la medida de antes y
+# después de pasar las natives a un ejecutor.
+medir-llamada: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatLlamada)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatLlamada,build/aotllamada)
+	$(CC) $(CFLAGS) -Isrc test/test_aotllamada.c build/aotllamada/aot_NatLlamada.c $(LIBOBJ) \
+	  -o build/test_aotllamada.exe $(LDFLAGS)
+	@./build/test_aotllamada.exe samples/NatLlamada.mod 2>/dev/null
+	@./build/test_aotllamada.exe samples/NatLlamada.mod --interp 2>/dev/null
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

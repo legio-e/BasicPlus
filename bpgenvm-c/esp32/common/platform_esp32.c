@@ -194,9 +194,23 @@ static int es_thread_spawn(bpvm_platform_thread_handle_t* t,
     return es_thread_spawn_prio(t, entry, arg, core, tskIDLE_PRIORITY + 1);
 }
 
+/* V7/H5 P2b.3 — con su nombre y su tamaño de pila (el ejecutor de una native los pide suyos). */
+static int es_thread_spawn_pila(bpvm_platform_thread_handle_t* t,
+                                bpvm_thread_entry_t entry, void* arg,
+                                BaseType_t core, UBaseType_t prio,
+                                const char* nombre, uint32_t pila_bytes);
+
 static int es_thread_spawn_prio(bpvm_platform_thread_handle_t* t,
                                 bpvm_thread_entry_t entry, void* arg,
                                 BaseType_t core, UBaseType_t prio) {
+    return es_thread_spawn_pila(t, entry, arg, core, prio, "bpvm-thread",
+                                BPVM_ESP32_THREAD_STACK_BYTES);
+}
+
+static int es_thread_spawn_pila(bpvm_platform_thread_handle_t* t,
+                                bpvm_thread_entry_t entry, void* arg,
+                                BaseType_t core, UBaseType_t prio,
+                                const char* nombre, uint32_t pila_bytes) {
     if (!t || !entry) return -1;
     es_thread_t* et = (es_thread_t*) pvPortMalloc(sizeof(es_thread_t));
     if (!et) return -1;
@@ -204,8 +218,8 @@ static int es_thread_spawn_prio(bpvm_platform_thread_handle_t* t,
     if (!et->exited) { vPortFree(et); return -1; }
     et->entry = entry;
     et->arg = arg;
-    BaseType_t r = xTaskCreatePinnedToCore(es_thread_trampoline, "bpvm-thread",
-                                           BPVM_ESP32_THREAD_STACK_BYTES,
+    BaseType_t r = xTaskCreatePinnedToCore(es_thread_trampoline, nombre,
+                                           pila_bytes,
                                            et, prio,
                                            &et->task, core);
     if (r != pdPASS) {
@@ -265,6 +279,47 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     vSemaphoreDelete(et->exited);
     vPortFree(et);
     *t = NULL;
+}
+
+/* ============================== V7/H5 P2b.3 ======================
+ * EL TESTIGO Y EL HILO DEL EJECUTOR DE NATIVES (bpvm_platform.h). */
+
+int bpvm_platform_sem_init(bpvm_platform_sem_handle_t* s) {
+    if (!s) return -1;
+    SemaphoreHandle_t x = xSemaphoreCreateBinary();   /* nace a 0 */
+    if (!x) return -1;
+    *s = (void*) x;
+    return 0;
+}
+
+void bpvm_platform_sem_destroy(bpvm_platform_sem_handle_t* s) {
+    if (!s || !*s) return;
+    vSemaphoreDelete((SemaphoreHandle_t) *s);
+    *s = NULL;
+}
+
+void bpvm_platform_sem_give(bpvm_platform_sem_handle_t* s) {
+    xSemaphoreGive((SemaphoreHandle_t) *s);   /* ya dado: se queda dado (binario) */
+}
+
+void bpvm_platform_sem_take(bpvm_platform_sem_handle_t* s) {
+    xSemaphoreTake((SemaphoreHandle_t) *s, portMAX_DELAY);
+}
+
+/* El IDF reserva la pila de una tarea en la RAM INTERNA (su heap de FreeRTOS es MALLOC_CAP_INTERNAL): justo lo
+ * que hace falta, porque con la pila en la PSRAM no se puede escribir la flash (spi_flash lo comprueba con un
+ * assert). A la prioridad de la tarea de la VM, como `io`, y sin afinidad, como `io`. */
+int bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* t,
+                                        bpvm_thread_entry_t entry, void* arg,
+                                        uint32_t pila_bytes) {
+    return es_thread_spawn_pila(t, entry, arg, tskNO_AFFINITY, uxTaskPriorityGet(NULL),
+                                "bpvm-nat", pila_bytes);
+}
+
+int32_t bpvm_platform_pila_libre_actual(void) {
+    /* En el IDF la pila se cuenta en BYTES (StackType_t es uint8_t): el producto no cambia nada, y vale igual si
+     * algún día no lo fuera. */
+    return (int32_t) (uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t));
 }
 
 void bpvm_platform_thread_yield(void) {

@@ -138,6 +138,75 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     *t = NULL;
 }
 
+/* ---- V7/H5 P2b.3 - el testigo y el hilo del ejecutor de natives ---- */
+
+typedef struct {
+    pthread_mutex_t m;
+    pthread_cond_t  c;
+    int             dado;   /* 0 / 1: binario */
+} pt_sem_t;
+
+int bpvm_platform_sem_init(bpvm_platform_sem_handle_t* s) {
+    pt_sem_t* x = (pt_sem_t*) bpvm_malloc_os(sizeof(pt_sem_t));
+    if (!x) return -1;
+    if (pthread_mutex_init(&x->m, NULL) != 0) { bpvm_free(x); return -1; }
+    if (pthread_cond_init(&x->c, NULL) != 0) { pthread_mutex_destroy(&x->m); bpvm_free(x); return -1; }
+    x->dado = 0;
+    *s = x;
+    return 0;
+}
+
+void bpvm_platform_sem_destroy(bpvm_platform_sem_handle_t* s) {
+    if (!s || !*s) return;
+    pt_sem_t* x = (pt_sem_t*) *s;
+    pthread_cond_destroy(&x->c);
+    pthread_mutex_destroy(&x->m);
+    bpvm_free(x);
+    *s = NULL;
+}
+
+void bpvm_platform_sem_give(bpvm_platform_sem_handle_t* s) {
+    pt_sem_t* x = (pt_sem_t*) *s;
+    pthread_mutex_lock(&x->m);
+    x->dado = 1;
+    pthread_cond_signal(&x->c);
+    pthread_mutex_unlock(&x->m);
+}
+
+void bpvm_platform_sem_take(bpvm_platform_sem_handle_t* s) {
+    pt_sem_t* x = (pt_sem_t*) *s;
+    pthread_mutex_lock(&x->m);
+    while (!x->dado) pthread_cond_wait(&x->c, &x->m);
+    x->dado = 0;
+    pthread_mutex_unlock(&x->m);
+}
+
+/* En el PC no hay prioridades que repartir (como `io`): sólo el tamaño de la pila. */
+int bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* th,
+                                        bpvm_thread_entry_t entry, void* arg,
+                                        uint32_t pila_bytes) {
+    pthread_attr_t at;
+    pthread_t* p = (pthread_t*) bpvm_malloc_os(sizeof(pthread_t));
+    if (!p) return -1;
+    pthread_trampoline_arg_t* t = (pthread_trampoline_arg_t*) bpvm_malloc_os(sizeof(*t));
+    if (!t) { bpvm_free(p); return -1; }
+    t->entry = entry;
+    t->arg   = arg;
+    if (pthread_attr_init(&at) != 0) { bpvm_free(p); bpvm_free(t); return -1; }
+    if (pthread_attr_setstacksize(&at, (size_t) pila_bytes) != 0) {
+        pthread_attr_destroy(&at); bpvm_free(p); bpvm_free(t); return -1;
+    }
+    int r = pthread_create(p, &at, pthread_trampoline, t);
+    pthread_attr_destroy(&at);
+    if (r != 0) { bpvm_free(p); bpvm_free(t); return -1; }
+    *th = p;
+    return 0;
+}
+
+int32_t bpvm_platform_pila_libre_actual(void) {
+    return -1;   /* el SO no lleva marca de agua de la pila de un hilo */
+}
+
 void bpvm_platform_thread_yield(void) {
 #if defined(_POSIX_PRIORITY_SCHEDULING) || defined(__MINGW32__) || defined(__MINGW64__)
     sched_yield();

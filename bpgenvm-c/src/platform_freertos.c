@@ -44,6 +44,7 @@
  * detalle largo está en `include/bpvm_platform.h`.
  */
 #include "bpvm_platform.h"
+#include "bpvm_alloc.h"   /* V7/H5 P2b.3: la pila del ejecutor de natives, de malloc */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -203,6 +204,9 @@ typedef struct {
     bpvm_thread_entry_t entry;
     void*               arg;
     int                 core_id;   /* -1 = sin afinidad; lo lee el gancho de abajo */
+    /* V7/H5 P2b.3 — sólo el ejecutor de una native: su TCB y su pila, de malloc (NULL en los demás). */
+    void*               tcb;
+    void*               pila;
 } fr_thread_t;
 
 /* ⚠️ EL HILO NO SE BORRA A SÍ MISMO, Y ESO NO ES UN DETALLE.
@@ -247,6 +251,8 @@ static int fr_spawn(bpvm_platform_thread_handle_t* t, bpvm_thread_entry_t entry,
     ft->entry   = entry;
     ft->arg     = arg;
     ft->core_id = core_id;
+    ft->tcb     = NULL;
+    ft->pila    = NULL;
 #if (configNUMBER_OF_CORES > 1) && (configUSE_CORE_AFFINITY == 1)
     /* Con SMP y un core pedido, se fija la afinidad al crear. Hoy ninguna familia
      * lo activa (la Pico va con configNUMBER_OF_CORES=1 hasta que cierre #153),
@@ -316,8 +322,78 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     }
     /* Aquí es donde se recicla de verdad la pila y el TCB (ver el trampolín). */
     if (ft->task) vTaskDelete(ft->task);
+    /* P2b.3 — el ejecutor de una native: su memoria es nuestra, y se devuelve DESPUÉS de borrar la tarea (borrar
+     * OTRA tarea la saca de las listas del núcleo en el acto). */
+    if (ft->tcb)  bpvm_free(ft->tcb);
+    if (ft->pila) bpvm_free(ft->pila);
     vPortFree(ft);
     *t = NULL;
+}
+
+/* ─── V7/H5 P2b.3 — EL TESTIGO Y EL HILO DEL EJECUTOR DE NATIVES ───────────────────────────────────────────── */
+
+int bpvm_platform_sem_init(bpvm_platform_sem_handle_t* s) {
+    if (!s) return -1;
+    SemaphoreHandle_t x = xSemaphoreCreateBinary();   /* nace a 0 */
+    if (!x) return -1;
+    *s = (void*) x;
+    return 0;
+}
+
+void bpvm_platform_sem_destroy(bpvm_platform_sem_handle_t* s) {
+    if (!s || !*s) return;
+    vSemaphoreDelete((SemaphoreHandle_t) *s);
+    *s = NULL;
+}
+
+void bpvm_platform_sem_give(bpvm_platform_sem_handle_t* s) {
+    xSemaphoreGive((SemaphoreHandle_t) *s);   /* ya dado: se queda dado (binario) */
+}
+
+void bpvm_platform_sem_take(bpvm_platform_sem_handle_t* s) {
+    xSemaphoreTake((SemaphoreHandle_t) *s, portMAX_DELAY);
+}
+
+/* El ejecutor es una tarea ESTÁTICA con su TCB y su pila de malloc: el heap de FreeRTOS está dimensionado para
+ * `vm` e `io` (24 KB en la STM32) y una pila de ejecutor no cabe en él; así sólo cuesta mientras existe. Nace de
+ * la tarea de la VM y a su prioridad, como `io`. Termina como los demás hilos de aquí: avisa y se SUSPENDE, y
+ * `join` la borra y devuelve su memoria (la propia tarea no podría: su TCB seguiría en la lista de terminadas
+ * hasta que corriera la ociosa). */
+int bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* t,
+                                        bpvm_thread_entry_t entry, void* arg,
+                                        uint32_t pila_bytes) {
+#if (configSUPPORT_STATIC_ALLOCATION == 1)
+    if (!t || !entry || pila_bytes < configMINIMAL_STACK_SIZE * sizeof(StackType_t)) return -1;
+    fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
+    if (!ft) return -1;
+    ft->exited  = xSemaphoreCreateBinary();
+    ft->entry   = entry;
+    ft->arg     = arg;
+    ft->core_id = -1;
+    ft->tcb     = bpvm_malloc_os(sizeof(StaticTask_t));
+    ft->pila    = bpvm_malloc_os(pila_bytes);
+    ft->task    = NULL;
+    if (ft->exited && ft->tcb && ft->pila)
+        ft->task = xTaskCreateStatic(fr_thread_trampoline, "bpvm-nat",
+                                     (configSTACK_DEPTH_TYPE) (pila_bytes / sizeof(StackType_t)), ft,
+                                     uxTaskPriorityGet(NULL), (StackType_t*) ft->pila, (StaticTask_t*) ft->tcb);
+    if (ft->task == NULL) {
+        if (ft->exited) vSemaphoreDelete(ft->exited);
+        if (ft->tcb)  bpvm_free(ft->tcb);
+        if (ft->pila) bpvm_free(ft->pila);
+        vPortFree(ft);
+        return -1;
+    }
+    *t = (void*) ft;
+    return 0;
+#else
+    (void) t; (void) entry; (void) arg; (void) pila_bytes;
+    return -1;   /* sin configSUPPORT_STATIC_ALLOCATION no hay ejecutor: las natives corren en la tarea de la VM */
+#endif
+}
+
+int32_t bpvm_platform_pila_libre_actual(void) {
+    return (int32_t) (uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t));
 }
 
 void bpvm_platform_thread_yield(void) { taskYIELD(); }

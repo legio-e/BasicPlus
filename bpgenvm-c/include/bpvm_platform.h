@@ -102,6 +102,39 @@ int  bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
 int  bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
                                      bpvm_thread_entry_t entry, void* arg);
 
+/* V7/H5 P2b.3 - EL EJECUTOR DE NATIVES.
+ *
+ * Una native corre en un hilo propio de la plataforma -su EJECUTOR- y el
+ * interprete y el se pasan el TESTIGO: solo corre uno de los dos
+ * (src/bpvm_nativa.c). Asi, dejar una native a medias y reanudarla es cosa del
+ * sistema: el cambio de contexto lo hace FreeRTOS (o el SO del PC) con todas sus
+ * vigilancias de pila en regla. Decision de Eduardo (27-sep): «la estructura ya
+ * existe y me parece mucho mas robusto» (V7_IDEAS §H5.P2b.3).
+ *
+ * El testigo: un semaforo BINARIO por lado. Nace a 0; `give` lo pone a 1 (darlo
+ * dos veces seguidas es darlo una); `take` espera a que este a 1 y lo deja a 0. */
+typedef void* bpvm_platform_sem_handle_t;
+int  bpvm_platform_sem_init(bpvm_platform_sem_handle_t* s);
+void bpvm_platform_sem_destroy(bpvm_platform_sem_handle_t* s);
+void bpvm_platform_sem_give(bpvm_platform_sem_handle_t* s);
+void bpvm_platform_sem_take(bpvm_platform_sem_handle_t* s);
+
+/* El hilo del ejecutor: con `pila_bytes` de pila y a la prioridad de quien lo
+ * crea -la tarea de la VM, como `io`: el testigo hace que nunca corran a la vez,
+ * y a esa prioridad `io` se sigue repartiendo el tiempo con el que lo tenga-. La
+ * pila va donde la plataforma pueda tener la de una tarea (en las ESP32, la RAM
+ * interna: una pila en la PSRAM no puede escribir la flash). Se recoge con
+ * bpvm_platform_thread_join cuando `entry` vuelve. */
+int  bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* t,
+                                         bpvm_thread_entry_t entry, void* arg,
+                                         uint32_t pila_bytes);
+
+/* Lo que el hilo EN CURSO nunca ha usado de su pila, en bytes -la marca de
+ * agua-; -1 si la plataforma no lo sabe (el PC). Un ejecutor la dice al
+ * terminar: es como se dimensiona su pila en cada familia (Eduardo, 27-sep: «en
+ * freertos el tamano del stack de los Threads puede ser mas pequeno»). */
+int32_t bpvm_platform_pila_libre_actual(void);
+
 
 /* Timestamp en ms (monotonic). Para Java equiv de System.currentTimeMillis().
  * El offset 0 es arbitrario; sólo importan diferencias. */

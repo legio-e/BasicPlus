@@ -24,6 +24,7 @@
 #include "pico/rand.h"   /* get_rand_32 — bpvm_platform_random_u32 (#347) */
 
 #include "flash_lock.h"  /* #153 — registro de core víctima de lockout */
+#include "bpvm_alloc.h"  /* V7/H5 P2b.3: la pila del ejecutor de natives, de malloc */
 
 #include <stdlib.h>
 #include <string.h>
@@ -192,6 +193,9 @@ typedef struct {
                                           * víctima de flash lockout antes
                                           * de correr entry (solo dual-core,
                                           * core != 0). */
+    /* V7/H5 P2b.3 — sólo el ejecutor de una native: su TCB y su pila, de malloc (NULL en los demás). */
+    void*               tcb;
+    void*               pila;
 } fr_thread_t;
 
 static void fr_thread_trampoline(void* pv) {
@@ -207,6 +211,13 @@ static void fr_thread_trampoline(void* pv) {
     t->entry(t->arg);
     /* Marcar como terminado para join. */
     if (t->exited) xSemaphoreGive(t->exited);
+    /* P2b.3 — el ejecutor de una native tiene la memoria de su tarea en nuestras manos: no puede borrarse a sí
+     * mismo (su TCB seguiría en la lista de terminadas hasta que corriera la ociosa, y join lo liberaría antes).
+     * Se SUSPENDE y join lo borra: borrar OTRA tarea la saca de las listas del núcleo en el acto. */
+    if (t->tcb) {
+        vTaskSuspend(NULL);
+        for (;;) { vTaskDelay(portMAX_DELAY); }   /* por si alguien la reanudara */
+    }
     /* El task se borra a sí mismo. join libera la estructura. */
     vTaskDelete(NULL);
 }
@@ -216,6 +227,7 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
     if (!t || !entry) return -1;
     fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
     if (!ft) return -1;
+    memset(ft, 0, sizeof *ft);   /* P2b.3: join mira tcb/pila; y lockout_victim, que `io` no ponía */
     ft->exited = xSemaphoreCreateBinary();
     if (!ft->exited) { vPortFree(ft); return -1; }
     ft->entry = entry;
@@ -256,6 +268,7 @@ int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
     if (!t || !entry) return -1;
     fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
     if (!ft) return -1;
+    memset(ft, 0, sizeof *ft);   /* P2b.3: join mira tcb/pila; y lockout_victim, que `io` no ponía */
     ft->exited = xSemaphoreCreateBinary();
     if (!ft->exited) { vPortFree(ft); return -1; }
     ft->entry = entry;
@@ -293,6 +306,7 @@ int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
     }
     fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
     if (!ft) return -1;
+    memset(ft, 0, sizeof *ft);   /* P2b.3: join mira tcb/pila; y lockout_victim, que `io` no ponía */
     ft->exited = xSemaphoreCreateBinary();
     if (!ft->exited) { vPortFree(ft); return -1; }
     ft->entry = entry;
@@ -326,8 +340,72 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     fr_thread_t* ft = (fr_thread_t*) *t;
     xSemaphoreTake(ft->exited, portMAX_DELAY);
     vSemaphoreDelete(ft->exited);
+    if (ft->tcb) {   /* P2b.3 — el ejecutor de una native: se borra aquí y se devuelve su memoria (ver el trampolín) */
+        vTaskDelete(ft->task);
+        bpvm_free(ft->tcb);
+        bpvm_free(ft->pila);
+    }
     vPortFree(ft);
     *t = NULL;
+}
+
+/* ============================== V7/H5 P2b.3 ======================
+ * EL TESTIGO Y EL HILO DEL EJECUTOR DE NATIVES (bpvm_platform.h). */
+
+int bpvm_platform_sem_init(bpvm_platform_sem_handle_t* s) {
+    if (!s) return -1;
+    SemaphoreHandle_t x = xSemaphoreCreateBinary();   /* nace a 0 */
+    if (!x) return -1;
+    *s = (void*) x;
+    return 0;
+}
+
+void bpvm_platform_sem_destroy(bpvm_platform_sem_handle_t* s) {
+    if (!s || !*s) return;
+    vSemaphoreDelete((SemaphoreHandle_t) *s);
+    *s = NULL;
+}
+
+void bpvm_platform_sem_give(bpvm_platform_sem_handle_t* s) {
+    xSemaphoreGive((SemaphoreHandle_t) *s);   /* ya dado: se queda dado (binario) */
+}
+
+void bpvm_platform_sem_take(bpvm_platform_sem_handle_t* s) {
+    xSemaphoreTake((SemaphoreHandle_t) *s, portMAX_DELAY);
+}
+
+/* Tarea ESTÁTICA con su TCB y su pila de malloc: el heap de FreeRTOS (32 KB) está dimensionado para `vm_task`
+ * e `io`, y una pila de ejecutor no cabe en él; así sólo cuesta mientras existe. A la prioridad de quien la crea
+ * —la tarea de la VM—, como `io`. */
+int bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* t,
+                                        bpvm_thread_entry_t entry, void* arg,
+                                        uint32_t pila_bytes) {
+    if (!t || !entry || pila_bytes < configMINIMAL_STACK_SIZE * sizeof(StackType_t)) return -1;
+    fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
+    if (!ft) return -1;
+    memset(ft, 0, sizeof *ft);
+    ft->exited = xSemaphoreCreateBinary();
+    ft->entry  = entry;
+    ft->arg    = arg;
+    ft->tcb    = bpvm_malloc_os(sizeof(StaticTask_t));
+    ft->pila   = bpvm_malloc_os(pila_bytes);
+    if (ft->exited && ft->tcb && ft->pila)
+        ft->task = xTaskCreateStatic(fr_thread_trampoline, "bpvm-nat",
+                                     (configSTACK_DEPTH_TYPE) (pila_bytes / sizeof(StackType_t)), ft,
+                                     uxTaskPriorityGet(NULL), (StackType_t*) ft->pila, (StaticTask_t*) ft->tcb);
+    if (ft->task == NULL) {
+        if (ft->exited) vSemaphoreDelete(ft->exited);
+        if (ft->tcb)  bpvm_free(ft->tcb);
+        if (ft->pila) bpvm_free(ft->pila);
+        vPortFree(ft);
+        return -1;
+    }
+    *t = (void*) ft;
+    return 0;
+}
+
+int32_t bpvm_platform_pila_libre_actual(void) {
+    return (int32_t) (uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t));
 }
 
 void bpvm_platform_thread_yield(void) {

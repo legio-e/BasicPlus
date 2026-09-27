@@ -82,10 +82,14 @@ extern uint32_t SystemCoreClock;
  * En la Nucleo quedan ~174 KB libres para newlib y en la Discovery ~447 KB,
  * así que esto no aprieta en ninguna de las dos. */
 #define configTOTAL_HEAP_SIZE                   ((size_t) (24 * 1024))
-/* A 0 a proposito: nada de este firmware usa xTaskCreateStatic, y ponerlo a 1
- * obliga a dar vApplicationGetIdleTaskMemory. Todo sale del heap del kernel,
- * que esta dimensionado justo para eso. */
-#define configSUPPORT_STATIC_ALLOCATION         0
+/* V7/H5 P2b.3 (27-sep) - A 1: el EJECUTOR de una native es una tarea estatica
+ * con su pila de malloc (src/platform_freertos.c), porque en el heap del kernel
+ * -dimensionado justo para `vm` e `io`- no cabe. Antes estaba a 0 porque ponerlo
+ * a 1 obligaba a dar vApplicationGetIdleTaskMemory; desde FreeRTOS 11 la da el
+ * kernel con configKERNEL_PROVIDED_STATIC_MEMORY. Lo demas sigue saliendo del
+ * heap del kernel. */
+#define configSUPPORT_STATIC_ALLOCATION         1
+#define configKERNEL_PROVIDED_STATIC_MEMORY     1
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 
 /* ─── QUE LOS FALLOS HAGAN RUIDO (norma del proyecto) ───────────────────────
