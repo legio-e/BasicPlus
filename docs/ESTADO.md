@@ -976,6 +976,34 @@ la C6, la P4 y la Nucleo.
   resincronizó en el borde de otro bloque —un punto ciego del guardián que ya estaba: `#593`—. Saboteada, roja: el
   GC barrió con el mapa roto y el programa atrapó «strCopy: fuera de rango».
 
+## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
+
+**Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador
+de miVM) · `6f249614` (la guarda del SMP, y `test-kill` en la red) · `dd2e06e5` (`#590`, el valor inicial de las
+globales) · `8614d7af` (`#531`, el cuanto de miVM por instrucciones) · `7a1a9374` (`#494`, el heap descarrilado es
+una excepción) · y sus docs.
+
+**Lo que decidió Eduardo esta tarde**: `#590` con su modelo —*«las variables globales van en el espacio de
+constantes del módulo […] si se indica, el valor viene ya grabado en el módulo»*; lo que no se puede grabar, en
+`__init`; un array literal, grabado y copiado al cargar—; `#494`, una excepción (y aprobó el diseño); `#356`,
+cerrada por superada; `#531`, analizarlo antes —con un prototipo desechable— y luego hacerlo; su «2º timer» para
+afinar las natives, `#592`. Fichas nuevas: `#591` (los helpers sintetizados heredan la última línea del `.dbg`),
+`#592` y `#593` (el punto ciego del guardián del heap).
+
+**Las placas**: la Metro, la DK2, el P4 y la Nucleo siguen con la imagen de `e5761dd1`; la S3, la C3, la C5 y la C6,
+con la de antes (`#581`). Lo de hoy que toca la VM-C —la guarda del SMP y `#494` (dos campos de `bpvm_t` y una
+prefabricada más en el prólogo)— y el `StringBuilder` nuevo van con la próxima grabación: las imágenes compilan (la
+Pico, comprobada tras `#494`) y el `.mdn` no cambia (el prefijo congelado de `bpvm_t`). Un programa compilado hoy
+funciona en las imágenes de ahora (la interfaz de `Core` casa por enlace tardío).
+
+**⚠️ A vigilar**: `test-listen` dio una vez un `TimeoutError` (el cliente espera 5 s a la VM-C); aislado, 6 de 6 y
+`check-testc` repetido 25/25. Si vuelve a salir, a mirarlo.
+
+**Lo siguiente**, el orden acordado: lo de análisis de H7 (Boot 1/2 y `U1.4`, unificar el montaje de packs,
+`CALL_REL`, la Pico a `platform_freertos.c`, los 32 MB del P4, `U6`/`U6.F1`, el muro heap/pilas, el diagnóstico del
+heap desde BP) y las fichas `#591` y `#593`; las sueltas `#577`–`#586`, poco a poco; `--smp=2` por defecto en el
+PC, con H12.
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
