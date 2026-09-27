@@ -21,17 +21,17 @@ lines
 583 213
 594 214
 603 215
-636 217
-652 221
-686 202
-699 203
-815 68
-830 71
-845 74
-860 77
-875 80
-890 83
-905 86
+631 217
+647 221
+681 202
+694 203
+810 68
+825 71
+840 74
+855 77
+870 80
+885 83
+900 86
 vars
 func Pin.getNum 40
 this -20 8 0 ?
@@ -96,26 +96,25 @@ this -20 8 0 ?
 func AnPin.read 580
 this -20 8 0 ?
 raw 4 4 0 integer
-func AnPin.readVolts 649
+func AnPin.readVolts 644
 this -20 8 0 ?
-func AnPin.__init 683
+func AnPin.__init 678
 this -24 8 0 ?
 num -16 4 0 integer
-func __cls_new_AnPin(i) 713
+func __cls_new_AnPin(i) 708
 num -16 4 0 integer
-func __cls_init_AnPin(i) 745
+func __cls_init_AnPin(i) 740
 this -24 8 0 ?
 num -16 4 0 integer
-func __cls_m_AnPin#read()i 761
+func __cls_m_AnPin#read()i 756
 this -20 8 0 ?
-func __cls_m_AnPin#channel()i 778
+func __cls_m_AnPin#channel()i 773
 this -20 8 0 ?
-func __cls_m_AnPin#readVolts()f 795
+func __cls_m_AnPin#readVolts()f 790
 this -20 8 0 ?
-func __strconcat 917
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?
+func __strconcat3 912
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

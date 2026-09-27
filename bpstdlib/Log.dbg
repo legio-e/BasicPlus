@@ -19,21 +19,21 @@ lines
 226 118
 236 119
 246 122
-275 123
-282 124
-319 127
-328 128
-335 129
-345 131
-352 132
-359 133
-374 134
-402 138
-405 139
-456 142
-471 149
-482 150
-499 151
+265 123
+272 124
+299 127
+308 128
+315 129
+325 131
+332 132
+339 133
+354 134
+382 138
+385 139
+421 142
+436 149
+447 150
+464 151
 vars
 func setFile 64
 p -20 8 0 string
@@ -61,12 +61,27 @@ etiqueta -28 8 0 string
 msg -20 8 0 string
 linea 0 8 0 string
 e 12 8 0 ?
-func rotaSiHaceFalta 468
+func rotaSiHaceFalta 433
 entrante -16 4 0 integer
-func __strconcat 531
+func __strconcat 496
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
-i 16 4 0 ?
+d 16 4 0 ?
+func __strconcat4 550
+s0 -44 8 0 ?
+s1 -36 8 0 ?
+s2 -28 8 0 ?
+s3 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?
+func __strconcat5 632
+s0 -52 8 0 ?
+s1 -44 8 0 ?
+s2 -36 8 0 ?
+s3 -28 8 0 ?
+s4 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

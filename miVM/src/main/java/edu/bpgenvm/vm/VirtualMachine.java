@@ -5570,6 +5570,40 @@ public class VirtualMachine {
                 break;
             }
 
+            // #554 (V7/H7, 27-sep) — LA CONCATENACIÓN: copia TODOS los bytes de la cadena `src` en el byte[] `dst`
+            // desde `pos` y devuelve la posición siguiente. La usan los helpers __strconcat/__strconcatN que
+            // sintetiza el compilador, en vez de copiar byte a byte en bytecode. `src` es una cadena en cualquiera
+            // de sus DOS formas —handle del heap o referencia cruda de un literal del bloque de datos, de cualquier
+            // módulo— o null (vacía, #512): refDeref resuelve las dos. Por eso es un builtin propio de las cadenas y
+            // no MOVE, que rechaza lo que no tiene cabecera de heap. `dst`, un array de bytes del heap. ESPEJO del
+            // `case BUILTIN_STR_COPY` de la VM-C, en el mismo orden y con los mismos textos.
+            case STR_COPY: {
+                int pos = popTc(tc);
+                long dstRefH = popTcRef(tc);
+                long srcRefH = popTcRef(tc);
+                if (dstRefH == 0)
+                    throwBpRuntimeError(tc, "strCopy: dst es null");
+                int dstRef = refDeref(dstRefH);
+                int dstHeader = dstRef - 4;
+                if (dstHeader < heapStart || dstHeader >= heapNext)
+                    throwBpRuntimeError(tc, "strCopy: dst no es ref a heap");
+                int dstTag = readInt32(dstHeader);
+                if ((dstTag & TAG_FREE_BIT) != 0)
+                    throwBpRuntimeError(tc, "strCopy: dst apunta a bloque libre");
+                int dstType = (dstTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+                if (dstType != TYPE_ARRAY_I8)
+                    throwBpRuntimeError(tc, "strCopy: dst no es un array de bytes (type=" + dstType + ")");
+                int srcRef = (srcRefH == 0) ? 0 : refDeref(srcRefH);
+                int n = (srcRef == 0) ? 0 : readInt32(srcRef);
+                int dstLen = readInt32(dstRef);
+                if (pos < 0 || n < 0 || (long) pos + n > dstLen)
+                    throwBpRuntimeError(tc, "strCopy: fuera de rango (pos=" + pos + " bytes=" + n
+                            + " dst=" + dstLen + ")");
+                if (n > 0) System.arraycopy(memory, srcRef + 4, memory, dstRef + 4 + pos, n);
+                pushTc(tc, pos + n);
+                break;
+            }
+
             // ---- Math intrínsecos ----
             case SIGN_I: {
                 int x = popTc(tc);

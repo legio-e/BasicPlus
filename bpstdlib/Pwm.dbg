@@ -14,7 +14,7 @@ lines
 291 86
 307 87
 321 88
-343 89
+338 89
 vars
 func Slice.getPin 35
 this -20 8 0 ?
@@ -47,27 +47,26 @@ this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Slice(ii) 358
+func __cls_new_Slice(ii) 353
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice(ii) 392
+func __cls_init_Slice(ii) 387
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_m_Slice#setFreq(i)V 410
+func __cls_m_Slice#setFreq(i)V 405
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func __cls_m_Slice#setDuty(i)V 426
+func __cls_m_Slice#setDuty(i)V 421
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func __cls_m_Slice#stop()V 442
+func __cls_m_Slice#stop()V 437
 this -20 8 0 ?
-func __cls_m_Slice#start()V 456
+func __cls_m_Slice#start()V 451
 this -20 8 0 ?
-func __strconcat 470
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?
+func __strconcat3 465
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

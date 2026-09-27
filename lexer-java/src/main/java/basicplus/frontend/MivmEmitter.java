@@ -4469,6 +4469,19 @@ public final class MivmEmitter {
                           || (tr instanceof PrimitiveType && ((PrimitiveType) tr).tag == PrimitiveType.Kind.STRING);
 
         if ("+".equals(b.op) && stringOp) {
+            /* V7/H7 #554 (27-sep, la idea de Eduardo) — una CADENA de `+` de strings (`a + b + c + d`) se hace
+             * DE UNA VEZ: una reserva del tamaño final y un `move` por operando, en vez de N−1 cadenas
+             * intermedias que se copian una dentro de otra. Los operandos se evalúan y se pasan a cadena en el
+             * mismo orden que antes (de izquierda a derecha); lo único que cambia es que las concatenaciones
+             * intermedias ya no existen —y una concatenación sólo puede fallar por memoria—.
+             * Se aplana sólo lo que es concatenación (`1 + 2 + "x"` sigue sumando primero), también a través de
+             * paréntesis: concatenar es asociativo. */
+            java.util.List<IExpr> partes = new java.util.ArrayList<>();
+            aplanarConcat(b, partes);
+            if (partes.size() >= 3) {
+                emitConcatDeVarias(partes);
+                return;
+            }
             emitExpr(b.left);
             coerceToString(tl);
             emitExpr(b.right);
@@ -6036,6 +6049,7 @@ public final class MivmEmitter {
         if (emittedHelpers.contains("__strconcat")) {
             emitStrconcatBody();
         }
+        for (int n : concatAridades) emitStrconcatNBody(n);   // #554
         if (emittedHelpers.contains("__strequals")) {
             emitStrequalsBody();
         }
@@ -6048,46 +6062,105 @@ public final class MivmEmitter {
         w.declareLocal("la");
         w.declareLocal("lb");
         w.declareLocalLong("out");   // H1.2a: byte[] ref = 8 bytes
-        w.declareLocal("i");
+        w.declareLocal("d");         // #554: dónde va la siguiente copia
 
         // la = a.length
         w.emitGetParam("a"); w.emit(OpCode.ALEN); w.emitSetLocal("la");
         // lb = b.length
         w.emitGetParam("b"); w.emit(OpCode.ALEN); w.emitSetLocal("lb");
-        // out = new byte[la + lb]  (H2: strings son byte[] UTF-8)
+        // out = new byte[la + lb]  (H2: strings son byte[] UTF-8; ALEN cuenta BYTES, no caracteres)
         w.emitGetLocal("la"); w.emitGetLocal("lb"); w.emit(OpCode.ADD);
         w.emit(OpCode.NEWARRAY_I8); w.emitSetLocal("out");
 
-        // copy a
-        emitInt(0); w.emitSetLocal("i");
-        int top1 = w.newLabel(); int end1 = w.newLabel();
-        w.declareLabel(top1);
-        w.emitGetLocal("i"); w.emitGetLocal("la"); w.emit(OpCode.LT);
-        w.emitJumpIfFalse(end1);
-        w.emitGetLocal("out");
-        w.emitGetLocal("i");
-        w.emitGetParam("a"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
-        w.emit(OpCode.ASTORE_I8);
-        w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal("i");
-        w.emitJump(top1);
-        w.declareLabel(end1);
-
-        // copy b at offset la
-        emitInt(0); w.emitSetLocal("i");
-        int top2 = w.newLabel(); int end2 = w.newLabel();
-        w.declareLabel(top2);
-        w.emitGetLocal("i"); w.emitGetLocal("lb"); w.emit(OpCode.LT);
-        w.emitJumpIfFalse(end2);
-        w.emitGetLocal("out");
-        w.emitGetLocal("i"); w.emitGetLocal("la"); w.emit(OpCode.ADD);
-        w.emitGetParam("b"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
-        w.emit(OpCode.ASTORE_I8);
-        w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal("i");
-        w.emitJump(top2);
-        w.declareLabel(end2);
+        /* V7/H7 #554 (27-sep) — las dos copias con `__strCopy` (CALL_BUILTIN 263: en C en la VM-C, `arraycopy` en
+         * miVM), no con un bucle de bytecode que copiaba BYTE A BYTE: 13 instrucciones por byte, y en placa unos
+         * 10 ms por concatenación de una cadena de 2 KB (el intérprete copiando, no el GC ni la reserva). Acepta la
+         * cadena en sus dos formas —un literal es una referencia cruda al bloque de datos de su módulo, de
+         * cualquier módulo, compilado antes o después; `move` no la acepta— y un null como vacía (#512). Devuelve
+         * dónde acabó: la segunda copia empieza ahí. (El camino C de Eduardo, 27-sep: `V7_IDEAS` §H7.) */
+        emitStrCopy("a", true);     // d = strCopy(a, out, 0)
+        emitStrCopy("b", false);    // d = strCopy(b, out, d)
 
         w.emitGetLocal("out");
         w.emitLRet();   // H1.2a: devuelve un ref (8 bytes)
+    }
+
+    /** #554 — `d = __strCopy(<param>, out, <0 o d>)`: los bytes del parámetro detrás de lo ya copiado. */
+    private void emitStrCopy(String param, boolean alPrincipio) throws IOException {
+        w.emitGetParam(param);
+        w.emitGetLocal("out");
+        if (alPrincipio) emitInt(0); else w.emitGetLocal("d");
+        w.emit(OpCode.CALL_BUILTIN);
+        w.emitShort((short) Builtin.STR_COPY.id);
+        w.emitSetLocal("d");
+    }
+
+    /** #554 — cuántos operandos, como mucho, junta un `__strconcatN`: una cadena más larga se hace por grupos (el
+     *  resultado de uno es el primer operando del siguiente), para no sintetizar funciones de 20 parámetros. */
+    private static final int CONCAT_MAX = 8;
+
+    /** Las aridades de `__strconcatN` que este módulo usa: se emiten al final, como `__strconcat`. */
+    private final java.util.TreeSet<Integer> concatAridades = new java.util.TreeSet<>();
+
+    /** #554 — los operandos de una cadena de concatenaciones, de izquierda a derecha: un `+` cuyo tipo es string
+     *  (uno de sus dos lados lo es: la regla de emitBinary) se abre; un paréntesis alrededor de uno también
+     *  (concatenar es asociativo); todo lo demás es un operando —`1 + 2` dentro de `"x" + (1 + 2)` también: suma—. */
+    private void aplanarConcat(IExpr e, java.util.List<IExpr> partes) {
+        if (e instanceof ParenExpr) {
+            IExpr dentro = ((ParenExpr) e).inner;
+            if (esConcat(dentro)) { aplanarConcat(dentro, partes); return; }
+        }
+        if (esConcat(e)) {
+            BinaryExpr b = (BinaryExpr) e;
+            aplanarConcat(b.left, partes);
+            aplanarConcat(b.right, partes);
+            return;
+        }
+        partes.add(e);
+    }
+
+    private boolean esConcat(IExpr e) {
+        if (!(e instanceof BinaryExpr) || !"+".equals(((BinaryExpr) e).op)) return false;
+        BinaryExpr b = (BinaryExpr) e;
+        BpType tl = info.exprTypes.get(b.left), tr = info.exprTypes.get(b.right);
+        return (tl instanceof PrimitiveType && ((PrimitiveType) tl).tag == PrimitiveType.Kind.STRING)
+            || (tr instanceof PrimitiveType && ((PrimitiveType) tr).tag == PrimitiveType.Kind.STRING);
+    }
+
+    /** #554 — `a + b + c + …` (3 o más): cada operando a su cadena, en orden, y `__strconcatN`; por grupos de
+     *  CONCAT_MAX si la cadena es más larga. */
+    private void emitConcatDeVarias(java.util.List<IExpr> partes) throws IOException {
+        int i = 0, enPila = 0;
+        while (i < partes.size()) {
+            IExpr p = partes.get(i++);
+            emitExpr(p);
+            coerceToString(info.exprTypes.get(p));
+            enPila++;
+            if (enPila == CONCAT_MAX || i == partes.size()) {
+                if (enPila == 1) break;                 /* no queda nada que juntar */
+                if (enPila == 2) emitStringConcatCall();
+                else {
+                    concatAridades.add(enPila);
+                    w.emitCall("__strconcat" + enPila);
+                }
+                enPila = 1;                              /* el resultado, primer operando del siguiente grupo */
+            }
+        }
+    }
+
+    /** #554 — `__strconcatN(s0 … sN-1)`: la longitud total (en bytes), UNA reserva y un `__strCopy` por operando,
+     *  cada uno donde acabó el anterior. */
+    private void emitStrconcatNBody(int n) throws IOException {
+        w.addFunction("__strconcat" + n, false);
+        for (int k = 0; k < n; k++) declareParamRef("s" + k);
+        w.declareLocalLong("out");
+        w.declareLocal("d");
+        w.emitGetParam("s0"); w.emit(OpCode.ALEN);
+        for (int k = 1; k < n; k++) { w.emitGetParam("s" + k); w.emit(OpCode.ALEN); w.emit(OpCode.ADD); }
+        w.emit(OpCode.NEWARRAY_I8); w.emitSetLocal("out");
+        for (int k = 0; k < n; k++) emitStrCopy("s" + k, k == 0);
+        w.emitGetLocal("out");
+        w.emitLRet();
     }
 
     /**

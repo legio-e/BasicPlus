@@ -1,5 +1,5 @@
 {
-  "_comentario": "La ronda de V7 (24-sep): las seis de la prueba de fuego (tanda_prueba.json) y lo de V7 que hay que ver en placa. H1 P5 pide Destructor, TimeDemo y ArrayFijo == host en S3/C3/C6/Nucleo/DK2 (Pico y P4 ya, 21-sep); MoveRango (#535: el move de la VM-C, que en placa es el mismo código) e HiloUsa (#530: run() heredado de otro módulo; HiloLib va a /app con el programa). Rutas relativas a la raiz del repo. criterio: identico (defecto) | no-peta. V7/H5 (25-sep): NatNew y NatV7 con «aot»: true —se suben con su nativo DENTRO, fundido para la receta de cada placa, y el EXITED tiene que decir que se usaron sus thunks (`nativos`); en el sim, SALTADAS—; «ignorar» quita la linea de tiempo de NatV7 de las dos salidas. Y FloatNat (25-sep, #559/#560/#561): float y double dentro de una native, cada caso contra su gemela interpretada — en la C5 por los helpers (sin FPU), en el P4 y la Metro por la instruccion. Y (27-sep) NatNombres (#572: nombres de BP que son de C, con el compilador de cada placa) y NatEstrecha (byte(x) y compania dentro de una native, con el texto del interprete).",
+  "_comentario": "La ronda de V7 (24-sep): las seis de la prueba de fuego (tanda_prueba.json) y lo de V7 que hay que ver en placa. H1 P5 pide Destructor, TimeDemo y ArrayFijo == host en S3/C3/C6/Nucleo/DK2 (Pico y P4 ya, 21-sep); MoveRango (#535: el move de la VM-C, que en placa es el mismo código) e HiloUsa (#530: run() heredado de otro módulo; HiloLib va a /app con el programa). Rutas relativas a la raiz del repo. criterio: identico (defecto) | no-peta. V7/H5 (25-sep): NatNew y NatV7 con «aot»: true —se suben con su nativo DENTRO, fundido para la receta de cada placa, y el EXITED tiene que decir que se usaron sus thunks (`nativos`); en el sim, SALTADAS—; «ignorar» quita la linea de tiempo de NatV7 de las dos salidas. Y FloatNat (25-sep, #559/#560/#561): float y double dentro de una native, cada caso contra su gemela interpretada — en la C5 por los helpers (sin FPU), en el P4 y la Metro por la instruccion. Y (27-sep) NatNombres (#572: nombres de BP que son de C, con el compilador de cada placa) y NatEstrecha (byte(x) y compania dentro de una native, con el texto del interprete). Y (#554) CatCadena (la concatenacion con __strCopy, que se comprueba ella misma) y CatCrono (lo que cuesta: el bucle de #554 y una cadena de +); piden la imagen con el builtin 263.",
   "pruebas": [
     { "nombre": "MathRango",       "fuente": "samples/MathRango.bp" },
     { "nombre": "ThrowSinAtrapar", "fuente": "samples/ThrowSinAtrapar.bp" },
@@ -24,6 +24,8 @@
     { "nombre": "NatDirecta",  "fuente": "bpgenvm-c/samples/NatDirecta.bp",  "aot": true },
     { "nombre": "NatCoste",    "fuente": "bpgenvm-c/samples/NatCoste.bp",    "aot": true, "ignorar": ["^  tiempo: "] },
     { "nombre": "NatNombres",  "fuente": "bpgenvm-c/samples/NatNombres.bp",  "aot": true },
-    { "nombre": "NatEstrecha", "fuente": "bpgenvm-c/samples/NatEstrecha.bp", "aot": true }
+    { "nombre": "NatEstrecha", "fuente": "bpgenvm-c/samples/NatEstrecha.bp", "aot": true },
+    { "nombre": "CatCadena",   "fuente": "bpgenvm-c/samples/CatCadena.bp" },
+    { "nombre": "CatCrono",    "fuente": "bpgenvm-c/samples/CatCrono.bp",    "ignorar": ["^  tiempo: "] }
   ]
 }

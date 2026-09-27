@@ -12,74 +12,74 @@ lines
 476 176
 489 178
 504 183
-546 187
-627 191
-771 126
-783 127
-803 128
-823 129
-826 130
-829 131
-832 132
-876 133
-887 134
-898 135
-909 136
-932 137
-965 138
-988 139
-1014 140
-1032 141
-1053 143
-1446 29
-1456 30
-1516 31
-1537 33
-1556 38
-1572 39
-1592 40
-1612 41
-1670 42
-1690 43
-1738 44
-1774 45
-1824 46
-1840 47
-1858 48
-1879 50
-1897 51
-1918 53
-1970 58
-1976 59
-1985 60
-2006 62
-2026 63
-2046 64
-2058 65
-2067 66
-2080 68
-2130 69
-2178 70
-2221 74
-2284 78
-2293 79
-2305 80
-2322 82
-2339 84
-2408 85
-2425 87
-2444 92
-2473 93
-2494 95
-2527 96
-2549 98
-2650 99
-2706 101
-2775 105
-2788 106
-2814 108
-2842 198
-2849 199
+541 187
+602 191
+731 126
+743 127
+763 128
+783 129
+786 130
+789 131
+792 132
+836 133
+847 134
+858 135
+869 136
+892 137
+925 138
+948 139
+974 140
+992 141
+1013 143
+1406 29
+1416 30
+1476 31
+1497 33
+1516 38
+1532 39
+1552 40
+1572 41
+1630 42
+1650 43
+1698 44
+1734 45
+1784 46
+1800 47
+1818 48
+1839 50
+1857 51
+1878 53
+1930 58
+1936 59
+1945 60
+1966 62
+1986 63
+2006 64
+2018 65
+2027 66
+2040 68
+2090 69
+2138 70
+2181 74
+2244 78
+2253 79
+2265 80
+2282 82
+2299 84
+2368 85
+2385 87
+2404 92
+2433 93
+2454 95
+2487 96
+2509 98
+2610 99
+2646 101
+2715 105
+2728 106
+2754 108
+2782 198
+2789 199
 vars
 func Date.getEpoch 40
 this -20 8 0 ?
@@ -128,11 +128,11 @@ other -20 8 0 ref
 o 4 8 0 ?
 func Date.toString 501
 this -20 8 0 ?
-func Date.toDateString 543
+func Date.toDateString 538
 this -20 8 0 ?
-func Date.toTimeString 624
+func Date.toTimeString 599
 this -20 8 0 ?
-func Date.__init 700
+func Date.__init 660
 this -28 8 0 ?
 e -20 8 0 long
 dias 4 8 0 long
@@ -141,7 +141,7 @@ y 20 4 0 integer
 mo 24 4 0 integer
 d 28 4 0 integer
 wd 52 8 0 long
-func Date.__init$iiiiii 1069
+func Date.__init$iiiiii 1029
 this -44 8 0 ?
 y -36 4 0 integer
 mo -32 4 0 integer
@@ -149,28 +149,28 @@ d -28 4 0 integer
 h -24 4 0 integer
 mi -20 4 0 integer
 s -16 4 0 integer
-func Date.__init$iii 1102
+func Date.__init$iii 1062
 this -32 8 0 ?
 y -24 4 0 integer
 mo -20 4 0 integer
 d -16 4 0 integer
-func __cls_new_Date(j) 1127
+func __cls_new_Date(j) 1087
 e -20 8 0 long
-func __cls_new_Date(iiiiii) 1160
+func __cls_new_Date(iiiiii) 1120
 y -36 4 0 integer
 mo -32 4 0 integer
 d -28 4 0 integer
 h -24 4 0 integer
 mi -20 4 0 integer
 s -16 4 0 integer
-func __cls_new_Date(iii) 1202
+func __cls_new_Date(iii) 1162
 y -24 4 0 integer
 mo -20 4 0 integer
 d -16 4 0 integer
-func __cls_init_Date(j) 1238
+func __cls_init_Date(j) 1198
 this -28 8 0 ?
 e -20 8 0 long
-func __cls_init_Date(iiiiii) 1255
+func __cls_init_Date(iiiiii) 1215
 this -44 8 0 ?
 y -36 4 0 integer
 mo -32 4 0 integer
@@ -178,34 +178,34 @@ d -28 4 0 integer
 h -24 4 0 integer
 mi -20 4 0 integer
 s -16 4 0 integer
-func __cls_init_Date(iii) 1281
+func __cls_init_Date(iii) 1241
 this -32 8 0 ?
 y -24 4 0 integer
 mo -20 4 0 integer
 d -16 4 0 integer
-func __cls_m_Date#toDateString()s 1301
+func __cls_m_Date#toDateString()s 1261
 this -20 8 0 ?
-func __cls_m_Date#compareTo(LObject;)i 1320
+func __cls_m_Date#compareTo(LObject;)i 1280
 this -28 8 0 ?
 other -20 8 0 ref
-func __cls_m_Date#secondsSince(LTime/Date;)j 1340
+func __cls_m_Date#secondsSince(LTime/Date;)j 1300
 this -28 8 0 ?
 otro -20 8 0 ref
-func __cls_m_Date#addSeconds(j)LTime/Date; 1362
+func __cls_m_Date#addSeconds(j)LTime/Date; 1322
 this -28 8 0 ?
 n -20 8 0 long
-func __cls_m_Date#addDays(i)LTime/Date; 1384
+func __cls_m_Date#addDays(i)LTime/Date; 1344
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Date#toString()s 1405
+func __cls_m_Date#toString()s 1365
 this -20 8 0 ?
-func __cls_m_Date#toTimeString()s 1424
+func __cls_m_Date#toTimeString()s 1384
 this -20 8 0 ?
-func divFloor 1443
+func divFloor 1403
 a -28 8 0 long
 b -20 8 0 long
 q 8 8 0 long
-func civilDesdeDias 1553
+func civilDesdeDias 1513
 z0 -20 8 0 long
 z 8 8 0 long
 era 16 8 0 long
@@ -216,7 +216,7 @@ doy 48 8 0 long
 mp 56 8 0 long
 d 64 8 0 long
 m 72 8 0 long
-func diasDesdeCivil 1967
+func diasDesdeCivil 1927
 y0 -24 4 0 integer
 m -20 4 0 integer
 d -16 4 0 integer
@@ -226,26 +226,49 @@ yoe 24 8 0 long
 mp 32 8 0 long
 doy 40 8 0 long
 doe 48 8 0 long
-func esBisiesto 2218
+func esBisiesto 2178
 y -16 4 0 integer
-func diasDelMes 2281
+func diasDelMes 2241
 y -20 4 0 integer
 m -16 4 0 integer
-func epochDe 2441
+func epochDe 2401
 y -36 4 0 integer
 mo -32 4 0 integer
 d -28 4 0 integer
 h -24 4 0 integer
 mi -20 4 0 integer
 s -16 4 0 integer
-func dosCifras 2772
+func dosCifras 2712
 n -16 4 0 integer
-func now 2839
+func now 2779
 s 8 8 0 long
-func __strconcat 2884
+func __strconcat 2824
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
-i 16 4 0 ?
+d 16 4 0 ?
+func __strconcat3 2878
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?
+func __strconcat5 2942
+s0 -52 8 0 ?
+s1 -44 8 0 ?
+s2 -36 8 0 ?
+s3 -28 8 0 ?
+s4 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?
+func __strconcat6 3042
+s0 -60 8 0 ?
+s1 -52 8 0 ?
+s2 -44 8 0 ?
+s3 -36 8 0 ?
+s4 -28 8 0 ?
+s5 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

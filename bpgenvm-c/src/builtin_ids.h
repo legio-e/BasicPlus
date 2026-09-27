@@ -268,7 +268,8 @@ enum {
     BUILTIN_SPI_DEV_EXEC                 = 260,   /* __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer */
     BUILTIN_I2C_WRITE_READ               = 261,   /* __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer */
     BUILTIN_I2C_EXEC                     = 262,   /* __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer */
-    BUILTIN__CUANTOS = 263
+    BUILTIN_STR_COPY                     = 263,   /* __strCopy(src: string, dst: byte[], pos: integer): integer */
+    BUILTIN__CUANTOS = 264
 };
 
 #endif

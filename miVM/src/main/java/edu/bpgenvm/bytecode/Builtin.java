@@ -272,7 +272,8 @@ public enum Builtin {
     SPI_DEV_XFER("__spiDevXfer"),   // [259] __spiDevXfer(bus: integer, cs: integer, baudrate: integer, mode: integer, op: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
     SPI_DEV_EXEC("__spiDevExec"),   // [260] __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
     I2C_WRITE_READ("__i2cWriteRead"),   // [261] __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
-    I2C_EXEC("__i2cExec");   // [262] __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
+    I2C_EXEC("__i2cExec"),   // [262] __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
+    STR_COPY("__strCopy");   // [263] __strCopy(src: string, dst: byte[], pos: integer): integer
 
     public final String bpName;
     public final int id;

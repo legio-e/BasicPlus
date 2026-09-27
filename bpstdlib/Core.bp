@@ -1493,6 +1493,9 @@ module Core
   function __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer   // I2c.Bus.execute(I2c.Transaction)
     inline CALL_BUILTIN 262
   end __i2cExec
+  function __strCopy(src: string, dst: byte[], pos: integer): integer   // #554: la concatenación (los __strconcat* que sintetiza el compilador)
+    inline CALL_BUILTIN 263
+  end __strCopy
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

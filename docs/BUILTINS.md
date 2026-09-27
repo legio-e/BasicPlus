@@ -339,6 +339,21 @@ byte-idéntico entre VMs y, deliberadamente, idéntico a `print v`. Lo emite
 > `"" + f` y `print f` podían diferir ENTRE SÍ para valores de más de 6
 > decimales).
 
+## 263 — `__strCopy(src: string, dst: byte[], pos: integer)` → integer  *(#554, V7/H7)*
+
+La concatenación. Copia **todos** los bytes de la cadena `src` en el array de bytes `dst` a partir de `pos` y
+devuelve la posición siguiente (`pos` + los bytes de `src`), así que las copias se encadenan. No la escribe nadie a
+mano: la usan los helpers `__strconcat(a, b)` y `__strconcatN(s0 … sN-1)` que el compilador sintetiza en cada módulo
+(una reserva del tamaño final —la suma de los `ALEN`, en BYTES— y un `__strCopy` por operando). Antes copiaban byte a
+byte en bytecode: ~10 ms por concatenación de una cadena de 2 KB en placa.
+
+`src` es una cadena en cualquiera de sus **dos** formas: un handle del heap o la referencia cruda de un literal del
+bloque de datos (`LEA_GLOBAL`) —de cualquier módulo, compilado antes o después—, o `null`, que es la cadena vacía
+(`#512`). Por eso es un builtin propio de las cadenas y no `move`, que rechaza lo que no tiene cabecera de heap.
+`dst` tiene que ser un array de bytes del heap. Errores (con el mismo texto en las dos VMs): `strCopy: dst es null`,
+`dst no es ref a heap`, `dst apunta a bloque libre`, `dst no es un array de bytes (type=N)`, `fuera de rango (pos=…
+bytes=… dst=…)` — ninguno sale del helper, que reserva justo lo que copia.
+
 ---
 
 ## Próximos builtins propuestos (no asignados todavía)

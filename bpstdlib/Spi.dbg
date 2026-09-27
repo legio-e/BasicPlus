@@ -76,38 +76,38 @@ lines
 1734 384
 1754 390
 1765 391
-1801 393
-1810 394
-1848 396
-1860 397
-1940 277
-2229 435
-2284 440
-2339 445
-2395 450
-2451 455
-2500 461
-2518 465
-2544 426
-2555 427
-2566 428
-2577 429
-2588 430
-2811 115
-2834 119
-2858 123
-2882 127
-2909 131
-2922 136
-2937 139
-2952 142
-2967 145
-2982 148
-2997 151
-3012 155
-3031 158
-3050 161
-3069 164
+1791 393
+1800 394
+1828 396
+1840 397
+1890 277
+2179 435
+2234 440
+2289 445
+2345 450
+2401 455
+2450 461
+2468 465
+2494 426
+2505 427
+2516 428
+2527 429
+2538 430
+2761 115
+2784 119
+2808 123
+2832 127
+2859 131
+2872 136
+2887 139
+2902 142
+2917 145
+2932 148
+2947 151
+2962 155
+2981 158
+3000 161
+3019 164
 vars
 func Bus.getId 40
 this -20 8 0 ?
@@ -250,144 +250,155 @@ data -40 8 0 ref
 count -32 4 0 integer
 op -28 8 0 string
 cual -20 8 0 string
-func Transaction.__init 1937
+func Transaction.__init 1887
 this -20 8 0 ?
-func __cls_init_Transaction() 1980
+func __cls_init_Transaction() 1930
 this -20 8 0 ?
-func __cls_m_Transaction#read([ii)V 1994
+func __cls_m_Transaction#read([ii)V 1944
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Transaction#clear()V 2013
+func __cls_m_Transaction#clear()V 1963
 this -20 8 0 ?
-func __cls_m_Transaction#executeOn(iiii)i 2027
+func __cls_m_Transaction#executeOn(iiii)i 1977
 this -36 8 0 ?
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Transaction#transfer([i[ii)V 2052
+func __cls_m_Transaction#transfer([i[ii)V 2002
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Transaction#size()i 2074
+func __cls_m_Transaction#size()i 2024
 this -20 8 0 ?
-func __cls_m_Transaction#write([ii)V 2091
+func __cls_m_Transaction#write([ii)V 2041
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Device.getBus 2110
+func Device.getBus 2060
 this -20 8 0 ?
-func Device.setBus 2125
+func Device.setBus 2075
 this -24 8 0 ?
-func Device.getCs 2139
+func Device.getCs 2089
 this -20 8 0 ?
-func Device.setCs 2154
+func Device.setCs 2104
 this -24 8 0 ?
-func Device.getBaudrate 2168
+func Device.getBaudrate 2118
 this -20 8 0 ?
-func Device.setBaudrate 2183
+func Device.setBaudrate 2133
 this -24 8 0 ?
-func Device.getMode 2197
+func Device.getMode 2147
 this -20 8 0 ?
-func Device.setMode 2212
+func Device.setMode 2162
 this -24 8 0 ?
-func Device.write 2226
+func Device.write 2176
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Device.read 2281
+func Device.read 2231
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Device.transfer 2336
+func Device.transfer 2286
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func Device.writeRead 2392
+func Device.writeRead 2342
 this -44 8 0 ?
 tx -36 8 0 ref
 ntx -28 4 0 integer
 rx -24 8 0 ref
 nrx -16 4 0 integer
-func Device.execute 2448
+func Device.execute 2398
 this -28 8 0 ?
 t -20 8 0 ref
-func Device.release 2497
+func Device.release 2447
 this -20 8 0 ?
-func Device.__dtor 2515
+func Device.__dtor 2465
 this -20 8 0 ?
-func Device.__init 2541
+func Device.__init 2491
 this -36 8 0 ?
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Device(iiii) 2604
+func __cls_new_Device(iiii) 2554
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Device(iiii) 2642
+func __cls_init_Device(iiii) 2592
 this -36 8 0 ?
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Device#read([ii)i 2664
+func __cls_m_Device#read([ii)i 2614
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Device#transfer([i[ii)i 2686
+func __cls_m_Device#transfer([i[ii)i 2636
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Device#__dtor()V 2711
+func __cls_m_Device#__dtor()V 2661
 this -20 8 0 ?
-func __cls_m_Device#release()V 2725
+func __cls_m_Device#release()V 2675
 this -20 8 0 ?
-func __cls_m_Device#writeRead([ii[ii)i 2739
+func __cls_m_Device#writeRead([ii[ii)i 2689
 this -44 8 0 ?
 tx -36 8 0 ref
 ntx -28 4 0 integer
 rx -24 8 0 ref
 nrx -16 4 0 integer
-func __cls_m_Device#write([ii)i 2766
+func __cls_m_Device#write([ii)i 2716
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Device#execute(LSpi/Transaction;)i 2788
+func __cls_m_Device#execute(LSpi/Transaction;)i 2738
 this -28 8 0 ?
 t -20 8 0 ref
-func init 2808
+func init 2758
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 2831
+func write 2781
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 2855
+func read 2805
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 2879
+func transfer 2829
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func release 2906
+func release 2856
 bus -16 4 0 integer
-func __strconcat 3085
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?
+func __strconcat4 3035
+s0 -44 8 0 ?
+s1 -36 8 0 ?
+s2 -28 8 0 ?
+s3 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?
+func __strconcat8 3117
+s0 -76 8 0 ?
+s1 -68 8 0 ?
+s2 -60 8 0 ?
+s3 -52 8 0 ?
+s4 -44 8 0 ?
+s5 -36 8 0 ?
+s6 -28 8 0 ?
+s7 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

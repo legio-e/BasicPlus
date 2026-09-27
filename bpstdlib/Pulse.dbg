@@ -11,10 +11,10 @@ lines
 225 100
 241 101
 255 102
-277 103
-406 63
-421 66
-436 69
+272 103
+401 63
+416 66
+431 69
 vars
 func Counter.getPin 35
 this -20 8 0 ?
@@ -41,25 +41,24 @@ this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Counter(ii) 292
+func __cls_new_Counter(ii) 287
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter(ii) 326
+func __cls_init_Counter(ii) 321
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_m_Counter#stop()V 344
+func __cls_m_Counter#stop()V 339
 this -20 8 0 ?
-func __cls_m_Counter#start()V 358
+func __cls_m_Counter#start()V 353
 this -20 8 0 ?
-func __cls_m_Counter#reset()V 372
+func __cls_m_Counter#reset()V 367
 this -20 8 0 ?
-func __cls_m_Counter#value()i 386
+func __cls_m_Counter#value()i 381
 this -20 8 0 ?
-func __strconcat 448
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?
+func __strconcat3 443
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

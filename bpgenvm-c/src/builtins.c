@@ -3319,6 +3319,45 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
 
+    case BUILTIN_STR_COPY: {
+        /* #554 (V7/H7, 27-sep) — LA CONCATENACIÓN: copia TODOS los bytes de la cadena `src` en el byte[] `dst` desde
+         * `pos`, y devuelve la posición siguiente (así se encadena: la copia siguiente empieza donde acabó ésta). La
+         * usan los helpers `__strconcat`/`__strconcatN` que el compilador sintetiza en cada módulo, en vez de copiar
+         * byte a byte en bytecode (#554: ~10 ms por concatenación de 2 KB en placa). `src` es una cadena en
+         * cualquiera de sus DOS formas —un handle del heap o la referencia cruda de un literal del bloque de datos
+         * (LEA_GLOBAL), la de cualquier módulo, compilado antes o después— o null, que es vacía (#512): la
+         * indirección resuelve las dos, y la longitud va delante de los bytes en las dos. Por eso es un builtin
+         * PROPIO de las cadenas y no `move`, que no sabe qué hay detrás de una referencia sin cabecera de heap (un
+         * literal, o un array fijo de un .mod MOD7) y la rechaza. `dst`, un array de bytes del heap: el que acaba de
+         * reservar el helper. ESPEJO de `STR_COPY` de miVM, en el mismo orden y con los mismos textos. */
+        int32_t  pos    = pop_i32(vm, tc);
+        uint32_t dstRef = pop_ref(vm, tc);
+        uint32_t srcRef = pop_ref(vm, tc);
+        char em[96];
+        if (dstRef == 0) return builtin_throw(vm, tc, "strCopy: dst es null");
+        uint32_t dd = ref_addr(vm, dstRef);
+        uint32_t dh = dd - 4u;
+        if (dh < vm->heap_start || dh >= vm->heap_next) return builtin_throw(vm, tc, "strCopy: dst no es ref a heap");
+        uint32_t dtag = bpvm_read_u32_be(vm->memory + dh);
+        if (dtag & BPVM_TAG_FREE_BIT) return builtin_throw(vm, tc, "strCopy: dst apunta a bloque libre");
+        int dt = (int) ((dtag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+        if (dt != BPVM_TYPE_ARRAY_I8) {
+            snprintf(em, sizeof em, "strCopy: dst no es un array de bytes (type=%d)", dt);
+            return builtin_throw(vm, tc, em);
+        }
+        uint32_t sd = (srcRef == 0) ? 0u : ref_addr(vm, srcRef);
+        int32_t  n  = (sd == 0u) ? 0 : bpvm_read_i32_be(vm->memory + sd);
+        int32_t  dstLen = bpvm_read_i32_be(vm->memory + dd);
+        if (pos < 0 || n < 0 || (int64_t) pos + n > (int64_t) dstLen) {
+            snprintf(em, sizeof em, "strCopy: fuera de rango (pos=%" PRId32 " bytes=%" PRId32 " dst=%" PRId32 ")",
+                     pos, n, dstLen);
+            return builtin_throw(vm, tc, em);
+        }
+        if (n > 0) memmove(vm->memory + dd + 4u + (uint32_t) pos, vm->memory + sd + 4u, (size_t) n);
+        push_i32(vm, tc, pos + n);
+        return BPVM_OK;
+    }
+
     case BUILTIN_NEW_INT_ARRAY: {
         /* P2b: la primitiva compartida (con el opcode NEWARRAY y el helper newarray_i32 del AOT). #570: un
          * tamaño negativo, atrapable y con el texto de miVM. */

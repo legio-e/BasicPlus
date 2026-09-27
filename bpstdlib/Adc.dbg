@@ -7,19 +7,19 @@ lines
 140 87
 152 88
 161 89
-194 91
-210 96
-231 101
-265 107
-274 108
-293 110
-296 111
-299 112
-309 113
-321 114
-329 116
-348 68
-359 69
+189 91
+205 96
+226 101
+260 107
+269 108
+288 110
+291 111
+294 112
+304 113
+316 114
+324 116
+343 68
+354 69
 vars
 func Channel.getCh_ 35
 this -20 8 0 ?
@@ -36,38 +36,37 @@ this -20 8 0 ?
 func Channel.leer 137
 this -20 8 0 ?
 raw 4 4 0 integer
-func Channel.read 207
+func Channel.read 202
 this -20 8 0 ?
-func Channel.readVolts 228
+func Channel.readVolts 223
 this -20 8 0 ?
-func Channel.readAvg 262
+func Channel.readAvg 257
 this -24 8 0 ?
 n -16 4 0 integer
 sum 4 4 0 integer
 i 8 4 0 integer
-func Channel.__init 345
+func Channel.__init 340
 this -24 8 0 ?
 ch -16 4 0 integer
-func __cls_new_Channel(i) 376
+func __cls_new_Channel(i) 371
 ch -16 4 0 integer
-func __cls_init_Channel(i) 408
+func __cls_init_Channel(i) 403
 this -24 8 0 ?
 ch -16 4 0 integer
-func __cls_m_Channel#read()i 424
+func __cls_m_Channel#read()i 419
 this -20 8 0 ?
-func __cls_m_Channel#__dtor()V 441
+func __cls_m_Channel#__dtor()V 436
 this -20 8 0 ?
-func __cls_m_Channel#release()V 455
+func __cls_m_Channel#release()V 450
 this -20 8 0 ?
-func __cls_m_Channel#readAvg(i)i 469
+func __cls_m_Channel#readAvg(i)i 464
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Channel#readVolts()f 488
+func __cls_m_Channel#readVolts()f 483
 this -20 8 0 ?
-func __strconcat 505
-a -28 8 0 ?
-b -20 8 0 ?
-la 0 4 0 ?
-lb 4 4 0 ?
-out 8 8 0 ?
-i 16 4 0 ?
+func __strconcat3 500
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?
