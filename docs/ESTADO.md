@@ -911,14 +911,13 @@ propuesta de cerrarla con la evidencia), `#580` (parar una native recursiva sin 
 - **La DK2 (COM12), la Metro (COM4) y el P4 (COM15)**: la imagen de P2b.3 (los ejecutores de 8 KB y los packs en v3:
   SQLite y Gui, directas), con el log apagado. Su INFO aún no manda `mdnAbi`: la imagen es de antes de `#576`.
 - **La Nucleo (COM5)**: la misma imagen (`softfp`), y en su ENV **`packRam=256`** —la VM en 256 KB— con el `mini` y
-  SQLite grabados, para la prueba del adaptador de `G5.b0`; el log, como estaba (`log=1`). **Pregunta abierta a
-  Eduardo**: si `packRam=256` se queda o se quita (quitarlo devuelve la VM a 512 KB; los packs se quedan grabados,
-  sin cargarse).
+  SQLite grabados, para la prueba del adaptador de `G5.b0`; el log, como estaba (`log=1`). **Se queda así**
+  (Eduardo: *«puedes dejar lo que hay, no importa»*).
 - **La S3, la C3, la C5 y la C6**: sin tocar hoy, con la ABI 8 (`#581`).
 
 **⚠️ El riesgo que acecha**: las ESP con la ABI 8 rechazan todo nativo nuevo y corren interpretado hasta `#581`
 (desde `#576`, el IDE lo dirá en cuanto conecte una placa con la imagen nueva; con las de antes, no lo sabe); y la
-Nucleo tiene la VM en 256 KB por su `packRam`.
+Nucleo tiene la VM en 256 KB por su `packRam` (a propósito: un programa que no quepa, es por eso).
 
 **Queda de V7**: los hitos H7 (memoria, arranque y arquitectura), H8 (IDE y wire), H9 (pruebas y medida), H10
 (placas y drivers), H11 (la C5) y H12 (los dos núcleos, al final), y las fichas sueltas `#577`–`#586` (FICHAS).
@@ -964,7 +963,8 @@ Nucleo tiene la VM en 256 KB por su `packRam`.
   (`FloatNat` 23/23 nativo), el testigo ~31 µs, la pila del ejecutor 3296 B. Y el adaptador de `G5.b0`, que esperaba
   placa: `packRam=256` en su ENV (la VM baja de 512 a 256 KB), el `mini` y SQLite grabados (en la zona quedan 24 KB
   de 504), los dos motores cargados y `SqlDemo` entero sin ejecutor. **`packRam=256` se queda en su ENV** hasta que
-  Eduardo diga (quitarlo devuelve la VM a 512 KB; los packs se quedan grabados, sin cargarse). De paso, un `put` sin
+  Eduardo diga (quitarlo devuelve la VM a 512 KB; los packs se quedan grabados, sin cargarse) —dicho el mismo día:
+  se queda—. De paso, un `put` sin
   `MSYS_NO_PATHCONV` dejó en la placa `/C:/Program Files/Git/app/SqlDemo.mod`: borrado con un `DEL` del wire.
 
 ## 🧵 H5 (27-sep) — P2b.3: la native en un HILO de la plataforma (idea de Eduardo), y las natives directas
