@@ -2339,7 +2339,7 @@ que correr A LA VEZ —dos hilos tocando el heap, el GC parando la native donde 
 costes van en ejes distintos: el testigo, por llamada; la línea, por vuelta (+15–33 % en los bucles más apretados,
 P2b.0). La línea da la rebanada, el `kill` y, mañana, el breakpoint, igual en todas las plataformas.
 
-#### P2b.3.c y la sesión de placas (27-sep): la DK2, la Metro y el P4
+#### P2b.3.c y la sesión de placas (27-sep): la DK2, la Metro, el P4 y la Nucleo
 
 **c** (`abb21836`, `9f7227f5`): el informe de un HardFault de `#447` sube al común (`src/bpvm_fallo_cm33.c`) y lo usan
 la Pico y, por fin, las STM32 —que tenían el bucle mudo de CubeMX—, con lo que no decía: **STKOF** (el desborde de la
@@ -2349,12 +2349,12 @@ apagado: el contrato de `#423` ya lo decía del arranque.
 
 **En las placas** (con el OK de Eduardo en cada grabación; `log=1` sólo mientras se medía):
 
-| | DK2 (STM32U5, 160 MHz) | Metro (RP2350, 150 MHz) | P4 (RISC-V con FPU, 360 MHz) |
-|---|---|---|---|
-| ronda de V7 (20) | **20/20** | **18/18** (sin pantalla) | **20/20** |
-| llamada con ejecutor (`NatCoste`, 20 000) | 206 → 929 ms: **~36 µs** | 170 → 667 ms: **~25 µs** | 86 → 436 ms: **~17,5 µs** |
-| pila del ejecutor, pruebas | 3,3 KB | 3,2 KB | 3,5 KB |
-| pila del ejecutor, SQLite (antes de la regla del pack) | 4960 B de 6144 | 4960 B | **5516 B** (628 libres) |
+| | DK2 (STM32U5, 160 MHz) | Metro (RP2350, 150 MHz) | P4 (RISC-V con FPU, 360 MHz) | Nucleo (STM32U5, 160 MHz) |
+|---|---|---|---|---|
+| ronda de V7 (20) | **20/20** | **18/18** (sin pantalla) | **20/20** | **18/18** (sin pantalla) |
+| llamada con ejecutor (`NatCoste`, 20 000) | 206 → 929 ms: **~36 µs** | 170 → 667 ms: **~25 µs** | 86 → 436 ms: **~17,5 µs** | 161 → 783 ms: **~31 µs** |
+| pila del ejecutor, pruebas | 3,3 KB | 3,2 KB | 3,5 KB | 3,3 KB |
+| pila del ejecutor, SQLite (antes de la regla del pack) | 4960 B de 6144 | 4960 B | **5516 B** (628 libres) | — (grabada ya con la regla: sin ejecutor) |
 
 Las seis pruebas de natives de la ronda (`NatCede`, `NatExpropia`, `NatBuiltin`, `NatAnida`, `NatDirecta`,
 `NatCoste`), IDÉNTICAS al PC en las tres: por primera vez, natives que se suspenden y se reanudan EN PLACA (en el puente
@@ -2379,9 +2379,18 @@ siguiente perilla; hoy no se toca.
 arreglo —los packs abajo, el FS arriba— es «los 32 MB del P4» de H7. Tras regrabar, su zona de packs queda en 1,4 MB
 libres (tras un `PACK_FORMAT`).
 
-**Quedan** de P2b.3.d: la Nucleo (primer arranque con `softfp` y el adaptador de G5.b0), la S3 (sólo la imagen: no tiene
-AOT), la C3, la C5 y la C6 (RISC-V sin FPU), y lo que esperaba placa en ellas: la C6 con `#574`, `DriverSpi` en la C5 y
-la C6.
+**La Nucleo** (con el OK de Eduardo; COM5): la imagen de HEAD, `softfp` —su primer arranque con la convención de
+`G5.b0` y con el adaptador de packs de la familia—, arranca a la primera («bios: lista (47 ranuras, v8)», el ancla en su
+sitio). La ronda, 18/18, con `FloatNat` 23/23 nativo; el testigo, ~31 µs por llamada (la DK2, al mismo reloj, 36); la
+pila del ejecutor, 3296 B de 8192, como la DK2. Y la prueba que `G5.b0` le había dejado: `packRam=256` en el ENV («vm:
+256 KB … | packs 256 KB delante»); el `mini` y SQLite podados y sellados para ARM (24 y 456 KB, en `0x08182000` y
+`0x08188000`; la RAM de SQLite en `0x20000010`, detrás de la del `mini`); al primer INFO, los dos motores cargados
+(«mini: TODO OK -> 0», que lee `packRam` del ENV; «sqlite: initialize OK» y la API `'SQLI'` publicada); y `SqlDemo`
+entero con el `.mdn` del pack —«16/16 thunks (16 directas)», sin ejecutor—. `Core.mod` lo sirve el `mini` en sitio
+(`#468`).
+
+**Quedan** de P2b.3.d: la S3 (sólo la imagen: no tiene AOT), la C3, la C5 y la C6 (RISC-V sin FPU), y lo que esperaba
+placa en ellas: la C6 con `#574`, `DriverSpi` en la C5 y la C6.
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
@@ -4262,6 +4271,9 @@ pack universal de la Gui, 2,3 MB; **podado para ARM, 744 KB**: cabe en los 1056 
 **`G5.b0` CERRADO.** Lo que deja dicho para `G5.b`: los estáticos de LVGL (383 KB) y los de SQLite, con `packRam=512`,
 dejarían a SQLite unos 122 KB de arena; el reparto de la RAM de la DK2 se decide ahí, cuando LVGL salga de su imagen y
 libere la suya.
+
+**Y en la Nucleo** (27-sep, en la sesión de placas de `P2b.3.d`): lo mismo, con el mismo código —`packRam=256`, el `mini`
+y SQLite, `SqlDemo` entero—; los detalles, en §H5.P2b.3.
 
 #### 15.6 `G5.b` — la DK2: su pantalla publicada como `'PANT'` desde la imagen, y LVGL fuera (26-sep, análisis)
 

@@ -891,7 +891,7 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
-## 🔌 H5 (27-sep, tarde) — P2b.3.d: la sesión de placas, primera parte (la DK2, la Metro y el P4)
+## 🔌 H5 (27-sep, tarde) — P2b.3.d: la sesión de placas, primera parte (la DK2, la Metro, el P4 y la Nucleo)
 
 - `P2b.3.c` (`abb21836`, `9f7227f5`): el HardFault habla en las dos familias Cortex-M33 (con STKOF, la tarea y su
   pila); los fallos fatales, al registro aunque el log esté apagado; la ronda de V7 gana las seis pruebas de natives.
@@ -903,6 +903,12 @@ la C6, la P4 y la Nucleo.
   el P4 y la DK2), y las tres placas otra vez: la ronda igual, y SQLite ya sin ejecutor.
 - De paso: el ADC de la DK2, el NeoPixel de la Metro, SQLite en la Metro y SQLite y la Gui en el P4. Y la pregunta de
   Eduardo por los 32 MB del P4: la caché mapea 16 (el revert `2dc12d5b`); es de H7.
+- La Nucleo (COM5), con el OK de Eduardo: la imagen de HEAD (`softfp`) arranca a la primera; la ronda 18/18
+  (`FloatNat` 23/23 nativo), el testigo ~31 µs, la pila del ejecutor 3296 B. Y el adaptador de `G5.b0`, que esperaba
+  placa: `packRam=256` en su ENV (la VM baja de 512 a 256 KB), el `mini` y SQLite grabados (en la zona quedan 24 KB
+  de 504), los dos motores cargados y `SqlDemo` entero sin ejecutor. **`packRam=256` se queda en su ENV** hasta que
+  Eduardo diga (quitarlo devuelve la VM a 512 KB; los packs se quedan grabados, sin cargarse). De paso, un `put` sin
+  `MSYS_NO_PATHCONV` dejó en la placa `/C:/Program Files/Git/app/SqlDemo.mod`: borrado con un `DEL` del wire.
 
 ## 🧵 H5 (27-sep) — P2b.3: la native en un HILO de la plataforma (idea de Eduardo), y las natives directas
 

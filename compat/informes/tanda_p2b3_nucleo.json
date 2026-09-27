@@ -1,0 +1,1624 @@
+[
+ {
+  "fecha": "2026-09-27 09:32:44",
+  "lista": "bpgenvm-c\\tools\\tanda_v7.json",
+  "n_listadas": 20,
+  "filtro": null,
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-09-27 09:05:26",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-09-27 09:05:31",
+   "sabor": "gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "MathRango",
+    "fuente": "samples/MathRango.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "MathRango"
+   },
+   {
+    "nombre": "ThrowSinAtrapar",
+    "fuente": "samples/ThrowSinAtrapar.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "ThrowSinAtrapar"
+   },
+   {
+    "nombre": "ThreadTrasMain",
+    "fuente": "samples/ThreadTrasMain.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "ThreadTrasMain"
+   },
+   {
+    "nombre": "MachineId",
+    "fuente": "samples/MachineId.bp",
+    "criterio": "no-peta",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "MachineId"
+   },
+   {
+    "nombre": "Destructor",
+    "fuente": "samples/Destructor.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "Destructor"
+   },
+   {
+    "nombre": "TimeDemo",
+    "fuente": "samples/TimeDemo.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "TimeDemo"
+   },
+   {
+    "nombre": "ArrayFijo",
+    "fuente": "samples/ArrayFijo.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "ArrayFijo"
+   },
+   {
+    "nombre": "MoveRango",
+    "fuente": "samples/MoveRango.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "MoveRango"
+   },
+   {
+    "nombre": "HiloUsa",
+    "fuente": "bpgenvm-c/samples/HiloUsa.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "HiloUsa"
+   },
+   {
+    "nombre": "GuiWinJson",
+    "fuente": "samples/GuiWinJson.bp",
+    "criterio": "identico",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [
+     "samples/formdemo/resources/main.win"
+    ],
+    "artefactos": [],
+    "modulo": "GuiWinJson"
+   },
+   {
+    "nombre": "GuiShot",
+    "fuente": "samples/GuiShot.bp",
+    "criterio": "no-peta",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [],
+    "artefactos": [
+     "GuiShot.shot"
+    ],
+    "modulo": "GuiShot"
+   },
+   {
+    "nombre": "NatNew",
+    "fuente": "samples/NatNew.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatNew"
+   },
+   {
+    "nombre": "NatV7",
+    "fuente": "samples/NatV7.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatV7"
+   },
+   {
+    "nombre": "FloatNat",
+    "fuente": "samples/FloatNat.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "FloatNat"
+   },
+   {
+    "nombre": "NatCede",
+    "fuente": "bpgenvm-c/samples/NatCede.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatCede"
+   },
+   {
+    "nombre": "NatExpropia",
+    "fuente": "bpgenvm-c/samples/NatExpropia.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatExpropia"
+   },
+   {
+    "nombre": "NatBuiltin",
+    "fuente": "bpgenvm-c/samples/NatBuiltin.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatBuiltin"
+   },
+   {
+    "nombre": "NatAnida",
+    "fuente": "bpgenvm-c/samples/NatAnida.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatAnida"
+   },
+   {
+    "nombre": "NatDirecta",
+    "fuente": "bpgenvm-c/samples/NatDirecta.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatDirecta"
+   },
+   {
+    "nombre": "NatCoste",
+    "fuente": "bpgenvm-c/samples/NatCoste.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatCoste"
+   }
+  ],
+  "oraculos": {
+   "MathRango": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MathRango",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MathRango\\MathRango.mod",
+    "crc": 2372248845,
+    "size": 1616,
+    "compilado": true,
+    "salida": "-- clamp(x, lo, hi) --\ndentro    5\npor abajo 0\npor arriba 10\nen el borde lo 0\nen el borde hi 10\nlo > hi   10\n-- wrap(x, lo, hi) --\n370 en [0,360) 10\n-10 en [0,360) 350\n  0 en [0,360) 0\n360 en [0,360) 0\n720 en [0,360) 0\n  7 en [-5,5)  -3\n -7 en [-5,5)  3\n-- hypot(x, y) --\n(3,4)     5\n(0,0)     0\n(-3,-4)   5\n(1,1)     1.414214\n(3e18,4e18) 5E18\n-- remap(x, inLo, inHi, outLo, outHi) --\n512 de [0,1023] a [0,100] 50.048878\n  0 de [0,1023] a [0,100] 0\n1023 de [0,1023] a [0,100] 100\ninvertido 100\nextrapola 200\nadc acotado 100\nFIN",
+    "rc": 0,
+    "ms": 11,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n-- clamp(x, lo, hi) --\r\ndentro    5\r\npor abajo 0\r\npor arriba 10\r\nen el borde lo 0\r\nen el borde hi 10\r\nlo > hi   10\r\n-- wrap(x, lo, hi) --\r\n370 en [0,360) 10\r\n-10 en [0,360) 350\r\n  0 en [0,360) 0\r\n360 en [0,360) 0\r\n720 en [0,360) 0\r\n  7 en [-5,5)  -3\r\n -7 en [-5,5)  3\r\n-- hypot(x, y) --\r\n(3,4)     5\r\n(0,0)     0\r\n(-3,-4)   5\r\n(1,1)     1.414214\r\n(3e18,4e18) 5E18\r\n-- remap(x, inLo, inHi, outLo, outHi) --\r\n512 de [0,1023] a [0,100] 50.048878\r\n  0 de [0,1023] a [0,100] 0\r\n1023 de [0,1023] a [0,100] 100\r\ninvertido 100\r\nextrapola 200\r\nadc acotado 100\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] tabla de simbolos: 123 simbolos, 3473 B de nombres, 5120 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 3 strcmp, 61 us\r\n[bpvm] tabla de handles: 0 -> 746 slots (5 KB dentro del heap) OK — techo del heap 387248, libre 367 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "ThrowSinAtrapar": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThrowSinAtrapar",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThrowSinAtrapar\\ThrowSinAtrapar.mod",
+    "crc": 4175510564,
+    "size": 292,
+    "compilado": true,
+    "salida": "antes",
+    "rc": 1,
+    "ms": 8,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nantes\r\n=== FIN DE LA EJECUCION (status=RuntimeError BP no atrapado) ===\r\n",
+    "stderr_cola": "interp): \"ALOAD: índice fuera de rango 99 (length=3)\"\r\n[bpvm] EXCEPCION NO ATRAPADA en el thread 0: el thread TERMINA aqui. Si esto sale dentro de un catch, el manejador se ha quedado sin memoria al construir su propio mensaje.\r\n[bpvm]   el mensaje que traia: \"ALOAD: índice fuera de rango 99 (length=3)\"\r\n[bpvm] throw (interp): construida pero SIN handler -> el RUN termina en error\r\n=== RuntimeError: excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3) ===\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "ThreadTrasMain": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThreadTrasMain",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ThreadTrasMain\\ThreadTrasMain.mod",
+    "crc": 3791226531,
+    "size": 530,
+    "compilado": true,
+    "salida": "1 main lanza el thread\n2 main termina (el thread aun no)\n3 el thread sigue vivo DESPUES de main",
+    "rc": 0,
+    "ms": 333,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n1 main lanza el thread\r\n2 main termina (el thread aun no)\r\n3 el thread sigue vivo DESPUES de main\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 2 refs, 45 bytes de arena\r\n[bpvm] tabla de simbolos: 125 simbolos, 3530 B de nombres, 5120 B en total\r\n[bpvm] enlace: 2 modulos, 2 busquedas, 14 strcmp, 142 us\r\n[bpvm] tabla de handles: 0 -> 748 slots (5 KB dentro del heap) OK — techo del heap 387232, libre 368 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "MachineId": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MachineId",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MachineId\\MachineId.mod",
+    "crc": 1710920695,
+    "size": 484,
+    "compilado": true,
+    "salida": "micro: host\nplaca: host\nobsoleta boardName() == getBoard(): true",
+    "rc": 0,
+    "ms": 8,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nmicro: host\r\nplaca: host\r\nobsoleta boardName() == getBoard(): true\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Machine' -> Machine.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] tabla de simbolos: 172 simbolos, 4420 B de nombres, 10240 B en total\r\n[bpvm] enlace: 3 modulos, 3 busquedas, 107 strcmp, 61 us\r\n[bpvm] tabla de handles: 0 -> 747 slots (5 KB dentro del heap) OK — techo del heap 387240, libre 367 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "Destructor": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\Destructor",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\Destructor\\Destructor.mod",
+    "crc": 1280358757,
+    "size": 4542,
+    "compilado": true,
+    "salida": "== normal (inverso: b, a) ==\nabre a (abiertos=1)\nabre b (abiertos=2)\n  trabajando con a y b\ncierra b (abiertos=1)\ncierra a (abiertos=0)\n== return ==\n  devuelve abre r (abiertos=1)\ncierra r (abiertos=0)\n42\n== excepcion ==\nabre e (abiertos=1)\ncierra e (abiertos=0)\n  atrapada: División por cero\n== hija ==\nabre h (abiertos=1)\n  h es h\nvacia la cache de h\ncierra h (abiertos=0)\n== null ==\n  owner a null: nada que destruir\n== try var ==\nabre t (abiertos=1)\n  dentro del bloque con t\ncierra t (abiertos=0)\n  fuera del bloque (t ya cerrado, abiertos=0)\nabre u (abiertos=1)\n  atrapada dentro: División por cero\ncierra u (abiertos=0)\n  tras el catch (abiertos=0)\n== excepcion antes del owner ==\n  antes:   atrapada: División por cero\nabiertos al final = 0",
+    "rc": 0,
+    "ms": 10,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n== normal (inverso: b, a) ==\r\nabre a (abiertos=1)\r\nabre b (abiertos=2)\r\n  trabajando con a y b\r\ncierra b (abiertos=1)\r\ncierra a (abiertos=0)\r\n== return ==\r\n  devuelve abre r (abiertos=1)\r\ncierra r (abiertos=0)\r\n42\r\n== excepcion ==\r\nabre e (abiertos=1)\r\ncierra e (abiertos=0)\r\n  atrapada: División por cero\r\n== hija ==\r\nabre h (abiertos=1)\r\n  h es h\r\nvacia la cache de h\r\ncierra h (abiertos=0)\r\n== null ==\r\n  owner a null: nada que destruir\r\n== try var ==\r\nabre t (abiertos=1)\r\n  dentro del bloque con t\r\ncierra t (abiertos=0)\r\n  fuera del bloque (t ya cerrado, abiertos=0)\r\nabre u (abiertos=1)\r\n  atrapada dentro: División por cero\r\ncierra u (abiertos=0)\r\n  tras el catch (abiertos=0)\r\n== excepcion antes del owner ==\r\n  antes:   atrapada: División por cero\r\nabiertos al final = 0\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 3 clases construidas, 14 refs, 125 bytes de arena\r\n[bpvm] tabla de simbolos: 145 simbolos, 4099 B de nombres, 10240 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 22 strcmp, 119 us\r\n[bpvm] tabla de handles: 0 -> 742 slots (5 KB dentro del heap) OK — techo del heap 387280, libre 365 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "TimeDemo": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\TimeDemo",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\TimeDemo\\TimeDemo.mod",
+    "crc": 162684734,
+    "size": 1552,
+    "compilado": true,
+    "salida": "1970-01-01 00:00:00 weekday=4\n2024-05-24 10:00:00 weekday=5\n2000-02-29 bisiesto=true\n1735689599 2024-12-31 23:59:59\n2025-01-01 00:00:00\n2023-12-31\n2147483648 2038-01-19 03:14:08\n2100-02-28 28\n-1 1969-12-31 23:59:59 weekday=3\ncompara: -1 1 0\nsegundos entre: 411794049\nrechazada: Time.Date: día fuera de rango: 29\nnow tiene año >= 1970: true",
+    "rc": 0,
+    "ms": 14,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n1970-01-01 00:00:00 weekday=4\r\n2024-05-24 10:00:00 weekday=5\r\n2000-02-29 bisiesto=true\r\n1735689599 2024-12-31 23:59:59\r\n2025-01-01 00:00:00\r\n2023-12-31\r\n2147483648 2038-01-19 03:14:08\r\n2100-02-28 28\r\n-1 1969-12-31 23:59:59 weekday=3\r\ncompara: -1 1 0\r\nsegundos entre: 411794049\r\nrechazada: Time.Date: día fuera de rango: 29\r\nnow tiene año >= 1970: true\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Time' -> Time.mod\r\n[bpvm-c] dep 'Rtc' -> Rtc.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 2 clases construidas, 39 refs, 201 bytes de arena\r\n[bpvm] tabla de simbolos: 160 simbolos, 4343 B de nombres, 10240 B en total\r\n[bpvm] enlace: 4 modulos, 12 busquedas, 318 strcmp, 120 us\r\n[bpvm] tabla de handles: 0 -> 738 slots (5 KB dentro del heap) OK — techo del heap 387312, libre 363 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "ArrayFijo": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ArrayFijo",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\ArrayFijo\\ArrayFijo.mod",
+    "crc": 3114394169,
+    "size": 2395,
+    "compilado": true,
+    "salida": "nums: 0 9 81 len = 10\nbytes: 1 250 0\nwords: 1000 65535 0\nlongs: 5 4000000000 0\ndobles: 1.5 0\nflags: false true\na y b: 100 2 7 9\nmedia: 75  suma de pesos: 253\notra media (a cero): 0\nrango: ASTORE: índice fuera de rango 4 (length=4)\nfin",
+    "rc": 0,
+    "ms": 12,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nnums: 0 9 81 len = 10\r\nbytes: 1 250 0\r\nwords: 1000 65535 0\r\nlongs: 5 4000000000 0\r\ndobles: 1.5 0\r\nflags: false true\r\na y b: 100 2 7 9\r\nmedia: 75  suma de pesos: 253\r\notra media (a cero): 0\r\nrango: ASTORE: índice fuera de rango 4 (length=4)\r\nfin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 9 refs, 53 bytes de arena\r\n[bpvm] tabla de simbolos: 130 simbolos, 3661 B de nombres, 6144 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 9 strcmp, 314 us\r\n[bpvm] tabla de handles: 0 -> 745 slots (5 KB dentro del heap) OK — techo del heap 387256, libre 367 KB\r\n[bpvm] throw (interp): \"ASTORE: índice fuera de rango 4 (length=4)\"\r\n[bpvm] throw (interp): ATRAPADA por un catch del programa\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "MoveRango": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MoveRango",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\MoveRango\\MoveRango.mod",
+    "crc": 2044484298,
+    "size": 3214,
+    "compilado": true,
+    "salida": "integer[]      20 30 40 0 0\na la derecha   1 1 2 3 4\na la izquierda 1 2 3 4 4\ncount 0 al final: nada que copiar\nbyte[]         170 170 1 2 170 170\nlong[]         5000000000 -7 123456789012\ndouble[]       1.5 -2.25\nCaja[]         7 8 9\nObject[]       9\nstring[]       dos tres []\nmove: src es null\nmove: dst es null\nmove: src es null  (con count 0 tambien)\nmove: src no es un array (type=4)\nmove: dst no es un array (type=4)\nmove: tipos de array distintos (src=2 dst=5)\nmove: tipos de array distintos (src=0 dst=2)\nmove: count negativo (-1)\nmove: offset negativo (srcStart=-1 dstStart=0)\nmove: offset negativo (srcStart=0 dstStart=-2)\nmove: rango fuera de src (srcStart=3 count=3 srcLen=5)\nmove: rango fuera de dst (dstStart=4 count=2 dstLen=5)\nel destino, intacto: 0 0 0 0 0\nmove: rango fuera de src (srcStart=2147483647 count=1 srcLen=5)\nmove: rango fuera de src (srcStart=6 count=0 srcLen=5)  (count 0 pasado el final)\nfin",
+    "rc": 0,
+    "ms": 9,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\ninteger[]      20 30 40 0 0\r\na la derecha   1 1 2 3 4\r\na la izquierda 1 2 3 4 4\r\ncount 0 al final: nada que copiar\r\nbyte[]         170 170 1 2 170 170\r\nlong[]         5000000000 -7 123456789012\r\ndouble[]       1.5 -2.25\r\nCaja[]         7 8 9\r\nObject[]       9\r\nstring[]       dos tres []\r\nmove: src es null\r\nmove: dst es null\r\nmove: src es null  (con count 0 tambien)\r\nmove: src no es un array (type=4)\r\nmove: dst no es un array (type=4)\r\nmove: tipos de array distintos (src=2 dst=5)\r\nmove: tipos de array distintos (src=0 dst=2)\r\nmove: count negativo (-1)\r\nmove: offset negativo (srcStart=-1 dstStart=0)\r\nmove: offset negativo (srcStart=0 dstStart=-2)\r\nmove: rango fuera de src (srcStart=3 count=3 srcLen=5)\r\nmove: rango fuera de dst (dstStart=4 count=2 dstLen=5)\r\nel destino, intacto: 0 0 0 0 0\r\nmove: rango fuera de src (srcStart=2147483647 count=1 srcLen=5)\r\nmove: rango fuera de src (srcStart=6 count=0 srcLen=5)  (count 0 pasado el final)\r\nfin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "echo del heap 387264, libre 366 KB\r\n[bpvm] throw: \"move: src es null\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] throw: \"move: dst es null\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] throw: \"move: src es null\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] throw: \"move: src no es un array (type=4)\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] throw: \"move: dst no es un array (type=4)\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "HiloUsa": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\HiloUsa",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\HiloUsa\\HiloUsa.mod",
+    "crc": 40829785,
+    "size": 2212,
+    "compilado": true,
+    "salida": "w1 run total=5050\ns2 run total=5050\ns2: el total visto desde Main=5050\nn3 run total=5050\nb4 run propio de Medio\nmudo: arrancado y terminado\nt5 run total=5050\nfin",
+    "rc": 0,
+    "ms": 10,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nw1 run total=5050\r\ns2 run total=5050\r\ns2: el total visto desde Main=5050\r\nn3 run total=5050\r\nb4 run propio de Medio\r\nmudo: arrancado y terminado\r\nt5 run total=5050\r\nfin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'HiloLib' -> HiloLib.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 6 clases construidas, 18 refs, 337 bytes de arena\r\n[bpvm] tabla de simbolos: 145 simbolos, 3974 B de nombres, 6144 B en total\r\n[bpvm] enlace: 3 modulos, 7 busquedas, 136 strcmp, 88 us\r\n[bpvm] tabla de handles: 0 -> 745 slots (5 KB dentro del heap) OK — techo del heap 387256, libre 366 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "GuiWinJson": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 154476969,
+    "size": 2116,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [480x320 align=0 +0,0]\n  panel [480x320 align=0 +0,0]\n    panel [480x320 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 61,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [480x320 align=0 +0,0]\r\n  panel [480x320 align=0 +0,0]\r\n    panel [480x320 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": " slots (5 KB dentro del heap) OK — techo del heap 387984, libre 322 KB\r\n[bpvm] GC por TABLA de handles: 591/654 slots (marca cruzada)\r\n[gc] pila t0: rango [393216..393568) = 88 palabras, 24 son refs al heap\r\n[gc] vivo=4452 liberado=37376 heap=[57984..99812) freelist=si\r\n[gc] reservas: de_lista=0 de_bump=590 astilla=0\r\n[gc] libres: 42 huecos, 37376 B en total, el mayor 7328 | altas=42 fusion_izq=0 fusion_der=0\r\n[bpvm] GC: bump 99812 -> 99812 (recupera 0 B, tope 42753, heap 57984..387984)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "GuiShot": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+    "crc": 2757095822,
+    "size": 1391,
+    "compilado": true,
+    "salida": "captura: Gui.shot('GuiShot.shot'): sin pantalla\nscreen [480x320 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]",
+    "rc": 0,
+    "ms": 351,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\ncaptura: Gui.shot('GuiShot.shot'): sin pantalla\r\nscreen [480x320 align=0 +0,0]\r\n  panel [200x120 pos=20,40]\r\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\r\n  button [-1x-1 align=4 +0,60]\r\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\r\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\r\n  slider [-1x-1 align=8 +-10,-16 val=70]\r\n\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "vm-c] dep 'Gui' -> Gui.mod\r\n[bpvm-c] dep 'Json' -> Json.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm-c] dep 'Collections' -> Collections.mod\r\n[bpvm-c] dep 'Str' -> Str.mod\r\n[bpvm] enlace tardio: 43 clases construidas, 325 refs, 6545 bytes de arena\r\n[bpvm] tabla de simbolos: 548 simbolos, 16912 B de nombres, 40960 B en total\r\n[bpvm] enlace: 6 modulos, 42 busquedas, 10670 strcmp, 548 us\r\n[bpvm] tabla de handles: 0 -> 656 slots (5 KB dentro del heap) OK — techo del heap 387968, libre 322 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n"
+   },
+   "NatNew": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatNew",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatNew\\NatNew.mod",
+    "crc": 2117418615,
+    "size": 2059,
+    "compilado": true,
+    "salida": "== NatNew ==\n  sumaArray(5)  = 105  (esperado 105)\n  sumaLargos()  = 7000000000  (esperado 7000000000)\n  tocaPalabras()= 6000  (esperado 6000)\n  w[0], w[1], w[2] = 1000 2000 3000  (esperado 1000 2000 3000)\n  mediaDobles() = 4  (esperado 4)\n  largoDeDos()  = 8  (esperado 8)\n  sumaFloats()  = 4  (esperado 4)\n  areaDe(6,7)   = 42  (esperado 42)\n== FIN ==",
+    "rc": 0,
+    "ms": 10,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n== NatNew ==\r\n  sumaArray(5)  = 105  (esperado 105)\r\n  sumaLargos()  = 7000000000  (esperado 7000000000)\r\n  tocaPalabras()= 6000  (esperado 6000)\r\n  w[0], w[1], w[2] = 1000 2000 3000  (esperado 1000 2000 3000)\r\n  mediaDobles() = 4  (esperado 4)\r\n  largoDeDos()  = 8  (esperado 8)\r\n  sumaFloats()  = 4  (esperado 4)\r\n  areaDe(6,7)   = 42  (esperado 42)\r\n== FIN ==\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 7 refs, 57 bytes de arena\r\n[bpvm] tabla de simbolos: 133 simbolos, 3659 B de nombres, 6144 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 12 strcmp, 209 us\r\n[bpvm] tabla de handles: 0 -> 746 slots (5 KB dentro del heap) OK — techo del heap 387248, libre 367 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] aviso NatNew: la funci�n native 'areaDe' llama a la factory de 'Punto' (la instancia se construye en el int�rprete, que es quien ejecuta el ctor) (l�nea 109). Esa llamada cruza al int�rprete por el puente native?BP y NO se acelera por AOT.\r\n[aot] [aot] aviso NatNew: la funcion native 'areaDe' lee la property 'x' (linea 110). Esa lectura cruza al interprete por el puente native?BP (getter virtual) y NO se acelera por AOT.\r\n[aot] [aot] aviso NatNew: la funcion native 'areaDe' lee la property 'y' (linea 110). Esa lectura cruza al interprete por el puente native?BP (getter virtual) y NO se acelera por AOT.\r\n[aot] [aot] NatNew.mod lleva dentro el nativo de arm (2064 B, secci�n native � 2059 -> 4123 B)\r\n[aot] [aot] NatNew: 7 thunk(s), 1788 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatNew\\aot-ARMV8M_MAIN_SOFTFP\\NatNew.mod",
+      "thunks": 7,
+      "crc": 1393604836,
+      "size": 4123
+     }
+    }
+   },
+   "NatV7": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatV7",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatV7\\NatV7.mod",
+    "crc": 3482387813,
+    "size": 1558,
+    "compilado": true,
+    "salida": "== NatV7 — el bloque nativo dentro del .mod ==\n1 native de modulo:\n  sumaHasta(20000) = 200010000  (esperado 200010000)\n2 double en native:\n  mediaPor2(3,5) = 8  (esperado 8.0)\n3 metodo native (lee property por su getter):\n  Caja(21).doble() = 42  (esperado 42)\n4 print desde native:\n7\n  traza(7) = 8  (esperado 8)\n== FIN ==",
+    "rc": 0,
+    "ms": 10,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n== NatV7 — el bloque nativo dentro del .mod ==\r\n1 native de modulo:\r\n  sumaHasta(20000) = 200010000  (esperado 200010000)\r\n  tiempo: 0 ms\r\n2 double en native:\r\n  mediaPor2(3,5) = 8  (esperado 8.0)\r\n3 metodo native (lee property por su getter):\r\n  Caja(21).doble() = 42  (esperado 42)\r\n4 print desde native:\r\n7\r\n  traza(7) = 8  (esperado 8)\r\n== FIN ==\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Machine' -> Machine.mod\r\n[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 5 refs, 53 bytes de arena\r\n[bpvm] tabla de simbolos: 180 simbolos, 4561 B de nombres, 10240 B en total\r\n[bpvm] enlace: 3 modulos, 3 busquedas, 128 strcmp, 153 us\r\n[bpvm] tabla de handles: 0 -> 745 slots (5 KB dentro del heap) OK — techo del heap 387256, libre 366 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Machine' desde Machine.mod (funcs=40, consts=0, enums=0, props=0, classes=0) --\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] aviso NatV7: la funcion native 'Caja.doble' lee la property 'n' (linea 52). Esa lectura cruza al interprete por el puente native?BP (getter virtual) y NO se acelera por AOT.\r\n[aot] [aot] NatV7.mod lleva dentro el nativo de arm (736 B, secci�n native � 1558 -> 2296 B)\r\n[aot] [aot] NatV7: 4 thunk(s), 568 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatV7\\aot-ARMV8M_MAIN_SOFTFP\\NatV7.mod",
+      "thunks": 4,
+      "crc": 666395561,
+      "size": 2296
+     }
+    }
+   },
+   "FloatNat": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\FloatNat",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\FloatNat\\FloatNat.mod",
+    "crc": 1957781022,
+    "size": 4870,
+    "compilado": true,
+    "salida": "== FloatNat ==\nok  ops(1.5, 0.1)  =  0.1\nok  ops(-3.25, 7)  =  7\nok  cmp(1.5, 2.5)  =  14\nok  cmp(2.5, 2.5)  =  41\nok  cmp(NaN, 1)  =  2\nok  cmp(1, NaN)  =  2\nok  mod(7.5, 2)  =  1.5\nok  mod(-7.5, 2)  =  -1.5\nok  mod(1, 0.3)  =  0.1\nok  neg(2.5)  =  -2.5\nok  neg(0)  =  0\nok  mixI(2.5, 3)  =  -0.090909\nok  asigI(7)  =  13\nok  retI(16777217)  =  16777216\nok  retI(-7)  =  -7\nok  arrI(5)  =  0.769231\nok  cmpI(2.5, 2)  =  2\nok  cmpI(2, 2)  =  6\nok  casts  =  123473567740\nok  l2f(2^60+2^36+1)  =  1152921642045800448\nok  dMix  =  -4999999996.85\nok  dAsig  =  9.007199E15\nok  dCasts  =  -37035\nok  double()  =  5000000003.1\nok  powF(2, 0.5)  =  1.414214\nok  powFI(1.1)  =  1.331\nok  powD(2)  =  1.414214\nok  glob  =  4.125\nok  glob tras  =  4.375\nok  llama(5)  =  4\nok  fma  =  0\nimprime (nativo, luego interpretado):\n0.1\n0.1\n1234567\n1234567\n1E-6\n1E-6\n== FIN ==",
+    "rc": 0,
+    "ms": 7,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\n== FloatNat ==\r\nok  ops(1.5, 0.1)  =  0.1\r\nok  ops(-3.25, 7)  =  7\r\nok  cmp(1.5, 2.5)  =  14\r\nok  cmp(2.5, 2.5)  =  41\r\nok  cmp(NaN, 1)  =  2\r\nok  cmp(1, NaN)  =  2\r\nok  mod(7.5, 2)  =  1.5\r\nok  mod(-7.5, 2)  =  -1.5\r\nok  mod(1, 0.3)  =  0.1\r\nok  neg(2.5)  =  -2.5\r\nok  neg(0)  =  0\r\nok  mixI(2.5, 3)  =  -0.090909\r\nok  asigI(7)  =  13\r\nok  retI(16777217)  =  16777216\r\nok  retI(-7)  =  -7\r\nok  arrI(5)  =  0.769231\r\nok  cmpI(2.5, 2)  =  2\r\nok  cmpI(2, 2)  =  6\r\nok  casts  =  123473567740\r\nok  l2f(2^60+2^36+1)  =  1152921642045800448\r\nok  dMix  =  -4999999996.85\r\nok  dAsig  =  9.007199E15\r\nok  dCasts  =  -37035\r\nok  double()  =  5000000003.1\r\nok  powF(2, 0.5)  =  1.414214\r\nok  powFI(1.1)  =  1.331\r\nok  powD(2)  =  1.414214\r\nok  glob  =  4.125\r\nok  glob tras  =  4.375\r\nok  llama(5)  =  4\r\nok  fma  =  0\r\nimprime (nativo, luego interpretado):\r\n0.1\r\n0.1\r\n1234567\r\n1234567\r\n1E-6\r\n1E-6\r\n== FIN ==\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] tabla de simbolos: 173 simbolos, 4223 B de nombres, 10240 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 53 strcmp, 89 us\r\n[bpvm] tabla de handles: 0 -> 741 slots (5 KB dentro del heap) OK — techo del heap 387288, libre 364 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] FloatNat.mod lleva dentro el nativo de arm (3576 B, secci�n native � 4870 -> 8449 B)\r\n[aot] [aot] FloatNat: 23 thunk(s), 2724 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\FloatNat\\aot-ARMV8M_MAIN_SOFTFP\\FloatNat.mod",
+      "thunks": 23,
+      "crc": 2041213908,
+      "size": 8449
+     }
+    }
+   },
+   "NatCede": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatCede",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatCede\\NatCede.mod",
+    "crc": 4148839067,
+    "size": 1485,
+    "compilado": true,
+    "salida": "ok main: antes de la native\nok otro: paso 0\nok otro: paso 1\nok otro: paso 2\nok main: la native volvio con 100000/7\nok main: atrapada tras la pausa: charAt: idx fuera de rango 100 (len=3)\nok fin",
+    "rc": 0,
+    "ms": 101,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok main: antes de la native\r\nok otro: paso 0\r\nok otro: paso 1\r\nok otro: paso 2\r\nok main: la native volvio con 100000/7\r\nok main: atrapada tras la pausa: charAt: idx fuera de rango 100 (len=3)\r\nok fin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 5 refs, 45 bytes de arena\r\n[bpvm] tabla de simbolos: 135 simbolos, 3732 B de nombres, 6144 B en total\r\n[bpvm] enlace: 2 modulos, 2 busquedas, 34 strcmp, 162 us\r\n[bpvm] tabla de handles: 0 -> 747 slots (5 KB dentro del heap) OK — techo del heap 387240, libre 367 KB\r\n[bpvm] throw: \"charAt: idx fuera de rango 100 (len=3)\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] aviso NatCede: la funci�n native 'tras' llama a la funci�n BP interpretada 'pausa'. Para m�ximo rendimiento, declara 'pausa' tambi�n como native (l�nea 50). Esa llamada cruza al int�rprete por el puente native?BP y NO se acelera por AOT.\r\n[aot] [aot] aviso NatCede: la funci�n native 'espera' llama a la funci�n BP interpretada 'esperarAlOtro'. Para m�ximo rendimiento, declara 'esperarAlOtro' tambi�n como native (l�nea 56). Esa llamada cruza al int�rprete por el puente native?BP y NO se acelera por AOT.\r\n[aot] [aot] NatCede.mod lleva dentro el nativo de arm (720 B, secci�n native � 1485 -> 2207 B)\r\n[aot] [aot] NatCede: 2 thunk(s), 624 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatCede\\aot-ARMV8M_MAIN_SOFTFP\\NatCede.mod",
+      "thunks": 2,
+      "crc": 1188521131,
+      "size": 2207
+     }
+    }
+   },
+   "NatExpropia": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatExpropia",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatExpropia\\NatExpropia.mod",
+    "crc": 3148139966,
+    "size": 948,
+    "compilado": true,
+    "salida": "ok main: gira la native\nok otro: dentro\nok main: la native paro: 1\nok fin",
+    "rc": 0,
+    "ms": 8,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok main: gira la native\r\nok otro: dentro\r\nok main: la native paro: 1\r\nok fin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 3 refs, 45 bytes de arena\r\n[bpvm] tabla de simbolos: 130 simbolos, 3646 B de nombres, 6144 B en total\r\n[bpvm] enlace: 2 modulos, 2 busquedas, 24 strcmp, 137 us\r\n[bpvm] tabla de handles: 0 -> 748 slots (5 KB dentro del heap) OK — techo del heap 387232, libre 368 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] NatExpropia.mod lleva dentro el nativo de arm (220 B, secci�n native � 948 -> 1169 B)\r\n[aot] [aot] NatExpropia: 1 thunk(s), 160 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatExpropia\\aot-ARMV8M_MAIN_SOFTFP\\NatExpropia.mod",
+      "thunks": 1,
+      "crc": 1565263172,
+      "size": 1169
+     }
+    }
+   },
+   "NatBuiltin": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatBuiltin",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatBuiltin\\NatBuiltin.mod",
+    "crc": 2469008549,
+    "size": 1509,
+    "compilado": true,
+    "salida": "ok raiz: 1.5\nok seno: 1.357008\nok valor: 42\nok empieza: true false\nok cadena: atrapada: __charsToString: longitud negativa: -1\nok otro: corre mientras la native duerme\nok dormida: 5\nok fin",
+    "rc": 0,
+    "ms": 59,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok raiz: 1.5\r\nok seno: 1.357008\r\nok valor: 42\r\nok empieza: true false\r\nok cadena: atrapada: __charsToString: longitud negativa: -1\r\nok otro: corre mientras la native duerme\r\nok dormida: 5\r\nok fin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 1 clases construidas, 5 refs, 45 bytes de arena\r\n[bpvm] tabla de simbolos: 135 simbolos, 3723 B de nombres, 6144 B en total\r\n[bpvm] enlace: 2 modulos, 2 busquedas, 34 strcmp, 161 us\r\n[bpvm] tabla de handles: 0 -> 747 slots (5 KB dentro del heap) OK — techo del heap 387240, libre 367 KB\r\n[bpvm] throw: \"__charsToString: longitud negativa: -1\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n-- cargado import 'Math' desde Math.mod (funcs=18, consts=0, enums=0, props=0, classes=0) --\r\n[aot] [aot] NatBuiltin.mod lleva dentro el nativo de arm (992 B, secci�n native � 1509 -> 2503 B)\r\n[aot] [aot] NatBuiltin: 6 thunk(s), 752 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatBuiltin\\aot-ARMV8M_MAIN_SOFTFP\\NatBuiltin.mod",
+      "thunks": 6,
+      "crc": 1299164638,
+      "size": 2503
+     }
+    }
+   },
+   "NatAnida": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatAnida",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatAnida\\NatAnida.mod",
+    "crc": 3142328267,
+    "size": 729,
+    "compilado": true,
+    "salida": "ok dentro: [h]\nok fuera: atrapada: charAt: idx fuera de rango 11 (len=3)\nok fin",
+    "rc": 0,
+    "ms": 11,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok dentro: [h]\r\nok fuera: atrapada: charAt: idx fuera de rango 11 (len=3)\r\nok fin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] enlace tardio: 0 clases construidas, 2 refs, 0 bytes de arena\r\n[bpvm] tabla de simbolos: 126 simbolos, 3523 B de nombres, 5120 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 6 strcmp, 105 us\r\n[bpvm] tabla de handles: 0 -> 748 slots (5 KB dentro del heap) OK — techo del heap 387232, libre 368 KB\r\n[bpvm] throw: \"charAt: idx fuera de rango 11 (len=3)\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] aviso NatAnida: la funci�n native 'exterior' llama a la funci�n BP interpretada 'puente'. Para m�ximo rendimiento, declara 'puente' tambi�n como native (l�nea 18). Esa llamada cruza al int�rprete por el puente native?BP y NO se acelera por AOT.\r\n[aot] [aot] NatAnida.mod lleva dentro el nativo de arm (428 B, secci�n native � 729 -> 1159 B)\r\n[aot] [aot] NatAnida: 2 thunk(s), 332 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatAnida\\aot-ARMV8M_MAIN_SOFTFP\\NatAnida.mod",
+      "thunks": 2,
+      "crc": 111875699,
+      "size": 1159
+     }
+    }
+   },
+   "NatDirecta": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatDirecta",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatDirecta\\NatDirecta.mod",
+    "crc": 944901204,
+    "size": 1071,
+    "compilado": true,
+    "salida": "ok hoja: 13\nok llamaHoja: 29\nok fibR: 610\nok texto: n=42\nok conBucle: 4950\nok pequena: 4951\nok llamaPequena: 92\nok conRaiz: 1.5\nok llamaBp: 41",
+    "rc": 0,
+    "ms": 11,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok hoja: 13\r\nok llamaHoja: 29\r\nok fibR: 610\r\nok texto: n=42\r\nok conBucle: 4950\r\nok pequena: 4951\r\nok llamaPequena: 92\r\nok conRaiz: 1.5\r\nok llamaBp: 41\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm] tabla de simbolos: 133 simbolos, 3663 B de nombres, 6144 B en total\r\n[bpvm] enlace: 2 modulos, 1 busquedas, 13 strcmp, 138 us\r\n[bpvm] tabla de handles: 0 -> 748 slots (5 KB dentro del heap) OK — techo del heap 387232, libre 368 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] aviso NatDirecta: la funci�n native 'llamaBp' llama a la funci�n BP interpretada 'doble'. Para m�ximo rendimiento, declara 'doble' tambi�n como native (l�nea 65). Esa llamada cruza al int�rprete por el puente native?BP y NO se acelera por AOT.\r\n[aot] [aot] NatDirecta.mod lleva dentro el nativo de arm (1140 B, secci�n native � 1071 -> 2212 B)\r\n[aot] [aot] NatDirecta: 9 thunk(s), 792 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatDirecta\\aot-ARMV8M_MAIN_SOFTFP\\NatDirecta.mod",
+      "thunks": 9,
+      "crc": 1956371386,
+      "size": 2212
+     }
+    }
+   },
+   "NatCoste": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatCoste",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatCoste\\NatCoste.mod",
+    "crc": 3656950803,
+    "size": 750,
+    "compilado": true,
+    "salida": "ok directa: 20000\nok con ejecutor: 20000",
+    "rc": 0,
+    "ms": 11,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok directa: 20000\r\n  tiempo: directa 1 ms las 20000 llamadas\r\nok con ejecutor: 20000\r\n  tiempo: con ejecutor 2 ms las 20000 llamadas\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "[bpvm-c] dep 'Core' -> Core.mod\r\n[bpvm-c] dep 'Machine' -> Machine.mod\r\n[bpvm] tabla de simbolos: 174 simbolos, 4448 B de nombres, 10240 B en total\r\n[bpvm] enlace: 3 modulos, 3 busquedas, 136 strcmp, 62 us\r\n[bpvm] tabla de handles: 0 -> 746 slots (5 KB dentro del heap) OK — techo del heap 387248, libre 367 KB\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 1 vivos)\r\n",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=70, consts=0, enums=0, props=0, classes=13) --\r\n-- cargado import 'Machine' desde Machine.mod (funcs=40, consts=0, enums=0, props=0, classes=0) --\r\n[aot] [aot] NatCoste.mod lleva dentro el nativo de arm (160 B, secci�n native � 750 -> 910 B)\r\n[aot] [aot] NatCoste: 2 thunk(s), 64 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatCoste\\aot-ARMV8M_MAIN_SOFTFP\\NatCoste.mod",
+      "thunks": 2,
+      "crc": 653787490,
+      "size": 910
+     }
+    }
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "stm32u575",
+     "uniqueId": "203436414230500D00350041",
+     "serverName": "bpvm-stm32",
+     "serverBuild": "Sep 27 2026 09:30:41",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "PACKS"
+     ],
+     "arch": 40,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "pin (NRST)",
+     "uptimeMs": 31413,
+     "fsUsedBytes": 229376,
+     "fsTotalBytes": 516096,
+     "vmHeapBytes": 393216,
+     "aotReceta": "ARMV8M_MAIN_SOFTFP",
+     "uptime_ultimo": 62925,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM5",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "203436414230500D00350041",
+      "boardName": "stm32u575",
+      "arch": 40,
+      "aotReceta": "ARMV8M_MAIN_SOFTFP",
+      "aotFlagsCrc": 1597191390,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 31413,
+      "resetReason": "pin (NRST)",
+      "tempMilliC": 0,
+      "micro": "stm32u575",
+      "paquete": "LQFP144",
+      "gpioCount": 126,
+      "pioCount": 0,
+      "pwmSlices": 3,
+      "pwmUnidad": "canal",
+      "adcChannels": 24,
+      "adcUnidades": 2,
+      "uartIds": "2,3,4,5",
+      "i2cIds": "1,2,3,4",
+      "spiIds": "1,2,3",
+      "flashBytes": 2097152,
+      "sramBytes": 786432,
+      "psramBytes": 0,
+      "vmHeapBytes": 393216,
+      "vmStackBytes": 131072,
+      "fsTotalBytes": 516096,
+      "fsUsedBytes": 229376
+     }
+    },
+    "pantalla": [
+     false,
+     "INFO sin screenW/screenH: la imagen no lleva LVGL"
+    ],
+    "resultados": [
+     {
+      "prueba": "MathRango",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 255,
+      "ms_host": 11,
+      "exited": {
+       "type": "EXITED",
+       "session": 1,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 255,
+       "nativos": 0
+      },
+      "salida_placa": "-- clamp(x, lo, hi) --\ndentro    5\npor abajo 0\npor arriba 10\nen el borde lo 0\nen el borde hi 10\nlo > hi   10\n-- wrap(x, lo, hi) --\n370 en [0,360) 10\n-10 en [0,360) 350\n  0 en [0,360) 0\n360 en [0,360) 0\n720 en [0,360) 0\n  7 en [-5,5)  -3\n -7 en [-5,5)  3\n-- hypot(x, y) --\n(3,4)     5\n(0,0)     0\n(-3,-4)   5\n(1,1)     1.414214\n(3e18,4e18) 5E18\n-- remap(x, inLo, inHi, outLo, outHi) --\n512 de [0,1023] a [0,100] 50.048878\n  0 de [0,1023] a [0,100] 0\n1023 de [0,1023] a [0,100] 100\ninvertido 100\nextrapola 200\nadc acotado 100\nFIN\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 33250,
+       "fsUsedBytes": 237568,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 401,
+      "session": 1
+     },
+     {
+      "prueba": "ThrowSinAtrapar",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1",
+      "ms_placa": 64,
+      "ms_host": 8,
+      "exited": {
+       "type": "EXITED",
+       "session": 2,
+       "status": "RUNTIME_ERROR",
+       "exitCode": 1,
+       "elapsedMs": 64,
+       "nativos": 0,
+       "errorMessage": "excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)"
+      },
+      "salida_placa": "antes\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 34329,
+       "fsUsedBytes": 245760,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 417,
+      "session": 2
+     },
+     {
+      "prueba": "ThreadTrasMain",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 376,
+      "ms_host": 333,
+      "exited": {
+       "type": "EXITED",
+       "session": 3,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 376,
+       "nativos": 0
+      },
+      "salida_placa": "1 main lanza el thread\n2 main termina (el thread aun no)\n3 el thread sigue vivo DESPUES de main\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 35644,
+       "fsUsedBytes": 253952,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 416,
+      "session": 3
+     },
+     {
+      "prueba": "MachineId",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 133,
+      "ms_host": 8,
+      "exited": {
+       "type": "EXITED",
+       "session": 4,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 133,
+       "nativos": 0
+      },
+      "salida_placa": "micro: stm32u575\nplaca: nucleo-u575zi\nobsoleta boardName() == getBoard(): true\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 36942,
+       "fsUsedBytes": 262144,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 415,
+      "session": 4
+     },
+     {
+      "prueba": "Destructor",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 351,
+      "ms_host": 10,
+      "exited": {
+       "type": "EXITED",
+       "session": 5,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 351,
+       "nativos": 0
+      },
+      "salida_placa": "== normal (inverso: b, a) ==\nabre a (abiertos=1)\nabre b (abiertos=2)\n  trabajando con a y b\ncierra b (abiertos=1)\ncierra a (abiertos=0)\n== return ==\n  devuelve abre r (abiertos=1)\ncierra r (abiertos=0)\n42\n== excepcion ==\nabre e (abiertos=1)\ncierra e (abiertos=0)\n  atrapada: División por cero\n== hija ==\nabre h (abiertos=1)\n  h es h\nvacia la cache de h\ncierra h (abiertos=0)\n== null ==\n  owner a null: nada que destruir\n== try var ==\nabre t (abiertos=1)\n  dentro del bloque con t\ncierra t (abiertos=0)\n  fuera del bloque (t ya cerrado, abiertos=0)\nabre u (abiertos=1)\n  atrapada dentro: División por cero\ncierra u (abiertos=0)\n  tras el catch (abiertos=0)\n== excepcion antes del owner ==\n  antes:   atrapada: División por cero\nabiertos al final = 0\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 39016,
+       "fsUsedBytes": 270336,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 434,
+      "session": 5
+     },
+     {
+      "prueba": "TimeDemo",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 503,
+      "ms_host": 14,
+      "exited": {
+       "type": "EXITED",
+       "session": 6,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 503,
+       "nativos": 0
+      },
+      "salida_placa": "1970-01-01 00:00:00 weekday=4\n2024-05-24 10:00:00 weekday=5\n2000-02-29 bisiesto=true\n1735689599 2024-12-31 23:59:59\n2025-01-01 00:00:00\n2023-12-31\n2147483648 2038-01-19 03:14:08\n2100-02-28 28\n-1 1969-12-31 23:59:59 weekday=3\ncompara: -1 1 0\nsegundos entre: 411794049\nrechazada: Time.Date: día fuera de rango: 29\nnow tiene año >= 1970: true\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 40652,
+       "fsUsedBytes": 278528,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 416,
+      "session": 6
+     },
+     {
+      "prueba": "ArrayFijo",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 184,
+      "ms_host": 12,
+      "exited": {
+       "type": "EXITED",
+       "session": 7,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 184,
+       "nativos": 0
+      },
+      "salida_placa": "nums: 0 9 81 len = 10\nbytes: 1 250 0\nwords: 1000 65535 0\nlongs: 5 4000000000 0\ndobles: 1.5 0\nflags: false true\na y b: 100 2 7 9\nmedia: 75  suma de pesos: 253\notra media (a cero): 0\nrango: ASTORE: índice fuera de rango 4 (length=4)\nfin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 41885,
+       "fsUsedBytes": 286720,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 402,
+      "session": 7
+     },
+     {
+      "prueba": "MoveRango",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 309,
+      "ms_host": 9,
+      "exited": {
+       "type": "EXITED",
+       "session": 8,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 309,
+       "nativos": 0
+      },
+      "salida_placa": "integer[]      20 30 40 0 0\na la derecha   1 1 2 3 4\na la izquierda 1 2 3 4 4\ncount 0 al final: nada que copiar\nbyte[]         170 170 1 2 170 170\nlong[]         5000000000 -7 123456789012\ndouble[]       1.5 -2.25\nCaja[]         7 8 9\nObject[]       9\nstring[]       dos tres []\nmove: src es null\nmove: dst es null\nmove: src es null  (con count 0 tambien)\nmove: src no es un array (type=4)\nmove: dst no es un array (type=4)\nmove: tipos de array distintos (src=2 dst=5)\nmove: tipos de array distintos (src=0 dst=2)\nmove: count negativo (-1)\nmove: offset negativo (srcStart=-1 dstStart=0)\nmove: offset negativo (srcStart=0 dstStart=-2)\nmove: rango fuera de src (srcStart=3 count=3 srcLen=5)\nmove: rango fuera de dst (dstStart=4 count=2 dstLen=5)\nel destino, intacto: 0 0 0 0 0\nmove: rango fuera de src (srcStart=2147483647 count=1 srcLen=5)\nmove: rango fuera de src (srcStart=6 count=0 srcLen=5)  (count 0 pasado el final)\nfin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 43215,
+       "fsUsedBytes": 294912,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 401,
+      "session": 8
+     },
+     {
+      "prueba": "HiloUsa",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 278,
+      "ms_host": 10,
+      "exited": {
+       "type": "EXITED",
+       "session": 9,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 278,
+       "nativos": 0
+      },
+      "salida_placa": "w1 run total=5050\ns2 run total=5050\ns2: el total visto desde Main=5050\nn3 run total=5050\nb4 run propio de Medio\nmudo: arrancado y terminado\nt5 run total=5050\nfin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 44969,
+       "fsUsedBytes": 311296,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 417,
+      "session": 9
+     },
+     {
+      "prueba": "GuiWinJson",
+      "veredicto": "SALTADA",
+      "detalle": "necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)",
+      "ms_placa": null,
+      "ms_host": 61,
+      "exited": null,
+      "salida_placa": null,
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": false,
+      "termino": false,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": null,
+      "reinicio": false,
+      "abortar_placa": null
+     },
+     {
+      "prueba": "GuiShot",
+      "veredicto": "SALTADA",
+      "detalle": "necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)",
+      "ms_placa": null,
+      "ms_host": 351,
+      "exited": null,
+      "salida_placa": null,
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": false,
+      "termino": false,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": null,
+      "reinicio": false,
+      "abortar_placa": null
+     },
+     {
+      "prueba": "NatNew",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 7/7 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 199,
+      "ms_host": 10,
+      "exited": {
+       "type": "EXITED",
+       "session": 10,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 199,
+       "nativos": 7
+      },
+      "salida_placa": "== NatNew ==\n  sumaArray(5)  = 105  (esperado 105)\n  sumaLargos()  = 7000000000  (esperado 7000000000)\n  tocaPalabras()= 6000  (esperado 6000)\n  w[0], w[1], w[2] = 1000 2000 3000  (esperado 1000 2000 3000)\n  mediaDobles() = 4  (esperado 4)\n  largoDeDos()  = 8  (esperado 8)\n  sumaFloats()  = 4  (esperado 4)\n  areaDe(6,7)   = 42  (esperado 42)\n== FIN ==\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 47615,
+       "fsUsedBytes": 319488,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 418,
+      "session": 10,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 7,
+       "nativos": 7,
+       "crc": 1393604836,
+       "size": 4123
+      }
+     },
+     {
+      "prueba": "NatV7",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 4/4 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 257,
+      "ms_host": 10,
+      "exited": {
+       "type": "EXITED",
+       "session": 11,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 257,
+       "nativos": 4
+      },
+      "salida_placa": "== NatV7 — el bloque nativo dentro del .mod ==\n1 native de modulo:\n  sumaHasta(20000) = 200010000  (esperado 200010000)\n  tiempo: 5 ms\n2 double en native:\n  mediaPor2(3,5) = 8  (esperado 8.0)\n3 metodo native (lee property por su getter):\n  Caja(21).doble() = 42  (esperado 42)\n4 print desde native:\n7\n  traza(7) = 8  (esperado 8)\n== FIN ==\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 49218,
+       "fsUsedBytes": 327680,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 417,
+      "session": 11,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 4,
+       "nativos": 4,
+       "crc": 666395561,
+       "size": 2296
+      }
+     },
+     {
+      "prueba": "FloatNat",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 23/23 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 369,
+      "ms_host": 7,
+      "exited": {
+       "type": "EXITED",
+       "session": 12,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 369,
+       "nativos": 23
+      },
+      "salida_placa": "== FloatNat ==\nok  ops(1.5, 0.1)  =  0.1\nok  ops(-3.25, 7)  =  7\nok  cmp(1.5, 2.5)  =  14\nok  cmp(2.5, 2.5)  =  41\nok  cmp(NaN, 1)  =  2\nok  cmp(1, NaN)  =  2\nok  mod(7.5, 2)  =  1.5\nok  mod(-7.5, 2)  =  -1.5\nok  mod(1, 0.3)  =  0.1\nok  neg(2.5)  =  -2.5\nok  neg(0)  =  0\nok  mixI(2.5, 3)  =  -0.090909\nok  asigI(7)  =  13\nok  retI(16777217)  =  16777216\nok  retI(-7)  =  -7\nok  arrI(5)  =  0.769231\nok  cmpI(2.5, 2)  =  2\nok  cmpI(2, 2)  =  6\nok  casts  =  123473567740\nok  l2f(2^60+2^36+1)  =  1152921642045800448\nok  dMix  =  -4999999996.85\nok  dAsig  =  9.007199E15\nok  dCasts  =  -37035\nok  double()  =  5000000003.1\nok  powF(2, 0.5)  =  1.414214\nok  powFI(1.1)  =  1.331\nok  powD(2)  =  1.414214\nok  glob  =  4.125\nok  glob tras  =  4.375\nok  llama(5)  =  4\nok  fma  =  0\nimprime (nativo, luego interpretado):\n0.1\n0.1\n1234567\n1234567\n1E-6\n1E-6\n== FIN ==\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 52489,
+       "fsUsedBytes": 344064,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 417,
+      "session": 12,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 23,
+       "nativos": 23,
+       "crc": 2041213908,
+       "size": 8449
+      }
+     },
+     {
+      "prueba": "NatCede",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 232,
+      "ms_host": 101,
+      "exited": {
+       "type": "EXITED",
+       "session": 13,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 232,
+       "nativos": 2
+      },
+      "salida_placa": "ok main: antes de la native\nok otro: paso 0\nok otro: paso 1\nok otro: paso 2\nok main: la native volvio con 100000/7\nok main: atrapada tras la pausa: charAt: idx fuera de rango 100 (len=3)\nok fin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 54075,
+       "fsUsedBytes": 352256,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 400,
+      "session": 13,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 2,
+       "nativos": 2,
+       "crc": 1188521131,
+       "size": 2207
+      }
+     },
+     {
+      "prueba": "NatExpropia",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 1/1 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 103,
+      "ms_host": 8,
+      "exited": {
+       "type": "EXITED",
+       "session": 14,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 103,
+       "nativos": 1
+      },
+      "salida_placa": "ok main: gira la native\nok otro: dentro\nok main: la native paro: 1\nok fin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 55760,
+       "fsUsedBytes": 360448,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 400,
+      "session": 14,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 1,
+       "nativos": 1,
+       "crc": 1565263172,
+       "size": 1169
+      }
+     },
+     {
+      "prueba": "NatBuiltin",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 6/6 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 149,
+      "ms_host": 59,
+      "exited": {
+       "type": "EXITED",
+       "session": 15,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 149,
+       "nativos": 6
+      },
+      "salida_placa": "ok raiz: 1.5\nok seno: 1.357008\nok valor: 42\nok empieza: true false\nok cadena: atrapada: __charsToString: longitud negativa: -1\nok otro: corre mientras la native duerme\nok dormida: 5\nok fin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 57379,
+       "fsUsedBytes": 368640,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 401,
+      "session": 15,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 6,
+       "nativos": 6,
+       "crc": 1299164638,
+       "size": 2503
+      }
+     },
+     {
+      "prueba": "NatAnida",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 98,
+      "ms_host": 11,
+      "exited": {
+       "type": "EXITED",
+       "session": 16,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 98,
+       "nativos": 2
+      },
+      "salida_placa": "ok dentro: [h]\nok fuera: atrapada: charAt: idx fuera de rango 11 (len=3)\nok fin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 58847,
+       "fsUsedBytes": 376832,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 401,
+      "session": 16,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 2,
+       "nativos": 2,
+       "crc": 111875699,
+       "size": 1159
+      }
+     },
+     {
+      "prueba": "NatDirecta",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 9/9 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 129,
+      "ms_host": 11,
+      "exited": {
+       "type": "EXITED",
+       "session": 17,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 129,
+       "nativos": 9
+      },
+      "salida_placa": "ok hoja: 13\nok llamaHoja: 29\nok fibR: 610\nok texto: n=42\nok conBucle: 4950\nok pequena: 4951\nok llamaPequena: 92\nok conRaiz: 1.5\nok llamaBp: 41\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 60465,
+       "fsUsedBytes": 385024,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 415,
+      "session": 17,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 9,
+       "nativos": 9,
+       "crc": 1956371386,
+       "size": 2212
+      }
+     },
+     {
+      "prueba": "NatCoste",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 1086,
+      "ms_host": 11,
+      "exited": {
+       "type": "EXITED",
+       "session": 18,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 1086,
+       "nativos": 2
+      },
+      "salida_placa": "ok directa: 20000\n  tiempo: directa 161 ms las 20000 llamadas\nok con ejecutor: 20000\n  tiempo: con ejecutor 783 ms las 20000 llamadas\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 62925,
+       "fsUsedBytes": 393216,
+       "fsTotalBytes": 516096,
+       "vmHeapBytes": 393216
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "tipos_extra": [],
+      "ms_wire": 1233,
+      "session": 18,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 2,
+       "nativos": 2,
+       "crc": 653787490,
+       "size": 910
+      }
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/MathRango.mod",
+      "local": "bpgenvm-c\\build\\tanda\\MathRango\\MathRango.mod",
+      "size": 1616,
+      "crc": "8d65a50d",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/ThrowSinAtrapar.mod",
+      "local": "bpgenvm-c\\build\\tanda\\ThrowSinAtrapar\\ThrowSinAtrapar.mod",
+      "size": 292,
+      "crc": "f8e13c24",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/ThreadTrasMain.mod",
+      "local": "bpgenvm-c\\build\\tanda\\ThreadTrasMain\\ThreadTrasMain.mod",
+      "size": 530,
+      "crc": "e1f986a3",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/MachineId.mod",
+      "local": "bpgenvm-c\\build\\tanda\\MachineId\\MachineId.mod",
+      "size": 484,
+      "crc": "65fa93f7",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/Destructor.mod",
+      "local": "bpgenvm-c\\build\\tanda\\Destructor\\Destructor.mod",
+      "size": 4542,
+      "crc": "4c50b965",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/TimeDemo.mod",
+      "local": "bpgenvm-c\\build\\tanda\\TimeDemo\\TimeDemo.mod",
+      "size": 1552,
+      "crc": "09b25f3e",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/ArrayFijo.mod",
+      "local": "bpgenvm-c\\build\\tanda\\ArrayFijo\\ArrayFijo.mod",
+      "size": 2395,
+      "crc": "b9a1e239",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/MoveRango.mod",
+      "local": "bpgenvm-c\\build\\tanda\\MoveRango\\MoveRango.mod",
+      "size": 3214,
+      "crc": "79dc5aca",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/HiloLib.mod",
+      "local": "bpgenvm-c\\build\\tanda\\HiloUsa\\HiloLib.mod",
+      "size": 1114,
+      "crc": "88bd91bd",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/HiloUsa.mod",
+      "local": "bpgenvm-c\\build\\tanda\\HiloUsa\\HiloUsa.mod",
+      "size": 2212,
+      "crc": "026f0359",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/NatNew.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatNew\\aot-ARMV8M_MAIN_SOFTFP\\NatNew.mod",
+      "size": 4123,
+      "crc": "5310b8e4",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/NatV7.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatV7\\aot-ARMV8M_MAIN_SOFTFP\\NatV7.mod",
+      "size": 2296,
+      "crc": "27b863a9",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/FloatNat.mod",
+      "local": "bpgenvm-c\\build\\tanda\\FloatNat\\aot-ARMV8M_MAIN_SOFTFP\\FloatNat.mod",
+      "size": 8449,
+      "crc": "79aa73d4",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/NatCede.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatCede\\aot-ARMV8M_MAIN_SOFTFP\\NatCede.mod",
+      "size": 2207,
+      "crc": "46d764ab",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/NatExpropia.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatExpropia\\aot-ARMV8M_MAIN_SOFTFP\\NatExpropia.mod",
+      "size": 1169,
+      "crc": "5d4c0544",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/NatBuiltin.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatBuiltin\\aot-ARMV8M_MAIN_SOFTFP\\NatBuiltin.mod",
+      "size": 2503,
+      "crc": "4d6fadde",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/NatAnida.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatAnida\\aot-ARMV8M_MAIN_SOFTFP\\NatAnida.mod",
+      "size": 1159,
+      "crc": "06ab1673",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/NatDirecta.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatDirecta\\aot-ARMV8M_MAIN_SOFTFP\\NatDirecta.mod",
+      "size": 2212,
+      "crc": "749bdbba",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/NatCoste.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatCoste\\aot-ARMV8M_MAIN_SOFTFP\\NatCoste.mod",
+      "size": 910,
+      "crc": "26f80162",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)",
+     "dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa"
+    ],
+    "inventario_detalle": "17 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "inventario": [
+     "/app/AdcNucleo.mod",
+     "/lib/Adc.mod",
+     "/lib/Core.mod",
+     "/lib/Gpio.mod",
+     "/lib/I2c.mod",
+     "/lib/IO.mod",
+     "/lib/Machine.mod",
+     "/lib/Math.mod",
+     "/lib/Pico.mod",
+     "/lib/Pulse.mod",
+     "/lib/Pwm.mod",
+     "/lib/Rtc.mod",
+     "/lib/Spi.mod",
+     "/lib/Time.mod",
+     "/lib/Timer.mod",
+     "/lib/Uart.mod",
+     "/lib/Wdt.mod"
+    ]
+   }
+  ]
+ }
+]
