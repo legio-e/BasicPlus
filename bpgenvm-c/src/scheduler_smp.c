@@ -110,8 +110,14 @@ static void worker_loop(void* raw) {
 
     for (;;) {
         /* P-run-stop (#257) — poll cooperativo del transporte ENTRE quanta
-         * (fuera del lock; con 1 worker es exactamente entre quanta). */
-        if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+         * (fuera del lock; con 1 worker es exactamente entre quanta).
+         * V7/H7 (27-sep) — con el hilo `io` en marcha el wire es SUYO (un KILL
+         * llega como `kill_requested`), así que aquí no se mira: la guarda
+         * `vm->io == NULL` de scheduler.c, que no había viajado a este fichero
+         * (la auditoría de capas, A3). Sin ella, dos hilos atenderían el mismo
+         * transporte. `test-kill`, fases 4-6. */
+        if (vm->io == NULL && vm->poll_cb != NULL
+                && vm->poll_cb(vm, vm->poll_user) != 0)
             vm->kill_requested = 1;
 
         /* ------- Scheduler decision bajo vm_lock ------- */
@@ -152,8 +158,8 @@ static void worker_loop(void* raw) {
             }
             /* P-run-stop — sin RUNNABLE: poll del transporte fuera del
              * lock antes de esperar (un programa dormido también tiene
-             * que poder morir). */
-            if (vm->poll_cb != NULL) {
+             * que poder morir). Con `io`, no: es suyo (arriba). */
+            if (vm->io == NULL && vm->poll_cb != NULL) {
                 bpvm_platform_mutex_unlock(&smp->vm_lock);
                 if (vm->poll_cb(vm, vm->poll_user) != 0)
                     vm->kill_requested = 1;

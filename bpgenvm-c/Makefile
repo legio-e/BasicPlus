@@ -446,7 +446,7 @@ test-kill: $(LIBOBJ)
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
-	  echo "--- KILL cooperativo (esperado: 3x 'terminado por KILL ... PASS') ---"; \
+	  echo "--- KILL cooperativo (esperado: 6x 'terminado por KILL ... PASS' y la linea OK) ---"; \
 	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod); \
 	fi
 
