@@ -891,6 +891,15 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## 🔗 H7 (27-sep, tarde) — `#554` cerrada: concatenar en placa, de 2122 a 44 ms
+
+- La causa (el `__strconcat` sintetizado copiaba byte a byte en bytecode), la concatenación de N de una vez (idea de
+  Eduardo) y el análisis a fondo de los literales como entradas estáticas de la tabla de handles (`V7_IDEAS` §H7);
+  Eduardo eligió el camino **C**: el builtin `__strCopy` (263), que acepta la cadena en sus dos formas (`e5761dd1`).
+- Con su OK, la Metro, la DK2, el P4 y la Nucleo grabadas con esa imagen; su INFO ya dice `"mdnAbi": 9` (`#576` en
+  placa); la ronda de V7 verde en las cuatro, con `CatCadena` y `CatCrono`. En la Metro, el bucle de `#554`, de 2122
+  a 44 ms. Del análisis salieron `#587` (el `StringBuilder`), `#588` (las globales del AOT) y `#589` (el depurador).
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
@@ -906,8 +915,9 @@ medida original: con la versión de `move` del mismo diseño, 2122 → 45 ms el 
 
 **⚠️ El riesgo que acecha**: lo que compila el compilador de hoy (el IDE incluido, reconstruido) usa el builtin 263.
 En una placa con la imagen de antes, un programa nuevo falla en la primera concatenación de cadenas («builtin no
-soportado») hasta que se regraba. Ninguna de las nueve placas tiene aún esa imagen. Lo compilado ANTES sigue
-funcionando en cualquier imagen (su helper copiaba byte a byte, que vale para todo).
+soportado») hasta que se regraba. **Desde la tarde, la Metro, la DK2, el P4 y la Nucleo ya la tienen** (`#554`
+cerrada); la S3, la C3, la C5 y la C6, todavía no (`#581`). Lo compilado ANTES sigue funcionando en cualquier imagen
+(su helper copiaba byte a byte, que vale para todo).
 
 **Las placas**, como en el traspaso de mediodía (la Nucleo con `packRam=256`, que se queda).
 

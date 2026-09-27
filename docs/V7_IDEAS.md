@@ -2534,6 +2534,11 @@ familias; `CatCadena` en la paridad (106) y, con `CatCrono`, en la ronda de V7. 
 builtin 263 —lo que compile el compilador de hoy lo necesita: en una imagen vieja, «builtin no soportado» en la
 primera concatenación—.
 
+**En placa** (27-sep, tarde, con el OK de Eduardo): la Metro, la DK2, el P4 y la Nucleo grabadas con la imagen de
+`e5761dd1` —con el INFO que ya trae `"mdnAbi": 9`, `#576`— y la ronda de V7 entera verde en las cuatro (22, 24,
+24 y 22: `CatCadena` y `CatCrono` idénticas al PC; `compat/informes/tanda_554_27sep.md`). `CatCrono`, el bucle de
+192 y la cadena de 500: la **Metro 2122 → 44 ms y 474 → 60**; la DK2, 22 y 54; el P4, 7 y 21; la Nucleo, 34 y 53.
+
 ### Hallazgos de paso (con ficha)
 
 - **`#588`** — el AOT calcula a mano la posición de las globales del módulo (-4, -8…, sólo para integer, float y
