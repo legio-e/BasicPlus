@@ -140,6 +140,7 @@ static void build_gc_valid_map(bpvm_t* vm) {
      * que COLGABA el firmware en cada gc() (regresión de Camino 1). El bitmap
      * crece con el uso real (el chequeo gc_valid_map_size<bytes solo re-aloca al
      * crecer). Verificado: Pico 128 KB no colgaba; Metro 8 MB sí. */
+    vm->gc_descarrilo = 0;   /* V7 #494: lo levanta el guardián de abajo */
     uint32_t span  = vm->heap_next - vm->heap_start;       /* heap USADO */
     uint32_t words = span / 4u;                            /* nº de palabras de 4B */
     size_t   bytes = ((size_t) words + 7u) / 8u + 1u;      /* 1 bit por palabra + pad */
@@ -186,8 +187,15 @@ static void build_gc_valid_map(bpvm_t* vm) {
      * Que grite aquí, en el sitio y el instante del destrozo.
      *
      * No abortamos: el mensaje ya identifica la causa, y matar la VM en placa
-     * sería peor que dejar que el error normal de la VM siga su curso. */
+     * sería peor que dejar que el error normal de la VM siga su curso.
+     *
+     * V7 #494 (27-sep, Eduardo) — pero tampoco se sigue como si nada, que era
+     * barrer con el mapa truncado: UNA EXCEPCIÓN. Se marca `gc_descarrilo`, este
+     * GC no marca ni barre (gc_mark_phase, bpvm_gc_cuerpo) y la reserva que lo
+     * pidió lanza la prefabricada «heap descarrilado» (bpvm_heap_alloc →
+     * bpvm_throw_runtime_error). El detalle, este aviso. */
     if (cur != vm->heap_next) {
+        vm->gc_descarrilo = 1;
         /* #355 — POR bpvm_diag, NO por stderr. Este guardián existía y describía
          * EXACTAMENTE el fallo que hemos perseguido todo el día... pero gritaba
          * por stderr, que en la placa no llega a ninguna parte. Llevaba horas
@@ -295,6 +303,9 @@ static void gc_mark_phase(bpvm_t* vm) {
     /* Camino 1 (H-008): (re)construir el set de cabeceras reales ANTES de marcar,
      * para que el scan conservativo no tome enteros por punteros. */
     build_gc_valid_map(vm);
+    /* V7 #494 — con el recorrido descarrilado el mapa está truncado: marcar con él (y luego barrer) se
+     * llevaría objetos VIVOS. Este GC no hace nada más; la reserva que lo pidió lanza la excepción. */
+    if (vm->gc_descarrilo) return;
     /* 1. Stacks de threads. */
     for (int t = 0; t < vm->thread_count; t++) {
         const bpvm_thread_t* tc = &vm->threads[t];
@@ -331,6 +342,7 @@ static void gc_mark_phase(bpvm_t* vm) {
      *     Tiene que sobrevivir TODAS las colectas para que lanzarla, cuando
      *     no queda memoria ni para contar el error, no aloje nada. */
     if (vm->oom_exc.v != 0) mark_recursive(vm, (uint32_t) vm->oom_exc.v);
+    if (vm->heap_exc.v != 0) mark_recursive(vm, (uint32_t) vm->heap_exc.v);   /* V7 #494: la del heap descarrilado */
     /* 2b. #302 — raíces del GUI: los objptr ligados a widgets (bind_click) y la
      *     cola de eventos viven en GLOBALS C (gui.c), FUERA de vm->memory → el
      *     scan conservador no los ve. Sin esto, un objeto BP cuyo único holder
@@ -711,6 +723,7 @@ static void bpvm_gc(bpvm_t* vm) {
  * el ejecutor que lo pide ya lo tiene tomado). */
 void bpvm_gc_cuerpo(bpvm_t* vm) {
     gc_mark_phase(vm);
+    if (vm->gc_descarrilo) return;   /* V7 #494: ni cerrar Files ni reciclar handles ni barrer */
     bpvm_files_gc(vm);         /* V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo */
     bpvm_handles_gc_sweep(vm); /* paso 6: recicla slots de tabla de lo inalcanzable (bpvm_handles.c) */
     gc_sweep_phase(vm);
@@ -940,6 +953,11 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                       (int)((long) antes - (long) vm->heap_next),
                       (unsigned) vm->gc_bump_threshold,
                       (unsigned) vm->heap_start, (unsigned) vm->heap_top);
+            if (vm->gc_descarrilo) {   /* V7 #494: esta reserva lanza la del heap descarrilado */
+                vm->reserva_descarrilada = 1;
+                bpvm_smp_unlock(vm);
+                return 0;
+            }
         }
     }
 
@@ -992,6 +1010,11 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
     if (addr == 0) {
         /* Sin sitio en free-list ni bump: STW GC y reintentar. */
         gc_stw(vm);
+        if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado */
+            vm->reserva_descarrilada = 1;
+            bpvm_smp_unlock(vm);
+            return 0;
+        }
         addr = try_allocate_inner(vm, total);
         if (addr == 0) {
             /* #355 — EL OOM ERA MUDO: se devolvia 0 y el que llama decidia si

@@ -179,8 +179,24 @@ const char* bpvm_runtime_error(const bpvm_t* vm) {
     return (vm && vm->runtime_error[0]) ? vm->runtime_error : "";
 }
 
+/* V7 #494 — si la última reserva falló porque el recorrido del heap se descarriló, la excepción es la
+ * PREFABRICADA del heap descarrilado —reservar ya no es seguro—, sea cual sea el mensaje con que se pida (casi
+ * siempre el de sin memoria, que es lo que dicen los que reciben un 0 de bpvm_heap_alloc). Consume la marca.
+ * bpref_null() si no toca. Espejo de miVM, donde heapAlloc la lanza directamente. */
+static bpref_t exc_heap_descarrilado(bpvm_t* vm) {
+    if (!vm->reserva_descarrilada) return bpref_null();
+    vm->reserva_descarrilada = 0;
+    if (vm->heap_exc.v == 0u) return bpref_null();
+    snprintf(vm->runtime_error, sizeof(vm->runtime_error), "%s", BPVM_MSG_HEAP_DESCARRILADO);
+    return vm->heap_exc;
+}
+
 bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
                                   const char* msg) {
+    {
+        bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494 */
+        if (d.v != 0u) return d;
+    }
     /* Guarda el detalle para que el host / wire lo surtan si el error acaba
      * NO atrapado (espejo de link_error). En cada throw; solo se reporta si el
      * run termina en BPVM_ERR_RUNTIME. */
@@ -265,6 +281,8 @@ have_class:
     size_t mlen = msg ? strlen(msg) : 0;
     uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
     if (msg_ref == 0) {
+        bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494: el GC de esta reserva descarriló */
+        if (d.v != 0u) { vm->building_error = 0; return d; }
         /* #430 — sin memoria ni para el mensaje: la PREFABRICADA (idea de
          * Eduardo). Construida en el prologo del RUN cuando construir era
          * gratis; lanzarla no aloja NADA. El detalle especifico ya quedo en
@@ -290,6 +308,8 @@ have_class:
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
     uint32_t obj_addr = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
     if (obj_addr == 0) {
+        bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494: idem */
+        if (d.v != 0u) { vm->building_error = 0; return d; }
         if (vm->oom_exc.v != 0) {   /* #430: idem — la prefabricada */
             bpvm_diag("[bpvm] throw: sin memoria para el objeto -> "
                       "excepcion PREFABRICADA (#430)");

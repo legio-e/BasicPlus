@@ -1,0 +1,21 @@
+// HeapRoto.bp — #494 (V7, 27-sep): el HEAP DESCARRILADO es UNA EXCEPCIÓN (decisión de Eduardo). Las pruebas
+// —test/test_heapdescarrilado.c en la VM-C, HeapDescarriladoTest (lexer-java) en miVM— le estropean la cabecera del primer bloque del
+// heap en la primera línea; aquí se reservan cadenas hasta que un GC recorre el heap, descarrila, no barre, y la reserva
+// que lo pidió lanza la excepción prefabricada: se atrapa y se dice. Sin la prueba (el heap sano), «sin excepcion».
+module HeapRoto
+
+  function Main()
+    try
+      var s: string := ""
+      var i: integer := 0
+      while i < 200000 do
+        s := "x" + i
+        i := i + 1
+      endwh
+      print "sin excepcion"
+    catch e: RuntimeError
+      print "cazada:", e.msg
+    endtry
+    print "fin"
+  end Main
+end HeapRoto

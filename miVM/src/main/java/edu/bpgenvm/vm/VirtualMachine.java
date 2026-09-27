@@ -750,6 +750,15 @@ public class VirtualMachine {
     // cuando construir es gratis, y se lanza cuando construir el error ya no cabe.
     // Raíz explícita del GC (scanRoots). 0 = no hay.
     private long oomExc = 0;
+    // V7 #494 (27-sep, Eduardo: ni avisar y seguir ni parar la VM — «una excepción») — EL HEAP
+    // DESCARRILADO. `gcDescarrilo`: el recorrido de cabeceras del último GC no acabó en heapNext
+    // (buildValidObjectsSet); ese GC no marca ni barre —con el set truncado se barrerían objetos
+    // vivos— y la reserva que lo pidió lanza `heapExc`, la prefabricada (como oomExc: construida en
+    // el prólogo del run, raíz del GC). Espejo de la VM-C (gc_descarrilo / heap_exc).
+    private long heapExc = 0;
+    private boolean gcDescarrilo = false;
+    /** El texto de la excepción; el MISMO en la VM-C (BPVM_MSG_HEAP_DESCARRILADO). */
+    public static final String MSG_HEAP_DESCARRILADO = "heap descarrilado (fallo interno de la VM)";
 
     // H1 — guarda anti-recursión del OOM: al quedarse sin heap, la alocación lanza un
     // RuntimeError BP ATRAPABLE, pero CONSTRUIR ese objeto-excepción vuelve a alocar; si
@@ -1754,6 +1763,7 @@ public class VirtualMachine {
             if (!gcSuspended
                     && (heapNext - lastGcHeapNext >= gcBumpThreshold || porTabla)) {
                 gcSafepoint(myTid);
+                if (gcDescarrilo) lanzaHeapDescarrilado(me);   // V7 #494
                 // Resolver la presión: si la colecta recicló slots, resuelta; si
                 // no (todo VIVO), crecer aquí — donde crecer es una decisión y no
                 // un accidente en medio de un register.
@@ -1794,6 +1804,7 @@ public class VirtualMachine {
             // refs colgantes que se manifiestan como bytecodes basura,
             // direcciones inválidas, mutex.id corruptos, etc.
             gcSafepoint(myTid);
+            if (gcDescarrilo) lanzaHeapDescarrilado(me);   // V7 #494: sin reintento
             addr = tryAllocateInner(totalSize);
             if (addr == -1) {
                 // H1 — OOM tras GC: RuntimeError BP ATRAPABLE (nunca colgar ni matar la VM
@@ -1858,6 +1869,30 @@ public class VirtualMachine {
             stopTheWorld = false;
             gcInProgress = false;
             vmLock.notifyAll();
+        }
+    }
+
+    /** V7 #494 — la reserva que pidió un GC descarrilado: lanza la PREFABRICADA del heap descarrilado
+     *  (reservar ya no es seguro), igual que el OOM lanza la suya (#430). Espejo de la VM-C, donde
+     *  bpvm_heap_alloc devuelve 0 y bpvm_throw_runtime_error la entrega (exc_heap_descarrilado). */
+    private void lanzaHeapDescarrilado(ThreadContext me) {
+        if (heapExc != 0 && me != null) {
+            writeI64(memory, me.sp, heapExc);
+            me.sp += 8;
+            me.allocAnchor = (int) heapExc;
+            throw new BpExceptionPending((int) heapExc);
+        }
+        throw new BpThreadFault(MSG_HEAP_DESCARRILADO);
+    }
+
+    /** V7 #494 — PARA LAS PRUEBAS: estropea la cabecera del PRIMER bloque del heap —un array de bytes con
+     *  un largo que se sale del heap ENTERO (con uno menor, el salto puede caer en el borde de otro bloque y
+     *  el recorrido se resincroniza en silencio)—, así que el recorrido del siguiente GC no acaba en
+     *  heapNext. Lo mismo que hace la prueba de C (test/test_heapdescarrilado.c) sobre vm->memory. */
+    public void estropeaHeapParaPrueba() {
+        synchronized (vmLock) {
+            writeInt32(heapStart, TYPE_ARRAY_I8 << TAG_TYPE_SHIFT);
+            writeInt32(heapStart + 4, (STACK_BASE - heapStart) + 4096);
         }
     }
 
@@ -1939,6 +1974,7 @@ public class VirtualMachine {
     /** Construye el conjunto de cabeceras válidas recorriendo el heap. */
     private Set<Integer> buildValidObjectsSet() {
         Set<Integer> valid = new HashSet<>();
+        gcDescarrilo = false;   // V7 #494: lo levanta el guardián de abajo
         int addr = heapStart;
         while (addr < heapNext) {
             int tag = readInt32(addr);
@@ -1957,7 +1993,10 @@ public class VirtualMachine {
         // barren objetos VIVOS → use-after-free mucho más tarde y sin rastro del origen
         // (así se fueron varios días con MemT4 en la VM-C: el descarrilamiento era
         // SILENCIOSO). Que grite aquí, en el sitio y el instante del destrozo.
+        // V7 #494 (27-sep, Eduardo) — y que no se siga como si nada: gcDescarrilo, este GC no marca
+        // ni barre (gcLocked) y la reserva que lo pidió lanza la prefabricada (heapAlloc).
         if (addr != heapNext) {
+            gcDescarrilo = true;
             System.err.println("[gc] !! HEAP INCONSISTENTE: el recorrido de cabeceras acabó en "
                     + addr + ", no en heapNext=" + heapNext + ". Hay un bloque cuyo tamaño real no "
                     + "coincide con objectTotalSize() → el set del GC sale incompleto y se barrerán "
@@ -2036,6 +2075,9 @@ public class VirtualMachine {
         }
 
         Set<Integer> valid = buildValidObjectsSet();
+        // V7 #494 — con el recorrido descarrilado el set está truncado: marcar con él y barrer se
+        // llevaría objetos VIVOS. Este GC no hace nada más; la reserva que lo pidió lanza la excepción.
+        if (gcDescarrilo) return;
 
         // Roots: pila operacional de TODOS los threads vivos. runOnContext
         // sincroniza tc.sp antes de cualquier llamada que pueda disparar GC,
@@ -2063,6 +2105,10 @@ public class VirtualMachine {
         if (oomExc != 0) {
             int oomHeader = refDeref((int) oomExc) - 4;
             if (valid.contains(oomHeader)) markObject(oomHeader, valid);
+        }
+        if (heapExc != 0) {   // V7 #494: la del heap descarrilado, igual
+            int heapExcHeader = refDeref((int) heapExc) - 4;
+            if (valid.contains(heapExcHeader)) markObject(heapExcHeader, valid);
         }
 
         // Roots #302: objptr retenidos por el backend GUI (widgets con bindClick +
@@ -2569,6 +2615,19 @@ public class VirtualMachine {
         } catch (BpThreadFault ignored) {
             // Sin RuntimeError exportado (mod legado): no hay prefabricada, y el
             // camino de siempre (BpThreadFault) sigue cubriendo el caso.
+        }
+        // V7 #494 — y la del HEAP DESCARRILADO, igual y por lo mismo; después de la de #430, en el
+        // mismo orden que la VM-C (bpvm_run): las dos VMs dejan el heap igual.
+        heapExc = 0;
+        gcDescarrilo = false;
+        try {
+            throwBpRuntimeError(main, MSG_HEAP_DESCARRILADO);
+        } catch (BpExceptionPending pend) {
+            heapExc = readI64(memory, main.sp - 8);
+            main.sp -= 8;
+            main.allocAnchor = 0;
+        } catch (BpThreadFault ignored) {
+            // idem: sin RuntimeError no hay prefabricada
         }
 
         // main arranca RUNNABLE en la cola; el primer worker que lo pille lo ejecuta.

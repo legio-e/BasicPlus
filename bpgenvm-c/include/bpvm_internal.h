@@ -401,6 +401,9 @@ struct aot_helpers_v2;
  * holgado para un debugger y barato en RAM en el MCU. */
 #define BPVM_MAX_BREAKPOINTS 32
 
+/* V7 #494 — el mensaje de la excepción del heap descarrilado; el MISMO en miVM (VirtualMachine). */
+#define BPVM_MSG_HEAP_DESCARRILADO "heap descarrilado (fallo interno de la VM)"
+
 struct bpvm {
     /* ══ PREFIJO CONGELADO ══════════════════════════════════════════════════
      *
@@ -526,6 +529,16 @@ struct bpvm {
                                     * de #430. Sin esto, el aviso de "no hay
                                     * RuntimeError" suena igual que un OOM de
                                     * verdad — y engaña: me costo un diagnostico. */
+    /* V7 #494 (27-sep, Eduardo: ni avisar y seguir ni parar la VM — «una excepción») — EL HEAP
+     * DESCARRILADO. `gc_descarrilo`: el recorrido de cabeceras del último GC no acabó en heap_next
+     * (build_gc_valid_map); ese GC ni marca ni barre, porque con el mapa truncado barrer se lleva
+     * objetos vivos. `reserva_descarrilada`: la reserva que pidió ese GC falló por eso (devuelve 0,
+     * como sin memoria); bpvm_throw_runtime_error lo consume y lanza `heap_exc` —la prefabricada,
+     * construida en el prólogo del RUN como `oom_exc` y raíz del GC como ella— en vez de la de sin
+     * memoria. Espejo de miVM (gcDescarrilo / heapExc). */
+    bpref_t   heap_exc;
+    uint8_t   gc_descarrilo;
+    uint8_t   reserva_descarrilada;
     int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
 
     /* Módulos cargados. */

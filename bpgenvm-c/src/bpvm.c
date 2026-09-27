@@ -375,6 +375,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
      * suspendido durante la migración. */
     bpvm_handles_init(vm);                      /* #430: tope del puerto, la marca sin cruzar, tabla vacía */
     vm->oom_exc.v = 0u;                         /* #430: la prefabricada, aun no */
+    vm->heap_exc.v = 0u;                        /* #494: idem, la del heap descarrilado */
     vm->gc_suspended = 0;        /* paso 6: GC reactivado (handle-aware: mark + barrido de tabla) */
 
     /* Pone los bytes sentinela en la región reservada:
@@ -1426,6 +1427,20 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
         vm->runtime_error[0] = 0;          /* el prologo no es un error */
         main_tc->alloc_anchor = 0;         /* el ancla era transitoria */
     }
+    /* V7 #494 — y la del HEAP DESCARRILADO, igual y por lo mismo: cuando el recorrido del heap se
+     * rompe, reservar ya no es seguro (ver bpvm_internal.h). Después de la de #430, en el mismo orden
+     * que miVM: las dos VMs dejan el heap igual. */
+    vm->heap_exc.v = 0u;
+    vm->gc_descarrilo = 0;
+    vm->reserva_descarrilada = 0;
+    {
+        vm->prefabricando_oom = 1;
+        bpref_t pre = bpvm_throw_runtime_error(vm, main_tc, BPVM_MSG_HEAP_DESCARRILADO);
+        vm->prefabricando_oom = 0;
+        vm->heap_exc = pre;
+        vm->runtime_error[0] = 0;
+        main_tc->alloc_anchor = 0;
+    }
 
     bpvm_status_t rs = bpvm_scheduler_run(vm);
     /* #310 (Eduardo) — al TERMINAR se vuelve al camino estándar: el del pack
@@ -1474,6 +1489,19 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
         bpref_t pre = bpvm_throw_runtime_error(vm, tc0, "No space in heap");
         vm->prefabricando_oom = 0;
         vm->oom_exc = pre;
+        vm->runtime_error[0] = 0;
+        tc0->alloc_anchor = 0;
+    }
+    /* V7 #494 — y la del heap descarrilado (ver bpvm_run). */
+    vm->heap_exc.v = 0u;
+    vm->gc_descarrilo = 0;
+    vm->reserva_descarrilada = 0;
+    {
+        bpvm_thread_t* tc0 = &vm->threads[0];
+        vm->prefabricando_oom = 1;
+        bpref_t pre = bpvm_throw_runtime_error(vm, tc0, BPVM_MSG_HEAP_DESCARRILADO);
+        vm->prefabricando_oom = 0;
+        vm->heap_exc = pre;
         vm->runtime_error[0] = 0;
         tc0->alloc_anchor = 0;
     }

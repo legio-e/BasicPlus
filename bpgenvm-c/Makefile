@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -448,6 +448,22 @@ test-kill: $(LIBOBJ)
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
 	  echo "--- KILL cooperativo (esperado: 6x 'terminado por KILL ... PASS' y la linea OK) ---"; \
 	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod); \
+	fi
+
+# V7 #494 (27-sep) — el HEAP DESCARRILADO es UNA excepcion (decision de Eduardo): un gancho de depuracion
+# estropea la cabecera del primer bloque y el GC siguiente no barre; la reserva que lo pidio lanza la
+# prefabricada. Con su control (sin estropear). Ver test/test_heapdescarrilado.c.
+HEAPD_BIN = build/test_heapdescarrilado.exe
+test-heapdescarrilado: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,HeapRoto)
+	@if [ ! -f samples/HeapRoto.mod ]; then \
+	  echo "(skip test-heapdescarrilado: no hay samples/HeapRoto.mod y no se ha podido generar)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_heapdescarrilado.c \
+	    $(LIBOBJ) -o $(HEAPD_BIN) $(LDFLAGS); \
+	  echo "--- el heap descarrilado (esperado: control PASS, estropeado PASS y la linea OK) ---"; \
+	  (cd samples && ../$(HEAPD_BIN) HeapRoto.mod); \
 	fi
 
 # #339 — el GUARDIÁN DE FIN DE RUN, probado contra una fuga DE VERDAD. Que la
