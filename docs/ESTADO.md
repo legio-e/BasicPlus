@@ -891,6 +891,24 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## 🧵 H5 (27-sep) — P2b.3: la native en un HILO de la plataforma (idea de Eduardo), y las natives directas
+
+- El análisis del cambio de contexto en ARM y RISC-V destapó lo que de verdad costaba: cambiar de pila DENTRO de una
+  tarea choca con las vigilancias de pila de cada sistema (el chequeo de desborde de FreeRTOS en ARM, el vigilante
+  por hardware del IDF en las ESP32 RISC-V —el de `#543`—, el área de la FPU del P4, la PSRAM). Eduardo: *«FreeRtos
+  hace un cambio de contexto cuando cambia de Thread»* y *«pensar en la ejecución de código nativo como un Thread BP,
+  con su propio stack… Ese es un mecanismo que ya existe»*. Rediseñado (`b2a55303`): la native corre en un EJECUTOR
+  (un hilo de la plataforma) y ella y el intérprete se pasan el testigo. Y Eduardo: la pila de un hilo de FreeRTOS
+  puede ser pequeña → se mide con la marca de agua.
+- `P2b.3.a` (`0b997502`): el semáforo binario y el hilo del ejecutor en las cuatro plataformas; `test-ejecutor`;
+  2,3 µs por paso del testigo en el PC. De paso, la copia de la Pico no ponía a cero su estructura de hilo.
+- `P2b.3.b` (`138e8626`): las natives en ejecutores, el GC en el worker, fuera el ensamblador x86; `compat.sh check`
+  verde; 5,2 µs por llamada a una native diminuta (0,10 antes).
+- Las natives DIRECTAS (`f8146e4d`), decididas por Eduardo al ver la medida: sin puntos de cesión (transitivo por
+  las del módulo: su pregunta) corren sin ejecutor; `.mdn` v3; la diminuta, 0,05 µs. `test-aotdirecta` y
+  `test-mdnv3`, con sus sabotajes.
+- Todo compila en la Pico, las dos STM32 y las cinco ESP32; nada grabado todavía.
+
 ## ⏭️ Traspaso (26-sep, fin del día) — H4 y H6 CERRADOS (Eduardo); mañana, H5: «Mañana intentamos terminar H5»
 
 **Hoy**: H4 cerrado (el NeoPixel de la ESP32, `#574`, el ADC del STM32); H6 cerrado (`G5.a` el P4, `G5.b0` los packs

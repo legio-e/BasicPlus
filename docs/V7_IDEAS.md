@@ -2297,6 +2297,48 @@ el USB del depurador desde la tarea del REPL); si molesta, con el depurador las 
   marca de agua y lo que cuesta una llamada en cada familia, y lo que esperaba placa (la C6 con `#574`, el ADC de la
   DK2, el NeoPixel de la Metro, `DriverSpi` en la C5 y la C6, SQLite y la Gui en el P4).
 
+#### P2b.3.a y b, en el PC (27-sep)
+
+- **a** (`0b997502`) — las dos piezas de la plataforma en sus cuatro implementaciones (el PC; la STM32, en
+  `src/platform_freertos.c`; la Pico, en su copia; las ESP32) y `make test-ejecutor`. Lo que cuesta pasar el testigo
+  en el PC: **2,3 µs** (Windows, pthread).
+- **b** (`138e8626`) — las natives en ejecutores y el GC en el worker; fuera `bpvm_ctx` y `test-ctx`. `compat.sh
+  check` verde. El diagnóstico enseña el GC escaneando la pila de la native suspendida EN SU EJECUTOR (246 veces en
+  `test-aotcede`, las mismas que en P2b.1) y los GC pedidos desde dentro, servidos en el worker; dos sabotajes
+  cazados. Una native diminuta llamada desde un bucle interpretado: **5,2 µs** por llamada (0,10 con el
+  ensamblador; 0,05 interpretada).
+
+**Las natives DIRECTAS** (Eduardo: «Hazlo ahora»; `f8146e4d`). Una native sin puntos de cesión no puede
+suspenderse aunque tenga ejecutor: corre directa, en la pila en la que se esté, como todas antes de P2b, y se ahorra el
+testigo. Lo decide el emisor sobre el C que EMITE (`AotCEmitter.nativesDirectas`): es directa si ni su C ni el de
+ninguna native del módulo a la que llame —transitivo, recursión incluida— llama a `punto_control`, `call_builtin`,
+`call_bp_i32`, `call_method_i32` o `pack_sym`. Transitiva por la pregunta de Eduardo: *«la rutina en sí puede ser
+pequeña pero puede llamar a una mucho más grande con bucles»*. Y sobre el C y no sobre el `.bp`: si el emisor gana
+otro sitio que cede, no se escapa. La marca viaja en el NOMBRE del thunk (`thunkd_`, por donde `MdnPack` ya reconoce
+los thunks) y, en el `.mdn` **v3**, en el bit alto de `thunk_offset` (ningún código de micro mide 2 GB, y los seis
+lectores que dan por hecho símbolos de 36 B no cambian); un `.mdn` v2 se sigue cargando y manda todo al ejecutor;
+un cargador de la v2 rechaza la v3 por su versión, con nombre.
+
+Medido: la native diminuta, ahora directa, hace las 200 000 llamadas en **9,7 ms** —0,05 µs—, más rápido que con el
+ensamblador (20,6: P2b.1 cambiaba de pila en CADA llamada) y que interpretada (10,3). Pruebas: `test-aotdirecta` (en
+el C generado, 4 directas y 5 al ejecutor —entre ellas la de Eduardo, `pequena`, sin bucle, que llama a una con
+bucle, y otra dos niveles más arriba—; y 9/9 igual que interpretado) y `test-mdnv3` (el cargador: la marca llega al
+registro y no se cuela en la dirección del thunk; la v2 sin marca; la v4, rechazada). Sabotajes: sin la regla
+transitiva, ROJO (`pequena` y `llamaPequena` salían directas); sin limpiar el bit del offset, ROJO. Y el `.mdn` ARM
+real de `NatDirecta`, enlazado con `mdn.ld`, sale con las cuatro directas marcadas.
+
+⚠️ **Una falsa alarma, para no repetirla** (y ya estaba en FICHAS): un `.mdn` hecho a mano desde el `.o`, SIN el
+enlace de `bpgenvm-c/aot/mdn.ld`, choca con `.rodata` —los tipos de `call_builtin`, el nombre que busca el puente,
+un literal de BP—. El pipeline enlaza SIEMPRE, y `mdn.ld` funde `.rodata` en `.text` (`#428`).
+
+**La línea del bucle se queda** (decidido por Eduardo, 27-sep: *«OK, mantenemos la línea del bucle»*). Él mismo había
+planteado quitarla —*«ahora ya no necesitamos insertar código para permitir la interrupción del código nativo, el SO lo
+hace por nosotros»*—, pero con el testigo no se cumple: mientras la native corre, el intérprete espera el testigo, y
+el sistema reparte la CPU con otras tareas (`io`), no con otros hilos BP. Para eso la native y el intérprete tendrían
+que correr A LA VEZ —dos hilos tocando el heap, el GC parando la native donde esté: el mundo del SMP—. Y los dos
+costes van en ejes distintos: el testigo, por llamada; la línea, por vuelta (+15–33 % en los bucles más apretados,
+P2b.0). La línea da la rebanada, el `kill` y, mañana, el breakpoint, igual en todas las plataformas.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
