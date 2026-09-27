@@ -2390,7 +2390,8 @@ entero con el `.mdn` del pack —«16/16 thunks (16 directas)», sin ejecutor—
 (`#468`).
 
 **Quedan** de P2b.3.d: la S3 (sólo la imagen: no tiene AOT), la C3, la C5 y la C6 (RISC-V sin FPU), y lo que esperaba
-placa en ellas: la C6 con `#574`, `DriverSpi` en la C5 y la C6.
+placa en ellas: la C6 con `#574`, `DriverSpi` en la C5 y la C6 — en la ficha suelta `#581` desde que H5 se cerró
+(27-sep), como el resto de lo que quedaba en su fila (`#577`–`#586`).
 
 #### Las conversiones estrechas en una native (27-sep, la opción A de Eduardo)
 

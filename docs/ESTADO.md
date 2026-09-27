@@ -891,6 +891,47 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## ⏭️ Traspaso (27-sep, mediodía) — H5 CERRADO
+
+**Commits de hoy** (sin push): `b2a55303` (P2b.3 rediseñado: la native en un hilo de la plataforma) · `0b997502`
+`138e8626` (P2b.3 a y b: el ejecutor y el testigo; las natives en ejecutores) · `f8146e4d` (las natives DIRECTAS) ·
+`abb21836` `9f7227f5` (c: el HardFault que habla, los fallos fatales al registro) · `b9b3f0ac` (llamar a un pack no
+cede; la pila del ejecutor a 8 KB; los packs en `.mdn` v3) · `a76375c6` (`#572`) · `5efb4c76` (las conversiones
+estrechas en una native, la opción A de Eduardo) · `7f2c60bd` (`#576`: el INFO con la ABI de helpers) · y los docs
+(`1670702d` `9c4d3a8c` `93a605ed` `998d05e7` `7c9a97f5` y el de este traspaso).
+
+**H5, cerrado** (Eduardo: *«Haz la 5, crea una entrada para cada una del resto y las pones como pendientes sueltas. Y
+después cerramos H5»*). Lo que quedaba en su fila está en diez fichas SUELTAS, cada una con qué falta y qué decidió
+Eduardo: `#577` (tuplas en una native), `#578` (`try`/`catch` en una native), `#579` (la paridad y el camino AOT:
+propuesta de cerrarla con la evidencia), `#580` (parar una native recursiva sin bucles; un `KILL` en placa), `#581`
+(P2b.3.d en las ESP), `#582` (la línea de un error), `#583` (el debugger), `#584` (la cola de la fusión), `#585`
+(`double` medido y en el manual) y `#586` (la documentación del AOT, desfasada tras P2b).
+
+**Las placas**:
+- **La DK2 (COM12), la Metro (COM4) y el P4 (COM15)**: la imagen de P2b.3 (los ejecutores de 8 KB y los packs en v3:
+  SQLite y Gui, directas), con el log apagado. Su INFO aún no manda `mdnAbi`: la imagen es de antes de `#576`.
+- **La Nucleo (COM5)**: la misma imagen (`softfp`), y en su ENV **`packRam=256`** —la VM en 256 KB— con el `mini` y
+  SQLite grabados, para la prueba del adaptador de `G5.b0`; el log, como estaba (`log=1`). **Pregunta abierta a
+  Eduardo**: si `packRam=256` se queda o se quita (quitarlo devuelve la VM a 512 KB; los packs se quedan grabados,
+  sin cargarse).
+- **La S3, la C3, la C5 y la C6**: sin tocar hoy, con la ABI 8 (`#581`).
+
+**⚠️ El riesgo que acecha**: las ESP con la ABI 8 rechazan todo nativo nuevo y corren interpretado hasta `#581`
+(desde `#576`, el IDE lo dirá en cuanto conecte una placa con la imagen nueva; con las de antes, no lo sabe); y la
+Nucleo tiene la VM en 256 KB por su `packRam`.
+
+**Queda de V7**: los hitos H7 (memoria, arranque y arquitectura), H8 (IDE y wire), H9 (pruebas y medida), H10
+(placas y drivers), H11 (la C5) y H12 (los dos núcleos, al final), y las fichas sueltas `#577`–`#586` (FICHAS).
+
+## 🏁 H5 (27-sep, mediodía) — `#576` hecha y H5 cerrado
+
+- `#576` (`7f2c60bd`): el INFO publica `mdnAbi` —la ABI de helpers de la imagen; 0 sin receta—. El IDE la compara
+  con la que genera y, si no casa, lo dice en vez de compilar un nativo que la placa rechazaría (así se tapó `#504`
+  tres semanas); `mdnIsStale` tampoco sube un `.mdn` suelto de otra ABI; la tanda la apunta y explica con ella un
+  «SIN NATIVO». `sim_smoke` (en `check-sim`) lo vigila. Las ocho imágenes compilan; las placas lo verán con su
+  próxima grabación.
+- Lo que quedaba en la fila de H5, en diez fichas sueltas (`#577`–`#586`), y **H5 cerrado**.
+
 ## 🏷️ H5 (27-sep, mediodía) — `#572`: los nombres de BP con su prefijo en el C del AOT
 
 - `#572` cerrada (`a76375c6`): el emisor pone `bp_` delante de todo identificador de BP (parámetros, locales, el
