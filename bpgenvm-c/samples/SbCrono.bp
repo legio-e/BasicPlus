@@ -1,0 +1,32 @@
+// SbCrono.bp — #587 (V7/H7, 27-sep): lo que cuesta el StringBuilder, con dos patrones: 192 appendStr de 10 bytes
+// (casi 2 KB, como el bucle de #554) y 2000 appendChar (como construye Json carácter a carácter), cada uno con su
+// toString(). Las líneas «tiempo» cambian en cada pasada (la tanda las ignora); las longitudes, no.
+module SbCrono
+  import Core
+  import Machine
+
+  function Main()
+    var t0: integer := Machine.uptimeMs()
+    var a: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < 192 do
+      a.appendStr("0123456789")
+      i += 1
+    endwh
+    var s: string := a.toString()
+    var ms1: integer := Machine.uptimeMs() - t0
+    print "ok appendStr: " + strlen(s) + " caracteres"
+    print "  tiempo: appendStr " + ms1 + " ms las 192"
+    t0 := Machine.uptimeMs()
+    var b: StringBuilder := StringBuilder()
+    i := 0
+    while i < 2000 do
+      b.appendChar(97 + (i mod 26))
+      i += 1
+    endwh
+    var r: string := b.toString()
+    var ms2: integer := Machine.uptimeMs() - t0
+    print "ok appendChar: " + strlen(r) + " caracteres"
+    print "  tiempo: appendChar " + ms2 + " ms las 2000"
+  end Main
+end SbCrono

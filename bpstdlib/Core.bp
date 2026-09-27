@@ -93,34 +93,56 @@ module Core
     end unlock
   end Mutex
 
-  // Construcción eficiente de strings: acumula code points y los vuelca en toString().
+  // Construcción eficiente de strings. V7/H7 #587 (27-sep, el diseño de Eduardo): guarda PIEZAS —cada appendStr y
+  // cada appendInt es una— en un array de strings, y toString() las junta DE UNA VEZ: la suma de sus BYTES, una
+  // reserva y una copia por pieza (__strCopy, en C). Los caracteres sueltos de appendChar van a una CACHÉ de longitud
+  // fija, que se vacía como una pieza más (__charsToString, en C) cuando se llena, cuando llega un appendStr o un
+  // appendInt, o en toString(): así un carácter no es una cadena propia (Json y Str construyen carácter a carácter).
+  // Antes: un integer[] de code points (4 bytes por carácter) y appendStr copiaba carácter a carácter con una
+  // llamada a método por cada uno.
   public class StringBuilder
-    var chars: integer[]
-    var size: integer
-    var cap: integer
+    var partes: string[]
+    var npartes: integer
+    var cache: integer[]
+    var ncache: integer
 
     public function StringBuilder()
-      this.chars := newIntArray(64)
-      this.size := 0
-      this.cap := 64
+      this.partes := __newStrArray(8)
+      this.npartes := 0
+      this.cache := newIntArray(64)
+      this.ncache := 0
     end StringBuilder
 
-    public function appendChar(c: integer)
-      if this.size >= this.cap then
-        this.cap := this.cap * 2
-        this.chars := __growIntArray(this.chars, this.cap)
+    // una pieza más al final; el array crece al doble
+    function pieza(s: string)
+      if this.npartes >= len(this.partes) then
+        this.partes := __growStrArray(this.partes, len(this.partes) * 2)
       endif
-      this.chars[this.size] := c
-      this.size := this.size + 1
+      this.partes[this.npartes] := s
+      this.npartes := this.npartes + 1
+    end pieza
+
+    // los caracteres de la caché, como una pieza
+    function vaciaCache()
+      if this.ncache > 0 then
+        this.pieza(__charsToString(this.cache, this.ncache))
+        this.ncache := 0
+      endif
+    end vaciaCache
+
+    // el tope de la caché, un literal: 64 caracteres (su tamaño en el constructor); nada más por carácter que el
+    // StringBuilder de antes —comparar, guardar, sumar uno— (medido en la Metro)
+    public function appendChar(c: integer)
+      if this.ncache >= 64 then
+        this.vaciaCache()
+      endif
+      this.cache[this.ncache] := c
+      this.ncache := this.ncache + 1
     end appendChar
 
     public function appendStr(s: string)
-      var n: integer := strlen(s)
-      var i: integer := 0
-      while i < n do
-        this.appendChar(charCodeAt(s, i))
-        i := i + 1
-      endwh
+      this.vaciaCache()
+      this.pieza(s)
     end appendStr
 
     public function appendInt(n: integer)
@@ -128,11 +150,33 @@ module Core
     end appendInt
 
     public function toString(): string
-      return __charsToString(this.chars, this.size)
+      this.vaciaCache()
+      var total: integer := 0
+      var i: integer := 0
+      while i < this.npartes do
+        total := total + __bytesDe(this.partes[i])   // BYTES, no caracteres: la reserva es de bytes
+        i := i + 1
+      endwh
+      var buf: byte[] := newByteArray(total)
+      var pos: integer := 0
+      i := 0
+      while i < this.npartes do
+        pos := __strCopy(this.partes[i], buf, pos)
+        i := i + 1
+      endwh
+      return fromBytes(buf)   // BP no tiene un molde byte[] -> string: la copia final
     end toString
 
+    // los CARACTERES (no los bytes): se cuentan al pedirlos —nadie de la stdlib lo usa, y llevar la cuenta en cada
+    // appendChar lo encarecía—
     public function length(): integer
-      return this.size
+      var n: integer := this.ncache
+      var i: integer := 0
+      while i < this.npartes do
+        n := n + strlen(this.partes[i])
+        i := i + 1
+      endwh
+      return n
     end length
   end StringBuilder
 
@@ -832,6 +876,15 @@ module Core
   public function growObjArray(old: Object[], newCap: integer): Object[]   // alias de __growRefArray
     inline CALL_BUILTIN 45
   end growObjArray
+  public function __newStrArray(cap: integer): string[]   // #587: las piezas del StringBuilder (alias de __newRefArray)
+    inline CALL_BUILTIN 44
+  end __newStrArray
+  public function __growStrArray(old: string[], newCap: integer): string[]   // #587: alias de __growRefArray
+    inline CALL_BUILTIN 45
+  end __growStrArray
+  public function __bytesDe(s: string): integer   // #587: los BYTES de una cadena (ALEN), no sus caracteres (strlen)
+    inline ALEN
+  end __bytesDe
   public function __growIntArray(old: integer[], newCap: integer): integer[]
     inline CALL_BUILTIN 46
   end __growIntArray
@@ -1493,7 +1546,7 @@ module Core
   function __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer   // I2c.Bus.execute(I2c.Transaction)
     inline CALL_BUILTIN 262
   end __i2cExec
-  function __strCopy(src: string, dst: byte[], pos: integer): integer   // #554: la concatenación (los __strconcat* que sintetiza el compilador)
+  public function __strCopy(src: string, dst: byte[], pos: integer): integer   // #554: la concatenación (los __strconcat* que sintetiza el compilador)
     inline CALL_BUILTIN 263
   end __strCopy
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
