@@ -12,7 +12,7 @@
  *   v2 con la huella de MI receta → MDN_OK
  *   v2 con otra huella            → MDN_ERR_RECETA (misma arch, otros flags: #440)
  *   v2 con huella 0               → MDN_ERR_RECETA (una huella inventada no vale)
- *   v3                            → MDN_ERR_VERSION
+ *   v4                            → MDN_ERR_VERSION (la v3, P2b.3, es valida: la marca DIRECTA)
  *   v2 truncado a 22 B            → MDN_ERR_TRUNCATED (la cabecera v2 son 24)
  *   v1 de 20 B justos + 0 código  → MDN_OK        (sizeof(mdn_header_t) NO vale de mínimo)
  *
@@ -72,8 +72,8 @@ int main(void) {
     ok(bpvm_load_mdn(NULL, (const uint8_t*) g_buf, n) == MDN_ERR_RECETA, "v2 con otra huella: MDN_ERR_RECETA (misma arch, otros flags)");
     n = blob(2, 0, 4);
     ok(bpvm_load_mdn(NULL, (const uint8_t*) g_buf, n) == MDN_ERR_RECETA, "v2 con huella 0: MDN_ERR_RECETA (una huella inventada no vale)");
-    n = blob(3, crc, 4);
-    ok(bpvm_load_mdn(NULL, (const uint8_t*) g_buf, n) == MDN_ERR_VERSION, "v3: MDN_ERR_VERSION");
+    n = blob(4, crc, 4);
+    ok(bpvm_load_mdn(NULL, (const uint8_t*) g_buf, n) == MDN_ERR_VERSION, "v4: MDN_ERR_VERSION (la v3 es valida desde P2b.3)");
     n = blob(2, crc, 4);
     ok(bpvm_load_mdn(NULL, (const uint8_t*) g_buf, 22) == MDN_ERR_TRUNCATED, "v2 truncado a 22 B: MDN_ERR_TRUNCATED");
     n = blob(1, 0, 0);

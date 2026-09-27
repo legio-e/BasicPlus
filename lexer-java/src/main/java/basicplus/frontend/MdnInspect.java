@@ -45,7 +45,7 @@ public final class MdnInspect {
     /* [V7/H2, #441] v1 (20 B, sin huella) y v2 (24 B, con `flags_crc`): las dos
      * valen, como en el cargador. */
     private static final int    MDN_VERSION_MIN = 1;
-    private static final int    MDN_VERSION     = 2;
+    private static final int    MDN_VERSION     = 3;   /* V7/H5 P2b.3: la marca DIRECTA en el bit alto del offset */
     /* La ABI NO se copia aquí: se lee de MdnPack, que es quien la ESTAMPA.
      * Tenerla dos veces ya salió caro — esta copia se quedó en 1 mientras la
      * de verdad iba por 2, así que la herramienta de diagnóstico daba FAIL a
@@ -187,6 +187,9 @@ public final class MdnInspect {
             }
             String name = new String(data, symOff, nameLen, StandardCharsets.UTF_8);
             long thunkOff = bb.getInt(symOff + MDN_NAME_MAX) & 0xffffffffL;
+            /* V7/H5 P2b.3 (v3) — el bit alto no es del offset: marca una native DIRECTA. */
+            boolean directa = version >= 3 && (thunkOff & 0x80000000L) != 0;
+            thunkOff &= 0x7fffffffL;
             if (thunkOff >= codeSize) {
                 System.err.println("FAIL: sym[" + i + "] '" + name
                     + "' thunk_offset=" + thunkOff
@@ -204,7 +207,7 @@ public final class MdnInspect {
              * es el offset tal cual. Decir «Thumb» sobre un blob RISC-V manda a
              * buscar un bit que no existe. */
             boolean esArm = (reserved == 0 || reserved == 40);   /* 0 = legacy, se trata como ARM */
-            System.out.println("  [" + i + "] '" + name + "' @ offset 0x"
+            System.out.println("  [" + i + "] '" + name + "'" + (directa ? " DIRECTA" : "") + " @ offset 0x"
                 + Long.toHexString(thunkOff)
                 + (esArm ? " (dir. Thumb en runtime = base+0x" + Long.toHexString(thunkOff) + " | 1)"
                          : " (dir. en runtime = base+0x" + Long.toHexString(thunkOff) + ")"));

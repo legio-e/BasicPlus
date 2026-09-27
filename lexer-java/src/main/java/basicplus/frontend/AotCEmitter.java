@@ -30,8 +30,11 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import basicplus.frontend.BpType.*;   // #173 — PrimitiveType (anidado en BpType)
@@ -702,8 +705,10 @@ public final class AotCEmitter {
         // Header del archivo.
         emitHeader();
 
-        // Una función + thunk por cada native.
+        // Una función por cada native; después, sus thunks.
         List<Ast.FuncDef> emitidas = new ArrayList<>();
+        /* V7/H5 P2b.3 — el C de cada native, tal como sale: con él se decide cuáles son DIRECTAS. */
+        Map<String, String> cuerpos = new LinkedHashMap<>();
         for (Ast.FuncDef f : nativeFuncs) {
             /* #349 — LA FUNCIÓN Y LA LÍNEA, o el aviso no sirve de nada. Los
              * throw de aquí abajo nacen en sitios que no saben en qué función
@@ -716,8 +721,11 @@ public final class AotCEmitter {
                  * pone el pack. Lo que se emite en su lugar es el PUENTE. El
                  * thunk es el mismo de siempre: desde la pila BP, llamar a un
                  * pack o a codigo traducido se ve exactamente igual. */
+                w.flush();
+                int desde = out.getBuffer().length();
                 if (f.isPackExtern) emitPackExtern(f); else emitFunction(f);
-                emitThunk(f);
+                w.flush();
+                cuerpos.put(f.name.name, out.getBuffer().substring(desde));
                 emitidas.add(f);
             } catch (UnsupportedAotException ex) {
                 /* #519 (V7; decidido por Eduardo el 24-sep) — un METODO native que no se
@@ -735,14 +743,69 @@ public final class AotCEmitter {
             }
         }
 
+        /* V7/H5 P2b.3 — los thunks, ya sabiendo qué natives son DIRECTAS (ver nativesDirectas). */
+        Set<String> directas = nativesDirectas(cuerpos);
+        for (Ast.FuncDef f : emitidas) {
+            try {
+                emitThunk(f, directas.contains(f.name.name));
+            } catch (UnsupportedAotException ex) {
+                String que = metodosAplanados.contains(f.name.name)
+                        ? "en el metodo native '" : "en la funcion native '";
+                throw new UnsupportedAotException(
+                    que + f.name.name + "' (linea " + f.line + "): " + ex.getMessage());
+            }
+        }
+
         // Función de registro — solo si NO estamos en modo .mdn.
         // En .mdn las relocs de bpvm_aot_register_by_name + string
         // literal contaminan el code section. El loader del firmware
         // registra automáticamente a partir del symtab.
         if (!omitRegisterFunc) {
-            emitRegisterFunc(emitidas);
+            emitRegisterFunc(emitidas, directas);
         }
         return out.toString();
+    }
+
+    /** V7/H5 P2b.3 — los helpers por los que una native puede CEDER el hilo: la línea del bucle, un builtin por el
+     *  despachador (puede bloquear), el puente a BP (la función BP puede bloquear) y un pack (su código podría volver
+     *  a BP). Todo lo demás de la tabla —cadenas, arrays, reservas, `print`, lanzar— vuelve sin ceder. */
+    private static final String[] CEDEN = {
+        "->punto_control(", "->call_builtin(", "->call_bp_i32(", "->call_method_i32(", "->pack_sym("
+    };
+
+    /** V7/H5 P2b.3 — las natives DIRECTAS: las que no pueden ceder el hilo en ningún caso, porque ni su C ni el de
+     *  ninguna native del módulo a la que llamen —hasta el fondo, recursión incluida— llama a un helper de CEDEN.
+     *  Una directa no necesita ejecutor: corre en la pila del worker, como todas antes de P2b, y se ahorra el testigo
+     *  (dos cambios de tarea por llamada). Se mira el C que SALE, no el `.bp`: si el emisor gana otro sitio que cede,
+     *  no se escapa. Una llamada que el emisor no resuelve a una native del módulo (BP, otro módulo, un pack) ya pasa
+     *  por uno de esos helpers. Pregunta de Eduardo (27-sep): «la rutina en sí puede ser pequeña pero puede llamar a
+     *  una mucho más grande con bucles» — por eso es transitivo. */
+    private Set<String> nativesDirectas(Map<String, String> cuerpos) {
+        Map<String, Boolean> cede = new HashMap<>();
+        Map<String, List<String>> llama = new HashMap<>();
+        for (Map.Entry<String, String> e : cuerpos.entrySet()) {
+            String c = e.getValue();
+            boolean si = false;
+            for (String h : CEDEN) if (c.contains(h)) { si = true; break; }
+            cede.put(e.getKey(), si);
+            List<String> ls = new ArrayList<>();
+            for (String g : cuerpos.keySet())
+                if (!g.equals(e.getKey()) && c.contains("aot_" + moduleName + "_" + cId(g) + "("))
+                    ls.add(g);
+            llama.put(e.getKey(), ls);
+        }
+        boolean cambia = true;
+        while (cambia) {
+            cambia = false;
+            for (String f : cuerpos.keySet()) {
+                if (cede.get(f)) continue;
+                for (String g : llama.get(f))
+                    if (cede.get(g)) { cede.put(f, true); cambia = true; break; }
+            }
+        }
+        Set<String> dir = new HashSet<>();
+        for (Map.Entry<String, Boolean> e : cede.entrySet()) if (!e.getValue()) dir.add(e.getKey());
+        return dir;
     }
 
     // ==================== Header ====================
@@ -1092,9 +1155,13 @@ public final class AotCEmitter {
 
     // ==================== Thunk ====================
 
-    private void emitThunk(Ast.FuncDef f) {
+    private void emitThunk(Ast.FuncDef f, boolean directa) {
         String fname = "aot_" + moduleName + "_" + cId(f.name.name);
         String tname = "thunk_" + moduleName + "_" + cId(f.name.name);
+        /* V7/H5 P2b.3 — una native DIRECTA (nativesDirectas) lo dice en el NOMBRE de su thunk, `thunkd_`: es por
+         * donde MdnPack reconoce los thunks, y así la marca llega al `.mdn` sin otro canal. */
+        if (directa)
+            w.println("/* P2b.3: DIRECTA — sin puntos de cesión: corre en la pila del worker, sin ejecutor. */");
         // En modo .mdn el thunk debe ser visible al linker — MdnPack lo
         // busca por nombre en el symtab del .o. Además marcamos `used`
         // para que -Os con -ffunction-sections no lo deade-code-stripe
@@ -1117,7 +1184,7 @@ public final class AotCEmitter {
              *
              * Con el nombre puesto explicitamente no hay nada que deducir. */
             w.println("void " + tname + "(struct bpvm*, uint32_t*, uint32_t*)");
-            w.println("    __asm__(\"thunk_" + moduleName + "_" + f.name.name + "\");");
+            w.println("    __asm__(\"" + (directa ? "thunkd_" : "thunk_") + moduleName + "_" + f.name.name + "\");");
             w.println("__attribute__((used))");
             w.println("void " + tname + "(struct bpvm* vm,");
         } else {
@@ -1191,7 +1258,7 @@ public final class AotCEmitter {
 
     // ==================== Register ====================
 
-    private void emitRegisterFunc(List<Ast.FuncDef> nativeFuncs) {
+    private void emitRegisterFunc(List<Ast.FuncDef> nativeFuncs, Set<String> directas) {
         w.println("/* Registra todas las funciones AOT de este módulo en el AOT");
         w.println(" * registry. Llamar tras link, antes de bpvm_run. Tolerante a");
         w.println(" * símbolos ausentes (skip silente si el .mod no está cargado). */");
@@ -1199,7 +1266,11 @@ public final class AotCEmitter {
         for (Ast.FuncDef f : nativeFuncs) {
             String qualified = moduleName + "." + f.name.name;
             String tname = "thunk_" + moduleName + "_" + cId(f.name.name);
-            w.println("    bpvm_aot_register_by_name(vm, \"" + qualified + "\", " + tname + ");");
+            if (directas.contains(f.name.name))   /* V7/H5 P2b.3 */
+                w.println("    bpvm_aot_register_by_name_flags(vm, \"" + qualified + "\", " + tname
+                          + ", BPVM_AOT_DIRECTA);");
+            else
+                w.println("    bpvm_aot_register_by_name(vm, \"" + qualified + "\", " + tname + ");");
         }
         w.println("}");
         w.println();

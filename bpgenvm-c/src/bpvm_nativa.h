@@ -85,10 +85,12 @@ typedef struct bpvm_nativa {
 int bpvm_aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp);
 
 /* Llama al thunk de una native. La más externa de un hilo, en un ejecutor; una anidada (native → BP → native),
- * directamente, porque ya está en él. Devuelve lo mismo que bpvm_aot_call_guarded: 0 = volvió normal, 1 = lanzó y
- * lo atrapó un try/catch de BP, 2 = lanzó y nadie lo atrapó (el hilo está muerto); o BPVM_NATIVA_SUSPENDIDA_R. */
-int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp,
-                       uint32_t pc_vuelta, uint32_t cs_vuelta);
+ * directamente, porque ya está en él; y una DIRECTA (`flags` con BPVM_AOT_DIRECTA: sin puntos de cesión), también
+ * directamente, en la pila en la que se esté: no puede suspenderse, así que no necesita ejecutor y se ahorra el
+ * testigo. Devuelve lo mismo que bpvm_aot_call_guarded: 0 = volvió normal, 1 = lanzó y lo atrapó un try/catch de
+ * BP, 2 = lanzó y nadie lo atrapó (el hilo está muerto); o BPVM_NATIVA_SUSPENDIDA_R. */
+int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t flags, uint32_t* sp,
+                       uint32_t* bp, uint32_t pc_vuelta, uint32_t cs_vuelta);
 
 /* ¿El hilo está suspendido DENTRO de una native? Entonces no se interpreta: se reanuda. */
 static inline int bpvm_nativa_suspendida(const bpvm_thread_t* tc) {

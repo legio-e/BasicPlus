@@ -79,10 +79,14 @@ class AotSimboloEnModTest {
         // en la llamada a register_by_name. Se leen los dos por si divergen.
         for (String linea : csrc.split("\n")) {
             String t = linea.trim();
-            if (t.startsWith("__asm__(\"thunk_" + modulo + "_")) {
+            /* V7/H5 P2b.3 — el thunk de una native DIRECTA (sin puntos de cesión) se llama `thunkd_`: la marca viaja
+             * en el nombre. El nombre BP que sigue al prefijo es el mismo. */
+            String pre = t.startsWith("__asm__(\"thunkd_" + modulo + "_") ? "thunkd_" : "thunk_";
+            if (t.startsWith("__asm__(\"" + pre + modulo + "_")) {
                 int a = t.indexOf('"') + 1, b = t.lastIndexOf('"');
-                out.add(modulo + "." + t.substring(a + ("thunk_" + modulo + "_").length(), b));
-            } else if (t.startsWith("bpvm_aot_register_by_name(vm, \"")) {
+                out.add(modulo + "." + t.substring(a + (pre + modulo + "_").length(), b));
+            } else if (t.startsWith("bpvm_aot_register_by_name(vm, \"")
+                       || t.startsWith("bpvm_aot_register_by_name_flags(vm, \"")) {
                 int a = t.indexOf('"') + 1, b = t.indexOf('"', a);
                 out.add(t.substring(a, b));
             }

@@ -802,6 +802,8 @@ public class Disasm {
                 while (nameLen < MDN_NAME_MAX && all[symOff + nameLen] != 0) nameLen++;
                 String n = new String(all, symOff, nameLen, StandardCharsets.UTF_8);
                 int off = bb.getInt(symOff + MDN_NAME_MAX);
+                /* V7/H5 P2b.3 (v3): el bit alto no es del offset, marca una native DIRECTA (sin ejecutor). */
+                if (version >= 3 && (off & 0x80000000) != 0) { n = n + " [directa]"; off &= 0x7fffffff; }
                 syms.add(new MdnSymbol(n, off));
             }
             return new MdnInfo(mdnFile.getPath(), version, abiVersion,

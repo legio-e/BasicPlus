@@ -53,7 +53,10 @@ public final class MdnPack {
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
     /* [V7/H2, #441] 15-sep: 2 — la cabecera lleva `flags_crc`, la huella de la
      * receta (24 B en vez de 20). La autoridad es mdn_format.h; esto lo copia. */
-    private static final int MDN_VERSION = 2;
+    /* [V7/H5 P2b.3] 27-sep: 3 — el bit alto de `thunk_offset` marca una native DIRECTA (MDN_SIM_DIRECTA). */
+    private static final int MDN_VERSION = 3;
+    /* [V7/H5 P2b.3] la marca de una native DIRECTA en `thunk_offset` (mdn_format.h). */
+    static final int MDN_SIM_DIRECTA = 0x80000000;
     private static final int MDN_HEADER_SIZE = 24;
     /* [V7/H5 #559] 25-sep: 8 — quince slots nuevos al final: el `float` por helper para
      * los núcleos SIN FPU (C5, C3, C6), donde gcc lo delegaba en libgcc.
@@ -315,6 +318,9 @@ public final class MdnPack {
         // el bit 0 del valor indica "modo Thumb" (no es parte del offset): lo
         // limpiamos; el loader del firmware re-añade `| 1u` al construir la dirección.
         String prefix = "thunk_" + moduleName + "_";
+        /* V7/H5 P2b.3 — `thunkd_` es el thunk de una native DIRECTA (sin puntos de cesión: AotCEmitter lo decide):
+         * se exporta igual, con la marca en el bit alto del offset. */
+        String prefixD = "thunkd_" + moduleName + "_";
         int textIdx = f.findSectionIndex(".text");
         List<Elf32.Symbol> exports = new ArrayList<>();
         for (Elf32.Symbol s : f.symbols()) {
@@ -326,19 +332,21 @@ public final class MdnPack {
              * saltan los sufijos de clonado de gcc, que es lo que se queria
              * saltar; el punto del nombre BP pasa. */
             if (esClonDeGcc(s.name)) continue;
-            if (!s.name.startsWith(prefix)) continue;
-            String funcName = s.name.substring(prefix.length());
+            boolean directa = s.name.startsWith(prefixD);
+            if (!directa && !s.name.startsWith(prefix)) continue;
+            String funcName = s.name.substring(directa ? prefixD.length() : prefix.length());
             String qualified = moduleName + "." + funcName;
             if (qualified.length() >= MDN_NAME_MAX) {
                 throw new PackException("Nombre muy largo: '" + qualified + "'");
             }
-            int byteOff = ((int) s.value) & ~1;
+            int byteOff = (((int) s.value) & ~1) | (directa ? MDN_SIM_DIRECTA : 0);
             exports.add(new Elf32.Symbol(qualified, byteOff, s.shndx));
         }
 
         if (exports.isEmpty()) {
             StringBuilder sb = new StringBuilder(
-                    "No se encontraron símbolos thunk_" + moduleName + "_* — disponibles:");
+                    "No se encontraron símbolos thunk_" + moduleName + "_* ni thunkd_" + moduleName
+                    + "_* — disponibles:");
             for (Elf32.Symbol s : f.symbols()) sb.append("\n  ").append(s.name);
             throw new PackException(sb.toString());
         }

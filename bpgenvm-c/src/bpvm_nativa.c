@@ -88,12 +88,13 @@ static int entrar(bpvm_nativa_t* n) {
     return n->resultado;   /* TERMINADA */
 }
 
-int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp,
-                       uint32_t pc_vuelta, uint32_t cs_vuelta) {
+int bpvm_nativa_llamar(bpvm_t* vm, bpvm_thread_t* tc, bpvm_aot_thunk_t aot, uint32_t flags, uint32_t* sp,
+                       uint32_t* bp, uint32_t pc_vuelta, uint32_t cs_vuelta) {
     bpvm_nativa_t* n = tc->nativa;
     int r;
-    /* Anidada: el hilo ya corre en su ejecutor (native → BP → native). Una llamada de C más. */
-    if (n != NULL)
+    /* Directa (sin puntos de cesión) o anidada (el hilo ya corre en su ejecutor: native → BP → native): una llamada
+     * de C más, en la pila en la que se esté. */
+    if ((flags & BPVM_AOT_DIRECTA) || n != NULL)
         return bpvm_aot_call_guarded(vm, tc, aot, sp, bp);
     n = ejecutor_libre(vm);
     if (n == NULL) {

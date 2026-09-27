@@ -30,11 +30,20 @@
 #include <stdint.h>
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
-#define MDN_VERSION        2   /* [V7/H2, #441] 15-sep — `flags_crc`: la huella
-                                * de la RECETA (bpvm_aot_recetas.h). Cabecera de
-                                * 24 B; la v1 (20 B, sin huella) se sigue
-                                * cargando «a ciegas» con aviso, como un MOD7
-                                * sin datos de versión. El escritor emite v2. */
+#define MDN_VERSION        3   /* [V7/H5 P2b.3] 27-sep — el bit alto de
+                                * `thunk_offset` marca una native DIRECTA
+                                * (MDN_SIM_DIRECTA, abajo). Misma cabecera (24 B)
+                                * y mismos símbolos (36 B) que la v2, que se sigue
+                                * cargando: sin la marca, todas sus natives van a
+                                * un ejecutor (correcto, sólo más lento). Un
+                                * cargador de la v2 rechaza la v3 por su versión,
+                                * con nombre. El escritor emite v3.
+                                *
+                                * Histórico: 2 = [V7/H2, #441] 15-sep — `flags_crc`:
+                                * la huella de la RECETA (bpvm_aot_recetas.h).
+                                * Cabecera de 24 B; la v1 (20 B, sin huella) se
+                                * sigue cargando «a ciegas» con aviso, como un MOD7
+                                * sin datos de versión. */
 #define MDN_HEADER_SIZE_V1 20
 #define MDN_HEADER_SIZE_V2 24
 #define MDN_ABI_VERSION    9   /* [V7/H5 P2b.1.d] 26-sep — un slot al final:
@@ -145,8 +154,15 @@ static inline uint32_t mdn_header_size(uint16_t version) {
 
 typedef struct {
     char     name[MDN_NAME_MAX];  /* qualified BP name, e.g. "Bench.fib" */
-    uint32_t thunk_offset;        /* offset del thunk dentro del code section */
+    uint32_t thunk_offset;        /* offset del thunk dentro del code section (v3: con la marca, abajo) */
 } mdn_symbol_t;
+
+/* [V7/H5 P2b.3] v3 — el bit alto de `thunk_offset` NO es del offset (ningún código de micro mide 2 GB): marca una
+ * native DIRECTA. Directa = sin puntos de cesión —ni la línea del bucle, ni un builtin por el despachador, ni el
+ * puente a BP, ni un pack; ni ella ni ninguna native del módulo a la que llame— (AotCEmitter.nativesDirectas): no
+ * puede suspenderse, así que corre en la pila del worker sin ejecutor y se ahorra el testigo. En v1/v2 el bit es 0. */
+#define MDN_SIM_DIRECTA    0x80000000u
+#define MDN_SIM_OFFSET(o)  ((o) & 0x7FFFFFFFu)
 
 /* Total header + N symbols, alineado a 4 (20 y 24 lo son; 36 por símbolo). El
  * code section empieza inmediatamente después. */

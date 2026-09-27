@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -781,6 +781,45 @@ test-aotbuiltin: $(LIBOBJ)
 	 if ! cmp -s build/aotbuiltin.int build/aotbuiltin.aot; then diff build/aotbuiltin.int build/aotbuiltin.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 8 ]; then cat build/aotbuiltin.aot; echo "  ROJO: $$n de 8 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 8/8 con el AOT, igual que interpretado"
+
+# V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
+# y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.
+test-mdnv3: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatDirecta)
+	$(call stdlibdep,Core)
+	$(CC) $(CFLAGS) -Isrc test/test_mdnv3.c $(LIBOBJ) -o build/test_mdnv3.exe $(LDFLAGS)
+	@echo "--- P2b.3 la marca DIRECTA del .mdn v3 (esperado: solo 'ok', [status=OK]) ---"
+	@./build/test_mdnv3.exe samples/NatDirecta.mod 2>/dev/null
+
+# V7/H5 (P2b.3, 27-sep) — las natives DIRECTAS: sin puntos de cesión (ni bucles, ni builtins por el despachador,
+# ni BP, ni packs; ni a través de otra native del módulo) corren en la pila del worker, sin ejecutor. La
+# clasificación, mirada en el C que emite el AOT (el registro de las pruebas de host lleva la marca), y el MISMO
+# .mod con el AOT y sin él.
+test-aotdirecta: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatDirecta)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatDirecta,build/aotdirecta)
+	$(CC) $(CFLAGS) -Isrc test/test_aotdirecta.c build/aotdirecta/aot_NatDirecta.c $(LIBOBJ) \
+	  -o build/test_aotdirecta.exe $(LDFLAGS)
+	@echo "--- P2b.3 las natives directas (esperado: 4 directas, 5 al ejecutor; AOT == interpretado, 9/9) ---"
+	@c=build/aotdirecta/aot_NatDirecta.c; mal=0; \
+	 for f in hoja llamaHoja fibR texto; do \
+	   grep -q "NatDirecta\.$$f\", .*BPVM_AOT_DIRECTA" $$c || { echo "  ROJO: $$f tenia que salir DIRECTA"; mal=1; }; \
+	 done; \
+	 for f in conBucle pequena llamaPequena conRaiz llamaBp; do \
+	   grep -q "bpvm_aot_register_by_name(vm, \"NatDirecta\.$$f\"" $$c || { echo "  ROJO: $$f tenia que ir a un EJECUTOR"; mal=1; }; \
+	 done; \
+	 if [ $$mal -ne 0 ]; then exit 1; fi; \
+	 echo "  ok  : hoja, llamaHoja, fibR y texto, DIRECTAS; conBucle, pequena, llamaPequena, conRaiz y llamaBp, al ejecutor"
+	@./build/test_aotdirecta.exe samples/NatDirecta.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotdirecta.aot; \
+	 ./build/test_aotdirecta.exe samples/NatDirecta.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotdirecta.int; \
+	 n=$$(grep -c '^ok ' build/aotdirecta.aot); \
+	 if grep -q '^FALLO' build/aotdirecta.aot build/aotdirecta.int; then grep -h '^FALLO' build/aotdirecta.aot build/aotdirecta.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotdirecta.int build/aotdirecta.aot; then diff build/aotdirecta.int build/aotdirecta.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 9 ]; then cat build/aotdirecta.aot; echo "  ROJO: $$n de 9 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 9/9 con el AOT, igual que interpretado"
 
 # V7/H5 (P2b.3, 27-sep) — LO QUE CUESTA LLAMAR a una native desde código interpretado: 200 000 llamadas a una
 # native diminuta, con el AOT y sin él. No es una prueba (no entra en check-testc): es la medida de antes y

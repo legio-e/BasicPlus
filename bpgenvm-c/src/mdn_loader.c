@@ -183,7 +183,8 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     if (memcmp(h->magic, expected, 4) != 0) return MDN_ERR_MAGIC;
     /* v1 (sin huella de receta) y v2 (con ella). Un v1 se carga «a ciegas» con
      * aviso, más abajo; es la transición, como un MOD7 sin datos de versión. */
-    if (h->version != 1 && h->version != MDN_VERSION) return MDN_ERR_VERSION;
+    /* v1, v2 y v3 (V7/H5 P2b.3: la v3 sólo añade la marca DIRECTA en el bit alto de thunk_offset). */
+    if (h->version < 1 || h->version > MDN_VERSION) return MDN_ERR_VERSION;
     const uint32_t hsz = mdn_header_size(h->version);
     if (size < hsz) return MDN_ERR_TRUNCATED;
     /* Gate de ABI — IGUAL, no "menor o igual" (norma #284: el formato debe
@@ -289,20 +290,24 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     }
     const mdn_symbol_t* syms      = (const mdn_symbol_t*)
                                       (data + hsz);
-    int registered = 0;
+    int registered = 0, directas = 0;
     for (uint32_t i = 0; i < h->sym_count; i++) {
-        uintptr_t thunk_addr = (uintptr_t)(code_base + syms[i].thunk_offset)
+        /* V7/H5 P2b.3 — en la v3 el bit alto es la marca DIRECTA, no parte del offset. */
+        uint32_t off   = h->version >= 3 ? MDN_SIM_OFFSET(syms[i].thunk_offset) : syms[i].thunk_offset;
+        uint32_t flags = (h->version >= 3 && (syms[i].thunk_offset & MDN_SIM_DIRECTA)) ? BPVM_AOT_DIRECTA : 0u;
+        uintptr_t thunk_addr = (uintptr_t)(code_base + off)
                              | MDN_FUNCPTR_BIT;
-        int rc = bpvm_aot_register_by_name(vm, syms[i].name,
-                                             (bpvm_aot_thunk_t) thunk_addr);
+        int rc = bpvm_aot_register_by_name_flags(vm, syms[i].name,
+                                                   (bpvm_aot_thunk_t) thunk_addr, flags);
         if (rc == 0) {
             registered++;
+            if (flags & BPVM_AOT_DIRECTA) directas++;
         } else {
             log_printf("MDN: skip '%s' rc=%d (symbol no en .mod?)",
                        syms[i].name, rc);
         }
     }
-    log_printf("MDN: %d/%u thunks registrados, %u code bytes (zero-copy)",
-               registered, (unsigned) h->sym_count, (unsigned) h->code_size);
+    log_printf("MDN: %d/%u thunks registrados (%d directas), %u code bytes (zero-copy)",
+               registered, (unsigned) h->sym_count, directas, (unsigned) h->code_size);
     return MDN_OK;
 }

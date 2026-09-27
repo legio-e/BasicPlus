@@ -1091,12 +1091,13 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t target_abs = bpvm_cb_for_cs(vm, tc, cs) + (uint32_t) target_rel;
             /* H3 #160 — AOT hijack. Si el target tiene un thunk
              * registrado, divertir SIN crear frame BP. */
-            bpvm_aot_thunk_t aot = bpvm_aot_lookup(target_abs);
+            uint32_t aot_flags;   /* V7/H5 P2b.3: ¿directa o a un ejecutor? */
+            bpvm_aot_thunk_t aot = bpvm_aot_lookup_flags(target_abs, &aot_flags);
             if (aot) {
                 /* #186 — boundary de fault. Si el native lanza, el wrapper
                  * propaga al try/catch BP que envuelva la llamada. */
                 tc->cs = cs;
-                int r = bpvm_nativa_llamar(vm, tc, aot, &sp, &bp, pc, cs);   /* P2b.3: en su ejecutor */
+                int r = bpvm_nativa_llamar(vm, tc, aot, aot_flags, &sp, &bp, pc, cs);   /* P2b.3: ejecutor o directa */
                 if (r == BPVM_NATIVA_SUSPENDIDA_R) {
                     /* P2b.1.c — el hilo se queda DENTRO de la native, suspendido: su estado (el del
                      * intérprete anidado, si lo hay) ya está en tc. No se pasa por `done`, que lo pisaría
@@ -2013,11 +2014,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             }
             /* H3 #160 — AOT hijack para CALL_EXT (mismo patrón que CALL). */
             {
-                bpvm_aot_thunk_t aot_ext = bpvm_aot_lookup(target);
+                uint32_t aot_ext_flags;   /* V7/H5 P2b.3 */
+                bpvm_aot_thunk_t aot_ext = bpvm_aot_lookup_flags(target, &aot_ext_flags);
                 if (aot_ext) {
                     /* #186 — mismo boundary de fault que OP_CALL. */
                     tc->cs = cs;
-                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, &sp, &bp, pc, cs);   /* P2b.3: en su ejecutor */
+                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, aot_ext_flags, &sp, &bp, pc, cs);   /* P2b.3 */
                     if (r == BPVM_NATIVA_SUSPENDIDA_R) {
                         /* P2b.1.c — el hilo se queda DENTRO de la native, suspendido: su estado (el del
                          * intérprete anidado, si lo hay) ya está en tc. No se pasa por `done`, que lo pisaría

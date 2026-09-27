@@ -1,0 +1,79 @@
+// NatDirecta.bp — V7/H5 P2b.3: QUÉ natives son DIRECTAS —sin puntos de cesión: corren en la pila del worker, sin
+// ejecutor ni testigo— y cuáles van a un ejecutor. El compilador lo decide sobre el C que emite, y es TRANSITIVO por
+// las natives del módulo; la pregunta de Eduardo (27-sep): «la rutina en sí puede ser pequeña pero puede llamar a
+// una mucho más grande con bucles». `make test-aotdirecta` mira la clasificación en el C generado y corre el MISMO
+// .mod con el AOT y sin él.
+module NatDirecta
+  import Core
+
+  // ── directas: ni bucles, ni builtins por el despachador, ni BP, ni packs; ni a través de otra native ──
+
+  native function hoja(x: integer): integer
+    return x * 3 + 1
+  end hoja
+
+  native function llamaHoja(x: integer): integer
+    return hoja(x) + hoja(x + 1)
+  end llamaHoja
+
+  // recursiva sin bucles: no tiene dónde ceder (y un kill no la corta hasta que vuelve, con ejecutor o sin él)
+  native function fibR(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fibR(n - 1) + fibR(n - 2)
+  end fibR
+
+  // cadenas por los helpers tipados: no ceden
+  native function texto(n: integer): string
+    return "n=" + intToString(n)
+  end texto
+
+  // ── al ejecutor ──
+
+  native function conBucle(n: integer): integer
+    var t: integer := 0
+    var i: integer := 0
+    while i < n do
+      t += i
+      i += 1
+    endwh
+    return t
+  end conBucle
+
+  // el caso de Eduardo: pequeña, pero llama a una con bucle
+  native function pequena(n: integer): integer
+    return conBucle(n) + 1
+  end pequena
+
+  // y dos niveles más arriba
+  native function llamaPequena(n: integer): integer
+    return pequena(n) * 2
+  end llamaPequena
+
+  // un builtin por el despachador (puede bloquear)
+  native function conRaiz(x: float): float
+    return sqrt(x)
+  end conRaiz
+
+  function doble(x: integer): integer
+    return x * 2
+  end doble
+
+  // una función BP (por el puente: puede bloquear)
+  native function llamaBp(x: integer): integer
+    return doble(x) + 1
+  end llamaBp
+
+  function Main()
+    print "ok hoja: " + intToString(hoja(4))
+    print "ok llamaHoja: " + intToString(llamaHoja(4))
+    print "ok fibR: " + intToString(fibR(15))
+    print "ok texto: " + texto(42)
+    print "ok conBucle: " + intToString(conBucle(100))
+    print "ok pequena: " + intToString(pequena(100))
+    print "ok llamaPequena: " + intToString(llamaPequena(10))
+    print "ok conRaiz: " + conRaiz(2.25)
+    print "ok llamaBp: " + intToString(llamaBp(20))
+  end Main
+end NatDirecta

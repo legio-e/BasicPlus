@@ -16,23 +16,30 @@
 typedef struct {
     uint32_t           addr;
     bpvm_aot_thunk_t   thunk;
+    uint32_t           flags;   /* V7/H5 P2b.3: BPVM_AOT_DIRECTA */
 } aot_entry_t;
 
 static aot_entry_t g_aot[BPVM_AOT_MAX];
 static int         g_aot_count = 0;
 
 int bpvm_aot_register(uint32_t addr, bpvm_aot_thunk_t thunk) {
+    return bpvm_aot_register_flags(addr, thunk, 0u);
+}
+
+int bpvm_aot_register_flags(uint32_t addr, bpvm_aot_thunk_t thunk, uint32_t flags) {
     if (g_aot_count >= BPVM_AOT_MAX) return -1;
     /* Si la dirección ya está registrada, sobrescribir — útil para
      * recargar entre tests. */
     for (int i = 0; i < g_aot_count; i++) {
         if (g_aot[i].addr == addr) {
             g_aot[i].thunk = thunk;
+            g_aot[i].flags = flags;
             return 0;
         }
     }
     g_aot[g_aot_count].addr  = addr;
     g_aot[g_aot_count].thunk = thunk;
+    g_aot[g_aot_count].flags = flags;
     g_aot_count++;
     return 0;
 }
@@ -45,13 +52,29 @@ bpvm_aot_thunk_t bpvm_aot_lookup(uint32_t addr) {
     return NULL;
 }
 
+bpvm_aot_thunk_t bpvm_aot_lookup_flags(uint32_t addr, uint32_t* flags) {
+    /* El mismo hot path, con las marcas de la native (V7/H5 P2b.3). */
+    for (int i = 0; i < g_aot_count; i++) {
+        if (g_aot[i].addr == addr) { *flags = g_aot[i].flags; return g_aot[i].thunk; }
+    }
+    *flags = 0u;
+    return NULL;
+}
+
 int bpvm_aot_register_by_name(struct bpvm* vm,
                                 const char* qualified,
                                 bpvm_aot_thunk_t thunk) {
+    return bpvm_aot_register_by_name_flags(vm, qualified, thunk, 0u);
+}
+
+int bpvm_aot_register_by_name_flags(struct bpvm* vm,
+                                     const char* qualified,
+                                     bpvm_aot_thunk_t thunk,
+                                     uint32_t flags) {
     if (!vm || !qualified || !thunk) return -2;
     for (int i = 0; i < vm->symbol_count; i++) {
         if (strcmp(bpvm_symbol_name(vm, i), qualified) == 0) {
-            return bpvm_aot_register(vm->symbols[i].abs_addr, thunk);
+            return bpvm_aot_register_flags(vm->symbols[i].abs_addr, thunk, flags);
         }
     }
     return -2;   /* símbolo no encontrado */

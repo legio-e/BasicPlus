@@ -41,10 +41,20 @@ typedef void (*bpvm_aot_thunk_t)(struct bpvm* vm,
  * Devuelve 0 OK, -1 si la tabla está llena. */
 int bpvm_aot_register(uint32_t target_abs_addr, bpvm_aot_thunk_t thunk);
 
+/* V7/H5 P2b.3 — una native DIRECTA: sin puntos de cesión (AotCEmitter.nativesDirectas; en el .mdn v3, el bit alto
+ * de thunk_offset). No puede suspenderse, así que corre en la pila en la que ya se esté, sin ejecutor. */
+#define BPVM_AOT_DIRECTA 1u
+
+/* Como bpvm_aot_register, con las marcas de la native (BPVM_AOT_DIRECTA). */
+int bpvm_aot_register_flags(uint32_t target_abs_addr, bpvm_aot_thunk_t thunk, uint32_t flags);
+
 /* Lookup por dirección absoluta. Devuelve el thunk o NULL.
  * Llamado desde el hot path del intérprete (OP_CALL / OP_CALL_EXT)
  * — debe ser barato. Con tabla < 32 entries un scan lineal es OK. */
 bpvm_aot_thunk_t bpvm_aot_lookup(uint32_t target_abs_addr);
+
+/* V7/H5 P2b.3 — lo mismo, y las marcas de la native en *flags (el intérprete: ¿directa o a un ejecutor?). */
+bpvm_aot_thunk_t bpvm_aot_lookup_flags(uint32_t target_abs_addr, uint32_t* flags);
 
 /* Variante helper: resuelve `qualified` en la global symbol table
  * de `vm` (típicamente "ModuleName.functionName") y registra el
@@ -54,6 +64,13 @@ bpvm_aot_thunk_t bpvm_aot_lookup(uint32_t target_abs_addr);
 int bpvm_aot_register_by_name(struct bpvm* vm,
                                 const char* qualified,
                                 bpvm_aot_thunk_t thunk);
+
+/* V7/H5 P2b.3 — lo mismo, con las marcas de la native (el registro que emite el AOT para las pruebas de host y el
+ * cargador del .mdn v3). */
+int bpvm_aot_register_by_name_flags(struct bpvm* vm,
+                                     const char* qualified,
+                                     bpvm_aot_thunk_t thunk,
+                                     uint32_t flags);
 
 /* Limpia el registry. Útil entre tests. */
 void bpvm_aot_clear(void);

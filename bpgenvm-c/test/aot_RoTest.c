@@ -40,6 +40,7 @@ static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t n) {
     return vm->aot_helpers->string_concat(vm, vm->aot_helpers->string_from_cstr(vm, "valor ", 6), vm->aot_helpers->int_to_string(vm, n));
 }
 
+/* P2b.3: DIRECTA — sin puntos de cesión: corre en la pila del worker, sin ejecutor. */
 static void thunk_RoTest_etiqueta(struct bpvm* vm,
                               uint32_t* sp_p,
                               uint32_t* bp_p) {
@@ -60,6 +61,6 @@ static void thunk_RoTest_etiqueta(struct bpvm* vm,
  * registry. Llamar tras link, antes de bpvm_run. Tolerante a
  * símbolos ausentes (skip silente si el .mod no está cargado). */
 void aot_RoTest_register(struct bpvm* vm) {
-    bpvm_aot_register_by_name(vm, "RoTest.etiqueta", thunk_RoTest_etiqueta);
+    bpvm_aot_register_by_name_flags(vm, "RoTest.etiqueta", thunk_RoTest_etiqueta, BPVM_AOT_DIRECTA);
 }
 
