@@ -1,0 +1,100 @@
+// GlobalesIni.bp — #590 (V7, 27-sep): EL VALOR INICIAL DE UNA GLOBAL, el modelo de Eduardo. Una global vive en el
+// espacio de constantes del módulo y siempre vale lo que dice su declaración: sin valor, 0 o null; con un literal,
+// horneado en el módulo; con cualquier otra cosa —un array literal, una llamada, un objeto, una expresión—,
+// calculado al cargar el módulo, en orden, tras los módulos importados y antes de la función inicializadora.
+// Globales son las `var` y las property de módulo y las `var` y las property ESTÁTICAS de una clase. Hasta hoy todo
+// lo que no era un literal se tiraba (con un aviso; en un `var` estático, en silencio) y el literal de una property
+// también. Se comprueba ella misma —cada línea, «ok» o «FALLO»—.
+module GlobalesIni
+  import Str
+
+  class Caja
+    var v: integer
+    var Caja.creadas: integer := 100
+    var Caja.nombre: string := "caja"
+    public property Caja.etiqueta: string := "et-" + "iqueta"
+    public function Caja(v: integer)
+      this.v := v
+      Caja.creadas := Caja.creadas + 1
+    end Caja
+    public function valor(): integer
+      return this.v
+    end valor
+    public function Caja.cuenta(): integer
+      return Caja.creadas
+    end Caja.cuenta
+    public function Caja.nombreDe(): string
+      return Caja.nombre
+    end Caja.nombreDe
+  end Caja
+
+  // literales: horneados en el módulo
+  public property entero: integer := 42
+  public property negativo: integer := -7
+  public property texto: string := "hola"
+  public property acentos: string := "año·€"
+  public property verdad: boolean := true
+  public property real: float := 2.5
+  public property largo: long := 5000000000L
+  public property doble: double := 1.25
+  property privada: string := "priv"
+  public sync property contador: integer := 3
+  public property sinValor: string
+  var suelta: string := "var"
+
+  // lo demás: calculado al cargar el módulo, en orden
+  var base: integer := strlen("abcd")
+  var dobleBase: integer := base * 2
+  public property tabla: integer[] := [10, 20, 30]
+  var bytes: byte[] := newByteArray(3)
+  public property laCaja: Caja := Caja(7)
+  var frase: string := "w=" + entero + " " + texto
+  var hex: string := Str.toHex(255)
+  var visto: string
+
+  // la función inicializadora del módulo ya los encuentra puestos
+  function GlobalesIni()
+    visto := "base=" + base + " caja=" + laCaja.valor()
+  end GlobalesIni
+
+  function mira(nombre: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok " + nombre + ": [" + obtenido + "]"
+    else
+      print "FALLO " + nombre + ": [" + obtenido + "] y se esperaba [" + esperado + "]"
+    endif
+  end mira
+
+  function Main()
+    mira("entero", "" + entero, "42")
+    mira("negativo", "" + negativo, "-7")
+    mira("texto", texto, "hola")
+    mira("acentos", acentos, "año·€")
+    mira("verdad", "" + verdad, "true")
+    mira("real", "" + real, "2.5")
+    mira("largo", "" + largo, "5000000000")
+    mira("doble", "" + doble, "1.25")
+    mira("privada", privada, "priv")
+    mira("sync", "" + contador, "3")
+    mira("sin valor", "" + sinValor, "")
+    mira("la var de al lado", suelta, "var")
+    mira("una llamada", "" + base, "4")
+    mira("otra global, en orden", "" + dobleBase, "8")
+    mira("un array literal", "" + len(tabla) + ":" + tabla[0] + "," + tabla[1] + "," + tabla[2], "3:10,20,30")
+    tabla[1] := 21
+    mira("el array se escribe", "" + tabla[1], "21")
+    mira("un array de una llamada", "" + len(bytes), "3")
+    mira("un objeto", "" + laCaja.valor(), "7")
+    mira("una expresion con globales", frase, "w=42 hola")
+    mira("un modulo importado", hex, "ff")
+    mira("estatico, literal (y el constructor de laCaja)", "" + Caja.cuenta(), "101")
+    mira("estatico, cadena", Caja.nombreDe(), "caja")
+    mira("property estatica, expresion", Caja.etiqueta, "et-iqueta")
+    mira("la inicializadora los ve", visto, "base=4 caja=7")
+    texto := "adiós"
+    mira("texto, reasignado", texto, "adiós")
+    contador := contador + 1
+    mira("sync, sumado", "" + contador, "4")
+    print "fin"
+  end Main
+end GlobalesIni

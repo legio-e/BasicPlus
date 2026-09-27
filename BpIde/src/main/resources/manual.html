@@ -585,12 +585,17 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <span class="kw">var</span> pts: <span class="type">integer</span>[<span class="num">100</span>]                  <span class="comment">// array fijo (§4.2.1)</span>
 <span class="kw">var</span> p: Punto := Punto(<span class="num">3</span>, <span class="num">4</span>)             <span class="comment">// ref a clase</span></code></pre>
 <p>
-  A nivel de módulo, una <code>var</code> con init <strong>literal</strong>
-  (numérico/boolean/string) queda <em>horneada</em> en el data block del
-  <code>.mod</code>: no genera código de arranque y la variable sigue siendo
-  reasignable. Un init de módulo no-literal se ignora con un aviso —
-  asígnalo en la función inicializadora del módulo (la función con el mismo
-  nombre que el módulo).
+  <strong>Una variable global siempre vale lo que dice su declaración.</strong>
+  Las globales —las <code>var</code> y las property de módulo, y las
+  <code>var</code> y las property estáticas de una clase— viven en el espacio
+  de constantes del módulo: sin valor inicial valen 0 (o <code>null</code>);
+  con un valor <strong>literal</strong> (numérico/boolean/string), queda
+  <em>grabado</em> en el <code>.mod</code>, sin código de arranque, y la
+  variable sigue siendo reasignable. Cualquier otro valor inicial —un array
+  literal, una llamada, un objeto, una expresión— se <em>calcula al cargar el
+  módulo</em>, en el orden en que están escritas, después de inicializarse los
+  módulos que importa y antes de su función inicializadora (la función con
+  el mismo nombre que el módulo), que ya las encuentra puestas.
 </p>
 <p>
   <strong>Una variable local se inicializa antes de leerla.</strong> Una <code>var</code> de módulo sin
@@ -1394,10 +1399,11 @@ end Base</code></pre>
 <p>
   El identificador <code>tick</code> dentro del propio módulo resuelve al
   getter/setter (no al global directo), así que la encapsulación se respeta
-  también dentro del módulo dueño. Si se necesita inicializar la property
-  con un valor distinto de cero, hazlo en la función inicializadora del
-  módulo (función con el mismo nombre que el módulo), igual que con
-  <code>var</code> a nivel módulo.
+  también dentro del módulo dueño. Una property de módulo lleva su valor
+  inicial igual que una <code>var</code> a nivel módulo (ver
+  <a href="#var">§5.1</a>): un literal queda grabado en el módulo, y
+  cualquier otra expresión se calcula al cargarlo, antes de la función
+  inicializadora del módulo.
 </p>
 <p>
   <code>sync</code> también es válido en properties de módulo:

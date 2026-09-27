@@ -1543,23 +1543,11 @@ public final class SemanticAnalyzer {
                     "valor de tipo '" + got.display() + "' no asignable a var de tipo '" + t.display() + "'"));
         if (t != null && t.isScalar() && got instanceof NullType)
             err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
-        // L8 v2 — init de var a NIVEL MÓDULO:
-        //   - literal escalar/string (con '-' opcional) → se HORNEA en el data
-        //     block del .mod (string: ref asignada por __init). Sin aviso.
-        //   - array de tamaño fijo `tipo[N] := [literales]` → elementos
-        //     horneados (resto a cero). Validación aquí.
-        //   - cualquier otra expresión → se ignora como siempre + aviso
-        //     (asignar en la función inicializadora del módulo).
-        // Vars locales y campos de instancia/static de clase no cambian.
-        if (sym instanceof VarSymbol) {
-            VarSymbol vs = (VarSymbol) sym;
-            if (vs.ownerClass == null && !vs.isLocal) {
-                if (constLiteralValue(v.init) == null) {
-                    warn(v.line, v.column, "inicializador de var a nivel módulo se ignora si no es "
-                            + "un literal; mueve la asignación a la función inicializadora del módulo");
-                }
-            }
-        }
+        // L8 v2 — init de var a NIVEL MÓDULO: un literal escalar/string (con '-' opcional) se HORNEA en el
+        // data block del .mod (string: ref asignada por __init). #590 (V7, 27-sep, Eduardo) — cualquier otra
+        // expresión (un array literal, una llamada, un objeto…) la calcula __globales al cargar el módulo, y lo
+        // mismo el de una `var` ESTÁTICA de clase: una global siempre vale lo que dice su declaración. Hasta hoy
+        // se ignoraba con un aviso (y el de un estático, sin él). Los campos de instancia: #511.
     }
 
     /** L8 v2 — `var t: tipo[N] := [...]` de módulo: el init debe ser un array
@@ -1741,16 +1729,10 @@ public final class SemanticAnalyzer {
             BpType t = analyzeExpr(p.init, null, ps.type);
             if (ps.type != null && !ps.type.isAssignableFrom(t))
                 err(p.line, p.column, "valor inicial de tipo '" + t.display() + "' no asignable a propiedad '" + ps.type.display() + "'");
-            // L8: el init de una property a NIVEL MÓDULO se ignora hoy.
-            //     (#511: las de INSTANCIA sí se inicializan, en el constructor tras el super().)
-            // L6: ídem para static property de clase (backing global, arranca a 0).
-            if (ps.ownerClass == null) {
-                warn(p.line, p.column, "inicializador de property a nivel módulo se ignora; "
-                        + "asigna el valor en la función inicializadora del módulo");
-            } else if (ps.isStatic) {
-                warn(p.line, p.column, "inicializador de static property se ignora; "
-                        + "asigna el valor en el inicializador del módulo o en una función estática");
-            }
+            // #590 (V7, 27-sep, Eduardo) — el init de una property de MÓDULO o ESTÁTICA de clase, como el de
+            //     una `var` de módulo: un literal se hornea en su backing, lo demás lo calcula __globales al
+            //     cargar el módulo. Hasta hoy se ignoraba SIEMPRE, con aviso: `property s: string := "hola"`
+            //     valía null. (#511: las de INSTANCIA se inicializan en el constructor, tras el super().)
         }
         if (p.getter != null) {
             insideGetter = true;

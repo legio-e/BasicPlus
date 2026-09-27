@@ -333,6 +333,27 @@ public final class MivmEmitter {
      *  LEA literal + SET_GLOBAL var (la dirección es de load-time). */
     private final List<String[]> pendingStrVarInits = new ArrayList<>();
 
+    /** #590 (V7, 27-sep) — EL VALOR INICIAL DE UNA GLOBAL, el modelo de Eduardo: *«las variables globales van en el
+     *  espacio de constantes del módulo, así que siempre tienen un valor inicial; si no se indica nada debe ser 0 o
+     *  null, pero si se indica, el valor viene ya grabado en el módulo»*. Globales son las `var` y las property de
+     *  módulo y las `var` y las property ESTÁTICAS de una clase. Un literal se hornea en su hueco del bloque de datos
+     *  (bakeModuleVarInit; el de una cadena de módulo lo asigna __init). Lo que no se puede hornear —un array literal,
+     *  una llamada, un objeto, una expresión, y la cadena de un estático— lo calcula `__globales` al cargar el módulo
+     *  (decisión de Eduardo: *«ejecutarlo en __init»*), en orden textual, después de los __init de los imports y antes
+     *  de la función inicializadora del usuario. Hasta hoy todo eso se tiraba: con aviso en el módulo (así se rompió
+     *  samples/ModInit.bp el 21-sep) y en silencio en un `var` estático. `__globales` sólo existe en un módulo que la
+     *  necesita, así que los demás .mod salen igual byte a byte. */
+    private static final class ValorInicial {
+        final String global; final BpType tipo; final IExpr expr; final int linea, columna;
+        ValorInicial(String global, BpType tipo, IExpr expr, int linea, int columna) {
+            this.global = global; this.tipo = tipo; this.expr = expr; this.linea = linea; this.columna = columna;
+        }
+    }
+    private final List<ValorInicial> valoresIniciales = new ArrayList<>();
+    /** #590 — ¿__init llama a __globales? Se decide al emitir __init (antes de las clases) con el mismo criterio
+     *  que luego llena {@link #valoresIniciales}; __globales se emite siempre que se llame. */
+    private boolean conGlobales = false;
+
     /** Track de qué helpers inyectamos para no repetirlos. */
     private final Set<String> emittedHelpers = new HashSet<>();
 
@@ -635,6 +656,11 @@ public final class MivmEmitter {
             if (d instanceof PropertyDef) emitModulePropertyAccessors((PropertyDef) d);
         }
 
+        // 5-ter) #590 — __globales: los valores iniciales de las globales que se calculan al cargar el
+        //        módulo. Aquí, con las clases y las funciones ya registradas (un valor puede construir un
+        //        objeto o llamar a una función), y antes de los helpers (puede concatenar).
+        emitGlobalesFunction();
+
         // 6) Helpers pendientes (e.g. __strconcat) tras user functions.
         flushHelpers();
 
@@ -879,6 +905,15 @@ public final class MivmEmitter {
                 }
             }
 
+            // #590 — los valores iniciales de las globales que no se hornean (ver ValorInicial): tras los
+            // __init de los imports (un valor puede usar un módulo importado) y antes de la función
+            // inicializadora del usuario (que ya los ve puestos). __globales se emite al final del módulo.
+            conGlobales = necesitaGlobales();
+            if (conGlobales) {
+                w.emitCall("__globales");
+                w.emitSetLocal("__discard");
+            }
+
             // Inicializador del propio módulo (function Modulename()) si
             // está declarado.
             if (info.module != null && info.module.initializer != null) {
@@ -987,13 +1022,127 @@ public final class MivmEmitter {
             // block (cero código de arranque). Para string, el literal queda
             // interned en el data block y __init asigna la REF (la dirección
             // es de load-time, no horneable) — la var sigue reasignable.
-            // Cualquier otro init se ignora como siempre (aviso L8).
+            // #590 — cualquier otro init lo calcula __globales al cargar el módulo
+            // (hasta hoy se ignoraba con el aviso L8).
             BpType t = (declT != null) ? declT : (vs != null ? vs.type : null);
-            Object lit = (vd.init != null) ? SemanticAnalyzer.constLiteralValue(vd.init) : null;
-            if (lit != null && bakeModuleVarInit(dn.name, t, lit)) continue;
+            declareGlobalConValor(dn.name, t, vd.init, vd.line, vd.column, false);
+        }
+    }
 
-            // Sin init horneable: slot a cero, 4 bytes (8 si long/double).
-            declareGlobalByType(dn.name, t);   // H1.8: el ancho lo decide el TIPO (era if/else aquí)
+    /** #590 — declara la global `nombre` de tipo `t` con su valor inicial (ver {@link ValorInicial}): un literal
+     *  horneable se hornea; si no, el hueco a cero (el ancho lo decide el TIPO, H1.8) y, si hay valor, a
+     *  __globales. `estatica`: la de una clase, que se declara después de emitir __init (su cadena no puede ir al
+     *  __init: va a __globales como cualquier otro valor). */
+    private void declareGlobalConValor(String nombre, BpType t, IExpr init, int linea, int columna, boolean estatica) {
+        Object lit = (init != null) ? SemanticAnalyzer.constLiteralValue(init) : null;
+        if (seHornea(t, lit, estatica) && bakeModuleVarInit(nombre, t, lit)) return;
+        declareGlobalByType(nombre, t);
+        if (init != null) valoresIniciales.add(new ValorInicial(nombre, t, init, linea, columna));
+    }
+
+    /** #590 — la declaración (VarDecl o PropertyDef) del miembro ESTÁTICO `nombre` de la clase, o null. */
+    private static Node declDeEstatico(ClassDef cd, String nombre, boolean esProperty) {
+        for (ITopLevelDecl m : cd.members) {
+            if (!esProperty && m instanceof VarDecl) {
+                for (DeclName dn : ((VarDecl) m).names)
+                    if (dn.isStatic() && dn.name.equals(nombre)) return (VarDecl) m;
+            } else if (esProperty && m instanceof PropertyDef) {
+                PropertyDef pd = (PropertyDef) m;
+                if (pd.name.isStatic() && pd.name.name.equals(nombre)) return pd;
+            }
+        }
+        return null;
+    }
+
+    /** #590 — el valor inicial de una declaración de global (null si no lleva). */
+    private static IExpr iniDe(Node decl) {
+        if (decl instanceof VarDecl) return ((VarDecl) decl).init;
+        if (decl instanceof PropertyDef) return ((PropertyDef) decl).init;
+        return null;
+    }
+
+    /** #590 — ¿hay alguna global cuyo valor inicial tenga que CALCULAR __globales? Se pregunta al emitir __init,
+     *  antes de declarar las globales de las clases, con el mismo criterio (seHornea) que luego las declara. */
+    private boolean necesitaGlobales() {
+        for (ITopLevelDecl d : moduleAst.defs) {
+            if (d instanceof VarDecl) {
+                VarDecl vd = (VarDecl) d;
+                if (vd.init == null) continue;
+                BpType declT = (vd.type != null) ? typeRefToBpType(vd.type) : null;
+                for (DeclName dn : vd.names) {
+                    if (dn.isStatic()) continue;   // un error (emitModuleVarDecl)
+                    Symbol msym = (info.module != null) ? info.module.members.tryLookup(dn.name) : null;
+                    VarSymbol vs = (msym instanceof VarSymbol) ? (VarSymbol) msym : null;
+                    if (vs != null && vs.fixedArraySize >= 0) continue;   // L8 v2 (desde #19, un error)
+                    BpType t = (declT != null) ? declT : (vs != null ? vs.type : null);
+                    if (!seHornea(t, SemanticAnalyzer.constLiteralValue(vd.init), false)) return true;
+                }
+            } else if (d instanceof PropertyDef) {
+                PropertyDef pd = (PropertyDef) d;
+                if (pd.init == null || pd.name.isStatic()) continue;
+                if (!seHornea(modulePropertyType(pd), SemanticAnalyzer.constLiteralValue(pd.init), false)) return true;
+            } else if (d instanceof ClassDef) {
+                ClassDef cd = (ClassDef) d;
+                Symbol cs = info.declSymbols.get(cd);
+                if (!(cs instanceof ClassSymbol)) continue;
+                for (Symbol s : ((ClassSymbol) cs).staticMembers.getSymbols()) {
+                    BpType t;
+                    Node decl;
+                    if (s instanceof VarSymbol) {
+                        t = ((VarSymbol) s).type;
+                        decl = declDeEstatico(cd, ((VarSymbol) s).name, false);
+                    } else if (s instanceof PropertySymbol) {
+                        t = ((PropertySymbol) s).type;
+                        decl = declDeEstatico(cd, ((PropertySymbol) s).name, true);
+                    } else continue;
+                    IExpr init = iniDe(decl);
+                    if (init != null && !seHornea(t, SemanticAnalyzer.constLiteralValue(init), true)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** #590 — `__globales`: los valores iniciales que se calculan al cargar el módulo (ver {@link ValorInicial}), en
+     *  orden textual. Cada uno lleva en el .dbg la línea de su declaración: un error de un valor inicial se sitúa
+     *  ahí, no en la última línea del fichero (#591). */
+    private void emitGlobalesFunction() {
+        if (!conGlobales) {
+            if (!valoresIniciales.isEmpty())
+                errors.add("interno (#590): hay valores iniciales que calcular y __init no llama a __globales");
+            return;
+        }
+        valoresIniciales.sort(java.util.Comparator.<ValorInicial>comparingInt(v -> v.linea).thenComparingInt(v -> v.columna));
+        try {
+            w.addFunction("__globales", false);
+            beginFunctionScope(makeSynthFs("__globales", null), null);
+            try {
+                for (ValorInicial v : valoresIniciales) {
+                    int relPc = w.getCurrentBytecodeOffset();
+                    if (v.linea > 0 && (debugLineMap.isEmpty() || debugLineMap.get(debugLineMap.size() - 1)[0] != relPc))
+                        debugLineMap.add(new int[]{relPc, v.linea});
+                    emitExpr(v.expr);
+                    coerceToTarget(v.expr, v.tipo);
+                    w.emitSetGlobal(v.global);
+                }
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        } catch (IOException e) {
+            errors.add("error emitiendo __globales: " + e.getMessage());
+        }
+    }
+
+    /** #590 — ¿el literal `lit` se hornea en una global de tipo `t`? El criterio de bakeModuleVarInit, sin efectos
+     *  (lo usa también {@link #necesitaGlobales}, antes de declarar nada); la cadena de un estático, no. */
+    private static boolean seHornea(BpType t, Object lit, boolean estatica) {
+        if (lit == null) return false;
+        PrimitiveType.Kind k = (t instanceof PrimitiveType) ? ((PrimitiveType) t).tag : null;
+        boolean cadena = (k == PrimitiveType.Kind.STRING) || (k == null && lit instanceof String);
+        if (cadena) return !estatica && lit instanceof String;
+        if (k == null) return lit instanceof Long || lit instanceof Double || lit instanceof Boolean;
+        switch (k) {
+            case LONG: case DOUBLE: case FLOAT: case BOOLEAN: return true;
+            default: return lit instanceof Number;
         }
     }
 
@@ -1001,6 +1150,7 @@ public final class MivmEmitter {
      *  data block. Devuelve false si la combinación tipo/literal no es
      *  horneable (el caller declara el slot a cero, comportamiento clásico). */
     private boolean bakeModuleVarInit(String name, BpType t, Object lit) {
+        if (!seHornea(t, lit, false)) return false;   // #590: UN criterio (el de necesitaGlobales)
         PrimitiveType.Kind k = (t instanceof PrimitiveType) ? ((PrimitiveType) t).tag : null;
         if (k == null) {   // sin tipo declarado ni inferido: deducir del literal
             if (lit instanceof Long)         k = PrimitiveType.Kind.INTEGER;
@@ -1299,7 +1449,9 @@ public final class MivmEmitter {
         // accesores emitían GET/SET_GLOBAL de 4B sobre un handle de 8B (verificado en
         // el disasm). El de CLASE (static property) ya era width-aware — el gemelo de
         // MÓDULO se quedó atrás, como en #10. Mismo propType que los accesores.
-        declareGlobalByType(moduleBackingName(pd.name.name), modulePropertyType(pd));
+        // #590 (V7, 27-sep) — con su valor inicial, como una `var` de módulo: un literal horneado en el backing, lo
+        // demás en __globales. Se escribe el backing, no el setter: es inicializar, como el campo de una clase.
+        declareGlobalConValor(moduleBackingName(pd.name.name), modulePropertyType(pd), pd.init, pd.line, pd.column, false);
     }
 
     /** H1.8 — tipo de una property de módulo, con la misma resolución que usan sus
@@ -1484,12 +1636,18 @@ public final class MivmEmitter {
                     // H1.8 (hermano de #16): por TIPO. Era declareGlobal (4B) siempre →
                     // una `var` estática de clase de tipo ref quedaba a 4B, mientras que
                     // la static PROPERTY de aquí al lado ya era width-aware.
-                    declareGlobalByType(cd.name + "." + v.name, v.type);
+                    // #590 — y con su valor inicial (hasta hoy se tiraba EN SILENCIO).
+                    Node decl = declDeEstatico(cd, v.name, false);
+                    declareGlobalConValor(cd.name + "." + v.name, v.type, iniDe(decl),
+                            decl != null ? decl.line : 0, decl != null ? decl.column : 0, true);
                 } else if (s instanceof PropertySymbol) {
                     // L6 — backing de static property: global cualificado, width-aware.
+                    // #590 — y con su valor inicial (hasta hoy se ignoraba con un aviso).
                     PropertySymbol ps = (PropertySymbol) s;
                     String backing = staticBackingName(cd.name, ps.name);
-                    declareGlobalByType(backing, ps.type);   // H1.8: el ancho lo decide el TIPO
+                    Node decl = declDeEstatico(cd, ps.name, true);
+                    declareGlobalConValor(backing, ps.type, iniDe(decl),
+                            decl != null ? decl.line : 0, decl != null ? decl.column : 0, true);
                 }
             }
 
