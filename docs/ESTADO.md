@@ -902,7 +902,10 @@ la C6, la P4 y la Nucleo.
   con los helpers que hay, sin tocar la ABI; B, un helper nuevo con la misma función que el opcode, que sube la ABI
   a 10 y obliga a regrabar todo—, Eduardo elige A: *«nos permite más flexibilidad, si se quiere cambiar algo
   solamente hace falta modificar el compilador. También es verdad que genera más código, pero siempre lo podemos
-  cambiar más adelante»*. En marcha.
+  cambiar más adelante»*. **Hecho** (`5efb4c76`): la comprobación en el C del módulo, con el texto del
+  intérprete; `make test-aotestrecha` 23/23 (roja con el emisor de antes) y `NatEstrecha` en la paridad; y el texto
+  rancio de «función desconocida». La ronda de V7 gana `NatNombres` y `NatEstrecha`.
+  En placa, sin imagen nueva (la ABI no cambia): `NatNombres` (4/4 thunks nativos) y `NatEstrecha` (7/7) IDÉNTICOS al PC en la DK2, la Metro, el P4 y la Nucleo (`compat/informes/tanda_estrecha_27sep.md`).
 
 ## 🔌 H5 (27-sep, tarde) — P2b.3.d: la sesión de placas, primera parte (la DK2, la Metro, el P4 y la Nucleo)
 

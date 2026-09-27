@@ -2392,6 +2392,34 @@ entero con el `.mdn` del pack —«16/16 thunks (16 directas)», sin ejecutor—
 **Quedan** de P2b.3.d: la S3 (sólo la imagen: no tiene AOT), la C3, la C5 y la C6 (RISC-V sin FPU), y lo que esperaba
 placa en ellas: la C6 con `#574`, `DriverSpi` en la C5 y la C6.
 
+#### Las conversiones estrechas en una native (27-sep, la opción A de Eduardo)
+
+`byte(x)`, `int8(x)`, `word(x)` e `int16(x)` (y `short(x)`, que el parser deja en `int16`) dentro de una native
+caían en «AOT: call a función desconocida 'byte'» —con un texto que listaba cinco builtins y daba `#169` por
+pendiente, rancio desde P2b.2— y la native no se traducía (el compilador lo trata como un error de la native). En el
+intérprete no son una llamada sino un opcode (`OP_I32_TO_U8/I8/U16/I16`, `interp.c`; miVM igual) que comprueba el
+rango: dentro, el valor tal cual; fuera, un `RuntimeError` atrapable, «I32_TO_U8: valor fuera de rango 300». Y son la
+ÚNICA puerta a un tipo estrecho: `var b: byte := i` no compila («requiere cast explícito: byte(<valor>)»). Como dijo
+Eduardo, la conversión con pérdida está siempre en la asignación a un byte o a un short: aparece en pocos sitios.
+
+| | qué | lo bueno | lo que cuesta |
+|---|---|---|---|
+| **A** | el emisor escribe la comprobación en el C del módulo (`aot_<Mod>_estrecha`) y, fuera de rango, arma el texto con los helpers que ya hay (`string_from_cstr` + `int_to_string` + `string_concat` → `throw_str`) | no toca la ABI del `.mdn`: ni regenerar los packs ni regrabar las placas; cambiarla es cosa del compilador | el texto está dos veces (la VM y el emisor) y algo más de código en cada sitio |
+| B | un helper nuevo que llama a la misma función que el opcode | una sola implementación, como la opción 3 de P2b | sube la ABI a 10: regenerar los `.mdn` de los packs y regrabar todas las placas |
+
+**Decidido: A** (Eduardo: *«A nos permite más flexibilidad, si se quiere cambiar algo solamente hace falta modificar
+el compilador. También es verdad que genera más código, pero siempre lo podemos cambiar más adelante»*). El texto
+duplicado lo vigilan `make test-aotestrecha` —los dos bordes de cada conversión y uno fuera por cada lado, con el AOT
+y sin él— y `NatEstrecha` en el corpus de paridad (interpretada, miVM == VM-C).
+
+**Hecho** (`5efb4c76`): `conversionEstrecha()` (los cuatro rangos y textos) y `aot_<Mod>_estrecha` en el prólogo de
+cada módulo, `static inline` (sólo cuesta donde se usa). De paso, un estrecho en una concatenación (`"b=" + b`) va
+como un integer —el intérprete lo pasa con `INT_TO_STRING` (`MivmEmitter.coerceToString`, L8 v2)— y el texto de
+«función desconocida» dice lo que hay: una función del módulo, una intrínseca, una conversión o una clase, y lo de
+otro módulo, cualificado. `samples/NatEstrecha.bp`: 23 comprobaciones, 23/23 con el AOT igual que interpretado (el GC
+en cada alocación), una de ellas con bucle —lanza desde un EJECUTOR— y las demás directas; con el emisor de antes, el
+compilador ni lo compila (ROJO). En placa, sin imagen nueva (la ABI no cambia): `NatNombres` (4/4 thunks nativos) y `NatEstrecha` (7/7) IDÉNTICOS al PC en la DK2, la Metro, el P4 y la Nucleo (`compat/informes/tanda_estrecha_27sep.md`).
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
