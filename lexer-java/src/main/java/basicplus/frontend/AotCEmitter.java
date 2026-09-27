@@ -75,6 +75,17 @@ public final class AotCEmitter {
      *  (es el simbolo del .mod); solo se sanean los identificadores emitidos. */
     private static String cId(String nombre) { return nombre.replace('.', '_'); }
 
+    /** [V7/H5 #572] EL NOMBRE EN C DE UN IDENTIFICADOR DE BP —parámetro, local, iterador de un `for`, el `this` de
+     *  un método aplanado—: con el prefijo `bp_`, y en ESTE sitio y en ningún otro. Hasta el 27-sep se escribían
+     *  tal cual, y chocaban con lo que el emisor declara en la función (`vm`, su primer parámetro; `mem` y `cs` en un
+     *  módulo con globales; `H`, `fn`, `nm`, `r`, `k`… en el puente a un pack) o con una palabra clave o una macro de
+     *  C (`int`, `char`, `static`, `bool`, `INT32_MAX`…): gcc no compilaba el módulo y sus natives corrían interpretadas,
+     *  con un aviso. Con el prefijo no queda nada con qué chocar: todo lo que declara el emisor empieza por otra cosa
+     *  (`vm`, `mem`, `cs`, `H`, `__…`, `aot_…`), y ninguna cabecera que incluye el C generado define nada que empiece
+     *  por `bp_` (mirado el 27-sep; los `bp_*` que hay son campos de struct y nombres de parámetro de un prototipo).
+     *  El nombre de BP se sigue usando tal cual para BUSCAR (`localNames`) y en los mensajes. */
+    private static String cVar(String nombreBp) { return "bp_" + nombreBp; }
+
     /** Los metodos que este modulo aplano. Si uno no se puede emitir NO tumba el
      *  modulo entero —eso seria una regresion: hoy esos modulos emiten bien— sino
      *  que se cae solo, con su aviso. */
@@ -867,7 +878,7 @@ public final class AotCEmitter {
                 w.print("static " + cType(f.returnType) + " aot_"
                     + moduleName + "_" + cId(f.name.name) + "(struct bpvm* vm");
                 for (Ast.Param p : f.params) {
-                    w.print(", " + cType(p.type) + " " + p.name);
+                    w.print(", " + cType(p.type) + " " + cVar(p.name));
                 }
                 w.println(");");
             } catch (UnsupportedAotException ex) {
@@ -924,7 +935,7 @@ public final class AotCEmitter {
         String cRet  = cType(f.returnType);
         w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
         for (Ast.Param p : f.params) {
-            w.print(", " + cType(p.type) + " " + p.name);
+            w.print(", " + cType(p.type) + " " + cVar(p.name));
         }
         w.println(") {");
         w.println("    (void) vm;   /* puede no usarse si la función no toca");
@@ -950,7 +961,7 @@ public final class AotCEmitter {
          * funciones de pass-through o cuando el AOT no usa todos los
          * args). El compilador C los elimina en -O2 igualmente. */
         for (Ast.Param p : f.params) {
-            w.println("    (void) " + p.name + ";");
+            w.println("    (void) " + cVar(p.name) + ";");
         }
 
         /* #172 — Inicializar ámbito local: params + reset entre funcs. */
@@ -1001,7 +1012,7 @@ public final class AotCEmitter {
                   + " v" + packVersion + ".");
         w.println(" * No hay cuerpo en el .bp: lo pone el pack. Esto es el puente. */");
         w.print("static " + cType(f.returnType) + " " + fname + "(struct bpvm* vm");
-        for (Ast.Param p : f.params) w.print(", " + cType(p.type) + " " + p.name);
+        for (Ast.Param p : f.params) w.print(", " + cType(p.type) + " " + cVar(p.name));
         w.println(") {");
         w.println("    const struct aot_helpers_v2* H = vm->aot_helpers;");
 
@@ -1037,7 +1048,7 @@ public final class AotCEmitter {
                   + ", nm, 1);   /* no retorna */");
         for (int i = 0; i < n; i++) {
             if (!esString(f.params.get(i).type)) continue;
-            String pn = f.params.get(i).name;
+            String pn = cVar(f.params.get(i).name);
             w.println("    if (H->string_to_cstr(vm, (uint32_t) " + pn + ", b" + i
                       + ", (int32_t) sizeof b" + i + ") < 0)");
             w.println("        H->pack_fallo(vm, " + marca + ", " + ver
@@ -1050,7 +1061,7 @@ public final class AotCEmitter {
             if (i > 0) args.append(", ");
             if (esString(t))             args.append("b").append(i);
             else if (salida8(t) != null) args.append("&o").append(i);
-            else                         args.append(f.params.get(i).name);
+            else                         args.append(cVar(f.params.get(i).name));
         }
         boolean devuelveCadena = esString(f.returnType);
         boolean hayCajas = false;
@@ -1084,7 +1095,7 @@ public final class AotCEmitter {
             String t8 = salida8(f.params.get(i).type);
             if (t8 == null) continue;
             String hp = t8.equals("int64_t") ? "array_store_i64" : "array_store_f64";
-            w.println("    H->" + hp + "(vm, (uint32_t) " + f.params.get(i).name
+            w.println("    H->" + hp + "(vm, (uint32_t) " + cVar(f.params.get(i).name)
                       + ", 0, o" + i + ");   /* caja de salida */");
         }
         if (f.returnType != null && !devuelveCadena) w.println("    return r; }");
@@ -1307,7 +1318,7 @@ public final class AotCEmitter {
             String cVarType = cType(v.type);
             for (Ast.DeclName dn : v.names) {
                 indent();
-                w.print(cVarType + " " + dn.name);
+                w.print(cVarType + " " + cVar(dn.name));
                 if (v.init != null) {
                     w.print(" = ");
                     emitComo(v.init, tipoDeclarado(v.type));   /* #559 — `var x: float := i` */
@@ -1329,12 +1340,12 @@ public final class AotCEmitter {
                         && a.op != Ast.AssignOpKind.ASSIGN && (esFloatT(tLocal) || esDoubleT(tLocal))) {
                     /* #559 — `x += v` con x float/double: la operación del intérprete, no
                      * el `+=` de C (que sería libgcc sin FPU, y en double en toda placa). */
-                    w.print(tname + " = ");
-                    emitCompuestoFlotante(a.op, tLocal, () -> w.print(tname), a.value);
+                    w.print(cVar(tname) + " = ");
+                    emitCompuestoFlotante(a.op, tLocal, () -> w.print(cVar(tname)), a.value);
                     w.println(";");
                 } else if (localNames.contains(tname)) {
                     /* Local — emisión directa estilo C. */
-                    w.print(tname);
+                    w.print(cVar(tname));
                     switch (a.op) {
                         case ASSIGN:       w.print(" = ");  break;
                         case PLUS_ASSIGN:  w.print(" += "); break;
@@ -1858,7 +1869,7 @@ public final class AotCEmitter {
         }
         Ast.ForNumericRange r = (Ast.ForNumericRange) fs.range;
         int tag = ++forCounter;
-        String it   = fs.iteratorName;
+        String it   = cVar(fs.iteratorName);   /* #572 — el nombre en C; localNames guarda el de BP */
         String end  = "__aot_end_"  + tag;
         String step = "__aot_step_" + tag;
 
@@ -1885,7 +1896,7 @@ public final class AotCEmitter {
          * la misma función. En la práctica el frontend BP genera
          * scoping por bloque, así que el riesgo es bajo; documentamos
          * por si surge ruido futuro. */
-        localNames.add(it);
+        localNames.add(fs.iteratorName);
 
         // for (; (step > 0) ? (it <= end) : (it >= end); it += step) { body }
         // #548 (24-sep) — un `for` de C y no `while (…) { body; it += step; }`: el `continue` de C
@@ -2083,7 +2094,7 @@ public final class AotCEmitter {
         if (e instanceof Ast.IdentifierExpr) {
             String name = ((Ast.IdentifierExpr) e).name;
             if (localNames.contains(name)) {
-                w.print(name);                          // param o local
+                w.print(cVar(name));                    // param o local (#572: su nombre en C)
                 return;
             }
             /* #172 — Variable nivel-módulo: acceso directo `mem + cs +
@@ -2390,8 +2401,8 @@ public final class AotCEmitter {
         }
         /* [V6/N1.1] `this` — en un metodo aplanado ES el primer parametro, con ese
          * mismo nombre (ver el barrido de emitModule). Asi que no hay nada que
-         * resolver: se emite tal cual, como el `self` de Python. */
-        if (e instanceof Ast.ThisExpr) { w.print("this"); return; }
+         * resolver: se emite como el parámetro, como el `self` de Python. */
+        if (e instanceof Ast.ThisExpr) { w.print(cVar("this")); return; }   /* #572: el parámetro `this` */
 
         /* [V6/N1.1] Lectura de una PROPERTY — `obj.x`, y tambien `this.x`.
          *

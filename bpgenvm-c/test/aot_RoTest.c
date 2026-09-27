@@ -26,18 +26,18 @@ static inline int32_t aot_RoTest_ranura(struct bpvm* vm, const char* clase, cons
 }
 
 /* Forward decls de las funciones AOT de este módulo. */
-static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t n);
+static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t bp_n);
 
-static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t n) {
+static int32_t aot_RoTest_etiqueta(struct bpvm* vm, int32_t bp_n) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
     int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
     (void) __bpvm_cuenta;
-    (void) n;
-    if ((n < 0)) {
+    (void) bp_n;
+    if ((bp_n < 0)) {
         return vm->aot_helpers->string_from_cstr(vm, "negativo", 8);
     }
-    return vm->aot_helpers->string_concat(vm, vm->aot_helpers->string_from_cstr(vm, "valor ", 6), vm->aot_helpers->int_to_string(vm, n));
+    return vm->aot_helpers->string_concat(vm, vm->aot_helpers->string_from_cstr(vm, "valor ", 6), vm->aot_helpers->int_to_string(vm, bp_n));
 }
 
 /* P2b.3: DIRECTA — sin puntos de cesión: corre en la pila del worker, sin ejecutor. */

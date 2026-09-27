@@ -1,0 +1,65 @@
+// NatNombres.bp — #572 (V7, 27-sep): los identificadores de BP en el C que escribe el AOT. Hasta hoy iban TAL CUAL,
+// y un parámetro o una local llamados `vm`, `mem` o `cs` —en un módulo con globales, cada native declara `mem` y
+// `cs` para leerlas—, o con el nombre de una palabra clave o de una macro de C (`int`, `char`, `static`, `register`,
+// `bool`, `INT32_MAX`…), daban un C que gcc no compilaba: la native corría interpretada, con un aviso. Ahora el emisor
+// les pone su prefijo en un solo sitio. `make test-aotnombres` corre este .mod con el AOT y sin él y exige la misma
+// salida, y además CUENTA las natives traducidas: si una se cayera, correría interpretada y la salida saldría igual.
+module NatNombres
+  import Core
+
+  var total: integer := 0
+
+  // los nombres de lo que el emisor declara en toda native: `vm` (su primer parámetro en C), `mem` y `cs` (las globales)
+  native function sumaVm(vm: integer, mem: integer, cs: integer): integer
+    var int: integer := vm + mem
+    var char: integer := int * cs
+    total += char
+    return char + total
+  end sumaVm
+
+  // palabras clave y macros de C como locales y como iterador de un `for`; y un switch de cadenas (su temporal de C)
+  native function palabras(static: integer, unsigned: integer): integer
+    var bool: integer := 0
+    var INT32_MAX: integer := 0
+    for register := static to unsigned do
+      bool += register
+      INT32_MAX += 1
+    next register
+    var goto: string := "s" + INT32_MAX
+    switch goto
+      case "s5"
+        bool += 1000
+      default
+        bool += 2000
+    endsw
+    return bool * 10 + INT32_MAX
+  end palabras
+
+  // una native que llama a otra con los mismos nombres; y un `float` con `+=` (la operación va por su macro)
+  native function llama(vm: integer, H: float): integer
+    var sizeof: float := H
+    sizeof += 1.5
+    return sumaVm(vm, vm, 2) + integer(sizeof)
+  end llama
+
+  // un método native: su `this` es el primer parámetro en C, y lee una property por el getter
+  public class Caja
+    public property n: integer
+    public function Caja(v: integer)
+      this.n := v
+    end Caja
+    public native function mas(mem: integer): integer
+      return this.n + mem
+    end mas
+  end Caja
+
+  function Main()
+    print "ok sumaVm: " + sumaVm(1, 2, 3)
+    print "ok total: " + total
+    print "ok palabras: " + palabras(1, 5)
+    print "ok llama: " + llama(4, 2.5)
+    var c: Caja := Caja(40)
+    print "ok mas: " + c.mas(2)
+    print "ok total al final: " + total
+  end Main
+end NatNombres

@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -840,6 +840,33 @@ medir-llamada: $(LIBOBJ)
 	  -o build/test_aotllamada.exe $(LDFLAGS)
 	@./build/test_aotllamada.exe samples/NatLlamada.mod 2>/dev/null
 	@./build/test_aotllamada.exe samples/NatLlamada.mod --interp 2>/dev/null
+
+# V7/H5 (#572, 27-sep) — LOS IDENTIFICADORES DE BP EN EL C DEL AOT: una native con parámetros, locales e iterador
+# llamados `vm`, `mem`, `cs`, `int`, `char`, `static`, `register`, `bool`, `INT32_MAX`… (en un módulo con globales), y el
+# puente a un pack con parámetros que se llaman como lo que el puente declara. Con los nombres tal cual, ninguno de los
+# dos C compilaba. Y se CUENTAN las natives traducidas: una que se cayera correría interpretada y la salida daría igual.
+test-aotnombres: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatNombres)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatNombres,build/aotnombres)
+	@n=$$(grep -c "bpvm_aot_register_by_name" build/aotnombres/aot_NatNombres.c); \
+	 if [ "$$n" -ne 4 ]; then cat build/aotnombres/aot.log; echo "  ROJO: el AOT tradujo $$n de las 4 natives de NatNombres"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotnombres.c build/aotnombres/aot_NatNombres.c $(LIBOBJ) \
+	  -o build/test_aotnombres.exe $(LDFLAGS)
+	$(call aotmain,NatNombresPack,build/aotnombrespack)
+	$(CC) $(CFLAGS) -Isrc -c build/aotnombrespack/aot_NatNombresPack.c -o build/aotnombrespack/aot_NatNombresPack.o
+	@# el caso MUDO de antes: con un parámetro `r`, el puente escribía `int32_t r = fn(…, r)` y el `r` del inicializador
+	@# ya era el nuevo, sin valor (el pack recibía basura sin un error). Ahora tiene que pasar el suyo, `bp_r`.
+	@grep -q "int32_t r = fn(.*, bp_r);" build/aotnombrespack/aot_NatNombresPack.c || { grep -n " r = fn(" build/aotnombrespack/aot_NatNombresPack.c; echo "  ROJO: el puente a un pack no pasa bp_r"; exit 1; }
+	@echo "--- #572 nombres de BP que son de C (esperado: los dos C compilan; AOT == interpretado, 6/6, sin FALLO) ---"
+	@./build/test_aotnombres.exe samples/NatNombres.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotnombres.aot; \
+	 ./build/test_aotnombres.exe samples/NatNombres.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotnombres.int; \
+	 n=$$(grep -c '^ok ' build/aotnombres.aot); \
+	 if grep -q '^FALLO' build/aotnombres.aot build/aotnombres.int; then grep -h '^FALLO' build/aotnombres.aot build/aotnombres.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotnombres.int build/aotnombres.aot; then diff build/aotnombres.int build/aotnombres.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 6 ]; then cat build/aotnombres.aot; echo "  ROJO: $$n de 6 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 6/6 con el AOT, igual que interpretado; el puente a un pack compila"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

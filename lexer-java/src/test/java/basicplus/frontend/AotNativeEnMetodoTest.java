@@ -94,7 +94,7 @@ class AotNativeEnMetodoTest {
         String src = modulo("NatSimple", "public property n: integer", "(3 * 31) + 1");
         String c = emitir(src, null);
         assertFalse(c.isEmpty(), "un método native tiene que producir C: antes se ignoraba en silencio");
-        assertTrue(c.contains("int32_t this"),
+        assertTrue(c.contains("int32_t bp_this"),   // #572: su nombre de C, con el prefijo de los de BP
                 "el receptor tiene que ser el primer parámetro (el `self` de Python). C:\n" + c);
         assertTrue(c.contains("\"NatSimple.Caja.doble\""),
                 "tiene que registrarse como <Modulo>.<Clase>.<metodo>, que es el símbolo"
